@@ -39,6 +39,14 @@ const UNION_JOINER: &str = " or ";
 const OPTIONAL_MARK: char = '?';
 /// the type of ø, the empty part of an optional (ø is the empty list)
 const EMPTY_TYPE: &str = ".list .never";
+/// Effect handlers (notes/effect_handlers.md): `on ev {h}`, `on ev {h} in {body}`, `emit ev{payload}`
+const ON_KEYWORD: &str = "on";
+const IN_KEYWORD: &str = "in";
+const EMIT_KEYWORD: &str = "emit";
+/// the handler's local holding the payload, `event.level`
+const EVENT_LOCAL: &str = "event";
+/// an event's payloads are instances of the class `ev·event`, whose fields are every key the program emits it with
+const EVENT_CLASS_SUFFIX: &str = "·event";
 
 /// W0's answer for one program
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -89,6 +97,55 @@ fn admitted(declared: &str, value: String) -> String {
 		Some(alternatives) => format!(".cast ({value}) {alternatives}"),
 		None => value,
 	}
+}
+
+/// `on`/`emit` forms; an event is named by one or more words (`on stop the machine {…}`)
+enum Effect<'a> {
+	On { event: String, handler: &'a Node, body: Option<&'a Node> },
+	Emit { event: String, payload: Vec<(String, &'a Node)> },
+}
+
+fn event_name(words: &[Node]) -> Option<String> {
+	let words: Option<Vec<String>> = words.iter().map(|word| match word.drop_meta() {
+		Node::Symbol(word) => Some(word.clone()),
+		_ => None,
+	}).collect();
+	words.filter(|words| !words.is_empty()).map(|words| words.join(" "))
+}
+
+fn effect(node: &Node) -> Option<Effect<'_>> {
+	let Node::List(items, _, _) = node.drop_meta() else { return None };
+	let (first, rest) = items.split_first()?;
+	if is_word(first, ON_KEYWORD) {
+		let (last, words) = rest.split_last()?;
+		let event = event_name(words)?;
+		return match last.drop_meta() {
+			Node::List(_, Bracket::Curly, _) => Some(Effect::On { event, handler: last, body: None }),
+			Node::List(parts, _, _) if parts.len() == 3 && is_word(&parts[1], IN_KEYWORD) => Some(Effect::On { event, handler: &parts[0], body: Some(&parts[2]) }),
+			_ => None,
+		};
+	}
+	if !is_word(first, EMIT_KEYWORD) {
+		return None;
+	}
+	// `emit alarm{level: 3}` parses as `alarm: {level: 3}` after the event's other words
+	if let Some((last, words)) = rest.split_last() {
+		if let Node::Key(word, Op::Colon, fields) = last.drop_meta() {
+			let Node::List(fields, Bracket::Curly, _) = fields.drop_meta() else { return None };
+			let payload: Option<Vec<(String, &Node)>> = fields.iter().map(|field| match field.drop_meta() {
+				Node::Key(key, Op::Colon, value) => Some((key.name(), &**value)),
+				_ => None,
+			}).collect();
+			let mut words = words.to_vec();
+			words.push((**word).clone());
+			return Some(Effect::Emit { event: event_name(&words)?, payload: payload? });
+		}
+	}
+	Some(Effect::Emit { event: event_name(rest)?, payload: vec![] })
+}
+
+fn event_class(event: &str) -> String {
+	format!("{event}{EVENT_CLASS_SUFFIX}")
 }
 
 fn is_word(node: &Node, word: &str) -> bool {
@@ -275,11 +332,55 @@ impl Exporter {
 		if fields.len() != arguments.len() {
 			return Err(format!("{class} takes {} fields, got {}", fields.len(), arguments.len()));
 		}
+		self.instance(class, fields.into_iter().zip(arguments).collect())
+	}
+
+	/// a new instance of class with the given fields written, `let o = new C; o.f1 = a; …; o`
+	fn instance(&mut self, class: &str, fields: Vec<(String, &Node)>) -> Lean {
 		let path = lean_strings(&self.classes[class].0);
 		let local = format!("new·{class}");
-		let writes: Result<Vec<String>, String> = fields.iter().zip(arguments).map(|(field, argument)| Ok(format!(".set (.loc {}) {} ({})", quoted(&local), quoted(field), self.expression(argument)?))).collect();
+		let writes: Result<Vec<String>, String> = fields.iter().map(|(field, value)| Ok(format!(".set (.loc {}) {} ({})", quoted(&local), quoted(field), self.expression(value)?))).collect();
 		let body = writes?.iter().rev().fold(format!(".loc {}", quoted(&local)), |rest, write| format!(".seq ({write}) ({rest})"));
 		Ok(format!(".letIn {} (.cls {path}) (.new {path}) ({body})", quoted(&local)))
+	}
+
+	/// `ev·event` with every key the program emits ev with
+	fn collect_event_classes(&mut self, program: &Node) -> Vec<String> {
+		let mut keys: Vec<(String, Vec<String>)> = vec![];
+		program.visit(&mut |part| if let Some(Effect::Emit { event, payload }) = effect(part) {
+			let class = event_class(&event);
+			let position = keys.iter().position(|(known, _)| *known == class).unwrap_or_else(|| {
+				keys.push((class, vec![]));
+				keys.len() - 1
+			});
+			for (key, _) in payload {
+				if !keys[position].1.contains(&key) {
+					keys[position].1.push(key);
+				}
+			}
+		});
+		keys.retain(|(_, fields)| !fields.is_empty());
+		for (class, fields) in &keys {
+			self.classes.insert(class.clone(), (vec![class.clone()], fields.iter().map(|field| (field.clone(), None)).collect()));
+		}
+		keys.into_iter().map(|(class, _)| class).collect()
+	}
+
+	/// a handler body: `event` is its payload
+	fn handler(&mut self, handler: &Node) -> Lean {
+		self.locals.push(EVENT_LOCAL.to_string());
+		let handler = self.block(handler);
+		self.locals.pop();
+		handler
+	}
+
+	fn effect(&mut self, effect: Effect) -> Lean {
+		match effect {
+			Effect::On { event, handler, body: Some(body) } => Ok(format!(".handle {} ({}) ({})", quoted(&event), self.handler(handler)?, self.block(body)?)),
+			Effect::On { event, .. } => Err(format!("not in W0: a program-wide handler of {event} inside an expression")),
+			Effect::Emit { event, payload } if payload.is_empty() => Ok(format!(".emit {} .unit", quoted(&event))),
+			Effect::Emit { event, payload } => Ok(format!(".emit {} ({})", quoted(&event), self.instance(&event_class(&event), payload)?)),
+		}
 	}
 
 	fn class_definition(&self, class: &str) -> Lean {
@@ -289,6 +390,7 @@ impl Exporter {
 
 	fn items(&mut self, program: &Node) -> Result<Vec<String>, String> {
 		self.collect_classes(program);
+		let event_classes = self.collect_event_classes(program);
 		let program: Vec<&Node> = statements(program).into_iter().flat_map(type_definitions).collect();
 		let mut argument_classes = Vec::new();
 		for statement in &program {
@@ -309,6 +411,7 @@ impl Exporter {
 			};
 			self.functions.insert(name.to_string(), parameter_type);
 		}
+		argument_classes.extend(event_classes);
 		let mut items = argument_classes.iter().map(|class| self.class_definition(class)).collect::<Result<Vec<_>, String>>()?;
 		for statement in program {
 			items.push(self.item(statement)?);
@@ -317,6 +420,9 @@ impl Exporter {
 	}
 
 	fn item(&mut self, statement: &Node) -> Lean {
+		if let Some(Effect::On { event, handler, body: None }) = effect(statement) {
+			return Ok(format!(".on {} ({})", quoted(&event), self.handler(handler)?));
+		}
 		match statement.drop_meta() {
 			Node::Type { name, .. } => self.class_definition(&name.drop_meta().name()),
 			_ if function_definition(statement).is_some() => {
@@ -461,6 +567,7 @@ impl Exporter {
 				let last = statements.pop().expect("more than one statement");
 				Ok(statements.iter().rev().fold(last, |rest, statement| format!(".seq ({statement}) ({rest})")))
 			}
+			_ if effect(node).is_some() => self.effect(effect(node).expect("an effect")),
 			Node::List(items, _, _) if items.first().is_some_and(|class| self.classes.contains_key(&class.name())) => self.construction(&items[0].name(), &items[1..]),
 			Node::List(items, _, _) => match items.as_slice() {
 				[marker, body, handler] if is_word(marker, TRY_MARKER) => self.binary(".tryCatch", body, handler),
