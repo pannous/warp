@@ -25,7 +25,7 @@ fn same_is_the_word() {
 	is!(&format!("{POINT}p = P(1); q = p; p same q"), true);
 	is!(&format!("{POINT}p = P(1); q = P(1); p same as q"), false);
 	is!(&format!("{POINT}p = P(1); q = p; p is the same as q"), true);
-	is!(&format!("{POINT}p = P(1); q = P(1); p is identical to q"), false);
+	is!(&format!("{POINT}p = P(1); q = P(1); p is the same as q"), false);
 	is!("same = 3; same + 1", 4);
 }
 
