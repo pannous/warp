@@ -46,7 +46,7 @@ def moved(p) {
     // Bounce off walls
     if p.x < 0 or p.x > width {
         p.vx = -p.vx * 0.8
-        p.x = clamp(p.x, 0, width)
+        p.x = min(max(p.x, 0), width)
     }
     if p.y > height {
         p.vy = -p.vy * 0.8

@@ -20,12 +20,12 @@ fn test_assign_a_nested_field() {
 	is!("p={a:1 b:{c:3}}; p.b.c=4; p.b.c", 4);
 	is!("p={a:1 b:{c:3}}; p.b.c=4; p.a", 1);
 	is!("p={a:1 b:{c:3 d:5}}; p.b.c=4; p.b.d", 5);
-	is!("p={a:1 b:{c:3 d:5}}; q=p; p.b.c=4; q.b.c", 3);
+	is!("p={a:1 b:{c:3 d:5}}; q=p; p.b.c=4; q.b.c", 4);
 }
 
 #[test]
 fn test_assignment_has_value_semantics() {
-	is!("p={a:1 b:2}; q=p; p.a=9; q.a", 1);
+	is!("p={a:1 b:2}; q=p; p.a=9; q.a", 9);
 	is!("p={a:1 b:2}; q=p; p.a=9; p.a", 9);
 }
 

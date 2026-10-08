@@ -18,6 +18,8 @@ mod test_std_math_text;
 mod test_std_random;
 mod test_std_time;
 mod test_std_qualified;
+mod test_std_module_uses_module;
+mod test_std_prelude;
 mod test_std_net;
 mod test_std_regex;
 mod test_std_matrix;

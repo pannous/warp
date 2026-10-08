@@ -1,0 +1,2 @@
+use text
+rest_words("a b c")

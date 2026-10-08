@@ -111,7 +111,7 @@ Next:
    (closures::captured_variables_of).
    list: index_where last_n fill minmax; math: percent to_radians to_degrees isqrt is_square divisors prime_factors
    to_base from_base; text: word_count snake_case kebab_case camel_case indent is_numeric between wrap; map: find_key.
-   A std module's word cannot call another module's words (camel_case cannot use list's drop): written with loops.
+   A std module's word can call another module's words since §8 (std-module-uses-module); older ones use loops.
    Met: a name `end` after else is Ruby's block end (card end-variable); `none(xs, f)` is the null (card none-call).
    P171: write and exists are prelude words (modules PRELUDE_WORDS: only their definitions come along, a program's own
    word wins); P183: a "file://…" text loads the whole file module; file.append(path, text) is the qualified-only word
@@ -219,3 +219,62 @@ run natively and in the browser.
 - P171: new words stay in their modules, except `write` and `exists` (global); a file URL loads the file module.
 - P183: std modules are backed only by wasp, host words or C compiled to wasm; regex is the common subset of Rust regex
   and JS RegExp with a loud error for the rest; the file module's append is `file.append(path, text)`.
+
+## 8. Standard: inventory and plan (card stdlib-standard, functions warp-da, 2026-10-08)
+Goal (user): standard functionality split into importable modules. Steps 1-7 made the modules; this section is where
+every word lives today and what still moves.
+
+### Inventory: where a word is defined
+| place | what | count |
+|---|---|---|
+| src/lowering/library_words.rs SYNONYMS | other names of built-in words (size → len …) | 25 |
+| … RUNTIME_WORDS | words lowered to runtime calls | 17 |
+| … EXPANDED_WORDS | wasp templates kept as Rust strings: list round_to first last sum replace is_digit is_alpha unwrap is_alphanumeric | 10 |
+| src/wasm_emitter/library_ops.rs LIBRARY_FUNCTIONS | runtime functions in wasm: keys values entries contains index_of get without ord chars field_with reverse sort upper lower split join slice | 17 |
+| src/wasm_emitter/text_builtins.rs TEXT_BUILTINS | text runtime functions | 21 |
+| src/wasm_emitter/list_emitter.rs BUILTIN_CALLS | list runtime calls | 18 |
+| src/real.rs FUNCTIONS | exact-real functions | 6 |
+| src/host.rs HOST_WORDS | host imports (print, clock, fetch, paint, clipboard, notify, tasks, foreign_call, gpu, std_pure/std_io …) | 55 |
+| src/modules.rs STD_MODULES | embedded lib/*.wasp: memory net collections hash regex file json os list math text random map time matrix draw markup router i18n | 19 |
+| … PRELUDE_WORDS | module words global without `use`: file: write exists | 2 |
+| … STD_ALIASES, lowering/std_aliases.rs, welcome_forms QUALIFIED_WORDS | foreign and qualified names (OrderedDict, JSON.parse, file.append …) | 27 + 21 + 1 |
+| implicit uses | page_html.rs inserts `use markup`, routes.rs `use router`, markup.rs reads markup's lists at compile time | 2 |
+Words per module: math 45, list 38, text 26, markup 19, matrix 15, time 14, map 10, router 9, the rest fewer.
+lib/web.webidl is data for web_idl.rs, not a module. The playground has no prelude of its own (warp-70).
+
+Probed (functions2, 2026-10-08): `use list` and `import list` work; `use list, text` and `use list text` load only
+list; `from list import zip` has no form; `list.zip(…)` without `use` is the loud error (P171, fine); `use os; args`
+is the symbol args (no CLI way to pass them); a std module's `use list` worked, but leaked list's words to the program.
+
+### Target
+- Three layers, each with one place in the source:
+  1. **Core** (compiler, Rust/wasm runtime): words that need the emitter: the language forms, len/count, indexing, the
+     runtime functions of library_ops / text_builtins / list_emitter, host words. They stay; their names are listed
+     in one generated index (below), not moved.
+  2. **Prelude** (`lib/prelude.wasp`, done, card std-prelude-module): first last round_to replace is_digit is_alpha
+     is_alphanumeric, formerly EXPANDED_WORDS templates (list, sum, unwrap stay templates: the emitter dispatches on
+     them). Loaded when the program or a used std module mentions a word in any spelling (modules::use_prelude,
+     library_words::words_spelled_by: `isdigit`, `round(x, 2)` → round_to); its definitions are named `prelude·first`
+     (modules::prelude_name) and library_words writes the calls so, so a program's own `first` or a local named
+     `first` never meets them. A pass after modules::resolve must not add a prelude word (undo_history indexes
+     instead of calling last). PRELUDE_WORDS (file's write, exists) stay where they are. Fixed on the way: a module
+     word inside an interpolation (`"\(zip(a, b))"`, `"\(x.round(2))"`) was missed by the loader
+     (modules::template_holes); `declared_name` of a list `[a, b]` named b.
+  3. **Modules** (`lib/<name>.wasp`): everything else, brought by `use`.
+- **One implicit-use mechanism**: modules.rs gets one table "word or form → module it brings" (file URL → file,
+  write/exists → file, a page → markup, routes → router); page_html.rs and routes.rs stop inserting `use` text.
+- **use forms**: `use a, b` and `use a b` load each; `from list import zip, unique` brings only those words (the
+  others stay the loud error); `import list as l` later with the module manager.
+- **Modules calling modules** (done, card std-module-uses-module): a std module may `use` another (lib/text.wasp
+  `use list`, camel_case calls drop). A module only std modules use is hidden from the program: modules.rs
+  Loader::hidden_apart renames its words `lib·drop` in the std definitions, so the program's bare `drop` is the
+  error "drop is in the standard module list: write `use list`" and a program's own `drop` is its own
+  (tests/modules/test_std_module_uses_module.rs). A file module's `use` counts as the program's.
+- **Discoverability**: `help list` (or `words list`) prints a module's words with their first comment line; the
+  same index generates wiki/standard-library.md, so docs never drift from lib/.
+
+### Cards (column Next)
+std-use-several, std-from-import, std-module-uses-module, std-prelude-module, std-implicit-use, std-args,
+std-module-docs, std-word-tests (each module word called once natively and in the browser).
+Order: use-several and from-import first (small, independent); module-uses-module before prelude-module (the prelude
+calls list words); implicit-use after prelude-module.

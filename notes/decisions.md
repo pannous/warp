@@ -51,6 +51,10 @@ D-number or #number mean this file. Open questions, parked ones and the standing
   the playground (warp-99).
 - test-soft (user to warp-dc, card test-soft, warp-99): `test C` is a soft check that records pass/fail and
   continues; `check C` stays assert; `test "name" { … }` is a named test block beside functions.
+- Copy details (defaults, warp-class, branch shared-maps): copy shares closures and Data nodes silently for now (P206's
+  note would be a run-time warning, not built yet); `x.copy(true)` positional also means shallow, and in the
+  Kotlin-style `p.copy(shallow = yes, y = 5)` shallow is the flag; each event handler still gets a copy of the event
+  as raised; lists are still values until card shared-lists (P200b's "everything shares" includes lists).
 - P209 test blocks run only under `warp test` (chosen over running with the main program); `warp run` and `use` skip
   them.
 - P210 when all tests pass, one summary line ("✓ 12 tests passed"); failures print ✗ lines and "m of n failed" and

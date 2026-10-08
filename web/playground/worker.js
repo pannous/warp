@@ -2,7 +2,7 @@
 // a worker may compile any module synchronously and block on a synchronous fetch, which the host calls need.
 
 importScripts("reader.js", "imports.js", "host.js");
-importScripts(...HOST_PART_FILES, "components.js");
+importScripts(...HOST_PART_FILES, "components.js", "served-files.js");
 prepareTaskPool(); // task Workers start while this worker is idle (host.js)
 
 // warp.wasm, the optimized build, or the one the page names (?compiler=warp.debug.wasm, build.sh)

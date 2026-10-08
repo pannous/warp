@@ -229,8 +229,9 @@ impl WasmGcEmitter {
 
 	/// The value of a field as its kind stores it; an int field never takes a fraction (`p.x = 0.5` traps)
 	fn emit_field_value(&mut self, func: &mut Function, class: &str, field_index: usize, value: &Node, kind: Kind) {
-		self.emit_value_of_kind(func, value, kind);
-		let field = self.ctx.type_registry.get_by_name(class).and_then(|type_def| type_def.fields.get(field_index));
+		let field = self.ctx.type_registry.get_by_name(class).and_then(|type_def| type_def.fields.get(field_index)).cloned();
+		let declared = field.as_ref().map(|field| Node::Symbol(field.type_name.clone()));
+		self.emit_declared_value(func, declared.as_ref(), value, kind);
 		// an optional int is stored as a Node (ø or the number): no whole check there
 		if kind == Kind::Int && field.is_some_and(|field| crate::analyzer::is_whole_type(&field.type_name)) {
 			self.emit_whole_check(func);
@@ -354,7 +355,7 @@ impl WasmGcEmitter {
 }
 
 /// The body without its value when that is a bare variable (`…; p`): nothing changes it after, so its Node copy is it
-fn without_final_variable(body: &Node) -> Node {
+pub(super) fn without_final_variable(body: &Node) -> Node {
 	match body.drop_meta() {
 		Node::List(statements, bracket, separator) if matches!(separator, Separator::Semicolon | Separator::Newline)
 			&& statements.last().is_some_and(|last| matches!(last.drop_meta(), Node::Symbol(_))) => {
@@ -366,7 +367,7 @@ fn without_final_variable(body: &Node) -> Node {
 
 /// The variables a node uses as a whole value: not as an assignment's target, a field's object `p#x`, or an argument
 /// to a struct parameter
-fn used_whole(node: &Node, abi: &HashMap<String, Vec<Option<String>>>, names: &mut Vec<String>) {
+pub(super) fn used_whole(node: &Node, abi: &HashMap<String, Vec<Option<String>>>, names: &mut Vec<String>) {
 	let mut recurse = |child: &Node| used_whole(child, abi, names);
 	match node.drop_meta() {
 		Node::Symbol(name) => names.push(name.clone()),

@@ -1,6 +1,7 @@
 === Test Results ===
 
 PASSED:
+  ✓ control::test_aborting_handlers::a_handled_block_assigned_to_a_number_variable
   ✓ control::test_aborting_handlers::a_resuming_handler_and_the_end_of_the_block_still_work
   ✓ control::test_aborting_handlers::a_try_inside_the_block_does_not_catch_the_abort
   ✓ control::test_aborting_handlers::an_abort_for_an_outer_block_passes_the_inner_one
@@ -808,6 +809,7 @@ PASSED:
   ✓ functions::test_counting_word_result::a_counting_word_gives_a_number
   ✓ functions::test_csharp_functions::a_typed_parameter_with_a_default
   ✓ functions::test_csharp_functions::an_expression_bodied_method
+  ✓ functions::test_def_bool_result::every_definition_form_returns_a_comparison_as_bool
   ✓ functions::test_def_forms::a_def_function_calls_its_function_parameter
   ✓ functions::test_def_forms::a_parameter_tested_for_membership_is_no_function
   ✓ functions::test_def_forms::definition_forms_agree
@@ -1516,9 +1518,19 @@ PASSED:
   ✓ modules::test_std_matrix::numpy_names_are_matrix_words
   ✓ modules::test_std_matrix::use_matrix_computes
   ✓ modules::test_std_matrix::use_matrix_makes_matrices
+  ✓ modules::test_std_module_uses_module::a_programs_own_word_of_the_hidden_name_is_its_own
+  ✓ modules::test_std_module_uses_module::a_std_module_calls_another_modules_word
+  ✓ modules::test_std_module_uses_module::the_program_uses_both_modules
+  ✓ modules::test_std_module_uses_module::the_used_modules_words_stay_hidden_from_the_program
   ✓ modules::test_std_named_program::a_file_shadowing_a_std_module_is_named
   ✓ modules::test_std_named_program::a_program_named_like_a_std_module_uses_the_std_module
   ✓ modules::test_std_net::use_net_posts_a_text
+  ✓ modules::test_std_prelude::a_local_named_like_a_prelude_word_is_the_local
+  ✓ modules::test_std_prelude::a_module_word_inside_an_interpolation_comes_along
+  ✓ modules::test_std_prelude::a_programs_own_prelude_word_wins
+  ✓ modules::test_std_prelude::dir_lists_the_prelude
+  ✓ modules::test_std_prelude::methods_and_other_spellings_reach_the_prelude_words
+  ✓ modules::test_std_prelude::the_prelude_words_work_without_use
   ✓ modules::test_std_qualified::a_qualified_module_word_is_the_word
   ✓ modules::test_std_qualified::a_qualified_word_without_its_use_names_the_module
   ✓ modules::test_std_qualified::a_std_word_without_its_use_shows_no_hint_of_the_std_source
@@ -1801,6 +1813,8 @@ PASSED:
   ✓ numbers::test_static_units_compiled::test_a_whole_list_of_quantities_shows_its_units
   ✓ numbers::test_static_units_compiled::test_eval_reads_the_same_section
   ✓ numbers::test_static_units_data::test_a_serialized_quantity_names_its_unit
+  ✓ numbers::test_static_units_data::test_a_whole_object_shows_its_units
+  ✓ numbers::test_static_units_data::test_aliases_keep_the_units
   ✓ numbers::test_static_units_data::test_annotated_variables_keep_and_check_units
   ✓ numbers::test_static_units_data::test_lists_grow_with_quantities_of_their_unit
   ✓ numbers::test_static_units_data::test_object_fields_hold_quantities
@@ -2525,8 +2539,12 @@ PASSED:
   ✓ text::test_trim::trim_drops_whitespace_at_both_ends
   ✓ text::test_unicode_escape::a_unicode_escape_is_its_code_point
   ✓ text::test_utf8_bytes::a_text_and_its_utf8_bytes
+  ✓ types::test_any_field_text::test_arithmetic_on_an_any_typed_field_has_a_text
   ✓ types::test_any_into_annotated::any_into_an_annotated_int_is_checked_at_run_time
   ✓ types::test_any_into_annotated::unannotated_places_stay_lax
+  ✓ types::test_any_into_annotated_types::any_into_a_declared_field_is_checked_at_run_time
+  ✓ types::test_any_into_annotated_types::any_into_annotated_places_is_checked_at_run_time
+  ✓ types::test_any_into_annotated_types::values_of_the_annotated_type_pass
   ✓ types::test_array_types::hints::test_bracketed_list_type_hints_the_plural_word
   ✓ types::test_array_types::hints::test_plural_word_needs_no_hint
   ✓ types::test_array_types::test_bracketed_type_is_a_list_of_that_type
@@ -2664,6 +2682,13 @@ PASSED:
   ✓ types::test_constructor_vs_data::test_construction_reads_its_fields
   ✓ types::test_constructor_vs_data::test_construction_rejects_an_undeclared_field
   ✓ types::test_constructor_vs_data::test_data_is_never_validated
+  ✓ types::test_copies::a_class_copy_wins_and_clone_calls_it
+  ✓ types::test_copies::a_copy_copies_a_cycle_once
+  ✓ types::test_copies::a_copy_is_deep
+  ✓ types::test_copies::a_copy_is_independent
+  ✓ types::test_copies::a_number_copy_is_itself
+  ✓ types::test_copies::a_shallow_copy_shares_the_values
+  ✓ types::test_copies::kotlin_copy_changes_fields
   ✓ types::test_data::an_object_mixing_commas_and_newlines_reads_its_fields
   ✓ types::test_data::an_object_of_rows_with_a_quoted_name_reads_its_fields
   ✓ types::test_data::test_node_data
@@ -2760,9 +2785,12 @@ PASSED:
   ✓ types::test_printable::print_and_interpolation_call_the_printable_operation
   ✓ types::test_real_references::a_function_changes_the_instance_it_is_given
   ✓ types::test_real_references::a_list_item_is_the_instance_itself
+  ✓ types::test_real_references::a_map_built_by_its_entries_shares
+  ✓ types::test_real_references::a_new_field_grows_the_same_instance
   ✓ types::test_real_references::an_alias_sees_a_changed_field
+  ✓ types::test_real_references::copy_makes_an_independent_map
   ✓ types::test_real_references::each_construction_is_a_new_instance
-  ✓ types::test_real_references::maps_stay_values
+  ✓ types::test_real_references::maps_share
   ✓ types::test_real_text::an_exact_real_as_text_is_symbolic
   ✓ types::test_real_text::an_exact_real_joins_a_text_symbolically
   ✓ types::test_records::test_optional_field_is_empty_and_settable
@@ -3581,4 +3609,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-19 ignored, 3576 passed, 0 failed, 3576 total tested
+19 ignored, 3604 passed, 0 failed, 3604 total tested
