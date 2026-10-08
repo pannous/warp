@@ -205,7 +205,7 @@ pub fn infer_type(node: &Node, scope: &Scope) -> Kind {
 }
 
 /// A loop is its last body value (P55): a text, character or list one held as such (card loop-value-kind), ø after a
-/// print (P213), a number otherwise
+/// print (P213); a number or ø otherwise, as a loop may never run (card loop-empty), so a Node decided at run time
 fn loop_kind(body: &Node, scope: &Scope) -> Kind {
 	let (statements, _) = crate::wasm_emitter::split_step(body);
 	let prints = match statements.drop_meta() {
@@ -213,11 +213,10 @@ fn loop_kind(body: &Node, scope: &Scope) -> Kind {
 		other => is_output_call(other),
 	};
 	let kind = infer_type(&statements, scope);
-	// only kinds known for sure: a call the analyzer cannot see into (Empty, Data) leaves the loop a number
 	match kind {
 		_ if prints => Kind::Empty,
 		Kind::Text | Kind::Codepoint | Kind::List => kind,
-		_ => Kind::Int,
+		_ => Kind::Data,
 	}
 }
 
