@@ -244,7 +244,7 @@ exporter collects every name declared `global` anywhere first. In warp a functio
 `global` makes a local (`n = 0; def f(x) { n = 5; x }; f(3); n` is 0); W0 has no function locals, so the exporter
 refuses it. Elaboration runs twice so a function can read a main-level name whatever their order
 (`elaborateTyped`: the second pass infers functions seeing the first pass's names). Not yet: `global float y = …`
-(the type word is lost in parsing), `global x; x` (read before any value).
+(the exporter does not read the type word yet), `global x; x` (read before any value).
 
 ## Inline unions and optionals
 
