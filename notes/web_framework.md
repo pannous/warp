@@ -361,7 +361,16 @@ Each step is useful on its own and is what the next ones stand on.
   `native` feature; pollster blocks on its futures), one device per process; errors in the browser's form, `1:10:
   expected identifier…` or wgpu's innermost cause. A machine without an adapter says "no WebGPU adapter" (tests skip).
   Cost: 69 more crates in Cargo.lock, a first build of about a minute. Not a sample yet.
-- Next: more buffers and uniforms (a map of named arrays), typed results (ints as array<i32>), render to a canvas.
+- Render (card g_YqWY, 2026-10-08, warp-web): `gpu_render(shader, width, height)` runs the WGSL fragment shader `main`
+  (`@fragment fn main(@builtin(position) at: vec4f) -> @location(0) vec4f`, `at.xy` the pixel's center) over a
+  width×height rgba8unorm image and gives its pixels as paint takes them, 0xFFRRGGBB row by row (alpha dropped).
+  warp appends the vertex stage (warp_full_image: one triangle covering the image) after the shader, so compile errors
+  keep the user's line numbers. Same task-Worker path as gpu_compute (host-gpu.js GPU_JOBS), natively src/gpu.rs
+  render. samples/webgpu.wasp animates rings (a frame per loop step: paint + sleep; values enter the shader by
+  interpolation, which recompiles it per frame), in the playground menu again. Without an adapter the samples test
+  skips it loudly (CI).
+- Next: uniforms instead of interpolated values, more buffers (a map of named arrays), typed results (ints as
+  array<i32>), rendering straight into a page canvas (GPUCanvasContext) without the pixel round trip.
 
 ## web-apis: WebIDL (2026-10-08, warp-95)
 - `use js <global>` of a browser global is typed through WebIDL as `use c` is through C headers: src/web_idl.rs reads

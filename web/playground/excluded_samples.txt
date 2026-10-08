@@ -17,4 +17,3 @@ life_kotlin_ranges	index out of range (does the loop bound `..size-1` include th
 modules	`}` is missing: the group opened at 22:15 runs to the end of the input (sketches a module system: card module-manager)
 natural	undefined: send in `send email to "user@example.com" with subject "Hello"` (the phrase waits for the user: card natural-phrases)
 netbase	undefined: query in `query "all cities with population > 100000"` (needs a netbase package: card netbase-package); `results where country is germany` reads country as a field: card natural-phrases
-webgpu	undefined: vec4 of f32 in `vec4 of f32 (in#uv+1, …)` (WGSL in a webgpu block: cards web-apis, gpu-map)
