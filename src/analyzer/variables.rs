@@ -241,7 +241,10 @@ pub(super) fn widen_to_node(scope: &mut Scope, name: &str, value: &Node) {
 	// a parameter's representation comes from its calls (infer_parameters_from_calls), not from the body
 	let Some(local) = scope.locals.get_mut(name).filter(|local| !local.is_param && local.type_node.as_ref().is_none_or(|_| local.kind == Kind::List)) else { return };
 	let mixes = |a: Kind, b: Kind| a == b || [a, b].iter().all(|kind| matches!(kind, Kind::Int | Kind::Float)) || [a, b].iter().all(|kind| matches!(kind, Kind::Text | Kind::Codepoint));
-	if CONCRETE_KINDS.contains(&local.kind) && CONCRETE_KINDS.contains(&assigned) && !mixes(local.kind, assigned) {
+	// an element of unknown kind may be an object: `item = 2` earlier, then `for item in basket` (samples/natural.wasp)
+	let unknown_element = assigned == Kind::Empty && matches!(value.drop_meta(), Node::Key(_, Op::Hash, _));
+	let other_kind = unknown_element || CONCRETE_KINDS.contains(&assigned) && !mixes(local.kind, assigned);
+	if CONCRETE_KINDS.contains(&local.kind) && other_kind {
 		local.kind = Kind::Empty;
 		local.type_node = None;
 	}
@@ -413,6 +416,8 @@ pub(crate) fn held_kind(value: &Node, inferred: impl FnOnce() -> Kind) -> Kind {
 pub(super) fn declared_kind(type_name: &str) -> Option<Kind> {
 	match type_name.strip_suffix('?') {
 		Some(_) => Some(Kind::Empty),
+		// an inline union `int or text` holds a value of either kind as a Node
+		None if super::checks::union_parts(type_name).is_some() => Some(Kind::Empty),
 		None => builtin_type_kind(type_name),
 	}
 }

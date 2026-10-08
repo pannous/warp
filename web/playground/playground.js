@@ -40,6 +40,7 @@ function element(tag, properties = {}, ...children) {
 
 let worker;
 let workerReady;
+let workerWarmed; // the worker was asked to compile the markup renderer ahead of the first markup run (worker.js warmUp)
 let nextRunId = 0;
 let pending; // {id, resolve, printed, timer} of the run in the worker
 let runs = Promise.resolve(); // the evaluations, one after another
@@ -128,6 +129,7 @@ function showAgain(topic) {
 // ---- the worker ---------------------------------------------------------------------------------------------
 
 function startWorker() {
+	workerWarmed = false;
 	worker = new Worker(debugBuild ? `worker.js?compiler=${DEBUG_COMPILER}` : "worker.js");
 	workerReady = new Promise((resolve, reject) => {
 		worker.onmessage = ({ data }) => {
@@ -499,7 +501,16 @@ async function show(code) {
 		const next = queued;
 		queued = undefined;
 		show(next);
+		return;
 	}
+	warmWorker();
+}
+
+// once per worker, after a run is shown: the page is idle, the worker free
+function warmWorker() {
+	if (workerWarmed) return;
+	workerWarmed = true;
+	worker.postMessage({ warm: true });
 }
 
 // a link to the same page with the other compiler build

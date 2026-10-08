@@ -36,8 +36,31 @@ theorem number_value {Γ v t} (h : HasType P Γ v t) (hv : v.isValue = true) (hs
 theorem add_typed {Γ a b ta tb} (ha : HasType P Γ a ta) (hb : HasType P Γ b tb) (va : a.isValue = true)
     (vb : b.isValue = true) (sa : addable ta = true) (sb : addable tb = true) :
     ∃ t', HasType P Γ (addValues a b) t' ∧ sub t' (plus ta tb) = true := by
-  cases ha <;> cases hb <;> simp_all [isValue, addValues, isText, asInt, asNumber, plus, arith, addable, sub] <;>
+  cases ha <;> cases hb <;> simp_all [isValue, addValues, isText, asInt, asNumber, plus, Ty.arith, addable, sub] <;>
     first | exact ⟨_, .int, by decide⟩ | exact ⟨_, .num, by decide⟩ | exact ⟨_, .text, by decide⟩
+
+theorem arith_typed {Γ op a b ta tb} (ha : HasType P Γ a ta) (hb : HasType P Γ b tb) (va : a.isValue = true)
+    (vb : b.isValue = true) (sa : sub ta .number = true) (sb : sub tb .number = true) :
+    ∃ t', HasType P Γ (arithValues op a b) t' ∧ sub t' (Ty.arith ta tb) = true := by
+  have whole : ∀ {v t x}, HasType P Γ v t → v.isValue = true → sub t .number = true → asInt v = some x →
+      sub t .int = true := by
+    intro v t x h hv hs hx
+    rcases number_value h hv hs with ⟨_, ht⟩ | ⟨hn, _⟩
+    · exact ht
+    · simp [hx] at hn
+  unfold arithValues
+  split
+  · rename_i x y hx hy
+    exact ⟨_, .int, by simp [Ty.arith, whole ha va sa hx, whole hb vb sb hy, sub]⟩
+  · rename_i hnot
+    refine ⟨_, .num, ?_⟩
+    rcases number_value ha va sa with ⟨ia, _⟩ | ⟨_, rfl⟩
+    · rcases number_value hb vb sb with ⟨ib, _⟩ | ⟨_, rfl⟩
+      · obtain ⟨x, hx⟩ := Option.ne_none_iff_exists'.1 ia
+        obtain ⟨y, hy⟩ := Option.ne_none_iff_exists'.1 ib
+        exact (hnot x y hx hy).elim
+      · simp [Ty.arith, sub]
+    · simp [Ty.arith, sub]
 
 theorem nth_typed {Γ} : ∀ {l : Expr} (i : Int) {tl e v}, l.isValue = true → HasType P Γ l tl → element tl = some e →
     nth l i = some v → ∃ tv, HasType P Γ v tv ∧ sub tv e = true := by
@@ -152,6 +175,11 @@ theorem narrow {Γ e t} (h : HasType P Γ e t) : ∀ {Γ'}, CtxSub Γ' Γ → �
     obtain ⟨a', h1, s1⟩ := ih1 hs
     obtain ⟨b', h2, s2⟩ := ih2 hs
     exact ⟨_, .add h1 h2 (addable_mono s1 sa) (addable_mono s2 sb), plus_mono s1 s2 sa sb⟩
+  | arith _ _ sa sb ih1 ih2 =>
+    intro Γ' hs
+    obtain ⟨a', h1, s1⟩ := ih1 hs
+    obtain ⟨b', h2, s2⟩ := ih2 hs
+    exact ⟨_, .arith h1 h2 (sub_trans s1 sa) (sub_trans s2 sb), arith_mono s1 s2⟩
   | lt _ _ sa sb ih1 ih2 =>
     intro Γ' hs
     obtain ⟨a', h1, s1⟩ := ih1 hs
@@ -271,6 +299,7 @@ theorem subst_typed {Γ0 e t} (h : HasType P Γ0 e t) :
     · cases hz; simp [*]; exact value_ctx htv hv _
     · simp [*]; exact .loc hz
   | add _ _ sa sb ih1 ih2 => intro Γ y tv v hΓ hv htv; simp only [Expr.subst]; exact .add (ih1 hΓ hv htv) (ih2 hΓ hv htv) sa sb
+  | arith _ _ sa sb ih1 ih2 => intro Γ y tv v hΓ hv htv; simp only [Expr.subst]; exact .arith (ih1 hΓ hv htv) (ih2 hΓ hv htv) sa sb
   | lt _ _ sa sb ih1 ih2 => intro Γ y tv v hΓ hv htv; simp only [Expr.subst]; exact .lt (ih1 hΓ hv htv) (ih2 hΓ hv htv) sa sb
   | eq _ _ ih1 ih2 => intro Γ y tv v hΓ hv htv; simp only [Expr.subst]; exact .eq (ih1 hΓ hv htv) (ih2 hΓ hv htv)
   | ite _ _ _ ih0 ih1 ih2 =>

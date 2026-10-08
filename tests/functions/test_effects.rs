@@ -106,3 +106,17 @@ fn test_imports_follow_effects() {
 	assert_eq!(imports_of("use m;floor(4.5)"), [("m".into(), "floor".into())]);
 	assert!(imports_of("x=fetch https://a.com/t;x").contains(&("host".into(), "fetch".into())));
 }
+
+// card effects-infer: Allocation (construction) is reported but stays pure (wiki/pure.md), Async is a real effect
+#[test]
+fn test_allocation_and_async_are_inferred() {
+	assert_eq!(effects("pair(x) := [x, x]", "pair"), EffectSet::of(&[Allocation]));
+	assert_eq!(effects("person(n) := {name: n}", "person"), EffectSet::of(&[Allocation]));
+	assert_eq!(effects("greet(n) := \"hi \" + n", "greet"), EffectSet::of(&[Allocation]));
+	assert!(EffectSet::of(&[Allocation]).is_pure());
+	is!("pair(x) := [x, x]\neffects of pair", Node::Symbol("Allocation".into()));
+	is!("first(x) := [x, x]#1 ! Pure\nfirst(3)", 3);
+	is!("g() := 1\nf() := await go g()\neffects of f", Node::Symbol("Async".into()));
+	let message = error_text(eval("g() := 1\nf() := await go g() ! Pure\nf()"));
+	assert!(message.contains("f is declared ! Pure but performs Async"), "{message}");
+}

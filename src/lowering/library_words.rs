@@ -211,7 +211,7 @@ pub fn lower(node: Node) -> Node {
 	let mut assigned = AssignedObjects::default();
 	collect_assigned_objects(&node, &mut assigned);
 
-	let plain = assigned.plain;
+	let plain = assigned.plain.difference(&assigned.rebound).cloned().collect();
 	let objects = assigned.objects.into_iter().filter_map(|(name, literal)| Some((name, literal?))).collect();
 	let instances = crate::traits::InstanceTypes::of(&node);
 	let call_results = call_results(&node, &context);
@@ -465,6 +465,8 @@ fn field_name(key: &Node) -> Option<String> {
 struct AssignedObjects {
 	objects: HashMap<String, Option<Node>>,
 	plain: HashSet<String>,
+	/// variables also bound to what may hold an object, so not plain: a loop's `for item in basket`, `p = people#1`
+	rebound: HashSet<String>,
 }
 
 fn collect_assigned_objects(node: &Node, assigned: &mut AssignedObjects) {
@@ -473,6 +475,9 @@ fn collect_assigned_objects(node: &Node, assigned: &mut AssignedObjects) {
 			if let Node::Symbol(name) = target.drop_meta() {
 				if is_plain_literal(value) {
 					assigned.plain.insert(name.clone());
+				}
+				if may_hold_object(value) {
+					assigned.rebound.insert(name.clone());
 				}
 				let copied = match value.drop_meta() {
 					Node::Symbol(other) => assigned.objects.get(other).cloned().flatten(), // `q=p` is the same object
@@ -488,8 +493,31 @@ fn collect_assigned_objects(node: &Node, assigned: &mut AssignedObjects) {
 			collect_assigned_objects(left, assigned);
 			collect_assigned_objects(right, assigned);
 		}
-		Node::List(items, _, _) => items.iter().for_each(|item| collect_assigned_objects(item, assigned)),
+		Node::List(items, _, _) => {
+			if let Some(variable) = loop_variable(items) {
+				assigned.rebound.insert(variable);
+			}
+			items.iter().for_each(|item| collect_assigned_objects(item, assigned))
+		}
 		_ => {}
+	}
+}
+
+/// An element, a field, a call's result or an object literal
+fn may_hold_object(value: &Node) -> bool {
+	match value.drop_meta() {
+		Node::Key(_, Op::Hash | Op::Dot, _) => true,
+		Node::List(items, Bracket::Round, Separator::None) => matches!(items.first().map(Node::drop_meta), Some(Node::Symbol(_))),
+		other => object_entries(other).is_some(),
+	}
+}
+
+/// The variable `item` of a loop `for item in basket {…}`, `for each item in basket {…}`
+fn loop_variable(words: &[Node]) -> Option<String> {
+	let words: Vec<String> = words.iter().take(4).map(|word| word.drop_meta().name()).collect();
+	match words.iter().map(String::as_str).collect::<Vec<_>>().as_slice() {
+		["for", "each", variable, "in"] | ["for", variable, "in", ..] => Some(variable.to_string()),
+		_ => None,
 	}
 }
 
@@ -952,7 +980,7 @@ impl Lowering {
 		}
 		let is_value = matches!(receiver.drop_meta(), Node::Symbol(_) | Node::Text(_) | Node::Char(_) | Node::Number(_) | Node::List(_, Bracket::Square, _));
 		let call = Node::Key(Box::new(receiver.clone()), Op::Dot, Box::new(method.clone()));
-		(!is_known && is_value).then(|| crate::ffi::undefined_function_diagnostic(&call, name).into_error())
+		(!is_known && is_value).then(|| self.context.undefined_function_diagnostic(&call, name).into_error())
 	}
 
 	/// `object.name = value` is `object = field_with(object, "name", value)`; a nested path updates the objects on the way

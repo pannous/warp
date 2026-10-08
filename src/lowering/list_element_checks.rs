@@ -15,6 +15,8 @@ use std::collections::HashMap;
 
 const ITEM_PLACEHOLDER: &str = "checked_item_placeholder";
 const LIST_PLACEHOLDER: &str = "checked_list_placeholder";
+const INSTANCE_PLACEHOLDER: &str = "checked_instance_placeholder";
+const CHECK_PLACEHOLDER: &str = "item_check_placeholder";
 /// The temporaries holding an item or a list while it is checked: `checked·1`
 const CHECKED_PREFIX: &str = "checked·";
 /// A float or number list takes ints too, as a declared float does
@@ -41,17 +43,24 @@ struct ElementChecks {
 struct ElementTest {
 	type_word: String,
 	message: String,
-	/// `b is bag`: the test applies only to an instance of that class, for a field of an instance whose class is unknown
-	guard: Option<String>,
+	/// the instance `b` and the class `bag` of `b is bag`: the test applies only to an instance of that class, for a field
+	/// of an instance whose class is unknown
+	guard: Option<(Node, String)>,
 }
 
 impl ElementTest {
-	/// `not (item is text)`, `(b is bag) and not (item is text)`
-	fn failure(&self, item: &str) -> String {
-		let misfit = format!("not ({item} is {})", self.type_word);
-		match &self.guard {
-			Some(guard) => format!("({guard}) and {misfit}"),
+	/// `if not (item is text) { raise "…" }`, `if (b is bag) and not (item is text) { … }`: the instance is put in
+	/// as a node, its name (`nested·0`) is no source text
+	fn check(&self) -> Node {
+		let misfit = format!("not ({ITEM_PLACEHOLDER} is {})", self.type_word);
+		let failure = match &self.guard {
+			Some((_, class)) => format!("({INSTANCE_PLACEHOLDER} is {class}) and {misfit}"),
 			None => misfit,
+		};
+		let template = crate::wasp_parser::parse(&format!("if {failure} {{ raise {:?} }}", self.message));
+		match &self.guard {
+			Some((instance, _)) => substitute(template, INSTANCE_PLACEHOLDER, instance),
+			None => template,
 		}
 	}
 }
@@ -188,17 +197,17 @@ impl ElementChecks {
 	/// checked list field of that name
 	fn field_tests(&self, list: &Node) -> Vec<ElementTest> {
 		let Node::Key(instance, Op::Dot, field) = list.drop_meta() else { return vec![] };
-		let Node::Symbol(instance) = instance.drop_meta() else { return vec![] };
+		let Node::Symbol(name) = instance.drop_meta() else { return vec![] };
 		let field = field.drop_meta().name();
 		let test_of = |class: &String| {
 			let (_, type_name) = self.class_fields.get(class)?.iter().find(|(name, _)| *name == field)?;
 			element_test(&format!("{field} of {class}"), type_name)
 		};
-		match self.instances.get(instance) {
+		match self.instances.get(name) {
 			Some(class) => test_of(class).into_iter().collect(),
 			None => self.class_fields.keys().collect::<std::collections::BTreeSet<_>>().into_iter().filter_map(|class| {
 				let test = test_of(class)?;
-				Some(ElementTest { guard: Some(format!("{instance} is {class}")), ..test })
+				Some(ElementTest { guard: Some((instance.drop_meta().clone(), class.clone())), ..test })
 			}).collect(),
 		}
 	}
@@ -231,14 +240,13 @@ fn element_test(name: &str, type_name: &str) -> Option<ElementTest> {
 
 /// `if not (v is text) { raise "…" }`
 fn item_check(item: &Node, test: &ElementTest) -> Node {
-	let template = crate::wasp_parser::parse(&format!("if {} {{ raise {:?} }}", test.failure(ITEM_PLACEHOLDER), test.message));
-	substitute(template, ITEM_PLACEHOLDER, item)
+	substitute(test.check(), ITEM_PLACEHOLDER, item)
 }
 
 /// `for item in list { if not (item is text) { raise "…" } }`
 fn each_item_check(list: &Node, test: &ElementTest) -> Node {
-	let check = format!("if {} {{ raise {:?} }}", test.failure(ITEM_PLACEHOLDER), test.message);
-	let template = crate::wasp_parser::parse(&format!("for {ITEM_PLACEHOLDER} in {LIST_PLACEHOLDER} {{ {check} }}"));
+	let template = crate::wasp_parser::parse(&format!("for {ITEM_PLACEHOLDER} in {LIST_PLACEHOLDER} {{ {CHECK_PLACEHOLDER} }}"));
+	let template = substitute(template, CHECK_PLACEHOLDER, &test.check());
 	let item = Node::Symbol(format!("{}·item", list.name()));
 	substitute(substitute(template, LIST_PLACEHOLDER, list), ITEM_PLACEHOLDER, &item)
 }

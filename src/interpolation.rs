@@ -33,6 +33,16 @@ pub fn template_mentions(node: &Node, mentions: impl Fn(&Node) -> bool) -> bool 
 	parts_with(template, false).is_ok_and(|parts| parts.iter().any(|part| matches!(part, Part::Hole(expression) if mentions(expression))))
 }
 
+/// The template as the concatenation of its pieces now, when a hole mentions a name (`"\(Math.max(1, 5))"` mentions
+/// Math): for a pass that gives such names their meaning before this lowering runs
+pub fn interpolated_mentioning(node: &Node, mentions: impl Fn(&Node) -> bool) -> Option<Node> {
+	let Node::Meta { node: inner, data } = node else { return None };
+	match inner.drop_meta() {
+		Node::Text(template) if is_template_mark(data) && template_mentions(node, mentions) => Some(interpolated(template)),
+		_ => None,
+	}
+}
+
 /// Every template left after the sql/sh lowering becomes the concatenation of its pieces
 pub fn lower(node: Node) -> Node {
 	match node {
