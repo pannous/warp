@@ -141,3 +141,4 @@ mod test_multiline_errors;
 #[cfg(feature = "native")] // SQLite natively; IndexedDB in the browser is a later step (notes/orm.md)
 mod test_database_tables; // card orm
 mod test_database_filters; // card orm-filters
+mod test_database_relations; // card orm, step 4

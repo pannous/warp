@@ -18,7 +18,12 @@ const ADD_WORD: &str = "add";
 /// the generated code's variables, written as these placeholders (`·` would parse as a product)
 const ROW: &str = "table_row";
 const ADDED: &str = "table_added";
-const GENERATED_NAMES: [(&str, &str); 3] = [(ROW, "table·row"), (ADDED, "table·added"), (ARGUMENTS, "table·arguments")];
+/// a foreign key's row, and the row of a one-to-many list with one of its members
+const REFERENCED: &str = "table_referenced";
+const OWNER: &str = "table_owner";
+const MEMBER: &str = "table_member";
+const GENERATED_NAMES: [(&str, &str); 6] = [(ROW, "table·row"), (ADDED, "table·added"), (ARGUMENTS, "table·arguments"),
+	(REFERENCED, "table·referenced"), (OWNER, "table·owner"), (MEMBER, "table·member")];
 const SCHEMA_PLACEHOLDER: &str = "table_schema";
 const VALUE_PLACEHOLDER: &str = "table_value";
 /// A filter's query (notes/orm.md step 2): the ids it keeps, its SQL condition and parameters, the functions it calls
@@ -42,6 +47,27 @@ struct Table {
 	name: String,
 	class: String,
 	fields: Vec<(String, String, Option<Node>)>,
+	/// fields holding an instance of another table's class, a foreign key: the field and that table's variable
+	references: Vec<(String, String)>,
+	/// list fields of another table's class, one-to-many: not a column, the other table's rows pointing back
+	members: Vec<Members>,
+}
+
+/// `members: [Person]` of Team: the rows of `table` (people) whose field `back` (team) is the team
+struct Members {
+	field: String,
+	table: String,
+	back: Option<String>,
+}
+
+impl Table {
+	fn reference(&self, field: &str) -> Option<&str> {
+		self.references.iter().find(|(name, _)| name == field).map(|(_, table)| table.as_str())
+	}
+
+	fn is_members(&self, field: &str) -> bool {
+		self.members.iter().any(|members| members.field == field)
+	}
 }
 
 pub fn lower(program: Node) -> Node {
@@ -60,7 +86,7 @@ pub fn lower(program: Node) -> Node {
 		return program;
 	}
 	let registered: Vec<&str> = tables.values().map(|table| table.class.as_str()).collect();
-	with_tables(with_row_ids(program, &registered), &tables, &tables_file())
+	with_tables(with_row_ids(program, &registered), &tables, &tables_file(), &mut vec![])
 }
 
 /// The program's registered tables by their list variable
@@ -70,6 +96,26 @@ fn registrations(program: &Node) -> HashMap<String, Table> {
 	program.visit(&mut |part| if let Some((variable, table)) = registration(part, &classes) {
 		tables.insert(variable, table);
 	});
+	with_relations(tables)
+}
+
+/// Each table's fields of another table's class (foreign keys) and lists of one (one-to-many, pointing back)
+fn with_relations(mut tables: HashMap<String, Table>) -> HashMap<String, Table> {
+	let variable_of: HashMap<String, String> = tables.iter().map(|(variable, table)| (table.class.clone(), variable.clone())).collect();
+	let fields_of: HashMap<String, Vec<(String, String)>> = tables.values()
+		.map(|table| (table.class.clone(), table.fields.iter().map(|(name, field_type, _)| (name.clone(), field_type.clone())).collect())).collect();
+	for table in tables.values_mut() {
+		for (field, field_type, _) in &table.fields {
+			if let Some(target) = variable_of.get(field_type) {
+				table.references.push((field.clone(), target.clone()));
+			}
+			let element = field_type.strip_prefix('[').and_then(|rest| rest.strip_suffix(']')).unwrap_or_default();
+			if let Some(target) = variable_of.get(element) {
+				let back = fields_of[element].iter().find(|(_, back_type)| *back_type == table.class).map(|(name, _)| name.clone());
+				table.members.push(Members { field: field.clone(), table: target.clone(), back });
+			}
+		}
+	}
 	tables
 }
 
@@ -201,7 +247,8 @@ impl Query<'_> {
 		let field = self.field_of_it(node)?;
 		match field == ID_FIELD {
 			true => Some(ID_FIELD.to_string()),
-			false => columns_of(self.table).contains(&field).then(|| quote(&field)),
+			// a foreign key's column is an id, the field an instance: compared through a query's function
+			false => (columns_of(self.table).contains(&field) && self.table.reference(&field).is_none()).then(|| quote(&field)),
 		}
 	}
 
@@ -268,7 +315,13 @@ fn with_arguments(node: Node, table: &Table, values: &[String], row_size: usize)
 		Node::Symbol(name) if values.contains(&name) => argument(row_size + 1 + values.iter().position(|value| *value == name).unwrap_or_default()),
 		Node::Key(element, Op::Dot, field) if element.drop_meta().name() == crate::lambdas::IMPLICIT_PARAMETER => match field.drop_meta().name() {
 			name if name == ID_FIELD => argument(1),
-			name if columns.contains(&name) => argument(2 + columns.iter().position(|column| *column == name).unwrap_or_default()),
+			name if columns.contains(&name) => {
+				let index = 2 + columns.iter().position(|column| *column == name).unwrap_or_default();
+				match table.reference(&name) {
+					Some(target) => generated(&referenced(target, &format!("{ARGUMENTS}#{index}")), []),
+					None => argument(index),
+				}
+			}
 			_ => Node::Key(Box::new(with_arguments(*element, table, values, row_size)), Op::Dot, field),
 		},
 		Node::Key(left, Op::Dot, right) => Node::Key(Box::new(with_arguments(*left, table, values, row_size)), Op::Dot, right),
@@ -279,9 +332,13 @@ fn with_arguments(node: Node, table: &Table, values: &[String], row_size: usize)
 /// The constructor's arguments of an instance from a row `[id, column values…]` held in `row`
 fn constructor_arguments(table: &Table, row: &str) -> Vec<String> {
 	let columns = columns_of(table);
-	table.fields.iter().map(|(name, _, _)| match name == ID_FIELD {
-		true => format!("{row}#1"),
-		false => format!("{row}#{}", 2 + columns.iter().position(|column| column == name).unwrap_or_default()),
+	let column = |name: &str| format!("{row}#{}", 2 + columns.iter().position(|column| column == name).unwrap_or_default());
+	table.fields.iter().map(|(name, _, _)| match (name == ID_FIELD, table.reference(name)) {
+		(true, _) => format!("{row}#1"),
+		(false, Some(target)) => referenced(target, &column(name)),
+		// one-to-many: filled once the table pointing back is open (members_filled)
+		_ if table.is_members(name) => "[]".to_string(),
+		_ => column(name),
 	}).chain(implicit_id(table).then(|| format!("{row}#1"))).collect()
 }
 
@@ -327,7 +384,7 @@ fn registration(statement: &Node, classes: &HashMap<String, Node>) -> Option<(St
 	let name = database_table(source)?;
 	let class = class.drop_meta().name();
 	let fields = crate::class_methods::field_declarations(classes.get(&class)?);
-	Some((variable.drop_meta().name(), Table { name, class, fields }))
+	Some((variable.drop_meta().name(), Table { name, class, fields, references: vec![], members: vec![] }))
 }
 
 /// The table `database.t` names
@@ -364,40 +421,63 @@ fn has_id(body: &Node) -> bool {
 	crate::class_methods::field_declarations(body).iter().any(|(name, _, _)| name == ID_FIELD)
 }
 
-/// The registrations, inserts and field changes of the tables as their table calls, in every block
-fn with_tables(node: Node, tables: &HashMap<String, Table>, file: &str) -> Node {
+/// The registrations, inserts and field changes of the tables as their table calls, in every block; `open` the tables
+/// registered so far, as a foreign key reads the rows of its table
+fn with_tables(node: Node, tables: &HashMap<String, Table>, file: &str, open: &mut Vec<String>) -> Node {
 	match node {
 		Node::List(statements, bracket, separator @ (Separator::Semicolon | Separator::Newline)) => {
-			let statements = statements.into_iter().flat_map(|statement| table_statements(statement, tables, file)).collect();
+			let statements = statements.into_iter().flat_map(|statement| table_statements(statement, tables, file, open)).collect();
 			Node::List(statements, bracket, separator)
 		}
-		other => other.map_children(|child| with_tables(child, tables, file)),
+		other => other.map_children(|child| with_tables(child, tables, file, open)),
 	}
 }
 
-fn table_statements(statement: Node, tables: &HashMap<String, Table>, file: &str) -> Vec<Node> {
-	if let Some(lowered) = opened(&statement, tables, file).or_else(|| inserted(&statement, tables, file)) {
+fn table_statements(statement: Node, tables: &HashMap<String, Table>, file: &str, open: &mut Vec<String>) -> Vec<Node> {
+	if let Some(lowered) = opened(&statement, tables, file, open).or_else(|| inserted(&statement, tables, file)) {
 		return lowered;
 	}
 	let updates = written_through(&statement, tables, file);
-	[vec![with_tables(statement, tables, file)], updates].concat()
+	[vec![with_tables(statement, tables, file, open)], updates].concat()
 }
 
-/// `people: [Person] = database.people` as the list of the table's rows, each an instance with its id
-fn opened(statement: &Node, tables: &HashMap<String, Table>, file: &str) -> Option<Vec<Node>> {
+/// `people: [Person] = database.people` as the list of the table's rows, each an instance with its id; then the
+/// one-to-many lists of the open tables its rows point back to
+fn opened(statement: &Node, tables: &HashMap<String, Table>, file: &str, open: &mut Vec<String>) -> Option<Vec<Node>> {
 	let Node::Key(target, Op::Assign, source) = statement.drop_meta() else { return None };
 	let Node::Key(variable, Op::Colon, _) = target.drop_meta() else { return None };
-	let table = tables.get(&variable.drop_meta().name())?;
+	let variable = variable.drop_meta().name();
+	let table = tables.get(&variable)?;
 	database_table(source)?;
+	if let Some((field, unopened)) = table.references.iter().find(|(_, referenced)| !open.contains(referenced)) {
+		let message = format!("register {unopened} before {variable}: {}.{field} points to its rows", table.class);
+		return Some(vec![crate::diagnostic::Diagnostic::at(statement, message).into_error()]);
+	}
+	if let Some(members) = table.members.iter().find(|members| members.back.is_none()) {
+		let message = format!("{}.{} lists rows of {}, whose class has no field of class {} pointing back", table.class, members.field, members.table, table.class);
+		return Some(vec![crate::diagnostic::Diagnostic::at(statement, message).into_error()]);
+	}
+	open.push(variable.clone());
 	// the row is [id, column values…] in the order of the columns
 	let arguments = constructor_arguments(table, ROW);
-	let schema = Node::List(table.fields.iter().filter(|(name, _, _)| name != ID_FIELD).map(|(name, field_type, default)| {
-		Node::List(vec![Node::Text(name.clone()), Node::Text(field_type.clone()), default.clone().unwrap_or(Node::Empty)], Bracket::Square, Separator::Space)
+	let schema = Node::List(column_fields(table).into_iter().map(|(name, field_type, default)| {
+		Node::List(vec![Node::Text(name), Node::Text(field_type), default.unwrap_or(Node::Empty)], Bracket::Square, Separator::Space)
 	}).collect(), Bracket::Square, Separator::Space);
 	let code = format!("[{class}({arguments}) for {ROW} in std_io(\"table\", \"open\", [{name:?}, {SCHEMA_PLACEHOLDER}, {file:?}])]",
 		class = table.class, arguments = arguments.join(", "), name = table.name);
 	let rows = generated(&code, [(SCHEMA_PLACEHOLDER, schema)]);
-	Some(vec![Node::Key(target.clone(), Op::Assign, Box::new(rows))])
+	let filled = tables.iter().filter(|(owner, _)| open.contains(owner)).flat_map(|(owner, owner_table)| members_filled(owner, owner_table, &variable));
+	Some(std::iter::once(Node::Key(Box::new(target.drop_meta().clone()), Op::Assign, Box::new(rows))).chain(filled).collect())
+}
+
+/// `members: [Person]` of each team: the rows of people whose `team` is that team (`members` the table `owner`'s list
+/// field of the rows of `table`)
+fn members_filled(owner: &str, owner_table: &Table, table: &str) -> Vec<Node> {
+	owner_table.members.iter().filter(|members| members.table == table).filter_map(|members| {
+		let back = members.back.as_ref()?;
+		Some(generated(&format!("for {OWNER} in {owner} {{ {OWNER}.{field} = [{MEMBER} for {MEMBER} in {table} if {MEMBER}.{back}.{ID_FIELD} == {OWNER}.{ID_FIELD}] }}",
+			field = members.field), []))
+	}).collect()
 }
 
 /// The code with each placeholder as its node and the generated variables named
@@ -408,17 +488,32 @@ fn generated<const N: usize>(code: &str, placeholders: [(&str, Node); N]) -> Nod
 
 /// The table's columns besides id, in field order
 fn columns_of(table: &Table) -> Vec<String> {
-	table.fields.iter().map(|(name, _, _)| name.clone()).filter(|name| name != ID_FIELD).collect()
+	column_fields(table).into_iter().map(|(name, _, _)| name).collect()
+}
+
+/// The fields kept in columns besides id (not one-to-many lists), a foreign key as the int id of its row
+fn column_fields(table: &Table) -> Vec<(String, String, Option<Node>)> {
+	table.fields.iter().filter(|(name, _, _)| name != ID_FIELD && !table.is_members(name)).map(|(name, field_type, default)| match table.reference(name) {
+		Some(_) => (name.clone(), NUMERIC_TYPES[0].to_string(), None),
+		None => (name.clone(), field_type.clone(), default.clone()),
+	}).collect()
+}
+
+/// The row of table `target` whose id is the value of `id` (the instance a foreign key points to)
+fn referenced(target: &str, id: &str) -> String {
+	format!("[{REFERENCED} for {REFERENCED} in {target} if {REFERENCED}.{ID_FIELD} == {id}]#1")
 }
 
 fn implicit_id(table: &Table) -> bool {
 	!table.fields.iter().any(|(name, _, _)| name == ID_FIELD)
 }
 
-/// `people.add(p)`: added to the list and inserted as a row, whose id p takes
+/// `people.add(p)`: added to the list and inserted as a row, whose id p takes; a foreign key stores the id of its row
+/// (an instance without one is an error) and p joins that row's one-to-many list of it
 fn inserted(statement: &Node, tables: &HashMap<String, Table>, file: &str) -> Option<Vec<Node>> {
 	let Node::Key(list, Op::Dot, call) = statement.drop_meta() else { return None };
-	let table = tables.get(&list.drop_meta().name())?;
+	let list = list.drop_meta().name();
+	let table = tables.get(&list)?;
 	let Node::List(parts, _, _) = call.drop_meta() else { return None };
 	let [word, value] = parts.as_slice() else { return None };
 	if word.drop_meta().name() != ADD_WORD {
@@ -426,11 +521,24 @@ fn inserted(statement: &Node, tables: &HashMap<String, Table>, file: &str) -> Op
 	}
 	let columns = columns_of(table);
 	let names: Vec<String> = columns.iter().map(|column| format!("{column:?}")).collect();
-	let values: Vec<String> = columns.iter().map(|column| format!("{ADDED}.{column}")).collect();
-	let code = format!("{ADDED} = {VALUE_PLACEHOLDER}\n{list}.add({ADDED})\n{ADDED}.{ID_FIELD} = std_io(\"table\", \"insert\", [{table:?}, [{names}], [{values}], {file:?}])",
-		list = list.drop_meta().name(), table = table.name, names = names.join(" "), values = values.join(" "));
+	let values: Vec<String> = columns.iter().map(|column| column_value(table, ADDED, column)).collect();
+	let checks = table.references.iter().map(|(field, target)| format!(
+		"if {ADDED}.{field}.{ID_FIELD} == 0 {{ raise \"{class}.{field} is no row of {target}: add it to its table first\" }}\n", class = table.class));
+	let joined = table.references.iter().flat_map(|(field, target)| tables[target].members.iter()
+		.filter(|members| members.table == list && members.back.as_ref() == Some(field))
+		.map(move |members| format!("\n{OWNER} = {ADDED}.{field}\n{OWNER}.{}.add({ADDED})", members.field)));
+	let code = format!("{ADDED} = {VALUE_PLACEHOLDER}\n{checks}{list}.add({ADDED})\n{ADDED}.{ID_FIELD} = std_io(\"table\", \"insert\", [{table:?}, [{names}], [{values}], {file:?}]){joined}",
+		checks = checks.collect::<String>(), table = table.name, names = names.join(" "), values = values.join(" "), joined = joined.collect::<String>());
 	let lowered = generated(&code, [(VALUE_PLACEHOLDER, value.clone())]);
 	Some(lowered.children())
+}
+
+/// What the column of `instance` stores: its field, the id of the row of a foreign key
+fn column_value(table: &Table, instance: &str, column: &str) -> String {
+	match table.reference(column) {
+		Some(_) => format!("{instance}.{column}.{ID_FIELD}"),
+		None => format!("{instance}.{column}"),
+	}
 }
 
 /// After `p.age += 1` (any assignment of a field of a registered class): the change written to p's row, when p has one
@@ -442,6 +550,6 @@ fn written_through(statement: &Node, tables: &HashMap<String, Table>, file: &str
 	let Node::Key(instance, Op::Dot, field) = target.drop_meta() else { return vec![] };
 	let (Node::Symbol(instance), field) = (instance.drop_meta(), field.drop_meta().name()) else { return vec![] };
 	tables.values().filter(|table| field != ID_FIELD && columns_of(table).contains(&field)).map(|table| parse(&format!(
-		"if {instance} is {class} and {instance}.{ID_FIELD} > 0 {{ std_io(\"table\", \"update\", [{name:?}, {instance}.{ID_FIELD}, {field:?}, {instance}.{field}, {file:?}]) }}",
-		class = table.class, name = table.name))).collect()
+		"if {instance} is {class} and {instance}.{ID_FIELD} > 0 {{ std_io(\"table\", \"update\", [{name:?}, {instance}.{ID_FIELD}, {field:?}, {value}, {file:?}]) }}",
+		class = table.class, name = table.name, value = column_value(table, instance, &field)))).collect()
 }
