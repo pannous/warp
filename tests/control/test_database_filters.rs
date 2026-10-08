@@ -1,15 +1,19 @@
 // card orm-filters (notes/orm.md step 2/3): bare field names in a filter (P223), and a filter of a table runs in its
 // SQL query, the parts SQL has as plain SQL, any other warp expression as an SQLite application function
 use crate::is;
+#[cfg(feature = "native")]
 use warp::wasm_emitter::eval;
 
 const PERSON: &str = "class Person{name: text; age: int}";
+#[cfg(feature = "native")] // SQLite natively; the browser has no tables yet (notes/orm.md step 6)
 const IS_PRIME: &str = "is_prime(n) := n > 1 and count([d for d in 2..n if n % d == 0]) == 0";
 
+#[cfg(feature = "native")] // SQLite natively; the browser has no tables yet (notes/orm.md step 6)
 fn table(name: &str, rest: &str) -> String {
 	format!("{PERSON}\n{IS_PRIME}\npeople: [Person] = database.{name}\n{rest}")
 }
 
+#[cfg(feature = "native")] // SQLite natively; the browser has no tables yet (notes/orm.md step 6)
 fn filled(name: &str) {
 	eval(&table(name, "people.add(Person(\"Bo\", 7))\npeople.add(Person(\"Cy\", 8))\npeople.add(Person(\"anna\", 11))"));
 }
@@ -32,6 +36,7 @@ fn a_variable_wins_over_a_field_of_the_same_name_with_a_warning() {
 	assert!(warnings.iter().any(|warning| warning.message.contains("it.name")), "{warnings:?}");
 }
 
+#[cfg(feature = "native")] // SQLite natively; the browser has no tables yet (notes/orm.md step 6)
 #[test]
 fn a_table_filter_runs_in_its_query() {
 	filled("people_filtered");
@@ -42,6 +47,7 @@ fn a_table_filter_runs_in_its_query() {
 }
 
 /// any pure warp function in a filter: SQLite calls back into the program (sqlite3_create_function)
+#[cfg(feature = "native")] // SQLite natively; the browser has no tables yet (notes/orm.md step 6)
 #[test]
 fn a_warp_function_in_a_table_filter_is_called_by_the_query() {
 	filled("people_called");
@@ -51,6 +57,7 @@ fn a_warp_function_in_a_table_filter_is_called_by_the_query() {
 }
 
 /// the rows a filter gives are the table's instances: a change through one is seen in the other
+#[cfg(feature = "native")] // SQLite natively; the browser has no tables yet (notes/orm.md step 6)
 #[test]
 fn a_filtered_row_is_the_same_instance() {
 	filled("people_same");
