@@ -87,8 +87,9 @@ function hostResult(program, action, what) {
 	}
 }
 
-// the values of a store: the session's (markup.js SESSION_STORE), else the program's
-const valuesOf = file => file === "wasp-session" ? sessionValues : storedValues;
+// the values of a store: the session's (markup.js SESSION_STORE), the database's (a file ending in database.json), else
+// the program's
+const valuesOf = file => file === "wasp-session" ? sessionValues : file.endsWith("database.json") ? databaseValues : storedValues;
 
 addHostPart({
 	words: (holder, hooks, { program, text }) => {

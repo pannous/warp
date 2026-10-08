@@ -41,9 +41,10 @@ function pageMarkup() {
 	return { html: plainOfTree(readNode(site.exports, render())) };
 }
 
-async function start({ module, stored, session, path }) {
+async function start({ module, stored, session, database, path }) {
 	Object.assign(storedValues, stored);
 	Object.assign(sessionValues, session);
+	Object.assign(databaseValues, database);
 	pagePath = path;
 	const bytes = new Uint8Array(await (await fetch(module)).arrayBuffer());
 	await taskPoolReady(); // tasks run on loaded Workers, not inline

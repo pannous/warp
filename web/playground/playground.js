@@ -132,7 +132,7 @@ function showAgain(topic) {
 function startWorker() {
 	workerWarmed = false;
 	worker = new Worker(debugBuild ? `worker.js?compiler=${DEBUG_COMPILER}` : "worker.js");
-	workerReady = new Promise((resolve, reject) => {
+	const started = new Promise((resolve, reject) => {
 		worker.onmessage = ({ data }) => {
 			if (data.type === "notify") data = notification(data.text);
 			if (!data) return;
@@ -150,6 +150,8 @@ function startWorker() {
 			if (data.type === "report" && data.id === pending.id) finish(pending, { ...data.report, printed: pending.printed, paintings: pending.paintings, listening: pending.listening ?? [], address: pending.address, milliseconds: data.milliseconds });
 		};
 	});
+	// IndexedDB answers asynchronously: a run waits until the worker has the database's values
+	workerReady = Promise.all([started, keptDatabase().then(database => worker.postMessage({ database }))]);
 	workerReady.then(() => setStatus("ready"), failure => setStatus(failure.message, true));
 	tellSystemValues();
 	sharePointer();

@@ -11,6 +11,9 @@ const STORED_PREFIX = "wasp stored "; // a stored value in localStorage, kept ac
 const DEV_PREFIX = "wasp dev "; // a value a `warp dev` page keeps in sessionStorage, across its reloads
 const SESSION_STORE = "wasp-session"; // the store of `session[k]` (src/lowering/stored_values.rs SESSION_STORE)
 const SESSION_PREFIX = "wasp session "; // a value of `session[k]` in sessionStorage, while the tab lasts
+// a store whose file ends so is `database[k]`'s, kept in IndexedDB (src/lowering/stored_values.rs DATABASE_STORE)
+const DATABASE_STORE = "database.json";
+const DATABASE = { name: "wasp", version: 1, objects: "values" }; // the IndexedDB database and its object store
 
 // the children of shown become those of wanted: an element with a key (data-wasp-key, card web-keyed) is the shown one
 // of that key, moved into place; any other node is matched by position; a node of another kind or tag is replaced.
@@ -106,10 +109,46 @@ function keptValues(files = ["", DEV_STORE]) {
 }
 
 function keepValue(name, value, file) {
+	if (isDatabase(file)) return keepInDatabase(name, value);
 	try {
 		const [storage, prefix] = keptStorage(file);
 		value === undefined ? storage.removeItem(prefix + name) : storage.setItem(prefix + name, JSON.stringify(value));
 	} catch (failure) {
 		console.error(`${name} could not be kept:`, failure);
 	}
+}
+
+const isDatabase = file => file?.endsWith(DATABASE_STORE);
+
+// the IndexedDB object store of `database[k]` in a transaction of `mode`; a page without IndexedDB rejects
+function databaseObjects(mode) {
+	return new Promise((resolve, reject) => {
+		const opening = indexedDB.open(DATABASE.name, DATABASE.version);
+		opening.onupgradeneeded = () => opening.result.createObjectStore(DATABASE.objects);
+		opening.onsuccess = () => resolve(opening.result.transaction(DATABASE.objects, mode).objectStore(DATABASE.objects));
+		opening.onerror = () => reject(opening.error);
+	});
+}
+
+const requested = request => new Promise((resolve, reject) => {
+	request.onsuccess = () => resolve(request.result);
+	request.onerror = () => reject(request.error);
+});
+
+// the values of `database[k]` by name, for host-files.js STD_ADAPTERS.store (databaseValues); none when IndexedDB fails
+async function keptDatabase() {
+	try {
+		const objects = await databaseObjects("readonly");
+		const [names, values] = await Promise.all([requested(objects.getAllKeys()), requested(objects.getAll())]);
+		return Object.fromEntries(names.map((name, index) => [name, values[index]]));
+	} catch (failure) {
+		console.error("database values could not be read:", failure);
+		return {};
+	}
+}
+
+function keepInDatabase(name, value) {
+	databaseObjects("readwrite")
+		.then(objects => requested(value === undefined ? objects.delete(name) : objects.put(value, name)))
+		.catch(failure => console.error(`${name} could not be kept in the database:`, failure));
 }
