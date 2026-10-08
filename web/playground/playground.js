@@ -17,7 +17,7 @@ const PENDING_VALUE = "…"; // the value shown from Run until the new one arriv
 const DEFAULT_EXAMPLE = "hello";
 const COMMIT_URL = "https://github.com/pannous/warp/commit/";
 const SHORT_COMMIT = 9;
-const EXAMPLE_PARAMETERS = ["example", "sample"]; // ?example=fizzbuzz picks a tour example or sample; the address shows the chosen one
+const EXAMPLE_PARAMETERS = ["example", "sample"]; // ?example=fizzbuzz (or #fizzbuzz) picks a tour example or sample; the address shows the chosen one as #fizzbuzz
 const DEBUG_PARAMETER = "debug"; // ?debug runs warp.debug.wasm: Rust names and lines in traces and the debugger
 const DEBUG_COMPILER = "warp.debug.wasm";
 const ACKNOWLEDGED = "acknowledged";
@@ -576,12 +576,29 @@ function chooseExample(name) {
 	return runCode(source);
 }
 
-// the address names the chosen example, so it can be shared or reloaded; the default one leaves it plain
+// the address names the chosen example as its hash (#circle), so it can be shared or reloaded; the default one leaves
+// it plain, and a hash naming a guide chapter stays (card sample-hash)
 function showExampleInAddress(name) {
 	const address = new URL(location.href);
 	EXAMPLE_PARAMETERS.forEach(parameter => address.searchParams.delete(parameter));
-	if (name !== DEFAULT_EXAMPLE) address.searchParams.set(EXAMPLE_PARAMETERS[0], name);
+	if (name !== DEFAULT_EXAMPLE) address.hash = name;
+	else if (exampleSource(hashName()) !== undefined) address.hash = "";
 	if (address.href !== location.href) history.replaceState(history.state, "", address);
+}
+
+const hashName = () => decodeURIComponent(location.hash.slice(1));
+const isGuideChapter = id => document.getElementById(id)?.classList.contains("guide-chapter");
+
+// the example the address names: ?example=circle (?sample=circle), else #circle
+function requestedExample() {
+	const parameters = new URLSearchParams(location.search);
+	return [...EXAMPLE_PARAMETERS.map(parameter => parameters.get(parameter)), hashName()].find(name => name && exampleSource(name) !== undefined);
+}
+
+// #circle typed into the address shows that example; a guide chapter's link (#lists) only opens the chapter
+function chooseExampleOfHash() {
+	const name = hashName();
+	if (exampleSource(name) !== undefined && !isGuideChapter(name) && name !== $("examples").value) chooseExample(name);
 }
 
 function fillExamples() {
@@ -615,9 +632,8 @@ function initialize() {
 	showVersion();
 	fillExamples();
 	startWorker();
-	const parameters = new URLSearchParams(location.search);
-	const requested = EXAMPLE_PARAMETERS.map(parameter => parameters.get(parameter)).find(Boolean);
-	chooseExample(requested && exampleSource(requested) !== undefined ? requested : DEFAULT_EXAMPLE);
+	chooseExample(requestedExample() ?? DEFAULT_EXAMPLE);
+	addEventListener("hashchange", chooseExampleOfHash);
 }
 
 // for the headless probes (probes/web_playground.py, test_in_browser.py --examples): evaluate code as the page does and return the report
