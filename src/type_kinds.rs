@@ -41,6 +41,7 @@ pub enum Kind {
 	Int32 = 14,    // explicit i32 (for FFI)
 	Float32 = 15,  // explicit f32 (for FFI)
 	Function = 16, // closure: data = $Closure struct (typed function reference + captured values), value = name symbol
+	Uncertain = 17, // x ± σ: data = $f64 array [value, source id, contribution, …] (wasm_emitter/uncertain.rs)
 }
 
 impl Kind {
@@ -113,6 +114,7 @@ impl std::fmt::Display for Kind {
 			Kind::TypeDef => write!(f, "typedef"),
 			Kind::Pointer => write!(f, "pointer"),
 			Kind::Function => write!(f, "function"),
+			Kind::Uncertain => write!(f, "uncertain"),
 		}
 	}
 }

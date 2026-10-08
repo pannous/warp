@@ -118,6 +118,8 @@ pub fn infer_type(node: &Node, scope: &Scope) -> Kind {
 		Node::List(items, bracket, separator) if !items.is_empty() => infer_list_type(node, items, bracket, separator, scope),
 		// a range as a value is the list of its numbers (wasm_emitter emit_range), as `x = 1..5` is
 		Node::Key(_, Op::Range | Op::To, _) => Kind::List,
+		// `5 ± 1` is uncertain, a kind the node arithmetic meets at run time (wasm_emitter/uncertain.rs)
+		Node::Key(_, Op::PlusMinus, _) => Kind::Data,
 		// Arithmetic: upgrade to Float if either operand is Float
 		Node::Key(left, op, right) if op.is_arithmetic() => {
 			arithmetic_kind_of_operands(infer_type(left, scope), op, infer_type(right, scope), right)

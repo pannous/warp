@@ -635,12 +635,13 @@ const MAP_WITHOUT_CELLS: &str = "map_without_cells";
 /// `a % 0`, `a rem 0`: an integer divide by zero (big_int::emit_nonzero_divisor)
 pub const DIVIDE_BY_ZERO: &str = "divide_by_zero";
 
-pub const RUNTIME_ERRORS: [&str; 26] = [
+pub const RUNTIME_ERRORS: [&str; 27] = [
 	"index_out_of_range", INDEX_NOT_INTEGRAL, "invalid_number", "out_of_memory", "key_not_found", "float_out_of_int_range",
 	"min_of_an_empty_list", "max_of_an_empty_list", "reduce_of_an_empty_list",
 	"not_a_list", "not_a_text", "not_an_int", "non_ascii_text", "not_a_joinable_item", "empty_separator", "not_an_object",
 	"not_comparable", super::closures::NOT_A_FUNCTION, super::closures::WRONG_ARGUMENT_COUNT, super::tuple_emitter::WRONG_NUMBER_OF_VALUES,
 	RETURNED_ERROR, "not_a_character", COUNT_NOT_INTEGRAL, NOT_A_NUMBER, DIVIDE_BY_ZERO, INT_NOT_WHOLE,
+	super::uncertain::NEGATIVE_UNCERTAINTY,
 ];
 
 /// text_as_int(node) -> i64: a Text's optional sign and decimal digits, any other node's Int (get_int_value)
@@ -776,6 +777,7 @@ impl WasmGcEmitter {
 				for operand in [0, 1] {
 					s.emit_fail_if_error(f, operand);
 				}
+				let uncertain = s.should_emit_function(super::uncertain::UNCERTAIN_NEW);
 				// a text, a character or a list is no number here: "x" * 2 is no 240
 				for operand in [0, 1] {
 					s.emit_field(f, operand, 0);
@@ -783,7 +785,19 @@ impl WasmGcEmitter {
 						I::I64Const(KIND_MASK), I::I64And, I::LocalTee(kind), I::I64Const(int_kind), I::I64Ne,
 						I::LocalGet(kind), I::I64Const(float_kind), I::I64Ne, I::I32And,
 					]);
+					if uncertain {
+						Self::emit_list(f, &[I::LocalGet(kind), I::I64Const(Kind::Uncertain as i64), I::I64Ne, I::I32And]);
+					}
 					s.emit_fail_if(f, NOT_A_NUMBER);
+				}
+				// a value with uncertainty (uncertain.rs) propagates it
+				if uncertain {
+					s.is_uncertain(f, 0);
+					s.is_uncertain(f, 1);
+					Self::emit_list(f, &[I::I32Or, I::If(BlockType::Empty), I::LocalGet(0), I::LocalGet(1)]);
+					let index = NODE_ARITHMETIC.iter().position(|(known, ..)| *known == name).expect("a node arithmetic");
+					s.call(f, super::uncertain::UNCERTAIN_ARITHMETIC[index]);
+					Self::emit_list(f, &[I::Return, I::End]);
 				}
 				for operand in [0, 1] {
 					s.emit_field(f, operand, 0);

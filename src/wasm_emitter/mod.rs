@@ -29,6 +29,7 @@ mod list_dispatch;
 mod library_ops;
 mod text_unicode;
 mod similarity;
+mod uncertain;
 pub use similarity::NUMBERS_SIMILAR;
 pub(crate) mod list_ops;
 mod list_abi;
@@ -653,6 +654,7 @@ impl WasmGcEmitter {
 			Need::MathImport(_) => None,
 		}));
 		component_adapters::add_dependencies(&mut self.ctx.required_functions);
+		uncertain::add_dependencies(&mut self.ctx.required_functions); // before the similarity's: uncertain_similar needs numbers_similar
 		similarity::add_dependencies(&mut self.ctx.required_functions); // before the text builtins': values_equal needs text_of
 		text_builtins::add_dependencies(&mut self.ctx.required_functions);
 		self.guards_errors = try_guard::guards_errors(node);
@@ -942,6 +944,7 @@ impl WasmGcEmitter {
 		self.emit_node_type_name(); // after values_equal, which names an instance's declared type
 		self.emit_text_as_int(); // after the getters: it calls get_int_value
 		self.emit_text_as_float();
+		self.emit_uncertain_runtime(); // after text_as_float, which it calls
 		if self.config.emit_reflection {
 			self.emit_reflection();
 		}
