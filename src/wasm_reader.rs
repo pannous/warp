@@ -509,14 +509,33 @@ pub fn node_of<T>(value: &Val, store: &mut StoreContextMut<'_, T>, instance: &In
 /// The Node a GC `$Node` struct encodes, its texts read from `memory`: also from a host function, which has the memory
 /// of its caller but no Instance (tasks.rs)
 pub fn node_in<T>(value: &Val, store: &mut StoreContextMut<'_, T>, memory: wasmtime::Memory) -> Node {
-	use crate::node::Bracket;
+	node_along(value, store, memory, &mut vec![])
+}
+
+/// What a node met again inside itself reads as: objects may point to each other (a team's players and each player's
+/// team), a Node is a tree
+pub const CYCLE_MARK: &str = "…";
+
+/// The node of `value`, `path` the structs it is read inside of: a struct among them is a cycle, read as CYCLE_MARK
+fn node_along<T>(value: &Val, store: &mut StoreContextMut<'_, T>, memory: wasmtime::Memory, path: &mut Vec<wasmtime::Rooted<wasmtime::StructRef>>) -> Node {
 	let Some(structref) = value.unwrap_anyref().and_then(|reference| reference.unwrap_struct(&*store).ok()) else { return Node::Empty };
+	if path.iter().any(|outer| wasmtime::Rooted::ref_eq(&*store, outer, &structref).unwrap_or(false)) {
+		return Node::Symbol(CYCLE_MARK.to_string());
+	}
+	path.push(structref);
+	let node = struct_node(&structref, store, memory, path);
+	path.pop();
+	node
+}
+
+fn struct_node<T>(structref: &wasmtime::Rooted<wasmtime::StructRef>, store: &mut StoreContextMut<'_, T>, memory: wasmtime::Memory, path: &mut Vec<wasmtime::Rooted<wasmtime::StructRef>>) -> Node {
+	use crate::node::Bracket;
 	let mut field = |index: usize| structref.field(&mut *store, index);
 	let (Ok(kind), Ok(data), Ok(child)) = (field(FIELD_KIND), field(FIELD_DATA), field(FIELD_VALUE)) else { return Node::Empty };
 	let kind = kind.unwrap_i64();
 	let tag = (kind & KIND_MASK) as u8;
 	let high_byte = (kind >> 8) & 0xFF;
-	let mut node = |val: &Val| node_in(val, store, memory);
+	let mut node = |val: &Val| node_along(val, store, memory, path);
 	match tag {
 		t if t == Kind::Empty as u8 => Node::Empty,
 		t if t == Kind::Int as u8 && high_byte == crate::type_kinds::BOOL_INFO => match read_payload(store, &data) {
@@ -536,7 +555,7 @@ pub fn node_in<T>(value: &Val, store: &mut StoreContextMut<'_, T>, memory: wasmt
 		t if t == Kind::Symbol as u8 => Node::Symbol(text_of(store, &data, memory)),
 		t if t == Kind::Error as u8 => Node::Error(Box::new(Node::Text(text_of(store, &data, memory)))),
 		t if t == Kind::Key as u8 => Node::Key(Box::new(node(&data)), crate::operators::code_to_op(high_byte), Box::new(node(&child))),
-		t if t == Kind::Block as u8 => list_in(data, child, Bracket::Curly, store, memory),
+		t if t == Kind::Block as u8 => list_in(data, child, Bracket::Curly, store, memory, path),
 		t if t == Kind::List as u8 => {
 			let bracket = match high_byte {
 				0 => Bracket::Curly,
@@ -545,7 +564,7 @@ pub fn node_in<T>(value: &Val, store: &mut StoreContextMut<'_, T>, memory: wasmt
 				3 => Bracket::Less,
 				_ => Bracket::None,
 			};
-			list_in(data, child, bracket, store, memory)
+			list_in(data, child, bracket, store, memory, path)
 		}
 		t if t == Kind::Data as u8 => {
 			let type_name = text_of(store, &data, memory);
@@ -563,18 +582,18 @@ pub fn node_in<T>(value: &Val, store: &mut StoreContextMut<'_, T>, memory: wasmt
 
 /// The items of a list of cons cells, walked in a loop (a long list must not take a stack frame per item): each cell's
 /// first item, then its rest, itself a cell of a list or block or a last single item; ø items stay
-fn list_in<T>(mut first: Val, mut rest: Val, bracket: crate::node::Bracket, store: &mut StoreContextMut<'_, T>, memory: wasmtime::Memory) -> Node {
+fn list_in<T>(mut first: Val, mut rest: Val, bracket: crate::node::Bracket, store: &mut StoreContextMut<'_, T>, memory: wasmtime::Memory, path: &mut Vec<wasmtime::Rooted<wasmtime::StructRef>>) -> Node {
 	let mut items = Vec::new();
 	loop {
 		// a null first item is the empty list's cell; a ø element is a node of kind Empty, kept
 		if first.unwrap_anyref().is_some() {
-			items.push(node_in(&first, store, memory));
+			items.push(node_along(&first, store, memory, path));
 		}
 		let Some(cell) = rest.unwrap_anyref().and_then(|reference| reference.unwrap_struct(&*store).ok()) else { break };
 		let (Ok(kind), Ok(data), Ok(child)) = (cell.field(&mut *store, FIELD_KIND), cell.field(&mut *store, FIELD_DATA), cell.field(&mut *store, FIELD_VALUE)) else { break };
 		let tag = (kind.unwrap_i64() & KIND_MASK) as u8;
 		if tag != Kind::List as u8 && tag != Kind::Block as u8 {
-			match node_in(&rest, store, memory) {
+			match node_along(&rest, store, memory, path) {
 				Node::Empty => {}
 				last => items.push(last),
 			}
