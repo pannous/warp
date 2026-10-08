@@ -9,10 +9,11 @@ use Instruction as I;
 use super::{WasmGcEmitter, ROUNDING_FUNCTIONS};
 
 /// Names the emitter resolves itself, besides user functions, imports, type words and counting functions
-const BUILTIN_CALLS: [&str; 18] = [
+const BUILTIN_CALLS: [&str; 19] = [
 	"return", "fetch", "puts", "puti", "putl", "putf", "fd_write", "range", "type", "use",
 	crate::min_max::EMPTY_EXTREMUM_CALL, crate::switch::NO_CASE_CALL, crate::analyzer::ZERO_FILL_CALL, crate::analyzer::INSERT_AT_CALL,
 	crate::analyzer::INSERT_EITHER_CALL, crate::library_words::LIST_SUM, crate::traits::INSTANCE_OF, crate::analyzer::REMOVED_VALUE_CALL,
+	crate::library_words::VALUES_SIMILAR,
 ];
 
 const PRINT: &str = "print";
@@ -266,6 +267,13 @@ impl WasmGcEmitter {
 					self.emit_call(func, "new_int");
 					return;
 				}
+			}
+		}
+		if let [word, left, right, tolerance] = items {
+			if word.drop_meta().name() == crate::library_words::VALUES_SIMILAR {
+				self.emit_similarity(func, left, right, tolerance);
+				self.emit_call(func, super::NEW_BOOL);
+				return;
 			}
 		}
 		if let [word, dividend, divisor] = items {

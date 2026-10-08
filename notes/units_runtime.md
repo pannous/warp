@@ -102,4 +102,5 @@ input) would need the dynamic struct.
 come first, then the plain ones as an object of them prints them (`{dist:500 m name:"run"}`). A field of a mixed object
 is any-typed at run time; its arithmetic has a text since card text-arithmetic (casts.rs: Kind::Data reads dynamically).
 `q = p` and `ys = xs` copy the signatures (maps and lists are values). Recursion with quantities stays a loud error
-(card static-units, Later). warp.units may move into card reflection's warp.meta section (warp-a2).
+(card static-units, Later). Since card reflection step 5 the text lives in the entry `units` of the module's one
+`warp.meta` section (src/meta_section.rs), byte for byte as it was in `warp.units`; the section name below is history.

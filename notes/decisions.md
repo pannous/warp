@@ -5,6 +5,9 @@ answered questions to a new file"). Older references to "notes/open_decisions.md
 D-number or #number mean this file. Open questions, parked ones and the standing rules stay in notes/open_decisions.md.
 
 ## Decided 2026-10-08 (user, as recommended unless quoted)
+- Language name (user): the language is named warp everywhere; wasp remains only in README history and other history
+  markdown. Defaults (supervisor): `*.wasp` → `*.warp`, with `.wasp` still readable; URLs and domains
+  (github.com/pannous/wasp, wasp.pannous.com) unchanged; wisp unchanged. Card rename-warp, warp-fixer.
 - P203 general rule, lax versus strict: annotations make it strict. Unannotated code is lax (Python-like, checked at
   run time); anything annotated (`x: T`, field types, `implements`, a declared parent type) is a promise the compiler
   enforces. `--strict` adds warnings for the lax spots. Asked after the user saw "a general conflict between pythonic
@@ -138,6 +141,8 @@ D-number or #number mean this file. Open questions, parked ones and the standing
   `local["k"]` canonical (localStorage), `storage["k"]` alias, `session["k"]` sessionStorage (natively in memory);
   clipboard `clipboard.write("text")` (navigator.clipboard.writeText), `clipboard.read()` = `clipboard` (native only;
   in a browser page reading stays a loud error, it is async).
+  IndexedDB (word choice, warp-web, branch database-store 020211abc): `database["k"]` canonical, `indexedDB["k"]`
+  alias, same forms as local/session (database.k, delete, keys); natively <program>.database.json beside the program.
 - Trailing percent (default, warp-d0, card postfix-words): a `%` with nothing after it is a percent, x/100 exact:
   `10%` = 1/10, `200 * 10%` = 20, `50 % of 200` = 100 (`of` multiplies after a percent). CSS values like
   `width: 50%` stay as written; `whenever battery < 20%` keeps its battery-level reading. Infix `%` stays remainder.

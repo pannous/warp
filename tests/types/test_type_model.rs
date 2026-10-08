@@ -143,6 +143,9 @@ const CORPUS: &[&str] = &[
 	"class P { x: int }; [P(1)] == [P(1)]",
 	"class P { x: int }; p = P(1); q = p; p === q",
 	"class P { x: int }; p = P(1); q = P(1); p === q",
+	"class P { x: int }; p = P(1); q = p; p same q",
+	"class P { x: int }; p = P(1); q = P(1); p same as q",
+	"class P { x: int }; p = P(1); q = p; p is the same as q",
 	"class P { x: int }; p = P(1); q = P(1); p !== q",
 	"0 === false",
 	"n = 0; on alarm { n += 1 }; emit alarm; emit alarm; n",
@@ -193,10 +196,55 @@ const CORPUS: &[&str] = &[
 	"i=0; !i",
 	"f(a:bool,b:bool):=not (a or b); f(true, false)",
 	"x = 1 < 2 or 3 < 2; x",
+
+	"s = 0; for x in 3 { s += x }; s",
+
+	"xs = [1, 2]; a, b = xs; a*10+b",
+	"f() := [1, 2]; a, b = f(); a*10+b",
+	"a, b = [1]; b",
+	"a, b = [1, 2, 3]; b",
+	"a, b = [1, 2]; a = \"x\"; a",
+	"a, b = 1, 2; a*10+b",
+	"a, b = 1, \"x\"; b",
+	"a, b = [1], 2; b",
+	"a = 0; b = 0; a, b = 5, 6; a + b",
+	"a = 1; b = 2; a, b = b, a; a*10+b",
+	"a = b = 3; a + b",
+	"b = 1; a = b = 3; a + b",
+	"a = b = c = 2; a + b + c",
+	"a = b = [1]; a#1",
+	"p = {x:1 y:2}; p.y",
+	"p = {x:1}; p.x + \"a\"",
+	"{a:1} == {a:1}",
+	"{a:1} == {a:2}",
+	"{a:1, b:2} == {b:2, a:1}",
+	"{a:1} == {a:1, b:2}",
+	"p = {x:1}; q = p; q.x = 5; p.x",
+	"p = {x:1}; q = {x:1}; p === q",
+	"p = {x:1}; q = p; p same q",
+	"p = {x:1}; p.x = \"s\"; p.x",
+	"p = {x:1}; p.z = 5; p.z",
+	"f(m) := m.x; f({x:3})",
+	"p = {x:{y:2}}; p.x.y",
+	"d = {year:1970 month:1 day:1}; [d.year, d.month, d.day]",
+	"xs = [{a:1} {a:2}]; xs[1].a",
+	"class P { x: int }; p = P(1); m = {x: 2}; p.x + m.x",
+	"p = {x:1}; p.x - \"a\"",
+	"a: int = 0; a, b = 3, \"x\"; a + 1",
+	"a: int = 0; a, b = \"xy\", 6; a",
+
+	"f = x => x*2; f(3)",
+	"make_adder(n) := (x => x+n); add2 = make_adder(2); add2(5)",
+	"t = 7; shout = s => s + t; shout(1)",
+	"apply(g, n) := { s=0; for i in 0..n { s = g(s) }; s }; k=1; apply(x => x+k, 3)",
+	"n = 0; inc = x => { n += x; n }; inc(2); inc(3)",
+	"f = x => x*2; f = y => y + 1; f(3)",
+	"x = 1; f = y => x + y; f(1); x = 10; 0",
+	"f = x => x*2; f = 3; 0",
 ];
 
 /// Programs warp compiles although the model rejects them: holes in warp's checks, each with its card
-const KNOWN_HOLES: &[(&str, &str)] = &[("s = 0; for x in 3 { s += x }; s", "non-list")];
+const KNOWN_HOLES: &[(&str, &str)] = &[("a: int = 0; a, b = 2.5, 6; a", "destructure-unchecked"), ("a: text = \"\"; a, b = 1, 2; a", "destructure-unchecked"), ("a: int = 0; a = b = 2.5; a", "chain-unchecked"), ("a: int = 0; a = b = \"x\"; b", "chain-unchecked")];
 
 /// Where warp's run-time admission differs from W0's subtyping: a bool is an Int at run time, so an int value passes
 /// a bool check (P199 lets only the literals 1 and 0 in; card bool-assign)
@@ -204,6 +252,7 @@ const KNOWN_ADMITS_GAPS: [&str; 2] = ["bool ← .int: warp admits true / W0 sub 
 
 /// Programs both accept whose values differ, each with its card
 const KNOWN_VALUE_DIFFERENCES: &[(&str, &str)] = &[
+	("class P { x: int }; p = P(1); a = p.x = 5; a + p.x", "chain-field"),
 ];
 /// What the model gives for a program it rejects, and for a value it does not keep
 const REJECTED: &str = "rejected";

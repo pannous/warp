@@ -134,11 +134,16 @@ pub fn written_text(node: &Node) -> String {
 	if !serialized.contains(crate::analyzer::TEMPORARY_SEPARATOR) {
 		return serialized;
 	}
+	written_statement(node).unwrap_or(serialized)
+}
+
+/// The source of the program from `node`'s position to the end of its statement, as the program wrote it
+pub fn written_statement(node: &Node) -> Option<String> {
 	let source_line = |(line, column): (usize, usize)| SOURCE.with(|source| {
 		let rest: String = source.borrow().lines().nth(line.checked_sub(1)?)?.chars().skip(column.saturating_sub(1)).collect();
 		Some(statement_prefix(&rest).trim().to_string())
 	});
-	position(node).and_then(source_line).filter(|text| !text.is_empty()).unwrap_or(serialized)
+	position(node).and_then(source_line).filter(|text| !text.is_empty())
 }
 
 /// The start of `text` up to the end of its statement: a `;` or a closing bracket it did not open (`[cube 1..n]`)

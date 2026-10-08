@@ -17,6 +17,9 @@ const AOT_FLAG: &str = "--aot";
 /// (and `--aot`) write the module instead
 const EXE_FLAG: &str = "--exe";
 const WASM_FLAG: &str = "--wasm";
+/// `warp help list`: a standard module's words; `warp help --markdown`: all of them as wiki/standard-library.md
+const HELP_PREFIX: &str = "help ";
+const HELP_MARKDOWN: &str = "help --markdown";
 /// `warp build --site app.warp`: the directory app-site/ a web server serves (src/site.rs, card web-ssr)
 const SITE_FLAG: &str = "--site";
 const SITE_SUFFIX: &str = "-site";
@@ -34,6 +37,7 @@ const MACHINE_CODE_EXTENSION: &str = "cwasm";
 const DEFAULT_EXECUTABLE_NAME: &str = "out";
 /// `warp run <file>`: the program runs, no executable is left (P105)
 const RUN_PREFIX: &str = "run ";
+const TEST_WORD: &str = "test";
 const RUNTIME_STUB_NAME: &str = "warp-runtime";
 const RUNTIME_STUB_VARIABLE: &str = "WARP_RUNTIME_STUB";
 /// The crate of the stub in warp's source checkout
@@ -107,6 +111,12 @@ fn program_file(args: &[String]) -> Option<(bool, &str, &[String])> {
     let file = if only_run { 2 } else { 1 };
     let path = args.get(file).filter(|path| path.ends_with(".wasp") || path.ends_with(".warp"))?;
     Some((only_run, path.as_str(), &args[file + 1..]))
+}
+
+/// `warp test file.warp`: the program file whose tests run
+fn test_file(args: &[String]) -> Option<&str> {
+    let path = args.get(2).filter(|path| path.ends_with(".wasp") || path.ends_with(".warp"))?;
+    args.get(1).is_some_and(|word| TEST_WORD == word).then_some(path.as_str())
 }
 
 /// What the command line asks for: a file, a subcommand (`eval`, `compile`, `verify`, `tool` …) or code to evaluate
@@ -209,6 +219,17 @@ fn run_command(args: &[String]) {
                 std::process::exit(1);
             }
         }
+    } else if let Some(path) = test_file(args) {
+        // P209, P210: the file's `test` lines and blocks run, failures print ✗ lines, "m of n failed" exits nonzero
+        diagnostic::show_lines_of(&source_of(path));
+        let result = warp::pipeline::for_tests(|| eval(path));
+        let failed = matches!(result, Node::Error(_));
+        match result.drop_meta() {
+            Node::Text(summary) => println!("{summary}"),
+            Node::Error(summary) if matches!(summary.drop_meta(), Node::Text(_)) => println!("{}", summary.drop_meta().serialize().trim_matches('"')),
+            other => show(other, ""),
+        }
+        std::process::exit(if failed { 1 } else { 0 });
     } else if let Some((only_run, path, program_arguments)) = program_file(args) {
         // P105 (user): `warp run <file>` "shall do the opposite": it runs the program and writes no executable
         warp::std_adapters::set_program_arguments(program_arguments.to_vec()); // `use os; args`
@@ -239,7 +260,7 @@ fn run_command(args: &[String]) {
         }
     } else if arg_string == "test" || arg_string == "tests" {
         {
-            println!("Run tests with: cargo test");
+            println!("warp test <file.warp> runs the tests of a program; warp's own tests run with: cargo test");
         }
     } else if matches!(arg_string.as_str(), "home" | "wiki" | "docs" | "documentation") {
         println!("Warp documentation can be found at https://github.com/pannous/warp/wiki");
@@ -286,7 +307,18 @@ fn run_command(args: &[String]) {
         }
     } else if matches!(arg_string.as_str(), "help" | "--help" | "-h") {
         usage();
+        println!("{}", warp::std_docs::modules_overview());
         println!("detailed documentation can be found at https://github.com/pannous/warp/wiki");
+    } else if arg_string == HELP_MARKDOWN {
+        print!("{}", warp::std_docs::standard_library_markdown());
+    } else if let Some(module) = arg_string.strip_prefix(HELP_PREFIX) {
+        match warp::std_docs::module_help(module) {
+            Some(help) => println!("{help}"),
+            None => {
+                eprintln!("no standard module {module}; {}", warp::std_docs::modules_overview());
+                std::process::exit(1);
+            }
+        }
     } else if arg_string == "version" || arg_string == "--version" || arg_string == "-v" {
         println!("Warp 🐝 {}", WARP_VERSION);
     } else {
@@ -558,6 +590,7 @@ fn usage() {
     println!("  warp docs            Open documentation");
     println!("  warp version         Show version");
     println!("  warp help            Show this help");
+    println!("  warp help <module>   A standard module's words (warp help --markdown: all, as wiki/standard-library.md)");
 }
 
 fn console() {

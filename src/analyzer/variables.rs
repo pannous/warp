@@ -321,6 +321,8 @@ pub fn check_kind_changes(program: &Node) -> Option<Diagnostic> {
 pub(super) enum EvidentKind {
 	Of(Kind),
 	Bool,
+	/// a name a function definition binds, `f = x => x*2` lowered to `(f x) := x*2` included
+	Function,
 }
 
 impl EvidentKind {
@@ -328,15 +330,17 @@ impl EvidentKind {
 		match value.drop_meta() {
 			Node::True | Node::False => Some(EvidentKind::Bool),
 			Node::Key(_, op, _) if op.is_comparison() => Some(EvidentKind::Bool),
+			Node::Key(_, Op::Arrow | Op::FatArrow, _) => Some(EvidentKind::Function),
 			_ => evident_kind(value, results).map(EvidentKind::Of),
 		}
 	}
 
 	/// The kind a variable that was `self` has after it is given `now`, None when `now` does not mix with it
 	fn given(self, now: EvidentKind) -> Option<EvidentKind> {
-		use EvidentKind::{Bool, Of};
+		use EvidentKind::{Bool, Function, Of};
 		match (self, now) {
 			(Bool, Bool) => Some(Bool),
+			(Function, Function) => Some(Function),
 			(Of(Kind::Int | Kind::Float), Bool) => Some(self),
 			(Of(was), Of(now)) if was == now => Some(self),
 			(Of(Kind::Int | Kind::Float), Of(Kind::Int | Kind::Float)) => Some(if now == Of(Kind::Float) { now } else { self }),
@@ -347,6 +351,7 @@ impl EvidentKind {
 	fn with_article(self) -> String {
 		match self {
 			EvidentKind::Bool => "a Bool".to_string(),
+			EvidentKind::Function => "a function".to_string(),
 			EvidentKind::Of(kind) => kind_with_article(kind),
 		}
 	}
@@ -356,34 +361,45 @@ impl EvidentKind {
 /// `kinds` holds each variable's evident kind, None once it was given a value of no evident kind
 pub(super) fn first_kind_change(node: &Node, kinds: &mut HashMap<String, Option<EvidentKind>>, results: &HashMap<String, Kind>) -> Option<Diagnostic> {
 	match node.drop_meta() {
-		Node::Key(_, Op::Define | Op::Arrow | Op::FatArrow, _) => None,
+		Node::Key(head, Op::Define, value) => match head.drop_meta() {
+			// `(f x) := …`: f names a function from here on
+			Node::List(items, _, _) if matches!(items.first().map(Node::drop_meta), Some(Node::Symbol(_))) => {
+				given_kind(&items[0].name(), Some(EvidentKind::Function), value, kinds)
+			}
+			_ => None,
+		},
+		Node::Key(_, Op::Arrow | Op::FatArrow, _) => None,
 		Node::Key(target, Op::Assign, value) => {
 			if let Some(change) = first_kind_change(value, kinds, results) {
 				return Some(change);
 			}
 			let Node::Symbol(name) = target.drop_meta() else { return None };
-			let (earlier, given) = (kinds.get(name).copied(), EvidentKind::of(value, results));
-			// a first evident value fixes the kind (Int widens to Float); any value of no evident kind ends the check
-			let kind = match (earlier, given) {
-				(None, given) => given,
-				// P199: 1 and 0 are yes and no, a bool variable stays one
-				(Some(Some(EvidentKind::Bool)), Some(_)) if crate::analyzer::is_zero_or_one(value) => Some(EvidentKind::Bool),
-				(Some(Some(was)), Some(now)) => match was.given(now) {
-					Some(kind) => Some(kind),
-					None => {
-						let message = format!("{name} was {}, is given {}: use another name", was.with_article(), now.with_article());
-						return Some(Diagnostic::at(value, message));
-					}
-				},
-				_ => None,
-			};
-			kinds.insert(name.clone(), kind);
-			None
+			given_kind(name, EvidentKind::of(value, results), value, kinds)
 		}
 		Node::Key(left, _, right) => first_kind_change(left, kinds, results).or_else(|| first_kind_change(right, kinds, results)),
 		Node::List(items, _, _) => items.iter().find_map(|item| first_kind_change(item, kinds, results)),
 		_ => None,
 	}
+}
+
+/// The variable `name` is given `value` of the evident kind `given`: the kinds it holds from here on, or the change
+fn given_kind(name: &str, given: Option<EvidentKind>, value: &Node, kinds: &mut HashMap<String, Option<EvidentKind>>) -> Option<Diagnostic> {
+	// a first evident value fixes the kind (Int widens to Float); any value of no evident kind ends the check
+	let kind = match (kinds.get(name).copied(), given) {
+		(None, given) => given,
+		// P199: 1 and 0 are yes and no, a bool variable stays one
+		(Some(Some(EvidentKind::Bool)), Some(_)) if crate::analyzer::is_zero_or_one(value) => Some(EvidentKind::Bool),
+		(Some(Some(was)), Some(now)) => match was.given(now) {
+			Some(kind) => Some(kind),
+			None => {
+				let message = format!("{name} was {}, is given {}: use another name", was.with_article(), now.with_article());
+				return Some(Diagnostic::at(value, message));
+			}
+		},
+		_ => None,
+	};
+	kinds.insert(name.to_string(), kind);
+	None
 }
 
 /// Kind of a new variable bound to `value`: `x=ø` makes x an optional, held as a Node that is ø until assigned

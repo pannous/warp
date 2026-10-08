@@ -45,6 +45,10 @@ inductive HasType (P : Program) : Ctx → Expr → Ty → Prop where
   | seq {Γ a b ta tb} : HasType P Γ a ta → HasType P Γ b tb → HasType P Γ (.seq a b) tb
   /-- inference.rs element_kind -/
   | index {Γ l i tl ti} : HasType P Γ l tl → HasType P Γ i ti → HasType P Γ (.index l i) (elementTy tl)
+  /-- the parameter takes anything (warp's lambdas are unannotated) -/
+  | lam {Γ y b tb} : HasType P (Γ.set y .any) b tb → HasType P Γ (.lam y b) (.fn tb)
+  | clo {Γ y b tb} : HasType P (Ctx.empty.set y .any) b tb → HasType P Γ (.clo y b) (.fn tb)
+  | app {Γ f a tf ta} : HasType P Γ f tf → HasType P Γ a ta → HasType P Γ (.app f a) (resultTy tf)
   /-- the items are ints (number bounds fail when it runs: W0 keeps no float values) -/
   | range {Γ a b ta tb} : HasType P Γ a ta → HasType P Γ b tb → HasType P Γ (.range a b) (.list (arithTy ta tb))
   | append {Γ a b ta tb} : HasType P Γ a ta → HasType P Γ b tb →

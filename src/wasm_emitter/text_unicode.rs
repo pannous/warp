@@ -32,18 +32,43 @@ const STRIDES: [u32; 2] = [1, 2];
 const OUTPUT_FACTOR: i32 = 3;
 
 
+/// How text_upper, text_lower and text_fold map a code point
+#[derive(Clone, Copy)]
+pub(super) enum CaseMapping {
+	Upper,
+	Lower,
+	/// lower case without accents: `í` is `i`, `É` is `e` (a letter whose canonical decomposition adds only combining
+	/// marks is its first code point; a Hangul syllable stays itself), for `≈`
+	Fold,
+}
+
+impl CaseMapping {
+	fn mapped(self, letter: char) -> Vec<u32> {
+		match self {
+			CaseMapping::Upper => letter.to_uppercase().map(u32::from).collect(),
+			CaseMapping::Lower => letter.to_lowercase().map(u32::from).collect(),
+			CaseMapping::Fold => {
+				let mut parts = vec![];
+				unicode_normalization::char::decompose_canonical(letter, |part| parts.push(part));
+				let accented = parts.len() > 1 && parts[1..].iter().all(|&part| unicode_normalization::char::is_combining_mark(part));
+				let base = if accented { parts[0] } else { letter };
+				base.to_lowercase().map(u32::from).collect()
+			}
+		}
+	}
+}
+
 /// case_table, worked out once per process: it walks every code point (100 ms in a debug build)
-fn cached_case_table(is_upper: bool) -> &'static [u8] {
-	static UPPER: std::sync::OnceLock<Vec<u8>> = std::sync::OnceLock::new();
-	static LOWER: std::sync::OnceLock<Vec<u8>> = std::sync::OnceLock::new();
-	(if is_upper { &UPPER } else { &LOWER }).get_or_init(|| case_table(is_upper))
+fn cached_case_table(mapping: CaseMapping) -> &'static [u8] {
+	static TABLES: [std::sync::OnceLock<Vec<u8>>; 3] = [const { std::sync::OnceLock::new() }; 3];
+	TABLES[mapping as usize].get_or_init(|| case_table(mapping))
 }
 
 /// The ranges of code points whose case mapping changes them (module doc), as little-endian u32
-fn case_table(is_upper: bool) -> Vec<u8> {
+fn case_table(mapping: CaseMapping) -> Vec<u8> {
 	let mut ranges: Vec<[u32; ENTRY_FIELDS]> = vec![];
 	for letter in (0..=char::MAX as u32).filter_map(char::from_u32) {
-		let mapped: Vec<u32> = if is_upper { letter.to_uppercase().map(u32::from).collect() } else { letter.to_lowercase().map(u32::from).collect() };
+		let mapped = mapping.mapped(letter);
 		let code = u32::from(letter);
 		if mapped == [code] {
 			continue;
@@ -131,13 +156,13 @@ impl WasmGcEmitter {
 		Self::emit_list(func, &[I::End, I::End, I::End]);
 	}
 
-	/// text_upper(text) / text_lower(text): a fresh text with every code point mapped
-	pub(super) fn emit_text_case(&mut self, name: &'static str, is_upper: bool) {
+	/// text_upper(text) / text_lower(text) / text_fold(text): a fresh text with every code point mapped
+	pub(super) fn emit_text_case(&mut self, name: &'static str, mapping: CaseMapping) {
 		if !self.should_emit_function(name) {
 			return;
 		}
 		self.emit_text_heap_global();
-		let case_table = cached_case_table(is_upper);
+		let case_table = cached_case_table(mapping);
 		let entries = (case_table.len() as u32 / ENTRY_BYTES) as i32;
 		let table = self.allocate_bytes(name, case_table) as i32;
 		let node_ref = Ref(self.node_ref(false));

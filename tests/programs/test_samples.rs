@@ -160,6 +160,6 @@ fn test_data_structures() { is!("samples/data_structures.warp", "Dave 11 20"); }
 
 #[test] // every feature in one program (card g-_c-A): each part checks itself, a new check needs no change here
 fn test_kitchensink() {
-	let value = warp::wasm_emitter::eval("samples/kitchensink.warp").serialize();
-	assert!(value.starts_with("\"all ") && value.ends_with(" checks pass\""), "{value}");
+	let value = warp::pipeline::for_tests(|| warp::wasm_emitter::eval("samples/kitchensink.warp")).serialize();
+	assert!(value.starts_with("\"✓ ") && value.ends_with(" tests passed\""), "{value}");
 }

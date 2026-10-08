@@ -1508,8 +1508,10 @@ pub fn lower_c_functions(node: Node) -> Node {
 	lower_lists(end_definitions(node), |items| definition_then_statements(items).or_else(|| function_definition(items)).or_else(|| extension_block(items)).or_else(|| smart_scope(items)).or_else(|| partial_application(items)))
 }
 
+/// The definition keeps the comment and position of its first word (`// doubles` before `def f(x) {…}`)
 fn function_definition(items: &[Node]) -> Option<Node> {
-	c_function(items).or_else(|| keyword_definition(items))
+	let definition = c_function(items).or_else(|| keyword_definition(items))?;
+	Some(definition.with_meta_of(items.first()?))
 }
 
 /// `function f(x) { return x * 2 } f(3)` (JS, PHP, Go, Rust): the body's closing brace ends the definition, what

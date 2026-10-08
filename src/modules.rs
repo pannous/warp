@@ -632,8 +632,13 @@ impl<'a> Loader<'a> {
 	}
 
 	/// never the program's own file: hash.warp saying `use hash` means the standard module; nor warp's own lib/hash.warp,
-	/// which is the embedded standard module itself (found in lib when a program runs in warp's repository)
+	/// which is the embedded standard module itself (found in lib when a program runs in warp's repository).
+	/// In the browser a program without a file (the playground's) has no folder of its own: a standard module's name is
+	/// the standard module, no request looks next to the page for a file shadowing it (card playground-module)
 	fn find_with(&self, name: &str, extensions: &[&str]) -> Option<PathBuf> {
+		if !cfg!(feature = "native") && program_file().is_none() && std_module(name).is_some() {
+			return None;
+		}
 		let program = program_file().and_then(|file| file.canonicalize().ok());
 		let is_program = |path: &PathBuf| program.is_some() && path.canonicalize().ok() == program;
 		self.candidates_with(name, extensions).into_iter().find(|path| module_exists(path) && !is_program(path) && !is_embedded_std_file(path))
@@ -822,6 +827,11 @@ fn is_embedded_std_file(path: &Path) -> bool {
 /// The name an embedded module is loaded under, once per program
 fn std_path(name: &str) -> PathBuf {
 	PathBuf::from(format!("{STD_FOLDER}/{name}.warp"))
+}
+
+/// The source of the standard module `name` (lib/<name>.warp, embedded)
+pub fn std_module_source(name: &str) -> Option<&'static str> {
+	std_module(name)
 }
 
 /// The standard modules' names: `list`, `math`, …

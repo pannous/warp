@@ -40,3 +40,5 @@ mod test_std_implicit_use; // card std-implicit
 #[cfg(feature = "native")] // reads lib/, tests/ and src/: not in the browser build
 mod test_std_coverage; // card std-word
 mod test_std_words; // card std-word
+mod test_std_names_offline; // card playground-module
+mod test_std_module_docs; // card std-module-docs

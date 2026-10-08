@@ -152,6 +152,8 @@ const PLACE_TEMPORARY: &str = "place·";
 /// `a ≈ b` holds when |a-b| ≤ tolerance·max(|a|, |b|); a program that assigns `tolerance` sets it
 const TOLERANCE_VARIABLE: &str = "tolerance";
 const DEFAULT_RELATIVE_TOLERANCE: &str = "1e-9";
+/// values_similar(a, b, tolerance): `a ≈ b` (wasm_emitter/similarity.rs)
+pub const VALUES_SIMILAR: &str = "values_similar";
 const RECEIVER_PLACEHOLDER: &str = "word_argument";
 const LOOKUP_PLACEHOLDER: &str = "word_lookup";
 const TEMPORARY: &str = "word_tmp";
@@ -731,16 +733,11 @@ impl Lowering {
 
 	/// `a ≈ b`, `a ~ b`, `a circa b`: compared within the relative tolerance; a side that is more than a plain value or
 	/// arithmetic is computed once into a temporary
+	/// `a ≈ b`: the emitter's values_similar(a, b, tolerance), numbers inline, any other values field by field
 	fn lower_similar(&self, left: Node, right: Node) -> Node {
 		let tolerance = if self.shadowed.contains(TOLERANCE_VARIABLE) { TOLERANCE_VARIABLE } else { DEFAULT_RELATIVE_TOLERANCE };
-		let mut bindings = vec![];
-		let [left, right] = [left, right].map(|operand| self.bound_once(operand, &mut bindings));
-		let (l, r) = (LEFT_OPERAND_PLACEHOLDER, RIGHT_OPERAND_PLACEHOLDER);
-		let comparison = self.instantiate_template(
-			&format!("abs({l} - {r}) <= {tolerance} * abs({l}) or abs({l} - {r}) <= {tolerance} * abs({r})"),
-			&[(l, &left), (r, &right)],
-		);
-		crate::min_max::with_bindings(bindings, comparison)
+		let call = vec![Node::Symbol(VALUES_SIMILAR.to_string()), left, right, crate::warp_parser::parse(tolerance)];
+		Node::List(call, Bracket::Round, Separator::None)
 	}
 
 	/// `a ?? b`: a unless it is ø, then b (a is computed once)
