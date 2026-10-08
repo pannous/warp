@@ -107,13 +107,12 @@ const CORPUS: &[&str] = &[
 	"type Color = red | rgb(r: int, g: int, b: int); c = rgb(1, \"a\", 3)",
 	"type Shape = circle(r: int) | square(s: int); f(x: Shape) := 1; f(circle(2))",
 	"type Shape = circle(r: int) | square(s: int); f(x: circle) := x.r; f(square(2))",
+	"class Shape { name: text }; class Circle extends Shape { r: int }; s: Shape = Circle(\"a\", 2); s.r",
+	"type Color = red | rgb(r: int, g: int, b: int); c: Color = rgb(1, 2, 3); c.r",
 ];
 
 /// Programs warp compiles although the model rejects them: holes in warp's checks, each with its card
-const KNOWN_HOLES: &[(&str, &str)] = &[
-	("class Shape { name: text }; class Circle extends Shape { r: int }; s: Shape = Circle(\"a\", 2); s.r", "upcast-field"),
-	("type Color = red | rgb(r: int, g: int, b: int); c: Color = rgb(1, 2, 3); c.r", "upcast-field"),
-];
+const KNOWN_HOLES: &[(&str, &str)] = &[];
 
 /// Where warp's run-time admission differs from W0's subtyping: a bool is an Int at run time, so an int value passes
 /// a bool check (P199 lets only the literals 1 and 0 in; card bool-assign)
