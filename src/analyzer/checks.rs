@@ -437,12 +437,24 @@ pub fn literal_number_type_word(node: &Node) -> Option<&'static str> {
 }
 
 pub(super) fn element_type_word(item: &Node, scope: &Scope) -> String {
+	if matches!(item.drop_meta(), Node::Empty) {
+		return crate::type_tests::EMPTY_TYPE.to_string();
+	}
 	literal_number_type_word(item).map(str::to_string).unwrap_or_else(|| infer_type(item, scope).to_string())
 }
 
 /// The one type word all element words fit: the same word, `rational` for a mix of `int` and `rational` (int is a special
-/// case of rational), `number` for any other mix of numbers; `None` when the elements are not all numbers or all alike
+/// case of rational), `number` for any other mix of numbers, optional (`int?`) when some are ø or optional (P179);
+/// `None` when the elements are not all numbers or all alike
 pub(super) fn common_type_word(words: &[String]) -> Option<String> {
+	let is_optional = |word: &String| word == crate::type_tests::EMPTY_TYPE || word.ends_with('?');
+	if words.iter().any(is_optional) {
+		let values: Vec<String> = words.iter().filter(|word| *word != crate::type_tests::EMPTY_TYPE).map(|word| word.trim_end_matches('?').to_string()).collect();
+		return match values.is_empty() {
+			true => Some(crate::type_tests::EMPTY_TYPE.to_string()),
+			false => common_type_word(&values).map(|word| format!("{word}?")),
+		};
+	}
 	let first = words.first()?;
 	if words.iter().all(|word| word == first) {
 		return Some(first.clone());
