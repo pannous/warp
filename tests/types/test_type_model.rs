@@ -182,6 +182,7 @@ const CORPUS: &[&str] = &[
 	"3..1",
 	"count(n) := { c=0; for i in 0..n { c += 1 }; c }; count(5)",
 	"to add number a to number b: a+b; add 1 to 2",
+	"b = 0; a = on fail { break 1 } in { b = on fail { break 2 } in { emit fail; 9 }; b * 10 }; a",
 ];
 
 /// Programs warp compiles although the model rejects them: holes in warp's checks, each with its card
