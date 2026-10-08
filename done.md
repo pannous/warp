@@ -1,6 +1,6 @@
 
 - DONE: Unbounded Int promotes to bignum on overflow, and `law::lean` exports Warp Int as Lean's unbounded `Int`; `square(3037000500)` is `9223372037000250000` and `law square(x) >= 0` is provable. Explicit `as i64` values still wrap and need a future `BitVec 64` proof model. See notes/laws.md.
-- DONE: `i<n {…}` without spaces lexes `<n` as a tag (`while i<n {i++}` → garbage); with spaces it works (seen writing lib/uniscript.wasp). (works on main 2026-10-03, fixer)
+- DONE: `i<n {…}` without spaces lexes `<n` as a tag (`while i<n {i++}` → garbage); with spaces it works (seen writing lib/uniscript.warp). (works on main 2026-10-03, fixer)
 - `global g = read("f")` → "undefined variable: read"; `global g = "abc"` used in a function → "cannot extract a numeric value"; `const` works.
 - A variable first assigned a one-character literal (`s="x"`) is a codepoint variable; `s = s + "ab"` is then a type error.
 - DONE: Uniscript: two suffix controls on one character (`<:mirror red A>`) are not expressible; nested tags are not supported. (effect words stack now; nested tags still open)
@@ -48,9 +48,9 @@
 - DONE: `print "a"` followed by a line starting with `√` (`print "a"\n√9`) evaluates to ø, without print it is 3. (web-playground 2026-10-03) (gives 3 on main 2026-10-03, fixer)
 - `xs=[3 1 2]; print sort(xs)` → Error("not a joinable item"); `sort(xs)` alone is fine. (web-playground 2026-10-03)
 - DONE: The indexing hint for a map with a text key is wrong: `ages["alice"]` hints `ages#("alice"+1)`. (web-playground 2026-10-03)
-- In the browser samples/quicksort.wasp overflows V8's wasm stack inside the compiler ("Maximum call stack size exceeded"); natively it reaches its error at 41:7. A deep recursion in the analyzer/emitter. (web-playground 2026-10-03)
+- In the browser samples/quicksort.warp overflows V8's wasm stack inside the compiler ("Maximum call stack size exceeded"); natively it reaches its error at 41:7. A deep recursion in the analyzer/emitter. (web-playground 2026-10-03)
 - The browser playground has no packages (`use netbase` → module not found) and no native FFI (raylib, SDL, libc): libm only, via Math. (web-playground 2026-10-03)
-- `try X else Y` catches the named runtime errors (wasm exception tag `wasp_error`, wasm_emitter/try_guard.rs) but not raw engine traps: a `ref.cast` failure elsewhere than get_int_value (get_float_value, struct field casts, text payload casts), a null dereference, stack overflow, running out of fuel. Turn each into a named runtime error like `not_an_int`. (r3-try 2026-10-03)
+- `try X else Y` catches the named runtime errors (wasm exception tag `warp_error`, wasm_emitter/try_guard.rs) but not raw engine traps: a `ref.cast` failure elsewhere than get_int_value (get_float_value, struct field casts, text payload casts), a null dereference, stack overflow, running out of fuel. Turn each into a named runtime error like `not_an_int`. (r3-try 2026-10-03)
 - DONE: A `return`, `break` or `continue` that leaves a `try X else Y` from inside X skips the depth decrement: an error after it throws instead of trapping and ends as an uncaught wasm exception rather than its message. (r3-try 2026-10-03)
 - DONE: The caught error id is kept in the global `caught_error` but nothing reads it yet: `try X else e => …` / naming the caught error is open. (r3-try 2026-10-03)
 - DONE: `x="a"; x as int` and `x="12"; x as int` are the runtime error "not an int" (was a raw cast trap); the literal `"a" as int` explains decision #35 at compile time, the variable form deserves the same message. (r3-try 2026-10-03) (fixer: "12" → 12, "a" → runtime error "invalid number", like the literal)
