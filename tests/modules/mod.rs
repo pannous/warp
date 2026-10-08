@@ -31,3 +31,4 @@ mod test_std_file_copy; // card std-file
 mod test_netbase_package;
 mod test_dir;
 mod test_use_several; // card std-use
+mod test_from_import; // card std-import
