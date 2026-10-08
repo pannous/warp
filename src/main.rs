@@ -17,6 +17,9 @@ const AOT_FLAG: &str = "--aot";
 /// (and `--aot`) write the module instead
 const EXE_FLAG: &str = "--exe";
 const WASM_FLAG: &str = "--wasm";
+/// `warp help list`: a standard module's words; `warp help --markdown`: all of them as wiki/standard-library.md
+const HELP_PREFIX: &str = "help ";
+const HELP_MARKDOWN: &str = "help --markdown";
 /// `warp build --site app.wasp`: the directory app-site/ a web server serves (src/site.rs, card web-ssr)
 const SITE_FLAG: &str = "--site";
 const SITE_SUFFIX: &str = "-site";
@@ -280,7 +283,18 @@ fn run_command(args: &[String]) {
         }
     } else if matches!(arg_string.as_str(), "help" | "--help" | "-h") {
         usage();
+        println!("{}", warp::std_docs::modules_overview());
         println!("detailed documentation can be found at https://github.com/pannous/warp/wiki");
+    } else if arg_string == HELP_MARKDOWN {
+        print!("{}", warp::std_docs::standard_library_markdown());
+    } else if let Some(module) = arg_string.strip_prefix(HELP_PREFIX) {
+        match warp::std_docs::module_help(module) {
+            Some(help) => println!("{help}"),
+            None => {
+                eprintln!("no standard module {module}; {}", warp::std_docs::modules_overview());
+                std::process::exit(1);
+            }
+        }
     } else if arg_string == "version" || arg_string == "--version" || arg_string == "-v" {
         println!("Wasp 🐝 {}", WARP_VERSION);
     } else {
@@ -552,6 +566,7 @@ fn usage() {
     println!("  warp docs            Open documentation");
     println!("  warp version         Show version");
     println!("  warp help            Show this help");
+    println!("  warp help <module>   A standard module's words (warp help --markdown: all, as wiki/standard-library.md)");
 }
 
 fn console() {

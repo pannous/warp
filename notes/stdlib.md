@@ -272,8 +272,9 @@ is the symbol args (no CLI way to pass them); a std module's `use list` worked, 
   Loader::hidden_apart renames its words `lib·drop` in the std definitions, so the program's bare `drop` is the
   error "drop is in the standard module list: write `use list`" and a program's own `drop` is its own
   (tests/modules/test_std_module_uses_module.rs). A file module's `use` counts as the program's.
-- **Discoverability**: `help list` (or `words list`) prints a module's words with their first comment line; the
-  same index generates wiki/standard-library.md, so docs never drift from lib/.
+- **Discoverability** (done, card std-module-docs): `warp help list` prints a module's leading comment and its words,
+  each with the comment line right above it; `warp help --markdown` prints the same index as wiki/standard-library.md,
+  so docs never drift from lib/ (src/std_docs.rs, tests/modules/test_std_module_docs.rs). `warp help` lists the modules.
 
 ### Cards (column Next)
 std-use-several, std-from-import, std-module-uses-module, std-prelude-module, std-implicit-use, std-args,

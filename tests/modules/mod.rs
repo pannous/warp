@@ -37,3 +37,4 @@ mod test_from_import; // card std-import
 mod test_std_shadowed_names; // card libm-function
 mod test_std_implicit_use; // card std-implicit
 mod test_std_names_offline; // card playground-module
+mod test_std_module_docs; // card std-module-docs

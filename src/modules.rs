@@ -829,6 +829,11 @@ fn std_path(name: &str) -> PathBuf {
 	PathBuf::from(format!("{STD_FOLDER}/{name}.wasp"))
 }
 
+/// The source of the standard module `name` (lib/<name>.wasp, embedded)
+pub fn std_module_source(name: &str) -> Option<&'static str> {
+	std_module(name)
+}
+
 /// The standard modules' names: `list`, `math`, …
 pub fn std_module_names() -> impl Iterator<Item = &'static str> {
 	STD_MODULES.iter().map(|(module, _)| *module)
