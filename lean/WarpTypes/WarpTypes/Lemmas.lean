@@ -36,6 +36,8 @@ theorem arith_typed {Γ op a b ta tb} (ha : HasType P Γ a ta) (hb : HasType P �
   unfold arithValues
   split
   · exact ⟨_, .error, sub_never _⟩
+  split
+  · exact ⟨_, .error, sub_never _⟩
   · cases ha <;> cases hb <;>
       simp_all [isValue, isNumber, asInt, asNumber, arithTy, Ty.arith, sub] <;>
       first | exact ⟨_, .int, by decide⟩ | exact ⟨_, .num, by decide⟩

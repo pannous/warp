@@ -323,6 +323,12 @@ const CORPUS: &[&str] = &[
 	"use list; product([2, 3, 4])",
 	"use list; take([1, 2, 3], 2)",
 	"use list; product(a, b) := a * b; product(3, 4)",
+	// `%` is the Euclidean remainder
+	"-7 % 3",
+	"7 % -3",
+	"5 % 0",
+	"n = 7; n %= 3; n",
+	"\"a\" % 2",
 ];
 
 /// Programs warp compiles although the model rejects them: holes in warp's checks, each with its card
