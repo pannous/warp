@@ -19,7 +19,7 @@ custom section, `wasp.meta`, kept unstripped.
 | `event.listeners` (= `listeners of e`) | event | handler count/list | `listeners of tick` broken (signal_listeners undefined) |
 | `module.exports` | `use wasm`, foreign module | export names | missing (dir-runtime) |
 | `x.unit` | quantity | its unit | static units (static_units.rs), no `.unit` word yet |
-| `x.doc` | binding, function | its comment (P114, `use comments`) | `x.@comment` exists |
+| `x.doc` | binding, function | its comment (P114, `use comments`) | step 4: `x.doc` = `x.@comment`, of functions too |
 
 ## Rule
 `x.word` is, in order: x's real field `word` (a class or map field always wins), its meta entry `@word`
@@ -51,4 +51,7 @@ Wasp notation text (parsed by the reader we already have), one map:
    a parameter's type is its annotation or the kind the body demands, the result the inferred kind (`def g(x){x*2}`
    is `(x) -> int`). Not yet: library and host words (`sqrt.signature`).
 4. `x.unit`, `x.doc` (aliases of meta/units), `module.exports` for `use wasm` modules (compile time: their exports).
+   `x.doc` done (meta_entries.rs; a function's comment survived no lowering before: declarations::lower_c_functions
+   and nonlocal_cells rebuilt the definition without its Meta, now `Node::with_meta_of`). `x.unit` waits for quantities
+   in variables (units runtime, warp-worker's area).
 5. wasp.meta section (absorbing wasp.units) + the run-time host call for `any`-typed values; playground reader too.

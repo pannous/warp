@@ -493,6 +493,14 @@ impl Node {
 		}
 	}
 
+	/// This node under the Meta layers (comments, positions) of `original`, which it replaces
+	pub fn with_meta_of(self, original: &Node) -> Node {
+		match original {
+			Meta { node, data } => Meta { node: Box::new(self.with_meta_of(node)), data: data.clone() },
+			_ => self,
+		}
+	}
+
 	pub fn drop_meta(&self) -> &Node {
 		match self {
 			Meta { node, .. } => node.drop_meta(),

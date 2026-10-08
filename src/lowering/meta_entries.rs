@@ -18,6 +18,8 @@ pub fn lower(node: Node) -> Node {
 
 const COMMENT_KEY: &str = "comment";
 const META_WORD: &str = "meta";
+/// `x.doc`, the reflection word for x's comment (notes/reflection.md)
+const DOC_WORD: &str = "doc";
 
 /// The comment a Meta layer of `node` carries (the parser puts it on the first word of a statement)
 fn comment_of(node: &Node) -> Option<&str> {
@@ -29,6 +31,8 @@ fn comment_of(node: &Node) -> Option<&str> {
 			},
 			_ => comment_of(node),
 		},
+		// a function's head `f(x)`: the comment is on its name
+		Node::List(items, Bracket::Round, _) => items.first().and_then(comment_of),
 		_ => None,
 	}
 }
@@ -37,23 +41,41 @@ fn comment_of(node: &Node) -> Option<&str> {
 struct Commented {
 	name: String,
 	comment: String,
-	/// x is an object with a field `meta`, which `x.meta` reads
-	meta_field: bool,
+	/// the fields of an object x, which `x.meta` and `x.doc` read instead
+	fields: Vec<String>,
+}
+
+/// The name a binding binds: `x = …`, or a function `f(x) := …`
+fn bound_name(target: &Node) -> Option<String> {
+	match target.drop_meta() {
+		Node::Symbol(name) => Some(name.clone()),
+		Node::List(items, Bracket::Round, _) => match items.first().map(Node::drop_meta) {
+			Some(Node::Symbol(name)) => Some(name.clone()),
+			_ => None,
+		},
+		_ => None,
+	}
 }
 
 fn binding_comments(node: &Node, bindings: &mut Vec<Commented>) {
-	let mut add = |target: &Node, comment: &str, value: &Node| bindings.push(Commented {
-		name: target.drop_meta().name(),
+	let mut add = |name: String, comment: &str, value: &Node| bindings.push(Commented {
+		name,
 		comment: comment.to_string(),
-		meta_field: matches!(value.drop_meta(), Node::List(items, Bracket::Curly, _) if items.iter().any(|item| matches!(item.drop_meta(), Node::Key(key, _, _) if key.drop_meta().name() == META_WORD))),
+		fields: match value.drop_meta() {
+			Node::List(items, Bracket::Curly, _) => items.iter().filter_map(|item| match item.drop_meta() {
+				Node::Key(key, _, _) => Some(key.drop_meta().name()),
+				_ => None,
+			}).collect(),
+			_ => vec![],
+		},
 	});
 	match node {
 		Node::Meta { node: inner, .. } => match (comment_of(node), inner.drop_meta()) {
-			(Some(comment), Node::Key(target, Op::Colon | Op::Assign | Op::Define, value)) if matches!(target.drop_meta(), Node::Symbol(_)) => add(target, comment, value),
+			(Some(comment), Node::Key(target, Op::Colon | Op::Assign | Op::Define, value)) if let Some(name) = bound_name(target) => add(name, comment, value),
 			_ => binding_comments(inner, bindings),
 		},
-		Node::Key(target, Op::Colon | Op::Assign | Op::Define, value) => match comment_of(target) {
-			Some(comment) if matches!(target.drop_meta(), Node::Symbol(_)) => add(target, comment, value),
+		Node::Key(target, Op::Colon | Op::Assign | Op::Define, value) => match (comment_of(target), bound_name(target)) {
+			(Some(comment), Some(name)) => add(name, comment, value),
 			_ => binding_comments(value, bindings),
 		},
 		Node::List(items, _, _) => items.iter().for_each(|item| binding_comments(item, bindings)),
@@ -71,7 +93,9 @@ fn comment_reads(node: Node, bindings: &[Commented]) -> Node {
 					let comment = Node::Text(binding.comment.clone());
 					let read = match field.as_str() {
 						_ if field.strip_prefix(ATTRIBUTE_MARK) == Some(COMMENT_KEY) => comment,
-						META_WORD if !binding.meta_field => Node::List(vec![Node::Key(Box::new(Node::Symbol(COMMENT_KEY.to_string())), Op::Colon, Box::new(comment))], Bracket::Curly, Separator::Space),
+						_ if binding.fields.iter().any(|own| own == field) => return None,
+						DOC_WORD => comment,
+						META_WORD =>Node::List(vec![Node::Key(Box::new(Node::Symbol(COMMENT_KEY.to_string())), Op::Colon, Box::new(comment))], Bracket::Curly, Separator::Space),
 						_ => return None,
 					};
 					Some(match crate::diagnostic::comments_as_meta() {
