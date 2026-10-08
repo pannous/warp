@@ -26,7 +26,19 @@ def asNumber : Expr → Int
   | .num n => n
   | e => (asInt e).getD 0
 
+/-- a value as `+` joins it to a text -/
+def render : Expr → String
+  | .text s => s
+  | .bool b => if b then "true" else "false"
+  | .int n | .num n => toString n
+  | _ => ""
+
+def isText : Expr → Bool
+  | .text _ => true
+  | _ => false
+
 def addValues (a b : Expr) : Expr :=
+  if isText a || isText b then .text (render a ++ render b) else
   match asInt a, asInt b with
   | some x, some y => .int (x + y)
   | _, _ => .num (asNumber a + asNumber b)
@@ -49,6 +61,29 @@ def appendValues : Expr → Expr → Expr
   | .cons h t, b => .cons h (appendValues t b)
   | _, b => b
 
+/-- the type of a value, as `HasType` gives it -/
+def valueType : Expr → Option Ty
+  | .bool _ => some .bool
+  | .int _ => some .int
+  | .num _ => some .number
+  | .text _ => some .text
+  | .unit => some .unit
+  | .nil => some (.list .never)
+  | .cons h t =>
+    match valueType h, valueType t with
+    | some a, some l =>
+      match element l with
+      | some e => some (.list (join a e))
+      | none => none
+    | _, _ => none
+  | _ => none
+
+/-- the run-time type test of a cast -/
+def fits (v : Expr) (t : Ty) : Bool :=
+  match valueType v with
+  | some tv => sub tv t
+  | none => false
+
 /-- an evaluation position: the hole is evaluated next once the expressions left of it are values -/
 inductive Frame where
   | consL (t : Expr) | consR (h : Expr)
@@ -62,6 +97,8 @@ inductive Frame where
   | assign (x : String) | init (x : String)
   | letIn (y : String) (t : Ty) (b : Expr)
   | call (f : String)
+  | cast (t : Ty)
+  | broadcast (f : String)
 
 namespace Frame
 
@@ -84,6 +121,8 @@ def plug : Frame → Expr → Expr
   | init x, e => .init x e
   | letIn y t b, e => .letIn y t e b
   | call f, e => .call f e
+  | cast t, e => .cast e t
+  | broadcast f, e => .broadcast f e
 
 /-- a right position needs the left operand evaluated -/
 def ready : Frame → Bool
@@ -116,6 +155,10 @@ inductive Step (P : Program) : Expr × Store → Expr × Store → Prop where
   | letIn {y t v b μ} : v.isValue = true → Step P (.letIn y t v b, μ) (b.subst y v, μ)
   | call {f v fn μ} : v.isValue = true → P.funs f = some fn →
       Step P (.call f v, μ) (.letIn fn.param fn.paramTy v fn.body, μ)
+  | broadcastNil {f μ} : Step P (.broadcast f .nil, μ) (.nil, μ)
+  | broadcastCons {f h t μ} : h.isValue = true → t.isValue = true →
+      Step P (.broadcast f (.cons h t), μ) (.cons (.call f h) (.broadcast f t), μ)
+  | cast {v t μ} : v.isValue = true → Step P (.cast v t, μ) (if fits v t then v else .error "type mismatch", μ)
 
 /-- every declared name has a cell that fits its mode and type -/
 def CellOk (P : Program) (m : Mode) (t : Ty) : Option Cell → Prop

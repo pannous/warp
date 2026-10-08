@@ -122,12 +122,14 @@ checked like a declared scalar:
   first, a whole list from a call checked item by item. The store keeps its form, so a typed int list stays an array.
 - `names = other + [v]` checks the items of `other` in a for-loop too, unless `other` is `names` itself or declared
   with the same element type (card list-element-runtime).
-- A field's run-time append `b.items.add(f())` is checked the same way when b's class is known in the pass
-  (`b = bag(…)`, `b: bag`; class_methods `instance_classes`, `class_fields`): "items of bag is declared texts".
+- A field's run-time append `b.items.add(f())` and a whole field store `b.items = f()` are checked the same way when
+  b's class is known in the pass (`b = bag(…)`, `b: bag`; class_methods `instance_classes`, `class_fields`): "items of
+  bag is declared texts". Of an instance whose class is unknown (a parameter `x.items.add(v)`) each class with a list
+  field `items` guards its check, `if (x is bag) and not (v is text)`, so a map with an `items` key stays unchecked and
+  a literal item is checked at run time too (card list-element-field).
 - A float or number list takes ints (`is number`), as a declared float does.
 - Parameters (`f(xs: texts)` called with `[420]`): warp-7c's param-types work (functions2, checks.rs
   `declared_element_type`, `elements_fit`).
-- Not checked yet: a field append whose instance's class the pass can't see (a parameter `b` without annotation, a
-  returned instance), and a field assigned whole at run time (`b.items = f()`).
+- Not checked yet: a field of a receiver that is no variable (`bags#1.items.add(v)`, `make().items.add(v)`).
 - Variance (TypeScript's covariant arrays) needs no rule while lists are values: a callee's widened `xs: list` is its
   own copy (probes/variance/, notes/footguns.md).

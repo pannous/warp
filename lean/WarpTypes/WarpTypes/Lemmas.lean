@@ -24,15 +24,19 @@ theorem value_list {Γ v t e} (h : HasType P Γ v t) (hv : v.isValue = true) (he
     t = .list e := by
   cases h <;> simp_all [isValue, element]
 
+theorem list_value {Γ v a} (h : HasType P Γ v (.list a)) (hv : v.isValue = true) :
+    v = .nil ∨ ∃ hd tl, v = .cons hd tl ∧ hd.isValue = true ∧ tl.isValue = true := by
+  cases v <;> simp [isValue] at hv ⊢ <;> first | exact hv | exact ⟨_, _, ⟨rfl, rfl⟩, hv⟩ | cases h
+
 theorem number_value {Γ v t} (h : HasType P Γ v t) (hv : v.isValue = true) (hs : sub t .number = true) :
     (asInt v ≠ none ∧ sub t .int = true) ∨ (asInt v = none ∧ t = .number) := by
   cases h <;> simp_all [isValue, asInt, sub]
 
 theorem add_typed {Γ a b ta tb} (ha : HasType P Γ a ta) (hb : HasType P Γ b tb) (va : a.isValue = true)
-    (vb : b.isValue = true) (sa : sub ta .number = true) (sb : sub tb .number = true) :
-    ∃ t', HasType P Γ (addValues a b) t' ∧ sub t' (arith ta tb) = true := by
-  cases ha <;> cases hb <;> simp_all [isValue, addValues, asInt, asNumber, arith, sub] <;>
-    first | exact ⟨_, .int, by decide⟩ | exact ⟨_, .num, by decide⟩
+    (vb : b.isValue = true) (sa : addable ta = true) (sb : addable tb = true) :
+    ∃ t', HasType P Γ (addValues a b) t' ∧ sub t' (plus ta tb) = true := by
+  cases ha <;> cases hb <;> simp_all [isValue, addValues, isText, asInt, asNumber, plus, arith, addable, sub] <;>
+    first | exact ⟨_, .int, by decide⟩ | exact ⟨_, .num, by decide⟩ | exact ⟨_, .text, by decide⟩
 
 theorem nth_typed {Γ} : ∀ {l : Expr} (i : Int) {tl e v}, l.isValue = true → HasType P Γ l tl → element tl = some e →
     nth l i = some v → ∃ tv, HasType P Γ v tv ∧ sub tv e = true := by
@@ -76,6 +80,26 @@ theorem append_typed {Γ b tb eb} (hb : HasType P Γ b tb) (vb : b.isValue = tru
       · exact sub_trans hs'' (join_least (sub_trans (join_upper_right _ _) (join_upper_left _ _)) (join_upper_right _ _))
   | _ => intro ta ea va ha hea; cases ha <;> simp_all [isValue, element]
 
+theorem valueType_typed {Γ} : ∀ {v : Expr} {t}, valueType v = some t → HasType P Γ v t := by
+  intro v
+  induction v with
+  | cons h tl ih1 ih2 =>
+    intro t hv
+    simp only [valueType] at hv
+    split at hv
+    · rename_i a l ha hl
+      split at hv
+      · rename_i e he; cases hv; exact .cons (ih1 ha) (ih2 hl) he
+      · cases hv
+    · cases hv
+  | _ => intro t hv; simp [valueType] at hv <;> subst hv <;> constructor
+
+theorem fits_typed {Γ v t} (h : fits v t = true) : ∃ tv, HasType P Γ v tv ∧ sub tv t = true := by
+  unfold fits at h
+  split at h
+  · exact ⟨_, valueType_typed (by assumption), h⟩
+  · cases h
+
 /-- Γ' gives every local of Γ a smaller type -/
 def CtxSub (Γ' Γ : Ctx) : Prop := ∀ z t, Γ z = some t → ∃ t', Γ' z = some t' ∧ sub t' t = true
 
@@ -110,7 +134,7 @@ theorem narrow {Γ e t} (h : HasType P Γ e t) : ∀ {Γ'}, CtxSub Γ' Γ → �
     intro Γ' hs
     obtain ⟨a', h1, s1⟩ := ih1 hs
     obtain ⟨b', h2, s2⟩ := ih2 hs
-    exact ⟨_, .add h1 h2 (sub_trans s1 sa) (sub_trans s2 sb), arith_mono s1 s2⟩
+    exact ⟨_, .add h1 h2 (addable_mono s1 sa) (addable_mono s2 sb), plus_mono s1 s2 sa sb⟩
   | lt _ _ sa sb ih1 ih2 =>
     intro Γ' hs
     obtain ⟨a', h1, s1⟩ := ih1 hs
@@ -173,6 +197,15 @@ theorem narrow {Γ e t} (h : HasType P Γ e t) : ∀ {Γ'}, CtxSub Γ' Γ → �
     obtain ⟨a', h1, s1⟩ := ih1 hs
     obtain ⟨b', h2, s2⟩ := ih2 hs
     exact ⟨_, .tryCatch h1 h2, join_mono s1 s2⟩
+  | cast _ ih =>
+    intro Γ' hs
+    obtain ⟨_, h1, _⟩ := ih hs
+    exact ⟨_, .cast h1, sub_refl _⟩
+  | broadcast hf _ he ha ih =>
+    intro Γ' hs
+    obtain ⟨_, h1, s1⟩ := ih hs
+    obtain ⟨a', he', sa⟩ := element_mono s1 he
+    exact ⟨_, .broadcast hf h1 he' (sub_trans sa ha), sub_refl _⟩
 
 theorem Ctx.set_same (Γ : Ctx) (y : String) (a b : Ty) : (Γ.set y a).set y b = Γ.set y b := by
   funext z; simp only [Ctx.set]; split <;> simp_all
@@ -228,6 +261,8 @@ theorem subst_typed {Γ0 e t} (h : HasType P Γ0 e t) :
   | call hf _ st ih => intro Γ y tv v hΓ hv htv; simp only [Expr.subst]; exact .call hf (ih hΓ hv htv) st
   | error => intros; simp only [Expr.subst]; exact .error
   | tryCatch _ _ ih1 ih2 => intro Γ y tv v hΓ hv htv; simp only [Expr.subst]; exact .tryCatch (ih1 hΓ hv htv) (ih2 hΓ hv htv)
+  | cast _ ih => intro Γ y tv v hΓ hv htv; simp only [Expr.subst]; exact .cast (ih hΓ hv htv)
+  | broadcast hf _ he ha ih => intro Γ y tv v hΓ hv htv; simp only [Expr.subst]; exact .broadcast hf (ih hΓ hv htv) he ha
 
 /-- a value of type tv ≤ t bound to a local of type t: the body keeps (a subtype of) its type -/
 theorem let_typed {y t v b tv tb} (hb : HasType P (Ctx.empty.set y t) b tb) (hv : v.isValue = true)
