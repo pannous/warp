@@ -5,6 +5,9 @@ answered questions to a new file"). Older references to "notes/open_decisions.md
 D-number or #number mean this file. Open questions, parked ones and the standing rules stay in notes/open_decisions.md.
 
 ## Decided 2026-10-08 (user, as recommended unless quoted)
+- From P200b (not asked; card shared-lists-typed, warp-class): a typed list read from a field shares too:
+  `p = {xs: [1, 2]}; ys = p.xs; p.xs#1 = 7; ys#1` → 7. The fast unboxed copy is kept only where the compiler proves
+  that neither alias is written afterwards; otherwise the list is shared, never a silent snapshot.
 - P216 (warp-types): named arguments run as written, left to right (like Python): with `global i = 0;
   g() := { i = i*10+1; i }; h() := { i = i*10+2; i }; f(a, b) := a*100 + b`, `f(b=h(), a=g())` runs h first
   (b=2), then g (a=21) → 2102; the corpus pin 112 (parameter order) changes. Applies to constructors too
