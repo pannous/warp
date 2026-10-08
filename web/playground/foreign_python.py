@@ -42,5 +42,7 @@ def answer(line):
         reply = {"error": type(failure).__name__ + ": " + str(failure)}
     return json.dumps(reply)
 if globals().get("WARP_BRIDGE_LOOP", True):
+    # the answers own stdout: what a module prints goes to stderr
+    answers, sys.stdout = sys.stdout, sys.stderr
     for line in sys.stdin:
-        print(answer(line), flush=True)
+        print(answer(line), file=answers, flush=True)
