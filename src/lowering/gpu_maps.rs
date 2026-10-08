@@ -25,9 +25,27 @@ const KERNEL_COUNT: &str = "count";
 /// `x^k` for a whole k up to this is a product (pow of a negative base is NaN in WGSL, a number on the CPU)
 const LARGEST_MULTIPLIED_POWER: i64 = 8;
 
-/// `xs.map(f) @gpu` or `@gpu xs.map(f)`: xs and f
+/// `xs.map(f) @gpu` or `@gpu xs.map(f)`: xs and f; a chain `xs.map(f).map(g)` is xs and g after f, one kernel
 pub(crate) fn gpu_map(value: &Node) -> Option<(Node, Node)> {
-	crate::parallel::is_annotated(value, GPU_ATTRIBUTE).then(|| crate::parallel::map_call(value)).flatten()
+	let (mut list, mut function) = crate::parallel::is_annotated(value, GPU_ATTRIBUTE).then(|| crate::parallel::map_call(value)).flatten()?;
+	loop {
+		let Some((inner_list, inner_function)) = crate::parallel::map_call(&list) else { return Some((list, function)) };
+		let Some(both) = composed(&inner_function, &function) else { return Some((list, function)) };
+		(list, function) = (inner_list, both);
+	}
+}
+
+/// `x => g_body` after `x => f_body`: `x => g_body` with g's parameter replaced by f's body (none when g reads a name
+/// f's parameter would capture)
+fn composed(first: &Node, then: &Node) -> Option<Node> {
+	let (Node::Key(parameter, Op::FatArrow, body), Node::Key(then_parameter, Op::FatArrow, then_body)) = (first.drop_meta(), then.drop_meta()) else { return None };
+	let (Node::Symbol(name), Node::Symbol(then_name)) = (parameter.drop_meta(), then_parameter.drop_meta()) else { return None };
+	if name != then_name && crate::warp_parser::mentions(then_body, name) {
+		return None;
+	}
+	let grouped = Node::List(vec![body.as_ref().clone()], crate::node::Bracket::Round, crate::node::Separator::None);
+	let body = crate::library_words::substitute(then_body.as_ref().clone(), then_name, &grouped);
+	Some(Node::Key(parameter.clone(), Op::FatArrow, Box::new(body)))
 }
 
 /// A lambda as a WGSL compute kernel: the shader, the program's numbers it reads (`outer`, appended to `data` after

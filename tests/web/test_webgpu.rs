@@ -124,3 +124,13 @@ fn a_gpu_map_reads_outer_numbers() {
 	assert_eq!(eval(&format!("{program}abs(ys#40000 - (sin(1) * 0.5 + 2)) < 0.00001")).serialize(), "yes");
 	with_warning_mode(WarningMode::Error, || crate::common::fails_with("linear xs = float[2]\nk = 3.0\nys = xs.map(x => x * k) @gpu", "CPU maps"));
 }
+
+// card gpu-vectors (chains kept on the GPU): `xs.map(f).map(g) @gpu` is one kernel of g after f, the items cross to
+// the GPU and back once
+#[test]
+fn a_chain_of_gpu_maps_is_one_kernel() {
+	let program = "linear xs = float[40000]\nfor i in 1 to 40000 { xs#i = i / 40000.0 }\nys = xs.map(x => x * 2).map(y => sin(y) + y) @gpu\n";
+	assert_eq!(eval(&format!("{program}abs(ys#40000 - (sin(2) + 2)) < 0.00001")).serialize(), "yes");
+	let lowered = warp::pipeline::lower(&format!("{program}ys#1")).expect("a program").serialize();
+	assert_eq!(lowered.matches("gpu_map_linear").count(), 1, "{lowered}");
+}
