@@ -593,3 +593,14 @@ Tests still pinning the old rule (not edited, supervisor decides): tests/welcomi
 | varphi | ϕ (Ll) | φ (Ll) | LaTeX (exception: a math name) | φ (Ll) |
 | Vee | ⋁ (Sm) | ⩔ (Sm) | LaTeX | ⩔ (Sm) |
 | Wedge | ⋀ (Sm) | ⩓ (Sm) | LaTeX | ⩓ (Sm) |
+
+## Array covariance (TypeScript's `Array<string>` passed as `Array<string | number>`), probed 2026-10-08
+- Not a hole in warp: lists are values, so a callee that widens the element type (`xs: list`,
+  `xs: list of (text or number)`) appends to its own copy. The caller's `names: texts` stays `["hi"]`; the same goes for a
+  typed class field, a `const` list and a list a closure reads. Probes: probes/variance/widening_*.wasp.
+- The actual hole is simpler: the element type of a declared list is not checked at all. `names: texts = ["hi"];
+  names.add(420)` gives `["hi" 420]` silently, as do `names: texts = [420]`, `names = [420]` and `b.items.add(420)` on a
+  field `items: texts`. A scalar `x: text = "a"; x = 3` is a compile error. Card list-element-types (fix: check items like
+  scalars, at compile time where known, at the store otherwise; the variance design above needs no extra rule while
+  lists stay values). Found on the way: const-list-add, typed-list-upper, class-field-list-of, uncalled-list-param,
+  map-function-name.
