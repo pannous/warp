@@ -13,6 +13,8 @@ const USE_WORD: &str = "use";
 pub const FOREIGN_RUNTIMES: [&str; 3] = ["python", JS_RUNTIME, COMPONENT_RUNTIME];
 /// JavaScript: its browser globals are typed through WebIDL (src/web_idl.rs)
 const JS_RUNTIME: &str = "js";
+/// The member of a foreign call that constructs its module (`new URL(…)`, src/foreign.rs and host-foreign.js)
+const CONSTRUCTOR_MEMBER: &str = "";
 /// `use wasm "lib.wasm" as lib`: a WebAssembly component (src/components.rs); its module is the file, found next to the
 /// program, and named after the file by default
 pub const COMPONENT_RUNTIME: &str = "wasm";
@@ -166,13 +168,14 @@ fn foreign_call(runtime: &str, module: Node, member: &str, is_call: bool, argume
 	Node::List(vec![Node::Symbol(crate::host::FOREIGN_CALL.to_string()), text(runtime), module, text(member), Node::int(i64::from(is_call)), arguments], Bracket::Round, Separator::None)
 }
 
-/// `foreign_call("js", receiver, member, 0, ø)`, the read of a JavaScript attribute: its receiver and member
-fn attribute_read(node: &Node) -> Option<(&Node, &str)> {
+/// `foreign_call("js", receiver, member, call, arguments)`, a JavaScript attribute read or method call: its receiver,
+/// member and whether it is a call
+fn javascript_member(node: &Node) -> Option<(&Node, &str, bool)> {
 	let Node::List(items, Bracket::Round, _) = node.drop_meta() else { return None };
 	match items.as_slice() {
 		[call, runtime, receiver, member, is_call, _] if matches!(call.drop_meta(), Node::Symbol(name) if name == crate::host::FOREIGN_CALL)
-			&& matches!(runtime.drop_meta(), Node::Text(runtime) if runtime == JS_RUNTIME) && *is_call == Node::int(0) => match member.drop_meta() {
-			Node::Text(member) => Some((receiver, member)),
+			&& matches!(runtime.drop_meta(), Node::Text(runtime) if runtime == JS_RUNTIME) => match member.drop_meta() {
+			Node::Text(member) => Some((receiver, member, *is_call == Node::int(1))),
 			_ => None,
 		},
 		_ => None,
@@ -241,7 +244,8 @@ impl Foreign<'_> {
 	}
 
 	/// The WebIDL interface of a JavaScript receiver and its path as written: a global `use js` names, a variable assigned
-	/// such a value, or an attribute read of one (`navigator.clipboard`: Clipboard); Err for a global only a page has
+	/// such a value, or what a member of one gives (`navigator.clipboard`: Clipboard, `document.body`: HTMLElement,
+	/// `document.getElementById(id)`: Element); Err for a global only a page has
 	fn web_idl_receiver(&self, receiver: &Node) -> Result<Option<(String, String)>, String> {
 		let global = |name: &str, path: &str| Ok(crate::web_idl::global_interface(name)?.map(|interface| (interface, path.to_string())));
 		match receiver.drop_meta() {
@@ -252,9 +256,13 @@ impl Foreign<'_> {
 			// the global inside a lowered read
 			Node::Text(name) => global(name, name),
 			other => {
-				let Some((inner, member)) = attribute_read(other) else { return Ok(None) };
+				let Some((inner, member, is_call)) = javascript_member(other) else { return Ok(None) };
+				if let (CONSTRUCTOR_MEMBER, Node::Text(interface)) = (member, inner.drop_meta()) {
+					return Ok(crate::web_idl::constructible(interface).then(|| (interface.clone(), format!("{interface}(…)"))));
+				}
 				let Some((interface, path)) = self.web_idl_receiver(inner)? else { return Ok(None) };
-				Ok(crate::web_idl::attribute_interface(&interface, member).map(|interface| (interface, format!("{path}.{member}"))))
+				let read = if is_call { format!("{path}.{member}(…)") } else { format!("{path}.{member}") };
+				Ok(crate::web_idl::result_interface(&interface, member, is_call).map(|interface| (interface, read)))
 			}
 		}
 	}
@@ -269,6 +277,20 @@ impl Foreign<'_> {
 		let Some((interface, path)) = self.web_idl_receiver(receiver)? else { return Ok(None) };
 		crate::web_idl::check_member(&interface, &path, member, is_call.then_some(count))?;
 		Ok(crate::web_idl::optional_result_type(&interface, member, is_call))
+	}
+
+	/// `URL("https://…")` of `use js URL`: the constructor called, JavaScript's `new`, checked by WebIDL when it declares
+	/// the interface
+	fn constructed(&mut self, node: &Node) -> Option<Node> {
+		let Node::List(items, Bracket::Round, _) = node.drop_meta() else { return None };
+		let (head, arguments) = items.split_first()?;
+		let Node::Symbol(name) = head.drop_meta() else { return None };
+		let (runtime, module) = self.modules.get(name).filter(|(runtime, _)| runtime == JS_RUNTIME)?.clone();
+		if let Err(problem) = crate::web_idl::check_constructor(&module, arguments.len()) {
+			return Some(crate::diagnostic::Diagnostic::at(node, problem).into_error());
+		}
+		let arguments = arguments.iter().cloned().map(|argument| self.rewrite(argument)).collect();
+		Some(foreign_call(&runtime, Node::Text(module), CONSTRUCTOR_MEMBER, true, Node::List(arguments, Bracket::Square, Separator::Space)))
 	}
 
 	/// Does the node name a used foreign module or a variable holding a foreign value
@@ -303,6 +325,9 @@ impl Foreign<'_> {
 		}
 		if let Some(forwarded) = self.forwarded(&node) {
 			return forwarded;
+		}
+		if let Some(constructed) = self.constructed(&node) {
+			return constructed;
 		}
 		// `"id \(crypto.randomUUID())"`: the holes are calls of this pass, the text is built later (interpolation.rs)
 		if let Some(text) = crate::interpolation::interpolated_mentioning(&node, |hole| self.mentions_foreign_name(hole)) {

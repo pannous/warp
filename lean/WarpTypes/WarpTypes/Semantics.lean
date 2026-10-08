@@ -74,16 +74,25 @@ def isText : Expr → Bool
   | .text _ => true
   | _ => false
 
+def isNumber : Expr → Bool
+  | .bool _ | .int _ | .num _ => true
+  | _ => false
+
 def arithValues (op : ArithOp) (a b : Expr) : Expr :=
+  if !(isNumber a && isNumber b) then .error "not a number" else
   match asInt a, asInt b with
   | some x, some y => .int (op.apply x y)
   | _, _ => .num (op.apply (asNumber a) (asNumber b))
 
 def addValues (a b : Expr) : Expr :=
+  if !((isNumber a || isText a) && (isNumber b || isText b)) then .error "not addable" else
   if isText a || isText b then .text (render a ++ render b) else
   match asInt a, asInt b with
   | some x, some y => .int (x + y)
   | _, _ => .num (asNumber a + asNumber b)
+
+def ltValues (a b : Expr) : Expr :=
+  if isNumber a && isNumber b then .bool (decide (asNumber a < asNumber b)) else .error "not comparable"
 
 /-- false, 0, "", ø and [] are falsy -/
 def truthy : Expr → Bool
@@ -141,7 +150,7 @@ inductive Frame where
   | assign (x : String) | init (x : String)
   | letIn (y : String) (t : Ty) (b : Expr)
   | call (f : String)
-  | cast (t : Ty)
+  | cast (ts : List Ty)
   | broadcast (f : String)
   | get (f : String)
   | setL (f : String) (v : Expr) | setR (o : Expr) (f : String)
@@ -170,7 +179,7 @@ def plug : Frame → Expr → Expr
   | init x, e => .init x e
   | letIn y t b, e => .letIn y t e b
   | call f, e => .call f e
-  | cast t, e => .cast e t
+  | cast ts, e => .cast e ts
   | broadcast f, e => .broadcast f e
   | get f, e => .get e f
   | setL f v, e => .set e f v
@@ -195,8 +204,7 @@ inductive Step (P : Program) : Expr × Store → Expr × Store → Prop where
   | readCharged {x b μ} : μ x = some (.charged b) → Step P (.glob x, μ) (b, μ)
   | add {a b μ} : a.isValue = true → b.isValue = true → Step P (.add a b, μ) (addValues a b, μ)
   | arith {op a b μ} : a.isValue = true → b.isValue = true → Step P (.arith op a b, μ) (arithValues op a b, μ)
-  | lt {a b μ} : a.isValue = true → b.isValue = true →
-      Step P (.lt a b, μ) (.bool (decide (asNumber a < asNumber b)), μ)
+  | lt {a b μ} : a.isValue = true → b.isValue = true → Step P (.lt a b, μ) (ltValues a b, μ)
   | eq {a b μ} : a.isValue = true → b.isValue = true → Step P (.eq a b, μ) (.bool (decide (a = b)), μ)
   | ite {v a b μ} : v.isValue = true → Step P (.ite v a b, μ) (if truthy v then a else b, μ)
   | loop {c b μ} : Step P (.loop c b, μ) (.ite c (.seq b (.loop c b)) .unit, μ)
@@ -212,7 +220,7 @@ inductive Step (P : Program) : Expr × Store → Expr × Store → Prop where
   | broadcastNil {f μ} : Step P (.broadcast f .nil, μ) (.nil, μ)
   | broadcastCons {f h t μ} : h.isValue = true → t.isValue = true →
       Step P (.broadcast f (.cons h t), μ) (.cons (.call f h) (.broadcast f t), μ)
-  | cast {v t μ} : v.isValue = true → Step P (.cast v t, μ) (if fits v t then v else .error "type mismatch", μ)
+  | cast {v ts μ} : v.isValue = true → Step P (.cast v ts, μ) (if ts.any (fits v) then v else .error "type mismatch", μ)
   | new {p μ} : Step P (.new p, μ) (.ref μ.heap.length p, μ.alloc p)
   | get {o f μ} : o.isValue = true → Step P (.get o f, μ) (readField μ o f, μ)
   | set {o f v μ} : o.isValue = true → v.isValue = true → Step P (.set o f v, μ) (writeField μ o f v)

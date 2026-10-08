@@ -27,7 +27,18 @@ const ANY_TYPE: &str = ".any";
 const BUILTIN_TYPE_WORDS: [&str; 11] = ["int", "integer", "long", "exact", "float", "number", "text", "string", "str", "bool", "boolean"];
 /// A value of each W0 scalar type and the run-time kind warp sees it as (a bool is an Int)
 const VALUE_KINDS: [(&str, Kind); 4] = [(BOOL_TYPE, Kind::Int), (".int", Kind::Int), (".number", Kind::Float), (".text", Kind::Text)];
+const DEF_KEYWORD: &str = "def";
+const UNIT_TYPE: &str = ".unit";
+/// the parameter of a function that takes none
+const UNIT_PARAMETER: &str = "·";
+const ARGUMENTS_SUFFIX: &str = "·args";
 const APPEND_METHODS: [&str; 2] = ["add", "push"];
+/// An inline union `int | text` or an optional `int?` is the join of its alternatives, every value given to it a cast
+const UNION_TYPE: &str = "(Ty.joinAll ";
+const UNION_JOINER: &str = " or ";
+const OPTIONAL_MARK: char = '?';
+/// the type of ø, the empty part of an optional (ø is the empty list)
+const EMPTY_TYPE: &str = ".list .never";
 
 /// W0's answer for one program
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -67,6 +78,19 @@ fn type_of_word(word: &str) -> Option<String> {
 	}
 }
 
+/// `[.int, .text]` of the union type `(Ty.joinAll [.int, .text])`
+fn union_alternatives(declared: &str) -> Option<&str> {
+	declared.strip_prefix(UNION_TYPE)?.strip_suffix(')')
+}
+
+/// a value given to a declared place: a union checks it against its alternatives when it runs
+fn admitted(declared: &str, value: String) -> String {
+	match union_alternatives(declared) {
+		Some(alternatives) => format!(".cast ({value}) {alternatives}"),
+		None => value,
+	}
+}
+
 fn is_word(node: &Node, word: &str) -> bool {
 	matches!(node.drop_meta(), Node::Symbol(found) if found == word)
 }
@@ -91,18 +115,41 @@ fn type_definitions(statement: &Node) -> Vec<&Node> {
 	}
 }
 
-/// `f(y)`, `f(y: int)`: a definition head of one parameter
-fn function_head(head: &Node) -> Option<(&str, &Node)> {
-	match head.drop_meta() {
-		Node::List(items, _, _) => match items.as_slice() {
-			[name, parameter] => match name.drop_meta() {
-				Node::Symbol(name) => Some((name.as_str(), parameter)),
-				_ => None,
-			},
+/// `f(y)`, `f(y: int)`, `f(a, b)`, `two()`: a definition head, the name and the parameters
+fn function_head(head: &Node) -> Option<(&str, Vec<&Node>)> {
+	let Node::List(items, _, _) = head.drop_meta() else { return None };
+	let (Node::Symbol(name), parameters) = (items.first()?.drop_meta(), &items[1..]) else { return None };
+	let parameters = match parameters {
+		[only] if only.is_nothing() => vec![],
+		[Node::List(grouped, Bracket::Round, _)] => grouped.iter().collect(),
+		parameters => parameters.iter().collect(),
+	};
+	Some((name.as_str(), parameters))
+}
+
+/// `f(a, b) := body` and `def f(a, b) { body }`: the name, the parameters and the body
+fn function_definition(statement: &Node) -> Option<(&str, Vec<&Node>, &Node)> {
+	match statement.drop_meta() {
+		Node::Key(head, Op::Define, body) => function_head(head).map(|(name, parameters)| (name, parameters, &**body)),
+		Node::List(items, _, _) if items.len() == 2 && is_word(&items[0], DEF_KEYWORD) => match items[1].drop_meta() {
+			Node::List(parts, _, _) if parts.len() == 2 => function_head(&parts[0]).map(|(name, parameters)| (name, parameters, &parts[1])),
 			_ => None,
 		},
 		_ => None,
 	}
+}
+
+/// The parameter's type word: `int` of `y: int`, none for an unannotated `y`
+fn parameter_type_word(parameter: &Node) -> Option<String> {
+	match parameter.drop_meta() {
+		Node::Key(_, Op::Colon, annotation) => Some(annotation.name()),
+		_ => None,
+	}
+}
+
+/// The class a function of several parameters takes them as: `f(a, b)` takes one `f·args` with fields a and b
+fn arguments_class(function: &str) -> String {
+	format!("{function}{ARGUMENTS_SUFFIX}")
 }
 
 /// A bool place (a declared variable or parameter) takes the literals 1 and 0 as yes and no (P199)
@@ -131,12 +178,15 @@ struct Exporter {
 	/// main-level names bound to an evident bool (`b = true`): a bool place for the literals 1 and 0 (P199)
 	bool_names: Vec<String>,
 	locals: Vec<String>,
+	/// the parameters of the function being exported when it takes several: each is a field of its arguments object
+	argument_fields: Vec<String>,
 	/// each class's ancestor chain, root first, and its own fields with their type words
 	classes: HashMap<String, ClassShape>,
 }
 
 /// A class's ancestor chain and its own fields as (name, type word)
-type ClassShape = (Vec<String>, Vec<(String, String)>);
+/// a class's ancestor chain, root first, and its own fields with their type words (none: unannotated)
+type ClassShape = (Vec<String>, Vec<(String, Option<String>)>);
 
 impl Exporter {
 	/// `int`, `texts`, `Point`: the W0 type a type word names
@@ -147,8 +197,34 @@ impl Exporter {
 		}
 	}
 
+	/// `(some T)` of a type word, `none` of an unannotated place: the model infers it from the values given to it
+	fn optional_type(&self, word: Option<&str>) -> Lean {
+		Ok(match word {
+			Some(word) => format!("(some ({}))", self.type_of(word)?),
+			None => "none".to_string(),
+		})
+	}
+
+	/// `int or text`, `int?`: the join of the alternatives; a union warp narrows to one part (`int | float` is float)
+	/// is that part
+	fn union_type(&self, union: &str) -> Lean {
+		let parts = union.strip_suffix(OPTIONAL_MARK);
+		let mut alternatives = parts.unwrap_or(union).split(UNION_JOINER).map(|part| self.type_of(part)).collect::<Result<Vec<_>, String>>()?;
+		if parts.is_some() {
+			alternatives.push(EMPTY_TYPE.to_string());
+		}
+		Ok(match alternatives.as_slice() {
+			[single] => single.clone(),
+			_ => format!("{UNION_TYPE}[{}])", alternatives.join(", ")),
+		})
+	}
+
 	fn annotation_type(&self, annotation: &Node) -> Lean {
+		if let Some(union) = crate::analyzer::union_type_name(annotation) {
+			return self.union_type(&union);
+		}
 		match annotation.drop_meta() {
+			Node::Symbol(word) if word.ends_with(OPTIONAL_MARK) => self.union_type(word),
 			Node::Symbol(word) => self.type_of(word),
 			other => unsupported(other),
 		}
@@ -179,7 +255,7 @@ impl Exporter {
 			chain
 		}
 		for class in parents.keys() {
-			let fields = own_fields.get(class).cloned().unwrap_or_default();
+			let fields = own_fields.get(class).cloned().unwrap_or_default().into_iter().map(|(field, word)| (field, (!word.is_empty()).then_some(word))).collect();
 			self.classes.insert(class.clone(), (path(class, &parents, 0), fields));
 		}
 	}
@@ -204,33 +280,48 @@ impl Exporter {
 	}
 
 	fn class_definition(&self, class: &str) -> Lean {
-		let fields: Result<Vec<String>, String> = self.classes[class].1.iter().map(|(field, type_word)| Ok(format!("({}, {})", quoted(field), self.type_of(type_word)?))).collect();
+		let fields: Result<Vec<String>, String> = self.classes[class].1.iter().map(|(field, type_word)| Ok(format!("({}, {})", quoted(field), self.optional_type(type_word.as_deref())?))).collect();
 		Ok(format!(".classDef {} [{}]", quoted(class), fields?.join(", ")))
 	}
 
 	fn items(&mut self, program: &Node) -> Result<Vec<String>, String> {
 		self.collect_classes(program);
 		let program: Vec<&Node> = statements(program).into_iter().flat_map(type_definitions).collect();
+		let mut argument_classes = Vec::new();
 		for statement in &program {
-			if let Node::Key(head, Op::Define, _) = statement.drop_meta() {
-				if let Some((name, parameter)) = function_head(head) {
-					let parameter_type = self.parameter_type(parameter)?.1;
-					self.functions.insert(name.to_string(), parameter_type);
+			let Some((name, parameters, _)) = function_definition(statement) else { continue };
+			let parameter_type = match parameters.as_slice() {
+				[] => UNIT_TYPE.to_string(),
+				[parameter] => self.parameter_type(parameter)?.1,
+				parameters => {
+					let class = arguments_class(name);
+					let fields = parameters.iter().map(|parameter| Ok((self.parameter_type(parameter)?.0, parameter_type_word(parameter)))).collect::<Result<Vec<_>, String>>()?;
+					self.classes.insert(class.clone(), (vec![class.clone()], fields));
+					argument_classes.push(class.clone());
+					format!(".cls {}", lean_strings(&[class]))
 				}
-			}
+			};
+			self.functions.insert(name.to_string(), parameter_type);
 		}
-		program.into_iter().map(|statement| self.item(statement)).collect()
+		let mut items = argument_classes.iter().map(|class| self.class_definition(class)).collect::<Result<Vec<_>, String>>()?;
+		for statement in program {
+			items.push(self.item(statement)?);
+		}
+		Ok(items)
 	}
 
 	fn item(&mut self, statement: &Node) -> Lean {
 		match statement.drop_meta() {
 			Node::Type { name, .. } => self.class_definition(&name.drop_meta().name()),
-			Node::Key(head, Op::Define, body) => match (head.drop_meta(), function_head(head)) {
-				(Node::Symbol(name), _) => {
+			_ if function_definition(statement).is_some() => {
+				let (name, parameters, body) = function_definition(statement).expect("a function definition");
+				self.function(name, &parameters, body)
+			}
+			Node::Key(head, Op::Define, body) => match head.drop_meta() {
+				Node::Symbol(name) => {
 					self.names.insert(name.clone(), None);
 					Ok(format!(".charged {} ({})", quoted(name), self.expression(body)?))
 				}
-				(_, Some((name, parameter))) => self.function(name, parameter, body),
 				_ => unsupported(statement),
 			},
 			Node::List(items, _, _) if items.len() == 2 && is_word(&items[0], CONSTANT_KEYWORD) => match items[1].drop_meta() {
@@ -269,8 +360,9 @@ impl Exporter {
 		}
 		let lean = self.expression(value)?;
 		Ok(match declared {
-			Some(declared) if declared.starts_with(".list") && self.is_call(value) => format!(".cast ({lean}) ({declared})"),
-			_ => lean,
+			Some(declared) if declared.starts_with(".list") && self.is_call(value) => format!(".cast ({lean}) [{declared}]"),
+			Some(declared) => admitted(declared, lean),
+			None => lean,
 		})
 	}
 
@@ -278,12 +370,37 @@ impl Exporter {
 		matches!(node.drop_meta(), Node::List(items, _, _) if matches!(items.first().map(Node::drop_meta), Some(Node::Symbol(name)) if self.functions.contains_key(name)))
 	}
 
-	fn function(&mut self, name: &str, parameter: &Node, body: &Node) -> Lean {
-		let (parameter, parameter_type) = self.parameter_type(parameter)?;
+	/// A function of one parameter as it is; of none, a function of `unit`; of several, a function of its
+	/// arguments object, whose fields the parameters read
+	fn function(&mut self, name: &str, parameters: &[&Node], body: &Node) -> Lean {
+		let declared = format!("(some ({}))", self.functions[name]);
+		let (parameter, fields, parameter_type) = match parameters {
+			[parameter] => {
+				let inferred = parameter_type_word(parameter).is_none();
+				(self.parameter_type(parameter)?.0, vec![], if inferred { "none".to_string() } else { declared })
+			}
+			[] => (UNIT_PARAMETER.to_string(), vec![], declared),
+			parameters => (arguments_class(name), parameters.iter().map(|parameter| parameter.drop_meta().name()).collect(), declared),
+		};
 		self.locals.push(parameter.clone());
-		let body = self.expression(body);
+		self.argument_fields = fields;
+		let body = self.block(body);
 		self.locals.pop();
-		Ok(format!(".function {} {} ({parameter_type}) ({})", quoted(name), quoted(&parameter), body?))
+		self.argument_fields.clear();
+		Ok(format!(".function {} {} {parameter_type} ({})", quoted(name), quoted(&parameter), body?))
+	}
+
+	/// a function body: `{ a; b }` is the sequence
+	fn block(&mut self, body: &Node) -> Lean {
+		match body.drop_meta() {
+			Node::List(items, Bracket::Curly, _) if !items.is_empty() => {
+				let statements: Result<Vec<String>, String> = items.iter().map(|item| self.expression(item)).collect();
+				let mut statements = statements?;
+				let last = statements.pop().expect("a statement");
+				Ok(statements.iter().rev().fold(last, |rest, statement| format!(".seq ({statement}) ({rest})")))
+			}
+			_ => self.expression(body),
+		}
 	}
 
 	fn assignment(&mut self, name: &str, value: &Node) -> Lean {
@@ -309,7 +426,12 @@ impl Exporter {
 			Node::Text(text) => Ok(format!(".text {}", quoted(text))),
 			Node::Char(c) => Ok(format!(".text {}", quoted(&c.to_string()))), // `"a"` parses as a codepoint
 			Node::Empty => Ok(".nil".to_string()), // ø is the empty list (`xs = []` parses as ø)
+			Node::Symbol(name) if self.argument_fields.contains(name) => {
+				Ok(format!(".get (.loc {}) {}", quoted(self.locals.last().expect("the arguments object")), quoted(name)))
+			}
 			Node::Symbol(name) if self.locals.contains(name) => Ok(format!(".loc {}", quoted(name))),
+			// `two()` of a function of no parameters parses as `(two)`
+			Node::Symbol(name) if self.functions.get(name).is_some_and(|parameter| parameter == UNIT_TYPE) => Ok(format!(".call {} .unit", quoted(name))),
 			Node::Symbol(name) if self.names.contains_key(name) => Ok(format!(".glob {}", quoted(name))),
 			Node::List(items, Bracket::Square, _) => {
 				let elements: Result<Vec<String>, String> = items.iter().map(|item| self.expression(item)).collect();
@@ -329,11 +451,16 @@ impl Exporter {
 					Node::Text(message) => Ok(format!(".error {}", quoted(message))),
 					_ => unsupported(node),
 				},
+				[call] if self.functions.get(&call.name()).is_some_and(|parameter| parameter == UNIT_TYPE) => Ok(format!(".call {} .unit", quoted(&call.name()))),
+				[call, arguments @ ..] if arguments.len() > 1 && self.classes.contains_key(&arguments_class(&call.name())) => {
+					let arguments = self.construction(&arguments_class(&call.name()), arguments)?;
+					Ok(format!(".call {} ({arguments})", quoted(&call.name())))
+				}
 				[call, argument] if self.functions.contains_key(&call.name()) => {
 					let declared = self.functions[&call.name()].clone();
 					let argument = match bool_literal(Some(&declared), argument) {
 						Some(yes_or_no) => yes_or_no,
-						None => self.expression(argument)?,
+						None => admitted(&declared, self.expression(argument)?),
 					};
 					Ok(format!(".call {} ({argument})", quoted(&call.name())))
 				}
