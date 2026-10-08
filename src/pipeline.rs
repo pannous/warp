@@ -201,7 +201,7 @@ pub struct CompiledModule {
 
 /// The passes over the source forms, in order, each reading what the one before it left: definitions and sugar become
 /// the forms every later pass knows (`def f(x) {…}` is `f(x) := {…}`), modules are resolved
-const SOURCE_PASSES: [fn(Node) -> Node; 85] = [
+const SOURCE_PASSES: [fn(Node) -> Node; 87] = [
 	crate::analyzer::lower_inline_unions,
 	// `on ask {…} in {…}` before any pass reads `{…} in {…}` as membership or an emit as nothing
 	crate::scoped_handlers::lower,
@@ -240,6 +240,8 @@ const SOURCE_PASSES: [fn(Node) -> Node; 85] = [
 	crate::transitions::lower,
 	// `dir(time)`: the names of the standard module (introspection.rs), before any pass reads time as a value
 	crate::introspection::lower,
+	// `f.effects`, `e.listeners`: the reflection words' dot forms (reflection.rs), before any pass reads them as fields
+	crate::reflection::lower,
 	// `root` is sqrt (word_operators.rs), before pipes.rs reads `2|square|root`
 	crate::word_operators::lower,
 	// `x | f` (pipes.rs) before any pass reads the or
@@ -252,6 +254,8 @@ const SOURCE_PASSES: [fn(Node) -> Node; 85] = [
 	crate::type_aliases::lower,
 	// `f(s:Shape)` of a trait takes any conforming instance: untyped before class_methods reads typed parameters
 	crate::traits::lower_trait_parameters,
+	// `p.fields`, `p.methods`, `dir(p)`: the class layout (reflection.rs), before class_methods lowers the class bodies
+	crate::reflection::lower_objects,
 	// methods in a class body become functions over the class before any pass reads the body as fields
 	crate::class_methods::lower,
 	// first: `math.sqrt(2)` of `use python math` is no method call of the built-in word

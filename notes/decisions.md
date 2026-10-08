@@ -41,8 +41,8 @@ D-number or #number mean this file. Open questions, parked ones and the standing
   returns its own class (checked when annotated); a copy keeps the real class (no slicing).
 - P208 `===` on objects (instances, maps, lists) is identity (chosen over a new `same(a, b)`): `q = p; q === p` yes,
   `p.copy() === p` no. On scalars `===` stays P196/P196b (type + value). `==` stays loose. The preferred spelling
-  is `same`: `a same b`, `a same as b`, `a is the same as b`; `===` and `identical` (`a is identical to b`) are its
-  aliases (user). Plain `is` stays the type
+  is `same`: `a same b`, `a same as b`, `a is the same as b`; `===` is its alias (user). `identical` was proposed
+  and dropped as bloat (each phrase alias costs parser special cases). Plain `is` stays the type
   test (`red is Color`).
 - check-assert (user to warp-dc): `check` acts like assert; float parameters stay IEEE and `==` stays exact (no
   tolerance); samples/polymorphism.wasp uses `combine number with number`, so `check combine 1.1 with 2.2 == 3.3`
@@ -55,6 +55,11 @@ D-number or #number mean this file. Open questions, parked ones and the standing
   note would be a run-time warning, not built yet); `x.copy(true)` positional also means shallow, and in the
   Kotlin-style `p.copy(shallow = yes, y = 5)` shallow is the flag; each event handler still gets a copy of the event
   as raised; lists are still values until card shared-lists (P200b's "everything shares" includes lists).
+- P211 `~` is looser than `≈` (card g_YHSM, "two levels of approximation"): `~` compares numbers within 1% (setting
+  `rough_tolerance`) and texts also ignoring surrounding whitespace and punctuation ("Hello!" ~ "hello"); `≈` stays:
+  numbers within 1e-9 relative, texts ignoring case and accents, lists and objects field by field.
+- P212 a class may define `approximately` (≈) and/or `similar` (~); with only one defined, both operators use it;
+  with neither, the built-in field-by-field rule applies.
 - P209 test blocks run only under `warp test` (chosen over running with the main program); `warp run` and `use` skip
   them.
 - P210 when all tests pass, one summary line ("✓ 12 tests passed"); failures print ✗ lines and "m of n failed" and

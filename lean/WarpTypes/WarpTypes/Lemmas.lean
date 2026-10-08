@@ -183,6 +183,18 @@ theorem CtxSub.set_le {Γ' Γ : Ctx} (h : CtxSub Γ' Γ) (y : String) {t' t : Ty
   · cases hz; exact ⟨t', by simp [*], st⟩
   · simp [*]; exact h z tz hz
 
+/-- the ints of a range are a list of ints -/
+theorem intList_typed {Γ} : ∀ (k : Nat) (m : Int), ∃ e, HasType P Γ (intList m k) (.list e) ∧ sub e .int = true
+  | 0, _ => ⟨_, .nil, rfl⟩
+  | k + 1, m => by
+    obtain ⟨e, ht, se⟩ := intList_typed k (m + 1)
+    exact ⟨_, .cons .int ht rfl, join_least rfl se⟩
+
+theorem int_sub_arithTy (a b : Ty) : sub .int (arithTy a b) = true := by
+  unfold arithTy Ty.arith; split
+  · rfl
+  · split <;> rfl
+
 /-- narrowing: smaller local types give a smaller type -/
 theorem narrow {Γ e t} (h : HasType P Γ e t) : ∀ {Γ'}, CtxSub Γ' Γ → ∃ t', HasType P Γ' e t' ∧ sub t' t = true := by
   induction h with
@@ -239,6 +251,11 @@ theorem narrow {Γ e t} (h : HasType P Γ e t) : ∀ {Γ'}, CtxSub Γ' Γ → �
     obtain ⟨_, h1, _⟩ := ih1 hs
     obtain ⟨b', h2, s2⟩ := ih2 hs
     exact ⟨_, .seq h1 h2, s2⟩
+  | range _ _ ih1 ih2 =>
+    intro Γ' hs
+    obtain ⟨a', h1, s1⟩ := ih1 hs
+    obtain ⟨b', h2, s2⟩ := ih2 hs
+    exact ⟨_, .range h1 h2, by simpa [sub] using arithTy_mono s1 s2⟩
   | index _ _ ih1 ih2 =>
     intro Γ' hs
     obtain ⟨l', h1, s1⟩ := ih1 hs
@@ -358,6 +375,7 @@ theorem subst_typed {Γ0 e t} (h : HasType P Γ0 e t) :
   | loop _ _ ih1 ih2 => intro Γ y tv v hΓ hv htv; simp only [Expr.subst]; exact .loop (ih1 hΓ hv htv) (ih2 hΓ hv htv)
   | seq _ _ ih1 ih2 => intro Γ y tv v hΓ hv htv; simp only [Expr.subst]; exact .seq (ih1 hΓ hv htv) (ih2 hΓ hv htv)
   | index _ _ ih1 ih2 => intro Γ y tv v hΓ hv htv; simp only [Expr.subst]; exact .index (ih1 hΓ hv htv) (ih2 hΓ hv htv)
+  | range _ _ ih1 ih2 => intro Γ y tv v hΓ hv htv; simp only [Expr.subst]; exact .range (ih1 hΓ hv htv) (ih2 hΓ hv htv)
   | append _ _ ih1 ih2 => intro Γ y tv v hΓ hv htv; simp only [Expr.subst]; exact .append (ih1 hΓ hv htv) (ih2 hΓ hv htv)
   | assign hx _ st ih => intro Γ y tv v hΓ hv htv; simp only [Expr.subst]; exact .assign hx (ih hΓ hv htv) st
   | init hx hm _ st ih => intro Γ y tv v hΓ hv htv; simp only [Expr.subst]; exact .init hx hm (ih hΓ hv htv) st

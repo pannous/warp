@@ -32,5 +32,5 @@ fn test_big_ratio_terminating_decimal() {
 fn test_big_ratio_unit_amounts_stay_exact() {
 	// 2^62 km / 7 mm → (2^62 · 10^6)/7, beyond i64, stays BigQuotient
 	assert_eq!(eval("4611686018427387904 km / 7 mm").serialize(), "4611686018427387904000000/7");
-	assert_eq!(eval("4611686018427387904 m / 7").serialize(), "4611686018427387904/7 m");
+	assert_eq!(eval("4611686018427387904 m / 7").serialize(), "(4611686018427387904/7)m");
 }

@@ -40,6 +40,8 @@ inductive Expr where
   | seq (a b : Expr)
   /-- `xs#i`, 1-based -/
   | index (l i : Expr)
+  /-- `a..b`, the ints from a up to b, b excluded (`a to b` is `a..b+1`); none when b ≤ a -/
+  | range (a b : Expr)
   /-- `a ++ b`; `xs.add(v)` is `xs = xs ++ [v]` -/
   | append (a b : Expr)
   | assign (x : String) (e : Expr)
@@ -107,6 +109,7 @@ def subst (e : Expr) (y : String) (v : Expr) : Expr :=
   | loop c b => loop (c.subst y v) (b.subst y v)
   | seq a b => seq (a.subst y v) (b.subst y v)
   | index a b => index (a.subst y v) (b.subst y v)
+  | range a b => range (a.subst y v) (b.subst y v)
   | append a b => append (a.subst y v) (b.subst y v)
   | assign x e => assign x (e.subst y v)
   | init x e => init x (e.subst y v)
@@ -128,7 +131,8 @@ def subst (e : Expr) (y : String) (v : Expr) : Expr :=
 /-- the main-level names an expression assigns or binds -/
 def assigned : Expr → List String
   | assign x e | init x e => x :: e.assigned
-  | cons a b | add a b | arith _ a b | lt a b | eq _ a b | loop a b | seq a b | index a b | append a b | tryCatch a b
+  | cons a b | add a b | arith _ a b | lt a b | eq _ a b | loop a b | seq a b | index a b | range a b | append a b
+  | tryCatch a b
   | handle _ a b => a.assigned ++ b.assigned
   | ite c a b => c.assigned ++ a.assigned ++ b.assigned
   | letIn _ _ e b | forIn _ e b => e.assigned ++ b.assigned

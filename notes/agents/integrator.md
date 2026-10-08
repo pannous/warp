@@ -13,6 +13,9 @@ Read notes/agents/common.md and notes/roles.md ("Integrator").
   file that looks stale (re-adds moved code, reverts decisions): include the rest and ask the user about that file.
 - Build tweak (version "<v>-integrate"), `cd "$W" && ./test.sh > ../integrate_test.log 2>&1` (cargo builds the cwd's checkout, so cd first) (it queues
   itself with priority), restore Cargo.toml/Cargo.lock/test_results.txt.
+- Browser suite and tour: `web/playground/build.sh optimized` FIRST (worker.js loads served-files.js, which build.sh
+  writes; without it every browser test fails with an importScripts NetworkError), then `cargo browser-test`, then
+  `build.sh components` and `python3 web/playground/test_in_browser.py --examples` (and `--firefox`).
 - Before pushing also check the browser build (the playground deploys from main; a native-only item breaks it):
   `cargo check --offline --lib --target wasm32-unknown-unknown --no-default-features`, and compile the browser test
   build (native-only API in a test broke it twice): `tests/queue.sh cargo --offline test --target wasm32-wasip1

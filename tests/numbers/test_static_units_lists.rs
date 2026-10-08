@@ -9,23 +9,23 @@ fn shown(code: &str) -> String {
 
 #[test]
 fn test_lists_of_quantities() {
-	assert_eq!(shown("xs = [1 m, 2 m, 50 cm]; xs#2"), "200 cm");
-	assert_eq!(shown("xs = [1 m, 2 m]; sum(xs)"), "3 m");
-	assert_eq!(shown("xs = [1 km, 300 m]; max(xs)"), "1000 m");
-	assert_eq!(shown("xs = [1 km, 300 m]; min(xs)"), "300 m");
-	assert_eq!(shown("xs = [1 m, 2 m]; last(xs)"), "2 m");
+	assert_eq!(shown("xs = [1 m, 2 m, 50 cm]; xs#2"), "200cm");
+	assert_eq!(shown("xs = [1 m, 2 m]; sum(xs)"), "3m");
+	assert_eq!(shown("xs = [1 km, 300 m]; max(xs)"), "1000m");
+	assert_eq!(shown("xs = [1 km, 300 m]; min(xs)"), "300m");
+	assert_eq!(shown("xs = [1 m, 2 m]; last(xs)"), "2m");
 	assert_eq!(shown("xs = [1 m, 2 m]; count(xs)"), "2");
-	assert_eq!(shown("xs = [1 m, 2 m]; t = 0 m; for x in xs { t += x }; t"), "3 m");
+	assert_eq!(shown("xs = [1 m, 2 m]; t = 0 m; for x in xs { t += x }; t"), "3m");
 	fails_with("xs = [1 m, 2 s]; xs#1", "DimensionError");
 }
 
 #[test]
 fn test_sqrt_halves_the_powers() {
-	assert_eq!(shown("a = 0 m²; for i in 1..2 { a += 9 m² }; √a"), "3 m");
+	assert_eq!(shown("a = 0 m²; for i in 1..2 { a += 9 m² }; √a"), "3m");
 	fails_with("v = 0 m; for i in 1..2 { v += 9 m }; √v", "DimensionError");
 }
 
 #[test]
 fn test_curly_interpolation_shows_the_unit() {
-	assert_eq!(shown("d = 0 m; for i in 1..3 { d += 2 m }; \"distance ${d}\""), "\"distance 4 m\"");
+	assert_eq!(shown("d = 0 m; for i in 1..3 { d += 2 m }; \"distance ${d}\""), "\"distance 4m\"");
 }

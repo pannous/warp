@@ -142,6 +142,8 @@ const CORPUS: &[&str] = &[
 	"class P { x: int }; class Q { x: int }; p = P(1); q = Q(1); p == q",
 	"class P { x: int }; [P(1)] == [P(1)]",
 	"class P { x: int }; p = P(1); q = p; p === q",
+	"class P { x: int }; p = P(1); q = P(1); p === q",
+	"class P { x: int }; p = P(1); q = P(1); p !== q",
 	"0 === false",
 	"n = 0; on alarm { n += 1 }; emit alarm; emit alarm; n",
 	"level = 0; on alarm { level = event.level }; emit alarm{level: 3}; level",
@@ -158,6 +160,39 @@ const CORPUS: &[&str] = &[
 	"out = []; for x in [1, 2] { out.add(x) }; out",
 	"class P { x: int }; s = 0; for p in [P(1), P(2)] { s += p.x }; s",
 	"t = \"\"; for w in [\"a\", \"b\"] { t = t + w }; t",
+
+	"def f(){ m = 5; m }; f()",
+	"def f(){ m = 5; m = \"a\"; m }; f()",
+	"product(xs) := { out = 1; for x in xs { out = out * x }; out }; product([2, 3, 4])",
+	"unique(xs) := { out = []; for x in xs { out.add(x) }; out }; unique([1, 2])",
+	"n = 0; def f(x) { n = 5; x }; f(3); n",
+	"fact(n) := { r = 1; if n > 1 then r = n * fact(n - 1); r }; fact(5)",
+	"g(n) := n; fact(n) := { r = 1; r = g(n); r }; fact(5)",
+	"y: any = 3; class P { v: int }; p = P(1); p.v = y; p.v",
+
+	"let x = 1; x = 2; x",
+	"shared n = 5; n += 2; n",
+	"String s = 'ab'; s",
+	"String s = 3; s",
+	"int i = 2; i = \"a\"; i",
+	"int i = 2.5; i",
+
+	"0..3",
+	"1 to 3",
+	"s = 0; for i in 0..3 { s += i }; s",
+	"s = 0; for i in 1 to 3 { s += i }; s",
+	"3..1",
+	"count(n) := { c=0; for i in 0..n { c += 1 }; c }; count(5)",
+	"to add number a to number b: a+b; add 1 to 2",
+	"b = 0; a = on fail { break 1 } in { b = on fail { break 2 } in { emit fail; 9 }; b * 10 }; a",
+
+	"0 and 7",
+	"1 and 7",
+	"(not 0) and 7",
+	"not 1==2 and 2==2",
+	"i=0; !i",
+	"f(a:bool,b:bool):=not (a or b); f(true, false)",
+	"x = 1 < 2 or 3 < 2; x",
 ];
 
 /// Programs warp compiles although the model rejects them: holes in warp's checks, each with its card
@@ -169,9 +204,6 @@ const KNOWN_ADMITS_GAPS: [&str; 2] = ["bool ← .int: warp admits true / W0 sub 
 
 /// Programs both accept whose values differ, each with its card
 const KNOWN_VALUE_DIFFERENCES: &[(&str, &str)] = &[
-	("class P { x: int }; p = P(1); q = P(1); p === q", "same-identity"),
-	("class P { x: int }; p = P(1); q = P(1); p !== q", "same-identity"),
-	("n: int = 0; for x in [1, \"a\"] { n = x }; n", "item-unchecked"),
 ];
 /// What the model gives for a program it rejects, and for a value it does not keep
 const REJECTED: &str = "rejected";

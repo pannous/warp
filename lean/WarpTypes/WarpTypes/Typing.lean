@@ -45,6 +45,8 @@ inductive HasType (P : Program) : Ctx → Expr → Ty → Prop where
   | seq {Γ a b ta tb} : HasType P Γ a ta → HasType P Γ b tb → HasType P Γ (.seq a b) tb
   /-- inference.rs element_kind -/
   | index {Γ l i tl ti} : HasType P Γ l tl → HasType P Γ i ti → HasType P Γ (.index l i) (elementTy tl)
+  /-- the items are ints (number bounds fail when it runs: W0 keeps no float values) -/
+  | range {Γ a b ta tb} : HasType P Γ a ta → HasType P Γ b tb → HasType P Γ (.range a b) (.list (arithTy ta tb))
   | append {Γ a b ta tb} : HasType P Γ a ta → HasType P Γ b tb →
       HasType P Γ (.append a b) (.list (join (listElem ta) (listElem tb)))
   /-- checks.rs check_assignment / check_declared_types; const (P130) and charged (P138) names are not assignable -/

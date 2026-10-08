@@ -6,6 +6,8 @@ web/playground/tests.html with agent-browser and prints the results like libtest
 `test_in_browser.py --examples [name…]` runs the tour (examples.js) in the playground page itself, built by build.sh:
 each example's value and printed output must be the ones it names (a broken example fails CI, .github/workflows/pages.yml).
 `test_in_browser.py --examples --url https://warp.pannous.com/ [name…]` checks the tour of a deployed playground instead.
+`test_in_browser.py --examples --firefox [--url …|--site …] [name…]` runs the same check in headless Firefox
+(firefox_driver.mjs, WebDriver BiDi) instead of agent-browser's Chrome.
 `test_in_browser.py --examples --site _site [name…]` checks it in a collected site (pages.yml), served as its root: a file
 the deploy forgot fails here, not on the live page.
 `test_in_browser.py --serve [tests.wasm]` only serves (http://127.0.0.1:PORT/web/playground/ and tests.html), for any browser.
@@ -35,6 +37,8 @@ REPOSITORY = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__f
 IGNORED_ARGUMENTS = ("--nocapture", "--quiet", "-q", "--color", "--format")
 # the console of the page and its workers (console_watch.mjs): any error or warning there fails the tour check
 CONSOLE_WATCHER = os.path.join(REPOSITORY, "web", "playground", "console_watch.mjs")
+FIREFOX_DRIVER = os.path.join(REPOSITORY, "web", "playground", "firefox_driver.mjs")
+firefox = None  # the FirefoxDriver of a --firefox run: browser() and the console go to it instead of agent-browser
 CONSOLE_READY = "ready"
 CONSOLE_SETTLE_SECONDS = 0.3  # a shown example's last messages reach the watcher
 PAGE_LOAD = "(loading the page)"
@@ -124,6 +128,8 @@ def port_holder(port):
 def open_page(url):
 	"""open `url` in this run's browser and wait until it loaded; a launch that fails is reported and retried, and after
 	LAUNCH_ATTEMPTS the run fails with the reason instead of waiting for the stall check"""
+	if firefox:
+		return firefox.command("open", url) or sys.exit(f"error: Firefox could not open {url}")
 	for attempt in range(1, LAUNCH_ATTEMPTS + 1):
 		try:
 			opened = subprocess.run(["agent-browser", "--session", SESSION, "open", url], capture_output=True, text=True, timeout=LAUNCH_SECONDS)
@@ -142,6 +148,8 @@ def open_page(url):
 
 
 def browser(*arguments):
+	if firefox:
+		return firefox.command(*arguments)
 	try:
 		return subprocess.run(["agent-browser", "--session", SESSION, *arguments], capture_output=True, text=True, timeout=60).stdout.strip()
 	except subprocess.TimeoutExpired:
@@ -155,6 +163,36 @@ RUN_EXAMPLE = """await playground.chooseExample(%s);
 
 def run_sample(name):
 	browser("eval", f"(async () => {{ {RUN_EXAMPLE % json.dumps(name)} }})()")
+
+
+def console_line(message):
+	return f"{message['level']}: {message['text']}" + (f" ({message['url']})" if message["url"] else "")
+
+
+class FirefoxDriver:
+	"""headless Firefox (firefox_driver.mjs): a command is a JSON line, its answer one JSON line"""
+
+	def __init__(self):
+		self.process = subprocess.Popen(["node", FIREFOX_DRIVER], stdin=subprocess.PIPE, stdout=subprocess.PIPE, text=True)
+		if self.process.stdout.readline().strip() != '"ready"':
+			sys.exit("error: firefox_driver.mjs did not start Firefox")
+
+	def command(self, *arguments):
+		self.process.stdin.write(json.dumps(arguments) + "\n")
+		self.process.stdin.flush()
+		answer = self.process.stdout.readline()
+		return json.loads(answer) if answer else ""
+
+
+class FirefoxConsole:
+	"""the errors and warnings Firefox reported (firefox_driver.mjs), taken per shown example like ConsoleWatch's"""
+
+	def take(self):
+		time.sleep(CONSOLE_SETTLE_SECONDS)
+		return list(dict.fromkeys(console_line(message) for message in firefox.command("messages")))
+
+	def stop(self):
+		pass
 
 
 class ConsoleWatch:
@@ -172,8 +210,7 @@ class ConsoleWatch:
 			if line.strip() == CONSOLE_READY:
 				self.ready.set()
 			else:
-				message = json.loads(line)
-				self.messages.append(f"{message['level']}: {message['text']}" + (f" ({message['url']})" if message["url"] else ""))
+				self.messages.append(console_line(json.loads(line)))
 
 	def take(self):
 		"""the messages since the last take, each once"""
@@ -246,7 +283,7 @@ def check_examples(names, page_url=None, site=None):
 		server = serve(None)
 		page_url = f"http://127.0.0.1:{PORT}/web/playground/"
 	open_page("about:blank")
-	console = ConsoleWatch()  # before the page, so its loading is watched too
+	console = FirefoxConsole() if firefox else ConsoleWatch()  # before the page, so its loading is watched too
 	open_page(page_url)
 	wait_for_isolation()
 	examples = json.loads(json.loads(browser("eval", "JSON.stringify(EXAMPLES)")))
@@ -285,7 +322,9 @@ def build_components():
 
 def main():
 	if sys.argv[1:2] == ["--examples"]:
-		names = sys.argv[2:]
+		global firefox
+		names = [name for name in sys.argv[2:] if name != "--firefox"]
+		firefox = FirefoxDriver() if "--firefox" in sys.argv[2:] else None
 		place = {names[0]: names[1]} if names[:1] in (["--url"], ["--site"]) else {}
 		check_examples(names[2:] if place else names, place.get("--url"), place.get("--site"))
 	if sys.argv[1:2] == ["--serve"]:

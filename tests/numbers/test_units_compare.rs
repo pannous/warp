@@ -18,15 +18,15 @@ fn quantities_compare_in_the_finer_unit() {
 
 #[test]
 fn scalar_division_keeps_the_unit_and_same_dimension_division_is_a_number() {
-	assert_eq!(text_of("6 m / 2"), "3 m");
+	assert_eq!(text_of("6 m / 2"), "3m");
 	is!("6 m / 2 m", 3);
 	is!("6 km / 2000 m", 3);
 }
 
 #[test]
 fn division_by_another_dimension_is_a_composite_unit() {
-	assert_eq!(text_of("10 km / 2 h"), "5 km/h");
-	assert_eq!(text_of("10 km / 2h"), "5 km/h");
+	assert_eq!(text_of("10 km / 2 h"), "5km/h");
+	assert_eq!(text_of("10 km / 2h"), "5km/h");
 }
 
 #[test]

@@ -77,7 +77,7 @@ Fractions stay exact.
 
 Numbers can have units.
 
-```wasp => 150 min
+```wasp => 150min
 2 h + 30 min
 ```
 

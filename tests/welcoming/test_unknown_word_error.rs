@@ -26,5 +26,5 @@ fn test_data_contexts_keep_unknown_words() {
 fn test_known_words_are_untouched() {
 	assert_eq!(shown("cube(x):=x*x*x; cube 3"), "27");
 	assert_eq!(shown("print 3"), "ø"); // print gives nothing (issue #18)
-	assert_eq!(shown("3 km"), "3 km");
+	assert_eq!(shown("3 km"), "3km");
 }
