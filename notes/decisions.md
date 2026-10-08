@@ -5,6 +5,41 @@ answered questions to a new file"). Older references to "notes/open_decisions.md
 D-number or #number mean this file. Open questions, parked ones and the standing rules stay in notes/open_decisions.md.
 
 ## Decided 2026-10-08 (user, as recommended unless quoted)
+- `//` is a comment only when followed by a space or the end of the line; otherwise floor division: `x //= 3`,
+  `x//=3`, `7//2`, `a //b` divide; `a // b`, `x = 1 // note` are comments (user, emphatic, via the supervisor;
+  replaces the 2026-10-03 rule, rewritten in place below). warp-worker implements it.
+- P223 (card orm, warp-functions): filters may name an element's fields bare, like SQL: `people where age > 20`
+  means `people where it.age > 20` when the list holds a known class with that field (database tables included)
+  and no variable of that name is in scope; a variable `age` in scope wins, with a warning that it is also a field.
+- With P222 (user: "warp serve can also get an argument; can we just call warp server.warp if the file is
+  obviously a server?"; criteria are the supervisor's undoable default): `warp serve [file] [port]`; plain
+  `warp app.warp` serves when the program declares a route/get/post handler or a server def (static check),
+  printing the URL and the `warp run` escape; markup-only programs don't auto-serve; `warp run` and `warp test`
+  never serve.
+- ORM (card orm, warp-functions; user in a discussion with the supervisor): plain classes connect to the database
+  without inheritance or annotations, they are only registered. Transactions are completely optional (an
+  optimization only). Filters work for any warp expression ("magic": SQLite application functions run warp code
+  inside queries). Lazy loading: a smart default chosen by us, fine-tuning keywords later. Migrations: start with
+  the supervisor's proposal.
+- `x /= y` means exactly `x = x / y`: `x = 3; x /= 2` → 3/2, prints 1.5; floor division is `x //= y`; a variable
+  declared `x:int` keeps a whole number. Card div-assign, warp-worker switches the floor tests to `//=` (user,
+  asked directly by the supervisor).
+- P221 (card route-sample, warp-functions; discussed in free form): one line serves both sides. A route such as
+  `route "/users/:id:int" { h1{ users#id } }` whose block reads server data (a database, files, secrets) runs on the
+  server: the first visit gets finished HTML, later in-app clicks fetch only the data and render in the browser
+  (like Next.js/SvelteKit); the compiler splits it, the user writes no JavaScript and nothing secret ships. Routes
+  that don't touch server data stay static. The browser never talks to the database itself. User: "both from your
+  single line YES!!". The single-page decision (2026-10-07) holds only for the playground web demo; real
+  applications can have as many pages and server routes as they want (user).
+- P217 (card plus-minus, warp-class): `5 ± 1` is an interval now (user: "I thought they are just interval"):
+  worst-case bounds, `(5 ± 1) + (2 ± 1)` → `7 ± 2`, functions map the endpoints (`sqrt(4 ± 1)` → √3..√5).
+  Gaussian propagation (Measurements.jl) comes later with an explicit form such as `5 ± 1σ` (user chose
+  "interval now, Gaussian later").
+- P218 `x ≈ r ± 1` holds when |x - r| ≤ 1, the tolerance as written (user: no preference; the default stands).
+- P219 ± values print with 2 significant digits of the ± part, the value rounded to the same place: `7.0 ± 1.4`.
+- P220 one meaning of ±: `1950 ± 50 AD` is the same ± value (an interval of years), not a separate units span.
+- P222 (card route-sample, warp-functions): the CGI mode of `warp serve` is retired; `warp serve app.warp 8080`
+  serves the page program (its routes, `server def` functions as POST /rpc/f), the production twin of `warp dev`.
 - From P200b (not asked; card shared-lists-typed, warp-class): a typed list read from a field shares too:
   `p = {xs: [1, 2]}; ys = p.xs; p.xs#1 = 7; ys#1` → 7. The fast unboxed copy is kept only where the compiler proves
   that neither alias is written afterwards; otherwise the list is shared, never a silent snapshot.
@@ -890,17 +925,15 @@ D-number or #number mean this file. Open questions, parked ones and the standing
   stays a type error. Flipped tests: test_text_concat::text_plus_number_stays_an_error,
   test_footguns::test_text_plus_number_is_a_type_error, test_text_bytes::text_plus_number_stays_a_type_error.
   Not yet: a runtime ratio (`y=2.5; "x"+y`, also `y as string`) prints garbage: list_join has no text form for ratios.
-- `//` glued to its operand (`7//2`, `x//=2`) is Python floor division, the Euclidean quotient that goes with `%`
-  (`floor_quotient(a, b)` since 2026-10-04, same results as the earlier `(a - a%b)/b`: floor for a positive divisor,
-  `-7//-2` gives 4 where Python gives 3); `x // note` (space before) stays a comment, and one whose comment hides a
-  closing bracket (`(col // 3)`) is a parse error naming the `//` (no reinterpretation).
-  `a div b` is the same floor division. An index that divides (`xs[n/2]`) traps `index must be an integer` unless the
-  division is exact, with the hint `n//2`.
-- Spaced `a // b` — USER DECISION 2026-10-03 (fix-floor-ask-3): "just make it a warning to the user that it's read
-  as a comment, don't do heuristics". A spaced `//` is always a comment, only glued `a//b` / `x//=b` divide. A `//`
-  comment after code on its line educates once (diagnostic::educate_once, topic `slash-comment`): "`// …` after code
-  is a comment; floor division is written glued: a//b", shown until acknowledged, never again after. The earlier
-  floor-or-comment Ask and its spacing/ASCII/default heuristics (fix-floor-ask, -2) are gone.
+- `//` not followed by a space is Python floor division (`7//2`, `a //b`, `x//=3`, `x //= 3`), the Euclidean
+  quotient that goes with `%` (`floor_quotient(a, b)`: floor for a positive divisor, `-7//-2` gives 4 where Python
+  gives 3). `a div b` is the same floor division. An index that divides (`xs[n/2]`) traps `index must be an
+  integer` unless the division is exact, with the hint `n//2`.
+- `//` is a comment only when followed by a space or the end of the line: `a // b`, `x = 1 // note` are comments
+  (user decision 2026-10-08, emphatic, via the supervisor; it replaces the 2026-10-03 rule that keyed on the space
+  before `//`). A comment that hides a closing bracket (`(col // 3)`) is a parse error naming the `//`. A `//`
+  comment after code on its line educates once (topic `slash-comment`): "`// …` after code is a comment; floor
+  division is written without a space after it: a //b".
 - #28 decided (supervisor warp-f3 under the welcoming policy, reported to the user): `x=ø; x.size` and `xs=[]; xs.count`
   are 0; arithmetic on ø still needs the check. Changed line: tests/welcoming/test_footguns.rs test_null_needs_a_check
   (`x=ø; x.size` → 0); tests/lists/test_empty_list_count.rs un-ignored.
