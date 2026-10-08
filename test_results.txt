@@ -630,6 +630,8 @@ PASSED:
   ✓ ffi::test_web_idl::a_page_has_local_storage_and_the_clipboard
   ✓ ffi::test_web_idl::an_attribute_is_read_not_called
   ✓ ffi::test_web_idl::an_attributes_value_is_typed_by_its_interface
+  ✓ ffi::test_web_idl::the_dom_is_typed
+  ✓ ffi::test_web_idl::the_global_object_is_typed
   ✓ ffi::test_web_idl::what_the_interface_declares_runs
   ✓ ffi_parser::tests::test_parse_int32_return
   ✓ ffi_parser::tests::test_parse_pointer_param
@@ -2074,6 +2076,7 @@ PASSED:
   ✓ parser::test_semicolon_square::test_square_brackets_keep_all_newline_items
   ✓ parser::test_semicolon_square::test_square_brackets_keep_all_semicolon_items
   ✓ parser::test_spaced_children::a_spaced_child_in_a_data_literal_is_a_child_node
+  ✓ parser::test_spaced_optional_type::an_optional_type_before_a_spaced_assignment
   ✓ parser::test_spaced_required_fields::spaced_fields_keep_the_required_mark
   ✓ parser::test_statement_phrases::after_reads_its_condition_up_to_return
   ✓ parser::test_statement_phrases::after_without_parentheses_waits_for_its_condition
@@ -3482,4 +3485,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-19 ignored, 3477 passed, 0 failed, 3477 total tested
+19 ignored, 3480 passed, 0 failed, 3480 total tested
