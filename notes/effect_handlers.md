@@ -34,3 +34,20 @@ Lowering (src/lowering/scoped_handlers.rs, before event_signals):
 - `emit` and `send` only; `emit = 3`, `emit(x)` and `emit + 1` keep `emit` a name (P165 soft keyword); a word operator after the event (`send alarm{} to "x"`) keeps the old
   shape, the operator's operands inside the phrase
 - a program-wide handler's value is its last statement's (body statements spliced, not a one-item block `{42}`)
+
+## Step 3: aborting handlers (card effect-handlers-abort, undoable default by warp-dc, user not asked yet)
+- `break value` (or bare `break`, ø) at the top level of a block handler's body does not resume: the emit never
+  returns, the `on … in {…}` block ends at once and its value is `value`:
+  `on fail { break 0 } in { compute() }` is 0 when compute emits fail, however deep. No new word: `break` already
+  leaves the innermost enclosing construct; a `break` inside a loop of the handler body still belongs to that loop.
+  `return` keeps meaning the handler's value (resume), `raise`/`stop` stay errors (P163).
+- Only block handlers abort; a program-wide `on fail {…}` has no block to unwind to (`break` there is an error as before).
+- Mechanism: wasm exceptions, a tag `wasp_abort(i32)` of its own, so a user's `try … else` (tag `wasp_error`) never
+  catches an abort. The handler stores the value in the global `effect_handler_aborted_<event>_<i>` and throws i;
+  the block runs inside `ran_without_abort(i, {value = block})` (try_guard.rs), which catches i (another number is
+  rethrown to the next block out), puts `try_depth` back to what it was at the block's start (tries the abort jumped
+  out of never ended) and gives 0; then `if finished then value else aborted value`. The block leaves its handler on
+  both paths.
+- The effect row is unchanged: an aborting handler still handles (removes) its event.
+- on error of f (Error.md) is the same shape (a handler that gives the call's value instead of resuming); it keeps
+  its own lowering for now.

@@ -177,6 +177,10 @@ pub(super) fn collect_variables_inner(node: &Node, scope: &mut Scope, skip_first
 		Node::List(items, Bracket::Round, Separator::Semicolon | Separator::Newline) => {
 			items.iter().map(|item| collect_variables_inner(item, scope, false, false)).sum()
 		}
+		// `ran_without_abort(i, {…})` keeps the try depth of its start in a temp local (try_guard.rs)
+		Node::List(items, Bracket::Round, Separator::None) if items.first().is_some_and(|head| matches!(head.drop_meta(), Node::Symbol(name) if name == crate::wasm_emitter::RAN_WITHOUT_ABORT)) => {
+			1 + items.iter().map(|item| collect_variables_inner(item, scope, false, in_structure)).sum::<u32>()
+		}
 		Node::List(items, _, _) => {
 			items.iter().map(|item| collect_variables_inner(item, scope, false, in_structure)).sum()
 		}

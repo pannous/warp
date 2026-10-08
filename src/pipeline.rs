@@ -293,6 +293,9 @@ fn lower_for_emission(node: Node) -> Result<Node, Node> {
 	if let Some(clash) = crate::analyzer::check_operator_word_functions(&node) {
 		return Err(clash.into_error());
 	}
+	if let Some(misread) = crate::analyzer::check_upcast_fields(&node) {
+		return Err(misread.into_error());
+	}
 	crate::diagnostic::report(&crate::accessibility::warnings(&node))?;
 	crate::diagnostic::report(&crate::analyzer::source_warnings(&node))?;
 	// emits and handler blocks as written: the passes lower them to calls, the named effects are read from them
@@ -315,6 +318,11 @@ fn lower_for_emission(node: Node) -> Result<Node, Node> {
 	if let Some(answer) = crate::units::answer(&node) {
 		return Err(answer);
 	}
+	// quantities in loops and branches: SI amounts at run time, the units checked here (static units, stage 1)
+	let node = match crate::units::static_units::lower(&node) {
+		Some(lowered) => lowered?,
+		None => node,
+	};
 	if let Some(answer) = crate::real::answer(&node) {
 		return Err(answer);
 	}
@@ -363,7 +371,8 @@ fn compile_program(code: &str, rewrite: fn(Node) -> Node) -> Result<CompiledModu
 	crate::diagnostic::in_program_mode(rewrite(lawful_program(code)?), |program| {
 		let node = crate::folding::precompute(lower_for_emission(program)?);
 		warn_about_run_time_blocks(&node)?;
-		choose_module(&node)
+		// a final quantity's unit goes into the module's `wasp.units` section
+		choose_module(&node).map(|module| CompiledModule { bytes: crate::units::static_units::with_result_units(module.bytes), ..module })
 	})
 }
 
@@ -427,9 +436,9 @@ fn eval_program(node: Node) -> Node {
 		}
 	}
 
-	// Fallback to standard Node encoding
+	// Fallback to standard Node encoding; a final quantity's unit travels in the module (`wasp.units`) and is read back
 	match emit_module(&node) {
-		Ok(module) => run_module(module),
+		Ok(module) => run_module(CompiledModule { bytes: crate::units::static_units::with_result_units(module.bytes), ..module }),
 		Err(type_error) => type_error,
 	}
 }
@@ -610,10 +619,11 @@ pub(crate) fn run_module(CompiledModule { bytes, needs_host, needs_wasi, needs_f
 	result.unwrap_or_else(failed_run)
 }
 
-/// Without wasmtime the embedding host runs the program (the browser playground: web.rs)
+/// Without wasmtime the embedding host runs the program (the browser playground: web.rs); a final quantity's unit is
+/// read back from the module's `wasp.units` section, as wasm_reader does natively
 #[cfg(not(feature = "native"))]
 pub(crate) fn run_module(module: CompiledModule) -> Node {
-	crate::web::run_in_host(&module.bytes)
+	crate::units::static_units::with_module_units(&module.bytes, crate::web::run_in_host(&module.bytes))
 }
 
 /// The run used up its fuel: it probably does not terminate, or needs a larger budget
