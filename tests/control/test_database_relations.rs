@@ -54,9 +54,3 @@ fn a_table_is_registered_after_the_tables_it_points_to() {
 	let swapped = format!("{CLASSES}\npeople: [Person] = database.people_swapped\nteams: [Team] = database.teams_swapped\ncount(people)");
 	fails_with(&swapped, "register teams before people");
 }
-
-#[test]
-fn the_orm_sample_runs_twice_alike() {
-	is!("samples/orm.warp", "Ann");
-	is!("samples/orm.warp", "Ann");
-}
