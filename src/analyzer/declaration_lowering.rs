@@ -314,9 +314,9 @@ pub(super) fn lower_declarations_among(node: Node, names: &Names) -> Node {
 			lower(Node::Key(Box::new(Node::Key(name, Op::Colon, type_node)), Op::Assign, value))
 		}
 		// `x:[number]=v` is `x:list of number=v`
-		Node::Key(target, Op::Assign, value) if matches!(target.drop_meta(), Node::Key(_, Op::Colon, type_node) if bracketed_list_type(type_node).is_some()) => {
+		Node::Key(target, Op::Assign, value) if matches!(target.drop_meta(), Node::Key(_, Op::Colon, type_node) if declared_bracketed_list_type(type_node).is_some()) => {
 			let Node::Key(name, Op::Colon, type_node) = target.drop_meta().clone() else { unreachable!("guarded") };
-			let typed = Node::Key(name, Op::Colon, Box::new(bracketed_list_type(&type_node).expect("guarded")));
+			let typed = Node::Key(name, Op::Colon, Box::new(declared_bracketed_list_type(&type_node).expect("guarded")));
 			lower(Node::Key(Box::new(typed), Op::Assign, value))
 		}
 		// `x:[number]` is `x:list of number`
@@ -785,11 +785,26 @@ pub(super) fn typed_array_value(value: &Node) -> Option<Node> {
 
 /// The type `[number]`: `list of number` for one element type word
 pub(super) fn bracketed_list_type(type_node: &Node) -> Option<Node> {
-	let Node::List(items, Bracket::Square, _) = type_node.drop_meta() else { return None };
-	let [element] = items.as_slice() else { return None };
-	let Node::Symbol(word) = element.drop_meta() else { return None };
+	let word = bracketed_element(type_node)?;
 	type_word_kind(word)?;
 	Some(Node::Symbol(format!("list of {word}")))
+}
+
+/// The element word of `[word]`
+fn bracketed_element(type_node: &Node) -> Option<&str> {
+	let Node::List(items, Bracket::Square, _) = type_node.drop_meta() else { return None };
+	match items.as_slice() {
+		[element] => match element.drop_meta() {
+			Node::Symbol(word) => Some(word),
+			_ => None,
+		},
+		_ => None,
+	}
+}
+
+/// The declared type of `x:[T]=v`: `list of T`, of a builtin type or a class (`xs:[Circle]=[c]`)
+fn declared_bracketed_list_type(type_node: &Node) -> Option<Node> {
+	Some(Node::Symbol(format!("list of {}", bracketed_element(type_node)?)))
 }
 
 /// `x:int[100]` as the variable and its zero-filled list

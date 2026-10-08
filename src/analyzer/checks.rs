@@ -481,6 +481,7 @@ pub fn diagnose(program: &Node) -> Option<Node> {
 	check_type_word_functions(program)
 		.or_else(|| check_parameter_annotations(program))
 		.or_else(|| check_declared_types(program, &mut HashMap::new()))
+		.or_else(|| super::list_views::check_widened_list_views(program))
 		.or_else(|| check_constants(program, &mut HashMap::new()))
 		.or_else(|| check_null_use(program, &mut HashMap::new()))
 		.or_else(|| check_subjectless_comparison(program))
