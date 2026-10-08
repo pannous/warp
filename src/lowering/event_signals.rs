@@ -167,7 +167,7 @@ pub fn lower(program: Node) -> Node {
 	}
 	let handler_lines: HashSet<usize> = handlers.iter().map(|(index, _, _)| *index).collect();
 	let lowered = statements.into_iter().enumerate().filter_map(|(index, statement)| match first_handler.get(&index) {
-		Some(name) => Some(function_with_globals(&handler_function_name(name), reads_event(&bodies[name]), &each_its_event(&bodies[name]), &main_variables)),
+		Some(name) => Some(function_with_globals(&handler_function_name(name), reads_event(&bodies[name]), &each_its_event(&bodies[name]).iter().flat_map(statements_of).collect::<Vec<_>>(), &main_variables)),
 		None if handler_lines.contains(&index) => None,
 		None => Some(statement),
 	});
@@ -640,6 +640,15 @@ pub(crate) fn global_declarations(bodies: &[Node], main_variables: &HashSet<Stri
 	mentioned.sort();
 	mentioned.dedup();
 	mentioned.iter().map(|name| global_declaration(name)).collect()
+}
+
+/// The statements of a block, so the function's value is its last one's, not a one-item block; `{emit ask}` holds the words of its one statement
+pub(crate) fn statements_of(block: &Node) -> Vec<Node> {
+	match block.drop_meta() {
+		Node::List(words, Bracket::Curly, Separator::Space) if words.len() > 1 => vec![Node::List(words.clone(), Bracket::None, Separator::Space)],
+		Node::List(statements, Bracket::Curly, _) => statements.clone(),
+		other => vec![other.clone()],
+	}
 }
 
 /// `global name`, built rather than parsed: a generated name (`users·loading`) parses as a product
