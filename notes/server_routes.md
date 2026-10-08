@@ -85,9 +85,15 @@ all. The page build now takes the definition: tests/web/test_server_functions_in
      replies as `<script type="application/json" id="warp-replies">`. host-tasks.js answers the first fetch of each
      request from them in a microtask, so the page shows the rendered value before the browser paints. A page without
      server calls stays the built file. Test: the_first_visit_gets_finished_html.
-   - Left: (b) Every route-data fetch runs on each navigation (ø
-     for a path of another route). A page whose program runs in a Worker (site-thread.js) cannot read the replies
-     element yet, so it fetches as before. (c) A main-level statement of the page that reads server data (`if count(users) == 0
+   - Navigation asks each route-data request once (card route-data-cache): host-tasks.js keeps the replies of
+     `/rpc/route·data·N` in by request (routeDataReplies), so going back to a page, or to a path of another route (ø),
+     asks the server nothing; the reply stays as fetched until the page reloads.
+   - A page whose program runs in a Worker (site-worker.js) gets the replies element's text with its start message
+     from site-thread.js, so its first visit asks the server nothing either (card ssr-worker-replies).
+   - Probe of both: probes/route_data/server_calls.sh counts the POSTs through probes/route_data/counting_proxy.py (the
+     browser's network log misses a Worker's fetches): app.warp's links home, first, second, home, first, second ask
+     "/users/1" and "/users/2" once each; worker_app.warp's direct visit of /users/2 asks nothing (one call before).
+   - Left: (c) A main-level statement of the page that reads server data (`if count(users) == 0
      { users.add(…) }`) fails loudly in the browser ("table.open: no such word in the browser"). (d) Access rules: card
      route-access.
    - Found on the way: route functions now stand where the first route stood instead of before everything, because a
