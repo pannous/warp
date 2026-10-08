@@ -50,9 +50,11 @@ D-number or #number mean this file. Open questions, parked ones and the standing
 - Quantities print without a space (user to warp-dc): `500m`, not `500 m`, in print, interpolation, serialize and
   the playground (warp-99).
 - test-soft (user to warp-dc, card test-soft, warp-99): `test C` is a soft check that records pass/fail and
-  continues; `check C` stays assert; `test "name" { … }` is a named test block beside functions. Default
-  (supervisor): test blocks run when the file is the main program or under `warp test`, skipped when it is used as a
-  module; a summary and a nonzero exit on failures.
+  continues; `check C` stays assert; `test "name" { … }` is a named test block beside functions.
+- P209 test blocks run only under `warp test` (chosen over running with the main program); `warp run` and `use` skip
+  them.
+- P210 when all tests pass, one summary line ("✓ 12 tests passed"); failures print ✗ lines and "m of n failed" and
+  exit nonzero.
 - P199 bool slots accept 1 and 0 as yes/no everywhere (variables, fields, list items); other ints and texts are
   errors. Card bool-assign.
 - P200 class instances passed to functions are shared references (like Python/JS). Card instance-field.
