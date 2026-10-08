@@ -102,3 +102,26 @@ Rejected: (b) automatic f32 for floats (results differ in the 7th digit), (c) do
    length check; tests compare GPU and CPU on lists above and below the threshold.
 4. Fusion of an element-wise expression ending in a reduction into one WGSL kernel.
 5. Floats per the Interviewer's answer; `map(f)` of a pure numeric f.
+   Done for linear float arrays (src/lowering/gpu_maps.rs): `ys = xs.map(x => …) @gpu` (or `@gpu xs.map(…)`) of a
+   lambda of + - * / ^ √ ‖‖ and the math words sin … atan2, min, max of the item and number literals becomes a WGSL
+   kernel (whole powers up to 8 multiplied out: WGSL's pow of a negative base is NaN); shared_arrays.rs lowers it to
+   `ys = linear_new(count(xs)); if gpu_map_linear(kernel, xs, ys, workgroups) == 0 { CPU loop }`. The host word gives
+   0 without an adapter (a runtime warning, once) and the CPU maps the same lambda in f64. Where @gpu cannot apply (a
+   list not in linear memory, a lambda WGSL cannot compute, a map not assigned, not a map) a compile-time warning says
+   why and the map runs on the CPU as written. Tests: test_webgpu a_gpu_map_runs_a_numeric_lambda_as_a_kernel,
+   a_gpu_map_the_gpu_cannot_run_says_why. Measured (probes/webgpu/threshold.sh, release, ms):
+
+   | n      | @gpu `x * 2 + 1` | CPU (f64x2 kernel) | @gpu `sin(x) * cos(x) + √x` | CPU (generic map) |
+   |--------|------------------|--------------------|-----------------------------|-------------------|
+   | 10^3   | 2                | 0                  | 3                           | 0                 |
+   | 10^4   | 9–13             | 0                  | 4–24                        | 2                 |
+   | 3·10^4 | 4                | 0                  | 2                           | 8                 |
+   | 10^5   | 2                | 0                  | 3                           | 16                |
+   | 10^6   | 13               | 1                  | 12                          | 167               |
+   | 10^7   | 129              | 11                 | 122                         | 7542              |
+
+   A light lambda never pays (the CPU's SIMD kernel is ~1 ns an item); a heavy one breaks even near 2–3·10^4 items and
+   wins 14× at 10^6, 60× at 10^7. The CPU's generic map of a linear array grows faster than linear (167 → 754 ns an
+   item from 10^6 to 10^7): it maps the array collected into a list first (card linear-map).
+   Open: lambdas reading outer numbers (a uniform), GC float lists (copy into a block first), the browser path with a
+   real adapter, chains of maps kept on the GPU.
