@@ -12,8 +12,10 @@
 //! A program with a top-level `test "…" { … }` block that renders is run by its tests: the code outside the tests is
 //! each test's setup, `render markup` shows that markup as the page, `click "label"` and `fill "label" with "text"` act
 //! on it, `check condition` must hold with `text` and `html` naming what the page shows, and any other line is setup
-//! of that test. The value is the count of passed tests, or an Error naming each failed test and why. Everything is
-//! taken from the source as written (Node::serialize would not give back every program).
+//! of that test. They run under `warp test` and the playground's Run (pipeline::for_tests); a plain run skips them (P209,
+//! lowering/test_blocks.rs). The value is "✓ n tests passed", or an Error with a ✗ line for each failed test and why,
+//! then "m of n failed" (P210). Everything is taken from the source as written (Node::serialize would not give back
+//! every program).
 
 use crate::extensions::numbers::Number;
 use crate::headless::Page;
@@ -32,7 +34,7 @@ const STEP_WORDS: [&str; 4] = [RENDER_WORD, CLICK_WORD, FILL_WORD, CHECK_WORD];
 
 /// The outcome of the program's page tests, when it has any
 pub fn answer(code: &str) -> Option<Node> {
-	if !code.contains(TEST_WORD) || !code.contains(RENDER_WORD) {
+	if !crate::pipeline::is_for_tests() || !code.contains(TEST_WORD) || !code.contains(RENDER_WORD) {
 		return None;
 	}
 	let ranges = test_ranges(code);
@@ -42,10 +44,10 @@ pub fn answer(code: &str) -> Option<Node> {
 	}
 	let mut setup = code.to_string();
 	ranges.iter().rev().for_each(|range| setup.replace_range(range.clone(), ""));
-	let failures: Vec<String> = tests.iter().filter_map(|(name, steps)| run_test(&setup, steps).err().map(|problem| format!("test \"{name}\": {problem}"))).collect();
+	let failures: Vec<String> = tests.iter().filter_map(|(name, steps)| run_test(&setup, steps).err().map(|problem| format!("✗ test \"{name}\": {problem}"))).collect();
 	Some(match failures.is_empty() {
 		true => Node::Text(format!("✓ {} passed", plural(tests.len(), TEST_WORD))),
-		false => error(&format!("{} of {} failed\n{}", failures.len(), plural(tests.len(), TEST_WORD), failures.join("\n"))),
+		false => error(&format!("{}\n{} of {} failed", failures.join("\n"), failures.len(), tests.len())),
 	})
 }
 
