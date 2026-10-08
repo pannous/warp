@@ -12,6 +12,9 @@ D-number or #number mean this file. Open questions, parked ones and the standing
 - P201 (from P203, card upcast-field): `s: Shape = Circle("a", 2); s.r` is a compile error "Shape has no field r"
   with the hint to match `Circle(r)` or use `s as Circle`; likewise `c: Color = rgb(1,2,3); c.r`. Unannotated
   `s = Circle("a", 2); s.r` works.
+- P204 (refines P203) a value of static type any going into an annotated place (`y: any = 3; x: int = y`, `f(y)` for
+  `f(n: int)`, `x = xs#1` of a mixed list, `level = event.level`) compiles with a run-time check: the value must have
+  the annotated type when it runs, else an error; the annotated place never holds a wrong value. Card int-unchecked.
 - P202 an `emit` that no handler receives gives a warning (chosen over P163's silence and a compile error).
 - `when` by shape (user to warp-dc): `when click {…}` = `on click`; `when x > 3 {…}` = `whenever` (edge-triggered,
   P156); a block of `->` arms stays Kotlin's switch. Card signals-shape.
