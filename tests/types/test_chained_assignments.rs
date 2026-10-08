@@ -23,3 +23,9 @@ fn increment_steps_a_text_as_plus_one_does() {
 	is!("x = 2.5; x++; x", 3.5);
 	is!("i = 2; i++; i", 3);
 }
+
+#[test]
+fn minus_one_of_a_text_is_the_type_error_of_text_minus_int() {
+	fails_with("s = \"a\"; s -= 1; s", "text - int: no implicit conversion");
+	fails_with("s = \"a\"; s--; s", "text - int: no implicit conversion");
+}
