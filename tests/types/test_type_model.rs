@@ -1,7 +1,7 @@
 //! Warp's type checks against W0, the Lean model of warp's type theory (notes/type_theory.md, lean/WarpTypes):
 //! the proofs must build without `sorry`, and warp must reject every program the model rejects, except the known
 //! holes, each with its card. A fixed hole fails the test until it is taken off the list.
-use warp::law::type_model::{axioms, export, model_sources, verdicts, warp_verdict, ModelVerdict};
+use warp::law::type_model::{admits_disagreements, axioms, export, model_sources, verdicts, warp_verdict, ModelVerdict};
 
 /// The soundness theorems the tie-in rests on
 const THEOREMS: [&str; 5] = ["Warp.progress", "Warp.preservation", "Warp.safety", "Warp.typeOf_sound", "Warp.check_safe"];
@@ -26,6 +26,9 @@ const CORPUS: &[&str] = &[
 	"x: int = 1; x = 2.5",
 	"x: float = 1",
 	"x: int = true",
+	"x: bool = 1",
+	"x: bool = 0; x = 1",
+	"f(b: bool) := b; f(1)",
 	"x: text = 3",
 	"x: text = \"ab\"; x = 3",
 	"const c = 1; c = 2",
@@ -60,9 +63,14 @@ const CORPUS: &[&str] = &[
 
 /// Programs warp compiles although the model rejects them: holes in warp's checks, each with its card
 const KNOWN_HOLES: &[(&str, &str)] = &[
-	("x: bool = 1", "bool-assign"),
+	("x: bool = 2", "bool-assign"),
+	("f(b: bool) := b; f(2)", "bool-assign"),
 	("b = true; b = 2", "bool-assign"),
 ];
+
+/// Where warp's run-time admission differs from W0's subtyping: a bool is an Int at run time, so an int value passes
+/// a bool check (P199 lets only the literals 1 and 0 in; card bool-assign)
+const KNOWN_ADMITS_GAPS: [&str; 2] = ["bool ← .int: warp admits true / W0 sub false", "boolean ← .int: warp admits true / W0 sub false"];
 
 #[test]
 fn test_type_model_is_proved() {
@@ -101,4 +109,11 @@ fn test_warp_rejects_what_the_type_model_rejects() {
 		}
 	}
 	assert!(disagreements.is_empty(), "{}", disagreements.join("\n"));
+}
+
+#[test]
+fn test_warp_admits_what_the_type_model_subtypes() {
+	crate::requires!(crate::common::LEAN);
+	let disagreements = admits_disagreements().unwrap_or_else(|why| panic!("the model does not answer:\n{why}"));
+	assert_eq!(disagreements, KNOWN_ADMITS_GAPS, "warp's admits and W0's Ty.sub differ");
 }

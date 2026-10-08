@@ -8,7 +8,8 @@ use crate::extensions::numbers::Number;
 use crate::node::{Bracket, Node, Separator};
 use crate::operators::Op;
 use crate::wasp_parser::TRY_MARKER;
-use std::collections::{HashMap, HashSet};
+use crate::type_kinds::Kind;
+use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
@@ -20,6 +21,12 @@ const ACCEPTED_PREFIX: &str = "ok ";
 const REJECTED: &str = "rejected";
 const CONSTANT_KEYWORD: &str = "const";
 const ERROR_CALL: &str = "error";
+const BOOL_TYPE: &str = ".bool";
+const ANY_TYPE: &str = ".any";
+/// The builtin scalar type words warp checks a value against (analyzer admits) that W0 has a type for
+const BUILTIN_TYPE_WORDS: [&str; 11] = ["int", "integer", "long", "exact", "float", "number", "text", "string", "str", "bool", "boolean"];
+/// A value of each W0 scalar type and the run-time kind warp sees it as (a bool is an Int)
+const VALUE_KINDS: [(&str, Kind); 4] = [(BOOL_TYPE, Kind::Int), (".int", Kind::Int), (".number", Kind::Float), (".text", Kind::Text)];
 const APPEND_METHODS: [&str; 2] = ["add", "push"];
 
 /// W0's answer for one program
@@ -46,8 +53,8 @@ fn type_of_word(word: &str) -> Option<String> {
 			"int" | "integer" | "long" => ".int",
 			"float" | "number" | "exact" => ".number",
 			"text" | "string" | "str" => ".text",
-			"bool" | "boolean" => ".bool",
-			"any" => ".any",
+			"bool" | "boolean" => BOOL_TYPE,
+			"any" => ANY_TYPE,
 			_ => return None,
 		})
 	};
@@ -97,9 +104,27 @@ fn function_head(head: &Node) -> Option<(&str, &Node)> {
 	}
 }
 
+/// A bool place (a declared variable or parameter) takes the literals 1 and 0 as yes and no (P199)
+fn bool_literal(declared: Option<&str>, value: &Node) -> Option<String> {
+	match value.drop_meta() {
+		Node::Number(Number::Int(n @ (0 | 1))) if declared == Some(BOOL_TYPE) => Some(format!(".bool {}", *n == 1)),
+		_ => None,
+	}
+}
+
+/// `y`, `y: int`: the parameter's name and W0 type
+fn parameter_type(parameter: &Node) -> Result<(String, String), String> {
+	match parameter.drop_meta() {
+		Node::Symbol(parameter) => Ok((parameter.clone(), ANY_TYPE.to_string())),
+		Node::Key(parameter, Op::Colon, annotation) => Ok((parameter.name(), annotation_type(annotation)?)),
+		other => Err(unsupported(other).unwrap_err()),
+	}
+}
+
 #[derive(Default)]
 struct Exporter {
-	functions: HashSet<String>,
+	/// the functions of the program with their parameter's W0 type
+	functions: HashMap<String, String>,
 	/// main-level names bound so far, with their declared type when annotated
 	names: HashMap<String, Option<String>>,
 	locals: Vec<String>,
@@ -110,8 +135,8 @@ impl Exporter {
 		let program = statements(program);
 		for statement in &program {
 			if let Node::Key(head, Op::Define, _) = statement.drop_meta() {
-				if let Some((name, _)) = function_head(head) {
-					self.functions.insert(name.to_string());
+				if let Some((name, parameter)) = function_head(head) {
+					self.functions.insert(name.to_string(), parameter_type(parameter)?.1);
 				}
 			}
 		}
@@ -156,6 +181,9 @@ impl Exporter {
 
 	/// A call's result stored in a declared list is checked item by item at run time (list-element-types): a cast
 	fn stored_value(&mut self, declared: Option<&str>, value: &Node) -> Lean {
+		if let Some(yes_or_no) = bool_literal(declared, value) {
+			return Ok(yes_or_no);
+		}
 		let lean = self.expression(value)?;
 		Ok(match declared {
 			Some(declared) if declared.starts_with(".list") && self.is_call(value) => format!(".cast ({lean}) ({declared})"),
@@ -164,15 +192,11 @@ impl Exporter {
 	}
 
 	fn is_call(&self, node: &Node) -> bool {
-		matches!(node.drop_meta(), Node::List(items, _, _) if matches!(items.first().map(Node::drop_meta), Some(Node::Symbol(name)) if self.functions.contains(name)))
+		matches!(node.drop_meta(), Node::List(items, _, _) if matches!(items.first().map(Node::drop_meta), Some(Node::Symbol(name)) if self.functions.contains_key(name)))
 	}
 
 	fn function(&mut self, name: &str, parameter: &Node, body: &Node) -> Lean {
-		let (parameter, parameter_type) = match parameter.drop_meta() {
-			Node::Symbol(parameter) => (parameter.clone(), ".any".to_string()),
-			Node::Key(parameter, Op::Colon, annotation) => (parameter.name(), annotation_type(annotation)?),
-			other => return unsupported(other),
-		};
+		let (parameter, parameter_type) = parameter_type(parameter)?;
 		self.locals.push(parameter.clone());
 		let body = self.expression(body);
 		self.locals.pop();
@@ -218,8 +242,13 @@ impl Exporter {
 					Node::Text(message) => Ok(format!(".error {}", quoted(message))),
 					_ => unsupported(node),
 				},
-				[call, argument] if matches!(call.drop_meta(), Node::Symbol(name) if self.functions.contains(name)) => {
-					Ok(format!(".call {} ({})", quoted(&call.name()), self.expression(argument)?))
+				[call, argument] if self.functions.contains_key(&call.name()) => {
+					let declared = self.functions[&call.name()].clone();
+					let argument = match bool_literal(Some(&declared), argument) {
+						Some(yes_or_no) => yes_or_no,
+						None => self.expression(argument)?,
+					};
+					Ok(format!(".call {} ({argument})", quoted(&call.name())))
 				}
 				_ => unsupported(node),
 			},
@@ -296,6 +325,22 @@ pub fn verdicts(exported: &[String]) -> Result<Vec<ModelVerdict>, String> {
 	Ok(lines.iter().map(|line| match line.strip_prefix(ACCEPTED_PREFIX) {
 		Some(type_name) => ModelVerdict::Accepted(type_name.to_string()),
 		None => ModelVerdict::Rejected,
+	}).collect())
+}
+
+/// Where warp's run-time admission of a value to a builtin type (analyzer admits) differs from W0's `Ty.sub`, for
+/// every type word and W0 scalar value type: "word ← value type: warp admits / W0 sub"
+pub fn admits_disagreements() -> Result<Vec<String>, String> {
+	let pairs: Vec<(&str, &str, Kind)> = BUILTIN_TYPE_WORDS.iter().flat_map(|word| VALUE_KINDS.iter().map(move |(value, kind)| (*word, *value, *kind))).collect();
+	let requests: String = pairs.iter().map(|(word, value, _)| format!("#eval IO.println (Ty.sub ({value}) ({}))\n", type_of_word(word).expect("a W0 type word"))).collect();
+	let output = ask_model("admits", &requests)?;
+	let answers: Vec<bool> = output.lines().filter_map(|line| line.parse().ok()).collect();
+	if answers.len() != pairs.len() {
+		return Err(format!("the model answered {} of {} pairs:\n{output}", answers.len(), pairs.len()));
+	}
+	Ok(pairs.iter().zip(answers).filter_map(|((word, value, kind), sub)| {
+		let admits = crate::analyzer::admits(word, *kind);
+		(admits != sub).then(|| format!("{word} ← {value}: warp admits {admits} / W0 sub {sub}"))
 	}).collect())
 }
 
