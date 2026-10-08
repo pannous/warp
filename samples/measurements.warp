@@ -10,4 +10,9 @@ big = area certainly > 10
 maybe_huge = area possibly > 14
 if big then print "certainly more than 10 m²"
 if maybe_huge then print "possibly more than 14 m²"
+
+// functions map the whole interval too: the swing of a pendulum this long
+pendulum = 2.0 ± 0.01
+period = 2 * π * √(pendulum / 9.81)
+print "period: " + str(period) + " s"
 area.value
