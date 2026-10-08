@@ -196,6 +196,19 @@ fn table_variable(statement: &Node) -> Option<(String, Node)> {
 	}
 }
 
+/// Whether the route's value (its last statement) is a list: a table or a list literal, so its ø answers []
+fn answers_a_list(body: &Node, tables: &[(String, Node)]) -> bool {
+	let value = match body.drop_meta() {
+		Node::List(items, Bracket::Curly, _) => items.last().map_or(body, |last| last).drop_meta(),
+		value => value,
+	};
+	match value {
+		Node::Symbol(name) => tables.iter().any(|(table, _)| table == name),
+		Node::List(_, Bracket::Square, _) => true,
+		_ => false,
+	}
+}
+
 /// The route's body after the statements reading the program's tables anew
 fn reading_tables(body: Node, tables: &[(String, Node)]) -> Node {
 	if tables.is_empty() {
@@ -505,8 +518,12 @@ fn serving(port: Node, routes: Vec<Route>, tables: &[(String, Node)], count: &mu
 		*count += 1;
 		let request = Node::Key(Box::new(Node::Symbol(REQUEST_WORD.to_string())), Op::Colon, Box::new(Node::Symbol(ANY_TYPE.to_string())));
 		let head = Node::List(vec![Node::Symbol(function.clone()), request], Bracket::Round, Separator::None);
+		let mut entry = vec![Node::Text(method), path, Node::Text(function)];
+		if answers_a_list(&body, tables) {
+			entry.push(Node::Text(crate::web_server::LIST_ANSWER.to_string()));
+		}
 		statements.push(Node::Key(Box::new(head), Op::Define, Box::new(reading_tables(body, tables))));
-		table.push(Node::List(vec![Node::Text(method), path, Node::Text(function)], Bracket::Square, Separator::Colon));
+		table.push(Node::List(entry, Bracket::Square, Separator::Colon));
 	}
 	let routes = Node::List(table, Bracket::Square, Separator::Colon);
 	statements.push(Node::List(vec![Node::Symbol(crate::host::SERVE_ROUTES.to_string()), port, routes], Bracket::Round, Separator::None));

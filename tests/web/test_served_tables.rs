@@ -9,31 +9,47 @@ const ADDING: &str = "class User{name: text}
 stored users: [User]
 users.add(User(\"Ann\"))";
 const PORT: u16 = 18493;
+const EMPTY_PORT: u16 = 18494;
 
-fn read(path: &str) -> String {
-	ureq::get(&format!("http://127.0.0.1:{PORT}{path}")).call().expect("an answer").body_mut().read_to_string().expect("a text")
+fn read(port: u16, path: &str) -> String {
+	ureq::get(&format!("http://127.0.0.1:{port}{path}")).call().expect("an answer").body_mut().read_to_string().expect("a text")
 }
 
-#[test]
-fn a_served_route_reads_the_table_at_each_request() {
-	let folder = std::path::Path::new("scratch").join("served_tables");
+/// PROGRAM served at `port` from scratch/<folder>/app.warp with a fresh database, for `requests` requests: the server
+/// thread and the program file
+fn serving(folder: &str, port: u16, requests: usize) -> (std::thread::JoinHandle<String>, std::path::PathBuf) {
+	let folder = std::path::Path::new("scratch").join(folder);
 	std::fs::create_dir_all(&folder).expect("scratch folder");
 	let _ = std::fs::remove_file(folder.join("app.database.sqlite"));
 	let program = folder.join("app.warp");
 	std::fs::write(&program, PROGRAM).expect("the program file");
 	let served = program.clone();
 	let server = std::thread::spawn(move || {
-		warp::web_server::stop_after(2);
-		warp::modules::with_program_file(&served, || warp::pipeline::serving_at(PORT, || warp::wasm_emitter::eval(PROGRAM))).serialize()
+		warp::web_server::stop_after(requests);
+		warp::modules::with_program_file(&served, || warp::pipeline::serving_at(port, || warp::wasm_emitter::eval(PROGRAM))).serialize()
 	});
 	let started = std::time::Instant::now();
-	while std::net::TcpStream::connect(("127.0.0.1", PORT)).is_err() {
+	while std::net::TcpStream::connect(("127.0.0.1", port)).is_err() {
 		assert!(started.elapsed() < Duration::from_secs(60), "the server did not start");
 		std::thread::sleep(Duration::from_millis(50));
 	}
-	assert!(!read("/api/users").contains("Ann"));
+	(server, program)
+}
+
+#[test]
+fn a_served_route_reads_the_table_at_each_request() {
+	let (server, program) = serving("served_tables", PORT, 2);
+	assert!(!read(PORT, "/api/users").contains("Ann"));
 	warp::modules::with_program_file(&program, || warp::wasm_emitter::eval(ADDING));
-	assert!(read("/api/users").contains("Ann"));
+	assert!(read(PORT, "/api/users").contains("Ann"));
+	server.join().expect("the server thread");
+}
+
+// card served-empty: an empty table is the JSON array [], not null (ø, the empty list, reads back as nothing)
+#[test]
+fn an_empty_table_answers_an_empty_array() {
+	let (server, _) = serving("served_empty", EMPTY_PORT, 1);
+	assert_eq!(read(EMPTY_PORT, "/api/users"), "[]");
 	server.join().expect("the server thread");
 }
 
