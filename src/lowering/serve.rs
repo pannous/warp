@@ -57,7 +57,7 @@ pub fn lower(program: Node) -> Node {
 			let servers = server_names(&statements);
 			let statements: Vec<Node> = statements.into_iter().map(|statement| server_definition(&statement).unwrap_or_else(|| assigned_asking(statement, &servers))).collect();
 			let calls: Vec<Route> = statements.iter().filter_map(rpc_route).collect();
-			let tables: Vec<(String, Node)> = statements.iter().filter_map(table_variable).collect();
+			let server_data = ServerData::of(&statements);
 			let mut routes = 0;
 			let serves_itself = statements.iter().any(|statement| served(statement).is_some());
 			// `warp serve`: the top-level routes and the server functions at its port, after the program's statements
@@ -65,19 +65,19 @@ pub fn lower(program: Node) -> Node {
 			let mut statements: Vec<Node> = statements.into_iter().flat_map(|statement| match served(&statement) {
 				Some((port, mut routed)) => {
 					routed.extend(calls.iter().cloned());
-					serving(port, routed, &tables, &mut routes)
+					serving(port, routed, &server_data, &mut routes)
 				}
 				None => vec![statement],
 			}).collect();
 			if let (Some(port), false) = (port, serves_itself) {
 				let routed = top_level.iter().flat_map(top_level_routes).chain(calls).collect();
-				statements.extend(serving(Node::int(i64::from(port)), routed, &tables, &mut routes));
+				statements.extend(serving(Node::int(i64::from(port)), routed, &server_data, &mut routes));
 			}
 			Node::List(statements, bracket, separator)
 		}
 		single if served(&single).is_some() => {
 			let (port, routed) = served(&single).expect("checked");
-			Node::List(serving(port, routed, &[], &mut 0), Bracket::None, Separator::Semicolon)
+			Node::List(serving(port, routed, &ServerData::default(), &mut 0), Bracket::None, Separator::Semicolon)
 		}
 		other => other,
 	}
@@ -193,6 +193,40 @@ fn table_variable(statement: &Node) -> Option<(String, Node)> {
 			Some((name, table))
 		}
 		_ => None,
+	}
+}
+
+/// The server's tables and the words giving a list: the table variables and the functions whose value is one
+#[derive(Default)]
+struct ServerData {
+	tables: Vec<(String, Node)>,
+	list_words: Vec<String>,
+}
+
+impl ServerData {
+	fn of(statements: &[Node]) -> ServerData {
+		let tables: Vec<(String, Node)> = statements.iter().filter_map(table_variable).collect();
+		let mut list_words: Vec<String> = tables.iter().map(|(name, _)| name.clone()).collect();
+		let giving_lists: Vec<String> = statements.iter().filter_map(|statement| match statement.drop_meta() {
+			Node::Key(_, Op::Define, body) if answers_a_list(body, &list_words) => defined_function(statement).map(|(name, _)| name),
+			_ => None,
+		}).collect();
+		list_words.extend(giving_lists);
+		ServerData { tables, list_words }
+	}
+}
+
+/// Whether a value (a block's last statement) is a list: a list word, its call or a list literal, so its ø answers []
+fn answers_a_list(value: &Node, list_words: &[String]) -> bool {
+	let value = match value.drop_meta() {
+		Node::List(items, Bracket::Curly, _) => items.last().map_or(value, |last| last).drop_meta(),
+		value => value,
+	};
+	match value {
+		Node::Symbol(name) => list_words.contains(name),
+		Node::List(items, Bracket::Round, _) => items.first().is_some_and(|word| matches!(word.drop_meta(), Node::Symbol(name) if list_words.contains(name))),
+		Node::List(_, Bracket::Square, _) => true,
+		_ => false,
 	}
 }
 
@@ -497,7 +531,7 @@ fn routes_in(items: &[Node]) -> Vec<Route> {
 }
 
 /// The route functions, then the call that serves them
-fn serving(port: Node, routes: Vec<Route>, tables: &[(String, Node)], count: &mut usize) -> Vec<Node> {
+fn serving(port: Node, routes: Vec<Route>, server_data: &ServerData, count: &mut usize) -> Vec<Node> {
 	let mut statements = vec![];
 	let mut table = vec![];
 	for (method, path, body) in routes {
@@ -505,8 +539,12 @@ fn serving(port: Node, routes: Vec<Route>, tables: &[(String, Node)], count: &mu
 		*count += 1;
 		let request = Node::Key(Box::new(Node::Symbol(REQUEST_WORD.to_string())), Op::Colon, Box::new(Node::Symbol(ANY_TYPE.to_string())));
 		let head = Node::List(vec![Node::Symbol(function.clone()), request], Bracket::Round, Separator::None);
-		statements.push(Node::Key(Box::new(head), Op::Define, Box::new(reading_tables(body, tables))));
-		table.push(Node::List(vec![Node::Text(method), path, Node::Text(function)], Bracket::Square, Separator::Colon));
+		let mut entry = vec![Node::Text(method), path, Node::Text(function)];
+		if answers_a_list(&body, &server_data.list_words) {
+			entry.push(Node::Text(crate::web_server::LIST_ANSWER.to_string()));
+		}
+		statements.push(Node::Key(Box::new(head), Op::Define, Box::new(reading_tables(body, &server_data.tables))));
+		table.push(Node::List(entry, Bracket::Square, Separator::Colon));
 	}
 	let routes = Node::List(table, Bracket::Square, Separator::Colon);
 	statements.push(Node::List(vec![Node::Symbol(crate::host::SERVE_ROUTES.to_string()), port, routes], Bracket::Round, Separator::None));

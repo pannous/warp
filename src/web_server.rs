@@ -31,11 +31,25 @@ pub(crate) fn take_request_limit() -> usize {
 	REQUEST_LIMIT.with(|limit| limit.replace(0))
 }
 
-/// A route of the program: method, path and the function answering it
+/// The mark of a route answering a list (lowering/serve.rs): its ø is the empty JSON array, not null
+pub const LIST_ANSWER: &str = "list";
+
+/// A route of the program: method, path, the function answering it and whether its value is a list
 pub struct Route {
 	pub method: String,
 	pub path: String,
 	pub function: String,
+	pub lists: bool,
+}
+
+impl Route {
+	/// The answer of the route's value; ø is the empty list, which reads back as nothing, so a list route says []
+	pub fn answer_of(&self, value: &Node) -> Answer {
+		match value.drop_meta() {
+			Node::Empty if self.lists => Answer { status: 200, content_type: JSON_TYPE, body: b"[]".to_vec() },
+			_ => Answer::of(value),
+		}
+	}
 }
 
 /// What a route's function gave, as the HTTP answer: status, content type, body
@@ -60,11 +74,16 @@ impl Answer {
 	}
 }
 
-/// The routes of `[[method, path, function] …]`
+/// The routes of `[[method, path, function] …]`, a list route marked `[method, path, function, LIST_ANSWER]`
 pub fn routes_of(routes: &Node) -> Vec<Route> {
 	let Node::List(items, _, _) = routes.drop_meta() else { return vec![] };
 	items.iter().filter_map(|route| match route.drop_meta() {
-		Node::List(parts, _, _) if parts.len() == 3 => Some(Route { method: text_of(&parts[0]), path: text_of(&parts[1]), function: text_of(&parts[2]) }),
+		Node::List(parts, _, _) if (3..=4).contains(&parts.len()) => Some(Route {
+			method: text_of(&parts[0]),
+			path: text_of(&parts[1]),
+			function: text_of(&parts[2]),
+			lists: parts.get(3).is_some_and(|mark| text_of(mark) == LIST_ANSWER),
+		}),
 		_ => None,
 	}).collect()
 }
