@@ -8,6 +8,9 @@ Read notes/agents/common.md and notes/roles.md ("Integrator").
 - Per job ("branch, tip"): `git -C "$W" checkout Cargo.toml Cargo.lock test_results.txt`, fetch, `merge --ff-only
   origin/main`, merge `origin/<branch>`. Conflicts in todo.md or tests/main.rs: union-merge the three stages (check the
   result is not empty and tests/main.rs has no duplicate lines); any other conflict goes back to the worker.
+- The user's own edits go into every batch (user, 2026-10-08): check `git -C /Users/me/dev/angles/warp status --short`
+  and commit its uncommitted changes on the integration tip as the user's change (never touch their working tree). A
+  file that looks stale (re-adds moved code, reverts decisions): include the rest and ask the user about that file.
 - Build tweak (version "<v>-integrate"), `cd "$W" && ./test.sh > ../integrate_test.log 2>&1` (cargo builds the cwd's checkout, so cd first) (it queues
   itself with priority), restore Cargo.toml/Cargo.lock/test_results.txt.
 - Before pushing also check the browser build (the playground deploys from main; a native-only item breaks it):
