@@ -34,3 +34,6 @@ mod test_netbase_package;
 mod test_dir;
 mod test_use_several; // card std-use
 mod test_from_import; // card std-import
+#[cfg(feature = "native")] // reads lib/, tests/ and src/: not in the browser build
+mod test_std_coverage; // card std-word
+mod test_std_words; // card std-word

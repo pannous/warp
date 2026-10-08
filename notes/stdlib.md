@@ -63,6 +63,12 @@ matches format pad json parse`; `today` and `args` read as symbols; `exec sh "â€
 - Names: after `use list`, `zip(a, b)` and `list.zip(a, b)` both work; a program's own `zip` wins (as for prelude words).
 - A module word used without its `use`: the loud error naming the module, with the fix `use list`.
 
+### Coverage (card std-word)
+tests/modules/test_std_coverage.rs fails naming every lib/*.wasp word no test calls: a word is covered when a test
+(tests/**/*.rs or .wasp) names it, or a covered word's body calls it. src/ doesn't count: its alias tables
+(modules.rs `("acos", "arc_cosine")`) name words without calling them. A new lib word needs an is! test; the words
+nothing else tested are in tests/modules/test_std_words.rs (native and browser).
+
 ## 6. Steps (functions)
 Done (branch functions, 2026-10-07):
 1. `lib/<name>.wasp` embedded in warp (modules.rs STD_MODULES; std/ until P194 merged it into lib/, non-standard
