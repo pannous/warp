@@ -393,8 +393,15 @@ Each step is useful on its own and is what the next ones stand on.
   (derived_interfaces: an Element's `value` is HTMLInputElement's), as the runtime element may be any of them; only a
   member none declares is an error, its suggestion drawn from all of them. `style` is CSSStyleProperties, generated
   per CSS property, not bundled: unchecked. Only on a page: the Worker (playground) and node have no document.
-- Next: fetch's Response, WebSocket; P203 (annotations strict, unannotated lax) may move these checks to warnings
-  unless `use js` counts as the annotation.
+- Global object (slice 6): `use js self` / `globalThis` (`window` on a page; in the Worker an error naming self) is
+  the program's scope, with WindowOrWorkerGlobalScope bundled whole (fetch, atob, setTimeout…) plus Response and
+  Headers. The scope is bundled in part, so a member it lacks stays unchecked (`window.innerWidth`). A `Promise<T>`
+  result is T: node's loop awaits a call (src/foreign.rs), so `self.fetch(url)` is a Response, `.text()` a text,
+  `.status` an int. Natively node mirrors self/window as globalThis. In the browser host a foreign call is
+  synchronous: a promise stays a handle there (no JSPI yet). warp's own `fetch "/x"` is unaffected.
+- P203 (user): `use js <global>` is the annotation (like `use c` headers), so these checks stay compile errors
+  (warp-dc, 2026-10-08).
+- Next: WebSocket instances (`use js WebSocket` is the constructor, unchecked); warp's own ws:// channels exist.
 
 ## web-apis: WebSocket (card web-websocket, 2026-10-07, warp-90)
 - No new words: a channel named by a ws:// or wss:// address is a WebSocket. `on message from "wss://…" { … event … }`
