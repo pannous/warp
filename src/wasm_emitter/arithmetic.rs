@@ -413,7 +413,8 @@ impl WasmGcEmitter {
 					}
 					return;
 				}
-				self.emit_value_of_kind(func, right, kind);
+				let declared = self.declared_type_of(left);
+				self.emit_declared_value(func, declared.as_ref(), right, kind);
 				self.emit_fits_declared(func, left);
 				func.instruction(&I::LocalTee(position));
 			} else if let Some(kind) = self.emit_global_store(func, name, right) {
