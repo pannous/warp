@@ -84,6 +84,13 @@ def typeOf (P : Program) (Γ : Ctx) : Expr → Option Ty
       | some a => if sub a fn.paramTy then some (.list fn.result) else none
       | none => none
     | _, _ => none
+  | .ref _ p | .new p => some (.cls p)
+  | .get e f => (typeOf P Γ e).bind (P.readTy · f)
+  | .set e f v =>
+    match typeOf P Γ e, typeOf P Γ v with
+    | some te, some tv => (P.writeTy te f).bind fun t => if sub tv t then some tv else none
+    | _, _ => none
+  | .isA e _ => (typeOf P Γ e).map fun _ => .bool
 
 theorem typeOf_sound {P : Program} : ∀ {e : Expr} {Γ t}, typeOf P Γ e = some t → HasType P Γ e t := by
   intro e
@@ -182,6 +189,23 @@ theorem typeOf_sound {P : Program} : ∀ {e : Expr} {Γ t}, typeOf P Γ e = some
       · rename_i hel hs; cases h; exact .broadcast hf (ih he) hel hs
       · cases h
     · cases h
+  | ref | new => intro Γ t h; simp [typeOf] at h; subst h; constructor
+  | get e f ih =>
+    intro Γ t h; simp only [typeOf, Option.bind_eq_some_iff] at h
+    obtain ⟨te, he, hr⟩ := h
+    exact .get (ih he) hr
+  | set e f v ih1 ih2 =>
+    intro Γ t h
+    cases he : typeOf P Γ e <;> cases hv : typeOf P Γ v <;> simp only [typeOf, he, hv] at h <;> try cases h
+    simp only [Option.bind_eq_some_iff] at h
+    obtain ⟨tf, hw, h⟩ := h
+    split at h
+    · rename_i hs; cases h; exact .set (ih1 he) hw (ih2 hv) hs
+    · cases h
+  | isA e c ih =>
+    intro Γ t h; simp only [typeOf, Option.map_eq_some_iff] at h
+    obtain ⟨_, he, rfl⟩ := h
+    exact .isA (ih he)
 
 /-! ## Whole programs, as warp writes them: top-level items in source order -/
 
@@ -201,15 +225,18 @@ structure Spec where
   decls : List Decl
   funs : List (String × Fn)
   main : Expr
+  /-- each class with the fields it declares itself -/
+  classes : List (String × List (String × Ty)) := []
 
 def Spec.program (s : Spec) : Program where
   names x := (s.decls.find? (·.name == x)).map fun d => (d.mode, d.type)
   funs f := (s.funs.find? (·.1 == f)).map (·.2)
   globals x := (s.decls.find? (·.name == x)).any (·.isGlobal)
+  fields c f := (s.classes.find? (·.1 == c)).bind fun (_, fields) => fields.lookup f
 
 /-- the store before main runs: charged names hold their body, the others are unset -/
-def Spec.store (s : Spec) : Store := fun x =>
-  (s.decls.find? (·.name == x)).map fun d =>
+def Spec.store (s : Spec) : Store where
+  vars x := (s.decls.find? (·.name == x)).map fun d =>
     match d.charged with
     | some b => .charged b
     | none => .unset
@@ -237,7 +264,7 @@ theorem Spec.check_sound {s : Spec} {t} (h : s.check = some t) :
   · rename_i hok
     simp only [Bool.and_eq_true, List.all_eq_true] at hok
     obtain ⟨hdecls, hfuns⟩ := hok
-    refine ⟨?_, ?_, typeOf_sound h⟩
+    refine ⟨?_, ⟨?_, fun a o ho => by simp [Spec.store] at ho⟩, typeOf_sound h⟩
     · intro f fn hf
       simp only [Spec.program, Option.map_eq_some_iff] at hf
       obtain ⟨⟨g, fn'⟩, hfind, rfl⟩ := hf
@@ -282,6 +309,9 @@ inductive Item where
   | charged (name : String) (body : Expr)
   /-- `f(y: T) := body` (warp hoists functions) -/
   | function (name param : String) (paramTy : Ty) (body : Expr)
+  /-- `class C : Parent { f: T … }` and the variants of `type Color = red | rgb(r: int, …)`: the fields C declares
+  itself; its ancestor chain is written into the types that name it -/
+  | classDef (name : String) (fields : List (String × Ty))
   /-- any other statement -/
   | statement (e : Expr)
 
@@ -298,7 +328,8 @@ def valuesOf (x : String) : Expr → List Expr
   | .tryCatch a b => valuesOf x a ++ valuesOf x b
   | .ite c a b => valuesOf x c ++ valuesOf x a ++ valuesOf x b
   | .letIn _ _ e b => valuesOf x e ++ valuesOf x b
-  | .call _ e | .cast e _ | .broadcast _ e => valuesOf x e
+  | .set a _ b => valuesOf x a ++ valuesOf x b
+  | .call _ e | .cast e _ | .broadcast _ e | .get e _ | .isA e _ => valuesOf x e
   | _ => []
 
 /-- P45: a name declared by its first value widens over the numbers it is given (`x = 1; x = 2.5` is a number);
@@ -334,6 +365,9 @@ def resolveCalls (P : Program) (Γ : Ctx) : Expr → Expr
   | .letIn y t e b => .letIn y t (resolveCalls P Γ e) (resolveCalls P (Γ.set y t) b)
   | .tryCatch e h => .tryCatch (resolveCalls P Γ e) (resolveCalls P Γ h)
   | .cast e t => .cast (resolveCalls P Γ e) t
+  | .get e f => .get (resolveCalls P Γ e) f
+  | .set e f v => .set (resolveCalls P Γ e) f (resolveCalls P Γ v)
+  | .isA e c => .isA (resolveCalls P Γ e) c
   | e => e
 
 /-- the function with a provisional result; its calls resolved (a recursive call sees that result) -/
@@ -362,8 +396,9 @@ def RESULT_ROUNDS : Nat := 4
 
 def elaborate (items : List Item) : Spec :=
   let functions := items.filterMap fun | .function f y t b => some (f, y, t, b) | _ => none
-  let rest := items.filter fun | .function .. => false | _ => true
-  let withFunctions := functions.foldl (init := ({ decls := [], funs := [], main := .unit } : Spec))
+  let rest := items.filter fun | .function .. | .classDef .. => false | _ => true
+  let classes := items.filterMap fun | .classDef c fields => some (c, fields) | _ => none
+  let withFunctions := functions.foldl (init := ({ decls := [], funs := [], main := .unit, classes } : Spec))
     fun s (f, y, t, b) =>
       { s with funs := s.funs ++ [(f, inferFunction s f y t b RESULT_ROUNDS .never)] }
   let step (s : Spec) (statements : List Expr) : Item → Spec × List Expr
@@ -377,7 +412,7 @@ def elaborate (items : List Item) : Spec :=
       let t := (typeOf s.program Ctx.empty body).getD .any
       ({ s with decls := s.decls ++ [{ name := x, mode := .charged, type := t, charged := some body }] }, statements)
     | .statement e => (s, statements ++ [resolveCalls s.program Ctx.empty e])
-    | .function .. => (s, statements)
+    | .function .. | .classDef .. => (s, statements)
   let (s, statements) := rest.foldl (init := (withFunctions, [])) fun (s, st) item => step s st item
   let s := { s with main := sequence statements }
   (List.range RESULT_ROUNDS).foldl (init := s) fun s _ => { s with decls := s.decls.map (widenOver s) }

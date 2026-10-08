@@ -1,13 +1,17 @@
 /-! Types of the core calculus W0 (notes/type_theory.md) and their order.
 
 `bool ≤ int ≤ number` is the chain of numbers (true/false act as 1/0), `never` is the bottom (the type of `error`
-and of the elements of `[]`), `any` the top (a Node), and lists are covariant: warp lists are values. -/
+and of the elements of `[]`), `any` the top (a Node), and lists are covariant: warp lists are values.
+A class type is its chain of ancestors, root first (`cls ["Shape", "Circle"]`): a subclass extends the chain, so
+subtyping is the prefix order and needs no class table. A variant of a sum type is a class extending the sum
+(P178, P179). -/
 
 namespace Warp
 
 inductive Ty where
   | never | bool | int | number | text | unit
   | list (element : Ty)
+  | cls (path : List String)
   | any
   deriving DecidableEq, Repr
 
@@ -18,6 +22,7 @@ def sub : Ty → Ty → Bool
   | never, _ => true
   | _, any => true
   | list a, list b => sub a b
+  | cls p, cls q => decide (q <+: p)
   | bool, bool | bool, int | bool, number | int, int | int, number | number, number => true
   | text, text | unit, unit => true
   | _, _ => false
@@ -31,13 +36,44 @@ def name : Ty → String
   | text => "text"
   | unit => "unit"
   | list t => s!"list of {t.name}"
+  | cls p => p.getLastD "object"
   | any => "any"
+
+/-- the longest common prefix: the nearest common ancestor of two class chains -/
+def commonPrefix : List String → List String → List String
+  | a :: p, b :: q => if a = b then a :: commonPrefix p q else []
+  | _, _ => []
+
+theorem commonPrefix_left : ∀ p q : List String, commonPrefix p q <+: p
+  | a :: p, b :: q => by
+    unfold commonPrefix; split
+    · exact (List.prefix_cons_inj a).2 (commonPrefix_left p q)
+    · exact List.nil_prefix
+  | [], _ | _ :: _, [] => by simp [commonPrefix]
+
+theorem commonPrefix_right : ∀ p q : List String, commonPrefix p q <+: q
+  | a :: p, b :: q => by
+    unfold commonPrefix; split
+    · subst_vars; exact (List.prefix_cons_inj _).2 (commonPrefix_right p q)
+    · exact List.nil_prefix
+  | [], _ | _ :: _, [] => by simp [commonPrefix]
+
+theorem commonPrefix_greatest : ∀ {r p q : List String}, r <+: p → r <+: q → r <+: commonPrefix p q
+  | [], _, _, _, _ => List.nil_prefix
+  | c :: r, a :: p, b :: q, hp, hq => by
+    rw [List.cons_prefix_cons] at hp hq
+    obtain ⟨rfl, hp⟩ := hp; obtain ⟨rfl, hq⟩ := hq
+    simp only [commonPrefix, ite_true]
+    exact (List.prefix_cons_inj _).2 (commonPrefix_greatest hp hq)
+  | _ :: _, [], _, hp, _ => by simp at hp
+  | _ :: _, _ :: _, [], _, hq => by simp at hq
 
 /-- least upper bound -/
 def join : Ty → Ty → Ty
   | never, b => b
   | a, never => a
   | list a, list b => list (join a b)
+  | cls p, cls q => cls (commonPrefix p q)
   | a, b => if sub a b then b else if sub b a then a else any
 
 /-- the element type of a list type; `never` (an error in list position) has elements of type `never` -/
@@ -57,6 +93,7 @@ def arith (a b : Ty) : Ty := if sub a int && sub b int then int else number
 
 theorem sub_refl : ∀ t : Ty, sub t t = true
   | list a => by simp [sub_refl a]
+  | cls p => by simp [sub]
   | never | bool | int | number | text | unit | any => rfl
 
 theorem sub_to_never : ∀ {t : Ty}, sub t never = true → t = never := by
@@ -83,6 +120,10 @@ theorem sub_trans : ∀ {a b c : Ty}, sub a b = true → sub b c = true → sub 
       · simp
       · simpa using ih hxy hyz
   | any => intro b c hab hbc; rw [sub_from_any hab] at hbc; exact hbc
+  | cls p =>
+    intro b c hab hbc
+    cases b <;> cases c <;> simp_all [sub]
+    exact hbc.trans hab
   | _ =>
     intro b c hab hbc
     cases b <;> cases c <;> simp_all [sub]
@@ -95,6 +136,10 @@ theorem sub_antisymm : ∀ {a b : Ty}, sub a b = true → sub b a = true → a =
     rcases sub_from_list hab with rfl | ⟨y, rfl, hxy⟩
     · simp [sub] at hba
     · simp at hba; rw [ih hxy hba]
+  | cls p =>
+    intro b hab hba
+    cases b <;> simp_all [sub]
+    exact List.IsPrefix.eq_of_length hba (Nat.le_antisymm hba.length_le hab.length_le)
   | _ => intro b hab hba; cases b <;> simp_all [sub]
 
 theorem join_upper_left : ∀ a b : Ty, sub a (join a b) = true := by
@@ -104,6 +149,7 @@ theorem join_upper_left : ∀ a b : Ty, sub a (join a b) = true := by
     intro b; cases b <;> simp [join, sub_refl, ih]
     all_goals (split <;> simp_all [sub])
   | never => intro b; simp
+  | cls p => intro b; cases b <;> simp [join, sub, commonPrefix_left] <;> (try split) <;> simp_all [sub]
   | _ => intro b; cases b <;> simp [join, sub] <;> (try split) <;> simp_all
 
 theorem join_upper_right : ∀ a b : Ty, sub b (join a b) = true := by
@@ -113,6 +159,7 @@ theorem join_upper_right : ∀ a b : Ty, sub b (join a b) = true := by
     intro b; cases b <;> simp [join, sub_refl, ih]
     all_goals (split <;> simp_all [sub])
   | never => intro b; simp [join, sub_refl]
+  | cls p => intro b; cases b <;> simp [join, sub, commonPrefix_right] <;> (try split) <;> simp_all [sub]
   | _ => intro b; cases b <;> simp [join, sub, sub_refl] <;> (try split) <;> simp_all
 
 theorem join_least : ∀ {a b c : Ty}, sub a c = true → sub b c = true → sub (join a b) c = true := by
@@ -130,6 +177,10 @@ theorem join_least : ∀ {a b c : Ty}, sub a c = true → sub b c = true → sub
     | _ => rcases sub_from_list hac with rfl | ⟨z, rfl, _⟩ <;> simp_all [join, sub]
   | never => intro b c _ hbc; simpa [join] using hbc
   | any => intro b c hac _; rw [sub_from_any hac]; simp
+  | cls p =>
+    intro b c hac hbc
+    cases b <;> cases c <;> simp_all [join, sub]
+    all_goals first | exact commonPrefix_greatest hac hbc | (split <;> simp_all [sub])
   | _ =>
     intro b c hac hbc
     cases b <;> cases c <;> simp_all [join, sub] <;> (try split) <;> simp_all

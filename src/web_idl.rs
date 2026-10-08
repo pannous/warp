@@ -79,18 +79,40 @@ pub fn members_of(interface: &str) -> BTreeMap<String, Member> {
 
 /// `global.member` read (`call` None) or called with `call` arguments: Err says what WebIDL declares instead
 pub fn check(global: &str, member: &str, call: Option<usize>) -> Result<(), String> {
-	let Some(interface) = interface_of_global(global, PROGRAM_SCOPE) else { return page_only(global) };
-	let mut members = members_of(&interface);
+	match global_interface(global)? {
+		Some(interface) => check_member(&interface, global, member, call),
+		None => Ok(()),
+	}
+}
+
+/// The interface a global is in the program's scope: None when WebIDL does not declare it, Err when only a page has it
+pub fn global_interface(global: &str) -> Result<Option<String>, String> {
+	match interface_of_global(global, PROGRAM_SCOPE) {
+		Some(interface) => Ok(Some(interface)),
+		None => page_only(global).map(|_| None),
+	}
+}
+
+/// The interface of an attribute's value (`navigator.clipboard`: Clipboard), when WebIDL declares it whole
+pub fn attribute_interface(interface: &str, member: &str) -> Option<String> {
+	let Member::Attribute(type_name) = members_of(interface).remove(member)? else { return None };
+	let type_name = type_name.trim_end_matches('?');
+	definitions().contains_key(type_name).then(|| type_name.to_string())
+}
+
+/// `path.member` of a value of `interface` (path as the program writes it: `navigator.clipboard`)
+pub fn check_member(interface: &str, path: &str, member: &str, call: Option<usize>) -> Result<(), String> {
+	let mut members = members_of(interface);
 	let Some(declared) = members.remove(member) else {
 		let same_letters = members.keys().find(|name| name.eq_ignore_ascii_case(member)).cloned();
 		let near = same_letters.or_else(|| crate::extensions::strings::near_miss(member, members.into_keys())).map(|near| format!("; did you mean {near}?")).unwrap_or_default();
-		return Err(format!("{global} ({interface} in WebIDL) has no member {member}{near}"));
+		return Err(format!("{path} ({interface} in WebIDL) has no member {member}{near}"));
 	};
 	match (declared, call) {
-		(Member::Attribute(type_name), Some(_)) => Err(format!("{global}.{member} is an attribute ({type_name}), read without a call: {global}.{member}")),
+		(Member::Attribute(type_name), Some(_)) => Err(format!("{path}.{member} is an attribute ({type_name}), read without a call: {path}.{member}")),
 		(Member::Operation(overloads), Some(count)) if !overloads.iter().any(|arguments| takes(arguments, count)) => {
 			let forms: Vec<String> = overloads.iter().map(|arguments| format!("{member}({})", signature(arguments))).collect();
-			Err(format!("{global}.{member} takes {}, not {count} argument{}", forms.join(" or "), if count == 1 { "" } else { "s" }))
+			Err(format!("{path}.{member} takes {}, not {count} argument{}", forms.join(" or "), if count == 1 { "" } else { "s" }))
 		}
 		_ => Ok(()),
 	}

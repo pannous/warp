@@ -1,4 +1,4 @@
 // FizzBuzz - classic interview problem
-def fizzbuzz(n) := n % 15 == 0 ? "FizzBuzz" : n % 3 == 0 ? "Fizz" : n % 5 == 0 ? "Buzz" : n
+def fizzbuzz(n) = if n % 15 == 0 then "FizzBuzz" else if n % 3 == 0 then "Fizz" else if n % 5 == 0 then "Buzz" else n
 
 fizzbuzz(15)
