@@ -73,8 +73,22 @@ Rejected: (b) automatic f32 for floats (results differ in the 7th digit), (c) do
    converts each number, and builds the result through built_in_program; the shader's work is lost in the noise.
    The CPU is 20–30 ns per item. Consequence for step 3: the automatic path must not go through Nodes. The list is
    copied by a wasm loop into linear memory (~1 ns/item, i64 → i32/f32), the host word takes (pointer, length) and
-   hands the slice to wgpu as is, and the result comes back the same way (a reduction: one number). Only then is a
-   threshold measurable; expect the fixed cost (dispatch + map_async, ≈ 0.1–1 ms) to dominate below ~10^5.
+   hands the slice to wgpu as is, and the result comes back the same way (a reduction: one number).
+   Done: `gpu_compute(shader, xs, w)` of a `linear xs = float[n]` lowers to the host word gpu_compute_linear
+   (shared_arrays.rs; host.rs natively, host-gpu.js in the browser), which reads the block's f64 cells, runs the
+   shader over them as f32 and writes them back in place; `ys = gpu_compute(…, xs, …)` names the same block.
+   Test: test_webgpu a_compute_shader_runs_over_a_linear_array_in_place. Measured the same way (ms):
+
+   | n      | transfer only | transfer + doubling | CPU `sum(xs.map(x => x * 2))` of the linear array |
+   |--------|---------------|---------------------|---------------------------------------------------|
+   | 10^4   | 1             | 0                   | 1                                                  |
+   | 10^5   | 3             | 2                   | 5                                                  |
+   | 10^6   | 11            | 13                  | 53                                                 |
+   | 10^7   | 114           | 118                 | 1776                                               |
+
+   ~11 ns an item for the whole round trip (f64 → f32, upload, readback, back to f64), against 20–30 ns of the CPU's
+   fused `sum(xs .* 2)` over a GC float list: break-even near 10^5 for a list coming back, lower for a reduction.
+   The browser path (host-gpu.js) copies the cells into the task Worker's message, untested with a real adapter.
 3. Ints (option a): `sum`, `dot`, element-wise over $IntList through a host word with an overflow flag, behind the
    length check; tests compare GPU and CPU on lists above and below the threshold.
 4. Fusion of an element-wise expression ending in a reduction into one WGSL kernel.

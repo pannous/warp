@@ -68,13 +68,27 @@ function gpuCompute(shader, numbers, workgroups) {
 	return values;
 }
 
+// the f64 cells of a linear array: its block is [count: i64][count cells] (src/wasm_emitter/linear_arrays.rs)
+function linearCells(memory, block) {
+	const count = Number(new DataView(memory.buffer).getBigInt64(Number(block), true));
+	return new Float64Array(memory.buffer, Number(block) + Float64Array.BYTES_PER_ELEMENT, count);
+}
+
 addHostPart({
-	words: (holder, hooks, { program }) => ({
-		gpu_compute: (shader, numbers, workgroups) => {
-			const plain = node => plainOfTree(readNode(program(), node));
-			const values = gpuCompute(plain(shader), plain(numbers).map(Number), Number(workgroups));
-			// floats, also the whole ones (treeOfPlain would make 3 an Int)
-			return buildValue(program(), { kind: SQUARE_LIST, items: values.map(float => ({ kind: KIND_FLOAT, data: { float }, chain: [] })) });
-		},
-	}),
+	words: (holder, hooks, { program }) => {
+		const plain = node => plainOfTree(readNode(program(), node));
+		return {
+			gpu_compute: (shader, numbers, workgroups) => {
+				const values = gpuCompute(plain(shader), plain(numbers).map(Number), Number(workgroups));
+				// floats, also the whole ones (treeOfPlain would make 3 an Int)
+				return buildValue(program(), { kind: SQUARE_LIST, items: values.map(float => ({ kind: KIND_FLOAT, data: { float }, chain: [] })) });
+			},
+			// over a `linear xs = float[n]`: its cells read and written in place, no list built (card gpu-vectors)
+			gpu_compute_linear: (shader, block, workgroups) => {
+				const cells = linearCells(program().memory, block);
+				cells.set(gpuCompute(plain(shader), cells.slice(), Number(workgroups))); // a copy: a view would post all of memory
+				return block;
+			},
+		};
+	},
 });
