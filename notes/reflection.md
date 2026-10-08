@@ -73,3 +73,7 @@ Warp notation text (parsed by the reader we already have), one map:
    (not warp's runtime exports), `adder.add.params` and `.signature` come from the entry (Objects::module_function_word;
    wasm_modules::qualify leaves `m.f.word` of an exported function unqualified for it). The run-time host call stays
    for `any`-typed values only. Not yet: classes of an imported module (`m.P.fields`), the page reader.
+   Size (web::test_bundle_budget, 23 KB for a hello-world site, a few dozen bytes of headroom): the `functions` entry
+   holds only the functions the source defines, not the html_*/prelude ones lowering brings in; a hello world writes
+   no section. The same rule holds for run-time tables: list_text carries the operators' texts only when the program
+   makes a Key with an operator beyond `:` (a Need::KeyOperator, wasm_emitter/mod.rs).
