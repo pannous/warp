@@ -390,7 +390,7 @@ fn compile_program(code: &str, rewrite: fn(Node) -> Node) -> Result<CompiledModu
 	crate::diagnostic::in_program_mode(rewrite(lawful_program(code)?), |program| {
 		let node = crate::folding::precompute(lower_for_emission(program)?);
 		warn_about_run_time_blocks(&node)?;
-		// a final quantity's unit goes into the module's `wasp.units` section
+		// a final quantity's unit goes into the module's `wasp.meta` section
 		choose_module(&node).map(|module| CompiledModule { bytes: crate::units::static_units::with_result_units(module.bytes), ..module })
 	})
 }
@@ -455,7 +455,7 @@ fn eval_program(node: Node) -> Node {
 		}
 	}
 
-	// Fallback to standard Node encoding; a final quantity's unit travels in the module (`wasp.units`) and is read back
+	// Fallback to standard Node encoding; a final quantity's unit travels in the module (`wasp.meta`) and is read back
 	match emit_module(&node) {
 		Ok(module) => run_module(CompiledModule { bytes: crate::units::static_units::with_result_units(module.bytes), ..module }),
 		Err(type_error) => type_error,
@@ -639,7 +639,7 @@ pub(crate) fn run_module(CompiledModule { bytes, needs_host, needs_wasi, needs_f
 }
 
 /// Without wasmtime the embedding host runs the program (the browser playground: web.rs); a final quantity's unit is
-/// read back from the module's `wasp.units` section, as wasm_reader does natively
+/// read back from the module's `wasp.meta` section (entry units), as wasm_reader does natively
 #[cfg(not(feature = "native"))]
 pub(crate) fn run_module(module: CompiledModule) -> Node {
 	crate::units::static_units::with_module_units(&module.bytes, crate::web::run_in_host(&module.bytes))
