@@ -242,7 +242,7 @@ fn run_command(args: &[String]) {
             }
             return;
         }
-        match wasm_emitter::compile(&code) {
+        match warp::pipeline::for_any_host(|| wasm_emitter::compile(&code)) {
             Ok(module) => {
                 let output_path = compiled_output_path(&target);
                 fs::write(&output_path, &module.bytes).expect("could not write the compiled module");
