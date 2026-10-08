@@ -43,6 +43,9 @@ pub struct Export {
 	/// how each parameter of the module's function crosses, by the header beside the module (all numbers without one)
 	pub c_parameters: Vec<CParameter>,
 	pub c_result: CResult,
+	/// a function of a module warp compiled taking or giving values (its `(ref $Node)` parameters and result): the kind of
+	/// its result by its warp.meta signature; each value is copied between the program's instance and the module's
+	pub node_result: Option<crate::type_kinds::Kind>,
 }
 
 /// How a parameter of a C function compiled to wasm crosses (the header beside the module, notes/wasm_modules.md)
@@ -188,29 +191,36 @@ fn read_exports(path: &str, bytes: &[u8]) -> Result<HashMap<String, Export>, Str
 			_ => {}
 		}
 	}
+	// a warp module names its functions' parameters in warp.meta, other modules may in the name section
+	let functions_meta = crate::meta_section::entry(bytes, crate::lowering::reflection::META_FUNCTIONS);
+	let meta_parameters = |name: &str| functions_meta.as_ref().map(|functions| crate::lowering::reflection::entry_names(&functions[name][crate::lowering::reflection::PARAMS_WORDS[0]]));
 	let library: &'static str = Box::leak(path.to_string().into_boxed_str());
 	let mut exports = HashMap::new();
-	let mut add = |name: String, params: Vec<wasm_encoder::ValType>, results: Vec<wasm_encoder::ValType>, role: Role, parameters: Vec<String>| {
+	let mut add = |name: String, params: Vec<wasm_encoder::ValType>, results: Vec<wasm_encoder::ValType>, role: Role, parameters: Vec<String>, node_result: Option<crate::type_kinds::Kind>| {
 		let import_name: &'static str = Box::leak(name.clone().into_boxed_str());
-		exports.insert(name, Export { signature: FfiSignature::new(import_name, library, params, results), role, parameters, c_parameters: vec![], c_result: CResult::Number });
+		exports.insert(name, Export { signature: FfiSignature::new(import_name, library, params, results), role, parameters, c_parameters: vec![], c_result: CResult::Number, node_result });
 	};
 	for (name, kind, index) in exported {
 		match kind {
 			ExternalKind::Func => {
 				let Some(function_type) = function_types.get(index).and_then(|type_index| types.get(*type_index as usize)).and_then(Option::as_ref) else { continue };
-				if let (Some(params), Some(results)) = (number_types(function_type.params()), number_types(function_type.results())) {
+				let node_result = functions_meta.as_ref().and_then(|functions| node_result(&functions[name.as_str()]));
+				let value_types = |types: &[wasmparser::ValType]| number_types(types).or_else(|| node_result.and(node_types(types)));
+				if let (Some(params), Some(results)) = (value_types(function_type.params()), value_types(function_type.results())) {
 					let names = local_names.get(&(index as u32));
-					let parameters = (0..params.len() as u32).map(|local| names.and_then(|names| names.get(&local)).cloned().unwrap_or_else(|| format!("${local}"))).collect();
-					add(name, params, results, Role::Function, parameters);
+					let named = meta_parameters(&name).filter(|names| names.len() == params.len());
+					let parameters = named.unwrap_or_else(|| (0..params.len() as u32).map(|local| names.and_then(|names| names.get(&local)).cloned().unwrap_or_else(|| format!("${local}"))).collect());
+					let crosses_nodes = number_types(function_type.params()).is_none() || number_types(function_type.results()).is_none();
+					add(name, params, results, Role::Function, parameters, node_result.filter(|_| crosses_nodes));
 				}
 			}
 			ExternalKind::Global => {
 				let Some(global) = global_types.get(index) else { continue };
 				let Some(value_type) = number_types(&[global.content_type]) else { continue };
 				if global.mutable {
-					add(format!("{SETTER_PREFIX}{name}"), value_type.clone(), value_type.clone(), Role::Setter, vec![name.clone()]);
+					add(format!("{SETTER_PREFIX}{name}"), value_type.clone(), value_type.clone(), Role::Setter, vec![name.clone()], None);
 				}
-				add(name, vec![], value_type, Role::Global { mutable: global.mutable }, vec![]);
+				add(name, vec![], value_type, Role::Global { mutable: global.mutable }, vec![], None);
 			}
 			_ => {}
 		}
@@ -343,6 +353,21 @@ pub fn texts_with_lengths(signature: &FfiSignature) -> Vec<usize> {
 	(0..passed.len()).filter(|index| passed[*index] == CParameter::Text && passed.get(index + 1) == Some(&CParameter::TextLength)).collect()
 }
 
+/// The result kind of a function a warp.meta `functions` entry describes: its signature's `-> type`, any value else
+fn node_result(function: &Node) -> Option<crate::type_kinds::Kind> {
+	let Node::Text(signature) = function["signature"].drop_meta() else { return None };
+	let result = signature.rsplit_once("-> ").map(|(_, result)| result.trim()).unwrap_or_default();
+	Some(crate::analyzer::type_word_kind(result).unwrap_or(crate::type_kinds::Kind::Empty))
+}
+
+/// The types of a warp function's parameters or results: its numbers, a value (a Node of the module) as anyref
+fn node_types(types: &[wasmparser::ValType]) -> Option<Vec<wasm_encoder::ValType>> {
+	types.iter().map(|value_type| match value_type {
+		wasmparser::ValType::Ref(_) => Some(wasm_encoder::ValType::Ref(wasm_encoder::RefType::ANYREF)),
+		number => number_types(std::slice::from_ref(number)).map(|mut types| types.remove(0)),
+	}).collect()
+}
+
 fn number_types(types: &[wasmparser::ValType]) -> Option<Vec<wasm_encoder::ValType>> {
 	types.iter().map(|value_type| match value_type {
 		wasmparser::ValType::I32 => Some(wasm_encoder::ValType::I32),
@@ -351,6 +376,30 @@ fn number_types(types: &[wasmparser::ValType]) -> Option<Vec<wasm_encoder::ValTy
 		wasmparser::ValType::F64 => Some(wasm_encoder::ValType::F64),
 		_ => None,
 	}).collect()
+}
+
+/// The classes of a module warp compiled, as their definitions (its warp.meta `classes`): the program importing it
+/// declares them too, so `P(1, 2)` and its methods are the program's own, and an instance crosses as a value
+pub fn classes(path: &str) -> Vec<Node> {
+	let Some(Node::List(classes, _, _)) = module_bytes(path).ok().and_then(|bytes| crate::meta_section::entry(&bytes, crate::reflection::META_CLASSES)) else { return vec![] };
+	classes.iter().filter_map(|class| match class[crate::reflection::DEFINITION_WORD].drop_meta() {
+		Node::Text(definition) => Some(crate::normalize::without_hints(|| crate::warp_parser::parse(definition)).drop_meta().clone()),
+		_ => None,
+	}).collect()
+}
+
+/// `shapes.P(1, 2)` of a class of the module with that alias (classes): the program's class `P(1, 2)`
+pub fn with_bare_classes(node: Node, alias: &str, classes: &[String]) -> Node {
+	if let Node::Key(receiver, Op::Dot, member) = node.drop_meta() {
+		let constructed = match member.drop_meta() {
+			Node::List(items, Bracket::Round, _) => items.first().map(|word| word.drop_meta().name()),
+			_ => None,
+		};
+		if receiver.drop_meta().name() == alias && constructed.is_some_and(|class| classes.contains(&class)) {
+			return with_bare_classes(member.drop_meta().clone(), alias, classes);
+		}
+	}
+	node.map_children(|child| with_bare_classes(child, alias, classes))
 }
 
 /// The name a module's exports are qualified with: its file stem (`fourty_two.twice(21)`)
@@ -540,9 +589,10 @@ pub fn link(linker: &mut wasmtime::Linker<crate::host::HostState>, module: &wasm
 				}
 				Role::Function => {
 					let function = instance.get_func(&mut caller, &name).ok_or_else(|| wasmtime::format_err!("{path} exports no function {name}"))?;
-					match exports(&path).get(&name).filter(|export| export.crosses_c_values()) {
-						Some(export) => call_c(&mut caller, instance, function, export, arguments, results)?,
-						None => function.call(&mut caller, arguments, results)?,
+					match exports(&path).get(&name) {
+						Some(export) if export.crosses_c_values() => call_c(&mut caller, instance, function, export, arguments, results)?,
+						Some(export) if export.node_result.is_some() => call_with_values(&mut caller, instance, function, arguments, results)?,
+						_ => function.call(&mut caller, arguments, results)?,
 					}
 				}
 			}
@@ -656,6 +706,43 @@ fn call_c(caller: &mut wasmtime::Caller<'_, crate::host::HostState>, instance: w
 		}
 	}
 	Ok(())
+}
+
+/// A call of a function of a module warp compiled that takes or gives values: each value argument is read out of the
+/// program's instance and built in the module's (its texts live in its own memory), the value result the other way
+#[cfg(feature = "native")]
+fn call_with_values(caller: &mut wasmtime::Caller<'_, crate::host::HostState>, instance: wasmtime::Instance, function: wasmtime::Func,
+	arguments: &[wasmtime::Val], results: &mut [wasmtime::Val]) -> wasmtime::Result<()> {
+	let module_arguments = arguments.iter().map(|argument| copied(caller, argument, None, Some(instance))).collect::<wasmtime::Result<Vec<_>>>()?;
+	let mut returned = vec![wasmtime::Val::I32(0); function.ty(&*caller).results().len()];
+	function.call(&mut *caller, &module_arguments, &mut returned)?;
+	for (slot, value) in results.iter_mut().zip(&returned) {
+		*slot = copied(caller, value, Some(instance), None)?;
+	}
+	Ok(())
+}
+
+/// A value of one instance (None: the program's) as the same value in the other one; a number stays itself
+#[cfg(feature = "native")]
+fn copied(caller: &mut wasmtime::Caller<'_, crate::host::HostState>, value: &wasmtime::Val, from: Option<wasmtime::Instance>, into: Option<wasmtime::Instance>) -> wasmtime::Result<wasmtime::Val> {
+	use wasmtime::AsContextMut;
+	if !matches!(value, wasmtime::Val::AnyRef(_)) {
+		return Ok(*value);
+	}
+	let memory = export_of(caller, from, "memory").and_then(wasmtime::Extern::into_memory).ok_or_else(|| wasmtime::format_err!("a value's instance exports no memory"))?;
+	let node = crate::wasm_reader::node_in(value, &mut caller.as_context_mut(), memory);
+	let value = crate::tasks::TaskValue::of(&node).map_err(|failure| wasmtime::format_err!("{failure}"))?;
+	let builders = crate::tasks::Builders::of(&mut |name| export_of(caller, into, name)).map_err(|failure| wasmtime::format_err!("{failure}"))?;
+	builders.build(&value, &mut caller.as_context_mut()).map_err(|failure| wasmtime::format_err!("{failure}"))
+}
+
+/// The export `name` of the instance (None: the program's)
+#[cfg(feature = "native")]
+fn export_of(caller: &mut wasmtime::Caller<'_, crate::host::HostState>, instance: Option<wasmtime::Instance>, name: &str) -> Option<wasmtime::Extern> {
+	match instance {
+		Some(instance) => instance.get_export(&mut *caller, name),
+		None => caller.get_export(name),
+	}
 }
 
 /// A count the program passed (a length, a capacity) as a size

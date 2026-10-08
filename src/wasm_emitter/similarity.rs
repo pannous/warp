@@ -7,6 +7,7 @@
 use super::equality::IS_META_ENTRY;
 use super::text_unicode::CaseMapping;
 use super::{WasmGcEmitter, IS_TRUTHY, VALUES_EQUAL};
+use super::uncertain::UNCERTAIN_SIMILAR;
 use super::text_builtins::{TEXT_OF, TEXT_ROUGH_TRIM};
 use crate::library_words::{VALUES_ROUGH, VALUES_SIMILAR};
 use crate::node::Node;
@@ -57,6 +58,7 @@ impl WasmGcEmitter {
 		if self.should_emit_function(NUMBERS_SIMILAR) {
 			self.emit_numbers_similar();
 		}
+		self.emit_uncertain_similar();
 		let levels = [(VALUES_SIMILAR, false), (VALUES_ROUGH, true)].map(|(name, rough)| (name, rough, self.should_emit_function(name)));
 		if levels.iter().any(|(_, _, needed)| *needed) {
 			self.emit_text_case(TEXT_FOLD, CaseMapping::Fold);
@@ -108,7 +110,7 @@ impl WasmGcEmitter {
 			Self::emit_list(f, &[I::I32And, I::If(BlockType::Empty)]);
 			for (from, to) in [(a, kind_a), (b, kind_b)] {
 				Self::field(f, from, node, 0);
-				f.instruction(&I::LocalSet(to));
+				Self::emit_list(f, &[I::I64Const(crate::type_kinds::UNMARKED_KIND), I::I64And, I::LocalSet(to)]);
 			}
 			// a bool and any value: alike in truthiness
 			Self::emit_list(f, &[I::LocalGet(kind_a), I::I64Const(BOOL_KIND), I::I64Eq, I::LocalGet(kind_b), I::I64Const(BOOL_KIND), I::I64Eq, I::I32Or]);
@@ -118,6 +120,18 @@ impl WasmGcEmitter {
 				s.call(f, IS_TRUTHY);
 			}
 			Self::emit_list(f, &[I::I32Eq, I::Return, I::End]);
+			// an uncertain value: alike within the uncertainty of the difference
+			if s.should_emit_function(UNCERTAIN_SIMILAR) {
+				for kind in [kind_a, kind_b] {
+					Self::emit_list(f, &[I::LocalGet(kind), I::I64Const(KIND_MASK), I::I64And, I::I64Const(Kind::Uncertain as i64), I::I64Eq]);
+				}
+				Self::emit_list(f, &[I::I32Or, I::If(BlockType::Empty)]);
+				for side in [a, b] {
+					Self::emit_list(f, &[I::LocalGet(side), I::RefCastNonNull(HeapType::Concrete(node))]);
+				}
+				call_with_tolerance(s, f, UNCERTAIN_SIMILAR);
+				Self::emit_list(f, &[I::Return, I::End]);
+			}
 			Self::is_number_kind(f, kind_a);
 			Self::is_number_kind(f, kind_b);
 			Self::emit_list(f, &[I::I32And, I::If(BlockType::Empty)]);

@@ -1,10 +1,25 @@
 # Decided questions (user answers)
 
-Answered decisions, newest first; moved out of notes/open_decisions.md on 2026-10-06 (user: "move all the old
-answered questions to a new file"). Older references to "notes/open_decisions.md" + a Decided section, P-number,
-D-number or #number mean this file. Open questions, parked ones and the standing rules stay in notes/open_decisions.md.
+History of answered decisions, newest first. Grep-only: look up a cited number (P71, D5, #10) or grep a topic
+before asking the user; nobody reads it front to back, the code, tests and wiki are the truth (user 2026-10-08:
+"If it's really grep-only, then it's perfect. Otherwise, move them to a history file"). References to
+"notes/open_decisions.md" + a Decided section, P-, D- or #-numbers mean this file. Open and parked questions:
+notes/open_decisions.md.
 
 ## Decided 2026-10-08 (user, as recommended unless quoted)
+- ORM updates (undoable default, supervisor, from the user's own edit of samples/orm.warp; warp-fixer): assigning a
+  field of a stored row (`bo.age += 1`) writes through as an SQL UPDATE; `save bo` is accepted as an explicit write,
+  a no-op when the row is already written.
+- Every major or semi-major feature ships with a sample in samples/, especially the ORM and the server (user, to the
+  supervisor; rule in notes/agents/common.md 2ca368e9f; cards sample-orm, warp-fixer, and sample-server,
+  warp-functions).
+- P224 (card plus-minus-print, warp-class): `<`, `>`, `<=`, `>=` on a ± interval answer only when certain, like
+  Julia's IntervalArithmetic: with `y = 6 ± 1` (5..7) `y < 8` → yes, `y < 4` → no. `≈` stays as P218.
+  P224b (user: "we don't want the application to crash" on values read from outside): no run-time crash.
+  Where the compiler knows a value is ±, a bare comparison is a compile error asking for one of
+  `y certainly < x`, `y possibly < x`, `y.value < x`. Where it can't know (data read at run time), an overlap
+  counts as not certain (`certainly`, the condition is no) and a warning is printed once naming the line, with
+  the hint to write `certainly`, `possibly` or `.value`.
 - `//` is a comment only when followed by a space or the end of the line; otherwise floor division: `x //= 3`,
   `x//=3`, `7//2`, `a //b` divide; `a // b`, `x = 1 // note` are comments (user, emphatic, via the supervisor;
   replaces the 2026-10-03 rule, rewritten in place below). warp-worker implements it.

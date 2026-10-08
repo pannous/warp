@@ -37,10 +37,10 @@ pub fn arithmetic_kind(left: Kind, op: &Op, right: Kind) -> Kind {
 	if *op == Op::Add && [left, right].iter().all(|kind| matches!(kind, Kind::List | Kind::Empty)) && [left, right].contains(&Kind::List) {
 		Kind::List // concatenation
 	} else if *op == Op::Add && (crate::wasm_emitter::text_builtins::concatenates(left, right)
-		|| [left, right].contains(&Kind::Empty) && [left, right].iter().any(|kind| matches!(kind, Kind::Text | Kind::Codepoint)))
+		|| [left, right].iter().any(|kind| matches!(kind, Kind::Empty | Kind::Data)) && [left, right].iter().any(|kind| matches!(kind, Kind::Text | Kind::Codepoint)))
 		|| repeats_text(left, op, right)
 	{
-		// concatenation; a value held as a Node (a map value, an element of one) joining a text; `"ab"*2` repeats, see WasmGcEmitter::emit_text_repeat
+		// concatenation; a value held as a Node (a map value, an element of one, a number of run-time kind) joining a text; `"ab"*2` repeats, see WasmGcEmitter::emit_text_repeat
 		Kind::Text
 	} else if [left, right].iter().any(|kind| matches!(kind, Kind::Text | Kind::Codepoint | Kind::List | Kind::Error | Kind::Function)) {
 		Kind::Error // no implicit conversion (DESIGN.md "Dangerous implicitness"); an error operand stays an error, a function is no number
@@ -118,6 +118,8 @@ pub fn infer_type(node: &Node, scope: &Scope) -> Kind {
 		Node::List(items, bracket, separator) if !items.is_empty() => infer_list_type(node, items, bracket, separator, scope),
 		// a range as a value is the list of its numbers (wasm_emitter emit_range), as `x = 1..5` is
 		Node::Key(_, Op::Range | Op::To, _) => Kind::List,
+		// `5 ± 1` is uncertain, a kind the node arithmetic meets at run time (wasm_emitter/uncertain.rs)
+		Node::Key(_, Op::PlusMinus, _) => Kind::Data,
 		// Arithmetic: upgrade to Float if either operand is Float
 		Node::Key(left, op, right) if op.is_arithmetic() => {
 			arithmetic_kind_of_operands(infer_type(left, scope), op, infer_type(right, scope), right)
@@ -249,6 +251,10 @@ pub(super) fn infer_list_type(node: &Node, items: &[Node], bracket: &Bracket, se
 		if name == crate::library_words::LIST_SUM && items.len() == 3 {
 			return infer_type(&items[2], scope); // the loop it dispatches around
 		}
+		// `data a and b` never runs: it is the literal written, here a Key
+		if name == crate::blocks::DATA_WORD && items.len() == 2 && *bracket == Bracket::None {
+			return match items[1].kind() { Kind::Block => Kind::List, kind => kind };
+		}
 		if RETURNING_KEYWORDS.contains(&name.as_str()) && items.len() == 2 {
 			return infer_type(&items[1], scope); // `return x` is worth x
 		}
@@ -366,6 +372,10 @@ pub(super) fn infer_list_type(node: &Node, items: &[Node], bracket: &Bracket, se
 		if let Node::Symbol(s) = items[0].drop_meta() {
 			if crate::ffi::is_ffi_function(s) {
 				return ffi_call_kind(s);
+			}
+			// `abs(c)`: a variable in parentheses is the variable
+			if let Some(local) = scope.binding(s) {
+				return local.kind;
 			}
 			// Assume zero-arg user function returns Int
 			return Kind::Int;

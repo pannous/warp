@@ -533,8 +533,9 @@ pub mod hints {
     pub fn conditional(used_ternary: bool) {
         let s = style();
         match (used_ternary, s.conditional) {
+            // shown until the user acknowledges it once (card hint-dismiss)
             (true, ConditionalStyle::IfThenElse) => {
-                hint("x ? y : z", "if x then y else z", "if-then-else is more readable")
+                crate::diagnostic::educate_once(CONDITIONAL_TOPIC, "x ? y : z", "if x then y else z", "if-then-else is more readable")
             }
             (false, ConditionalStyle::Ternary) => {
                 hint("if x then y else z", "x ? y : z", "ternary operator is more concise")
@@ -714,6 +715,8 @@ const LIST_TYPE_HEAD: &str = "list";
 const OF_WORD: &str = "of";
 /// The acknowledge-once note that `let` is immutable in warp
 pub const LET_TOPIC: &str = "let";
+/// The acknowledge-once note on `x ? y : z` against `if x then y else z`
+pub const CONDITIONAL_TOPIC: &str = "conditional";
 const STRING_TYPE_NAMES: [&str; 2] = ["str", "String"];
 
 /// The quote character of the canonical string style

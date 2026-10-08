@@ -292,6 +292,7 @@ PASSED:
   ✓ control::test_relational_arms::a_comparison_without_its_left_side_is_an_error
   ✓ control::test_relational_arms::a_match_arm_compares_the_subject
   ✓ control::test_relational_arms::the_operator_value_stays
+  ✓ control::test_run_tests::a_build_leaves_the_tests_out
   ✓ control::test_run_time_block_cache::a_block_in_a_loop_body_sees_the_variables_assigned_there
   ✓ control::test_run_time_block_cache::a_block_run_in_a_loop_with_changing_numbers_compiles_once
   ✓ control::test_run_time_block_cache::a_cached_block_sees_the_values_of_each_run
@@ -1326,11 +1327,14 @@ PASSED:
   ✓ lists::test_lazy_range::a_small_range_variable_is_still_its_list
   ✓ lists::test_linear_append::an_appended_list_of_nodes_keeps_its_items
   ✓ lists::test_linear_append::map_and_filter_of_texts_stay_linear
+  ✓ lists::test_linear_arrays::a_chain_of_numeric_maps_of_a_linear_array_is_one_loop
   ✓ lists::test_linear_arrays::a_float_map_of_a_linear_array_is_a_simd_kernel
   ✓ lists::test_linear_arrays::a_for_loop_over_a_linear_array_gives_its_last_value
   ✓ lists::test_linear_arrays::a_linear_array_checks_its_bounds_and_stays_in_its_task
   ✓ lists::test_linear_arrays::a_linear_array_is_a_list_as_a_whole
   ✓ lists::test_linear_arrays::a_linear_array_reads_and_writes_its_cells
+  ✓ lists::test_linear_arrays::a_numeric_map_of_a_linear_array_writes_a_new_block
+  ✓ lists::test_linear_arrays::a_numeric_map_of_a_mapped_linear_array_writes_a_block_too
   ✓ lists::test_list_arithmetic::test_round_group_of_arithmetic_is_still_an_expression
   ✓ lists::test_list_arithmetic::test_square_list_keeps_all_items_that_are_arithmetic
   ✓ lists::test_list_arithmetic::test_square_list_of_one_arithmetic_item_is_a_list
@@ -1349,6 +1353,7 @@ PASSED:
   ✓ lists::test_list_plus_number::a_list_variable_plus_a_number_stays_a_type_error
   ✓ lists::test_list_plus_number::each_reading_has_its_explicit_form
   ✓ lists::test_list_plus_number::the_explicit_forms_never_ask
+  ✓ lists::test_list_retype::a_list_variable_given_another_element_type_holds_both
   ✓ lists::test_list_truthiness::a_list_of_nothing_is_truthy
   ✓ lists::test_lists::test_array_creation
   ✓ lists::test_lists::test_array_indices
@@ -1755,6 +1760,9 @@ PASSED:
   ✓ numbers::test_declared_float_exact_reals::test_declared_float_reassignment_accepts_exact_reals
   ✓ numbers::test_declared_float_exact_reals::test_declared_float_rounds_an_exact_expression_once
   ✓ numbers::test_declared_float_exact_reals::test_undeclared_and_int_targets_keep_their_rules
+  ✓ numbers::test_div_assign::declared_int_keeps_dividing_whole
+  ✓ numbers::test_div_assign::divide_assign_divides_exactly
+  ✓ numbers::test_div_assign::floor_divide_assign_floors
   ✓ numbers::test_division_by_zero::float_division_by_zero_is_infinity
   ✓ numbers::test_division_by_zero::int_division_by_zero_is_an_error
   ✓ numbers::test_duration_text::a_duration_and_a_date_have_their_text
@@ -2137,6 +2145,7 @@ PASSED:
   ✓ parser::test_dollar_names::dollar_names_survive_eval
   ✓ parser::test_emoji_atoms::an_emoji_is_a_codepoint
   ✓ parser::test_emoji_atoms::an_emoji_sequence_is_one_atom
+  ✓ parser::test_empty_argument::an_empty_argument_of_a_braceless_call
   ✓ parser::test_end_word::a_name_end_stays_a_name
   ✓ parser::test_end_word::end_still_closes_blocks
   ✓ parser::test_entity_table::hello_world_is_the_uniscript_world
@@ -3338,6 +3347,15 @@ PASSED:
   ✓ web::test_routes::without_a_matching_route_the_page_says_so
   ✓ web::test_safari_imports::safaris_engine_reads_the_imports_of_a_task_program
   ✓ web::test_safari_imports::the_page_never_asks_the_engine_for_import_or_export_descriptors
+  ✓ web::test_server_functions_in_page::a_page_build_takes_a_server_function
+  ✓ web::test_server_functions_in_page::a_page_build_warns_that_a_server_function_ships
+  ✓ web::test_server_rpc_everywhere::a_call_in_a_handler_asks_the_server
+  ✓ web::test_server_rpc_everywhere::a_call_in_markup_asks_the_server
+  ✓ web::test_server_rpc_everywhere::a_call_with_a_local_argument_is_refused
+  ✓ web::test_server_rpc_everywhere::a_call_with_a_main_level_argument_asks_the_server
+  ✓ web::test_server_rpc_everywhere::a_fetch_starts_from_its_default
+  ✓ web::test_server_rpc_stub::a_server_function_body_stays_out_of_the_page
+  ✓ web::test_server_rpc_stub::an_uncalled_server_function_stays_out_of_the_page
   ✓ web::test_site::a_program_failing_at_build_time_builds_no_site
   ✓ web::test_site::a_site_holds_the_rendered_page_the_module_and_its_scripts
   ✓ web::test_site::a_site_starting_tasks_runs_its_program_in_a_worker
@@ -3388,10 +3406,15 @@ PASSED:
   ✓ web::test_web_server::a_served_page_with_routes_answers_every_path
   ✓ web::test_web_server::a_server_function_is_called_over_http
   ✓ web::test_web_server::serve_answers_routes
+  ✓ web::test_webgpu::a_chain_of_gpu_maps_is_one_kernel
   ✓ web::test_webgpu::a_compute_shader_runs_over_a_linear_array_in_place
   ✓ web::test_webgpu::a_compute_shader_runs_over_the_numbers
   ✓ web::test_webgpu::a_fragment_shader_reads_the_values_given
   ✓ web::test_webgpu::a_fragment_shader_renders_the_pixels
+  ✓ web::test_webgpu::a_gpu_map_reads_outer_numbers
+  ✓ web::test_webgpu::a_gpu_map_runs_a_numeric_lambda_as_a_kernel
+  ✓ web::test_webgpu::a_gpu_map_runs_on_the_cpu_where_that_is_faster
+  ✓ web::test_webgpu::a_gpu_map_the_gpu_cannot_run_says_why
   ✓ web::test_webgpu::a_render_shader_that_does_not_compile_says_where
   ✓ web::test_webgpu::a_shader_that_does_not_compile_says_where
   ✓ web::test_webgpu::a_value_that_is_no_number_says_so
@@ -3743,4 +3766,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-19 ignored, 3738 passed, 0 failed, 3738 total tested
+19 ignored, 3761 passed, 0 failed, 3761 total tested

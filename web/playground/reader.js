@@ -3,7 +3,7 @@
 // A node is {kind, data, chain}: chain holds the nodes reached through value fields (a list's cons cells), kept flat.
 
 // the order of PAYLOAD_TAGS in reflection.rs
-const PAYLOAD_TAGS = ["null", "node", "int", "float", "string", "i31", "big_int", "ratio", "other"];
+const PAYLOAD_TAGS = ["null", "node", "int", "float", "string", "i31", "big_int", "ratio", "floats", "other"];
 const KIND_INT = "1";
 const KIND_FLOAT = "2";
 const KIND_MASK = 0xFFn;
@@ -33,6 +33,7 @@ function readPayload(module, payload, path) {
 			return { big: { negative: module.reflect_negative(payload) !== 0, limbs } };
 		}
 		case "ratio": return { ratio: [readPayload(module, module.reflect_numerator(payload)), readPayload(module, module.reflect_denominator(payload))] };
+		case "floats": return { floats: Array.from({ length: module.reflect_float_count(payload) }, (_, index) => floatPayload(module.reflect_float(payload, index))) };
 		default: return null;
 	}
 }

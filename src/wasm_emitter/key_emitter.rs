@@ -101,6 +101,11 @@ impl WasmGcEmitter {
 				// Emit the right side as a Node reference
 				let declared = self.declared_type_of(left);
 				self.emit_declared_value(func, declared.as_ref(), right, crate::Kind::Empty);
+				let written = self.scope.lookup(name).is_some_and(|local| local.declared);
+				if let Some(mark) = declared.as_ref().filter(|_| written).and_then(|declared| self.element_mark_of(declared)) {
+					func.instruction(&I::I64Const(mark));
+					self.emit_call(func, super::declared_values::LIST_MARK);
+				}
 				// Store in ref-type local
 				if let Some(local) = self.scope.lookup(name) {
 					func.instruction(&I::LocalTee(local.position));
@@ -166,6 +171,10 @@ impl WasmGcEmitter {
 		} else if *op == Op::Range || *op == Op::To {
 			// Range operators: 0..3 (exclusive) or 0...3 / 0…3 (inclusive)
 			self.emit_range(func, left, right, *op == Op::To);
+		} else if *op == Op::PlusMinus {
+			self.emit_float_value(func, left);
+			self.emit_float_value(func, right);
+			self.emit_call(func, super::uncertain::UNCERTAIN_NEW);
 		} else {
 			self.emit_default_key(func, left, right, op);
 		}

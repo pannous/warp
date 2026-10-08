@@ -10,48 +10,10 @@ const PAGE_ROUTES_EXPORT = "page·routes";
 const PAGE_BITS = 16;
 const STDERR = 2;
 const DARK_MODE_QUERY = "(prefers-color-scheme: dark)";
-// random_seed (crates/warp-runtime host_words.rs): after a seed, xorshift64* as natively, so a seeded program gives the
-// same numbers in both; unseeded, Math.random
-const U64 = (1n << 64n) - 1n;
-let seededRandom = null;
-const seedRandom = seed => { seededRandom = (BigInt.asUintN(64, seed) * 0x9E3779B97F4A7C15n & U64) | 1n; };
-function nextSeeded() {
-	let x = seededRandom;
-	x ^= x >> 12n;
-	x = (x ^ (x << 25n)) & U64;
-	x ^= x >> 27n;
-	seededRandom = x;
-	return x * 0x2545F4914F6CDD1Dn & U64;
-}
-const randomFloat = () => seededRandom === null ? Math.random() : Number(nextSeeded() >> 11n) / 2 ** 53;
-const randomBelow = bound => bound <= 0n ? 0n : seededRandom === null ? BigInt(Math.floor(Math.random() * Number(bound))) : nextSeeded() % bound;
-
 // the standard library's adapters (src/std_adapters.rs, notes/stdlib.md section 7): module → member → function of
-// plain values (plainOfTree / treeOfPlain, as for foreign_call); the parts add theirs (host-files.js file, net and store)
-const STD_ADAPTERS = {
-	json: { parse: text => JSON.parse(text), to_json: (value, classes) => JSON.stringify(classes ? withoutClassTags(value, new Set(classes)) : value) },
-	os: { env: () => null, args: () => [] }, // a page has no environment and no command line
-	regex: {
-		matches: (subject, pattern) => regexOf(pattern).test(subject),
-		first: (subject, pattern) => subject.match(regexOf(pattern))?.[0] ?? null,
-		all: (subject, pattern) => [...subject.matchAll(regexOf(pattern, "g"))].map(found => found[0]),
-		replace: (subject, pattern, replacement) => subject.replace(regexOf(pattern, "g"), replacement),
-	},
-};
-// an instance of one of the program's classes is its fields: {Point: {x: 1}} is {x: 1} (src/std_adapters.rs)
-function withoutClassTags(value, classes) {
-	if (Array.isArray(value)) return value.map(item => withoutClassTags(item, classes));
-	if (value === null || typeof value !== "object") return value;
-	const keys = Object.keys(value);
-	if (keys.length === 1 && classes.has(keys[0]) && value[keys[0]] !== null && typeof value[keys[0]] === "object" && !Array.isArray(value[keys[0]])) return withoutClassTags(value[keys[0]], classes);
-	return Object.fromEntries(keys.map(key => [key, withoutClassTags(value[key], classes)]));
-}
-// what Rust's regex lacks is refused here too, so a pattern means the same in both hosts (src/std_adapters.rs regex_of)
-function regexOf(pattern, flags = "") {
-	const feature = /\(\?<?[=!]/.test(pattern) ? "look-around" : /\\[1-9]/.test(pattern) ? "a backreference" : null;
-	if (feature) throw new Error(`${feature} is not in warp's regex (one engine lacks it): ${pattern}`);
-	return new RegExp(pattern, flags + "u");
-}
+// plain values (plainOfTree / treeOfPlain, as for foreign_call); the parts add them (host-hashes.js, host-files.js)
+const STD_ADAPTERS = {};
+
 // the stored values of `stored x = v` and `local[k]`, by name: the page's localStorage as the worker started
 // (playground.js); those of `session[k]`, its sessionStorage
 const storedValues = {};
@@ -74,7 +36,8 @@ function writeBytes(program, bytes) {
 }
 
 // The parts of the host a program reaches only through some of its imports, each a file that adds itself here:
-// host-files.js, host-hashes.js, host-tasks.js, host-foreign.js (needs host-files.js), host-compiler.js, host-routes.js. A built site
+// host-files.js, host-hashes.js, host-tasks.js, host-foreign.js (needs host-files.js), host-compiler.js, host-routes.js,
+// host-gpu.js, host-timers.js, host-random.js. A built site
 // ships a part only when its module imports one of the part's words (src/site.rs HOST_PARTS); the playground's workers
 // load them all. A part gives any of: words(holder, hooks, access) the host words it adds, access being {program, text,
 // cString} of programImports; imports(holder, hooks) import modules of their own (m, c); importModule(holder, hooks,
@@ -82,7 +45,7 @@ function writeBytes(program, bytes) {
 // started(run) as a run begins; poll(holder) at each check point (sleep, signal_poll); finished(holder, hooks) after a
 // call into the run returned, a failure nobody read or nothing; ended(holder) after the call failed; stopped(holder)
 // when the page drops the run (stopListening); navigated(holder) when the page goes to another path (navigate)
-const HOST_PART_FILES = ["host-files.js", "host-hashes.js", "host-tasks.js", "host-foreign.js", "host-compiler.js", "host-routes.js", "host-gpu.js"];
+const HOST_PART_FILES = ["host-files.js", "host-hashes.js", "host-tasks.js", "host-foreign.js", "host-compiler.js", "host-routes.js", "host-gpu.js", "host-timers.js", "host-random.js"];
 const hostParts = [];
 function addHostPart(part) {
 	hostParts.push(part);
@@ -92,7 +55,6 @@ const eachHostPart = (step, ...values) => hostParts.map(part => part[step]?.(...
 
 // hooks: print(text, fd), module(bytes) (each compiled module), panicked(message) (the compiler's)
 function programImports(holder, hooks) {
-	seededRandom = null; // each run starts unseeded
 	const program = () => holder.exports;
 	const text = (pointer, length) => readText(program(), pointer, length);
 	const cString = pointer => {
@@ -121,7 +83,8 @@ function programImports(holder, hooks) {
 					return module.error_of(module.new_text(pointer, length));
 				}
 			},
-			// std_pure / std_io(module, member, arguments): a word of lib/<module>.warp (src/std_adapters.rs)
+			// std_pure / std_io(module, member, arguments): a word of lib/<module>.warp (src/std_adapters.rs), by the
+			// adapters the parts add (host-hashes.js hash, json and regex; host-files.js file, net, store and os)
 			std_pure: (module, member, argumentList) => stdCall(program(), module, member, argumentList, holder.warnings),
 			std_io: (module, member, argumentList) => stdCall(program(), module, member, argumentList, holder.warnings),
 			// `serve 8080 {…}` (src/web_server.rs): a page cannot listen on a port
@@ -139,15 +102,9 @@ function programImports(holder, hooks) {
 				}
 				checkPoint();
 			},
-			random: randomFloat,
-			random_below: randomBelow,
-			random_seed: seedRandom,
 			clock: () => BigInt(Date.now()),
 			// a page has no ctrl-c: `on interrupt {…}` never runs here (notes/system_signals.md); shared listeners do
 			signal_poll: checkPoint,
-			signal_every: (id, milliseconds) => addTimer(holder, hooks, id, { every: Number(milliseconds) }, "on every …"),
-			signal_daily: (id, minute, weekdays) => addTimer(holder, hooks, id, { minute: Number(minute), weekdays: Number(weekdays) }, "on every day at …"),
-			signal_at: (id, minute) => addTimer(holder, hooks, id, { minute: Number(minute), once: true }, "at 9:00 {…}"),
 			signal_watch: () => { holder.warnings.push("on file … change: a page has no files to watch"); },
 			// system values (crates/warp-runtime/src/system_values.rs): what the browser tells, a loud error for the rest
 			system_value: name => {
@@ -332,49 +289,6 @@ function exactHandle(module, numerator, denominator) {
 		return n < 0n ? module.exact_sub(0n, magnitude) : magnitude;
 	};
 	return denominator === 1n ? integer(numerator) : module.exact_div(integer(numerator), integer(denominator));
-}
-
-// Timers (crates/warp-runtime/src/system_signals.rs): main records them, the page starts them after it (startTimers,
-// in the playground's worker.js and a built site's site.js); a host without a page that stays (test-worker.js) only warns
-const TIMER_HANDLER_PREFIX = "on·every·";
-function addTimer(holder, hooks, id, timer, written) {
-	if (!hooks.listen) return holder.warnings.push(`${written}: timers do not run here`);
-	(holder.timers ??= []).push({ id: Number(id), handler: TIMER_HANDLER_PREFIX + id, ...timer });
-}
-
-// milliseconds from now to the next local minute_of_day on a weekday of the mask (bit 0 Sunday), as seconds_until_on
-const EVERY_DAY = 0b1111111;
-const DAY_MILLISECONDS = 24 * 3600 * 1000;
-function millisecondsUntil(minuteOfDay, weekdays = EVERY_DAY, now = new Date()) {
-	const midnight = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-	for (let daysAhead = 0; daysAhead <= 7; daysAhead++) {
-		const due = new Date(midnight.getFullYear(), midnight.getMonth(), midnight.getDate() + daysAhead, 0, minuteOfDay);
-		if (due > now && (weekdays || EVERY_DAY) & (1 << due.getDay())) return due - now;
-	}
-	return 7 * DAY_MILLISECONDS;
-}
-
-// a run's timers started: `fire(handler)` runs the handler on·every·<id> of each when it is due; stopTimers ends them
-function startTimers(holder, fire) {
-	const handles = [];
-	const atClock = timer => handles.push(setTimeout(() => {
-		fire(timer.handler);
-		if (!timer.once) atClock(timer);
-	}, millisecondsUntil(timer.minute, timer.weekdays)));
-	for (const timer of holder.timers ?? []) {
-		if (timer.every !== undefined) handles.push(setInterval(() => fire(timer.handler), timer.every));
-		else atClock(timer);
-	}
-	holder.stopTimers = () => handles.forEach(handle => { clearTimeout(handle); clearInterval(handle); });
-}
-
-// what a timer says in the page: "every 500 ms", "at 09:00", "every day at 09:00", or the channel its listener reads
-function timerLabel(holder, { id, every, minute, once }) {
-	const channel = holder.channels?.get(id);
-	if (channel) return `message from "${channel.name}"`;
-	if (every !== undefined) return every % 1000 ? `every ${every} ms` : `every ${every / 1000} s`;
-	const time = `${String(Math.floor(minute / 60)).padStart(2, "0")}:${String(minute % 60).padStart(2, "0")}`;
-	return once ? `at ${time}` : `every day at ${time}`;
 }
 
 // a run's timers and channels end with it (the next run, worker.js)

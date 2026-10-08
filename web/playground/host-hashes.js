@@ -1,4 +1,5 @@
-// The hashes of std's hash module in the page (a part of host.js, which says how parts work): SHA-256 and CRC-32
+// std's pure modules in the page (a part of host.js, which says how parts work, shipped with std_pure): hash (SHA-256
+// and CRC-32), json and regex
 
 // SHA-256 (FIPS 180-4) and CRC-32 (IEEE) of bytes, synchronous: host calls cannot await crypto.subtle
 const SHA256_K = Uint32Array.from([0x428a2f98, 0x71374491, 0xb5c0fbcf, 0xe9b5dba5, 0x3956c25b, 0x59f111f1, 0x923f82a4, 0xab1c5ed5,
@@ -41,8 +42,30 @@ const CRC32_TABLE = Uint32Array.from({ length: 256 }, (_, n) => {
 });
 const crc32Of = bytes => (bytes.reduce((crc, byte) => CRC32_TABLE[(crc ^ byte) & 0xff] ^ (crc >>> 8), 0xffffffff) ^ 0xffffffff) >>> 0;
 
+// an instance of one of the program's classes is its fields: {Point: {x: 1}} is {x: 1} (src/std_adapters.rs)
+function withoutClassTags(value, classes) {
+	if (Array.isArray(value)) return value.map(item => withoutClassTags(item, classes));
+	if (value === null || typeof value !== "object") return value;
+	const keys = Object.keys(value);
+	if (keys.length === 1 && classes.has(keys[0]) && value[keys[0]] !== null && typeof value[keys[0]] === "object" && !Array.isArray(value[keys[0]])) return withoutClassTags(value[keys[0]], classes);
+	return Object.fromEntries(keys.map(key => [key, withoutClassTags(value[key], classes)]));
+}
+// what Rust's regex lacks is refused here too, so a pattern means the same in both hosts (src/std_adapters.rs regex_of)
+function regexOf(pattern, flags = "") {
+	const feature = /\(\?<?[=!]/.test(pattern) ? "look-around" : /\\[1-9]/.test(pattern) ? "a backreference" : null;
+	if (feature) throw new Error(`${feature} is not in warp's regex (one engine lacks it): ${pattern}`);
+	return new RegExp(pattern, flags + "u");
+}
+
 addHostPart({
 	adapters: {
 		hash: { sha256: subject => sha256Hex(utf8.encode(contentText(subject))), crc32: subject => crc32Of(utf8.encode(contentText(subject))) },
+		json: { parse: text => JSON.parse(text), to_json: (value, classes) => JSON.stringify(classes ? withoutClassTags(value, new Set(classes)) : value) },
+		regex: {
+			matches: (subject, pattern) => regexOf(pattern).test(subject),
+			first: (subject, pattern) => subject.match(regexOf(pattern))?.[0] ?? null,
+			all: (subject, pattern) => [...subject.matchAll(regexOf(pattern, "g"))].map(found => found[0]),
+			replace: (subject, pattern, replacement) => subject.replace(regexOf(pattern, "g"), replacement),
+		},
 	},
 });

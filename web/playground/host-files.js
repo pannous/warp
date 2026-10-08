@@ -203,6 +203,7 @@ addHostPart({
 		};
 	},
 	adapters: {
+		os: { env: () => null, args: () => [] }, // a page has no environment and no command line
 		// `stored theme = "dark"`, `local[k]`, `session[k]` (src/lowering/stored_values.rs, std_io): the page's values
 		// (markup.js keptValues), each save sent back to it with its store (the dev store of a `warp dev` page, the
 		// session's, else the program's)
@@ -222,7 +223,8 @@ addHostPart({
 				return [...writtenFiles.keys()].filter(path => path.startsWith(prefix) && !path.slice(prefix.length).includes("/")).map(path => path.slice(prefix.length)).sort();
 			},
 		},
-		table: { open: openTable, insert: insertRow, update: updateRow },
+		// a filter compiled natively is an SQL query (a page compiled by the browser keeps filters as comprehensions)
+		table: { open: openTable, insert: insertRow, update: updateRow, select: table => { throw new Error(`a filter of the table ${table} is an SQL query: it runs natively (warp serve)`); } },
 		net: { post: (url, body) => postSync(url, contentText(body)) },
 		// `clipboard.write(text)` (lowering/system_values.rs): a page writes it (markup.js copyText), a Worker has no
 		// clipboard and hands the text to its page (self.writeClipboard: worker.js)

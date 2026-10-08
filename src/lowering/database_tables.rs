@@ -449,11 +449,16 @@ fn table_statements(statement: Node, tables: &HashMap<String, Table>, file: &str
 }
 
 /// `people: [Person] = database.people` as the list of the table's rows, each an instance with its id; then the
-/// one-to-many lists of the open tables its rows point back to
+/// one-to-many lists of the open tables its rows point back to. A plain `people = database.people` of a registered
+/// people opens it again (a served route reading it at each request)
 fn opened(statement: &Node, tables: &HashMap<String, Table>, file: &str, open: &mut Vec<String>) -> Option<Vec<Node>> {
 	let Node::Key(target, Op::Assign, source) = statement.drop_meta() else { return None };
-	let Node::Key(variable, Op::Colon, _) = target.drop_meta() else { return None };
-	let variable = variable.drop_meta().name();
+	let variable = match target.drop_meta() {
+		Node::Key(variable, Op::Colon, _) => variable.drop_meta(),
+		variable @ Node::Symbol(_) => variable,
+		_ => return None,
+	};
+	let variable = variable.name();
 	let table = tables.get(&variable)?;
 	database_table(source)?;
 	if let Some((field, unopened)) = table.references.iter().find(|(_, referenced)| !open.contains(referenced)) {

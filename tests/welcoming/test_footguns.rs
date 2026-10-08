@@ -737,8 +737,8 @@ fn test_modulo_and_remainder_are_both_named() {
 	is!("-6 % 3", 0);
 	is!("x=-7; x % 3", 2);
 	is!("x=-7; x %= 3; x", 2);
-	is!("x=-7; x /= 3; x", -3); // integer /= is the Euclidean quotient: -7 == 3*-3 + 2
-	is!("x=7; x /= -3; x", -2); // 7 == -3*-2 + 1
+	is!("x=-7; x//=3; x", -3); // //= is the Euclidean quotient: -7 == 3*-3 + 2
+	is!("x=7; x//=-3; x", -2); // 7 == -3*-2 + 1
 	is!("(-7/2 % 3) * 2", 5); // exact ratios too: -3.5 % 3 == 2.5
 	// mod is the same operation as %
 	is!("-7 mod 3", 2);

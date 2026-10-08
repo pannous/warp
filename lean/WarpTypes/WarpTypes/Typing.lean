@@ -35,7 +35,7 @@ inductive HasType (P : Program) : Ctx → Expr → Ty → Prop where
   /-- inference.rs arithmetic_kind; operands of other types raise when it runs (gradual: `HasType` means "cannot get
   stuck", the checker demands addable or numeric operands) -/
   | add {Γ a b ta tb} : HasType P Γ a ta → HasType P Γ b tb → HasType P Γ (.add a b) (plus ta tb)
-  | arith {Γ op a b ta tb} : HasType P Γ a ta → HasType P Γ b tb → HasType P Γ (.arith op a b) (arithTy ta tb)
+  | arith {Γ op a b ta tb} : HasType P Γ a ta → HasType P Γ b tb → HasType P Γ (.arith op a b) (op.ty ta tb)
   | lt {Γ a b ta tb} : HasType P Γ a ta → HasType P Γ b tb → HasType P Γ (.lt a b) .bool
   | eq {Γ s a b ta tb} : HasType P Γ a ta → HasType P Γ b tb → HasType P Γ (.eq s a b) .bool
   /-- any condition (truthiness); inference.rs branches_kind -/
@@ -74,6 +74,14 @@ inductive HasType (P : Program) : Ctx → Expr → Ty → Prop where
   | broadcast {Γ f e fn te a} : P.funs f = some fn → HasType P Γ e te → element te = some a → sub a fn.paramTy = true →
       HasType P Γ (.broadcast f e) (.list fn.result)
   | ref {Γ a p} : HasType P Γ (.ref a p) (.cls p)
+  /-- a shared list is typed by the element type it was made with: its items fit that type, which every write checks,
+  so a covariant view `list τ` of it (t ≤ τ) reads items that fit τ -/
+  | lref {Γ a t} : HasType P Γ (.lref a t) (.list t)
+  /-- the items are checked against t when the list is made -/
+  | share {Γ e t te} : HasType P Γ e te → HasType P Γ (.share e t) (.list t)
+  /-- the item is checked against the list's own element type when it runs -/
+  | push {Γ l v tl tv} : HasType P Γ l tl → HasType P Γ v tv → HasType P Γ (.push l v) tl
+  | setAt {Γ l i v tl ti tv} : HasType P Γ l tl → HasType P Γ i ti → HasType P Γ v tv → HasType P Γ (.setAt l i v) tv
   | new {Γ p} : HasType P Γ (.new p) (.cls p)
   /-- field access: the field type of the static class (or of an ancestor) -/
   | get {Γ e f te} : HasType P Γ e te → HasType P Γ (.get e f) (P.readTy te f)

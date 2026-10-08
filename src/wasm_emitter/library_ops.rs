@@ -1,5 +1,6 @@
 //! Runtime functions of the library words (`reverse`, `sort`, `upper`, `lower`, `split`, `join`), see library_words.rs
 
+use crate::node::{Bracket, Node};
 use crate::operators::{op_to_code, Op};
 use crate::type_kinds::{Kind, KIND_MASK};
 use crate::wasm_emitter::WasmGcEmitter;
@@ -382,10 +383,18 @@ impl WasmGcEmitter {
 	/// list_text(list, separator), the text of a list (`str(xs)`), also takes nested lists, each as "[…]" ("{…}" for a
 	/// map), entries as "key:value", symbols as their names and texts quoted (P126: `["a" "b"]`, `p{name:"a"}`)
 	fn emit_list_join(&mut self) {
-		for (name, nested) in [(LIST_JOIN, false), (LIST_TEXT, true)] {
-			if self.should_emit_function(name) {
-				self.emit_joining(name, nested);
-			}
+		let joinings = [(LIST_JOIN, false), (LIST_TEXT, true)].into_iter().filter(|(name, _)| self.should_emit_function(name)).collect::<Vec<_>>();
+		if joinings.is_empty() {
+			return;
+		}
+		// the functions both call, once
+		self.emit_text_quoted();
+		self.emit_text_heap_global();
+		self.emit_int_to_decimal();
+		self.emit_exact_text();
+		self.emit_float_text(); // after int_to_decimal, which it calls
+		for (name, nested) in joinings {
+			self.emit_joining(name, nested);
 		}
 	}
 
@@ -437,11 +446,6 @@ impl WasmGcEmitter {
 	}
 
 	fn emit_joining(&mut self, name: &'static str, nested: bool) {
-		self.emit_text_quoted();
-		self.emit_text_heap_global();
-		self.emit_int_to_decimal();
-		self.emit_exact_text();
-		self.emit_float_text(); // after int_to_decimal, which it calls
 		let float_box = self.type_manager.f64_box_type;
 		let exact_numbers = self.should_emit_function(crate::wasm_emitter::exact::EXACT_TEXT);
 		let texts = [self.allocate_string("["), self.allocate_string("]"), self.allocate_string(" ")];
@@ -722,14 +726,29 @@ impl WasmGcEmitter {
 	}
 
 	/// Push the node in `local` (not null), a `key:value` entry as the one-entry map `{key:value}` it stands for, so its
-	/// text keeps the braces: `{a:{b:1}}` is the entry a:(b:1) at run time and would write a:b:1
+	/// text keeps the braces: `{a:{b:1}}` is the entry a:(b:1) at run time and would write a:b:1. A tag, an entry whose
+	/// value is a map (`data point{x:1}`), writes as an instance does, its name before its braces (card data-tag)
 	pub(super) fn emit_entry_in_braces(&self, f: &mut Function, local: u32) {
 		let node_type = self.type_manager.node_type;
 		let entry_kind_mask = (OP_INFO_MASK << KIND_BITS) | KIND_MASK;
 		let colon_entry_kind = (crate::operators::op_to_code(&crate::operators::Op::Colon) << KIND_BITS) | KEY_KIND;
 		self.emit_field(f, local, 0);
 		Self::emit_list(f, &[I::I64Const(entry_kind_mask), I::I64And, I::I64Const(colon_entry_kind), I::I64Eq, I::If(BlockType::Result(Ref(self.node_ref(false))))]);
-		Self::emit_list(f, &[I::I64Const(CURLY_LIST_KIND), I::LocalGet(local), I::RefNull(HeapType::Concrete(node_type)), I::StructNew(node_type)]);
+		if !self.writes_tags {
+			Self::emit_list(f, &[I::I64Const(CURLY_LIST_KIND), I::LocalGet(local), I::RefNull(HeapType::Concrete(node_type)), I::StructNew(node_type)]);
+			return Self::emit_list(f, &[I::Else, I::LocalGet(local), I::RefAsNonNull, I::End]);
+		}
+		self.emit_field(f, local, 2);
+		Self::emit_list(f, &[I::RefIsNull, I::If(BlockType::Result(ValType::I64)), I::I64Const(0), I::Else]);
+		self.emit_field(f, local, 2);
+		Self::emit_list(f, &[I::StructGet { struct_type_index: node_type, field_index: 0 }, I::End]);
+		let list_kind_mask = (BRACKET_INFO_MASK << KIND_BITS) | KIND_MASK;
+		Self::emit_list(f, &[I::I64Const(list_kind_mask), I::I64And, I::I64Const(CURLY_LIST_KIND), I::I64Eq, I::If(BlockType::Result(Ref(self.node_ref(false))))]);
+		Self::emit_list(f, &[I::I64Const(KEY_KIND)]);
+		self.emit_field(f, local, 1);
+		self.emit_field(f, local, 2);
+		Self::emit_list(f, &[I::StructNew(node_type), I::Else]);
+		Self::emit_list(f, &[I::I64Const(CURLY_LIST_KIND), I::LocalGet(local), I::RefNull(HeapType::Concrete(node_type)), I::StructNew(node_type), I::End]);
 		Self::emit_list(f, &[I::Else, I::LocalGet(local), I::RefAsNonNull, I::End]);
 	}
 
@@ -943,5 +962,25 @@ impl WasmGcEmitter {
 			s.call(f, FIELDS_GROW);
 			Self::emit_list(f, &[I::End, I::LocalGet(object)]);
 		});
+	}
+}
+
+/// A tag quoted as data anywhere in the program (`p = data point{x:1}`): an entry whose value is a map. Markup
+/// (`p{ "hello" }`) has the same shape but is no data, so a page's list_text needs no tag check
+pub(super) fn mentions_quoted_tag(node: &Node) -> bool {
+	match node.drop_meta() {
+		Node::List(items, _, _) if crate::lowering::run_time_blocks::is_data(node) => items.iter().skip(1).any(mentions_tag),
+		Node::Key(left, _, right) => mentions_quoted_tag(left) || mentions_quoted_tag(right),
+		Node::List(items, _, _) => items.iter().any(mentions_quoted_tag),
+		_ => false,
+	}
+}
+
+fn mentions_tag(node: &Node) -> bool {
+	match node.drop_meta() {
+		Node::Key(_, Op::Colon, value) if matches!(value.drop_meta(), Node::List(_, Bracket::Curly, _)) => true,
+		Node::Key(left, _, right) => mentions_tag(left) || mentions_tag(right),
+		Node::List(items, _, _) => items.iter().any(mentions_tag),
+		_ => false,
 	}
 }

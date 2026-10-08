@@ -438,7 +438,7 @@ impl WasmGcEmitter {
 			Self::return_if(f, 0);
 			for (from, to) in [(0, 2), (1, 3)] {
 				Self::field(f, from, node, 0);
-				f.instruction(&I::LocalSet(to));
+				Self::emit_list(f, &[I::I64Const(crate::type_kinds::UNMARKED_KIND), I::I64And, I::LocalSet(to)]);
 			}
 			s.emit_character_equals_text(f, node, recurse);
 			f.instruction(&I::LocalGet(2));
@@ -569,8 +569,7 @@ impl WasmGcEmitter {
 			Self::emit_list(f, &[I::F64Eq, I::Return, I::End]);
 			f.instruction(&I::I32Const(0));
 		});
-		let idx = self.func_index(VALUES_EQUAL);
-		self.exports.export(VALUES_EQUAL, ExportKind::Func, idx);
+		self.export_runtime_function(VALUES_EQUAL);
 	}
 
 	/// is_truthy(x: anyref) -> i32, the rule of `Node::is_falsy`; locals: kind
@@ -667,7 +666,6 @@ impl WasmGcEmitter {
 			f.instruction(&I::End);
 			f.instruction(&I::I32Const(1));
 		});
-		let idx = self.func_index(IS_TRUTHY);
-		self.exports.export(IS_TRUTHY, ExportKind::Func, idx);
+		self.export_runtime_function(IS_TRUTHY);
 	}
 }

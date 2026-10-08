@@ -25,6 +25,8 @@ pub(crate) fn computed_literal_kind(value: &Node) -> Option<Kind> {
 					_ => Some(Kind::Int),
 				},
 				(Kind::Float | Kind::Int, Kind::Float | Kind::Int) => Some(Kind::Float),
+				// `"5"*3` repeats the text (card repeat-int)
+				(left_kind, right_kind) if super::inference::repeats_text(left_kind, op, right_kind) => Some(Kind::Text),
 				_ => None,
 			}
 		}
@@ -810,6 +812,16 @@ pub(super) fn infer_parameters_from_calls(ctx: &mut Context, program: &Node) {
 		}
 	});
 	ctx.parameter_conflicts.extend(float_for_int);
+	// a value its body gives the parameter is one more kind it holds; with no call of known kind it starts as an Int
+	for (name, function) in &ctx.user_functions {
+		for (index, param) in function.params.iter().enumerate() {
+			let assigned = assigned_literal_kinds(&function.body, &param.name);
+			if !assigned.is_empty() {
+				let kinds = argument_kinds.entry((name.clone(), index)).or_insert_with(|| vec![param.used_as.unwrap_or(Kind::Int)]);
+				kinds.extend(assigned.into_iter().filter(|kind| !kinds.contains(kind)).collect::<Vec<_>>());
+			}
+		}
+	}
 	for ((name, index), kinds) in argument_kinds {
 		let function = ctx.user_functions.get_mut(&name).expect("call sites were collected from known functions");
 		let param = &mut function.params[index];
@@ -824,6 +836,23 @@ pub(super) fn infer_parameters_from_calls(ctx: &mut Context, program: &Node) {
 			[] => {}
 		}
 	}
+}
+
+/// The kinds of the literals `body` assigns to `name` (`n = "x"`), a character as a text
+fn assigned_literal_kinds(body: &Node, name: &str) -> Vec<Kind> {
+	let mut kinds = vec![];
+	body.visit(&mut |node| {
+		let Node::Key(target, Op::Assign, value) = node else { return };
+		if !matches!(target.drop_meta(), Node::Symbol(target) if target == name) {
+			return;
+		}
+		if let Some(kind) = argument_literal_kind(value).map(|kind| if kind == Kind::Codepoint { Kind::Text } else { kind }) {
+			if !kinds.contains(&kind) {
+				kinds.push(kind);
+			}
+		}
+	});
+	kinds
 }
 
 /// Infer every return kind again knowing all user functions (they shadow FFI names, recursion assumes Int first),

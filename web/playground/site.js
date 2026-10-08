@@ -20,7 +20,8 @@ const siteHooks = {
 	instantiated: holder => { site = holder; },
 	print: (text, stream) => (stream === 2 ? console.error : console.log)(text.replace(/\n$/, "")),
 	listen: holder => {
-		startTimers(holder, handler => showAfter(runTimer(holder, siteHooks, handler)));
+		// only a page whose program has timers loads host-timers.js
+		if (holder.timers) startTimers(holder, handler => showAfter(runTimer(holder, siteHooks, handler)));
 	},
 	arrived: (holder, handler) => holder === site && showAfter(runTimer(holder, siteHooks, handler)),
 };
