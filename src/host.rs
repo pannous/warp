@@ -733,8 +733,28 @@ fn route_value(caller: &mut Caller<'_, HostState>, function: &str, request: &Nod
 fn std_call(mut caller: Caller<'_, HostState>, module: HostNode, member: HostNode, arguments: HostNode) -> wasmtime::Result<HostNode> {
 	let [module, member, arguments] = [module, member, arguments].map(|value| given_node(&mut caller, value));
 	let (module, member) = (module?.name(), member?.name());
-	let answer = crate::std_adapters::call(&module, &member, &arguments?).map_err(|problem| wasmtime::Error::new(crate::tasks::TaskFailure(problem)))?;
+	let answer = match (module.as_str(), member.as_str()) {
+		("table", "select") => queried_rows(&mut caller, &arguments?)?,
+		_ => crate::std_adapters::call(&module, &member, &arguments?).map_err(|problem| wasmtime::Error::new(crate::tasks::TaskFailure(problem)))?,
+	};
 	built_in_program(&mut caller, &answer, &format!("{module}.{member}"))
+}
+
+/// The ids a filter's query keeps (database.rs select), its warp_call calling the program's functions back; a function
+/// that fails fails the query with its own error (the trap, whose trap_detail says what went wrong)
+#[cfg(feature = "native")]
+fn queried_rows(caller: &mut Caller<'_, HostState>, arguments: &Node) -> wasmtime::Result<Node> {
+	let mut trapped = None;
+	let rows = crate::database::select(&arguments.children(), &mut |function, request| route_value(caller, function, request).map_err(|trap| {
+		let problem = format!("{trap:#}");
+		trapped.get_or_insert(trap);
+		problem
+	}));
+	match (rows, trapped) {
+		(Ok(rows), _) => Ok(rows),
+		(Err(_), Some(trap)) => Err(trap),
+		(Err(problem), None) => Err(wasmtime::Error::new(crate::tasks::TaskFailure(format!("table.select: {problem}")))),
+	}
 }
 
 /// The node a host word was given, read out of the caller's instance
