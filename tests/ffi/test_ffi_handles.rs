@@ -1,16 +1,16 @@
 // C pointers cross as handle ids (card ffi-handles, notes/ffi_handles.md): a pointer result (sqlite3 *, FILE *) is an id
 // into the run's handle table, 0 is NULL; a struct-pointer parameter takes such an id; an out-pointer (sqlite3 **ppDb)
-// is left out of the wasp call and becomes its result, NULL there is a loud error with the C status
+// is left out of the warp call and becomes its result, NULL there is a loud error with the C status
 #![cfg(feature = "native")]
 use crate::is;
 
-const OPEN_AND_PREPARE: &str = "use sqlite3; db = sqlite3_open(\":memory:\"); stmt = sqlite3_prepare_v2(db, \"select 1+2, 'wasp'\", -1)";
+const OPEN_AND_PREPARE: &str = "use sqlite3; db = sqlite3_open(\":memory:\"); stmt = sqlite3_prepare_v2(db, \"select 1+2, 'warp'\", -1)";
 
 #[test]
 fn a_sqlite_session_runs_on_handles() {
 	is!(&format!("{OPEN_AND_PREPARE}; sqlite3_step(stmt)"), 100); // SQLITE_ROW
 	is!(&format!("{OPEN_AND_PREPARE}; sqlite3_step(stmt); sqlite3_column_int(stmt, 0)"), 3);
-	is!(&format!("{OPEN_AND_PREPARE}; sqlite3_step(stmt); sqlite3_column_text(stmt, 1)"), "wasp");
+	is!(&format!("{OPEN_AND_PREPARE}; sqlite3_step(stmt); sqlite3_column_text(stmt, 1)"), "warp");
 	is!(&format!("{OPEN_AND_PREPARE}; sqlite3_step(stmt); sqlite3_step(stmt)"), 101); // SQLITE_DONE
 	is!(&format!("{OPEN_AND_PREPARE}; sqlite3_finalize(stmt); sqlite3_close(db)"), 0);
 }

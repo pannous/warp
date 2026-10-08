@@ -13,6 +13,7 @@ const BRACKET_INFO_MASK: i64 = 0xff;
 const OP_INFO_MASK: i64 = 0xff;
 const INSTANCE_OP_CODE: i64 = 0;
 use crate::wasm_emitter::layout::BYTE;
+use crate::wasm_emitter::text_unicode::CaseMapping;
 
 const KEY_KIND: i64 = Kind::Key as i64;
 /// An i64 has at most 19 digits, plus the sign
@@ -69,8 +70,8 @@ impl WasmGcEmitter {
 		if self.should_emit_function(NODE_ORDER) {
 			self.emit_node_order();
 		}
-		self.emit_text_case("text_upper", true);
-		self.emit_text_case("text_lower", false);
+		self.emit_text_case("text_upper", CaseMapping::Upper);
+		self.emit_text_case("text_lower", CaseMapping::Lower);
 		self.emit_text_split();
 		self.emit_list_join();
 		self.emit_list_sort(); // after text_chars and list_join: a text sorts its characters

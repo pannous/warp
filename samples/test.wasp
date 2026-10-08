@@ -1,5 +1,0 @@
-#!/usr/bin/env wasp
-real x = 3 // a declaration needs a value: `real x;` alone leaves x undefined
-int, string, array, json
-x*x
-2+2π

@@ -1,5 +1,5 @@
 //! `type Point: {` with its fields on the lines below declares them, as `type Point {` does (the colon read the braces as
-//! an indented block and nested them: 'Point has no field x'; samples/particles.wasp)
+//! an indented block and nested them: 'Point has no field x'; samples/particles.warp)
 use crate::is;
 
 #[test]

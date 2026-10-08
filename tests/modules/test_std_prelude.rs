@@ -1,7 +1,7 @@
-//! lib/prelude.wasp (card std-prelude-module, notes/stdlib.md §8): the wasp-written words every program has without
+//! lib/prelude.warp (card std-prelude-module, notes/stdlib.md §8): the warp-written words every program has without
 //! `use`, formerly templates in the compiler; spellings and method forms still reach them
 use crate::is;
-use warp::wasp_parser::parse;
+use warp::warp_parser::parse;
 
 #[test]
 fn the_prelude_words_work_without_use() {

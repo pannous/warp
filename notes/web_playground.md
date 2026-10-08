@@ -20,12 +20,12 @@ build switch, silenced hints) sit in the header's ⋯ menu; the run time is a sm
 
 ## The language guide (guide.md, guide.js)
 The left pane of the page (cards "core feature", "doc-example"; P188 one page): web/playground/guide.md, chapters `## Title` from
-easy to advanced, one open at a time (anchor `#<title-in-kebab-case>`). A fence ```` ```wasp => <value> ```` is a snippet
+easy to advanced, one open at a time (anchor `#<title-in-kebab-case>`). A fence ```` ```warp => <value> ```` is a snippet
 with a `try ▶` button (window.playground.runCode) and the value the page shows for it; an `Examples: a, "b c"; samples:
 x, y` line links tour examples and samples/ files, and choosing one of those shows a toolbar back-link "guide: <chapter>".
 tests/web/test_guide.rs checks every fence's value through warp::web::evaluate (the page's own report) and every linked
 example. Write snippets in canonical style (`^`, `\(name)`, `xs#1`, `if … then … else`): the page shows hints otherwise.
-Markup values show as wasp data there (`p{class:"note" "hello"}`), not as HTML like the CLI.
+Markup values show as warp data there (`p{class:"note" "hello"}`), not as HTML like the CLI.
 
 ## Architecture
 - The compiler itself runs in the browser: `cargo rustc --lib --crate-type cdylib --target wasm32-unknown-unknown
@@ -51,7 +51,7 @@ Markup values show as wasp data there (`p{class:"note" "hello"}`), not as HTML l
   browser" when called.
 
 ## From the C++ version (~/wasp/docs, wasp.pannous.com)
-- Reused: CodeMirror 5 + simple mode (copied to web/playground/codemirror/), the wasp syntax mode (rewritten with word
+- Reused: CodeMirror 5 + simple mode (copied to web/playground/codemirror/), the warp syntax mode (rewritten with word
   boundaries and warp's comment rules), example menu + `?example=` URL parameter, run-while-typing, download wasm.
 - Not taken: the C++ runtime's linear-memory node ABI (string/array headers, smartResult), binaryen wasm→wat,
   deploy-to-lambda, the canvas/DOM externref bridge (`$canvas.getContext`) — candidates for later host imports.
@@ -122,7 +122,7 @@ web/playground/tests.html in headless Chrome (agent-browser, session warp-browse
 - card coi-headless (2026-10-08): the reload does happen, on warp.pannous.com and a plain local server, in a fresh
   profile of headless Chrome (agent-browser) and of WebKit 26 (Playwright, probes/webkit_samples.mjs, 3 of 3). Without
   isolation (service worker blocked: ISOLATED=no in that probe, a private window) tasks take turns: `tasks` prints out
-  of order, samples/threads.wasp and async.wasp hang. No fallback can make them parallel without shared memory (the
+  of order, samples/threads.warp and async.warp hang. No fallback can make them parallel without shared memory (the
   program blocks on a task's result with Atomics.wait; only JSPI could suspend instead, not in Safari), so the run says
   why: host-tasks.js TASKS_INLINE as a warning, and the page's 10 s timeout names it (worker message "tasks inline").
 
@@ -137,7 +137,7 @@ web/playground/tests.html in headless Chrome (agent-browser, session warp-browse
 
 ## A clean console, checked (card console-errors, user 2026-10-08)
 - The red lines were the compiler's searches: `use math` asks ., include, lib, lib/extra, src, source, samples for
-  math.wasp/.warp before the embedded module, a C header search asks lib/host.h…; every miss was a 404 in the console
+  math.warp/.warp before the embedded module, a C header search asks lib/host.h…; every miss was a 404 in the console
   (Firefox shows worker XHRs; ~46 per sample). Now build.sh writes served-files.js (the server's files: git ls-files
   locally, `build.sh served _site` for the deploy) and host-files.js getSync answers an unlisted path "missing" without
   asking. Also: an inline 🐝 favicon (favicon.ico 404), CodeMirror fixedGutter off (Firefox's scroll-linked warning).
@@ -149,7 +149,11 @@ web/playground/tests.html in headless Chrome (agent-browser, session warp-browse
   console_watch.mjs attaches over CDP (`agent-browser get cdp-url`) to every target: Runtime + Log + Network (Chrome's
   Log omits a worker's failed request). pages.yml runs it on _site before deploy and on the live page after (job verify).
 - Not ours: `TypeError … shiftKey … inject.js` in the user's Firefox is a browser extension's content script.
-- Open: the gate in headless Firefox (card console-errors-step).
+- Firefox too (card console-errors-step): `--examples --firefox` drives headless Firefox over WebDriver BiDi
+  (firefox_driver.mjs: log.entryAdded + network.responseCompleted, workers included; a fresh profile per run). On macOS
+  it starts Firefox with `open -n -g`: a terminal's child may not read ~/Library/Application Support/Firefox (privacy
+  protection), and Firefox then stops with "Could not find profile folder" even with --profile. pages.yml runs both
+  browsers, before deploy and after.
 
 ## Modules and packages in the browser (2026-10-04)
 The compiler reads files through the page: `warp_host.fetch(address)` / `take_fetched` (web.rs `read_bytes`, cached
@@ -158,7 +162,7 @@ URL: module sources, C modules (`import tests/fixtures/wasm/zlib`: zlib.wasm and
 page's own files go by `page:` (web.rs PAGE_PREFIX, host.js resolves it against the worker's URL, since the page is
 web/playground/ locally but the site root when deployed): `use c` reads page:lib/libc.h (ffi_parser PAGE_INCLUDE), no
 WARP_INCLUDE (2026-10-06, card use-import; before, the page had no headers: `strlen("hello")` gave 0). The deploy
-copies the tour's C module to _site/tests/fixtures/wasm/ (pages.yml), tour example "C libraries". A registered package (packages.wasp) is read from its
+copies the tour's C module to _site/tests/fixtures/wasm/ (pages.yml), tour example "C libraries". A registered package (packages.warp) is read from its
 GitHub raw files at the pinned tag (`raw.githubusercontent.com/<owner>/<repo>/v<version>/…`, served to any page), so
 `use uniscript` works; a program's `read(path)` of a URL (the package's data/entities.idx) fetches its bytes as they
 are (host.js `readBytes`, no newline added, like the native read). Browser suite: 1452 passed, 15 failed (inherent);
@@ -200,8 +204,8 @@ the_strict_flag_turns_warnings_into_errors before).
 ## paint: a canvas in the page (2026-10-06, issue #15)
 `paint(pixels, width, height)` is a host word (src/host.rs PAINT): host.js reads the pixel list and hands it to the
 worker's hooks.paint, the page draws one canvas per call under the output (playground.js showPaintings: nonzero/true
-is ink, 0 paper). Natively it writes a grayscale PNG to <temp>/warp-paint/paint.png (src/paint.rs, flate2 + crc32fast), prints its path and opens it on a terminal. samples/circle.wasp is the issue's demo as
-written (one loop moving x and y together, so it paints only a short diagonal), samples/filled_circle.wasp the filled
+is ink, 0 paper). Natively it writes a grayscale PNG to <temp>/warp-paint/paint.png (src/paint.rs, flate2 + crc32fast), prints its path and opens it on a terminal. samples/circle.warp is the issue's demo as
+written (one loop moving x and y together, so it paints only a short diagonal), samples/filled_circle.warp the filled
 circle with two loops.
 
 ### Wasm memory limit across Workers (card browser-test, 2026-10-06)
@@ -216,7 +220,7 @@ whose failed allocation frees its own garbage. Still possible: the other test wo
 ends on about:blank), a declared memory maximum (still ~8 GB reserved).
 
 ## First markup run (card guide-warmup, 2026-10-08)
-- The first markup program a worker compiles pays a one-time cost (the markup renderer, lib/markup.wasp's to_html):
+- The first markup program a worker compiles pays a one-time cost (the markup renderer, lib/markup.warp's to_html):
   live, a fresh page measured 470–560 ms in headless Chrome and 0.6–4.4 s in WebKit 26, later markup runs ~80–120 ms,
   other programs none. After a run is shown the page asks its worker once to warm up (playground.js warmWorker →
   worker.js warmUp: `p{ "" }` evaluated with the worker's messages silenced, skipped over a live run). With it the

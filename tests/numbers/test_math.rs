@@ -139,8 +139,8 @@ fn test_logarithm_in_runtime() {
 }
 
 #[test]
-fn test_sinus_wasp_import() {
-	// using sin.wasp, not sin.wasm
+fn test_sinus_warp_import() {
+	// using sin.warp, not sin.wasm
 	// todo: compile and reuse sin.wasm if unmodified
 	is!("use sin;sin π/2", 1);
 	is!("use sin;sin π", 0);
@@ -279,7 +279,7 @@ fn test_sqrt_alias() {
 }
 
 #[test]
-#[allow(clippy::approx_constant)] // 3.14 is the wasp literal under test, not π
+#[allow(clippy::approx_constant)] // 3.14 is the warp literal under test, not π
 fn test_abs_alias() {
 	is!("abs -3", 3);
 	is!("abs 3", 3);

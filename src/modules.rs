@@ -1,9 +1,9 @@
 //! `use <name>` file modules: `name.wasp` or `name.warp` is loaded and its definitions become part of the program.
-//! A name found nowhere locally but in the registry packages.wasp is a package: its git repository, fetched into packages/<name>.
+//! A name found nowhere locally but in the registry packages.warp is a package: its git repository, fetched into packages/<name>.
 use crate::node::{error, Bracket, Node, Separator};
 use crate::operators::{is_function_keyword, Op};
 use crate::versions::{declared_version, is_version_keyword, version_of, Requirement, Version, MINIMUM_KEYWORD};
-use crate::wasp_parser::WaspParser;
+use crate::warp_parser::WarpParser;
 use std::collections::HashSet;
 use std::path::{Path, PathBuf};
 use std::process::Command;
@@ -21,7 +21,7 @@ const USE_KEYWORD: &str = "use";
 /// `from list import zip, unique`: only those words of the module
 const IMPORT_KEYWORD: &str = "import";
 /// name: "git url" for every package, compiled in so warp finds it from any directory
-const PACKAGE_REGISTRY: &str = include_str!("../packages.wasp");
+const PACKAGE_REGISTRY: &str = include_str!("../packages.warp");
 /// the directory of the file it is written in, as text: `read(module_directory + "/data/x")` finds a module's own files
 const MODULE_DIRECTORY: &str = "module_directory";
 /// A module word a program variable shadows is renamed apart: `words` of lib/text is `lib·words` in its definitions
@@ -93,7 +93,7 @@ pub fn insert_module_classes(program: Node) -> Node {
 			},
 		};
 		// a look for classes only: the loader's own read of a file module hints it, a standard module never
-		let module = crate::normalize::without_hints(|| WaspParser::parse(&source));
+		let module = crate::normalize::without_hints(|| WarpParser::parse(&source));
 		if module.first_error().is_some() {
 			continue; // the loader reports it
 		}
@@ -280,7 +280,7 @@ struct Sibling {
 enum Scope {
 	/// the files of the program's folder
 	Folder,
-	/// every file below the package folder: the nearest folder holding `<folder name>.wasp`
+	/// every file below the package folder: the nearest folder holding `<folder name>.warp`
 	Package,
 	/// every file below the project root: the nearest folder holding .git
 	Project,
@@ -333,7 +333,7 @@ fn package_root(folder: &Path) -> Result<PathBuf, Node> {
 		MODULE_EXTENSIONS.iter().any(|extension| directory.join(format!("{name}.{extension}")).is_file())
 	};
 	absolute.ancestors().find(holds_its_module).map(Path::to_path_buf)
-		.ok_or_else(|| error(&format!("use package: no package folder around {}: a package folder holds <folder name>.wasp", folder.display())))
+		.ok_or_else(|| error(&format!("use package: no package folder around {}: a package folder holds <folder name>.warp", folder.display())))
 }
 
 fn project_root(folder: &Path) -> Result<PathBuf, Node> {
@@ -346,7 +346,7 @@ impl Sibling {
 	/// The statements of the file; a file that does not parse is reported and contributes nothing
 	fn statements(&mut self) -> Result<&[Node], Node> {
 		if self.statements.is_none() {
-			let module = WaspParser::parse(&self.source);
+			let module = WarpParser::parse(&self.source);
 			let parsed = match module.first_error() {
 				Some(failure) => {
 					let warning = crate::diagnostic::Diagnostic::at(&module, format!("folder scope skips {}: {}", self.path.display(), failure.serialize()));
@@ -412,7 +412,7 @@ impl<'a> Loader<'a> {
 	}
 
 	/// The standard definitions with the words of a module only other standard modules use renamed apart
-	/// (`take` → `lib·take` when lib/text.wasp's `use list` brought it): the program sees a module's words only with
+	/// (`take` → `lib·take` when lib/text.warp's `use list` brought it): the program sees a module's words only with
 	/// its own `use`, a bare `take` is the error naming the module
 	fn hidden_apart(&self) -> Vec<Node> {
 		let hidden: Vec<&String> = self.std_modules_of_std_modules.iter().filter(|module| !self.program_std_modules.contains(*module)).flat_map(|module| std_module_definitions(module).unwrap_or_default()).collect();
@@ -513,7 +513,7 @@ impl<'a> Loader<'a> {
 		self.load(import, name, path)
 	}
 
-	/// A registered package: fetched once, then its module `<name>.wasp` if it has one; a package without is data.
+	/// A registered package: fetched once, then its module `<name>.warp` if it has one; a package without is data.
 	/// A required version the default branch does not declare comes from the matching git tag.
 	fn use_package(&mut self, name: &str, requirement: Option<&Requirement>) -> Result<Vec<Node>, Node> {
 		let mut directory = package_directory(name).map_err(|failure| error(&failure))?;
@@ -529,19 +529,16 @@ impl<'a> Loader<'a> {
 		}
 	}
 
-	/// The standard modules a program uses without `use`: the file module for a file URL (P183), the prelude words it
+	/// The standard modules a program uses without `use`: those IMPLICIT_MODULES picks for it, the prelude words it
 	/// mentions (P171); a module the program used is loaded already
 	fn implicit_std_modules(&mut self, program: &Node) -> Result<(), Node> {
-		let mut mentioned = HashSet::new();
-		let mut file_url = false;
-		program.visit(&mut |node| match node {
-			Node::Symbol(name) => { mentioned.insert(name.clone()); }
-			Node::Text(text) => file_url |= text.starts_with(FILE_URL_PREFIX),
-			_ => {}
-		});
-		if file_url {
-			self.use_std_module("file", std_module("file").expect("lib/file.wasp is embedded"))?;
+		for (module, needed) in IMPLICIT_MODULES {
+			if needed(program) {
+				self.use_std_module(module, std_module(module).expect("an implicit module is embedded"))?;
+			}
 		}
+		let mut mentioned = HashSet::new();
+		program.visit(&mut |node| if let Node::Symbol(name) = node { mentioned.insert(name.clone()); });
 		// a program's own `write(x, y)` wins
 		let own: HashSet<String> = statements(program.clone()).iter().filter_map(declared_name).collect();
 		for (module, words) in PRELUDE_WORDS {
@@ -555,7 +552,7 @@ impl<'a> Loader<'a> {
 		self.use_prelude(program)
 	}
 
-	/// lib/prelude.wasp, its words named `prelude·first` (prelude_name), when the program or a used standard module
+	/// lib/prelude.warp, its words named `prelude·first` (prelude_name), when the program or a used standard module
 	/// mentions one of them in any spelling (`isdigit`); with_needed_definitions keeps those called
 	fn use_prelude(&mut self, program: &Node) -> Result<(), Node> {
 		let mentioned = called_names(&[std::slice::from_ref(program), &self.std_definitions].concat());
@@ -563,7 +560,7 @@ impl<'a> Loader<'a> {
 		if !prelude.iter().any(|word| mentioned.contains(word)) {
 			return Ok(());
 		}
-		let source = std_module(PRELUDE_MODULE).expect("lib/prelude.wasp is embedded");
+		let source = std_module(PRELUDE_MODULE).expect("lib/prelude.warp is embedded");
 		let definitions = crate::normalize::without_hints(|| self.load_source(Import::Use, std_path(PRELUDE_MODULE), source))?;
 		let qualified = |definition: Node| prelude.iter().fold(definition, |node, word| renamed_word(node, word, &prelude_name(word).unwrap_or_default()));
 		self.std_definitions.extend(definitions.into_iter().map(qualified));
@@ -602,7 +599,7 @@ impl<'a> Loader<'a> {
 		if !loaded.insert(path.canonicalize().unwrap_or_else(|_| path.clone())) {
 			return Ok(vec![]);
 		}
-		let module = WaspParser::parse(source);
+		let module = WarpParser::parse(source);
 		if let Some(failure) = module.first_error() {
 			return Err(failure.clone());
 		}
@@ -634,9 +631,14 @@ impl<'a> Loader<'a> {
 		self.find_with(name, &MODULE_EXTENSIONS)
 	}
 
-	/// never the program's own file: hash.wasp saying `use hash` means the standard module; nor warp's own lib/hash.wasp,
-	/// which is the embedded standard module itself (found in lib when a program runs in warp's repository)
+	/// never the program's own file: hash.warp saying `use hash` means the standard module; nor warp's own lib/hash.warp,
+	/// which is the embedded standard module itself (found in lib when a program runs in warp's repository).
+	/// In the browser a program without a file (the playground's) has no folder of its own: a standard module's name is
+	/// the standard module, no request looks next to the page for a file shadowing it (card playground-module)
 	fn find_with(&self, name: &str, extensions: &[&str]) -> Option<PathBuf> {
+		if !cfg!(feature = "native") && program_file().is_none() && std_module(name).is_some() {
+			return None;
+		}
 		let program = program_file().and_then(|file| file.canonicalize().ok());
 		let is_program = |path: &PathBuf| program.is_some() && path.canonicalize().ok() == program;
 		self.candidates_with(name, extensions).into_iter().find(|path| module_exists(path) && !is_program(path) && !is_embedded_std_file(path))
@@ -652,7 +654,7 @@ impl<'a> Loader<'a> {
 			true => vec![name.to_string()],
 			false => extensions.iter().map(|extension| format!("{name}.{extension}")).collect(),
 		};
-		// `use "./helper.wasp"`, `use "/srv/helper.wasp"`: that file, `./` from the including file's folder
+		// `use "./helper.warp"`, `use "/srv/helper.warp"`: that file, `./` from the including file's folder
 		if is_explicit_path(name) {
 			let base = self.including_directory.clone().unwrap_or_default();
 			return file_names.iter().map(|file_name| base.join(file_name)).collect();
@@ -750,40 +752,49 @@ impl<'a> Loader<'a> {
 	}
 }
 
-/// The standard library's modules written in wasp (notes/stdlib.md), embedded so `use list` needs no files
+/// The standard library's modules written in warp (notes/stdlib.md), embedded so `use list` needs no files
 const STD_MODULES: [(&str, &str); 20] = [
-	(PRELUDE_MODULE, include_str!("../lib/prelude.wasp")),
-	("memory", include_str!("../lib/memory.wasp")),
-	("net", include_str!("../lib/net.wasp")),
-	("collections", include_str!("../lib/collections.wasp")),
-	("hash", include_str!("../lib/hash.wasp")),
-	("regex", include_str!("../lib/regex.wasp")),
-	("file", include_str!("../lib/file.wasp")),
-	("json", include_str!("../lib/json.wasp")),
-	("os", include_str!("../lib/os.wasp")),
-	("list", include_str!("../lib/list.wasp")),
-	("math", include_str!("../lib/math.wasp")),
-	("text", include_str!("../lib/text.wasp")),
-	("random", include_str!("../lib/random.wasp")),
-	("map", include_str!("../lib/map.wasp")),
-	("time", include_str!("../lib/time.wasp")),
-	("matrix", include_str!("../lib/matrix.wasp")),
-	("draw", include_str!("../lib/draw.wasp")),
-	("markup", include_str!("../lib/markup.wasp")),
-	("router", include_str!("../lib/router.wasp")),
-	("i18n", include_str!("../lib/i18n.wasp")),
+	(PRELUDE_MODULE, include_str!("../lib/prelude.warp")),
+	("memory", include_str!("../lib/memory.warp")),
+	("net", include_str!("../lib/net.warp")),
+	("collections", include_str!("../lib/collections.warp")),
+	("hash", include_str!("../lib/hash.warp")),
+	("regex", include_str!("../lib/regex.warp")),
+	("file", include_str!("../lib/file.warp")),
+	("json", include_str!("../lib/json.warp")),
+	("os", include_str!("../lib/os.warp")),
+	("list", include_str!("../lib/list.warp")),
+	("math", include_str!("../lib/math.warp")),
+	("text", include_str!("../lib/text.warp")),
+	("random", include_str!("../lib/random.warp")),
+	("map", include_str!("../lib/map.warp")),
+	("time", include_str!("../lib/time.warp")),
+	("matrix", include_str!("../lib/matrix.warp")),
+	("draw", include_str!("../lib/draw.warp")),
+	("markup", include_str!("../lib/markup.warp")),
+	("router", include_str!("../lib/router.warp")),
+	("i18n", include_str!("../lib/i18n.warp")),
 ];
 /// The standard modules' folder (P194: std/ merged into lib/), embedded in the binary
 const STD_FOLDER: &str = "lib";
-/// lib/prelude.wasp: the wasp-written words of every program, loaded when mentioned (Loader::use_prelude)
+/// lib/prelude.warp: the warp-written words of every program, loaded when mentioned (Loader::use_prelude)
 const PRELUDE_MODULE: &str = "prelude";
 /// Between a module's name and its word in a qualified definition name, as between a nested function's outer and own
 const QUALIFIER: char = '·';
 /// P171: module words a program calls without their `use` (the prelude); only these definitions come along
 const PRELUDE_WORDS: [(&str, &[&str]); 1] = [("file", &["write", "exists"])];
-/// P183: a file URL in the program loads the file module, no `use file` needed
 const FILE_URL_PREFIX: &str = "file://";
-/// Other languages' names of the standard modules' classes and words (Java, Python, Rust, C#), each read as wasp's with
+/// Whether a program needs a module
+type NeededBy = fn(&Node) -> bool;
+/// The standard modules a program needs without `use`: P183 a file URL → file, a page → markup (lowering/page_html.rs),
+/// routes → router, a route's regular expression → regex (lowering/routes.rs)
+const IMPLICIT_MODULES: [(&str, NeededBy); 4] = [
+	("file", mentions_file_url),
+	("markup", |_| crate::pipeline::renders_itself()),
+	("router", |program| defined(program, crate::routes::PAGE_ROUTES).is_some()),
+	("regex", |program| defined(program, crate::routes::PAGE_ROUTE_INDEX).is_some_and(|index| called_names(&[index]).contains(crate::routes::REGEX_MATCH))),
+];
+/// Other languages' names of the standard modules' classes and words (Java, Python, Rust, C#), each read as warp's with
 /// a note, when a used module defines that word
 const STD_ALIASES: [(&str, &str); 27] = [
 	("HashSet", "Set"), ("TreeSet", "Set"), ("LinkedHashSet", "Set"), ("frozenset", "Set"),
@@ -798,7 +809,7 @@ const STD_ALIASES: [(&str, &str); 27] = [
 	("fmod", "remainder"), ("ln", "natural_log"),
 ];
 
-/// warp's own lib/<module>.wasp of a standard module: the source the binary embeds (natively the lib folder of the
+/// warp's own lib/<module>.warp of a standard module: the source the binary embeds (natively the lib folder of the
 /// repository it was built from; in the browser lib/ of the served repository, the page's file root)
 fn is_embedded_std_file(path: &Path) -> bool {
 	let stem = path.file_stem().and_then(|stem| stem.to_str());
@@ -815,7 +826,12 @@ fn is_embedded_std_file(path: &Path) -> bool {
 
 /// The name an embedded module is loaded under, once per program
 fn std_path(name: &str) -> PathBuf {
-	PathBuf::from(format!("{STD_FOLDER}/{name}.wasp"))
+	PathBuf::from(format!("{STD_FOLDER}/{name}.warp"))
+}
+
+/// The source of the standard module `name` (lib/<name>.warp, embedded)
+pub fn std_module_source(name: &str) -> Option<&'static str> {
+	std_module(name)
 }
 
 /// The standard modules' names: `list`, `math`, …
@@ -830,7 +846,7 @@ fn std_module(name: &str) -> Option<&'static str> {
 /// Each standard module with the names it defines, in their order
 fn std_module_words() -> &'static [(&'static str, Vec<String>)] {
 	static DEFINED: std::sync::OnceLock<Vec<(&'static str, Vec<String>)>> = std::sync::OnceLock::new();
-	DEFINED.get_or_init(|| STD_MODULES.iter().map(|(module, source)| (*module, statements(crate::normalize::without_hints(|| WaspParser::parse(source))).iter().filter(|statement| used_module(statement).is_none()).filter_map(declared_name).collect())).collect())
+	DEFINED.get_or_init(|| STD_MODULES.iter().map(|(module, source)| (*module, statements(crate::normalize::without_hints(|| WarpParser::parse(source))).iter().filter(|statement| used_module(statement).is_none()).filter_map(declared_name).collect())).collect())
 }
 
 /// The standard module that defines `word` (`zip` → list), for the error of a word used without its `use`
@@ -848,7 +864,7 @@ pub fn prelude_word_arity(word: &str) -> Option<usize> {
 	static ARITIES: std::sync::OnceLock<Vec<(String, usize)>> = std::sync::OnceLock::new();
 	let arities = ARITIES.get_or_init(|| {
 		let source = std_module(PRELUDE_MODULE).unwrap_or_default();
-		statements(crate::normalize::without_hints(|| WaspParser::parse(source))).iter().filter_map(|statement| match statement.drop_meta() {
+		statements(crate::normalize::without_hints(|| WarpParser::parse(source))).iter().filter_map(|statement| match statement.drop_meta() {
 			Node::Key(head, Op::Define, _) => match head.drop_meta() {
 				Node::List(items, _, _) => Some((leftmost_symbol(head)?, items.len() - 1)),
 				_ => None,
@@ -868,7 +884,7 @@ pub fn prelude_name(word: &str) -> Option<String> {
 /// The texts of a list a standard module assigns at its top: `html_elements = ["html", …]` of markup; empty if missing
 pub fn std_module_list(module: &str, list: &str) -> Vec<String> {
 	let source = std_module(module).unwrap_or_default();
-	statements(crate::normalize::without_hints(|| WaspParser::parse(source))).iter().find_map(|statement| match statement.drop_meta() {
+	statements(crate::normalize::without_hints(|| WarpParser::parse(source))).iter().find_map(|statement| match statement.drop_meta() {
 		Node::Key(name, Op::Assign, items) if name.drop_meta().name() == list => match items.drop_meta() {
 			// "p" parses as a character
 			Node::List(items, _, _) => Some(items.iter().map(|item| match item.drop_meta() {
@@ -908,7 +924,7 @@ struct Registered {
 }
 
 fn registered(name: &str) -> Option<Registered> {
-	statements(WaspParser::parse(PACKAGE_REGISTRY)).iter().find_map(|entry| {
+	statements(WarpParser::parse(PACKAGE_REGISTRY)).iter().find_map(|entry| {
 		let Node::Key(key, _, value) = entry.drop_meta() else { return None };
 		if !matches!(key.drop_meta(), Node::Symbol(key) if key == name) {
 			return None;
@@ -1108,7 +1124,7 @@ fn package_directory(name: &str) -> Result<PathBuf, String> {
 /// The version a module file declares with a top level `version 1.2.3`
 fn module_version(path: &Path) -> Option<Version> {
 	let source = crate::web::read_text(&path.to_string_lossy())?;
-	declared_version(&statements(WaspParser::parse(&source)))
+	declared_version(&statements(WarpParser::parse(&source)))
 }
 
 /// A local module a `use … version` names must declare a version the requirement allows
@@ -1172,7 +1188,7 @@ fn imported_words(node: &Node) -> Option<(Used, Node, Vec<String>)> {
 	used_module(&statement).map(|used| (used, statement, names))
 }
 
-/// `use name`, `require name`, `import name` and `include name`: the name is a symbol, a text or a path `lib/name`, `name.wasp`.
+/// `use name`, `require name`, `import name` and `include name`: the name is a symbol, a text or a path `lib/name`, `name.warp`.
 /// A version may follow: `use name version 1.2.3` exactly that one, `use name from 1.2.3` / `use name >= 1.2.3` that or later
 fn used_module(node: &Node) -> Option<Used> {
 	let Node::List(items, _, _) = node.drop_meta() else { return None };
@@ -1222,6 +1238,17 @@ fn is_explicit_path(name: &str) -> bool {
 /// A relative path that stays below its directory
 fn is_plain_relative_path(name: &str) -> bool {
 	Path::new(name).components().all(|component| matches!(component, std::path::Component::Normal(_)))
+}
+
+fn mentions_file_url(program: &Node) -> bool {
+	let mut file_url = false;
+	program.visit(&mut |node| if let Node::Text(text) = node { file_url |= text.starts_with(FILE_URL_PREFIX) });
+	file_url
+}
+
+/// The program's main-level definition of `name`
+fn defined(program: &Node, name: &str) -> Option<Node> {
+	statements(program.clone()).into_iter().find(|statement| declared_name(statement).as_deref() == Some(name))
 }
 
 fn statements(module: Node) -> Vec<Node> {

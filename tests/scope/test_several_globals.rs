@@ -1,4 +1,4 @@
-// samples/neural_net.wasp: a function declares several main-level variables global, Python's `global a, b` or one
+// samples/neural_net.warp: a function declares several main-level variables global, Python's `global a, b` or one
 // `global` line each (two of them in a block were the "duplicate key 'global'" of an object)
 use crate::is;
 

@@ -7,6 +7,8 @@ mod test_on_error_of_function;
 mod test_empty_block_binding;
 mod test_empty_block;
 mod test_for_loop;
+mod test_for_over_a_number;
+mod test_mixed_range_bounds;
 mod test_if_call_condition;
 mod test_if_value_kind;
 mod test_if_then_assign;
@@ -128,3 +130,6 @@ mod test_emit_operands;
 mod test_handler_globals;
 mod test_aborting_handlers;
 mod test_check_assert;
+mod test_soft_tests;
+mod test_reflection_words; // card reflection
+mod test_multiline_errors;

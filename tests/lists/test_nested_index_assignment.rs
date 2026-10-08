@@ -2,7 +2,7 @@
 // does; it used to change a copy and leave m as it was. `row = m#2; row#1 = 9` still leaves m alone (values are never
 // shared)
 use crate::is;
-use warp::wasp_parser::parse;
+use warp::warp_parser::parse;
 
 #[test]
 fn a_nested_index_assignment_sets_the_inner_item() {

@@ -1,6 +1,6 @@
 //! Wiki row 29 (mutable.md): `add "c" to x` and `x.add("c")` of a text variable grow the text; of a list they append
 use crate::is;
-use warp::wasp_parser::parse;
+use warp::warp_parser::parse;
 
 #[test]
 fn test_add_to_a_text() {

@@ -334,7 +334,7 @@ impl WasmGcEmitter {
 
 /// A meta entry `@name` (meta_entries.rs) is no field: a map with one keeps the generic way
 fn is_meta_key(index: &Node) -> bool {
-	let key = crate::wasp_parser::subscript_key(index).unwrap_or(index);
+	let key = crate::warp_parser::subscript_key(index).unwrap_or(index);
 	matches!(key.drop_meta(), Node::Text(name) | Node::Symbol(name) if name.starts_with(crate::node::ATTRIBUTE_MARK))
 }
 
@@ -375,7 +375,8 @@ fn without_reads(node: Node) -> Node {
 			let word = items.next().expect("guarded");
 			Node::List(std::iter::once(word).chain(items.map(read)).collect(), bracket, separator)
 		}
-		Node::Key(left, op, right) if op.is_comparison() => Node::Key(Box::new(read(*left)), op, Box::new(read(*right))),
+		// `m same n` asks for the one Node
+		Node::Key(left, op, right) if op.is_comparison() && !matches!(op, Op::Identical | Op::NotIdentical) => Node::Key(Box::new(read(*left)), op, Box::new(read(*right))),
 		Node::Key(object, Op::Dot, member) if is_reading_word(&member) => Node::Key(Box::new(read(*object)), Op::Dot, member),
 		other => other.map_children(without_reads),
 	}

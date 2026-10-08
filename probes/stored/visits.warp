@@ -1,0 +1,4 @@
+// a persisted signal: each run counts one more (warp run probes/stored/visits.warp), kept in visits.stored.json
+stored visits = 0
+visits += 1
+visits

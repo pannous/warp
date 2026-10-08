@@ -17,6 +17,7 @@ theorem value_ctx {Γ v t} (h : HasType P Γ v t) (hv : v.isValue = true) (Γ' :
   | unit => exact .unit
   | nil => exact .nil
   | ref => exact .ref
+  | clo hb => exact .clo hb
   | cons _ _ he ih1 ih2 => simp [isValue] at hv; exact .cons (ih1 hv.1) (ih2 hv.2) he
   | _ => simp [isValue] at hv
 
@@ -183,6 +184,18 @@ theorem CtxSub.set_le {Γ' Γ : Ctx} (h : CtxSub Γ' Γ) (y : String) {t' t : Ty
   · cases hz; exact ⟨t', by simp [*], st⟩
   · simp [*]; exact h z tz hz
 
+/-- the ints of a range are a list of ints -/
+theorem intList_typed {Γ} : ∀ (k : Nat) (m : Int), ∃ e, HasType P Γ (intList m k) (.list e) ∧ sub e .int = true
+  | 0, _ => ⟨_, .nil, rfl⟩
+  | k + 1, m => by
+    obtain ⟨e, ht, se⟩ := intList_typed k (m + 1)
+    exact ⟨_, .cons .int ht rfl, join_least rfl se⟩
+
+theorem int_sub_arithTy (a b : Ty) : sub .int (arithTy a b) = true := by
+  unfold arithTy Ty.arith; split
+  · rfl
+  · split <;> rfl
+
 /-- narrowing: smaller local types give a smaller type -/
 theorem narrow {Γ e t} (h : HasType P Γ e t) : ∀ {Γ'}, CtxSub Γ' Γ → ∃ t', HasType P Γ' e t' ∧ sub t' t = true := by
   induction h with
@@ -239,6 +252,11 @@ theorem narrow {Γ e t} (h : HasType P Γ e t) : ∀ {Γ'}, CtxSub Γ' Γ → �
     obtain ⟨_, h1, _⟩ := ih1 hs
     obtain ⟨b', h2, s2⟩ := ih2 hs
     exact ⟨_, .seq h1 h2, s2⟩
+  | range _ _ ih1 ih2 =>
+    intro Γ' hs
+    obtain ⟨a', h1, s1⟩ := ih1 hs
+    obtain ⟨b', h2, s2⟩ := ih2 hs
+    exact ⟨_, .range h1 h2, by simpa [sub] using arithTy_mono s1 s2⟩
   | index _ _ ih1 ih2 =>
     intro Γ' hs
     obtain ⟨l', h1, s1⟩ := ih1 hs
@@ -319,6 +337,16 @@ theorem narrow {Γ e t} (h : HasType P Γ e t) : ∀ {Γ'}, CtxSub Γ' Γ → �
     obtain ⟨_, h1, s1⟩ := ih1 hs
     obtain ⟨_, h2, _⟩ := ih2 (hs.set_le _ (listElem_mono s1))
     exact ⟨_, .forIn h1 h2, sub_refl _⟩
+  | lam _ ih =>
+    intro Γ' hs
+    obtain ⟨_, h1, s1⟩ := ih (hs.set _ _)
+    exact ⟨_, .lam h1, by simpa using s1⟩
+  | clo hb => intros; exact ⟨_, .clo hb, sub_refl _⟩
+  | app _ _ ih1 ih2 =>
+    intro Γ' hs
+    obtain ⟨_, h1, s1⟩ := ih1 hs
+    obtain ⟨_, h2, _⟩ := ih2 hs
+    exact ⟨_, .app h1 h2, resultTy_mono s1⟩
 
 theorem Ctx.set_same (Γ : Ctx) (y : String) (a b : Ty) : (Γ.set y a).set y b = Γ.set y b := by
   funext z; simp only [Ctx.set]; split <;> simp_all
@@ -358,6 +386,7 @@ theorem subst_typed {Γ0 e t} (h : HasType P Γ0 e t) :
   | loop _ _ ih1 ih2 => intro Γ y tv v hΓ hv htv; simp only [Expr.subst]; exact .loop (ih1 hΓ hv htv) (ih2 hΓ hv htv)
   | seq _ _ ih1 ih2 => intro Γ y tv v hΓ hv htv; simp only [Expr.subst]; exact .seq (ih1 hΓ hv htv) (ih2 hΓ hv htv)
   | index _ _ ih1 ih2 => intro Γ y tv v hΓ hv htv; simp only [Expr.subst]; exact .index (ih1 hΓ hv htv) (ih2 hΓ hv htv)
+  | range _ _ ih1 ih2 => intro Γ y tv v hΓ hv htv; simp only [Expr.subst]; exact .range (ih1 hΓ hv htv) (ih2 hΓ hv htv)
   | append _ _ ih1 ih2 => intro Γ y tv v hΓ hv htv; simp only [Expr.subst]; exact .append (ih1 hΓ hv htv) (ih2 hΓ hv htv)
   | assign hx _ st ih => intro Γ y tv v hΓ hv htv; simp only [Expr.subst]; exact .assign hx (ih hΓ hv htv) st
   | init hx hm _ st ih => intro Γ y tv v hΓ hv htv; simp only [Expr.subst]; exact .init hx hm (ih hΓ hv htv) st
@@ -404,6 +433,18 @@ theorem subst_typed {Γ0 e t} (h : HasType P Γ0 e t) :
       simpa using HasType.forIn (ih1 rfl hv htv) hb
     · simp only [hzy, ite_false]
       exact .forIn (ih1 rfl hv htv) (ih2 (Ctx.set_comm Γ hzy tv _) hv htv)
+  | @lam Γ0 z b tb hb ih =>
+    intro Γ y tv v hΓ hv htv
+    simp only [Expr.subst]
+    subst hΓ
+    by_cases hzy : z = y
+    · subst hzy
+      rw [Ctx.set_same] at hb
+      simpa using HasType.lam hb
+    · simp only [hzy, ite_false]
+      exact .lam (ih (Ctx.set_comm Γ hzy tv _) hv htv)
+  | clo hb => intros; simp only [Expr.subst]; exact .clo hb
+  | app _ _ ih1 ih2 => intro Γ y tv v hΓ hv htv; simp only [Expr.subst]; exact .app (ih1 hΓ hv htv) (ih2 hΓ hv htv)
 
 /-- a value of type tv ≤ t bound to a local of type t: the body keeps (a subtype of) its type -/
 theorem let_typed {y t v b tv tb} (hb : HasType P (Ctx.empty.set y t) b tb) (hv : v.isValue = true)

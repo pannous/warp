@@ -30,7 +30,7 @@ const randomBelow = bound => bound <= 0n ? 0n : seededRandom === null ? BigInt(M
 // plain values (plainOfTree / treeOfPlain, as for foreign_call); the parts add theirs (host-files.js file, net and store)
 const STD_ADAPTERS = {
 	json: { parse: text => JSON.parse(text), to_json: (value, classes) => JSON.stringify(classes ? withoutClassTags(value, new Set(classes)) : value) },
-	os: { env: () => null }, // a page has no environment
+	os: { env: () => null, args: () => [] }, // a page has no environment and no command line
 	regex: {
 		matches: (subject, pattern) => regexOf(pattern).test(subject),
 		first: (subject, pattern) => subject.match(regexOf(pattern))?.[0] ?? null,
@@ -49,7 +49,7 @@ function withoutClassTags(value, classes) {
 // what Rust's regex lacks is refused here too, so a pattern means the same in both hosts (src/std_adapters.rs regex_of)
 function regexOf(pattern, flags = "") {
 	const feature = /\(\?<?[=!]/.test(pattern) ? "look-around" : /\\[1-9]/.test(pattern) ? "a backreference" : null;
-	if (feature) throw new Error(`${feature} is not in wasp's regex (one engine lacks it): ${pattern}`);
+	if (feature) throw new Error(`${feature} is not in warp's regex (one engine lacks it): ${pattern}`);
 	return new RegExp(pattern, flags + "u");
 }
 // the stored values of `stored x = v` and `local[k]`, by name: the page's localStorage as the worker started
@@ -121,7 +121,7 @@ function programImports(holder, hooks) {
 					return module.error_of(module.new_text(pointer, length));
 				}
 			},
-			// std_pure / std_io(module, member, arguments): a word of lib/<module>.wasp (src/std_adapters.rs)
+			// std_pure / std_io(module, member, arguments): a word of lib/<module>.warp (src/std_adapters.rs)
 			std_pure: (module, member, argumentList) => stdCall(program(), module, member, argumentList),
 			std_io: (module, member, argumentList) => stdCall(program(), module, member, argumentList),
 			// `serve 8080 {…}` (src/web_server.rs): a page cannot listen on a port
@@ -412,7 +412,7 @@ function runMain(holder, hooks) {
 	const events = pageEvents(exports);
 	// a program with routes stays for its links (lowering/routes.rs page·routes)
 	if ((events.length > 0 || holder.timers || holder.fetches || exports[PAGE_ROUTES_EXPORT]) && outcome.result) hooks.listen?.(holder, events);
-	// a run without page events (lib/markup.wasp rendering the page's HTML, src/markup.rs) keeps the page's run
+	// a run without page events (lib/markup.warp rendering the page's HTML, src/markup.rs) keeps the page's run
 	if (events.length > 0 && outcome.result) listeningRun = holder;
 	return outcome;
 }
@@ -422,7 +422,7 @@ let listeningRun;
 const PAGE_VALUE_EXPORT = "page·value";
 const PAGE_RENDER_EXPORT = "page·render"; // src/lowering/page_html.rs PAGE_RENDER
 
-// the HTML of a value by the program's own renderer (lib/markup.wasp's to_html, exported as page·render by a program
+// the HTML of a value by the program's own renderer (lib/markup.warp's to_html, exported as page·render by a program
 // holding markup): undefined for a number, a program without one, or a rendering that failed (the compiler then
 // renders the value itself, src/web.rs html_of)
 function renderedHtml(exports, value) {

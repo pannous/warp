@@ -15,7 +15,7 @@ A `law` states a property once. Its assurance rises without touching the source.
 | proved | pure integer functions and the law are exported to Lean 4 as unbounded `Int` and checked | `law::lean::prove` |
 
 `law::verify(code)` runs tested → proved and returns a `LawReport` per law.
-CLI: `warp verify file.wasp` (or inline code) prints the reports and exits 1 if any law is violated.
+CLI: `warp verify file.warp` (or inline code) prints the reports and exits 1 if any law is violated.
 
 ## Lean export
 
@@ -40,7 +40,7 @@ Counterexamples come from property tests evaluated in wasm. Lean either proves t
 
 ## Next
 
-- Attach laws to `FunctionDecl` in `src/semantic/` once that IR exists. Persist the verdict in the Wasp-serialized artifact instead of `~/.cache/warp/lean`.
+- Attach laws to `FunctionDecl` in `src/semantic/` once that IR exists. Persist the verdict in the Warp-serialized artifact instead of `~/.cache/warp/lean`.
 - Use an SMT backend (z3 is installed) as a faster prover for linear and bitvector laws.
 - Asserted mode checks concrete call sites at compile time. It doesn't yet check values computed at runtime inside the WASM module.
 - Lawful lifting: broadcasting is allowed only where functor laws are Proved.

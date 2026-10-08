@@ -7,7 +7,7 @@ use super::lean::{lean_executable, run_with_timeout};
 use crate::extensions::numbers::Number;
 use crate::node::{Bracket, Node, Separator};
 use crate::operators::Op;
-use crate::wasp_parser::TRY_MARKER;
+use crate::warp_parser::TRY_MARKER;
 use crate::type_kinds::Kind;
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
@@ -34,6 +34,9 @@ const UNIT_PARAMETER: &str = "·";
 const ARGUMENTS_SUFFIX: &str = "·args";
 const APPEND_METHODS: [&str; 2] = ["add", "push"];
 const FOR_KEYWORD: &str = "for";
+const VARIABLE_KEYWORDS: [&str; 2] = ["let", "shared"];
+/// the one field of a function local's cell (`f·n`): `·` keeps it apart from the program's own fields
+const CELL_FIELD: &str = "·value";
 /// An inline union `int | text` or an optional `int?` is the join of its alternatives, every value given to it a cast
 const UNION_TYPE: &str = "(Ty.joinAll ";
 const UNION_JOINER: &str = " or ";
@@ -52,6 +55,9 @@ const BREAK_KEYWORD: &str = "break";
 const EVENT_LOCAL: &str = "event";
 /// an event's payloads are instances of the class `ev·event`, whose fields are every key the program emits it with
 const EVENT_CLASS_SUFFIX: &str = "·event";
+/// Maps `{a:1}` (P200b: they share, like instances) are instances of one class `map` whose fields are every key the
+/// program writes, in a literal or with `m.key = v`; reading a key never written is W0's run-time "unset field"
+const MAP_CLASS: &str = "map";
 
 /// W0's answer for one program
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -73,7 +79,7 @@ fn quoted(text: &str) -> String {
 /// `int`, `texts`, `list`: the W0 type a warp type word names
 fn type_of_word(word: &str) -> Option<String> {
 	let scalar = |word: &str| -> Option<&str> {
-		Some(match crate::type_kinds::canonical_type_name(word) {
+		Some(match crate::type_kinds::canonical_type_name(&word.to_lowercase()) {
 			"int" | "integer" | "long" => ".int",
 			"float" | "number" | "exact" => ".number",
 			"text" | "string" | "str" => ".text",
@@ -185,6 +191,40 @@ fn event_class(event: &str) -> String {
 	format!("{event}{EVENT_CLASS_SUFFIX}")
 }
 
+/// `{a:1 b:2}`: its keys and values
+fn map_entries(node: &Node) -> Option<Vec<(String, &Node)>> {
+	let Node::List(items, Bracket::Curly, _) = node.drop_meta() else { return None };
+	items.iter().map(|item| match item.drop_meta() {
+		Node::Key(key, Op::Colon, value) if matches!(key.drop_meta(), Node::Symbol(_)) => Some((key.name(), value.as_ref())),
+		_ => None,
+	}).collect()
+}
+
+/// every key a map literal or a field write `x.key = v` names, when the program has a map literal
+fn map_keys(program: &Node) -> Option<Vec<String>> {
+	let mut has_map = false;
+	let mut keys: Vec<String> = Vec::new();
+	program.visit(&mut |part| {
+		let written: Vec<String> = match (map_entries(part), part) {
+			(Some(entries), _) => {
+				has_map = true;
+				entries.into_iter().map(|(key, _)| key).collect()
+			}
+			(None, Node::Key(target, Op::Assign, _)) => match target.drop_meta() {
+				Node::Key(_, Op::Dot, field) => vec![field.name()],
+				_ => vec![],
+			},
+			_ => vec![],
+		};
+		for key in written {
+			if !keys.contains(&key) {
+				keys.push(key);
+			}
+		}
+	});
+	has_map.then_some(keys)
+}
+
 fn is_word(node: &Node, word: &str) -> bool {
 	matches!(node.drop_meta(), Node::Symbol(found) if found == word)
 }
@@ -231,6 +271,98 @@ fn function_definition(statement: &Node) -> Option<(&str, Vec<&Node>, &Node)> {
 		},
 		_ => None,
 	}
+}
+
+/// `a, b = xs` parses as the list `a, (b = xs)`: the names and the value
+/// `a, b = xs` and `a, b = 1, 2`: the names and the values after `=` (one: a list to take apart)
+fn destructuring(items: &[Node]) -> Option<(Vec<String>, Vec<&Node>)> {
+	let assignment = items.iter().position(|item| matches!(item.drop_meta(), Node::Key(_, Op::Assign, _)))?;
+	let Node::Key(target, Op::Assign, value) = items[assignment].drop_meta() else { return None };
+	let names: Option<Vec<String>> = items[..assignment].iter().chain(std::iter::once(&**target)).map(|name| match name.drop_meta() {
+		// `*rest` takes the items between: outside W0
+		Node::Symbol(name) if !name.starts_with('*') => Some(name.clone()),
+		_ => None,
+	}).collect();
+	Some((names?, std::iter::once(&**value).chain(&items[assignment + 1..]).collect()))
+}
+
+/// A function or lambda bound at main level: its name, parameters and body
+fn callable_definition(statement: &Node) -> Option<(&str, Vec<String>, &Node)> {
+	if let Some((name, parameters, body)) = function_definition(statement) {
+		return Some((name, parameters.iter().map(|parameter| parameter.drop_meta().name()).collect(), body));
+	}
+	let Node::Key(target, Op::Assign, value) = statement.drop_meta() else { return None };
+	let (Node::Symbol(name), Node::Key(parameter, Op::FatArrow, body)) = (target.drop_meta(), unwrapped(value).drop_meta()) else { return None };
+	Some((name, vec![parameter.name()], &**body))
+}
+
+/// `(e)` is e
+fn unwrapped(node: &Node) -> &Node {
+	match node.drop_meta() {
+		Node::List(items, Bracket::Round, _) if items.len() == 1 => unwrapped(&items[0]),
+		other => other,
+	}
+}
+
+fn mentions(node: &Node, name: &str) -> bool {
+	let mut found = false;
+	node.visit(&mut |part| found |= matches!(part, Node::Symbol(symbol) if symbol == name));
+	found
+}
+
+/// Warp's late binding (src/lowering/late_binding.rs): a function or lambda reading a main-level name the program
+/// changes after its definition, with a call after that change, needs `global x`. W0 reads at call time, which gives
+/// what warp gives for every program warp accepts, so such programs are outside W0 rather than rejected by it
+fn late_binding(statements: &[&Node], globals: &[String]) -> Option<String> {
+	for (position, statement) in statements.iter().enumerate() {
+		let Some((name, parameters, body)) = callable_definition(statement) else { continue };
+		for (offset, later) in statements[position + 1..].iter().enumerate() {
+			let Node::Key(target, op, _) = later.drop_meta() else { continue };
+			let Node::Symbol(changed) = target.drop_meta() else { continue };
+			let read = mentions(body, changed) && !parameters.contains(changed) && !globals.contains(changed);
+			if (*op == Op::Assign || op.is_compound_assign()) && read && statements[position + offset + 2..].iter().any(|call| mentions(call, name)) {
+				return Some(format!("not in W0: {name} reads {changed}, which changes after {name} is defined and before a call (warp asks for `global {changed}`, late binding)"));
+			}
+		}
+	}
+	None
+}
+
+/// `not e`: yes when e is falsy
+fn negation(lean: String) -> String {
+	format!(".ite ({lean}) (.bool false) (.bool true)")
+}
+
+/// The class of the cell a local of function holds its value in: `f·n` for n in f
+fn cell_class(function: &str, local: &str) -> String {
+	format!("{function}·{local}")
+}
+
+/// The names a function body assigns (`n = 0`, `n += 1`), in order of first assignment, but for its parameters and
+/// the given globals: its locals (functions2)
+fn assigned_locals(body: &Node, parameters: &[String], globals: &[String]) -> Vec<String> {
+	let mut locals: Vec<String> = vec![];
+	body.visit(&mut |part| {
+		if let Node::Key(target, op, _) = part {
+			match target.drop_meta() {
+				Node::Symbol(name) if (*op == Op::Assign || op.is_compound_assign()) && !parameters.contains(name) && !globals.contains(name) && !locals.contains(name) => locals.push(name.clone()),
+				_ => {}
+			}
+		}
+	});
+	locals
+}
+
+/// Whether the first value a function body gives local is a list (`out = []`, `out = [1]`)
+fn first_value_is_list(body: &Node, local: &str) -> bool {
+	let mut first = None;
+	body.visit(&mut |part| match part {
+		Node::Key(target, Op::Assign, value) if first.is_none() && matches!(target.drop_meta(), Node::Symbol(name) if name == local) => {
+			first = Some(is_list_literal(value) || matches!(value.drop_meta(), Node::Empty));
+		}
+		_ => {}
+	});
+	first.unwrap_or(false)
 }
 
 /// The parameter's type word: `int` of `y: int`, none for an unannotated `y`
@@ -284,8 +416,15 @@ struct Exporter {
 	breaking: Vec<Option<String>>,
 	/// the names declared `global` anywhere in the program
 	globals: Vec<String>,
-	/// exporting a function body: there a name assigned without `global` is a new local (functions2)
-	in_function: bool,
+	/// the locals of the function being exported: each lives in a cell, a fresh instance of its class `f·n` per call
+	/// (W0's locals are bound by substitution, warp's change), whose one field takes the join of the values written
+	cells: Vec<String>,
+	/// the cell locals whose first value is a list: `xs.add(v)` appends to them
+	cell_lists: Vec<String>,
+	/// main-level names bound to a lambda: warp makes them functions, so a bare `f` is a call missing its argument
+	lambda_names: Vec<String>,
+	/// how many hidden main-level names (`·tuple1`, `·count1`) destructuring took so far
+	hidden_names: usize,
 }
 
 /// A class's ancestor chain and its own fields as (name, type word)
@@ -348,7 +487,7 @@ impl Exporter {
 		let own_fields = crate::lowering::class_methods::class_fields(program);
 		let mut parents = HashMap::new();
 		program.visit(&mut |part| if let Node::Type { name, .. } = part {
-			parents.insert(name.drop_meta().name(), name.attribute(crate::wasp_parser::EXTENDS_KEYWORD).map(Node::name));
+			parents.insert(name.drop_meta().name(), name.attribute(crate::warp_parser::EXTENDS_KEYWORD).map(Node::name));
 		});
 		fn path(class: &str, parents: &HashMap<String, Option<String>>, depth: usize) -> Vec<String> {
 			let mut chain = match parents.get(class) {
@@ -457,8 +596,13 @@ impl Exporter {
 			self.globals.push(name.to_string());
 		});
 		let event_classes = self.collect_event_classes(program);
+		let program_node = program;
 		let program: Vec<&Node> = statements(program).into_iter().flat_map(type_definitions).collect();
+		if let Some(why) = late_binding(&program, &self.globals) {
+			return Err(why);
+		}
 		let mut argument_classes = Vec::new();
+		let mut cell_items = Vec::new();
 		for statement in &program {
 			let Some((name, parameters, _)) = function_definition(statement) else { continue };
 			if self.functions.contains_key(name) {
@@ -477,8 +621,22 @@ impl Exporter {
 			};
 			self.functions.insert(name.to_string(), parameter_type);
 		}
+		for statement in &program {
+			let Some((name, parameters, body)) = function_definition(statement) else { continue };
+			let parameters: Vec<String> = parameters.iter().map(|parameter| self.parameter_type(parameter).map(|(parameter, _)| parameter)).collect::<Result<_, String>>()?;
+			for local in assigned_locals(body, &parameters, &self.globals) {
+				let class = cell_class(name, &local);
+				self.classes.insert(class.clone(), (vec![class.clone()], vec![(CELL_FIELD.to_string(), None)]));
+				cell_items.push(format!(".cell {}", quoted(&class)));
+			}
+		}
 		argument_classes.extend(event_classes);
+		if let Some(keys) = map_keys(program_node) {
+			self.classes.insert(MAP_CLASS.to_string(), (vec![MAP_CLASS.to_string()], keys.into_iter().map(|key| (key, None)).collect()));
+			argument_classes.push(MAP_CLASS.to_string());
+		}
 		let mut items = argument_classes.iter().map(|class| self.class_definition(class)).collect::<Result<Vec<_>, String>>()?;
+		items.extend(cell_items);
 		for statement in program {
 			items.push(self.item(statement)?);
 		}
@@ -512,8 +670,78 @@ impl Exporter {
 				Node::Key(target, Op::Assign, value) => self.binding(target, ".const", value),
 				other => unsupported(other),
 			},
+			Node::List(items, Bracket::None, Separator::Colon) if destructuring(items).is_some() => {
+				let (names, values) = destructuring(items).expect("a destructuring");
+				match values[..] {
+					[list] => self.destructure(&names, list),
+					_ => self.assign_tuple(&names, &values),
+				}
+			}
+			// `let x = 1`, `shared n = 5` (one thread in W0): a variable; `int i = 2`: `i: int = 2`
+			Node::List(items, _, _) if items.len() == 2 && matches!(items[1].drop_meta(), Node::Key(target, Op::Assign, _) if matches!(target.drop_meta(), Node::Symbol(_))) => {
+				let Node::Key(target, _, value) = items[1].drop_meta() else { unreachable!("an assignment") };
+				match items[0].drop_meta() {
+					Node::Symbol(word) if VARIABLE_KEYWORDS.contains(&word.as_str()) => self.binding(target, ".var", value),
+					Node::Symbol(word) if self.type_of(word).is_ok() => self.binding(&Node::Key(target.clone(), Op::Colon, Box::new(items[0].clone())), ".var", value),
+					_ => Ok(format!(".statement ({})", self.expression(statement)?)),
+				}
+			}
+			// `a = b = 3`: `b = 3`, then `a = b`
+			Node::Key(target, Op::Assign, value) if matches!(value.drop_meta(), Node::Key(_, Op::Assign, _)) => {
+				let Node::Key(inner_target, _, _) = value.drop_meta() else { unreachable!("an assignment") };
+				Ok(format!("{},\n  {}", self.item(value)?, self.item(&Node::Key(target.clone(), Op::Assign, inner_target.clone()))?))
+			}
 			Node::Key(target, Op::Assign, value) if !self.is_bound(target) && !matches!(target.drop_meta(), Node::Key(_, Op::Dot, _)) => self.binding(target, ".var", value),
 			other => Ok(format!(".statement ({})", self.expression(other)?)),
+		}
+	}
+
+	/// `a, b = xs`: the hidden `·tupleN = xs`, its items counted (warp fails on a wrong number of values), then
+	/// `a = ·tupleN#1`, `b = ·tupleN#2`; several items in one
+	fn destructure(&mut self, names: &[String], list: &Node) -> Lean {
+		if let Some(bound) = names.iter().find(|name| self.names.contains_key(*name)) {
+			return Err(format!("not in W0: destructuring into {bound}, which holds a value (card destructure-existing)"));
+		}
+		self.hidden_names += 1;
+		let (tuple, count) = (format!("·tuple{}", self.hidden_names), format!("·count{}", self.hidden_names));
+		let mut items = vec![
+			format!(".bind {} .var none ({}) false", quoted(&tuple), self.expression(list)?),
+			format!(".bind {} .var none (.int 0) false", quoted(&count)),
+			format!(".statement (.forIn \"·item\" (.glob {}) (.assign {} (.add (.glob {}) (.int 1))))", quoted(&tuple), quoted(&count), quoted(&count)),
+			format!(".statement (.ite (.eq false (.glob {}) (.int {})) .unit (.error \"wrong number of values\"))", quoted(&count), names.len()),
+		];
+		for (position, name) in names.iter().enumerate() {
+			items.push(self.store(name, format!(".index (.glob {}) (.int {})", quoted(&tuple), position + 1)));
+		}
+		Ok(items.join(",\n  "))
+	}
+
+	/// `a, b = 1, 2`: each value in a hidden `·valueN_i` first, so `a, b = b, a` swaps, then into the names, which may
+	/// hold values already (checked against their declared types as any assignment)
+	fn assign_tuple(&mut self, names: &[String], values: &[&Node]) -> Lean {
+		if names.len() != values.len() {
+			return Err(format!("not in W0: {} values for {} names (warp counts them when it compiles)", values.len(), names.len()));
+		}
+		self.hidden_names += 1;
+		let hidden: Vec<String> = (1..=values.len()).map(|position| format!("·value{}_{position}", self.hidden_names)).collect();
+		let mut items = Vec::new();
+		for (name, value) in hidden.iter().zip(values) {
+			items.push(format!(".bind {} .var none ({}) false", quoted(name), self.expression(value)?));
+		}
+		for (name, value) in names.iter().zip(&hidden) {
+			items.push(self.store(name, format!(".glob {}", quoted(value))));
+		}
+		Ok(items.join(",\n  "))
+	}
+
+	/// a main-level name takes a value: its first binding, or an assignment checked against its declared type
+	fn store(&mut self, name: &str, value: String) -> String {
+		match self.names.get(name).cloned() {
+			Some(declared) => format!(".statement (.assign {} ({}))", quoted(name), declared.map_or(value.clone(), |declared| admitted(&declared, value))),
+			None => {
+				self.names.insert(name.to_string(), None);
+				format!(".bind {} .var none ({value}) {}", quoted(name), self.globals.contains(&name.to_string()))
+			}
 		}
 	}
 
@@ -530,6 +758,9 @@ impl Exporter {
 		};
 		if annotation.is_none() && is_evident_bool(value) {
 			self.bool_names.push(name.clone());
+		}
+		if matches!(unwrapped(value), Node::Key(_, Op::FatArrow, _)) {
+			self.lambda_names.push(name.clone());
 		}
 		if is_list_literal(value) || matches!(value.drop_meta(), Node::Empty) || annotation.as_deref().is_some_and(|lean| lean.starts_with(".list")) {
 			self.list_names.push(name.clone());
@@ -574,14 +805,21 @@ impl Exporter {
 			[] => (UNIT_PARAMETER.to_string(), vec![], declared),
 			parameters => (arguments_class(name), parameters.iter().map(|parameter| parameter.drop_meta().name()).collect(), declared),
 		};
+		let parameters: Vec<String> = std::iter::once(parameter.clone()).chain(fields.iter().cloned()).collect();
+		let cells = assigned_locals(body, &parameters, &self.globals);
+		self.cell_lists = cells.iter().filter(|cell| first_value_is_list(body, cell)).cloned().collect();
+		self.cells = cells.clone();
 		self.locals.push(parameter.clone());
 		self.argument_fields = fields;
-		self.in_function = true;
 		let body = self.block(body);
-		self.in_function = false;
 		self.locals.pop();
 		self.argument_fields.clear();
-		Ok(format!(".function {} {} {parameter_type} ({})", quoted(name), quoted(&parameter), body?))
+		self.cells.clear();
+		let body = cells.iter().rev().fold(body?, |body, cell| {
+			let path = lean_strings(&[cell_class(name, cell)]);
+			format!(".letIn {} (.cls {path}) (.new {path}) ({body})", quoted(cell))
+		});
+		Ok(format!(".function {} {} {parameter_type} ({body})", quoted(name), quoted(&parameter)))
 	}
 
 	/// a function body: `{ a; b }` is the sequence
@@ -600,6 +838,9 @@ impl Exporter {
 	}
 
 	fn assignment(&mut self, name: &str, value: &Node) -> Lean {
+		if self.cells.iter().any(|cell| cell == name) {
+			return Ok(format!(".set (.loc {}) {} ({})", quoted(name), quoted(CELL_FIELD), self.expression(value)?));
+		}
 		let declared = self.names.get(name).cloned().flatten();
 		let value = match bool_literal(self.bool_names.contains(&name.to_string()).then_some(BOOL_TYPE), value) {
 			Some(yes_or_no) => yes_or_no,
@@ -608,9 +849,6 @@ impl Exporter {
 		if !self.names.contains_key(name) {
 			return Err(format!("not in W0: a first binding of {name} inside an expression"));
 		}
-		if self.in_function && !self.globals.iter().any(|global| global == name) {
-			return Err(format!("not in W0: {name} assigned in a function without `global {name}` (a local there)"));
-		}
 		Ok(format!(".assign {} ({value})", quoted(name)))
 	}
 
@@ -618,7 +856,7 @@ impl Exporter {
 	/// variable (type filters, unit walks) is not in W0, nor a main-level name (warp's loop assigns it, W0's shadows it)
 	fn for_loop(&mut self, variable: &Node, list: &Node, body: &Node) -> Lean {
 		let variable = match variable.drop_meta() {
-			Node::Symbol(name) if name != crate::lambdas::IMPLICIT_PARAMETER && type_of_word(name).is_none() && !self.names.contains_key(name) => name.clone(),
+			Node::Symbol(name) if name != crate::lambdas::IMPLICIT_PARAMETER && type_of_word(name).is_none() && !self.names.contains_key(name) && !self.cells.contains(name) => name.clone(),
 			_ => return Err(format!("not in W0: the loop variable {}", variable.serialize().trim())),
 		};
 		let list = self.expression(list)?;
@@ -626,6 +864,42 @@ impl Exporter {
 		let body = self.breaking_in(None, |exporter| exporter.block(body));
 		self.locals.pop();
 		Ok(format!(".forIn {} ({list}) ({})", quoted(&variable), body?))
+	}
+
+	/// `x => body`: x is a local of the body; a lambda of no or several parameters is not in W0
+	fn lambda(&mut self, parameter: &Node, body: &Node) -> Lean {
+		let parameter = match parameter.drop_meta() {
+			Node::Symbol(name) => name.clone(),
+			other => return Err(format!("not in W0: the lambda parameters {}", other.serialize().trim())),
+		};
+		self.locals.push(parameter.clone());
+		let body = self.breaking_in(None, |exporter| exporter.block(body));
+		self.locals.pop();
+		Ok(format!(".lam {} ({})", quoted(&parameter), body?))
+	}
+
+	/// a variable, parameter or local (not a function or class): what a call of it calls is its value
+	fn holds_value(&self, node: &Node) -> bool {
+		match node.drop_meta() {
+			Node::Symbol(name) => !self.functions.contains_key(name) && !self.classes.contains_key(name)
+				&& (self.names.contains_key(name) || self.locals.contains(name) || self.argument_fields.contains(name) || self.cells.contains(name)),
+			_ => false,
+		}
+	}
+
+	/// a literal, a name (not a function's), or operators on such: evaluating it twice changes nothing
+	fn is_pure(&self, node: &Node) -> bool {
+		match node.drop_meta() {
+			Node::Number(_) | Node::Text(_) | Node::Char(_) | Node::True | Node::False | Node::Empty => true,
+			Node::Symbol(name) => !self.functions.contains_key(name),
+			Node::List(items, Bracket::Round, _) if items.len() == 1 => self.is_pure(&items[0]),
+			Node::Key(left, op, right) => !matches!(op, Op::Assign | Op::Define | Op::Dot) && !op.is_compound_assign() && self.is_pure(left) && self.is_pure(right),
+			_ => false,
+		}
+	}
+
+	fn cell_value(&self, cell: &str) -> String {
+		format!(".get (.loc {}) {}", quoted(cell), quoted(CELL_FIELD))
 	}
 
 	fn binary(&mut self, constructor: &str, left: &Node, right: &Node) -> Lean {
@@ -641,13 +915,17 @@ impl Exporter {
 			Node::Text(text) => Ok(format!(".text {}", quoted(text))),
 			Node::Char(c) => Ok(format!(".text {}", quoted(&c.to_string()))), // `"a"` parses as a codepoint
 			Node::Empty => Ok(".nil".to_string()), // ø is the empty list (`xs = []` parses as ø)
+			Node::Symbol(name) if self.cells.contains(name) => Ok(self.cell_value(name)),
+			// the function's first local is its arguments object; loops and lambdas push theirs after it
 			Node::Symbol(name) if self.argument_fields.contains(name) => {
-				Ok(format!(".get (.loc {}) {}", quoted(self.locals.last().expect("the arguments object")), quoted(name)))
+				Ok(format!(".get (.loc {}) {}", quoted(self.locals.first().expect("the arguments object")), quoted(name)))
 			}
 			Node::Symbol(name) if self.locals.contains(name) => Ok(format!(".loc {}", quoted(name))),
 			// `two()` of a function of no parameters parses as `(two)`
 			Node::Symbol(name) if self.functions.get(name).is_some_and(|parameter| parameter == UNIT_TYPE) => Ok(format!(".call {} .unit", quoted(name))),
+			Node::Symbol(name) if self.lambda_names.contains(name) => Err(format!("not in W0: {name} as a value (warp calls it; `function {name}` is the function)")),
 			Node::Symbol(name) if self.names.contains_key(name) => Ok(format!(".glob {}", quoted(name))),
+			_ if map_entries(node).is_some() && self.classes.contains_key(MAP_CLASS) => self.instance(MAP_CLASS, map_entries(node).expect("a map")),
 			Node::List(items, Bracket::Square, _) => {
 				let elements: Result<Vec<String>, String> = items.iter().map(|item| self.expression(item)).collect();
 				Ok(elements?.iter().rev().fold(".nil".to_string(), |tail, head| format!(".cons ({head}) ({tail})")))
@@ -675,9 +953,23 @@ impl Exporter {
 				},
 				[call] if self.functions.get(&call.name()).is_some_and(|parameter| parameter == UNIT_TYPE) => Ok(format!(".call {} .unit", quoted(&call.name()))),
 				[_, arguments @ ..] if arguments.iter().any(|argument| matches!(argument.drop_meta(), Node::Key(_, Op::Assign, _))) => Err(format!("not in W0: named arguments in {}", node.serialize().trim())),
+				// `add 1 to 2` of `to add number a to number b: …` parses as `add (1 to 2)`: two arguments
+				[call, argument] if self.classes.contains_key(&arguments_class(&call.name())) && matches!(argument.drop_meta(), Node::Key(_, Op::To, _)) => {
+					let Node::Key(first, _, second) = argument.drop_meta() else { unreachable!("a `to` pair") };
+					let arguments = self.construction(&arguments_class(&call.name()), &[first.as_ref().clone(), second.as_ref().clone()])?;
+					Ok(format!(".call {} ({arguments})", quoted(&call.name())))
+				}
 				[call, arguments @ ..] if arguments.len() > 1 && self.classes.contains_key(&arguments_class(&call.name())) => {
 					let arguments = self.construction(&arguments_class(&call.name()), arguments)?;
 					Ok(format!(".call {} ({arguments})", quoted(&call.name())))
+				}
+				// `f(3)` of a name holding a lambda
+				[value, argument] if self.holds_value(value) => {
+					let function = match value.drop_meta() {
+						Node::Symbol(name) if self.lambda_names.contains(name) => format!(".glob {}", quoted(name)),
+						_ => self.expression(value)?,
+					};
+					Ok(format!(".app ({function}) ({})", self.expression(argument)?))
 				}
 				[call, argument] if self.functions.contains_key(&call.name()) => {
 					let declared = self.functions[&call.name()].clone();
@@ -701,6 +993,10 @@ impl Exporter {
 			},
 			// `xs.add(v)` is `xs = xs ++ [v]`: lists are values
 			Node::Key(list, Op::Dot, call) => match (list.drop_meta(), call.drop_meta()) {
+				(Node::Symbol(name), Node::List(items, _, _)) if items.len() == 2 && self.cell_lists.contains(name) && APPEND_METHODS.iter().any(|method| is_word(&items[0], method)) => {
+					let item = self.expression(&items[1])?;
+					Ok(format!(".set (.loc {}) {} (.append ({}) (.cons ({item}) .nil))", quoted(name), quoted(CELL_FIELD), self.cell_value(name)))
+				}
 				(Node::Symbol(name), Node::List(items, _, _)) if items.len() == 2 && APPEND_METHODS.iter().any(|method| is_word(&items[0], method)) => {
 					let item = self.expression(&items[1])?;
 					if !self.list_names.contains(name) {
@@ -740,9 +1036,21 @@ impl Exporter {
 			Node::Key(left, Op::Eq, right) if matches!(right.drop_meta(), Node::Symbol(class) if self.classes.contains_key(class)) => Ok(format!(".isA ({}) {}", self.expression(left)?, quoted(&right.name()))),
 			Node::Key(left, op @ (Op::Eq | Op::Ne | Op::Identical | Op::NotIdentical), right) => {
 				let compared = self.binary(if matches!(op, Op::Identical | Op::NotIdentical) { ".eq true" } else { ".eq false" }, left, right)?;
-				Ok(if matches!(op, Op::Ne | Op::NotIdentical) { format!(".ite ({compared}) (.bool false) (.bool true)") } else { compared })
+				Ok(if matches!(op, Op::Ne | Op::NotIdentical) { negation(compared) } else { compared })
 			}
 			Node::Key(list, Op::Hash, index) if !list.is_nothing() => self.binary(".index", list, index),
+			Node::Key(empty, Op::Not, operand) if empty.is_nothing() => Ok(negation(self.expression(operand)?)),
+			Node::Key(parameter, Op::FatArrow, body) => self.lambda(parameter, body),
+			// `a and b` is b when a is truthy, else a; `a or b` the other way round: a, free of effects, evaluated twice
+			Node::Key(left, op @ (Op::And | Op::Or), right) if self.is_pure(left) => {
+				let (left, right) = (self.expression(left)?, self.expression(right)?);
+				Ok(if *op == Op::And { format!(".ite ({left}) ({right}) ({left})") } else { format!(".ite ({left}) ({left}) ({right})") })
+			}
+			// `'a'..'e'`: letters, outside W0
+			Node::Key(from, Op::Range | Op::To, to) if [from, to].iter().any(|bound| matches!(bound.drop_meta(), Node::Text(_) | Node::Char(_))) => unsupported(node),
+			Node::Key(from, Op::Range, to) => self.binary(".range", from, to),
+			// `1 to 3` includes 3
+			Node::Key(from, Op::To, to) => Ok(format!(".range ({}) (.add ({}) (.int 1))", self.expression(from)?, self.expression(to)?)),
 			_ => unsupported(node),
 		}
 	}
@@ -750,7 +1058,7 @@ impl Exporter {
 
 /// The program as the Lean list of W0 items, or why it is outside W0
 pub fn export(code: &str) -> Result<String, String> {
-	let program = crate::wasp_parser::parse(code);
+	let program = crate::warp_parser::parse(code);
 	let items = Exporter::default().items(&program)?;
 	Ok(format!("[{}]", items.join(",\n  ")))
 }

@@ -57,7 +57,7 @@ pub fn kernel_name(parameter: &str, body: &Node) -> String {
 /// The parameter and body a kernel's name holds
 fn kernel_of(name: &str) -> Option<(String, Node)> {
 	let (parameter, body) = name.strip_prefix(LINEAR_MAP_PREFIX)?.split_once(KERNEL_NAME_SEPARATOR)?;
-	Some((parameter.to_string(), crate::wasp_parser::parse(body)))
+	Some((parameter.to_string(), crate::warp_parser::parse(body)))
 }
 
 /// The block's header (its count) and each cell are 8 bytes

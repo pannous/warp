@@ -6,12 +6,12 @@
 use crate::common::fails_with;
 use crate::is;
 use warp::normalize::{capture_hints, set_hint_mode, HintMode};
-use warp::wasp_parser::{parse_data, WaspParser};
+use warp::warp_parser::{parse_data, WarpParser};
 use warp::Node;
 
 fn hints_of(code: &str) -> Vec<(String, String)> {
 	set_hint_mode(HintMode::Always);
-	let (_, hints) = capture_hints(|| WaspParser::parse(code));
+	let (_, hints) = capture_hints(|| WarpParser::parse(code));
 	hints.into_iter().map(|hint| (hint.original, hint.canonical)).collect()
 }
 

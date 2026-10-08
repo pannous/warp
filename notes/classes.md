@@ -166,7 +166,7 @@ Keyword methods (classes-6, card classes-keyword): `def area() -> int {…}`, `f
 `func area() -> Int {…}`, `def scaled(k) {…}` in a class body are methods: class_items feeds each item through
 declarations.rs keyword_definition (warp-dd's) before splitting methods from fields, the result type stays on the
 method (dropped when the method changes its object and so gives it back); the parser no longer reads a keyword
-method's body as field types (wasp_parser transform_fields_to_types: `k` of `side * k` was `type k`).
+method's body as field types (warp_parser transform_fields_to_types: `k` of `side * k` was `type k`).
 
 Constructor block (classes-7, wiki/constructor.md): `init{ id = random() }` or `init {…}` in a class body is the
 function `P·init(self:P)` (class_methods::constructor_name), its field names read and set on self, giving self; a
@@ -182,7 +182,7 @@ Extension methods (classes-11, card functions-extension, declarations.rs): Kotli
 Swift `extension Int { func twice() -> Int { self * 2 } }` define `twice(this:Int)` (`self` when the body says self),
 so `3.twice()` calls it as a method like any function whose first parameter is the receiver.
 
-Generic classes (classes-12, wasp_parser atoms.rs): `class Box<T>{item:T}`, `class Pair<A, B>{…}`: a field of a type
+Generic classes (classes-12, warp_parser atoms.rs): `class Box<T>{item:T}`, `class Pair<A, B>{…}`: a field of a type
 parameter is `any` (a Node field), a method parameter of one is untyped; `Box<int>(3)` and `Box<int>{item:3}`
 construct a Box (the type arguments of a declared class are read past, not checked yet).
 
@@ -191,7 +191,7 @@ body is the method `method·double` (class_methods renamed_type_word_methods), i
 `double()` in the class body renamed too; `double(3)` and `3.double()` stay the conversion.
 
 Properties (classes-14, wiki/property.md): `get age() {…}` is the getter `age := …` (read `p.age` like a field),
-`set age(v) {…}` the method `age·set(self, v)`; the wasp form `age:{2026 - birthday} set{birthday = 2026 - it}` both,
+`set age(v) {…}` the method `age·set(self, v)`; the warp form `age:{2026 - birthday} set{birthday = 2026 - it}` both,
 `it` the new value. `p.age = v` of a variable p runs it: `p = age·set(p, v)` (class_methods setter_calls).
 
 Mixins (classes-15): `mixin Walker{steps:int=0; walk() := name + " walks"}` declares no class but items classes take
@@ -229,7 +229,7 @@ call with a block (parser flag in_data_literal, atoms.rs). In code `run { … }`
 ## Ported forms (classes-19, tests/types/test_class_forms_ported.rs)
 The same class as other languages write it (parser atoms.rs, class_methods.rs class_items):
 - Kotlin: primary constructor `class Point(val x: Int, var y: Int = 0) {…}` (its parameters are the fields, the
-  declaration ends at its line without a body), `data class` / `open` / `abstract` (CLASS_MODIFIERS: a wasp class
+  declaration ends at its line without a body), `data class` / `open` / `abstract` (CLASS_MODIFIERS: a warp class
   compares by value already), expression bodies `fun sum() = x + y`.
 - JavaScript: `constructor(x, y) {…}` and `sum() {…}` members, `new Point(1, 2)` of a declared class.
 - Python: `class Point:` with an indented body, `class Dog(Animal):` (parents in parentheses, `object` none),
@@ -260,13 +260,13 @@ operand keeps the built-in operator (card class-method: dispatch at run time). A
 `+(o) := …` and C++/C#'s `operator +(o) := …` (classes-25: the parser's try_parse_operator_method_head reads a glyph
 before `(…) :=` as the head, as_member renames it to the english name).
 Foreign spellings are aliases (classes-24, alias rule in notes/agents/common.md): they work and give a got-it note
-with an "I meant: <wasp word>" fix, `diagnostic::note_alias(written, wasp_word)` (educate_once, topic
+with an "I meant: <warp word>" fix, `diagnostic::note_alias(written, warp_word)` (educate_once, topic
 `alias-<foreign word>`): `__add__`/`add` → `plus` (every non-first name in
 OPERATOR_METHODS), `data class`/`open class`… → `class`, `mutating func` → `func`, `val x`/`var count` → the field
-(`async` stays silent: it may mean something in wasp), `new Point(1, 2)` → `Point(1, 2)` ("new is superfluous").
+(`async` stays silent: it may mean something in warp), `new Point(1, 2)` → `Point(1, 2)` ("new is superfluous").
 Tests: tests/types/test_class_aliases.rs.
-P162 (user, 2026-10-06, classes-26): `init` is the constructor. Aliases with the note "wasp says init": `value` (the
-first wasp name), `constructor`, `__init__`, `initialize`, `__construct`, `New`, `Create`, `new`, and a method named
+P162 (user, 2026-10-06, classes-26): `init` is the constructor. Aliases with the note "warp says init": `value` (the
+first warp name), `constructor`, `__init__`, `initialize`, `__construct`, `New`, `Create`, `new`, and a method named
 like its class (class_methods with_init_constructors, CONSTRUCTOR_ALIASES). An alias the program also calls as a
 method (`p.new(2)`, Rust's `Point::new(1, 2)`: method_calls_named) stays a method. The constructor function is
 `P·init` (it was `P·value`).
@@ -301,7 +301,7 @@ questions (`age:{date - 1996}` getters of data, setters): nothing ported from it
 Interfaces (classes-32): class methods satisfy traits, trait-typed parameters, foreign interface/protocol forms and
 `implements`/`: Shape` lists: notes/traits.md "Classes and foreign interfaces".
 
-Enums and sealed classes (classes-33, tests/types/test_enums_ported.rs): a wasp enum is the object of its cases
+Enums and sealed classes (classes-33, tests/types/test_enums_ported.rs): a warp enum is the object of its cases
 numbered from 0 (declarations::enum_object). Ported: Swift's `enum Direction { case north, south }` and
 `switch d { case .north: 1 }` (welcome_forms arrow_cases strips `case`; declarations::enum_paths reads `.north` as
 `Direction.north` when one enum has the case), Kotlin's `enum class` (a note), `when (c) { A -> 1; 1, 2 -> …; is T -> …;
@@ -315,7 +315,7 @@ Text, equality and order as methods (classes-34, tests/types/test_class_witnesse
 the other instance `o:P`; they are no type-word methods). Aliases with a note: toString, to_s, __str__, ToString,
 String (Go) → text; Equals, __eq__, equal → equals (`==` is no operator method any more: Equatable dispatches it);
 compareTo, CompareTo, cmp → compare. `P·init(P{…}, 3)` has P's shape for the trait passes (traits::shape).
-Not ported: hashCode/__hash__ (wasp has no hash witness; they stay plain methods), Swift's `description` property.
+Not ported: hashCode/__hash__ (warp has no hash witness; they stay plain methods), Swift's `description` property.
 
 ## Instances and json (classes-37, tests/types/test_class_json.rs)
 - `to_json(p)` in a program declaring classes is `to_json_of_classes(p, ["Point", …])` (class_methods
@@ -351,7 +351,7 @@ block as children and per-instance state are web's (ruby_blocks.rs, component_st
 
 ## Field names that are words (classes-41, card classes-field, tests/types/test_class_field_names.rs)
 - An operator word directly before a key colon names the key: `{from:a to:b}`, `{is:1 or:2}` (parser
-  `word_names_key` in wasp_parser/lookahead.rs); `then:`, `else:`, `do:` stay operators (BLOCK_COLON_WORDS).
+  `word_names_key` in warp_parser/lookahead.rs); `then:`, `else:`, `do:` stay operators (BLOCK_COLON_WORDS).
 - `l.start` beside a user function `start` reads the field when start is a declared class field and l is a parameter
   or of known instance shape (library_words::method_call); before, it became `start(l)` and recursed forever.
 - Without any class (card classes-function): `p.name` inside the function `name(p)` reads the field, since the call
@@ -376,5 +376,11 @@ block as children and per-instance state are web's (ruby_blocks.rs, component_st
 the parser (skip_conformances) puts the named traits on the type's name as `@implements(Shape Named)`; traits.rs
 named_claims checks each declared trait like the claim `class Square{…} is Shape`: a missing operation is the compile
 error "Square claims Shape but defines no area(s:Square)". A name that is no declared trait (a parent class written
-`: Base`) is not checked. The old "wasp needs no list of them" note is gone. Found on the way: a trait written
+`: Base`) is not checked. The old "warp needs no list of them" note is gone. Found on the way: a trait written
 `interface Shape { fun area(): Int }` on one line took `fun` as an operation; function keywords are dropped there.
+Shared lists (card shared-lists, not started): lists are still values. All list changes lower to `place = new value`
+(`ys.add(2)` → `ys = ys + [2]`, pop → slice, `ys#1 = 5` → list_with_at copies the cells), and list_dispatch.rs typed
+lists copy on alias by design ("ys = xs copies it when either variable is updated"). Sharing needs: in-place runtime
+append/set/pop/remove/insert on Node cons lists (ø grows like fields_grow), add lowered to a form other than
+`ys = ys + [v]` (Python: `+` makes a new list, `+=` extends in place), typed $IntList/$FloatList locals aliased to one
+struct and kept typed only while never used whole (as map_backend does).

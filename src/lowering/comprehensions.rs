@@ -5,7 +5,7 @@
 use crate::library_words::substitute;
 use crate::node::{Bracket, Node, Separator};
 use crate::operators::Op;
-use crate::wasp_parser::parse;
+use crate::warp_parser::parse;
 use std::cell::Cell;
 
 const FOR_WORD: &str = "for";

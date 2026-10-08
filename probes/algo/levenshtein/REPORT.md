@@ -4,7 +4,7 @@ Branch: `algo-levenshtein`. The natural version fails (`test_levenshtein` is `#[
 Probe runner: `cargo --offline test --all-features --test test_algo_levenshtein probe -- --ignored --nocapture` evaluates every snippet in this folder.
 
 ## Natural program
-`samples/levenshtein.wasp` → `Error("undefined variable: let")`, expected 11.
+`samples/levenshtein.warp` → `Error("undefined variable: let")`, expected 11.
 
 ## Failures (minimal snippet → actual vs expected; cause)
 1. **`let`/`var` inside any block** (fun, for, if): `fun f(n) { let m = n + 1; return m }; f(2)` → `undefined variable: let`, expected 3.
@@ -17,12 +17,12 @@ Probe runner: `cargo --offline test --all-features --test test_algo_levenshtein 
    Cause: wasm_emitter/list_emitter.rs:360 `is_statement_sequence` counts `Key(_, Op::Hash, _)` as a statement, so the literal is evaluated as a block.
 4. **Pushing a min() result**: `c=[1]; x=2; y=3; c.push(min(x, y)); c#2` → `list + int`, expected 2. min lowers to `x<y ? x : y`, and inside `[...]` the `x : y` is read as a key:value entry. Fix in min_max.rs `extremum`: parenthesize the ternary.
 5. **min() rejects indexing**: `p=[1,2]; min(p#1, 5)` → `min arguments must be plain values or arithmetic`, expected 1. Indexing has no side effects (min_max.rs:56). Better: bind the arguments to temp locals.
-6. **`for j in 0...n { … }` never terminates**: → out of fuel, expected 6 (with s += j, n = 3). The parse is `for j in 0 to (n {s+=j})`, because `try_parse_for_in` (wasp_parser.rs ~1610) splits off `xs {…}` only at the top of the iterable, not inside the `to` key. `0...3 {` and `0...(n) {` work.
+6. **`for j in 0...n { … }` never terminates**: → out of fuel, expected 6 (with s += j, n = 3). The parse is `for j in 0 to (n {s+=j})`, because `try_parse_for_in` (warp_parser.rs ~1610) splits off `xs {…}` only at the top of the iterable, not inside the `to` key. `0...3 {` and `0...(n) {` work.
 7. **`+=` mixes scopes**: `def g(a) { t = a; 7 }; t = 0; t += g("x"); t` → `WASM validation failed: type mismatch: expected i64, found (ref $type)`, expected 7. `t = t + g("x")` works.
 
 ## Also noticed
 - `len(x)` → `undefined function: len`; Python users will write it.
-- `#s` alone on a line (for example a function's last expression, or `{ #a }`) is a shell comment (wasp_parser.rs:584), so `def g(a){ s=a\n #s }; g("abc")` → "abc". That's a footgun, since the length hint itself recommends `#var`. Suggest: `#ident` with no space counts; `# ` with a space is a comment.
+- `#s` alone on a line (for example a function's last expression, or `{ #a }`) is a shell comment (warp_parser.rs:584), so `def g(a){ s=a\n #s }; g("abc")` → "abc". That's a footgun, since the length hint itself recommends `#var`. Suggest: `#ident` with no space counts; `# ` with a space is a comment.
 
 ## Non-idiomatic constructs (all should be eaten, with education)
 | mine | idiomatic |

@@ -4,6 +4,9 @@ use super::*;
 
 impl WasmGcEmitter {
 	pub(super) fn emit_numeric_value(&mut self, func: &mut Function, node: &Node) {
+		if let Some(identity) = self.object_identity(node) {
+			return self.emit_object_identity(func, identity);
+		}
 		if let Some(product) = self.numeric_times(node).or_else(|| self.identity_as_equality(node)) {
 			return self.emit_numeric_value(func, &product);
 		}
@@ -172,8 +175,14 @@ impl WasmGcEmitter {
 				}
 			}
 		}
+		if let [word, left, right, tolerance] = items {
+			if word.drop_meta().name() == crate::library_words::VALUES_SIMILAR {
+				self.emit_similarity(func, left, right, tolerance);
+				return true;
+			}
+		}
 		if let [word, dividend, divisor] = items {
-			if matches!(word.drop_meta(), Node::Symbol(name) if name == crate::wasp_parser::FLOOR_QUOTIENT) {
+			if matches!(word.drop_meta(), Node::Symbol(name) if name == crate::warp_parser::FLOOR_QUOTIENT) {
 				self.emit_floor_quotient(func, dividend, divisor);
 				return true;
 			}

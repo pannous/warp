@@ -7,7 +7,7 @@ use warp::diagnostic::take_assumptions;
 fn a_spaced_left_arrow_assigns_with_a_note() {
 	is!("x <- 3; x + 1", 4);
 	take_assumptions();
-	warp::wasp_parser::parse("x <- 3");
+	warp::warp_parser::parse("x <- 3");
 	let assumed = take_assumptions();
 	assert!(assumed.iter().any(|note| note.message.contains("x = 3")), "{assumed:?}");
 }

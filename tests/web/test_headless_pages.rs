@@ -10,7 +10,7 @@ fn a_click_runs_the_handler_and_shows_the_page_anew() {
 	assert_eq!(page.text(), "Addclicked 0");
 	page.click("Add").expect("clicks");
 	page.click("Add").expect("clicks");
-	assert_eq!(page.html(), "<div><button data-wasp-click=\"1\">Add</button><p>clicked 2</p></div>");
+	assert_eq!(page.html(), "<div><button data-warp-click=\"1\">Add</button><p>clicked 2</p></div>");
 }
 
 #[test]

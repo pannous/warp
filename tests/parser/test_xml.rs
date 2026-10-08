@@ -1,6 +1,6 @@
 use crate::eq;
 use warp::Node;
-use warp::wasp_parser::parse_xml;
+use warp::warp_parser::parse_xml;
 use Node::*;
 
 #[test]
@@ -192,9 +192,9 @@ fn test_complex_xml_document() {
 	let node3 = parse_xml(&xml_output);
 	eq!(node, node3);
 
-	// Also test Wasp notation serialization
+	// Also test Warp notation serialization
 	let serialized = node.serialize();
-	println!("Serialized (Wasp notation): {}", serialized);
+	println!("Serialized (Warp notation): {}", serialized);
 	assert!(serialized.contains("html"));
 	assert!(serialized.contains(".class")); // Attributes use dotted notation
 }

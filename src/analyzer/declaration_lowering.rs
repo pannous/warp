@@ -115,7 +115,7 @@ pub(super) fn indexes(body: &Node, name: &str) -> bool {
 
 /// A text key or a variable holding one of the map's keys (`m[k]` in `for k in keys(m)`), not a position
 pub fn looks_up_a_key(index: &Node, key_variables: &HashSet<String>) -> bool {
-	is_text_key(index) || matches!(crate::wasp_parser::subscript_key(index).unwrap_or(index).drop_meta(), Node::Symbol(index) if key_variables.contains(index))
+	is_text_key(index) || matches!(crate::warp_parser::subscript_key(index).unwrap_or(index).drop_meta(), Node::Symbol(index) if key_variables.contains(index))
 }
 
 /// The variables that hold a map's keys: `k` of a lowered `for k in keys(m)`, `k·items = map_keys(m)` … `k = k·items#i`,
@@ -178,7 +178,7 @@ pub(super) fn field_update(value: &Node, name: &str) -> bool {
 
 /// An index by a text key: `m["k"]`, `m["k\(i)"]` (arriving as `"k" + text_form(i)`), not a position
 pub(super) fn is_text_key(index: &Node) -> bool {
-	is_text(crate::wasp_parser::subscript_key(index).unwrap_or(index))
+	is_text(crate::warp_parser::subscript_key(index).unwrap_or(index))
 }
 
 pub(super) fn is_text(node: &Node) -> bool {
@@ -409,7 +409,7 @@ pub(super) fn lower_declarations_among(node: Node, names: &Names) -> Node {
 		}
 		Node::List(items, Bracket::None, _) if applied_object(&items).is_some() => {
 			let (object, key) = applied_object(&items).expect("guarded");
-			lower(crate::wasp_parser::subscript(object, key))
+			lower(crate::warp_parser::subscript(object, key))
 		}
 		Node::List(items, bracket, separator) => Node::List(items.into_iter().map(lower).collect(), bracket, separator),
 		Node::Meta { node, data } => Node::Meta { node: Box::new(lower(*node)), data },
@@ -551,7 +551,7 @@ pub(super) fn popped_list(list: &Node, call: &Node) -> Option<Node> {
 	}
 	match call.drop_meta() {
 		Node::List(items, _, _) if matches!(items.as_slice(), [method] if is_word(method, POP_METHOD)) => {
-			let template = crate::wasp_parser::parse(&format!(
+			let template = crate::warp_parser::parse(&format!(
 				"({POP_TEMPORARY} = {POP_PLACE}#count({POP_PLACE}); {POP_PLACE} = {LIST_DROP_LAST}({POP_PLACE}); {POP_TEMPORARY})"));
 			Some(crate::law::substitute(&template, &std::collections::HashMap::from([(POP_PLACE.to_string(), list.clone())])))
 		}
@@ -579,7 +579,7 @@ pub(super) fn removed_key(map: &Node, call: &Node) -> Option<Node> {
 	], Bracket::Round, Separator::Semicolon))
 }
 
-/// `xs.insert(a, b)` when xs is a variable. Wasp writes `insert(value, position)`, Python `insert(position, value)`:
+/// `xs.insert(a, b)` when xs is a variable. Warp writes `insert(value, position)`, Python `insert(position, value)`:
 /// the order is never guessed (wiki/Footguns.md "Guessing intent"), `at:` or the kinds decide
 pub(super) fn inserted_element(list: &Node, call: &Node) -> Option<Inserted> {
 	if !is_place(list) {
@@ -608,7 +608,7 @@ pub(super) enum Inserted {
 }
 
 /// `xs = list_insert_at(xs, position, value)`, or `insert_in_either_order(xs, a, b)` that the emitter resolves by the
-/// kinds of a and b: the one Int is the position, two Ints are ambiguous (Python and wasp order differ)
+/// kinds of a and b: the one Int is the position, two Ints are ambiguous (Python and warp order differ)
 pub(super) fn lowered_insert(list: Box<Node>, call: &Node) -> Node {
 	let (pseudo_call, first, second) = match inserted_element(&list, call).expect("guarded") {
 		Inserted::At(position, value) => (INSERT_AT_CALL, position, value),
@@ -685,7 +685,7 @@ pub(super) fn list_times(key: &Node, positioned: &Node) -> Option<Node> {
 	Some(match crate::diagnostic::ask(&question) {
 		Ok(0) => filled_list(count.clone(), list).unwrap_or_else(|| crate::node::error("`n times [x]` repeats one element: `3 times [0]`")),
 		Ok(_) => {
-			let mapped = crate::wasp_parser::parse(&format!("({}).map(item => item * ({}))", list.serialize(), count.serialize()));
+			let mapped = crate::warp_parser::parse(&format!("({}).map(item => item * ({}))", list.serialize(), count.serialize()));
 			lower_list_times(mapped)
 		}
 		Err(error) => error,
@@ -729,7 +729,7 @@ pub(super) fn list_plus(key: &Node, positioned: &Node) -> Option<Node> {
 	})
 }
 
-/// The element name of the lambda an element-wise operator maps with: no wasp program writes it
+/// The element name of the lambda an element-wise operator maps with: no warp program writes it
 pub const EACH_ELEMENT: &str = "each_element";
 
 /// `xs .+ n` (also `.-`, `.*`, `./`): the operator applied to each element, `xs.map(each_element => each_element + n)`
@@ -766,7 +766,7 @@ pub(super) fn zero_filled_subscript(element: &Node, one_based: &Node, variables:
 	}
 	let count = match one_based.drop_meta() {
 		Node::Number(Number::Int(one_based)) => Node::int(one_based - 1),
-		other => crate::wasp_parser::subscript_key(other)?.clone(),
+		other => crate::warp_parser::subscript_key(other)?.clone(),
 	};
 	zero_list(count, word)
 }

@@ -1,7 +1,7 @@
 # Distribution (2026-10-05)
 
 Our own answer to a "growth" cold email: README is repositioned (README.md), these are the channels and drafts.
-README examples are verified by probes/readme/*.wasp (run each with `warp <file>`).
+README examples are verified by probes/readme/*.warp (run each with `warp <file>`).
 
 ## Positioning
 One line: **a data format that is also a programming language, compiled straight to WebAssembly GC; try it in the

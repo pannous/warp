@@ -62,7 +62,7 @@ fn lower_timers(program: Node) -> Node {
 		if let Some((channel, body)) = message_listener(&statement) {
 			let handler = format!("{}{count}", crate::host::TIMER_HANDLER_PREFIX);
 			let id = Node::int(count as i64);
-			let messages = crate::law::substitute(&crate::wasp_parser::parse(MESSAGES_TEMPLATE), &std::collections::HashMap::from([("ID".to_string(), id.clone()), ("BODY".to_string(), body)]));
+			let messages = crate::law::substitute(&crate::warp_parser::parse(MESSAGES_TEMPLATE), &std::collections::HashMap::from([("ID".to_string(), id.clone()), ("BODY".to_string(), body)]));
 			lowered.push(function_with_globals(&handler, false, &[messages.drop_meta().clone()], &main_variables));
 			lowered.push(call(crate::host::CHANNEL_LISTEN, vec![id.clone(), channel]));
 			lowered.push(call(crate::host::SIGNAL_EVERY, vec![id, Node::int(CHANNEL_CHECK_MILLISECONDS)]));

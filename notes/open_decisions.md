@@ -8,7 +8,7 @@ Details: notes/todo_sweep_task.md (board), notes/semicolon_survey.md, notes/floa
 
 ## Pending questions (ordered by impact; recommended option first)
 None open. Parked (user: "Later"):
-- Parked: P150 license: warp (and wasp) have none, so package managers list no license and nobody may legally reuse the
+- Parked: P150 license: warp (and warp) have none, so package managers list no license and nobody may legally reuse the
   code. MIT (recommended, as uniscript) / Apache-2.0 / MIT OR Apache-2.0 (Rust convention). User 2026-10-06: "let's
   postpone the license". Blocks the crates.io upload of P151 (crates.io refuses a crate without license metadata).
 - Parked: P69a may a run-time block assign the `!` site's local variables? Spec default (wiki/charged.md): no, it reads them

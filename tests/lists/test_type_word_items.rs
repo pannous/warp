@@ -1,7 +1,7 @@
 // card variable-named: `int 4` and `int(4)` cast, but a list `[int, 4]` or a variable named like a type word is no
 // cast: `int = 3; [int, 4]` is the list [3 4]
 use crate::is;
-use warp::wasp_parser::parse;
+use warp::warp_parser::parse;
 
 #[test]
 fn a_type_word_variable_heads_a_list() {

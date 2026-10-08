@@ -24,13 +24,13 @@ fn a_css_transition_joins_the_element_style() {
 #[test]
 fn the_starting_style_is_data_for_the_page() {
 	let html = html_of("ul{ li{ starting-style: { opacity: 0 transform: \"scale(0.8)\" } transition: \"opacity 200ms, transform 200ms\" \"a\" } }");
-	assert_eq!(html, "<ul><li data-wasp-starting-style=\"opacity: 0; transform: scale(0.8)\" style=\"transition: opacity 200ms, transform 200ms\">a</li></ul>");
+	assert_eq!(html, "<ul><li data-warp-starting-style=\"opacity: 0; transform: scale(0.8)\" style=\"transition: opacity 200ms, transform 200ms\">a</li></ul>");
 }
 
 #[test]
 fn a_made_up_kind_is_css_with_a_hint() {
 	let (shown, hints) = capture_hints(|| html_of("p{ transition: fade 200ms\n \"a\" }"));
-	assert_eq!(shown, "<p data-wasp-starting-style=\"opacity: 0\" style=\"transition: opacity 200ms, transform 200ms\">a</p>", "fade still works");
+	assert_eq!(shown, "<p data-warp-starting-style=\"opacity: 0\" style=\"transition: opacity 200ms, transform 200ms\">a</p>", "fade still works");
 	let canonical: Vec<String> = hints.into_iter().map(|hint| hint.canonical).collect();
 	assert!(canonical.contains(&"transition: \"opacity 200ms, transform 200ms\" starting-style: { opacity: 0 }".to_string()), "{canonical:?}");
 }

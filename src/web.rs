@@ -41,7 +41,7 @@ impl Acknowledger for PageAcknowledger {
 	}
 }
 
-/// Compile and run `code` as `warp file.wasp` does, with the topics the page acknowledged. The report (JSON):
+/// Compile and run `code` as `warp file.warp` does, with the topics the page acknowledged. The report (JSON):
 /// `value` (what the CLI prints), `error`, `errors` (the failed program's errors with fixes), `warnings`, `hints`,
 /// `notes` (topics of the warnings and notes shown that the user can say "got it" to), `got_it` (each of them with the
 /// `topic@expression` key that silences only its expression; a warning carries its own as `expression_key`) and
@@ -80,26 +80,27 @@ pub fn evaluate(code: &str, acknowledged: HashSet<String>) -> Value {
 	report
 }
 
-/// Markup the page shows as DOM (card web-dom), rendered by lib/markup.wasp: inside the program's module when it renders
+/// Markup the page shows as DOM (card web-dom), rendered by lib/markup.warp: inside the program's module when it renders
 /// itself, else by the renderer compiled on its own
 fn html_of(value: &Node) -> Value {
 	let rendered = RENDERED.with(|rendered| rendered.borrow_mut().take());
 	json!(crate::markup::is_markup(value).then(|| rendered.unwrap_or_else(|| crate::markup::to_html(value))))
 }
 
-/// `code` compiled and run; a program holding markup renders itself (pipeline::rendering_itself)
+/// `code` compiled and run; a program holding markup renders itself (pipeline::rendering_itself). The page has no
+/// `warp test`: a program's tests run, and their summary is its value (lowering/test_blocks.rs)
 fn run_shown(code: &str) -> Node {
-	match renders_itself(code) {
+	crate::pipeline::for_tests(|| match renders_itself(code) {
 		true => crate::pipeline::rendering_itself(|| crate::wasm_emitter::eval(code)),
 		false => crate::wasm_emitter::eval(code),
-	}
+	})
 }
 
 /// Does the program hold markup (`div{…}`): only then it carries the renderer, which a plain program does not need
 pub fn renders_itself(code: &str) -> bool {
 	let mut holds_markup = false;
 	// quietly: the compile that follows says what the parse finds
-	diagnostic::quietly(|| crate::wasp_parser::parse(code)).visit(&mut |part| holds_markup |= crate::markup::is_markup(part));
+	diagnostic::quietly(|| crate::warp_parser::parse(code)).visit(&mut |part| holds_markup |= crate::markup::is_markup(part));
 	holds_markup
 }
 
@@ -511,7 +512,7 @@ mod exports {
 		})
 	}
 
-	/// The value of a run outcome (as run_outcome reads it) as wasp text: what a page event handler gave (worker.js
+	/// The value of a run outcome (as run_outcome reads it) as warp text: what a page event handler gave (worker.js
 	/// handleEvent, notes/signals.md phase 7); returns the length of the text, read at `web_report()`
 	#[no_mangle]
 	pub extern "C" fn web_show(outcome: *const u8, outcome_length: usize) -> usize {

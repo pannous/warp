@@ -6,7 +6,7 @@ fn probe_indent() {
 		("06_nested_spaces", "4202"), ("07_while_do_end", "3"), ("08_while_do_end_lines", "3"), ("09_def_tabs", "7"), ("11_if_then_else_end", "6"), ("10_single_end_ambiguous", "ambiguous"), ("12_do_end_two_statements", "3")];
 	let mut failed = 0;
 	for (name, expected) in cases {
-		let path = format!("probes/indent/{name}.wasp");
+		let path = format!("probes/indent/{name}.warp");
 		let code = std::fs::read_to_string(&path).unwrap();
 		let parsed = std::panic::catch_unwind(|| warp::parse(&code).serialize()).unwrap_or_else(|_| "PANIC".into());
 		let got = std::panic::catch_unwind(|| eval(&path).to_string()).unwrap_or_else(|_| "PANIC".into());

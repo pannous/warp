@@ -9,7 +9,7 @@
 use crate::diagnostic::Diagnostic;
 use crate::node::{Bracket, Node, Separator};
 use crate::operators::Op;
-use crate::wasp_parser::WaspParser;
+use crate::warp_parser::WarpParser;
 use std::collections::HashMap;
 use std::fmt;
 
@@ -136,7 +136,7 @@ pub fn parts_with(source: &str, bare_names: bool) -> Result<Vec<Part>, TemplateE
 				if expression.trim().is_empty() {
 					return Err(TemplateError("empty hole ${}".into()));
 				}
-				WaspParser::parse(&expression)
+				WarpParser::parse(&expression)
 			}
 			Some(c) if bare_names && (c.is_alphabetic() || c == '_') => {
 				let mut name = String::new();

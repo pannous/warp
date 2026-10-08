@@ -10,7 +10,7 @@ The program says *what* it listens to with the same words as for its own signals
 `on file "notes.txt" change {…}`, `whenever battery < 20% {…}`, `on dark mode {…}`. The compiler sees a name it does not
 define, finds it in the **system signal catalog**, and emits an import `signal_subscribe(name, filter)` plus an exported
 dispatcher `on·signal(id, event)`. The **runtime** (wasmtime host natively, host.js in the page) owns a **signal bus**:
-platform **connectors** feed it, it queues events as wasp nodes, and delivers them to the module at **check points**.
+platform **connectors** feed it, it queues events as warp nodes, and delivers them to the module at **check points**.
 WASM never sees a platform API; every dirty part lives in a connector.
 
 ```
@@ -29,7 +29,7 @@ WASM never sees a platform API; every dirty part lives in a connector.
 
 ## The catalog: names, not APIs
 
-A signal is named in words, with a namespace for the ambiguous ones; the payload is a wasp node, so it reads as data.
+A signal is named in words, with a namespace for the ambiguous ones; the payload is a warp node, so it reads as data.
 
 | signal | payload (`event`) | native connector | browser connector |
 |---|---|---|---|
@@ -86,9 +86,9 @@ one instance. So events are **queued and delivered at check points**, the same m
 
 ## Language surface (nothing new beyond notes/signals.md)
 
-```wasp
+```warp
 on interrupt { print "saving…"; save(); exit }
-on file "config.wasp" change { config = load "config.wasp" }   // hot reload
+on file "config.warp" change { config = load "config.warp" }   // hot reload
 whenever battery < 20% { notify "plug me in" }                 // a system value as a derived signal
 on every 5 minutes { backup() }
 on message from "chat" { print event.text }
@@ -199,7 +199,7 @@ connectors. Board card: signals-system (phase 7 of notes/signals.md, split out).
   the next run; each tick runs `on·every·N` and shows the output binding `page·value` (event_signals.rs makes it for
   programs with timers too). A host without a page loop (test-worker.js) still only warns.
 - Channels (branch signals-broadcast, warp-3a; tests/control/test_broadcast.rs; syntax an assumption queued with the
-  Interviewer): `broadcast value on "chat"` sends any value (`{text: "hi"}`, `21`) as wasp text to every program on this
+  Interviewer): `broadcast value on "chat"` sends any value (`{text: "hi"}`, `21`) as warp text to every program on this
   machine listening with `on message from "chat" {…}`, where `event` is the value; without a name both use the channel
   "warp". Natively (unix, src/channels.rs) a channel is the directory `<temp>/warp-channels/<channel>` of Unix datagram
   sockets, one per listener, removed when its run ends; a broadcast sends to each and drops dead ones. A listener is

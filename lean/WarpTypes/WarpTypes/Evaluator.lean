@@ -53,6 +53,7 @@ def step (P : Program) (μ : Store) : Expr → Option (Expr × Store)
   | .seq a b => if a.isValue then some (b, μ) else stepIn (.seq b) a μ (step P μ a)
   | .index l i => stepPair .indexL .indexR l i μ (step P μ l) (step P μ i)
       (some ((nth l ((asInt i).getD 0)).getD (.error "index out of range"), μ))
+  | .range a b => stepPair .rangeL .rangeR a b μ (step P μ a) (step P μ b) (some (rangeValues a b, μ))
   | .append a b => stepPair .appendL .appendR a b μ (step P μ a) (step P μ b) (some (appendValues a b, μ))
   | .assign x e => if e.isValue then some (e, μ.set x (.val e)) else stepIn (.assign x) e μ (step P μ e)
   | .init x e => if e.isValue then some (e, μ.set x (.val e)) else stepIn (.init x) e μ (step P μ e)
@@ -110,6 +111,11 @@ def step (P : Program) (μ : Store) : Expr → Option (Expr × Store)
         | .cons h t => .seq (b.subst y h) (.forIn y t b)
         | _ => .error "not a list", μ)
     else stepIn (.forIn y b) l μ (step P μ l)
+  | .lam y b => some (.clo y b, μ)
+  | .app f a => stepPair .appL .appR f a μ (step P μ f) (step P μ a)
+      (some (match f with
+        | .clo y b => b.subst y a
+        | _ => .error "not a function", μ))
   | _ => none
 
 variable {P : Program}
@@ -183,6 +189,10 @@ theorem step_sound : ∀ {e : Expr} {μ s'}, step P μ e = some s' → Step P (e
     intro μ s' hs
     exact stepPair_sound (L := .indexL) (R := .indexR) rfl id rfl (fun _ => ih1) (fun _ => ih2)
       (fun va vb hd => by cases hd; exact .index va vb) hs
+  | range a b ih1 ih2 =>
+    intro μ s' hs
+    exact stepPair_sound (L := .rangeL) (R := .rangeR) rfl id rfl (fun _ => ih1) (fun _ => ih2)
+      (fun va vb hd => by cases hd; exact .range va vb) hs
   | append a b ih1 ih2 =>
     intro μ s' hs
     exact stepPair_sound (L := .appendL) (R := .appendR) rfl id rfl (fun _ => ih1) (fun _ => ih2)
@@ -296,6 +306,15 @@ theorem step_sound : ∀ {e : Expr} {μ s'}, step P μ e = some s' → Step P (e
       · simp only [isValue, Bool.and_eq_true] at hv; exact .forCons hv.1 hv.2
       · exact .forOther hv (by cases l <;> simp_all [isList])
     · exact stepIn_sound (F := .forIn y b) rfl (fun _ => ih) hs
+  | lam y b => intro μ s' hs; simp only [step] at hs; cases hs; exact .lam
+  | app f a ih1 ih2 =>
+    intro μ s' hs
+    exact stepPair_sound (L := .appL) (R := .appR) rfl id rfl (fun _ => ih1) (fun _ => ih2)
+      (fun vf va hd => by
+        cases hd
+        split
+        · exact .app va
+        · exact .appOther vf va (by cases f <;> simp_all [isClosure])) hs
   | _ => intro μ s' hs; simp [step] at hs
 
 /-- at most `fuel` steps -/

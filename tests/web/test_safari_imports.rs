@@ -27,8 +27,8 @@ fn safaris_engine_reads_the_imports_of_a_task_program() {
 		return;
 	}
 	let directory = PathBuf::from(env!("CARGO_TARGET_TMPDIR"));
-	let source = directory.join("safari_threads.wasp");
-	std::fs::copy(concat!(env!("CARGO_MANIFEST_DIR"), "/samples/threads.wasp"), &source).unwrap();
+	let source = directory.join("safari_threads.warp");
+	std::fs::copy(concat!(env!("CARGO_MANIFEST_DIR"), "/samples/threads.warp"), &source).unwrap();
 	let compiled = crate::common::warp_command().args(["compile", "--wasm"]).arg(&source).output().unwrap();
 	assert!(compiled.status.success(), "{}", String::from_utf8_lossy(&compiled.stderr));
 

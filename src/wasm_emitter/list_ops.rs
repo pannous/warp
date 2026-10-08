@@ -1795,12 +1795,12 @@ impl WasmGcEmitter {
 
 	/// A key held as a Node (`edge[0]` of a map's value): a number indexes, a name looks up, decided at runtime
 	pub(super) fn dynamic_key(&self, index: &Node) -> Option<Node> {
-		let key = crate::wasp_parser::subscript_key(index)?;
+		let key = crate::warp_parser::subscript_key(index)?;
 		(self.get_type(key) == Kind::Empty && !matches!(key.drop_meta(), Node::Empty)).then(|| key.clone())
 	}
 
 	pub(super) fn map_key(&self, index: &Node) -> Option<Node> {
-		let key = crate::wasp_parser::subscript_key(index)?;
+		let key = crate::warp_parser::subscript_key(index)?;
 		let is_name = matches!(self.get_type(key), Kind::Symbol | Kind::Text | Kind::Codepoint) || matches!(key.drop_meta(), Node::Char(_)); // "x" is a codepoint
 		is_name.then(|| key.clone())
 	}

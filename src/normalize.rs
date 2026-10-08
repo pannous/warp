@@ -1,6 +1,6 @@
 //! Normalization hints for guiding users toward canonical syntax
 //!
-//! Wasp accepts many syntactic forms but has preferred canonical forms.
+//! Warp accepts many syntactic forms but has preferred canonical forms.
 //! This module emits gentle hints to educate users about the preferred way.
 //!
 //! # Configuration
@@ -567,7 +567,7 @@ pub mod hints {
         match used_style {
             // shown until the user acknowledges it once (diagnostic::educate_once)
             VarStyle::Let => crate::diagnostic::educate_once(LET_TOPIC, &spell(used_style), &spell(preferred),
-                &format!("{reason}; in wasp `let` is immutable (unlike JS), use var or plain = for variables that change")),
+                &format!("{reason}; in warp `let` is immutable (unlike JS), use var or plain = for variables that change")),
             _ => hint(&spell(used_style), &spell(preferred), reason),
         }
     }
@@ -714,7 +714,7 @@ pub mod hints {
 /// Type word of the list types; `list<int>`, `list of int` and `ints` all denote a list of int
 const LIST_TYPE_HEAD: &str = "list";
 const OF_WORD: &str = "of";
-/// The acknowledge-once note that `let` is immutable in wasp
+/// The acknowledge-once note that `let` is immutable in warp
 pub const LET_TOPIC: &str = "let";
 const STRING_TYPE_NAMES: [&str; 2] = ["str", "String"];
 
@@ -738,7 +738,7 @@ pub fn operand_text(node: &Node) -> String {
 fn as_written(node: Node) -> Node {
     match node {
         Node::List(items, bracket, separator) => match items.as_slice() {
-            [word, dividend, divisor] if matches!(word.drop_meta(), Node::Symbol(name) if name == crate::wasp_parser::FLOOR_QUOTIENT) => {
+            [word, dividend, divisor] if matches!(word.drop_meta(), Node::Symbol(name) if name == crate::warp_parser::FLOOR_QUOTIENT) => {
                 Node::Symbol(format!("{}//{}", operand_text(dividend), operand_text(divisor)))
             }
             _ => Node::List(items.into_iter().map(as_written).collect(), bracket, separator),
@@ -969,9 +969,9 @@ mod tests {
 		set_hint_position(10, 5);
 		assert_eq!(position_string(), "10:5");
 
-		set_hint_file("test.wasp");
+		set_hint_file("test.warp");
 		set_hint_position(42, 13);
-		assert_eq!(position_string(), "test.wasp:42:13");
+		assert_eq!(position_string(), "test.warp:42:13");
 
 		// Clear again
 		clear_hint_position();

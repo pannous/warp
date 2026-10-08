@@ -1,4 +1,4 @@
-//! The standard library's adapters (notes/stdlib.md section 7, adapter A): the words of lib/<module>.wasp that wasp
+//! The standard library's adapters (notes/stdlib.md section 7, adapter A): the words of lib/<module>.warp that warp
 //! cannot write itself call the host words std_pure / std_io (module, member, arguments), answered here natively and
 //! by host.js's twin in the browser. Nodes in, a Node out; a failure is the error naming module.member. JSON crosses as
 //! for the foreign runtimes (foreign.rs json_of / node_of, host.js plainOfTree / treeOfPlain): null ø, booleans 1/0.
@@ -15,7 +15,7 @@ pub fn call(module: &str, member: &str, arguments: &Node) -> Result<Node, String
 		Node::Char(character) => Ok(character.to_string()),
 		other => Err(failure(format!("needs a text, got {}", other.serialize().trim()))),
 	};
-	// what write puts into a file: a text as it is, any other value as wasp writes it (`42`, `[1 2]`)
+	// what write puts into a file: a text as it is, any other value as warp writes it (`42`, `[1 2]`)
 	let content_of = |node: &Node| text_of(node).or_else(|_| Ok::<String, String>(node.serialize().trim().to_string()));
 	match (module, member, arguments.as_slice()) {
 		("json", "parse", [text]) => {
@@ -63,6 +63,7 @@ pub fn call(module: &str, member: &str, arguments: &Node) -> Result<Node, String
 		#[cfg(feature = "native")]
 		("clipboard", "write", [text]) => warp_runtime::system_values::write_clipboard(&text_of(text)?).map(|_| Node::Empty).map_err(failure),
 		("os", "env", [name]) => Ok(std::env::var(text_of(name)?).map_or(Node::Empty, Node::Text)),
+		("os", "args", []) => Ok(texts(PROGRAM_ARGUMENTS.with(|arguments| arguments.borrow().clone()))),
 		// `stored theme = "dark"` (lowering/stored_values.rs): the value kept under its name, or the default
 		("store", "load", [name, default, file]) => {
 			let kept = stored_values(&text_of(file)?).map_err(failure)?.remove(&text_of(name)?);
@@ -87,6 +88,16 @@ pub fn call(module: &str, member: &str, arguments: &Node) -> Result<Node, String
 }
 
 type StoredValues = serde_json::Map<String, serde_json::Value>;
+
+thread_local! {
+	/// The command line arguments after the program file (`warp run prog.warp a b`), what `use os; args` gives
+	static PROGRAM_ARGUMENTS: std::cell::RefCell<Vec<String>> = Default::default();
+}
+
+/// The arguments the running program gets as `args`
+pub fn set_program_arguments(arguments: Vec<String>) {
+	PROGRAM_ARGUMENTS.with(|kept| *kept.borrow_mut() = arguments);
+}
 
 thread_local! {
 	/// The stored values kept in memory while the process runs, by store: of a program without a file (`warp eval`,
@@ -134,7 +145,7 @@ fn texts(items: impl IntoIterator<Item = String>) -> Node {
 /// use them either (host.js checks the same); every other syntax error is the regex crate's own
 fn regex_of(pattern: &str) -> Result<regex::Regex, String> {
 	if let Some(feature) = unshared_feature(pattern) {
-		return Err(format!("{feature} is not in wasp's regex (one engine lacks it): {pattern}"));
+		return Err(format!("{feature} is not in warp's regex (one engine lacks it): {pattern}"));
 	}
 	regex::Regex::new(pattern).map_err(|problem| problem.to_string())
 }

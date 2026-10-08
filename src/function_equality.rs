@@ -220,7 +220,7 @@ fn comparison_law(f: &Function, g: &Function) -> Law {
 		}
 	}
 	let arguments = names.join(", ");
-	let statement = crate::wasp_parser::WaspParser::parse(&format!(
+	let statement = crate::warp_parser::WarpParser::parse(&format!(
 		"{}({arguments}) == {}({arguments})",
 		f.name(),
 		g.name()

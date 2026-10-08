@@ -3,7 +3,7 @@
 use std::sync::Mutex;
 use warp::normalize::*;
 use warp::wasm_emitter::eval;
-use warp::wasp_parser::WaspParser;
+use warp::warp_parser::WarpParser;
 
 /// Style and hint mode are global: tests that read hints or swap the style run one at a time
 static GLOBAL_STYLE: Mutex<()> = Mutex::new(());
@@ -14,7 +14,7 @@ fn hints_of(code: &str) -> Vec<(String, String, String)> {
 	let _guard = GLOBAL_STYLE.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
 	set_hint_mode(HintMode::Always);
 	set_style(Style::canonical());
-	let (_, hints) = capture_hints(|| WaspParser::parse(code));
+	let (_, hints) = capture_hints(|| WarpParser::parse(code));
 	set_style(Style::default());
 	hints.into_iter().map(|hint| (hint.original, hint.canonical, hint.position)).collect()
 }
@@ -23,7 +23,7 @@ fn hints_with_style(style: Style, code: &str) -> Vec<(String, String, String)> {
 	let _guard = GLOBAL_STYLE.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
 	set_hint_mode(HintMode::Always);
 	set_style(style);
-	let (_, hints) = capture_hints(|| WaspParser::parse(code));
+	let (_, hints) = capture_hints(|| WarpParser::parse(code));
 	set_style(Style::default());
 	hints.into_iter().map(|hint| (hint.original, hint.canonical, hint.position)).collect()
 }
@@ -307,7 +307,7 @@ fn test_ranges_have_no_canonical_form() {
 fn test_hints_are_off_when_the_mode_is_off() {
 	let _guard = GLOBAL_STYLE.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
 	set_hint_mode(HintMode::Off);
-	let (_, hints) = capture_hints(|| WaspParser::parse("1 && 0"));
+	let (_, hints) = capture_hints(|| WarpParser::parse("1 && 0"));
 	set_hint_mode(HintMode::Always);
 	assert_eq!(hints, vec![]);
 }

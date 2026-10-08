@@ -127,7 +127,7 @@ impl Pipes {
 			},
 			_ => false,
 		};
-		pipes.then(|| crate::wasp_parser::piped(value.clone(), stage.clone()))
+		pipes.then(|| crate::warp_parser::piped(value.clone(), stage.clone()))
 	}
 
 	/// Does `name` call a function that takes more than `given` arguments (a word's own count is not known: any)

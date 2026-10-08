@@ -11,7 +11,7 @@ fn a_site_holds_the_rendered_page_the_module_and_its_scripts() {
 	let site = warp::site::build(COUNTER, "counter", &directory).expect("the site is built");
 	assert_eq!(site.files, ["index.html", "app.wasm", "reader.js", "host.js", "markup.js", "site.js"]);
 	let page = std::fs::read_to_string(directory.join("index.html")).unwrap();
-	assert!(page.contains(r#"<div id="wasp-root"><div><button data-wasp-click="1">Add</button><p>clicked 0</p></div></div>"#), "{page}");
+	assert!(page.contains(r#"<div id="warp-root"><div><button data-warp-click="1">Add</button><p>clicked 0</p></div></div>"#), "{page}");
 	assert!(page.contains("<title>counter</title>") && page.contains(r#"<script src="site.js"></script>"#), "{page}");
 	let module = std::fs::read(directory.join("app.wasm")).unwrap();
 	let names = String::from_utf8_lossy(&module);
@@ -34,7 +34,7 @@ fn a_static_page_is_its_last_line_rendered() {
 	let directory = scratch_directory("static-site");
 	warp::site::build("title = \"Docs\"\narticle{ h1{ title } p{ \"1 < 2\" } }", "docs", &directory).expect("the site is built");
 	let page = std::fs::read_to_string(directory.join("index.html")).unwrap();
-	assert!(page.contains(r#"<div id="wasp-root"><article><h1>Docs</h1><p>1 &lt; 2</p></article></div>"#), "{page}");
+	assert!(page.contains(r#"<div id="warp-root"><article><h1>Docs</h1><p>1 &lt; 2</p></article></div>"#), "{page}");
 	std::fs::remove_dir_all(directory).unwrap();
 }
 
@@ -64,7 +64,7 @@ fn a_site_starting_tasks_runs_its_program_in_a_worker() {
 	let site = warp::site::build("nap(ms) := { sleep(ms); 1 }\nfirst = go nap(1)\np{ \"naps: \" + await first }", "tasks", &directory).expect("the site is built");
 	assert_eq!(site.files, ["index.html", "app.wasm", "site-thread.js", "markup.js", "site.js", "reader.js", "host.js", "host-tasks.js", "site-worker.js", "task-worker.js", "coi-serviceworker.js"]);
 	let page = std::fs::read_to_string(directory.join("index.html")).unwrap();
-	assert!(page.contains(r#"<div id="wasp-root" data-wasp-worker="reader.js,host.js,host-tasks.js"><p>naps: 1</p></div>"#), "{page}");
+	assert!(page.contains(r#"<div id="warp-root" data-warp-worker="reader.js,host.js,host-tasks.js"><p>naps: 1</p></div>"#), "{page}");
 	assert!(page.contains(r#"<script src="site-thread.js"></script>"#) && !page.contains(r#"<script src="host.js">"#), "{page}");
 	std::fs::remove_dir_all(directory).unwrap();
 }
@@ -78,7 +78,7 @@ fn a_site_with_routes_starting_tasks_runs_its_program_in_a_worker() {
 	let site = warp::site::build(program, "routed", &directory).expect("the site is built");
 	let page = std::fs::read_to_string(directory.join("index.html")).unwrap();
 	assert!(page.contains(r#"<script src="site-thread.js"></script>"#) && page.contains(r#"<script src="host-routes.js"></script>"#) && !page.contains(r#"<script src="host.js">"#), "{page}");
-	assert!(page.contains(r#"data-wasp-worker="reader.js,host.js,host-tasks.js,host-routes.js""#), "{page}");
+	assert!(page.contains(r#"data-warp-worker="reader.js,host.js,host-tasks.js,host-routes.js""#), "{page}");
 	assert!(site.files.iter().any(|file| file == "site-worker.js") && site.files.iter().any(|file| file == "404.html"), "{:?}", site.files);
 	std::fs::remove_dir_all(directory).unwrap();
 }

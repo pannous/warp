@@ -32,11 +32,11 @@ pub fn is_function_keyword(s: &str) -> bool {
 
 // node[i]
 
-// Wasp ABI GC Node representation design:
+// Warp ABI GC Node representation design:
 // This is a single struct that can represent any node type
 
-// todo move node layout to wasp_abi.rs
-// todo ... any change to node layout must be reflected in wasm_gc_reader.rs wasp_abi.md ...
+// todo move node layout to warp_abi.rs
+// todo ... any change to node layout must be reflected in wasm_gc_reader.rs warp_abi.md ...
 
 /* restructure the whole emitter emit_node_instructions serialization to use
 (type $Node (struct

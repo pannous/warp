@@ -9,7 +9,7 @@ its caller expects back. Both rename the variants to `name·T` (traits::witness_
 
 ## Overloads
 Two or more definitions of one name whose result types differ are overloads, in declaration order:
-```wasp
+```warp
 class pdf{body}
 class docx{body}
 render(t):pdf  := pdf("%PDF " + t)      // the result type written after the head (also `render(t) as pdf := …`)

@@ -14,14 +14,14 @@ script = """(async () => {
 	await playground.evaluate();
 	await new Promise(done => setTimeout(done, 300));
 	await settled();
-	return JSON.stringify([document.getElementById("value").textContent, localStorage.getItem("wasp stored probe_visits")]);
+	return JSON.stringify([document.getElementById("value").textContent, localStorage.getItem("warp stored probe_visits")]);
 })()""" % json.dumps(CODE)
 seen = []
 for visit in range(2):
 	page.open_page(url)
 	page.wait_for_isolation()
 	if visit == 0:
-		page.browser("eval", "localStorage.removeItem('wasp stored probe_visits')")
+		page.browser("eval", "localStorage.removeItem('warp stored probe_visits')")
 	seen.append(json.loads(json.loads(page.browser("eval", script))))
 print(seen)
 page.browser("close")

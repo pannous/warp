@@ -1,0 +1,27 @@
+// the Mandelbrot set painted on the playground's canvas (natively a PNG): ink inside the set and on every other
+// escape-time band around it; mandelbrot.warp draws it in ASCII
+width = 240
+height = 160
+max_iter = 60
+
+def escape_time(cx, cy) {
+    x = 0.0 as float
+    y = 0.0 as float
+    iter = 0
+    while x*x + y*y <= 4 and iter < max_iter {
+        xtemp = x*x - y*y + cx
+        y = 2*x*y + cy
+        x = xtemp
+        iter = iter + 1
+    }
+    return iter
+}
+
+pixels = width * height int
+for row in 0..height {
+    for col in 0..width {
+        steps = escape_time(-2.2 + col * 3.2 / width, -1.1 + row * 2.2 / height)
+        pixels[row * width + col] = steps == max_iter or steps % 2 == 1
+    }
+}
+paint(pixels, width, height)

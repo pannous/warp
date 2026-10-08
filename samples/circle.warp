@@ -1,0 +1,10 @@
+#!/usr/bin/env warp
+y=0
+x=0
+radius=50
+width=height=400
+center=height/2
+surface=height*width int
+while y++<height and x++<width:
+	surface[y+height*x % #surface]= abs( (y-center)^2 + (x-center)^2 ) < radius
+paint(surface,width,height)

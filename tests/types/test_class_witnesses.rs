@@ -1,5 +1,5 @@
 // A class's own text, equality and order as methods (notes/traits.md: methods in the class body as sugar for the
-// witnesses text·T, equals·T, compare·T), under their wasp names and as other languages spell them
+// witnesses text·T, equals·T, compare·T), under their warp names and as other languages spell them
 use crate::is;
 
 #[test]

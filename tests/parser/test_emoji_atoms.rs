@@ -17,7 +17,7 @@ fn an_emoji_sequence_is_one_atom() {
 	is!("👍🏽", "👍🏽");
 	is!("#[👨‍👩‍👧, 🇩🇪, 🌍]", 3);
 	is!("🇩🇪 = 3; 🇩🇪 == \"🇩🇪\"", true); // no variable: `🇩🇪 = 3` is the pair "🇩🇪"=3, as `"a" = 3` is
-	let warp::Node::List(emojis, _, _) = warp::wasp_parser::parse("[👨‍👩‍👧, 🇩🇪, 🌍]").drop_meta().clone() else { panic!("expected a list") };
+	let warp::Node::List(emojis, _, _) = warp::warp_parser::parse("[👨‍👩‍👧, 🇩🇪, 🌍]").drop_meta().clone() else { panic!("expected a list") };
 	assert_eq!(emojis.len(), 3);
 	assert_eq!(emojis[0].drop_meta(), &warp::Node::Text("👨‍👩‍👧".to_string()));
 }

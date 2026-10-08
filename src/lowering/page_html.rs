@@ -1,5 +1,5 @@
 //! A page renders itself (card web-ssr, notes/web_framework.md "Built sites"): a program compiled for a page
-//! (pipeline::for_a_page) exports page·html, the HTML of what it shows by lib/markup.wasp's to_html, which `warp build
+//! (pipeline::for_a_page) exports page·html, the HTML of what it shows by lib/markup.warp's to_html, which `warp build
 //! --site` calls at build time for index.html and the page after each handler. What it shows is page·value, the output
 //! binding event_signals.rs made, else the program's last line when that is an expression: a page shows its last line
 //! anew, so it is read again after each handler.
@@ -13,12 +13,11 @@ use std::collections::HashSet;
 pub const PAGE_HTML: &str = "page·html";
 /// page·render(value): the HTML of any value of the program, for the playground's fine holes (worker.js showHoles)
 pub const PAGE_RENDER: &str = "page·render";
-const MARKUP_MODULE_USE: &str = "use markup";
 const TO_HTML: &str = "to_html";
 /// Words that start a statement, not a value to show
 const STATEMENT_WORDS: [&str; 5] = ["print", "puts", "use", "import", "return"];
 
-/// A page uses lib/markup.wasp and exports page·html := to_html(page·value()) and page·render(event) := to_html(event),
+/// A page uses lib/markup.warp (modules.rs brings it implicitly) and exports page·html := to_html(page·value()) and page·render(event) := to_html(event),
 /// before modules::resolve joins the used modules (it keeps the std definitions the program names)
 pub fn use_markup(program: Node) -> Node {
 	if !crate::pipeline::renders_itself() {
@@ -29,7 +28,6 @@ pub fn use_markup(program: Node) -> Node {
 	statements.insert(statements.len().saturating_sub(1), function_with_globals(PAGE_HTML, false, &[rendered], &HashSet::new()));
 	let any_value = call(TO_HTML, vec![Node::Symbol(crate::event_signals::EVENT_WORD.to_string())]);
 	statements.insert(statements.len().saturating_sub(1), function_with_globals(PAGE_RENDER, true, &[any_value], &HashSet::new()));
-	statements.insert(0, crate::wasp_parser::parse(MARKUP_MODULE_USE));
 	Node::List(statements, bracket, separator)
 }
 
