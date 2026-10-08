@@ -16,8 +16,12 @@ const PAGE_SCOPE: &str = "Window";
 const PROGRAM_SCOPE: &str = PAGE_SCOPE;
 #[cfg(not(feature = "native"))]
 const PROGRAM_SCOPE: &str = "WorkerGlobalScope";
+/// The global object by its names (`window` only on a page): the scope itself, bundled only with the members warp
+/// types (WindowOrWorkerGlobalScope whole: fetch, setTimeout…), so a member it does not declare stays unchecked
+const SELF_GLOBALS: [&str; 3] = ["self", "globalThis", "window"];
+const PAGE_ONLY_SELF: &str = "window";
 /// What a program in a Worker writes for a page's global
-const WORKER_ALTERNATIVES: [(&str, &str); 2] = [("localStorage", "local[k] keeps values in the page's localStorage"), ("sessionStorage", "session[k] keeps values in its sessionStorage")];
+const WORKER_ALTERNATIVES: [(&str, &str); 3] = [("localStorage", "local[k] keeps values in the page's localStorage"), ("sessionStorage", "session[k] keeps values in its sessionStorage"), ("window", "self is the Worker's global")];
 /// Definitions that declare no members a program reaches
 const SKIPPED_KINDS: [&str; 4] = ["dictionary", "enum", "typedef", "callback"];
 const DEFINITION_WORDS: [&str; 4] = ["partial", "interface", "mixin", "namespace"];
@@ -73,6 +77,9 @@ pub fn interface_of_global(global: &str, scope: &str) -> Option<String> {
 	if definitions().get(global).is_some_and(|definition| definition.namespace) {
 		return Some(global.to_string());
 	}
+	if SELF_GLOBALS.contains(&global) && (global != PAGE_ONLY_SELF || scope == PAGE_SCOPE) {
+		return Some(scope.to_string());
+	}
 	match members_of(scope).remove(global)? {
 		Member::Attribute(type_name) => Some(type_name.trim_end_matches('?').to_string()),
 		Member::Operation(_) => None,
@@ -106,10 +113,11 @@ pub fn global_interface(global: &str) -> Result<Option<String>, String> {
 	}
 }
 
-/// The interface of an attribute's value (`navigator.clipboard`: Clipboard), when WebIDL declares it whole
-pub fn attribute_interface(interface: &str, member: &str) -> Option<String> {
-	let Member::Attribute(type_name) = members_of(interface).remove(member)? else { return None };
-	let type_name = type_name.trim_end_matches('?');
+/// The interface of what a member gives, read or called (`navigator.clipboard`: Clipboard,
+/// `document.getElementById(id)`: Element), when WebIDL declares it whole; a nullable one (`Element?`) too
+pub fn result_interface(interface: &str, member: &str, call: bool) -> Option<String> {
+	let declared = declared_result(interface, member, call)?;
+	let type_name = declared.trim_end_matches('?');
 	definitions().contains_key(type_name).then(|| type_name.to_string())
 }
 
@@ -128,16 +136,17 @@ pub fn optional_result_type(interface: &str, member: &str, call: bool) -> Option
 	}
 }
 
-/// The WebIDL type of what `member` gives, when all its overloads agree
+/// The WebIDL type of what `member` gives, when all its overloads agree; a promise's value, which a foreign call awaits
 fn declared_result(interface: &str, member: &str, call: bool) -> Option<String> {
-	match (members_of(interface).remove(member)?, call) {
-		(Member::Attribute(type_name), false) => Some(type_name),
+	let declared = match (members_of(interface).remove(member)?, call) {
+		(Member::Attribute(type_name), false) => type_name,
 		(Member::Operation(overloads), true) => {
 			let returns: Vec<String> = overloads.into_iter().map(|overload| overload.returns).collect();
-			returns.iter().all(|other| *other == returns[0]).then(|| returns[0].clone())
+			returns.iter().all(|other| *other == returns[0]).then(|| returns[0].clone())?
 		}
-		_ => None,
-	}
+		_ => return None,
+	};
+	Some(declared.strip_prefix("Promise<").and_then(|promised| promised.strip_suffix('>')).map(str::to_string).unwrap_or(declared))
 }
 
 fn primitive_type(declared: &str) -> Option<&'static str> {
@@ -148,8 +157,18 @@ fn primitive_type(declared: &str) -> Option<&'static str> {
 pub fn check_member(interface: &str, path: &str, member: &str, call: Option<usize>) -> Result<(), String> {
 	let mut members = members_of(interface);
 	let Some(declared) = members.remove(member) else {
-		let same_letters = members.keys().find(|name| name.eq_ignore_ascii_case(member)).cloned();
-		let near = same_letters.or_else(|| crate::extensions::strings::near_miss(member, members.into_keys())).map(|near| format!("; did you mean {near}?")).unwrap_or_default();
+		// `document.getElementById(id).value`: an Element that is an HTMLInputElement at run time
+		let derived = derived_interfaces(interface);
+		if let Some(declaring) = derived.iter().find(|derived| members_of(derived).contains_key(member)) {
+			return check_member(declaring, path, member, call);
+		}
+		if [PAGE_SCOPE, PROGRAM_SCOPE].contains(&interface) {
+			return Ok(()); // `window.innerWidth`: the scope is bundled in part
+		}
+		let mut names: Vec<String> = members.into_keys().collect();
+		names.extend(derived.iter().flat_map(|derived| members_of(derived).into_keys()));
+		let same_letters = names.iter().find(|name| name.eq_ignore_ascii_case(member)).cloned();
+		let near = same_letters.or_else(|| crate::extensions::strings::near_miss(member, names)).map(|near| format!("; did you mean {near}?")).unwrap_or_default();
 		return Err(format!("{path} ({interface} in WebIDL) has no member {member}{near}"));
 	};
 	match (declared, call) {
@@ -160,6 +179,23 @@ pub fn check_member(interface: &str, path: &str, member: &str, call: Option<usiz
 		}
 		_ => Ok(()),
 	}
+}
+
+/// The interfaces deriving from `interface`, at any depth (HTMLInputElement of Element), sorted by name
+fn derived_interfaces(interface: &str) -> Vec<String> {
+	let derives = |name: &str| {
+		let mut parent = definitions().get(name).and_then(|definition| definition.parent.as_deref());
+		while let Some(ancestor) = parent {
+			if ancestor == interface {
+				return true;
+			}
+			parent = definitions().get(ancestor).and_then(|definition| definition.parent.as_deref());
+		}
+		false
+	};
+	let mut derived: Vec<String> = definitions().keys().filter(|name| derives(name)).cloned().collect();
+	derived.sort();
+	derived
 }
 
 /// A global of a page that the program's scope lacks (a Worker's: localStorage), else unchecked

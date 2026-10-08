@@ -90,3 +90,36 @@ fn a_nullable_result_is_optional() {
 	eq!(warp::web_idl::optional_result_type("Crypto", "randomUUID", true), Some("text".to_string()));
 	eq!(warp::web_idl::optional_result_type("Navigator", "clipboard", false), None);
 }
+
+// the DOM: document is a Document; what an operation gives is typed too (getElementById: Element), and an Element
+// takes the members of the elements deriving from it (an input's value)
+#[cfg(feature = "native")] // a Worker has no document
+#[test]
+fn the_dom_is_typed() {
+	fails_with("use js document; document.getElementByID(\"x\")", "did you mean getElementById");
+	fails_with("use js document; document.getElementById(\"x\").innerHtml", "document.getElementById(…) (Element in WebIDL) has no member innerHtml; did you mean innerHTML");
+	fails_with("use js document; e = document.querySelector(\"p\"); e.classList.ad(\"x\")", "DOMTokenList");
+	fails_with("use js document; document.body.appendChild(1, 2)", "appendChild(Node node)");
+	fails_with("use js document; document.getElementById(\"x\").valu", "did you mean value");
+	assert!(warp::web_idl::check_member("Element", "e", "value", None).is_ok()); // HTMLInputElement's
+	eq!(warp::web_idl::result_interface("Document", "getElementById", true), Some("Element".to_string()));
+	eq!(warp::web_idl::result_interface("Document", "body", false), Some("HTMLElement".to_string()));
+}
+
+// the global object (self, globalThis; window on a page) has WindowOrWorkerGlobalScope's members typed: fetch gives a
+// Response (its promise awaited), atob a text; members it is not bundled with stay unchecked
+#[test]
+fn the_global_object_is_typed() {
+	is!("use js self; self.atob(\"aGk=\").upper()", "HI");
+	is!("use js globalThis; count globalThis.btoa(\"hi\")", 4);
+	fails_with("use js self; r = self.fetch(\"https://example.com\"); r.stauts", "(Response in WebIDL) has no member stauts; did you mean status");
+	eq!(warp::web_idl::result_interface("Window", "fetch", true), Some("Response".to_string()));
+	eq!(warp::web_idl::result_type("Response", "text", true), Some("text")); // Promise<USVString>
+	eq!(warp::web_idl::result_type("Response", "status", false), Some("int"));
+}
+
+#[cfg(not(feature = "native"))]
+#[test]
+fn a_worker_has_no_window() {
+	fails_with("use js window; window.atob(\"aGk=\")", "self is the Worker's global");
+}

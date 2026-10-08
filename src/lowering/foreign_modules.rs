@@ -166,13 +166,14 @@ fn foreign_call(runtime: &str, module: Node, member: &str, is_call: bool, argume
 	Node::List(vec![Node::Symbol(crate::host::FOREIGN_CALL.to_string()), text(runtime), module, text(member), Node::int(i64::from(is_call)), arguments], Bracket::Round, Separator::None)
 }
 
-/// `foreign_call("js", receiver, member, 0, ø)`, the read of a JavaScript attribute: its receiver and member
-fn attribute_read(node: &Node) -> Option<(&Node, &str)> {
+/// `foreign_call("js", receiver, member, call, arguments)`, a JavaScript attribute read or method call: its receiver,
+/// member and whether it is a call
+fn javascript_member(node: &Node) -> Option<(&Node, &str, bool)> {
 	let Node::List(items, Bracket::Round, _) = node.drop_meta() else { return None };
 	match items.as_slice() {
 		[call, runtime, receiver, member, is_call, _] if matches!(call.drop_meta(), Node::Symbol(name) if name == crate::host::FOREIGN_CALL)
-			&& matches!(runtime.drop_meta(), Node::Text(runtime) if runtime == JS_RUNTIME) && *is_call == Node::int(0) => match member.drop_meta() {
-			Node::Text(member) => Some((receiver, member)),
+			&& matches!(runtime.drop_meta(), Node::Text(runtime) if runtime == JS_RUNTIME) => match member.drop_meta() {
+			Node::Text(member) => Some((receiver, member, *is_call == Node::int(1))),
 			_ => None,
 		},
 		_ => None,
@@ -241,7 +242,8 @@ impl Foreign<'_> {
 	}
 
 	/// The WebIDL interface of a JavaScript receiver and its path as written: a global `use js` names, a variable assigned
-	/// such a value, or an attribute read of one (`navigator.clipboard`: Clipboard); Err for a global only a page has
+	/// such a value, or what a member of one gives (`navigator.clipboard`: Clipboard, `document.body`: HTMLElement,
+	/// `document.getElementById(id)`: Element); Err for a global only a page has
 	fn web_idl_receiver(&self, receiver: &Node) -> Result<Option<(String, String)>, String> {
 		let global = |name: &str, path: &str| Ok(crate::web_idl::global_interface(name)?.map(|interface| (interface, path.to_string())));
 		match receiver.drop_meta() {
@@ -252,9 +254,10 @@ impl Foreign<'_> {
 			// the global inside a lowered read
 			Node::Text(name) => global(name, name),
 			other => {
-				let Some((inner, member)) = attribute_read(other) else { return Ok(None) };
+				let Some((inner, member, is_call)) = javascript_member(other) else { return Ok(None) };
 				let Some((interface, path)) = self.web_idl_receiver(inner)? else { return Ok(None) };
-				Ok(crate::web_idl::attribute_interface(&interface, member).map(|interface| (interface, format!("{path}.{member}"))))
+				let read = if is_call { format!("{path}.{member}(…)") } else { format!("{path}.{member}") };
+				Ok(crate::web_idl::result_interface(&interface, member, is_call).map(|interface| (interface, read)))
 			}
 		}
 	}
