@@ -859,7 +859,9 @@ impl WasmGcEmitter {
 	fn is_ref_value(&self, item: &Node) -> bool {
 		match item.drop_meta() {
 			Node::Key(_, op, _) if *op == Op::Assign || *op == Op::Define || op.is_compound_assign() => false,
+			// `c + 1` of a text c in a loop body is a text, "a1" (card loop-text)
 			Node::Symbol(_) | Node::List(_, Bracket::Round, _) => self.get_type(item).is_ref(),
+			Node::Key(_, op, _) if op.is_arithmetic() => self.get_type(item).is_ref(),
 			_ => false,
 		}
 	}
