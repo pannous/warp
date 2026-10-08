@@ -29,4 +29,5 @@ mod test_wasm_interop_rest;
 mod test_component_worlds;
 mod test_component_exports; // card reflection-components
 mod test_parameter_names; // card reflection-classes
+#[cfg(feature = "native")] // a warp process in a temporary directory: not in the browser build
 mod test_no_cwd_debris; // card cwd-artifacts
