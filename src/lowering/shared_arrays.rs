@@ -265,6 +265,9 @@ impl Rewrite<'_> {
 					(Node::Symbol(_), Op::Assign) if shared(&target, &names).is_some() && let Some((array, kernel)) = float_map(&value, &names) => {
 						Node::Key(target, op, Box::new(builtin(&kernel, vec![array])))
 					}
+					(Node::Symbol(_), Op::Assign) if shared(&target, &names).is_some() && let Some((array, lambda)) = numeric_map(&value, &names) => {
+						block_mapped(&target, &array, &lambda, "map_loop", &[])
+					}
 					// `ys = gpu_compute(shader, xs, w)` of a linear float array: ys names the same block
 					(Node::Symbol(_), Op::Assign) if shared(&target, &names).is_some() && gpu_compute_of_linear_floats(&value, &names) => {
 						Node::Key(target, op, Box::new(self.node(*value, function)))
@@ -357,18 +360,30 @@ impl Rewrite<'_> {
 /// `xs.map(x => body)` or `map(xs, x => body)` of a linear float array whose body a float kernel computes: the array and
 /// the kernel's name (wasm_emitter/linear_arrays.rs, f64x2 lanes)
 fn float_map(value: &Node, names: &HashMap<String, Shared>) -> Option<(Node, String)> {
-	let (array, lambda) = match value.drop_meta() {
-		Node::Key(array, Op::Dot, call) => match call.drop_meta() {
-			Node::List(items, _, _) if items.len() == 2 && items[0].name() == MAP_WORD => (array.as_ref(), &items[1]),
-			_ => return None,
-		},
-		Node::List(items, _, _) if items.len() == 3 && items[0].name() == MAP_WORD => (&items[1], &items[2]),
-		_ => return None,
-	};
+	let (array, lambda) = map_parts(value)?;
 	let Node::Key(parameter, Op::FatArrow, body) = lambda.drop_meta() else { return None };
 	let Node::Symbol(parameter) = parameter.drop_meta() else { return None };
 	(is_linear_floats(array, names) && crate::wasm_emitter::linear_arrays::is_float_kernel(parameter, body))
 		.then(|| (array.clone(), crate::wasm_emitter::linear_arrays::kernel_name(parameter, body)))
+}
+
+/// `xs.map(f)` or `map(xs, f)`: xs and f
+fn map_parts(value: &Node) -> Option<(&Node, &Node)> {
+	match value.drop_meta() {
+		Node::Key(array, Op::Dot, call) => match call.drop_meta() {
+			Node::List(items, _, _) if items.len() == 2 && items[0].name() == MAP_WORD => Some((array.as_ref(), &items[1])),
+			_ => None,
+		},
+		Node::List(items, _, _) if items.len() == 3 && items[0].name() == MAP_WORD => Some((&items[1], &items[2])),
+		_ => None,
+	}
+}
+
+/// `xs.map(x => …)` of a linear float array whose lambda is pure arithmetic (any the f64x2 kernel cannot compute,
+/// `sin(x)`, `max(x, 2)`): xs and the lambda, mapped in one loop into a new block (card linear-map)
+fn numeric_map(value: &Node, names: &HashMap<String, Shared>) -> Option<(Node, Node)> {
+	let (array, lambda) = map_parts(value)?;
+	(is_linear_floats(array, names) && crate::gpu_maps::kernel(lambda).is_some()).then(|| (array.clone(), lambda.clone()))
 }
 
 fn is_linear_floats(array: &Node, names: &HashMap<String, Shared>) -> bool {
@@ -388,20 +403,25 @@ fn gpu_kernel_map(value: &Node, names: &HashMap<String, Shared>) -> Option<(Node
 
 /// `ys = linear_new(count(xs))`, then the kernel maps xs's cells into ys's, or without an adapter the CPU does
 fn gpu_mapped(target: &Node, array: &Node, lambda: &Node, shader: &str) -> Node {
+	use crate::wasm_emitter::linear_arrays::LINEAR_COUNT;
+	let size = crate::gpu_maps::WORKGROUP_SIZE;
+	let mapped = format!("if {}(gpu_shader, map_source, map_target, ({LINEAR_COUNT}(map_source) + {size} - 1)//{size}) == 0 {{ map_loop }}", crate::host::GPU_MAP_LINEAR);
+	block_mapped(target, array, lambda, &mapped, &[("gpu_shader", Node::Text(shader.to_string()))])
+}
+
+/// `ys = linear_new(count(xs))`, then `mapped` (`map_loop` in it the CPU's loop writing each cell of ys from xs's)
+fn block_mapped(target: &Node, array: &Node, lambda: &Node, mapped: &str, fills: &[(&str, Node)]) -> Node {
 	use crate::library_words::substitute;
 	use crate::wasm_emitter::linear_arrays::{LINEAR_COUNT, LINEAR_FLOAT_WORDS, LINEAR_NEW};
-	let Node::Key(parameter, _, body) = lambda.drop_meta() else { unreachable!("a kernel is a lambda") };
+	let Node::Key(parameter, _, body) = lambda.drop_meta() else { unreachable!("a numeric map's function is a lambda") };
 	let [get, set, _] = LINEAR_FLOAT_WORDS;
-	let size = crate::gpu_maps::WORKGROUP_SIZE;
-	let template = crate::warp_parser::parse(&format!(
-		"gpu_target = {LINEAR_NEW}({LINEAR_COUNT}(gpu_source)); \
-		if {}(gpu_shader, gpu_source, gpu_target, ({LINEAR_COUNT}(gpu_source) + {size} - 1)//{size}) == 0 {{ \
-			for gpu_index in 1 to {LINEAR_COUNT}(gpu_source) {{ {set}(gpu_target, gpu_index, gpu_item) }} }}", crate::host::GPU_MAP_LINEAR));
+	let each_cell = format!("for map_index in 1 to {LINEAR_COUNT}(map_source) {{ {set}(map_target, map_index, {}(map_item)) }}", FLOAT_WORDS[0]);
+	let template = crate::warp_parser::parse(&format!("map_target = {LINEAR_NEW}({LINEAR_COUNT}(map_source)); {}", mapped.replace("map_loop", &each_cell)));
 	let separator = crate::analyzer::TEMPORARY_SEPARATOR;
-	let index = Node::Symbol(format!("{}{separator}gpu{separator}index", target.name()));
+	let index = Node::Symbol(format!("{}{separator}map{separator}index", target.name()));
 	let item = substitute(body.as_ref().clone(), &parameter.name(), &builtin(get, vec![array.clone(), index.clone()]));
-	[("gpu_target", target.clone()), ("gpu_source", array.clone()), ("gpu_shader", Node::Text(shader.to_string())), ("gpu_index", index), ("gpu_item", item)]
-		.into_iter().fold(template, |node, (placeholder, value)| substitute(node, placeholder, &value))
+	[("map_target", target.clone()), ("map_source", array.clone()), ("map_index", index), ("map_item", item)].into_iter().chain(fills.iter().cloned())
+		.fold(template, |node, (placeholder, value)| substitute(node, placeholder, &value))
 }
 
 /// `gpu_compute(shader, xs, workgroups)` of a linear float array, which the shader updates in place
@@ -416,7 +436,7 @@ fn float_map_results(node: &Node, declared: &HashMap<String, Shared>) -> HashMap
 		if let Node::Symbol(name) = target.drop_meta() {
 			let entry = assignments.entry(name.clone()).or_insert((0, false));
 			entry.0 += 1;
-			entry.1 = float_map(value, declared).is_some() || gpu_compute_of_linear_floats(value, declared) || gpu_kernel_map(value, declared).is_some();
+			entry.1 = float_map(value, declared).is_some() || gpu_compute_of_linear_floats(value, declared) || gpu_kernel_map(value, declared).is_some() || numeric_map(value, declared).is_some();
 		}
 	});
 	let linear_floats = Shared { element: Element::Float, value: false, storage: Storage::Linear };
@@ -432,15 +452,16 @@ fn shared(node: &Node, names: &HashMap<String, Shared>) -> Option<Shared> {
 }
 
 
-/// `(xs·list = []; for xs·index in 1 to count(xs) { xs·list = xs·list + [get(xs, xs·index)] }; xs·list)`
+/// `(xs·list = float[count(xs)]; for xs·index in 1 to count(xs) { xs·list#xs·index = get(xs, xs·index) }; xs·list)`
 fn collected(array: &Node, kind: Shared) -> Node {
 	let name = array.name();
 	let separator = crate::analyzer::TEMPORARY_SEPARATOR;
 	let [get, _, _] = element_words(kind);
 	let count = kind.storage.new_and_count().1;
+	let element = if kind.element == Element::Float { FLOAT_WORDS[0] } else { "int" };
 	use crate::library_words::substitute;
 	let template = crate::warp_parser::parse(&format!(
-		"(linear_list = []; for linear_index in 1 to {count}(linear_array) {{ linear_list = linear_list + [{get}(linear_array, linear_index)] }}; linear_list)"
+		"(linear_list = {element}[{count}(linear_array)]; for linear_index in 1 to {count}(linear_array) {{ linear_list#linear_index = {get}(linear_array, linear_index) }}; linear_list)"
 	));
 	let named = |suffix: &str| Node::Symbol(format!("{name}{separator}{suffix}"));
 	substitute(substitute(substitute(template, "linear_array", array), "linear_list", &named("list")), "linear_index", &named("index"))

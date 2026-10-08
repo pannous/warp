@@ -46,3 +46,16 @@ fn a_float_map_of_a_linear_array_is_a_simd_kernel() {
 	assert!(!lowered(&format!("{fill}{k}ys = xs.map(x => x * k); ys#1")).contains("linear_mapf"));
 	is!(&format!("{fill}{k}ys = xs.map(x => x * k); ys#2"), 12.0);
 }
+
+// card linear-map: a numeric map the f64x2 kernel cannot compute (sin, min …) writes a new linear block in one loop,
+// and a linear array read as a whole fills a typed list of its count, no list grown item by item (that was superlinear)
+#[test]
+fn a_numeric_map_of_a_linear_array_writes_a_new_block() {
+	let fill = "linear xs = float[3]; for i in 1 to 3 { xs#i = i * 1.0 }; ";
+	is!(&format!("{fill}ys = xs.map(x => max(x, 2) * 2); [ys#1, ys#3, #ys]"), list(vec![float(4.0), float(6.0), int(3)]));
+	is!(&format!("{fill}ys = xs.map(x => floor(x / 2)); ys"), list(vec![float(0.0), float(1.0), float(1.0)]));
+	is!(&format!("{fill}sum(xs)"), 6.0);
+	is!("linear xs = int[3]; xs#2 = 5; xs", ints(vec![0, 5, 0]));
+	let lowered = warp::pipeline::lower(&format!("{fill}ys = xs.map(x => sin(x)); ys#1")).expect("a program").serialize();
+	assert!(lowered.contains("linear_new") && !lowered.contains(".map"), "{lowered}");
+}
