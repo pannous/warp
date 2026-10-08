@@ -129,3 +129,4 @@ mod test_handler_globals;
 mod test_aborting_handlers;
 mod test_check_assert;
 mod test_reflection_words; // card reflection
+mod test_multiline_errors;
