@@ -8,8 +8,16 @@ use std::collections::{BTreeMap, HashMap};
 use std::sync::OnceLock;
 
 const BUNDLE: &str = include_str!("../lib/web.webidl");
-/// The interface whose attributes are the globals (`navigator`, `localStorage`, `crypto` through its mixins)
-const GLOBAL_SCOPE: &str = "Window";
+/// The interface whose attributes are a page's globals (`navigator`, `localStorage`, `crypto` through its mixins)
+const PAGE_SCOPE: &str = "Window";
+/// Where a program's globals come from: a page natively (node mirrors it, a built site runs there); the playground and
+/// the browser suite run programs in a Worker, where `localStorage` does not exist and `navigator` is a WorkerNavigator
+#[cfg(feature = "native")]
+const PROGRAM_SCOPE: &str = PAGE_SCOPE;
+#[cfg(not(feature = "native"))]
+const PROGRAM_SCOPE: &str = "WorkerGlobalScope";
+/// What a program in a Worker writes for a page's global
+const WORKER_ALTERNATIVES: [(&str, &str); 2] = [("localStorage", "local[k] keeps values in the page's localStorage"), ("sessionStorage", "session[k] keeps values in its sessionStorage")];
 /// Definitions that declare no members a program reaches
 const SKIPPED_KINDS: [&str; 4] = ["dictionary", "enum", "typedef", "callback"];
 const DEFINITION_WORDS: [&str; 4] = ["partial", "interface", "mixin", "namespace"];
@@ -39,6 +47,7 @@ struct Definition {
 	parent: Option<String>,
 	members: BTreeMap<String, Member>,
 	includes: Vec<String>,
+	namespace: bool,
 }
 
 fn definitions() -> &'static HashMap<String, Definition> {
@@ -46,12 +55,12 @@ fn definitions() -> &'static HashMap<String, Definition> {
 	PARSED.get_or_init(|| parse(BUNDLE))
 }
 
-/// The interface a global is: a namespace of that name (`console`), else the type of the global scope's attribute
-pub fn interface_of_global(global: &str) -> Option<String> {
-	if definitions().contains_key(global) {
+/// The interface a global of `scope` is: a namespace of that name (`console`), else the type of the scope's attribute
+pub fn interface_of_global(global: &str, scope: &str) -> Option<String> {
+	if definitions().get(global).is_some_and(|definition| definition.namespace) {
 		return Some(global.to_string());
 	}
-	match members_of(GLOBAL_SCOPE).remove(global)? {
+	match members_of(scope).remove(global)? {
 		Member::Attribute(type_name) => Some(type_name.trim_end_matches('?').to_string()),
 		Member::Operation(_) => None,
 	}
@@ -70,7 +79,7 @@ pub fn members_of(interface: &str) -> BTreeMap<String, Member> {
 
 /// `global.member` read (`call` None) or called with `call` arguments: Err says what WebIDL declares instead
 pub fn check(global: &str, member: &str, call: Option<usize>) -> Result<(), String> {
-	let Some(interface) = interface_of_global(global) else { return Ok(()) };
+	let Some(interface) = interface_of_global(global, PROGRAM_SCOPE) else { return page_only(global) };
 	let mut members = members_of(&interface);
 	let Some(declared) = members.remove(member) else {
 		let same_letters = members.keys().find(|name| name.eq_ignore_ascii_case(member)).cloned();
@@ -85,6 +94,13 @@ pub fn check(global: &str, member: &str, call: Option<usize>) -> Result<(), Stri
 		}
 		_ => Ok(()),
 	}
+}
+
+/// A global of a page that the program's scope lacks (a Worker's: localStorage), else unchecked
+fn page_only(global: &str) -> Result<(), String> {
+	let Some(interface) = interface_of_global(global, PAGE_SCOPE).filter(|_| PROGRAM_SCOPE != PAGE_SCOPE) else { return Ok(()) };
+	let instead = WORKER_ALTERNATIVES.iter().find(|(name, _)| *name == global).map(|(_, instead)| format!(": {instead}")).unwrap_or_default();
+	Err(format!("{global} ({interface}) exists on a page, not in the Worker this program runs in{instead}"))
 }
 
 fn takes(arguments: &[Argument], count: usize) -> bool {
@@ -126,6 +142,7 @@ fn parse(text: &str) -> HashMap<String, Definition> {
 		};
 		let body = &chunk[open + 1..chunk.rfind('}').unwrap_or(chunk.len())];
 		let definition = parsed.entry(name).or_default();
+		definition.namespace |= header.split_whitespace().any(|word| word == "namespace");
 		definition.parent = parent.or(definition.parent.take());
 		for member in split_top_level(body, ';') {
 			add_member(&mut definition.members, &member);
