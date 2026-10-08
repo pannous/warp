@@ -618,8 +618,10 @@ PASSED:
   ✓ ffi::test_wasi::test_wasi_putf
   ✓ ffi::test_wasi::test_wasi_puti
   ✓ ffi::test_web_idl::a_call_with_a_count_no_overload_takes_is_an_error
+  ✓ ffi::test_web_idl::a_global_is_a_namespace_or_an_attribute_of_the_scope_not_an_interface
   ✓ ffi::test_web_idl::a_global_without_webidl_stays_unchecked
   ✓ ffi::test_web_idl::a_member_the_interface_lacks_is_an_error_with_its_near_miss
+  ✓ ffi::test_web_idl::a_page_has_local_storage_and_the_clipboard
   ✓ ffi::test_web_idl::an_attribute_is_read_not_called
   ✓ ffi::test_web_idl::what_the_interface_declares_runs
   ✓ ffi_parser::tests::test_parse_int32_return
@@ -694,6 +696,7 @@ PASSED:
   ✓ functions::test_broadcasting::test_operators_do_not_broadcast
   ✓ functions::test_broadcasting::test_scalar_calls_and_list_functions_do_not_broadcast
   ✓ functions::test_broadcasting_declared::a_declared_list_variable_broadcasts
+  ✓ functions::test_broadcasting_declared::a_method_of_a_list_broadcasts
   ✓ functions::test_broadcasting_declared::test_declared_list_parameters_take_the_list
   ✓ functions::test_broadcasting_declared::test_declared_scalar_parameters_broadcast
   ✓ functions::test_builtin_clash::a_cast_cannot_name_a_function
@@ -3449,4 +3452,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-19 ignored, 3444 passed, 0 failed, 3444 total tested
+19 ignored, 3447 passed, 0 failed, 3447 total tested
