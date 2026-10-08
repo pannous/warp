@@ -70,6 +70,7 @@ pub mod type_name_matching;
 pub mod type_tests;
 pub mod element_events;
 pub mod event_signals;
+pub mod scoped_handlers;
 pub mod system_signals;
 pub mod fetch_signals;
 pub mod page_html;

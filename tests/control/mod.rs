@@ -103,6 +103,7 @@ mod test_signal_values;
 mod test_stored_signals;
 mod test_storage;
 mod test_undo_history;
+mod test_scoped_handlers;
 mod test_shared_signals;
 mod test_signal_reflection;
 mod test_broadcast;

@@ -542,13 +542,13 @@ fn handler(statement: &Node) -> Option<(String, Node, bool)> {
 }
 
 /// The words that emit in this program: emit, send and the aliases it does not name itself (soft keywords, P165)
-fn emit_verbs(program: &Node) -> Vec<String> {
+pub(crate) fn emit_verbs(program: &Node) -> Vec<String> {
 	EMIT_WORDS.iter().chain(EMIT_ALIASES.iter()).filter(|verb| !crate::soft_keywords::program_names(program, verb)).map(|verb| verb.to_string()).collect()
 }
 
 /// `emit alarm`, `emit stop the machine{reason:"…"}`, `emit item 1` (or a `verbs` word): the name and the data (ø
 /// without)
-fn emitted(node: &Node, verbs: &[String]) -> Option<(String, Node)> {
+pub(crate) fn emitted(node: &Node, verbs: &[String]) -> Option<(String, Node)> {
 	let Node::List(items, _, _) = node.drop_meta() else { return None };
 	let (verb, rest) = items.split_first()?;
 	let (last, words) = rest.split_last()?;
@@ -672,7 +672,7 @@ fn each_its_event(bodies: &[Node]) -> Vec<Node> {
 
 /// Handlers take `event` only when a body reads it: an unread parameter has no type a caller from outside (the page)
 /// could pass a value as
-fn reads_event(bodies: &[Node]) -> bool {
+pub(crate) fn reads_event(bodies: &[Node]) -> bool {
 	bodies.iter().flat_map(symbols).any(|name| name == EVENT_WORD)
 }
 
