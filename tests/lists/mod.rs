@@ -25,6 +25,8 @@ mod test_size_property_word;
 mod test_typed_lists;
 mod test_concat_declared;
 mod test_unpacking;
+mod test_unpacking_into_existing;
+mod test_unpacking_declared;
 mod test_tuples;
 mod test_pop;
 mod test_numbered_fields;
