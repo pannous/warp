@@ -67,10 +67,13 @@ all. The page build now takes the definition: tests/web/test_server_functions_in
    page fetches it (`users := fetch "/api/users"`). A later step could lower a route's read of a server-only variable to
    that fetch automatically. That needs a `server` mark on variables too (`server users = db.load()`), so it waits for a
    user decision.
-6. **`warp serve app.warp [port]`**: today `warp run` serves when the program says `serve PORT {…}`. A CLI word that
-   serves any page program (site + /rpc routes, no `serve` statement needed) would be the production twin of
-   `warp dev`. Cheap: main.rs plus a default port. Not done, because the old `serv` CGI mode in main.rs holds the word.
-   Retiring that mode is a question for the user.
+6. **`warp serve [app.warp] [port]`** (P222, done; the CGI mode is retired): serves any program without a `serve PORT
+   {…}` statement: its page (site.rs), its `server def`s as POST /rpc/f and its top-level `get`/`post "/path" {…}` routes,
+   at the port (8080; the file app.warp or main.warp of the folder). pipeline::serving_at(port) makes lowering/serve.rs
+   append the serving after the program's statements; a program with its own `serve PORT {…}` keeps it. Plain
+   `warp app.warp` serves too when serve::serves finds a route, a `get`/`post`, a `server def` or a `serve` (a static
+   check), printing "serving http://localhost:8080 (routes found; `warp run app.warp` runs it once without serving)";
+   `warp run` and `warp test` never serve. Probe: probes/warp_serve/app.warp; tests/web/test_warp_serve.rs.
 
 ## Undoable defaults taken
 - RPC in the page is async, like fetch (option a), starting from the prerendered value; a call with a local argument is refused.

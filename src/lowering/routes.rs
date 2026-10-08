@@ -79,6 +79,11 @@ pub fn lower(program: Node) -> Node {
 	Node::List(lowered, bracket, separator)
 }
 
+/// Whether the statement is a page's `route "/path" {…}`
+pub(crate) fn is_route(statement: &Node) -> bool {
+	route(statement).is_some()
+}
+
 /// `route "/users/:id" {…}`: the pattern ("/" parses as a character) and the block's items
 fn route(statement: &Node) -> Option<Route> {
 	let Node::List(items, _, _) = statement.drop_meta() else { return None };

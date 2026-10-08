@@ -30,18 +30,32 @@ pub fn lower(program: Node) -> Node {
 	if crate::pipeline::is_for_a_page() {
 		return without_serving(program);
 	}
+	let port = crate::pipeline::serving_port();
+	let program = match program {
+		single if port.is_some() && !matches!(single.drop_meta(), Node::List(_, Bracket::None, Separator::Semicolon | Separator::Newline)) => {
+			Node::List(vec![single], Bracket::None, Separator::Newline)
+		}
+		other => other,
+	};
 	match program {
-		Node::List(statements, bracket, separator) if statements.iter().any(|statement| served(statement).is_some() || server_definition(statement).is_some()) => {
+		Node::List(statements, bracket, separator) if port.is_some() || statements.iter().any(|statement| served(statement).is_some() || server_definition(statement).is_some()) => {
 			let statements: Vec<Node> = statements.into_iter().map(|statement| server_definition(&statement).unwrap_or(statement)).collect();
 			let calls: Vec<Route> = statements.iter().filter_map(rpc_route).collect();
 			let mut routes = 0;
-			let statements = statements.into_iter().flat_map(|statement| match served(&statement) {
+			let serves_itself = statements.iter().any(|statement| served(statement).is_some());
+			// `warp serve`: the top-level routes and the server functions at its port, after the program's statements
+			let (top_level, statements): (Vec<Node>, Vec<Node>) = statements.into_iter().partition(|statement| !serves_itself && port.is_some() && !top_level_routes(statement).is_empty());
+			let mut statements: Vec<Node> = statements.into_iter().flat_map(|statement| match served(&statement) {
 				Some((port, mut routed)) => {
 					routed.extend(calls.iter().cloned());
 					serving(port, routed, &mut routes)
 				}
 				None => vec![statement],
 			}).collect();
+			if let (Some(port), false) = (port, serves_itself) {
+				let routed = top_level.iter().flat_map(top_level_routes).chain(calls).collect();
+				statements.extend(serving(Node::int(i64::from(port)), routed, &mut routes));
+			}
 			Node::List(statements, bracket, separator)
 		}
 		single if served(&single).is_some() => {
@@ -49,6 +63,33 @@ pub fn lower(program: Node) -> Node {
 			Node::List(serving(port, routed, &mut 0), Bracket::None, Separator::Semicolon)
 		}
 		other => other,
+	}
+}
+
+/// Whether the program is obviously a server, without running it: it serves (`serve PORT {…}`), defines a server
+/// function, a page route (`route "/" {…}`) or a top-level `get`/`post` route. Plain `warp app.warp` serves such a
+/// program as `warp serve` does (P222)
+pub fn serves(code: &str) -> bool {
+	top_level_statements(code).iter().any(|statement| served(statement).is_some() || server_definition(statement).is_some() || crate::routes::is_route(statement) || !top_level_routes(statement).is_empty())
+}
+
+/// Whether the program has its own `serve PORT {…}`
+pub fn serves_itself(code: &str) -> bool {
+	top_level_statements(code).iter().any(|statement| served(statement).is_some())
+}
+
+fn top_level_statements(code: &str) -> Vec<Node> {
+	match crate::warp_parser::parse(code).drop_meta() {
+		Node::List(statements, Bracket::None, Separator::Semicolon | Separator::Newline) => statements.clone(),
+		single => vec![single.clone()],
+	}
+}
+
+/// The route a top-level `get "/api" {…}` statement is
+fn top_level_routes(statement: &Node) -> Vec<Route> {
+	match statement.drop_meta() {
+		Node::List(_, Bracket::None, Separator::Space) => routes_in(std::slice::from_ref(statement)),
+		_ => vec![],
 	}
 }
 

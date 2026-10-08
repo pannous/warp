@@ -118,6 +118,8 @@ thread_local! {
 	static PRERENDERING: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
 	/// the values the page's calls of server functions gave its prerender, the shipped page's first values
 	static SERVER_VALUES: std::cell::RefCell<Vec<Node>> = const { std::cell::RefCell::new(vec![]) };
+	/// the port `warp serve` serves a program at that has no `serve PORT {…}` of its own (lowering/serve.rs)
+	static SERVING_PORT: std::cell::Cell<Option<u16>> = const { std::cell::Cell::new(None) };
 	/// whether it runs under `warp test`: its tests run and give its value (lowering/test_blocks.rs)
 	static FOR_TESTS: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
 }
@@ -180,6 +182,19 @@ pub fn with_server_values<T>(values: Vec<Node>, run: impl FnOnce() -> T) -> T {
 	let result = run();
 	SERVER_VALUES.with(|current| current.replace(before));
 	result
+}
+
+/// `run` compiling a program `warp serve` serves at the port: its server functions, its top-level `get`/`post` routes
+/// and its page, without a `serve PORT {…}` statement
+pub fn serving_at<T>(port: u16, run: impl FnOnce() -> T) -> T {
+	let before = SERVING_PORT.with(|current| current.replace(Some(port)));
+	let result = run();
+	SERVING_PORT.with(|current| current.set(before));
+	result
+}
+
+pub fn serving_port() -> Option<u16> {
+	SERVING_PORT.with(|port| port.get())
 }
 
 /// The first value of the page's `index`th call of a server function, ø when none was rendered
