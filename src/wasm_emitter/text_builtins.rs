@@ -115,6 +115,10 @@ pub fn add_dependencies(required: &mut HashSet<&'static str>) {
 	if required.contains(super::list_ops::NODE_AT_KEY) {
 		required.extend(["node_index_at", "map_get"]);
 	}
+	// instance_copy is emitted with field_with, both looking into an instance's fields
+	if required.contains(crate::library_words::INSTANCE_COPY) {
+		required.insert(crate::library_words::FIELD_WITH);
+	}
 	if required.contains(crate::library_words::FIELD_WITH) {
 		required.insert(super::list_ops::STRUCT_BODY); // an instance keeps its type
 	}

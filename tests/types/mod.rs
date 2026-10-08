@@ -98,5 +98,6 @@ mod test_shared_instances;
 mod test_type_static;
 mod test_upcast_fields;
 mod test_empty_type_aliases;
+mod test_real_references;
 mod test_optional_list_items;
 mod test_any_into_annotated;

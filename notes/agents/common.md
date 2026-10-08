@@ -13,6 +13,12 @@ when a message or comment cites a number (P71, D5) and you need its wording; nev
 
 - Find the others with ListAgents: Supervisor (the session that spawned you, or tmux `warp-supervisor`), Integrator
   (tmux `warp-integrator`), Interviewer (tmux `warp-interviewer`).
+- One name per session (user, 2026-10-08: "I often have to guess who is actually responsible"): every session is named
+  `warp-<role>`: its claude.ai title, its SendMessage/ListAgents address and its tmux session (claude-remote.sh starts
+  `claude --name warp-<role> --remote-control warp-<role>`; a swap's replacement gets the same name). Address peers
+  by role (`warp-integrator`, `warp-types`) and write role names, not session hashes like warp-3f, in messages,
+  cards and reports to the user. Older sessions are renamed with `/rename warp-<role>` while idle
+  (~/dev/bin/rename-when-idle; typed into a busy session it is lost).
 - Never block on a decision: take the recommended default, mark it as an assumption (an existing-test edit goes in its
   own commit, named in the message), keep working, and SendMessage the Interviewer the question.
 - Never ask the user yourself (user, 2026-10-06: questions go "either through the Supervisor or through the

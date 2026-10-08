@@ -318,8 +318,8 @@ pub(super) fn infer_list_type(node: &Node, items: &[Node], bracket: &Bracket, se
 					_ => Kind::List,
 				};
 			}
-			if name == crate::library_words::FIELD_WITH {
-				// a copy of the object with one field set: a Node, whatever the object's kind is known as
+			if name == crate::library_words::FIELD_WITH || name == crate::library_words::INSTANCE_COPY {
+				// the object with one field set, or its copy: a Node, whatever the object's kind is known as
 				return match infer_type(&items[1], scope) { kind if kind.is_ref() => kind, _ => Kind::Empty };
 			}
 			if name == REMOVED_VALUE_CALL {

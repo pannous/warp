@@ -25,7 +25,7 @@ const COPY_BYTES: I<'static> = I::MemoryCopy { src_mem: 0, dst_mem: 0 };
 const EMPTY_TEXT: &str = "ø";
 
 /// Names of the runtime functions, keyed by the library word
-pub const LIBRARY_FUNCTIONS: [(&str, &str); 17] = [
+pub const LIBRARY_FUNCTIONS: [(&str, &str); 18] = [
 	(crate::library_words::MAP_KEYS, crate::library_words::MAP_KEYS),
 	(crate::library_words::MAP_VALUES, crate::library_words::MAP_VALUES),
 	(crate::library_words::MAP_ENTRIES, crate::library_words::MAP_ENTRIES),
@@ -36,6 +36,7 @@ pub const LIBRARY_FUNCTIONS: [(&str, &str); 17] = [
 	(crate::library_words::ORD, CODEPOINT_OF),
 	("chars", "text_chars"),
 	("field_with", "field_with"),
+	(crate::library_words::INSTANCE_COPY, crate::library_words::INSTANCE_COPY),
 	("reverse", "list_reverse"),
 	("sort", "list_sort"),
 	("upper", "text_upper"),
@@ -45,6 +46,8 @@ pub const LIBRARY_FUNCTIONS: [(&str, &str); 17] = [
 	(crate::library_words::SLICE, NODE_SLICE),
 ];
 pub const NODE_SLICE: &str = "node_slice";
+/// instance_field_set(fields, name, value): an instance's field set in place (field_with)
+const INSTANCE_FIELD_SET: &str = "instance_field_set";
 /// text_quoted(text) -> text: how a text inside a container prints (P126)
 pub const TEXT_QUOTED: &str = "text_quoted";
 const QUOTE_BYTE: i32 = b'"' as i32;
@@ -699,6 +702,75 @@ impl WasmGcEmitter {
 		Self::emit_list(f, &[I::Else, I::LocalGet(local), I::RefAsNonNull, I::End]);
 	}
 
+	/// instance_copy(node): a new instance with the same field values in entries of its own, so a field set in place
+	/// changes only it; any other value is itself (values are never shared)
+	pub(super) fn emit_instance_copy(&mut self) {
+		if !self.should_emit_function(crate::library_words::INSTANCE_COPY) {
+			return;
+		}
+		let (node_ref, nullable) = (Ref(self.node_ref(false)), Ref(self.node_ref(true)));
+		let node_type = self.type_manager.node_type;
+		let has_instances = !self.ctx.type_registry.types().is_empty();
+		let copy_entries = self.ctx.func_registry.import_count() + self.ctx.func_registry.code_count();
+		if has_instances {
+			// the fields: one entry, or a cons list of them, each entry new
+			self.runtime_function("instance_entries_copy", vec![nullable], vec![nullable], vec![], |s, f| {
+				let cells = 0;
+				Self::emit_list(f, &[I::LocalGet(cells), I::RefIsNull, I::If(BlockType::Empty), I::RefNull(HeapType::Concrete(node_type)), I::Return, I::End]);
+				s.emit_field(f, cells, 0);
+				Self::emit_list(f, &[I::I64Const(KIND_MASK), I::I64And, I::I64Const(KEY_KIND), I::I64Eq, I::If(BlockType::Empty)]);
+				for field_index in 0..3 {
+					s.emit_field(f, cells, field_index);
+				}
+				Self::emit_list(f, &[I::StructNew(node_type), I::Return, I::End]);
+				s.emit_field(f, cells, 0);
+				s.emit_field(f, cells, 1);
+				Self::emit_list(f, &[I::RefCastNullable(HeapType::Concrete(node_type)), I::Call(copy_entries)]);
+				s.emit_field(f, cells, 2);
+				Self::emit_list(f, &[I::Call(copy_entries), I::StructNew(node_type)]);
+			});
+			assert_eq!(self.func_index("instance_entries_copy"), copy_entries, "recursive call index");
+		}
+		self.runtime_function(crate::library_words::INSTANCE_COPY, vec![node_ref], vec![node_ref], vec![nullable], |s, f| {
+			let body = 1;
+			if has_instances {
+				f.instruction(&I::LocalGet(0));
+				s.call(f, super::list_ops::STRUCT_BODY);
+				Self::emit_list(f, &[I::LocalTee(body), I::LocalGet(0), I::RefEq, I::I32Eqz, I::If(BlockType::Empty)]);
+				s.emit_field(f, 0, 0);
+				s.emit_field(f, 0, 1);
+				Self::emit_list(f, &[I::LocalGet(body), I::Call(copy_entries), I::StructNew(node_type), I::Return, I::End]);
+			}
+			f.instruction(&I::LocalGet(0));
+		});
+	}
+
+	/// instance_field_set(fields, name, value) -> found: the entry `name:…` among an instance's fields (one entry, or a
+	/// cons list of them) gets the value in place
+	fn emit_instance_field_set(&mut self) {
+		let (node_ref, nullable) = (Ref(self.node_ref(false)), Ref(self.node_ref(true)));
+		let node_type = self.type_manager.node_type;
+		self.runtime_function(INSTANCE_FIELD_SET, vec![nullable, node_ref, node_ref], vec![ValType::I32], vec![nullable, ValType::I64], |s, f| {
+			let (cells, name, value, entry, kind) = (0, 1, 2, 3, 4);
+			Self::emit_list(f, &[I::Block(BlockType::Empty), I::Loop(BlockType::Empty)]);
+			Self::emit_list(f, &[I::LocalGet(cells), I::RefIsNull, I::BrIf(1)]);
+			s.emit_field(f, cells, 0);
+			Self::emit_list(f, &[I::I64Const(KIND_MASK), I::I64And, I::LocalTee(kind), I::I64Const(KEY_KIND), I::I64Eq]);
+			// one field: the fields are that entry; else the entry is the cell's item
+			Self::emit_list(f, &[I::If(BlockType::Empty), I::LocalGet(cells), I::LocalSet(entry), I::Else]);
+			s.emit_field(f, cells, 1);
+			Self::emit_list(f, &[I::RefCastNullable(HeapType::Concrete(node_type)), I::LocalSet(entry), I::End]);
+			Self::emit_list(f, &[I::LocalGet(entry), I::RefIsNull, I::I32Eqz, I::If(BlockType::Empty)]);
+			Self::emit_list(f, &[I::LocalGet(entry), I::RefAsNonNull, I::LocalGet(name)]);
+			s.call(f, "map_entry_has_key");
+			Self::emit_list(f, &[I::If(BlockType::Empty), I::LocalGet(entry), I::LocalGet(value)]);
+			Self::emit_list(f, &[I::StructSet { struct_type_index: node_type, field_index: 2 }, I32Const(1), I::Return, I::End, I::End]);
+			Self::emit_list(f, &[I::LocalGet(kind), I::I64Const(KEY_KIND), I::I64Eq, I::BrIf(1)]);
+			s.emit_field(f, cells, 2);
+			Self::emit_list(f, &[I::LocalSet(cells), I::Br(0), I::End, I::End, I32Const(0)]);
+		});
+	}
+
 	/// field_with(object, name, value): a copy of the object with the field `name` set to `value`, added at the end when it is
 	/// new (value semantics: the object itself never changes). A one-entry object `{a:1}` is the entry node itself.
 	pub(super) fn emit_field_with(&mut self) {
@@ -742,15 +814,25 @@ impl WasmGcEmitter {
 		});
 		assert_eq!(self.func_index("map_replace_entry"), replace_entry, "recursive call index");
 
-		let field_with = next_index(self);
 		let has_instances = !self.ctx.type_registry.types().is_empty();
+		if has_instances {
+			self.emit_instance_field_set();
+		}
+		let field_with = next_index(self);
 		self.runtime_function("field_with", vec![node_ref, node_ref, node_ref], vec![node_ref], vec![nullable, ValType::I64, nullable], |s, f| {
 			let (entry, kind, body) = (3, 4, 5);
-			// an instance `T:{fields}` keeps its type: the field is set in its field list
+			// an instance `T:{fields}` is a reference (P200): a field it has is set in place, the instance given back;
+			// a new field makes a copy of it with the field added
 			if has_instances {
 				f.instruction(&I::LocalGet(0));
 				s.call(f, super::list_ops::STRUCT_BODY);
 				Self::emit_list(f, &[I::LocalTee(body), I::LocalGet(0), I::RefEq, I::I32Eqz, I::If(BlockType::Empty)]);
+				f.instruction(&I::LocalGet(body));
+				f.instruction(&I::LocalGet(1));
+				s.call(f, super::list_ops::MAP_KEY_NAME);
+				f.instruction(&I::LocalGet(2));
+				s.call(f, INSTANCE_FIELD_SET);
+				Self::emit_list(f, &[I::If(BlockType::Empty), I::LocalGet(0), I::Return, I::End]);
 				s.emit_field(f, 0, 0);
 				s.emit_field(f, 0, 1);
 				Self::emit_list(f, &[I::LocalGet(body), I::RefAsNonNull, I::LocalGet(1), I::LocalGet(2), I::Call(field_with), I::StructNew(node_type), I::Return, I::End]);

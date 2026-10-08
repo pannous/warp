@@ -60,6 +60,9 @@ PASSED:
   ✓ control::test_channels::for_over_a_channel_receives_until_it_is_closed
   ✓ control::test_channels::receiving_with_no_task_left_is_an_error
   ✓ control::test_charged_fields::test_define_entries_are_values
+  ✓ control::test_check_assert::a_failed_check_stops_the_program
+  ✓ control::test_check_assert::check_passes_a_condition_that_holds
+  ✓ control::test_check_assert::check_throws_when_the_condition_fails
   ✓ control::test_clipboard::a_clipboard_listener_watches_the_change_count
   ✓ control::test_clipboard::reading_the_clipboard_is_one_host_call
   ✓ control::test_clipboard::the_change_count_is_read_without_the_content
@@ -1421,6 +1424,10 @@ PASSED:
   ✓ modules::test_folder_scope::inline_code_has_no_folder_scope
   ✓ modules::test_folder_scope::sibling_definitions_are_visible_without_use
   ✓ modules::test_folder_scope::the_file_itself_wins_over_its_siblings
+  ✓ modules::test_from_import::a_program_word_of_an_unimported_name_is_its_own
+  ✓ modules::test_from_import::from_import_brings_the_named_words
+  ✓ modules::test_from_import::from_import_leaves_the_other_words_out
+  ✓ modules::test_from_import::from_import_of_a_missing_word_is_an_error
   ✓ modules::test_header_search::a_header_comes_from_the_first_include_directory_holding_it
   ✓ modules::test_header_search::an_import_nothing_declares_says_why
   ✓ modules::test_header_search::only_sdl_names_read_the_sdl_headers
@@ -1539,6 +1546,9 @@ PASSED:
   ✓ modules::test_use_modules::test_use_missing_module_is_an_error_value
   ✓ modules::test_use_modules::test_use_twice_is_a_no_op
   ✓ modules::test_use_modules::test_warp_extension_is_found
+  ✓ modules::test_use_several::a_use_with_a_version_stays_one_module
+  ✓ modules::test_use_several::a_use_with_commas_uses_each_module
+  ✓ modules::test_use_several::a_use_with_spaces_uses_each_module
   ✓ modules::test_versions::an_older_version_comes_from_its_git_tag
   ✓ modules::test_versions::tagged_version_literals
   ✓ modules::test_versions::use_requires_a_version_of_a_package
@@ -1790,6 +1800,10 @@ PASSED:
   ✓ numbers::test_static_units_compiled::test_a_compiled_quantity_carries_its_unit
   ✓ numbers::test_static_units_compiled::test_a_whole_list_of_quantities_shows_its_units
   ✓ numbers::test_static_units_compiled::test_eval_reads_the_same_section
+  ✓ numbers::test_static_units_data::test_a_serialized_quantity_names_its_unit
+  ✓ numbers::test_static_units_data::test_annotated_variables_keep_and_check_units
+  ✓ numbers::test_static_units_data::test_lists_grow_with_quantities_of_their_unit
+  ✓ numbers::test_static_units_data::test_object_fields_hold_quantities
   ✓ numbers::test_static_units_functions::test_a_unit_word_called_as_a_function_is_no_unit
   ✓ numbers::test_static_units_functions::test_dimension_errors_inside_functions_are_compile_errors
   ✓ numbers::test_static_units_functions::test_functions_take_and_give_quantities
@@ -2744,6 +2758,11 @@ PASSED:
   ✓ types::test_person_struct::test_person_struct_roundtrip
   ✓ types::test_printable::as_text_str_and_text_call_the_printable_operation
   ✓ types::test_printable::print_and_interpolation_call_the_printable_operation
+  ✓ types::test_real_references::a_function_changes_the_instance_it_is_given
+  ✓ types::test_real_references::a_list_item_is_the_instance_itself
+  ✓ types::test_real_references::an_alias_sees_a_changed_field
+  ✓ types::test_real_references::each_construction_is_a_new_instance
+  ✓ types::test_real_references::maps_stay_values
   ✓ types::test_real_text::an_exact_real_as_text_is_symbolic
   ✓ types::test_real_text::an_exact_real_joins_a_text_symbolically
   ✓ types::test_records::test_optional_field_is_empty_and_settable
@@ -3167,6 +3186,7 @@ PASSED:
   ✓ web::test_site::a_site_holds_the_rendered_page_the_module_and_its_scripts
   ✓ web::test_site::a_site_starting_tasks_runs_its_program_in_a_worker
   ✓ web::test_site::a_site_with_routes_is_one_page_for_every_path
+  ✓ web::test_site::a_site_with_routes_starting_tasks_runs_its_program_in_a_worker
   ✓ web::test_site::a_static_page_is_its_last_line_rendered
   ✓ web::test_site_tasks::a_site_renders_what_its_tasks_computed
   ✓ web::test_style_rules::descendant_selectors_and_rules_on_one_line
@@ -3561,4 +3581,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-19 ignored, 3556 passed, 0 failed, 3556 total tested
+19 ignored, 3576 passed, 0 failed, 3576 total tested

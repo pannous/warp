@@ -136,7 +136,7 @@ impl TypeManager {
 			}, // data
 			FieldType {
 				element_type: Val(Ref(node_ref)),
-				mutable: false,
+				mutable: true, // mutable for a field set in place: instances are references (P200)
 			}, // value
 		]);
 		self.node_type = node_type_idx;
