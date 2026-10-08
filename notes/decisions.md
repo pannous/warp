@@ -55,6 +55,9 @@ D-number or #number mean this file. Open questions, parked ones and the standing
   note would be a run-time warning, not built yet); `x.copy(true)` positional also means shallow, and in the
   Kotlin-style `p.copy(shallow = yes, y = 5)` shallow is the flag; each event handler still gets a copy of the event
   as raised; lists are still values until card shared-lists (P200b's "everything shares" includes lists).
+- Soft tests (defaults, warp-worker, notes/soft_tests.md): bare `test C` lines are skipped by `warp run` too (P209);
+  the playground's Run runs a program's tests and shows the summary (no separate Test button); page tests still run
+  under a plain run for now; a program's own `test` function keeps the word.
 - P211 `~` is looser than `≈` (card g_YHSM, "two levels of approximation"): `~` compares numbers within 1% (setting
   `rough_tolerance`) and texts also ignoring surrounding whitespace and punctuation ("Hello!" ~ "hello"); `≈` stays:
   numbers within 1e-9 relative, texts ignoring case and accents, lists and objects field by field.
