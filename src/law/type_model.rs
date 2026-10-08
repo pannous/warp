@@ -34,6 +34,7 @@ const UNIT_PARAMETER: &str = "·";
 const ARGUMENTS_SUFFIX: &str = "·args";
 const APPEND_METHODS: [&str; 2] = ["add", "push"];
 const FOR_KEYWORD: &str = "for";
+const VARIABLE_KEYWORDS: [&str; 2] = ["let", "shared"];
 /// the one field of a function local's cell (`f·n`): `·` keeps it apart from the program's own fields
 const CELL_FIELD: &str = "·value";
 /// An inline union `int | text` or an optional `int?` is the join of its alternatives, every value given to it a cast
@@ -75,7 +76,7 @@ fn quoted(text: &str) -> String {
 /// `int`, `texts`, `list`: the W0 type a warp type word names
 fn type_of_word(word: &str) -> Option<String> {
 	let scalar = |word: &str| -> Option<&str> {
-		Some(match crate::type_kinds::canonical_type_name(word) {
+		Some(match crate::type_kinds::canonical_type_name(&word.to_lowercase()) {
 			"int" | "integer" | "long" => ".int",
 			"float" | "number" | "exact" => ".number",
 			"text" | "string" | "str" => ".text",
@@ -560,6 +561,15 @@ impl Exporter {
 				Node::Key(target, Op::Assign, value) => self.binding(target, ".const", value),
 				other => unsupported(other),
 			},
+			// `let x = 1`, `shared n = 5` (one thread in W0): a variable; `int i = 2`: `i: int = 2`
+			Node::List(items, _, _) if items.len() == 2 && matches!(items[1].drop_meta(), Node::Key(target, Op::Assign, _) if matches!(target.drop_meta(), Node::Symbol(_))) => {
+				let Node::Key(target, _, value) = items[1].drop_meta() else { unreachable!("an assignment") };
+				match items[0].drop_meta() {
+					Node::Symbol(word) if VARIABLE_KEYWORDS.contains(&word.as_str()) => self.binding(target, ".var", value),
+					Node::Symbol(word) if self.type_of(word).is_ok() => self.binding(&Node::Key(target.clone(), Op::Colon, Box::new(items[0].clone())), ".var", value),
+					_ => Ok(format!(".statement ({})", self.expression(statement)?)),
+				}
+			}
 			Node::Key(target, Op::Assign, value) if !self.is_bound(target) && !matches!(target.drop_meta(), Node::Key(_, Op::Dot, _)) => self.binding(target, ".var", value),
 			other => Ok(format!(".statement ({})", self.expression(other)?)),
 		}

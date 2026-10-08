@@ -235,8 +235,9 @@ W0 now has `arith op a b`, which takes numbers only.
   name bound to a list). Lists became gradual like arithmetic: `#` gives `elementTy` (a text's element is a text,
   anything but a list or text gives `any`), `++` takes any operands, and non-lists raise "not a list" when it runs.
   The checker demands lists, texts (for `#`) or `any`. Result: 77 exported, all agreeing with warp; with braced
-  blocks as expressions (`if c {a} else {b}`) and `+=`/`-=`/`*=` exported: 98. With effect handlers and implicit casts from `any`: 102; after repairing the sample file (53 lines were UTF-8 encoded twice, `ø` stored as `Ã¸`): 112, all agreeing (2026-10-08). With `global` (below): 121; with `for` loops: 122 of 600; with function locals: 123. Most of the rest:
-  imports (`use`), named arguments, nested functions, ranges `1..3`, maps `{a:1}`, lambdas, `i++`, `global`, string methods.
+  blocks as expressions (`if c {a} else {b}`) and `+=`/`-=`/`*=` exported: 98. With effect handlers and implicit casts from `any`: 102; after repairing the sample file (53 lines were UTF-8 encoded twice, `ø` stored as `Ã¸`): 112, all agreeing (2026-10-08). With `global` (below): 121; with `for` loops: 122 of 600; with function locals: 123; with `let x = …`, `shared n = …` and C-style `int i = 2` / `String s = …`: 125, all
+  agreeing. Most of the rest:
+  imports (`use`), multiple assignment `a, b = xs`, nested functions, ranges `1..3`, maps `{a:1}`, lambdas, `i++`, `global`, string methods.
 
 ## Globals
 
