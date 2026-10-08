@@ -168,7 +168,7 @@ pub fn check_member(interface: &str, path: &str, member: &str, call: Option<usiz
 		let mut names: Vec<String> = members.into_keys().collect();
 		names.extend(derived.iter().flat_map(|derived| members_of(derived).into_keys()));
 		let same_letters = names.iter().find(|name| name.eq_ignore_ascii_case(member)).cloned();
-		let near = same_letters.or_else(|| crate::extensions::strings::near_miss(member, names.into_iter())).map(|near| format!("; did you mean {near}?")).unwrap_or_default();
+		let near = same_letters.or_else(|| crate::extensions::strings::near_miss(member, names)).map(|near| format!("; did you mean {near}?")).unwrap_or_default();
 		return Err(format!("{path} ({interface} in WebIDL) has no member {member}{near}"));
 	};
 	match (declared, call) {
