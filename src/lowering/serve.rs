@@ -24,6 +24,8 @@ const RPC_VALUE_INFIX: &str = "·rpc·";
 pub const RPC_VALUES: &str = "rpc·values";
 /// The prerender's requests of those values, `[["/rpc/f", [args]] …]`: a server renders a page with their replies (site.rs)
 pub const RPC_REQUESTS: &str = "rpc·requests";
+/// The mark of a route answering a list in the route table (web_server.rs routes_of): its ø is the JSON array [], not null
+pub const LIST_ANSWER: &str = "list";
 
 /// P221: the server functions giving what a route shows, `route·data·0(path)`
 const ROUTE_DATA_PREFIX: &str = "route·data·";
@@ -541,7 +543,7 @@ fn serving(port: Node, routes: Vec<Route>, server_data: &ServerData, count: &mut
 		let head = Node::List(vec![Node::Symbol(function.clone()), request], Bracket::Round, Separator::None);
 		let mut entry = vec![Node::Text(method), path, Node::Text(function)];
 		if answers_a_list(&body, &server_data.list_words) {
-			entry.push(Node::Text(crate::web_server::LIST_ANSWER.to_string()));
+			entry.push(Node::Text(LIST_ANSWER.to_string()));
 		}
 		statements.push(Node::Key(Box::new(head), Op::Define, Box::new(reading_tables(body, &server_data.tables))));
 		table.push(Node::List(entry, Bracket::Square, Separator::Colon));
