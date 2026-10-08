@@ -4,7 +4,7 @@ History of answered decisions, newest first. Grep-only: look up a cited number (
 before asking the user; nobody reads it front to back, the code, tests and wiki are the truth (user 2026-10-08:
 "If it's really grep-only, then it's perfect. Otherwise, move them to a history file"). References to
 "notes/open_decisions.md" + a Decided section, P-, D- or #-numbers mean this file. Open and parked questions:
-notes/open_decisions.md; standing rules: notes/standing_rules.md.
+notes/open_decisions.md.
 
 ## Decided 2026-10-08 (user, as recommended unless quoted)
 - Every major or semi-major feature ships with a sample in samples/, especially the ORM and the server (user, to the

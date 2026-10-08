@@ -2,8 +2,8 @@
 
 Only the Interviewer asks the user (notes/roles.md). Nothing here blocks: each question names the assumption the code
 already follows. Answers move to notes/decisions.md (newest Decided section on top) with the date and the user's
-words; this file keeps only what is open: pending and parked questions and user to-dos. Standing rules are in
-notes/standing_rules.md (user 2026-10-08: "It's called open decisions for a reason. Open"). Older references to
+words; this file keeps only what is open: pending and parked questions and user to-dos. (user 2026-10-08: "It's called open
+decisions for a reason. Open"). Rules belong where they are applied: AGENTS.md, notes/agents/, the wiki. Older references to
 "open_decisions.md" Decided sections, P-, D- or #-numbers mean notes/decisions.md.
 Details: notes/todo_sweep_task.md (board), notes/semicolon_survey.md, notes/float_truncation_survey.md.
 

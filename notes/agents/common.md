@@ -7,7 +7,7 @@ relays an explicit user decision counts as the user's decision.
 
 Read first: AGENTS.md, notes/roles.md (roles, enforcement), notes/welcoming.md (clear intent → compile it; ambiguous →
 warning with "got it" or a loud error naming the explicit forms; preferred syntax differs → educate), and the decided
-standing rules in notes/standing_rules.md and wiki/Footguns.md. Decisions reach you from the Interviewer or Supervisor;
+rules in wiki/Footguns.md. Decisions reach you from the Interviewer or Supervisor;
 once built, the code, tests and wiki are the truth. notes/decisions.md is the history: look something up there only
 when a message or comment cites a number (P71, D5) and you need its wording; never read it front to back.
 
@@ -62,6 +62,7 @@ when a message or comment cites a number (P71, D5) and you need its wording; nev
 - A card or issue is closed only with a commit linked in its description (user, 2026-10-06): `todo done <card>
   <commit>` (a commit URL for wiki changes), never `gh issue close`; `todo move <card> Done` refuses without a link.
 - Picking a card: `todo take <card> <your session name>` (user, 2026-10-06): assigns the user on GitHub, names you in
-  the board field Agent, moves the card to Now.
+  the board field Agent, moves the card to Now. Prefer fresh, easy cards in column Next (user, 2026-10-06).
+- Deleting old stuff needs no confirmation (user, 2026-10-03): merged branches, stale copies, leftover stashes.
 - Wiki (`wiki/`, its own repo pannous/warp.wiki): GitHub wikis can only serve `master` (notes/wiki_branch.md), so wiki
   edits go to master (`git push origin HEAD:master`); there is no `main` branch in the wiki.
