@@ -308,8 +308,6 @@ impl WasmGcEmitter {
 	/// Where the value of a loop whose body ends in a text or list comes from
 	fn loop_value(&mut self, statements: &Node) -> LoopValue {
 		match last_statement(statements).drop_meta() {
-			// `if c then {out = out + [x]}`, a filter's step: held, each pass would make the list a Node again
-			Node::Key(_, Op::Then | Op::Else, _) => LoopValue::Number,
 			// `xs = xs + [i]`, `s += c`: the variable after the loop, read once
 			Node::Key(variable, op, _) if (*op == Op::Assign || op.is_compound_assign()) && matches!(variable.drop_meta(), Node::Symbol(_)) => {
 				LoopValue::Updated(variable.drop_meta().clone())

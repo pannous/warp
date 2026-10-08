@@ -44,6 +44,7 @@ mod test_while_paren_condition;
 mod test_while_value;
 mod test_text_loop_value;
 mod test_loop_value_at_run_time;
+mod test_loop_if_value;
 mod test_try_else_value;
 mod test_block_statements;
 mod test_try_named_traps;
