@@ -31,9 +31,6 @@ pub(crate) fn take_request_limit() -> usize {
 	REQUEST_LIMIT.with(|limit| limit.replace(0))
 }
 
-/// The mark of a route answering a list (lowering/serve.rs): its ø is the empty JSON array, not null
-pub const LIST_ANSWER: &str = "list";
-
 /// A route of the program: method, path, the function answering it and whether its value is a list
 pub struct Route {
 	pub method: String,
@@ -74,7 +71,7 @@ impl Answer {
 	}
 }
 
-/// The routes of `[[method, path, function] …]`, a list route marked `[method, path, function, LIST_ANSWER]`
+/// The routes of `[[method, path, function] …]`, a list route marked `[method, path, function, serve::LIST_ANSWER]`
 pub fn routes_of(routes: &Node) -> Vec<Route> {
 	let Node::List(items, _, _) = routes.drop_meta() else { return vec![] };
 	items.iter().filter_map(|route| match route.drop_meta() {
@@ -82,7 +79,7 @@ pub fn routes_of(routes: &Node) -> Vec<Route> {
 			method: text_of(&parts[0]),
 			path: text_of(&parts[1]),
 			function: text_of(&parts[2]),
-			lists: parts.get(3).is_some_and(|mark| text_of(mark) == LIST_ANSWER),
+			lists: parts.get(3).is_some_and(|mark| text_of(mark) == crate::serve::LIST_ANSWER),
 		}),
 		_ => None,
 	}).collect()
