@@ -27,6 +27,8 @@ impl WarpParser {
 			call
 		} else if let Some(statement) = self.try_parse_return() {
 			statement
+		} else if let Some(data) = self.try_parse_data() {
+			data
 		} else if let Some(awaited) = self.try_parse_await() {
 			awaited
 		} else if let Some(emitted) = self.try_parse_emit() {
@@ -193,6 +195,28 @@ impl WarpParser {
 			self.continue_expr(value, 0)
 		};
 		Some(Node::List(vec![Symbol(RETURN_KEYWORD.to_string()), value], Bracket::None, Separator::Space))
+	}
+
+	/// `data a and b` is the data `a and b`, also as an operand (`x = data a and b`, `string(data a and b)`); parentheses
+	/// around all of it only group it (`data (a and b)`). `data = …`, `data.x`, glued `data(x)` and `data class` stay
+	pub(super) fn try_parse_data(&mut self) -> Option<Node> {
+		if self.options.data_mode || !self.matches_keyword(DATA_KEYWORD) || self.peek_char(DATA_KEYWORD.len()) != ' ' {
+			return None;
+		}
+		let before_keyword = (self.pos, self.line_nr, self.column, self.current_line.clone());
+		self.advance_by(DATA_KEYWORD.len());
+		self.skip_spaces();
+		let ends = matches!(self.current_char(), '}' | ']' | ')' | ';' | ',' | '\n' | '\r' | '\0');
+		if ends || self.peek_operator().is_some() || self.matches_keyword(CLASS_KEYWORD) {
+			(self.pos, self.line_nr, self.column, self.current_line) = before_keyword;
+			return None;
+		}
+		let parsed = self.parse_expr(Op::Assign.binding_power().1);
+		let data = match parsed.drop_meta() {
+			Node::List(items, Bracket::Round, _) if items.len() == 1 => items[0].clone(),
+			_ => parsed,
+		};
+		Some(Node::List(vec![Symbol(DATA_KEYWORD.to_string()), data], Bracket::None, Separator::Space))
 	}
 
 	/// The operator after `lhs` that the infix table does not hold, its width in characters and its binding power

@@ -258,6 +258,8 @@ pub struct WasmGcEmitter {
 	discovered_needs: std::collections::HashSet<Need>,
 	/// The highest operator code list_text writes as written, from the needs (any code above it is written `:`)
 	written_operator_bound: i64,
+	/// The program quotes a tag (`data point{x:1}`), which list_text writes as an instance: only then does it check for one
+	writes_tags: bool,
 	type_errors: Vec<String>,
 	/// The latest source position among the nodes being emitted (note_position)
 	source_position: Option<(usize, usize)>,
@@ -329,6 +331,7 @@ impl WasmGcEmitter {
 			text_heap_global: None,
 			discovered_needs: Default::default(),
 			written_operator_bound: crate::operators::op_to_code(&crate::operators::Op::Colon),
+			writes_tags: false,
 			type_errors: Vec::new(),
 			source_position: None,
 			loop_labels: Vec::new(),
@@ -667,6 +670,7 @@ impl WasmGcEmitter {
 		}));
 		let key_operators = self.discovered_needs.iter().filter_map(|need| if let Need::KeyOperator(code) = need { Some(*code) } else { None });
 		self.written_operator_bound = key_operators.fold(self.written_operator_bound, i64::max);
+		self.writes_tags = library_ops::mentions_quoted_tag(node);
 		component_adapters::add_dependencies(&mut self.ctx.required_functions);
 		similarity::add_dependencies(&mut self.ctx.required_functions); // before the text builtins': values_equal needs text_of
 		text_builtins::add_dependencies(&mut self.ctx.required_functions);
