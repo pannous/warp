@@ -391,7 +391,7 @@ pub fn resolve_main_variable_assignments(program: Node) -> Result<Node, Node> {
 		let is_main_variable = |name: &String| main.lookup(name).is_some() && !main.is_global(name)
 			&& !function.params.iter().any(|param| param.name == *name) && !declares_local(&function.body, name) && !looped.contains(name);
 		let mut decided: HashSet<&String> = HashSet::new();
-		for (node, name) in find_assignments(&function.body, &is_main_variable) {
+		for (node, name) in find_changes(&function.body, &is_main_variable) {
 			if !decided.insert(name) {
 				continue;
 			}
@@ -534,13 +534,33 @@ pub(crate) fn starts_with_fresh_binding(body: &Node, name: &str) -> bool {
 
 /// The assignments (kept with their positions) whose changed variable satisfies `wanted`, in source order
 pub(crate) fn find_assignments<'a>(node: &'a Node, wanted: &dyn Fn(&String) -> bool) -> Vec<(&'a Node, &'a String)> {
-	let mut found: Vec<(&'a Node, &'a String)> = assignment_target_root(node.drop_meta()).filter(|name| wanted(name)).map(|name| (node, name)).into_iter().collect();
+	find_changes_by(node, wanted, assignment_target_root)
+}
+
+/// The assignments and list updates (`xs.add(x)`, lowered to an assignment later) whose variable satisfies `wanted`
+fn find_changes<'a>(node: &'a Node, wanted: &dyn Fn(&String) -> bool) -> Vec<(&'a Node, &'a String)> {
+	find_changes_by(node, wanted, |node| assignment_target_root(node).or_else(|| updated_list_root(node)))
+}
+
+fn find_changes_by<'a>(node: &'a Node, wanted: &dyn Fn(&String) -> bool, changed: fn(&Node) -> Option<&String>) -> Vec<(&'a Node, &'a String)> {
+	let mut found: Vec<(&'a Node, &'a String)> = changed(node.drop_meta()).filter(|name| wanted(name)).map(|name| (node, name)).into_iter().collect();
 	match node.drop_meta() {
-		Node::Key(left, _, right) => found.extend(find_assignments(left, wanted).into_iter().chain(find_assignments(right, wanted))),
-		Node::List(items, _, _) => found.extend(items.iter().flat_map(|item| find_assignments(item, wanted))),
+		Node::Key(left, _, right) => found.extend(find_changes_by(left, wanted, changed).into_iter().chain(find_changes_by(right, wanted, changed))),
+		Node::List(items, _, _) => found.extend(items.iter().flat_map(|item| find_changes_by(item, wanted, changed))),
 		_ => {}
 	}
 	found
+}
+
+/// The list variable a list method changes: `xs` in `xs.add(x)`, `xs.pop()`
+fn updated_list_root(node: &Node) -> Option<&String> {
+	let Node::Key(target, Op::Dot, call) = node else { return None };
+	let Node::List(items, _, _) = call.drop_meta() else { return None };
+	let is_update = matches!(items.first().map(Node::drop_meta), Some(Node::Symbol(method)) if is_list_mutating_method(method));
+	match target.drop_meta() {
+		Node::Symbol(name) if is_update => Some(name),
+		_ => None,
+	}
 }
 
 /// The variable an assignment changes: `n` in `n = …`, `n += …`, `n++` and `xs#i = …`

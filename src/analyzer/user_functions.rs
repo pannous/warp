@@ -271,6 +271,10 @@ pub(super) fn with_usage_kinds(params: Vec<Param>, body: &Node) -> Vec<Param> {
 		if let Some(name) = joined_to_text(node) {
 			texted.insert(name.to_string());
 		}
+		// `xs.add(420)`, lowered to `xs = xs + [420]`: xs is a list, called or not
+		if let Some(name) = joined_to_list(node) {
+			indexed.insert(name.to_string());
+		}
 		if let Node::Key(alias, Op::Assign | Op::Define, source) = node {
 			if let (Node::Symbol(alias), Node::Symbol(source)) = (alias.drop_meta(), source.drop_meta()) {
 				aliases.push((alias.clone(), source.clone()));
@@ -299,12 +303,24 @@ pub(super) fn with_usage_kinds(params: Vec<Param>, body: &Node) -> Vec<Param> {
 /// The name `+` joins to a text: `" " + t`, `t + "!"`, `n times " " + t`, `t[0 ..< n] + "…"`; a list never
 /// concatenates with a text
 fn joined_to_text(node: &Node) -> Option<&str> {
-	fn call_of(node: &Node, word: &str) -> bool {
-		matches!(node, Node::List(items, Bracket::Round, _) if matches!(items.first().map(Node::drop_meta), Some(Node::Symbol(call)) if call == word))
-	}
-	fn is_text(node: &Node) -> bool {
-		matches!(node, Node::Text(_) | Node::Char(_)) || call_of(node, crate::wasp_parser::TEXT_TIMES)
-	}
+	joined_to(node, is_text)
+}
+
+/// The name `+` joins to a list literal: `xs + [x]`, `[x] + xs`
+fn joined_to_list(node: &Node) -> Option<&str> {
+	joined_to(node, |node| matches!(node, Node::List(_, Bracket::Square, _)))
+}
+
+fn call_of(node: &Node, word: &str) -> bool {
+	matches!(node, Node::List(items, Bracket::Round, _) if matches!(items.first().map(Node::drop_meta), Some(Node::Symbol(call)) if call == word))
+}
+
+fn is_text(node: &Node) -> bool {
+	matches!(node, Node::Text(_) | Node::Char(_)) || call_of(node, crate::wasp_parser::TEXT_TIMES)
+}
+
+/// The name joined by `+` to a value that `is_joined` accepts
+fn joined_to(node: &Node, is_joined: fn(&Node) -> bool) -> Option<&str> {
 	fn joined_name(node: &Node) -> Option<&str> {
 		match node {
 			Node::Symbol(name) => Some(name),
@@ -317,7 +333,7 @@ fn joined_to_text(node: &Node) -> Option<&str> {
 	}
 	let Node::Key(left, Op::Add, right) = node else { return None };
 	let (left, right) = (left.drop_meta(), right.drop_meta());
-	match (is_text(left), is_text(right)) {
+	match (is_joined(left), is_joined(right)) {
 		(true, false) => joined_name(right),
 		(false, true) => joined_name(left),
 		_ => None,
