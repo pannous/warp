@@ -38,11 +38,13 @@ Branch samples-2 / implicit-libm (warp-d2): a character variable compares by cod
 functions since 3da746b), `x="5"; x as int` is 5, and libm called without import links libm (exp/sin/… compiled to
 their argument at run time before).
 
-## Still failing (2026-10-03 night)
-Split 2026-10-03: sample fixer (branch samples) takes async … mandelbrot; warp-d2 takes modules … webgpu.
-neural_net next blockers: `Matrix(r, c, fn)`, `Array(n, fn)`, `m[i, j]`, `round(x, 3)` (todo.md), plus `global` for
-the weights (sample side). calculator / json_parser now pass the character tests and stop at nested functions sharing
-`pos` and dynamic objects.
-async, calculator, circle, control_flow, data_structures, errors, functions, html, html_dsl, json_parser, mandelbrot,
-modules, natural, netbase, neural_net, particles, polymorphism (needs parameter overloading, todo.md), sample,
-test_ffi_extended, types, wasm_interop, webgpu; raylib/sdl not run (windows).
+## Still failing (2026-10-08, branch samples-run)
+All other samples run (exit code = the program's value, so sweep for `Error(` in the output, not for exit codes).
+The failures left, each with its reason in web/playground/excluded_samples.txt:
+- errors (malformed on purpose), life_kotlin_ranges (fails on purpose), modules (sketch: card module-manager),
+  webgpu (WGSL block), netbase (needs a netbase server).
+- natural: given its data it runs to `send email to … with subject …`; that phrase and `results where country is
+  germany` wait for decisions (card natural-phrases), `10 down to 1` is card down-wasm.
+- raylib/sdl: not run in sweeps (windows). SDL_video.h is among the SDL headers now (SDL_CreateWindow).
+Fixed on samples-run: a loop variable reusing a number's name reads fields (`item = 2; for item in basket {
+item.price }`); an import no header declares says so; `xs where country is germany` hints `it.country==germany`.
