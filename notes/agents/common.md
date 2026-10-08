@@ -44,6 +44,10 @@ when a message or comment cites a number (P71, D5) and you need its wording; nev
 - The warp CLI binary is shared too: `<target-dir>/debug/warp` is whichever worktree built last. To probe your own code,
   run `scripts/own-warp.sh` (builds offline and atomically copies into `scratch/warp`) and run that path; a copy taken
   later can be another session's build.
+- Samples (user, 2026-10-08): every major or semi-major feature (a new syntax form, library area, server/ORM/GPU
+  capability, playground ability) ships with a sample in samples/<topic>.warp that shows it the way a user would
+  write it, in the same branch. tests/programs/test_all_samples.rs and the playground menu pick it up; a sample that
+  cannot run in the browser goes in web/playground/excluded_samples.txt. Name the sample in the Integrator message.
 - Done = push the branch, SendMessage the Integrator "branch, tip, new tests, filters", fix what it reports, clean up,
   report one line to the Supervisor.
 - Clean up after the merge: you are allowed and expected to remove your own worktree and branch, nobody else will.
