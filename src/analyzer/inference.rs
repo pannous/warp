@@ -373,6 +373,10 @@ pub(super) fn infer_list_type(node: &Node, items: &[Node], bracket: &Bracket, se
 			if crate::ffi::is_ffi_function(s) {
 				return ffi_call_kind(s);
 			}
+			// `abs(c)`: a variable in parentheses is the variable
+			if let Some(local) = scope.binding(s) {
+				return local.kind;
+			}
 			// Assume zero-arg user function returns Int
 			return Kind::Int;
 		}
