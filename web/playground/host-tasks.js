@@ -422,7 +422,7 @@ const FETCH_HANDLER_PREFIX = "on·fetch·";
 function startFetch(holder, hooks, id, request) {
 	const [url, body] = Array.isArray(request) ? [request[0], JSON.stringify(request[1])] : [request];
 	if (!hooks.arrived && taskPool.length === 0) return holder.warnings.push(`fetch ${url}: replies arriving later are not handled here`);
-	const started = { url };
+	const started = { url, posted: body !== undefined };
 	(holder.fetches ??= new Map()).set(id, started);
 	const current = () => holder.fetches.get(id) === started && !holder.stopped;
 	const arrive = reply => {
@@ -502,9 +502,11 @@ function deliverFetches(holder) {
 
 // [value, error] as src/fetches.rs reply gives it: a JSON object or array parsed, any other body the text
 function fetchReply(holder, id) {
-	const { reply } = holder.fetches?.get(id) ?? {};
+	const { reply, posted } = holder.fetches?.get(id) ?? {};
 	if (!reply) return [null, `fetch ${id} has no reply yet`];
 	if (reply.error) return [null, reply.error];
+	// a server function's reply (src/lowering/serve.rs) is JSON of any value, a number or a text too
+	if (posted) try { return [JSON.parse(reply.body), null]; } catch {} // not JSON
 	const structure = structureOf(reply.body);
 	if (structure !== undefined) return [structure, null];
 	return [reply.body.endsWith("\n") ? reply.body : reply.body + "\n", null]; // warp convention (src/host.rs fetch)

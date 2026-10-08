@@ -14,9 +14,12 @@ use std::collections::{HashMap, HashSet};
 
 const LOADING_FIELD: &str = "loading";
 const ERROR_FIELD: &str = "error";
-const START_TEMPLATE: &str = "VALUE = ø; LOADING = true; ERROR = ø; fetch_start(ID, URL)";
+const START_TEMPLATE: &str = "VALUE = DEFAULT; LOADING = true; ERROR = ø; fetch_start(ID, URL)";
 /// The value written last: a listener on it sees loading and error already set
-const ARRIVED_TEMPLATE: &str = "REPLY = fetch_reply(ID); LOADING = false; ERROR = REPLY#2; VALUE = REPLY#1";
+const ARRIVED_TEMPLATE: &str = "REPLY = fetch_reply(ID); LOADING = false; ERROR = REPLY#2; VALUE = ARRIVED";
+const ARRIVED_VALUE: &str = "REPLY#1";
+/// `users := fetch url ?? []`: the default until the reply is in, and in place of a failed one
+const ARRIVED_OR_DEFAULT: &str = "REPLY#1 ?? DEFAULT";
 const REFETCH_TEMPLATE: &str = "on change SOURCE { LOADING = true; fetch_start(ID, URL) }";
 const REPLY_FIELD: &str = "reply";
 
@@ -25,21 +28,21 @@ pub fn lower(program: Node) -> Node {
 		return program;
 	}
 	let (statements, bracket, separator) = crate::variable_signals::main_statements(&program);
-	let fetched: Vec<(String, Node)> = statements.iter().filter_map(async_fetch).collect();
+	let fetched: Vec<Fetched> = statements.iter().filter_map(async_fetch).collect();
 	if fetched.is_empty() {
 		return program;
 	}
 	let main_variables: HashSet<String> = main_level_variables(&statements).into_iter()
-		.chain(fetched.iter().flat_map(|(name, _)| [name.clone(), generated(name, LOADING_FIELD), generated(name, ERROR_FIELD)]))
+		.chain(fetched.iter().flat_map(|fetched| [fetched.name.clone(), generated(&fetched.name, LOADING_FIELD), generated(&fetched.name, ERROR_FIELD)]))
 		.collect();
 	let mut count = 0;
 	let mut lowered = vec![];
 	for statement in statements {
-		let Some((name, url)) = async_fetch(&statement) else {
+		let Some(Fetched { name, url, default }) = async_fetch(&statement) else {
 			lowered.push(statement);
 			continue;
 		};
-		let bindings = bindings(&name, &url, count);
+		let bindings = bindings(&name, &url, default, count);
 		let handler = format!("{}{count}", crate::host::FETCH_HANDLER_PREFIX);
 		lowered.push(function_with_globals(&handler, false, &instantiated(ARRIVED_TEMPLATE, &bindings), &main_variables));
 		lowered.extend(instantiated(START_TEMPLATE, &bindings));
@@ -51,16 +54,26 @@ pub fn lower(program: Node) -> Node {
 		}
 		count += 1;
 	}
-	let names: Vec<String> = fetched.into_iter().map(|(name, _)| name).collect();
+	let names: Vec<String> = fetched.into_iter().map(|fetched| fetched.name).collect();
 	with_state_variables(Node::List(lowered, bracket, separator), &names)
 }
 
-/// `users := fetch url`: the name and the URL (a fetch with a timeout stays a fetch on each read)
-fn async_fetch(statement: &Node) -> Option<(String, Node)> {
+struct Fetched {
+	name: String,
+	url: Node,
+	default: Option<Node>,
+}
+
+/// `users := fetch url` or `users := fetch url ?? default` (a fetch with a timeout stays a fetch on each read)
+fn async_fetch(statement: &Node) -> Option<Fetched> {
 	let Node::Key(target, Op::Define, value) = statement.drop_meta() else { return None };
 	let Node::Symbol(name) = target.drop_meta() else { return None };
-	match crate::host::fetch_call(value)? {
-		(url, None) => Some((name.clone(), url)),
+	let (fetch, default) = match value.drop_meta() {
+		Node::Key(fetch, Op::Coalesce, default) => (fetch.as_ref(), Some(default.as_ref().clone())),
+		fetch => (fetch, None),
+	};
+	match crate::host::fetch_call(fetch)? {
+		(url, None) => Some(Fetched { name: name.clone(), url, default }),
 		_ => None,
 	}
 }
@@ -70,9 +83,13 @@ fn generated(name: &str, field: &str) -> String {
 	format!("{name}·{field}")
 }
 
-fn bindings(name: &str, url: &Node, id: usize) -> HashMap<String, Node> {
+fn bindings(name: &str, url: &Node, default: Option<Node>, id: usize) -> HashMap<String, Node> {
 	let symbol = |text: String| Node::Symbol(text);
+	let reply = HashMap::from([("REPLY".to_string(), symbol(generated(name, REPLY_FIELD))), ("DEFAULT".to_string(), default.clone().unwrap_or(Node::Empty))]);
+	let arrived = crate::law::substitute(crate::warp_parser::parse(if default.is_some() { ARRIVED_OR_DEFAULT } else { ARRIVED_VALUE }).drop_meta(), &reply);
 	HashMap::from([
+		("DEFAULT".to_string(), default.unwrap_or(Node::Empty)),
+		("ARRIVED".to_string(), arrived),
 		("VALUE".to_string(), symbol(name.to_string())),
 		("LOADING".to_string(), symbol(generated(name, LOADING_FIELD))),
 		("ERROR".to_string(), symbol(generated(name, ERROR_FIELD))),
