@@ -4,7 +4,7 @@
 //! `y: outer·y` holds the cell itself, so inner's writes reach outer. A plain `y = 7` in inner is inner's own local,
 //! as in Python and warp.
 
-use super::{assigned_locals, cell_class, function_definition, parameter_name, statements};
+use super::{assigned_locals, cell_class, function_definition, mentions, parameter_name, statements};
 use crate::node::{Bracket, Node, Separator};
 use crate::operators::Op;
 
@@ -116,11 +116,6 @@ fn typed(name: &str, type_word: &str) -> Node {
 	Node::Key(Box::new(Node::Symbol(name.to_string())), Op::Colon, Box::new(Node::Symbol(type_word.to_string())))
 }
 
-fn mentions(body: &Node, name: &str) -> bool {
-	let mut found = false;
-	body.visit(&mut |part| found |= matches!(part, Node::Symbol(symbol) if symbol == name));
-	found
-}
 
 /// `nonlocal y` (parsed `nonlocal: y`)
 fn nonlocal_declaration(statement: &Node) -> Option<String> {

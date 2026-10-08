@@ -312,6 +312,17 @@ const CORPUS: &[&str] = &[
 	"f(x) := { for i in 1..x { if i == 3 { return i * 10 } }; 0 }; f(5)",
 	"f(n) := { if n < 1 { return 0 }; n + f(n - 1) }; f(4)",
 	"f(x: int) := { if x > 2 { return \"big\" }; x }; f(5)",
+	// texts compare in codepoint order; min and max of two values
+	"\"ab\" < \"b\"",
+	"x = \"b\"; x < \"ab\"",
+	"min(3, 5) + max(3, 5)",
+	"max(\"b\", \"ab\")",
+	"xs = [4, 9]; min(count(xs), 1)",
+	// `use list`: the module's definitions the program calls come along
+	"use list; drop([1, 2, 3], 1)",
+	"use list; product([2, 3, 4])",
+	"use list; take([1, 2, 3], 2)",
+	"use list; product(a, b) := a * b; product(3, 4)",
 ];
 
 /// Programs warp compiles although the model rejects them: holes in warp's checks, each with its card

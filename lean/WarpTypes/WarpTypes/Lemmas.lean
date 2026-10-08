@@ -44,7 +44,9 @@ theorem lt_typed {Γ a b} : ∃ t', HasType P Γ (ltValues a b) t' ∧ sub t' .b
   unfold ltValues
   split
   · exact ⟨_, .bool, sub_refl _⟩
-  · exact ⟨_, .error, sub_never _⟩
+  · split
+    · exact ⟨_, .bool, sub_refl _⟩
+    · exact ⟨_, .error, sub_never _⟩
 
 theorem nth_typed {Γ} : ∀ {l : Expr} (i : Int) {tl v}, l.isValue = true → HasType P Γ l tl →
     nth l i = some v → ∃ tv, HasType P Γ v tv ∧ sub tv (elementTy tl) = true := by

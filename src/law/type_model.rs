@@ -14,6 +14,7 @@ use std::path::{Path, PathBuf};
 use std::process::Command;
 
 mod nested_functions;
+mod used_modules;
 
 /// The lake project of the model, in the source tree
 pub const MODEL_DIR: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/lean/WarpTypes");
@@ -66,6 +67,8 @@ const MAP_CLASS: &str = "map";
 /// `count xs`, `count x in xs` (how often x is in xs) and `x in xs` (x's first position from 1, else 0) walk the list
 /// with a `·tally` instance: its int fields hold the count or position and the current index
 const COUNT_WORD: &str = "count";
+/// `min(a, b)` and `max(a, b)` of two values (lowering/min_max.rs): a comparison, each argument computed once
+const EXTREMA: [&str; 2] = ["min", "max"];
 const TALLY_CLASS: &str = "·tally";
 const TALLY_INDEX: &str = "·index";
 
@@ -674,6 +677,8 @@ impl Exporter {
 	}
 
 	fn items(&mut self, program: &Node) -> Result<Vec<String>, String> {
+		let with_modules = used_modules::inline(program)?;
+		let program = &with_modules;
 		self.collect_classes(program);
 		program.visit(&mut |part| if let Some((name, _)) = global_declaration(part) {
 			self.globals.push(name.to_string());
@@ -1010,6 +1015,15 @@ impl Exporter {
 		}
 	}
 
+	/// `min(a, b)` is `b < a ? b : a`, `max(a, b)` is `a < b ? b : a`, a and b bound once
+	fn extremum(&mut self, word: &str, a: &Node, b: &Node) -> Lean {
+		self.hidden_names += 1;
+		let (first, second) = (quoted(&format!("·a{}", self.hidden_names)), quoted(&format!("·b{}", self.hidden_names)));
+		let (left, right) = if word == EXTREMA[0] { (&second, &first) } else { (&first, &second) };
+		let comparison = format!(".ite (.lt (.loc {left}) (.loc {right})) (.loc {second}) (.loc {first})");
+		Ok(format!(".letIn {first} {ANY_TYPE} ({}) (.letIn {second} {ANY_TYPE} ({}) ({comparison}))", self.expression(a)?, self.expression(b)?))
+	}
+
 	/// a literal, a name (not a function's), or operators on such: evaluating it twice changes nothing
 	fn is_pure(&self, node: &Node) -> bool {
 		match node.drop_meta() {
@@ -1112,6 +1126,7 @@ impl Exporter {
 					_ => self.tally(list, None, false),
 				},
 				[item, in_word, list] if is_word(in_word, IN_KEYWORD) => self.tally(list, Some(item), true),
+				[call, a, b] if EXTREMA.iter().any(|word| is_word(call, word)) && !self.functions.contains_key(&call.name()) => self.extremum(&call.name(), a, b),
 				[call, message] if is_word(call, ERROR_CALL) => match message.drop_meta() {
 					Node::Text(message) => Ok(format!(".error {}", quoted(message))),
 					_ => unsupported(node),

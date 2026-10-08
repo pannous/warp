@@ -459,3 +459,11 @@ inside `on f·return { break event }` (the effect handlers above, so no new W0 f
 handler is the running call's, so recursion returns from the right call. The event's payload is typed `any`, so a
 function that returns early is typed by the join with `any` (sound, imprecise: `f(x) := { if x > 2 { return 7 }; 1 }`
 is `any`). Declared result types (`-> int`, `: int`) are still outside W0.
+
+## use, min/max, text order
+
+`use list` (src/law/type_model/used_modules.rs) brings the definitions of lib/list.warp the program calls, and the
+ones those call, as if the program had written them (not the ones it defines itself). Most of lib/text.warp still
+needs builtins outside W0 (upper, chars, split, ends_with, ord, sort). `min(a, b)` / `max(a, b)` export as
+`b < a ? b : a` / `a < b ? b : a`, a and b bound once (typed `any`). `<` orders texts by codepoints (`ltValues`,
+the checker's `textual`); `"a" < 1` stays out (a one-letter `"a"` is a codepoint in warp).

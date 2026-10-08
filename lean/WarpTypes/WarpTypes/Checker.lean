@@ -45,7 +45,7 @@ def typeOf (P : Program) (Γ : Ctx) : Expr → Option Ty
     | _, _ => none
   | .lt a b =>
     match typeOf P Γ a, typeOf P Γ b with
-    | some ta, some tb => if numeric ta && numeric tb then some .bool else none
+    | some ta, some tb => if (numeric ta && numeric tb) || (textual ta && textual tb) then some .bool else none
     | _, _ => none
   | .eq _ a b =>
     match typeOf P Γ a, typeOf P Γ b with
