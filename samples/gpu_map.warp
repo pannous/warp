@@ -1,0 +1,18 @@
+#!/usr/bin/env warp
+// @gpu: a map of a heavy lambda (math words) runs as a WGSL kernel over every item at once; sum, min and max of it
+// read back only one partial result per workgroup. Without a GPU adapter the same lines run on the CPU.
+// The GPU computes in f32: its sum differs from the CPU's in the 7th digit
+n = 1000000
+xs = float[n]
+for i in 1 to n { xs#i = i / n }
+
+t0 = clock()
+on_cpu = sum(xs.map(x => sin(x) * exp(x) + cos(x * 3)))
+t1 = clock()
+on_gpu = sum(xs.map(x => sin(x) * exp(x) + cos(x * 3)) @gpu)
+t2 = clock()
+print "sum of \(n) items: CPU \(on_cpu) in \(t1 - t0) ms, GPU \(on_gpu) in \(t2 - t1) ms"
+
+ys = xs.map(x => sin(x) * exp(x) + cos(x * 3)) @gpu
+t3 = clock()
+print "the mapped list itself back from the GPU: \(t3 - t2) ms, last item \(ys#n)"

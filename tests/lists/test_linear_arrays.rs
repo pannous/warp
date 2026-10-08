@@ -76,3 +76,10 @@ fn a_chain_of_numeric_maps_of_a_linear_array_is_one_loop() {
 	let lowered = warp::pipeline::lower(program).expect("a program").serialize();
 	assert!(lowered.contains("linear_setf") && !lowered.contains("+["), "{lowered}");
 }
+
+// card linear-interpolation: a text hole reads a linear array's item like any other expression
+#[test]
+fn an_item_of_a_linear_array_reads_in_a_text_hole() {
+	is!("linear xs = float[3]; xs#1 = 2.5; \"a \\(xs#1) b\"", "a 2.5 b");
+	is!("linear xs = int[2]; xs#2 = 7; \"\\(#xs): ${xs#2}\"", "2: 7");
+}

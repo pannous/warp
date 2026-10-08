@@ -142,3 +142,11 @@ checked like a declared scalar:
   ys.add(…)`) is a compile error where the alias is visible (src/analyzer/list_views.rs); a view that only reads, or of
   a fitting element type (a subclass), is fine. Not yet: the run-time half (a lax alias, an unannotated parameter,
   writes checked against the list's own declared element type), probes/variance/.
+
+## Appends copy only while aliased (card map-typed, 2026-10-08)
+`xs = xs + [v]` copies the array first when another variable may hold it (P200b). That was decided for the whole alias
+group, so every lowered map and filter, `d = (out = ø; for … { out = out + [x] }; out)`, copied on each append: the
+alias `d = out` exists, though only after the loop (int[20000].map 0.5 s, 80000 out of fuel). Now
+(list_dispatch.rs appends_while_aliased) an append copies only if it can run after an assignment between its own
+variable and another (`ys = xs`, `xs = ys`) in program order, or in a loop around one. map / filter of 10^6 ints: 7–9
+ms (release); a variable given a second map result (`d = d.map(…)`) stays linear. Tests: tests/lists/test_map_typed.rs.
