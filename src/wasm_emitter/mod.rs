@@ -1424,12 +1424,6 @@ impl WasmGcEmitter {
 			.collect();
 		self.names.functions(&name_map(&mut functions.iter().map(|(idx, name)| (*idx, name.as_str())).collect()));
 
-		// a user function's parameter names: an importer calls it with named arguments and reflects `m.f.params`
-		let parameter_names = self.ctx.user_functions.values()
-			.filter_map(|function| Some((function.func_index?, function.params.iter().enumerate().map(|(i, param)| (i as u32, param.name.as_str())).collect())))
-			.collect();
-		self.names.locals(&indirect_name_map(parameter_names));
-
 		let tm = &self.type_manager;
 		let mut types = vec![(tm.string_type, "String"), (tm.i64_box_type, "i64box"), (tm.f64_box_type, "f64box"), (tm.node_type, "Node"),
 			(tm.int_array_type, "IntArray"), (tm.int_list_type, "IntList"), (tm.float_array_type, "FloatArray"), (tm.float_list_type, "FloatList")];

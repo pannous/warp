@@ -188,6 +188,9 @@ fn read_exports(path: &str, bytes: &[u8]) -> Result<HashMap<String, Export>, Str
 			_ => {}
 		}
 	}
+	// a warp module names its functions' parameters in warp.meta, other modules may in the name section
+	let functions_meta = crate::meta_section::entry(bytes, crate::lowering::reflection::META_FUNCTIONS);
+	let meta_parameters = |name: &str| functions_meta.as_ref().map(|functions| crate::lowering::reflection::entry_names(&functions[name][crate::lowering::reflection::PARAMS_WORDS[0]]));
 	let library: &'static str = Box::leak(path.to_string().into_boxed_str());
 	let mut exports = HashMap::new();
 	let mut add = |name: String, params: Vec<wasm_encoder::ValType>, results: Vec<wasm_encoder::ValType>, role: Role, parameters: Vec<String>| {
@@ -200,7 +203,8 @@ fn read_exports(path: &str, bytes: &[u8]) -> Result<HashMap<String, Export>, Str
 				let Some(function_type) = function_types.get(index).and_then(|type_index| types.get(*type_index as usize)).and_then(Option::as_ref) else { continue };
 				if let (Some(params), Some(results)) = (number_types(function_type.params()), number_types(function_type.results())) {
 					let names = local_names.get(&(index as u32));
-					let parameters = (0..params.len() as u32).map(|local| names.and_then(|names| names.get(&local)).cloned().unwrap_or_else(|| format!("${local}"))).collect();
+					let named = meta_parameters(&name).filter(|names| names.len() == params.len());
+					let parameters = named.unwrap_or_else(|| (0..params.len() as u32).map(|local| names.and_then(|names| names.get(&local)).cloned().unwrap_or_else(|| format!("${local}"))).collect());
 					add(name, params, results, Role::Function, parameters);
 				}
 			}

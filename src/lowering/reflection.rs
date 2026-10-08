@@ -26,7 +26,7 @@ const KEYS_WORD: &str = "keys";
 const EXPORTS_WORD: &str = "exports";
 /// The run-time choice of a class's names (Objects::dispatched)
 const DISPATCH_TEMPLATE: &str = "if RECEIVER is CLASS then NAMES else OTHERWISE";
-const PARAMS_WORDS: [&str; 2] = ["params", "parameters"];
+pub(crate) const PARAMS_WORDS: [&str; 2] = ["params", "parameters"];
 const SIGNATURE_WORD: &str = "signature";
 /// `f.body`: the body as written, as data (card g_X_3s)
 const BODY_WORD: &str = "body";
@@ -421,7 +421,7 @@ fn listed_names(fields: Vec<String>, methods: Vec<String>, word: &str) -> Option
 
 /// Names as symbols, `[x y]`: a one-letter text would read back as a character
 /// The names of a warp.meta list, `["x" "y"]`: a one-letter text reads back as a character
-fn entry_names(list: &Node) -> Vec<String> {
+pub(crate) fn entry_names(list: &Node) -> Vec<String> {
 	match list.drop_meta() {
 		Node::List(items, _, _) => items.iter().map(|item| match item.drop_meta() {
 			Node::Char(letter) => letter.to_string(),
