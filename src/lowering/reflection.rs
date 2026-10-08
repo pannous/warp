@@ -121,10 +121,10 @@ pub fn meta_entries(source: &Node, lowered: &Node) -> Vec<(&'static str, Node)> 
 	let own = user_functions(source);
 	let functions: Vec<(String, Node)> = user_functions(lowered).values().filter(|function| own.contains_key(&function.name) && !is_method(&function.name)).map(|function| {
 		let params = function.params.iter().map(|param| param.name.clone()).collect::<Vec<_>>();
-		(function.name.clone(), meta_map(vec![(PARAMS_WORDS[0], symbol_list(&params)), (SIGNATURE_WORD, Node::Text(signature(function)))]))
+		(function.name.clone(), meta_map(vec![(PARAMS_WORDS[0], text_list(&params)), (SIGNATURE_WORD, Node::Text(signature(function)))]))
 	}).collect();
 	let classes: Vec<(String, Node)> = classes.into_iter().map(|class| {
-		(class.clone(), meta_map(vec![(FIELDS_WORDS[0], symbol_list(&objects.fields(class))), (METHODS_WORD, symbol_list(&objects.methods(class)))]))
+		(class.clone(), meta_map(vec![(FIELDS_WORDS[0], text_list(&objects.fields(class))), (METHODS_WORD, text_list(&objects.methods(class)))]))
 	}).collect();
 	[(META_FUNCTIONS, functions), (META_CLASSES, classes)].into_iter()
 		.filter(|(_, entries)| !entries.is_empty())
@@ -420,14 +420,13 @@ fn listed_names(fields: Vec<String>, methods: Vec<String>, word: &str) -> Option
 }
 
 /// Names as symbols, `[x y]`: a one-letter text would read back as a character
-fn symbol_list(names: &[String]) -> Node {
-	Node::List(names.iter().map(|name| Node::Symbol(name.clone())).collect(), Bracket::Square, Separator::Space)
-}
-
-/// The names of a warp.meta list, `[x y]`
+/// The names of a warp.meta list, `["x" "y"]`: a one-letter text reads back as a character
 fn entry_names(list: &Node) -> Vec<String> {
 	match list.drop_meta() {
-		Node::List(items, _, _) => items.iter().map(Node::name).collect(),
+		Node::List(items, _, _) => items.iter().map(|item| match item.drop_meta() {
+			Node::Char(letter) => letter.to_string(),
+			other => other.name(),
+		}).collect(),
 		_ => vec![],
 	}
 }
