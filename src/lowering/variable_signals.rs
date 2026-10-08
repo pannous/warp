@@ -414,13 +414,15 @@ impl Signals {
 		};
 		let body = self.lower(with_value(&body, &variable), &[]);
 		let changed = Node::Key(Box::new(variable.clone()), Op::Ne, Box::new(Node::Symbol(last.clone())));
+		// a copy: a list or map changed in place (`x.add(2)`, P200b) is no longer the one remembered
+		let remember = || assign(&last, crate::library_words::copy_call(variable.clone(), Node::False));
 		Some(Listener {
 			trigger: Trigger::Write(self.sources(&variable)),
 			condition: Some(changed),
-			body: block([remembered, vec![assign(&last, variable.clone()), body]].concat()),
+			body: block([remembered, vec![remember(), body]].concat()),
 			fired: None,
 			held: None,
-			start: Some(assign(&last, variable)),
+			start: Some(remember()),
 		})
 	}
 

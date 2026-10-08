@@ -78,7 +78,7 @@ fn test_int_array_index_count_sum_for() {
 fn test_int_array_assignment_keeps_value_semantics() {
 	is!("xs=[1,2,3]; xs#2=7; xs#2", 7);
 	is!("xs=[1,2,3]; xs[1]=7; sum xs", 11);
-	is!("xs=[1,2,3]; ys=xs; ys#1=9; xs#1", 1);
+	is!("xs=[1,2,3]; ys=xs; ys#1=9; xs#1", 9); // P200b: ys and xs are one list
 	is!("xs=[1,2,3]; ys=xs; ys#1=9; ys#1", 9);
 	is!("xs=[1,2,3]; s=0; for x in xs {xs#1=10; s+=x}; s", 6);
 	is!("xs=[1,2,3]; xs=[4,5]; #xs", 2);
@@ -123,8 +123,8 @@ fn test_appended_int_list_is_an_array() {
 	is!("xs=[7]; for i in 1..20 {xs.add(i)}; #xs", 20);
 	assert_eq!(printed("xs=[]; for i in 1..5 {xs.add(i)}; xs"), "[1 2 3 4]");
 	assert_eq!(printed("xs=[]; xs"), printed("[]"));
-	is!("xs=[1]; ys=xs; xs.add(2); #ys", 1);
-	is!("xs=[1]; ys=xs; ys.add(2); #xs", 1);
+	is!("xs=[1]; ys=xs; xs.add(2); #ys", 2); // P200b: ys and xs are one list
+	is!("xs=[1]; ys=xs; ys.add(2); #xs", 2);
 }
 
 #[test]

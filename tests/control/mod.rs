@@ -42,6 +42,9 @@ mod test_try_exits_and_naming;
 mod test_try_deep;
 mod test_while_paren_condition;
 mod test_while_value;
+mod test_text_loop_value;
+mod test_loop_value_at_run_time;
+mod test_loop_if_value;
 mod test_try_else_value;
 mod test_block_statements;
 mod test_try_named_traps;
@@ -133,4 +136,5 @@ mod test_check_assert;
 mod test_soft_tests;
 mod test_reflection_words; // card reflection
 mod test_function_body; // card g_X_3s
+mod test_data_string; // card data-string
 mod test_multiline_errors;

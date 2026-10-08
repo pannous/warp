@@ -26,6 +26,11 @@ const LOCAL_WORDS: [&str; 2] = ["local", "storage"];
 const SESSION_WORD: &str = "session";
 /// The store of `session[k]` (in memory natively, std_adapters.rs; sessionStorage in the browser, markup.js SESSION_STORE)
 pub const SESSION_STORE: &str = "warp-session";
+/// `database[k]` (alias indexedDB): the store for values beyond localStorage's ~5 MB. Its file ends in this, `app.warp`'s
+/// is `app.database.json`, inline code's this name alone (in memory natively, std_adapters.rs); in the browser any
+/// store whose file ends so is IndexedDB (host-files.js DATABASE_STORE)
+pub const DATABASE_STORE: &str = "database.json";
+const DATABASE_WORDS: [&str; 2] = ["database", "indexedDB"];
 const DELETE_WORD: &str = "delete";
 const KEYS_WORD: &str = "keys";
 /// stand for the key and the value in the templates of a storage access
@@ -61,7 +66,16 @@ pub fn lower(program: Node) -> Node {
 
 /// The program's store file, "" for inline code
 fn store_file() -> String {
-	crate::modules::program_file().map(|file| file.with_extension(STORE_FILE_EXTENSION).to_string_lossy().into_owned()).unwrap_or_default()
+	program_file_with(STORE_FILE_EXTENSION).unwrap_or_default()
+}
+
+/// The program's database file, DATABASE_STORE for inline code
+fn database_file() -> String {
+	program_file_with(DATABASE_STORE).unwrap_or_else(|| DATABASE_STORE.to_string())
+}
+
+fn program_file_with(extension: &str) -> Option<String> {
+	crate::modules::program_file().map(|file| file.with_extension(extension).to_string_lossy().into_owned())
 }
 
 /// `stored x = v` as its load and the listener that saves each change
@@ -119,8 +133,9 @@ fn changed_names(statements: &[Node]) -> HashSet<String> {
 
 /// The store words the program uses and does not name itself, with the file of each store
 fn stores_used(program: &Node) -> Vec<(&'static str, String)> {
-	let local = store_file();
+	let (local, database) = (store_file(), database_file());
 	let words = LOCAL_WORDS.iter().map(|word| (*word, local.clone())).chain([(SESSION_WORD, SESSION_STORE.to_string())]);
+	let words = words.chain(DATABASE_WORDS.iter().map(|word| (*word, database.clone())));
 	words.filter(|(word, _)| crate::warp_parser::mentions(program, word) && !crate::soft_keywords::program_names(program, word)).collect()
 }
 

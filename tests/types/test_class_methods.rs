@@ -75,3 +75,11 @@ fn a_field_in_an_interpolated_text_of_a_method() {
 	is!("class B{n:int; f() := \"#\\(n)\"}; B(3).f()", "#3");
 	is!("class B{n:int; f() := \"${n * 2}!\"}; B(3).f()", "6!");
 }
+
+#[test]
+fn a_python_style_def_method_without_parameters_is_found() {
+	is!("class P{x:int; def f(): x + 1}; P(3).f()", 4);
+	is!("class P{x:int; def f(): return x + 1}; P(3).f()", 4);
+	is!("class P{x:int; def f(): x + 1; def g(): f() * 2}; P(3).g()", 8);
+	is!("class P{x:int; def add(n): x + n}; P(3).add(2)", 5);
+}

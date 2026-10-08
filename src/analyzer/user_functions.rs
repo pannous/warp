@@ -157,6 +157,8 @@ pub(super) fn infer_function_return_kind(params: &[Param], body: &Node, function
 		(true, Some(_)) => Kind::Empty, // returns of different kinds: a Node of unknown kind
 		// `while true { …; return left }` with left a float: a float function, whatever the loop is worth
 		_ => match infer_type(last, &scope) {
+			// a loop the function returns from inside: the returns decide, the loop's own value (a number or ø) does not
+			Kind::Data if is_loop(last) && !returned.is_empty() => if returned.contains(&Kind::Float) { Kind::Float } else { Kind::Int },
 			Kind::Int if returned.contains(&Kind::Float) => Kind::Float,
 			kind => kind,
 		},
@@ -168,6 +170,11 @@ pub(super) fn infer_function_return_kind(params: &[Param], body: &Node, function
 		[Kind::List] => Kind::List,
 		_ => Kind::Empty, // Nodes of different kinds (a text here, a list there): known only at run time
 	}
+}
+
+/// `while c do body`, what every loop lowers to
+fn is_loop(node: &Node) -> bool {
+	matches!(node.drop_meta(), Node::Key(condition, Op::Do, _) if matches!(condition.drop_meta(), Node::Key(_, Op::While, _)))
 }
 
 /// `number` is the exact numeric tower (Int); the other builtin type names have their own kind;
@@ -279,9 +286,14 @@ pub(super) fn with_usage_kinds(params: Vec<Param>, body: &Node) -> Vec<Param> {
 			texted.insert(name.to_string());
 		}
 		foreign.extend(given_to_foreign_code(node).map(str::to_string));
-		// `xs.add(420)`, lowered to `xs = xs + [420]`: xs is a list, called or not
+		// `xs = xs + [420]`, `xs += [420]` (what `xs.add(420)` lowers to): xs is a list, called or not
 		if let Some(name) = joined_to_list(node) {
 			indexed.insert(name.to_string());
+		}
+		if let Node::Key(list, Op::AddAssign, added) = node {
+			if let (Node::Symbol(name), Node::List(_, Bracket::Square, _)) = (list.drop_meta(), added.drop_meta()) {
+				indexed.insert(name.clone());
+			}
 		}
 		if let Node::Key(alias, Op::Assign | Op::Define, source) = node {
 			if let (Node::Symbol(alias), Node::Symbol(source)) = (alias.drop_meta(), source.drop_meta()) {
@@ -1145,9 +1157,13 @@ pub(crate) fn extract_def_function(items: &[Node]) -> Option<UserFunctionDef> {
 		return None;
 	}
 	let first = items[0].drop_meta();
+	// `def add(a:int) -> int { a }`, before the declaration passes take its result type off
+	if let Some((untyped, _)) = crate::declarations::typed_result(first) {
+		return extract_def_function(&[untyped]);
+	}
 
-	// Pattern 1: def (name params...): body
-	if let Node::Key(sig, Op::Colon, body) = first {
+	// Pattern 1: def (name params...): body, or := body
+	if let Node::Key(sig, Op::Colon | Op::Define, body) = first {
 		if let Node::List(sig_items, bracket, _) = sig.drop_meta() {
 			if !sig_items.is_empty() {
 				if let Node::Symbol(name) = sig_items[0].drop_meta() {

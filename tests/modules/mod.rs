@@ -27,6 +27,7 @@ mod test_use_modules;
 #[cfg(feature = "native")] // wasmtime, files or network: not in the browser build
 mod test_versions;
 mod test_wasm_modules;
+mod test_module_meta; // card reflection-foreign-meta
 mod test_std_aliases;
 mod test_std_named_program; // card cli-std
 mod test_std_file_copy; // card std-file

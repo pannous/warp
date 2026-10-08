@@ -15,7 +15,7 @@ fn loops_over_a_list_are_linear() {
 fn a_node_list_keeps_its_elements_and_values() {
 	is!("xs=[\"ab\" \"cd\"]; xs#2", "cd");
 	is!("xs=[[1 2] [3]]; xs#1", ints(vec![1, 2]));
-	is!("xs=(0..5).map(x=>x); ys=xs; ys#1=9; xs#1*10 + ys#1", 9);
+	is!("xs=(0..5).map(x=>x); ys=xs; ys#1=9; xs#1*10 + ys#1", 99); // P200b: ys and xs are one list
 	is!("def f(xs){ s=0; for x in xs { s+=x }; s }; f([1 2 3])", 6);
 	is!("a=(1 2);b=(3 4);c=a+b;#c", 4);
 	is!("a=[1,2,3,4]; b=a[:1] + a[2:]; count(b)*10 + b#2", 33);

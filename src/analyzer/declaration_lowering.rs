@@ -314,9 +314,9 @@ pub(super) fn lower_declarations_among(node: Node, names: &Names) -> Node {
 			lower(Node::Key(Box::new(Node::Key(name, Op::Colon, type_node)), Op::Assign, value))
 		}
 		// `x:[number]=v` is `x:list of number=v`
-		Node::Key(target, Op::Assign, value) if matches!(target.drop_meta(), Node::Key(_, Op::Colon, type_node) if bracketed_list_type(type_node).is_some()) => {
+		Node::Key(target, Op::Assign, value) if matches!(target.drop_meta(), Node::Key(_, Op::Colon, type_node) if declared_bracketed_list_type(type_node).is_some()) => {
 			let Node::Key(name, Op::Colon, type_node) = target.drop_meta().clone() else { unreachable!("guarded") };
-			let typed = Node::Key(name, Op::Colon, Box::new(bracketed_list_type(&type_node).expect("guarded")));
+			let typed = Node::Key(name, Op::Colon, Box::new(declared_bracketed_list_type(&type_node).expect("guarded")));
 			lower(Node::Key(Box::new(typed), Op::Assign, value))
 		}
 		// `x:[number]` is `x:list of number`
@@ -378,13 +378,13 @@ pub(super) fn lower_declarations_among(node: Node, names: &Names) -> Node {
 		Node::Key(list, Op::Dot, call) if inserted_element(&list, &call).is_some() => lowered_insert(list, &call),
 		Node::Key(list, Op::Dot, call) if appended_element(&list, &call).is_some() => {
 			let element = lower(appended_element(&list, &call).expect("guarded").clone());
-			// `add "c" to x` of a text: the text grows (wiki row 29); of a list: the list gets the element
-			let added = match names.texts.contains(&list.name()) {
-				true => element,
-				false => Node::List(vec![element], Bracket::Square, Separator::Space),
-			};
-			let appended = Node::Key(list.clone(), Op::Add, Box::new(added));
-			Node::Key(list, Op::Assign, Box::new(appended))
+			// `add "c" to x` of a text: the text grows (wiki row 29); a list gets the element in place, `xs += [v]` like
+			// Python's extend, so every holder of the list sees it (P200b)
+			if names.texts.contains(&list.name()) {
+				let appended = Node::Key(list.clone(), Op::Add, Box::new(element));
+				return Node::Key(list, Op::Assign, Box::new(appended));
+			}
+			Node::Key(list, Op::AddAssign, Box::new(Node::List(vec![element], Bracket::Square, Separator::Space)))
 		}
 		Node::Key(list, Op::Dot, call) if popped_list(&list, &call).is_some() => popped_list(&list, &call).expect("guarded"),
 		Node::Key(map, Op::Dot, call) if removed_key(&map, &call).is_some() => lower(removed_key(&map, &call).expect("guarded")),
@@ -484,9 +484,11 @@ pub(super) fn applied_object(items: &[Node]) -> Option<(Node, Node)> {
 	}
 }
 
-/// Methods that append one element; with value semantics `x.add(v)` rebinds `x = x + [v]`
+/// Methods that append one element: `x.add(v)` is `x += [v]`, in place
 pub(super) const APPEND_METHODS: [&str; 4] = ["add", "append", "push", "insert"];
 pub(super) const POP_METHOD: &str = "pop";
+/// Pseudo-call `list_drop_last(xs)`: xs without its last item, in place (wasm_emitter list_ops emit_list_drop_last)
+pub const LIST_DROP_LAST: &str = "list_drop_last";
 /// The list a pop template takes from, replaced by the variable or field popped
 const POP_PLACE: &str = "pop_place";
 pub(super) const REMOVE_METHOD: &str = "remove";
@@ -541,7 +543,8 @@ pub(super) fn appended_element<'a>(list: &Node, call: &'a Node) -> Option<&'a No
 	}
 }
 
-/// `xs.pop()` when xs is a variable or a field of one (`s.items`): the last item, removed from xs (Python's list.pop())
+/// `xs.pop()` when xs is a variable or a field of one (`s.items`): the last item, removed from xs in place, so every
+/// holder of the list sees it (Python's list.pop(), P200b)
 pub(super) fn popped_list(list: &Node, call: &Node) -> Option<Node> {
 	if !is_place(list) {
 		return None;
@@ -549,7 +552,7 @@ pub(super) fn popped_list(list: &Node, call: &Node) -> Option<Node> {
 	match call.drop_meta() {
 		Node::List(items, _, _) if matches!(items.as_slice(), [method] if is_word(method, POP_METHOD)) => {
 			let template = crate::warp_parser::parse(&format!(
-				"({POP_TEMPORARY} = {POP_PLACE}#count({POP_PLACE}); {POP_PLACE} = slice({POP_PLACE}, 0, count({POP_PLACE})-1); {POP_TEMPORARY})"));
+				"({POP_TEMPORARY} = {POP_PLACE}#count({POP_PLACE}); {POP_PLACE} = {LIST_DROP_LAST}({POP_PLACE}); {POP_TEMPORARY})"));
 			Some(crate::law::substitute(&template, &std::collections::HashMap::from([(POP_PLACE.to_string(), list.clone())])))
 		}
 		_ => None,
@@ -787,11 +790,26 @@ pub(crate) fn typed_array_value(value: &Node) -> Option<Node> {
 
 /// The type `[number]`: `list of number` for one element type word
 pub(super) fn bracketed_list_type(type_node: &Node) -> Option<Node> {
-	let Node::List(items, Bracket::Square, _) = type_node.drop_meta() else { return None };
-	let [element] = items.as_slice() else { return None };
-	let Node::Symbol(word) = element.drop_meta() else { return None };
+	let word = bracketed_element(type_node)?;
 	type_word_kind(word)?;
 	Some(Node::Symbol(format!("list of {word}")))
+}
+
+/// The element word of `[word]`
+fn bracketed_element(type_node: &Node) -> Option<&str> {
+	let Node::List(items, Bracket::Square, _) = type_node.drop_meta() else { return None };
+	match items.as_slice() {
+		[element] => match element.drop_meta() {
+			Node::Symbol(word) => Some(word),
+			_ => None,
+		},
+		_ => None,
+	}
+}
+
+/// The declared type of `x:[T]=v`: `list of T`, of a builtin type or a class (`xs:[Circle]=[c]`)
+fn declared_bracketed_list_type(type_node: &Node) -> Option<Node> {
+	Some(Node::Symbol(format!("list of {}", bracketed_element(type_node)?)))
 }
 
 /// `x:int[100]` as the variable and its zero-filled list

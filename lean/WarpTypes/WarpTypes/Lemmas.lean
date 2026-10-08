@@ -36,6 +36,8 @@ theorem arith_typed {Γ op a b ta tb} (ha : HasType P Γ a ta) (hb : HasType P �
   unfold arithValues
   split
   · exact ⟨_, .error, sub_never _⟩
+  split
+  · exact ⟨_, .error, sub_never _⟩
   · cases ha <;> cases hb <;>
       simp_all [isValue, isNumber, asInt, asNumber, arithTy, Ty.arith, sub] <;>
       first | exact ⟨_, .int, by decide⟩ | exact ⟨_, .num, by decide⟩
@@ -44,7 +46,9 @@ theorem lt_typed {Γ a b} : ∃ t', HasType P Γ (ltValues a b) t' ∧ sub t' .b
   unfold ltValues
   split
   · exact ⟨_, .bool, sub_refl _⟩
-  · exact ⟨_, .error, sub_never _⟩
+  · split
+    · exact ⟨_, .bool, sub_refl _⟩
+    · exact ⟨_, .error, sub_never _⟩
 
 theorem nth_typed {Γ} : ∀ {l : Expr} (i : Int) {tl v}, l.isValue = true → HasType P Γ l tl →
     nth l i = some v → ∃ tv, HasType P Γ v tv ∧ sub tv (elementTy tl) = true := by
