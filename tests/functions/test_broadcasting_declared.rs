@@ -29,3 +29,13 @@ fn a_declared_list_variable_broadcasts() {
 	assert_eq!(printed("names: list of text = [\"hi\"]; upper names"), "[\"HI\"]");
 	assert_eq!(printed("xs: ints = [1 2]; inc(x:int):=x+1; inc xs"), "[2 3]");
 }
+
+// card method-broadcast (default, question queued with the user): the method form broadcasts like the prefix form
+#[test]
+fn a_method_of_a_list_broadcasts() {
+	assert_eq!(printed("names = [\"hi\", \"yo\"]; names.upper"), "[\"HI\" \"YO\"]");
+	assert_eq!(printed("names: texts = [\"hi\"]; names.upper()"), "[\"HI\"]");
+	assert_eq!(printed("[1.5 2.5].floor"), "[1 2]");
+	assert_eq!(printed("inc(x:int):=x+1; xs = [1 2]; xs.inc"), "[2 3]");
+	assert_eq!(printed("\"hi\".upper"), "\"HI\"");
+}
