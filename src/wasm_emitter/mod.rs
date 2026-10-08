@@ -1171,8 +1171,12 @@ impl WasmGcEmitter {
 		if self.emit_loop_jump(func, node) || self.emit_tuple_statement(func, node, Self::emit_node_instructions) {
 			return;
 		}
+		if let Some((value, declared)) = declared_values::declared_field_value(node) {
+			return self.emit_declared_value(func, Some(declared), value, Kind::Empty);
+		}
 		if let Some((name, fields)) = crate::type_constructor::instance_parts(node) {
-			self.emit_default_key(func, name, fields, &Op::None); // an instance is no data: its own op code (D4)
+			let fields = self.with_declared_field_types(name, fields);
+			self.emit_default_key(func, name, &fields, &Op::None); // an instance is no data: its own op code (D4)
 			return;
 		}
 		if let Some((target, captured)) = crate::closures::as_closure_new(node) {

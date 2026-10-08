@@ -18,9 +18,16 @@ enum Admitted {
 /// The run-time kinds of a value of a declared type: an object, also one that fits by its fields (`like`), or a variant
 const OBJECT_KINDS: [Kind; 5] = [Kind::Key, Kind::List, Kind::Block, Kind::Data, Kind::Symbol];
 
-fn with_article(type_name: &str) -> String {
-	let article = if type_name.starts_with(['a', 'e', 'i', 'o', 'u']) { "an" } else { "a" };
-	format!("{article} {type_name}")
+/// Meta key marking the value of a field with the field's declared type, for the check when the instance is built
+const DECLARED_TYPE: &str = "declared type";
+
+/// The value and declared type of a field value marked by with_declared_field_types
+pub(super) fn declared_field_value(node: &Node) -> Option<(&Node, &Node)> {
+	let Node::Meta { node, data } = node else { return None };
+	match data.as_ref() {
+		Node::Key(key, _, declared) if key.name() == DECLARED_TYPE => Some((node, declared)),
+		_ => None,
+	}
 }
 
 impl WasmGcEmitter {
@@ -49,6 +56,23 @@ impl WasmGcEmitter {
 		}
 	}
 
+	/// The fields `{x: v …}` of an instance of `class`, each value marked with its field's declared type
+	pub(super) fn with_declared_field_types(&self, class: &Node, fields: &Node) -> Node {
+		let Some(type_def) = self.ctx.type_registry.get_by_name(&class.name()) else { return fields.clone() };
+		let Node::List(entries, bracket, separator) = fields.drop_meta() else { return fields.clone() };
+		let marked = entries.iter().map(|entry| match entry.drop_meta() {
+			Node::Key(field, op, value) => match type_def.fields.iter().find(|declared| declared.name == field.name()) {
+				Some(declared) => {
+					let data = Node::key(DECLARED_TYPE, Node::Symbol(declared.type_name.clone()));
+					Node::Key(field.clone(), *op, Box::new(Node::Meta { node: value.clone(), data: Box::new(data) }))
+				}
+				None => entry.clone(),
+			},
+			_ => entry.clone(),
+		});
+		Node::List(marked.collect(), bracket.clone(), separator.clone())
+	}
+
 	/// The declared type of the variable `target` (`x: int`), if it has one
 	pub(super) fn declared_type_of(&self, target: &Node) -> Option<Node> {
 		let Node::Symbol(name) = target.drop_meta() else { return None };
@@ -66,7 +90,7 @@ impl WasmGcEmitter {
 		func.instruction(&I::LocalSet(held));
 		self.emit_admits(func, held, &admitted);
 		Self::emit_list(func, &[I::I64Eqz, I::If(BlockType::Empty)]);
-		self.emit_trap_detail(func, &Node::Text(format!("not {}", with_article(&declared.name()))));
+		self.emit_trap_detail(func, &Node::Text(format!("not {}", crate::analyzer::with_article(&declared.name()))));
 		self.emit_runtime_error(func, super::list_ops::RETURNED_ERROR);
 		Self::emit_list(func, &[I::End, I::LocalGet(held), I::RefAsNonNull]);
 		if kind.is_float() {

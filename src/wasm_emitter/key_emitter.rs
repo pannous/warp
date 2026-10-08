@@ -341,7 +341,9 @@ impl WasmGcEmitter {
 		} else if *op == Op::Colon {
 			// the value of an entry is data: unknown words in it stay words (P62)
 			let outer = std::mem::replace(&mut self.data_context, true);
-			self.emit_node_instructions(func, right_node);
+			// a field value keeps the mark of its declared type (declared_values::with_declared_field_types)
+			let checked = super::declared_values::declared_field_value(right).is_some();
+			self.emit_node_instructions(func, if checked { right } else { right_node });
 			self.data_context = outer;
 			if has_list_children(left, right_node) {
 				self.emit_call(func, super::list_ops::ELEMENT_BODY);

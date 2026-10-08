@@ -30,3 +30,12 @@ fn values_of_the_annotated_type_pass() {
 	is!("xs = [1, \"ab\"]; f(t: text) := t; f(xs#2)", "ab");
 	is!("xs = [1.5, \"ab\"]; f(t: float) := t; f(xs#1)", 1.5);
 }
+
+#[test]
+fn any_into_a_declared_field_is_checked_at_run_time() {
+	fails_with("class P{x:int}; y: any = \"a\"; p = P(y); p.x", "not an int");
+	fails_with("class P{t:text}; y: any = 2.5; p = P(y); p.t", "not a text");
+	fails_with("class P{x:float}; xs = [1, \"ab\"]; p = P(xs#2); p.x", "not a float");
+	is!("class P{x:int}; y: any = 3; p = P(y); p.x", 3);
+	is!("class P{t:text}; xs = [1, \"ab\"]; p = P(xs#2); p.t", "ab");
+}

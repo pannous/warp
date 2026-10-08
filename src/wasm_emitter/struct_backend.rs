@@ -226,8 +226,9 @@ impl WasmGcEmitter {
 
 	/// The value of a field as its kind stores it; an int field never takes a fraction (`p.x = 0.5` traps)
 	fn emit_field_value(&mut self, func: &mut Function, class: &str, field_index: usize, value: &Node, kind: Kind) {
-		self.emit_value_of_kind(func, value, kind);
-		let field = self.ctx.type_registry.get_by_name(class).and_then(|type_def| type_def.fields.get(field_index));
+		let field = self.ctx.type_registry.get_by_name(class).and_then(|type_def| type_def.fields.get(field_index)).cloned();
+		let declared = field.as_ref().map(|field| Node::Symbol(field.type_name.clone()));
+		self.emit_declared_value(func, declared.as_ref(), value, kind);
 		// an optional int is stored as a Node (ø or the number): no whole check there
 		if kind == Kind::Int && field.is_some_and(|field| crate::analyzer::is_whole_type(&field.type_name)) {
 			self.emit_whole_check(func);
