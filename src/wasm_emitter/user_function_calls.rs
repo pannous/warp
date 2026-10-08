@@ -478,7 +478,10 @@ impl WasmGcEmitter {
 				self.emit_type_error(func, message);
 				return;
 			}
-			self.emit_value_of_kind(func, argument, expected);
+			match expected {
+				Kind::Int => self.emit_int_for_declared(func, param.annotation.as_ref(), argument),
+				_ => self.emit_value_of_kind(func, argument, expected),
+			}
 			if expected == Kind::Text && given == Kind::Codepoint { // f("a") for f(t:text): "a" lexes as a character
 				self.emit_call(func, text_builtins::TEXT_OF);
 			}
