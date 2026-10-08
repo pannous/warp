@@ -577,7 +577,7 @@ function chooseExample(name) {
 }
 
 // the address names the chosen example as its hash (#circle), so it can be shared or reloaded; the default one leaves
-// it plain, and a hash naming a guide chapter stays (card sample-hash)
+// it plain, and a guide chapter's hash (#guide-lists) stays (card sample-hash)
 function showExampleInAddress(name) {
 	const address = new URL(location.href);
 	EXAMPLE_PARAMETERS.forEach(parameter => address.searchParams.delete(parameter));
@@ -587,7 +587,6 @@ function showExampleInAddress(name) {
 }
 
 const hashName = () => decodeURIComponent(location.hash.slice(1));
-const isGuideChapter = id => document.getElementById(id)?.classList.contains("guide-chapter");
 
 // the example the address names: ?example=circle (?sample=circle), else #circle
 function requestedExample() {
@@ -595,10 +594,10 @@ function requestedExample() {
 	return [...EXAMPLE_PARAMETERS.map(parameter => parameters.get(parameter)), hashName()].find(name => name && exampleSource(name) !== undefined);
 }
 
-// #circle typed into the address shows that example; a guide chapter's link (#lists) only opens the chapter
+// #circle typed into the address shows that example
 function chooseExampleOfHash() {
 	const name = hashName();
-	if (exampleSource(name) !== undefined && !isGuideChapter(name) && name !== $("examples").value) chooseExample(name);
+	if (exampleSource(name) !== undefined && name !== $("examples").value) chooseExample(name);
 }
 
 function fillExamples() {
