@@ -9,13 +9,13 @@ fn html_of(code: &str) -> String {
 
 #[test]
 fn a_bound_input_shows_its_variable_and_handles_input() {
-	assert_eq!(html_of("name = \"Ann\"\ndiv{ input{ bind: name } p{ \"Hi \" + name } }"), "<div><input value=\"Ann\" data-wasp-input=\"1\"><p>Hi Ann</p></div>");
+	assert_eq!(html_of("name = \"Ann\"\ndiv{ input{ bind: name } p{ \"Hi \" + name } }"), "<div><input value=\"Ann\" data-warp-input=\"1\"><p>Hi Ann</p></div>");
 }
 
 #[test]
 fn a_bound_checkbox_is_checked_by_its_variable() {
-	assert_eq!(html_of("done = true\ninput{ type: \"checkbox\" bind: done }"), "<input type=\"checkbox\" checked data-wasp-input=\"1\">");
-	assert_eq!(html_of("done = false\ninput{ type: \"checkbox\" bind: done }"), "<input type=\"checkbox\" data-wasp-input=\"1\">");
+	assert_eq!(html_of("done = true\ninput{ type: \"checkbox\" bind: done }"), "<input type=\"checkbox\" checked data-warp-input=\"1\">");
+	assert_eq!(html_of("done = false\ninput{ type: \"checkbox\" bind: done }"), "<input type=\"checkbox\" data-warp-input=\"1\">");
 }
 
 #[test]

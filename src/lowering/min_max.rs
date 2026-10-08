@@ -6,7 +6,7 @@ use crate::analyzer::{call_name, extract_user_functions};
 use crate::context::Context;
 use crate::diagnostic::Diagnostic;
 use crate::node::{Bracket, Node, Separator};
-use crate::wasp_parser::parse;
+use crate::warp_parser::parse;
 use crate::operators::Op;
 
 const EXTREMA: [(&str, Op); 2] = [("min", Op::Lt), ("max", Op::Gt)];

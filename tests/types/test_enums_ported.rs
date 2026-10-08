@@ -1,4 +1,4 @@
-// Enums and sealed classes with matching on them, as other languages write them (notes/classes.md "Enums"): a wasp
+// Enums and sealed classes with matching on them, as other languages write them (notes/classes.md "Enums"): a warp
 // enum is the object of its cases numbered from 0 (declarations::enum_object), matched with `switch`
 use crate::is;
 

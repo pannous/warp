@@ -1,4 +1,4 @@
-// Type aliases (card types-alias, samples/types.wasp): `type Name = string` names the type string wherever a type is
+// Type aliases (card types-alias, samples/types.warp): `type Name = string` names the type string wherever a type is
 // written: fields, optional fields, parameters, annotations
 use crate::is;
 
@@ -18,7 +18,7 @@ fn alias_as_optional_field_and_parameter() {
 #[cfg(feature = "native")]
 #[test]
 fn types_sample_runs() {
-	let sample = std::fs::read_to_string(concat!(env!("CARGO_MANIFEST_DIR"), "/samples/types.wasp")).unwrap();
+	let sample = std::fs::read_to_string(concat!(env!("CARGO_MANIFEST_DIR"), "/samples/types.warp")).unwrap();
 	let printed = crate::common::printed(&sample.replace("match color", "color = rgb(1, 2, 3)\nmatch color"));
 	assert_eq!(printed.trim(), "RGB: 1, 2, 3");
 }

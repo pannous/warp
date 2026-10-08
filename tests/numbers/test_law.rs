@@ -2,7 +2,7 @@
 use warp::law::{extract_laws, lean, property_test, separate_laws, verify, Assurance, Verdict, PROPERTY_TRIALS};
 use warp::type_kinds::Kind;
 use warp::wasm_emitter::eval;
-use warp::wasp_parser::parse;
+use warp::warp_parser::parse;
 use warp::Node;
 use crate::is;
 

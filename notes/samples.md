@@ -1,7 +1,7 @@
 # Sample sweep (samples/, started 2026-10-03)
 
-Goal: every `samples/*.wasp` runs, ideally by fixing the language rather than the sample. Each fixed sample gets an
-`is!("samples/x.wasp", …)` line in tests/programs/test_samples.rs.
+Goal: every `samples/*.warp` runs, ideally by fixing the language rather than the sample. Each fixed sample gets an
+`is!("samples/x.warp", …)` line in tests/programs/test_samples.rs.
 
 ## How to sweep
 - Build a private CLI copy: `WARP=$(scripts/own-warp.sh)` then run `"$WARP" …` (or `probes/samples/…`).
@@ -9,9 +9,9 @@ Goal: every `samples/*.wasp` runs, ideally by fixing the language rather than th
 - Skip `raylib_*` / `sdl_*` in sweeps: they open real windows.
 - `test.wasm` in the cwd is the last emitted module, written before validation: `wasm-tools print test.wasm` shows the
   function behind an "internal error: WASM validation failed".
-- `samples/life_kotlin_ranges.wasp` fails on purpose (tests/welcoming/test_welcoming_ask.rs pins its explanation).
+- `samples/life_kotlin_ranges.warp` fails on purpose (tests/welcoming/test_welcoming_ask.rs pins its explanation).
 
-## Wasp habits the old samples get wrong (sample-side fixes)
+## Warp habits the old samples get wrong (sample-side fixes)
 - Lists are values: a function cannot change a list it is passed. Return the new list, or make the state `global`.
 - A function sees main-level constants; to change (or read a computed) main-level value, declare it `global`.
 - `/` is exact division (`7/3` stays a fraction); use `//` for floor division, written glued: ` // ` with spaces is a comment.

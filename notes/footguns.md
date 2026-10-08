@@ -32,7 +32,7 @@
   `probes/footguns/inspiration/injection-time-effects.md`, rerun the merge script.
 
 ## Work area "literals" (2026-09-27, 9682281d)
-- Fixed in `src/wasp_parser.rs` `parse_number`: `1e3` → exact Int 1000 (`MAX_INTEGER_EXPONENT` 4096 digits, beyond → error),
+- Fixed in `src/warp_parser.rs` `parse_number`: `1e3` → exact Int 1000 (`MAX_INTEGER_EXPONENT` 4096 digits, beyond → error),
   mantissa with `.` or negative exponent → Float; `_` accepted only between two digits; `.5`/`-.5` start a number
   (`number_starts_at`), a space before `.5` makes it a new list item instead of `Op::Dot`.
 - `‖x‖`: the closing bar used to be re-read as a new prefix Abs with an empty operand ("Unexpected character"); now
@@ -43,7 +43,7 @@
 - Fixed: `-2^2` → -4 (prefix `-` is always `Op::Neg` at bp 155, folded into a literal via `impl Neg for Number`);
   `not` bp (0,105): weaker than comparisons, tighter than and/or; chained comparisons (all comparisons one level 120,
   parse_expr rewrites `a<b<c` → `a<b and b<c`, the middle operand is duplicated, so side effects in it run twice);
-  `=` inside `if`/`while` conditions parses as `==` (`WaspParser::equals_compares`, off again inside `{}` and after `:`);
+  `=` inside `if`/`while` conditions parses as `==` (`WarpParser::equals_compares`, off again inside `{}` and after `:`);
   `x++` as a statement was emitted as data (key_emitter skipped Inc/Dec), `++i`/`--i` parse as `i++`/`i--`;
   braceless call as operand of `+ - * /` (MAX_BP_FOR_APPLICATION 130 → 151).
 - `warp parse <code>` prints the parse tree as s-expressions: `(op left right)`, lists as `(items`.
@@ -204,7 +204,7 @@
 ## Work area "syntax decisions" (2026-09-28)
 - Decided and fixed: `&`/`|` vs comparison. `&`/`|` stay logical and/or (wiki/&.md); the parser turns a single-char `&`/`|`
   next to an ungrouped comparison into an error value with both groupings as fix-it (`logic_mixed_with_comparison` in
-  src/wasp_parser.rs). `and`/`or`/`&&`/`||` are not affected. Alternatives recorded in Footguns.md.
+  src/warp_parser.rs). `and`/`or`/`&&`/`||` are not affected. Alternatives recorded in Footguns.md.
 - Decided and fixed: braceless calls. The argument takes arithmetic and stops at ranges/comparisons (ARGUMENT_BP 140), in operand
   position and, for functions of the implicit `it`, at statement level: `1 + f 3-1` → 21, `f 3-1 > 15` → true. This matches the
   legacy wasp tests (`3 + id 3+3` → 9, test_wasm.rs, ignored). A braceless call inside a braceless argument is rejected by
@@ -250,7 +250,7 @@
   `2 * 1.5 as int` → 2. Now `as` is (125, TYPE_OPERAND_BP=250): it converts the whole arithmetic expression to its left
   (C#, TypeScript), `2 * 1.5 as int` → 3, and its target type is one atom. An ungrouped mix is linted:
   fix `(2*1.5) as int or 2 * 1.5:int`.
-- Tight conversion is written on the literal (`literal_type_suffix` in wasp_parser.rs, code only, not data mode):
+- Tight conversion is written on the literal (`literal_type_suffix` in warp_parser.rs, code only, not data mode):
   `0.1:float`, `1.5:int` and the C/Java/C# suffixes `0.1f`/`F`, `0.1d`/`D` (double) → float, `0.1l`/`L` (long double) → exact.
 - Word operators serialize with spaces (`0.1 as float`, was `0.1asfloat`).
 - /usr/local/bin/warp is a symlink to target/debug/warp: every cargo build/test updates it.
@@ -536,7 +536,7 @@ Tests still pinning the old rule (not edited, supervisor decides): tests/welcomi
   `xs#i = v`, `y = n; n = y+1`. A body whose first mention is a fresh `name = value` not reading it (`primes = []`)
   is ambiguous and asks (topic `local-or-global`, analyzer::resolve_main_variable_assignments): "a new local of f"
   (default, explicit form `let n = …`) or "the main-level n" (`global n`, which turns main's first `n = …` into the
-  global declaration). Unanswered it warns and takes the local, as Python does (samples/sieve_idiomatic.wasp relies on
+  global declaration). Unanswered it warns and takes the local, as Python does (samples/sieve_idiomatic.warp relies on
   this); `use strict` makes it an error. `let`/`var n = …`, a parameter of the same name, or a local whose name main does
   not use, is the function's own without a question.
 - Tests: tests/welcoming/test_welcoming_globals.rs.
@@ -550,7 +550,7 @@ Tests still pinning the old rule (not edited, supervisor decides): tests/welcomi
   to be letters (exceptions cdot, varepsilon, varphi). A Unicode name ranks above both (`\:tilde` ~, `\:breve` ˘).
   In uniscript since 131b627 (after v1.0.4); warp reads it once its pin is raised past 1.0.4 (src/uniscript_entities.tsv,
   tests/parser/test_entity_table.rs).
-- Generated, not hand-written: `python3 probes/entities_index/html_latex.py ~/dev/uniscript` (latex.wasp keeps the
+- Generated, not hand-written: `python3 probes/entities_index/html_latex.py ~/dev/uniscript` (latex.warp keeps the
   LaTeX readings HTML wins over as commented `// name: …` lines).
 
 36 names differ:
@@ -597,7 +597,7 @@ Tests still pinning the old rule (not edited, supervisor decides): tests/welcomi
 ## Array covariance (TypeScript's `Array<string>` passed as `Array<string | number>`), probed 2026-10-08
 - Not a hole in warp: lists are values, so a callee that widens the element type (`xs: list`,
   `xs: list of (text or number)`) appends to its own copy. The caller's `names: texts` stays `["hi"]`; the same goes for a
-  typed class field, a `const` list and a list a closure reads. Probes: probes/variance/widening_*.wasp.
+  typed class field, a `const` list and a list a closure reads. Probes: probes/variance/widening_*.warp.
 - The actual hole is simpler: the element type of a declared list is not checked at all. `names: texts = ["hi"];
   names.add(420)` gives `["hi" 420]` silently, as do `names: texts = [420]`, `names = [420]` and `b.items.add(420)` on a
   field `items: texts`. A scalar `x: text = "a"; x = 3` is a compile error. Fixed (card list-element-types): items are

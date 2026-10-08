@@ -45,9 +45,9 @@ fn test_an_unknown_noun_is_an_untyped_name() {
 
 #[test]
 fn test_a_declared_class_types_its_noun() {
-	let definition = warp::wasp_parser::parse("class photo{width:int}; to keep a photo: photo").serialize();
+	let definition = warp::warp_parser::parse("class photo{width:int}; to keep a photo: photo").serialize();
 	assert!(definition.contains("keep photo:photo"), "{definition}");
-	let untyped = warp::wasp_parser::parse("to keep a photo: photo").serialize();
+	let untyped = warp::warp_parser::parse("to keep a photo: photo").serialize();
 	assert!(!untyped.contains("photo:photo"), "{untyped}");
 }
 

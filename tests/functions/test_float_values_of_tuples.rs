@@ -1,4 +1,4 @@
-// Card destructured-float (samples/neural_net.wasp): a float a tuple function gives back with `return a, b` stays a
+// Card destructured-float (samples/neural_net.warp): a float a tuple function gives back with `return a, b` stays a
 // float through a destructuring statement, a call taking it and a float global a function changes
 use crate::is;
 

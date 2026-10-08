@@ -148,7 +148,7 @@ fn cell_value(value: Node, element: Element) -> Node {
 
 /// `int[n]` arrives as the 1-based `int#(n+1)`: n back
 fn written_count(index: &Node) -> Node {
-	match (crate::wasp_parser::subscript_key(index), index.drop_meta()) {
+	match (crate::warp_parser::subscript_key(index), index.drop_meta()) {
 		(Some(count), _) => count.clone(),
 		(None, Node::Number(number)) => Node::Number(*number - crate::extensions::numbers::Number::Int(1)),
 		(None, other) => Node::Key(Box::new(other.clone()), Op::Sub, Box::new(crate::node::int(1))),
@@ -390,7 +390,7 @@ fn collected(array: &Node, kind: Shared) -> Node {
 	let [get, _, _] = element_words(kind);
 	let count = kind.storage.new_and_count().1;
 	use crate::library_words::substitute;
-	let template = crate::wasp_parser::parse(&format!(
+	let template = crate::warp_parser::parse(&format!(
 		"(linear_list = []; for linear_index in 1 to {count}(linear_array) {{ linear_list = linear_list + [{get}(linear_array, linear_index)] }}; linear_list)"
 	));
 	let named = |suffix: &str| Node::Symbol(format!("{name}{separator}{suffix}"));

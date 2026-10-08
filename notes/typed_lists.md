@@ -28,7 +28,7 @@ through `int_list_as_node`, which builds exactly the square cons list the litera
 printing, returning, passing to a function, `sort`, comparisons… are unchanged, they just pay one O(n) conversion.
 Errors are the same runtime functions (`index_out_of_range`, `index_must_be_an_integer`).
 
-Value semantics: wasp lists are values (`node_with_at` copies). A typed list is updated in place, so `ys = xs` copies the
+Value semantics: warp lists are values (`node_with_at` copies). A typed list is updated in place, so `ys = xs` copies the
 list (`int_list_copy`) when either side is ever updated by index or append; otherwise the two share it.
 
 `sum`, `map`, `each`, element-wise `xs * 2` are lowered to loops before emission (library_words.rs, lambdas.rs,

@@ -1,4 +1,4 @@
-//! The standard library's index (card std-module-docs, notes/stdlib.md §8 "Discoverability"), read from lib/*.wasp:
+//! The standard library's index (card std-module-docs, notes/stdlib.md §8 "Discoverability"), read from lib/*.warp:
 //! a module's leading comment says what it is, the comment line right above a definition what that word does.
 //! `warp help list` prints one module, `warp help --markdown` the page wiki/standard-library.md, so docs never drift
 //! from lib/.
@@ -9,7 +9,7 @@ const ASSIGN: char = '=';
 const CLASS: &str = "class ";
 const BLOCK_START: char = '{';
 const MARKDOWN_TITLE: &str = "# Standard library";
-const MARKDOWN_INTRO: &str = "Made by `warp help --markdown` from lib/*.wasp: each module with its words, a word with the comment line above it. A module comes with `use <module>`; the prelude needs none.";
+const MARKDOWN_INTRO: &str = "Made by `warp help --markdown` from lib/*.warp: each module with its words, a word with the comment line above it. A module comes with `use <module>`; the prelude needs none.";
 
 /// A word of a module: how it is written (`zip(a, b)`, `class Stack`) and its comment line, if any
 struct Word {

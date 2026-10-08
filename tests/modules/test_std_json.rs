@@ -1,7 +1,7 @@
-//! The standard library module json (notes/stdlib.md section 7): `use json` loads lib/json.wasp, whose words call the
+//! The standard library module json (notes/stdlib.md section 7): `use json` loads lib/json.warp, whose words call the
 //! adapter std_pure: serde_json natively, JSON.parse / JSON.stringify in the browser
 use crate::is;
-use warp::wasp_parser::parse;
+use warp::warp_parser::parse;
 
 #[test]
 fn use_json_parses_and_writes_json() {

@@ -56,7 +56,7 @@ with other numbers is the same program: compiled once per thread (BLOCK_MODULES,
 the rest of each run in wasm_reader::link_imports (libm's FFI functions and the host words linked again per run): each
 thread now keeps one linker per engine and import families and clones it. The browser still writes the values in.
 
-| probes/bang_cache/loop.wasp (100 × `xs#1!`, `a` changing), debug, own module cache | cold | warm |
+| probes/bang_cache/loop.warp (100 × `xs#1!`, `a` changing), debug, own module cache | cold | warm |
 |---|---|---|
 | before | 1.68 s | 0.24 s (only because the values repeat run to run) |
 | after | 0.24 s | 0.09 s |

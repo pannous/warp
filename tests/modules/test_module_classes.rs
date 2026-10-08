@@ -3,10 +3,10 @@ use crate::is;
 
 #[test]
 fn a_used_modules_class_has_its_methods() {
-	is!("tests/wasp/module_class/main.wasp", 41);
+	is!("tests/warp/module_class/main.warp", 41);
 }
 
 #[test]
 fn the_programs_own_class_wins() {
-	is!("tests/wasp/module_class/own.wasp", 7);
+	is!("tests/warp/module_class/own.warp", 7);
 }

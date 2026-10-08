@@ -1,4 +1,4 @@
-// samples/neural_net.wasp: an element of a list of tuples keeps its items' kinds. `p = xs#1; p#1` of `[("a", 2)]` read
+// samples/neural_net.warp: an element of a list of tuples keeps its items' kinds. `p = xs#1; p#1` of `[("a", 2)]` read
 // the text "a" as the Int 97, and a list item of a pair was "not an int"
 use crate::is;
 

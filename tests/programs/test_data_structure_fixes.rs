@@ -1,4 +1,4 @@
-//! What samples/data_structures.wasp needed: data keys read like variables, fields of list elements, list
+//! What samples/data_structures.warp needed: data keys read like variables, fields of list elements, list
 //! comprehensions, named tuples
 use crate::is;
 

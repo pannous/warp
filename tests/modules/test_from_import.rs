@@ -1,7 +1,7 @@
 //! `from list import zip, unique` brings only the named words of a module (card std-import)
 use crate::common::fails_with;
 use crate::is;
-use warp::wasp_parser::parse;
+use warp::warp_parser::parse;
 
 #[test]
 fn from_import_brings_the_named_words() {

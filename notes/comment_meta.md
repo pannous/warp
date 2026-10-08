@@ -1,6 +1,6 @@
 # Comments as meta information (card g-1tHQ, P114, 2026-10-06)
 
-samples/comments.wasp says "Comments attach to the next element as metadata"; the playground user ran
+samples/comments.warp says "Comments attach to the next element as metadata"; the playground user ran
 `greeting.meta` and got `Error("no field meta@https")`.
 
 - The parser already keeps a comment as a Meta layer `comment: "…"` on the first word of the next statement (lines of

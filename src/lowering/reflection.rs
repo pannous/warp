@@ -24,6 +24,8 @@ const METHODS_WORD: &str = "methods";
 const DIR_WORD: &str = "dir";
 const KEYS_WORD: &str = "keys";
 const EXPORTS_WORD: &str = "exports";
+/// The run-time choice of a class's names (Objects::dispatched)
+const DISPATCH_TEMPLATE: &str = "if RECEIVER is CLASS then NAMES else OTHERWISE";
 const PARAMS_WORDS: [&str; 2] = ["params", "parameters"];
 const SIGNATURE_WORD: &str = "signature";
 
@@ -213,48 +215,87 @@ impl Objects {
 	}
 
 	/// `subject.word` as a reflection word, unless subject has a real field or key of that name
-	fn dot_word(&self, subject: &str, word: &str) -> Option<Node> {
+	fn dot_word(&self, subject: &Node, word: &str) -> Option<Node> {
 		if self.defined.contains(word) {
 			return None;
 		}
-		if let Some(class) = self.class_of(subject) {
-			let is_instance = self.instances.contains_key(subject);
+		let written = || Node::Key(Box::new(subject.clone()), Op::Dot, Box::new(Node::Symbol(word.into())));
+		let Some(name) = symbol(subject) else { return self.dispatched(subject, word, written()) };
+		if let Some(class) = self.class_of(name) {
+			let is_instance = self.instances.contains_key(name);
 			return match word {
-				_ if self.fields(class).iter().chain(&self.methods(class)).any(|name| name == word) => None,
-				_ if CLASS_WORDS.contains(&word) && is_instance => Some(Node::List(vec![Node::Symbol(crate::type_tests::TYPE_WORD.into()), Node::Symbol(subject.into())], Bracket::Round, Separator::None)),
-				_ if FIELDS_WORDS.contains(&word) => Some(text_list(&self.fields(class))),
-				METHODS_WORD => Some(text_list(&self.methods(class))),
-				_ => None,
+				_ if self.has_member(class, word) => None,
+				_ if CLASS_WORDS.contains(&word) && is_instance => Some(Node::List(vec![Node::Symbol(crate::type_tests::TYPE_WORD.into()), subject.clone()], Bracket::Round, Separator::None)),
+				_ => self.listed(class, word).map(|names| text_list(&names)),
 			};
 		}
-		if let Some(exports) = self.modules.get(subject) {
+		if let Some(exports) = self.modules.get(name) {
 			return (word == EXPORTS_WORD).then(|| text_list(exports));
 		}
-		let keys = self.maps.get(subject)?;
-		(FIELDS_WORDS.contains(&word) && !keys.iter().any(|key| key == word)).then(|| self.map_keys(subject))
+		match self.maps.get(name) {
+			Some(keys) => (FIELDS_WORDS.contains(&word) && !keys.iter().any(|key| key == word)).then(|| self.map_keys(subject)),
+			None => self.dispatched(subject, word, written()),
+		}
 	}
 
 	/// `dir(x)`: the fields and methods of an instance or class, a module's exports, the keys of a map
-	fn dir(&self, subject: &str) -> Option<Node> {
+	fn dir(&self, subject: &Node) -> Option<Node> {
 		if self.defined.contains(DIR_WORD) {
 			return None;
 		}
-		match (self.class_of(subject), self.modules.get(subject)) {
-			(Some(class), _) => Some(text_list(&[self.fields(class), self.methods(class)].concat())),
+		// no class's instance at run time: a map's keys
+		let Some(name) = symbol(subject) else { return self.dispatched(subject, DIR_WORD, self.map_keys(subject)) };
+		match (self.class_of(name), self.modules.get(name)) {
+			(Some(class), _) => self.listed(class, DIR_WORD).map(|names| text_list(&names)),
 			(None, Some(exports)) => Some(text_list(exports)),
-			(None, None) => self.maps.contains_key(subject).then(|| self.map_keys(subject)),
+			(None, None) if self.maps.contains_key(name) => Some(self.map_keys(subject)),
+			(None, None) => self.dispatched(subject, DIR_WORD, self.map_keys(subject)),
 		}
 	}
 
-	fn map_keys(&self, subject: &str) -> Node {
-		Node::Key(Box::new(Node::Symbol(subject.into())), Op::Dot, Box::new(Node::Symbol(KEYS_WORD.into())))
+	/// The names a reflection word lists for a class: its fields, its methods, or both for `dir`
+	fn listed(&self, class: &str, word: &str) -> Option<Vec<String>> {
+		match word {
+			DIR_WORD => Some([self.fields(class), self.methods(class)].concat()),
+			METHODS_WORD => Some(self.methods(class)),
+			_ if FIELDS_WORDS.contains(&word) => Some(self.fields(class)),
+			_ => None,
+		}
+	}
+
+	fn has_member(&self, class: &str, word: &str) -> bool {
+		self.fields(class).iter().chain(&self.methods(class)).any(|name| name == word)
+	}
+
+	/// A subject whose class is known only at run time (`f(o) := o.fields`): a type test over the program's classes
+	/// picks the names, a class's own member of that name is read as written, anything else stays `written`
+	fn dispatched(&self, subject: &Node, word: &str, written: Node) -> Option<Node> {
+		// a class without a layout lists nothing: whether the word lists names at all
+		if self.layouts.is_empty() || self.listed("", word).is_none() {
+			return None;
+		}
+		let mut classes: Vec<&String> = self.layouts.keys().collect();
+		classes.sort();
+		Some(classes.into_iter().rev().fold(written.clone(), |otherwise, class| {
+			let names = match self.has_member(class, word) {
+				true => written.clone(),
+				false => text_list(&self.listed(class, word).unwrap_or_default()),
+			};
+			let bindings = [("RECEIVER", subject.clone()), ("CLASS", Node::Symbol(class.clone())), ("NAMES", names), ("OTHERWISE", otherwise)];
+			let bindings = bindings.into_iter().map(|(placeholder, node)| (placeholder.to_string(), node)).collect();
+			crate::law::substitute(&crate::warp_parser::parse(DISPATCH_TEMPLATE), &bindings).drop_meta().clone()
+		}))
+	}
+
+	fn map_keys(&self, subject: &Node) -> Node {
+		Node::Key(Box::new(subject.clone()), Op::Dot, Box::new(Node::Symbol(KEYS_WORD.into())))
 	}
 }
 
 fn with_object_words(node: Node, objects: &Objects) -> Node {
 	let reflected = match node.drop_meta() {
-		Node::Key(subject, Op::Dot, word) => symbol(subject).zip(symbol(word)).and_then(|(subject, word)| objects.dot_word(subject, word)),
-		Node::List(items, Bracket::Round | Bracket::None, _) if items.len() == 2 && symbol(&items[0]) == Some(DIR_WORD) => symbol(&items[1]).and_then(|subject| objects.dir(subject)),
+		Node::Key(subject, Op::Dot, word) => symbol(word).and_then(|word| objects.dot_word(subject, word)),
+		Node::List(items, Bracket::Round | Bracket::None, _) if items.len() == 2 && symbol(&items[0]) == Some(DIR_WORD) => objects.dir(&items[1]),
 		_ => None,
 	};
 	reflected.unwrap_or_else(|| node.map_children(|child| with_object_words(child, objects)))

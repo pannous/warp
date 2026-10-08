@@ -13,7 +13,7 @@ use crate::node::{Bracket, Node, Separator};
 use crate::operators::Op;
 use crate::signal_values::ungrouped_reflection;
 use crate::variable_signals::{assign, block, if_then, symbols};
-use crate::wasp_parser::parse;
+use crate::warp_parser::parse;
 use std::collections::{HashMap, HashSet};
 
 const ON_WORD: &str = "on";
@@ -478,7 +478,7 @@ fn function_error_handler(statement: &Node) -> Option<(String, Node)> {
 
 /// The definition with its body `try body else handler`: `f(x) := body`, `def f(x): body`, `fun f(x) {body}`
 fn guarded_definition(definition: &Node, handler: &Node) -> Option<Node> {
-	let guarded = |body: &Node| Node::List(vec![Node::Symbol(crate::wasp_parser::TRY_MARKER.to_string()), body.clone(), handler.clone()], Bracket::Round, Separator::Space);
+	let guarded = |body: &Node| Node::List(vec![Node::Symbol(crate::warp_parser::TRY_MARKER.to_string()), body.clone(), handler.clone()], Bracket::Round, Separator::Space);
 	match definition.drop_meta() {
 		Node::Key(head, op @ (Op::Define | Op::Assign | Op::Colon), body) => Some(Node::Key(head.clone(), *op, Box::new(guarded(body)))),
 		Node::List(items, bracket, separator) if items.len() >= 2 => {

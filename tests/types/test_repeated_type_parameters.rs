@@ -1,4 +1,4 @@
-// samples/polymorphism.wasp (matching by type name, D5): a type word repeated alone numbers its parameters, the body
+// samples/polymorphism.warp (matching by type name, D5): a type word repeated alone numbers its parameters, the body
 // reads the n-th as `float#n` or positionally as `$0`, `$1`
 use crate::is;
 

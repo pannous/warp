@@ -11,7 +11,7 @@ script = """(async () => {
 	while (document.getElementById("status").textContent === "running…") await new Promise(done => setTimeout(done, 50));
 	const root = document.getElementById("rendered").shadowRoot;
 	const pause = ms => new Promise(done => setTimeout(done, ms));
-	const snapshot = () => [...root.querySelectorAll("li")].map(li => li.textContent + (li.hasAttribute("data-wasp-leaving") ? "(leaving)" : ""));
+	const snapshot = () => [...root.querySelectorAll("li")].map(li => li.textContent + (li.hasAttribute("data-warp-leaving") ? "(leaving)" : ""));
 	[...root.querySelectorAll("button")].find(button => button.textContent === "remove").click();
 	let during = [];
 	for (let tries = 0; tries < 40 && !during.some(text => text.includes("leaving")); tries++) { await pause(10); during = snapshot(); }

@@ -510,7 +510,7 @@ fn link_single_function(
         return Err(anyhow::anyhow!("Null function pointer for {}", func_name));
     }
 
-    let wasm_params: Vec<ValType> = wasp_parameters(&sig.param_types)
+    let wasm_params: Vec<ValType> = warp_parameters(&sig.param_types)
         .filter_map(|t| c_type_to_wasm_valtype(t))
         .collect();
 
@@ -864,13 +864,13 @@ struct NativeArguments {
 fn native_arguments(caller: &mut wasmtime::Caller<'_, FfiState>, name: &str, params: &[Val], param_types: &[ParamType], out_slot: &mut usize) -> wasmtime::Result<NativeArguments> {
     let mut args = NativeArguments::default();
     let (mut integer, mut float) = (0, 0);
-    let mut wasp_params = params.iter();
+    let mut warp_params = params.iter();
     let mut out_slot = Some(out_slot);
     for ptype in param_types {
         let value = if *ptype == ParamType::Out {
             Some(out_slot.take().map_or(0, |slot| slot as *mut usize as u64))
         } else {
-            let Some(param) = wasp_params.next() else { break };
+            let Some(param) = warp_params.next() else { break };
             match ptype {
                 ParamType::I32 => Some(param.unwrap_i32() as u64),
                 ParamType::I64 => Some(param.unwrap_i64() as u64),
@@ -896,7 +896,7 @@ fn native_arguments(caller: &mut wasmtime::Caller<'_, FfiState>, name: &str, par
     Ok(args)
 }
 
-/// The C pointers a run got, handed to wasp as ids: id n is the n-th pointer, 0 is NULL; the same pointer keeps its id.
+/// The C pointers a run got, handed to warp as ids: id n is the n-th pointer, 0 is NULL; the same pointer keeps its id.
 /// The table lives in the run's HostState and goes with it: ids are never addresses, and never outlive the run
 #[cfg(feature = "native")]
 #[derive(Default)]
@@ -941,7 +941,7 @@ struct PointerCall {
 
 /// One wrapper for every C function crossing pointers: `sqlite3_column_text(stmt, i)` takes a handle and gives a text,
 /// `sqlite3_open(name)` gives the handle its out-pointer received (NULL there is an error naming the C status), a
-/// `char *` result is copied into the module as a wasp text (NULL is ø)
+/// `char *` result is copied into the module as a warp text (NULL is ø)
 #[cfg(feature = "native")]
 fn create_pointer_wrapper(linker: &mut Linker<FfiState>, lib_name: &str, func_type: FuncType, call: PointerCall) -> Result<()> {
     let name = call.name.clone();
@@ -983,7 +983,7 @@ fn native_result(returned: u64, ret_type: RetType) -> Val {
     }
 }
 
-/// A wasp text of `bytes` in the calling module (its memory, text heap and new_text), or ø
+/// A warp text of `bytes` in the calling module (its memory, text heap and new_text), or ø
 #[cfg(feature = "native")]
 pub(crate) fn text_node(caller: &mut wasmtime::Caller<'_, FfiState>, bytes: Option<&[u8]>) -> Result<Val> {
     let export = |caller: &mut wasmtime::Caller<'_, FfiState>, name: &str| caller.get_export(name).ok_or_else(|| anyhow::anyhow!("a C text result needs the module's {name}"));

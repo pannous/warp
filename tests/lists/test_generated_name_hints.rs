@@ -14,5 +14,5 @@ fn comprehension_and_where_give_no_hint_about_their_list() {
 		let hints = hint_texts(code);
 		assert!(hints.iter().all(|hint| !hint.contains("comprehension")), "{code}: {hints:?}");
 	}
-	is!("[x * 2 for x in [1 2 3] if x > 1]", warp::wasp_parser::parse("[4 6]"));
+	is!("[x * 2 for x in [1 2 3] if x > 1]", warp::warp_parser::parse("[4 6]"));
 }

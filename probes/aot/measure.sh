@@ -1,6 +1,6 @@
 #!/bin/bash
 # Compile vs run time of warp programs on the wasmtime CLI: JIT (.wasm) against precompiled (.cwasm)
-# usage: probes/aot/measure.sh <dir with .wasp files> [warp binary]
+# usage: probes/aot/measure.sh <dir with .warp files> [warp binary]
 set -e
 DIR=${1:-scratch/aot}
 WARP=${2:-scratch/warp}
@@ -18,8 +18,8 @@ best_ms() { # best wall time of RUNS runs of the command, in ms
 	echo $best
 }
 printf "%-18s %8s %8s %9s %8s %8s\n" program wasm_B cwasm_B compile_ms jit_ms aot_ms
-for source in "$DIR"/*.wasp; do
-	name=${source%.wasp}
+for source in "$DIR"/*.warp; do
+	name=${source%.warp}
 	"$WARP" compile "$source" >/dev/null
 	wasmtime compile "${FLAGS[@]}" "$name.wasm" -o "$name.cwasm"
 	compile=$(best_ms wasmtime compile "${FLAGS[@]}" "$name.wasm" -o "$name.cwasm")

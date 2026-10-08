@@ -1,5 +1,5 @@
 //! Static units, stage 6: quantities in object fields, in `any` and annotated variables, serialized, and in lists grown at
-//! run time. The signatures stay static; a final object names the units of its fields in `wasp.units`
+//! run time. The signatures stay static; a final object names the units of its fields in `warp.units`
 use crate::common::fails_with;
 use warp::wasm_emitter::eval;
 

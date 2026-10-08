@@ -189,7 +189,7 @@ impl WasmGcEmitter {
 		let class = self.typed_structs[&target.drop_meta().name()].clone();
 		self.emit_field_value(func, &class, access.field_index as usize, value, access.kind);
 		func.instruction(&I::StructSet { struct_type_index: access.type_index, field_index: access.field_index });
-		let key = crate::wasp_parser::subscript_key(index).expect("a field by name").clone();
+		let key = crate::warp_parser::subscript_key(index).expect("a field by name").clone();
 		self.emit_assigned_entry_value(func, target, &key, value);
 		true
 	}
@@ -466,7 +466,7 @@ impl StructFunction {
 
 /// The index and stored kind of the field a one-based subscript `"x" + 1` names
 fn field_of(instance: &InstanceType, index: &Node) -> Option<(u32, Kind)> {
-	let name = match crate::wasp_parser::subscript_key(index)?.drop_meta() {
+	let name = match crate::warp_parser::subscript_key(index)?.drop_meta() {
 		Node::Text(name) => name.clone(),
 		Node::Char(letter) => letter.to_string(),
 		_ => return None,

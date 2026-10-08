@@ -543,7 +543,7 @@ pub fn check_operator_word_functions(program: &Node) -> Option<Diagnostic> {
 	Some(Diagnostic::at(&definition, format!("{word} is an operator ({op}); rename your function")))
 }
 
-/// The words the parser reads as prefix operators (wasp_parser lookahead.rs peek_prefix_operator)
+/// The words the parser reads as prefix operators (warp_parser lookahead.rs peek_prefix_operator)
 const OPERATOR_WORDS: [(Op, &str); 4] = [(Op::Sqrt, "sqrt"), (Op::Cbrt, "cbrt"), (Op::Abs, "abs"), (Op::Not, "not")];
 
 /// `double := it*2` or `double(x) := …`: a type word names a type, never a function (user decision P20)

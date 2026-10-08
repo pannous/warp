@@ -80,7 +80,7 @@ pub const OUTPUT_WORDS: [&str; 4] = ["puts", "puti", "putl", "putf"];
 pub(crate) const OUTPUT_CALLS: [&str; 5] = ["print", OUTPUT_WORDS[0], OUTPUT_WORDS[1], OUTPUT_WORDS[2], OUTPUT_WORDS[3]];
 
 /// Builtins that round a float to an exact Int
-pub(crate) const ROUNDING_FUNCTIONS: [&str; 6] = ["ceil", "floor", "round", "round_half_up", "round_half_even", crate::wasp_parser::FLOOR_QUOTIENT];
+pub(crate) const ROUNDING_FUNCTIONS: [&str; 6] = ["ceil", "floor", "round", "round_half_up", "round_half_even", crate::warp_parser::FLOOR_QUOTIENT];
 
 /// 2^63: floats with a magnitude at or beyond it do not fit an i64
 const I64_RANGE_LIMIT: f64 = 9223372036854775808.0;
@@ -107,14 +107,32 @@ pub const TRAP_DETAIL_PREFIX: &str = "trap detail: ";
 /// The `trap detail: <value>` line of a trapped run; an Error value raised as it is (Node arithmetic on an Error, a text
 /// builtin of an Error) names its message
 pub fn trap_detail_line(detail: &Node) -> String {
-	match detail {
-		Node::Error(reason) => format!("{TRAP_DETAIL_PREFIX}{}", reason.serialize()),
-		value => format!("{TRAP_DETAIL_PREFIX}{}", value.serialize()),
-	}
+	let shown = match detail {
+		Node::Error(reason) => reason.serialize(),
+		value => value.serialize(),
+	};
+	// one line in the trace, whatever lines the value has: `\` and line breaks escaped, trap_detail reads them back
+	format!("{TRAP_DETAIL_PREFIX}{}", shown.replace('\\', "\\\\").replace('\n', "\\n"))
 }
+
+/// The value a trace's `trap detail: …` line carries, its line breaks back
+fn trap_detail(trace: &str) -> Option<String> {
+	let line = trace.split_once(TRAP_DETAIL_PREFIX)?.1.lines().next()?;
+	let mut detail = String::with_capacity(line.len());
+	let mut characters = line.chars();
+	while let Some(character) = characters.next() {
+		detail.push(match (character, (character == '\\').then(|| characters.next()).flatten()) {
+			(_, Some('n')) => '\n',
+			(_, Some(escaped)) => escaped,
+			(plain, None) => plain,
+		});
+	}
+	Some(detail)
+}
+
 /// Why a unit word is an undefined variable: quantities are computed in constant expressions only
 const UNIT_AT_RUN_TIME: &str = " (a unit: quantities compute only in constant expressions so far, not yet in functions, loops, lists, branches or print; notes/units_runtime.md)";
-/// The global behind the export `trap_detail`: not a wasp name, so no user global meets it
+/// The global behind the export `trap_detail`: not a warp name, so no user global meets it
 const TRAP_DETAIL_GLOBAL: &str = "trap·detail";
 
 const TERNARY_BRANCHES: &str = "`condition ? then : else`";
@@ -1377,7 +1395,7 @@ impl WasmGcEmitter {
 
 	/// The name section: subsections in id order (module, functions, types, globals, fields, tags), every map by index
 	fn emit_names(&mut self) {
-		self.names.module("wasp_compact");
+		self.names.module("warp_compact");
 
 		let functions: Vec<(u32, String)> = self.ctx.func_registry.all().iter()
 			.map(|f| (f.call_index as u32, f.name.clone()))
@@ -1797,7 +1815,7 @@ pub fn trap_error(trace: &str, trap: String) -> Node {
 	});
 	let no_case = trace.split_once(crate::switch::NO_CASE_PREFIX).map(|(_, rest)| {
 		let label: String = rest.chars().take_while(|c| c.is_alphanumeric() || *c == '_').collect();
-		match trace.split_once(TRAP_DETAIL_PREFIX).and_then(|(_, rest)| rest.lines().next()) {
+		match trap_detail(trace) {
 			Some(value) => format!("no case for {label} = {value}"),
 			None => format!("no case for {label}"),
 		}
@@ -1807,9 +1825,8 @@ pub fn trap_error(trace: &str, trap: String) -> Node {
 		crate::fixed_width::overflow_message(&type_name)
 	});
 	// `return error("…")` from a number function: the message is the trap detail
-	let returned_error = trace.contains(list_ops::RETURNED_ERROR).then(|| trace.split_once(TRAP_DETAIL_PREFIX).and_then(|(_, rest)| rest.lines().next()))
-		.flatten().map(|detail| detail.trim_matches('"').to_string());
-	let index_range = trace.contains(list_ops::INDEX_OUT_OF_RANGE_OF).then(|| trace.split_once(TRAP_DETAIL_PREFIX).and_then(|(_, rest)| index_range_message(rest.lines().next()?))).flatten();
+	let returned_error = trace.contains(list_ops::RETURNED_ERROR).then(|| trap_detail(trace)).flatten().map(|detail| detail.trim_matches('"').to_string());
+	let index_range = trace.contains(list_ops::INDEX_OUT_OF_RANGE_OF).then(|| index_range_message(&trap_detail(trace)?)).flatten();
 	let runtime_error = returned_error.or(index_range).or(missing_field).or(no_case).or(overflow).or_else(|| list_ops::RUNTIME_ERRORS.iter().find(|name| trace.contains(*name)).map(|name| list_ops::runtime_error_message(name)));
 	let exact_trap = EXACT_TRAP_MESSAGES.iter().find(|(function, _)| trace.contains(function)).map(|(_, message)| message.to_string());
 	// the engine's own integer divide trap (a division the emitter did not guard) reads as the guarded one

@@ -57,7 +57,7 @@ impl ElementTest {
 			Some((_, class)) => format!("({INSTANCE_PLACEHOLDER} is {class}) and {misfit}"),
 			None => misfit,
 		};
-		let template = crate::wasp_parser::parse(&format!("if {failure} {{ raise {:?} }}", self.message));
+		let template = crate::warp_parser::parse(&format!("if {failure} {{ raise {:?} }}", self.message));
 		match &self.guard {
 			Some((instance, _)) => substitute(template, INSTANCE_PLACEHOLDER, instance),
 			None => template,
@@ -245,7 +245,7 @@ fn item_check(item: &Node, test: &ElementTest) -> Node {
 
 /// `for item in list { if not (item is text) { raise "…" } }`
 fn each_item_check(list: &Node, test: &ElementTest) -> Node {
-	let template = crate::wasp_parser::parse(&format!("for {ITEM_PLACEHOLDER} in {LIST_PLACEHOLDER} {{ {CHECK_PLACEHOLDER} }}"));
+	let template = crate::warp_parser::parse(&format!("for {ITEM_PLACEHOLDER} in {LIST_PLACEHOLDER} {{ {CHECK_PLACEHOLDER} }}"));
 	let template = substitute(template, CHECK_PLACEHOLDER, &test.check());
 	let item = Node::Symbol(format!("{}·item", list.name()));
 	substitute(substitute(template, LIST_PLACEHOLDER, list), ITEM_PLACEHOLDER, &item)

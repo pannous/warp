@@ -3,23 +3,23 @@
 //! of the page counts on its own. A variable of a component that one of its element handlers mentions is a list with
 //! one entry per instance, `Counter·count`; an instance is the n-th call of the component in a render (as React's
 //! hooks: the same call order finds the same state), its first call sets the entry, later renders keep it. The element
-//! of a handler carries `data-wasp-instance`, which the page passes as `event.instance` (playground.js), so the handler
+//! of a handler carries `data-warp-instance`, which the page passes as `event.instance` (playground.js), so the handler
 //! (element_events.rs makes it main-level) changes its own instance's entry. The program's last line becomes the
 //! getter `page·markup`, which starts each render at the first instance.
 //! `on mount {…}` in a component runs when an instance first renders, `on cleanup {…}` when a render has fewer instances
 //! than the one before (the last ones left; card web-cleanup); their state entries go with them.
-//! A component whose markup holds a style sheet names itself on its root element (`data-wasp-scope: "Card"`), so the
+//! A component whose markup holds a style sheet names itself on its root element (`data-warp-scope: "Card"`), so the
 //! sheet styles only its own elements (html.rs, card web-scoped).
 
 use crate::element_events::{element_items, handler_at, has_element_handler, HANDLER_ATTRIBUTE_PREFIX};
 use crate::law::substitute;
 use crate::node::{Bracket, Node, Separator};
 use crate::operators::Op;
-use crate::wasp_parser::parse;
+use crate::warp_parser::parse;
 use std::collections::HashMap;
 
 const JOINER: char = '·';
-/// `data-wasp-instance`: the attribute naming the instance of a component's element, read by playground.js
+/// `data-warp-instance`: the attribute naming the instance of a component's element, read by playground.js
 const INSTANCE_ATTRIBUTE: &str = "instance";
 const INSTANCES: &str = "instances";
 const INSTANCE: &str = "instance";
