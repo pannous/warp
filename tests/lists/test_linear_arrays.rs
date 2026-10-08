@@ -83,3 +83,15 @@ fn an_item_of_a_linear_array_reads_in_a_text_hole() {
 	is!("linear xs = float[3]; xs#1 = 2.5; \"a \\(xs#1) b\"", "a 2.5 b");
 	is!("linear xs = int[2]; xs#2 = 7; \"\\(#xs): ${xs#2}\"", "2: 7");
 }
+
+// `xs .* ys` of two linear arrays pairs their items by index, as of two lists (it multiplied by ys's address)
+#[test]
+fn element_wise_operators_pair_two_linear_arrays() {
+	let filled = "linear xs = float[3]; linear ys = float[3]; xs#1 = 2.0; ys#1 = 3.0; xs#2 = 4.0; ys#2 = 0.5\n";
+	is!(&format!("{filled}zs = xs .* ys; [zs#1, zs#2, #zs]"), list(vec![float(6.0), float(2.0), int(3)]));
+	is!(&format!("{filled}sum(xs .* ys)"), 8.0);
+	is!(&format!("{filled}dot(xs, ys)"), 8.0);
+	is!(&format!("{filled}zs = xs .+ ys .* 2; zs#2"), 5.0);
+	fails_with("linear xs = float[3]; linear ys = float[2]; zs = xs .* ys; zs#1", "differ in length");
+	fails_with("linear xs = float[3]; linear ys = float[2]; sum(xs .* ys)", "differ in length");
+}

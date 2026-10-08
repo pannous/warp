@@ -24,6 +24,8 @@ const SHARED_COUNT: &str = crate::host::SHARED_WORDS[4];
 const COUNTING_WORDS: [&str; 3] = ["count", "length", "size"];
 const FLOAT_WORDS: [&str; 3] = ["float", "real", "double"];
 const MAP_WORD: &str = "map";
+const DOT_WORD: &str = "dot";
+const SUM_WORD: &str = "sum";
 
 /// `linear xs = int[n]`: an array in linear memory
 const LINEAR_WORD: &str = "linear";
@@ -78,7 +80,7 @@ fn element_words(kind: Shared) -> [&'static str; 3] {
 }
 
 pub fn lower(node: Node) -> Node {
-	let node = crate::gpu_maps::kept_on_gpu(node);
+	let mut node = crate::gpu_maps::kept_on_gpu(node);
 	let mut declared = HashMap::new();
 	let mut first_linear: Option<Node> = None;
 	node.visit(&mut |part| if let Some((name, _, shared)) = declaration(part) {
@@ -88,7 +90,9 @@ pub fn lower(node: Node) -> Node {
 		declared.insert(name, shared);
 	});
 	// a map of a map's result is one too: until no name is added
+	let (defines_dot, mut pairs) = (definitions(&node).contains_key(DOT_WORD), 0);
 	loop {
+		node = paired_with_linear(node, &declared, defines_dot, &mut pairs);
 		let results = float_map_results(&node, &declared);
 		if results.is_empty() {
 			break;
@@ -424,6 +428,35 @@ fn gpu_kernel_map(value: &Node) -> Option<(Node, Node, crate::gpu_maps::Kernel)>
 	let (array, lambda) = crate::gpu_maps::gpu_map(value)?;
 	let kernel = crate::gpu_maps::gpu_kernel(&lambda)?;
 	Some((array, lambda, kernel))
+}
+
+/// `xs .op ys` with ys a linear array (or an element-wise expression of one): the items paired by index as
+/// broadcasting.rs pairs two lists, where the map would read ys as one number (its block's address); `dot(xs, ys)` of
+/// one is `sum(xs .* ys)`. `pairs` counts the pairings, naming each one's lists
+fn paired_with_linear(node: Node, names: &HashMap<String, Shared>, defines_dot: bool, pairs: &mut usize) -> Node {
+	use crate::broadcasting::{element_wise_parts, named_by, paired_by, PAIRED_TEMPLATE};
+	let node = node.map_children(|child| paired_with_linear(child, names, defines_dot, pairs));
+	if let Some((receiver, op, operand)) = element_wise_parts(&node).filter(|(_, _, operand)| is_linear_list(operand, names)) {
+		*pairs += 1;
+		return paired_by(receiver, op, operand, PAIRED_TEMPLATE, named_by(format!("linear_{pairs}")));
+	}
+	match node.drop_meta() {
+		Node::List(items, Bracket::Round, _) if !defines_dot && items.len() == 3 && items[0].name() == DOT_WORD && items[1..].iter().any(|list| is_linear_list(list, names)) => {
+			let product = crate::analyzer::element_wise(items[1].clone(), Op::Mul, items[2].clone());
+			let sum = Node::List(vec![Node::Symbol(SUM_WORD.into()), product], Bracket::Round, Separator::None);
+			paired_with_linear(sum, names, defines_dot, pairs)
+		}
+		_ => node,
+	}
+}
+
+/// A linear array, or an element-wise expression of one: `ys`, `(ys .* 2)`
+fn is_linear_list(node: &Node, names: &HashMap<String, Shared>) -> bool {
+	match node.drop_meta() {
+		Node::List(items, Bracket::Round, _) if items.len() == 1 => is_linear_list(&items[0], names),
+		_ => shared(node, names).is_some_and(|kind| kind.storage == Storage::Linear)
+			|| crate::broadcasting::element_wise_parts(node).is_some_and(|(receiver, _, _)| is_linear_list(&receiver, names)),
+	}
 }
 
 /// Whether a name of `names` occurs in node
