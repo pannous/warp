@@ -59,6 +59,23 @@ def step (P : Program) (μ : Store) : Expr → Option (Expr × Store)
   | .get o f => if o.isValue then some (readField μ o f, μ) else stepIn (.get f) o μ (step P μ o)
   | .set o f v => stepPair (fun v => .setL f v) (fun o => .setR o f) o v μ (step P μ o) (step P μ v) (some (writeField μ o f v))
   | .isA e c => if e.isValue then some (.bool (isInstance e c), μ) else stepIn (.isA c) e μ (step P μ e)
+  | .handle ev h b =>
+    match b with
+    | .error m => some (.error m, μ)
+    | _ => if b.isValue then some (b, μ) else (step P (μ.push ev h) b).map fun s => (.handle ev h s.1, s.2.withHandlers μ.handlers)
+  | .emit ev e =>
+    if e.isValue then
+      some (match lookupHandler μ.handlers ev with
+        | some (h, k) => (.scope k (h.subst eventLocal e), μ)
+        | none =>
+          match P.handlers ev with
+          | some h => (.scope 0 (h.subst eventLocal e), μ)
+          | none => (.unit, μ))
+    else stepIn (.emit ev) e μ (step P μ e)
+  | .scope k e =>
+    match e with
+    | .error m => some (.error m, μ)
+    | _ => if e.isValue then some (e, μ) else (step P (μ.outer k) e).map fun s => (.scope k s.1, s.2.withHandlers μ.handlers)
   | _ => none
 
 variable {P : Program}
@@ -193,6 +210,36 @@ theorem step_sound : ∀ {e : Expr} {μ s'}, step P μ e = some s' → Step P (e
     split at hs
     · cases hs; exact .isA (by assumption)
     · exact stepIn_sound (F := .isA c) rfl (fun _ => ih) hs
+  | handle ev h b _ ih =>
+    intro μ s' hs; simp only [step] at hs
+    split at hs
+    · cases hs; exact .handleError
+    · split at hs
+      · cases hs; exact .handleValue (by assumption)
+      · simp only [Option.map_eq_some_iff] at hs
+        obtain ⟨⟨e', μ'⟩, he, rfl⟩ := hs
+        exact .handleStep (ih he)
+  | emit ev e ih =>
+    intro μ s' hs; simp only [step] at hs
+    split at hs
+    · rename_i hv
+      cases hs
+      split
+      · rename_i hl; exact .emitBlock hv hl
+      · rename_i hl
+        split
+        · rename_i hp; exact .emitProgram hv hl hp
+        · rename_i hp; exact .emitNone hv hl hp
+    · exact stepIn_sound (F := .emit ev) rfl (fun _ => ih) hs
+  | scope k e ih =>
+    intro μ s' hs; simp only [step] at hs
+    split at hs
+    · cases hs; exact .scopeError
+    · split at hs
+      · cases hs; exact .scopeValue (by assumption)
+      · simp only [Option.map_eq_some_iff] at hs
+        obtain ⟨⟨e', μ'⟩, he, rfl⟩ := hs
+        exact .scopeStep (ih he)
   | _ => intro μ s' hs; simp [step] at hs
 
 /-- at most `fuel` steps -/

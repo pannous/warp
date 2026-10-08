@@ -79,6 +79,8 @@ PASSED:
   ✓ control::test_do_block::do_still_joins_a_while_condition_with_its_body
   ✓ control::test_each_colon::a_range_do_walks_it
   ✓ control::test_each_colon::each_and_all_with_a_colon_walk_the_list
+  ✓ control::test_emit_operands::an_emit_is_an_operand
+  ✓ control::test_emit_operands::an_emitted_value_is_the_handlers_number
   ✓ control::test_empty_block::a_program_that_is_only_an_empty_block_is_empty
   ✓ control::test_empty_block::an_empty_block_inside_a_statement_is_a_value
   ✓ control::test_empty_block_binding::a_bound_empty_block_counts_zero
@@ -156,6 +158,9 @@ PASSED:
   ✓ control::test_go_blocks::go_blocks_fill_a_job_list
   ✓ control::test_go_blocks::lines_printed_by_tasks_stay_whole
   ✓ control::test_go_blocks::sleep_takes_a_duration
+  ✓ control::test_handler_globals::a_handler_assigns_an_emitted_value_to_a_global
+  ✓ control::test_handler_globals::a_handler_writes_an_annotated_global
+  ✓ control::test_handler_globals::an_int_given_empty_fails_when_it_happens
   ✓ control::test_if_call_condition::a_call_condition_parses_like_the_assigned_call
   ✓ control::test_if_call_condition::a_call_with_arguments_as_condition_keeps_its_arguments
   ✓ control::test_if_empty_branch::a_branch_printing_a_number_gives_empty
@@ -611,6 +616,9 @@ PASSED:
   ✓ ffi::test_host_words::test_a_program_prints_and_uses_the_host
   ✓ ffi::test_host_words::test_clock_and_sleep
   ✓ ffi::test_host_words::test_random_stays_in_range
+  ✓ ffi::test_js_callbacks::a_promise_is_awaited_natively
+  ✓ ffi::test_js_callbacks::a_warp_function_called_back_calls_javascript_in_the_page
+  ✓ ffi::test_js_callbacks::a_warp_function_is_called_back_by_javascript
   ✓ ffi::test_libc_results::atol_returns_a_long
   ✓ ffi::test_libc_results::comment_prose_in_a_header_declares_nothing
   ✓ ffi::test_libc_results::libc_text_and_character_functions
@@ -819,6 +827,8 @@ PASSED:
   ✓ functions::test_effects::test_imports_follow_effects
   ✓ functions::test_empty_call::a_name_and_a_group_stay_symbols_and_defined_calls_run
   ✓ functions::test_empty_call::an_empty_call_of_an_undefined_name_is_an_error
+  ✓ functions::test_empty_function_bodies::a_function_with_an_empty_body_leaves_the_program_alone
+  ✓ functions::test_empty_function_bodies::calling_a_function_with_an_empty_body_gives_empty
   ✓ functions::test_event_effects::a_block_handler_handles_its_event
   ✓ functions::test_event_effects::a_declared_effect_set_reports_an_unhandled_event
   ✓ functions::test_event_effects::an_emitted_event_is_a_named_effect
@@ -3512,4 +3522,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-19 ignored, 3507 passed, 0 failed, 3507 total tested
+19 ignored, 3517 passed, 0 failed, 3517 total tested

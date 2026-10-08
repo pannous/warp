@@ -62,6 +62,7 @@ theorem frame_typing {Γ} (F : Frame) {e t} (h : HasType P Γ (F.plug e) t) :
     cases h with | set he hw hv st =>
     exact ⟨_, hv, fun h' s => ⟨_, .set he hw h' (sub_trans s st), s⟩⟩
   case isA => cases h with | isA he => exact ⟨_, he, fun h' _ => ⟨_, .isA h', sub_refl _⟩⟩
+  case emit => cases h with | emit hR he => exact ⟨_, he, fun h' _ => ⟨_, .emit hR h', sub_refl _⟩⟩
 
 /-- a value of a class type is a reference -/
 theorem cls_value {Γ v p} (h : HasType P Γ v (.cls p)) (hv : v.isValue = true) : ∃ a, v = .ref a p := by
@@ -146,8 +147,30 @@ theorem StoreOk.set {μ : Store} (hμ : StoreOk P μ) {x m t v tv} (hx : P.names
   · subst_vars; rw [hx] at hz; cases hz; exact ⟨hm, hv, tv, htv, st⟩
   · exact hμ.1 z mz tz hz
 
+theorem StoreOk.push {μ : Store} (hμ : StoreOk P μ) {ev h} (hh : HandlerOk P ev h) : StoreOk P (μ.push ev h) := by
+  refine ⟨hμ.1, hμ.2.1, fun p hp => ?_⟩
+  simp only [Store.push, Store.withHandlers, List.mem_cons] at hp
+  rcases hp with rfl | hp
+  · exact hh
+  · exact hμ.2.2 p hp
+
+theorem StoreOk.outer {μ : Store} (hμ : StoreOk P μ) (k : Nat) : StoreOk P (μ.outer k) :=
+  ⟨hμ.1, hμ.2.1, fun p hp => hμ.2.2 p (List.mem_of_mem_drop hp)⟩
+
+/-- the handlers return to those of μ -/
+theorem StoreOk.restore {μ μ' : Store} (hμ' : StoreOk P μ') (hμ : StoreOk P μ) : StoreOk P (μ'.withHandlers μ.handlers) :=
+  ⟨hμ'.1, hμ'.2.1, hμ.2.2⟩
+
+/-- a handler run on a payload gives at most what an emit of its event gives -/
+theorem handler_typed {ev h v tv R} (hh : HandlerOk P ev h) (hR : P.effects ev = some R) (hv : v.isValue = true)
+    (htv : HasType P Ctx.empty v tv) : ∃ t', HasType P Ctx.empty (h.subst eventLocal v) t' ∧ sub t' (join R .unit) = true := by
+  obtain ⟨R', th, hR', hth, sth⟩ := hh
+  rw [hR] at hR'; cases hR'
+  obtain ⟨t', ht', st'⟩ := let_typed hth hv htv (sub_any _)
+  exact ⟨t', ht', sub_trans st' (sub_trans sth (join_upper_left _ _))⟩
+
 /-- **Preservation**: a step keeps the store well typed and the expression's type, or makes it smaller -/
-theorem preservation (hP : FunsOk P) {s s' : Expr × Store} (hs : Step P s s') :
+theorem preservation (hP : ProgramOk P) {s s' : Expr × Store} (hs : Step P s s') :
     ∀ {t}, HasType P Ctx.empty s.1 t → StoreOk P s.2 →
       (∃ t', HasType P Ctx.empty s'.1 t' ∧ sub t' t = true) ∧ StoreOk P s'.2 := by
   induction hs with
@@ -242,7 +265,7 @@ theorem preservation (hP : FunsOk P) {s s' : Expr × Store} (hs : Step P s s') :
     cases h with
     | call hf' he st =>
       rw [hf] at hf'; cases hf'
-      obtain ⟨⟨tb, hb, sb⟩, _⟩ := hP f fn hf
+      obtain ⟨⟨tb, hb, sb⟩, _⟩ := hP.1 f fn hf
       exact ⟨⟨tb, .letIn he st hb, sb⟩, hμ⟩
   | broadcastNil => intro t h hμ; cases h; exact ⟨⟨_, .nil, by simp⟩, hμ⟩
   | broadcastCons =>
@@ -267,11 +290,11 @@ theorem preservation (hP : FunsOk P) {s s' : Expr × Store} (hs : Step P s s') :
         obtain ⟨tv, htv, st⟩ := fits_typed (P := P) (Γ := Ctx.empty) hfit
         exact ⟨tv, htv, sub_trans st (sub_joinAll ht)⟩
       · exact ⟨_, .error, sub_never _⟩
-  | new => intro t h hμ; cases h; exact ⟨⟨_, .ref, sub_refl _⟩, hμ.1, hμ.2.alloc _⟩
+  | new => intro t h hμ; cases h; exact ⟨⟨_, .ref, sub_refl _⟩, hμ.1, hμ.2.1.alloc _, hμ.2.2⟩
   | @get o f μ vo =>
     intro t h hμ
     cases h with
-    | get ho => exact ⟨get_typed hμ.2 ho vo, hμ⟩
+    | get ho => exact ⟨get_typed hμ.2.1 ho vo, hμ⟩
   | @set o f v μ vo vv =>
     intro t h hμ
     cases h with
@@ -282,9 +305,38 @@ theorem preservation (hP : FunsOk P) {s s' : Expr × Store} (hs : Step P s s') :
       split
       · rename_i hs
         obtain ⟨obj, hobj⟩ := Option.isSome_iff_exists.1 hs
-        exact ⟨⟨_, hv, sub_refl _⟩, hμ.1, hμ.2.write hobj hw vv hv st⟩
+        exact ⟨⟨_, hv, sub_refl _⟩, hμ.1, hμ.2.1.write hobj hw vv hv st, hμ.2.2⟩
       · exact ⟨⟨_, .error, sub_never _⟩, hμ⟩
   | isA => intro t h hμ; cases h; exact ⟨⟨_, .bool, sub_refl _⟩, hμ⟩
+  | handleStep _ ih =>
+    intro t h hμ
+    cases h with
+    | handle hR hh sh hb =>
+      obtain ⟨⟨_, hb', s'⟩, hμ'⟩ := ih hb (hμ.push ⟨_, _, hR, hh, sh⟩)
+      exact ⟨⟨_, .handle hR hh sh hb', s'⟩, hμ'.restore hμ⟩
+  | handleValue => intro t h hμ; cases h with | handle _ _ _ hb => exact ⟨⟨_, hb, sub_refl _⟩, hμ⟩
+  | handleError => intro t _ hμ; exact ⟨⟨_, .error, sub_never _⟩, hμ⟩
+  | emitBlock hv hl =>
+    intro t h hμ
+    cases h with
+    | emit hR he =>
+      obtain ⟨t', ht', st⟩ := handler_typed (hμ.2.2 _ (lookupHandler_mem hl)) hR hv he
+      exact ⟨⟨t', .scope ht', st⟩, hμ⟩
+  | emitProgram hv _ hp =>
+    intro t h hμ
+    cases h with
+    | emit hR he =>
+      obtain ⟨t', ht', st⟩ := handler_typed (hP.2 _ _ hp) hR hv he
+      exact ⟨⟨t', .scope ht', st⟩, hμ⟩
+  | emitNone => intro t h hμ; cases h; exact ⟨⟨_, .unit, join_upper_right _ _⟩, hμ⟩
+  | scopeStep _ ih =>
+    intro t h hμ
+    cases h with
+    | scope he =>
+      obtain ⟨⟨_, he', s'⟩, hμ'⟩ := ih he (hμ.outer _)
+      exact ⟨⟨_, .scope he', s'⟩, hμ'.restore hμ⟩
+  | scopeValue => intro t h hμ; cases h with | scope he => exact ⟨⟨_, he, sub_refl _⟩, hμ⟩
+  | scopeError => intro t _ hμ; exact ⟨⟨_, .error, sub_never _⟩, hμ⟩
 
 /-- a closed expression is done (a value), failed (an error), or can step -/
 def Progresses (P : Program) (μ : Store) (e : Expr) : Prop :=
@@ -302,11 +354,11 @@ theorem steps {μ : Store} {e : Expr} {s'} (hs : Step P (e, μ) s') : Progresses
 /-- **Progress**: a closed, well-typed expression in a well-typed store is a value, an error, or steps -/
 theorem progress {Γ e t} (h : HasType P Γ e t) (hΓ : Γ = Ctx.empty) {μ : Store} (hμ : StoreOk P μ) :
     Progresses P μ e := by
-  induction h with
+  induction h generalizing μ with
   | bool | int | num | text | unit | nil => exact .inl rfl
   | @cons _ a b _ _ _ _ _ _ ih1 ih2 =>
-    exact in_frame (.consL b) rfl (ih1 hΓ) fun va =>
-      in_frame (.consR a) va (ih2 hΓ) fun vb => .inl (by simp [Frame.plug, isValue, va, vb])
+    exact in_frame (.consL b) rfl (ih1 hΓ hμ) fun va =>
+      in_frame (.consR a) va (ih2 hΓ hμ) fun vb => .inl (by simp [Frame.plug, isValue, va, vb])
   | @glob _ x m t hx =>
     have hc := hμ.1 x m t hx
     cases hcell : μ x with
@@ -318,33 +370,33 @@ theorem progress {Γ e t} (h : HasType P Γ e t) (hΓ : Γ = Ctx.empty) {μ : St
       | charged b => exact steps (.readCharged hcell)
   | loc hy => subst hΓ; simp [Ctx.empty] at hy
   | @add _ a b _ _ _ _ ih1 ih2 =>
-    exact in_frame (.addL b) rfl (ih1 hΓ) fun va => in_frame (.addR a) va (ih2 hΓ) fun vb => steps (.add va vb)
+    exact in_frame (.addL b) rfl (ih1 hΓ hμ) fun va => in_frame (.addR a) va (ih2 hΓ hμ) fun vb => steps (.add va vb)
   | @arith _ op a b _ _ _ _ ih1 ih2 =>
-    exact in_frame (.arithL op b) rfl (ih1 hΓ) fun va => in_frame (.arithR op a) va (ih2 hΓ) fun vb => steps (.arith va vb)
+    exact in_frame (.arithL op b) rfl (ih1 hΓ hμ) fun va => in_frame (.arithR op a) va (ih2 hΓ hμ) fun vb => steps (.arith va vb)
   | @lt _ a b _ _ _ _ ih1 ih2 =>
-    exact in_frame (.ltL b) rfl (ih1 hΓ) fun va => in_frame (.ltR a) va (ih2 hΓ) fun vb => steps (.lt va vb)
+    exact in_frame (.ltL b) rfl (ih1 hΓ hμ) fun va => in_frame (.ltR a) va (ih2 hΓ hμ) fun vb => steps (.lt va vb)
   | @eq _ a b _ _ _ _ ih1 ih2 =>
-    exact in_frame (.eqL b) rfl (ih1 hΓ) fun va => in_frame (.eqR a) va (ih2 hΓ) fun vb => steps (.eq va vb)
-  | @ite _ c a b _ _ _ _ _ _ ih0 _ _ => exact in_frame (.ite a b) rfl (ih0 hΓ) fun vc => steps (.ite vc)
+    exact in_frame (.eqL b) rfl (ih1 hΓ hμ) fun va => in_frame (.eqR a) va (ih2 hΓ hμ) fun vb => steps (.eq va vb)
+  | @ite _ c a b _ _ _ _ _ _ ih0 _ _ => exact in_frame (.ite a b) rfl (ih0 hΓ hμ) fun vc => steps (.ite vc)
   | loop => exact steps .loop
-  | @seq _ a b _ _ _ _ ih1 _ => exact in_frame (.seq b) rfl (ih1 hΓ) fun va => steps (.seq va)
+  | @seq _ a b _ _ _ _ ih1 _ => exact in_frame (.seq b) rfl (ih1 hΓ hμ) fun va => steps (.seq va)
   | @index _ l i _ _ _ _ ih1 ih2 =>
-    exact in_frame (.indexL i) rfl (ih1 hΓ) fun vl => in_frame (.indexR l) vl (ih2 hΓ) fun vi => steps (.index vl vi)
+    exact in_frame (.indexL i) rfl (ih1 hΓ hμ) fun vl => in_frame (.indexR l) vl (ih2 hΓ hμ) fun vi => steps (.index vl vi)
   | @append _ a b _ _ _ _ ih1 ih2 =>
-    exact in_frame (.appendL b) rfl (ih1 hΓ) fun va => in_frame (.appendR a) va (ih2 hΓ) fun vb => steps (.append va vb)
-  | @assign _ x _ _ _ _ _ _ ih => exact in_frame (.assign x) rfl (ih hΓ) fun v => steps (.assign v)
-  | @init _ x _ _ _ _ _ _ _ _ ih => exact in_frame (.init x) rfl (ih hΓ) fun v => steps (.init v)
-  | @letIn _ y t _ b _ _ _ _ _ ih _ => exact in_frame (.letIn y t b) rfl (ih hΓ) fun v => steps (.letIn v)
-  | @call _ f _ _ _ hf _ _ ih => exact in_frame (.call f) rfl (ih hΓ) fun v => steps (.call v hf)
+    exact in_frame (.appendL b) rfl (ih1 hΓ hμ) fun va => in_frame (.appendR a) va (ih2 hΓ hμ) fun vb => steps (.append va vb)
+  | @assign _ x _ _ _ _ _ _ ih => exact in_frame (.assign x) rfl (ih hΓ hμ) fun v => steps (.assign v)
+  | @init _ x _ _ _ _ _ _ _ _ ih => exact in_frame (.init x) rfl (ih hΓ hμ) fun v => steps (.init v)
+  | @letIn _ y t _ b _ _ _ _ _ ih _ => exact in_frame (.letIn y t b) rfl (ih hΓ hμ) fun v => steps (.letIn v)
+  | @call _ f _ _ _ hf _ _ ih => exact in_frame (.call f) rfl (ih hΓ hμ) fun v => steps (.call v hf)
   | error => exact .inr (.inl ⟨_, rfl⟩)
   | tryCatch _ _ ih _ =>
-    rcases ih hΓ with hv | ⟨m, rfl⟩ | ⟨⟨e', μ'⟩, hs⟩
+    rcases ih hΓ hμ with hv | ⟨m, rfl⟩ | ⟨⟨e', μ'⟩, hs⟩
     · exact steps (.tryValue hv)
     · exact steps .tryError
     · exact steps (.tryStep hs)
-  | @cast _ _ ts _ _ ih => exact in_frame (.cast ts) rfl (ih hΓ) fun v => steps (.cast v)
+  | @cast _ _ ts _ _ ih => exact in_frame (.cast ts) rfl (ih hΓ hμ) fun v => steps (.cast v)
   | @broadcast _ f _ _ _ _ _ he _ _ ih =>
-    refine in_frame (.broadcast f) rfl (ih hΓ) fun v => ?_
+    refine in_frame (.broadcast f) rfl (ih hΓ hμ) fun v => ?_
     rename_i hel _
     rw [value_list he v hel] at he
     rcases list_value he v with rfl | ⟨hd, tl, rfl, vh, vt⟩
@@ -352,10 +404,29 @@ theorem progress {Γ e t} (h : HasType P Γ e t) (hΓ : Γ = Ctx.empty) {μ : St
     · exact steps (.broadcastCons vh vt)
   | ref => exact .inl rfl
   | new => exact steps .new
-  | @get _ e f _ _ ih => exact in_frame (.get f) rfl (ih hΓ) fun v => steps (.get v)
+  | @get _ e f _ _ ih => exact in_frame (.get f) rfl (ih hΓ hμ) fun v => steps (.get v)
   | @set _ e f v _ _ _ _ _ _ _ ih1 ih2 =>
-    exact in_frame (.setL f v) rfl (ih1 hΓ) fun vo => in_frame (.setR e f) vo (ih2 hΓ) fun vv => steps (.set vo vv)
-  | @isA _ e c _ _ ih => exact in_frame (.isA c) rfl (ih hΓ) fun v => steps (.isA v)
+    exact in_frame (.setL f v) rfl (ih1 hΓ hμ) fun vo => in_frame (.setR e f) vo (ih2 hΓ hμ) fun vv => steps (.set vo vv)
+  | @isA _ e c _ _ ih => exact in_frame (.isA c) rfl (ih hΓ hμ) fun v => steps (.isA v)
+  | @handle _ ev h b _ _ _ hR hh sh _ _ ih =>
+    subst hΓ
+    rcases ih rfl (hμ.push ⟨_, _, hR, hh, sh⟩) with hv | ⟨m, rfl⟩ | ⟨⟨e', μ'⟩, hs⟩
+    · exact steps (.handleValue hv)
+    · exact steps .handleError
+    · exact steps (.handleStep hs)
+  | @emit _ ev e _ _ _ _ ih =>
+    refine in_frame (.emit ev) rfl (ih hΓ hμ) fun v => ?_
+    cases hl : lookupHandler μ.handlers ev with
+    | some p => exact steps (.emitBlock (h := p.1) (k := p.2) v hl)
+    | none =>
+      cases hp : P.handlers ev with
+      | some h => exact steps (.emitProgram v hl hp)
+      | none => exact steps (.emitNone v hl hp)
+  | @scope _ k e _ _ ih =>
+    rcases ih hΓ (hμ.outer k) with hv | ⟨m, rfl⟩ | ⟨⟨e', μ'⟩, hs⟩
+    · exact steps (.scopeValue hv)
+    · exact steps .scopeError
+    · exact steps (.scopeStep hs)
 
 /-- any number of steps -/
 inductive Steps (P : Program) : Expr × Store → Expr × Store → Prop where
@@ -363,7 +434,7 @@ inductive Steps (P : Program) : Expr × Store → Expr × Store → Prop where
   | step {s s' s''} : Step P s s' → Steps P s' s'' → Steps P s s''
 
 /-- **Type safety**: every state a well-typed program reaches is well typed and done, failed, or able to step -/
-theorem safety (hP : FunsOk P) {s s' : Expr × Store} (hs : Steps P s s') :
+theorem safety (hP : ProgramOk P) {s s' : Expr × Store} (hs : Steps P s s') :
     ∀ {t}, HasType P Ctx.empty s.1 t → StoreOk P s.2 →
       (∃ t', HasType P Ctx.empty s'.1 t' ∧ sub t' t = true) ∧ StoreOk P s'.2 ∧ Progresses P s'.2 s'.1 := by
   induction hs with

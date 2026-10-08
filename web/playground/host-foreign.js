@@ -9,6 +9,8 @@ const MODULE_PATH = /\.(wasm|wat)$/; // src/wasm_modules.rs MODULE_EXTENSIONS
 const SETTER_PREFIX = "set "; // src/wasm_modules.rs SETTER_PREFIX: the import that sets a mutable global
 const C_CALLS_SECTION = "warp.c_calls"; // src/wasm_modules.rs C_CALLS_SECTION
 const IMPORTED_MEMORY_PAGES = 1; // src/wasm_emitter/mod.rs MEMORY: one page at least
+// a foreign call is synchronous here: the program cannot wait for a promise (card js-callbacks)
+const PROMISE_REFUSAL = "gives a promise, which a program in the browser cannot wait for yet; natively (the warp CLI) node awaits it";
 
 // the runtimes foreign_call reaches in the page, by their name in `use <runtime> …`: call(module, member, arguments,
 // hooks) gives the member's plain value (arguments null: a read, no call); prepare(code), when given, readies the runtime
@@ -49,7 +51,12 @@ registerForeignRuntime("js", {
 			if (value?.[part] === undefined) throw new Error(`js ${moduleName}.${memberName}: ReferenceError: ${moduleName} has no ${memberName}`);
 			[owner, value] = [value, value[part]];
 		}
-		return argumentValues === null ? value : value.apply(owner, argumentValues.map(unhandled));
+		const result = argumentValues === null ? value : value.apply(owner, argumentValues.map(unhandled));
+		if (typeof result?.then === "function") {
+			result.then(undefined, () => {}); // its failure is not the program's: no unhandled rejection
+			throw new Error(`js ${moduleName}.${memberName}: ${PROMISE_REFUSAL}`);
+		}
+		return result;
 	},
 });
 
