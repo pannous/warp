@@ -187,3 +187,12 @@ fn a_reduction_of_a_gpu_map_takes_a_list_of_floats() {
 	assert!(lowered.contains("gpu_reduce_linear"), "{lowered}");
 	assert_eq!(eval(&format!("{program}abs(s - sin(1)) < 0.00001")).serialize(), "yes");
 }
+
+// card gpu-vectors: an @gpu map result read in a text hole between two maps is read on the CPU, so it is not folded
+// into the later map (it was: the hole read a block never filled, "index out of range")
+#[test]
+fn a_gpu_map_result_read_in_a_text_hole_is_not_folded() {
+	let program = "linear xs = float[40000]\nfor i in 1 to 40000 { xs#i = i / 40000.0 }\nys = xs.map(x => sin(x)) @gpu\nprint \"\\(ys#1)\"\nzs = ys.map(y => exp(y) + 1) @gpu\n";
+	assert_eq!(warp::pipeline::lower(program).expect("a program").serialize().matches("gpu_map_linear").count(), 2);
+	crate::is!(&format!("{program}abs(zs#40000 - (exp(sin(1)) + 1)) < 0.00001"), true);
+}

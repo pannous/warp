@@ -84,8 +84,7 @@ fn folded_into_consumers(statements: &[Node], index: usize, program: &Node) -> O
 	if later.iter().any(|statement| read.iter().any(|symbol| writes(statement, symbol))) {
 		return None;
 	}
-	let mut uses = 0;
-	program.visit(&mut |part| uses += usize::from(matches!(part, Node::Symbol(symbol) if *symbol == name)));
+	let uses = uses_of(program, &name);
 	let bare = value.drop_meta().clone();
 	let mut consumers = 0;
 	let rewritten: Vec<Node> = later.iter().map(|statement| match gpu_assignment(statement) {
@@ -99,6 +98,20 @@ fn folded_into_consumers(statements: &[Node], index: usize, program: &Node) -> O
 		gpu_assignment(new).and_then(|(_, value)| gpu_map(&value)).is_some_and(|(list, _)| crate::parallel::map_call(&list).is_none())
 	});
 	(consumers > 0 && uses == consumers + 1 && all_fold).then(|| [&statements[..index], &rewritten[..]].concat())
+}
+
+/// How often `name` occurs in `node`, in the holes of its texts too (`"\(ys#1)"` reads ys)
+fn uses_of(node: &Node, name: &str) -> usize {
+	let holes = crate::interpolation::holes(node);
+	if !holes.is_empty() {
+		return holes.iter().map(|hole| uses_of(hole, name)).sum();
+	}
+	match node.drop_meta() {
+		Node::Symbol(symbol) => usize::from(symbol == name),
+		Node::Key(left, _, right) => uses_of(left, name) + uses_of(right, name),
+		Node::List(items, _, _) => items.iter().map(|item| uses_of(item, name)).sum(),
+		_ => 0,
+	}
 }
 
 /// `ys = xs.map(f) @gpu`: ys and the map
