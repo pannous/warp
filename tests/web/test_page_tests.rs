@@ -8,7 +8,7 @@ const COUNTER: &str = "def Counter(start) {\n\tcount = start\n\tdiv{ button{ on 
 #[test]
 fn passing_page_tests_are_counted() {
 	let tests = "test \"counter\" {\n\trender Counter(1)\n\tclick \"Add\"\n\tcheck text is \"Addn 2\"\n}\ntest \"form\" {\n\tname = \"\"\n\trender div{ input{ placeholder: \"name\" bind: name } p{ \"hi \" + name } }\n\tfill \"name\" with \"Ada\"\n\tcheck html.ends_with(\"<p>hi Ada</p></div>\")\n}\n";
-	assert_eq!(eval(&format!("{COUNTER}{tests}")), Node::Text("2 tests passed".to_string()));
+	assert_eq!(eval(&format!("{COUNTER}{tests}")), Node::Text("✓ 2 tests passed".to_string()));
 }
 
 #[test]
