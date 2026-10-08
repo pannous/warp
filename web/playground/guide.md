@@ -269,7 +269,7 @@ Make a new list from another one.
 [x² for x in [1 2 3 4]]
 ```
 
-With a function, `square [1 2 3 4]` does the same: see "Whole lists at once".
+With a function, `square [1 2 3 4]` does the same: see "Whole lists at once" below.
 
 `where` keeps only some items.
 
@@ -277,7 +277,22 @@ With a function, `square [1 2 3 4]` does the same: see "Whole lists at once".
 [1 2 3 4] where it > 2
 ```
 
-Examples: lists, "lazy ranges", "linear arrays"; samples: sorting, quicksort, primes, sieve, sorting_idiomatic, sieve_idiomatic
+### Whole lists at once
+
+A function for one number also works on a whole list.
+
+```warp => [1 4 9]
+square := it * it
+square [1 2 3]
+```
+
+`map` spells the same out, handy for a function written in place.
+
+```warp => [2 4 6]
+[1 2 3].map(x => x * 2)
+```
+
+Examples: lists, broadcasting, "lazy ranges", "linear arrays"; samples: sorting, quicksort, primes, sieve, sorting_idiomatic, sieve_idiomatic
 
 ## Objects
 
@@ -377,23 +392,6 @@ fib(10)
 ```
 
 Examples: functions, arguments, "polyglot calls"; samples: functions, fibonacci, ackermann, queens, queens_idiomatic, sudoku
-
-## Whole lists at once
-
-A function for one number also works on a whole list.
-
-```warp => [1 4 9]
-square := it * it
-square [1 2 3]
-```
-
-`map` spells the same out, handy for a function written in place.
-
-```warp => [2 4 6]
-[1 2 3].map(x => x * 2)
-```
-
-Examples: broadcasting
 
 ## Closures
 
