@@ -403,6 +403,9 @@ inductive Item where
   itself, an unannotated one (`none`) typed by the values written to it; its ancestor chain is written into the
   types that name it -/
   | classDef (name : String) (fields : List (String × Option Ty))
+  /-- the cell a local of a function lives in, a fresh instance per call (warp's locals change, W0's are bound by
+  substitution): a class of the one field `cellField`, typed like a main-level name by the first value written -/
+  | cell (name : String)
   /-- `on ev {h}` at main level: a program-wide handler -/
   | on (ev : String) (h : Expr)
   /-- any other statement -/
@@ -488,13 +491,16 @@ def castDynamicValues (P : Program) : Ctx → Expr → Expr :=
     | .assign x v => checked ((P.names x).map (·.2)) v (.assign x)
     | .init x v => checked ((P.names x).map (·.2)) v (.init x)
     | .call f v => checked ((P.funs f).map (·.paramTy)) v (.call f)
+    | .set o f v => checked ((typeOf P Γ o).bind (P.writeTy · f)) v (.set o f)
     | e => e
 
-/-- the function with a provisional result; its calls resolved (a recursive call sees that result) -/
+/-- the function with a provisional result; its calls resolved (a recursive call sees that result) and its values of
+unknown type checked where they go to a typed place (so its result is inferred from the body that runs) -/
 def draftFunction (s : Spec) (name param : String) (paramTy result : Ty) (body : Expr) : Fn :=
   let draft : Fn := { param, paramTy, result, body }
   let s' := { s with funs := (name, draft) :: s.funs }
-  { draft with body := resolveCalls s'.program (Ctx.empty.set param paramTy) body }
+  let Γ := Ctx.empty.set param paramTy
+  { draft with body := castDynamicValues s'.program Γ (resolveCalls s'.program Γ body) }
 
 /-- a function's result: iterate from `never` so a recursive call sees its own result type -/
 def inferFunction (s : Spec) (name param : String) (paramTy : Ty) (body : Expr) : Nat → Ty → Fn
@@ -514,10 +520,15 @@ def sequence : List Expr → Expr
 
 def RESULT_ROUNDS : Nat := 4
 
+/-- the field of a cell (`Item.cell`) -/
+def cellField : String := "·value"
+
 /-- the types guessed for unannotated parameters (by function) and fields (by class and field), and each event's
 result type: the join of what its handlers give -/
 structure Guesses where
   params : List (String × Ty) := []
+  /-- each cell's first value's type, from the latest round -/
+  cells : List (String × Ty) := []
   fields : List ((String × String) × Ty) := []
   effects : List (String × Ty) := []
   aborts : List (String × Ty) := []
@@ -561,6 +572,7 @@ def Guesses.fill (g : Guesses) : Item → Item
   | .function f y none b => .function f y (some (((g.params.lookup f).filter (· != .never)).getD .any)) b
   | .classDef c fields =>
     .classDef c (fields.map fun (f, t) => (f, some (t.getD (((g.fields.lookup (c, f)).filter (· != .never)).getD .any))))
+  | .cell c => .classDef c [(cellField, some (((g.cells.lookup c).filter (· != .never)).map widen |>.getD .any))]
   | item => item
 
 def Guesses.add (g : Guesses) (classes : List (String × List (String × Option Ty))) : Observation → Guesses
@@ -578,7 +590,7 @@ def Guesses.add (g : Guesses) (classes : List (String × List (String × Option 
 may read a main-level name declared after it: warp hoists functions) -/
 def elaboratePass (items : List Item) (effects aborts : List (String × Ty)) (known : List Decl) : Spec :=
   let functions := items.filterMap fun | .function f y t b => some (f, y, t.getD .any, b) | _ => none
-  let rest := items.filter fun | .function .. | .classDef .. => false | _ => true
+  let rest := items.filter fun | .function .. | .classDef .. | .cell _ => false | _ => true
   let classes := items.filterMap fun | .classDef c fields => some (c, fields.map fun (f, t) => (f, t.getD .any)) | _ => none
   let withFunctions := functions.foldl (init := ({ decls := known, funs := [], main := .unit, classes, effects, aborts } : Spec))
     fun s (f, y, t, b) =>
@@ -596,7 +608,7 @@ def elaboratePass (items : List Item) (effects aborts : List (String × Ty)) (kn
       ({ s with decls := s.decls ++ [{ name := x, mode := .charged, type := t, charged := some body }] }, statements)
     | .statement e => (s, statements ++ [resolveCalls s.program Ctx.empty e])
     | .on ev h => ({ s with handlers := s.handlers ++ [(ev, resolveCalls s.program (Ctx.empty.set eventLocal .any) h)] }, statements)
-    | .function .. | .classDef .. => (s, statements)
+    | .function .. | .classDef .. | .cell _ => (s, statements)
   let (s, statements) := rest.foldl (init := (withFunctions, [])) fun (s, st) item => step s st item
   let s := { s with main := sequence statements }
   let s := (List.range RESULT_ROUNDS).foldl (init := s) fun s _ => { s with decls := s.decls.map (widenOver s) }
@@ -613,9 +625,14 @@ def elaborateTyped (items : List Item) (effects aborts : List (String × Ty)) : 
 def Guesses.refine (items : List Item) (g : Guesses) : Guesses :=
   let s := elaborateTyped (items.map g.fill) g.effects g.aborts
   let classes := items.filterMap fun | .classDef c fields => some (c, fields) | _ => none
+  let cells := items.filterMap fun | .cell c => some c | _ => none
   let bodies := s.funs.map fun (_, fn) => observe s.program (Ctx.empty.set fn.param fn.paramTy) fn.body
   let handlers := s.handlers.map fun (ev, h) => observe.observeHandler s.program Ctx.empty ev h
-  (observe s.program Ctx.empty s.main ++ bodies.flatten ++ handlers.flatten).foldl (fun g o => g.add classes o) g
+  let observed := observe s.program Ctx.empty s.main ++ bodies.flatten ++ handlers.flatten
+  let firsts := observed.foldl (init := ([] : List (String × Ty))) fun firsts o => match o with
+    | .field [c] f t => if f == cellField && cells.contains c && (firsts.lookup c).isNone then firsts ++ [(c, t)] else firsts
+    | _ => firsts
+  { observed.foldl (fun g o => g.add classes o) g with cells := firsts }
 
 /-- warp's elaboration: unannotated parameters and fields are typed by the values the program gives them (P173: a
 parameter given several kinds holds anything), then the program is elaborated in source order -/
