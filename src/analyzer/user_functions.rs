@@ -1145,9 +1145,13 @@ pub(crate) fn extract_def_function(items: &[Node]) -> Option<UserFunctionDef> {
 		return None;
 	}
 	let first = items[0].drop_meta();
+	// `def add(a:int) -> int { a }`, before the declaration passes take its result type off
+	if let Some((untyped, _)) = crate::declarations::typed_result(first) {
+		return extract_def_function(&[untyped]);
+	}
 
-	// Pattern 1: def (name params...): body
-	if let Node::Key(sig, Op::Colon, body) = first {
+	// Pattern 1: def (name params...): body, or := body
+	if let Node::Key(sig, Op::Colon | Op::Define, body) = first {
 		if let Node::List(sig_items, bracket, _) = sig.drop_meta() {
 			if !sig_items.is_empty() {
 				if let Node::Symbol(name) = sig_items[0].drop_meta() {

@@ -135,4 +135,6 @@ mod test_text_joined_parameter;
 mod test_words_in_phrases;
 mod test_library_word_values;
 mod test_empty_function_bodies;
+mod test_nested_two_deep; // card nested-two
+mod test_nonlocal_kind_change; // card nonlocal-assign
 mod test_operator_word_methods;

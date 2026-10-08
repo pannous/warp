@@ -79,7 +79,7 @@ impl Operations {
 	}
 }
 
-fn is_text_word(node: &Node) -> bool {
+pub(crate) fn is_text_word(node: &Node) -> bool {
 	matches!(node.drop_meta(), Node::Symbol(word) if TEXT_WORDS.contains(&word.as_str()))
 }
 

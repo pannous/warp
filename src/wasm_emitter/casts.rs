@@ -197,8 +197,7 @@ impl WasmGcEmitter {
 				// Unknown type, emit as key node for dynamic dispatch
 				self.emit_node_instructions(func, value);
 				self.emit_node_instructions(func, target_type);
-				func.instruction(&I::I64Const(op_to_code(&Op::As)));
-				self.emit_call(func, "new_key");
+				self.emit_new_key(func, &Op::As);
 			}
 		}
 	}
@@ -287,6 +286,10 @@ impl WasmGcEmitter {
 
 	/// `x as text`, `str(x)`
 	pub(super) fn emit_cast_to_text(&mut self, func: &mut Function, value: &Node) {
+		// `string(data x+1)` is "x+1"
+		if let Some(quoted) = crate::blocks::quoted_data(value) {
+			return self.emit_string_call(func, &quoted.serialize(), "new_text");
+		}
 		match value {
 			Node::Number(n) => self.emit_string_call(func, &n.to_string(), "new_text"),
 			Node::Char(c) => self.emit_string_call(func, &c.to_string(), "new_text"),
