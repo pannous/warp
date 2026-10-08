@@ -387,7 +387,7 @@ square := it * it
 square [1 2 3]
 ```
 
-`map` does the same with any function.
+`map` spells the same out, handy for a function written in place.
 
 ```wasp => [2 4 6]
 [1 2 3].map(x => x * 2)
