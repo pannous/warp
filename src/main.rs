@@ -135,6 +135,8 @@ fn run_command(args: &[String]) {
         let reports = law::verify(&code);
         reports.iter().for_each(|report| println!("{}", report));
         std::process::exit(reports.iter().any(|report| report.failed()) as i32);
+    } else if let Some(target) = arg_string.strip_prefix("types ") {
+        println!("{}", law::type_model::report(&source_of(target)));
     } else if args[1] == TOOL_COMMAND && args.len() >= 3 {
         let arguments: Vec<&str> = args[3..].iter().map(String::as_str).collect();
         match package_tools::run_package_tool(&args[2], &arguments) {
@@ -537,6 +539,7 @@ fn usage() {
     println!("  warp lower <code>    Show the program after the lowering passes");
     println!("  warp parse <code>    Show the parsed AST");
     println!("  warp verify <file>   Test and prove the laws of a file");
+    println!("  warp types <file>    The program in W0, the proved model of warp's types, and both verdicts");
     println!("  warp data <file>     Read untrusted data without evaluating it");
     println!("  warp tool <package> [args]  Run a package's prebuilt <package>.wasm in its directory");
     println!("  warp dev <file> [port]  Serve the file's page, reloaded when it changes (port 8008)");

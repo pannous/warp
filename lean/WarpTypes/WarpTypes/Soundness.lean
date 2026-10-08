@@ -22,10 +22,10 @@ theorem frame_typing {Γ} (F : Frame) {e t} (h : HasType P Γ (F.plug e) t) :
     exact ⟨_, .cons hh h' he', by simpa using join_mono (sub_refl _) se⟩
   case addL =>
     cases h with | add ha hb sa sb =>
-    exact ⟨_, ha, fun h' s => ⟨_, .add h' hb (sub_trans s sa) sb, arith_mono s (sub_refl _)⟩⟩
+    exact ⟨_, ha, fun h' s => ⟨_, .add h' hb (addable_mono s sa) sb, plus_mono s (sub_refl _) sa sb⟩⟩
   case addR =>
     cases h with | add ha hb sa sb =>
-    exact ⟨_, hb, fun h' s => ⟨_, .add ha h' sa (sub_trans s sb), arith_mono (sub_refl _) s⟩⟩
+    exact ⟨_, hb, fun h' s => ⟨_, .add ha h' sa (addable_mono s sb), plus_mono (sub_refl _) s sa sb⟩⟩
   case ltL =>
     cases h with | lt ha hb sa sb =>
     exact ⟨_, ha, fun h' s => ⟨_, .lt h' hb (sub_trans s sa) sb, sub_refl _⟩⟩
@@ -62,6 +62,12 @@ theorem frame_typing {Γ} (F : Frame) {e t} (h : HasType P Γ (F.plug e) t) :
     cases h with | letIn he st hb => exact ⟨_, he, fun h' s => ⟨_, .letIn h' (sub_trans s st) hb, sub_refl _⟩⟩
   case call =>
     cases h with | call hf he st => exact ⟨_, he, fun h' s => ⟨_, .call hf h' (sub_trans s st), sub_refl _⟩⟩
+  case cast => cases h with | cast he => exact ⟨_, he, fun h' _ => ⟨_, .cast h', sub_refl _⟩⟩
+  case broadcast =>
+    cases h with | broadcast hf he hel ha =>
+    refine ⟨_, he, fun h' s => ?_⟩
+    obtain ⟨a', he', sa⟩ := element_mono s hel
+    exact ⟨_, .broadcast hf h' he' (sub_trans sa ha), sub_refl _⟩
 
 theorem StoreOk.set {μ : Store} (hμ : StoreOk P μ) {x m t v tv} (hx : P.names x = some (m, t)) (hm : m ≠ .charged)
     (hv : v.isValue = true) (htv : HasType P Ctx.empty v tv) (st : sub tv t = true) :
@@ -164,8 +170,28 @@ theorem preservation (hP : FunsOk P) {s s' : Expr × Store} (hs : Step P s s') :
     cases h with
     | call hf' he st =>
       rw [hf] at hf'; cases hf'
-      obtain ⟨tb, hb, sb⟩ := hP f fn hf
+      obtain ⟨⟨tb, hb, sb⟩, _⟩ := hP f fn hf
       exact ⟨⟨tb, .letIn he st hb, sb⟩, hμ⟩
+  | broadcastNil => intro t h hμ; cases h; exact ⟨⟨_, .nil, by simp⟩, hμ⟩
+  | broadcastCons =>
+    intro t h hμ
+    cases h with
+    | broadcast hf hc hel ha =>
+      cases hc with
+      | cons hh ht helt =>
+        simp only [element, Option.some.injEq] at hel; subst hel
+        have h1 := sub_trans (join_upper_left _ _) ha
+        have h2 := sub_trans (join_upper_right _ _) ha
+        refine ⟨⟨_, .cons (.call hf hh h1) (.broadcast hf ht helt h2) rfl, ?_⟩, hμ⟩
+        simp only [sub_list]; exact join_least (sub_refl _) (sub_refl _)
+  | @cast v t μ hv =>
+    intro t' h hμ
+    cases h with
+    | cast _ =>
+      refine ⟨?_, hμ⟩
+      split
+      · rename_i hf; obtain ⟨tv, htv, st⟩ := fits_typed (P := P) (Γ := Ctx.empty) hf; exact ⟨tv, htv, st⟩
+      · exact ⟨_, .error, sub_never _⟩
 
 /-- a closed expression is done (a value), failed (an error), or can step -/
 def Progresses (P : Program) (μ : Store) (e : Expr) : Prop :=
@@ -221,6 +247,14 @@ theorem progress {Γ e t} (h : HasType P Γ e t) (hΓ : Γ = Ctx.empty) {μ : St
     · exact steps (.tryValue hv)
     · exact steps .tryError
     · exact steps (.tryStep hs)
+  | @cast _ _ t _ _ ih => exact in_frame (.cast t) rfl (ih hΓ) fun v => steps (.cast v)
+  | @broadcast _ f _ _ _ _ _ he _ _ ih =>
+    refine in_frame (.broadcast f) rfl (ih hΓ) fun v => ?_
+    rename_i hel _
+    rw [value_list he v hel] at he
+    rcases list_value he v with rfl | ⟨hd, tl, rfl, vh, vt⟩
+    · exact steps .broadcastNil
+    · exact steps (.broadcastCons vh vt)
 
 /-- any number of steps -/
 inductive Steps (P : Program) : Expr × Store → Expr × Store → Prop where
