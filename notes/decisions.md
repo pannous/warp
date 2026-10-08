@@ -5,6 +5,10 @@ answered questions to a new file"). Older references to "notes/open_decisions.md
 D-number or #number mean this file. Open questions, parked ones and the standing rules stay in notes/open_decisions.md.
 
 ## Decided 2026-10-08 (user, as recommended unless quoted)
+- P213 (card loop-value, warp-worker): a loop ending in `print` gives ø, because print gives ø (#18) and a loop's
+  value is its last body value (P55); no pass-count special case. `for f in [foe1, friend1]: print it` → ø
+  (tests/control/test_for_it.rs pinned 2, changes to ø); `for i in [1,2]: i*10` stays 20. Loops stay expressions
+  (the user asked; "loops are statements" like Lean's Unit was offered and not chosen).
 - Language name (user): the language is named warp everywhere; wasp remains only in README history and other history
   markdown. Defaults (supervisor): `*.wasp` → `*.warp`, with `.wasp` still readable; URLs and domains
   (github.com/pannous/wasp, wasp.pannous.com) unchanged; wisp unchanged. Card rename-warp, warp-fixer.
