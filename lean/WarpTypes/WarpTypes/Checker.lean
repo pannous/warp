@@ -317,11 +317,12 @@ inductive Item where
   | bind (name : String) (mode : Mode) (annotation : Option Ty) (value : Expr) (isGlobal : Bool)
   /-- `z := e` -/
   | charged (name : String) (body : Expr)
-  /-- `f(y: T) := body` (warp hoists functions) -/
-  | function (name param : String) (paramTy : Ty) (body : Expr)
+  /-- `f(y: T) := body` (warp hoists functions); an unannotated parameter (`none`) takes the values it is given -/
+  | function (name param : String) (paramTy : Option Ty) (body : Expr)
   /-- `class C : Parent { f: T … }` and the variants of `type Color = red | rgb(r: int, …)`: the fields C declares
-  itself; its ancestor chain is written into the types that name it -/
-  | classDef (name : String) (fields : List (String × Ty))
+  itself, an unannotated one (`none`) typed by the values written to it; its ancestor chain is written into the
+  types that name it -/
+  | classDef (name : String) (fields : List (String × Option Ty))
   /-- any other statement -/
   | statement (e : Expr)
 
@@ -405,10 +406,50 @@ def sequence : List Expr → Expr
 
 def RESULT_ROUNDS : Nat := 4
 
-def elaborate (items : List Item) : Spec :=
-  let functions := items.filterMap fun | .function f y t b => some (f, y, t, b) | _ => none
+/-- the types guessed for unannotated parameters (by function) and fields (by class and field) -/
+structure Guesses where
+  params : List (String × Ty) := []
+  fields : List ((String × String) × Ty) := []
+
+/-- a value given to an unannotated place: an argument of f, or a write to field f of a class chain -/
+inductive Observation where
+  | argument (f : String) (t : Ty)
+  | field (path : List String) (f : String) (t : Ty)
+
+/-- the arguments and field writes of an expression, with their types -/
+def observe (P : Program) (Γ : Ctx) : Expr → List Observation
+  | .call f e => (typeOf P Γ e).toList.map (.argument f) ++ observe P Γ e
+  | .set o f v =>
+    (match typeOf P Γ o, typeOf P Γ v with
+      | some (.cls p), some tv => [.field p f tv]
+      | _, _ => []) ++ observe P Γ o ++ observe P Γ v
+  | .letIn y t e b => observe P Γ e ++ observe P (Γ.set y t) b
+  | .cons a b | .add a b | .arith _ a b | .lt a b | .eq a b | .loop a b | .seq a b | .index a b | .append a b
+  | .tryCatch a b => observe P Γ a ++ observe P Γ b
+  | .ite c a b => observe P Γ c ++ observe P Γ a ++ observe P Γ b
+  | .assign _ e | .init _ e | .cast e _ | .broadcast _ e | .get e _ | .isA e _ => observe P Γ e
+  | _ => []
+
+/-- the items with every unannotated place typed by its guess; one never given a value holds anything -/
+def Guesses.fill (g : Guesses) : Item → Item
+  | .function f y none b => .function f y (some (((g.params.lookup f).filter (· != .never)).getD .any)) b
+  | .classDef c fields =>
+    .classDef c (fields.map fun (f, t) => (f, some (t.getD (((g.fields.lookup (c, f)).filter (· != .never)).getD .any))))
+  | item => item
+
+def Guesses.add (g : Guesses) (classes : List (String × List (String × Option Ty))) : Observation → Guesses
+  | .argument f t => { g with params := (f, join ((g.params.lookup f).getD .never) t) :: g.params.filter (·.1 != f) }
+  | .field p f t =>
+    -- the class of the chain that declares f
+    match p.find? fun c => ((classes.lookup c).getD []).any (·.1 == f) with
+    | some c =>
+      { g with fields := ((c, f), join ((g.fields.lookup (c, f)).getD .never) t) :: g.fields.filter (·.1 != (c, f)) }
+    | none => g
+
+def elaborateTyped (items : List Item) : Spec :=
+  let functions := items.filterMap fun | .function f y t b => some (f, y, t.getD .any, b) | _ => none
   let rest := items.filter fun | .function .. | .classDef .. => false | _ => true
-  let classes := items.filterMap fun | .classDef c fields => some (c, fields) | _ => none
+  let classes := items.filterMap fun | .classDef c fields => some (c, fields.map fun (f, t) => (f, t.getD .any)) | _ => none
   let withFunctions := functions.foldl (init := ({ decls := [], funs := [], main := .unit, classes } : Spec))
     fun s (f, y, t, b) =>
       { s with funs := s.funs ++ [(f, inferFunction s f y t b RESULT_ROUNDS .never)] }
@@ -427,6 +468,19 @@ def elaborate (items : List Item) : Spec :=
   let (s, statements) := rest.foldl (init := (withFunctions, [])) fun (s, st) item => step s st item
   let s := { s with main := sequence statements }
   (List.range RESULT_ROUNDS).foldl (init := s) fun s _ => { s with decls := s.decls.map (widenOver s) }
+
+/-- one round of inference: elaborate with the guesses so far, then join in the values the program gives -/
+def Guesses.refine (items : List Item) (g : Guesses) : Guesses :=
+  let s := elaborateTyped (items.map g.fill)
+  let classes := items.filterMap fun | .classDef c fields => some (c, fields) | _ => none
+  let bodies := s.funs.map fun (_, fn) => observe s.program (Ctx.empty.set fn.param fn.paramTy) fn.body
+  (observe s.program Ctx.empty s.main ++ bodies.flatten).foldl (fun g o => g.add classes o) g
+
+/-- warp's elaboration: unannotated parameters and fields are typed by the values the program gives them (P173: a
+parameter given several kinds holds anything), then the program is elaborated in source order -/
+def elaborate (items : List Item) : Spec :=
+  let guesses := (List.range RESULT_ROUNDS).foldl (init := ({} : Guesses)) fun g _ => g.refine items
+  elaborateTyped (items.map guesses.fill)
 
 /-- the verdict line the differential test reads: `ok <type>` or `rejected` -/
 def verdict (items : List Item) : String :=

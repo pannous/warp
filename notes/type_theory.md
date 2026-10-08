@@ -205,6 +205,22 @@ exported as `num 0`; instances). test_warp_computes_what_the_type_model_computes
 Found on the way: the exporter had mapped `-` and `*` to `+`, so W0 accepted `"a" - 1` and `f(n - 1)` recursed upward.
 W0 now has `arith op a b`, which takes numbers only.
 
+## Functions of several parameters, `def`, inferred parameters
+
+- The exporter desugars `f(a, b) := body` (and `def f(a, b) { body }`) into a function of one parameter, an
+  instance of the generated class `f·args` with fields a and b. The body reads `args.a`, and a call `f(1, "x")`
+  constructs the arguments object. Per-position types come from class typing, so the proofs are unchanged. A
+  function of no parameters takes `unit`; `two()` parses as `(two)`.
+- Elaboration (Checker.lean `Guesses`) types an unannotated parameter or class field by the join of the values the
+  program gives it (call arguments, field writes), iterated so recursive calls count. Several kinds join to `any`
+  (P173); a place never given a value holds `any`. Elaboration is outside the proof: `check_safe` holds for any
+  elaborated Spec.
+- Open model question: warp runs `+` on an `any` value dynamically (`f(x) := x + 1; f(3); f("a")` gives "a1"), W0
+  refuses `+` on `any`. Faithful modeling is gradual typing: operations on `any` allowed statically and checked at
+  run time (a step to an error). Not in the corpus until decided.
+- Coverage (data/types/coverage.txt, 600 is!() programs sampled from tests/): 83 were inside W0 before this
+  phase. Most of the rest: imports (`use`), maps `{a:1}`, lambdas, `for` loops, `i++`, division, string methods.
+
 ## Later phases
 
 Optional and auto-unwrap (P179: `a: int = Some(3)`), payload-free variants (`red`: one shared instance per variant),
