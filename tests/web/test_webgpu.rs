@@ -47,3 +47,25 @@ fn a_render_shader_that_does_not_compile_says_where() {
 	let failed = eval("gpu_render(\"@fragment fn main( {\", 2, 2)");
 	assert!(matches!(&failed, Node::Error(message) if message.to_string().contains("gpu_render") && message.to_string().contains("1:")), "{failed:?}");
 }
+
+// gpu_render's values: a map of numbers (f32) and lists of two to four numbers (vec2f…vec4f) the shader reads as
+// `values.<name>` (a uniform), so a frame's values change without compiling the shader anew
+const WITH_VALUES: &str = "shader = \"@fragment fn main(@builtin(position) at: vec4f) -> @location(0) vec4f {
+	return vec4f(values.red, values.tint.y, values.tint.z, 1.0);
+}\"
+gpu_render(shader, 1, 1, {red: 1.0, tint: [0.0, 1.0, 0.0]})";
+
+#[test]
+fn a_fragment_shader_reads_the_values_given() {
+	let rendered = eval(WITH_VALUES);
+	if matches!(&rendered, Node::Error(message) if message.to_string().contains("no WebGPU adapter")) {
+		return crate::common::announce_skip("a WebGPU adapter", module_path!());
+	}
+	assert_eq!(rendered.serialize(), format!("[{}]", 0xFFFFFF00u32));
+}
+
+#[test]
+fn a_value_that_is_no_number_says_so() {
+	let failed = eval("gpu_render(\"@fragment fn main() -> @location(0) vec4f { return vec4f(1.0); }\", 1, 1, {name: \"x\"})");
+	assert!(matches!(&failed, Node::Error(message) if message.to_string().contains("gpu_render") && message.to_string().contains("name")), "{failed:?}");
+}

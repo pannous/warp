@@ -366,11 +366,16 @@ Each step is useful on its own and is what the next ones stand on.
   width×height rgba8unorm image and gives its pixels as paint takes them, 0xFFRRGGBB row by row (alpha dropped).
   warp appends the vertex stage (warp_full_image: one triangle covering the image) after the shader, so compile errors
   keep the user's line numbers. Same task-Worker path as gpu_compute (host-gpu.js GPU_JOBS), natively src/gpu.rs
-  render. samples/webgpu.wasp animates rings (a frame per loop step: paint + sleep; values enter the shader by
-  interpolation, which recompiles it per frame), in the playground menu again. Without an adapter the samples test
-  skips it loudly (CI).
-- Next: uniforms instead of interpolated values, more buffers (a map of named arrays), typed results (ints as
-  array<i32>), rendering straight into a page canvas (GPUCanvasContext) without the pixel round trip.
+  render. samples/webgpu.wasp animates rings (a frame per loop step: paint + sleep), in the playground menu again.
+  Without an adapter the samples test skips it loudly (CI).
+- Values (uniforms): `gpu_render(shader, w, h, {frame: 3, size: [128, 128]})`: the shader reads the map as `values.frame`
+  (f32), `values.size` (vec2f; lists of 2–4 numbers are vec2f…vec4f). warp appends `struct WarpValues {…}` and
+  `@group(0) @binding(0) var<uniform> values` after the shader (gpu.rs / host-gpu.js uniform_layout: WGSL alignment, 4 /
+  8 / 16 bytes, rows of 16) and binds them through an explicit pipeline layout, so an unread value is no error. Leaving
+  the map out passes a null node (ffi_emitter.rs fills a missing argument), i.e. no values. A frame's values change
+  without interpolating them into the shader text.
+- Next: more buffers (a map of named arrays) for gpu_compute, typed results (ints as array<i32>), rendering straight
+  into a page canvas (GPUCanvasContext) without the pixel round trip; GPU vectors: card gpu-vectors, notes/gpu.md.
 
 ## web-apis: WebIDL (2026-10-08, warp-95)
 - `use js <global>` of a browser global is typed through WebIDL as `use c` is through C headers: src/web_idl.rs reads

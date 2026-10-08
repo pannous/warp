@@ -1,8 +1,9 @@
 // WebGPU (a part of host.js, which says how parts work; card web-apis, notes/web_framework.md "web-apis: WebGPU"):
 // gpu_compute(shader, numbers, workgroups) runs a WGSL compute shader whose entry point `main` reads and writes the
 // numbers as array<f32> at @group(0) @binding(0), dispatched over `workgroups` workgroups, and gives back the numbers it
-// left. gpu_render(shader, width, height) runs the fragment shader `main` over every pixel of the image and gives the
-// pixels as paint takes them, 0xFFRRGGBB row by row (src/gpu.rs does both natively). WebGPU only answers
+// left. gpu_render(shader, width, height, values) runs the fragment shader `main` over every pixel of the image and gives
+// the pixels as paint takes them, 0xFFRRGGBB row by row; the shader reads the map `values` as a uniform,
+// `values.<name>` (src/gpu.rs does both natively). WebGPU only answers
 // asynchronously, so a task Worker (host-tasks.js) does the GPU work while the program's worker waits for its answer in
 // shared memory, as a task's result.
 
@@ -18,6 +19,11 @@ const TRIANGLE_CORNERS = 3;
 const PIXEL_BYTES = 4;
 const ROW_ALIGNMENT = 256; // a copied row is padded to 256 bytes
 const OPAQUE = 0xFF000000;
+const VALUES_NAME = "values"; // gpu_render's values as the shader names them
+const VALUES_BINDING = 0;
+const UNIFORM_ALIGNMENT = 16; // a uniform struct is a whole number of 16-byte rows
+// the WGSL type of a value of 1…4 floats and its alignment in bytes
+const VALUE_TYPES = [, ["f32", 4], ["vec2f", 8], ["vec3f", 16], ["vec4f", 16]];
 let gpuDevice; // the task Worker's device, asked for once
 
 // the task Worker's side: {values} the shader left, or {error} (no WebGPU, a shader that does not compile, …)
@@ -45,32 +51,65 @@ async function gpuComputed({ shader, numbers, workgroups }) {
 }
 
 // {values}: the pixels the fragment shader colored, row by row
-async function gpuRendered({ shader, width, height }) {
+async function gpuRendered({ shader, width, height, values }) {
 	const device = gpuDevice ??= await gpuDeviceOrFailure();
-	const module = await gpuModule(device, shader + FULL_IMAGE_VERTICES);
+	const { declarations, bytes: valueBytes } = uniformLayout(values);
+	const module = await gpuModule(device, shader + FULL_IMAGE_VERTICES + declarations);
+	const uniform = valueBytes.byteLength ? uniformBinding(device, valueBytes) : undefined;
 	const format = "rgba8unorm";
 	const image = device.createTexture({ size: [width, height], format, usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.COPY_SRC });
 	const rowBytes = Math.ceil(width * PIXEL_BYTES / ROW_ALIGNMENT) * ROW_ALIGNMENT;
 	const readback = device.createBuffer({ size: rowBytes * height, usage: GPUBufferUsage.MAP_READ | GPUBufferUsage.COPY_DST });
 	device.pushErrorScope("validation");
 	const pipeline = device.createRenderPipeline({
-		layout: "auto",
+		layout: uniform?.layout ?? "auto",
 		vertex: { module, entryPoint: VERTEX_ENTRY_POINT },
 		fragment: { module, entryPoint: GPU_ENTRY_POINT, targets: [{ format }] },
 	});
 	const encoder = device.createCommandEncoder();
 	const pass = encoder.beginRenderPass({ colorAttachments: [{ view: image.createView(), loadOp: "clear", storeOp: "store" }] });
 	pass.setPipeline(pipeline);
+	if (uniform) pass.setBindGroup(0, uniform.bindings);
 	pass.draw(TRIANGLE_CORNERS);
 	pass.end();
 	encoder.copyTextureToBuffer({ texture: image }, { buffer: readback, bytesPerRow: rowBytes, rowsPerImage: height }, [width, height]);
 	const bytes = new Uint8Array(await gpuReadBack(device, encoder, readback));
 	image.destroy();
-	const values = [];
+	const pixels = [];
 	for (let row = 0; row < height; row++)
 		for (let at = row * rowBytes; at < row * rowBytes + width * PIXEL_BYTES; at += PIXEL_BYTES)
-			values.push((OPAQUE | bytes[at] << 16 | bytes[at + 1] << 8 | bytes[at + 2]) >>> 0);
-	return { values };
+			pixels.push((OPAQUE | bytes[at] << 16 | bytes[at + 1] << 8 | bytes[at + 2]) >>> 0);
+	return { values: pixels };
+}
+
+// the WGSL declaring `values` (appended, so the shader's line numbers stay the user's) and the uniform's bytes, laid out
+// as WGSL aligns its members (src/gpu.rs uniform_layout)
+function uniformLayout(values) {
+	const entries = Object.entries(values ?? {});
+	if (!entries.length) return { declarations: "", bytes: new ArrayBuffer(0) };
+	const members = [], floats = [];
+	for (const [name, value] of entries) {
+		const numbers = [value].flat();
+		if (!numbers.every(number => typeof number === "number")) throw new Error(`${VALUES_NAME}.${name} is a number or a list of numbers, got ${JSON.stringify(value)}`);
+		const [type, alignment] = VALUE_TYPES[numbers.length] ?? [];
+		if (!type) throw new Error(`${VALUES_NAME}.${name} is one number or a list of two to four, got ${numbers.length}`);
+		while (floats.length % (alignment / 4)) floats.push(0);
+		floats.push(...numbers);
+		members.push(`${name}: ${type}`);
+	}
+	while (floats.length % (UNIFORM_ALIGNMENT / 4)) floats.push(0);
+	const declarations = `\nstruct WarpValues { ${members.join(", ")} }\n@group(0) @binding(${VALUES_BINDING}) var<uniform> ${VALUES_NAME}: WarpValues;`;
+	return { declarations, bytes: new Float32Array(floats).buffer };
+}
+
+// an explicit layout holding the uniform, so a shader that leaves `values` unread still binds them
+function uniformBinding(device, bytes) {
+	const buffer = device.createBuffer({ size: bytes.byteLength, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
+	device.queue.writeBuffer(buffer, 0, bytes);
+	const groupLayout = device.createBindGroupLayout({ entries: [{ binding: VALUES_BINDING, visibility: GPUShaderStage.FRAGMENT, buffer: { type: "uniform" } }] });
+	const layout = device.createPipelineLayout({ bindGroupLayouts: [groupLayout] });
+	const bindings = device.createBindGroup({ layout: groupLayout, entries: [{ binding: VALUES_BINDING, resource: { buffer } }] });
+	return { layout, bindings };
 }
 
 async function gpuDeviceOrFailure() {
@@ -134,9 +173,10 @@ addHostPart({
 				// floats, also the whole ones (treeOfPlain would make 3 an Int)
 				return list(values, float => ({ kind: KIND_FLOAT, data: { float }, chain: [] }));
 			},
-			gpu_render: (shader, width, height) => {
-				const values = gpuJob("gpu_render", { shader: plain(shader), width: Number(width), height: Number(height) });
-				return list(values, treeOfPlain);
+			gpu_render: (shader, width, height, values) => {
+				const given = values == null ? {} : plain(values);
+				const pixels = gpuJob("gpu_render", { shader: plain(shader), width: Number(width), height: Number(height), values: given });
+				return list(pixels, treeOfPlain);
 			},
 		};
 	},

@@ -19,6 +19,14 @@ const VERTEX_ENTRY_POINT: &str = "warp_full_image";
 const TRIANGLE_CORNERS: u32 = 3;
 const PIXEL_BYTES: u32 = 4;
 const OPAQUE: u32 = 0xFF00_0000;
+/// gpu_render's values as the shader names them: `values.<name>`
+const VALUES_NAME: &str = "values";
+const VALUES_BINDING: u32 = 0;
+/// A uniform struct is a whole number of 16-byte rows
+const UNIFORM_ALIGNMENT: usize = 16;
+
+/// A value the shader reads as `values.<name>`: one to four floats (f32, vec2f, vec3f, vec4f)
+pub type ShaderValue = (String, Vec<f32>);
 
 struct Gpu {
 	device: wgpu::Device,
@@ -77,10 +85,12 @@ pub fn compute(shader: &str, numbers: &[f32], workgroups: u32) -> Result<Vec<f32
 
 /// Run the fragment shader `main` over a width×height image: its pixels row by row as 0xFFRRGGBB (alpha dropped:
 /// paint shows opaque colors), or why not
-pub fn render(shader: &str, width: u32, height: u32) -> Result<Vec<u32>, String> {
+pub fn render(shader: &str, width: u32, height: u32, values: &[ShaderValue]) -> Result<Vec<u32>, String> {
 	let Gpu { device, queue } = gpu()?;
 	let validation = device.push_error_scope(wgpu::ErrorFilter::Validation);
-	let module = compiled(device, &format!("{shader}{FULL_IMAGE_VERTICES}"))?;
+	let (declarations, bytes) = uniform_layout(values)?;
+	let module = compiled(device, &format!("{shader}{FULL_IMAGE_VERTICES}{declarations}"))?;
+	let uniform = (!bytes.is_empty()).then(|| uniform_binding(device, &bytes));
 	let format = wgpu::TextureFormat::Rgba8Unorm;
 	let size = wgpu::Extent3d { width, height, depth_or_array_layers: 1 };
 	let usage = wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::COPY_SRC;
@@ -90,7 +100,7 @@ pub fn render(shader: &str, width: u32, height: u32) -> Result<Vec<u32>, String>
 	let readback = device.create_buffer(&wgpu::BufferDescriptor { label: Some("gpu_render readback"), size: u64::from(row_bytes * height), usage: wgpu::BufferUsages::MAP_READ | wgpu::BufferUsages::COPY_DST, mapped_at_creation: false });
 	let pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
 		label: Some("gpu_render"),
-		layout: None,
+		layout: uniform.as_ref().map(|(layout, _)| layout),
 		vertex: wgpu::VertexState { module: &module, entry_point: Some(VERTEX_ENTRY_POINT), compilation_options: Default::default(), buffers: &[] },
 		primitive: wgpu::PrimitiveState::default(),
 		depth_stencil: None,
@@ -105,6 +115,9 @@ pub fn render(shader: &str, width: u32, height: u32) -> Result<Vec<u32>, String>
 		let target = wgpu::RenderPassColorAttachment { view: &view, depth_slice: None, resolve_target: None, ops: wgpu::Operations::default() };
 		let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor { label: Some("gpu_render"), color_attachments: &[Some(target)], ..Default::default() });
 		pass.set_pipeline(&pipeline);
+		if let Some((_, bindings)) = &uniform {
+			pass.set_bind_group(0, bindings, &[]);
+		}
 		pass.draw(0..TRIANGLE_CORNERS, 0..1);
 	}
 	let layout = wgpu::TexelCopyBufferLayout { offset: 0, bytes_per_row: Some(row_bytes), rows_per_image: Some(height) };
@@ -113,6 +126,51 @@ pub fn render(shader: &str, width: u32, height: u32) -> Result<Vec<u32>, String>
 	let bytes = read_back(device, &readback, validation)?;
 	let rows = bytes.chunks_exact(row_bytes as usize).map(|row| &row[..(width * PIXEL_BYTES) as usize]);
 	Ok(rows.flat_map(|row| row.chunks_exact(PIXEL_BYTES as usize).map(|rgba| OPAQUE | u32::from(rgba[0]) << 16 | u32::from(rgba[1]) << 8 | u32::from(rgba[2]))).collect())
+}
+
+/// The WGSL declaring `values` (appended to the shader, so its line numbers stay the user's) and the bytes of the
+/// uniform, laid out as WGSL aligns its members: f32 by 4, vec2f by 8, vec3f and vec4f by 16
+pub fn uniform_layout(values: &[ShaderValue]) -> Result<(String, Vec<u8>), String> {
+	if values.is_empty() {
+		return Ok((String::new(), Vec::new()));
+	}
+	let mut members = Vec::new();
+	let mut bytes = Vec::new();
+	for (name, floats) in values {
+		let (wgsl_type, alignment) = match floats.len() {
+			1 => ("f32", 4),
+			2 => ("vec2f", 8),
+			3 => ("vec3f", 16),
+			4 => ("vec4f", 16),
+			count => return Err(format!("{VALUES_NAME}.{name} is one number or a list of two to four, got {count}")),
+		};
+		bytes.resize(bytes.len().next_multiple_of(alignment), 0);
+		bytes.extend(floats.iter().flat_map(|float| float.to_le_bytes()));
+		members.push(format!("{name}: {wgsl_type}"));
+	}
+	bytes.resize(bytes.len().next_multiple_of(UNIFORM_ALIGNMENT), 0);
+	let declarations = format!("\nstruct WarpValues {{ {} }}\n@group(0) @binding({VALUES_BINDING}) var<uniform> {VALUES_NAME}: WarpValues;", members.join(", "));
+	Ok((declarations, bytes))
+}
+
+/// The pipeline layout holding the uniform and its bind group: explicit, so a shader that leaves `values` unread
+/// still binds them
+fn uniform_binding(device: &wgpu::Device, bytes: &[u8]) -> (wgpu::PipelineLayout, wgpu::BindGroup) {
+	let buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor { label: Some("gpu_render values"), contents: bytes, usage: wgpu::BufferUsages::UNIFORM });
+	let entry = wgpu::BindGroupLayoutEntry {
+		binding: VALUES_BINDING,
+		visibility: wgpu::ShaderStages::FRAGMENT,
+		ty: wgpu::BindingType::Buffer { ty: wgpu::BufferBindingType::Uniform, has_dynamic_offset: false, min_binding_size: None },
+		count: None,
+	};
+	let group_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor { label: Some("gpu_render values"), entries: &[entry] });
+	let layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor { label: Some("gpu_render"), bind_group_layouts: &[Some(&group_layout)], immediate_size: 0 });
+	let bindings = device.create_bind_group(&wgpu::BindGroupDescriptor {
+		label: Some("gpu_render values"),
+		layout: &group_layout,
+		entries: &[wgpu::BindGroupEntry { binding: VALUES_BINDING, resource: buffer.as_entire_binding() }],
+	});
+	(layout, bindings)
 }
 
 /// The shader's module, or where and why it does not compile
