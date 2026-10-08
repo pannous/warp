@@ -78,7 +78,7 @@ pub(crate) fn quoted_data(node: &Node) -> Option<&Node> {
 
 /// `(data q+1)` is `data q+1` and `[data a]` the list of one item `data a`: a prefix takes the rest of its group,
 /// it is no function to call
-/// `string(data x+1)`: the call of string with the one argument `data x+1`
+/// `string(data x+1)`: the cast of the one argument `data x+1`
 fn prefixed_group(node: &Node) -> Option<Node> {
 	let Node::List(items, bracket @ (Bracket::Round | Bracket::Square), Separator::None | Separator::Space) = node.drop_meta() else { return None };
 	let is_prefix = |item: &Node| matches!(item.drop_meta(), Node::Symbol(word) if word == DATA_WORD || BLOCK_WORDS.contains(&word.as_str()));
@@ -90,8 +90,8 @@ fn prefixed_group(node: &Node) -> Option<Node> {
 				_ => prefixed,
 			})
 		}
-		// only `data`: `f(block rest)` passes a variable named block
-		[function @ Node::Symbol(_), prefix, _, ..] if *bracket == Bracket::Round && prefix.drop_meta().name() == DATA_WORD => {
+		// only text casts: `f(block rest)` passes a variable named block, interpret and print take the words as they are
+		[function, prefix, _, ..] if *bracket == Bracket::Round && crate::printable::is_text_word(function) && prefix.drop_meta().name() == DATA_WORD => {
 			let argument = Node::List(items[1..].to_vec(), Bracket::None, Separator::Space);
 			Some(Node::List(vec![function.clone(), argument], Bracket::Round, Separator::None))
 		}
