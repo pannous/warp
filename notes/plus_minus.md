@@ -46,3 +46,20 @@ Static kind, run-time struct (like static units, notes/units_runtime.md, but the
   `≈`; (2) correlation (sources) if not already in 1; (3) math words; (4) user functions specialised; (5) lists/any as
   Nodes; (6) units together (`5 m ± 1 cm`).
 - Effort: L (about the size of static units stage 1+2).
+
+## Done (branch plus-minus, 2026-10-08)
+Built differently from the plan above, simpler: no static kind and no specialising. `a ± b` is a run-time value,
+Kind::Uncertain = 17, analyzed as Kind::Data, so every `+ - * /` that meets one goes through node_add/sub/mul/div
+(list_ops.rs), and untyped functions pass it through unchanged (`f(x) := x*x; f(3 ± 0.1)` is 9.00 ± 0.60).
+- Run-time form (wasm_emitter/uncertain.rs): a $Node of Kind::Uncertain whose data is one f64 array
+  [value, source id, contribution, …], sources ordered by id, ids from a global counter at each `±` evaluated. No new GC
+  type. uncertain_combine merges two source lists scaled by the partial derivatives, so `x - x` is 0 ± 0.
+- `≈`: values_similar hands an uncertain side to uncertain_similar: |a - b| ≤ σ(a - b), correlation included, or
+  numbers_similar.
+- Reading back: Node::data(uncertain::Uncertain {value, sigma}), shown by its Display: σ to 2 significant digits.
+- units.rs declines (Stop::Unsupported) `+ - * /` on a unit-less tolerance, so those programs compile normally; the
+  span comparisons (`1950 ± 50 == 1900 - 2000`) and every case with units stay compile-time as before.
+- Tests: tests/numbers/test_plus_minus.rs.
+Not yet (step 1 rest): printing at run time (`print x`, `"{x}"`: text_of has no Uncertain case), `.value` and
+`.uncertainty`, negation `-(5 ± 1)` (units.rs still errors), comparisons `<`, the playground reader (web.rs), math
+words (step 3), units (step 6). A typed parameter `f(x: float)` refuses an uncertain argument (not a number).
