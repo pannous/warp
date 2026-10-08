@@ -22,6 +22,8 @@ const USE_KEYWORD: &str = "use";
 const PACKAGE_REGISTRY: &str = include_str!("../packages.wasp");
 /// the directory of the file it is written in, as text: `read(module_directory + "/data/x")` finds a module's own files
 const MODULE_DIRECTORY: &str = "module_directory";
+/// A module word a program variable shadows is renamed apart: `words` of lib/text is `std·words` in its definitions
+const SHADOWED_WORD_PREFIX: &str = "std·";
 /// where packages are fetched to, below the working directory
 pub const PACKAGES_DIRECTORY: &str = "packages";
 /// where a tagged version of a package is fetched once per machine and linked from packages/: a tag never changes
@@ -152,20 +154,13 @@ fn with_needed_definitions(program: Node, definitions: Vec<Node>) -> Node {
 	if definitions.is_empty() {
 		return program;
 	}
+	let definitions = shadowed_apart(definitions, &program_variables(&program));
 	let mut needed: Vec<Node> = vec![];
 	// a standard word called as a method (`"hé".to_utf8()`) is needed too
 	let mentioned_or_called = |statements: &[Node]| mentioned_names(statements).into_iter().chain(method_names(statements));
 	let mut mentioned: HashSet<String> = mentioned_or_called(std::slice::from_ref(&program)).collect();
-	// the program's own variable `words = […]` wins over the module's words(t)
-	let own: HashSet<String> = statements(program.clone()).iter().filter_map(|statement| match statement.drop_meta() {
-		Node::Key(variable, Op::Assign, _) => match variable.drop_meta() {
-			Node::Symbol(name) => Some(name.clone()),
-			_ => None,
-		},
-		_ => None,
-	}).collect();
 	loop {
-		let now_needed: Vec<Node> = definitions.iter().filter(|definition| declared_name(definition).is_some_and(|name| mentioned.contains(&name) && !own.contains(&name))).cloned().collect();
+		let now_needed: Vec<Node> = definitions.iter().filter(|definition| declared_name(definition).is_some_and(|name| mentioned.contains(&name))).cloned().collect();
 		if now_needed.len() == needed.len() {
 			break;
 		}
@@ -182,6 +177,33 @@ fn with_needed_definitions(program: Node, definitions: Vec<Node>) -> Node {
 	Node::List([needed, statements].concat(), Bracket::None, separator)
 }
 
+
+/// The variables a program assigns at its top: `words = […]`
+fn program_variables(program: &Node) -> HashSet<String> {
+	statements(program.clone()).iter().filter_map(|statement| match statement.drop_meta() {
+		Node::Key(variable, Op::Assign, _) => match variable.drop_meta() {
+			Node::Symbol(name) => Some(name.clone()),
+			_ => None,
+		},
+		_ => None,
+	}).collect()
+}
+
+/// Module words a program variable shadows, renamed in the module's definitions (`words` → `std·words`): the module's
+/// own code calls its own words (lexical scope), the program's `words` is its variable
+fn shadowed_apart(definitions: Vec<Node>, variables: &HashSet<String>) -> Vec<Node> {
+	let shadowed: Vec<String> = definitions.iter().filter_map(declared_name).filter(|name| variables.contains(name)).collect();
+	definitions.into_iter().map(|definition| shadowed.iter().fold(definition, |node, name| renamed_word(node, name, &format!("{SHADOWED_WORD_PREFIX}{name}")))).collect()
+}
+
+/// `from` as a word renamed `to`; a field `x.from` keeps its name
+fn renamed_word(node: Node, from: &str, to: &str) -> Node {
+	match node {
+		Node::Symbol(name) if name == from => Node::Symbol(to.to_string()),
+		Node::Key(receiver, Op::Dot, field) => Node::Key(Box::new(renamed_word(*receiver, from, to)), Op::Dot, field),
+		other => other.map_children(|child| renamed_word(child, from, to)),
+	}
+}
 
 thread_local! {
 	/// The file being compiled; its folder is in scope (D15). None for inline code

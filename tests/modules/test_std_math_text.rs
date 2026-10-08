@@ -134,3 +134,11 @@ fn a_module_function_maps_in_a_comprehension() {
 	is!("use text; words = [\"ab\", \"cd\"]; [capitalize w for w in words]", warp::texts(vec!["Ab", "Cd"]));
 	is!("f(t) := upper(t[0]) + t[1..]; [f w for w in [\"ab\"]]", warp::texts(vec!["Ab"]));
 }
+
+/// A module's own code calls its own words, whatever the program names its variables (card module-scope)
+#[test]
+fn a_program_variable_leaves_the_module_its_words() {
+	is!("use text; words = [\"a b\"]; title \"hello world\"", "Hello World");
+	is!("use text; words = [\"ab\", \"cd\"]; [title w for w in words]", warp::texts(vec!["Ab", "Cd"]));
+	is!("use text; words = [\"ab\", \"cd\"]; [capitalize w for w in words]", warp::texts(vec!["Ab", "Cd"]));
+}
