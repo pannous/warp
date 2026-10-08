@@ -22,11 +22,11 @@ use warp::Number::Int;
 #[test]
 fn test_wasm_roundtrip() {
 	// same as eval() but shows explicit parsing
-	use warp::wasp_parser::WaspParser;
+	use warp::warp_parser::WarpParser;
 
-	// Parse WASP input
+	// Parse WARP input
 	let input = "html{test=1}";
-	let node = WaspParser::parse(input);
+	let node = WarpParser::parse(input);
 	println!("Parsed node: {:?}", node);
 
 	let mut emitter = WasmGcEmitter::new();
@@ -101,10 +101,10 @@ fn test_node_kind_enum_abi() {
 
 #[test]
 fn test_function_usage_tracking() {
-	use warp::wasp_parser::WaspParser;
+	use warp::warp_parser::WarpParser;
 
 	// Parse a simple char - should only use new_codepoint
-	let node = WaspParser::parse("'🦀'");
+	let node = WarpParser::parse("'🦀'");
 	let mut emitter = WasmGcEmitter::new();
 	emitter.emit();
 	emitter.emit_node_main(&node);
@@ -129,10 +129,10 @@ fn test_function_usage_tracking() {
 
 #[test]
 fn test_emit_for_node_tree_shaking() {
-	use warp::wasp_parser::WaspParser;
+	use warp::warp_parser::WarpParser;
 
 	// Without tree-shaking
-	let node = WaspParser::parse("'🦀'");
+	let node = WarpParser::parse("'🦀'");
 	let mut emitter_full = WasmGcEmitter::new();
 	emitter_full.emit();
 	emitter_full.emit_node_main(&node);

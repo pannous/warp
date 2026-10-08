@@ -8,7 +8,7 @@ User decision (2026-10-03), verbatim: "add all the synonyms we discussed before 
 I think trait as the standard cannoic is fine because it's short"
 
 What other languages call it: Rust traits, Haskell typeclasses, Swift protocols, Java/Go/TypeScript interfaces, JS
-prototypes. Wasp's canonical word is **trait**; `interface` (wiki/struct.md, WIT), `protocol`, `typeclass`, `prototype`,
+prototypes. Warp's canonical word is **trait**; `interface` (wiki/struct.md, WIT), `protocol`, `typeclass`, `prototype`,
 `capability`, `aspect` and `feature` declare the same and hint toward `trait` (`traits::TRAIT_KEYWORDS`, first = canonical).
 Note: the C++ wasp listed `prototype` and `interface` among its class kinds (Keywords.cpp); warp never had them as class
 keywords, so they are free for traits.
@@ -34,7 +34,7 @@ keywords, so they are free for traits.
 `x is Comparable`, `x is Equatable`, `x is shape` are type tests, answered at compile time.
 
 ## Declared traits
-```wasp
+```warp
 trait shape{area perimeter}          // or area(s): parameter names only show in fixes
 class square{side:int}
 area(s:square) := s.side*s.side      // the witness area·square

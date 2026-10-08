@@ -1,5 +1,5 @@
 //! A parameter typed `real`, `exact` or `rational` takes a decimal literal: decimals are exact numbers, only a whole
-//! type (`int`) refuses them (samples/sample.wasp `fun calculate(a: int, b: real)`)
+//! type (`int`) refuses them (samples/sample.warp `fun calculate(a: int, b: real)`)
 use crate::is;
 
 #[test]

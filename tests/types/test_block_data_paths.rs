@@ -1,7 +1,7 @@
 //! wiki variable.md "cross-referencing from neighbor scope": inside one block a key reads a sibling's data by its path,
 //! `{ colors:{red:(1 0 0)} circle:{radius:5 color: colors.red} }` (the data is the scope)
 use crate::is;
-use warp::wasp_parser::parse;
+use warp::warp_parser::parse;
 
 #[test]
 fn test_a_sibling_path_inside_a_block() {

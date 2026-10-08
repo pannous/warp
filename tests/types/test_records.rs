@@ -1,4 +1,4 @@
-//! Records of declared types as values (samples/binary_tree.wasp): optional fields, setting fields of instances, and
+//! Records of declared types as values (samples/binary_tree.warp): optional fields, setting fields of instances, and
 //! the recursive functions over them
 use crate::is;
 use warp::*;

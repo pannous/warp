@@ -58,7 +58,7 @@ fn test_an_unknown_word_with_a_block_stays_data() {
 	is!("(a{x:1}) == (a:{x:1})", true);
 }
 
-/// `email?: text` (samples/types.wasp, the fix the 'needs field' error suggests) is the typed optional field, not the
+/// `email?: text` (samples/types.warp, the fix the 'needs field' error suggests) is the typed optional field, not the
 /// elvis `email ?: text`
 #[test]
 fn test_a_typed_optional_field_puts_the_question_mark_on_its_name() {

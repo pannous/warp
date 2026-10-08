@@ -1,4 +1,4 @@
-//! `warp build --component app.wasp` (card wasm-interop-rest, component worlds): the program compiled to a WebAssembly
+//! `warp build --component app.warp` (card wasm-interop-rest, component worlds): the program compiled to a WebAssembly
 //! component of the world its `component` declaration names (component_worlds.rs). Each function a world export lists
 //! is the program's `export def` of that name, reached through an adapter of the canonical ABI the emitter adds
 //! (wasm_emitter/component_adapters.rs); the module, its WIT embedded, becomes the component through wit-component.
@@ -6,7 +6,7 @@ const WIT_PATH: &str = "world.wit";
 
 /// The component of the program `code`
 pub fn build(code: &str) -> Result<Vec<u8>, String> {
-	let program = crate::wasp_parser::parse(code);
+	let program = crate::warp_parser::parse(code);
 	let world = crate::component_worlds::world(&program)?;
 	let wit = crate::component_worlds::world_wit(&program)?;
 	let module = crate::pipeline::for_a_component(world.functions(), || crate::pipeline::compile(code))

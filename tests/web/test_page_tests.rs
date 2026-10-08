@@ -1,4 +1,4 @@
-//! Page tests written in wasp (card web-testing, src/page_tests.rs): `test "…" { render …; click "…"; check … }` runs
+//! Page tests written in warp (card web-testing, src/page_tests.rs): `test "…" { render …; click "…"; check … }` runs
 //! on a headless page; the program's value counts the passed tests or names the failed ones
 use warp::node::Node;
 use warp::wasm_emitter::eval;

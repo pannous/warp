@@ -39,7 +39,7 @@ seen failing per test.
 
 With newline as a block separator and no item-content check, `{a:1\nb:2}` evaluates to `b:2` (the first key is lost);
 `1\n2\n3` → 3, `a\nb\nc` → `c`, `(1\n2)` → `(1 2)`. No existing test evaluates a newline-separated braced data object, so
-nothing fails, but the wasp data format (`Person {\n name: "Alice"\n age: 30 }`) is exactly that shape.
+nothing fails, but the warp data format (`Person {\n name: "Alice"\n age: 30 }`) is exactly that shape.
 Decision needed: is `{…}` whose items are `key:value` pairs data (all items kept) or a block (last item)? Without an
 item-content check the rule says block; that would silently drop keys when such an object goes through eval.
 Parsing (`parse`, `parse_data`, `warp data`) is unaffected; only eval/emit is.

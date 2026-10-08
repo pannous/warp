@@ -1,5 +1,5 @@
 #![cfg_attr(test, allow(unused))] // main() is not compiled under test
-use warp::{diagnostic, extensions, markup, law, package_tools, run, util, wasm_emitter, wasm_reader, wasp_parser};
+use warp::{diagnostic, extensions, markup, law, package_tools, run, util, wasm_emitter, wasm_reader, warp_parser};
 use warp::node;
 use std::env;
 use std::fs;
@@ -11,7 +11,7 @@ use extensions::numbers::Number;
 const DEFAULT_COMPILED_NAME: &str = "out.wasm";
 /// `warp compile --aot` also writes the machine code (wasmtime's .cwasm), which `warp <file>.cwasm` runs
 const AOT_FLAG: &str = "--aot";
-/// P103 (user): "Just giving it a file will compile it": `warp hello.wasp` runs the program and leaves the standalone
+/// P103 (user): "Just giving it a file will compile it": `warp hello.warp` runs the program and leaves the standalone
 /// executable `hello` next to it (`hello.exe` on Windows), the warp-runtime stub with the program's machine code appended.
 /// `warp build <file>` / `warp compile <file>` (not in the help any more) only make it; `--exe` still says so, `--wasm`
 /// (and `--aot`) write the module instead
@@ -20,15 +20,15 @@ const WASM_FLAG: &str = "--wasm";
 /// `warp help list`: a standard module's words; `warp help --markdown`: all of them as wiki/standard-library.md
 const HELP_PREFIX: &str = "help ";
 const HELP_MARKDOWN: &str = "help --markdown";
-/// `warp build --site app.wasp`: the directory app-site/ a web server serves (src/site.rs, card web-ssr)
+/// `warp build --site app.warp`: the directory app-site/ a web server serves (src/site.rs, card web-ssr)
 const SITE_FLAG: &str = "--site";
 const SITE_SUFFIX: &str = "-site";
 /// The site of inline code
 const DEFAULT_SITE_NAME: &str = "site";
-/// `warp build --wit app.wasp`: the WIT world of the program's `component` declaration, app.wit (card wasm-interop-rest)
+/// `warp build --wit app.warp`: the WIT world of the program's `component` declaration, app.wit (card wasm-interop-rest)
 const WIT_FLAG: &str = "--wit";
 const WIT_EXTENSION: &str = "wit";
-/// `warp build --component app.wasp`: app.component.wasm, the component of that world (src/component_builder.rs)
+/// `warp build --component app.warp`: app.component.wasm, the component of that world (src/component_builder.rs)
 const COMPONENT_FLAG: &str = "--component";
 const COMPONENT_EXTENSION: &str = "component.wasm";
 const COMPILE_FLAGS: [&str; 6] = [EXE_FLAG, WASM_FLAG, AOT_FLAG, SITE_FLAG, WIT_FLAG, COMPONENT_FLAG];
@@ -50,9 +50,9 @@ const TOOL_COMMAND: &str = "tool";
 const DEV_COMMAND: &str = "dev";
 const WARP_VERSION: &str = env!("CARGO_PKG_VERSION");
 /// The warnings and notes the user said "got it" to, remembered per project: one `ack:<topic> = acknowledged` per line
-const ACKNOWLEDGEMENTS_FILE: &str = ".wasp-acknowledged";
+const ACKNOWLEDGEMENTS_FILE: &str = ".warp-acknowledged";
 /// What earlier versions called the acknowledgements file: its `ack:` lines are adopted
-const OLD_ANSWERS_FILE: &str = ".wasp-answers";
+const OLD_ANSWERS_FILE: &str = ".warp-answers";
 /// Never prompt "got it?" after a warning or note (as in CI or a pipe)
 const NO_ASK_FLAG: &str = "--no-ask";
 /// What the console and `warp <code>` put before a program's value
@@ -103,7 +103,7 @@ fn apply_flags(args: &mut Vec<String>) {
     diagnostic::use_acknowledgements_file(ACKNOWLEDGEMENTS_FILE);
 }
 
-/// `warp [run] prog.wasp a b`: whether only to run, the program file and the arguments it gets (`use os; args`)
+/// `warp [run] prog.warp a b`: whether only to run, the program file and the arguments it gets (`use os; args`)
 #[cfg(not(test))]
 fn program_file(args: &[String]) -> Option<(bool, &str, &[String])> {
     let only_run = args.get(1).is_some_and(|word| RUN_PREFIX.trim_end() == word);
@@ -172,7 +172,7 @@ fn run_command(args: &[String]) {
         }
     } else if let Some(target) = arg_string.strip_prefix("data ") {
         let text = source_of(target);
-        println!("{}", wasp_parser::parse_data(&text).serialize());
+        println!("{}", warp_parser::parse_data(&text).serialize());
     } else if COMPILE_COMMANDS.iter().any(|command| arg_string.starts_with(&format!("{command} "))) {
         let target = extract_after(&arg_string, " ");
         let (flags, target) = leading_flags(target);
@@ -245,7 +245,7 @@ fn run_command(args: &[String]) {
             println!("Run tests with: cargo test");
         }
     } else if matches!(arg_string.as_str(), "home" | "wiki" | "docs" | "documentation") {
-        println!("Wasp documentation can be found at https://github.com/pannous/warp/wiki");
+        println!("Warp documentation can be found at https://github.com/pannous/warp/wiki");
         {
             let _ = std::process::Command::new("open")
                 .arg("https://github.com/pannous/warp/")
@@ -261,7 +261,7 @@ fn run_command(args: &[String]) {
             Err(final_value) => println!("no module needed: {}", final_value.serialize()),
         }
     } else if let Some(code) = arg_string.strip_prefix("parse ") {
-        println!("{}", structure(&wasp_parser::parse(code)));
+        println!("{}", structure(&warp_parser::parse(code)));
     } else if matches!(arg_string.as_str(), "repl"| "console" | "start" | "run") {
         console();
     } else if matches!(arg_string.as_str(), "2D" | "2d" | "SDL" | "sdl") {
@@ -280,7 +280,7 @@ fn run_command(args: &[String]) {
             let result = eval(&prog);
             println!("{}", result.serialize());
         } else {
-            println!("Wasp compiled without server OR no program given!");
+            println!("Warp compiled without server OR no program given!");
         }
     } else if arg_string == "lsp" {
         {
@@ -302,7 +302,7 @@ fn run_command(args: &[String]) {
             }
         }
     } else if arg_string == "version" || arg_string == "--version" || arg_string == "-v" {
-        println!("Wasp 🐝 {}", WARP_VERSION);
+        println!("Warp 🐝 {}", WARP_VERSION);
     } else {
         // Default: eval and print
         show(&eval(&arg_string), RESULT_MARK);
@@ -319,7 +319,7 @@ fn print_and_exit(result: Node) -> ! {
 /// program that only acts, as Python's console shows nothing for None
 fn show(result: &Node, mark: &str) {
     if !matches!(result.drop_meta(), Node::Empty) {
-        // markup (`html{ body{ … } }`) is printed as HTML: `warp run page.wasp > page.html` (card web-dom)
+        // markup (`html{ body{ … } }`) is printed as HTML: `warp run page.warp > page.html` (card web-dom)
         let shown = if markup::is_markup(result) { markup::to_html(result) } else { result.serialize() };
         println!("{mark}{shown}");
     }
@@ -443,7 +443,7 @@ fn feature_of(module: &str, name: &str) -> String {
 /// `warp build --wit`: the component's WIT world next to the program file (out.wit for inline code)
 fn write_wit(code: &str, target: &str) {
     let path = std::path::Path::new(&compiled_output_path(target)).with_extension(WIT_EXTENSION);
-    match warp::component_worlds::world_wit(&wasp_parser::parse(code)) {
+    match warp::component_worlds::world_wit(&warp_parser::parse(code)) {
         Ok(wit) => {
             fs::write(&path, wit).expect("could not write the WIT world");
             println!("wrote {}", path.display());

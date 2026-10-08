@@ -13,14 +13,14 @@ resolver = "2"
 name = "warp-lang" # crates.io: `warp` is the web framework (user 2026-10-06: "lang is perfect"); the library stays `warp`
 version = "1.2.3"
 edition = "2021"  # Cargo edition! NOT package edition!
-description = "Warp: the Wasp language, a data notation that is also a programming language, compiled to WebAssembly GC"
+description = "Warp: the Warp language, a data notation that is also a programming language, compiled to WebAssembly GC"
 repository = "https://github.com/pannous/warp"
 homepage = "https://warp.pannous.com/"
 readme = "README.md"
 keywords = ["wasm", "webassembly", "language", "compiler", "notation"]
 categories = ["compilers", "wasm", "command-line-utilities"]
 # the published crate: the sources and the two files they include_str!, not the tests, wiki or playground
-include = ["src/**", "packages.wasp", "web/playground/foreign_python.py", "README.md"]
+include = ["src/**", "packages.warp", "web/playground/foreign_python.py", "README.md"]
 # One test binary: cargo would otherwise build and link every tests/*.rs as its own crate (~200 links)
 autotests = false
 
@@ -61,7 +61,7 @@ anyhow = "1.0"
 #regex = "1.10.3" # removed: unused
 unicode-normalization = "0.1"
 serde = { version = "1.0", features = ["derive"] }
-serde_json = { version = "1.0", features = ["preserve_order"] } # objects keep the order of wasp maps (and of JS JSON.stringify)
+serde_json = { version = "1.0", features = ["preserve_order"] } # objects keep the order of warp maps (and of JS JSON.stringify)
 #wast = "*"
 wasmparser = "0.259"
 wat = { version = "1.259", optional = true } # native: an imported module may be WAT text (wasm_modules.rs)

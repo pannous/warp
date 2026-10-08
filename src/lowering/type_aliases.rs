@@ -1,4 +1,4 @@
-//! Type aliases (card types-alias, samples/types.wasp): `type Name = string` names the type string wherever a type is
+//! Type aliases (card types-alias, samples/types.warp): `type Name = string` names the type string wherever a type is
 //! written, `name: Name` in a class, `age: Age?`, `[Name]`, `f(n: Name)`, `a: Age = 3`; an alias of an alias is resolved
 //! to the end. Aliases of other shapes (`type Predicate = int -> bool`) stay declarations only.
 

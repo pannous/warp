@@ -29,7 +29,7 @@ The rewrite is scripted: `probes/ci-policy/apply_policy.py <workflow.yml> <owner
 - hieros jekyll-gh-pages.yml: Pages deploy (fails on every push, 13/13 red: deploy problem, not test noise),
   plus dependabot-automerge, npm-audit-fix, wiki-sync (maintenance; wiki-sync also failing).
 - warp/hieros/Listen npm-audit-fix.yml, warp offline-build-refresh.yml: scheduled maintenance/vendoring.
-- wasp test.yml: triggered by workflow_run of the disabled build.yml, never runs; claude*.yml are agent bots.
+- warp test.yml: triggered by workflow_run of the disabled build.yml, never runs; claude*.yml are agent bots.
 - Upstream forks with workflows but no runs on the fork (qemu, mozjs, MarkdownEditing, conan-center-index, LyricsKit,
   goo, rust-script, apple-mail-mcp, TRX64, BoostNote-App): not the user's CI, no mails.
 - ~/jobs: client work, skipped.

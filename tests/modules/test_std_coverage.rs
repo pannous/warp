@@ -1,4 +1,4 @@
-//! Every word of the standard library (lib/*.wasp) is called by some test (card std-word, notes/stdlib.md "Coverage").
+//! Every word of the standard library (lib/*.warp) is called by some test (card std-word, notes/stdlib.md "Coverage").
 //! A word counts as covered when a test names it or the body of a covered word calls it; src/ doesn't count (its
 //! alias tables name words no program calls).
 use std::collections::{BTreeMap, BTreeSet};
@@ -6,7 +6,7 @@ use std::path::{Path, PathBuf};
 
 const DEFINITION_KEYWORDS: [&str; 5] = ["def ", "fun ", "class ", "type ", "global "];
 const DEFINITION_MARKS: [&str; 4] = ["(", ":=", "=", "{"];
-const MENTIONING_EXTENSIONS: [&str; 2] = ["rs", "wasp"];
+const MENTIONING_EXTENSIONS: [&str; 2] = ["rs", "warp"];
 
 fn files_below(folder: &Path, extensions: &[&str]) -> Vec<PathBuf> {
 	let mut files = vec![];
@@ -38,10 +38,10 @@ fn defined_word(line: &str) -> Option<&str> {
 	(starts_like_a_name && marked).then_some(name)
 }
 
-/// word → its definition text (up to the next top-level definition), over all lib/*.wasp
+/// word → its definition text (up to the next top-level definition), over all lib/*.warp
 fn library_words(lib: &Path) -> BTreeMap<String, String> {
 	let mut words = BTreeMap::new();
-	for file in files_below(lib, &["wasp"]).iter().filter(|file| file.parent() == Some(lib)) {
+	for file in files_below(lib, &["warp"]).iter().filter(|file| file.parent() == Some(lib)) {
 		let mut current: Option<String> = None;
 		for line in std::fs::read_to_string(file).unwrap().lines() {
 			if let Some(name) = defined_word(line) {
@@ -80,5 +80,5 @@ fn uncovered_library_words(root: &Path) -> Vec<String> {
 #[test]
 fn every_library_word_is_called_by_a_test() {
 	let uncovered = uncovered_library_words(Path::new(env!("CARGO_MANIFEST_DIR")));
-	assert!(uncovered.is_empty(), "lib/*.wasp words no test calls: {}", uncovered.join(" "));
+	assert!(uncovered.is_empty(), "lib/*.warp words no test calls: {}", uncovered.join(" "));
 }

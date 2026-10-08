@@ -1,8 +1,8 @@
-// A component's world (card wasm-interop-rest, samples/wasm_interop.wasp): `component name { import …: {…} export …: … }`
+// A component's world (card wasm-interop-rest, samples/wasm_interop.warp): `component name { import …: {…} export …: … }`
 // declares what a component imports and exports; its WIT is what `warp build --wit` writes. The declaration does
 // nothing when the program runs.
 use crate::is;
-use warp::wasp_parser::parse;
+use warp::warp_parser::parse;
 
 const PROGRAM: &str = "interface calculator {\n    add: (i32, i32) -> i32\n    ticks: () -> i64\n}\ncomponent my_component {\n    import host: {\n        print: (string) -> ()\n        time: () -> i64\n    }\n    export api: calculator\n}\n";
 

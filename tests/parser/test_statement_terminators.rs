@@ -1,4 +1,4 @@
-use warp::wasp_parser::parse;
+use warp::warp_parser::parse;
 
 #[test]
 fn semicolon_at_line_end_separates_statements_like_the_newline() {

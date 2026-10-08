@@ -9,7 +9,7 @@ use warp::*;
 fn a_glued_sign_after_a_space_is_a_list_by_default() {
 	is!("1 -1", ints(vec![1, -1]));
 	take_assumptions();
-	warp::wasp_parser::parse("1 -1");
+	warp::warp_parser::parse("1 -1");
 	let assumed = take_assumptions();
 	assert!(assumed.iter().any(|warning| warning.message.contains("taking the list")), "{assumed:?}");
 	is!("[1 -1]", ints(vec![1, -1]));

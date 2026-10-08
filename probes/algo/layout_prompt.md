@@ -11,7 +11,7 @@ Steps:
 1. .gitignore: replace the blanket `probes` rule (and the probes/... lines) with this allowlist (tested by the supervisor; extend the extension list with other real source types you find in probes, e.g. .lean .kt .swift .ts .js .c .wit .wat .toml when they are hand-written):
    probes/**
    !probes/**/
-   !probes/**/*.wasp
+   !probes/**/*.warp
    !probes/**/*.md
    !probes/**/*.rs
    !probes/**/*.py

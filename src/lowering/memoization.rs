@@ -108,7 +108,7 @@ fn cached(node: &Node, memoized: &[String]) -> Option<Node> {
 		if let Node::List(items, Bracket::Round, _) = head.drop_meta() {
 			let id = items.first().and_then(|name| memoized.iter().position(|memo| *memo == name.drop_meta().name()));
 			if let ([_, param], Some(id)) = (items.as_slice(), id) {
-				let template = crate::wasp_parser::parse(&format!(
+				let template = crate::warp_parser::parse(&format!(
 					"if {MEMO_KNOWN}({id}, {ARGUMENT_PLACEHOLDER}) then {MEMO_VALUE}({id}, {ARGUMENT_PLACEHOLDER}) else {MEMO_STORE}({id}, {ARGUMENT_PLACEHOLDER}, {BODY_PLACEHOLDER})"));
 				let argument = Node::Symbol(match param.drop_meta() {
 					Node::Key(name, _, _) => name.drop_meta().name(), // `n: int`

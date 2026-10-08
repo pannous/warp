@@ -137,7 +137,7 @@ passes goes into tests/functions/test_ported_calls.rs (one table), so no ported 
   `$0` (arithmetic.rs), closures.rs `tail` stops at a closure, a definition with parameters walks its block body
   (card functions-calling); Swift `-> (Int) -> Int` results and Scala's curried `def add(x)(y) = …`
   (declarations.rs `function_typed_result`, `curried_definition`); `xs.max()` was "max of an empty list" (min_max.rs);
-  C# LINQ `Select`/`Where`/`Aggregate`/`Sum` … work with a note naming wasp's word (welcome_forms.rs, alias rule).
+  C# LINQ `Select`/`Where`/`Aggregate`/`Sum` … work with a note naming warp's word (welcome_forms.rs, alias rule).
 - Batch 24: round 7 (probes/function_calls_round7.md). Regression fix: Python's one-line `def f(x): return a if c
   else b` was "undefined function: f" since batch 21 (try_parse_return continues at binding power 0 after the
   phrase). OCaml `let inc = fun x -> x + 1 in inc 4` printed nothing (split_at_in descends into the lambda body),
@@ -152,7 +152,7 @@ passes goes into tests/functions/test_ported_calls.rs (one table), so no ported 
   and P157 (user) generics compile untyped with a note; Dart named parameters `{required int a, int b = 2}`; English
   `To square a number: return it times it`, `square of x`, `square of x is 9` (P149), numeric `times` multiplies
   (alias rule). Fix: `def add(a, b: int) -> int` lost a parameter (flat call arguments were read as a Swift label;
-  now only after `func`). P161 (user): Swift argument labels compile with the note "wasp names a parameter once"
+  now only after `func`). P161 (user): Swift argument labels compile with the note "warp names a parameter once"
   (tests/functions/test_argument_labels.rs). Round 7 still open: MATLAB `@(x)`, R `sapply(c(…), function(x) …)`,
   `func id<T>(_ x: T)`.
 - Batch 26: `it` and `$0` belong to the innermost lambda (Kotlin): `xs.map{ it.map{ it*10 } }` shadows, a function's

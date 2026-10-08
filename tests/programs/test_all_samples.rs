@@ -1,9 +1,9 @@
 use std::fs;
 use std::io::{stdout, Write};
 use std::path::Path;
-use warp::wasp_parser::WaspParser;
+use warp::warp_parser::WarpParser;
 use warp::Node;
-/// Test that all sample .wasp files can be parsed without errors
+/// Test that all sample .warp files can be parsed without errors
 #[test]
 // #[ignore] // works but it's too slow
 fn test_parse_all_samples() {
@@ -17,15 +17,15 @@ fn test_parse_all_samples() {
 	let mut parsed_count = 0;
 	let mut failed_files = Vec::new();
 
-	// Read all .wasp files in samples directory
+	// Read all .warp files in samples directory
 	let entries = fs::read_dir(samples_dir).expect("Failed to read samples directory");
 
 	for entry in entries {
 		let entry = entry.expect("Failed to read directory entry");
 		let path = entry.path();
 
-		// Only process .wasp files
-		if path.extension().and_then(|s| s.to_str()) != Some("wasp") {
+		// Only process .warp files
+		if path.extension().and_then(|s| s.to_str()) != Some("warp") {
 			continue;
 		}
 
@@ -35,7 +35,7 @@ fn test_parse_all_samples() {
 
 		match fs::read_to_string(&path) {
 			Ok(content) => {
-				let node = WaspParser::parse(&content);
+				let node = WarpParser::parse(&content);
 				if let Node::Error(e) = &node {
 					println!("✗ Parse error: {:?}", e);
 					failed_files.push(filename.to_string());
@@ -71,7 +71,7 @@ fn test_parse_all_samples() {
 		}
 
 		// Known problematic files that can fail
-		let known_issues = ["lib.wasp", "errors.wasp", "webgpu.wasp"];
+		let known_issues = ["lib.warp", "errors.warp", "webgpu.warp"];
 		let unexpected_failures: Vec<_> = failed_files
 			.iter()
 			.filter(|f| !known_issues.contains(&f.as_str()))

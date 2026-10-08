@@ -1,17 +1,17 @@
-// use warp::wasp_parser::WaspParser::parse;
+// use warp::warp_parser::WarpParser::parse;
 use warp::Node;
-use warp::wasp_parser::{parse, WaspParser};
+use warp::warp_parser::{parse, WarpParser};
 use crate::{is, eq, put};
 
 #[test]
 fn test_line_comments() {
-	let wasp = r#"
+	let warp = r#"
         // This is a comment
         name: "Alice"
         age: 30
     "#;
 
-	let node = WaspParser::parse(wasp);
+	let node = WarpParser::parse(warp);
 	println!("Parsed with line comment: {:?}", node);
 
 	// Comments are attached as metadata to the following node
@@ -23,14 +23,14 @@ fn test_line_comments() {
 
 #[test]
 fn test_block_comments() {
-	let wasp = r#"
+	let warp = r#"
         /* This is a
            multi-line comment */
         name: "Bob"
         age: 25
     "#;
 
-	let node = WaspParser::parse(wasp);
+	let node = WarpParser::parse(warp);
 	println!("Parsed with block comment: {:?}", node);
 
 	// Comments are attached as metadata to the following node
@@ -44,19 +44,19 @@ fn test_block_comments() {
 
 #[test]
 fn test_inline_comments() {
-	let wasp = r#"
+	let warp = r#"
         name: "Charlie" // name field
         age: 35 /* age in years */
     "#;
 
-	let node = WaspParser::parse(wasp);
+	let node = WarpParser::parse(warp);
 	println!("Parsed with inline comments: {:?}", node);
 }
 
 #[test]
 fn test_comment_metadata() {
-	let wasp = "// Important config\nport: 8080";
-	let node = WaspParser::parse(wasp);
+	let warp = "// Important config\nport: 8080";
+	let node = WarpParser::parse(warp);
 	put!(node.serialize());
 	put!(node.serialize_recurse(true));
 	println!("Node: {}", node);
@@ -67,7 +67,7 @@ fn test_comment_metadata() {
 
 #[test]
 fn test_comments_in_html_structure() {
-	let wasp = r#"
+	let warp = r#"
         html{
             // Header section
             header{ title:"My Site" }
@@ -76,10 +76,10 @@ fn test_comments_in_html_structure() {
         }
     "#;
 
-	let node = WaspParser::parse(wasp);
+	let node = WarpParser::parse(warp);
 	let json = node.to_json().unwrap();
 
-	println!("WASP with comments:\n{}\n", wasp);
+	println!("WARP with comments:\n{}\n", warp);
 	println!("JSON output:\n{}", json);
 
 	assert!(json.contains("html"));
@@ -118,7 +118,7 @@ fn test_comments2() {
 	assert!(result[1].length() == 0); // `(y=0)` is a Key, not a list
 }
 
-#[test] // samples/comments.wasp: "Nested block comments are supported"
+#[test] // samples/comments.warp: "Nested block comments are supported"
 fn test_nested_block_comments() {
 	is!("/* a /* b */ c */ 3", 3);
 	is!("/# a /# b #/ #/ 4", 4);

@@ -5,7 +5,7 @@
 use crate::node::{Bracket, Node, Separator};
 use crate::operators::Op;
 use crate::wasm_emitter::{emit_module, find_struct_instantiation, WasmGcEmitter};
-use crate::wasp_parser::WaspParser;
+use crate::warp_parser::WarpParser;
 #[cfg(feature = "native")]
 use log::warn;
 
@@ -76,7 +76,7 @@ fn explain_runtime_error(result: Node, exclusive_range: bool) -> Node {
 
 /// Parse the source and check its laws; `Err` is the violation.
 fn lawful_program(code: &str) -> Result<Node, Node> {
-	let lawful = crate::law::separate_laws(crate::diagnostic::in_source_mode(code, || WaspParser::parse(code)));
+	let lawful = crate::law::separate_laws(crate::diagnostic::in_source_mode(code, || WarpParser::parse(code)));
 	match crate::law::assert_laws(&lawful, code) {
 		Some(violation) => Err(violation),
 		None => Ok(lawful.program),
@@ -87,7 +87,7 @@ fn lawful_program(code: &str) -> Result<Node, Node> {
 /// function is refused before it is compiled. To only read data, use `parse_data`, which evaluates nothing.
 pub fn eval_untrusted(code: &str) -> Node {
 	crate::diagnostic::begin_program();
-	let program = WaspParser::parse(code);
+	let program = WarpParser::parse(code);
 	match crate::effects::EffectReport::of(&program).denied(&crate::effects::Capability::GRANTED_UNTRUSTED) {
 		Some((external, _)) => crate::node::error(&format!("untrusted code has no capabilities but pure libm, refusing to call {external}")),
 		None => with_granted(&crate::effects::Capability::GRANTED_UNTRUSTED, || eval_parsed(program, code)),
@@ -222,7 +222,7 @@ const SOURCE_PASSES: [fn(Node) -> Node; 87] = [
 	// `label(for:pwd):"Password"` in a tag block is the tag label{for:pwd "Password"} (markup_tags.rs), before any pass
 	// reads it as a call
 	crate::markup_tags::lower,
-	// `li{ transition: fade 200ms }`: words as data, the attribute data-wasp-transition (transitions.rs), before any pass
+	// `li{ transition: fade 200ms }`: words as data, the attribute data-warp-transition (transitions.rs), before any pass
 	// reads fade as a variable
 	crate::transitions::lower,
 	// `dir(time)`: the names of the standard module (introspection.rs), before any pass reads time as a value
@@ -377,7 +377,7 @@ fn compile_program(code: &str, rewrite: fn(Node) -> Node) -> Result<CompiledModu
 	crate::diagnostic::in_program_mode(rewrite(lawful_program(code)?), |program| {
 		let node = crate::folding::precompute(lower_for_emission(program)?);
 		warn_about_run_time_blocks(&node)?;
-		// a final quantity's unit goes into the module's `wasp.units` section
+		// a final quantity's unit goes into the module's `warp.units` section
 		choose_module(&node).map(|module| CompiledModule { bytes: crate::units::static_units::with_result_units(module.bytes), ..module })
 	})
 }
@@ -393,8 +393,8 @@ fn printing_result(program: Node) -> Node {
 			Node::List(statements, Bracket::None, separator)
 		}
 		Node::Empty => Node::Empty,
-		statement if crate::modules::is_declaration(&statement) || crate::wasp_parser::starts_print(&statement) => statement,
-		value => crate::wasp_parser::print_call([value]),
+		statement if crate::modules::is_declaration(&statement) || crate::warp_parser::starts_print(&statement) => statement,
+		value => crate::warp_parser::print_call([value]),
 	}
 }
 
@@ -442,7 +442,7 @@ fn eval_program(node: Node) -> Node {
 		}
 	}
 
-	// Fallback to standard Node encoding; a final quantity's unit travels in the module (`wasp.units`) and is read back
+	// Fallback to standard Node encoding; a final quantity's unit travels in the module (`warp.units`) and is read back
 	match emit_module(&node) {
 		Ok(module) => run_module(CompiledModule { bytes: crate::units::static_units::with_result_units(module.bytes), ..module }),
 		Err(type_error) => type_error,
@@ -626,7 +626,7 @@ pub(crate) fn run_module(CompiledModule { bytes, needs_host, needs_wasi, needs_f
 }
 
 /// Without wasmtime the embedding host runs the program (the browser playground: web.rs); a final quantity's unit is
-/// read back from the module's `wasp.units` section, as wasm_reader does natively
+/// read back from the module's `warp.units` section, as wasm_reader does natively
 #[cfg(not(feature = "native"))]
 pub(crate) fn run_module(module: CompiledModule) -> Node {
 	crate::units::static_units::with_module_units(&module.bytes, crate::web::run_in_host(&module.bytes))

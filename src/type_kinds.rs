@@ -97,11 +97,11 @@ impl std::fmt::Display for Kind {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
 		match self {
 			Kind::Empty => write!(f, "empty"),
-			Kind::Int => write!(f, "int"),      // wasp uses "int" for i64
+			Kind::Int => write!(f, "int"),      // warp uses "int" for i64
 			Kind::Int32 => write!(f, "i32"),
-			Kind::Float => write!(f, "float"),  // wasp uses "float" for f64
+			Kind::Float => write!(f, "float"),  // warp uses "float" for f64
 			Kind::Float32 => write!(f, "f32"),
-			Kind::Text => write!(f, "text"),    // wasp uses "text" for strings
+			Kind::Text => write!(f, "text"),    // warp uses "text" for strings
 			Kind::Codepoint => write!(f, "codepoint"),
 			Kind::Symbol => write!(f, "symbol"),
 			Kind::Key => write!(f, "key"),

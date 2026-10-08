@@ -1,7 +1,7 @@
 //! `and` / `or` test a call's value at run time, and evaluate it once
 use crate::is;
 
-#[test] // samples/game_of_life.wasp: `cell(x, y) and n == 2` was always `n == 2`
+#[test] // samples/game_of_life.warp: `cell(x, y) and n == 2` was always `n == 2`
 fn test_call_operand_of_and_or() {
 	is!("def c(){ return 0 }; c() and 1", 0);
 	is!("def c(x){ return false }; k=2; c(5) and k == 2", false);

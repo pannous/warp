@@ -1,4 +1,4 @@
-//! Python-style unpacking assignments in wasp: tuples, lists, starred rest, nesting, errors.
+//! Python-style unpacking assignments in warp: tuples, lists, starred rest, nesting, errors.
 //! Each case is the Python program's result.
 //! (was probe_destructuring.rs; promoted unchanged, no case duplicated elsewhere)
 

@@ -1,5 +1,5 @@
 use crate::{is, eq, skip};
-use warp::wasp_parser::parse;
+use warp::warp_parser::parse;
 use warp::*;
 use warp::node::strings;
 
@@ -88,7 +88,7 @@ fn test_array_creation() {
 	crate::common::fails_with("pixel=[];pixel[1]=15;pixel[1]", "index out of range");
 	crate::common::fails_with("pixel=();pixel#1=15;pixel#1", "index out of range");
 	is!("pixel:int[100];pixel[1]=15;pixel[1]", 15);
-	is!("pixel=int[100];pixel[1]=15;pixel[1]", 15); // todo wasp can't distinguish type ':' from value '=' OK?
+	is!("pixel=int[100];pixel[1]=15;pixel[1]", 15); // todo warp can't distinguish type ':' from value '=' OK?
 	is!("pixel: 100 int;pixel[1]=15;pixel[1]", 15); // number times type = typed array
 }
 

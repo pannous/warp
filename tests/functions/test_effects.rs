@@ -2,7 +2,7 @@
 
 use warp::effects::{effects_of, Effect::*, EffectReport, EffectSet};
 use warp::wasm_emitter::eval;
-use warp::wasp_parser::WaspParser;
+use warp::warp_parser::WarpParser;
 use warp::{Node, WasmGcEmitter};
 use crate::is;
 
@@ -13,7 +13,7 @@ fn effects(code: &str, function: &str) -> EffectSet {
 /// (module, name) of every import the compiled program declares
 fn imports_of(code: &str) -> Vec<(String, String)> {
 	let mut emitter = WasmGcEmitter::new();
-	emitter.emit_for_node(&WaspParser::parse(code));
+	emitter.emit_for_node(&WarpParser::parse(code));
 	let bytes = emitter.finish();
 	let mut imports = vec![];
 	for payload in wasmparser::Parser::new(0).parse_all(&bytes) {
@@ -59,7 +59,7 @@ fn test_effects_are_inferred_from_calls() {
 #[test]
 fn test_effects_propagate_through_callers_and_recursion() {
 	let code = "log(x) := puts x\nhelper(x) := log(x)\nloop(x) := x<1 ? helper(x) : loop(x-1)\nfib(n) := n<2 ? n : fib(n-1)+fib(n-2)";
-	let report = EffectReport::of(&WaspParser::parse(code));
+	let report = EffectReport::of(&WarpParser::parse(code));
 	assert_eq!(report.effects_of("helper"), Some(EffectSet::of(&[IO])));
 	assert_eq!(report.effects_of("loop"), Some(EffectSet::of(&[IO])));
 	assert_eq!(report.effects_of("fib"), Some(EffectSet::PURE));

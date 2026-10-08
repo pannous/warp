@@ -7,7 +7,7 @@ later call could see is a compile error unless the function declares `global y`,
 current value; a variable first bound after the definition is made a global. Compile-time specialisation
 (src/lowering/function_values.rs, decision #37) stays wherever the function is known; closures cover the rest.
 
-```wasp
+```warp
 make_adder(n) := (x => x+n); add2 = make_adder(2); add2(5)      # 7
 apply(f, x) := f(x); k=4; apply(y=>y*k, 3)                       # 12, generic apply with a closure
 pick(c) := if c then double else square; f = pick(1); f(5)       # chosen at run time
@@ -67,7 +67,7 @@ sum_with(f, xs) := reduce xs f; k=0; sum_with((a b)->a+b+k, [1 2 3])
   targets' return kinds (`closure_call_site_kind`); unknown callees still use the arity-wide join (Data when they
   differ). The shared helper may stay Data; call sites unbox via the site kind. Not done: monomorphizing `apply`, full SSA.
 - A closure called with the wrong arity, or a non-function called as one, traps with `cast failure` instead of a
-  wasp error message.
+  warp error message.
 - A lifted lambda prints as `closure_lambda_n`, not its source.
 - Float parameters of a closure unbox only from Float nodes (an Int argument traps).
 - Variables assigned in another function's body count as capturable everywhere (names, not scopes).
@@ -86,7 +86,7 @@ sum_with(f, xs) := reduce xs f; k=0; sum_with((a b)->a+b+k, [1 2 3])
 ## Functions in object fields (card function-values)
 - Parse: `{f: x => x * 2}` would bind as `(f:x) => …` (`:` is tighter than `=>`). In a curly group an entry whose
   `:`-right side is a lowercase non-type word (or a `(a, b)` group) is the field holding the lambda
-  (wasp_parser/lists.rs `field_holding_lambda`); `{x: int => …}` and `{p: Person => …}` stay typed lambdas (assumption:
+  (warp_parser/lists.rs `field_holding_lambda`); `{x: int => …}` and `{p: Person => …}` stay typed lambdas (assumption:
   capitalised words are types).
 - `s.f(4)`: blocks.rs turns a function entry into the method `s·f` (already so for `f := …`); `f: (x => …)` counts too.
   `h = s.f` (not called) is `function s·f`, or the lambda `(x) => s·f(s, x)` when the body reads other fields.

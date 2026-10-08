@@ -2,7 +2,7 @@
 //! function of one parameter are one list, `f 1 2 3` = `f [1 2 3]`; a scalar function broadcasts over it
 use crate::common::fails_with;
 use crate::is;
-use warp::wasp_parser::parse;
+use warp::warp_parser::parse;
 
 #[test]
 fn test_several_arguments_are_one_list() {
