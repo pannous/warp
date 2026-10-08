@@ -65,6 +65,9 @@ pub const HOST_PARTS: [HostPart; 7] = [
 	HostPart { script: ("host-routes.js", concat!(include_str!("../web/playground/imports.js"), include_str!("../web/playground/host-routes.js"))), gives: |module, name| module == HOST_LIBRARY && name == PAGE_PATH, needs: &[] },
 	HostPart { script: ("host-gpu.js", include_str!("../web/playground/host-gpu.js")), gives: |module, name| module == HOST_LIBRARY && name == GPU_COMPUTE, needs: &["host-tasks.js"] },
 ];
+/// The parts the page keeps when the program runs in a Worker: host-routes.js follows links and the back button and
+/// moves the focus, which only the page can (site-thread.js)
+const PAGE_SIDE_PARTS: [&str; 1] = ["host-routes.js"];
 const LINE_COMMENT: &str = "//";
 /// The element holding the program's markup (site.js SITE_ROOT)
 const ROOT_ID: &str = "wasp-root";
@@ -140,7 +143,8 @@ fn site_files(code: &str, title: &str, dev: bool) -> Result<Option<Vec<SiteFile>
 	let host_scripts = host_scripts_of(&module.bytes)?;
 	let dev_script = dev.then_some(DEV_SCRIPT);
 	let (scripts, worker_scripts): (Vec<Script>, Vec<Script>) = if runs_in_a_worker(&imports_of(&module.bytes)?) {
-		([THREAD_SCRIPT].into_iter().chain(page_scripts_of(&module.bytes)).chain(dev_script).collect(), host_scripts)
+		let page_parts = host_scripts.iter().filter(|(name, _)| PAGE_SIDE_PARTS.contains(name)).copied();
+		([THREAD_SCRIPT].into_iter().chain(page_parts).chain(page_scripts_of(&module.bytes)).chain(dev_script).collect(), host_scripts)
 	} else {
 		(host_scripts.into_iter().chain(page_scripts_of(&module.bytes)).chain(dev_script).collect(), vec![])
 	};
@@ -158,7 +162,7 @@ fn site_files(code: &str, title: &str, dev: bool) -> Result<Option<Vec<SiteFile>
 	}
 	files.extend(route_modules);
 	let worker_files = if worker_scripts.is_empty() { &[][..] } else { &WORKER_FILES[..] };
-	let shipped = scripts.iter().chain(&worker_scripts).chain(worker_files);
+	let shipped = scripts.iter().chain(worker_scripts.iter().filter(|script| !scripts.contains(script))).chain(worker_files);
 	files.extend(shipped.map(|(name, text)| (name.to_string(), compacted(text).into_bytes())));
 	Ok(Some(files))
 }
@@ -214,11 +218,10 @@ fn page_scripts_of(module: &[u8]) -> Vec<Script> {
 }
 
 /// A module that starts tasks, uses channels or shared memory runs in a Worker, where a blocking `await` may wait and
-/// its tasks run together (card site-worker); a plain page stays on the page's thread. A program with routes stays
-/// there too for now: following a link reaches the program through the page (host-routes.js followSiteLinks)
+/// its tasks run together (card site-worker); a plain page stays on the page's thread. Routes go along: the page sends
+/// the Worker the path of each link followed (site-thread.js)
 fn runs_in_a_worker(imports: &[(String, String)]) -> bool {
-	let imports_word = |wanted: &dyn Fn(&str) -> bool| imports.iter().any(|(module, name)| module == HOST_LIBRARY && wanted(name));
-	imports_word(&|name| TASK_WORD_PREFIXES.iter().any(|prefix| name.starts_with(prefix))) && !imports_word(&|name| name == PAGE_PATH)
+	imports.iter().any(|(module, name)| module == HOST_LIBRARY && TASK_WORD_PREFIXES.iter().any(|prefix| name.starts_with(prefix)))
 }
 
 /// The (module, name) of each import of a module

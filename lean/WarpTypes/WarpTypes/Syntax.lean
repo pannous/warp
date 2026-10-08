@@ -33,7 +33,8 @@ inductive Expr where
   | add (a b : Expr)
   | arith (op : ArithOp) (a b : Expr)
   | lt (a b : Expr)
-  | eq (a b : Expr)
+  /-- `a == b` (loose), or with `same` (`a same b`, `===`) identity on instances (P208) -/
+  | eq (same : Bool) (a b : Expr)
   | ite (c a b : Expr)
   | loop (c body : Expr)
   | seq (a b : Expr)
@@ -99,7 +100,7 @@ def subst (e : Expr) (y : String) (v : Expr) : Expr :=
   | add a b => add (a.subst y v) (b.subst y v)
   | arith op a b => arith op (a.subst y v) (b.subst y v)
   | lt a b => lt (a.subst y v) (b.subst y v)
-  | eq a b => eq (a.subst y v) (b.subst y v)
+  | eq s a b => eq s (a.subst y v) (b.subst y v)
   | ite c a b => ite (c.subst y v) (a.subst y v) (b.subst y v)
   | loop c b => loop (c.subst y v) (b.subst y v)
   | seq a b => seq (a.subst y v) (b.subst y v)
@@ -124,7 +125,7 @@ def subst (e : Expr) (y : String) (v : Expr) : Expr :=
 /-- the main-level names an expression assigns or binds -/
 def assigned : Expr → List String
   | assign x e | init x e => x :: e.assigned
-  | cons a b | add a b | arith _ a b | lt a b | eq a b | loop a b | seq a b | index a b | append a b | tryCatch a b
+  | cons a b | add a b | arith _ a b | lt a b | eq _ a b | loop a b | seq a b | index a b | append a b | tryCatch a b
   | handle _ a b => a.assigned ++ b.assigned
   | ite c a b => c.assigned ++ a.assigned ++ b.assigned
   | letIn _ _ e b => e.assigned ++ b.assigned
@@ -155,6 +156,8 @@ structure Program where
   handlers : String → Option Expr := fun _ => none
   /-- each event's abort type: what a `break v` of its block handlers gives the block -/
   aborts : String → Ty := fun _ => .never
+  /-- the fields of an instance of the class chain p, for `==` (run time only) -/
+  fieldNames : List String → List String := fun _ => []
 
 /-- the type of field f of an instance of the class chain p: the declaration nearest the root wins, so a subclass
 keeps the field types of its ancestors -/

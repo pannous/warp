@@ -416,11 +416,12 @@ fn collect_variable_kinds(node: &Node, variables: &mut HashMap<String, Option<Ki
 	});
 }
 
-/// The kind of an argument as overloads see it: a decimal literal is a Float here (it fits `x:float` exactly)
+/// The kind of an argument as overloads see it: a decimal literal (exact `1.1` too) is a Float here, it fits `x:float`
+/// exactly and never `x:int`
 fn argument_kind(argument: &Node, variables: &HashMap<String, Option<Kind>>) -> Option<Kind> {
 	use crate::extensions::numbers::Number;
 	match argument.drop_meta() {
-		Node::Number(Number::Float(_)) => Some(Kind::Float),
+		Node::Number(Number::Float(_) | Number::Quotient(..)) => Some(Kind::Float),
 		Node::Number(_) => Some(Kind::Int),
 		Node::Text(_) => Some(Kind::Text),
 		Node::Char(_) => Some(Kind::Codepoint),
@@ -436,8 +437,12 @@ fn argument_kind(argument: &Node, variables: &HashMap<String, Option<Kind>>) -> 
 	}
 }
 
-/// How well an argument of `kind` fits a parameter of `type_name`: 0 exactly, 1 by widening an Int to a Float
+/// How well an argument of `kind` fits a parameter of `type_name`: 0 exactly, 1 by widening an Int to a Float or any
+/// number to the wider `number`
 fn fit(kind: Kind, type_name: &str) -> Option<u32> {
+	if type_name == "number" {
+		return matches!(kind, Kind::Int | Kind::Float).then_some(1);
+	}
 	match (kind, type_word_kind(type_name)?) {
 		(given, wanted) if given == wanted => Some(0),
 		(Kind::Int, Kind::Float) => Some(1),

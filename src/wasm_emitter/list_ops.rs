@@ -1989,6 +1989,7 @@ impl WasmGcEmitter {
 			Self::emit_list(f, &[I::Unreachable, I::End]);
 		});
 		self.emit_field_with();
+		self.emit_instance_copy();
 		self.emit_map_words();
 		self.emit_dynamic_key_access();
 	}

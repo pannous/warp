@@ -10,7 +10,7 @@ use crate::node::{Bracket, Node, Separator};
 use crate::operators::Op;
 
 /// The receiver parameter of a method
-pub(crate) const RECEIVER: &str = "self";
+const RECEIVER: &str = "self";
 /// Other names of the receiver in a method body
 const RECEIVER_ALIASES: [&str; 1] = ["this"];
 /// Suffixes of a field name that mark it optional or required (`left?`, `name!`)
@@ -982,7 +982,7 @@ fn go_method(words: &[Node]) -> Option<(String, Vec<Node>)> {
 	Some((class.clone(), class_items(&Node::List(vec![method], Bracket::Curly, Separator::Semicolon))))
 }
 
-/// Kotlin's `p.copy(y = 5)`: a copy of p with those fields changed, `field_with(p, "y", 5)`
+/// Kotlin's `p.copy(y = 5)`: a new instance with p's fields, those changed: `field_with(instance_copy(p), "y", 5)`
 fn copies(node: Node) -> Node {
 	let changed = |argument: &Node| match argument.drop_meta() {
 		Node::Key(field, Op::Assign | Op::Colon, value) if matches!(field.drop_meta(), Node::Symbol(_)) => Some((field.drop_meta().name(), value.as_ref().clone())),
@@ -997,7 +997,7 @@ fn copies(node: Node) -> Node {
 				_ => None,
 			};
 			match changes {
-				Some(changes) => changes.into_iter().fold(receiver, |object, (field, value)| {
+				Some(changes) => changes.into_iter().fold(Node::List(vec![Node::Symbol(crate::library_words::INSTANCE_COPY.to_string()), receiver], Bracket::Round, Separator::None), |object, (field, value)| {
 					let call = vec![Node::Symbol(crate::library_words::FIELD_WITH.to_string()), object, Node::Text(field), value];
 					Node::List(call, Bracket::Round, Separator::None)
 				}),
@@ -2113,7 +2113,7 @@ fn receiver_reads(node: Node, readable: &Readable) -> Node {
 
 /// Does the body assign a field of the variable (`self.n = …`, `self.n += 1`, `self.n++`) or change a list in one
 /// (`self.items.add(x)`)
-pub(crate) fn changes_fields_of(body: &Node, variable: &str) -> bool {
+fn changes_fields_of(body: &Node, variable: &str) -> bool {
 	let mut changes = false;
 	body.visit(&mut |part| {
 		changes |= match part {
