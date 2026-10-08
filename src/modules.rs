@@ -156,8 +156,16 @@ fn with_needed_definitions(program: Node, definitions: Vec<Node>) -> Node {
 	// a standard word called as a method (`"hé".to_utf8()`) is needed too
 	let mentioned_or_called = |statements: &[Node]| mentioned_names(statements).into_iter().chain(method_names(statements));
 	let mut mentioned: HashSet<String> = mentioned_or_called(std::slice::from_ref(&program)).collect();
+	// the program's own variable `words = […]` wins over the module's words(t)
+	let own: HashSet<String> = statements(program.clone()).iter().filter_map(|statement| match statement.drop_meta() {
+		Node::Key(variable, Op::Assign, _) => match variable.drop_meta() {
+			Node::Symbol(name) => Some(name.clone()),
+			_ => None,
+		},
+		_ => None,
+	}).collect();
 	loop {
-		let now_needed: Vec<Node> = definitions.iter().filter(|definition| declared_name(definition).is_some_and(|name| mentioned.contains(&name))).cloned().collect();
+		let now_needed: Vec<Node> = definitions.iter().filter(|definition| declared_name(definition).is_some_and(|name| mentioned.contains(&name) && !own.contains(&name))).cloned().collect();
 		if now_needed.len() == needed.len() {
 			break;
 		}

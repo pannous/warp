@@ -127,3 +127,10 @@ fn a_standard_module_gives_no_hints() {
 	let own_hints = hints_of("use text; xs = [1, 2]; xs[0]");
 	assert!(own_hints.iter().any(|hint| hint.original == "xs[0]"), "{own_hints:?}");
 }
+
+/// A module's function as the phrase of a comprehension takes each element, not the list (card use-text-capitalize)
+#[test]
+fn a_module_function_maps_in_a_comprehension() {
+	is!("use text; words = [\"ab\", \"cd\"]; [capitalize w for w in words]", warp::texts(vec!["Ab", "Cd"]));
+	is!("f(t) := upper(t[0]) + t[1..]; [f w for w in [\"ab\"]]", warp::texts(vec!["Ab"]));
+}
