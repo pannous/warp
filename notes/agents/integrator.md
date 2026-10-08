@@ -26,6 +26,17 @@ Read notes/agents/common.md and notes/roles.md ("Integrator").
   Verify every merged branch with `git merge-base --is-ancestor origin/<branch> HEAD`. Commit test_results.txt as a
   "test: baseline" commit when the count changes. Delete the merged remote branch (by literal name; the hook allows
   merged ones).
+- The playground deploy is part of done (user, 2026-10-08: it stayed broken from 11:59 to ~18:40 over five pushes).
+  After every push to main, `.claude/hooks/watch-playground-deploy.sh <sha>` (the PostToolUse hook does it on a push)
+  must end green; a red deploy comes before the next batch. The local gate cannot see the runner's environment:
+  GitHub's runner has no GPU and is slower (a "ready" status raced the first run; samples/webgpu logged Chrome's
+  "No available adapters." — fixed by AGENT_BROWSER_ARGS SwiftShader in pages.yml). So a batch that adds or changes a
+  sample, web/playground/** or pages.yml gets the runner's verdict before main: push the tested tip as a branch and
+  `gh workflow run Playground -R pannous/warp --ref <branch>`; job build green = both tours pass on the runner (its
+  deploy job fails on a branch, expected: the Pages environment takes main only).
+- web::test_bundle_budget fails when a branch grows every program's app.wasm: integrator_tools/site_size.sh
+  <commits> measures the hello-world site per first-parent merge (worktree budget_bisect), the grower goes back to
+  its worker with the section/segment diff (`wasm-tools objdump`).
 - Failures: report test name + first panic line to the worker. A failure that passes alone is shared state: find and
   fix the cause in a small commit with a test (known flake: tests running the shared debug/warp binary; rerun).
 - Batch branches that arrive close together. After each push: one line to the Supervisor and the board.

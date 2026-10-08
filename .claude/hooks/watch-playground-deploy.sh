@@ -24,7 +24,7 @@ fi
 
 run_id=""
 for (( waited = 0; waited < APPEAR_SECONDS; waited += POLL_SECONDS )); do
-  run_id=$(gh run list -R $REPO --workflow $WORKFLOW --commit $commit --json databaseId -q '.[0].databaseId' 2>/dev/null)
+  run_id=$(gh run list -R $REPO --workflow $WORKFLOW --commit $commit --event push --json databaseId -q '.[0].databaseId' 2>/dev/null)
   [[ -n $run_id ]] && break
   sleep $POLL_SECONDS
 done
