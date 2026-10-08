@@ -560,6 +560,15 @@ def sequence : List Expr → Expr
 
 def RESULT_ROUNDS : Nat := 4
 
+/-- all functions' results, inferred together so a function may call one defined after it, or call each other (warp
+hoists functions): each round infers every function against the drafts of the round before -/
+def inferFunctions (s : Spec) (functions : List (String × String × Ty × Expr)) : Nat → List (String × Fn) → List (String × Fn)
+  | 0, drafts => drafts
+  | n + 1, drafts =>
+    let s' := { s with funs := drafts }
+    inferFunctions s functions n (functions.map fun (f, y, t, b) =>
+      (f, inferFunction s' f y t b RESULT_ROUNDS (((drafts.lookup f).map (·.result)).getD .never)))
+
 /-- the field of a cell (`Item.cell`) -/
 def cellField : String := "·value"
 
@@ -633,9 +642,9 @@ def elaboratePass (items : List Item) (effects aborts : List (String × Ty)) (kn
   let functions := items.filterMap fun | .function f y t b => some (f, y, t.getD .any, b) | _ => none
   let rest := items.filter fun | .function .. | .classDef .. | .cell _ => false | _ => true
   let classes := items.filterMap fun | .classDef c fields => some (c, fields.map fun (f, t) => (f, t.getD .any)) | _ => none
-  let withFunctions := functions.foldl (init := ({ decls := known, funs := [], main := .unit, classes, effects, aborts } : Spec))
-    fun s (f, y, t, b) =>
-      { s with funs := s.funs ++ [(f, inferFunction s f y t b RESULT_ROUNDS .never)] }
+  let base : Spec := { decls := known, funs := [], main := .unit, classes, effects, aborts }
+  let drafts := functions.map fun (f, y, t, b) => (f, ({ param := y, paramTy := t, result := .never, body := b } : Fn))
+  let withFunctions := { base with funs := inferFunctions base functions RESULT_ROUNDS drafts }
   let withFunctions := { withFunctions with decls := [] }
   let step (s : Spec) (statements : List Expr) : Item → Spec × List Expr
     | .bind x m annotation value g =>

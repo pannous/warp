@@ -447,6 +447,7 @@ until src/lowering/named_arguments.rs moved effectful reordered ones into tempor
 parameter. A function defined in a function's body is lifted (src/law/type_model/nested_functions.rs) to the
 main-level `outer·inner`, the names of outer it reads added as parameters passed by name; a name it declares
 `nonlocal` is passed as outer's cell (parameter type `outer·y`, the cell class), so writes reach outer. Siblings
-pass on what their callees capture and are ordered callees first (W0 types functions in order: a main-level
-`a() := b() + 1; b() := 5` is still rejected). Cards: nested-two-deep (warp cannot read two levels up),
+pass on what their callees capture. Checker.lean `inferFunctions` infers all functions' results together, in rounds,
+so a function may call one defined after it and two may call each other (warp hoists functions; before, W0 rejected
+`a() := b() + 1; b() := 5`). A function giving a literal `true` returns 1 in warp (card bool-return). Cards: nested-two-deep (warp cannot read two levels up),
 nonlocal-assign-unchecked (KNOWN_HOLES), named-constructor-args.

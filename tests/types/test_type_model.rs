@@ -302,6 +302,10 @@ const CORPUS: &[&str] = &[
 	"outer(n) := { total = 0; add(k) := { nonlocal total; total += k }; for i in 1..n { add(i) }; total }; outer(4)",
 	"outer(n) := { fact(k) := if k < 2 then 1 else k * fact(k - 1); fact(n) }; outer(5)",
 	"outer(x) := { mid(y) := { deep(z) := y + z; deep(1) }; mid(10) }; outer(100)",
+	// a function may call one defined after it, and two may call each other (warp hoists functions)
+	"a() := b() + 1; b() := 5; a()",
+	"a() := b() + 1; b() := \"x\"; a()",
+	"a(n) := if n < 1 then 0 else b(n - 1); b(n) := a(n); a(3)",
 ];
 
 /// Programs warp compiles although the model rejects them: holes in warp's checks, each with its card
@@ -315,6 +319,7 @@ const KNOWN_ADMITS_GAPS: [&str; 2] = ["bool ← .int: warp admits true / W0 sub 
 const KNOWN_VALUE_DIFFERENCES: &[(&str, &str)] = &[
 	("f(xs) := for x in xs { x + 1 }; f([1, 2])", "loop-param"),
 	("class P { x: int }; p = P(1); a = p.x = 5; a + p.x", "chain-field"),
+	("h() := true; h()", "bool-return"),
 ];
 /// What the model gives for a program it rejects, and for a value it does not keep
 const REJECTED: &str = "rejected";

@@ -88,7 +88,7 @@ fn lift_from(outer: &str, parameters: &[&Node], body: &Node, globals: &[String])
 		}
 	}
 	let mut lifted = vec![];
-	for function in callees_first(&nested) {
+	for function in &nested {
 		let captured = function.captures.iter().map(|capture| match () {
 			_ if function.references.contains(capture) => typed(capture, &cell_class(outer, capture)),
 			_ => parameters.iter().find(|parameter| parameter_name(parameter) == *capture).map_or_else(|| Node::Symbol(capture.clone()), |parameter| parameter.drop_meta().clone()),
@@ -99,25 +99,6 @@ fn lift_from(outer: &str, parameters: &[&Node], body: &Node, globals: &[String])
 	let outer_head = Node::List(std::iter::once(Node::Symbol(outer.to_string())).chain(parameters.iter().map(|parameter| (*parameter).clone())).collect(), Bracket::Round, Separator::None);
 	lifted.push(Node::Key(Box::new(outer_head), Op::Define, Box::new(with_lifted_calls(&rest_body, &nested))));
 	Ok(lifted)
-}
-
-/// W0 types functions in order: a sibling called before its definition comes first (mutual recursion stays as written)
-fn callees_first(nested: &[Nested]) -> Vec<&Nested> {
-	let mut ordered: Vec<&Nested> = vec![];
-	fn visit<'a>(function: &'a Nested, nested: &'a [Nested], ordered: &mut Vec<&'a Nested>, visiting: &mut Vec<String>) {
-		if ordered.iter().any(|done| done.name == function.name) || visiting.contains(&function.name) {
-			return;
-		}
-		visiting.push(function.name.clone());
-		for callee in nested.iter().filter(|callee| callee.name != function.name && mentions(&function.body, &callee.name)) {
-			visit(callee, nested, ordered, visiting);
-		}
-		ordered.push(function);
-	}
-	for function in nested {
-		visit(function, nested, &mut ordered, &mut vec![]);
-	}
-	ordered
 }
 
 /// adds the names not yet in names; whether any was new
