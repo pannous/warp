@@ -1,0 +1,104 @@
+//! Warp's type checks against W0, the Lean model of warp's type theory (notes/type_theory.md, lean/WarpTypes):
+//! the proofs must build without `sorry`, and warp must reject every program the model rejects, except the known
+//! holes, each with its card. A fixed hole fails the test until it is taken off the list.
+use warp::law::type_model::{axioms, export, model_sources, verdicts, warp_verdict, ModelVerdict};
+
+/// The soundness theorems the tie-in rests on
+const THEOREMS: [&str; 5] = ["Warp.progress", "Warp.preservation", "Warp.safety", "Warp.typeOf_sound", "Warp.check_safe"];
+/// The axioms of Lean's core logic; anything else (sorryAx above all) is an unproved assumption
+const STANDARD_AXIOMS: [&str; 3] = ["propext", "Quot.sound", "Classical.choice"];
+/// An unproved step: the `sorry` tactic, or a declared `axiom`
+const SORRY: &str = "sorry";
+const AXIOM_DECLARATION: &str = "axiom ";
+
+/// Programs both sides judge alike
+const CORPUS: &[&str] = &[
+	"1 + 2",
+	"1 + 2.5",
+	"true + 1",
+	"\"a\" + 1",
+	"1 < 2",
+	"x = 1; x = 2",
+	"x = 1; x = 2.5",
+	"x = 1; x = \"a\"",
+	"x = [1]; x = 5",
+	"x: int = 1.5",
+	"x: int = 1; x = 2.5",
+	"x: float = 1",
+	"x: int = true",
+	"x: text = 3",
+	"x: text = \"ab\"; x = 3",
+	"const c = 1; c = 2",
+	"z := 1; z = 2",
+	"y = 3; z := y*y; y = 4; z",
+	"xs = [1, 2]; xs#1",
+	"xs = [1, 2]; xs#5",
+	"xs = [1, 2]; try xs#5 catch 0",
+	"xs = [1]; xs.add(\"a\")",
+	"xs = [1]; xs = [\"a\"]",
+	"xs = []; xs.add(1)",
+	"xs: ints = [1]; xs.add(2)",
+	"xs: ints = [1]; xs.add(\"a\")",
+	"xs: ints = [1]; xs = [\"a\"]",
+	"xs: texts = [420]",
+	"xs: ints = [1]; xs = xs + [2]",
+	"xs: ints = [1, 2]; xs#1 + 1",
+	"f(x: int) := x + 1; f(2)",
+	"f(x: int) := x + 1; f(1.5)",
+	"f(x: int) := x + 1; f(\"ab\")",
+	"f(x: int) := x + 1; f([1, 2])",
+	"f(x: float) := x * 2; f(1)",
+	"f(n: int) := if n < 1 then 1 else n * f(n - 1); f(5)",
+	"f(x) := x; f(3)",
+	"i = 0; while i < 3 do i = i + 1; i",
+	"if 1 < 2 then 1 else \"a\"",
+	"try error(\"no\") catch 1",
+	"x = 1; x == \"a\"",
+];
+
+/// Programs warp compiles although the model rejects them: holes in warp's checks, each with its card
+const KNOWN_HOLES: &[(&str, &str)] = &[
+	("x: bool = 1", "bool-assign"),
+	("b = true; b = 2", "bool-assign"),
+	("f(x: text) := x; f(3)", "param-types"),
+	("f(x: int) := x + 1; y = f(2); y = \"a\"", "call-result"),
+];
+
+#[test]
+fn test_type_model_is_proved() {
+	crate::requires!(crate::common::LEAN);
+	for source in model_sources() {
+		let text = std::fs::read_to_string(&source).unwrap();
+		let unproved = text.lines().find(|line| line.split(|c: char| !c.is_alphanumeric()).any(|word| word == SORRY) || line.trim_start().starts_with(AXIOM_DECLARATION));
+		assert!(unproved.is_none(), "{}: {}: the model must be proved", source.display(), unproved.unwrap_or_default());
+	}
+	let listed = axioms(&THEOREMS).unwrap_or_else(|why| panic!("the model does not build:\n{why}"));
+	for line in listed.lines().filter(|line| line.contains("depends on axioms")) {
+		let used = line.split('[').nth(1).unwrap_or_default().trim_end_matches(']');
+		for axiom in used.split(',').map(str::trim) {
+			assert!(STANDARD_AXIOMS.contains(&axiom), "{line}: {axiom} is no axiom of Lean's core logic");
+		}
+	}
+	assert_eq!(listed.lines().filter(|line| line.contains("axioms")).count(), THEOREMS.len(), "{listed}");
+}
+
+#[test]
+fn test_warp_rejects_what_the_type_model_rejects() {
+	crate::requires!(crate::common::LEAN);
+	let programs: Vec<&str> = CORPUS.iter().copied().chain(KNOWN_HOLES.iter().map(|(code, _)| *code)).collect();
+	let exported: Vec<String> = programs.iter().map(|code| export(code).unwrap_or_else(|why| panic!("{code}: {why}"))).collect();
+	let model = verdicts(&exported).unwrap_or_else(|why| panic!("the model does not answer:\n{why}"));
+	let mut disagreements = Vec::new();
+	for (code, model) in programs.iter().zip(model) {
+		let warp = warp_verdict(code);
+		let hole = KNOWN_HOLES.iter().find(|(hole, _)| hole == code).map(|(_, card)| card);
+		match (&model, &warp, hole) {
+			(ModelVerdict::Rejected, Ok(()), None) => disagreements.push(format!("{code}: warp compiles what the model rejects")),
+			(ModelVerdict::Accepted(type_name), Err(why), _) => disagreements.push(format!("{code}: warp rejects ({why}), the model accepts it as {type_name}")),
+			(ModelVerdict::Rejected, Err(_), Some(card)) => disagreements.push(format!("{code}: hole fixed (card {card}), take it off KNOWN_HOLES")),
+			(ModelVerdict::Accepted(_), Ok(()), Some(card)) => disagreements.push(format!("{code}: the model accepts a listed hole (card {card})")),
+			_ => {}
+		}
+	}
+	assert!(disagreements.is_empty(), "{}", disagreements.join("\n"));
+}

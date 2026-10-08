@@ -83,3 +83,5 @@ mod test_conformance_claims;
 mod test_file_declarations;
 mod test_match_static_variant;
 mod test_bool_type;
+#[cfg(feature = "native")] // runs lean and lake
+mod test_type_model;
