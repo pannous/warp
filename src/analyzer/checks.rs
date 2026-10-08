@@ -519,10 +519,6 @@ pub(super) fn call_arity_error(node: &Node, context: &Context) -> Option<Diagnos
 /// `sqrt(x) := …`, `def abs(x): …`: a prefix operator word reads as the operator, so the definition could never be
 /// called (P141); it arrives as `(√ ø x) := …`. Checked on the source, before a pass reads the operator
 pub fn check_operator_word_functions(program: &Node) -> Option<Diagnostic> {
-	let operator_word = |head: &Node| match head.drop_meta() {
-		Node::Key(empty, op @ (Op::Sqrt | Op::Cbrt | Op::Abs | Op::Not), _) if empty.is_nothing() => Some(*op),
-		_ => None,
-	};
 	let mut clash = None;
 	program.visit(&mut |node| {
 		if clash.is_some() {
@@ -532,15 +528,31 @@ pub fn check_operator_word_functions(program: &Node) -> Option<Diagnostic> {
 			Node::Key(head, Op::Define | Op::Assign, _) => operator_word(head),
 			Node::List(items, _, _) => match (items.first(), items.get(1).map(Node::drop_meta)) {
 				(Some(def), Some(Node::Key(head, Op::Colon, _))) if crate::operators::is_function_keyword(&crate::declarations::word(def)) => operator_word(head),
+				(Some(def), Some(head)) if crate::operators::is_function_keyword(&crate::declarations::word(def)) => operator_word(head),
 				_ => None,
 			},
 			_ => None,
 		};
-		clash = defined.map(|op| (node.clone(), op));
+		clash = defined.map(|(word, op)| (node.clone(), word, op));
 	});
-	let (definition, op) = clash?;
-	let word = OPERATOR_WORDS.iter().find(|(known, _)| *known == op).map_or("this word", |(_, word)| *word);
+	let (definition, word, op) = clash?;
 	Some(Diagnostic::at(&definition, format!("{word} is an operator ({op}); rename your function")))
+}
+
+/// The operator word a definition's head names: `norm(x)` keeps its name (the parser's defines_named), also as the
+/// first part of `fun norm(x) { … }`; `not(x)` arrives as the operator
+fn operator_word(head: &Node) -> Option<(String, Op)> {
+	match head.drop_meta() {
+		Node::Key(empty, op @ (Op::Sqrt | Op::Cbrt | Op::Abs | Op::Not), _) if empty.is_nothing() => {
+			OPERATOR_WORDS.iter().find(|(known, _)| known == op).map(|(_, word)| (word.to_string(), *op))
+		}
+		Node::List(items, _, _) => match items.first().map(Node::drop_meta) {
+			Some(Node::Symbol(name)) => crate::warp_parser::PREFIX_OPERATOR_WORDS.iter().find(|(word, _)| word == name).map(|(word, op)| (word.to_string(), *op)),
+			Some(call @ Node::List(..)) => operator_word(call),
+			_ => None,
+		},
+		_ => None,
+	}
 }
 
 /// The words the parser reads as prefix operators (warp_parser lookahead.rs peek_prefix_operator)
