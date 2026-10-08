@@ -20,7 +20,7 @@ function runTaskInto({ module, name, ints, values, shared, arrays, captured, con
 
 // `users := fetch url` of a running program (host.js startFetch): the reply goes into shared memory, which the program
 // reads at its check points, and a message tells the program's Worker once it is back in its event loop
-async function fetchInto({ fetch: url, shared }) {
-	writeShared(shared, await fetchReplyOf(url));
+async function fetchInto({ fetch: url, body, shared }) {
+	writeShared(shared, await fetchReplyOf(url, body));
 	self.postMessage(FETCH_DONE);
 }
