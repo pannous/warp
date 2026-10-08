@@ -246,6 +246,16 @@ refuses it. Elaboration runs twice so a function can read a main-level name what
 (`elaborateTyped`: the second pass infers functions seeing the first pass's names). Not yet: `global float y = …`
 (the exporter does not read the type word yet), `global x; x` (read before any value).
 
+## Equality (P208)
+
+`Expr.eq same a b`: `a == b` (same = false) is loose: two instances of one class are equal when their fields are
+(`looseEq`, walking the heap with fuel for cycles; `Program.fieldNames` enumerates a class chain's fields for it),
+lists item by item, anything else by value. `a === b` / `a same b` (same = true) is identity on instances (an
+instance is its address); on other values it compares by value, so `0 === false` is no. Not modelled: list identity
+(W0's lists are values, `[1] === [1]` is yes in W0, no in warp under P208) and `1 === 1.0` (W0 keeps no float
+values). The exporter maps `!=` and `!==` to the negation; `same`/`identical` spellings once warp parses them
+(card same-identity, which also covers warp still answering yes for `p === q` of distinct instances).
+
 ## Inline unions and optionals
 
 `x: int | text`, `int or text`, `(int|text)` and the optional `int | ø` stay out of `Ty`: a union in the order would

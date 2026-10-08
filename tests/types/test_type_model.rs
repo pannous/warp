@@ -133,6 +133,13 @@ const CORPUS: &[&str] = &[
 	"global n = 0; def f() { n += 1 }; f(); f(); n",
 	"global x; x = 7; x + 1",
 	"global k = 7",
+	"1 != 2",
+	"class P { x: int }; p = P(1); q = P(1); p == q",
+	"class P { x: int }; p = P(1); q = P(2); p == q",
+	"class P { x: int }; class Q { x: int }; p = P(1); q = Q(1); p == q",
+	"class P { x: int }; [P(1)] == [P(1)]",
+	"class P { x: int }; p = P(1); q = p; p === q",
+	"0 === false",
 	"n = 0; on alarm { n += 1 }; emit alarm; emit alarm; n",
 	"level = 0; on alarm { level = event.level }; emit alarm{level: 3}; level",
 	"def check(x) { if x > 2 { emit too big{value: x} }; x }; check(1)",
@@ -153,7 +160,10 @@ const KNOWN_HOLES: &[(&str, &str)] = &[];
 const KNOWN_ADMITS_GAPS: [&str; 2] = ["bool ← .int: warp admits true / W0 sub false", "boolean ← .int: warp admits true / W0 sub false"];
 
 /// Programs both accept whose values differ, each with its card
-const KNOWN_VALUE_DIFFERENCES: &[(&str, &str)] = &[];
+const KNOWN_VALUE_DIFFERENCES: &[(&str, &str)] = &[
+	("class P { x: int }; p = P(1); q = P(1); p === q", "same-identity"),
+	("class P { x: int }; p = P(1); q = P(1); p !== q", "same-identity"),
+];
 /// What the model gives for a program it rejects, and for a value it does not keep
 const REJECTED: &str = "rejected";
 const UNKEPT: &str = "?";

@@ -399,8 +399,8 @@ theorem progress {Γ e t} (h : HasType P Γ e t) (hΓ : Γ = Ctx.empty) {μ : St
     exact in_frame (.arithL op b) rfl (ih1 hΓ hμ) fun va => in_frame (.arithR op a) va (ih2 hΓ hμ) fun vb => steps (.arith va vb)
   | @lt _ a b _ _ _ _ ih1 ih2 =>
     exact in_frame (.ltL b) rfl (ih1 hΓ hμ) fun va => in_frame (.ltR a) va (ih2 hΓ hμ) fun vb => steps (.lt va vb)
-  | @eq _ a b _ _ _ _ ih1 ih2 =>
-    exact in_frame (.eqL b) rfl (ih1 hΓ hμ) fun va => in_frame (.eqR a) va (ih2 hΓ hμ) fun vb => steps (.eq va vb)
+  | @eq _ s a b _ _ _ _ ih1 ih2 =>
+    exact in_frame (.eqL s b) rfl (ih1 hΓ hμ) fun va => in_frame (.eqR s a) va (ih2 hΓ hμ) fun vb => steps (.eq va vb)
   | @ite _ c a b _ _ _ _ _ _ ih0 _ _ => exact in_frame (.ite a b) rfl (ih0 hΓ hμ) fun vc => steps (.ite vc)
   | loop => exact steps .loop
   | @seq _ a b _ _ _ _ ih1 _ => exact in_frame (.seq b) rfl (ih1 hΓ hμ) fun va => steps (.seq va)

@@ -47,7 +47,7 @@ def step (P : Program) (μ : Store) : Expr → Option (Expr × Store)
   | .add a b => stepPair .addL .addR a b μ (step P μ a) (step P μ b) (some (addValues a b, μ))
   | .arith op a b => stepPair (.arithL op) (.arithR op) a b μ (step P μ a) (step P μ b) (some (arithValues op a b, μ))
   | .lt a b => stepPair .ltL .ltR a b μ (step P μ a) (step P μ b) (some (ltValues a b, μ))
-  | .eq a b => stepPair .eqL .eqR a b μ (step P μ a) (step P μ b) (some (.bool (decide (a = b)), μ))
+  | .eq s a b => stepPair (.eqL s) (.eqR s) a b μ (step P μ a) (step P μ b) (some (.bool (eqValues P μ s a b), μ))
   | .ite c a b => if c.isValue then some (if truthy c then a else b, μ) else stepIn (.ite a b) c μ (step P μ c)
   | .loop c b => some (.ite c (.seq b (.loop c b)) .unit, μ)
   | .seq a b => if a.isValue then some (b, μ) else stepIn (.seq b) a μ (step P μ a)
@@ -157,9 +157,9 @@ theorem step_sound : ∀ {e : Expr} {μ s'}, step P μ e = some s' → Step P (e
     intro μ s' hs
     exact stepPair_sound (L := .ltL) (R := .ltR) rfl id rfl (fun _ => ih1) (fun _ => ih2)
       (fun va vb hd => by cases hd; exact .lt va vb) hs
-  | eq a b ih1 ih2 =>
+  | eq s a b ih1 ih2 =>
     intro μ s' hs
-    exact stepPair_sound (L := .eqL) (R := .eqR) rfl id rfl (fun _ => ih1) (fun _ => ih2)
+    exact stepPair_sound (L := .eqL s) (R := .eqR s) rfl id rfl (fun _ => ih1) (fun _ => ih2)
       (fun va vb hd => by cases hd; exact .eq va vb) hs
   | ite c a b ih _ _ =>
     intro μ s' hs; simp only [step] at hs

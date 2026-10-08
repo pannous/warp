@@ -721,8 +721,11 @@ impl Exporter {
 			Node::Key(left, Op::Lt | Op::Le, right) => self.binary(".lt", left, right),
 			Node::Key(left, Op::Gt | Op::Ge, right) => self.binary(".lt", right, left),
 			// `c is Color` parses as `c == Color`: a type test
-			Node::Key(left, Op::Eq, right) if self.classes.contains_key(&right.name()) => Ok(format!(".isA ({}) {}", self.expression(left)?, quoted(&right.name()))),
-			Node::Key(left, Op::Eq | Op::Ne, right) => self.binary(".eq", left, right),
+			Node::Key(left, Op::Eq, right) if matches!(right.drop_meta(), Node::Symbol(class) if self.classes.contains_key(class)) => Ok(format!(".isA ({}) {}", self.expression(left)?, quoted(&right.name()))),
+			Node::Key(left, op @ (Op::Eq | Op::Ne | Op::Identical | Op::NotIdentical), right) => {
+				let compared = self.binary(if matches!(op, Op::Identical | Op::NotIdentical) { ".eq true" } else { ".eq false" }, left, right)?;
+				Ok(if matches!(op, Op::Ne | Op::NotIdentical) { format!(".ite ({compared}) (.bool false) (.bool true)") } else { compared })
+			}
 			Node::Key(list, Op::Hash, index) if !list.is_nothing() => self.binary(".index", list, index),
 			_ => unsupported(node),
 		}
