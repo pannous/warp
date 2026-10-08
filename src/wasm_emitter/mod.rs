@@ -28,6 +28,8 @@ mod list_emitter;
 mod list_dispatch;
 mod library_ops;
 mod text_unicode;
+mod similarity;
+pub use similarity::NUMBERS_SIMILAR;
 pub(crate) mod list_ops;
 mod list_abi;
 mod map_backend;
@@ -631,6 +633,7 @@ impl WasmGcEmitter {
 			Need::MathImport(_) => None,
 		}));
 		component_adapters::add_dependencies(&mut self.ctx.required_functions);
+		similarity::add_dependencies(&mut self.ctx.required_functions); // before the text builtins': values_equal needs text_of
 		text_builtins::add_dependencies(&mut self.ctx.required_functions);
 		self.guards_errors = try_guard::guards_errors(node);
 		let len = self.ctx.required_functions.len();
@@ -927,6 +930,7 @@ impl WasmGcEmitter {
 		self.emit_map_get(); // after the text builtins: map keys are compared by text_of
 		self.emit_node_map_runtime();
 		self.emit_library_ops(); // after the text builtins: the library words call text_of
+		self.emit_similarity_ops(); // after the library ops and the equality ops it calls
 		self.emit_node_arithmetic(); // after text_as_float, get_int_value, text_concat and list_join, which it calls
 	}
 
