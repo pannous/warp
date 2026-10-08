@@ -233,7 +233,7 @@ W0 now has `arith op a b`, which takes numbers only.
   name bound to a list). Lists became gradual like arithmetic: `#` gives `elementTy` (a text's element is a text,
   anything but a list or text gives `any`), `++` takes any operands, and non-lists raise "not a list" when it runs.
   The checker demands lists, texts (for `#`) or `any`. Result: 77 exported, all agreeing with warp; with braced
-  blocks as expressions (`if c {a} else {b}`) and `+=`/`-=`/`*=` exported: 98. Most of the rest:
+  blocks as expressions (`if c {a} else {b}`) and `+=`/`-=`/`*=` exported: 98. With effect handlers and implicit casts from `any`: 102; after repairing the sample file (53 lines were UTF-8 encoded twice, `ø` stored as `Ã¸`): 112, all agreeing (2026-10-08). Most of the rest:
   imports (`use`), `for` loops, maps `{a:1}`, lambdas, `i++`, `global`, string methods.
 
 ## Inline unions and optionals
@@ -258,9 +258,8 @@ A value of static type `any` given to a narrower place is a run-time check, not 
 (Checker.lean `castDynamicValues`, after names are widened) rewrites `x = v`, `x: T = v` and `f(v)` with `v : any`
 into `x = cast v [T]` (T the name's or parameter's type), for annotated places as well, since warp admits all of them
 at compile time (`y: any = 3; x: int = y`, `f(n: int) := n + 1; f(y)`, `x = xs#1` of a mixed list,
-`level = event.level`). The cast is part of the proved calculus, so soundness needs nothing new. Open question (to
-the Interviewer): P203 says annotations are promises the compiler enforces; whether an annotated place given an
-`any` value should rather be a compile error. Warp does not check these values at run time yet: `y: any = "a";
+`level = event.level`). The cast is part of the proved calculus, so soundness needs nothing new. User decision P204:
+an annotated place given an `any` value compiles and is checked when it runs (not a compile error). Warp does not check these values at run time yet: `y: any = "a";
 x: int = 0; x = y; x` gives 97 (card int-unchecked, KNOWN_VALUE_DIFFERENCES).
 `Expr.rewrite` (bottom-up, carrying the locals in scope) is the one traversal behind both elaboration rewrites
 (`resolveCalls` decides broadcasting the same way).
