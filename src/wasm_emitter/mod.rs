@@ -5,6 +5,7 @@ pub(crate) mod component_adapters;
 mod arithmetic;
 mod globals;
 mod control_flow;
+use control_flow::LoopValues;
 mod casts;
 mod values;
 mod big_int;
@@ -36,7 +37,7 @@ mod map_backend;
 mod struct_backend;
 pub use map_backend::MAP_COPY_SUFFIX;
 mod loop_control;
-pub(crate) use loop_control::{is_step, mark_step};
+pub(crate) use loop_control::{is_step, mark_step, split_step};
 pub(crate) mod text_builtins;
 mod reflection;
 mod string_table;
@@ -80,7 +81,7 @@ const FIX_SEPARATOR: &str = "; fix: ";
 pub const CAPTURE_EXPORT_PREFIX: &str = "capture·";
 /// The WASI output words besides print: each gives an Int (analyzer)
 pub const OUTPUT_WORDS: [&str; 4] = ["puts", "puti", "putl", "putf"];
-const OUTPUT_CALLS: [&str; 5] = ["print", OUTPUT_WORDS[0], OUTPUT_WORDS[1], OUTPUT_WORDS[2], OUTPUT_WORDS[3]];
+pub(crate) const OUTPUT_CALLS: [&str; 5] = ["print", OUTPUT_WORDS[0], OUTPUT_WORDS[1], OUTPUT_WORDS[2], OUTPUT_WORDS[3]];
 
 /// Builtins that round a float to an exact Int
 pub(crate) const ROUNDING_FUNCTIONS: [&str; 6] = ["ceil", "floor", "round", "round_half_up", "round_half_even", crate::warp_parser::FLOOR_QUOTIENT];
@@ -241,6 +242,7 @@ pub struct WasmGcEmitter {
 
 	// Unbounded Int (big_int.rs)
 	int_scratch: u32,      // first of INT_SCRATCH_LOCALS i64 locals in the current function
+	loop_values: LoopValues, // the Node locals holding text loop values (control_flow.rs)
 	wrapping_ints: bool,   // inside `expr as i64`: machine arithmetic
 	int_heap_global: u32,  // $BigInts heap that handles index
 	int_count_global: u32, // used slots in that heap
@@ -312,6 +314,7 @@ impl WasmGcEmitter {
 			ctx: Context::new(),
 			scope: Default::default(),
 			int_scratch: 0,
+			loop_values: LoopValues::default(),
 			wrapping_ints: false,
 			int_heap_global: 0,
 			int_count_global: 0,
@@ -1154,6 +1157,7 @@ impl WasmGcEmitter {
 		self.int_scratch = var_count + temp_locals;
 		locals.push((big_int::INT_SCRATCH_LOCALS, ValType::I64));
 		locals.push((NODE_SCRATCH_LOCALS, Ref(self.node_ref(true)))); // node_scratch, container_scratch
+		self.declare_loop_values(&mut locals, node);
 
 		let mut func = Function::new(locals);
 		self.emit_node_local_defaults(&mut func, node, 0);

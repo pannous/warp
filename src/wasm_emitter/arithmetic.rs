@@ -14,6 +14,11 @@ impl WasmGcEmitter {
 			self.emit_call(func, "new_int");
 			return;
 		}
+		// `s++` of a text is `s += 1`, "a" → "a1" (card inc-text); the int step below holds an i64 local only
+		if matches!(op, Op::Inc | Op::Dec) && !matches!(self.get_type(left), Kind::Int | Kind::Float) {
+			self.emit_node_instructions(func, &crate::library_words::stepped(left.clone(), *op));
+			return;
+		}
 		if op.is_arithmetic() && self.emit_typed_arithmetic(func, left, op, right) {
 			return;
 		}
@@ -449,11 +454,12 @@ impl WasmGcEmitter {
 		}
 	}
 
-	/// `s += x` of a number s and a text x: the type error `s = s + x` is, never the text's code points added
+	/// `s += x` of a number s and a text x, or `s -= 1` of a text s (card text-crashes): the type error `s = s op x`
+	/// is, never the text's code points added
 	pub(super) fn emit_compound_type_error(&mut self, func: &mut Function, left: &Node, base_op: &Op, right: &Node) -> bool {
 		let kind = self.arithmetic_type(left, base_op, right);
 		let numeric_target = matches!(self.get_type(left), Kind::Int | Kind::Float);
-		numeric_target && matches!(kind, Kind::Error | Kind::Text) && self.emit_arithmetic_type_error(func, left, base_op, right, kind)
+		(kind == Kind::Error || numeric_target && kind == Kind::Text) && self.emit_arithmetic_type_error(func, left, base_op, right, kind)
 	}
 
 	/// Stack [x, y] → [x op y] for `x op= y` on Ints; `/=` keeps an integer x an integer

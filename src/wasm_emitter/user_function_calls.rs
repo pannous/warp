@@ -272,6 +272,7 @@ impl WasmGcEmitter {
 		}
 		locals.push((big_int::INT_SCRATCH_LOCALS, ValType::I64));
 		locals.push((NODE_SCRATCH_LOCALS, Ref(self.node_ref(true)))); // node_scratch, container_scratch
+		let saved_loop_values = self.declare_loop_values(&mut locals, &user_fn.body);
 		let mut func = Function::new(locals);
 		self.emit_node_local_defaults(&mut func, &user_fn.body, num_params as usize);
 
@@ -322,6 +323,7 @@ impl WasmGcEmitter {
 		self.scope = saved_scope;
 		self.int_scratch = saved_scratch;
 		self.next_temp_local = saved_temp_local;
+		self.loop_values = saved_loop_values;
 		self.returns_node = saved_returns_node;
 		self.returns_float = saved_returns_float;
 		self.returns_list = saved_returns_list;

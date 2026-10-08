@@ -779,6 +779,19 @@ impl WasmGcEmitter {
 		if self.emit_discarded_branches(func, item) {
 			return;
 		}
+		// a loop whose value is dropped computes none: a held text or list value would be made a Node every pass
+		match item.drop_meta() {
+			Node::Key(condition, Op::Do, body) if matches!(condition.drop_meta(), Node::Key(_, Op::While, _)) => {
+				self.emit_while_loop_value(func, condition, body);
+				return;
+			}
+			// `out = ø; while … do {…}`, statements a call like count hoists: their last one is dropped too
+			Node::List(items, bracket, Separator::Semicolon | Separator::Newline) if *bracket != Bracket::Square && items.len() > 1 => {
+				self.emit_statement_sequence(func, items, Self::emit_dropped_statement);
+				return;
+			}
+			_ => {}
+		}
 		let destructured = self.destructured_kind(item);
 		if let Some((name, value)) = self.typed_list_store(item) {
 			self.emit_typed_list_store(func, &name, &value); // the array itself is dropped, it needs no Node
@@ -789,6 +802,11 @@ impl WasmGcEmitter {
 		} else {
 			emit(self, func, item);
 		}
+	}
+
+	/// A statement whose value is dropped: leaves one value of any type for the caller to drop
+	fn emit_dropped_statement(&mut self, func: &mut Function, item: &Node) {
+		self.emit_discarded_statement(func, item, Self::emit_node_instructions);
 	}
 
 	/// A call giving a float (`shared_addf(xs, i, v)`)
@@ -859,7 +877,9 @@ impl WasmGcEmitter {
 	fn is_ref_value(&self, item: &Node) -> bool {
 		match item.drop_meta() {
 			Node::Key(_, op, _) if *op == Op::Assign || *op == Op::Define || op.is_compound_assign() => false,
+			// `c + 1` of a text c in a loop body is a text, "a1" (card loop-text)
 			Node::Symbol(_) | Node::List(_, Bracket::Round, _) => self.get_type(item).is_ref(),
+			Node::Key(_, op, _) if op.is_arithmetic() => self.get_type(item).is_ref(),
 			_ => false,
 		}
 	}

@@ -374,8 +374,8 @@ impl WasmGcEmitter {
 	/// Emit the numeric value of a node onto the stack (as i64)
 	/// `print x`, `puti x`: an output builtin (not shadowed by a user function), whose value is the printed node
 	pub(super) fn is_output_call(&self, node: &Node) -> bool {
-		matches!(node.drop_meta(), Node::List(items, _, _) if matches!(items.as_slice(), [word, _]
-			if matches!(word.drop_meta(), Node::Symbol(name) if OUTPUT_CALLS.contains(&name.as_str()) && !self.ctx.user_functions.contains_key(name))))
+		crate::analyzer::is_output_call(node)
+			&& matches!(node.drop_meta(), Node::List(items, _, _) if !self.ctx.user_functions.contains_key(&items[0].name()))
 	}
 }
 

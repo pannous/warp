@@ -198,9 +198,32 @@ pub fn infer_type(node: &Node, scope: &Scope) -> Kind {
 				|| matches!(infer_type(key, scope), Kind::Text | Kind::Codepoint));
 			if by_name { Kind::Empty } else { Kind::Int }
 		}),
+		Node::Key(condition, Op::Do, body) if matches!(condition.drop_meta(), Node::Key(_, Op::While, _)) => loop_kind(body, scope),
 		// Default to Int for other cases
 		_ => Kind::Int,
 	}
+}
+
+/// A loop is its last body value (P55): a text, character or list one held as such (card loop-value-kind), ø after a
+/// print (P213); a number or ø otherwise, as a loop may never run (card loop-empty), so a Node decided at run time
+fn loop_kind(body: &Node, scope: &Scope) -> Kind {
+	let (statements, _) = crate::wasm_emitter::split_step(body);
+	let prints = match statements.drop_meta() {
+		Node::List(items, _, _) => items.last().is_some_and(is_output_call),
+		other => is_output_call(other),
+	};
+	let kind = infer_type(&statements, scope);
+	match kind {
+		_ if prints => Kind::Empty,
+		Kind::Text | Kind::Codepoint | Kind::List => kind,
+		_ => Kind::Data,
+	}
+}
+
+/// `print x`, `puts x`: an output word applied to one value
+pub(crate) fn is_output_call(node: &Node) -> bool {
+	matches!(node.drop_meta(), Node::List(items, _, _) if matches!(items.as_slice(), [word, _]
+		if matches!(word.drop_meta(), Node::Symbol(name) if crate::wasm_emitter::OUTPUT_CALLS.contains(&name.as_str()))))
 }
 
 /// The kind of a non-empty list: a call's result, a statement sequence's last value, or a data list
