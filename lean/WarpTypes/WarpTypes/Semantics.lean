@@ -149,6 +149,10 @@ def nth : Expr → Int → Option Expr
   | .text s, i => if 1 ≤ i then s.toList[(i - 1).toNat]?.map fun c => .text (String.singleton c) else none
   | _, _ => none
 
+def isClosure : Expr → Bool
+  | .clo _ _ => true
+  | _ => false
+
 def isList : Expr → Bool
   | .nil | .cons _ _ => true
   | _ => false
@@ -217,6 +221,7 @@ inductive Frame where
   | emit (ev : String)
   | abort (ev : String) (k : Option Nat)
   | forIn (y : String) (b : Expr)
+  | appL (a : Expr) | appR (f : Expr)
 
 namespace Frame
 
@@ -252,10 +257,12 @@ def plug : Frame → Expr → Expr
   | emit ev, e => .emit ev e
   | abort ev k, e => .abort ev k e
   | forIn y b, e => .forIn y e b
+  | appL a, e => .app e a
+  | appR f, e => .app f e
 
 /-- a right position needs the left operand evaluated -/
 def ready : Frame → Bool
-  | consR h | addR h | arithR _ h | ltR h | eqR _ h | indexR h | rangeR h | appendR h | setR h _ => h.isValue
+  | consR h | addR h | arithR _ h | ltR h | eqR _ h | indexR h | rangeR h | appendR h | appR h | setR h _ => h.isValue
   | _ => true
 
 end Frame
@@ -276,6 +283,10 @@ inductive Step (P : Program) : Expr × Store → Expr × Store → Prop where
   | ite {v a b μ} : v.isValue = true → Step P (.ite v a b, μ) (if truthy v then a else b, μ)
   | loop {c b μ} : Step P (.loop c b, μ) (.ite c (.seq b (.loop c b)) .unit, μ)
   | seq {v b μ} : v.isValue = true → Step P (.seq v b, μ) (b, μ)
+  | lam {y b μ} : Step P (.lam y b, μ) (.clo y b, μ)
+  | app {y b v μ} : v.isValue = true → Step P (.app (.clo y b) v, μ) (b.subst y v, μ)
+  | appOther {f v μ} : f.isValue = true → v.isValue = true → isClosure f = false →
+      Step P (.app f v, μ) (.error "not a function", μ)
   | range {a b μ} : a.isValue = true → b.isValue = true → Step P (.range a b, μ) (rangeValues a b, μ)
   | index {l i μ} : l.isValue = true → i.isValue = true →
       Step P (.index l i, μ) ((nth l ((asInt i).getD 0)).getD (.error "index out of range"), μ)

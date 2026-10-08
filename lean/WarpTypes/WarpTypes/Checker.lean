@@ -17,6 +17,11 @@ def strictRead (P : Program) : Ty → String → Bool
 /-- the checker takes `#` and `++` of a list or of a dynamic value (checked when it runs) -/
 def listy (t : Ty) : Bool := t == .any || (element t).isSome
 
+/-- what a call takes statically: a function, an error, or a dynamic value (checked when it runs) -/
+def callable : Ty → Bool
+  | .fn _ | .never | .any => true
+  | _ => false
+
 def typeOf (P : Program) (Γ : Ctx) : Expr → Option Ty
   | .bool _ => some .bool
   | .int _ => some .int
@@ -84,7 +89,7 @@ def typeOf (P : Program) (Γ : Ctx) : Expr → Option Ty
     | none => none
   | .call f e =>
     match P.funs f, typeOf P Γ e with
-    | some fn, some te => if sub te fn.paramTy then some fn.result else none
+    | some fd, some te => if sub te fd.paramTy then some fd.result else none
     | _, _ => none
   | .error _ => some .never
   | .tryCatch e h =>
@@ -94,9 +99,9 @@ def typeOf (P : Program) (Γ : Ctx) : Expr → Option Ty
   | .cast e ts => (typeOf P Γ e).bind fun te => if ts.any (consub te) then some (joinAll ts) else none
   | .broadcast f e =>
     match P.funs f, typeOf P Γ e with
-    | some fn, some te =>
+    | some fd, some te =>
       match element te with
-      | some a => if sub a fn.paramTy then some (.list fn.result) else none
+      | some a => if sub a fd.paramTy then some (.list fd.result) else none
       | none => none
     | _, _ => none
   | .ref _ p | .new p => some (.cls p)
@@ -117,6 +122,12 @@ def typeOf (P : Program) (Γ : Ctx) : Expr → Option Ty
   | .scope _ e => typeOf P Γ e
   | .abort ev _ e => (typeOf P Γ e).bind fun te => if sub te (P.aborts ev) then some .never else none
   | .forIn y l b => (typeOf P Γ l).bind fun tl => if listy tl then (typeOf P (Γ.set y (listElem tl)) b).map fun _ => .unit else none
+  | .lam y b => (typeOf P (Γ.set y .any) b).map .fn
+  | .clo y b => (typeOf P (Ctx.empty.set y .any) b).map .fn
+  | .app f a =>
+    match typeOf P Γ f, typeOf P Γ a with
+    | some tf, some _ => if callable tf then some (resultTy tf) else none
+    | _, _ => none
 
 theorem typeOf_sound {P : Program} : ∀ {e : Expr} {Γ t}, typeOf P Γ e = some t → HasType P Γ e t := by
   intro e
@@ -271,6 +282,18 @@ theorem typeOf_sound {P : Program} : ∀ {e : Expr} {Γ t}, typeOf P Γ e = some
       obtain ⟨_, hb, rfl⟩ := hs
       exact .forIn (ih1 hl) (ih2 hb)
     · cases hs
+  | lam y b ih =>
+    intro Γ t hs; simp only [typeOf, Option.map_eq_some_iff] at hs
+    obtain ⟨_, hb, rfl⟩ := hs; exact .lam (ih hb)
+  | clo y b ih =>
+    intro Γ t hs; simp only [typeOf, Option.map_eq_some_iff] at hs
+    obtain ⟨_, hb, rfl⟩ := hs; exact .clo (ih hb)
+  | app f a ih1 ih2 =>
+    intro Γ t h
+    cases hf : typeOf P Γ f <;> cases ha : typeOf P Γ a <;> simp only [typeOf, hf, ha] at h <;> try cases h
+    split at h
+    · cases h; exact .app (ih1 hf) (ih2 ha)
+    · cases h
   | abort ev k e ih =>
     intro Γ t hs
     simp only [typeOf, Option.bind_eq_some_iff] at hs
@@ -431,12 +454,13 @@ def widen : Ty → Ty
 def valuesOf (x : String) : Expr → List Expr
   | .assign y e | .init y e => (if y = x then [e] else []) ++ valuesOf x e
   | .cons a b | .add a b | .arith _ a b | .lt a b | .eq _ a b | .loop a b | .seq a b | .index a b | .range a b | .append a b
-  | .tryCatch a b => valuesOf x a ++ valuesOf x b
+  | .tryCatch a b | .app a b => valuesOf x a ++ valuesOf x b
   | .ite c a b => valuesOf x c ++ valuesOf x a ++ valuesOf x b
   | .letIn _ _ e b => valuesOf x e ++ valuesOf x b
   | .set a _ b => valuesOf x a ++ valuesOf x b
   | .call _ e | .cast e _ | .broadcast _ e | .get e _ | .isA e _ | .emit _ e | .scope _ e | .abort _ _ e => valuesOf x e
   | .handle _ h b | .forIn _ h b => valuesOf x h ++ valuesOf x b
+  | .lam _ b => valuesOf x b
   | _ => []
 
 /-- P45: a name declared by its first value widens over the numbers it is given (`x = 1; x = 2.5` is a number);
@@ -477,6 +501,8 @@ def Expr.rewrite (f : Ctx → Expr → Expr) (Γ : Ctx) : Expr → Expr
   | .abort ev k e => f Γ (.abort ev k (e.rewrite f Γ))
   -- the loop variable's type would need P: rewrites see it as any
   | .forIn y l b => f Γ (.forIn y (l.rewrite f Γ) (b.rewrite f (Γ.set y .any)))
+  | .lam y b => f Γ (.lam y (b.rewrite f (Γ.set y .any)))
+  | .app a b => f Γ (.app (a.rewrite f Γ) (b.rewrite f Γ))
   | e => f Γ e
 
 /-- warp decides broadcasting at compile time: a call whose argument is a list of what the function takes -/
@@ -484,9 +510,9 @@ def resolveCalls (P : Program) : Ctx → Expr → Expr :=
   Expr.rewrite fun Γ e => match e with
     | .call f e =>
       match P.funs f, typeOf P Γ e with
-      | some fn, some te =>
-        if sub te fn.paramTy then .call f e
-        else if (element te).any (sub · fn.paramTy) then .broadcast f e else .call f e
+      | some fd, some te =>
+        if sub te fd.paramTy then .call f e
+        else if (element te).any (sub · fd.paramTy) then .broadcast f e else .call f e
       | _, _ => .call f e
     | e => e
 
@@ -566,12 +592,13 @@ def observe (P : Program) (Γ : Ctx) : Expr → List Observation
       | _, _ => []) ++ observe P Γ o ++ observe P Γ v
   | .letIn y t e b => observe P Γ e ++ observe P (Γ.set y t) b
   | .cons a b | .add a b | .arith _ a b | .lt a b | .eq _ a b | .loop a b | .seq a b | .index a b | .range a b | .append a b
-  | .tryCatch a b => observe P Γ a ++ observe P Γ b
+  | .tryCatch a b | .app a b => observe P Γ a ++ observe P Γ b
   | .ite c a b => observe P Γ c ++ observe P Γ a ++ observe P Γ b
   | .assign _ e | .init _ e | .cast e _ | .broadcast _ e | .get e _ | .isA e _ | .emit _ e | .scope _ e => observe P Γ e
   | .handle ev h b => observeHandler P Γ ev h ++ observe P Γ b
   | .abort ev _ e => ((typeOf P Γ e).getD .any |> Observation.abort ev) :: observe P Γ e
   | .forIn y l b => observe P Γ l ++ observe P (Γ.set y (((typeOf P Γ l).map listElem).getD .any)) b
+  | .lam y b => observe P (Γ.set y .any) b
   | _ => []
 where
   observeHandler (P : Program) (Γ : Ctx) (ev : String) (h : Expr) : List Observation :=
@@ -626,7 +653,7 @@ def elaboratePass (items : List Item) (effects aborts : List (String × Ty)) (kn
   let lax := castDynamicValues s.program
   { s with
     main := lax Ctx.empty s.main
-    funs := s.funs.map fun (f, fn) => (f, { fn with body := lax (Ctx.empty.set fn.param fn.paramTy) fn.body })
+    funs := s.funs.map fun (f, fd) => (f, { fd with body := lax (Ctx.empty.set fd.param fd.paramTy) fd.body })
     handlers := s.handlers.map fun (ev, h) => (ev, lax (Ctx.empty.set eventLocal .any) h) }
 
 def elaborateTyped (items : List Item) (effects aborts : List (String × Ty)) : Spec :=
@@ -637,7 +664,7 @@ def Guesses.refine (items : List Item) (g : Guesses) : Guesses :=
   let s := elaborateTyped (items.map g.fill) g.effects g.aborts
   let classes := items.filterMap fun | .classDef c fields => some (c, fields) | _ => none
   let cells := items.filterMap fun | .cell c => some c | _ => none
-  let bodies := s.funs.map fun (_, fn) => observe s.program (Ctx.empty.set fn.param fn.paramTy) fn.body
+  let bodies := s.funs.map fun (_, fd) => observe s.program (Ctx.empty.set fd.param fd.paramTy) fd.body
   let handlers := s.handlers.map fun (ev, h) => observe.observeHandler s.program Ctx.empty ev h
   let observed := observe s.program Ctx.empty s.main ++ bodies.flatten ++ handlers.flatten
   let firsts := observed.foldl (init := ([] : List (String × Ty))) fun firsts o => match o with
@@ -657,9 +684,10 @@ def Expr.breaksIn (ev : Option String) : Expr → Bool
   | .abort e k x => ev == some e && k.isNone && x.breaksIn ev
   | .handle e h b => h.breaksIn (some e) && b.breaksIn ev
   | .loop c b | .forIn _ c b => c.breaksIn none && b.breaksIn none
+  | .lam _ b => b.breaksIn none
   | .letIn _ _ e b => e.breaksIn ev && b.breaksIn ev
   | .cons a b | .add a b | .arith _ a b | .lt a b | .eq _ a b | .seq a b | .index a b | .range a b | .append a b | .tryCatch a b
-  | .set a _ b => a.breaksIn ev && b.breaksIn ev
+  | .set a _ b | .app a b => a.breaksIn ev && b.breaksIn ev
   | .ite c a b => c.breaksIn ev && a.breaksIn ev && b.breaksIn ev
   | .assign _ e | .init _ e | .call _ e | .cast e _ | .broadcast _ e | .get e _ | .isA e _ | .emit _ e
   | .scope _ e => e.breaksIn ev

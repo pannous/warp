@@ -143,6 +143,9 @@ const CORPUS: &[&str] = &[
 	"class P { x: int }; [P(1)] == [P(1)]",
 	"class P { x: int }; p = P(1); q = p; p === q",
 	"class P { x: int }; p = P(1); q = P(1); p === q",
+	"class P { x: int }; p = P(1); q = p; p same q",
+	"class P { x: int }; p = P(1); q = P(1); p same as q",
+	"class P { x: int }; p = P(1); q = p; p is the same as q",
 	"class P { x: int }; p = P(1); q = P(1); p !== q",
 	"0 === false",
 	"n = 0; on alarm { n += 1 }; emit alarm; emit alarm; n",
@@ -195,10 +198,24 @@ const CORPUS: &[&str] = &[
 	"x = 1 < 2 or 3 < 2; x",
 
 	"s = 0; for x in 3 { s += x }; s",
+
+	"xs = [1, 2]; a, b = xs; a*10+b",
+	"f() := [1, 2]; a, b = f(); a*10+b",
+	"a, b = [1]; b",
+	"a, b = [1, 2, 3]; b",
+	"a, b = [1, 2]; a = \"x\"; a",
+
+	"f = x => x*2; f(3)",
+	"make_adder(n) := (x => x+n); add2 = make_adder(2); add2(5)",
+	"t = 7; shout = s => s + t; shout(1)",
+	"apply(g, n) := { s=0; for i in 0..n { s = g(s) }; s }; k=1; apply(x => x+k, 3)",
+	"n = 0; inc = x => { n += x; n }; inc(2); inc(3)",
+	"f = x => x*2; f = y => y + 1; f(3)",
+	"x = 1; f = y => x + y; f(1); x = 10; 0",
 ];
 
 /// Programs warp compiles although the model rejects them: holes in warp's checks, each with its card
-const KNOWN_HOLES: &[(&str, &str)] = &[];
+const KNOWN_HOLES: &[(&str, &str)] = &[("f = x => x*2; f = 3; 0", "lambda-reassign")];
 
 /// Where warp's run-time admission differs from W0's subtyping: a bool is an Int at run time, so an int value passes
 /// a bool check (P199 lets only the literals 1 and 0 in; card bool-assign)

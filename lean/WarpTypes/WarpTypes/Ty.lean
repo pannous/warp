@@ -1,7 +1,8 @@
 /-! Types of the core calculus W0 (notes/type_theory.md) and their order.
 
 `bool ≤ int ≤ number` is the chain of numbers (true/false act as 1/0), `never` is the bottom (the type of `error`
-and of the elements of `[]`), `any` the top (a Node), and lists are covariant: warp lists are values.
+and of the elements of `[]`), `any` the top (a Node), and lists are covariant: warp lists are values. A function
+value (a lambda, `x => x*2`) takes anything (its parameter is unannotated) and is covariant in its result.
 A class type is its chain of ancestors, root first (`cls ["Shape", "Circle"]`): a subclass extends the chain, so
 subtyping is the prefix order and needs no class table. A variant of a sum type is a class extending the sum
 (P178, P179). -/
@@ -11,6 +12,7 @@ namespace Warp
 inductive Ty where
   | never | bool | int | number | text | unit
   | list (element : Ty)
+  | fn (result : Ty)
   | cls (path : List String)
   | any
   deriving DecidableEq, Repr
@@ -22,6 +24,7 @@ def sub : Ty → Ty → Bool
   | never, _ => true
   | _, any => true
   | list a, list b => sub a b
+  | fn a, fn b => sub a b
   | cls p, cls q => decide (q <+: p)
   | bool, bool | bool, int | bool, number | int, int | int, number | number, number => true
   | text, text | unit, unit => true
@@ -36,6 +39,7 @@ def name : Ty → String
   | text => "text"
   | unit => "empty"
   | list t => s!"list of {t.name}"
+  | fn t => s!"function to {t.name}"
   | cls p => p.getLastD "object"
   | any => "any"
 
@@ -73,6 +77,7 @@ def join : Ty → Ty → Ty
   | never, b => b
   | a, never => a
   | list a, list b => list (join a b)
+  | fn a, fn b => fn (join a b)
   | cls p, cls q => cls (commonPrefix p q)
   | a, b => if sub a b then b else if sub b a then a else any
 
@@ -91,8 +96,11 @@ def arith (a b : Ty) : Ty := if sub a int && sub b int then int else number
 
 @[simp] theorem sub_list (a b : Ty) : sub (list a) (list b) = sub a b := rfl
 
+@[simp] theorem sub_fn (a b : Ty) : sub (fn a) (fn b) = sub a b := rfl
+
 theorem sub_refl : ∀ t : Ty, sub t t = true
   | list a => by simp [sub_refl a]
+  | fn a => by simp [sub_refl a]
   | cls p => by simp [sub]
   | never | bool | int | number | text | unit | any => rfl
 
@@ -108,6 +116,12 @@ theorem sub_to_list : ∀ {t a : Ty}, sub t (list a) = true → t = never ∨ �
 theorem sub_from_list : ∀ {t a : Ty}, sub (list a) t = true → t = any ∨ ∃ b, t = list b ∧ sub a b = true := by
   intro t a h; cases t <;> simp_all [sub]
 
+theorem sub_to_fn : ∀ {t a : Ty}, sub t (fn a) = true → t = never ∨ ∃ b, t = fn b ∧ sub b a = true := by
+  intro t a h; cases t <;> simp_all [sub]
+
+theorem sub_from_fn : ∀ {t a : Ty}, sub (fn a) t = true → t = any ∨ ∃ b, t = fn b ∧ sub a b = true := by
+  intro t a h; cases t <;> simp_all [sub]
+
 theorem sub_trans : ∀ {a b c : Ty}, sub a b = true → sub b c = true → sub a c = true := by
   intro a
   induction a with
@@ -117,6 +131,13 @@ theorem sub_trans : ∀ {a b c : Ty}, sub a b = true → sub b c = true → sub 
     rcases sub_from_list hab with rfl | ⟨y, rfl, hxy⟩
     · rw [sub_from_any hbc]; simp
     · rcases sub_from_list hbc with rfl | ⟨z, rfl, hyz⟩
+      · simp
+      · simpa using ih hxy hyz
+  | fn x ih =>
+    intro b c hab hbc
+    rcases sub_from_fn hab with rfl | ⟨y, rfl, hxy⟩
+    · rw [sub_from_any hbc]; simp
+    · rcases sub_from_fn hbc with rfl | ⟨z, rfl, hyz⟩
       · simp
       · simpa using ih hxy hyz
   | any => intro b c hab hbc; rw [sub_from_any hab] at hbc; exact hbc
@@ -136,6 +157,11 @@ theorem sub_antisymm : ∀ {a b : Ty}, sub a b = true → sub b a = true → a =
     rcases sub_from_list hab with rfl | ⟨y, rfl, hxy⟩
     · simp [sub] at hba
     · simp at hba; rw [ih hxy hba]
+  | fn x ih =>
+    intro b hab hba
+    rcases sub_from_fn hab with rfl | ⟨y, rfl, hxy⟩
+    · simp [sub] at hba
+    · simp at hba; rw [ih hxy hba]
   | cls p =>
     intro b hab hba
     cases b <;> simp_all [sub]
@@ -148,6 +174,9 @@ theorem join_upper_left : ∀ a b : Ty, sub a (join a b) = true := by
   | list x ih =>
     intro b; cases b <;> simp [join, sub_refl, ih]
     all_goals (split <;> simp_all [sub])
+  | fn x ih =>
+    intro b; cases b <;> simp [join, sub_refl, ih]
+    all_goals (split <;> simp_all [sub])
   | never => intro b; simp
   | cls p => intro b; cases b <;> simp [join, sub, commonPrefix_left] <;> (try split) <;> simp_all [sub]
   | _ => intro b; cases b <;> simp [join, sub] <;> (try split) <;> simp_all
@@ -156,6 +185,9 @@ theorem join_upper_right : ∀ a b : Ty, sub b (join a b) = true := by
   intro a
   induction a with
   | list x ih =>
+    intro b; cases b <;> simp [join, sub_refl, ih]
+    all_goals (split <;> simp_all [sub])
+  | fn x ih =>
     intro b; cases b <;> simp [join, sub_refl, ih]
     all_goals (split <;> simp_all [sub])
   | never => intro b; simp [join, sub_refl]
@@ -175,6 +207,16 @@ theorem join_least : ∀ {a b c : Ty}, sub a c = true → sub b c = true → sub
       · simp at hbc; simpa [join] using ih hxz hbc
     | any => rw [sub_from_any hbc]; simp
     | _ => rcases sub_from_list hac with rfl | ⟨z, rfl, _⟩ <;> simp_all [join, sub]
+  | fn x ih =>
+    intro b c hac hbc
+    cases b with
+    | never => simpa [join] using hac
+    | fn y =>
+      rcases sub_from_fn hac with rfl | ⟨z, rfl, hxz⟩
+      · simp
+      · simp at hbc; simpa [join] using ih hxz hbc
+    | any => rw [sub_from_any hbc]; simp
+    | _ => rcases sub_from_fn hac with rfl | ⟨z, rfl, _⟩ <;> simp_all [join, sub]
   | never => intro b c _ hbc; simpa [join] using hbc
   | any => intro b c hac _; rw [sub_from_any hac]; simp
   | cls p =>
@@ -197,6 +239,22 @@ theorem element_mono {l l' e : Ty} (hl : sub l' l = true) (he : element l = some
     rcases sub_to_list hl with rfl | ⟨b, rfl, hb⟩
     · exact ⟨never, rfl, by simp⟩
     · exact ⟨b, rfl, hb⟩
+
+/-- the result type of calling a value of type t: a function's result, `never` of an error, `any` of anything else
+(a dynamic value is checked when it runs; the checker rejects calling a value known not to be a function) -/
+def resultTy : Ty → Ty
+  | never => never
+  | fn r => r
+  | _ => any
+
+theorem resultTy_mono {f f' : Ty} (hf : sub f' f = true) : sub (resultTy f') (resultTy f) = true := by
+  cases f with
+  | never => rw [sub_to_never hf]; simp [resultTy]
+  | fn r =>
+    rcases sub_to_fn hf with rfl | ⟨b, rfl, hb⟩
+    · simp [resultTy]
+    · simpa [resultTy] using hb
+  | _ => cases f' <;> simp [resultTy]
 
 /-- the type of a value of one of the alternatives ts: their join (`int | float` is `number`, `int | text` is `any`) -/
 def joinAll (ts : List Ty) : Ty := ts.foldr join never

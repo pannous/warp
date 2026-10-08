@@ -236,7 +236,7 @@ W0 now has `arith op a b`, which takes numbers only.
   name bound to a list). Lists became gradual like arithmetic: `#` gives `elementTy` (a text's element is a text,
   anything but a list or text gives `any`), `++` takes any operands, and non-lists raise "not a list" when it runs.
   The checker demands lists, texts (for `#`) or `any`. Result: 77 exported, all agreeing with warp; with braced
-  blocks as expressions (`if c {a} else {b}`) and `+=`/`-=`/`*=` exported: 98. With effect handlers and implicit casts from `any`: 102; after repairing the sample file (53 lines were UTF-8 encoded twice, `ø` stored as `Ã¸`): 112, all agreeing (2026-10-08). With `global` (below): 121; with `for` loops: 122 of 600; with function locals: 123; with `let x = …`, `shared n = …` and C-style `int i = 2` / `String s = …`: 125; with ranges: 131; with `not`/`and`/`or`: 140, all agreeing. Most of the rest:
+  blocks as expressions (`if c {a} else {b}`) and `+=`/`-=`/`*=` exported: 98. With effect handlers and implicit casts from `any`: 102; after repairing the sample file (53 lines were UTF-8 encoded twice, `ø` stored as `Ã¸`): 112, all agreeing (2026-10-08). With `global` (below): 121; with `for` loops: 122 of 600; with function locals: 123; with `let x = …`, `shared n = …` and C-style `int i = 2` / `String s = …`: 125; with ranges: 131; with `not`/`and`/`or`: 140; with `a, b = xs`: 141; with lambdas: 149, all agreeing. Most of the rest:
   imports (`use`), multiple assignment `a, b = xs`, nested functions, maps `{a:1}`, lambdas, `i++`, `global`, string methods.
 
 ## Globals
@@ -247,6 +247,23 @@ exporter collects every name declared `global` anywhere first. In warp a functio
 `global` makes a local (`n = 0; def f(x) { n = 5; x }; f(3); n` is 0): see Function locals. Elaboration runs twice so a function can read a main-level name whatever their order
 (`elaborateTyped`: the second pass infers functions seeing the first pass's names). Not yet: `global float y = …`
 (the exporter does not read the type word yet), `global x; x` (read before any value).
+
+## Lambdas
+
+`x => body` is `Expr.lam` (an expression; parameter `any`, warp's lambdas are unannotated), which steps to the closed
+value `Expr.clo` once substitution has replaced the locals it captures; `f(a)` of a value is `Expr.app`, beta
+reduction by substitution, "not a function" otherwise. `Ty.fn r` is covariant in its result like `list`;
+`resultTy` (total: `any` for a non-function, the checker's `callable` rejects those statically). Exporter: a name
+bound to a lambda is a function in warp (a bare `f` is a call missing its argument), so bare reads are refused;
+warp's late binding (a function or lambda reading a main-level name changed after its definition, then called,
+needs `global x`) is refused as outside W0, since W0 reads at call time. Hole lambda-reassign: `f = x => x*2; f = 3`.
+
+## Destructuring
+
+`a, b = xs` (first bindings only) exports as a hidden `·tupleN = xs`, its items counted by a `for` loop into
+`·countN` (warp fails with "wrong number of values" otherwise), then `a = ·tupleN#1`, `b = ·tupleN#2`: the names
+hold anything, as in warp. `a, *mid, z = …` is refused; destructuring into names that hold values fails in warp
+(card destructure-existing).
 
 ## not, and, or
 
@@ -292,8 +309,8 @@ item-unchecked).
 lists item by item, anything else by value. `a === b` / `a same b` (same = true) is identity on instances (an
 instance is its address); on other values it compares by value, so `0 === false` is no. Not modelled: list identity
 (W0's lists are values, `[1] === [1]` is yes in W0, no in warp under P208) and `1 === 1.0` (W0 keeps no float
-values). The exporter maps `!=` and `!==` to the negation; `same`/`identical` spellings once warp parses them
-(card same-identity, which also covers warp still answering yes for `p === q` of distinct instances).
+values). The exporter maps `!=` and `!==` to the negation; `same`, `same as` and `is the same as` are `===`
+(`identical` is no alias, user decision).
 
 ## Inline unions and optionals
 
