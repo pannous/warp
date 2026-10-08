@@ -60,6 +60,9 @@ PASSED:
   ✓ control::test_channels::for_over_a_channel_receives_until_it_is_closed
   ✓ control::test_channels::receiving_with_no_task_left_is_an_error
   ✓ control::test_charged_fields::test_define_entries_are_values
+  ✓ control::test_check_assert::a_failed_check_stops_the_program
+  ✓ control::test_check_assert::check_passes_a_condition_that_holds
+  ✓ control::test_check_assert::check_throws_when_the_condition_fails
   ✓ control::test_clipboard::a_clipboard_listener_watches_the_change_count
   ✓ control::test_clipboard::reading_the_clipboard_is_one_host_call
   ✓ control::test_clipboard::the_change_count_is_read_without_the_content
@@ -1421,6 +1424,10 @@ PASSED:
   ✓ modules::test_folder_scope::inline_code_has_no_folder_scope
   ✓ modules::test_folder_scope::sibling_definitions_are_visible_without_use
   ✓ modules::test_folder_scope::the_file_itself_wins_over_its_siblings
+  ✓ modules::test_from_import::a_program_word_of_an_unimported_name_is_its_own
+  ✓ modules::test_from_import::from_import_brings_the_named_words
+  ✓ modules::test_from_import::from_import_leaves_the_other_words_out
+  ✓ modules::test_from_import::from_import_of_a_missing_word_is_an_error
   ✓ modules::test_header_search::a_header_comes_from_the_first_include_directory_holding_it
   ✓ modules::test_header_search::an_import_nothing_declares_says_why
   ✓ modules::test_header_search::only_sdl_names_read_the_sdl_headers
@@ -1793,6 +1800,10 @@ PASSED:
   ✓ numbers::test_static_units_compiled::test_a_compiled_quantity_carries_its_unit
   ✓ numbers::test_static_units_compiled::test_a_whole_list_of_quantities_shows_its_units
   ✓ numbers::test_static_units_compiled::test_eval_reads_the_same_section
+  ✓ numbers::test_static_units_data::test_a_serialized_quantity_names_its_unit
+  ✓ numbers::test_static_units_data::test_annotated_variables_keep_and_check_units
+  ✓ numbers::test_static_units_data::test_lists_grow_with_quantities_of_their_unit
+  ✓ numbers::test_static_units_data::test_object_fields_hold_quantities
   ✓ numbers::test_static_units_functions::test_a_unit_word_called_as_a_function_is_no_unit
   ✓ numbers::test_static_units_functions::test_dimension_errors_inside_functions_are_compile_errors
   ✓ numbers::test_static_units_functions::test_functions_take_and_give_quantities
@@ -3570,4 +3581,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-19 ignored, 3565 passed, 0 failed, 3565 total tested
+19 ignored, 3576 passed, 0 failed, 3576 total tested
