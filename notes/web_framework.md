@@ -361,6 +361,26 @@ Each step is useful on its own and is what the next ones stand on.
   Cost: 69 more crates in Cargo.lock, a first build of about a minute. Not a sample yet.
 - Next: more buffers and uniforms (a map of named arrays), typed results (ints as array<i32>), render to a canvas.
 
+## web-apis: WebIDL (2026-10-08, warp-95)
+- `use js <global>` of a browser global is typed through WebIDL as `use c` is through C headers: src/web_idl.rs reads
+  lib/web.webidl (bundled from w3c/webref's @webref/idl 3.85.0 by scripts/webidl_bundle.py: console, Crypto,
+  Performance, Storage, Navigator, Location, Clipboard whole, i.e. with every partial, mixin and parent of all 334 spec
+  files; Window and its mixins only with the attributes that name those globals). foreign_modules.rs checks a member of
+  such a global at compile time: one the interface lacks (did you mean, case-insensitive first), an attribute called,
+  an argument count no overload takes. Natively too: node resolves a name to its global first, which is the same
+  object (node-only members such as performance.eventLoopUtilization are refused: `use js "perf_hooks"`).
+- A global WebIDL does not declare (Math, JSON: ECMAScript; node modules) stays unchecked. Tests: tests/ffi/test_web_idl.rs.
+- Scope (slice 2): natively a program's globals are Window's; without the native feature (the playground, the browser
+  suite) WorkerGlobalScope's, where they run: `use js localStorage` says it exists on a page, not in the Worker, and
+  names local[k]; `navigator` is a WorkerNavigator (no clipboard). A global is a namespace (console) or an attribute of
+  the scope, never an interface name (`use js Storage` is the constructor: unchecked). Member-level [Exposed=Window]
+  inside mixins (NavigatorID.vendor) is not read yet.
+- Chains (slice 3): an attribute's value is typed by its interface when the bundle declares it whole
+  (`navigator.clipboard.writeTxt` → Clipboard, did you mean writeText), also through a variable
+  (`board = navigator.clipboard`; foreign_modules.rs web_idl_values). Results of operations stay untyped.
+- Next: result kinds from the IDL (DOMString → text, boolean, numbers, `?` → ø; operation results such as
+  getItem's DOMString?), more interfaces (bundle arguments: Document and the DOM, fetch's Response, WebSocket).
+
 ## web-apis: WebSocket (card web-websocket, 2026-10-07, warp-90)
 - No new words: a channel named by a ws:// or wss:// address is a WebSocket. `on message from "wss://…" { … event … }`
   connects at once (natively an unreachable server is a loud error there) and hears what the server sends;

@@ -10,7 +10,9 @@ use std::collections::HashMap;
 
 const USE_WORD: &str = "use";
 /// The runtimes a `use <runtime> <module>` names: Python, and JavaScript (node natively, the page in the browser)
-pub const FOREIGN_RUNTIMES: [&str; 3] = ["python", "js", COMPONENT_RUNTIME];
+pub const FOREIGN_RUNTIMES: [&str; 3] = ["python", JS_RUNTIME, COMPONENT_RUNTIME];
+/// JavaScript: its browser globals are typed through WebIDL (src/web_idl.rs)
+const JS_RUNTIME: &str = "js";
 /// `use wasm "lib.wasm" as lib`: a WebAssembly component (src/components.rs); its module is the file, found next to the
 /// program, and named after the file by default
 pub const COMPONENT_RUNTIME: &str = "wasm";
@@ -29,7 +31,7 @@ pub fn lower(program: Node) -> Node {
 	if modules.is_empty() {
 		return program;
 	}
-	Foreign { modules: &modules, values: HashMap::new(), component_values: Default::default() }.rewrite(program)
+	Foreign { modules: &modules, values: HashMap::new(), component_values: Default::default(), web_idl_values: HashMap::new() }.rewrite(program)
 }
 
 /// `use rust_demo.wasm`: the component's long form `use wasm "rust_demo.wasm"` (card g-_Xm4); a core module file stays
@@ -96,6 +98,8 @@ struct Foreign<'a> {
 	values: HashMap<String, String>,
 	/// variables assigned a component's result: plain values, or handles of its resources whose methods it runs
 	component_values: std::collections::HashSet<String>,
+	/// variables assigned a JavaScript value WebIDL declares (`c = navigator.clipboard`): their interface
+	web_idl_values: HashMap<String, String>,
 }
 
 /// `foreign_call(runtime, …)`: its runtime, when its value can stay in that runtime (a component's results are plain
@@ -162,6 +166,19 @@ fn foreign_call(runtime: &str, module: Node, member: &str, is_call: bool, argume
 	Node::List(vec![Node::Symbol(crate::host::FOREIGN_CALL.to_string()), text(runtime), module, text(member), Node::int(i64::from(is_call)), arguments], Bracket::Round, Separator::None)
 }
 
+/// `foreign_call("js", receiver, member, 0, ø)`, the read of a JavaScript attribute: its receiver and member
+fn attribute_read(node: &Node) -> Option<(&Node, &str)> {
+	let Node::List(items, Bracket::Round, _) = node.drop_meta() else { return None };
+	match items.as_slice() {
+		[call, runtime, receiver, member, is_call, _] if matches!(call.drop_meta(), Node::Symbol(name) if name == crate::host::FOREIGN_CALL)
+			&& matches!(runtime.drop_meta(), Node::Text(runtime) if runtime == JS_RUNTIME) && *is_call == Node::int(0) => match member.drop_meta() {
+			Node::Text(member) => Some((receiver, member)),
+			_ => None,
+		},
+		_ => None,
+	}
+}
+
 /// `operator.member(arguments…)` in `runtime`
 fn operator_call(runtime: &str, member: &str, arguments: Vec<Node>) -> Node {
 	foreign_call(runtime, Node::Text(OPERATOR_MODULE.to_string()), member, true, Node::List(arguments, Bracket::Square, Separator::Space))
@@ -223,6 +240,38 @@ impl Foreign<'_> {
 		}
 	}
 
+	/// The WebIDL interface of a JavaScript receiver and its path as written: a global `use js` names, a variable assigned
+	/// such a value, or an attribute read of one (`navigator.clipboard`: Clipboard); Err for a global only a page has
+	fn web_idl_receiver(&self, receiver: &Node) -> Result<Option<(String, String)>, String> {
+		let global = |name: &str, path: &str| Ok(crate::web_idl::global_interface(name)?.map(|interface| (interface, path.to_string())));
+		match receiver.drop_meta() {
+			Node::Symbol(name) => match self.modules.get(name) {
+				Some((runtime, module)) if runtime == JS_RUNTIME => global(module, name),
+				_ => Ok(self.web_idl_values.get(name).map(|interface| (interface.clone(), name.clone()))),
+			},
+			// the global inside a lowered read
+			Node::Text(name) => global(name, name),
+			other => {
+				let Some((inner, member)) = attribute_read(other) else { return Ok(None) };
+				let Some((interface, path)) = self.web_idl_receiver(inner)? else { return Ok(None) };
+				Ok(crate::web_idl::attribute_interface(&interface, member).map(|interface| (interface, format!("{path}.{member}"))))
+			}
+		}
+	}
+
+	/// `crypto.randomUuid()`: what WebIDL declares for the receiver instead
+	fn undeclared_in_web_idl(&self, receiver: &Node, member: &str, is_call: bool, arguments: &Node) -> Option<String> {
+		let count = match arguments {
+			Node::List(items, _, _) => items.len(),
+			_ => 0,
+		};
+		match self.web_idl_receiver(receiver) {
+			Err(problem) => Some(problem),
+			Ok(Some((interface, path))) => crate::web_idl::check_member(&interface, &path, member, is_call.then_some(count)).err(),
+			Ok(None) => None,
+		}
+	}
+
 	/// The runtime and the module (its name as text) or the handle (the value itself) a receiver names
 	fn receiver(&self, receiver: &Node) -> Option<(String, Node)> {
 		if let Node::Symbol(name) = receiver.drop_meta() {
@@ -259,6 +308,9 @@ impl Foreign<'_> {
 					},
 					_ => return node,
 				};
+				if let Some(problem) = (runtime == JS_RUNTIME).then(|| self.undeclared_in_web_idl(&receiver, &member, is_call, &arguments)).flatten() {
+					return crate::diagnostic::Diagnostic::at(&node, problem).into_error();
+				}
 				return foreign_call(&runtime, module, &member, is_call, arguments);
 			}
 			// `counter.increment(2)` of a handle a component gave: the method of its resource
@@ -275,6 +327,10 @@ impl Foreign<'_> {
 					match foreign_runtime(&value) {
 						Some(runtime) => self.values.insert(name.clone(), runtime),
 						None => self.values.remove(name),
+					};
+					match self.web_idl_receiver(&value) {
+						Ok(Some((interface, _))) => self.web_idl_values.insert(name.clone(), interface),
+						_ => self.web_idl_values.remove(name),
 					};
 					match called_runtime(&value).is_some_and(|runtime| runtime == COMPONENT_RUNTIME) {
 						true => self.component_values.insert(name.clone()),

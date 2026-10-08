@@ -464,6 +464,13 @@ impl WasmGcEmitter {
 			let refused: &[Kind] = if declared_list { &[Kind::Int, Kind::Float, Kind::Text, Kind::Codepoint] } else { &[Kind::List, Kind::Text] };
 			// a declared builtin type takes only its subtypes, `f(x: text)` refuses 3 (W0, notes/type_theory.md)
 			let declared_misfit = param.annotation.as_ref().and_then(crate::analyzer::annotated_builtin_type).is_some_and(|type_name| SCALAR_KINDS.contains(&given) && !crate::analyzer::admits(type_name, given));
+			// `f(b: bool)` refuses 2 but takes yes, no, 1 and 0 (card bool-assign, P199)
+			let annotated_bool = param.annotation.as_ref().map(Node::name).filter(|type_name| crate::analyzer::is_bool_type(type_name));
+			if annotated_bool.is_some_and(|type_name| crate::analyzer::literal_misfit(&type_name, argument).is_some()) {
+				let message = format!("{} needs a bool for parameter {}, got {} ({})", user_fn.name, param.name, argument.serialize(), kind_with_article(given));
+				self.emit_type_error(func, message);
+				return;
+			}
 			// `[]` is ø here: the empty list fits every declared list
 			let is_empty_list = matches!(argument.drop_meta(), Node::Empty);
 			if declared_misfit || ((!expected.is_ref() || declared_list) && refused.contains(&given) && given != expected && !is_empty_list) {

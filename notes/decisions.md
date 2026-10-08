@@ -96,6 +96,14 @@ D-number or #number mean this file. Open questions, parked ones and the standing
 - Mutating a main-level list in a function (default, warp-7c, card uncalled-list-param): `names = ["a"]; grow() := {
   names.add(420) }` gets the same educating error as `names = names + [420]` there: "declare it `global names`";
   with `global names` it works. Alternative: Python's silent mutation without a declaration.
+- P199 bool slots: 1 and 0 are accepted as yes/no everywhere (variables, fields, list items): "yes is 1, no is 0";
+  other ints and texts are errors. Card bool-assign.
+- P200 class instances passed to functions are shared references (like Python/JS): `put(b, "yo")` changes b.items.
+  Card instance-field.
+- Undeclared lists (default, warp-a1, card list-element-types): an undeclared list stays `list any` (`xs = [1];
+  xs = ["a"]` is fine), while a scalar's first value fixes its kind.
+- Method broadcast (default following P50, warp-c9, card method-broadcast): the method form of scalar library words
+  (upper lower trim floor ceil round) broadcasts over lists like the prefix form: `names.upper` = `upper names`.
 - Defaults shown to the user and kept (no objection): error highlighting (CLI carets under the word on stderr; web
   demo red/amber wavy underlines, message on hover; card g-_ZNg); P168 detail (an object whose fields are unknown at
   compile time keeps the field read `p.phone-number`); char as Text (card char-text, follows from P173: an untyped

@@ -2,7 +2,8 @@
 //! compile-time error (analyzer check_declared_types); an item known only at run time is checked at the store:
 //! `names.add(v)` of `names: texts` is `if not (v is text) { raise "…" }; names.add(v)`, a call's item is held in a
 //! temporary first, and a whole list from a call (`names = f()`) or another list (`names = other + [v]`) has each item
-//! checked. A list field of an instance whose class is known (`b = bag(…)`) is checked the same way: `b.items.add(v)`.
+//! checked. A list field (`b.items.add(v)`, `b.items = f()`) is checked the same way: by its class when the pass knows
+//! b's class (`b = bag(…)`), else guarded by each class with a list field of that name, `if (b is bag) and not (v is text)`.
 //! The check is a statement before the store, so the store keeps its form (a typed int list stays an array).
 
 use crate::analyzer::{added_items, appended_items, builtin_type_kind, computed_literal_kind, declaring_name_and_type, indexed_list, list_element_type, of_type_declaration};
@@ -40,6 +41,19 @@ struct ElementChecks {
 struct ElementTest {
 	type_word: String,
 	message: String,
+	/// `b is bag`: the test applies only to an instance of that class, for a field of an instance whose class is unknown
+	guard: Option<String>,
+}
+
+impl ElementTest {
+	/// `not (item is text)`, `(b is bag) and not (item is text)`
+	fn failure(&self, item: &str) -> String {
+		let misfit = format!("not ({item} is {})", self.type_word);
+		match &self.guard {
+			Some(guard) => format!("({guard}) and {misfit}"),
+			None => misfit,
+		}
+	}
 }
 
 impl ElementChecks {
@@ -57,8 +71,13 @@ impl ElementChecks {
 				// `names#1 = v`
 				if let Some(test) = indexed_list(&target).and_then(|name| self.declared_test(name)) {
 					let mut checks = vec![];
-					let item = self.checked_items(vec![value], &test, &mut checks).remove(0);
+					let item = self.checked_items(vec![value], &[test], &mut checks).remove(0);
 					return self.with_checks(checks, Node::Key(target, op, Box::new(item)));
+				}
+				// `b.items = f()`
+				let field_tests = self.field_tests(&target);
+				if !field_tests.is_empty() {
+					return self.checked_store(&field_tests, &target.clone(), *target, op, value);
 				}
 				let declaration = match target.drop_meta() {
 					Node::Symbol(name) => self.declared.get(name).map(|type_name| (name.clone(), type_name.clone())),
@@ -67,44 +86,51 @@ impl ElementChecks {
 				let Some((name, type_name)) = declaration else { return Node::Key(target, op, Box::new(value)) };
 				self.declared.insert(name.clone(), type_name.clone());
 				match element_test(&name, &type_name) {
-					Some(test) => self.checked_store(&test, &name, *target, op, value),
+					Some(test) => self.checked_store(&[test], &Node::Symbol(name), *target, op, value),
 					None => Node::Key(target, op, Box::new(value)),
 				}
 			}
 			Node::Key(list, Op::Dot, call) => {
 				let append = Node::Key(list, Op::Dot, call);
-				match self.append_test(&append) {
-					Some(test) => self.checked_append(&test, append),
-					None if appended_items(&append).is_some() => append,
-					None => append.map_children(|child| self.lower(child)),
+				if appended_items(&append).is_none() {
+					return append.map_children(|child| self.lower(child));
+				}
+				let Node::Key(list, _, _) = append.drop_meta() else { unreachable!("an append call") };
+				let tests = match list.drop_meta() {
+					Node::Symbol(name) => self.declared_test(name).into_iter().collect(),
+					field => self.field_tests(field),
+				};
+				match tests.is_empty() {
+					true => append,
+					false => self.checked_append(&tests, append),
 				}
 			}
 			other => other.map_children(|child| self.lower(child)),
 		}
 	}
 
-	/// `names = names + [v]`, `names = other + [v]`, `names = [v w]`, `names = f()`
-	fn checked_store(&mut self, test: &ElementTest, name: &str, target: Node, op: Op, value: Node) -> Node {
+	/// `names = names + [v]`, `names = other + [v]`, `names = [v w]`, `names = f()`, into the list `stored`
+	fn checked_store(&mut self, tests: &[ElementTest], stored: &Node, target: Node, op: Op, value: Node) -> Node {
 		let mut checks = vec![];
 		let value = match added_items(&value) {
 			Some(items) => {
-				let items = self.checked_items(items.to_vec(), test, &mut checks);
+				let items = self.checked_items(items.to_vec(), tests, &mut checks);
 				let value = with_added_items(&value, items);
 				match value {
-					Node::Key(list, Op::Add, appended) if !self.holds_checked_items(&list, name) => {
+					Node::Key(list, Op::Add, appended) if !self.holds_checked_items(&list, stored) => {
 						let held = self.temporary();
 						checks.push(assignment(held.clone(), *list));
-						checks.push(each_item_check(&held, test));
+						checks.extend(tests.iter().map(|test| each_item_check(&held, test)));
 						Node::Key(Box::new(held), Op::Add, appended)
 					}
 					value => value,
 				}
 			}
-			None if matches!(value.drop_meta(), Node::Empty) || computed_literal_kind(&value).is_some() => value,
+			None if matches!(value.drop_meta(), Node::Empty) || checked_at_compile_time(&value, tests) => value,
 			None => {
 				let list = self.temporary();
 				checks.push(assignment(list.clone(), value));
-				checks.push(each_item_check(&list, test));
+				checks.extend(tests.iter().map(|test| each_item_check(&list, test)));
 				list
 			}
 		};
@@ -112,21 +138,21 @@ impl ElementChecks {
 	}
 
 	/// `names.add(v)`
-	fn checked_append(&mut self, test: &ElementTest, append: Node) -> Node {
+	fn checked_append(&mut self, tests: &[ElementTest], append: Node) -> Node {
 		let Node::Key(list, Op::Dot, call) = append.drop_meta() else { return append };
 		let Node::List(items, bracket, separator) = call.drop_meta() else { return append };
 		let (method, arguments) = items.split_first().expect("an append call has its method");
 		let mut checks = vec![];
-		let arguments = self.checked_items(arguments.to_vec(), test, &mut checks);
+		let arguments = self.checked_items(arguments.to_vec(), tests, &mut checks);
 		let call = Node::List([vec![method.clone()], arguments].concat(), bracket.clone(), separator.clone());
 		self.with_checks(checks, Node::Key(list.clone(), Op::Dot, Box::new(call)))
 	}
 
 	/// The items as stored, each run-time one checked first; a call's item is held in a temporary so it runs once
-	fn checked_items(&mut self, items: Vec<Node>, test: &ElementTest, checks: &mut Vec<Node>) -> Vec<Node> {
+	fn checked_items(&mut self, items: Vec<Node>, tests: &[ElementTest], checks: &mut Vec<Node>) -> Vec<Node> {
 		items.into_iter().map(|item| {
-			if computed_literal_kind(&item).is_some() {
-				return item; // a literal is checked at compile time
+			if checked_at_compile_time(&item, tests) {
+				return item;
 			}
 			let held = match item.drop_meta() {
 				Node::Symbol(_) => item,
@@ -136,7 +162,7 @@ impl ElementChecks {
 					temporary
 				}
 			};
-			checks.push(item_check(&held, test));
+			checks.extend(tests.iter().map(|test| item_check(&held, test)));
 			held
 		}).collect()
 	}
@@ -145,28 +171,35 @@ impl ElementChecks {
 		element_test(name, self.declared.get(name)?)
 	}
 
-	/// The list `xs` of `xs + [v]` stored in `name` holds checked items: name itself or a list declared with the same
-	/// element type
-	fn holds_checked_items(&self, list: &Node, name: &str) -> bool {
-		let Node::Symbol(list) = list.drop_meta() else { return false };
-		let element = |variable: &str| self.declared.get(variable).and_then(|type_name| list_element_type(type_name));
-		list == name || element(list).is_some_and(|element_type| element(name) == Some(element_type))
+	/// The list `xs` of `xs + [v]` stored in the list `stored` holds checked items: stored itself or a list declared
+	/// with the same element type
+	fn holds_checked_items(&self, list: &Node, stored: &Node) -> bool {
+		if list.drop_meta() == stored.drop_meta() {
+			return true;
+		}
+		let element = |variable: &Node| match variable.drop_meta() {
+			Node::Symbol(name) => self.declared.get(name).and_then(|type_name| list_element_type(type_name)),
+			_ => None,
+		};
+		element(list).is_some_and(|element_type| element(stored) == Some(element_type))
 	}
 
-	/// The test of the list an append call `names.add(…)`, `b.items.add(…)` adds to: a declared list variable or the
-	/// list field of an instance whose class is known
-	fn append_test(&self, append: &Node) -> Option<ElementTest> {
-		appended_items(append)?;
-		let Node::Key(list, Op::Dot, _) = append.drop_meta() else { return None };
-		match list.drop_meta() {
-			Node::Symbol(name) => self.declared_test(name),
-			Node::Key(instance, Op::Dot, field) => {
-				let class = self.instances.get(&instance.drop_meta().name())?;
-				let field = field.drop_meta().name();
-				let (_, type_name) = self.class_fields.get(class)?.iter().find(|(name, _)| *name == field)?;
-				element_test(&format!("{field} of {class}"), type_name)
-			}
-			_ => None,
+	/// The tests of a list field `b.items`: by b's class when the pass knows it, else one guarded test per class with a
+	/// checked list field of that name
+	fn field_tests(&self, list: &Node) -> Vec<ElementTest> {
+		let Node::Key(instance, Op::Dot, field) = list.drop_meta() else { return vec![] };
+		let Node::Symbol(instance) = instance.drop_meta() else { return vec![] };
+		let field = field.drop_meta().name();
+		let test_of = |class: &String| {
+			let (_, type_name) = self.class_fields.get(class)?.iter().find(|(name, _)| *name == field)?;
+			element_test(&format!("{field} of {class}"), type_name)
+		};
+		match self.instances.get(instance) {
+			Some(class) => test_of(class).into_iter().collect(),
+			None => self.class_fields.keys().collect::<std::collections::BTreeSet<_>>().into_iter().filter_map(|class| {
+				let test = test_of(class)?;
+				Some(ElementTest { guard: Some(format!("{instance} is {class}")), ..test })
+			}).collect(),
 		}
 	}
 
@@ -183,23 +216,28 @@ impl ElementChecks {
 	}
 }
 
+/// A literal is checked at compile time, unless a test is guarded: the compiler doesn't know that instance's class
+fn checked_at_compile_time(value: &Node, tests: &[ElementTest]) -> bool {
+	computed_literal_kind(value).is_some() && tests.iter().all(|test| test.guard.is_none())
+}
+
 fn element_test(name: &str, type_name: &str) -> Option<ElementTest> {
 	let element = list_element_type(type_name)?;
 	let kind = builtin_type_kind(element)?;
 	let type_word = if kind == Kind::Float { NUMBER_WORD.to_string() } else { element.to_string() };
 	let message = format!("type mismatch: {name} is declared {type_name}, cannot hold an item that is no {element}");
-	Some(ElementTest { type_word, message })
+	Some(ElementTest { type_word, message, guard: None })
 }
 
 /// `if not (v is text) { raise "…" }`
 fn item_check(item: &Node, test: &ElementTest) -> Node {
-	let template = crate::wasp_parser::parse(&format!("if not ({ITEM_PLACEHOLDER} is {}) {{ raise {:?} }}", test.type_word, test.message));
+	let template = crate::wasp_parser::parse(&format!("if {} {{ raise {:?} }}", test.failure(ITEM_PLACEHOLDER), test.message));
 	substitute(template, ITEM_PLACEHOLDER, item)
 }
 
 /// `for item in list { if not (item is text) { raise "…" } }`
 fn each_item_check(list: &Node, test: &ElementTest) -> Node {
-	let check = format!("if not ({ITEM_PLACEHOLDER} is {}) {{ raise {:?} }}", test.type_word, test.message);
+	let check = format!("if {} {{ raise {:?} }}", test.failure(ITEM_PLACEHOLDER), test.message);
 	let template = crate::wasp_parser::parse(&format!("for {ITEM_PLACEHOLDER} in {LIST_PLACEHOLDER} {{ {check} }}"));
 	let item = Node::Symbol(format!("{}·item", list.name()));
 	substitute(substitute(template, LIST_PLACEHOLDER, list), ITEM_PLACEHOLDER, &item)

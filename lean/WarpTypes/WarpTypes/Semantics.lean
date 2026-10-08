@@ -1,7 +1,7 @@
 import WarpTypes.Typing
 
 /-! Small-step semantics of W0: left to right, call by value. An `error` in any evaluation position propagates,
-except under `try`. Main-level names are cells of the store. -/
+except under `try`. Main-level names are cells of the store; class instances live in its heap, which only grows. -/
 
 namespace Warp
 open Ty Expr
@@ -12,9 +12,46 @@ inductive Cell where
   /-- the body of a charged name `z := e`, run at each read -/
   | charged (body : Expr)
 
-abbrev Store := String → Option Cell
+/-- a class instance: its class chain and the fields set so far -/
+structure Obj where
+  path : List String
+  fields : String → Option Expr
 
-def Store.set (μ : Store) (x : String) (c : Cell) : Store := fun z => if z = x then some c else μ z
+structure Store where
+  vars : String → Option Cell
+  heap : List Obj := []
+
+instance : CoeFun Store (fun _ => String → Option Cell) := ⟨Store.vars⟩
+
+def Store.set (μ : Store) (x : String) (c : Cell) : Store :=
+  { μ with vars := fun z => if z = x then some c else μ.vars z }
+
+/-- a new instance with no field set, at address `μ.heap.length` -/
+def Store.alloc (μ : Store) (p : List String) : Store := { μ with heap := μ.heap ++ [⟨p, fun _ => none⟩] }
+
+/-- the object at address a, if it is of class chain p -/
+def Store.obj (μ : Store) (a : Nat) (p : List String) : Option Obj := μ.heap[a]?.filter (·.path == p)
+
+def Store.write (μ : Store) (a : Nat) (f : String) (v : Expr) : Store :=
+  { μ with heap := μ.heap.modify a fun o => { o with fields := fun g => if g = f then some v else o.fields g } }
+
+/-- `o.f` of a value o -/
+def readField (μ : Store) : Expr → String → Expr
+  | .ref a p, f =>
+    match μ.obj a p with
+    | some o => (o.fields f).getD (.error "unset field")
+    | none => .error "dangling reference"
+  | _, _ => .error "not an object"
+
+/-- `o.f = v` of values o and v -/
+def writeField (μ : Store) : Expr → String → Expr → Expr × Store
+  | .ref a p, f, v => if (μ.obj a p).isSome then (v, μ.write a f v) else (.error "dangling reference", μ)
+  | _, _, _ => (.error "not an object", μ)
+
+/-- `v is c`: c is the class of v or one of its ancestors -/
+def isInstance : Expr → String → Bool
+  | .ref _ p, c => p.contains c
+  | _, _ => false
 
 /-- true/false act as 1/0 -/
 def asInt : Expr → Option Int
@@ -26,7 +63,19 @@ def asNumber : Expr → Int
   | .num n => n
   | e => (asInt e).getD 0
 
+/-- a value as `+` joins it to a text -/
+def render : Expr → String
+  | .text s => s
+  | .bool b => if b then "true" else "false"
+  | .int n | .num n => toString n
+  | _ => ""
+
+def isText : Expr → Bool
+  | .text _ => true
+  | _ => false
+
 def addValues (a b : Expr) : Expr :=
+  if isText a || isText b then .text (render a ++ render b) else
   match asInt a, asInt b with
   | some x, some y => .int (x + y)
   | _, _ => .num (asNumber a + asNumber b)
@@ -49,6 +98,30 @@ def appendValues : Expr → Expr → Expr
   | .cons h t, b => .cons h (appendValues t b)
   | _, b => b
 
+/-- the type of a value, as `HasType` gives it -/
+def valueType : Expr → Option Ty
+  | .bool _ => some .bool
+  | .int _ => some .int
+  | .num _ => some .number
+  | .text _ => some .text
+  | .unit => some .unit
+  | .nil => some (.list .never)
+  | .ref _ p => some (.cls p)
+  | .cons h t =>
+    match valueType h, valueType t with
+    | some a, some l =>
+      match element l with
+      | some e => some (.list (join a e))
+      | none => none
+    | _, _ => none
+  | _ => none
+
+/-- the run-time type test of a cast -/
+def fits (v : Expr) (t : Ty) : Bool :=
+  match valueType v with
+  | some tv => sub tv t
+  | none => false
+
 /-- an evaluation position: the hole is evaluated next once the expressions left of it are values -/
 inductive Frame where
   | consL (t : Expr) | consR (h : Expr)
@@ -62,6 +135,11 @@ inductive Frame where
   | assign (x : String) | init (x : String)
   | letIn (y : String) (t : Ty) (b : Expr)
   | call (f : String)
+  | cast (t : Ty)
+  | broadcast (f : String)
+  | get (f : String)
+  | setL (f : String) (v : Expr) | setR (o : Expr) (f : String)
+  | isA (c : String)
 
 namespace Frame
 
@@ -84,10 +162,16 @@ def plug : Frame → Expr → Expr
   | init x, e => .init x e
   | letIn y t b, e => .letIn y t e b
   | call f, e => .call f e
+  | cast t, e => .cast e t
+  | broadcast f, e => .broadcast f e
+  | get f, e => .get e f
+  | setL f v, e => .set e f v
+  | setR o f, e => .set o f e
+  | isA c, e => .isA e c
 
 /-- a right position needs the left operand evaluated -/
 def ready : Frame → Bool
-  | consR h | addR h | ltR h | eqR h | indexR h | appendR h => h.isValue
+  | consR h | addR h | ltR h | eqR h | indexR h | appendR h | setR h _ => h.isValue
   | _ => true
 
 end Frame
@@ -116,6 +200,14 @@ inductive Step (P : Program) : Expr × Store → Expr × Store → Prop where
   | letIn {y t v b μ} : v.isValue = true → Step P (.letIn y t v b, μ) (b.subst y v, μ)
   | call {f v fn μ} : v.isValue = true → P.funs f = some fn →
       Step P (.call f v, μ) (.letIn fn.param fn.paramTy v fn.body, μ)
+  | broadcastNil {f μ} : Step P (.broadcast f .nil, μ) (.nil, μ)
+  | broadcastCons {f h t μ} : h.isValue = true → t.isValue = true →
+      Step P (.broadcast f (.cons h t), μ) (.cons (.call f h) (.broadcast f t), μ)
+  | cast {v t μ} : v.isValue = true → Step P (.cast v t, μ) (if fits v t then v else .error "type mismatch", μ)
+  | new {p μ} : Step P (.new p, μ) (.ref μ.heap.length p, μ.alloc p)
+  | get {o f μ} : o.isValue = true → Step P (.get o f, μ) (readField μ o f, μ)
+  | set {o f v μ} : o.isValue = true → v.isValue = true → Step P (.set o f v, μ) (writeField μ o f v)
+  | isA {v c μ} : v.isValue = true → Step P (.isA v c, μ) (.bool (isInstance v c), μ)
 
 /-- every declared name has a cell that fits its mode and type -/
 def CellOk (P : Program) (m : Mode) (t : Ty) : Option Cell → Prop
@@ -124,6 +216,12 @@ def CellOk (P : Program) (m : Mode) (t : Ty) : Option Cell → Prop
   | some (.charged b) => m = .charged ∧ ∃ tb, HasType P Ctx.empty b tb ∧ sub tb t = true
   | none => False
 
-def StoreOk (P : Program) (μ : Store) : Prop := ∀ x m t, P.names x = some (m, t) → CellOk P m t (μ x)
+/-- every field set on an instance holds a value of the field's type -/
+def HeapOk (P : Program) (μ : Store) : Prop :=
+  ∀ (a : Nat) (o : Obj), μ.heap[a]? = some o → ∀ f v, o.fields f = some v →
+    v.isValue = true ∧ ∃ t tv, P.fieldTy o.path f = some t ∧ HasType P Ctx.empty v tv ∧ sub tv t = true
+
+def StoreOk (P : Program) (μ : Store) : Prop :=
+  (∀ x m t, P.names x = some (m, t) → CellOk P m t (μ x)) ∧ HeapOk P μ
 
 end Warp

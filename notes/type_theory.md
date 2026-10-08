@@ -21,9 +21,9 @@ ambiguous forms per notes/welcoming.md), never less, except at a listed hole.
 ## W0: syntax
 
 ```
-types      τ ::= never | bool | int | number | text | unit | list τ | any
+types      τ ::= never | bool | int | number | text | unit | list τ | cls [C₀ … Cₙ] | any
 modes      m ::= var | const | charged
-values     v ::= b | n | q | "s" | ø | [] | v :: v                    (lists are cons cells, as the GC $Node)
+values     v ::= b | n | q | "s" | ø | [] | v :: v | ref a [C…]      (lists are cons cells, as the GC $Node)
 expr       e ::= v | x                          main-level name (store)
                | y                              local (parameter or let), bound by substitution
                | e + e | e < e | e == e
@@ -33,8 +33,12 @@ expr       e ::= v | x                          main-level name (store)
                | x = e | init x e               assignment / first binding of a main-level name
                | let y : τ = e in e
                | f(e)                           call of a top-level function
+               | broadcast f e                  f applied to each item of a list (warp decides it statically)
+               | cast e τ                       run-time checked: the value if it fits τ, else an error
                | error "s" | try e catch e
-program    P ::= Σ (declared names: x ↦ (m, τ, charged body?)), Φ (functions f(y:τ):τ := e), main e
+               | new [C…] | e.f | e.f = e | e is C          instances (phase 4)
+program    P ::= Σ (declared names: x ↦ (m, τ, charged body?)), Φ (functions f(y:τ):τ := e),
+               Θ (classes: C ↦ its own fields f:τ), main e
 ```
 
 Code: `Node` (src/node/mod.rs) carries all of this untyped; `Kind` (src/type_kinds.rs) is the run-time tag. W0 types
@@ -51,6 +55,7 @@ exact decimals/rationals (Kind::Int holding a ratio, wasm_emitter/exact.rs) and 
 | bool ≤ int | true/false act as 1/0 (P195: `true + 1` is 2) | BOOL_KIND masks to Int |
 | int ≤ number | `x: float = 1` is accepted | checks.rs `assignment_mismatch` (Float ← Int) |
 | list σ ≤ list τ if σ ≤ τ | **covariant lists** | probes/variance/ |
+| cls p ≤ cls q if q is a prefix of p | a subclass or variant extends its parent's chain | class_methods.rs inherit, traits.rs IS_TYPE |
 
 Covariant lists are sound in warp because **lists are values**: `xs.add(v)` is the assignment `xs = xs ++ [v]` of a
 new list to the variable xs (node_with_at copies; typed lists copy on `ys = xs` when either side is updated,
@@ -69,7 +74,7 @@ Join (least upper bound) `σ ⊔ τ`: the type of `if … then σ else τ`, of a
 | literals | `n : int`, `q : number`, `"s" : text`, `true : bool`, `ø : unit`, `[] : list never` | inference.rs `infer_type` |
 | `v :: vs` | `σ :: list τ : list (σ ⊔ τ)` | `infer_list_type`, `list_type_name` |
 | `x` | Σ(x) = (m, τ) ⇒ τ; reading a charged name runs its body | analyzer `Scope::lookup` |
-| `e1 + e2` | both ≤ number; `int` if both ≤ int, else `number` | inference.rs `arithmetic_kind`, `node_arithmetic` |
+| `e1 + e2` | both ≤ number or text; `text` if a side is text (`"a" + 1` is "a1"), `int` if both ≤ int, else `number`; `never` if a side is | inference.rs `arithmetic_kind`, `node_arithmetic` |
 | `e1 < e2` | both ≤ number ⇒ bool | `infer_type` comparison arm |
 | `e1 == e2` | any operands ⇒ bool (`0 == false` is true) | equality.rs |
 | `if c then a else b` | c : any (truthiness: false, 0, ø, [] are falsy); a ⊔ b | `infer_type` if arms |
@@ -80,9 +85,11 @@ Join (least upper bound) `σ ⊔ τ`: the type of `if … then σ else τ`, of a
 | `x = e` | Σ(x) = (var, τ), e ≤ τ ⇒ τ. const: refused (P130). charged: refused (P138) | `check_constants`, `check_assignment` |
 | `let y : τ = e in b` | e ≤ τ, then b with y : τ | function locals |
 | `f(e)` | Φ(f) = (y:σ):τ, e ≤ σ ⇒ τ | user_functions.rs P49, traits.rs `admit` |
+| `f(xs)` broadcast | Φ(f) = (y:σ):τ, xs : list α, α ≤ σ ⇒ list τ (`f(x: int) := x+1; f([1])` is [2]); decided at compile time, so its own form | broadcasting |
+| `cast e τ` | any e ⇒ τ; at run time the value if it fits τ, else an error | list-element-types run-time item checks |
 | `error "s"` | `never` | `raises_error` |
 | `try e catch h` | e ⊔ h | try lowering, P60, decision #34 |
-| program | each charged body : τ under Σ; each function body ≤ its declared result with y : σ; main typed | analyzer passes |
+| program | each charged body : τ under Σ; each function body ≤ its declared result with y : σ and assigns only `global` names; main typed | analyzer passes, functions2 (`global names`) |
 
 A main-level name's declared type τ is its annotation (`x: int = …`, `xs: texts = …` = list text) or the type of its
 first value (`x = 1` declares int; P45: a later `x = "a"` is refused, "x was an Int, is given a Text").
@@ -96,9 +103,10 @@ copy); `v :: vs # i` gives the i-th element or `error "index out of range"`; `wh
 evaluation position propagates to the whole expression, except under `try`: `try error s catch h → h`,
 `try v catch h → v`.
 
-Main-level names are the store; function parameters and lets are substituted values. A function cannot assign a
-main-level name (decisions: "mutating a main-level list in a function needs `global`"), which W0 reflects by not
-typing `x = e` inside function bodies (Σ is read-only there).
+Main-level names are the store; function parameters and lets are substituted values. A function may assign a
+main-level name only when it is declared `global` (decisions: "mutating a main-level list in a function needs
+`global`"): `FunsOk` requires every name a body assigns to be global. Broadcasting steps
+`f([]) → []`, `f(v :: vs) → f(v) :: f(vs)`.
 
 ## Theorems (lean/WarpTypes)
 
@@ -108,7 +116,7 @@ typing `x = e` inside function bodies (Σ is read-only there).
   error value, or runs forever (`while`, a charged name reading itself).
 
 All three are proved, with no `sorry` and only Lean's standard axioms (`#print axioms Warp.safety`: propext,
-Quot.sound). Plain Lean 4 core (toolchain v4.34.1), no Mathlib. Build: `cd lean/WarpTypes && lake build` (~10 s).
+Quot.sound). Plain Lean 4 core (toolchain v4.34.1), no Mathlib. Build: `cd lean/WarpTypes && lake build` (~15 s).
 
 | file | contents |
 | --- | --- |
@@ -118,30 +126,76 @@ Quot.sound). Plain Lean 4 core (toolchain v4.34.1), no Mathlib. Build: `cd lean/
 | Semantics.lean | store cells (unset, value, charged body), value operations, evaluation `Frame`s, `Step`, `StoreOk` |
 | Lemmas.lean | values are closed, narrowing (smaller local types give smaller types), substitution, typing of `+`, `#`, `++` |
 | Soundness.lean | `frame_typing`, `preservation`, `progress`, `Steps`, `safety` |
+| Checker.lean | `typeOf` + `typeOf_sound`, `Spec.check` + `check_safe`, `elaborate` (warp's source order), `verdict` |
 
 Model choices to keep in mind (each a simplification of warp, not a claim about it):
 - Typing is algorithmic (one type per expression, no subsumption rule), so preservation says the type may shrink:
   `if c then 1 else 2.5` has type number and steps to `1 : int`.
 - `==` compares values structurally; warp's `0 == false` (true) is a refinement for later.
-- A function body may assign main-level names (warp needs `global` there); allowing it only makes W0 more permissive.
-- Run-time element checks (list-element-types stores `names = f()` with a check per item) are a cast from `any`,
-  not yet in W0: W0 refuses `names = f()` when f's result type is not ≤ `list text`.
+- Run-time element checks (list-element-types stores `names = f()` with a check per item) are `cast`s: the exporter
+  wraps a call stored in a declared list.
 
-## Holes found 2026-10-08 (warp compiles, W0 rejects)
+## The executable checker and the tie-in (phase 3)
 
-`warp compile --wasm '<code>'` accepts all of these:
+- Checker.lean: `typeOf` (the algorithm) with `typeOf_sound` (it agrees with `HasType`); `Spec.check` checks a whole
+  program, `check_safe`: an accepted program is safe from its initial store. `elaborate` turns warp's top-level items
+  in source order into a `Spec` the way warp's analyzer does: a name's type is its annotation, else the type of its
+  first value, widened over the numbers it is given later (P45: `x = 1; x = 2.5` is a number; a bool stays bool), an
+  undeclared list is `list any` (list-element-types: `[1, "a"]` is a valid list); a function's result is inferred by
+  iteration from `never` (recursion); a call with a list where the function takes its items is a broadcast.
+- src/law/type_model.rs: `export` turns a warp program (parsed source) into W0 items; `verdicts` runs the model (it
+  builds the lake project first, so a broken proof fails); `warp_verdict` is `pipeline::compile`. Reuses the law
+  bridge's Lean runner (law/lean.rs). `warp types <file|code>` prints the export and both verdicts.
+- tests/types/test_type_model.rs: the model builds, no `sorry`/`admit`/`axiom` in it, the soundness theorems rest only
+  on Lean's core axioms; on the corpus, warp rejects every program the model rejects except the KNOWN_HOLES, and the
+  model accepts what warp compiles. A fixed hole fails the test until it is taken off the list.
+
+## Holes (warp compiles, W0 rejects), pinned by KNOWN_HOLES in tests/types/test_type_model.rs
 
 | program | W0 | card |
 | --- | --- | --- |
-| `xs: ints = [1]; xs.add("a")` | text ≰ int | list-element (warp-a1 is on it) |
-| `xs: ints = [1]; xs = ["a"]` | list text ≰ list int | list-element |
-| `xs = [1]; xs = ["a"]` | list text ≰ list int (P45 sees only "List") | list-element |
-| `f(x: text) := x; f(3)` | int ≰ text: parameters are checked only for int (P49) and classes (admit) | param-types |
-| `b = true; b = 2` | int ≰ bool, and the result prints `yes` | bool-assign |
-| `f(x: int) := x + 1; y = f(2); y = "a"` | text ≰ int: a call result has no evident kind for P45 | call-result |
+| `x: bool = 2`, `b = true; b = 2`, `f(b: bool) := b; f(2)` | int ≰ bool (b then prints `yes`) | bool-assign |
+| `s: Shape = Circle("a", 2); s.r`, `c: Color = rgb(1, 2, 3); c.r` | Shape has no field r (warp looks it up at run time) | upcast-field |
+
+P199: a bool place (a declared variable or parameter, or a variable whose first value is evidently bool) takes
+the literals 1 and 0 as yes and no. The exporter elaborates them to `.bool` (src/law/type_model.rs bool_literal),
+so `x: bool = 1` and `b = true; b = 1` are no holes.
+
+analyzer admits (the run-time check of a value against a builtin type word) agrees with W0 `Ty.sub` for every
+type word × W0 scalar value type (test_warp_admits_what_the_type_model_subtypes), except bool ← int: the run-time
+Kind has no bool, so any int passes a bool check there.
+
+Fixed: declared list elements (`xs: ints = [1]; xs.add("a")`, `xs = ["a"]`, `xs: texts = [420]`), card
+list-element-types (warp-a1, main 499bb5b1c); typed parameters (`f(x: text) := x; f(3)`, card param-types) and
+call results (`f(x: int) := x + 1; y = f(2); y = "a"`, card call-result), functions2 on main by 18952a635.
+bool-assign is on its way (warp-15 tip 64c8abf14). Not a hole: `xs = [1]; xs = ["a"]`, an undeclared list holds anything.
+
+## Classes and sum types (phase 4)
+
+A class type is its ancestor chain, root first: `class Circle extends Shape` is `cls ["Shape", "Circle"]`, and a
+variant of `type Color = red | rgb(r: int, …)` is `cls ["Color", "rgb"]` (P178, P179: a variant is a class extending
+the sum). So subtyping is the prefix order and join the common prefix, with no class table in `Ty`.
+- Instances live on a heap that only grows (`Store.heap`), and a value is `ref a path`, so instances are shared:
+  a mutation through a parameter is visible to the caller (P200). The ref carries its class, so typing needs no heap
+  typing; `HeapOk` says every field set on an instance holds a value of the field's type.
+- A field's type is the first declaration along the chain from the root (`Program.fieldTy`), so a subclass keeps its
+  ancestors' field types. Fields are invariant: a write must fit the declared type, a read gives it.
+- `new` makes an instance with no field set (reading one is the error "unset field"). The exporter turns a
+  constructor `Circle("a", 2)` into `let o = new …; o.name = "a"; o.r = 2; o`, with fields in warp's order:
+  ancestors first.
+- `e is C` (warp parses it as `e == C`) is the run-time test that C is in the instance's chain. A `cast` to a class
+  type is the checked downcast of a match arm.
+- Weaker than warp claims: reading through a dangling reference, or a reference whose class differs from its
+  object's, steps to an error rather than being ruled out. Neither can arise from a program, since `new` is the only
+  source of refs.
+
+Agreeing corpus: constructors with wrong field types, field writes, inheritance, variants, `is`, and parameters
+typed by a sum or by a variant. Not covered by a verdict test: P200's sharing. Warp accepts
+`f(q: Point) := q.x = 7; p = Point(1); f(p); p.x` like the model does, but gives 1 where the model gives 7 (card
+instance-field). Catching that needs a value comparison: an executable evaluator in Lean, proved to agree with `Step`.
 
 ## Later phases
 
-Sum types and enum cases with values (P178, P179: sealed classes, optional as a sum with auto-unwrap), classes with
-typed fields (P131, notes/classes.md), errors as stored values (`r = f(-1); if r failed …`: a `τ or error` sum),
+Optional and auto-unwrap (P179: `a: int = Some(3)`), payload-free variants (`red`: one shared instance per variant),
+inline unions (card inline-union: `union a b`), the value comparison above, errors as stored values (`r = f(-1); if r failed …`: a `τ or error` sum),
 exact vs float, codepoints (`"a"` parses as one; `codepoint ≤ text` for parameters), maps, then effects and tasks.
