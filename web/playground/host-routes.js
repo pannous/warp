@@ -56,7 +56,7 @@ function loadRouteModule(holder) {
 	return loadedRoutes.get(name);
 }
 
-globalThis.addHostPart?.({
+if (globalThis.addHostPart) addHostPart({
 	words: (holder, hooks, { program }) => ({
 		// the path of the page shown, which picks its route (src/lowering/routes.rs); navigate changes it
 		page_path: () => buildValue(program(), treeOfPlain(holder.pagePath ?? ROOT_PATH)),
