@@ -375,8 +375,11 @@ Each step is useful on its own and is what the next ones stand on.
   names local[k]; `navigator` is a WorkerNavigator (no clipboard). A global is a namespace (console) or an attribute of
   the scope, never an interface name (`use js Storage` is the constructor: unchecked). Member-level [Exposed=Window]
   inside mixins (NavigatorID.vendor) is not read yet.
-- Next: result kinds from the IDL (DOMString → text, boolean, numbers, `?` → ø), members of held values
-  (`navigator.clipboard.writeText` reaches Clipboard), more interfaces (bundle arguments).
+- Chains (slice 3): an attribute's value is typed by its interface when the bundle declares it whole
+  (`navigator.clipboard.writeTxt` → Clipboard, did you mean writeText), also through a variable
+  (`board = navigator.clipboard`; foreign_modules.rs web_idl_values). Results of operations stay untyped.
+- Next: result kinds from the IDL (DOMString → text, boolean, numbers, `?` → ø; operation results such as
+  getItem's DOMString?), more interfaces (bundle arguments: Document and the DOM, fetch's Response, WebSocket).
 
 ## web-apis: WebSocket (card web-websocket, 2026-10-07, warp-90)
 - No new words: a channel named by a ws:// or wss:// address is a WebSocket. `on message from "wss://…" { … event … }`
