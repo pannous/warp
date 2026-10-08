@@ -64,11 +64,11 @@ impl WasmGcEmitter {
 		if self.should_emit_function(NODE_ORDER) {
 			self.emit_node_order();
 		}
-		self.emit_list_sort();
 		self.emit_text_case("text_upper", true);
 		self.emit_text_case("text_lower", false);
 		self.emit_text_split();
 		self.emit_list_join();
+		self.emit_list_sort(); // after text_chars and list_join: a text sorts its characters
 		self.emit_print_value(); // after list_join, which gives the text
 		self.emit_node_slice(); // after list_reverse, text_chars and list_join, which it calls
 		self.emit_codepoint_of();
@@ -277,8 +277,10 @@ impl WasmGcEmitter {
 		});
 		assert_eq!(self.func_index("list_insert_sorted"), insert_sorted, "recursive call index");
 
-		self.runtime_function("list_sort", vec![nullable], vec![node_ref], vec![nullable, nullable], |s, f| {
-			let (sorted, element) = (1, 2);
+		self.runtime_function("list_sort", vec![nullable], vec![node_ref], vec![nullable, nullable, ValType::I32], |s, f| {
+			let (sorted, element, is_text) = (1, 2, 3);
+			// a text sorts its characters: `sorted "hello"` is "ehllo"
+			s.emit_text_as_characters(f, 0, is_text);
 			s.emit_empty_as_null(f, 0);
 			s.emit_require_list(f);
 			Self::emit_list(f, &[I::Block(BlockType::Empty), I::Loop(BlockType::Empty), I::LocalGet(0), I::RefIsNull, I::BrIf(1)]);
@@ -290,6 +292,8 @@ impl WasmGcEmitter {
 			s.emit_field(f, 0, 2);
 			Self::emit_list(f, &[I::LocalSet(0), I::Br(0), I::End, I::End]);
 			s.emit_list_result(f, sorted);
+			f.instruction(&I::LocalSet(sorted));
+			s.emit_characters_as_text(f, sorted, is_text);
 		});
 	}
 
@@ -633,16 +637,7 @@ impl WasmGcEmitter {
 				s.emit_fail_if(f, "index_out_of_range");
 				Self::emit_list(f, &[I::LocalGet(target), I::LocalGet(length), I::LocalGet(target), I::LocalGet(length), I::I64LtS, I::Select, I::LocalSet(target)]);
 			};
-			// a text slices its characters
-			Self::emit_list(f, &[I::LocalGet(list), I::RefIsNull, I::I32Eqz, I::If(BlockType::Empty)]);
-			for kind in [Kind::Text, Kind::Codepoint] {
-				s.emit_field(f, list, 0);
-				Self::emit_list(f, &[I::I64Const(KIND_MASK), I::I64And, I::I64Const(kind as i64), I::I64Eq, I::If(BlockType::Empty)]);
-				Self::emit_list(f, &[I::LocalGet(list), I::RefAsNonNull]);
-				s.call(f, "text_chars");
-				Self::emit_list(f, &[I::LocalSet(list), I::I32Const(1), I::LocalSet(is_text), I::End]);
-			}
-			f.instruction(&I::End);
+			s.emit_text_as_characters(f, list, is_text);
 			s.emit_empty_as_null(f, list);
 			s.emit_require_list(f);
 			walk_cells(f);
@@ -660,11 +655,31 @@ impl WasmGcEmitter {
 			next_cell(f);
 			f.instruction(&I::LocalGet(sliced));
 			s.call(f, "list_reverse");
-			Self::emit_list(f, &[I::LocalSet(sliced), I::LocalGet(is_text), I::If(BlockType::Result(node_ref)), I::LocalGet(sliced), I::I32Const(0), I::I32Const(0)]);
-			s.call(f, "new_text");
-			s.call(f, "list_join");
-			Self::emit_list(f, &[I::Else, I::LocalGet(sliced), I::RefAsNonNull, I::End]);
+			f.instruction(&I::LocalSet(sliced));
+			s.emit_characters_as_text(f, sliced, is_text);
 		});
+	}
+
+	/// A text or character in `local` replaced by the list of its characters, `is_text` set: words on lists work on texts
+	fn emit_text_as_characters(&self, f: &mut Function, local: u32, is_text: u32) {
+		Self::emit_list(f, &[I::LocalGet(local), I::RefIsNull, I::I32Eqz, I::If(BlockType::Empty)]);
+		for kind in [Kind::Text, Kind::Codepoint] {
+			self.emit_field(f, local, 0);
+			Self::emit_list(f, &[I::I64Const(KIND_MASK), I::I64And, I::I64Const(kind as i64), I::I64Eq, I::If(BlockType::Empty)]);
+			Self::emit_list(f, &[I::LocalGet(local), I::RefAsNonNull]);
+			self.call(f, "text_chars");
+			Self::emit_list(f, &[I::LocalSet(local), I::I32Const(1), I::LocalSet(is_text), I::End]);
+		}
+		f.instruction(&I::End);
+	}
+
+	/// The list in `local` (not null), joined back into a text when `is_text` (emit_text_as_characters)
+	fn emit_characters_as_text(&self, f: &mut Function, local: u32, is_text: u32) {
+		let node_ref = Ref(self.node_ref(false));
+		Self::emit_list(f, &[I::LocalGet(is_text), I::If(BlockType::Result(node_ref)), I::LocalGet(local), I::I32Const(0), I::I32Const(0)]);
+		self.call(f, "new_text");
+		self.call(f, "list_join");
+		Self::emit_list(f, &[I::Else, I::LocalGet(local), I::RefAsNonNull, I::End]);
 	}
 
 	/// Push the node in `local` (not null), a `key:value` entry as the one-entry map `{key:value}` it stands for, so its

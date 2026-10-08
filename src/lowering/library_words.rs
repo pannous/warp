@@ -176,6 +176,14 @@ pub fn is_library_word(name: &str) -> bool {
 	is_runtime_word(name) || canonical_word(name).is_some()
 }
 
+/// Words that take the name after them as their argument inside an operand, as a defined function does:
+/// `word == reverse word` compares with `reverse(word)`
+const OPERAND_WORDS: [&str; 7] = ["reverse", "sort", "upper", "lower", "trim", "chars", SUM];
+
+pub fn is_operand_word(name: &str) -> bool {
+	canonical_word(name).is_some_and(|word| OPERAND_WORDS.contains(&word))
+}
+
 fn canonical_word(name: &str) -> Option<&'static str> {
 	SYNONYMS
 		.iter()

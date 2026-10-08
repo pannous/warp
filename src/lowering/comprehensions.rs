@@ -100,6 +100,23 @@ fn where_position(items: &[Node]) -> Option<usize> {
 	(items.len() >= 3).then(|| items.len() - 2).filter(|&at| matches!(items[at].drop_meta(), Node::Symbol(symbol) if symbol == WHERE_WORD))
 }
 
+fn is_word(node: &Node, word: &str) -> bool {
+	matches!(node.drop_meta(), Node::Symbol(symbol) if symbol == word)
+}
+
+/// The clause `for v in xs …`
+fn starts_with_for(node: &Node) -> bool {
+	matches!(node.drop_meta(), Node::List(words, _, _) if words.first().is_some_and(|word| is_word(word, FOR_WORD)))
+}
+
+/// One node of several juxtaposed words: `upper w`
+fn phrase(words: &[Node]) -> Node {
+	match words {
+		[single] => single.clone(),
+		_ => Node::List(words.to_vec(), Bracket::None, Separator::Space),
+	}
+}
+
 struct Lowering {
 	count: Cell<usize>,
 }
@@ -125,22 +142,23 @@ impl Lowering {
 		}
 	}
 
-	/// The items `[element, (for v in xs), …]` as the parser groups them; with a filter `(for v in xs if) condition`
+	/// The items `[element, (for v in xs), …]` as the parser groups them; with a filter `(for v in xs if) condition`.
+	/// An element or condition of several words is their phrase: `[upper w for w in words]`
 	fn comprehension(&self, items: &[Node]) -> Option<Node> {
-		let [element, clause, rest @ ..] = items else { return None };
+		let at = items.iter().position(starts_with_for).filter(|&at| at > 0)?;
+		let (element, clause, rest) = (phrase(&items[..at]), &items[at], &items[at + 1..]);
 		let Node::List(words, _, _) = clause.drop_meta() else { return None };
-		let [for_word, variable, in_word, sequence, tail @ ..] = words.as_slice() else { return None };
-		let is_word = |node: &Node, word: &str| matches!(node.drop_meta(), Node::Symbol(symbol) if symbol == word);
-		if !is_word(for_word, FOR_WORD) || !is_word(in_word, IN_WORD) || !matches!(variable.drop_meta(), Node::Symbol(_)) {
+		let [_, variable, in_word, sequence, tail @ ..] = words.as_slice() else { return None };
+		if !is_word(in_word, IN_WORD) || !matches!(variable.drop_meta(), Node::Symbol(_)) {
 			return None;
 		}
 		let condition = match (tail, rest) {
 			([], []) => None,
 			([nothing], []) if matches!(nothing.drop_meta(), Node::Empty) => None,
-			([if_word], [condition]) if is_word(if_word, IF_WORD) => Some(condition),
+			([filter_word], [_, ..]) if is_word(filter_word, IF_WORD) || is_word(filter_word, WHERE_WORD) => Some(phrase(rest)),
 			_ => return None,
 		};
-		Some(self.built(variable, sequence, element, condition))
+		Some(self.built(variable, sequence, &element, condition.as_ref()))
 	}
 
 	/// `(made = []; for variable in sequence { if condition { made.push(element) } }; made)`
