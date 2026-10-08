@@ -6,7 +6,7 @@
 //! (0: none) and `effect_handler_outer_ask_i` the one active when block i was entered, which an emit inside handler i
 //! reaches.
 
-use crate::event_signals::{emit_verbs, emitted, function_with_globals, main_level_variables, reads_event};
+use crate::event_signals::{emit_verbs, emitted, function_with_globals, main_level_variables, reads_event, statements_of};
 use crate::node::{Bracket, Node, Separator};
 use crate::operators::Op;
 use crate::variable_signals::{assign, if_then_else};
@@ -151,15 +151,6 @@ fn handler_function(handler: &Handler, by_event: &BTreeMap<String, Vec<usize>>, 
 		Node::Symbol(result),
 	];
 	function_with_globals(&handler_name(&handler.event, handler.number), reads_event(std::slice::from_ref(&handler.body)), &statements, main_variables)
-}
-
-/// The statements of a block; `{emit ask}` holds the words of its one statement
-fn statements_of(block: &Node) -> Vec<Node> {
-	match block.drop_meta() {
-		Node::List(words, Bracket::Curly, Separator::Space) if words.len() > 1 => vec![Node::List(words.clone(), Bracket::None, Separator::Space)],
-		Node::List(statements, Bracket::Curly, _) => statements.clone(),
-		other => vec![other.clone()],
-	}
 }
 
 /// `(a; b; c)`: the statements run in order, the last one's value is the value

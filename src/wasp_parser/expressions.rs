@@ -29,6 +29,8 @@ impl WaspParser {
 			statement
 		} else if let Some(awaited) = self.try_parse_await() {
 			awaited
+		} else if let Some(emitted) = self.try_parse_emit() {
+			emitted
 		} else if let Some(head) = self.try_parse_operator_method_head() {
 			head
 		} else if let Some((op, chars)) = self.peek_prefix_operator().filter(|_| !self.at_member_name(0)) {
@@ -143,6 +145,30 @@ impl WaspParser {
 		}
 		let operand = self.parse_expr(AWAIT_OPERAND_BP);
 		Some(Node::List(vec![Symbol(AWAIT_KEYWORD.to_string()), operand], Bracket::None, Separator::Space))
+	}
+
+	/// `1 + emit ask`, `2 * emit stop the machine{reason: "x"} + 1`: the phrase `emit ask` is one operand, the words
+	/// of the event and its data bind like the operand of a unary minus; the same Space list a statement `emit ask` is
+	pub(super) fn try_parse_emit(&mut self) -> Option<Node> {
+		let keyword = EMIT_KEYWORDS.into_iter().find(|keyword| self.matches_keyword(keyword))?;
+		let before_keyword = (self.pos, self.line_nr, self.column, self.current_line.clone());
+		self.advance_by(keyword.len());
+		self.skip_spaces();
+		if !self.is_identifier_start(0) || self.peek_operator().is_some() {
+			(self.pos, self.line_nr, self.column, self.current_line) = before_keyword;
+			return None;
+		}
+		let mut phrase = vec![Symbol(keyword.to_string())];
+		while self.is_identifier_start(0) || (phrase.len() > 1 && matches!(self.current_char(), '0'..='9' | '"' | '\'')) {
+			// `send alarm{} to "x"`: a word operator takes the whole phrase, as without this
+			if self.peek_operator().is_some() {
+				(self.pos, self.line_nr, self.column, self.current_line) = before_keyword;
+				return None;
+			}
+			phrase.push(self.parse_expr(AWAIT_OPERAND_BP));
+			self.skip_spaces();
+		}
+		Some(Node::List(phrase, Bracket::None, Separator::Space))
 	}
 
 	/// `return` takes the whole expression after it: `return -1` is no subtraction from `return`
