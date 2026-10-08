@@ -140,12 +140,15 @@ Upcast fields (P201/P203, card upcast-field, analyzer/upcast_fields.rs, on the s
 member, so library methods and unknown names stay run-time lookups; a name tested in its scope (`if s is Circle`) is
 smart-cast and skipped. `s as Circle` is the checked downcast `(cast·value = s; if not (cast·value is Circle) raise …;
 cast·value)` (class_methods checked_cast), "s is no Circle".
-Shared instances (P200, card instance-field, lowering/shared_instances.rs): a function changing a field of a parameter
-(`q.x = 7`, `q.items.add(v)`, or passing q on to a function or method that does, found by a fixpoint) gives
-`[value, q]` (each `return v` too), and a call stores it back into a variable argument:
-`(f·shared = f(p); p = f·shared#2; f·shared#1)`. Copy-in/copy-out over value instances, no heap: `q = Point(9)`
-stays local; aliases do not share (`q = p; q.x = 7` leaves p), nor does an argument that is no variable (`f(bags#1)`),
-nor a function used as a value (it keeps its plain result). Any parameter counts, a map given as one too.
+Instances are references (P200, card real-references): $Node.value is mutable; `p.x = v` still lowers to
+`p = field_with(p, "x", v)`, but field_with on an instance with an existing field calls the runtime
+instance_field_set (library_ops.rs), which sets the entry in place and gives back the same instance, so every holder
+sees it: aliases (`q = p; q.x = 7`), list items (`xs = [p]`), parameters and results of functions. A new field
+added to an instance still copies, maps stay values. `p.copy()` / `clone()` and Kotlin `p.copy(y = 5)` make a fresh
+instance (runtime instance_copy with fresh entries). struct_backend.rs keeps a variable on the struct backend only
+while it is never used as a whole value (struct_variables / used_whole: `q = p`, `[p]`, print(p), an argument to a
+non-struct parameter make it a shared Node); field writes and a bare final `p` do not count. The old
+copy-in/copy-out pass (lowering/shared_instances.rs) is gone.
 Next steps: struct elements in typed lists (`for p in points`), a struct result of a construction inside a function
 (`moved(dx) := point(x + dx, y)`).
 
