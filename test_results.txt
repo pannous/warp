@@ -2491,6 +2491,7 @@ PASSED:
   ✓ types::test_class_field_names::field_beside_function_of_its_name
   ✓ types::test_class_field_names::operator_words_name_fields
   ✓ types::test_class_field_names::own_parameter_field_inside_function_of_its_name
+  ✓ types::test_class_field_type_phrases::a_field_type_of_words_is_one_field
   ✓ types::test_class_forms_ported::a_copy_with_changed_fields
   ✓ types::test_class_forms_ported::a_csharp_record_declares_its_fields
   ✓ types::test_class_forms_ported::a_go_struct_with_methods
@@ -3435,4 +3436,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-19 ignored, 3430 passed, 0 failed, 3430 total tested
+19 ignored, 3431 passed, 0 failed, 3431 total tested
