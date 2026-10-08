@@ -1183,6 +1183,10 @@ fn changing_list_method(call: &Node) -> bool {
 }
 
 pub(super) fn check_constants(node: &Node, constants: &mut HashMap<String, (String, String)>) -> Option<Diagnostic> {
+	// a function's own `let`/`const` bind in it only; it still sees main's (card serve-var)
+	if let Some(body) = super::variables::function_definition_body(node) {
+		return check_constants(body, &mut constants.clone());
+	}
 	match node.drop_meta() {
 		Node::List(items, _, _) => {
 			let statements = match items.as_slice() {
