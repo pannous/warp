@@ -101,7 +101,11 @@ impl WasmGcEmitter {
 		if use_float {
 			self.emit_float_value(func, right);
 		} else {
-			self.emit_numeric_value(func, right);
+			let declared = match left.drop_meta() {
+				Node::Symbol(name) => self.scope.lookup(name).and_then(|local| local.type_node.as_deref().cloned()),
+				_ => None,
+			};
+			self.emit_int_for_declared(func, declared.as_ref(), right);
 			self.emit_fits_declared(func, left);
 		}
 		if let Node::Symbol(name) = left.drop_meta() {
