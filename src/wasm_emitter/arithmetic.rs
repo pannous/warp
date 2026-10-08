@@ -241,19 +241,22 @@ impl WasmGcEmitter {
 			self.emit_call(func, "get_int_value");
 		} else if let Some(local) = self.scope.lookup(name) {
 			func.instruction(&I::LocalGet(local.position));
-			if local.kind.is_ref() {
-				// an optional held as a Node, checked non-ø before use (analyzer::check_null_use)
-				self.emit_call(func, "get_int_value");
-			} else if local.kind.is_float() {
-				self.emit_float_in_exact_context(func, name);
-			}
+			self.emit_as_numeric(func, name, local.kind);
 		} else if let Some(&(idx, kind)) = self.ctx.user_globals.get(name) {
 			func.instruction(&I::GlobalGet(idx));
-			if kind.is_float() {
-				self.emit_float_in_exact_context(func, name);
-			}
+			self.emit_as_numeric(func, name, kind);
 		} else {
 			self.emit_undefined_variable(func, name);
+		}
+	}
+
+	/// The variable `name` of `kind` just read, as a number
+	fn emit_as_numeric(&mut self, func: &mut Function, name: &str, kind: Kind) {
+		if kind.is_ref() {
+			// an optional held as a Node, checked non-ø before use (analyzer::check_null_use); a handler's abort value
+			self.emit_call(func, "get_int_value");
+		} else if kind.is_float() {
+			self.emit_float_in_exact_context(func, name);
 		}
 	}
 

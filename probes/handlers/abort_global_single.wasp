@@ -1,0 +1,3 @@
+b = 0
+b = on fail { break 2 } in { emit fail; 9 }
+b * 10
