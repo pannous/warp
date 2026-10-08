@@ -102,6 +102,8 @@ D-number or #number mean this file. Open questions, parked ones and the standing
   Card instance-field.
 - Undeclared lists (default, warp-a1, card list-element-types): an undeclared list stays `list any` (`xs = [1];
   xs = ["a"]` is fine), while a scalar's first value fixes its kind.
+- Method broadcast (default following P50, warp-c9, card method-broadcast): the method form of scalar library words
+  (upper lower trim floor ceil round) broadcasts over lists like the prefix form: `names.upper` = `upper names`.
 - Defaults shown to the user and kept (no objection): error highlighting (CLI carets under the word on stderr; web
   demo red/amber wavy underlines, message on hover; card g-_ZNg); P168 detail (an object whose fields are unknown at
   compile time keeps the field read `p.phone-number`); char as Text (card char-text, follows from P173: an untyped
