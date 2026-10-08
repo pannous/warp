@@ -917,8 +917,7 @@ impl WasmGcEmitter {
 		let params: Vec<ValType> = type_def.fields.iter().map(|f| field_def_to_val_type(f, self)).collect();
 
 		// Function type: (params...) -> (ref $TypeName)
-		let func_type = self.type_manager.types().len();
-		self.type_manager.types_mut().ty().function(params.clone(), vec![Ref(type_ref)]);
+		let func_type = self.type_manager.function_type(params.clone(), vec![Ref(type_ref)]);
 		self.functions.function(func_type);
 
 		// Function body: get all params, struct.new
@@ -1151,8 +1150,7 @@ impl WasmGcEmitter {
 		self.next_temp_local = var_count; // Temp locals start after variables
 
 		let node_ref = self.node_ref(false);
-		let func_type = self.type_manager.types().len();
-		self.type_manager.types_mut().ty().function(vec![], vec![Ref(node_ref)]);
+		let func_type = self.type_manager.function_type(vec![], vec![Ref(node_ref)]);
 		self.functions.function(func_type);
 
 		// Build locals list based on variable types
@@ -1454,7 +1452,7 @@ impl WasmGcEmitter {
 			const KIND_GLOBALS: [&str; 12] = ["kind_empty", "kind_int", "kind_float", "kind_text", "kind_codepoint", "kind_symbol",
 				"kind_key", "kind_block", "kind_list", "kind_data", "kind_meta", "kind_error"];
 			let mut globals: Vec<(u32, &str)> = KIND_GLOBALS.iter().enumerate()
-				.filter(|(idx, _)| (*idx as u32) < self.next_global_idx).map(|(idx, name)| (idx as u32, *name)).collect();
+				.filter(|(idx, _)| (*idx as u32) < self.ctx.kind_global_indices.len() as u32).map(|(idx, name)| (idx as u32, *name)).collect();
 			globals.extend(self.extra_global_names.iter().copied());
 			self.names.globals(&name_map(&mut globals));
 		}

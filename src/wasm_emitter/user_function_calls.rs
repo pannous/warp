@@ -179,7 +179,6 @@ impl WasmGcEmitter {
 		let returns_node = user_fn.return_kind.is_ref();  // Text, Symbol, List, etc. return Node refs
 
 		// Create function type: (params...) -> i64 or (ref $Node) depending on return type
-		let func_type_idx = self.type_manager.types().len();
 		let param_types: Vec<ValType> = user_fn.params.iter().enumerate()
 			.map(|(index, param)| match self.struct_parameter(name, index) {
 				Some(class) => Ref(self.instance_ref(class)),
@@ -198,7 +197,7 @@ impl WasmGcEmitter {
 		} else {
 			vec![self.storage_type(user_fn.return_kind)]
 		};
-		self.type_manager.types_mut().ty().function(param_types, result_types);
+		let func_type_idx = self.type_manager.function_type(param_types, result_types);
 
 		// Register function in function section
 		self.functions.function(func_type_idx);

@@ -86,8 +86,7 @@ fn core_scalar(wit: &str) -> Option<(ValType, bool)> {
 impl WasmGcEmitter {
 	/// An exported function emitted after the program's functions, which took their indices without the registry
 	fn component_function(&mut self, export: &str, params: Vec<ValType>, results: Vec<ValType>, locals: Vec<ValType>, body: impl FnOnce(&mut Self, &mut Function)) {
-		let func_type = self.type_manager.types().len();
-		self.type_manager.types_mut().ty().function(params, results);
+		let func_type = self.type_manager.function_type(params, results);
 		let mut func = Function::new(locals.into_iter().map(|local| (1, local)).collect::<Vec<_>>());
 		body(self, &mut func);
 		func.instruction(&I::End);
