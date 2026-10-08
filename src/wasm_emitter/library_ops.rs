@@ -11,7 +11,6 @@ use crate::type_kinds::{CURLY_BRACKET_INFO, CURLY_LIST_KIND, KIND_BITS, SQUARE_L
 const BRACKET_INFO_MASK: i64 = 0xff;
 /// The operator code in a key's kind, above its KIND_BITS; a type instance `point{x:1}` has none
 const OP_INFO_MASK: i64 = 0xff;
-const INSTANCE_OP_CODE: i64 = 0;
 use crate::wasm_emitter::layout::BYTE;
 use crate::wasm_emitter::text_unicode::CaseMapping;
 
@@ -428,8 +427,8 @@ impl WasmGcEmitter {
 		let float_box = self.type_manager.f64_box_type;
 		let exact_numbers = self.should_emit_function(crate::wasm_emitter::exact::EXACT_TEXT);
 		let texts = [self.allocate_string("["), self.allocate_string("]"), self.allocate_string(" ")];
-		let map_texts = [self.allocate_string("{"), self.allocate_string("}"), self.allocate_string(":")];
-		let no_text = self.allocate_string("");
+		let map_texts = [self.allocate_string("{"), self.allocate_string("}")];
+		let key_separators: Vec<(i64, (u32, u32))> = crate::operators::key_separators().map(|(code, separator)| (code, self.allocate_string(&separator))).collect();
 		let empty_text = self.allocate_string(EMPTY_TEXT);
 		let bool_texts = [self.allocate_string(crate::node::NO), self.allocate_string(crate::node::YES)];
 		let i64_box = self.type_manager.i64_box_type;
@@ -476,7 +475,7 @@ impl WasmGcEmitter {
 				// list_text: a nested list as its literal, "[" + list_text(item, " ") + "]", a map in braces
 				if nested {
 					let [open, close, space] = texts;
-					let [open_map, close_map, colon] = map_texts;
+					let [open_map, close_map] = map_texts;
 					let new_text = |f: &mut Function, (pointer, length): (u32, u32)| {
 						Self::emit_list(f, &[I32Const(pointer as i32), I32Const(length as i32)]);
 						s.call(f, "new_text");
@@ -504,14 +503,18 @@ impl WasmGcEmitter {
 					f.instruction(&I::LocalSet(entry_value));
 					s.emit_entry_in_braces(f, entry_value);
 					Self::emit_list(f, &[I::End, I::RefNull(HeapType::Concrete(node_type)), I::StructNew(node_type), I::StructNew(node_type)]);
-					// an instance `point{x:1}` (a key without operator) joins its name and fields without one (P123)
+					// joined by its operator as written: an instance `point{x:1}` (a key without operator) joins its name and
+					// fields without one (P123), quoted data `a and b` with its operator (card data-quoting)
 					s.emit_field(f, element, 0);
-					Self::emit_list(f, &[I::I64Const(KIND_BITS), I::I64ShrU, I::I64Const(OP_INFO_MASK), I::I64And, I::I64Const(INSTANCE_OP_CODE), I::I64Eq]);
-					f.instruction(&I::If(BlockType::Result(node_ref)));
-					new_text(f, no_text);
-					f.instruction(&I::Else);
-					new_text(f, colon);
-					f.instruction(&I::End);
+					Self::emit_list(f, &[I::I64Const(KIND_BITS), I::I64ShrU, I::I64Const(OP_INFO_MASK), I::I64And, I::LocalSet(number)]);
+					let (last, others) = key_separators.split_last().expect("operators");
+					for (code, separator) in others {
+						Self::emit_list(f, &[I::LocalGet(number), I::I64Const(*code), I::I64Eq, I::If(BlockType::Result(node_ref))]);
+						new_text(f, *separator);
+						f.instruction(&I::Else);
+					}
+					new_text(f, last.1);
+					others.iter().for_each(|_| { f.instruction(&I::End); });
 					Self::emit_list(f, &[I::Call(own_index), I::LocalSet(element), I::End]);
 					// a curly list is a map: its bracket info, above the kind (other info may sit higher still)
 					let is_map = |f: &mut Function| {

@@ -418,6 +418,20 @@ pub fn op_to_code(op: &Op) -> i64 {
 	OP_CODES.iter().position(|known| known == op).unwrap_or(0) as i64
 }
 
+/// The text between a Key's sides as Node::serialize writes it: `a and b`, `1+2`, `a:1`, none in an instance `point{x:1}`
+pub fn key_separator(op: &Op) -> String {
+	match op {
+		Op::None => String::new(),
+		word if word.as_str().starts_with(char::is_alphabetic) => format!(" {word} "),
+		symbol => symbol.as_str().to_string(),
+	}
+}
+
+/// Every operator code with its key separator
+pub fn key_separators() -> impl Iterator<Item = (i64, String)> {
+	OP_CODES.iter().enumerate().map(|(code, op)| (code as i64, key_separator(op)))
+}
+
 /// The operator written `text` (Op::as_str's inverse): `*` is Mul
 pub fn op_named(text: &str) -> Option<Op> {
 	OP_CODES.iter().find(|op| op.as_str() == text).copied()

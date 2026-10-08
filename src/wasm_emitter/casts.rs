@@ -291,6 +291,8 @@ impl WasmGcEmitter {
 			Node::Number(n) => self.emit_string_call(func, &n.to_string(), "new_text"),
 			Node::Char(c) => self.emit_string_call(func, &c.to_string(), "new_text"),
 			Node::Text(s) => self.emit_string_call(func, s, "new_text"),
+			// `str(data a and b)`: quoted data reads as written
+			_ if let Some(source) = quoted_source(value) => self.emit_string_call(func, &source, "new_text"),
 			// a list of numbers and texts reads as it prints, its texts quoted (P126)
 			Node::List(..) if is_plain_data(value) => self.emit_runtime_text_cast(func, value),
 			// data and names are their source text; a number expression (`str(1+2)`, `str(f(1))` of a float f) is the
@@ -382,5 +384,13 @@ fn is_plain_data(node: &Node) -> bool {
 		Node::Number(_) | Node::Text(_) | Node::Char(_) => true,
 		Node::List(items, Bracket::Square, _) => items.iter().all(is_plain_data),
 		_ => false,
+	}
+}
+
+/// The source text of `data e`, which never runs
+fn quoted_source(value: &Node) -> Option<String> {
+	match value.drop_meta() {
+		Node::List(items, Bracket::None, _) if items.len() == 2 && crate::lowering::run_time_blocks::is_data(value) => Some(items[1].serialize()),
+		_ => None,
 	}
 }

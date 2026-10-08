@@ -134,3 +134,4 @@ mod test_soft_tests;
 mod test_reflection_words; // card reflection
 mod test_function_body; // card g_X_3s
 mod test_multiline_errors;
+mod test_data_quoting; // card data-quoting
