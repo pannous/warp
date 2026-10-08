@@ -113,6 +113,20 @@ const CORPUS: &[&str] = &[
 	"type Color = red | rgb(r: int, g: int, b: int); c = rgb(1, \"a\", 3)",
 	"type Shape = circle(r: int) | square(s: int); f(x: Shape) := 1; f(circle(2))",
 	"type Shape = circle(r: int) | square(s: int); f(x: circle) := x.r; f(square(2))",
+	"on ask { 42 } in { emit ask }",
+	"compute() := (emit ask) * 2; on ask { 21 } in { compute() }",
+	"compute() := emit ask{n: 4}; on ask { event.n * 10 } in { compute() }",
+	"compute() := emit ask; on ask { 1 } in { on ask { 2 } in { compute() } }",
+	"a = 0; compute() := emit ask; on ask { 1 } in { a = on ask { 2 } in { compute() }; a * 10 + compute() }",
+	"on ask { 7 }; compute() := emit ask; a = on ask { 2 } in { compute() }; a * 10 + compute()",
+	"y = 0; on ask { y = 5; y + 10 } in { emit ask }",
+	"n = 0; on alarm { n += 1 }; emit alarm; emit alarm; n",
+	"level = 0; on alarm { level = event.level }; emit alarm{level: 3}; level",
+	"def check(x) { if x > 2 { emit too big{value: x} }; x }; check(1)",
+	"y: any = 3; x: int = y; x",
+	"f(n: int) := n + 1; y: any = 3; f(y)",
+	"x: int = 0; xs = [1, \"a\"]; x = xs#1; x",
+	"f(n: int) := n; f(\"a\")",
 ];
 
 /// Programs warp compiles although the model rejects them: holes in warp's checks, each with its card
@@ -131,6 +145,8 @@ const KNOWN_VALUE_DIFFERENCES: &[(&str, &str)] = &[
 	("x: bool = 0; x = 1", "bool-literal-value"),
 	("f(b: bool) := b; f(1)", "bool-literal-value"),
 	("b = true; b = 1", "bool-literal-value"),
+	("level: int = 0; on alarm { level = 7 }; emit alarm; level", "handler-annotated"),
+	("y: any = \"a\"; x: int = 0; x = y; x", "int-unchecked"),
 ];
 /// What the model gives for a program it rejects, and for a value it does not keep
 const REJECTED: &str = "rejected";

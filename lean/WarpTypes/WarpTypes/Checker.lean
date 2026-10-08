@@ -414,37 +414,56 @@ def widenOver (s : Spec) (d : Decl) : Decl :=
     | none => t
   { d with type := widened }
 
+/-- rewrites an expression bottom-up, `f` seeing each node with its children rewritten and the locals in scope -/
+def Expr.rewrite (f : Ctx → Expr → Expr) (Γ : Ctx) : Expr → Expr
+  | .call g e => f Γ (.call g (e.rewrite f Γ))
+  | .cons a b => f Γ (.cons (a.rewrite f Γ) (b.rewrite f Γ))
+  | .add a b => f Γ (.add (a.rewrite f Γ) (b.rewrite f Γ))
+  | .arith op a b => f Γ (.arith op (a.rewrite f Γ) (b.rewrite f Γ))
+  | .lt a b => f Γ (.lt (a.rewrite f Γ) (b.rewrite f Γ))
+  | .eq a b => f Γ (.eq (a.rewrite f Γ) (b.rewrite f Γ))
+  | .ite c a b => f Γ (.ite (c.rewrite f Γ) (a.rewrite f Γ) (b.rewrite f Γ))
+  | .loop c b => f Γ (.loop (c.rewrite f Γ) (b.rewrite f Γ))
+  | .seq a b => f Γ (.seq (a.rewrite f Γ) (b.rewrite f Γ))
+  | .index a b => f Γ (.index (a.rewrite f Γ) (b.rewrite f Γ))
+  | .append a b => f Γ (.append (a.rewrite f Γ) (b.rewrite f Γ))
+  | .assign x e => f Γ (.assign x (e.rewrite f Γ))
+  | .init x e => f Γ (.init x (e.rewrite f Γ))
+  | .letIn y t e b => f Γ (.letIn y t (e.rewrite f Γ) (b.rewrite f (Γ.set y t)))
+  | .tryCatch e h => f Γ (.tryCatch (e.rewrite f Γ) (h.rewrite f Γ))
+  | .cast e ts => f Γ (.cast (e.rewrite f Γ) ts)
+  | .get e g => f Γ (.get (e.rewrite f Γ) g)
+  | .set e g v => f Γ (.set (e.rewrite f Γ) g (v.rewrite f Γ))
+  | .isA e c => f Γ (.isA (e.rewrite f Γ) c)
+  | .handle ev h b => f Γ (.handle ev (h.rewrite f (Γ.set eventLocal .any)) (b.rewrite f Γ))
+  | .emit ev e => f Γ (.emit ev (e.rewrite f Γ))
+  | .scope k e => f Γ (.scope k (e.rewrite f Γ))
+  | e => f Γ e
+
 /-- warp decides broadcasting at compile time: a call whose argument is a list of what the function takes -/
-def resolveCalls (P : Program) (Γ : Ctx) : Expr → Expr
-  | .call f e =>
-    let e := resolveCalls P Γ e
-    match P.funs f, typeOf P Γ e with
-    | some fn, some te =>
-      if sub te fn.paramTy then .call f e
-      else if (element te).any (sub · fn.paramTy) then .broadcast f e else .call f e
-    | _, _ => .call f e
-  | .cons a b => .cons (resolveCalls P Γ a) (resolveCalls P Γ b)
-  | .add a b => .add (resolveCalls P Γ a) (resolveCalls P Γ b)
-  | .arith op a b => .arith op (resolveCalls P Γ a) (resolveCalls P Γ b)
-  | .lt a b => .lt (resolveCalls P Γ a) (resolveCalls P Γ b)
-  | .eq a b => .eq (resolveCalls P Γ a) (resolveCalls P Γ b)
-  | .ite c a b => .ite (resolveCalls P Γ c) (resolveCalls P Γ a) (resolveCalls P Γ b)
-  | .loop c b => .loop (resolveCalls P Γ c) (resolveCalls P Γ b)
-  | .seq a b => .seq (resolveCalls P Γ a) (resolveCalls P Γ b)
-  | .index a b => .index (resolveCalls P Γ a) (resolveCalls P Γ b)
-  | .append a b => .append (resolveCalls P Γ a) (resolveCalls P Γ b)
-  | .assign x e => .assign x (resolveCalls P Γ e)
-  | .init x e => .init x (resolveCalls P Γ e)
-  | .letIn y t e b => .letIn y t (resolveCalls P Γ e) (resolveCalls P (Γ.set y t) b)
-  | .tryCatch e h => .tryCatch (resolveCalls P Γ e) (resolveCalls P Γ h)
-  | .cast e ts => .cast (resolveCalls P Γ e) ts
-  | .get e f => .get (resolveCalls P Γ e) f
-  | .set e f v => .set (resolveCalls P Γ e) f (resolveCalls P Γ v)
-  | .isA e c => .isA (resolveCalls P Γ e) c
-  | .handle ev h b => .handle ev (resolveCalls P (Γ.set eventLocal .any) h) (resolveCalls P Γ b)
-  | .emit ev e => .emit ev (resolveCalls P Γ e)
-  | .scope k e => .scope k (resolveCalls P Γ e)
-  | e => e
+def resolveCalls (P : Program) : Ctx → Expr → Expr :=
+  Expr.rewrite fun Γ e => match e with
+    | .call f e =>
+      match P.funs f, typeOf P Γ e with
+      | some fn, some te =>
+        if sub te fn.paramTy then .call f e
+        else if (element te).any (sub · fn.paramTy) then .broadcast f e else .call f e
+      | _, _ => .call f e
+    | e => e
+
+/-- gradual typing: a value of static type any given to a narrower name or parameter is checked when it runs
+(`level = event.level` is `level = cast event.level [int]`); warp admits these at compile time -/
+def castDynamicValues (P : Program) : Ctx → Expr → Expr :=
+  Expr.rewrite fun Γ e =>
+    let checked (place : Option Ty) (v : Expr) (give : Expr → Expr) :=
+      match place, typeOf P Γ v with
+      | some t, some .any => if t == .any then e else give (.cast v [t])
+      | _, _ => e
+    match e with
+    | .assign x v => checked ((P.names x).map (·.2)) v (.assign x)
+    | .init x v => checked ((P.names x).map (·.2)) v (.init x)
+    | .call f v => checked ((P.funs f).map (·.paramTy)) v (.call f)
+    | e => e
 
 /-- the function with a provisional result; its calls resolved (a recursive call sees that result) -/
 def draftFunction (s : Spec) (name param : String) (paramTy result : Ty) (body : Expr) : Fn :=
@@ -542,7 +561,12 @@ def elaborateTyped (items : List Item) (effects : List (String × Ty)) : Spec :=
     | .function .. | .classDef .. => (s, statements)
   let (s, statements) := rest.foldl (init := (withFunctions, [])) fun (s, st) item => step s st item
   let s := { s with main := sequence statements }
-  (List.range RESULT_ROUNDS).foldl (init := s) fun s _ => { s with decls := s.decls.map (widenOver s) }
+  let s := (List.range RESULT_ROUNDS).foldl (init := s) fun s _ => { s with decls := s.decls.map (widenOver s) }
+  let lax := castDynamicValues s.program
+  { s with
+    main := lax Ctx.empty s.main
+    funs := s.funs.map fun (f, fn) => (f, { fn with body := lax (Ctx.empty.set fn.param fn.paramTy) fn.body })
+    handlers := s.handlers.map fun (ev, h) => (ev, lax (Ctx.empty.set eventLocal .any) h) }
 
 /-- one round of inference: elaborate with the guesses so far, then join in the values the program gives -/
 def Guesses.refine (items : List Item) (g : Guesses) : Guesses :=

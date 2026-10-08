@@ -234,7 +234,7 @@ W0 now has `arith op a b`, which takes numbers only.
   anything but a list or text gives `any`), `++` takes any operands, and non-lists raise "not a list" when it runs.
   The checker demands lists, texts (for `#`) or `any`. Result: 77 exported, all agreeing with warp; with braced
   blocks as expressions (`if c {a} else {b}`) and `+=`/`-=`/`*=` exported: 98. Most of the rest:
-  imports (`use`), `for` loops, maps `{a:1}`, lambdas, `on`/`emit`, `i++`, `global`, string methods.
+  imports (`use`), `for` loops, maps `{a:1}`, lambdas, `i++`, `global`, string methods.
 
 ## Inline unions and optionals
 
@@ -252,8 +252,39 @@ assignments and single-parameter call arguments. Not yet: unions as fields or as
 of classes (warp refuses them for now), `x as T?` (a conversion in warp: `"4" as int?` is 4; W0's cast only checks).
 `x: int? = 3` does not parse in warp (card int-spaces); the corpus spells it `x: int | ø = 3`.
 
+## Implicit casts from `any`
+
+A value of static type `any` given to a narrower place is a run-time check, not a compile error: elaboration
+(Checker.lean `castDynamicValues`, after names are widened) rewrites `x = v`, `x: T = v` and `f(v)` with `v : any`
+into `x = cast v [T]` (T the name's or parameter's type), for annotated places as well, since warp admits all of them
+at compile time (`y: any = 3; x: int = y`, `f(n: int) := n + 1; f(y)`, `x = xs#1` of a mixed list,
+`level = event.level`). The cast is part of the proved calculus, so soundness needs nothing new. Open question (to
+the Interviewer): P203 says annotations are promises the compiler enforces; whether an annotated place given an
+`any` value should rather be a compile error. Warp does not check these values at run time yet: `y: any = "a";
+x: int = 0; x = y; x` gives 97 (card int-unchecked, KNOWN_VALUE_DIFFERENCES).
+`Expr.rewrite` (bottom-up, carrying the locals in scope) is the one traversal behind both elaboration rewrites
+(`resolveCalls` decides broadcasting the same way).
+
+## Effect handlers
+
+Semantics from the functions session (notes/effect_handlers.md): `on ev {h} in {body}` (`Expr.handle`) runs body with
+h as the innermost handler of ev; `emit ev payload` (`Expr.emit`) evaluates to the innermost active handler's value
+(tail-resumptive, an emit is a call of the handler); the handler body runs with only the handlers outside it
+(`Expr.scope k e`), so an emit inside a handler goes outward; a program-wide `on ev {h}` (`Item.on`,
+`Program.handlers`) answers when no block handler is active; an emit nobody answers gives ø (`.unit`; warp warns at
+compile time, P202). The payload is the local `event` (type `any`); the exporter makes each event's payloads
+instances of a synthetic class `ev·event` whose fields are every key the program emits it with. The store carries
+the handler stack (`Store.handlers`, innermost first; `StoreOk` = vars ∧ heap ∧ handlers ok). Typing: each event has
+a result type R (`Program.effects`, inferred as the join of its handlers' types, `Guesses.effects`); a handler must
+fit R, an emit has type `join R unit`. `ProgramOk` (was `FunsOk`) also demands the program-wide handlers fit.
+Program-wide handlers are hoisted in both: `x = emit ask; on ask { 1 }; x` is 1.
+Exporter limits: a first binding inside a handler or body (`on ask { y = emit ask; … }`) is refused like any first
+binding inside an expression; pre-declare the name. Warp bugs found here: cards handler-annotated (an annotated
+global assigned by a program-wide handler keeps its old value) and handler-global (a global assigned from an emit
+inside a handler body loses the outer handler).
+
 ## Later phases
 
 Optional and auto-unwrap (P179: `a: int = Some(3)`), payload-free variants (`red`: one shared instance per variant),
 the value comparison above, errors as stored values (`r = f(-1); if r failed …`: a `τ or error` sum),
-exact vs float, codepoints (`"a"` parses as one; `codepoint ≤ text` for parameters), maps, then effects and tasks.
+exact vs float, codepoints (`"a"` parses as one; `codepoint ≤ text` for parameters), maps, units, then tasks.
