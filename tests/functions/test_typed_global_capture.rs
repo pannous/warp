@@ -14,3 +14,12 @@ fn a_call_before_the_definition_reads_the_variable() {
 	is!("users = [1,2]; x = f(); def f(){ count(users) }; x", 2);
 	is!("k = 3; x = f(); def f(){ k + 1 }; x", 4);
 }
+
+/// Routes become functions placed before the program's statements, so a typed list a route reads is bound after them
+/// (card route-typed-list)
+#[test]
+fn a_route_reads_a_typed_list_of_main() {
+	let program = "class User{name: text}; users: [User] = [User(\"a\")]; route \"/\" { p{ \"home\" } }; route \"/u\" { h1{ \"User \" + users#1.name } }";
+	let page = warp::host::with_page_path("/u", || warp::markup::to_html(&warp::wasm_emitter::eval(program)));
+	assert_eq!(page, "<h1>User a</h1>");
+}
