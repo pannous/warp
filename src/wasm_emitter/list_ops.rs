@@ -10,6 +10,9 @@ use crate::wasm_emitter::layout::{utf8, BYTE};
 use crate::node::Node;
 use crate::extensions::strings::{GRAPHEME_EXTEND, GRAPHEME_PICTOGRAPHIC, REGIONAL_INDICATORS, ZERO_WIDTH_JOINER};
 
+/// The code points from which UTF-8 needs 2, 3 and 4 bytes
+const UTF8_LENGTH_STEPS: [i64; 3] = [0x80, 0x800, 0x10000];
+
 
 /// An ASCII letter with this bit set is lowercase: `byte | ASCII_LOWERCASE_BIT == 'e'` takes e and E
 const ASCII_LOWERCASE_BIT: i32 = 0x20;
@@ -199,6 +202,15 @@ impl WasmGcEmitter {
 		if self.should_emit_function("node_bytes") {
 			self.runtime_function("node_bytes", vec![Ref(node_ref)], vec![ValType::I64], vec![], |s, f| {
 				s.emit_fail_if_error(f, 0); // the bytes of an Error are none of its message's (card byte-slice)
+				// a one-character text, held as a codepoint, counts the bytes of its UTF-8 encoding
+				s.emit_field(f, 0, 0);
+				Self::emit_list(f, &[I::I64Const(KIND_MASK), I::I64And, I::I64Const(Kind::Codepoint as i64), I::I64Eq, I::If(BlockType::Empty), I::I64Const(1)]);
+				for first_code_point_of_longer_encoding in UTF8_LENGTH_STEPS {
+					f.instruction(&I::LocalGet(0));
+					s.emit_codepoint_of_node(f);
+					Self::emit_list(f, &[I::I64Const(first_code_point_of_longer_encoding), I::I64GeU, I::I64ExtendI32U, I::I64Add]);
+				}
+				Self::emit_list(f, &[I::Return, I::End]);
 				s.emit_is_text(f);
 				f.instruction(&I::If(BlockType::Result(ValType::I64)));
 				f.instruction(&I::LocalGet(0));

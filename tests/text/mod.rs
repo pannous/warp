@@ -46,3 +46,4 @@ mod test_print_runtime_number;
 mod test_utf8_bytes;
 mod test_case_table;
 mod test_error_as_text;
+mod test_codepoint_bytes;
