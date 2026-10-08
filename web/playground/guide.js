@@ -147,7 +147,7 @@ function openChapterOfAddress() {
 // an old chapter link #hello-world goes to #guide-hello-world, unless the name is an example's (#lists)
 function redirectOldChapterLink() {
 	const name = location.hash.slice(1);
-	const chapter = name && document.getElementById(CHAPTER_PREFIX + name);
+	const chapter = name ? document.getElementById(CHAPTER_PREFIX + name) : null;
 	if (chapter?.classList.contains("guide-chapter") && exampleSource(name) === undefined) history.replaceState(null, "", `#${chapter.id}`);
 }
 
