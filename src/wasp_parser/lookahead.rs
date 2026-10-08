@@ -240,23 +240,28 @@ impl WaspParser {
 
 	/// `try` or `assert` followed by an operand: the words that guard a statement
 	pub(super) fn peek_guard_word(&self) -> Option<&'static str> {
+		self.guard_word_ahead().map(|(_, marker)| marker)
+	}
+
+	/// The guard word here and its marker
+	fn guard_word_ahead(&self) -> Option<(&'static str, &'static str)> {
 		if self.options.data_mode {
 			return None;
 		}
-		GUARD_MARKERS.iter().map(|(word, marker)| (*word, *marker))
-			.find(|(word, _)| self.matches_keyword(word) && matches!(self.peek_char(word.len()), ' ' | '\t' | '{' | ':'))
-			.map(|(_, marker)| marker)
+		GUARD_MARKERS.iter().copied().find(|(word, _)| self.matches_keyword(word) && matches!(self.peek_char(word.len()), ' ' | '\t' | '{' | ':'))
 	}
 
 	/// `try X else Y` and `assert C else X`, as the marker call `marker(X, Y)` that `library_words` lowers.
 	/// X runs to the `else` (it may be an assignment); `assert C` alone has ø for the message.
 	pub(super) fn parse_guard(&mut self, marker: &'static str) -> Node {
-		let word_length = GUARD_MARKERS.iter().find(|(_, known)| *known == marker).map_or(0, |(word, _)| word.len());
+		let word_length = self.guard_word_ahead().map_or(0, |(word, _)| word.len());
 		self.advance_by(word_length);
 		self.skip_spaces();
 		self.skip_python_colon();
 		let outer = std::mem::replace(&mut self.stops_at_else, true);
+		let start = self.pos;
 		let guarded = self.with_equals_comparing(marker == ASSERT_MARKER, |parser| parser.parse_guarded_phrase());
+		let written: String = self.chars[start..self.pos].iter().collect();
 		self.stops_at_else = outer;
 		self.skip_spaces();
 		let mut caught = None;
@@ -272,6 +277,9 @@ impl WaspParser {
 			Symbol(UNCAUGHT_ERROR.to_string())
 		} else if marker == TRY_MARKER {
 			return error("`try` needs an `else`: `try X else Y`");
+		} else if marker == ASSERT_MARKER {
+			// the error names the condition as written, before lowering rewrote it
+			Node::Text(format!("{ASSERTION_FAILED}: {}", written.trim()))
 		} else {
 			Empty
 		};
