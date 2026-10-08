@@ -162,3 +162,19 @@ fn a_gpu_map_result_mapped_again_stays_on_the_gpu() {
 	let light_after = program.replace("exp(y) + 1", "y * y + 1");
 	assert_eq!(with_warning_mode(WarningMode::Error, || eval(&format!("{light_after}abs(zs#40000 - (sin(1) * sin(1) + 1)) < 0.00001"))).serialize(), "yes");
 }
+
+// card gpu-vectors: sum, min and max of an @gpu map reduce on the GPU: each workgroup leaves one partial result, only
+// those come back and the CPU combines them; below GPU_MAP_MIN_COUNT items, on the CPU in f64
+#[test]
+fn a_reduction_of_a_gpu_map_reads_back_partial_results() {
+	use warp::diagnostic::{with_warning_mode, WarningMode};
+	let filled = |n: usize| format!("linear xs = float[{n}]\nfor i in 1 to {n} {{ xs#i = i / {n}.0 }}\n");
+	let program = filled(40000);
+	let close = |reduction: &str, expected: &str| format!("{program}c = 0.0\nfor i in 1 to 40000 {{ c = c + sin(xs#i) }}\nr = {reduction}(xs.map(x => sin(x)) @gpu)\nabs(r - {expected}) * 100000 < {expected} + 1");
+	for (reduction, expected) in [("sum", "c"), ("max", "sin(1)"), ("min", "sin(1 / 40000)")] {
+		assert_eq!(with_warning_mode(WarningMode::Error, || eval(&close(reduction, expected))).serialize(), "yes", "{reduction}");
+	}
+	let lowered = warp::pipeline::lower(&format!("{program}s = sum(xs.map(x => sin(x)) @gpu)\ns")).expect("a program").serialize();
+	assert!(lowered.contains("gpu_reduce_linear"), "{lowered}");
+	assert_eq!(eval(&format!("{}s = sum(xs.map(x => sin(x)) @gpu)\ns == sin(0.5) + sin(1)", filled(2))).serialize(), "yes");
+}

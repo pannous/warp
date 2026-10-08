@@ -174,6 +174,23 @@ addHostPart({
 	words: (holder, hooks, { program }) => {
 		const plain = node => plainOfTree(readNode(program(), node));
 		const list = (values, item) => buildValue(program(), { kind: SQUARE_LIST, items: values.map(item) });
+		const gpuKernelLinear = (shader, source, values, target, workgroups, reduces) => {
+			// the items, then the values of the program's numbers the kernel reads, then a cell per workgroup to reduce into
+			const numbers = [...linearCells(program().memory, source), ...[plain(values) ?? []].flat().map(Number)];
+			const partials = numbers.length;
+			if (reduces) numbers.push(...new Array(Number(workgroups)).fill(0));
+			try {
+				const left = gpuJob("gpu_compute", { shader: plain(shader), numbers, workgroups: Number(workgroups) });
+				const cells = linearCells(program().memory, target);
+				cells.set(left.slice(reduces ? partials : 0).slice(0, cells.length));
+				return 1n;
+			} catch (failure) {
+				if (!/adapter|task Workers/.test(failure.message)) throw failure;
+				if (!gpuMapWarned) console.warn(`@gpu: ${failure.message}, so the map runs on the CPU`);
+				gpuMapWarned = true;
+				return 0n;
+			}
+		};
 		return {
 			gpu_compute: (shader, numbers, workgroups) => {
 				const values = gpuJob("gpu_compute", { shader: plain(shader), numbers: plain(numbers).map(Number), workgroups: Number(workgroups) });
@@ -188,23 +205,10 @@ addHostPart({
 				return block;
 			},
 			// `ys = xs.map(x => …) @gpu` (src/lowering/gpu_maps.rs): the kernel over source's cells (and the values it reads)
-			// into target's; 0 without
-			// an adapter (said once), when the program maps them on the CPU
-			gpu_map_linear: (shader, source, values, target, workgroups) => {
-				// the items, then the values of the program's numbers the kernel reads
-				const numbers = [...linearCells(program().memory, source), ...[plain(values) ?? []].flat().map(Number)];
-				try {
-					const left = gpuJob("gpu_compute", { shader: plain(shader), numbers, workgroups: Number(workgroups) });
-					const cells = linearCells(program().memory, target);
-					cells.set(left.slice(0, cells.length));
-					return 1n;
-				} catch (failure) {
-					if (!/adapter|task Workers/.test(failure.message)) throw failure;
-					if (!gpuMapWarned) console.warn(`@gpu: ${failure.message}, so the map runs on the CPU`);
-					gpuMapWarned = true;
-					return 0n;
-				}
-			},
+			// into target's; 0 without an adapter (said once), when the program maps them on the CPU
+			gpu_map_linear: (shader, source, values, target, workgroups) => gpuKernelLinear(shader, source, values, target, workgroups, false),
+			// `s = sum(xs.map(x => …) @gpu)`, min, max: each workgroup's partial result, left after the values, into target
+			gpu_reduce_linear: (shader, source, values, target, workgroups) => gpuKernelLinear(shader, source, values, target, workgroups, true),
 			gpu_render: (shader, width, height, values) => {
 				const given = values == null ? {} : plain(values);
 				const pixels = gpuJob("gpu_render", { shader: plain(shader), width: Number(width), height: Number(height), values: given });

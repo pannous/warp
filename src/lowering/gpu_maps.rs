@@ -121,12 +121,97 @@ fn writes(node: &Node, name: &str) -> bool {
 	found
 }
 
-/// A lambda as a WGSL compute kernel: the shader, the program's numbers it reads (`outer`, appended to `data` after
-/// the items, in this order) and whether it is worth the GPU (math words, powers: `heavy`)
+/// A lambda as a WGSL compute kernel: the item it computes in WGSL, the program's numbers it reads (`outer`, appended
+/// to `data` after the items, in this order) and whether it is worth the GPU (math words, powers: `heavy`)
 pub(crate) struct Kernel {
-	pub shader: String,
+	computed: String,
 	pub outer: Vec<String>,
 	heavy: bool,
+}
+
+/// The words reducing an @gpu map to one number: `s = sum(xs.map(x => …) @gpu)`
+#[derive(Clone, Copy)]
+pub(crate) enum Reduction {
+	Sum,
+	Min,
+	Max,
+}
+
+const REDUCTIONS: [Reduction; 3] = [Reduction::Sum, Reduction::Min, Reduction::Max];
+/// The largest f32, where min and max start (WGSL has no infinity literal)
+const LARGEST_F32: &str = "3.4028235e38";
+
+impl Reduction {
+	pub(crate) fn word(self) -> &'static str {
+		match self {
+			Reduction::Sum => "sum",
+			Reduction::Min => "min",
+			Reduction::Max => "max",
+		}
+	}
+
+	/// The value no item changes, in WGSL
+	fn identity(self) -> String {
+		match self {
+			Reduction::Sum => "0.0".into(),
+			Reduction::Min => LARGEST_F32.into(),
+			Reduction::Max => format!("-{LARGEST_F32}"),
+		}
+	}
+
+	/// `left` and `right` combined, in WGSL and in warp
+	pub(crate) fn combined(self, left: &str, right: &str) -> String {
+		match self {
+			Reduction::Sum => format!("({left} + {right})"),
+			Reduction::Min => format!("min({left}, {right})"),
+			Reduction::Max => format!("max({left}, {right})"),
+		}
+	}
+}
+
+/// `sum(xs.map(f) @gpu)`, min, max: the reduction and the @gpu map
+pub(crate) fn gpu_reduction(value: &Node) -> Option<(Reduction, Node)> {
+	let Node::List(items, _, _) = value.drop_meta() else { return None };
+	let [word, argument] = items.as_slice() else { return None };
+	let reduction = REDUCTIONS.into_iter().find(|reduction| word.drop_meta().name() == reduction.word())?;
+	let argument = match argument.drop_meta() {
+		Node::List(inner, crate::node::Bracket::Round, _) if inner.len() == 1 => &inner[0],
+		_ => argument,
+	};
+	gpu_map(argument).map(|_| (reduction, argument.clone()))
+}
+
+const KERNEL_BINDING: &str = "@group(0) @binding(0) var<storage, read_write> data: array<f32>;";
+
+impl Kernel {
+	/// The shader mapping every item of `data` in place
+	pub(crate) fn map_shader(&self) -> String {
+		format!("{KERNEL_BINDING}
+@compute @workgroup_size({WORKGROUP_SIZE}) fn main(@builtin(global_invocation_id) id: vec3<u32>) {{
+	let {KERNEL_COUNT} = arrayLength(&data) - {}u;
+	if (id.x < {KERNEL_COUNT}) {{ let {KERNEL_ITEM} = data[id.x]; data[id.x] = {}; }}
+}}", self.outer.len(), self.computed)
+	}
+
+	/// The shader reducing the mapped items of each workgroup in its shared memory, halving the active threads each
+	/// step, into one cell per workgroup after the items and the outer numbers
+	pub(crate) fn reduce_shader(&self, reduction: Reduction) -> String {
+		let outer = self.outer.len();
+		format!("{KERNEL_BINDING}
+var<workgroup> partial: array<f32, {WORKGROUP_SIZE}>;
+@compute @workgroup_size({WORKGROUP_SIZE}) fn main(@builtin(global_invocation_id) id: vec3<u32>, @builtin(local_invocation_id) local: vec3<u32>, @builtin(workgroup_id) group: vec3<u32>, @builtin(num_workgroups) groups: vec3<u32>) {{
+	let {KERNEL_COUNT} = arrayLength(&data) - {outer}u - groups.x;
+	var mapped = {};
+	if (id.x < {KERNEL_COUNT}) {{ let {KERNEL_ITEM} = data[id.x]; mapped = {}; }}
+	partial[local.x] = mapped;
+	workgroupBarrier();
+	for (var step = {}u; step > 0u; step = step / 2u) {{
+		if (local.x < step) {{ partial[local.x] = {}; }}
+		workgroupBarrier();
+	}}
+	if (local.x == 0u) {{ data[{KERNEL_COUNT} + {outer}u + group.x] = partial[0]; }}
+}}", reduction.identity(), self.computed, WORKGROUP_SIZE / 2, reduction.combined("partial[local.x]", "partial[local.x + step]"))
+	}
 }
 
 /// The kernel mapping every item of `data` by the lambda `parameter => body`, if WGSL can compute it
@@ -136,12 +221,7 @@ pub(crate) fn kernel(lambda: &Node) -> Option<Kernel> {
 	let mut translation = Translation { parameter, outer: vec![], heavy: false };
 	let computed = translation.expression(body)?;
 	let Translation { outer, heavy, .. } = translation;
-	let shader = format!("@group(0) @binding(0) var<storage, read_write> data: array<f32>;
-@compute @workgroup_size({WORKGROUP_SIZE}) fn main(@builtin(global_invocation_id) id: vec3<u32>) {{
-	let {KERNEL_COUNT} = arrayLength(&data) - {}u;
-	if (id.x < {KERNEL_COUNT}) {{ let {KERNEL_ITEM} = data[id.x]; data[id.x] = {computed}; }}
-}}", outer.len());
-	Some(Kernel { shader, outer, heavy })
+	Some(Kernel { computed, outer, heavy })
 }
 
 /// The kernel of a lambda worth the GPU: one of only arithmetic is faster on the CPU at any count
@@ -245,14 +325,15 @@ pub fn warn_unapplied(node: Node) -> Node {
 fn collect_unapplied(node: &Node, warnings: &mut Vec<crate::diagnostic::Diagnostic>) {
 	let warn = |warnings: &mut Vec<_>, reason: String| warnings.push(crate::diagnostic::Diagnostic::at(node, format!("{reason}, so this runs on the CPU")));
 	match node.drop_meta() {
-		Node::Key(target, Op::Assign, value) if matches!(target.drop_meta(), Node::Symbol(_)) && gpu_map(value).is_some() => {
-			if let Some(reason) = unapplied(value) {
+		Node::Key(target, Op::Assign, value) if matches!(target.drop_meta(), Node::Symbol(_)) && (gpu_map(value).is_some() || gpu_reduction(value).is_some()) => {
+			let map = gpu_reduction(value).map_or(value.as_ref().clone(), |(_, map)| map);
+			if let Some(reason) = unapplied(&map) {
 				warn(warnings, reason);
 			}
 		}
 		_ if crate::parallel::annotated_here(node, GPU_ATTRIBUTE) => {
-			let assign = if crate::parallel::map_call(node).is_some() { "@gpu maps into a new array: assign the map" } else { "@gpu runs only a map" };
-			warn(warnings, format!("{assign}, `ys = xs.map(x => …) @gpu`"));
+			let assign = if crate::parallel::map_call(node).is_some() { "@gpu maps into a new array or reduces to a number: assign it" } else { "@gpu runs only a map" };
+			warn(warnings, format!("{assign}, `ys = xs.map(x => …) @gpu`, `s = sum(xs.map(x => …) @gpu)`"));
 		}
 		Node::Key(left, _, right) => [left, right].into_iter().for_each(|part| collect_unapplied(part, warnings)),
 		Node::List(items, _, _) => items.iter().for_each(|item| collect_unapplied(item, warnings)),
