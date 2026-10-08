@@ -32,7 +32,7 @@ const SCALAR_KINDS: [Kind; 4] = [Kind::Int, Kind::Float, Kind::Text, Kind::Codep
 /// `xs .op ys` of two lists (card gpu-vectors, notes/gpu.md): the lists held once, their items paired by index
 pub(crate) const PAIRED_TEMPLATE: &str = "(LEFT = paired_left; RIGHT = paired_right; (1 to COUNT).map(paired_index => paired_item))";
 const PAIRED_ITEM: &str = "LEFT#paired_index + RIGHT#paired_index";
-const PAIRED_COUNT: &str = "(if #LEFT == #RIGHT then #LEFT else raise \"element-wise operator: the lists differ in length\")";
+pub(crate) const PAIRED_COUNT: &str = "(if #LEFT == #RIGHT then #LEFT else raise \"element-wise operator: the lists differ in length\")";
 /// `sum(xs .* ys)` and `sum(xs .* 3)` fused into one loop, no list of the products built (5–20× faster, notes/gpu.md)
 pub(crate) const PAIRED_SUM_TEMPLATE: &str = "(LEFT = paired_left; RIGHT = paired_right; SUM = 0; for paired_index in 1 to COUNT { SUM = SUM + paired_item }; SUM)";
 const FUSED_SUM_TEMPLATE: &str = "(ITEMS = fused_list; SUM = 0; for ITEM in ITEMS { SUM = SUM + fused_item }; SUM)";
@@ -347,6 +347,11 @@ fn broadcasting_call<'a>(items: &'a [Node], bracket: &Bracket, separator: &Separ
 fn collect_list_variables(node: &Node, functions: &HashSet<String>, assigned: &mut HashMap<String, bool>) {
 	// `xs = []` (which parses as ø) is a list once the program appends to xs: `xs.add(i)`, `xs = xs + [i]`
 	let mut appended: HashSet<String> = HashSet::new();
+	// `float[n]` is the subscript `float#(n+1)` still: a zero-filled list unless float names a variable
+	let mut variables: HashSet<String> = HashSet::new();
+	node.visit(&mut |part| if let Node::Key(target, Op::Assign | Op::Define, _) = part {
+		variables.extend(assigned_variable(target).map(|(name, _)| name.clone()));
+	});
 	node.visit(&mut |part| match part {
 		Node::Key(list, Op::Dot, call) => {
 			if let (Node::Symbol(name), Node::List(items, _, _)) = (list.drop_meta(), call.drop_meta()) {
@@ -376,6 +381,7 @@ fn collect_list_variables(node: &Node, functions: &HashSet<String>, assigned: &m
 					_ if is_range(value) => true,
 					_ if element_wise_parts(value).is_some() => true,
 					_ if crate::analyzer::typed_array_value(value).is_some() => true,
+					Node::Key(element, Op::Hash, one_based) => crate::analyzer::zero_filled_subscript(element, one_based, &variables).is_some(),
 					Node::Empty => appended.contains(name),
 					// `xs = xs + [i]`
 					Node::Key(left, Op::Add, right) => matches!(left.drop_meta(), Node::Symbol(same) if same == name) && matches!(right.drop_meta(), Node::List(_, Bracket::Square, _)),
