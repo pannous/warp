@@ -65,3 +65,18 @@ fn declared_list_checks_the_items_of_another_list() {
 	is!("words() := [\"a\" \"b\"]; names: texts = words() + [\"c\"]; #names", 3);
 	is!("names: texts = [\"hi\"]; more: texts = [\"yo\"]; names = more + [\"ok\"]; #names", 2);
 }
+
+#[test]
+fn list_fields_check_items_of_instances_of_unknown_class() {
+	let program = "same(y) := y; class bag { items: texts }; ";
+	fails_with(&format!("{program}put(x) := {{ x.items.add(same(420)); x }}; put(bag([\"hi\"])).items"), "items of bag is declared texts");
+	is!(&format!("{program}put(x) := {{ x.items.add(same(\"yo\")); x }}; #put(bag([\"hi\"])).items"), 2);
+}
+
+#[test]
+fn list_fields_check_a_whole_assigned_list() {
+	let program = "class bag { items: texts }; b = bag([\"hi\"]); ";
+	fails_with(&format!("numbers() := [1 2]; {program}b.items = numbers(); b.items"), "items of bag is declared texts");
+	is!(&format!("words() := [\"a\" \"b\"]; {program}b.items = words(); #b.items"), 2);
+	is!(&format!("{program}b.items = b.items + [\"yo\"]; #b.items"), 2);
+}
