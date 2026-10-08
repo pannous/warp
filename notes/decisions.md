@@ -27,6 +27,9 @@ D-number or #number mean this file. Open questions, parked ones and the standing
   run time from the WASM metadata. Words: x.type, x.class, x.fields/attributes/members, x.methods,
   f.params/signature, f.effects, event.listeners, module.exports, x.unit, x.doc. Lookup order field → meta →
   reflection. One warp custom section (wasp.meta), kept unstripped.
+- P200b real references without exceptions (card real-references, warp-58): maps share like class instances
+  (`m = {a: 1}; n = m; n.a = 2; m.a` → 2), and adding a new field keeps the same object (`q = p; q.color = "red";
+  p.color` → "red"). `x.copy()` is the explicit independent copy.
 - P199 bool slots accept 1 and 0 as yes/no everywhere (variables, fields, list items); other ints and texts are
   errors. Card bool-assign.
 - P200 class instances passed to functions are shared references (like Python/JS). Card instance-field.
