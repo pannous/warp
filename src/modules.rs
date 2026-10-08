@@ -375,8 +375,8 @@ impl<'a> Loader<'a> {
 	}
 
 	fn resolve(&mut self, node: Node) -> Result<Node, Node> {
-		if let Some(used) = used_module(&node) {
-			return Ok(match self.import(&used, &node)? {
+		if let Some(uses) = used_modules(&node) {
+			return Ok(match self.import_all(uses)? {
 				imported if imported.is_empty() => Node::Empty,
 				imported => Node::List(imported, Bracket::None, Separator::Semicolon),
 			});
@@ -385,8 +385,8 @@ impl<'a> Loader<'a> {
 			Node::List(items, bracket, separator) => {
 				let mut resolved = Vec::with_capacity(items.len());
 				for item in items {
-					match used_module(&item) {
-						Some(used) => resolved.extend(self.import(&used, &item)?),
+					match used_modules(&item) {
+						Some(uses) => resolved.extend(self.import_all(uses)?),
 						None => resolved.push(self.resolve(item)?),
 					}
 				}
@@ -395,6 +395,15 @@ impl<'a> Loader<'a> {
 			Node::Meta { node, data } => Ok(Node::Meta { node: Box::new(self.resolve(*node)?), data }),
 			other => Ok(other),
 		}
+	}
+
+	/// The statements of each module a `use` names
+	fn import_all(&mut self, uses: Vec<(Used, Node)>) -> Result<Vec<Node>, Node> {
+		let mut imported = vec![];
+		for (used, statement) in uses {
+			imported.extend(self.import(&used, &statement)?);
+		}
+		Ok(imported)
 	}
 
 	/// The statements a `use` stands for: the module's definitions, nothing for a module already loaded,
@@ -614,7 +623,7 @@ impl<'a> Loader<'a> {
 
 	/// The modules a sibling file uses, resolved from its folder
 	fn uses_of(&mut self, sibling: &mut Sibling) -> Result<Vec<Node>, Node> {
-		let uses: Vec<Node> = sibling.statements()?.iter().filter(|statement| used_module(statement).is_some()).cloned().collect();
+		let uses: Vec<Node> = sibling.statements()?.iter().filter(|statement| used_modules(statement).is_some()).cloned().collect();
 		let outer_directory = self.including_directory.replace(folder_of(&sibling.path));
 		let resolved = uses.into_iter().map(|statement| self.resolve(statement)).collect::<Result<Vec<Node>, Node>>();
 		self.including_directory = outer_directory;
@@ -992,6 +1001,34 @@ struct Used {
 	import: Import,
 	name: String,
 	requirement: Option<Requirement>,
+}
+
+/// The modules a `use` statement names, each with the statement that uses it alone: `use list, text` and
+/// `use list text` (card std-use) use each; `use js Math` is a foreign module (lowering/foreign_modules.rs), not two
+fn used_modules(node: &Node) -> Option<Vec<(Used, Node)>> {
+	if let Some(used) = used_module(node) {
+		return Some(vec![(used, node.clone())]);
+	}
+	let (keyword, names) = match node.drop_meta() {
+		// `use list, text`: the parser groups `use list` before the comma
+		Node::List(items, _, Separator::Colon) => match items.split_first() {
+			Some((first, rest)) => match first.drop_meta() {
+				Node::List(head, _, _) if head.len() == 2 => (&head[0], std::iter::once(&head[1]).chain(rest).collect::<Vec<_>>()),
+				_ => return None,
+			},
+			None => return None,
+		},
+		Node::List(items, _, _) if items.len() > 2 => (&items[0], items[1..].iter().collect()),
+		_ => return None,
+	};
+	let plain_name = |name: &&Node| matches!(name.drop_meta(), Node::Symbol(word) if !crate::foreign_modules::FOREIGN_RUNTIMES.contains(&word.as_str()) && ![MINIMUM_KEYWORD, "as", "from"].contains(&word.as_str()) && !is_version_keyword(name));
+	if !names.iter().all(plain_name) {
+		return None;
+	}
+	names.into_iter().map(|name| {
+		let statement = Node::List(vec![keyword.clone(), name.clone()], Bracket::None, Separator::Space);
+		used_module(&statement).map(|used| (used, statement))
+	}).collect()
 }
 
 /// `use name`, `require name`, `import name` and `include name`: the name is a symbol, a text or a path `lib/name`, `name.wasp`.
