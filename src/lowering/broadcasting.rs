@@ -4,7 +4,7 @@
 //! declared with a scalar type (`x:int`, `square number`, P50) or, undeclared, is an arithmetic operand of the body; a
 //! function of a list (`count(xs)`, `xs#2`, `xs:list`) takes the list whole. Operators never broadcast (`[1 2 3]*2`).
 
-use crate::analyzer::annotated_kind;
+use crate::analyzer::{annotated_kind, list_element_type};
 use crate::function_values::{definitions, Definition};
 use crate::type_kinds::Kind;
 use crate::lambdas::IMPLICIT_PARAMETER;
@@ -355,11 +355,12 @@ fn collect_list_variables(node: &Node, functions: &HashSet<String>, assigned: &m
 	});
 	node.visit(&mut |part| {
 		if let Node::Key(target, Op::Assign | Op::Define, value) = part {
-			if let Node::Symbol(name) = target.drop_meta() {
+			if let Some((name, declared_type)) = assigned_variable(target) {
 				if is_broadcast_over(value, name, functions) {
 					return;
 				}
-				let is_list = match value.drop_meta() {
+				let declared_list = declared_type.is_some_and(|type_node| list_element_type(&type_node.serialize()).is_some());
+				let is_list = declared_list || match value.drop_meta() {
 					Node::List(items, Bracket::Square, _) => !items.iter().any(is_pair),
 					_ if is_range(value) => true,
 					Node::Empty => appended.contains(name),
@@ -371,6 +372,18 @@ fn collect_list_variables(node: &Node, functions: &HashSet<String>, assigned: &m
 			}
 		}
 	});
+}
+
+/// The variable `x = …` or `x: type = …` assigns, and its declared type
+fn assigned_variable(target: &Node) -> Option<(&String, Option<&Node>)> {
+	match target.drop_meta() {
+		Node::Symbol(name) => Some((name, None)),
+		Node::Key(name, Op::Colon, declared_type) => match name.drop_meta() {
+			Node::Symbol(name) => Some((name, Some(declared_type))),
+			_ => None,
+		},
+		_ => None,
+	}
 }
 
 /// `1 to 4`, `(1 to 4)`, `1..4`
