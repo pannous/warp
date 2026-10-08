@@ -68,3 +68,17 @@ fn a_site_starting_tasks_runs_its_program_in_a_worker() {
 	assert!(page.contains(r#"<script src="site-thread.js"></script>"#) && !page.contains(r#"<script src="host.js">"#), "{page}");
 	std::fs::remove_dir_all(directory).unwrap();
 }
+
+// card site-worker-step (step 2): a program with routes that starts tasks runs in the Worker too; the page keeps
+// host-routes.js for its links, the back button and the focus, and the Worker shows each route the page sends it
+#[test]
+fn a_site_with_routes_starting_tasks_runs_its_program_in_a_worker() {
+	let directory = scratch_directory("routed-tasks-site");
+	let program = "nap(ms) := { sleep(ms); 1 }\nfirst = go nap(1)\nnaps = await first\nroute \"/\" { p{ \"naps: \" + naps } }\nroute \"/other\" { p{ \"other\" } }";
+	let site = warp::site::build(program, "routed", &directory).expect("the site is built");
+	let page = std::fs::read_to_string(directory.join("index.html")).unwrap();
+	assert!(page.contains(r#"<script src="site-thread.js"></script>"#) && page.contains(r#"<script src="host-routes.js"></script>"#) && !page.contains(r#"<script src="host.js">"#), "{page}");
+	assert!(page.contains(r#"data-wasp-worker="reader.js,host.js,host-tasks.js,host-routes.js""#), "{page}");
+	assert!(site.files.iter().any(|file| file == "site-worker.js") && site.files.iter().any(|file| file == "404.html"), "{:?}", site.files);
+	std::fs::remove_dir_all(directory).unwrap();
+}

@@ -1,0 +1,7 @@
+// a built site with routes whose main awaits a task (card site-worker-step): it runs in the site's Worker, the page
+// sends it each link followed and the back button, the Worker answers the route's markup
+nap(ms) := { sleep(ms); 1 }
+first = go nap(10)
+naps = await first
+route "/" { div{ h1{ "Home " + naps } a{ href: "/other" "Other" } } }
+route "/other" { div{ h1{ "Other" } a{ href: "/" "Home" } } }
