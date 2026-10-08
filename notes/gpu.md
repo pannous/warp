@@ -159,4 +159,10 @@ Rejected: (b) automatic f32 for floats (results differ in the 7th digit), (c) do
    a linear float array. A non-number item is a run-time error of `float`. Measured (release, `sin(x)`, ms, copy
    included): 10^5 CPU 8 / @gpu 31, 10^6 87 / 45, 10^7 614 / 252. (Filling float[10^7] item by item exhausts the
    default fuel; WARP_FUEL=10^11 for that row.) Test: test_webgpu a_gpu_map_takes_a_list_of_floats.
-   Open: the browser path with a real adapter, data kept on the GPU between separate statements.
+   Across statements (done, gpu_maps.rs kept_on_gpu): `ys = xs.map(f) @gpu; zs = ys.map(g) @gpu` where only later
+   @gpu maps read ys becomes `zs = xs.map(f).map(g) @gpu`: ys never comes back from the GPU. Not when ys is read
+   elsewhere, or xs or a number f reads is written after ys's statement (ys keeps the values before). The round trip
+   (upload, dispatch, readback, f64↔f32) is the cost, not the kernel: 10^7 sin then cos, ms: two maps 272–321, folded
+   143–188, one map alone ~150 (load average 20–30, noisy). Test: a_gpu_map_result_mapped_again_stays_on_the_gpu.
+   Open: a result both read on the CPU and mapped again on the GPU (a GPU buffer kept per block, skipping the upload),
+   the browser path with a real adapter.
