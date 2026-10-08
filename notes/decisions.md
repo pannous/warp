@@ -10,6 +10,9 @@ D-number or #number mean this file. Open questions, parked ones and the standing
   go to the GPU only when the program allows f32: `@gpu …` or a `float32[n]` list. `sum(int[10^7] .* 3)` → GPU;
   `sum(float[10^7] .* 0.1)` → CPU. User: "for @gpu give a warning or hint if the GPU does not apply" (it then runs on
   the CPU). The GPU covers the dotted element-wise operators (`xs .* 2`, `xs .+ ys`).
+  Threshold (user): offloading usually pays off from about 10⁵–10⁶ elements, clearly from 10⁶–10⁷; one cheap op
+  like `xs .* 3` may never pay off unless several ops are fused or the data stays on the GPU. Err on the CPU side.
+  Once the feature works, measure where and when to enable it and set safety bounds from real measurements.
 - P215 (card shared-lists, warp-class): with shared lists, element types are checked both ways, per P203: where the
   alias is visible a covariant assignment is a compile error (`xs: [Circle] = [c]; ys: [Shape] = xs` → error unless ys
   is read-only); otherwise each write (add/insert/`xs#i = v`) checks the declared element type and fails loudly at
