@@ -1080,6 +1080,22 @@ pub(super) fn check_null_use(node: &Node, nullable: &mut HashMap<String, Uncheck
 /// `const x=…` binds x once: a later assignment of another value, a compound assignment, an increment or an element
 /// assignment is rejected (P130); the same value again only warns (P159). `let x=…` may change, with a note that
 /// teaches `var` for a variable that changes (P159)
+/// A `let` variable may change, with a got-it note teaching `var`
+fn educate_let_change(node: &Node, place: &str, change: &str) {
+	crate::normalize::set_position_of(node);
+	crate::diagnostic::educate_once(LET_CHANGES_TOPIC, &format!("let {place}"), &format!("var {place}"), &format!("{place} changes ({change}): var says so where it is declared"));
+}
+
+/// The method call `add(4)`, `pop()`, `remove(x)` of `names.add(4)`: one that changes the list it is called on
+fn changing_list_method(call: &Node) -> bool {
+	let method = match call.drop_meta() {
+		Node::List(items, _, _) => items.first().map(Node::name),
+		Node::Symbol(name) => Some(name.clone()),
+		_ => None,
+	};
+	method.is_some_and(|method| is_list_mutating_method(&method))
+}
+
 pub(super) fn check_constants(node: &Node, constants: &mut HashMap<String, (String, String)>) -> Option<Diagnostic> {
 	match node.drop_meta() {
 		Node::List(items, _, _) => {
@@ -1106,10 +1122,7 @@ pub(super) fn check_constants(node: &Node, constants: &mut HashMap<String, (Stri
 			};
 			let assignment = node.drop_meta().serialize();
 			match constants.get(&place) {
-				Some((keyword, _)) if keyword == IMMUTABLE_LET => {
-					crate::normalize::set_position_of(node);
-					crate::diagnostic::educate_once(LET_CHANGES_TOPIC, &format!("let {place}"), &format!("var {place}"), &format!("{place} changes ({assignment}): var says so where it is declared"));
-				}
+				Some((keyword, _)) if keyword == IMMUTABLE_LET => educate_let_change(node, &place, &assignment),
 				Some((_, bound)) if *op == Op::Assign && matches!(target.drop_meta(), Node::Symbol(_)) && value.serialize() == *bound => {
 					let redundant = Diagnostic::at(node, format!("{place} is const and already {bound}: {assignment} changes nothing")).fix("remove the redundant assignment".to_string());
 					if crate::diagnostic::report(std::slice::from_ref(&redundant)).is_err() {
@@ -1123,6 +1136,20 @@ pub(super) fn check_constants(node: &Node, constants: &mut HashMap<String, (Stri
 				None => {}
 			}
 			check_constants(value, constants)
+		}
+		// `names.add(4)`, `names.pop()` change the list as an assignment would (card const-list-add)
+		Node::Key(list, Op::Dot, call) if changing_list_method(call) => {
+			let place = list.name();
+			let change = node.drop_meta().serialize();
+			match constants.get(&place) {
+				Some((keyword, _)) if keyword == IMMUTABLE_LET => educate_let_change(node, &place, &change),
+				Some(_) => {
+					return Some(Diagnostic::at(node, format!("{place} is const, cannot change it: {change}"))
+						.fix(format!("change a copy (copy = {place}), or declare {place} without const")));
+				}
+				None => {}
+			}
+			check_constants(call, constants)
 		}
 		Node::Key(left, _, right) => check_constants(left, constants).or_else(|| check_constants(right, constants)),
 		_ => None,
@@ -1205,6 +1232,55 @@ pub(super) fn check_declared_types(node: &Node, declared: &mut HashMap<String, S
 	}
 }
 
+/// Does a value of kind `actual` fit the builtin type `type_name` (W0 subtyping, notes/type_theory.md)? An int fits a
+/// float, a decimal fits `exact`, a character fits a text (`"a"` parses as a codepoint); any other type admits all here
+pub(crate) fn admits(type_name: &str, actual: Kind) -> bool {
+	let type_name = type_name.trim_end_matches('?');
+	let Some(expected) = builtin_type_kind(type_name) else { return true };
+	let exact_decimal = canonical_type_name(type_name) == "exact" && actual == Kind::Float;
+	let one_character_text = expected == Kind::Text && actual == Kind::Codepoint;
+	expected == actual || (expected == Kind::Float && actual == Kind::Int) || exact_decimal || one_character_text
+}
+
+/// The builtin type a parameter annotation names: `x: text`, not `xs: [int]`
+pub(crate) fn annotated_builtin_type(annotation: &Node) -> Option<&str> {
+	match annotation.drop_meta() {
+		Node::Symbol(name) if builtin_type_kind(name.trim_end_matches('?')).is_some() => Some(name),
+		_ => None,
+	}
+}
+
+/// The element type a list annotation names: `texts`, `[text]` and `list of text` are lists of `text`
+pub(crate) fn declared_element_type(annotation: &Node) -> Option<&str> {
+	fn symbol(node: &Node) -> Option<&str> {
+		match node.drop_meta() {
+			Node::Symbol(name) => Some(name),
+			_ => None,
+		}
+	}
+	match annotation.drop_meta() {
+		Node::Symbol(word) => plural_element_type(word).or_else(|| word.strip_prefix(LIST_OF_PREFIX)),
+		Node::List(items, Bracket::Square, _) if items.len() == 1 => symbol(&items[0]),
+		Node::List(items, _, Separator::Space) => match items.as_slice() {
+			[list, of, element] if symbol(list) == Some(LIST_WORD) && symbol(of) == Some(OF_WORD) => symbol(element),
+			_ => None,
+		},
+		_ => None,
+	}
+}
+
+/// Do the elements of a list of type `list_type` (list_type_name: `list of int`) fit the declared element type? A list
+/// whose elements are known only at run time (`list of node`, a plain `list`) is checked there
+pub(crate) fn elements_fit(declared_element: &str, list_type: &str) -> bool {
+	let Some(element) = list_type.strip_prefix(LIST_OF_PREFIX) else { return true };
+	// a rational or real element is a fraction an int list loses (`rational` names the exact Int representation)
+	let fraction = [RATIONAL_WORD, REAL_WORD, FLOAT_WORD, NUMBER_WORD].contains(&element).then_some(Kind::Float);
+	match fraction.or_else(|| builtin_type_kind(element)) {
+		Some(kind) => admits(declared_element, kind),
+		None => true,
+	}
+}
+
 pub(super) fn assignment_mismatch(assignment: &Node, name: &str, type_name: &str, value: &Node) -> Option<Diagnostic> {
 	if let Some(base) = type_name.strip_suffix('?') {
 		return match value.drop_meta() {
@@ -1227,12 +1303,9 @@ pub(super) fn assignment_mismatch(assignment: &Node, name: &str, type_name: &str
 
 /// The kind of a literal `value` that does not fit the built-in type `type_name`; None when it fits or is no literal
 pub(crate) fn literal_misfit(type_name: &str, value: &Node) -> Option<Kind> {
-	let expected = builtin_type_kind(type_name)?;
+	builtin_type_kind(type_name)?;
 	let actual = computed_literal_kind(value)?;
-	let exact_decimal = canonical_type_name(type_name) == "exact" && actual == Kind::Float;
-	let one_character_text = expected == Kind::Text && actual == Kind::Codepoint; // `"a"` parses as a codepoint
-	let fits = expected == actual || (expected == Kind::Float && actual == Kind::Int) || exact_decimal || one_character_text;
-	(!fits).then_some(actual)
+	(!admits(type_name, actual)).then_some(actual)
 }
 
 /// The element type of a list type: `texts` and `list of text` hold `text`

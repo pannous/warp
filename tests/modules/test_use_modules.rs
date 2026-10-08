@@ -95,3 +95,16 @@ fn a_program_variable_leaves_a_file_module_its_words() {
 	assert_eq!(run("use mytext; words = [\"ab\", \"cd\"]; [titled w for w in words]"), texts(vec!["AB", "CD"]));
 	assert_eq!(run("use mytext; words = [\"a b\"]; titled \"hello world\""), Node::Text("HELLO WORLD".into()));
 }
+
+/// `use "./helper.wasp"` and `use "/absolute/helper.wasp"` load that file; `./` starts at the program's folder
+/// (card use-path)
+#[test]
+fn a_quoted_path_uses_that_file() {
+	let directory = module_directory("use_path", &[("helper.wasp", "triple(x) := x * 3")]);
+	let absolute = directory.join("helper.wasp");
+	assert_eq!(eval(&format!("use \"{}\"; triple(3)", absolute.display())), 9);
+	let program = directory.join("app.wasp");
+	let run = |code: &str| warp::modules::with_program_file(&program, || eval(code));
+	assert_eq!(run("use \"./helper.wasp\"; triple(2)"), 6);
+	assert_eq!(run("use \"./helper\"; triple(4)"), 12);
+}
