@@ -5,6 +5,10 @@ answered questions to a new file"). Older references to "notes/open_decisions.md
 D-number or #number mean this file. Open questions, parked ones and the standing rules stay in notes/open_decisions.md.
 
 ## Decided 2026-10-08 (user, as recommended unless quoted)
+- P216 (warp-types): named arguments run as written, left to right (like Python): with `global i = 0;
+  g() := { i = i*10+1; i }; h() := { i = i*10+2; i }; f(a, b) := a*100 + b`, `f(b=h(), a=g())` runs h first
+  (b=2), then g (a=21) → 2102; the corpus pin 112 (parameter order) changes. Applies to constructors too
+  (card named-constructor-args).
 - P214 (card gpu-vectors, warp-web; revises P118): big list math moves to the GPU automatically only where the result
   is identical to the CPU's: Int lists fitting i32, with an overflow flag (the CPU redoes it on overflow). Float lists
   go to the GPU only when the program allows f32: `@gpu …` or a `float32[n]` list. `sum(int[10^7] .* 3)` → GPU;
