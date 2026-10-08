@@ -838,3 +838,13 @@ pub(super) fn prefixed_declaration(type_name: &Node, next: &Node) -> Option<Node
 		_ => None,
 	}
 }
+
+/// `x: int | text` is `x:"int or text"` (card inline-union), before any pass reads `int | text` as a value
+pub fn lower_inline_unions(node: Node) -> Node {
+	match node {
+		Node::Key(name, Op::Colon, type_node) if crate::analyzer::union_type_name(&type_node).is_some() => {
+			Node::Key(name, Op::Colon, Box::new(Node::Symbol(crate::analyzer::union_type_name(&type_node).expect("guarded"))))
+		}
+		other => other.map_children(lower_inline_unions),
+	}
+}

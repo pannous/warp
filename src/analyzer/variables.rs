@@ -413,6 +413,8 @@ pub(crate) fn held_kind(value: &Node, inferred: impl FnOnce() -> Kind) -> Kind {
 pub(super) fn declared_kind(type_name: &str) -> Option<Kind> {
 	match type_name.strip_suffix('?') {
 		Some(_) => Some(Kind::Empty),
+		// an inline union `int or text` holds a value of either kind as a Node
+		None if super::checks::union_parts(type_name).is_some() => Some(Kind::Empty),
 		None => builtin_type_kind(type_name),
 	}
 }
