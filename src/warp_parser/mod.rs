@@ -64,7 +64,7 @@ const ELEMENT_WISE_OPERATORS: [(char, Op); 5] = [('+', Op::Add), ('-', Op::Sub),
 
 /// Control words behind a statement, each lowering to `if`/`while`, negated for `unless`/`until`
 /// Words that declare a type from a field block: `struct point{x:int y:int}`, `class contact {name email?}`
-const TYPE_DECLARATION_WORDS: [&str; 2] = ["class", "struct"];
+pub(crate) const TYPE_DECLARATION_WORDS: [&str; 2] = ["class", "struct"];
 /// Words before a class declaration that change nothing in warp: `data class` (a warp class compares by value already),
 /// `open`, `abstract`, `sealed`, `final`, visibility
 const CLASS_MODIFIERS: [&str; 8] = ["data", "open", "abstract", "sealed", "final", "public", "private", "internal"];

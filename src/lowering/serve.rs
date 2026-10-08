@@ -22,34 +22,233 @@ const RPC_METHOD: &str = "POST";
 const RPC_VALUE_INFIX: &str = "·rpc·";
 /// What a prerendered page exports: the values its calls of server functions gave, the shipped page's first ones
 pub const RPC_VALUES: &str = "rpc·values";
+/// The prerender's requests of those values, `[["/rpc/f", [args]] …]`: a server renders a page with their replies (site.rs)
+pub const RPC_REQUESTS: &str = "rpc·requests";
+
+/// P221: the server functions giving what a route shows, `route·data·0(path)`
+const ROUTE_DATA_PREFIX: &str = "route·data·";
+const PATH_PARAMETER: &str = "path";
+const PAGE_PATH_CALL: &str = "page_path()";
+/// The page's path as a main-level variable, which page·navigated sets anew when the page goes to another path
+/// (host-routes.js navigate)
+const PAGE_PATH: &str = "page·path";
+const PAGE_NAVIGATED: &str = "page·navigated";
+const DATABASE_WORDS: [&str; 2] = ["database", "indexedDB"];
+/// `·` of a generated name as written in code (it would parse as a product)
+const NAME_DOT: &str = "_dot_";
 
 /// A route as written: its method (upper case), path and body
 type Route = (String, Node, Node);
 
 pub fn lower(program: Node) -> Node {
+	let program = with_route_data(program);
 	if crate::pipeline::is_for_a_page() {
 		return without_serving(program);
 	}
+	let port = crate::pipeline::serving_port();
+	let program = match program {
+		single if port.is_some() && !matches!(single.drop_meta(), Node::List(_, Bracket::None, Separator::Semicolon | Separator::Newline)) => {
+			Node::List(vec![single], Bracket::None, Separator::Newline)
+		}
+		other => other,
+	};
 	match program {
-		Node::List(statements, bracket, separator) if statements.iter().any(|statement| served(statement).is_some() || server_definition(statement).is_some()) => {
+		Node::List(statements, bracket, separator) if port.is_some() || statements.iter().any(|statement| served(statement).is_some() || server_definition(statement).is_some()) => {
 			let statements: Vec<Node> = statements.into_iter().map(|statement| server_definition(&statement).unwrap_or(statement)).collect();
 			let calls: Vec<Route> = statements.iter().filter_map(rpc_route).collect();
+			let tables: Vec<(String, Node)> = statements.iter().filter_map(table_variable).collect();
 			let mut routes = 0;
-			let statements = statements.into_iter().flat_map(|statement| match served(&statement) {
+			let serves_itself = statements.iter().any(|statement| served(statement).is_some());
+			// `warp serve`: the top-level routes and the server functions at its port, after the program's statements
+			let (top_level, statements): (Vec<Node>, Vec<Node>) = statements.into_iter().partition(|statement| !serves_itself && port.is_some() && !top_level_routes(statement).is_empty());
+			let mut statements: Vec<Node> = statements.into_iter().flat_map(|statement| match served(&statement) {
 				Some((port, mut routed)) => {
 					routed.extend(calls.iter().cloned());
-					serving(port, routed, &mut routes)
+					serving(port, routed, &tables, &mut routes)
 				}
 				None => vec![statement],
 			}).collect();
+			if let (Some(port), false) = (port, serves_itself) {
+				let routed = top_level.iter().flat_map(top_level_routes).chain(calls).collect();
+				statements.extend(serving(Node::int(i64::from(port)), routed, &tables, &mut routes));
+			}
 			Node::List(statements, bracket, separator)
 		}
 		single if served(&single).is_some() => {
 			let (port, routed) = served(&single).expect("checked");
-			Node::List(serving(port, routed, &mut 0), Bracket::None, Separator::Semicolon)
+			Node::List(serving(port, routed, &[], &mut 0), Bracket::None, Separator::Semicolon)
 		}
 		other => other,
 	}
+}
+
+/// Whether the program is obviously a server, without running it: it serves (`serve PORT {…}`), defines a server
+/// function, a page route (`route "/" {…}`) or a top-level `get`/`post` route. Plain `warp app.warp` serves such a
+/// program as `warp serve` does (P222)
+pub fn serves(code: &str) -> bool {
+	top_level_statements(code).iter().any(|statement| served(statement).is_some() || server_definition(statement).is_some() || crate::routes::is_route(statement) || !top_level_routes(statement).is_empty())
+}
+
+/// Whether the program has its own `serve PORT {…}`
+pub fn serves_itself(code: &str) -> bool {
+	top_level_statements(code).iter().any(|statement| served(statement).is_some())
+}
+
+/// The program's statements, read quietly: running it says its hints and warnings
+fn top_level_statements(code: &str) -> Vec<Node> {
+	match crate::diagnostic::quietly(|| crate::warp_parser::parse(code)).drop_meta() {
+		Node::List(statements, Bracket::None, Separator::Semicolon | Separator::Newline) => statements.clone(),
+		single => vec![single.clone()],
+	}
+}
+
+/// The route a top-level `get "/api" {…}` statement is
+fn top_level_routes(statement: &Node) -> Vec<Route> {
+	match statement.drop_meta() {
+		Node::List(_, Bracket::None, Separator::Space) => routes_in(std::slice::from_ref(statement)),
+		_ => vec![],
+	}
+}
+
+/// P221: a route whose block reads server data asks the server for what it shows. Each value of the block reading it
+/// (`"User " + users#id.name` of `h1{…}`) is the server function `route·data·N(path)`, which binds the route's
+/// parameters from the path and gives that value (ø for a path of another route); the block calls it with the
+/// main-level `page·path` (page_path(), set anew by page·navigated when the page goes to another path), so the page asks
+/// POST /rpc/route·data·N anew for each path (asking_the_server). The shipped page leaves the server data out
+fn with_route_data(program: Node) -> Node {
+	let Node::List(statements, bracket, separator) = program else { return program };
+	let server_data: Vec<String> = statements.iter().filter_map(server_variable).collect();
+	let reads_server_data = |node: &Node| node.mentions_any(&server_data.iter().map(String::as_str).collect::<Vec<_>>());
+	if server_data.is_empty() || !statements.iter().any(|statement| crate::routes::route(statement).is_some_and(|(_, body)| body.iter().any(reads_server_data))) {
+		return Node::List(statements, bracket, separator);
+	}
+	let mut data_functions = vec![];
+	let mut lowered: Vec<Node> = vec![parse_named(&format!("{PAGE_PATH} = page_path()")), parse_named(&format!("{PAGE_NAVIGATED}() := {{ global {PAGE_PATH}; {PAGE_PATH} = page_path() }}"))];
+	for statement in statements {
+		match crate::routes::route(&statement) {
+			Some((pattern, body)) if body.iter().any(reads_server_data) => {
+				let body = body.into_iter().map(|item| data_read(item, &pattern, &reads_server_data, &mut data_functions)).collect();
+				let Node::List(items, route_bracket, route_separator) = statement.drop_meta().clone() else { unreachable!("a route is a list") };
+				let block = Node::List(body, Bracket::Curly, Separator::Newline);
+				lowered.push(Node::List(vec![items[0].clone(), items[1].clone(), block], route_bracket, route_separator));
+			}
+			_ => lowered.push(statement),
+		}
+	}
+	// where the first route stands, after the server data they read (as routes.rs places its functions)
+	let first_route = lowered.iter().position(crate::routes::is_route).unwrap_or(lowered.len());
+	lowered.splice(first_route..first_route, data_functions);
+	// the shipped page asks the server, so the server data's definitions stay on the server
+	if crate::pipeline::is_for_a_page() && !crate::pipeline::is_prerendering() {
+		let page_reads = |name: &String| lowered.iter().filter(|statement| server_variable(statement).is_none() && server_definition(statement).is_none()).any(|statement| statement.mentions_any(&[name]));
+		let unread: Vec<String> = server_data.iter().filter(|name| !page_reads(name)).cloned().collect();
+		lowered.retain(|statement| server_variable(statement).is_none_or(|name| !unread.contains(&name)));
+	}
+	Node::List(lowered, bracket, separator)
+}
+
+/// `users: [User] = database.users`, `prefs = database.prefs` (indexedDB too), `stored users: [User]`: the variable
+/// holding server data
+fn server_variable(statement: &Node) -> Option<String> {
+	match statement.drop_meta() {
+		Node::Key(target, Op::Assign, source) => {
+			let Node::Key(store, Op::Dot, _) = source.drop_meta() else { return None };
+			if !DATABASE_WORDS.contains(&store.drop_meta().name().as_str()) {
+				return None;
+			}
+			match target.drop_meta() {
+				Node::Key(name, Op::Colon, _) => Some(name.drop_meta().name()),
+				Node::Symbol(name) => Some(name.clone()),
+				_ => None,
+			}
+		}
+		Node::List(items, _, _) => match items.as_slice() {
+			[word, declaration] if word.drop_meta().name() == crate::stored_values::STORED_WORD => match declaration.drop_meta() {
+				Node::Key(name, Op::Colon, list_type) if matches!(list_type.drop_meta(), Node::List(_, Bracket::Square, _)) => Some(name.drop_meta().name()),
+				_ => None,
+			},
+			_ => None,
+		},
+		_ => None,
+	}
+}
+
+/// `users: [User] = database.users` or `stored users: [User]`: the table variable and `database.users`, its table.
+/// A served route reads it anew at each request (`global users; users = database.users`, reopened by
+/// database_tables.rs): a page render runs in an instance of its own and may have changed the table since
+fn table_variable(statement: &Node) -> Option<(String, Node)> {
+	let name = server_variable(statement)?;
+	match statement.drop_meta() {
+		Node::Key(target, Op::Assign, source) if matches!(target.drop_meta(), Node::Key(_, Op::Colon, list_type) if matches!(list_type.drop_meta(), Node::List(_, Bracket::Square, _))) => {
+			Some((name, source.drop_meta().clone()))
+		}
+		Node::List(..) => {
+			let table = Node::Key(Box::new(Node::Symbol(DATABASE_WORDS[0].to_string())), Op::Dot, Box::new(Node::Symbol(name.clone())));
+			Some((name, table))
+		}
+		_ => None,
+	}
+}
+
+/// The route's body after the statements reading the program's tables anew
+fn reading_tables(body: Node, tables: &[(String, Node)]) -> Node {
+	if tables.is_empty() {
+		return body;
+	}
+	let reads = tables.iter().flat_map(|(name, table)| [
+		crate::warp_parser::parse(&format!("{} {name}", crate::late_binding::GLOBAL)),
+		Node::Key(Box::new(Node::Symbol(name.clone())), Op::Assign, Box::new(table.clone())),
+	]);
+	let statements = match body.drop_meta() {
+		Node::List(items, Bracket::Curly, _) => items.clone(),
+		_ => vec![body],
+	};
+	Node::List(reads.chain(statements).collect(), Bracket::Curly, Separator::Newline)
+}
+
+/// The item with each value reading server data as the call of a server function giving it; markup and blocks are
+/// looked into, any other value is asked for whole
+fn data_read(node: Node, pattern: &str, reads_server_data: &dyn Fn(&Node) -> bool, functions: &mut Vec<Node>) -> Node {
+	if !reads_server_data(&node) {
+		return node;
+	}
+	if is_markup(&node) {
+		return node.map_children(|child| data_read(child, pattern, reads_server_data, functions));
+	}
+	let name = format!("{ROUTE_DATA_PREFIX}{}", functions.len());
+	let path = Node::Symbol(PATH_PARAMETER.to_string());
+	let page_path = crate::warp_parser::parse(PAGE_PATH_CALL);
+	let body: Vec<Node> = crate::routes::route_body(pattern, &[node]).into_iter().map(|item| replaced(item, &page_path, &path)).collect();
+	let guard = crate::warp_parser::parse(&format!("if not route_matches({pattern:?}, {PATH_PARAMETER}) {{ return ø }}"));
+	let head = Node::List(vec![Node::Symbol(name.clone()), Node::Key(Box::new(path), Op::Colon, Box::new(Node::Symbol("text".to_string())))], Bracket::Round, Separator::None);
+	let definition = Node::Key(Box::new(head), Op::Define, Box::new(Node::List([vec![guard], body].concat(), Bracket::Curly, Separator::Newline)));
+	functions.push(Node::List(vec![Node::Symbol(SERVER_WORD.to_string()), definition], Bracket::None, Separator::Space));
+	Node::List(vec![Node::Symbol(name), Node::Symbol(PAGE_PATH.to_string())], Bracket::Round, Separator::None)
+}
+
+/// `h1{…}`, `{…}`: markup or a block, whose items are looked into
+fn is_markup(node: &Node) -> bool {
+	match node.drop_meta() {
+		Node::List(_, Bracket::Curly, _) => true,
+		Node::List(items, _, _) => items.last().is_some_and(|last| matches!(last.drop_meta(), Node::List(_, Bracket::Curly, _))) && items.first().is_some_and(|first| matches!(first.drop_meta(), Node::Symbol(_))),
+		Node::Key(tag, _, block) => matches!(tag.drop_meta(), Node::Symbol(_)) && matches!(block.drop_meta(), Node::List(_, Bracket::Curly, _)),
+		_ => false,
+	}
+}
+
+/// The node with each occurrence of `old` as `new`
+fn replaced(node: Node, old: &Node, new: &Node) -> Node {
+	match node.serialize() == old.serialize() {
+		true => new.clone(),
+		false => node.map_children(|child| replaced(child, old, new)),
+	}
+}
+
+/// The code with its generated names (`page·path`, written so it parses as a name)
+fn parse_named(code: &str) -> Node {
+	let written = |name: &str| name.replace('·', NAME_DOT);
+	let names = [PAGE_PATH, PAGE_NAVIGATED].map(|name| (written(name), Node::Symbol(name.to_string())));
+	crate::law::substitute(&crate::warp_parser::parse(&written(code)), &names.into_iter().collect())
 }
 
 /// A program compiled for its page (pipeline::for_a_page) does not serve: the server runs it natively, the page in the
@@ -123,9 +322,11 @@ fn asking_the_server(statements: Vec<Node>, servers: &[String]) -> Result<Vec<No
 	}
 	if prerendering {
 		let values = Node::List(names.iter().cloned().map(Node::Symbol).collect(), Bracket::Square, Separator::Colon);
+		let requests = Node::List((0..calls.len()).map(|index| rpc_request(&asking(index).0)).collect(), Bracket::Square, Separator::Colon);
 		let globals: HashSet<String> = main_variables.into_iter().chain(names).collect();
 		// first: the last statement shows the page
 		kept.insert(0, crate::event_signals::function_with_globals(RPC_VALUES, false, &[values], &globals));
+		kept.insert(0, crate::event_signals::function_with_globals(RPC_REQUESTS, false, &[requests], &globals));
 	}
 	Ok(kept)
 }
@@ -249,8 +450,9 @@ fn with_any_parameters(definition: Node) -> Node {
 /// POST /rpc/f of a function marked `server`: f called with the items of the request's JSON array
 fn rpc_route(definition: &Node) -> Option<Route> {
 	let (name, parameters) = defined_function(definition)?;
-	let arguments: Vec<String> = (1..=parameters).map(|index| format!("{REQUEST_WORD}.body#{index}")).collect();
-	let call = crate::warp_parser::parse(&format!("{name}({})", arguments.join(", ")));
+	let arguments = (1..=parameters).map(|index| crate::warp_parser::parse(&format!("{REQUEST_WORD}.body#{index}")));
+	// built, not parsed: a generated name's `·` would parse as a product
+	let call = Node::List(std::iter::once(Node::Symbol(name.clone())).chain(arguments).collect(), Bracket::Round, Separator::None);
 	Some((RPC_METHOD.to_string(), Node::Text(format!("{RPC_PREFIX}{name}")), Node::List(vec![call], Bracket::Curly, Separator::None)))
 }
 
@@ -274,7 +476,7 @@ fn routes_in(items: &[Node]) -> Vec<Route> {
 }
 
 /// The route functions, then the call that serves them
-fn serving(port: Node, routes: Vec<Route>, count: &mut usize) -> Vec<Node> {
+fn serving(port: Node, routes: Vec<Route>, tables: &[(String, Node)], count: &mut usize) -> Vec<Node> {
 	let mut statements = vec![];
 	let mut table = vec![];
 	for (method, path, body) in routes {
@@ -282,7 +484,7 @@ fn serving(port: Node, routes: Vec<Route>, count: &mut usize) -> Vec<Node> {
 		*count += 1;
 		let request = Node::Key(Box::new(Node::Symbol(REQUEST_WORD.to_string())), Op::Colon, Box::new(Node::Symbol(ANY_TYPE.to_string())));
 		let head = Node::List(vec![Node::Symbol(function.clone()), request], Bracket::Round, Separator::None);
-		statements.push(Node::Key(Box::new(head), Op::Define, Box::new(body)));
+		statements.push(Node::Key(Box::new(head), Op::Define, Box::new(reading_tables(body, tables))));
 		table.push(Node::List(vec![Node::Text(method), path, Node::Text(function)], Bracket::Square, Separator::Colon));
 	}
 	let routes = Node::List(table, Bracket::Square, Separator::Colon);

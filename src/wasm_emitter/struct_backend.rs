@@ -460,7 +460,8 @@ impl StructFunction {
 			});
 		}
 		let replaced = if self.changed.is_some() { replacing } else { calls };
-		calls == replaced && mentions == heads + replaced
+		// a function the program never calls keeps the Node parameter: only a program importing the module calls it
+		replaced > 0 && calls == replaced && mentions == heads + replaced
 	}
 }
 

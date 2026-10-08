@@ -1,0 +1,5 @@
+// P222: `warp serve` (or plain `warp app.warp`, routes found) serves this without a `serve PORT {…}`
+users = ["Ann", "Bo"]
+server def user_count() { count(users) }
+get "/api/users" { users }
+route "/" { div{ h1{ "Users" } p{ "count: " + user_count() } } }
