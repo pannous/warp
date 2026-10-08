@@ -1305,7 +1305,7 @@ pub(super) fn assignment_mismatch(assignment: &Node, name: &str, type_name: &str
 
 /// The kind of a literal `value` that does not fit the built-in type `type_name`; None when it fits or is no literal
 pub(crate) fn literal_misfit(type_name: &str, value: &Node) -> Option<Kind> {
-	if BOOL_TYPES.contains(&type_name.to_lowercase().as_str()) {
+	if is_bool_type(type_name) {
 		return bool_misfit(value);
 	}
 	builtin_type_kind(type_name)?;
@@ -1320,6 +1320,11 @@ fn bool_misfit(value: &Node) -> Option<Kind> {
 		value if is_zero_or_one(value) => None,
 		_ => computed_literal_kind(value),
 	}
+}
+
+/// `bool`, `boolean`: a bool, held as an Int (builtin_type_kind)
+pub(crate) fn is_bool_type(type_name: &str) -> bool {
+	BOOL_TYPES.contains(&type_name.trim_end_matches('?').to_lowercase().as_str())
 }
 
 /// P199 (user): 1 and 0 are yes and no wherever a bool is expected
