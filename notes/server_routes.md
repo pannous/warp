@@ -9,7 +9,7 @@ One source file is compiled twice:
 | build | what it makes of | made by |
 |---|---|---|
 | server (native, `warp run app.warp`) | `serve 8080 { get "/api/x" {…} }` serves HTTP, `server def f` is also POST /rpc/f, the page's site answers GET / and any other path | lowering/serve.rs, web_server.rs, site::served_files |
-| page (wasm in the browser, pipeline::for_a_page) | `route` patterns run in the page's router, `serve` is left out, `server def f` is asked over POST /rpc/f | lowering/routes.rs, lowering/serve.rs without_serving, site.js |
+| page (wasm in the browser, pipeline::for_a_page) | `route` patterns run in the page's router, `serve` is left out, each call of a `server def f` is a value fetched from POST /rpc/f | lowering/routes.rs, lowering/serve.rs without_serving, site.js |
 
 Example (probes/server_routes/one_source.warp, which runs and was checked in a browser):
 
@@ -38,16 +38,26 @@ all. The page build now takes the definition: tests/web/test_server_functions_in
 ## What is left: how the code splits (the real design question)
 1. **Shared code** (data shapes, validation, formatting, the route table) compiles into both builds. It works today
    because every definition is in both.
-2. **Server-only code** (`server def`), done (card rpc-stub, probes/server_routes/rpc_stub.warp, checked in a browser):
-   in the page build a main-level `x := f(args)` of a server function becomes `x := fetch ["/rpc/f", [args]]`
-   (lowering/serve.rs without_serving), a POST of the arguments as a JSON array. It is async like any fetch (option a):
-   `x` is ø with `x.loading` until the reply arrives, so the page writes `x ?? "…"` (the ø check demands it). f's
-   definition is left out of the page, so its body and any secret in it stay out of app.wasm
-   (tests/web/test_server_rpc_stub.rs). fetch_start takes `[url, body]` for a POST on both hosts (src/host.rs
-   request_of, host-tasks.js startFetch).
-   - A page that calls f any other way (`p{ f() }`, inside a function) still gets f's body, with a warning naming f and
-     the `x := f(…)` form. A synchronous call (option b) would need site-worker's Atomics.wait and coi-serviceworker.
-   - The page's first HTML (prerendered at build time by app.wasm itself) shows the pending state, `said: …`.
+2. **Server-only code** (`server def`), done (cards rpc-stub, rpc-everywhere; probes/server_routes/rpc_everywhere.warp,
+   checked in a browser: the button's handler doubles n through the server, "next" is fetched anew):
+   - The page build reads **every** call of a server function from a main-level variable, `f·rpc·0` (lowering/serve.rs
+     asking_the_server; `g := f(x)` names it g). The shipped page leaves the server functions out (their bodies and
+     secrets stay out of app.wasm) and fetches the value: `f·rpc·0 := fetch ["/rpc/f", [args]] ?? first value`, a
+     POST of the arguments as JSON, fetched anew when an argument changes. Markup, expressions and handlers read the
+     variable (`on click { n = doubled(n) }` takes the value for the current n).
+   - **First HTML**: site.rs compiles the page twice. The prerender (pipeline::prerendering) keeps the server
+     functions, calls them directly as the server does, renders the HTML and exports `rpc·values`; the shipped page
+     starts from those values (pipeline::with_server_values), so hydration shows the same text and the ø check is
+     satisfied. headless.rs prerenders too.
+   - `x := fetch url ?? default` (lowering/fetch_signals.rs) is the general form: the default until the reply is in,
+     and in place of a failed one. A POSTed reply is JSON of any value, a number or a text too (src/fetches.rs,
+     host-tasks.js fetchReply); a GET reply stays as before (objects and arrays parsed, else the text).
+   - Refused, loudly: an argument the page only knows inside a function (`def show(k) { p{ doubled(k) } }`). The page
+     asks before its code runs, so it sends main-level values only. A synchronous call would need site-worker's
+     Atomics.wait.
+   - Known gaps: a server function's untyped parameter is `any`, so `n = doubled(n)` makes n a data value in the native
+     server build (`"n " + n` fails there; `doubled(x:int)` works). The `g := f(x)` hint "prefer g = …" still shows in
+     the server build.
 3. **JavaScript on the client** needs no third language in the source. The page's warp code reaches browser APIs
    through the WebIDL bindings (notes/web_framework.md "web-apis: WebIDL") and arbitrary JS through foreign_call (js =
    globalThis, host-foreign.js). Hand-written JS stays possible as a `.js` file of the site, but it is not the model.
@@ -63,4 +73,4 @@ all. The page build now takes the definition: tests/web/test_server_functions_in
    Retiring that mode is a question for the user.
 
 ## Undoable defaults taken
-- RPC in the page is async, like fetch (option a); a direct call in the page ships the body, with a warning.
+- RPC in the page is async, like fetch (option a), starting from the prerendered value; a call with a local argument is refused.
