@@ -174,6 +174,14 @@ const CORPUS: &[&str] = &[
 	"String s = 3; s",
 	"int i = 2; i = \"a\"; i",
 	"int i = 2.5; i",
+
+	"0..3",
+	"1 to 3",
+	"s = 0; for i in 0..3 { s += i }; s",
+	"s = 0; for i in 1 to 3 { s += i }; s",
+	"3..1",
+	"count(n) := { c=0; for i in 0..n { c += 1 }; c }; count(5)",
+	"to add number a to number b: a+b; add 1 to 2",
 ];
 
 /// Programs warp compiles although the model rejects them: holes in warp's checks, each with its card

@@ -745,6 +745,12 @@ impl Exporter {
 				},
 				[call] if self.functions.get(&call.name()).is_some_and(|parameter| parameter == UNIT_TYPE) => Ok(format!(".call {} .unit", quoted(&call.name()))),
 				[_, arguments @ ..] if arguments.iter().any(|argument| matches!(argument.drop_meta(), Node::Key(_, Op::Assign, _))) => Err(format!("not in W0: named arguments in {}", node.serialize().trim())),
+				// `add 1 to 2` of `to add number a to number b: …` parses as `add (1 to 2)`: two arguments
+				[call, argument] if self.classes.contains_key(&arguments_class(&call.name())) && matches!(argument.drop_meta(), Node::Key(_, Op::To, _)) => {
+					let Node::Key(first, _, second) = argument.drop_meta() else { unreachable!("a `to` pair") };
+					let arguments = self.construction(&arguments_class(&call.name()), &[first.as_ref().clone(), second.as_ref().clone()])?;
+					Ok(format!(".call {} ({arguments})", quoted(&call.name())))
+				}
 				[call, arguments @ ..] if arguments.len() > 1 && self.classes.contains_key(&arguments_class(&call.name())) => {
 					let arguments = self.construction(&arguments_class(&call.name()), arguments)?;
 					Ok(format!(".call {} ({arguments})", quoted(&call.name())))
@@ -817,6 +823,11 @@ impl Exporter {
 				Ok(if matches!(op, Op::Ne | Op::NotIdentical) { format!(".ite ({compared}) (.bool false) (.bool true)") } else { compared })
 			}
 			Node::Key(list, Op::Hash, index) if !list.is_nothing() => self.binary(".index", list, index),
+			// `'a'..'e'`: letters, outside W0
+			Node::Key(from, Op::Range | Op::To, to) if [from, to].iter().any(|bound| matches!(bound.drop_meta(), Node::Text(_) | Node::Char(_))) => unsupported(node),
+			Node::Key(from, Op::Range, to) => self.binary(".range", from, to),
+			// `1 to 3` includes 3
+			Node::Key(from, Op::To, to) => Ok(format!(".range ({}) (.add ({}) (.int 1))", self.expression(from)?, self.expression(to)?)),
 			_ => unsupported(node),
 		}
 	}

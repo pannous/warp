@@ -53,6 +53,7 @@ def step (P : Program) (μ : Store) : Expr → Option (Expr × Store)
   | .seq a b => if a.isValue then some (b, μ) else stepIn (.seq b) a μ (step P μ a)
   | .index l i => stepPair .indexL .indexR l i μ (step P μ l) (step P μ i)
       (some ((nth l ((asInt i).getD 0)).getD (.error "index out of range"), μ))
+  | .range a b => stepPair .rangeL .rangeR a b μ (step P μ a) (step P μ b) (some (rangeValues a b, μ))
   | .append a b => stepPair .appendL .appendR a b μ (step P μ a) (step P μ b) (some (appendValues a b, μ))
   | .assign x e => if e.isValue then some (e, μ.set x (.val e)) else stepIn (.assign x) e μ (step P μ e)
   | .init x e => if e.isValue then some (e, μ.set x (.val e)) else stepIn (.init x) e μ (step P μ e)
@@ -183,6 +184,10 @@ theorem step_sound : ∀ {e : Expr} {μ s'}, step P μ e = some s' → Step P (e
     intro μ s' hs
     exact stepPair_sound (L := .indexL) (R := .indexR) rfl id rfl (fun _ => ih1) (fun _ => ih2)
       (fun va vb hd => by cases hd; exact .index va vb) hs
+  | range a b ih1 ih2 =>
+    intro μ s' hs
+    exact stepPair_sound (L := .rangeL) (R := .rangeR) rfl id rfl (fun _ => ih1) (fun _ => ih2)
+      (fun va vb hd => by cases hd; exact .range va vb) hs
   | append a b ih1 ih2 =>
     intro μ s' hs
     exact stepPair_sound (L := .appendL) (R := .appendR) rfl id rfl (fun _ => ih1) (fun _ => ih2)
