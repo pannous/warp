@@ -128,15 +128,29 @@ pub fn served_files(code: &str, title: &str) -> Result<Option<Vec<SiteFile>>, St
 }
 
 fn site_files(code: &str, title: &str, dev: bool) -> Result<Option<Vec<SiteFile>>, String> {
-	let compile = || crate::pipeline::for_a_page(|| crate::pipeline::compile(code));
-	let module = if dev { crate::pipeline::for_dev(compile) } else { compile() };
-	let module = module.map_err(|value| format!("nothing to compile: {}", with_excerpt(code, message_of(&value))))?;
-	if !exports(&module.bytes, crate::page_html::PAGE_HTML) {
+	let compile = |build: &dyn Fn() -> Result<crate::pipeline::CompiledModule, Node>| {
+		let module = crate::pipeline::for_a_page(|| if dev { crate::pipeline::for_dev(build) } else { build() });
+		module.map_err(|value| format!("nothing to compile: {}", with_excerpt(code, message_of(&value))))
+	};
+	let rendering = compile(&|| crate::pipeline::prerendering(|| crate::pipeline::compile(code)))?;
+	if !exports(&rendering.bytes, crate::page_html::PAGE_HTML) {
 		return Ok(None);
 	}
-	let imports = crate::wasm_reader::Imports { host: module.needs_host, wasi: module.needs_wasi, ffi: module.needs_ffi };
-	let rendered = crate::wasm_reader::read_export_after_main(&module.bytes, imports, crate::page_html::PAGE_HTML)
-		.map_err(|failure| format!("the program failed at build time: {}", with_excerpt(code, failure.to_string())))?;
+	let read_after_main = |name: &str| {
+		let imports = crate::wasm_reader::Imports { host: rendering.needs_host, wasi: rendering.needs_wasi, ffi: rendering.needs_ffi };
+		crate::wasm_reader::read_export_after_main(&rendering.bytes, imports, name).map_err(|failure| format!("the program failed at build time: {}", with_excerpt(code, failure.to_string())))
+	};
+	let rendered = read_after_main(crate::page_html::PAGE_HTML)?;
+	// a page calling server functions ships without them, starting from the values they gave here (lowering/serve.rs)
+	let module = if exports(&rendering.bytes, crate::serve::RPC_VALUES) {
+		let values = match read_after_main(crate::serve::RPC_VALUES)?.drop_meta() {
+			Node::List(values, _, _) => values.clone(),
+			single => vec![single.clone()],
+		};
+		compile(&|| crate::pipeline::with_server_values(values.clone(), || crate::pipeline::compile(code)))?
+	} else {
+		rendering
+	};
 	let Node::Text(html) = rendered.drop_meta() else {
 		return Err(format!("{} gave no text: {}", crate::page_html::PAGE_HTML, rendered.serialize()));
 	};

@@ -22,6 +22,8 @@ enum Fetch {
 thread_local! {
 	/// the fetches of the run on this thread, by the id the program gave each; a fetch started anew replaces its own
 	static FETCHES: RefCell<HashMap<i64, Fetch>> = RefCell::new(HashMap::new());
+	/// the fetches that POSTed a body: a server function's reply, JSON of any value (lowering/serve.rs)
+	static POSTED: RefCell<std::collections::HashSet<i64>> = RefCell::new(std::collections::HashSet::new());
 }
 
 /// Start fetching `url` (POSTing the body when there is one); the handler on·fetch·id runs once the reply arrived (a
@@ -29,6 +31,7 @@ thread_local! {
 pub fn start(id: i64, (url, body): Request, timeout: Duration) {
 	let (sender, receiver) = channel();
 	let awaited = format!("fetch {url}");
+	POSTED.with(|posted| if body.is_some() { posted.borrow_mut().insert(id) } else { posted.borrow_mut().remove(&id) });
 	std::thread::spawn(move || sender.send(match body {
 		Some(body) => crate::extensions::utils::post_within(&url, &body, timeout).map_err(|reason| format!("fetch {url} failed: {reason}")),
 		None => crate::host::fetch(&url, timeout),
@@ -62,8 +65,14 @@ pub fn reply(id: i64) -> Node {
 		None => Err(format!("fetch {id} was never started")),
 	};
 	let (value, error) = match reply {
+		Ok(body) if POSTED.with(|posted| posted.borrow().contains(&id)) => (value_of_json(body), Node::Empty),
 		Ok(body) => (crate::web_server::value_of_body(body), Node::Empty),
 		Err(failure) => (Node::Empty, Node::Text(failure)),
 	};
 	Node::List(vec![value, error], Bracket::Square, Separator::Colon)
+}
+
+/// The value a server function's JSON reply holds, a number or a text too; else the text
+fn value_of_json(body: String) -> Node {
+	serde_json::from_str::<serde_json::Value>(&body).map_or(Node::Text(body), |value| crate::foreign::node_of(&value))
 }

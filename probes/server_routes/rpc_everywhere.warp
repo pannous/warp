@@ -1,0 +1,9 @@
+// card rpc-everywhere: every page call of a server function asks POST /rpc/f; the first HTML has the server's values
+// warp run probes/server_routes/rpc_everywhere.warp, then open http://localhost:18463/ and click "Double"
+n = 1
+server def doubled(x:int) { token = "s3cret-token"; x * 2 }
+server def motto() { "served at " + 18463 }
+serve 18463 {
+	get "/api/ping" { "pong" }
+}
+div{ p{ motto() } button{ on click { n = doubled(n) } "Double" } p{ "n " + n + ", next " + doubled(n) } }

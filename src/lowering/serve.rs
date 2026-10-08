@@ -8,6 +8,7 @@
 
 use crate::node::{Bracket, Node, Separator};
 use crate::operators::Op;
+use std::collections::HashSet;
 
 const SERVE_WORD: &str = "serve";
 const ROUTE_PREFIX: &str = "route·";
@@ -17,6 +18,10 @@ const METHODS: [&str; 5] = ["get", "post", "put", "delete", "patch"];
 const SERVER_WORD: &str = "server";
 const RPC_PREFIX: &str = "/rpc/";
 const RPC_METHOD: &str = "POST";
+/// `f·rpc·0`: the value of the page's first call of the server function f
+const RPC_VALUE_INFIX: &str = "·rpc·";
+/// What a prerendered page exports: the values its calls of server functions gave, the shipped page's first ones
+pub const RPC_VALUES: &str = "rpc·values";
 
 /// A route as written: its method (upper case), path and body
 type Route = (String, Node, Node);
@@ -48,36 +53,115 @@ pub fn lower(program: Node) -> Node {
 }
 
 /// A program compiled for its page (pipeline::for_a_page) does not serve: the server runs it natively, the page in the
-/// browser (notes/web_framework.md "Built sites"). A main-level `x := f(args)` of a server function asks the server, as
-/// `x := fetch` does (POST /rpc/f, lowering/fetch_signals.rs), so f's body stays out of app.wasm; a server function the
-/// page calls otherwise still runs there, loudly (notes/server_routes.md)
+/// browser (notes/web_framework.md "Built sites"). Its calls of server functions ask the server (asking_the_server)
 fn without_serving(program: Node) -> Node {
 	match program {
 		Node::List(statements, bracket, separator) => {
 			let statements: Vec<Node> = statements.into_iter().filter(|statement| served(statement).is_none()).collect();
 			let servers: Vec<String> = statements.iter().filter_map(server_definition).filter_map(|definition| defined_function(&definition)).map(|(name, _)| name).collect();
-			let asked: Vec<Node> = statements.into_iter().map(|statement| server_call(&statement, &servers).unwrap_or(statement)).collect();
-			let page_code = Node::List(asked.iter().filter(|statement| server_definition(statement).is_none()).cloned().collect(), Bracket::None, Separator::None);
-			let called_directly = |statement: &Node| server_definition(statement).and_then(|definition| defined_function(&definition)).map(|(name, _)| name).filter(|name| page_code.mentions_any(&[name]));
-			let warnings: Vec<_> = asked.iter().filter_map(|statement| called_directly(statement).map(|name| crate::diagnostic::Diagnostic::at(statement, format!("the page calls the server function {name} directly, so its body ships in its app.wasm: `x := {name}(…)` asks the server instead (POST {RPC_PREFIX}{name}, notes/server_routes.md)")))).collect();
-			if let Err(error) = crate::diagnostic::report(&warnings) {
-				return error;
+			if servers.is_empty() {
+				return Node::List(statements, bracket, separator);
 			}
-			let shipped: Vec<Node> = asked.iter().filter(|statement| server_definition(statement).is_none() || called_directly(statement).is_some()).map(|statement| server_definition(statement).unwrap_or_else(|| statement.clone())).collect();
-			Node::List(shipped, bracket, separator)
+			asking_the_server(statements, &servers).map_or_else(|error| error, |statements| Node::List(statements, bracket, separator))
 		}
 		single if served(&single).is_some() => Node::Empty,
 		other => other,
 	}
 }
 
-/// `x := f(a, b)` of a server function f as `x := fetch ["/rpc/f", [a, b]]`, the request fetch_start POSTs
-fn server_call(statement: &Node, servers: &[String]) -> Option<Node> {
-	let Node::Key(target, Op::Define, value) = statement.drop_meta() else { return None };
-	let (name, arguments) = crate::tuples::call_parts(value)?;
-	if !servers.iter().any(|server| server == name) {
-		return None;
+/// Each call of a server function in the page read from a main-level variable of its own, `f·rpc·0`. The shipped page
+/// leaves the server functions out and fetches it, `f·rpc·0 := fetch ["/rpc/f", [args]] ?? first value`, anew when an
+/// argument changes (lowering/fetch_signals.rs); its first value is what the call gave the prerender
+/// (pipeline::prerendering), which keeps the functions and calls them, and exports the values as rpc·values (site.rs)
+fn asking_the_server(statements: Vec<Node>, servers: &[String]) -> Result<Vec<Node>, Node> {
+	let page_code: Vec<Node> = statements.iter().filter(|statement| server_definition(statement).is_none()).cloned().collect();
+	let calls = server_calls(&page_code, servers);
+	// a page calling no server function needs none of them, prerendered or not
+	let prerendering = crate::pipeline::is_prerendering() && !calls.is_empty();
+	let main_variables = crate::event_signals::main_level_variables(&page_code);
+	let functions: HashSet<String> = statements.iter().filter_map(|statement| defined_function(&server_definition(statement).unwrap_or_else(|| statement.clone()))).map(|(name, _)| name).collect();
+	if let Some(error) = calls.iter().find_map(|call| local_argument(call, &main_variables, &functions)) {
+		return Err(error);
 	}
+	// `g := f(x)` names the value of its call g
+	let names: Vec<String> = calls.iter().enumerate().map(|(index, call)| page_code.iter().find_map(|statement| defined_as(statement, call)).unwrap_or_else(|| format!("{}{RPC_VALUE_INFIX}{index}", callee(call)))).collect();
+	let read = |node: Node| with_calls_read(node, &calls, &names);
+	let asking = |index: usize| {
+		let call = Node::List(call_items(&calls[index]).into_iter().map(&read).collect(), Bracket::Round, Separator::None);
+		let value = if prerendering {
+			call.clone()
+		} else {
+			let fetch = Node::List(vec![Node::Symbol(crate::host::FETCH_WORD.to_string()), rpc_request(&call)], Bracket::None, Separator::Space);
+			Node::Key(Box::new(fetch), Op::Coalesce, Box::new(crate::pipeline::server_value(index)))
+		};
+		let op = if prerendering { Op::Assign } else { Op::Define };
+		(call, Node::Key(Box::new(Node::Symbol(names[index].clone())), op, Box::new(value)))
+	};
+	let mut kept = vec![];
+	let mut asked_in_place = HashSet::new();
+	for statement in statements {
+		match server_definition(&statement) {
+			Some(definition) if prerendering => kept.push(definition),
+			Some(_) => {}
+			None => match calls.iter().position(|call| defined_as(&statement, call).is_some()) {
+				Some(index) => {
+					asked_in_place.insert(index);
+					kept.push(asking(index).1);
+				}
+				None => kept.push(read(statement)),
+			},
+		}
+	}
+	let mut asked: Vec<(usize, usize, Node)> = (0..calls.len()).filter(|index| !asked_in_place.contains(index)).map(|index| {
+		let (call, statement) = asking(index);
+		(asked_at(&kept, &names[index], &call, &main_variables), index, statement)
+	}).collect();
+	// the last first: an inner call (a later index) before the call around it
+	asked.sort_by_key(|(position, index, _)| std::cmp::Reverse((*position, std::cmp::Reverse(*index))));
+	for (position, _, statement) in asked {
+		kept.insert(position, statement);
+	}
+	if prerendering {
+		let values = Node::List(names.iter().cloned().map(Node::Symbol).collect(), Bracket::Square, Separator::Colon);
+		let globals: HashSet<String> = main_variables.into_iter().chain(names).collect();
+		// first: the last statement shows the page
+		kept.insert(0, crate::event_signals::function_with_globals(RPC_VALUES, false, &[values], &globals));
+	}
+	Ok(kept)
+}
+
+/// `g := f(x)` of the call: g
+fn defined_as(statement: &Node, call: &Node) -> Option<String> {
+	let Node::Key(target, Op::Define, value) = statement.drop_meta() else { return None };
+	let Node::Symbol(name) = target.drop_meta() else { return None };
+	(value.serialize() == call.serialize()).then(|| name.clone())
+}
+
+/// The calls of server functions in the page's code, each once, outer before inner
+fn server_calls(page_code: &[Node], servers: &[String]) -> Vec<Node> {
+	let mut calls: Vec<Node> = vec![];
+	for statement in page_code {
+		statement.visit(&mut |node| {
+			if is_server_call(node, servers) && !calls.iter().any(|call| call.serialize() == node.serialize()) {
+				calls.push(node.clone());
+			}
+		});
+	}
+	calls
+}
+
+/// `f(a, b)` / `f a` of a server function f
+fn is_server_call(node: &Node, servers: &[String]) -> bool {
+	matches!(node.drop_meta(), Node::List(_, Bracket::Round | Bracket::None, _)) && crate::tuples::call_parts(node).is_some_and(|(name, _)| servers.iter().any(|server| server == name))
+}
+
+fn callee(call: &Node) -> String {
+	crate::tuples::call_parts(call).map(|(name, _)| name.to_string()).unwrap_or_default()
+}
+
+/// The callee and the arguments of a call, `f(a, b)` written either way
+fn call_items(call: &Node) -> Vec<Node> {
+	let Some((name, arguments)) = crate::tuples::call_parts(call) else { return vec![call.clone()] };
 	let arguments = match arguments {
 		[single] => match single.drop_meta() {
 			Node::List(items, Bracket::Round, _) => items.clone(),
@@ -85,9 +169,43 @@ fn server_call(statement: &Node, servers: &[String]) -> Option<Node> {
 		},
 		several => several.to_vec(),
 	};
-	let request = Node::List(vec![Node::Text(format!("{RPC_PREFIX}{name}")), Node::List(arguments, Bracket::Square, Separator::Colon)], Bracket::Square, Separator::Colon);
-	let fetch = Node::List(vec![Node::Symbol(crate::host::FETCH_WORD.to_string()), request], Bracket::None, Separator::Space);
-	Some(Node::Key(target.clone(), Op::Define, Box::new(fetch)))
+	std::iter::once(Node::Symbol(name.to_string())).chain(arguments).collect()
+}
+
+/// `["/rpc/f", [a, b]]`, the request fetch_start POSTs
+fn rpc_request(call: &Node) -> Node {
+	let items = call_items(call);
+	let path = Node::Text(format!("{RPC_PREFIX}{}", callee(call)));
+	Node::List(vec![path, Node::List(items[1..].to_vec(), Bracket::Square, Separator::Colon)], Bracket::Square, Separator::Colon)
+}
+
+/// Each of the calls in `node` as the variable holding its value
+fn with_calls_read(node: Node, calls: &[Node], names: &[String]) -> Node {
+	match calls.iter().position(|call| call.serialize() == node.serialize()) {
+		Some(index) => Node::Symbol(names[index].clone()),
+		None => node.map_children(|child| with_calls_read(child, calls, names)),
+	}
+}
+
+/// Where the page asks: before the first statement reading the value, after its arguments got their first values
+fn asked_at(statements: &[Node], name: &str, call: &Node, main_variables: &HashSet<String>) -> usize {
+	let first_read = statements.iter().position(|statement| statement.mentions_any(&[name])).unwrap_or(statements.len());
+	let arguments: Vec<String> = crate::variable_signals::symbols(call).into_iter().filter(|symbol| main_variables.contains(symbol)).collect();
+	let first_assigned = |variable: &String| statements.iter().position(|statement| crate::event_signals::main_level_variables(std::slice::from_ref(statement)).contains(variable)).map_or(0, |index| index + 1);
+	arguments.iter().map(first_assigned).fold(first_read, usize::max)
+}
+
+/// A call whose argument names a value only a function of the page knows: the page asks before its code runs
+fn local_argument(call: &Node, main_variables: &HashSet<String>, functions: &HashSet<String>) -> Option<Node> {
+	let items = call_items(call);
+	let mut heads = HashSet::new();
+	for argument in &items[1..] {
+		argument.visit(&mut |node| if let Some((name, _)) = crate::tuples::call_parts(node) { heads.insert(name.to_string()); });
+	}
+	let known = |symbol: &String| main_variables.contains(symbol) || functions.contains(symbol) || heads.contains(symbol);
+	let local = items[1..].iter().flat_map(crate::variable_signals::symbols).find(|symbol| !known(symbol))?;
+	let name = callee(call);
+	Some(crate::diagnostic::Diagnostic::at(call, format!("the page asks the server for {name}(…) before its code runs, so it sends main-level values only, not {local}: compute {local} at the main level or call {name} from a function of the server (POST {RPC_PREFIX}{name}, notes/server_routes.md)")).into_error())
 }
 
 /// `serve port {routes}`: the port and each route's method, path and body
