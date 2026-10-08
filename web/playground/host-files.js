@@ -131,6 +131,56 @@ function keep(name, value, file) {
 		.catch(failure => console.error(`${name} could not be kept in the database:`, failure));
 }
 
+// `people: [Person] = database.people` (src/lowering/database_tables.rs): a table of the browser, kept as one value of
+// the database store (IndexedDB, as `database[k]`), where natively SQLite keeps it (src/database.rs): its column types
+// and its rows, objects with their id. Filters stay list comprehensions over the rows (no SQL here).
+const TABLE_PREFIX = "table ";
+const ID_COLUMN = "id";
+const tableKey = (file, table) => `${TABLE_PREFIX}${file} ${table}`;
+const storedTable = (file, table) => databaseValues[tableKey(file, table)] ?? { types: {}, rows: [] };
+function keepTable(file, table, stored) {
+	const key = tableKey(file, table);
+	databaseValues[key] = stored;
+	keep(key, stored, DATABASE_STORE);
+}
+
+// the table's rows [id, columns…], the table first created or migrated to the class's fields [name, type, default];
+// a removed field keeps its column (data is never dropped silently), loudly
+function openTable(table, schema, file) {
+	const stored = storedTable(file, table);
+	for (const [name, type, fallback] of schema) {
+		const storedType = stored.types[name];
+		if (storedType === undefined) {
+			stored.types[name] = type;
+			stored.rows.forEach(row => { row[name] = fallback; });
+		} else if (storedType !== type) {
+			throw new Error(`the column ${table}.${name} holds ${storedType}, the class's field is ${type}: converting a column is not done yet (notes/orm.md step 7)`);
+		}
+	}
+	const fields = schema.map(([name]) => name);
+	for (const name of Object.keys(stored.types).filter(name => !fields.includes(name))) {
+		this.warn(`the table ${table} keeps its column ${name}, which the class no longer has (its data is kept)`);
+	}
+	keepTable(file, table, stored);
+	return stored.rows.map(row => [row[ID_COLUMN], ...schema.map(([name]) => row[name])]);
+}
+
+function insertRow(table, columns, values, file) {
+	const stored = storedTable(file, table);
+	const id = Math.max(0, ...stored.rows.map(row => row[ID_COLUMN])) + 1;
+	stored.rows.push(Object.fromEntries([[ID_COLUMN, id], ...columns.map((column, index) => [column, values[index]])]));
+	keepTable(file, table, stored);
+	return id;
+}
+
+function updateRow(table, id, column, value, file) {
+	const stored = storedTable(file, table);
+	const row = stored.rows.find(row => row[ID_COLUMN] === id);
+	if (row) row[column] = value;
+	keepTable(file, table, stored);
+	return null;
+}
+
 addHostPart({
 	words: (holder, hooks, { program, text }) => {
 		const fetchUrl = (pointer, length, timeout) => {
@@ -172,6 +222,7 @@ addHostPart({
 				return [...writtenFiles.keys()].filter(path => path.startsWith(prefix) && !path.slice(prefix.length).includes("/")).map(path => path.slice(prefix.length)).sort();
 			},
 		},
+		table: { open: openTable, insert: insertRow, update: updateRow },
 		net: { post: (url, body) => postSync(url, contentText(body)) },
 		// `clipboard.write(text)` (lowering/system_values.rs): a page writes it (markup.js copyText), a Worker has no
 		// clipboard and hands the text to its page (self.writeClipboard: worker.js)

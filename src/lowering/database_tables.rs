@@ -2,7 +2,8 @@
 //! table people for the class Person. The list starts as the table's rows (`std_io("table", "open", …)` creates the
 //! table or migrates it to the class's fields), `people.add(p)` inserts p and gives it its row's id, and a field change
 //! `p.age += 1` of an instance with a row is written through (`std_io("table", "update", …)`). Natively the tables live
-//! in `<program>.database.sqlite` (in memory for code without a file, database.rs); the browser has no tables yet.
+//! in `<program>.database.sqlite` (in memory for code without a file, database.rs); the browser keeps them in IndexedDB
+//! (web/playground/host-files.js), where a filter stays the list comprehension over the rows.
 
 use crate::node::{Bracket, Node, Separator};
 use crate::operators::Op;
@@ -148,6 +149,9 @@ pub fn registered(program: &Node) -> Tables {
 /// binding of the ids it keeps, and the condition keeping the list's instances of those ids, so a filtered row is the
 /// same instance. What SQL can say stays SQL; any other part is a function of the program the query calls per row.
 pub fn queried(subject: &Node, condition: &Node, variables: &HashSet<String>, tables: &mut Tables) -> Option<Result<(Node, Node), Node>> {
+	if cfg!(not(feature = "native")) {
+		return None; // the browser's tables have no SQL: their rows are the list already
+	}
 	let table = tables.tables.get(&subject.drop_meta().name())?;
 	let first_function = tables.functions.len();
 	let mut query = Query { table, variables, parameters: vec![], functions: vec![], first_function };

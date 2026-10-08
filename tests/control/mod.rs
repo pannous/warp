@@ -138,7 +138,6 @@ mod test_reflection_words; // card reflection
 mod test_function_body; // card g_X_3s
 mod test_data_string; // card data-string
 mod test_multiline_errors;
-#[cfg(feature = "native")] // SQLite natively; IndexedDB in the browser is a later step (notes/orm.md)
 mod test_database_tables; // card orm
 mod test_database_filters; // card orm-filters
 mod test_database_relations; // card orm, step 4
