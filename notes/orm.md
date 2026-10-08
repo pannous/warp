@@ -78,7 +78,7 @@ bo's row again, so it changes nothing after written-through changes; an instance
   `if v is C and v.id > 0 { std_io("table", "update", …) }`.
 - src/database.rs: the SQLite C API through libloading (the system's libsqlite3, ffi/link.rs get_or_load_library), one
   connection per file and thread, `:memory:` for inline code. An added column takes the field's default, else the
-  type's zero. A changed column type is a loud error for now (step 7). Browser: `std_io("table", …)` is an error.
+  type's zero. A changed column type: see step 7. Browser: web/playground/host-files.js `table` (step 6).
 
 ## How filters work (steps 2 and 3, card orm-filters)
 - comprehensions::lower_where (early, before database_tables::lower) asks database_tables::queried for a subject that is
@@ -135,4 +135,10 @@ bo's row again, so it changes nothing after written-through changes; an instance
    before the run and written back on every change. The browser-built compiler keeps a filter as the comprehension
    over the rows (database_tables::queried is native-only), since the browser has no SQL. One value per table rewrites
    the whole table on each change: fine for samples, slow for big tables (then one object store per table).
-7. Unit and type conversions in migrations, `@was` renames.
+7. Unit and type conversions in migrations, `@was` renames. Type conversions done (branch orm-updates):
+   - database.rs `converted`: INTEGER → REAL → TEXT converts forward (rename the column aside, add it with the new
+     type, `UPDATE … SET c = CAST(old AS type)`, drop the old one, in a SAVEPOINT); a fresh column because SQLite's
+     affinity would turn the values back. Any other change (REAL → INTEGER, TEXT → INTEGER) fails the open: "its values
+     would lose data". host-files.js `convertColumn` does the same to the stored rows (a real's text keeps ".0").
+   - Open: unit changes (km → m) wait for runtime units (a unit type is no column yet, notes/units_runtime.md); `@was`.
+   - A field named size/count/length reads as the builtin count off a typed list element (card field-named-size).
