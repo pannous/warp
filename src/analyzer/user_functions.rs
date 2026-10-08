@@ -148,7 +148,8 @@ pub(super) fn infer_function_return_kind(params: &[Param], body: &Node, function
 		other => other,
 	};
 	// `f() := {}`, a handler `{{}}`: a body doing nothing returns ø
-	let empty_block = matches!(last.drop_meta(), Node::List(items, Bracket::Curly, _) if items.is_empty());
+	// `f() = ø` too
+	let empty_block = matches!(last.drop_meta(), Node::List(items, Bracket::Curly, _) if items.is_empty()) || matches!(last.drop_meta(), Node::Empty);
 	let last_kind = match (is_error(last), returned.first()) {
 		(false, None) if empty_block => Kind::Empty,
 		(true, Some(_)) if returned.contains(&Kind::Float) && returned.iter().all(|kind| !kind.is_ref()) => Kind::Float,
