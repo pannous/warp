@@ -138,8 +138,9 @@ pub(crate) enum Reduction {
 }
 
 const REDUCTIONS: [Reduction; 3] = [Reduction::Sum, Reduction::Min, Reduction::Max];
-/// The largest f32, where min and max start (WGSL has no infinity literal)
-const LARGEST_F32: &str = "3.4028235e38";
+/// The largest f32, where min and max start (WGSL has no infinity literal), by its bits: the decimal 3.4028235e38
+/// rounds above it, which Chrome's WGSL compiler (Tint) refuses
+const LARGEST_F32: &str = "bitcast<f32>(0x7f7fffffu)";
 
 impl Reduction {
 	pub(crate) fn word(self) -> &'static str {
