@@ -18,6 +18,8 @@ pub(crate) const USE_KEYWORDS: [&str; 3] = ["use", "require", "import"];
 /// `include x`: the whole file, spliced in place
 const INCLUDE_KEYWORD: &str = "include";
 const USE_KEYWORD: &str = "use";
+/// `from list import zip, unique`: only those words of the module
+const IMPORT_KEYWORD: &str = "import";
 /// name: "git url" for every package, compiled in so warp finds it from any directory
 const PACKAGE_REGISTRY: &str = include_str!("../packages.wasp");
 /// the directory of the file it is written in, as text: `read(module_directory + "/data/x")` finds a module's own files
@@ -63,7 +65,7 @@ pub fn resolve_in(program: Node, directories: &[&str]) -> Node {
 		Some(scope) => loader.with_scope(program, scope, file.as_deref()),
 		None => Ok(program),
 	}).map(|program| crate::wasm_modules::rewrite_uses(program, &loader.wasm_modules))
-		.map(|program| with_needed_definitions(program, loader.std_definitions));
+		.map(|program| with_needed_definitions(program, loader.hidden_apart()));
 	EARLY_CLASS_MODULES.with(|modules| modules.borrow_mut().clear()); // for this program only
 	MODULE_DEFINITIONS.with(|names| own_names.iter().for_each(|own| { names.borrow_mut().remove(own); })); // the program's own word wins
 	resolved.unwrap_or_else(|failure| failure)
@@ -156,15 +158,13 @@ fn with_needed_definitions(program: Node, definitions: Vec<Node>) -> Node {
 		return program;
 	}
 	let mut needed: Vec<Node> = vec![];
-	// a standard word called as a method (`"hé".to_utf8()`) is needed too
-	let mentioned_or_called = |statements: &[Node]| mentioned_names(statements).into_iter().chain(method_names(statements));
-	let mut mentioned: HashSet<String> = mentioned_or_called(std::slice::from_ref(&program)).collect();
+	let mut mentioned = called_names(std::slice::from_ref(&program));
 	loop {
 		let now_needed: Vec<Node> = definitions.iter().filter(|definition| declared_name(definition).is_some_and(|name| mentioned.contains(&name))).cloned().collect();
 		if now_needed.len() == needed.len() {
 			break;
 		}
-		mentioned.extend(mentioned_or_called(&now_needed));
+		mentioned.extend(called_names(&now_needed));
 		needed = now_needed;
 	}
 	if needed.is_empty() {
@@ -177,6 +177,21 @@ fn with_needed_definitions(program: Node, definitions: Vec<Node>) -> Node {
 	Node::List([needed, statements].concat(), Bracket::None, separator)
 }
 
+
+/// The names the statements mention or call, as methods too (`"hé".to_utf8()`), in interpolations too, with the library
+/// words they spell
+fn called_names(statements: &[Node]) -> HashSet<String> {
+	with_library_words(mentioned_names(statements).into_iter().chain(method_names(statements)).collect())
+}
+
+/// The names with the library words they spell (`isdigit` → is_digit, `round` → round_to) and the prelude names of
+/// those (`prelude·is_digit`): library_words, which writes them so, runs after the modules are resolved
+fn with_library_words(names: HashSet<String>) -> HashSet<String> {
+	let spelled: Vec<&str> = names.iter().flat_map(|name| crate::library_words::words_spelled_by(name)).collect();
+	let qualified: Vec<String> = names.iter().map(String::as_str).chain(spelled.iter().copied()).filter_map(prelude_name).collect();
+	let spelled: Vec<String> = spelled.into_iter().map(str::to_string).collect();
+	names.into_iter().chain(spelled).chain(qualified).collect()
+}
 
 /// The variables a program assigns at its top: `words = […]`
 fn program_variables(program: &Node) -> HashSet<String> {
@@ -193,7 +208,12 @@ fn program_variables(program: &Node) -> HashSet<String> {
 /// own code calls its own words (lexical scope), the program's `words` is its variable
 fn shadowed_apart(definitions: Vec<Node>, variables: &HashSet<String>) -> Vec<Node> {
 	let shadowed: Vec<String> = definitions.iter().filter_map(declared_name).filter(|name| variables.contains(name)).collect();
-	definitions.into_iter().map(|definition| shadowed.iter().fold(definition, |node, name| renamed_word(node, name, &format!("{SHADOWED_WORD_PREFIX}{name}")))).collect()
+	renamed_apart(definitions, &shadowed)
+}
+
+/// `names` renamed `lib·name` in the definitions: the definitions still call them, the program does not see them
+fn renamed_apart(definitions: Vec<Node>, names: &[String]) -> Vec<Node> {
+	definitions.into_iter().map(|definition| names.iter().fold(definition, |node, name| renamed_word(node, name, &format!("{SHADOWED_WORD_PREFIX}{name}")))).collect()
 }
 
 /// `from` as a word renamed `to`; a field `x.from` keeps its name
@@ -367,16 +387,48 @@ struct Loader<'a> {
 	std_definitions: Vec<Node>,
 	/// the program's top-level variables: a module word of the same name is renamed apart in the module (shadowed_apart)
 	program_variables: HashSet<String>,
+	/// whether a standard module's source is being loaded: its `use`s are its own, not the program's
+	inside_std_module: bool,
+	/// the standard modules the program (or a file module) uses, and those only standard modules use (hidden_apart)
+	program_std_modules: HashSet<String>,
+	std_modules_of_std_modules: HashSet<String>,
 }
 
 impl<'a> Loader<'a> {
 	fn new(directories: &'a [&'a str], including_directory: Option<PathBuf>) -> Self {
-		Loader { directories, loaded: HashSet::new(), included: HashSet::new(), including_directory, scope: None, wasm_modules: vec![], std_definitions: vec![], program_variables: HashSet::new() }
+		Loader {
+			directories,
+			loaded: HashSet::new(),
+			included: HashSet::new(),
+			including_directory,
+			scope: None,
+			wasm_modules: vec![],
+			std_definitions: vec![],
+			program_variables: HashSet::new(),
+			inside_std_module: false,
+			program_std_modules: HashSet::new(),
+			std_modules_of_std_modules: HashSet::new(),
+		}
+	}
+
+	/// The standard definitions with the words of a module only other standard modules use renamed apart
+	/// (`take` → `lib·take` when lib/text.wasp's `use list` brought it): the program sees a module's words only with
+	/// its own `use`, a bare `take` is the error naming the module
+	fn hidden_apart(&self) -> Vec<Node> {
+		let hidden: Vec<&String> = self.std_modules_of_std_modules.iter().filter(|module| !self.program_std_modules.contains(*module)).flat_map(|module| std_module_definitions(module).unwrap_or_default()).collect();
+		MODULE_DEFINITIONS.with(|names| {
+			let mut names = names.borrow_mut();
+			hidden.iter().for_each(|word| { names.remove(*word); names.insert(format!("{SHADOWED_WORD_PREFIX}{word}")); });
+		});
+		self.std_definitions.iter().map(|definition| hidden.iter().fold(definition.clone(), |node, word| renamed_word(node, word, &format!("{SHADOWED_WORD_PREFIX}{word}")))).collect()
 	}
 
 	fn resolve(&mut self, node: Node) -> Result<Node, Node> {
-		if let Some(used) = used_module(&node) {
-			return Ok(match self.import(&used, &node)? {
+		if let Some((used, statement, words)) = imported_words(&node) {
+			return Ok(Node::List(self.import_words(&used, &statement, &words)?, Bracket::None, Separator::Semicolon));
+		}
+		if let Some(uses) = used_modules(&node) {
+			return Ok(match self.import_all(uses)? {
 				imported if imported.is_empty() => Node::Empty,
 				imported => Node::List(imported, Bracket::None, Separator::Semicolon),
 			});
@@ -385,9 +437,10 @@ impl<'a> Loader<'a> {
 			Node::List(items, bracket, separator) => {
 				let mut resolved = Vec::with_capacity(items.len());
 				for item in items {
-					match used_module(&item) {
-						Some(used) => resolved.extend(self.import(&used, &item)?),
-						None => resolved.push(self.resolve(item)?),
+					match (imported_words(&item), used_modules(&item)) {
+						(Some((used, statement, words)), _) => resolved.extend(self.import_words(&used, &statement, &words)?),
+						(None, Some(uses)) => resolved.extend(self.import_all(uses)?),
+						(None, None) => resolved.push(self.resolve(item)?),
 					}
 				}
 				Ok(Node::List(resolved, bracket, separator))
@@ -395,6 +448,33 @@ impl<'a> Loader<'a> {
 			Node::Meta { node, data } => Ok(Node::Meta { node: Box::new(self.resolve(*node)?), data }),
 			other => Ok(other),
 		}
+	}
+
+	/// The statements of each module a `use` names
+	fn import_all(&mut self, uses: Vec<(Used, Node)>) -> Result<Vec<Node>, Node> {
+		let mut imported = vec![];
+		for (used, statement) in uses {
+			imported.extend(self.import(&used, &statement)?);
+		}
+		Ok(imported)
+	}
+
+	/// A module's statements with only `words` visible to the program: its other words are renamed apart.
+	/// A module loaded already brings nothing new
+	fn import_words(&mut self, used: &Used, statement: &Node, words: &[String]) -> Result<Vec<Node>, Node> {
+		let first_std_definition = self.std_definitions.len();
+		let imported = self.import(used, statement)?;
+		let std_definitions = self.std_definitions.split_off(first_std_definition);
+		let module_words: HashSet<String> = imported.iter().chain(&std_definitions).filter_map(declared_name).collect();
+		if module_words.is_empty() {
+			return Ok(imported);
+		}
+		if let Some(missing) = words.iter().find(|word| !module_words.contains(*word)) {
+			return Err(error(&format!("{} has no {missing}", used.name)));
+		}
+		let hidden: Vec<String> = module_words.into_iter().filter(|word| !words.contains(word)).collect();
+		self.std_definitions.extend(renamed_apart(std_definitions, &hidden));
+		Ok(renamed_apart(imported, &hidden))
 	}
 
 	/// The statements a `use` stands for: the module's definitions, nothing for a module already loaded,
@@ -472,14 +552,39 @@ impl<'a> Loader<'a> {
 				self.std_definitions.extend(definitions.into_iter().filter(|definition| declared_name(definition).is_some_and(|name| words.contains(&name.as_str()))));
 			}
 		}
+		self.use_prelude(program)
+	}
+
+	/// lib/prelude.wasp, its words named `prelude·first` (prelude_name), when the program or a used standard module
+	/// mentions one of them in any spelling (`isdigit`); with_needed_definitions keeps those called
+	fn use_prelude(&mut self, program: &Node) -> Result<(), Node> {
+		let mentioned = called_names(&[std::slice::from_ref(program), &self.std_definitions].concat());
+		let prelude = std_module_definitions(PRELUDE_MODULE).unwrap_or_default();
+		if !prelude.iter().any(|word| mentioned.contains(word)) {
+			return Ok(());
+		}
+		let source = std_module(PRELUDE_MODULE).expect("lib/prelude.wasp is embedded");
+		let definitions = crate::normalize::without_hints(|| self.load_source(Import::Use, std_path(PRELUDE_MODULE), source))?;
+		let qualified = |definition: Node| prelude.iter().fold(definition, |node, word| renamed_word(node, word, &prelude_name(word).unwrap_or_default()));
+		self.std_definitions.extend(definitions.into_iter().map(qualified));
+		MODULE_DEFINITIONS.with(|names| {
+			let mut names = names.borrow_mut();
+			prelude.iter().for_each(|word| { names.remove(word); names.extend(prelude_name(word)); });
+		});
 		Ok(())
 	}
 
 	/// A standard module: its definitions wait aside until the program is resolved; its source shows the program
 	/// no style hints
 	fn use_std_module(&mut self, name: &str, source: &str) -> Result<Vec<Node>, Node> {
-		let definitions = crate::normalize::without_hints(|| self.load_source(Import::Use, std_path(name), source))?;
-		self.std_definitions.extend(definitions);
+		match self.inside_std_module {
+			true => self.std_modules_of_std_modules.insert(name.to_string()),
+			false => self.program_std_modules.insert(name.to_string()),
+		};
+		let outer = std::mem::replace(&mut self.inside_std_module, true);
+		let definitions = crate::normalize::without_hints(|| self.load_source(Import::Use, std_path(name), source));
+		self.inside_std_module = outer;
+		self.std_definitions.extend(definitions?);
 		Ok(vec![])
 	}
 
@@ -614,7 +719,7 @@ impl<'a> Loader<'a> {
 
 	/// The modules a sibling file uses, resolved from its folder
 	fn uses_of(&mut self, sibling: &mut Sibling) -> Result<Vec<Node>, Node> {
-		let uses: Vec<Node> = sibling.statements()?.iter().filter(|statement| used_module(statement).is_some()).cloned().collect();
+		let uses: Vec<Node> = sibling.statements()?.iter().filter(|statement| used_modules(statement).is_some()).cloned().collect();
 		let outer_directory = self.including_directory.replace(folder_of(&sibling.path));
 		let resolved = uses.into_iter().map(|statement| self.resolve(statement)).collect::<Result<Vec<Node>, Node>>();
 		self.including_directory = outer_directory;
@@ -646,7 +751,8 @@ impl<'a> Loader<'a> {
 }
 
 /// The standard library's modules written in wasp (notes/stdlib.md), embedded so `use list` needs no files
-const STD_MODULES: [(&str, &str); 19] = [
+const STD_MODULES: [(&str, &str); 20] = [
+	(PRELUDE_MODULE, include_str!("../lib/prelude.wasp")),
 	("memory", include_str!("../lib/memory.wasp")),
 	("net", include_str!("../lib/net.wasp")),
 	("collections", include_str!("../lib/collections.wasp")),
@@ -669,6 +775,10 @@ const STD_MODULES: [(&str, &str); 19] = [
 ];
 /// The standard modules' folder (P194: std/ merged into lib/), embedded in the binary
 const STD_FOLDER: &str = "lib";
+/// lib/prelude.wasp: the wasp-written words of every program, loaded when mentioned (Loader::use_prelude)
+const PRELUDE_MODULE: &str = "prelude";
+/// Between a module's name and its word in a qualified definition name, as between a nested function's outer and own
+const QUALIFIER: char = '·';
 /// P171: module words a program calls without their `use` (the prelude); only these definitions come along
 const PRELUDE_WORDS: [(&str, &[&str]); 1] = [("file", &["write", "exists"])];
 /// P183: a file URL in the program loads the file module, no `use file` needed
@@ -720,7 +830,7 @@ fn std_module(name: &str) -> Option<&'static str> {
 /// Each standard module with the names it defines, in their order
 fn std_module_words() -> &'static [(&'static str, Vec<String>)] {
 	static DEFINED: std::sync::OnceLock<Vec<(&'static str, Vec<String>)>> = std::sync::OnceLock::new();
-	DEFINED.get_or_init(|| STD_MODULES.iter().map(|(module, source)| (*module, statements(crate::normalize::without_hints(|| WaspParser::parse(source))).iter().filter_map(declared_name).collect())).collect())
+	DEFINED.get_or_init(|| STD_MODULES.iter().map(|(module, source)| (*module, statements(crate::normalize::without_hints(|| WaspParser::parse(source))).iter().filter(|statement| used_module(statement).is_none()).filter_map(declared_name).collect())).collect())
 }
 
 /// The standard module that defines `word` (`zip` → list), for the error of a word used without its `use`
@@ -731,6 +841,28 @@ pub fn std_module_defining(word: &str) -> Option<&'static str> {
 /// The names a standard module defines, in their order (`dir(time)`); None for no standard module
 pub fn std_module_definitions(module: &str) -> Option<&'static [String]> {
 	std_module_words().iter().find(|(name, _)| *name == module).map(|(_, names)| names.as_slice())
+}
+
+/// The number of parameters of a prelude word (`replace(t, old, new) := …` → 3); None for no prelude word
+pub fn prelude_word_arity(word: &str) -> Option<usize> {
+	static ARITIES: std::sync::OnceLock<Vec<(String, usize)>> = std::sync::OnceLock::new();
+	let arities = ARITIES.get_or_init(|| {
+		let source = std_module(PRELUDE_MODULE).unwrap_or_default();
+		statements(crate::normalize::without_hints(|| WaspParser::parse(source))).iter().filter_map(|statement| match statement.drop_meta() {
+			Node::Key(head, Op::Define, _) => match head.drop_meta() {
+				Node::List(items, _, _) => Some((leftmost_symbol(head)?, items.len() - 1)),
+				_ => None,
+			},
+			_ => None,
+		}).collect()
+	});
+	arities.iter().find(|(name, _)| name == word).map(|(_, arity)| *arity)
+}
+
+/// The name a prelude word's definition has in the program (`first` → `prelude·first`): a program's own `first`, or
+/// a local of that name, never meets it; library_words writes the calls of the word so. None for no prelude word
+pub fn prelude_name(word: &str) -> Option<String> {
+	prelude_word_arity(word).map(|_| format!("{PRELUDE_MODULE}{QUALIFIER}{word}"))
 }
 
 /// The texts of a list a standard module assigns at its top: `html_elements = ["html", …]` of markup; empty if missing
@@ -994,6 +1126,52 @@ struct Used {
 	requirement: Option<Requirement>,
 }
 
+/// The words of a statement, commas flattened: the parser groups `use list` before the comma of `use list, text`
+fn statement_words(node: &Node) -> Option<Vec<&Node>> {
+	match node.drop_meta() {
+		Node::List(items, _, Separator::Colon) => match items.split_first()?.0.drop_meta() {
+			Node::List(head, _, _) => Some(head.iter().chain(&items[1..]).collect()),
+			_ => None,
+		},
+		Node::List(items, _, _) => Some(items.iter().collect()),
+		_ => None,
+	}
+}
+
+/// The modules a `use` statement names, each with the statement that uses it alone: `use list, text` and
+/// `use list text` (card std-use) use each; `use js Math` is a foreign module (lowering/foreign_modules.rs), not two
+fn used_modules(node: &Node) -> Option<Vec<(Used, Node)>> {
+	if let Some(used) = used_module(node) {
+		return Some(vec![(used, node.clone())]);
+	}
+	let words = statement_words(node)?;
+	let [keyword, names @ ..] = words.as_slice() else { return None };
+	let plain_name = |name: &&Node| matches!(name.drop_meta(), Node::Symbol(word) if !crate::foreign_modules::FOREIGN_RUNTIMES.contains(&word.as_str()) && ![MINIMUM_KEYWORD, "as", "from"].contains(&word.as_str()) && !is_version_keyword(name));
+	if names.len() < 2 || !names.iter().all(plain_name) {
+		return None;
+	}
+	names.iter().map(|name| {
+		let statement = Node::List(vec![(*keyword).clone(), (*name).clone()], Bracket::None, Separator::Space);
+		used_module(&statement).map(|used| (used, statement))
+	}).collect()
+}
+
+/// `from list import zip, unique`: the module, the statement that uses it, and the only words it brings (card std-import)
+fn imported_words(node: &Node) -> Option<(Used, Node, Vec<String>)> {
+	let words = statement_words(node)?;
+	let [from, module, import, names @ ..] = words.as_slice() else { return None };
+	let is_word = |node: &Node, word: &str| matches!(node.drop_meta(), Node::Symbol(name) if name == word);
+	if !is_word(from, MINIMUM_KEYWORD) || !is_word(import, IMPORT_KEYWORD) || names.is_empty() {
+		return None;
+	}
+	let names = names.iter().map(|name| match name.drop_meta() {
+		Node::Symbol(name) => Some(name.clone()),
+		_ => None,
+	}).collect::<Option<Vec<String>>>()?;
+	let statement = Node::List(vec![Node::Symbol(USE_KEYWORD.into()), (*module).clone()], Bracket::None, Separator::Space);
+	used_module(&statement).map(|used| (used, statement, names))
+}
+
 /// `use name`, `require name`, `import name` and `include name`: the name is a symbol, a text or a path `lib/name`, `name.wasp`.
 /// A version may follow: `use name version 1.2.3` exactly that one, `use name from 1.2.3` / `use name >= 1.2.3` that or later
 fn used_module(node: &Node) -> Option<Used> {
@@ -1069,6 +1247,9 @@ pub(crate) fn is_declaration(statement: &Node) -> bool {
 
 /// The name a declaration defines: `f(x) := …`, `x = …`, `x:int = 1`, `fun f(x) {…}`, `global x = …`, `class T {…}`
 fn declared_name(statement: &Node) -> Option<String> {
+	if !is_declaration(statement) {
+		return None; // a list `[a, b]` declares nothing
+	}
 	match statement.drop_meta() {
 		Node::Type { name, .. } => leftmost_symbol(name),
 		Node::Key(target, Op::Assign | Op::Define, _) => leftmost_symbol(target),
@@ -1150,7 +1331,34 @@ fn method_names(statements: &[Node]) -> Vec<String> {
 			}
 		});
 	}
+	let holes = template_holes(statements);
+	if !holes.is_empty() {
+		names.extend(method_names(&holes));
+	}
 	names
+}
+
+/// The expressions in the interpolations of the statements (`"\(x.round(2))"`), which are lowered after the modules
+/// are resolved
+fn template_holes(statements: &[Node]) -> Vec<Node> {
+	fn collect(node: &Node, holes: &mut Vec<Node>) {
+		match node {
+			Node::Meta { node: inner, .. } => {
+				holes.extend(crate::interpolation::holes(node));
+				collect(inner, holes);
+			}
+			Node::Key(left, _, right) => {
+				collect(left, holes);
+				collect(right, holes);
+			}
+			Node::List(items, _, _) => items.iter().for_each(|item| collect(item, holes)),
+			Node::Type { body, .. } => collect(body, holes),
+			_ => {}
+		}
+	}
+	let mut holes = vec![];
+	statements.iter().for_each(|statement| collect(statement, &mut holes));
+	holes
 }
 
 fn mentioned_names(statements: &[Node]) -> Vec<String> {
@@ -1168,7 +1376,8 @@ fn mentioned_names(statements: &[Node]) -> Vec<String> {
 				collect(right, names);
 			}
 			Node::List(items, _, _) => items.iter().for_each(|item| collect(item, names)),
-			Node::Meta { node, .. } => collect(node, names),
+			// an interpolation is lowered after the modules are resolved: `"\(zip(a, b))"` calls zip
+			Node::Meta { node: inner, .. } => crate::interpolation::holes(node).iter().chain([inner.as_ref()]).for_each(|part| collect(part, names)),
 			Node::Type { name, body } => {
 				collect(name, names);
 				collect(body, names);

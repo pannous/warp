@@ -248,12 +248,6 @@ pub fn builtin_type_kind(name: &str) -> Option<Kind> {
 	})
 }
 
-/// A declared number type held as an Int (`int`, `long`, `exact` …), not bool: a value of type any going into a place of
-/// it is checked at run time (P204)
-pub fn is_int_type(name: &str) -> bool {
-	!is_bool_type(name) && builtin_type_kind(name) == Some(Kind::Int)
-}
-
 /// A whole-number type (`int`, `long`, `byte` …): never a fraction, unlike `exact`
 pub fn is_whole_type(name: &str) -> bool {
 	let name = name.trim_end_matches('?').to_lowercase();

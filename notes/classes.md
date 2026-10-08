@@ -140,12 +140,23 @@ Upcast fields (P201/P203, card upcast-field, analyzer/upcast_fields.rs, on the s
 member, so library methods and unknown names stay run-time lookups; a name tested in its scope (`if s is Circle`) is
 smart-cast and skipped. `s as Circle` is the checked downcast `(cast·value = s; if not (cast·value is Circle) raise …;
 cast·value)` (class_methods checked_cast), "s is no Circle".
-Shared instances (P200, card instance-field, lowering/shared_instances.rs): a function changing a field of a parameter
-(`q.x = 7`, `q.items.add(v)`, or passing q on to a function or method that does, found by a fixpoint) gives
-`[value, q]` (each `return v` too), and a call stores it back into a variable argument:
-`(f·shared = f(p); p = f·shared#2; f·shared#1)`. Copy-in/copy-out over value instances, no heap: `q = Point(9)`
-stays local; aliases do not share (`q = p; q.x = 7` leaves p), nor does an argument that is no variable (`f(bags#1)`),
-nor a function used as a value (it keeps its plain result). Any parameter counts, a map given as one too.
+Objects are references (P200 instances, P200b maps and new fields; cards real-references, shared-maps): $Node's kind,
+data and value are mutable; `p.x = v` still lowers to `p = field_with(p, "x", v)`, but the runtime field_with
+(library_ops.rs) sets an existing entry in place (field_set_in_place) or grows the fields in place (fields_grow: ø
+becomes the entry, a single entry a cons list, a new field goes in front of the meta entries) and gives back the same
+object, so every holder sees it: aliases (`q = p; q.x = 7`), list items (`xs = [p]`), parameters and results of
+functions, for instances and maps alike. struct_backend.rs and map_backend.rs keep a variable on the struct or hash-table
+backend only while it is never used as a whole value (used_whole: `q = p`, `[p]`, print(p), an argument to a non-struct
+parameter make it the shared Node); field writes and a bare final `p` do not count. A map parameter becomes a hash-table
+copy (`m·map = m`, declaration_lowering.rs keys) only when the function never sets an entry of it. The old
+copy-in/copy-out pass (lowering/shared_instances.rs) is gone.
+Copies (P205/P207, runtime instance_copy(object, shallow)): `x.copy()` is deep (deep_copy with a memo of
+`original:copy` pairs, so a part held twice or a cycle is copied once; numbers, texts, closures and data are shared),
+`x.copy(shallow: true)` makes only the object's own entries and cells new (copy_spine). The class keeps its type; a
+class's own `copy` method wins, `clone` is an alias that always calls it (METHOD_ALIASES), Kotlin
+`p.copy(y = 5)` copies then sets (class_methods copies, `shallow = yes` among its arguments is the flag).
+Open: P206's got-it note when a copy shares a resource (copies share closures and data silently now); lists are still
+values (`ys = xs; ys.add(2)` leaves xs).
 Next steps: struct elements in typed lists (`for p in points`), a struct result of a construction inside a function
 (`moved(dx) := point(x + dx, y)`).
 

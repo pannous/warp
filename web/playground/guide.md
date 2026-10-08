@@ -35,7 +35,7 @@ A comment is a note for people. The computer skips it.
 3 // a note
 ```
 
-Examples: hello
+Examples: hello; samples: comments, sample
 
 ## Numbers
 
@@ -81,7 +81,7 @@ Numbers can have units.
 2 h + 30 min
 ```
 
-Examples: numbers; samples: factorial, power, gcd, collatz, quadratic
+Examples: numbers; samples: factorial, power, gcd, collatz, quadratic, sum, sin, sine
 
 ## Text
 
@@ -109,7 +109,7 @@ Text is anything in quotes: a word, a name, a sentence.
 "1 + 1 = $(1 + 1)"
 ```
 
-Examples: text; samples: levenshtein, palindrome, word_count, sort_words, word_lengths, replace_word, find_text
+Examples: text; samples: levenshtein, palindrome, word_count, sort_words, word_lengths, replace_word, find_text, levenshtein_idiomatic, calculator
 
 ## Variables
 
@@ -277,7 +277,7 @@ With a function, `square [1 2 3 4]` does the same: see "Whole lists at once".
 [1 2 3 4] where it > 2
 ```
 
-Examples: lists, "lazy ranges", "linear arrays"; samples: sorting, quicksort, primes, sieve
+Examples: lists, "lazy ranges", "linear arrays"; samples: sorting, quicksort, primes, sieve, sorting_idiomatic, sieve_idiomatic
 
 ## Objects
 
@@ -302,7 +302,7 @@ ada.age += 1
 ada.age
 ```
 
-Examples: data; samples: data_structures, json_parser
+Examples: data; samples: data_structures, json_parser, binary_tree, dijkstra, dijkstra_idiomatic
 
 ## Loops
 
@@ -337,7 +337,7 @@ while n < 3 { n += 1 }
 n
 ```
 
-Examples: loops; samples: fizzbuzz, sieve, life, mandelbrot
+Examples: loops; samples: fizzbuzz, sieve, life, mandelbrot, game_of_life, life_idiomatic
 
 ## Functions
 
@@ -376,7 +376,7 @@ def fib(n) = if n < 2 then n else fib(n - 1) + fib(n - 2)
 fib(10)
 ```
 
-Examples: functions, arguments, "polyglot calls"; samples: functions, fibonacci, ackermann
+Examples: functions, arguments, "polyglot calls"; samples: functions, fibonacci, ackermann, queens, queens_idiomatic, sudoku
 
 ## Whole lists at once
 
@@ -463,7 +463,7 @@ use math
 sqrt 2
 ```
 
-Examples: "C libraries"; samples: lib
+Examples: "C libraries"; samples: lib, square, main, test_ffi, test_ffi_comprehensive, test_ffi_extended
 
 ## Values that follow
 
@@ -584,3 +584,7 @@ Examples: "kitchen sink"; samples: laws, kitchensink
 
 
 ## Advanced
+
+Bigger programs that put the chapters together: a neural net, a ray tracer, a game, pictures painted on the canvas.
+
+Examples: "kitchen sink"; samples: neural_net, raytracer, snake, particles, circle, filled_circle, mandelbrot_canvas, test, simple

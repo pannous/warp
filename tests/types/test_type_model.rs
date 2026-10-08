@@ -105,6 +105,9 @@ const CORPUS: &[&str] = &[
 	"class Point { x: int; y: int }; p = Point(1, 2); p.x = \"a\"",
 	"class Point { x: int }; p = Point(\"a\")",
 	"class Point { x: int }; f(q: Point) := q.x = 7; p = Point(1); f(p); p.x",
+	"class P { x: int }; p = P(1); q = p; q.x = 7; p.x",
+	"class P { x: int }; p = P(1); xs = [p]; p.x = 5; xs#1.x",
+	"class P { x: int }; p = P(1); g(q: P) := q; r = g(p); r.x = 9; p.x",
 	"class Shape { name: text }; class Circle extends Shape { r: int }; c = Circle(\"a\", 2); c.r",
 	"class Shape { name: text }; class Circle extends Shape { r: int }; s: Shape = Circle(\"a\", 2); s.name",
 	"class Shape { name: text }; class Circle extends Shape { r: int }; s = Circle(\"a\", 2); s.r",
@@ -121,6 +124,25 @@ const CORPUS: &[&str] = &[
 	"on ask { 7 }; compute() := emit ask; a = on ask { 2 } in { compute() }; a * 10 + compute()",
 	"y = 0; on ask { y = 5; y + 10 } in { emit ask }",
 	"y = 0; on ask { 1 } in { on ask { y = emit ask; y + 10 } in { emit ask } }",
+	"on fail { break 0 } in { emit fail; 5 }",
+	"n = 0; on fail { break 1 } in { n += 10; emit fail; n += 100 }; n",
+	"on fail { break 1 } in { on stop { break 2 } in { emit fail; 9 } }",
+	"on fail { break 3 } in { try { emit fail; 4 } else 5 }",
+	"on ask { 3 } in { on fail { break 0 } in { emit ask * 2 } }",
+	"on fail { break } in { emit fail; 5 }",
+	"on ask { 2 }; 3 * emit ask + 1",
+	"global n = 0; def f(x) { n = 5; x }; f(3); n",
+	"y = 3; def z() { global y; y * y }; y = 4; z()",
+	"global n = 0; def f() { n += 1 }; f(); f(); n",
+	"global x; x = 7; x + 1",
+	"global k = 7",
+	"1 != 2",
+	"class P { x: int }; p = P(1); q = P(1); p == q",
+	"class P { x: int }; p = P(1); q = P(2); p == q",
+	"class P { x: int }; class Q { x: int }; p = P(1); q = Q(1); p == q",
+	"class P { x: int }; [P(1)] == [P(1)]",
+	"class P { x: int }; p = P(1); q = p; p === q",
+	"0 === false",
 	"n = 0; on alarm { n += 1 }; emit alarm; emit alarm; n",
 	"level = 0; on alarm { level = event.level }; emit alarm{level: 3}; level",
 	"def check(x) { if x > 2 { emit too big{value: x} }; x }; check(1)",
@@ -131,17 +153,26 @@ const CORPUS: &[&str] = &[
 
 	"class Shape { name: text }; class Circle extends Shape { r: int }; s: Shape = Circle(\"a\", 2); s.r",
 	"type Color = red | rgb(r: int, g: int, b: int); c: Color = rgb(1, 2, 3); c.r",
+
+	"s = 0; for x in [1, 2, 3] { s += x }; s",
+	"out = []; for x in [1, 2] { out.add(x) }; out",
+	"class P { x: int }; s = 0; for p in [P(1), P(2)] { s += p.x }; s",
+	"t = \"\"; for w in [\"a\", \"b\"] { t = t + w }; t",
 ];
 
 /// Programs warp compiles although the model rejects them: holes in warp's checks, each with its card
-const KNOWN_HOLES: &[(&str, &str)] = &[];
+const KNOWN_HOLES: &[(&str, &str)] = &[("s = 0; for x in 3 { s += x }; s", "non-list")];
 
 /// Where warp's run-time admission differs from W0's subtyping: a bool is an Int at run time, so an int value passes
 /// a bool check (P199 lets only the literals 1 and 0 in; card bool-assign)
 const KNOWN_ADMITS_GAPS: [&str; 2] = ["bool ← .int: warp admits true / W0 sub false", "boolean ← .int: warp admits true / W0 sub false"];
 
 /// Programs both accept whose values differ, each with its card
-const KNOWN_VALUE_DIFFERENCES: &[(&str, &str)] = &[];
+const KNOWN_VALUE_DIFFERENCES: &[(&str, &str)] = &[
+	("class P { x: int }; p = P(1); q = P(1); p === q", "same-identity"),
+	("class P { x: int }; p = P(1); q = P(1); p !== q", "same-identity"),
+	("n: int = 0; for x in [1, \"a\"] { n = x }; n", "item-unchecked"),
+];
 /// What the model gives for a program it rejects, and for a value it does not keep
 const REJECTED: &str = "rejected";
 const UNKEPT: &str = "?";

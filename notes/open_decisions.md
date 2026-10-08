@@ -33,6 +33,8 @@ None open. Parked (user: "Later"):
   Design questions come to the Interviewer, each with a default.
 - Lax versus strict (2026-10-08, P203): annotations make it strict. Unannotated code is lax (Python-like, run-time
   checks); anything annotated is a promise the compiler enforces; `--strict` warns about the lax spots.
+- Explained questions (2026-10-08): "make these small explanations a general rule for all discussions": every
+  question and option comes with a small explanation and example (notes/agents/interviewer.md).
 - Word choices are not questions (2026-10-06): "we have the alias mechanism to generally tell people if they use the
   wrong word what the right word is but still keep the synonym working or replacing". When the alternatives are only
   different words for the same thing, the recommended word is canonical and the others become aliases: they work,

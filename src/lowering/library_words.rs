@@ -80,10 +80,10 @@ const SUM: &str = "sum";
 pub const LIST_SUM: &str = "list_sum";
 
 /// Words the emitter implements as runtime functions, with the number of arguments including the receiver
-pub const RUNTIME_WORDS: [(&str, usize); 17] = [
+pub const RUNTIME_WORDS: [(&str, usize); 18] = [
 	(ORD, 1), ("upper", 1), ("lower", 1), ("reverse", 1), ("sort", 1), ("split", 2), ("join", 2), ("chars", 1), (FIELD_WITH, 3),
 	(MAP_KEYS, 1), (MAP_VALUES, 1), (MAP_ENTRIES, 1), (COLLECTION_CONTAINS, 2), (COLLECTION_POSITION, 2), (MAP_GET_OR, 3), (SLICE, 3),
-	(MAP_WITHOUT, 2),
+	(MAP_WITHOUT, 2), (INSTANCE_COPY, 2),
 ];
 /// `codepoint(c)`, `ord(c)`, `ordinal(c)`: the code point of a character (`c as int` is only its digit). Inside the
 /// compiler it is `ord`, since `codepoint` is also a type word
@@ -98,26 +98,33 @@ const OPTIONAL_ARGUMENTS: [(&str, usize); 2] = [(MAP_GET_OR, 1), (SLICE, 1)];
 const COPY: &str = "copy";
 /// `field_with(object, "name", value)`: a copy of the object with the field set; what `object.name = value` lowers to
 pub const FIELD_WITH: &str = "field_with";
+/// instance_copy(x): a new instance with x's field values (`p.copy()`, Kotlin's `p.copy(y = 5)`); any other value is x
+pub const INSTANCE_COPY: &str = "instance_copy";
+/// The named argument of `copy` asking for a shallow copy (P205)
+pub const SHALLOW: &str = "shallow";
 
-/// Character tests (ASCII), `c.is_digit()`; a character compares by its code point. Templates are not lowered again,
-/// so is_alphanumeric spells out both tests instead of calling the words
-macro_rules! digit_test { () => { "(word_tmp >= '0' and word_tmp <= '9')" } }
-macro_rules! letter_test { () => { "((word_tmp >= 'a' and word_tmp <= 'z') or (word_tmp >= 'A' and word_tmp <= 'Z'))" } }
+/// `instance_copy(object, shallow)`
+pub fn copy_call(object: Node, shallow: Node) -> Node {
+	Node::List(vec![Node::Symbol(INSTANCE_COPY.to_string()), object, shallow], Bracket::Round, Separator::None)
+}
+
+/// The value of `shallow: v` / `shallow = v`, or a positional `v`
+pub fn shallow_flag(argument: &Node) -> Node {
+	match argument.drop_meta() {
+		Node::Key(name, Op::Colon | Op::Assign, value) if name.drop_meta().name() == SHALLOW => value.as_ref().clone(),
+		other => other.clone(),
+	}
+}
+
 /// Source of the words expanded here, with their number of arguments; `word_argument` is the receiver, `word_tmp` a
-/// temporary that holds it once, `word_argument_2` … the arguments after the receiver
-const EXPANDED_WORDS: [(&str, usize, &str); 10] = [
+/// temporary that holds it once, `word_argument_2` … the arguments after the receiver. The words written in wasp
+/// (first, last, round_to, replace, is_digit …) are lib/prelude.wasp's; these three the emitter dispatches on
+const EXPANDED_WORDS: [(&str, usize, &str); 3] = [
 	// Python's `list(x)`: the list itself, a text's characters
 	(LIST_WORD, 1, "word_tmp as list"),
-	(ROUND_TO, 2, "round(word_tmp * 10^word_argument_2) / 10^word_argument_2"),
-	("first", 1, "word_tmp#1"),
-	("last", 1, "word_tmp#(count(word_tmp))"),
 	(SUM, 1, "(word_sum=0; for word_item in word_tmp {word_sum = word_sum + word_item}; word_sum)"),
-	("replace", 3, "join(split(word_tmp, word_argument_2), word_argument_3)"),
-	(IS_DIGIT, 1, digit_test!()),
-	(IS_ALPHA, 1, letter_test!()),
 	// `x!` (mutation.rs): the value, a loud error when it is ø; an Error value stays that Error
 	(crate::mutation::UNWRAP, 1, "if word_tmp == ø then error(\"unwrapped ø\") else word_tmp"),
-	("is_alphanumeric", 1, concat!(letter_test!(), " or ", digit_test!())),
 ];
 const IS_DIGIT: &str = "is_digit";
 const LIST_WORD: &str = "list";
@@ -196,7 +203,15 @@ fn canonical_word(name: &str) -> Option<&'static str> {
 
 fn arity(word: &str) -> usize {
 	let expanded = EXPANDED_WORDS.iter().map(|(name, arity, _)| (*name, *arity));
-	RUNTIME_WORDS.into_iter().chain(expanded).find(|(name, _)| *name == word).map_or(1, |(_, arity)| arity)
+	let built_in = RUNTIME_WORDS.into_iter().chain(expanded).find(|(name, _)| *name == word).map(|(_, arity)| arity);
+	built_in.or_else(|| crate::modules::prelude_word_arity(word)).unwrap_or(1)
+}
+
+/// The library words a name may stand for once this pass has run: its canonical spelling (`isdigit` → is_digit) and,
+/// for `round`, round_to (`round(x, 2)`). modules::resolve, which runs before, loads the prelude words by them
+pub fn words_spelled_by(name: &str) -> Vec<&'static str> {
+	let rounding = (name == ROUND).then_some(ROUND_TO);
+	canonical_word(name).into_iter().chain(rounding).collect()
 }
 
 pub fn lower(node: Node) -> Node {
@@ -1074,10 +1089,9 @@ impl Lowering {
 		if arguments.len() < wanted && arguments.len() + optional >= wanted {
 			arguments.resize(wanted, Node::Empty);
 		}
-		if let (COPY, [receiver]) = (word, arguments.as_slice()) {
-			crate::normalize::set_position_of(head);
-			crate::normalize::hint(&format!("{}.{}()", receiver.serialize(), head.serialize()), &receiver.serialize(), "values are never shared: b = a already copies");
-			return receiver.clone();
+		// objects are references (P200): `x.copy()` is a new deep copy, `x.copy(shallow: true)` a shallow one (P205)
+		if let (COPY, [receiver], shallow) | (COPY, [receiver, shallow], _) = (word, arguments.as_slice(), &Node::False) {
+			return copy_call(receiver.clone(), shallow_flag(shallow));
 		}
 		// a text builtin's own arity check names its values (`trim takes 1 value, got 2`)
 		let checks_itself = crate::wasm_emitter::text_builtins::is_text_builtin(word);
@@ -1089,6 +1103,8 @@ impl Lowering {
 		match EXPANDED_WORDS.iter().find(|(name, _, _)| *name == word) {
 			Some((_, _, template)) if word == SUM => dispatched_sum(self.expanded(template, arguments)),
 			Some((_, _, template)) => self.expanded(template, arguments),
+			// a prelude word calls its definition from lib/prelude.wasp (modules::prelude_name)
+			None if let Some(qualified) = crate::modules::prelude_name(word) => Node::List([vec![Node::Symbol(qualified)], arguments].concat(), Bracket::Round, Separator::None),
 			None => {
 				let name = if matches!(head.drop_meta(), Node::Symbol(written) if written == word) { head.clone() } else { Node::Symbol(word.to_string()) };
 				Node::List([vec![name], arguments].concat(), Bracket::Round, Separator::None)
@@ -1167,15 +1183,16 @@ impl Lowering {
 		)
 	}
 
-	/// `assert C else X` is 1 when C holds and the Error X otherwise; without a message the error says the assertion failed
+	/// `assert C else X` is 1 when C holds and throws X otherwise, also mid-program (`check C`, card check-assert); without
+	/// a message the error says the assertion failed
 	fn lower_assert(&self, condition: Node, message: Node) -> Node {
 		let message = match message.drop_meta() {
-			Node::Empty => Node::Text(format!("assertion failed: {}", condition.serialize())),
+			Node::Empty => Node::Text(format!("{}: {}", crate::wasp_parser::ASSERTION_FAILED, condition.serialize())),
 			_ => message,
 		};
 		let condition_placeholder = ASSERT_CONDITION_PLACEHOLDER;
 		self.instantiate_template(
-			&format!("(if {condition_placeholder} {{1}} else {{error({TRY_FALLBACK_PLACEHOLDER})}})"),
+			&format!("(if {condition_placeholder} {{1}} else {{{}({TRY_FALLBACK_PLACEHOLDER})}})", crate::wasm_emitter::text_builtins::RAISE),
 			&[(condition_placeholder, &condition), (TRY_FALLBACK_PLACEHOLDER, &message)],
 		)
 	}

@@ -27,6 +27,38 @@ D-number or #number mean this file. Open questions, parked ones and the standing
   run time from the WASM metadata. Words: x.type, x.class, x.fields/attributes/members, x.methods,
   f.params/signature, f.effects, event.listeners, module.exports, x.unit, x.doc. Lookup order field → meta →
   reflection. One warp custom section (wasp.meta), kept unstripped.
+- P200b real references without exceptions (card real-references, warp-58): maps share like class instances
+  (`m = {a: 1}; n = m; n.a = 2; m.a` → 2), and adding a new field keeps the same object (`q = p; q.color = "red";
+  p.color` → "red"). `x.copy()` is the explicit independent copy.
+- P200c (user): every object has `copy()` and `clone()` by inheritance from the root type (instances, maps, lists,
+  texts), overridable by a class. Discussed first ("in C++ there are sometimes very complicated copy footguns"):
+- P205 `copy()` is deep: everything mutable inside is copied, numbers and texts are shared (they never change);
+  cycles and shared parts are copied once. Shallow is a default argument, not a method (user): `x.copy()` =
+  `x.copy(shallow: false)`; `x.copy(shallow: true)` is shallow.
+- P206 a resource inside (file, socket, timer, listener, closure) is shared by both copies, with a got-it note;
+  --strict makes it an error.
+- P207 one overridable `copy` method; `clone` is an alias that always calls it, so they cannot diverge; an override
+  returns its own class (checked when annotated); a copy keeps the real class (no slicing).
+- P208 `===` on objects (instances, maps, lists) is identity (chosen over a new `same(a, b)`): `q = p; q === p` yes,
+  `p.copy() === p` no. On scalars `===` stays P196/P196b (type + value). `==` stays loose. The preferred spelling
+  is `same`: `a same b`, `a same as b`, `a is the same as b`; `===` and `identical` (`a is identical to b`) are its
+  aliases (user). Plain `is` stays the type
+  test (`red is Color`).
+- check-assert (user to warp-dc): `check` acts like assert; float parameters stay IEEE and `==` stays exact (no
+  tolerance); samples/polymorphism.wasp uses `combine number with number`, so `check combine 1.1 with 2.2 == 3.3`
+  passes with exact numbers.
+- Quantities print without a space (user to warp-dc): `500m`, not `500 m`, in print, interpolation, serialize and
+  the playground (warp-99).
+- test-soft (user to warp-dc, card test-soft, warp-99): `test C` is a soft check that records pass/fail and
+  continues; `check C` stays assert; `test "name" { … }` is a named test block beside functions.
+- Copy details (defaults, warp-class, branch shared-maps): copy shares closures and Data nodes silently for now (P206's
+  note would be a run-time warning, not built yet); `x.copy(true)` positional also means shallow, and in the
+  Kotlin-style `p.copy(shallow = yes, y = 5)` shallow is the flag; each event handler still gets a copy of the event
+  as raised; lists are still values until card shared-lists (P200b's "everything shares" includes lists).
+- P209 test blocks run only under `warp test` (chosen over running with the main program); `warp run` and `use` skip
+  them.
+- P210 when all tests pass, one summary line ("✓ 12 tests passed"); failures print ✗ lines and "m of n failed" and
+  exit nonzero.
 - P199 bool slots accept 1 and 0 as yes/no everywhere (variables, fields, list items); other ints and texts are
   errors. Card bool-assign.
 - P200 class instances passed to functions are shared references (like Python/JS). Card instance-field.

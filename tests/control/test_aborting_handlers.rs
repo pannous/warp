@@ -48,3 +48,11 @@ fn any_value_and_a_loop_break_inside_the_handler() {
 fn an_error_after_an_abort_out_of_a_try_keeps_its_message() {
 	crate::common::fails_with("on fail { break 3 } in { try { emit fail; 4 } else 5 }; x = [1, 2]; x#5", "index out of range");
 }
+
+#[test]
+fn a_handled_block_assigned_to_a_number_variable() {
+	// card abort-global-wasm: the abort value is held as a Node, the variable as an int
+	is!("b = 0; a = on fail { break 1 } in { b = on fail { break 2 } in { emit fail; 9 }; b * 10 }; a", 20);
+	is!("b = 0; b = on fail { break 2 } in { 9 }; b", 9);
+	is!("def f() { b = 0; b = on fail { break 2 } in { emit fail; 9 }; b * 10 }; f()", 20);
+}

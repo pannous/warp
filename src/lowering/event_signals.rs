@@ -677,8 +677,10 @@ fn each_its_event(bodies: &[Node]) -> Vec<Node> {
 	if !changing_before_last {
 		return bodies.to_vec();
 	}
-	let restored = |index: usize| (index > 0 && bodies[..index].iter().any(changes_event)).then(|| assign(EVENT_WORD, Node::Symbol(RAISED_EVENT.to_string())));
-	let kept = assign(RAISED_EVENT, Node::Symbol(EVENT_WORD.to_string()));
+	// an event is an object, so a reference (P200b): kept and handed on as copies
+	let copy_of = |name: &str| crate::library_words::copy_call(Node::Symbol(name.to_string()), Node::False);
+	let restored = |index: usize| (index > 0 && bodies[..index].iter().any(changes_event)).then(|| assign(EVENT_WORD, copy_of(RAISED_EVENT)));
+	let kept = assign(RAISED_EVENT, copy_of(EVENT_WORD));
 	std::iter::once(kept).chain(bodies.iter().enumerate().flat_map(|(index, body)| restored(index).into_iter().chain([body.clone()]))).collect()
 }
 

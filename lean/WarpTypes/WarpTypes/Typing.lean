@@ -37,7 +37,7 @@ inductive HasType (P : Program) : Ctx → Expr → Ty → Prop where
   | add {Γ a b ta tb} : HasType P Γ a ta → HasType P Γ b tb → HasType P Γ (.add a b) (plus ta tb)
   | arith {Γ op a b ta tb} : HasType P Γ a ta → HasType P Γ b tb → HasType P Γ (.arith op a b) (arithTy ta tb)
   | lt {Γ a b ta tb} : HasType P Γ a ta → HasType P Γ b tb → HasType P Γ (.lt a b) .bool
-  | eq {Γ a b ta tb} : HasType P Γ a ta → HasType P Γ b tb → HasType P Γ (.eq a b) .bool
+  | eq {Γ s a b ta tb} : HasType P Γ a ta → HasType P Γ b tb → HasType P Γ (.eq s a b) .bool
   /-- any condition (truthiness); inference.rs branches_kind -/
   | ite {Γ c a b tc ta tb} : HasType P Γ c tc → HasType P Γ a ta → HasType P Γ b tb →
       HasType P Γ (.ite c a b) (join ta tb)
@@ -82,6 +82,9 @@ inductive HasType (P : Program) : Ctx → Expr → Ty → Prop where
   | scope {Γ k e te} : HasType P Γ e te → HasType P Γ (.scope k e) te
   /-- `break v` does not return: the bottom type; v goes to a block of ev -/
   | abort {Γ ev k e te} : HasType P Γ e te → sub te (P.aborts ev) = true → HasType P Γ (.abort ev k e) .never
+  /-- the loop variable holds the list's items (anything when the list's type is not known: a non-list fails when it
+  runs) -/
+  | forIn {Γ y l b tl tb} : HasType P Γ l tl → HasType P (Γ.set y (listElem tl)) b tb → HasType P Γ (.forIn y l b) .unit
 
 /-- a handler of ev, closed but for the payload, gives at most ev's result type -/
 def HandlerOk (P : Program) (ev : String) (h : Expr) : Prop :=

@@ -10,7 +10,7 @@ use crate::node::{Bracket, Node, Separator};
 use crate::operators::Op;
 
 /// The receiver parameter of a method
-pub(crate) const RECEIVER: &str = "self";
+const RECEIVER: &str = "self";
 /// Other names of the receiver in a method body
 const RECEIVER_ALIASES: [&str; 1] = ["this"];
 /// Suffixes of a field name that mark it optional or required (`left?`, `name!`)
@@ -35,7 +35,8 @@ const CAST_PLACEHOLDER: &str = "cast_placeholder";
 const GIVING_MUTATIONS: [&str; 2] = ["pop", "remove"];
 /// Other languages' method names (Python's deque, Java's Deque and Queue, JS's Array and Set) and the wasp methods they
 /// mean, the first one the class defines taken, with a note; only on a class that does not define the name itself
-const METHOD_ALIASES: [(&str, &[&str]); 22] = [
+const METHOD_ALIASES: [(&str, &[&str]); 23] = [
+	("clone", &["copy"]), // clone always calls the class's copy (P207)
 	("append", &["push_back", "push", "enqueue", "add"]), ("addLast", &["push_back", "enqueue"]), ("offerLast", &["push_back", "enqueue"]),
 	("offer", &["enqueue", "push_back"]), ("push", &["push_back", "enqueue"]),
 	("appendleft", &["push_front"]), ("addFirst", &["push_front"]), ("offerFirst", &["push_front"]), ("unshift", &["push_front"]),
@@ -982,7 +983,8 @@ fn go_method(words: &[Node]) -> Option<(String, Vec<Node>)> {
 	Some((class.clone(), class_items(&Node::List(vec![method], Bracket::Curly, Separator::Semicolon))))
 }
 
-/// Kotlin's `p.copy(y = 5)`: a copy of p with those fields changed, `field_with(p, "y", 5)`
+/// Kotlin's `p.copy(y = 5)`: a new instance with p's fields, those changed: `field_with(instance_copy(p, no), "y", 5)`;
+/// `shallow = yes` among them asks for the shallow copy (P205)
 fn copies(node: Node) -> Node {
 	let changed = |argument: &Node| match argument.drop_meta() {
 		Node::Key(field, Op::Assign | Op::Colon, value) if matches!(field.drop_meta(), Node::Symbol(_)) => Some((field.drop_meta().name(), value.as_ref().clone())),
@@ -997,10 +999,13 @@ fn copies(node: Node) -> Node {
 				_ => None,
 			};
 			match changes {
-				Some(changes) => changes.into_iter().fold(receiver, |object, (field, value)| {
-					let call = vec![Node::Symbol(crate::library_words::FIELD_WITH.to_string()), object, Node::Text(field), value];
-					Node::List(call, Bracket::Round, Separator::None)
-				}),
+				Some(mut changes) => {
+					let shallow = changes.iter().position(|(field, _)| field == crate::library_words::SHALLOW).map_or(Node::False, |at| changes.remove(at).1);
+					changes.into_iter().fold(crate::library_words::copy_call(receiver, shallow), |object, (field, value)| {
+						let call = vec![Node::Symbol(crate::library_words::FIELD_WITH.to_string()), object, Node::Text(field), value];
+						Node::List(call, Bracket::Round, Separator::None)
+					})
+				}
 				None => Node::Key(Box::new(receiver), Op::Dot, Box::new(member)),
 			}
 		}
@@ -2113,7 +2118,7 @@ fn receiver_reads(node: Node, readable: &Readable) -> Node {
 
 /// Does the body assign a field of the variable (`self.n = …`, `self.n += 1`, `self.n++`) or change a list in one
 /// (`self.items.add(x)`)
-pub(crate) fn changes_fields_of(body: &Node, variable: &str) -> bool {
+fn changes_fields_of(body: &Node, variable: &str) -> bool {
 	let mut changes = false;
 	body.visit(&mut |part| {
 		changes |= match part {

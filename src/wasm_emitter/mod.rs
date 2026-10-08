@@ -8,6 +8,7 @@ mod control_flow;
 mod casts;
 mod values;
 mod big_int;
+mod declared_values;
 pub mod cells;
 mod closures;
 pub use closures::{CLOSURE_APPLY, CLOSURE_CAPTURED, CLOSURE_REBUILD};
@@ -959,18 +960,6 @@ impl WasmGcEmitter {
 			});
 			s.emit_int_from_payload(func);
 		});
-		if self.should_emit_function(big_int::INT_OF_ANY) {
-			// int_of_any(node) -> i64: the Int of a value of type any going into a declared int (P204), a character too is
-			// not_an_int here
-			self.runtime_function(big_int::INT_OF_ANY, vec![Ref(node_ref)], vec![ValType::I64], vec![], |s, func| {
-				s.emit_field(func, 0, 0);
-				Self::emit_list(func, &[I::I64Const(KIND_MASK), I::I64And, I::I64Const(Kind::Int as i64), I::I64Ne, I::If(BlockType::Empty)]);
-				s.emit_runtime_error(func, "not_an_int");
-				Self::emit_list(func, &[I::End, I::LocalGet(0)]);
-				s.emit_call(func, "get_int_value");
-			});
-		}
-
 		// get_text_ptr / get_text_len(node: ref $Node) -> i32: the $String of a Text, Symbol or Error, 0 for any other node,
 		// so a host without GC field access (JavaScript) can read a result text from memory
 		for (name, field_index) in [("get_text_ptr", 0), ("get_text_len", 1)] {
@@ -1182,8 +1171,12 @@ impl WasmGcEmitter {
 		if self.emit_loop_jump(func, node) || self.emit_tuple_statement(func, node, Self::emit_node_instructions) {
 			return;
 		}
+		if let Some((value, declared)) = declared_values::declared_field_value(node) {
+			return self.emit_declared_value(func, Some(declared), value, Kind::Empty);
+		}
 		if let Some((name, fields)) = crate::type_constructor::instance_parts(node) {
-			self.emit_default_key(func, name, fields, &Op::None); // an instance is no data: its own op code (D4)
+			let fields = self.with_declared_field_types(name, fields);
+			self.emit_default_key(func, name, &fields, &Op::None); // an instance is no data: its own op code (D4)
 			return;
 		}
 		if let Some((target, captured)) = crate::closures::as_closure_new(node) {

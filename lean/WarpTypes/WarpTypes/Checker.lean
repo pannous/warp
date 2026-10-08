@@ -42,7 +42,7 @@ def typeOf (P : Program) (Γ : Ctx) : Expr → Option Ty
     match typeOf P Γ a, typeOf P Γ b with
     | some ta, some tb => if numeric ta && numeric tb then some .bool else none
     | _, _ => none
-  | .eq a b =>
+  | .eq _ a b =>
     match typeOf P Γ a, typeOf P Γ b with
     | some _, some _ => some .bool
     | _, _ => none
@@ -112,6 +112,7 @@ def typeOf (P : Program) (Γ : Ctx) : Expr → Option Ty
     | _, _ => none
   | .scope _ e => typeOf P Γ e
   | .abort ev _ e => (typeOf P Γ e).bind fun te => if sub te (P.aborts ev) then some .never else none
+  | .forIn y l b => (typeOf P Γ l).bind fun tl => if listy tl then (typeOf P (Γ.set y (listElem tl)) b).map fun _ => .unit else none
 
 theorem typeOf_sound {P : Program} : ∀ {e : Expr} {Γ t}, typeOf P Γ e = some t → HasType P Γ e t := by
   intro e
@@ -147,7 +148,7 @@ theorem typeOf_sound {P : Program} : ∀ {e : Expr} {Γ t}, typeOf P Γ e = some
     split at h
     · cases h; exact .lt (ih1 ha) (ih2 hb)
     · cases h
-  | eq a b ih1 ih2 =>
+  | eq s a b ih1 ih2 =>
     intro Γ t h; simp only [typeOf] at h; split at h
     · rename_i ha hb; cases h; exact .eq (ih1 ha) (ih2 hb)
     · cases h
@@ -251,6 +252,15 @@ theorem typeOf_sound {P : Program} : ∀ {e : Expr} {Γ t}, typeOf P Γ e = some
     cases hR : P.effects ev <;> cases he : typeOf P Γ e <;> simp only [typeOf, hR, he] at hs <;> try cases hs
     exact .emit hR (ih he)
   | scope k e ih => intro Γ t hs; exact .scope (ih hs)
+  | forIn y l b ih1 ih2 =>
+    intro Γ t hs
+    simp only [typeOf, Option.bind_eq_some_iff] at hs
+    obtain ⟨tl, hl, hs⟩ := hs
+    split at hs
+    · simp only [Option.map_eq_some_iff] at hs
+      obtain ⟨_, hb, rfl⟩ := hs
+      exact .forIn (ih1 hl) (ih2 hb)
+    · cases hs
   | abort ev k e ih =>
     intro Γ t hs
     simp only [typeOf, Option.bind_eq_some_iff] at hs
@@ -294,6 +304,7 @@ def Spec.program (s : Spec) : Program where
   effects ev := some ((s.effects.lookup ev).getD .never)
   handlers ev := (s.handlers.find? (·.1 == ev)).map (·.2)
   aborts ev := (s.aborts.lookup ev).getD .never
+  fieldNames p := p.flatMap fun c => ((s.classes.lookup c).getD []).map (·.1)
 
 /-- the store before main runs: charged names hold their body, the others are unset -/
 def Spec.store (s : Spec) : Store where
@@ -406,13 +417,13 @@ def widen : Ty → Ty
 /-- the values a main-level name is given -/
 def valuesOf (x : String) : Expr → List Expr
   | .assign y e | .init y e => (if y = x then [e] else []) ++ valuesOf x e
-  | .cons a b | .add a b | .arith _ a b | .lt a b | .eq a b | .loop a b | .seq a b | .index a b | .append a b
+  | .cons a b | .add a b | .arith _ a b | .lt a b | .eq _ a b | .loop a b | .seq a b | .index a b | .append a b
   | .tryCatch a b => valuesOf x a ++ valuesOf x b
   | .ite c a b => valuesOf x c ++ valuesOf x a ++ valuesOf x b
   | .letIn _ _ e b => valuesOf x e ++ valuesOf x b
   | .set a _ b => valuesOf x a ++ valuesOf x b
   | .call _ e | .cast e _ | .broadcast _ e | .get e _ | .isA e _ | .emit _ e | .scope _ e | .abort _ _ e => valuesOf x e
-  | .handle _ h b => valuesOf x h ++ valuesOf x b
+  | .handle _ h b | .forIn _ h b => valuesOf x h ++ valuesOf x b
   | _ => []
 
 /-- P45: a name declared by its first value widens over the numbers it is given (`x = 1; x = 2.5` is a number);
@@ -432,7 +443,7 @@ def Expr.rewrite (f : Ctx → Expr → Expr) (Γ : Ctx) : Expr → Expr
   | .add a b => f Γ (.add (a.rewrite f Γ) (b.rewrite f Γ))
   | .arith op a b => f Γ (.arith op (a.rewrite f Γ) (b.rewrite f Γ))
   | .lt a b => f Γ (.lt (a.rewrite f Γ) (b.rewrite f Γ))
-  | .eq a b => f Γ (.eq (a.rewrite f Γ) (b.rewrite f Γ))
+  | .eq s a b => f Γ (.eq s (a.rewrite f Γ) (b.rewrite f Γ))
   | .ite c a b => f Γ (.ite (c.rewrite f Γ) (a.rewrite f Γ) (b.rewrite f Γ))
   | .loop c b => f Γ (.loop (c.rewrite f Γ) (b.rewrite f Γ))
   | .seq a b => f Γ (.seq (a.rewrite f Γ) (b.rewrite f Γ))
@@ -450,6 +461,8 @@ def Expr.rewrite (f : Ctx → Expr → Expr) (Γ : Ctx) : Expr → Expr
   | .emit ev e => f Γ (.emit ev (e.rewrite f Γ))
   | .scope k e => f Γ (.scope k (e.rewrite f Γ))
   | .abort ev k e => f Γ (.abort ev k (e.rewrite f Γ))
+  -- the loop variable's type would need P: rewrites see it as any
+  | .forIn y l b => f Γ (.forIn y (l.rewrite f Γ) (b.rewrite f (Γ.set y .any)))
   | e => f Γ e
 
 /-- warp decides broadcasting at compile time: a call whose argument is a list of what the function takes -/
@@ -530,12 +543,13 @@ def observe (P : Program) (Γ : Ctx) : Expr → List Observation
       | some (.cls p), some tv => [.field p f tv]
       | _, _ => []) ++ observe P Γ o ++ observe P Γ v
   | .letIn y t e b => observe P Γ e ++ observe P (Γ.set y t) b
-  | .cons a b | .add a b | .arith _ a b | .lt a b | .eq a b | .loop a b | .seq a b | .index a b | .append a b
+  | .cons a b | .add a b | .arith _ a b | .lt a b | .eq _ a b | .loop a b | .seq a b | .index a b | .append a b
   | .tryCatch a b => observe P Γ a ++ observe P Γ b
   | .ite c a b => observe P Γ c ++ observe P Γ a ++ observe P Γ b
   | .assign _ e | .init _ e | .cast e _ | .broadcast _ e | .get e _ | .isA e _ | .emit _ e | .scope _ e => observe P Γ e
   | .handle ev h b => observeHandler P Γ ev h ++ observe P Γ b
   | .abort ev _ e => ((typeOf P Γ e).getD .any |> Observation.abort ev) :: observe P Γ e
+  | .forIn y l b => observe P Γ l ++ observe P (Γ.set y (((typeOf P Γ l).map listElem).getD .any)) b
   | _ => []
 where
   observeHandler (P : Program) (Γ : Ctx) (ev : String) (h : Expr) : List Observation :=
@@ -560,13 +574,16 @@ def Guesses.add (g : Guesses) (classes : List (String × List (String × Option 
   | .handler ev t => { g with effects := joinAt g.effects ev t }
   | .abort ev t => { g with aborts := joinAt g.aborts ev t }
 
-def elaborateTyped (items : List Item) (effects aborts : List (String × Ty)) : Spec :=
+/-- one elaboration pass; functions are inferred seeing the main-level names `known` from the pass before (a function
+may read a main-level name declared after it: warp hoists functions) -/
+def elaboratePass (items : List Item) (effects aborts : List (String × Ty)) (known : List Decl) : Spec :=
   let functions := items.filterMap fun | .function f y t b => some (f, y, t.getD .any, b) | _ => none
   let rest := items.filter fun | .function .. | .classDef .. => false | _ => true
   let classes := items.filterMap fun | .classDef c fields => some (c, fields.map fun (f, t) => (f, t.getD .any)) | _ => none
-  let withFunctions := functions.foldl (init := ({ decls := [], funs := [], main := .unit, classes, effects, aborts } : Spec))
+  let withFunctions := functions.foldl (init := ({ decls := known, funs := [], main := .unit, classes, effects, aborts } : Spec))
     fun s (f, y, t, b) =>
       { s with funs := s.funs ++ [(f, inferFunction s f y t b RESULT_ROUNDS .never)] }
+  let withFunctions := { withFunctions with decls := [] }
   let step (s : Spec) (statements : List Expr) : Item → Spec × List Expr
     | .bind x m annotation value g =>
       let value := resolveCalls s.program Ctx.empty value
@@ -589,6 +606,9 @@ def elaborateTyped (items : List Item) (effects aborts : List (String × Ty)) : 
     funs := s.funs.map fun (f, fn) => (f, { fn with body := lax (Ctx.empty.set fn.param fn.paramTy) fn.body })
     handlers := s.handlers.map fun (ev, h) => (ev, lax (Ctx.empty.set eventLocal .any) h) }
 
+def elaborateTyped (items : List Item) (effects aborts : List (String × Ty)) : Spec :=
+  elaboratePass items effects aborts (elaboratePass items effects aborts []).decls
+
 /-- one round of inference: elaborate with the guesses so far, then join in the values the program gives -/
 def Guesses.refine (items : List Item) (g : Guesses) : Guesses :=
   let s := elaborateTyped (items.map g.fill) g.effects g.aborts
@@ -608,9 +628,9 @@ W0 does not have): so no abort escapes its block -/
 def Expr.breaksIn (ev : Option String) : Expr → Bool
   | .abort e k x => ev == some e && k.isNone && x.breaksIn ev
   | .handle e h b => h.breaksIn (some e) && b.breaksIn ev
-  | .loop c b => c.breaksIn none && b.breaksIn none
+  | .loop c b | .forIn _ c b => c.breaksIn none && b.breaksIn none
   | .letIn _ _ e b => e.breaksIn ev && b.breaksIn ev
-  | .cons a b | .add a b | .arith _ a b | .lt a b | .eq a b | .seq a b | .index a b | .append a b | .tryCatch a b
+  | .cons a b | .add a b | .arith _ a b | .lt a b | .eq _ a b | .seq a b | .index a b | .append a b | .tryCatch a b
   | .set a _ b => a.breaksIn ev && b.breaksIn ev
   | .ite c a b => c.breaksIn ev && a.breaksIn ev && b.breaksIn ev
   | .assign _ e | .init _ e | .call _ e | .cast e _ | .broadcast _ e | .get e _ | .isA e _ | .emit _ e

@@ -33,6 +33,7 @@ const UNIT_TYPE: &str = ".unit";
 const UNIT_PARAMETER: &str = "·";
 const ARGUMENTS_SUFFIX: &str = "·args";
 const APPEND_METHODS: [&str; 2] = ["add", "push"];
+const FOR_KEYWORD: &str = "for";
 /// An inline union `int | text` or an optional `int?` is the join of its alternatives, every value given to it a cast
 const UNION_TYPE: &str = "(Ty.joinAll ";
 const UNION_JOINER: &str = " or ";
@@ -43,6 +44,10 @@ const EMPTY_TYPE: &str = ".list .never";
 const ON_KEYWORD: &str = "on";
 const IN_KEYWORD: &str = "in";
 const EMIT_KEYWORD: &str = "emit";
+/// `global n = 0` at main level, `global n` in a function: a main-level name functions may assign
+const GLOBAL_KEYWORD: &str = "global";
+/// `break v` in a block handler ends its block with v (aborting handlers)
+const BREAK_KEYWORD: &str = "break";
 /// the handler's local holding the payload, `event.level`
 const EVENT_LOCAL: &str = "event";
 /// an event's payloads are instances of the class `ev·event`, whose fields are every key the program emits it with
@@ -160,6 +165,22 @@ fn effect(node: &Node) -> Option<Effect<'_>> {
 	Some(Effect::Emit { event: event_name(rest)?, payload: vec![] })
 }
 
+/// `global n` or `global n = 0` (parsed `global: n`, `global: (n = 0)`): the name and the value
+fn global_declaration(node: &Node) -> Option<(&str, Option<&Node>)> {
+	let Node::Key(keyword, Op::Colon, declared) = node.drop_meta() else { return None };
+	if !is_word(keyword, GLOBAL_KEYWORD) {
+		return None;
+	}
+	match declared.drop_meta() {
+		Node::Symbol(name) => Some((name, None)),
+		Node::Key(name, Op::Assign, value) => match name.drop_meta() {
+			Node::Symbol(name) => Some((name, Some(&**value))),
+			_ => None,
+		},
+		_ => None,
+	}
+}
+
 fn event_class(event: &str) -> String {
 	format!("{event}{EVENT_CLASS_SUFFIX}")
 }
@@ -258,6 +279,13 @@ struct Exporter {
 	argument_fields: Vec<String>,
 	/// each class's ancestor chain, root first, and its own fields with their type words
 	classes: HashMap<String, ClassShape>,
+	/// the event whose block a `break` ends: the innermost block handler's; none in a loop (the loop's break) or a
+	/// program-wide handler
+	breaking: Vec<Option<String>>,
+	/// the names declared `global` anywhere in the program
+	globals: Vec<String>,
+	/// exporting a function body: there a name assigned without `global` is a new local (functions2)
+	in_function: bool,
 }
 
 /// A class's ancestor chain and its own fields as (name, type word)
@@ -382,17 +410,36 @@ impl Exporter {
 		keys.into_iter().map(|(class, _)| class).collect()
 	}
 
-	/// a handler body: `event` is its payload
-	fn handler(&mut self, handler: &Node) -> Lean {
+	/// a handler body: `event` is its payload; a block handler (of `on ev {…} in {…}`) may `break`
+	fn handler(&mut self, handler: &Node, block_event: Option<&str>) -> Lean {
 		self.locals.push(EVENT_LOCAL.to_string());
-		let handler = self.block(handler);
+		let handler = self.breaking_in(block_event.map(str::to_string), |exporter| exporter.block(handler));
 		self.locals.pop();
 		handler
 	}
 
+	fn breaking_in(&mut self, event: Option<String>, export: impl FnOnce(&mut Self) -> Lean) -> Lean {
+		self.breaking.push(event);
+		let exported = export(self);
+		self.breaking.pop();
+		exported
+	}
+
+	/// `break v` or a bare `break` (ø) in a block handler
+	fn abort(&mut self, value: Option<&Node>) -> Lean {
+		let Some(event) = self.breaking.last().cloned().flatten() else {
+			return Err("not in W0: a break outside a block handler".to_string());
+		};
+		let value = match value {
+			Some(value) => self.expression(value)?,
+			None => UNIT_TYPE.to_string(),
+		};
+		Ok(format!(".abort {} none ({value})", quoted(&event)))
+	}
+
 	fn effect(&mut self, effect: Effect) -> Lean {
 		match effect {
-			Effect::On { event, handler, body: Some(body) } => Ok(format!(".handle {} ({}) ({})", quoted(&event), self.handler(handler)?, self.block(body)?)),
+			Effect::On { event, handler, body: Some(body) } => Ok(format!(".handle {} ({}) ({})", quoted(&event), self.handler(handler, Some(&event))?, self.block(body)?)),
 			Effect::On { event, .. } => Err(format!("not in W0: a program-wide handler of {event} inside an expression")),
 			Effect::Emit { event, payload } if payload.is_empty() => Ok(format!(".emit {} .unit", quoted(&event))),
 			Effect::Emit { event, payload } => Ok(format!(".emit {} ({})", quoted(&event), self.instance(&event_class(&event), payload)?)),
@@ -406,6 +453,9 @@ impl Exporter {
 
 	fn items(&mut self, program: &Node) -> Result<Vec<String>, String> {
 		self.collect_classes(program);
+		program.visit(&mut |part| if let Some((name, _)) = global_declaration(part) {
+			self.globals.push(name.to_string());
+		});
 		let event_classes = self.collect_event_classes(program);
 		let program: Vec<&Node> = statements(program).into_iter().flat_map(type_definitions).collect();
 		let mut argument_classes = Vec::new();
@@ -437,7 +487,13 @@ impl Exporter {
 
 	fn item(&mut self, statement: &Node) -> Lean {
 		if let Some(Effect::On { event, handler, body: None }) = effect(statement) {
-			return Ok(format!(".on {} ({})", quoted(&event), self.handler(handler)?));
+			return Ok(format!(".on {} ({})", quoted(&event), self.handler(handler, None)?));
+		}
+		match global_declaration(statement) {
+			Some((name, Some(value))) => return self.binding(&Node::Symbol(name.to_string()), ".var", value),
+			// `global x; x = 7`: the later first binding is the global one
+			Some((_, None)) => return Ok(format!(".statement {UNIT_TYPE}")),
+			None => {}
 		}
 		match statement.drop_meta() {
 			Node::Type { name, .. } => self.class_definition(&name.drop_meta().name()),
@@ -481,7 +537,7 @@ impl Exporter {
 		let value = self.stored_value(annotation.as_deref(), value)?;
 		self.names.insert(name.clone(), annotation.clone());
 		let annotation = annotation.map_or("none".to_string(), |lean| format!("(some ({lean}))"));
-		Ok(format!(".bind {} {mode} {annotation} ({value}) false", quoted(&name)))
+		Ok(format!(".bind {} {mode} {annotation} ({value}) {}", quoted(&name), self.globals.contains(&name)))
 	}
 
 	/// A call's result stored in a declared list is checked item by item at run time (list-element-types): a cast
@@ -520,7 +576,9 @@ impl Exporter {
 		};
 		self.locals.push(parameter.clone());
 		self.argument_fields = fields;
+		self.in_function = true;
 		let body = self.block(body);
+		self.in_function = false;
 		self.locals.pop();
 		self.argument_fields.clear();
 		Ok(format!(".function {} {} {parameter_type} ({})", quoted(name), quoted(&parameter), body?))
@@ -550,7 +608,24 @@ impl Exporter {
 		if !self.names.contains_key(name) {
 			return Err(format!("not in W0: a first binding of {name} inside an expression"));
 		}
+		if self.in_function && !self.globals.iter().any(|global| global == name) {
+			return Err(format!("not in W0: {name} assigned in a function without `global {name}` (a local there)"));
+		}
 		Ok(format!(".assign {} ({value})", quoted(name)))
+	}
+
+	/// `for x in xs { body }`: x is a local of the body; a `break` in it ends the loop. A type word or `it` as the
+	/// variable (type filters, unit walks) is not in W0, nor a main-level name (warp's loop assigns it, W0's shadows it)
+	fn for_loop(&mut self, variable: &Node, list: &Node, body: &Node) -> Lean {
+		let variable = match variable.drop_meta() {
+			Node::Symbol(name) if name != crate::lambdas::IMPLICIT_PARAMETER && type_of_word(name).is_none() && !self.names.contains_key(name) => name.clone(),
+			_ => return Err(format!("not in W0: the loop variable {}", variable.serialize().trim())),
+		};
+		let list = self.expression(list)?;
+		self.locals.push(variable.clone());
+		let body = self.breaking_in(None, |exporter| exporter.block(body));
+		self.locals.pop();
+		Ok(format!(".forIn {} ({list}) ({})", quoted(&variable), body?))
 	}
 
 	fn binary(&mut self, constructor: &str, left: &Node, right: &Node) -> Lean {
@@ -586,9 +661,14 @@ impl Exporter {
 				Ok(statements.iter().rev().fold(last, |rest, statement| format!(".seq ({statement}) ({rest})")))
 			}
 			_ if effect(node).is_some() => self.effect(effect(node).expect("an effect")),
+			Node::Symbol(word) if word == BREAK_KEYWORD => self.abort(None),
+			// `global y` in a function only declares: the name is main-level and assignable there
+			_ if global_declaration(node).is_some_and(|(name, value)| value.is_none() && self.names.contains_key(name)) => Ok(UNIT_TYPE.to_string()),
+			Node::List(items, _, _) if items.len() == 2 && is_word(&items[0], BREAK_KEYWORD) => self.abort(Some(&items[1])),
 			Node::List(items, _, _) if items.first().is_some_and(|class| self.classes.contains_key(&class.name())) => self.construction(&items[0].name(), &items[1..]),
 			Node::List(items, _, _) => match items.as_slice() {
 				[marker, body, handler] if is_word(marker, TRY_MARKER) => self.binary(".tryCatch", body, handler),
+				[for_word, variable, in_word, list, body] if is_word(for_word, FOR_KEYWORD) && is_word(in_word, IN_KEYWORD) => self.for_loop(variable, list, body),
 				[call, message] if is_word(call, ERROR_CALL) => match message.drop_meta() {
 					Node::Text(message) => Ok(format!(".error {}", quoted(message))),
 					_ => unsupported(node),
@@ -647,7 +727,7 @@ impl Exporter {
 				_ => unsupported(node),
 			},
 			Node::Key(condition, Op::Do, body) => match condition.drop_meta() {
-				Node::Key(empty, Op::While, condition) if empty.is_nothing() => self.binary(".loop", condition, body),
+				Node::Key(empty, Op::While, condition) if empty.is_nothing() => self.breaking_in(None, |exporter| exporter.binary(".loop", condition, body)),
 				_ => unsupported(node),
 			},
 			Node::Key(left, Op::Add, right) if is_list_literal(left) || is_list_literal(right) => self.binary(".append", left, right),
@@ -657,8 +737,11 @@ impl Exporter {
 			Node::Key(left, Op::Lt | Op::Le, right) => self.binary(".lt", left, right),
 			Node::Key(left, Op::Gt | Op::Ge, right) => self.binary(".lt", right, left),
 			// `c is Color` parses as `c == Color`: a type test
-			Node::Key(left, Op::Eq, right) if self.classes.contains_key(&right.name()) => Ok(format!(".isA ({}) {}", self.expression(left)?, quoted(&right.name()))),
-			Node::Key(left, Op::Eq | Op::Ne, right) => self.binary(".eq", left, right),
+			Node::Key(left, Op::Eq, right) if matches!(right.drop_meta(), Node::Symbol(class) if self.classes.contains_key(class)) => Ok(format!(".isA ({}) {}", self.expression(left)?, quoted(&right.name()))),
+			Node::Key(left, op @ (Op::Eq | Op::Ne | Op::Identical | Op::NotIdentical), right) => {
+				let compared = self.binary(if matches!(op, Op::Identical | Op::NotIdentical) { ".eq true" } else { ".eq false" }, left, right)?;
+				Ok(if matches!(op, Op::Ne | Op::NotIdentical) { format!(".ite ({compared}) (.bool false) (.bool true)") } else { compared })
+			}
 			Node::Key(list, Op::Hash, index) if !list.is_nothing() => self.binary(".index", list, index),
 			_ => unsupported(node),
 		}

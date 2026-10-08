@@ -64,6 +64,12 @@ theorem frame_typing {Γ} (F : Frame) {e t} (h : HasType P Γ (F.plug e) t) :
   case isA => cases h with | isA he => exact ⟨_, he, fun h' _ => ⟨_, .isA h', sub_refl _⟩⟩
   case emit => cases h with | emit hR he => exact ⟨_, he, fun h' _ => ⟨_, .emit hR h', sub_refl _⟩⟩
   case abort => cases h with | abort he st => exact ⟨_, he, fun h' s => ⟨_, .abort h' (sub_trans s st), sub_refl _⟩⟩
+  case forIn =>
+    cases h with
+    | forIn hl hb =>
+      refine ⟨_, hl, fun h' s => ?_⟩
+      obtain ⟨_, hb', _⟩ := narrow hb ((CtxSub.refl _).set_le _ (listElem_mono s))
+      exact ⟨_, .forIn h' hb', sub_refl _⟩
 
 /-- a value of a class type is a reference -/
 theorem cls_value {Γ v p} (h : HasType P Γ v (.cls p)) (hv : v.isValue = true) : ∃ a, v = .ref a p := by
@@ -342,6 +348,19 @@ theorem preservation (hP : ProgramOk P) {s s' : Expr × Store} (hs : Step P s s'
     intro t h hμ
     obtain ⟨_, he, _⟩ := frame_typing F h
     cases he with | abort hv st => exact ⟨⟨_, .abort hv st, sub_never _⟩, hμ⟩
+  | forNil => intro t h hμ; cases h; exact ⟨⟨_, .unit, sub_refl _⟩, hμ⟩
+  | forOther => intro t _ hμ; exact ⟨⟨_, .error, sub_never _⟩, hμ⟩
+  | @forCons y hd tl b μ vh vt =>
+    intro t h hμ
+    cases h with
+    | forIn hl hb =>
+      cases hl with
+      | cons hh ht he =>
+        obtain ⟨_, h1, _⟩ := let_typed hb vh hh (by simp [listElem, element]; exact join_upper_left _ _)
+        have hs : ∀ {a l e}, element l = some e → sub (listElem l) (listElem (.list (join a e))) = true := by
+          intro a l e he; cases l <;> simp_all [element, listElem] <;> exact join_upper_right _ _
+        obtain ⟨_, hb', _⟩ := narrow hb ((CtxSub.refl _).set_le _ (hs he))
+        exact ⟨⟨_, .seq h1 (.forIn ht hb'), sub_refl _⟩, hμ⟩
   | tryAbort =>
     intro t h hμ
     cases h with | tryCatch he _ => cases he with | abort hv st => exact ⟨⟨_, .abort hv st, sub_never _⟩, hμ⟩
@@ -399,8 +418,8 @@ theorem progress {Γ e t} (h : HasType P Γ e t) (hΓ : Γ = Ctx.empty) {μ : St
     exact in_frame (.arithL op b) rfl (ih1 hΓ hμ) fun va => in_frame (.arithR op a) va (ih2 hΓ hμ) fun vb => steps (.arith va vb)
   | @lt _ a b _ _ _ _ ih1 ih2 =>
     exact in_frame (.ltL b) rfl (ih1 hΓ hμ) fun va => in_frame (.ltR a) va (ih2 hΓ hμ) fun vb => steps (.lt va vb)
-  | @eq _ a b _ _ _ _ ih1 ih2 =>
-    exact in_frame (.eqL b) rfl (ih1 hΓ hμ) fun va => in_frame (.eqR a) va (ih2 hΓ hμ) fun vb => steps (.eq va vb)
+  | @eq _ s a b _ _ _ _ ih1 ih2 =>
+    exact in_frame (.eqL s b) rfl (ih1 hΓ hμ) fun va => in_frame (.eqR s a) va (ih2 hΓ hμ) fun vb => steps (.eq va vb)
   | @ite _ c a b _ _ _ _ _ _ ih0 _ _ => exact in_frame (.ite a b) rfl (ih0 hΓ hμ) fun vc => steps (.ite vc)
   | loop => exact steps .loop
   | @seq _ a b _ _ _ _ ih1 _ => exact in_frame (.seq b) rfl (ih1 hΓ hμ) fun va => steps (.seq va)
@@ -454,6 +473,12 @@ theorem progress {Γ e t} (h : HasType P Γ e t) (hΓ : Γ = Ctx.empty) {μ : St
     · exact steps .scopeError
     · exact steps (.scopeAbort hv)
     · exact steps (.scopeStep hs)
+  | @forIn _ y l b _ _ _ _ ih _ =>
+    refine in_frame (.forIn y b) rfl (ih hΓ hμ) fun hv => ?_
+    cases l with
+    | nil => exact steps .forNil
+    | cons h t => simp only [isValue, Bool.and_eq_true] at hv; exact steps (.forCons hv.1 hv.2)
+    | _ => exact steps (.forOther hv rfl)
   | @abort _ ev k e _ _ _ ih => exact in_frame (.abort ev k) rfl (ih hΓ hμ) fun v => .inr (.inr (.inl ⟨ev, k, e, rfl, v⟩))
 
 /-- any number of steps -/

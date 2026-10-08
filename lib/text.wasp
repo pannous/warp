@@ -1,4 +1,5 @@
 // The standard library module text (notes/stdlib.md): `use text`
+use list
 repeat(t, n) := n times t
 pad_left(t, width) := if count(t) >= width then t else (width - count(t)) times " " + t
 pad_right(t, width) := if count(t) >= width then t else t + (width - count(t)) times " "
@@ -60,7 +61,7 @@ word_count(t) := count(words(t))
 snake_case(t) := { out = ""; for c in chars(t) { if is_alphanumeric(c) { if upper(c) == c and lower(c) != c and out != "" and last(out) != "_" { out = out + "_" }; out = out + lower(c) } else if out != "" and last(out) != "_" { out = out + "_" } }; out }
 kebab_case(t) := join(split(snake_case(t), "_"), "-")
 // "hello_world" → "helloWorld"
-camel_case(t) := { out = ""; for p in split(snake_case(t), "_") { if p != "" { out = if out == "" then p else out + capitalize(p) } }; out }
+camel_case(t) := { parts = [p for p in split(snake_case(t), "_") if p != ""]; if parts == [] then "" else first(parts) + join([capitalize(p) for p in drop(parts, 1)], "") }
 // each line indented by n spaces
 indent(t, n) := join([n times " " + line for line in lines(t)], "\n")
 // a whole or decimal number, optionally signed: "12.5", "-3"

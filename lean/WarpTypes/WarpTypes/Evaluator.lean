@@ -47,7 +47,7 @@ def step (P : Program) (μ : Store) : Expr → Option (Expr × Store)
   | .add a b => stepPair .addL .addR a b μ (step P μ a) (step P μ b) (some (addValues a b, μ))
   | .arith op a b => stepPair (.arithL op) (.arithR op) a b μ (step P μ a) (step P μ b) (some (arithValues op a b, μ))
   | .lt a b => stepPair .ltL .ltR a b μ (step P μ a) (step P μ b) (some (ltValues a b, μ))
-  | .eq a b => stepPair .eqL .eqR a b μ (step P μ a) (step P μ b) (some (.bool (decide (a = b)), μ))
+  | .eq s a b => stepPair (.eqL s) (.eqR s) a b μ (step P μ a) (step P μ b) (some (.bool (eqValues P μ s a b), μ))
   | .ite c a b => if c.isValue then some (if truthy c then a else b, μ) else stepIn (.ite a b) c μ (step P μ c)
   | .loop c b => some (.ite c (.seq b (.loop c b)) .unit, μ)
   | .seq a b => if a.isValue then some (b, μ) else stepIn (.seq b) a μ (step P μ a)
@@ -103,6 +103,13 @@ def step (P : Program) (μ : Store) : Expr → Option (Expr × Store)
       else if e.isValue then some (e, μ)
       else (step P (μ.outer k) e).map fun s => (.scope k s.1, s.2.withHandlers μ.handlers)
   | .abort ev k e => if e.isValue then none else stepIn (.abort ev k) e μ (step P μ e)
+  | .forIn y l b =>
+    if l.isValue then
+      some (match l with
+        | .nil => .unit
+        | .cons h t => .seq (b.subst y h) (.forIn y t b)
+        | _ => .error "not a list", μ)
+    else stepIn (.forIn y b) l μ (step P μ l)
   | _ => none
 
 variable {P : Program}
@@ -157,9 +164,9 @@ theorem step_sound : ∀ {e : Expr} {μ s'}, step P μ e = some s' → Step P (e
     intro μ s' hs
     exact stepPair_sound (L := .ltL) (R := .ltR) rfl id rfl (fun _ => ih1) (fun _ => ih2)
       (fun va vb hd => by cases hd; exact .lt va vb) hs
-  | eq a b ih1 ih2 =>
+  | eq s a b ih1 ih2 =>
     intro μ s' hs
-    exact stepPair_sound (L := .eqL) (R := .eqR) rfl id rfl (fun _ => ih1) (fun _ => ih2)
+    exact stepPair_sound (L := .eqL s) (R := .eqR s) rfl id rfl (fun _ => ih1) (fun _ => ih2)
       (fun va vb hd => by cases hd; exact .eq va vb) hs
   | ite c a b ih _ _ =>
     intro μ s' hs; simp only [step] at hs
@@ -280,6 +287,15 @@ theorem step_sound : ∀ {e : Expr} {μ s'}, step P μ e = some s' → Step P (e
     split at hs
     · cases hs
     · exact stepIn_sound (F := .abort ev k) rfl (fun _ => ih) hs
+  | forIn y l b ih _ =>
+    intro μ s' hs; simp only [step] at hs
+    split at hs
+    · rename_i hv; cases hs
+      split
+      · exact .forNil
+      · simp only [isValue, Bool.and_eq_true] at hv; exact .forCons hv.1 hv.2
+      · exact .forOther hv (by cases l <;> simp_all [isList])
+    · exact stepIn_sound (F := .forIn y b) rfl (fun _ => ih) hs
   | _ => intro μ s' hs; simp [step] at hs
 
 /-- at most `fuel` steps -/
