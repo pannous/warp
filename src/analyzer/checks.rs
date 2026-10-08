@@ -1518,14 +1518,16 @@ pub(crate) fn list_element_type(type_name: &str) -> Option<&str> {
 	plural_element_type(type_name).or_else(|| type_name.strip_prefix(LIST_OF_PREFIX))
 }
 
-/// The items a list value is given literally: all of `[a b]`, the appended ones of `xs + [c]`
+/// The items a list value is given literally: all of `[a b]`, the appended ones of `xs + [c]` and of
+/// `list_extend(p.xs, [c])` (what `p.xs.add(c)` emits)
 pub(crate) fn added_items(value: &Node) -> Option<&[Node]> {
-	match value.drop_meta() {
+	let appended = match value.drop_meta() {
+		Node::Key(_, Op::Add, appended) => appended.as_ref(),
+		Node::List(items, Bracket::Round, _) if matches!(items.as_slice(), [call, _, _] if call.drop_meta().name() == crate::wasm_emitter::list_ops::LIST_EXTEND) => &items[2],
+		literal => literal,
+	};
+	match appended.drop_meta() {
 		Node::List(items, Bracket::Square, _) => Some(items),
-		Node::Key(_, Op::Add, appended) => match appended.drop_meta() {
-			Node::List(items, Bracket::Square, _) => Some(items),
-			_ => None,
-		},
 		_ => None,
 	}
 }

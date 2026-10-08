@@ -170,7 +170,7 @@ impl WasmGcEmitter {
 		let mut typed = self.find_typed_lists(&function.body);
 		self.scope = saved_scope;
 		for (param, _) in function.params.iter().zip(list_params).filter(|(_, is_list)| **is_list) {
-			typed.insert(param.name.clone(), TypedList { element: ElementType::Node, updated: true });
+			typed.insert(param.name.clone(), TypedList { element: ElementType::Node, updated: true, aliased: true });
 		}
 		typed
 	}

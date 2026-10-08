@@ -245,7 +245,7 @@ impl WasmGcEmitter {
 		let mut typed_lists = self.find_typed_lists(&user_fn.body);
 		for (index, param) in user_fn.params.iter().enumerate().filter(|(index, _)| self.takes_list_abi(name, *index)) {
 			let _ = index;
-			typed_lists.insert(param.name.clone(), list_dispatch::TypedList { element: list_dispatch::ElementType::Node, updated: true });
+			typed_lists.insert(param.name.clone(), list_dispatch::TypedList { element: list_dispatch::ElementType::Node, updated: true, aliased: true });
 		}
 		let saved_typed_lists = std::mem::replace(&mut self.typed_lists, typed_lists);
 		let typed_maps = self.find_typed_maps(&user_fn.body);

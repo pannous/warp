@@ -9,11 +9,11 @@ use Instruction as I;
 use super::{WasmGcEmitter, ROUNDING_FUNCTIONS};
 
 /// Names the emitter resolves itself, besides user functions, imports, type words and counting functions
-const BUILTIN_CALLS: [&str; 20] = [
+const BUILTIN_CALLS: [&str; 22] = [
 	"return", "fetch", "puts", "puti", "putl", "putf", "fd_write", "range", "type", "use",
 	crate::min_max::EMPTY_EXTREMUM_CALL, crate::switch::NO_CASE_CALL, crate::analyzer::ZERO_FILL_CALL, crate::analyzer::INSERT_AT_CALL,
 	crate::analyzer::INSERT_EITHER_CALL, crate::library_words::LIST_SUM, crate::traits::INSTANCE_OF, crate::analyzer::REMOVED_VALUE_CALL,
-	crate::library_words::VALUES_SIMILAR, crate::library_words::VALUES_ROUGH,
+	crate::analyzer::LIST_DROP_LAST, crate::library_words::VALUES_SIMILAR, super::list_ops::LIST_EXTEND, crate::library_words::VALUES_ROUGH,
 ];
 
 const PRINT: &str = "print";
@@ -313,6 +313,21 @@ impl WasmGcEmitter {
 				self.emit_numeric_value(func, count);
 				self.emit_node_instructions(func, zero);
 				self.emit_call(func, crate::analyzer::ZERO_FILL_CALL);
+				return;
+			}
+		}
+		if let [Node::Symbol(call), list] = items {
+			if call == crate::analyzer::LIST_DROP_LAST {
+				self.emit_node_instructions(func, list);
+				self.emit_call(func, crate::analyzer::LIST_DROP_LAST);
+				return;
+			}
+		}
+		if let [Node::Symbol(call), list, added] = items {
+			if call == super::list_ops::LIST_EXTEND {
+				self.emit_node_instructions(func, list);
+				self.emit_node_instructions(func, added);
+				self.emit_call(func, super::list_ops::LIST_EXTEND);
 				return;
 			}
 		}
@@ -793,7 +808,9 @@ impl WasmGcEmitter {
 			_ => {}
 		}
 		let destructured = self.destructured_kind(item);
-		if let Some((name, value)) = self.typed_list_store(item) {
+		if let Some((name, items)) = self.typed_list_extension(item) {
+			self.emit_typed_list_extend(func, &name, &items); // the array itself is dropped, it needs no Node
+		} else if let Some((name, value)) = self.typed_list_store(item) {
 			self.emit_typed_list_store(func, &name, &value); // the array itself is dropped, it needs no Node
 		} else if self.is_float_assignment(item) || self.is_float_call(item) || destructured.is_some_and(|kind| kind.is_float()) {
 			self.emit_float_value(func, item); // a float update or a call giving a float (shared_addf), dropped as an f64
@@ -864,6 +881,10 @@ impl WasmGcEmitter {
 	/// `s += "a"`, `xs = xs + [1]`, and an `if` whose branch does such an update
 	fn is_ref_update(&self, item: &Node) -> bool {
 		match item.drop_meta() {
+			// `p.items += [v]`, `m#2 += [v]`: items added to the list a field or item holds (emit_member_list_extend)
+			Node::Key(left, Op::AddAssign, right) if matches!(left.drop_meta(), Node::Key(_, Op::Hash | Op::Dot, _)) => {
+				matches!(right.drop_meta(), Node::List(_, Bracket::Square, _))
+			}
 			Node::Key(left, op, _) if *op == Op::Assign || op.is_compound_assign() => {
 				matches!(left.drop_meta(), Node::Symbol(name) if self.scope.lookup(name).map(|local| local.kind)
 					.or_else(|| self.ctx.user_globals.get(name).map(|(_, kind)| *kind)).is_some_and(|kind| kind.is_ref()))

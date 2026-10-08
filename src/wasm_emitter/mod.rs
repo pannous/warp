@@ -27,6 +27,7 @@ mod layout;
 pub(crate) mod linear_arrays;
 mod list_emitter;
 mod list_dispatch;
+mod list_sharing;
 mod library_ops;
 mod text_unicode;
 mod similarity;
