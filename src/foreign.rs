@@ -45,7 +45,7 @@ const unplain = value => Array.isArray(value) ? value.map(unplain)
 	: value;
 const plain = value => {
 	if (typeof value === "bigint") return value >= -(2n ** 63n) && value < 2n ** 63n ? Number(value) : { "$int": value.toString() };
-	if (value === undefined || typeof value === "symbol") return null;
+	if (value === undefined || value === null || typeof value === "symbol") return null; // ø, not a handle of null
 	if (Array.isArray(value)) return value.map(plain);
 	const prototype = value !== null && typeof value === "object" ? Object.getPrototypeOf(value) : undefined;
 	if (prototype === Object.prototype || prototype === null) return Object.fromEntries(Object.entries(value).map(([key, item]) => [key, plain(item)]));
