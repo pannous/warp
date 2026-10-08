@@ -120,6 +120,13 @@ pub fn analyze_required_functions(ctx: &mut Context, node: &Node) {
 				if fn_name == crate::type_tests::IS_TYPE {
 					ctx.required_functions.insert(crate::type_tests::NODE_KIND_IN);
 				}
+				if fn_name == crate::type_tests::TYPE_WORD {
+					ctx.required_functions.insert(crate::type_tests::NODE_TYPE_NAME);
+					// node_type_name names an instance by comparing its data with each declared type's name
+					if !ctx.type_registry.types().is_empty() {
+						ctx.required_functions.insert(crate::wasm_emitter::VALUES_EQUAL);
+					}
+				}
 				if fn_name == crate::switch::NO_CASE_CALL {
 					ctx.missing_case_labels.extend(items.get(1).map(|label| label.name()));
 				}

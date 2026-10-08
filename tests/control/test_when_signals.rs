@@ -17,3 +17,17 @@ fn when_arms_stay_a_switch() {
 	is!("when 3 { 1 -> \"a\"; 3 -> \"c\" }", 'c');
 	is!("x = 2; when (x) { 1 -> 10; else -> 20 }", 20);
 }
+
+/// The hints a program's compilation gives, as `written → preferred`
+fn hints_of(code: &str) -> Vec<String> {
+	warp::normalize::clear_shown_hints();
+	let (_, hints) = warp::normalize::capture_hints(|| warp::wasm_emitter::eval(code));
+	hints.iter().map(|hint| format!("{} → {}", hint.original, hint.canonical)).collect()
+}
+
+#[test]
+fn a_condition_when_notes_that_it_reacts_to_later_writes() {
+	assert!(hints_of("x = 0; when x > 3 { print 1 }; x = 5").contains(&"when → whenever".to_string()));
+	assert!(!hints_of("n = 0; when ping { n += 1 }; emit ping").iter().any(|hint| hint.contains("whenever")));
+	assert!(!hints_of("when 3 { 1 -> 2; 3 -> 4 }").iter().any(|hint| hint.contains("whenever")));
+}

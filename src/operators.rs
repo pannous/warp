@@ -143,7 +143,8 @@ impl Op {
 		match self {
 			// Suffix operators (bind very tight to left, no right operand)
 			Op::Square | Op::Cube => (200, 0),
-			Op::Inc | Op::Dec => (195, 0),
+			// below member access and indexing: `xs#1++`, `bags#1.n++` change the whole place, not its index or field name
+			Op::Inc | Op::Dec => (165, 0),
 
 			// Member access (tightest infix)
 			Op::Dot | Op::SafeDot => (180, 181),

@@ -190,8 +190,10 @@ pub struct CompiledModule {
 
 /// The passes over the source forms, in order, each reading what the one before it left: definitions and sugar become
 /// the forms every later pass knows (`def f(x) {…}` is `f(x) := {…}`), modules are resolved
-const SOURCE_PASSES: [fn(Node) -> Node; 83] = [
+const SOURCE_PASSES: [fn(Node) -> Node; 85] = [
 	crate::analyzer::lower_inline_unions,
+	// `on ask {…} in {…}` before any pass reads `{…} in {…}` as membership or an emit as nothing
+	crate::scoped_handlers::lower,
 	// `component name {…}` declares a WIT world (`warp build --wit`) and does nothing at run time
 	crate::component_worlds::lower,
 	// `ch.send(v)` of `ch = channel()` before go_blocks renames ch in a go block and system_signals reads the send
@@ -249,7 +251,7 @@ const SOURCE_PASSES: [fn(Node) -> Node; 83] = [
 	crate::object_groups::lower,
 	// the used modules join the program before the signal passes: a listener of the program sees the writes of their functions
 	crate::routes::lower, crate::page_html::use_markup, crate::modules::resolve,
-	crate::units::lower_sleep_durations, crate::units::lower_quantity_comparisons, crate::stored_values::lower, crate::undo_history::lower, crate::declarations::lower_tasks, crate::system_values::name, crate::signal_values::poll_shared, crate::system_values::read, crate::shared_arrays::lower, crate::fetch_signals::lower, crate::system_signals::lower, crate::component_state::lower, crate::element_events::lower, crate::event_signals::lower, crate::page_html::lower, crate::signal_values::subscribe, crate::variable_signals::lower, crate::signal_values::lower, crate::declarations::lower_c_functions, crate::declarations::lower_bare_declarations, crate::declarations::lower_spaced_definitions, crate::lowering::number_words::lower, crate::parameter_shapes::lower, crate::ruby_blocks::lower, crate::declarations::lower_sized_arrays, crate::result_word::lower, crate::picked_calls::lower, crate::variadic::lower, crate::nonlocal_cells::lower_lambdas, crate::named_arguments::lower, crate::comprehensions::lower, crate::library_words::lower_function_methods, crate::tuples::lower, crate::run_time_blocks::warn_unresolved, crate::run_time_blocks::lower_interpret, crate::blocks::lower, crate::getters::lower, crate::run_time_blocks::lower_run_time_bangs, crate::mutation::warn_discarded, crate::mutation::lower, crate::nested_index::lower, crate::field_elements::lower, crate::host::lower_aliases,
+	crate::units::lower_sleep_durations, crate::units::lower_quantity_comparisons, crate::stored_values::lower, crate::undo_history::lower, crate::declarations::lower_tasks, crate::system_values::name, crate::signal_values::poll_shared, crate::system_values::read, crate::shared_arrays::lower, crate::fetch_signals::lower, crate::system_signals::lower, crate::component_state::lower, crate::element_events::lower, crate::event_signals::lower, crate::page_html::lower, crate::signal_values::subscribe, crate::variable_signals::lower, crate::signal_values::lower, crate::declarations::lower_c_functions, crate::declarations::lower_bare_declarations, crate::declarations::lower_spaced_definitions, crate::lowering::number_words::lower, crate::parameter_shapes::lower, crate::ruby_blocks::lower, crate::declarations::lower_sized_arrays, crate::result_word::lower, crate::picked_calls::lower, crate::variadic::lower, crate::nonlocal_cells::lower_lambdas, crate::named_arguments::lower, crate::comprehensions::lower, crate::library_words::lower_function_methods, crate::tuples::lower, crate::run_time_blocks::warn_unresolved, crate::run_time_blocks::lower_interpret, crate::blocks::lower, crate::getters::lower, crate::run_time_blocks::lower_run_time_bangs, crate::shared_instances::lower, crate::mutation::warn_discarded, crate::mutation::lower, crate::nested_index::lower, crate::field_elements::lower, crate::host::lower_aliases,
 	// again: the getters of the modules used, which lower_module_source leaves for here, and the program's reads of them
 	crate::getters::lower,
 	crate::type_name_matching::lower, crate::meta_entries::lower, crate::versions::lower_versions,
@@ -293,6 +295,8 @@ fn lower_for_emission(node: Node) -> Result<Node, Node> {
 	}
 	crate::diagnostic::report(&crate::accessibility::warnings(&node))?;
 	crate::diagnostic::report(&crate::analyzer::source_warnings(&node))?;
+	// emits and handler blocks as written: the passes lower them to calls, the named effects are read from them
+	let as_written = node.clone();
 	let node = run_passes(node, &SOURCE_PASSES);
 	if let Some(error) = node.first_error() {
 		return Err(error.clone());
@@ -318,7 +322,7 @@ fn lower_for_emission(node: Node) -> Result<Node, Node> {
 	if let Some(error) = node.first_error() {
 		return Err(error.clone());
 	}
-	let effects = EffectReport::of(&node);
+	let effects = EffectReport::of(&node).with_events_of(&as_written);
 	if let Some(answer) = effects.answer(&node) {
 		return Err(answer);
 	}

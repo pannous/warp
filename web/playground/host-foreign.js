@@ -43,6 +43,8 @@ registerForeignRuntime("js", {
 		// a module's name, or a handle: an object of the page kept behind an id (src/foreign.rs)
 		let owner = null, value = typeof moduleName === "object" ? unhandled(moduleName) : moduleName === "operator" ? FOREIGN_OPERATORS : globalThis[moduleName];
 		if (value === undefined) throw new Error(`js ${moduleName}.${memberName}: the page has no global ${moduleName} (modules need the native host)`);
+		// member "": the module constructed, `new URL(…)` (src/lowering/foreign_modules.rs CONSTRUCTOR_MEMBER)
+		if (memberName === "") return new value(...argumentValues.map(unhandled));
 		for (const part of memberName.split(".")) {
 			if (value?.[part] === undefined) throw new Error(`js ${moduleName}.${memberName}: ReferenceError: ${moduleName} has no ${memberName}`);
 			[owner, value] = [value, value[part]];

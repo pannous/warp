@@ -13,6 +13,7 @@ const RUN_TIMEOUT_MS = 10000;
 // the origin a link of the shown program resolves against: "/about" is a page of the program, "https://…" is not
 const PROGRAM_ORIGIN = "http://program.invalid";
 const TYPING_DELAY_MS = 300;
+const PENDING_VALUE = "…"; // the value shown from Run until the new one arrives
 const DEFAULT_EXAMPLE = "hello";
 const DEBUG_PARAMETER = "debug"; // ?debug runs warp.debug.wasm: Rust names and lines in traces and the debugger
 const DEBUG_COMPILER = "warp.debug.wasm";
@@ -537,6 +538,13 @@ function runNow() {
 	return show(editor.getValue());
 }
 
+// Run pressed (the button, Ctrl/Cmd-Enter): the old value gives way to "…" at once, so it is not taken for the new one
+function runPressed() {
+	$("value").textContent = PENDING_VALUE;
+	$("value").classList.remove("error", "located");
+	return runNow();
+}
+
 const exampleSource = name => EXAMPLES[name]?.code ?? SAMPLES[name];
 
 // puts the code in the editor and runs it once; resolves once its report is shown
@@ -563,14 +571,14 @@ function fillExamples() {
 function initialize() {
 	editor = CodeMirror.fromTextArea($("code"), {
 		lineNumbers: true, lineWrapping: true, mode: "wasp", indentWithTabs: true, tabSize: 4,
-		extraKeys: { "Ctrl-Enter": runNow, "Cmd-Enter": runNow },
+		extraKeys: { "Ctrl-Enter": runPressed, "Cmd-Enter": runPressed },
 	});
 	editor.on("change", () => {
 		if (!$("auto").checked) return;
 		clearTimeout(typingTimer);
 		typingTimer = setTimeout(runNow, TYPING_DELAY_MS);
 	});
-	$("run").onclick = runNow;
+	$("run").onclick = runPressed;
 	$("address").onkeydown = goToAddress;
 	$("rendered").onclick = click => followLink(click) || sendElementEvent("click", click, clickDetail(click));
 	$("rendered").oninput = input => sendElementEvent("input", input, inputDetail(input.composedPath()[0]));
