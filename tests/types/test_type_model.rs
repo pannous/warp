@@ -193,10 +193,12 @@ const CORPUS: &[&str] = &[
 	"i=0; !i",
 	"f(a:bool,b:bool):=not (a or b); f(true, false)",
 	"x = 1 < 2 or 3 < 2; x",
+
+	"s = 0; for x in 3 { s += x }; s",
 ];
 
 /// Programs warp compiles although the model rejects them: holes in warp's checks, each with its card
-const KNOWN_HOLES: &[(&str, &str)] = &[("s = 0; for x in 3 { s += x }; s", "non-list")];
+const KNOWN_HOLES: &[(&str, &str)] = &[];
 
 /// Where warp's run-time admission differs from W0's subtyping: a bool is an Int at run time, so an int value passes
 /// a bool check (P199 lets only the literals 1 and 0 in; card bool-assign)
