@@ -154,5 +154,9 @@ Rejected: (b) automatic f32 for floats (results differ in the 7th digit), (c) do
 
    Before the fusion the CPU chain mapped f's results as a GC list grown by `out = out + [x]`, quadratic (card
    map-filter: any `map` of a list, `int[20000].map(x => x * 2)` 0.5 s, 80000 out of fuel).
-   Open: GC float lists (copy into a block first), the browser path with a real adapter, data kept on the GPU
-   between separate statements.
+   GC lists (done, shared_arrays.rs copied_into_block): `ys = xs.map(f) @gpu` of a list not in linear memory
+   (`xs = float[n]`, a literal, a call's result) copies its items as floats into a block once, then maps that; ys is
+   a linear float array. A non-number item is a run-time error of `float`. Measured (release, `sin(x)`, ms, copy
+   included): 10^5 CPU 8 / @gpu 31, 10^6 87 / 45, 10^7 614 / 252. (Filling float[10^7] item by item exhausts the
+   default fuel; WARP_FUEL=10^11 for that row.) Test: test_webgpu a_gpu_map_takes_a_list_of_floats.
+   Open: the browser path with a real adapter, data kept on the GPU between separate statements.
