@@ -141,9 +141,7 @@ const KNOWN_HOLES: &[(&str, &str)] = &[];
 const KNOWN_ADMITS_GAPS: [&str; 2] = ["bool ← .int: warp admits true / W0 sub false", "boolean ← .int: warp admits true / W0 sub false"];
 
 /// Programs both accept whose values differ, each with its card
-const KNOWN_VALUE_DIFFERENCES: &[(&str, &str)] = &[
-	("y: any = \"a\"; x: int = 0; x = y; x", "int-unchecked"),
-];
+const KNOWN_VALUE_DIFFERENCES: &[(&str, &str)] = &[];
 /// What the model gives for a program it rejects, and for a value it does not keep
 const REJECTED: &str = "rejected";
 const UNKEPT: &str = "?";
