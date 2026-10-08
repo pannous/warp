@@ -12,54 +12,32 @@ uncertainty; every generic function computes with it, the uncertainty propagates
   variable or a float is a parse error, `sqrt(4 ± 1)` too, `12 ≈ r±1` the same error.
 - `≈` (notes/approximately.md): numbers within 1e-9 relative (`tolerance`), field by field for objects.
 
-## Meaning (defaults, undoable; questions queued with the Interviewer)
-1. Propagation as Measurements.jl, first-order (linear) Gaussian: f(x ± σ) = f(x) ± |f'(x)|·σ; independent
-   uncertainties add in quadrature: `(5 ± 1) + (2 ± 1)` is `7 ± 1.4`. Alternative: interval arithmetic
-   (worst case, `7 ± 2`, sound bounds, grows fast).
-2. Correlation is tracked, as in Measurements.jl: each `±` written is one independent source; a value keeps its
-   contribution per source (∂f/∂source · σ_source), so `x - x` is `0 ± 0`, `x * x` is `2x·σ`, not `√2·x·σ`.
-   σ = √Σ contribution².
-3. `a ≈ b ± e` holds when |a - b| ≤ e; with both sides uncertain, when |a - b| ≤ √(σa² + σb²) (1σ, the tolerance as
-   written). `≈` of plain numbers stays as D8. `a == b` compares value and σ exactly (`x - x == 0 ± 0`); `<` compares
-   values.
-4. Printing: σ to 2 significant digits, the value to the same decimal place: `7.0 ± 1.4`, `3 ± 1`, `1950 ± 50`
-   (integers stay integers when value and σ are integers). Alternative: all digits like Julia (`7.0 ± 1.4142135623730951`).
-5. `x.value` (alias `x.nominal`), `x.uncertainty` (alias `x.error`, `x.σ`): plain numbers. A plain number is `n ± 0`
-   where mixed.
-6. The compile-time Tolerance of units.rs (`1950 ± 50 AD`) is the same value: one meaning of ±. The range question
-   (`1900 - 2000 AD == 1950 AD ± 50`) stays open as it is.
-7. Never silent: a function that cannot propagate (an FFI call, `as int`, a parameter typed `x: float`) is a loud
-   error naming the ± value ("the C function f takes a float, got 3 ± 1; fix: f(x.value)"), never a dropped σ.
+## Meaning (user decisions P217–P220, notes/decisions.md)
+- P217 an interval, worst-case bounds, not Measurements.jl's Gaussian: `(5 ± 1) + (2 ± 1)` is `7 ± 2`, `x - x` is
+  `0 ± 2` (no correlation), functions map the endpoints: `sqrt(4 ± 1)` is √3..√5, shown `2.00 ± 0.27`. Gaussian later
+  through an explicit form such as `5 ± 1σ` (card plus-minus-gaussian).
+- P218 `x ≈ r ± 1` holds when |x - r| ≤ 1; two ± values are ≈ when their intervals overlap.
+- P219 the ± part to 2 significant digits, the value to the same place: `7.0 ± 2.0`, `3.00 ± 0.50`.
+- P220 one meaning of ±: `1950 ± 50 AD` (units.rs Tolerance, compile time) is the same interval value.
+- Default (undoable): never silent: a function that cannot take an interval (FFI, `as int`, a parameter typed
+  `x: float`) is a loud error naming the ± value, never a dropped bound.
 
-## Where it runs (implementation plan)
-Static kind, run-time struct (like static units, notes/units_runtime.md, but the uncertainty itself is run-time data):
-- Analyzer: `Kind::Uncertain`, inferred like Float: a `±` literal has it, arithmetic with a number keeps it,
-  user functions are specialised per argument kind where an argument is uncertain (as static_units specialises per unit
-  signature), so `f(x) := x*x + 1; f(3 ± 0.1)` needs no change to f ("passes through all functions").
-- Run time: GC struct `$Uncertain { value: f64, sources: (ref $Contributions) }`, contributions an array of
-  (source id i64, contribution f64) sorted by id; ids from a global counter at each `±` evaluated. Runtime functions
-  `uncertain_add/sub/mul/div/neg`, `uncertain_scale(x, value, derivative)` for unary functions, `uncertain_sigma`,
-  `uncertain_text`. A Node of kind Uncertain (data = the struct) for lists, maps, any.
-- Math words with derivative rules: sqrt, exp, log, sin, cos, tan, pow/`^` with a constant or uncertain exponent, abs.
-- Reading back (wasm_reader): a new Node form or `Node::Key(value, PlusMinus, σ)` as today's Tolerance prints.
-- Steps (each a small branch): (1) literals of numbers and variables, + - * / neg, printing, `.value`/`.uncertainty`,
-  `≈`; (2) correlation (sources) if not already in 1; (3) math words; (4) user functions specialised; (5) lists/any as
-  Nodes; (6) units together (`5 m ± 1 cm`).
-- Effort: L (about the size of static units stage 1+2).
-
-## Done (branch plus-minus, 2026-10-08)
-Built differently from the plan above, simpler: no static kind and no specialising. `a ± b` is a run-time value,
-Kind::Uncertain = 17, analyzed as Kind::Data, so every `+ - * /` that meets one goes through node_add/sub/mul/div
-(list_ops.rs), and untyped functions pass it through unchanged (`f(x) := x*x; f(3 ± 0.1)` is 9.00 ± 0.60).
-- Run-time form (wasm_emitter/uncertain.rs): a $Node of Kind::Uncertain whose data is one f64 array
-  [value, source id, contribution, …], sources ordered by id, ids from a global counter at each `±` evaluated. No new GC
-  type. uncertain_combine merges two source lists scaled by the partial derivatives, so `x - x` is 0 ± 0.
-- `≈`: values_similar hands an uncertain side to uncertain_similar: |a - b| ≤ σ(a - b), correlation included, or
-  numbers_similar.
-- Reading back: Node::data(uncertain::Uncertain {value, sigma}), shown by its Display: σ to 2 significant digits.
+## Where it runs (branch plus-minus, done)
+No static kind and no specialising: `a ± b` is a run-time value, Kind::Uncertain = 17, analyzed as Kind::Data, so every
+`+ - * /` that meets one goes through node_add/sub/mul/div (list_ops.rs), and untyped functions pass it through
+unchanged (`f(x) := x*x; f(3 ± 0.1)` is 9.00 ± 0.61).
+- Run-time form (wasm_emitter/uncertain.rs): a $Node of Kind::Uncertain whose data is the f64 array
+  [value, low, high]; no new GC type. uncertain_add/sub/mul/div: the value from the values, the bounds the least and
+  greatest of the operation on the four endpoint pairs (division by an interval holding 0 gives infinite bounds).
+- `≈`: values_similar hands an uncertain side to uncertain_similar: the intervals overlap, or numbers_similar.
+- Reading back: Node::data(uncertain::Uncertain {value, low, high}), its Display shows value ± the farther bound.
 - units.rs declines (Stop::Unsupported) `+ - * /` on a unit-less tolerance, so those programs compile normally; the
   span comparisons (`1950 ± 50 == 1900 - 2000`) and every case with units stay compile-time as before.
 - Tests: tests/numbers/test_plus_minus.rs.
-Not yet (step 1 rest): printing at run time (`print x`, `"{x}"`: text_of has no Uncertain case), `.value` and
-`.uncertainty`, negation `-(5 ± 1)` (units.rs still errors), comparisons `<`, the playground reader (web.rs), math
-words (step 3), units (step 6). A typed parameter `f(x: float)` refuses an uncertain argument (not a number).
+
+## Open
+- Card plus-minus-print: printing at run time (`print x`, `"{x}"`: text_of has no Uncertain case), `.value` and
+  `.uncertainty`, negation `-(5 ± 1)` (units.rs still errors), comparisons `<`.
+- Card plus-minus-playground: the playground reader (web.rs node_from_tree), math words (sqrt, sin: map the endpoints,
+  split at extrema), units with ± at run time (`5 m ± 1 cm`).
+- A typed parameter `f(x: float)` refuses an interval argument ("not a number"); the error should name the ± value.
