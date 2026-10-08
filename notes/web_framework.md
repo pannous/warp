@@ -370,9 +370,16 @@ Each step is useful on its own and is what the next ones stand on.
   an argument count no overload takes. Natively too: node resolves a name to its global first, which is the same
   object (node-only members such as performance.eventLoopUtilization are refused: `use js "perf_hooks"`).
 - A global WebIDL does not declare (Math, JSON: ECMAScript; node modules) stays unchecked. Tests: tests/ffi/test_web_idl.rs.
-- Next: result kinds from the IDL (DOMString → text, boolean, numbers, `?` → ø), members of held values
-  (`navigator.clipboard.writeText` reaches Clipboard), [Exposed=Window] vs Worker (the playground runs programs in a
-  Worker, where localStorage does not exist: say so at compile time), more interfaces (bundle arguments).
+- Scope (slice 2): natively a program's globals are Window's; without the native feature (the playground, the browser
+  suite) WorkerGlobalScope's, where they run: `use js localStorage` says it exists on a page, not in the Worker, and
+  names local[k]; `navigator` is a WorkerNavigator (no clipboard). A global is a namespace (console) or an attribute of
+  the scope, never an interface name (`use js Storage` is the constructor: unchecked). Member-level [Exposed=Window]
+  inside mixins (NavigatorID.vendor) is not read yet.
+- Chains (slice 3): an attribute's value is typed by its interface when the bundle declares it whole
+  (`navigator.clipboard.writeTxt` → Clipboard, did you mean writeText), also through a variable
+  (`board = navigator.clipboard`; foreign_modules.rs web_idl_values). Results of operations stay untyped.
+- Next: result kinds from the IDL (DOMString → text, boolean, numbers, `?` → ø; operation results such as
+  getItem's DOMString?), more interfaces (bundle arguments: Document and the DOM, fetch's Response, WebSocket).
 
 ## web-apis: WebSocket (card web-websocket, 2026-10-07, warp-90)
 - No new words: a channel named by a ws:// or wss:// address is a WebSocket. `on message from "wss://…" { … event … }`

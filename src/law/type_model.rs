@@ -132,8 +132,11 @@ struct Exporter {
 	bool_names: Vec<String>,
 	locals: Vec<String>,
 	/// each class's ancestor chain, root first, and its own fields with their type words
-	classes: HashMap<String, (Vec<String>, Vec<(String, String)>)>,
+	classes: HashMap<String, ClassShape>,
 }
+
+/// A class's ancestor chain and its own fields as (name, type word)
+type ClassShape = (Vec<String>, Vec<(String, String)>);
 
 impl Exporter {
 	/// `int`, `texts`, `Point`: the W0 type a type word names

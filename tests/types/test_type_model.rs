@@ -29,6 +29,9 @@ const CORPUS: &[&str] = &[
 	"x: bool = 1",
 	"x: bool = 0; x = 1",
 	"f(b: bool) := b; f(1)",
+	"x: bool = 2",
+	"f(b: bool) := b; f(2)",
+	"b = true; b = 2",
 	"x: text = 3",
 	"x: text = \"ab\"; x = 3",
 	"const c = 1; c = 2",
@@ -79,11 +82,8 @@ const CORPUS: &[&str] = &[
 
 /// Programs warp compiles although the model rejects them: holes in warp's checks, each with its card
 const KNOWN_HOLES: &[(&str, &str)] = &[
-	("x: bool = 2", "bool-assign"),
-	("f(b: bool) := b; f(2)", "bool-assign"),
 	("class Shape { name: text }; class Circle extends Shape { r: int }; s: Shape = Circle(\"a\", 2); s.r", "upcast-field"),
 	("type Color = red | rgb(r: int, g: int, b: int); c: Color = rgb(1, 2, 3); c.r", "upcast-field"),
-	("b = true; b = 2", "bool-assign"),
 ];
 
 /// Where warp's run-time admission differs from W0's subtyping: a bool is an Int at run time, so an int value passes

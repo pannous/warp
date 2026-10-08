@@ -7,7 +7,7 @@ def levenshtein(a, b) {
     for i in 1...(#s) {
         curr = [i]
         for j in 1...(#t) {
-            cost = s#i == t#j ? 0 : 1
+            cost = if s#i == t#j then 0 else 1
             deletion = prev#(j + 1) + 1
             insertion = curr#j + 1
             substitution = prev#j + cost
