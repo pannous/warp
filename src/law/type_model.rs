@@ -790,5 +790,9 @@ pub fn report(code: &str) -> String {
 		Ok(()) => "Accepted".to_string(),
 		Err(why) => format!("Rejected: {why}"),
 	};
-	format!("W0: {exported}\nmodel: {model}\nwarp: {warp}")
+	let value = match outcomes(std::slice::from_ref(&exported)) {
+		Ok(values) => values[0].clone(),
+		Err(why) => format!("model failed: {why}"),
+	};
+	format!("W0: {exported}\nmodel: {model}\nmodel value: {value}\nwarp: {warp}\nwarp value: {}", warp_value(code))
 }
