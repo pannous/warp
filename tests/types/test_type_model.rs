@@ -160,6 +160,15 @@ const CORPUS: &[&str] = &[
 	"out = []; for x in [1, 2] { out.add(x) }; out",
 	"class P { x: int }; s = 0; for p in [P(1), P(2)] { s += p.x }; s",
 	"t = \"\"; for w in [\"a\", \"b\"] { t = t + w }; t",
+
+	"def f(){ m = 5; m }; f()",
+	"def f(){ m = 5; m = \"a\"; m }; f()",
+	"product(xs) := { out = 1; for x in xs { out = out * x }; out }; product([2, 3, 4])",
+	"unique(xs) := { out = []; for x in xs { out.add(x) }; out }; unique([1, 2])",
+	"n = 0; def f(x) { n = 5; x }; f(3); n",
+	"fact(n) := { r = 1; if n > 1 then r = n * fact(n - 1); r }; fact(5)",
+	"g(n) := n; fact(n) := { r = 1; r = g(n); r }; fact(5)",
+	"y: any = 3; class P { v: int }; p = P(1); p.v = y; p.v",
 ];
 
 /// Programs warp compiles although the model rejects them: holes in warp's checks, each with its card

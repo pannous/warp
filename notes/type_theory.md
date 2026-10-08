@@ -235,18 +235,28 @@ W0 now has `arith op a b`, which takes numbers only.
   name bound to a list). Lists became gradual like arithmetic: `#` gives `elementTy` (a text's element is a text,
   anything but a list or text gives `any`), `++` takes any operands, and non-lists raise "not a list" when it runs.
   The checker demands lists, texts (for `#`) or `any`. Result: 77 exported, all agreeing with warp; with braced
-  blocks as expressions (`if c {a} else {b}`) and `+=`/`-=`/`*=` exported: 98. With effect handlers and implicit casts from `any`: 102; after repairing the sample file (53 lines were UTF-8 encoded twice, `ø` stored as `Ã¸`): 112, all agreeing (2026-10-08). With `global` (below): 121; with `for` loops: 122 of 600. Most of the rest:
-  imports (`use`), ranges `1..3`, maps `{a:1}`, lambdas, `i++`, `global`, string methods.
+  blocks as expressions (`if c {a} else {b}`) and `+=`/`-=`/`*=` exported: 98. With effect handlers and implicit casts from `any`: 102; after repairing the sample file (53 lines were UTF-8 encoded twice, `ø` stored as `Ã¸`): 112, all agreeing (2026-10-08). With `global` (below): 121; with `for` loops: 122 of 600; with function locals: 123. Most of the rest:
+  imports (`use`), named arguments, nested functions, ranges `1..3`, maps `{a:1}`, lambdas, `i++`, `global`, string methods.
 
 ## Globals
 
 `global n = 0` binds a main-level name functions may assign (`Decl.isGlobal`; `ProgramOk` demands a function body
 assigns only globals); `global y` inside a function, or bare at main level before `y = …`, only declares. The
 exporter collects every name declared `global` anywhere first. In warp a function's assignment to a name without
-`global` makes a local (`n = 0; def f(x) { n = 5; x }; f(3); n` is 0); W0 has no function locals, so the exporter
-refuses it. Elaboration runs twice so a function can read a main-level name whatever their order
+`global` makes a local (`n = 0; def f(x) { n = 5; x }; f(3); n` is 0): see Function locals. Elaboration runs twice so a function can read a main-level name whatever their order
 (`elaborateTyped`: the second pass infers functions seeing the first pass's names). Not yet: `global float y = …`
 (the exporter does not read the type word yet), `global x; x` (read before any value).
+
+## Function locals
+
+W0's locals are bound by substitution and never change; warp's function locals do (`out = []; for x in xs {
+out.add(x) }`). The exporter keeps each name a function body assigns (but its parameters and globals) in a cell: a
+fresh instance of a class `f·n` per call (`.letIn n (.cls [f·n]) (.new [f·n]) body`), read as `n.·value`, written by
+`.set`, so recursion gets one cell per call like warp's frames, and no proof changed. `Item.cell` declares the class;
+its one field `cellField` is typed like a main-level name by its first value (widened: a list holds anything), since
+warp rejects `def f(){ m = 5; m = "a"; m }`. A value of type `any` written to a typed field (or cell) is checked at
+run time like any other P204 place (`castDynamicValues` handles `.set`), and functions are inferred from their body
+with those checks in place (`draftFunction`), else a body that only types with the check got the result `never`.
 
 ## For loops
 
