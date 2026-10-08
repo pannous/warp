@@ -77,12 +77,14 @@ def render() {
     print "Score: " + str(score)
 }
 
+// each turn a frame: in the playground what a frame prints replaces the last one after the sleep
 for turn in 1 to 60 {
     if not game_over {
         steer()
         update()
     }
+    render()
+    sleep 50 ms
 }
-render()
 if game_over { print "GAME OVER" }
 score
