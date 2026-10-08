@@ -1337,6 +1337,9 @@ pub(super) fn check_declared_types(node: &Node, declared: &mut HashMap<String, S
 			let item = Node::List(vec![value.as_ref().clone()], Bracket::Square, Separator::Space);
 			list_items_mismatch(node, name, type_name, element, &item)
 		}
+		Node::Key(target, Op::Assign | Op::Define, value) if super::variables::function_definition_body(node).is_some() => {
+			check_declared_types(value, &mut with_parameters_declared(target, declared))
+		}
 		Node::Key(target, Op::Assign | Op::Define, value) => {
 			let declaration = match target.drop_meta() {
 				Node::Symbol(name) => declared.get_key_value(name).map(|(name, type_name)| (name.clone(), type_name.clone())),
@@ -1373,6 +1376,21 @@ pub(super) fn check_declared_types(node: &Node, declared: &mut HashMap<String, S
 		}
 		_ => None,
 	}
+}
+
+/// The declared types inside a function `(f n:int m)`: its annotated parameters are declared, a plain one hides an outer
+/// declaration of its name
+fn with_parameters_declared(head: &Node, declared: &HashMap<String, String>) -> HashMap<String, String> {
+	let mut inner = declared.clone();
+	let Node::List(items, _, _) = head.drop_meta() else { return inner };
+	for parameter in items.iter().skip(1).map(Node::drop_meta) {
+		match (declaring_name_and_type(parameter), parameter) {
+			(Some((name, type_name)), _) => inner.insert(name, type_name),
+			(None, Node::Symbol(name)) => inner.remove(name),
+			_ => None,
+		};
+	}
+	inner
 }
 
 /// Does a value of kind `actual` fit the builtin type `type_name` (W0 subtyping, notes/type_theory.md)? An int fits a
