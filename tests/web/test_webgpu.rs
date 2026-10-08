@@ -82,3 +82,55 @@ fn a_compute_shader_runs_over_a_linear_array_in_place() {
 	}
 	assert_eq!(computed.serialize(), "[3 4.5 6 3]");
 }
+
+// card gpu-vectors (P214: floats go to the GPU only where the program allows f32): `ys = xs.map(f) @gpu` of a pure
+// numeric f over a linear float array runs f as a WGSL kernel in f32, xs left as it was; without an adapter the CPU
+// maps it after one warning, so the values are the same either way
+#[test]
+fn a_gpu_map_runs_a_numeric_lambda_as_a_kernel() {
+	let program = "linear xs = float[4]\nxs#1 = 1; xs#2 = 2; xs#3 = 4; xs#4 = 9\nys = xs.map(x => x * x - √x + 0.5) @gpu\n[ys#1, ys#3, ys#4, #ys, xs#4]";
+	assert_eq!(eval(program).serialize(), "[0.5 14.5 78.5 4 9]");
+	assert_eq!(eval(&program.replace(") @gpu", ")").replace("ys = xs", "ys = @gpu xs")).serialize(), "[0.5 14.5 78.5 4 9]");
+}
+
+// P214 (user: "for @gpu give a warning or hint if the GPU does not apply"): a lambda WGSL cannot run, or a list not in
+// linear memory, maps on the CPU with a warning saying why (an error under strict)
+#[test]
+fn a_gpu_map_the_gpu_cannot_run_says_why() {
+	use warp::diagnostic::{with_warning_mode, WarningMode};
+	with_warning_mode(WarningMode::Error, || crate::common::fails_with("linear xs = float[2]\nys = xs.map(x => str(x)) @gpu", "@gpu"));
+	with_warning_mode(WarningMode::Error, || crate::common::fails_with("xs = [1.5, 2.5]\nys = xs.map(x => x * 2) @gpu", "@gpu"));
+	assert_eq!(eval("xs = [1.5, 2.5]\nys = xs.map(x => x * 2) @gpu\nys").serialize(), "[3 5]");
+}
+
+// card gpu-threshold (notes/gpu.md, P214: err on the CPU side): an @gpu map of fewer than GPU_MAP_MIN_COUNT items runs
+// on the CPU in f64 (the GPU's fixed ~2 ms loses below ~3·10^4 items), above it in f32 within f32's precision; a
+// lambda the CPU's f64x2 kernel computes (~1 ns an item) never goes to the GPU, a warning says so
+#[test]
+fn a_gpu_map_runs_on_the_cpu_where_that_is_faster() {
+	use warp::diagnostic::{with_warning_mode, WarningMode};
+	let filled = |n: usize| format!("linear xs = float[{n}]\nfor i in 1 to {n} {{ xs#i = i / 30000.0 }}\nys = xs.map(x => sin(x)) @gpu\n");
+	assert_eq!(eval(&format!("{}ys#1 == sin(xs#1)", filled(100))).serialize(), "yes");
+	assert_eq!(eval(&format!("{}abs(ys#40000 - sin(xs#40000)) < 0.00001", filled(40000))).serialize(), "yes");
+	with_warning_mode(WarningMode::Error, || crate::common::fails_with("linear xs = float[2]\nys = xs.map(x => x * 2 + 1) @gpu", "f64x2"));
+}
+
+// card gpu-vectors: a @gpu lambda may read numbers of the program (`k`, `shift`): the kernel gets their values with
+// each map; a lambda of only arithmetic stays on the CPU, with outer numbers too
+#[test]
+fn a_gpu_map_reads_outer_numbers() {
+	use warp::diagnostic::{with_warning_mode, WarningMode};
+	let program = "linear xs = float[40000]\nfor i in 1 to 40000 { xs#i = i / 40000.0 }\nk = 0.5; shift = 2\nys = xs.map(x => sin(x) * k + shift) @gpu\n";
+	assert_eq!(eval(&format!("{program}abs(ys#40000 - (sin(1) * 0.5 + 2)) < 0.00001")).serialize(), "yes");
+	with_warning_mode(WarningMode::Error, || crate::common::fails_with("linear xs = float[2]\nk = 3.0\nys = xs.map(x => x * k) @gpu", "CPU maps"));
+}
+
+// card gpu-vectors (chains kept on the GPU): `xs.map(f).map(g) @gpu` is one kernel of g after f, the items cross to
+// the GPU and back once
+#[test]
+fn a_chain_of_gpu_maps_is_one_kernel() {
+	let program = "linear xs = float[40000]\nfor i in 1 to 40000 { xs#i = i / 40000.0 }\nys = xs.map(x => x * 2).map(y => sin(y) + y) @gpu\n";
+	assert_eq!(eval(&format!("{program}abs(ys#40000 - (sin(2) + 2)) < 0.00001")).serialize(), "yes");
+	let lowered = warp::pipeline::lower(&format!("{program}ys#1")).expect("a program").serialize();
+	assert_eq!(lowered.matches("gpu_map_linear").count(), 1, "{lowered}");
+}

@@ -17,6 +17,7 @@ theorem value_ctx {Γ v t} (h : HasType P Γ v t) (hv : v.isValue = true) (Γ' :
   | unit => exact .unit
   | nil => exact .nil
   | ref => exact .ref
+  | lref => exact .lref
   | clo hb => exact .clo hb
   | cons _ _ he ih1 ih2 => simp [isValue] at hv; exact .cons (ih1 hv.1) (ih2 hv.2) he
   | _ => simp [isValue] at hv
@@ -27,19 +28,42 @@ theorem value_list {Γ v t e} (h : HasType P Γ v t) (hv : v.isValue = true) (he
   cases h <;> simp_all [isValue, element]
 
 theorem list_value {Γ v a} (h : HasType P Γ v (.list a)) (hv : v.isValue = true) :
-    v = .nil ∨ ∃ hd tl, v = .cons hd tl ∧ hd.isValue = true ∧ tl.isValue = true := by
+    v = .nil ∨ (∃ hd tl, v = .cons hd tl ∧ hd.isValue = true ∧ tl.isValue = true) ∨ ∃ b t, v = .lref b t := by
   cases v <;> simp [isValue] at hv ⊢ <;> first | exact hv | exact ⟨_, _, ⟨rfl, rfl⟩, hv⟩ | cases h
 
-/-- `-` and `*` on values: a number of a type below `arithTy`, or an error -/
+/-- an arithmetic result on a number-or-wider left side is a number or wider -/
+theorem number_sub_arithTy {t : Ty} (b : Ty) (ht : sub .number t = true) : sub .number (arithTy t b) = true := by
+  unfold arithTy
+  by_cases y : t = .any ∨ b = .any
+  · rw [ite_eq_left y]; exact sub_any _
+  rw [ite_eq_right y]; unfold Ty.arith
+  cases hj : (sub t .int && sub b .int)
+  · rfl
+  · simp at hj; exact absurd (sub_trans ht hj.1) (by decide)
+
+theorem number_sub_div (a b : Ty) : sub .number (ArithOp.div.ty a b) = true :=
+  number_sub_arithTy b (join_upper_right a .number)
+
+-- the brute-force case split over operand values needs more than the default budget
+set_option maxHeartbeats 1000000 in
+/-- `-`, `*`, `%` and `/` on values: a number of a type below `op.ty`, or an error -/
 theorem arith_typed {Γ op a b ta tb} (ha : HasType P Γ a ta) (hb : HasType P Γ b tb) (va : a.isValue = true)
-    (vb : b.isValue = true) : ∃ t', HasType P Γ (arithValues op a b) t' ∧ sub t' (arithTy ta tb) = true := by
+    (vb : b.isValue = true) : ∃ t', HasType P Γ (arithValues op a b) t' ∧ sub t' (op.ty ta tb) = true := by
   unfold arithValues
   split
   · exact ⟨_, .error, sub_never _⟩
   split
   · exact ⟨_, .error, sub_never _⟩
-  · cases ha <;> cases hb <;>
-      simp_all [isValue, isNumber, asInt, asNumber, arithTy, Ty.arith, sub] <;>
+  · cases op
+    case div =>
+      have n := number_sub_div ta tb
+      split
+      · split
+        · exact ⟨_, .num, n⟩
+        · exact ⟨_, .int, sub_trans (by decide) n⟩
+      · exact ⟨_, .num, n⟩
+    all_goals cases ha <;> cases hb <;>
+      simp_all [isValue, isNumber, asInt, asNumber, ArithOp.ty, ArithOp.widen, arithTy, Ty.arith, sub] <;>
       first | exact ⟨_, .int, by decide⟩ | exact ⟨_, .num, by decide⟩
 
 theorem lt_typed {Γ a b} : ∃ t', HasType P Γ (ltValues a b) t' ∧ sub t' .bool = true := by
@@ -99,6 +123,11 @@ theorem concat_typed {Γ b tb eb} (hb : HasType P Γ b tb) (vb : b.isValue = tru
       apply join_least
       · exact sub_trans (join_upper_left _ _) (join_upper_left _ _)
       · exact sub_trans hs'' (join_least (sub_trans (join_upper_right _ _) (join_upper_left _ _)) (join_upper_right _ _))
+  | lref =>
+    intro ta ea _ ha hea
+    cases ha; simp [element] at hea; subst hea
+    rw [value_list hb vb eb'] at hb
+    exact ⟨_, hb, by simpa [concat] using join_upper_right _ _⟩
   | _ => intro ta ea va ha hea; cases ha <;> simp_all [isValue, element]
 
 /-- a list value's type has elements -/
@@ -239,7 +268,7 @@ theorem narrow {Γ e t} (h : HasType P Γ e t) : ∀ {Γ'}, CtxSub Γ' Γ → �
     intro Γ' hs
     obtain ⟨a', h1, s1⟩ := ih1 hs
     obtain ⟨b', h2, s2⟩ := ih2 hs
-    exact ⟨_, .arith h1 h2, arithTy_mono s1 s2⟩
+    exact ⟨_, .arith h1 h2, ArithOp.ty_mono _ s1 s2⟩
   | lt _ _ ih1 ih2 =>
     intro Γ' hs
     obtain ⟨a', h1, _⟩ := ih1 hs
@@ -315,6 +344,16 @@ theorem narrow {Γ e t} (h : HasType P Γ e t) : ∀ {Γ'}, CtxSub Γ' Γ → �
     obtain ⟨a', he', sa⟩ := element_mono s1 he
     exact ⟨_, .broadcast hf h1 he' (sub_trans sa ha), sub_refl _⟩
   | ref => intros; exact ⟨_, .ref, sub_refl _⟩
+  | lref => intros; exact ⟨_, .lref, sub_refl _⟩
+  | share _ ih =>
+    intro Γ' hs
+    obtain ⟨_, h1, _⟩ := ih hs
+    exact ⟨_, .share h1, sub_refl _⟩
+  | push _ _ ih1 ih2 =>
+    intro Γ' hs
+    obtain ⟨_, h1, s1⟩ := ih1 hs
+    obtain ⟨_, h2, _⟩ := ih2 hs
+    exact ⟨_, .push h1 h2, s1⟩
   | new => intros; exact ⟨_, .new, sub_refl _⟩
   | get _ ih =>
     intro Γ' hs
@@ -423,6 +462,9 @@ theorem subst_typed {Γ0 e t} (h : HasType P Γ0 e t) :
   | cast _ ih => intro Γ y tv v hΓ hv htv; simp only [Expr.subst]; exact .cast (ih hΓ hv htv)
   | broadcast hf _ he ha ih => intro Γ y tv v hΓ hv htv; simp only [Expr.subst]; exact .broadcast hf (ih hΓ hv htv) he ha
   | ref => intros; simp only [Expr.subst]; exact .ref
+  | lref => intros; simp only [Expr.subst]; exact .lref
+  | share _ ih => intro Γ y tv v hΓ hv htv; simp only [Expr.subst]; exact .share (ih hΓ hv htv)
+  | push _ _ ih1 ih2 => intro Γ y tv v hΓ hv htv; simp only [Expr.subst]; exact .push (ih1 hΓ hv htv) (ih2 hΓ hv htv)
   | new => intros; simp only [Expr.subst]; exact .new
   | get _ ih => intro Γ y tv v hΓ hv htv; simp only [Expr.subst]; exact .get (ih hΓ hv htv)
   | set _ hw _ st ih1 ih2 => intro Γ y tv v hΓ hv htv; simp only [Expr.subst]; exact .set (ih1 hΓ hv htv) hw (ih2 hΓ hv htv) st

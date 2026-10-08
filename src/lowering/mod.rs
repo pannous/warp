@@ -14,6 +14,7 @@ pub mod go_blocks;
 pub mod object_groups;
 pub mod channel_words;
 pub mod parallel;
+pub mod gpu_maps;
 pub mod folding;
 pub mod memoization;
 pub mod for_loop;
