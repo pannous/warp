@@ -11,6 +11,8 @@ raylib_simple	undefined function: InitWindow at 18:12
 raylib_simple_use	module not found: raylib
 raylib_sleep	module not found: raylib
 sdl_red_square	undefined function: SDL_Init at 17:10
+# a server or a compiled module: native only
+import_compiled	imports a module compiled first (warp compile --wasm probes/import_compiled/shapes.warp); the browser has no bridge for warp modules yet: card import-compiled-browser
 server	a server: `warp serve samples/server.warp`, its stored table lives in the server's database (no table in the browser)
 # errors to fix
 errors	`}` is missing: the group opened at 4:9 runs to the end of the input (deliberately malformed: input for the forgiving parser, never meant to run)
