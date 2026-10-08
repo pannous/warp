@@ -20,6 +20,10 @@ D-number or #number mean this file. Open questions, parked ones and the standing
 - P199 bool slots accept 1 and 0 as yes/no everywhere (variables, fields, list items); other ints and texts are
   errors. Card bool-assign.
 - P200 class instances passed to functions are shared references (like Python/JS). Card instance-field.
+  Built as copy-in/copy-out (warp-c6): a parameter whose field a function changes is shared (maps too); aliases
+  don't share (`q = p; q.x = 7` leaves p.x); only a variable argument gets the change back (`f(bags#1)` doesn't);
+  a function passed as a value keeps value semantics. User: interim OK; real references (struct_backend's mutable
+  per-class structs; WASM GC structs are references) on card real-references, Later.
 - `type(ø)` prints "empty" (word choice, not asked; warp-79, card type-static): matches the run-time kind name;
   unit, nil, ø may be aliases where a type name is read. `type(1.5)` stays "rational".
 
