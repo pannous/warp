@@ -291,9 +291,15 @@ function showAcknowledged() {
 	$("silenced").hidden = acknowledged.length === 0;
 }
 
+// the » value line; markup the page renders (#rendered) is shown there only, its text would repeat it (card hide-html)
+function showValue(value, error, html) {
+	$("value").textContent = value;
+	$("value").classList.toggle("error", Boolean(error));
+	$("value").parentElement.hidden = Boolean(html) && !error;
+}
+
 function showReport(report) {
-	$("value").textContent = report.value;
-	$("value").classList.toggle("error", report.error);
+	showValue(report.value, report.error, report.html);
 	const errorAt = report.error ? report.error_at : null; // the failing place: clicking the error goes there
 	$("value").classList.toggle("located", Boolean(errorAt));
 	$("value").title = errorAt ? `go to ${at(errorAt.line, errorAt.column)}` : "";
@@ -466,10 +472,7 @@ function showEventOutput(data) {
 	if (data.type === "paint") showPaintings([data]);
 	if (data.type === "address") showAddress(data.path);
 	if (data.type !== "handled") return;
-	if (data.value !== undefined) {
-		$("value").textContent = data.value;
-		$("value").classList.toggle("error", data.error);
-	}
+	if (data.value !== undefined) showValue(data.value, data.error, data.html);
 	if (data.html !== undefined) showRendered(data.html);
 	(data.patches ?? []).forEach(showPatch);
 }
@@ -541,8 +544,8 @@ function runNow() {
 
 // Run pressed (the button, Ctrl/Cmd-Enter): the old value gives way to "…" at once, so it is not taken for the new one
 function runPressed() {
-	$("value").textContent = PENDING_VALUE;
-	$("value").classList.remove("error", "located");
+	showValue(PENDING_VALUE);
+	$("value").classList.remove("located");
 	return runNow();
 }
 
