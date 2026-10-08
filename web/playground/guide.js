@@ -18,7 +18,9 @@ const examplesOfChapter = new Map(); // in the guide's order: the example menu's
 const MORE_SAMPLES = "more samples";
 
 const escapeHtml = text => text.replace(/[&<>"]/g, char => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[char]);
-const chapterId = title => title.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
+// a chapter's anchor is #guide-lists: a bare #lists names an example (playground.js, card sample-hash)
+const CHAPTER_PREFIX = "guide-";
+const chapterId = title => CHAPTER_PREFIX + title.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
 
 // `code`, **bold** and [text](url) in one line of escaped text
 function inline(text) {
@@ -134,11 +136,19 @@ function openedChapter(event) {
 
 // the chapter the address names, else the first one
 function openChapterOfAddress() {
+	redirectOldChapterLink();
 	const chapter = location.hash ? document.getElementById(location.hash.slice(1)) : document.querySelector(".guide-chapter");
 	if (!chapter?.classList.contains("guide-chapter")) return;
 	if (location.hash) $("guide").open = true;
 	chapter.open = true;
 	if (location.hash) chapter.scrollIntoView({ block: "nearest" });
+}
+
+// an old chapter link #hello-world goes to #guide-hello-world, unless the name is an example's (#lists)
+function redirectOldChapterLink() {
+	const name = location.hash.slice(1);
+	const chapter = name && document.getElementById(CHAPTER_PREFIX + name);
+	if (chapter?.classList.contains("guide-chapter") && exampleSource(name) === undefined) history.replaceState(null, "", `#${chapter.id}`);
 }
 
 // the example menu in the guide's order: a group per chapter with its examples and samples, then the other samples
