@@ -290,7 +290,7 @@ const CORPUS: &[&str] = &[
 ];
 
 /// Programs warp compiles although the model rejects them: holes in warp's checks, each with its card
-const KNOWN_HOLES: &[(&str, &str)] = &[("a: int = 0; a, b = 2.5, 6; a", "destructure-unchecked"), ("a: text = \"\"; a, b = 1, 2; a", "destructure-unchecked"), ("a: int = 0; a = b = 2.5; a", "chain-unchecked"), ("a: int = 0; a = b = \"x\"; b", "chain-unchecked"), ("b: bool = no; b++; b", "bool-assign"), ("xs: ints = [1]; ys = [\"a\"]; xs = xs + ys; xs", "concat-unchecked"), ("f(n) := { n = \"x\"; n }; f(3)", "param-assign-unchecked"), ("f(n: int) := { n = \"x\"; n }; f(3)", "param-assign-unchecked"), ("f(n: int) := { n = 2.5; n }; f(3)", "param-assign-unchecked")];
+const KNOWN_HOLES: &[(&str, &str)] = &[("a: int = 0; a = b = 2.5; a", "chain-unchecked"), ("a: int = 0; a = b = \"x\"; b", "chain-unchecked"), ("b: bool = no; b++; b", "bool-assign"), ("xs: ints = [1]; ys = [\"a\"]; xs = xs + ys; xs", "concat-unchecked"), ("f(n) := { n = \"x\"; n }; f(3)", "param-assign-unchecked"), ("f(n: int) := { n = \"x\"; n }; f(3)", "param-assign-unchecked"), ("f(n: int) := { n = 2.5; n }; f(3)", "param-assign-unchecked")];
 
 /// Where warp's run-time admission differs from W0's subtyping: a bool is an Int at run time, so an int value passes
 /// a bool check (P199 lets only the literals 1 and 0 in; card bool-assign)
