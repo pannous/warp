@@ -779,9 +779,11 @@ const QUALIFIER: char = '·';
 /// P171: module words a program calls without their `use` (the prelude); only these definitions come along
 const PRELUDE_WORDS: [(&str, &[&str]); 1] = [("file", &["write", "exists"])];
 const FILE_URL_PREFIX: &str = "file://";
+/// Whether a program needs a module
+type NeededBy = fn(&Node) -> bool;
 /// The standard modules a program needs without `use`: P183 a file URL → file, a page → markup (lowering/page_html.rs),
 /// routes → router, a route's regular expression → regex (lowering/routes.rs)
-const IMPLICIT_MODULES: [(&str, fn(&Node) -> bool); 4] = [
+const IMPLICIT_MODULES: [(&str, NeededBy); 4] = [
 	("file", mentions_file_url),
 	("markup", |_| crate::pipeline::renders_itself()),
 	("router", |program| defined(program, crate::routes::PAGE_ROUTES).is_some()),
