@@ -291,6 +291,9 @@ fn lower_for_emission(node: Node) -> Result<Node, Node> {
 	if let Some(clash) = crate::analyzer::check_operator_word_functions(&node) {
 		return Err(clash.into_error());
 	}
+	if let Some(misread) = crate::analyzer::check_upcast_fields(&node) {
+		return Err(misread.into_error());
+	}
 	crate::diagnostic::report(&crate::accessibility::warnings(&node))?;
 	crate::diagnostic::report(&crate::analyzer::source_warnings(&node))?;
 	let node = run_passes(node, &SOURCE_PASSES);

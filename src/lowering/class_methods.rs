@@ -29,6 +29,9 @@ const SETTER_SUFFIX: &str = "·set";
 /// the list mutations that give one
 const VALUE_SUFFIX: &str = "·value";
 const RESULT_SUFFIX: &str = "·result";
+/// The value a class cast `s as Circle` checks, and its stand-in in the check's source text
+const CAST_VALUE: &str = "cast·value";
+const CAST_PLACEHOLDER: &str = "cast_placeholder";
 const GIVING_MUTATIONS: [&str; 2] = ["pop", "remove"];
 /// Other languages' method names (Python's deque, Java's Deque and Queue, JS's Array and Set) and the wasp methods they
 /// mean, the first one the class defines taken, with a note; only on a class that does not define the name itself
@@ -340,6 +343,16 @@ pub(crate) fn class_fields(node: &Node) -> std::collections::HashMap<String, Vec
 	fields
 }
 
+/// Each class's parent and the names of its own fields and methods (`class Circle extends Shape { r: int }`)
+pub(crate) fn class_members(node: &Node) -> std::collections::HashMap<String, (Option<String>, Vec<String>)> {
+	let mut classes = std::collections::HashMap::new();
+	node.visit(&mut |part| if let Node::Type { name, body } = part {
+		let parent = name.attribute(crate::wasp_parser::EXTENDS_KEYWORD).map(|parent| parent.drop_meta().name());
+		classes.insert(name.drop_meta().name(), (parent, class_items(body).iter().filter_map(item_name).collect()));
+	});
+	classes
+}
+
 /// The variable holding what is taken apart: `{x, y} = p` is `(parts·from = p; x = parts·from.x; y = parts·from.y)`
 const PARTS_WORD: &str = "parts·from";
 
@@ -571,6 +584,8 @@ fn with_objects_as_instances(node: Node, fields: &std::collections::HashMap<Stri
 			let class = class.drop_meta().name();
 			instance_from(with_objects_as_instances(*object, fields), &class, fields)
 		}
+		// `s as Circle` of an instance: the checked downcast (P201)
+		Node::Key(object, Op::As, class) if class_of(&class).is_some() => checked_cast(with_objects_as_instances(*object, fields), &class.drop_meta().name()),
 		Node::Key(class, Op::Dot, member) if class_of(&class).is_some() && leading_name(&member) == FROM_JSON_WORD => {
 			let arguments = match member.drop_meta() {
 				Node::List(items, Bracket::Round, _) => items[1..].iter().cloned().map(|argument| with_objects_as_instances(argument, fields)).collect(),
@@ -582,6 +597,15 @@ fn with_objects_as_instances(node: Node, fields: &std::collections::HashMap<Stri
 		}
 		other => other.map_children(|child| with_objects_as_instances(child, fields)),
 	}
+}
+
+/// `(cast·value = s; if not (cast·value is Circle) { raise "s is no Circle" }; cast·value)`: the value is computed once
+fn checked_cast(object: Node, class: &str) -> Node {
+	let held = Node::Symbol(CAST_VALUE.to_string());
+	let message = format!("{} is no {class}", object.serialize());
+	let check = crate::wasp_parser::parse(&format!("if not ({CAST_PLACEHOLDER} is {class}) {{ raise {message:?} }}"));
+	let statements = vec![Node::Key(Box::new(held.clone()), Op::Assign, Box::new(object)), crate::library_words::substitute(check, CAST_PLACEHOLDER, &held), held];
+	Node::List(statements, Bracket::Round, Separator::Semicolon)
 }
 
 fn instance_from(object: Node, class: &str, fields: &std::collections::HashMap<String, Vec<(String, String)>>) -> Node {
