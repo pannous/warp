@@ -102,3 +102,15 @@ fn a_gpu_map_the_gpu_cannot_run_says_why() {
 	with_warning_mode(WarningMode::Error, || crate::common::fails_with("xs = [1.5, 2.5]\nys = xs.map(x => x * 2) @gpu", "@gpu"));
 	assert_eq!(eval("xs = [1.5, 2.5]\nys = xs.map(x => x * 2) @gpu\nys").serialize(), "[3 5]");
 }
+
+// card gpu-threshold (notes/gpu.md, P214: err on the CPU side): an @gpu map of fewer than GPU_MAP_MIN_COUNT items runs
+// on the CPU in f64 (the GPU's fixed ~2 ms loses below ~3·10^4 items), above it in f32 within f32's precision; a
+// lambda the CPU's f64x2 kernel computes (~1 ns an item) never goes to the GPU, a warning says so
+#[test]
+fn a_gpu_map_runs_on_the_cpu_where_that_is_faster() {
+	use warp::diagnostic::{with_warning_mode, WarningMode};
+	let filled = |n: usize| format!("linear xs = float[{n}]\nfor i in 1 to {n} {{ xs#i = i / 30000.0 }}\nys = xs.map(x => sin(x)) @gpu\n");
+	assert_eq!(eval(&format!("{}ys#1 == sin(xs#1)", filled(100))).serialize(), "yes");
+	assert_eq!(eval(&format!("{}abs(ys#40000 - sin(xs#40000)) < 0.00001", filled(40000))).serialize(), "yes");
+	with_warning_mode(WarningMode::Error, || crate::common::fails_with("linear xs = float[2]\nys = xs.map(x => x * 2 + 1) @gpu", "f64x2"));
+}

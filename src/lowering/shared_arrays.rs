@@ -397,15 +397,17 @@ fn is_linear_float_array(kind: Shared) -> bool {
 /// `xs.map(x => …) @gpu` of a linear float array whose lambda WGSL computes: xs, the lambda and its kernel
 fn gpu_kernel_map(value: &Node, names: &HashMap<String, Shared>) -> Option<(Node, Node, String)> {
 	let (array, lambda) = crate::gpu_maps::gpu_map(value)?;
-	let shader = crate::gpu_maps::kernel(&lambda).filter(|_| is_linear_floats(&array, names))?;
+	let shader = crate::gpu_maps::gpu_kernel(&lambda).filter(|_| is_linear_floats(&array, names))?;
 	Some((array, lambda, shader))
 }
 
-/// `ys = linear_new(count(xs))`, then the kernel maps xs's cells into ys's, or without an adapter the CPU does
+/// `ys = linear_new(count(xs))`, then the kernel maps xs's cells into ys's, or the CPU does: for few items or without an
+/// adapter
 fn gpu_mapped(target: &Node, array: &Node, lambda: &Node, shader: &str) -> Node {
 	use crate::wasm_emitter::linear_arrays::LINEAR_COUNT;
 	let size = crate::gpu_maps::WORKGROUP_SIZE;
-	let mapped = format!("if {}(gpu_shader, map_source, map_target, ({LINEAR_COUNT}(map_source) + {size} - 1)//{size}) == 0 {{ map_loop }}", crate::host::GPU_MAP_LINEAR);
+	let fewest = crate::gpu_maps::GPU_MAP_MIN_COUNT;
+	let mapped = format!("if {LINEAR_COUNT}(map_source) < {fewest} or {}(gpu_shader, map_source, map_target, ({LINEAR_COUNT}(map_source) + {size} - 1)//{size}) == 0 {{ map_loop }}", crate::host::GPU_MAP_LINEAR);
 	block_mapped(target, array, lambda, &mapped, &[("gpu_shader", Node::Text(shader.to_string()))])
 }
 

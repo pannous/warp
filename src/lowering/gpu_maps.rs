@@ -10,6 +10,9 @@ use crate::operators::Op;
 const GPU_ATTRIBUTE: &str = "gpu";
 /// Threads per workgroup of the kernel; gpu_map_linear dispatches count / WORKGROUP_SIZE workgroups, rounded up
 pub(crate) const WORKGROUP_SIZE: i64 = 256;
+/// Fewer items map on the CPU (card gpu-threshold, notes/gpu.md): the GPU's ~2 ms of setup and readback loses below
+/// ~3·10^4 items even against a heavy lambda (sin, cos: ~70–190 ns an item on the CPU, ~12 on the GPU)
+pub(crate) const GPU_MAP_MIN_COUNT: i64 = 32768;
 /// The lambda's parameter as the kernel names it (the user's name could be a WGSL keyword)
 const KERNEL_ITEM: &str = "item";
 /// The math words WGSL has under the same name and meaning (warp's log is the natural logarithm, as WGSL's)
@@ -32,6 +35,17 @@ pub(crate) fn kernel(lambda: &Node) -> Option<String> {
 @compute @workgroup_size({WORKGROUP_SIZE}) fn main(@builtin(global_invocation_id) id: vec3<u32>) {{
 	if (id.x < arrayLength(&data)) {{ let {KERNEL_ITEM} = data[id.x]; data[id.x] = {computed}; }}
 }}"))
+}
+
+/// The kernel of a lambda worth the GPU: one the CPU's f64x2 kernel computes is faster there at any count
+pub(crate) fn gpu_kernel(lambda: &Node) -> Option<String> {
+	kernel(lambda).filter(|_| !is_light(lambda))
+}
+
+/// Arithmetic the CPU maps two cells at a time (wasm_emitter/linear_arrays.rs)
+fn is_light(lambda: &Node) -> bool {
+	matches!(lambda.drop_meta(), Node::Key(parameter, Op::FatArrow, body)
+		if crate::wasm_emitter::linear_arrays::is_float_kernel(&parameter.name(), body))
 }
 
 /// `body` in WGSL f32 arithmetic of the parameter and number literals
@@ -118,6 +132,9 @@ fn unapplied(value: &Node, linear_floats: &[String]) -> Option<String> {
 	let (array, lambda) = gpu_map(value)?;
 	if !matches!(array.drop_meta(), Node::Symbol(name) if linear_floats.contains(name)) {
 		return Some(format!("@gpu maps a `linear xs = float[n]` on the GPU; {} is none", array.serialize().trim()));
+	}
+	if is_light(&lambda) {
+		return Some(format!("@gpu: the CPU's f64x2 kernel maps `{}` faster (~1 ns an item, the GPU ~12)", lambda.serialize().trim()));
 	}
 	kernel(&lambda).is_none().then(|| format!("@gpu: WGSL cannot compute `{}` (only + - * / ^ √ and math words of the item and numbers)", lambda.serialize().trim()))
 }
