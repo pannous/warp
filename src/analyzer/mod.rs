@@ -105,6 +105,8 @@ mod user_functions;
 mod counting;
 mod imports;
 mod booleans;
+mod upcast_fields;
+pub use upcast_fields::check_upcast_fields;
 pub(crate) use imports::signature_kind;
 pub use inference::*;
 pub use variables::*;

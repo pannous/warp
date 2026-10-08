@@ -44,10 +44,9 @@ inductive HasType (P : Program) : Ctx → Expr → Ty → Prop where
   | loop {Γ c b tc tb} : HasType P Γ c tc → HasType P Γ b tb → HasType P Γ (.loop c b) .unit
   | seq {Γ a b ta tb} : HasType P Γ a ta → HasType P Γ b tb → HasType P Γ (.seq a b) tb
   /-- inference.rs element_kind -/
-  | index {Γ l i tl e ti} : HasType P Γ l tl → element tl = some e → HasType P Γ i ti → sub ti .int = true →
-      HasType P Γ (.index l i) e
-  | append {Γ a b ta tb ea eb} : HasType P Γ a ta → element ta = some ea → HasType P Γ b tb → element tb = some eb →
-      HasType P Γ (.append a b) (.list (join ea eb))
+  | index {Γ l i tl ti} : HasType P Γ l tl → HasType P Γ i ti → HasType P Γ (.index l i) (elementTy tl)
+  | append {Γ a b ta tb} : HasType P Γ a ta → HasType P Γ b tb →
+      HasType P Γ (.append a b) (.list (join (listElem ta) (listElem tb)))
   /-- checks.rs check_assignment / check_declared_types; const (P130) and charged (P138) names are not assignable -/
   | assign {Γ x e t te} : P.names x = some (.var, t) → HasType P Γ e te → sub te t = true →
       HasType P Γ (.assign x e) t
@@ -74,11 +73,26 @@ inductive HasType (P : Program) : Ctx → Expr → Ty → Prop where
   | set {Γ e f v te t tv} : HasType P Γ e te → P.writeTy te f = some t → HasType P Γ v tv → sub tv t = true →
       HasType P Γ (.set e f v) tv
   | isA {Γ e c te} : HasType P Γ e te → HasType P Γ (.isA e c) .bool
+  /-- a handler gives at most its event's result type; the payload is dynamic data (`event.level`); the block gives
+  its body's value or what a handler's `break` gives -/
+  | handle {Γ ev h b th tb R} : P.effects ev = some R → HasType P (Γ.set eventLocal .any) h th → sub th R = true →
+      HasType P Γ b tb → HasType P Γ (.handle ev h b) (join tb (P.aborts ev))
+  /-- an emit gives its event's result type, or ø when nothing handles it -/
+  | emit {Γ ev e te R} : P.effects ev = some R → HasType P Γ e te → HasType P Γ (.emit ev e) (join R .unit)
+  | scope {Γ k e te} : HasType P Γ e te → HasType P Γ (.scope k e) te
+  /-- `break v` does not return: the bottom type; v goes to a block of ev -/
+  | abort {Γ ev k e te} : HasType P Γ e te → sub te (P.aborts ev) = true → HasType P Γ (.abort ev k e) .never
 
-/-- every function body fits its declared result, given its parameter, and assigns only global names -/
-def FunsOk (P : Program) : Prop :=
-  ∀ f fn, P.funs f = some fn →
+/-- a handler of ev, closed but for the payload, gives at most ev's result type -/
+def HandlerOk (P : Program) (ev : String) (h : Expr) : Prop :=
+  ∃ R th, P.effects ev = some R ∧ HasType P (Ctx.empty.set eventLocal .any) h th ∧ sub th R = true
+
+/-- every function body fits its declared result, given its parameter, and assigns only global names; every
+program-wide handler fits its event -/
+def ProgramOk (P : Program) : Prop :=
+  (∀ f fn, P.funs f = some fn →
     (∃ tb, HasType P (Ctx.empty.set fn.param fn.paramTy) fn.body tb ∧ sub tb fn.result = true) ∧
-    ∀ x ∈ fn.body.assigned, P.globals x = true
+    ∀ x ∈ fn.body.assigned, P.globals x = true) ∧
+  ∀ ev h, P.handlers ev = some h → HandlerOk P ev h
 
 end Warp

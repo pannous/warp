@@ -55,26 +55,35 @@ theorem lt_typed {Γ a b} : ∃ t', HasType P Γ (ltValues a b) t' ∧ sub t' .b
   · exact ⟨_, .bool, sub_refl _⟩
   · exact ⟨_, .error, sub_never _⟩
 
-theorem nth_typed {Γ} : ∀ {l : Expr} (i : Int) {tl e v}, l.isValue = true → HasType P Γ l tl → element tl = some e →
-    nth l i = some v → ∃ tv, HasType P Γ v tv ∧ sub tv e = true := by
+theorem nth_typed {Γ} : ∀ {l : Expr} (i : Int) {tl v}, l.isValue = true → HasType P Γ l tl →
+    nth l i = some v → ∃ tv, HasType P Γ v tv ∧ sub tv (elementTy tl) = true := by
   intro l
   induction l with
   | cons h t _ iht =>
-    intro i tl e v hv hl he hn
+    intro i tl v hv hl hn
     simp [isValue] at hv
     cases hl with
     | cons hh ht hel =>
-      simp [element] at he; subst he
+      simp only [elementTy, element, reduceCtorEq, ite_false, Option.getD_some]
       simp [nth] at hn
       split at hn
       · cases hn; exact ⟨_, hh, join_upper_left _ _⟩
-      · obtain ⟨tv, htv, hs⟩ := iht (i - 1) hv.2 ht hel hn
+      · obtain ⟨tv, htv, hs⟩ := iht (i - 1) hv.2 ht hn
+        rw [elementTy_of_element hel] at hs
         exact ⟨tv, htv, sub_trans hs (join_upper_right _ _)⟩
-  | _ => intro i tl e v _ _ _ hn; simp [nth] at hn
+  | text s =>
+    intro i tl v _ hl hn
+    cases hl
+    simp only [nth] at hn
+    split at hn
+    · obtain ⟨c, _, rfl⟩ := Option.map_eq_some_iff.1 hn; exact ⟨_, .text, by simp [elementTy, sub_refl]⟩
+    · cases hn
+  | _ => intro i tl v _ _ hn; simp [nth] at hn
 
-theorem append_typed {Γ b tb eb} (hb : HasType P Γ b tb) (vb : b.isValue = true) (eb' : element tb = some eb) :
+/-- concatenating list values: a list of the joined element types -/
+theorem concat_typed {Γ b tb eb} (hb : HasType P Γ b tb) (vb : b.isValue = true) (eb' : element tb = some eb) :
     ∀ {a : Expr} {ta ea}, a.isValue = true → HasType P Γ a ta → element ta = some ea →
-    ∃ t', HasType P Γ (appendValues a b) t' ∧ sub t' (.list (join ea eb)) = true := by
+    ∃ t', HasType P Γ (concat a b) t' ∧ sub t' (.list (join ea eb)) = true := by
   intro a
   induction a with
   | nil =>
@@ -96,6 +105,24 @@ theorem append_typed {Γ b tb eb} (hb : HasType P Γ b tb) (vb : b.isValue = tru
       · exact sub_trans (join_upper_left _ _) (join_upper_left _ _)
       · exact sub_trans hs'' (join_least (sub_trans (join_upper_right _ _) (join_upper_left _ _)) (join_upper_right _ _))
   | _ => intro ta ea va ha hea; cases ha <;> simp_all [isValue, element]
+
+/-- a list value's type has elements -/
+theorem list_element {Γ v t} (h : HasType P Γ v t) (hl : isList v = true) : ∃ e, element t = some e := by
+  cases h <;> simp_all [isList, element]
+
+/-- `++` on values: a list of the joined element types, or an error -/
+theorem append_typed {Γ a b ta tb} (ha : HasType P Γ a ta) (hb : HasType P Γ b tb) (va : a.isValue = true)
+    (vb : b.isValue = true) :
+    ∃ t', HasType P Γ (appendValues a b) t' ∧ sub t' (.list (join (listElem ta) (listElem tb))) = true := by
+  unfold appendValues
+  split
+  · rename_i hl
+    simp only [Bool.and_eq_true] at hl
+    obtain ⟨ea, hea⟩ := list_element ha hl.1
+    obtain ⟨eb, heb⟩ := list_element hb hl.2
+    rw [listElem_of_element hea, listElem_of_element heb]
+    exact concat_typed hb vb heb va ha hea
+  · exact ⟨_, .error, sub_never _⟩
 
 theorem valueType_typed {Γ} : ∀ {v : Expr} {t}, valueType v = some t → HasType P Γ v t := by
   intro v
@@ -202,19 +229,16 @@ theorem narrow {Γ e t} (h : HasType P Γ e t) : ∀ {Γ'}, CtxSub Γ' Γ → �
     obtain ⟨_, h1, _⟩ := ih1 hs
     obtain ⟨b', h2, s2⟩ := ih2 hs
     exact ⟨_, .seq h1 h2, s2⟩
-  | index _ he _ si ih1 ih2 =>
+  | index _ _ ih1 ih2 =>
     intro Γ' hs
     obtain ⟨l', h1, s1⟩ := ih1 hs
-    obtain ⟨i', h2, s2⟩ := ih2 hs
-    obtain ⟨e', he', se⟩ := element_mono s1 he
-    exact ⟨_, .index h1 he' h2 (sub_trans s2 si), se⟩
-  | append _ hea _ heb ih1 ih2 =>
+    obtain ⟨i', h2, _⟩ := ih2 hs
+    exact ⟨_, .index h1 h2, elementTy_mono s1⟩
+  | append _ _ ih1 ih2 =>
     intro Γ' hs
     obtain ⟨a', h1, s1⟩ := ih1 hs
     obtain ⟨b', h2, s2⟩ := ih2 hs
-    obtain ⟨ea', hea', sa⟩ := element_mono s1 hea
-    obtain ⟨eb', heb', sb⟩ := element_mono s2 heb
-    exact ⟨_, .append h1 hea' h2 heb', by simpa using join_mono sa sb⟩
+    exact ⟨_, .append h1 h2, by simpa using join_mono (listElem_mono s1) (listElem_mono s2)⟩
   | assign hx _ st ih =>
     intro Γ' hs
     obtain ⟨_, h1, s1⟩ := ih hs
@@ -263,6 +287,23 @@ theorem narrow {Γ e t} (h : HasType P Γ e t) : ∀ {Γ'}, CtxSub Γ' Γ → �
     intro Γ' hs
     obtain ⟨_, h1, _⟩ := ih hs
     exact ⟨_, .isA h1, sub_refl _⟩
+  | handle hR _ sh _ ih1 ih2 =>
+    intro Γ' hs
+    obtain ⟨_, h1, s1⟩ := ih1 (hs.set _ _)
+    obtain ⟨_, h2, s2⟩ := ih2 hs
+    exact ⟨_, .handle hR h1 (sub_trans s1 sh) h2, join_mono s2 (sub_refl _)⟩
+  | emit hR _ ih =>
+    intro Γ' hs
+    obtain ⟨_, h1, _⟩ := ih hs
+    exact ⟨_, .emit hR h1, sub_refl _⟩
+  | scope _ ih =>
+    intro Γ' hs
+    obtain ⟨_, h1, s1⟩ := ih hs
+    exact ⟨_, .scope h1, s1⟩
+  | abort _ st ih =>
+    intro Γ' hs
+    obtain ⟨_, h1, s1⟩ := ih hs
+    exact ⟨_, .abort h1 (sub_trans s1 st), sub_refl _⟩
 
 theorem Ctx.set_same (Γ : Ctx) (y : String) (a b : Ty) : (Γ.set y a).set y b = Γ.set y b := by
   funext z; simp only [Ctx.set]; split <;> simp_all
@@ -301,9 +342,8 @@ theorem subst_typed {Γ0 e t} (h : HasType P Γ0 e t) :
     intro Γ y tv v hΓ hv htv; simp only [Expr.subst]; exact .ite (ih0 hΓ hv htv) (ih1 hΓ hv htv) (ih2 hΓ hv htv)
   | loop _ _ ih1 ih2 => intro Γ y tv v hΓ hv htv; simp only [Expr.subst]; exact .loop (ih1 hΓ hv htv) (ih2 hΓ hv htv)
   | seq _ _ ih1 ih2 => intro Γ y tv v hΓ hv htv; simp only [Expr.subst]; exact .seq (ih1 hΓ hv htv) (ih2 hΓ hv htv)
-  | index _ he _ si ih1 ih2 => intro Γ y tv v hΓ hv htv; simp only [Expr.subst]; exact .index (ih1 hΓ hv htv) he (ih2 hΓ hv htv) si
-  | append _ hea _ heb ih1 ih2 =>
-    intro Γ y tv v hΓ hv htv; simp only [Expr.subst]; exact .append (ih1 hΓ hv htv) hea (ih2 hΓ hv htv) heb
+  | index _ _ ih1 ih2 => intro Γ y tv v hΓ hv htv; simp only [Expr.subst]; exact .index (ih1 hΓ hv htv) (ih2 hΓ hv htv)
+  | append _ _ ih1 ih2 => intro Γ y tv v hΓ hv htv; simp only [Expr.subst]; exact .append (ih1 hΓ hv htv) (ih2 hΓ hv htv)
   | assign hx _ st ih => intro Γ y tv v hΓ hv htv; simp only [Expr.subst]; exact .assign hx (ih hΓ hv htv) st
   | init hx hm _ st ih => intro Γ y tv v hΓ hv htv; simp only [Expr.subst]; exact .init hx hm (ih hΓ hv htv) st
   | @letIn Γ0 z t' e b te tb he st hb ih1 ih2 =>
@@ -326,6 +366,19 @@ theorem subst_typed {Γ0 e t} (h : HasType P Γ0 e t) :
   | get _ ih => intro Γ y tv v hΓ hv htv; simp only [Expr.subst]; exact .get (ih hΓ hv htv)
   | set _ hw _ st ih1 ih2 => intro Γ y tv v hΓ hv htv; simp only [Expr.subst]; exact .set (ih1 hΓ hv htv) hw (ih2 hΓ hv htv) st
   | isA _ ih => intro Γ y tv v hΓ hv htv; simp only [Expr.subst]; exact .isA (ih hΓ hv htv)
+  | @handle Γ0 ev h b th tb R hR hh sh hb ih1 ih2 =>
+    intro Γ y tv v hΓ hv htv
+    simp only [Expr.subst]
+    subst hΓ
+    by_cases hy : y = eventLocal
+    · subst hy
+      rw [Ctx.set_same] at hh
+      simpa using HasType.handle hR hh sh (ih2 rfl hv htv)
+    · simp only [hy, ite_false]
+      exact .handle hR (ih1 (Ctx.set_comm Γ (fun h => hy h.symm) tv .any) hv htv) sh (ih2 rfl hv htv)
+  | emit hR _ ih => intro Γ y tv v hΓ hv htv; simp only [Expr.subst]; exact .emit hR (ih hΓ hv htv)
+  | scope _ ih => intro Γ y tv v hΓ hv htv; simp only [Expr.subst]; exact .scope (ih hΓ hv htv)
+  | abort _ st ih => intro Γ y tv v hΓ hv htv; simp only [Expr.subst]; exact .abort (ih hΓ hv htv) st
 
 /-- a value of type tv ≤ t bound to a local of type t: the body keeps (a subtype of) its type -/
 theorem let_typed {y t v b tv tb} (hb : HasType P (Ctx.empty.set y t) b tb) (hv : v.isValue = true)

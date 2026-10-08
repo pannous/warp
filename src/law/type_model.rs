@@ -39,6 +39,14 @@ const UNION_JOINER: &str = " or ";
 const OPTIONAL_MARK: char = '?';
 /// the type of ø, the empty part of an optional (ø is the empty list)
 const EMPTY_TYPE: &str = ".list .never";
+/// Effect handlers (notes/effect_handlers.md): `on ev {h}`, `on ev {h} in {body}`, `emit ev{payload}`
+const ON_KEYWORD: &str = "on";
+const IN_KEYWORD: &str = "in";
+const EMIT_KEYWORD: &str = "emit";
+/// the handler's local holding the payload, `event.level`
+const EVENT_LOCAL: &str = "event";
+/// an event's payloads are instances of the class `ev·event`, whose fields are every key the program emits it with
+const EVENT_CLASS_SUFFIX: &str = "·event";
 
 /// W0's answer for one program
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -89,6 +97,71 @@ fn admitted(declared: &str, value: String) -> String {
 		Some(alternatives) => format!(".cast ({value}) {alternatives}"),
 		None => value,
 	}
+}
+
+/// `on`/`emit` forms; an event is named by one or more words (`on stop the machine {…}`)
+enum Effect<'a> {
+	On { event: String, handler: &'a Node, body: Option<&'a Node> },
+	Emit { event: String, payload: Vec<(String, &'a Node)> },
+}
+
+fn event_name(words: &[Node]) -> Option<String> {
+	let words: Option<Vec<String>> = words.iter().map(|word| match word.drop_meta() {
+		Node::Symbol(word) => Some(word.clone()),
+		_ => None,
+	}).collect();
+	words.filter(|words| !words.is_empty()).map(|words| words.join(" "))
+}
+
+fn effect(node: &Node) -> Option<Effect<'_>> {
+	let Node::List(items, _, _) = node.drop_meta() else { return None };
+	// `on ev {h} in {body}` as a value parses as `(on ev {h}) in {body}`
+	if let [handled, keyword, body] = items.as_slice() {
+		if is_word(keyword, IN_KEYWORD) {
+			if let Some(Effect::On { event, handler, body: None }) = effect(handled) {
+				return Some(Effect::On { event, handler, body: Some(body) });
+			}
+		}
+	}
+	let (first, rest) = items.split_first()?;
+	if is_word(first, ON_KEYWORD) {
+		// `a = on ask {2} in {…}` groups the words after `on`: `on (ask {2})`
+		let rest = match rest {
+			[grouped] => match grouped.drop_meta() {
+				Node::List(words, Bracket::None, Separator::Space) => words.as_slice(),
+				_ => rest,
+			},
+			_ => rest,
+		};
+		let (last, words) = rest.split_last()?;
+		let event = event_name(words)?;
+		return match last.drop_meta() {
+			Node::List(_, Bracket::Curly, _) => Some(Effect::On { event, handler: last, body: None }),
+			Node::List(parts, _, _) if parts.len() == 3 && is_word(&parts[1], IN_KEYWORD) => Some(Effect::On { event, handler: &parts[0], body: Some(&parts[2]) }),
+			_ => None,
+		};
+	}
+	if !is_word(first, EMIT_KEYWORD) {
+		return None;
+	}
+	// `emit alarm{level: 3}` parses as `alarm: {level: 3}` after the event's other words
+	if let Some((last, words)) = rest.split_last() {
+		if let Node::Key(word, Op::Colon, fields) = last.drop_meta() {
+			let Node::List(fields, Bracket::Curly, _) = fields.drop_meta() else { return None };
+			let payload: Option<Vec<(String, &Node)>> = fields.iter().map(|field| match field.drop_meta() {
+				Node::Key(key, Op::Colon, value) => Some((key.name(), &**value)),
+				_ => None,
+			}).collect();
+			let mut words = words.to_vec();
+			words.push((**word).clone());
+			return Some(Effect::Emit { event: event_name(&words)?, payload: payload? });
+		}
+	}
+	Some(Effect::Emit { event: event_name(rest)?, payload: vec![] })
+}
+
+fn event_class(event: &str) -> String {
+	format!("{event}{EVENT_CLASS_SUFFIX}")
 }
 
 fn is_word(node: &Node, word: &str) -> bool {
@@ -177,6 +250,9 @@ struct Exporter {
 	names: HashMap<String, Option<String>>,
 	/// main-level names bound to an evident bool (`b = true`): a bool place for the literals 1 and 0 (P199)
 	bool_names: Vec<String>,
+	/// main-level names bound to a list (`xs = [1]`, `xs = []`, `xs: ints = …`): `xs.add(v)` appends to them, while
+	/// `.add` of a text concatenates, outside W0
+	list_names: Vec<String>,
 	locals: Vec<String>,
 	/// the parameters of the function being exported when it takes several: each is a field of its arguments object
 	argument_fields: Vec<String>,
@@ -272,11 +348,55 @@ impl Exporter {
 		if fields.len() != arguments.len() {
 			return Err(format!("{class} takes {} fields, got {}", fields.len(), arguments.len()));
 		}
+		self.instance(class, fields.into_iter().zip(arguments).collect())
+	}
+
+	/// a new instance of class with the given fields written, `let o = new C; o.f1 = a; …; o`
+	fn instance(&mut self, class: &str, fields: Vec<(String, &Node)>) -> Lean {
 		let path = lean_strings(&self.classes[class].0);
 		let local = format!("new·{class}");
-		let writes: Result<Vec<String>, String> = fields.iter().zip(arguments).map(|(field, argument)| Ok(format!(".set (.loc {}) {} ({})", quoted(&local), quoted(field), self.expression(argument)?))).collect();
+		let writes: Result<Vec<String>, String> = fields.iter().map(|(field, value)| Ok(format!(".set (.loc {}) {} ({})", quoted(&local), quoted(field), self.expression(value)?))).collect();
 		let body = writes?.iter().rev().fold(format!(".loc {}", quoted(&local)), |rest, write| format!(".seq ({write}) ({rest})"));
 		Ok(format!(".letIn {} (.cls {path}) (.new {path}) ({body})", quoted(&local)))
+	}
+
+	/// `ev·event` with every key the program emits ev with
+	fn collect_event_classes(&mut self, program: &Node) -> Vec<String> {
+		let mut keys: Vec<(String, Vec<String>)> = vec![];
+		program.visit(&mut |part| if let Some(Effect::Emit { event, payload }) = effect(part) {
+			let class = event_class(&event);
+			let position = keys.iter().position(|(known, _)| *known == class).unwrap_or_else(|| {
+				keys.push((class, vec![]));
+				keys.len() - 1
+			});
+			for (key, _) in payload {
+				if !keys[position].1.contains(&key) {
+					keys[position].1.push(key);
+				}
+			}
+		});
+		keys.retain(|(_, fields)| !fields.is_empty());
+		for (class, fields) in &keys {
+			self.classes.insert(class.clone(), (vec![class.clone()], fields.iter().map(|field| (field.clone(), None)).collect()));
+		}
+		keys.into_iter().map(|(class, _)| class).collect()
+	}
+
+	/// a handler body: `event` is its payload
+	fn handler(&mut self, handler: &Node) -> Lean {
+		self.locals.push(EVENT_LOCAL.to_string());
+		let handler = self.block(handler);
+		self.locals.pop();
+		handler
+	}
+
+	fn effect(&mut self, effect: Effect) -> Lean {
+		match effect {
+			Effect::On { event, handler, body: Some(body) } => Ok(format!(".handle {} ({}) ({})", quoted(&event), self.handler(handler)?, self.block(body)?)),
+			Effect::On { event, .. } => Err(format!("not in W0: a program-wide handler of {event} inside an expression")),
+			Effect::Emit { event, payload } if payload.is_empty() => Ok(format!(".emit {} .unit", quoted(&event))),
+			Effect::Emit { event, payload } => Ok(format!(".emit {} ({})", quoted(&event), self.instance(&event_class(&event), payload)?)),
+		}
 	}
 
 	fn class_definition(&self, class: &str) -> Lean {
@@ -286,10 +406,14 @@ impl Exporter {
 
 	fn items(&mut self, program: &Node) -> Result<Vec<String>, String> {
 		self.collect_classes(program);
+		let event_classes = self.collect_event_classes(program);
 		let program: Vec<&Node> = statements(program).into_iter().flat_map(type_definitions).collect();
 		let mut argument_classes = Vec::new();
 		for statement in &program {
 			let Some((name, parameters, _)) = function_definition(statement) else { continue };
+			if self.functions.contains_key(name) {
+				return Err(format!("not in W0: overloads of {name}"));
+			}
 			let parameter_type = match parameters.as_slice() {
 				[] => UNIT_TYPE.to_string(),
 				[parameter] => self.parameter_type(parameter)?.1,
@@ -303,6 +427,7 @@ impl Exporter {
 			};
 			self.functions.insert(name.to_string(), parameter_type);
 		}
+		argument_classes.extend(event_classes);
 		let mut items = argument_classes.iter().map(|class| self.class_definition(class)).collect::<Result<Vec<_>, String>>()?;
 		for statement in program {
 			items.push(self.item(statement)?);
@@ -311,6 +436,9 @@ impl Exporter {
 	}
 
 	fn item(&mut self, statement: &Node) -> Lean {
+		if let Some(Effect::On { event, handler, body: None }) = effect(statement) {
+			return Ok(format!(".on {} ({})", quoted(&event), self.handler(handler)?));
+		}
 		match statement.drop_meta() {
 			Node::Type { name, .. } => self.class_definition(&name.drop_meta().name()),
 			_ if function_definition(statement).is_some() => {
@@ -347,6 +475,9 @@ impl Exporter {
 		if annotation.is_none() && is_evident_bool(value) {
 			self.bool_names.push(name.clone());
 		}
+		if is_list_literal(value) || matches!(value.drop_meta(), Node::Empty) || annotation.as_deref().is_some_and(|lean| lean.starts_with(".list")) {
+			self.list_names.push(name.clone());
+		}
 		let value = self.stored_value(annotation.as_deref(), value)?;
 		self.names.insert(name.clone(), annotation.clone());
 		let annotation = annotation.map_or("none".to_string(), |lean| format!("(some ({lean}))"));
@@ -364,6 +495,11 @@ impl Exporter {
 			Some(declared) => admitted(declared, lean),
 			None => lean,
 		})
+	}
+
+	/// a field some class declares: other words after a dot are methods (`x.size`, `4.square`), outside W0
+	fn is_field(&self, word: &str) -> bool {
+		self.classes.values().any(|(_, fields)| fields.iter().any(|(field, _)| field == word))
 	}
 
 	fn is_call(&self, node: &Node) -> bool {
@@ -393,6 +529,8 @@ impl Exporter {
 	/// a function body: `{ a; b }` is the sequence
 	fn block(&mut self, body: &Node) -> Lean {
 		match body.drop_meta() {
+			// `{emit too big{value: x}}`: the words of one statement
+			Node::List(items, Bracket::Curly, Separator::Space) if items.len() > 1 => self.expression(&Node::List(items.clone(), Bracket::None, Separator::Space)),
 			Node::List(items, Bracket::Curly, _) if !items.is_empty() => {
 				let statements: Result<Vec<String>, String> = items.iter().map(|item| self.expression(item)).collect();
 				let mut statements = statements?;
@@ -409,8 +547,10 @@ impl Exporter {
 			Some(yes_or_no) => yes_or_no,
 			None => self.stored_value(declared.as_deref(), value)?,
 		};
-		let operation = if self.names.contains_key(name) { ".assign" } else { ".init" };
-		Ok(format!("{operation} {} ({value})", quoted(name)))
+		if !self.names.contains_key(name) {
+			return Err(format!("not in W0: a first binding of {name} inside an expression"));
+		}
+		Ok(format!(".assign {} ({value})", quoted(name)))
 	}
 
 	fn binary(&mut self, constructor: &str, left: &Node, right: &Node) -> Lean {
@@ -438,12 +578,14 @@ impl Exporter {
 				Ok(elements?.iter().rev().fold(".nil".to_string(), |tail, head| format!(".cons ({head}) ({tail})")))
 			}
 			Node::List(items, Bracket::Round, _) if items.len() == 1 => self.expression(&items[0]),
+			Node::List(items, Bracket::Curly, _) if !items.is_empty() => self.block(node),
 			Node::List(items, Bracket::None, Separator::Semicolon | Separator::Newline) if items.len() > 1 => {
 				let statements: Result<Vec<String>, String> = items.iter().map(|item| self.expression(item)).collect();
 				let mut statements = statements?;
 				let last = statements.pop().expect("more than one statement");
 				Ok(statements.iter().rev().fold(last, |rest, statement| format!(".seq ({statement}) ({rest})")))
 			}
+			_ if effect(node).is_some() => self.effect(effect(node).expect("an effect")),
 			Node::List(items, _, _) if items.first().is_some_and(|class| self.classes.contains_key(&class.name())) => self.construction(&items[0].name(), &items[1..]),
 			Node::List(items, _, _) => match items.as_slice() {
 				[marker, body, handler] if is_word(marker, TRY_MARKER) => self.binary(".tryCatch", body, handler),
@@ -452,6 +594,7 @@ impl Exporter {
 					_ => unsupported(node),
 				},
 				[call] if self.functions.get(&call.name()).is_some_and(|parameter| parameter == UNIT_TYPE) => Ok(format!(".call {} .unit", quoted(&call.name()))),
+				[_, arguments @ ..] if arguments.iter().any(|argument| matches!(argument.drop_meta(), Node::Key(_, Op::Assign, _))) => Err(format!("not in W0: named arguments in {}", node.serialize().trim())),
 				[call, arguments @ ..] if arguments.len() > 1 && self.classes.contains_key(&arguments_class(&call.name())) => {
 					let arguments = self.construction(&arguments_class(&call.name()), arguments)?;
 					Ok(format!(".call {} ({arguments})", quoted(&call.name())))
@@ -466,6 +609,11 @@ impl Exporter {
 				}
 				_ => unsupported(node),
 			},
+			// `s += 2` is `s = s + 2`
+			Node::Key(target, op, value) if op.is_compound_assign() => match target.drop_meta() {
+				Node::Symbol(name) => self.assignment(name, &Node::Key(target.clone(), op.base_op(), value.clone())),
+				_ => unsupported(node),
+			},
 			Node::Key(target, Op::Assign, value) => match target.drop_meta() {
 				Node::Symbol(name) => self.assignment(name, value),
 				Node::Key(object, Op::Dot, field) => Ok(format!(".set ({}) {} ({})", self.expression(object)?, quoted(&field.name()), self.expression(value)?)),
@@ -475,10 +623,12 @@ impl Exporter {
 			Node::Key(list, Op::Dot, call) => match (list.drop_meta(), call.drop_meta()) {
 				(Node::Symbol(name), Node::List(items, _, _)) if items.len() == 2 && APPEND_METHODS.iter().any(|method| is_word(&items[0], method)) => {
 					let item = self.expression(&items[1])?;
-					let operation = if self.names.contains_key(name) { ".assign" } else { return unsupported(node) };
-					Ok(format!("{operation} {} (.append (.glob {}) (.cons ({item}) .nil))", quoted(name), quoted(name)))
+					if !self.list_names.contains(name) {
+						return unsupported(node);
+					}
+					Ok(format!(".assign {} (.append (.glob {}) (.cons ({item}) .nil))", quoted(name), quoted(name)))
 				}
-				(_, Node::Symbol(field)) => Ok(format!(".get ({}) {}", self.expression(list)?, quoted(field))),
+				(_, Node::Symbol(field)) if self.is_field(field) => Ok(format!(".get ({}) {}", self.expression(list)?, quoted(field))),
 				_ => unsupported(node),
 			},
 			Node::Key(if_then, Op::Else, otherwise) => match if_then.drop_meta() {
@@ -640,5 +790,9 @@ pub fn report(code: &str) -> String {
 		Ok(()) => "Accepted".to_string(),
 		Err(why) => format!("Rejected: {why}"),
 	};
-	format!("W0: {exported}\nmodel: {model}\nwarp: {warp}")
+	let value = match outcomes(std::slice::from_ref(&exported)) {
+		Ok(values) => values[0].clone(),
+		Err(why) => format!("model failed: {why}"),
+	};
+	format!("W0: {exported}\nmodel: {model}\nmodel value: {value}\nwarp: {warp}\nwarp value: {}", warp_value(code))
 }

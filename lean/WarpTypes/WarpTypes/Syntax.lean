@@ -66,7 +66,23 @@ inductive Expr where
   | set (e : Expr) (f : String) (v : Expr)
   /-- `e is C`, the type test of a match arm `Shape::Circle(r)` (P178) -/
   | isA (e : Expr) (c : String)
+  /-- `on ev {h} in {body}`: body runs with h answering the event ev; in h the local `event` is the emitted payload
+  (effect handlers, notes/effect_handlers.md: block-scoped, dynamically scoped, tail-resumptive) -/
+  | handle (ev : String) (h body : Expr)
+  /-- `emit ev{payload}`: the innermost active handler of ev runs on the payload, and its value is emit's value; with no
+  handler, a program-wide `on ev {…}`; with none, ø (P202) -/
+  | emit (ev : String) (payload : Expr)
+  /-- a handler body running where its emit was, with only the k handlers outside the one answering: an emit inside
+  a handler goes to the next handler outward (run time only) -/
+  | scope (k : Nat) (e : Expr)
+  /-- `break v` in a block handler of ev (aborting handlers, notes/effect_handlers.md Step 3): the emit does not
+  resume, the block `on ev {…} in {…}` whose handler ran ends with v. k is the depth of that block (the handlers
+  outside it), unknown (none) until the abort leaves the handler's scope (run time) -/
+  | abort (ev : String) (k : Option Nat) (e : Expr)
   deriving DecidableEq, Repr
+
+/-- the local a handler reads the emitted payload from -/
+def eventLocal : String := "event"
 
 namespace Expr
 
@@ -99,17 +115,21 @@ def subst (e : Expr) (y : String) (v : Expr) : Expr :=
   | get e f => get (e.subst y v) f
   | set e f w => set (e.subst y v) f (w.subst y v)
   | isA e c => isA (e.subst y v) c
+  | handle ev h b => handle ev (if y = eventLocal then h else h.subst y v) (b.subst y v)
+  | emit ev e => emit ev (e.subst y v)
+  | scope k e => scope k (e.subst y v)
+  | abort ev k e => abort ev k (e.subst y v)
   | e => e
 
 /-- the main-level names an expression assigns or binds -/
 def assigned : Expr → List String
   | assign x e | init x e => x :: e.assigned
-  | cons a b | add a b | arith _ a b | lt a b | eq a b | loop a b | seq a b | index a b | append a b | tryCatch a b =>
-    a.assigned ++ b.assigned
+  | cons a b | add a b | arith _ a b | lt a b | eq a b | loop a b | seq a b | index a b | append a b | tryCatch a b
+  | handle _ a b => a.assigned ++ b.assigned
   | ite c a b => c.assigned ++ a.assigned ++ b.assigned
   | letIn _ _ e b => e.assigned ++ b.assigned
   | set a _ b => a.assigned ++ b.assigned
-  | call _ e | cast e _ | broadcast _ e | get e _ | isA e _ => e.assigned
+  | call _ e | cast e _ | broadcast _ e | get e _ | isA e _ | emit _ e | scope _ e | abort _ _ e => e.assigned
   | _ => []
 
 end Expr
@@ -129,6 +149,12 @@ structure Program where
   globals : String → Bool
   /-- the fields a class declares itself, with their types -/
   fields : String → String → Option Ty := fun _ _ => none
+  /-- each event's result type: what its handlers give back to an emit -/
+  effects : String → Option Ty := fun _ => none
+  /-- the program-wide handlers, `on ev {…}` at main level: they answer when no block handler is active -/
+  handlers : String → Option Expr := fun _ => none
+  /-- each event's abort type: what a `break v` of its block handlers gives the block -/
+  aborts : String → Ty := fun _ => .never
 
 /-- the type of field f of an instance of the class chain p: the declaration nearest the root wins, so a subclass
 keeps the field types of its ancestors -/

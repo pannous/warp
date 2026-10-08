@@ -182,6 +182,10 @@ pub(crate) fn annotated_kind(type_node: &Node) -> Option<Kind> {
 	}
 	// `v:any`, as an untyped field: any value, held as a Node (lib/json.wasp's to_json takes what parse_json gives)
 	// `x: int or text` (an inline union of builtin types, card inline-union) likewise
+	// `x:ø` / `x:nil` / `x:unit`: the empty type, ø is held as a Node
+	if matches!(type_node.drop_meta(), Node::Empty) || crate::type_tests::canonical_spec_word(&type_name) == crate::type_tests::EMPTY_TYPE {
+		return Some(Kind::Empty);
+	}
 	if type_name == crate::type_kinds::UNTYPED_FIELD || annotated_builtin_type(type_node).is_some_and(|name| union_parts(name).is_some()) {
 		return Some(Kind::Empty);
 	}
@@ -250,6 +254,7 @@ pub(super) fn with_usage_kinds(params: Vec<Param>, body: &Node) -> Vec<Param> {
 	let mut called: HashSet<String> = HashSet::new();
 	let mut celled: HashSet<String> = HashSet::new();
 	let mut texted: HashSet<String> = HashSet::new();
+	let mut foreign: HashSet<String> = HashSet::new();
 	let mut aliases: Vec<(String, String)> = vec![];
 	body.visit(&mut |node| {
 		if let Some(name) = crate::closures::called_closure(node) {
@@ -273,6 +278,7 @@ pub(super) fn with_usage_kinds(params: Vec<Param>, body: &Node) -> Vec<Param> {
 		if let Some(name) = joined_to_text(node) {
 			texted.insert(name.to_string());
 		}
+		foreign.extend(given_to_foreign_code(node).map(str::to_string));
 		// `xs.add(420)`, lowered to `xs = xs + [420]`: xs is a list, called or not
 		if let Some(name) = joined_to_list(node) {
 			indexed.insert(name.to_string());
@@ -290,7 +296,7 @@ pub(super) fn with_usage_kinds(params: Vec<Param>, body: &Node) -> Vec<Param> {
 	params.into_iter().map(|param| {
 		let used_as = if called.contains(&param.name) {
 			Some(Kind::Function)
-		} else if celled.contains(&param.name) {
+		} else if celled.contains(&param.name) || foreign.contains(&param.name) {
 			Some(Kind::Data)
 		} else if indexed.contains(&param.name) {
 			// a counted sequence joined to a text is a text; joined alone it may be any value (`"set " + value`)
@@ -300,6 +306,23 @@ pub(super) fn with_usage_kinds(params: Vec<Param>, body: &Node) -> Vec<Param> {
 		};
 		Param { used_as, ..param }
 	}).collect()
+}
+
+/// The names a foreign call takes as its receiver or arguments (lowering/foreign_modules.rs): values of any kind, as
+/// foreign code gives them (a warp function called back by JavaScript, card js-callbacks)
+fn given_to_foreign_code(node: &Node) -> impl Iterator<Item = &str> {
+	let given = match node {
+		Node::List(items, Bracket::Round, _) if call_of(node, crate::host::FOREIGN_CALL) => match items.as_slice() {
+			[_, _, receiver, _, _, Node::List(arguments, _, _)] => std::iter::once(receiver).chain(arguments).collect(),
+			[_, _, receiver, ..] => vec![receiver],
+			_ => vec![],
+		},
+		_ => vec![],
+	};
+	given.into_iter().filter_map(|item| match item.drop_meta() {
+		Node::Symbol(name) => Some(name.as_str()),
+		_ => None,
+	})
 }
 
 /// The name `+` joins to a text: `" " + t`, `t + "!"`, `n times " " + t`, `t[0 ..< n] + "…"`; a list never

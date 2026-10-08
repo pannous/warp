@@ -65,3 +65,4 @@ mod test_nested_index_assignment;
 mod test_pair_values;
 mod test_none_word;
 mod test_index_out_of_range;
+mod test_range_returns;

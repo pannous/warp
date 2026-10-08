@@ -10,7 +10,7 @@ mod values;
 mod big_int;
 pub mod cells;
 mod closures;
-pub use closures::{CLOSURE_CAPTURED, CLOSURE_REBUILD};
+pub use closures::{CLOSURE_APPLY, CLOSURE_CAPTURED, CLOSURE_REBUILD};
 pub(crate) mod exact;
 mod constructors;
 pub use constructors::NEW_BOOL;
@@ -40,7 +40,7 @@ mod string_table;
 mod type_manager;
 mod try_guard;
 mod tuple_emitter;
-pub use try_guard::{CAUGHT_ERROR, RAN_WITHOUT_ERROR};
+pub use try_guard::{ABORT_TO, CAUGHT_ERROR, RAN_WITHOUT_ABORT, RAN_WITHOUT_ERROR};
 mod witness;
 pub(crate) mod wasi_emitter;
 
@@ -192,6 +192,7 @@ pub struct WasmGcEmitter {
 	/// Emitting data, not code: the value of an object entry or a quoted form, where unknown words stay words (P62)
 	data_context: bool,
 	error_catching: Option<try_guard::ErrorCatching>, // the tag and globals of that `try`
+	abort_catching: Option<try_guard::AbortCatching>, // the tag of aborting effect handlers
 	memo_caches: HashMap<i64, (u32, u32)>, // per memoized function id: the globals of its values and known flags (memoization.rs)
 	extra_global_names: Vec<(u32, &'static str)>,
 
@@ -271,6 +272,7 @@ impl WasmGcEmitter {
 			guards_errors: false,
 			data_context: false,
 			error_catching: None,
+			abort_catching: None,
 			memo_caches: HashMap::new(),
 			extra_global_names: Vec::new(),
 			config: EmitterConfig::default(),
@@ -957,6 +959,17 @@ impl WasmGcEmitter {
 			});
 			s.emit_int_from_payload(func);
 		});
+		if self.should_emit_function(big_int::INT_OF_ANY) {
+			// int_of_any(node) -> i64: the Int of a value of type any going into a declared int (P204), a character too is
+			// not_an_int here
+			self.runtime_function(big_int::INT_OF_ANY, vec![Ref(node_ref)], vec![ValType::I64], vec![], |s, func| {
+				s.emit_field(func, 0, 0);
+				Self::emit_list(func, &[I::I64Const(KIND_MASK), I::I64And, I::I64Const(Kind::Int as i64), I::I64Ne, I::If(BlockType::Empty)]);
+				s.emit_runtime_error(func, "not_an_int");
+				Self::emit_list(func, &[I::End, I::LocalGet(0)]);
+				s.emit_call(func, "get_int_value");
+			});
+		}
 
 		// get_text_ptr / get_text_len(node: ref $Node) -> i32: the $String of a Text, Symbol or Error, 0 for any other node,
 		// so a host without GC field access (JavaScript) can read a result text from memory
