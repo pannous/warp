@@ -98,8 +98,7 @@ Rejected: (b) automatic f32 for floats (results differ in the 7th digit), (c) do
    reduced to what still has a payoff, and the threshold card (gpu-threshold) should measure those, not sums.
    Fixed on the way (cards float-typed, list-literal): `xs#1 = 0.5` widened a float list to a Node list (variables.rs
    widen_element_type), and `[2 2] .* [2 4]` asked the list * number question for the lambda's `each_element * [2 4]`.
-3. Ints (option a): `sum`, `dot`, element-wise over $IntList through a host word with an overflow flag, behind the
-   length check; tests compare GPU and CPU on lists above and below the threshold.
+3. Dropped (gpu-threshold): Ints automatically never pay against the fused CPU loop (step 2 finding).
 4. Fusion of an element-wise expression ending in a reduction into one WGSL kernel.
 5. Floats per the Interviewer's answer; `map(f)` of a pure numeric f.
    Done for linear float arrays (src/lowering/gpu_maps.rs): `ys = xs.map(x => …) @gpu` (or `@gpu xs.map(…)`) of a
@@ -127,5 +126,15 @@ Rejected: (b) automatic f32 for floats (results differ in the 7th digit), (c) do
    an item at 10^7, most of it warp's sin), and an array read as a whole fills a `float[n]` / `int[n]` list
    (`sum(xs)` 71 → 25 ns an item). The heavy CPU column then reads 17, 281, 1871 ms at 10^5, 10^6, 10^7 (noisy):
    the GPU still wins 15–20× from 10^6.
+   Thresholds (card gpu-threshold, P214 err on the CPU side), from these measurements:
+   - automatic offload (no @gpu): none. Int reductions and element-wise ops are memory bound; the fused CPU loop
+     (3–15 ns an item) beats the GPU round trip (~12 ns + ~2 ms) at every size, so step 3 is dropped.
+   - `@gpu` map of a light lambda (one the f64x2 kernel computes: + - * / √ ‖‖ of the item and numbers): the CPU,
+     in f64, with a warning saying so (gpu_maps.rs is_light).
+   - `@gpu` map of a heavy lambda (math words, powers): the GPU from GPU_MAP_MIN_COUNT = 32768 items (2^15, above the
+     measured ~3·10^4 break-even), the CPU below, checked at run time in the lowered map.
+   Test: test_webgpu a_gpu_map_runs_on_the_cpu_where_that_is_faster (below the count the value equals the f64 one).
+   f32 note: `sin` of large arguments loses digits on the GPU (sin(13333.3) differs in the 3rd digit, the argument
+   itself rounds to f32): @gpu is the program's consent to that.
    Open: lambdas reading outer numbers (a uniform), GC float lists (copy into a block first), the browser path with a
    real adapter, chains of maps kept on the GPU.
