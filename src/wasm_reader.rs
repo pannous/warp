@@ -557,10 +557,7 @@ pub fn node_in<T>(value: &Val, store: &mut StoreContextMut<'_, T>, memory: wasmt
 			None => Node::Symbol("function".to_string()),
 		},
 		t if t == Kind::TypeDef as u8 => Node::Type { name: Box::new(node(&data)), body: Box::new(node(&child)) },
-		t if t == Kind::Uncertain as u8 => match float_array(store, &data).and_then(|parts| crate::uncertain::Uncertain::from_parts(&parts)) {
-			Some(uncertain) => Node::data(uncertain),
-			None => crate::node::error("unreadable uncertain value"),
-		},
+		t if t == Kind::Uncertain as u8 => crate::uncertain::Uncertain::read_node(float_array(store, &data)),
 		_ => Node::Text(format!("Unknown Kind: {tag}")),
 	}
 }

@@ -22,6 +22,14 @@ impl Uncertain {
 		}
 	}
 
+	/// The node a reader (wasm_reader.rs, web.rs) makes of a Kind::Uncertain payload's parts
+	pub fn read_node(parts: Option<Vec<f64>>) -> crate::node::Node {
+		match parts.as_deref().and_then(Uncertain::from_parts) {
+			Some(uncertain) => crate::node::Node::data(uncertain),
+			None => crate::node::error("unreadable uncertain value"),
+		}
+	}
+
 	/// The ± part: how far the interval reaches from the value, on its farther side
 	pub fn radius(&self) -> f64 {
 		(self.high - self.value).max(self.value - self.low)
