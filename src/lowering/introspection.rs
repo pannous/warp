@@ -1,7 +1,7 @@
 //! `dir(time)`, `dir text` (Python's dir, card dir-introspection): the names a standard module defines, a list of
 //! texts in the order the module defines them. A program's own `dir`, or its own name of the module, wins
 
-use crate::node::{Bracket, Node, Separator};
+use crate::node::{Bracket, Node};
 
 const DIR_WORD: &str = "dir";
 
@@ -20,7 +20,7 @@ fn listed_names(node: Node, defined: &std::collections::HashSet<String>) -> Node
 	match node {
 		Node::List(items, bracket @ (Bracket::Round | Bracket::None), separator) if items.len() == 2 && items[0].drop_meta().name() == DIR_WORD => {
 			match module_names(&items[1], defined) {
-				Some(names) => Node::List(names.iter().map(|name| Node::Text(name.clone())).collect(), Bracket::Square, Separator::None),
+				Some(names) => crate::reflection::text_list(names),
 				None => Node::List(items.into_iter().map(|item| listed_names(item, defined)).collect(), bracket, separator),
 			}
 		}

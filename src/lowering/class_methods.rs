@@ -353,6 +353,32 @@ pub(crate) fn class_members(node: &Node) -> std::collections::HashMap<String, (O
 	classes
 }
 
+/// A class's parent and its own field and method names in declared order (reflection.rs), without constructors and
+/// the methods the lowering derives (`age·set`)
+pub(crate) struct ClassLayout {
+	pub parent: Option<String>,
+	pub fields: Vec<String>,
+	pub methods: Vec<String>,
+}
+
+pub(crate) fn class_layouts(node: &Node) -> std::collections::HashMap<String, ClassLayout> {
+	let mut layouts = std::collections::HashMap::new();
+	node.visit(&mut |part| if let Node::Type { name, body } = part {
+		let parent = name.attribute(crate::wasp_parser::EXTENDS_KEYWORD).map(|parent| parent.drop_meta().name());
+		let class = name.drop_meta().name();
+		let (mut fields, mut methods) = (vec![], vec![]);
+		for item in class_items(body) {
+			match method_parts(&item) {
+				Some((method, _, _)) if method != CONSTRUCTOR_WORD && method != class && !method.contains('·') => methods.push(method),
+				Some(_) => {}
+				None => fields.extend(field_name(&item)),
+			}
+		}
+		layouts.insert(class, ClassLayout { parent, fields, methods });
+	});
+	layouts
+}
+
 /// The variable holding what is taken apart: `{x, y} = p` is `(parts·from = p; x = parts·from.x; y = parts·from.y)`
 const PARTS_WORD: &str = "parts·from";
 
