@@ -26,6 +26,7 @@ const CONSTANT_KEYWORD: &str = "const";
 const ERROR_CALL: &str = "error";
 const BOOL_TYPE: &str = ".bool";
 const ANY_TYPE: &str = ".any";
+const LIST_TYPE_PREFIX: &str = ".list ";
 /// The builtin scalar type words warp checks a value against (analyzer admits) that W0 has a type for
 const BUILTIN_TYPE_WORDS: [&str; 11] = ["int", "integer", "long", "exact", "float", "number", "text", "string", "str", "bool", "boolean"];
 /// A value of each W0 scalar type and the run-time kind warp sees it as (a bool is an Int)
@@ -876,13 +877,25 @@ impl Exporter {
 		if matches!(unwrapped(value), Node::Key(_, Op::FatArrow, _)) {
 			self.lambda_names.push(name.clone());
 		}
-		if is_list_literal(value) || matches!(value.drop_meta(), Node::Empty) || annotation.as_deref().is_some_and(|lean| lean.starts_with(".list")) {
+		let aliased_list = matches!(value.drop_meta(), Node::Symbol(other) if self.list_names.contains(other));
+		if aliased_list || is_list_literal(value) || matches!(value.drop_meta(), Node::Empty) || annotation.as_deref().is_some_and(|lean| lean.starts_with(LIST_TYPE_PREFIX)) {
 			self.list_names.push(name.clone());
 		}
-		let value = self.stored_value(annotation.as_deref(), value)?;
+		let value = self.shared_list(&name, annotation.as_deref(), value)?;
 		self.names.insert(name.clone(), annotation.clone());
 		let annotation = annotation.map_or("none".to_string(), |lean| format!("(some ({lean}))"));
 		Ok(format!(".bind {} {mode} {annotation} ({value}) {}", quoted(&name), self.globals.contains(&name)))
+	}
+
+	/// A list stored in a list name is shared (P215): a new list, tagged with the declared element type (anything when
+	/// undeclared), which each `add` checks when it runs; a name read (`ys = xs`) stores the same list
+	fn shared_list(&mut self, name: &str, declared: Option<&str>, value: &Node) -> Lean {
+		let lean = self.stored_value(declared, value)?;
+		if !self.list_names.iter().any(|list| list == name) || matches!(value.drop_meta(), Node::Symbol(_)) {
+			return Ok(lean);
+		}
+		let tag = declared.and_then(|declared| declared.strip_prefix(LIST_TYPE_PREFIX)).unwrap_or(ANY_TYPE);
+		Ok(format!(".share ({lean}) {tag}"))
 	}
 
 	/// A call's result stored in a declared list is checked item by item at run time (list-element-types): a cast
@@ -980,7 +993,7 @@ impl Exporter {
 		let declared = self.names.get(name).cloned().flatten();
 		let value = match bool_literal(self.bool_names.contains(&name.to_string()).then_some(BOOL_TYPE), value) {
 			Some(yes_or_no) => yes_or_no,
-			None => self.stored_value(declared.as_deref(), value)?,
+			None => self.shared_list(name, declared.as_deref(), value)?,
 		};
 		if !self.names.contains_key(name) {
 			return Err(format!("not in W0: a first binding of {name} inside an expression"));
@@ -1203,7 +1216,7 @@ impl Exporter {
 				Node::Key(object, Op::Dot, field) => Ok(format!(".set ({}) {} ({})", self.expression(object)?, quoted(&field.name()), self.expression(value)?)),
 				_ => unsupported(node),
 			},
-			// `xs.add(v)` is `xs = xs ++ [v]`: lists are values
+			// `xs.add(v)` changes the shared list xs holds; a function local's list is a value: `xs = xs ++ [v]`
 			Node::Key(list, Op::Dot, call) => match (list.drop_meta(), call.drop_meta()) {
 				(Node::Symbol(name), Node::List(items, _, _)) if items.len() == 2 && self.cell_lists.contains(name) && APPEND_METHODS.iter().any(|method| is_word(&items[0], method)) => {
 					let item = self.expression(&items[1])?;
@@ -1214,7 +1227,7 @@ impl Exporter {
 					if !self.list_names.contains(name) {
 						return unsupported(node);
 					}
-					Ok(format!(".assign {} (.append (.glob {}) (.cons ({item}) .nil))", quoted(name), quoted(name)))
+					Ok(format!(".push (.glob {}) ({item})", quoted(name)))
 				}
 				(_, Node::Symbol(field)) if self.is_field(field) => Ok(format!(".get ({}) {}", self.expression(list)?, quoted(field))),
 				(_, Node::Symbol(method)) if SIZE_METHODS.contains(&method.as_str()) => self.tally(list, None, false),

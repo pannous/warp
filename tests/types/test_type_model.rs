@@ -361,6 +361,13 @@ const CORPUS: &[&str] = &[
 	// a number index is checked when it runs
 	"xs = [1, 2, 3]; n = 4; xs[n/2]",
 	"xs = [1, 2, 3]; n = 3; xs[n/2]",
+	// lists are shared (P215): an alias sees each add; an undeclared list takes anything, a declared one its items
+	"xs = [1, 2]; ys = xs; ys.add(3); xs",
+	"xs = [1]; ys = xs; xs = [5]; ys",
+	"xs = []; xs.add(1); xs.add(2); xs.count",
+	"xs = [1]; xs.add(\"ab\"); xs",
+	"xs: ints = [1]; xs.add(2); xs",
+	"xs: ints = [1]; xs.add(\"ab\"); xs",
 ];
 
 /// Programs warp compiles although the model rejects them: holes in warp's checks, each with its card
@@ -372,6 +379,8 @@ const KNOWN_ADMITS_GAPS: [&str; 2] = ["bool ← .int: warp admits true / W0 sub 
 
 /// Programs both accept whose values differ, each with its card
 const KNOWN_VALUE_DIFFERENCES: &[(&str, &str)] = &[
+	// a covariant alias's write: W0 checks it against the list's own element type when it runs, warp adds 2.5 to ints
+	("xs: ints = [1]; ys: numbers = xs; ys.add(2.5); xs", "p215-user"),
 ];
 /// What the model gives for a program it rejects, and for a value it does not keep
 const REJECTED: &str = "rejected";

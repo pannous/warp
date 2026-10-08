@@ -59,25 +59,22 @@ exact decimals/rationals (Kind::Int holding a ratio, wasm_emitter/exact.rs) and 
 | list σ ≤ list τ if σ ≤ τ | **covariant lists** | probes/variance/ |
 | cls p ≤ cls q if q is a prefix of p | a subclass or variant extends its parent's chain | class_methods.rs inherit, traits.rs IS_TYPE |
 
-Covariant lists are sound in warp because **lists are values**: `xs.add(v)` is the assignment `xs = xs ++ [v]` of a
-new list to the variable xs (node_with_at copies; typed lists copy on `ys = xs` when either side is updated,
-notes/typed_lists.md). A function receiving `names` gets the value, so TypeScript's hole (a `string[]` passed as
-`(string|number)[]` and a number pushed through the alias) cannot happen: probes/variance/widening_*.warp are all
-sound. In W0 this shows up as: no expression form mutates a value, only `x = e` changes the store, and `x = e`
-checks e against x's declared type. Preservation (below) is the proof.
+Lists are shared (P200b): `ys = xs` makes an alias and `xs.add(v)` changes the one list both see, so covariant
+lists alone are TypeScript's hole (`xs: [Circle] = [c]; ys: [Shape] = xs; ys.add(square); xs#2`). P215 closes it:
+each write is checked against the element type the list was made with when it runs (the run-time half), and a
+visible covariant alias that writes is a compile error (the compile-time half, warp-fixer's p215-user).
 
-**Shared lists (P200b, P215; branch shared-lists, not yet in W0).** Once lists share like maps, the alias hole is
-real: `xs: [Circle] = [c]; ys: [Shape] = xs; ys.add(square); xs#2`. P215 closes it both ways. Plan for W0, after
-shared-lists is on main:
-- a list becomes a heap object like an instance: the value `lst a` points to a cell holding the items and the element
-  type the list was made with (its declared type, else its literal's element type); `xs.add(v)`, insert and
-  `xs#i = v` change the cell instead of assigning xs
-- each write checks v against the cell's element type at run time and is a loud error otherwise (P215's run-time half)
-- `lst a` is typed `list (tag a)`, so covariance stays: the heap invariant "every item of cell a fits tag a" is what
-  writes preserve, and `tag a ≤ τ` makes every read through a `list τ` alias fit τ
-- P215's compile-time half (a visible alias `ys: [Shape] = xs` of a non-fresh `[Circle]` is rejected unless ys is
-  read-only) is a checker rule on assignments whose source is not a fresh list; it must stay monotone (a join-based
-  premise, not `¬ sub`), or W0 keeps it as a known difference
+**Shared lists in W0 (Semantics.lean `Store.lists`).** A stored list is a cell of the store, `lref a t`, made by
+`share e t` from a list value whose items fit t (else "type mismatch") and typed `list t`. `push l v` (`xs.add(v)`)
+appends v to the cell if v fits t, else it is a run-time error; list reads (`+`, `++`, `#`, `if`, `for`, broadcast)
+read the cell's items (`Store.items`). The store invariant `ListsOk` (each cell's items are a value whose type is
+below `list t`) is what each write keeps, and since `t ≤ τ` for every `list τ` alias, every read through it fits τ:
+covariance stays sound (preservation, progress and safety proved, no sorry). The exporter shares a list where a
+main-level list name takes it (`xs = [1]`, `xs: ints = …`, `xs = []`), tagged with the declared element type (`any`
+when undeclared: warp's undeclared lists take anything); `ys = xs` stores the same cell. Function locals' lists
+stay values (`xs = xs ++ [v]` in their cell). Not yet: `xs#i = v` and insert as writes, list identity for `===`
+beyond names. The compile-time half is not in W0 (its run-time check is what makes the model sound); the corpus
+lists `ys: numbers = xs; ys.add(2.5)` as a known value difference (W0: error, warp: adds it; card p215-user).
 
 Join (least upper bound) `σ ⊔ τ`: the type of `if … then σ else τ`, of a list literal's elements, of `try σ catch τ`.
 `int ⊔ text = any`, `list int ⊔ list text = list any`, `never ⊔ τ = τ`. Code: inference.rs `branches_kind`.
@@ -373,7 +370,7 @@ item-unchecked).
 (`looseEq`, walking the heap with fuel for cycles; `Program.fieldNames` enumerates a class chain's fields for it),
 lists item by item, anything else by value. `a === b` / `a same b` (same = true) is identity on instances (an
 instance is its address); on other values it compares by value, so `0 === false` is no. Not modelled: list identity
-(W0's lists are values, `[1] === [1]` is yes in W0, no in warp under P208) and `1 === 1.0` (W0 keeps no float
+(literal lists are values in W0, `[1] === [1]` is yes in W0, no in warp under P208; stored lists are cells) and `1 === 1.0` (W0 keeps no float
 values). The exporter maps `!=` and `!==` to the negation; `same`, `same as` and `is the same as` are `===`
 (`identical` is no alias, user decision).
 
