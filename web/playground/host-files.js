@@ -21,8 +21,14 @@ function servedFileExists(path) {
 	}
 }
 
+// a path of the served root that served-files.js (build.sh) does not list: missing without asking, since every 404 is
+// an error in the console (card console-errors)
+const isUnserved = url => typeof SERVED_FILES !== "undefined" && url.startsWith(FILE_ROOT)
+	&& !SERVED_FILES.has(decodeURIComponent(new URL(url).pathname.slice(new URL(FILE_ROOT).pathname.length)));
+
 // a synchronous GET (host calls are synchronous, so this runs in a worker); `timeout` in ms
 function getSync(url, timeout, binary = false) {
+	if (isUnserved(url)) throw new Error(HTTP_NOT_FOUND);
 	const request = new XMLHttpRequest();
 	request.open("GET", url, false);
 	if (timeout) request.timeout = timeout;

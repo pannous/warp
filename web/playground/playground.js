@@ -570,7 +570,8 @@ function fillExamples() {
 
 function initialize() {
 	editor = CodeMirror.fromTextArea($("code"), {
-		lineNumbers: true, lineWrapping: true, mode: "wasp", indentWithTabs: true, tabSize: 4,
+		// fixedGutter moves the gutter on every scroll, which Firefox warns about; wrapped lines never scroll sideways
+		lineNumbers: true, lineWrapping: true, fixedGutter: false, mode: "wasp", indentWithTabs: true, tabSize: 4,
 		extraKeys: { "Ctrl-Enter": runPressed, "Cmd-Enter": runPressed },
 	});
 	editor.on("change", () => {
