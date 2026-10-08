@@ -1133,8 +1133,7 @@ fn dispatched_sum(expanded: Node) -> Node {
 	Node::List(items, bracket, separator)
 }
 
-/// `first [1 2 3]` has one argument, `join [1 2] ","` two: a prefix call with more items than the word takes keeps the rest together
-
+/// `a == b`, `a < b`, `a and b`: where a library word's argument stops
 fn is_comparison(node: &Node) -> bool {
 	matches!(node.drop_meta(), Node::Key(_, op, _) if op.is_comparison() || op.is_logical())
 }
