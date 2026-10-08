@@ -14,6 +14,11 @@ impl WasmGcEmitter {
 			self.emit_call(func, "new_int");
 			return;
 		}
+		// `s++` of a text is `s += 1`, "a" → "a1" (card inc-text); the int step below holds an i64 local only
+		if matches!(op, Op::Inc | Op::Dec) && !matches!(self.get_type(left), Kind::Int | Kind::Float) {
+			self.emit_node_instructions(func, &crate::library_words::stepped(left.clone(), *op));
+			return;
+		}
 		if op.is_arithmetic() && self.emit_typed_arithmetic(func, left, op, right) {
 			return;
 		}

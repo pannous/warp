@@ -411,7 +411,7 @@ fn is_nested_place(place: &Node) -> bool {
 }
 
 /// `place += 1` for `place++`, `place -= 1` for `place--`
-fn stepped(place: Node, step: Op) -> Node {
+pub(crate) fn stepped(place: Node, step: Op) -> Node {
 	let update = if step == Op::Inc { Op::AddAssign } else { Op::SubAssign };
 	Node::Key(Box::new(place), update, Box::new(Node::int(1)))
 }
@@ -660,6 +660,9 @@ impl Lowering {
 				self.method_call(&left, &right).unwrap_or(Node::Key(Box::new(left), Op::Dot, Box::new(right)))
 			}
 			Node::Key(left, Op::Assign, right) => {
+				if let Some(chained) = self.chained_field_assignment(&left, &right) {
+					return chained;
+				}
 				let left = self.expand(*left);
 				let right = self.in_definition(&left, *right);
 				self.field_assignment(&left, &right).unwrap_or(Node::Key(Box::new(left), Op::Assign, Box::new(right)))
@@ -1002,6 +1005,16 @@ impl Lowering {
 		let Node::Key(_, Op::Hash, index) = target.drop_meta() else { return None };
 		subscript_field(index)?;
 		self.stored(target, value.clone())
+	}
+
+	/// `a = p.x = 5` is `p.x = 5; a = p.x`: the value of a field assignment is the field's new value, not the object
+	/// field_with gives (card chain-field)
+	fn chained_field_assignment(&self, outer: &Node, value: &Node) -> Option<Node> {
+		let Node::Key(inner, Op::Assign, _) = value.drop_meta() else { return None };
+		let Node::Key(_, Op::Hash, index) = self.expand(inner.as_ref().clone()).drop_meta().clone() else { return None };
+		subscript_field(&index)?;
+		let read_back = Node::Key(Box::new(outer.clone()), Op::Assign, inner.clone());
+		Some(self.expand(Node::List(vec![value.clone(), read_back], Bracket::None, Separator::Semicolon)))
 	}
 
 	/// `place = value` for any place: a variable, an element `xs#i` of one (as written), a field (field_with on its
