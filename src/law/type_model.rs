@@ -342,14 +342,14 @@ fn cell_class(function: &str, local: &str) -> String {
 	format!("{function}·{local}")
 }
 
-/// The names a function body assigns (`n = 0`, `n += 1`), in order of first assignment, but for its parameters and
-/// the given globals: its locals (functions2)
-fn assigned_locals(body: &Node, parameters: &[String], globals: &[String]) -> Vec<String> {
+/// The names a function body assigns (`n = 0`, `n += 1`, a parameter too), in order of first assignment, but for the
+/// given globals: its locals (functions2)
+fn assigned_locals(body: &Node, globals: &[String]) -> Vec<String> {
 	let mut locals: Vec<String> = vec![];
 	body.visit(&mut |part| {
 		if let Node::Key(target, op, _) = part {
 			match target.drop_meta() {
-				Node::Symbol(name) if (*op == Op::Assign || op.is_compound_assign()) && !parameters.contains(name) && !globals.contains(name) && !locals.contains(name) => locals.push(name.clone()),
+				Node::Symbol(name) if (*op == Op::Assign || op.is_compound_assign()) && !globals.contains(name) && !locals.contains(name) => locals.push(name.clone()),
 				_ => {}
 			}
 		}
@@ -626,9 +626,8 @@ impl Exporter {
 			self.functions.insert(name.to_string(), parameter_type);
 		}
 		for statement in &program {
-			let Some((name, parameters, body)) = function_definition(statement) else { continue };
-			let parameters: Vec<String> = parameters.iter().map(|parameter| self.parameter_type(parameter).map(|(parameter, _)| parameter)).collect::<Result<_, String>>()?;
-			for local in assigned_locals(body, &parameters, &self.globals) {
+			let Some((name, _, body)) = function_definition(statement) else { continue };
+			for local in assigned_locals(body, &self.globals) {
 				let class = cell_class(name, &local);
 				self.classes.insert(class.clone(), (vec![class.clone()], vec![(CELL_FIELD.to_string(), None)]));
 				cell_items.push(format!(".cell {}", quoted(&class)));
@@ -816,8 +815,13 @@ impl Exporter {
 			[] => (UNIT_PARAMETER.to_string(), vec![], declared),
 			parameters => (arguments_class(name), parameters.iter().map(|parameter| parameter.drop_meta().name()).collect(), declared),
 		};
-		let parameters: Vec<String> = std::iter::once(parameter.clone()).chain(fields.iter().cloned()).collect();
-		let cells = assigned_locals(body, &parameters, &self.globals);
+		let cells = assigned_locals(body, &self.globals);
+		// an assigned parameter's cell starts with the argument (read before the cell's name hides it)
+		let first_values: Vec<String> = cells.iter().map(|cell| match () {
+			_ if *cell == parameter => format!(".loc {}", quoted(cell)),
+			_ if fields.contains(cell) => format!(".get (.loc {}) {}", quoted(&parameter), quoted(cell)),
+			_ => UNIT_TYPE.to_string(),
+		}).collect();
 		self.cell_lists = cells.iter().filter(|cell| first_value_is_list(body, cell)).cloned().collect();
 		self.cells = cells.clone();
 		self.locals.push(parameter.clone());
@@ -826,9 +830,13 @@ impl Exporter {
 		self.locals.pop();
 		self.argument_fields.clear();
 		self.cells.clear();
-		let body = cells.iter().rev().fold(body?, |body, cell| {
+		let body = cells.iter().zip(&first_values).rev().fold(body?, |body, (cell, first_value)| {
 			let path = lean_strings(&[cell_class(name, cell)]);
-			format!(".letIn {} (.cls {path}) (.new {path}) ({body})", quoted(cell))
+			let new_cell = match first_value.as_str() {
+				UNIT_TYPE => format!(".new {path}"),
+				_ => format!(".letIn \"·new\" (.cls {path}) (.new {path}) (.seq (.set (.loc \"·new\") {} ({first_value})) (.loc \"·new\"))", quoted(CELL_FIELD)),
+			};
+			format!(".letIn {} (.cls {path}) ({new_cell}) ({body})", quoted(cell))
 		});
 		Ok(format!(".function {} {} {parameter_type} ({body})", quoted(name), quoted(&parameter)))
 	}
