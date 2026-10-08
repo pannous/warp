@@ -15,7 +15,7 @@ pub(crate) fn literal_kind(value: &Node) -> Option<Kind> {
 }
 
 /// The kind of a literal or of arithmetic on literals: `π*1000000` is a float, `2*3` and `2.0*3` (exact decimals) Ints
-pub(super) fn computed_literal_kind(value: &Node) -> Option<Kind> {
+pub(crate) fn computed_literal_kind(value: &Node) -> Option<Kind> {
 	match value.drop_meta() {
 		Node::Key(left, op, right) if op.is_arithmetic() && !matches!(left.drop_meta(), Node::Empty) => {
 			match (operand_kind(left)?, operand_kind(right)?) {
