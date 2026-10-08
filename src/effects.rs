@@ -9,7 +9,7 @@
 
 use crate::analyzer::{extract_ffi_imports, extract_user_functions};
 use crate::context::Context;
-use crate::node::Node;
+use crate::node::{Bracket, Node};
 use crate::operators::{is_function_keyword, Op};
 use std::collections::{BTreeMap, BTreeSet, VecDeque};
 use std::fmt;
@@ -61,7 +61,7 @@ pub enum Effect {
 impl Effect {
 	pub const ALL: [Effect; 8] = [State, Allocation, IO, FFI, Async, Unsafe, Div, Eval];
 
-	fn bit(self) -> u8 {
+	const fn bit(self) -> u8 {
 		1 << self as u8
 	}
 
@@ -75,6 +75,9 @@ pub struct EffectSet(u8);
 
 impl EffectSet {
 	pub const PURE: EffectSet = EffectSet(0);
+	/// Construction only uses memory: reported (`effects of f` says Allocation) but pure (wiki/pure.md), so it is never
+	/// a violation of `! Pure` and never keeps a function from being folded or memoized
+	const UNOBSERVABLE: EffectSet = EffectSet(Allocation.bit());
 
 	pub fn of(effects: &[Effect]) -> Self {
 		effects.iter().copied().collect()
@@ -93,7 +96,12 @@ impl EffectSet {
 	}
 
 	pub fn is_pure(self) -> bool {
-		self == Self::PURE
+		self.observable() == Self::PURE
+	}
+
+	/// The effects but those only the memory use shows
+	pub fn observable(self) -> Self {
+		self.minus(Self::UNOBSERVABLE)
 	}
 
 	pub fn is_subset_of(self, other: EffectSet) -> bool {
@@ -129,7 +137,7 @@ impl FromIterator<Effect> for EffectSet {
 
 impl fmt::Display for EffectSet {
 	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-		if self.is_pure() {
+		if *self == Self::PURE {
 			return write!(f, "{PURE}");
 		}
 		let names: Vec<String> = self.iter().map(|effect| format!("{effect:?}")).collect();
@@ -312,7 +320,7 @@ impl EffectReport {
 	fn check_constraints(&self) -> Vec<EffectViolation> {
 		self.functions.iter().filter_map(|(name, function)| {
 			let constraint = function.declared.clone()?;
-			let excess = function.effects.minus(constraint.allowed);
+			let excess = function.effects.minus(constraint.allowed).observable();
 			let first_excess = excess.iter().next()?;
 			Some(EffectViolation { function: name.clone(), constraint, excess, chain: self.call_chain(name, first_excess) })
 		}).collect()
@@ -415,9 +423,12 @@ impl Resolver<'_> {
 		}
 		if let Some(import) = self.context.ffi_imports.get(name) {
 			// libm is pure (P26): untrusted code and `! Pure` functions may call it; so are the module's own linear arrays
-			return Some(match import.library == crate::ffi::LIBM || import.library == crate::wasm_emitter::linear_arrays::LINEAR_LIBRARY {
-				true => External { capability: Libm, effects: EffectSet::PURE },
-				false => External { capability: Ffi, effects: EffectSet::of(&[FFI]) },
+			let pure_library = import.library == crate::ffi::LIBM || import.library == crate::wasm_emitter::linear_arrays::LINEAR_LIBRARY;
+			let task_word = import.library == crate::host::HOST_LIBRARY && crate::host::TASK_WORDS.contains(&name);
+			return Some(match (pure_library, task_word) {
+				(true, _) => External { capability: Libm, effects: EffectSet::PURE },
+				(_, true) => External { capability: Ffi, effects: EffectSet::of(&[Async]) },
+				_ => External { capability: Ffi, effects: EffectSet::of(&[FFI]) },
 			});
 		}
 		trusted_external(name)
@@ -444,10 +455,27 @@ impl Resolver<'_> {
 			Node::Symbol(name) if self.resolves(name) => {
 				function.calls.insert(name.clone());
 			}
-			Node::List(items, _, _) => items.iter().for_each(|item| self.collect(item, function)),
+			// the arguments a lowering pass builds for a host word (`run_block xs#1 "xs" [xs]`) are no construction of
+			// the program's own: the call keeps their other effects only
+			Node::List(items, _, _) if items.first().is_some_and(|head| matches!(head.drop_meta(), Node::Symbol(name) if self.external(name).is_some())) => {
+				let mut arguments = FunctionEffects::default();
+				items.iter().for_each(|item| self.collect(item, &mut arguments));
+				function.calls.extend(arguments.calls);
+				function.own = function.own.union(arguments.own.observable());
+				function.effects = function.effects.union(arguments.effects.observable());
+			}
+			Node::List(items, bracket, _) => {
+				if constructs(bracket, items) {
+					function.perform(Allocation);
+				}
+				items.iter().for_each(|item| self.collect(item, function))
+			}
 			Node::Key(left, op, right) => {
 				if *op == Op::While && !never_true(right) {
 					function.perform(Div);
+				}
+				if *op == Op::Add && [left, right].iter().any(|operand| matches!(operand.drop_meta(), Node::Text(_))) {
+					function.perform(Allocation); // a text joined: "hi " + name
 				}
 				self.collect(left, function);
 				self.collect(right, function);
@@ -467,6 +495,16 @@ impl FunctionEffects {
 		let effect = EffectSet::of(&[effect]);
 		self.own = self.own.union(effect);
 		self.effects = self.effects.union(effect);
+	}
+}
+
+/// A list `[a b]` or a record `{name: a}` built where it is written; not a block `{global y; y*y}`
+fn constructs(bracket: &Bracket, items: &[Node]) -> bool {
+	let is_field = |item: &Node| matches!(item.drop_meta(), Node::Key(key, Op::Colon, _) if key.drop_meta().name() != STATE_KEYWORD);
+	match bracket {
+		Bracket::Square => true,
+		Bracket::Curly => !items.is_empty() && items.iter().all(is_field),
+		_ => false,
 	}
 }
 

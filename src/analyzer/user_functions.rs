@@ -148,7 +148,8 @@ pub(super) fn infer_function_return_kind(params: &[Param], body: &Node, function
 		other => other,
 	};
 	// `f() := {}`, a handler `{{}}`: a body doing nothing returns ø
-	let empty_block = matches!(last.drop_meta(), Node::List(items, Bracket::Curly, _) if items.is_empty());
+	// `f() = ø` too
+	let empty_block = matches!(last.drop_meta(), Node::List(items, Bracket::Curly, _) if items.is_empty()) || matches!(last.drop_meta(), Node::Empty);
 	let last_kind = match (is_error(last), returned.first()) {
 		(false, None) if empty_block => Kind::Empty,
 		(true, Some(_)) if returned.contains(&Kind::Float) && returned.iter().all(|kind| !kind.is_ref()) => Kind::Float,
@@ -180,7 +181,8 @@ pub(crate) fn annotated_kind(type_node: &Node) -> Option<Kind> {
 		return Some(Kind::List);
 	}
 	// `v:any`, as an untyped field: any value, held as a Node (lib/json.wasp's to_json takes what parse_json gives)
-	if type_name == crate::type_kinds::UNTYPED_FIELD {
+	// `x: int or text` (an inline union of builtin types, card inline-union) likewise
+	if type_name == crate::type_kinds::UNTYPED_FIELD || annotated_builtin_type(type_node).is_some_and(|name| union_parts(name).is_some()) {
 		return Some(Kind::Empty);
 	}
 	type_word_kind(&type_name)
@@ -753,7 +755,7 @@ pub(super) fn infer_parameters_from_calls(ctx: &mut Context, program: &Node) {
 			let Some(function) = ctx.user_functions.get(&name) else { continue };
 			for (index, argument) in arguments.into_iter().enumerate().take(function.params.len()) {
 				// `real`, `exact` are Ints that may hold a ratio: only a whole type loses a decimal's digits
-				let declared_int = function.params[index].annotation.as_ref().is_some_and(|annotation| crate::analyzer::checks::is_whole_type(&annotation.name()));
+				let declared_int = function.params[index].annotation.as_ref().is_some_and(|annotation| crate::analyzer::checks::refuses_decimals(&annotation.name()));
 				if declared_int && has_digits_an_int_loses(argument) {
 					// a whole float serializes as `2`; its decimal point is what makes it no int
 					let written = match argument.drop_meta() {

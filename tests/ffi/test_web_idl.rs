@@ -2,7 +2,7 @@
 //! is through the C headers: a member the global's interface lacks, an attribute called, or a call with an argument
 //! count no overload takes is a compile-time error, natively (node) and in the page alike
 use crate::common::fails_with;
-use crate::is;
+use crate::{is, eq};
 
 #[test]
 fn a_member_the_interface_lacks_is_an_error_with_its_near_miss() {
@@ -62,4 +62,31 @@ fn a_global_is_a_namespace_or_an_attribute_of_the_scope_not_an_interface() {
 fn an_attributes_value_is_typed_by_its_interface() {
 	fails_with("use js navigator; navigator.clipboard.writeTxt(\"x\")", "navigator.clipboard (Clipboard in WebIDL) has no member writeTxt; did you mean writeText");
 	fails_with("use js navigator; board = navigator.clipboard; board.writeText()", "writeText(DOMString data)");
+}
+
+// a declared text, bool, int or float is a warp value: warp's methods apply, a variable holds it
+#[test]
+fn a_declared_primitive_result_is_a_warp_value() {
+	is!("use js crypto; count crypto.randomUUID().upper()", 36);
+	is!("use js crypto; id = crypto.randomUUID(); count id", 36);
+	is!("use js navigator; navigator.hardwareConcurrency + 0.5 > 1", 1);
+	eq!(warp::web_idl::result_type("Crypto", "randomUUID", true), Some("text"));
+	eq!(warp::web_idl::result_type("Navigator", "onLine", false), Some("bool"));
+	eq!(warp::web_idl::result_type("Performance", "now", true), Some("float"));
+	eq!(warp::web_idl::result_type("Storage", "getItem", true), None); // DOMString? may be ø
+	eq!(warp::web_idl::result_type("Navigator", "clipboard", false), None); // an object
+}
+
+// the text of a foreign call is the text of its value, not of the call
+#[test]
+fn a_foreign_calls_value_as_text() {
+	is!("use js JSON; (JSON.stringify(1) as text) + 1", "11");
+}
+
+// a nullable result is the optional type: getItem's DOMString? is text? (ø or a text, optional_casts.rs)
+#[test]
+fn a_nullable_result_is_optional() {
+	eq!(warp::web_idl::optional_result_type("Storage", "getItem", true), Some("text?".to_string()));
+	eq!(warp::web_idl::optional_result_type("Crypto", "randomUUID", true), Some("text".to_string()));
+	eq!(warp::web_idl::optional_result_type("Navigator", "clipboard", false), None);
 }

@@ -479,6 +479,9 @@ PASSED:
   ✓ control::test_web_sockets::data_goes_as_json
   ✓ control::test_welcome_forms::loop_runs_until_break
   ✓ control::test_welcome_forms::match_cases_may_be_written_with_fat_arrows
+  ✓ control::test_when_signals::when_a_condition_listens_like_whenever
+  ✓ control::test_when_signals::when_an_event_listens_like_on
+  ✓ control::test_when_signals::when_arms_stay_a_switch
   ✓ control::test_while_paren_condition::test_while_parenthesized_condition_takes_a_bare_body
   ✓ control::test_while_paren_condition::test_while_parenthesized_condition_takes_a_bare_body_with_space
   ✓ control::test_while_value::test_while_value_is_last_body_value
@@ -618,9 +621,12 @@ PASSED:
   ✓ ffi::test_wasi::test_wasi_putf
   ✓ ffi::test_wasi::test_wasi_puti
   ✓ ffi::test_web_idl::a_call_with_a_count_no_overload_takes_is_an_error
+  ✓ ffi::test_web_idl::a_declared_primitive_result_is_a_warp_value
+  ✓ ffi::test_web_idl::a_foreign_calls_value_as_text
   ✓ ffi::test_web_idl::a_global_is_a_namespace_or_an_attribute_of_the_scope_not_an_interface
   ✓ ffi::test_web_idl::a_global_without_webidl_stays_unchecked
   ✓ ffi::test_web_idl::a_member_the_interface_lacks_is_an_error_with_its_near_miss
+  ✓ ffi::test_web_idl::a_nullable_result_is_optional
   ✓ ffi::test_web_idl::a_page_has_local_storage_and_the_clipboard
   ✓ ffi::test_web_idl::an_attribute_is_read_not_called
   ✓ ffi::test_web_idl::an_attributes_value_is_typed_by_its_interface
@@ -790,6 +796,7 @@ PASSED:
   ✓ functions::test_deterministic_inference::a_program_compiles_the_same_every_time
   ✓ functions::test_dollar_body::dollar_parameters_in_a_body_block
   ✓ functions::test_each_spellings::for_each_spellings_are_each
+  ✓ functions::test_effects::test_allocation_and_async_are_inferred
   ✓ functions::test_effects::test_constraint_on_non_function_is_loud
   ✓ functions::test_effects::test_declared_constraint_holds
   ✓ functions::test_effects::test_declared_constraint_violation_names_span_and_chain
@@ -1368,6 +1375,7 @@ PASSED:
   ✓ lists::test_unpacking::unpack_text
   ✓ lists::test_unpacking::unpack_tuple_function
   ✓ lists::test_unpacking::unpack_tuple_values
+  ✓ lists::test_where_filter::a_where_condition_of_a_bare_word_suggests_the_field
   ✓ lists::test_where_filter::a_where_condition_without_it_is_an_error
   ✓ lists::test_where_filter::where_filters_by_it
   ✓ lists::test_where_filter::where_with_an_assignment_binds
@@ -1378,7 +1386,9 @@ PASSED:
   ✓ modules::test_folder_scope::sibling_definitions_are_visible_without_use
   ✓ modules::test_folder_scope::the_file_itself_wins_over_its_siblings
   ✓ modules::test_header_search::a_header_comes_from_the_first_include_directory_holding_it
+  ✓ modules::test_header_search::an_import_nothing_declares_says_why
   ✓ modules::test_header_search::only_sdl_names_read_the_sdl_headers
+  ✓ modules::test_header_search::the_sdl_headers_declare_the_window_functions
   ✓ modules::test_include::a_missing_include_lists_the_searched_paths
   ✓ modules::test_include::a_nested_include_is_found_next_to_the_including_file
   ✓ modules::test_include::include_splices_the_whole_file_and_runs_it
@@ -2257,6 +2267,7 @@ PASSED:
   ✓ scope::test_use_scopes::use_package_sees_every_file_below_the_package_folder
   ✓ scope::test_use_scopes::use_project_sees_every_file_below_the_project_root
   ✓ scope::test_variable_kind_change::a_loop_variable_may_reuse_the_name_of_a_list
+  ✓ scope::test_variable_kind_change::a_loop_variable_may_reuse_the_name_of_a_number_and_read_fields
   ✓ scope::test_variable_kind_change::a_variable_holds_its_last_value_of_another_kind
   ✓ scope::test_variable_kind_clash::a_function_body_is_checked_too
   ✓ scope::test_variable_kind_clash::a_variable_given_another_kind_is_a_compile_error
@@ -2324,6 +2335,7 @@ PASSED:
   ✓ text::test_interpolation::curly_dollar_holes_interpolate_bare_dollars_stay_text
   ✓ text::test_interpolation::data_keeps_dollars_as_text
   ✓ text::test_interpolation::dollar_arguments_and_templates_keep_working
+  ✓ text::test_interpolation::holes_call_foreign_modules
   ✓ text::test_interpolation::holes_take_parameters_lists_and_exact_numbers
   ✓ text::test_interpolation::holes_take_text_results_of_library_words
   ✓ text::test_interpolation::round_dollar_holes_interpolate_like_curly_ones
@@ -2582,6 +2594,10 @@ PASSED:
   ✓ types::test_declaration_zero_value::a_text_declaration_is_empty
   ✓ types::test_declared_int_of_float_expression::an_int_declaration_refuses_a_float_expression
   ✓ types::test_declared_int_of_float_expression::an_int_declaration_refuses_a_non_whole_exact_value
+  ✓ types::test_element_field_writes::a_character_stored_into_a_list_of_unknown_type_stays_a_character
+  ✓ types::test_element_field_writes::a_field_of_a_list_element_changes
+  ✓ types::test_element_field_writes::a_list_field_of_an_element_checks_its_items
+  ✓ types::test_element_field_writes::a_store_into_a_call_result_is_an_error
   ✓ types::test_enum_cases::a_match_on_enum_cases_tests_and_binds
   ✓ types::test_enum_cases::an_enum_case_with_values_is_a_class
   ✓ types::test_enum_cases::an_enum_without_values_stays_numbered
@@ -2614,6 +2630,11 @@ PASSED:
   ✓ types::test_generic_types::test_comparisons_and_shifts_are_not_type_applications
   ✓ types::test_generic_types::test_nested_type_applications
   ✓ types::test_generic_types::test_type_of_a_literal_list_stays
+  ✓ types::test_inline_unions::a_covered_part_is_dropped
+  ✓ types::test_inline_unions::a_part_that_is_no_builtin_type_is_refused
+  ✓ types::test_inline_unions::an_inline_union_holds_either_kind
+  ✓ types::test_inline_unions::an_inline_union_parameter_takes_either_kind
+  ✓ types::test_inline_unions::an_inline_union_refuses_a_value_fitting_no_part
   ✓ types::test_instance_arguments::a_call_with_an_instance_argument_gives_the_call_result
   ✓ types::test_int_declaration_stays_whole::a_declared_int_refuses_a_fraction_at_run_time
   ✓ types::test_int_declaration_stays_whole::a_declared_int_takes_whole_results
@@ -2644,6 +2665,9 @@ PASSED:
   ✓ types::test_mutating_methods::a_method_setting_an_element_of_a_list_field_changes_its_object
   ✓ types::test_mutating_methods::pop_on_a_list_field
   ✓ types::test_mutating_methods::the_call_gives_the_changed_object
+  ✓ types::test_optional_casts::a_function_of_empty_returns_empty
+  ✓ types::test_optional_casts::a_javascript_null_is_empty
+  ✓ types::test_optional_casts::an_optional_cast_keeps_empty
   ✓ types::test_optional_number_fields::a_comment_after_an_optional_type_ends_the_field
   ✓ types::test_optional_number_fields::a_given_optional_number_is_the_number
   ✓ types::test_optional_number_fields::an_omitted_optional_number_is_empty
@@ -2740,6 +2764,7 @@ PASSED:
   ✓ types::test_type_colon_block::a_type_colon_block_declares_its_fields
   ✓ types::test_type_model::test_type_model_is_proved
   ✓ types::test_type_model::test_warp_admits_what_the_type_model_subtypes
+  ✓ types::test_type_model::test_warp_computes_what_the_type_model_computes
   ✓ types::test_type_model::test_warp_rejects_what_the_type_model_rejects
   ✓ types::test_type_name_definition_forms::test_define_operator_takes_the_same_slots_as_assign
   ✓ types::test_type_name_definition_forms::test_to_phrase_with_a_block_body
@@ -3457,4 +3482,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-19 ignored, 3452 passed, 0 failed, 3452 total tested
+19 ignored, 3477 passed, 0 failed, 3477 total tested
