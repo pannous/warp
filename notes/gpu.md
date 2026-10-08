@@ -195,5 +195,8 @@ Rejected: (b) automatic f32 for floats (results differ in the 7th digit), (c) do
    its storage buffer on the GPU (gpu.rs KEPT, the last 4 blocks); the later kernel copies from it instead of uploading.
    gpu_maps.rs marked_kept sets the flags (6th argument of gpu_map_linear / gpu_reduce_linear: KEEP_RESULT 1,
    SOURCE_KEPT 2); a write to ys or a call that hands it on between them drops both. 10^7 items, second map: 125–172 →
-   68–84 ms. Missing kept buffer → plain upload. The browser ignores the flag: each task Worker has its own device and
-   taskPool hands out any worker, so a kept buffer would need worker affinity (open).
+   68–84 ms. Missing kept buffer → plain upload. Only a producer that maps on the GPU (a heavy lambda) is kept; a newly
+   kept block replaces an earlier run's buffer for the same address (addresses recur across runs in one process).
+   Browser (card gpu-kept): GPU jobs go to the task Worker of the last GPU job (host-gpu.js gpuTaskWorker), which keeps
+   the buffers (keptBuffers, by block and count); busy or missing → another worker / an upload (KEPT_MISSING, retried).
+   Headless Chrome, samples/gpu_map.warp: the kept-buffer map 18 ms at 10^6, same result as native.
