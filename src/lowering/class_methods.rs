@@ -331,7 +331,7 @@ fn from_objects(node: Node) -> Node {
 }
 
 /// Each class's fields in order, with their type names
-fn class_fields(node: &Node) -> std::collections::HashMap<String, Vec<(String, String)>> {
+pub(crate) fn class_fields(node: &Node) -> std::collections::HashMap<String, Vec<(String, String)>> {
 	let mut fields = std::collections::HashMap::new();
 	node.visit(&mut |part| if let Node::Type { name, body } = part {
 		let typed = class_items(body).iter().filter(|item| method_parts(item).is_none()).filter_map(|item| Some((field_name(item)?, field_type_name(item)))).collect();
@@ -654,7 +654,7 @@ fn renamed_type_word_methods(node: Node) -> Node {
 
 /// The variables known to hold an instance of one of `classes`, with its class: assigned a construction, annotated
 /// `p:Point`, or iterating a list of constructions `for p in ps`
-fn instance_classes(node: &Node, classes: &[String]) -> std::collections::HashMap<String, String> {
+pub(crate) fn instance_classes(node: &Node, classes: &[String]) -> std::collections::HashMap<String, String> {
 	let mut instances = std::collections::HashMap::new();
 	node.visit(&mut |part| if let Node::Key(target, op, value) = part {
 		// `p:Point = …`: the annotation says it

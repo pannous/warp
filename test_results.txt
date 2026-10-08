@@ -1470,6 +1470,7 @@ PASSED:
   ✓ modules::test_std_time::use_time_knows_leap_years_and_month_lengths
   ✓ modules::test_std_time::use_time_parses_dates
   ✓ modules::test_use_modules::a_program_variable_leaves_a_file_module_its_words
+  ✓ modules::test_use_modules::a_quoted_path_uses_that_file
   ✓ modules::test_use_modules::module_function_locals_are_not_the_programs_variables
   ✓ modules::test_use_modules::test_module_statements_are_not_imported
   ✓ modules::test_use_modules::test_module_using_module_imports_transitively_and_survives_cycles
@@ -2447,6 +2448,10 @@ PASSED:
   ✓ types::test_cast_bugs::a_runtime_value_as_string
   ✓ types::test_cast_bugs::a_text_as_list_is_its_characters
   ✓ types::test_cast_bugs::nonsense_casts_are_loud
+  ✓ types::test_checked_call_kinds::a_declared_list_parameter_refuses_other_elements
+  ✓ types::test_checked_call_kinds::a_declared_parameter_refuses_an_argument_of_another_kind
+  ✓ types::test_checked_call_kinds::a_declared_parameter_takes_its_subtypes
+  ✓ types::test_checked_call_kinds::a_variable_keeps_the_kind_of_a_call_result
   ✓ types::test_class_aliases::a_constructor_alias_called_as_a_method_stays_a_method
   ✓ types::test_class_aliases::a_loop_in_init_keeps_its_variables_local
   ✓ types::test_class_aliases::a_type_parameter_of_a_class_is_noted
@@ -2605,9 +2610,11 @@ PASSED:
   ✓ types::test_list_annotations::a_postfix_list_annotation_declares_the_list
   ✓ types::test_list_element_types::declared_list_checks_element_assignment
   ✓ types::test_list_element_types::declared_list_checks_run_time_items_at_the_store
+  ✓ types::test_list_element_types::declared_list_checks_the_items_of_another_list
   ✓ types::test_list_element_types::declared_list_refuses_a_literal_of_another_type
   ✓ types::test_list_element_types::declared_list_refuses_another_type_later
   ✓ types::test_list_element_types::declared_lists_keep_fitting_items
+  ✓ types::test_list_element_types::list_fields_check_run_time_items
   ✓ types::test_list_element_types::list_fields_check_their_items
   ✓ types::test_match_static_variant::a_bare_variant_skips_the_class_arms
   ✓ types::test_match_static_variant::an_instance_still_takes_its_arm
@@ -3087,6 +3094,8 @@ PASSED:
   ✓ welcoming::test_c_style::test_c_style_definition
   ✓ welcoming::test_c_style::test_if_assigning_a_float
   ✓ welcoming::test_c_style::test_if_parenthesized_condition_then_statement
+  ✓ welcoming::test_const_list_methods::a_const_list_reads_and_a_let_list_changes
+  ✓ welcoming::test_const_list_methods::a_const_list_refuses_its_changing_methods
   ✓ welcoming::test_constant_shadowing::a_constant_word_still_reads_and_names_fields
   ✓ welcoming::test_constant_shadowing::a_field_named_like_a_constant_is_read_by_the_methods
   ✓ welcoming::test_constant_shadowing::an_assigned_constant_word_is_an_error
@@ -3426,4 +3435,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-19 ignored, 3421 passed, 0 failed, 3421 total tested
+19 ignored, 3430 passed, 0 failed, 3430 total tested

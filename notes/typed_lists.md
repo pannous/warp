@@ -120,8 +120,14 @@ checked like a declared scalar:
 - Items known only at run time are checked at the store (lowering/list_element_checks.rs, first MEANING pass):
   `if not (v is text) { raise "…" }` as a statement before the store, a call's item held in a temporary `checked·N`
   first, a whole list from a call checked item by item. The store keeps its form, so a typed int list stays an array.
+- `names = other + [v]` checks the items of `other` in a for-loop too, unless `other` is `names` itself or declared
+  with the same element type (card list-element-runtime).
+- A field's run-time append `b.items.add(f())` is checked the same way when b's class is known in the pass
+  (`b = bag(…)`, `b: bag`; class_methods `instance_classes`, `class_fields`): "items of bag is declared texts".
 - A float or number list takes ints (`is number`), as a declared float does.
-- Not checked yet: run-time items appended to a list field (`b.items.add(f())`), the items of `other` in
-  `names = other + [v]`, and parameters (`f(xs: texts)` called with `[420]`).
+- Parameters (`f(xs: texts)` called with `[420]`): warp-7c's param-types work (functions2, checks.rs
+  `declared_element_type`, `elements_fit`).
+- Not checked yet: a field append whose instance's class the pass can't see (a parameter `b` without annotation, a
+  returned instance), and a field assigned whole at run time (`b.items = f()`).
 - Variance (TypeScript's covariant arrays) needs no rule while lists are values: a callee's widened `xs: list` is its
   own copy (probes/variance/, notes/footguns.md).

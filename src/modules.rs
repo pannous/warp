@@ -542,14 +542,19 @@ impl<'a> Loader<'a> {
 	}
 
 	fn candidates_with(&self, name: &str, extensions: &[&str]) -> Vec<PathBuf> {
-		if !is_plain_relative_path(name) {
-			return vec![];
-		}
 		let has_extension = extensions.iter().any(|extension| name.ends_with(&format!(".{extension}")));
 		let file_names: Vec<String> = match has_extension {
 			true => vec![name.to_string()],
 			false => extensions.iter().map(|extension| format!("{name}.{extension}")).collect(),
 		};
+		// `use "./helper.wasp"`, `use "/srv/helper.wasp"`: that file, `./` from the including file's folder
+		if is_explicit_path(name) {
+			let base = self.including_directory.clone().unwrap_or_default();
+			return file_names.iter().map(|file_name| base.join(file_name)).collect();
+		}
+		if !is_plain_relative_path(name) {
+			return vec![];
+		}
 		let bases: Vec<PathBuf> = self.including_directory.iter().cloned().chain(std::iter::once(PathBuf::new())).collect();
 		let mut candidates = Vec::new();
 		for base in &bases {
@@ -1029,6 +1034,11 @@ pub(crate) fn path_of(node: &Node) -> Option<String> {
 		Node::Key(name, Op::Dot, extension) => Some(format!("{}.{}", path_of(name)?, path_of(extension)?)),
 		_ => None,
 	}
+}
+
+/// A path naming its file itself rather than a name to search for: absolute, or starting at `./` or `../`
+fn is_explicit_path(name: &str) -> bool {
+	Path::new(name).is_absolute() || name.starts_with("./") || name.starts_with("../")
 }
 
 /// A relative path that stays below its directory
