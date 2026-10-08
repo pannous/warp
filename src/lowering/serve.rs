@@ -47,10 +47,14 @@ pub fn lower(program: Node) -> Node {
 }
 
 /// A program compiled for its page (pipeline::for_a_page) does not serve: the server runs it natively, the page in the
-/// browser (notes/web_framework.md "Built sites")
+/// browser (notes/web_framework.md "Built sites"). A server function is a function of the page too, its body run there
+/// until the page calls POST /rpc/f instead (notes/server_routes.md, step 2)
 fn without_serving(program: Node) -> Node {
 	match program {
-		Node::List(statements, bracket, separator) => Node::List(statements.into_iter().filter(|statement| served(statement).is_none()).collect(), bracket, separator),
+		Node::List(statements, bracket, separator) => {
+			let statements = statements.into_iter().filter(|statement| served(statement).is_none());
+			Node::List(statements.map(|statement| server_definition(&statement).unwrap_or(statement)).collect(), bracket, separator)
+		}
 		single if served(&single).is_some() => Node::Empty,
 		other => other,
 	}
