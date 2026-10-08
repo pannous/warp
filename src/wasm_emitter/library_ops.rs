@@ -73,6 +73,7 @@ impl WasmGcEmitter {
 		if self.should_emit_function(NODE_ORDER) {
 			self.emit_node_order();
 		}
+		self.emit_uncertain_order(); // after node_order, which it calls
 		self.emit_text_case("text_upper", CaseMapping::Upper);
 		self.emit_text_case("text_lower", CaseMapping::Lower);
 		self.emit_text_split();
@@ -198,6 +199,8 @@ impl WasmGcEmitter {
 			};
 			s.emit_codepoint_as_text(f, first);
 			s.emit_codepoint_as_text(f, second);
+			s.emit_uncertain_as_value(f, first);
+			s.emit_uncertain_as_value(f, second);
 			for (node, kind) in [(first, kinds[0]), (second, kinds[1])] {
 				s.emit_field(f, node, 0);
 				Self::emit_list(f, &[I::I64Const(KIND_MASK), I::I64And, I::LocalSet(kind)]);
@@ -393,6 +396,7 @@ impl WasmGcEmitter {
 		self.emit_int_to_decimal();
 		self.emit_exact_text();
 		self.emit_float_text(); // after int_to_decimal, which it calls
+		self.emit_uncertain_text(); // after float_text and text_concat, which it calls
 		for (name, nested) in joinings {
 			self.emit_joining(name, nested);
 		}
@@ -575,6 +579,12 @@ impl WasmGcEmitter {
 					f.instruction(&I::If(BlockType::Empty));
 					Self::emit_list(f, &[I32Const(empty_text.0 as i32), I32Const(empty_text.1 as i32)]);
 					s.call(f, "new_text");
+					Self::emit_list(f, &[I::LocalSet(element), I::End]);
+				}
+				if s.should_emit_function(super::uncertain::UNCERTAIN_TEXT) {
+					is_kind(f, Kind::Uncertain);
+					Self::emit_list(f, &[I::If(BlockType::Empty), I::LocalGet(element), I::RefAsNonNull]);
+					s.call(f, super::uncertain::UNCERTAIN_TEXT);
 					Self::emit_list(f, &[I::LocalSet(element), I::End]);
 				}
 				is_kind(f, Kind::Float);

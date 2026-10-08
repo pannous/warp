@@ -187,3 +187,35 @@ fn a_reduction_of_a_gpu_map_takes_a_list_of_floats() {
 	assert!(lowered.contains("gpu_reduce_linear"), "{lowered}");
 	assert_eq!(eval(&format!("{program}abs(s - sin(1)) < 0.00001")).serialize(), "yes");
 }
+
+// card gpu-vectors: an @gpu map result read in a text hole between two maps is read on the CPU, so it is not folded
+// into the later map (it was: the hole read a block never filled, "index out of range")
+#[test]
+fn a_gpu_map_result_read_in_a_text_hole_is_not_folded() {
+	let program = "linear xs = float[40000]\nfor i in 1 to 40000 { xs#i = i / 40000.0 }\nys = xs.map(x => sin(x)) @gpu\nprint \"\\(ys#1)\"\nzs = ys.map(y => exp(y) + 1) @gpu\n";
+	assert_eq!(warp::pipeline::lower(program).expect("a program").serialize().matches("gpu_map_linear").count(), 2);
+	crate::is!(&format!("{program}abs(zs#40000 - (exp(sin(1)) + 1)) < 0.00001"), true);
+}
+
+// card gpu-vectors kept-buffer: an @gpu map result read on the CPU comes back, but its buffer also stays on the GPU, and
+// a later @gpu map or reduction of it starts from there (flags KEEP_RESULT 1, SOURCE_KEPT 2 on the host word); not when
+// a statement between writes it or hands it on
+#[test]
+fn a_gpu_map_result_read_on_the_cpu_is_kept_on_the_gpu_for_the_next_map() {
+	use warp::diagnostic::{with_warning_mode, WarningMode};
+	let keeping = |program: &str| {
+		let mut flags = vec![];
+		warp::pipeline::lower(program).expect("a program").visit(&mut |part| if let Node::List(items, _, _) = part {
+			if items.first().is_some_and(|head| ["gpu_map_linear", "gpu_reduce_linear"].contains(&head.name().as_str())) {
+				flags.push(items.last().expect("arguments").serialize());
+			}
+		});
+		flags
+	};
+	let program = "linear xs = float[40000]\nfor i in 1 to 40000 { xs#i = i / 40000.0 }\nys = xs.map(x => sin(x)) @gpu\nprint \"\\(ys#1) of \\(#ys)\"\nzs = ys.map(y => exp(y) + 1) @gpu\ns = sum(ys.map(y => cos(y)) @gpu)\n";
+	assert_eq!(keeping(program), ["1", "2", "2"]);
+	let checked = format!("{program}abs(zs#40000 - (exp(sin(1)) + 1)) < 0.00001 and abs(s - sum(ys.map(y => cos(y)))) < 0.01");
+	assert_eq!(with_warning_mode(WarningMode::Error, || eval(&checked)).serialize(), "yes");
+	assert_eq!(keeping(&program.replace("zs = ", "ys#1 = 5.0\nzs = ")), ["0", "0", "0"]);
+	assert_eq!(keeping(&program.replace("zs = ", "f(ys)\nzs = ")), ["0", "0", "0"]);
+}

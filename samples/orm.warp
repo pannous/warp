@@ -4,7 +4,6 @@
 class Person{name: text; age: int}
 
 // registering a list of a class from the database makes it a table, with an implicit id per row;
-// the short form of people: [Person] = database.people
 stored people: [Person]
 
 if count(people) == 0 {
@@ -14,13 +13,15 @@ if count(people) == 0 {
 }
 
 // a filter is SQL where SQL says the same; the fields of each row can be named bare
-grown = people where age > 18
+grown = people where it.age > 18
 print "grown: " + count(grown)
 
 // any warp function works inside a filter too: SQLite calls back into the program for each row
 is_prime(n) := n > 1 and count([d for d in 2..n if n % d == 0]) == 0
-print "prime ages: " + count(people where is_prime(age))
+print "prime ages: " + count(people where is_prime(it.age))
 
 // a row read from the table is an ordinary instance that knows its row
 bo = grown#1
 bo.name + " has row " + bo.id
+bo.age += 1
+save bo
