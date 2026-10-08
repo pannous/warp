@@ -63,7 +63,7 @@ pub fn resolve_in(program: Node, directories: &[&str]) -> Node {
 		Some(scope) => loader.with_scope(program, scope, file.as_deref()),
 		None => Ok(program),
 	}).map(|program| crate::wasm_modules::rewrite_uses(program, &loader.wasm_modules))
-		.map(|program| with_needed_definitions(program, loader.std_definitions));
+		.map(|program| with_needed_definitions(program, loader.hidden_apart()));
 	EARLY_CLASS_MODULES.with(|modules| modules.borrow_mut().clear()); // for this program only
 	MODULE_DEFINITIONS.with(|names| own_names.iter().for_each(|own| { names.borrow_mut().remove(own); })); // the program's own word wins
 	resolved.unwrap_or_else(|failure| failure)
@@ -367,11 +367,40 @@ struct Loader<'a> {
 	std_definitions: Vec<Node>,
 	/// the program's top-level variables: a module word of the same name is renamed apart in the module (shadowed_apart)
 	program_variables: HashSet<String>,
+	/// whether a standard module's source is being loaded: its `use`s are its own, not the program's
+	inside_std_module: bool,
+	/// the standard modules the program (or a file module) uses, and those only standard modules use (hidden_apart)
+	program_std_modules: HashSet<String>,
+	std_modules_of_std_modules: HashSet<String>,
 }
 
 impl<'a> Loader<'a> {
 	fn new(directories: &'a [&'a str], including_directory: Option<PathBuf>) -> Self {
-		Loader { directories, loaded: HashSet::new(), included: HashSet::new(), including_directory, scope: None, wasm_modules: vec![], std_definitions: vec![], program_variables: HashSet::new() }
+		Loader {
+			directories,
+			loaded: HashSet::new(),
+			included: HashSet::new(),
+			including_directory,
+			scope: None,
+			wasm_modules: vec![],
+			std_definitions: vec![],
+			program_variables: HashSet::new(),
+			inside_std_module: false,
+			program_std_modules: HashSet::new(),
+			std_modules_of_std_modules: HashSet::new(),
+		}
+	}
+
+	/// The standard definitions with the words of a module only other standard modules use renamed apart
+	/// (`take` → `lib·take` when lib/text.wasp's `use list` brought it): the program sees a module's words only with
+	/// its own `use`, a bare `take` is the error naming the module
+	fn hidden_apart(&self) -> Vec<Node> {
+		let hidden: Vec<&String> = self.std_modules_of_std_modules.iter().filter(|module| !self.program_std_modules.contains(*module)).flat_map(|module| std_module_definitions(module).unwrap_or_default()).collect();
+		MODULE_DEFINITIONS.with(|names| {
+			let mut names = names.borrow_mut();
+			hidden.iter().for_each(|word| { names.remove(*word); names.insert(format!("{SHADOWED_WORD_PREFIX}{word}")); });
+		});
+		self.std_definitions.iter().map(|definition| hidden.iter().fold(definition.clone(), |node, word| renamed_word(node, word, &format!("{SHADOWED_WORD_PREFIX}{word}")))).collect()
 	}
 
 	fn resolve(&mut self, node: Node) -> Result<Node, Node> {
@@ -478,8 +507,14 @@ impl<'a> Loader<'a> {
 	/// A standard module: its definitions wait aside until the program is resolved; its source shows the program
 	/// no style hints
 	fn use_std_module(&mut self, name: &str, source: &str) -> Result<Vec<Node>, Node> {
-		let definitions = crate::normalize::without_hints(|| self.load_source(Import::Use, std_path(name), source))?;
-		self.std_definitions.extend(definitions);
+		match self.inside_std_module {
+			true => self.std_modules_of_std_modules.insert(name.to_string()),
+			false => self.program_std_modules.insert(name.to_string()),
+		};
+		let outer = std::mem::replace(&mut self.inside_std_module, true);
+		let definitions = crate::normalize::without_hints(|| self.load_source(Import::Use, std_path(name), source));
+		self.inside_std_module = outer;
+		self.std_definitions.extend(definitions?);
 		Ok(vec![])
 	}
 
@@ -720,7 +755,7 @@ fn std_module(name: &str) -> Option<&'static str> {
 /// Each standard module with the names it defines, in their order
 fn std_module_words() -> &'static [(&'static str, Vec<String>)] {
 	static DEFINED: std::sync::OnceLock<Vec<(&'static str, Vec<String>)>> = std::sync::OnceLock::new();
-	DEFINED.get_or_init(|| STD_MODULES.iter().map(|(module, source)| (*module, statements(crate::normalize::without_hints(|| WaspParser::parse(source))).iter().filter_map(declared_name).collect())).collect())
+	DEFINED.get_or_init(|| STD_MODULES.iter().map(|(module, source)| (*module, statements(crate::normalize::without_hints(|| WaspParser::parse(source))).iter().filter(|statement| used_module(statement).is_none()).filter_map(declared_name).collect())).collect())
 }
 
 /// The standard module that defines `word` (`zip` → list), for the error of a word used without its `use`

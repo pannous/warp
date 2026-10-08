@@ -1,0 +1,2 @@
+use list
+pairs_of(xs) := zip(xs, drop(xs, 1))

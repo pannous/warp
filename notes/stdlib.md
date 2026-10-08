@@ -111,7 +111,7 @@ Next:
    (closures::captured_variables_of).
    list: index_where last_n fill minmax; math: percent to_radians to_degrees isqrt is_square divisors prime_factors
    to_base from_base; text: word_count snake_case kebab_case camel_case indent is_numeric between wrap; map: find_key.
-   A std module's word cannot call another module's words (camel_case cannot use list's drop): written with loops.
+   A std module's word can call another module's words since §8 (std-module-uses-module); older ones use loops.
    Met: a name `end` after else is Ruby's block end (card end-variable); `none(xs, f)` is the null (card none-call).
    P171: write and exists are prelude words (modules PRELUDE_WORDS: only their definitions come along, a program's own
    word wins); P183: a "file://…" text loads the whole file module; file.append(path, text) is the qualified-only word
@@ -244,7 +244,7 @@ lib/web.webidl is data for web_idl.rs, not a module. The playground has no prelu
 
 Probed (functions2, 2026-10-08): `use list` and `import list` work; `use list, text` and `use list text` load only
 list; `from list import zip` has no form; `list.zip(…)` without `use` is the loud error (P171, fine); `use os; args`
-is the symbol args (no CLI way to pass them); a module's words cannot call another module's words.
+is the symbol args (no CLI way to pass them); a std module's `use list` worked, but leaked list's words to the program.
 
 ### Target
 - Three layers, each with one place in the source:
@@ -260,7 +260,11 @@ is the symbol args (no CLI way to pass them); a module's words cannot call anoth
   write/exists → file, a page → markup, routes → router); page_html.rs and routes.rs stop inserting `use` text.
 - **use forms**: `use a, b` and `use a b` load each; `from list import zip, unique` brings only those words (the
   others stay the loud error); `import list as l` later with the module manager.
-- **Modules calling modules**: a module may `use` another; its words come along through with_needed_definitions.
+- **Modules calling modules** (done, card std-module-uses-module): a std module may `use` another (lib/text.wasp
+  `use list`, camel_case calls drop). A module only std modules use is hidden from the program: modules.rs
+  Loader::hidden_apart renames its words `lib·drop` in the std definitions, so the program's bare `drop` is the
+  error "drop is in the standard module list: write `use list`" and a program's own `drop` is its own
+  (tests/modules/test_std_module_uses_module.rs). A file module's `use` counts as the program's.
 - **Discoverability**: `help list` (or `words list`) prints a module's words with their first comment line; the
   same index generates wiki/standard-library.md, so docs never drift from lib/.
 
