@@ -145,5 +145,8 @@ checked like a declared scalar:
   element type admits, in kind bits 16+ (type_kinds::element_mark, set by list_mark at the assignment);
   list_extend, list_insert_at and list_with_at check each new item (list_item_check, error "list cannot hold this
   item"). Whole-kind compares mask the mark off (UNMARKED_KIND: equality, similarity, is_map, element_children).
-  Limits: an empty declared list (ø, kind Empty) carries no mark; a class element type checks only that the item
-  is an object (OBJECT_KINDS), not its class; typed arrays need none. Probes: probes/variance/runtime_*.warp.
+  Only a type written in the source marks (Local.declared): the `list of int` inferred for `ys = [1]` leaves the list
+  open. An empty declared list (ø) is marked too and keeps its mark when it becomes a cell or ø again
+  (list_extend, list_insert_at, emit_become_empty; ø compares mask with KIND_MASK; card p215-empty).
+  Limits: a class element type checks only that the item is an object (OBJECT_KINDS), not its class; typed arrays
+  need none. Probes: probes/variance/runtime_*.warp.

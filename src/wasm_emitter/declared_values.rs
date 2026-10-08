@@ -139,8 +139,8 @@ impl WasmGcEmitter {
 }
 
 /// list_mark(list, mark) -> list: the head cell of a declared list takes its element mark (type_kinds::element_mark), so a
-/// write through any alias, a lax variable or an unannotated parameter, checks its item at run time (P215); ø and any
-/// other node stay as they are
+/// write through any alias, a lax variable or an unannotated parameter, checks its item at run time (P215); so does ø,
+/// which keeps the mark when its first item makes it a cell; any other node stays as it is
 pub(super) const LIST_MARK: &str = "list_mark";
 /// list_item_check(list, item): the run-time error when the list's element mark does not admit the item
 pub(super) const LIST_ITEM_CHECK: &str = "list_item_check";
@@ -179,10 +179,12 @@ impl WasmGcEmitter {
 		let node_type = self.type_manager.node_type;
 		let (node_ref, nullable) = (ValType::Ref(self.node_ref(false)), ValType::Ref(self.node_ref(true)));
 		let is_list = [I::I64Const(KIND_MASK), I::I64And, I::I64Const(Kind::List as i64), I::I64Eq];
-		self.runtime_function(LIST_MARK, vec![node_ref, ValType::I64], vec![node_ref], vec![], |s, f| {
+		let is_list_or_empty = [I::I64Const(KIND_MASK), I::I64And, I::LocalTee(2), I::I64Const(Kind::List as i64), I::I64Eq,
+			I::LocalGet(2), I::I64Const(Kind::Empty as i64), I::I64Eq, I::I32Or];
+		self.runtime_function(LIST_MARK, vec![node_ref, ValType::I64], vec![node_ref], vec![ValType::I64], |s, f| {
 			let (list, mark) = (0, 1);
 			s.emit_field(f, list, 0);
-			Self::emit_list(f, &is_list);
+			Self::emit_list(f, &is_list_or_empty);
 			Self::emit_list(f, &[I::If(BlockType::Empty), I::LocalGet(list)]);
 			s.emit_field(f, list, 0);
 			Self::emit_list(f, &[I::LocalGet(mark), I::I64Or, I::StructSet { struct_type_index: node_type, field_index: 0 }, I::End, I::LocalGet(list)]);
@@ -191,7 +193,7 @@ impl WasmGcEmitter {
 			let (list, item, mark) = (0, 1, 2);
 			Self::emit_list(f, &[I::LocalGet(list), I::RefIsNull, I::If(BlockType::Empty), I::Return, I::End]);
 			s.emit_field(f, list, 0);
-			Self::emit_list(f, &is_list);
+			Self::emit_list(f, &is_list_or_empty);
 			Self::emit_list(f, &[I::I32Eqz, I::If(BlockType::Empty), I::Return, I::End]);
 			s.emit_field(f, list, 0);
 			Self::emit_list(f, &[I::I64Const(ELEMENT_MARK_SHIFT), I::I64ShrU, I::LocalTee(mark), I::I64Eqz, I::If(BlockType::Empty), I::Return, I::End]);

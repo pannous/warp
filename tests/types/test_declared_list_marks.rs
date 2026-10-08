@@ -33,3 +33,25 @@ fn a_marked_list_is_the_same_list() {
 	is!("names: texts = [\"hi\"]; ys = names; ys.add(\"a\"); string(names)", r#"["hi" "a"]"#);
 	is!("names: texts = [\"hi\"]; ys = names; ys.add(\"a\"); type(names)", "list of text");
 }
+
+/// An empty declared list (ø) carries its mark too, and keeps it when its first item makes it a cell (card p215-empty)
+#[test]
+fn an_empty_declared_list_checks_its_items() {
+	fails_with("names: texts = []; ys = names; ys.add(1); names", CANNOT_HOLD);
+	fails_with("names: texts = []; f(xs) := xs.add(420); f(names); names", CANNOT_HOLD);
+	fails_with("names: texts = []; ys = names; ys.add(\"a\"); ys.add(2); names", CANNOT_HOLD);
+	fails_with("names: texts = []; ys = names; ys.insert(5, at: 0); names", CANNOT_HOLD);
+	fails_with("names: texts = [\"a\"]; ys = names; ys.pop(); ys.add(3); names", CANNOT_HOLD);
+	is!("names: texts = []; ys = names; ys.add(\"a\"); string(names)", r#"["a"]"#);
+	is!("names: texts = []; ys = names; count names", 0);
+	is!("names: texts = []; ys = names; names == []", true);
+	is!("names: texts = []; ys = names; if names { 1 } else { 2 }", 2);
+}
+
+/// Only a type written in the source marks a list: the element type inferred for `ys = [1]` leaves it open
+#[test]
+fn an_inferred_element_type_marks_nothing() {
+	is!("ys = [1]; zs = ys; zs.add(\"a\"); count ys", 2);
+	is!("ys = [1]; f(xs) := xs.add(\"a\"); f(ys); count ys", 2);
+	is!("ys = []; ys.add(1); f(xs) := xs.add(\"a\"); f(ys); count ys", 2);
+}

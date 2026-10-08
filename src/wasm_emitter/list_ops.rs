@@ -5,7 +5,7 @@ use wasm_encoder::*;
 use Instruction::I32Const;
 use Instruction as I;
 use ValType::Ref;
-use crate::type_kinds::{Kind, CURLY_LIST_KIND, KIND_MASK, SQUARE_LIST_KIND};
+use crate::type_kinds::{Kind, CURLY_LIST_KIND, KIND_MASK, SQUARE_LIST_KIND, UNMARKED_KIND};
 use crate::wasm_emitter::layout::{utf8, BYTE};
 use crate::node::Node;
 use crate::extensions::strings::{GRAPHEME_EXTEND, GRAPHEME_PICTOGRAPHIC, REGIONAL_INDICATORS, ZERO_WIDTH_JOINER};
@@ -197,6 +197,8 @@ impl WasmGcEmitter {
 
 				// ø is the empty list
 				s.emit_field(func, 0, 0);
+				func.instruction(&I::I64Const(KIND_MASK));
+				func.instruction(&I::I64And);
 				func.instruction(&I::I64Const(Kind::Empty as i64));
 				func.instruction(&I::I64Eq);
 				func.instruction(&I::If(BlockType::Empty));
@@ -373,8 +375,9 @@ impl WasmGcEmitter {
 			Self::emit_list(f, &lone_cell);
 			Self::emit_list(f, &[I::Return, I::End]);
 			s.emit_field(f, list, 0);
-			Self::emit_list(f, &[I::I64Const(Kind::Empty as i64), I::I64Eq, I::If(BlockType::Empty),
-				I::LocalGet(list), I::I64Const(SQUARE_LIST_KIND), set(0), I::LocalGet(list), I::LocalGet(value), set(1),
+			Self::emit_list(f, &[I::I64Const(KIND_MASK), I::I64And, I::I64Const(Kind::Empty as i64), I::I64Eq, I::If(BlockType::Empty), I::LocalGet(list)]);
+			s.emit_element_mark(f, list);
+			Self::emit_list(f, &[I::I64Const(SQUARE_LIST_KIND), I::I64Or, set(0), I::LocalGet(list), I::LocalGet(value), set(1),
 				I::LocalGet(list), I::RefAsNonNull, I::Return, I::End]);
 			Self::emit_list(f, &[I::LocalGet(list), I::LocalSet(cell), I::Loop(BlockType::Empty),
 				I::LocalGet(position), I::I64Eqz, I::If(BlockType::Empty), I::LocalGet(cell)]);
@@ -1407,6 +1410,8 @@ impl WasmGcEmitter {
 		func.instruction(&I::If(BlockType::Empty));
 		func.instruction(&I::Else);
 		self.emit_field(func, list, 0);
+		func.instruction(&I::I64Const(KIND_MASK));
+		func.instruction(&I::I64And);
 		func.instruction(&I::I64Const(Kind::Empty as i64));
 		func.instruction(&I::I64Eq);
 		func.instruction(&I::If(BlockType::Empty));
@@ -1416,12 +1421,21 @@ impl WasmGcEmitter {
 		func.instruction(&I::End);
 	}
 
-	/// The node in local `node` (a lone cell or entry) becomes ø in place, so every holder of it sees the empty list
+	/// The element mark of the node in local `node` (declared_values LIST_MARK), its kind bits cleared
+	pub(super) fn emit_element_mark(&self, func: &mut Function, node: u32) {
+		self.emit_field(func, node, 0);
+		Self::emit_list(func, &[I::I64Const(!UNMARKED_KIND), I::I64And]);
+	}
+
+	/// The node in local `node` (a lone cell or entry) becomes ø in place, so every holder of it sees the empty list;
+	/// a declared list keeps its element mark
 	pub(super) fn emit_become_empty(&self, func: &mut Function, node: u32) {
 		let node_type = self.type_manager.node_type;
 		let set = |field_index: u32| I::StructSet { struct_type_index: node_type, field_index };
+		func.instruction(&I::LocalGet(node));
+		self.emit_element_mark(func, node);
 		Self::emit_list(func, &[
-			I::LocalGet(node), I::I64Const(Kind::Empty as i64), set(0),
+			I::I64Const(Kind::Empty as i64), I::I64Or, set(0),
 			I::LocalGet(node), I::RefNull(HeapType::Abstract { shared: false, ty: AbstractHeapType::Any }), set(1),
 			I::LocalGet(node), I::RefNull(HeapType::Concrete(node_type)), set(2),
 		]);
@@ -1479,6 +1493,10 @@ impl WasmGcEmitter {
 			for field_index in 0..3 {
 				f.instruction(&I::LocalGet(list));
 				s.emit_field(f, copy.result, field_index);
+				if field_index == 0 {
+					s.emit_element_mark(f, list);
+					f.instruction(&I::I64Or);
+				}
 				f.instruction(&set(field_index));
 			}
 			Self::emit_list(f, &[I::LocalGet(list), I::RefAsNonNull, I::Return, I::End]);
