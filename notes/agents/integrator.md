@@ -34,6 +34,8 @@ Read notes/agents/common.md and notes/roles.md ("Integrator").
   sample, web/playground/** or pages.yml gets the runner's verdict before main: push the tested tip as a branch and
   `gh workflow run Playground -R pannous/warp --ref <branch>`; job build green = both tours pass on the runner (its
   deploy job fails on a branch, expected: the Pages environment takes main only).
+  The runner tours the collected site (pages.yml SITE_FILES), the local tour the whole repository: a new site file
+  missing from SITE_FILES (guide-expert.md, batch 20) shows only there.
 - web::test_bundle_budget fails when a branch grows every program's app.wasm: integrator_tools/site_size.sh
   <commits> measures the hello-world site per first-parent merge (worktree budget_bisect), the grower goes back to
   its worker with the section/segment diff (`wasm-tools objdump`).

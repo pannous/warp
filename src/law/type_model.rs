@@ -13,6 +13,9 @@ use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
+mod nested_functions;
+mod used_modules;
+
 /// The lake project of the model, in the source tree
 pub const MODEL_DIR: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/lean/WarpTypes");
 /// `lake build` of one project must not run twice at once
@@ -51,6 +54,9 @@ const EMIT_KEYWORD: &str = "emit";
 const GLOBAL_KEYWORD: &str = "global";
 /// `break v` in a block handler ends its block with v (aborting handlers)
 const BREAK_KEYWORD: &str = "break";
+/// `return v` before a function's end is the event `f·return` whose block handler, around f's body, breaks with v
+const RETURN_KEYWORD: &str = "return";
+const RETURN_EVENT_SUFFIX: &str = "·return";
 /// the handler's local holding the payload, `event.level`
 const EVENT_LOCAL: &str = "event";
 /// an event's payloads are instances of the class `ev·event`, whose fields are every key the program emits it with
@@ -61,6 +67,10 @@ const MAP_CLASS: &str = "map";
 /// `count xs`, `count x in xs` (how often x is in xs) and `x in xs` (x's first position from 1, else 0) walk the list
 /// with a `·tally` instance: its int fields hold the count or position and the current index
 const COUNT_WORD: &str = "count";
+/// `xs.size`, `xs.count`, `"abc".length`: `count xs`
+const SIZE_METHODS: [&str; 3] = ["size", "count", "length"];
+/// `min(a, b)` and `max(a, b)` of two values (lowering/min_max.rs): a comparison, each argument computed once
+const EXTREMA: [&str; 2] = ["min", "max"];
 const TALLY_CLASS: &str = "·tally";
 const TALLY_INDEX: &str = "·index";
 
@@ -234,6 +244,38 @@ fn is_word(node: &Node, word: &str) -> bool {
 	matches!(node.drop_meta(), Node::Symbol(found) if found == word)
 }
 
+/// the value of `return v`, ø of a bare `return`
+fn returned(node: &Node) -> Option<Node> {
+	match node.drop_meta() {
+		Node::List(items, _, _) if items.first().is_some_and(|first| is_word(first, RETURN_KEYWORD)) => Some(match &items[1..] {
+			[] => Node::Empty,
+			[value] => value.clone(),
+			words => Node::List(words.to_vec(), Bracket::None, Separator::Space),
+		}),
+		_ => None,
+	}
+}
+
+fn returns(body: &Node) -> bool {
+	let mut found = false;
+	body.visit(&mut |part| found |= returned(part).is_some());
+	found
+}
+
+/// A function body ending in `return v` ends in v
+fn without_tail_return(body: &Node) -> Node {
+	match body.drop_meta() {
+		Node::List(items, Bracket::Curly, separator) if returned(body).is_none() => {
+			let mut items = items.clone();
+			if let Some(value) = items.last().and_then(returned) {
+				*items.last_mut().expect("a last statement") = value;
+			}
+			Node::List(items, Bracket::Curly, separator.clone())
+		}
+		_ => returned(body).unwrap_or_else(|| body.clone()),
+	}
+}
+
 fn is_list_literal(node: &Node) -> bool {
 	matches!(node.drop_meta(), Node::List(_, Bracket::Square, _))
 }
@@ -293,7 +335,7 @@ fn destructuring(items: &[Node]) -> Option<(Vec<String>, Vec<&Node>)> {
 /// A function or lambda bound at main level: its name, parameters and body
 fn callable_definition(statement: &Node) -> Option<(&str, Vec<String>, &Node)> {
 	if let Some((name, parameters, body)) = function_definition(statement) {
-		return Some((name, parameters.iter().map(|parameter| parameter.drop_meta().name()).collect(), body));
+		return Some((name, parameters.iter().map(|parameter| parameter_name(parameter)).collect(), body));
 	}
 	let Node::Key(target, Op::Assign, value) = statement.drop_meta() else { return None };
 	let (Node::Symbol(name), Node::Key(parameter, Op::FatArrow, body)) = (target.drop_meta(), unwrapped(value).drop_meta()) else { return None };
@@ -373,7 +415,16 @@ fn first_value_is_list(body: &Node, local: &str) -> bool {
 fn parameter_type_word(parameter: &Node) -> Option<String> {
 	match parameter.drop_meta() {
 		Node::Key(_, Op::Colon, annotation) => Some(annotation.name()),
+		Node::Key(parameter, Op::Assign, _) => parameter_type_word(parameter),
 		_ => None,
+	}
+}
+
+/// `b`, `b: int`, `b=3` and `b: int = 3` all name the parameter b
+fn parameter_name(parameter: &Node) -> String {
+	match parameter.drop_meta() {
+		Node::Key(parameter, Op::Colon | Op::Assign, _) => parameter_name(parameter),
+		parameter => parameter.name(),
 	}
 }
 
@@ -403,6 +454,8 @@ fn lean_strings(words: &[String]) -> String {
 struct Exporter {
 	/// the functions of the program with their parameter's W0 type
 	functions: HashMap<String, String>,
+	/// the parameter name of each function of one parameter: `f(n=3)` names it
+	single_parameters: HashMap<String, String>,
 	/// main-level names bound so far, with their declared type when annotated
 	names: HashMap<String, Option<String>>,
 	/// main-level names bound to an evident bool (`b = true`): a bool place for the literals 1 and 0 (P199)
@@ -415,6 +468,8 @@ struct Exporter {
 	argument_fields: Vec<String>,
 	/// each class's ancestor chain, root first, and its own fields with their type words
 	classes: HashMap<String, ClassShape>,
+	/// the default values of a function's parameters (`f(a, b=3)`), by its arguments class: a call missing b passes 3
+	defaults: HashMap<String, HashMap<String, Node>>,
 	/// the event whose block a `break` ends: the innermost block handler's; none in a loop (the loop's break) or a
 	/// program-wide handler
 	breaking: Vec<Option<String>>,
@@ -423,6 +478,11 @@ struct Exporter {
 	/// the locals of the function being exported: each lives in a cell, a fresh instance of its class `f·n` per call
 	/// (W0's locals are bound by substitution, warp's change), whose one field takes the join of the values written
 	cells: Vec<String>,
+	/// the event a `return` of the function being exported emits, when it returns before its end
+	returning: Option<String>,
+	/// the classes of the function locals' cells: a parameter of one holds the cell itself (a lifted nested function's
+	/// nonlocal, nested_functions.rs)
+	cell_classes: Vec<String>,
 	/// the cell locals whose first value is a list: `xs.add(v)` appends to them
 	cell_lists: Vec<String>,
 	/// main-level names bound to a lambda: warp makes them functions, so a bare `f` is a call missing its argument
@@ -482,6 +542,7 @@ impl Exporter {
 		match parameter.drop_meta() {
 			Node::Symbol(parameter) => Ok((parameter.clone(), ANY_TYPE.to_string())),
 			Node::Key(parameter, Op::Colon, annotation) => Ok((parameter.name(), self.annotation_type(annotation)?)),
+			Node::Key(parameter, Op::Assign, _) => self.parameter_type(parameter),
 			other => Err(unsupported(other).unwrap_err()),
 		}
 	}
@@ -513,37 +574,43 @@ impl Exporter {
 		path.iter().flat_map(|ancestor| self.classes[ancestor].1.iter().map(|(field, _)| field.clone())).collect()
 	}
 
-	/// `C(a, b)`: a new instance with its fields written in order, `let o = new C; o.f1 = a; …; o`. A named argument
-	/// `f(b=1, a=5)` goes to its field, the positional ones fill the others in order; warp evaluates them all in field
-	/// order, not as written
+	/// `C(a, b)`: a new instance with its fields written in order, `let o = new C; o.f1 = a; …; o`
 	fn construction(&mut self, class: &str, arguments: &[Node]) -> Lean {
+		let written = self.field_values(class, arguments)?;
+		self.instance(class, written.iter().map(|(field, value)| (field.clone(), value)).collect())
+	}
+
+	/// The fields an argument list writes: a named argument `f(b=1, a=5)` goes to its field, the positional ones fill
+	/// the others in order, a missing one takes its default; they run as written (P216)
+	fn field_values(&self, class: &str, arguments: &[Node]) -> Result<Vec<(String, Node)>, String> {
 		let fields = self.constructor_fields(class);
-		let mut slots: Vec<Option<&Node>> = vec![None; fields.len()];
-		let mut positional = vec![];
-		for argument in arguments {
-			match argument.drop_meta() {
-				Node::Key(name, Op::Assign, value) => {
-					let slot = fields.iter().position(|field| *field == name.name()).ok_or_else(|| format!("{class} has no field {}", name.name()))?;
-					slots[slot] = Some(value.as_ref());
-				}
-				_ => positional.push(argument),
-			}
+		let named: Vec<Option<(String, Node)>> = arguments.iter().map(|argument| match argument.drop_meta() {
+			Node::Key(name, Op::Assign, value) => Some((name.name(), value.as_ref().clone())),
+			_ => None,
+		}).collect();
+		if let Some((unknown, _)) = named.iter().flatten().find(|(name, _)| !fields.contains(name)) {
+			return Err(format!("{class} has no field {unknown}"));
 		}
-		let mut positional = positional.into_iter();
-		for slot in slots.iter_mut().filter(|slot| slot.is_none()) {
-			*slot = positional.next();
+		let named_fields: Vec<String> = named.iter().flatten().map(|(name, _)| name.clone()).collect();
+		let mut unnamed = fields.iter().filter(|field| !named_fields.contains(field));
+		let written: Option<Vec<(String, Node)>> = arguments.iter().zip(named).map(|(argument, named)| named.or_else(|| unnamed.next().map(|field| (field.clone(), argument.clone())))).collect();
+		let mut written = written.ok_or_else(|| format!("{class} takes {} fields, got {}", fields.len(), arguments.len()))?;
+		let defaults = self.defaults.get(class);
+		for field in unnamed {
+			let default = defaults.and_then(|defaults| defaults.get(field)).ok_or_else(|| format!("{class} needs a value for {field}"))?;
+			written.push((field.clone(), default.clone()));
 		}
-		if positional.next().is_some() || slots.contains(&None) {
-			return Err(format!("{class} takes {} fields, got {}", fields.len(), arguments.len()));
-		}
-		self.instance(class, fields.into_iter().zip(slots.into_iter().flatten()).collect())
+		Ok(written)
 	}
 
 	/// a new instance of class with the given fields written, `let o = new C; o.f1 = a; …; o`
 	fn instance(&mut self, class: &str, fields: Vec<(String, &Node)>) -> Lean {
 		let path = lean_strings(&self.classes[class].0);
 		let local = format!("new·{class}");
-		let writes: Result<Vec<String>, String> = fields.iter().map(|(field, value)| Ok(format!(".set (.loc {}) {} ({})", quoted(&local), quoted(field), self.expression(value)?))).collect();
+		let writes: Result<Vec<String>, String> = fields.iter().map(|(field, value)| {
+			let field_type = self.classes[class].1.iter().find(|(own, _)| own == field).and_then(|(_, word)| word.clone());
+			Ok(format!(".set (.loc {}) {} ({})", quoted(&local), quoted(field), self.argument(field_type.as_deref(), value)?))
+		}).collect();
 		let body = writes?.iter().rev().fold(format!(".loc {}", quoted(&local)), |rest, write| format!(".seq ({write}) ({rest})"));
 		Ok(format!(".letIn {} (.cls {path}) (.new {path}) ({body})", quoted(&local)))
 	}
@@ -612,10 +679,14 @@ impl Exporter {
 	}
 
 	fn items(&mut self, program: &Node) -> Result<Vec<String>, String> {
+		let with_modules = used_modules::inline(program)?;
+		let program = &with_modules;
 		self.collect_classes(program);
 		program.visit(&mut |part| if let Some((name, _)) = global_declaration(part) {
 			self.globals.push(name.to_string());
 		});
+		let lifted = nested_functions::lift(program, &self.globals)?;
+		let program = &lifted;
 		let event_classes = self.collect_event_classes(program);
 		let program_node = program;
 		let program: Vec<&Node> = statements(program).into_iter().flat_map(type_definitions).collect();
@@ -624,6 +695,22 @@ impl Exporter {
 		}
 		let mut argument_classes = Vec::new();
 		let mut cell_items = Vec::new();
+		// first: a lifted nested function's parameter `y: outer·y` holds outer's cell
+		let mut declared_cells = vec![];
+		for statement in &program {
+			let Some((name, parameters, body)) = function_definition(statement) else { continue };
+			for local in assigned_locals(body, &self.globals) {
+				let class = cell_class(name, &local);
+				self.classes.insert(class.clone(), (vec![class.clone()], vec![(CELL_FIELD.to_string(), None)]));
+				declared_cells.push((class.clone(), parameters.iter().find(|parameter| parameter_name(parameter) == local).and_then(|parameter| parameter_type_word(parameter))));
+				self.cell_classes.push(class);
+			}
+		}
+		// an annotated parameter's cell keeps its type (P203); a cell parameter has none of its own
+		for (class, declared) in declared_cells {
+			let declared = declared.filter(|word| !self.cell_classes.contains(word));
+			cell_items.push(format!(".cell {} {}", quoted(&class), self.optional_type(declared.as_deref())?));
+		}
 		for statement in &program {
 			let Some((name, parameters, _)) = function_definition(statement) else { continue };
 			if self.functions.contains_key(name) {
@@ -631,10 +718,18 @@ impl Exporter {
 			}
 			let parameter_type = match parameters.as_slice() {
 				[] => UNIT_TYPE.to_string(),
-				[parameter] => self.parameter_type(parameter)?.1,
+				[parameter] => {
+					self.single_parameters.insert(name.to_string(), parameter_name(parameter));
+					self.parameter_type(parameter)?.1
+				}
 				parameters => {
 					let class = arguments_class(name);
 					let fields = parameters.iter().map(|parameter| Ok((self.parameter_type(parameter)?.0, parameter_type_word(parameter)))).collect::<Result<Vec<_>, String>>()?;
+					let defaults = parameters.iter().filter_map(|parameter| match parameter.drop_meta() {
+						Node::Key(_, Op::Assign, default) => Some((parameter_name(parameter), default.as_ref().clone())),
+						_ => None,
+					});
+					self.defaults.insert(class.clone(), defaults.collect());
 					self.classes.insert(class.clone(), (vec![class.clone()], fields));
 					argument_classes.push(class.clone());
 					format!(".cls {}", lean_strings(&[class]))
@@ -642,17 +737,9 @@ impl Exporter {
 			};
 			self.functions.insert(name.to_string(), parameter_type);
 		}
-		for statement in &program {
-			let Some((name, _, body)) = function_definition(statement) else { continue };
-			for local in assigned_locals(body, &self.globals) {
-				let class = cell_class(name, &local);
-				self.classes.insert(class.clone(), (vec![class.clone()], vec![(CELL_FIELD.to_string(), None)]));
-				cell_items.push(format!(".cell {}", quoted(&class)));
-			}
-		}
 		argument_classes.extend(event_classes);
 		let mut words_used = false;
-		program_node.visit(&mut |part| words_used |= is_word(part, COUNT_WORD) || is_word(part, IN_KEYWORD));
+		program_node.visit(&mut |part| words_used |= [COUNT_WORD, IN_KEYWORD].iter().chain(&SIZE_METHODS).any(|word| is_word(part, word)));
 		if words_used {
 			let fields = [CELL_FIELD, TALLY_INDEX].map(|field| (field.to_string(), Some("int".to_string())));
 			self.classes.insert(TALLY_CLASS.to_string(), (vec![TALLY_CLASS.to_string()], fields.to_vec()));
@@ -830,9 +917,10 @@ impl Exporter {
 				(self.parameter_type(parameter)?.0, vec![], if inferred { "none".to_string() } else { declared })
 			}
 			[] => (UNIT_PARAMETER.to_string(), vec![], declared),
-			parameters => (arguments_class(name), parameters.iter().map(|parameter| parameter.drop_meta().name()).collect(), declared),
+			parameters => (arguments_class(name), parameters.iter().map(|parameter| parameter_name(parameter)).collect(), declared),
 		};
-		let cells = assigned_locals(body, &self.globals);
+		let references: Vec<String> = parameters.iter().filter(|parameter| parameter_type_word(parameter).is_some_and(|word| self.cell_classes.contains(&word))).map(|parameter| parameter_name(parameter)).collect();
+		let cells: Vec<String> = assigned_locals(body, &self.globals).into_iter().filter(|cell| !references.contains(cell)).collect();
 		// an assigned parameter's cell starts with the argument (read before the cell's name hides it)
 		let first_values: Vec<String> = cells.iter().map(|cell| match () {
 			_ if *cell == parameter => format!(".loc {}", quoted(cell)),
@@ -840,10 +928,16 @@ impl Exporter {
 			_ => UNIT_TYPE.to_string(),
 		}).collect();
 		self.cell_lists = cells.iter().filter(|cell| first_value_is_list(body, cell)).cloned().collect();
-		self.cells = cells.clone();
+		self.cells = cells.iter().chain(&references).cloned().collect();
 		self.locals.push(parameter.clone());
-		self.argument_fields = fields;
-		let body = self.block(body);
+		self.argument_fields = fields.clone();
+		let body = &without_tail_return(body);
+		let return_event = format!("{name}{RETURN_EVENT_SUFFIX}");
+		self.returning = returns(body).then(|| return_event.clone());
+		let body = self.block(body).map(|body| match self.returning.take() {
+			Some(event) => format!(".handle {event} (.abort {event} none (.loc {})) ({body})", quoted(EVENT_LOCAL), event = quoted(&event)),
+			None => body,
+		});
 		self.locals.pop();
 		self.argument_fields.clear();
 		self.cells.clear();
@@ -854,6 +948,12 @@ impl Exporter {
 				_ => format!(".letIn \"·new\" (.cls {path}) (.new {path}) (.seq (.set (.loc \"·new\") {} ({first_value})) (.loc \"·new\"))", quoted(CELL_FIELD)),
 			};
 			format!(".letIn {} (.cls {path}) ({new_cell}) ({body})", quoted(cell))
+		});
+		// a cell parameter among several is read from the arguments object once
+		let body = references.iter().filter(|reference| fields.contains(reference)).fold(body, |body, reference| {
+			let cell = parameters.iter().find(|parameter| parameter_name(parameter) == **reference).and_then(|parameter| parameter_type_word(parameter)).expect("a cell parameter");
+			let path = lean_strings(&[cell]);
+			format!(".letIn {} (.cls {path}) (.get (.loc {}) {}) ({body})", quoted(reference), quoted(&parameter), quoted(reference))
 		});
 		Ok(format!(".function {} {} {parameter_type} ({body})", quoted(name), quoted(&parameter)))
 	}
@@ -923,6 +1023,15 @@ impl Exporter {
 		}
 	}
 
+	/// `min(a, b)` is `b < a ? b : a`, `max(a, b)` is `a < b ? b : a`, a and b bound once
+	fn extremum(&mut self, word: &str, a: &Node, b: &Node) -> Lean {
+		self.hidden_names += 1;
+		let (first, second) = (quoted(&format!("·a{}", self.hidden_names)), quoted(&format!("·b{}", self.hidden_names)));
+		let (left, right) = if word == EXTREMA[0] { (&second, &first) } else { (&first, &second) };
+		let comparison = format!(".ite (.lt (.loc {left}) (.loc {right})) (.loc {second}) (.loc {first})");
+		Ok(format!(".letIn {first} {ANY_TYPE} ({}) (.letIn {second} {ANY_TYPE} ({}) ({comparison}))", self.expression(a)?, self.expression(b)?))
+	}
+
 	/// a literal, a name (not a function's), or operators on such: evaluating it twice changes nothing
 	fn is_pure(&self, node: &Node) -> bool {
 		match node.drop_meta() {
@@ -931,6 +1040,14 @@ impl Exporter {
 			Node::List(items, Bracket::Round, _) if items.len() == 1 => self.is_pure(&items[0]),
 			Node::Key(left, op, right) => !matches!(op, Op::Assign | Op::Define | Op::Dot) && !op.is_compound_assign() && self.is_pure(left) && self.is_pure(right),
 			_ => false,
+		}
+	}
+
+	/// the value given to a place of the given type word: to a cell parameter, the caller's cell itself
+	fn argument(&mut self, type_word: Option<&str>, value: &Node) -> Lean {
+		match value.drop_meta() {
+			Node::Symbol(name) if type_word.is_some_and(|word| self.cell_classes.iter().any(|cell| cell == word)) && self.cells.contains(name) => Ok(format!(".loc {}", quoted(name))),
+			_ => self.expression(value),
 		}
 	}
 
@@ -967,6 +1084,10 @@ impl Exporter {
 	}
 
 	fn expression(&mut self, node: &Node) -> Lean {
+		if let Some(value) = returned(node) {
+			let event = self.returning.clone().ok_or("not in W0: a return outside a function body")?;
+			return Ok(format!(".emit {} ({})", quoted(&event), self.expression(&value)?));
+		}
 		match node.drop_meta() {
 			Node::Number(Number::Int(n)) => Ok(format!(".int ({n})")),
 			Node::Number(Number::Float(_) | Number::Quotient(_, _)) => Ok(".num 0".to_string()),
@@ -1013,6 +1134,7 @@ impl Exporter {
 					_ => self.tally(list, None, false),
 				},
 				[item, in_word, list] if is_word(in_word, IN_KEYWORD) => self.tally(list, Some(item), true),
+				[call, a, b] if EXTREMA.iter().any(|word| is_word(call, word)) && !self.functions.contains_key(&call.name()) => self.extremum(&call.name(), a, b),
 				[call, message] if is_word(call, ERROR_CALL) => match message.drop_meta() {
 					Node::Text(message) => Ok(format!(".error {}", quoted(message))),
 					_ => unsupported(node),
@@ -1024,8 +1146,13 @@ impl Exporter {
 					let arguments = self.construction(&arguments_class(&call.name()), &[first.as_ref().clone(), second.as_ref().clone()])?;
 					Ok(format!(".call {} ({arguments})", quoted(&call.name())))
 				}
-				[call, arguments @ ..] if arguments.len() > 1 && self.classes.contains_key(&arguments_class(&call.name())) => {
-					let arguments = self.construction(&arguments_class(&call.name()), arguments)?;
+				[call, arguments @ ..] if self.classes.contains_key(&arguments_class(&call.name())) => {
+					// an argument list that does not fit is a compile error in warp: W0 rejects a call given no arguments object
+					let class = arguments_class(&call.name());
+					let arguments = match self.field_values(&class, arguments) {
+						Ok(written) => self.instance(&class, written.iter().map(|(field, value)| (field.clone(), value)).collect())?,
+						Err(_) => UNIT_TYPE.to_string(),
+					};
 					Ok(format!(".call {} ({arguments})", quoted(&call.name())))
 				}
 				// `f(3)` of a name holding a lambda
@@ -1037,9 +1164,16 @@ impl Exporter {
 					Ok(format!(".app ({function}) ({})", self.expression(argument)?))
 				}
 				[call, argument] if self.functions.contains_key(&call.name()) => {
+					let argument = match argument.drop_meta() {
+						Node::Key(name, Op::Assign, value) if self.single_parameters.get(&call.name()) == Some(&name.name()) => value.as_ref(),
+						Node::Key(name, Op::Assign, _) => return Err(format!("{} has no parameter {}", call.name(), name.name())),
+						_ => argument,
+					};
 					let declared = self.functions[&call.name()].clone();
+					let cell = self.cell_classes.iter().find(|cell| declared == format!(".cls {}", lean_strings(&[cell.to_string()]))).cloned();
 					let argument = match bool_literal(Some(&declared), argument) {
 						Some(yes_or_no) => yes_or_no,
+						None if cell.is_some() => self.argument(cell.as_deref(), argument)?,
 						None => admitted(&declared, self.expression(argument)?),
 					};
 					Ok(format!(".call {} ({argument})", quoted(&call.name())))
@@ -1078,6 +1212,7 @@ impl Exporter {
 					Ok(format!(".assign {} (.append (.glob {}) (.cons ({item}) .nil))", quoted(name), quoted(name)))
 				}
 				(_, Node::Symbol(field)) if self.is_field(field) => Ok(format!(".get ({}) {}", self.expression(list)?, quoted(field))),
+				(_, Node::Symbol(method)) if SIZE_METHODS.contains(&method.as_str()) => self.tally(list, None, false),
 				_ => unsupported(node),
 			},
 			Node::Key(if_then, Op::Else, otherwise) => match if_then.drop_meta() {
@@ -1103,6 +1238,7 @@ impl Exporter {
 			Node::Key(left, Op::Add, right) if !left.is_nothing() => self.binary(".add", left, right),
 			Node::Key(left, Op::Sub, right) if !left.is_nothing() => self.binary(".arith .sub", left, right),
 			Node::Key(left, Op::Mul, right) => self.binary(".arith .mul", left, right),
+			Node::Key(left, Op::Mod, right) => self.binary(".arith .mod", left, right),
 			Node::Key(left, Op::Lt | Op::Le, right) => self.binary(".lt", left, right),
 			Node::Key(left, Op::Gt | Op::Ge, right) => self.binary(".lt", right, left),
 			// `c is Color` parses as `c == Color`: a type test

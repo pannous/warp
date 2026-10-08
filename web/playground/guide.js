@@ -1,8 +1,12 @@
 // The language guide beside the editor: guide.md, one chapter per `## title`, chapters from easy to advanced.
 // The open chapter (the page's #anchor) shows its text; `try ▶` runs a snippet, an `Examples:` line links the tour
 // examples and samples/ that show the chapter, and choosing such an example links back to its chapter.
+// The expert guide (guide-expert.md) has the same chapters in compact form; a toggle switches, keeping the open
+// chapter, and the page remembers the choice (?guide=expert names it in a link).
 // Runs after playground.js (both deferred) and uses its $, element and window.playground.
-const GUIDE_FILE = "guide.md";
+const GUIDE_FILES = { beginner: "guide.md", expert: "guide-expert.md" };
+const LEVEL_PARAMETER = "guide";
+const LEVEL_KEY = "warp-guide-level";
 const NARROW_SCREEN = "(max-width: 900px)"; // playground.css stacks the panes there: the guide starts closed
 const EXAMPLES_PREFIX = "Examples: ";
 const SAMPLES_SEPARATOR = "; samples: ";
@@ -14,7 +18,9 @@ const examplesOfChapter = new Map(); // in the guide's order: the example menu's
 const MORE_SAMPLES = "more samples";
 
 const escapeHtml = text => text.replace(/[&<>"]/g, char => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[char]);
-const chapterId = title => title.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
+// a chapter's anchor is #guide-lists: a bare #lists names an example (playground.js, card sample-hash)
+const CHAPTER_PREFIX = "guide-";
+const chapterId = title => CHAPTER_PREFIX + title.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
 
 // `code`, **bold** and [text](url) in one line of escaped text
 function inline(text) {
@@ -99,7 +105,25 @@ function renderGuide(markdown) {
 		const summary = element("summary", {}, element("a", { href: `#${id}` }, title));
 		return element("details", { id, className: "guide-chapter", ontoggle: openedChapter }, summary, ...renderBody(lines, title));
 	});
-	$("guide-chapters").replaceChildren(...renderBody(introLines, ""), ...chapters);
+	return [...renderBody(introLines, ""), ...chapters];
+}
+
+const renderedGuides = {}; // level → its rendered intro and chapters
+
+function chosenLevel() {
+	const named = new URLSearchParams(location.search).get(LEVEL_PARAMETER);
+	let remembered = null;
+	try { remembered = localStorage.getItem(LEVEL_KEY); } catch { /* private window: the default */ }
+	return [named, remembered].find(level => level in renderedGuides) ?? "beginner";
+}
+
+// shows the guide of that level, with the chapter open in the other one
+function showLevel(level) {
+	const open = document.querySelector(".guide-chapter[open]")?.id;
+	$("guide-chapters").replaceChildren(...renderedGuides[level]);
+	for (const button of document.querySelectorAll(".guide-level button")) button.setAttribute("aria-pressed", button.value === level);
+	try { localStorage.setItem(LEVEL_KEY, level); } catch { /* private window: lasts for this page */ }
+	if (open) document.getElementById(open).open = true;
 }
 
 function openedChapter(event) {
@@ -112,11 +136,19 @@ function openedChapter(event) {
 
 // the chapter the address names, else the first one
 function openChapterOfAddress() {
+	redirectOldChapterLink();
 	const chapter = location.hash ? document.getElementById(location.hash.slice(1)) : document.querySelector(".guide-chapter");
 	if (!chapter?.classList.contains("guide-chapter")) return;
 	if (location.hash) $("guide").open = true;
 	chapter.open = true;
 	if (location.hash) chapter.scrollIntoView({ block: "nearest" });
+}
+
+// an old chapter link #hello-world goes to #guide-hello-world, unless the name is an example's (#lists)
+function redirectOldChapterLink() {
+	const name = location.hash.slice(1);
+	const chapter = name ? document.getElementById(CHAPTER_PREFIX + name) : null;
+	if (chapter?.classList.contains("guide-chapter") && exampleSource(name) === undefined) history.replaceState(null, "", `#${chapter.id}`);
 }
 
 // the example menu in the guide's order: a group per chapter with its examples and samples, then the other samples
@@ -142,11 +174,14 @@ function showChapterLink(chapter) {
 async function startGuide() {
 	if (matchMedia(NARROW_SCREEN).matches) $("guide").open = false;
 	try {
-		renderGuide(await (await fetch(GUIDE_FILE)).text());
+		// the beginner guide first: its Examples lines group the example menu
+		for (const [level, file] of Object.entries(GUIDE_FILES)) renderedGuides[level] = renderGuide(await (await fetch(file)).text());
 	} catch (error) {
 		$("guide-chapters").textContent = `the guide did not load: ${error.message}`;
 		return;
 	}
+	for (const button of document.querySelectorAll(".guide-level button")) button.onclick = () => showLevel(button.value);
+	showLevel(chosenLevel());
 	groupExamplesByChapter();
 	addEventListener("hashchange", openChapterOfAddress);
 	$("examples").addEventListener("change", event => showChapterLink(chapterOfExample.get(event.target.value)));

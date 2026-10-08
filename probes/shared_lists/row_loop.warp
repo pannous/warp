@@ -1,0 +1,12 @@
+// row = grid#i; row#j reads: the typed-array speed shared-lists-typed must keep (card shared-lists-typed)
+n = 300
+grid = []
+for i in 1 to n {
+    grid.add([j * i for j in 1 to n])
+}
+s = 0
+for i in 1 to n {
+    row = grid#i
+    for j in 1 to n { s += row#j }
+}
+s

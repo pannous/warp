@@ -232,7 +232,7 @@ fn test_negative_literals_after_power_fix() {
 #[test]
 fn test_mutation_through_alias_is_not_visible() {
 	is!("x=\"ab\";y=x;y#1=\"z\";x", "ab");
-	is!("a=(1 2);b=a;b#1=9;a#1", 1);
+	is!("a=(1 2);b=a;b#1=9;a#1", 9); // P200b: lists share, as in Python and JS
 }
 
 #[test]
@@ -245,7 +245,7 @@ fn test_equal_literals_are_not_shared() {
 #[test]
 fn test_compound_index_assignment() {
 	is!("a=(1 2);a#1 += 1;a#1", 2);
-	is!("a=(1 2);b=a;a#2 *= 5;b#2", 2);
+	is!("a=(1 2);b=a;a#2 *= 5;b#2", 10); // P200b
 }
 
 #[test]
@@ -268,7 +268,7 @@ fn test_list_plus_concatenates() {
 fn test_append_method_rebinds_the_list() {
 	is!("pixel=(1 2);pixel.add(5);pixel", warp::ints(vec![1, 2, 5])); // was unchanged
 	is!("pixel=[1 2 3];pixel.add(4);pixel#4", 4);
-	is!("a=(1 2);b=a;a.add(3);#b", 2); // value semantics: b keeps its value
+	is!("a=(1 2);b=a;a.add(3);#b", 3); // P200b: b is the same list
 	is!("x=[4];x#1", 4); // a one-element list stays a list
 }
 

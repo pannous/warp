@@ -55,6 +55,7 @@ h1 span { color: var(--accent); font-weight: 500; }
 .tools > summary:hover { color: var(--ink); background: var(--code-ground); }
 .tools-menu { position: absolute; right: 0; top: 1.8em; z-index: 10; width: min(22rem, 90vw); padding: 4px 14px; background: var(--panel); border: 1px solid var(--line); border-radius: 8px; box-shadow: 0 6px 24px rgb(0 0 0 / 0.12); font-size: 0.9em; color: var(--muted); }
 .tools-menu a { color: inherit; }
+.tools-menu .version { opacity: 0.6; font-size: 0.85em; }
 
 .toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px; }
 .status { float: right; color: var(--muted); font-size: 0.8em; margin-left: 8px; }
@@ -140,6 +141,9 @@ main.single { grid-template-columns: minmax(0, 1fr); }
 /* the language guide (guide.js renders guide.md): one open chapter at a time */
 .guide-pane { padding: 8px 14px; max-height: calc(100vh - 80px); position: sticky; top: 8px; overflow-y: auto; font-size: 0.93em; }
 .guide-pane > summary { color: var(--muted); cursor: pointer; }
+.guide-level { display: flex; gap: 4px; margin: 6px 0; }
+.guide-level button { font: inherit; font-size: 0.85em; padding: 1px 8px; border: 1px solid var(--line); border-radius: 10px; background: none; color: var(--muted); cursor: pointer; }
+.guide-level button[aria-pressed="true"] { color: inherit; border-color: currentColor; }
 .guide-chapters > p { color: var(--muted); }
 .guide-chapter { border-top: 1px solid var(--line); padding: 4px 0; }
 .guide-chapter > summary { cursor: pointer; font-weight: 600; }

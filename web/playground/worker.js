@@ -187,6 +187,7 @@ self.onmessage = async ({ data }) => {
 	if (data.system) return Object.assign(self.pageSystemValues ??= {}, data.system); // host.js system_value
 	if (data.stored) return Object.assign(storedValues, data.stored) && Object.assign(sessionValues, data.session); // host-files.js STD_ADAPTERS.store
 	await ready;
+	await globalThis.loadDatabase?.(); // host-files.js: `database[k]`'s values, once
 	if (data.warm) return warmUp();
 	if (data.event) return handleEvent(data);
 	if (data.navigate) return handleNavigation(data.navigate);

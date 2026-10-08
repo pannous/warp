@@ -1,0 +1,7 @@
+def fill(arr, n) { if n < 1 { return 0 }; arr[n-1] = n * 10; fill(arr, n - 1); return arr[0] }
+def grow(arr, n) { if n < 1 { return 0 }; arr.add(n + count(arr) - count(arr)); grow(arr, n - 1) }
+xs = [0, 0, 0]
+fill(xs, 3)
+ys = [7]
+grow(ys, 2)
+xs#3 * 100 + count(ys)

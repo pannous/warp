@@ -287,10 +287,67 @@ const CORPUS: &[&str] = &[
 	"f(a: int, b: text) := a; f(b=\"x\", a=5)",
 	"f(a: int, b: text) := a; f(b=5, a=\"x\")",
 	"global i = 0; g() := { i = i * 10 + 1; i }; h() := { i = i * 10 + 2; i }; f(a, b) := a * 100 + b; f(b=h(), a=g())",
+	// a missing argument takes its parameter's default
+	"f(a, b=3) := a - b; f(5) + f(5, b=2)",
+	"f(a, b: int = 3) := a - b; f(5)",
+	"f(a, b: int = 3) := a - b; f(5, b=\"x\")",
+	"f(n) := n * 2; f(n=4)",
+	// nested functions read the outer function's names; `nonlocal y` writes through, a plain `y = 7` is inner's own
+	"outer(x) := { inner(y) := x + y; inner(2) }; outer(5)",
+	"outer(x: int) := { inner(y: int) := x + y; inner(\"a\") }; outer(5)",
+	"outer(x) := { y = 1; inner() := { nonlocal y; y = y + x }; inner(); inner(); y }; outer(5)",
+	"outer(x) := { y = 1; inner() := { y = 7; y }; inner() + y }; outer(5)",
+	"outer(x) := { a() := b() + 1; b() := x; a() }; outer(5)",
+	"outer() := { y = 1; inc() := { nonlocal y; y += 1 }; twice() := { inc(); inc() }; twice(); y }; outer()",
+	"outer(n) := { total = 0; add(k) := { nonlocal total; total += k }; for i in 1..n { add(i) }; total }; outer(4)",
+	"outer(n) := { fact(k) := if k < 2 then 1 else k * fact(k - 1); fact(n) }; outer(5)",
+	"outer(x) := { mid(y) := { deep(z) := y + z; deep(1) }; mid(10) }; outer(100)",
+	// a function may call one defined after it, and two may call each other (warp hoists functions)
+	"a() := b() + 1; b() := 5; a()",
+	"a() := b() + 1; b() := \"x\"; a()",
+	"a(n) := if n < 1 then 0 else b(n - 1); b(n) := a(n); a(3)",
+	// `return v` at the end is v; before it, an event whose block handler around the body breaks with v
+	"f(x) := { return x + 1 }; f(1)",
+	"f(x) := { if x > 2 { return 7 }; 1 }; f(5) + f(1)",
+	"f(x) := { for i in 1..x { if i == 3 { return i * 10 } }; 0 }; f(5)",
+	"f(n) := { if n < 1 { return 0 }; n + f(n - 1) }; f(4)",
+	"f(x: int) := { if x > 2 { return \"big\" }; x }; f(5)",
+	// texts compare in codepoint order; min and max of two values
+	"\"ab\" < \"b\"",
+	"x = \"b\"; x < \"ab\"",
+	"min(3, 5) + max(3, 5)",
+	"max(\"b\", \"ab\")",
+	"xs = [4, 9]; min(count(xs), 1)",
+	// `use list`: the module's definitions the program calls come along
+	"use list; drop([1, 2, 3], 1)",
+	"use list; product([2, 3, 4])",
+	"use list; take([1, 2, 3], 2)",
+	"use list; product(a, b) := a * b; product(3, 4)",
+	// `%` is the Euclidean remainder
+	"-7 % 3",
+	"7 % -3",
+	"5 % 0",
+	"n = 7; n %= 3; n",
+	"\"a\" % 2",
+	// `sum` folds from 0; `.size`, `.count` and `.length` count; a local widens over the numbers it is given
+	"sum [1, 2, 3]",
+	"xs = [1, 2]; sum xs",
+	"sum 1..4",
+	"sum = 5; sum + 1",
+	"[1, 2, 3].size",
+	"xs = [1, 2]; xs.count",
+	"\"abc\".length",
+	"f() := { out = 1.5; for x in [2, 3] { out = out + x }; out }; f()",
+	"f() := { out = 0; out = \"a\"; out }; f()",
+	"a: int = 0; a = b = 2.5; a",
+	"a: int = 0; a = b = \"x\"; b",
+	"class P { x: int }; p = P(1); a = p.x = 5; a + p.x",
+	"for x in [1, 2, 3] { if x > 2 then { \"big\" } }",
+	"for x in [1, 2, 3] { if x < 2 then { \"small\" } }",
 ];
 
 /// Programs warp compiles although the model rejects them: holes in warp's checks, each with its card
-const KNOWN_HOLES: &[(&str, &str)] = &[("a: int = 0; a = b = 2.5; a", "chain-unchecked"), ("a: int = 0; a = b = \"x\"; b", "chain-unchecked"), ("b: bool = no; b++; b", "bool-assign"), ("xs: ints = [1]; ys = [\"a\"]; xs = xs + ys; xs", "concat-unchecked"), ("f(n) := { n = \"x\"; n }; f(3)", "param-assign-unchecked"), ("f(n: int) := { n = \"x\"; n }; f(3)", "param-assign-unchecked"), ("f(n: int) := { n = 2.5; n }; f(3)", "param-assign-unchecked")];
+const KNOWN_HOLES: &[(&str, &str)] = &[("b: bool = no; b++; b", "bool-assign"), ("f(n) := { n = \"x\"; n }; f(3)", "param-assign-unchecked")];
 
 /// Where warp's run-time admission differs from W0's subtyping: a bool is an Int at run time, so an int value passes
 /// a bool check (P199 lets only the literals 1 and 0 in; card bool-assign)
@@ -298,8 +355,6 @@ const KNOWN_ADMITS_GAPS: [&str; 2] = ["bool ← .int: warp admits true / W0 sub 
 
 /// Programs both accept whose values differ, each with its card
 const KNOWN_VALUE_DIFFERENCES: &[(&str, &str)] = &[
-	("f(xs) := for x in xs { x + 1 }; f([1, 2])", "loop-param"),
-	("class P { x: int }; p = P(1); a = p.x = 5; a + p.x", "chain-field"),
 ];
 /// What the model gives for a program it rejects, and for a value it does not keep
 const REJECTED: &str = "rejected";

@@ -1751,7 +1751,7 @@ fn extension_block(items: &[Node]) -> Option<Node> {
 
 /// `f(x) -> int { body }`, `f(x): int { body }` (Rust/Swift/Python, TypeScript/Kotlin) and `f(x) -> int: body`
 /// (Python): the definition `(f(x) { body })` without its result type, and the type
-fn typed_result(definition: &Node) -> Option<(Node, Node)> {
+pub(crate) fn typed_result(definition: &Node) -> Option<(Node, Node)> {
 	let Node::Key(head, Op::Arrow | Op::Colon, typed_body) = definition else { return None };
 	if !matches!(head.drop_meta(), Node::List(items, Bracket::Round, _) if matches!(items.first().map(Node::drop_meta), Some(Node::Symbol(_)))) {
 		return None;
