@@ -704,46 +704,98 @@ impl WasmGcEmitter {
 		Self::emit_list(f, &[I::Else, I::LocalGet(local), I::RefAsNonNull, I::End]);
 	}
 
-	/// instance_copy(node): a new instance with the same field values in entries of its own, so a field set in place
-	/// changes only it; any other value is itself (values are never shared)
+	/// instance_copy(node, shallow): a copy of any object, keeping its class (P205/P207). Deep unless `shallow` is true:
+	/// every instance, map, list and entry inside is new, each copied once however often it is held (cycles too);
+	/// numbers, texts and resources (closures, data) are shared, they never change. Shallow: the object's own entries
+	/// and cells are new, the values in them shared
 	pub(super) fn emit_instance_copy(&mut self) {
 		if !self.should_emit_function(crate::library_words::INSTANCE_COPY) {
 			return;
 		}
 		let (node_ref, nullable) = (Ref(self.node_ref(false)), Ref(self.node_ref(true)));
 		let node_type = self.type_manager.node_type;
+		let node_heap = HeapType::Concrete(node_type);
 		let has_instances = !self.ctx.type_registry.types().is_empty();
-		let copy_entries = self.ctx.func_registry.import_count() + self.ctx.func_registry.code_count();
-		if has_instances {
-			// the fields: one entry, or a cons list of them, each entry new
-			self.runtime_function("instance_entries_copy", vec![nullable], vec![nullable], vec![], |s, f| {
-				let cells = 0;
-				Self::emit_list(f, &[I::LocalGet(cells), I::RefIsNull, I::If(BlockType::Empty), I::RefNull(HeapType::Concrete(node_type)), I::Return, I::End]);
-				s.emit_field(f, cells, 0);
-				Self::emit_list(f, &[I::I64Const(KIND_MASK), I::I64And, I::I64Const(KEY_KIND), I::I64Eq, I::If(BlockType::Empty)]);
-				for field_index in 0..3 {
-					s.emit_field(f, cells, field_index);
-				}
-				Self::emit_list(f, &[I::StructNew(node_type), I::Return, I::End]);
-				s.emit_field(f, cells, 0);
-				s.emit_field(f, cells, 1);
-				Self::emit_list(f, &[I::RefCastNullable(HeapType::Concrete(node_type)), I::Call(copy_entries)]);
-				s.emit_field(f, cells, 2);
-				Self::emit_list(f, &[I::Call(copy_entries), I::StructNew(node_type)]);
-			});
-			assert_eq!(self.func_index("instance_entries_copy"), copy_entries, "recursive call index");
-		}
-		self.runtime_function(crate::library_words::INSTANCE_COPY, vec![node_ref], vec![node_ref], vec![nullable], |s, f| {
-			let body = 1;
-			if has_instances {
-				f.instruction(&I::LocalGet(0));
-				s.call(f, super::list_ops::STRUCT_BODY);
-				Self::emit_list(f, &[I::LocalTee(body), I::LocalGet(0), I::RefEq, I::I32Eqz, I::If(BlockType::Empty)]);
-				s.emit_field(f, 0, 0);
-				s.emit_field(f, 0, 1);
-				Self::emit_list(f, &[I::LocalGet(body), I::Call(copy_entries), I::StructNew(node_type), I::Return, I::End]);
+		let next_index = |s: &Self| s.ctx.func_registry.import_count() + s.ctx.func_registry.code_count();
+		// is the node in `local` an entry or cell (a Key or List), else leave the function giving it back
+		let return_unless_structure = |f: &mut Function, local: u32, kind: u32| {
+			Self::emit_list(f, &[I::LocalGet(local), I::StructGet { struct_type_index: node_type, field_index: 0 }, I::I64Const(KIND_MASK), I::I64And, I::LocalTee(kind)]);
+			Self::emit_list(f, &[I::I64Const(KEY_KIND), I::I64Ne, I::LocalGet(kind), I::I64Const(Kind::List as i64), I::I64Ne, I::I32And]);
+			Self::emit_list(f, &[I::LocalGet(kind), I::I64Const(Kind::Empty as i64), I::I64Ne, I::I32And, I::If(BlockType::Empty), I::LocalGet(local), I::Return, I::End]);
+		};
+		let entry_copy = |s: &Self, f: &mut Function, local: u32| {
+			for field_index in 0..3 {
+				s.emit_field(f, local, field_index);
 			}
-			f.instruction(&I::LocalGet(0));
+			f.instruction(&I::StructNew(node_type));
+		};
+
+		// copy_spine(fields): new entries and cells, the values in them shared
+		let spine = next_index(self);
+		self.runtime_function("copy_spine", vec![nullable], vec![nullable], vec![ValType::I64, Self::any_ref(), nullable], |s, f| {
+			let (node, kind, item, entry) = (0, 1, 2, 3);
+			Self::emit_list(f, &[I::LocalGet(node), I::RefIsNull, I::If(BlockType::Empty), I::RefNull(node_heap), I::Return, I::End]);
+			return_unless_structure(f, node, kind);
+			Self::emit_list(f, &[I::LocalGet(kind), I::I64Const(Kind::List as i64), I::I64Ne, I::If(BlockType::Empty)]);
+			entry_copy(s, f, node);
+			Self::emit_list(f, &[I::Return, I::End]);
+			// a cell: its item new when it is an entry
+			s.emit_field(f, node, 1);
+			Self::emit_list(f, &[I::LocalTee(item), I::RefTestNonNull(node_heap), I::If(BlockType::Empty), I::LocalGet(item), I::RefCastNonNull(node_heap), I::LocalTee(entry)]);
+			Self::emit_list(f, &[I::StructGet { struct_type_index: node_type, field_index: 0 }, I::I64Const(KIND_MASK), I::I64And, I::I64Const(KEY_KIND), I::I64Eq, I::If(BlockType::Empty)]);
+			entry_copy(s, f, entry);
+			Self::emit_list(f, &[I::LocalSet(item), I::End, I::End]);
+			s.emit_field(f, node, 0);
+			f.instruction(&I::LocalGet(item));
+			s.emit_field(f, node, 2);
+			Self::emit_list(f, &[I::Call(spine), I::StructNew(node_type)]);
+		});
+		assert_eq!(self.func_index("copy_spine"), spine, "recursive call index");
+
+		// deep_copy(node, memo): memo.value lists `original:copy` pairs, so a part held twice is copied once
+		let deep = next_index(self);
+		self.runtime_function("deep_copy", vec![nullable, node_ref], vec![nullable], vec![ValType::I64, nullable, nullable, nullable, Self::any_ref()], |s, f| {
+			let (node, memo, kind, cell, pair, copy, data) = (0, 1, 2, 3, 4, 5, 6);
+			Self::emit_list(f, &[I::LocalGet(node), I::RefIsNull, I::If(BlockType::Empty), I::RefNull(node_heap), I::Return, I::End]);
+			return_unless_structure(f, node, kind);
+			s.emit_field(f, memo, 2);
+			Self::emit_list(f, &[I::LocalSet(cell), I::Block(BlockType::Empty), I::Loop(BlockType::Empty), I::LocalGet(cell), I::RefIsNull, I::BrIf(1)]);
+			s.emit_field(f, cell, 1);
+			Self::emit_list(f, &[I::RefCastNonNull(node_heap), I::LocalTee(pair)]);
+			Self::emit_list(f, &[I::StructGet { struct_type_index: node_type, field_index: 1 }, I::RefCastNonNull(node_heap), I::LocalGet(node), I::RefEq, I::If(BlockType::Empty)]);
+			s.emit_field(f, pair, 2);
+			Self::emit_list(f, &[I::Return, I::End]);
+			s.emit_field(f, cell, 2);
+			Self::emit_list(f, &[I::LocalSet(cell), I::Br(0), I::End, I::End]);
+			s.emit_field(f, node, 0);
+			Self::emit_list(f, &[I::RefNull(HeapType::Abstract { shared: false, ty: AbstractHeapType::Any }), I::RefNull(node_heap), I::StructNew(node_type), I::LocalSet(copy)]);
+			Self::emit_list(f, &[I::LocalGet(memo), I::I64Const(Kind::List as i64), I::I64Const(KEY_KIND), I::LocalGet(node), I::LocalGet(copy), I::StructNew(node_type)]);
+			s.emit_field(f, memo, 2);
+			Self::emit_list(f, &[I::StructNew(node_type), I::StructSet { struct_type_index: node_type, field_index: 2 }]);
+			s.emit_field(f, node, 1);
+			Self::emit_list(f, &[I::LocalSet(data), I::LocalGet(copy), I::LocalGet(data), I::RefTestNonNull(node_heap)]);
+			Self::emit_list(f, &[I::If(BlockType::Result(Self::any_ref())), I::LocalGet(data), I::RefCastNonNull(node_heap), I::LocalGet(memo), I::Call(deep), I::Else, I::LocalGet(data), I::End]);
+			Self::emit_list(f, &[I::StructSet { struct_type_index: node_type, field_index: 1 }, I::LocalGet(copy)]);
+			s.emit_field(f, node, 2);
+			Self::emit_list(f, &[I::LocalGet(memo), I::Call(deep), I::StructSet { struct_type_index: node_type, field_index: 2 }, I::LocalGet(copy)]);
+		});
+		assert_eq!(self.func_index("deep_copy"), deep, "recursive call index");
+
+		self.runtime_function(crate::library_words::INSTANCE_COPY, vec![node_ref, node_ref], vec![node_ref], vec![nullable], |s, f| {
+			let (object, shallow, body) = (0, 1, 2);
+			f.instruction(&I::LocalGet(shallow));
+			s.call(f, super::equality::IS_TRUTHY);
+			f.instruction(&I::If(BlockType::Empty));
+			if has_instances {
+				f.instruction(&I::LocalGet(object));
+				s.call(f, super::list_ops::STRUCT_BODY);
+				Self::emit_list(f, &[I::LocalTee(body), I::LocalGet(object), I::RefEq, I::I32Eqz, I::If(BlockType::Empty)]);
+				s.emit_field(f, object, 0);
+				s.emit_field(f, object, 1);
+				Self::emit_list(f, &[I::LocalGet(body), I::Call(spine), I::StructNew(node_type), I::Return, I::End]);
+			}
+			Self::emit_list(f, &[I::LocalGet(object), I::Call(spine), I::RefAsNonNull, I::Return, I::End]);
+			Self::emit_list(f, &[I::LocalGet(object), I::I64Const(Kind::Empty as i64), I::RefNull(HeapType::Abstract { shared: false, ty: AbstractHeapType::Any }), I::RefNull(node_heap), I::StructNew(node_type), I::Call(deep), I::RefAsNonNull]);
 		});
 	}
 

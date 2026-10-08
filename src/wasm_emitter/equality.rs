@@ -197,7 +197,7 @@ impl WasmGcEmitter {
 		f.instruction(&I::End);
 	}
 
-	fn any_ref() -> ValType {
+	pub(super) fn any_ref() -> ValType {
 		Ref(RefType { nullable: true, heap_type: any_heap_type() })
 	}
 
