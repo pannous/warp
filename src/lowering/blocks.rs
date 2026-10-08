@@ -136,6 +136,9 @@ pub(crate) fn uncharged(node: &Node) -> Option<(String, Node)> {
 /// Code that computes: an operation or a call, not a literal, a word, a type or an object/list literal
 fn is_computed(value: &Node) -> bool {
 	match value.drop_meta() {
+		// a quantity `5 m` is a value, written as data
+		Node::Key(amount, Op::Mul, unit) if matches!(amount.drop_meta(), Node::Number(_))
+			&& matches!(unit.drop_meta(), Node::Symbol(name) if crate::units::is_unit(name)) => false,
 		// a type expression declares: `int[100]`, `100 * int`, `3 * char`
 		Node::Key(left, op, right) => {
 			let is_type = |side: &Node| matches!(side.drop_meta(), Node::Symbol(word)
