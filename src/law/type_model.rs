@@ -236,6 +236,11 @@ fn function_definition(statement: &Node) -> Option<(&str, Vec<&Node>, &Node)> {
 	}
 }
 
+/// `not e`: yes when e is falsy
+fn negation(lean: String) -> String {
+	format!(".ite ({lean}) (.bool false) (.bool true)")
+}
+
 /// The class of the cell a local of function holds its value in: `f·n` for n in f
 fn cell_class(function: &str, local: &str) -> String {
 	format!("{function}·{local}")
@@ -693,6 +698,17 @@ impl Exporter {
 		Ok(format!(".forIn {} ({list}) ({})", quoted(&variable), body?))
 	}
 
+	/// a literal, a name (not a function's), or operators on such: evaluating it twice changes nothing
+	fn is_pure(&self, node: &Node) -> bool {
+		match node.drop_meta() {
+			Node::Number(_) | Node::Text(_) | Node::Char(_) | Node::True | Node::False | Node::Empty => true,
+			Node::Symbol(name) => !self.functions.contains_key(name),
+			Node::List(items, Bracket::Round, _) if items.len() == 1 => self.is_pure(&items[0]),
+			Node::Key(left, op, right) => !matches!(op, Op::Assign | Op::Define | Op::Dot) && !op.is_compound_assign() && self.is_pure(left) && self.is_pure(right),
+			_ => false,
+		}
+	}
+
 	fn cell_value(&self, cell: &str) -> String {
 		format!(".get (.loc {}) {}", quoted(cell), quoted(CELL_FIELD))
 	}
@@ -820,9 +836,15 @@ impl Exporter {
 			Node::Key(left, Op::Eq, right) if matches!(right.drop_meta(), Node::Symbol(class) if self.classes.contains_key(class)) => Ok(format!(".isA ({}) {}", self.expression(left)?, quoted(&right.name()))),
 			Node::Key(left, op @ (Op::Eq | Op::Ne | Op::Identical | Op::NotIdentical), right) => {
 				let compared = self.binary(if matches!(op, Op::Identical | Op::NotIdentical) { ".eq true" } else { ".eq false" }, left, right)?;
-				Ok(if matches!(op, Op::Ne | Op::NotIdentical) { format!(".ite ({compared}) (.bool false) (.bool true)") } else { compared })
+				Ok(if matches!(op, Op::Ne | Op::NotIdentical) { negation(compared) } else { compared })
 			}
 			Node::Key(list, Op::Hash, index) if !list.is_nothing() => self.binary(".index", list, index),
+			Node::Key(empty, Op::Not, operand) if empty.is_nothing() => Ok(negation(self.expression(operand)?)),
+			// `a and b` is b when a is truthy, else a; `a or b` the other way round: a, free of effects, evaluated twice
+			Node::Key(left, op @ (Op::And | Op::Or), right) if self.is_pure(left) => {
+				let (left, right) = (self.expression(left)?, self.expression(right)?);
+				Ok(if *op == Op::And { format!(".ite ({left}) ({right}) ({left})") } else { format!(".ite ({left}) ({left}) ({right})") })
+			}
 			// `'a'..'e'`: letters, outside W0
 			Node::Key(from, Op::Range | Op::To, to) if [from, to].iter().any(|bound| matches!(bound.drop_meta(), Node::Text(_) | Node::Char(_))) => unsupported(node),
 			Node::Key(from, Op::Range, to) => self.binary(".range", from, to),
