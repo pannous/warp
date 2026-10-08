@@ -86,7 +86,14 @@ pub fn lower(node: Node) -> Node {
 		}
 		declared.insert(name, shared);
 	});
-	declared.extend(float_map_results(&node, &declared));
+	// a map of a map's result is one too: until no name is added
+	loop {
+		let results = float_map_results(&node, &declared);
+		if results.is_empty() {
+			break;
+		}
+		declared.extend(results);
+	}
 	let linear_floats: Vec<String> = declared.iter().filter(|(_, kind)| is_linear_float_array(**kind)).map(|(name, _)| name.clone()).collect();
 	let node = crate::gpu_maps::warn_unapplied(node, &linear_floats);
 	if declared.is_empty() || matches!(node, Node::Error(_)) {

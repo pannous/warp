@@ -59,3 +59,11 @@ fn a_numeric_map_of_a_linear_array_writes_a_new_block() {
 	let lowered = warp::pipeline::lower(&format!("{fill}ys = xs.map(x => sin(x)); ys#1")).expect("a program").serialize();
 	assert!(lowered.contains("linear_new") && !lowered.contains(".map"), "{lowered}");
 }
+
+// a map of a numeric map's result is a linear array too (the results found until none is added)
+#[test]
+fn a_numeric_map_of_a_mapped_linear_array_writes_a_block_too() {
+	let program = "linear xs = float[2]; xs#2 = 1.0; ys = xs.map(x => sin(x)); zs = ys.map(y => max(y, 0.5)); [zs#1, #zs]";
+	is!(program, list(vec![float(0.5), int(2)]));
+	assert!(!warp::pipeline::lower(program).expect("a program").serialize().contains(".map"));
+}
