@@ -26,6 +26,12 @@ theorem frame_typing {Γ} (F : Frame) {e t} (h : HasType P Γ (F.plug e) t) :
   case addR =>
     cases h with | add ha hb sa sb =>
     exact ⟨_, hb, fun h' s => ⟨_, .add ha h' sa (addable_mono s sb), plus_mono (sub_refl _) s sa sb⟩⟩
+  case arithL =>
+    cases h with | arith ha hb sa sb =>
+    exact ⟨_, ha, fun h' s => ⟨_, .arith h' hb (sub_trans s sa) sb, arith_mono s (sub_refl _)⟩⟩
+  case arithR =>
+    cases h with | arith ha hb sa sb =>
+    exact ⟨_, hb, fun h' s => ⟨_, .arith ha h' sa (sub_trans s sb), arith_mono (sub_refl _) s⟩⟩
   case ltL =>
     cases h with | lt ha hb sa sb =>
     exact ⟨_, ha, fun h' s => ⟨_, .lt h' hb (sub_trans s sa) sb, sub_refl _⟩⟩
@@ -185,6 +191,10 @@ theorem preservation (hP : FunsOk P) {s s' : Expr × Store} (hs : Step P s s') :
     intro t h hμ
     cases h with
     | add ha hb sa sb => exact ⟨add_typed ha hb va vb sa sb, hμ⟩
+  | arith va vb =>
+    intro t h hμ
+    cases h with
+    | arith ha hb sa sb => exact ⟨arith_typed ha hb va vb sa sb, hμ⟩
   | lt => intro t h hμ; cases h; exact ⟨⟨_, .bool, sub_refl _⟩, hμ⟩
   | eq => intro t h hμ; cases h; exact ⟨⟨_, .bool, sub_refl _⟩, hμ⟩
   | ite =>
@@ -306,6 +316,8 @@ theorem progress {Γ e t} (h : HasType P Γ e t) (hΓ : Γ = Ctx.empty) {μ : St
   | loc hy => subst hΓ; simp [Ctx.empty] at hy
   | @add _ a b _ _ _ _ _ _ ih1 ih2 =>
     exact in_frame (.addL b) rfl (ih1 hΓ) fun va => in_frame (.addR a) va (ih2 hΓ) fun vb => steps (.add va vb)
+  | @arith _ op a b _ _ _ _ _ _ ih1 ih2 =>
+    exact in_frame (.arithL op b) rfl (ih1 hΓ) fun va => in_frame (.arithR op a) va (ih2 hΓ) fun vb => steps (.arith va vb)
   | @lt _ a b _ _ _ _ _ _ ih1 ih2 =>
     exact in_frame (.ltL b) rfl (ih1 hΓ) fun va => in_frame (.ltR a) va (ih2 hΓ) fun vb => steps (.lt va vb)
   | @eq _ a b _ _ _ _ ih1 ih2 =>

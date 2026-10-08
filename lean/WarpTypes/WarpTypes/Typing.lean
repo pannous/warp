@@ -34,6 +34,8 @@ inductive HasType (P : Program) : Ctx → Expr → Ty → Prop where
   /-- inference.rs arithmetic_kind -/
   | add {Γ a b ta tb} : HasType P Γ a ta → HasType P Γ b tb → addable ta = true → addable tb = true →
       HasType P Γ (.add a b) (plus ta tb)
+  | arith {Γ op a b ta tb} : HasType P Γ a ta → HasType P Γ b tb → sub ta .number = true → sub tb .number = true →
+      HasType P Γ (.arith op a b) (Ty.arith ta tb)
   | lt {Γ a b ta tb} : HasType P Γ a ta → HasType P Γ b tb → sub ta .number = true → sub tb .number = true →
       HasType P Γ (.lt a b) .bool
   | eq {Γ a b ta tb} : HasType P Γ a ta → HasType P Γ b tb → HasType P Γ (.eq a b) .bool
