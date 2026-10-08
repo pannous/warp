@@ -22,3 +22,12 @@ fn an_any_value_and_a_number_join_as_text() {
 	is!("id(x:any) := x; id(\"ab\") + 3", "ab3");
 	is!("id(x:any) := x; 1 + id(2)", 3);
 }
+
+/// arithmetic of an any value is a number decided at run time; joined with a text it takes its text form, as a known
+/// number does (card server-def-any: `server def doubled(n)` takes n:any, and `"n " + doubled(n)` was "text + data")
+#[test]
+fn an_any_result_joins_a_text() {
+	is!("doubled(x:any) := x * 2; \"n \" + doubled(1)", "n 2");
+	is!("doubled(x:any) := x * 2; n = 1; n = doubled(n); \"n \" + n", "n 2");
+	is!("half(x:any) := x / 2.0; half(3) + \" left\"", "1.5 left");
+}
