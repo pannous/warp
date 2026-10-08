@@ -148,7 +148,7 @@ impl WasmGcEmitter {
 	fn reaches(&self, func: &mut Function, parts: u32, extremum: &Extremum) {
 		let at = I::F64Const(extremum.at.into());
 		if extremum.every == 0.0 {
-			Self::emit_list(func, &[at.clone()]);
+			func.instruction(&at);
 			Self::emit_list(func, &self.part(parts, LOW));
 			Self::emit_list(func, &[I::F64Ge, at]);
 			Self::emit_list(func, &self.part(parts, HIGH));

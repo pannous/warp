@@ -338,7 +338,7 @@ pub(super) fn infer_list_type(node: &Node, items: &[Node], bracket: &Bracket, se
 			// FFI/builtin function calls return Int by default
 			// This handles strcmp, strlen, abs, etc.
 			if crate::ffi::is_ffi_function(s) {
-				return match &items[..] {
+				return match items {
 					[_, argument] if crate::uncertain::maps_intervals(s) => interval_or(ffi_call_kind(s), argument, scope),
 					_ => ffi_call_kind(s),
 				};
