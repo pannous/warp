@@ -45,4 +45,5 @@ mod test_i18n;
 mod test_webgpu;
 mod test_tag_lists;
 mod test_safari_imports;
+#[cfg(feature = "native")] // a site build with the native compiler
 mod test_server_functions_in_page; // card route-sample
