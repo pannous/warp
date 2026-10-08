@@ -7,6 +7,9 @@ before asking the user; nobody reads it front to back, the code, tests and wiki 
 notes/open_decisions.md.
 
 ## Decided 2026-10-08 (user, as recommended unless quoted)
+- ORM updates (undoable default, supervisor, from the user's own edit of samples/orm.warp; warp-fixer): assigning a
+  field of a stored row (`bo.age += 1`) writes through as an SQL UPDATE; `save bo` is accepted as an explicit write,
+  a no-op when the row is already written.
 - Every major or semi-major feature ships with a sample in samples/, especially the ORM and the server (user, to the
   supervisor; rule in notes/agents/common.md 2ca368e9f; cards sample-orm, warp-fixer, and sample-server,
   warp-functions).
