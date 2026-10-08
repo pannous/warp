@@ -44,6 +44,7 @@ impl CopyCells {
 impl WasmGcEmitter {
 	/// Emit list and string operation helper functions
 	pub(crate) fn emit_list_ops(&mut self) {
+		self.require_list_marks();
 		self.emit_is_meta_entry();
 		self.emit_zero_fill();
 		if TEXT_UNIT_USERS.iter().any(|name| self.should_emit_function(name)) {
@@ -52,6 +53,7 @@ impl WasmGcEmitter {
 		self.emit_list_cell_access();
 		self.emit_node_counting();
 		self.emit_node_kind_test();
+		self.emit_list_marks();
 		self.emit_node_indexing();
 		self.emit_with_at_functions();
 		self.emit_typed_list_runtime();
@@ -365,6 +367,8 @@ impl WasmGcEmitter {
 		self.runtime_function(crate::analyzer::INSERT_AT_CALL, params, vec![node_ref], vec![node_ref_nullable], |s, f| {
 			let (list, position, value, cell) = (0, 1, 2, 3);
 			let lone_cell = [I::I64Const(SQUARE_LIST_KIND), I::LocalGet(value), I::RefNull(HeapType::Concrete(node_type)), I::StructNew(node_type)];
+			Self::emit_list(f, &[I::LocalGet(list), I::LocalGet(value)]);
+			s.call(f, super::declared_values::LIST_ITEM_CHECK);
 			Self::emit_list(f, &[I::LocalGet(list), I::RefIsNull, I::If(BlockType::Empty)]);
 			Self::emit_list(f, &lone_cell);
 			Self::emit_list(f, &[I::Return, I::End]);
@@ -629,7 +633,8 @@ fn divided_index(index: &Node) -> Option<(&Node, &Node)> {
 
 /// How to fix a runtime error, appended to its message: the trap knows no source position, so the fix is generic
 const WHOLE_NUMBER_FIX: &str = "fix: compute it with // (floor division) or `… as int`";
-const RUNTIME_ERROR_FIXES: [(&str, &str); 3] = [(INDEX_NOT_INTEGRAL, WHOLE_NUMBER_FIX), (COUNT_NOT_INTEGRAL, WHOLE_NUMBER_FIX), (INT_NOT_WHOLE, WHOLE_NUMBER_FIX)];
+const RUNTIME_ERROR_FIXES: [(&str, &str); 4] = [(INDEX_NOT_INTEGRAL, WHOLE_NUMBER_FIX), (COUNT_NOT_INTEGRAL, WHOLE_NUMBER_FIX), (INT_NOT_WHOLE, WHOLE_NUMBER_FIX),
+	(super::declared_values::LIST_CANNOT_HOLD, "its declared element type does not admit it (P215)")];
 
 /// The message of the runtime error trapped in the function `name`: its words, then its fix if it has one
 pub fn runtime_error_message(name: &str) -> String {
@@ -652,12 +657,12 @@ pub const RETURNED_ERROR: &str = "returned_error";
 /// `a % 0`, `a rem 0`: an integer divide by zero (big_int::emit_nonzero_divisor)
 pub const DIVIDE_BY_ZERO: &str = "divide_by_zero";
 
-pub const RUNTIME_ERRORS: [&str; 26] = [
+pub const RUNTIME_ERRORS: [&str; 27] = [
 	"index_out_of_range", INDEX_NOT_INTEGRAL, "invalid_number", "out_of_memory", "key_not_found", "float_out_of_int_range",
 	"min_of_an_empty_list", "max_of_an_empty_list", "reduce_of_an_empty_list",
 	"not_a_list", "not_a_text", "not_an_int", "non_ascii_text", "not_a_joinable_item", "empty_separator", "not_an_object",
 	"not_comparable", super::closures::NOT_A_FUNCTION, super::closures::WRONG_ARGUMENT_COUNT, super::tuple_emitter::WRONG_NUMBER_OF_VALUES,
-	RETURNED_ERROR, "not_a_character", COUNT_NOT_INTEGRAL, NOT_A_NUMBER, DIVIDE_BY_ZERO, INT_NOT_WHOLE,
+	RETURNED_ERROR, "not_a_character", COUNT_NOT_INTEGRAL, NOT_A_NUMBER, DIVIDE_BY_ZERO, INT_NOT_WHOLE, super::declared_values::LIST_CANNOT_HOLD,
 ];
 
 /// text_as_int(node) -> i64: a Text's optional sign and decimal digits, any other node's Int (get_int_value)
@@ -1458,6 +1463,8 @@ impl WasmGcEmitter {
 			let (list, items) = (0, 1);
 			let copy = CopyCells::at(2);
 			let kind = copy.result + 1;
+			Self::emit_list(f, &[I::LocalGet(list), I::LocalGet(items)]);
+			s.call(f, super::declared_values::LIST_ITEMS_CHECK);
 			s.emit_empty_as_null(f, items);
 			s.emit_collect_cells(f, items, None, &copy);
 			s.emit_rebuild_cells(f, &copy);
@@ -1533,7 +1540,7 @@ impl WasmGcEmitter {
 		self.runtime_function(ELEMENT_CHILDREN, vec![node_ref_nullable, node_ref_nullable], vec![node_ref_nullable], vec![node_ref_nullable], |s, f| {
 			let kind_is = |s: &Self, f: &mut Function, local: u32, kind: i64| {
 				s.emit_field(f, local, 0);
-				Self::emit_list(f, &[I::I64Const(kind), I::I64Eq]);
+				Self::emit_list(f, &[I::I64Const(crate::type_kinds::UNMARKED_KIND), I::I64And, I::I64Const(kind), I::I64Eq]);
 			};
 			// no children (null or ø): the tail
 			Self::emit_list(f, &[I::LocalGet(children), I::RefIsNull, I::If(BlockType::Empty), I::LocalGet(tail), I::Return, I::End]);
@@ -1659,6 +1666,8 @@ impl WasmGcEmitter {
 			};
 			Self::emit_index_compare(f, I::I64LtS);
 			s.emit_fail_if(f, "index_out_of_range");
+			Self::emit_list(f, &[I::LocalGet(list), I::LocalGet(value)]);
+			s.call(f, super::declared_values::LIST_ITEM_CHECK);
 			// the cell at index
 			Self::emit_list(f, &[I::LocalGet(list), I::LocalSet(cell), I::LocalGet(index), I::LocalSet(countdown), I::Block(BlockType::Empty), I::Loop(BlockType::Empty)]);
 			kind_test(s, f);
@@ -2157,7 +2166,7 @@ impl WasmGcEmitter {
 			is_entry(s, f, 0);
 			Self::emit_list(f, &[I::If(BlockType::Empty), I32Const(1), I::Return, I::End]);
 			s.emit_field(f, 0, 0);
-			Self::emit_list(f, &[I::I64Const(CURLY_LIST_KIND), I::I64Ne, I::If(BlockType::Empty), I32Const(0), I::Return, I::End]);
+			Self::emit_list(f, &[I::I64Const(crate::type_kinds::UNMARKED_KIND), I::I64And, I::I64Const(CURLY_LIST_KIND), I::I64Ne, I::If(BlockType::Empty), I32Const(0), I::Return, I::End]);
 			s.emit_field(f, 0, 1);
 			Self::emit_list(f, &[I::RefTestNonNull(HeapType::Concrete(node)), I::If(BlockType::Result(ValType::I32))]);
 			s.emit_field(f, 0, 1);

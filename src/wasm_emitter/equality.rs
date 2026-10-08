@@ -438,7 +438,7 @@ impl WasmGcEmitter {
 			Self::return_if(f, 0);
 			for (from, to) in [(0, 2), (1, 3)] {
 				Self::field(f, from, node, 0);
-				f.instruction(&I::LocalSet(to));
+				Self::emit_list(f, &[I::I64Const(crate::type_kinds::UNMARKED_KIND), I::I64And, I::LocalSet(to)]);
 			}
 			s.emit_character_equals_text(f, node, recurse);
 			f.instruction(&I::LocalGet(2));

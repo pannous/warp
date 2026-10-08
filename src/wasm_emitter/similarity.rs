@@ -97,7 +97,7 @@ impl WasmGcEmitter {
 			Self::emit_list(f, &[I::I32And, I::If(BlockType::Empty)]);
 			for (from, to) in [(a, kind_a), (b, kind_b)] {
 				Self::field(f, from, node, 0);
-				f.instruction(&I::LocalSet(to));
+				Self::emit_list(f, &[I::I64Const(crate::type_kinds::UNMARKED_KIND), I::I64And, I::LocalSet(to)]);
 			}
 			// a bool and any value: alike in truthiness
 			Self::emit_list(f, &[I::LocalGet(kind_a), I::I64Const(BOOL_KIND), I::I64Eq, I::LocalGet(kind_b), I::I64Const(BOOL_KIND), I::I64Eq, I::I32Or]);

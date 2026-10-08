@@ -140,5 +140,10 @@ checked like a declared scalar:
 - Variance (TypeScript's covariant arrays), P215: lists are shared (P200b), so a view of a declared list under a wider
   element type that changes it (`widen(xs: list) := xs.add(420)` of `names: texts`, `ys: [Shape] = circles;
   ys.add(…)`) is a compile error where the alias is visible (src/analyzer/list_views.rs); a view that only reads, or of
-  a fitting element type (a subclass), is fine. Not yet: the run-time half (a lax alias, an unannotated parameter,
-  writes checked against the list's own declared element type), probes/variance/.
+  a fitting element type (a subclass), is fine. The run-time half (a lax alias `ys = names`, an unannotated parameter
+  `f(xs) := xs.add(420)`): a declared Node-held list's head cell carries an element mark, the node_kind_in kinds its
+  element type admits, in kind bits 16+ (type_kinds::element_mark, set by list_mark at the assignment);
+  list_extend, list_insert_at and list_with_at check each new item (list_item_check, error "list cannot hold this
+  item"). Whole-kind compares mask the mark off (UNMARKED_KIND: equality, similarity, is_map, element_children).
+  Limits: an empty declared list (ø, kind Empty) carries no mark; a class element type checks only that the item
+  is an object (OBJECT_KINDS), not its class; typed arrays need none. Probes: probes/variance/runtime_*.warp.

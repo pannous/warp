@@ -119,3 +119,82 @@ impl WasmGcEmitter {
 		self.emit_call(func, crate::type_tests::NODE_KIND_IN);
 	}
 }
+
+/// list_mark(list, mark) -> list: the head cell of a declared list takes its element mark (type_kinds::element_mark), so a
+/// write through any alias, a lax variable or an unannotated parameter, checks its item at run time (P215); ø and any
+/// other node stay as they are
+pub(super) const LIST_MARK: &str = "list_mark";
+/// list_item_check(list, item): the run-time error when the list's element mark does not admit the item
+pub(super) const LIST_ITEM_CHECK: &str = "list_item_check";
+/// list_items_check(list, items): list_item_check of each item of the list `items`
+pub(super) const LIST_ITEMS_CHECK: &str = "list_items_check";
+pub(super) const LIST_CANNOT_HOLD: &str = "list_cannot_hold_this_item";
+/// The in-place writers of a list, which check their items against its element mark
+const MARK_CHECKING_WRITERS: [&str; 3] = [super::list_ops::LIST_EXTEND, crate::analyzer::INSERT_AT_CALL, "node_with_at"];
+
+impl WasmGcEmitter {
+	/// The element mark of a list declared `declared` (`names: texts`), when a writer could check it
+	pub(super) fn element_mark_of(&self, declared: &Node) -> Option<i64> {
+		if !self.should_emit_function(LIST_MARK) {
+			return None;
+		}
+		let type_name = declared.name();
+		let element = crate::analyzer::list_element_type(&type_name)?;
+		let mask = match self.admitted(&Node::Symbol(element.to_string()))? {
+			Admitted::Kinds(mask) => mask,
+			Admitted::Bool => 1 << BOOL_MASK_BIT,
+		};
+		Some(crate::type_kinds::element_mark(mask))
+	}
+
+	pub(super) fn require_list_marks(&mut self) {
+		if MARK_CHECKING_WRITERS.iter().any(|writer| self.should_emit_function(writer)) {
+			self.ctx.required_functions.extend([crate::type_tests::NODE_KIND_IN, LIST_MARK, LIST_ITEM_CHECK, LIST_ITEMS_CHECK]);
+		}
+	}
+
+	pub(super) fn emit_list_marks(&mut self) {
+		use crate::type_kinds::{ELEMENT_MARK_SHIFT, KIND_MASK, MARK_BOOL_BIT, MARK_KINDS_MASK};
+		if !self.should_emit_function(LIST_MARK) {
+			return;
+		}
+		let node_type = self.type_manager.node_type;
+		let (node_ref, nullable) = (ValType::Ref(self.node_ref(false)), ValType::Ref(self.node_ref(true)));
+		let is_list = [I::I64Const(KIND_MASK), I::I64And, I::I64Const(Kind::List as i64), I::I64Eq];
+		self.runtime_function(LIST_MARK, vec![node_ref, ValType::I64], vec![node_ref], vec![], |s, f| {
+			let (list, mark) = (0, 1);
+			s.emit_field(f, list, 0);
+			Self::emit_list(f, &is_list);
+			Self::emit_list(f, &[I::If(BlockType::Empty), I::LocalGet(list)]);
+			s.emit_field(f, list, 0);
+			Self::emit_list(f, &[I::LocalGet(mark), I::I64Or, I::StructSet { struct_type_index: node_type, field_index: 0 }, I::End, I::LocalGet(list)]);
+		});
+		self.runtime_function(LIST_ITEM_CHECK, vec![nullable, node_ref], vec![], vec![ValType::I64], |s, f| {
+			let (list, item, mark) = (0, 1, 2);
+			Self::emit_list(f, &[I::LocalGet(list), I::RefIsNull, I::If(BlockType::Empty), I::Return, I::End]);
+			s.emit_field(f, list, 0);
+			Self::emit_list(f, &is_list);
+			Self::emit_list(f, &[I::I32Eqz, I::If(BlockType::Empty), I::Return, I::End]);
+			s.emit_field(f, list, 0);
+			Self::emit_list(f, &[I::I64Const(ELEMENT_MARK_SHIFT), I::I64ShrU, I::LocalTee(mark), I::I64Eqz, I::If(BlockType::Empty), I::Return, I::End]);
+			// the node_kind_in mask of the mark: its kind bits, its bool bit back at BOOL_MASK_BIT
+			Self::emit_list(f, &[I::LocalGet(item), I::LocalGet(mark), I::I64Const(MARK_KINDS_MASK), I::I64And,
+				I::LocalGet(mark), I::I64Const(MARK_BOOL_BIT), I::I64ShrU, I::I64Const(1), I::I64And, I::I64Const(BOOL_MASK_BIT), I::I64Shl, I::I64Or]);
+			s.call(f, crate::type_tests::NODE_KIND_IN);
+			f.instruction(&I::I64Eqz);
+			s.emit_fail_if(f, LIST_CANNOT_HOLD);
+		});
+		self.runtime_function(LIST_ITEMS_CHECK, vec![nullable, nullable], vec![], vec![], |s, f| {
+			let (list, cell) = (0, 1);
+			Self::emit_list(f, &[I::Block(BlockType::Empty), I::Loop(BlockType::Empty), I::LocalGet(cell), I::RefIsNull, I::BrIf(1)]);
+			s.emit_field(f, cell, 0);
+			Self::emit_list(f, &is_list);
+			Self::emit_list(f, &[I::I32Eqz, I::BrIf(1), I::LocalGet(list)]);
+			s.emit_field(f, cell, 1);
+			f.instruction(&I::RefCastNonNull(HeapType::Concrete(node_type)));
+			s.call(f, LIST_ITEM_CHECK);
+			s.emit_field(f, cell, 2);
+			Self::emit_list(f, &[I::LocalSet(cell), I::Br(0), I::End, I::End]);
+		});
+	}
+}

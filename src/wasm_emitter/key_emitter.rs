@@ -101,6 +101,10 @@ impl WasmGcEmitter {
 				// Emit the right side as a Node reference
 				let declared = self.declared_type_of(left);
 				self.emit_declared_value(func, declared.as_ref(), right, crate::Kind::Empty);
+				if let Some(mark) = declared.as_ref().and_then(|declared| self.element_mark_of(declared)) {
+					func.instruction(&I::I64Const(mark));
+					self.emit_call(func, super::declared_values::LIST_MARK);
+				}
 				// Store in ref-type local
 				if let Some(local) = self.scope.lookup(name) {
 					func.instruction(&I::LocalTee(local.position));
