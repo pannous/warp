@@ -436,7 +436,11 @@ impl Broadcast {
 				let right = self.rewrite(*right);
 				self.broadcast_operator(op, &right).unwrap_or(Node::Key(left, op, Box::new(right)))
 			}
-			Node::Key(left, op, right) => Node::Key(Box::new(self.rewrite(*left)), op, Box::new(self.rewrite(*right))),
+			Node::Key(left, op, right) => {
+				let (left, right) = (self.rewrite(*left), self.rewrite(*right));
+				let method_call = (op == Op::Dot).then(|| self.broadcast_method(&left, &right)).flatten();
+				method_call.unwrap_or(Node::Key(Box::new(left), op, Box::new(right)))
+			}
 			Node::Meta { node, data } => Node::Meta { node: Box::new(self.rewrite(*node)), data },
 			other => other,
 		}
@@ -453,6 +457,26 @@ impl Broadcast {
 			_ if self.is_list_value(argument) => Some(each_item(argument.clone(), |item| call(name, item))),
 			_ => None,
 		}
+	}
+
+	/// `names.upper`, `names.upper()`: the method form of a broadcasting function maps over the list as `upper names`
+	/// does (card method-broadcast, default pending the user's decision)
+	fn broadcast_method(&self, receiver: &Node, method: &Node) -> Option<Node> {
+		let name = match method.drop_meta() {
+			Node::Symbol(name) => name,
+			Node::List(items, Bracket::Round, _) => match items.as_slice() {
+				[only] => match only.drop_meta() {
+					Node::Symbol(name) => name,
+					_ => return None,
+				},
+				_ => return None,
+			},
+			_ => return None,
+		};
+		if !self.is_list(receiver) {
+			return None;
+		}
+		self.broadcast_call(&[Node::Symbol(name.clone()), receiver.clone()], &Bracket::Round, &Separator::None)
 	}
 
 	/// A list variable or a range: `sqrt xs`, `sqrt (1 to 4)` map over its items
