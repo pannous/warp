@@ -120,6 +120,7 @@ const CORPUS: &[&str] = &[
 	"a = 0; compute() := emit ask; on ask { 1 } in { a = on ask { 2 } in { compute() }; a * 10 + compute() }",
 	"on ask { 7 }; compute() := emit ask; a = on ask { 2 } in { compute() }; a * 10 + compute()",
 	"y = 0; on ask { y = 5; y + 10 } in { emit ask }",
+	"y = 0; on ask { 1 } in { on ask { y = emit ask; y + 10 } in { emit ask } }",
 	"n = 0; on alarm { n += 1 }; emit alarm; emit alarm; n",
 	"level = 0; on alarm { level = event.level }; emit alarm{level: 3}; level",
 	"def check(x) { if x > 2 { emit too big{value: x} }; x }; check(1)",
@@ -127,22 +128,20 @@ const CORPUS: &[&str] = &[
 	"f(n: int) := n + 1; y: any = 3; f(y)",
 	"x: int = 0; xs = [1, \"a\"]; x = xs#1; x",
 	"f(n: int) := n; f(\"a\")",
+
+	"class Shape { name: text }; class Circle extends Shape { r: int }; s: Shape = Circle(\"a\", 2); s.r",
+	"type Color = red | rgb(r: int, g: int, b: int); c: Color = rgb(1, 2, 3); c.r",
 ];
 
 /// Programs warp compiles although the model rejects them: holes in warp's checks, each with its card
-const KNOWN_HOLES: &[(&str, &str)] = &[
-	("class Shape { name: text }; class Circle extends Shape { r: int }; s: Shape = Circle(\"a\", 2); s.r", "upcast-field"),
-	("type Color = red | rgb(r: int, g: int, b: int); c: Color = rgb(1, 2, 3); c.r", "upcast-field"),
-];
+const KNOWN_HOLES: &[(&str, &str)] = &[];
 
 /// Where warp's run-time admission differs from W0's subtyping: a bool is an Int at run time, so an int value passes
 /// a bool check (P199 lets only the literals 1 and 0 in; card bool-assign)
 const KNOWN_ADMITS_GAPS: [&str; 2] = ["bool ← .int: warp admits true / W0 sub false", "boolean ← .int: warp admits true / W0 sub false"];
 
 /// Programs both accept whose values differ, each with its card
-const KNOWN_VALUE_DIFFERENCES: &[(&str, &str)] = &[
-	("y: any = \"a\"; x: int = 0; x = y; x", "int-unchecked"),
-];
+const KNOWN_VALUE_DIFFERENCES: &[(&str, &str)] = &[];
 /// What the model gives for a program it rejects, and for a value it does not keep
 const REJECTED: &str = "rejected";
 const UNKEPT: &str = "?";

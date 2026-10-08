@@ -262,6 +262,10 @@ pub fn run_wasm_gc_object(path: &str) -> Result<GcObject> {
 
 /// Load WASM bytes and return Node (calls from_gc_object)
 pub fn read_bytes(bytes: &[u8]) -> Result<Node> {
+	read_main_result(bytes).map(|result| crate::units::static_units::with_module_units(bytes, result))
+}
+
+fn read_main_result(bytes: &[u8]) -> Result<Node> {
 	let (result, mut store, instance) = run_main(bytes, (), |_, _, _| Ok(()))?;
 	match result {
 		Val::AnyRef(Some(reference)) => {
@@ -426,7 +430,7 @@ pub fn read_bytes_with_imports(bytes: &[u8], imports: Imports) -> Result<Node> {
 	let mut tasks = None;
 	let outcome = run_main(bytes, crate::host::HostState::new(), |linker, engine, module| link_run(linker, engine, module, imports, &mut tasks));
 	let (result, mut store, instance) = finish_tasks(outcome, tasks.as_deref())?;
-	val_to_node(&result, &mut store, &instance)
+	val_to_node(&result, &mut store, &instance).map(|result| crate::units::static_units::with_module_units(bytes, result))
 }
 
 /// Link a run's imports, with the shared arrays and the task words when the module uses them (`tasks` gets the run's)

@@ -73,12 +73,15 @@ inductive HasType (P : Program) : Ctx → Expr → Ty → Prop where
   | set {Γ e f v te t tv} : HasType P Γ e te → P.writeTy te f = some t → HasType P Γ v tv → sub tv t = true →
       HasType P Γ (.set e f v) tv
   | isA {Γ e c te} : HasType P Γ e te → HasType P Γ (.isA e c) .bool
-  /-- a handler gives at most its event's result type; the payload is dynamic data (`event.level`) -/
+  /-- a handler gives at most its event's result type; the payload is dynamic data (`event.level`); the block gives
+  its body's value or what a handler's `break` gives -/
   | handle {Γ ev h b th tb R} : P.effects ev = some R → HasType P (Γ.set eventLocal .any) h th → sub th R = true →
-      HasType P Γ b tb → HasType P Γ (.handle ev h b) tb
+      HasType P Γ b tb → HasType P Γ (.handle ev h b) (join tb (P.aborts ev))
   /-- an emit gives its event's result type, or ø when nothing handles it -/
   | emit {Γ ev e te R} : P.effects ev = some R → HasType P Γ e te → HasType P Γ (.emit ev e) (join R .unit)
   | scope {Γ k e te} : HasType P Γ e te → HasType P Γ (.scope k e) te
+  /-- `break v` does not return: the bottom type; v goes to a block of ev -/
+  | abort {Γ ev k e te} : HasType P Γ e te → sub te (P.aborts ev) = true → HasType P Γ (.abort ev k e) .never
 
 /-- a handler of ev, closed but for the payload, gives at most ev's result type -/
 def HandlerOk (P : Program) (ev : String) (h : Expr) : Prop :=

@@ -4,8 +4,7 @@ use crate::common::fails_with;
 
 #[test]
 fn test_quantities_at_run_time_fail_loudly_naming_the_unit() {
-	for code in ["speed(d, t) := d/t; speed(10 km, 2 h)", "total = 0 m; for i in 1..3 { total += 5 m }; total", "xs = [1 m, 2 m]; xs#1 + xs#2",
-		"c = 1; if c { 5 m } else { 3 m }", "x = 2 km; print x", "sqrt(4 m)"] {
-		fails_with(code, "quantities compute only in constant expressions");
-	}
+	// loops and branches compute since static units stage 1 (test_static_units.rs), functions since stage 2
+	// print since stage 3, list elements and √ since stage 4, a whole list since stage 5
+	fails_with("xs = [1 m]; xs.add(2 m); sum(xs)", "quantities compute only in constant expressions");
 }

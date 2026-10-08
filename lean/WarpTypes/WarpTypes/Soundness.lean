@@ -63,6 +63,7 @@ theorem frame_typing {Γ} (F : Frame) {e t} (h : HasType P Γ (F.plug e) t) :
     exact ⟨_, hv, fun h' s => ⟨_, .set he hw h' (sub_trans s st), s⟩⟩
   case isA => cases h with | isA he => exact ⟨_, he, fun h' _ => ⟨_, .isA h', sub_refl _⟩⟩
   case emit => cases h with | emit hR he => exact ⟨_, he, fun h' _ => ⟨_, .emit hR h', sub_refl _⟩⟩
+  case abort => cases h with | abort he st => exact ⟨_, he, fun h' s => ⟨_, .abort h' (sub_trans s st), sub_refl _⟩⟩
 
 /-- a value of a class type is a reference -/
 theorem cls_value {Γ v p} (h : HasType P Γ v (.cls p)) (hv : v.isValue = true) : ∃ a, v = .ref a p := by
@@ -313,8 +314,8 @@ theorem preservation (hP : ProgramOk P) {s s' : Expr × Store} (hs : Step P s s'
     cases h with
     | handle hR hh sh hb =>
       obtain ⟨⟨_, hb', s'⟩, hμ'⟩ := ih hb (hμ.push ⟨_, _, hR, hh, sh⟩)
-      exact ⟨⟨_, .handle hR hh sh hb', s'⟩, hμ'.restore hμ⟩
-  | handleValue => intro t h hμ; cases h with | handle _ _ _ hb => exact ⟨⟨_, hb, sub_refl _⟩, hμ⟩
+      exact ⟨⟨_, .handle hR hh sh hb', join_mono s' (sub_refl _)⟩, hμ'.restore hμ⟩
+  | handleValue => intro t h hμ; cases h with | handle _ _ _ hb => exact ⟨⟨_, hb, join_upper_left _ _⟩, hμ⟩
   | handleError => intro t _ hμ; exact ⟨⟨_, .error, sub_never _⟩, hμ⟩
   | emitBlock hv hl =>
     intro t h hμ
@@ -337,19 +338,42 @@ theorem preservation (hP : ProgramOk P) {s s' : Expr × Store} (hs : Step P s s'
       exact ⟨⟨_, .scope he', s'⟩, hμ'.restore hμ⟩
   | scopeValue => intro t h hμ; cases h with | scope he => exact ⟨⟨_, he, sub_refl _⟩, hμ⟩
   | scopeError => intro t _ hμ; exact ⟨⟨_, .error, sub_never _⟩, hμ⟩
+  | @escape F _ _ _ _ =>
+    intro t h hμ
+    obtain ⟨_, he, _⟩ := frame_typing F h
+    cases he with | abort hv st => exact ⟨⟨_, .abort hv st, sub_never _⟩, hμ⟩
+  | tryAbort =>
+    intro t h hμ
+    cases h with | tryCatch he _ => cases he with | abort hv st => exact ⟨⟨_, .abort hv st, sub_never _⟩, hμ⟩
+  | scopeAbort =>
+    intro t h hμ
+    cases h with | scope he => cases he with | abort hv st => exact ⟨⟨_, .abort hv st, sub_never _⟩, hμ⟩
+  | handleAbort =>
+    intro t h hμ
+    cases h with
+    | handle _ _ _ hb =>
+      cases hb with
+      | abort hv st =>
+        refine ⟨?_, hμ⟩
+        split
+        · rename_i hm; obtain ⟨rfl, _⟩ := hm
+          exact ⟨_, hv, sub_trans st (join_upper_right _ _)⟩
+        · exact ⟨_, .abort hv st, sub_never _⟩
 
-/-- a closed expression is done (a value), failed (an error), or can step -/
+/-- a closed expression is done (a value), failed (an error), aborting (a `break` that found no block of its event,
+which the checker's handler rule keeps from happening but the proof does not track), or can step -/
 def Progresses (P : Program) (μ : Store) (e : Expr) : Prop :=
-  e.isValue = true ∨ (∃ m, e = .error m) ∨ ∃ s', Step P (e, μ) s'
+  e.isValue = true ∨ (∃ m, e = .error m) ∨ (∃ ev k v, e = .abort ev k v ∧ v.isValue = true) ∨ ∃ s', Step P (e, μ) s'
 
 theorem in_frame {μ : Store} (F : Frame) (hF : F.ready = true) {e : Expr} (h : Progresses P μ e)
     (k : e.isValue = true → Progresses P μ (F.plug e)) : Progresses P μ (F.plug e) := by
-  rcases h with hv | ⟨m, rfl⟩ | ⟨⟨e', μ'⟩, hs⟩
+  rcases h with hv | ⟨m, rfl⟩ | ⟨ev, k', v, rfl, hv⟩ | ⟨⟨e', μ'⟩, hs⟩
   · exact k hv
-  · exact .inr (.inr ⟨_, .raise hF⟩)
-  · exact .inr (.inr ⟨_, .frame hF hs⟩)
+  · exact .inr (.inr (.inr ⟨_, .raise hF⟩))
+  · exact .inr (.inr (.inr ⟨_, .escape hF hv⟩))
+  · exact .inr (.inr (.inr ⟨_, .frame hF hs⟩))
 
-theorem steps {μ : Store} {e : Expr} {s'} (hs : Step P (e, μ) s') : Progresses P μ e := .inr (.inr ⟨_, hs⟩)
+theorem steps {μ : Store} {e : Expr} {s'} (hs : Step P (e, μ) s') : Progresses P μ e := .inr (.inr (.inr ⟨_, hs⟩))
 
 /-- **Progress**: a closed, well-typed expression in a well-typed store is a value, an error, or steps -/
 theorem progress {Γ e t} (h : HasType P Γ e t) (hΓ : Γ = Ctx.empty) {μ : Store} (hμ : StoreOk P μ) :
@@ -390,9 +414,10 @@ theorem progress {Γ e t} (h : HasType P Γ e t) (hΓ : Γ = Ctx.empty) {μ : St
   | @call _ f _ _ _ hf _ _ ih => exact in_frame (.call f) rfl (ih hΓ hμ) fun v => steps (.call v hf)
   | error => exact .inr (.inl ⟨_, rfl⟩)
   | tryCatch _ _ ih _ =>
-    rcases ih hΓ hμ with hv | ⟨m, rfl⟩ | ⟨⟨e', μ'⟩, hs⟩
+    rcases ih hΓ hμ with hv | ⟨m, rfl⟩ | ⟨_, _, _, rfl, hv⟩ | ⟨⟨e', μ'⟩, hs⟩
     · exact steps (.tryValue hv)
     · exact steps .tryError
+    · exact steps (.tryAbort hv)
     · exact steps (.tryStep hs)
   | @cast _ _ ts _ _ ih => exact in_frame (.cast ts) rfl (ih hΓ hμ) fun v => steps (.cast v)
   | @broadcast _ f _ _ _ _ _ he _ _ ih =>
@@ -410,9 +435,10 @@ theorem progress {Γ e t} (h : HasType P Γ e t) (hΓ : Γ = Ctx.empty) {μ : St
   | @isA _ e c _ _ ih => exact in_frame (.isA c) rfl (ih hΓ hμ) fun v => steps (.isA v)
   | @handle _ ev h b _ _ _ hR hh sh _ _ ih =>
     subst hΓ
-    rcases ih rfl (hμ.push ⟨_, _, hR, hh, sh⟩) with hv | ⟨m, rfl⟩ | ⟨⟨e', μ'⟩, hs⟩
+    rcases ih rfl (hμ.push ⟨_, _, hR, hh, sh⟩) with hv | ⟨m, rfl⟩ | ⟨_, _, _, rfl, hv⟩ | ⟨⟨e', μ'⟩, hs⟩
     · exact steps (.handleValue hv)
     · exact steps .handleError
+    · exact steps (.handleAbort hv)
     · exact steps (.handleStep hs)
   | @emit _ ev e _ _ _ _ ih =>
     refine in_frame (.emit ev) rfl (ih hΓ hμ) fun v => ?_
@@ -423,10 +449,12 @@ theorem progress {Γ e t} (h : HasType P Γ e t) (hΓ : Γ = Ctx.empty) {μ : St
       | some h => exact steps (.emitProgram v hl hp)
       | none => exact steps (.emitNone v hl hp)
   | @scope _ k e _ _ ih =>
-    rcases ih hΓ (hμ.outer k) with hv | ⟨m, rfl⟩ | ⟨⟨e', μ'⟩, hs⟩
+    rcases ih hΓ (hμ.outer k) with hv | ⟨m, rfl⟩ | ⟨_, _, _, rfl, hv⟩ | ⟨⟨e', μ'⟩, hs⟩
     · exact steps (.scopeValue hv)
     · exact steps .scopeError
+    · exact steps (.scopeAbort hv)
     · exact steps (.scopeStep hs)
+  | @abort _ ev k e _ _ _ ih => exact in_frame (.abort ev k) rfl (ih hΓ hμ) fun v => .inr (.inr (.inl ⟨ev, k, e, rfl, v⟩))
 
 /-- any number of steps -/
 inductive Steps (P : Program) : Expr × Store → Expr × Store → Prop where
