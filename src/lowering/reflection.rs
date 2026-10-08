@@ -28,7 +28,7 @@ const KEYS_WORD: &str = "keys";
 const EXPORTS_WORD: &str = "exports";
 /// The run-time choice of a class's names (Objects::dispatched)
 const DISPATCH_TEMPLATE: &str = "if RECEIVER is CLASS then NAMES else OTHERWISE";
-const PARAMS_WORDS: [&str; 2] = ["params", "parameters"];
+pub(crate) const PARAMS_WORDS: [&str; 2] = ["params", "parameters"];
 const SIGNATURE_WORD: &str = "signature";
 /// `f.body`: the body as written, as data (card g_X_3s)
 const BODY_WORD: &str = "body";
@@ -112,20 +112,23 @@ fn as_reflection_words(node: Node, functions: &Functions, listened: &HashSet<Str
 
 /// The warp.meta entries of a program (card reflection-foreign-meta, meta_section.rs): `functions` {f: {params: ["a"]
 /// signature: "(a:int) -> int"}}, read off the lowered program (every definition form is one by then, the kinds are
-/// inferred), and `classes` {P: {fields: ["x"] methods: ["sum"] definition: "class P{…}"}} off the source; absent when the
-/// program defines none
+/// inferred), and `classes` {P: {fields: [x] methods: [sum] definition: "class P{…}"}} off the source, inherited
+/// fields first; absent when the program defines none. Names are symbols: a one-letter text reads back as a character
 pub fn meta_entries(source: &Node, lowered: &Node, code: &str) -> Vec<(&'static str, Node)> {
-	let mut layouts: Vec<(String, ClassLayout)> = crate::class_methods::class_layouts(source).into_iter().collect();
-	layouts.sort_by(|(one, _), (other, _)| one.cmp(other));
-	let is_method = |name: &String| layouts.iter().any(|(_, layout)| layout.methods.contains(name));
+	let objects = Objects { layouts: crate::class_methods::class_layouts(source), ..Objects::default() };
+	let mut classes: Vec<&String> = objects.layouts.keys().collect();
+	classes.sort();
+	let is_method = |name: &String| objects.layouts.values().any(|layout| layout.methods.contains(name));
 	// the program's own functions, not the library's its lowering brought in (html_render, prelude·replace)
 	let own = user_functions(source);
 	let functions: Vec<(String, Node)> = user_functions(lowered).values().filter(|function| own.contains_key(&function.name) && !is_method(&function.name)).map(|function| {
 		let params = function.params.iter().map(|param| param.name.clone()).collect::<Vec<_>>();
 		(function.name.clone(), meta_map(vec![(PARAMS_WORDS[0], text_list(&params)), (SIGNATURE_WORD, Node::Text(signature(function)))]))
 	}).collect();
-	let classes: Vec<(String, Node)> = layouts.iter().map(|(class, layout)| (class.clone(), meta_map(vec![(FIELDS_WORDS[0], text_list(&layout.fields)), (METHODS_WORD, text_list(&layout.methods)),
-		(DEFINITION_WORD, class_definition(code, class).unwrap_or(Node::Empty))]))).collect();
+	let classes: Vec<(String, Node)> = classes.into_iter().map(|class| {
+		(class.clone(), meta_map(vec![(FIELDS_WORDS[0], text_list(&objects.fields(class))), (METHODS_WORD, text_list(&objects.methods(class))),
+			(DEFINITION_WORD, class_definition(code, class).unwrap_or(Node::Empty))]))
+	}).collect();
 	[(META_FUNCTIONS, functions), (META_CLASSES, classes)].into_iter()
 		.filter(|(_, entries)| !entries.is_empty())
 		.map(|(entry, entries)| (entry, meta_map(entries.iter().map(|(name, value)| (name.as_str(), value.clone())).collect())))
@@ -199,8 +202,9 @@ struct Objects {
 	instances: HashMap<String, String>,
 	maps: HashMap<String, Vec<String>>,
 	modules: HashMap<String, Vec<String>>,
-	/// the `functions` entry of an imported module's warp.meta section, by its alias
+	/// the `functions` and `classes` entries of an imported module's warp.meta section, by its alias
 	module_functions: HashMap<String, Node>,
+	module_classes: HashMap<String, Node>,
 	defined: HashSet<String>,
 }
 
@@ -221,17 +225,19 @@ pub fn lower_objects(node: Node) -> Node {
 	with_object_words(node, &objects)
 }
 
-/// `m.exports`, `dir(m)` of an imported core module m, once modules::resolve has found its file
+/// `m.exports`, `dir(m)` of an imported core module m, once modules::resolve has found its file; of a module compiled
+/// from warp also `m.f.params`, `m.f.signature` of its functions and `m.P.fields`, `m.P.methods`, `dir(m.P)` of its classes
 pub fn lower_module_words(node: Node) -> Node {
-	if !node.mentions_any(&[EXPORTS_WORD, DIR_WORD, SIGNATURE_WORD, PARAMS_WORDS[0], PARAMS_WORDS[1]]) {
+	let words: Vec<&str> = PARAMS_WORDS.iter().chain(&FIELDS_WORDS).chain(&[EXPORTS_WORD, DIR_WORD, SIGNATURE_WORD, METHODS_WORD]).copied().collect();
+	if !node.mentions_any(&words) {
 		return node;
 	}
-	let (modules, module_functions) = module_exports(&node);
-	if modules.is_empty() {
+	let objects = module_objects(&node);
+	if objects.modules.is_empty() {
 		return node;
 	}
 	let defined = crate::library_words::defined_names(&node);
-	with_object_words(node, &Objects { modules, module_functions, defined, ..Objects::default() })
+	with_object_words(node, &Objects { defined, ..objects })
 }
 
 /// `calc.exports`, `dir(calc)` of a component (`use wasm "calc.wasm" as calc`, card reflection-components): its export
@@ -267,22 +273,25 @@ fn component_exports(_node: &Node) -> HashMap<String, Vec<String>> {
 
 /// `import lib/fourty_two`: the names fourty_two exports (wasm_modules.rs), sorted; not the setters derived for its globals.
 /// A module warp compiled names its own functions in warp.meta: its exports are those (not warp's runtime exports), and
-/// that entry is kept by the module's alias for `m.f.params`
-fn module_exports(node: &Node) -> (HashMap<String, Vec<String>>, HashMap<String, Node>) {
+/// that entry is kept by the module's alias for `m.f.params`, its `classes` entry for `m.P.fields`
+fn module_objects(node: &Node) -> Objects {
 	let mut context = crate::context::Context::new();
 	crate::analyzer::extract_ffi_imports(&mut context, node);
 	let paths: HashSet<&str> = context.ffi_imports.values().map(|import| import.library).filter(|library| crate::wasm_modules::is_module_path(library)).collect();
-	let (mut modules, mut module_functions) = (HashMap::new(), HashMap::new());
+	let mut objects = Objects::default();
 	for path in paths {
 		let alias = crate::wasm_modules::module_alias(path);
-		let functions = crate::wasm_modules::module_bytes(path).ok().and_then(|bytes| crate::meta_section::entry(&bytes, META_FUNCTIONS));
+		let bytes = crate::wasm_modules::module_bytes(path).ok();
+		let entry = |key: &str| bytes.as_ref().and_then(|bytes| crate::meta_section::entry(bytes, key));
+		let functions = entry(META_FUNCTIONS);
 		let is_own = |name: &String| functions.as_ref().is_none_or(|functions| !matches!(functions[name.as_str()].drop_meta(), Node::Empty));
 		let mut names: Vec<String> = crate::wasm_modules::exports(path).keys().filter(|name| !name.contains(' ') && is_own(name)).cloned().collect();
 		names.sort();
-		modules.insert(alias.clone(), names);
-		module_functions.extend(functions.map(|functions| (alias, functions)));
+		objects.module_classes.extend(entry(META_CLASSES).map(|classes| (alias.clone(), classes)));
+		objects.module_functions.extend(functions.map(|functions| (alias.clone(), functions)));
+		objects.modules.insert(alias, names);
 	}
-	(modules, module_functions)
+	objects
 }
 
 /// `m = {a:1, b:2}`: m's keys as written
@@ -303,17 +312,22 @@ fn map_keys(node: &Node) -> HashMap<String, Vec<String>> {
 }
 
 impl Objects {
-	/// `m.f.params`, `m.f.signature` of an imported module's function, from the module's warp.meta section; modules.rs
-	/// has made `m.f` the qualified name of the import (wasm_modules::qualified)
-	fn module_function_word(&self, subject: &Node, word: &str) -> Option<Node> {
-		let (module, function) = match subject.drop_meta() {
-			Node::Key(module, Op::Dot, function) => (symbol(module)?, symbol(function)?),
+	/// `m.f.params`, `m.f.signature` of an imported module's function, `m.P.fields`, `m.P.methods`, `dir(m.P)` of its
+	/// class, from the module's warp.meta section; modules.rs has made `m.f` the qualified name of the import
+	/// (wasm_modules::qualified)
+	fn module_member_word(&self, subject: &Node, word: &str) -> Option<Node> {
+		let (module, member) = match subject.drop_meta() {
+			Node::Key(module, Op::Dot, member) => (symbol(module)?, symbol(member)?),
 			qualified => symbol(qualified)?.split_once('.')?,
 		};
-		let functions = self.module_functions.get(module)?;
+		let class = self.module_classes.get(module).map(|classes| &classes[member]).filter(|class| !matches!(class.drop_meta(), Node::Empty));
+		if let Some(class) = class {
+			return listed_names(entry_names(&class[FIELDS_WORDS[0]]), entry_names(&class[METHODS_WORD]), word).map(|names| text_list(&names));
+		}
 		let word = if PARAMS_WORDS.contains(&word) { PARAMS_WORDS[0] } else { word };
-		match functions[function][word].drop_meta() {
+		match self.module_functions.get(module)?[member][word].drop_meta() {
 			Node::Empty => None,
+			names if word == PARAMS_WORDS[0] => Some(text_list(&entry_names(names))),
 			value => Some(value.clone()),
 		}
 	}
@@ -345,7 +359,7 @@ impl Objects {
 			return None;
 		}
 		let written = || Node::Key(Box::new(subject.clone()), Op::Dot, Box::new(Node::Symbol(word.into())));
-		if let Some(reflected) = self.module_function_word(subject, word) {
+		if let Some(reflected) = self.module_member_word(subject, word) {
 			return Some(reflected);
 		}
 		let Some(name) = symbol(subject) else { return self.dispatched(subject, word, written()) };
@@ -371,6 +385,9 @@ impl Objects {
 		if self.defined.contains(DIR_WORD) {
 			return None;
 		}
+		if let Some(reflected) = self.module_member_word(subject, DIR_WORD) {
+			return Some(reflected);
+		}
 		// no class's instance at run time: a map's keys
 		let Some(name) = symbol(subject) else { return self.dispatched(subject, DIR_WORD, self.map_keys(subject)) };
 		match (self.class_of(name), self.modules.get(name)) {
@@ -383,12 +400,7 @@ impl Objects {
 
 	/// The names a reflection word lists for a class: its fields, its methods, or both for `dir`
 	fn listed(&self, class: &str, word: &str) -> Option<Vec<String>> {
-		match word {
-			DIR_WORD => Some([self.fields(class), self.methods(class)].concat()),
-			METHODS_WORD => Some(self.methods(class)),
-			_ if FIELDS_WORDS.contains(&word) => Some(self.fields(class)),
-			_ => None,
-		}
+		listed_names(self.fields(class), self.methods(class), word)
 	}
 
 	fn has_member(&self, class: &str, word: &str) -> bool {
@@ -430,6 +442,28 @@ fn with_object_words(node: Node, objects: &Objects) -> Node {
 }
 
 /// Names as a list of texts, as `dir(time)` gives them
+/// The names a reflection word lists for a class of these fields and methods: either, or both for `dir`
+fn listed_names(fields: Vec<String>, methods: Vec<String>, word: &str) -> Option<Vec<String>> {
+	match word {
+		DIR_WORD => Some([fields, methods].concat()),
+		METHODS_WORD => Some(methods),
+		_ if FIELDS_WORDS.contains(&word) => Some(fields),
+		_ => None,
+	}
+}
+
+/// Names as symbols, `[x y]`: a one-letter text would read back as a character
+/// The names of a warp.meta list, `["x" "y"]`: a one-letter text reads back as a character
+pub(crate) fn entry_names(list: &Node) -> Vec<String> {
+	match list.drop_meta() {
+		Node::List(items, _, _) => items.iter().map(|item| match item.drop_meta() {
+			Node::Char(letter) => letter.to_string(),
+			other => other.name(),
+		}).collect(),
+		_ => vec![],
+	}
+}
+
 pub(crate) fn text_list(names: &[String]) -> Node {
 	Node::List(names.iter().map(|name| Node::Text(name.clone())).collect(), Bracket::Square, Separator::None)
 }

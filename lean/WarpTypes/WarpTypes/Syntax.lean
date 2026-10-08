@@ -17,6 +17,8 @@ inductive ArithOp where
   | mod
   /-- `6/2` is the int 3, `7/2` the number 3.5 -/
   | div
+  /-- `2^10` is the int 1024, `2^-1` the number 0.5 -/
+  | pow
   deriving DecidableEq, Repr
 
 def ArithOp.apply : ArithOp → Int → Int → Int
@@ -24,22 +26,27 @@ def ArithOp.apply : ArithOp → Int → Int → Int
   | .mul, a, b => a * b
   | .mod, a, b => a % b
   | .div, a, b => a / b
+  | .pow, a, b => a ^ b.toNat
 
-/-- the dividend of `/` counts as a number: two ints divide to a fraction -/
+/-- the left side of `/` and `^` counts as a number: two ints divide to a fraction, a negative power is one -/
 def ArithOp.widen : ArithOp → Ty → Ty
-  | .div, t => Ty.join t .number
+  | .div, t | .pow, t => Ty.join t .number
   | _, t => t
 
 theorem ArithOp.widen_mono (op : ArithOp) {a a' : Ty} (h : Ty.sub a' a = true) :
     Ty.sub (op.widen a') (op.widen a) = true := by
   cases op <;> simp only [widen] <;> first | exact h | exact Ty.join_mono h (Ty.sub_refl _)
 
-/-- the result type of an arithmetic operation -/
-def ArithOp.ty (op : ArithOp) (a b : Ty) : Ty := Ty.arithTy (op.widen a) b
+/-- the result type of an arithmetic operation: `*` also repeats a text -/
+def ArithOp.ty : ArithOp → Ty → Ty → Ty
+  | .mul, a, b => Ty.repeatTy a b
+  | op, a, b => Ty.arithTy (op.widen a) b
 
 theorem ArithOp.ty_mono (op : ArithOp) {a b a' b' : Ty} (ha : Ty.sub a' a = true) (hb : Ty.sub b' b = true) :
-    Ty.sub (op.ty a' b') (op.ty a b) = true :=
-  Ty.arithTy_mono (op.widen_mono ha) hb
+    Ty.sub (op.ty a' b') (op.ty a b) = true := by
+  cases op
+  case mul => exact Ty.repeatTy_mono ha hb
+  all_goals exact Ty.arithTy_mono (ArithOp.widen_mono _ ha) hb
 
 inductive Expr where
   | bool (b : Bool)
@@ -114,6 +121,8 @@ inductive Expr where
   /-- `xs.add(v)`: v joins the end of the shared list xs if it fits xs's element type, else a loud error (P215's
   run-time half); gives xs -/
   | push (l v : Expr)
+  /-- `xs#i = v`: v replaces the i-th item of the shared list xs if it fits xs's element type, else a loud error; gives v -/
+  | setAt (l i v : Expr)
   /-- `for y in l { body }`: body runs once per item of the list l, the local y holding the item; gives ø -/
   | forIn (y : String) (l body last : Expr)
   /-- `y => body`, a lambda: it evaluates to the closure `clo y body` once the locals it captures are substituted -/
@@ -168,6 +177,7 @@ def subst (e : Expr) (y : String) (v : Expr) : Expr :=
   | app f a => app (f.subst y v) (a.subst y v)
   | share e t => share (e.subst y v) t
   | push l w => push (l.subst y v) (w.subst y v)
+  | setAt l i w => setAt (l.subst y v) (i.subst y v) (w.subst y v)
   | e => e
 
 /-- the main-level names an expression assigns or binds -/
@@ -176,7 +186,7 @@ def assigned : Expr → List String
   | cons a b | add a b | arith _ a b | lt a b | eq _ a b | seq a b | index a b | range a b | append a b
   | tryCatch a b | app a b | push a b
   | handle _ a b => a.assigned ++ b.assigned
-  | ite c a b | loop c a b => c.assigned ++ a.assigned ++ b.assigned
+  | ite c a b | loop c a b | setAt c a b => c.assigned ++ a.assigned ++ b.assigned
   | forIn _ e b d => e.assigned ++ b.assigned ++ d.assigned
   | letIn _ _ e b => e.assigned ++ b.assigned
   | set a _ b => a.assigned ++ b.assigned

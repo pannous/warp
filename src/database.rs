@@ -16,8 +16,15 @@ const SQLITE_FLOAT: c_int = 2;
 const SQLITE_TEXT: c_int = 3;
 /// sqlite3_bind_text copies the text (SQLITE_TRANSIENT)
 const SQLITE_TRANSIENT: isize = -1;
+const SQLITE_UTF8: c_int = 1;
 const IN_MEMORY: &str = ":memory:";
 const ID_COLUMN: &str = "id";
+/// The SQL function a filter's query calls a warp function through: `warp_call('function', arguments…)`
+const WARP_CALL: &str = "warp_call";
+
+/// The program's function by name, called with the list of its arguments (src/host.rs calls back into the instance)
+pub type Callback<'a> = dyn FnMut(&str, &Node) -> Result<Node, String> + 'a;
+type SqlFunction = unsafe extern "C" fn(Handle, c_int, *mut Handle);
 
 type Handle = *mut c_void;
 
@@ -38,6 +45,17 @@ struct Sqlite {
 	column_text: unsafe extern "C" fn(Handle, c_int) -> *const c_char,
 	finalize: unsafe extern "C" fn(Handle) -> c_int,
 	last_insert_rowid: unsafe extern "C" fn(Handle) -> i64,
+	create_function: unsafe extern "C" fn(Handle, *const c_char, c_int, c_int, *mut c_void, Option<SqlFunction>, Option<SqlFunction>, Option<unsafe extern "C" fn(Handle)>, Option<unsafe extern "C" fn(*mut c_void)>) -> c_int,
+	user_data: unsafe extern "C" fn(Handle) -> *mut c_void,
+	value_type: unsafe extern "C" fn(Handle) -> c_int,
+	value_int64: unsafe extern "C" fn(Handle) -> i64,
+	value_double: unsafe extern "C" fn(Handle) -> f64,
+	value_text: unsafe extern "C" fn(Handle) -> *const c_char,
+	result_int64: unsafe extern "C" fn(Handle, i64),
+	result_double: unsafe extern "C" fn(Handle, f64),
+	result_text: unsafe extern "C" fn(Handle, *const c_char, c_int, isize),
+	result_null: unsafe extern "C" fn(Handle),
+	result_error: unsafe extern "C" fn(Handle, *const c_char, c_int),
 }
 
 static SQLITE: std::sync::OnceLock<Result<Sqlite, String>> = std::sync::OnceLock::new();
@@ -70,6 +88,17 @@ fn load_sqlite() -> Result<Sqlite, String> {
 		column_text: function!("sqlite3_column_text"),
 		finalize: function!("sqlite3_finalize"),
 		last_insert_rowid: function!("sqlite3_last_insert_rowid"),
+		create_function: function!("sqlite3_create_function_v2"),
+		user_data: function!("sqlite3_user_data"),
+		value_type: function!("sqlite3_value_type"),
+		value_int64: function!("sqlite3_value_int64"),
+		value_double: function!("sqlite3_value_double"),
+		value_text: function!("sqlite3_value_text"),
+		result_int64: function!("sqlite3_result_int64"),
+		result_double: function!("sqlite3_result_double"),
+		result_text: function!("sqlite3_result_text"),
+		result_null: function!("sqlite3_result_null"),
+		result_error: function!("sqlite3_result_error"),
 	})
 }
 
@@ -100,6 +129,84 @@ pub fn call(member: &str, arguments: &[Node]) -> Result<Node, String> {
 		}
 		_ => Err(format!("no such word of {} arguments", arguments.len())),
 	}
+}
+
+/// `std_io("table", "select", [table, condition, parameters, file])`: the ids of the rows the SQL condition keeps, in
+/// order; the condition's `warp_call('f', …)` calls the program's function f, registered for this query only
+pub fn select(arguments: &[Node], callback: &mut Callback) -> Result<Node, String> {
+	let [table, condition, parameters, file] = arguments else { return Err(format!("select needs 4 arguments, got {}", arguments.len())) };
+	let database = connection(&file.drop_meta().name())?;
+	let sql = format!("SELECT {ID_COLUMN} FROM {} WHERE {} ORDER BY {ID_COLUMN}", quote(&table.drop_meta().name()), condition.drop_meta().name());
+	let mut call = WarpCall { callback, failure: None };
+	register_warp_call(database, Some((&mut call as *mut WarpCall).cast()))?;
+	let found = rows(database, &sql, &parameters.children());
+	register_warp_call(database, None)?;
+	if let Some(failure) = call.failure {
+		return Err(failure);
+	}
+	Ok(list(found?.into_iter().flatten().collect()))
+}
+
+/// What warp_call reaches during one query: the program, and its first failure
+struct WarpCall<'a, 'b> {
+	callback: &'a mut Callback<'b>,
+	failure: Option<String>,
+}
+
+/// warp_call registered on the connection with the query's WarpCall, or removed (None)
+fn register_warp_call(database: Handle, call: Option<*mut c_void>) -> Result<(), String> {
+	let sqlite = sqlite()?;
+	let name = CString::new(WARP_CALL).map_err(|problem| problem.to_string())?;
+	let function = call.is_some().then_some(warp_call as SqlFunction);
+	let code = unsafe { (sqlite.create_function)(database, name.as_ptr(), -1, SQLITE_UTF8, call.unwrap_or(std::ptr::null_mut()), function, None, None, None) };
+	match code {
+		SQLITE_OK => Ok(()),
+		_ => Err(format!("{WARP_CALL}: {}", message(sqlite, database))),
+	}
+}
+
+/// `warp_call('f', a, b…)` in a query: f([a, b…]) of the program, its value given back to SQLite
+unsafe extern "C" fn warp_call(context: Handle, count: c_int, values: *mut Handle) {
+	let Ok(sqlite) = sqlite() else { return };
+	let call = unsafe { &mut *(sqlite.user_data)(context).cast::<WarpCall>() };
+	let arguments: Vec<Node> = (0..count as usize).map(|index| unsafe { value_of(sqlite, *values.add(index)) }).collect();
+	let Some((function, arguments)) = arguments.split_first() else { return };
+	let answer = (call.callback)(&function.name(), &list(arguments.to_vec())).and_then(|answer| unsafe { give(sqlite, context, &answer) });
+	if let Err(failure) = answer {
+		let text = CString::new(failure.replace('\0', "")).unwrap_or_default();
+		unsafe { (sqlite.result_error)(context, text.as_ptr(), -1) };
+		call.failure.get_or_insert(failure);
+	}
+}
+
+unsafe fn value_of(sqlite: &Sqlite, value: Handle) -> Node {
+	unsafe {
+		match (sqlite.value_type)(value) {
+			SQLITE_INTEGER => Node::int((sqlite.value_int64)(value)),
+			SQLITE_FLOAT => Node::float((sqlite.value_double)(value)),
+			SQLITE_TEXT => Node::Text(CStr::from_ptr((sqlite.value_text)(value)).to_string_lossy().into_owned()),
+			_ => Node::Empty,
+		}
+	}
+}
+
+/// A warp value as the result of an SQL function: a number, a text, a truth (1 or 0) or ø (NULL)
+unsafe fn give(sqlite: &Sqlite, context: Handle, value: &Node) -> Result<(), String> {
+	unsafe {
+		match value.drop_meta() {
+			Node::Empty => (sqlite.result_null)(context),
+			Node::Number(Number::Int(number)) => (sqlite.result_int64)(context, *number),
+			Node::Number(Number::Float(number)) => (sqlite.result_double)(context, *number),
+			Node::True => (sqlite.result_int64)(context, 1),
+			Node::False => (sqlite.result_int64)(context, 0),
+			Node::Text(_) | Node::Char(_) => {
+				let text = CString::new(value.name()).map_err(|problem| problem.to_string())?;
+				(sqlite.result_text)(context, text.as_ptr(), -1, SQLITE_TRANSIENT)
+			}
+			other => return Err(format!("a filter's function gave {}, which a query cannot compare", other.serialize().trim())),
+		}
+	}
+	Ok(())
 }
 
 /// The table's rows `[id, columns…]`, the table first created or migrated to the class's fields `[name, type, default]`

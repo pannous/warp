@@ -1,0 +1,5 @@
+// P215 run-time half: a lax variable aliases a declared list. Wanted: a run-time error at the add
+names: texts = ["hi"]
+ys = names
+ys.add(420)
+names

@@ -191,22 +191,25 @@ fn read_exports(path: &str, bytes: &[u8]) -> Result<HashMap<String, Export>, Str
 			_ => {}
 		}
 	}
+	// a warp module names its functions' parameters in warp.meta, other modules may in the name section
+	let functions_meta = crate::meta_section::entry(bytes, crate::lowering::reflection::META_FUNCTIONS);
+	let meta_parameters = |name: &str| functions_meta.as_ref().map(|functions| crate::lowering::reflection::entry_names(&functions[name][crate::lowering::reflection::PARAMS_WORDS[0]]));
 	let library: &'static str = Box::leak(path.to_string().into_boxed_str());
 	let mut exports = HashMap::new();
 	let mut add = |name: String, params: Vec<wasm_encoder::ValType>, results: Vec<wasm_encoder::ValType>, role: Role, parameters: Vec<String>, node_result: Option<crate::type_kinds::Kind>| {
 		let import_name: &'static str = Box::leak(name.clone().into_boxed_str());
 		exports.insert(name, Export { signature: FfiSignature::new(import_name, library, params, results), role, parameters, c_parameters: vec![], c_result: CResult::Number, node_result });
 	};
-	let warp_functions = crate::meta_section::entry(bytes, crate::reflection::META_FUNCTIONS).unwrap_or(Node::Empty);
 	for (name, kind, index) in exported {
 		match kind {
 			ExternalKind::Func => {
 				let Some(function_type) = function_types.get(index).and_then(|type_index| types.get(*type_index as usize)).and_then(Option::as_ref) else { continue };
-				let node_result = node_result(&warp_functions[name.as_str()]);
+				let node_result = functions_meta.as_ref().and_then(|functions| node_result(&functions[name.as_str()]));
 				let value_types = |types: &[wasmparser::ValType]| number_types(types).or_else(|| node_result.and(node_types(types)));
 				if let (Some(params), Some(results)) = (value_types(function_type.params()), value_types(function_type.results())) {
 					let names = local_names.get(&(index as u32));
-					let parameters = (0..params.len() as u32).map(|local| names.and_then(|names| names.get(&local)).cloned().unwrap_or_else(|| format!("${local}"))).collect();
+					let named = meta_parameters(&name).filter(|names| names.len() == params.len());
+					let parameters = named.unwrap_or_else(|| (0..params.len() as u32).map(|local| names.and_then(|names| names.get(&local)).cloned().unwrap_or_else(|| format!("${local}"))).collect());
 					let crosses_nodes = number_types(function_type.params()).is_none() || number_types(function_type.results()).is_none();
 					add(name, params, results, Role::Function, parameters, node_result.filter(|_| crosses_nodes));
 				}

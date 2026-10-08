@@ -191,10 +191,10 @@ div{ h2{ "Alice" } p{ "30 years, likes:" } ul{ li{ "reading" } li{ "hiking" } } 
 	"element events": { value: 'div{button{"+1" data-warp-click:"1"} button{"reset" data-warp-click:"2"} p:"count: 0"}', code: `// a button with a click handler: click it
 count = 0
 div{ button{ "+1" on click { count += 1 } } button{ "reset" on click { count = 0 } } p{ "count: " + count } }` },
-	"fine updates": { value: 'div{button{data-warp-click:"1" "toggle"} p{class:"open" "state"} ul:li:"toggled 0 times"}', clicks: ["toggle", "toggle", "toggle"], clicked: 'div{button{data-warp-click:"1" "toggle"} p{class:"done" "state"} ul:li:"toggled 3 times"}', kept: true, code: `// after a click only what changed is redrawn
+	"fine updates": { value: 'div{style:.done:color:"green" button{data-warp-click:"1" "toggle"} p{class:"open" "state"} ul:li:"toggled 0 times"}', clicks: ["toggle", "toggle", "toggle"], clicked: 'div{style:.done:color:"green" button{data-warp-click:"1" "toggle"} p{class:"done" "state"} ul:li:"toggled 3 times"}', kept: true, code: `// after a click only what changed is redrawn
 done = false
 toggles = 0
-div{ button{ on click { done = not done; toggles += 1 } "toggle" } p{ class: (if done then "done" else "open") "state" } ul{ li{ "toggled " + toggles + " times" } } }` },
+div{ style{ .done = "green" } button{ on click { done = not done; toggles += 1 } "toggle" } p{ class: (if done then "done" else "open") "state" } ul{ li{ "toggled " + toggles + " times" } } }` },
 	components: { value: 'div{div{button{data-warp-instance:1 data-warp-click:"1" \'+\'} p:"Apples: 1"} div{button{data-warp-instance:2 data-warp-click:"1" \'+\'} p:"Pears: 5"}}', clicks: ["+"], clicked: 'div{div{button{data-warp-instance:1 data-warp-click:"1" \'+\'} p:"Apples: 2"} div{button{data-warp-instance:2 data-warp-click:"1" \'+\'} p:"Pears: 5"}}', kept: true, code: `// a component is a function that returns markup; each keeps its own count
 def Counter(label, start) {
 	count = start
