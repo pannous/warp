@@ -3,3 +3,4 @@ fonts/
 !uniscript.wasm
 packages/
 __pycache__/
+imports.js

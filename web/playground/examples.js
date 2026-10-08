@@ -175,6 +175,13 @@ if online then "online" else "offline"` },
 on exit { print "bye" }
 print "working"
 42` },
+	tasks: { value: '"done"', printed: "first!\nlate\n", code: `// a task runs beside the program, which waits for it at the end
+go {
+	sleep(100 ms)
+	print "late"
+}
+print "first!"
+"done"` },
 	channels: { value: '"sent"', wait: 500, printed: "got hi\n", code: `// send a message to every tab listening on a channel
 on message from "chat" { print "got " + event.text }
 send {text: "hi"} to "chat"

@@ -141,6 +141,7 @@ function startWorker() {
 			if (data.type === "listening") Object.assign(pending, { listening: data.events, address: data.address });
 			if (data.type === "print") pending.printed.push(data);
 			if (data.type === "sleep") pending.slept = true;
+			if (data.type === "tasks inline") pending.tasksInline = data.reason;
 			if (data.type === "paint") painted(pending, data);
 			if (data.type === "module") lastModule = data.bytes;
 			if (data.type === "report" && data.id === pending.id) finish(pending, { ...data.report, printed: pending.printed, paintings: pending.paintings, listening: pending.listening ?? [], address: pending.address, milliseconds: data.milliseconds });
@@ -178,7 +179,7 @@ function painted(run, painting) {
 
 function stopAfterTimeout(run) {
 	clearTimeout(run.timer);
-	run.timer = setTimeout(() => stopRun(run, `stopped after ${RUN_TIMEOUT_MS / 1000} s: the program may not terminate`), RUN_TIMEOUT_MS);
+	run.timer = setTimeout(() => stopRun(run, `stopped after ${RUN_TIMEOUT_MS / 1000} s: ${run.tasksInline ?? "the program may not terminate"}`), RUN_TIMEOUT_MS);
 }
 
 // a program that does not stop blocks the worker: replace it

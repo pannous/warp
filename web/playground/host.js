@@ -389,7 +389,7 @@ function instantiateProgram(bytes, hooks) {
 	const holder = { warnings: [], pagePath: hooks.pagePath?.() };
 	try {
 		const module = new WebAssembly.Module(bytes);
-		holder.run = { module };
+		holder.run = { module, bytes };
 		eachHostPart("started", holder.run);
 		holder.exports = new WebAssembly.Instance(holder.run.module, programImports(holder, hooks)).exports;
 		hooks.instantiated?.(holder);

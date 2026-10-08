@@ -119,6 +119,12 @@ web/playground/tests.html in headless Chrome (agent-browser, session warp-browse
   once in a fresh instance. The pool is made by worker.js / test-worker.js at start (prepareTaskPool): a Worker made
   while a program runs would never start. test_in_browser.py sends COOP/COEP; index.html registers
   coi-serviceworker.js, which adds them on GitHub Pages (one reload, guarded by sessionStorage "isolating").
+- card coi-headless (2026-10-08): the reload does happen, on warp.pannous.com and a plain local server, in a fresh
+  profile of headless Chrome (agent-browser) and of WebKit 26 (Playwright, probes/webkit_samples.mjs, 3 of 3). Without
+  isolation (service worker blocked: ISOLATED=no in that probe, a private window) tasks take turns: `tasks` prints out
+  of order, samples/threads.wasp and async.wasp hang. No fallback can make them parallel without shared memory (the
+  program blocks on a task's result with Atomics.wait; only JSPI could suspend instead, not in Safari), so the run says
+  why: host-tasks.js TASKS_INLINE as a warning, and the page's 10 s timeout names it (worker message "tasks inline").
 
 ## Published: https://warp.pannous.com/ (user request 2026-10-03)
 - .github/workflows/pages.yml ("Playground") builds warp.wasm + samples.js with web/playground/build.sh on a push to
