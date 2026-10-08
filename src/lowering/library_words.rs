@@ -80,10 +80,10 @@ const SUM: &str = "sum";
 pub const LIST_SUM: &str = "list_sum";
 
 /// Words the emitter implements as runtime functions, with the number of arguments including the receiver
-pub const RUNTIME_WORDS: [(&str, usize); 17] = [
+pub const RUNTIME_WORDS: [(&str, usize); 18] = [
 	(ORD, 1), ("upper", 1), ("lower", 1), ("reverse", 1), ("sort", 1), ("split", 2), ("join", 2), ("chars", 1), (FIELD_WITH, 3),
 	(MAP_KEYS, 1), (MAP_VALUES, 1), (MAP_ENTRIES, 1), (COLLECTION_CONTAINS, 2), (COLLECTION_POSITION, 2), (MAP_GET_OR, 3), (SLICE, 3),
-	(MAP_WITHOUT, 2),
+	(MAP_WITHOUT, 2), (INSTANCE_COPY, 1),
 ];
 /// `codepoint(c)`, `ord(c)`, `ordinal(c)`: the code point of a character (`c as int` is only its digit). Inside the
 /// compiler it is `ord`, since `codepoint` is also a type word
@@ -98,6 +98,8 @@ const OPTIONAL_ARGUMENTS: [(&str, usize); 2] = [(MAP_GET_OR, 1), (SLICE, 1)];
 const COPY: &str = "copy";
 /// `field_with(object, "name", value)`: a copy of the object with the field set; what `object.name = value` lowers to
 pub const FIELD_WITH: &str = "field_with";
+/// instance_copy(x): a new instance with x's field values (`p.copy()`, Kotlin's `p.copy(y = 5)`); any other value is x
+pub const INSTANCE_COPY: &str = "instance_copy";
 
 /// Character tests (ASCII), `c.is_digit()`; a character compares by its code point. Templates are not lowered again,
 /// so is_alphanumeric spells out both tests instead of calling the words
@@ -1074,10 +1076,9 @@ impl Lowering {
 		if arguments.len() < wanted && arguments.len() + optional >= wanted {
 			arguments.resize(wanted, Node::Empty);
 		}
+		// an instance is a reference (P200): its copy is a new one; other values are never shared, so they are themselves
 		if let (COPY, [receiver]) = (word, arguments.as_slice()) {
-			crate::normalize::set_position_of(head);
-			crate::normalize::hint(&format!("{}.{}()", receiver.serialize(), head.serialize()), &receiver.serialize(), "values are never shared: b = a already copies");
-			return receiver.clone();
+			return Node::List(vec![Node::Symbol(INSTANCE_COPY.to_string()), receiver.clone()], Bracket::Round, Separator::None);
 		}
 		// a text builtin's own arity check names its values (`trim takes 1 value, got 2`)
 		let checks_itself = crate::wasm_emitter::text_builtins::is_text_builtin(word);

@@ -83,7 +83,7 @@ pub(super) fn calls_outside_heads<'a>(node: &'a Node, action: &mut dyn FnMut(&'a
 
 pub(super) const LIST_COPY_SUFFIX: &str = "·list";
 
-pub(crate) fn parameter_symbol(parameter: &Node) -> Option<String> {
+pub(super) fn parameter_symbol(parameter: &Node) -> Option<String> {
 	match parameter.drop_meta() {
 		Node::Symbol(name) => Some(name.clone()),
 		Node::Key(name, Op::Colon, _) => match name.drop_meta() {
