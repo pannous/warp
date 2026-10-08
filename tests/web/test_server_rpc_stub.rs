@@ -1,7 +1,7 @@
 // card rpc-stub (notes/server_routes.md step 2): the page calls a server function through POST /rpc/f, so the
 // function's body, and any secret in it, stays on the server and out of app.wasm
 const SECRET: &str = "s3cret-token";
-const PROGRAM: &str = "server def greeting(name) { \"hi \" + name + \" s3cret-token\" }\ng := greeting(\"Ann\")\np{ \"said: \" + (g ?? \"…\") }";
+const PROGRAM: &str = "server def greeting(name) { token = \"s3cret-token\"; \"hi \" + name + token#1 }\ng := greeting(\"Ann\")\np{ \"said: \" + (g ?? \"…\") }";
 
 fn app_wasm(program: &str) -> Vec<u8> {
 	let files = warp::site::files(program, "rpc", false).expect("the page builds");
