@@ -17,3 +17,11 @@ fn parentheses_around_the_data_only_group_it() {
 fn data_of_a_tag_reads_as_written() {
 	is!("string(data point{x:1})", "point{x:1}");
 }
+
+// card data-tag: a tag held in a variable reads as written too, a map entry keeps its braces
+#[test] fn a_tag_in_a_variable_reads_as_written() {
+	is!("p = data point{x:1}; string p", "point{x:1}");
+	is!("m = {a: data point{x:1}}; string m", "{a:point{x:1}}");
+	is!("m = {a:{b:1}}; string m", "{a:{b:1}}");
+	is!("e = data a:1; string e", "{a:1}");
+}

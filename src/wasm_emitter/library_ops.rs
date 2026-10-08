@@ -722,14 +722,25 @@ impl WasmGcEmitter {
 	}
 
 	/// Push the node in `local` (not null), a `key:value` entry as the one-entry map `{key:value}` it stands for, so its
-	/// text keeps the braces: `{a:{b:1}}` is the entry a:(b:1) at run time and would write a:b:1
+	/// text keeps the braces: `{a:{b:1}}` is the entry a:(b:1) at run time and would write a:b:1. A tag, an entry whose
+	/// value is a map (`data point{x:1}`), writes as an instance does, its name before its braces (card data-tag)
 	pub(super) fn emit_entry_in_braces(&self, f: &mut Function, local: u32) {
 		let node_type = self.type_manager.node_type;
 		let entry_kind_mask = (OP_INFO_MASK << KIND_BITS) | KIND_MASK;
 		let colon_entry_kind = (crate::operators::op_to_code(&crate::operators::Op::Colon) << KIND_BITS) | KEY_KIND;
 		self.emit_field(f, local, 0);
 		Self::emit_list(f, &[I::I64Const(entry_kind_mask), I::I64And, I::I64Const(colon_entry_kind), I::I64Eq, I::If(BlockType::Result(Ref(self.node_ref(false))))]);
-		Self::emit_list(f, &[I::I64Const(CURLY_LIST_KIND), I::LocalGet(local), I::RefNull(HeapType::Concrete(node_type)), I::StructNew(node_type)]);
+		self.emit_field(f, local, 2);
+		Self::emit_list(f, &[I::RefIsNull, I::If(BlockType::Result(ValType::I64)), I::I64Const(0), I::Else]);
+		self.emit_field(f, local, 2);
+		Self::emit_list(f, &[I::StructGet { struct_type_index: node_type, field_index: 0 }, I::End]);
+		let list_kind_mask = (BRACKET_INFO_MASK << KIND_BITS) | KIND_MASK;
+		Self::emit_list(f, &[I::I64Const(list_kind_mask), I::I64And, I::I64Const(CURLY_LIST_KIND), I::I64Eq, I::If(BlockType::Result(Ref(self.node_ref(false))))]);
+		Self::emit_list(f, &[I::I64Const(KEY_KIND)]);
+		self.emit_field(f, local, 1);
+		self.emit_field(f, local, 2);
+		Self::emit_list(f, &[I::StructNew(node_type), I::Else]);
+		Self::emit_list(f, &[I::I64Const(CURLY_LIST_KIND), I::LocalGet(local), I::RefNull(HeapType::Concrete(node_type)), I::StructNew(node_type), I::End]);
 		Self::emit_list(f, &[I::Else, I::LocalGet(local), I::RefAsNonNull, I::End]);
 	}
 
