@@ -49,3 +49,4 @@ mod test_undefined_in_text_sum; // card compile-path
 mod test_count_shadowed; // card count-shadowed
 mod test_discarded_pure_warning;
 mod test_slash_comment_needs_space;
+mod test_ternary_hint_got_it; // card hint-dismiss
