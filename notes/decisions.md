@@ -5,6 +5,9 @@ answered questions to a new file"). Older references to "notes/open_decisions.md
 D-number or #number mean this file. Open questions, parked ones and the standing rules stay in notes/open_decisions.md.
 
 ## Decided 2026-10-08 (user, as recommended unless quoted)
+- `x /= y` means exactly `x = x / y`: `x = 3; x /= 2` → 3/2, prints 1.5; floor division is `x //= y`; a variable
+  declared `x:int` keeps a whole number. Card div-assign, warp-worker switches the floor tests to `//=` (user,
+  asked directly by the supervisor).
 - P221 (card route-sample, warp-functions; discussed in free form): one line serves both sides. A route such as
   `route "/users/:id:int" { h1{ users#id } }` whose block reads server data (a database, files, secrets) runs on the
   server: the first visit gets finished HTML, later in-app clicks fetch only the data and render in the browser
