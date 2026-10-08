@@ -59,8 +59,22 @@ Rejected: (b) automatic f32 for floats (results differ in the 7th digit), (c) do
    dot. Tests: tests/lists/test_element_wise_lists.rs. CPU cost (release, process start included): dot of two
    float[10^6] 0.47 s, of 10^7 2.05 s (~200 ns an item: indexing through the closure map), slower than
    `sum(xs .* 2)` (20–30 ns): a fused loop for the paired form is worth doing with the GPU kernel's lowering.
-2. Measure: a probe timing CPU vs GPU for n = 10^4…10^7 on sum, dot, .* then sum, map(sin), with the copy separated
-   from the compute; the thresholds come from it.
+2. Measured (probes/webgpu/threshold.sh, release, M-series, machine busy so ±50 %): through today's gpu_compute the
+   GPU never pays off. Milliseconds:
+
+   | n      | transfer only (idle shader) | transfer + doubling | CPU `sum(xs .* 2)` |
+   |--------|-----------------------------|---------------------|--------------------|
+   | 10^4   | 12–17                       | 11–43               | 0–1                |
+   | 10^5   | 104                         | 102                 | 3                  |
+   | 10^6   | 1073–1665                   | 1115–1478           | 34–87              |
+   | 3·10^6 | 5929                        | 3150                | 93                 |
+
+   ~1 µs per item, all of it marshalling: host.rs gpu_compute reads the list as a Node (cons cells → Vec<Node>),
+   converts each number, and builds the result through built_in_program; the shader's work is lost in the noise.
+   The CPU is 20–30 ns per item. Consequence for step 3: the automatic path must not go through Nodes. The list is
+   copied by a wasm loop into linear memory (~1 ns/item, i64 → i32/f32), the host word takes (pointer, length) and
+   hands the slice to wgpu as is, and the result comes back the same way (a reduction: one number). Only then is a
+   threshold measurable; expect the fixed cost (dispatch + map_async, ≈ 0.1–1 ms) to dominate below ~10^5.
 3. Ints (option a): `sum`, `dot`, element-wise over $IntList through a host word with an overflow flag, behind the
    length check; tests compare GPU and CPU on lists above and below the threshold.
 4. Fusion of an element-wise expression ending in a reduction into one WGSL kernel.
