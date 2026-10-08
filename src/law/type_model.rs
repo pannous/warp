@@ -293,7 +293,7 @@ fn destructuring(items: &[Node]) -> Option<(Vec<String>, Vec<&Node>)> {
 /// A function or lambda bound at main level: its name, parameters and body
 fn callable_definition(statement: &Node) -> Option<(&str, Vec<String>, &Node)> {
 	if let Some((name, parameters, body)) = function_definition(statement) {
-		return Some((name, parameters.iter().map(|parameter| parameter.drop_meta().name()).collect(), body));
+		return Some((name, parameters.iter().map(|parameter| parameter_name(parameter)).collect(), body));
 	}
 	let Node::Key(target, Op::Assign, value) = statement.drop_meta() else { return None };
 	let (Node::Symbol(name), Node::Key(parameter, Op::FatArrow, body)) = (target.drop_meta(), unwrapped(value).drop_meta()) else { return None };
@@ -373,7 +373,16 @@ fn first_value_is_list(body: &Node, local: &str) -> bool {
 fn parameter_type_word(parameter: &Node) -> Option<String> {
 	match parameter.drop_meta() {
 		Node::Key(_, Op::Colon, annotation) => Some(annotation.name()),
+		Node::Key(parameter, Op::Assign, _) => parameter_type_word(parameter),
 		_ => None,
+	}
+}
+
+/// `b`, `b: int`, `b=3` and `b: int = 3` all name the parameter b
+fn parameter_name(parameter: &Node) -> String {
+	match parameter.drop_meta() {
+		Node::Key(parameter, Op::Colon | Op::Assign, _) => parameter_name(parameter),
+		parameter => parameter.name(),
 	}
 }
 
@@ -415,6 +424,8 @@ struct Exporter {
 	argument_fields: Vec<String>,
 	/// each class's ancestor chain, root first, and its own fields with their type words
 	classes: HashMap<String, ClassShape>,
+	/// the default values of a function's parameters (`f(a, b=3)`), by its arguments class: a call missing b passes 3
+	defaults: HashMap<String, HashMap<String, Node>>,
 	/// the event whose block a `break` ends: the innermost block handler's; none in a loop (the loop's break) or a
 	/// program-wide handler
 	breaking: Vec<Option<String>>,
@@ -482,6 +493,7 @@ impl Exporter {
 		match parameter.drop_meta() {
 			Node::Symbol(parameter) => Ok((parameter.clone(), ANY_TYPE.to_string())),
 			Node::Key(parameter, Op::Colon, annotation) => Ok((parameter.name(), self.annotation_type(annotation)?)),
+			Node::Key(parameter, Op::Assign, _) => self.parameter_type(parameter),
 			other => Err(unsupported(other).unwrap_err()),
 		}
 	}
@@ -513,30 +525,33 @@ impl Exporter {
 		path.iter().flat_map(|ancestor| self.classes[ancestor].1.iter().map(|(field, _)| field.clone())).collect()
 	}
 
-	/// `C(a, b)`: a new instance with its fields written in order, `let o = new C; o.f1 = a; …; o`. A named argument
-	/// `f(b=1, a=5)` goes to its field, the positional ones fill the others in order; warp evaluates them all in field
-	/// order, not as written
+	/// `C(a, b)`: a new instance with its fields written in order, `let o = new C; o.f1 = a; …; o`
 	fn construction(&mut self, class: &str, arguments: &[Node]) -> Lean {
+		let written = self.field_values(class, arguments)?;
+		self.instance(class, written.iter().map(|(field, value)| (field.clone(), value)).collect())
+	}
+
+	/// The fields an argument list writes: a named argument `f(b=1, a=5)` goes to its field, the positional ones fill
+	/// the others in order, a missing one takes its default; they run as written (P216)
+	fn field_values(&self, class: &str, arguments: &[Node]) -> Result<Vec<(String, Node)>, String> {
 		let fields = self.constructor_fields(class);
-		let mut slots: Vec<Option<&Node>> = vec![None; fields.len()];
-		let mut positional = vec![];
-		for argument in arguments {
-			match argument.drop_meta() {
-				Node::Key(name, Op::Assign, value) => {
-					let slot = fields.iter().position(|field| *field == name.name()).ok_or_else(|| format!("{class} has no field {}", name.name()))?;
-					slots[slot] = Some(value.as_ref());
-				}
-				_ => positional.push(argument),
-			}
+		let named: Vec<Option<(String, Node)>> = arguments.iter().map(|argument| match argument.drop_meta() {
+			Node::Key(name, Op::Assign, value) => Some((name.name(), value.as_ref().clone())),
+			_ => None,
+		}).collect();
+		if let Some((unknown, _)) = named.iter().flatten().find(|(name, _)| !fields.contains(name)) {
+			return Err(format!("{class} has no field {unknown}"));
 		}
-		let mut positional = positional.into_iter();
-		for slot in slots.iter_mut().filter(|slot| slot.is_none()) {
-			*slot = positional.next();
+		let named_fields: Vec<String> = named.iter().flatten().map(|(name, _)| name.clone()).collect();
+		let mut unnamed = fields.iter().filter(|field| !named_fields.contains(field));
+		let written: Option<Vec<(String, Node)>> = arguments.iter().zip(named).map(|(argument, named)| named.or_else(|| unnamed.next().map(|field| (field.clone(), argument.clone())))).collect();
+		let mut written = written.ok_or_else(|| format!("{class} takes {} fields, got {}", fields.len(), arguments.len()))?;
+		let defaults = self.defaults.get(class);
+		for field in unnamed {
+			let default = defaults.and_then(|defaults| defaults.get(field)).ok_or_else(|| format!("{class} needs a value for {field}"))?;
+			written.push((field.clone(), default.clone()));
 		}
-		if positional.next().is_some() || slots.contains(&None) {
-			return Err(format!("{class} takes {} fields, got {}", fields.len(), arguments.len()));
-		}
-		self.instance(class, fields.into_iter().zip(slots.into_iter().flatten()).collect())
+		Ok(written)
 	}
 
 	/// a new instance of class with the given fields written, `let o = new C; o.f1 = a; …; o`
@@ -635,6 +650,11 @@ impl Exporter {
 				parameters => {
 					let class = arguments_class(name);
 					let fields = parameters.iter().map(|parameter| Ok((self.parameter_type(parameter)?.0, parameter_type_word(parameter)))).collect::<Result<Vec<_>, String>>()?;
+					let defaults = parameters.iter().filter_map(|parameter| match parameter.drop_meta() {
+						Node::Key(_, Op::Assign, default) => Some((parameter_name(parameter), default.as_ref().clone())),
+						_ => None,
+					});
+					self.defaults.insert(class.clone(), defaults.collect());
 					self.classes.insert(class.clone(), (vec![class.clone()], fields));
 					argument_classes.push(class.clone());
 					format!(".cls {}", lean_strings(&[class]))
@@ -830,7 +850,7 @@ impl Exporter {
 				(self.parameter_type(parameter)?.0, vec![], if inferred { "none".to_string() } else { declared })
 			}
 			[] => (UNIT_PARAMETER.to_string(), vec![], declared),
-			parameters => (arguments_class(name), parameters.iter().map(|parameter| parameter.drop_meta().name()).collect(), declared),
+			parameters => (arguments_class(name), parameters.iter().map(|parameter| parameter_name(parameter)).collect(), declared),
 		};
 		let cells = assigned_locals(body, &self.globals);
 		// an assigned parameter's cell starts with the argument (read before the cell's name hides it)
@@ -1024,8 +1044,13 @@ impl Exporter {
 					let arguments = self.construction(&arguments_class(&call.name()), &[first.as_ref().clone(), second.as_ref().clone()])?;
 					Ok(format!(".call {} ({arguments})", quoted(&call.name())))
 				}
-				[call, arguments @ ..] if arguments.len() > 1 && self.classes.contains_key(&arguments_class(&call.name())) => {
-					let arguments = self.construction(&arguments_class(&call.name()), arguments)?;
+				[call, arguments @ ..] if self.classes.contains_key(&arguments_class(&call.name())) => {
+					// an argument list that does not fit is a compile error in warp: W0 rejects a call given no arguments object
+					let class = arguments_class(&call.name());
+					let arguments = match self.field_values(&class, arguments) {
+						Ok(written) => self.instance(&class, written.iter().map(|(field, value)| (field.clone(), value)).collect())?,
+						Err(_) => UNIT_TYPE.to_string(),
+					};
 					Ok(format!(".call {} ({arguments})", quoted(&call.name())))
 				}
 				// `f(3)` of a name holding a lambda

@@ -287,6 +287,10 @@ const CORPUS: &[&str] = &[
 	"f(a: int, b: text) := a; f(b=\"x\", a=5)",
 	"f(a: int, b: text) := a; f(b=5, a=\"x\")",
 	"global i = 0; g() := { i = i * 10 + 1; i }; h() := { i = i * 10 + 2; i }; f(a, b) := a * 100 + b; f(b=h(), a=g())",
+	// a missing argument takes its parameter's default
+	"f(a, b=3) := a - b; f(5) + f(5, b=2)",
+	"f(a, b: int = 3) := a - b; f(5)",
+	"f(a, b: int = 3) := a - b; f(5, b=\"x\")",
 ];
 
 /// Programs warp compiles although the model rejects them: holes in warp's checks, each with its card
