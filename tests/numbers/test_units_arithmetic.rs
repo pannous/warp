@@ -7,20 +7,20 @@ use crate::common;
 fn test_unit_sum_uses_the_finer_unit() {
 	let sum = wasm_emitter::eval("3km+10m");
 	assert_eq!(sum, 3010);
-	assert_eq!(sum.to_string(), "3010 m");
+	assert_eq!(sum.to_string(), "3010m");
 }
 
 #[test]
 fn test_spaced_known_unit_multiplies() {
 	let sum = wasm_emitter::eval("1 m + 1km");
 	assert_eq!(sum, 1001);
-	assert_eq!(sum.to_string(), "1001 m");
+	assert_eq!(sum.to_string(), "1001m");
 }
 
 #[test]
 fn test_scaling_a_quantity() {
-	assert_eq!(wasm_emitter::eval("2*3km").to_string(), "6 km");
-	assert_eq!(wasm_emitter::eval("3km-500m").to_string(), "2500 m");
+	assert_eq!(wasm_emitter::eval("2*3km").to_string(), "6km");
+	assert_eq!(wasm_emitter::eval("3km-500m").to_string(), "2500m");
 }
 
 #[test]

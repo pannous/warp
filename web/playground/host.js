@@ -30,7 +30,7 @@ const randomBelow = bound => bound <= 0n ? 0n : seededRandom === null ? BigInt(M
 // plain values (plainOfTree / treeOfPlain, as for foreign_call); the parts add theirs (host-files.js file, net and store)
 const STD_ADAPTERS = {
 	json: { parse: text => JSON.parse(text), to_json: (value, classes) => JSON.stringify(classes ? withoutClassTags(value, new Set(classes)) : value) },
-	os: { env: () => null }, // a page has no environment
+	os: { env: () => null, args: () => [] }, // a page has no environment and no command line
 	regex: {
 		matches: (subject, pattern) => regexOf(pattern).test(subject),
 		first: (subject, pattern) => subject.match(regexOf(pattern))?.[0] ?? null,

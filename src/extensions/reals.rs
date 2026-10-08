@@ -47,6 +47,25 @@ impl Rational {
 		Some(Rational::new(numerator, BigInt::from(10).pow(fraction.len() as u32)))
 	}
 
+	/// The exact decimal text when the denominator has no prime factor but 2 and 5: 981/100 is "9.81", 1/3 has none
+	pub fn decimal_text(&self) -> Option<String> {
+		let factors = [BigInt::from(2), BigInt::from(5)];
+		let mut rest = self.denominator.clone();
+		// one place per factor 2 or 5 taken out: enough places, the surplus zeros are trimmed below
+		let mut digits = 0u32;
+		while !rest.is_one() {
+			let factor = factors.iter().find(|factor| (&rest % *factor).is_zero())?;
+			rest /= factor;
+			digits += 1;
+		}
+		let scaled = (&self.numerator * BigInt::from(10).pow(digits) / &self.denominator).abs().to_string();
+		let padded = format!("{scaled:0>width$}", width = digits as usize + 1);
+		let (whole, fraction) = padded.split_at(padded.len() - digits as usize);
+		let fraction = fraction.trim_end_matches('0');
+		let sign = if self.is_negative() { "-" } else { "" };
+		Some(if fraction.is_empty() { format!("{sign}{whole}") } else { format!("{sign}{whole}.{fraction}") })
+	}
+
 	pub fn integer(value: impl Into<BigInt>) -> Rational {
 		Rational { numerator: value.into(), denominator: BigInt::one() }
 	}

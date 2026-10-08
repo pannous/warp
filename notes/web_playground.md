@@ -149,7 +149,11 @@ web/playground/tests.html in headless Chrome (agent-browser, session warp-browse
   console_watch.mjs attaches over CDP (`agent-browser get cdp-url`) to every target: Runtime + Log + Network (Chrome's
   Log omits a worker's failed request). pages.yml runs it on _site before deploy and on the live page after (job verify).
 - Not ours: `TypeError … shiftKey … inject.js` in the user's Firefox is a browser extension's content script.
-- Open: the gate in headless Firefox (card console-errors-step).
+- Firefox too (card console-errors-step): `--examples --firefox` drives headless Firefox over WebDriver BiDi
+  (firefox_driver.mjs: log.entryAdded + network.responseCompleted, workers included; a fresh profile per run). On macOS
+  it starts Firefox with `open -n -g`: a terminal's child may not read ~/Library/Application Support/Firefox (privacy
+  protection), and Firefox then stops with "Could not find profile folder" even with --profile. pages.yml runs both
+  browsers, before deploy and after.
 
 ## Modules and packages in the browser (2026-10-04)
 The compiler reads files through the page: `warp_host.fetch(address)` / `take_fetched` (web.rs `read_bytes`, cached

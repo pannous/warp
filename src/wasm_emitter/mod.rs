@@ -133,7 +133,7 @@ fn if_then_parts(node: &Node) -> Option<(&Node, &Node)> {
 	Some((condition, then_branch))
 }
 
-pub use equality::{IS_TRUTHY, VALUES_EQUAL};
+pub use equality::{IS_TRUTHY, SAME_NODE, VALUES_EQUAL};
 pub use config::{EmitterConfig, EmitterConfigBuilder};
 pub use import_manager::ImportManager;
 pub use string_table::StringTable;
@@ -731,6 +731,13 @@ impl WasmGcEmitter {
 		found
 	}
 
+	/// A variable named like a function of the program is the variable: a parameter (`f(inc) := inc(3)`), and inside a
+	/// function its locals too (`angle = 0.5; cos(angle)` beside math's angle). main also holds a local for each
+	/// `sq := it * 2`, which is the function
+	fn is_variable(&self, name: &str) -> bool {
+		self.scope.lookup(name).is_some_and(|local| local.is_param || self.compiling.is_some())
+	}
+
 	/// A name that is no variable, global, function or `$n` parameter here
 	fn is_unbound(&self, name: &str) -> bool {
 		!name.starts_with('$') && self.scope.lookup(name).is_none() && !self.ctx.user_globals.contains_key(name) && !self.ctx.user_functions.contains_key(name)
@@ -1161,6 +1168,10 @@ impl WasmGcEmitter {
 	}
 
 	fn emit_node_value(&mut self, func: &mut Function, node: &Node) {
+		if let Some(identity) = self.object_identity(node) {
+			self.emit_object_identity(func, identity);
+			return self.emit_call(func, "new_int");
+		}
 		if let Some(equality) = self.identity_as_equality(node) {
 			return self.emit_node_value(func, &equality);
 		}
@@ -1214,9 +1225,8 @@ impl WasmGcEmitter {
 				self.emit_call(func, "new_codepoint");
 			}
 			Node::Symbol(s) => {
-				// a parameter named like a function of the program (`f(inc) := inc(3)`) is the parameter
-				let parameter = self.scope.lookup(s).is_some_and(|local| local.is_param);
-				if let Some(user_fn) = self.ctx.user_functions.get(s).filter(|_| !parameter) {
+				let variable = self.is_variable(s);
+				if let Some(user_fn) = self.ctx.user_functions.get(s).filter(|_| !variable) {
 					match user_fn.params.iter().filter(|param| param.default.is_none()).count() {
 						0 => self.emit_user_function_call(func, s, &[]),
 						count => {

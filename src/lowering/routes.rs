@@ -26,9 +26,9 @@ const PATH_SEPARATOR: char = '/';
 pub const PAGE_ROUTES: &str = "page·routes";
 const PAGE_ROUTED: &str = "page·routed";
 pub const PAGE_ROUTE_INDEX: &str = "page·route_index";
-const ROUTER_MODULE_USE: &str = "use router";
-/// A parameter's regular expression (":id(\\d+)") is checked with std regex
-const REGEX_MODULE_USE: &str = "use regex";
+/// A parameter's regular expression (":id(\\d+)") is checked with std regex's word, which GROUP_TEMPLATE calls: modules.rs
+/// brings regex when page·route_index calls it, router when the program has page·routes
+pub const REGEX_MATCH: &str = "matches";
 /// Where a layout shows the matched route
 const OUTLET: &str = "outlet";
 const PARAMETER_MARK: &str = ":";
@@ -67,11 +67,7 @@ pub fn lower(program: Node) -> Node {
 	let routes: Vec<Route> = statements.iter().filter_map(route).flat_map(|(pattern, body)| flattened(&pattern, &body, &mut parts)).collect();
 	let routed = call(PAGE_ROUTED, vec![]);
 	let outlet = HashMap::from([(OUTLET.to_string(), routed.clone())]);
-	let mut lowered: Vec<Node> = vec![crate::wasp_parser::parse(ROUTER_MODULE_USE)];
-	if routes.iter().flat_map(|(pattern, _)| parameters(pattern)).any(|parameter| parameter.group.is_some()) {
-		lowered.push(crate::wasp_parser::parse(REGEX_MODULE_USE));
-	}
-	lowered.extend(parts.iter().map(|(name, pattern, body)| function_with_globals(name, false, &route_body(pattern, body), &main_variables)));
+	let mut lowered: Vec<Node> = parts.iter().map(|(name, pattern, body)| function_with_globals(name, false, &route_body(pattern, body), &main_variables)).collect();
 	lowered.extend(routes.iter().enumerate().map(|(index, (pattern, body))| function_with_globals(&format!("{ROUTE_PREFIX}{index}"), false, &route_body(pattern, body), &main_variables)));
 	lowered.push(function_with_globals(PAGE_ROUTES, false, &[patterns(&routes)], &main_variables));
 	lowered.push(function_with_globals(PAGE_ROUTE_INDEX, false, &matching(&routes), &main_variables));

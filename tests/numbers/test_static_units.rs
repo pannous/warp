@@ -10,16 +10,16 @@ fn shown(code: &str) -> String {
 
 #[test]
 fn test_quantities_accumulate_in_loops() {
-	assert_eq!(shown("total = 0 m; for i in 1..3 { total += 5 m }; total"), "10 m");
-	assert_eq!(shown("d = 0 km; for i in 1..4 { d = d + 250 m }; d"), "750 m");
-	assert_eq!(shown("t = 0 h; n = 0; while n < 3 { t += 20 min; n += 1 }; t"), "60 min");
+	assert_eq!(shown("total = 0 m; for i in 1..3 { total += 5 m }; total"), "10m");
+	assert_eq!(shown("d = 0 km; for i in 1..4 { d = d + 250 m }; d"), "750m");
+	assert_eq!(shown("t = 0 h; n = 0; while n < 3 { t += 20 min; n += 1 }; t"), "60min");
 }
 
 #[test]
 fn test_quantities_in_branches_and_products() {
-	assert_eq!(shown("c = 1; d = if c { 5 m } else { 3 m }; d"), "5 m");
-	assert_eq!(shown("x = 2 km; t = 0 h; for i in 1..2 { t += 1 h }; x / t"), "2 km/h");
-	assert_eq!(shown("a = 0 m; for i in 1..2 { a += 3 m }; a * 2 m"), "6 m²");
+	assert_eq!(shown("c = 1; d = if c { 5 m } else { 3 m }; d"), "5m");
+	assert_eq!(shown("x = 2 km; t = 0 h; for i in 1..2 { t += 1 h }; x / t"), "2km/h");
+	assert_eq!(shown("a = 0 m; for i in 1..2 { a += 3 m }; a * 2 m"), "6m²");
 }
 
 #[test]
@@ -31,7 +31,7 @@ fn test_dimension_errors_are_compile_errors() {
 #[test]
 fn test_unsupported_uses_stay_loud() {
 	// print since stage 3, list elements since stage 4, a whole list since stage 5, a list grown at run time since stage 6
-	assert_eq!(shown("total = 0 m; for i in 1..3 { total += 5 m }; xs = [total]; xs.add(1 m); sum(xs)"), "11 m");
+	assert_eq!(shown("total = 0 m; for i in 1..3 { total += 5 m }; xs = [total]; xs.add(1 m); sum(xs)"), "11m");
 }
 
 #[test]

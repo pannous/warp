@@ -51,6 +51,7 @@ pub mod picked_calls;
 pub mod pipes;
 pub mod references;
 pub mod introspection;
+pub mod reflection;
 pub mod word_operators;
 pub mod result_word;
 pub mod ruby_blocks;
