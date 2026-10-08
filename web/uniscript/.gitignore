@@ -3,4 +3,4 @@ fonts/
 !uniscript.wasm
 packages/
 __pycache__/
-reader.js
+imports.js

@@ -2,7 +2,7 @@
 // fresh instance, since a panic aborts the instance (wasm has panic=abort). `is!` and friends compile and run their
 // programs through warp_host (host.js), exactly like the playground.
 
-importScripts("reader.js", "host.js");
+importScripts("reader.js", "imports.js", "host.js");
 importScripts(...HOST_PART_FILES, "components.js", "wasi.js");
 prepareTaskPool(); // task Workers start while this worker is idle (host.js)
 

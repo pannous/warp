@@ -41,7 +41,8 @@ pub struct HostPart {
 	pub needs: &'static [&'static str],
 }
 
-/// The parts of host.js, in load order (host.js HOST_PART_FILES). std_pure and std_io are coarse: they carry every std
+/// The parts of host.js, in load order (host.js HOST_PART_FILES); the tasks and routes parts start with imports.js, which they
+/// read their module's imports with. std_pure and std_io are coarse: they carry every std
 /// module's words, so a program using json (std_pure) also gets the hashes
 pub const HOST_PARTS: [HostPart; 7] = [
 	HostPart {
@@ -51,7 +52,7 @@ pub const HOST_PARTS: [HostPart; 7] = [
 	},
 	HostPart { script: ("host-hashes.js", include_str!("../web/playground/host-hashes.js")), gives: |module, name| module == HOST_LIBRARY && name == STD_PURE, needs: &[] },
 	HostPart {
-		script: ("host-tasks.js", include_str!("../web/playground/host-tasks.js")),
+		script: ("host-tasks.js", concat!(include_str!("../web/playground/imports.js"), include_str!("../web/playground/host-tasks.js"))),
 		gives: |module, name| module == HOST_LIBRARY && (TASK_WORD_PREFIXES.iter().any(|prefix| name.starts_with(prefix)) || [FETCH_START, FETCH_REPLY, SIGNAL_SEND].contains(&name)),
 		needs: &[],
 	},
@@ -61,7 +62,7 @@ pub const HOST_PARTS: [HostPart; 7] = [
 		needs: &["host-files.js"],
 	},
 	HostPart { script: ("host-compiler.js", include_str!("../web/playground/host-compiler.js")), gives: |module, name| module == HOST_LIBRARY && name == RUN_BLOCK, needs: &["host-files.js"] },
-	HostPart { script: ("host-routes.js", include_str!("../web/playground/host-routes.js")), gives: |module, name| module == HOST_LIBRARY && name == PAGE_PATH, needs: &[] },
+	HostPart { script: ("host-routes.js", concat!(include_str!("../web/playground/imports.js"), include_str!("../web/playground/host-routes.js"))), gives: |module, name| module == HOST_LIBRARY && name == PAGE_PATH, needs: &[] },
 	HostPart { script: ("host-gpu.js", include_str!("../web/playground/host-gpu.js")), gives: |module, name| module == HOST_LIBRARY && name == GPU_COMPUTE, needs: &["host-tasks.js"] },
 ];
 const LINE_COMMENT: &str = "//";

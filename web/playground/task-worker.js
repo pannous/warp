@@ -4,7 +4,7 @@
 
 // a built site's task Worker gets the site's scripts as ?scripts=… (host-tasks.js addTaskWorker)
 const SITE_SCRIPTS = new URL(self.location.href).searchParams.get("scripts")?.split(",");
-importScripts(...(SITE_SCRIPTS ?? ["reader.js", "host.js"]));
+importScripts(...(SITE_SCRIPTS ?? ["reader.js", "imports.js", "host.js"]));
 if (!SITE_SCRIPTS) importScripts(...HOST_PART_FILES, "components.js");
 self.postMessage(TASK_WORKER_READY); // the pool takes this Worker only once it has loaded (host.js prepareTaskPool)
 

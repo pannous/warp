@@ -99,7 +99,7 @@ const hostFunctions = {
 	warn: (pointer, length) => warn(readString(pointer, length)),
 };
 
-// every import the module declares (reader.js importDescriptors): the host functions above, anything else a stub that warns when called
+// every import the module declares (imports.js importDescriptors): the host functions above, anything else a stub that warns when called
 function importsOf(bytes) {
 	const imports = {};
 	for (const { module: space, name, kind } of importDescriptors(bytes)) {

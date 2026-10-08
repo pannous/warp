@@ -1,7 +1,8 @@
 //! card task-sample: Safari 27 throws "WebAssembly.Module.imports unable to produce import descriptors" (and the same
 //! for exports) for any module whose imported functions take or give a GC reference (anyref, eqref), so every task
 //! program failed in the playground before it started. The page reads import names from the module's bytes
-//! (reader.js importDescriptors, shared with the uniscript page) and export names from the instance.
+//! (imports.js importDescriptors, shared with the uniscript page) and export names from the instance.
+#![cfg(feature = "native")] // reads the page's files
 const PLAYGROUND: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/web/playground");
 const PAGES: [&str; 2] = [PLAYGROUND, concat!(env!("CARGO_MANIFEST_DIR"), "/web/uniscript")];
 const REFLECTION_CALLS: [&str; 2] = ["WebAssembly.Module.imports(", "WebAssembly.Module.exports("];
@@ -17,7 +18,7 @@ fn the_page_never_asks_the_engine_for_import_or_export_descriptors() {
 }
 
 // Safari's own engine, where macOS has its shell: the page's import reader on a compiled task program
-#[cfg(all(feature = "native", target_os = "macos"))]
+#[cfg(target_os = "macos")]
 #[test]
 fn safaris_engine_reads_the_imports_of_a_task_program() {
 	use std::path::PathBuf;
@@ -31,12 +32,9 @@ fn safaris_engine_reads_the_imports_of_a_task_program() {
 	let compiled = crate::common::warp_command().args(["compile", "--wasm"]).arg(&source).output().unwrap();
 	assert!(compiled.status.success(), "{}", String::from_utf8_lossy(&compiled.stderr));
 
-	let reader_script = std::fs::read_to_string(format!("{PLAYGROUND}/reader.js")).unwrap();
-	let start = reader_script.find("const WASM_HEADER_BYTES").unwrap();
-	let end = start + reader_script[start..].find("\n}\n").unwrap() + 2;
+	let reader = std::fs::read_to_string(format!("{PLAYGROUND}/imports.js")).unwrap();
 	let script = directory.join("safari_imports.js");
-	let reader = &reader_script[start..end];
-	std::fs::write(&script, format!("const utf8Decoder = {{ decode: bytes => String.fromCharCode(...bytes) }};\n{reader}\n\
+	std::fs::write(&script, format!("class TextDecoder {{ decode(bytes) {{ return String.fromCharCode(...bytes); }} }}\n{reader}\n\
 		const bytes = read(arguments[0], 'binary');\n\
 		new WebAssembly.Module(bytes);\n\
 		print(importDescriptors(bytes).map(entry => entry.kind + ':' + entry.name).join(' '));\n")).unwrap();
