@@ -1801,6 +1801,8 @@ PASSED:
   ✓ numbers::test_static_units_compiled::test_a_whole_list_of_quantities_shows_its_units
   ✓ numbers::test_static_units_compiled::test_eval_reads_the_same_section
   ✓ numbers::test_static_units_data::test_a_serialized_quantity_names_its_unit
+  ✓ numbers::test_static_units_data::test_a_whole_object_shows_its_units
+  ✓ numbers::test_static_units_data::test_aliases_keep_the_units
   ✓ numbers::test_static_units_data::test_annotated_variables_keep_and_check_units
   ✓ numbers::test_static_units_data::test_lists_grow_with_quantities_of_their_unit
   ✓ numbers::test_static_units_data::test_object_fields_hold_quantities
@@ -2527,6 +2529,9 @@ PASSED:
   ✓ text::test_utf8_bytes::a_text_and_its_utf8_bytes
   ✓ types::test_any_into_annotated::any_into_an_annotated_int_is_checked_at_run_time
   ✓ types::test_any_into_annotated::unannotated_places_stay_lax
+  ✓ types::test_any_into_annotated_types::any_into_a_declared_field_is_checked_at_run_time
+  ✓ types::test_any_into_annotated_types::any_into_annotated_places_is_checked_at_run_time
+  ✓ types::test_any_into_annotated_types::values_of_the_annotated_type_pass
   ✓ types::test_array_types::hints::test_bracketed_list_type_hints_the_plural_word
   ✓ types::test_array_types::hints::test_plural_word_needs_no_hint
   ✓ types::test_array_types::test_bracketed_type_is_a_list_of_that_type
@@ -3581,4 +3586,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-19 ignored, 3576 passed, 0 failed, 3576 total tested
+19 ignored, 3581 passed, 0 failed, 3581 total tested

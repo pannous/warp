@@ -98,14 +98,11 @@ impl WasmGcEmitter {
 		}
 
 		// x:=42 or x=42 → emit value, store to local, return value
+		let declared = self.declared_type_of(left);
 		if use_float {
-			self.emit_float_value(func, right);
+			self.emit_declared_value(func, declared.as_ref(), right, Kind::Float);
 		} else {
-			let declared = match left.drop_meta() {
-				Node::Symbol(name) => self.scope.lookup(name).and_then(|local| local.type_node.as_deref().cloned()),
-				_ => None,
-			};
-			self.emit_int_for_declared(func, declared.as_ref(), right);
+			self.emit_declared_value(func, declared.as_ref(), right, Kind::Int);
 			self.emit_fits_declared(func, left);
 		}
 		if let Node::Symbol(name) = left.drop_meta() {
