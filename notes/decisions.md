@@ -20,6 +20,8 @@ D-number or #number mean this file. Open questions, parked ones and the standing
 - P199 bool slots accept 1 and 0 as yes/no everywhere (variables, fields, list items); other ints and texts are
   errors. Card bool-assign.
 - P200 class instances passed to functions are shared references (like Python/JS). Card instance-field.
+- `type(ø)` prints "empty" (word choice, not asked; warp-79, card type-static): matches the run-time kind name;
+  unit, nil, ø may be aliases where a type name is read. `type(1.5)` stays "rational".
 
 ## Decided 2026-10-07 (user, multiple-choice interview, as recommended unless quoted)
 - P169 `use math` loads a NEW wasp math module (to be designed) with beautiful names, not the historic C names: "we
