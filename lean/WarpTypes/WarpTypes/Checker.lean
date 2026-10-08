@@ -104,13 +104,14 @@ def typeOf (P : Program) (Γ : Ctx) : Expr → Option Ty
   | .isA e _ => (typeOf P Γ e).map fun _ => .bool
   | .handle ev h b =>
     match P.effects ev, typeOf P (Γ.set eventLocal .any) h, typeOf P Γ b with
-    | some R, some th, some tb => if sub th R then some tb else none
+    | some R, some th, some tb => if sub th R then some (join tb (P.aborts ev)) else none
     | _, _, _ => none
   | .emit ev e =>
     match P.effects ev, typeOf P Γ e with
     | some R, some _ => some (join R .unit)
     | _, _ => none
   | .scope _ e => typeOf P Γ e
+  | .abort ev _ e => (typeOf P Γ e).bind fun te => if sub te (P.aborts ev) then some .never else none
 
 theorem typeOf_sound {P : Program} : ∀ {e : Expr} {Γ t}, typeOf P Γ e = some t → HasType P Γ e t := by
   intro e
@@ -250,6 +251,13 @@ theorem typeOf_sound {P : Program} : ∀ {e : Expr} {Γ t}, typeOf P Γ e = some
     cases hR : P.effects ev <;> cases he : typeOf P Γ e <;> simp only [typeOf, hR, he] at hs <;> try cases hs
     exact .emit hR (ih he)
   | scope k e ih => intro Γ t hs; exact .scope (ih hs)
+  | abort ev k e ih =>
+    intro Γ t hs
+    simp only [typeOf, Option.bind_eq_some_iff] at hs
+    obtain ⟨te, he, hs⟩ := hs
+    split at hs
+    · rename_i st; cases hs; exact .abort (ih he) st
+    · cases hs
 
 /-! ## Whole programs, as warp writes them: top-level items in source order -/
 
@@ -275,6 +283,8 @@ structure Spec where
   effects : List (String × Ty) := []
   /-- the program-wide handlers `on ev {…}` -/
   handlers : List (String × Expr) := []
+  /-- each event's abort type: the join of what its handlers' `break`s give -/
+  aborts : List (String × Ty) := []
 
 def Spec.program (s : Spec) : Program where
   names x := (s.decls.find? (·.name == x)).map fun d => (d.mode, d.type)
@@ -283,6 +293,7 @@ def Spec.program (s : Spec) : Program where
   fields c f := (s.classes.find? (·.1 == c)).bind fun (_, fields) => fields.lookup f
   effects ev := some ((s.effects.lookup ev).getD .never)
   handlers ev := (s.handlers.find? (·.1 == ev)).map (·.2)
+  aborts ev := (s.aborts.lookup ev).getD .never
 
 /-- the store before main runs: charged names hold their body, the others are unset -/
 def Spec.store (s : Spec) : Store where
@@ -400,7 +411,7 @@ def valuesOf (x : String) : Expr → List Expr
   | .ite c a b => valuesOf x c ++ valuesOf x a ++ valuesOf x b
   | .letIn _ _ e b => valuesOf x e ++ valuesOf x b
   | .set a _ b => valuesOf x a ++ valuesOf x b
-  | .call _ e | .cast e _ | .broadcast _ e | .get e _ | .isA e _ | .emit _ e | .scope _ e => valuesOf x e
+  | .call _ e | .cast e _ | .broadcast _ e | .get e _ | .isA e _ | .emit _ e | .scope _ e | .abort _ _ e => valuesOf x e
   | .handle _ h b => valuesOf x h ++ valuesOf x b
   | _ => []
 
@@ -438,6 +449,7 @@ def Expr.rewrite (f : Ctx → Expr → Expr) (Γ : Ctx) : Expr → Expr
   | .handle ev h b => f Γ (.handle ev (h.rewrite f (Γ.set eventLocal .any)) (b.rewrite f Γ))
   | .emit ev e => f Γ (.emit ev (e.rewrite f Γ))
   | .scope k e => f Γ (.scope k (e.rewrite f Γ))
+  | .abort ev k e => f Γ (.abort ev k (e.rewrite f Γ))
   | e => f Γ e
 
 /-- warp decides broadcasting at compile time: a call whose argument is a list of what the function takes -/
@@ -495,6 +507,11 @@ structure Guesses where
   params : List (String × Ty) := []
   fields : List ((String × String) × Ty) := []
   effects : List (String × Ty) := []
+  aborts : List (String × Ty) := []
+
+/-- the list with t joined into the entry of key -/
+def joinAt {α} [BEq α] (entries : List (α × Ty)) (key : α) (t : Ty) : List (α × Ty) :=
+  (key, join ((entries.lookup key).getD .never) t) :: entries.filter (·.1 != key)
 
 /-- a value given to an unannotated place: an argument of f, or a write to field f of a class chain -/
 inductive Observation where
@@ -502,6 +519,8 @@ inductive Observation where
   | field (path : List String) (f : String) (t : Ty)
   /-- a handler of ev giving t -/
   | handler (ev : String) (t : Ty)
+  /-- a `break` of a handler of ev giving t -/
+  | abort (ev : String) (t : Ty)
 
 /-- the arguments and field writes of an expression, with their types -/
 def observe (P : Program) (Γ : Ctx) : Expr → List Observation
@@ -516,6 +535,7 @@ def observe (P : Program) (Γ : Ctx) : Expr → List Observation
   | .ite c a b => observe P Γ c ++ observe P Γ a ++ observe P Γ b
   | .assign _ e | .init _ e | .cast e _ | .broadcast _ e | .get e _ | .isA e _ | .emit _ e | .scope _ e => observe P Γ e
   | .handle ev h b => observeHandler P Γ ev h ++ observe P Γ b
+  | .abort ev _ e => ((typeOf P Γ e).getD .any |> Observation.abort ev) :: observe P Γ e
   | _ => []
 where
   observeHandler (P : Program) (Γ : Ctx) (ev : String) (h : Expr) : List Observation :=
@@ -530,20 +550,21 @@ def Guesses.fill (g : Guesses) : Item → Item
   | item => item
 
 def Guesses.add (g : Guesses) (classes : List (String × List (String × Option Ty))) : Observation → Guesses
-  | .argument f t => { g with params := (f, join ((g.params.lookup f).getD .never) t) :: g.params.filter (·.1 != f) }
+  | .argument f t => { g with params := joinAt g.params f t }
   | .field p f t =>
     -- the class of the chain that declares f
     match p.find? fun c => ((classes.lookup c).getD []).any (·.1 == f) with
     | some c =>
-      { g with fields := ((c, f), join ((g.fields.lookup (c, f)).getD .never) t) :: g.fields.filter (·.1 != (c, f)) }
+      { g with fields := joinAt g.fields (c, f) t }
     | none => g
-  | .handler ev t => { g with effects := (ev, join ((g.effects.lookup ev).getD .never) t) :: g.effects.filter (·.1 != ev) }
+  | .handler ev t => { g with effects := joinAt g.effects ev t }
+  | .abort ev t => { g with aborts := joinAt g.aborts ev t }
 
-def elaborateTyped (items : List Item) (effects : List (String × Ty)) : Spec :=
+def elaborateTyped (items : List Item) (effects aborts : List (String × Ty)) : Spec :=
   let functions := items.filterMap fun | .function f y t b => some (f, y, t.getD .any, b) | _ => none
   let rest := items.filter fun | .function .. | .classDef .. => false | _ => true
   let classes := items.filterMap fun | .classDef c fields => some (c, fields.map fun (f, t) => (f, t.getD .any)) | _ => none
-  let withFunctions := functions.foldl (init := ({ decls := [], funs := [], main := .unit, classes, effects } : Spec))
+  let withFunctions := functions.foldl (init := ({ decls := [], funs := [], main := .unit, classes, effects, aborts } : Spec))
     fun s (f, y, t, b) =>
       { s with funs := s.funs ++ [(f, inferFunction s f y t b RESULT_ROUNDS .never)] }
   let step (s : Spec) (statements : List Expr) : Item → Spec × List Expr
@@ -570,7 +591,7 @@ def elaborateTyped (items : List Item) (effects : List (String × Ty)) : Spec :=
 
 /-- one round of inference: elaborate with the guesses so far, then join in the values the program gives -/
 def Guesses.refine (items : List Item) (g : Guesses) : Guesses :=
-  let s := elaborateTyped (items.map g.fill) g.effects
+  let s := elaborateTyped (items.map g.fill) g.effects g.aborts
   let classes := items.filterMap fun | .classDef c fields => some (c, fields) | _ => none
   let bodies := s.funs.map fun (_, fn) => observe s.program (Ctx.empty.set fn.param fn.paramTy) fn.body
   let handlers := s.handlers.map fun (ev, h) => observe.observeHandler s.program Ctx.empty ev h
@@ -580,12 +601,31 @@ def Guesses.refine (items : List Item) (g : Guesses) : Guesses :=
 parameter given several kinds holds anything), then the program is elaborated in source order -/
 def elaborate (items : List Item) : Spec :=
   let guesses := (List.range RESULT_ROUNDS).foldl (init := ({} : Guesses)) fun g _ => g.refine items
-  elaborateTyped (items.map guesses.fill) guesses.effects
+  elaborateTyped (items.map guesses.fill) guesses.effects guesses.aborts
+
+/-- every `break` sits in a block handler of its own event, outside loops (a `break` in a loop is the loop's, which
+W0 does not have): so no abort escapes its block -/
+def Expr.breaksIn (ev : Option String) : Expr → Bool
+  | .abort e k x => ev == some e && k.isNone && x.breaksIn ev
+  | .handle e h b => h.breaksIn (some e) && b.breaksIn ev
+  | .loop c b => c.breaksIn none && b.breaksIn none
+  | .letIn _ _ e b => e.breaksIn ev && b.breaksIn ev
+  | .cons a b | .add a b | .arith _ a b | .lt a b | .eq a b | .seq a b | .index a b | .append a b | .tryCatch a b
+  | .set a _ b => a.breaksIn ev && b.breaksIn ev
+  | .ite c a b => c.breaksIn ev && a.breaksIn ev && b.breaksIn ev
+  | .assign _ e | .init _ e | .call _ e | .cast e _ | .broadcast _ e | .get e _ | .isA e _ | .emit _ e
+  | .scope _ e => e.breaksIn ev
+  | _ => true
+
+def Spec.breaksPlaced (s : Spec) : Bool :=
+  s.main.breaksIn none && s.funs.all (·.2.body.breaksIn none) && s.handlers.all (·.2.breaksIn none) &&
+    s.decls.all fun d => (d.charged.map (Expr.breaksIn none)).getD true
 
 /-- the verdict line the differential test reads: `ok <type>` or `rejected` -/
 def verdict (items : List Item) : String :=
-  match (elaborate items).check with
-  | some t => s!"ok {t.name}"
-  | none => "rejected"
+  let s := elaborate items
+  match s.breaksPlaced, s.check with
+  | true, some t => s!"ok {t.name}"
+  | _, _ => "rejected"
 
 end Warp
