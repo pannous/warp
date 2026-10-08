@@ -52,8 +52,14 @@ pub fn lower(program: Node) -> Node {
 fn without_serving(program: Node) -> Node {
 	match program {
 		Node::List(statements, bracket, separator) => {
-			let statements = statements.into_iter().filter(|statement| served(statement).is_none());
-			Node::List(statements.map(|statement| server_definition(&statement).unwrap_or(statement)).collect(), bracket, separator)
+			let statements: Vec<Node> = statements.into_iter().filter(|statement| served(statement).is_none()).collect();
+			let shipped: Vec<_> = statements.iter().filter(|statement| server_definition(statement).is_some()).map(|statement| {
+				crate::diagnostic::Diagnostic::at(statement, "a server function also runs in the page and ships in its app.wasm (until the page calls POST /rpc/, notes/server_routes.md): keep secrets out of it".to_string())
+			}).collect();
+			if let Err(error) = crate::diagnostic::report(&shipped) {
+				return error;
+			}
+			Node::List(statements.into_iter().map(|statement| server_definition(&statement).unwrap_or(statement)).collect(), bracket, separator)
 		}
 		single if served(&single).is_some() => Node::Empty,
 		other => other,
