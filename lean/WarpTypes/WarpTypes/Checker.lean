@@ -14,6 +14,9 @@ def strictRead (P : Program) : Ty → String → Bool
   | .cls p, f => (P.fieldTy p f).isSome
   | _, _ => false
 
+/-- the checker takes `#` and `++` of a list or of a dynamic value (checked when it runs) -/
+def listy (t : Ty) : Bool := t == .any || (element t).isSome
+
 def typeOf (P : Program) (Γ : Ctx) : Expr → Option Ty
   | .bool _ => some .bool
   | .int _ => some .int
@@ -57,14 +60,11 @@ def typeOf (P : Program) (Γ : Ctx) : Expr → Option Ty
     | _, _ => none
   | .index l i =>
     match typeOf P Γ l, typeOf P Γ i with
-    | some tl, some ti => if sub ti .int then element tl else none
+    | some tl, some ti => if listy tl || tl == .text then (if consub ti .int then some (elementTy tl) else none) else none
     | _, _ => none
   | .append a b =>
     match typeOf P Γ a, typeOf P Γ b with
-    | some ta, some tb =>
-      match element ta, element tb with
-      | some ea, some eb => some (.list (join ea eb))
-      | _, _ => none
+    | some ta, some tb => if listy ta && listy tb then some (.list (join (listElem ta) (listElem tb))) else none
     | _, _ => none
   | .assign x e =>
     match P.names x, typeOf P Γ e with
@@ -154,16 +154,18 @@ theorem typeOf_sound {P : Program} : ∀ {e : Expr} {Γ t}, typeOf P Γ e = some
     · rename_i ha hb; cases h; exact .seq (ih1 ha) (ih2 hb)
     · cases h
   | index l i ih1 ih2 =>
-    intro Γ t h; simp only [typeOf] at h; split at h
+    intro Γ t h
+    cases hl : typeOf P Γ l <;> cases hi : typeOf P Γ i <;> simp only [typeOf, hl, hi] at h <;> try cases h
+    split at h
     · split at h
-      · rename_i hl hi hs; exact .index (ih1 hl) h (ih2 hi) hs
+      · cases h; exact .index (ih1 hl) (ih2 hi)
       · cases h
     · cases h
   | append a b ih1 ih2 =>
     intro Γ t h
     cases ha : typeOf P Γ a <;> cases hb : typeOf P Γ b <;> simp only [typeOf, ha, hb] at h <;> try cases h
     split at h
-    · rename_i hea heb; cases h; exact .append (ih1 ha) hea (ih2 hb) heb
+    · cases h; exact .append (ih1 ha) (ih2 hb)
     · cases h
   | assign x e ih =>
     intro Γ t h; simp only [typeOf] at h; split at h
