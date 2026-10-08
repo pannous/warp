@@ -81,8 +81,9 @@ impl WasmGcEmitter {
 			_ => {
 				// all values first, then the stores: `x, y = y, x` swaps
 				let kinds: Vec<Kind> = names.iter().map(|name| self.variable_kind(name)).collect();
-				for (value, kind) in values.iter().zip(&kinds) {
-					self.emit_value_of_kind(func, value, *kind);
+				for ((value, kind), name) in values.iter().zip(&kinds).zip(names) {
+					let declared = self.declared_type_of(&Node::Symbol(name.clone()));
+					self.emit_declared_value(func, declared.as_ref(), value, *kind);
 				}
 				kinds
 			}
@@ -157,6 +158,9 @@ impl WasmGcEmitter {
 		} else if self.storage_type(variable_kind) != self.storage_type(kind) {
 			self.emit_type_error(func, format!("{name} holds {variable_kind:?}, the destructured value is {kind:?}"));
 			return;
+		}
+		if variable_kind == Kind::Int {
+			self.emit_fits_declared(func, &Node::Symbol(name.to_string())); // `a: int`: no ratio, within its width
 		}
 		if let Some(local) = self.scope.lookup(name) {
 			func.instruction(&I::LocalSet(local.position));

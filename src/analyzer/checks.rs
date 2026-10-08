@@ -1354,6 +1354,7 @@ pub(super) fn check_declared_types(node: &Node, declared: &mut HashMap<String, S
 			list_items_mismatch(node, name, type_name, element, &appended)
 		}
 		Node::Key(left, _, right) => check_declared_types(left, declared).or_else(|| check_declared_types(right, declared)),
+		_ if crate::tuples::destructuring(node).is_some() => destructured_mismatch(node, declared),
 		Node::List(items, bracket, separator) => {
 			// `names: list of text = […]` still arrives as the items `names:list`, `of`, `text=[…]`
 			if let Some(declaration) = of_type_declaration(items, bracket, separator) {
@@ -1364,6 +1365,22 @@ pub(super) fn check_declared_types(node: &Node, declared: &mut HashMap<String, S
 		}
 		_ => None,
 	}
+}
+
+/// `a, b = 2.5, 6` and `a, b = [2.5, 6]`: each value written for a declared name must fit its type, as in `a = 2.5`
+fn destructured_mismatch(node: &Node, declared: &HashMap<String, String>) -> Option<Diagnostic> {
+	let (names, values) = crate::tuples::destructuring(node)?;
+	let values = match values {
+		[one] => match strip_round(one) {
+			Node::List(items, Bracket::Square | Bracket::Round, _) => items.as_slice(),
+			_ => return None,
+		},
+		many => many,
+	};
+	if values.len() != names.len() {
+		return None;
+	}
+	names.iter().zip(values).find_map(|(name, value)| assignment_mismatch(node, name, declared.get(name)?, value))
 }
 
 /// Does a value of kind `actual` fit the builtin type `type_name` (W0 subtyping, notes/type_theory.md)? An int fits a
