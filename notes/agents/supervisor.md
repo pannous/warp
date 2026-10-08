@@ -14,9 +14,13 @@ notes/agents/common.md.
   rename leaves alone: while it is idle, `tmux send-keys -t "=warp-<new>:" "/rename <new>" Enter`, which also makes `<new>` its SendMessage address: tell the Integrator and Interviewer); one doing many unrelated tasks in a row or
   in parallel gets a generic name (worker, fixer). Tell the renamed session its new role.
 - Urgent cards (user, 2026-10-07): the user drops them into column Now without an Agent. Cron runs
-  ~/dev/bin/urgent-card-watch every 2 minutes, which types "[urgent-card-watch] …" into tmux warp-supervisor once per
-  card (`todo urgent` remembers what it reported). Take such a card at once (`todo key` it, `todo take`) and assign it
-  ahead of other work. A card you add yourself into Now needs an immediate `todo take`, or the watcher reports it.
+  ~/dev/bin/urgent-card-watch every 2 minutes, which types "[urgent-card-watch] …" into tmux warp-supervisor when a
+  card appears and again every 30 minutes while it stays untaken (at most 3 times: a prompt typed into a busy session
+  can get lost). Take such a card at once (`todo key` it, `todo take`) and assign it ahead of other work. A card you
+  add yourself into Now needs an immediate `todo take`, or the watcher reports it.
+- Idle workers (user, 2026-10-08, "why did the fleet stop working"): whenever a worker reports idle, run
+  `todo list Next` and give it the real cards of its area before letting it idle; workers file cards there all the
+  time, and the fleet stood still overnight with a dozen of them waiting.
 - No merging, no test runs, no decision questions to the user: decisions go to the Interviewer, merges to the
   Integrator. Relay user decisions you hear directly to the Interviewer so it records them verbatim.
 - Report to the user at the end of each answer: what merged (suite count), what runs, what needs them. Delete merged
