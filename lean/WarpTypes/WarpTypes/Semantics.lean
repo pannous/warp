@@ -103,14 +103,21 @@ def truthy : Expr → Bool
   | .unit | .nil => false
   | _ => true
 
-/-- the i-th element, 1-based -/
+/-- the i-th element, 1-based; of a text its i-th codepoint -/
 def nth : Expr → Int → Option Expr
   | .cons h t, i => if i = 1 then some h else nth t (i - 1)
+  | .text s, i => if 1 ≤ i then s.toList[(i - 1).toNat]?.map fun c => .text (String.singleton c) else none
   | _, _ => none
 
-def appendValues : Expr → Expr → Expr
-  | .cons h t, b => .cons h (appendValues t b)
+def isList : Expr → Bool
+  | .nil | .cons _ _ => true
+  | _ => false
+
+def concat : Expr → Expr → Expr
+  | .cons h t, b => .cons h (concat t b)
   | _, b => b
+
+def appendValues (a b : Expr) : Expr := if isList a && isList b then concat a b else .error "not a list"
 
 /-- the type of a value, as `HasType` gives it -/
 def valueType : Expr → Option Ty

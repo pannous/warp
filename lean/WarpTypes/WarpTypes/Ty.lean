@@ -34,7 +34,7 @@ def name : Ty → String
   | int => "int"
   | number => "number"
   | text => "text"
-  | unit => "unit"
+  | unit => "empty"
   | list t => s!"list of {t.name}"
   | cls p => p.getLastD "object"
   | any => "any"
@@ -301,6 +301,38 @@ theorem plus_mono {a b a' b' : Ty} (ha : sub a' a = true) (hb : sub b' b = true)
       · exact y (.inr h)
   rw [ite_eq_right t']
   exact arith_mono ha hb
+
+/-- the element type `#` gives: a list's elements', a text's one-codepoint texts, an error's `never`, anything
+else's `any` (checked when it runs) -/
+def elementTy (t : Ty) : Ty := if t = text then text else (element t).getD any
+
+/-- the element type `++` takes: a list's elements', anything else's `any` (checked when it runs) -/
+def listElem (t : Ty) : Ty := (element t).getD any
+
+theorem elementTy_of_element {t e : Ty} (h : element t = some e) : elementTy t = e := by
+  cases t <;> simp_all [elementTy, element]
+
+theorem listElem_of_element {t e : Ty} (h : element t = some e) : listElem t = e := by
+  cases t <;> simp_all [listElem, element]
+
+theorem listElem_mono {l l' : Ty} (h : sub l' l = true) : sub (listElem l') (listElem l) = true := by
+  cases l with
+  | never => rw [sub_to_never h]; simp [listElem, element]
+  | list a =>
+    rcases sub_to_list h with rfl | ⟨b, rfl, hb⟩
+    · simp [listElem, element]
+    · simp [listElem, element, hb]
+  | _ => simp [listElem, element]
+
+theorem elementTy_mono {l l' : Ty} (h : sub l' l = true) : sub (elementTy l') (elementTy l) = true := by
+  cases l with
+  | never => rw [sub_to_never h]; simp [elementTy, element]
+  | list a =>
+    rcases sub_to_list h with rfl | ⟨b, rfl, hb⟩
+    · simp [elementTy, element]
+    · simp [elementTy, element, hb]
+  | text => rcases sub_to_text h with rfl | rfl <;> simp [elementTy, element, sub_refl]
+  | _ => simp [elementTy, element]
 
 end Ty
 end Warp

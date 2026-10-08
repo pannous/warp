@@ -177,6 +177,9 @@ struct Exporter {
 	names: HashMap<String, Option<String>>,
 	/// main-level names bound to an evident bool (`b = true`): a bool place for the literals 1 and 0 (P199)
 	bool_names: Vec<String>,
+	/// main-level names bound to a list (`xs = [1]`, `xs = []`, `xs: ints = …`): `xs.add(v)` appends to them, while
+	/// `.add` of a text concatenates, outside W0
+	list_names: Vec<String>,
 	locals: Vec<String>,
 	/// the parameters of the function being exported when it takes several: each is a field of its arguments object
 	argument_fields: Vec<String>,
@@ -290,6 +293,9 @@ impl Exporter {
 		let mut argument_classes = Vec::new();
 		for statement in &program {
 			let Some((name, parameters, _)) = function_definition(statement) else { continue };
+			if self.functions.contains_key(name) {
+				return Err(format!("not in W0: overloads of {name}"));
+			}
 			let parameter_type = match parameters.as_slice() {
 				[] => UNIT_TYPE.to_string(),
 				[parameter] => self.parameter_type(parameter)?.1,
@@ -347,6 +353,9 @@ impl Exporter {
 		if annotation.is_none() && is_evident_bool(value) {
 			self.bool_names.push(name.clone());
 		}
+		if is_list_literal(value) || matches!(value.drop_meta(), Node::Empty) || annotation.as_deref().is_some_and(|lean| lean.starts_with(".list")) {
+			self.list_names.push(name.clone());
+		}
 		let value = self.stored_value(annotation.as_deref(), value)?;
 		self.names.insert(name.clone(), annotation.clone());
 		let annotation = annotation.map_or("none".to_string(), |lean| format!("(some ({lean}))"));
@@ -364,6 +373,11 @@ impl Exporter {
 			Some(declared) => admitted(declared, lean),
 			None => lean,
 		})
+	}
+
+	/// a field some class declares: other words after a dot are methods (`x.size`, `4.square`), outside W0
+	fn is_field(&self, word: &str) -> bool {
+		self.classes.values().any(|(_, fields)| fields.iter().any(|(field, _)| field == word))
 	}
 
 	fn is_call(&self, node: &Node) -> bool {
@@ -409,8 +423,10 @@ impl Exporter {
 			Some(yes_or_no) => yes_or_no,
 			None => self.stored_value(declared.as_deref(), value)?,
 		};
-		let operation = if self.names.contains_key(name) { ".assign" } else { ".init" };
-		Ok(format!("{operation} {} ({value})", quoted(name)))
+		if !self.names.contains_key(name) {
+			return Err(format!("not in W0: a first binding of {name} inside an expression"));
+		}
+		Ok(format!(".assign {} ({value})", quoted(name)))
 	}
 
 	fn binary(&mut self, constructor: &str, left: &Node, right: &Node) -> Lean {
@@ -452,6 +468,7 @@ impl Exporter {
 					_ => unsupported(node),
 				},
 				[call] if self.functions.get(&call.name()).is_some_and(|parameter| parameter == UNIT_TYPE) => Ok(format!(".call {} .unit", quoted(&call.name()))),
+				[_, arguments @ ..] if arguments.iter().any(|argument| matches!(argument.drop_meta(), Node::Key(_, Op::Assign, _))) => Err(format!("not in W0: named arguments in {}", node.serialize().trim())),
 				[call, arguments @ ..] if arguments.len() > 1 && self.classes.contains_key(&arguments_class(&call.name())) => {
 					let arguments = self.construction(&arguments_class(&call.name()), arguments)?;
 					Ok(format!(".call {} ({arguments})", quoted(&call.name())))
@@ -475,10 +492,12 @@ impl Exporter {
 			Node::Key(list, Op::Dot, call) => match (list.drop_meta(), call.drop_meta()) {
 				(Node::Symbol(name), Node::List(items, _, _)) if items.len() == 2 && APPEND_METHODS.iter().any(|method| is_word(&items[0], method)) => {
 					let item = self.expression(&items[1])?;
-					let operation = if self.names.contains_key(name) { ".assign" } else { return unsupported(node) };
-					Ok(format!("{operation} {} (.append (.glob {}) (.cons ({item}) .nil))", quoted(name), quoted(name)))
+					if !self.list_names.contains(name) {
+						return unsupported(node);
+					}
+					Ok(format!(".assign {} (.append (.glob {}) (.cons ({item}) .nil))", quoted(name), quoted(name)))
 				}
-				(_, Node::Symbol(field)) => Ok(format!(".get ({}) {}", self.expression(list)?, quoted(field))),
+				(_, Node::Symbol(field)) if self.is_field(field) => Ok(format!(".get ({}) {}", self.expression(list)?, quoted(field))),
 				_ => unsupported(node),
 			},
 			Node::Key(if_then, Op::Else, otherwise) => match if_then.drop_meta() {
