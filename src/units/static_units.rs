@@ -10,7 +10,7 @@
 //! Stage 4: a variable holding a list of quantities has one element signature (`xs = [1 m, 2 m]`), used by `xs#i`,
 //! `sum max min first last count` and `for x in xs`; `√q` halves the powers; `${q}` interpolation shows the unit.
 //! Stage 6: a variable holding an object has one signature per field (`p = {dist: 0 m}`, `p.dist += 5 m`), a final object
-//! names its fields' units in `wasp.units`; `x:any = q` keeps the signature, `x:km = q` checks it; `q.serialize()` is its
+//! names its fields' units in `wasp.meta` (entry units); `x:any = q` keeps the signature, `x:km = q` checks it; `q.serialize()` is its
 //! text; `xs.add(q)` checks the element signature.
 
 use super::{finest_units, signature, unit_named, units_text, Dimension, Factor, Quantity, Unit, UNITS};
@@ -104,10 +104,10 @@ pub(crate) fn take_result_units() -> Option<ResultUnits> {
 	RESULT_UNITS.with(|cell| cell.borrow_mut().take())
 }
 
-/// The custom section naming the units of `main`'s result in a module (`km:1 h:-1`), or of its result's fields
-/// (`dist=km:1;time=s:1`): a module that returns SI amounts says which quantities they are, and running it reads them back
-/// (wasm_reader)
-pub const UNITS_SECTION: &str = "wasp.units";
+/// The entry of the module's `wasp.meta` section (meta_section.rs) naming the units of `main`'s result (`km:1 h:-1`), or
+/// of its result's fields (`dist=km:1;time=s:1`): a module that returns SI amounts says which quantities they are, and
+/// running it reads them back (wasm_reader)
+pub const UNITS_ENTRY: &str = "units";
 const POWER_MARK: char = ':';
 const FIELD_MARK: char = '=';
 const FIELD_SEPARATOR: &str = ";";
@@ -123,19 +123,17 @@ fn factors_of(text: &str) -> Option<Vec<Factor>> {
 	}).collect()
 }
 
-/// The module with the `wasp.units` section of the units of its result, when the last lowered program's result has units
-pub(crate) fn with_result_units(mut bytes: Vec<u8>) -> Vec<u8> {
+/// The module with the `units` entry of the units of its result, when the last lowered program's result has units
+pub(crate) fn with_result_units(bytes: Vec<u8>) -> Vec<u8> {
 	let Some(units) = take_result_units() else { return bytes };
 	let text = match units {
 		ResultUnits::Whole(factors) => factors_text(&factors),
 		ResultUnits::Fields(fields) => fields.iter().map(|(field, factors)| format!("{field}{FIELD_MARK}{}", factors_text(factors))).collect::<Vec<_>>().join(FIELD_SEPARATOR),
 	};
-	let section = wasm_encoder::CustomSection { name: UNITS_SECTION.into(), data: text.into_bytes().into() };
-	wasm_encoder::Section::append_to(&section, &mut bytes);
-	bytes
+	crate::meta_section::with_entries(bytes, vec![(UNITS_ENTRY, Node::Text(text))])
 }
 
-/// The result of running a module, as the quantity its `wasp.units` section names (unchanged without the section)
+/// The result of running a module, as the quantity its `units` entry names (unchanged without it)
 pub fn with_module_units(bytes: &[u8], result: Node) -> Node {
 	match module_units(bytes) {
 		Some(ResultUnits::Whole(units)) => quantity_of(result, &units),
@@ -145,11 +143,7 @@ pub fn with_module_units(bytes: &[u8], result: Node) -> Node {
 }
 
 fn module_units(bytes: &[u8]) -> Option<ResultUnits> {
-	let section = wasmparser::Parser::new(0).parse_all(bytes).filter_map(Result::ok).find_map(|payload| match payload {
-		wasmparser::Payload::CustomSection(section) if section.name() == UNITS_SECTION => Some(section.data().to_vec()),
-		_ => None,
-	})?;
-	let text = String::from_utf8(section).ok()?;
+	let Node::Text(text) = crate::meta_section::entry(bytes, UNITS_ENTRY)? else { return None };
 	if !text.contains(FIELD_MARK) {
 		return factors_of(&text).map(ResultUnits::Whole);
 	}
@@ -832,7 +826,7 @@ impl Inference {
 		for (index, item) in items.into_iter().enumerate() {
 			// the program's last statement may show a whole list of quantities
 			if statements && index + 1 == count && self.at_top {
-				// a final object: its fields' units go into `wasp.units`
+				// a final object: its fields' units go into the `units` entry
 				if let Some(fields) = self.objects.get(&item.name()).filter(|_| matches!(item.drop_meta(), Node::Symbol(_))) {
 					self.result_fields = Some(fields.iter().filter(|(_, signature)| !signature.is_empty()).cloned().collect());
 					lowered.push(item);
