@@ -58,6 +58,11 @@ const EVENT_CLASS_SUFFIX: &str = "·event";
 /// Maps `{a:1}` (P200b: they share, like instances) are instances of one class `map` whose fields are every key the
 /// program writes, in a literal or with `m.key = v`; reading a key never written is W0's run-time "unset field"
 const MAP_CLASS: &str = "map";
+/// `count xs`, `count x in xs` (how often x is in xs) and `x in xs` (x's first position from 1, else 0) walk the list
+/// with a `·tally` instance: its int fields hold the count or position and the current index
+const COUNT_WORD: &str = "count";
+const TALLY_CLASS: &str = "·tally";
+const TALLY_INDEX: &str = "·index";
 
 /// W0's answer for one program
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -273,7 +278,6 @@ fn function_definition(statement: &Node) -> Option<(&str, Vec<&Node>, &Node)> {
 	}
 }
 
-/// `a, b = xs` parses as the list `a, (b = xs)`: the names and the value
 /// `a, b = xs` and `a, b = 1, 2`: the names and the values after `=` (one: a list to take apart)
 fn destructuring(items: &[Node]) -> Option<(Vec<String>, Vec<&Node>)> {
 	let assignment = items.iter().position(|item| matches!(item.drop_meta(), Node::Key(_, Op::Assign, _)))?;
@@ -631,6 +635,13 @@ impl Exporter {
 			}
 		}
 		argument_classes.extend(event_classes);
+		let mut words_used = false;
+		program_node.visit(&mut |part| words_used |= is_word(part, COUNT_WORD) || is_word(part, IN_KEYWORD));
+		if words_used {
+			let fields = [CELL_FIELD, TALLY_INDEX].map(|field| (field.to_string(), Some("int".to_string())));
+			self.classes.insert(TALLY_CLASS.to_string(), (vec![TALLY_CLASS.to_string()], fields.to_vec()));
+			argument_classes.push(TALLY_CLASS.to_string());
+		}
 		if let Some(keys) = map_keys(program_node) {
 			self.classes.insert(MAP_CLASS.to_string(), (vec![MAP_CLASS.to_string()], keys.into_iter().map(|key| (key, None)).collect()));
 			argument_classes.push(MAP_CLASS.to_string());
@@ -902,6 +913,30 @@ impl Exporter {
 		format!(".get (.loc {}) {}", quoted(cell), quoted(CELL_FIELD))
 	}
 
+	/// `count list`, `count item in list`, and with `position` `item in list`: a walk of the list with a fresh `·tally`
+	fn tally(&mut self, list: &Node, item: Option<&Node>, position: bool) -> Lean {
+		let (tally, path) = (".loc \"·t\"", lean_strings(&[TALLY_CLASS.to_string()]));
+		let field = |name: &str| format!(".get ({tally}) {}", quoted(name));
+		let write = |name: &str, value: String| format!(".set ({tally}) {} ({value})", quoted(name));
+		let increment = |name: &str| write(name, format!(".add ({}) (.int 1)", field(name)));
+		let matches = |then: String| format!(".ite (.eq false (.loc \"·item\") (.loc \"·x\")) ({then}) .unit");
+		let step = match (item, position) {
+			(None, _) => increment(CELL_FIELD),
+			(Some(_), false) => matches(increment(CELL_FIELD)),
+			(Some(_), true) => {
+				let first = format!(".ite (.eq false ({}) (.int 0)) ({}) .unit", field(CELL_FIELD), write(CELL_FIELD, field(TALLY_INDEX)));
+				format!(".seq ({}) ({})", increment(TALLY_INDEX), matches(first))
+			}
+		};
+		let walk = format!(".forIn \"·item\" ({}) ({step})", self.expression(list)?);
+		let start = format!(".seq ({}) ({})", write(CELL_FIELD, ".int 0".to_string()), write(TALLY_INDEX, ".int 0".to_string()));
+		let counted = format!(".letIn \"·t\" (.cls {path}) (.new {path}) (.seq ({start}) (.seq ({walk}) ({})))", field(CELL_FIELD));
+		match item {
+			Some(item) => Ok(format!(".letIn \"·x\" .any ({}) ({counted})", self.expression(item)?)),
+			None => Ok(counted),
+		}
+	}
+
 	fn binary(&mut self, constructor: &str, left: &Node, right: &Node) -> Lean {
 		Ok(format!("{constructor} ({}) ({})", self.expression(left)?, self.expression(right)?))
 	}
@@ -947,6 +982,12 @@ impl Exporter {
 			Node::List(items, _, _) => match items.as_slice() {
 				[marker, body, handler] if is_word(marker, TRY_MARKER) => self.binary(".tryCatch", body, handler),
 				[for_word, variable, in_word, list, body] if is_word(for_word, FOR_KEYWORD) && is_word(in_word, IN_KEYWORD) => self.for_loop(variable, list, body),
+				// `count 2 in xs` parses as `count (2 in xs)`
+				[count, list] if is_word(count, COUNT_WORD) && !self.functions.contains_key(COUNT_WORD) => match list.drop_meta() {
+					Node::List(words, Bracket::None, _) if words.len() == 3 && is_word(&words[1], IN_KEYWORD) => self.tally(&words[2], Some(&words[0]), false),
+					_ => self.tally(list, None, false),
+				},
+				[item, in_word, list] if is_word(in_word, IN_KEYWORD) => self.tally(list, Some(item), true),
 				[call, message] if is_word(call, ERROR_CALL) => match message.drop_meta() {
 					Node::Text(message) => Ok(format!(".error {}", quoted(message))),
 					_ => unsupported(node),

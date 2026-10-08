@@ -345,7 +345,7 @@ theorem narrow {Γ e t} (h : HasType P Γ e t) : ∀ {Γ'}, CtxSub Γ' Γ → �
   | forIn _ _ ih1 ih2 =>
     intro Γ' hs
     obtain ⟨_, h1, s1⟩ := ih1 hs
-    obtain ⟨_, h2, _⟩ := ih2 (hs.set_le _ (listElem_mono s1))
+    obtain ⟨_, h2, _⟩ := ih2 (hs.set_le _ (elementTy_mono s1))
     exact ⟨_, .forIn h1 h2, sub_refl _⟩
   | lam _ ih =>
     intro Γ' hs

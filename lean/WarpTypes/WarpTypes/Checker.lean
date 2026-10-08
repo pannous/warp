@@ -121,7 +121,8 @@ def typeOf (P : Program) (Γ : Ctx) : Expr → Option Ty
     | _, _ => none
   | .scope _ e => typeOf P Γ e
   | .abort ev _ e => (typeOf P Γ e).bind fun te => if sub te (P.aborts ev) then some .never else none
-  | .forIn y l b => (typeOf P Γ l).bind fun tl => if listy tl then (typeOf P (Γ.set y (listElem tl)) b).map fun _ => .unit else none
+  | .forIn y l b => (typeOf P Γ l).bind fun tl =>
+    if listy tl || tl == .text then (typeOf P (Γ.set y (elementTy tl)) b).map fun _ => .unit else none
   | .lam y b => (typeOf P (Γ.set y .any) b).map .fn
   | .clo y b => (typeOf P (Ctx.empty.set y .any) b).map .fn
   | .app f a =>
@@ -597,7 +598,7 @@ def observe (P : Program) (Γ : Ctx) : Expr → List Observation
   | .assign _ e | .init _ e | .cast e _ | .broadcast _ e | .get e _ | .isA e _ | .emit _ e | .scope _ e => observe P Γ e
   | .handle ev h b => observeHandler P Γ ev h ++ observe P Γ b
   | .abort ev _ e => ((typeOf P Γ e).getD .any |> Observation.abort ev) :: observe P Γ e
-  | .forIn y l b => observe P Γ l ++ observe P (Γ.set y (((typeOf P Γ l).map listElem).getD .any)) b
+  | .forIn y l b => observe P Γ l ++ observe P (Γ.set y (((typeOf P Γ l).map elementTy).getD .any)) b
   | .lam y b => observe P (Γ.set y .any) b
   | _ => []
 where

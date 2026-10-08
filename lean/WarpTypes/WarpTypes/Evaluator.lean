@@ -109,6 +109,7 @@ def step (P : Program) (μ : Store) : Expr → Option (Expr × Store)
       some (match l with
         | .nil => .unit
         | .cons h t => .seq (b.subst y h) (.forIn y t b)
+        | .text s => walkText y s b
         | _ => .error "not a list", μ)
     else stepIn (.forIn y b) l μ (step P μ l)
   | .lam y b => some (.clo y b, μ)
@@ -304,7 +305,8 @@ theorem step_sound : ∀ {e : Expr} {μ s'}, step P μ e = some s' → Step P (e
       split
       · exact .forNil
       · simp only [isValue, Bool.and_eq_true] at hv; exact .forCons hv.1 hv.2
-      · exact .forOther hv (by cases l <;> simp_all [isList])
+      · exact .forText
+      · exact .forOther hv (by cases l <;> simp_all [isList]) (by cases l <;> simp_all [isText])
     · exact stepIn_sound (F := .forIn y b) rfl (fun _ => ih) hs
   | lam y b => intro μ s' hs; simp only [step] at hs; cases hs; exact .lam
   | app f a ih1 ih2 =>

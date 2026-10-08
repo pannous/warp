@@ -72,7 +72,7 @@ theorem frame_typing {Γ} (F : Frame) {e t} (h : HasType P Γ (F.plug e) t) :
     cases h with
     | forIn hl hb =>
       refine ⟨_, hl, fun h' s => ?_⟩
-      obtain ⟨_, hb', _⟩ := narrow hb ((CtxSub.refl _).set_le _ (listElem_mono s))
+      obtain ⟨_, hb', _⟩ := narrow hb ((CtxSub.refl _).set_le _ (elementTy_mono s))
       exact ⟨_, .forIn h' hb', sub_refl _⟩
 
 /-- a value of a class type is a reference -/
@@ -374,15 +374,25 @@ theorem preservation (hP : ProgramOk P) {s s' : Expr × Store} (hs : Step P s s'
     cases he with | abort hv st => exact ⟨⟨_, .abort hv st, sub_never _⟩, hμ⟩
   | forNil => intro t h hμ; cases h; exact ⟨⟨_, .unit, sub_refl _⟩, hμ⟩
   | forOther => intro t _ hμ; exact ⟨⟨_, .error, sub_never _⟩, hμ⟩
+  | @forText y s b μ =>
+    intro t h hμ
+    cases h with
+    | forIn hl hb =>
+      cases hl
+      unfold walkText
+      split
+      · exact ⟨⟨_, .unit, sub_refl _⟩, hμ⟩
+      · obtain ⟨_, h1, _⟩ := let_typed hb rfl .text (by simp [elementTy, sub])
+        exact ⟨⟨_, .seq h1 (.forIn .text hb), sub_refl _⟩, hμ⟩
   | @forCons y hd tl b μ vh vt =>
     intro t h hμ
     cases h with
     | forIn hl hb =>
       cases hl with
       | cons hh ht he =>
-        obtain ⟨_, h1, _⟩ := let_typed hb vh hh (by simp [listElem, element]; exact join_upper_left _ _)
-        have hs : ∀ {a l e}, element l = some e → sub (listElem l) (listElem (.list (join a e))) = true := by
-          intro a l e he; cases l <;> simp_all [element, listElem] <;> exact join_upper_right _ _
+        obtain ⟨_, h1, _⟩ := let_typed hb vh hh (by simp [elementTy, element]; exact join_upper_left _ _)
+        have hs : ∀ {a l e}, element l = some e → sub (elementTy l) (elementTy (.list (join a e))) = true := by
+          intro a l e he; rw [elementTy_of_element he, elementTy_of_element rfl]; exact join_upper_right _ _
         obtain ⟨_, hb', _⟩ := narrow hb ((CtxSub.refl _).set_le _ (hs he))
         exact ⟨⟨_, .seq h1 (.forIn ht hb'), sub_refl _⟩, hμ⟩
   | tryAbort =>
@@ -511,7 +521,8 @@ theorem progress {Γ e t} (h : HasType P Γ e t) (hΓ : Γ = Ctx.empty) {μ : St
     cases l with
     | nil => exact steps .forNil
     | cons h t => simp only [isValue, Bool.and_eq_true] at hv; exact steps (.forCons hv.1 hv.2)
-    | _ => exact steps (.forOther hv rfl)
+    | text s => exact steps .forText
+    | _ => exact steps (.forOther hv rfl rfl)
   | @abort _ ev k e _ _ _ ih => exact in_frame (.abort ev k) rfl (ih hΓ hμ) fun v => .inr (.inr (.inl ⟨ev, k, e, rfl, v⟩))
 
 /-- any number of steps -/

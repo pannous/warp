@@ -95,6 +95,18 @@ def isText : Expr → Bool
   | .text _ => true
   | _ => false
 
+/-- a text's first character and the rest: `for c in "ab"` walks its one-character texts -/
+def peel (s : String) : Option (String × String) :=
+  match s.toList with
+  | [] => none
+  | c :: cs => some (c.toString, String.ofList cs)
+
+/-- one step of a walk over a text: done at the end, else the body for the first character, then the rest -/
+def walkText (y : String) (s : String) (b : Expr) : Expr :=
+  match peel s with
+  | none => .unit
+  | some (c, rest) => .seq (b.subst y (.text c)) (.forIn y (.text rest) b)
+
 def isNumber : Expr → Bool
   | .bool _ | .int _ | .num _ => true
   | _ => false
@@ -330,7 +342,9 @@ inductive Step (P : Program) : Expr × Store → Expr × Store → Prop where
   | forNil {y b μ} : Step P (.forIn y .nil b, μ) (.unit, μ)
   | forCons {y h t b μ} : h.isValue = true → t.isValue = true →
       Step P (.forIn y (.cons h t) b, μ) (.seq (b.subst y h) (.forIn y t b), μ)
-  | forOther {y v b μ} : v.isValue = true → isList v = false → Step P (.forIn y v b, μ) (.error "not a list", μ)
+  | forText {y s b μ} : Step P (.forIn y (.text s) b, μ) (walkText y s b, μ)
+  | forOther {y v b μ} : v.isValue = true → isList v = false → isText v = false →
+      Step P (.forIn y v b, μ) (.error "not a list", μ)
   | handleAbort {ev' h ev k v μ} : v.isValue = true →
       Step P (.handle ev' h (.abort ev k v), μ) (if ev' = ev ∧ k = some μ.handlers.length then v else .abort ev k v, μ)
 

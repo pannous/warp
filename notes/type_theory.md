@@ -297,6 +297,15 @@ warp (card bool-assign, KNOWN_HOLES); `s = "a"; s++` is an internal error in war
 `[1] + 2` and `xs + "a"` stay errors, as in warp. warp skips the element check when a named list is concatenated
 into a declared one: `xs: ints = [1]; ys = ["a"]; xs = xs + ys` (card concat-unchecked, KNOWN_HOLES).
 
+## Texts in loops, count, in
+
+`for c in "abc"` walks the text's one-character texts (`forText` peels one with `walkText`; the loop variable has
+type `elementTy`, `text` for a text, as `#` gives). `count xs`, `count x in xs` (how often) and `x in xs` (warp's
+1-based first position, 0 when absent, tests/operators/test_in_position.rs) are derived forms: a walk with a fresh
+`·tally` instance whose int fields hold the count and the index, items compared by `==`. `count 5` (warp: 1) is
+outside W0. warp checks a loop body's last expression by another rule: `for c in ["a"] { c + 1 }` is a compile
+error there while `c = "a"; c + 1` is "a1" (card loop-text).
+
 ## not, and, or
 
 No new forms: `not e` is `if e then no else yes`; `a and b` is `if a then b else a` and `a or b` is
