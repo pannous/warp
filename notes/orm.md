@@ -38,7 +38,7 @@ written through: `bo.age += 1` is an UPDATE of that row.
 - Any other pure warp function inside a filter (`people where is_prime(it.age)`) is registered on the connection as an
   SQLite application function (sqlite3_create_function_v2): `WHERE warp_fn_3(age)`. SQLite calls back into the
   running module, so every filter runs inside the query with SQL's own index use for the translated parts.
-- An impure function in a filter is a loud error (a query may run it any number of times).
+- An impure function in a filter is warned about at compile time (a query may run it any number of times).
 - Backends without application functions (IndexedDB) push down what they can (key/index ranges) and filter the rest
   in memory: same results, the speed differs.
 - Bare field names (P223, user): `people where age > 20` is `it.age > 20` when the element class has the field and no
@@ -90,7 +90,8 @@ written through: `bo.age += 1` is an UPDATE of that row.
   filter's variables as the values after the row. database.rs select registers warp_call for the query only
   (sqlite3_create_function_v2, user data the callback), host.rs queried_rows calls the export through route_value. A
   function that fails fails the query with its own trap (`raise "boom"` gives "boom").
-- Purity is not checked: a filter's function runs once per row in id order, as the in-memory filter does.
+- A function with side effects (State, IO, FFI, Async, Eval of effects.rs) in a table filter is a compile-time warning
+  (card orm-filter, `effectful_calls`); it still runs, once per row in id order, as the in-memory filter does.
 - Still loaded whole at registration: the query only picks ids. count/#i/paging and the identity map are step 2's rest.
 - An element changed without the write-through form `v.f op= e` (`people#1.age = 5`) leaves its row stale, and a
   query of the table then disagrees with the list.

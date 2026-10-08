@@ -34,6 +34,8 @@ const FUNCTION: &str = "table·call";
 /// The SQL function a query calls a warp function through (database.rs)
 const WARP_CALL: &str = "warp_call";
 const NUMERIC_TYPES: [&str; 4] = ["int", "float", "number", "real"];
+/// What a filter's function should not do: not being sure to end (Div) or allocating is fine
+const SIDE_EFFECTS: [crate::effects::Effect; 5] = [crate::effects::Effect::State, crate::effects::Effect::IO, crate::effects::Effect::FFI, crate::effects::Effect::Async, crate::effects::Effect::Eval];
 
 /// A registered table: the list variable holding it and its class's fields (name, type, default)
 struct Table {
@@ -79,6 +81,8 @@ fn tables_file() -> String {
 pub struct Tables {
 	tables: HashMap<String, Table>,
 	functions: Vec<Node>,
+	/// the effects of the program's functions, which a filter's query should not have
+	effects: Option<crate::effects::EffectReport>,
 }
 
 pub fn registered(program: &Node) -> Tables {
@@ -87,18 +91,22 @@ pub fn registered(program: &Node) -> Tables {
 		true => registrations(&with_stored_tables(program.clone(), &class_bodies(program))),
 		false => HashMap::new(),
 	};
-	Tables { tables, functions: vec![] }
+	let effects = (!tables.is_empty()).then(|| crate::effects::EffectReport::of(program));
+	Tables { tables, functions: vec![], effects }
 }
 
 /// `people where age > 7 and is_prime(age)` of a table: the query `SELECT id … WHERE "age" > ? AND warp_call(…)` as a
 /// binding of the ids it keeps, and the condition keeping the list's instances of those ids, so a filtered row is the
 /// same instance. What SQL can say stays SQL; any other part is a function of the program the query calls per row.
-pub fn queried(subject: &Node, condition: &Node, variables: &HashSet<String>, tables: &mut Tables) -> Option<(Node, Node)> {
+pub fn queried(subject: &Node, condition: &Node, variables: &HashSet<String>, tables: &mut Tables) -> Option<Result<(Node, Node), Node>> {
 	let table = tables.tables.get(&subject.drop_meta().name())?;
 	let first_function = tables.functions.len();
 	let mut query = Query { table, variables, parameters: vec![], functions: vec![], first_function };
 	let sql = query.sql(condition);
 	let (parameters, functions) = (query.parameters, query.functions);
+	if let Err(error) = crate::diagnostic::report(&effectful_calls(&functions, tables.effects.as_ref())) {
+		return Some(Err(error));
+	}
 	tables.functions.extend(functions);
 	let ids = format!("{IDS}·{}", first_function + 1);
 	let code = format!("{IDS_PLACEHOLDER} = std_io(\"table\", \"select\", [{name:?}, {CONDITION_PLACEHOLDER}, {PARAMETERS_PLACEHOLDER}, {file:?}])",
@@ -109,7 +117,27 @@ pub fn queried(subject: &Node, condition: &Node, variables: &HashSet<String>, ta
 		(PARAMETERS_PLACEHOLDER, Node::List(parameters, Bracket::Square, Separator::Space)),
 	]);
 	let kept = generated(&format!("{}.{ID_FIELD} in {IDS_PLACEHOLDER}", crate::lambdas::IMPLICIT_PARAMETER), [(IDS_PLACEHOLDER, Node::Symbol(ids))]);
-	Some((binding, kept))
+	Some(Ok((binding, kept)))
+}
+
+/// A warning for each function with side effects that a query's functions call: SQLite calls it once per row, and
+/// how often or in which order a query runs is its own business (card orm-filter)
+fn effectful_calls(functions: &[Node], effects: Option<&crate::effects::EffectReport>) -> Vec<crate::diagnostic::Diagnostic> {
+	let Some(effects) = effects else { return vec![] };
+	let mut warned: Vec<String> = vec![];
+	let mut warnings = vec![];
+	for function in functions {
+		function.visit(&mut |node| if let Node::Symbol(name) = node {
+			let side_effects: Vec<String> = effects.effects_of(name).into_iter().flat_map(|found| found.iter())
+				.filter(|effect| SIDE_EFFECTS.contains(effect)).map(|effect| format!("{effect:?}")).collect();
+			if !side_effects.is_empty() && !warned.contains(name) {
+				warned.push(name.clone());
+				warnings.push(crate::diagnostic::Diagnostic::at(node, format!(
+					"{name} has side effects ({}): a table filter runs it once per row inside its query; keep filters pure", side_effects.join(", "))));
+			}
+		});
+	}
+	warnings
 }
 
 /// The program with the functions its filters' queries call, first

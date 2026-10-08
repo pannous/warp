@@ -63,3 +63,18 @@ fn a_filtered_row_is_the_same_instance() {
 	filled("people_same");
 	is!(&table("people_same", "bo = (people where name == \"Bo\")#1\nbo.age += 1\npeople#1.age"), 8);
 }
+
+/// A function with side effects in a table filter runs once per row inside the query: a warning names it; a pure one
+/// gives none (card orm-filter)
+#[cfg(feature = "native")] // SQLite natively; the browser has no tables yet (notes/orm.md step 6)
+#[test]
+fn a_function_with_side_effects_in_a_table_filter_is_warned_about() {
+	filled("filter_effects");
+	warp::diagnostic::take_warnings();
+	is!(&table("filter_effects", "seen = 0\nnoted(n) := (global seen; seen += 1; n > 7)\ncount(people where noted(age))"), 2);
+	let warnings = warp::diagnostic::take_warnings();
+	assert!(warnings.iter().any(|warning| warning.message.contains("noted") && warning.message.contains("once per row")), "{warnings:?}");
+	is!(&table("filter_effects", "count(people where is_prime(age))"), 2);
+	let warnings = warp::diagnostic::take_warnings();
+	assert!(!warnings.iter().any(|warning| warning.message.contains("once per row")), "{warnings:?}");
+}
