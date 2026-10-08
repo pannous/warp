@@ -150,7 +150,7 @@ fn handler_function(handler: &Handler, by_event: &BTreeMap<String, Vec<usize>>, 
 		assign(&active, Node::Symbol(previous)),
 		Node::Symbol(result),
 	];
-	function_with_globals(&handler_name(&handler.event, handler.number), reads_event(&[handler.body.clone()]), &statements, main_variables)
+	function_with_globals(&handler_name(&handler.event, handler.number), reads_event(std::slice::from_ref(&handler.body)), &statements, main_variables)
 }
 
 /// The statements of a block; `{emit ask}` holds the words of its one statement
