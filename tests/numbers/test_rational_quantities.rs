@@ -8,17 +8,17 @@ fn shown(code: &str) -> String {
 
 #[test]
 fn test_non_whole_results_are_exact() {
-	assert_eq!(shown("1 km/h + 1 m/s"), "23/18 m/s");
-	assert_eq!(shown("10 km / 3 h"), "10/3 km/h");
-	assert_eq!(shown("1 km/h in m/s"), "5/18 m/s");
-	assert_eq!(shown("1 m / 4"), "1/4 m");
+	assert_eq!(shown("1 km/h + 1 m/s"), "(23/18)m/s");
+	assert_eq!(shown("10 km / 3 h"), "(10/3)km/h");
+	assert_eq!(shown("1 km/h in m/s"), "(5/18)m/s");
+	assert_eq!(shown("1 m / 4"), "0.25m");
 	assert_eq!(shown("1 m / 3 m"), "1/3");
 }
 
 #[test]
 fn test_exact_amounts_compute_on() {
-	assert_eq!(shown("(1 m / 3) * 3"), "1 m");
-	assert_eq!(shown("90 minutes in hours"), "3/2 h");
+	assert_eq!(shown("(1 m / 3) * 3"), "1m");
+	assert_eq!(shown("90 minutes in hours"), "1.5h");
 	assert_eq!(shown("1 km/h < 1 m/s"), "1");
-	assert_eq!(shown("150 cm in m"), "3/2 m");
+	assert_eq!(shown("150 cm in m"), "1.5m");
 }

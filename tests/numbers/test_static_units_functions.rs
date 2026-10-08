@@ -9,15 +9,15 @@ fn shown(code: &str) -> String {
 
 #[test]
 fn test_functions_take_and_give_quantities() {
-	assert_eq!(shown("speed(d, t) := d/t; v = speed(10 km, 2 h); for i in 1..2 { v = v }; v"), "5 km/h");
-	assert_eq!(shown("twice(x) := x * 2; a = twice(3 m); b = twice(4); for i in 1..2 { a = a }; a"), "6 m");
-	assert_eq!(shown("area(w, l) := w * l; t = 0 m²; for i in 1..3 { t += area(2 m, 3 m) }; t"), "12 m²");
-	assert_eq!(shown("lap() := 400 m; d = 0 m; for i in 1..4 { d += lap() }; d"), "1200 m");
+	assert_eq!(shown("speed(d, t) := d/t; v = speed(10 km, 2 h); for i in 1..2 { v = v }; v"), "5km/h");
+	assert_eq!(shown("twice(x) := x * 2; a = twice(3 m); b = twice(4); for i in 1..2 { a = a }; a"), "6m");
+	assert_eq!(shown("area(w, l) := w * l; t = 0 m²; for i in 1..3 { t += area(2 m, 3 m) }; t"), "12m²");
+	assert_eq!(shown("lap() := 400 m; d = 0 m; for i in 1..4 { d += lap() }; d"), "1200m");
 }
 
 #[test]
 fn test_one_function_with_several_unit_signatures() {
-	assert_eq!(shown("twice(x) := x * 2; a = twice(3 m); b = twice(2 s); for i in 1..2 { a = a }; a / b"), "3/2 m/s");
+	assert_eq!(shown("twice(x) := x * 2; a = twice(3 m); b = twice(2 s); for i in 1..2 { a = a }; a / b"), "1.5m/s");
 }
 
 #[test]
