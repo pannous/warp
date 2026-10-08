@@ -1469,6 +1469,7 @@ PASSED:
   ✓ modules::test_std_time::use_time_formats_dates_and_times
   ✓ modules::test_std_time::use_time_knows_leap_years_and_month_lengths
   ✓ modules::test_std_time::use_time_parses_dates
+  ✓ modules::test_use_modules::a_program_variable_leaves_a_file_module_its_words
   ✓ modules::test_use_modules::module_function_locals_are_not_the_programs_variables
   ✓ modules::test_use_modules::test_module_statements_are_not_imported
   ✓ modules::test_use_modules::test_module_using_module_imports_transitively_and_survives_cycles
@@ -3419,4 +3420,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-19 ignored, 3414 passed, 0 failed, 3414 total tested
+19 ignored, 3415 passed, 0 failed, 3415 total tested
