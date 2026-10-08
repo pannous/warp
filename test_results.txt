@@ -265,6 +265,11 @@ PASSED:
   ✓ control::test_run_time_blocks::interpret_of_a_constant_block_runs_it_where_written
   ✓ control::test_run_time_blocks::interpret_runs_a_block_known_only_at_run_time
   ✓ control::test_run_time_blocks::running_a_run_time_block_is_the_eval_effect
+  ✓ control::test_scoped_handlers::a_block_handler_answers_emits_in_the_block
+  ✓ control::test_scoped_handlers::a_block_handler_answers_the_functions_the_block_calls
+  ✓ control::test_scoped_handlers::a_handler_emitting_its_own_event_reaches_the_next_handler_out
+  ✓ control::test_scoped_handlers::outside_any_block_the_program_handler_answers
+  ✓ control::test_scoped_handlers::the_innermost_handler_wins_and_ends_with_its_block
   ✓ control::test_shared_arrays::a_shared_array_is_a_list_as_a_whole
   ✓ control::test_shared_arrays::a_shared_array_of_floats
   ✓ control::test_shared_arrays::a_shared_array_reads_writes_and_adds
@@ -453,6 +458,8 @@ PASSED:
   ✓ control::test_undo_history::any_value_and_any_writer_has_a_history
   ✓ control::test_undo_history::redo_takes_back_an_undo_until_a_new_change
   ✓ control::test_undo_history::undo_steps_back_through_the_changes
+  ✓ control::test_unhandled_emits::a_handled_emit_does_not_warn
+  ✓ control::test_unhandled_emits::an_emit_nobody_handles_warns
   ✓ control::test_unwrap::test_mutating_and_evaluating_bangs_keep_their_meaning
   ✓ control::test_unwrap::test_unwrap_gives_the_value
   ✓ control::test_unwrap::test_unwrap_of_nothing_or_an_error_is_loud
@@ -479,6 +486,7 @@ PASSED:
   ✓ control::test_web_sockets::data_goes_as_json
   ✓ control::test_welcome_forms::loop_runs_until_break
   ✓ control::test_welcome_forms::match_cases_may_be_written_with_fat_arrows
+  ✓ control::test_when_signals::a_condition_when_notes_that_it_reacts_to_later_writes
   ✓ control::test_when_signals::when_a_condition_listens_like_whenever
   ✓ control::test_when_signals::when_an_event_listens_like_on
   ✓ control::test_when_signals::when_arms_stay_a_switch
@@ -621,6 +629,7 @@ PASSED:
   ✓ ffi::test_wasi::test_wasi_putf
   ✓ ffi::test_wasi::test_wasi_puti
   ✓ ffi::test_web_idl::a_call_with_a_count_no_overload_takes_is_an_error
+  ✓ ffi::test_web_idl::a_canvas_context_is_typed
   ✓ ffi::test_web_idl::a_constructor_is_a_plain_call
   ✓ ffi::test_web_idl::a_declared_primitive_result_is_a_warp_value
   ✓ ffi::test_web_idl::a_foreign_calls_value_as_text
@@ -810,6 +819,9 @@ PASSED:
   ✓ functions::test_effects::test_imports_follow_effects
   ✓ functions::test_empty_call::a_name_and_a_group_stay_symbols_and_defined_calls_run
   ✓ functions::test_empty_call::an_empty_call_of_an_undefined_name_is_an_error
+  ✓ functions::test_event_effects::a_block_handler_handles_its_event
+  ✓ functions::test_event_effects::a_declared_effect_set_reports_an_unhandled_event
+  ✓ functions::test_event_effects::an_emitted_event_is_a_named_effect
   ✓ functions::test_failed_word::test_failed_ends_a_condition_like_the_other_test_words
   ✓ functions::test_failed_word::test_failed_tests_for_an_error_value
   ✓ functions::test_field_function_values::test_function_in_nested_object
@@ -1933,6 +1945,8 @@ PASSED:
   ✓ operators::test_structural_equality::struct_instances_compare_by_their_fields
   ✓ operators::test_structural_equality::the_entry_order_of_an_object_does_not_matter
   ✓ operators::test_structural_equality::variables_holding_structures_compare_by_value
+  ✓ operators::test_suffix_power_places::a_field_or_element_squares
+  ✓ operators::test_suffix_power_places::a_root_takes_the_squared_place
   ✓ operators::test_superscript_operator_declarations::test_prefix_operator_on_a_superscript_sign
   ✓ operators::test_superscript_operator_declarations::test_short_declaration_without_the_operator_word
   ✓ operators::test_superscript_operator_declarations::test_suffix_operator_on_a_superscript_digit
@@ -2471,6 +2485,8 @@ PASSED:
   ✓ types::test_bool_assign::a_bool_variable_refuses_other_kinds
   ✓ types::test_bool_assign::a_bool_variable_takes_bools_and_an_int_variable_takes_a_bool
   ✓ types::test_bool_assign::one_and_zero_are_yes_and_no_everywhere
+  ✓ types::test_bool_literal_value::a_function_giving_its_bool_parameter_gives_a_bool
+  ✓ types::test_bool_literal_value::an_assignment_to_a_bool_gives_a_bool
   ✓ types::test_bool_type::a_bool_of_unknown_static_type_is_tested_at_run_time
   ✓ types::test_bool_type::a_list_starting_with_a_bool_is_a_list
   ✓ types::test_bool_type::a_literal_bool_counts_in_arithmetic
@@ -3496,4 +3512,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-19 ignored, 3491 passed, 0 failed, 3491 total tested
+19 ignored, 3507 passed, 0 failed, 3507 total tested

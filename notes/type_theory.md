@@ -225,8 +225,15 @@ W0 now has `arith op a b`, which takes numbers only.
   `f(x) := x + 1; f(3); f("a")` ("a1"), `f(x) := x - 1; f(3); f("a")` (a run-time error), `x: any = 2; x * 3`.
   warp is stricter than W0 where it knows the value: `x: any = "a"; x - 1` is a compile error in warp (constant
   propagation), so that form stays out of the corpus.
-- Coverage (data/types/coverage.txt, 600 is!() programs sampled from tests/): 83 were inside W0 before this
-  phase. Most of the rest: imports (`use`), maps `{a:1}`, lambdas, `for` loops, `i++`, division, string methods.
+- Coverage (probes/type_coverage.sh over data/types/sample_programs.txt, 599 is!() programs sampled from tests/,
+  result data/types/coverage.txt): 83 were inside W0 before this phase. On 2026-10-08, 95 exported, but 23 of those
+  were mis-exports the model rejected (method calls such as `x.size` or `4.square` exported as field reads, named
+  arguments, overloads, first bindings inside expressions, `.add` on a text) or a model gap (`#` and `++` on `any`
+  and texts). The exporter now refuses the former (a field read needs a field some class declares; `.add` needs a
+  name bound to a list). Lists became gradual like arithmetic: `#` gives `elementTy` (a text's element is a text,
+  anything but a list or text gives `any`), `++` takes any operands, and non-lists raise "not a list" when it runs.
+  The checker demands lists, texts (for `#`) or `any`. Result: 77 exported, all agreeing with warp. Most of the rest:
+  imports (`use`), `for` loops, maps `{a:1}`, lambdas, `on`/`emit`, `i++`, `global`, string methods.
 
 ## Inline unions and optionals
 

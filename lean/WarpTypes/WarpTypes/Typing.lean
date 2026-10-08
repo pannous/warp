@@ -44,10 +44,9 @@ inductive HasType (P : Program) : Ctx → Expr → Ty → Prop where
   | loop {Γ c b tc tb} : HasType P Γ c tc → HasType P Γ b tb → HasType P Γ (.loop c b) .unit
   | seq {Γ a b ta tb} : HasType P Γ a ta → HasType P Γ b tb → HasType P Γ (.seq a b) tb
   /-- inference.rs element_kind -/
-  | index {Γ l i tl e ti} : HasType P Γ l tl → element tl = some e → HasType P Γ i ti → sub ti .int = true →
-      HasType P Γ (.index l i) e
-  | append {Γ a b ta tb ea eb} : HasType P Γ a ta → element ta = some ea → HasType P Γ b tb → element tb = some eb →
-      HasType P Γ (.append a b) (.list (join ea eb))
+  | index {Γ l i tl ti} : HasType P Γ l tl → HasType P Γ i ti → HasType P Γ (.index l i) (elementTy tl)
+  | append {Γ a b ta tb} : HasType P Γ a ta → HasType P Γ b tb →
+      HasType P Γ (.append a b) (.list (join (listElem ta) (listElem tb)))
   /-- checks.rs check_assignment / check_declared_types; const (P130) and charged (P138) names are not assignable -/
   | assign {Γ x e t te} : P.names x = some (.var, t) → HasType P Γ e te → sub te t = true →
       HasType P Γ (.assign x e) t

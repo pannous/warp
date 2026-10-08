@@ -31,6 +31,10 @@ const SKIPPED_MEMBERS: [&str; 6] = ["const", "iterable", "maplike", "setlike", "
 const QUALIFIERS: [&str; 7] = ["static", "stringifier", "getter", "setter", "deleter", "inherit", "readonly"];
 const VARIADIC: &str = "...";
 const CONSTRUCTOR: &str = "constructor";
+/// `canvas.getContext("2d")`: the interface of the context a literal context id gives (RenderingContext is their union)
+const CONTEXT_MEMBER: &str = "getContext";
+const CONTEXT_INTERFACES: [(&str, &str); 5] = [("2d", "CanvasRenderingContext2D"), ("bitmaprenderer", "ImageBitmapRenderingContext"),
+	("webgl", "WebGLRenderingContext"), ("webgl2", "WebGL2RenderingContext"), ("webgpu", "GPUCanvasContext")];
 /// WebIDL's primitive types as warp's (the typedefs among them as their spec defines them: DOMHighResTimeStamp is a
 /// double, EpochTimeStamp an unsigned long long)
 const PRIMITIVE_TYPES: [(&[&str], &str); 4] = [
@@ -141,7 +145,9 @@ pub fn optional_result_type(interface: &str, member: &str, call: bool) -> Option
 
 /// The WebIDL type of what `member` gives, when all its overloads agree; a promise's value, which a foreign call awaits
 fn declared_result(interface: &str, member: &str, call: bool) -> Option<String> {
-	let declared = match (members_of(interface).remove(member)?, call) {
+	// an Element's getContext is its HTMLCanvasElement's (check_member accepts the derived interfaces' members)
+	let declaring = || derived_interfaces(interface).into_iter().find_map(|derived| members_of(&derived).remove(member));
+	let declared = match (members_of(interface).remove(member).or_else(declaring)?, call) {
 		(Member::Attribute(type_name), false) => type_name,
 		(Member::Operation(overloads), true) => {
 			let returns: Vec<String> = overloads.into_iter().map(|overload| overload.returns).collect();
@@ -213,6 +219,18 @@ pub fn check_constructor(interface: &str, count: usize) -> Result<Option<String>
 		return Err(format!("{interface} takes {}, not {count} argument{}", forms.join(" or "), if count == 1 { "" } else { "s" }));
 	}
 	Ok(Some(interface.to_string()))
+}
+
+/// The interface `getContext(id)` gives for a literal id when the bundle declares it (`"2d"`: CanvasRenderingContext2D;
+/// an OffscreenCanvas's "2d" is OffscreenCanvasRenderingContext2D)
+pub fn context_interface(interface: &str, member: &str, context_id: &str) -> Option<String> {
+	if member != CONTEXT_MEMBER {
+		return None;
+	}
+	let (_, context) = CONTEXT_INTERFACES.iter().find(|(id, _)| *id == context_id)?;
+	let offscreen = format!("Offscreen{context}");
+	let context = if interface.starts_with("Offscreen") && definitions().contains_key(&offscreen) { offscreen } else { context.to_string() };
+	definitions().contains_key(&context).then_some(context)
 }
 
 /// Does WebIDL declare a constructor of `interface` (`URL(text)` is a URL)

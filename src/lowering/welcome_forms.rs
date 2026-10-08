@@ -33,6 +33,7 @@ const ELSE_WORD: &str = "else";
 /// The listeners a `when` without arms is: of an event, of a condition
 const ON_WORD: &str = "on";
 const WHENEVER_WORD: &str = "whenever";
+const WHEN_CONDITION_TOPIC: &str = "when-condition";
 const IS_WORD: &str = "is";
 /// The if chain a `when` arm adds, its conditions joined by `or`
 const WHEN_ARM: &str = "if CONDITION then VALUE else OTHERWISE";
@@ -314,6 +315,10 @@ fn when_listener(items: &[Node]) -> Option<Vec<Node>> {
 		return None;
 	}
 	let listener = if matches!(subject.drop_meta(), Node::Symbol(_)) { ON_WORD } else { WHENEVER_WORD };
+	if listener == WHENEVER_WORD {
+		crate::normalize::set_position_of(word);
+		crate::diagnostic::educate_once(WHEN_CONDITION_TOPIC, WHEN_WORD, WHENEVER_WORD, "it reacts to every later write that makes the condition true; write if for a one-time check now");
+	}
 	Some(vec![Node::Symbol(listener.to_string()), subject.clone(), body.clone()])
 }
 

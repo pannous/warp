@@ -17,12 +17,21 @@ thread_local! {
 pub fn note_bool_functions<'a>(functions: impl Iterator<Item = &'a crate::context::UserFunctionDef> + Clone) {
 	BOOL_FUNCTIONS.with(|known| known.borrow_mut().clear());
 	loop {
-		let found: Vec<String> = functions.clone().filter(|function| !is_bool_function(&function.name) && is_boolean(&function.body, &Scope::new())).map(|function| function.name.clone()).collect();
+		let found: Vec<String> = functions.clone().filter(|function| !is_bool_function(&function.name) && is_boolean(&function.body, &parameter_scope(function))).map(|function| function.name.clone()).collect();
 		if found.is_empty() {
 			return;
 		}
 		BOOL_FUNCTIONS.with(|known| known.borrow_mut().extend(found));
 	}
+}
+
+/// The function's parameters declared bool (`f(b: bool) := b`), the rest unknown
+fn parameter_scope(function: &crate::context::UserFunctionDef) -> Scope {
+	let mut scope = Scope::new();
+	for param in function.params.iter().filter(|param| param.annotation.as_ref().is_some_and(|annotation| annotation.drop_meta().name() == BOOL_TYPE)) {
+		scope.define(param.name.clone(), param.annotation.clone().map(Box::new), Kind::Int);
+	}
+	scope
 }
 
 pub fn is_bool_function(name: &str) -> bool {
@@ -37,7 +46,8 @@ pub fn is_boolean(node: &Node, scope: &Scope) -> bool {
 			_ if op.is_comparison() => true,
 			Op::Not => matches!(left.drop_meta(), Node::Empty),
 			Op::And | Op::Or => is_boolean(left, scope) && is_boolean(right, scope),
-			Op::Assign | Op::Define => matches!(left.drop_meta(), Node::Symbol(_)) && is_boolean(right, scope),
+			// `x: bool = 1` (P199): the value stored, a bool
+			Op::Assign | Op::Define => matches!(left.drop_meta(), Node::Symbol(name) if is_bool_variable(name, scope) || is_boolean(right, scope)),
 			_ => false,
 		},
 		Node::Symbol(name) => is_bool_variable(name, scope),

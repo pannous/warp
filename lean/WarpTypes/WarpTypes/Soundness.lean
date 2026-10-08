@@ -30,24 +30,14 @@ theorem frame_typing {Γ} (F : Frame) {e t} (h : HasType P Γ (F.plug e) t) :
   case eqR => cases h with | eq ha hb => exact ⟨_, hb, fun h' _ => ⟨_, .eq ha h', sub_refl _⟩⟩
   case ite => cases h with | ite hc ha hb => exact ⟨_, hc, fun h' _ => ⟨_, .ite h' ha hb, sub_refl _⟩⟩
   case seq => cases h with | seq ha hb => exact ⟨_, ha, fun h' _ => ⟨_, .seq h' hb, sub_refl _⟩⟩
-  case indexL =>
-    cases h with | index hl he hi si =>
-    refine ⟨_, hl, fun h' s => ?_⟩
-    obtain ⟨e', he', se⟩ := element_mono s he
-    exact ⟨_, .index h' he' hi si, se⟩
-  case indexR =>
-    cases h with | index hl he hi si =>
-    exact ⟨_, hi, fun h' s => ⟨_, .index hl he h' (sub_trans s si), sub_refl _⟩⟩
+  case indexL => cases h with | index hl hi => exact ⟨_, hl, fun h' s => ⟨_, .index h' hi, elementTy_mono s⟩⟩
+  case indexR => cases h with | index hl hi => exact ⟨_, hi, fun h' _ => ⟨_, .index hl h', sub_refl _⟩⟩
   case appendL =>
-    cases h with | append ha hea hb heb =>
-    refine ⟨_, ha, fun h' s => ?_⟩
-    obtain ⟨e', he', se⟩ := element_mono s hea
-    exact ⟨_, .append h' he' hb heb, by simpa using join_mono se (sub_refl _)⟩
+    cases h with | append ha hb =>
+    exact ⟨_, ha, fun h' s => ⟨_, .append h' hb, by simpa using join_mono (listElem_mono s) (sub_refl _)⟩⟩
   case appendR =>
-    cases h with | append ha hea hb heb =>
-    refine ⟨_, hb, fun h' s => ?_⟩
-    obtain ⟨e', he', se⟩ := element_mono s heb
-    exact ⟨_, .append ha hea h' he', by simpa using join_mono (sub_refl _) se⟩
+    cases h with | append ha hb =>
+    exact ⟨_, hb, fun h' s => ⟨_, .append ha h', by simpa using join_mono (sub_refl _) (listElem_mono s)⟩⟩
   case assign =>
     cases h with | assign hx he st => exact ⟨_, he, fun h' s => ⟨_, .assign hx h' (sub_trans s st), sub_refl _⟩⟩
   case init =>
@@ -226,15 +216,15 @@ theorem preservation (hP : FunsOk P) {s s' : Expr × Store} (hs : Step P s s') :
   | @index l i μ vl _ =>
     intro t h hμ
     cases h with
-    | index hl he _ _ =>
+    | index hl _ =>
       refine ⟨?_, hμ⟩
       cases hn : nth l ((asInt i).getD 0) with
       | none => exact ⟨_, .error, sub_never _⟩
-      | some v => simpa using nth_typed _ vl hl he hn
+      | some v => simpa using nth_typed _ vl hl hn
   | append va vb =>
     intro t h hμ
     cases h with
-    | append ha hea hb heb => exact ⟨append_typed hb vb heb va ha hea, hμ⟩
+    | append ha hb => exact ⟨append_typed ha hb va vb, hμ⟩
   | assign hv =>
     intro t h hμ
     cases h with
@@ -338,9 +328,9 @@ theorem progress {Γ e t} (h : HasType P Γ e t) (hΓ : Γ = Ctx.empty) {μ : St
   | @ite _ c a b _ _ _ _ _ _ ih0 _ _ => exact in_frame (.ite a b) rfl (ih0 hΓ) fun vc => steps (.ite vc)
   | loop => exact steps .loop
   | @seq _ a b _ _ _ _ ih1 _ => exact in_frame (.seq b) rfl (ih1 hΓ) fun va => steps (.seq va)
-  | @index _ l i _ _ _ _ _ _ _ ih1 ih2 =>
+  | @index _ l i _ _ _ _ ih1 ih2 =>
     exact in_frame (.indexL i) rfl (ih1 hΓ) fun vl => in_frame (.indexR l) vl (ih2 hΓ) fun vi => steps (.index vl vi)
-  | @append _ a b _ _ _ _ _ _ _ _ ih1 ih2 =>
+  | @append _ a b _ _ _ _ ih1 ih2 =>
     exact in_frame (.appendL b) rfl (ih1 hΓ) fun va => in_frame (.appendR a) va (ih2 hΓ) fun vb => steps (.append va vb)
   | @assign _ x _ _ _ _ _ _ ih => exact in_frame (.assign x) rfl (ih hΓ) fun v => steps (.assign v)
   | @init _ x _ _ _ _ _ _ _ _ ih => exact in_frame (.init x) rfl (ih hΓ) fun v => steps (.init v)

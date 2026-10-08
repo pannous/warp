@@ -190,8 +190,10 @@ pub struct CompiledModule {
 
 /// The passes over the source forms, in order, each reading what the one before it left: definitions and sugar become
 /// the forms every later pass knows (`def f(x) {…}` is `f(x) := {…}`), modules are resolved
-const SOURCE_PASSES: [fn(Node) -> Node; 84] = [
+const SOURCE_PASSES: [fn(Node) -> Node; 85] = [
 	crate::analyzer::lower_inline_unions,
+	// `on ask {…} in {…}` before any pass reads `{…} in {…}` as membership or an emit as nothing
+	crate::scoped_handlers::lower,
 	// `component name {…}` declares a WIT world (`warp build --wit`) and does nothing at run time
 	crate::component_worlds::lower,
 	// `ch.send(v)` of `ch = channel()` before go_blocks renames ch in a go block and system_signals reads the send
@@ -296,6 +298,8 @@ fn lower_for_emission(node: Node) -> Result<Node, Node> {
 	}
 	crate::diagnostic::report(&crate::accessibility::warnings(&node))?;
 	crate::diagnostic::report(&crate::analyzer::source_warnings(&node))?;
+	// emits and handler blocks as written: the passes lower them to calls, the named effects are read from them
+	let as_written = node.clone();
 	let node = run_passes(node, &SOURCE_PASSES);
 	if let Some(error) = node.first_error() {
 		return Err(error.clone());
@@ -321,7 +325,7 @@ fn lower_for_emission(node: Node) -> Result<Node, Node> {
 	if let Some(error) = node.first_error() {
 		return Err(error.clone());
 	}
-	let effects = EffectReport::of(&node);
+	let effects = EffectReport::of(&node).with_events_of(&as_written);
 	if let Some(answer) = effects.answer(&node) {
 		return Err(answer);
 	}
