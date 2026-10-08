@@ -90,6 +90,9 @@ D-number or #number mean this file. Open questions, parked ones and the standing
   Follow-up default (warp-84): "letter names" means Latin letters with diacritics (ocirc ô, oslash ø, imath ı, jmath
   ȷ); cdot ⋅, varepsilon ε, varphi φ take LaTeX as exceptions. 36 names differ, listed in notes/footguns.md.
 - uniscript 1.0.5 released (user, via warp-84) with the P198 letter/operator rule and its exceptions; warp pins it.
+- try-finally (default, warp-a1, card try-finally): `try X finally Z` without catch is accepted; Z always runs and X's
+  value is the result; if X fails (raised or trapped), the Error becomes the value, as in `try X catch e { e } finally
+  Z`. Alternative: re-raise the Error after Z.
 - Defaults shown to the user and kept (no objection): error highlighting (CLI carets under the word on stderr; web
   demo red/amber wavy underlines, message on hover; card g-_ZNg); P168 detail (an object whose fields are unknown at
   compile time keeps the field read `p.phone-number`); char as Text (card char-text, follows from P173: an untyped
