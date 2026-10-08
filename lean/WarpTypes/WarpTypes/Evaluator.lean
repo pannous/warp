@@ -1,0 +1,238 @@
+import WarpTypes.Checker
+
+/-! The executable semantics: `step` computes the next state (`step_sound`: every step it takes is a `Step`), `run`
+iterates it with fuel (`run_sound`: the state it ends in is reachable by `Steps`). `outcome` runs an elaborated
+program, so the differential test compares warp's values with the model's, not only the verdicts. -/
+
+namespace Warp
+open Ty Expr
+
+/-- a step inside frame F of its hole e, given e's own step r: an error in the hole is raised -/
+def stepIn (F : Frame) (e : Expr) (μ : Store) (r : Option (Expr × Store)) : Option (Expr × Store) :=
+  match e with
+  | .error m => some (.error m, μ)
+  | _ => r.map fun s => (F.plug s.1, s.2)
+
+/-- two operands left to right, then `done` on their values -/
+def stepPair (L : Expr → Frame) (R : Expr → Frame) (a b : Expr) (μ : Store) (ra rb : Option (Expr × Store))
+    (done : Option (Expr × Store)) : Option (Expr × Store) :=
+  if a.isValue then (if b.isValue then done else stepIn (R a) b μ rb) else stepIn (L b) a μ ra
+
+def step (P : Program) (μ : Store) : Expr → Option (Expr × Store)
+  | .cons h t => stepPair .consL .consR h t μ (step P μ h) (step P μ t) none
+  | .glob x =>
+    match μ x with
+    | some (.val v) => some (v, μ)
+    | some .unset => some (.error "unset", μ)
+    | some (.charged b) => some (b, μ)
+    | none => none
+  | .add a b => stepPair .addL .addR a b μ (step P μ a) (step P μ b) (some (addValues a b, μ))
+  | .arith op a b => stepPair (.arithL op) (.arithR op) a b μ (step P μ a) (step P μ b) (some (arithValues op a b, μ))
+  | .lt a b => stepPair .ltL .ltR a b μ (step P μ a) (step P μ b)
+      (some (.bool (decide (asNumber a < asNumber b)), μ))
+  | .eq a b => stepPair .eqL .eqR a b μ (step P μ a) (step P μ b) (some (.bool (decide (a = b)), μ))
+  | .ite c a b => if c.isValue then some (if truthy c then a else b, μ) else stepIn (.ite a b) c μ (step P μ c)
+  | .loop c b => some (.ite c (.seq b (.loop c b)) .unit, μ)
+  | .seq a b => if a.isValue then some (b, μ) else stepIn (.seq b) a μ (step P μ a)
+  | .index l i => stepPair .indexL .indexR l i μ (step P μ l) (step P μ i)
+      (some ((nth l ((asInt i).getD 0)).getD (.error "index out of range"), μ))
+  | .append a b => stepPair .appendL .appendR a b μ (step P μ a) (step P μ b) (some (appendValues a b, μ))
+  | .assign x e => if e.isValue then some (e, μ.set x (.val e)) else stepIn (.assign x) e μ (step P μ e)
+  | .init x e => if e.isValue then some (e, μ.set x (.val e)) else stepIn (.init x) e μ (step P μ e)
+  | .letIn y t e b => if e.isValue then some (b.subst y e, μ) else stepIn (.letIn y t b) e μ (step P μ e)
+  | .call f e =>
+    if e.isValue then (P.funs f).map fun fn => (.letIn fn.param fn.paramTy e fn.body, μ)
+    else stepIn (.call f) e μ (step P μ e)
+  | .tryCatch e h =>
+    match e with
+    | .error _ => some (h, μ)
+    | _ => if e.isValue then some (e, μ) else (step P μ e).map fun s => (.tryCatch s.1 h, s.2)
+  | .cast e t =>
+    if e.isValue then some (if fits e t then e else .error "type mismatch", μ) else stepIn (.cast t) e μ (step P μ e)
+  | .broadcast f e =>
+    if e.isValue then
+      match e with
+      | .nil => some (.nil, μ)
+      | .cons h t => some (.cons (.call f h) (.broadcast f t), μ)
+      | _ => none
+    else stepIn (.broadcast f) e μ (step P μ e)
+  | .new p => some (.ref μ.heap.length p, μ.alloc p)
+  | .get o f => if o.isValue then some (readField μ o f, μ) else stepIn (.get f) o μ (step P μ o)
+  | .set o f v => stepPair (fun v => .setL f v) (fun o => .setR o f) o v μ (step P μ o) (step P μ v) (some (writeField μ o f v))
+  | .isA e c => if e.isValue then some (.bool (isInstance e c), μ) else stepIn (.isA c) e μ (step P μ e)
+  | _ => none
+
+variable {P : Program}
+
+theorem stepIn_sound {F : Frame} (hF : F.ready = true) {e μ r s'}
+    (hr : ∀ s, r = some s → Step P (e, μ) s) (h : stepIn F e μ r = some s') : Step P (F.plug e, μ) s' := by
+  unfold stepIn at h
+  split at h
+  · cases h; exact .raise hF
+  · simp only [Option.map_eq_some_iff] at h
+    obtain ⟨⟨e', μ'⟩, hs, rfl⟩ := h
+    exact .frame hF (hr _ hs)
+
+theorem stepPair_sound {L R : Expr → Frame} {a b μ ra rb done s'}
+    (hL : (L b).ready = true) (hR : a.isValue = true → (R a).ready = true)
+    (pa : (L b).plug a = (R a).plug b)
+    (ha : ∀ s, ra = some s → Step P (a, μ) s) (hb : ∀ s, rb = some s → Step P (b, μ) s)
+    (hd : a.isValue = true → b.isValue = true → done = some s' → Step P ((L b).plug a, μ) s')
+    (h : stepPair L R a b μ ra rb done = some s') : Step P ((L b).plug a, μ) s' := by
+  unfold stepPair at h
+  split at h
+  · split at h
+    · exact hd (by assumption) (by assumption) h
+    · rw [pa]; exact stepIn_sound (hR (by assumption)) hb h
+  · exact stepIn_sound hL ha h
+
+/-- **The evaluator takes only steps of the semantics** -/
+theorem step_sound : ∀ {e : Expr} {μ s'}, step P μ e = some s' → Step P (e, μ) s' := by
+  intro e
+  induction e with
+  | cons h t ih1 ih2 =>
+    intro μ s' hs
+    exact stepPair_sound (L := .consL) (R := .consR) rfl id rfl (fun _ => ih1) (fun _ => ih2)
+      (fun _ _ hd => by cases hd) hs
+  | glob x =>
+    intro μ s' hs; simp only [step] at hs
+    split at hs <;> cases hs
+    · exact .readValue (by assumption)
+    · exact .readUnset (by assumption)
+    · exact .readCharged (by assumption)
+  | add a b ih1 ih2 =>
+    intro μ s' hs
+    exact stepPair_sound (L := .addL) (R := .addR) rfl id rfl (fun _ => ih1) (fun _ => ih2)
+      (fun va vb hd => by cases hd; exact .add va vb) hs
+  | arith op a b ih1 ih2 =>
+    intro μ s' hs
+    exact stepPair_sound (L := .arithL op) (R := .arithR op) rfl id rfl (fun _ => ih1) (fun _ => ih2)
+      (fun va vb hd => by cases hd; exact .arith va vb) hs
+  | lt a b ih1 ih2 =>
+    intro μ s' hs
+    exact stepPair_sound (L := .ltL) (R := .ltR) rfl id rfl (fun _ => ih1) (fun _ => ih2)
+      (fun va vb hd => by cases hd; exact .lt va vb) hs
+  | eq a b ih1 ih2 =>
+    intro μ s' hs
+    exact stepPair_sound (L := .eqL) (R := .eqR) rfl id rfl (fun _ => ih1) (fun _ => ih2)
+      (fun va vb hd => by cases hd; exact .eq va vb) hs
+  | ite c a b ih _ _ =>
+    intro μ s' hs; simp only [step] at hs
+    split at hs
+    · cases hs; exact .ite (by assumption)
+    · exact stepIn_sound (F := .ite a b) rfl (fun _ => ih) hs
+  | loop => intro μ s' hs; simp only [step] at hs; cases hs; exact .loop
+  | seq a b ih _ =>
+    intro μ s' hs; simp only [step] at hs
+    split at hs
+    · cases hs; exact .seq (by assumption)
+    · exact stepIn_sound (F := .seq b) rfl (fun _ => ih) hs
+  | index l i ih1 ih2 =>
+    intro μ s' hs
+    exact stepPair_sound (L := .indexL) (R := .indexR) rfl id rfl (fun _ => ih1) (fun _ => ih2)
+      (fun va vb hd => by cases hd; exact .index va vb) hs
+  | append a b ih1 ih2 =>
+    intro μ s' hs
+    exact stepPair_sound (L := .appendL) (R := .appendR) rfl id rfl (fun _ => ih1) (fun _ => ih2)
+      (fun va vb hd => by cases hd; exact .append va vb) hs
+  | assign x e ih =>
+    intro μ s' hs; simp only [step] at hs
+    split at hs
+    · cases hs; exact .assign (by assumption)
+    · exact stepIn_sound (F := .assign x) rfl (fun _ => ih) hs
+  | init x e ih =>
+    intro μ s' hs; simp only [step] at hs
+    split at hs
+    · cases hs; exact .init (by assumption)
+    · exact stepIn_sound (F := .init x) rfl (fun _ => ih) hs
+  | letIn y t e b ih _ =>
+    intro μ s' hs; simp only [step] at hs
+    split at hs
+    · cases hs; exact .letIn (by assumption)
+    · exact stepIn_sound (F := .letIn y t b) rfl (fun _ => ih) hs
+  | call f e ih =>
+    intro μ s' hs; simp only [step] at hs
+    split at hs
+    · simp only [Option.map_eq_some_iff] at hs
+      obtain ⟨fn, hf, rfl⟩ := hs
+      exact .call (by assumption) hf
+    · exact stepIn_sound (F := .call f) rfl (fun _ => ih) hs
+  | tryCatch e h ih _ =>
+    intro μ s' hs; simp only [step] at hs
+    split at hs
+    · cases hs; exact .tryError
+    · split at hs
+      · cases hs; exact .tryValue (by assumption)
+      · simp only [Option.map_eq_some_iff] at hs
+        obtain ⟨⟨e', μ'⟩, he, rfl⟩ := hs
+        exact .tryStep (ih he)
+  | cast e t ih =>
+    intro μ s' hs; simp only [step] at hs
+    split at hs
+    · cases hs; exact .cast (by assumption)
+    · exact stepIn_sound (F := .cast t) rfl (fun _ => ih) hs
+  | broadcast f e ih =>
+    intro μ s' hs; simp only [step] at hs
+    split at hs
+    · split at hs
+      · cases hs; exact .broadcastNil
+      · cases hs; rename_i hv; simp [isValue] at hv; exact .broadcastCons hv.1 hv.2
+      · cases hs
+    · exact stepIn_sound (F := .broadcast f) rfl (fun _ => ih) hs
+  | new p => intro μ s' hs; simp only [step] at hs; cases hs; exact .new
+  | get o f ih =>
+    intro μ s' hs; simp only [step] at hs
+    split at hs
+    · cases hs; exact .get (by assumption)
+    · exact stepIn_sound (F := .get f) rfl (fun _ => ih) hs
+  | set o f v ih1 ih2 =>
+    intro μ s' hs
+    exact stepPair_sound (L := fun v => .setL f v) (R := fun o => .setR o f) rfl id rfl (fun _ => ih1)
+      (fun _ => ih2) (fun vo vv hd => by cases hd; exact .set vo vv) hs
+  | isA e c ih =>
+    intro μ s' hs; simp only [step] at hs
+    split at hs
+    · cases hs; exact .isA (by assumption)
+    · exact stepIn_sound (F := .isA c) rfl (fun _ => ih) hs
+  | _ => intro μ s' hs; simp [step] at hs
+
+/-- at most `fuel` steps -/
+def run (P : Program) : Nat → Expr × Store → Expr × Store
+  | 0, s => s
+  | fuel + 1, s =>
+    match step P s.2 s.1 with
+    | some s' => run P fuel s'
+    | none => s
+
+theorem run_sound : ∀ (fuel : Nat) (s : Expr × Store), Steps P s (run P fuel s)
+  | 0, s => .refl
+  | fuel + 1, (e, μ) => by
+    simp only [run]
+    split
+    · rename_i s' hs; exact .step (step_sound hs) (run_sound fuel s')
+    · exact .refl
+
+/-- a value as warp prints it; `?` where the model does not keep what warp prints (numbers, instances) -/
+def display : Expr → String
+  | .bool b => if b then "yes" else "no"
+  | .int n => toString n
+  | .text s => s!"\"{s}\""
+  | .cons h t => "[" ++ " ".intercalate (showItems (.cons h t)) ++ "]"
+  | _ => "?"
+where showItems : Expr → List String
+  | .cons h t => display h :: showItems t
+  | _ => []
+
+def FUEL : Nat := 10000
+
+/-- what an elaborated program gives when run: `rejected`, `error`, a value as warp prints it, or `?` -/
+def outcome (items : List Item) : String :=
+  let s := elaborate items
+  match s.check with
+  | none => "rejected"
+  | some _ =>
+    match (run s.program FUEL (s.main, s.store)).1 with
+    | .error _ => "error"
+    | v => if v.isValue then display v else "?"
+
+end Warp

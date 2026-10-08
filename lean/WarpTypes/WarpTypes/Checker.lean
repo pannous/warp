@@ -24,6 +24,10 @@ def typeOf (P : Program) (Γ : Ctx) : Expr → Option Ty
     match typeOf P Γ a, typeOf P Γ b with
     | some ta, some tb => if addable ta && addable tb then some (plus ta tb) else none
     | _, _ => none
+  | .arith _ a b =>
+    match typeOf P Γ a, typeOf P Γ b with
+    | some ta, some tb => if sub ta .number && sub tb .number then some (Ty.arith ta tb) else none
+    | _, _ => none
   | .lt a b =>
     match typeOf P Γ a, typeOf P Γ b with
     | some ta, some tb => if sub ta .number && sub tb .number then some .bool else none
@@ -113,6 +117,12 @@ theorem typeOf_sound {P : Program} : ∀ {e : Expr} {Γ t}, typeOf P Γ e = some
     cases ha : typeOf P Γ a <;> cases hb : typeOf P Γ b <;> simp only [typeOf, ha, hb] at h <;> try cases h
     split at h
     · rename_i hc; cases h; simp at hc; exact .add (ih1 ha) (ih2 hb) hc.1 hc.2
+    · cases h
+  | arith op a b ih1 ih2 =>
+    intro Γ t h
+    cases ha : typeOf P Γ a <;> cases hb : typeOf P Γ b <;> simp only [typeOf, ha, hb] at h <;> try cases h
+    split at h
+    · rename_i hc; cases h; simp at hc; exact .arith (ih1 ha) (ih2 hb) hc.1 hc.2
     · cases h
   | lt a b ih1 ih2 =>
     intro Γ t h
@@ -324,7 +334,7 @@ def widen : Ty → Ty
 /-- the values a main-level name is given -/
 def valuesOf (x : String) : Expr → List Expr
   | .assign y e | .init y e => (if y = x then [e] else []) ++ valuesOf x e
-  | .cons a b | .add a b | .lt a b | .eq a b | .loop a b | .seq a b | .index a b | .append a b
+  | .cons a b | .add a b | .arith _ a b | .lt a b | .eq a b | .loop a b | .seq a b | .index a b | .append a b
   | .tryCatch a b => valuesOf x a ++ valuesOf x b
   | .ite c a b => valuesOf x c ++ valuesOf x a ++ valuesOf x b
   | .letIn _ _ e b => valuesOf x e ++ valuesOf x b
@@ -353,6 +363,7 @@ def resolveCalls (P : Program) (Γ : Ctx) : Expr → Expr
     | _, _ => .call f e
   | .cons a b => .cons (resolveCalls P Γ a) (resolveCalls P Γ b)
   | .add a b => .add (resolveCalls P Γ a) (resolveCalls P Γ b)
+  | .arith op a b => .arith op (resolveCalls P Γ a) (resolveCalls P Γ b)
   | .lt a b => .lt (resolveCalls P Γ a) (resolveCalls P Γ b)
   | .eq a b => .eq (resolveCalls P Γ a) (resolveCalls P Γ b)
   | .ite c a b => .ite (resolveCalls P Γ c) (resolveCalls P Γ a) (resolveCalls P Γ b)

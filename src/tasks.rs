@@ -20,8 +20,7 @@ use wasmtime::{AnyRef, AsContextMut, Caller, Engine, Func, Global, Linker, Memor
 const EPOCH_TICK: Duration = Duration::from_millis(5);
 /// The main program's epoch deadline: it never stops at an epoch check
 pub const MAIN_EPOCH_DEADLINE: u64 = 1 << 62;
-const TASK_WORDS: [&str; 16] = [TASK_SPAWN, TASK_AWAIT, TASK_CONTROL, TASK_SPAWN_VALUES, TASK_AWAIT_VALUE, TASK_JOIN, TASK_FAILURE, TASK_STATUS, crate::host::TASK_POLL,
-	crate::host::TASK_INSIDE, crate::host::SIGNAL_SEND, CHANNEL_NEW, CHANNEL_PUT, CHANNEL_TAKE, CHANNEL_MORE, CHANNEL_CLOSE];
+use crate::host::TASK_WORDS;
 const CHANNEL_NEW: &str = crate::host::CHANNEL_WORDS[0];
 const CHANNEL_PUT: &str = crate::host::CHANNEL_WORDS[1];
 const CHANNEL_TAKE: &str = crate::host::CHANNEL_WORDS[2];

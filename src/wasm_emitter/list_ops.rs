@@ -1174,11 +1174,12 @@ impl WasmGcEmitter {
 		func.instruction(&I::LocalGet(assigned));
 	}
 
-	/// An element value node_with_at stores as given: an Int, or a character in anything but a list (a text's element)
+	/// An element value node_with_at stores as given: an Int, or a character in a text known as one. A character into
+	/// a target of unknown type goes as its Node: a list read from a field would otherwise hold its codepoint as an Int
 	pub(super) fn is_exact_int_element(&self, target: &Node, value: &Node) -> bool {
 		match self.get_type(value) {
 			Kind::Int => true,
-			Kind::Codepoint => self.get_type(target) != Kind::List,
+			Kind::Codepoint => matches!(self.get_type(target), Kind::Text | Kind::Symbol),
 			_ => false,
 		}
 	}

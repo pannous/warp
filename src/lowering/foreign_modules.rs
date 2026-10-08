@@ -261,14 +261,25 @@ impl Foreign<'_> {
 
 	/// The warp type WebIDL declares for what the member gives (`crypto.randomUUID()`: text); Err when WebIDL declares
 	/// something else for the receiver (`crypto.randomUuid()`)
-	fn web_idl_result(&self, receiver: &Node, member: &str, is_call: bool, arguments: &Node) -> Result<Option<&'static str>, String> {
+	fn web_idl_result(&self, receiver: &Node, member: &str, is_call: bool, arguments: &Node) -> Result<Option<String>, String> {
 		let count = match arguments {
 			Node::List(items, _, _) => items.len(),
 			_ => 0,
 		};
 		let Some((interface, path)) = self.web_idl_receiver(receiver)? else { return Ok(None) };
 		crate::web_idl::check_member(&interface, &path, member, is_call.then_some(count))?;
-		Ok(crate::web_idl::result_type(&interface, member, is_call))
+		Ok(crate::web_idl::optional_result_type(&interface, member, is_call))
+	}
+
+	/// Does the node name a used foreign module or a variable holding a foreign value
+	fn mentions_foreign_name(&self, node: &Node) -> bool {
+		let mut found = false;
+		node.visit(&mut |part| {
+			if let Node::Symbol(name) = part {
+				found |= self.modules.contains_key(name) || self.values.contains_key(name);
+			}
+		});
+		found
 	}
 
 	/// The runtime and the module (its name as text) or the handle (the value itself) a receiver names
@@ -293,6 +304,10 @@ impl Foreign<'_> {
 		if let Some(forwarded) = self.forwarded(&node) {
 			return forwarded;
 		}
+		// `"id \(crypto.randomUUID())"`: the holes are calls of this pass, the text is built later (interpolation.rs)
+		if let Some(text) = crate::interpolation::interpolated_mentioning(&node, |hole| self.mentions_foreign_name(hole)) {
+			return self.rewrite(text);
+		}
 		if let Node::Key(receiver, Op::Dot, member) = node.drop_meta() {
 			let receiver = self.rewrite(receiver.as_ref().clone());
 			if let Some((runtime, module)) = self.receiver(&receiver) {
@@ -312,10 +327,10 @@ impl Foreign<'_> {
 					false => Ok(None),
 				};
 				let call = foreign_call(&runtime, module, &member, is_call, arguments);
-				// a declared text, bool, int or float is a warp value: `crypto.randomUUID().upper()` is warp's upper
+				// a declared text, bool, int or float is a warp value: `crypto.randomUUID().upper()` is warp's upper; `text?` keeps ø
 				return match result_type {
 					Err(problem) => crate::diagnostic::Diagnostic::at(&node, problem).into_error(),
-					Ok(Some(warp_type)) => Node::Key(Box::new(call), Op::As, Box::new(Node::Symbol(warp_type.to_string()))),
+					Ok(Some(warp_type)) => Node::Key(Box::new(call), Op::As, Box::new(Node::Symbol(warp_type))),
 					Ok(None) => call,
 				};
 			}

@@ -25,3 +25,9 @@ fn where_with_an_assignment_binds() {
 	is!("x * 2 where x = 3", 6);
 	is!("xs.reduce(0) { $0 + $1 } where xs = [1,2,3]", 6);
 }
+
+#[test]
+fn a_where_condition_of_a_bare_word_suggests_the_field() {
+	// samples/netbase.wasp: `results where country is germany`
+	crate::common::fails_with("results = [{country: germany}]; results where country is germany", "or results where it.country==germany for a field country");
+}
