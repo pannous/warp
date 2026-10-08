@@ -5,6 +5,7 @@
 // the checks of the listeners on shared values (src/lowering/signal_values.rs), run at every check point
 const SHARED_HANDLER = "on·shared";
 const SOCKET_ADDRESS = /^wss?:\/\//; // src/web_sockets.rs SOCKET_SCHEMES
+const TEXT_REPLY_TYPE = "text/plain"; // src/web_server.rs TEXT_TYPE: a text reply of a server function
 
 const TASK_FINISHED = 1n; // src/host.rs TASK_FINISHED, TASK_FAILED, TASK_STOPPED, TASK_STOP
 const TASK_FAILED = 2n;
@@ -431,7 +432,7 @@ function startFetch(holder, hooks, id, request) {
 		hooks.arrived?.(holder, FETCH_HANDLER_PREFIX + id);
 	};
 	const failed = reason => ({ error: `fetch ${url} failed: ${reason}` });
-	if (taskPool.length === 0) return void fetchReplyOf(url, body).then(({ body, error }) => arrive(error ? failed(error) : { body }));
+	if (taskPool.length === 0) return void fetchReplyOf(url, body).then(reply => arrive(reply.error ? failed(reply.error) : reply));
 	const worker = taskPool.pop();
 	started.shared = new SharedArrayBuffer(TASK_HEADER + TASK_RESULT_BYTES, { maxByteLength: TASK_RESULT_LIMIT });
 	started.failed = failed;
@@ -458,7 +459,8 @@ function dropPendingFetches(holder) {
 // {body} or {error} of a URL: the HTTP status of a failed request, or why it failed
 function fetchReplyOf(url, body) {
 	const request = body === undefined ? undefined : { method: "POST", body };
-	return fetch(url, request).then(async response => response.ok ? { body: await response.text() } : { error: `HTTP status ${response.status}` }, failure => ({ error: failure.message }));
+	const replied = async response => ({ body: await response.text(), text: response.headers.get("content-type")?.startsWith(TEXT_REPLY_TYPE) });
+	return fetch(url, request).then(response => response.ok ? replied(response) : { error: `HTTP status ${response.status}` }, failure => ({ error: failure.message }));
 }
 
 // a task Worker's answer: the JSON of `record` in the shared buffer, then its state set to done for the waiting side
@@ -485,8 +487,7 @@ function readShared(shared, wait = false) {
 function sharedFetchReply(started) {
 	const answer = started.reply ? undefined : readShared(started.shared);
 	if (!answer) return undefined;
-	const { body, error } = answer;
-	return error ? started.failed(error) : { body };
+	return answer.error ? started.failed(answer.error) : answer;
 }
 
 // a check point of a running main (sleep, loop starts): the handlers of the fetches whose reply is in shared memory
@@ -505,8 +506,9 @@ function fetchReply(holder, id) {
 	const { reply, posted } = holder.fetches?.get(id) ?? {};
 	if (!reply) return [null, `fetch ${id} has no reply yet`];
 	if (reply.error) return [null, reply.error];
-	// a server function's reply (src/lowering/serve.rs) is JSON of any value, a number or a text too
-	if (posted) try { return [JSON.parse(reply.body), null]; } catch {} // not JSON
+	// a server function's reply (src/lowering/serve.rs) is a text as text/plain, JSON of any other value (src/web_server.rs)
+	if (posted && reply.text) return [reply.body, null];
+	if (posted) try { return [JSON.parse(reply.body), null]; } catch (failure) { return [null, `the server's reply is no JSON: ${failure.message}`]; }
 	const structure = structureOf(reply.body);
 	if (structure !== undefined) return [structure, null];
 	return [reply.body.endsWith("\n") ? reply.body : reply.body + "\n", null]; // warp convention (src/host.rs fetch)
