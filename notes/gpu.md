@@ -173,5 +173,14 @@ Rejected: (b) automatic f32 for floats (results differ in the 7th digit), (c) do
    10^7 170–200 / 2800–3500 (the CPU side builds the mapped GC list, then sums). Tests: test_webgpu
    a_reduction_of_a_gpu_map_reads_back_partial_results, a_reduction_of_a_gpu_map_takes_a_list_of_floats.
    `dot` waits for list .* list (paired lists on the GPU).
-   Open: a result both read on the CPU and mapped again on the GPU (a GPU buffer kept per block, skipping the upload),
-   the browser path with a real adapter.
+   Browser (done, host-gpu.js gpu_kernel): the block's cells go to the task Worker as a transferred Float32Array and
+   come back as raw f32 bytes in the shared buffer (writeSharedFloats, state FLOATS_STATE), only from the first cell
+   needed (the partials of a reduction). Before, 10^6 floats went as a JS array and came back as JSON: 160–350 ms, slower
+   than the CPU. Measured with samples/gpu_map.warp (headless Chrome, Apple Metal, `sin(x) * exp(x) + cos(x * 3)`,
+   10^6, ms): sum GPU 8–17 / CPU 80–160, the mapped list back 12–16; the first run 86 (device + shader). Raw WebGPU for
+   that kernel is ~3 ms. SwiftShader (CI): correct, sum 464 ms, sin less precise (2e-5 relative). Chrome's Tint
+   refuses the f32 literal 3.4028235e38 (it rounds above the largest f32): LARGEST_F32 is a bitcast. Careful when
+   measuring: the page keeps an old host-gpu.js in the browser cache; open it with `?nocache=<n>` in a new session.
+   Native runs of the sample show 41 ms for the sum: its first GPU call creates the device (gpu.rs keeps it per
+   process); warmed up (threshold.sh) it is 20 ms.
+   Open: a result both read on the CPU and mapped again on the GPU (a GPU buffer kept per block, skipping the upload).
