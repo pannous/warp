@@ -139,6 +139,14 @@ pub struct TypedList {
 	pub aliased: bool,
 }
 
+/// An append to a list variable or an assignment of one list variable to another, numbered in the order it runs,
+/// with the loops around it
+struct ListEvent {
+	append: bool,
+	order: usize,
+	loops: Vec<usize>,
+}
+
 /// Where a typed list variable lives: a local of the body, or a global main builds and functions read
 #[derive(Clone, Copy, Debug)]
 pub(super) enum Slot {
@@ -340,6 +348,50 @@ impl WasmGcEmitter {
 	}
 
 	/// The source of `target = value`
+	/// Whether an append to `name` (`xs = xs + [v]`) can run while another variable holds its list: after an assignment
+	/// between it and another (`ys = xs`, `xs = ys`) or in a loop around one. A list aliased only once its appends are
+	/// done (`d = (out = ø; for … { out = out + [x] }; out)`, every lowered map and filter) grows in place (card map-typed)
+	fn appends_while_aliased(&self, program: &Node, name: &str) -> bool {
+		let mut events = vec![];
+		self.list_events(program, name, &mut vec![], &mut 0, &mut events);
+		let runs_after = |append: &ListEvent, alias: &ListEvent| append.order > alias.order || append.loops.iter().any(|ring| alias.loops.contains(ring));
+		events.iter().filter(|alias| !alias.append).any(|alias| events.iter().any(|append| append.append && runs_after(append, alias)))
+	}
+
+	/// The appends to `name` and the assignments between it and another variable, in the order they run (an assignment
+	/// after its value), each with the loops around it
+	fn list_events(&self, node: &Node, name: &str, loops: &mut Vec<usize>, count: &mut usize, events: &mut Vec<ListEvent>) {
+		let node = node.drop_meta();
+		let is_loop = matches!(node, Node::Key(condition, Op::Do, _) if matches!(condition.drop_meta(), Node::Key(_, Op::While, _)));
+		if is_loop {
+			loops.push(*count);
+			*count += 1;
+		}
+		match node {
+			Node::Key(left, _, right) => [left, right].into_iter().for_each(|part| self.list_events(part, name, loops, count, events)),
+			Node::List(items, _, _) => items.iter().for_each(|item| self.list_events(item, name, loops, count, events)),
+			_ => {}
+		}
+		let append = match node {
+			Node::Key(target, Op::Assign | Op::Define, value) => match target.drop_meta() {
+				Node::Symbol(target) => match self.number_source_of(target, value) {
+					Source::Append(_) if target == name => Some(true),
+					Source::Variable(other) if target == name || other == name => Some(false),
+					_ => None,
+				},
+				_ => None,
+			},
+			_ => None,
+		};
+		if let Some(append) = append {
+			events.push(ListEvent { append, order: *count, loops: loops.clone() });
+			*count += 1;
+		}
+		if is_loop {
+			loops.pop();
+		}
+	}
+
 	fn source_of(&self, target: &str, value: &Node) -> Source {
 		match self.number_source_of(target, value) {
 			// not a tuple `(1, 2)` or an object `{a:1}`, whose brackets a typed list would lose
@@ -461,7 +513,8 @@ impl WasmGcEmitter {
 				return typed.into_iter()
 					.filter(|(name, element)| *element != Some(ElementType::Node) || indexed.contains(name) || appended(name))
 					.filter_map(|(name, element)| {
-						let list = TypedList { element: element?, updated: group_updated(&name), aliased: groups[&name].len() > 1 };
+						let aliased = groups[&name].len() > 1 && self.appends_while_aliased(program, &name);
+						let list = TypedList { element: element?, updated: group_updated(&name), aliased };
 						Some((name, list))
 					})
 					.collect();

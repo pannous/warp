@@ -132,7 +132,11 @@ pub(super) fn collect_variables_inner(node: &Node, scope: &mut Scope, skip_first
 							Some(type_name) => (declared_kind(&type_name.name()).unwrap_or_else(|| binding_kind(right, scope)), Some(Box::new(type_name.clone()))),
 							None => value_binding(right, scope),
 						};
+						let is_declared = declared.is_some();
 						scope.define(name.clone(), type_node, kind);
+						if let Some(local) = scope.own_binding_mut(name) {
+							local.declared = is_declared;
+						}
 					}
 					Node::Symbol(name) => {
 						type_list_by_first_append(name, right, scope);
@@ -645,7 +649,10 @@ pub(crate) fn declare_global(program: Node, names: &[String]) -> Node {
 		single => (vec![single], Bracket::None, Separator::Newline),
 	};
 	for name in names {
-		let assigns = |item: &Node| matches!(item.drop_meta(), Node::Key(target, Op::Assign, _) if matches!(target.drop_meta(), Node::Symbol(target) if target == name));
+		let named = |target: &Node| matches!(target.drop_meta(), Node::Symbol(target) if target == name);
+		// `xs = v` or the typed `xs: [int] = v`
+		let assigns = |item: &Node| matches!(item.drop_meta(), Node::Key(target, Op::Assign, _)
+			if named(target) || matches!(target.drop_meta(), Node::Key(typed, Op::Colon, _) if named(typed)));
 		match items.iter().position(assigns) {
 			Some(index) => items[index] = as_global(items[index].clone()),
 			None => items.insert(0, as_global(Node::Symbol(name.clone()))),
@@ -811,6 +818,7 @@ impl Scope {
 		let local = Local {
 			name: name.clone(),
 			type_node,
+			declared: false,
 			position,
 			is_param: false,
 			kind,

@@ -38,11 +38,12 @@ written through: `bo.age += 1` is an UPDATE of that row.
 - Any other pure warp function inside a filter (`people where is_prime(it.age)`) is registered on the connection as an
   SQLite application function (sqlite3_create_function_v2): `WHERE warp_fn_3(age)`. SQLite calls back into the
   running module, so every filter runs inside the query with SQL's own index use for the translated parts.
-- An impure function in a filter is a loud error (a query may run it any number of times).
+- An impure function in a filter is warned about at compile time (a query may run it any number of times).
 - Backends without application functions (IndexedDB) push down what they can (key/index ranges) and filter the rest
   in memory: same results, the speed differs.
 - Bare field names (P223, user): `people where age > 20` is `it.age > 20` when the element class has the field and no
-  variable age is in scope; a variable in scope wins with a warning. Not implemented yet (`it.age` works).
+  variable age is in scope; a variable in scope wins with a warning. Works on any list declared of a class
+  (`people: [Person]`), table or not (comprehensions.rs Lists, fields_of_it).
 
 ## Loading: the smart default
 - A table and every `where`/`sorted by`/`#a..b` on it is a **query**, not loaded. A query loads when the program reads
@@ -77,14 +78,32 @@ written through: `bo.age += 1` is an UPDATE of that row.
   connection per file and thread, `:memory:` for inline code. An added column takes the field's default, else the
   type's zero. A changed column type is a loud error for now (step 7). Browser: `std_io("table", …)` is an error.
 
+## How filters work (steps 2 and 3, card orm-filters)
+- comprehensions::lower_where (early, before database_tables::lower) asks database_tables::queried for a subject that is
+  a registered table: `people where c` becomes
+  `(table·ids·N = std_io("table", "select", [t, sql, [values…], file]); people where it.id in table·ids·N)`.
+  The list keeps its instances, so a filtered row is the same instance (`bo.age += 1` shows in `people`).
+- SQL keeps: comparisons, and/or, `+ - *` of numeric columns and number literals, `it.f` as its column, literals and
+  variables as `?` values. Not `/` (warp's division is exact) and not `+` of texts or of unknown types.
+- Every other part is `warp_call('table·call·N', id, columns…, values…)`: a generated function
+  `table·call·N(table·arguments: any) := …` with `it.f` as its column's argument, `it` as the row's instance and the
+  filter's variables as the values after the row. database.rs select registers warp_call for the query only
+  (sqlite3_create_function_v2, user data the callback), host.rs queried_rows calls the export through route_value. A
+  function that fails fails the query with its own trap (`raise "boom"` gives "boom").
+- A function with side effects (State, IO, FFI, Async, Eval of effects.rs) in a table filter is a compile-time warning
+  (card orm-filter, `effectful_calls`); it still runs, once per row in id order, as the in-memory filter does.
+- Still loaded whole at registration: the query only picks ids. count/#i/paging and the identity map are step 2's rest.
+- An element changed without the write-through form `v.f op= e` (`people#1.age = 5`) leaves its row stale, and a
+  query of the table then disagrees with the list.
+
 ## Steps
 1. **Prototype, native, eager** (done: lowering/database_tables.rs, src/database.rs, tests/control/test_database_tables.rs):
    - registration, schema and the implicit id;
    - add and field updates written through;
    - migrations for added/removed columns;
    - the table loaded whole at registration, filters in memory.
-2. Queries instead of loading: SQL translation of filters, count/#i/paging, the identity map.
-3. Application functions for the rest of a filter (callback into the module from sqlite3_create_function_v2).
+2. Queries instead of loading: SQL translation of filters (done, card orm-filters), count/#i/paging, the identity map.
+3. Application functions for the rest of a filter (done, card orm-filters: warp_call into the module).
 4. Foreign keys and one-to-many, batched lazy loading.
 5. `transaction { }`.
 6. IndexedDB backend in the browser (async underneath: the page's host keeps a loaded mirror per table, like the

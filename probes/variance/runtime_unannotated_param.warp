@@ -1,0 +1,6 @@
+// P215 run-time half: the parameter has no declared type, so the compile check does not see the alias.
+// Wanted: a loud run-time error "names is declared texts, cannot hold an int" at the add
+names: texts = ["hi"]
+f(xs) := xs.add(420)
+f(names)
+names

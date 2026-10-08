@@ -93,8 +93,9 @@ pub fn serves_itself(code: &str) -> bool {
 	top_level_statements(code).iter().any(|statement| served(statement).is_some())
 }
 
+/// The program's statements, read quietly: running it says its hints and warnings
 fn top_level_statements(code: &str) -> Vec<Node> {
-	match crate::warp_parser::parse(code).drop_meta() {
+	match crate::diagnostic::quietly(|| crate::warp_parser::parse(code)).drop_meta() {
 		Node::List(statements, Bracket::None, Separator::Semicolon | Separator::Newline) => statements.clone(),
 		single => vec![single.clone()],
 	}

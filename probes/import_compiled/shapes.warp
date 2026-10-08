@@ -1,0 +1,3 @@
+class P{x:int; y:int}
+def area(w:int, h:int) { w * h }
+def greet(name:text) { "hi " + name }

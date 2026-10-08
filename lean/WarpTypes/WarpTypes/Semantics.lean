@@ -127,11 +127,21 @@ def isNumber : Expr → Bool
   | .bool _ | .int _ | .num _ => true
   | _ => false
 
+/-- `"ab" * 3`, `3 * "ab"`: the text n times (none for n ≤ 0), P1 -/
+def repeatValues (s : String) (n : Expr) : Expr :=
+  match asInt n with
+  | some k => .text (String.join (List.replicate k.toNat s))
+  | none => .error "a text repeats a whole number of times"
+
 def arithValues (op : ArithOp) (a b : Expr) : Expr :=
+  match op, a, b with
+  | .mul, .text s, n | .mul, n, .text s => repeatValues s n
+  | _, _, _ => numberValues op a b
+where numberValues (op : ArithOp) (a b : Expr) : Expr :=
   if !(isNumber a && isNumber b) then .error "not a number" else
   if (op == .mod || op == .div) && asNumber b == 0 then .error "divide by zero" else
   match asInt a, asInt b with
-  | some x, some y => if op == .div && x % y != 0 then .num (op.apply x y) else .int (op.apply x y)
+  | some x, some y => if (op == .div && x % y != 0) || (op == .pow && y < 0) then .num (op.apply x y) else .int (op.apply x y)
   | _, _ => .num (op.apply (asNumber a) (asNumber b))
 
 def isList : Expr → Bool
@@ -237,6 +247,24 @@ def pushValues (μ : Store) : Expr → Expr → Expr × Store
     | none => (.error "dangling list", μ)
   | _, _ => (.error "not a list", μ)
 
+/-- the list value xs with its n-th item (from 1) replaced by v, if it has one -/
+def replaceAt : Expr → Int → Expr → Option Expr
+  | .cons h t, n, v => if n = 1 then some (.cons v t) else (replaceAt t (n - 1) v).map (.cons h)
+  | _, _, _ => none
+
+/-- `xs#i = v` of values: v replaces an item of the shared list if it fits the list's element type -/
+def setAtValues (μ : Store) : Expr → Expr → Expr → Expr × Store
+  | .lref a t, i, v =>
+    match μ.listAt a t with
+    | some items =>
+      if fits v t then
+        match replaceAt items ((asInt i).getD 0) v with
+        | some items' => (v, μ.writeList a items')
+        | none => (.error "index out of range", μ)
+      else (.error "type mismatch", μ)
+    | none => (.error "dangling list", μ)
+  | _, _, _ => (.error "not a list", μ)
+
 /-- the k ints from m: `[m, m+1, …]` -/
 def intList (m : Int) : Nat → Expr
   | 0 => .nil
@@ -276,6 +304,7 @@ inductive Frame where
   | appL (a : Expr) | appR (f : Expr)
   | share (t : Ty)
   | pushL (v : Expr) | pushR (l : Expr)
+  | setAtL (i v : Expr) | setAtI (l v : Expr) | setAtR (l i : Expr)
 
 namespace Frame
 
@@ -318,11 +347,15 @@ def plug : Frame → Expr → Expr
   | share t, e => .share e t
   | pushL v, e => .push e v
   | pushR l, e => .push l e
+  | setAtL i v, e => .setAt e i v
+  | setAtI l v, e => .setAt l e v
+  | setAtR l i, e => .setAt l i e
 
 /-- a right position needs the left operand evaluated -/
 def ready : Frame → Bool
-  | consR h | addR h | arithR _ h | ltR h | eqR _ h | indexR h | rangeR h | appendR h | appR h | setR h _ | pushR h
+  | consR h | addR h | arithR _ h | ltR h | eqR _ h | indexR h | rangeR h | appendR h | appR h | setR h _ | pushR h | setAtI h _
   | forInLast _ h _ => h.isValue
+  | setAtR l i => l.isValue && i.isValue
   | _ => true
 
 end Frame
@@ -366,6 +399,8 @@ inductive Step (P : Program) : Expr × Store → Expr × Store → Prop where
   | shareBad {v t μ} : v.isValue = true → (isList v && fits v (.list t)) = false →
       Step P (.share v t, μ) (.error "type mismatch", μ)
   | push {l v μ} : l.isValue = true → v.isValue = true → Step P (.push l v, μ) (pushValues μ l v)
+  | setAt {l i v μ} : l.isValue = true → i.isValue = true → v.isValue = true →
+      Step P (.setAt l i v, μ) (setAtValues μ l i v)
   | cast {v ts μ} : v.isValue = true → Step P (.cast v ts, μ) (if ts.any (fits v) then v else .error "type mismatch", μ)
   | new {p μ} : Step P (.new p, μ) (.ref μ.heap.length p, μ.alloc p)
   | get {o f μ} : o.isValue = true → Step P (.get o f, μ) (readField μ o f, μ)

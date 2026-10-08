@@ -1,10 +1,15 @@
 # Decided questions (user answers)
 
-Answered decisions, newest first; moved out of notes/open_decisions.md on 2026-10-06 (user: "move all the old
-answered questions to a new file"). Older references to "notes/open_decisions.md" + a Decided section, P-number,
-D-number or #number mean this file. Open questions, parked ones and the standing rules stay in notes/open_decisions.md.
+History of answered decisions, newest first. Grep-only: look up a cited number (P71, D5, #10) or grep a topic
+before asking the user; nobody reads it front to back, the code, tests and wiki are the truth (user 2026-10-08:
+"If it's really grep-only, then it's perfect. Otherwise, move them to a history file"). References to
+"notes/open_decisions.md" + a Decided section, P-, D- or #-numbers mean this file. Open and parked questions:
+notes/open_decisions.md; standing rules: notes/standing_rules.md.
 
 ## Decided 2026-10-08 (user, as recommended unless quoted)
+- Every major or semi-major feature ships with a sample in samples/, especially the ORM and the server (user, to the
+  supervisor; rule in notes/agents/common.md 2ca368e9f; cards sample-orm, warp-fixer, and sample-server,
+  warp-functions).
 - P224 (card plus-minus-print, warp-class): `<`, `>`, `<=`, `>=` on a ± interval answer only when certain, like
   Julia's IntervalArithmetic: with `y = 6 ± 1` (5..7) `y < 8` → yes, `y < 4` → no. `≈` stays as P218.
   P224b (user: "we don't want the application to crash" on values read from outside): no run-time crash.

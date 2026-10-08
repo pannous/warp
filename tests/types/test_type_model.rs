@@ -353,6 +353,24 @@ const CORPUS: &[&str] = &[
 	"n: number = 7 / 2; n",
 	"y: int = 1; y = 7/2; y",
 	"\"ab\" / 2",
+	// `^`: an int power of ints, a number for a negative exponent
+	"2^10",
+	"2^0",
+	"(-2)^3",
+	"2^3^2",
+	"x = 3; x^2 + 1",
+	"n: number = 2^-1; n",
+	"\"ab\"^2",
+	// `*` repeats a text a whole number of times, in either order (P1)
+	"\"ab\"*3",
+	"3*\"ab\"",
+	"\"ab\"*0",
+	"\"ab\"*-1",
+	"\"5\"*3",
+	"n = 2; \"ab\"*n",
+	"x: text = \"ab\"*2; x",
+	"\"ab\"*2.5",
+	"\"ab\"*\"cd\"",
 	// `c ? a : b` is `if c then a else b`
 	"x = 3; x > 2 ? \"big\" : \"small\"",
 	"x = 1; x < 2 ? 5 : 6.5",
@@ -368,10 +386,18 @@ const CORPUS: &[&str] = &[
 	"xs = [1]; xs.add(\"ab\"); xs",
 	"xs: ints = [1]; xs.add(2); xs",
 	"xs: ints = [1]; xs.add(\"ab\"); xs",
+	// `xs#i = v` writes into the shared list: checked against its element type and its length when it runs
+	"xs = [1, 2]; xs#1 = 5; xs",
+	"xs = [1]; ys = xs; ys#1 = 7; xs",
+	"xs = [1]; xs#3 = 7; xs",
+	"xs = [1, 2]; xs#2 = \"ab\"; xs",
+	"xs = [1, 2]; xs[0] = 5; xs",
+	"xs = [1, 2]; v = (xs#1 = 9); v",
+	"xs: ints = [1]; xs#1 = \"ab\"; xs",
 ];
 
 /// Programs warp compiles although the model rejects them: holes in warp's checks, each with its card
-const KNOWN_HOLES: &[(&str, &str)] = &[("b: bool = no; b++; b", "bool-assign"), ("f(n) := { n = \"x\"; n }; f(3)", "param-assign-unchecked")];
+const KNOWN_HOLES: &[(&str, &str)] = &[("b: bool = no; b++; b", "bool-assign"), ("f(n) := { n = \"x\"; n }; f(3)", "param-assign-unchecked"), ("x: int = \"5\"*3; x", "repeat-int")];
 
 /// Where warp's run-time admission differs from W0's subtyping: a bool is an Int at run time, so an int value passes
 /// a bool check (P199 lets only the literals 1 and 0 in; card bool-assign)
@@ -381,6 +407,7 @@ const KNOWN_ADMITS_GAPS: [&str; 2] = ["bool ← .int: warp admits true / W0 sub 
 const KNOWN_VALUE_DIFFERENCES: &[(&str, &str)] = &[
 	// a covariant alias's write: W0 checks it against the list's own element type when it runs, warp adds 2.5 to ints
 	("xs: ints = [1]; ys: numbers = xs; ys.add(2.5); xs", "p215-user"),
+	("xs: ints = [1, 2]; ys: numbers = xs; ys#1 = 2.5; xs", "p215-user"),
 ];
 /// What the model gives for a program it rejects, and for a value it does not keep
 const REJECTED: &str = "rejected";

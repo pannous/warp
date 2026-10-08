@@ -154,5 +154,33 @@ Rejected: (b) automatic f32 for floats (results differ in the 7th digit), (c) do
 
    Before the fusion the CPU chain mapped f's results as a GC list grown by `out = out + [x]`, quadratic (card
    map-filter: any `map` of a list, `int[20000].map(x => x * 2)` 0.5 s, 80000 out of fuel).
-   Open: GC float lists (copy into a block first), the browser path with a real adapter, data kept on the GPU
-   between separate statements.
+   GC lists (done, shared_arrays.rs copied_into_block): `ys = xs.map(f) @gpu` of a list not in linear memory
+   (`xs = float[n]`, a literal, a call's result) copies its items as floats into a block once, then maps that; ys is
+   a linear float array. A non-number item is a run-time error of `float`. Measured (release, `sin(x)`, ms, copy
+   included): 10^5 CPU 8 / @gpu 31, 10^6 87 / 45, 10^7 614 / 252. (Filling float[10^7] item by item exhausts the
+   default fuel; WARP_FUEL=10^11 for that row.) Test: test_webgpu a_gpu_map_takes_a_list_of_floats.
+   Across statements (done, gpu_maps.rs kept_on_gpu): `ys = xs.map(f) @gpu; zs = ys.map(g) @gpu` where only later
+   @gpu maps read ys becomes `zs = xs.map(f).map(g) @gpu`: ys never comes back from the GPU. Not when ys is read
+   elsewhere, or xs or a number f reads is written after ys's statement (ys keeps the values before). The round trip
+   (upload, dispatch, readback, f64↔f32) is the cost, not the kernel: 10^7 sin then cos, ms: two maps 272–321, folded
+   143–188, one map alone ~150 (load average 20–30, noisy). Test: a_gpu_map_result_mapped_again_stays_on_the_gpu.
+   Reductions (done, gpu_maps.rs Reduction + reduce_shader, shared_arrays.rs gpu_reduced, host word
+   gpu_reduce_linear): `s = sum(xs.map(f) @gpu)`, min, max. Each workgroup of 256 maps its items and folds them in
+   shared memory (tree of halvings), one partial per group is written after the data, only those come back (n/256
+   floats), the CPU combines them. Below GPU_MAP_MIN_COUNT or without an adapter, the reduction as written runs.
+   f32: sum of 10^7 sin·exp is 9093306.84 against 9093307.88 in f64 (1e-7 relative). Measured (release,
+   probes/webgpu/threshold.sh, `sin(x) * exp(x)`, GC list copied in, ms): 10^5 GPU 4–27 / CPU 15, 10^6 20 / 140,
+   10^7 170–200 / 2800–3500 (the CPU side builds the mapped GC list, then sums). Tests: test_webgpu
+   a_reduction_of_a_gpu_map_reads_back_partial_results, a_reduction_of_a_gpu_map_takes_a_list_of_floats.
+   `dot` waits for list .* list (paired lists on the GPU).
+   Browser (done, host-gpu.js gpu_kernel): the block's cells go to the task Worker as a transferred Float32Array and
+   come back as raw f32 bytes in the shared buffer (writeSharedFloats, state FLOATS_STATE), only from the first cell
+   needed (the partials of a reduction). Before, 10^6 floats went as a JS array and came back as JSON: 160–350 ms, slower
+   than the CPU. Measured with samples/gpu_map.warp (headless Chrome, Apple Metal, `sin(x) * exp(x) + cos(x * 3)`,
+   10^6, ms): sum GPU 8–17 / CPU 80–160, the mapped list back 12–16; the first run 86 (device + shader). Raw WebGPU for
+   that kernel is ~3 ms. SwiftShader (CI): correct, sum 464 ms, sin less precise (2e-5 relative). Chrome's Tint
+   refuses the f32 literal 3.4028235e38 (it rounds above the largest f32): LARGEST_F32 is a bitcast. Careful when
+   measuring: the page keeps an old host-gpu.js in the browser cache; open it with `?nocache=<n>` in a new session.
+   Native runs of the sample show 41 ms for the sum: its first GPU call creates the device (gpu.rs keeps it per
+   process); warmed up (threshold.sh) it is 20 ms.
+   Open: a result both read on the CPU and mapped again on the GPU (a GPU buffer kept per block, skipping the upload).

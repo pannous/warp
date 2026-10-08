@@ -437,7 +437,7 @@ fn compile_program(code: &str, rewrite: fn(Node) -> Node) -> Result<CompiledModu
 	crate::diagnostic::in_program_mode(rewrite(lawful_program(code)?), |program| {
 		let source = program.clone();
 		let node = crate::folding::precompute(lower_for_emission(program)?);
-		let reflected = crate::reflection::meta_entries(&source, &node);
+		let reflected = crate::reflection::meta_entries(&source, &node, code);
 		warn_about_run_time_blocks(&node)?;
 		// the module's `warp.meta` section: a final quantity's unit, the program's functions and classes
 		let entries: Vec<_> = crate::units::static_units::result_units_entry().into_iter().chain(reflected).collect();

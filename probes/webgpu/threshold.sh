@@ -28,3 +28,13 @@ t0 = clock(); a = xs.map(x => x * 2 + 1) @gpu; t1 = clock(); b = xs.map(x => x *
 c = xs.map(x => sin(x) * cos(x) + √x) @gpu; t3 = clock(); d = xs.map(x => sin(x) * cos(x) + √x); t4 = clock()
 {n: $n, gpu_light: t1 - t0, cpu_light: t2 - t1, gpu_heavy: t3 - t2, cpu_heavy: t4 - t3}" 2>&1 | grep -v -e hint -e 'the compiler picks'
 done
+
+# `sum(xs.map(f) @gpu)`, min, max: reduced on the GPU in workgroups, one partial per group read back
+for n in $COUNTS; do
+	"$WARP" eval "xs = float[$n]
+for i in 1 to $n { xs#i = float(i) / $n }
+warm = sum(xs.map(x => sin(x)) @gpu)
+t0 = clock(); a = sum(xs.map(x => sin(x) * exp(x)) @gpu); t1 = clock(); b = sum(xs.map(x => sin(x) * exp(x))); t2 = clock()
+c = max(xs.map(x => sin(x) * exp(x)) @gpu); t3 = clock()
+{n: $n, gpu_sum: t1 - t0, cpu_sum: t2 - t1, gpu_max: t3 - t2, sums: [a b]}" 2>&1 | grep -v -e hint -e 'the compiler picks'
+done

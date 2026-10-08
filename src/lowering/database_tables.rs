@@ -7,7 +7,7 @@
 use crate::node::{Bracket, Node, Separator};
 use crate::operators::Op;
 use crate::warp_parser::parse;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 const DATABASE_WORDS: [&str; 2] = ["database", "indexedDB"];
 /// `app.warp` keeps its tables in `app.database.sqlite`; inline code's tables are this name alone (in memory)
@@ -18,9 +18,24 @@ const ADD_WORD: &str = "add";
 /// the generated code's variables, written as these placeholders (`·` would parse as a product)
 const ROW: &str = "table_row";
 const ADDED: &str = "table_added";
-const GENERATED_NAMES: [(&str, &str); 2] = [(ROW, "table·row"), (ADDED, "table·added")];
+const GENERATED_NAMES: [(&str, &str); 3] = [(ROW, "table·row"), (ADDED, "table·added"), (ARGUMENTS, "table·arguments")];
 const SCHEMA_PLACEHOLDER: &str = "table_schema";
 const VALUE_PLACEHOLDER: &str = "table_value";
+/// A filter's query (notes/orm.md step 2): the ids it keeps, its SQL condition and parameters, the functions it calls
+const IDS_PLACEHOLDER: &str = "table_ids";
+const CONDITION_PLACEHOLDER: &str = "table_condition";
+const PARAMETERS_PLACEHOLDER: &str = "table_parameters";
+const FUNCTION_PLACEHOLDER: &str = "table_function";
+const BODY_PLACEHOLDER: &str = "table_body";
+/// The one parameter of a query's function: [id, columns…, the filter's values…] of a row
+const ARGUMENTS: &str = "table_arguments";
+const IDS: &str = "table·ids";
+const FUNCTION: &str = "table·call";
+/// The SQL function a query calls a warp function through (database.rs)
+const WARP_CALL: &str = "warp_call";
+const NUMERIC_TYPES: [&str; 4] = ["int", "float", "number", "real"];
+/// What a filter's function should not do: not being sure to end (Div) or allocating is fine
+const SIDE_EFFECTS: [crate::effects::Effect; 5] = [crate::effects::Effect::State, crate::effects::Effect::IO, crate::effects::Effect::FFI, crate::effects::Effect::Async, crate::effects::Effect::Eval];
 
 /// A registered table: the list variable holding it and its class's fields (name, type, default)
 struct Table {
@@ -40,17 +55,239 @@ pub fn lower(program: Node) -> Node {
 	if !DATABASE_WORDS.iter().any(|word| crate::warp_parser::mentions(&program, word)) {
 		return program;
 	}
-	let classes = class_bodies(&program);
-	let mut tables: HashMap<String, Table> = HashMap::new();
-	program.visit(&mut |part| if let Some((variable, table)) = registration(part, &classes) {
-		tables.insert(variable, table);
-	});
+	let tables = registrations(&program);
 	if tables.is_empty() {
 		return program;
 	}
-	let file = crate::modules::program_file().map_or_else(|| TABLES_FILE.to_string(), |file| file.with_extension(TABLES_FILE).to_string_lossy().into_owned());
 	let registered: Vec<&str> = tables.values().map(|table| table.class.as_str()).collect();
-	with_tables(with_row_ids(program, &registered), &tables, &file)
+	with_tables(with_row_ids(program, &registered), &tables, &tables_file())
+}
+
+/// The program's registered tables by their list variable
+fn registrations(program: &Node) -> HashMap<String, Table> {
+	let classes = class_bodies(program);
+	let mut tables = HashMap::new();
+	program.visit(&mut |part| if let Some((variable, table)) = registration(part, &classes) {
+		tables.insert(variable, table);
+	});
+	tables
+}
+
+fn tables_file() -> String {
+	crate::modules::program_file().map_or_else(|| TABLES_FILE.to_string(), |file| file.with_extension(TABLES_FILE).to_string_lossy().into_owned())
+}
+
+/// The tables a program registers, both forms, before database_tables::lower; and the functions its filters' queries call
+pub struct Tables {
+	tables: HashMap<String, Table>,
+	functions: Vec<Node>,
+	/// the effects of the program's functions, which a filter's query should not have
+	effects: Option<crate::effects::EffectReport>,
+}
+
+pub fn registered(program: &Node) -> Tables {
+	let registers = crate::warp_parser::mentions(program, crate::stored_values::STORED_WORD) || DATABASE_WORDS.iter().any(|word| crate::warp_parser::mentions(program, word));
+	let tables = match registers {
+		true => registrations(&with_stored_tables(program.clone(), &class_bodies(program))),
+		false => HashMap::new(),
+	};
+	let effects = (!tables.is_empty()).then(|| crate::effects::EffectReport::of(program));
+	Tables { tables, functions: vec![], effects }
+}
+
+/// `people where age > 7 and is_prime(age)` of a table: the query `SELECT id … WHERE "age" > ? AND warp_call(…)` as a
+/// binding of the ids it keeps, and the condition keeping the list's instances of those ids, so a filtered row is the
+/// same instance. What SQL can say stays SQL; any other part is a function of the program the query calls per row.
+pub fn queried(subject: &Node, condition: &Node, variables: &HashSet<String>, tables: &mut Tables) -> Option<Result<(Node, Node), Node>> {
+	let table = tables.tables.get(&subject.drop_meta().name())?;
+	let first_function = tables.functions.len();
+	let mut query = Query { table, variables, parameters: vec![], functions: vec![], first_function };
+	let sql = query.sql(condition);
+	let (parameters, functions) = (query.parameters, query.functions);
+	if let Err(error) = crate::diagnostic::report(&effectful_calls(&functions, tables.effects.as_ref())) {
+		return Some(Err(error));
+	}
+	tables.functions.extend(functions);
+	let ids = format!("{IDS}·{}", first_function + 1);
+	let code = format!("{IDS_PLACEHOLDER} = std_io(\"table\", \"select\", [{name:?}, {CONDITION_PLACEHOLDER}, {PARAMETERS_PLACEHOLDER}, {file:?}])",
+		name = table.name, file = tables_file());
+	let binding = generated(&code, [
+		(IDS_PLACEHOLDER, Node::Symbol(ids.clone())),
+		(CONDITION_PLACEHOLDER, Node::Text(sql)),
+		(PARAMETERS_PLACEHOLDER, Node::List(parameters, Bracket::Square, Separator::Space)),
+	]);
+	let kept = generated(&format!("{}.{ID_FIELD} in {IDS_PLACEHOLDER}", crate::lambdas::IMPLICIT_PARAMETER), [(IDS_PLACEHOLDER, Node::Symbol(ids))]);
+	Some(Ok((binding, kept)))
+}
+
+/// A warning for each function with side effects that a query's functions call: SQLite calls it once per row, and
+/// how often or in which order a query runs is its own business (card orm-filter)
+fn effectful_calls(functions: &[Node], effects: Option<&crate::effects::EffectReport>) -> Vec<crate::diagnostic::Diagnostic> {
+	let Some(effects) = effects else { return vec![] };
+	let mut warned: Vec<String> = vec![];
+	let mut warnings = vec![];
+	for function in functions {
+		function.visit(&mut |node| if let Node::Symbol(name) = node {
+			let side_effects: Vec<String> = effects.effects_of(name).into_iter().flat_map(|found| found.iter())
+				.filter(|effect| SIDE_EFFECTS.contains(effect)).map(|effect| format!("{effect:?}")).collect();
+			if !side_effects.is_empty() && !warned.contains(name) {
+				warned.push(name.clone());
+				warnings.push(crate::diagnostic::Diagnostic::at(node, format!(
+					"{name} has side effects ({}): a table filter runs it once per row inside its query; keep filters pure", side_effects.join(", "))));
+			}
+		});
+	}
+	warnings
+}
+
+/// The program with the functions its filters' queries call, first
+pub fn with_filter_functions(program: Node, tables: Tables) -> Node {
+	if tables.functions.is_empty() {
+		return program;
+	}
+	let statements = match program {
+		Node::List(statements, Bracket::None, Separator::Semicolon | Separator::Newline) => statements,
+		program => vec![program],
+	};
+	Node::List([tables.functions, statements].concat(), Bracket::None, Separator::Newline)
+}
+
+/// One filter's condition as SQL: its `?` parameters and the functions it calls
+struct Query<'a> {
+	table: &'a Table,
+	variables: &'a HashSet<String>,
+	parameters: Vec<Node>,
+	functions: Vec<Node>,
+	first_function: usize,
+}
+
+impl Query<'_> {
+	fn sql(&mut self, node: &Node) -> String {
+		self.translated(node).unwrap_or_else(|| self.called(node))
+	}
+
+	/// The part as SQL when SQL means the same: comparisons, and/or, arithmetic of numbers, columns, values
+	fn translated(&mut self, node: &Node) -> Option<String> {
+		if let Some(column) = self.column(node) {
+			return Some(column);
+		}
+		match node.drop_meta() {
+			Node::Key(left, op, right) => {
+				let operator = match op {
+					Op::Eq => "=",
+					Op::Ne => "<>",
+					Op::Lt => "<",
+					Op::Gt => ">",
+					Op::Le => "<=",
+					Op::Ge => ">=",
+					Op::And => "AND",
+					Op::Or => "OR",
+					// warp's division is exact and its + joins texts: only these keep their meaning on numbers
+					Op::Add if self.is_numeric(left) && self.is_numeric(right) => "+",
+					Op::Sub if self.is_numeric(left) && self.is_numeric(right) => "-",
+					Op::Mul if self.is_numeric(left) && self.is_numeric(right) => "*",
+					_ => return None,
+				};
+				Some(format!("({} {operator} {})", self.sql(left), self.sql(right)))
+			}
+			Node::Number(_) | Node::Text(_) | Node::True | Node::False => Some(self.parameter(node.drop_meta().clone())),
+			Node::Symbol(name) if self.variables.contains(name) => Some(self.parameter(node.drop_meta().clone())),
+			_ => None,
+		}
+	}
+
+	/// `it.age` as the column "age", `it.id` as id
+	fn column(&self, node: &Node) -> Option<String> {
+		let field = self.field_of_it(node)?;
+		match field == ID_FIELD {
+			true => Some(ID_FIELD.to_string()),
+			false => columns_of(self.table).contains(&field).then(|| quote(&field)),
+		}
+	}
+
+	fn field_of_it(&self, node: &Node) -> Option<String> {
+		let Node::Key(element, Op::Dot, field) = node.drop_meta() else { return None };
+		let field = field.drop_meta();
+		(element.drop_meta().name() == crate::lambdas::IMPLICIT_PARAMETER && matches!(field, Node::Symbol(_))).then(|| field.name())
+	}
+
+	fn is_numeric(&self, node: &Node) -> bool {
+		match node.drop_meta() {
+			Node::Number(_) => true,
+			_ => self.field_of_it(node).is_some_and(|field| field == ID_FIELD || self.table.fields.iter().any(|(name, field_type, _)| *name == field && NUMERIC_TYPES.contains(&field_type.as_str()))),
+		}
+	}
+
+	fn parameter(&mut self, value: Node) -> String {
+		self.parameters.push(value);
+		"?".to_string()
+	}
+
+	/// The part as `warp_call('table·call·N', id, columns…, values…)`: the program's function table·call·N, generated
+	/// here, works it out of the row and the filter's values
+	fn called(&mut self, node: &Node) -> String {
+		let name = format!("{FUNCTION}·{}", self.first_function + self.functions.len() + 1);
+		let mut values = vec![];
+		free_variables(node, self.variables, &mut values);
+		let row_size = 1 + columns_of(self.table).len();
+		let body = with_arguments(node.clone(), self.table, &values, row_size);
+		let function = generated(&format!("{FUNCTION_PLACEHOLDER}({ARGUMENTS}: any) := {BODY_PLACEHOLDER}"), [
+			(FUNCTION_PLACEHOLDER, Node::Symbol(name.clone())),
+			(BODY_PLACEHOLDER, body),
+		]);
+		self.functions.push(function);
+		let row: Vec<String> = std::iter::once(ID_FIELD.to_string()).chain(columns_of(self.table).iter().map(|column| quote(column))).collect();
+		let values: Vec<String> = values.into_iter().map(|value| self.parameter(Node::Symbol(value))).collect();
+		format!("{WARP_CALL}('{name}', {})", [row, values].concat().join(", "))
+	}
+}
+
+/// The variables a part reads, in order, each once (not a name after a dot: a field or method)
+fn free_variables(node: &Node, variables: &HashSet<String>, found: &mut Vec<String>) {
+	match node.drop_meta() {
+		Node::Symbol(name) if variables.contains(name) && !found.contains(name) => found.push(name.clone()),
+		Node::Key(left, Op::Dot, _) => free_variables(left, variables, found),
+		Node::Key(left, _, right) => {
+			free_variables(left, variables, found);
+			free_variables(right, variables, found);
+		}
+		Node::List(items, _, _) => items.iter().for_each(|item| free_variables(item, variables, found)),
+		_ => {}
+	}
+}
+
+/// The part in a query's function: `it.age` as its column's argument, `it` as the row's instance, a variable as the
+/// filter's value passed after the row
+fn with_arguments(node: Node, table: &Table, values: &[String], row_size: usize) -> Node {
+	let argument = |index: usize| generated(&format!("{ARGUMENTS}#{index}"), []);
+	let columns = columns_of(table);
+	match node {
+		Node::Symbol(name) if name == crate::lambdas::IMPLICIT_PARAMETER => {
+			generated(&format!("{}({})", table.class, constructor_arguments(table, ARGUMENTS).join(", ")), [])
+		}
+		Node::Symbol(name) if values.contains(&name) => argument(row_size + 1 + values.iter().position(|value| *value == name).unwrap_or_default()),
+		Node::Key(element, Op::Dot, field) if element.drop_meta().name() == crate::lambdas::IMPLICIT_PARAMETER => match field.drop_meta().name() {
+			name if name == ID_FIELD => argument(1),
+			name if columns.contains(&name) => argument(2 + columns.iter().position(|column| *column == name).unwrap_or_default()),
+			_ => Node::Key(Box::new(with_arguments(*element, table, values, row_size)), Op::Dot, field),
+		},
+		Node::Key(left, Op::Dot, right) => Node::Key(Box::new(with_arguments(*left, table, values, row_size)), Op::Dot, right),
+		other => other.map_children(|child| with_arguments(child, table, values, row_size)),
+	}
+}
+
+/// The constructor's arguments of an instance from a row `[id, column values…]` held in `row`
+fn constructor_arguments(table: &Table, row: &str) -> Vec<String> {
+	let columns = columns_of(table);
+	table.fields.iter().map(|(name, _, _)| match name == ID_FIELD {
+		true => format!("{row}#1"),
+		false => format!("{row}#{}", 2 + columns.iter().position(|column| column == name).unwrap_or_default()),
+	}).chain(implicit_id(table).then(|| format!("{row}#1"))).collect()
+}
+
+/// "name" as an SQL identifier
+fn quote(name: &str) -> String {
+	format!("\"{}\"", name.replace('"', "\"\""))
 }
 
 /// `stored people: [Person]`, the short form of `people: [Person] = database.people` (user, 2026-10-08)
@@ -73,7 +310,7 @@ fn with_stored_tables(node: Node, classes: &HashMap<String, Node>) -> Node {
 }
 
 /// Each class's body by name
-fn class_bodies(program: &Node) -> HashMap<String, Node> {
+pub fn class_bodies(program: &Node) -> HashMap<String, Node> {
 	let mut bodies = HashMap::new();
 	program.visit(&mut |part| if let Node::Type { name, body } = part {
 		bodies.insert(name.drop_meta().name(), body.as_ref().clone());
@@ -152,25 +389,21 @@ fn opened(statement: &Node, tables: &HashMap<String, Table>, file: &str) -> Opti
 	let Node::Key(variable, Op::Colon, _) = target.drop_meta() else { return None };
 	let table = tables.get(&variable.drop_meta().name())?;
 	database_table(source)?;
-	let columns = columns_of(table);
 	// the row is [id, column values…] in the order of the columns
-	let arguments: Vec<String> = table.fields.iter().map(|(name, _, _)| match name == ID_FIELD {
-		true => format!("{ROW}#1"),
-		false => format!("{ROW}#{}", 2 + columns.iter().position(|column| column == name).unwrap_or_default()),
-	}).chain(implicit_id(table).then(|| format!("{ROW}#1"))).collect();
+	let arguments = constructor_arguments(table, ROW);
 	let schema = Node::List(table.fields.iter().filter(|(name, _, _)| name != ID_FIELD).map(|(name, field_type, default)| {
 		Node::List(vec![Node::Text(name.clone()), Node::Text(field_type.clone()), default.clone().unwrap_or(Node::Empty)], Bracket::Square, Separator::Space)
 	}).collect(), Bracket::Square, Separator::Space);
 	let code = format!("[{class}({arguments}) for {ROW} in std_io(\"table\", \"open\", [{name:?}, {SCHEMA_PLACEHOLDER}, {file:?}])]",
 		class = table.class, arguments = arguments.join(", "), name = table.name);
-	let rows = generated(&code, SCHEMA_PLACEHOLDER, schema);
+	let rows = generated(&code, [(SCHEMA_PLACEHOLDER, schema)]);
 	Some(vec![Node::Key(target.clone(), Op::Assign, Box::new(rows))])
 }
 
-/// The code with the placeholder as the node and the generated variables named
-fn generated(code: &str, placeholder: &str, node: Node) -> Node {
+/// The code with each placeholder as its node and the generated variables named
+fn generated<const N: usize>(code: &str, placeholders: [(&str, Node); N]) -> Node {
 	let names = GENERATED_NAMES.iter().map(|(written, name)| (written.to_string(), Node::Symbol(name.to_string())));
-	crate::law::substitute(&parse(code), &names.chain([(placeholder.to_string(), node)]).collect())
+	crate::law::substitute(&parse(code), &names.chain(placeholders.map(|(placeholder, node)| (placeholder.to_string(), node))).collect())
 }
 
 /// The table's columns besides id, in field order
@@ -196,7 +429,7 @@ fn inserted(statement: &Node, tables: &HashMap<String, Table>, file: &str) -> Op
 	let values: Vec<String> = columns.iter().map(|column| format!("{ADDED}.{column}")).collect();
 	let code = format!("{ADDED} = {VALUE_PLACEHOLDER}\n{list}.add({ADDED})\n{ADDED}.{ID_FIELD} = std_io(\"table\", \"insert\", [{table:?}, [{names}], [{values}], {file:?}])",
 		list = list.drop_meta().name(), table = table.name, names = names.join(" "), values = values.join(" "));
-	let lowered = generated(&code, VALUE_PLACEHOLDER, value.clone());
+	let lowered = generated(&code, [(VALUE_PLACEHOLDER, value.clone())]);
 	Some(lowered.children())
 }
 
