@@ -55,6 +55,9 @@ const BREAK_KEYWORD: &str = "break";
 const EVENT_LOCAL: &str = "event";
 /// an event's payloads are instances of the class `ev·event`, whose fields are every key the program emits it with
 const EVENT_CLASS_SUFFIX: &str = "·event";
+/// Maps `{a:1}` (P200b: they share, like instances) are instances of one class `map` whose fields are every key the
+/// program writes, in a literal or with `m.key = v`; reading a key never written is W0's run-time "unset field"
+const MAP_CLASS: &str = "map";
 
 /// W0's answer for one program
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -186,6 +189,40 @@ fn global_declaration(node: &Node) -> Option<(&str, Option<&Node>)> {
 
 fn event_class(event: &str) -> String {
 	format!("{event}{EVENT_CLASS_SUFFIX}")
+}
+
+/// `{a:1 b:2}`: its keys and values
+fn map_entries(node: &Node) -> Option<Vec<(String, &Node)>> {
+	let Node::List(items, Bracket::Curly, _) = node.drop_meta() else { return None };
+	items.iter().map(|item| match item.drop_meta() {
+		Node::Key(key, Op::Colon, value) if matches!(key.drop_meta(), Node::Symbol(_)) => Some((key.name(), value.as_ref())),
+		_ => None,
+	}).collect()
+}
+
+/// every key a map literal or a field write `x.key = v` names, when the program has a map literal
+fn map_keys(program: &Node) -> Option<Vec<String>> {
+	let mut has_map = false;
+	let mut keys: Vec<String> = Vec::new();
+	program.visit(&mut |part| {
+		let written: Vec<String> = match (map_entries(part), part) {
+			(Some(entries), _) => {
+				has_map = true;
+				entries.into_iter().map(|(key, _)| key).collect()
+			}
+			(None, Node::Key(target, Op::Assign, _)) => match target.drop_meta() {
+				Node::Key(_, Op::Dot, field) => vec![field.name()],
+				_ => vec![],
+			},
+			_ => vec![],
+		};
+		for key in written {
+			if !keys.contains(&key) {
+				keys.push(key);
+			}
+		}
+	});
+	has_map.then_some(keys)
 }
 
 fn is_word(node: &Node, word: &str) -> bool {
@@ -559,6 +596,7 @@ impl Exporter {
 			self.globals.push(name.to_string());
 		});
 		let event_classes = self.collect_event_classes(program);
+		let program_node = program;
 		let program: Vec<&Node> = statements(program).into_iter().flat_map(type_definitions).collect();
 		if let Some(why) = late_binding(&program, &self.globals) {
 			return Err(why);
@@ -593,6 +631,10 @@ impl Exporter {
 			}
 		}
 		argument_classes.extend(event_classes);
+		if let Some(keys) = map_keys(program_node) {
+			self.classes.insert(MAP_CLASS.to_string(), (vec![MAP_CLASS.to_string()], keys.into_iter().map(|key| (key, None)).collect()));
+			argument_classes.push(MAP_CLASS.to_string());
+		}
 		let mut items = argument_classes.iter().map(|class| self.class_definition(class)).collect::<Result<Vec<_>, String>>()?;
 		items.extend(cell_items);
 		for statement in program {
@@ -883,6 +925,7 @@ impl Exporter {
 			Node::Symbol(name) if self.functions.get(name).is_some_and(|parameter| parameter == UNIT_TYPE) => Ok(format!(".call {} .unit", quoted(name))),
 			Node::Symbol(name) if self.lambda_names.contains(name) => Err(format!("not in W0: {name} as a value (warp calls it; `function {name}` is the function)")),
 			Node::Symbol(name) if self.names.contains_key(name) => Ok(format!(".glob {}", quoted(name))),
+			_ if map_entries(node).is_some() && self.classes.contains_key(MAP_CLASS) => self.instance(MAP_CLASS, map_entries(node).expect("a map")),
 			Node::List(items, Bracket::Square, _) => {
 				let elements: Result<Vec<String>, String> = items.iter().map(|item| self.expression(item)).collect();
 				Ok(elements?.iter().rev().fold(".nil".to_string(), |tail, head| format!(".cons ({head}) ({tail})")))
