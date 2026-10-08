@@ -386,8 +386,15 @@ Each step is useful on its own and is what the next ones stand on.
 - Nullable results (card text-generally): `DOMString?` is `text?` (web_idl.rs optional_result_type), lowered by
   src/lowering/optional_casts.rs: `x as T?` keeps ø, any other value is cast to T, the call held once in `optional·N`.
   Natively a JS null (getItem of a missing key) arrives as ø (foreign.rs plain), no longer as a handle of null.
-- Next: more interfaces (bundle arguments: Document and the DOM, fetch's Response,
-  WebSocket).
+- DOM (slice 5): the bundle adds Document, Element, NodeList, HTMLCollection, DOMTokenList, Event and every
+  HTML…Element of html.idl (lib/web.webidl ~100 KB; arguments in scripts/webidl_bundle.py's docstring). What an
+  operation gives is typed like an attribute (web_idl.rs result_interface: `document.getElementById(id)` is an
+  Element, `document.body` an HTMLElement). An interface also takes the members of those deriving from it
+  (derived_interfaces: an Element's `value` is HTMLInputElement's), as the runtime element may be any of them; only a
+  member none declares is an error, its suggestion drawn from all of them. `style` is CSSStyleProperties, generated
+  per CSS property, not bundled: unchecked. Only on a page: the Worker (playground) and node have no document.
+- Next: fetch's Response, WebSocket; P203 (annotations strict, unannotated lax) may move these checks to warnings
+  unless `use js` counts as the annotation.
 
 ## web-apis: WebSocket (card web-websocket, 2026-10-07, warp-90)
 - No new words: a channel named by a ws:// or wss:// address is a WebSocket. `on message from "wss://…" { … event … }`

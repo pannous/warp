@@ -106,10 +106,11 @@ pub fn global_interface(global: &str) -> Result<Option<String>, String> {
 	}
 }
 
-/// The interface of an attribute's value (`navigator.clipboard`: Clipboard), when WebIDL declares it whole
-pub fn attribute_interface(interface: &str, member: &str) -> Option<String> {
-	let Member::Attribute(type_name) = members_of(interface).remove(member)? else { return None };
-	let type_name = type_name.trim_end_matches('?');
+/// The interface of what a member gives, read or called (`navigator.clipboard`: Clipboard,
+/// `document.getElementById(id)`: Element), when WebIDL declares it whole; a nullable one (`Element?`) too
+pub fn result_interface(interface: &str, member: &str, call: bool) -> Option<String> {
+	let declared = declared_result(interface, member, call)?;
+	let type_name = declared.trim_end_matches('?');
 	definitions().contains_key(type_name).then(|| type_name.to_string())
 }
 
@@ -148,8 +149,15 @@ fn primitive_type(declared: &str) -> Option<&'static str> {
 pub fn check_member(interface: &str, path: &str, member: &str, call: Option<usize>) -> Result<(), String> {
 	let mut members = members_of(interface);
 	let Some(declared) = members.remove(member) else {
-		let same_letters = members.keys().find(|name| name.eq_ignore_ascii_case(member)).cloned();
-		let near = same_letters.or_else(|| crate::extensions::strings::near_miss(member, members.into_keys())).map(|near| format!("; did you mean {near}?")).unwrap_or_default();
+		// `document.getElementById(id).value`: an Element that is an HTMLInputElement at run time
+		let derived = derived_interfaces(interface);
+		if let Some(declaring) = derived.iter().find(|derived| members_of(derived).contains_key(member)) {
+			return check_member(declaring, path, member, call);
+		}
+		let mut names: Vec<String> = members.into_keys().collect();
+		names.extend(derived.iter().flat_map(|derived| members_of(derived).into_keys()));
+		let same_letters = names.iter().find(|name| name.eq_ignore_ascii_case(member)).cloned();
+		let near = same_letters.or_else(|| crate::extensions::strings::near_miss(member, names.into_iter())).map(|near| format!("; did you mean {near}?")).unwrap_or_default();
 		return Err(format!("{path} ({interface} in WebIDL) has no member {member}{near}"));
 	};
 	match (declared, call) {
@@ -160,6 +168,23 @@ pub fn check_member(interface: &str, path: &str, member: &str, call: Option<usiz
 		}
 		_ => Ok(()),
 	}
+}
+
+/// The interfaces deriving from `interface`, at any depth (HTMLInputElement of Element), sorted by name
+fn derived_interfaces(interface: &str) -> Vec<String> {
+	let derives = |name: &str| {
+		let mut parent = definitions().get(name).and_then(|definition| definition.parent.as_deref());
+		while let Some(ancestor) = parent {
+			if ancestor == interface {
+				return true;
+			}
+			parent = definitions().get(ancestor).and_then(|definition| definition.parent.as_deref());
+		}
+		false
+	};
+	let mut derived: Vec<String> = definitions().keys().filter(|name| derives(name)).cloned().collect();
+	derived.sort();
+	derived
 }
 
 /// A global of a page that the program's scope lacks (a Worker's: localStorage), else unchecked
