@@ -82,3 +82,11 @@ fn a_declared_primitive_result_is_a_warp_value() {
 fn a_foreign_calls_value_as_text() {
 	is!("use js JSON; (JSON.stringify(1) as text) + 1", "11");
 }
+
+// a nullable result is the optional type: getItem's DOMString? is text? (ø or a text, optional_casts.rs)
+#[test]
+fn a_nullable_result_is_optional() {
+	eq!(warp::web_idl::optional_result_type("Storage", "getItem", true), Some("text?".to_string()));
+	eq!(warp::web_idl::optional_result_type("Crypto", "randomUUID", true), Some("text".to_string()));
+	eq!(warp::web_idl::optional_result_type("Navigator", "clipboard", false), None);
+}
