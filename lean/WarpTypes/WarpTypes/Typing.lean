@@ -6,11 +6,12 @@ import WarpTypes.Syntax
 namespace Warp
 open Ty
 
-/-- the type a field read gives: from an error (`never`), `never` -/
-def Program.readTy (P : Program) : Ty → String → Option Ty
-  | .never, _ => some .never
-  | .cls p, f => P.fieldTy p f
-  | _, _ => none
+/-- the type a field read gives: from an error (`never`), `never`; a declared field its type; anything else is checked
+when it runs (`any`) -/
+def Program.readTy (P : Program) : Ty → String → Ty
+  | .never, _ => .never
+  | .cls p, f => (P.fieldTy p f).getD .any
+  | _, _ => .any
 
 /-- the type a field write takes: into an error (`never`), anything -/
 def Program.writeTy (P : Program) : Ty → String → Option Ty
@@ -31,13 +32,11 @@ inductive HasType (P : Program) : Ctx → Expr → Ty → Prop where
   /-- analyzer Scope::lookup -/
   | glob {Γ x m t} : P.names x = some (m, t) → HasType P Γ (.glob x) t
   | loc {Γ y t} : Γ y = some t → HasType P Γ (.loc y) t
-  /-- inference.rs arithmetic_kind -/
-  | add {Γ a b ta tb} : HasType P Γ a ta → HasType P Γ b tb → addable ta = true → addable tb = true →
-      HasType P Γ (.add a b) (plus ta tb)
-  | arith {Γ op a b ta tb} : HasType P Γ a ta → HasType P Γ b tb → sub ta .number = true → sub tb .number = true →
-      HasType P Γ (.arith op a b) (Ty.arith ta tb)
-  | lt {Γ a b ta tb} : HasType P Γ a ta → HasType P Γ b tb → sub ta .number = true → sub tb .number = true →
-      HasType P Γ (.lt a b) .bool
+  /-- inference.rs arithmetic_kind; operands of other types raise when it runs (gradual: `HasType` means "cannot get
+  stuck", the checker demands addable or numeric operands) -/
+  | add {Γ a b ta tb} : HasType P Γ a ta → HasType P Γ b tb → HasType P Γ (.add a b) (plus ta tb)
+  | arith {Γ op a b ta tb} : HasType P Γ a ta → HasType P Γ b tb → HasType P Γ (.arith op a b) (arithTy ta tb)
+  | lt {Γ a b ta tb} : HasType P Γ a ta → HasType P Γ b tb → HasType P Γ (.lt a b) .bool
   | eq {Γ a b ta tb} : HasType P Γ a ta → HasType P Γ b tb → HasType P Γ (.eq a b) .bool
   /-- any condition (truthiness); inference.rs branches_kind -/
   | ite {Γ c a b tc ta tb} : HasType P Γ c tc → HasType P Γ a ta → HasType P Γ b tb →
@@ -70,7 +69,7 @@ inductive HasType (P : Program) : Ctx → Expr → Ty → Prop where
   | ref {Γ a p} : HasType P Γ (.ref a p) (.cls p)
   | new {Γ p} : HasType P Γ (.new p) (.cls p)
   /-- field access: the field type of the static class (or of an ancestor) -/
-  | get {Γ e f te t} : HasType P Γ e te → P.readTy te f = some t → HasType P Γ (.get e f) t
+  | get {Γ e f te} : HasType P Γ e te → HasType P Γ (.get e f) (P.readTy te f)
   /-- field write: fields are invariant, the value must fit the declared field type -/
   | set {Γ e f v te t tv} : HasType P Γ e te → P.writeTy te f = some t → HasType P Γ v tv → sub tv t = true →
       HasType P Γ (.set e f v) tv

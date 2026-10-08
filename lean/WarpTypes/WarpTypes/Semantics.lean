@@ -74,16 +74,25 @@ def isText : Expr → Bool
   | .text _ => true
   | _ => false
 
+def isNumber : Expr → Bool
+  | .bool _ | .int _ | .num _ => true
+  | _ => false
+
 def arithValues (op : ArithOp) (a b : Expr) : Expr :=
+  if !(isNumber a && isNumber b) then .error "not a number" else
   match asInt a, asInt b with
   | some x, some y => .int (op.apply x y)
   | _, _ => .num (op.apply (asNumber a) (asNumber b))
 
 def addValues (a b : Expr) : Expr :=
+  if !((isNumber a || isText a) && (isNumber b || isText b)) then .error "not addable" else
   if isText a || isText b then .text (render a ++ render b) else
   match asInt a, asInt b with
   | some x, some y => .int (x + y)
   | _, _ => .num (asNumber a + asNumber b)
+
+def ltValues (a b : Expr) : Expr :=
+  if isNumber a && isNumber b then .bool (decide (asNumber a < asNumber b)) else .error "not comparable"
 
 /-- false, 0, "", ø and [] are falsy -/
 def truthy : Expr → Bool
@@ -195,8 +204,7 @@ inductive Step (P : Program) : Expr × Store → Expr × Store → Prop where
   | readCharged {x b μ} : μ x = some (.charged b) → Step P (.glob x, μ) (b, μ)
   | add {a b μ} : a.isValue = true → b.isValue = true → Step P (.add a b, μ) (addValues a b, μ)
   | arith {op a b μ} : a.isValue = true → b.isValue = true → Step P (.arith op a b, μ) (arithValues op a b, μ)
-  | lt {a b μ} : a.isValue = true → b.isValue = true →
-      Step P (.lt a b, μ) (.bool (decide (asNumber a < asNumber b)), μ)
+  | lt {a b μ} : a.isValue = true → b.isValue = true → Step P (.lt a b, μ) (ltValues a b, μ)
   | eq {a b μ} : a.isValue = true → b.isValue = true → Step P (.eq a b, μ) (.bool (decide (a = b)), μ)
   | ite {v a b μ} : v.isValue = true → Step P (.ite v a b, μ) (if truthy v then a else b, μ)
   | loop {c b μ} : Step P (.loop c b, μ) (.ite c (.seq b (.loop c b)) .unit, μ)

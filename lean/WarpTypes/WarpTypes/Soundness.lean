@@ -20,24 +20,12 @@ theorem frame_typing {Γ} (F : Frame) {e t} (h : HasType P Γ (F.plug e) t) :
     refine ⟨_, ht, fun h' s => ?_⟩
     obtain ⟨e', he', se⟩ := element_mono s he
     exact ⟨_, .cons hh h' he', by simpa using join_mono (sub_refl _) se⟩
-  case addL =>
-    cases h with | add ha hb sa sb =>
-    exact ⟨_, ha, fun h' s => ⟨_, .add h' hb (addable_mono s sa) sb, plus_mono s (sub_refl _) sa sb⟩⟩
-  case addR =>
-    cases h with | add ha hb sa sb =>
-    exact ⟨_, hb, fun h' s => ⟨_, .add ha h' sa (addable_mono s sb), plus_mono (sub_refl _) s sa sb⟩⟩
-  case arithL =>
-    cases h with | arith ha hb sa sb =>
-    exact ⟨_, ha, fun h' s => ⟨_, .arith h' hb (sub_trans s sa) sb, arith_mono s (sub_refl _)⟩⟩
-  case arithR =>
-    cases h with | arith ha hb sa sb =>
-    exact ⟨_, hb, fun h' s => ⟨_, .arith ha h' sa (sub_trans s sb), arith_mono (sub_refl _) s⟩⟩
-  case ltL =>
-    cases h with | lt ha hb sa sb =>
-    exact ⟨_, ha, fun h' s => ⟨_, .lt h' hb (sub_trans s sa) sb, sub_refl _⟩⟩
-  case ltR =>
-    cases h with | lt ha hb sa sb =>
-    exact ⟨_, hb, fun h' s => ⟨_, .lt ha h' sa (sub_trans s sb), sub_refl _⟩⟩
+  case addL => cases h with | add ha hb => exact ⟨_, ha, fun h' s => ⟨_, .add h' hb, plus_mono s (sub_refl _)⟩⟩
+  case addR => cases h with | add ha hb => exact ⟨_, hb, fun h' s => ⟨_, .add ha h', plus_mono (sub_refl _) s⟩⟩
+  case arithL => cases h with | arith ha hb => exact ⟨_, ha, fun h' s => ⟨_, .arith h' hb, arithTy_mono s (sub_refl _)⟩⟩
+  case arithR => cases h with | arith ha hb => exact ⟨_, hb, fun h' s => ⟨_, .arith ha h', arithTy_mono (sub_refl _) s⟩⟩
+  case ltL => cases h with | lt ha hb => exact ⟨_, ha, fun h' _ => ⟨_, .lt h' hb, sub_refl _⟩⟩
+  case ltR => cases h with | lt ha hb => exact ⟨_, hb, fun h' _ => ⟨_, .lt ha h', sub_refl _⟩⟩
   case eqL => cases h with | eq ha hb => exact ⟨_, ha, fun h' _ => ⟨_, .eq h' hb, sub_refl _⟩⟩
   case eqR => cases h with | eq ha hb => exact ⟨_, hb, fun h' _ => ⟨_, .eq ha h', sub_refl _⟩⟩
   case ite => cases h with | ite hc ha hb => exact ⟨_, hc, fun h' _ => ⟨_, .ite h' ha hb, sub_refl _⟩⟩
@@ -74,11 +62,7 @@ theorem frame_typing {Γ} (F : Frame) {e t} (h : HasType P Γ (F.plug e) t) :
     refine ⟨_, he, fun h' s => ?_⟩
     obtain ⟨a', he', sa⟩ := element_mono s hel
     exact ⟨_, .broadcast hf h' he' (sub_trans sa ha), sub_refl _⟩
-  case get =>
-    cases h with | get he hr =>
-    refine ⟨_, he, fun h' s => ?_⟩
-    obtain ⟨t', hr', st⟩ := readTy_mono s hr
-    exact ⟨_, .get h' hr', st⟩
+  case get => cases h with | get he => exact ⟨_, he, fun h' s => ⟨_, .get h', readTy_mono s _⟩⟩
   case setL =>
     cases h with | set he hw hv st =>
     refine ⟨_, he, fun h' s => ?_⟩
@@ -133,6 +117,35 @@ theorem readField_typed {μ : Store} (hμ : HeapOk P μ) {o p f t} (ho : HasType
       rw [hf] at hf'; cases hf'
       exact ⟨tv, by simpa using htv, st⟩
   · exact ⟨_, .error, sub_never _⟩
+
+/-- reading a field of anything gives a typed expression: a field value of the heap or an error -/
+theorem readField_any {μ : Store} (hμ : HeapOk P μ) (o : Expr) (f : String) :
+    ∃ t', HasType P Ctx.empty (readField μ o f) t' := by
+  unfold readField
+  split
+  · split
+    · rename_i obj hobj
+      simp only [Store.obj, Option.filter_eq_some_iff] at hobj
+      cases hg : obj.fields f with
+      | none => exact ⟨_, .error⟩
+      | some v =>
+        obtain ⟨_, _, tv, _, htv, _⟩ := hμ _ obj hobj.1 f v hg
+        exact ⟨tv, by simpa using htv⟩
+    · exact ⟨_, .error⟩
+  · exact ⟨_, .error⟩
+
+/-- `o.f` of a value o: below the field type when the static class declares f, typed anyway (`any`) otherwise -/
+theorem get_typed {μ : Store} (hμ : HeapOk P μ) {o te f} (ho : HasType P Ctx.empty o te) (vo : o.isValue = true) :
+    ∃ t', HasType P Ctx.empty (readField μ o f) t' ∧ sub t' (P.readTy te f) = true := by
+  have dynamic : P.readTy te f = .any → ∃ t', HasType P Ctx.empty (readField μ o f) t' ∧ sub t' (P.readTy te f) = true :=
+    fun h => (readField_any hμ o f).imp fun _ h' => ⟨h', by simp [h]⟩
+  cases te with
+  | never => cases o <;> simp [isValue] at vo <;> cases ho
+  | cls p =>
+    cases hf : P.fieldTy p f with
+    | some t => simpa [Program.readTy, hf] using readField_typed hμ ho vo hf
+    | none => exact dynamic (by simp [Program.readTy, hf])
+  | _ => exact dynamic rfl
 
 theorem StoreOk.set {μ : Store} (hμ : StoreOk P μ) {x m t v tv} (hx : P.names x = some (m, t)) (hm : m ≠ .charged)
     (hv : v.isValue = true) (htv : HasType P Ctx.empty v tv) (st : sub tv t = true) :
@@ -190,12 +203,12 @@ theorem preservation (hP : FunsOk P) {s s' : Expr × Store} (hs : Step P s s') :
   | add va vb =>
     intro t h hμ
     cases h with
-    | add ha hb sa sb => exact ⟨add_typed ha hb va vb sa sb, hμ⟩
+    | add ha hb => exact ⟨add_typed ha hb va vb, hμ⟩
   | arith va vb =>
     intro t h hμ
     cases h with
-    | arith ha hb sa sb => exact ⟨arith_typed ha hb va vb sa sb, hμ⟩
-  | lt => intro t h hμ; cases h; exact ⟨⟨_, .bool, sub_refl _⟩, hμ⟩
+    | arith ha hb => exact ⟨arith_typed ha hb va vb, hμ⟩
+  | lt => intro t h hμ; cases h; exact ⟨lt_typed, hμ⟩
   | eq => intro t h hμ; cases h; exact ⟨⟨_, .bool, sub_refl _⟩, hμ⟩
   | ite =>
     intro t h hμ
@@ -265,10 +278,7 @@ theorem preservation (hP : FunsOk P) {s s' : Expr × Store} (hs : Step P s s') :
   | @get o f μ vo =>
     intro t h hμ
     cases h with
-    | get ho hr =>
-      refine ⟨?_, hμ⟩
-      cases ho <;> simp_all [isValue, Program.readTy]
-      exact readField_typed hμ.2 .ref rfl hr
+    | get ho => exact ⟨get_typed hμ.2 ho vo, hμ⟩
   | @set o f v μ vo vv =>
     intro t h hμ
     cases h with
@@ -314,11 +324,11 @@ theorem progress {Γ e t} (h : HasType P Γ e t) (hΓ : Γ = Ctx.empty) {μ : St
       | val v => exact steps (.readValue hcell)
       | charged b => exact steps (.readCharged hcell)
   | loc hy => subst hΓ; simp [Ctx.empty] at hy
-  | @add _ a b _ _ _ _ _ _ ih1 ih2 =>
+  | @add _ a b _ _ _ _ ih1 ih2 =>
     exact in_frame (.addL b) rfl (ih1 hΓ) fun va => in_frame (.addR a) va (ih2 hΓ) fun vb => steps (.add va vb)
-  | @arith _ op a b _ _ _ _ _ _ ih1 ih2 =>
+  | @arith _ op a b _ _ _ _ ih1 ih2 =>
     exact in_frame (.arithL op b) rfl (ih1 hΓ) fun va => in_frame (.arithR op a) va (ih2 hΓ) fun vb => steps (.arith va vb)
-  | @lt _ a b _ _ _ _ _ _ ih1 ih2 =>
+  | @lt _ a b _ _ _ _ ih1 ih2 =>
     exact in_frame (.ltL b) rfl (ih1 hΓ) fun va => in_frame (.ltR a) va (ih2 hΓ) fun vb => steps (.lt va vb)
   | @eq _ a b _ _ _ _ ih1 ih2 =>
     exact in_frame (.eqL b) rfl (ih1 hΓ) fun va => in_frame (.eqR a) va (ih2 hΓ) fun vb => steps (.eq va vb)
@@ -349,7 +359,7 @@ theorem progress {Γ e t} (h : HasType P Γ e t) (hΓ : Γ = Ctx.empty) {μ : St
     · exact steps (.broadcastCons vh vt)
   | ref => exact .inl rfl
   | new => exact steps .new
-  | @get _ e f _ _ _ _ ih => exact in_frame (.get f) rfl (ih hΓ) fun v => steps (.get v)
+  | @get _ e f _ _ ih => exact in_frame (.get f) rfl (ih hΓ) fun v => steps (.get v)
   | @set _ e f v _ _ _ _ _ _ _ ih1 ih2 =>
     exact in_frame (.setL f v) rfl (ih1 hΓ) fun vo => in_frame (.setR e f) vo (ih2 hΓ) fun vv => steps (.set vo vv)
   | @isA _ e c _ _ ih => exact in_frame (.isA c) rfl (ih hΓ) fun v => steps (.isA v)
