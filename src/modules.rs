@@ -87,11 +87,12 @@ pub fn insert_module_classes(program: Node) -> Node {
 				None => continue,
 			},
 		};
-		let module = WaspParser::parse(&source);
+		// a look for classes only: the loader's own read of a file module hints it, a standard module never
+		let module = crate::normalize::without_hints(|| WaspParser::parse(&source));
 		if module.first_error().is_some() {
 			continue; // the loader reports it
 		}
-		let definitions = crate::normalize::without_hints(|| statements(module));
+		let definitions = statements(module);
 		defined.extend(definitions.iter().filter_map(declared_name));
 		match is_std {
 			true => {
