@@ -26,7 +26,7 @@ modes      m ::= var | const | charged
 values     v ::= b | n | q | "s" | ø | [] | v :: v | ref a [C…]      (lists are cons cells, as the GC $Node)
 expr       e ::= v | x                          main-level name (store)
                | y                              local (parameter or let), bound by substitution
-               | e + e | e < e | e == e
+               | e + e | e - e | e * e | e < e | e == e     (`-` and `*` take numbers only; `+` also texts)
                | if e then e else e | while e do e | e ; e
                | e # e                          1-based element, `xs#1`
                | e ++ e                         list append, what `xs + [v]` / `xs.add(v)` lower to
@@ -190,9 +190,20 @@ the sum). So subtyping is the prefix order and join the common prefix, with no c
   source of refs.
 
 Agreeing corpus: constructors with wrong field types, field writes, inheritance, variants, `is`, and parameters
-typed by a sum or by a variant. Not covered by a verdict test: P200's sharing. Warp accepts
-`f(q: Point) := q.x = 7; p = Point(1); f(p); p.x` like the model does, but gives 1 where the model gives 7 (card
-instance-field). Catching that needs a value comparison: an executable evaluator in Lean, proved to agree with `Step`.
+typed by a sum or by a variant.
+
+## Values: the executable evaluator
+
+Evaluator.lean: `step` computes the next state, `step_sound` proves each of its steps is a `Step`, and `run` iterates
+it with fuel (`run_sound`: the end state is reachable by `Steps`). `outcome` elaborates, checks and runs a program,
+printing the value as warp prints it (`yes`, `[1 2]`, `"a"`) or `?` where the model keeps no value (floats are
+exported as `num 0`; instances). test_warp_computes_what_the_type_model_computes compares that with warp's
+`pipeline::eval` on the corpus. The known differences are listed in KNOWN_VALUE_DIFFERENCES, each with its card:
+- instance-field (P200): `f(q: Point) := q.x = 7; p = Point(1); f(p); p.x` gives 1 in warp, 7 in the model.
+- bool-literal-value (P199): `f(b: bool) := b; f(1)` gives 1 (the parameter keeps the int), and the assignment
+  expression `x: bool = 1` gives 1 while x holds yes.
+Found on the way: the exporter had mapped `-` and `*` to `+`, so W0 accepted `"a" - 1` and `f(n - 1)` recursed upward.
+W0 now has `arith op a b`, which takes numbers only.
 
 ## Later phases
 

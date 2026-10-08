@@ -241,6 +241,8 @@ const SOURCE_PASSES: [fn(Node) -> Node; 83] = [
 	crate::class_methods::lower,
 	// first: `math.sqrt(2)` of `use python math` is no method call of the built-in word
 	crate::foreign_modules::lower,
+	// `x as text?` keeps ø, after foreign_modules types a nullable WebIDL result so
+	crate::optional_casts::lower,
 	crate::phrase_calls::lower,
 	crate::std_aliases::lower, crate::class_methods::lower_json_classes, crate::welcome_forms::lower, crate::analyzer::lower_kebab_members, crate::number_keys::lower,
 	// `{ a: 1, b: 2\n c: 3 }`: one row of fields (object_groups.rs)

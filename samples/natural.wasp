@@ -1,6 +1,23 @@
 // Natural language style
 // wasp allows English-like syntax
 
+// The things the phrases below talk about
+age = 20
+has_id = yes
+is_admin = no
+is_owner = yes
+a = 3
+b = 2
+x = 1
+y = 1
+item = 2
+collection = [1 2 3]
+logged_in = no
+redirect_to_login() := print "please log in"
+basket = [{price: 2} {price: 3}]
+numbers = [3, -1, 2]
+create_user(name, email, role) := print name
+
 // Arithmetic with words
 result = one plus two
 total = three times four

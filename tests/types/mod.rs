@@ -84,9 +84,11 @@ mod test_conformance_claims;
 mod test_file_declarations;
 mod test_match_static_variant;
 mod test_bool_type;
+mod test_element_field_writes;
 #[cfg(feature = "native")] // runs lean and lake
 mod test_type_model;
 mod test_bool_assign;
 mod test_checked_call_kinds;
 mod test_class_field_type_phrases;
+mod test_optional_casts;
 mod test_shared_instances;

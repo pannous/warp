@@ -4,6 +4,25 @@ Answered decisions, newest first; moved out of notes/open_decisions.md on 2026-1
 answered questions to a new file"). Older references to "notes/open_decisions.md" + a Decided section, P-number,
 D-number or #number mean this file. Open questions, parked ones and the standing rules stay in notes/open_decisions.md.
 
+## Decided 2026-10-08 (user, as recommended unless quoted)
+- P203 general rule, lax versus strict: annotations make it strict. Unannotated code is lax (Python-like, checked at
+  run time); anything annotated (`x: T`, field types, `implements`, a declared parent type) is a promise the compiler
+  enforces. `--strict` adds warnings for the lax spots. Asked after the user saw "a general conflict between pythonic
+  type laxity and strict typing".
+- P201 (from P203, card upcast-field): `s: Shape = Circle("a", 2); s.r` is a compile error "Shape has no field r"
+  with the hint to match `Circle(r)` or use `s as Circle`; likewise `c: Color = rgb(1,2,3); c.r`. Unannotated
+  `s = Circle("a", 2); s.r` works.
+- P202 an `emit` that no handler receives gives a warning (chosen over P163's silence and a compile error).
+- `when` by shape (user to warp-dc): `when click {…}` = `on click`; `when x > 3 {…}` = `whenever` (edge-triggered,
+  P156); a block of `->` arms stays Kotlin's switch. Card signals-shape.
+- Effect handlers steps 1+2 approved (user to warp-dc): block-scoped `on` handlers, and emitted events as named typed
+  effects, lowered to plain calls. Card effect-handlers.
+- P199 bool slots accept 1 and 0 as yes/no everywhere (variables, fields, list items); other ints and texts are
+  errors. Card bool-assign.
+- P200 class instances passed to functions are shared references (like Python/JS). Card instance-field.
+- `type(ø)` prints "empty" (word choice, not asked; warp-79, card type-static): matches the run-time kind name;
+  unit, nil, ø may be aliases where a type name is read. `type(1.5)` stays "rational".
+
 ## Decided 2026-10-07 (user, multiple-choice interview, as recommended unless quoted)
 - P169 `use math` loads a NEW wasp math module (to be designed) with beautiful names, not the historic C names: "we
   need to educate people about beautiful names". The raw C library stays available as `use cmath`. Owner warp-67.
@@ -96,10 +115,6 @@ D-number or #number mean this file. Open questions, parked ones and the standing
 - Mutating a main-level list in a function (default, warp-7c, card uncalled-list-param): `names = ["a"]; grow() := {
   names.add(420) }` gets the same educating error as `names = names + [420]` there: "declare it `global names`";
   with `global names` it works. Alternative: Python's silent mutation without a declaration.
-- P199 bool slots: 1 and 0 are accepted as yes/no everywhere (variables, fields, list items): "yes is 1, no is 0";
-  other ints and texts are errors. Card bool-assign.
-- P200 class instances passed to functions are shared references (like Python/JS): `put(b, "yo")` changes b.items.
-  Card instance-field.
 - Undeclared lists (default, warp-a1, card list-element-types): an undeclared list stays `list any` (`xs = [1];
   xs = ["a"]` is fine), while a scalar's first value fixes its kind.
 - Method broadcast (default following P50, warp-c9, card method-broadcast): the method form of scalar library words

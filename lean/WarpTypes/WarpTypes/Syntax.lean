@@ -10,6 +10,15 @@ inductive Mode where
   | var | const | charged
   deriving DecidableEq, Repr
 
+/-- `-` and `*`: numbers only, unlike `+` -/
+inductive ArithOp where
+  | sub | mul
+  deriving DecidableEq, Repr
+
+def ArithOp.apply : ArithOp → Int → Int → Int
+  | .sub, a, b => a - b
+  | .mul, a, b => a * b
+
 inductive Expr where
   | bool (b : Bool)
   | int (n : Int)
@@ -22,6 +31,7 @@ inductive Expr where
   | glob (x : String)
   | loc (y : String)
   | add (a b : Expr)
+  | arith (op : ArithOp) (a b : Expr)
   | lt (a b : Expr)
   | eq (a b : Expr)
   | ite (c a b : Expr)
@@ -70,6 +80,7 @@ def subst (e : Expr) (y : String) (v : Expr) : Expr :=
   | loc z => if z = y then v else loc z
   | cons a b => cons (a.subst y v) (b.subst y v)
   | add a b => add (a.subst y v) (b.subst y v)
+  | arith op a b => arith op (a.subst y v) (b.subst y v)
   | lt a b => lt (a.subst y v) (b.subst y v)
   | eq a b => eq (a.subst y v) (b.subst y v)
   | ite c a b => ite (c.subst y v) (a.subst y v) (b.subst y v)
@@ -92,7 +103,7 @@ def subst (e : Expr) (y : String) (v : Expr) : Expr :=
 /-- the main-level names an expression assigns or binds -/
 def assigned : Expr → List String
   | assign x e | init x e => x :: e.assigned
-  | cons a b | add a b | lt a b | eq a b | loop a b | seq a b | index a b | append a b | tryCatch a b =>
+  | cons a b | add a b | arith _ a b | lt a b | eq a b | loop a b | seq a b | index a b | append a b | tryCatch a b =>
     a.assigned ++ b.assigned
   | ite c a b => c.assigned ++ a.assigned ++ b.assigned
   | letIn _ _ e b => e.assigned ++ b.assigned
