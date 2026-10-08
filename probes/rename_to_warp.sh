@@ -5,8 +5,10 @@
 #   probes/rename_to_warp.sh           rename
 #   probes/rename_to_warp.sh --check   list what a run would still change (exit 1 if anything), then the kept mentions
 # Kept as written:
-#   - lines naming the C++ original (C++), lines marked legacy, lines about this rename itself
-#   - lines accepting both names: a word with wasp whose warp form is on the same line (`".wasp" || ".warp"`)
+#   - lines naming the original: C++, `implementation of wasp`, `Wasp Wisp and Warp`; lines marked legacy; lines about
+#     this rename itself
+#   - lines accepting both names: a file name or quoted word with wasp whose warp form is on the same line
+#     (`".wasp" || ".warp"`, `["wasp", "warp"]`, `sin.wasp`/`sin.warp`)
 #   - URLs, domains and paths of the original: github.com/pannous/wasp, wasp.pannous.com, ~/wasp, homebrew-wasp
 #   - notes/OLD (history) and this script
 # wisp is a different word and stays.
@@ -15,24 +17,27 @@ set -euo pipefail
 MODE="${1:-rename}"
 EXCLUDED=(':!notes/OLD' ':!probes/rename_to_warp.sh')
 
-KEPT_LINES='C\+\+|\blegacy\b|wasp remains|rename[-_ ]?(?:to[-_ ])?warp|named warp everywhere'
+KEPT_LINES='C\+\+|\blegacy\b|implementation of \W*wasp|Wasp,? Wisp|wasp remains|rename[-_ ]?(?:to[-_ ])?warp|named warp everywhere'
+# a file name `x.wasp` or a quoted word `"wasp_main"`: kept with its line when its warp form is there too
+BOTH_NAMES='\w*\.(?:wasp|Wasp|WASP)\b|["'"'"'][\w.-]*(?:wasp|Wasp|WASP)[\w.-]*["'"'"']'
 KEPT_PARTS='(?:https?://)?(?:www\.)?github\.com/pannous/wasp\b[\w./#-]*|[\w.-]*wasp\.pannous\.com[\w./#-]*|pannous\.github\.io/wasp\b|~/wasp\b[\w./-]*|/Users/me/wasp\b|apps/wasp\b|homebrew-wasp'
 
 # perl: every line of the files named on stdin (NUL separated); MODE check prints the lines it would change
 convert_files() {
-	KEPT_LINES="$KEPT_LINES" KEPT_PARTS="$KEPT_PARTS" MODE="$MODE" perl -0 -ne '
+	KEPT_LINES="$KEPT_LINES" BOTH_NAMES="$BOTH_NAMES" KEPT_PARTS="$KEPT_PARTS" MODE="$MODE" perl -0 -ne '
 		BEGIN { $changed = 0 }
 		sub renamed { my $text = shift; $text =~ s/wasp/warp/g; $text =~ s/Wasp/Warp/g; $text =~ s/WASP/WARP/g; $text }
 		sub converted {
 			my $line = shift;
 			return $line if $line =~ /$ENV{KEPT_LINES}/i;
-			for my $word ($line =~ /([\w.]*(?:wasp|Wasp|WASP)\w*)/g) {
+			for my $word ($line =~ /($ENV{BOTH_NAMES})/g) {
 				my $other = renamed($word);
 				return $line if index($line, $other) >= 0;
 			}
 			my @kept;
 			$line =~ s/($ENV{KEPT_PARTS})/push @kept, $1; "\x00" . $#kept . "\x00"/ge;
 			$line = renamed($line);
+			$line =~ s/\b(warp|Warp)\/\1\b/$1/g; # "wasp/warp" says one name now
 			$line =~ s/\x00(\d+)\x00/$kept[$1]/g;
 			$line;
 		}
