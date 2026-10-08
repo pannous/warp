@@ -93,8 +93,8 @@ const CHANNEL_CHECK_MS = 20; // how often a waiting side looks whether it waits 
 const CHANNEL_INTS = CHANNEL_HEADER + CHANNEL_SLOTS * SLOT_FIELDS;
 
 // a run's channel table, when its program makes channels and the page has shared memory
-function channelTable(module) {
-	if (!WebAssembly.Module.imports(module).some(entry => entry.name === "channel_new")) return null;
+function channelTable(bytes) {
+	if (!importDescriptors(bytes).some(entry => entry.name === "channel_new")) return null;
 	if (!hasTaskWorkers()) return null;
 	return new Int32Array(new SharedArrayBuffer(4 * CHANNEL_INTS + CHANNEL_SLOTS * CHANNEL_VALUE_BYTES));
 }
@@ -225,7 +225,7 @@ function endChannels(run) {
 function startTask(holder, hooks, name, ints, values) {
 	const run = holder.run;
 	const id = BigInt(run.tasks.size + 1);
-	const captured = capturedValues(holder.exports, run.module);
+	const captured = capturedValues(holder.exports);
 	if (taskPool.length > 0) {
 		const shared = new SharedArrayBuffer(TASK_HEADER + TASK_RESULT_BYTES, { maxByteLength: TASK_RESULT_LIMIT });
 		const worker = taskPool.pop();
@@ -388,8 +388,8 @@ function readTaskValue(module, node) {
 }
 
 // the capture globals of the program's closures (src/tasks.rs captured): their values now, for the task's instance
-function capturedValues(exports, module) {
-	const names = WebAssembly.Module.exports(module).map(entry => entry.name).filter(name => name.startsWith(CAPTURE_PREFIX));
+function capturedValues(exports) {
+	const names = Object.keys(exports).filter(name => name.startsWith(CAPTURE_PREFIX));
 	return names.map(name => {
 		const value = exports[name].value;
 		return [name, typeof value === "object" && value !== null ? { tree: readTaskValue(exports, value) } : { raw: value }];
@@ -634,7 +634,7 @@ addHostPart({
 			}
 		},
 	}),
-	started: run => Object.assign(run, { tasks: new Map(), shared: [], channels: channelTable(run.module) }),
+	started: run => Object.assign(run, { tasks: new Map(), shared: [], channels: channelTable(run.bytes) }),
 	poll: holder => {
 		checkShared(holder);
 		deliverFetches(holder);

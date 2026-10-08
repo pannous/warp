@@ -47,7 +47,7 @@ const loadedRoutes = new Map(); // a route module's name → its loading
 // fills the program's table slots of that route's functions, instantiated with the program's exports as `primary`
 function loadRouteModule(holder) {
 	const name = ROUTE_MODULE_PREFIX + holder.exports[ROUTE_INDEX_EXPORT]?.();
-	if (!WebAssembly.Module.imports(holder.run.module).some(entry => entry.module === PLACEHOLDER_PREFIX + name)) return;
+	if (!importDescriptors(holder.run.bytes).some(entry => entry.module === PLACEHOLDER_PREFIX + name)) return;
 	if (!loadedRoutes.has(name)) {
 		loadedRoutes.set(name, fetch(`${name}.wasm`).then(response => response.arrayBuffer())
 			.then(bytes => WebAssembly.instantiate(bytes, { primary: holder.exports })));

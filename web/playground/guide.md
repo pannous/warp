@@ -529,7 +529,7 @@ print("first!")
 
 Channels pass messages between programs.
 
-Examples: channels; samples: async, threads
+Examples: tasks, channels; samples: async, threads
 
 ## Web pages
 
