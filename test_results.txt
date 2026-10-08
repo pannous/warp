@@ -1539,6 +1539,9 @@ PASSED:
   ✓ modules::test_use_modules::test_use_missing_module_is_an_error_value
   ✓ modules::test_use_modules::test_use_twice_is_a_no_op
   ✓ modules::test_use_modules::test_warp_extension_is_found
+  ✓ modules::test_use_several::a_use_with_a_version_stays_one_module
+  ✓ modules::test_use_several::a_use_with_commas_uses_each_module
+  ✓ modules::test_use_several::a_use_with_spaces_uses_each_module
   ✓ modules::test_versions::an_older_version_comes_from_its_git_tag
   ✓ modules::test_versions::tagged_version_literals
   ✓ modules::test_versions::use_requires_a_version_of_a_package
@@ -2744,6 +2747,11 @@ PASSED:
   ✓ types::test_person_struct::test_person_struct_roundtrip
   ✓ types::test_printable::as_text_str_and_text_call_the_printable_operation
   ✓ types::test_printable::print_and_interpolation_call_the_printable_operation
+  ✓ types::test_real_references::a_function_changes_the_instance_it_is_given
+  ✓ types::test_real_references::a_list_item_is_the_instance_itself
+  ✓ types::test_real_references::an_alias_sees_a_changed_field
+  ✓ types::test_real_references::each_construction_is_a_new_instance
+  ✓ types::test_real_references::maps_stay_values
   ✓ types::test_real_text::an_exact_real_as_text_is_symbolic
   ✓ types::test_real_text::an_exact_real_joins_a_text_symbolically
   ✓ types::test_records::test_optional_field_is_empty_and_settable
@@ -3562,4 +3570,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-19 ignored, 3557 passed, 0 failed, 3557 total tested
+19 ignored, 3565 passed, 0 failed, 3565 total tested
