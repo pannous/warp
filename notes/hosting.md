@@ -8,13 +8,13 @@ A warp program is one WASM GC module (`warp compile --wasm`). A pure one has no 
 `wasi_snapshot_preview1.fd_write`. A host therefore needs (1) WASM GC, (2) a way to load *this* module, and (3)
 glue that turns a request into a call and the returned Node into a response. The glue is warp-web's Worker glue.
 
-## Verified by running a warp module (probes/hosting/)
+## Verified by running a warp module (probes/hosting/gc_hosts.sh, `--edge` deploys to workers.dev too)
 | host | engine | GC | how checked |
 |---|---|---|---|
-| Cloudflare Workers | V8 (workerd) | **yes** | gc_worker/ under `wrangler dev`, and deployed to warp-gc-check.pannous.workers.dev (since deleted): `{"gc":"object","kind":"262"}` |
+| Cloudflare Workers | V8 (workerd) | **yes** | `wrangler dev`, and deployed to warp-gc-check.pannous.workers.dev (since deleted): `{"gc":"object","kind":"262"}` |
 | Cloudflare Workers, wasm compiled at run time | | **refused** | `WebAssembly.compile(bytes)` → "Wasm code generation disallowed by embedder". Each program must be uploaded as its own script, with the .wasm as a module part |
-| Spin 4.2.2 (Akamai Functions, wasmtime) | wasmtime | **yes** | spin_check/ WAGI: answers `fib 6765`. Spin componentizes the module, and `_start` has to be `() -> ()`, so warp's `main` (which returns a Node) needs a void wrapper. Spin 3.0 failed. WAGI is deprecated, and the long-term route is a wasi-http component (`warp build --component`) |
-| Deno 2 (Deno Deploy, Netlify Edge) | V8 | **yes** | `deno run --allow-read deno_check.mjs` → `object 262` |
+| Spin 4.2.2 (Akamai Functions, wasmtime) | wasmtime | **yes** | WAGI: answers `fib 6765`. Spin componentizes the module, and `_start` has to be `() -> ()`, so warp's `main` (which returns a Node) needs a void wrapper. Spin 3.0 failed. WAGI is deprecated, and the long-term route is a wasi-http component (`warp build --component`) |
+| Deno 2 (Deno Deploy, Netlify Edge) | V8 | **yes** | `deno run` → `{"gc":"object","kind":"262"}` |
 
 ## Ranked options
 1. **Cloudflare Workers (recommended, built).** GC is verified on the edge. The free plan allows 100 scripts per
@@ -22,7 +22,7 @@ glue that turns a request into a call and the returned Node into a response. The
    scripts, 20M requests, dispatch namespaces with no script limit, `<name>.warp.pannous.com` through one dispatch
    Worker) and isn't bought yet (API error 10121). Login for **our** hosting: GitHub OAuth. Login for **their own
    account**: Cloudflare OAuth clients have been open to third parties since 2026 (authorization code + PKCE; scopes
-   `workers-scripts.write`, `user-details.read`, `account-settings.read`). A client is private (members of our
+   `workers-scripts.edit`, `user-details.read`, `account-settings.read`; `offline_access` is refused for our client). A client is private (members of our
    account only) until a TXT record `cloudflare_oauth_client_publisher=…` on the client's domain makes it public.
    The fallback needs no registration: a scoped API token the user pastes.
 2. **Netlify Edge Functions (Deno).** GC works because Deno's V8 does, and Edge Functions compile wasm from bytes
@@ -47,19 +47,38 @@ glue that turns a request into a call and the returned Node into a response. The
   operating it ourselves.
 
 ## Built: warp-hosting (web/hosting/)
-One control Worker in our Cloudflare account, https://warp-hosting.pannous.workers.dev:
-- `GET /auth/github` → GitHub OAuth → a signed session cookie (HMAC, `SESSION_SECRET`). A CLI or test sends
+One control Worker in our Cloudflare account, https://warp-hosting.pannous.workers.dev, reached as
+https://lambda.pannous.com (a Ferron reverse proxy on pannous.com, ~/dev/pannous-lockdown notes/rust-web.md, until
+lambda's DNS moves to Cloudflare):
+- `GET /auth/github?origin=<playground>` → GitHub OAuth app (callback https://lambda.pannous.com/callback) → the
+  callback page posts `{warpHosting: {session, login}}` to the playground that opened it (a signed `warp.…` session,
+  HMAC `SESSION_SECRET`, 30 days). Opened directly, the page says "Logged in as <login>". The CLI and the test send
   `Authorization: Bearer <GitHub token>` instead (`gh auth token`), checked against api.github.com/user.
-- `POST /deploy?name=<name>` with the program's .wasm as the body: the name is owned by the first GitHub user who
-  deploys it (KV `NAMES`). The Worker builds a script from its glue plus the wasm and uploads it as
-  `warp-<name>` (Cloudflare API, `CLOUDFLARE_API_TOKEN`), with its workers.dev route enabled. It answers
-  `{url: "https://warp-<name>.pannous.workers.dev"}`.
-- "Deploy to my own account": the same upload with the user's own token and account (`X-Cloudflare-Token`,
-  `X-Cloudflare-Account`), which the browser keeps and the Worker passes through without storing. The
-  api.cloudflare.com API has no CORS, which is why this goes through our Worker.
-- The playground's ⋯ menu has Deploy and "Deploy to my Cloudflare".
+- `GET /auth/cloudflare?origin=…` → Cloudflare OAuth client "warp hosting" (PKCE, callback …/callback/cloudflare) →
+  `{warpHosting: {cloudflareToken}}`. The client is private (our account's members) until the publisher TXT record
+  (in the main checkout's .env) goes on warp.pannous.com; until then others paste an API token (Workers Scripts: Edit).
+- `POST /deploy?name=<name>&scripts=<host scripts>` with the module as the body: the first GitHub user to deploy a
+  name owns it (KV `NAMES`). worker.js = the named playground scripts + cloud-worker.js (warp-web's glue), uploaded
+  as `warp-<name>` with app.wasm and app.bin, workers.dev route on: `{url: "https://warp-<name>.pannous.workers.dev"}`.
+  `DELETE /deploy?name=` removes one's own program.
+- "Deploy to my own account": the same upload with `X-Cloudflare-Token` (and `X-Cloudflare-Account` when the token
+  reaches several accounts), passed through, never stored. api.cloudflare.com has no CORS, hence the Worker.
+- Clients: `warp deploy --hosted app.warp` (src/deploy.rs; WARP_HOSTING, WARP_HOSTING_TOKEN); the playground's ⋯ menu
+  (deploy.js: Deploy, Deploy to my Cloudflare, a pasted token; the browser compiler builds the module and names the
+  scripts, src/web.rs worker_bundle → src/host_parts.rs).
+- Tests: tests/web/test_deploy.rs (the bundle); `node web/hosting/test_hosting.mjs` against the real API (wrangler
+  dev of the control Worker, `warp deploy --hosted`, the live routes, DELETE; needs ~/.keys CLOUDFLARE_API_TOKEN and gh).
 
-## Open (user decisions, sent to the Interviewer 2026-10-09)
-GitHub OAuth app + secrets, the Cloudflare API token for uploads, Workers for Platforms ($25/month), pannous.com
-nameservers (mixed orderbox + Cloudflare, so a `*.warp.pannous.com` wildcard is unreliable), and a Cloudflare OAuth
-client (private now, public after the TXT record).
+## Limits (no surprise bills)
+- Our account is on the Workers Free plan, which never bills: past 100k requests/day the Workers answer errors until
+  the next day, and the account holds 100 scripts (6 are the user's own).
+- warp-hosting caps programs: 80 in total (MAX_PROGRAMS, "full for now: deploy to your own account") and 5 per GitHub
+  user (MAX_PROGRAMS_PER_USER), wrangler.toml vars.
+- On Workers Paid ($5/month) usage would bill without a hard cap: then add billing notifications and a rate limit on
+  /deploy before switching.
+
+## Decisions (user, via the Interviewer, 2026-10-09)
+Free plan now, programs at warp-<name>.pannous.workers.dev, no Workers for Platforms yet; GitHub login with the
+callback on lambda.pannous.com behind a proxy on pannous.com (not workers.dev); a private Cloudflare OAuth client now
+with the token-paste fallback. Open: publishing the Cloudflare client (TXT record), pannous.com nameservers (mixed
+orderbox + Cloudflare, so `*.warp.pannous.com` is unreliable).
