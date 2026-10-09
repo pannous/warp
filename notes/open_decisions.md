@@ -22,6 +22,10 @@ Held until 9 AM 2026-10-09 (user: "no more questions till 9 AM"):
   `["State" "IO"]` like f.params (a, default on branch interpolation-passes; one assertion in
   tests/control/test_variable_signals.rs changes from "(State IO)") or symbols `(State IO)` (b, needs symbol values
   in the emitter)?
+- P231 (supervisor/warp-web): how does an exact quantity print? mean of 5, 1.5 and 12 km is exactly 37/6 km.
+  (b, recommended) print rounds quantities with units to a decimal, `6.17km`, while str()/serialization keeps
+  `(37/6)km`; plain numbers keep `7/3`. (a, building meanwhile) `(37/6)km` everywhere, exact and reads back.
+  (c) mean/average return floats, `6.16666666666667km` (needs card float-accumulator first).
 Parked (user: "Later"):
 - Parked: P150 license: warp (and warp) have none, so package managers list no license and nobody may legally reuse the
   code. MIT (recommended, as uniscript) / Apache-2.0 / MIT OR Apache-2.0 (Rust convention). User 2026-10-06: "let's
