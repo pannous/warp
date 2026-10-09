@@ -13,8 +13,12 @@ notes/open_decisions.md.
   not by value and not building a range.
   Amended the same day (user, via the supervisor: "up to 2 is very confusing when it also contains the number 2"):
   positions are marked, with the hash (`xs from #2 to #4`, `xs up to #2`) or ordinals (`from second to fourth`,
-  `up to 2nd`, `nth`). A bare number in a word slice is a loud error naming both forms (undoable default,
-  warp-class); whether bare numbers mean values instead is open.
+  `up to 2nd`, `nth`). A bare number in a word slice (`xs up to 2`) is a loud error naming `#2` and `second`
+  (user's multiple choice, via the supervisor); positions are only `#n` or ordinals.
+- Playground CI (user, via the supervisor): pages.yml runs Chrome and Firefox as parallel jobs; workers are not
+  required to tour new examples with --firefox before a merge request.
+- Standing rule (user, via the supervisor): "always present questions in multiple choice form so I get informed
+  either here or via the interviewer": every user question, the Supervisor's included, is an AskUserQuestion popup.
 - Hosting of deployed warp programs (user, via the supervisor): "let's start with our own login and let people log
   in with their own button". First our account hosts the programs: users log in with us and get a Deploy button.
   Second, a button deploying to the person's own provider account. Worker warp-hosting researches providers
