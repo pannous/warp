@@ -625,7 +625,11 @@ fn build_runtime_stub(expected: &std::path::Path) -> Result<std::path::PathBuf, 
     if !source.join(RUNTIME_STUB_CRATE).is_dir() {
         return Err(format!("no runtime stub {}: put warp-runtime there or name one in {RUNTIME_STUB_VARIABLE} (the warp source {} that would build it is gone)", expected.display(), source.display()));
     }
-    eprintln!("note: building the runtime stub for executables once (cargo build -p {RUNTIME_STUB_NAME})");
+    // cargo runs every time (it keeps the stub current, quickly once built); the note only before the first build
+    let release_stub = expected.parent().and_then(std::path::Path::parent).map(|target| target.join("release").join(RUNTIME_STUB_NAME));
+    if !release_stub.is_some_and(|stub| stub.is_file()) {
+        eprintln!("note: building the runtime stub for executables once (cargo build -p {RUNTIME_STUB_NAME})");
+    }
     let mut build = std::process::Command::new(env::var("CARGO").unwrap_or_else(|_| "cargo".to_string()));
     build.args(["build", "--release", "--quiet", "--message-format=json", "-p", RUNTIME_STUB_NAME, "--bin", RUNTIME_STUB_NAME]).current_dir(source);
     let output = build.output().map_err(|failure| format!("cannot run cargo to build the runtime stub: {failure}"))?;

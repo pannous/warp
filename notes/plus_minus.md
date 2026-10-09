@@ -62,8 +62,8 @@ is a DimensionError), but only when units::answer can't answer the whole program
 Unsupported), so span comparisons and final-value tolerances stay compile time. Quantity's `amount:number` admits a ±
 value (type_tests.rs runtime_kind_mask; `float` stays strict). Function parameters get their class from the calls
 (class_methods.rs parameter_classes), so `f(x) := x * 2; f(5 m ± 1 cm)` dispatches to Quantity.times.
-Open: a final Quantity value prints its record (instance-result-text); `f` called with a quantity and a plain number
-fails "not an int". Tests: tests/numbers/test_plus_minus_units.rs, samples/measurements.warp.
+A final Quantity value shows its text (card instance-final). `f` called with a quantity and with a plain number calls
+a copy `f_Quantity(x:Quantity)` for the quantity (card mixed-arguments, class_methods.rs specialized_calls). Tests: tests/numbers/test_plus_minus_units.rs, samples/measurements.warp.
 
 ## Open
 - `if area certainly > 10 then …` parses as `(if area) (then (certainly > 10) …)`: the condition stops at the second

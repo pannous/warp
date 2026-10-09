@@ -53,6 +53,12 @@ pub fn interpolated_mentioning(node: &Node, mentions: impl Fn(&Node) -> bool) ->
 	}
 }
 
+/// The first source pass: `sql "…"` / `sh "…"` templates become parameterized calls, every other template the
+/// concatenation of its pieces, so each later pass reads the holes as code (`"\(area.params)"`)
+pub fn lower_program(program: Node) -> Node {
+	crate::injection::lower_templates(program).map(lower).unwrap_or_else(|error| error)
+}
+
 /// Every template left after the sql/sh lowering becomes the concatenation of its pieces
 pub fn lower(node: Node) -> Node {
 	match node {

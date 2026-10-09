@@ -76,7 +76,7 @@ pub(crate) fn has_block_handler(program: &Node, event: &str) -> bool {
 
 /// The program with each `on ask {…} in {…}` replaced by its block run under handler i, the handlers collected
 fn scoped_blocks(node: Node, handlers: &mut Vec<Handler>) -> Node {
-	let node = node.map_children(|child| scoped_blocks(child, handlers));
+	let node = operand_phrase(node).map_children(|child| scoped_blocks(child, handlers));
 	let Some((event, body, block)) = scoped_handler(&node) else { return node };
 	let number = handlers.len() + 1;
 	let saved = generated(&[SAVED_WORD, &event_word(&event), &number.to_string()]);
@@ -116,6 +116,44 @@ pub(crate) fn scoped_handler(node: &Node) -> Option<(String, Node, Node)> {
 		return None;
 	}
 	Some((words.join(" "), body.clone(), block.clone()))
+}
+
+/// `print "x " + on ask {…} in {…}` parses as `print ("x " + on) ask {…} in {…}`: the handler phrase back in the place
+/// of its `on`, a word of the phrase or the last operand of an operator (`"x " + (on ask {…} in {…})`)
+fn operand_phrase(node: Node) -> Node {
+	let Node::List(items, _, Separator::Space) = node.drop_meta() else { return node };
+	let items = phrase_words(items);
+	let starts_handler = |index: &usize| {
+		let rest = [&[Node::Symbol(ON_WORD.into())], &items[index + 1..]].concat();
+		scoped_handler(&Node::List(rest, Bracket::None, Separator::Space)).is_some()
+	};
+	let Some(start) = (0..items.len()).filter(|index| ends_with_on(&items[*index])).find(|index| *index > 0 || !is_on(&items[0])).filter(starts_handler) else { return node };
+	let phrase = Node::List([&[Node::Symbol(ON_WORD.into())], &items[start + 1..]].concat(), Bracket::None, Separator::Space);
+	let head = &items[..start];
+	let placed = with_last_operand(items[start].clone(), phrase);
+	match head.is_empty() {
+		true => placed,
+		false => Node::List([head, &[placed]].concat(), Bracket::None, Separator::Space),
+	}
+}
+
+fn is_on(node: &Node) -> bool {
+	matches!(node.drop_meta(), Node::Symbol(word) if word == ON_WORD)
+}
+
+fn ends_with_on(node: &Node) -> bool {
+	match node.drop_meta() {
+		Node::Key(_, _, right) => ends_with_on(right),
+		other => is_on(other),
+	}
+}
+
+/// `a + on` → `a + phrase`, `on` → phrase
+fn with_last_operand(node: Node, phrase: Node) -> Node {
+	match node.drop_meta() {
+		Node::Key(left, op, right) => Node::Key(left.clone(), *op, Box::new(with_last_operand(*right.clone(), phrase))),
+		_ => phrase,
+	}
 }
 
 /// The words of a phrase, the groups the parser makes of it (`on (ask {…}) in {…}`, `on ask ({…} in {…})`) undone

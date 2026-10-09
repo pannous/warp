@@ -24,6 +24,7 @@ mod test_unbounded_int;
 mod test_unit_composites;
 mod test_unit_polish;
 mod test_plus_minus_units; // card plus-minus-units
+mod test_mixed_quantity_arguments; // card mixed-arguments
 mod test_rational_quantities;
 mod test_static_units;
 mod test_static_units_compiled;
@@ -42,6 +43,7 @@ mod test_range_tolerance_compare;
 mod test_units_followup;
 mod test_zero_fill;
 mod test_float_zero_and_compound;
+mod test_fourth_root;
 mod test_implicit_libm;
 mod test_unit_word_keys;
 mod test_round_to_digits;

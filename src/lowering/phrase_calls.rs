@@ -7,7 +7,7 @@
 
 use crate::node::{Bracket, Node, Separator};
 use crate::operators::Op;
-use crate::type_name_matching::PREPOSITIONS;
+use crate::type_name_matching::prepositions_among;
 use std::collections::HashMap;
 
 /// The Meta key the parser puts on the head of a `to` phrase: its pattern as text, `_ to _`
@@ -27,12 +27,12 @@ enum Token {
 	Word(String),
 }
 
-/// The pattern of the words after a phrase's name: each run of words between prepositions is one slot, whatever its
-/// articles and type words (`a number`, `number a`, `a`)
-pub fn pattern_text(words: &[&str]) -> String {
+/// The pattern of the words after a phrase's name: each run of words between its phrase words (prepositions,
+/// type_name_matching::phrase_words) is one slot, whatever its articles and type words (`a number`, `number a`, `a`)
+pub fn pattern_text(words: &[&str], in_phrase: &[bool]) -> String {
 	let mut parts: Vec<&str> = vec![];
-	for word in words {
-		if PREPOSITIONS.contains(word) {
+	for (word, phrase_word) in words.iter().zip(in_phrase) {
+		if *phrase_word {
 			parts.push(word);
 		} else if parts.last() != Some(&SLOT) {
 			parts.push(SLOT);
@@ -95,7 +95,7 @@ fn spaced_pattern(items: &[Node]) -> Option<(String, Vec<Part>)> {
 	let (last, middle) = rest.split_last()?;
 	let Node::Key(last_word, Op::Assign | Op::Define, _) = last.drop_meta() else { return None };
 	let words: Vec<&str> = middle.iter().chain(std::iter::once(last_word.as_ref())).map(word).collect::<Option<_>>()?;
-	Some((word(name)?.to_string(), parts_of(&pattern_text(&words))))
+	Some((word(name)?.to_string(), parts_of(&pattern_text(&words, &prepositions_among(&words)))))
 }
 
 /// The arguments of a call as values and preposition words: `1 to 2` parses as the range `1 to 2`, which is two values

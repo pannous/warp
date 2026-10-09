@@ -4,6 +4,8 @@ use super::*;
 
 /// `abs x`, `norm x`: the absolute value (card g-1pvQ: norm is a synonym)
 /// The prefix operators written as words: `sqrt x`, `cbrt x`, `abs x`, `norm x`
+/// `∜x`, read as `√√x`
+pub(super) const FOURTH_ROOT: char = '∜';
 pub const PREFIX_OPERATOR_WORDS: [(&str, Op); 4] = [("sqrt", Op::Sqrt), ("cbrt", Op::Cbrt), ("abs", Op::Abs), ("norm", Op::Abs)];
 /// Infix operators that may follow a suffix: `10% + 1`, `x abs * 2`
 const SUFFIX_FOLLOWERS: [char; 6] = ['+', '-', '*', '/', '<', '>'];
@@ -471,7 +473,7 @@ impl WarpParser {
 			'-' => Some((Op::Neg, 1)),
 			dash if matches!(glyph_operator(dash), Some((Op::Sub, _))) => Some((Op::Neg, 1)),
 			'!' | '¬' => Some((Op::Not, 1)),
-			'√' => Some((Op::Sqrt, 1)),
+			'√' | FOURTH_ROOT => Some((Op::Sqrt, 1)), // ∜x is √√x (expressions.rs)
 			'∛' => Some((Op::Cbrt, 1)),
 			'‖' => Some((Op::Abs, 1)),
 			'#' => Some((Op::Hash, 1)), // prefix # means count/length

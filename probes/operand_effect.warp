@@ -1,0 +1,4 @@
+print "x " + on tax_rate { 0.2 } in { 100 }
+print on tax_rate { 0.3 } in { 7 }
+y = 1 + 2 * on t { 3 } in { emit t }
+y

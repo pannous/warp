@@ -257,7 +257,9 @@ pub struct CompiledModule {
 
 /// The passes over the source forms, in order, each reading what the one before it left: definitions and sugar become
 /// the forms every later pass knows (`def f(x) {…}` is `f(x) := {…}`), modules are resolved
-const SOURCE_PASSES: [fn(Node) -> Node; 93] = [
+const SOURCE_PASSES: [fn(Node) -> Node; 94] = [
+	// `"a \(x) b"` → `"a " + text_form(x) + " b"` (interpolation.rs) first, so every pass reads the holes as code
+	crate::interpolation::lower_program,
 	crate::analyzer::lower_inline_unions,
 	// `on ask {…} in {…}` before any pass reads `{…} in {…}` as membership or an emit as nothing
 	crate::scoped_handlers::lower,
@@ -394,7 +396,6 @@ fn lower_for_emission(node: Node) -> Result<Node, Node> {
 	if let Some(unsaid) = crate::uncertain::check_orderings(&node) {
 		return Err(unsaid.into_error());
 	}
-	let node = crate::interpolation::lower(crate::injection::lower_templates(node)?);
 	let node = crate::function_equality::decide_comparisons(node);
 	if let Node::Error(_) = node {
 		return Err(node);
@@ -420,6 +421,10 @@ fn lower_for_emission(node: Node) -> Result<Node, Node> {
 	let effects = EffectReport::of(&node).with_events_of(&as_written);
 	if let Some(answer) = effects.answer(&node) {
 		return Err(answer);
+	}
+	let node = effects.answer_queries(node);
+	if let Some(error) = node.first_error() {
+		return Err(error.clone());
 	}
 	if let Some((name, capability)) = effects.denied(GRANTED.with(|granted| granted.get())) {
 		return Err(crate::node::error(&format!(

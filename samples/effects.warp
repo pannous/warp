@@ -4,8 +4,7 @@
 price(net) := net * (1 + emit tax_rate)
 
 home = on tax_rate { 0.2 } in { price(100) }
-abroad = on tax_rate { 0.07 } in { price(100) }
-print "at home \(home), abroad \(abroad)"
+print "at home \(home), abroad " + on tax_rate { 0.07 } in { price(100) }
 
 // the innermost handler wins, also through nested calls
 basket(a, b) := price(a) + price(b)
@@ -23,4 +22,7 @@ print "valid \(valid), invalid \(invalid)"
 
 // a function that handles what it asks for asks for nothing more: checkout is Pure, so `! Pure` holds
 checkout(net) := on tax_rate { 0.2 } in { price(net) } ! Pure
-checkout(50)
+print "checkout: \(checkout(50))"
+
+// the compiler knows what a function asks for
+print "price asks for \(price.effects), checkout for \(effects of checkout)"
