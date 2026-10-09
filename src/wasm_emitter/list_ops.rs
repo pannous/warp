@@ -1812,6 +1812,8 @@ impl WasmGcEmitter {
 pub const LIST_EXTEND: &str = "list_extend";
 /// The runtime error of a missing constant field is a function `no_field_<name>`; eval reports it as `no field <name>`
 pub const NO_FIELD_PREFIX: &str = "no_field_";
+/// How a missing field's error begins: `no field title`
+pub const NO_FIELD_MESSAGE: &str = "no field ";
 /// struct_body(node): the field list of an instance of a declared type, else the node itself
 pub(super) const STRUCT_BODY: &str = "struct_body";
 /// instance_field(fields, name_ptr, name_len): the value of the field whose name is that very string of the string
