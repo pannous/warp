@@ -69,6 +69,8 @@ mod test_trailing_symbol; // card trailing-symbol
 mod test_div_assign;
 mod test_unit_fields; // card unit-fields
 mod test_unit_field_display; // card unit-value
+mod test_average; // card average-undefined
 mod test_log_glyphs; // P226
 mod test_units_text; // card units-text
 mod test_as_compound_unit; // card compound-unit
+mod test_printed_quantity; // P231
