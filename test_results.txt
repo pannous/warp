@@ -870,6 +870,7 @@ PASSED:
   ✓ functions::test_captured_containers::test_a_captured_list_element_keeps_its_kind
   ✓ functions::test_captured_containers::test_a_captured_object_field_keeps_its_kind
   ✓ functions::test_captured_copy_of_global::a_lambda_captures_a_local_copied_from_main
+  ✓ functions::test_captured_node_return::a_nested_function_returns_a_float_from_a_captured_float
   ✓ functions::test_character_results::a_returned_character_stays_a_character
   ✓ functions::test_charged_getters::a_function_factory_gets_no_hint_of_lowered_code
   ✓ functions::test_charged_getters::a_getter_of_now_reads_the_clock_at_every_use
@@ -4089,4 +4090,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-14 ignored, 4084 passed, 0 failed, 4084 total tested
+14 ignored, 4085 passed, 0 failed, 4085 total tested
