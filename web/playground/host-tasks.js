@@ -18,6 +18,11 @@ const TASK_RESUME = 3n;
 const TASK_PAUSED = 4n;
 const CONTROL_RUNNING = 0; // a task Worker's control word
 const CONTROL_PAUSED = 1;
+// the control buffer's second word: set by the task Worker once it took the task (task-worker.js runTaskInto)
+const TASK_TAKEN_SLOT = 1;
+// how long a run waits for a task Worker to take its task before it calls the Worker lost (card task-hang)
+const TASK_TAKE_MS = 15000;
+const TASK_CHECK_MS = 100; // how often a run waiting for a task looks after its other tasks
 
 const TASK_WORKER = "task-worker.js";
 const TASK_WORKER_READY = "ready"; // a task Worker's first message: loaded
@@ -242,9 +247,9 @@ function startTask(holder, hooks, name, ints, values) {
 	if (taskPool.length > 0) {
 		const shared = new SharedArrayBuffer(TASK_HEADER + TASK_RESULT_BYTES, { maxByteLength: TASK_RESULT_LIMIT });
 		const worker = taskPool.pop();
-		const control = new Int32Array(new SharedArrayBuffer(4));
+		const control = new Int32Array(new SharedArrayBuffer(2 * Int32Array.BYTES_PER_ELEMENT));
 		worker.postMessage({ module: run.module, name, ints, values, shared, arrays: run.shared, captured, control, channels: run.channels });
-		run.tasks.set(id, { name, worker, shared, control, inline: () => runTask(run.module, hooks, holder.warnings, name, ints, values, run.shared, captured, null, run.channels) });
+		run.tasks.set(id, { name, worker, shared, control, started: performance.now(), inline: () => runTask(run.module, hooks, holder.warnings, name, ints, values, run.shared, captured, null, run.channels) });
 	} else {
 		if (!hasTaskWorkers()) sayTasksInline(run, holder, hooks);
 		run.tasks.set(id, runTask(run.module, hooks, holder.warnings, name, ints, values, run.shared, captured, null, run.channels));
@@ -278,11 +283,13 @@ function runTask(module, hooks, warnings, name, ints, values, arrays, captured =
 }
 
 // the task's record once it is done: a Worker's is waited for (the program runs in a worker, which may block) and
-// read from its shared buffer, its output printed then
+// read from its shared buffer, its output printed then. Meanwhile the run's stalled tasks run here, since the awaited
+// one may wait for them (`after done` waits for the go block that sets done)
 function finishedTask(run, hooks, id) {
+	while (isRunningOnWorker(run.tasks.get(id)) && !isWritten(run.tasks.get(id), TASK_CHECK_MS)) runStalledTasks(run, hooks);
 	const task = run.tasks.get(id);
 	if (!task.worker) return queuedSignals(run, task);
-	let record = readShared(task.shared, true);
+	let record = readShared(task.shared);
 	if (record.output) hooks.print(record.output, 1);
 	taskPool.push(task.worker); // free for the next task
 	if (record.value?.kind === KIND_INT && record.ints) record.value = BigInt(record.value.data.int);
@@ -293,6 +300,32 @@ function finishedTask(run, hooks, id) {
 	if (record.unstarted) record = task.inline();
 	run.tasks.set(id, record);
 	return queuedSignals(run, record);
+}
+
+const isRunningOnWorker = task => Boolean(task.worker);
+const isWritten = (task, milliseconds = 0) => Atomics.wait(new Int32Array(task.shared, 0, 1), 0, 0, milliseconds) !== "timed-out";
+const isTaken = task => Atomics.load(task.control, TASK_TAKEN_SLOT) !== 0;
+
+// the run's tasks that cannot go on by themselves, here: one whose Worker could not instantiate it (out of Wasm memory,
+// see finishedTask) or did not take it in time (card task-hang)
+function runStalledTasks(run, hooks) {
+	for (const [id, task] of run.tasks) {
+		if (!isRunningOnWorker(task) || task.checked) continue;
+		if (isWritten(task)) {
+			task.checked = true; // its record is read once here
+			if (readShared(task.shared).unstarted) finishedTask(run, hooks, id);
+		} else if (!isTaken(task) && performance.now() - task.started > TASK_TAKE_MS) runLostTask(run, hooks, id, task);
+	}
+}
+
+// a task whose Worker never took it: the Worker is replaced and the task runs here, loudly
+function runLostTask(run, hooks, id, task) {
+	const lost = `task ${taskName(task.name)}: its Worker did not take it within ${TASK_TAKE_MS / 1000} s, so it runs here (card task-hang)\n`;
+	console.error(lost);
+	hooks.print(lost, STDERR);
+	task.worker.terminate();
+	addTaskWorker();
+	run.tasks.set(id, task.inline());
 }
 
 // the raises a finished task forwarded, queued once for the program (deliverSignals)
@@ -494,11 +527,9 @@ function writeShared(shared, record) {
 	Atomics.notify(header, 0);
 }
 
-// the record a task Worker wrote into a shared buffer (writeShared): waited for when `wait`, else undefined while none is
-// there yet
-function readShared(shared, wait = false) {
+// the record a task Worker wrote into a shared buffer (writeShared), undefined while none is there yet
+function readShared(shared) {
 	const header = new Int32Array(shared, 0, 2);
-	if (wait) Atomics.wait(header, 0, 0);
 	if (Atomics.load(header, 0) === 0) return undefined;
 	return JSON.parse(decode(new Uint8Array(shared, TASK_HEADER, header[1]).slice()));
 }
