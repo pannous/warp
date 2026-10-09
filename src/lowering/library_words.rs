@@ -94,8 +94,19 @@ pub const ORD: &str = "ord";
 pub const CODEPOINT: &str = "codepoint";
 /// `slice(x, start, end)`: the items or characters start…end-1, 0-based (`a[1:3]`, `s.slice(1)`)
 pub const SLICE: &str = "slice";
-/// Trailing arguments a word may leave out, passed as ø: `m.get(k)` is ø for a missing key, `s.slice(2)` slices to the end
-const OPTIONAL_ARGUMENTS: [(&str, usize); 2] = [(MAP_GET_OR, 1), (SLICE, 1)];
+/// Trailing arguments a word may leave out, passed as ø: `m.get(k)` is ø for a missing key, `s.slice(2)` slices to the end;
+/// `s.split` splits at spaces (left_out_argument)
+const OPTIONAL_ARGUMENTS: [(&str, usize); 3] = [(MAP_GET_OR, 1), (SLICE, 1), (SPLIT, 1)];
+const SPLIT: &str = "split";
+const SPLIT_SEPARATOR: &str = " ";
+/// What an optional argument left out is: the space `s.split` splits at, else ø
+fn left_out_argument(word: &str) -> Node {
+	match word {
+		SPLIT => Node::Text(SPLIT_SEPARATOR.to_string()),
+		_ => Node::Empty,
+	}
+}
+
 /// `b = a.copy()`: values are never shared, so the copy is the value itself
 const COPY: &str = "copy";
 /// `field_with(object, "name", value)`: a copy of the object with the field set; what `object.name = value` lowers to
@@ -1122,7 +1133,7 @@ impl Lowering {
 		let wanted = arity(word);
 		let optional = OPTIONAL_ARGUMENTS.iter().find(|(name, _)| *name == word).map_or(0, |(_, optional)| *optional);
 		if arguments.len() < wanted && arguments.len() + optional >= wanted {
-			arguments.resize(wanted, Node::Empty);
+			arguments.resize(wanted, left_out_argument(word));
 		}
 		// objects are references (P200): `x.copy()` is a new deep copy, `x.copy(shallow: true)` a shallow one (P205)
 		if let (COPY, [receiver], shallow) | (COPY, [receiver, shallow], _) = (word, arguments.as_slice(), &Node::False) {
