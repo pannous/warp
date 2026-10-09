@@ -407,7 +407,7 @@ pub fn extract_host_words(ctx: &mut Context, node: &Node) {
 						ctx.required_functions.insert(crate::wasm_emitter::text_builtins::ERROR_OF);
 					}
 					// an image's pixels cross in one call (wasm_emitter/int_lists.rs)
-					if name == crate::host::GPU_RENDER {
+					if [crate::host::GPU_RENDER, crate::host::TEXT_COVERAGE].contains(&name.as_str()) {
 						ctx.required_functions.insert(crate::wasm_emitter::int_lists::INTS_TO_LIST);
 					}
 					if name == crate::host::PAINT {
