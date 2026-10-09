@@ -131,10 +131,7 @@ pub fn rows_read() -> usize {
 /// position), count, insert
 /// (give the id), update
 pub fn call(member: &str, arguments: &[Node]) -> Result<Node, String> {
-	let text = |node: &Node| match node.drop_meta() {
-		Node::Text(text) => Ok(text.clone()),
-		other => Err(format!("needs a text, got {}", other.serialize().trim())),
-	};
+	let text = |node: &Node| crate::std_adapters::text_value(node).ok_or_else(|| format!("needs a text, got {}", node.serialize().trim()));
 	match (member, arguments) {
 		("open", [table, schema, file]) => opened(&text(table)?, &schema.children(), &text(file)?),
 		("rows", [table, schema, file]) => {
