@@ -16,6 +16,7 @@ pub const TABLES_FILE: &str = "database.sqlite";
 /// The row id every registered class gets, unless it declares one
 const ID_FIELD: &str = "id";
 const ADD_WORD: &str = "add";
+const GLOBAL_WORD: &str = "global";
 /// `@was(old) name: text`: the field's column was called old, so the table's column is renamed
 const RENAMED_MARK: &str = "was";
 /// `save p` writes every column of p's row (field changes are written through already, so it changes nothing then)
@@ -30,10 +31,26 @@ const ADDED: &str = "table_added";
 const REFERENCED: &str = "table_referenced";
 const MEMBER: &str = "table_member";
 const SAVED: &str = "table_saved";
-const GENERATED_NAMES: [(&str, &str); 8] = [(ROW, "table·row"), (ROWS, "table·rows"), (MATCHES, "table·matches"), (ADDED, "table·added"), (ARGUMENTS, "table·arguments"),
-	(REFERENCED, "table·referenced"), (MEMBER, "table·member"), (SAVED, "table·saved")];
+/// the instances given a row before the table loaded, of a loading row's id: the loaded list holds that instance
+const KNOWN: &str = "table_known";
+const GENERATED_NAMES: [(&str, &str); 9] = [(ROW, "table·row"), (ROWS, "table·rows"), (MATCHES, "table·matches"), (ADDED, "table·added"), (ARGUMENTS, "table·arguments"),
+	(REFERENCED, "table·referenced"), (MEMBER, "table·member"), (SAVED, "table·saved"), (KNOWN, "table·known")];
+/// Each table's lazy parts (notes/orm.md Loading), `people·load` of people: the function giving the list, loading its
+/// rows on the first call; the count, SELECT COUNT(*) until then; the add, inserting without loading; the reset of a
+/// route reading the table anew; whether the rows are loaded; the instances added before
+const LOAD: &str = "table_load";
+const COUNTED: &str = "table_count";
+const ADDING: &str = "table_add";
+const RESET: &str = "table_reset";
+const LOADED: &str = "table_loaded";
+const MET: &str = "table_met";
+const LAZY_PARTS: [(&str, &str); 6] = [(LOAD, "load"), (COUNTED, "count"), (ADDING, "add"), (RESET, "reset"), (LOADED, "loaded"), (MET, "met")];
+/// `count(people)`, `people.count`: counted without loading
+const COUNT_WORDS: [&str; 4] = ["count", "size", "length", "len"];
 const SCHEMA_PLACEHOLDER: &str = "table_schema";
 const READ_PLACEHOLDER: &str = "table_read";
+const ROWS_PLACEHOLDER: &str = "table_rows_read";
+const COUNT_PLACEHOLDER: &str = "table_count_read";
 const VALUE_PLACEHOLDER: &str = "table_value";
 /// `red.players.add(p)`: the instance whose one-to-many field is added to
 const OWNER_PLACEHOLDER: &str = "table_owner";
@@ -112,7 +129,7 @@ pub fn lower(program: Node) -> Node {
 	if tables.is_empty() {
 		return program;
 	}
-	with_tables(with_row_fields(program, &tables), &tables, &tables_file(), &mut vec![])
+	with_lazy_reads(with_tables(with_row_fields(program, &tables), &tables, &tables_file(), &mut vec![]), &tables, None)
 }
 
 /// The program's registered tables by their list variable
@@ -454,8 +471,8 @@ fn with_member_getters(body: Node, table: &Table) -> Node {
 		let Node::Key(field, Op::Colon, _) = item.drop_meta() else { return item };
 		let Some(members) = table.members.iter().find(|members| members.field == field.drop_meta().name()) else { return item };
 		let Some(back) = &members.back else { return item };
-		generated(&format!("{field} := {{ global {list}; [{MEMBER} for {MEMBER} in {list} if {key} == {ID_FIELD}] }}", key = key_id(MEMBER, back, members.optional_back),
-			field = members.field, list = members.table), [])
+		generated(&format!("{field} := {{ [{MEMBER} for {MEMBER} in {LOAD}() if {key} == {ID_FIELD}] }}", key = key_id(MEMBER, back, members.optional_back),
+			field = members.field), lazy_names(&members.table))
 	};
 	match body {
 		Node::List(items, Bracket::Curly, separator) if !table.members.is_empty() => Node::List(items.into_iter().map(getter).collect(), Bracket::Curly, separator),
@@ -546,29 +563,147 @@ fn opened(statement: &Node, tables: &HashMap<String, Table>, file: &str, open: &
 		let column = [Node::Text(name), Node::Text(field_type), default.unwrap_or(Node::Empty)].into_iter().chain(old_name);
 		Node::List(column.collect(), Bracket::Square, Separator::Space)
 	}).collect(), Bracket::Square, Separator::Space);
-	let read = generated(&format!("std_io(\"table\", \"open\", [{:?}, {SCHEMA_PLACEHOLDER}, {file:?}])", table.name), [(SCHEMA_PLACEHOLDER, schema)]);
-	let instances = |rows: &str, kept: &str| format!("[{}({}) for {ROW} in {rows}{kept}]", table.class, arguments.join(", "));
-	let required: Vec<&str> = table.references.iter().map(|(field, _)| field.as_str()).filter(|field| !table.is_optional(field)).collect();
-	let assigned = |rows: Node| Node::Key(Box::new(target.drop_meta().clone()), Op::Assign, Box::new(rows));
-	if required.is_empty() {
-		return Some(vec![assigned(generated(&instances(READ_PLACEHOLDER, ""), [(READ_PLACEHOLDER, read)]))]);
+	if !matches!(target.drop_meta(), Node::Key(_, Op::Colon, _)) {
+		// `people = database.people` again (a served route at each request): the next read loads the rows anew; an
+		// assignment still, so a block of it and a value stays a block (`{ p = …; p#1 }`), no list
+		let reset = called(lazy_name(&variable, "reset"), None);
+		return Some(vec![Node::Key(Box::new(target.drop_meta().clone()), Op::Assign, Box::new(reset))]);
 	}
+	let table_call = |member: &str| generated(&format!("std_io(\"table\", {member:?}, [{:?}, {SCHEMA_PLACEHOLDER}, {file:?}])", table.name), [(SCHEMA_PLACEHOLDER, schema.clone())]);
+	let class = &table.class;
+	let required: Vec<&str> = table.references.iter().map(|(field, _)| field.as_str()).filter(|field| !table.is_optional(field)).collect();
 	// a required key without its row (deleted, or the 0 of a column added for it) leaves its row out, reported
 	let found = |field: &str| format!("count({}) > 0", matching_rows(table, field, &column_cell(table, ROW, field)));
 	let warnings: String = required.iter().map(|field| format!(
 		"if not ({found}) {{ warning(\"{variable} row \" + {ROW}#1 + \": {field} \" + {cell} + \" is no row of {target}; the row is left out (declare {field}: {class}? to keep it, with ø)\") }}\n",
 		found = found(field), cell = column_cell(table, ROW, field), target = table.reference(field).unwrap_or_default(),
 		class = class_of(&table.fields.iter().find(|(name, _, _)| name == field).map(|(_, field_type, _)| field_type.clone()).unwrap_or_default()))).collect();
-	let kept = format!(" if {}", required.iter().map(|field| found(field)).collect::<Vec<_>>().join(" and "));
-	let checked = generated(&format!("{ROWS} = {READ_PLACEHOLDER}\nfor {ROW} in {ROWS} {{\n{warnings}}}"), [(READ_PLACEHOLDER, read)]);
-	Some([checked.children(), vec![assigned(generated(&instances(ROWS, &kept), []))]].concat())
+	let checks = match warnings.is_empty() {
+		true => String::new(),
+		false => format!("for {ROW} in {ROWS} {{\n{warnings}}}\n"),
+	};
+	let kept = match required.is_empty() {
+		true => String::new(),
+		false => format!(" if {}", required.iter().map(|field| found(field)).collect::<Vec<_>>().join(" and ")),
+	};
+	let instance = format!("({KNOWN} = [{REFERENCED} for {REFERENCED} in {MET} if {REFERENCED}.{ID_FIELD} == {ROW}#1]; if {KNOWN} then {KNOWN}#1 else {class}({}))", arguments.join(", "));
+	// the rows a required key leaves out are counted only by loading
+	let unloaded_count = match required.is_empty() {
+		true => COUNT_PLACEHOLDER.to_string(),
+		false => format!("count({LOAD}())"),
+	};
+	let code = format!("{LOADED} = no
+{MET}: [{class}] = []
+{READ_PLACEHOLDER}
+{LOAD}() := {{
+global {variable}
+global {LOADED}
+global {MET}
+if not {LOADED} {{
+{ROWS} = {ROWS_PLACEHOLDER}
+{checks}{variable} = [{instance} for {ROW} in {ROWS}{kept}]
+{LOADED} = yes
+}}
+{variable}
+}}
+{COUNTED}() := {{
+global {variable}
+global {LOADED}
+if {LOADED} then count({variable}) else {unloaded_count}
+}}
+{ADDING}({ADDED}) := {{
+global {variable}
+global {LOADED}
+global {MET}
+if {LOADED} {{ {variable}.add({ADDED}) }} else {{ {MET}.add({ADDED}) }}
+{ADDED}
+}}
+{RESET}() := {{
+global {LOADED}
+global {MET}
+{LOADED} = no
+{MET} = []
+[]
+}}");
+	let placeholders = [(READ_PLACEHOLDER, table_call("migrate")), (ROWS_PLACEHOLDER, table_call("rows")), (COUNT_PLACEHOLDER, table_call("count"))].into_iter().chain(lazy_names(&variable));
+	let empty = parse("[]");
+	Some([vec![Node::Key(Box::new(target.drop_meta().clone()), Op::Assign, Box::new(empty))], generated(&code, placeholders).children()].concat())
 }
 
 
 /// The code with each placeholder as its node and the generated variables named
-fn generated<const N: usize>(code: &str, placeholders: [(&str, Node); N]) -> Node {
+fn generated<'a>(code: &str, placeholders: impl IntoIterator<Item = (&'a str, Node)>) -> Node {
 	let names = GENERATED_NAMES.iter().map(|(written, name)| (written.to_string(), Node::Symbol(name.to_string())));
-	crate::law::substitute(&parse(code), &names.chain(placeholders.map(|(placeholder, node)| (placeholder.to_string(), node))).collect())
+	crate::law::substitute(&parse(code), &names.chain(placeholders.into_iter().map(|(placeholder, node)| (placeholder.to_string(), node))).collect())
+}
+
+/// The placeholders of a table's lazy parts as their names: `table_load` of people is `people·load`
+fn lazy_names(variable: &str) -> Vec<(&'static str, Node)> {
+	LAZY_PARTS.iter().map(|(placeholder, part)| (*placeholder, Node::Symbol(lazy_name(variable, part)))).collect()
+}
+
+fn lazy_name(variable: &str, part: &str) -> String {
+	format!("{variable}·{part}")
+}
+
+/// The call `name()` or `name(argument)`
+fn called(name: String, argument: Option<Node>) -> Node {
+	let code = match argument { Some(_) => format!("{FUNCTION_PLACEHOLDER}({VALUE_PLACEHOLDER})"), None => format!("{FUNCTION_PLACEHOLDER}()") };
+	generated(&code, [(FUNCTION_PLACEHOLDER, Node::Symbol(name))].into_iter().chain(argument.map(|value| (VALUE_PLACEHOLDER, value))))
+}
+
+/// Reads of a table's list as its load (`people` → `people·load()`), `count(people)` as its count and `people.add(p)` as
+/// its add, which load no rows; a table's own lazy functions keep its list (`own`). Registrations, `global people`,
+/// assigned lists and field names (`x.people`) stay
+fn with_lazy_reads(node: Node, tables: &HashMap<String, Table>, own: Option<&str>) -> Node {
+	let table_of = |node: &Node| match node.drop_meta() {
+		Node::Symbol(name) if tables.contains_key(name) && own != Some(name.as_str()) => Some(name.clone()),
+		_ => None,
+	};
+	let rewrite = |node: Node| with_lazy_reads(node, tables, own);
+	if let Some(variable) = lazy_definition(&node, tables) {
+		return node.map_children(|child| with_lazy_reads(child, tables, Some(&variable)));
+	}
+	match node.drop_meta().clone() {
+		Node::Symbol(_) => match table_of(&node) {
+			Some(variable) => called(lazy_name(&variable, "load"), None),
+			None => node,
+		},
+		Node::Key(_, Op::Assign, source) if database_table(&source).is_some() => node,
+		Node::Key(word, Op::Colon, _) if word.drop_meta().name() == GLOBAL_WORD => node,
+		Node::List(parts, _, _) if parts.len() == 2 && COUNT_WORDS.contains(&parts[0].drop_meta().name().as_str()) && table_of(&parts[1]).is_some() => {
+			called(lazy_name(&table_of(&parts[1]).unwrap_or_default(), "count"), None)
+		}
+		Node::Key(left, Op::Dot, right) => match (table_of(&left), right.drop_meta()) {
+			(Some(variable), Node::Symbol(word)) if COUNT_WORDS.contains(&word.as_str()) => called(lazy_name(&variable, "count"), None),
+			(Some(variable), Node::List(parts, _, _)) if parts.len() == 2 && parts[0].drop_meta().name() == ADD_WORD => {
+				called(lazy_name(&variable, "add"), Some(rewrite(parts[1].clone())))
+			}
+			(_, Node::Symbol(_)) => Node::Key(Box::new(rewrite(*left)), Op::Dot, right),
+			_ => Node::Key(Box::new(rewrite(*left)), Op::Dot, Box::new(rewrite(*right))),
+		},
+		Node::Key(target, op, value) if (op == Op::Assign || op.is_compound_assign()) && table_of(declared(&target)).is_some() => Node::Key(target, op, Box::new(rewrite(*value))),
+		_ => node.map_children(rewrite),
+	}
+}
+
+/// The variable an assignment's target names: `people` of `people: [Person]`
+fn declared(target: &Node) -> &Node {
+	match target.drop_meta() {
+		Node::Key(variable, Op::Colon, _) => variable,
+		_ => target,
+	}
+}
+
+/// `people·load() := …` and the other lazy functions of a table: its variable
+fn lazy_definition(node: &Node, tables: &HashMap<String, Table>) -> Option<String> {
+	let Node::Key(head, Op::Define, _) = node.drop_meta() else { return None };
+	let name = match head.drop_meta() {
+		Node::List(parts, _, _) => parts.first()?.drop_meta().name(),
+		other => other.name(),
+	};
+	let (variable, part) = name.rsplit_once('·')?;
+	(tables.contains_key(variable) && LAZY_PARTS.iter().any(|(_, lazy_part)| *lazy_part == part)).then(|| variable.to_string())
 }
 
 /// The table's columns besides id, in field order

@@ -58,6 +58,22 @@ bo's row again, so it changes nothing after written-through changes; an instance
   the whole page (IN (…)), which avoids N+1 queries without any annotation.
 - Keywords to tune it (eager, page size) come later (user).
 
+### How loading works now (branch orm-updates)
+- Registration migrates (`std_io("table", "migrate", …)`) and loads no rows. database_tables.rs `opened` generates per
+  table `people·load()` (rows via `std_io("table", "rows", …)` on the first call, `people·loaded`), `people·count()`
+  (SELECT COUNT(*) until loaded; a table with a required foreign key loads, since such rows can be left out),
+  `people·add(p)` (onto the list when loaded, else onto `people·met`) and `people·reset()`.
+- `with_lazy_reads` (last in database_tables::lower) turns each read `people` into `people·load()`, `count(people)` and
+  `people.count` into `people·count()`, `people.add(p)` into `people·add(p)`; registrations, `global people`, assigned
+  lists and field names stay, and a table's own lazy functions keep its list. One-to-many getters read `people·load()`.
+- Identity: the load builds each row's instance unless `people·met` holds one with its id, so an instance added before
+  the load is the loaded row (test an_instance_added_before_loading_is_the_loaded_row).
+- A route reopening the table (`users = database.users`, serve.rs) is `users = users·reset()`: the next read loads anew.
+- Observed natively by `database::rows_read()` (test a_table_loads_its_rows_only_when_read).
+- Not yet: `#i` loading one row, paged iteration, the IN (…) batching; a class method reading a table directly (not a
+  generated getter) is not rewritten. An empty list must be `parse("[]")` (ø): a built `[]` List node with Space
+  separator types `xs += [x]` as int + list.
+
 ## Writes and transactions
 - Default autocommit: each add/remove/field change is its own statement.
 - `transaction { … }` (optional) is BEGIN … COMMIT, ROLLBACK when the block fails; it also batches.
@@ -132,7 +148,8 @@ bo's row again, so it changes nothing after written-through changes; an instance
    - add and field updates written through;
    - migrations for added/removed columns;
    - the table loaded whole at registration, filters in memory.
-2. Queries instead of loading: SQL translation of filters (done, card orm-filters), count/#i/paging, the identity map.
+2. Queries instead of loading: SQL translation of filters (done, card orm-filters), lazy load + count + add without
+   loading + identity of added instances (done, orm-updates), #i/paging.
 3. Application functions for the rest of a filter (done, card orm-filters: warp_call into the module).
 4. Foreign keys and one-to-many (done, card orm; one-to-many lazy as getters), batched lazy loading of tables.
 5. `transaction { }`.

@@ -64,6 +64,25 @@ fn an_add_in_a_block_of_one_statement_inserts() {
 	is!(&program("people_blocked", "people#1.id"), 1);
 }
 
+// the smart default (notes/orm.md Loading): registering a table loads no rows; count is SELECT COUNT(*), an add
+// inserts without loading, and the rows load on the first read of the list
+#[cfg(feature = "native")]
+#[test]
+fn a_table_loads_its_rows_only_when_read() {
+	eval(&program("people_lazy", "people.add(Person(\"Jo\", 5))\npeople.add(Person(\"Ki\", 6))"));
+	let before = warp::database::rows_read();
+	is!(&program("people_lazy", "people.add(Person(\"Lu\", 7))\ncount(people)"), 3);
+	assert_eq!(warp::database::rows_read(), before, "counting and adding loaded rows");
+	is!(&program("people_lazy", "people#2.name"), "Ki");
+	assert!(warp::database::rows_read() > before, "reading an element loads the rows");
+}
+
+// an instance added before the rows load is the one the loaded list holds
+#[test]
+fn an_instance_added_before_loading_is_the_loaded_row() {
+	is!(&program("people_known", "mo = Person(\"Mo\", 1)\npeople.add(mo)\nmo.age = 2\nfirst = people#1\nfirst.age = 3\nmo.age"), 3);
+}
+
 // `@was(old)` on a field renames its column, keeping the data; without it a rename reads as add + remove
 #[test]
 fn a_field_marked_was_renames_its_column() {
