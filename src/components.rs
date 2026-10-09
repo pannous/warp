@@ -126,6 +126,7 @@ fn load(path: &str) -> Result<Loaded, String> {
 	serve_host_imports(&mut linker, &component).map_err(|failure| format!("{path}: {failure:#}"))?;
 	let state = ComponentState { wasi: WasiCtx::builder().inherit_stdio().build(), table: ResourceTable::new() };
 	let mut store = Store::new(engine(), state);
+	warp_runtime::engine::cap_memory(&mut store);
 	let instance = linker.instantiate(&mut store, &component).map_err(|failure| format!("cannot instantiate {path}: {failure:#}"))?;
 	let (mut functions, mut kinds) = (vec![], vec![]);
 	let mut add = |store: &mut Store<ComponentState>, name: &str, item: &ComponentItem, index: Option<ComponentExportIndex>| {
