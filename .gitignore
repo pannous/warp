@@ -12,6 +12,9 @@ out
 .fleet/
 .idea/
 .vscode/
+# session data permissions_hook.js may write
+.claude/sessions.json
+.claude/session-config.json
 
 notes/session
 
