@@ -10,6 +10,7 @@ use std::time::Duration;
 pub const TEXT_HEAP_EXPORT: &str = "text_heap";
 #[cfg(feature = "native")]
 const PAGE_BITS: u32 = 16;
+#[cfg(feature = "native")]
 const I64_BYTES: usize = 8;
 
 /// Other spellings of the host words, for any number of arguments or only for the given one (user decision #14e:
