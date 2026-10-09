@@ -3723,6 +3723,10 @@ PASSED:
   ✓ web::test_page_tests::a_missing_button_fails_the_test
   ✓ web::test_page_tests::a_plain_run_skips_page_tests
   ✓ web::test_page_tests::passing_page_tests_are_counted
+  ✓ web::test_primer::every_primer_compile_snippet_compiles
+  ✓ web::test_primer::every_primer_snippet_prints_what_the_primer_shows
+  ✓ web::test_primer::every_primer_snippet_runs_to_its_value
+  ✓ web::test_primer::the_primer_fits_a_system_prompt
   ✓ web::test_rendering_itself::a_program_with_markup_exports_its_renderer
   ✓ web::test_rendering_itself::only_a_program_with_markup_renders_itself
   ✓ web::test_rendering_itself::the_renderer_inside_the_module_gives_the_html
@@ -3887,11 +3891,15 @@ PASSED:
   ✓ welcoming::test_fixits::bare_list_fixes
   ✓ welcoming::test_fixits::braceless_call_fixes
   ✓ welcoming::test_fixits::codepoint_is_the_preferred_name
+  ✓ welcoming::test_fixits::declared_type_mismatch_fixes
   ✓ welcoming::test_fixits::filter_loop_fixes
   ✓ welcoming::test_fixits::kebab_key_fixes
   ✓ welcoming::test_fixits::list_operator_fixes
   ✓ welcoming::test_fixits::local_or_global_fixes
   ✓ welcoming::test_fixits::loop_it_fix
+  ✓ welcoming::test_fixits::missing_closer_fixes
+  ✓ welcoming::test_fixits::misspelled_name_fixes
+  ✓ welcoming::test_fixits::misspelled_parameter_and_type_fixes
   ✓ welcoming::test_fixits::operator_ambiguity_fixes
   ✓ welcoming::test_fixits::range_end_fixes
   ✓ welcoming::test_fixits::signed_operand_fixes
@@ -3899,7 +3907,9 @@ PASSED:
   ✓ welcoming::test_fixits::the_page_gets_each_fix_as_an_edit
   ✓ welcoming::test_fixits::the_page_gets_every_edit_of_a_fix
   ✓ welcoming::test_fixits::the_page_says_got_it_for_one_expression
+  ✓ welcoming::test_fixits::unused_copy_fix
   ✓ welcoming::test_fixits::word_fixes
+  ✓ welcoming::test_fixits::written_form_fixes
   ✓ welcoming::test_footguns::test_addition_is_associative_by_default
   ✓ welcoming::test_footguns::test_and_or_ternary_is_linted
   ✓ welcoming::test_footguns::test_append_method_rebinds_the_list
@@ -4224,4 +4234,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-10 ignored, 4219 passed, 0 failed, 4219 total tested
+10 ignored, 4229 passed, 0 failed, 4229 total tested
