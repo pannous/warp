@@ -46,7 +46,7 @@ pub fn download_within(url: &str, _timeout: std::time::Duration) -> Result<Strin
 #[cfg(all(feature = "native", not(test)))]
 pub fn download_within(url: &str, timeout: std::time::Duration) -> Result<String, String> {
 	let reason = |error| network_reason(error, timeout);
-	let mut response = agent_within(timeout).get(url).call().map_err(reason)?;
+	let mut response = agent_within(timeout, true).get(url).call().map_err(reason)?;
 	response.body_mut().read_to_string().map_err(reason)
 }
 
@@ -56,8 +56,7 @@ pub fn download_within(url: &str, timeout: std::time::Duration) -> Result<String
 #[cfg(feature = "native")]
 pub fn post_within(url: &str, body: &str, headers: &[(String, String)], timeout: std::time::Duration) -> Result<String, String> {
 	let reason = |error| network_reason(error, timeout);
-	let agent: ureq::Agent = ureq::Agent::config_builder().timeout_global(Some(timeout)).http_status_as_error(false).build().into();
-	let mut request = agent.post(url).header("Content-Type", "text/plain; charset=utf-8");
+	let mut request = agent_within(timeout, false).post(url).header("Content-Type", "text/plain; charset=utf-8");
 	for (name, value) in headers {
 		request = request.header(name, value);
 	}
@@ -71,8 +70,9 @@ pub fn post_within(url: &str, body: &str, headers: &[(String, String)], timeout:
 }
 
 #[cfg(feature = "native")]
-fn agent_within(timeout: std::time::Duration) -> ureq::Agent {
-	ureq::Agent::config_builder().timeout_global(Some(timeout)).build().into()
+/// `status_is_error`: an answer of status >= 400 fails the call itself, its body unread
+fn agent_within(timeout: std::time::Duration, status_is_error: bool) -> ureq::Agent {
+	ureq::Agent::config_builder().timeout_global(Some(timeout)).http_status_as_error(status_is_error).build().into()
 }
 
 /// A failed request in a few words: DNS, timeout, HTTP status >= 400, else ureq's own
