@@ -19,6 +19,7 @@ mod test_concatenating_parameter;
 mod test_conversion_methods;
 mod test_round8_call_forms;
 mod test_def_forms;
+mod test_definition_bodies;
 mod test_def_bool_result;
 mod test_python_ruby_definitions;
 mod test_field_function_values;
