@@ -193,6 +193,8 @@ function startWorker(restarts = 0) {
 			if (data.type === "failed") return failed(new Error(data.message));
 			if (data.type === "bundle") return bundled(data.bundle); // deploy.js
 			if (data.type === "sound") return playSound(data);
+			if (data.type === "sound file") return playSoundFile(data.url);
+			if (data.type === "stop sound files") return stopSoundFiles();
 			if (!pending) return showEventOutput(data);
 			if (data.type === "listening") Object.assign(pending, { listening: data.events, address: data.address });
 			if (data.type === "print") printedChunk(pending, data);
@@ -286,10 +288,26 @@ function playSound({ samples, rate }) {
 	sounding.push(source);
 }
 
+// `play "song.mp3"` (card sound-library): a music file in the background, by its URL beside the page or anywhere
+let playingFiles = [];
+function playSoundFile(url) {
+	if (navigator.userActivation && !navigator.userActivation.hasBeenActive) return;
+	const player = new Audio(url);
+	player.onended = () => playingFiles = playingFiles.filter(other => other !== player);
+	player.play().catch(error => console.error(`play "${url}": ${error.message}`));
+	playingFiles.push(player);
+}
+
+function stopSoundFiles() {
+	playingFiles.forEach(player => player.pause());
+	playingFiles = [];
+}
+
 function silence() {
 	sounding.forEach(source => source.stop());
 	sounding = [];
 	soundsEnd = 0;
+	stopSoundFiles();
 }
 
 // each painting shows at once, while the program still runs: one the size of the last replaces it, as a frame (card
