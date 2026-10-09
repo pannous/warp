@@ -28,9 +28,9 @@ const BOOL_TYPE: &str = ".bool";
 const ANY_TYPE: &str = ".any";
 const LIST_TYPE_PREFIX: &str = ".list ";
 /// The builtin scalar type words warp checks a value against (analyzer admits) that W0 has a type for
-const BUILTIN_TYPE_WORDS: [&str; 11] = ["int", "integer", "long", "exact", "float", "number", "text", "string", "str", "bool", "boolean"];
+const BUILTIN_TYPE_WORDS: [&str; 13] = ["int", "integer", "long", "exact", "float", "number", "text", "string", "str", "codepoint", "char", "bool", "boolean"];
 /// A value of each W0 scalar type and the run-time kind warp sees it as (a bool is an Int)
-const VALUE_KINDS: [(&str, Kind); 4] = [(BOOL_TYPE, Kind::Int), (".int", Kind::Int), (".number", Kind::Float), (".text", Kind::Text)];
+const VALUE_KINDS: [(&str, Kind); 5] = [(BOOL_TYPE, Kind::Int), (".int", Kind::Int), (".number", Kind::Float), (".text", Kind::Text), (".codepoint", Kind::Codepoint)];
 const UNIT_TYPE: &str = ".unit";
 /// the parameter of a function that takes none
 const UNIT_PARAMETER: &str = "·";
@@ -102,6 +102,7 @@ fn type_of_word(word: &str) -> Option<String> {
 			"int" | "integer" | "long" => ".int",
 			"float" | "number" | "exact" => ".number",
 			"text" | "string" | "str" => ".text",
+			"codepoint" | "char" => ".codepoint",
 			"bool" | "boolean" => BOOL_TYPE,
 			"any" => ANY_TYPE,
 			_ => return None,
@@ -485,6 +486,12 @@ fn bool_literal(declared: Option<&str>, value: &Node) -> Option<String> {
 }
 
 /// A value whose type is evidently bool: `true`, `1 < 2`
+/// One `unit` as a W0 quantity: its number of smallest steps of its base dimension
+fn quantity_literal(unit: &str) -> String {
+	let (dimension, factor) = crate::units::dimension_and_factor(unit).expect("a unit");
+	format!(".qty {factor} [({}, 1)]", quoted(&dimension))
+}
+
 fn is_evident_bool(value: &Node) -> bool {
 	matches!(value.drop_meta(), Node::True | Node::False | Node::Key(_, Op::Lt | Op::Le | Op::Gt | Op::Ge | Op::Eq | Op::Ne, _))
 }
@@ -1185,6 +1192,8 @@ impl Exporter {
 			Node::Symbol(name) if self.functions.get(name).is_some_and(|parameter| parameter == UNIT_TYPE) => Ok(format!(".call {} .unit", quoted(name))),
 			Node::Symbol(name) if self.lambda_names.contains(name) => Err(format!("not in W0: {name} as a value (warp calls it; `function {name}` is the function)")),
 			Node::Symbol(name) if self.names.contains_key(name) => Ok(format!(".glob {}", quoted(name))),
+			// a unit word is a quantity of one unit (`2 km` parses as `2 * km`)
+			Node::Symbol(name) if crate::units::is_unit(name) => Ok(quantity_literal(name)),
 			_ if map_entries(node).is_some() && self.classes.contains_key(MAP_CLASS) => self.instance(MAP_CLASS, map_entries(node).expect("a map")),
 			Node::List(items, Bracket::Square, _) => {
 				let elements: Result<Vec<String>, String> = items.iter().map(|item| self.expression(item)).collect();

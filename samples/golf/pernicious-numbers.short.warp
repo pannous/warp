@@ -1,1 +1,1 @@
-use math;for 0…50:is_prime(to_base(it,2).count("1"))&&print(it)
+use math;for 0…50:is_prime(bit_count(it))&&print it

@@ -6,7 +6,7 @@
 use crate::analyzer::is_list_mutating_method;
 use crate::node::{Bracket, Node, Separator};
 use crate::operators::Op;
-use std::collections::{BTreeMap, HashSet};
+use std::collections::{BTreeMap, HashMap, HashSet};
 
 use super::map_backend::is_update;
 use crate::context::UserFunctionDef;
@@ -18,24 +18,36 @@ const READING_WORDS: [&str; 15] = ["count", "len", "size", "length", "print", "p
 /// The variables `program` hands on as a whole Node: an argument of a function that changes that parameter (or of an
 /// imported one that `changes_arguments` may), an item of a list or map, a field value (not the program's final
 /// variable, a value read or discarded)
-pub(super) fn held_elsewhere(program: &Node, functions: &BTreeMap<String, UserFunctionDef>, changes_arguments: &dyn Fn(&str) -> bool) -> HashSet<String> {
-	let mut walk = Holders { functions, changes_arguments, names: HashSet::new() };
+pub(super) fn held_elsewhere<'a>(program: &'a Node, functions: &BTreeMap<String, UserFunctionDef>, changes_arguments: &dyn Fn(&str) -> bool) -> Holds<'a> {
+	let mut walk = Holders { functions, changes_arguments, passing: false, holds: Holds::default() };
 	walk.value(program, true);
-	walk.names
+	walk.holds
 }
 
-struct Holders<'a> {
+#[derive(Default)]
+pub(super) struct Holds<'n> {
+	/// The places an item or a field holds each variable: `[xs, 5]`, `{r = xs}`
+	pub places: HashMap<String, Vec<&'n Node>>,
+	/// The variables passed to a function that changes them
+	pub passed: HashSet<String>,
+}
+
+struct Holders<'a, 'n> {
 	functions: &'a BTreeMap<String, UserFunctionDef>,
 	changes_arguments: &'a dyn Fn(&str) -> bool,
-	names: HashSet<String>,
+	/// inside an argument a function may change
+	passing: bool,
+	holds: Holds<'n>,
 }
 
-impl Holders<'_> {
+impl<'n> Holders<'_, 'n> {
 	/// The variables a value holds; `read`: where it goes only reads it (a reading word, a discarded statement, the
 	/// result), so the variable it is stays unheld
-	fn value(&mut self, node: &Node, read: bool) {
-		match node.drop_meta() {
-			Node::Symbol(name) if !read => { self.names.insert(name.clone()); }
+	fn value(&mut self, node: &'n Node, read: bool) {
+		let place = node.drop_meta();
+		match place {
+			Node::Symbol(name) if !read && self.passing => { self.holds.passed.insert(name.clone()); }
+			Node::Symbol(name) if !read => self.holds.places.entry(name.clone()).or_default().push(place),
 			Node::Symbol(_) => {}
 			Node::List(statements, _, Separator::Semicolon | Separator::Newline) => {
 				for (index, statement) in statements.iter().enumerate() {
@@ -54,7 +66,10 @@ impl Holders<'_> {
 				let imported_changing = function.is_none() && (self.changes_arguments)(&callee);
 				for (index, argument) in items.iter().enumerate().skip(1) {
 					// a function that never changes the list it gets only reads it
-					self.value(argument, !imported_changing && !function.is_some_and(|function| changes_parameter(function, index - 1)));
+					let changed = imported_changing || function.is_some_and(|function| changes_parameter(function, index - 1));
+					let passing = std::mem::replace(&mut self.passing, changed);
+					self.value(argument, !changed);
+					self.passing = passing;
 				}
 			}
 			// `(x)`: the value itself
@@ -65,7 +80,7 @@ impl Holders<'_> {
 		}
 	}
 
-	fn assignment(&mut self, target: &Node, value: &Node) {
+	fn assignment(&mut self, target: &'n Node, value: &'n Node) {
 		match (target.drop_meta(), value.drop_meta()) {
 			// `xs = xs + [v]`: only the new items
 			(Node::Symbol(name), Node::Key(list, Op::Add, added)) if matches!(list.drop_meta(), Node::Symbol(list) if list == name) => self.value(added, false),

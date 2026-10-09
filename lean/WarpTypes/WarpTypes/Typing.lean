@@ -25,7 +25,10 @@ inductive HasType (P : Program) : Ctx → Expr → Ty → Prop where
   /-- an int in the range of a fixed width (`int16`), what a checked declaration holds -/
   | intIn {Γ n lo hi} : lo ≤ n → n ≤ hi → HasType P Γ (.int n) (.ranged lo hi)
   | num {Γ n} : HasType P Γ (.num n) .number
-  | text {Γ s} : HasType P Γ (.text s) .text
+  | qty {Γ n d} : HasType P Γ (.qty n d) (.quantity d)
+  | text {Γ s} : s.length ≠ 1 → HasType P Γ (.text s) .text
+  /-- a one-character text: the parser reads `"a"` as a codepoint -/
+  | codepoint {Γ s} : s.length = 1 → HasType P Γ (.text s) .codepoint
   | unit {Γ} : HasType P Γ .unit .unit
   | nil {Γ} : HasType P Γ .nil (.list .never)
   /-- inference.rs infer_list_type: the elements' join -/
@@ -118,5 +121,11 @@ def ProgramOk (P : Program) : Prop :=
     (∃ tb, HasType P (Ctx.empty.set fn.param fn.paramTy) fn.body tb ∧ sub tb fn.result = true) ∧
     ∀ x ∈ fn.body.assigned, P.globals x = true) ∧
   ∀ ev h, P.handlers ev = some h → HandlerOk P ev h
+
+/-- a text value's type: a codepoint when it is one character -/
+theorem HasType.ofText {P Γ} (s : String) : HasType P Γ (.text s) (Ty.textTy s) := by
+  unfold Ty.textTy; split
+  · exact .codepoint ‹_›
+  · exact .text ‹_›
 
 end Warp

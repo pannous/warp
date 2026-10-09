@@ -747,7 +747,7 @@ function initialize() {
 	editor = CodeMirror.fromTextArea($("code"), {
 		// fixedGutter moves the gutter on every scroll, which Firefox warns about; wrapped lines never scroll sideways
 		lineNumbers: true, lineWrapping: true, fixedGutter: false, mode: "warp", indentWithTabs: true, tabSize: 4,
-		extraKeys: { "Ctrl-Enter": runPressed, "Cmd-Enter": runPressed },
+		extraKeys: SHORTCUTS, // shortcuts.js
 	});
 	editor.on("change", () => {
 		if (!$("auto").checked) return;

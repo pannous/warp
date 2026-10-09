@@ -257,7 +257,7 @@ pub struct CompiledModule {
 
 /// The passes over the source forms, in order, each reading what the one before it left: definitions and sugar become
 /// the forms every later pass knows (`def f(x) {…}` is `f(x) := {…}`), modules are resolved
-const SOURCE_PASSES: [fn(Node) -> Node; 98] = [
+const SOURCE_PASSES: [fn(Node) -> Node; 99] = [
 	// `"a \(x) b"` → `"a " + text_form(x) + " b"` (interpolation.rs) first, so every pass reads the holes as code
 	crate::interpolation::lower_program,
 	crate::analyzer::lower_inline_unions,
@@ -280,6 +280,8 @@ const SOURCE_PASSES: [fn(Node) -> Node; 98] = [
 	crate::lowering::sum_variants::lower,
 	// `global n = 5` in a function body is `global n; n = 5` before any pass reads its `global n`
 	crate::late_binding::split_global_assignments,
+	// `xs from #2 to #4`, `xs up to second`: a slice by position (word_slices.rs), before a pass reads `to` as a range
+	crate::word_slices::lower,
 	// `xs.keep only positive` is `xs where it > 0`, before lower_where reads it (list_phrases.rs)
 	crate::list_phrases::lower,
 	// `post "/todos/:id" { todos where it.id == id }`: the path's parameters bound before lower_where reads the variables
@@ -388,6 +390,9 @@ fn lower_for_emission(node: Node) -> Result<Node, Node> {
 	use crate::effects::{without_constraints, EffectReport};
 
 	if let Some(clash) = crate::analyzer::check_operator_word_functions(&node) {
+		return Err(clash.into_error());
+	}
+	if let Some(clash) = crate::units::check_unit_parameter_clashes(&node) {
 		return Err(clash.into_error());
 	}
 	if let Some(misread) = crate::analyzer::check_upcast_fields(&node) {

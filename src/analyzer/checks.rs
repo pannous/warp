@@ -718,7 +718,8 @@ pub(super) fn data_binding(item: &Node) -> Option<(&str, &Node)> {
 	let Node::Symbol(name) = key.drop_meta() else { return None };
 	// a value, or data made of values: `colors:{red:(1 0 0)}` is read by a sibling as `colors.red` (wiki variable.md)
 	let is_data = matches!(value.drop_meta(), Node::Number(_) | Node::Text(_) | Node::Char(_))
-		|| matches!(value.drop_meta(), Node::List(items, _, _) if !items.is_empty()) && is_data_node(value);
+		|| matches!(value.drop_meta(), Node::List(items, _, _) if !items.is_empty()) && is_data_node(value)
+		|| matches!(value.drop_meta(), Node::Key(from, Op::Range | Op::To, to) if is_data_node(from) && is_data_node(to));
 	is_data.then(|| (name.as_str(), value.drop_meta()))
 }
 

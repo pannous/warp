@@ -28,6 +28,10 @@ divisors(n) := [d for d in 1..n+1 if n % d == 0]
 prime_factors(n) := { out = []; rest = n; d = 2; while d * d <= rest { while rest % d == 0 { out = out + [d]; rest = rest//d }; d++ }; if rest > 1 { out = out + [rest] }; out }
 // the digits of n in a base up to 36: to_base(255, 16) is "ff"
 to_base(n, base) := { symbols = "0123456789abcdefghijklmnopqrstuvwxyz"; if n == 0 { return "0" }; out = ""; rest = abs(n); while rest > 0 { out = symbols#(rest % base + 1) + out; rest = rest//base }; if n < 0 then "-" + out else out }
+// the one bits of whole numbers ≥ 0 (`&` and `|` are logical, `xor` is bitwise already): bit_count(6) is 2
+bit_count(n) := { out = 0; rest = n; while rest > 0 { out = out + rest % 2; rest = rest//2 }; out }
+bit_and(a, b) := { out = 0; bit = 1; x = a; y = b; while x > 0 and y > 0 { if x % 2 == 1 and y % 2 == 1 { out = out + bit }; bit = bit * 2; x = x//2; y = y//2 }; out }
+bit_or(a, b) := a + b - bit_and(a, b)
 from_base(t, base) := { symbols = "0123456789abcdefghijklmnopqrstuvwxyz"; out = 0; for c in chars(lower(t)) { out = out * base + index_of(symbols, c) - 1 }; out }
 // P169/P191: descriptive names; they forward to the C library (use cmath) until warp has its own implementations.
 // The C names still work after `use math`, each with a note naming the word here (modules STD_ALIASES)

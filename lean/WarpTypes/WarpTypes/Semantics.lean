@@ -117,6 +117,13 @@ def peel (s : String) : Option (String × String) :=
   | [] => none
   | c :: cs => some (c.toString, String.ofList cs)
 
+/-- a walk over a text gives one-character texts: codepoints -/
+theorem peel_codepoint {s c rest : String} (h : peel s = some (c, rest)) : c.length = 1 := by
+  unfold peel at h
+  split at h
+  · cases h
+  · cases h; simp [Char.toString]
+
 /-- one step of a walk over a text: done at the end, else the body for the first character, then the rest -/
 def walkText (y : String) (s : String) (b last : Expr) : Expr :=
   match peel s with
@@ -133,7 +140,40 @@ def repeatValues (s : String) (n : Expr) : Expr :=
   | some k => .text (String.join (List.replicate k.toNat s))
   | none => .error "a text repeats a whole number of times"
 
-def arithValues (op : ArithOp) (a b : Expr) : Expr :=
+def isQuantityValue : Expr → Bool
+  | .qty _ _ => true
+  | _ => false
+
+/-- a quantity's dimensions, a number's none (`[]`) -/
+def valueDims : Expr → Option Dims
+  | .qty _ d => some d
+  | v => if isNumber v then some [] else none
+
+def amount : Expr → Int
+  | .qty n _ => n
+  | v => asNumber v
+
+/-- the value of an amount in dimensions d: a number when they cancel -/
+def quantityValue (n : Int) (d : Dims) : Expr := if d = [] then .num n else .qty n d
+
+def DIMENSION_ERROR : String := "DimensionError"
+
+/-- `-`, `*` and `/` with a quantity side (ArithOp.quantityTy) -/
+def quantityValues (op : ArithOp) (a b : Expr) : Expr :=
+  if op = .sub then
+    match a, b with
+    | .qty x d, .qty y e => if d = e then .qty (x - y) d else .error DIMENSION_ERROR
+    | _, _ => .error DIMENSION_ERROR
+  else
+  match valueDims a, valueDims b with
+  | some d, some e =>
+    match op.dims d e with
+    | some dims => if op = .div && amount b == 0 then .error "divide by zero" else quantityValue (op.apply (amount a) (amount b)) dims
+    | none => .error DIMENSION_ERROR
+  | _, _ => .error DIMENSION_ERROR
+
+/-- `-`, `*`, `%`, `/` and `^` without quantities: numbers, or a text repeated -/
+def plainArithValues (op : ArithOp) (a b : Expr) : Expr :=
   match op, a, b with
   | .mul, .text s, n | .mul, n, .text s => repeatValues s n
   | _, _, _ => numberValues op a b
@@ -143,6 +183,10 @@ where numberValues (op : ArithOp) (a b : Expr) : Expr :=
   match asInt a, asInt b with
   | some x, some y => if (op == .div && x % y != 0) || (op == .pow && y < 0) then .num (op.apply x y) else .int (op.apply x y)
   | _, _ => .num (op.apply (asNumber a) (asNumber b))
+
+/-- `-`, `*`, `%`, `/` and `^` on values -/
+def arithValues (op : ArithOp) (a b : Expr) : Expr :=
+  if (isQuantityValue a || isQuantityValue b) = true then quantityValues op a b else plainArithValues op a b
 
 def isList : Expr → Bool
   | .nil | .cons _ _ => true
@@ -154,6 +198,9 @@ def concat : Expr → Expr → Expr
 
 /-- `+`: two lists concatenate (`xs + ys`), numbers add, a text side makes a text -/
 def addValues (a b : Expr) : Expr :=
+  match a, b with
+  | .qty x d, .qty y e => if d = e then .qty (x + y) d else .error DIMENSION_ERROR
+  | _, _ =>
   if isList a && isList b then concat a b else
   if !((isNumber a || isText a) && (isNumber b || isText b)) then .error "not addable" else
   if isText a || isText b then .text (render a ++ render b) else
@@ -163,6 +210,9 @@ def addValues (a b : Expr) : Expr :=
 
 /-- numbers by value, texts in codepoint order (`"a" < "b"`) -/
 def ltValues (a b : Expr) : Expr :=
+  match a, b with
+  | .qty x d, .qty y e => if d = e then .bool (decide (x < y)) else .error DIMENSION_ERROR
+  | _, _ =>
   if isNumber a && isNumber b then .bool (decide (asNumber a < asNumber b)) else
   match a, b with
   | .text x, .text y => .bool (decide (x < y))
@@ -219,7 +269,8 @@ def valueType : Expr → Option Ty
   | .bool _ => some .bool
   | .int _ => some .int
   | .num _ => some .number
-  | .text _ => some .text
+  | .qty _ d => some (.quantity d)
+  | .text s => some (textTy s)
   | .unit => some .unit
   | .nil => some (.list .never)
   | .ref _ p => some (.cls p)

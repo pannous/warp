@@ -188,9 +188,17 @@ impl WasmGcEmitter {
 			}
 		}
 		if let [Node::Symbol(fn_name), arguments @ ..] = items {
-			if text_builtins::text_builtin_kind(fn_name, arguments.len()) == Some(Kind::Int) {
-				self.emit_integer_text_builtin(func, fn_name, arguments);
-				return true;
+			match (text_builtins::text_builtin_kind(fn_name, arguments.len()), arguments) {
+				(Some(Kind::Int), _) => {
+					self.emit_integer_text_builtin(func, fn_name, arguments);
+					return true;
+				}
+				// `chr(n)`: a character's numeric form is its code point, n itself (card golf-chr: `f(x) := chr(x + 1)`)
+				(Some(Kind::Codepoint), [code]) => {
+					self.emit_numeric_value(func, code);
+					return true;
+				}
+				_ => {}
 			}
 		}
 		let [word, argument] = items else { return false };

@@ -18,6 +18,9 @@ const FIRST_INDEX: i64 = 0;
 const CODE_SUFFIX: &str = "·code";
 const ORD_WORD: &str = "ord";
 const CHR_WORD: &str = "chr";
+/// `for c in w.chars`, `w.chars.map(…)`: walked, the unit word `w.chars` (elsewhere the count) is the list `chars(w)`
+const CHARS_CALL: &str = "chars";
+const CODEPOINT_UNIT: &str = "codepoints";
 
 /// The `while` lowering of a `for` loop, or the node itself when it is not one
 /// The counter of a loop over a list's items, `x·index`: 0, then ++ while below the item count (wasm_emitter
@@ -242,6 +245,13 @@ fn counting_loop(variable: &Node, start: &Node, range: Op, end: &Node, mut body:
 	], Bracket::None)
 }
 
+fn walked_units(iterable: Node) -> Node {
+	match iterable.drop_meta() {
+		Node::Key(text, Op::Dot, unit) if crate::analyzer::text_unit(&unit.drop_meta().name()) == Some(CODEPOINT_UNIT) => call(CHARS_CALL, (**text).clone()),
+		_ => iterable,
+	}
+}
+
 fn walking_loop(variable: &Node, iterable: Node, mut body: Vec<Node>) -> Node {
 	let name = variable.name();
 	let (items, index) = (symbol(&format!("{name}{ITEMS_SUFFIX}")), symbol(&format!("{name}{INDEX_SUFFIX}")));
@@ -251,7 +261,7 @@ fn walking_loop(variable: &Node, iterable: Node, mut body: Vec<Node>) -> Node {
 	statements.push(mark_step(key(index.clone(), Op::Inc, Node::Empty)));
 	let test = key(index.clone(), Op::Lt, key(Node::Empty, Op::Hash, items.clone()));
 	block(vec![
-		key(items, Op::Assign, iterable),
+		key(items, Op::Assign, walked_units(iterable)),
 		key(index, Op::Assign, number(FIRST_INDEX)),
 		while_do(test, block(statements, Bracket::Curly)),
 	], Bracket::None)

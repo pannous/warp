@@ -185,7 +185,7 @@ step() := {
 }
 population = 15
 paint(cells, width, height)
-on every 500 ms { step(); population = sum(cells); paint(cells, width, height) }
+on every 500ms { step(); population = sum(cells); paint(cells, width, height) }
 population` },
 	"system values": { value: '"online"', code: `// system values like dark mode and online are signals too
 on change dark mode { if value { print "dark mode on" } else { print "light mode on" } }
@@ -196,7 +196,7 @@ print "working"
 42` },
 	tasks: { value: '"done"', printed: "first!\nlate\n", code: `// a task runs beside the program, which waits for it at the end
 go {
-	sleep(100 ms)
+	sleep(100ms)
 	print "late"
 }
 print "first!"
