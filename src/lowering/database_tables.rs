@@ -466,6 +466,15 @@ fn with_member_getters(body: Node, table: &Table) -> Node {
 	}
 }
 
+/// The named classes with their row's `id: int = 0`: a page leaving their table on the server still reads `todo.id` of
+/// the rows it is sent (lowering/serve.rs)
+pub(crate) fn with_row_ids(node: Node, classes: &[String]) -> Node {
+	match node {
+		Node::Type { name, body } if classes.contains(&name.drop_meta().name()) => Node::Type { name, body: Box::new(with_id(*body)) },
+		other => other.map_children(|child| with_row_ids(child, classes)),
+	}
+}
+
 fn with_id(body: Node) -> Node {
 	if has_id(&body) {
 		return body;

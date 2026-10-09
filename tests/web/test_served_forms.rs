@@ -30,6 +30,17 @@ fn served_from(port: u16, code: &'static str, file: Option<std::path::PathBuf>, 
 	server
 }
 
+/// scratch/<folder>/app.warp holding `code`, its table beside it fresh and filled by running `adding`
+fn program_with_rows(folder: &str, code: &str, adding: &str) -> std::path::PathBuf {
+	let folder = std::path::Path::new("scratch").join(folder);
+	std::fs::create_dir_all(&folder).expect("scratch folder");
+	let _ = std::fs::remove_file(folder.join("app.database.sqlite"));
+	let program = folder.join("app.warp");
+	std::fs::write(&program, code).expect("the program file");
+	warp::modules::with_program_file(&program, || warp::wasm_emitter::eval(adding));
+	program
+}
+
 fn agent() -> ureq::Agent {
 	ureq::Agent::config_builder().max_redirects(0).http_status_as_error(false).build().into()
 }
@@ -61,12 +72,7 @@ fn a_form_posts_to_a_served_route() {
 fn a_path_parameter_filters_a_table() {
 	const TABLE_PORT: u16 = 18639;
 	const TABLE: &str = "class Todo{title: text; done: bool}\nstored todos: [Todo]\npost \"/todos/:id:int\" { (todos where it.id == id)#1.title }";
-	let folder = std::path::Path::new("scratch").join("served_filter");
-	std::fs::create_dir_all(&folder).expect("scratch folder");
-	let _ = std::fs::remove_file(folder.join("app.database.sqlite"));
-	let program = folder.join("app.warp");
-	std::fs::write(&program, TABLE).expect("the program file");
-	warp::modules::with_program_file(&program, || warp::wasm_emitter::eval("class Todo{title: text; done: bool}\nstored todos: [Todo]\ntodos.add(Todo(\"milk\", false))\ntodos.add(Todo(\"tea\", false))"));
+	let program = program_with_rows("served_filter", TABLE, "class Todo{title: text; done: bool}\nstored todos: [Todo]\ntodos.add(Todo(\"milk\", false))\ntodos.add(Todo(\"tea\", false))");
 	let server = served_from(TABLE_PORT, TABLE, Some(program), 1);
 	let title = agent().post(&format!("http://127.0.0.1:{TABLE_PORT}/todos/2")).send("").expect("an answer").body_mut().read_to_string().expect("a text");
 	assert_eq!(title, "tea");
@@ -82,5 +88,18 @@ fn a_failing_route_answers_its_failure() {
 	assert_eq!(answer.status().as_u16(), 500);
 	let message = answer.body_mut().read_to_string().expect("a text");
 	assert!(message.contains("index out of range"), "{message}");
+	server.join().expect("the server thread");
+}
+
+// the page leaves a server table out, but its rows keep their id: the shipped page starts from the server's rows (it
+// failed "Todo has no field id" once the table had rows, so `warp serve` served no page)
+#[test]
+fn a_page_starts_from_rows_of_a_server_table() {
+	const PAGE_PORT: u16 = 18646;
+	const PAGE: &str = "class Todo{title: text}\nstored todos: [Todo]\nroute \"/\" { ul{ for todo in todos { li{ a{ href:\"/todos/\" + todo.id todo.title } } } } }";
+	let program = program_with_rows("served_page_rows", PAGE, "class Todo{title: text}\nstored todos: [Todo]\ntodos.add(Todo(\"tea\"))");
+	let server = served_from(PAGE_PORT, PAGE, Some(program), 1);
+	let page = agent().get(&format!("http://127.0.0.1:{PAGE_PORT}/")).call().expect("an answer").body_mut().read_to_string().expect("a text");
+	assert!(page.contains("<a href=\"/todos/1\">tea</a>"), "{page}");
 	server.join().expect("the server thread");
 }

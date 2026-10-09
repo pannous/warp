@@ -153,9 +153,26 @@ fn with_route_data(program: Node) -> Node {
 	if crate::pipeline::is_for_a_page() && !crate::pipeline::is_prerendering() {
 		let page_reads = |name: &String| lowered.iter().filter(|statement| server_variable(statement).is_none() && server_definition(statement).is_none() && !is_serving(statement)).any(|statement| statement.mentions_any(&[name]));
 		let unread: Vec<String> = server_data.iter().filter(|name| !page_reads(name)).cloned().collect();
-		lowered.retain(|statement| server_variable(statement).is_none_or(|name| !unread.contains(&name)));
+		let left_out = |statement: &Node| server_variable(statement).is_some_and(|name| unread.contains(&name));
+		let row_classes: Vec<String> = lowered.iter().filter(|statement| left_out(statement)).filter_map(table_class).collect();
+		lowered.retain(|statement| !left_out(statement));
+		lowered = lowered.into_iter().map(|statement| crate::database_tables::with_row_ids(statement, &row_classes)).collect();
 	}
 	Node::List(lowered, bracket, separator)
+}
+
+/// `stored todos: [Todo]` or `todos: [Todo] = database.todos`: the class of the table's rows
+fn table_class(statement: &Node) -> Option<String> {
+	let declared = match statement.drop_meta() {
+		Node::Key(target, Op::Assign, _) => target.drop_meta().clone(),
+		Node::List(items, _, _) => items.last()?.drop_meta().clone(),
+		_ => return None,
+	};
+	let Node::Key(_, Op::Colon, list_type) = declared else { return None };
+	match list_type.drop_meta() {
+		Node::List(element, Bracket::Square, _) if element.len() == 1 => Some(element[0].drop_meta().name()),
+		_ => None,
+	}
 }
 
 /// `users: [User] = database.users`, `prefs = database.prefs` (indexedDB too), `stored users: [User]`: the variable
