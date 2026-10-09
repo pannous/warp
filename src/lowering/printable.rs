@@ -24,7 +24,7 @@ pub fn lower(node: Node) -> Node {
 		return node;
 	}
 	let types = InstanceTypes::of(&node);
-	Operations { printable, iterable, types }.rewrite(node)
+	Operations { printable, iterable, types }.rewrite_program(node)
 }
 
 struct Operations {
@@ -35,6 +35,20 @@ struct Operations {
 }
 
 impl Operations {
+	/// The program's last statement, when it is an instance of a printable type, is its text (card instance-final):
+	/// a program shows the value `str()` would
+	fn rewrite_program(&self, node: Node) -> Node {
+		match node {
+			Node::Meta { node, data } if is_statements(&node) => Node::Meta { node: Box::new(self.rewrite_program(*node)), data },
+			Node::List(mut statements, Bracket::None, separator @ (Separator::Semicolon | Separator::Newline)) => {
+				let last = statements.pop().map(|last| self.rewrite_program(last));
+				let statements = statements.into_iter().map(|statement| self.rewrite(statement)).chain(last).collect();
+				Node::List(statements, Bracket::None, separator)
+			}
+			value => self.call(TEXT_OPERATION, &self.printable, &value).unwrap_or_else(|| self.rewrite(value)),
+		}
+	}
+
 	fn rewrite(&self, node: Node) -> Node {
 		for (operation, types) in [(TEXT_OPERATION, &self.printable), (ITERATE_OPERATION, &self.iterable)] {
 			if let Some((type_name, parameter, body)) = definition(&node, types, operation) {
@@ -84,6 +98,10 @@ impl Operations {
 	}
 }
 
+fn is_statements(node: &Node) -> bool {
+	matches!(node.drop_meta(), Node::List(_, Bracket::None, Separator::Semicolon | Separator::Newline))
+}
+
 pub(crate) fn is_text_word(node: &Node) -> bool {
 	matches!(node.drop_meta(), Node::Symbol(word) if TEXT_WORDS.contains(&word.as_str()))
 }
@@ -94,11 +112,24 @@ fn declared_types(node: &Node) -> HashSet<String> {
 	types
 }
 
-/// The declared types with a definition of `operation`
+/// The declared types with a definition of `operation`, or with its witness already (a class's `text()` method is
+/// `text·V` by now)
 fn defining(node: &Node, declared: &HashSet<String>, operation: &str) -> HashSet<String> {
 	let mut types = HashSet::new();
-	node.visit(&mut |part| if let Some((type_name, _, _)) = definition(part, declared, operation) { types.insert(type_name); });
+	node.visit(&mut |part| {
+		if let Some((type_name, _, _)) = definition(part, declared, operation) {
+			types.insert(type_name);
+		}
+		if let Some(type_name) = declared.iter().find(|type_name| defines_function(part, &witness_name(operation, type_name))) {
+			types.insert(type_name.clone());
+		}
+	});
 	types
+}
+
+fn defines_function(node: &Node, name: &str) -> bool {
+	let Node::Key(head, Op::Define | Op::Assign, _) = node else { return false };
+	matches!(head.drop_meta(), Node::List(items, Bracket::Round, _) if items.first().is_some_and(|word| word.name() == name))
 }
 
 /// `operation(p:T) := body` of a declared type T: T, the parameter and the body

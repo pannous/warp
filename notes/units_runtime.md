@@ -125,3 +125,5 @@ ms s min h, with powers (`m²`, `s^2`), products (`kg·m`) and one `/`.
 - Mixed (card units-mixed): a unit written in the program meeting a run-time quantity becomes one, on either side:
   `quantity("5 km") + 1 m`, `2 km < q`, `1 min == q` (class_methods.rs with_run_time_units, units.rs
   as_run_time_quantity: `5 m/s` is `quantity(5, "m/s")`). Static units alone stay static.
+- ± (card plus-minus-units): `5 m ± 1 cm` the program needs at run time is a Quantity whose amount is a ± value
+  (notes/plus_minus.md).
