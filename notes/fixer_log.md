@@ -239,3 +239,4 @@ Running list of the small fixes done by the fixer session (branches fix-<topic>)
 - 2026-10-09 orm-identity-map: list cursor: a loop over a list of objects indexed and counted it from the head each step (n² per walk); now O(1) per step.
 - 2026-10-09 orm-element-write: people#1.age = 5 (and a filtered row's field) is written to its row; it was refused as a copy.
 - 2026-10-09 units-function-name: a function, parameter or variable named like a unit (g(x) := x + 1 m) shadows only that unit; it switched all units passes off ("undefined variable: m").
+- 2026-10-09 units-holes: quantity comparisons give yes/no, reassigning another dimension / an int annotation / a text repeated by a quantity are DimensionErrors (four W0-model holes).
