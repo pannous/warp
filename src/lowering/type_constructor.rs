@@ -82,12 +82,21 @@ impl Classes<'_> {
 		let constructor = self.constructor(class, items.len() - 1)?;
 		let type_def = self.registry.get_by_name(class)?;
 		let fields = type_def.fields.iter().map(|field| {
-			let value = self.default_of(type_def, field).unwrap_or(Node::Empty);
+			let value = self.default_of(type_def, field).unwrap_or_else(|| unset_field(field));
 			Node::Key(Box::new(Node::Symbol(field.name.clone())), Op::Colon, Box::new(value))
 		}).collect();
 		let arguments = std::iter::once(constructor).chain(std::iter::once(instance_node(class, fields))).chain(items[1..].iter().cloned());
 		Some(Node::List(arguments.collect(), Bracket::Round, Separator::None))
 	}
+}
+
+/// A field the constructor sets, before it does: an Int or float field (a raw number in the struct) is 0, any other ø
+fn unset_field(field: &crate::type_kinds::FieldDef) -> Node {
+	use crate::type_kinds::Kind;
+	crate::analyzer::type_word_kind(&field.type_name)
+		.filter(|kind| matches!(kind, Kind::Int | Kind::Float))
+		.and_then(crate::declarations::zero_value)
+		.unwrap_or(Node::Empty)
 }
 
 /// The constructor functions the program defines, with the number of their parameters besides the instance

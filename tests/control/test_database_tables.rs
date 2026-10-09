@@ -64,6 +64,48 @@ fn an_add_in_a_block_of_one_statement_inserts() {
 	is!(&program("people_blocked", "people#1.id"), 1);
 }
 
+// the smart default (notes/orm.md Loading): registering a table loads no rows; count is SELECT COUNT(*), an add
+// inserts without loading, and the rows load on the first read of the list
+#[cfg(feature = "native")]
+#[test]
+fn a_table_loads_its_rows_only_when_read() {
+	eval(&program("people_lazy", "people.add(Person(\"Jo\", 5))\npeople.add(Person(\"Ki\", 6))"));
+	let before = warp::database::rows_read();
+	is!(&program("people_lazy", "people.add(Person(\"Lu\", 7))\ncount(people)"), 3);
+	assert_eq!(warp::database::rows_read(), before, "counting and adding loaded rows");
+	is!(&program("people_lazy", "people#2.name"), "Ki");
+	assert!(warp::database::rows_read() > before, "reading an element loads the rows");
+}
+
+// `people#i` reads that one row, kept so the loaded list holds the same instance
+#[cfg(feature = "native")]
+#[test]
+fn an_element_of_a_table_loads_one_row() {
+	eval(&program("people_indexed", "people.add(Person(\"Ny\", 5))\npeople.add(Person(\"Oz\", 6))\npeople.add(Person(\"Pi\", 7))"));
+	let before = warp::database::rows_read();
+	is!(&program("people_indexed", "people#2.name"), "Oz");
+	assert_eq!(warp::database::rows_read(), before + 1, "people#2 read more than its row");
+	is!(&program("people_indexed", "oz = people#2\noz.age = 60\nsum = 0\nfor p in people { sum += p.age }\nsum + people#2.age"), 72 + 60);
+}
+
+// iterating an unloaded table reads it in pages of 100 rows: a loop that breaks early reads only the pages it reached
+#[cfg(feature = "native")]
+#[test]
+fn iterating_a_table_reads_it_in_pages() {
+	eval(&program("people_paged", "for i in 1 to 250 { people.add(Person(\"N\" + i, i)) }"));
+	let before = warp::database::rows_read();
+	is!(&program("people_paged", "found = 0\nfor p in people { if p.age == 150 { found = p.age; break } }\nfound"), 150);
+	assert_eq!(warp::database::rows_read(), before + 200, "a loop breaking at row 150 read other than two pages");
+	is!(&program("people_paged", "sum = 0\nfor p in people { if p.age > 3 { continue }; sum += p.age }\nsum"), 6);
+	is!(&program("people_paged", "for p in people { if p.age == 120 { p.name = \"Hundred20\" } }\npeople#120.name"), "Hundred20");
+}
+
+// an instance added before the rows load is the one the loaded list holds
+#[test]
+fn an_instance_added_before_loading_is_the_loaded_row() {
+	is!(&program("people_known", "mo = Person(\"Mo\", 1)\npeople.add(mo)\nmo.age = 2\nfirst = people#1\nfirst.age = 3\nmo.age"), 3);
+}
+
 // `@was(old)` on a field renames its column, keeping the data; without it a rename reads as add + remove
 #[test]
 fn a_field_marked_was_renames_its_column() {
