@@ -20,6 +20,7 @@ custom section, `warp.meta`, kept unstripped.
 | `event.listeners` (= `listeners of e`) | event | handler count/list | `listeners of tick` broken (signal_listeners undefined) |
 | `module.exports` | `use wasm`, foreign module | export names | step 4: imported core modules; components natively |
 | `x.unit` | quantity | its unit | static units (static_units.rs), no `.unit` word yet |
+| `help(x)` | class, instance, user function | text: `class P extends Q` / `fields: …` / `methods: …` lines; a function's name and signature | card help-help (2026-10-09): compile time; no doc comment yet (P114 keeps comments off by default) |
 | `x.doc` | binding, function | its comment (P114, `use comments`) | step 4: `x.doc` = `x.@comment`, of functions too |
 
 ## Rule
