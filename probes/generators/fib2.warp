@@ -1,3 +1,0 @@
-fib() := { a = 0; while yes { yield a; a += 1 } }
-for f in fib { if f > 3 { break }; print f }
-1
