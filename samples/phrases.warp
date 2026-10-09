@@ -1,0 +1,10 @@
+// Functions defined as English phrases are called with their own words
+to add number a to number b: a+b
+to move x from a to b: print b
+to mail note to address with subject title {
+	"\(title) for \(address): \(note)"
+}
+
+move 1 from 2 to 3
+add 1 to 2
+mail "see you" to "a@b" with subject "hi"

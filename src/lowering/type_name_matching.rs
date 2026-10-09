@@ -35,7 +35,26 @@ fn typed(name: &str, type_name: &str) -> Node {
 	Node::Key(Box::new(Node::Symbol(name.to_string())), Op::Colon, Box::new(Node::Symbol(type_name.to_string())))
 }
 
+/// Which head words are prepositions
+pub fn prepositions_among(words: &[&str]) -> Vec<bool> {
+	words.iter().map(|word| PREPOSITIONS.contains(word)).collect()
+}
+
+/// Which head words belong to the phrase rather than name parameters (card phrase-multiword): the prepositions and,
+/// in a slot after one, the plain words before the slot's last that the body never uses: `with subject title` is
+/// called `with subject "hi"`
+pub fn phrase_words(words: &[&str], body: &Node, is_known_type: &dyn Fn(&str) -> bool) -> Vec<bool> {
+	let mut in_phrase = prepositions_among(words);
+	for index in 1..words.len() {
+		let word = words[index];
+		let more_in_slot = words.get(index + 1).is_some_and(|next| !PREPOSITIONS.contains(next));
+		in_phrase[index] |= in_phrase[index - 1] && more_in_slot && !ARTICLES.contains(&word) && !is_known_type(word) && !uses_name(body, word);
+	}
+	in_phrase
+}
+
 /// The parameters of the head words after the function name (notes/matching.md):
+/// - in a slot after a preposition, plain words the body never uses belong to the phrase (phrase_words)
 /// - prepositions (`to of from …`) only separate slots: `to add number a to number b` → `a:number`, `b:number`
 /// - an article starts a noun slot when a known type follows it or the body never uses the article as a name:
 ///   `a number` → `number:number`, `a photo` → `photo` (`photo:photo` once `class photo` is declared); `to add a b: a+b` keeps `a`
@@ -47,18 +66,19 @@ fn typed(name: &str, type_name: &str) -> Node {
 ///
 /// Err when two parameters end up with one name (`a first name`, `a last name`).
 pub fn parameter_slots(words: &[&str], body: &Node, is_known_type: &dyn Fn(&str) -> bool) -> Result<(Vec<Node>, Node), String> {
+	let in_phrase = phrase_words(words, body, is_known_type);
 	let is_name = |word: &str| !PREPOSITIONS.contains(&word) && !is_known_type(word);
 	let mut parameters = vec![];
 	// `number a to …`: an article right before a preposition or the end is a name
-	let ends_slot = |index: usize| words.get(index).is_none_or(|word| PREPOSITIONS.contains(word));
+	let ends_slot = |index: usize| in_phrase.get(index).is_none_or(|phrase_word| *phrase_word);
 	let mut index = 0;
 	while index < words.len() {
 		let word = words[index];
-		let next = words.get(index + 1).copied().filter(|next| !PREPOSITIONS.contains(next));
-		if PREPOSITIONS.contains(&word) {
+		let next = (!ends_slot(index + 1)).then(|| words[index + 1]);
+		if in_phrase[index] {
 			index += 1;
 		} else if ARTICLES.contains(&word) && next.is_some_and(|next| is_known_type(next) || !uses_name(body, word)) {
-			let noun: Vec<&str> = words[index + 1..].iter().copied().take_while(|word| !PREPOSITIONS.contains(word) && !ARTICLES.contains(word)).collect();
+			let noun: Vec<&str> = (index + 1..words.len()).take_while(|later| !ends_slot(*later) && !ARTICLES.contains(&words[*later])).map(|later| words[later]).collect();
 			let head = noun[noun.len() - 1];
 			parameters.push(if is_known_type(head) { typed(head, head) } else { Node::Symbol(head.to_string()) });
 			index += 1 + noun.len();
