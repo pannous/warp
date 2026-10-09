@@ -2650,6 +2650,10 @@ PASSED:
   ✓ programs::test_samples::test_sudoku
   ✓ programs::test_samples::test_sum
   ✓ programs::test_samples_run_cleanly::every_sample_runs_without_a_compiler_error
+  ✓ programs::test_shader_blocks::a_shader_block_is_its_wgsl_text
+  ✓ programs::test_shader_blocks::a_shader_block_over_lines_loses_its_indentation
+  ✓ programs::test_shader_blocks::paint_takes_a_shader_block
+  ✓ programs::test_shader_blocks::shader_stays_a_name
   ✓ programs::test_small_samples::error_samples
   ✓ programs::test_small_samples::text_samples
   ✓ programs::test_warp_command::debug_build_names_its_commit
@@ -4144,4 +4148,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-10 ignored, 4139 passed, 0 failed, 4139 total tested
+10 ignored, 4143 passed, 0 failed, 4143 total tested
