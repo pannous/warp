@@ -66,6 +66,11 @@ const ACKNOWLEDGEMENTS_FILE: &str = ".warp-acknowledged";
 const OLD_ANSWERS_FILE: &str = ".warp-answers";
 /// Never prompt "got it?" after a warning or note (as in CI or a pipe)
 const NO_ASK_FLAG: &str = "--no-ask";
+/// Hints and notes (`prefer ^ over **`) are shown by default; `--no-hints` or WARP_HINTS=0 hide them (card hints-toggle)
+const NO_HINTS_FLAG: &str = "--no-hints";
+const HINTS_VARIABLE: &str = "WARP_HINTS";
+/// The last line of a run that showed hints while nobody chose to see them (neither the flag nor WARP_HINTS was given)
+const HIDE_HINTS_TIP: &str = "hide hints with: warp --no-hints (or WARP_HINTS=0)";
 /// What the console and `warp <code>` put before a program's value
 const RESULT_MARK: &str = "» ";
 /// The exit status of a run that ends in an uncaught error (card cli-error-exit)
@@ -87,7 +92,7 @@ fn main() {
     run_command(&args);
 }
 
-/// `--fuel <steps>`, `--strict`, `--no-ask` take effect and leave the arguments; the answers file is read
+/// `--fuel <steps>`, `--strict`, `--no-ask`, `--no-hints` take effect and leave the arguments; the answers file is read
 #[cfg(not(test))]
 fn apply_flags(args: &mut Vec<String>) {
     // `--fuel <steps>`: execution budget of every run (default util::DEFAULT_FUEL, env WARP_FUEL)
@@ -108,6 +113,14 @@ fn apply_flags(args: &mut Vec<String>) {
         args.remove(flag);
     }
 
+    let no_hints = args.iter().position(|arg| arg == NO_HINTS_FLAG).map(|flag| args.remove(flag)).is_some();
+    let hints_variable = env::var(HINTS_VARIABLE).ok();
+    let hints_wanted = hints_variable.as_deref().is_none_or(|value| !matches!(value, "0" | "false" | "no" | "off"));
+    warp::normalize::print_hints(hints_wanted && !no_hints);
+    if hints_wanted && !no_hints && hints_variable.is_none() {
+        tip_hiding_hints_at_exit();
+    }
+
     // "got it?" is asked on the terminal after a warning or note unless nobody is there to answer
     let no_ask = args.iter().position(|arg| arg == NO_ASK_FLAG).map(|flag| args.remove(flag)).is_some();
     if !no_ask && env::var_os("CI").is_none() && io::stdin().is_terminal() && io::stderr().is_terminal() {
@@ -115,6 +128,21 @@ fn apply_flags(args: &mut Vec<String>) {
     }
     diagnostic::adopt_acknowledgements(OLD_ANSWERS_FILE, ACKNOWLEDGEMENTS_FILE);
     diagnostic::use_acknowledgements_file(ACKNOWLEDGEMENTS_FILE);
+}
+
+/// After the run (also one ending in process::exit), one line telling how to hide the hints it showed
+#[cfg(not(test))]
+fn tip_hiding_hints_at_exit() {
+    extern "C" fn tip() {
+        if warp::normalize::any_hint_printed() {
+            eprintln!("{}", diagnostic::paint(diagnostic::Color::Gray, HIDE_HINTS_TIP));
+        }
+    }
+    extern "C" {
+        fn atexit(callback: extern "C" fn()) -> i32;
+    }
+    // SAFETY: atexit only stores the function pointer; tip touches no state torn down before exit handlers run
+    unsafe { atexit(tip) };
 }
 
 #[cfg(all(not(test), target_os = "macos"))]
@@ -677,6 +705,7 @@ fn usage() {
     println!("  warp register        Let Finder and `open` run .warp files (macOS)");
     println!("  --fuel <steps>       Execution budget before 'out of fuel' (env WARP_FUEL)");
     println!("  --no-ask             Never prompt \"got it?\" after a warning or note");
+    println!("  --no-hints           Hide hints and notes (prefer ^ over **), shown by default (env WARP_HINTS=0)");
     println!("  The last compiled module is kept in ~/.cache/warp/last.wasm for inspection");
     println!("  warp compile --wasm <file|code>  Only the module, <file>.wasm (out.wasm for inline code), without running");
     println!("  warp compile --aot <file|code>   The module and its machine code for this machine, <file>.cwasm");

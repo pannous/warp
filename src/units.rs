@@ -82,9 +82,31 @@ fn target_unit(node: &Node) -> Option<&'static Unit> {
 	unit_named(name).or_else(|| LONG_NAMES.iter().find(|(long, _)| *long == singular || *long == name).and_then(|(_, short)| unit_named(short)))
 }
 
+/// The unit words as the units passes read them: aliases expanded (`60 mph`), the whole unit after `as` (`q as km/h`)
+pub fn lower_unit_words(program: Node) -> Node {
+	let program = lower_unit_aliases(program);
+	match defines_unit_name(&program) {
+		true => program,
+		false => with_whole_conversion_units(program),
+	}
+}
+
+/// `60 mi/h as km/h` parses `(60 mi/h as km)/h`: the unit after `as` regrouped whole, as after `in`, when it is one
+fn with_whole_conversion_units(node: Node) -> Node {
+	match node.map_children(with_whole_conversion_units) {
+		Node::Key(conversion, op @ (Op::Div | Op::Mul), rest) => match conversion.drop_meta() {
+			Node::Key(quantity, Op::As, unit) if unit_expression(&Node::Key(unit.clone(), op, rest.clone())).is_some() => {
+				Node::Key(quantity.clone(), Op::As, Box::new(Node::Key(unit.clone(), op, rest)))
+			}
+			_ => Node::Key(conversion, op, rest),
+		},
+		other => other,
+	}
+}
+
 /// `60 mph` as `60 mi/h`: each unit alias the program does not define read as its unit expression (not a field name:
 /// `r.mph`, `{mph: 3}`)
-pub fn lower_unit_aliases(program: Node) -> Node {
+fn lower_unit_aliases(program: Node) -> Node {
 	let aliases: Vec<(&str, &str)> = UNIT_ALIASES.into_iter().filter(|(alias, _)| mentions_word(&program, alias)).collect();
 	if aliases.is_empty() {
 		return program;
