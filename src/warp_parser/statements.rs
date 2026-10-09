@@ -563,8 +563,8 @@ impl WarpParser {
 					self.advance(); // Python's `else: body`
 					self.parse_branch(0)
 				}
-				ElseParseMode::Atom => self.parse_atom(),
-				ElseParseMode::Expr => self.parse_branch(0),
+				ElseParseMode::Atom if self.current_char() == '{' => self.parse_atom(),
+				_ => self.parse_branch(0), // `if c {1} else 3+1`, `if c {…} else print x+1`: the rest of the expression
 			}
 		} else {
 			return if_then;
