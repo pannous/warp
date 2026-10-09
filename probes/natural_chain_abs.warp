@@ -1,0 +1,6 @@
+numbers = [3, -5, 2]
+r = numbers
+    .keep only positive
+    .sort by abs
+    .take first 1
+r
