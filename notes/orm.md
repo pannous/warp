@@ -88,8 +88,9 @@ keeping its fields with id 0; the lazy `people·remove` drops bo from the loaded
   instance of its row by `people·kept` (no load); a loaded table, or one with a required foreign key, keeps its loaded
   instances of those ids (test a_filter_reads_only_the_rows_it_keeps). A served route answering one answers [] when
   empty (serve.rs answers_a_list, database_tables::is_filter_query).
-- Not yet: comprehensions over a table (they load it), the IN (…) batching; a class method reading a table directly (not a
-  generated getter) is not rewritten. An empty list must be `parse("[]")` (ø): a built `[]` List node with Space
+- A class method reads and filters tables as a function does: with_lazy_reads and lower_where enter class bodies (a
+  `Node::Type` is no child of map_children), only method bodies, and a field named like a table stays the field.
+- Not yet: comprehensions over a table (they load it), the IN (…) batching. An empty list must be `parse("[]")` (ø): a built `[]` List node with Space
   separator types `xs += [x]` as int + list.
 
 ## Writes and transactions
@@ -139,7 +140,6 @@ keeping its fields with id 0; the lazy `people·remove` drops bo from the loaded
   function that fails fails the query with its own trap (`raise "boom"` gives "boom").
 - A function with side effects (State, IO, FFI, Async, Eval of effects.rs) in a table filter is a compile-time warning
   (card orm-filter, `effectful_calls`); it still runs, once per row in id order, as the in-memory filter does.
-- Still loaded whole at registration: the query only picks ids. count/#i/paging and the identity map are step 2's rest.
 - An element changed in place (`people#1.age = 5`, `(people where …)#1.age += 1`) is bound first,
   `people·element = people#1; people·element.age = 5`, so it is written through as a variable's change is
   (database_tables.rs with_bound_element; it was "people·at() gives a copy").
