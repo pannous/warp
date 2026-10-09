@@ -302,13 +302,15 @@ function painted(run, painting) {
 	showFrame(run.paintings);
 }
 
-// a text frame (`render(); sleep(.1s)`) arrives line by line: the last one is shown whole once the next one begins
+// a text frame (`render(); sleep(.1s)`) arrives line by line: the last one is shown whole once the next one begins.
+// Before any frame each print shows at once, so a print before a slow paint is read while it renders (card print-watch)
 function printedChunk(run, chunk) {
 	if (startsFrame(run, "printed")) {
 		showPrinted(run.printed);
 		run.printed = [];
 	}
 	run.printed.push(chunk);
+	if (!run.animating) showPrinted(run.printed);
 }
 
 function stopAfterTimeout(run) {

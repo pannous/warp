@@ -46,7 +46,7 @@ deprecated = "warn"
 [features]
 # native: running programs (wasmtime), the network, FFI and the console; off for the compiler-in-the-browser build (web/playground)
 default = ["native", "validate"]
-native = ["dep:wasmtime", "dep:wasmtime-wasi", "dep:sha2", "dep:flate2", "dep:crc32fast", "warp-runtime/compiler", "dep:ureq", "dep:rustyline", "dep:libloading", "dep:wat", "dep:regex", "dep:tiny_http", "dep:tungstenite", "dep:wit-component", "dep:wit-parser", "dep:wgpu", "dep:pollster", "dep:winit"]
+native = ["dep:wasmtime", "dep:wasmtime-wasi", "dep:sha2", "dep:flate2", "dep:crc32fast", "warp-runtime/compiler", "dep:ureq", "dep:rustyline", "dep:libloading", "dep:wat", "dep:regex", "dep:tiny_http", "dep:tungstenite", "dep:wit-component", "dep:wit-parser", "dep:wgpu", "dep:pollster", "dep:winit", "dep:ab_glyph"]
 # validate: check every emitted module with wasmparser's validator (a compiler bug becomes an internal error); a quarter
 # of the browser build, whose engine validates anyway: web/playground/build.sh leaves it out of the optimized warp.wasm
 validate = []
@@ -77,6 +77,7 @@ tungstenite = { version = "0.30", optional = true, features = ["rustls-tls-webpk
 # gpu_compute natively (src/gpu.rs): WGSL compute shaders on Metal, Vulkan or DX12, as WebGPU runs them in the browser
 wgpu = { version = "30", optional = true, default-features = false, features = ["std", "parking_lot", "wgsl", "metal", "vulkan", "dx12"] }
 pollster = { version = "0.4", optional = true } # wgpu answers with futures: block on them
+ab_glyph = { version = "0.2", optional = true } # label of use draw natively: text set in a system font (src/text_raster.rs)
 # paint() in a terminal shows its frames in a window (src/paint_window.rs), drawn through a wgpu surface (Metal on macOS)
 winit = { version = "0.30", optional = true, default-features = false, features = ["rwh_06", "x11", "wayland", "wayland-dlopen"] }
 regex = { version = "1.12", optional = true }

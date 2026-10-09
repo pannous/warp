@@ -85,13 +85,25 @@ impl Lowering<'_> {
 		if arguments.is_empty() {
 			return Some(Diagnostic::at(&items[0], format!("{name} of an empty list")).into_error());
 		}
-		let (bindings, arguments) = self.bind_once(arguments);
-		let chosen = arguments[1..].iter().fold(arguments[0].clone(), |best, next| {
+		let (mut bindings, arguments) = self.bind_once(arguments);
+		let mut best = arguments[0].clone();
+		for next in &arguments[1..] {
+			// each comparison names the best so far twice: unbound, n arguments would make 2ⁿ nodes
+			if matches!(best.drop_meta(), Node::Key(_, Op::Question, _)) {
+				best = self.bind(&mut bindings, best);
+			}
 			let comparison = Node::Key(Box::new(best.clone()), better, Box::new(next.clone()));
 			let branches = Node::Key(Box::new(best), Op::Colon, Box::new(next.clone()));
-			Node::Key(Box::new(comparison), Op::Question, Box::new(branches))
-		});
-		Some(with_bindings(bindings, chosen))
+			best = Node::Key(Box::new(comparison), Op::Question, Box::new(branches));
+		}
+		Some(with_bindings(bindings, best))
+	}
+
+	/// `temporary = value` appended to the bindings; the temporary stands for the value
+	fn bind(&mut self, bindings: &mut Vec<Node>, value: Node) -> Node {
+		let temporary = Node::Symbol(self.temporary());
+		bindings.push(Node::Key(Box::new(temporary.clone()), Op::Assign, Box::new(value)));
+		temporary
 	}
 
 	/// The comparisons repeat their operands: an argument that is more than a plain value or arithmetic
@@ -102,9 +114,7 @@ impl Lowering<'_> {
 			if is_plain(argument) {
 				return argument.clone();
 			}
-			let temporary = Node::Symbol(self.temporary());
-			bindings.push(Node::Key(Box::new(temporary.clone()), Op::Assign, Box::new(argument.clone())));
-			temporary
+			self.bind(&mut bindings, argument.clone())
 		}).collect();
 		(bindings, operands)
 	}

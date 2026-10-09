@@ -48,6 +48,10 @@ pub const GPU_COMPUTE: &str = "gpu_compute";
 /// `gpu_render(shader, width, height)`: a WGSL fragment shader `main` run over every pixel, the pixels paint shows
 /// (0xFFRRGGBB row by row; card g_YqWY, notes/web_framework.md "web-apis: WebGPU")
 pub const GPU_RENDER: &str = "gpu_render";
+/// `text_coverage(words, size)`: the words set in a sans-serif font `size` pixels high (card paint-text, lib/draw.warp
+/// label): [width, height, then how much each pixel is covered, 0 to 255, row by row]; the browser's canvas 2D fillText
+/// in the playground, a system font through ab_glyph natively (src/text_raster.rs)
+pub const TEXT_COVERAGE: &str = "text_coverage";
 /// `gpu_compute(shader, xs, workgroups)` of a `linear xs = float[n]`: the shader runs over the cells of the block in linear
 /// memory, read and written in place without building a list (card gpu-vectors, notes/gpu.md); gives the block back
 pub const GPU_COMPUTE_LINEAR: &str = "gpu_compute_linear";

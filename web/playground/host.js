@@ -48,6 +48,26 @@ function scratch(program, byteCount) {
 	return address;
 }
 
+// [width, height, then how much each pixel is covered from 0 to 255, row by row] of the words set in a sans-serif font
+// `size` pixels per em on one line, as src/text_raster.rs does natively: an OffscreenCanvas works in the run's Worker too
+const TEXT_FONT = "sans-serif";
+function textCoverage(words, size) {
+	const font = `${size}px ${TEXT_FONT}`;
+	const measured = new OffscreenCanvas(1, 1).getContext("2d");
+	measured.font = font;
+	const metrics = measured.measureText(words);
+	const width = Math.max(1, Math.ceil(metrics.width));
+	const height = Math.max(1, Math.ceil(metrics.fontBoundingBoxAscent + metrics.fontBoundingBoxDescent));
+	const context = new OffscreenCanvas(width, height).getContext("2d");
+	context.font = font;
+	context.fillText(words, 0, metrics.fontBoundingBoxAscent);
+	const pixels = context.getImageData(0, 0, width, height).data;
+	const covered = new Uint32Array(2 + width * height);
+	covered.set([width, height]);
+	for (let pixel = 0; pixel < width * height; pixel++) covered[2 + pixel] = pixels[pixel * 4 + 3];
+	return covered;
+}
+
 // u32s as a list of Ints, built in one call of the program's ints_to_list (gpu_render's pixels); undefined without it
 function listOfInts(program, ints) {
 	const address = program.ints_to_list && scratch(program, ints.byteLength);
@@ -157,6 +177,11 @@ function programImports(holder, hooks) {
 				const shown = plainOfTree(readNode(program(), text));
 				if (!hooks.notify) throw new Error(`notify ${JSON.stringify(shown)}: this page shows no notifications`);
 				hooks.notify(typeof shown === "string" ? shown : JSON.stringify(shown));
+			},
+			// text_coverage(words, size) (label of use draw, card paint-text): the words set by the browser's canvas
+			text_coverage: (words, size) => {
+				const covered = textCoverage(String(plainOfTree(readNode(program(), words))), Number(size));
+				return listOfInts(program(), covered) ?? buildValue(program(), treeOfPlain(Array.from(covered)));
 			},
 			clipboard_text: () => { throw new Error("clipboard: the playground cannot read it (the browser's clipboard is asynchronous)"); },
 			// `exit(code)` ends the run, its value ø (P121): runProgram tells it from a failure by holder.exitCode

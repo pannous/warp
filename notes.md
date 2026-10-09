@@ -54,3 +54,5 @@
   run from the main checkout (worktrees have no wiki/). Most → diffs are fragments needing the sentence's context.
   A parameter's kind is guessed from body usage before calls are seen (user_functions::with_usage_kinds): counting
   guessed List, so an uncalled text helper failed; joining it to a text literal now says Text.
+
+- 2026-10-09 wasmtime 49 GC heap: its growth goes through the store's ResourceLimiter::memory_growing (store/gc.rs grow_gc_heap → memory.grow(delta, limiter)); a refusal is swallowed (GcHeapGrowthFailed) and the allocation traps "GC heap out of memory". The GC heap is capped at 4 GiB anyway (1 << 32), and gc-copying uses half of it: one allocation over ~2 GB fails even unlimited. warp caps every memory at WARP_MEMORY_CAP_MB (default 2048, crates/warp-runtime/src/engine.rs cap_memory), so 1 GiB of live GC objects per run.

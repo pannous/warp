@@ -22,6 +22,7 @@ mod test_sound;
 mod test_shader_blocks; // card g_oFJc
 mod test_shader_holes; // card shader-holes
 mod test_draw;
+mod test_draw_label; // card paint-text
 mod test_plain_hints_when_piped;
 mod test_warp_command;
 mod test_hints_toggle; // card hints-toggle
