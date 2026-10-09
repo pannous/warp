@@ -120,6 +120,8 @@ thread_local! {
 	static SERVER_VALUES: std::cell::RefCell<Vec<Node>> = const { std::cell::RefCell::new(vec![]) };
 	/// the port `warp serve` serves a program at that has no `serve PORT {…}` of its own (lowering/serve.rs)
 	static SERVING_PORT: std::cell::Cell<Option<u16>> = const { std::cell::Cell::new(None) };
+	/// whether it is a module for any host (`warp compile --wasm`): a browser's host reads its values too
+	static FOR_ANY_HOST: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
 	/// whether it runs under `warp test`: its tests run and give its value (lowering/test_blocks.rs)
 	static FOR_TESTS: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
 }
@@ -164,6 +166,16 @@ pub fn for_a_page<T>(run: impl FnOnce() -> T) -> T {
 /// Whether the program compiled now is for a page: it exports the reflection getters the page's host reads values with
 pub fn is_for_a_page() -> bool {
 	FOR_A_PAGE.with(|page| page.get())
+}
+
+/// `run` compiling a module for any host (`warp compile --wasm`): it exports the reflection getters a host without GC
+/// field access (the browser) reads values with, so a browser program importing it copies values in and out
+pub fn for_any_host<T>(run: impl FnOnce() -> T) -> T {
+	with_flag(&FOR_ANY_HOST, run)
+}
+
+pub fn is_for_any_host() -> bool {
+	FOR_ANY_HOST.with(|any| any.get())
 }
 
 /// `run` compiling a page that calls its server functions directly, as the server does (lowering/serve.rs): for its
