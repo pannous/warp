@@ -3856,6 +3856,7 @@ PASSED:
   ✓ web::test_webgpu::a_chain_of_gpu_maps_is_one_kernel
   ✓ web::test_webgpu::a_compute_shader_runs_over_a_linear_array_in_place
   ✓ web::test_webgpu::a_compute_shader_runs_over_the_numbers
+  ✓ web::test_webgpu::a_fragment_shader_reads_lists_of_vectors
   ✓ web::test_webgpu::a_fragment_shader_reads_the_values_given
   ✓ web::test_webgpu::a_fragment_shader_renders_the_pixels
   ✓ web::test_webgpu::a_gpu_map_of_a_cpu_mapped_result_uploads_it
@@ -4256,4 +4257,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-10 ignored, 4251 passed, 0 failed, 4251 total tested
+10 ignored, 4252 passed, 0 failed, 4252 total tested
