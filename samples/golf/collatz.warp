@@ -1,0 +1,9 @@
+// code.golf collatz: the stopping time of 1 to 1000, the steps n → n/2 (even) or 3n+1 (odd) needs to reach 1
+def stopping_time(n):
+	steps = 0
+	while n != 1:
+		n = n % 2 == 0 ? n / 2 : 3 * n + 1
+		steps += 1
+	steps
+for n in 1 to 1000:
+	print stopping_time(n)

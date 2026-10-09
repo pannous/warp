@@ -1,0 +1,1 @@
+t="1";for 1…19:{print t;s="";i=0;while i<#t:{j=i;while j<#t&&t[j]==t[i]:j++;s+="\(j-i)\(t[i])";i=j};t=s};print t

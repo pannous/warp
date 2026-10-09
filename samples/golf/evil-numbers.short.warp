@@ -1,0 +1,1 @@
+use math;print (0…50).filter(x=>to_base(x,2).count("1")%2<1).join("\n")

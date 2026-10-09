@@ -1,0 +1,4 @@
+// code.golf catalan-numbers: C(0) to C(99), C(n) = binomial(2n, n) / (n + 1); C(99) has 57 digits
+use math
+for n in 0 to 99:
+	print choose(2 * n, n) / (n + 1)

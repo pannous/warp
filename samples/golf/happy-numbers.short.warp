@@ -1,0 +1,1 @@
+use math;h(n):=n>4?h(digits(n).map(d=>d*d).sum()):n<2;print (1…200).filter(h).join("\n")

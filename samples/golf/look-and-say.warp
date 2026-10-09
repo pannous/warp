@@ -1,0 +1,15 @@
+// code.golf look-and-say: 20 terms from 1, each saying the runs of digits of the one before: 1211 → 111221
+def say(term)
+	said = ""
+	start = 0
+	while start < term.length:
+		end = start
+		while end < term.length and term[end] == term[start]: end += 1
+		said += "\(end - start)\(term[start])"
+		start = end
+	said
+term = "1"
+for 1 to 19:
+	print term
+	term = say(term)
+print term

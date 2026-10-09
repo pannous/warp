@@ -1,0 +1,1 @@
+a=0;b=1;for 0…29:{print a;a,b=b,a+b};print a

@@ -14,6 +14,7 @@ mod test_data_structure_fixes;
 mod test_samples_run_cleanly;
 mod test_playground_samples;
 mod test_cli_help;
+mod test_code_golf; // card code-golf
 mod test_paint;
 mod test_paint_lists;
 mod test_paint_shader; // P234

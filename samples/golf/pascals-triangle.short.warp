@@ -1,0 +1,1 @@
+use math;for r in 0…19:print (0…r).map(k=>choose(r,k)).join(" ")

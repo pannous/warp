@@ -1,0 +1,4 @@
+// code.golf divisors: the positive divisors of each number from 1 to 100
+use math
+for n in 1 to 100:
+	print divisors(n).join(" ")
