@@ -65,7 +65,8 @@ impl WasmGcEmitter {
 				}
 				_ => self.emit_numeric_value(func, value),
 			},
-			_ if crate::analyzer::builtin_type_kind(&target.name()) == Some(Kind::Int) => {
+			// `"2.5" as number` is exact, its Int read off the cast node
+			name if name == "number" || crate::analyzer::builtin_type_kind(&target.name()) == Some(Kind::Int) => {
 				self.emit_cast(func, value, target);
 				self.emit_call(func, "get_int_value");
 			}
@@ -358,6 +359,10 @@ impl WasmGcEmitter {
 				_ => self.emit_int_node(func, 0),
 			},
 			Node::Char(c) => self.emit_int_node(func, c.to_digit(10).map_or(*c as i64, |digit| digit as i64)),
+			_ if matches!(self.get_type(value), Kind::Text | Kind::Codepoint | Kind::Empty) => {
+				self.emit_node_instructions(func, value);
+				self.emit_call(func, list_ops::TEXT_AS_NUMBER);
+			}
 			_ => self.emit_node_instructions(func, value),
 		}
 	}

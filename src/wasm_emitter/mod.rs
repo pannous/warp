@@ -968,6 +968,7 @@ impl WasmGcEmitter {
 		self.emit_node_type_name(); // after values_equal, which names an instance's declared type
 		self.emit_text_as_int(); // after the getters: it calls get_int_value
 		self.emit_text_as_float();
+		self.emit_text_as_number(); // after text_as_float, which it calls
 		self.emit_uncertain_runtime(); // after text_as_float, which it calls
 		if self.config.emit_reflection {
 			self.emit_reflection();

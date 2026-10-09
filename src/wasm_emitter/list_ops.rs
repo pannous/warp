@@ -680,6 +680,10 @@ pub const NODE_ARITHMETIC: [(&str, Instruction<'static>, &str); 4] = [
 
 /// text_as_float(node): the f64 of a text like "-12.5e3" (a number node converts as it is); anything else is invalid_number
 pub const TEXT_AS_FLOAT: &str = "text_as_float";
+/// text_as_number(node) -> node: the number a text spells, an Int when whole (`"5"`), else a Float (`"2.5"`)
+pub const TEXT_AS_NUMBER: &str = "text_as_number";
+/// 2^53: below it every whole f64 is an exact i64
+const F64_WHOLE_LIMIT: f64 = 9007199254740992.0;
 /// The educate-once topic of `"ab"*2`, whose explicit form is `2 times "ab"`
 const TEXT_REPEAT_TOPIC: &str = "text-repeat";
 
@@ -841,6 +845,26 @@ impl WasmGcEmitter {
 				f.instruction(&I::End);
 			});
 		}
+	}
+
+	/// `t as number` of a text known only at run time, like the literal `"5" as number`: an Int when whole, else a Float
+	pub(super) fn emit_text_as_number(&mut self) {
+		if !self.should_emit_function(TEXT_AS_NUMBER) {
+			return;
+		}
+		let node_ref = Ref(self.node_ref(false));
+		self.runtime_function(TEXT_AS_NUMBER, vec![node_ref], vec![node_ref], vec![ValType::F64], |s, f| {
+			let value = 1;
+			f.instruction(&I::LocalGet(0));
+			s.call(f, TEXT_AS_FLOAT);
+			Self::emit_list(f, &[I::LocalTee(value), I::LocalGet(value), I::F64Trunc, I::F64Eq]);
+			Self::emit_list(f, &[I::LocalGet(value), I::F64Abs, I::F64Const(F64_WHOLE_LIMIT.into()), I::F64Lt, I::I32And]);
+			Self::emit_list(f, &[I::If(BlockType::Result(node_ref)), I::LocalGet(value), I::I64TruncF64S]);
+			s.call(f, "new_int");
+			Self::emit_list(f, &[I::Else, I::LocalGet(value)]);
+			s.call(f, "new_float");
+			f.instruction(&I::End);
+		});
 	}
 
 	pub(super) fn emit_text_as_float(&mut self) {

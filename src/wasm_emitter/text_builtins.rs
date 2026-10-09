@@ -156,6 +156,9 @@ pub fn add_dependencies(required: &mut HashSet<&'static str>) {
 	if super::list_ops::NODE_ARITHMETIC.iter().any(|(name, _, _)| required.contains(name)) {
 		required.extend([super::list_ops::TEXT_AS_FLOAT, super::INT_RUNTIME, "exact_add", "exact_sub", "exact_mul", "exact_div", "new_float"]);
 	}
+	if required.contains(super::list_ops::TEXT_AS_NUMBER) {
+		required.extend([super::list_ops::TEXT_AS_FLOAT, "new_int", "new_float"]);
+	}
 	if required.contains(super::list_ops::TEXT_AS_INT) || required.contains(super::list_ops::TEXT_AS_FLOAT) {
 		required.insert("get_int_value");
 	}
