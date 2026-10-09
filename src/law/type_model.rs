@@ -42,6 +42,7 @@ const VARIABLE_KEYWORDS: [&str; 2] = ["let", "shared"];
 const CELL_FIELD: &str = "·value";
 /// An inline union `int | text` or an optional `int?` is the join of its alternatives, every value given to it a cast
 const UNION_TYPE: &str = "(Ty.joinAll ";
+const RANGED_TYPE_PREFIX: &str = ".ranged ";
 const UNION_JOINER: &str = " or ";
 const OPTIONAL_MARK: char = '?';
 /// the type of ø, the empty part of an optional (ø is the empty list)
@@ -91,9 +92,12 @@ fn quoted(text: &str) -> String {
 	format!("\"{}\"", text.replace('\\', "\\\\").replace('"', "\\\""))
 }
 
-/// `int`, `texts`, `list`: the W0 type a warp type word names
+/// `int`, `texts`, `list`, `int16` (the range of ints it holds): the W0 type a warp type word names
 fn type_of_word(word: &str) -> Option<String> {
-	let scalar = |word: &str| -> Option<&str> {
+	let scalar = |word: &str| -> Option<String> {
+		if let Some(width) = crate::fixed_width::fixed_width(word) {
+			return Some(format!("{RANGED_TYPE_PREFIX}({}) ({})", width.low, width.high));
+		}
 		Some(match crate::type_kinds::canonical_type_name(&word.to_lowercase()) {
 			"int" | "integer" | "long" => ".int",
 			"float" | "number" | "exact" => ".number",
@@ -101,14 +105,14 @@ fn type_of_word(word: &str) -> Option<String> {
 			"bool" | "boolean" => BOOL_TYPE,
 			"any" => ANY_TYPE,
 			_ => return None,
-		})
+		}.to_string())
 	};
 	if word == "list" {
 		return Some(".list .any".to_string());
 	}
 	match scalar(word) {
-		Some(lean) => Some(lean.to_string()),
-		None => word.strip_suffix('s').and_then(scalar).map(|element| format!(".list {element}")),
+		Some(lean) => Some(lean),
+		None => word.strip_suffix('s').and_then(scalar).map(|element| format!(".list ({element})")),
 	}
 }
 
@@ -117,10 +121,12 @@ fn union_alternatives(declared: &str) -> Option<&str> {
 	declared.strip_prefix(UNION_TYPE)?.strip_suffix(')')
 }
 
-/// a value given to a declared place: a union checks it against its alternatives when it runs
+/// a value given to a declared place: a union checks it against its alternatives when it runs, a fixed width
+/// against its range (an int literal is an `int`, not below the range: `x: int16 = 5`)
 fn admitted(declared: &str, value: String) -> String {
 	match union_alternatives(declared) {
 		Some(alternatives) => format!(".cast ({value}) {alternatives}"),
+		None if declared.starts_with(RANGED_TYPE_PREFIX) => format!(".cast ({value}) [{declared}]"),
 		None => value,
 	}
 }
@@ -570,6 +576,8 @@ impl Exporter {
 		match annotation.drop_meta() {
 			Node::Symbol(word) if word.ends_with(OPTIONAL_MARK) => self.union_type(word),
 			Node::Symbol(word) => self.type_of(word),
+			// `[int]`: a list of int
+			Node::List(items, Bracket::Square, _) if items.len() == 1 => Ok(format!("{LIST_TYPE_PREFIX}({})", self.annotation_type(&items[0])?)),
 			other => unsupported(other),
 		}
 	}

@@ -21,7 +21,7 @@ ambiguous forms per notes/welcoming.md), never less, except at a listed hole.
 ## W0: syntax
 
 ```
-types      τ ::= never | bool | int | number | text | unit | list τ | cls [C₀ … Cₙ] | any
+types      τ ::= never | bool | int | number | text | unit | list τ | cls [C₀ … Cₙ] | ranged lo hi | any
 modes      m ::= var | const | charged
 values     v ::= b | n | q | "s" | ø | [] | v :: v | ref a [C…]      (lists are cons cells, as the GC $Node)
 expr       e ::= v | x                          main-level name (store)
@@ -57,6 +57,7 @@ exact decimals/rationals (Kind::Int holding a ratio, wasm_emitter/exact.rs) and 
 | bool ≤ int | true/false act as 1/0 (P195: `true + 1` is 2) | BOOL_KIND masks to Int |
 | int ≤ number | `x: float = 1` is accepted | checks.rs `assignment_mismatch` (Float ← Int) |
 | list σ ≤ list τ if σ ≤ τ | **covariant lists** | probes/variance/ |
+| ranged a b ≤ ranged c d if c ≤ a, b ≤ d; ranged ≤ int | a fixed width (`int16`) is the range of ints it holds | fixed_width.rs |
 | cls p ≤ cls q if q is a prefix of p | a subclass or variant extends its parent's chain | class_methods.rs inherit, traits.rs IS_TYPE |
 
 Lists are shared (P200b): `ys = xs` makes an alias and `xs.add(v)` changes the one list both see, so covariant
@@ -494,3 +495,19 @@ exporter wraps the body in `.conv`, returns included: `def f(x) -> int { … }`,
 src/law/type_model.rs); nested functions keep theirs when lifted. Coverage: 246 of the 600 sampled programs, all
 agreeing (2026-10-09). Found: card kind-name (`x = 3.7 as int; x = "a"` compiles: the analyzer does not type a
 conversion, KNOWN_HOLES) and card bool-conversion (`2 as bool` gives 1, not yes, KNOWN_VALUE_DIFFERENCES).
+
+## Fixed widths and typed list elements
+
+`int8 … int64`, `uint8 … uint64` and `byte` (D16) are `ranged lo hi`, the range of ints they hold (Ty.lean,
+`FIXED_WIDTHS` names them back): below `int`, one range below another that contains it, `bool ⊔ ranged = int`,
+two ranges join to the range covering both. An int literal is an `int`, so it is typed `ranged lo hi` only by
+`intIn` (lo ≤ n ≤ hi), the type of a value a check let through. `fits` is structural: an int fits a range when it
+is in it, a list fits `list e` when each item fits e, so `share`, `push` and `setAt` check a fixed-width list's
+items one by one. A value given to a fixed-width place is a run-time `cast` (`x: int16 = 70000` is an error when it
+runs, as warp's overflow trap; `x: byte = 5; x = 300`), which the checker admits since `consub int (ranged …)`: an
+int may be in range. A literal written into a typed list that evidently does not fit (Checker.lean `evidentMisfit`:
+`xs: [int16] = [1, 70000]`, `xs: [int] = [1, "a"]`, `xs.add(70000)`) is rejected statically, as warp's
+checks.rs `misfit_item`; soundness is untouched (rejecting more never is unsound). Arithmetic on a fixed width gives
+`int` (`arith`): looser than warp, which traps when an int16 sum leaves int16 (a value difference only on overflow,
+not yet in the corpus). The exporter reads `[int]` as `list int` and `int16s` as `list (ranged …)` (card
+typed-list-elements).

@@ -233,11 +233,15 @@ def valueType : Expr → Option Ty
     | _, _ => none
   | _ => none
 
-/-- the run-time type test of a cast -/
-def fits (v : Expr) (t : Ty) : Bool :=
-  match valueType v with
-  | some tv => sub tv t
-  | none => false
+/-- the run-time type test of a cast: an int fits a fixed width when it is in its range, a list fits a list type when
+each item fits its element type, any other value when its type is below t -/
+def fits : Expr → Ty → Bool
+  | .int n, .ranged lo hi => decide (lo ≤ n ∧ n ≤ hi)
+  | .cons h t, .list e => fits h e && fits t (.list e)
+  | v, t =>
+    match valueType v with
+    | some tv => sub tv t
+    | none => false
 
 /-- a value as warp prints it, shared lists read in store μ down to `depth` levels; `?` where the model does not keep
 what warp prints (numbers, instances) -/
