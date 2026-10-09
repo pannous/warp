@@ -9,7 +9,10 @@ rm -f samples/todo_app.database.sqlite
 "$WARP" serve samples/todo_app.warp $PORT > /dev/null 2>&1 &
 SERVER=$!
 trap 'kill $SERVER; rm -f samples/todo_app.database.sqlite' EXIT
-until curl -s -o /dev/null localhost:$PORT/; do sleep 0.5; done
+until curl -s -o /dev/null localhost:$PORT/; do
+	kill -0 $SERVER 2>/dev/null || { echo "FAIL $WARP serve samples/todo_app.warp exited before answering"; exit 1; }
+	sleep 0.5
+done
 expect() {
 	[ "$2" = "$3" ] && echo "ok   $1" || { echo "FAIL $1: $2, expected $3"; exit 1; }
 }
