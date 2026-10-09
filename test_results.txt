@@ -2701,6 +2701,10 @@ PASSED:
   ✓ programs::test_shader_blocks::a_shader_block_over_lines_loses_its_indentation
   ✓ programs::test_shader_blocks::paint_takes_a_shader_block
   ✓ programs::test_shader_blocks::shader_stays_a_name
+  ✓ programs::test_shader_holes::a_hole_is_read_from_the_values
+  ✓ programs::test_shader_holes::a_shader_with_holes_paints_as_with_the_values_given
+  ✓ programs::test_shader_holes::each_paint_passes_the_holes_given_no_value
+  ✓ programs::test_shader_holes::values_not_written_out_cannot_take_the_holes
   ✓ programs::test_small_samples::error_samples
   ✓ programs::test_small_samples::text_samples
   ✓ programs::test_warp_command::debug_build_names_its_commit
@@ -3655,6 +3659,7 @@ PASSED:
   ✓ web::test_css_transitions::the_starting_style_is_data_for_the_page
   ✓ web::test_deploy::a_deployed_program_answers_its_routes
   ✓ web::test_deploy::a_program_without_routes_is_no_worker
+  ✓ web::test_deploy::the_playground_bundles_a_program_for_warp_hosting
   ✓ web::test_dev_server::a_dev_build_keeps_the_values_the_program_changed
   ✓ web::test_dev_server::the_dev_server_rebuilds_a_changed_program
   ✓ web::test_dom_pages::a_handler_draws_on_a_canvas_of_the_page
@@ -4234,4 +4239,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-10 ignored, 4229 passed, 0 failed, 4229 total tested
+10 ignored, 4234 passed, 0 failed, 4234 total tested
