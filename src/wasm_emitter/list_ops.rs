@@ -1,6 +1,7 @@
 //! List and string operation functions for WASM
 
 use crate::wasm_emitter::{WasmGcEmitter, VALUES_EQUAL};
+use crate::wasm_emitter::list_dispatch::Slot;
 use wasm_encoder::*;
 use Instruction::I32Const;
 use Instruction as I;
@@ -729,13 +730,15 @@ pub const TEXT_AS_INT: &str = "text_as_int";
 /// Arithmetic on two Nodes of run-time kind: (function, its operator, the exact Int function); the first four in
 /// uncertain.rs UNCERTAIN_ARITHMETIC's order
 pub const NODE_ADD: &str = "node_add";
-pub const NODE_ARITHMETIC: [(&str, Op, &str); 6] = [
+pub const NODE_POW: &str = "node_pow";
+pub const NODE_ARITHMETIC: [(&str, Op, &str); 7] = [
 	(NODE_ADD, Op::Add, "exact_add"),
 	("node_sub", Op::Sub, "exact_sub"),
 	("node_mul", Op::Mul, "exact_mul"),
 	("node_div", Op::Div, "exact_div"),
 	("node_mod", Op::Mod, "exact_mod"),
 	("node_rem", Op::Rem, "exact_rem"),
+	(NODE_POW, Op::Pow, "exact_pow"),
 ];
 
 /// text_as_float(node): the f64 of a text like "-12.5e3" (a number node converts as it is); anything else is invalid_number
@@ -798,7 +801,7 @@ impl WasmGcEmitter {
 
 	/// The f64 of `a op b` of the Nodes in params 0 and 1; a remainder reads them again instead of holding them in the
 	/// emitter's scratch locals, which a runtime function has not (arithmetic.rs emit_float_remainder)
-	fn emit_node_float_arithmetic(&mut self, f: &mut Function, op: Op) {
+	fn emit_node_float_arithmetic(&mut self, f: &mut Function, op: Op, power: u32) {
 		let operand = |s: &mut Self, f: &mut Function, param: u32, absolute: bool| {
 			f.instruction(&I::LocalGet(param));
 			s.call(f, TEXT_AS_FLOAT);
@@ -807,6 +810,17 @@ impl WasmGcEmitter {
 			}
 		};
 		let (dividend, divisor) = (0, 1);
+		// libm's pow; a NaN (a negative base with a fractional exponent) is invalid_number, as emit_float_power makes it
+		if op == Op::Pow {
+			operand(self, f, dividend, false);
+			operand(self, f, divisor, false);
+			if self.emit_libm_call(f, super::LIBM_POW) {
+				Self::emit_list(f, &[I::LocalTee(power), I::LocalGet(power), I::F64Ne]);
+				self.emit_fail_if(f, "invalid_number");
+				f.instruction(&I::LocalGet(power));
+			}
+			return;
+		}
 		if !matches!(op, Op::Mod | Op::Rem) {
 			operand(self, f, dividend, false);
 			operand(self, f, divisor, false);
@@ -833,8 +847,8 @@ impl WasmGcEmitter {
 			if !self.should_emit_function(name) {
 				continue;
 			}
-			self.runtime_function(name, vec![node_ref, node_ref], vec![node_ref], vec![ValType::I64], |s, f| {
-				let kind = 2;
+			self.runtime_function(name, vec![node_ref, node_ref], vec![node_ref], vec![ValType::I64, ValType::F64], |s, f| {
+				let (kind, power) = (2, 3);
 				// node_add of two lists (ø is the empty list): their concatenation, `out = out + row`
 				if name == NODE_ADD {
 					let is_list = |f: &mut Function, operand: u32| {
@@ -914,8 +928,16 @@ impl WasmGcEmitter {
 					s.emit_field(f, operand, 0);
 					Self::emit_list(f, &[I::I64Const(KIND_MASK), I::I64And, I::I64Const(float_kind), I::I64Eq]);
 				}
-				Self::emit_list(f, &[I::I32Or, I::If(BlockType::Result(node_ref))]);
-				s.emit_node_float_arithmetic(f, op);
+				f.instruction(&I::I32Or);
+				// an exact power of a ratio exponent is no exact number: 2^(7/12) is computed as f64
+				if op == Op::Pow {
+					Self::emit_list(f, &[I::If(BlockType::Result(ValType::I32)), I::I32Const(1), I::Else, I::LocalGet(1)]);
+					s.call(f, "get_int_value");
+					s.call(f, "is_ratio");
+					f.instruction(&I::End);
+				}
+				f.instruction(&I::If(BlockType::Result(node_ref)));
+				s.emit_node_float_arithmetic(f, op, power);
 				s.call(f, "new_float");
 				Self::emit_list(f, &[I::Else, I::LocalGet(0)]);
 				s.call(f, "get_int_value");
@@ -1381,16 +1403,23 @@ impl WasmGcEmitter {
 
 	/// A variable target (local or declared global) gets the updated copy on the stack, any other target drops it
 	fn emit_store_updated(&mut self, func: &mut Function, target: &Node) {
-		let Node::Symbol(name) = target.drop_meta() else {
-			func.instruction(&I::Drop);
-			return;
+		let slot = match target.drop_meta() {
+			Node::Symbol(name) => self.node_variable_slot(name),
+			_ => None,
 		};
-		let global = self.ctx.user_globals.get(name).filter(|(_, kind)| kind.is_ref());
-		match (self.scope.lookup(name), global) {
-			(Some(local), _) if local.kind.is_ref() => func.instruction(&I::LocalSet(local.position)),
-			(None, Some(&(index, _))) => func.instruction(&I::GlobalSet(index)),
-			_ => func.instruction(&I::Drop),
-		};
+		func.instruction(&match slot {
+			Some(Slot::Local(index)) => I::LocalSet(index),
+			Some(Slot::Global(index)) => I::GlobalSet(index),
+			None => I::Drop,
+		});
+	}
+
+	/// The local or declared global a variable holding a Node (reference) lives in
+	pub(super) fn node_variable_slot(&self, name: &str) -> Option<Slot> {
+		match self.scope.lookup(name) {
+			Some(local) => local.kind.is_ref().then_some(Slot::Local(local.position)),
+			None => self.ctx.user_globals.get(name).filter(|(_, kind)| kind.is_ref()).map(|&(index, _)| Slot::Global(index)),
+		}
 	}
 
 	/// `d[k] = v` with a key read at runtime (`for k in ks {d[k] = 0}`): the copy that `setter` makes with the entry set;
@@ -2362,7 +2391,6 @@ impl WasmGcEmitter {
 		}
 		let node = self.type_manager.node_type;
 		let (node_ref, nullable) = (Ref(self.node_ref(false)), Ref(self.node_ref(true)));
-		let next_index = |s: &Self| s.ctx.func_registry.import_count() + s.ctx.func_registry.code_count();
 		let is_entry = |s: &Self, f: &mut Function, local: u32| {
 			s.emit_field(f, local, 0);
 			Self::emit_list(f, &[I::I64Const(KIND_MASK), I::I64And, I::I64Const(KEY_KIND), I::I64Eq]);
@@ -2395,24 +2423,25 @@ impl WasmGcEmitter {
 			s.emit_field(f, key, 2);
 			Self::emit_list(f, &[I::StructNew(node), I::Else, I::LocalGet(key), I::RefAsNonNull, I::End]);
 		});
-		// map_column_cells(cells, part): a `[…]` list of that part of every entry
-		let column_cells = next_index(self);
-		self.runtime_function(MAP_COLUMN_CELLS, vec![nullable, ValType::I32], vec![nullable], vec![], |s, f| {
-			Self::emit_list(f, &[I::LocalGet(0), I::RefIsNull, I::If(BlockType::Empty), I::RefNull(HeapType::Concrete(node)), I::Return, I::End]);
+		// map_column_cells(cells, part): a `[…]` list of that part of every entry, appended at its last cell in a loop
+		// (a call per entry exhausted the call stack near ten thousand entries)
+		self.runtime_function(MAP_COLUMN_CELLS, vec![nullable, ValType::I32], vec![nullable], vec![nullable, nullable, nullable], |s, f| {
+			let (cell, part, head, last, made) = (0, 1, 2, 3, 4);
+			Self::emit_list(f, &[I::Block(BlockType::Empty), I::Loop(BlockType::Empty), I::LocalGet(cell), I::RefIsNull, I::BrIf(1)]);
 			// a meta entry `@name:value` is no key, value or entry of the map
-			s.emit_field(f, 0, 1);
+			s.emit_field(f, cell, 1);
 			s.call(f, super::equality::IS_META_ENTRY);
-			f.instruction(&I::If(BlockType::Empty));
-			s.emit_field(f, 0, 2);
-			Self::emit_list(f, &[I::LocalGet(1), I::Call(column_cells), I::Return, I::End]);
-			f.instruction(&I::I64Const(SQUARE_LIST_KIND));
-			s.emit_field(f, 0, 1);
-			Self::emit_list(f, &[I::RefCastNonNull(HeapType::Concrete(node)), I::LocalGet(1)]);
+			Self::emit_list(f, &[I::I32Eqz, I::If(BlockType::Empty), I::I64Const(SQUARE_LIST_KIND)]);
+			s.emit_field(f, cell, 1);
+			Self::emit_list(f, &[I::RefCastNonNull(HeapType::Concrete(node)), I::LocalGet(part)]);
 			s.call(f, MAP_PART);
-			s.emit_field(f, 0, 2);
-			Self::emit_list(f, &[I::LocalGet(1), I::Call(column_cells), I::StructNew(node)]);
+			Self::emit_list(f, &[I::RefNull(HeapType::Concrete(node)), I::StructNew(node), I::LocalSet(made)]);
+			Self::emit_list(f, &[I::LocalGet(last), I::RefIsNull, I::If(BlockType::Empty), I::LocalGet(made), I::LocalSet(head), I::Else]);
+			Self::emit_list(f, &[I::LocalGet(last), I::LocalGet(made), I::StructSet { struct_type_index: node, field_index: 2 }, I::End]);
+			Self::emit_list(f, &[I::LocalGet(made), I::LocalSet(last), I::End]);
+			s.emit_field(f, cell, 2);
+			Self::emit_list(f, &[I::LocalSet(cell), I::Br(0), I::End, I::End, I::LocalGet(head)]);
 		});
-		assert_eq!(self.func_index(MAP_COLUMN_CELLS), column_cells, "recursive call index");
 		// map_column(xs, part): that part of every entry of a map, as a list; anything else unchanged
 		self.runtime_function(MAP_COLUMN, vec![node_ref, ValType::I32], vec![node_ref], vec![], |s, f| {
 			is_entry(s, f, 0);

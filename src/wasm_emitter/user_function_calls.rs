@@ -380,6 +380,10 @@ impl WasmGcEmitter {
 		let user_fn = self.ctx.user_functions[fn_name].clone();
 		if user_fn.return_kind.is_float() {
 			self.emit_user_function_call_inner(func, &user_fn, args);
+		} else if user_fn.return_kind.is_ref() && !self.returns_list_abi(fn_name) {
+			// a Node result (a number whose kind is decided at run time) is a Float or an Int
+			self.emit_user_function_call_inner(func, &user_fn, args);
+			self.emit_held_node_as_f64(func);
 		} else {
 			self.emit_user_function_call_numeric(func, fn_name, args);
 			self.emit_int_to_f64(func, None);
