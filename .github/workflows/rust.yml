@@ -70,6 +70,8 @@ jobs:
       run: |
         curl -sSfL https://raw.githubusercontent.com/leanprover/elan/master/elan-init.sh | sh -s -- -y --default-toolchain $LEAN_TOOLCHAIN
         echo "$HOME/.elan/bin" >> $GITHUB_PATH
+    - name: Install agent-browser (headless Chrome for the page tests, tests/web/test_dom_pages.rs)
+      run: npm install -g agent-browser && agent-browser install --with-deps
     # claude/* branches are the cloud agents' build farm (their sandboxes cannot reach crates.io):
     # a red build there is expected mid-work and belongs to the agent, so it must not fail the job
     # and mail the maintainer. The real outcome is reported to the agent in the last step.
