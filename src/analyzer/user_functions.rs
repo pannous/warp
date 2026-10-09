@@ -4,6 +4,8 @@ use super::*;
 
 /// The type word of a value that is an int or a float
 const NUMBER_TYPE: &str = "number";
+/// The printing words, which `print #xs` and `print -1` call like a function of the program (card print-people)
+const PRINT_WORDS: [&str; 2] = ["print", "puts"];
 
 /// Kind of a value known before running the program
 pub(crate) fn literal_kind(value: &Node) -> Option<Kind> {
@@ -619,8 +621,9 @@ pub(crate) fn declared_globals(program: &Node) -> HashMap<String, Local> {
 	scope.globals
 }
 
-/// `f -x` with a user or built-in function `f` is the call `f(-x)`: a function is never an operand of a subtraction.
-/// A built-in name that the program also binds as a variable or parameter (`exp-1`) stays a subtraction.
+/// `f -x` with a user or built-in function `f` is the call `f(-x)`, and `print #xs` is `print(#xs)`: a function is never
+/// an operand of a subtraction nor indexed (card print-people). A built-in name that the program also binds as a
+/// variable or parameter (`exp-1`) stays a subtraction.
 pub fn lower_negated_calls(node: Node) -> Node {
 	let mut ctx = Context::new();
 	extract_user_functions_inner(&mut ctx, &node);
@@ -640,13 +643,14 @@ pub fn applicable_function_names(node: &Node) -> HashSet<String> {
 pub(super) fn negate_calls(node: Node, functions: &std::collections::BTreeMap<String, UserFunctionDef>, bound: &HashSet<String>) -> Node {
 	let is_function = |operand: &Node| match operand.drop_meta() {
 		Node::Symbol(name) => functions.get(name).is_some_and(|function| !function.params.is_empty())
-			|| (crate::real::FUNCTIONS.contains(&name.as_str()) && !bound.contains(name)),
+			|| ((crate::real::FUNCTIONS.contains(&name.as_str()) || PRINT_WORDS.contains(&name.as_str())) && !bound.contains(name)),
 		_ => false,
 	};
 	match node {
-		Node::Key(function, Op::Sub, argument) if is_function(&function) => {
-			let negated = Node::Key(Box::new(Node::Empty), Op::Neg, Box::new(negate_calls(*argument, functions, bound)));
-			Node::List(vec![*function, negated], Bracket::Round, Separator::None)
+		Node::Key(function, op @ (Op::Sub | Op::Hash), argument) if is_function(&function) => {
+			let prefix = if op == Op::Sub { Op::Neg } else { Op::Hash };
+			let argument = Node::Key(Box::new(Node::Empty), prefix, Box::new(negate_calls(*argument, functions, bound)));
+			Node::List(vec![*function, argument], Bracket::Round, Separator::None)
 		}
 		Node::Key(left, op, right) => Node::Key(Box::new(negate_calls(*left, functions, bound)), op, Box::new(negate_calls(*right, functions, bound))),
 		Node::List(items, bracket, separator) => Node::List(items.into_iter().map(|item| negate_calls(item, functions, bound)).collect(), bracket, separator),
