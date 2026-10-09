@@ -436,10 +436,10 @@ fn run_command(args: &[String]) {
     }
 }
 
-/// `Warp 🐝 1.2.4`; a debug build also names, on stderr, the commit of the checkout it was built from and the time of
+/// `Warp 🌀 1.2.4`; a debug build also names, on stderr, the commit of the checkout it was built from and the time of
 /// its binary (cards g_oMw8, g_oM-0): `debug build 75d67b068 · built 2026-10-09 14:32`
 fn print_version() {
-    println!("Warp 🐝 {}", WARP_VERSION);
+    println!("🌀 Warp {}", WARP_VERSION);
     if cfg!(debug_assertions) {
         let commit = command_line("git", &["-C", env!("CARGO_MANIFEST_DIR"), "rev-parse", "--short=9", "HEAD"]);
         let binary = env::current_exe().map(|path| path.display().to_string()).unwrap_or_default();
@@ -785,7 +785,7 @@ fn console() {
     let _ = rl.load_history(&history_path);
 
     loop {
-        match rl.readline("🐝 ") {
+        match rl.readline("🌀") { // warp language symbol for prompt
             Ok(line) => {
                 let input = line.trim();
                 if input.is_empty() { continue; }
