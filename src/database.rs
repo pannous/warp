@@ -202,7 +202,7 @@ unsafe fn give(sqlite: &Sqlite, context: Handle, value: &Node) -> Result<(), Str
 			Node::True => (sqlite.result_int64)(context, 1),
 			Node::False => (sqlite.result_int64)(context, 0),
 			Node::Text(_) | Node::Char(_) => {
-				let text = CString::new(value.name()).map_err(|problem| problem.to_string())?;
+				let text = c_text(value)?;
 				(sqlite.result_text)(context, text.as_ptr(), -1, SQLITE_TRANSIENT)
 			}
 			other => return Err(format!("a filter's function gave {}, which a query cannot compare", other.serialize().trim())),
@@ -371,6 +371,15 @@ fn rows(database: Handle, sql: &str, parameters: &[Node]) -> Result<Vec<Vec<Node
 	result
 }
 
+/// A text or character value as SQLite's text: a one-character text ("x") is a character (its name() is empty)
+fn c_text(value: &Node) -> Result<CString, String> {
+	let text = match value.drop_meta() {
+		Node::Char(character) => character.to_string(),
+		other => other.name(),
+	};
+	CString::new(text).map_err(|problem| problem.to_string())
+}
+
 fn bind(sqlite: &Sqlite, statement: Handle, index: c_int, value: &Node) -> Result<(), String> {
 	let code = unsafe {
 		match value {
@@ -380,7 +389,7 @@ fn bind(sqlite: &Sqlite, statement: Handle, index: c_int, value: &Node) -> Resul
 			Node::True => (sqlite.bind_int64)(statement, index, 1),
 			Node::False => (sqlite.bind_int64)(statement, index, 0),
 			Node::Text(_) | Node::Char(_) => {
-				let text = CString::new(value.name()).map_err(|problem| problem.to_string())?;
+				let text = c_text(value)?;
 				(sqlite.bind_text)(statement, index, text.as_ptr(), -1, SQLITE_TRANSIENT)
 			}
 			other => return Err(format!("{} is no column value", other.serialize().trim())),
