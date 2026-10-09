@@ -85,6 +85,11 @@ impl Uncertain {
 		}
 	}
 
+	/// The same uncertainty counted in a unit `factor` times larger (a positive factor)
+	pub fn scaled(&self, factor: f64) -> Uncertain {
+		Uncertain { value: self.value * factor, low: self.low * factor, high: self.high * factor, gaussian: self.gaussian }
+	}
+
 	/// The ± part: how far the interval reaches from the value, on its farther side
 	pub fn radius(&self) -> f64 {
 		(self.high - self.value).max(self.value - self.low)

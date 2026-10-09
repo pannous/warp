@@ -47,3 +47,11 @@ fn a_field_type_with_tolerance_gives_its_values_the_tolerance() {
 fn a_gaussian_quantity_shows_sigma_apart_from_its_unit() {
 	assert_eq!(shown("x = 12 m ± 0.6σ; str(x)"), "12.00 ± 0.60σ m");
 }
+
+// a final ± value of a unit field shows its unit, in the field's unit (card quantity-final)
+#[test]
+fn a_final_unit_field_with_tolerance_shows_its_unit() {
+	assert_eq!(shown("class Rope{length: m}\nr = Rope(5 m ± 1 cm)\nr.length"), "5.000 ± 0.010m");
+	assert_eq!(shown("class Rope{length: cm}\nr = Rope(5 m ± 1 cm)\nr.length"), "500.0 ± 1.0cm");
+	assert_eq!(shown("class Rope{length: m}\nr = Rope(5 m ± 1 cm)\nr"), "Rope{length:5.000 ± 0.010m}");
+}
