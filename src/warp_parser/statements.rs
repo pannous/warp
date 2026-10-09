@@ -195,8 +195,7 @@ impl WarpParser {
 			(self.pos, self.line_nr, self.column, self.current_line) = before_header.clone();
 			self.skip_spaces();
 			if self.at_c_style_for_head() { // `for(i=0;i<n;i++)`; `for (1…5).filter(f):` walks the list
-				(self.pos, self.line_nr, self.column, self.current_line) = before_header;
-				return None;
+				return Some(self.c_style_for());
 			}
 		}
 		let outer_header = std::mem::replace(&mut self.in_for_header, true);
@@ -208,6 +207,7 @@ impl WarpParser {
 			// only the colon and do forms: `for 1..3 {…}` is read where for loops are lowered
 			let body = match body_word {
 				Some(word) => self.colon_body(word),
+				None if self.current_char() == '{' => self.parse_atom(), // `for (1…5).filter(odd) {print it}`
 				None => match self.indented_lines_below() {
 					Some(block) => block, // `for 0 to 2` and the lines indented below it
 					None => {
@@ -216,8 +216,7 @@ impl WarpParser {
 					}
 				},
 			};
-			let block = Node::List(vec![body], Bracket::Curly, Separator::Semicolon);
-			return Some(Node::List(vec![Symbol("for".to_string()), iterable, block], Bracket::None, Separator::Space));
+			return Some(Node::List(vec![Symbol("for".to_string()), iterable, as_block(body)], Bracket::None, Separator::Space));
 		};
 		let key_variable = match variable.drop_meta() {
 			Symbol(name) if iterates_keys(&iterable) => Some(name.clone()),
@@ -401,6 +400,19 @@ impl WarpParser {
 		Ok(Node::List(vec![guarded], Bracket::Curly, Separator::Semicolon))
 	}
 
+	/// `for (i=0;i<n;i++) {body}`, `for(…) print i`, `for(…): body`, at its head: `((for (head)) {body})` as lowering reads it
+	fn c_style_for(&mut self) -> Node {
+		let head = self.parse_atom();
+		self.skip_blanks();
+		let body = match self.current_char() {
+			'{' => self.parse_atom(),
+			':' => self.colon_body(":"),
+			_ if self.matches_keyword(DO_WORD) => self.colon_body(DO_WORD),
+			_ => self.indented_lines_below().unwrap_or_else(|| self.rest_of_statement()),
+		};
+		Node::List(vec![Node::List(vec![Symbol("for".to_string()), head], Bracket::Round, Separator::None), as_block(body)], Bracket::None, Separator::None)
+	}
+
 	/// The body after `:` or `do`: the statements up to `end` after `do`, the indented block under a `:` or `do` at the end
 	/// of the line, else the rest of the line
 	pub(super) fn colon_body(&mut self, word: &str) -> Node {
@@ -422,16 +434,29 @@ impl WarpParser {
 
 	/// The words up to the end of the line, one expression: the colon body `print i` of `for i in 1..3 : print i`
 	pub(super) fn rest_of_statement(&mut self) -> Node {
+		let words = self.words_of_expression();
+		if words.len() < 2 || !is_print_word(&words[0]) || self.current_char() != ',' {
+			return match words.len() {
+				1 => words[0].clone(),
+				_ => grouped_list(words, Bracket::None, Separator::Space), // `for c in s: print ord c` prints `ord c`
+			};
+		}
+		let mut arguments = vec![one_expression(&words[1..])]; // `for i in 1..3: print i, i*2` prints both
+		while self.current_char() == ',' {
+			self.advance();
+			self.skip_blanks();
+			arguments.push(one_expression(&self.words_of_expression()));
+		}
+		print_call(arguments)
+	}
+
+	/// The words up to the end of the line or a comma, `ord c` of `print ord c`
+	fn words_of_expression(&mut self) -> Vec<Node> {
 		let mut words = vec![self.with_equals_comparing(false, |parser| parser.parse_expr(0))];
-		loop {
-			if !self.braceless_argument_follows() {
-				return match words.len() {
-					1 => words.remove(0),
-					_ => grouped_list(words, Bracket::None, Separator::Space), // `for c in s: print ord c` prints `ord c`
-				};
-			}
+		while self.braceless_argument_follows() {
 			words.push(self.with_equals_comparing(false, |parser| parser.parse_expr(0)));
 		}
+		words
 	}
 
 	/// `print x` without parentheses follows the blanks here: true with the word taken, the argument next
@@ -549,5 +574,13 @@ fn statement_block(block: Node) -> Node {
 			Node::List(vec![Node::List(items, Bracket::None, Separator::Colon)], Bracket::Curly, Separator::Semicolon)
 		}
 		block => block,
+	}
+}
+
+/// A loop body as a `{…}` block: `print i` becomes `{print i}`, a block stays itself
+fn as_block(body: Node) -> Node {
+	match body.drop_meta() {
+		Node::List(_, Bracket::Curly, _) => body,
+		_ => Node::List(vec![body], Bracket::Curly, Separator::Semicolon),
 	}
 }

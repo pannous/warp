@@ -1,0 +1,101 @@
+#!/usr/bin/env warp
+// A 3D model from a Wavefront .obj text, spun and shaded on the GPU. warp reads the model (`v x y z` corners, `f a b c …`
+// faces, a face of more corners split into triangles), the shader casts a ray through every pixel against the
+// triangles, the nearest one hit is lit by its normal. `$mesh` is the list of triangle corners, one vec4f each
+use graphics
+house = "# a house: walls, a gable roof, a chimney
+v -1 -1 -1
+v  1 -1 -1
+v  1  1 -1
+v -1  1 -1
+v -1 -1  1
+v  1 -1  1
+v  1  1  1
+v -1  1  1
+v  0  2 -1
+v  0  2  1
+v  0.4 1 -0.3
+v  0.7 1 -0.3
+v  0.7 1  0.3
+v  0.4 1  0.3
+v  0.4 2 -0.3
+v  0.7 2 -0.3
+v  0.7 2  0.3
+v  0.4 2  0.3
+f 1 2 3 4
+f 6 5 8 7
+f 5 1 4 8
+f 2 6 7 3
+f 5 6 2 1
+f 4 3 9
+f 7 8 10
+f 3 7 10 9
+f 8 4 9 10
+f 11 12 16 15
+f 13 14 18 17
+f 12 13 17 16
+f 14 11 15 18
+f 15 16 17 18"
+
+// the corners of every triangle, three by three: `v` lines are the points, `f` lines index them from 1 (`3/1/2`: the
+// point before the slash)
+def triangles(obj) {
+	points = []
+	corners = []
+	for line in obj.split("\n") {
+		words = line.split(" ").filter(word => word != "")
+		if #words > 0 and words#1 == "v" { points = points + [[float(words#2), float(words#3), float(words#4)]] }
+		if #words > 3 and words#1 == "f" {
+			face = words.filter(word => word != "f").map(word => points#int(word.split("/")#1))
+			for i in 2 to #face - 1 { corners = corners + [face#1, face#i, face#(i + 1)] }
+		}
+	}
+	corners
+}
+
+mesh = triangles(house)
+size = 256
+viewer = shader {
+@fragment fn main(@builtin(position) at: vec4f) -> @location(0) vec4f {
+	let uv = (at.xy / $size - 0.5) * vec2f(1.0, -1.0);
+	// the camera turns around the model instead of the model around itself: same picture, one rotation per pixel
+	let turn = $angle;
+	let tilt = 0.45;
+	let spin = mat3x3f(cos(turn), 0.0, sin(turn), 0.0, 1.0, 0.0, -sin(turn), 0.0, cos(turn));
+	let lean = mat3x3f(1.0, 0.0, 0.0, 0.0, cos(tilt), -sin(tilt), 0.0, sin(tilt), cos(tilt));
+	let view = spin * lean;
+	let origin = view * vec3f(0.0, 0.3, 6.0);
+	let ray = normalize(view * vec3f(uv * 1.1, -1.0));
+	var nearest = 1e9;
+	var normal = vec3f(0.0);
+	for (var i = 0u; i < u32($count); i += 3u) {
+		let a = $mesh[i].xyz;
+		let ab = $mesh[i + 1u].xyz - a;
+		let ac = $mesh[i + 2u].xyz - a;
+		let p = cross(ray, ac);
+		let det = dot(ab, p);
+		if (abs(det) < 1e-6) { continue; }
+		let s = origin - a;
+		let u = dot(s, p) / det;
+		let q = cross(s, ab);
+		let v = dot(ray, q) / det;
+		let t = dot(ac, q) / det;
+		if (u >= 0.0 && v >= 0.0 && u + v <= 1.0 && t > 0.0 && t < nearest) {
+			nearest = t;
+			normal = normalize(cross(ab, ac));
+		}
+	}
+	if (nearest > 1e8) { return vec4f(0.10, 0.12, 0.18 + 0.2 * (uv.y + 0.5), 1.0); }
+	let facing = select(normal, -normal, dot(normal, ray) > 0.0);
+	let sun = normalize(vec3f(0.5, 0.8, 0.6));
+	let light = max(dot(facing, sun), 0.0) + 0.35 * max(dot(facing, -sun), 0.0);
+	let base = vec3f(0.95, 0.62, 0.30);
+	return vec4f(base * (0.25 + 0.7 * light), 1.0);
+	}
+}
+
+count = #mesh
+for frame in 1..90 {
+	angle = frame * 0.07
+	paint(viewer, size, size, {size: [size, size]})
+}
