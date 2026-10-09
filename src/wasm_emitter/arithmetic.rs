@@ -22,7 +22,8 @@ impl WasmGcEmitter {
 		if op.is_arithmetic() && self.emit_typed_arithmetic(func, left, op, right) {
 			return;
 		}
-		if let Some(function) = crate::analyzer::node_arithmetic(self.get_type(left), op, self.get_type(right)) {
+		let run_time_power = *op == Op::Pow && self.arithmetic_type(left, op, right) == Kind::Data;
+		if let Some(function) = crate::analyzer::node_arithmetic(self.get_type(left), op, self.get_type(right)).or(run_time_power.then_some(super::list_ops::NODE_POW)) {
 			self.emit_node_instructions(func, left);
 			self.emit_node_instructions(func, right);
 			self.emit_call(func, function);
