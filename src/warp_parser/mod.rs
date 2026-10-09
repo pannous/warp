@@ -229,6 +229,12 @@ fn grouped_list(items: Vec<Node>, bracket: Bracket, separator: Separator) -> Nod
 	if is_print_block {
 		return Node::List(vec![items[0].clone(), one_expression(&items[1..])], bracket, separator);
 	}
+	// `{ print i, i*2 }`: the block of the one call print(i, i*2)
+	if let (Bracket::Curly, Separator::Colon, Some(Node::List(head, Bracket::None, Separator::Space))) = (&bracket, &separator, items.first().map(Node::drop_meta)) {
+		if is_print_word(&head[0]) {
+			return Node::List(vec![print_call(head[1..].iter().chain(&items[1..]).cloned())], bracket, Separator::None);
+		}
+	}
 	if bracket != Bracket::None || !matches!(separator, Separator::Space | Separator::Colon) {
 		return Node::List(items, bracket, separator);
 	}

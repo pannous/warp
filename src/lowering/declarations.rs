@@ -1442,8 +1442,10 @@ fn spaced_definition(items: &[Node]) -> Option<(Node, Vec<Node>, Node)> {
 /// (returned, assigned, an argument): `mk(k) := { return {it * k} }` returns the function `it => it * k`
 fn bind_it(node: Node, parameter: &str, is_value: bool) -> Node {
 	let values = |items: Vec<Node>| -> Vec<Node> {
+		let head = items.first().cloned().unwrap_or(Node::Empty);
 		let mut items = items.into_iter();
-		items.next().map(|head| bind_it(head, parameter, false)).into_iter().chain(items.map(|item| bind_it(item, parameter, true))).collect()
+		let bound = |item: Node| if crate::lambdas::has_own_it(&head, &item) { item } else { bind_it(item, parameter, true) };
+		items.next().map(|head| bind_it(head, parameter, false)).into_iter().chain(items.map(bound)).collect()
 	};
 	match node {
 		Node::Symbol(name) if name == IT_PARAMETER => Node::Symbol(parameter.to_string()),

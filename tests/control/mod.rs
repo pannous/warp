@@ -7,6 +7,7 @@ mod test_on_error_of_function;
 mod test_empty_block_binding;
 mod test_empty_block;
 mod test_for_loop;
+mod test_for_forms; // cards print-comma, forms-space, chain-block
 mod test_help_word;
 mod test_for_over_a_number;
 mod test_mixed_range_bounds;

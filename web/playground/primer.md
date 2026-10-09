@@ -58,7 +58,7 @@ Items separated by spaces or commas; `xs#1` is the first item (`xs[0]` too: brac
 xs = [3 1 2]; xs.add(4); [#xs, xs#1, sort xs, sum xs, xs#(2…3)]
 ```
 ```warp => [[1 4 9] [2 4 6] [3] [1 2 3]]
-[[1 2 3].map(x => x * x), (1…3).map(x => x * 2), [1 2 3].filter(x => x > 2), 1..4]
+[[1 2 3].map(x => x * x), (1…3).map(it * 2), [1 2 3].filter(it > 2), 1..4]
 ```
 Comprehensions filter with `where` (or `if`); a function of a number broadcasts over a list.
 ```warp => [[9 16] [1 4 9]]
@@ -95,7 +95,8 @@ total = 0; for (a, b) in [(1, 2), (3, 4)] { total += a * b }; total
 
 ## Functions
 `f(x) := …` or `def f(x) = …` or `def f(x) { … }`; `return`; a one-parameter definition may use `it`; calls need no
-parentheses (`f 3-1` is `f(3-1)`); lambdas `x => …`; functions are values and closures.
+parentheses (`f 3-1` is `f(3-1)`); lambdas `x => …`, or just `it` where a function is expected (`xs.map(it * 2)`);
+functions are values and closures.
 ```warp => [55 42 7 7]
 fib(n) := if n < 2 then n else fib(n - 1) + fib(n - 2)
 twice := it * 2

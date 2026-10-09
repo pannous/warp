@@ -233,3 +233,19 @@ fn a_gpu_map_of_a_cpu_mapped_result_uploads_it() {
 	});
 	assert_eq!(flags, ["0"]);
 }
+
+// card demo-simple (a mesh for the shader): a list of lists in gpu_render's values is an array of vec4f, one item each
+// (missing coordinates 0), and a list of more than four numbers fills vec4f after vec4f: `values.corners[1].y`
+const WITH_ARRAYS: &str = "shader = \"@fragment fn main(@builtin(position) at: vec4f) -> @location(0) vec4f {
+	return vec4f(values.corners[1].y, values.corners[0].z, values.flat[1].x, 1.0);
+}\"
+gpu_render(shader, 1, 1, {corners: [[0, 0, 1], [0, 1, 0]], flat: [0, 0, 0, 0, 1]})";
+
+#[test]
+fn a_fragment_shader_reads_lists_of_vectors() {
+	let rendered = eval(WITH_ARRAYS);
+	if matches!(&rendered, Node::Error(message) if message.to_string().contains("no WebGPU adapter")) {
+		return crate::common::announce_skip("a WebGPU adapter", module_path!());
+	}
+	assert_eq!(rendered.serialize(), format!("[{}]", 0xFFFFFFFFu32));
+}

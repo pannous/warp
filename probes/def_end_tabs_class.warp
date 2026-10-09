@@ -1,0 +1,9 @@
+class Point
+	def initialize(x)
+		@x = x
+	end
+	def double
+		@x * 2
+	end
+end
+Point.new(4).double

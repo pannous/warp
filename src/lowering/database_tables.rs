@@ -933,7 +933,8 @@ fn with_lazy_reads(node: Node, tables: &HashMap<String, Table>, own: Option<&str
 	}
 }
 
-/// A class's methods read its tables as functions do; its fields stay, also one named like a table
+/// A class's methods read its tables as functions do; its fields stay, also one named like a table (map_children would
+/// read a field declaration `people: int` as a read of the table)
 fn in_method_bodies(node: Node, rewrite: &impl Fn(Node) -> Node) -> Node {
 	match node {
 		Node::Key(head, Op::Define, body) => Node::Key(head, Op::Define, Box::new(rewrite(*body))),

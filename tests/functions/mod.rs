@@ -19,6 +19,7 @@ mod test_concatenating_parameter;
 mod test_conversion_methods;
 mod test_round8_call_forms;
 mod test_def_forms;
+mod test_definition_bodies;
 mod test_def_bool_result;
 mod test_python_ruby_definitions;
 mod test_field_function_values;
@@ -37,6 +38,7 @@ mod test_anonymous_application;
 mod test_anonymous_function_forms;
 mod test_map_phrase;
 mod test_nested_it;
+mod test_it_arguments; // card map-it
 mod test_parameter_shapes;
 mod test_passed_through_functions;
 mod test_soft_keywords;

@@ -531,9 +531,14 @@ pub(super) fn call_arity_error(node: &Node, context: &Context) -> Option<Diagnos
 /// `sqrt(x) := …`, `def abs(x): …`: a prefix operator word reads as the operator, so the definition could never be
 /// called (P141); it arrives as `(√ ø x) := …`. Checked on the source, before a pass reads the operator
 pub fn check_operator_word_functions(program: &Node) -> Option<Diagnostic> {
+	// a method may be named so: `p.norm()` reads as the method (card class-method-named)
+	let mut methods = std::collections::HashSet::new();
+	program.visit(&mut |node| if let Node::Type { body, .. } = node {
+		body.visit(&mut |part| { methods.insert(part as *const Node); });
+	});
 	let mut clash = None;
 	program.visit(&mut |node| {
-		if clash.is_some() {
+		if clash.is_some() || methods.contains(&(node as *const Node)) {
 			return;
 		}
 		let defined = match node {

@@ -1103,7 +1103,7 @@ fn gpu_failure(word: &'static str) -> impl Fn(String) -> wasmtime::Error {
 	move |problem| wasmtime::Error::new(crate::tasks::TaskFailure(format!("{word}: {problem}")))
 }
 
-/// gpu_render's values (none when left out): each entry a number or a list of numbers
+/// gpu_render's values (none when left out): each entry a number, a list of numbers or a list of vectors
 #[cfg(feature = "native")]
 fn shader_values(values: &Node) -> Result<Vec<crate::gpu::ShaderValue>, String> {
 	let float = |name: &str, value: &Node| match value.drop_meta() {
@@ -1119,11 +1119,30 @@ fn shader_values(values: &Node) -> Result<Vec<crate::gpu::ShaderValue>, String> 
 	entries.iter().map(|entry| {
 		let Node::Key(name, _, value) = entry.drop_meta() else { return Err(format!("values is a map of names, got {}", entry.serialize())) };
 		let name = name.drop_meta().name();
-		let floats = match value.drop_meta() {
-			Node::List(items, _, _) => items.iter().map(|item| float(&name, item)).collect::<Result<Vec<f32>, String>>()?,
-			single => vec![float(&name, single)?],
+		let floats_of = |value: &Node| match value.drop_meta() {
+			Node::List(items, _, _) => items.iter().map(|item| float(&name, item)).collect::<Result<Vec<f32>, String>>(),
+			single => Ok(vec![float(&name, single)?]),
 		};
-		Ok((name, floats))
+		let items: Vec<Node> = match value.drop_meta() {
+			Node::List(items, _, _) => items.clone(),
+			_ => vec![],
+		};
+		// a list of lists: one vec4f per item, its missing coordinates 0
+		if items.iter().any(|item| matches!(item.drop_meta(), Node::List(..))) {
+			let mut floats = vec![];
+			for item in &items {
+				let mut vector = floats_of(item)?;
+				if vector.len() > crate::gpu::VECTOR_FLOATS {
+					return Err(format!("values.{name} is a list of vectors of up to four numbers, got {}", item.serialize()));
+				}
+				vector.resize(crate::gpu::VECTOR_FLOATS, 0.0);
+				floats.extend(vector);
+			}
+			return Ok(crate::gpu::ShaderValue { name, floats, array: true });
+		}
+		let floats = floats_of(value)?;
+		let array = floats.len() > crate::gpu::VECTOR_FLOATS;
+		Ok(crate::gpu::ShaderValue { name, floats, array })
 	}).collect()
 }
 

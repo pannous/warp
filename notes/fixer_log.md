@@ -241,4 +241,9 @@ Running list of the small fixes done by the fixer session (branches fix-<topic>)
 - 2026-10-09 units-function-name: a function, parameter or variable named like a unit (g(x) := x + 1 m) shadows only that unit; it switched all units passes off ("undefined variable: m").
 - 2026-10-09 units-holes: quantity comparisons give yes/no, reassigning another dimension / an int annotation / a text repeated by a quantity are DimensionErrors (four W0-model holes).
 - 2026-10-09 orm-method-reads: a class method reading a table saw it empty, and any where-filter in a method was not lowered (class bodies are no map_children children).
+<<<<<<< HEAD
 - 2026-10-09 int-map: maps keyed by a run-time number gave "index out of range" (only written numbers keyed a `{}` map); global maps were cons lists (n² fills); the ORM identity map was a list searched by id (n² loads). Now keys are texts of the number, global maps and removals are hash tables, the identity map is one.
+||||||| 87cdec210
+=======
+- 2026-10-09 method-bodies: passes before class_methods::lower skipped methods (xs.keep only positive in a method failed); map_children/visit now enter class code, not fields.
+>>>>>>> origin/main
