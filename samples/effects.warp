@@ -3,7 +3,7 @@
 // price asks for the tax rate instead of knowing it
 price(net) := net * (1 + emit tax_rate)
 
-home = on tax_rate { 0.2 } in { price(100) }
+home = on tax_rate { 0.2 } in { price(100) } # todo : Explain this syntax. 
 print "at home \(home), abroad " + on tax_rate { 0.07 } in { price(100) }
 
 // the innermost handler wins, also through nested calls

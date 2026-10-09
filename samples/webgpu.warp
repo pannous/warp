@@ -1,7 +1,11 @@
 #!/usr/bin/env warp
 // WebGPU: a WGSL fragment shader colors every pixel on the GPU (gpu_render gives the pixels), paint shows each frame.
 // The shader reads the map given last as `values`: the frame changes without compiling the shader anew
-size = 128
+
+# todo : use graphics Or something to import the names paint / gpu_render   
+# todo: merge gpu_render into render or even paint? discuss We want elegance, but not black magic. 
+
+size = 128*2
 shader = "@fragment fn main(@builtin(position) at: vec4f) -> @location(0) vec4f {
 	let uv = at.xy / values.size;
 	let rings = 0.5 + 0.5 * cos(length(uv - 0.5) * 40.0 - values.frame * 0.3);
@@ -9,5 +13,5 @@ shader = "@fragment fn main(@builtin(position) at: vec4f) -> @location(0) vec4f 
 }"
 for frame in 1..30 {
 	paint(gpu_render(shader, size, size, {frame: frame, size: [size, size]}), size, size)
-	sleep 40 ms
+	# sleep 20 ms
 }
