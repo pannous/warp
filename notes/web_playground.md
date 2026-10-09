@@ -241,7 +241,8 @@ the_strict_flag_turns_warnings_into_errors before).
 - `use lib.wasm` / `use wasm "lib.wasm"` (components.js): build.sh components runs `jco transpile --instantiation sync` on every
   tests/fixtures/components/*.wasm and wraps the result into components/<name>.js, a classic script with the core
   modules as base64 (`registerComponent`); the first call importScripts it, found by the file's name alone (the page has
-  one flat folder of components). WASI p2 is a small shim: output goes to the program's print, no input, no environment.
+  one flat folder of components). Their names go to components/names.txt, which the compiler reads for `use lib` and
+  for the error naming them when a used one is missing (card playground-use). WASI p2 is a small shim: output goes to the program's print, no input, no environment.
   test_in_browser.py runs build.sh components before serving; pages.yml installs jco and ships components/.
 - jco's JavaScript values are turned into the native JSON forms by the WIT types, which build.sh embeds as the
   signatures of the exports (`wasm-tools component wit --json`): camelCase ↔ the WIT's kebab-case names, `{tag, val}` →
