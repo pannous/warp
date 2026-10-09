@@ -11,6 +11,8 @@ use crate::operators::Op;
 
 const KEEP: (&str, &str) = ("keep", "only");
 const SORT: (&str, &str) = ("sort", "by");
+/// `xs sorted by it.age`: the words before the key
+const SORT_WORDS: [&str; 2] = ["sorted", "sort"];
 const TAKE: (&str, &str) = ("take", "first");
 /// The conditions `keep only` knows by name, on each element `it`
 const PROPERTIES: [(&str, &str); 4] = [("positive", "it > 0"), ("negative", "it < 0"), ("even", "it % 2 == 0"), ("odd", "it % 2 != 0")];
@@ -32,9 +34,28 @@ pub fn lower(node: Node) -> Node {
 fn expand(node: Node, context: &Context) -> Node {
 	let node = node.map_children(|child| expand(child, context));
 	match node.drop_meta() {
-		Node::List(items, _, _) => chain(items, context).unwrap_or(node),
+		Node::List(items, _, _) => sorted_by(items, context).or_else(|| chain(items, context)).unwrap_or(node),
 		_ => node,
 	}
+}
+
+/// `xs sorted by it.age`, `xs sorted by -it.age` (read as `by - it.age`), `xs sort by name`: `xs.sort_by(it => key)`
+fn sorted_by(items: &[Node], context: &Context) -> Option<Node> {
+	let is_word = |node: &Node, words: &[&str]| matches!(node.drop_meta(), Node::Symbol(word) if words.contains(&word.as_str()));
+	let (receiver, key_written) = match items {
+		[receiver, sort, by, key] if is_word(sort, &SORT_WORDS) && is_word(by, &[SORT.1]) => (receiver, key.clone()),
+		[receiver, sort, descending] if is_word(sort, &SORT_WORDS) => match descending.drop_meta() {
+			Node::Key(by, Op::Sub, key) if is_word(by, &[SORT.1]) => (receiver, Node::Key(Box::new(Node::Empty), Op::Neg, key.clone())),
+			_ => return None,
+		},
+		_ => return None,
+	};
+	let it = crate::lambdas::IMPLICIT_PARAMETER;
+	let sort_key = match crate::lambdas::mentions(&key_written, it) {
+		true => Node::Key(Box::new(symbol(it)), Op::Arrow, Box::new(key_written)),
+		false => key(&key_written, context)?,
+	};
+	Some(method_call(receiver.clone(), SORT_BY, vec![sort_key]))
 }
 
 /// A word of a chain: a value or `.method`

@@ -74,3 +74,4 @@ mod test_range_returns;
 mod test_list_retype;
 mod test_linear_hint; // card linear-hint
 mod test_picked_linear; // card compiler-picks-dot
+mod test_sorted_by_phrase; // card sorted-by-phrase
