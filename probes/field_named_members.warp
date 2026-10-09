@@ -1,0 +1,3 @@
+class G{name: text; members: [text]}
+gs: [G] = [G("a", ["x","y"])]
+gs#1.members
