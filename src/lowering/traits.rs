@@ -731,9 +731,8 @@ pub struct InstanceTypes {
 	registry: TypeRegistry,
 	/// The last inference round: a value whose shape is still unknown is unknown for good
 	final_round: bool,
-	/// The untyped parameters of the function being expanded: its own values, not the program's variables of the same
-	/// names (card param-named-like-global)
-	shadowed: RefCell<Vec<String>>,
+	/// The parameters of the definitions being rewritten, innermost last (in_definition)
+	parameters: RefCell<Vec<HashMap<String, Option<Shape>>>>,
 }
 
 /// Fixpoint rounds over the assignments: a variable can be assigned from another one defined later in the text
@@ -743,7 +742,7 @@ impl InstanceTypes {
 	pub fn of(node: &Node) -> Self {
 		let mut registry = TypeRegistry::new();
 		collect_all_types(&mut registry, node);
-		let mut types = InstanceTypes { variables: HashMap::new(), results: HashMap::new(), registry, final_round: false, shadowed: RefCell::new(Vec::new()) };
+		let mut types = InstanceTypes { variables: HashMap::new(), results: HashMap::new(), registry, final_round: false, parameters: RefCell::default() };
 		if types.registry.types().is_empty() {
 			return types;
 		}
@@ -813,6 +812,26 @@ impl InstanceTypes {
 		}
 	}
 
+	/// `rewrite` of the body of the definition `head := …` while its parameters hide the variables of their names: `q`
+	/// of `f(q:V)` is an instance of the declared type V, an untyped one of no known shape (card param-text)
+	pub fn in_definition<T>(&self, head: &Node, rewrite: impl FnOnce() -> T) -> T {
+		let Some(items) = definition_head(head) else { return rewrite() };
+		let shape_of = |parameter: &Node| match parameter.drop_meta() {
+			Node::Key(name, Op::Colon, type_node) => {
+				let type_name = type_node.drop_meta().name();
+				Some((name.name(), self.registry.get_by_name(&type_name).map(|_| Shape::Instance(type_name))))
+			}
+			Node::Key(name, Op::Assign, _) => Some((name.name(), None)),
+			Node::Symbol(name) => Some((name.clone(), None)),
+			_ => None,
+		};
+		let scope = items[1..].iter().filter_map(shape_of).collect();
+		self.parameters.borrow_mut().push(scope);
+		let rewritten = rewrite();
+		self.parameters.borrow_mut().pop();
+		rewritten
+	}
+
 	/// The declared type of the elements of `[C]`
 	fn declared_element(&self, type_node: &Node) -> Option<String> {
 		let Node::List(items, Bracket::Square, _) = type_node.drop_meta() else { return None };
@@ -835,8 +854,10 @@ impl InstanceTypes {
 			return Some(Shape::Instance(type_name));
 		}
 		match node.drop_meta() {
-			Node::Symbol(name) if self.shadowed.borrow().contains(name) => None,
-			Node::Symbol(name) => self.variables.get(name).cloned().flatten(),
+			Node::Symbol(name) => match self.parameters.borrow().iter().rev().find_map(|scope| scope.get(name)) {
+				Some(parameter) => parameter.clone(),
+				None => self.variables.get(name).cloned().flatten(),
+			},
 			Node::List(items, Bracket::Square, _) if !items.is_empty() => {
 				let first = self.shape(&items[0])?;
 				let Shape::Instance(type_name) = &first else { return None };
@@ -849,6 +870,11 @@ impl InstanceTypes {
 			},
 			// `xs.sort`
 			Node::Key(list, Op::Dot, word) if word.name() == SORT_WORD => self.shape(list).filter(|shape| matches!(shape, Shape::ListOf(_))),
+			// `q.to("km")` of an instance: what the method returns (card instance-result)
+			Node::Key(receiver, Op::Dot, call) if matches!(self.shape(receiver), Some(Shape::Instance(_))) => {
+				let method = crate::lowering::class_methods::leading_name(call);
+				self.results.get(&method).cloned().flatten()
+			}
 			// `c ? a : b`, `if c then a else b`: the shape both branches share
 			Node::Key(_, Op::Question, branches) => match branches.drop_meta() {
 				Node::Key(then, Op::Colon, otherwise) => self.branches_shape(then, otherwise),
@@ -1025,7 +1051,7 @@ impl Dispatch {
 		match node {
 			// a definition head names parameters, it calls nothing
 			Node::Key(head, op @ (Op::Assign | Op::Define), body) if definition_head(&head).is_some() => {
-				let body = shadowing(&self.types.shadowed, untyped_parameters(&head), || self.expand(*body));
+				let body = self.types.in_definition(&head, || self.expand(*body));
 				Node::Key(head, op, Box::new(body))
 			}
 			Node::Key(left, op, right) => {

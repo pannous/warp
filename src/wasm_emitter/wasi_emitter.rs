@@ -72,6 +72,8 @@ impl WasmGcEmitter {
 			Node::Number(number) => self.emit_print_literal(func, &number.to_string()),
 			Node::Text(text) => self.emit_print_literal(func, text),
 			Node::Char(character) => self.emit_print_literal(func, &character.to_string()),
+			// infer_type calls a literal ø an Int, as constructors' field placeholders need (card print-error)
+			Node::Empty => self.emit_print_literal(func, &Node::Empty.serialize()),
 			_ => {
 				self.emit_written_value(func, value, PRINT_VALUE, "print");
 				func.instruction(&I::Drop);

@@ -666,4 +666,4 @@ function initialize() {
 // for the headless probes (probes/web_playground.py, test_in_browser.py --examples): evaluate code as the page does and return the report
 window.playground = { evaluate, applyFix, chooseExample, runCode, code: () => editor.getValue(), setCode: source => editor.setValue(source), lastModule: () => lastModule, acknowledge: topic => saveAcknowledged([...acknowledged, topic]), forgetAll: () => saveAcknowledged([]) };
 
-initialize();
+(window.pageStarts ?? Promise.resolve()).then(initialize); // index.html: not before its reload for isolation
