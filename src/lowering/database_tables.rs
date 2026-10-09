@@ -40,8 +40,9 @@ const SAVED: &str = "table_saved";
 /// a transaction's value, and the failure of its block
 const TRANSACTION_VALUE: &str = "table_transaction";
 const FAILURE: &str = "table_failure";
-/// the instances given a row before the table loaded, of a loading row's id: the loaded list holds that instance
+/// a restore's rows by their id, and a key of the identity map
 const KNOWN: &str = "table_known";
+const KEY: &str = "table_key";
 /// the position of `people#i`
 const POSITION: &str = "table_position";
 /// the instance a row read before loading makes
@@ -50,8 +51,8 @@ const MADE: &str = "table_made";
 const CONDITION: &str = "table_condition";
 const CONDITION_VALUES: &str = "table_condition_values";
 const FOUND_IDS: &str = "table_found_ids";
-const GENERATED_NAMES: [(&str, &str); 17] = [(POSITION, "table·position"), (MADE, "table·made"), (ROW, "table·row"), (ROWS, "table·rows"), (MATCHES, "table·matches"), (ADDED, "table·added"), (REMOVED, "table·removed"), (ARGUMENTS, "table·arguments"),
-	(REFERENCED, "table·referenced"), (MEMBER, "table·member"), (SAVED, "table·saved"), (KNOWN, "table·known"),
+const GENERATED_NAMES: [(&str, &str); 18] = [(POSITION, "table·position"), (MADE, "table·made"), (ROW, "table·row"), (ROWS, "table·rows"), (MATCHES, "table·matches"), (ADDED, "table·added"), (REMOVED, "table·removed"), (ARGUMENTS, "table·arguments"),
+	(REFERENCED, "table·referenced"), (MEMBER, "table·member"), (SAVED, "table·saved"), (KNOWN, "table·known"), (KEY, "table·key"),
 	(TRANSACTION_VALUE, "table·transaction"), (FAILURE, "table·failure"), (CONDITION, "table·condition"),
 	(CONDITION_VALUES, "table·condition_values"), (FOUND_IDS, "table·found_ids")];
 /// Each table's lazy parts (notes/orm.md Loading), `people·load` of people: the function giving the list, loading its
@@ -499,9 +500,8 @@ fn restored_rows(table: &Table, arguments: &[String], list: &str) -> String {
 	let fields = table.fields.iter().filter(|(name, _, _)| !table.is_members(name)).map(|(name, _, _)| name);
 	let restored: String = fields.zip(arguments).filter(|(name, _)| *name != ID_FIELD).map(|(name, argument)| format!("{MADE}.{name} = {argument}\n")).collect();
 	format!("for {MADE} in {list} {{
-{KNOWN} = [{ROW} for {ROW} in {ROWS} if {ROW}#1 == {MADE}.{ID_FIELD}]
-if {KNOWN} {{
-{ROW} = {KNOWN}#1
+if {MADE}.{ID_FIELD} in {KNOWN} {{
+{ROW} = {KNOWN}[{MADE}.{ID_FIELD}]
 {restored}}} else {{ {MADE}.{ID_FIELD} = 0 }}
 }}")
 }
@@ -738,9 +738,10 @@ fn opened(statement: &Node, tables: &HashMap<String, Table>, file: &str, open: &
 		true => String::new(),
 		false => format!(" if {}", required.iter().map(|field| found(field)).collect::<Vec<_>>().join(" and ")),
 	};
-	let known = format!("{KNOWN} = [{REFERENCED} for {REFERENCED} in {MET} if {REFERENCED}.{ID_FIELD} == {ROW}#1]");
+	// the identity map: the instance of each id met, a hash table keyed by the id (card int-map)
+	let known = format!("{ROW}#1 in {MET}");
 	let constructed = format!("{class}({})", arguments.join(", "));
-	let instance = format!("({known}; if {KNOWN} then {KNOWN}#1 else {constructed})");
+	let instance = format!("(if {known} then {MET}[{ROW}#1] else {constructed})");
 	// the rows a required key leaves out are counted and positioned only by loading
 	let (unloaded_count, unloaded_element, unloaded_streamed) = match required.is_empty() {
 		true => (COUNT_PLACEHOLDER.to_string(), format!("{{
@@ -756,7 +757,7 @@ if {POSITION} < {START} or {POSITION} >= {START} + count({PAGE}) {{
 		false => (format!("count({LOAD}())"), format!("{LOAD}()#{POSITION}"), format!("{LOAD}()#{POSITION}")),
 	};
 	let code = format!("{LOADED} = no
-{MET}: [{class}] = []
+{MET} = {{}}
 {PAGE}: [{class}] = []
 {START} = 0
 {READ_PLACEHOLDER}
@@ -780,7 +781,7 @@ if {LOADED} then count({variable}) else {unloaded_count}
 global {variable}
 global {LOADED}
 global {MET}
-if {LOADED} {{ {variable}.add({ADDED}) }} else {{ {MET}.add({ADDED}) }}
+if {LOADED} {{ {variable}.add({ADDED}) }} else {{ {MET}[{ADDED}.{ID_FIELD}] = {ADDED} }}
 {ADDED}
 }}
 {REMOVING}({REMOVED}) := {{
@@ -788,15 +789,14 @@ global {variable}
 global {MET}
 std_io(\"table\", \"delete\", [{name:?}, {REMOVED}.{ID_FIELD}, {file:?}])
 {variable} = [{ROW} for {ROW} in {variable} if {ROW}.{ID_FIELD} != {REMOVED}.{ID_FIELD}]
-{MET} = [{ROW} for {ROW} in {MET} if {ROW}.{ID_FIELD} != {REMOVED}.{ID_FIELD}]
+{MET}.remove({REMOVED}.{ID_FIELD})
 {REMOVED}
 }}
 {KEPT}({ROW}) := {{
 global {MET}
-{known}
-if {KNOWN} then {KNOWN}#1 else {{
+if {known} then {MET}[{ROW}#1] else {{
 {MADE} = {constructed}
-{MET}.add({MADE})
+{MET}[{MADE}.{ID_FIELD}] = {MADE}
 {MADE}
 }}
 }}
@@ -817,7 +817,7 @@ global {LOADED}
 global {MET}
 global {PAGE}
 {LOADED} = no
-{MET} = []
+{MET} = {{}}
 {PAGE} = []
 []
 }}
@@ -835,16 +835,18 @@ global {LOADED}
 global {MET}
 global {PAGE}
 {ROWS} = {ROWS_PLACEHOLDER}
+{KNOWN} = {{}}
+for {ROW} in {ROWS} {{ {KNOWN}[{ROW}#1] = {ROW} }}
 {restore_met}
+for {KEY} in keys({MET}) {{ if {MET}[{KEY}].{ID_FIELD} == 0 {{ {MET}.remove({KEY}) }} }}
 if {LOADED} {{
 {restore_loaded}
-for {MADE} in {variable} {{ if {MADE}.{ID_FIELD} != 0 {{ {MET}.add({MADE}) }} }}
+for {MADE} in {variable} {{ if {MADE}.{ID_FIELD} != 0 {{ {MET}[{MADE}.{ID_FIELD}] = {MADE} }} }}
 }}
-{MET} = [{MADE} for {MADE} in {MET} if {MADE}.{ID_FIELD} != 0]
 {LOADED} = no
 {PAGE} = []
 []
-}}", name = table.name, restore_met = restored_rows(table, &arguments, MET), restore_loaded = restored_rows(table, &arguments, &variable),
+}}", name = table.name, restore_met = restored_rows(table, &arguments, &format!("values({MET})")), restore_loaded = restored_rows(table, &arguments, &variable),
 		loaded_found = if required.is_empty() { LOADED } else { "yes" });
 	let placeholders = [(READ_PLACEHOLDER, table_call("migrate")), (ROWS_PLACEHOLDER, table_call("rows")), (COUNT_PLACEHOLDER, table_call("count")),
 		(ROW_PLACEHOLDER, table_call_with("page", &format!(", {POSITION}, 1"))), (PAGE_PLACEHOLDER, table_call_with("page", &format!(", {POSITION}, {PAGE_SIZE}"))),
@@ -1054,14 +1056,15 @@ fn table_mutation<'a>(statement: &'a Node, tables: &'a HashMap<String, Table>) -
 	Some((list, table, word.drop_meta().name(), value))
 }
 
-/// `people.add(ADDED)` and its INSERT, ADDED taking the row's id; a foreign key without its row is an error
+/// The INSERT of ADDED, which takes the row's id, and `people.add(ADDED)`; a foreign key without its row is an error
 fn insert_code(table: &Table, list: &str, file: &str) -> String {
 	let columns = columns_of(table);
 	let names: Vec<String> = columns.iter().map(|column| format!("{column:?}")).collect();
 	let values: Vec<String> = columns.iter().map(|column| column_value(table, ADDED, column)).collect();
 	let checks = table.references.iter().map(|(field, target)| format!(
 		"if {ADDED}.{field} != ø and {ADDED}.{field}.{ID_FIELD} == 0 {{ raise \"{class}.{field} is no row of {target}: add it to its table first\" }}\n", class = table.class));
-	format!("{checks}{list}.add({ADDED})\n{ADDED}.{ID_FIELD} = std_io(\"table\", \"insert\", [{table:?}, [{names}], [{values}], {file:?}])",
+	// the id first: the identity map keeps the instance by it
+	format!("{checks}{ADDED}.{ID_FIELD} = std_io(\"table\", \"insert\", [{table:?}, [{names}], [{values}], {file:?}])\n{list}.add({ADDED})",
 		checks = checks.collect::<String>(), table = table.name, names = names.join(" "), values = values.join(" "))
 }
 
