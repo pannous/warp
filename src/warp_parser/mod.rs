@@ -128,6 +128,7 @@ const TEST_WORDS: [&str; 6] = ["empty", "missing", "absent", "unknown", "undefin
 const FAILED_WORD: &str = "failed";
 /// The runtime test of `x failed` (wasm_emitter/text_builtins.rs)
 const IS_ERROR_CALL: &str = "is_error";
+const COUNT_CALL: &str = "count";
 const EMPTY_WORD: &str = "empty";
 /// Operators that may follow a suffix `!` directly: `x!+1`, `x!*2` (`!=` is the inequality)
 const INFIX_AFTER_BANG: [char; 9] = ['+', '-', '*', '/', '%', '^', '<', '>', ')'];
