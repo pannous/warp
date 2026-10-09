@@ -24,7 +24,7 @@ print "prime ages: " + count(people where is_prime(it.age))
 
 // a row read from the table is an ordinary instance that knows its row
 bo = grown#1
-bo.name + " has row " + bo.id
+print(bo.name + " has row " + bo.id + " and age ${bo.age}")
 
 // a field of a table's class is a foreign key; a list of one is the rows pointing back, read when used
 if count(teams) == 0 { teams.add(Team("Climbers")) }
@@ -32,5 +32,5 @@ climbers = teams#1
 climbers.players.add(bo)  // writes bo.team through
 print climbers.name + ": " + count(climbers.players)
 
-bo.age += 1
-save bo
+bo.age += 1 // ages with each call ;)
+# save bo // Unnecessary!
