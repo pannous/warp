@@ -31,6 +31,9 @@ pub const LIST_ANSWER: &str = "list";
 const ROUTE_DATA_PREFIX: &str = "route·data·";
 const PATH_PARAMETER: &str = "path";
 const PAGE_PATH_CALL: &str = "page_path()";
+/// The path a served route was asked at, which binds its parameters
+const REQUEST_PATH: &str = "request.path";
+const PARAMETER_MARK: char = ':';
 /// The page's path as a main-level variable, which page·navigated sets anew when the page goes to another path
 /// (host-routes.js navigate)
 const PAGE_PATH: &str = "page·path";
@@ -233,6 +236,25 @@ fn answers_a_list(value: &Node, list_words: &[String]) -> bool {
 }
 
 /// The route's body after the statements reading the program's tables anew
+/// `post "/todos/:id:int/toggle" {…}`: the block with its path's parameters bound from the request's path, as a page's
+/// route binds them from page_path() (routes.rs route_body); web_server.rs path_fits picks the route
+fn with_path_parameters(path: &Node, body: Node) -> Node {
+	let pattern = match path.drop_meta() {
+		Node::Text(text) => text.clone(),
+		_ => return body,
+	};
+	if !pattern.contains(PARAMETER_MARK) {
+		return body;
+	}
+	let items = match body.drop_meta() {
+		Node::List(items, Bracket::Curly, _) => items.clone(),
+		_ => vec![body],
+	};
+	let (page_path, request_path) = (crate::warp_parser::parse(PAGE_PATH_CALL), crate::warp_parser::parse(REQUEST_PATH));
+	let bound = crate::routes::route_body(&pattern, &items).into_iter().map(|item| replaced(item, &page_path, &request_path));
+	Node::List(bound.collect(), Bracket::Curly, Separator::Newline)
+}
+
 fn reading_tables(body: Node, tables: &[(String, Node)]) -> Node {
 	if tables.is_empty() {
 		return body;
@@ -541,6 +563,7 @@ fn serving(port: Node, routes: Vec<Route>, server_data: &ServerData, count: &mut
 		*count += 1;
 		let request = Node::Key(Box::new(Node::Symbol(REQUEST_WORD.to_string())), Op::Colon, Box::new(Node::Symbol(ANY_TYPE.to_string())));
 		let head = Node::List(vec![Node::Symbol(function.clone()), request], Bracket::Round, Separator::None);
+		let body = with_path_parameters(&path, body);
 		let mut entry = vec![Node::Text(method), path, Node::Text(function)];
 		if answers_a_list(&body, &server_data.list_words) {
 			entry.push(Node::Text(LIST_ANSWER.to_string()));
