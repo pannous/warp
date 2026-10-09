@@ -418,6 +418,10 @@ fn lower_for_emission(node: Node) -> Result<Node, Node> {
 	if let Some(answer) = effects.answer(&node) {
 		return Err(answer);
 	}
+	let node = effects.answer_queries(node);
+	if let Some(error) = node.first_error() {
+		return Err(error.clone());
+	}
 	if let Some((name, capability)) = effects.denied(GRANTED.with(|granted| granted.get())) {
 		return Err(crate::node::error(&format!(
 			"capability denied: {name} needs the {} capability, which eval does not grant", capability.name())));
