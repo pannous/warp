@@ -142,6 +142,8 @@ function startWorker() {
 	if (slowStart) options.set(SLOW_START_PARAMETER, slowStart);
 	worker = new Worker(options.size ? `worker.js?${options}` : "worker.js");
 	workerReady = new Promise((resolve, reject) => {
+		// worker.js or a script it imports failed to load: without this the first run waits for "ready" forever (card firefox-hello-hang)
+		worker.onerror = event => reject(new Error(`the compiler's worker failed to start: ${event.message || "worker.js did not load"}`));
 		worker.onmessage = ({ data }) => {
 			if (data.type === "notify") data = notification(data.text);
 			if (!data) return;

@@ -3,7 +3,7 @@
 //   ["open", url] → true once loaded · ["eval", js] → the value as agent-browser prints it (JSON text)
 //   ["messages"] → the console errors and warnings and failed requests since the last ask, workers included
 //   ["close"] → quits
-// A command still unanswered after COMMAND_SECONDS answers {"timeout": what}; a Firefox that went away ends the driver
+// A command still unanswered after COMMAND_SECONDS answers {"timeout": what, the page's state and console}; a Firefox that went away ends the driver
 // with exit code 1 and the reason on stderr (test_in_browser.py stops loudly on either, card deploy-firefox-hang).
 // FIREFOX names the binary (default `firefox`; on macOS the app, default /Applications/Firefox.app, started by `open`:
 // a terminal's child may not read ~/Library/Application Support/Firefox, which Firefox needs even with --profile).
@@ -19,7 +19,9 @@ const MAC = process.platform === "darwin";
 const FIREFOX = process.env.FIREFOX ?? (MAC ? "/Applications/Firefox.app" : "firefox");
 const START_SECONDS = 60;
 // a command not answered by then (a page that never finishes loading, an example that never ends) fails the run loudly
-const COMMAND_SECONDS = 120;
+// (FIREFOX_COMMAND_SECONDS: shorter, for a probe of that path)
+const COMMAND_SECONDS = Number(process.env.FIREFOX_COMMAND_SECONDS ?? 120);
+const STATE_SECONDS = 10; // then the page's state, asked after such a timeout
 // Firefox writes its profile until it has quit (card firefox-profile: ENOTEMPTY removing it right after the socket closed)
 const QUIT_SECONDS = 30;
 const REPORTED_LEVELS = new Set(["error", "warn", "warning", "assert"]);
@@ -109,9 +111,18 @@ const commands = {
 	},
 };
 
-// the command's answer, or {timeout} naming it when none came in COMMAND_SECONDS
-const answeredInTime = (answer, line) => Promise.race([answer,
-	sleep(COMMAND_SECONDS * 1000).then(() => ({ timeout: `no answer to ${line.slice(0, 200)} in ${COMMAND_SECONDS} s` }))]);
+// what the page was doing when a command got no answer: where it is, whether it is isolated, the playground's status
+const PAGE_STATE = `({ address: location.href, loaded: document.readyState, isolated: self.crossOriginIsolated,
+	controlled: !!navigator.serviceWorker?.controller, status: document.getElementById("status")?.textContent })`;
+const unanswered = seconds => sleep(seconds * 1000).then(() => `no answer in ${seconds} s`);
+
+// the command's answer, or {timeout} naming it, the page's state and its console when none came in COMMAND_SECONDS
+// (card firefox-hello-hang: a cold runner's first example once waited forever)
+const answeredInTime = (answer, line) => Promise.race([answer, sleep(COMMAND_SECONDS * 1000).then(async () => {
+	const state = await Promise.race([commands.eval(PAGE_STATE), unanswered(STATE_SECONDS)]);
+	const logged = messages.splice(0).map(({ level, text, url }) => `${level}: ${text}${url ? ` (${url})` : ""}`);
+	return { timeout: `no answer to ${line.slice(0, 200)} in ${COMMAND_SECONDS} s; the page: ${state}; its console: ${JSON.stringify(logged)}` };
+})]);
 
 console.log(JSON.stringify("ready"));
 for await (const line of createInterface({ input: process.stdin })) {
