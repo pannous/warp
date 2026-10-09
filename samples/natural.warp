@@ -17,6 +17,7 @@ redirect_to_login() := print "please log in"
 basket = [{price: 2} {price: 3}]
 numbers = [3, -1, 2]
 create_user(name, email, role) := print name
+to mail message to address { print "\(message) → \(address)" }
 
 // Arithmetic with words
 result = one plus two
@@ -47,8 +48,8 @@ for each item in basket {
     total = total plus item.price
 }
 
-// English-like function calls
-send email to "user@example.com" with subject "Hello"
+// English-like function calls: a `to` phrase is called with its own prepositions
+mail "Hello" to "user@example.com"
 
 // Method chaining reads naturally
 result = numbers

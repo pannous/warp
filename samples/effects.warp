@@ -1,0 +1,28 @@
+// Effect handlers: a function asks with `emit`, whoever calls it answers with `on … in {…}` (notes/effect_handlers.md)
+
+// price asks for the tax rate instead of knowing it
+price(net) := net * (1 + emit tax_rate)
+
+home = on tax_rate { 0.2 } in { price(100) }
+print "at home \(home), abroad " + on tax_rate { 0.07 } in { price(100) }
+
+// the innermost handler wins, also through nested calls
+basket(a, b) := price(a) + price(b)
+nested = on tax_rate { 0.2 } in { on tax_rate { 0.1 } in { basket(10, 20) } }
+print "nested: \(nested)"
+
+// `break value` in a handler gives up: the block ends at once with that value, however deep the emit was
+parse_age(text) := {
+	if not is_digit(text) { emit invalid }
+	text as int
+}
+valid = on invalid { break -1 } in { parse_age("42") }
+invalid = on invalid { break -1 } in { parse_age("forty") }
+print "valid \(valid), invalid \(invalid)"
+
+// a function that handles what it asks for asks for nothing more: checkout is Pure, so `! Pure` holds
+checkout(net) := on tax_rate { 0.2 } in { price(net) } ! Pure
+print "checkout: \(checkout(50))"
+
+// the compiler knows what a function asks for
+print "price asks for \(price.effects), checkout for \(effects of checkout)"

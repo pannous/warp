@@ -303,7 +303,7 @@ impl WarpParser {
 			return self.parse_atom();
 		}
 		if !self.only_blanks_before_newline() {
-			return self.parse_expr(0);
+			return self.rest_of_statement(); // `to mail x to address: print address`
 		}
 		self.parse_indented_block().unwrap_or_else(|| error("a definition needs a body: `to name params: body`"))
 	}

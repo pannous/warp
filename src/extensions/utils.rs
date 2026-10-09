@@ -46,21 +46,33 @@ pub fn download_within(url: &str, _timeout: std::time::Duration) -> Result<Strin
 #[cfg(all(feature = "native", not(test)))]
 pub fn download_within(url: &str, timeout: std::time::Duration) -> Result<String, String> {
 	let reason = |error| network_reason(error, timeout);
-	let mut response = agent_within(timeout).get(url).call().map_err(reason)?;
+	let mut response = agent_within(timeout, true).get(url).call().map_err(reason)?;
 	response.body_mut().read_to_string().map_err(reason)
 }
 
-/// `post(url, body)` of the stdlib module net (src/std_adapters.rs): the body sent as UTF-8 text, the answer's text
+/// `post(url, body, headers)` of the stdlib module net (src/std_adapters.rs): the body sent as UTF-8 text (plain text
+/// unless a header names its Content-Type), the answer's text; an answer of status >= 400 is the error, with its body
+/// (an API's own reason, `{"error": … "invalid x-api-key"}`)
 #[cfg(feature = "native")]
-pub fn post_within(url: &str, body: &str, timeout: std::time::Duration) -> Result<String, String> {
+pub fn post_within(url: &str, body: &str, headers: &[(String, String)], timeout: std::time::Duration) -> Result<String, String> {
 	let reason = |error| network_reason(error, timeout);
-	let mut response = agent_within(timeout).post(url).header("Content-Type", "text/plain; charset=utf-8").send(body).map_err(reason)?;
-	response.body_mut().read_to_string().map_err(reason)
+	let mut request = agent_within(timeout, false).post(url).header("Content-Type", "text/plain; charset=utf-8");
+	for (name, value) in headers {
+		request = request.header(name, value);
+	}
+	let mut response = request.send(body).map_err(reason)?;
+	let status = response.status().as_u16();
+	let answer = response.body_mut().read_to_string().map_err(reason)?;
+	if status >= 400 {
+		return Err(format!("HTTP status {status}: {answer}"));
+	}
+	Ok(answer)
 }
 
 #[cfg(feature = "native")]
-fn agent_within(timeout: std::time::Duration) -> ureq::Agent {
-	ureq::Agent::config_builder().timeout_global(Some(timeout)).build().into()
+/// `status_is_error`: an answer of status >= 400 fails the call itself, its body unread
+fn agent_within(timeout: std::time::Duration, status_is_error: bool) -> ureq::Agent {
+	ureq::Agent::config_builder().timeout_global(Some(timeout)).http_status_as_error(status_is_error).build().into()
 }
 
 /// A failed request in a few words: DNS, timeout, HTTP status >= 400, else ureq's own

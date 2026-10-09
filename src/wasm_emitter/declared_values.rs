@@ -40,7 +40,8 @@ impl WasmGcEmitter {
 			Some(Kind::List) => "list", // `xs: [int]`, `xs: ints`
 			_ if crate::analyzer::is_bool_type(&type_name) => return Some(Admitted::Bool),
 			_ if self.ctx.type_registry.get_by_name(&type_name).is_some() => return Some(Admitted::Kinds(object_mask)),
-			Some(Kind::Float) => "number", // an int fits a float
+			Some(Kind::Float) if type_name == "number" => "number",
+			Some(Kind::Float) => "real", // an int fits a float, a ± value does not
 			_ => &type_name,
 		};
 		crate::type_tests::runtime_kind_mask(spec).map(Admitted::Kinds)

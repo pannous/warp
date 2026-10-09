@@ -31,6 +31,9 @@ mod test_class_aliases;
 mod test_class_interfaces;
 mod test_enums_ported;
 mod test_class_witnesses;
+mod test_number_field; // card number-field
+mod test_parameter_text; // card param-text
+mod test_instance_final_text; // card instance-final
 mod test_construction_checks;
 mod test_struct_field_of_constructor;
 #[cfg(feature = "native")] // wasmtime, files or network: not in the browser build
@@ -120,3 +123,6 @@ mod test_cycle_mark_depth; // card cycle-mark-depth
 mod test_fraction_text;
 mod test_empty_literal_kind;
 mod test_as_number_variable; // card number-variable
+mod test_param_named_like_global; // card param-named-like-global
+mod test_runtime_text_ratio;
+mod test_method_result_text; // card instance-result

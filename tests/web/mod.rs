@@ -63,3 +63,5 @@ mod test_served_forms; // card todo-app
 mod test_markup_lines; // card todo-app
 mod test_guide_sections; // card guide-lists
 mod test_typed_variable_not_markup; // card annotation-html
+#[cfg(feature = "native")] // a server on a port, HTTP requests
+mod test_serve_error_body; // card serve-error-body

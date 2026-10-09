@@ -68,11 +68,14 @@ const OLD_ANSWERS_FILE: &str = ".warp-answers";
 const NO_ASK_FLAG: &str = "--no-ask";
 /// What the console and `warp <code>` put before a program's value
 const RESULT_MARK: &str = "» ";
+/// The exit status of a run that ends in an uncaught error (card cli-error-exit)
+const ERROR_STATUS: i32 = 1;
 
 fn node_to_i32(node: &Node) -> i32 {
-    match node {
+    match node.drop_meta() {
         Node::Number(Number::Int(n)) => *n as i32,
         Node::Number(Number::Float(f)) => *f as i32,
+        Node::Error(_) => ERROR_STATUS,
         _ => 0,
     }
 }
@@ -187,7 +190,7 @@ fn run_command(args: &[String]) {
             // Read from stdin pipe
             let mut input = String::new();
             if io::stdin().read_to_string(&mut input).is_ok() && !input.is_empty() {
-                show(&eval(&input), "");
+                show_and_fail_on_error(&eval(&input), "");
                 return;
             }
         }
@@ -342,7 +345,7 @@ fn run_command(args: &[String]) {
     } else if arg_string.starts_with("eval ") {
         let code = arg_string.strip_prefix("eval ").unwrap_or("");
         diagnostic::show_lines_of(code);
-        show(&eval(code), RESULT_MARK);
+        show_and_fail_on_error(&eval(code), RESULT_MARK);
     } else if let Some(code) = arg_string.strip_prefix("lower ") {
         match wasm_emitter::lower(code) {
             Ok(lowered) => println!("{}", lowered.serialize()),
@@ -382,14 +385,22 @@ fn run_command(args: &[String]) {
         println!("Warp 🐝 {}", WARP_VERSION);
     } else {
         // Default: eval and print
-        show(&eval(&arg_string), RESULT_MARK);
+        show_and_fail_on_error(&eval(&arg_string), RESULT_MARK);
     }
 }
 
-/// The program's value printed, its Int the exit status
+/// The program's value printed, its Int the exit status, an uncaught error status 1
 fn print_and_exit(result: Node) -> ! {
     show(&result, "");
     std::process::exit(node_to_i32(&result));
+}
+
+/// The value of inline code printed; an uncaught error exits with status 1, so scripts and CI see it failed
+fn show_and_fail_on_error(result: &Node, mark: &str) {
+    show(result, mark);
+    if matches!(result.drop_meta(), Node::Error(_)) {
+        std::process::exit(ERROR_STATUS);
+    }
 }
 
 /// A program's value after what it printed, behind `mark`; nothing for ø, the value of `print` (issue #18) and of a
@@ -614,7 +625,11 @@ fn build_runtime_stub(expected: &std::path::Path) -> Result<std::path::PathBuf, 
     if !source.join(RUNTIME_STUB_CRATE).is_dir() {
         return Err(format!("no runtime stub {}: put warp-runtime there or name one in {RUNTIME_STUB_VARIABLE} (the warp source {} that would build it is gone)", expected.display(), source.display()));
     }
-    eprintln!("note: building the runtime stub for executables once (cargo build -p {RUNTIME_STUB_NAME})");
+    // cargo runs every time (it keeps the stub current, quickly once built); the note only before the first build
+    let release_stub = expected.parent().and_then(std::path::Path::parent).map(|target| target.join("release").join(RUNTIME_STUB_NAME));
+    if !release_stub.is_some_and(|stub| stub.is_file()) {
+        eprintln!("note: building the runtime stub for executables once (cargo build -p {RUNTIME_STUB_NAME})");
+    }
     let mut build = std::process::Command::new(env::var("CARGO").unwrap_or_else(|_| "cargo".to_string()));
     build.args(["build", "--release", "--quiet", "--message-format=json", "-p", RUNTIME_STUB_NAME, "--bin", RUNTIME_STUB_NAME]).current_dir(source);
     let output = build.output().map_err(|failure| format!("cannot run cargo to build the runtime stub: {failure}"))?;

@@ -121,5 +121,9 @@ ms s min h, with powers (`m²`, `s^2`), products (`kg·m`) and one `/`.
   returned_classes); a parameter named like an instance variable is its own value.
 - Open (cards): param-text-witness (`str(q)` of a parameter `q:Quantity` prints the record, the library uses
   quantity_text), instance-result-text (`"\(q.to("m"))"` prints the record; assign it first), number-field-float.
-  A non-terminating ratio shows as a fraction (`151/15km/h`); mixing a static `1 m` with a run-time quantity is not
-  supported yet.
+  A non-terminating ratio shows as a fraction (`151/15km/h`).
+- Mixed (card units-mixed): a unit written in the program meeting a run-time quantity becomes one, on either side:
+  `quantity("5 km") + 1 m`, `2 km < q`, `1 min == q` (class_methods.rs with_run_time_units, units.rs
+  as_run_time_quantity: `5 m/s` is `quantity(5, "m/s")`). Static units alone stay static.
+- ± (card plus-minus-units): `5 m ± 1 cm` the program needs at run time is a Quantity whose amount is a ± value
+  (notes/plus_minus.md).

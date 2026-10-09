@@ -6,6 +6,18 @@ before asking the user; nobody reads it front to back, the code, tests and wiki 
 "notes/open_decisions.md" + a Decided section, P-, D- or #-numbers mean this file. Open and parked questions:
 notes/open_decisions.md.
 
+## Decided 2026-10-09 (user, as recommended unless quoted)
+- P225 (warp-worker, test_string_operations): a float joined to text uses its shortest form, as print does:
+  `'say ' + 0.` → "say 0"; the old test expecting "say 0." changes.
+- P226 (warp-worker, test_logarithm2): the log glyphs come, and they differ (user: "yes add them but they are not the
+  same"): `b⌞x` is log base b of x (`10⌞100` → 2); `⌟` is a postfix log (`ℯ⌟` → 1). Its forms with a base: P226b
+  (queued).
+- P227 (warp-worker, test_emit_cast_tuple): a comma next to `==` without parentheses is an error asking for them
+  (user: "insist on braces to avoid errors"): `(2.0, 4) == 2.0, 4` → error, write `(2.0, 4) == (2.0, 4)`.
+- Not asked (legacy names / test typos): test_sinus and test_sinus2 use `x % tau` instead of the C++ helper
+  `modulo_double` (no alias), test_sinus loses its stray quote; test_recent_random_bugs: legacy lines go to skip!
+  or are fixed to warp's meaning (`use math;`, parentheses, √π² = π) and the test is un-ignored.
+
 ## Decided 2026-10-08 (user, as recommended unless quoted)
 - ORM updates (undoable default, supervisor, from the user's own edit of samples/orm.warp; warp-fixer): assigning a
   field of a stored row (`bo.age += 1`) writes through as an SQL UPDATE; `save bo` is accepted as an explicit write,

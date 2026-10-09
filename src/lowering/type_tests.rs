@@ -74,7 +74,9 @@ pub fn runtime_kind_mask(spec: &str) -> Option<i64> {
 		crate::analyzer::BOOL_TYPE => return Some(1 << crate::type_kinds::BOOL_MASK_BIT),
 		"int" => vec![Kind::Int],
 		"float" => vec![Kind::Float],
-		"number" | "real" | "rational" => vec![Kind::Int, Kind::Float],
+		// a ± value is a number with an uncertainty (card plus-minus-units: Quantity's amount:number holds one)
+		"number" => vec![Kind::Int, Kind::Float, Kind::Uncertain],
+		"real" | "rational" => vec![Kind::Int, Kind::Float],
 		"text" => vec![Kind::Text, Kind::Codepoint],
 		"codepoint" => vec![Kind::Codepoint],
 		"symbol" => vec![Kind::Symbol],

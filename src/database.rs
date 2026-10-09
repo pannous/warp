@@ -23,6 +23,12 @@ const ID_COLUMN: &str = "id";
 const LOSSLESS_ORDER: [&str; 3] = ["INTEGER", "REAL", "TEXT"];
 /// The SQL function a filter's query calls a warp function through: `warp_call('function', arguments…)`
 const WARP_CALL: &str = "warp_call";
+/// How long a write waits for another connection's (another program or thread) before "database is locked"
+const BUSY_MILLISECONDS: c_int = 5000;
+/// A folder set by cargo's test runs (.cargo/config.toml): each test thread keeps a sample's tables in its own copy there
+const TEST_TABLES: &str = "WARP_TEST_TABLES";
+/// The folder of the samples, which several tests run at once
+const SAMPLES_FOLDER: &str = "samples";
 
 /// The program's function by name, called with the list of its arguments (src/host.rs calls back into the instance)
 pub type Callback<'a> = dyn FnMut(&str, &Node) -> Result<Node, String> + 'a;
@@ -33,6 +39,7 @@ type Handle = *mut c_void;
 /// The functions of the SQLite C API the tables use
 struct Sqlite {
 	open: unsafe extern "C" fn(*const c_char, *mut Handle) -> c_int,
+	busy_timeout: unsafe extern "C" fn(Handle, c_int) -> c_int,
 	errmsg: unsafe extern "C" fn(Handle) -> *const c_char,
 	prepare: unsafe extern "C" fn(Handle, *const c_char, c_int, *mut Handle, *mut *const c_char) -> c_int,
 	bind_int64: unsafe extern "C" fn(Handle, c_int, i64) -> c_int,
@@ -76,6 +83,7 @@ fn load_sqlite() -> Result<Sqlite, String> {
 	}
 	Ok(Sqlite {
 		open: function!("sqlite3_open"),
+		busy_timeout: function!("sqlite3_busy_timeout"),
 		errmsg: function!("sqlite3_errmsg"),
 		prepare: function!("sqlite3_prepare_v2"),
 		bind_int64: function!("sqlite3_bind_int64"),
@@ -107,9 +115,18 @@ fn load_sqlite() -> Result<Sqlite, String> {
 thread_local! {
 	/// The open connections by file, kept while the thread runs (inline code's tables live as long as its connection)
 	static CONNECTIONS: std::cell::RefCell<HashMap<String, usize>> = Default::default();
+	/// The rows tables gave whole while the thread runs (a lazy table loads none until its list is read)
+	static ROWS_READ: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
 }
 
-/// `std_io("table", member, arguments)`: open (create or migrate, give the rows), insert (give the id), update
+/// How many rows opening tables read on this thread so far
+pub fn rows_read() -> usize {
+	ROWS_READ.get()
+}
+
+/// `std_io("table", member, arguments)`: open (create or migrate, give the rows), migrate and rows (its two halves), page (from a
+/// position), count, insert
+/// (give the id), update
 pub fn call(member: &str, arguments: &[Node]) -> Result<Node, String> {
 	let text = |node: &Node| match node.drop_meta() {
 		Node::Text(text) => Ok(text.clone()),
@@ -117,6 +134,19 @@ pub fn call(member: &str, arguments: &[Node]) -> Result<Node, String> {
 	};
 	match (member, arguments) {
 		("open", [table, schema, file]) => opened(&text(table)?, &schema.children(), &text(file)?),
+		("rows", [table, schema, file]) => {
+			let columns = schema.children().iter().map(column_of).collect::<Result<Vec<_>, _>>()?;
+			selected(connection(&text(file)?)?, &text(table)?, &columns, None)
+		}
+		("page", [table, schema, file, start, size]) => {
+			let columns = schema.children().iter().map(column_of).collect::<Result<Vec<_>, _>>()?;
+			selected(connection(&text(file)?)?, &text(table)?, &columns, Some([start, size]))
+		}
+		("migrate", [table, schema, file]) => migrated(connection(&text(file)?)?, &text(table)?, &schema.children()).map(|_| Node::Empty),
+		("count", [table, _schema, file]) => {
+			let counted = rows(connection(&text(file)?)?, &format!("SELECT COUNT(*) FROM {}", quote(&text(table)?)), &[])?;
+			Ok(counted.into_iter().flatten().next().unwrap_or(Node::int(0)))
+		}
 		("insert", [table, columns, values, file]) => {
 			let (table, columns) = (text(table)?, columns.children().iter().map(text).collect::<Result<Vec<_>, _>>()?);
 			let placeholders = vec!["?"; columns.len()].join(", ");
@@ -215,6 +245,24 @@ unsafe fn give(sqlite: &Sqlite, context: Handle, value: &Node) -> Result<(), Str
 /// (and the column's old name when the field is marked `@was(old)`)
 fn opened(table: &str, schema: &[Node], file: &str) -> Result<Node, String> {
 	let database = connection(file)?;
+	let columns = migrated(database, table, schema)?;
+	selected(database, table, &columns, None)
+}
+
+/// The table's rows `[id, columns…]` in id order, or only a page of them: its start position (counted from 1) and size
+fn selected(database: Handle, table: &str, columns: &[(String, String, String)], page: Option<[&Node; 2]>) -> Result<Node, String> {
+	let selected: Vec<String> = std::iter::once(ID_COLUMN.to_string()).chain(columns.iter().map(|(name, _, _)| quote(name))).collect();
+	let (limit, parameters) = match page {
+		Some([start, size]) => (" LIMIT ? OFFSET ? - 1", vec![size.clone(), start.clone()]),
+		None => ("", vec![]),
+	};
+	let rows = rows(database, &format!("SELECT {} FROM {} ORDER BY {ID_COLUMN}{limit}", selected.join(", "), quote(table)), &parameters)?;
+	ROWS_READ.set(ROWS_READ.get() + rows.len());
+	Ok(list(rows.into_iter().map(list).collect()))
+}
+
+/// The table created or migrated to the class's fields; their columns
+fn migrated(database: Handle, table: &str, schema: &[Node]) -> Result<Vec<(String, String, String)>, String> {
 	let columns = schema.iter().map(column_of).collect::<Result<Vec<_>, _>>()?;
 	let definitions: Vec<String> = columns.iter().map(|(name, column_type, _)| format!("{} {column_type}", quote(name))).collect();
 	let quoted_table = quote(table);
@@ -237,9 +285,7 @@ fn opened(table: &str, schema: &[Node], file: &str) -> Result<Node, String> {
 	for (name, _) in stored.iter().filter(|(name, _)| name != ID_COLUMN && !columns.iter().any(|(column, _, _)| column == name)) {
 		crate::diagnostic::report_runtime_warning(&format!("the table {table} keeps its column {name}, which the class no longer has (its data is kept)"));
 	}
-	let selected: Vec<String> = std::iter::once(ID_COLUMN.to_string()).chain(columns.iter().map(|(name, _, _)| quote(name))).collect();
-	let rows = rows(database, &format!("SELECT {} FROM {quoted_table} ORDER BY {ID_COLUMN}", selected.join(", ")), &[])?;
-	Ok(list(rows.into_iter().map(list).collect()))
+	Ok(columns)
 }
 
 /// Each column's name and SQL type as the table holds them
@@ -325,8 +371,8 @@ fn list(items: Vec<Node>) -> Node {
 /// The connection to the file's database, opened once per thread
 fn connection(file: &str) -> Result<Handle, String> {
 	let path = match file {
-		crate::database_tables::TABLES_FILE => IN_MEMORY,
-		file => file,
+		crate::database_tables::TABLES_FILE => IN_MEMORY.to_string(),
+		file => test_thread_copy(file).unwrap_or_else(|| file.to_string()),
 	};
 	if let Some(handle) = CONNECTIONS.with(|connections| connections.borrow().get(file).copied()) {
 		return Ok(handle as Handle);
@@ -337,8 +383,21 @@ fn connection(file: &str) -> Result<Handle, String> {
 	if unsafe { (sqlite.open)(c_path.as_ptr(), &mut handle) } != SQLITE_OK {
 		return Err(format!("{file}: {}", message(sqlite, handle)));
 	}
+	unsafe { (sqlite.busy_timeout)(handle, BUSY_MILLISECONDS) };
 	CONNECTIONS.with(|connections| connections.borrow_mut().insert(file.to_string(), handle as usize));
 	Ok(handle)
+}
+
+/// Under cargo's tests a named thread other than main (libtest names each test's thread) gets its own copy of a
+/// sample's file, so tests running one sample at once neither lock nor change each other's rows
+fn test_thread_copy(file: &str) -> Option<String> {
+	let file = std::path::Path::new(file);
+	let in_samples = file.parent().and_then(|folder| folder.file_name()).is_some_and(|folder| folder == SAMPLES_FOLDER);
+	let folder = std::env::var(TEST_TABLES).ok().filter(|_| in_samples)?;
+	let thread = std::thread::current().name().filter(|name| *name != "main")?.replace("::", ".");
+	let folder = std::path::Path::new(&folder).join(thread);
+	std::fs::create_dir_all(&folder).ok()?;
+	Some(folder.join(file.file_name()?).to_string_lossy().into_owned())
 }
 
 fn message(sqlite: &Sqlite, database: Handle) -> String {

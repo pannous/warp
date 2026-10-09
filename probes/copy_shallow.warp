@@ -1,0 +1,7 @@
+class Team { name: text; members: list }
+a = Team("red", ["ann"])
+b = copy(a, shallow: true)
+c = copy(a)
+b.members.add("bob")
+print a.members
+print c.members

@@ -14,6 +14,8 @@ const TEXT_TYPE: &str = "text/plain; charset=utf-8";
 pub const TEXT_REPLY_TYPE: &str = "text/plain";
 const NOT_FOUND: u16 = 404;
 const FAILED: u16 = 500;
+/// Routes under these paths answer a failure as JSON `{"error": …}`, the others as text
+const JSON_PATHS: [&str; 2] = ["/api/", "/rpc/"];
 const SITE_METHOD: &str = "GET";
 /// A body of this type is the fields of an HTML form, `title=buy+milk&done=on`
 const FORM_TYPE: &str = "application/x-www-form-urlencoded";
@@ -53,8 +55,18 @@ impl Route {
 	pub fn answer_of(&self, value: &Node) -> Answer {
 		match value.drop_meta() {
 			Node::Empty if self.lists => Answer { status: 200, content_type: JSON_TYPE, body: b"[]".to_vec() },
+			Node::Error(message) => self.failed(&message.to_string()),
 			_ => Answer::of(value),
 		}
+	}
+
+	/// The answer of the route failing with `message`: JSON `{"error": message}` where a program reads JSON (an
+	/// /api/ or /rpc/ path), else the message as text
+	pub fn failed(&self, message: &str) -> Answer {
+		if !JSON_PATHS.iter().any(|prefix| self.path.starts_with(prefix)) {
+			return Answer::failed(message);
+		}
+		Answer { status: FAILED, content_type: JSON_TYPE, body: serde_json::json!({ "error": message }).to_string().into_bytes() }
 	}
 }
 

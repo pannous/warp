@@ -359,9 +359,17 @@ impl WasmGcEmitter {
 			return;
 		}
 		let r = self.scratch(2);
-		func.instruction(&I::LocalSet(r));
-		self.emit_fixnum_test(func, &[r]);
-		self.emit_fast_or_unary_slow(func, r, &[I::LocalGet(r)], "int_from_i64", ValType::I64);
+		self.emit_int_from_machine_in(func, r);
+	}
+
+	/// The same in a runtime function, with its own i64 local
+	pub(crate) fn emit_int_from_machine_in(&mut self, func: &mut Function, local: u32) {
+		if !self.int_runtime() {
+			return;
+		}
+		func.instruction(&I::LocalSet(local));
+		self.emit_fixnum_test(func, &[local]);
+		self.emit_fast_or_unary_slow(func, local, &[I::LocalGet(local)], "int_from_i64", ValType::I64);
 	}
 
 	fn emit_fast_or_unary_slow(&mut self, func: &mut Function, local: u32, fast: &[Instruction], slow: &'static str, result: ValType) {

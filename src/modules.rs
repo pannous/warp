@@ -790,7 +790,7 @@ impl<'a> Loader<'a> {
 }
 
 /// The standard library's modules written in warp (notes/stdlib.md), embedded so `use list` needs no files
-const STD_MODULES: [(&str, &str); 21] = [
+const STD_MODULES: [(&str, &str); 22] = [
 	(PRELUDE_MODULE, include_str!("../lib/prelude.warp")),
 	("memory", include_str!("../lib/memory.warp")),
 	("net", include_str!("../lib/net.warp")),
@@ -812,6 +812,7 @@ const STD_MODULES: [(&str, &str); 21] = [
 	("router", include_str!("../lib/router.warp")),
 	("i18n", include_str!("../lib/i18n.warp")),
 	(UNITS_MODULE, include_str!("../lib/units.warp")),
+	(AGENT_MODULE, include_str!("../lib/agent.warp")),
 ];
 /// The standard modules' folder (P194: std/ merged into lib/), embedded in the binary
 const STD_FOLDER: &str = "lib";
@@ -827,17 +828,26 @@ const UNITS_MODULE: &str = "units";
 const QUANTITY: &str = "quantity";
 /// A served route's path parameters (`post "/todos/:id:int/toggle"`, lowering/serve.rs) are read by the router's words
 const ROUTE_PARTS: [&str; 3] = ["route_segment", "route_parameter", "route_matches"];
+/// lib/agent.warp: `agent "prompt"` asks Claude (card g_X_F0)
+const AGENT_MODULE: &str = "agent";
 /// Whether a program needs a module
 type NeededBy = fn(&Node) -> bool;
 /// The standard modules a program needs without `use`: P183 a file URL → file, a page → markup (lowering/page_html.rs),
-/// routes → router, a route's regular expression → regex (lowering/routes.rs), a call of quantity → units (run-time units)
-const IMPLICIT_MODULES: [(&str, NeededBy); 5] = [
+/// routes → router, a route's regular expression → regex (lowering/routes.rs), a call of quantity → units (run-time units),
+/// a call of agent → agent
+const IMPLICIT_MODULES: [(&str, NeededBy); 6] = [
 	("file", mentions_file_url),
 	("markup", |_| crate::pipeline::renders_itself()),
 	("router", |program| defined(program, crate::routes::PAGE_ROUTES).is_some() || { let called = called_names(&statements(program.clone())); ROUTE_PARTS.iter().any(|word| called.contains(*word)) }),
 	("regex", |program| defined(program, crate::routes::PAGE_ROUTE_INDEX).is_some_and(|index| called_names(&[index]).contains(crate::routes::REGEX_MATCH))),
-	(UNITS_MODULE, |program| defined(program, QUANTITY).is_none() && called_names(&statements(program.clone())).contains(QUANTITY)),
+	(UNITS_MODULE, |program| calls_undefined(program, QUANTITY)),
+	(AGENT_MODULE, |program| calls_undefined(program, AGENT_MODULE)),
 ];
+
+/// Whether the program calls `word` without defining it
+fn calls_undefined(program: &Node, word: &str) -> bool {
+	defined(program, word).is_none() && called_names(&statements(program.clone())).contains(word)
+}
 /// Other languages' names of the standard modules' classes and words (Java, Python, Rust, C#), each read as warp's with
 /// a note, when a used module defines that word
 const STD_ALIASES: [(&str, &str); 27] = [

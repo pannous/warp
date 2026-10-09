@@ -91,6 +91,7 @@ mod test_atomic_arrays;
 mod test_task_list_literal;
 mod test_job_lists;
 mod test_try_stack_overflow;
+mod test_try_host_failure; // card try-catch
 mod test_run_time_blocks;
 mod test_run_time_block_cache;
 mod test_catch_binding;
@@ -148,3 +149,5 @@ mod test_database_dangling_key; // card orm-dangling
 mod test_database_members_add; // cards orm-nested, orm-list-add
 mod test_print_empty; // card print-error
 mod test_database_bool_column; // card todo-app
+mod test_try_else_print; // card try-print
+mod test_database_busy; // card orm-sample-lock

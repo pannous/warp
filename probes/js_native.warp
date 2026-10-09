@@ -1,0 +1,3 @@
+use js crypto
+id = crypto.randomUUID()
+print id.length

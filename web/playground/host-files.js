@@ -38,14 +38,26 @@ function getSync(url, timeout, binary = false) {
 	return binary ? Uint8Array.from(request.responseText, character => character.charCodeAt(0) & 0xff) : request.responseText;
 }
 
-// a synchronous POST of a text (stdlib net's post, src/extensions/utils.rs post_within), its answer's text
-function postSync(url, body) {
+// a synchronous POST of a text with its headers (stdlib net's post, src/extensions/utils.rs post_within), its answer's
+// text; an answer of status >= 400 is the error, with its text (an API's own reason)
+function postSync(url, body, headers = {}) {
 	const request = new XMLHttpRequest();
 	request.open("POST", url, false);
 	request.setRequestHeader("Content-Type", "text/plain; charset=utf-8");
+	for (const [name, value] of Object.entries(headers)) request.setRequestHeader(name, withPageSecret(url, value));
 	request.send(body);
-	if (request.status >= 400 || request.status === 0) throw new Error(request.status ? `HTTP status ${request.status}` : "network error (blocked by CORS?)");
+	if (request.status === 0) throw new Error("network error (blocked by CORS?)");
+	if (request.status >= 400) throw new Error(`HTTP status ${request.status}: ${request.responseText}`);
 	return request.responseText;
+}
+
+// A program sees a secret of the page (the playground's API key, assistant.js) only as its stand-in `env` gives:
+// the secret itself goes into a header of a request to its own service, nowhere else, so no program can send it away
+function withPageSecret(url, value) {
+	const secret = self.pageSecrets?.[value];
+	if (!secret) return value;
+	if (new URL(url).origin !== secret.origin) throw new Error(`the playground's key goes only to ${secret.origin}, not to ${url}`);
+	return secret.value;
 }
 
 // a file of the served repository, failing in the words of the native read (src/host.rs)
@@ -161,7 +173,16 @@ function keepTable(file, table, stored) {
 
 // the table's rows [id, columns…], the table first created or migrated to the class's fields [name, type, default];
 // a removed field keeps its column (data is never dropped silently), loudly
+// the table migrated to the class's fields, then its rows; src/database.rs gives the two halves apart too: a table's
+// list migrates at registration and loads its rows at the first read (lowering/database_tables.rs)
 function openTable(table, schema, file) {
+	migrateTable.call(this, table, schema, file);
+	return tableRows(table, schema, file);
+}
+
+const tableRows = (table, schema, file) => storedTable(file, table).rows.map(row => [row[ID_COLUMN], ...schema.map(([name]) => row[name])]);
+
+function migrateTable(table, schema, file) {
 	const stored = storedTable(file, table);
 	for (const [name, , , oldName] of schema.filter(([name, , , oldName]) => oldName in stored.types && !(name in stored.types))) {
 		renameColumn(stored, oldName, name);
@@ -181,7 +202,7 @@ function openTable(table, schema, file) {
 		this.warn(`the table ${table} keeps its column ${name}, which the class no longer has (its data is kept)`);
 	}
 	keepTable(file, table, stored);
-	return stored.rows.map(row => [row[ID_COLUMN], ...schema.map(([name]) => row[name])]);
+	return null;
 }
 
 // a field marked `@was(oldName)`: its column keeps type and values under the new name
@@ -229,7 +250,8 @@ addHostPart({
 		};
 	},
 	adapters: {
-		os: { env: () => null, args: () => [] }, // a page has no environment and no command line
+		// a page has no command line; its environment is what the page sets (the stand-in of the playground's key)
+		os: { env: name => self.pageEnvironment?.[name] ?? null, args: () => [] },
 		// `stored theme = "dark"`, `local[k]`, `session[k]` (src/lowering/stored_values.rs, std_io): the page's values
 		// (markup.js keptValues), each save sent back to it with its store (the dev store of a `warp dev` page, the
 		// session's, else the program's)
@@ -250,8 +272,8 @@ addHostPart({
 			},
 		},
 		// a filter compiled natively is an SQL query (a page compiled by the browser keeps filters as comprehensions)
-		table: { open: openTable, insert: insertRow, update: updateRow, select: table => { throw new Error(`a filter of the table ${table} is an SQL query: it runs natively (warp serve)`); } },
-		net: { post: (url, body) => postSync(url, contentText(body)) },
+		table: { open: openTable, migrate: migrateTable, rows: tableRows, page: (table, schema, file, start, size) => tableRows(table, schema, file).slice(start - 1, start - 1 + size), count: (table, schema, file) => storedTable(file, table).rows.length, insert: insertRow, update: updateRow, select: table => { throw new Error(`a filter of the table ${table} is an SQL query: it runs natively (warp serve)`); } },
+		net: { post: (url, body, headers) => postSync(url, contentText(body), headers ?? {}) },
 		// `clipboard.write(text)` (lowering/system_values.rs): a page writes it (markup.js copyText), a Worker has no
 		// clipboard and hands the text to its page (self.writeClipboard: worker.js)
 		clipboard: { write: text => { (self.writeClipboard ?? copyText)(contentText(text)); return null; } },

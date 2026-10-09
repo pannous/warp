@@ -36,6 +36,11 @@ function writeBytes(program, bytes) {
 	return [pointer, bytes.length];
 }
 
+// the Error of `reason`, built with the program's own error_of: a failure its `try` catches (src/host.rs error_in_program)
+function errorInProgram(program, reason) {
+	return program.error_of(program.new_text(...writeBytes(program, utf8.encode(reason))));
+}
+
 // The parts of the host a program reaches only through some of its imports, each a file that adds itself here:
 // host-files.js, host-hashes.js, host-tasks.js, host-foreign.js (needs host-files.js), host-compiler.js, host-routes.js,
 // host-gpu.js, host-timers.js, host-random.js. A built site
@@ -80,8 +85,7 @@ function programImports(holder, hooks) {
 					return typeof result === "number" ? module.new_float(result) : result;
 				} catch (failure) {
 					if (!(failure instanceof RangeError)) throw failure;
-					const [pointer, length] = writeBytes(module, utf8.encode("call stack exhausted"));
-					return module.error_of(module.new_text(pointer, length));
+					return errorInProgram(module, "call stack exhausted");
 				}
 			},
 			// std_pure / std_io(module, member, arguments): a word of lib/<module>.warp (src/std_adapters.rs), by the
@@ -211,7 +215,8 @@ function stdCall(program_, module, member, argumentList, warnings) {
 		const context = { warn: message => warnings.push(message) };
 		return buildValue(program_, treeOfPlain(adapter.apply(context, Array.isArray(given) ? given : [given])));
 	} catch (error) {
-		throw new Error(`${moduleName}.${memberName}: ${error.message}`);
+		// the program raises it (src/wasm_emitter/ffi_emitter.rs emit_ffi_result): `try` catches it
+		return errorInProgram(program_, `${moduleName}.${memberName}: ${error.message}`);
 	}
 }
 

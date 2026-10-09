@@ -149,19 +149,21 @@ fn guarded_call(mut caller: Caller<'_, HostState>, name: i32, arguments: Option<
 			Val::F64(bits) => crate::tasks::TaskValue::Float(warp_runtime::floats::canonical_nan(f64::from_bits(bits))),
 			node => return Ok(node.unwrap_anyref().copied()),
 		},
-		Err(failure) if failure.downcast_ref::<wasmtime::Trap>() == Some(&wasmtime::Trap::StackOverflow) => {
-			crate::tasks::TaskValue::Text(STACK_EXHAUSTED.to_string())
-		}
+		Err(failure) if failure.downcast_ref::<wasmtime::Trap>() == Some(&wasmtime::Trap::StackOverflow) => return error_in_program(&mut caller, STACK_EXHAUSTED),
 		Err(failure) => return Err(failure),
 	};
 	let builders = crate::tasks::Builders::of(&mut |export| caller.get_export(export)).map_err(message)?;
 	let built = builders.build(&value, &mut caller.as_context_mut()).map_err(message)?;
-	if !matches!(value, crate::tasks::TaskValue::Text(_)) {
-		return Ok(built.unwrap_anyref().copied());
-	}
+	Ok(built.unwrap_anyref().copied())
+}
+
+/// The Error of `reason`, built with the module's own error_of: a failure the program's `try` catches
+#[cfg(feature = "native")]
+fn error_in_program(caller: &mut Caller<'_, HostState>, reason: &str) -> wasmtime::Result<HostNode> {
+	let text = built_in_program(caller, &Node::Text(reason.to_string()), crate::wasm_emitter::text_builtins::ERROR_OF)?;
 	let error_of = caller.get_export(crate::wasm_emitter::text_builtins::ERROR_OF).and_then(Extern::into_func).ok_or_else(|| wasmtime::Error::msg("no exported error_of"))?;
 	let mut error = [Val::AnyRef(None)];
-	error_of.call(&mut caller, &[built], &mut error)?;
+	error_of.call(&mut *caller, &[Val::AnyRef(text)], &mut error)?;
 	Ok(error[0].unwrap_anyref().copied())
 }
 
@@ -688,15 +690,39 @@ type HostNode = Option<wasmtime::Rooted<wasmtime::AnyRef>>;
 /// serve_routes(port, routes): HTTP on the port, each request answered by its route's function (src/web_server.rs)
 #[cfg(feature = "native")]
 fn serve_routes(mut caller: Caller<'_, HostState>, port: i64, routes: HostNode) -> wasmtime::Result<HostNode> {
-	use crate::web_server::{routes_of, serve, Answer};
+	use crate::web_server::{routes_of, serve};
 	let routes = routes_of(&given_node(&mut caller, routes)?);
 	let port = u16::try_from(port).map_err(|_| wasmtime::Error::new(crate::tasks::TaskFailure(format!("serve {port}: no port number"))))?;
 	let site = served_site(port);
 	serve(port, &routes, &site, |route, request| match route_value(&mut caller, &route.function, &request) {
 		Ok(value) => route.answer_of(&value),
-		Err(problem) => Answer::failed(&crate::tasks::failure_message(anyhow::Error::from(problem))),
+		Err(failure) => route.failed(&route_failure(&mut caller, &route.path, failure)),
 	}).map_err(|problem| wasmtime::Error::new(crate::tasks::TaskFailure(problem)))?;
 	built_in_program(&mut caller, &Node::Empty, SERVE_ROUTES)
+}
+
+/// What a failed route says to the client: the program's error message, read with the value the program left in
+/// trap_detail (as wasm_reader::with_trap_detail does for main); the whole trace goes to the server's log
+#[cfg(feature = "native")]
+fn route_failure(caller: &mut Caller<'_, HostState>, path: &str, failure: wasmtime::Error) -> String {
+	let detail = caller.get_export(crate::wasm_reader::TRAP_DETAIL).and_then(Extern::into_global);
+	let left = detail.map(|global| global.get(&mut *caller));
+	// read once: the next failure must not show this one's detail
+	if let Some(global) = detail {
+		let _ = global.set(&mut *caller, Val::AnyRef(None));
+	}
+	let failure = anyhow::Error::from(failure);
+	let failure = match left {
+		Some(Val::AnyRef(Some(value))) => match given_node(caller, Some(value)) {
+			Ok(node) => failure.context(crate::wasm_reader::trap_detail_line(&node)),
+			Err(_) => failure,
+		},
+		_ => failure,
+	};
+	let trace = format!("{failure:?}");
+	let message = crate::tasks::failure_message(failure);
+	eprintln!("{path} failed: {message}\n{trace}");
+	message
 }
 
 /// The site of the program file being run, which a program whose last line shows a page serves at / (src/site.rs); a
@@ -737,7 +763,11 @@ fn std_call(mut caller: Caller<'_, HostState>, module: HostNode, member: HostNod
 	let (module, member) = (module?.name(), member?.name());
 	let answer = match (module.as_str(), member.as_str()) {
 		("table", "select") => queried_rows(&mut caller, &arguments?)?,
-		_ => crate::std_adapters::call(&module, &member, &arguments?).map_err(|problem| wasmtime::Error::new(crate::tasks::TaskFailure(problem)))?,
+		_ => match crate::std_adapters::call(&module, &member, &arguments?) {
+			Ok(answer) => answer,
+			// the program raises it (emit_ffi_result): `try` catches it, uncaught it ends the run with this reason
+			Err(problem) => return error_in_program(&mut caller, &problem),
+		},
 	};
 	built_in_program(&mut caller, &answer, &format!("{module}.{member}"))
 }

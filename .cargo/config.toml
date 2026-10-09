@@ -23,3 +23,7 @@ browser-test = ["test", "--target", "wasm32-wasip1", "--no-default-features", "-
 
 [target.wasm32-wasip1]
 runner = "web/playground/test_in_browser.py"
+
+# each test thread keeps a sample's database tables in its own copy here (src/database.rs, card orm-sample-lock)
+[env]
+WARP_TEST_TABLES = { value = "data/test_tables", relative = true }

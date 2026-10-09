@@ -379,7 +379,9 @@ impl VariantRenaming for ArityOverloads {
 	fn resolve_call(&mut self, node: &Node) -> Option<Node> {
 		let Node::List(items, bracket, separator) = node.drop_meta() else { return None };
 		let [head, arguments @ ..] = items.as_slice() else { return None };
-		let name = head.drop_meta().name();
+		// `(quantity("5 m"))`: parentheses around a call are no call of it without arguments
+		let Node::Symbol(name) = head.drop_meta() else { return None };
+		let name = name.clone();
 		let variants = self.arities.get(&name)?.clone();
 		if !is_call(items, bracket, separator) {
 			return None;

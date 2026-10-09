@@ -280,7 +280,7 @@ pub fn lower(program: Node) -> Node {
 	let list_variables = assigned.into_iter().filter(|(_, only_lists)| *only_lists).map(|(name, _)| name).collect();
 	let scalar_parameters = found.iter().map(|definition| (definition.name.clone(), definition.params.iter().map(|param| takes_a_scalar(param, &definition.body)).collect())).collect();
 	let [defines_dot, defines_sum] = [DOT_WORD, SUM_WORD].map(|word| defined.contains(&word.to_string()));
-	Broadcast { functions: broadcasting, list_variables, scalar_parameters, defines_dot, defines_sum, paired: Default::default() }.rewrite(program)
+	Broadcast { functions: broadcasting, list_variables, scalar_parameters, defines_dot, defines_sum, paired: Default::default(), shadowed: Default::default() }.rewrite(program)
 }
 
 /// `map(list, broadcast_item => applied(broadcast_item))`
@@ -437,9 +437,21 @@ struct Broadcast {
 	defines_sum: bool,
 	/// element-wise operators between two lists so far: each holds its lists under names of its own
 	paired: std::cell::Cell<usize>,
+	/// The untyped parameters of the functions being rewritten: their own values, not the program's list variables of
+	/// the same names (card param-named-like-global)
+	shadowed: std::cell::RefCell<Vec<String>>,
 }
 
 impl Broadcast {
+	/// `run` with a function's `parameters` among the shadowed names: its own values inside its body
+	fn with_parameters<T>(&self, parameters: Vec<String>, run: impl FnOnce() -> T) -> T {
+		let outer = self.shadowed.borrow().len();
+		self.shadowed.borrow_mut().extend(parameters);
+		let result = run();
+		self.shadowed.borrow_mut().truncate(outer);
+		result
+	}
+
 	fn rewrite(&self, node: Node) -> Node {
 		match node {
 			Node::List(items, bracket, separator) => {
@@ -462,6 +474,11 @@ impl Broadcast {
 			Node::Key(left, op, right) if matches!(left.drop_meta(), Node::Empty) && SCALAR_OPERATORS.contains(&op) => {
 				let right = self.rewrite(*right);
 				self.broadcast_operator(op, &right).unwrap_or(Node::Key(left, op, Box::new(right)))
+			}
+			// a definition head names parameters, it calls nothing
+			Node::Key(head, op @ (Op::Define | Op::Assign | Op::FatArrow | Op::Arrow), body) if is_function_head(&head, op) => {
+				let body = self.with_parameters(untyped_parameters(&head, op), || self.rewrite(*body));
+				Node::Key(head, op, Box::new(body))
 			}
 			Node::Key(left, op, right) => {
 				let (left, right) = (self.rewrite(*left), self.rewrite(*right));
@@ -513,7 +530,7 @@ impl Broadcast {
 
 	/// A list variable or a range: `sqrt xs`, `sqrt (1 to 4)` map over its items
 	fn is_list_value(&self, node: &Node) -> bool {
-		is_range(node) || matches!(node.drop_meta(), Node::Symbol(variable) if self.list_variables.contains(variable))
+		is_range(node) || matches!(node.drop_meta(), Node::Symbol(variable) if self.list_variables.contains(variable) && !self.shadowed.borrow().contains(variable))
 	}
 
 	/// `add [1 2] 10`, `add(10, xs)`, `add(all xs, 10)`, `square(all xs)`: a call whose one list argument goes to a
