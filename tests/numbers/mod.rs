@@ -7,6 +7,7 @@ mod test_float_assignment;
 mod test_float_text;
 mod test_float_bit_operations;
 mod test_float_exact_context;
+mod test_float_quotient; // card exact-div
 mod test_float_parameters;
 mod test_float_promotion;
 mod test_float_to_int_range;
