@@ -71,6 +71,14 @@ pub(crate) fn has_jump(body: &Node) -> bool {
 	}
 }
 
+/// Does the body end in `break` or `continue`: its last statement never gives the loop a value
+pub(crate) fn ends_in_jump(body: &Node) -> bool {
+	match body.drop_meta() {
+		Node::List(items, _, _) => items.last().is_some_and(ends_in_jump),
+		node => jump_word(node).is_some(),
+	}
+}
+
 /// Open control frames (block, loop, if, try) at the end of the code emitted so far
 pub(crate) fn open_control_frames(func: &Function) -> usize {
 	open_frames(func).len()

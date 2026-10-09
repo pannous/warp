@@ -1,0 +1,14 @@
+def fib
+  a = 0
+  b = 1
+  while true
+    yield a
+    t = a
+    a = b
+    b = t + b
+  end
+end
+for f in fib
+  break if f > 50
+  puts f
+end

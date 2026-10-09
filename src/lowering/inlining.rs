@@ -170,7 +170,7 @@ fn inlined_call(items: &[Node], bracket: &Bracket, separator: &Separator, functi
 	Some(Node::List(body.collect(), Bracket::Round, Separator::Semicolon))
 }
 
-fn renamed_names(node: Node, names: &HashSet<String>, rename: &dyn Fn(&str) -> String) -> Node {
+pub(crate) fn renamed_names(node: Node, names: &HashSet<String>, rename: &dyn Fn(&str) -> String) -> Node {
 	match node {
 		Node::Symbol(word) if names.contains(&word) => Node::Symbol(rename(&word)),
 		// a key `{x: x}` and a field `p.x` keep their names
