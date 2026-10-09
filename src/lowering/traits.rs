@@ -836,6 +836,11 @@ impl InstanceTypes {
 			},
 			// `xs.sort`
 			Node::Key(list, Op::Dot, word) if word.name() == SORT_WORD => self.shape(list).filter(|shape| matches!(shape, Shape::ListOf(_))),
+			// `q.to("km")` of an instance: what the method returns (card instance-result)
+			Node::Key(receiver, Op::Dot, call) if matches!(self.shape(receiver), Some(Shape::Instance(_))) => {
+				let method = crate::lowering::class_methods::leading_name(call);
+				self.results.get(&method).cloned().flatten()
+			}
 			// `c ? a : b`, `if c then a else b`: the shape both branches share
 			Node::Key(_, Op::Question, branches) => match branches.drop_meta() {
 				Node::Key(then, Op::Colon, otherwise) => self.branches_shape(then, otherwise),
