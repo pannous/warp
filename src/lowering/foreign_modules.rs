@@ -50,26 +50,46 @@ pub fn component_modules(program: &Node) -> HashMap<String, String> {
 	modules
 }
 
-/// `use rust_demo.wasm`: the component's long form `use wasm "rust_demo.wasm"` (card g-_Xm4); a core module file stays
-/// the import of its functions (modules.rs)
+/// `use rust_demo.wasm`: the component's long form `use wasm "rust_demo.wasm"` (card g-_Xm4), `use rust_demo.wasm as
+/// demo` that of `use wasm "rust_demo.wasm" as demo`; a core module file stays the import of its functions (modules.rs)
 fn component_uses(node: Node) -> Node {
-	let path = match &node {
-		Node::List(items, _, _) => component_path(items),
+	let module = match &node {
+		Node::List(items, _, _) => component_module(items),
 		_ => None,
 	};
-	match (path, node) {
-		(Some(path), Node::List(_, bracket, separator)) => Node::List(vec![Node::Symbol(USE_WORD.to_string()), Node::Symbol(COMPONENT_RUNTIME.to_string()), Node::Text(path)], bracket, separator),
+	match (module, node) {
+		(Some(module), Node::List(_, bracket, separator)) => Node::List(vec![Node::Symbol(USE_WORD.to_string()), Node::Symbol(COMPONENT_RUNTIME.to_string()), module], bracket, separator),
 		(_, node) => node.map_children(component_uses),
 	}
 }
 
-fn component_path(items: &[Node]) -> Option<String> {
-	let [word, file] = items else { return None };
+/// The component of `use rust_demo.wasm`, as the text of its path, or its path `as` an alias
+fn component_module(items: &[Node]) -> Option<Node> {
+	let [word, used] = items else { return None };
 	if !matches!(word.drop_meta(), Node::Symbol(word) if crate::modules::USE_KEYWORDS.contains(&word.as_str())) {
 		return None;
 	}
-	let path = crate::modules::path_of(file).filter(|path| path.ends_with(COMPONENT_EXTENSION))?;
-	(!is_core_module(&crate::modules::beside_program(&path))).then_some(path)
+	let (file, alias) = match used.drop_meta() {
+		Node::Key(file, Op::As, alias) => (file.as_ref(), Some(alias)),
+		_ => (used, None),
+	};
+	let path = component_path(&crate::modules::path_of(file)?)?;
+	Some(match alias {
+		Some(alias) => Node::Key(Box::new(Node::Text(path)), Op::As, alias.clone()),
+		None => Node::Text(path),
+	})
+}
+
+/// `rust_demo.wasm` as written, `rust_demo` where the loader finds the component file rust_demo.wasm (natively; the page
+/// knows its components by name only)
+fn component_path(written: &str) -> Option<String> {
+	let path = match written.ends_with(COMPONENT_EXTENSION) {
+		true => written.to_string(),
+		// absolute: the loader's find is no path beside the program to be joined again
+		false => crate::modules::wasm_module_file(written).map(|found| found.canonicalize().unwrap_or(found))?.to_string_lossy().into_owned(),
+	};
+	let found = crate::modules::beside_program(&path);
+	(found.ends_with(COMPONENT_EXTENSION) && !is_core_module(&found)).then_some(path)
 }
 
 /// A file that is no component, else none or unreadable here (the page finds its components by name, components.js)
