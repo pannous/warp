@@ -391,14 +391,18 @@ impl WasmGcEmitter {
 			}
 		}
 		let is_list = matches!(self.get_type(left), crate::Kind::List | crate::Kind::Empty) && self.get_type(right) == crate::Kind::List;
-		let Some(position) = self.scope.lookup(name).filter(|local| local.kind.is_ref()).map(|local| local.position) else { return false };
+		// a declared global grows in place too (`global out; out += [i]` in a function): its concat copy was quadratic
+		let Some(slot) = self.node_variable_slot(name) else { return false };
 		if !is_list || !self.should_emit_function(super::list_ops::LIST_EXTEND) {
 			return false;
 		}
 		self.emit_node_instructions(func, left);
 		self.emit_node_instructions(func, right);
 		self.emit_call(func, super::list_ops::LIST_EXTEND);
-		func.instruction(&I::LocalTee(position));
+		slot.tee(func);
+		if matches!(slot, super::list_dispatch::Slot::Global(_)) {
+			func.instruction(&I::RefAsNonNull); // a global is nullable, list_extend's list is not
+		}
 		true
 	}
 

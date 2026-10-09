@@ -1,6 +1,7 @@
 //! List and string operation functions for WASM
 
 use crate::wasm_emitter::{WasmGcEmitter, VALUES_EQUAL};
+use crate::wasm_emitter::list_dispatch::Slot;
 use wasm_encoder::*;
 use Instruction::I32Const;
 use Instruction as I;
@@ -1402,16 +1403,23 @@ impl WasmGcEmitter {
 
 	/// A variable target (local or declared global) gets the updated copy on the stack, any other target drops it
 	fn emit_store_updated(&mut self, func: &mut Function, target: &Node) {
-		let Node::Symbol(name) = target.drop_meta() else {
-			func.instruction(&I::Drop);
-			return;
+		let slot = match target.drop_meta() {
+			Node::Symbol(name) => self.node_variable_slot(name),
+			_ => None,
 		};
-		let global = self.ctx.user_globals.get(name).filter(|(_, kind)| kind.is_ref());
-		match (self.scope.lookup(name), global) {
-			(Some(local), _) if local.kind.is_ref() => func.instruction(&I::LocalSet(local.position)),
-			(None, Some(&(index, _))) => func.instruction(&I::GlobalSet(index)),
-			_ => func.instruction(&I::Drop),
-		};
+		func.instruction(&match slot {
+			Some(Slot::Local(index)) => I::LocalSet(index),
+			Some(Slot::Global(index)) => I::GlobalSet(index),
+			None => I::Drop,
+		});
+	}
+
+	/// The local or declared global a variable holding a Node (reference) lives in
+	pub(super) fn node_variable_slot(&self, name: &str) -> Option<Slot> {
+		match self.scope.lookup(name) {
+			Some(local) => local.kind.is_ref().then_some(Slot::Local(local.position)),
+			None => self.ctx.user_globals.get(name).filter(|(_, kind)| kind.is_ref()).map(|&(index, _)| Slot::Global(index)),
+		}
 	}
 
 	/// `d[k] = v` with a key read at runtime (`for k in ks {d[k] = 0}`): the copy that `setter` makes with the entry set;

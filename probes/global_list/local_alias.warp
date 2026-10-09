@@ -1,0 +1,4 @@
+out = [0]
+held = out
+out += [1]
+print count(held)
