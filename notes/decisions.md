@@ -7,6 +7,10 @@ before asking the user; nobody reads it front to back, the code, tests and wiki 
 notes/open_decisions.md.
 
 ## Decided 2026-10-09 (user, as recommended unless quoted)
+- Undoable default (warp-class, card g_mSEw "a less explicit form"): `form post "/todos" { input{name:"title"}
+  button{"add"} }` = `form{ method:"post" action:"/todos" … }`, matching the route `post "/todos" {…}`;
+  samples/todo_app.warp. Not built: naming the route function (`form add_todo {…}`) or finding the only matching
+  post route by the form's inputs.
 - P232 (warp-class, card g_mQ9U): `$x` as "field x of the implicit subject" stays in served routes only
   (`$title` = request.body.title / request.query.title); not in event handlers, `it` contexts or component props.
   `$a` in data literals keeps referencing the enclosing node `a{…}` (references.rs).
