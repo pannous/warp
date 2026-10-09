@@ -5,12 +5,14 @@
 //! ends. The body is cut into states at its yields: `while 1 { if generator·state == 0 { …; generator·state = 2;
 //! continue }; …; return ø }`. A loop or an if that yields inside becomes jumps between states, a `for` loop is lowered
 //! to its `while` first; every other statement stays as it is. A loop walks the object with next() (lower_iterators).
+//! `send(v)` (card generators-send) resumes it like next() and gives `x = yield …` the value v where it resumes; next()
+//! gives it ø.
 
 use crate::for_loop::block_items;
-use crate::generators::{assign, generators, holds_own, holds_stop, is_return, is_word, number, statements, symbol, symbol_name, yielded_value, Generator, BREAK_WORD, CONTINUE_WORD, FOR_WORD, NAME_SEPARATOR, NEXT_METHOD, RETURN_WORD};
+use crate::generators::{assign, generators, yield_statement, holds_own, holds_stop, is_return, is_word, number, statements, symbol, symbol_name, yielded_value, Generator, BREAK_WORD, CONTINUE_WORD, FOR_WORD, NAME_SEPARATOR, NEXT_METHOD, RETURN_WORD};
 use crate::node::{Bracket, Node, Separator};
 use crate::operators::Op;
-use crate::ruby_blocks::{arguments, yielded};
+use crate::ruby_blocks::arguments;
 use crate::wasm_emitter::{is_step, split_step};
 use crate::warp_parser::{parse, while_do};
 use std::collections::{BTreeSet, HashMap, HashSet};
@@ -21,6 +23,10 @@ const CLASS_SUFFIX: &str = "generator";
 const STATE_FIELD: &str = "generator·state";
 /// The state of an ended generator: no state block matches it, `next()` gives ø
 const DONE: i64 = -1;
+/// What `send(v)` gives the generator, which `x = yield …` receives where it resumes (ø after `next()`)
+const SENT_FIELD: &str = "generator·sent";
+const SENT_VALUE: &str = "generator·value";
+const SEND: &str = "send(VALUE) := { SENT = VALUE; self.next() }";
 const FIELD_PLACEHOLDER: &str = "generator_field";
 const FIELD_TYPE: &str = "any";
 
@@ -110,15 +116,16 @@ fn class_name(generator: &str) -> String {
 /// `count_to·generator(args…, ø for each local, 0)`
 fn construction(name: &str, generator: &Generator, arguments: Vec<Node>) -> Node {
 	let locals = fields(generator).len() - generator.parameters.len();
-	let values = arguments.into_iter().chain(std::iter::repeat_n(Node::Empty, locals)).chain([number(0)]);
+	let values = arguments.into_iter().chain(std::iter::repeat_n(Node::Empty, locals)).chain([number(0), Node::Empty]);
 	Node::List(std::iter::once(symbol(&class_name(name))).chain(values).collect(), Bracket::Round, Separator::None)
 }
 
-/// The fields in order: the parameters, the locals, (then the state)
+/// The fields in order: the parameters, the locals, (then the state and what was sent)
 fn fields(generator: &Generator) -> Vec<String> {
 	let mut locals: BTreeSet<String> = assigned_names(&machine_body(generator).unwrap_or(Node::Empty));
 	locals.extend(generator.locals.iter().cloned());
 	locals.remove(STATE_FIELD);
+	locals.remove(SENT_FIELD);
 	let parameters = generator.parameters.iter().cloned();
 	parameters.clone().chain(locals.into_iter().filter(|local| !generator.parameters.contains(local))).collect()
 }
@@ -144,9 +151,10 @@ fn generator_class(name: &str, generator: &Generator) -> Option<Node> {
 		other => other.clone(),
 	};
 	let mut members: Vec<Node> = fields(generator).iter().map(|name| field(name)).collect();
-	members.push(field(STATE_FIELD));
+	members.extend([field(STATE_FIELD), field(SENT_FIELD)]);
 	let head = Node::List(vec![symbol(NEXT_METHOD)], Bracket::Round, Separator::None);
 	members.push(Node::Key(Box::new(head), Op::Define, Box::new(statements(vec![body], Bracket::Curly))));
+	members.extend(crate::generator_consumers::template(SEND, &[("VALUE", &symbol(SENT_VALUE)), ("SENT", &symbol(SENT_FIELD))]));
 	Some(Node::Type { name: Box::new(symbol(&class_name(name))), body: Box::new(statements(members, Bracket::Curly)) })
 }
 
@@ -217,9 +225,12 @@ impl Machine {
 
 	/// Where the code goes on after the statement
 	fn statement(&mut self, statement: Node, at: usize, exits: Option<Exits>) -> Option<usize> {
-		if let Some(values) = yielded(&statement) {
+		if let Some((values, target)) = yield_statement(&statement) {
 			let resume = self.state();
 			self.states[at].extend([set_state(resume as i64), returned(yielded_value(values))]);
+			if let Some(target) = target {
+				self.states[resume].extend([assign(target, symbol(SENT_FIELD)), assign(symbol(SENT_FIELD), Node::Empty)]);
+			}
 			return Some(resume);
 		}
 		if is_return(&statement) {

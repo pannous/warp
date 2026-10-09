@@ -174,6 +174,19 @@ fn is_own_scope(node: &Node) -> bool {
 	matches!(node.drop_meta(), Node::Key(_, Op::Define | Op::FatArrow | Op::Arrow, _))
 }
 
+/// `yield v`, or `x = yield v` whose x receives what `send` gives the generator object: the values and the target
+pub(crate) fn yield_statement(node: &Node) -> Option<(Vec<Node>, Option<Node>)> {
+	match node.drop_meta() {
+		Node::Key(target, Op::Assign, value) => yielded(value).map(|values| (values, Some(target.as_ref().clone()))),
+		other => yielded(other).map(|values| (values, None)),
+	}
+}
+
+/// Where nothing is sent (a collected or inlined generator): `x = yield v` receives ø
+fn receiving_nothing(target: Option<Node>) -> Vec<Node> {
+	target.map(|target| assign(target, Node::Empty)).into_iter().collect()
+}
+
 /// The value a `yield` gives: one value, the list of several, or nothing
 pub(crate) fn yielded_value(values: Vec<Node>) -> Node {
 	match values.len() {
@@ -311,8 +324,8 @@ fn inlined_loop(variable: Node, name: &str, generator: &Generator, arguments: Ve
 /// In the generator's body: `yield v` runs the loop's body, `return` stops, a loop that may stop is followed by
 /// `if stop { break }`
 fn generator_step(node: &Node, loop_body: &dyn Fn(Vec<Node>) -> Vec<Node>, stop: &Node, stops: bool) -> Step {
-	if let Some(values) = yielded(node) {
-		return Step::Replace(loop_body(values));
+	if let Some((values, target)) = yield_statement(node) {
+		return Step::Replace(loop_body(values).into_iter().chain(receiving_nothing(target)).collect());
 	}
 	match node {
 		_ if is_return(node) => Step::Replace(vec![assign(stop.clone(), number(1)), symbol(BREAK_WORD)]),
@@ -405,9 +418,10 @@ fn collected_definitions(node: Node, generators: &HashMap<String, Generator>) ->
 			let (name, _, _) = definition(&Node::Key(head.clone(), Op::Define, body.clone())).expect("a generator");
 			let list = symbol(&[name.as_str(), YIELDED_SUFFIX].join(NAME_SEPARATOR));
 			let step = |node: &Node| -> Step {
-				if let Some(values) = yielded(node) {
+				if let Some((values, target)) = yield_statement(node) {
 					let item = Node::List(vec![yielded_value(values)], Bracket::Square, Separator::None);
-					return Step::Replace(vec![Node::Key(Box::new(list.clone()), Op::AddAssign, Box::new(item))]);
+					let collect = Node::Key(Box::new(list.clone()), Op::AddAssign, Box::new(item));
+					return Step::Replace(std::iter::once(collect).chain(receiving_nothing(target)).collect());
 				}
 				match node {
 					_ if is_return(node) => Step::Replace(vec![Node::List(vec![symbol(RETURN_WORD), list.clone()], Bracket::None, Separator::Space)]),

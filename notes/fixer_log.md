@@ -249,3 +249,4 @@ Running list of the small fixes done by the fixer session (branches fix-<topic>)
 - 2026-10-09 generators-zip: take/first/zip/list/sum over generators pull lazily (generator_consumers.rs); a 0-argument generator call in an argument list is a bare symbol.
 - 2026-10-09 generators-generator: (x*x for x in xs) standing alone gave ø; now a generator (generator_expressions.rs); lazy_loops before generator objects. Filed sum-helper (word_sum warning).
 - 2026-10-09 generators-yield: yield from / yield each / yield* delegate (generators.rs delegations); a parameterless Python def with yield was a getter form, now a definition.
+- 2026-10-09 generators-send: x = yield v + g.send(w); numbered ·result temps in class_methods

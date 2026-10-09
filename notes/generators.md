@@ -67,3 +67,12 @@
   generator without the state machine; not needed now.
 - a recursive generator lazily (each level an object of its own).
 - Done (card ruby-loop): Ruby `loop do … end` and `while c … end` inside a `def … end` parse (parser skip_end_line, welcome_forms endless_loop).
+
+## send (card generators-send)
+`x = yield v` receives what `g.send(w)` gives: the object has the field `generator·sent` and the method
+`send(generator·value) := { generator·sent = generator·value; self.next() }`; the state after the yield starts with
+`x = generator·sent; generator·sent = ø`, so `next(g)` gives x ø. A collected or inlined generator receives ø
+(`generators::yield_statement`, `receiving_nothing`). Prime with `next(g)` first, as in Python.
+Side fix: class_methods' temp pair of a changing method call is numbered per call site (`next·result·3`): send's
+`self.next()` and main's `a.next()` shared `next·result` and the scope analyzer asked whose it was.
+Probe: probes/generators/send.warp.
