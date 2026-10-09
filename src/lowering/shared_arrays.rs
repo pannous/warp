@@ -8,13 +8,13 @@
 //! Linear arrays (notes/linear_arrays.md): `linear xs = int[n]`, `linear xs = float[n]` are rewritten the same way into
 //! the module's own words over a block of linear memory (`linear_get`, `linear_set` … in wasm_emitter/linear_arrays.rs);
 //! they stay in their task's memory, so a `go` cannot take one. Declaring one is discouraged: the compiler picks where
-//! number lists live by itself.
+//! number lists live by itself; plain `xs = float[n]` arrays paired by dot or `.*` become linear ones (picked_linear).
 //! Shared values (P106): `shared done = false`, `shared n = 0`, `shared x = 0.5` are one-cell arrays: a read of `n` is
 //! `shared_get(n, 1)`, `n = v` is `shared_set(n, 1, v)`, `n += v` is `shared_add(n, 1, v)`; a boolean is the Int 1 or 0.
 
 use crate::node::{Bracket, Node, Separator};
 use crate::operators::Op;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 /// `shared xs = int[n]` and its synonym `atomic` (P44)
 const SHARED_WORDS: [&str; 2] = ["shared", "atomic"];
@@ -80,13 +80,15 @@ fn element_words(kind: Shared) -> [&'static str; 3] {
 }
 
 pub fn lower(node: Node) -> Node {
-	let mut node = crate::gpu_maps::kept_on_gpu(node);
+	let node = crate::gpu_maps::kept_on_gpu(node);
+	// the first array the program itself declares linear, before the compiler picks any
+	let mut first_linear: Option<(Node, Element)> = None;
+	node.visit(&mut |part| if let Some((_, _, shared)) = declaration(part).filter(|(_, _, shared)| shared.storage == Storage::Linear) {
+		first_linear.get_or_insert((part.clone(), shared.element));
+	});
+	let mut node = picked_linear(node);
 	let mut declared = HashMap::new();
-	let mut first_linear: Option<Node> = None;
 	node.visit(&mut |part| if let Some((name, _, shared)) = declaration(part) {
-		if shared.storage == Storage::Linear && first_linear.is_none() {
-			first_linear = Some(part.clone());
-		}
 		declared.insert(name, shared);
 	});
 	// a map of a map's result is one too: until no name is added
@@ -103,15 +105,99 @@ pub fn lower(node: Node) -> Node {
 	if (declared.is_empty() && !reduces_on_gpu(&node)) || matches!(node, Node::Error(_)) {
 		return node;
 	}
-	// dot and `.*` of linear arrays stay in linear memory, the compiler does not pick it for them yet (card compiler-picks-dot)
-	if let Some(linear) = first_linear.filter(|_| pairs == 0) {
+	// a program pairing linear arrays by dot or `.*` keeps its word unhinted (card linear-hint, tests/lists/test_linear_hint.rs)
+	if let Some((linear, element)) = first_linear.filter(|_| pairs == 0) {
 		crate::normalize::set_position_of(&linear);
-		crate::diagnostic::educate_once(LINEAR_TOPIC, "linear xs = int[n]", "xs = int[n]",
+		let array = if element == Element::Float { FLOAT_WORDS[0] } else { "int" };
+		crate::diagnostic::educate_once(LINEAR_TOPIC, &format!("linear xs = {array}[n]"), &format!("xs = {array}[n]"),
 			"the compiler picks where a list of numbers lives by itself, linear memory included; `linear` only forces it");
 	}
 	let functions = definitions(&node);
 	let shared_parameters = shared_parameters(&node, &functions, &declared);
 	Rewrite { declared, functions: &functions, shared_parameters: &shared_parameters }.node(node, None)
+}
+
+/// Plain `xs = float[n]` arrays paired by dot or `.*` with another float array, every other use one linear arrays
+/// support (cells, count, `for x in xs`): declared `linear`, so dot runs as linear_dotf over the blocks (10^6: 3 ms
+/// instead of 13 ms over GC lists)
+fn picked_linear(node: Node) -> Node {
+	let mut assignments: HashMap<String, usize> = HashMap::new();
+	node.visit(&mut |part| if let Some(name) = float_array_assignment(part) {
+		*assignments.entry(name).or_default() += 1;
+	});
+	let mut picked: HashSet<String> = assignments.into_iter().filter(|(_, count)| *count == 1).map(|(name, _)| name).collect();
+	// dropping one array may leave its partner unpaired: until none is dropped
+	loop {
+		let kept: HashSet<String> = picked.iter().filter(|name| only_linear_uses(&node, name, &picked)).cloned().collect();
+		if kept.len() == picked.len() {
+			break;
+		}
+		picked = kept;
+	}
+	if picked.is_empty() { node } else { declared_linear(node, &picked) }
+}
+
+/// `xs = float[n]`, plain or declared linear: xs
+fn float_array_assignment(node: &Node) -> Option<String> {
+	let Node::Key(target, Op::Assign, value) = node.drop_meta() else { return None };
+	let Node::Key(element, Op::Hash, _) = value.drop_meta() else { return None };
+	let Node::Symbol(name) = target.drop_meta() else { return None };
+	FLOAT_WORDS.contains(&element.name().as_str()).then(|| name.clone())
+}
+
+/// Whether every mention of name is one a linear array supports, and one of them pairs it with another of `picked`
+fn only_linear_uses(node: &Node, name: &str, picked: &HashSet<String>) -> bool {
+	let (mut mentions, mut supported, mut pairings) = (0, 0, 0);
+	node.visit(&mut |part| {
+		mentions += usize::from(names(part, name));
+		let (uses, paired) = linear_uses(part, name, picked);
+		supported += uses;
+		pairings += paired;
+	});
+	pairings > 0 && supported == mentions
+}
+
+fn names(node: &Node, name: &str) -> bool {
+	matches!(node.drop_meta(), Node::Symbol(symbol) if symbol == name)
+}
+
+/// The mentions of name that part makes as a linear array supports them, and how many of those pair it with another
+/// array of `picked`
+fn linear_uses(part: &Node, name: &str, picked: &HashSet<String>) -> (usize, usize) {
+	let is_name = |node: &Node| names(node, name);
+	let is_picked = |node: &Node| matches!(node.drop_meta(), Node::Symbol(symbol) if picked.contains(symbol));
+	let paired = |left: &Node, right: &Node| {
+		let uses = usize::from(is_name(left)) + usize::from(is_name(right));
+		if is_picked(left) && is_picked(right) { (uses, uses) } else { (0, 0) }
+	};
+	if let Some((receiver, _, operand)) = crate::broadcasting::element_wise_parts(part) {
+		return paired(&receiver, &operand);
+	}
+	let single = match part.drop_meta() {
+		Node::Key(..) if float_array_assignment(part).as_deref() == Some(name) => true,
+		Node::Key(array, Op::Hash, index) if is_name(array) => !matches!(index.drop_meta(), Node::Empty),
+		Node::Key(empty, Op::Hash, array) => matches!(empty.drop_meta(), Node::Empty) && is_name(array),
+		Node::Key(array, Op::Dot, word) => is_name(array) && COUNTING_WORDS.contains(&word.name().as_str()),
+		Node::List(items, Bracket::Round, _) if items.len() == 3 && items[0].name() == DOT_WORD => return paired(&items[1], &items[2]),
+		Node::List(items, _, _) => match items.as_slice() {
+			[word, array] => COUNTING_WORDS.contains(&word.name().as_str()) && is_name(array),
+			[word, _, in_word, array, _] => word.name() == "for" && in_word.name() == "in" && is_name(array),
+			_ => false,
+		},
+		_ => false,
+	};
+	(usize::from(single), 0)
+}
+
+/// The assignments of `picked` arrays declared `linear`
+fn declared_linear(node: Node, picked: &HashSet<String>) -> Node {
+	if declaration(&node).is_some() {
+		return node;
+	}
+	if float_array_assignment(&node).is_some_and(|name| picked.contains(&name)) {
+		return Node::List(vec![Node::Symbol(LINEAR_WORD.into()), node], Bracket::None, Separator::Space);
+	}
+	node.map_children(|child| declared_linear(child, picked))
 }
 
 /// The names a program declares shared, arrays and values
