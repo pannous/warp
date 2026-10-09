@@ -48,10 +48,30 @@ const hooks = {
 
 const compilerText = (pointer, length) => readText(compiler, pointer, length);
 
+// the response's bytes, each chunk told to the page as {type: "loading", loaded, total} (the page shows the progress,
+// card firefox-hello-hang); a compressed response's Content-Length counts other bytes, so its total stays unknown
+async function downloaded(response) {
+	const total = response.headers.get("Content-Encoding") ? 0 : Number(response.headers.get("Content-Length") ?? 0);
+	const chunks = [];
+	let loaded = 0;
+	for (const reader = response.body.getReader(); ;) {
+		const { done, value } = await reader.read();
+		if (done) break;
+		chunks.push(value);
+		loaded += value.length;
+		post({ type: "loading", loaded, total });
+	}
+	const bytes = new Uint8Array(loaded);
+	chunks.reduce((offset, chunk) => (bytes.set(chunk, offset), offset + chunk.length), 0);
+	return bytes;
+}
+
 async function loadCompiler() {
 	const response = await fetch(COMPILER_URL);
 	if (!response.ok) throw new Error(`${COMPILER_URL}: HTTP ${response.status}; build it with web/playground/build.sh`);
-	const { instance } = await WebAssembly.instantiate(await response.arrayBuffer(), { warp_host: warpHost(() => compiler.memory, hooks) });
+	const bytes = await downloaded(response);
+	post({ type: "compiling" });
+	const { instance } = await WebAssembly.instantiate(bytes, { warp_host: warpHost(() => compiler.memory, hooks) });
 	compiler = instance.exports;
 }
 
@@ -123,6 +143,11 @@ function handleNavigation(path) {
 // the page's path for the playground's address bar: only a program with routes has one (lowering/routes.rs)
 const addressOf = holder => holder.exports[PAGE_ROUTES_EXPORT] ? holder.pagePath ?? ROOT_PATH : undefined;
 
+// a form of the page was sent (playground.js submitForm): the live run's route answers it, then its page shows anew
+function handleSubmit(request) {
+	if (live) showHandled(live, runSubmitted(live, hooks, request));
+}
+
 // a page event (playground.js): the live run's handler
 function handleEvent({ event, detail }) {
 	if (live) showHandled(live, runPageEvent(live, hooks, event, detail));
@@ -192,6 +217,7 @@ self.onmessage = async ({ data }) => {
 	if (data.warm) return warmUp();
 	if (data.event) return handleEvent(data);
 	if (data.navigate) return handleNavigation(data.navigate);
+	if (data.submit) return handleSubmit(data.submit);
 	if (live) stopListening(live);
 	live = undefined;
 	if (!compiler) await loadCompiler();

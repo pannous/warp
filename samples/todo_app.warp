@@ -1,0 +1,36 @@
+// A full-stack todo list from one source: `warp serve samples/todo_app.warp`, then open http://localhost:8080/
+// (notes/server_routes.md). The server keeps the table in todo_app.database.sqlite; the playground runs it as one page,
+// the table in its memory
+class Todo{title: text; done: bool}
+stored todos: [Todo]                           // the table todos, one row per Todo
+
+// data for anyone: GET /api/todos, GET /api/open
+get "/api/todos" { todos }
+get "/api/open" { todos where not done }       // a filter is SQL where SQL says the same
+
+// an HTML form POSTs its fields; a browser's form is sent back to its page, curl gets the new todo
+post "/todos" { todos.add(Todo(request.body.title, false)) }
+
+// a path parameter, as a page's route has: POST /todos/2/toggle
+post "/todos/:id:int/toggle" {
+	todo = (todos where it.id == id)#1
+	todo.done = not todo.done                  // written through to its row
+	todo
+}
+
+route "/" {
+	div{
+		h1{ "Todos" }
+		form{ method:"post" action:"/todos"
+			input{ name:"title" aria-label:"new todo" placeholder:"what next?" }
+			button{ "add" }
+		}
+		ul{ for todo in todos {
+			li{
+				form{ method:"post" action:"/todos/" + todo.id + "/toggle" button{ if todo.done then "☑" else "☐" } }
+				todo.title
+			}
+		} }
+		p{ count(todos where not done) + " open" }
+	}
+}

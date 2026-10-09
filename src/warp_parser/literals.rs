@@ -304,10 +304,10 @@ impl WarpParser {
 
 	/// `2 km` multiplies only when `km` is a known unit; any other spaced word keeps the list `[2 foo]`, and so does a
 	/// unit word that starts the next entry or assignment: `{w:2 h:3}`; a spaced colon ends a condition instead:
-	/// `if x > 1500 m : "far"`
+	/// `if x > 1500 m : "far"`. σ joins like a unit: `5 ± 1 σ` is the Gaussian `5 ± 1σ` (card trailing-symbol)
 	pub(super) fn at_spaced_unit(&self) -> bool {
 		// `2 m²`: the power is no part of the unit's name
-		self.spaced_word().is_some_and(|word| crate::units::names_unit(word.trim_end_matches(|c: char| superscript_digit(c).is_some())))
+		self.spaced_word().is_some_and(|word| word == crate::uncertain::SIGMA || crate::units::names_unit(word.trim_end_matches(|c: char| superscript_digit(c).is_some())))
 	}
 
 	/// The word after one or more spaces, unless it starts the next entry or assignment

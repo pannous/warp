@@ -1,0 +1,3 @@
+post "/todos" { request.body.title }
+post "/todos/:id:int/toggle" { id * 2 }
+get "/hello/:name" { "hi " + name }

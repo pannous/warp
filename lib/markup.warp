@@ -55,11 +55,17 @@ html_element(tag:any, content:any, scope:any) := {
 	"<" + tag + attributes + ">" + children + "</" + tag + ">"
 }
 
-// the items of an element's block, or its one item
+// the items of an element's block, or its one item; a line of pairs (`form{ method:"post" action:"/t"` before more
+// lines) is its pairs, attributes among them
 html_items(content:any) := {
 	if content == ø { return [] }
-	if content is list and not html_is_element(content) { return content }
-	[content]
+	if not (content is list) or html_is_element(content) { return [content] }
+	var items = []
+	for item in content {
+		if item is list and not html_is_element(item) and html_holds_pairs(item) { for pair in item { items.add(pair) } }
+		else { items.add(item) }
+	}
+	items
 }
 
 // `class:"box"` inside an element: an attribute when its name is one and its value plain (or inline CSS for style)
@@ -67,7 +73,7 @@ html_is_attribute(item:any, tag:any) := {
 	if not (item is pair) { return false }
 	let name = keys(item)#1
 	let value = values(item)#1
-	named = starts_with(name, "data-") or name == "key" or (contains(html_attributes, name) and not (tag == "head" and contains(html_elements, name)))
+	named = starts_with(name, "data-") or starts_with(name, "aria-") or name == "key" or (contains(html_attributes, name) and not (tag == "head" and contains(html_elements, name)))
 	if not named { return false }
 	if (name == "style" or name == "data-warp-starting-style") and tag != "head" and html_is_declarations(value) { return true }
 	not (value is pair) and (not (value is list) or not html_holds_pairs(value))

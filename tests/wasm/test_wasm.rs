@@ -954,7 +954,6 @@ fn test_wasm_stuff() {
 
 // ⚠️ CANNOT USE is! in WASM! ONLY via #[test] fn testRun();
 #[test]
-#[ignore]
 fn test_recent_random_bugs() {
 	// fixed now thank god
 	// if (!testRecentRandomBugsAgain){return};
@@ -962,11 +961,11 @@ fn test_recent_random_bugs() {
 	is!("-42", -42);
 	is!("‖3‖-1", 2);
 	{
-		is!("test42+1", 43); // OK in WASM too? todo
-		is!("square 3*42 > square 2*3", 1);
-		{
+		skip!( // legacy: test42 was a C++ test function; no square builtin (test_squares, user)
+			is!("test42+1", 43); // OK in WASM too? todo
 			test_squares();
-		}
+		);
+		is!("use math; square(3*42) > square(2*3)", 1); // warp's meaning (decision 2026-10-09): use math, parentheses
 	}
 	//			WebAssembly.Module doesn't validate: control flow returns with unexpected type. F32 is !a I32, in function at index 0
 	is!("42/2", 21); // in WEBAPP
@@ -974,7 +973,7 @@ fn test_recent_random_bugs() {
 	is!("42.1", 42.1);
 	// main returns int, should be pointer to value! let array_header_32 : result => smart pointer!
 	//			Ambiguous mixing of functions `ƒ 1 + ƒ 1 ` can be read as `ƒ(1 + ƒ 1)` or `ƒ(1) + ƒ 1`
-	is!("id 3*42 > id 2*3", 1);
+	skip!(is!("id 3*42 > id 2*3", 1);); // legacy: no id builtin (user)
 	is!("1-‖3‖/-3", 2);
 	is!("i=true; !i", false);
 	// these fail LATER in tests!!
@@ -987,7 +986,7 @@ fn test_recent_random_bugs() {
 		is!("i*=3",  0);
 	);
 	is!("maxi=3840*2160", 3840 * 2160);
-	is!("√π²", 3);
+	is!("√π²", PI); // √π² = π (decision 2026-10-09)
 	is!("i=-9;√-i", 3);
 	is!("1- -3", 4);
 	is!("width=height=400;height", 400);
@@ -1230,7 +1229,6 @@ fn test_logarithm() {
 }
 
 #[test]
-#[ignore]
 fn test_logarithm2() {
 	//	float ℯ = 2.7182818284590;
 
@@ -1239,17 +1237,21 @@ fn test_logarithm2() {
 	is!("use math; log10(100)", 2.);
 	is!("use math; 10⌞100", 2.); // read 10'er Logarithm
 	is!("use math; 100⌟10", 2.); // read 100 lowered by 10's
-	is!("use math; 10⌟100", 2.);
-	is!("use math; ℯ⌟", 2.);
-	is!("use math; ℯ⌟", 2.);
+	is!("use math; ℯ⌟", 1.); // P226: the postfix ⌟ is the natural log
+	is!("use math; ℯ⌟", 1.);
 	is!("log10(100)", 2.); // requires pre-parsing lib and dictionary lookup
-	is!("₁₀⌟100", 2.); // requires pre-parsing lib and dynamic operator-list extension OR 10⌟ as function name
-	is!("10⌟100", 2.); // requires pre-parsing lib and dynamic operator-list extension OR 10⌟ as function name
+	skip!( // P226b (queued): what ⌟ with the base first means
+		is!("use math; 10⌟100", 2.);
+		is!("₁₀⌟100", 2.); // requires pre-parsing lib and dynamic operator-list extension OR 10⌟ as function name
+		is!("10⌟100", 2.); // requires pre-parsing lib and dynamic operator-list extension OR 10⌟ as function name
+	);
 
 	//    eq!(ln(e),abs(1));
-	is!("use log;ℯ = 2.7182818284590;ln(ℯ)", 1.);
-	is!("use log;ℯ = 2.7182818284590;ln(ℯ)", 1.);
-	is!("ℯ = 2.7182818284590;ln(ℯ*ℯ)", 2.);
+	skip!( // legacy: there is no module log, and ℯ is a constant (P130)
+		is!("use log;ℯ = 2.7182818284590;ln(ℯ)", 1.);
+		is!("use log;ℯ = 2.7182818284590;ln(ℯ)", 1.);
+		is!("ℯ = 2.7182818284590;ln(ℯ*ℯ)", 2.);
+	);
 	is!("ln(1)", 0.);
 	is!("log10(100000)", 5.);
 	is!("log10(10)", 1.);
@@ -1337,11 +1339,10 @@ fn test_host_download() {
 	}
 }
 #[test]
-#[ignore]
 fn test_sinus2() {
 	is!(
 		r#"double sin(double x){
-    x = modulo_double(x,tau);
+    x = x % tau;
     let z : double = x*x
     let w : double = z*z
     S1  = -1.66666666666666324348e-01,
@@ -1350,7 +1351,7 @@ fn test_sinus2() {
     S4  =  2.75573137070700676789e-06,
     S5  = -2.50507602534068634195e-08,
     S6  =  1.58969099521155010221e-10
-    if(x >= PI) return -sin(modulo_double(x,PI));
+    if(x >= PI) return -sin(x % PI);
     let r : double = S2 + z*(S3 + z*S4) + z*w*(S5 + z*S6);
     return x + z*x*(S1 + z*r);
 }; sin π/2"#,
@@ -1359,11 +1360,10 @@ fn test_sinus2() {
 }
 
 #[test]
-#[ignore]
 fn test_sinus() {
 	is!(
 		r#"double sin(double x){
-    x = modulo_double(x,tau)
+    x = x % tau
     let z : tdouble = x*x
     let w : tdouble = z*z
     S1  = -1.66666666666666324348e-01, /* 0xBFC55555, 0x55555549 */
@@ -1373,12 +1373,12 @@ fn test_sinus() {
     S5  = -2.50507602534068634195e-08, /* 0xBE5AE5E6, 0x8A2B9CEB */
     S6  =  1.58969099521155010221e-10  /* 0x3DE5D93A, 0x5ACFD57C */
     //	            tau =  6.283185307179586 // 2π
-    if(x >= PI) return -sin(modulo_double(x,PI))
+    if(x >= PI) return -sin(x % PI)
     let r : tdouble = S2 + z*(S3 + z*S4) + z*w*(S5 + z*S6)
     return x + z*x*(S1 + z*r)
-    "};sin π/2"#,
-		1.0000000002522271
-	); // IT WORKS!!! todo: why imprecision?
+    };sin π/2"#,
+		1
+	); // IT WORKS!!! the C++ wasp gave 1.0000000002522271, warp exactly 1 like test_sinus2
 }
 
 #[test]

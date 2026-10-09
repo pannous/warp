@@ -826,6 +826,8 @@ const FILE_URL_PREFIX: &str = "file://";
 /// lib/units.warp: quantities whose unit is known only at run time, `quantity("5 km")` (notes/units_runtime.md)
 const UNITS_MODULE: &str = "units";
 const QUANTITY: &str = "quantity";
+/// A served route's path parameters (`post "/todos/:id:int/toggle"`, lowering/serve.rs) are read by the router's words
+const ROUTE_PARTS: [&str; 3] = ["route_segment", "route_parameter", "route_matches"];
 /// lib/agent.warp: `agent "prompt"` asks Claude (card g_X_F0)
 const AGENT_MODULE: &str = "agent";
 /// Whether a program needs a module
@@ -836,7 +838,7 @@ type NeededBy = fn(&Node) -> bool;
 const IMPLICIT_MODULES: [(&str, NeededBy); 6] = [
 	("file", mentions_file_url),
 	("markup", |_| crate::pipeline::renders_itself()),
-	("router", |program| defined(program, crate::routes::PAGE_ROUTES).is_some()),
+	("router", |program| defined(program, crate::routes::PAGE_ROUTES).is_some() || { let called = called_names(&statements(program.clone())); ROUTE_PARTS.iter().any(|word| called.contains(*word)) }),
 	("regex", |program| defined(program, crate::routes::PAGE_ROUTE_INDEX).is_some_and(|index| called_names(&[index]).contains(crate::routes::REGEX_MATCH))),
 	(UNITS_MODULE, |program| calls_undefined(program, QUANTITY)),
 	(AGENT_MODULE, |program| calls_undefined(program, AGENT_MODULE)),

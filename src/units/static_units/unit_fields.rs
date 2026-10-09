@@ -41,8 +41,7 @@ fn field_unit(type_name: &str) -> Option<Signature> {
 }
 
 /// A field type that is a unit (`km`): the quantity it measures (`m` of km, `m/s` of km/h) and its SI amount per unit
-/// (1000 of km); a stored column keeps it in its type (`NUMERIC km`, database.rs)
-#[cfg(feature = "native")]
+/// (1000 of km); a stored column keeps it in its type (`NUMERIC km`, database.rs), the browser's store in its schema
 pub(crate) fn unit_type(type_name: &str) -> Option<(String, f64)> {
 	let units = crate::units::unit_expression(&crate::warp_parser::parse(type_name))?;
 	let per_unit = crate::units::scale(&units, |factor| super::base_unit(factor.unit.dimension));
