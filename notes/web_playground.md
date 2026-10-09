@@ -2,7 +2,12 @@
 
 Run it: `web/playground/build.sh && python3 -m http.server 8000` in the repository root, then open
 http://localhost:8000/web/playground/ (`?example=<name>` picks a tour example or a samples/ file).
-Probe: `probes/web_playground.py [sample…]` (headless agent-browser; compares every sample's value with the CLI's).
+Probe: `probes/web_playground.py [sample…]` (headless agent-browser; compares every sample's value with the CLI's,
+exit 1 on a difference). Presentation is no difference: markup the page renders (report.html) is compared with the
+HTML text the CLI prints, a program with `test` lines with `warp test` (the page's Run runs tests), a value ø with a
+CLI run that shows no » line. Samples in excluded_samples.txt are skipped (no native raylib/SDL window opens).
+Each step waits for its run to finish (#status), not a fixed sleep: after `use python` the worker is busy loading
+Pyodide and 1.5 s sleeps read the previous run (six false FAILs, card web-playground-probe).
 
 ## The tour (examples.js)
 In the order of the guide's chapters (card playground-redesign, 2026-10-07): small examples with one idea each and an

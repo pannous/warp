@@ -246,6 +246,11 @@ fn shown(signature: &Signature) -> String {
 	if factors.is_empty() { "a plain number".to_string() } else { units_text(&factors) }
 }
 
+/// ø, which has no dimension: an optional unit field may hold it
+fn is_nothing(node: &Node) -> bool {
+	matches!(node.drop_meta(), Node::Empty)
+}
+
 fn dimension_error(op: Op, left: &Signature, right: &Signature) -> Stop {
 	Stop::Error(format!("DimensionError: {} {op} {}: the units do not match", shown(left), shown(right)))
 }
@@ -415,6 +420,12 @@ impl Inference {
 				let left = self.as_text(left, &left_signature, left_units)?;
 				let right = self.as_text(right, &right_signature, right_units)?;
 				Ok((Node::Key(Box::new(left), Op::Add, Box::new(right)), vec![]))
+			}
+			// `r.distance == ø` of an optional unit field: ø has no dimension, any value may be it
+			Node::Key(left, op @ (Op::Eq | Op::Ne), right) if is_nothing(&left) || is_nothing(&right) => {
+				let (left, _) = self.infer(*left)?;
+				let (right, _) = self.infer(*right)?;
+				Ok((Node::Key(Box::new(left), op, Box::new(right)), vec![]))
 			}
 			Node::Key(left, op, right) if matches!(op, Op::Add | Op::Sub | Op::Mul | Op::Div) || op.is_comparison() => {
 				let (left, left_signature) = self.infer(*left)?;
