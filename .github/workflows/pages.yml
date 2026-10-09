@@ -81,6 +81,34 @@ jobs:
         path: _site
         retention-days: 1
 
+  # the whole test suite in headless Chrome (cargo browser-test, notes/web_playground.md): browser tests run in CI only
+  # (user 2026-10-09). Beside the deploy, not before it: a failure shows in the run without holding the page back
+  browser-suite:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+    - uses: actions/checkout@v4
+    - uses: dtolnay/rust-toolchain@stable
+      with:
+        targets: wasm32-wasip1
+    - uses: actions/cache@v4
+      with:
+        path: |
+          ~/.cargo/registry
+          ~/.cargo/git
+          target
+        key: ${{ runner.os }}-browser-suite-${{ hashFiles('**/Cargo.lock') }}
+    - name: Install jco (build.sh components, for the `use wasm` tests)
+      run: npm install -g @bytecodealliance/jco
+    - name: "Install wasm-tools (build.sh components: the WIT signatures)"
+      uses: taiki-e/install-action@v2
+      with:
+        tool: wasm-tools
+    - name: Install agent-browser (headless Chrome)
+      run: npm install -g agent-browser && agent-browser install --with-deps
+    - name: The test suite in headless Chrome
+      run: cargo browser-test
+
   # every tour example shows what it promises (examples.js) and no example or sample writes an error or warning to the
   # console, in the collected site, else no deploy
   tour-chrome:
