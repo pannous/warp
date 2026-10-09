@@ -257,9 +257,11 @@ pub struct CompiledModule {
 
 /// The passes over the source forms, in order, each reading what the one before it left: definitions and sugar become
 /// the forms every later pass knows (`def f(x) {…}` is `f(x) := {…}`), modules are resolved
-const SOURCE_PASSES: [fn(Node) -> Node; 99] = [
+const SOURCE_PASSES: [fn(Node) -> Node; 100] = [
 	// `"a \(x) b"` → `"a " + text_form(x) + " b"` (interpolation.rs) first, so every pass reads the holes as code
 	crate::interpolation::lower_program,
+	// a shader's `$name` holes (shader_holes.rs) as `name: name` in the values map of each paint of it
+	crate::shader_holes::lower,
 	crate::analyzer::lower_inline_unions,
 	// `on ask {…} in {…}` before any pass reads `{…} in {…}` as membership or an emit as nothing
 	crate::scoped_handlers::lower,
