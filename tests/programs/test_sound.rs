@@ -45,8 +45,7 @@ fn notes_are_frequencies() {
 /// Every note name lib/sound.warp defines (C2 … B6) is its frequency as note(name) computes it, to a hundredth of a Hz
 #[test]
 fn the_note_table_matches_note() {
-	// written out: test_std_coverage looks for each library word in the tests' text; an octave per program, because a
-	// list of many calls compiles slowly (card list-calls-slow)
+	// written out: test_std_coverage looks for each library word in the tests' text; an octave per program keeps each small
 	const OCTAVES: [&str; 5] = ["C2 D2 E2 F2 G2 A2 B2", "C3 D3 E3 F3 G3 A3 B3", "C4 D4 E4 F4 G4 A4 B4", "C5 D5 E5 F5 G5 A5 B5", "C6 D6 E6 F6 G6 A6 B6"];
 	for octave in OCTAVES {
 		let differences: Vec<String> = octave.split(' ').map(|name| format!("abs({name} - note(\"{name}\"))")).collect();
