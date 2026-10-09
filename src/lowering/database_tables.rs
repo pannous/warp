@@ -728,13 +728,13 @@ fn opened(statement: &Node, tables: &HashMap<String, Table>, file: &str, open: &
 	let class = &table.class;
 	let required: Vec<&str> = table.references.iter().map(|(field, _)| field.as_str()).filter(|field| !table.is_optional(field)).collect();
 	// a required key without its row (deleted, or the 0 of a column added for it) leaves its row out, reported
-	let found = |field: &str| match is_own_reference(table, field) {
-		true => format!("count({}) > 0", matching_rows(table, field, &column_cell(table, ROW, field))),
-		false => format!("{} != ø", referenced_instance(table, field, &column_cell(table, ROW, field))),
+	let found = |field: &str, present: bool| match is_own_reference(table, field) {
+		true => format!("count({}) {} 0", matching_rows(table, field, &column_cell(table, ROW, field)), if present { ">" } else { "==" }),
+		false => format!("({}) {} ø", referenced_instance(table, field, &column_cell(table, ROW, field)), if present { "!=" } else { "==" }),
 	};
 	let warnings: String = required.iter().map(|field| format!(
-		"if not ({found}) {{ warning(\"{variable} row \" + {ROW}#1 + \": {field} \" + {cell} + \" is no row of {target}; the row is left out (declare {field}: {class}? to keep it, with ø)\") }}\n",
-		found = found(field), cell = column_cell(table, ROW, field), target = table.reference(field).unwrap_or_default(),
+		"if {missing} {{ warning(\"{variable} row \" + {ROW}#1 + \": {field} \" + {cell} + \" is no row of {target}; the row is left out (declare {field}: {class}? to keep it, with ø)\") }}\n",
+		missing = found(field, false), cell = column_cell(table, ROW, field), target = table.reference(field).unwrap_or_default(),
 		class = class_of(&table.fields.iter().find(|(name, _, _)| name == field).map(|(_, field_type, _)| field_type.clone()).unwrap_or_default()))).collect();
 	let checks = match warnings.is_empty() {
 		true => String::new(),
@@ -742,7 +742,7 @@ fn opened(statement: &Node, tables: &HashMap<String, Table>, file: &str, open: &
 	};
 	let kept = match required.is_empty() {
 		true => String::new(),
-		false => format!(" if {}", required.iter().map(|field| found(field)).collect::<Vec<_>>().join(" and ")),
+		false => format!(" if {}", required.iter().map(|field| found(field, true)).collect::<Vec<_>>().join(" and ")),
 	};
 	// the identity map: the instance of each id met, a hash table keyed by the id (card int-map)
 	let known = format!("{ROW}#1 in {MET}");
@@ -840,8 +840,9 @@ if {loaded_found} {{
 }} else [{KEPT}({ROW}) for {ROW} in {ROWS}]
 }}
 {OF}({KEY}) := {{
+global {LOADED}
 global {MET}
-{LOAD}()
+if not {LOADED} {{ {LOAD}() }}
 if {KEY} in {MET} then {MET}[{KEY}] else ø
 }}
 {RESTORE}() := {{
