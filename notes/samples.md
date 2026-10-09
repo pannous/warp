@@ -39,7 +39,8 @@ functions since 3da746b), `x="5"; x as int` is 5, and libm called without import
 their argument at run time before).
 
 ## Still failing (2026-10-08, branch samples-run)
-All other samples run (exit code = the program's value, so sweep for `Error(` in the output, not for exit codes).
+All other samples run. The exit code is the program's Int value, and 1 after an uncaught error (card cli-error-exit),
+so a sweep for exit code 1 also finds samples whose value is 1: check for `Error(` in the output.
 The failures left, each with its reason in web/playground/excluded_samples.txt:
 - errors (malformed on purpose), life_kotlin_ranges (fails on purpose), modules (sketch: card module-manager),
   webgpu (WGSL block), netbase (needs a netbase server).
