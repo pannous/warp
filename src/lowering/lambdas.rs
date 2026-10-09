@@ -21,6 +21,8 @@ const LIST_PLACEHOLDER: &str = "loop_list";
 const START_PLACEHOLDER: &str = "loop_start";
 const CALL_PLACEHOLDER: &str = "loop_call";
 const LOOP_ITEM_PREFIX: &str = "loop_item_";
+/// The statements that may bind `it` for a lambda inside them: loops, function definitions
+const BINDING_KEYWORDS: [&str; 8] = ["for", "while", "each", "def", "fn", "fun", "function", "to"];
 
 /// An iteration word over a list: the arguments between the list and the function, the arguments of the function
 /// (`reduce` and `fold` take the accumulator and the item), and the loop it lowers to. `out`, `item`, `acc`, `list`, `index`
@@ -106,6 +108,9 @@ pub fn lower_strict(node: Node) -> Node {
 }
 
 fn lowering(node: Node, strict: bool) -> Node {
+	if let Some(error) = unbound_it(&node).filter(|_| !assigns_it(&node)) {
+		return error;
+	}
 	let mut context = Context::new();
 	extract_user_functions(&mut context, &node);
 	let first_fresh = first_fresh_number(&node);
@@ -377,14 +382,43 @@ fn shorthand_parameters(body: &Node) -> Vec<String> {
 
 /// A mention not inside a nested block or lambda: `{ return { $0 + k } }` has no `$0` of its own, the inner closure has
 fn mentions_outside_blocks(node: &Node, name: &str) -> bool {
+	mention_outside_blocks(node, name).is_some()
+}
+
+fn mention_outside_blocks<'a>(node: &'a Node, name: &str) -> Option<&'a Node> {
 	match node.drop_meta() {
-		Node::Symbol(symbol) => symbol == name,
-		Node::Key(_, Op::FatArrow, _) => false,
-		Node::Key(left, _, right) => mentions_outside_blocks(left, name) || mentions_outside_blocks(right, name),
-		Node::List(_, Bracket::Curly, _) => false,
-		Node::List(items, _, _) => items.iter().any(|item| mentions_outside_blocks(item, name)),
-		_ => false,
+		Node::Symbol(symbol) if symbol == name => Some(node),
+		Node::Key(_, Op::FatArrow, _) | Node::List(_, Bracket::Curly, _) => None,
+		Node::Key(left, _, right) => mention_outside_blocks(left, name).or_else(|| mention_outside_blocks(right, name)),
+		Node::List(items, _, _) => items.iter().find_map(|item| mention_outside_blocks(item, name)),
+		_ => None,
 	}
+}
+
+/// `[1 2].map(x => it)` in the main program: the lambda names its parameter, so its `it` is the `it` of the code around
+/// it, and nothing there binds one. A definition, block, loop or function around the lambda may bind it: not checked
+fn unbound_it(node: &Node) -> Option<Node> {
+	let binds_it = |items: &[Node]| matches!(items.first().map(Node::drop_meta), Some(Node::Symbol(word)) if BINDING_KEYWORDS.contains(&word.as_str()));
+	match node.drop_meta() {
+		Node::Key(_, Op::FatArrow, body) => match arrow_lambda(node) {
+			Some(lambda) if !lambda.params.iter().any(|param| param == IMPLICIT_PARAMETER) => mention_outside_blocks(body, IMPLICIT_PARAMETER)
+				.map(|it| Diagnostic::at(it, format!("undefined variable: {IMPLICIT_PARAMETER} (the function names its parameter {})", lambda.params.join(", "))).into_error()),
+			_ => None,
+		},
+		Node::Key(_, Op::Define, _) | Node::List(_, Bracket::Curly, _) => None,
+		Node::Key(target, Op::Assign, _) if !matches!(target.drop_meta(), Node::Symbol(_)) => None, // `f(x) = …`
+		Node::List(items, _, _) if binds_it(items) => None,
+		Node::Key(left, _, right) => unbound_it(left).or_else(|| unbound_it(right)),
+		Node::List(items, _, _) => items.iter().find_map(unbound_it),
+		_ => None,
+	}
+}
+
+/// `it = 3` anywhere: the program's own variable it
+fn assigns_it(program: &Node) -> bool {
+	let mut found = false;
+	program.visit(&mut |node| found |= matches!(node, Node::Key(target, Op::Assign, _) if matches!(target.drop_meta(), Node::Symbol(name) if name == IMPLICIT_PARAMETER)));
+	found
 }
 
 /// The parameter `name` replaced by `argument` in a lambda body, except inside an inner lambda that binds the same name
