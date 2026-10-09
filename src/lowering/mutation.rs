@@ -23,7 +23,8 @@ pub fn warn_discarded(program: Node) -> Node {
 		Node::List(statements, _, Separator::Semicolon | Separator::Newline) => {
 			for statement in &statements[..statements.len().saturating_sub(1)] {
 				if let Some((word, variable)) = copy_call(statement) {
-					warnings.push(Diagnostic::at(statement, format!("unused value of {word} {variable}: assign it (y = {word} {variable}) or write {variable}.{word}! to change {variable}")));
+					let message = format!("unused value of {word} {variable}: assign it (y = {word} {variable}) or write {variable}.{word}! to change {variable}");
+					warnings.push(Diagnostic::at(statement, message).offer(format!("change {variable}"), format!("{word} {variable}"), format!("{variable}.{word}!")));
 				}
 			}
 		}

@@ -80,7 +80,8 @@ impl WarpParser {
 		loop {
 			let ch = self.current_char();
 			if ch == '\0' {
-				return error(&format!("Unterminated string: the text opened at {quote_line}:{quote_column} has no closing `{closing}`"));
+				let message = format!("Unterminated string: the text opened at {quote_line}:{quote_column} has no closing `{closing}`");
+				return missing_closer(message, closing, crate::fixits::end_of_line(&self.input, quote_line));
 			}
 			if ch == closing {
 				self.advance(); // skip closing quote
@@ -215,7 +216,7 @@ impl WarpParser {
 		let start = self.pos + open + 1;
 		let Some(end) = closing_brace(&self.chars[start..]).map(|length| start + length) else {
 			self.advance_by(self.chars.len() - self.pos);
-			return Some(error(&format!("the {{ of `{word} {{ … }}` is never closed")));
+			return Some(missing_closer(format!("the {{ of `{word} {{ … }}` is never closed"), "}", crate::fixits::end_of_source(&self.input)));
 		};
 		let source: String = self.chars[start..end].iter().collect();
 		self.advance_by(end + 1 - self.pos);

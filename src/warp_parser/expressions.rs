@@ -553,7 +553,7 @@ impl WarpParser {
 		let inner = self.parse_expr(0);
 		self.skip_spaces();
 		if self.current_char() != '‖' {
-			return error("Missing closing ‖");
+			return missing_closer("Missing closing ‖".into(), "‖", crate::fixits::end_of_line(&self.input, self.line_nr));
 		}
 		self.advance();
 		self.finish_prefix(Op::Abs, inner)

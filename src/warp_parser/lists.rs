@@ -111,7 +111,8 @@ impl WarpParser {
 			if at_end {
 				if let Some(closer) = close.filter(|_| ch == '\0') {
 					let (line, column) = self.group_start;
-					return error(&format!("`{closer}` is missing: the group opened at {line}:{column} runs to the end of the input"));
+					let message = format!("`{closer}` is missing: the group opened at {line}:{column} runs to the end of the input");
+					return missing_closer(message, closer, crate::fixits::end_of_source(&self.input));
 				}
 				if close.is_some() {
 					self.advance(); // consume closing bracket

@@ -28,7 +28,7 @@ const BOOL_TYPE: &str = ".bool";
 const ANY_TYPE: &str = ".any";
 const LIST_TYPE_PREFIX: &str = ".list ";
 /// The builtin scalar type words warp checks a value against (analyzer admits) that W0 has a type for
-const BUILTIN_TYPE_WORDS: [&str; 13] = ["int", "integer", "long", "exact", "float", "number", "text", "string", "str", "codepoint", "char", "bool", "boolean"];
+pub(crate) const BUILTIN_TYPE_WORDS: [&str; 13] = ["int", "integer", "long", "exact", "float", "number", "text", "string", "str", "codepoint", "char", "bool", "boolean"];
 /// A value of each W0 scalar type and the run-time kind warp sees it as (a bool is an Int)
 const VALUE_KINDS: [(&str, Kind); 5] = [(BOOL_TYPE, Kind::Int), (".int", Kind::Int), (".number", Kind::Float), (".text", Kind::Text), (".codepoint", Kind::Codepoint)];
 const UNIT_TYPE: &str = ".unit";

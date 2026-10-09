@@ -201,3 +201,44 @@ fn ambiguous_call_comparison_fixes() {
 	assert_fix("say(x) := x\nsay 3 == 3", "the call compared", "yes");
 	assert_eq!(fixed_by("say(x) := x\nsay 3 == 3", "the comparison as the argument"), "say(x) := x\nsay(3 == 3)");
 }
+
+/// card more-fixes (user): an error with an evident fix offers it; a missing closer is added where it was left open
+#[test]
+fn missing_closer_fixes() {
+	assert_eq!(fixed_by("x = \"abc", "the closing \""), "x = \"abc\"");
+	assert_eq!(fixed_by("x = \"abc\ny = 2", "the closing \""), "x = \"abc\"\ny = 2");
+	assert_fix("f(x) := x + 1\nf(1", "the closing )", "2");
+	assert_fix("xs = [1, 2\n", "the closing ]", "[1 2]");
+	assert_fix("‖-3", "the closing ‖", "3");
+}
+
+#[test]
+fn misspelled_name_fixes() {
+	assert_fix("count = 3; coutn + 1", "the name count", "4");
+	assert_fix("square:=it*it; sqaure(3)", "the name square", "9");
+}
+
+#[test]
+fn written_form_fixes() {
+	assert_fix("(7 // 2)", "floor division", "3");
+	assert_eq!(fixed_by("x is 5", "a definition"), "x be 5");
+	assert_eq!(fixed_by("t = \\alpha", "the uniscript entity"), "t = \\:alpha");
+}
+
+#[test]
+fn misspelled_parameter_and_type_fixes() {
+	assert_fix("f(name, age) := age; f(nmae: \"a\", age: 3)", "the parameter name", "3");
+	assert_fix("f(x: flaot) := x * 2; f(1.5)", "the type float", "3");
+}
+
+#[test]
+fn declared_type_mismatch_fixes() {
+	assert_fix("x:int = 2.5; x", "the int of the value", "2");
+	assert_fix("x:int = 2.5; x", "x holds float", "2.5");
+	assert_eq!(fixed_by("x:int = ø", "allow ø"), "x:int? = ø");
+}
+
+#[test]
+fn unused_copy_fix() {
+	assert_fix("x = [3, 1, 2]; sort x; x", "change x", "[1 2 3]");
+}

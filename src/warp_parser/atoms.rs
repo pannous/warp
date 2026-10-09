@@ -159,7 +159,8 @@ impl WarpParser {
 			}
 			'\\' if let Some(name) = crate::uniscript_entities::bare_entity_name_at(&self.chars, self.pos) => {
 				(0..=name.len()).for_each(|_| self.advance());
-				error(&format!("a uniscript entity is written \\:{name}, not \\{name}"))
+				Diagnostic::default().message(format!("a uniscript entity is written \\:{name}, not \\{name}"))
+					.offer("the uniscript entity", format!("\\{name}"), format!("\\:{name}")).into_error()
 			}
 			_ if let Some((operator, length)) = self.bare_operator_in_block() => {
 				(0..length).for_each(|_| self.advance());

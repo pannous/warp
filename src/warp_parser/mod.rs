@@ -669,6 +669,22 @@ fn comment_hiding_a_closer(input: &str) -> Option<(usize, usize, char)> {
 	None
 }
 
+/// `(7 // 2)`: the fix `7//2`, the operands around the `//` at `line`:`column` glued to it
+fn glued_floor_division(diagnostic: Diagnostic, input: &str, line: usize, column: usize) -> Diagnostic {
+	let text: Vec<char> = input.lines().nth(line - 1).unwrap_or_default().chars().collect();
+	let before = text[..column - 1].iter().rposition(|c| !c.is_whitespace());
+	let after = text[column + 1..].iter().position(|c| !c.is_whitespace()).map(|offset| column + 1 + offset);
+	let (Some(before), Some(after)) = (before, after) else { return diagnostic };
+	let written: String = text[before..=after].iter().collect();
+	diagnostic.offer("floor division", written, format!("{}//{}", text[before], text[after]))
+}
+
+/// The error `message`, fixed by adding the missing `closer` at `at` (line, column)
+pub(super) fn missing_closer(message: String, closer: impl Into<String>, at: (usize, usize)) -> Node {
+	let closer = closer.into();
+	Diagnostic::default().message(message).offering(crate::fixits::inserted(format!("the closing {closer}"), closer, at)).into_error()
+}
+
 /// Parse-only path for untrusted data: nothing is evaluated, no word is guessed to be a boolean
 pub fn parse_data(input: &str) -> Node {
 	WarpParser::parse_with_options(input, ParserOptions::data())
@@ -1062,7 +1078,8 @@ impl WarpParser {
 
 	pub fn parse_with_options(input: &str, options: ParserOptions) -> Node {
 		if let Some((line, column, closer)) = comment_hiding_a_closer(input).filter(|_| !options.data_mode) {
-			return error(&format!("`//` at {line}:{column} starts a comment that hides the closing `{closer}`: floor division is written glued, a//b"));
+			let message = format!("`//` at {line}:{column} starts a comment that hides the closing `{closer}`: floor division is written glued, a//b");
+			return glued_floor_division(Diagnostic::default().message(message), input, line, column).into_error();
 		}
 		let mut parser = WarpParser::new_with_options(input.to_string(), options);
 		let program = parser.parse_list_with_separators(None, Bracket::None);
