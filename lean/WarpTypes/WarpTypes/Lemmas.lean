@@ -14,7 +14,8 @@ theorem value_ctx {Γ v t} (h : HasType P Γ v t) (hv : v.isValue = true) (Γ' :
   | int => exact .int
   | num => exact .num
   | qty => exact .qty
-  | text => exact .text
+  | text h => exact .text h
+  | codepoint h => exact .codepoint h
   | unit => exact .unit
   | nil => exact .nil
   | ref => exact .ref
@@ -43,14 +44,15 @@ theorem number_sub_arithTy {t : Ty} (b : Ty) (ht : sub .number t = true) : sub .
   · rfl
   · simp at hj; exact absurd (sub_trans ht hj.1) (by decide)
 
-theorem repeat_typed {Γ n tn} (s : String) (hn : HasType P Γ n tn) :
-    ∃ t', HasType P Γ (repeatValues s n) t' ∧ sub t' (repeatTy .text tn) = true ∧ sub t' (repeatTy tn .text) = true := by
+theorem repeat_typed {Γ n tn} (s : String) {ts : Ty} (hts : ts.isText = true) (hn : HasType P Γ n tn) :
+    ∃ t', HasType P Γ (repeatValues s n) t' ∧ sub t' (repeatTy ts tn) = true ∧ sub t' (repeatTy tn ts) = true := by
   unfold repeatValues
   split
   · rename_i k hk
-    cases n <;> simp [asInt] at hk <;> cases hn <;> first
-      | exact ⟨_, .text, by decide, by decide⟩
-      | exact ⟨_, .text, by simp [repeatTy, sub], by simp [repeatTy, sub]⟩
+    have up : ∀ t, sub .text t = true → sub (textTy (String.join (List.replicate k.toNat s))) t = true :=
+      fun _ ht => sub_trans (textTy_sub_text _) ht
+    cases n <;> simp [asInt] at hk <;> cases hn <;> cases ts <;> simp [Ty.isText] at hts <;>
+      exact ⟨_, .ofText _, up _ (by simp [repeatTy, Ty.isText, sub]), up _ (by simp [repeatTy, Ty.isText, sub])⟩
   · exact ⟨_, .error, sub_never _, sub_never _⟩
 
 -- the brute-force case split over operand values needs more than the default budget
@@ -60,8 +62,12 @@ theorem plainArith_typed {Γ op a b ta tb} (ha : HasType P Γ a ta) (hb : HasTyp
     (vb : b.isValue = true) : ∃ t', HasType P Γ (plainArithValues op a b) t' ∧ sub t' (op.numberTy ta tb) = true := by
   unfold plainArithValues
   split
-  · cases ha; obtain ⟨t', h, s, _⟩ := repeat_typed _ hb; exact ⟨t', h, s⟩
-  · cases hb; obtain ⟨t', h, _, s⟩ := repeat_typed _ ha; exact ⟨t', h, s⟩
+  · cases ha with
+    | text _ => obtain ⟨t', h, s, _⟩ := repeat_typed _ (ts := .text) rfl hb; exact ⟨t', h, s⟩
+    | codepoint _ => obtain ⟨t', h, s, _⟩ := repeat_typed _ (ts := .codepoint) rfl hb; exact ⟨t', h, s⟩
+  · cases hb with
+    | text _ => obtain ⟨t', h, _, s⟩ := repeat_typed _ (ts := .text) rfl ha; exact ⟨t', h, s⟩
+    | codepoint _ => obtain ⟨t', h, _, s⟩ := repeat_typed _ (ts := .codepoint) rfl ha; exact ⟨t', h, s⟩
   unfold plainArithValues.numberValues
   split
   · exact ⟨_, .error, sub_never _⟩
@@ -80,8 +86,8 @@ theorem plainArith_typed {Γ op a b ta tb} (ha : HasType P Γ a ta) (hb : HasTyp
       first
         | exact ⟨_, .int, by decide⟩
         | exact ⟨_, .num, by decide⟩
-        | exact ⟨_, .int, by simp [repeatTy, Ty.arith, sub]⟩
-        | exact ⟨_, .num, by simp [repeatTy, Ty.arith, sub]⟩
+        | exact ⟨_, .int, by simp [repeatTy, Ty.isText, Ty.arith, sub]⟩
+        | exact ⟨_, .num, by simp [repeatTy, Ty.isText, Ty.arith, sub]⟩
 
 /-- a value's type is neither `never` nor `any`, and tells whether the value is a quantity and of which dimensions -/
 theorem value_shape {Γ v t} (h : HasType P Γ v t) (hv : v.isValue = true) :
@@ -159,10 +165,10 @@ theorem nth_typed {Γ} : ∀ {l : Expr} (i : Int) {tl v}, l.isValue = true → H
         exact ⟨tv, htv, sub_trans hs (join_upper_right _ _)⟩
   | text s =>
     intro i tl v _ hl hn
-    cases hl
     simp only [nth] at hn
     split at hn
-    · obtain ⟨c, _, rfl⟩ := Option.map_eq_some_iff.1 hn; exact ⟨_, .text, by simp [elementTy, sub_refl]⟩
+    · obtain ⟨c, _, rfl⟩ := Option.map_eq_some_iff.1 hn
+      exact ⟨_, .codepoint (by simp), by cases hl <;> simp [elementTy, Ty.isText, sub]⟩
     · cases hn
   | _ => intro i tl v _ _ hn; simp [nth] at hn
 
@@ -265,8 +271,8 @@ theorem add_typed {Γ a b ta tb} (ha : HasType P Γ a ta) (hb : HasType P Γ b t
   split
   · exact ⟨_, .error, sub_never _⟩
   · cases ha <;> cases hb <;>
-      simp_all [isValue, isNumber, isText, isList, asInt, asNumber, plus, isListTy, Ty.isQuantity, Ty.arith, sub] <;>
-      first | exact ⟨_, .int, by decide⟩ | exact ⟨_, .num, by decide⟩ | exact ⟨_, .text, by decide⟩
+      simp_all [isValue, isNumber, isText, Ty.isText, isList, asInt, asNumber, plus, isListTy, Ty.isQuantity, Ty.arith, sub] <;>
+      first | exact ⟨_, .int, by decide⟩ | exact ⟨_, .num, by decide⟩ | exact ⟨_, .ofText _, sub_trans (textTy_sub_text _) (by decide)⟩
 
 theorem valueType_typed {Γ} : ∀ {v : Expr} {t}, valueType v = some t → HasType P Γ v t := by
   intro v
@@ -280,6 +286,7 @@ theorem valueType_typed {Γ} : ∀ {v : Expr} {t}, valueType v = some t → HasT
       · rename_i e he; cases hv; exact .cons (ih1 ha) (ih2 hl) he
       · cases hv
     · cases hv
+  | text s => intro t hv; simp [valueType] at hv; subst hv; exact .ofText s
   | _ => intro t hv; simp [valueType] at hv <;> subst hv <;> constructor
 
 theorem fits_typed {Γ} : ∀ {v : Expr} {t}, fits v t = true → ∃ tv, HasType P Γ v tv ∧ sub tv t = true := by
@@ -324,7 +331,7 @@ theorem convertValue_typed {Γ v} (μ : Store) (t : Ty) :
     · exact fits_typed ‹_›
     · exact ⟨_, .error, sub_never _⟩
   cases t
-  case text => exact ⟨_, .text, sub_refl _⟩
+  case text => exact ⟨_, .ofText _, textTy_sub_text _⟩
   case bool => exact ⟨_, .bool, sub_refl _⟩
   case int =>
     simp only [convertValue]; split
@@ -395,7 +402,8 @@ theorem narrow {Γ e t} (h : HasType P Γ e t) : ∀ {Γ'}, CtxSub Γ' Γ → �
   | intIn h1 h2 => intros; exact ⟨_, .intIn h1 h2, sub_refl _⟩
   | num => intros; exact ⟨_, .num, sub_refl _⟩
   | qty => intros; exact ⟨_, .qty, sub_refl _⟩
-  | text => intros; exact ⟨_, .text, sub_refl _⟩
+  | text h => intros; exact ⟨_, .text h, sub_refl _⟩
+  | codepoint h => intros; exact ⟨_, .codepoint h, sub_refl _⟩
   | unit => intros; exact ⟨_, .unit, sub_refl _⟩
   | nil => intros; exact ⟨_, .nil, sub_refl _⟩
   | cons _ _ he ih1 ih2 =>
@@ -580,7 +588,8 @@ theorem subst_typed {Γ0 e t} (h : HasType P Γ0 e t) :
   | intIn h1 h2 => intros; simp only [Expr.subst]; exact .intIn h1 h2
   | num => intros; simp only [Expr.subst]; exact .num
   | qty => intros; simp only [Expr.subst]; exact .qty
-  | text => intros; simp only [Expr.subst]; exact .text
+  | text h => intros; simp only [Expr.subst]; exact .text h
+  | codepoint h => intros; simp only [Expr.subst]; exact .codepoint h
   | unit => intros; simp only [Expr.subst]; exact .unit
   | nil => intros; simp only [Expr.subst]; exact .nil
   | cons _ _ he ih1 ih2 => intro Γ y tv v hΓ hv htv; simp only [Expr.subst]; exact .cons (ih1 hΓ hv htv) (ih2 hΓ hv htv) he

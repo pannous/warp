@@ -18,6 +18,8 @@ namespace Warp
 
 inductive Ty where
   | never | bool | int | number | text | unit
+  /-- a one-character text (`"a"` parses as one): a text wherever a text is taken -/
+  | codepoint
   | list (element : Ty)
   | fn (result : Ty)
   | cls (path : List String)
@@ -53,7 +55,7 @@ def sub : Ty → Ty → Bool
   | ranged _ _, int | ranged _ _, number => true
   | quantity d, quantity e => d == e
   | bool, bool | bool, int | bool, number | int, int | int, number | number, number => true
-  | text, text | unit, unit => true
+  | text, text | codepoint, codepoint | codepoint, text | unit, unit => true
   | _, _ => false
 
 /-- warp's fixed-width int types (fixed_width.rs FIXED_WIDTHS) and their ranges -/
@@ -69,6 +71,7 @@ def name : Ty → String
   | int => "int"
   | number => "number"
   | text => "text"
+  | codepoint => "codepoint"
   | unit => "empty"
   | list t => s!"list of {t.name}"
   | fn t => s!"function to {t.name}"
@@ -140,7 +143,7 @@ theorem sub_refl : ∀ t : Ty, sub t t = true
   | cls p => by simp [sub]
   | ranged a b => by simp [sub]
   | quantity d => by simp [sub]
-  | never | bool | int | number | text | unit | any => rfl
+  | never | bool | int | number | text | codepoint | unit | any => rfl
 
 theorem sub_to_never : ∀ {t : Ty}, sub t never = true → t = never := by
   intro t h; cases t <;> simp_all [sub]
@@ -384,18 +387,47 @@ theorem sameQuantity_mono {a b a' b' : Ty} (ha : sub a' a = true) (hb : sub b' b
       exact absurd ((quantity_eq ha na q'.1).symm.trans (quantity_eq hb nb q'.2)) e
     · exact sub_refl _
 
+/-- a text or a codepoint (a one-character text) -/
+def isText : Ty → Bool
+  | text | codepoint => true
+  | _ => false
+
+/-- the type of a text literal: one character is a codepoint, as warp's parser reads `"a"` -/
+def textTy (s : String) : Ty := if s.length = 1 then codepoint else text
+
+@[simp] theorem textTy_sub_text (s : String) : sub (textTy s) text = true := by
+  unfold textTy; split <;> rfl
+
+@[simp] theorem textTy_isText (s : String) : isText (textTy s) = true := by
+  unfold textTy; split <;> rfl
+
+@[simp] theorem textTy_ne_never (s : String) : textTy s ≠ never := by
+  unfold textTy; split <;> simp
+
+@[simp] theorem textTy_ne_any (s : String) : textTy s ≠ any := by
+  unfold textTy; split <;> simp
+
+/-- between `never` and `any`, widening keeps a text a text and a non-text a non-text -/
+theorem isText_up {a a' : Ty} (h : sub a' a = true) (n : a' ≠ never) (y : a ≠ any) : isText a' = isText a := by
+  cases a' <;> cases a <;> simp_all [sub, isText]
+
+/-- between `never` and `any`, widening keeps a number a number and a non-number a non-number -/
+theorem number_up {a a' : Ty} (h : sub a' a = true) (n : a' ≠ never) (y : a ≠ any) :
+    sub a' number = sub a number := by
+  cases a' <;> cases a <;> simp_all [sub]
+
 /-- the result of `+`: `never` when a side raises, dynamic when a side is, two lists' concatenation a list of their
 elements' join, a text when a side is a text, a number type otherwise -/
 def plus (a b : Ty) : Ty :=
   if a = never ∨ b = never then never else if a = any ∨ b = any then any
   else if (isQuantity a || isQuantity b) = true then sameQuantity a b
   else if (isListTy a && isListTy b) = true then list (join ((element a).getD any) ((element b).getD any))
-  else if a = text ∨ b = text then text else arith a b
+  else if (isText a || isText b) = true then text else arith a b
 
 /-- the result of `-` and `*`: dynamic when a side is -/
 def arithTy (a b : Ty) : Ty := if a = any ∨ b = any then any else arith a b
 
-theorem sub_to_text : ∀ {t : Ty}, sub t text = true → t = never ∨ t = text := by
+theorem sub_to_text : ∀ {t : Ty}, sub t text = true → t = never ∨ t = text ∨ t = codepoint := by
   intro t h; cases t <;> simp_all [sub]
 
 theorem sub_from_text : ∀ {t : Ty}, sub text t = true → t = text ∨ t = any := by
@@ -418,7 +450,7 @@ theorem arithTy_mono {a b a' b' : Ty} (ha : sub a' a = true) (hb : sub b' b = tr
 def repeatTy (a b : Ty) : Ty :=
   if a = never ∨ b = never then never
   else if a = any ∨ b = any then any
-  else if (a = text ∧ sub b number) ∨ (sub a number ∧ b = text) then text
+  else if (isText a && sub b number || sub a number && isText b) = true then text
   else arith a b
 
 /-- above a number other than `never`, below `any`: a number -/
@@ -447,19 +479,10 @@ theorem repeatTy_mono {a b a' b' : Ty} (ha : sub a' a = true) (hb : sub b' b = t
   rw [ite_eq_right y']
   simp only [not_or] at n n' y y'
   -- a text side stays a text side when widened (only `any` is above text), and a number side stays a number
-  have widened : (a' = text ∧ sub b' number = true) ∨ (sub a' number = true ∧ b' = text) →
-      (a = text ∧ sub b number = true) ∨ (sub a number = true ∧ b = text) := by
-    rintro (⟨rfl, hn⟩ | ⟨hn, rfl⟩)
-    · exact .inl ⟨(sub_from_text ha).resolve_right y.1, sub_number_up hn hb y.2 n'.2⟩
-    · exact .inr ⟨sub_number_up hn ha y.1 n'.1, (sub_from_text hb).resolve_right y.2⟩
-  have narrowed : (a = text ∧ sub b number = true) ∨ (sub a number = true ∧ b = text) →
-      (a' = text ∧ sub b' number = true) ∨ (sub a' number = true ∧ b' = text) := by
-    rintro (⟨rfl, hn⟩ | ⟨hn, rfl⟩)
-    · exact .inl ⟨(sub_to_text ha).resolve_left n'.1, sub_trans hb hn⟩
-    · exact .inr ⟨sub_trans ha hn, (sub_to_text hb).resolve_left n'.2⟩
-  by_cases r' : (a' = text ∧ sub b' number = true) ∨ (sub a' number = true ∧ b' = text)
-  · rw [if_pos r', if_pos (widened r')]; exact sub_refl _
-  · rw [if_neg r', if_neg (fun r => r' (narrowed r))]; exact arith_mono ha hb
+  rw [isText_up ha n'.1 y.1, isText_up hb n'.2 y.2, number_up ha n'.1 y.1, number_up hb n'.2 y.2]
+  split
+  · exact sub_refl _
+  · exact arith_mono ha hb
 
 theorem plus_mono {a b a' b' : Ty} (ha : sub a' a = true) (hb : sub b' b = true) :
     sub (plus a' b') (plus a b) = true := by
@@ -507,39 +530,23 @@ theorem plus_mono {a b a' b' : Ty} (ha : sub a' a = true) (hb : sub b' b = true)
     rcases sub_from_list hb with h | ⟨z, rfl, _⟩
     · exact absurd (.inr h) y
     rfl
-  rw [if_neg l, if_neg l']
-  by_cases t : a = text ∨ b = text
-  · rw [ite_eq_left t]
-    have t' : a' = text ∨ b' = text := by
-      rcases t with rfl | rfl
-      · rcases sub_to_text ha with h | h
-        · exact absurd (.inl h) n'
-        · exact .inl h
-      · rcases sub_to_text hb with h | h
-        · exact absurd (.inr h) n'
-        · exact .inr h
-    rw [ite_eq_left t']; exact sub_refl _
-  rw [ite_eq_right t]
-  have t' : ¬(a' = text ∨ b' = text) := by
-    rintro (rfl | rfl)
-    · rcases sub_from_text ha with h | h
-      · exact t (.inl h)
-      · exact y (.inl h)
-    · rcases sub_from_text hb with h | h
-      · exact t (.inr h)
-      · exact y (.inr h)
-  rw [ite_eq_right t']
-  exact arith_mono ha hb
+  rw [if_neg l, if_neg l', isText_up ha na ya, isText_up hb nb yb]
+  split
+  · exact sub_refl _
+  · exact arith_mono ha hb
 
-/-- the element type `#` gives: a list's elements', a text's one-codepoint texts, an error's `never`, anything
-else's `any` (checked when it runs) -/
-def elementTy (t : Ty) : Ty := if t = text then text else (element t).getD any
+/-- the element type `#` gives: a list's elements', a text's codepoints, an error's `never`, anything else's `any`
+(checked when it runs) -/
+def elementTy (t : Ty) : Ty := if isText t = true then codepoint else (element t).getD any
 
 /-- the element type `++` takes: a list's elements', anything else's `any` (checked when it runs) -/
 def listElem (t : Ty) : Ty := (element t).getD any
 
+@[simp] theorem elementTy_textTy (s : String) : elementTy (textTy s) = codepoint := by
+  simp [elementTy]
+
 theorem elementTy_of_element {t e : Ty} (h : element t = some e) : elementTy t = e := by
-  cases t <;> simp_all [elementTy, element]
+  cases t <;> simp [element] at h <;> subst h <;> simp [elementTy, element, isText]
 
 theorem listElem_of_element {t e : Ty} (h : element t = some e) : listElem t = e := by
   cases t <;> simp_all [listElem, element]
@@ -555,13 +562,13 @@ theorem listElem_mono {l l' : Ty} (h : sub l' l = true) : sub (listElem l') (lis
 
 theorem elementTy_mono {l l' : Ty} (h : sub l' l = true) : sub (elementTy l') (elementTy l) = true := by
   cases l with
-  | never => rw [sub_to_never h]; simp [elementTy, element]
+  | never => rw [sub_to_never h]; simp [elementTy, element, isText]
   | list a =>
     rcases sub_to_list h with rfl | ⟨b, rfl, hb⟩
-    · simp [elementTy, element]
-    · simp [elementTy, element, hb]
-  | text => rcases sub_to_text h with rfl | rfl <;> simp [elementTy, element, sub_refl]
-  | _ => simp [elementTy, element]
+    · simp [elementTy, element, isText]
+    · simp [elementTy, element, isText, hb]
+  | text | codepoint => cases l' <;> simp_all [sub, elementTy, element, isText]
+  | _ => simp [elementTy, element, isText]
 
 end Ty
 end Warp
