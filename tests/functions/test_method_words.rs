@@ -110,8 +110,8 @@ fn test_library_words_refuse_what_they_cannot_do() {
 	fails_with("sort [1 \"a\"]", "not comparable"); // #26: texts sort, mixed kinds don't
 	fails_with("reverse 5", "not a list");
 	fails_with("join([[1], [2]], \",\")", "not a joinable item");
-	fails_with("first(1, 2)", "first takes 1 argument, got 2");
-	fails_with("x=[1 2]; x.first(3)", "first takes 1 argument, got 2");
+	fails_with("first(1, 2)", "not a list"); // first(xs, n) is the first n items (card first-first)
+	is!("x=[1 2]; x.first(3)", warp::ints(vec![1, 2]));
 	fails_with("join([1 2])", "join takes 2 arguments, got 1");
 }
 
