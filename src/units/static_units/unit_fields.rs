@@ -3,7 +3,7 @@
 //! instance's class: a constructor call, a variable declared `r: Run`, an element of a list (or table) declared `[Run]`,
 //! a loop over such a list. A unit field read of an instance it cannot see is a loud error, never a silent SI number.
 
-use super::{shown, Fields, Inference, Signature, Stop};
+use super::{shown, Fields, Inference, Signature, Stop, MAP_WORD};
 use crate::lowering::database_tables::OPTIONAL_MARK;
 use crate::node::{Bracket, Node};
 use crate::operators::Op;
@@ -53,6 +53,13 @@ pub(crate) fn unit_type(type_name: &str) -> Option<(String, f64)> {
 	Some((shown(&crate::units::signature(&units)), per_unit.to_f64()))
 }
 
+/// A constant quantity's SI amount and the quantity it measures, as unit_type gives a column's: `5 km` is (5000, "m")
+pub(crate) fn si_quantity(node: &Node) -> Option<(f64, String)> {
+	let Ok(crate::units::Value::Quantity(quantity)) = crate::units::evaluate(node) else { return None };
+	let per_unit = crate::units::scale(&quantity.factors, |factor| super::base_unit(factor.unit.dimension));
+	Some((quantity.amount.mul(&per_unit).to_f64(), shown(&crate::units::signature(&quantity.factors))))
+}
+
 /// `Run` of `r: Run`, and `Run` of a list `xs: [Run]` (true)
 fn declared_class(declared: &Node) -> Option<(String, bool)> {
 	match declared.drop_meta() {
@@ -94,7 +101,22 @@ impl Inference {
 
 	/// The fields of the instances a list of a class holds (a final `runs` shows their units)
 	pub(super) fn list_instance_fields(&self, list: &Node) -> Option<Fields> {
-		self.classes.get(self.class_lists.get(&list.drop_meta().name())?).cloned()
+		let name = crate::database_tables::loaded_table(list).unwrap_or_else(|| list.drop_meta().name());
+		self.classes.get(self.class_lists.get(&name)?).cloned()
+	}
+
+	/// `runs.map(r => r.distance)` of a list of a class: the signature of the unit field each instance gives
+	pub(super) fn mapped_field(&self, mapped: &Node) -> Option<Signature> {
+		let Node::Key(list, Op::Dot, call) = mapped.drop_meta() else { return None };
+		let Node::List(items, _, _) = call.drop_meta() else { return None };
+		let [word, function] = items.as_slice() else { return None };
+		let Node::Key(parameter, Op::FatArrow, body) = function.drop_meta() else { return None };
+		let Node::Key(object, Op::Dot, field) = body.drop_meta() else { return None };
+		if word.drop_meta().name() != MAP_WORD || object.drop_meta().name() != parameter.drop_meta().name() {
+			return None;
+		}
+		let fields = self.list_instance_fields(list)?;
+		fields.into_iter().find(|(name, _)| *name == field.drop_meta().name()).map(|(_, signature)| signature).filter(|signature| !signature.is_empty())
 	}
 
 	/// The fields of the instance `object` is, with their signatures

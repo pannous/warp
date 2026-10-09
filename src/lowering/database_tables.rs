@@ -9,6 +9,7 @@
 use crate::node::{Bracket, Node, Separator};
 use crate::operators::Op;
 use crate::warp_parser::parse;
+use crate::units::static_units::si_quantity;
 use std::collections::{HashMap, HashSet};
 
 const DATABASE_WORDS: [&str; 2] = ["database", "indexedDB"];
@@ -218,8 +219,11 @@ pub fn queried(subject: &Node, condition: &Node, variables: &HashSet<String>, ta
 	}
 	let table = tables.tables.get(&subject.drop_meta().name())?;
 	let first_function = tables.functions.len();
-	let mut query = Query { table, variables, parameters: vec![], functions: vec![], first_function };
+	let mut query = Query { table, variables, parameters: vec![], functions: vec![], first_function, mismatches: vec![] };
 	let sql = query.sql(condition);
+	if let Some(mismatch) = query.mismatches.into_iter().next() {
+		return Some(Err(mismatch.into_error()));
+	}
 	let (parameters, functions) = (query.parameters, query.functions);
 	if let Err(error) = crate::diagnostic::report(&effectful_calls(&functions, tables.effects.as_ref())) {
 		return Some(Err(error));
@@ -276,6 +280,8 @@ struct Query<'a> {
 	parameters: Vec<Node>,
 	functions: Vec<Node>,
 	first_function: usize,
+	/// a unit column compared with another kind of quantity: `it.distance > 5 s`
+	mismatches: Vec<crate::diagnostic::Diagnostic>,
 }
 
 impl Query<'_> {
@@ -306,12 +312,33 @@ impl Query<'_> {
 					Op::Mul if self.is_numeric(left) && self.is_numeric(right) => "*",
 					_ => return None,
 				};
-				Some(format!("({} {operator} {})", self.sql(left), self.sql(right)))
+				let (left_unit, right_unit) = (self.column_unit(left), self.column_unit(right));
+				Some(format!("({} {operator} {})", self.sql_beside(left, right_unit), self.sql_beside(right, left_unit)))
 			}
 			Node::Number(_) | Node::Text(_) | Node::True | Node::False => Some(self.parameter(node.drop_meta().clone())),
 			Node::Symbol(name) if self.variables.contains(name) => Some(self.parameter(node.drop_meta().clone())),
 			_ => None,
 		}
+	}
+
+	/// A part compared with a unit column: a constant quantity of its kind is its SI amount, as the column holds it
+	/// (`it.distance > 5 km` asks `"distance" > 5000`)
+	fn sql_beside(&mut self, node: &Node, column_unit: Option<String>) -> String {
+		match column_unit.zip(si_quantity(node)) {
+			Some((unit, (amount, quantity))) if quantity == unit => self.parameter(crate::node::float(amount)),
+			Some((unit, (_, quantity))) => {
+				self.mismatches.push(crate::diagnostic::Diagnostic::at(node, format!("DimensionError: a column of {unit} compared with {quantity}")));
+				self.sql(node)
+			}
+			None => self.sql(node),
+		}
+	}
+
+	/// The quantity a unit column measures (`m` of `distance: km`)
+	fn column_unit(&self, node: &Node) -> Option<String> {
+		let field = self.field_of_it(node)?;
+		let (_, field_type, _) = self.table.fields.iter().find(|(name, _, _)| *name == field)?;
+		crate::units::static_units::unit_type(class_of(field_type)).map(|(quantity, _)| quantity)
 	}
 
 	/// `it.age` as the column "age", `it.id` as id
@@ -349,7 +376,7 @@ impl Query<'_> {
 		let mut values = vec![];
 		free_variables(node, self.variables, &mut values);
 		let row_size = 1 + columns_of(self.table).len();
-		let body = with_arguments(node.clone(), self.table, &values, row_size);
+		let body = with_arguments(with_si_amounts(node.clone()), self.table, &values, row_size);
 		let function = generated(&format!("{FUNCTION_PLACEHOLDER}({ARGUMENTS}: any) := {BODY_PLACEHOLDER}"), [
 			(FUNCTION_PLACEHOLDER, Node::Symbol(name.clone())),
 			(BODY_PLACEHOLDER, body),
@@ -358,6 +385,14 @@ impl Query<'_> {
 		let row: Vec<String> = std::iter::once(ID_FIELD.to_string()).chain(columns_of(self.table).iter().map(|column| quote(column))).collect();
 		let values: Vec<String> = values.into_iter().map(|value| self.parameter(Node::Symbol(value))).collect();
 		format!("{WARP_CALL}('{name}', {})", [row, values].concat().join(", "))
+	}
+}
+
+/// A query's function gets a unit column as its SI amount: a constant quantity in it is one too (`5 km` is 5000.0)
+fn with_si_amounts(node: Node) -> Node {
+	match si_quantity(&node) {
+		Some((amount, _)) if !matches!(node.drop_meta(), Node::Symbol(_)) => crate::node::float(amount),
+		_ => node.map_children(with_si_amounts),
 	}
 }
 

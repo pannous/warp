@@ -17,6 +17,7 @@
 use super::{finest_units, signature, unit_named, units_text, Dimension, Factor, Quantity, Unit, UNITS};
 
 mod unit_fields;
+pub(crate) use unit_fields::si_quantity;
 pub(crate) use unit_fields::unit_type;
 use crate::extensions::numbers::Number;
 use crate::extensions::reals::Rational;
@@ -46,6 +47,7 @@ const TEXT_WORDS: [&str; 3] = [TEXT_WORD, "text_form", "serialize"];
 const ELEMENT_METHODS: [&str; 2] = ["add", "push"];
 /// List words that give an element: its signature
 const ELEMENT_WORDS: [&str; 5] = ["sum", "max", "min", "first", "last"];
+const MAP_WORD: &str = "map";
 /// List words that give a plain number
 const COUNT_WORDS: [&str; 3] = ["count", "size", "length"];
 
@@ -549,6 +551,11 @@ impl Inference {
 				return Ok((Node::Key(Box::new(target), op, Box::new(Node::List(items, Bracket::Square, separator.clone()))), vec![]));
 			}
 		}
+		// `xs = runs.map(r => r.distance)`: a list of the field's quantities
+		if let Some(element) = self.mapped_field(&value) {
+			self.lists.insert(name, element);
+			return Ok((Node::Key(Box::new(target), op, Box::new(value)), vec![]));
+		}
 		// `q = p`, `ys = xs`: an alias has the signatures of what it names
 		if let Node::Symbol(other) = value.drop_meta() {
 			if let Some(fields) = self.objects.get(other).cloned() {
@@ -728,7 +735,7 @@ impl Inference {
 		let element = match arguments {
 			[list] => match list.drop_meta() {
 				Node::Symbol(name) => self.lists.get(name).cloned()?,
-				_ => return None,
+				_ => self.mapped_field(list)?,
 			},
 			_ if ELEMENT_WORDS.contains(&word) => match self.list_elements(arguments.to_vec()) {
 				Ok((items, element)) if !element.is_empty() => return Some(Ok((items, element))),
@@ -908,6 +915,8 @@ impl Inference {
 		let is_amount_and_unit = items.len() == 2 && bracket == Bracket::None && separator == Separator::Space && is_amount(&items[0])
 			&& matches!(items[1].drop_meta(), Node::Symbol(name) if unit_named(name).is_some() && !self.variables.contains_key(name));
 		let is_host_call = bracket == Bracket::Round && matches!(items.first().map(Node::drop_meta), Some(Node::Symbol(word)) if word == HOST_CALL);
+		// `(r.distance)`, `(a + b)`: parentheses around one expression group it (a lone word `(f)` may be a call)
+		let grouping = bracket == Bracket::Round && matches!(items.as_slice(), [single] if !matches!(single.drop_meta(), Node::Symbol(_)));
 		let in_host_call = self.in_host_call || is_host_call;
 		let outer_host_call = std::mem::replace(&mut self.in_host_call, in_host_call);
 		let mut lowered = vec![];
@@ -943,7 +952,7 @@ impl Inference {
 			return Ok((product, signature));
 		}
 		let in_host_call = std::mem::replace(&mut self.in_host_call, outer_host_call);
-		let signature = if statements { signatures.last().cloned().unwrap_or_default() } else if is_loop || in_host_call || signatures.iter().all(Vec::is_empty) {
+		let signature = if statements || grouping { signatures.last().cloned().unwrap_or_default() } else if is_loop || in_host_call || signatures.iter().all(Vec::is_empty) {
 			vec![]
 		} else {
 			return Err(Stop::Unsupported); // a call, print, a list literal or interpolation of a quantity

@@ -397,6 +397,7 @@ fn literal(value: &Node) -> Result<String, String> {
 		Node::Empty => Ok("NULL".to_string()),
 		Node::Number(Number::Int(number)) => Ok(number.to_string()),
 		Node::Number(Number::Float(number)) => Ok(format!("{number:?}")),
+		Node::Number(number @ Number::Quotient(..)) => Ok(format!("{:?}", f64::from(*number))),
 		Node::True => Ok("1".to_string()),
 		Node::False => Ok("0".to_string()),
 		Node::Text(text) => Ok(format!("'{}'", text.replace('\'', "''"))),
@@ -491,6 +492,8 @@ fn bind(sqlite: &Sqlite, statement: Handle, index: c_int, value: &Node) -> Resul
 			Node::Empty => (sqlite.bind_null)(statement, index),
 			Node::Number(Number::Int(number)) => (sqlite.bind_int64)(statement, index, *number),
 			Node::Number(Number::Float(number)) => (sqlite.bind_double)(statement, index, *number),
+			// an exact amount (500 g is 1/2 kg): the column keeps it as a REAL
+			Node::Number(number @ Number::Quotient(..)) => (sqlite.bind_double)(statement, index, f64::from(*number)),
 			Node::True => (sqlite.bind_int64)(statement, index, 1),
 			Node::False => (sqlite.bind_int64)(statement, index, 0),
 			Node::Text(_) | Node::Char(_) => {
