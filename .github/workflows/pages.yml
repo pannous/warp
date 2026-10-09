@@ -66,8 +66,8 @@ jobs:
         for part in $(grep -o '"host-[a-z]*\.js"' web/playground/host.js | tr -d '"'); do test -f _site/$part || { echo "::error::$part missing from the site"; exit 1; }; done
         # the C module the tour imports (examples.js "C libraries"), at its repository path: the page's file root is the site
         mkdir -p _site/tests/fixtures/wasm && cp tests/fixtures/wasm/zlib.wasm tests/fixtures/wasm/zlib.h _site/tests/fixtures/wasm/
-        # the warp-compiled module samples/import_compiled.warp imports
-        mkdir -p _site/tests/fixtures/compiled && cp tests/fixtures/compiled/shapes.wasm _site/tests/fixtures/compiled/
+        # the warp-compiled module samples/import_compiled.warp imports by its bare name (samples/shapes.wasm links it)
+        mkdir -p _site/samples && cp tests/fixtures/compiled/shapes.wasm _site/samples/
         echo "warp.pannous.com" > _site/CNAME
         # the files the site serves, so the compiler asks only for those (host-files.js): no 404 in the console
         web/playground/build.sh served _site
