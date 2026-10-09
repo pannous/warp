@@ -108,3 +108,12 @@ fn a_quoted_path_uses_that_file() {
 	assert_eq!(run("use \"./helper.warp\"; triple(2)"), 6);
 	assert_eq!(run("use \"./helper\"; triple(4)"), 12);
 }
+
+// `use list as l; l.unique(xs)`: a standard or warp module under the program's name for it, its words called through
+// that name (card use-list)
+#[test]
+fn a_module_is_used_as_an_alias() {
+	is!("use list as l\ncount(l.unique([1 1 2]))", 2);
+	is!("use square as sq\nsq.square(7)", 49);
+	is!("use math as m\nm.floor(4.5)", 4);
+}

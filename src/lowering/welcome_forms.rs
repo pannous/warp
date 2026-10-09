@@ -74,7 +74,7 @@ const LINQ_METHODS: [(&str, &str); 12] = [("Select", "map"), ("Where", "filter")
 pub fn lower(node: Node) -> Node {
 	let defined = defined_names(&node);
 	let node = if names_vector_word(&node) { node } else { r_vectors(node) };
-	let node = qualified_module_calls(node);
+	let node = qualified_module_calls(module_aliases(node));
 	let node = linq_calls(forms(node), &defined);
 	let mut lambda_names = HashSet::new();
 	collect_lambda_names(&node, &mut lambda_names);
@@ -566,6 +566,38 @@ fn is_function_keyword(node: &Node) -> bool {
 fn qualified_module_calls(node: Node) -> Node {
 	let modules: Vec<&str> = crate::modules::std_module_names().chain([JS_MATH]).filter(|module| !crate::soft_keywords::program_names(&node, module)).collect();
 	module_calls(node, &modules)
+}
+
+/// `use list as l; l.unique(xs)`: a standard or warp module under the program's name for it is the module, a word
+/// called through that name the word itself, without the note qualified_module_calls gives
+fn module_aliases(node: Node) -> Node {
+	let mut aliases = vec![];
+	let node = unaliased_uses(node, &mut aliases);
+	let aliases: Vec<&str> = aliases.iter().map(String::as_str).collect();
+	match aliases.is_empty() {
+		true => node,
+		false => crate::normalize::without_hints(|| module_calls(node, &aliases)),
+	}
+}
+
+/// `use list as l` → `use list`, collecting the alias l
+fn unaliased_uses(node: Node, aliases: &mut Vec<String>) -> Node {
+	if let Node::List(items, bracket, separator) = node.drop_meta() {
+		if let [keyword, used] = items.as_slice() {
+			if let Some((module, alias)) = aliased_module(keyword, used) {
+				aliases.push(alias);
+				return Node::List(vec![keyword.clone(), module], bracket.clone(), separator.clone());
+			}
+		}
+	}
+	node.map_children(|child| unaliased_uses(child, aliases))
+}
+
+fn aliased_module(keyword: &Node, used: &Node) -> Option<(Node, String)> {
+	let Node::Key(module, Op::As, alias) = used.drop_meta() else { return None };
+	let is_use = matches!(keyword.drop_meta(), Node::Symbol(word) if crate::modules::USE_KEYWORDS.contains(&word.as_str()));
+	let Node::Symbol(alias) = alias.drop_meta() else { return None };
+	(is_use && crate::modules::names_a_module(&crate::modules::path_of(module)?)).then(|| (module.as_ref().clone(), alias.clone()))
 }
 
 pub(crate) fn module_calls(node: Node, modules: &[&str]) -> Node {
