@@ -137,6 +137,9 @@ all. The page build now takes the definition: tests/web/test_server_functions_in
      stays positional. Open (Interviewer): one mechanism for context variables elsewhere, `$x` as the field x of the
      context's implicit subject: an event handler's event (`on click { $x }`), a loop's or lambda's `it` (`$name` =
      `it.name`), a component's props. It would take `$a` from references.rs inside data literals.
+   - `form post "/todos" { … }` is `form{ method:"post" action:"/todos" … }`: a form written as the route it sends
+     to (card g_mSEw, 2026-10-09, markup_tags::lower_form_routes, first source pass so serve never reads it as a
+     route); any method word of serve::METHODS, any path expression (`"/todos/\(todo.id)/toggle"`).
    - A get/post path holds parameters as a page route does. serve.rs bind_path_parameters binds them from
      `request.path` before lower_where, so a table's filter takes `id` as a value.
    - A bool column reads back as a bool, and a one-character text is stored as its text (database.rs c_text).
