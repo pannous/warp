@@ -1273,6 +1273,11 @@ pub(crate) fn declaring_name_and_type(target: &Node) -> Option<(String, String)>
 	};
 	match (name, type_name) {
 		(Node::Symbol(name), Node::Symbol(type_name)) => Some((name, type_name)),
+		// `xs: [int]` is `xs: list of int`
+		(Node::Symbol(name), Node::List(items, Bracket::Square, _)) => match items.as_slice() {
+			[element] => Some((name, format!("{LIST_OF_PREFIX}{}", element.drop_meta().name()))),
+			_ => None,
+		},
 		(Node::Symbol(name), union) => Some((name, union_type_name(&union)?)),
 		_ => None,
 	}
@@ -1578,9 +1583,16 @@ fn evident_items_mismatch(assignment: &Node, name: &str, type_name: &str, value:
 	Some(Diagnostic::at(assignment, message).fix(format!("declare {name}:list to hold any items")))
 }
 
-/// The first literal item of a list value that does not fit `element`, with its kind
+/// The first literal item of a list value that does not fit `element`, with its kind: of another kind, or an int
+/// outside a fixed width (`xs: [int16] = [70000]`)
 pub(crate) fn misfit_item<'a>(element: &str, value: &'a Node) -> Option<(&'a Node, Kind)> {
-	added_items(value)?.iter().find_map(|item| Some((item, literal_misfit(element, item)?)))
+	added_items(value)?.iter().find_map(|item| Some((item, literal_misfit(element, item).or_else(|| out_of_width(element, item))?)))
+}
+
+fn out_of_width(element: &str, item: &Node) -> Option<Kind> {
+	let width = crate::fixed_width::fixed_width(element)?;
+	let Node::Number(Number::Int(value)) = item.drop_meta() else { return None };
+	(!(width.low..=width.high).contains(&(*value as i128))).then_some(Kind::Int)
 }
 
 /// The list variable `names` of an element `names#i`

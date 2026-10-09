@@ -28,6 +28,11 @@ def wholeNumber (t : Ty) : Bool := sub t .int || t == .any
 /-- what `*` repeats statically: a text times a whole number, in either order (P1) -/
 def repeats (a b : Ty) : Bool := (textual a && wholeNumber b) || (wholeNumber a && textual b)
 
+
+/-- a value written into a typed list that evidently does not fit its element type: warp checks literal items when it
+compiles (checks.rs misfit_item: `xs: [int16] = [70000]`, `xs.add("a")`); any other value is checked when it runs -/
+def evidentMisfit (v : Expr) (t : Ty) : Bool := v.isValue && !fits v t
+
 /-- what `as` converts statically: anything to text or bool, numbers and texts to a number type, else what a cast
 admits (`[1] as int` is refused) -/
 def convertible (te : Ty) : Ty → Bool
@@ -122,14 +127,15 @@ def typeOf (P : Program) (Γ : Ctx) : Expr → Option Ty
   | .ref _ p | .new p => some (.cls p)
   | .lref _ t => some (.list t)
   /- statically, a list and a write that may fit; each write is checked again when it runs -/
-  | .share e t => (typeOf P Γ e).bind fun te => if consub te (.list t) then some (.list t) else none
+  | .share e t => (typeOf P Γ e).bind fun te => if consub te (.list t) && !evidentMisfit e (.list t) then some (.list t) else none
   | .push l v =>
     match typeOf P Γ l, typeOf P Γ v with
-    | some tl, some tv => if listy tl && consub tv (listElem tl) then some tl else none
+    | some tl, some tv => if listy tl && consub tv (listElem tl) && !evidentMisfit v (listElem tl) then some tl else none
     | _, _ => none
   | .setAt l i v =>
     match typeOf P Γ l, typeOf P Γ i, typeOf P Γ v with
-    | some tl, some ti, some tv => if listy tl && consub ti .number && consub tv (listElem tl) then some tv else none
+    | some tl, some ti, some tv =>
+      if listy tl && consub ti .number && consub tv (listElem tl) && !evidentMisfit v (listElem tl) then some tv else none
     | _, _, _ => none
   | .get e f => (typeOf P Γ e).bind fun te => if strictRead P te f then some (P.readTy te f) else none
   | .set e f v =>

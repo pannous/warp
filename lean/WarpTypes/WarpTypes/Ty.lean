@@ -5,7 +5,9 @@ and of the elements of `[]`), `any` the top (a Node), and lists are covariant: w
 value (a lambda, `x => x*2`) takes anything (its parameter is unannotated) and is covariant in its result.
 A class type is its chain of ancestors, root first (`cls ["Shape", "Circle"]`): a subclass extends the chain, so
 subtyping is the prefix order and needs no class table. A variant of a sum type is a class extending the sum
-(P178, P179). -/
+(P178, P179).
+A fixed-width int type (`int16`, `byte`, D16) is the range of ints it holds, `ranged lo hi`: below int, and one range
+below another that contains it. -/
 
 namespace Warp
 
@@ -14,6 +16,7 @@ inductive Ty where
   | list (element : Ty)
   | fn (result : Ty)
   | cls (path : List String)
+  | ranged (low high : Int)
   | any
   deriving DecidableEq, Repr
 
@@ -26,9 +29,17 @@ def sub : Ty → Ty → Bool
   | list a, list b => sub a b
   | fn a, fn b => sub a b
   | cls p, cls q => decide (q <+: p)
+  | ranged a b, ranged c d => decide (c ≤ a ∧ b ≤ d)
+  | ranged _ _, int | ranged _ _, number => true
   | bool, bool | bool, int | bool, number | int, int | int, number | number, number => true
   | text, text | unit, unit => true
   | _, _ => false
+
+/-- warp's fixed-width int types (fixed_width.rs FIXED_WIDTHS) and their ranges -/
+def FIXED_WIDTHS : List (String × Int × Int) :=
+  [("byte", 0, 255), ("int8", -128, 127), ("int16", -32768, 32767), ("int32", -2147483648, 2147483647),
+   ("int64", -9223372036854775808, 9223372036854775807), ("uint8", 0, 255), ("uint16", 0, 65535),
+   ("uint32", 0, 4294967295), ("uint64", 0, 18446744073709551615)]
 
 /-- the type as warp writes it -/
 def name : Ty → String
@@ -41,6 +52,7 @@ def name : Ty → String
   | list t => s!"list of {t.name}"
   | fn t => s!"function to {t.name}"
   | cls p => p.getLastD "object"
+  | ranged lo hi => ((FIXED_WIDTHS.find? fun (_, l, h) => l == lo && h == hi).map (·.1)).getD s!"int {lo}…{hi}"
   | any => "any"
 
 /-- the longest common prefix: the nearest common ancestor of two class chains -/
@@ -79,6 +91,8 @@ def join : Ty → Ty → Ty
   | list a, list b => list (join a b)
   | fn a, fn b => fn (join a b)
   | cls p, cls q => cls (commonPrefix p q)
+  | ranged a b, ranged c d => ranged (min a c) (max b d)
+  | bool, ranged _ _ | ranged _ _, bool => int
   | a, b => if sub a b then b else if sub b a then a else any
 
 /-- the element type of a list type; `never` (an error in list position) has elements of type `never` -/
@@ -102,6 +116,7 @@ theorem sub_refl : ∀ t : Ty, sub t t = true
   | list a => by simp [sub_refl a]
   | fn a => by simp [sub_refl a]
   | cls p => by simp [sub]
+  | ranged a b => by simp [sub]
   | never | bool | int | number | text | unit | any => rfl
 
 theorem sub_to_never : ∀ {t : Ty}, sub t never = true → t = never := by
@@ -147,7 +162,7 @@ theorem sub_trans : ∀ {a b c : Ty}, sub a b = true → sub b c = true → sub 
     exact hbc.trans hab
   | _ =>
     intro b c hab hbc
-    cases b <;> cases c <;> simp_all [sub]
+    cases b <;> cases c <;> simp_all [sub] <;> omega
 
 theorem sub_antisymm : ∀ {a b : Ty}, sub a b = true → sub b a = true → a = b := by
   intro a
@@ -166,7 +181,7 @@ theorem sub_antisymm : ∀ {a b : Ty}, sub a b = true → sub b a = true → a =
     intro b hab hba
     cases b <;> simp_all [sub]
     exact List.IsPrefix.eq_of_length hba (Nat.le_antisymm hba.length_le hab.length_le)
-  | _ => intro b hab hba; cases b <;> simp_all [sub]
+  | _ => intro b hab hba; cases b <;> simp_all [sub] <;> omega
 
 theorem join_upper_left : ∀ a b : Ty, sub a (join a b) = true := by
   intro a
@@ -179,7 +194,7 @@ theorem join_upper_left : ∀ a b : Ty, sub a (join a b) = true := by
     all_goals (split <;> simp_all [sub])
   | never => intro b; simp
   | cls p => intro b; cases b <;> simp [join, sub, commonPrefix_left] <;> (try split) <;> simp_all [sub]
-  | _ => intro b; cases b <;> simp [join, sub] <;> (try split) <;> simp_all
+  | _ => intro b; cases b <;> simp [join, sub] <;> (try split) <;> (try simp_all) <;> omega
 
 theorem join_upper_right : ∀ a b : Ty, sub b (join a b) = true := by
   intro a
@@ -192,7 +207,7 @@ theorem join_upper_right : ∀ a b : Ty, sub b (join a b) = true := by
     all_goals (split <;> simp_all [sub])
   | never => intro b; simp [join, sub_refl]
   | cls p => intro b; cases b <;> simp [join, sub, commonPrefix_right] <;> (try split) <;> simp_all [sub]
-  | _ => intro b; cases b <;> simp [join, sub, sub_refl] <;> (try split) <;> simp_all
+  | _ => intro b; cases b <;> simp [join, sub, sub_refl] <;> (try split) <;> (try simp_all) <;> omega
 
 theorem join_least : ∀ {a b c : Ty}, sub a c = true → sub b c = true → sub (join a b) c = true := by
   intro a
@@ -225,7 +240,7 @@ theorem join_least : ∀ {a b c : Ty}, sub a c = true → sub b c = true → sub
     all_goals first | exact commonPrefix_greatest hac hbc | (split <;> simp_all [sub])
   | _ =>
     intro b c hac hbc
-    cases b <;> cases c <;> simp_all [join, sub] <;> (try split) <;> simp_all
+    cases b <;> cases c <;> simp_all [join, sub] <;> (try split) <;> (try simp_all) <;> omega
 
 theorem join_mono {a b a' b' : Ty} (ha : sub a' a = true) (hb : sub b' b = true) :
     sub (join a' b') (join a b) = true :=
@@ -267,9 +282,10 @@ theorem sub_joinAll : ∀ {t : Ty} {ts : List Ty}, t ∈ ts → sub t (joinAll t
     · exact sub_trans (sub_joinAll h) (join_upper_right _ _)
 
 /-- consistent subtyping (gradual typing): `any` stands for whatever type the value turns out to have, so a dynamic
-value may go where a cast checks it -/
+value may go where a cast checks it, as an int may go to a fixed width whose range a cast checks -/
 def consub : Ty → Ty → Bool
   | any, _ => true
+  | int, ranged _ _ | ranged _ _, ranged _ _ => true
   | list a, list b => consub a b
   | a, b => sub a b
 
