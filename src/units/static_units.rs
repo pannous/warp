@@ -46,8 +46,10 @@ const RETURN_WORD: &str = "return";
 const TEXT_WORDS: [&str; 3] = [TEXT_WORD, "text_form", "serialize"];
 /// `xs.add(q)`: list methods that take an element
 const ELEMENT_METHODS: [&str; 2] = ["add", "push"];
-/// List words that give an element: its signature
-const ELEMENT_WORDS: [&str; 5] = ["sum", "max", "min", "first", "last"];
+/// `xs.map(f)`: a list of what f gives each element
+const MAP_WORD: &str = "map";
+/// List words that give an element: its signature (`mean` also spelled `average`, library_words.rs)
+const ELEMENT_WORDS: [&str; 7] = ["sum", "max", "min", "first", "last", "mean", "average"];
 /// List words that give a plain number
 const COUNT_WORDS: [&str; 3] = ["count", "size", "length"];
 
@@ -79,9 +81,14 @@ pub fn lower(program: &Node) -> Option<Result<Node, Node>> {
 	if (!super::needs_quantities(program) && classes.is_empty()) || super::defines_unit_name(program) {
 		return None;
 	}
-	let mut written = vec![];
-	program.visit(&mut |node| if let Node::Symbol(name) = node { written.extend(unit_named(name)) });
-	let written = written.iter().map(|unit| Factor { unit, power: 1 }).chain(unit_fields::written_field_units(program)).collect::<Vec<_>>();
+	// a unit a constructor argument is written in (`Run(1500 m)`) is stored in its field's unit, which shows it
+	let mut written = written_units(program);
+	for stored in unit_fields::stored_argument_units(program, &classes) {
+		if let Some(at) = written.iter().position(|unit| std::ptr::eq(*unit, stored)) {
+			written.remove(at);
+		}
+	}
+	let written = written.into_iter().map(|unit| Factor { unit, power: 1 }).chain(unit_fields::written_field_units(program)).collect::<Vec<_>>();
 	let display = finest_units(&written);
 	let mut definitions = HashMap::new();
 	program.visit(&mut |node| {
@@ -110,6 +117,13 @@ pub fn lower(program: &Node) -> Option<Result<Node, Node>> {
 		Err(Stop::Error(message)) => Some(Err(crate::node::error(&message))),
 		Err(Stop::Unsupported) => None,
 	}
+}
+
+/// Every unit word written in `node`, once per mention
+fn written_units(node: &Node) -> Vec<&'static Unit> {
+	let mut written = vec![];
+	node.visit(&mut |part| if let Node::Symbol(name) = part { written.extend(unit_named(name)) });
+	written
 }
 
 /// The units the last lowered program's final value has, once (None for a plain number)
@@ -544,6 +558,13 @@ impl Inference {
 		if let Some(instance) = self.assigned_instance(&name, &target, op, &value) {
 			return instance;
 		}
+		if let Some(mapped) = self.mapped_list(&value) {
+			let (mapped, element) = mapped?;
+			if !element.is_empty() {
+				self.lists.insert(name, element);
+			}
+			return Ok((Node::Key(Box::new(target), op, Box::new(mapped)), vec![]));
+		}
 		if let Node::List(items, Bracket::Square, separator) = value.drop_meta() {
 			let (items, element) = self.list_elements(items.clone())?;
 			if !element.is_empty() {
@@ -727,10 +748,17 @@ impl Inference {
 		if !ELEMENT_WORDS.contains(&word) && !COUNT_WORDS.contains(&word) {
 			return None;
 		}
-		let element = match arguments {
-			[list] => match list.drop_meta() {
-				Node::Symbol(name) => self.lists.get(name).cloned()?,
-				_ => return None,
+		let (arguments, element) = match arguments {
+			[list] => match (list.drop_meta(), self.mapped_list(list)) {
+				(Node::Symbol(name), _) => (arguments.to_vec(), self.lists.get(name).cloned()?),
+				(Node::List(items, Bracket::Square, separator), _) => match self.list_elements(items.clone()) {
+					Ok((items, element)) if !element.is_empty() => (vec![Node::List(items, Bracket::Square, separator.clone())], element),
+					Ok(_) => return None,
+					Err(stop) => return Some(Err(stop)),
+				},
+				(_, Some(Ok((mapped, element)))) => (vec![mapped], element),
+				(_, Some(Err(stop))) => return Some(Err(stop)),
+				(_, None) => return None,
 			},
 			_ if ELEMENT_WORDS.contains(&word) => match self.list_elements(arguments.to_vec()) {
 				Ok((items, element)) if !element.is_empty() => return Some(Ok((items, element))),
@@ -740,12 +768,48 @@ impl Inference {
 			_ => return None,
 		};
 		let signature = if COUNT_WORDS.contains(&word) { vec![] } else { element };
-		Some(Ok((arguments.to_vec(), signature)))
+		Some(Ok((arguments, signature)))
+	}
+
+	/// `runs.map(r => r.distance)` (or an `it` body) of a list of a class or of quantities: the list, its
+	/// function's parameter an element, and the signature of the elements it maps to; None for any other value
+	fn mapped_list(&mut self, list: &Node) -> Option<Result<(Node, Signature), Stop>> {
+		let Node::Key(source, Op::Dot, call) = list.drop_meta() else { return None };
+		let Node::List(items, Bracket::Round, separator) = call.drop_meta() else { return None };
+		let [method, function] = items.as_slice() else { return None };
+		// a table's list reads as `runs·load()`
+		let source_name = match source.drop_meta() {
+			Node::Symbol(name) => name.clone(),
+			loaded => crate::database_tables::loaded_table(loaded)?,
+		};
+		if method.drop_meta().name() != MAP_WORD {
+			return None;
+		}
+		let (parameter, body) = match function.drop_meta() {
+			Node::Key(parameter, Op::FatArrow, body) => (parameter.drop_meta().name(), body.as_ref()),
+			body => (crate::lambdas::IMPLICIT_PARAMETER.to_string(), body),
+		};
+		if let Some(class) = self.class_lists.get(&source_name).cloned() {
+			self.declare_instance(parameter, class);
+		} else if let Some(element) = self.lists.get(&source_name).cloned() {
+			self.variables.insert(parameter, element);
+		} else {
+			return None;
+		}
+		Some(self.infer(body.clone()).map(|(body, element)| {
+			let function = match function.drop_meta() {
+				Node::Key(parameter, Op::FatArrow, _) => Node::Key(parameter.clone(), Op::FatArrow, Box::new(body)),
+				_ => body,
+			};
+			let call = Node::List(vec![method.clone(), function], Bracket::Round, separator.clone());
+			(Node::Key(source.clone(), Op::Dot, Box::new(call)), element)
+		}))
 	}
 
 	/// `print q`, `q in km`, `return q`: the forms of stage 3 written as lists; None for any other list
 	fn output_form(&mut self, items: &[Node], bracket: &Bracket, separator: &Separator) -> Option<Result<(Node, Signature), Stop>> {
-		let call_or_words = matches!((bracket, separator), (Bracket::None, Separator::Space) | (Bracket::Round, Separator::None));
+		// a one-line block `{ print r.distance }` is its words too
+		let call_or_words = matches!((bracket, separator), (Bracket::None | Bracket::Curly, Separator::Space) | (Bracket::Round, Separator::None));
 		let word = |node: &Node, wanted: &str| matches!(node.drop_meta(), Node::Symbol(w) if w == wanted);
 		if call_or_words {
 			if let Some(Node::Symbol(name)) = items.first().map(Node::drop_meta) {
