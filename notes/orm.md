@@ -81,7 +81,12 @@ keeping its fields with id 0; the lazy `people·remove` drops bo from the loaded
   an_element_of_a_table_loads_one_row, iterating_a_table_reads_it_in_pages).
 - The identity map `people·met` is a list searched by id, so a loop over n unloaded rows costs n²/2 comparisons:
   a map by id once tables grow large.
-- Not yet: paging of `where` results and comprehensions over a table (they load it), the IN (…) batching; a class method reading a table directly (not a
+- A filter `people where c` is `people.table·found(sql, parameters)` until with_lazy_reads makes it `people·found(…)`:
+  `std_io("table", "select", [table, schema, file, sql, parameters])` gives the kept rows whole, each made the one
+  instance of its row by `people·kept` (no load); a loaded table, or one with a required foreign key, keeps its loaded
+  instances of those ids (test a_filter_reads_only_the_rows_it_keeps). A served route answering one answers [] when
+  empty (serve.rs answers_a_list, database_tables::is_filter_query).
+- Not yet: comprehensions over a table (they load it), the IN (…) batching; a class method reading a table directly (not a
   generated getter) is not rewritten. An empty list must be `parse("[]")` (ø): a built `[]` List node with Space
   separator types `xs += [x]` as int + list.
 
