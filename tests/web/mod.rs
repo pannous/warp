@@ -8,6 +8,7 @@ mod test_web_playground;
 mod test_missing_use; // card clickable-hint
 mod test_guide; // the language guide on the playground page
 mod test_expert_guide;
+mod test_primer; // card language-primer: the assistant's system prompt, /llms.txt
 #[cfg(feature = "native")] // a server on a port, HTTP requests
 mod test_web_server;
 #[cfg(feature = "native")] // `warp dev` serves HTTP on a port
