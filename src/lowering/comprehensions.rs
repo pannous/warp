@@ -70,7 +70,7 @@ impl Lists {
 }
 
 /// The names a definition or assignment binds: `x`, `x: int`, the parameters of `f(a, b: int)`
-fn bound_names(target: &Node) -> Vec<String> {
+pub(crate) fn bound_names(target: &Node) -> Vec<String> {
 	match target.drop_meta() {
 		Node::Symbol(name) => vec![name.clone()],
 		Node::Key(name, Op::Colon, _) => bound_names(name),
@@ -227,6 +227,34 @@ fn phrase(words: &[Node]) -> Node {
 	}
 }
 
+pub(crate) struct Comprehension {
+	/// Where the `for` clause starts: 1 after an element of one word
+	pub(crate) at: usize,
+	pub(crate) element: Node,
+	pub(crate) variable: Node,
+	pub(crate) sequence: Node,
+	pub(crate) condition: Option<Node>,
+}
+
+/// The items `[element, (for v in xs), …]` as the parser groups them; with a filter `(for v in xs if) condition`.
+/// An element or condition of several words is their phrase: `[upper w for w in words]`
+pub(crate) fn comprehension_parts(items: &[Node]) -> Option<Comprehension> {
+	let at = items.iter().position(starts_with_for).filter(|&at| at > 0)?;
+	let (element, clause, rest) = (phrase(&items[..at]), &items[at], &items[at + 1..]);
+	let Node::List(words, _, _) = clause.drop_meta() else { return None };
+	let [_, variable, in_word, sequence, tail @ ..] = words.as_slice() else { return None };
+	if !is_word(in_word, IN_WORD) || !matches!(variable.drop_meta(), Node::Symbol(_)) {
+		return None;
+	}
+	let condition = match (tail, rest) {
+		([], []) => None,
+		([nothing], []) if matches!(nothing.drop_meta(), Node::Empty) => None,
+		([filter_word], [_, ..]) if is_word(filter_word, IF_WORD) || is_word(filter_word, WHERE_WORD) => Some(phrase(rest)),
+		_ => return None,
+	};
+	Some(Comprehension { at, element, variable: variable.clone(), sequence: sequence.clone(), condition })
+}
+
 struct Lowering {
 	count: Cell<usize>,
 }
@@ -252,23 +280,9 @@ impl Lowering {
 		}
 	}
 
-	/// The items `[element, (for v in xs), …]` as the parser groups them; with a filter `(for v in xs if) condition`.
-	/// An element or condition of several words is their phrase: `[upper w for w in words]`
 	fn comprehension(&self, items: &[Node]) -> Option<Node> {
-		let at = items.iter().position(starts_with_for).filter(|&at| at > 0)?;
-		let (element, clause, rest) = (phrase(&items[..at]), &items[at], &items[at + 1..]);
-		let Node::List(words, _, _) = clause.drop_meta() else { return None };
-		let [_, variable, in_word, sequence, tail @ ..] = words.as_slice() else { return None };
-		if !is_word(in_word, IN_WORD) || !matches!(variable.drop_meta(), Node::Symbol(_)) {
-			return None;
-		}
-		let condition = match (tail, rest) {
-			([], []) => None,
-			([nothing], []) if matches!(nothing.drop_meta(), Node::Empty) => None,
-			([filter_word], [_, ..]) if is_word(filter_word, IF_WORD) || is_word(filter_word, WHERE_WORD) => Some(phrase(rest)),
-			_ => return None,
-		};
-		Some(self.built(variable, sequence, &element, condition.as_ref()))
+		let parts = comprehension_parts(items)?;
+		Some(self.built(&parts.variable, &parts.sequence, &parts.element, parts.condition.as_ref()))
 	}
 
 	/// `(made = []; for variable in sequence { if condition { made.push(element) } }; made)`

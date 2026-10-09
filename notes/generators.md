@@ -47,9 +47,17 @@
   are (lib/list.warp, `use list`). A call in a `while` condition is not rewritten (it would be computed once).
 - An argument `naturals()` arrives as the bare symbol `naturals`: generator_call takes it as the call.
 
+## Generator expressions (src/lowering/generator_expressions.rs, first step of generators::lower)
+- `(x * x for x in xs)`, `(x for x in xs if c)` standing alone (before: ø) become the generator
+  `generator·expression·1(free…) := { for x in xs { if c { yield x * x } } }` and its call: collected as a value,
+  lazy in a loop or take, an object for next. The variables it reads are its parameters. A call's argument
+  `sum(x * x for x in xs)` stays the eager comprehension (comprehensions.rs): `(upper w for w in words)` and
+  `upper(w for w in words)` parse alike, so only an element of one word starts a generator expression.
+- lazy_loops now runs before the generator objects and inlines the loops it made in turn: a generator looping over
+  another (`(x * x for x in naturals())`) has it inlined first, so its object never collects the endless one.
+
 ## Next
 - wasm stack switching (wasmtime 49 has `wasm_stack_switching`, x86-64 Linux only; no browser) would resume any
   generator without the state machine; not needed now.
-- `yield from xs` / `yield each xs`, a recursive generator lazily, a generator expression `(x*x for x in xs)` as a
-  lazy value.
+- `yield from xs` / `yield each xs`, a recursive generator lazily.
 - Ruby `loop do … end` and `while c … end` inside a `def … end` do not parse (found writing a Ruby fib generator).

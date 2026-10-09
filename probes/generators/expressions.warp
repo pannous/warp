@@ -1,0 +1,15 @@
+naturals() := { k = 1; while yes { yield k; k += 1 } }
+squares = (x * x for x in [1, 2, 3])
+print squares
+evens = (x for x in 1 to 9 if x % 2 == 0)
+print sum(evens)
+print take 3 of (x * 10 for x in naturals())
+t = 0
+for y in (x * x for x in naturals()) { if y > 20 { break }; t += y }
+print t
+factor = 3
+g = (x * factor for x in [1, 2])
+print [next(g), next(g), next(g)]
+scaled(xs, k) := sum(x * k for x in xs)
+print scaled([1, 2], 10)
+print sum(x * x for x in [1, 2, 3])
