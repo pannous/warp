@@ -741,6 +741,10 @@ PASSED:
   ✓ ffi::test_foreign_js::test_js_modules
   ✓ ffi::test_foreign_js::test_untrusted_code_gets_no_js
   ✓ ffi::test_foreign_js::test_values_held_from_another_runtime_compare
+  ✓ ffi::test_foreign_member_assignment::a_js_member_is_set
+  ✓ ffi::test_foreign_member_assignment::a_member_of_a_call_result_is_set
+  ✓ ffi::test_foreign_member_assignment::a_page_element_member_assignment_compiles
+  ✓ ffi::test_foreign_member_assignment::a_python_attribute_is_set
   ✓ ffi::test_foreign_operators::test_js_indexing_and_counting
   ✓ ffi::test_foreign_operators::test_plain_values_keep_their_operators
   ✓ ffi::test_foreign_operators::test_python_indexing_counting_iteration
@@ -1548,6 +1552,8 @@ PASSED:
   ✓ lists::test_range_arguments::a_range_argument_used_as_a_list_stays_one
   ✓ lists::test_range_arguments::a_range_passed_on_to_a_reader_stays_its_bounds
   ✓ lists::test_range_arguments::a_range_variable_passed_on_stays_its_bounds
+  ✓ lists::test_range_in_structure::a_held_range_is_collected_in_linear_time
+  ✓ lists::test_range_in_structure::a_range_after_colon_is_its_value
   ✓ lists::test_range_returns::a_returned_range_is_read_from_its_bounds
   ✓ lists::test_range_returns::a_returned_range_stored_in_a_variable_stays_its_bounds
   ✓ lists::test_range_returns::a_returned_range_used_as_a_list_is_its_list
@@ -2099,6 +2105,8 @@ PASSED:
   ✓ numbers::test_rational_type::test_pi_is_real_whatever_its_representation
   ✓ numbers::test_rational_type::test_rational_and_rationals_are_type_words
   ✓ numbers::test_rational_type::test_type_of_a_list_of_decimals_is_a_list_of_rational
+  ✓ numbers::test_recursive_units::a_recursive_function_keeps_its_dimensions
+  ✓ numbers::test_recursive_units::a_recursive_function_takes_quantities
   ✓ numbers::test_round_to_digits::round_to_digits
   ✓ numbers::test_round_to_digits::round_without_digits_is_whole
   ✓ numbers::test_rounding_in_functions::test_rounding_builtins_work_inside_function_bodies
@@ -2179,6 +2187,11 @@ PASSED:
   ✓ numbers::test_unit_literals::a_long_unit_name_belongs_to_its_amount_in_a_condition
   ✓ numbers::test_unit_literals::a_unit_after_a_comparison_belongs_to_its_amount
   ✓ numbers::test_unit_literals::a_variable_named_like_a_unit_stays_a_variable
+  ✓ numbers::test_unit_named_function::a_function_named_like_a_unit_keeps_the_other_units
+  ✓ numbers::test_unit_named_function::a_parameter_named_like_a_unit_keeps_the_other_units
+  ✓ numbers::test_unit_named_function::a_variable_named_like_a_unit_keeps_the_other_units
+  ✓ numbers::test_unit_named_parameter::a_parameter_named_like_a_unit_written_as_that_unit_is_a_name_clash
+  ✓ numbers::test_unit_named_parameter::a_parameter_named_like_another_unit_or_used_only_inside_is_no_clash
   ✓ numbers::test_unit_named_variable::a_loop_variable_named_like_a_unit
   ✓ numbers::test_unit_named_variable::a_printed_loop_variable_named_like_a_unit
   ✓ numbers::test_unit_named_variable::an_assigned_variable_named_like_a_unit
@@ -2367,6 +2380,8 @@ PASSED:
   ✓ operators::test_superscript_operator_declarations::test_short_declaration_without_the_operator_word
   ✓ operators::test_superscript_operator_declarations::test_suffix_operator_on_a_superscript_digit
   ✓ operators::test_superscript_operator_declarations::test_undeclared_superscripts_stay_powers
+  ✓ operators::test_text_or_number::a_sum_of_repeated_texts_or_a_number
+  ✓ operators::test_text_or_number::repeated_text_or_a_number
   ✓ operators::test_then_pipe::then_pipes_into_a_function
   ✓ operators::test_then_pipe::then_pipes_into_a_word_operator
   ✓ operators::test_then_pipe::then_without_if_is_the_condition
@@ -2607,6 +2622,7 @@ PASSED:
   ✓ programs::test_calculator_fixes::test_run_time_math
   ✓ programs::test_calculator_fixes::test_text_comparisons
   ✓ programs::test_cli_help::help_prints_the_usage
+  ✓ programs::test_code_golf::every_golf_solution_prints_its_holes_output
   ✓ programs::test_data_structure_fixes::test_data_key_read_as_a_variable
   ✓ programs::test_data_structure_fixes::test_list_comprehension
   ✓ programs::test_data_structure_fixes::test_named_tuple_fields
@@ -3621,6 +3637,8 @@ PASSED:
   ✓ web::test_css_transitions::the_starting_style_is_data_for_the_page
   ✓ web::test_dev_server::a_dev_build_keeps_the_values_the_program_changed
   ✓ web::test_dev_server::the_dev_server_rebuilds_a_changed_program
+  ✓ web::test_dom_pages::a_handler_draws_on_a_canvas_of_the_page
+  ✓ web::test_dom_pages::a_handler_sets_and_reads_elements_of_the_page
   ✓ web::test_element_events::an_element_handler_marks_its_element
   ✓ web::test_element_events::each_element_handler_has_its_number
   ✓ web::test_element_events::the_page_shows_the_markup_after_a_handler
@@ -3667,6 +3685,8 @@ PASSED:
   ✓ web::test_markup_lines::an_aria_attribute_renders
   ✓ web::test_markup_renderer::a_style_sheet_inside_a_scoped_element_styles_only_its_elements
   ✓ web::test_markup_renderer::the_renderer_keeps_its_locals_apart_from_the_programs_variables
+  ✓ web::test_markup_scripts::js_is_the_script_element
+  ✓ web::test_markup_scripts::script_content_is_not_escaped
   ✓ web::test_markup_tags::a_call_outside_tags_or_of_a_function_stays_a_call
   ✓ web::test_markup_tags::a_spaced_child_element_takes_its_loop_as_children
   ✓ web::test_markup_tags::a_tag_takes_html_attributes_with_equals
@@ -3998,6 +4018,11 @@ PASSED:
   ✓ welcoming::test_got_it_warnings::got_it_silences_the_warning_but_never_changes_the_program
   ✓ welcoming::test_got_it_warnings::the_explicit_forms_say_it_without_a_warning
   ✓ welcoming::test_hint_positions::a_lowering_hint_names_its_node
+  ✓ welcoming::test_indented_body_without_colon::a_bare_for_takes_its_indented_lines
+  ✓ welcoming::test_indented_body_without_colon::a_definition_ending_its_line_takes_the_indented_lines
+  ✓ welcoming::test_indented_body_without_colon::a_for_in_takes_its_indented_if
+  ✓ welcoming::test_indented_body_without_colon::a_while_takes_all_its_indented_lines
+  ✓ welcoming::test_indented_body_without_colon::an_indented_comma_line_swaps
   ✓ welcoming::test_index_hint_numbers::only_a_number_index_gets_the_hash_hint
   ✓ welcoming::test_index_hint_simple::only_a_simple_index_gets_the_hash_hint
   ✓ welcoming::test_it_shadow_warning::a_loop_it_hiding_the_function_it_warns
@@ -4024,6 +4049,8 @@ PASSED:
   ✓ welcoming::test_lone_words::test_a_word_close_to_a_name_warns
   ✓ welcoming::test_lone_words::test_data_is_the_data_prefix
   ✓ welcoming::test_lowered_error_text::an_unknown_word_error_quotes_the_words_as_written
+  ✓ welcoming::test_open_range_slices::a_slice_from_the_start
+  ✓ welcoming::test_open_range_slices::a_slice_to_the_end
   ✓ welcoming::test_quiet_hints::legitimate_forms_get_no_hint
   ✓ welcoming::test_slash_comment_after_value::a_comment_after_a_text_gets_no_division_note
   ✓ welcoming::test_slash_comment_after_value::a_prose_comment_after_a_value_gets_no_division_note
@@ -4166,4 +4193,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-10 ignored, 4161 passed, 0 failed, 4161 total tested
+10 ignored, 4188 passed, 0 failed, 4188 total tested
