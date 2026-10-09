@@ -26,6 +26,11 @@ const UNIFORM_ALIGNMENT = 16; // a uniform struct is a whole number of 16-byte r
 const VALUE_TYPES = [, ["f32", 4], ["vec2f", 8], ["vec3f", 16], ["vec4f", 16]];
 const VECTOR_FLOATS = 4; // the floats of one vector in an array value, `values.<name>[i]` (src/gpu.rs)
 let gpuDevice; // the task Worker's device, asked for once
+// a shader painted every frame compiles once, not each frame (card playground-tour: the tour's page crashed in a
+// shader animation on a Mac): the task Worker's last MOST_COMPILED modules and pipelines, by their WGSL
+const MOST_COMPILED = 16;
+const compiledModules = new Map();
+const compiledPipelines = new Map();
 const WORDS_STATE = 2; // the shared buffer's state when it holds raw 32-bit words, floats or pixels (writeShared's JSON is state 1)
 // kept buffers (src/lowering/gpu_maps.rs marked_kept): a map result read on the CPU stays on the GPU for the next map of
 // it, by block, the last MOST_KEPT of them (src/gpu.rs KEPT); flags as gpu_map_linear's last argument
@@ -53,7 +58,7 @@ async function gpuComputedFloats({ shader, numbers, workgroups, first = 0, sourc
 	if (input.length) device.queue.writeBuffer(storage, keptBytes, input);
 	const module = await gpuModule(device, shader);
 	device.pushErrorScope("validation");
-	const pipeline = device.createComputePipeline({ layout: "auto", compute: { module, entryPoint: GPU_ENTRY_POINT } });
+	const pipeline = compiledOnce(compiledPipelines, shader, () => device.createComputePipeline({ layout: "auto", compute: { module, entryPoint: GPU_ENTRY_POINT } }));
 	const bindings = device.createBindGroup({ layout: pipeline.getBindGroupLayout(0), entries: [{ binding: GPU_BINDING, resource: { buffer: storage } }] });
 	const encoder = device.createCommandEncoder();
 	if (kept) encoder.copyBufferToBuffer(kept.storage, 0, storage, 0, keptBytes);
@@ -85,18 +90,24 @@ function keepBuffer(block, buffer) {
 async function gpuRendered({ shader, width, height, values }) {
 	const device = gpuDevice ??= await gpuDeviceOrFailure();
 	const { declarations, bytes: valueBytes } = uniformLayout(values);
-	const module = await gpuModule(device, shader + FULL_IMAGE_VERTICES + declarations);
-	const uniform = valueBytes.byteLength ? uniformBinding(device, valueBytes) : undefined;
+	const code = shader + FULL_IMAGE_VERTICES + declarations;
+	const module = await gpuModule(device, code);
 	const format = "rgba8unorm";
 	const image = device.createTexture({ size: [width, height], format, usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.COPY_SRC });
 	const rowBytes = Math.ceil(width * PIXEL_BYTES / ROW_ALIGNMENT) * ROW_ALIGNMENT;
 	const readback = device.createBuffer({ size: rowBytes * height, usage: GPUBufferUsage.MAP_READ | GPUBufferUsage.COPY_DST });
 	device.pushErrorScope("validation");
-	const pipeline = device.createRenderPipeline({
-		layout: uniform?.layout ?? "auto",
-		vertex: { module, entryPoint: VERTEX_ENTRY_POINT },
-		fragment: { module, entryPoint: GPU_ENTRY_POINT, targets: [{ format }] },
+	const { pipeline, groupLayout } = compiledOnce(compiledPipelines, code, () => {
+		const groupLayout = declarations ? valuesGroupLayout(device) : undefined;
+		const layout = groupLayout ? device.createPipelineLayout({ bindGroupLayouts: [groupLayout] }) : "auto";
+		const pipeline = device.createRenderPipeline({
+			layout,
+			vertex: { module, entryPoint: VERTEX_ENTRY_POINT },
+			fragment: { module, entryPoint: GPU_ENTRY_POINT, targets: [{ format }] },
+		});
+		return { pipeline, groupLayout };
 	});
+	const uniform = groupLayout ? uniformBinding(device, groupLayout, valueBytes) : undefined;
 	const encoder = device.createCommandEncoder();
 	const pass = encoder.beginRenderPass({ colorAttachments: [{ view: image.createView(), loadOp: "clear", storeOp: "store" }] });
 	pass.setPipeline(pipeline);
@@ -106,6 +117,7 @@ async function gpuRendered({ shader, width, height, values }) {
 	encoder.copyTextureToBuffer({ texture: image }, { buffer: readback, bytesPerRow: rowBytes, rowsPerImage: height }, [width, height]);
 	const bytes = new Uint8Array(await gpuReadBack(device, encoder, readback));
 	image.destroy();
+	uniform?.buffer.destroy();
 	const pixels = new Uint32Array(width * height);
 	for (let row = 0, pixel = 0; row < height; row++)
 		for (let at = row * rowBytes; at < row * rowBytes + width * PIXEL_BYTES; at += PIXEL_BYTES)
@@ -140,13 +152,21 @@ function uniformLayout(values) {
 }
 
 // an explicit layout holding the uniform, so a shader that leaves `values` unread still binds them
-function uniformBinding(device, bytes) {
+const valuesGroupLayout = device => device.createBindGroupLayout({ entries: [{ binding: VALUES_BINDING, visibility: GPUShaderStage.FRAGMENT, buffer: { type: "uniform" } }] });
+
+// this frame's values in a uniform buffer, bound as the layout says; the buffer is destroyed once the frame is read
+function uniformBinding(device, groupLayout, bytes) {
 	const buffer = device.createBuffer({ size: bytes.byteLength, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
 	device.queue.writeBuffer(buffer, 0, bytes);
-	const groupLayout = device.createBindGroupLayout({ entries: [{ binding: VALUES_BINDING, visibility: GPUShaderStage.FRAGMENT, buffer: { type: "uniform" } }] });
-	const layout = device.createPipelineLayout({ bindGroupLayouts: [groupLayout] });
 	const bindings = device.createBindGroup({ layout: groupLayout, entries: [{ binding: VALUES_BINDING, resource: { buffer } }] });
-	return { layout, bindings };
+	return { buffer, bindings };
+}
+
+// the value made for `key` before, or made now; the oldest of more than MOST_COMPILED goes
+function compiledOnce(cache, key, make) {
+	if (!cache.has(key)) cache.set(key, make());
+	if (cache.size > MOST_COMPILED) cache.delete(cache.keys().next().value);
+	return cache.get(key);
 }
 
 async function gpuDeviceOrFailure() {
@@ -155,8 +175,11 @@ async function gpuDeviceOrFailure() {
 	return adapter.requestDevice();
 }
 
+// the shader's module, checked once: asking a module for its compilation info a second time crashed Chrome's page (Mac)
+const gpuModule = (device, shader) => compiledOnce(compiledModules, shader, () => checkedModule(device, shader));
+
 // the shader's module; one that does not compile throws where and why
-async function gpuModule(device, shader) {
+async function checkedModule(device, shader) {
 	const module = device.createShaderModule({ code: shader });
 	const problems = (await module.getCompilationInfo()).messages.filter(message => message.type === "error");
 	if (problems.length) throw new Error(problems.map(problem => `${problem.lineNum}:${problem.linePos}: ${problem.message}`).join("; "));
