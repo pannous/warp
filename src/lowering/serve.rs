@@ -13,6 +13,8 @@ use std::collections::HashSet;
 const SERVE_WORD: &str = "serve";
 const ROUTE_PREFIX: &str = "route·";
 const REQUEST_WORD: &str = "request";
+const REQUEST_PATH: &str = "request.path";
+const PATH_PARAMETER_MARK: char = ':';
 const ANY_TYPE: &str = "any";
 const METHODS: [&str; 5] = ["get", "post", "put", "delete", "patch"];
 const SERVER_WORD: &str = "server";
@@ -545,6 +547,7 @@ fn serving(port: Node, routes: Vec<Route>, server_data: &ServerData, count: &mut
 		if answers_a_list(&body, &server_data.list_words) {
 			entry.push(Node::Text(LIST_ANSWER.to_string()));
 		}
+		let body = with_path_parameters(&crate::routes::pattern_text(&entry[1]), body);
 		statements.push(Node::Key(Box::new(head), Op::Define, Box::new(reading_tables(body, &server_data.tables))));
 		table.push(Node::List(entry, Bracket::Square, Separator::Colon));
 	}
@@ -552,3 +555,16 @@ fn serving(port: Node, routes: Vec<Route>, server_data: &ServerData, count: &mut
 	statements.push(Node::List(vec![Node::Symbol(crate::host::SERVE_ROUTES.to_string()), port, routes], Bracket::Round, Separator::None));
 	statements
 }
+
+/// `get "/api/users/:id:int" { users#id }`: the block after `let id:int` bound from the request's path
+fn with_path_parameters(pattern: &str, body: Node) -> Node {
+	if !pattern.contains(PATH_PARAMETER_MARK) {
+		return body;
+	}
+	let items = match body.drop_meta() {
+		Node::List(items, Bracket::Curly, _) => items.clone(),
+		other => vec![other.clone()],
+	};
+	Node::List(crate::routes::route_body_at(pattern, &items, crate::warp_parser::parse(REQUEST_PATH)), Bracket::Curly, Separator::Newline)
+}
+

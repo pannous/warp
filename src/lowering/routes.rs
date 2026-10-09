@@ -25,6 +25,8 @@ const PATH_SEPARATOR: char = '/';
 /// The patterns of the routes in order, exported for the site's loader (warp-cf: a module per route, card web-bundle)
 pub const PAGE_ROUTES: &str = "page·routes";
 const PAGE_ROUTED: &str = "page·routed";
+/// lib/router.warp's words binding a parameter: a program calling one needs the router (modules.rs)
+pub const PATH_WORDS: [&str; 2] = ["route_segment", "route_parameter"];
 pub const PAGE_ROUTE_INDEX: &str = "page·route_index";
 /// A parameter's regular expression (":id(\\d+)") is checked with std regex's word, which GROUP_TEMPLATE calls: modules.rs
 /// brings regex when page·route_index calls it, router when the program has page·routes
@@ -37,11 +39,13 @@ const PARAMETER_TYPES: [&str; 4] = ["int", "float", "text", "string"];
 /// URLPattern (card route-urlpattern): how often the last part may come ("?", "*", "+"), a regular expression "(…)"
 const PART_MARKS: [char; 3] = ['?', '*', '+'];
 const GROUP_START: char = '(';
-const ANY_PARTS: &str = "*";
+pub const ANY_PARTS: &str = "*";
 /// `id` of the pattern bound in the route's function: without a type a number when it is digits, else its text
-const PARAMETER_CALL: &str = "route_parameter(pattern, page_path(), parameter_name)";
+const PARAMETER_CALL: &str = "route_parameter(pattern, routed_path, parameter_name)";
 /// the text of a typed one, which the `let` casts to its type (`as`: float(text) is card float-of-text)
-const SEGMENT_CALL: &str = "route_segment(pattern, page_path(), parameter_name)";
+const SEGMENT_CALL: &str = "route_segment(pattern, routed_path, parameter_name)";
+/// the path a page's route binds its parameters from
+const PAGE_PATH_CALL: &str = "page_path()";
 const PATH_TEMPLATE: &str = "let routed_path = page_path()";
 const MATCH_TEMPLATE: &str = "if route_matches(pattern, routed_path) and groups_fit { return index }";
 /// a parameter with a regular expression: absent (optional) or its part matching all of it
@@ -88,16 +92,23 @@ pub(crate) fn is_route(statement: &Node) -> bool {
 	route(statement).is_some()
 }
 
+/// A pattern's text; "/" parses as a character
+pub(crate) fn pattern_text(pattern: &Node) -> String {
+	match pattern.drop_meta() {
+		Node::Char(character) => character.to_string(),
+		other => other.name(),
+	}
+}
+
 /// `route "/users/:id" {…}`: the pattern ("/" parses as a character) and the block's items
 pub(crate) fn route(statement: &Node) -> Option<Route> {
 	let Node::List(items, _, _) = statement.drop_meta() else { return None };
 	let [word, pattern, block] = items.as_slice() else { return None };
 	let Node::List(body, Bracket::Curly, _) = block.drop_meta() else { return None };
-	let pattern = match pattern.drop_meta() {
-		Node::Text(text) => text.clone(),
-		Node::Char(character) => character.to_string(),
-		_ => return None,
-	};
+	if !matches!(pattern.drop_meta(), Node::Text(_) | Node::Char(_)) {
+		return None;
+	}
+	let pattern = pattern_text(pattern);
 	(word.drop_meta().name() == ROUTE_WORD).then(|| (pattern, body.clone()))
 }
 
@@ -149,6 +160,39 @@ fn parameters(pattern: &str) -> impl Iterator<Item = Parameter<'_>> {
 	})
 }
 
+/// Whether `path` matches `pattern`, as lib/router.warp route_matches, for a server choosing its route before any warp
+/// code runs: fixed parts equal, a typed parameter's part of its type, a mark on the last part, "*" any path
+pub fn path_matches(pattern: &str, path: &str) -> bool {
+	if pattern == ANY_PARTS {
+		return true;
+	}
+	let parts = |text: &'_ str| text.split(PATH_SEPARATOR).filter(|part| !part.is_empty()).map(str::to_string).collect::<Vec<String>>();
+	let (wanted, given) = (parts(pattern), parts(path));
+	let mark = wanted.last().and_then(|last| if last == ANY_PARTS { Some('*') } else { last.strip_prefix(PARAMETER_MARK)?.chars().last().filter(|end| PART_MARKS.contains(end)) });
+	let fixed = wanted.len() - usize::from(mark.is_some());
+	let counted = match mark {
+		None => given.len() == fixed,
+		Some('?') => (fixed..=fixed + 1).contains(&given.len()),
+		Some('+') => given.len() > fixed,
+		Some(_) => given.len() >= fixed,
+	};
+	counted && wanted.iter().zip(&given).take(fixed).all(|(part, segment)| match part.strip_prefix(PARAMETER_MARK) {
+		None => part == segment,
+		Some(_) => parameters(part).next().and_then(|parameter| parameter.kind).is_none_or(|kind| part_fits(kind, segment)),
+	})
+}
+
+/// Whether a path part is a value of the type a parameter declares (lib/router.warp route_fits): digits, a float's
+/// with at most one dot
+fn part_fits(kind: &str, segment: &str) -> bool {
+	let dots = match kind {
+		"int" => 0,
+		"float" => 1,
+		_ => return true,
+	};
+	!segment.is_empty() && segment.chars().all(|character| character.is_ascii_digit() || character == '.') && segment.matches('.').count() <= dots
+}
+
 /// What a pattern says wrong, loudly: a mark on a part before the last, a group without a name, a type no path part has
 fn pattern_problem(pattern: &str) -> Option<String> {
 	let parts: Vec<&str> = pattern.split(PATH_SEPARATOR).filter(|part| !part.is_empty()).collect();
@@ -165,6 +209,11 @@ fn pattern_problem(pattern: &str) -> Option<String> {
 
 /// The route's block after a `let` for each parameter of its pattern, typed when the parameter declares its type
 pub(crate) fn route_body(pattern: &str, body: &[Node]) -> Vec<Node> {
+	route_body_at(pattern, body, crate::warp_parser::parse(PAGE_PATH_CALL))
+}
+
+/// The block with its parameters bound from the path `path` gives (a server route's `request.path`)
+pub(crate) fn route_body_at(pattern: &str, body: &[Node], path: Node) -> Vec<Node> {
 	if let Some(problem) = pattern_problem(pattern) {
 		return vec![crate::node::error(&problem)];
 	}
@@ -173,7 +222,7 @@ pub(crate) fn route_body(pattern: &str, body: &[Node]) -> Vec<Node> {
 			None => format!("let {name} = {PARAMETER_CALL}"),
 			Some(kind) => format!("let {name}:{kind} = {SEGMENT_CALL} as {kind}"),
 		};
-		template(&value, [("pattern", text(pattern)), ("parameter_name", text(name))])
+		template(&value, [("pattern", text(pattern)), ("parameter_name", text(name)), ("routed_path", path.clone())])
 	});
 	bindings.chain(body.iter().cloned()).collect()
 }
