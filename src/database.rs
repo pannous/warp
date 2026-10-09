@@ -293,7 +293,10 @@ fn stored_columns(database: Handle, quoted_table: &str) -> Result<Vec<(String, S
 /// A field `[name, type, default, old name]` of a renamed column: the name and the old one
 fn renamed_column(field: &Node) -> Option<(String, String)> {
 	let parts = field.children();
-	let [name, _, _, old_name] = parts.as_slice() else { return None };
+	let [name, _, _, old_name, ..] = parts.as_slice() else { return None };
+	if matches!(old_name.drop_meta(), Node::Empty) {
+		return None; // a unit field's column, not renamed
+	}
 	Some((name.drop_meta().name(), old_name.drop_meta().name()))
 }
 
@@ -361,7 +364,7 @@ fn split_unit(column_type: &str) -> (&str, Option<&str>) {
 /// A field `[name, type, default]` as its column: name, SQL type, the SQL literal new rows of an added column take
 fn column_of(field: &Node) -> Result<(String, String, String), String> {
 	let parts = field.children();
-	let ([name, field_type, default] | [name, field_type, default, _]) = parts.as_slice() else { return Err(format!("no field [name type default]: {}", field.serialize().trim())) };
+	let [name, field_type, default, ..] = parts.as_slice() else { return Err(format!("no field [name type default]: {}", field.serialize().trim())) };
 	let field_type = field_type.drop_meta().name();
 	// `email: text?`: a nullable column, its rows default to NULL (ø)
 	let optional = field_type.ends_with(OPTIONAL_MARK);
