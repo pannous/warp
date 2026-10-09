@@ -7,6 +7,9 @@ before asking the user; nobody reads it front to back, the code, tests and wiki 
 notes/open_decisions.md.
 
 ## Decided 2026-10-09 (user, as recommended unless quoted)
+- P233 (warp-keywords, card field-tolerance): a field typed with a tolerance gives every value that tolerance:
+  `class Part{length: m ± 1 mm}`, `Part(5 m).length` → `5.000 ± 0.001m` (a spec attached to each value). Replaces
+  the interim "not supported yet" error.
 - Undoable default (warp-class, card g_mSEw "a less explicit form"): `form post "/todos" { input{name:"title"}
   button{"add"} }` = `form{ method:"post" action:"/todos" … }`, matching the route `post "/todos" {…}`;
   samples/todo_app.warp. Not built: naming the route function (`form add_todo {…}`) or finding the only matching
