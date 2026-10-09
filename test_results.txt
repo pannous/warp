@@ -205,6 +205,7 @@ PASSED:
   ✓ control::test_filter_loops::test_plain_loops_do_not_filter
   ✓ control::test_for_forms::block_after_a_chained_iterable
   ✓ control::test_for_forms::c_style_for_with_a_space_or_without_braces
+  ✓ control::test_for_forms::each_starts_a_loop
   ✓ control::test_for_forms::else_after_a_block_takes_the_whole_expression
   ✓ control::test_for_forms::else_print_after_a_block
   ✓ control::test_for_forms::print_of_a_call_without_parentheses_in_an_if_branch
@@ -305,6 +306,7 @@ PASSED:
   ✓ control::test_named_broadcast::a_text_alone_sends_a_named_event_without_data
   ✓ control::test_named_broadcast::raise_stays_inside_the_program
   ✓ control::test_named_broadcast::send_to_is_broadcast_on
+  ✓ control::test_not_condition_block::a_comparison_with_empty_in_a_group
   ✓ control::test_not_condition_block::a_negated_condition_in_a_loop
   ✓ control::test_not_condition_block::a_negated_condition_takes_its_block
   ✓ control::test_object_blocks::test_a_computed_entry_warns_where_it_is_written
@@ -1061,13 +1063,19 @@ PASSED:
   ✓ functions::test_functions::test2def
   ✓ functions::test_generator_arguments::a_generator_argument
   ✓ functions::test_generator_arguments::any_and_all_of_a_list
+  ✓ functions::test_generators::a_changing_method_returns_early
   ✓ functions::test_generators::a_generator_call_collects_what_it_yields
+  ✓ functions::test_generators::a_generator_object_jumps_like_its_loops
   ✓ functions::test_generators::a_loop_ending_in_break_has_a_value
   ✓ functions::test_generators::a_loop_over_a_generator_runs_its_body_per_yield
+  ✓ functions::test_generators::a_loop_walks_a_generator_object
+  ✓ functions::test_generators::a_loop_walks_an_object_with_next_until_it_gives_nothing
   ✓ functions::test_generators::break_stops_an_endless_generator
   ✓ functions::test_generators::continue_goes_on_after_the_yield
+  ✓ functions::test_generators::next_resumes_a_generator_where_it_stopped
   ✓ functions::test_generators::python_generator
   ✓ functions::test_generators::return_ends_a_generator
+  ✓ functions::test_generators::two_generator_objects_advance_apart
   ✓ functions::test_getter_warning_text::a_long_getter_body_is_not_spelled_out_in_its_warning
   ✓ functions::test_global_with_closures::global_in_a_program_with_a_lambda
   ✓ functions::test_go_functions::a_go_short_declaration_that_is_assigned_stays_an_error
@@ -1433,6 +1441,7 @@ PASSED:
   ✓ lists::test_empty_list_count::the_counting_properties_of_an_empty_list_need_no_null_check
   ✓ lists::test_field_count::a_parameter_counts_with_the_call_form
   ✓ lists::test_field_count::test_count_of_a_field
+  ✓ lists::test_find_any_all::any_and_all_answer_yes_or_no
   ✓ lists::test_find_any_all::find_any_and_all_test_the_elements
   ✓ lists::test_first_items::first_and_last_take_a_number_of_items
   ✓ lists::test_first_items::first_of_a_list_is_its_first_item
@@ -2151,6 +2160,9 @@ PASSED:
   ✓ numbers::test_round_to_digits::round_to_digits
   ✓ numbers::test_round_to_digits::round_without_digits_is_whole
   ✓ numbers::test_rounding_in_functions::test_rounding_builtins_work_inside_function_bodies
+  ✓ numbers::test_run_time_remainder::a_float_element_has_a_float_remainder
+  ✓ numbers::test_run_time_remainder::a_long_float_literal_element_has_a_remainder
+  ✓ numbers::test_run_time_remainder::an_int_element_keeps_an_exact_remainder
   ✓ numbers::test_shift_operators::test_angle_brackets_still_delimit_generics
   ✓ numbers::test_shift_operators::test_shift_left_multiplies_by_a_power_of_two
   ✓ numbers::test_shift_operators::test_shift_of_a_float_is_refused
@@ -2745,6 +2757,7 @@ PASSED:
   ✓ programs::test_small_samples::text_samples
   ✓ programs::test_sound::a_melody_is_its_notes_one_after_another
   ✓ programs::test_sound::notes_are_frequencies
+  ✓ programs::test_sound::notes_are_named_in_a_program_with_units
   ✓ programs::test_sound::play_writes_the_tone_as_a_wav
   ✓ programs::test_sound::sound_words_run_without_use
   ✓ programs::test_sound::the_note_table_matches_note
@@ -4137,6 +4150,7 @@ PASSED:
   ✓ welcoming::test_left_arrow::a_spaced_less_than_compares
   ✓ welcoming::test_let_const_changes::a_constant_assigned_its_own_value_again
   ✓ welcoming::test_let_const_changes::a_let_variable_changes
+  ✓ welcoming::test_let_const_changes::let_and_const_unpack_a_tuple
   ✓ welcoming::test_list_phrases::a_chain_of_phrases
   ✓ welcoming::test_list_phrases::a_method_of_a_parenthesized_filter
   ✓ welcoming::test_list_phrases::keep_only_a_property
@@ -4292,4 +4306,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-10 ignored, 4287 passed, 0 failed, 4287 total tested
+10 ignored, 4301 passed, 0 failed, 4301 total tested
