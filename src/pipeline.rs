@@ -262,7 +262,7 @@ pub struct CompiledModule {
 
 /// The passes over the source forms, in order, each reading what the one before it left: definitions and sugar become
 /// the forms every later pass knows (`def f(x) {…}` is `f(x) := {…}`), modules are resolved
-const SOURCE_PASSES: [fn(Node) -> Node; 101] = [
+const SOURCE_PASSES: &[fn(Node) -> Node] = &[
 	// `"a \(x) b"` → `"a " + text_form(x) + " b"` (interpolation.rs) first, so every pass reads the holes as code
 	crate::interpolation::lower_program,
 	// a shader's `$name` holes (shader_holes.rs) as `name: name` in the values map of each paint of it
@@ -367,7 +367,7 @@ const SOURCE_PASSES: [fn(Node) -> Node; 101] = [
 ];
 
 /// The passes after the constant answers (time, units, reals), in order: types and traits, lambdas and closures, words
-const MEANING_PASSES: [fn(Node) -> Node; 30] = [
+const MEANING_PASSES: &[fn(Node) -> Node] = &[
 	// first: the run-time item checks of declared lists see `names.add(v)` before any pass lowers the append
 	crate::lowering::list_element_checks::lower,
 	crate::lazy_ranges::lower, crate::declarations::resolve_tasks, crate::traits::lower_declarations, crate::type_tests::lower, crate::ambiguous_forms::lower, crate::analyzer::lower_list_times,
@@ -411,7 +411,7 @@ fn lower_for_emission(node: Node) -> Result<Node, Node> {
 	crate::diagnostic::report(&crate::analyzer::source_warnings(&node))?;
 	// emits and handler blocks as written: the passes lower them to calls, the named effects are read from them
 	let as_written = node.clone();
-	let node = run_passes(node, &SOURCE_PASSES);
+	let node = run_passes(node, SOURCE_PASSES);
 	if let Some(error) = node.first_error() {
 		return Err(error.clone());
 	}
@@ -439,7 +439,7 @@ fn lower_for_emission(node: Node) -> Result<Node, Node> {
 	if let Some(answer) = crate::real::answer(&node) {
 		return Err(answer);
 	}
-	let node = run_passes(node, &MEANING_PASSES);
+	let node = run_passes(node, MEANING_PASSES);
 	if let Some(error) = node.first_error() {
 		return Err(error.clone());
 	}
