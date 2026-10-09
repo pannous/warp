@@ -126,7 +126,7 @@ pub fn rows_read() -> usize {
 
 /// `std_io("table", member, arguments)`: open (create or migrate, give the rows), migrate and rows (its two halves), page (from a
 /// position), count, insert
-/// (give the id), update
+/// (give the id), delete (by id), update
 pub fn call(member: &str, arguments: &[Node]) -> Result<Node, String> {
 	let text = |node: &Node| match node.drop_meta() {
 		Node::Text(text) => Ok(text.clone()),
@@ -154,6 +154,10 @@ pub fn call(member: &str, arguments: &[Node]) -> Result<Node, String> {
 			let quoted: Vec<String> = columns.iter().map(|column| quote(column)).collect();
 			rows(database, &format!("INSERT INTO {} ({}) VALUES ({placeholders})", quote(&table), quoted.join(", ")), &values.children())?;
 			Ok(Node::int(unsafe { (sqlite()?.last_insert_rowid)(database) }))
+		}
+		("delete", [table, id, file]) => {
+			let sql = format!("DELETE FROM {} WHERE {ID_COLUMN} = ?", quote(&text(table)?));
+			rows(connection(&text(file)?)?, &sql, std::slice::from_ref(id)).map(|_| Node::Empty)
 		}
 		("update", [table, id, column, value, file]) => {
 			let sql = format!("UPDATE {} SET {} = ? WHERE {ID_COLUMN} = ?", quote(&text(table)?), quote(&text(column)?));

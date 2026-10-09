@@ -17,6 +17,7 @@ pub const TABLES_FILE: &str = "database.sqlite";
 /// The row id every registered class gets, unless it declares one
 const ID_FIELD: &str = "id";
 const ADD_WORD: &str = "add";
+const REMOVE_WORD: &str = "remove";
 const GLOBAL_WORD: &str = "global";
 /// `@was(old) name: text`: the field's column was called old, so the table's column is renamed
 const RENAMED_MARK: &str = "was";
@@ -28,6 +29,7 @@ const ROW: &str = "table_row";
 const ROWS: &str = "table_rows";
 const MATCHES: &str = "table_matches";
 const ADDED: &str = "table_added";
+const REMOVED: &str = "table_removed";
 /// a foreign key's row, and a row of a one-to-many getter
 const REFERENCED: &str = "table_referenced";
 const MEMBER: &str = "table_member";
@@ -38,16 +40,18 @@ const KNOWN: &str = "table_known";
 const POSITION: &str = "table_position";
 /// the instance a row read before loading makes
 const MADE: &str = "table_made";
-const GENERATED_NAMES: [(&str, &str); 11] = [(POSITION, "table·position"), (MADE, "table·made"), (ROW, "table·row"), (ROWS, "table·rows"), (MATCHES, "table·matches"), (ADDED, "table·added"), (ARGUMENTS, "table·arguments"),
+const GENERATED_NAMES: [(&str, &str); 12] = [(POSITION, "table·position"), (MADE, "table·made"), (ROW, "table·row"), (ROWS, "table·rows"), (MATCHES, "table·matches"), (ADDED, "table·added"), (REMOVED, "table·removed"), (ARGUMENTS, "table·arguments"),
 	(REFERENCED, "table·referenced"), (MEMBER, "table·member"), (SAVED, "table·saved"), (KNOWN, "table·known")];
 /// Each table's lazy parts (notes/orm.md Loading), `people·load` of people: the function giving the list, loading its
-/// rows on the first call; the count, SELECT COUNT(*) until then; the add, inserting without loading; the reset of a
+/// rows on the first call; the count, SELECT COUNT(*) until then; the add, inserting without loading; the remove, deleting
+/// the row and dropping its instance from the loaded list and the known instances; the reset of a
 /// route reading the table anew; the element `people#i`, reading its one row until then; the element of a loop over the
 /// table, reading a page of rows until then; the instance of a row read before loading; whether the rows are loaded;
 /// the instances added or read before; the page read last and its start position
 const LOAD: &str = "table_load";
 const COUNTED: &str = "table_count";
 const ADDING: &str = "table_add";
+const REMOVING: &str = "table_remove";
 const RESET: &str = "table_reset";
 const LOADED: &str = "table_loaded";
 const MET: &str = "table_met";
@@ -56,7 +60,7 @@ const STREAMED: &str = "table_streamed";
 const KEPT: &str = "table_kept";
 const PAGE: &str = "table_page";
 const START: &str = "table_start";
-const LAZY_PARTS: [(&str, &str); 11] = [(LOAD, "load"), (COUNTED, "count"), (ADDING, "add"), (RESET, "reset"), (ELEMENT, "at"), (STREAMED, "streamed"),
+const LAZY_PARTS: [(&str, &str); 12] = [(LOAD, "load"), (COUNTED, "count"), (ADDING, "add"), (REMOVING, "remove"), (RESET, "reset"), (ELEMENT, "at"), (STREAMED, "streamed"),
 	(KEPT, "kept"), (LOADED, "loaded"), (MET, "met"), (PAGE, "page"), (START, "start")];
 /// The rows a loop over an unloaded table reads at once (notes/orm.md Loading)
 const PAGE_SIZE: usize = 100;
@@ -666,6 +670,14 @@ global {MET}
 if {LOADED} {{ {variable}.add({ADDED}) }} else {{ {MET}.add({ADDED}) }}
 {ADDED}
 }}
+{REMOVING}({REMOVED}) := {{
+global {variable}
+global {MET}
+std_io(\"table\", \"delete\", [{name:?}, {REMOVED}.{ID_FIELD}, {file:?}])
+{variable} = [{ROW} for {ROW} in {variable} if {ROW}.{ID_FIELD} != {REMOVED}.{ID_FIELD}]
+{MET} = [{ROW} for {ROW} in {MET} if {ROW}.{ID_FIELD} != {REMOVED}.{ID_FIELD}]
+{REMOVED}
+}}
 {KEPT}({ROW}) := {{
 global {MET}
 {known}
@@ -695,7 +707,7 @@ global {PAGE}
 {MET} = []
 {PAGE} = []
 []
-}}");
+}}", name = table.name);
 	let placeholders = [(READ_PLACEHOLDER, table_call("migrate")), (ROWS_PLACEHOLDER, table_call("rows")), (COUNT_PLACEHOLDER, table_call("count")),
 		(ROW_PLACEHOLDER, table_call_with("page", &format!(", {POSITION}, 1"))), (PAGE_PLACEHOLDER, table_call_with("page", &format!(", {POSITION}, {PAGE_SIZE}")))].into_iter().chain(lazy_names(&variable));
 	let empty = parse("[]");
@@ -754,8 +766,8 @@ fn with_lazy_reads(node: Node, tables: &HashMap<String, Table>, own: Option<&str
 		Node::Key(left, Op::Hash, position) if table_of(&left).is_some() => called(lazy_name(&table_of(&left).unwrap_or_default(), "at"), Some(rewrite(*position))),
 		Node::Key(left, Op::Dot, right) => match (table_of(&left), right.drop_meta()) {
 			(Some(variable), Node::Symbol(word)) if COUNT_WORDS.contains(&word.as_str()) => called(lazy_name(&variable, "count"), None),
-			(Some(variable), Node::List(parts, _, _)) if parts.len() == 2 && parts[0].drop_meta().name() == ADD_WORD => {
-				called(lazy_name(&variable, "add"), Some(rewrite(parts[1].clone())))
+			(Some(variable), Node::List(parts, _, _)) if parts.len() == 2 && [ADD_WORD, REMOVE_WORD].contains(&parts[0].drop_meta().name().as_str()) => {
+				called(lazy_name(&variable, &parts[0].drop_meta().name()), Some(rewrite(parts[1].clone())))
 			}
 			(_, Node::Symbol(_)) => Node::Key(Box::new(rewrite(*left)), Op::Dot, right),
 			_ => Node::Key(Box::new(rewrite(*left)), Op::Dot, Box::new(rewrite(*right))),
