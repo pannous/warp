@@ -37,6 +37,7 @@
 	<script src="completion.js" defer></script>
 	<script src="playground.js" defer></script>
 	<script src="guide.js" defer></script>
+	<script src="deploy.js" defer></script>
 </head>
 <body>
 <header>
@@ -47,6 +48,12 @@
 		<summary title="more">⋯</summary>
 		<div class="tools-menu">
 			<p><button id="download" title="the WebAssembly module of the last run">⤓ download the wasm</button></p>
+			<p>Put the program's routes (<code>get "/" {…}</code>) on the web as
+				<input id="deploy-name" class="deploy-name" autocomplete="off" spellcheck="false" placeholder="name"><br/>
+				<button id="deploy" title="log in with GitHub; it answers at https://warp-<name>.pannous.workers.dev">☁ Deploy</button>
+				<button id="deploy-own" title="log in with Cloudflare, or paste an API token below; it goes to your own account">☁ Deploy to my Cloudflare</button><br/>
+				<input id="cloudflare-token" class="api-key" type="password" autocomplete="off" spellcheck="false" placeholder="or a Cloudflare API token (Workers Scripts: Edit)"><br/>
+				<span id="deployed"></span></p>
 			<p>Run it on your machine: <code>warp hello.warp</code> <br/>
 				<a href="https://github.com/pannous/warp#install" target="_blank" rel="noopener">get warp</a>
 			</p>

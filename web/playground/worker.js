@@ -148,6 +148,22 @@ function handleSubmit(request) {
 	if (live) showHandled(live, runSubmitted(live, hooks, request));
 }
 
+// the playground's Deploy (deploy.js): the program's Worker module and its host scripts' names (src/web.rs
+// worker_bundle), `{scripts, module}` or `{error}`
+function workerBundle(code) {
+	const codeText = passText(code);
+	try {
+		const length = compiler.web_worker_bundle(...codeText);
+		const report = JSON.parse(compilerText(compiler.web_report(), length));
+		const module = report.error ? undefined : new Uint8Array(compiler.memory.buffer, compiler.web_bundle_module(), report.module_length).slice();
+		compiler.web_free(...codeText);
+		return { scripts: report.scripts, module, error: report.error };
+	} catch (crash) {
+		compiler = undefined; // as in evaluate: load it again
+		return { error: `compiler crashed: ${panicMessage ?? crash.message}` };
+	}
+}
+
 // a page event (playground.js): the live run's handler
 function handleEvent({ event, detail }) {
 	if (live) showHandled(live, runPageEvent(live, hooks, event, detail));
@@ -226,6 +242,10 @@ self.onmessage = async ({ data }) => {
 	if (data.event) return handleEvent(data);
 	if (data.navigate) return handleNavigation(data.navigate);
 	if (data.submit) return handleSubmit(data.submit);
+	if (data.bundle !== undefined) { // the running program keeps running
+		if (!compiler) await loadCompiler();
+		return post({ type: "bundle", bundle: workerBundle(data.bundle) });
+	}
 	if (live) stopListening(live);
 	live = undefined;
 	stage("checking the compiler");
