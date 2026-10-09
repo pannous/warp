@@ -423,6 +423,19 @@ const CORPUS: &[&str] = &[
 	"def f(x) -> int { [x] }; f(2)",
 	"def f(x) -> text { x }; f(3)",
 	"def outer(x) -> int { inner(y) := y * 2; inner(x) / 3 }; outer(5)",
+	// a bracketed list type and the fixed widths, a range of ints (card typed-list-elements)
+	"xs: [int] = [1, \"a\"]; xs",
+	"xs: [int] = [1, 2]; xs",
+	"xs: [int16] = [1, 70000]; xs",
+	"xs: [int16] = [1, 7]; xs",
+	"x: int16 = 70000; x",
+	"x: int16 = 5; x",
+	"x: int16 = 5; x + 1",
+	"x: int16 = \"a\"; x",
+	"xs: int16s = [1]; xs.add(70000); xs",
+	"xs: int16s = [1]; xs.add(7); xs",
+	"x: byte = 5; x = 300; x",
+	"x: byte = 5; x = 200; x",
 ];
 
 /// Programs warp compiles although the model rejects them: holes in warp's checks, each with its card
