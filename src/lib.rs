@@ -61,6 +61,8 @@ pub mod web_server;
 #[cfg(feature = "native")]
 pub mod site;
 #[cfg(feature = "native")]
+pub mod deploy;
+#[cfg(feature = "native")]
 pub mod route_split;
 #[cfg(feature = "native")]
 pub mod dev_server;

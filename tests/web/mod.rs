@@ -40,6 +40,8 @@ mod test_style_rules;
 mod test_headless_pages;
 #[cfg(feature = "native")] // builds a site natively, opens it in headless Chrome (agent-browser)
 mod test_dom_pages;
+#[cfg(feature = "native")] // wrangler dev runs the Worker (card cloud-deploy)
+mod test_deploy;
 mod test_page_tests;
 mod test_transitions;
 mod test_css_transitions;

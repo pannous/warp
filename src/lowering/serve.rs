@@ -44,7 +44,7 @@ const BODY_PART: &str = "body";
 const PAGE_PATH: &str = "page·path";
 const PAGE_NAVIGATED: &str = "page·navigated";
 /// Without a server, a form of the page asks the program's own routes: page·submitted(request) (worker.js handleSubmit)
-const PAGE_SUBMITTED: &str = "page·submitted";
+pub const PAGE_SUBMITTED: &str = "page·submitted";
 const DATABASE_WORDS: [&str; 2] = ["database", "indexedDB"];
 /// `·` of a generated name as written in code (it would parse as a product)
 const NAME_DOT: &str = "_dot_";
