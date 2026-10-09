@@ -140,8 +140,11 @@ function showHandled(holder, handled, timer = false) {
 	if (timer && !binding && handled.result) return;
 	if (handled.result && binding && showHoles(holder)) return;
 	const outcome = handled.result && binding ? outcomeOf(holder, hooks, binding) : handled;
+	const failed = outcome.result === undefined;
 	const { value, html } = shownOf(outcome);
-	post({ type: "handled", value, html, error: outcome.result === undefined });
+	// a failing handler (a route's raise refusing an empty title) leaves the page as it was and says why beside it
+	const page = failed && binding ? shownOf(outcomeOf(holder, hooks, binding)).html : html;
+	post({ type: "handled", value, html: page, error: failed });
 }
 
 // the value and HTML the compiler shows for a run outcome (src/web.rs shown)
