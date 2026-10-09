@@ -259,10 +259,14 @@ function startsFrame(run, output) {
 	return starts;
 }
 
+// each painting shows at once, while the program still runs: one the size of the last replaces it, as a frame (card
+// g_oldM: `if frame % 6 == 0 { render() }` animates without a sleep, as the native window does)
 function painted(run, painting) {
-	if (!startsFrame(run, "paintings")) return run.paintings.push(painting);
-	run.paintings = [painting];
-	showFrame(painting);
+	const last = run.paintings.at(-1);
+	if (startsFrame(run, "paintings")) run.paintings = [];
+	else if (last && sameSize(last, painting)) run.paintings.pop();
+	run.paintings.push(painting);
+	showFrame(run.paintings);
 }
 
 // a text frame (`render(); sleep(.1s)`) arrives line by line: the last one is shown whole once the next one begins
@@ -491,12 +495,15 @@ function showPaintings(paintings) {
 	}));
 }
 
-// an animation's next frame drawn into the canvas shown, which keeps the pointer over it; another size is a new canvas
-function showFrame(painting) {
+const sameSize = (one, other) => one.width === other.width && one.height === other.height;
+
+// the run's paintings, its last one drawn into the canvas shown for it, which keeps the pointer over it
+function showFrame(paintings) {
 	const shown = $("paintings").querySelectorAll("canvas");
-	const [canvas] = shown;
-	if (shown.length === 1 && canvas.width === painting.width && canvas.height === painting.height) drawn(canvas, painting);
-	else showPaintings([painting]);
+	const canvas = shown[shown.length - 1];
+	const painting = paintings.at(-1);
+	if (shown.length === paintings.length && sameSize(canvas, painting)) drawn(canvas, painting);
+	else showPaintings(paintings);
 }
 
 function drawn(canvas, { pixels, width, height }) {
