@@ -13,7 +13,7 @@ Chars as code.golf counts them: Unicode characters, so `…` is one. Best = code
 
 | hole | warp readable | warp short | Python | Ruby | JavaScript |
 |---|---|---|---|---|---|
-| fizz-buzz | 200 | 57 (52 with golf-sum) | 53 | 45 | 56 |
+| fizz-buzz | 200 | **51** | 53 | 45 | 56 |
 | fibonacci | 184 | 44 | 36 | 25 | 33 |
 | prime-numbers | 109 | 50 | 40 | 27 | 36 |
 | 99-bottles-of-beer | 493 | 293 | 118 | 120 | 142 |
@@ -33,14 +33,14 @@ Chars as code.golf counts them: Unicode characters, so `…` is one. Best = code
 | pernicious-numbers | 172 | 63 | 40 | 28 | 34 |
 | rot13 | 337 | 110 | 59 | 35 | 89 |
 
-The leaderboard entries are years of collective golfing; the warp ones are a first pass. Warp wins divisors (the
-math module's `divisors`) and the quine (`1` + a line break: a script echoes its final value). It is close on
-fizz-buzz, catalan, collatz, niven and leap-years.
+The leaderboard entries are years of collective golfing; the warp ones are a first pass. Warp wins fizz-buzz (51 to
+Python's 53), divisors (the math module's `divisors`) and the quine (`1` + a line break: a script echoes its final
+value). It is close on catalan, collatz, niven and leap-years.
 
 ## What helps
 - `for 1…100:` with `it`: `…` is one char and inclusive (`..` excludes the end).
 - `use math` words: is_prime, divisors, choose, digits, to_base. `use os` gives `args`.
-- `"x"*bool` repeats 0 or 1 times, `s||it` falls back to the number, and `\(expr)` holes. A bare `$x` stays literal
+- `"x"*bool` repeats 0 or 1 times, `"Fizz"*a+"Buzz"*b||it` falls back to the number, and `\(expr)` holes. A bare `$x` stays literal
   text by decision.
 - Exact big integers: catalan's 57 digits and `((10^w-1)/9)^2` (the diamond rows 12321) need no special code.
 - One-line function definitions: `h(n):=n>4?h(…):n<2`.
@@ -48,8 +48,8 @@ fizz-buzz, catalan, collatz, niven and leap-years.
 ## What costs chars
 - The final-value echo: `warp run` prints a script's last value after its printed output, so a program must end with
   a print. `for …:{print a;a,b=b,a+b}` adds a line with b; ending with `ø` or `()` still echoes the loop's value; a
-  text echoes quoted. Workarounds: `print (…).filter(f).join("\n")` or a last `print`. Asked: is the echo wanted
-  after printed output? (card golf-echo)
+  text echoes quoted. Workarounds: `print (…).filter(f).join("\n")` or a last `print`. Kept by decision P236
+  (card golf-echo).
 - `print` is not an operand: `c&&print(it)` needs the parentheses (golf-print).
 - No bitwise operators or bit count (golf-bits): `to_base(it,2).count("1")`, `choose(i,j)%2`.
 - Negative indexes don't wrap (by design: `last(xs)`); `s[2…]` fails (golf-open).
@@ -58,6 +58,7 @@ fizz-buzz, catalan, collatz, niven and leap-years.
 - `text` is a type name, so `for text in args` filters by type, with a warning.
 
 ## Gaps filed (board column Next)
-golf-text, golf-sum, golf-indented, golf-bare, golf-indented-while, golf-indented-swap,
+golf-indented, golf-bare, golf-indented-while, golf-indented-swap,
 golf-chr, golf-chars, golf-print, golf-inline, golf-expression, golf-open,
-golf-bits, golf-count, golf-echo.
+golf-bits, golf-count.
+Fixed: golf-text, golf-sum (text arithmetic is no number for `||`/`or`). Decided: golf-echo (P236, kept).
