@@ -307,7 +307,7 @@ impl WarpParser {
 	/// `if x > 1500 m : "far"`. σ joins like a unit: `5 ± 1 σ` is the Gaussian `5 ± 1σ` (card trailing-symbol)
 	pub(super) fn at_spaced_unit(&self) -> bool {
 		// `2 m²`: the power is no part of the unit's name
-		self.spaced_word().is_some_and(|word| word == crate::uncertain::SIGMA || crate::units::is_unit(word.trim_end_matches(|c: char| superscript_digit(c).is_some())))
+		self.spaced_word().is_some_and(|word| word == crate::uncertain::SIGMA || crate::units::names_unit(word.trim_end_matches(|c: char| superscript_digit(c).is_some())))
 	}
 
 	/// The word after one or more spaces, unless it starts the next entry or assignment
