@@ -14,6 +14,7 @@ fn hello_world_is_the_uniscript_world() {
 }
 
 #[test]
+#[cfg_attr(not(feature = "native"), ignore = "browser: fetches the uniscript package into scratch/")]
 fn the_entity_table_is_the_pinned_uniscript_index() {
 	let packages = Path::new("scratch/entity_table");
 	std::fs::create_dir_all(packages).unwrap();
