@@ -395,10 +395,33 @@ const CORPUS: &[&str] = &[
 	"xs = [1, 2]; xs[0] = 5; xs",
 	"xs = [1, 2]; v = (xs#1 = 9); v",
 	"xs: ints = [1]; xs#1 = \"ab\"; xs",
+	// `e as T` converts: a number keeps its whole part, a text is parsed (or fails when it runs), anything prints as text
+	"3.7 as int",
+	"\"4\" as int",
+	"3 as text",
+	"[1] as int",
+	"f(x) := x as int; f(\"7\")",
+	"f(x) := x as int; f(\"a\")",
+	"f(x) := x as text; f([1, 2])",
+	// a declared result converts the body's value, as `body as T`, in every spelling
+	"def f(x: int) -> int { x + 1 }; f(1)",
+	"func f(x: Int) -> Int { return x + 1 }; f(1)",
+	"fun f(x: Int): Int { return x + 1 }; f(1)",
+	"def f(x: int) -> int: x + 1; f(1)",
+	"def half(x) -> int { x / 2 }; half(3)",
+	"def half(x) -> float { x / 2 }; half(3)",
+	"f(a, b) : int := a - b; f(b=1, a=5)",
+	"int square(x) = x*x; square(4) + square 3.1",
+	"def square(x) as int = x*x; square 3.1",
+	"int half(x) := {y = x; if y > 2 {return y/2}; y/4}; half(3) + half(2)",
+	"def f(x) -> int { x }; f(\"a\")",
+	"def f(x) -> int { [x] }; f(2)",
+	"def f(x) -> text { x }; f(3)",
+	"def outer(x) -> int { inner(y) := y * 2; inner(x) / 3 }; outer(5)",
 ];
 
 /// Programs warp compiles although the model rejects them: holes in warp's checks, each with its card
-const KNOWN_HOLES: &[(&str, &str)] = &[("b: bool = no; b++; b", "bool-assign"), ("f(n) := { n = \"x\"; n }; f(3)", "param-assign-unchecked")];
+const KNOWN_HOLES: &[(&str, &str)] = &[("b: bool = no; b++; b", "bool-assign"), ("f(n) := { n = \"x\"; n }; f(3)", "param-assign-unchecked"), ("x = 3.7 as int; x = \"a\"", "kind-name")];
 
 /// Where warp's run-time admission differs from W0's subtyping: a bool is an Int at run time, so an int value passes
 /// a bool check (P199 lets only the literals 1 and 0 in; card bool-assign)
@@ -409,6 +432,9 @@ const KNOWN_VALUE_DIFFERENCES: &[(&str, &str)] = &[
 	// a covariant alias's write: W0 checks it against the list's own element type when it runs, warp adds 2.5 to ints
 	("xs: ints = [1]; ys: numbers = xs; ys.add(2.5); xs", "p215-user"),
 	("xs: ints = [1, 2]; ys: numbers = xs; ys#1 = 2.5; xs", "p215-user"),
+	// a conversion to bool: W0 gives yes, warp the int 1
+	("2 as bool", "bool-conversion"),
+	("def f(x) -> bool { x }; f(2)", "bool-conversion"),
 ];
 /// What the model gives for a program it rejects, and for a value it does not keep
 const REJECTED: &str = "rejected";
