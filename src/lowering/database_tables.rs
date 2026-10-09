@@ -675,7 +675,7 @@ fn with_bound_element(statement: &Node, tables: &HashMap<String, Table>) -> Opti
 		return None;
 	}
 	let element = Node::Symbol(lazy_name(variable, "element"));
-	let changed = Node::Key(Box::new(Node::Key(Box::new(element.clone()), Op::Dot, field.clone())), op.clone(), value.clone());
+	let changed = Node::Key(Box::new(Node::Key(Box::new(element.clone()), Op::Dot, field.clone())), *op, value.clone());
 	Some(vec![Node::Key(Box::new(element), Op::Assign, instance.clone()), changed])
 }
 
