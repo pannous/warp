@@ -45,9 +45,15 @@ fn content_type(name: &str) -> tiny_http::Header {
 
 /// The page of `code` opened headless, its button `button` clicked: the title the handler set
 fn title_after_clicking(name: &str, code: &str, button: &str) -> String {
-	let _one_browser = ONE_BROWSER.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
 	let directory = scratch_directory(name);
 	warp::site::build(code, "dom", &directory).unwrap_or_else(|failure| panic!("the site of {name} is not built: {failure}"));
+	title_on_page(name, directory, Some(button))
+}
+
+/// The built site in `directory` opened headless, its button `button` clicked (none: as it loaded): the title the
+/// program set
+fn title_on_page(name: &str, directory: std::path::PathBuf, button: Option<&str>) -> String {
+	let _one_browser = ONE_BROWSER.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
 	let url = serve_directory(directory.clone());
 	let session = format!("warp-dom-{name}-{}", std::process::id());
 	let run = |arguments: &[&str]| Command::new("agent-browser").env("AGENT_BROWSER_DEFAULT_TIMEOUT", ACTION_TIMEOUT_MS).args(["--session", &session]).args(arguments).output()
@@ -57,6 +63,8 @@ fn title_after_clicking(name: &str, code: &str, button: &str) -> String {
 		assert!(output.status.success(), "agent-browser {arguments:?}: {}", String::from_utf8_lossy(&output.stderr));
 		String::from_utf8_lossy(&output.stdout).trim().to_string()
 	};
+	// the browser first, then the page: a fresh browser asked for a page at once at times stays on about:blank
+	browser(&["open"]);
 	let opened = (1..=OPEN_ATTEMPTS).any(|attempt| {
 		let output = run(&["open", &url]);
 		if !output.status.success() {
@@ -67,7 +75,9 @@ fn title_after_clicking(name: &str, code: &str, button: &str) -> String {
 	});
 	assert!(opened, "agent-browser did not open {url} in {OPEN_ATTEMPTS} attempts");
 	browser(&["wait", "--load", "networkidle"]);
-	browser(&["find", "text", button, "click"]);
+	if let Some(button) = button {
+		browser(&["find", "text", button, "click"]);
+	}
 	let waited = run(&["wait", "--fn", TITLE_SET, "--timeout", CLICK_WAIT_MS]).status.success();
 	let title = browser(&["eval", "document.title"]);
 	let console = browser(&["console"]);
@@ -87,4 +97,20 @@ fn a_handler_sets_and_reads_elements_of_the_page() {
 fn a_handler_draws_on_a_canvas_of_the_page() {
 	let code = "use js document\ndiv{\n\tbutton{ on click {\n\t\tctx = document.getElementById(\"c\").getContext(\"2d\")\n\t\tctx.fillStyle = \"red\"\n\t\tctx.fillRect(0, 0, 4, 4)\n\t\tpixel = ctx.getImageData(1, 1, 1, 1).data\n\t\tdocument.title = \"red \" + str(pixel#1) + \" alpha \" + str(pixel#4)\n\t} \"Draw\" }\n\tcanvas{ id: \"c\" width: 4 height: 4 }\n}";
 	assert_eq!(title_after_clicking("canvas", code, "Draw"), "red 255 alpha 255");
+}
+
+/// card page-dom: a main calling into the page cannot run when the site is built, natively, so the page is rendered in
+/// the browser. Built by the warp binary: a site built in this process leaves its node interpreter running here, and
+/// a browser this process then starts never runs the page's main (seen 2026-10-09, cause unknown)
+#[test]
+fn main_sets_the_title_of_the_page() {
+	let folder = scratch_directory("main");
+	std::fs::create_dir_all(&folder).expect("a folder");
+	let program = folder.join("dom.warp");
+	std::fs::write(&program, "use js document\ndocument.title = \"main ran\"\ndiv{ p{ \"shown\" } }").expect("written");
+	let built = crate::common::warp_command().args(["build", "--site"]).arg(&program).output().expect("warp runs");
+	let warned = String::from_utf8_lossy(&built.stderr);
+	assert!(built.status.success() && warned.contains("rendered there"), "{warned}");
+	assert_eq!(title_on_page("main", folder.join("dom-site"), None), "main ran");
+	std::fs::remove_dir_all(folder).ok();
 }

@@ -189,7 +189,16 @@ fn site_files(code: &str, title: &str, dev: bool) -> Result<Option<ServedSite>, 
 	let read_after_main = |name: &str| {
 		crate::wasm_reader::read_export_after_main(&rendering.bytes, imports, name).map_err(|failure| format!("the program failed at build time: {}", with_excerpt(code, failure.to_string())))
 	};
-	let rendered = read_after_main(crate::page_html::PAGE_HTML)?;
+	// card page-dom: a main calling into the page (`use js document`) fails here, natively, where there is no page; the
+	// page then starts empty and shows what main renders in the browser
+	let rendered_here = read_after_main(crate::page_html::PAGE_HTML);
+	let rendered = match rendered_here {
+		Err(_) if calls_foreign_code(&rendering.bytes)? => {
+			eprintln!("warning: main calls into the page (use js), which exists only in the browser: the page is rendered there, without JavaScript it is empty");
+			Node::Text(String::new())
+		}
+		other => other?,
+	};
 	let page_routes: Vec<String> = match exports(&rendering.bytes, crate::routes::PAGE_ROUTES) {
 		true => items_of(&read_after_main(crate::routes::PAGE_ROUTES)?).iter().map(crate::routes::pattern_text).collect(),
 		false => vec![],
@@ -275,6 +284,10 @@ fn page_scripts_of(module: &[u8]) -> Vec<Script> {
 /// the Worker the path of each link followed (site-thread.js)
 fn runs_in_a_worker(imports: &[(String, String)]) -> bool {
 	imports.iter().any(|(module, name)| module == HOST_LIBRARY && TASK_WORD_PREFIXES.iter().any(|prefix| name.starts_with(prefix)))
+}
+
+fn calls_foreign_code(module: &[u8]) -> Result<bool, String> {
+	Ok(imports_of(module)?.iter().any(|(module, name)| module == HOST_LIBRARY && name == FOREIGN_CALL))
 }
 
 /// A page served at a deeper path than the site's files finds them, and the module and route modules they load,
