@@ -1528,6 +1528,8 @@ PASSED:
   ✓ lists::test_number_keys::a_list_keeps_its_positions
   ✓ lists::test_number_keys::a_number_subscript_keys_an_empty_map
   ✓ lists::test_numbered_fields::numbered_fields_of_a_tuple
+  ✓ lists::test_object_list_walk::indexing_after_an_in_place_change_reads_the_changed_list
+  ✓ lists::test_object_list_walk::walking_a_list_of_objects_takes_linear_steps
   ✓ lists::test_one_entry_map_text::print_keeps_the_braces_of_a_one_entry_map
   ✓ lists::test_one_entry_map_text::the_text_of_a_one_entry_map_keeps_its_braces
   ✓ lists::test_pair_values::a_value_of_a_pair_is_held_as_a_node
@@ -2612,6 +2614,13 @@ PASSED:
   ✓ programs::test_paint::paint_frames_for_the_window_read_back_as_sent
   ✓ programs::test_paint::paint_writes_a_png_natively
   ✓ programs::test_paint::paint_writes_colors_as_a_truecolor_png
+  ✓ programs::test_paint_lists::paint_of_too_few_ints_fails
+  ✓ programs::test_paint_lists::paint_reads_ints_from_a_built_list
+  ✓ programs::test_paint_lists::paint_reads_other_pixels_node_by_node
+  ✓ programs::test_paint_lists::paint_takes_the_first_pixels_of_a_longer_list
+  ✓ programs::test_paint_shader::paint_of_a_shader_without_values_reads_none
+  ✓ programs::test_paint_shader::paint_renders_a_shader_text
+  ✓ programs::test_paint_shader::use_graphics_is_use_draw
   ✓ programs::test_plain_hints_when_piped::a_hint_on_piped_stderr_has_no_escape_codes
   ✓ programs::test_playground_samples::every_excluded_sample_exists
   ✓ programs::test_playground_samples::every_playground_sample_runs_without_an_error
@@ -4135,4 +4144,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-10 ignored, 4130 passed, 0 failed, 4130 total tested
+10 ignored, 4139 passed, 0 failed, 4139 total tested
