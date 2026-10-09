@@ -352,11 +352,12 @@ function runProgram(bytes, hooks) {
 
 // the program's instance, its main not run yet (a built site first loads the module of the route it shows, site.js);
 // { failure } when it cannot be instantiated
-function instantiateProgram(bytes, hooks) {
+// `compiled`: the module compiled already, where a host compiles none from bytes (a Cloudflare Worker, cloud-worker.js)
+function instantiateProgram(bytes, hooks, compiled) {
 	// the runtime warnings go back to the compiler, which reports them (src/web.rs); the page's path is the page's own
 	const holder = { warnings: [], pagePath: hooks.pagePath?.() };
 	try {
-		const module = new WebAssembly.Module(bytes);
+		const module = compiled ?? new WebAssembly.Module(bytes);
 		holder.run = { module, bytes };
 		eachHostPart("started", holder.run);
 		holder.exports = new WebAssembly.Instance(holder.run.module, programImports(holder, hooks)).exports;
