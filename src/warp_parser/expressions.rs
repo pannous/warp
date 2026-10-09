@@ -40,6 +40,7 @@ impl WarpParser {
 			// `-7 abs`, `f = abs`, `x abs + 1`: an operator word without its operand is the operator itself, which
 			// lowering (ambiguous_forms) applies to the value before it or makes a function
 			let operator_word = chars > 1 && matches!(op, Op::Abs | Op::Sqrt | Op::Cbrt);
+			let fourth_root = self.current_char() == super::lookahead::FOURTH_ROOT;
 			let bare = operator_word && self.expression_ends_after(chars);
 			self.hint_operator(chars, true);
 			self.advance_by(chars);
@@ -54,6 +55,7 @@ impl WarpParser {
 					set_hint_position(prefix_line, prefix_column);
 					norm::length_operator(&crate::normalize::operand_text(&rhs), false);
 				}
+				let rhs = if fourth_root { self.finish_prefix(op, rhs) } else { rhs };
 				self.finish_prefix(op, rhs)
 			}
 		} else if let Some(operator) = self.try_parse_operator_value() {
