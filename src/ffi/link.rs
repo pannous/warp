@@ -361,6 +361,8 @@ fn get_library_paths(lib_name: &str) -> Vec<String> {
         paths.push(format!("/usr/lib/lib{}.so", lib_name));
         paths.push(format!("/usr/local/lib/lib{}.so", lib_name));
         paths.push(format!("lib{}.so", lib_name));
+        // glibc's libm.so and libc.so are linker scripts dlopen refuses: the libraries go by their soname
+        paths.push(format!("lib{}.so.6", lib_name));
     }
 
     paths
