@@ -1,0 +1,4 @@
+v = {x: 1, y: 2}
+let (a, b) = (keys(v), values(v))
+print a
+print b
