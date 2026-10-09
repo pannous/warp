@@ -83,6 +83,17 @@ pub fn announce_skip(resource: &str, test_module: &str) {
 	let _ = writeln!(std::io::stderr(), "skipped: needs {resource} ({test_module})");
 }
 
+/// Whether a test may start Chrome (agent-browser): only in CI (user, 2026-10-09: no test launches Chrome or Chromium
+/// on the Mac); elsewhere it announces its skip
+#[cfg(feature = "native")]
+pub fn chrome_runs_here(test_module: &str) -> bool {
+	let in_ci = std::env::var_os("CI").is_some();
+	if !in_ci {
+		announce_skip("Chrome: browser tests run in CI only", test_module);
+	}
+	in_ci
+}
+
 pub fn fails_with(code: &str, needle: &str) {
 	match eval(code) {
 		Node::Error(message) => assert!(format!("{message}").contains(needle), "{message}"),

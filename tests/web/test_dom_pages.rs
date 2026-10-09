@@ -91,12 +91,18 @@ fn title_on_page(name: &str, directory: std::path::PathBuf, button: Option<&str>
 
 #[test]
 fn a_handler_sets_and_reads_elements_of_the_page() {
+	if !crate::common::chrome_runs_here(module_path!()) {
+		return;
+	}
 	let code = "use js document\ndiv{\n\tbutton{ on click {\n\t\te = document.getElementById(\"out\")\n\t\te.innerHTML = \"<b>set</b>\"\n\t\tdocument.getElementById(\"other\").innerHTML = \"<i>chained</i>\"\n\t\tdocument.title = e.textContent + \" \" + document.getElementById(\"other\").textContent\n\t} \"Go\" }\n\tp{ id: \"out\" \"before\" }\n\tp{ id: \"other\" \"before\" }\n}";
 	assert_eq!(title_after_clicking("elements", code, "Go"), "set chained");
 }
 
 #[test]
 fn a_handler_draws_on_a_canvas_of_the_page() {
+	if !crate::common::chrome_runs_here(module_path!()) {
+		return;
+	}
 	let code = "use js document\ndiv{\n\tbutton{ on click {\n\t\tctx = document.getElementById(\"c\").getContext(\"2d\")\n\t\tctx.fillStyle = \"red\"\n\t\tctx.fillRect(0, 0, 4, 4)\n\t\tpixel = ctx.getImageData(1, 1, 1, 1).data\n\t\tdocument.title = \"red \" + str(pixel#1) + \" alpha \" + str(pixel#4)\n\t} \"Draw\" }\n\tcanvas{ id: \"c\" width: 4 height: 4 }\n}";
 	assert_eq!(title_after_clicking("canvas", code, "Draw"), "red 255 alpha 255");
 }
@@ -106,6 +112,9 @@ fn a_handler_draws_on_a_canvas_of_the_page() {
 /// a browser this process then starts never runs the page's main (seen 2026-10-09, cause unknown)
 #[test]
 fn main_sets_the_title_of_the_page() {
+	if !crate::common::chrome_runs_here(module_path!()) {
+		return;
+	}
 	let folder = scratch_directory("main");
 	std::fs::create_dir_all(&folder).expect("a folder");
 	let program = folder.join("dom.warp");

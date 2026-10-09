@@ -1,6 +1,7 @@
 #!/bin/bash
 # card print-watch: a print before slow work shows in the playground while the work still runs, not once the run ends.
 # Needs web/playground/build.sh (warp.wasm) and agent-browser; headless.
+[ -n "${CI:-}" ] || { echo "browser tests run in CI only: skipped, Chrome is not started outside CI (user, 2026-10-09)"; exit 0; }
 set -euo pipefail
 PORT=${PORT:-8932}
 REPO=$(cd "$(dirname "$0")/.." && pwd)

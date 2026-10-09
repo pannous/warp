@@ -1,6 +1,7 @@
 #!/bin/bash
 # card little-full: ⛶ over the playground's paintings fills the screen with the last one at its own aspect ratio and
 # leaves again. Needs web/playground/build.sh (warp.wasm) and agent-browser; headless.
+[ -n "${CI:-}" ] || { echo "browser tests run in CI only: skipped, Chrome is not started outside CI (user, 2026-10-09)"; exit 0; }
 set -euo pipefail
 PORT=${PORT:-8931}
 REPO=$(cd "$(dirname "$0")/.." && pwd)

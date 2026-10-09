@@ -10,6 +10,10 @@ import { copyFileSync, mkdirSync, openSync, readFileSync, writeFileSync } from "
 import { homedir } from "node:os";
 import { join, resolve } from "node:path";
 import assert from "node:assert/strict";
+if (!process.env.CI) {
+	console.log("browser tests run in CI only: skipped, Chrome is not started outside CI (user, 2026-10-09)");
+	process.exit(0);
+}
 
 const ROOT = resolve(import.meta.dirname, "../..");
 const WORK = join(ROOT, "scratch/hosting_test");

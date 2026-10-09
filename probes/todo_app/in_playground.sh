@@ -1,6 +1,7 @@
 #!/bin/bash
 # runs a warp file in the local playground (python3 -m http.server $PORT in the repository root, web/playground/build.sh
 # done) and prints its status, value, rendered page and diagnostics. QUERY=?debug runs the debug build (build.sh debug)
+[ -n "${CI:-}" ] || { echo "browser tests run in CI only: skipped, Chrome is not started outside CI (user, 2026-10-09)"; exit 0; }
 PORT=${PORT:-18660}
 QUERY=${QUERY:-}
 SESSION=${SESSION:-todo5}

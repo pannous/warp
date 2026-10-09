@@ -5,6 +5,8 @@ value with the CLI's (`warp --no-ask`); exits 1 on any failure or difference. Ne
 (`optimized`; `debug` too for the debug-build check) and builds the native warp binary itself.
 Usage: probes/web_playground.py [sample names…]"""
 import json, os, re, shutil, subprocess, sys, time, http.server, threading, functools
+if not os.environ.get("CI"):
+	sys.exit(print("browser tests run in CI only: skipped, Chrome is not started outside CI (user, 2026-10-09)"))
 
 PORT = 8732
 SESSION = "web-playground-probe"
