@@ -11,14 +11,11 @@ raylib_simple	undefined function: InitWindow at 18:12
 raylib_simple_use	module not found: raylib
 raylib_sleep	module not found: raylib
 sdl_red_square	undefined function: SDL_Init at 17:10
-# a server or a compiled module: native only
+# a compiled module: native only
 import_compiled	imports a module compiled first (warp compile --wasm probes/import_compiled/shapes.warp); the browser has no bridge for warp modules yet: card import-compiled-browser
-server	a server: `warp serve samples/server.warp`, its stored table lives in the server's database (no table in the browser)
 # errors to fix
 errors	`}` is missing: the group opened at 4:9 runs to the end of the input (deliberately malformed: input for the forgiving parser, never meant to run)
 life_kotlin_ranges	index out of range (does the loop bound `..size-1` include the end? at 23:13) (fails on purpose: tests/welcoming/test_welcoming_ask.rs checks the explanation)
 modules	`}` is missing: the group opened at 22:15 runs to the end of the input (sketches a module system: card module-manager)
 natural	undefined: send in `send email to "user@example.com" with subject "Hello"` (the phrase waits for the user: card natural-phrases)
 netbase	undefined: query in `query "all cities with population > 100000"` (needs a netbase package: card netbase-package); `results where country is germany` reads country as a field: card natural-phrases
-# SQLite natively; the browser has no tables yet (notes/orm.md step 6)
-orm	table.open: no such word in the browser

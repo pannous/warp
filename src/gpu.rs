@@ -4,7 +4,7 @@
 //! the numbers it left. gpu_render runs a WGSL fragment shader `main` over every pixel of a width×height image, as
 //! host-gpu.js does, and gives the pixels as paint takes them.
 
-use std::sync::OnceLock;
+use std::sync::{Mutex, OnceLock};
 use wgpu::util::DeviceExt;
 
 const ENTRY_POINT: &str = "main";
@@ -59,12 +59,46 @@ pub fn compute(shader: &str, numbers: &[f32], workgroups: u32) -> Result<Vec<f32
 /// Run `shader` over `numbers`: the numbers it left from index `first` on, the only ones read back (a reduction's
 /// partial results after the items)
 pub fn compute_from(shader: &str, numbers: &[f32], workgroups: u32, first: usize) -> Result<Vec<f32>, String> {
+	compute_kept(shader, numbers, workgroups, first, Keeping::default())
+}
+
+/// The buffers of @gpu map results a later map starts from (gpu_maps.rs marked_kept): the result block's address, the
+/// buffer holding its items first, their count. A block is never reused, so its address names one result; the oldest
+/// go when more are kept
+static KEPT: Mutex<Vec<(i64, wgpu::Buffer, usize)>> = Mutex::new(Vec::new());
+const MOST_KEPT: usize = 4;
+
+/// Where the items come from and where the result goes besides memory: `source`, the block whose kept buffer holds
+/// the items (before `numbers`); `result`, the block to keep the buffer for and its count of items
+#[derive(Default)]
+pub struct Keeping {
+	pub source: Option<i64>,
+	pub result: Option<(i64, usize)>,
+}
+
+/// The count of items the GPU keeps for the block, if it does
+pub fn kept_count(block: i64) -> Option<usize> {
+	kept_buffer(block).map(|(_, count)| count)
+}
+
+fn kept_buffer(block: i64) -> Option<(wgpu::Buffer, usize)> {
+	KEPT.lock().ok()?.iter().find(|(kept, _, _)| *kept == block).map(|(_, buffer, count)| (buffer.clone(), *count))
+}
+
+/// As compute_from, the items taken from a kept buffer and the result's buffer kept, as `keeping` says
+pub fn compute_kept(shader: &str, numbers: &[f32], workgroups: u32, first: usize, keeping: Keeping) -> Result<Vec<f32>, String> {
 	let Gpu { device, queue } = gpu()?;
+	let kept = keeping.source.and_then(kept_buffer);
+	let items = kept.as_ref().map_or(0, |(_, count)| *count);
 	let bytes: Vec<u8> = numbers.iter().flat_map(|number| number.to_le_bytes()).collect();
-	let offset = (first.min(numbers.len()) * FLOAT_BYTES) as u64;
-	let size = bytes.len() as u64 - offset;
+	let total = items + numbers.len();
+	let offset = (first.min(total) * FLOAT_BYTES) as u64;
+	let size = (total * FLOAT_BYTES) as u64 - offset;
 	let usage = wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_SRC | wgpu::BufferUsages::COPY_DST;
-	let storage = device.create_buffer_init(&wgpu::util::BufferInitDescriptor { label: Some("gpu_compute numbers"), contents: &bytes, usage });
+	let storage = device.create_buffer(&wgpu::BufferDescriptor { label: Some("gpu_compute numbers"), size: (total * FLOAT_BYTES) as u64, usage, mapped_at_creation: false });
+	if !bytes.is_empty() {
+		queue.write_buffer(&storage, (items * FLOAT_BYTES) as u64, &bytes);
+	}
 	let readback = device.create_buffer(&wgpu::BufferDescriptor { label: Some("gpu_compute readback"), size, usage: wgpu::BufferUsages::MAP_READ | wgpu::BufferUsages::COPY_DST, mapped_at_creation: false });
 
 	let validation = device.push_error_scope(wgpu::ErrorFilter::Validation);
@@ -83,6 +117,9 @@ pub fn compute_from(shader: &str, numbers: &[f32], workgroups: u32, first: usize
 		entries: &[wgpu::BindGroupEntry { binding: BINDING, resource: storage.as_entire_binding() }],
 	});
 	let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor::default());
+	if let Some((buffer, count)) = &kept {
+		encoder.copy_buffer_to_buffer(buffer, 0, &storage, 0, (count * FLOAT_BYTES) as u64);
+	}
 	{
 		let mut pass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor::default());
 		pass.set_pipeline(&pipeline);
@@ -92,6 +129,14 @@ pub fn compute_from(shader: &str, numbers: &[f32], workgroups: u32, first: usize
 	encoder.copy_buffer_to_buffer(&storage, offset, &readback, 0, size);
 	queue.submit([encoder.finish()]);
 	let bytes = read_back(device, &readback, validation)?;
+	if let (Some((block, count)), Ok(mut kept)) = (keeping.result, KEPT.lock()) {
+		// an earlier run's buffer for the same block address is stale
+		kept.retain(|(earlier, _, _)| *earlier != block);
+		if kept.len() >= MOST_KEPT {
+			kept.remove(0);
+		}
+		kept.push((block, storage, count));
+	}
 	Ok(bytes.chunks_exact(FLOAT_BYTES).map(|chunk| f32::from_le_bytes(chunk.try_into().expect("four bytes"))).collect())
 }
 

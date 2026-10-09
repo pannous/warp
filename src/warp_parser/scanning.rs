@@ -190,7 +190,7 @@ impl WarpParser {
 	fn comment_reads_like_divisor(&self) -> bool {
 		let rest: String = self.chars[self.pos + 2..].iter().take_while(|&&c| c != '\n').collect();
 		let rest = rest.trim();
-		!rest.contains(char::is_whitespace) || rest.contains(['+', '-', '*', '/', '%', '(', '^'])
+		!rest.contains(char::is_whitespace) || (rest.contains(['+', '-', '*', '/', '%', '(', '^']) && !has_adjacent_words(rest))
 	}
 
 	pub(super) fn is_at_line_start(&self) -> bool {
@@ -407,4 +407,10 @@ impl WarpParser {
 			self.advance();
 		}
 	}
+}
+
+/// Prose, not an expression: two words side by side with no operator between them (`data for`, `GET /api` stays one)
+fn has_adjacent_words(text: &str) -> bool {
+	let words: Vec<&str> = text.split_whitespace().collect();
+	words.windows(2).any(|pair| pair[0].ends_with(char::is_alphanumeric) && pair[1].starts_with(char::is_alphanumeric))
 }
