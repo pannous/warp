@@ -21,13 +21,13 @@ post "/todos/:id:int/toggle" {
 route "/" {
 	div{
 		h1{ "Todos" }
-		form{ method:"post" action:"/todos"
+		form post "/todos" {                    // the route it sends to, as the route is written
 			input{ name:"title" aria-label:"new todo" placeholder:"what next?" }
 			button{ "add" }
 		}
 		ul{ for todo in todos {
 			li{
-				form{ method:"post" action:"/todos/" + todo.id + "/toggle" button{ if todo.done then "☑" else "☐" } }
+				form post "/todos/\(todo.id)/toggle" { button{ if todo.done then "☑" else "☐" } }
 				todo.title
 			}
 		} }
