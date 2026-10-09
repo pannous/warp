@@ -13,6 +13,7 @@ theorem value_ctx {Γ v t} (h : HasType P Γ v t) (hv : v.isValue = true) (Γ' :
   | bool => exact .bool
   | int => exact .int
   | num => exact .num
+  | qty => exact .qty
   | text => exact .text
   | unit => exact .unit
   | nil => exact .nil
@@ -54,14 +55,14 @@ theorem repeat_typed {Γ n tn} (s : String) (hn : HasType P Γ n tn) :
 
 -- the brute-force case split over operand values needs more than the default budget
 set_option maxHeartbeats 1000000 in
-/-- `-`, `*`, `%`, `/` and `^` on values: a number of a type below `op.ty`, or an error -/
-theorem arith_typed {Γ op a b ta tb} (ha : HasType P Γ a ta) (hb : HasType P Γ b tb) (va : a.isValue = true)
-    (vb : b.isValue = true) : ∃ t', HasType P Γ (arithValues op a b) t' ∧ sub t' (op.ty ta tb) = true := by
-  unfold arithValues
+/-- `-`, `*`, `%`, `/` and `^` on values without quantities: a number of a type below `op.numberTy`, or an error -/
+theorem plainArith_typed {Γ op a b ta tb} (ha : HasType P Γ a ta) (hb : HasType P Γ b tb) (va : a.isValue = true)
+    (vb : b.isValue = true) : ∃ t', HasType P Γ (plainArithValues op a b) t' ∧ sub t' (op.numberTy ta tb) = true := by
+  unfold plainArithValues
   split
   · cases ha; obtain ⟨t', h, s, _⟩ := repeat_typed _ hb; exact ⟨t', h, s⟩
   · cases hb; obtain ⟨t', h, _, s⟩ := repeat_typed _ ha; exact ⟨t', h, s⟩
-  unfold arithValues.numberValues
+  unfold plainArithValues.numberValues
   split
   · exact ⟨_, .error, sub_never _⟩
   split
@@ -75,15 +76,65 @@ theorem arith_typed {Γ op a b ta tb} (ha : HasType P Γ a ta) (hb : HasType P �
         · exact ⟨_, .int, sub_trans (by decide) n⟩
       · exact ⟨_, .num, n⟩
     all_goals cases ha <;> cases hb <;>
-      simp_all [isValue, isNumber, asInt, asNumber, ArithOp.ty, ArithOp.widen, arithTy, Ty.arith, sub] <;>
+      simp_all [isValue, isNumber, asInt, asNumber, ArithOp.numberTy, ArithOp.widen, arithTy, Ty.arith, sub] <;>
       first
         | exact ⟨_, .int, by decide⟩
         | exact ⟨_, .num, by decide⟩
         | exact ⟨_, .int, by simp [repeatTy, Ty.arith, sub]⟩
         | exact ⟨_, .num, by simp [repeatTy, Ty.arith, sub]⟩
 
+/-- a value's type is neither `never` nor `any`, and tells whether the value is a quantity and of which dimensions -/
+theorem value_shape {Γ v t} (h : HasType P Γ v t) (hv : v.isValue = true) :
+    t ≠ .never ∧ t ≠ .any ∧ isQuantityValue v = t.isQuantity ∧ valueDims v = t.dimsOf := by
+  cases h <;> simp_all [isValue, isQuantityValue, Ty.isQuantity, valueDims, Ty.dimsOf, isNumber, sub]
+
+theorem quantityValue_typed {Γ} (n : Int) (d : Dims) : HasType P Γ (quantityValue n d) (Ty.ofDims d) := by
+  unfold quantityValue Ty.ofDims; split
+  · exact .num
+  · exact .qty
+
+/-- `-`, `*` and `/` with a quantity side: a value of the dimensions `op.quantityTy` gives, or an error -/
+theorem quantity_typed {Γ op a b ta tb} (ha : HasType P Γ a ta) (hb : HasType P Γ b tb)
+    (da : valueDims a = ta.dimsOf) (db : valueDims b = tb.dimsOf) :
+    ∃ t', HasType P Γ (quantityValues op a b) t' ∧ sub t' (op.quantityTy ta tb) = true := by
+  unfold quantityValues ArithOp.quantityTy
+  split
+  · split
+    · cases ha; cases hb
+      split
+      · subst_vars; exact ⟨_, .qty, by simp [Ty.sameQuantity, sub_refl]⟩
+      · exact ⟨_, .error, sub_never _⟩
+    · exact ⟨_, .error, sub_never _⟩
+  · rw [da, db]
+    split
+    · split
+      · rename_i d e hda hdb _ dims hd
+        simp only [hda, hdb, hd, Option.map_some, Option.getD_some]
+        split
+        · exact ⟨_, .error, sub_never _⟩
+        · exact ⟨_, quantityValue_typed _ _, sub_refl _⟩
+      · exact ⟨_, .error, sub_never _⟩
+    · exact ⟨_, .error, sub_never _⟩
+
+/-- `-`, `*`, `%`, `/` and `^` on values: a value of a type below `op.ty`, or an error -/
+theorem arith_typed {Γ op a b ta tb} (ha : HasType P Γ a ta) (hb : HasType P Γ b tb) (va : a.isValue = true)
+    (vb : b.isValue = true) : ∃ t', HasType P Γ (arithValues op a b) t' ∧ sub t' (op.ty ta tb) = true := by
+  obtain ⟨na, ya, qa, da⟩ := value_shape ha va
+  obtain ⟨nb, yb, qb, db⟩ := value_shape hb vb
+  have n : ¬(ta = .never ∨ tb = .never) := by rintro (h | h) <;> contradiction
+  have y : ¬(ta = .any ∨ tb = .any) := by rintro (h | h) <;> contradiction
+  unfold arithValues ArithOp.ty
+  rw [ite_eq_right n, ite_eq_right y, qa, qb]
+  split
+  · exact quantity_typed ha hb da db
+  · exact plainArith_typed ha hb va vb
+
 theorem lt_typed {Γ a b} : ∃ t', HasType P Γ (ltValues a b) t' ∧ sub t' .bool = true := by
   unfold ltValues
+  split
+  · split
+    · exact ⟨_, .bool, sub_refl _⟩
+    · exact ⟨_, .error, sub_never _⟩
   split
   · exact ⟨_, .bool, sub_refl _⟩
   · split
@@ -196,6 +247,11 @@ theorem add_typed {Γ a b ta tb} (ha : HasType P Γ a ta) (hb : HasType P Γ b t
     (vb : b.isValue = true) : ∃ t', HasType P Γ (addValues a b) t' ∧ sub t' (plus ta tb) = true := by
   unfold addValues
   split
+  · cases ha; cases hb
+    split
+    · subst_vars; exact ⟨_, .qty, by simp [plus, Ty.isQuantity, Ty.sameQuantity, sub_refl]⟩
+    · exact ⟨_, .error, sub_never _⟩
+  split
   · rename_i hl
     simp only [Bool.and_eq_true] at hl
     obtain ⟨ea, hea⟩ := list_element ha hl.1
@@ -203,12 +259,13 @@ theorem add_typed {Γ a b ta tb} (ha : HasType P Γ a ta) (hb : HasType P Γ b t
     have hta := value_list ha va hea
     have htb := value_list hb vb heb
     subst hta htb
-    simp only [plus, isListTy, Bool.and_self, if_true, element, Option.getD_some]
+    simp only [plus, isListTy, Ty.isQuantity, Bool.or_self, Bool.false_eq_true, Bool.and_self, if_true, if_false,
+      element, Option.getD_some]
     simpa using concat_typed hb vb heb va ha hea
   split
   · exact ⟨_, .error, sub_never _⟩
   · cases ha <;> cases hb <;>
-      simp_all [isValue, isNumber, isText, isList, asInt, asNumber, plus, isListTy, Ty.arith, sub] <;>
+      simp_all [isValue, isNumber, isText, isList, asInt, asNumber, plus, isListTy, Ty.isQuantity, Ty.arith, sub] <;>
       first | exact ⟨_, .int, by decide⟩ | exact ⟨_, .num, by decide⟩ | exact ⟨_, .text, by decide⟩
 
 theorem valueType_typed {Γ} : ∀ {v : Expr} {t}, valueType v = some t → HasType P Γ v t := by
@@ -337,6 +394,7 @@ theorem narrow {Γ e t} (h : HasType P Γ e t) : ∀ {Γ'}, CtxSub Γ' Γ → �
   | int => intros; exact ⟨_, .int, sub_refl _⟩
   | intIn h1 h2 => intros; exact ⟨_, .intIn h1 h2, sub_refl _⟩
   | num => intros; exact ⟨_, .num, sub_refl _⟩
+  | qty => intros; exact ⟨_, .qty, sub_refl _⟩
   | text => intros; exact ⟨_, .text, sub_refl _⟩
   | unit => intros; exact ⟨_, .unit, sub_refl _⟩
   | nil => intros; exact ⟨_, .nil, sub_refl _⟩
@@ -521,6 +579,7 @@ theorem subst_typed {Γ0 e t} (h : HasType P Γ0 e t) :
   | int => intros; simp only [Expr.subst]; exact .int
   | intIn h1 h2 => intros; simp only [Expr.subst]; exact .intIn h1 h2
   | num => intros; simp only [Expr.subst]; exact .num
+  | qty => intros; simp only [Expr.subst]; exact .qty
   | text => intros; simp only [Expr.subst]; exact .text
   | unit => intros; simp only [Expr.subst]; exact .unit
   | nil => intros; simp only [Expr.subst]; exact .nil

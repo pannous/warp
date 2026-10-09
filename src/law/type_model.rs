@@ -485,6 +485,12 @@ fn bool_literal(declared: Option<&str>, value: &Node) -> Option<String> {
 }
 
 /// A value whose type is evidently bool: `true`, `1 < 2`
+/// One `unit` as a W0 quantity: its number of smallest steps of its base dimension
+fn quantity_literal(unit: &str) -> String {
+	let (dimension, factor) = crate::units::dimension_and_factor(unit).expect("a unit");
+	format!(".qty {factor} [({}, 1)]", quoted(&dimension))
+}
+
 fn is_evident_bool(value: &Node) -> bool {
 	matches!(value.drop_meta(), Node::True | Node::False | Node::Key(_, Op::Lt | Op::Le | Op::Gt | Op::Ge | Op::Eq | Op::Ne, _))
 }
@@ -1185,6 +1191,8 @@ impl Exporter {
 			Node::Symbol(name) if self.functions.get(name).is_some_and(|parameter| parameter == UNIT_TYPE) => Ok(format!(".call {} .unit", quoted(name))),
 			Node::Symbol(name) if self.lambda_names.contains(name) => Err(format!("not in W0: {name} as a value (warp calls it; `function {name}` is the function)")),
 			Node::Symbol(name) if self.names.contains_key(name) => Ok(format!(".glob {}", quoted(name))),
+			// a unit word is a quantity of one unit (`2 km` parses as `2 * km`)
+			Node::Symbol(name) if crate::units::is_unit(name) => Ok(quantity_literal(name)),
 			_ if map_entries(node).is_some() && self.classes.contains_key(MAP_CLASS) => self.instance(MAP_CLASS, map_entries(node).expect("a map")),
 			Node::List(items, Bracket::Square, _) => {
 				let elements: Result<Vec<String>, String> = items.iter().map(|item| self.expression(item)).collect();

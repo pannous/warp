@@ -436,10 +436,41 @@ const CORPUS: &[&str] = &[
 	"xs: int16s = [1]; xs.add(7); xs",
 	"x: byte = 5; x = 300; x",
 	"x: byte = 5; x = 200; x",
+	// quantities: a type per dimension, beside the numbers (card type-theory, units in W0)
+	"2 m + 50 cm",
+	"2 km - 500 m",
+	"1 m < 2 m",
+	"50 cm < 1 m",
+	"6 m / 2 s",
+	"3 * 2 m",
+	"6 m / 3 m",
+	"1 m == 100 cm",
+	"x = 3 m; y = x * 2; y < 7 m",
+	"y = 5 m; if y < 6 m { 1 } else { 2 }",
+	"if 1 < 2 { 1 m } else { 200 cm }",
+	"speed(d, t) := d / t; speed(10 km, 2 h)",
+	"1 m + 1",
+	"1 m + 1 s",
+	"1 m < 2 s",
+	"1 m == 1 s",
+	"1 m == 1",
+	"if 1 < 2 { 1 m } else { 2 s }",
+	"if 1 < 2 { 1 m } else { 2 }",
+	"\"a\" + 1 m",
+	"\"a\" < 1 m",
+	"10 m % 3 m",
+	"y = 2 m; y < 3",
+	"x = 1 m; x - 1",
 ];
 
 /// Programs warp compiles although the model rejects them: holes in warp's checks, each with its card
-const KNOWN_HOLES: &[(&str, &str)] = &[("b: bool = no; b++; b", "bool-assign"), ("f(n) := { n = \"x\"; n }; f(3)", "param-assign-unchecked")];
+const KNOWN_HOLES: &[(&str, &str)] = &[
+	("b: bool = no; b++; b", "bool-assign"),
+	("f(n) := { n = \"x\"; n }; f(3)", "param-assign-unchecked"),
+	("x = 1 m; x = 2 s; x", "units-reassign"),
+	("x: int = 1 m; x", "units-annotation"),
+	("2 m * \"a\"", "units-text-repeat"),
+];
 
 /// Where warp's run-time admission differs from W0's subtyping: a bool is an Int at run time, so an int value passes
 /// a bool check (P199 lets only the literals 1 and 0 in; card bool-assign)
@@ -450,6 +481,11 @@ const KNOWN_VALUE_DIFFERENCES: &[(&str, &str)] = &[
 	// a covariant alias's write: W0 checks it against the list's own element type when it runs, warp adds 2.5 to ints
 	("xs: ints = [1]; ys: numbers = xs; ys.add(2.5); xs", "p215-user"),
 	("xs: ints = [1, 2]; ys: numbers = xs; ys#1 = 2.5; xs", "p215-user"),
+	// a comparison of quantities gives the int 1, a plain comparison yes
+	("1 m < 2 m", "units-compare"),
+	("50 cm < 1 m", "units-compare"),
+	("1 m == 100 cm", "units-compare"),
+	("x = 3 m; y = x * 2; y < 7 m", "units-compare"),
 ];
 /// What the model gives for a program it rejects, and for a value it does not keep
 const REJECTED: &str = "rejected";

@@ -179,6 +179,11 @@ fn times_first_unit(amount: Node, expression: Node) -> Node {
 	}
 }
 
+/// A unit word's base dimension and how many of the dimension's smallest steps it is (`km`: Length, 10_000_000)
+pub fn dimension_and_factor(name: &str) -> Option<(String, i64)> {
+	unit_named(name).map(|unit| (format!("{:?}", unit.dimension), unit.factor))
+}
+
 pub fn is_unit(name: &str) -> bool {
 	unit_named(name).is_some()
 }

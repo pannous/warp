@@ -25,6 +25,7 @@ inductive HasType (P : Program) : Ctx → Expr → Ty → Prop where
   /-- an int in the range of a fixed width (`int16`), what a checked declaration holds -/
   | intIn {Γ n lo hi} : lo ≤ n → n ≤ hi → HasType P Γ (.int n) (.ranged lo hi)
   | num {Γ n} : HasType P Γ (.num n) .number
+  | qty {Γ n d} : HasType P Γ (.qty n d) (.quantity d)
   | text {Γ s} : HasType P Γ (.text s) .text
   | unit {Γ} : HasType P Γ .unit .unit
   | nil {Γ} : HasType P Γ .nil (.list .never)

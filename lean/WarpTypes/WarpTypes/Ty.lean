@@ -7,7 +7,12 @@ A class type is its chain of ancestors, root first (`cls ["Shape", "Circle"]`): 
 subtyping is the prefix order and needs no class table. A variant of a sum type is a class extending the sum
 (P178, P179).
 A fixed-width int type (`int16`, `byte`, D16) is the range of ints it holds, `ranged lo hi`: below int, and one range
-below another that contains it. -/
+below another that contains it.
+A quantity (`2 m`, `3 km/h`, src/units/static_units.rs) has the type of its dimensions, `quantity [("Length", 1),
+("Time", -1)]`: a type of its own, beside the numbers, since `1 m + 1` is a DimensionError. -/
+
+/-- the powers of a quantity's base dimensions, sorted by name, none zero (`Dims.times` keeps them so) -/
+abbrev Dims := List (String × Int)
 
 namespace Warp
 
@@ -17,8 +22,23 @@ inductive Ty where
   | fn (result : Ty)
   | cls (path : List String)
   | ranged (low high : Int)
+  | quantity (dims : Dims)
   | any
   deriving DecidableEq, Repr
+
+/-- d with the power p of the base dimension n multiplied in -/
+def Dims.insert (n : String) (p : Int) : Dims → Dims
+  | [] => if p = 0 then [] else [(n, p)]
+  | (m, q) :: r =>
+    if n = m then (if p + q = 0 then r else (m, p + q) :: r)
+    else if n < m then (if p = 0 then (m, q) :: r else (n, p) :: (m, q) :: r)
+    else (m, q) :: Dims.insert n p r
+
+/-- the dimensions of a product: `m * m` is `m²`, `m/s * s` is `m` -/
+def Dims.times (d e : Dims) : Dims := e.foldl (fun product (n, p) => Dims.insert n p product) d
+
+/-- the dimensions of `1 / q` -/
+def Dims.inverse (d : Dims) : Dims := d.map fun (n, p) => (n, -p)
 
 namespace Ty
 
@@ -31,6 +51,7 @@ def sub : Ty → Ty → Bool
   | cls p, cls q => decide (q <+: p)
   | ranged a b, ranged c d => decide (c ≤ a ∧ b ≤ d)
   | ranged _ _, int | ranged _ _, number => true
+  | quantity d, quantity e => d == e
   | bool, bool | bool, int | bool, number | int, int | int, number | number, number => true
   | text, text | unit, unit => true
   | _, _ => false
@@ -52,6 +73,7 @@ def name : Ty → String
   | list t => s!"list of {t.name}"
   | fn t => s!"function to {t.name}"
   | cls p => p.getLastD "object"
+  | quantity d => s!"quantity {d}"
   | ranged lo hi => ((FIXED_WIDTHS.find? fun (_, l, h) => l == lo && h == hi).map (·.1)).getD s!"int {lo}…{hi}"
   | any => "any"
 
@@ -117,6 +139,7 @@ theorem sub_refl : ∀ t : Ty, sub t t = true
   | fn a => by simp [sub_refl a]
   | cls p => by simp [sub]
   | ranged a b => by simp [sub]
+  | quantity d => by simp [sub]
   | never | bool | int | number | text | unit | any => rfl
 
 theorem sub_to_never : ∀ {t : Ty}, sub t never = true → t = never := by
@@ -194,6 +217,7 @@ theorem join_upper_left : ∀ a b : Ty, sub a (join a b) = true := by
     all_goals (split <;> simp_all [sub])
   | never => intro b; simp
   | cls p => intro b; cases b <;> simp [join, sub, commonPrefix_left] <;> (try split) <;> simp_all [sub]
+  | quantity d => intro b; cases b <;> simp [join, sub] <;> (repeat' split) <;> (try simp_all [sub, eq_comm])
   | _ => intro b; cases b <;> simp [join, sub] <;> (try split) <;> (try simp_all) <;> omega
 
 theorem join_upper_right : ∀ a b : Ty, sub b (join a b) = true := by
@@ -207,6 +231,7 @@ theorem join_upper_right : ∀ a b : Ty, sub b (join a b) = true := by
     all_goals (split <;> simp_all [sub])
   | never => intro b; simp [join, sub_refl]
   | cls p => intro b; cases b <;> simp [join, sub, commonPrefix_right] <;> (try split) <;> simp_all [sub]
+  | quantity d => intro b; cases b <;> simp [join, sub] <;> (repeat' split) <;> (try simp_all [sub, eq_comm])
   | _ => intro b; cases b <;> simp [join, sub, sub_refl] <;> (try split) <;> (try simp_all) <;> omega
 
 theorem join_least : ∀ {a b c : Ty}, sub a c = true → sub b c = true → sub (join a b) c = true := by
@@ -314,10 +339,56 @@ def isListTy : Ty → Bool
   | list _ => true
   | _ => false
 
+def isQuantity : Ty → Bool
+  | quantity _ => true
+  | _ => false
+
+/-- the dimensions of a quantity type, none (`[]`) of a number type; none of anything else -/
+def dimsOf : Ty → Option Dims
+  | quantity d => some d
+  | t => if sub t number then some [] else none
+
+/-- the type of a value of dimensions d: a number when they cancel (`6 m / 3 m` is 2) -/
+def ofDims (d : Dims) : Ty := if d = [] then number else quantity d
+
+/-- a quantity type has no subtypes but itself and `never`, and no supertypes but itself and `any` -/
+theorem quantity_up {a a' : Ty} (h : sub a' a = true) (n : a' ≠ never) (y : a ≠ any) :
+    isQuantity a' = isQuantity a := by
+  cases a' <;> cases a <;> simp_all [sub, isQuantity]
+
+theorem quantity_eq {a a' : Ty} (h : sub a' a = true) (n : a' ≠ never) (q : isQuantity a = true) : a' = a := by
+  cases a' <;> cases a <;> simp_all [sub, isQuantity]
+
+theorem dimsOf_up {a a' : Ty} (h : sub a' a = true) (n : a' ≠ never) (y : a ≠ any) : dimsOf a' = dimsOf a := by
+  cases a' <;> cases a <;> simp_all [sub, dimsOf]
+
+/-- `+` and `-` of quantities: one dimension on both sides, else a DimensionError -/
+def sameQuantity (a b : Ty) : Ty := if a = b then a else never
+
+theorem sameQuantity_mono {a b a' b' : Ty} (ha : sub a' a = true) (hb : sub b' b = true) (na : a' ≠ never)
+    (nb : b' ≠ never) (ya : a ≠ any) (yb : b ≠ any) (q : (isQuantity a || isQuantity b) = true) :
+    sub (sameQuantity a' b') (sameQuantity a b) = true := by
+  unfold sameQuantity
+  by_cases e : a = b
+  · subst e
+    have qa : isQuantity a = true := by simpa using q
+    rw [quantity_eq ha na qa, quantity_eq hb nb qa]; simp [sub_refl]
+  · rw [if_neg e]
+    split
+    · rename_i e'
+      have qa := quantity_up ha na ya
+      have qb := quantity_up hb nb yb
+      subst e'
+      rw [qa] at qb
+      have q' : isQuantity a = true ∧ isQuantity b = true := by cases h : isQuantity a <;> simp_all
+      exact absurd ((quantity_eq ha na q'.1).symm.trans (quantity_eq hb nb q'.2)) e
+    · exact sub_refl _
+
 /-- the result of `+`: `never` when a side raises, dynamic when a side is, two lists' concatenation a list of their
 elements' join, a text when a side is a text, a number type otherwise -/
 def plus (a b : Ty) : Ty :=
   if a = never ∨ b = never then never else if a = any ∨ b = any then any
+  else if (isQuantity a || isQuantity b) = true then sameQuantity a b
   else if (isListTy a && isListTy b) = true then list (join ((element a).getD any) ((element b).getD any))
   else if a = text ∨ b = text then text else arith a b
 
@@ -409,6 +480,14 @@ theorem plus_mono {a b a' b' : Ty} (ha : sub a' a = true) (hb : sub b' b = true)
     · exact y (.inl (sub_from_any ha))
     · exact y (.inr (sub_from_any hb))
   rw [ite_eq_right y']
+  have na : a' ≠ never := fun h => n' (.inl h)
+  have nb : b' ≠ never := fun h => n' (.inr h)
+  have ya : a ≠ any := fun h => y (.inl h)
+  have yb : b ≠ any := fun h => y (.inr h)
+  rw [quantity_up ha na ya, quantity_up hb nb yb]
+  by_cases q : (isQuantity a || isQuantity b) = true
+  · rw [ite_eq_left q, ite_eq_left q]; exact sameQuantity_mono ha hb na nb ya yb q
+  rw [ite_eq_right q, ite_eq_right q]
   by_cases l : (isListTy a && isListTy b) = true
   · obtain ⟨x, rfl⟩ : ∃ x, a = list x := by cases a <;> simp [isListTy] at l ⊢
     obtain ⟨z, rfl⟩ : ∃ z, b = list z := by cases b <;> simp [isListTy] at l ⊢

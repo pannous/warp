@@ -40,10 +40,24 @@ def convertible (te : Ty) : Ty → Bool
   | .int | .number => consub te .number || consub te .text
   | t => consub te t
 
+/-- a quantity meets only its own dimensions (or a dynamic value, or an error): `1 m + 1 s`, `1 m == 1`, `1 m < "a"`
+and `if c { 1 m } else { 2 }` are DimensionErrors when warp compiles them (src/units/static_units.rs) -/
+def dimensionsAgree (a b : Ty) : Bool :=
+  !(a.isQuantity || b.isQuantity) || a == b || a == .any || b == .any || a == .never || b == .never
+
+/-- `-` takes one dimension, `*` and `/` combine quantities and numbers, `%` and `^` take no quantity -/
+def dimensionsCombine (op : ArithOp) (a b : Ty) : Bool :=
+  if op = .sub then dimensionsAgree a b
+  else !(a.isQuantity || b.isQuantity) || a == .any || b == .any || (op == .mul || op == .div) && a.dimsOf.isSome && b.dimsOf.isSome
+
+/-- what `-`, `*`, `/` and `<` take: numbers, quantities and a dynamic value -/
+def measurable (t : Ty) : Bool := numeric t || t.isQuantity
+
 def typeOf (P : Program) (Γ : Ctx) : Expr → Option Ty
   | .bool _ => some .bool
   | .int _ => some .int
   | .num _ => some .number
+  | .qty _ d => some (.quantity d)
   | .text _ => some .text
   | .unit => some .unit
   | .nil => some (.list .never)
@@ -55,23 +69,28 @@ def typeOf (P : Program) (Γ : Ctx) : Expr → Option Ty
   | .loc y => Γ y
   | .add a b =>
     match typeOf P Γ a, typeOf P Γ b with
-    | some ta, some tb => if (addable ta && addable tb) || (listy ta && listy tb) then some (plus ta tb) else none
+    | some ta, some tb =>
+      if dimensionsAgree ta tb && ((addable ta && addable tb) || (listy ta && listy tb) || ta.isQuantity) then some (plus ta tb)
+      else none
     | _, _ => none
   | .arith op a b =>
     match typeOf P Γ a, typeOf P Γ b with
-    | some ta, some tb => if (numeric ta && numeric tb) || (op == .mul && repeats ta tb) then some (op.ty ta tb) else none
+    | some ta, some tb =>
+      if dimensionsCombine op ta tb && ((measurable ta && measurable tb) || (op == .mul && repeats ta tb)) then some (op.ty ta tb)
+      else none
     | _, _ => none
   | .lt a b =>
     match typeOf P Γ a, typeOf P Γ b with
-    | some ta, some tb => if (numeric ta && numeric tb) || (textual ta && textual tb) then some .bool else none
+    | some ta, some tb =>
+      if dimensionsAgree ta tb && ((measurable ta && measurable tb) || (textual ta && textual tb)) then some .bool else none
     | _, _ => none
   | .eq _ a b =>
     match typeOf P Γ a, typeOf P Γ b with
-    | some _, some _ => some .bool
+    | some ta, some tb => if dimensionsAgree ta tb then some .bool else none
     | _, _ => none
   | .ite c a b =>
     match typeOf P Γ c, typeOf P Γ a, typeOf P Γ b with
-    | some _, some ta, some tb => some (join ta tb)
+    | some _, some ta, some tb => if dimensionsAgree ta tb then some (join ta tb) else none
     | _, _, _ => none
   | .loop c b d =>
     match typeOf P Γ c, typeOf P Γ b, typeOf P Γ d with
@@ -167,7 +186,7 @@ def typeOf (P : Program) (Γ : Ctx) : Expr → Option Ty
 theorem typeOf_sound {P : Program} : ∀ {e : Expr} {Γ t}, typeOf P Γ e = some t → HasType P Γ e t := by
   intro e
   induction e with
-  | bool | int | num | text | unit | nil => intro Γ t h; simp [typeOf] at h; subst h; constructor
+  | bool | int | num | qty | text | unit | nil => intro Γ t h; simp [typeOf] at h; subst h; constructor
   | cons h tl ih1 ih2 =>
     intro Γ t hs; simp only [typeOf] at hs; split at hs
     · rename_i a l ha hl
@@ -200,11 +219,15 @@ theorem typeOf_sound {P : Program} : ∀ {e : Expr} {Γ t}, typeOf P Γ e = some
     · cases h
   | eq s a b ih1 ih2 =>
     intro Γ t h; simp only [typeOf] at h; split at h
-    · rename_i ha hb; cases h; exact .eq (ih1 ha) (ih2 hb)
+    · rename_i ha hb; split at h
+      · cases h; exact .eq (ih1 ha) (ih2 hb)
+      · cases h
     · cases h
   | ite c a b ih0 ih1 ih2 =>
     intro Γ t h; simp only [typeOf] at h; split at h
-    · rename_i hc ha hb; cases h; exact .ite (ih0 hc) (ih1 ha) (ih2 hb)
+    · rename_i hc ha hb; split at h
+      · cases h; exact .ite (ih0 hc) (ih1 ha) (ih2 hb)
+      · cases h
     · cases h
   | loop c b d ih1 ih2 ih3 =>
     intro Γ t h; simp only [typeOf] at h; split at h
