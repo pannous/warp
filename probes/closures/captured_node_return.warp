@@ -1,0 +1,1 @@
+v(xs) := { m = mean(xs); f = x => x - m; f(1) }; v([float(1), float(4)])
