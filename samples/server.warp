@@ -15,6 +15,7 @@ get "/api/users" { users }                 // data for anyone: GET /api/users
 post "/api/users" { users.add(User(request.body)); count(users) }
 // a typed parameter as a page route's: GET /api/users/2 is {"name":"Bo","id":2}, /api/users/9 a JSON 404
 get "/api/users/:id:int" { users#id }
+get "/api/newest" { last 2 of users }      // the two users added last
 
 route "/" {
 	div{

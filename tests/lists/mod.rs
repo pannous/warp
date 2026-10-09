@@ -77,3 +77,4 @@ mod test_picked_linear; // card compiler-picks-dot
 mod test_sorted_by_phrase; // card sorted-by-phrase
 mod test_for_where; // card for-where
 mod test_phrase_in_call; // card phrase-in-call
+mod test_first_items; // card first-first

@@ -26,6 +26,7 @@ check GET /api/users
 check GET /api/users/2
 check GET /api/users/abc
 check GET /api/users/9
+check GET /api/newest
 check GET /users/2
 check GET /users/abc
 check GET /nope
