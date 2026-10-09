@@ -1,5 +1,5 @@
-// card linear-hint: 'prefer xs = float[n] over linear' only where the compiler would pick linear memory itself; dot and
-// `.*` of linear arrays run in linear memory (linear_dotf, 3 ms for 10^6) while plain lists stay GC lists (13 ms)
+// card linear-hint: 'prefer xs = float[n] over linear' only where the compiler would pick linear memory itself, which
+// it does for float arrays paired by dot and `.*` (card compiler-picks-dot)
 use warp::normalize::{capture_hints, clear_shown_hints};
 
 fn linear_hinted(code: &str) -> bool {
@@ -8,11 +8,12 @@ fn linear_hinted(code: &str) -> bool {
 	hints.iter().any(|hint| hint.original.starts_with("linear"))
 }
 
+// the compiler picks linear memory for float arrays paired by dot or `.*` itself (card compiler-picks-dot)
 #[test]
-fn linear_arrays_of_dot_keep_their_word() {
-	assert!(!linear_hinted("linear xs = float[3]; linear ys = float[3]; dot(xs, ys)"));
-	assert!(!linear_hinted("linear xs = float[3]; linear ys = float[3]; sum(xs .* ys)"));
-	assert!(!linear_hinted("linear xs = float[3]; zs = xs .* xs; zs#1"));
+fn linear_arrays_of_dot_are_hinted_too() {
+	assert!(linear_hinted("linear xs = float[3]; linear ys = float[3]; dot(xs, ys)"));
+	assert!(linear_hinted("linear xs = float[3]; linear ys = float[3]; sum(xs .* ys)"));
+	assert!(linear_hinted("linear xs = float[3]; zs = xs .* xs; zs#1"));
 }
 
 #[test]
