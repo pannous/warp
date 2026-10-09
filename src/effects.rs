@@ -158,6 +158,10 @@ impl Capability {
 	pub const GRANTED_BY_EVAL: [Capability; 7] = Capability::ALL;
 	/// Capabilities untrusted code gets: all of them for now too (P88)
 	pub const GRANTED_UNTRUSTED: [Capability; 7] = Capability::ALL;
+	/// Capabilities of a program run with `warp --sandbox`, as warp-lambda hosts strangers' programs on pannous.com
+	/// (user, 2026-10-09: sandboxed): no C, no shell, no other runtime; its files and SQLite stay in its own folder by
+	/// the systemd unit around it (web/hosting/server)
+	pub const GRANTED_SANDBOXED: [Capability; 4] = [Host, Wasi, Libm, Sql];
 
 	pub fn name(self) -> &'static str {
 		match self {
@@ -471,11 +475,14 @@ impl Resolver<'_> {
 		if let Some(import) = self.context.ffi_imports.get(name) {
 			// libm is pure (P26): untrusted code and `! Pure` functions may call it; so are the module's own linear arrays
 			let pure_library = import.library == crate::ffi::LIBM || import.library == crate::wasm_emitter::linear_arrays::LINEAR_LIBRARY;
-			let task_word = import.library == crate::host::HOST_LIBRARY && crate::host::TASK_WORDS.contains(&name);
-			return Some(match (pure_library, task_word) {
+			// warp's own host words (serve_routes, sleep, gpu_render …) are the Host capability, not C: a sandboxed program
+			// (warp --sandbox) keeps them
+			let host_word = import.library == crate::host::HOST_LIBRARY;
+			let capability = if host_word { Host } else { Ffi };
+			return Some(match (pure_library, host_word && crate::host::TASK_WORDS.contains(&name)) {
 				(true, _) => External { capability: Libm, effects: EffectSet::PURE },
-				(_, true) => External { capability: Ffi, effects: EffectSet::of(&[Async]) },
-				_ => External { capability: Ffi, effects: EffectSet::of(&[FFI]) },
+				(_, true) => External { capability, effects: EffectSet::of(&[Async]) },
+				_ => External { capability, effects: EffectSet::of(&[FFI]) },
 			});
 		}
 		trusted_external(name)

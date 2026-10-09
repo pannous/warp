@@ -12,6 +12,10 @@ use crate::site::ServedSite;
 use std::cell::Cell;
 
 const JSON_TYPE: &str = "application/json";
+/// The address a server listens on: every interface, or WARP_SERVE_ADDRESS (warp-lambda: 127.0.0.2, reachable only
+/// through its proxy, web/hosting/server)
+const SERVE_ADDRESS_VARIABLE: &str = "WARP_SERVE_ADDRESS";
+const EVERY_INTERFACE: &str = "0.0.0.0";
 const TEXT_TYPE: &str = "text/plain; charset=utf-8";
 /// A reply of this type is a text (host-tasks.js TEXT_REPLY_TYPE)
 pub const TEXT_REPLY_TYPE: &str = "text/plain";
@@ -190,7 +194,8 @@ fn text_of(node: &Node) -> String {
 /// Serve on `port` until the request limit (if any): `answer(route, request)` runs the route's function; a GET no route
 /// takes is a file of the program's `site` (src/site.rs), its page at /
 pub fn serve(port: u16, routes: &[Route], site: &ServedSite, mut answer: impl FnMut(&Route, Node) -> Result<Answer, RouteFailure>) -> Result<(), String> {
-	let server = tiny_http::Server::http(("0.0.0.0", port)).map_err(|problem| format!("serve {port}: {problem}"))?;
+	let address = std::env::var(SERVE_ADDRESS_VARIABLE).unwrap_or_else(|_| EVERY_INTERFACE.to_string());
+	let server = tiny_http::Server::http((address.as_str(), port)).map_err(|problem| format!("serve {address}:{port}: {problem}"))?;
 	let limit = take_request_limit();
 	let mut served = 0;
 	for mut request in server.incoming_requests() {
