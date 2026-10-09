@@ -4,6 +4,7 @@
 //! a loop over such a list. A unit field read of an instance it cannot see is a loud error, never a silent SI number.
 
 use super::{shown, Fields, Inference, Signature, Stop};
+use crate::lowering::database_tables::OPTIONAL_MARK;
 use crate::node::{Bracket, Node};
 use crate::operators::Op;
 use std::collections::HashMap;
@@ -27,23 +28,27 @@ pub(super) fn unit_classes(program: &Node) -> HashMap<String, Fields> {
 /// The units the program's unit fields are written in: `distance: km` shows km like a written `5 km`
 pub(super) fn written_field_units(program: &Node) -> Vec<crate::units::Factor> {
 	let fields = crate::class_methods::class_fields(program).into_values().flatten();
-	fields.filter(|(_, type_name)| !type_name.is_empty())
-		.filter_map(|(_, type_name)| crate::units::unit_expression(&crate::warp_parser::parse(&type_name)))
-		.flatten().collect()
+	fields.filter_map(|(_, type_name)| field_units(&type_name)).flatten().collect()
 }
 
-/// The signature of a field type that is a unit (`km`, `km/h`)
-fn field_unit(type_name: &str) -> Option<Signature> {
-	if type_name.is_empty() {
+/// The units of a field type that is a unit (`km`, `km/h`, an optional `km?`)
+fn field_units(type_name: &str) -> Option<Vec<crate::units::Factor>> {
+	let unit = type_name.trim_end_matches(OPTIONAL_MARK);
+	if unit.is_empty() {
 		return None;
 	}
-	crate::units::unit_expression(&crate::warp_parser::parse(type_name)).map(|units| crate::units::signature(&units))
+	crate::units::unit_expression(&crate::warp_parser::parse(unit))
+}
+
+/// The signature of a field type that is a unit
+fn field_unit(type_name: &str) -> Option<Signature> {
+	field_units(type_name).map(|units| crate::units::signature(&units))
 }
 
 /// A field type that is a unit (`km`): the quantity it measures (`m` of km, `m/s` of km/h) and its SI amount per unit
 /// (1000 of km); a stored column keeps it in its type (`NUMERIC km`, database.rs), the browser's store in its schema
 pub(crate) fn unit_type(type_name: &str) -> Option<(String, f64)> {
-	let units = crate::units::unit_expression(&crate::warp_parser::parse(type_name))?;
+	let units = field_units(type_name)?;
 	let per_unit = crate::units::scale(&units, |factor| super::base_unit(factor.unit.dimension));
 	Some((shown(&crate::units::signature(&units)), per_unit.to_f64()))
 }
@@ -72,8 +77,16 @@ impl Inference {
 		}
 	}
 
-	/// The class of a list literal of instances of one class: `[Run(1 km), Run(2 km)]`
+	/// The class of a list literal of instances of one class: `[Run(1 km), Run(2 km)]`, or of another list of them (`rs =
+	/// runs`, as a comprehension takes the list it filters; a table's list reads as `runs·load()`)
 	fn instances_class(&self, list: &Node) -> Option<String> {
+		let other_list = match list.drop_meta() {
+			Node::Symbol(name) => Some(name.clone()),
+			_ => crate::database_tables::loaded_table(list),
+		};
+		if let Some(name) = other_list {
+			return self.class_lists.get(&name).cloned();
+		}
 		let Node::List(items, Bracket::Square, _) = list.drop_meta() else { return None };
 		let classes: Vec<String> = items.iter().map(|item| self.instance_class(item)).collect::<Option<_>>()?;
 		classes.first().filter(|first| classes.iter().all(|class| class == *first)).cloned()
@@ -129,18 +142,23 @@ impl Inference {
 		if !is_word(word, FOR_WORD) || !is_word(in_word, IN_WORD) {
 			return;
 		}
-		if let (Node::Symbol(name), Some(class)) = (variable.drop_meta(), self.class_lists.get(&iterable.drop_meta().name()).cloned()) {
+		if let (Node::Symbol(name), Some(class)) = (variable.drop_meta(), self.instances_class(iterable)) {
 			self.declare_instance(name.clone(), class);
 		}
 	}
 
-	/// `Run(5 km, "park")`: each argument has its field's signature (a plain number for a unit field is a DimensionError)
+	/// `Run(5 km, "park")`: each argument has its field's signature (a plain number for a unit field is a DimensionError);
+	/// ø has no dimension, whether a field may hold nothing is its type's matter (`distance: km?`)
 	pub(super) fn constructed(&mut self, items: &[Node]) -> Option<Result<(Node, Signature), Stop>> {
 		let (head, arguments) = items.split_first()?;
 		let fields = self.classes.get(&head.drop_meta().name())?.clone();
 		let class = head.drop_meta().name();
 		let mut lowered = vec![head.clone()];
 		for (index, argument) in arguments.iter().enumerate() {
+			if super::is_nothing(argument) {
+				lowered.push(argument.clone());
+				continue;
+			}
 			let (argument, given) = match self.infer(argument.clone()) {
 				Ok(inferred) => inferred,
 				Err(stop) => return Some(Err(stop)),
@@ -177,9 +195,13 @@ impl Inference {
 		match item {
 			Node::Meta { node, data } => Ok(Node::Meta { node: Box::new(self.numeric_field(*node, fields)?), data }),
 			Node::Key(field, Op::Colon, field_type) if unit_of(&field).is_some() => {
-				let number = match *field_type {
-					Node::Type { body, .. } => Node::Type { name: Box::new(Node::Symbol(NUMBER_TYPE.to_string())), body },
-					_ => Node::Symbol(NUMBER_TYPE.to_string()),
+				let number_type = |written: &Node| {
+					let optional = if written.drop_meta().name().ends_with(OPTIONAL_MARK) { OPTIONAL_MARK.to_string() } else { String::new() };
+					Box::new(Node::Symbol(format!("{NUMBER_TYPE}{optional}")))
+				};
+				let number = match field_type.drop_meta() {
+					Node::Type { name, body } => Node::Type { name: number_type(name), body: body.clone() },
+					other => *number_type(other),
 				};
 				Ok(Node::Key(field, Op::Colon, Box::new(number)))
 			}

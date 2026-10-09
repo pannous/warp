@@ -187,5 +187,6 @@ bo's row again, so it changes nothing after written-through changes; an instance
      migrations above. The playground's store follows the same rules (card browser-unit-migrations): the schema
      entry of a unit field carries its quantity and SI amount per unit (`[distance km ø ø m 1000]`, the 4th entry ø
      unless renamed; units::static_units::unit_type), the store keeps each unit column's quantity (`quantities`).
-     Sample: samples/orm_units.warp.
+     An optional unit field (`climb: m?`, card unit-field) is a nullable `NUMERIC m` column declared `number?`; ø has
+     no dimension, so `Run(5 km, ø)` and `r.climb == ø` pass static units. Sample: samples/orm_units.warp.
    - A field named size/count/length reads as the builtin count off a typed list element (card field-named-size).
