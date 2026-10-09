@@ -86,6 +86,10 @@ inductive Expr where
   `names: texts`, card list-element-types; any value given to an inline union `x: int | text` or an optional
   `x: int?`): the value if it fits one of the alternatives ts, else an error -/
   | cast (e : Expr) (ts : List Ty)
+  /-- `e as t`, warp's conversion: a scalar converts to text, int, number or bool (`3.7 as int` is 3, `"4" as int` is
+  4, `3 as text` is "3"), a text that is no number fails when it runs; to any other type it is a checked cast. A
+  declared result `def f(x) -> int { body }` is `body as int` -/
+  | conv (e : Expr) (t : Ty)
   /-- broadcasting: `f(xs)` of a function of A given a list of A applies f to each item (`f(x: int) := x+1; f([1])` is
   [2]); warp decides it at compile time, so it is its own form -/
   | broadcast (f : String) (arg : Expr)
@@ -164,6 +168,7 @@ def subst (e : Expr) (y : String) (v : Expr) : Expr :=
   | call f e => call f (e.subst y v)
   | tryCatch e h => tryCatch (e.subst y v) (h.subst y v)
   | cast e ts => cast (e.subst y v) ts
+  | conv e t => conv (e.subst y v) t
   | broadcast f e => broadcast f (e.subst y v)
   | get e f => get (e.subst y v) f
   | set e f w => set (e.subst y v) f (w.subst y v)
@@ -190,7 +195,7 @@ def assigned : Expr → List String
   | forIn _ e b d => e.assigned ++ b.assigned ++ d.assigned
   | letIn _ _ e b => e.assigned ++ b.assigned
   | set a _ b => a.assigned ++ b.assigned
-  | call _ e | cast e _ | broadcast _ e | get e _ | isA e _ | emit _ e | scope _ e | abort _ _ e | lam _ e
+  | call _ e | cast e _ | conv e _ | broadcast _ e | get e _ | isA e _ | emit _ e | scope _ e | abort _ _ e | lam _ e
   | share e _ => e.assigned
   | _ => []
 
