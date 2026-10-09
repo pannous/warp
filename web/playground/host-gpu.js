@@ -24,6 +24,7 @@ const VALUES_BINDING = 0;
 const UNIFORM_ALIGNMENT = 16; // a uniform struct is a whole number of 16-byte rows
 // the WGSL type of a value of 1…4 floats and its alignment in bytes
 const VALUE_TYPES = [, ["f32", 4], ["vec2f", 8], ["vec3f", 16], ["vec4f", 16]];
+const VECTOR_FLOATS = 4; // the floats of one vector in an array value, `values.<name>[i]` (src/gpu.rs)
 let gpuDevice; // the task Worker's device, asked for once
 const WORDS_STATE = 2; // the shared buffer's state when it holds raw 32-bit words, floats or pixels (writeShared's JSON is state 1)
 // kept buffers (src/lowering/gpu_maps.rs marked_kept): a map result read on the CPU stays on the GPU for the next map of
@@ -118,16 +119,22 @@ function uniformLayout(values) {
 	const entries = Object.entries(values ?? {});
 	if (!entries.length) return { declarations: "", bytes: new ArrayBuffer(0) };
 	const members = [], floats = [];
+	const padded = alignment => { while (floats.length % (alignment / 4)) floats.push(0); };
 	for (const [name, value] of entries) {
-		const numbers = [value].flat();
+		// a list of lists: one vec4f per item, its missing coordinates 0
+		const vectors = Array.isArray(value) && value.some(Array.isArray);
+		if (vectors && value.some(item => [item].flat().length > VECTOR_FLOATS)) throw new Error(`${VALUES_NAME}.${name} is a list of vectors of up to four numbers, got ${JSON.stringify(value)}`);
+		const numbers = vectors ? value.flatMap(item => [...[item].flat(), 0, 0, 0, 0].slice(0, VECTOR_FLOATS)) : [value].flat();
 		if (!numbers.every(number => typeof number === "number")) throw new Error(`${VALUES_NAME}.${name} is a number or a list of numbers, got ${JSON.stringify(value)}`);
-		const [type, alignment] = VALUE_TYPES[numbers.length] ?? [];
+		const array = vectors || numbers.length > VECTOR_FLOATS;
+		const [type, alignment] = array ? [`array<vec4f, ${Math.max(1, Math.ceil(numbers.length / VECTOR_FLOATS))}>`, UNIFORM_ALIGNMENT] : VALUE_TYPES[numbers.length] ?? [];
 		if (!type) throw new Error(`${VALUES_NAME}.${name} is one number or a list of two to four, got ${numbers.length}`);
-		while (floats.length % (alignment / 4)) floats.push(0);
+		padded(alignment);
 		floats.push(...numbers);
+		if (array) padded(UNIFORM_ALIGNMENT);
 		members.push(`${name}: ${type}`);
 	}
-	while (floats.length % (UNIFORM_ALIGNMENT / 4)) floats.push(0);
+	padded(UNIFORM_ALIGNMENT);
 	const declarations = `\nstruct WarpValues { ${members.join(", ")} }\n@group(0) @binding(${VALUES_BINDING}) var<uniform> ${VALUES_NAME}: WarpValues;`;
 	return { declarations, bytes: new Float32Array(floats).buffer };
 }
