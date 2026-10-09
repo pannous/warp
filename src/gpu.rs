@@ -130,6 +130,8 @@ pub fn compute_kept(shader: &str, numbers: &[f32], workgroups: u32, first: usize
 	queue.submit([encoder.finish()]);
 	let bytes = read_back(device, &readback, validation)?;
 	if let (Some((block, count)), Ok(mut kept)) = (keeping.result, KEPT.lock()) {
+		// an earlier run's buffer for the same block address is stale
+		kept.retain(|(earlier, _, _)| *earlier != block);
 		if kept.len() >= MOST_KEPT {
 			kept.remove(0);
 		}

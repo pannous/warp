@@ -87,7 +87,11 @@ fn kept_in(node: Node, program: &Node) -> Node {
 /// ys's items and nothing else (no write, no call handing ys on)
 fn marked_kept(mut statements: Vec<Node>) -> Vec<Node> {
 	for index in 0..statements.len() {
-		let Some((name, _)) = gpu_assignment(&statements[index]) else { continue };
+		let Some((name, value)) = gpu_assignment(&statements[index]) else { continue };
+		// a map of only arithmetic runs on the CPU and leaves no buffer on the GPU
+		if gpu_map(&value).and_then(|(_, function)| gpu_kernel(&function)).is_none() {
+			continue;
+		}
 		let mut kept = false;
 		for statement in &mut statements[index + 1..] {
 			if maps_on_gpu(statement, &name) {

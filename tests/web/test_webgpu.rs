@@ -219,3 +219,17 @@ fn a_gpu_map_result_read_on_the_cpu_is_kept_on_the_gpu_for_the_next_map() {
 	assert_eq!(keeping(&program.replace("zs = ", "ys#1 = 5.0\nzs = ")), ["0", "0", "0"]);
 	assert_eq!(keeping(&program.replace("zs = ", "f(ys)\nzs = ")), ["0", "0", "0"]);
 }
+
+// card gpu-kept: a producer of only arithmetic maps on the CPU, so it leaves no buffer on the GPU; its consumer uploads
+// (with SOURCE_KEPT it read a stale buffer an earlier run kept for the same block)
+#[test]
+fn a_gpu_map_of_a_cpu_mapped_result_uploads_it() {
+	let mut flags = vec![];
+	let program = "linear xs = float[40000]\nys = xs.map(x => x * 2) @gpu\nprint ys#1\nzs = ys.map(y => exp(y) + 1) @gpu\n";
+	warp::pipeline::lower(program).expect("a program").visit(&mut |part| if let Node::List(items, _, _) = part {
+		if items.first().is_some_and(|head| head.name() == "gpu_map_linear") {
+			flags.push(items.last().expect("arguments").serialize());
+		}
+	});
+	assert_eq!(flags, ["0"]);
+}

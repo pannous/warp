@@ -72,8 +72,14 @@ fn save_writes_the_row_and_is_the_instance() {
 	crate::common::fails_with(&program("people_unsaved", "save Person(\"Fay\", 3)"), "add it to people first");
 }
 
-// samples/orm.warp keeps its rows beside it and seeds them once; each run makes Bo (row 2) a year older and saves him
-#[cfg(feature = "native")]
+// as any expression: the standalone build of a program ending with `save bo` prints it, `print(save bo)` (card orm-standalone)
+#[test]
+fn save_is_an_expression() {
+	is!(&program("people_saved_inline", "people.add(Person(\"Gus\", 60))\nprint(save people#1)\n(save people#1).age"), 60);
+}
+
+// samples/orm.warp keeps its rows beside it (in the browser in IndexedDB) and seeds them once; each run makes Bo (row 2)
+// a year older and saves him
 #[test]
 fn the_orm_sample_runs_twice_on_the_same_rows() {
 	let runs = [eval("samples/orm.warp").serialize(), eval("samples/orm.warp").serialize()];
