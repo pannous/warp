@@ -106,8 +106,22 @@ jobs:
         tool: wasm-tools
     - name: Install agent-browser (headless Chrome)
       run: npm install -g agent-browser && agent-browser install --with-deps
+    # the browser cannot run git: each pinned package of packages.warp is fetched as the native fetch_package does
+    # (src/modules.rs): its version tag cloned once into the package cache, linked as packages/<name>
+    - name: Fetch the pinned packages
+      run: |
+        grep -oE '^[a-z_]+: \{repository: "[^"]+", version: [0-9.]+\}' packages.warp | while read -r pinned; do
+          name=${pinned%%:*}
+          url=$(grep -oE 'https://[^"]+' <<< "$pinned")
+          version=$(grep -oE '[0-9]+\.[0-9]+\.[0-9]+' <<< "$pinned")
+          tag=$(git ls-remote --tags --refs "$url" | grep -oE "refs/tags/v?$version\$" | sed 's|refs/tags/||' | head -1)
+          cached=~/.cache/warp/packages/$name@$version
+          git clone -q --depth 1 --branch "$tag" "$url" "$cached"
+          mkdir -p packages && ln -s "$cached" "packages/$name"
+        done
+        ls -l packages
     - name: The test suite in headless Chrome
-      run: cargo browser-test
+      run: cargo browser-test test_gpu_precision_probe test_webgpu test_packages test_text_bytes
 
   # every tour example shows what it promises (examples.js) and no example or sample writes an error or warning to the
   # console, in the collected site, else no deploy
