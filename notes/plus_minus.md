@@ -48,9 +48,8 @@ unchanged (`f(x) := x*x; f(3 ± 0.1)` is 9.00 ± 0.61).
   makes ± values and orders values therefore imports the host (may_order_intervals).
 
 ## Open
-- `if area certainly > 10 then …` parses as `(if area) (then (certainly > 10) …)`: the condition stops at the second
-  word; `if (area certainly > 10) then` and `ok = area certainly > 10` work. `x + 1 certainly < 8` reads
-  `x + (1 certainly < 8)`; write `(x + 1) certainly < 8`.
+- `x + 1 certainly < 8` reads `x + (1 certainly < 8)`; write `(x + 1) certainly < 8`. (`if area certainly > 10 then`
+  works since card parser-if-stops: a condition takes a braceless call with a variable argument, as a branch does.)
 - `"y=" + x` with an interval x is the general type error text + data (no implicit conversion of a run-time value);
   `"y=" + str(x)` works. Text interpolation does not exist in warp (notes/i18n.md).
 - Card plus-minus-playground: the playground reader (web.rs node_from_tree), math words (sqrt, sin: map the endpoints,

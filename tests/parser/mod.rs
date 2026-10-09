@@ -43,3 +43,4 @@ mod test_bare_operator_block;
 mod test_emoji_atoms;
 mod test_spaced_optional_type;
 mod test_empty_argument;
+mod test_if_condition_words; // card parser-if-stops
