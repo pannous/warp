@@ -8,8 +8,8 @@ HERE=$(cd "$(dirname "$0")" && pwd)
 ROOT=$(cd "$HERE/../.." && pwd)
 WORK="$ROOT/scratch/hosting_gc"
 WARP="$ROOT/scratch/warp"
-WORKER_PORT=8799
-SPIN_PORT=8798
+WORKER_PORT=${WARP_GC_WORKER_PORT:-8897}  # outside the test suite's 87xx ports
+SPIN_PORT=${WARP_GC_SPIN_PORT:-8898}
 mkdir -p "$WORK/worker" "$WORK/spin"
 
 "$WARP" --no-hints compile --wasm "$HERE/gc_check.warp" >/dev/null && mv "$HERE/gc_check.wasm" "$WORK/"

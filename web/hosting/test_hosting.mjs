@@ -11,7 +11,7 @@ import assert from "node:assert/strict";
 
 const ROOT = resolve(import.meta.dirname, "../..");
 const WORK = join(ROOT, "scratch/hosting_test");
-const PORT = 8797;
+const PORT = Number(process.env.WARP_HOSTING_TEST_PORT ?? 8899); // outside the test suite's 87xx ports
 const INSPECTOR_PORT = 9331; // not wrangler's default 9229, which another wrangler dev may hold
 const HOSTING = `http://localhost:${PORT}`;
 const NAME = "hosting-test";
