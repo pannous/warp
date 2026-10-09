@@ -52,6 +52,10 @@ notes/open_decisions.md.
   in with their own button". First our account hosts the programs: users log in with us and get a Deploy button.
   Second, a button deploying to the person's own provider account. Worker warp-hosting researches providers
   (notes/hosting.md), builds both, and sends account, cost and DNS questions here.
+- Hosting, third option (user, 2026-10-09, multiple choice: "let's also create a third option"): both Ferron on
+  pannous.com (built: warp-lambda, `<name>.lambda.pannous.com`, notes/hosting.md) and Fermyon / Akamai Functions
+  ("Both now"). Programs on pannous.com run sandboxed: no C, shell or other runtime, files and SQLite only in their
+  own folder, web requests allowed, a locked-down systemd unit each.
 - Ranges (user, via warp-class, branch range-descriptor 51cdcb2dd): "We don't need the colon syntax if we have the
   dot-dot syntax": `r: 1..n` is the range itself, same as `r = 1..n`; `..` marks a value, so no uncharged-block
   warning.

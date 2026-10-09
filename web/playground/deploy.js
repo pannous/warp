@@ -2,6 +2,8 @@
 // (web/hosting). "Deploy" logs in with GitHub and hosts the program at warp-<name>.pannous.workers.dev; "Deploy to my
 // Cloudflare" logs in with Cloudflare, or takes a pasted API token, and puts it in the visitor's own account. The
 // compiler's worker builds the Worker's module (worker.js workerBundle); sessions and tokens stay in this browser.
+// "Deploy to pannous.com" sends the source itself, with the same GitHub login, to warp-lambda
+// (web/hosting/server/warp_lambda.py): `warp --sandbox serve` natively on pannous.com at <name>.lambda.pannous.com.
 
 const HOSTING = new URL(location.href).searchParams.get("hosting") ?? "https://lambda.pannous.com";
 const NAME_PATTERN = /^[a-z0-9]([a-z0-9-]{0,38}[a-z0-9])?$/; // web/hosting/hosting.mjs NAME_PATTERN
@@ -65,26 +67,38 @@ const bundleOf = code => new Promise(resolve => {
 	worker.postMessage({ bundle: code });
 });
 
-async function upload(provider, name, { module, scripts }, fresh = false) {
-	const address = `${HOSTING}/deploy?name=${name}&scripts=${scripts.join(",")}`;
-	const reply = await fetch(address, { method: "POST", body: module, headers: await credentials(provider, fresh) });
+async function upload(provider, address, body, fresh = false) {
+	const reply = await fetch(address, { method: "POST", body, headers: await credentials(provider, fresh) });
 	const answer = await reply.json().catch(() => ({ error: `HTTP ${reply.status}` }));
 	// an expired session or token: log in once more
-	if (REFUSED_LOGIN.includes(reply.status) && !fresh && !$("cloudflare-token").value.trim()) return upload(provider, name, { module, scripts }, true);
+	if (REFUSED_LOGIN.includes(reply.status) && !fresh && !$("cloudflare-token").value.trim()) return upload(provider, address, body, true);
 	if (!reply.ok) throw new Error(answer.error ?? `HTTP ${reply.status}`);
 	return answer.url;
 }
 
-async function deploy(provider) {
+// [login provider, what is sent where]: a Worker module built from the source, or the source itself (native)
+const TARGETS = {
+	github: ["github", "deploying to warp-hosting…", workerUpload],
+	cloudflare: ["cloudflare", "deploying to your Cloudflare account…", workerUpload],
+	native: ["github", "deploying to pannous.com…", async name => [`${HOSTING}/native/deploy?name=${name}`, editor.getValue()]],
+};
+
+async function workerUpload(name) {
+	setStatus("building the Worker…");
+	const { module, scripts, error } = await bundleOf(editor.getValue());
+	if (error) throw new Error(error);
+	return [`${HOSTING}/deploy?name=${name}&scripts=${scripts.join(",")}`, module];
+}
+
+async function deploy(target) {
 	const name = $("deploy-name").value.trim();
 	if (!NAME_PATTERN.test(name)) return setStatus("a name to deploy as: lower-case letters, digits and dashes", true);
 	store(NAME_KEY, name);
-	setStatus("building the Worker…");
-	const bundle = await bundleOf(editor.getValue());
-	if (bundle.error) return setStatus(bundle.error, true);
-	setStatus(provider === "github" ? "deploying to warp-hosting…" : "deploying to your Cloudflare account…");
+	const [provider, deploying, request] = TARGETS[target];
 	try {
-		const url = await upload(provider, name, bundle);
+		const [address, body] = await request(name);
+		setStatus(deploying);
+		const url = await upload(provider, address, body);
 		setStatus(`deployed: ${url}`);
 		$("deployed").replaceChildren(element("a", { href: url, target: "_blank", rel: "noopener" }, url));
 	} catch (failure) {
@@ -96,3 +110,4 @@ $("deploy-name").value = stored(NAME_KEY) ?? "";
 $("cloudflare-token").value = stored(PASTED_TOKEN_KEY) ?? "";
 $("deploy").onclick = () => deploy("github");
 $("deploy-own").onclick = () => deploy("cloudflare");
+$("deploy-native").onclick = () => deploy("native");
