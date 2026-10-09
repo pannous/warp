@@ -3784,6 +3784,8 @@ PASSED:
   ✓ web::test_routes::without_a_matching_route_the_page_says_so
   ✓ web::test_safari_imports::safaris_engine_reads_the_imports_of_a_task_program
   ✓ web::test_safari_imports::the_page_never_asks_the_engine_for_import_or_export_descriptors
+  ✓ web::test_sandboxed_programs::a_sandboxed_program_calls_no_c_and_no_other_runtime
+  ✓ web::test_sandboxed_programs::a_sandboxed_program_keeps_the_host_words
   ✓ web::test_serve_error_body::a_failing_route_answers_its_message
   ✓ web::test_served_forms::a_failing_route_answers_its_failure
   ✓ web::test_served_forms::a_form_posts_to_a_served_route
@@ -4273,4 +4275,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-10 ignored, 4268 passed, 0 failed, 4268 total tested
+10 ignored, 4270 passed, 0 failed, 4270 total tested
