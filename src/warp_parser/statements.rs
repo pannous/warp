@@ -401,13 +401,43 @@ impl WarpParser {
 	pub(super) fn rest_of_statement(&mut self) -> Node {
 		let mut words = vec![self.with_equals_comparing(false, |parser| parser.parse_expr(0))];
 		loop {
-			while matches!(self.current_char(), ' ' | '\t') {
-				self.advance();
-			}
-			if !self.can_start_atom() {
-				return one_expression(&words);
+			if !self.braceless_argument_follows() {
+				return match words.len() {
+					1 => words.remove(0),
+					_ => grouped_list(words, Bracket::None, Separator::Space), // `for c in s: print ord c` prints `ord c`
+				};
 			}
 			words.push(self.with_equals_comparing(false, |parser| parser.parse_expr(0)));
+		}
+	}
+
+	/// `print x` without parentheses follows the blanks here: true with the word taken, the argument next
+	pub(super) fn take_braceless_print(&mut self) -> bool {
+		self.skip_blanks();
+		let takes = self.matches_keyword(PRINT_WORD) && matches!(self.peek_char(PRINT_WORD.len()), ' ' | '\t');
+		if takes {
+			self.advance_by(PRINT_WORD.len());
+		}
+		takes && self.braceless_argument_follows()
+	}
+
+	/// A branch of an if, `print x+1` of `else print x+1` printing its one expression
+	pub(super) fn parse_branch(&mut self, min_bp: u8) -> Node {
+		match self.take_braceless_print() {
+			true => print_call([self.parse_expr(min_bp)]),
+			false => self.parse_expr(min_bp),
+		}
+	}
+
+	/// An argument without parentheses follows the blanks here, on the same line
+	pub(super) fn braceless_argument_follows(&mut self) -> bool {
+		self.skip_blanks();
+		self.can_start_atom()
+	}
+
+	fn skip_blanks(&mut self) {
+		while matches!(self.current_char(), ' ' | '\t') {
+			self.advance();
 		}
 	}
 
@@ -460,10 +490,10 @@ impl WarpParser {
 				}
 				_ if self.current_char() == ':' => {
 					self.advance(); // Python's `else: body`
-					self.parse_expr(0)
+					self.parse_branch(0)
 				}
 				ElseParseMode::Atom => self.parse_atom(),
-				ElseParseMode::Expr => self.parse_expr(0),
+				ElseParseMode::Expr => self.parse_branch(0),
 			}
 		} else {
 			return if_then;
