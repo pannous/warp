@@ -165,6 +165,16 @@ web/playground/tests.html in headless Chrome (agent-browser, session warp-browse
   it starts Firefox with `open -n -g`: a terminal's child may not read ~/Library/Application Support/Firefox (privacy
   protection), and Firefox then stops with "Could not find profile folder" even with --profile. pages.yml runs both
   browsers, before deploy and after.
+- Card firefox-hello-hang (deploy verify 2026-10-09 04:13, passed on rerun; 10 of 10 cold local runs against the live
+  page clean): the first example waited 120 s for an answer after a clean page load. The only endless wait in that path
+  is the page's `workerReady`: a worker that never says "ready" or "failed". Reproduced with a site missing worker.js
+  (scratch copy): the old page hung with status "running…", exactly the runner's symptom. Now (1) playground.js rejects
+  workerReady on the Worker's error event, so the first run shows "the compiler's worker failed to start: …" at once,
+  and an example's verdict lists a failed status; (2) firefox_driver.mjs answers a timeout with the page's state
+  (address, readyState, isolated, controlled by the service worker, #status) and its console, so the next hang names
+  its cause. A worker that loaded but whose warp.wasm fetch never ends would still wait (no deadline: a slow network may
+  take over a minute for 3.7 MB); the driver's state then shows "running…" with a clean console.
+  Probe: probes/firefox_hello_hang/unanswered.sh (FIREFOX_COMMAND_SECONDS=5, a promise that never resolves).
 
 ## Modules and packages in the browser (2026-10-04)
 The compiler reads files through the page: `warp_host.fetch(address)` / `take_fetched` (web.rs `read_bytes`, cached
