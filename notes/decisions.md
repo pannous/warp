@@ -20,7 +20,9 @@ notes/open_decisions.md.
 - P230 (card effects-value): NOT as recommended: `effects of f` gives symbols `(State IO)`, not texts; needs symbol
   values in the emitter. The interim text-list default and its test edit are undone.
 - P228 (warp-fixer, card standalone-std-io): no; programs using tables or JSON don't build stand-alone, the runtime
-  stays ~1 MB; a native run notes "host.std_io needs runtime." on the first run only.
+  stays ~1 MB; a native run notes "host.std_io needs runtime." on the first run only. Wording changed the same day
+  (user's own src/main.rs edit, via the supervisor): the note reads "<features> used runtime.", without the
+  "(said once until the file or warp changes)" remark.
 - P226b (test_logarithm2): `x⌟b` is log base b of x: `100⌟10` → 2, `10⌟100` → 0.5; `x⌟` alone is ln x.
 - P229 (card g_gHmE): settled by the user outside the code: "I already changed it to open my editor. Nothing to fix
   here." Double-clicking a .warp file opens the editor; nothing to build.
