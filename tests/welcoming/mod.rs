@@ -22,6 +22,7 @@ mod test_welcoming_parse;
 mod test_welcoming_print;
 mod test_welcoming_rangeblock;
 mod test_welcoming_slices;
+mod test_open_range_slices; // card golf-open
 mod test_welcoming_sugar;
 mod test_let_const_changes;
 mod test_function_bindings; // card serve-var

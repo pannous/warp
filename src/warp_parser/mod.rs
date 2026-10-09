@@ -1200,7 +1200,7 @@ fn slice_bounds(index: &Node) -> Option<(Node, Node)> {
 	let Node::Key(start, op, end) = index.drop_meta() else { return None };
 	let end = match op {
 		Op::Colon | Op::Range => end.as_ref().clone(),
-		Op::To => Node::Key(end.clone(), Op::Add, Box::new(Node::Number(Number::Int(1)))),
+		Op::To => unless_open(end, |end| Node::Key(Box::new(end.clone()), Op::Add, Box::new(Node::Number(Number::Int(1))))),
 		_ => return None,
 	};
 	Some((start.as_ref().clone(), end))
@@ -1227,8 +1227,16 @@ fn hash_slice_bounds(index: &Node) -> Option<(Node, Node)> {
 	let [range] = items.as_slice() else { return None };
 	let Node::Key(start, op @ (Op::Range | Op::To), end) = range.drop_meta() else { return None };
 	let minus_one = |bound: &Node| Node::Key(Box::new(bound.clone()), Op::Sub, Box::new(Node::Number(Number::Int(1))));
-	let end = if *op == Op::To { end.as_ref().clone() } else { minus_one(end) };
-	Some((minus_one(start), end))
+	let end = if *op == Op::To { end.as_ref().clone() } else { unless_open(end, minus_one) };
+	Some((unless_open(start, minus_one), end))
+}
+
+/// A slice bound shifted by `shift`; an open bound (`s[2…]`, `s[…3]`) stays open, ø
+fn unless_open(bound: &Node, shift: impl Fn(&Node) -> Node) -> Node {
+	match bound.drop_meta() {
+		Node::Empty => Node::Empty,
+		_ => shift(bound),
+	}
 }
 
 /// The written index of a subscript's 1-based index `index+1`, when it was not a number (inverse of `subscript`)
