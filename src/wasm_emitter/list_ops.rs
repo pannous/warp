@@ -1321,7 +1321,9 @@ impl WasmGcEmitter {
 		match self.arithmetic_type(left, op, right) {
 			Kind::Text if *op == crate::operators::Op::Mul => self.emit_arithmetic_type_error(func, left, op, right, Kind::Text),
 			Kind::Text => {
-				self.emit_text_concat(func, left, right);
+				if !self.emit_unbound_operand(func, left, right) {
+					self.emit_text_concat(func, left, right);
+				}
 				true
 			}
 			Kind::List => {
@@ -1364,18 +1366,24 @@ impl WasmGcEmitter {
 	}
 
 	/// In a numeric context any collection or text operand is a type error
-	pub(super) fn emit_arithmetic_type_error(&mut self, func: &mut Function, left: &Node, op: &crate::operators::Op, right: &Node, kind: Kind) -> bool {
-		if !matches!(kind, Kind::Error | Kind::List | Kind::Text) {
-			return false;
-		}
-		// `"clicks " + cont` of an undefined cont: the undefined variable at the name, as in number arithmetic
+	/// `"clicks " + cont` of an undefined cont: the undefined variable at the name, as in number arithmetic, never a
+	/// symbol joined as its name. Returns true when it emitted the error
+	fn emit_unbound_operand(&mut self, func: &mut Function, left: &Node, right: &Node) -> bool {
 		let unbound = [left, right].into_iter().find_map(|operand| match operand.drop_meta() {
 			Node::Symbol(name) if self.is_unbound(name) => Some((operand, name.clone())),
 			_ => None,
 		});
-		if let Some((operand, name)) = unbound {
-			self.note_position(operand);
-			self.emit_undefined_variable(func, &name);
+		let Some((operand, name)) = unbound else { return false };
+		self.note_position(operand);
+		self.emit_undefined_variable(func, &name);
+		true
+	}
+
+	pub(super) fn emit_arithmetic_type_error(&mut self, func: &mut Function, left: &Node, op: &crate::operators::Op, right: &Node, kind: Kind) -> bool {
+		if !matches!(kind, Kind::Error | Kind::List | Kind::Text) {
+			return false;
+		}
+		if self.emit_unbound_operand(func, left, right) {
 			return true;
 		}
 		let (left_kind, right_kind) = (self.get_type(left), self.get_type(right));
