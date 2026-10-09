@@ -18,6 +18,10 @@ use Capability::*;
 use Effect::*;
 
 const PURE: &str = "Pure";
+/// The switch point of a pending user decision (card effects-value): false keeps the old answer to a program ending in
+/// `effects of f`, the symbols `(State IO)` at compile time without running its top level; true runs the program and
+/// ends it with the texts `["State" "IO"]` of the value form (tests/control/test_variable_signals.rs pins the old form)
+const TRAILING_QUERY_RUNS: bool = false;
 const ENTRY: &str = "main";
 const QUERY_WORDS: [&str; 2] = ["effects", "of"];
 const DECLARATION_KEYWORDS: [&str; 2] = ["import", "use"];
@@ -116,16 +120,6 @@ impl EffectSet {
 	pub fn named(names: &[&str]) -> Option<EffectSet> {
 		names.iter().map(|name| if *name == PURE { Some(Self::PURE) } else { Effect::named(name).map(|e| Self::of(&[e])) })
 			.try_fold(Self::PURE, |all, one| one.map(|one| all.union(one)))
-	}
-
-	/// Structured query answer: `Pure`, `IO` or `(IO FFI)`
-	pub fn to_node(self) -> Node {
-		let mut names: Vec<Node> = self.iter().map(|effect| Node::Symbol(format!("{effect:?}"))).collect();
-		match names.len() {
-			0 => Node::Symbol(PURE.into()),
-			1 => names.remove(0),
-			_ => Node::List(names, crate::node::Bracket::Round, crate::node::Separator::Space),
-		}
 	}
 }
 
@@ -419,7 +413,8 @@ impl EffectReport {
 		vec![from.to_string()]
 	}
 
-	/// Diagnostic for the first violated constraint, else the answer to a trailing `effects of f`
+	/// Diagnostic for the first violated constraint, else the answer to a trailing `effects of f` of a program whose top
+	/// level has no effect: nothing to run, so the program needs no module (its functions may not even compile yet)
 	pub fn answer(&self, program: &Node) -> Option<Node> {
 		if let Some(violation) = self.violations.first() {
 			return Some(Node::Error(Box::new(Node::Text(violation.to_string()))));
@@ -430,11 +425,28 @@ impl EffectReport {
 				constraint.line, constraint.column, constraint.allowed)))));
 		}
 		let name = effects_query(last_statement(program))?;
-		Some(match (self.functions.get(&name), self.effects_of(&name)) {
-			(Some(function), _) => effects_node(function.reported, &function.events),
-			(None, Some(effects)) => effects.to_node(),
+		if !TRAILING_QUERY_RUNS {
+			return Some(self.query_answer(&name, false));
+		}
+		// the query mentions f, which reads as a call of it: the top level without the query
+		EffectReport::of(&statements_before_last(program)).entry_effects().is_pure().then(|| self.query_answer(&name, true))
+	}
+
+	/// Every `effects of f` in the program as its constant answer (`IO`, `(IO ask)`), so it is a value anywhere: assigned,
+	/// printed, the program's result
+	pub fn answer_queries(&self, program: Node) -> Node {
+		match effects_query(&program) {
+			Some(name) => self.query_answer(&name, true),
+			None => program.map_children(|child| self.answer_queries(child)),
+		}
+	}
+
+	fn query_answer(&self, name: &str, as_value: bool) -> Node {
+		match (self.functions.get(name), self.effects_of(name)) {
+			(Some(function), _) => effects_node(function.reported, &function.events, as_value),
+			(None, Some(effects)) => effects_node(effects, &BTreeSet::new(), as_value),
 			(None, None) => Node::Error(Box::new(Node::Text(format!("effects of {name}: unknown function")))),
-		})
+		}
 	}
 }
 
@@ -562,13 +574,18 @@ fn is_plumbing_declaration(node: &Node) -> bool {
 	keyword.drop_meta().name() == STATE_KEYWORD && !names.is_empty() && names.iter().all(|name| crate::scoped_handlers::is_plumbing_variable(name))
 }
 
-/// `Pure`, `ask`, `(IO ask)`: the effects and then the events
-fn effects_node(effects: EffectSet, events: &BTreeSet<String>) -> Node {
-	let mut names: Vec<Node> = effects.iter().map(|effect| format!("{effect:?}")).chain(events.iter().cloned()).map(Node::Symbol).collect();
+/// The effects and then the events: as a value texts like the other reflection words' answers (`f.params`), `"IO"`,
+/// `["IO" "ask"]`, `"Pure"`; else symbols, `IO`, `(IO ask)`, `Pure`
+fn effects_node(effects: EffectSet, events: &BTreeSet<String>, as_value: bool) -> Node {
+	let (word, bracket): (fn(String) -> Node, _) = match as_value {
+		true => (Node::Text, crate::node::Bracket::Square),
+		false => (Node::Symbol, crate::node::Bracket::Round),
+	};
+	let mut names: Vec<Node> = effects.iter().map(|effect| format!("{effect:?}")).chain(events.iter().cloned()).map(word).collect();
 	match names.len() {
-		0 => Node::Symbol(PURE.into()),
+		0 => word(PURE.into()),
 		1 => names.remove(0),
-		_ => Node::List(names, crate::node::Bracket::Round, crate::node::Separator::Space),
+		_ => Node::List(names, bracket, crate::node::Separator::Space),
 	}
 }
 
@@ -972,6 +989,13 @@ pub fn without_constraints(node: Node) -> Node {
 			Node::List(kept, bracket, separator)
 		}
 		other => other,
+	}
+}
+
+fn statements_before_last(program: &Node) -> Node {
+	match program.drop_meta() {
+		Node::List(items, bracket, separator) if !items.is_empty() => Node::List(items[..items.len() - 1].to_vec(), bracket.clone(), separator.clone()),
+		_ => Node::Empty,
 	}
 }
 

@@ -25,6 +25,8 @@ mod test_field_function_values;
 mod test_default_parameters;
 mod test_event_effects;
 mod test_effects;
+mod test_effects_value;
+mod test_effect_block_operand;
 mod test_function_keyword;
 mod test_function_values;
 mod test_functions;
