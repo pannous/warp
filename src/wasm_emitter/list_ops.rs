@@ -1921,8 +1921,12 @@ impl WasmGcEmitter {
 
 	pub(super) fn map_key(&self, index: &Node) -> Option<Node> {
 		let key = crate::warp_parser::subscript_key(index)?;
-		let is_name = matches!(self.get_type(key), Kind::Symbol | Kind::Text | Kind::Codepoint) || matches!(key.drop_meta(), Node::Char(_)); // "x" is a codepoint
-		is_name.then(|| key.clone())
+		self.is_name_key(key).then(|| key.clone())
+	}
+
+	/// A key that names an entry: a symbol, a text or a character ("x" is a codepoint)
+	pub(super) fn is_name_key(&self, key: &Node) -> bool {
+		matches!(self.get_type(key), Kind::Symbol | Kind::Text | Kind::Codepoint) || matches!(key.drop_meta(), Node::Char(_))
 	}
 
 	/// Push the map a lookup searches: a struct instance `point:{x:1 y:2}` is searched by its fields, anything else as it is

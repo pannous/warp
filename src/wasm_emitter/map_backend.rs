@@ -26,11 +26,12 @@ pub(super) const NODE_MAP_OF: &str = "node_map_of";
 pub const MAP_COPY_SUFFIX: &str = "·map";
 const NODE_MAP_HASH: &str = "node_map_hash";
 const NODE_MAP_SLOT: &str = "node_map_slot";
-const NODE_MAP_REHASH: &str = "node_map_rehash";
+const NODE_MAP_RESLOT: &str = "node_map_reslot";
+const NODE_MAP_REMOVE: &str = "node_map_remove";
 /// The functions a program using a map variable calls; the rest come with them
-pub(super) const NODE_MAP_FUNCTIONS: [&str; 5] = [NODE_MAP_NEW, NODE_MAP_SET, NODE_MAP_LOOKUP, NODE_MAP_AS_NODE, NODE_MAP_OF];
+pub(super) const NODE_MAP_FUNCTIONS: [&str; 6] = [NODE_MAP_NEW, NODE_MAP_SET, NODE_MAP_LOOKUP, NODE_MAP_AS_NODE, NODE_MAP_OF, NODE_MAP_REMOVE];
 /// Words that read a map without holding on to it: a map variable given to them stays a hash table
-const READING_WORDS: [&str; 15] = ["count", "len", "size", "length", "print", "put", "string", "text", "type", "has", "contains",
+const READING_WORDS: [&str; 16] = [crate::analyzer::REMOVED_VALUE_CALL, "count", "len", "size", "length", "print", "put", "string", "text", "type", "has", "contains",
 	crate::library_words::MAP_KEYS, crate::library_words::MAP_VALUES, COLLECTION_CONTAINS, COLLECTION_POSITION];
 /// Entries and slots of a new table; both double when full (slots when half full)
 const FIRST_ENTRIES: i32 = 8;
@@ -72,6 +73,8 @@ impl WasmGcEmitter {
 				Node::Symbol(name) if matches!(op, Op::Assign | Op::Define) && is_map_start(name, value) => { started.insert(name.clone()); }
 				// `m = field_with(m, "k", v)`, the lowered `m["k"] = v` of a parameter
 				Node::Symbol(name) if *op == Op::Assign && entry_update(name, value).is_some_and(|(key, _)| self.map_key(&key).is_some() && !is_meta_key(&key)) => { keyed.insert(name.clone()); }
+				// `m = map_without(m, k)`, the lowered `m.remove(k)`
+				Node::Symbol(name) if *op == Op::Assign && entry_removal(name, value).is_some_and(|key| self.is_name_key(key)) => {}
 				Node::Symbol(name) if matches!(op, Op::Assign | Op::Define) || is_update(op) => { excluded.insert(name.clone()); }
 				Node::Key(map, Op::Hash, index) if matches!(op, Op::Assign | Op::Define) || is_update(op) => {
 					let Node::Symbol(name) = map.drop_meta() else { return };
@@ -128,8 +131,7 @@ impl WasmGcEmitter {
 	pub(super) fn emit_typed_map_membership(&mut self, func: &mut Function, items: &[Node]) -> bool {
 		let [word, map, key] = items else { return false };
 		let is_membership = matches!(word.drop_meta(), Node::Symbol(word) if word == COLLECTION_CONTAINS || word == COLLECTION_POSITION);
-		let is_name = matches!(self.get_type(key), Kind::Symbol | Kind::Text | Kind::Codepoint);
-		let Some(slot) = self.typed_map(map).filter(|_| is_membership && is_name) else { return false };
+		let Some(slot) = self.typed_map(map).filter(|_| is_membership && self.is_name_key(key)) else { return false };
 		func.instruction(&slot.get());
 		self.emit_node_instructions(func, key);
 		self.emit_call(func, NODE_MAP_LOOKUP);
@@ -142,12 +144,17 @@ impl WasmGcEmitter {
 		RefType { nullable: true, heap_type: HeapType::Concrete(self.type_manager.node_map_type) }
 	}
 
-	/// `m = {}`, `m = {a:1}`, `m·map = m`: a table in m's local, left on the stack; `m = field_with(m, k, v)` sets the
-	/// entry in place
+	/// `m = {}`, `m = {a:1}`, `m·map = m`: a table in m's slot, left on the stack; `m = field_with(m, k, v)` sets the
+	/// entry in place, `m = map_without(m, k)` removes it
 	pub(super) fn emit_typed_map_store(&mut self, func: &mut Function, name: &str, slot: Slot, value: &Node) {
 		if let Some((key, entry_value)) = entry_update(name, value) {
 			let key = self.map_key(&key).expect("find_typed_maps admits only name keys");
 			self.emit_typed_map_set(func, slot, &key, &entry_value);
+			func.instruction(&slot.get());
+		} else if let Some(key) = entry_removal(name, value) {
+			func.instruction(&slot.get());
+			self.emit_node_instructions(func, key);
+			self.emit_call(func, NODE_MAP_REMOVE);
 			func.instruction(&slot.get());
 		} else if is_empty_map(value) {
 			self.emit_call(func, NODE_MAP_NEW);
@@ -240,12 +247,10 @@ impl WasmGcEmitter {
 			Self::emit_list(f, &[I::LocalGet(slot), I::I32Const(1), I::I32Add, I::LocalGet(mask), I::I32And, I::LocalSet(slot), I::Br(0), I::End, I::Unreachable]);
 		});
 
-		// twice the slots, every entry placed again
-		self.runtime_function(NODE_MAP_REHASH, vec![map_ref], vec![], vec![int], |s, f| {
-			let entry = 1;
-			Self::emit_list(f, &[I::LocalGet(0), I::I32Const(EMPTY_SLOT)]);
-			field(f, 0, SLOTS);
-			Self::emit_list(f, &[I::ArrayLen, I::I32Const(1), I::I32Shl, I::ArrayNew(slots), I::StructSet { struct_type_index: map, field_index: SLOTS }]);
+		// node_map_reslot(map, slots): that many slots, every entry placed again
+		self.runtime_function(NODE_MAP_RESLOT, vec![map_ref, int], vec![], vec![int], |s, f| {
+			let entry = 2;
+			Self::emit_list(f, &[I::LocalGet(0), I::I32Const(EMPTY_SLOT), I::LocalGet(1), I::ArrayNew(slots), I::StructSet { struct_type_index: map, field_index: SLOTS }]);
 			Self::emit_list(f, &[I::I32Const(0), I::LocalSet(entry), I::Block(BlockType::Empty), I::Loop(BlockType::Empty)]);
 			Self::emit_list(f, &[I::LocalGet(entry)]);
 			field(f, 0, COUNT);
@@ -296,8 +301,39 @@ impl WasmGcEmitter {
 			Self::emit_list(f, &[I::LocalGet(count), I::I32Const(1), I::I32Shl]);
 			slots_of_map(f);
 			Self::emit_list(f, &[I::ArrayLen, I::I32GtU, I::If(BlockType::Empty), I::LocalGet(0)]);
-			s.call(f, NODE_MAP_REHASH);
+			slots_of_map(f);
+			Self::emit_list(f, &[I::ArrayLen, I::I32Const(1), I::I32Shl]);
+			s.call(f, NODE_MAP_RESLOT);
 			f.instruction(&I::End);
+		});
+
+		// node_map_remove(map, key): the entry of that name gone, the later ones moved up a place; the slots placed again
+		self.runtime_function(NODE_MAP_REMOVE, vec![map_ref, node_ref], vec![], vec![nullable, int, int], |s, f| {
+			let (name, entry, count) = (2, 3, 4);
+			f.instruction(&I::LocalGet(1));
+			s.call(f, super::list_ops::MAP_KEY_NAME);
+			f.instruction(&I::LocalSet(name));
+			s.emit_field(f, name, 0);
+			Self::emit_list(f, &[I::I64Const(KIND_MASK), I::I64And, I::I64Const(Kind::Symbol as i64), I::I64Ne, I::If(BlockType::Empty), I::Return, I::End]);
+			field(f, 0, SLOTS);
+			Self::emit_list(f, &[I::LocalGet(0), I::LocalGet(name), I::RefAsNonNull]);
+			s.call(f, NODE_MAP_SLOT);
+			Self::emit_list(f, &[I::ArrayGet(slots), I::LocalTee(entry), I::I32Const(EMPTY_SLOT), I::I32Eq, I::If(BlockType::Empty), I::Return, I::End]);
+			field(f, 0, COUNT);
+			Self::emit_list(f, &[I::I32Const(1), I::I32Sub, I::LocalSet(count)]);
+			for part in [KEYS, VALUES] {
+				field(f, 0, part);
+				f.instruction(&I::LocalGet(entry));
+				field(f, 0, part);
+				Self::emit_list(f, &[I::LocalGet(entry), I::I32Const(1), I::I32Add, I::LocalGet(count), I::LocalGet(entry), I::I32Sub]);
+				Self::emit_list(f, &[I::ArrayCopy { array_type_index_dst: array, array_type_index_src: array }]);
+				field(f, 0, part);
+				Self::emit_list(f, &[I::LocalGet(count), null_node.clone(), I::ArraySet(array)]);
+			}
+			Self::emit_list(f, &[I::LocalGet(0), I::LocalGet(count), I::StructSet { struct_type_index: map, field_index: COUNT }, I::LocalGet(0)]);
+			field(f, 0, SLOTS);
+			f.instruction(&I::ArrayLen);
+			s.call(f, NODE_MAP_RESLOT);
 		});
 
 		// node_map_lookup(map, key): the value of the entry of that name; null when there is none or the key is no name
@@ -392,6 +428,13 @@ pub(super) fn entry_update(name: &str, value: &Node) -> Option<(Node, Node)> {
 	let Node::List(items, _, _) = value.drop_meta() else { return None };
 	let [_, _, key, entry_value] = items.as_slice() else { return None };
 	crate::library_words::is_field_update_of(name, value).then(|| (Node::Key(Box::new(key.clone()), Op::Add, Box::new(crate::node::int(1))), entry_value.clone()))
+}
+
+/// `map_without(m, key)` removing an entry of the variable m itself: the key
+pub(super) fn entry_removal<'a>(name: &str, value: &'a Node) -> Option<&'a Node> {
+	let Node::List(items, _, _) = value.drop_meta() else { return None };
+	let [word, map, key] = items.as_slice() else { return None };
+	(word.name() == crate::library_words::MAP_WITHOUT && matches!(map.drop_meta(), Node::Symbol(map) if map == name)).then_some(key)
 }
 
 /// What a map variable held as a table may start from: `{}`, a map literal of name keys, or the parameter it copies
