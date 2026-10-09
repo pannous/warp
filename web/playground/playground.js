@@ -190,6 +190,7 @@ function startWorker(restarts = 0) {
 			if (data.type === "stored") return keepValue(data.name, data.value, data.file);
 			if (data.type === "clipboard") return copyText(data.text);
 			if (data.type === "failed") return failed(new Error(data.message));
+			if (data.type === "bundle") return bundled(data.bundle); // deploy.js
 			if (!pending) return showEventOutput(data);
 			if (data.type === "listening") Object.assign(pending, { listening: data.events, address: data.address });
 			if (data.type === "print") printedChunk(pending, data);

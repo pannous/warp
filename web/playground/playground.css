@@ -165,6 +165,7 @@ button.position { border: none; background: none; padding: 0; color: inherit; fo
 output.located { cursor: pointer; }
 
 /* the assistant (assistant.js): the key field, completion in gray at the cursor, the chat under the output */
+.deploy-name { width: 9em; margin: 4px 0; }
 .api-key { box-sizing: border-box; width: 100%; margin: 4px 0; font-family: ui-monospace, Menlo, Consolas, monospace; }
 .completion { color: var(--muted); opacity: 0.8; white-space: pre-wrap; }
 .completion-pending, .completion-failed { font-size: 0.85em; color: var(--muted); padding-left: 4px; }
