@@ -69,17 +69,23 @@ thread_local! {
 	static RESULT_UNITS: RefCell<Option<ResultUnits>> = const { RefCell::new(None) };
 }
 
-/// Why a program is no stage-1 program: `Unsupported` leaves it unchanged, `Error` is a compile error
+/// Why a program is no stage-1 program: `Unsupported` leaves it unchanged, `Error` is a compile error, `Recursive` is a
+/// recursive call whose result signature is not known yet (the other branch of an if/else gives it)
 enum Stop {
 	Unsupported,
 	Error(String),
+	Recursive,
 }
 
 /// The program with unit literals as SI amounts and the units of its final value; None when it uses no units or uses
 /// quantities beyond stage 1; Err for a dimension error
 pub fn lower(program: &Node) -> Option<Result<Node, Node>> {
+	super::shadowing(program, || lower_shadowed(program))
+}
+
+fn lower_shadowed(program: &Node) -> Option<Result<Node, Node>> {
 	let classes = unit_fields::unit_classes(program);
-	if (!super::needs_quantities(program) && classes.is_empty()) || super::defines_unit_name(program) {
+	if !super::needs_quantities(program) && classes.is_empty() {
 		return None;
 	}
 	// a unit a constructor argument is written in (`Run(1500 m)`) is stored in its field's unit, which shows it
@@ -97,7 +103,7 @@ pub fn lower(program: &Node) -> Option<Result<Node, Node>> {
 			definitions.insert(name, definition);
 		}
 	});
-	let mut inference = Inference { variables: HashMap::new(), lists: HashMap::new(), objects: HashMap::new(), classes, instances: HashMap::new(), class_lists: HashMap::new(), result_fields: None, definitions, specialised: HashMap::new(), in_progress: vec![], new_definitions: vec![], display: display.clone(), returns: vec![], at_top: true, in_host_call: false };
+	let mut inference = Inference { variables: HashMap::new(), lists: HashMap::new(), objects: HashMap::new(), classes, instances: HashMap::new(), class_lists: HashMap::new(), result_fields: None, definitions, specialised: HashMap::new(), in_progress: vec![], numbered: 0, new_definitions: vec![], display: display.clone(), returns: vec![], at_top: true, in_host_call: false };
 	match inference.infer(program.clone()) {
 		Ok((node, result)) => {
 			// a final `q as km` shows km
@@ -116,7 +122,7 @@ pub fn lower(program: &Node) -> Option<Result<Node, Node>> {
 			Some(Ok(node))
 		}
 		Err(Stop::Error(message)) => Some(Err(crate::node::error(&message))),
-		Err(Stop::Unsupported) => None,
+		Err(Stop::Unsupported | Stop::Recursive) => None,
 	}
 }
 
@@ -203,12 +209,15 @@ fn with_field_units(object: Node, fields: &[(String, Vec<Factor>)]) -> Node {
 
 /// A run-time amount in SI base units as the quantity it is in `units`
 pub(crate) fn quantity_of(value: Node, units: &[Factor]) -> Node {
-	let Some(amount) = exact_amount(&value) else { return value };
-	let in_si = super::scale(units, |factor| base_unit(factor.unit.dimension));
-	match in_si.inverse() {
-		Some(per_unit) => Node::data(Quantity { amount: amount.mul(&per_unit), factors: units.to_vec() }),
-		None => value,
+	let Some(per_unit) = super::scale(units, |factor| base_unit(factor.unit.dimension)).inverse() else { return value };
+	if let Some(amount) = exact_amount(&value) {
+		return Node::data(Quantity { amount: amount.mul(&per_unit), factors: units.to_vec() });
 	}
+	let uncertain = match value.drop_meta() {
+		Node::Data(data) => data.downcast_ref::<crate::uncertain::Uncertain>().map(|amount| amount.scaled(per_unit.to_f64())),
+		_ => None,
+	};
+	uncertain.map_or(value, |amount| Node::data(super::UncertainQuantity::new(amount, units)))
 }
 
 fn exact_amount(value: &Node) -> Option<Rational> {
@@ -256,6 +265,14 @@ fn combined(left: &Signature, right: &Signature, sign: i32) -> Signature {
 		.map(|(dimension, power)| Factor { unit: base_unit(dimension), power })
 		.collect();
 	signature(&factors)
+}
+
+fn is_text(node: &Node) -> bool {
+	matches!(node.drop_meta(), Node::Text(_) | Node::Char(_))
+}
+
+fn is_number_type(declared: &Node) -> bool {
+	crate::analyzer::builtin_type_kind(&declared.drop_meta().name()).is_some_and(|kind| matches!(kind, crate::type_kinds::Kind::Int | crate::type_kinds::Kind::Float))
 }
 
 fn shown(signature: &Signature) -> String {
@@ -310,6 +327,13 @@ fn mentions_units(node: &Node) -> bool {
 /// A specialisation: the function and the unit signatures of its arguments
 type Specialisation = (String, Vec<Signature>);
 
+struct InProgress {
+	key: Specialisation,
+	name: String,
+	recursive: bool,
+	result: Option<Signature>,
+}
+
 struct Inference {
 	variables: HashMap<String, Signature>,
 	/// Variables holding a list of quantities: the signature of its elements
@@ -325,7 +349,10 @@ struct Inference {
 	definitions: HashMap<String, Definition>,
 	/// Specialised functions: their name and result signature
 	specialised: HashMap<Specialisation, (String, Signature)>,
-	in_progress: Vec<Specialisation>,
+	/// The specialisations being inferred: their name, whether they call themselves, and their result signature once a
+	/// first pass found it
+	in_progress: Vec<InProgress>,
+	numbered: usize,
 	new_definitions: Vec<Node>,
 	/// The finest written unit of each dimension: the unit a quantity shows in unless converted
 	display: Vec<&'static Unit>,
@@ -447,6 +474,16 @@ impl Inference {
 				let (right, _) = self.infer(*right)?;
 				Ok((Node::Key(Box::new(left), op, Box::new(right)), vec![]))
 			}
+			// `2 m * "a"`: a text repeats a plain count of times (card units-text-repeat)
+			Node::Key(left, Op::Mul, right) if is_text(&left) || is_text(&right) => {
+				let (left, left_signature) = self.infer(*left)?;
+				let (right, right_signature) = self.infer(*right)?;
+				let count = combined(&left_signature, &right_signature, 1);
+				match count.is_empty() {
+					true => Ok((Node::Key(Box::new(left), Op::Mul, Box::new(right)), vec![])),
+					false => Err(Stop::Error(format!("DimensionError: a text repeats a plain number of times, is given {}", shown(&count)))),
+				}
+			}
 			Node::Key(left, op, right) if matches!(op, Op::Add | Op::Sub | Op::Mul | Op::Div) || op.is_comparison() => {
 				let (left, left_signature) = self.infer(*left)?;
 				let (right, right_signature) = self.infer(*right)?;
@@ -461,8 +498,16 @@ impl Inference {
 			}
 			// `if c then a else b`: both branches have one signature
 			Node::Key(if_then, Op::Else, otherwise) if matches!(if_then.drop_meta(), Node::Key(_, Op::Then, _)) => {
-				let (if_then, then_signature) = self.infer(*if_then)?;
-				let (otherwise, else_signature) = self.infer(*otherwise)?;
+				let (if_then, then_signature, otherwise, else_signature) = match (self.infer(*if_then.clone()), self.infer(*otherwise.clone())) {
+					// a recursive branch has the base case's units (the specialisation infers its body again to check that)
+					(Err(Stop::Recursive), Ok((otherwise, signature))) => (*if_then, signature.clone(), otherwise, signature),
+					(Ok((if_then, signature)), Err(Stop::Recursive)) => (if_then, signature.clone(), *otherwise, signature),
+					(then_inferred, else_inferred) => {
+						let (if_then, then_signature) = then_inferred?;
+						let (otherwise, else_signature) = else_inferred?;
+						(if_then, then_signature, otherwise, else_signature)
+					}
+				};
 				if then_signature != else_signature {
 					return Err(Stop::Error(format!("DimensionError: the branches give {} and {}", shown(&then_signature), shown(&else_signature))));
 				}
@@ -533,6 +578,8 @@ impl Inference {
 			Node::Key(name, Op::Colon, declared) if matches!(name.drop_meta(), Node::Symbol(_)) => match super::unit_expression(declared) {
 				// the unit is no type the emitter knows: the variable is a plain number with this signature
 				Some(units) => self.assign_variable(name.name(), name.as_ref().clone(), op, value, Some(signature(&units))),
+				// `x: int = 1 m`: a number type holds plain numbers only (card units-annotation)
+				None if is_number_type(declared) => self.assign_variable(name.name(), target.clone(), op, value, Some(vec![])),
 				None => {
 					self.declared_instance(&name.name(), declared);
 					match self.instances.contains_key(&name.name()) {
@@ -902,28 +949,51 @@ impl Inference {
 		if let Some(done) = self.specialised.get(&key) {
 			return Ok(done.clone());
 		}
-		if self.in_progress.contains(&key) {
-			return Err(Stop::Unsupported); // recursion with quantities: a later stage
+		if let Some(progressing) = self.in_progress.iter_mut().find(|progressing| progressing.key == key) {
+			progressing.recursive = true;
+			return progressing.result.clone().map(|result| (progressing.name.clone(), result)).ok_or(Stop::Recursive);
 		}
-		self.in_progress.push(key.clone());
-		let outer = std::mem::replace(&mut self.variables, definition.parameters.iter().cloned().zip(signatures).collect());
+		if self.in_progress.iter().any(|progressing| progressing.key.0 == name) {
+			return Err(Stop::Unsupported); // recursion that changes the arguments' units
+		}
+		let specialised = format!("{name}{SPECIALISATION_SEPARATOR}{}", self.numbered);
+		self.numbered += 1;
+		self.in_progress.push(InProgress { key: key.clone(), name: specialised.clone(), recursive: false, result: None });
+		let mut inferred = self.infer_body(name, definition, &signatures);
+		// a recursive function: its recursive calls give the result of the first pass, which the second pass must confirm
+		if let (Ok((_, result)), Some(progressing)) = (&inferred, self.in_progress.last_mut().filter(|progressing| progressing.recursive)) {
+			progressing.result = Some(result.clone());
+			let provisional = result.clone();
+			inferred = self.infer_body(name, definition, &signatures);
+			if let Ok((_, result)) = &inferred {
+				if *result != provisional {
+					inferred = Err(Stop::Error(format!("DimensionError: {name} returns {} and {}", shown(&provisional), shown(result))));
+				}
+			}
+		}
+		self.in_progress.pop();
+		let (body, result) = inferred?;
+		let parameters = definition.parameters.iter().map(|parameter| Node::Symbol(parameter.clone()));
+		let head = Node::List(std::iter::once(Node::Symbol(specialised.clone())).chain(parameters).collect(), Bracket::Round, Separator::None);
+		self.new_definitions.push(Node::Key(Box::new(head), Op::Define, Box::new(body)));
+		self.specialised.insert(key, (specialised.clone(), result.clone()));
+		Ok((specialised, result))
+	}
+
+	/// The body of a function lowered for the unit signatures of its parameters, and its result signature
+	fn infer_body(&mut self, name: &str, definition: &Definition, signatures: &[Signature]) -> Result<(Node, Signature), Stop> {
+		let outer = std::mem::replace(&mut self.variables, definition.parameters.iter().cloned().zip(signatures.iter().cloned()).collect());
 		self.returns.push(vec![]);
 		let inferred = self.infer(definition.body.clone());
 		let returns = self.returns.pop().unwrap_or_default();
 		self.variables = outer;
-		self.in_progress.pop();
 		let (body, result) = inferred?;
 		// every `return` gives the result's units: the first one decides, the others and the last statement agree
 		let result = returns.first().cloned().unwrap_or(result);
 		if let Some(other) = returns.iter().find(|signature| **signature != result) {
 			return Err(Stop::Error(format!("DimensionError: {name} returns {} and {}", shown(&result), shown(other))));
 		}
-		let specialised = format!("{name}{SPECIALISATION_SEPARATOR}{}", self.specialised.len());
-		let parameters = definition.parameters.iter().map(|parameter| Node::Symbol(parameter.clone()));
-		let head = Node::List(std::iter::once(Node::Symbol(specialised.clone())).chain(parameters).collect(), Bracket::Round, Separator::None);
-		self.new_definitions.push(Node::Key(Box::new(head), Op::Define, Box::new(body)));
-		self.specialised.insert(key, (specialised.clone(), result.clone()));
-		Ok((specialised, result))
+		Ok((body, result))
 	}
 
 	fn infer_list(&mut self, items: Vec<Node>, bracket: Bracket, separator: Separator) -> Result<(Node, Signature), Stop> {

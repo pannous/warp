@@ -21,9 +21,9 @@ ambiguous forms per notes/welcoming.md), never less, except at a listed hole.
 ## W0: syntax
 
 ```
-types      τ ::= never | bool | int | number | text | unit | list τ | cls [C₀ … Cₙ] | any
+types      τ ::= never | bool | int | number | text | unit | list τ | cls [C₀ … Cₙ] | ranged lo hi | quantity D | any
 modes      m ::= var | const | charged
-values     v ::= b | n | q | "s" | ø | [] | v :: v | ref a [C…]      (lists are cons cells, as the GC $Node)
+values     v ::= b | n | q | n D | "s" | ø | [] | v :: v | ref a [C…]      (lists are cons cells, as the GC $Node)
 expr       e ::= v | x                          main-level name (store)
                | y                              local (parameter or let), bound by substitution
                | e + e | e - e | e * e | e < e | e == e     (`-` takes numbers only; `+` also texts; `*` a text and a whole number)
@@ -57,7 +57,10 @@ exact decimals/rationals (Kind::Int holding a ratio, wasm_emitter/exact.rs) and 
 | bool ≤ int | true/false act as 1/0 (P195: `true + 1` is 2) | BOOL_KIND masks to Int |
 | int ≤ number | `x: float = 1` is accepted | checks.rs `assignment_mismatch` (Float ← Int) |
 | list σ ≤ list τ if σ ≤ τ | **covariant lists** | probes/variance/ |
+| ranged a b ≤ ranged c d if c ≤ a, b ≤ d; ranged ≤ int | a fixed width (`int16`) is the range of ints it holds | fixed_width.rs |
 | cls p ≤ cls q if q is a prefix of p | a subclass or variant extends its parent's chain | class_methods.rs inherit, traits.rs IS_TYPE |
+| quantity D ≤ quantity D only | a quantity is no number: `1 m + 1` is a DimensionError | static_units.rs |
+| codepoint ≤ text | `"a"` parses as a codepoint, taken where a text is (`x: text = "a"`) | analyzer admits |
 
 Lists are shared (P200b): `ys = xs` makes an alias and `xs.add(v)` changes the one list both see, so covariant
 lists alone are TypeScript's hole (`xs: [Circle] = [c]; ys: [Shape] = xs; ys.add(square); xs#2`). P215 closes it:
@@ -438,7 +441,7 @@ inside a handler body loses the outer handler).
 
 Optional and auto-unwrap (P179: `a: int = Some(3)`), payload-free variants (`red`: one shared instance per variant),
 the value comparison above, errors as stored values (`r = f(-1); if r failed …`: a `τ or error` sum),
-exact vs float, codepoints (`"a"` parses as one; `codepoint ≤ text` for parameters), maps, units, then tasks.
+exact vs float, maps, then tasks.
 
 ## Named arguments, defaults, nested functions (exporter only)
 
@@ -494,3 +497,44 @@ exporter wraps the body in `.conv`, returns included: `def f(x) -> int { … }`,
 src/law/type_model.rs); nested functions keep theirs when lifted. Coverage: 246 of the 600 sampled programs, all
 agreeing (2026-10-09). Found: card kind-name (`x = 3.7 as int; x = "a"` compiles: the analyzer does not type a
 conversion, KNOWN_HOLES) and card bool-conversion (`2 as bool` gives 1, not yes, KNOWN_VALUE_DIFFERENCES).
+
+## Fixed widths and typed list elements
+
+`int8 … int64`, `uint8 … uint64` and `byte` (D16) are `ranged lo hi`, the range of ints they hold (Ty.lean,
+`FIXED_WIDTHS` names them back): below `int`, one range below another that contains it, `bool ⊔ ranged = int`,
+two ranges join to the range covering both. An int literal is an `int`, so it is typed `ranged lo hi` only by
+`intIn` (lo ≤ n ≤ hi), the type of a value a check let through. `fits` is structural: an int fits a range when it
+is in it, a list fits `list e` when each item fits e, so `share`, `push` and `setAt` check a fixed-width list's
+items one by one. A value given to a fixed-width place is a run-time `cast` (`x: int16 = 70000` is an error when it
+runs, as warp's overflow trap; `x: byte = 5; x = 300`), which the checker admits since `consub int (ranged …)`: an
+int may be in range. A literal written into a typed list that evidently does not fit (Checker.lean `evidentMisfit`:
+`xs: [int16] = [1, 70000]`, `xs: [int] = [1, "a"]`, `xs.add(70000)`) is rejected statically, as warp's
+checks.rs `misfit_item`; soundness is untouched (rejecting more never is unsound). Arithmetic on a fixed width gives
+`int` (`arith`): looser than warp, which traps when an int16 sum leaves int16 (a value difference only on overflow,
+not yet in the corpus). The exporter reads `[int]` as `list int` and `int16s` as `list (ranged …)` (card
+typed-list-elements).
+
+## Units (quantities)
+A quantity `2 m` is the value `qty n D`: D the powers of its base dimensions (`[("Length", 1), ("Time", -1)]`, sorted,
+none zero: `Dims.times`), n its number of the dimension's smallest steps (units.rs `factor`: 0.1 mm, ms, 10 µg, so
+every unit is whole). Its type `quantity D` stands beside the numbers: below only itself (and above `never`), since
+`1 m + 1` is a DimensionError in warp. `+`, `-`, `<` take one dimension on both sides (`sameQuantity`, else the value
+is an error and the type `never`), `*` and `/` combine a quantity with a quantity or a number (`ArithOp.dims`,
+`ofDims`: dimensions that cancel give a number, `6 m / 3 m` is 2), `%` and `^` raise. `ArithOp.ty` checks `never`,
+`any`, then a quantity side, before the number rules (`numberTy`). The checker refuses what warp's static units pass
+refuses (`dimensionsAgree`, `dimensionsCombine`): mixed dimensions in `+ - < == if`, a quantity with a number in `+`,
+`%`/`^` of a quantity. The exporter turns a unit word into `.qty factor [(dimension, 1)]` (`2 km` parses as `2 * km`).
+Amounts are whole and `/` truncates, so the model's quantity values are not compared (printed `?`) beyond `<`/`==`.
+Known differences: warp gives the int 1 for `1 m < 2 m` (card units-compare); warp compiles `x = 1 m; x = 2 s`
+(units-reassign), `x: int = 1 m` (units-annotation) and `2 m * "a"` (units-text-repeat).
+
+## Codepoints
+A one-character text literal is a codepoint, as warp's parser reads `"a"` (`Node::Char`): W0 keeps one value form,
+`.text s`, typed `codepoint` when `s` has one character and `text` otherwise (Typing.lean rules `text`/`codepoint`,
+`Ty.textTy`, `HasType.ofText`). `codepoint ≤ text`, so a codepoint goes wherever a text is taken, and `isText` (text
+or codepoint) replaces `= text` in `+` (`plus`), `*` (`repeatTy`) and `#`/`for` (`elementTy`): a text's items are
+codepoints, which the walk (`peel_codepoint`) and `#` give. A name given no annotation widens a codepoint to text
+(`widen`: `x = "a"; x = "bc"` is accepted, `x = "a"; x = 1` is "x was a Text"). The checker rejects, as warp does,
+`x: codepoint = "ab"`, `f(c: codepoint) := c; f("ab")` and `x: codepoint = 97`. The exporter maps the words
+`codepoint` and `char`. `c + 1` of a codepoint is a text in both (`"a1"`). Not yet: `97 as codepoint` (W0 converts
+only by `fits`).

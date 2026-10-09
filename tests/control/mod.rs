@@ -164,3 +164,5 @@ mod test_table_remove; // card table-remove
 mod test_table_key_filter; // card table-key-filter
 mod test_table_transactions; // card orm step 5
 mod test_table_query_loading; // orm: a filter reads only its rows
+mod test_table_method_reads;
+mod test_table_element_writes; // orm: people#1.age = 5 writes through

@@ -52,6 +52,8 @@ const COMPILE_COMMANDS: [&str; 3] = ["compile", "build", "link"];
 const TOOL_COMMAND: &str = "tool";
 /// `warp dev <file> [port]`: serves the file's site and builds it anew when it changes (src/dev_server.rs, card web-dev)
 const DEV_COMMAND: &str = "dev";
+/// `warp deploy [--dev|--dry-run] app.warp`: the program as a Cloudflare Worker, deployed by wrangler (src/deploy.rs)
+const DEPLOY_COMMAND: &str = "deploy";
 /// `warp serve [app.warp] [port]`: serves the program, its page, server functions and routes (P222)
 const SERVE_COMMAND: &str = "serve";
 const SERVE_PORT: u16 = 8080;
@@ -267,6 +269,21 @@ fn run_command(args: &[String]) {
                 eprintln!("warp serve: {failure}");
                 std::process::exit(1);
             }
+        }
+    } else if args[1] == DEPLOY_COMMAND && args.len() >= 3 {
+        use warp::deploy::{Deployment, DEV_FLAG, DRY_RUN_FLAG};
+        let deployment = match args[2].as_str() {
+            DEV_FLAG => Deployment::Local,
+            DRY_RUN_FLAG => Deployment::DryRun,
+            _ => Deployment::Cloud,
+        };
+        let Some(program) = args.get(if deployment == Deployment::Cloud { 2 } else { 3 }) else {
+            eprintln!("warp deploy: which program? warp deploy [{DEV_FLAG}|{DRY_RUN_FLAG}] app.warp");
+            std::process::exit(1);
+        };
+        if let Err(failure) = warp::deploy::deploy(std::path::Path::new(program), deployment) {
+            eprintln!("warp deploy: {failure}");
+            std::process::exit(1);
         }
     } else if args[1] == DEV_COMMAND && args.len() >= 3 {
         let port = args.get(3).map_or(Ok(warp::dev_server::DEV_PORT), |port| port.parse::<u16>());
@@ -732,6 +749,7 @@ fn usage() {
     println!("  warp tool <package> [args]  Run a package's prebuilt <package>.wasm in its directory");
     println!("  warp dev <file> [port]  Serve the file's page, reloaded when it changes (port 8008)");
     println!("  warp serve [file] [port]  Serve the program: its page, server functions and routes (app.warp, port 8080)");
+    println!("  warp deploy [--dev|--dry-run] <file>  The program's routes as a Cloudflare Worker, by wrangler (--dev: on this machine, --dry-run: only <file>-worker/)");
     println!("  warp repl            Start interactive console");
     println!("  warp register        Let Finder and `open` run .warp files (macOS)");
     println!("  --fuel <steps>       Execution budget before 'out of fuel' (env WARP_FUEL)");

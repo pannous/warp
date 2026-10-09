@@ -105,7 +105,11 @@ fn where_filters(node: Node, lists: &mut Lists) -> Node {
 			return Node::List(filtered_loop, bracket.clone(), separator.clone());
 		}
 	}
-	let node = node.map_children(|child| where_filters(child, lists));
+	let node = match node {
+		// a method's filter as a function's (a class body is no child of map_children)
+		Node::Type { name, body } => return Node::Type { name, body: Box::new(where_filters(*body, lists)) },
+		other => other.map_children(|child| where_filters(child, lists)),
+	};
 	let Node::List(items, bracket, separator) = node else { return node };
 	let Some(at) = where_position(&items) else { return Node::List(items, bracket, separator) };
 	let filtered = match items[at + 1].drop_meta() {
@@ -186,18 +190,23 @@ fn where_reassociated(node: Node) -> Node {
 				_ => Node::Key(Box::new(left), op, Box::new(right)),
 			}
 		}
+		Node::Type { name, body } => Node::Type { name, body: Box::new(where_reassociated(*body)) },
 		other => other.map_children(where_reassociated),
 	}
 }
 
-/// `[[xs, where], it]`, as the right side of an assignment parses, as `[xs, where, it]`
+/// `[[xs, where], it]` and `[xs, [where, 4 + it]]`, as the right side of an assignment parses, as `[xs, where, it]`
 fn where_flattened(node: Node) -> Node {
 	let Node::List(items, bracket, separator) = node else { return node };
-	let Some(Node::List(inner, Bracket::None, _)) = items.first().map(Node::drop_meta) else { return Node::List(items, bracket, separator) };
-	if !inner.last().is_some_and(|word| matches!(word.drop_meta(), Node::Symbol(symbol) if symbol == WHERE_WORD)) {
-		return Node::List(items, bracket, separator);
-	}
-	let flat = inner.clone().into_iter().chain(items[1..].iter().cloned()).collect();
+	let words_of = |item: Option<&Node>| match item.map(Node::drop_meta) {
+		Some(Node::List(inner, Bracket::None, _)) => Some(inner.clone()),
+		_ => None,
+	};
+	let flat = match (words_of(items.first()), words_of(items.last())) {
+		(Some(inner), _) if inner.last().is_some_and(|word| is_word(word, WHERE_WORD)) => inner.into_iter().chain(items[1..].iter().cloned()).collect(),
+		(_, Some(inner)) if items.len() > 1 && inner.len() == 2 && is_word(&inner[0], WHERE_WORD) => items[..items.len() - 1].iter().cloned().chain(inner).collect(),
+		_ => items,
+	};
 	Node::List(flat, bracket, separator)
 }
 

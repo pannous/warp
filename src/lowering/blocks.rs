@@ -152,6 +152,8 @@ fn is_computed(value: &Node) -> bool {
 		// a quantity `5 m` is a value, written as data
 		Node::Key(amount, Op::Mul, unit) if matches!(amount.drop_meta(), Node::Number(_))
 			&& matches!(unit.drop_meta(), Node::Symbol(name) if crate::units::is_unit(name)) => false,
+		// a range `1..n` is a value too (a descriptor), whatever its bounds compute
+		Node::Key(_, Op::Range | Op::To, _) => false,
 		// a type expression declares: `int[100]`, `100 * int`, `3 * char`
 		Node::Key(left, op, right) => {
 			let is_type = |side: &Node| matches!(side.drop_meta(), Node::Symbol(word)

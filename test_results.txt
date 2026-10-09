@@ -473,7 +473,13 @@ PASSED:
   ✓ control::test_system_values::the_battery_is_a_percent_or_a_loud_error
   ✓ control::test_system_values::the_mouse_is_a_system_value_of_the_page
   ✓ control::test_system_values::yes_no_values_read_the_machine
+  ✓ control::test_table_element_writes::a_filtered_row_field_change_is_written_to_its_row
+  ✓ control::test_table_element_writes::an_element_field_change_is_written_to_its_row
   ✓ control::test_table_key_filter::rows_whose_foreign_key_is_a_given_row
+  ✓ control::test_table_method_reads::a_field_named_like_a_table_stays_the_field
+  ✓ control::test_table_method_reads::a_method_filters_a_list
+  ✓ control::test_table_method_reads::a_method_filters_the_table
+  ✓ control::test_table_method_reads::a_method_reads_the_table
   ✓ control::test_table_query_loading::a_filter_reads_only_the_rows_it_keeps
   ✓ control::test_table_query_loading::a_filtered_row_is_the_one_instance_of_its_row
   ✓ control::test_table_remove::removing_a_row_before_the_table_loads
@@ -739,6 +745,10 @@ PASSED:
   ✓ ffi::test_foreign_js::test_js_modules
   ✓ ffi::test_foreign_js::test_untrusted_code_gets_no_js
   ✓ ffi::test_foreign_js::test_values_held_from_another_runtime_compare
+  ✓ ffi::test_foreign_member_assignment::a_js_member_is_set
+  ✓ ffi::test_foreign_member_assignment::a_member_of_a_call_result_is_set
+  ✓ ffi::test_foreign_member_assignment::a_page_element_member_assignment_compiles
+  ✓ ffi::test_foreign_member_assignment::a_python_attribute_is_set
   ✓ ffi::test_foreign_operators::test_js_indexing_and_counting
   ✓ ffi::test_foreign_operators::test_plain_values_keep_their_operators
   ✓ ffi::test_foreign_operators::test_python_indexing_counting_iteration
@@ -1358,6 +1368,8 @@ PASSED:
   ✓ lists::test_captured_call_lists::a_captured_list_of_float_calls_holds_floats
   ✓ lists::test_concat_declared::concatenation_checks_declared_element_type
   ✓ lists::test_concat_declared::evident_other_items_are_a_compile_error
+  ✓ lists::test_count_after_function::a_count_after_a_function
+  ✓ lists::test_count_after_function::print_a_count
   ✓ lists::test_counting_word_variables::a_counting_word_variable_in_a_list_is_an_item
   ✓ lists::test_counting_word_variables::shared_values_named_like_counting_words_reach_a_go_block
   ✓ lists::test_decimal_list_elements::a_decimal_element_can_be_assigned
@@ -1544,6 +1556,8 @@ PASSED:
   ✓ lists::test_range_arguments::a_range_argument_used_as_a_list_stays_one
   ✓ lists::test_range_arguments::a_range_passed_on_to_a_reader_stays_its_bounds
   ✓ lists::test_range_arguments::a_range_variable_passed_on_stays_its_bounds
+  ✓ lists::test_range_in_structure::a_held_range_is_collected_in_linear_time
+  ✓ lists::test_range_in_structure::a_range_after_colon_is_its_value
   ✓ lists::test_range_returns::a_returned_range_is_read_from_its_bounds
   ✓ lists::test_range_returns::a_returned_range_stored_in_a_variable_stays_its_bounds
   ✓ lists::test_range_returns::a_returned_range_used_as_a_list_is_its_list
@@ -1614,9 +1628,14 @@ PASSED:
   ✓ lists::test_where_filter::an_assigned_filter_may_start_with_not
   ✓ lists::test_where_filter::where_filters_by_it
   ✓ lists::test_where_filter::where_with_an_assignment_binds
+  ✓ lists::test_word_slices::a_bare_number_is_no_position
+  ✓ lists::test_word_slices::hash_positions_slice
+  ✓ lists::test_word_slices::ordinal_positions_slice
+  ✓ lists::test_word_slices::other_from_and_to_stay
   ✓ modules::test_agent::agent_answers_a_prompt_when_a_key_is_set
   ✓ modules::test_agent::agent_with_a_wrong_key_fails_with_the_api_reason
   ✓ modules::test_agent::agent_without_a_key_names_the_variable
+  ✓ modules::test_agent::agent_without_a_key_says_where_to_set_it
   ✓ modules::test_dir::a_program_s_own_dir_wins
   ✓ modules::test_dir::dir_lists_the_names_of_a_standard_module
   ✓ modules::test_folder_scope::a_name_defined_in_two_siblings_is_ambiguous
@@ -2057,6 +2076,7 @@ PASSED:
   ✓ numbers::test_plus_minus_math::a_math_word_maps_the_endpoints
   ✓ numbers::test_plus_minus_math::a_plain_number_still_takes_the_math_word
   ✓ numbers::test_plus_minus_math::an_extremum_inside_the_interval_is_its_bound
+  ✓ numbers::test_plus_minus_parameter::a_number_parameter_takes_a_plus_minus_value
   ✓ numbers::test_plus_minus_print::a_known_interval_says_how_it_compares
   ✓ numbers::test_plus_minus_print::an_interval_known_only_at_run_time_compares_certainly_with_a_warning
   ✓ numbers::test_plus_minus_print::an_interval_negated
@@ -2076,9 +2096,11 @@ PASSED:
   ✓ numbers::test_quantity_conversion::a_run_time_quantity_converts_with_as
   ✓ numbers::test_quantity_conversion::a_run_time_quantity_joins_a_text
   ✓ numbers::test_quantity_tolerance::a_field_type_with_tolerance_gives_its_values_the_tolerance
+  ✓ numbers::test_quantity_tolerance::a_final_unit_field_with_tolerance_shows_its_unit
   ✓ numbers::test_quantity_tolerance::a_gaussian_quantity_shows_sigma_apart_from_its_unit
   ✓ numbers::test_quantity_tolerance::a_quantity_with_tolerance_compares_certainly_or_possibly
   ✓ numbers::test_quantity_tolerance::a_quantity_with_tolerance_has_its_bounds
+  ✓ numbers::test_quantity_tolerance::a_sum_of_quantities_is_a_quantity
   ✓ numbers::test_quantity_tolerance::a_unit_field_takes_a_quantity_with_tolerance
   ✓ numbers::test_quantity_tolerance::quantities_with_tolerance_sum
   ✓ numbers::test_range_tolerance_compare::a_range_equals_the_same_span_with_tolerance
@@ -2091,6 +2113,8 @@ PASSED:
   ✓ numbers::test_rational_type::test_pi_is_real_whatever_its_representation
   ✓ numbers::test_rational_type::test_rational_and_rationals_are_type_words
   ✓ numbers::test_rational_type::test_type_of_a_list_of_decimals_is_a_list_of_rational
+  ✓ numbers::test_recursive_units::a_recursive_function_keeps_its_dimensions
+  ✓ numbers::test_recursive_units::a_recursive_function_takes_quantities
   ✓ numbers::test_round_to_digits::round_to_digits
   ✓ numbers::test_round_to_digits::round_without_digits_is_whole
   ✓ numbers::test_rounding_in_functions::test_rounding_builtins_work_inside_function_bodies
@@ -2168,9 +2192,16 @@ PASSED:
   ✓ numbers::test_unit_fields::a_unit_field_holds_a_quantity
   ✓ numbers::test_unit_fields::a_unit_field_refuses_another_quantity_or_a_plain_number
   ✓ numbers::test_unit_fields::unit_fields_add_up_in_loops_over_lists_of_the_class
+  ✓ numbers::test_unit_glue_hint::a_glued_unit_or_a_spaced_word_has_no_glue_hint
+  ✓ numbers::test_unit_glue_hint::a_unit_apart_from_its_number_hints_the_glued_form
   ✓ numbers::test_unit_literals::a_long_unit_name_belongs_to_its_amount_in_a_condition
   ✓ numbers::test_unit_literals::a_unit_after_a_comparison_belongs_to_its_amount
   ✓ numbers::test_unit_literals::a_variable_named_like_a_unit_stays_a_variable
+  ✓ numbers::test_unit_named_function::a_function_named_like_a_unit_keeps_the_other_units
+  ✓ numbers::test_unit_named_function::a_parameter_named_like_a_unit_keeps_the_other_units
+  ✓ numbers::test_unit_named_function::a_variable_named_like_a_unit_keeps_the_other_units
+  ✓ numbers::test_unit_named_parameter::a_parameter_named_like_a_unit_written_as_that_unit_is_a_name_clash
+  ✓ numbers::test_unit_named_parameter::a_parameter_named_like_another_unit_or_used_only_inside_is_no_clash
   ✓ numbers::test_unit_named_variable::a_loop_variable_named_like_a_unit
   ✓ numbers::test_unit_named_variable::a_printed_loop_variable_named_like_a_unit
   ✓ numbers::test_unit_named_variable::an_assigned_variable_named_like_a_unit
@@ -2209,6 +2240,10 @@ PASSED:
   ✓ numbers::test_units_text::a_conversion_joins_a_text_in_its_unit
   ✓ numbers::test_units_text::imperial_units_convert_exactly
   ✓ numbers::test_units_text::mph_is_miles_per_hour
+  ✓ numbers::test_units_type_holes::a_comparison_of_quantities_is_yes_or_no
+  ✓ numbers::test_units_type_holes::a_number_annotation_takes_no_quantity
+  ✓ numbers::test_units_type_holes::a_text_repeats_a_plain_count_of_times
+  ✓ numbers::test_units_type_holes::a_variable_keeps_its_dimension
   ✓ numbers::test_zero_fill::a_computed_size_is_a_runtime_count
   ✓ numbers::test_zero_fill::a_large_zero_list_has_its_size
   ✓ numbers::test_zero_fill::a_zero_list_is_still_a_list_of_zeros
@@ -2245,6 +2280,11 @@ PASSED:
   ✓ operators::test_increment_places::an_element_increments
   ✓ operators::test_increment_places::an_element_of_a_field_and_a_nested_element_change
   ✓ operators::test_infix_operand_names::test_infix_operands_named_left_and_right
+  ✓ operators::test_infix_word_operators::a_word_infix_operator_with_parameters
+  ✓ operators::test_infix_word_operators::a_word_infix_operator_without_parameters
+  ✓ operators::test_infix_word_operators::a_word_operator_is_still_a_word_elsewhere
+  ✓ operators::test_infix_word_operators::an_assigned_filter_by_an_operator
+  ✓ operators::test_infix_word_operators::infix_without_operator_is_an_alias
   ✓ operators::test_less_than_compare::test_a_less_than_after_a_variable_is_a_comparison
   ✓ operators::test_less_than_compare::test_generics_still_start_after_a_type_name
   ✓ operators::test_like::a_known_other_type_teaches_like
@@ -2274,6 +2314,10 @@ PASSED:
   ✓ operators::test_mutating_bang::without_bang_the_value_is_unchanged
   ✓ operators::test_nand_spellings::test_nand_binds_like_and
   ✓ operators::test_nand_spellings::test_nand_spellings
+  ✓ operators::test_natural_phrases::glued_chain_after_a_prefix_function
+  ✓ operators::test_natural_phrases::modulo_is_mod
+  ✓ operators::test_natural_phrases::number_word_hint_is_where_it_is_written
+  ✓ operators::test_natural_phrases::sort_by_a_prefix_function
   ✓ operators::test_negated_call::test_builtin_name_bound_as_a_parameter_stays_subtraction
   ✓ operators::test_negated_call::test_function_applied_to_a_negative_number
   ✓ operators::test_negated_call::test_variable_minus_number_stays_subtraction
@@ -2354,6 +2398,8 @@ PASSED:
   ✓ operators::test_superscript_operator_declarations::test_short_declaration_without_the_operator_word
   ✓ operators::test_superscript_operator_declarations::test_suffix_operator_on_a_superscript_digit
   ✓ operators::test_superscript_operator_declarations::test_undeclared_superscripts_stay_powers
+  ✓ operators::test_text_or_number::a_sum_of_repeated_texts_or_a_number
+  ✓ operators::test_text_or_number::repeated_text_or_a_number
   ✓ operators::test_then_pipe::then_pipes_into_a_function
   ✓ operators::test_then_pipe::then_pipes_into_a_word_operator
   ✓ operators::test_then_pipe::then_without_if_is_the_condition
@@ -2594,6 +2640,7 @@ PASSED:
   ✓ programs::test_calculator_fixes::test_run_time_math
   ✓ programs::test_calculator_fixes::test_text_comparisons
   ✓ programs::test_cli_help::help_prints_the_usage
+  ✓ programs::test_code_golf::every_golf_solution_prints_its_holes_output
   ✓ programs::test_data_structure_fixes::test_data_key_read_as_a_variable
   ✓ programs::test_data_structure_fixes::test_list_comprehension
   ✓ programs::test_data_structure_fixes::test_named_tuple_fields
@@ -2650,6 +2697,10 @@ PASSED:
   ✓ programs::test_samples::test_sudoku
   ✓ programs::test_samples::test_sum
   ✓ programs::test_samples_run_cleanly::every_sample_runs_without_a_compiler_error
+  ✓ programs::test_shader_blocks::a_shader_block_is_its_wgsl_text
+  ✓ programs::test_shader_blocks::a_shader_block_over_lines_loses_its_indentation
+  ✓ programs::test_shader_blocks::paint_takes_a_shader_block
+  ✓ programs::test_shader_blocks::shader_stays_a_name
   ✓ programs::test_small_samples::error_samples
   ✓ programs::test_small_samples::text_samples
   ✓ programs::test_warp_command::debug_build_names_its_commit
@@ -2841,6 +2892,9 @@ PASSED:
   ✓ text::test_runtime_text_as_int::a_text_without_a_number_is_a_runtime_error
   ✓ text::test_split_default::split_without_separator_splits_at_spaces
   ✓ text::test_split_element_kind::split_elements_concatenate
+  ✓ text::test_str_computed::str_of_a_field_read_is_its_value
+  ✓ text::test_str_computed::str_of_data_reads_as_written
+  ✓ text::test_str_computed::str_of_literal_arithmetic_is_its_value
   ✓ text::test_string::test_first_char
   ✓ text::test_string::test_interpolation
   ✓ text::test_string::test_map
@@ -3369,6 +3423,8 @@ PASSED:
   ✓ types::test_typed_arrays::test_typed_array_declaration_with_count_first
   ✓ types::test_typed_arrays::test_typed_array_declaration_with_subscript
   ✓ types::test_typed_arrays::test_typed_array_of_other_types
+  ✓ types::test_typed_list_elements::a_bracketed_list_type_checks_its_items
+  ✓ types::test_typed_list_elements::a_fixed_width_list_checks_its_range
   ✓ types::test_types::test_auto_type
   ✓ types::test_types::test_auto_type_nan
   ✓ types::test_types::test_bad_type
@@ -3597,8 +3653,12 @@ PASSED:
   ✓ web::test_css_transitions::a_made_up_kind_is_css_with_a_hint
   ✓ web::test_css_transitions::a_site_with_transitions_carries_their_script
   ✓ web::test_css_transitions::the_starting_style_is_data_for_the_page
+  ✓ web::test_deploy::a_deployed_program_answers_its_routes
+  ✓ web::test_deploy::a_program_without_routes_is_no_worker
   ✓ web::test_dev_server::a_dev_build_keeps_the_values_the_program_changed
   ✓ web::test_dev_server::the_dev_server_rebuilds_a_changed_program
+  ✓ web::test_dom_pages::a_handler_draws_on_a_canvas_of_the_page
+  ✓ web::test_dom_pages::a_handler_sets_and_reads_elements_of_the_page
   ✓ web::test_element_events::an_element_handler_marks_its_element
   ✓ web::test_element_events::each_element_handler_has_its_number
   ✓ web::test_element_events::the_page_shows_the_markup_after_a_handler
@@ -3645,6 +3705,8 @@ PASSED:
   ✓ web::test_markup_lines::an_aria_attribute_renders
   ✓ web::test_markup_renderer::a_style_sheet_inside_a_scoped_element_styles_only_its_elements
   ✓ web::test_markup_renderer::the_renderer_keeps_its_locals_apart_from_the_programs_variables
+  ✓ web::test_markup_scripts::js_is_the_script_element
+  ✓ web::test_markup_scripts::script_content_is_not_escaped
   ✓ web::test_markup_tags::a_call_outside_tags_or_of_a_function_stays_a_call
   ✓ web::test_markup_tags::a_spaced_child_element_takes_its_loop_as_children
   ✓ web::test_markup_tags::a_tag_takes_html_attributes_with_equals
@@ -3804,6 +3866,9 @@ PASSED:
   ✓ welcoming::test_discarded_pure_warning::an_assigned_mutating_call_warns
   ✓ welcoming::test_discarded_pure_warning::the_warned_program_still_runs
   ✓ welcoming::test_discarded_pure_warning::used_and_mutating_calls_do_not_warn
+  ✓ welcoming::test_end_and_def_blocks::a_def_takes_its_indented_lines
+  ✓ welcoming::test_end_and_def_blocks::a_for_do_reads_its_lines_up_to_end
+  ✓ welcoming::test_end_and_def_blocks::an_end_in_a_comment_closes_no_else
   ✓ welcoming::test_english_operator_words::a_function_of_an_operator_word_stays_callable
   ✓ welcoming::test_english_operator_words::membership_ranges_and_loops
   ✓ welcoming::test_english_operator_words::operator_words
@@ -3966,6 +4031,10 @@ PASSED:
   ✓ welcoming::test_fuel_default::ten_million_float_fills_fit_the_default_fuel
   ✓ welcoming::test_function_bindings::a_const_in_one_function_leaves_another_alone
   ✓ welcoming::test_function_bindings::a_let_in_one_function_leaves_another_alone
+  ✓ welcoming::test_golf_words::a_char_loop_over_a_text_visits_every_char
+  ✓ welcoming::test_golf_words::chr_of_an_expression_is_a_function_result
+  ✓ welcoming::test_golf_words::print_without_parentheses_in_an_operand_or_branch
+  ✓ welcoming::test_golf_words::walked_chars_are_the_list_of_chars
   ✓ welcoming::test_got_it_scope::a_got_it_comment_silences_its_line
   ✓ welcoming::test_got_it_scope::got_it_for_all_silences_the_kind
   ✓ welcoming::test_got_it_scope::got_it_for_this_silences_only_that_expression
@@ -3976,6 +4045,11 @@ PASSED:
   ✓ welcoming::test_got_it_warnings::got_it_silences_the_warning_but_never_changes_the_program
   ✓ welcoming::test_got_it_warnings::the_explicit_forms_say_it_without_a_warning
   ✓ welcoming::test_hint_positions::a_lowering_hint_names_its_node
+  ✓ welcoming::test_indented_body_without_colon::a_bare_for_takes_its_indented_lines
+  ✓ welcoming::test_indented_body_without_colon::a_definition_ending_its_line_takes_the_indented_lines
+  ✓ welcoming::test_indented_body_without_colon::a_for_in_takes_its_indented_if
+  ✓ welcoming::test_indented_body_without_colon::a_while_takes_all_its_indented_lines
+  ✓ welcoming::test_indented_body_without_colon::an_indented_comma_line_swaps
   ✓ welcoming::test_index_hint_numbers::only_a_number_index_gets_the_hash_hint
   ✓ welcoming::test_index_hint_simple::only_a_simple_index_gets_the_hash_hint
   ✓ welcoming::test_it_shadow_warning::a_loop_it_hiding_the_function_it_warns
@@ -4002,6 +4076,8 @@ PASSED:
   ✓ welcoming::test_lone_words::test_a_word_close_to_a_name_warns
   ✓ welcoming::test_lone_words::test_data_is_the_data_prefix
   ✓ welcoming::test_lowered_error_text::an_unknown_word_error_quotes_the_words_as_written
+  ✓ welcoming::test_open_range_slices::a_slice_from_the_start
+  ✓ welcoming::test_open_range_slices::a_slice_to_the_end
   ✓ welcoming::test_quiet_hints::legitimate_forms_get_no_hint
   ✓ welcoming::test_slash_comment_after_value::a_comment_after_a_text_gets_no_division_note
   ✓ welcoming::test_slash_comment_after_value::a_prose_comment_after_a_value_gets_no_division_note
@@ -4144,4 +4220,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-10 ignored, 4139 passed, 0 failed, 4139 total tested
+10 ignored, 4215 passed, 0 failed, 4215 total tested

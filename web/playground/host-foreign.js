@@ -10,6 +10,7 @@ const SETTER_PREFIX = "set "; // src/wasm_modules.rs SETTER_PREFIX: the import t
 const C_CALLS_SECTION = "warp.c_calls"; // src/wasm_modules.rs C_CALLS_SECTION
 const IMPORTED_MEMORY_PAGES = 1; // src/wasm_emitter/mod.rs MEMORY: one page at least
 // a foreign call is synchronous here: the program cannot wait for a promise (card js-callbacks)
+const SETTER = /^set (.+)$/; // src/lowering/foreign_modules.rs SETTER_PREFIX: "set innerHTML" sets the member to the one argument
 const PROMISE_REFUSAL = "gives a promise, which a program in the browser cannot wait for yet; natively (the warp CLI) node awaits it";
 
 // the runtimes foreign_call reaches in the page, by their name in `use <runtime> …`: call(module, member, arguments,
@@ -47,6 +48,8 @@ registerForeignRuntime("js", {
 		if (value === undefined) throw new Error(`js ${moduleName}.${memberName}: the page has no global ${moduleName} (modules need the native host)`);
 		// member "": the module constructed, `new URL(…)` (src/lowering/foreign_modules.rs CONSTRUCTOR_MEMBER)
 		if (memberName === "") return new value(...argumentValues.map(unhandled));
+		const set = memberName.match(SETTER);
+		if (set) return value[set[1]] = unhandled(argumentValues[0]);
 		for (const part of memberName.split(".")) {
 			if (value?.[part] === undefined) throw new Error(`js ${moduleName}.${memberName}: ReferenceError: ${moduleName} has no ${memberName}`);
 			[owner, value] = [value, value[part]];

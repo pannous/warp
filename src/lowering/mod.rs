@@ -46,6 +46,7 @@ pub mod phrase_calls;
 pub mod printable;
 pub mod phrase_words;
 pub mod list_phrases;
+pub mod word_slices;
 pub mod parameter_shapes;
 pub mod optional_casts;
 pub mod picked_calls;

@@ -18,6 +18,7 @@ mod test_code_golf; // card code-golf
 mod test_paint;
 mod test_paint_lists;
 mod test_paint_shader; // P234
+mod test_shader_blocks; // card g_oFJc
 mod test_draw;
 mod test_plain_hints_when_piped;
 mod test_warp_command;

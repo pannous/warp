@@ -53,3 +53,4 @@ mod test_count_method;
 mod test_codepoint_bytes;
 mod test_repeat_typed; // card repeat-int
 mod test_split_default; // card split-without
+mod test_str_computed; // card str-inline

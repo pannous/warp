@@ -28,9 +28,9 @@ const BOOL_TYPE: &str = ".bool";
 const ANY_TYPE: &str = ".any";
 const LIST_TYPE_PREFIX: &str = ".list ";
 /// The builtin scalar type words warp checks a value against (analyzer admits) that W0 has a type for
-const BUILTIN_TYPE_WORDS: [&str; 11] = ["int", "integer", "long", "exact", "float", "number", "text", "string", "str", "bool", "boolean"];
+const BUILTIN_TYPE_WORDS: [&str; 13] = ["int", "integer", "long", "exact", "float", "number", "text", "string", "str", "codepoint", "char", "bool", "boolean"];
 /// A value of each W0 scalar type and the run-time kind warp sees it as (a bool is an Int)
-const VALUE_KINDS: [(&str, Kind); 4] = [(BOOL_TYPE, Kind::Int), (".int", Kind::Int), (".number", Kind::Float), (".text", Kind::Text)];
+const VALUE_KINDS: [(&str, Kind); 5] = [(BOOL_TYPE, Kind::Int), (".int", Kind::Int), (".number", Kind::Float), (".text", Kind::Text), (".codepoint", Kind::Codepoint)];
 const UNIT_TYPE: &str = ".unit";
 /// the parameter of a function that takes none
 const UNIT_PARAMETER: &str = "·";
@@ -42,6 +42,7 @@ const VARIABLE_KEYWORDS: [&str; 2] = ["let", "shared"];
 const CELL_FIELD: &str = "·value";
 /// An inline union `int | text` or an optional `int?` is the join of its alternatives, every value given to it a cast
 const UNION_TYPE: &str = "(Ty.joinAll ";
+const RANGED_TYPE_PREFIX: &str = ".ranged ";
 const UNION_JOINER: &str = " or ";
 const OPTIONAL_MARK: char = '?';
 /// the type of ø, the empty part of an optional (ø is the empty list)
@@ -91,24 +92,28 @@ fn quoted(text: &str) -> String {
 	format!("\"{}\"", text.replace('\\', "\\\\").replace('"', "\\\""))
 }
 
-/// `int`, `texts`, `list`: the W0 type a warp type word names
+/// `int`, `texts`, `list`, `int16` (the range of ints it holds): the W0 type a warp type word names
 fn type_of_word(word: &str) -> Option<String> {
-	let scalar = |word: &str| -> Option<&str> {
+	let scalar = |word: &str| -> Option<String> {
+		if let Some(width) = crate::fixed_width::fixed_width(word) {
+			return Some(format!("{RANGED_TYPE_PREFIX}({}) ({})", width.low, width.high));
+		}
 		Some(match crate::type_kinds::canonical_type_name(&word.to_lowercase()) {
 			"int" | "integer" | "long" => ".int",
 			"float" | "number" | "exact" => ".number",
 			"text" | "string" | "str" => ".text",
+			"codepoint" | "char" => ".codepoint",
 			"bool" | "boolean" => BOOL_TYPE,
 			"any" => ANY_TYPE,
 			_ => return None,
-		})
+		}.to_string())
 	};
 	if word == "list" {
 		return Some(".list .any".to_string());
 	}
 	match scalar(word) {
-		Some(lean) => Some(lean.to_string()),
-		None => word.strip_suffix('s').and_then(scalar).map(|element| format!(".list {element}")),
+		Some(lean) => Some(lean),
+		None => word.strip_suffix('s').and_then(scalar).map(|element| format!(".list ({element})")),
 	}
 }
 
@@ -117,10 +122,12 @@ fn union_alternatives(declared: &str) -> Option<&str> {
 	declared.strip_prefix(UNION_TYPE)?.strip_suffix(')')
 }
 
-/// a value given to a declared place: a union checks it against its alternatives when it runs
+/// a value given to a declared place: a union checks it against its alternatives when it runs, a fixed width
+/// against its range (an int literal is an `int`, not below the range: `x: int16 = 5`)
 fn admitted(declared: &str, value: String) -> String {
 	match union_alternatives(declared) {
 		Some(alternatives) => format!(".cast ({value}) {alternatives}"),
+		None if declared.starts_with(RANGED_TYPE_PREFIX) => format!(".cast ({value}) [{declared}]"),
 		None => value,
 	}
 }
@@ -479,6 +486,12 @@ fn bool_literal(declared: Option<&str>, value: &Node) -> Option<String> {
 }
 
 /// A value whose type is evidently bool: `true`, `1 < 2`
+/// One `unit` as a W0 quantity: its number of smallest steps of its base dimension
+fn quantity_literal(unit: &str) -> String {
+	let (dimension, factor) = crate::units::dimension_and_factor(unit).expect("a unit");
+	format!(".qty {factor} [({}, 1)]", quoted(&dimension))
+}
+
 fn is_evident_bool(value: &Node) -> bool {
 	matches!(value.drop_meta(), Node::True | Node::False | Node::Key(_, Op::Lt | Op::Le | Op::Gt | Op::Ge | Op::Eq | Op::Ne, _))
 }
@@ -570,6 +583,8 @@ impl Exporter {
 		match annotation.drop_meta() {
 			Node::Symbol(word) if word.ends_with(OPTIONAL_MARK) => self.union_type(word),
 			Node::Symbol(word) => self.type_of(word),
+			// `[int]`: a list of int
+			Node::List(items, Bracket::Square, _) if items.len() == 1 => Ok(format!("{LIST_TYPE_PREFIX}({})", self.annotation_type(&items[0])?)),
 			other => unsupported(other),
 		}
 	}
@@ -1177,6 +1192,8 @@ impl Exporter {
 			Node::Symbol(name) if self.functions.get(name).is_some_and(|parameter| parameter == UNIT_TYPE) => Ok(format!(".call {} .unit", quoted(name))),
 			Node::Symbol(name) if self.lambda_names.contains(name) => Err(format!("not in W0: {name} as a value (warp calls it; `function {name}` is the function)")),
 			Node::Symbol(name) if self.names.contains_key(name) => Ok(format!(".glob {}", quoted(name))),
+			// a unit word is a quantity of one unit (`2 km` parses as `2 * km`)
+			Node::Symbol(name) if crate::units::is_unit(name) => Ok(quantity_literal(name)),
 			_ if map_entries(node).is_some() && self.classes.contains_key(MAP_CLASS) => self.instance(MAP_CLASS, map_entries(node).expect("a map")),
 			Node::List(items, Bracket::Square, _) => {
 				let elements: Result<Vec<String>, String> = items.iter().map(|item| self.expression(item)).collect();

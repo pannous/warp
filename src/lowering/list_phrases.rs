@@ -166,8 +166,13 @@ fn condition(argument: &Node, context: &Context) -> Option<Node> {
 
 /// The key `sort by <argument>` names: `element => f(element)` of a function, else `element => element.field`
 fn key(argument: &Node, context: &Context) -> Option<Node> {
-	let Node::Symbol(name) = argument.drop_meta() else { return None };
 	let element = symbol(ELEMENT);
+	// `sort by abs`: a function word the parser reads as its prefix operator, without an operand
+	if let Node::Key(left, op, right) = argument.drop_meta() {
+		let applied = Node::Key(left.clone(), *op, Box::new(element.clone()));
+		return matches!((left.drop_meta(), right.drop_meta()), (Node::Empty, Node::Empty)).then(|| Node::Key(Box::new(element), Op::Arrow, Box::new(applied)));
+	}
+	let Node::Symbol(name) = argument.drop_meta() else { return None };
 	let is_function = context.user_functions.contains_key(name) || crate::analyzer::is_counting_word(name);
 	let value = match is_function {
 		true => call(name, element.clone()),

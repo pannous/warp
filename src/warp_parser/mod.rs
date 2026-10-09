@@ -40,7 +40,7 @@ const LITERAL_SUFFIXES: [(char, &str); 6] = [('f', "float"), ('F', "float"), ('d
 /// `0.1:float`, `1.5:int`: a number literal directly typed with one of these binds tightly, unlike the loose `as`
 const LITERAL_NUMBER_TYPES: [&str; 11] = ["int", "i64", "integer", "exact", "real", "float", "fast", "f64", "double", "f32", "i32"];
 /// Words that may precede the name of a global besides a type word (`int`, `long` … see `analyzer::type_word_kind`)
-const ORDINAL_SUFFIXES: [&str; 4] = ["st", "nd", "rd", "th"];
+pub(crate) const ORDINAL_SUFFIXES: [&str; 4] = ["st", "nd", "rd", "th"];
 
 /// Type names that take type arguments in angle brackets besides the plural and user types: `list<int>`, `map<text, int>`
 const GENERIC_TYPE_HEADS: [&str; 7] = ["list", "array", "set", "map", "option", "result", "tuple"];
@@ -809,6 +809,28 @@ fn declared_glyph<'a>(words: &'a [&'a str]) -> Option<&'a str> {
 	}
 }
 
+/// The operator a `prefix|suffix|infix` declaration declares: a glyph (`infix operator ⊕ := …`), or for infix a word with
+/// optional parameters, `infix operator divides(d:int, n:int) := …` (card g_mnvA); `infix divides(d, n) := …` is the
+/// alias without `operator`
+fn declared_operator(kind: UserOperatorKind, words: &[&str]) -> Option<String> {
+	if let Some(glyph) = declared_glyph(words).filter(|glyph| is_operator_glyph(glyph)) {
+		return Some(glyph.to_string());
+	}
+	let head = match words {
+		[OPERATOR_WORD, head, ..] | [head, ..] if kind == UserOperatorKind::Infix && words.contains(&":=") => head,
+		_ => return None,
+	};
+	let word: String = head.chars().take_while(|c| c.is_alphanumeric() || *c == '_').collect();
+	let parameters = &head[word.len()..];
+	let is_word = word.starts_with(char::is_alphabetic) && word != OPERATOR_WORD;
+	(is_word && (parameters.is_empty() || parameters.starts_with('('))).then_some(word)
+}
+
+/// `divides`: a declared operator that is a word, ending where the word ends (not `dividesx`)
+fn is_operator_word(glyph: &[char]) -> bool {
+	glyph.first().is_some_and(|c| c.is_alphabetic())
+}
+
 fn is_plain_name(word: &str) -> bool {
 	!word.is_empty() && word.chars().all(|c| c.is_alphanumeric() || c == '_')
 }
@@ -869,14 +891,15 @@ fn scan_user_operators(source: &str) -> Vec<UserOperator> {
 	let mut found: Vec<UserOperator> = Vec::new();
 	for statement in source.lines().flat_map(|line| line.split(';')) {
 		let words: Vec<&str> = statement.split_whitespace().collect();
-		let declared = match words.as_slice() {
-			[kind, rest @ ..] if declared_glyph(rest).is_some() => {
-				OPERATOR_KINDS.iter().find(|(word, _)| word == kind).and_then(|(_, kind)| Some((declared_glyph(rest)?, *kind)))
-			}
-			[left, glyph, right, ":=", ..] if is_plain_name(left) && is_plain_name(right) => Some((*glyph, UserOperatorKind::Infix)),
+		let by_kind = words.split_first().and_then(|(word, rest)| {
+			let (_, kind) = OPERATOR_KINDS.iter().find(|(keyword, _)| keyword == word)?;
+			Some((declared_operator(*kind, rest)?, *kind))
+		});
+		let declared = by_kind.or_else(|| match words.as_slice() {
+			[left, glyph, right, ":=", ..] if is_plain_name(left) && is_plain_name(right) && is_operator_glyph(glyph) => Some((glyph.to_string(), UserOperatorKind::Infix)),
 			_ => None,
-		};
-		if let Some((glyph, kind)) = declared.filter(|(glyph, _)| is_operator_glyph(glyph)) {
+		});
+		if let Some((glyph, kind)) = declared {
 			found.push(UserOperator { glyph: glyph.chars().collect(), kind, level: kind.default_level() });
 		}
 	}

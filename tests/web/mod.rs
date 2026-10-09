@@ -3,6 +3,7 @@ mod test_uniscript;
 #[cfg(feature = "native")] // wasmtime, files or network: not in the browser build
 mod test_web;
 mod test_markup_tags;
+mod test_markup_scripts;
 mod test_web_playground;
 mod test_missing_use; // card clickable-hint
 mod test_guide; // the language guide on the playground page
@@ -37,6 +38,10 @@ mod test_form_bindings;
 mod test_styles;
 mod test_style_rules;
 mod test_headless_pages;
+#[cfg(feature = "native")] // builds a site natively, opens it in headless Chrome (agent-browser)
+mod test_dom_pages;
+#[cfg(feature = "native")] // wrangler dev runs the Worker (card cloud-deploy)
+mod test_deploy;
 mod test_page_tests;
 mod test_transitions;
 mod test_css_transitions;

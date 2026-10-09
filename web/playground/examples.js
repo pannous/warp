@@ -145,11 +145,13 @@ for x in 0..32 {
 }
 "done"` },
 	shader: { value: '"done"', canvases: 1, code: `// paint a WGSL fragment shader: the GPU colors every pixel, values change each frame
-shader = "@fragment fn main(@builtin(position) at: vec4f) -> @location(0) vec4f {
-  return vec4f(at.x / 64.0, at.y / 32.0, values.blue, 1.0);
-}"
+gradient = shader {
+  @fragment fn main(@builtin(position) at: vec4f) -> @location(0) vec4f {
+    return vec4f(at.x / 64.0, at.y / 32.0, values.blue, 1.0);
+  }
+}
 for frame in 0..20 {
-  paint(shader, 64, 32, {blue: frame / 20})
+  paint(gradient, 64, 32, {blue: frame / 20})
 }
 "done"` },
 	mouse: { value: '"done"', canvases: 1, code: `// move the mouse over the canvas: the dot follows
@@ -183,7 +185,7 @@ step() := {
 }
 population = 15
 paint(cells, width, height)
-on every 500 ms { step(); population = sum(cells); paint(cells, width, height) }
+on every 500ms { step(); population = sum(cells); paint(cells, width, height) }
 population` },
 	"system values": { value: '"online"', code: `// system values like dark mode and online are signals too
 on change dark mode { if value { print "dark mode on" } else { print "light mode on" } }
@@ -194,7 +196,7 @@ print "working"
 42` },
 	tasks: { value: '"done"', printed: "first!\nlate\n", code: `// a task runs beside the program, which waits for it at the end
 go {
-	sleep(100 ms)
+	sleep(100ms)
 	print "late"
 }
 print "first!"

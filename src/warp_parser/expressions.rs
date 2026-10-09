@@ -41,7 +41,9 @@ impl WarpParser {
 			// lowering (ambiguous_forms) applies to the value before it or makes a function
 			let operator_word = chars > 1 && matches!(op, Op::Abs | Op::Sqrt | Op::Cbrt);
 			let fourth_root = self.current_char() == super::lookahead::FOURTH_ROOT;
-			let bare = operator_word && self.expression_ends_after(chars);
+			// `sort by abs.take first 1`: a glued method applies to the word, it is no operand
+			let method_follows = self.peek_char(chars) == '.' && self.peek_char(chars + 1).is_alphabetic();
+			let bare = operator_word && (self.expression_ends_after(chars) || method_follows);
 			self.hint_operator(chars, true);
 			self.advance_by(chars);
 			self.skip_spaces();
@@ -223,8 +225,9 @@ impl WarpParser {
 
 	/// The operator after `lhs` that the infix table does not hold, its width in characters and its binding power
 	pub(super) fn special_infix(&self, lhs: &Node) -> Option<(SpecialInfix, usize, (u8, u8))> {
-		// `a mod b` is `a % b` (Euclidean, 0 ≤ r < |b|), `a rem b` the truncated remainder (sign of the dividend, as C)
-		for (word, op) in [("mod", Op::Mod), ("rem", Op::Rem)] {
+		// `a mod b` (`a modulo b`) is `a % b` (Euclidean, 0 ≤ r < |b|), `a rem b` the truncated remainder (sign of the
+		// dividend, as C)
+		for (word, op) in [("mod", Op::Mod), ("modulo", Op::Mod), ("rem", Op::Rem)] {
 			if self.matches_keyword(word) {
 				return Some((SpecialInfix::Keyword(op), word.len(), op.binding_power()));
 			}

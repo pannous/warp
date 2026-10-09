@@ -1,5 +1,6 @@
 samples.js
 keywords.js
+entities.tsv
 warp.wasm
 warp.debug.wasm
 components/

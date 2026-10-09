@@ -37,22 +37,75 @@ theorem ArithOp.widen_mono (op : ArithOp) {a a' : Ty} (h : Ty.sub a' a = true) :
     Ty.sub (op.widen a') (op.widen a) = true := by
   cases op <;> simp only [widen] <;> first | exact h | exact Ty.join_mono h (Ty.sub_refl _)
 
-/-- the result type of an arithmetic operation: `*` also repeats a text -/
-def ArithOp.ty : ArithOp → Ty → Ty → Ty
+/-- the result type of an arithmetic operation on numbers: `*` also repeats a text -/
+def ArithOp.numberTy : ArithOp → Ty → Ty → Ty
   | .mul, a, b => Ty.repeatTy a b
   | op, a, b => Ty.arithTy (op.widen a) b
 
-theorem ArithOp.ty_mono (op : ArithOp) {a b a' b' : Ty} (ha : Ty.sub a' a = true) (hb : Ty.sub b' b = true) :
-    Ty.sub (op.ty a' b') (op.ty a b) = true := by
+theorem ArithOp.numberTy_mono (op : ArithOp) {a b a' b' : Ty} (ha : Ty.sub a' a = true) (hb : Ty.sub b' b = true) :
+    Ty.sub (op.numberTy a' b') (op.numberTy a b) = true := by
   cases op
   case mul => exact Ty.repeatTy_mono ha hb
   all_goals exact Ty.arithTy_mono (ArithOp.widen_mono _ ha) hb
+
+/-- the dimensions of a product (`*`) or quotient (`/`) of quantities of dimensions d and e -/
+def ArithOp.dims : ArithOp → Dims → Dims → Option Dims
+  | .mul, d, e => some (Dims.times d e)
+  | .div, d, e => some (Dims.times d (Dims.inverse e))
+  | _, _, _ => none
+
+/-- the result type of an arithmetic operation with a quantity side: `-` keeps one dimension, `*` and `/` combine a
+quantity with a quantity or a number, anything else raises a DimensionError -/
+def ArithOp.quantityTy (op : ArithOp) (a b : Ty) : Ty :=
+  if op = .sub then Ty.sameQuantity a b else
+  match a.dimsOf, b.dimsOf with
+  | some d, some e => ((op.dims d e).map Ty.ofDims).getD .never
+  | _, _ => .never
+
+/-- the result type of an arithmetic operation: `never` when a side raises, dynamic when a side is -/
+def ArithOp.ty (op : ArithOp) (a b : Ty) : Ty :=
+  if a = .never ∨ b = .never then .never else if a = .any ∨ b = .any then .any
+  else if (a.isQuantity || b.isQuantity) = true then op.quantityTy a b else op.numberTy a b
+
+theorem ArithOp.ty_mono (op : ArithOp) {a b a' b' : Ty} (ha : Ty.sub a' a = true) (hb : Ty.sub b' b = true) :
+    Ty.sub (op.ty a' b') (op.ty a b) = true := by
+  unfold ArithOp.ty
+  by_cases n' : a' = .never ∨ b' = .never
+  · rw [ite_eq_left n']; exact Ty.sub_never _
+  rw [ite_eq_right n']
+  have na : a' ≠ .never := fun h => n' (.inl h)
+  have nb : b' ≠ .never := fun h => n' (.inr h)
+  have n : ¬(a = .never ∨ b = .never) := by
+    rintro (rfl | rfl)
+    · exact na (Ty.sub_to_never ha)
+    · exact nb (Ty.sub_to_never hb)
+  rw [ite_eq_right n]
+  by_cases y : a = .any ∨ b = .any
+  · rw [ite_eq_left y]; exact Ty.sub_any _
+  rw [ite_eq_right y]
+  have ya : a ≠ .any := fun h => y (.inl h)
+  have yb : b ≠ .any := fun h => y (.inr h)
+  have y' : ¬(a' = .any ∨ b' = .any) := by
+    rintro (rfl | rfl)
+    · exact ya (Ty.sub_from_any ha)
+    · exact yb (Ty.sub_from_any hb)
+  rw [ite_eq_right y', Ty.quantity_up ha na ya, Ty.quantity_up hb nb yb]
+  by_cases q : (a.isQuantity || b.isQuantity) = true
+  · rw [ite_eq_left q, ite_eq_left q]
+    unfold ArithOp.quantityTy
+    split
+    · exact Ty.sameQuantity_mono ha hb na nb ya yb q
+    · rw [Ty.dimsOf_up ha na ya, Ty.dimsOf_up hb nb yb]; exact Ty.sub_refl _
+  · rw [ite_eq_right q, ite_eq_right q]; exact op.numberTy_mono ha hb
 
 inductive Expr where
   | bool (b : Bool)
   | int (n : Int)
   /-- an exact or float number; its representation does not matter to the type theory -/
   | num (n : Int)
+  /-- a quantity, `2 m`: n counts the smallest step of each base dimension (units.rs `factor`: 0.1 mm, ms, 10 µg),
+  so every unit is a whole number of steps -/
+  | qty (n : Int) (dims : Dims)
   | text (s : String)
   | unit
   | nil
@@ -143,7 +196,7 @@ def eventLocal : String := "event"
 namespace Expr
 
 def isValue : Expr → Bool
-  | bool _ | int _ | num _ | text _ | unit | nil | ref _ _ | clo _ _ | lref _ _ => true
+  | bool _ | int _ | num _ | qty _ _ | text _ | unit | nil | ref _ _ | clo _ _ | lref _ _ => true
   | cons h t => h.isValue && t.isValue
   | _ => false
 

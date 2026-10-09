@@ -67,6 +67,7 @@ mod test_plus_minus;
 mod test_plus_minus_math;
 mod test_plus_minus_print;
 mod test_plus_minus_gaussian; // card plus-minus-gaussian
+mod test_plus_minus_parameter; // card number-param
 mod test_trailing_symbol; // card trailing-symbol
 mod test_div_assign;
 mod test_unit_fields; // card unit-fields
@@ -83,3 +84,8 @@ mod test_quantities_in_one_text; // card text-join
 mod test_text_then_conversion; // card print-km
 mod test_compound_accumulator; // card compound-accumulator
 mod test_unit_named_variable; // card loop-variable
+mod test_recursive_units; // card static-units
+mod test_unit_named_function; // card static-units-function
+mod test_unit_named_parameter; // card static-units-parameter
+mod test_unit_glue_hint; // card unit-glue
+mod test_units_type_holes; // cards units-compare units-reassign units-annotation units-text-repeat

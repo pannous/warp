@@ -84,7 +84,7 @@ for turn in 1 to 60 {
         update()
     }
     render()
-    sleep 50 ms
+    sleep 50ms
 }
 if game_over { print "GAME OVER" }
 score
