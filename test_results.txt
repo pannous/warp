@@ -3379,6 +3379,8 @@ PASSED:
   ✓ types::test_typed_arrays::test_typed_array_declaration_with_count_first
   ✓ types::test_typed_arrays::test_typed_array_declaration_with_subscript
   ✓ types::test_typed_arrays::test_typed_array_of_other_types
+  ✓ types::test_typed_list_elements::a_bracketed_list_type_checks_its_items
+  ✓ types::test_typed_list_elements::a_fixed_width_list_checks_its_range
   ✓ types::test_types::test_auto_type
   ✓ types::test_types::test_auto_type_nan
   ✓ types::test_types::test_bad_type
@@ -4154,4 +4156,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-10 ignored, 4149 passed, 0 failed, 4149 total tested
+10 ignored, 4151 passed, 0 failed, 4151 total tested
