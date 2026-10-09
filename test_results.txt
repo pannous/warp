@@ -237,6 +237,10 @@ PASSED:
   ✓ control::test_handler_globals::a_handler_assigns_an_emitted_value_to_a_global
   ✓ control::test_handler_globals::a_handler_writes_an_annotated_global
   ✓ control::test_handler_globals::an_int_given_empty_fails_when_it_happens
+  ✓ control::test_help_word::a_programs_own_help_wins
+  ✓ control::test_help_word::help_of_a_class_and_of_its_instance
+  ✓ control::test_help_word::help_of_a_function_is_its_signature
+  ✓ control::test_help_word::help_of_a_subclass_names_its_parent
   ✓ control::test_if_call_condition::a_call_condition_parses_like_the_assigned_call
   ✓ control::test_if_call_condition::a_call_with_arguments_as_condition_keeps_its_arguments
   ✓ control::test_if_empty_branch::a_branch_printing_a_number_gives_empty
@@ -3730,6 +3734,7 @@ PASSED:
   ✓ web::test_webgpu::a_render_shader_that_does_not_compile_says_where
   ✓ web::test_webgpu::a_shader_that_does_not_compile_says_where
   ✓ web::test_webgpu::a_value_that_is_no_number_says_so
+  ✓ web::test_webgpu_ints::a_compute_shader_over_ints_gives_ints
   ✓ welcoming::test_adopted_acknowledgements::acknowledgements_of_the_old_answers_file_are_adopted_once
   ✓ welcoming::test_braceless_call_argument::a_plain_braceless_argument_does_not_warn
   ✓ welcoming::test_braceless_call_argument::an_operator_in_a_braceless_argument_warns_with_both_readings
@@ -4090,4 +4095,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-14 ignored, 4085 passed, 0 failed, 4085 total tested
+14 ignored, 4090 passed, 0 failed, 4090 total tested
