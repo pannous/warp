@@ -105,7 +105,7 @@ impl WasmGcEmitter {
 		scope.globals = self.ctx.declared_globals.clone();
 		for (index, param) in enclosing.params.iter().enumerate() {
 			let kind = if self.takes_list_abi(&enclosing.name, index) { Kind::List } else { param_kind(param) };
-			scope.define_param(param.name.clone(), kind);
+			scope.define_param(param, kind);
 		}
 		collect_variables(&enclosing.body, &mut scope);
 		Some(scope)
@@ -226,7 +226,7 @@ impl WasmGcEmitter {
 		self.scope.globals = self.function_globals(name);
 		for (index, param) in user_fn.params.iter().enumerate() {
 			let kind = if self.takes_list_abi(name, index) { Kind::List } else { param_kind(param) };
-			self.scope.define_param(param.name.clone(), kind);
+			self.scope.define_param(param, kind);
 		}
 
 		// a captured typed list of main is read from its capture global (shadowing a typed global of that name)

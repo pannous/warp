@@ -177,7 +177,7 @@ impl WarpParser {
 			}
 		}
 		let outer_header = std::mem::replace(&mut self.in_for_header, true);
-		let iterable = self.with_equals_comparing(false, |parser| parser.parse_expr(Op::Colon.binding_power().0 + 1));
+		let iterable = self.with_equals_comparing(false, |parser| parser.parse_iterable());
 		self.in_for_header = outer_header;
 		self.skip_spaces();
 		let body_word = if self.current_char() == ':' { Some(":") } else { Some("do").filter(|word| self.matches_keyword(word)) };
@@ -235,6 +235,37 @@ impl WarpParser {
 		Some(Node::List(vec![Symbol("for".to_string()), variable, Symbol("in".to_string()), iterable, body], Bracket::None, Separator::Space))
 	}
 
+	/// The iterable of a loop header, its words up to the body: `for todo in todos sorted by priority {…}`,
+	/// `for x in xs where it > 1: …`; a comprehension's iterable is one word, its condition follows
+	/// (`[x for x in xs where x > 1]`)
+	fn parse_iterable(&mut self) -> Node {
+		let first = self.parse_expr(Op::Colon.binding_power().0 + 1);
+		let after_first = (self.pos, self.line_nr, self.column, self.current_line.clone());
+		let mut words = vec![first];
+		loop {
+			self.skip_spaces();
+			let start = self.pos;
+			if self.at_loop_body() || ITERABLE_ENDS.contains(&self.current_char()) || self.matches_keyword(IF_WORD) {
+				break;
+			}
+			let word = self.parse_expr(Op::Colon.binding_power().0 + 1);
+			if self.pos == start {
+				break;
+			}
+			words.push(word);
+		}
+		if words.len() == 1 || !self.at_loop_body() {
+			(self.pos, self.line_nr, self.column, self.current_line) = after_first;
+			return words.remove(0);
+		}
+		Node::List(words, Bracket::None, Separator::Space)
+	}
+
+	/// A loop's body starts here: `{…}`, `: …`, `do …`, or the next line
+	fn at_loop_body(&self) -> bool {
+		matches!(self.current_char(), '{' | ':' | '\n') || (self.current_char() == '/' && self.peek_char(1) == '/') || self.matches_keyword("do")
+	}
+
 	/// `for (it>2) in xs: body` (wiki/for.md, P46): the items the condition holds for, as `it`; None (nothing consumed)
 	/// for any other header
 	pub(super) fn try_parse_condition_loop(&mut self) -> Option<Node> {
@@ -276,7 +307,7 @@ impl WarpParser {
 		self.advance_by("in".len());
 		// in the header `xs {` is the collection and the body, as in any for loop, not a construction of xs
 		let outer_header = std::mem::replace(&mut self.in_for_header, true);
-		let iterable = self.with_equals_comparing(false, |parser| parser.parse_expr(Op::Colon.binding_power().0 + 1));
+		let iterable = self.with_equals_comparing(false, |parser| parser.parse_iterable());
 		self.in_for_header = outer_header;
 		self.skip_spaces();
 		let body_word = if self.current_char() == ':' { Some(":") } else { Some("do").filter(|word| self.matches_keyword(word)) };

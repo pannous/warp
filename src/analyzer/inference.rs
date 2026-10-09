@@ -215,10 +215,11 @@ pub fn infer_type(node: &Node, scope: &Scope) -> Kind {
 		}
 		// An element: `xs#i`, `xs[i]`, `text#i`
 		// a value looked up by a name in a map of unknown values (`graph[node]` of a parameter) is held as a Node
-		// a field read by name with a declared kind: `v.x` of `type V {x: float}`
+		// a field read by name with a declared kind: `v.x` of `type V {x: float}`; a field of a value known only at run time
+		// (`request.body.priority` of an any) holds what it holds, whatever a class's field of that name declares
 		Node::Key(indexed, Op::Hash, index) if crate::warp_parser::subscript_key(index)
 			.and_then(|key| match key.drop_meta() { Node::Text(name) => scope.function_kind(&field_kind_key(name)), _ => None })
-			.is_some() && !matches!(indexed.drop_meta(), Node::Empty) => {
+			.is_some() && !matches!(indexed.drop_meta(), Node::Empty) && !declared_any(indexed, scope) => {
 			let Some(Node::Text(name)) = crate::warp_parser::subscript_key(index).map(Node::drop_meta) else { unreachable!("guarded") };
 			scope.function_kind(&field_kind_key(name)).expect("guarded")
 		}
@@ -506,4 +507,14 @@ pub fn spelled_number(node: &Node) -> Option<Node> {
 	let Node::Key(value, Op::As, target) = node.drop_meta() else { return None };
 	let is_number_word = matches!(target.name().to_lowercase().as_str(), "number" | "num");
 	is_number_word.then(|| literal_number(value)).flatten()
+}
+
+/// A value declared `any` (`r: any`, a route's `request`) or a field of one (`request.body`): known only at run time
+fn declared_any(node: &Node, scope: &Scope) -> bool {
+	match node.drop_meta() {
+		Node::Symbol(name) => scope.lookup(name).and_then(|local| local.type_node.as_deref())
+			.is_some_and(|type_node| matches!(type_node.drop_meta(), Node::Symbol(type_name) if type_name == crate::type_kinds::UNTYPED_FIELD)),
+		Node::Key(indexed, Op::Hash, _) => declared_any(indexed, scope),
+		_ => false,
+	}
 }

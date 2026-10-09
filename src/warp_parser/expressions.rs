@@ -342,7 +342,10 @@ impl WarpParser {
 			}
 
 			// Step 3: Check for infix operator
-			let (op, chars) = match self.peek_operator() {
+			// `whenever not x {…}`, `waiting = xs where not done`: the word `not` negates what follows, it is no infix
+			// (the effect constraint `f := … ! IO` is written with `!`)
+			let prefix_not = self.matches_keyword("not");
+			let (op, chars) = match self.peek_operator().filter(|_| !prefix_not) {
 				Some(pair) => pair,
 				None if self.stops_at_else && self.at_else_if_word().is_some() => break, // `if c: x elif d: y`
 				None if self.at_block_close() => break, // `do x end`: the `end` is no argument of x
@@ -375,10 +378,8 @@ impl WarpParser {
 
 			// `sleep 1s and print "x"`: the statement ends before the `and`, the statement list runs both (parse_list_with_separators)
 			let ends_command = op == Op::And && (self.in_command || (min_bp == 0 && is_command(&lhs))) && self.and_starts_statement();
-			// `whenever not x {…}`, `print not done`: the word `not` after a bare name negates what follows, it is no infix
-			let prefix_not = op == Op::Not && self.matches_keyword("not") && matches!(lhs.drop_meta(), Symbol(_));
 			// Stop if operator binds less tightly than our minimum
-			if ends_command || prefix_not || l_bp < min_bp || (op == Op::Else && self.stops_at_else) {
+			if ends_command || l_bp < min_bp || (op == Op::Else && self.stops_at_else) {
 				break;
 			}
 			if let Err(refused) = self.left_arrow_assignment(op, &lhs) {

@@ -11,9 +11,10 @@ use crate::operators::Op;
 
 const KEEP: (&str, &str) = ("keep", "only");
 const SORT: (&str, &str) = ("sort", "by");
-/// `xs sorted by it.age`: the words before the key
-const SORT_WORDS: [&str; 2] = ["sorted", "sort"];
 const TAKE: (&str, &str) = ("take", "first");
+const PHRASES: [(&str, &str); 3] = [KEEP, SORT, TAKE];
+/// Other spellings of a phrase's method: `todos sorted by priority`
+const METHOD_ALIASES: [(&str, &str); 1] = [("sorted", "sort")];
 /// The conditions `keep only` knows by name, on each element `it`
 const PROPERTIES: [(&str, &str); 4] = [("positive", "it > 0"), ("negative", "it < 0"), ("even", "it % 2 == 0"), ("odd", "it % 2 != 0")];
 const WHERE_WORD: &str = "where";
@@ -41,16 +42,17 @@ fn expand(node: Node, context: &Context) -> Node {
 
 /// `xs sorted by it.age`, `xs sorted by -it.age` (read as `by - it.age`), `xs sort by name`: `xs.sort_by(it => key)`
 fn sorted_by(items: &[Node], context: &Context) -> Option<Node> {
-	let is_word = |node: &Node, words: &[&str]| matches!(node.drop_meta(), Node::Symbol(word) if words.contains(&word.as_str()));
+	let items = &words(items);
+	let is_word = |node: &Node, words: &[&str]| matches!(node.drop_meta(), Node::Symbol(word) if words.contains(&canonical(word).as_str()));
 	// `xs.sort by -it` parses as `[xs.sort, by - it]`
 	if let [Node::Key(receiver, Op::Dot, sort), descending] = items.iter().map(Node::drop_meta).collect::<Vec<_>>().as_slice() {
-		if is_word(sort, &SORT_WORDS) {
+		if is_word(sort, &[SORT.0]) {
 			return sorted_by(&[receiver.as_ref().clone(), sort.as_ref().clone(), (*descending).clone()], context);
 		}
 	}
 	let (receiver, key_written) = match items {
-		[receiver, sort, by, key] if is_word(sort, &SORT_WORDS) && is_word(by, &[SORT.1]) => (receiver, key.clone()),
-		[receiver, sort, descending] if is_word(sort, &SORT_WORDS) => match descending.drop_meta() {
+		[receiver, sort, by, key] if is_word(sort, &[SORT.0]) && is_word(by, &[SORT.1]) => (receiver, key.clone()),
+		[receiver, sort, descending] if is_word(sort, &[SORT.0]) => match descending.drop_meta() {
 			Node::Key(by, Op::Sub, key) if is_word(by, &[SORT.1]) => (receiver, Node::Key(Box::new(Node::Empty), Op::Neg, key.clone())),
 			_ => return None,
 		},
@@ -87,13 +89,16 @@ fn chain(items: &[Node], context: &Context) -> Option<Node> {
 			return chain(argument, context).map(|chained| call(&callee.drop_meta().name(), chained));
 		}
 	}
+	let items = words(items);
 	let mut tokens = vec![];
-	for item in items {
+	for (index, item) in items.iter().enumerate() {
 		match item.drop_meta() {
 			Node::Key(left, Op::Dot, method) if matches!(method.drop_meta(), Node::Symbol(_)) => {
 				tokens.push(Token::Value(left.as_ref().clone()));
-				tokens.push(Token::Method(method.drop_meta().name()));
+				tokens.push(Token::Method(canonical(&method.drop_meta().name())));
 			}
+			// `xs sorted by price`: the method word without its dot, when its phrase word follows
+			Node::Symbol(word) if index > 0 && starts_phrase(&canonical(word), items.get(index + 1)) => tokens.push(Token::Method(canonical(word))),
 			_ => tokens.push(Token::Value(item.clone())),
 		}
 	}
@@ -115,6 +120,23 @@ fn chain(items: &[Node], context: &Context) -> Option<Node> {
 		phrased |= !words.is_empty();
 	}
 	phrased.then_some(receiver)
+}
+
+/// The words of a phrase, flat: `cheapest = items sorted by price` reads as `[[items, [sorted, by]], price]`
+pub(crate) fn words(items: &[Node]) -> Vec<Node> {
+	items.iter().flat_map(|item| match item.drop_meta() {
+		Node::List(inner, Bracket::None, Separator::Space) => words(inner),
+		_ => vec![item.clone()],
+	}).collect()
+}
+
+fn canonical(method: &str) -> String {
+	METHOD_ALIASES.iter().find(|(alias, _)| *alias == method).map_or(method, |(_, name)| name).to_string()
+}
+
+fn starts_phrase(method: &str, next: Option<&Node>) -> bool {
+	let Some(Node::Symbol(word)) = next.map(Node::drop_meta) else { return false };
+	PHRASES.contains(&(method, word.as_str()))
 }
 
 fn phrase(method: &str, word: &str, receiver: Node, argument: &Node, context: &Context) -> Option<Node> {

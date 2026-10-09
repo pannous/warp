@@ -17,7 +17,6 @@ pub const TABLES_FILE: &str = "database.sqlite";
 /// The row id every registered class gets, unless it declares one
 const ID_FIELD: &str = "id";
 const ADD_WORD: &str = "add";
-/// `people.remove(p)` deletes p's row, p keeping its fields without one (id 0)
 const REMOVE_WORD: &str = "remove";
 const GLOBAL_WORD: &str = "global";
 /// `@was(old) name: text`: the field's column was called old, so the table's column is renamed
@@ -44,7 +43,8 @@ const MADE: &str = "table_made";
 const GENERATED_NAMES: [(&str, &str); 12] = [(POSITION, "table·position"), (MADE, "table·made"), (ROW, "table·row"), (ROWS, "table·rows"), (MATCHES, "table·matches"), (ADDED, "table·added"), (REMOVED, "table·removed"), (ARGUMENTS, "table·arguments"),
 	(REFERENCED, "table·referenced"), (MEMBER, "table·member"), (SAVED, "table·saved"), (KNOWN, "table·known")];
 /// Each table's lazy parts (notes/orm.md Loading), `people·load` of people: the function giving the list, loading its
-/// rows on the first call; the count, SELECT COUNT(*) until then; the add, inserting without loading; the reset of a
+/// rows on the first call; the count, SELECT COUNT(*) until then; the add, inserting without loading; the remove, deleting
+/// the row and dropping its instance from the loaded list and the known instances; the reset of a
 /// route reading the table anew; the element `people#i`, reading its one row until then; the element of a loop over the
 /// table, reading a page of rows until then; the instance of a row read before loading; whether the rows are loaded;
 /// the instances added or read before; the page read last and its start position
@@ -691,12 +691,10 @@ if {LOADED} {{ {variable}.add({ADDED}) }} else {{ {MET}.add({ADDED}) }}
 }}
 {REMOVING}({REMOVED}) := {{
 global {variable}
-global {LOADED}
 global {MET}
-global {PAGE}
-if {LOADED} {{ if {variable} {{ {variable}.remove({REMOVED}) }} }}
-{MET}.remove({REMOVED})
-{PAGE} = []
+std_io(\"table\", \"delete\", [{name:?}, {REMOVED}.{ID_FIELD}, {file:?}])
+{variable} = [{ROW} for {ROW} in {variable} if {ROW}.{ID_FIELD} != {REMOVED}.{ID_FIELD}]
+{MET} = [{ROW} for {ROW} in {MET} if {ROW}.{ID_FIELD} != {REMOVED}.{ID_FIELD}]
 {REMOVED}
 }}
 {KEPT}({ROW}) := {{
@@ -728,7 +726,7 @@ global {PAGE}
 {MET} = []
 {PAGE} = []
 []
-}}");
+}}", name = table.name);
 	let placeholders = [(READ_PLACEHOLDER, table_call("migrate")), (ROWS_PLACEHOLDER, table_call("rows")), (COUNT_PLACEHOLDER, table_call("count")),
 		(ROW_PLACEHOLDER, table_call_with("page", &format!(", {POSITION}, 1"))), (PAGE_PLACEHOLDER, table_call_with("page", &format!(", {POSITION}, {PAGE_SIZE}")))].into_iter().chain(lazy_names(&variable));
 	let empty = parse("[]");

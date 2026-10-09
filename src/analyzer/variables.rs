@@ -848,11 +848,12 @@ impl Scope {
 		local
 	}
 
-	/// Define a function parameter
-	pub fn define_param(&mut self, name: String, kind: Kind) -> Local {
-		let mut local = self.define(name.clone(), None, kind);
+	/// Define a function parameter, with its declared type (`r: any`)
+	pub fn define_param(&mut self, param: &crate::context::Param, kind: Kind) -> Local {
+		let mut local = self.define(param.name.clone(), param.annotation.clone().map(Box::new), kind);
 		local.is_param = true;
-		self.locals.insert(name, local.clone());
+		local.declared = param.annotation.is_some();
+		self.locals.insert(param.name.clone(), local.clone());
 		local
 	}
 

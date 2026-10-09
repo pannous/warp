@@ -23,6 +23,8 @@ const EXAMPLE_PARAMETERS = ["example", "sample"]; // ?example=fizzbuzz (or #fizz
 const DEBUG_PARAMETER = "debug"; // ?debug runs warp.debug.wasm: Rust names and lines in traces and the debugger
 const DEBUG_COMPILER = "warp.debug.wasm";
 const SLOW_START_PARAMETER = "slow_start"; // ?slow_start=<ms>: the worker reports ready that much later (a slow machine)
+// a starting worker silent this long is stuck (card firefox-hello-hang, three of six deploys): started again once, loudly
+const STALLED_START_MS = 60_000;
 const ACKNOWLEDGED = "acknowledged";
 const ACKNOWLEDGED_PREFIX = "ack:";
 const STDERR = 2;
@@ -137,7 +139,17 @@ function showAgain(topic) {
 
 // ---- the worker ---------------------------------------------------------------------------------------------
 
-function startWorker() {
+// a starting worker silent for STALLED_START_MS: started again once (a warning), then its runs fail naming its stage
+function restartStalledWorker(stalledWorker, restarts, resolve, reject) {
+	const stall = `the compiler's worker gave no sign for ${STALLED_START_MS / 1000} s at stage "${workerStage}"`;
+	if (restarts > 0) return reject(new Error(stall));
+	console.warn(`${stall}: starting it again`);
+	stalledWorker.terminate();
+	startWorker(restarts + 1);
+	resolve(workerReady);
+}
+
+function startWorker(restarts = 0) {
 	workerWarmed = false;
 	const options = new URLSearchParams();
 	if (debugBuild) options.set("compiler", DEBUG_COMPILER);
@@ -147,18 +159,33 @@ function startWorker() {
 	worker = new Worker(options.size ? `worker.js?${options}` : "worker.js");
 	showLoading("starting the compiler's worker", false);
 	workerReady = new Promise((resolve, reject) => {
+		const starting = worker;
+		let stalled;
+		// each message of the starting worker shows it alive: the stall timer starts over
+		const watchStart = () => {
+			clearTimeout(stalled);
+			stalled = setTimeout(() => restartStalledWorker(starting, restarts, resolve, reject), STALLED_START_MS);
+		};
+		const settled = outcome => value => {
+			clearTimeout(stalled);
+			stalled = undefined;
+			outcome(value);
+		};
+		const [ready, failed] = [settled(resolve), settled(reject)];
+		watchStart();
 		// worker.js or a script it imports failed to load: without this the first run waits for "ready" forever (card firefox-hello-hang)
-		worker.onerror = event => reject(new Error(`the compiler's worker failed to start: ${event.message || "worker.js did not load"}`));
+		worker.onerror = event => failed(new Error(`the compiler's worker failed to start: ${event.message || "worker.js did not load"}`));
 		worker.onmessage = ({ data }) => {
 			if (data.type === "notify") data = notification(data.text);
 			if (!data) return;
+			if (stalled) watchStart();
 			if (data.type === "stage") return workerStage = data.stage;
 			if (data.type === "loading") return showLoading(`loading the compiler: ${megabytes(data.loaded)}${data.total ? ` of ${megabytes(data.total)}` : ""} MB`);
 			if (data.type === "compiling") return stopLoading();
-			if (data.type === "ready") return resolve();
+			if (data.type === "ready") return ready();
 			if (data.type === "stored") return keepValue(data.name, data.value, data.file);
 			if (data.type === "clipboard") return copyText(data.text);
-			if (data.type === "failed") return reject(new Error(data.message));
+			if (data.type === "failed") return failed(new Error(data.message));
 			if (!pending) return showEventOutput(data);
 			if (data.type === "listening") Object.assign(pending, { listening: data.events, address: data.address });
 			if (data.type === "print") printedChunk(pending, data);
@@ -171,6 +198,7 @@ function startWorker() {
 	});
 	// a slow start (the CI runner) finishes after the first run began: "ready" then must not hide its "running…"
 	workerReady.then(() => stopLoading() || showing || setStatus("ready"), failure => stopLoading() || setStatus(failure.message, true));
+	workerSettled = "starting";
 	workerReady.then(() => workerSettled = "ready", failure => workerSettled = `failed: ${failure.message}`);
 	tellSystemValues();
 	sharePointer();

@@ -130,7 +130,7 @@ pub fn rows_read() -> usize {
 
 /// `std_io("table", member, arguments)`: open (create or migrate, give the rows), migrate and rows (its two halves), page (from a
 /// position), count, insert
-/// (give the id), update
+/// (give the id), delete (by id), update
 pub fn call(member: &str, arguments: &[Node]) -> Result<Node, String> {
 	let text = |node: &Node| crate::std_adapters::text_value(node).ok_or_else(|| format!("needs a text, got {}", node.serialize().trim()));
 	match (member, arguments) {
@@ -156,13 +156,13 @@ pub fn call(member: &str, arguments: &[Node]) -> Result<Node, String> {
 			rows(database, &format!("INSERT INTO {} ({}) VALUES ({placeholders})", quote(&table), quoted.join(", ")), &values.children())?;
 			Ok(Node::int(unsafe { (sqlite()?.last_insert_rowid)(database) }))
 		}
-		("update", [table, id, column, value, file]) => {
-			let sql = format!("UPDATE {} SET {} = ? WHERE {ID_COLUMN} = ?", quote(&text(table)?), quote(&text(column)?));
-			rows(connection(&text(file)?)?, &sql, &[value.clone(), id.clone()]).map(|_| Node::Empty)
-		}
 		("delete", [table, id, file]) => {
 			let sql = format!("DELETE FROM {} WHERE {ID_COLUMN} = ?", quote(&text(table)?));
 			rows(connection(&text(file)?)?, &sql, std::slice::from_ref(id)).map(|_| Node::Empty)
+		}
+		("update", [table, id, column, value, file]) => {
+			let sql = format!("UPDATE {} SET {} = ? WHERE {ID_COLUMN} = ?", quote(&text(table)?), quote(&text(column)?));
+			rows(connection(&text(file)?)?, &sql, &[value.clone(), id.clone()]).map(|_| Node::Empty)
 		}
 		_ => Err(format!("no such word of {} arguments", arguments.len())),
 	}
