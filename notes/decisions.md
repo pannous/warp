@@ -7,6 +7,14 @@ before asking the user; nobody reads it front to back, the code, tests and wiki 
 notes/open_decisions.md.
 
 ## Decided 2026-10-09 (user, as recommended unless quoted)
+- P235 (warp-web, card g_oFJc): WGSL is written as a `shader { … }` block, read verbatim with balanced braces, its
+  value the shader text; `wgsl { … }` is an alias. `shader{…}` is no longer tagged data (`Shader{…}` still is).
+  P235b: a shader does not capture warp variables; inputs stay explicit, `paint(rings, w, h, {frame: frame})` and
+  `values.frame` inside.
+- Not asked (word choice, warp-class, card g_mnvA): word infix operators are declared as in the user's own line,
+  `infix operator divides(d:int, n:int) := n % d == 0` (parameters optional, `left`/`right` otherwise, precedence
+  of `+` per P48); `infix divides(d, n) := …` is an alias. samples/orm.warp's `n divides d` in is_prime is reversed
+  under that definition and becomes `d divides n`.
 - P234 (warp-web, card graphics-names, from the user's TODO "We want elegance, but not black magic"): paint also
   takes a WGSL shader text and renders it on the GPU: `paint(shader, size, size, {frame: frame})`; given pixels it
   shows them as before. gpu_render stays for getting the pixels. Word choice, not asked: `use graphics` is an alias
