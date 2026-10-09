@@ -164,7 +164,11 @@ function startWorker() {
 	tellSystemValues();
 	sharePointer();
 	worker.postMessage({ stored: keptValues(), session: keptValues([SESSION_STORE]) });
+	tellEnvironment();
 }
+
+// the program's environment (assistant.js: the stand-in of the API key), sent again when the key changes
+const tellEnvironment = () => worker.postMessage(programEnvironment());
 
 // `notify "text"`: the browser's notification once the page may show them; until then (or when refused) a printed
 // line, so the text never goes missing; the first one asks for the permission
@@ -659,6 +663,7 @@ function initialize() {
 	showVersion();
 	fillExamples();
 	startWorker();
+	startAssistant(editor, tellEnvironment);
 	chooseExample(requestedExample() ?? DEFAULT_EXAMPLE);
 	addEventListener("hashchange", chooseExampleOfHash);
 }

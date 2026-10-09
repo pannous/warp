@@ -23,6 +23,7 @@ mod test_sum_of_decimals;
 mod test_unbounded_int;
 mod test_unit_composites;
 mod test_unit_polish;
+mod test_plus_minus_units; // card plus-minus-units
 mod test_rational_quantities;
 mod test_static_units;
 mod test_static_units_compiled;
@@ -32,6 +33,7 @@ mod test_static_units_lists;
 mod test_static_units_output;
 mod test_units_at_run_time;
 mod test_dynamic_units; // card units-dynamic
+mod test_mixed_units; // card units-mixed
 mod test_units_nospace;
 mod test_unit_products;
 mod test_units_arithmetic;

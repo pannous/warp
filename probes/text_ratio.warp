@@ -1,0 +1,3 @@
+f(x) := x
+t = f("1/3")
+(t as number) * 3

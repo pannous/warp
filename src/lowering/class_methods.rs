@@ -874,7 +874,54 @@ fn operator_calls(node: Node) -> Node {
 	let classes: Vec<String> = methods.iter().map(|(class, _, _)| class.clone()).collect();
 	let instances = instance_classes(&node, &classes);
 	let returned = returned_classes(&node, &classes);
-	with_operator_calls(node, &Operands { methods: &methods, instances: &instances, returned: &returned }).0
+	let parameters = std::collections::HashMap::new();
+	let operands = Operands { methods: &methods, instances: &instances, returned: &returned, parameters: &parameters };
+	let parameters = parameter_classes(&node, &operands);
+	with_operator_calls(node, &Operands { parameters: &parameters, ..operands }).0
+}
+
+/// The class of each parameter that every call of its function gives an instance of: `f(x) := x * 2; f(5 m ± 1 cm)`
+/// (card plus-minus-units); None at a position where the calls differ or give no instance
+fn parameter_classes(node: &Node, operands: &Operands) -> std::collections::HashMap<String, Vec<Option<String>>> {
+	let mut classes: std::collections::HashMap<String, Vec<Option<String>>> = std::collections::HashMap::new();
+	let defined: std::collections::HashSet<String> = definition_heads(node).into_iter().map(|items| items[0].drop_meta().name()).collect();
+	collect_argument_classes(node, operands, &defined, &mut classes);
+	classes
+}
+
+fn definition_heads(node: &Node) -> Vec<Vec<Node>> {
+	let mut heads = vec![];
+	node.visit(&mut |part| if let Node::Key(head, Op::Define, _) = part {
+		if let Node::List(items, Bracket::Round, _) = head.drop_meta() {
+			if items.len() > 1 {
+				heads.push(items.clone());
+			}
+		}
+	});
+	heads
+}
+
+fn collect_argument_classes(node: &Node, operands: &Operands, defined: &std::collections::HashSet<String>, classes: &mut std::collections::HashMap<String, Vec<Option<String>>>) {
+	match node.drop_meta() {
+		Node::Key(_, Op::Define, body) => collect_argument_classes(body, operands, defined, classes),
+		Node::List(items, Bracket::Round, _) if items.len() > 1 && defined.contains(&items[0].drop_meta().name()) => {
+			let is_operator_class = |class: &String| operands.methods.iter().any(|(owner, _, _)| owner == class);
+			let given: Vec<Option<String>> = items[1..].iter().map(|argument| operand_class(argument, operands).filter(is_operator_class)).collect();
+			classes.entry(items[0].drop_meta().name())
+				.and_modify(|known| *known = known.iter().zip(&given).map(|(known, given)| known.clone().filter(|known| Some(known) == given.as_ref())).collect())
+				.or_insert(given);
+			items[1..].iter().for_each(|argument| collect_argument_classes(argument, operands, defined, classes));
+		}
+		other => children_of(other).into_iter().for_each(|child| collect_argument_classes(child, operands, defined, classes)),
+	}
+}
+
+fn children_of(node: &Node) -> Vec<&Node> {
+	match node {
+		Node::Key(left, _, right) => vec![left, right],
+		Node::List(items, _, _) => items.iter().collect(),
+		_ => vec![],
+	}
 }
 
 /// What tells an operator's operand an instance: the classes' operator methods, the variables holding instances, the
@@ -883,6 +930,8 @@ struct Operands<'a> {
 	methods: &'a [(String, Op, String)],
 	instances: &'a std::collections::HashMap<String, String>,
 	returned: &'a std::collections::HashMap<String, String>,
+	/// parameter_classes
+	parameters: &'a std::collections::HashMap<String, Vec<Option<String>>>,
 }
 
 /// The node with its operator calls, and the class of the instance it gives when it is one
@@ -891,37 +940,81 @@ fn with_operator_calls(node: Node, operands: &Operands) -> (Node, Option<String>
 	match node {
 		Node::Key(left, op, right) if OPERATOR_METHODS.iter().any(|(known, _)| *known == op) => {
 			let (left, class) = with_operator_calls(*left, operands);
-			let right = recurse(*right);
-			let class = class.or_else(|| match left.drop_meta() {
-				Node::Symbol(variable) => operands.instances.get(variable).cloned(),
-				// `(a + b).x`: the parenthesized operation
-				Node::List(items, Bracket::Round, _) if items.len() == 1 => with_operator_calls(items[0].clone(), operands).1,
-				other => instance_class(other, operands.returned),
-			});
+			let (right, right_class) = with_operator_calls(*right, operands);
+			let class = class.or_else(|| operand_class(&left, operands));
+			let (left, class, right) = with_run_time_units(left, class, right, right_class, operands);
 			match class.as_ref().and_then(|class| operands.methods.iter().find(|(owner, known, _)| owner == class && *known == op)) {
 				Some((_, _, method)) => {
 					let call = Node::List(vec![Node::Symbol(method.clone()), right], Bracket::Round, Separator::None);
+					// `(quantity(…)) * 2`: the receiver without its parentheses, else `(f(…)).times` reads as a call of f
+					let left = match left.drop_meta() {
+						Node::List(items, Bracket::Round, _) if items.len() == 1 => items[0].clone(),
+						_ => left,
+					};
 					(Node::Key(Box::new(left), Op::Dot, Box::new(call)), class)
 				}
 				None => (Node::Key(Box::new(left), op, Box::new(right)), None),
 			}
 		}
+		// `1 min == q` of a run-time quantity q (the equality witness compares them)
+		Node::Key(left, op @ (Op::Eq | Op::Ne), right) => {
+			let (left, class) = with_operator_calls(*left, operands);
+			let (right, right_class) = with_operator_calls(*right, operands);
+			let class = class.or_else(|| operand_class(&left, operands));
+			let (left, _, right) = with_run_time_units(left, class, right, right_class, operands);
+			(Node::Key(Box::new(left), op, Box::new(right)), None)
+		}
 		Node::List(items, Bracket::Round, separator) if items.len() == 1 => {
 			let (item, class) = with_operator_calls(items[0].clone(), operands);
 			(Node::List(vec![item], Bracket::Round, separator), class)
 		}
-		// `f(a) := a + 1`: its parameters are none of the program's instance variables of the same names
+		// `f(a) := a + 1`: its parameters are none of the program's instance variables of the same names; one typed by a
+		// class (`q:Quantity`), or given instances of one class by every call, is an instance of it
 		Node::Key(head, Op::Define, body) if matches!(head.drop_meta(), Node::List(items, Bracket::Round, _) if items.len() > 1) => {
 			let Node::List(items, _, _) = head.drop_meta() else { unreachable!("guarded") };
 			let mut instances = operands.instances.clone();
-			for parameter in &items[1..] {
-				let name = match parameter.drop_meta() { Node::Key(name, Op::Colon, _) => name.drop_meta().name(), other => other.name() };
-				instances.remove(&name);
+			let called_with = operands.parameters.get(&items[0].drop_meta().name());
+			for (position, parameter) in items[1..].iter().enumerate() {
+				let (name, declared) = match parameter.drop_meta() {
+					Node::Key(name, Op::Colon, type_node) => (name.drop_meta().name(), Some(type_node.drop_meta().name())),
+					other => (other.name(), called_with.and_then(|classes| classes.get(position).cloned().flatten())),
+				};
+				match declared.filter(|class| operands.methods.iter().any(|(owner, _, _)| owner == class)) {
+					Some(class) => instances.insert(name, class),
+					None => instances.remove(&name),
+				};
 			}
 			let body = with_operator_calls(*body, &Operands { instances: &instances, ..*operands }).0;
 			(Node::Key(head, Op::Define, Box::new(body)), None)
 		}
 		other => (other.map_children(recurse), None),
+	}
+}
+
+/// `2 km < q`, `q + 1 m` of a run-time quantity q: the unit written in the program is one too (card units-mixed); the
+/// operands with the left one's class
+fn with_run_time_units(left: Node, class: Option<String>, right: Node, right_class: Option<String>, operands: &Operands) -> (Node, Option<String>, Node) {
+	let run_time = Some(crate::units::RUN_TIME_QUANTITY);
+	let lifted_left = class.is_none() && right_class.or_else(|| operand_class(&right, operands)).as_deref() == run_time;
+	let (left, class) = match lifted_left.then(|| crate::units::as_run_time_quantity(&left)).flatten() {
+		Some(quantity) => (quantity, run_time.map(str::to_string)),
+		None => (left, class),
+	};
+	let right = match class.as_deref() == run_time {
+		true => crate::units::as_run_time_quantity(&right).unwrap_or(right),
+		false => right,
+	};
+	(left, class, right)
+}
+
+/// The class of the instance an operand is: a variable holding one, a parenthesized operation, a construction or a call
+/// of a function returning one
+fn operand_class(operand: &Node, operands: &Operands) -> Option<String> {
+	match operand.drop_meta() {
+		Node::Symbol(variable) => operands.instances.get(variable).cloned(),
+		// `(a + b).x`: the parenthesized operation, `(quantity("5 m")) * 2` the parenthesized instance
+		Node::List(items, Bracket::Round, _) if items.len() == 1 => with_operator_calls(items[0].clone(), operands).1.or_else(|| operand_class(&items[0], operands)),
+		other => instance_class(other, operands.returned),
 	}
 }
 

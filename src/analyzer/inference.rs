@@ -124,6 +124,8 @@ pub fn infer_type(node: &Node, scope: &Scope) -> Kind {
 		// Text and char
 		Node::Text(_) => Kind::Text,
 		Node::Char(_) => Kind::Codepoint,
+		// ø, the empty value (card infer-type: it was the catch-all's Int)
+		Node::Empty => Kind::Empty,
 		// Symbol (identifier)
 		Node::Symbol(name) => {
 			if let Some(local) = scope.binding(name) {
@@ -173,10 +175,11 @@ pub fn infer_type(node: &Node, scope: &Scope) -> Kind {
 		Node::Key(_, Op::As, target) if matches!(target.name().to_lowercase().as_str(), "char" | "character") => Kind::Codepoint,
 		Node::Key(_, Op::As, target) if target.name().to_lowercase() == "list" => Kind::List,
 		Node::Key(_, Op::As, target) if matches!(target.name().to_lowercase().as_str(), "string" | "str" | "text") => Kind::Text,
-		// `"4" as number` is the number the text reads as: an Int, `"4.5" as number` a Float (card number-variable)
-		Node::Key(value, Op::As, target) if target.name().to_lowercase() == "number" && literal_number(value).is_some() => {
-			infer_type(&literal_number(value).expect("guarded"), scope)
-		}
+		// `"1/3" as number` is the number the text spells, of its kind (an exact ratio is an Int)
+		Node::Key(..) if spelled_number(node).is_some() => infer_type(&spelled_number(node).expect("spelled"), scope),
+		// `t as number` of a text known only at run time: an Int, a ratio or a Float, as the text says (card runtime-text-ratio)
+		Node::Key(value, Op::As, target) if matches!(target.name().to_lowercase().as_str(), "number" | "num")
+			&& matches!(infer_type(value, scope), Kind::Text | Kind::Codepoint) => Kind::Data,
 		// `v as float` is an f64; `as int`, `as exact` stay exact Ints
 		Node::Key(_, Op::As, target) if builtin_type_kind(&target.name()).is_some_and(|kind| kind.is_float()) => Kind::Float,
 		// `a or b`, `a and b` of a text or another Node give one of their operands (`"" or "d"` is "d"); of numbers an
@@ -495,4 +498,11 @@ pub(super) fn branches_kind(then_kind: Kind, else_kind: Kind) -> Kind {
 	} else {
 		Kind::Int
 	}
+}
+
+/// `"1/3" as number`: the number a constant text spells, which the cast is (card fraction-number)
+pub fn spelled_number(node: &Node) -> Option<Node> {
+	let Node::Key(value, Op::As, target) = node.drop_meta() else { return None };
+	let is_number_word = matches!(target.name().to_lowercase().as_str(), "number" | "num");
+	is_number_word.then(|| literal_number(value)).flatten()
 }

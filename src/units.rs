@@ -75,6 +75,95 @@ pub fn is_unit(name: &str) -> bool {
 	unit_named(name).is_some()
 }
 
+/// lib/units.warp's class of quantities whose unit is known only at run time, and the word making one
+pub const RUN_TIME_QUANTITY: &str = "Quantity";
+const RUN_TIME_QUANTITY_WORD: &str = "quantity";
+
+/// A unit written in the program (`1 m`, `5 m/s`, `6 m²`) as the run-time `quantity(1, "m")`, for where it meets one
+/// (card units-mixed)
+pub fn as_run_time_quantity(node: &Node) -> Option<Node> {
+	let (amount, unit) = unit_literal(node)?;
+	Some(run_time_quantity(amount, unit))
+}
+
+fn run_time_quantity(amount: Node, unit: String) -> Node {
+	Node::List(vec![Node::Symbol(RUN_TIME_QUANTITY_WORD.to_string()), amount, Node::Text(unit)], Bracket::Round, Separator::None)
+}
+
+/// `5 m ± 1 cm` in a program the compile-time evaluation cannot answer (arithmetic with it, a function given it) as the
+/// run-time `quantity(5 ± 1/100, "m")`: its amount an interval in the unit of the value (card plus-minus-units). A
+/// tolerance the evaluation answers (`2m ± 5cm`, `1950 AD ± 50 == 1900 - 2000 AD`) stays the compile-time Tolerance
+pub fn lower_run_time_tolerances(program: Node) -> Node {
+	if !has_unit_tolerance(&program) || answers_at_compile_time(&program) {
+		return program;
+	}
+	with_run_time_tolerances(program)
+}
+
+fn has_unit_tolerance(node: &Node) -> bool {
+	match node.drop_meta() {
+		Node::Key(value, Op::PlusMinus, spread) if unit_literal(value).is_some() || unit_literal(spread).is_some() => true,
+		other => children(other).into_iter().any(has_unit_tolerance),
+	}
+}
+
+fn answers_at_compile_time(program: &Node) -> bool {
+	!defines_unit_name(program) && match evaluate(program) {
+		Ok(_) => true,
+		Err(Stop::Error(message)) => !RUN_TIME_TOLERANCE_ERRORS.iter().any(|refusal| message.starts_with(refusal)),
+		Err(Stop::Unsupported) => false,
+	}
+}
+
+fn with_run_time_tolerances(node: Node) -> Node {
+	match node {
+		Node::Key(value, Op::PlusMinus, spread) if unit_literal(&value).is_some() || unit_literal(&spread).is_some() => {
+			run_time_tolerance(&value, &spread).unwrap_or_else(|message| error(&message))
+		}
+		other => other.map_children(with_run_time_tolerances),
+	}
+}
+
+/// `5 m ± 1 cm` is `quantity(5 ± 1/100, "m")`, `5 m ± 1` counts the 1 in m, `5 ± 1 cm` the 5 in cm
+fn run_time_tolerance(value: &Node, spread: &Node) -> Result<Node, String> {
+	let interval = |amount: Node, spread: Node| Node::Key(Box::new(amount), Op::PlusMinus, Box::new(spread));
+	let (amount, unit) = match (unit_literal(value), unit_literal(spread)) {
+		(Some((amount, unit)), Some(_)) => {
+			let (Ok(Value::Quantity(value)), Ok(Value::Quantity(spread))) = (evaluate(value), evaluate(spread)) else { return Err(format!("a tolerance applies to numbers and quantities: {}", spread.serialize())) };
+			aligned(&value, &spread).map_err(|stop| match stop { Stop::Error(message) => message, Stop::Unsupported => "incompatible units".to_string() })?;
+			let unit_of = |factor: &Factor| value.factors.iter().find(|own| own.unit.dimension == factor.unit.dimension).map_or(factor.unit, |own| own.unit);
+			(interval(amount, quotient_node(&spread.amount.mul(&scale(&spread.factors, unit_of)))), unit)
+		}
+		(Some((amount, unit)), None) => (interval(amount, spread.clone()), unit),
+		(None, Some((amount, unit))) => (interval(value.clone(), amount), unit),
+		(None, None) => unreachable!("guarded by has_unit_tolerance"),
+	};
+	Ok(run_time_quantity(amount, unit))
+}
+
+/// `5 m/s` as its amount and unit text: a number times units, then more units multiplied or divided
+fn unit_literal(node: &Node) -> Option<(Node, String)> {
+	match node.drop_meta() {
+		Node::Key(amount, Op::Mul, unit) if matches!(amount.drop_meta(), Node::Number(_)) => Some((amount.drop_meta().clone(), unit_text(unit)?)),
+		Node::Key(literal, op @ (Op::Mul | Op::Div), unit) => {
+			let (amount, written) = unit_literal(literal)?;
+			let joint = if *op == Op::Mul { "·" } else { "/" };
+			Some((amount, format!("{written}{joint}{}", unit_text(unit)?)))
+		}
+		Node::List(items, Bracket::Round, _) if items.len() == 1 => unit_literal(&items[0]),
+		_ => None,
+	}
+}
+
+/// `m`, `m²`: a unit's name, to a power
+fn unit_text(node: &Node) -> Option<String> {
+	match node.drop_meta() {
+		Node::Symbol(name) if is_unit(name) => Some(name.clone()),
+		Node::Key(base, power @ (Op::Square | Op::Cube), _) => Some(format!("{}{power}", unit_text(base)?)),
+		_ => None,
+	}
+}
+
 /// `meters`, `kilogram`: a long name of a quantity's unit; durations (`2 minutes`) belong to the time module
 pub fn is_long_unit_name(name: &str) -> bool {
 	!is_unit(name) && target_unit(&Node::Symbol(name.to_string())).is_some_and(|unit| unit.dimension != Dimension::Time)
@@ -241,6 +330,12 @@ enum Stop {
 }
 
 type Evaluated = Result<Value, Stop>;
+
+/// The refusals of the compile-time evaluation that a run-time quantity answers (lower_run_time_tolerances)
+const TOLERANCE_ARITHMETIC: &str = "arithmetic on a value with tolerance or a range is not supported";
+const WHOLE_TOLERANCE: &str = "a tolerance counts whole numbers";
+const PLAIN_TOLERANCE: &str = "a tolerance applies to numbers and plain quantities";
+const RUN_TIME_TOLERANCE_ERRORS: [&str; 3] = [TOLERANCE_ARITHMETIC, WHOLE_TOLERANCE, PLAIN_TOLERANCE];
 
 fn fail<T>(message: impl Into<String>) -> Result<T, Stop> {
 	Err(Stop::Error(message.into()))
@@ -614,7 +709,7 @@ fn arithmetic(left: Value, op: Op, right: Value) -> Evaluated {
 		(left, Op::Add | Op::Sub | Op::Mul | Op::Div, right) if [&left, &right].iter().all(|value| unitless_number(value))
 			&& [&left, &right].iter().any(|value| matches!(value, Value::Tolerance(_))) => Err(Stop::Unsupported),
 		(Value::Tolerance(_) | Value::Range(_), _, _) | (_, _, Value::Tolerance(_) | Value::Range(_)) => {
-			fail(format!("arithmetic on a value with tolerance or a range is not supported: {op}"))
+			fail(format!("{TOLERANCE_ARITHMETIC}: {op}"))
 		}
 		(left, Op::PlusMinus, right) => tolerance(left, right),
 		(Value::Number(from), Op::Sub, Value::Quantity(end)) if end.single_unit().is_some() => range(from, end),
@@ -819,8 +914,8 @@ fn sum(left: Quantity, op: Op, right: Quantity) -> Evaluated {
 
 /// `1950 ± 50`, `1950 cm ± 50` and `1950 ± 50 cm` all count in the unit that is present
 fn tolerance(center: Value, spread: Value) -> Evaluated {
-	let plain = |quantity: &Quantity| quantity.single_unit().ok_or_else(|| Stop::Error(format!("a tolerance applies to numbers and plain quantities, not {quantity}")));
-	let counted = |amount: &Rational| whole(amount).ok_or_else(|| Stop::Error(format!("a tolerance counts whole numbers, not {amount}")));
+	let plain = |quantity: &Quantity| quantity.single_unit().ok_or_else(|| Stop::Error(format!("{PLAIN_TOLERANCE}, not {quantity}")));
+	let counted = |amount: &Rational| whole(amount).ok_or_else(|| Stop::Error(format!("{WHOLE_TOLERANCE}, not {amount}")));
 	let (value, tolerance, unit) = match (center, spread) {
 		(Value::Number(value), Value::Number(tolerance)) => (value, tolerance, None),
 		(Value::Quantity(value), Value::Number(tolerance)) => (counted(&value.amount)?, tolerance, Some(plain(&value)?)),

@@ -58,6 +58,8 @@ area·square(x)` picks the witness at run time (traits::with_dispatchers; `insta
   values like of object literals, so `p.age` works on a parameter `p:person` and on `first = (sort xs)#1`.
   `in_definition` scopes a definition's parameters over its body (printable's rewrite): `q` of `f(q:V)` is a V there,
   so `str(q)` calls V's text() (card param-text); an untyped parameter hides an outer variable of its name.
+- A program whose value is an instance of a type with text() shows that text, as `str()` gives it (card instance-final,
+  printable.rs rewrite_program); a type without one stays its record `P{x:1}`.
 - `lower_dispatch` (after library_words): `p < q` of known instances is `compare·T(p, q) < 0`, `p == q` is
   `equals·T(p, q) != 0` when T overrides equality, `op(x, …)` is `op·T(x, …)`. `sort`, `<`, `min`/`max` (lowered to `<`)
   and declared operations on a type without the witness are compile errors:

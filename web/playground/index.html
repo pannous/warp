@@ -33,6 +33,7 @@
 	<script src="version.js" onerror="window.PLAYGROUND_VERSION = null"></script>
 	<script src="markup.js"></script>
 	<script src="markup-transitions.js"></script>
+	<script src="assistant.js" defer></script>
 	<script src="playground.js" defer></script>
 	<script src="guide.js" defer></script>
 </head>
@@ -48,6 +49,9 @@
 			<p>Run it on your machine: <code>warp hello.warp</code> <br/>
 				<a href="https://github.com/pannous/warp#install" target="_blank" rel="noopener">get warp</a>
 			</p>
+			<p><label>Anthropic API key, for <code>agent "…"</code>, completion (Ctrl-Space) and Ask ✦:<br/>
+				<input id="api-key" class="api-key" type="password" autocomplete="off" spellcheck="false" placeholder="sk-ant-…"></label><br/>
+				kept in this browser only, sent to api.anthropic.com only</p>
 			<p><a id="build" class="build"></a></p>
 			<p><a id="version" class="version" target="_blank" rel="noopener" hidden></a></p>
 			<div id="silenced" class="silenced" hidden>
@@ -73,6 +77,7 @@
 			<button id="run" title="Ctrl/Cmd-Enter">Run ▶</button>
 			<label><input id="auto" type="checkbox" checked> run while typing</label>
 			<a id="guide-link" class="guide-link" hidden></a>
+			<button id="ask" type="button" title="chat with Claude about this program (needs the API key in the ⋯ menu)">Ask ✦</button>
 		</nav>
 		<section class="editor-pane"><textarea id="code" spellcheck="false"></textarea></section>
 		<div id="editor-resizer" class="resizer rows" role="separator" aria-orientation="horizontal" aria-label="editor height" tabindex="0" title="drag to resize, double-click to reset"></div>
@@ -85,6 +90,10 @@
 			<div id="rendered" class="rendered" hidden></div>
 			<div id="paintings" class="paintings"></div>
 			<ul id="diagnostics" class="diagnostics"></ul>
+		</section>
+		<section id="assistant" class="assistant-pane" hidden>
+			<div id="chat-log" class="chat-log"></div>
+			<form id="chat-form" class="chat-form"><input id="chat-input" placeholder="ask about this program…" aria-label="question"><button>send</button></form>
 		</section>
 	</div>
 </main>
