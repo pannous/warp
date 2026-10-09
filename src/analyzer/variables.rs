@@ -548,7 +548,7 @@ pub fn resolve_main_variable_assignments(program: Node) -> Result<Node, Node> {
 	// a used module's functions never see the program's variables (card module-locals)
 	for function in functions.into_iter().filter(|function| !crate::modules::is_module_definition(&function.name)) {
 		let looped = crate::lowering::for_loop::loop_variables(&function.body);
-		let is_main_variable = |name: &String| main.lookup(name).is_some() && !main.is_global(name)
+		let is_main_variable = |name: &String| !is_compiler_temporary(name) && main.lookup(name).is_some() && !main.is_global(name)
 			&& !function.params.iter().any(|param| param.name == *name) && !declares_local(&function.body, name) && !looped.contains(name);
 		let mut decided: HashSet<&String> = HashSet::new();
 		for (node, name) in find_changes(&function.body, &is_main_variable) {

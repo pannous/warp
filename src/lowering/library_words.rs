@@ -129,15 +129,15 @@ pub fn shallow_flag(argument: &Node) -> Node {
 	}
 }
 
-/// Source of the words expanded here, with their number of arguments; `word_argument` is the receiver, `word_tmp` a
-/// temporary that holds it once, `word_argument_2` … the arguments after the receiver. The words written in warp
+/// Source of the words expanded here, with their number of arguments; `word_argument` is the receiver, `hidden_value` a
+/// temporary that holds it once (each `hidden_x` becomes the temporary `word·x·3`), `word_argument_2` … the arguments after the receiver. The words written in warp
 /// (first, last, round_to, replace, is_digit …) are lib/prelude.warp's; these three the emitter dispatches on
 const EXPANDED_WORDS: [(&str, usize, &str); 3] = [
 	// Python's `list(x)`: the list itself, a text's characters
-	(LIST_WORD, 1, "word_tmp as list"),
-	(SUM, 1, "(word_sum=0; for word_item in word_tmp {word_sum = word_sum + word_item}; word_sum)"),
+	(LIST_WORD, 1, "hidden_value as list"),
+	(SUM, 1, "(hidden_sum=0; for hidden_item in hidden_value {hidden_sum = hidden_sum + hidden_item}; hidden_sum)"),
 	// `x!` (mutation.rs): the value, a loud error when it is ø; an Error value stays that Error
-	(crate::mutation::UNWRAP, 1, "if word_tmp == ø then error(\"unwrapped ø\") else word_tmp"),
+	(crate::mutation::UNWRAP, 1, "if hidden_value == ø then error(\"unwrapped ø\") else hidden_value"),
 ];
 const IS_DIGIT: &str = "is_digit";
 const LIST_WORD: &str = "list";
@@ -150,7 +150,9 @@ const LIST_CONSTRUCTORS: [&str; 4] = ["listOf", "mutableListOf", "arrayOf", "arr
 const ARITY_VARIANTS: [(&str, usize, &str); 3] = [("round", 2, "round_to"), ("first", 2, "first_items"), ("last", 2, "last_items")];
 const IS_ALPHA: &str = "is_alpha";
 /// Hidden variables and placeholders of the `try`/`assert` templates
-const TRY_TEMPORARY: &str = "try_tmp";
+/// `try_tmp_value` of a try template becomes the temporary `try·value·3`
+const TRY_TEMPORARY: &str = "try_tmp_";
+const TRY_BASE: &str = "try";
 const TRY_VALUE_PLACEHOLDER: &str = "try_placeholder_value";
 const TRY_FALLBACK_PLACEHOLDER: &str = "try_placeholder_fallback";
 const LIST_PLACEHOLDER: &str = "try_placeholder_list";
@@ -160,7 +162,7 @@ const DIVISOR_PLACEHOLDER: &str = "try_placeholder_divisor";
 const ASSERT_CONDITION_PLACEHOLDER: &str = "assert_placeholder_condition";
 const LEFT_OPERAND_PLACEHOLDER: &str = "operand_placeholder_left";
 const RIGHT_OPERAND_PLACEHOLDER: &str = "operand_placeholder_right";
-const OPERAND_TEMPORARY: &str = "operand_tmp";
+const OPERAND_TEMPORARY: &str = "operand";
 /// The variable holding a list while one of its elements changes: `place·0`
 const PLACE_TEMPORARY: &str = "place·";
 /// values_similar(a, b, tolerance): `a ≈ b` (wasm_emitter/similarity.rs)
@@ -177,7 +179,11 @@ pub fn is_similarity_call(name: &str) -> bool {
 pub const SIMILARITY_LEVELS: [(Op, &str, &str, &str); 2] = [(Op::Similar, VALUES_SIMILAR, "tolerance", "1e-9"), (Op::Rough, VALUES_ROUGH, "rough_tolerance", "0.01")];
 const RECEIVER_PLACEHOLDER: &str = "word_argument";
 const LOOKUP_PLACEHOLDER: &str = "word_lookup";
-const TEMPORARY: &str = "word_tmp";
+const TEMPORARY: &str = "hidden_value";
+const HIDDEN_PREFIX: &str = "hidden_";
+const WORD_BASE: &str = "word";
+const SAFE_PREFIX: &str = "safe_tmp_";
+const SAFE_BASE: &str = "safe";
 
 /// Library words whose result is always a text, and those whose result is always a list
 const TEXT_RESULT_WORDS: [&str; 4] = ["upper", "lower", "trim", "join"];
@@ -778,7 +784,7 @@ impl Lowering {
 		if crate::min_max::is_plain(&operand) {
 			return operand;
 		}
-		let temporary = Node::Symbol(format!("{OPERAND_TEMPORARY}_{}", self.next_temporary()));
+		let temporary = Node::Symbol(temporary_name(&[OPERAND_TEMPORARY, &self.next_temporary().to_string()]));
 		bindings.push(Node::Key(Box::new(temporary.clone()), Op::Assign, Box::new(operand)));
 		temporary
 	}
@@ -1091,9 +1097,9 @@ impl Lowering {
 		let Node::Symbol(name) = word.drop_meta() else {
 			return Diagnostic::at(&word, "?. needs a field name after it").into_error();
 		};
-		let temporary = format!("safe_tmp_{}", self.next_temporary());
-		let program = parse(&format!("({temporary}={RECEIVER_PLACEHOLDER}; if {temporary} == ø then ø else {LOOKUP_PLACEHOLDER})"));
-		let lookup = field_lookup(&Node::Symbol(temporary), name, &word);
+		let number = self.next_temporary();
+		let program = named_apart(parse(&format!("({SAFE_PREFIX}value={RECEIVER_PLACEHOLDER}; if {SAFE_PREFIX}value == ø then ø else {LOOKUP_PLACEHOLDER})")), SAFE_PREFIX, SAFE_BASE, number);
+		let lookup = field_lookup(&Node::Symbol(temporary_name(&[SAFE_BASE, "value", &number.to_string()])), name, &word);
 		substitute(substitute(program, RECEIVER_PLACEHOLDER, &receiver), LOOKUP_PLACEHOLDER, &lookup)
 	}
 
@@ -1180,9 +1186,7 @@ impl Lowering {
 
 	/// A source template with `hidden` variables made unique, its placeholders replaced by the given nodes
 	fn instantiate_template(&self, template: &str, replacements: &[(&str, &Node)]) -> Node {
-		let number = self.temporaries.get();
-		self.temporaries.set(number + 1);
-		let mut program = parse(&template.replace(TRY_TEMPORARY, &format!("{TRY_TEMPORARY}_{number}")));
+		let mut program = named_apart(parse(template), TRY_TEMPORARY, TRY_BASE, self.next_temporary());
 		for (placeholder, replacement) in replacements {
 			program = substitute(program, placeholder, replacement);
 		}
@@ -1251,11 +1255,7 @@ impl Lowering {
 
 	/// The template of an expanded word with the receiver (held once in a temporary) and the further arguments in place
 	fn expanded(&self, template: &str, arguments: Vec<Node>) -> Node {
-		let number = self.temporaries.get();
-		self.temporaries.set(number + 1);
-		let temporary = format!("{TEMPORARY}_{number}");
-		let body = template.replace(TEMPORARY, &temporary);
-		let program = parse(&format!("({temporary}={RECEIVER_PLACEHOLDER}; {body})"));
+		let program = named_apart(parse(&format!("({TEMPORARY}={RECEIVER_PLACEHOLDER}; {template})")), HIDDEN_PREFIX, WORD_BASE, self.next_temporary());
 		arguments.iter().enumerate().fold(program, |program, (index, argument)| {
 			let placeholder = if index == 0 { RECEIVER_PLACEHOLDER.to_string() } else { format!("{RECEIVER_PLACEHOLDER}_{}", index + 1) };
 			substitute(program, &placeholder, argument)
@@ -1284,6 +1284,20 @@ fn with_first_comparand(node: Node, replace: &dyn Fn(Node) -> Node) -> Node {
 		Node::Key(left, op, right) if op.is_comparison() || op.is_logical() => Node::Key(Box::new(with_first_comparand(*left, replace)), op, right),
 		Node::Meta { node, data } if is_comparison(&node) => Node::Meta { node: Box::new(with_first_comparand(*node, replace)), data },
 		operand => replace(operand),
+	}
+}
+
+/// A compiler temporary's name, `word·sum·3`: the program never writes `·` in a name (`a·b` is a product), so the
+/// scope checks pass it by (analyzer::is_compiler_temporary)
+pub(crate) fn temporary_name(parts: &[&str]) -> String {
+	parts.join(crate::analyzer::TEMPORARY_SEPARATOR)
+}
+
+/// A parsed template's temporaries named apart: `prefix_part` becomes `base·part·number`
+pub(crate) fn named_apart(node: Node, prefix: &str, base: &str, number: usize) -> Node {
+	match node {
+		Node::Symbol(name) if name.starts_with(prefix) => Node::Symbol(temporary_name(&[base, &name[prefix.len()..], &number.to_string()])),
+		other => other.map_children(|child| named_apart(child, prefix, base, number)),
 	}
 }
 

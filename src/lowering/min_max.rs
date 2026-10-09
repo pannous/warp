@@ -11,7 +11,10 @@ use crate::operators::Op;
 
 const EXTREMA: [(&str, Op); 2] = [("min", Op::Lt), ("max", Op::Gt)];
 const MIN_ARGUMENTS: usize = 2;
-const TEMPORARY_PREFIX: &str = "extremum_argument_";
+const TEMPORARY_BASE: &str = "extremum";
+/// `extremum_best` of the runtime fold becomes the temporary `extremum·best·3`
+const FOLD_PREFIX: &str = "extremum_";
+const FOLD_LIST: &str = "fold_list_placeholder";
 
 /// Pseudo-call the emitter turns into the runtime error `<extremum> of an empty list`
 pub const EMPTY_EXTREMUM_CALL: &str = "empty_extremum";
@@ -73,12 +76,12 @@ impl Lowering<'_> {
 		let arguments = listed.unwrap_or(&items[1..]);
 		if let ([list], None) = (arguments, listed) {
 			return Some(match list.drop_meta() {
-				Node::Symbol(list) => fold_list_at_runtime(name, list, &better),
+				Node::Symbol(_) => self.fold_list_at_runtime(name, list, &better),
 				value if is_plain(value) => Diagnostic::at(&items[0], format!("{name} takes at least {MIN_ARGUMENTS} arguments or one list, got 1")).into_error(),
 				_ => {
-					let temporary = self.temporary();
-					let binding = Node::Key(Box::new(Node::Symbol(temporary.clone())), Op::Assign, Box::new(list.clone()));
-					with_bindings(vec![binding], fold_list_at_runtime(name, &temporary, &better))
+					let temporary = Node::Symbol(self.temporary());
+					let binding = Node::Key(Box::new(temporary.clone()), Op::Assign, Box::new(list.clone()));
+					with_bindings(vec![binding], self.fold_list_at_runtime(name, &temporary, &better))
 				}
 			});
 		}
@@ -119,9 +122,18 @@ impl Lowering<'_> {
 		(bindings, operands)
 	}
 
+	/// `max(xs)` for a list variable: the first item, improved by every later one; an empty list is an error
+	fn fold_list_at_runtime(&mut self, name: &str, list: &Node, better: &Op) -> Node {
+		self.temporaries += 1;
+		let template = parse(&format!(
+			"(if count({FOLD_LIST}) == 0 then {EMPTY_EXTREMUM_CALL}({name}) else ({FOLD_PREFIX}best={FOLD_LIST}#1; for {FOLD_PREFIX}item in {FOLD_LIST} {{ {FOLD_PREFIX}best = if {FOLD_PREFIX}item {better} {FOLD_PREFIX}best then {FOLD_PREFIX}item else {FOLD_PREFIX}best }}; {FOLD_PREFIX}best))"
+		));
+		crate::library_words::substitute(crate::library_words::named_apart(template, FOLD_PREFIX, TEMPORARY_BASE, self.temporaries), FOLD_LIST, list)
+	}
+
 	fn temporary(&mut self) -> String {
 		self.temporaries += 1;
-		format!("{TEMPORARY_PREFIX}{}", self.temporaries)
+		crate::library_words::temporary_name(&[TEMPORARY_BASE, "argument", &self.temporaries.to_string()])
 	}
 }
 
@@ -146,12 +158,6 @@ fn list_literal_items(arguments: &[Node]) -> Option<&[Node]> {
 	}
 }
 
-/// `max(xs)` for a list variable: the first item, improved by every later one; an empty list is an error
-fn fold_list_at_runtime(name: &str, list: &str, better: &Op) -> Node {
-	parse(&format!(
-		"(if count({list}) == 0 then {EMPTY_EXTREMUM_CALL}({name}) else (extremum_best={list}#1; for extremum_item in {list} {{ extremum_best = if extremum_item {better} extremum_best then extremum_item else extremum_best }}; extremum_best))"
-	))
-}
 
 /// A value or arithmetic on values: cheap and side-effect free to repeat in the comparisons
 pub(crate) fn is_plain(node: &Node) -> bool {
