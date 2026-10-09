@@ -19,6 +19,10 @@ const PENDING_VALUE = "…"; // the value shown from Run until the new one arriv
 const DEFAULT_EXAMPLE = "hello";
 const COMMIT_URL = "https://github.com/pannous/warp/commit/";
 const SHORT_COMMIT = 9;
+// terminal codes in printed text (`print "\e[H"`, samples/game_of_life.warp): clearing the screen or moving the cursor
+// home starts the text anew, the other codes (colors, cursor moves) are dropped
+const TERMINAL_RESTART = /\x1b\[(?:2J|H|1;1H)/g;
+const TERMINAL_CODE = /\x1b\[[0-9;?]*[A-Za-z]/g;
 const EXAMPLE_PARAMETERS = ["example", "sample"]; // ?example=fizzbuzz (or #fizzbuzz) picks a tour example or sample; the address shows the chosen one as #fizzbuzz
 const DEBUG_PARAMETER = "debug"; // ?debug runs warp.debug.wasm: Rust names and lines in traces and the debugger
 const DEBUG_COMPILER = "warp.debug.wasm";
@@ -570,8 +574,14 @@ function clickDetail(click) {
 	return { x: Math.floor((click.clientX - bounds.left) * scale), y: Math.floor((click.clientY - bounds.top) * scale) };
 }
 
+function terminalText(text) {
+	const restarts = [...text.matchAll(TERMINAL_RESTART)];
+	const last = restarts.at(-1);
+	return (last ? text.slice(last.index + last[0].length) : text).replace(TERMINAL_CODE, "");
+}
+
 function showPrinted(chunks) {
-	const printed = chunks.map(chunk => chunk.stream === STDERR ? "" : chunk.text).join("");
+	const printed = terminalText(chunks.map(chunk => chunk.stream === STDERR ? "" : chunk.text).join(""));
 	$("printed").textContent = printed;
 	$("printed").hidden = printed === "";
 }
@@ -579,7 +589,7 @@ function showPrinted(chunks) {
 // what a handler printed, painted and gave, while no run is pending
 function showEventOutput(data) {
 	if (data.type === "print" && data.stream !== STDERR) {
-		$("printed").textContent += data.text;
+		$("printed").textContent = terminalText($("printed").textContent + data.text);
 		$("printed").hidden = false;
 	}
 	if (data.type === "paint") showPaintings([data]);
