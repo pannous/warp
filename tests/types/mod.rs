@@ -118,5 +118,7 @@ mod test_loop_text_arithmetic;
 mod test_cyclic_objects; // card orm: objects pointing to each other
 mod test_field_named_like_builtin; // cards field-named-size, orm-members-word
 mod test_cycle_mark_depth; // card cycle-mark-depth
+mod test_fraction_text;
+mod test_empty_literal_kind;
 mod test_as_number_variable; // card number-variable
 mod test_method_result_text; // card instance-result
