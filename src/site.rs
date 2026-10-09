@@ -8,7 +8,7 @@
 use crate::node::Node;
 pub use crate::host_parts::{HostPart, Script, HOST_PARTS};
 pub(crate) use crate::host_parts::{exports, host_scripts_of, imports_of, message_of, with_excerpt, TASK_WORD_PREFIXES};
-use crate::host::HOST_LIBRARY;
+use crate::host::{FOREIGN_CALL, HOST_LIBRARY};
 use std::path::{Path, PathBuf};
 
 const PAGE_FILE: &str = "index.html";
