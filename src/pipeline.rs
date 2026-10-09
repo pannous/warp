@@ -114,6 +114,8 @@ thread_local! {
 	/// whether it is for `warp dev`, whose page keeps the program's state across reloads
 	static FOR_DEV: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
 	static RENDERS_ITSELF: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+	/// whether the program compiled now ends in the print of its value that compile_printing_result added
+	static PRINTS_RESULT: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
 	/// whether the page is compiled to render its first HTML where the server's code is (site.rs, headless.rs)
 	static PRERENDERING: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
 	/// the values the page's calls of server functions gave its prerender, the shipped page's first values
@@ -443,8 +445,18 @@ pub fn compile(code: &str) -> Result<CompiledModule, Node> {
 /// compile for a standalone executable (`warp build`): the program prints its value at the end, as `warp <file>`
 /// shows it, since nobody reads the result of an executable
 pub fn compile_printing_result(code: &str) -> Result<CompiledModule, Node> {
+	PRINTS_RESULT.with(|prints| prints.set(false));
 	// the routes first: a program ending with a route prints the page its path shows, not the route statement
-	compile_program(code, |program| printing_result(crate::routes::lower(program)))
+	let compiled = compile_program(code, |program| printing_result(crate::routes::lower(program)));
+	PRINTS_RESULT.with(|prints| prints.set(false));
+	compiled
+}
+
+/// Whether the program compiled now ends in the print of its value that compile_printing_result added: that print
+/// shows nothing for ø (a loop or a call that gives nothing), as `warp <file>` shows nothing; a print of the program's
+/// own prints ø
+pub fn prints_result() -> bool {
+	PRINTS_RESULT.with(|prints| prints.get())
 }
 
 fn compile_program(code: &str, rewrite: fn(Node) -> Node) -> Result<CompiledModule, Node> {
@@ -472,7 +484,10 @@ fn printing_result(program: Node) -> Node {
 		}
 		Node::Empty => Node::Empty,
 		statement if crate::modules::is_declaration(&statement) || crate::warp_parser::starts_print(&statement) => statement,
-		value => crate::warp_parser::print_call([value]),
+		value => {
+			PRINTS_RESULT.with(|prints| prints.set(true));
+			crate::warp_parser::print_call([value])
+		}
 	}
 }
 

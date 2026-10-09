@@ -176,6 +176,10 @@ impl WasmGcEmitter {
 		}
 		let Node::Symbol(word) = items[0].drop_meta() else { return false };
 		match word.as_str() {
+			PRINT if items.as_ptr() as usize == self.result_print => {
+				self.emit_result_print(func, &printed_value(items, bracket));
+				return true;
+			}
 			PRINT => {
 				self.emit_print(func, &printed_value(items, bracket));
 				return true;

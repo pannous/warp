@@ -80,6 +80,26 @@ impl WasmGcEmitter {
 		self.emit_call(func, "new_empty");
 	}
 
+	/// The print of the program's value an executable ends with (pipeline::prints_result): as emit_print, but a value
+	/// only known at run time shows nothing when it is ø, as `warp <file>` shows nothing then
+	pub(super) fn emit_result_print(&mut self, func: &mut Function, value: &Node) {
+		if !matches!(self.get_type(value), Kind::List | Kind::Key | Kind::Symbol | Kind::Empty | Kind::Data) {
+			return self.emit_print(func, value);
+		}
+		let held = self.emit_dynamic_text(func, value);
+		let node_type = self.type_manager.node_type;
+		let consumes_text = self.type_manager.function_type(vec![ValType::Ref(self.node_ref(false))], vec![]);
+		Self::emit_list(func, &[I::LocalGet(held), I::StructGet { struct_type_index: node_type, field_index: 0 }]);
+		Self::emit_list(func, &[I::I64Const(crate::type_kinds::KIND_MASK), I::I64And, I::I64Const(Kind::Empty as i64), I::I64Eq]);
+		func.instruction(&I::If(BlockType::FunctionType(consumes_text)));
+		func.instruction(&I::Drop);
+		func.instruction(&I::Else);
+		self.emit_call(func, PRINT_VALUE);
+		func.instruction(&I::Drop);
+		func.instruction(&I::End);
+		self.emit_call(func, "new_empty");
+	}
+
 	fn emit_print_literal(&mut self, func: &mut Function, text: &str) {
 		self.emit_wasi_puts(func, &Node::Text(format!("{text}{PRINT_TERMINATOR}")));
 		func.instruction(&I::Drop);

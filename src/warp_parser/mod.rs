@@ -174,7 +174,7 @@ fn is_print_word(node: &Node) -> bool {
 /// `print` or the call `print(…)`: a print statement starts here
 pub(crate) fn starts_print(node: &Node) -> bool {
 	match node.drop_meta() {
-		Node::List(items, Bracket::Round, _) => items.first().is_some_and(is_print_word),
+		Node::List(items, Bracket::Round, _) | Node::List(items, Bracket::None, Separator::Space) => items.first().is_some_and(is_print_word),
 		other => is_print_word(other),
 	}
 }
