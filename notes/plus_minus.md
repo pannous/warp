@@ -73,8 +73,11 @@ a copy `f_Quantity(x:Quantity)` for the quantity (card mixed-arguments, class_me
   the field. A plain Int/Float reads as the exact interval [x, x] (uncertain_field).
 - `sum([5 m ± 1 cm, 3 m ± 2 cm])`: a literal list of run-time quantities folds `reduce((s, i) => s.plus(i))`.
 - `Rope(5 m ± 1 cm)` of a unit field: unit_fields::written_quantity reads `quantity(a, "m")` back as `a * m`.
-- A Gaussian quantity shows `12.00 ± 0.60σ m`; a field type `m ± 1 mm` is a loud "not supported yet" (meaning open:
-  card field-tolerance). Gaps filed: quantity-final, str-inline, quantity-sum, number-param.
+- A Gaussian quantity shows `12.00 ± 0.60σ m`.
+- A field type with a tolerance (P233, card field-tolerance): `class Part{length: m ± 1 mm}`, `Part(5 m).length` is
+  `5.0000 ± 0.0010m`; unit_fields::lower_field_tolerances (a source pass before lower_run_time_tolerances) writes the
+  spread into each construction (`Part(5 m)`, `Part{length: 5 m}`) and leaves the field type `m`; a value given with its
+  own tolerance keeps it. Gaps filed: quantity-final, str-inline, quantity-sum, number-param.
 
 ## Gaussian ± (card plus-minus-gaussian, 2026-10-09)
 `5 ± 1σ` or `5 ± 1 σ` (the spread times the symbol σ, joined like a unit word: card trailing-symbol) is a Gaussian: one standard deviation; a bare `5 ± 1` stays an

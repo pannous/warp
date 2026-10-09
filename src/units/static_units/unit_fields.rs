@@ -25,19 +25,77 @@ pub(super) fn unit_classes(program: &Node) -> HashMap<String, Fields> {
 	}).collect()
 }
 
-/// `class Part{length: m ± 1 mm}`: a field type with a tolerance, which no class field holds yet (the tolerance goes in
-/// the value, `Part(5 m ± 1 mm)`); loud, as dropping it would leave a plain `m` (card quantity-tolerance)
-pub(super) fn field_tolerance(program: &Node) -> Option<String> {
-	let mut found = None;
+/// Each field typed with a tolerance (`length: m ± 1 mm`) by class: its position among the fields, its name, its spread
+type Tolerances = HashMap<String, Vec<(usize, String, Node)>>;
+
+/// `class Part{length: m ± 1 mm}`: the value carries the tolerance (user decision P233): `Part(5 m)` holds `5 m ± 1 mm`
+/// (a run-time quantity, lower_run_time_tolerances runs next), a value given with its own tolerance keeps it, and the
+/// field type is the plain unit
+pub(crate) fn lower_field_tolerances(program: Node) -> Node {
+	let tolerances = field_tolerances(&program);
+	if tolerances.is_empty() {
+		return program;
+	}
+	with_field_tolerances(program, &tolerances)
+}
+
+fn field_tolerances(program: &Node) -> Tolerances {
+	let fields = crate::class_methods::class_fields(program);
+	let mut tolerances = Tolerances::new();
 	program.visit(&mut |node| if let Node::Type { name, body } = node {
-		body.visit(&mut |member| if let Node::Key(field, Op::Colon, type_name) = member {
-			let is_unit_type = |unit: &Node| crate::units::unit_expression(unit).is_some();
-			if found.is_none() && matches!(type_name.drop_meta(), Node::Key(unit, Op::PlusMinus, _) if is_unit_type(unit)) {
-				found = Some(format!("{}.{}: {}", name.drop_meta().name(), field.drop_meta().name(), type_name.serialize().trim()));
+		let class = name.drop_meta().name();
+		body.visit(&mut |member| if let Some((field, _, spread)) = tolerance_parts(member) {
+			let position = fields.get(&class).and_then(|fields| fields.iter().position(|(name, _)| *name == field));
+			if let Some(position) = position {
+				tolerances.entry(class.clone()).or_default().push((position, field, spread.clone()));
 			}
 		});
 	});
-	found
+	tolerances
+}
+
+/// `length: m ± 1 mm`: the field name, its unit and its spread
+fn tolerance_parts(member: &Node) -> Option<(String, &Node, &Node)> {
+	let Node::Key(field, Op::Colon, type_name) = member.drop_meta() else { return None };
+	match type_name.drop_meta() {
+		Node::Key(unit, Op::PlusMinus, spread) if crate::units::unit_expression(unit).is_some() => Some((field.drop_meta().name(), unit, spread)),
+		_ => None,
+	}
+}
+
+fn with_field_tolerances(node: Node, tolerances: &Tolerances) -> Node {
+	let toleranced = |value: Node, spread: &Node| match value.drop_meta() {
+		Node::Key(_, Op::PlusMinus, _) => value,
+		_ => Node::Key(Box::new(value), Op::PlusMinus, Box::new(spread.clone())),
+	};
+	let class_tolerances = |class: &Node| tolerances.get(&class.drop_meta().name());
+	match node {
+		Node::Type { name, body } => Node::Type { name, body: Box::new(body.map_children(|member| match tolerance_parts(&member) {
+			Some((field, unit, _)) => Node::Key(Box::new(Node::Symbol(field)), Op::Colon, Box::new(unit.clone())),
+			None => member,
+		})) },
+		Node::List(items, Bracket::Round, separator) if items.first().and_then(class_tolerances).is_some() => {
+			let fields = class_tolerances(&items[0]).unwrap();
+			let items = items.into_iter().enumerate().map(|(index, item)| {
+				let tolerance = fields.iter().find(|(position, _, _)| index == position + 1);
+				let item = with_field_tolerances(item, tolerances);
+				tolerance.map_or(item.clone(), |(_, _, spread)| toleranced(item, spread))
+			});
+			Node::List(items.collect(), Bracket::Round, separator)
+		}
+		Node::Key(class, op @ (Op::Colon | Op::None), body) if class_tolerances(&class).is_some() && matches!(body.drop_meta(), Node::List(_, Bracket::Curly, _)) => {
+			let fields = class_tolerances(&class).unwrap();
+			let body = body.map_children(|entry| match entry.drop_meta() {
+				Node::Key(field, entry_op, value) => match fields.iter().find(|(_, name, _)| *name == field.drop_meta().name()) {
+					Some((_, _, spread)) => Node::Key(field.clone(), *entry_op, Box::new(toleranced(with_field_tolerances(*value.clone(), tolerances), spread))),
+					None => with_field_tolerances(entry, tolerances),
+				},
+				_ => with_field_tolerances(entry, tolerances),
+			});
+			Node::Key(class, op, Box::new(body))
+		}
+		other => other.map_children(|child| with_field_tolerances(child, tolerances)),
+	}
 }
 
 /// The units the program's unit fields are written in: `distance: km` shows km like a written `5 km`

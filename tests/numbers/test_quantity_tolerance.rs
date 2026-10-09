@@ -36,8 +36,11 @@ fn a_unit_field_takes_a_quantity_with_tolerance() {
 }
 
 #[test]
-fn a_field_type_with_tolerance_is_loud() {
-	fails_with("class Part{length: m ± 1 mm}\np = Part(5 m)\np.length", "not supported yet");
+fn a_field_type_with_tolerance_gives_its_values_the_tolerance() {
+	const PART: &str = "class Part{length: m ± 1 mm}\n";
+	assert_eq!(shown(&format!("{PART}p = Part(5 m)\nstr(p.length)")), "5.0000 ± 0.0010m");
+	assert_eq!(shown(&format!("{PART}p = Part{{length: 5 m}}\nstr(p.length)")), "5.0000 ± 0.0010m");
+	assert_eq!(shown(&format!("{PART}p = Part(5 m ± 1 cm)\nstr(p.length)")), "5.000 ± 0.010m");
 }
 
 #[test]

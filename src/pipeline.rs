@@ -257,7 +257,7 @@ pub struct CompiledModule {
 
 /// The passes over the source forms, in order, each reading what the one before it left: definitions and sugar become
 /// the forms every later pass knows (`def f(x) {…}` is `f(x) := {…}`), modules are resolved
-const SOURCE_PASSES: [fn(Node) -> Node; 95] = [
+const SOURCE_PASSES: [fn(Node) -> Node; 96] = [
 	// `"a \(x) b"` → `"a " + text_form(x) + " b"` (interpolation.rs) first, so every pass reads the holes as code
 	crate::interpolation::lower_program,
 	crate::analyzer::lower_inline_unions,
@@ -311,6 +311,8 @@ const SOURCE_PASSES: [fn(Node) -> Node; 95] = [
 	crate::lowering::file_declarations::lower,
 	// `60 mph` is `60 mi/h`, `q as km/h` converts to km/h, before any units pass reads them
 	crate::units::lower_unit_words,
+	// `class Part{length: m ± 1 mm}`: `Part(5 m)` holds `5 m ± 1 mm` (unit_fields.rs), a tolerance the next pass reads
+	crate::units::static_units::lower_field_tolerances,
 	// `5 m ± 1 cm; x * 2`: a run-time quantity with an interval amount (units.rs), before the units module is loaded for it
 	crate::units::lower_run_time_tolerances,
 	crate::modules::insert_module_classes,
