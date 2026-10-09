@@ -16,7 +16,7 @@ fn test_timeout_protection() {
 // DONE: separator precedence creates nested groups, needs flattening for WIT
 pub fn test_wit_parse() {
 	// loop {} // Should be killed at .1
-	let ast = parse_file("warp-ast.wit");
+	let ast = parse_file("samples/wit/warp-ast.wit");
 	println!("serialize: {:#?}", ast.serialize());
 	if let List(ref items, _, _) = ast {
 		for (i, item) in items.iter().enumerate() {
