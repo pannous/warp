@@ -1,0 +1,1 @@
+use math;for i in 0…15:print " "*(15-i)+(0…i).map(j=>choose(i,j)%2?"▲":" ").join(" ")

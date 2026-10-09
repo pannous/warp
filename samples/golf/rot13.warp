@@ -1,0 +1,11 @@
+// code.golf rot13: each argument with every letter 13 places further in the alphabet, wrapping around
+use os
+def rotated(c)
+	for first in ['a', 'A']:
+		place = ord(c) - ord(first)
+		if place >= 0 and place < 26:
+			code = (place + 13) % 26 + ord(first)
+			return chr(code)
+	c
+for words in args:
+	print chars(words).map(rotated).join("")

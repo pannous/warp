@@ -1,0 +1,4 @@
+// code.golf prime-numbers: the primes from 1 to 100
+use math
+for n in 1 to 100:
+	if is_prime(n) then print n

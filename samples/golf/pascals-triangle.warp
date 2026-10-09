@@ -1,0 +1,4 @@
+// code.golf pascals-triangle: the first 20 rows of binomial coefficients
+use math
+for row in 0 to 19:
+	print (0 to row).map(k => choose(row, k)).join(" ")

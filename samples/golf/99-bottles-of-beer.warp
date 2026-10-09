@@ -1,0 +1,7 @@
+// code.golf 99-bottles-of-beer: the song's verses from 99 bottles down to none, then back to the store
+def bottles(n) := (n == 0 ? "no more" : "\(n)") + " bottle" + (n == 1 ? "" : "s") + " of beer"
+for n in 99 down to 1:
+	print "\(bottles(n)) on the wall, \(bottles(n))."
+	print "Take one down and pass it around, \(bottles(n - 1)) on the wall.\n"
+print "No more bottles of beer on the wall, no more bottles of beer."
+print "Go to the store and buy some more, 99 bottles of beer on the wall."

@@ -1,0 +1,1 @@
+b(n):=(n?"\(n)":"no more")+" bottle"+(n-1?"s":"")+" of beer";w=" on the wall";for n in 99 down to 1:print "\(b(n))\(w), \(b(n)).\nTake one down and pass it around, \(b(n-1))\(w).\n";print "No more bottles of beer\(w), no more bottles of beer.\nGo to the store and buy some more, \(b(99))\(w)."

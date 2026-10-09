@@ -1,0 +1,1 @@
+use os;for args:print chars(it).map(c=>{o=ord(c);b=o<97?65:97;x=(o-b+13)%26+b;o-b<26&&o>=b?chr(x):c}).join("")

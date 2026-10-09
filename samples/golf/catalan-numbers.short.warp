@@ -1,0 +1,1 @@
+use math;for 0…99:print choose(2*it,it)/(it+1)
