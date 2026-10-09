@@ -26,10 +26,14 @@ const TEXT_UNIT_USERS: [&str; 7] =
 	["node_count", "node_bytes", "string_char_at", "node_with_at", "text_byte_count", "text_codepoint_count", "text_grapheme_count"];
 
 /// The globals of the list cursor (emit_list_cursor_globals): the list indexed last, the cell and index found there, the
-/// list counted last and its count
+/// list counted last and its count, the list extended last and its last cell
 #[derive(Clone, Copy)]
-enum CursorPart { List, Cell, Index, Counted, Count }
-const LIST_CURSOR_PARTS: [CursorPart; 5] = [CursorPart::List, CursorPart::Cell, CursorPart::Index, CursorPart::Counted, CursorPart::Count];
+enum CursorPart { List, Cell, Index, Counted, Count, Extended, Last }
+const LIST_CURSOR_PARTS: [CursorPart; 7] =
+	[CursorPart::List, CursorPart::Cell, CursorPart::Index, CursorPart::Counted, CursorPart::Count, CursorPart::Extended, CursorPart::Last];
+/// An index or count up to this leaves the cursor where it is: a short list read inside a loop (a row's `row#4`, its
+/// `#row`) takes few links from its head anyway, and the loop's long list keeps its cursor, or each step walks it again
+const SHORT_WALK: i64 = 8;
 
 /// The locals of a copy of a list's first cells (emit_collect_cells, emit_rebuild_cells), consecutive from `cell`
 pub(super) struct CopyCells {
@@ -73,9 +77,10 @@ impl WasmGcEmitter {
 	/// The cursor of list_at, list_node_at and node_count: the list, cell and index found last, so a walk on from it (a
 	/// loop's `items#(i+1)` after `items#i`) takes the links between, not all from the head; and the list counted last
 	/// with its count (a loop's `index < #items`). A function changing a list's links in place forgets both
-	/// (forget_list_cursor). Globals in the order of LIST_CURSOR_PARTS.
+	/// (forget_list_cursor). The list extended last and its last cell, so a loop's `out += [x]` appends there instead of
+	/// walking the list. Globals in the order of LIST_CURSOR_PARTS.
 	pub(super) fn emit_list_cursor_globals(&mut self) {
-		if !["list_at", "list_node_at", "node_count"].iter().any(|function| self.should_emit_function(function)) {
+		if !["list_at", "list_node_at", "node_count", LIST_EXTEND].iter().any(|function| self.should_emit_function(function)) {
 			return;
 		}
 		let node_type = self.type_manager.node_type;
@@ -97,8 +102,12 @@ impl WasmGcEmitter {
 
 	/// The instructions forgetting the list cursor, before a list's links change in place
 	pub(super) fn forget_list_cursor(&self) -> Vec<Instruction<'static>> {
+		self.forget_cursor_parts(&[CursorPart::List, CursorPart::Counted, CursorPart::Extended])
+	}
+
+	fn forget_cursor_parts(&self, parts: &[CursorPart]) -> Vec<Instruction<'static>> {
 		let forget = |global: u32| [I::RefNull(HeapType::Concrete(self.type_manager.node_type)), I::GlobalSet(global)];
-		[CursorPart::List, CursorPart::Counted].into_iter().filter_map(|part| self.list_cursor(part)).flat_map(forget).collect()
+		parts.iter().filter_map(|part| self.list_cursor(*part)).flat_map(forget).collect()
 	}
 
 	/// list_at and list_node_at: the element of a cons list at a 1-based index
@@ -297,7 +306,8 @@ impl WasmGcEmitter {
 				func.instruction(&I::End); // end block
 
 				if let (Some(counted), Some(count)) = (s.list_cursor(CursorPart::Counted), s.list_cursor(CursorPart::Count)) {
-					Self::emit_list(func, &[I::LocalGet(0), I::GlobalSet(counted), I::LocalGet(1), I::GlobalSet(count)]);
+					Self::emit_list(func, &[I::LocalGet(1), I::I64Const(SHORT_WALK), I::I64GtS, I::If(BlockType::Empty),
+						I::LocalGet(0), I::GlobalSet(counted), I::LocalGet(1), I::GlobalSet(count), I::End]);
 				}
 				// return count
 				func.instruction(&I::LocalGet(1));
@@ -1187,7 +1197,8 @@ impl WasmGcEmitter {
 		self.call(func, super::equality::IS_META_ENTRY);
 		self.emit_fail_out_of_range_if(func, asked);
 		if let (Some(list), Some(cell), Some(index)) = (self.list_cursor(CursorPart::List), self.list_cursor(CursorPart::Cell), self.list_cursor(CursorPart::Index)) {
-			Self::emit_list(func, &[I::LocalGet(0), I::GlobalSet(list), I::LocalGet(current), I::GlobalSet(cell), I::LocalGet(asked), I::GlobalSet(index)]);
+			Self::emit_list(func, &[I::LocalGet(asked), I::I64Const(SHORT_WALK), I::I64GtS, I::If(BlockType::Empty),
+				I::LocalGet(0), I::GlobalSet(list), I::LocalGet(current), I::GlobalSet(cell), I::LocalGet(asked), I::GlobalSet(index), I::End]);
 		}
 	}
 
@@ -1564,12 +1575,26 @@ impl WasmGcEmitter {
 		let node_ref = Ref(self.node_ref(false));
 		let node_type = self.type_manager.node_type;
 		let set = |field_index: u32| I::StructSet { struct_type_index: node_type, field_index };
-		let locals = [self.copy_cells_locals(), vec![ValType::I64]].concat();
+		let locals = [self.copy_cells_locals(), vec![ValType::I64, node_ref_nullable]].concat();
 		self.runtime_function(LIST_EXTEND, vec![node_ref_nullable, node_ref_nullable], vec![node_ref], locals, |s, f| {
-			Self::emit_list(f, &s.forget_list_cursor());
 			let (list, items) = (0, 1);
 			let copy = CopyCells::at(2);
 			let kind = copy.result + 1;
+			let walk_start = kind + 1;
+			let extended_last = s.list_cursor(CursorPart::Extended).zip(s.list_cursor(CursorPart::Last));
+			// the list extended last starts its walk to the end at its last cell then
+			Self::emit_list(f, &[I::LocalGet(list), I::LocalSet(walk_start)]);
+			if let Some((extended, last)) = extended_last {
+				Self::emit_list(f, &[I::GlobalGet(extended), I::LocalGet(list), I::RefEq, I::If(BlockType::Empty), I::GlobalGet(last), I::LocalSet(walk_start), I::End]);
+			}
+			// items added at the end leave each cell at its index: the index cursor stays, and the count of another
+			// list, so a loop over a list appending to this one walks on (a comprehension over a table's rows)
+			Self::emit_list(f, &s.forget_cursor_parts(&[CursorPart::Extended]));
+			if let Some(counted) = s.list_cursor(CursorPart::Counted) {
+				Self::emit_list(f, &[I::GlobalGet(counted), I::LocalGet(list), I::RefEq, I::If(BlockType::Empty)]);
+				Self::emit_list(f, &s.forget_cursor_parts(&[CursorPart::Counted]));
+				f.instruction(&I::End);
+			}
 			s.emit_item_check(f, super::declared_values::LIST_ITEMS_CHECK, list, items);
 			s.emit_empty_as_null(f, items);
 			s.emit_collect_cells(f, items, None, &copy);
@@ -1594,13 +1619,23 @@ impl WasmGcEmitter {
 			Self::emit_list(f, &[I::LocalGet(kind), I::I64Const(Kind::List as i64), I::I64Ne, I::If(BlockType::Empty), I::LocalGet(list), I::LocalGet(items)]);
 			s.call(f, "list_concat");
 			Self::emit_list(f, &[I::RefAsNonNull, I::Return, I::End]);
-			// the last cell takes the copies as its rest
-			Self::emit_list(f, &[I::LocalGet(list), I::LocalSet(copy.cell), I::Block(BlockType::Empty), I::Loop(BlockType::Empty)]);
-			s.emit_field(f, copy.cell, 2);
-			Self::emit_list(f, &[I::RefIsNull, I::BrIf(1)]);
-			s.emit_field(f, copy.cell, 2);
-			Self::emit_list(f, &[I::LocalSet(copy.cell), I::Br(0), I::End, I::End]);
-			Self::emit_list(f, &[I::LocalGet(copy.cell), I::LocalGet(copy.result), set(2), I::LocalGet(list), I::RefAsNonNull]);
+			// the last cell takes the copies as its rest, whose last cell is the list's last then
+			let walk_to_last = |s: &Self, f: &mut Function| {
+				Self::emit_list(f, &[I::LocalSet(copy.cell), I::Block(BlockType::Empty), I::Loop(BlockType::Empty)]);
+				s.emit_field(f, copy.cell, 2);
+				Self::emit_list(f, &[I::RefIsNull, I::BrIf(1)]);
+				s.emit_field(f, copy.cell, 2);
+				Self::emit_list(f, &[I::LocalSet(copy.cell), I::Br(0), I::End, I::End]);
+			};
+			f.instruction(&I::LocalGet(walk_start));
+			walk_to_last(s, f);
+			Self::emit_list(f, &[I::LocalGet(copy.cell), I::LocalGet(copy.result), set(2)]);
+			if let Some((extended, last)) = extended_last {
+				f.instruction(&I::LocalGet(copy.result));
+				walk_to_last(s, f);
+				Self::emit_list(f, &[I::LocalGet(list), I::GlobalSet(extended), I::LocalGet(copy.cell), I::GlobalSet(last)]);
+			}
+			Self::emit_list(f, &[I::LocalGet(list), I::RefAsNonNull]);
 		});
 	}
 
