@@ -52,6 +52,8 @@ const DEV_COMMAND: &str = "dev";
 /// `warp serve [app.warp] [port]`: serves the program, its page, server functions and routes (P222)
 const SERVE_COMMAND: &str = "serve";
 const SERVE_PORT: u16 = 8080;
+/// `warp register`: Finder and `open` run .warp files (macOS, src/file_type.rs)
+const REGISTER_COMMAND: &str = "register";
 /// The program `warp serve` serves when it is given none: the first of these in the current folder
 const DEFAULT_PROGRAMS: [&str; 2] = ["app.warp", "main.warp"];
 const WARP_VERSION: &str = env!("CARGO_PKG_VERSION");
@@ -107,6 +109,23 @@ fn apply_flags(args: &mut Vec<String>) {
     }
     diagnostic::adopt_acknowledgements(OLD_ANSWERS_FILE, ACKNOWLEDGEMENTS_FILE);
     diagnostic::use_acknowledgements_file(ACKNOWLEDGEMENTS_FILE);
+}
+
+#[cfg(all(not(test), target_os = "macos"))]
+fn register_file_type() {
+    match warp::file_type::register() {
+        Ok(app) => println!("registered .warp files: {} runs them in Terminal (Open With offers editors)", app.display()),
+        Err(failure) => {
+            eprintln!("warp register: {failure}");
+            std::process::exit(1);
+        }
+    }
+}
+
+#[cfg(all(not(test), not(target_os = "macos")))]
+fn register_file_type() {
+    eprintln!("warp register: only macOS so far");
+    std::process::exit(1);
 }
 
 /// `warp [run] prog.warp a b`: whether only to run, the program file and the arguments it gets (`use os; args`)
@@ -198,6 +217,8 @@ fn run_command(args: &[String]) {
                 std::process::exit(1);
             }
         }
+    } else if args[1] == REGISTER_COMMAND {
+        register_file_type();
     } else if args[1] == SERVE_COMMAND {
         match served_program(&args[2..]) {
             Ok((path, port)) => serve_file(path, port, ""),
@@ -612,6 +633,7 @@ fn usage() {
     println!("  warp dev <file> [port]  Serve the file's page, reloaded when it changes (port 8008)");
     println!("  warp serve [file] [port]  Serve the program: its page, server functions and routes (app.warp, port 8080)");
     println!("  warp repl            Start interactive console");
+    println!("  warp register        Let Finder and `open` run .warp files (macOS)");
     println!("  --fuel <steps>       Execution budget before 'out of fuel' (env WARP_FUEL)");
     println!("  --no-ask             Never prompt \"got it?\" after a warning or note");
     println!("  The last compiled module is kept in ~/.cache/warp/last.wasm for inspection");
