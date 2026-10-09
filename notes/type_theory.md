@@ -60,6 +60,7 @@ exact decimals/rationals (Kind::Int holding a ratio, wasm_emitter/exact.rs) and 
 | ranged a b ≤ ranged c d if c ≤ a, b ≤ d; ranged ≤ int | a fixed width (`int16`) is the range of ints it holds | fixed_width.rs |
 | cls p ≤ cls q if q is a prefix of p | a subclass or variant extends its parent's chain | class_methods.rs inherit, traits.rs IS_TYPE |
 | quantity D ≤ quantity D only | a quantity is no number: `1 m + 1` is a DimensionError | static_units.rs |
+| codepoint ≤ text | `"a"` parses as a codepoint, taken where a text is (`x: text = "a"`) | analyzer admits |
 
 Lists are shared (P200b): `ys = xs` makes an alias and `xs.add(v)` changes the one list both see, so covariant
 lists alone are TypeScript's hole (`xs: [Circle] = [c]; ys: [Shape] = xs; ys.add(square); xs#2`). P215 closes it:
@@ -440,7 +441,7 @@ inside a handler body loses the outer handler).
 
 Optional and auto-unwrap (P179: `a: int = Some(3)`), payload-free variants (`red`: one shared instance per variant),
 the value comparison above, errors as stored values (`r = f(-1); if r failed …`: a `τ or error` sum),
-exact vs float, codepoints (`"a"` parses as one; `codepoint ≤ text` for parameters), maps, then tasks.
+exact vs float, maps, then tasks.
 
 ## Named arguments, defaults, nested functions (exporter only)
 
@@ -527,3 +528,13 @@ Amounts are whole and `/` truncates, so the model's quantity values are not comp
 Known differences: warp gives the int 1 for `1 m < 2 m` (card units-compare); warp compiles `x = 1 m; x = 2 s`
 (units-reassign), `x: int = 1 m` (units-annotation) and `2 m * "a"` (units-text-repeat).
 
+## Codepoints
+A one-character text literal is a codepoint, as warp's parser reads `"a"` (`Node::Char`): W0 keeps one value form,
+`.text s`, typed `codepoint` when `s` has one character and `text` otherwise (Typing.lean rules `text`/`codepoint`,
+`Ty.textTy`, `HasType.ofText`). `codepoint ≤ text`, so a codepoint goes wherever a text is taken, and `isText` (text
+or codepoint) replaces `= text` in `+` (`plus`), `*` (`repeatTy`) and `#`/`for` (`elementTy`): a text's items are
+codepoints, which the walk (`peel_codepoint`) and `#` give. A name given no annotation widens a codepoint to text
+(`widen`: `x = "a"; x = "bc"` is accepted, `x = "a"; x = 1` is "x was a Text"). The checker rejects, as warp does,
+`x: codepoint = "ab"`, `f(c: codepoint) := c; f("ab")` and `x: codepoint = 97`. The exporter maps the words
+`codepoint` and `char`. `c + 1` of a codepoint is a text in both (`"a1"`). Not yet: `97 as codepoint` (W0 converts
+only by `fits`).
