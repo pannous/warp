@@ -23,6 +23,7 @@ to mail message to address { print "\(message) → \(address)" }
 result = one plus two
 total = three times four
 half = ten divided by two
+rest = ten modulo three
 
 // Boolean logic
 valid = age >= 18 and has_id
