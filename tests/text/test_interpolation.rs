@@ -83,7 +83,7 @@ fn dollar_arguments_and_templates_keep_working() {
 
 #[test]
 fn the_normalizer_hints_the_swift_form() {
-	assert_eq!(hints_of("x=1; \"a ${x} b\""), vec![("${x}".to_string(), "\\(x)".to_string())]);
+	assert_eq!(hints_of("x=1; \"a ${x} b\""), vec![]); // user, 2026-10-09: ${} $() \() \{} are all fine, no hint
 	assert_eq!(hints_of("x=1; \"a $x b\""), vec![]); // a bare $x is text, nothing to hint
 	assert_eq!(hints_of("x=1; \"a \\(x) b\""), vec![]);
 }
@@ -97,7 +97,7 @@ fn round_dollar_holes_interpolate_like_curly_ones() {
 	is!("name=\"Bob\"; \"hi $(name)! $name\"", "hi Bob! $name");
 	is!("\"a\\$(b)\"", "a$(b)"); // an escaped dollar is never a hole
 	is!("a=\"x\";q=sql \"SELECT * FROM t WHERE a = $(a)\";q#1", "SELECT * FROM t WHERE a = ?");
-	assert_eq!(hints_of("x=1; \"a $(x) b\""), vec![("$(x)".to_string(), "\\(x)".to_string())]);
+	assert_eq!(hints_of("x=1; \"a $(x) b\""), vec![]); // user, 2026-10-09: no hint
 }
 
 // card crypto-randomuuid: a hole calling a foreign module is lowered with the module's calls (foreign_modules.rs)

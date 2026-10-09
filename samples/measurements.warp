@@ -14,14 +14,19 @@ if maybe_huge then print "possibly more than 14 m²"
 // functions map the whole interval too: the swing of a pendulum this long
 pendulum = 2.0 ± 0.01
 period = 2 * π * √(pendulum / 9.81)
-print "period: " + str(period) + " s"
+print "period: " + period + " s"
 // with units, ± converts its spread into the value's unit and carries both through Quantity arithmetic
 rope = 5 m ± 1 cm
 print "two ropes: " + str(rope * 2)
+# print "two ropes: " + rope * 2 // TODO Error("wasm trap: cast failure")
+print "with a 20 cm knot: " + str(rope + 20 cm)  // the exact 20 cm adds no spread
+print "pulled in 2 s: " + str(rope / 2 s)
 // one function serves a quantity and a plain number alike
 twice(x) := x * 2
-print "twice: " + str(twice(rope)) + " and " + str(twice(3))
-print "area about " + str(area.value) + " m²"
+print "twice: \(twice(rope)) and \(twice(3))"
+# print "twice: \{twice(rope)} and \(twice(3))"
+
+print "area about " + area.value + " m²"
 // 1σ makes a Gaussian: one standard deviation, independent errors add in quadrature (an interval adds them whole)
 mass = 6.0 ± 0.3σ
 volume = 2.0 ± 0.2σ

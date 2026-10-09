@@ -8,6 +8,8 @@ first_items(xs, n) := xs[0:min(n, count(xs))]
 last_items(xs, n) := xs[max(count(xs) - n, 0):count(xs)]
 // x rounded to that many digits after the point
 round_to(x, places) := round(x * 10^places) / 10^places
+// the arithmetic mean, also spelled average
+mean(xs) := sum(xs) / count(xs)
 replace(t, old, new) := join(split(t, old), new)
 // ASCII character tests; a character compares by its code point
 is_digit(c) := c >= '0' and c <= '9'

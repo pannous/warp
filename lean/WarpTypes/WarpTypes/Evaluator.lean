@@ -69,6 +69,7 @@ def step (P : Program) (μ : Store) : Expr → Option (Expr × Store)
       else if e.isValue then some (e, μ) else (step P μ e).map fun s => (.tryCatch s.1 h, s.2)
   | .cast e ts =>
     if e.isValue then some (if ts.any (fits e) then e else .error "type mismatch", μ) else stepIn (.cast ts) e μ (step P μ e)
+  | .conv e t => if e.isValue then some (convertValue μ e t, μ) else stepIn (.conv t) e μ (step P μ e)
   | .broadcast f e =>
     if e.isValue then
       match e with
@@ -255,6 +256,11 @@ theorem step_sound : ∀ {e : Expr} {μ s'}, step P μ e = some s' → Step P (e
     split at hs
     · cases hs; exact .cast (by assumption)
     · exact stepIn_sound (F := .cast ts) rfl (fun _ => ih) hs
+  | conv e t ih =>
+    intro μ s' hs; simp only [step] at hs
+    split at hs
+    · cases hs; exact .conv (by assumption)
+    · exact stepIn_sound (F := .conv t) rfl (fun _ => ih) hs
   | broadcast f e ih =>
     intro μ s' hs; simp only [step] at hs
     split at hs
@@ -382,22 +388,6 @@ theorem run_sound : ∀ (fuel : Nat) (s : Expr × Store), Steps P s (run P fuel 
     split
     · rename_i s' hs; exact .step (step_sound hs) (run_sound fuel s')
     · exact .refl
-
-/-- a value as warp prints it, shared lists read in store μ down to `depth` levels; `?` where the model does not keep
-what warp prints (numbers, instances) -/
-def display (μ : Store) : Nat → Expr → String
-  | _, .bool b => if b then "yes" else "no"
-  | _, .int n => toString n
-  | _, .text s => s!"\"{s}\""
-  | depth + 1, .lref a t => display μ depth (μ.items (.lref a t))
-  | depth, .cons h t => "[" ++ " ".intercalate (showItems depth (.cons h t)) ++ "]"
-  | _, _ => "?"
-where showItems (depth : Nat) : Expr → List String
-  | .cons h t => display μ depth h :: showItems depth t
-  | _ => []
-
-/-- how deep `display` follows shared lists: a list that holds itself prints `?` there -/
-def DISPLAY_DEPTH : Nat := 8
 
 def FUEL : Nat := 10000
 

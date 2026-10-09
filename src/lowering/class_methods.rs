@@ -70,6 +70,10 @@ const GO_FUNCTION_WORD: &str = "func";
 const IMPL_WORD: &str = "impl";
 /// Kotlin's `p.copy(y = 5)`
 const COPY_WORD: &str = "copy";
+/// lib/units.warp's `q.to("km/h")`: a run-time quantity in other units
+const CONVERSION_METHOD: &str = "to";
+/// `str(q)`: a run-time quantity's text
+const TEXT_WORD: &str = "str";
 /// The methods an operator on an instance calls (wiki/operator.md aliases, Python's special methods)
 const OPERATOR_METHODS: [(Op, &[&str]); 9] = [
 	(Op::Add, &["plus", "add", "__add__"]),
@@ -760,12 +764,16 @@ pub(crate) fn instance_classes(node: &Node, classes: &[String]) -> std::collecti
 			}
 		}
 		let Node::Symbol(variable) = target.drop_meta() else { return };
+		let class_of = |operand: &Node| match operand.drop_meta() {
+			Node::Symbol(operand) => instances.get(operand).cloned(),
+			other => constructed_class(other),
+		};
 		let class = match (op, value.drop_meta()) {
 			// `c = a + b` of an instance a: the operation gives one of a's class, as with_operator_calls reads it
-			(Op::Assign | Op::Define, Node::Key(left, Op::Add | Op::Sub | Op::Mul | Op::Div | Op::Mod, _)) => match left.drop_meta() {
-				Node::Symbol(operand) => instances.get(operand).cloned(),
-				other => constructed_class(other),
-			},
+			(Op::Assign | Op::Define, Node::Key(left, Op::Add | Op::Sub | Op::Mul | Op::Div | Op::Mod, _)) => class_of(left),
+			// `w = q as m`, `w = q.to("m")` of a run-time quantity q: another one
+			(Op::Assign | Op::Define, conversion) if crate::units::conversion(conversion).is_some() => crate::units::conversion(conversion).and_then(|(quantity, _)| class_of(quantity)),
+			(Op::Assign | Op::Define, Node::Key(quantity, Op::Dot, call)) if is_call_of(call, CONVERSION_METHOD) => class_of(quantity),
 			(Op::Assign | Op::Define, _) => constructed_class(value),
 			// `p:Point`, the annotation a symbol or a type
 			(Op::Colon, Node::Symbol(_) | Node::Type { .. }) => Some(value.drop_meta().name()),
@@ -1063,18 +1071,25 @@ fn with_operator_calls(node: Node, operands: &Operands) -> (Node, Option<String>
 			let (left, class) = with_operator_calls(*left, operands);
 			let (right, right_class) = with_operator_calls(*right, operands);
 			let class = class.or_else(|| operand_class(&left, operands));
+			let right_class = right_class.or_else(|| operand_class(&right, operands));
+			// `"v: " + q` of a run-time quantity q joins its text, as a static quantity does (card quantity-falls)
+			if op == Op::Add && (is_text(&left) || is_text(&right)) {
+				return (Node::Key(Box::new(joined_text(left, class)), op, Box::new(joined_text(right, right_class))), None);
+			}
 			let (left, class, right) = with_run_time_units(left, class, right, right_class, operands);
 			match class.as_ref().and_then(|class| operands.methods.iter().find(|(owner, known, _)| owner == class && *known == op)) {
-				Some((_, _, method)) => {
-					let call = Node::List(vec![Node::Symbol(method.clone()), right], Bracket::Round, Separator::None);
-					// `(quantity(…)) * 2`: the receiver without its parentheses, else `(f(…)).times` reads as a call of f
-					let left = match left.drop_meta() {
-						Node::List(items, Bracket::Round, _) if items.len() == 1 => items[0].clone(),
-						_ => left,
-					};
-					(Node::Key(Box::new(left), Op::Dot, Box::new(call)), class)
-				}
+				Some((_, _, method)) => (method_call(left, method, right), class),
 				None => (Node::Key(Box::new(left), op, Box::new(right)), None),
+			}
+		}
+		// `q as km/h`, `q in m` of a run-time quantity q: its conversion `q.to("km/h")` (card quantity-falls)
+		conversion if crate::units::conversion(&conversion).is_some() => {
+			let (quantity, units) = crate::units::conversion(&conversion).map(|(quantity, units)| (quantity.clone(), units)).expect("guarded");
+			let (quantity, class) = with_operator_calls(quantity, operands);
+			let run_time = Some(crate::units::RUN_TIME_QUANTITY);
+			match class.or_else(|| operand_class(&quantity, operands)).as_deref() == run_time {
+				true => (method_call(quantity, CONVERSION_METHOD, Node::Text(crate::units::unit_suffix(&units))), run_time.map(str::to_string)),
+				false => (conversion.map_children(recurse), None),
 			}
 		}
 		// `1 min == q` of a run-time quantity q (the equality witness compares them)
@@ -1112,6 +1127,17 @@ fn with_operator_calls(node: Node, operands: &Operands) -> (Node, Option<String>
 	}
 }
 
+/// `receiver.method(argument)`; `(quantity(…)) * 2`: the receiver without its parentheses, else `(f(…)).times` reads as
+/// a call of f
+fn method_call(receiver: Node, method: &str, argument: Node) -> Node {
+	let receiver = match receiver.drop_meta() {
+		Node::List(items, Bracket::Round, _) if items.len() == 1 => items[0].clone(),
+		_ => receiver,
+	};
+	let call = Node::List(vec![Node::Symbol(method.to_string()), argument], Bracket::Round, Separator::None);
+	Node::Key(Box::new(receiver), Op::Dot, Box::new(call))
+}
+
 /// `2 km < q`, `q + 1 m` of a run-time quantity q: the unit written in the program is one too (card units-mixed); the
 /// operands with the left one's class
 fn with_run_time_units(left: Node, class: Option<String>, right: Node, right_class: Option<String>, operands: &Operands) -> (Node, Option<String>, Node) {
@@ -1137,8 +1163,31 @@ fn operand_class(operand: &Node, operands: &Operands) -> Option<String> {
 		Node::List(items, Bracket::Round, _) if items.len() == 1 => with_operator_calls(items[0].clone(), operands).1.or_else(|| operand_class(&items[0], operands)),
 		// `f(quantity("5 m") / 5)`: an operation of an instance as an argument
 		Node::Key(_, op, _) if OPERATOR_METHODS.iter().any(|(known, _)| known == op) => with_operator_calls(operand.drop_meta().clone(), operands).1,
+		// `q.times(2)`: an operator method already called on an instance gives one of its class
+		Node::Key(receiver, Op::Dot, call) if is_operator_method_call(call, operands) || is_call_of(call, CONVERSION_METHOD) => operand_class(receiver, operands),
 		other => instance_class(other, operands.returned),
 	}
+}
+
+fn is_text(node: &Node) -> bool {
+	matches!(node.drop_meta(), Node::Text(_))
+}
+
+/// An operand joining a text: a run-time quantity as `str(q)`
+fn joined_text(operand: Node, class: Option<String>) -> Node {
+	match class.as_deref() == Some(crate::units::RUN_TIME_QUANTITY) {
+		true => Node::List(vec![Node::Symbol(TEXT_WORD.to_string()), operand], Bracket::Round, Separator::None),
+		false => operand,
+	}
+}
+
+fn is_operator_method_call(call: &Node, operands: &Operands) -> bool {
+	operands.methods.iter().any(|(_, _, method)| is_call_of(call, method))
+}
+
+/// `to("m")` is a call of `to`
+fn is_call_of(call: &Node, method: &str) -> bool {
+	matches!(call.drop_meta(), Node::List(items, Bracket::Round, _) if items.first().is_some_and(|word| word.drop_meta().name() == method))
 }
 
 /// A name the library gives lists and texts too (`pop`, `sum`, `count`): a method of that name is one only on an

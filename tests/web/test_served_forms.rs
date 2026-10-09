@@ -196,3 +196,27 @@ fn the_todo_sample_takes_a_users_edits() {
 	assert!(page.contains("Todos (1 open)"), "{page}");
 	server.join().expect("the server thread");
 }
+
+// a route's refusal answers by its cause (supervisor default 2026-10-09): a raise to a browser's form 400 with the page it
+// came from and the message, a form field the request lacks 400 "missing field …", a path parameter's lookup that finds
+// nothing 404; a real bug stays 500
+#[test]
+fn a_refused_request_answers_400_or_404() {
+	const REFUSING_PORT: u16 = 18654;
+	let program = program_with_rows("served_refusals", EDITED_TODO_APP, "class Todo{title: text; done: bool; priority: int}\nstored todos: [Todo]\ntodos.add(Todo(\"tea\", false, 1))");
+	let server = served_from(REFUSING_PORT, EDITED_TODO_APP, Some(program), 4);
+	let at = |path: &str| format!("http://127.0.0.1:{REFUSING_PORT}{path}");
+	let answer = |path: &str, body: &str, browser: bool| {
+		let request = agent().post(&at(path)).header("Content-Type", FORM_TYPE);
+		let request = if browser { request.header("Accept", "text/html,*/*").header("Referer", &at("/")) } else { request };
+		let mut answer = request.send(body).expect("an answer");
+		(answer.status().as_u16(), answer.body_mut().read_to_string().expect("a text"))
+	};
+	let (status, page) = answer("/todos", "title=&priority=1", true);
+	assert_eq!(status, 400, "{page}");
+	assert!(page.contains("a todo needs a title") && page.contains("Todos (1 open)"), "{page}");
+	assert_eq!(answer("/todos", "priority=1", false), (400, "missing field title".to_string()));
+	assert_eq!(answer("/todos/9/delete", "", false).0, 404);
+	assert_eq!(answer("/todos", "title=tea&priority=x", false).0, 500);
+	server.join().expect("the server thread");
+}

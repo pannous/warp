@@ -211,7 +211,7 @@ typed by a sum or by a variant.
 Evaluator.lean: `step` computes the next state, `step_sound` proves each of its steps is a `Step`, and `run` iterates
 it with fuel (`run_sound`: the end state is reachable by `Steps`). `outcome` elaborates, checks and runs a program,
 printing the value as warp prints it (`yes`, `[1 2]`, `"a"`) or `?` where the model keeps no value (floats are
-exported as `num 0`; instances). test_warp_computes_what_the_type_model_computes compares that with warp's
+exported as their whole part, `num 3` of 3.7; instances). test_warp_computes_what_the_type_model_computes compares that with warp's
 `pipeline::eval` on the corpus. The known differences are listed in KNOWN_VALUE_DIFFERENCES, each with its card:
 - instance-field (P200): `f(q: Point) := q.x = 7; p = Point(1); f(p); p.x` gives 1 in warp, 7 in the model.
 - bool-literal-value (P199): `f(b: bool) := b; f(1)` gives 1 (the parameter keeps the int), and the assignment
@@ -460,7 +460,7 @@ nonlocal-assign-unchecked (KNOWN_HOLES), named-constructor-args.
 inside `on f·return { break event }` (the effect handlers above, so no new W0 form and no new proof): the innermost
 handler is the running call's, so recursion returns from the right call. The event's payload is typed `any`, so a
 function that returns early is typed by the join with `any` (sound, imprecise: `f(x) := { if x > 2 { return 7 }; 1 }`
-is `any`). Declared result types (`-> int`, `: int`) are still outside W0.
+is `any`). A declared result type converts the value (see Conversions below).
 
 ## use, min/max, text order
 
@@ -475,3 +475,22 @@ function local widens over the numbers it is given, as a main-level name does (P
 keeps its annotation (`Item.cell c (some t)`, P203). Elaboration types a loop variable by its list's element type
 (Expr.rewrite takes P), so `out + x` in a loop over floats is a number, not `any` cast to the local's first type.
 Card sum-empty: `sum []` prints the word sum.
+
+## Conversions and declared results
+
+`e as T` is `Expr.conv e T`, typed T from any source type (like `cast`, so the proofs only gained one case each and
+`convertValue_typed`: a conversion gives a value of type T or an error). It steps to `convertValue`: to text, a text as
+it is, ø as "ø", anything else as warp prints it (`[1, "a"] as text` is `[1 "a"]`, `display`, moved to
+Semantics.lean); to bool, its truthiness; to int or number, a number keeps its whole part (`3.7 as int` is 3; float
+literals export as `num` of their whole part, the only part W0 keeps) and a text is parsed ("4" is 4, "a" the error
+"invalid number", as in warp); to any other type, the cast's check. The checker (`convertible`) refuses what can never
+convert to a number type (`[1] as int`, a compile error in warp too). The exporter takes scalar targets (int, number,
+text, bool and their spellings); `x as Point`, `x as texts` and `x as int?` are other operations in warp and stay out.
+
+A declared result converts the body's value, as warp lowers it (lowering/declarations.rs: `body as T`), so the
+exporter wraps the body in `.conv`, returns included: `def f(x) -> int { … }`, `func f(x: Int) -> Int`,
+`fun f(x: Int): Int`, `function f(x: number): number`, `def f(x) -> int: body`, `f(a, b): int := …`,
+`square(x) as int := …`, `def square(x) as int = …`, `int square(x) = …` (`typed_definition` in
+src/law/type_model.rs); nested functions keep theirs when lifted. Coverage: 246 of the 600 sampled programs, all
+agreeing (2026-10-09). Found: card kind-name (`x = 3.7 as int; x = "a"` compiles: the analyzer does not type a
+conversion, KNOWN_HOLES) and card bool-conversion (`2 as bool` gives 1, not yes, KNOWN_VALUE_DIFFERENCES).

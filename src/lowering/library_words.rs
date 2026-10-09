@@ -46,7 +46,7 @@ const LOG_WORD: &str = "log";
 const OF_WORD: &str = "of";
 
 /// Canonical word and the spellings that mean it
-const SYNONYMS: [(&str, &[&str]); 25] = [
+const SYNONYMS: [(&str, &[&str]); 26] = [
 	(LIST_WORD, &[]),
 	(MAP_KEYS, &["keys"]),
 	(MAP_VALUES, &["values"]),
@@ -71,6 +71,7 @@ const SYNONYMS: [(&str, &[&str]); 25] = [
 	("replace", &[]),
 	(ORD, &["ordinal", CODEPOINT]),
 	(IS_DIGIT, &["isdigit"]),
+	("mean", &["average"]),
 	(IS_ALPHA, &["is_letter", "isalpha"]),
 	("is_alphanumeric", &["is_alnum", "isalnum"]),
 	(crate::mutation::UNWRAP, &[]),

@@ -639,11 +639,23 @@ fn runtime_stub_path() -> Result<std::path::PathBuf, String> {
     let warp = env::current_exe().map_err(|failure| failure.to_string())?;
     let resolved = fs::canonicalize(&warp).unwrap_or_else(|_| warp.clone());
     let next_to_warp = [&warp, &resolved].map(|binary| binary.with_file_name(RUNTIME_STUB_NAME));
-    // a debug warp's neighbour is a debug stub (5 MB, it was 21 MB, card g_gFs8): build the release one instead
-    match next_to_warp.iter().find(|stub| stub.is_file() && !cfg!(debug_assertions)) {
+    let neighbour = next_to_warp.iter().find(|stub| stub.is_file());
+    if !in_cargo_target(&resolved) {
+        // an installed warp (brew, a release tarball, ~/dev/bin) uses the prebuilt stub shipped next to it and never
+        // builds one (user 2026-10-09)
+        return neighbour.cloned().ok_or_else(|| format!("no runtime stub {}: warp-runtime ships next to warp (brew, the release tarball); put it there or name one in {RUNTIME_STUB_VARIABLE}", next_to_warp[0].display()));
+    }
+    // a debug warp's neighbour in a cargo target is a debug stub (5 MB, it was 21 MB, card g_gFs8): build the release one
+    match neighbour.filter(|_| !cfg!(debug_assertions)) {
         Some(stub) => Ok(stub.clone()),
         None => build_runtime_stub(&next_to_warp[0]),
     }
+}
+
+/// Whether `binary` lies in a cargo profile folder (debug/, release/, deps/ under them; cargo keeps its .fingerprint
+/// there): a development build, which may build its runtime stub from its source checkout
+fn in_cargo_target(binary: &std::path::Path) -> bool {
+    binary.ancestors().skip(1).take(2).any(|folder| folder.join(".fingerprint").is_dir())
 }
 
 /// `cargo build --release -p warp-runtime` in warp's source checkout, whatever warp's own profile: the stub lands next

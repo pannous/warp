@@ -385,6 +385,6 @@ pub fn compacted(script: &str) -> String {
 	kept
 }
 
-fn escaped(text: &str) -> String {
+pub(crate) fn escaped(text: &str) -> String {
 	text.replace('&', "&amp;").replace('<', "&lt;").replace('>', "&gt;")
 }
