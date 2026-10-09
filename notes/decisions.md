@@ -7,6 +7,9 @@ before asking the user; nobody reads it front to back, the code, tests and wiki 
 notes/open_decisions.md.
 
 ## Decided 2026-10-09 (user, as recommended unless quoted)
+- P232 (warp-class, card g_mQ9U): `$x` as "field x of the implicit subject" stays in served routes only
+  (`$title` = request.body.title / request.query.title); not in event handlers, `it` contexts or component props.
+  `$a` in data literals keeps referencing the enclosing node `a{…}` (references.rs).
 - The user's uncommitted main-checkout edits (supervisor; patch scratch/user_edits.patch) land:
   literals.rs: `${}`, `$()`, `\()` and `\{}` interpolation are all fine, no hint (user: "${} $() \() \{} all fine");
   the 2 test_interpolation tests expecting the hint change. orm.warp: `bo.age += 1` writes through without
