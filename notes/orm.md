@@ -62,15 +62,18 @@ bo's row again, so it changes nothing after written-through changes; an instance
 - Registration migrates (`std_io("table", "migrate", …)`) and loads no rows. database_tables.rs `opened` generates per
   table `people·load()` (rows via `std_io("table", "rows", …)` on the first call, `people·loaded`), `people·count()`
   (SELECT COUNT(*) until loaded; a table with a required foreign key loads, since such rows can be left out),
-  `people·add(p)` (onto the list when loaded, else onto `people·met`) and `people·reset()`.
+  `people·add(p)` (onto the list when loaded, else onto `people·met`), `people·at(i)` (until loaded the one row
+  `std_io("table", "row", […, i])`, SELECT … LIMIT 1 OFFSET i-1, its instance kept in `people·met`; a required foreign
+  key, a position below 1 or past the end loads) and `people·reset()`.
 - `with_lazy_reads` (last in database_tables::lower) turns each read `people` into `people·load()`, `count(people)` and
-  `people.count` into `people·count()`, `people.add(p)` into `people·add(p)`; registrations, `global people`, assigned
+  `people.count` into `people·count()`, `people.add(p)` into `people·add(p)`, `people#i` into `people·at(i)`; registrations, `global people`, assigned
   lists and field names stay, and a table's own lazy functions keep its list. One-to-many getters read `people·load()`.
 - Identity: the load builds each row's instance unless `people·met` holds one with its id, so an instance added before
   the load is the loaded row (test an_instance_added_before_loading_is_the_loaded_row).
 - A route reopening the table (`users = database.users`, serve.rs) is `users = users·reset()`: the next read loads anew.
-- Observed natively by `database::rows_read()` (test a_table_loads_its_rows_only_when_read).
-- Not yet: `#i` loading one row, paged iteration, the IN (…) batching; a class method reading a table directly (not a
+- Observed natively by `database::rows_read()` (tests a_table_loads_its_rows_only_when_read,
+  an_element_of_a_table_loads_one_row).
+- Not yet: paged iteration, the IN (…) batching; a class method reading a table directly (not a
   generated getter) is not rewritten. An empty list must be `parse("[]")` (ø): a built `[]` List node with Space
   separator types `xs += [x]` as int + list.
 

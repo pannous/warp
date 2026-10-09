@@ -77,6 +77,17 @@ fn a_table_loads_its_rows_only_when_read() {
 	assert!(warp::database::rows_read() > before, "reading an element loads the rows");
 }
 
+// `people#i` reads that one row, kept so the loaded list holds the same instance
+#[cfg(feature = "native")]
+#[test]
+fn an_element_of_a_table_loads_one_row() {
+	eval(&program("people_indexed", "people.add(Person(\"Ny\", 5))\npeople.add(Person(\"Oz\", 6))\npeople.add(Person(\"Pi\", 7))"));
+	let before = warp::database::rows_read();
+	is!(&program("people_indexed", "people#2.name"), "Oz");
+	assert_eq!(warp::database::rows_read(), before + 1, "people#2 read more than its row");
+	is!(&program("people_indexed", "oz = people#2\noz.age = 60\nsum = 0\nfor p in people { sum += p.age }\nsum + people#2.age"), 72 + 60);
+}
+
 // an instance added before the rows load is the one the loaded list holds
 #[test]
 fn an_instance_added_before_loading_is_the_loaded_row() {

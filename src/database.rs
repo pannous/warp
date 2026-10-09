@@ -116,7 +116,8 @@ pub fn rows_read() -> usize {
 	ROWS_READ.get()
 }
 
-/// `std_io("table", member, arguments)`: open (create or migrate, give the rows), migrate and rows (its two halves), count, insert
+/// `std_io("table", member, arguments)`: open (create or migrate, give the rows), migrate and rows (its two halves), row (one,
+/// by position), count, insert
 /// (give the id), update
 pub fn call(member: &str, arguments: &[Node]) -> Result<Node, String> {
 	let text = |node: &Node| match node.drop_meta() {
@@ -127,7 +128,12 @@ pub fn call(member: &str, arguments: &[Node]) -> Result<Node, String> {
 		("open", [table, schema, file]) => opened(&text(table)?, &schema.children(), &text(file)?),
 		("rows", [table, schema, file]) => {
 			let columns = schema.children().iter().map(column_of).collect::<Result<Vec<_>, _>>()?;
-			selected(connection(&text(file)?)?, &text(table)?, &columns)
+			selected(connection(&text(file)?)?, &text(table)?, &columns, None)
+		}
+		("row", [table, schema, file, index]) => {
+			let columns = schema.children().iter().map(column_of).collect::<Result<Vec<_>, _>>()?;
+			let rows = selected(connection(&text(file)?)?, &text(table)?, &columns, Some(index))?;
+			Ok(rows.children().into_iter().next().unwrap_or(Node::Empty))
 		}
 		("migrate", [table, schema, file]) => migrated(connection(&text(file)?)?, &text(table)?, &schema.children()).map(|_| Node::Empty),
 		("count", [table, _schema, file]) => {
@@ -233,13 +239,17 @@ unsafe fn give(sqlite: &Sqlite, context: Handle, value: &Node) -> Result<(), Str
 fn opened(table: &str, schema: &[Node], file: &str) -> Result<Node, String> {
 	let database = connection(file)?;
 	let columns = migrated(database, table, schema)?;
-	selected(database, table, &columns)
+	selected(database, table, &columns, None)
 }
 
-/// The table's rows `[id, columns…]` in id order
-fn selected(database: Handle, table: &str, columns: &[(String, String, String)]) -> Result<Node, String> {
+/// The table's rows `[id, columns…]` in id order, or only its row at a position counted from 1
+fn selected(database: Handle, table: &str, columns: &[(String, String, String)], position: Option<&Node>) -> Result<Node, String> {
 	let selected: Vec<String> = std::iter::once(ID_COLUMN.to_string()).chain(columns.iter().map(|(name, _, _)| quote(name))).collect();
-	let rows = rows(database, &format!("SELECT {} FROM {} ORDER BY {ID_COLUMN}", selected.join(", "), quote(table)), &[])?;
+	let (limit, parameters) = match position {
+		Some(position) => (" LIMIT 1 OFFSET ? - 1", vec![position.clone()]),
+		None => ("", vec![]),
+	};
+	let rows = rows(database, &format!("SELECT {} FROM {} ORDER BY {ID_COLUMN}{limit}", selected.join(", "), quote(table)), &parameters)?;
 	ROWS_READ.set(ROWS_READ.get() + rows.len());
 	Ok(list(rows.into_iter().map(list).collect()))
 }
