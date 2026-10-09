@@ -1,0 +1,6 @@
+class Person{name: text; age: int}
+people: [Person] = database.people_identity_cost
+if count(people) == 0 { for i in 1 to 3000 { people.add(Person("N" + i, i)) } }
+total = 0
+for p in people { total += p.age }
+print total

@@ -203,12 +203,15 @@ fn with_field_units(object: Node, fields: &[(String, Vec<Factor>)]) -> Node {
 
 /// A run-time amount in SI base units as the quantity it is in `units`
 pub(crate) fn quantity_of(value: Node, units: &[Factor]) -> Node {
-	let Some(amount) = exact_amount(&value) else { return value };
-	let in_si = super::scale(units, |factor| base_unit(factor.unit.dimension));
-	match in_si.inverse() {
-		Some(per_unit) => Node::data(Quantity { amount: amount.mul(&per_unit), factors: units.to_vec() }),
-		None => value,
+	let Some(per_unit) = super::scale(units, |factor| base_unit(factor.unit.dimension)).inverse() else { return value };
+	if let Some(amount) = exact_amount(&value) {
+		return Node::data(Quantity { amount: amount.mul(&per_unit), factors: units.to_vec() });
 	}
+	let uncertain = match value.drop_meta() {
+		Node::Data(data) => data.downcast_ref::<crate::uncertain::Uncertain>().map(|amount| amount.scaled(per_unit.to_f64())),
+		_ => None,
+	};
+	uncertain.map_or(value, |amount| Node::data(super::UncertainQuantity::new(amount, units)))
 }
 
 fn exact_amount(value: &Node) -> Option<Rational> {

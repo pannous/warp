@@ -19,6 +19,8 @@ const CERTAINTY_WORDS: [&str; 2] = [CERTAINLY, POSSIBLY];
 pub const INTERVAL_FIELDS: [&str; 4] = ["value", "low", "high", "uncertainty"];
 /// `5 ± 1σ`: a Gaussian ± (card plus-minus-gaussian), its spread one standard deviation; shown after its ± part
 pub const SIGMA: &str = "σ";
+/// The type of every number, a ± value among them
+const NUMBER_TYPE: &str = "number";
 
 /// Where a math word turns or jumps: an interval reaching `at + k·every` (just `at` when `every` is 0) has `value` as
 /// its low (`high` false) or high bound
@@ -85,6 +87,11 @@ impl Uncertain {
 		}
 	}
 
+	/// The same uncertainty counted in a unit `factor` times larger (a positive factor)
+	pub fn scaled(&self, factor: f64) -> Uncertain {
+		Uncertain { value: self.value * factor, low: self.low * factor, high: self.high * factor, gaussian: self.gaussian }
+	}
+
 	/// The ± part: how far the interval reaches from the value, on its farther side
 	pub fn radius(&self) -> f64 {
 		(self.high - self.value).max(self.value - self.low)
@@ -142,6 +149,43 @@ pub fn lower_certainty(node: Node) -> Node {
 	};
 	let comparison = Node::Key(Box::new(compared.clone()), *op, right.clone());
 	Node::List(vec![Node::Symbol(word.drop_meta().name()), comparison], Bracket::None, Separator::Space).with_meta_of(&node)
+}
+
+/// Marks the type `number` of a parameter that may hold a ± value: held as a Node and checked for a number at run time
+/// (a plain `number` parameter is an i64, which no interval fits)
+#[derive(Clone, Debug, PartialEq)]
+pub struct IntervalNumber;
+
+/// `lo(a:number) := a.low; lo(5 ± 1)`: in a program that makes ± values each `number` parameter takes one (card
+/// number-param)
+pub fn lower_interval_parameters(program: Node) -> Node {
+	if !makes_intervals(&program) {
+		return program;
+	}
+	with_interval_parameters(program)
+}
+
+fn with_interval_parameters(node: Node) -> Node {
+	match node {
+		Node::Key(head, op @ (Op::Define | Op::Assign), body) if matches!(head.drop_meta(), Node::List(_, Bracket::Round, _)) => {
+			let head = head.map_children(|parameter| match parameter.drop_meta() {
+				Node::Key(name, Op::Colon, type_node) if type_node.drop_meta().name() == NUMBER_TYPE => {
+					Node::Key(name.clone(), Op::Colon, Box::new(Node::meta(type_node.drop_meta().clone(), Node::data(IntervalNumber))))
+				}
+				_ => parameter,
+			});
+			Node::Key(Box::new(head), op, Box::new(with_interval_parameters(*body)))
+		}
+		other => other.map_children(with_interval_parameters),
+	}
+}
+
+/// Is the type `number` of a parameter that may hold a ± value
+pub fn is_interval_number(type_node: &Node) -> bool {
+	match type_node {
+		Node::Meta { node, data } => matches!(data.as_ref(), Node::Data(dada) if dada.downcast_ref::<IntervalNumber>().is_some()) || is_interval_number(node),
+		_ => false,
+	}
 }
 
 /// The word and the ordering of a lowered `certainly(y < x)`

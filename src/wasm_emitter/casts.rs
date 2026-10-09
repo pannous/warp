@@ -315,7 +315,7 @@ impl WasmGcEmitter {
 			Node::List(..) if is_plain_data(value) => self.emit_runtime_text_cast(func, value),
 			// data and names are their source text; a number expression (`str(1+2)`, `str(f(1))` of a float f) is the
 			// text of its value
-			_ if !self.mentions_variable(value) && !self.mentions_call(value) && !matches!(self.get_type(value), Kind::Int | Kind::Float) => {
+			_ if !self.mentions_variable(value) && !self.mentions_call(value) && !computes_value(value) && !matches!(self.get_type(value), Kind::Int | Kind::Float) => {
 				self.emit_string_call(func, &value.serialize(), "new_text");
 			}
 			_ => self.emit_runtime_text_cast(func, value),
@@ -462,6 +462,24 @@ fn is_plain_data(node: &Node) -> bool {
 		Node::List(items, Bracket::Square, _) => items.iter().all(|item| is_plain_data(item) || quoted_source(item).is_some()), // card data-list
 		_ => false,
 	}
+}
+
+/// An index or field read (`P{x:5}.x`, `{a:"x"}#1`) or arithmetic of literals without names (`"a"+"b"`): a value to
+/// compute, not data that reads as written (card str-inline)
+fn computes_value(node: &Node) -> bool {
+	let mut found = false;
+	node.visit(&mut |part| found |= match part {
+		Node::Key(_, Op::Hash, _) => true,
+		Node::Key(_, op, _) if op.is_arithmetic() => !names_anything(part),
+		_ => false,
+	});
+	found
+}
+
+fn names_anything(node: &Node) -> bool {
+	let mut found = false;
+	node.visit(&mut |part| found |= matches!(part, Node::Symbol(_)));
+	found
 }
 
 /// The source text of `data e`, which never runs

@@ -45,7 +45,7 @@ impl WasmGcEmitter {
 		// the module changed in its copy of an argument is written back (host-foreign.js, wasm_modules.rs write_back)
 		if self.ctx.ffi_imports.values().any(|import| crate::wasm_modules::is_module_path(import.library)) {
 			let assign = (0..3).flat_map(|field_index| [I::LocalGet(0), I::LocalGet(1), field(node_type, field_index), I::StructSet { struct_type_index: node_type, field_index }]);
-			self.reflect("reflect_assign", vec![node, node], vec![], &assign.collect::<Vec<_>>());
+			self.reflect("reflect_assign", vec![node, node], vec![], &[self.forget_list_cursor(), assign.collect()].concat());
 		}
 
 		// reflect_tag: the index in PAYLOAD_TAGS of the first type the payload is

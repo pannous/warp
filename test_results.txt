@@ -1528,6 +1528,8 @@ PASSED:
   ✓ lists::test_number_keys::a_list_keeps_its_positions
   ✓ lists::test_number_keys::a_number_subscript_keys_an_empty_map
   ✓ lists::test_numbered_fields::numbered_fields_of_a_tuple
+  ✓ lists::test_object_list_walk::indexing_after_an_in_place_change_reads_the_changed_list
+  ✓ lists::test_object_list_walk::walking_a_list_of_objects_takes_linear_steps
   ✓ lists::test_one_entry_map_text::print_keeps_the_braces_of_a_one_entry_map
   ✓ lists::test_one_entry_map_text::the_text_of_a_one_entry_map_keeps_its_braces
   ✓ lists::test_pair_values::a_value_of_a_pair_is_held_as_a_node
@@ -1642,6 +1644,8 @@ PASSED:
   ✓ modules::test_include::including_a_file_twice_includes_it_once_and_cycles_terminate
   ✓ modules::test_include::require_and_import_are_use
   ✓ modules::test_include::use_imports_only_the_declarations
+  ✓ modules::test_json_parse_form::json_parse_reads_json
+  ✓ modules::test_json_parse_form::parse_json_is_an_alias_of_json_parse
   ✓ modules::test_module_cache::test_different_modules_not_cached
   ✓ modules::test_module_cache::test_module_cache_reuse
   ✓ modules::test_module_classes::a_used_modules_class_has_its_methods
@@ -2053,6 +2057,7 @@ PASSED:
   ✓ numbers::test_plus_minus_math::a_math_word_maps_the_endpoints
   ✓ numbers::test_plus_minus_math::a_plain_number_still_takes_the_math_word
   ✓ numbers::test_plus_minus_math::an_extremum_inside_the_interval_is_its_bound
+  ✓ numbers::test_plus_minus_parameter::a_number_parameter_takes_a_plus_minus_value
   ✓ numbers::test_plus_minus_print::a_known_interval_says_how_it_compares
   ✓ numbers::test_plus_minus_print::an_interval_known_only_at_run_time_compares_certainly_with_a_warning
   ✓ numbers::test_plus_minus_print::an_interval_negated
@@ -2072,9 +2077,11 @@ PASSED:
   ✓ numbers::test_quantity_conversion::a_run_time_quantity_converts_with_as
   ✓ numbers::test_quantity_conversion::a_run_time_quantity_joins_a_text
   ✓ numbers::test_quantity_tolerance::a_field_type_with_tolerance_gives_its_values_the_tolerance
+  ✓ numbers::test_quantity_tolerance::a_final_unit_field_with_tolerance_shows_its_unit
   ✓ numbers::test_quantity_tolerance::a_gaussian_quantity_shows_sigma_apart_from_its_unit
   ✓ numbers::test_quantity_tolerance::a_quantity_with_tolerance_compares_certainly_or_possibly
   ✓ numbers::test_quantity_tolerance::a_quantity_with_tolerance_has_its_bounds
+  ✓ numbers::test_quantity_tolerance::a_sum_of_quantities_is_a_quantity
   ✓ numbers::test_quantity_tolerance::a_unit_field_takes_a_quantity_with_tolerance
   ✓ numbers::test_quantity_tolerance::quantities_with_tolerance_sum
   ✓ numbers::test_range_tolerance_compare::a_range_equals_the_same_span_with_tolerance
@@ -2167,6 +2174,9 @@ PASSED:
   ✓ numbers::test_unit_literals::a_long_unit_name_belongs_to_its_amount_in_a_condition
   ✓ numbers::test_unit_literals::a_unit_after_a_comparison_belongs_to_its_amount
   ✓ numbers::test_unit_literals::a_variable_named_like_a_unit_stays_a_variable
+  ✓ numbers::test_unit_named_variable::a_loop_variable_named_like_a_unit
+  ✓ numbers::test_unit_named_variable::a_printed_loop_variable_named_like_a_unit
+  ✓ numbers::test_unit_named_variable::an_assigned_variable_named_like_a_unit
   ✓ numbers::test_unit_polish::test_as_converts_to_a_powered_unit
   ✓ numbers::test_unit_polish::test_middle_dot_multiplies
   ✓ numbers::test_unit_products::test_areas_add_divide_and_compare
@@ -2643,6 +2653,10 @@ PASSED:
   ✓ programs::test_samples::test_sudoku
   ✓ programs::test_samples::test_sum
   ✓ programs::test_samples_run_cleanly::every_sample_runs_without_a_compiler_error
+  ✓ programs::test_shader_blocks::a_shader_block_is_its_wgsl_text
+  ✓ programs::test_shader_blocks::a_shader_block_over_lines_loses_its_indentation
+  ✓ programs::test_shader_blocks::paint_takes_a_shader_block
+  ✓ programs::test_shader_blocks::shader_stays_a_name
   ✓ programs::test_small_samples::error_samples
   ✓ programs::test_small_samples::text_samples
   ✓ programs::test_warp_command::debug_build_names_its_commit
@@ -2834,6 +2848,9 @@ PASSED:
   ✓ text::test_runtime_text_as_int::a_text_without_a_number_is_a_runtime_error
   ✓ text::test_split_default::split_without_separator_splits_at_spaces
   ✓ text::test_split_element_kind::split_elements_concatenate
+  ✓ text::test_str_computed::str_of_a_field_read_is_its_value
+  ✓ text::test_str_computed::str_of_data_reads_as_written
+  ✓ text::test_str_computed::str_of_literal_arithmetic_is_its_value
   ✓ text::test_string::test_first_char
   ✓ text::test_string::test_interpolation
   ✓ text::test_string::test_map
@@ -3373,6 +3390,7 @@ PASSED:
   ✓ types::test_types::test_empty_typed_functions
   ✓ types::test_types::test_function_argument_cast
   ✓ types::test_types::test_function_return_types
+  ✓ types::test_types::test_generics
   ✓ types::test_types::test_go_types
   ✓ types::test_types::test_polymorphism
   ✓ types::test_types::test_polymorphism2
@@ -3738,8 +3756,12 @@ PASSED:
   ✓ web::test_uniscript::use_strict_makes_uniscript_warnings_errors
   ✓ web::test_warp_serve::a_program_without_serve_is_served_with_its_server_functions_and_routes
   ✓ web::test_warp_serve::a_server_is_known_without_running_it
+  ✓ web::test_web::test_canvas
+  ✓ web::test_web::test_dom
   ✓ web::test_web::test_fetch
   ✓ web::test_web::test_html_warp
+  ✓ web::test_web::test_inner_html
+  ✓ web::test_web::test_js
   ✓ web::test_web_apis::notify_is_a_host_word
   ✓ web::test_web_playground::a_returned_value_has_its_own_kind_on_every_platform
   ✓ web::test_web_playground::a_trap_in_the_page_names_the_runtime_error
@@ -4132,4 +4154,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-14 ignored, 4127 passed, 0 failed, 4127 total tested
+10 ignored, 4149 passed, 0 failed, 4149 total tested

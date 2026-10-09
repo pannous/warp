@@ -35,6 +35,7 @@ impl WasmGcEmitter {
 		let type_name = declared.name();
 		let object_mask = OBJECT_KINDS.iter().fold(0, |mask, kind| mask | 1 << *kind as i64);
 		let spec = match crate::analyzer::annotated_kind(declared) {
+			Some(Kind::Empty) if crate::uncertain::is_interval_number(declared) => "number",
 			Some(Kind::Empty) => return None, // any, an inline union
 			Some(Kind::Key) => return Some(Admitted::Kinds(object_mask)),
 			Some(Kind::List) => "list", // `xs: [int]`, `xs: ints`
