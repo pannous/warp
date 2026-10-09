@@ -99,6 +99,15 @@ pub fn written_kind(node: &Node, scope: &Scope) -> Kind {
 }
 
 /// A math word's result: a Node when its argument is one, which may be a ± interval (crate::uncertain::INTERVAL_WORDS)
+/// The number a text literal spells: `"4"` is 4
+pub fn literal_number(value: &Node) -> Option<Node> {
+	match value.drop_meta() {
+		Node::Text(text) => crate::warp_parser::number_in_text(text).map(Node::Number),
+		Node::Char(digit) => digit.to_digit(10).map(|digit| Node::Number(Number::Int(digit as i64))),
+		_ => None,
+	}
+}
+
 fn interval_or(kind: Kind, argument: &Node, scope: &Scope) -> Kind {
 	if is_run_time_kind(&infer_type(argument, scope)) { Kind::Data } else { kind }
 }
@@ -491,7 +500,6 @@ pub(super) fn branches_kind(then_kind: Kind, else_kind: Kind) -> Kind {
 /// `"1/3" as number`: the number a constant text spells, which the cast is (card fraction-number)
 pub fn spelled_number(node: &Node) -> Option<Node> {
 	let Node::Key(value, Op::As, target) = node.drop_meta() else { return None };
-	let Node::Text(text) = value.drop_meta() else { return None };
 	let is_number_word = matches!(target.name().to_lowercase().as_str(), "number" | "num");
-	is_number_word.then(|| crate::warp_parser::number_in_text(text)).flatten().map(Node::Number)
+	is_number_word.then(|| literal_number(value)).flatten()
 }
