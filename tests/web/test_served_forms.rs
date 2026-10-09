@@ -110,3 +110,33 @@ fn a_page_starts_from_rows_of_a_server_table() {
 fn routes_without_a_server_wait_for_the_page() {
 	crate::is!(&format!("items = [1]\n{PROGRAM}\npost \"/items\" {{ items.add(2) }}\ncount(items)"), 1);
 }
+
+// samples/todo_app.warp served, as the samples check asks it with curl: a todo is created, toggled and listed
+#[test]
+fn the_todo_sample_creates_toggles_and_lists() {
+	const TODO_PORT: u16 = 18647;
+	const TODO_APP: &str = include_str!("../../samples/todo_app.warp");
+	let program = program_with_rows("served_todo_app", TODO_APP, TODO_APP);
+	let server = served_from(TODO_PORT, TODO_APP, Some(program), 5);
+	let at = |path: &str| format!("http://127.0.0.1:{TODO_PORT}{path}");
+	let posted = |path: &str, body: &str| agent().post(&at(path)).header("Content-Type", FORM_TYPE).send(body).expect("an answer").body_mut().read_to_string().expect("a text");
+	let got = |path: &str| agent().get(&at(path)).call().expect("an answer").body_mut().read_to_string().expect("a text");
+	assert_eq!(posted("/todos", "title=tea"), r#"{"Todo":{"title":"tea","done":false,"id":1}}"#);
+	assert_eq!(posted("/todos", "title=buy+milk"), r#"{"Todo":{"title":"buy milk","done":false,"id":2}}"#);
+	assert_eq!(posted("/todos/1/toggle", ""), r#"{"Todo":{"title":"tea","done":true,"id":1}}"#);
+	assert_eq!(got("/api/todos"), r#"[{"Todo":{"title":"tea","done":true,"id":1}},{"Todo":{"title":"buy milk","done":false,"id":2}}]"#);
+	assert_eq!(got("/api/open"), r#"[{"Todo":{"title":"buy milk","done":false,"id":2}}]"#);
+	server.join().expect("the server thread");
+}
+
+// a filter of a table that keeps no row answers [] as the table itself does (card served-empty), not null
+#[test]
+fn an_empty_filter_answers_an_empty_list() {
+	const FILTER_PORT: u16 = 18649;
+	const TABLE: &str = "class Todo{title: text; done: bool}\nstored todos: [Todo]\nget \"/open\" { todos where not done }";
+	let program = program_with_rows("served_empty_filter", TABLE, "class Todo{title: text; done: bool}\nstored todos: [Todo]\ntodos.add(Todo(\"tea\", true))");
+	let server = served_from(FILTER_PORT, TABLE, Some(program), 1);
+	let open = agent().get(&format!("http://127.0.0.1:{FILTER_PORT}/open")).call().expect("an answer").body_mut().read_to_string().expect("a text");
+	assert_eq!(open, "[]");
+	server.join().expect("the server thread");
+}

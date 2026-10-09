@@ -241,14 +241,12 @@ impl ServerData {
 	}
 }
 
-/// Whether a value (a block's last statement) is a list: a list word, its call or a list literal, so its ø answers []
+/// Whether a value (a block's last statement) is a list: a list word, its call, a list literal or a filter (`todos where
+/// not done`, a comprehension by now), so its ø answers []
 fn answers_a_list(value: &Node, list_words: &[String]) -> bool {
-	let value = match value.drop_meta() {
-		Node::List(items, Bracket::Curly, _) => items.last().map_or(value, |last| last).drop_meta(),
-		value => value,
-	};
-	match value {
-		Node::Symbol(name) => list_words.contains(name),
+	match value.drop_meta() {
+		Node::List(items, Bracket::Curly, _) | Node::List(items, Bracket::Round, Separator::Semicolon | Separator::Newline) => items.last().is_some_and(|last| answers_a_list(last, list_words)),
+		Node::Symbol(name) => list_words.contains(name) || name.starts_with(crate::comprehensions::MADE),
 		Node::List(items, Bracket::Round, _) => items.first().is_some_and(|word| matches!(word.drop_meta(), Node::Symbol(name) if list_words.contains(name))),
 		Node::List(_, Bracket::Square, _) => true,
 		_ => false,
