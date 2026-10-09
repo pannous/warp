@@ -22,6 +22,7 @@ fn print_rounds_a_quantity_to_two_decimals() {
 	assert_eq!(printed("x = 1 m / 3\nprint x as cm").trim(), "33.33cm");
 	assert_eq!(printed("x = 3 km / 2\nprint x").trim(), "1.5km");
 	assert_eq!(printed("xs = [37 km / 6, 2 km]\nprint xs").trim(), "[6.17km 2km]");
+	assert_eq!(printed("print mean([5 km, 1.5 km, 12 km])").trim(), "6.17km");
 }
 
 #[cfg(feature = "native")]
