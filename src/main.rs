@@ -522,7 +522,8 @@ fn leave_executable(path: &str) {
     }
     let written = diagnostic::quietly(|| warp::modules::with_program_file(program_file, || write_standalone_executable(&load_file(path), path)));
     if let Err(failure) = written {
-        eprintln!("note: no executable {}: {failure} (said once until the file or warp changes)", executable.display());
+        // (said once until the file or warp changes)
+        eprintln!("note: no executable {}: {failure}", executable.display());
         if let Some(marker) = marker {
             let _ = marker.parent().map(fs::create_dir_all);
             let _ = fs::write(&marker, failure);
@@ -554,8 +555,7 @@ fn write_standalone_executable(code: &str, target: &str) -> Result<String, Strin
         }
     }
     if !missing.is_empty() {
-        let need = if missing.len() == 1 && !missing[0].ends_with('s') { "needs" } else { "need" };
-        return Err(format!("{} {need} runtime.", missing.join(", ")));
+        return Err(format!("{} used runtime.", missing.join(", ")));
     }
     let machine_code = module.serialize().map_err(|failure| failure.to_string())?;
     let stub = runtime_stub_path()?;
