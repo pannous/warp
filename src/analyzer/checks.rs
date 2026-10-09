@@ -398,6 +398,12 @@ pub(super) const NODE_LIST_TYPE: &str = "list of node";
 pub(super) const LIST_WORD: &str = "list";
 /// Between a variable and the name of a temporary made for it (`xs·range`, `xs·item`, `m·removed`)
 pub const TEMPORARY_SEPARATOR: &str = "·";
+
+/// A name only a lowering pass makes (`word·sum·3`, `x·iterator`): the program cannot write `·` in a name, where it
+/// reads as a product
+pub fn is_compiler_temporary(name: &str) -> bool {
+	name.contains(TEMPORARY_SEPARATOR)
+}
 /// Statements that name functions or modules instead of calling them
 pub(super) const IMPORT_WORDS: [&str; 3] = ["import", "use", "include"];
 pub(super) const LIST_OF_PREFIX: &str = "list of ";

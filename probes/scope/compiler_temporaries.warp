@@ -1,0 +1,12 @@
+total(xs) := sum(xs)
+biggest(xs) := max(xs)
+halved(n) := try n / 0 else 0
+first_or_zero(xs) := try xs#9 else 0
+print total([1 2 3])
+print sum([4 5])
+print biggest([3 9 2])
+print max([1 2])
+print halved(4)
+print try 4 / 0 else 1
+print first_or_zero([1])
+print try [1]#9 else 2

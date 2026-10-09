@@ -14,7 +14,7 @@ use std::collections::{HashMap, HashSet};
 const OPTIONAL_MARK: char = '?';
 const MAYBE_WORD: &str = "maybe";
 /// the arguments computed before a call whose named arguments change their order (P216)
-const TEMPORARY_PREFIX: &str = "named_argument_";
+const TEMPORARY_BASE: [&str; 2] = ["named", "argument"];
 
 struct Function {
 	parameters: Vec<String>,
@@ -428,6 +428,6 @@ impl Rewrite {
 
 	fn temporary(&self) -> String {
 		self.temporaries.set(self.temporaries.get() + 1);
-		format!("{TEMPORARY_PREFIX}{}", self.temporaries.get())
+		crate::library_words::temporary_name(&[TEMPORARY_BASE[0], TEMPORARY_BASE[1], &self.temporaries.get().to_string()])
 	}
 }
