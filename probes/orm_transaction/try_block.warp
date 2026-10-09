@@ -1,0 +1,7 @@
+x = 0
+v = try { x = 5; raise "boom"; 7 } catch e { print "caught " + e.message; 0 }
+print x
+print v
+w = try { x = 6; 8 } catch e { 0 }
+print x
+print w

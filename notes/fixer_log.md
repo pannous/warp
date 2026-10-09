@@ -232,3 +232,6 @@ Running list of the small fixes done by the fixer session (branches fix-<topic>)
 - a longer text join with several quantities: static_units takes any sum with a text in it as a join (units::joins_text, shared with print-km).
 ## 2026-10-09 prebuilt-stub
 - an installed warp (not in a cargo target) never builds warp-runtime; it uses the one shipped next to it (main.rs in_cargo_target).
+
+## 2026-10-09 orm-transaction (card orm step 5)
+- transaction { } = BEGIN … COMMIT, ROLLBACK + restore of held instances on failure, re-raised; native and browser.
