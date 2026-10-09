@@ -178,3 +178,15 @@ fn the_orm_sample_runs_twice_on_the_same_rows() {
 	}
 	assert_ne!(runs[0], runs[1], "the second run reads the age the first one wrote");
 }
+
+// card todo-app robustness: `people.remove(p)` deletes p's row, loaded or not, in a function too
+#[test]
+fn remove_deletes_the_row() {
+	let run = |rest: &str| eval(&program("people_removed", rest));
+	run("people.add(Person(\"Al\", 1))\npeople.add(Person(\"Bo\", 2))\npeople.add(Person(\"Cy\", 3))");
+	is!(&program("people_removed", "people.remove((people where it.name == \"Bo\")#1)\ncount(people)"), 2);
+	is!(&program("people_removed", "count(people)"), 2);
+	is!(&program("people_removed", "gone(name) := { people.remove((people where it.name == name)#1) }\ngone(\"Al\").age"), 1);
+	is!(&program("people_removed", "people#1.name"), "Cy");
+	is!(&program("people_removed", "people.remove(people#1)\npeople.add(Person(\"Di\", 4))\npeople#1.name"), "Di");
+}

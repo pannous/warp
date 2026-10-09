@@ -12,7 +12,7 @@ fn shown(rest: &str) -> String {
 fn parentheses_keep_a_unit_field() {
 	assert_eq!(shown("(runs#2.distance) as m"), "1500m");
 	assert_eq!(shown("r = runs#1\n(r.distance + 1 m) as m"), "5001m");
-	assert_eq!(shown("d = (runs#3.distance)\nd"), "12000m");
+	assert_eq!(shown("d = (runs#3.distance)\nd"), "12km"); // the declared unit (card unit-value)
 }
 
 #[test]

@@ -36,3 +36,12 @@ fn a_chain_of_phrases() {
 fn a_method_of_a_parenthesized_filter() {
 	is!("w = [2, -1, 5]; (w where it > 0).slice(0, 1)", parse("[2]"));
 }
+
+/// card todo-app robustness: `todos sorted by priority` as written without a dot, and `sorted` as `sort`
+#[test]
+fn sorted_by_a_field_without_a_dot() {
+	is!("items = [{price: 3}, {price: 1}]; cheapest = items sorted by price; cheapest#1.price", 1);
+	is!("class T{p:int}; xs = [T(2), T(1)]; (xs sorted by p)#1.p", 1);
+	is!("class T{p:int}; xs = [T(2), T(1)]; ys = xs.sorted by p; ys#1.p", 1);
+	is!("xs = [1, -2, 3]; xs keep only positive", parse("[1 3]"));
+}

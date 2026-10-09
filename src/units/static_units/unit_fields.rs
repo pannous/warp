@@ -3,7 +3,7 @@
 //! instance's class: a constructor call, a variable declared `r: Run`, an element of a list (or table) declared `[Run]`,
 //! a loop over such a list. A unit field read of an instance it cannot see is a loud error, never a silent SI number.
 
-use super::{shown, Fields, Inference, Signature, Stop, MAP_WORD};
+use super::{shown, Fields, Inference, Signature, Stop};
 use crate::lowering::database_tables::OPTIONAL_MARK;
 use crate::node::{Bracket, Node};
 use crate::operators::Op;
@@ -38,6 +38,18 @@ fn field_units(type_name: &str) -> Option<Vec<crate::units::Factor>> {
 		return None;
 	}
 	crate::units::unit_expression(&crate::warp_parser::parse(unit))
+}
+
+/// The units written in the arguments of constructor calls of `classes` (`1500 m` of `Run(1500 m)`)
+pub(super) fn stored_argument_units(program: &Node, classes: &HashMap<String, Fields>) -> Vec<&'static crate::units::Unit> {
+	let mut stored = vec![];
+	program.visit(&mut |node| {
+		let Node::List(items, Bracket::Round, _) = node else { return };
+		if let Some((_, arguments)) = items.split_first().filter(|(head, _)| classes.contains_key(&head.drop_meta().name())) {
+			arguments.iter().for_each(|argument| stored.extend(super::written_units(argument)));
+		}
+	});
+	stored
 }
 
 /// The signature of a field type that is a unit
@@ -103,20 +115,6 @@ impl Inference {
 	pub(super) fn list_instance_fields(&self, list: &Node) -> Option<Fields> {
 		let name = crate::database_tables::loaded_table(list).unwrap_or_else(|| list.drop_meta().name());
 		self.classes.get(self.class_lists.get(&name)?).cloned()
-	}
-
-	/// `runs.map(r => r.distance)` of a list of a class: the signature of the unit field each instance gives
-	pub(super) fn mapped_field(&self, mapped: &Node) -> Option<Signature> {
-		let Node::Key(list, Op::Dot, call) = mapped.drop_meta() else { return None };
-		let Node::List(items, _, _) = call.drop_meta() else { return None };
-		let [word, function] = items.as_slice() else { return None };
-		let Node::Key(parameter, Op::FatArrow, body) = function.drop_meta() else { return None };
-		let Node::Key(object, Op::Dot, field) = body.drop_meta() else { return None };
-		if word.drop_meta().name() != MAP_WORD || object.drop_meta().name() != parameter.drop_meta().name() {
-			return None;
-		}
-		let fields = self.list_instance_fields(list)?;
-		fields.into_iter().find(|(name, _)| *name == field.drop_meta().name()).map(|(_, signature)| signature).filter(|signature| !signature.is_empty())
 	}
 
 	/// The fields of the instance `object` is, with their signatures

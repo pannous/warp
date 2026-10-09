@@ -164,7 +164,7 @@ impl WasmGcEmitter {
 		let saved_scope = std::mem::replace(&mut self.scope, scope);
 		self.scope.globals = self.function_globals(&function.name);
 		for (param, is_list) in function.params.iter().zip(list_params) {
-			self.scope.define_param(param.name.clone(), if *is_list { Kind::List } else { param_kind(param) });
+			self.scope.define_param(param, if *is_list { Kind::List } else { param_kind(param) });
 		}
 		collect_variables(&function.body, &mut self.scope);
 		let mut typed = self.find_typed_lists(&function.body);

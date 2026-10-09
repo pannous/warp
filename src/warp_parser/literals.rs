@@ -114,7 +114,7 @@ impl WarpParser {
 					self.text_until_closing('{', '}').map(Some)
 				}
 				'$' if interpolates => self.parse_dollar_hole(),
-				'\\' if interpolates && self.peek_char(1) == '(' => self.parse_swift_hole().map(Some),
+				'\\' if interpolates && matches!(self.peek_char(1), '(' | '{') => self.parse_swift_hole().map(Some),
 				_ => Ok(None),
 			};
 			match hole {
@@ -232,10 +232,18 @@ impl WarpParser {
 		Ok(Some(expression))
 	}
 
-	/// `\(expr)` inside interpolated text, the canonical hole: its expression
+	/// `\(expr)` inside interpolated text, the canonical hole: its expression; `\{expr}` too, with a hint (card brace-hole)
 	pub(super) fn parse_swift_hole(&mut self) -> Result<String, String> {
+		let (line, column) = self.get_position();
+		let open = self.peek_char(1);
 		self.advance_by(2);
-		self.text_until_closing('(', ')')
+		if open == '(' {
+			return self.text_until_closing('(', ')');
+		}
+		let expression = self.text_until_closing('{', '}')?;
+		set_hint_position(line, column);
+		norm::interpolation(&format!("\\{{{expression}}}"), &expression);
+		Ok(expression)
 	}
 
 	/// The source up to the bracket closing an already opened `open`, skipping quoted text; consumes the closing bracket

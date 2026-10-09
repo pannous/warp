@@ -151,6 +151,9 @@ const PRINT_WORD: &str = "print";
 /// `print a  print b`: statements separated by spaces only (user decision 2026-10-03: a loud error)
 const TWO_STATEMENTS_ON_ONE_LINE: &str = "two statements on one line? separate them with `;` or a newline";
 const IN_KEYWORD: &str = "in";
+/// What ends a loop's iterable besides its body: the statement, a comprehension's bracket or condition (`if`)
+const ITERABLE_ENDS: [char; 6] = [';', '}', ']', ')', ',', '\0'];
+const IF_WORD: &str = "if";
 /// Ruby/Lua blocks: `while c do … end`, `if c then … else … end`
 const END_KEYWORD: &str = "end";
 const ELIXIR_FUNCTION_KEYWORD: &str = "fn";
@@ -1042,14 +1045,26 @@ fn real(exact: Exact) -> Node {
 	Node::Number(Number::real(Real::Exact(exact)))
 }
 
+/// The glyphs that are true or false (card keyword-glyphs), longest spelling first: `✔️` is `✔` with an emoji variation
+/// selector. Most start an emoji, which would otherwise be a codepoint (atoms.rs, parse_emoji)
+pub(crate) const TRUTH_GLYPHS: [(&str, bool); 13] = [
+	("✔️", true), ("✓️", true), ("☑️", true), ("⊤", true), ("✓", true), ("✔", true), ("☑", true), ("✅", true), ("🗸", true), ("🗹", true),
+	("⊥", false), ("❌", false), ("✗", false),
+];
+
+pub(crate) fn truth_glyph(glyph: &str) -> Option<Node> {
+	TRUTH_GLYPHS.iter().find(|(spelling, _)| *spelling == glyph).map(|(_, truth)| if *truth { Node::True } else { Node::False })
+}
+
 fn check_constants(s: &str, data_mode: bool) -> Option<Node> {
 	let is_word = s.chars().all(|c| c.is_ascii_alphabetic());
 	if data_mode && is_word && !DATA_WORD_LITERALS.contains(&s) {
 		return None;
 	}
 	match s.to_lowercase().as_str() {
-		"⊤" | "true" | "yes" | "✓" | "🗸" | "✔" | "✓️" | "🗹" | "☑" | "✅" | "⊨" => Some(Node::True),
-		"⊥" | "false" | "no" | "⊭" | "❌" | "" => Some(Node::False),
+		"true" | "yes" => Some(Node::True),
+		"false" | "no" | "" => Some(Node::False),
+		glyph if TRUTH_GLYPHS.iter().any(|(spelling, _)| *spelling == glyph) => truth_glyph(glyph),
 		"ø" | "null" | "nul" | "none" | "nil" | "nill" | "nix" | "nada" | "nothing" | "empty" | "void" => Some(Empty),
 		// exact generators (extensions/reals.rs); a bare `e` or `i` stays a free name
 		"π" | "pi" => Some(real(Exact::pi())),
@@ -1059,7 +1074,6 @@ fn check_constants(s: &str, data_mode: bool) -> Option<Node> {
 		// hyperreals (wiki/hyperreals.md): the glyphs only, `epsilon` stays a free name like `e`
 		"ε" => Some(real(Exact::epsilon())),
 		"ω" => Some(real(Exact::omega())),
-		"⚠️" | "⚡" | "⚡️" => Some(error(s)),
 		_ => None,
 	}
 }

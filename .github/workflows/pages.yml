@@ -104,6 +104,10 @@ jobs:
       run: npm install -g agent-browser && agent-browser install --with-deps
     - name: The live playground shows the tour and its console stays clean
       run: python3 web/playground/test_in_browser.py --examples --url https://warp.pannous.com/
-    - name: The same in headless Firefox
+    # the page is deployed by now: a Firefox failure here (the intermittent worker-start hang, card firefox-hello) is a
+    # warning annotation on the run, not a failed run mailing the user (user 2026-10-09: "conditionally skip the tests")
+    - name: The same in headless Firefox (a warning, not a failure)
       timeout-minutes: 15
-      run: python3 web/playground/test_in_browser.py --examples --firefox --url https://warp.pannous.com/
+      run: |
+        python3 web/playground/test_in_browser.py --examples --firefox --url https://warp.pannous.com/ ||
+          echo "::warning title=Firefox check of the live playground failed::see this step's log (card firefox-hello)"

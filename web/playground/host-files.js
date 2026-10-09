@@ -236,6 +236,13 @@ function insertRow(table, columns, values, file) {
 	return id;
 }
 
+function deleteRow(table, id, file) {
+	const stored = storedTable(file, table);
+	stored.rows = stored.rows.filter(row => row[ID_COLUMN] !== id);
+	keepTable(file, table, stored);
+	return null;
+}
+
 function updateRow(table, id, column, value, file) {
 	const stored = storedTable(file, table);
 	const row = stored.rows.find(row => row[ID_COLUMN] === id);
@@ -288,7 +295,7 @@ addHostPart({
 			},
 		},
 		// a filter compiled natively is an SQL query (a page compiled by the browser keeps filters as comprehensions)
-		table: { open: openTable, migrate: migrateTable, rows: tableRows, page: (table, schema, file, start, size) => tableRows(table, schema, file).slice(start - 1, start - 1 + size), count: (table, schema, file) => storedTable(file, table).rows.length, insert: insertRow, update: updateRow, select: table => { throw new Error(`a filter of the table ${table} is an SQL query: it runs natively (warp serve)`); } },
+		table: { open: openTable, migrate: migrateTable, rows: tableRows, page: (table, schema, file, start, size) => tableRows(table, schema, file).slice(start - 1, start - 1 + size), count: (table, schema, file) => storedTable(file, table).rows.length, insert: insertRow, delete: deleteRow, update: updateRow, select: table => { throw new Error(`a filter of the table ${table} is an SQL query: it runs natively (warp serve)`); } },
 		net: { post: (url, body, headers) => postSync(url, contentText(body), headers ?? {}) },
 		// `clipboard.write(text)` (lowering/system_values.rs): a page writes it (markup.js copyText), a Worker has no
 		// clipboard and hands the text to its page (self.writeClipboard: worker.js)
