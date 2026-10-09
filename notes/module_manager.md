@@ -1,6 +1,6 @@
 # Module manager: the sketch (card module-manager)
 
-samples/modules.warp was this sketch of a module system, from the wasp repo. It ended in an uncaught error through
+samples/modules.warp was this sketch of a module system, from the warp repo. It ended in an uncaught error through
 the CLI (card samples-uncaught), so the sample now shows the module forms that work, and the sketch lives here as
 input for card module-manager. What it needs, as found on 2026-10-09:
 - `module name { … }` blocks, nested ones, and `graphics.colors.red` into them: `module` is an undefined variable.
