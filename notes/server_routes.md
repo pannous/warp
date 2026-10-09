@@ -127,3 +127,17 @@ all. The page build now takes the definition: tests/web/test_server_functions_in
 
 ## Undoable defaults taken
 - RPC in the page is async, like fetch (option a), starting from the prerendered value; a call with a local argument is refused.
+- /api and /rpc JSON shows an instance as a plain object, `{"name":"Ann","id":1}`, with no class wrapper (supervisor,
+  2026-10-09). An instance reads back as `Key(Class, Op::None, {…})`, and web_server.rs without_classes strips it where a
+  value stands. An object's own entries (`address:{…}`) keep their names.
+
+## Server route paths (cards server-path, route-star)
+- `get "/api/users/:id:int" { users#id }`: a server route's path takes the page routes' patterns. web_server.rs
+  route_at prefers the route with exactly the path, then the first whose pattern matches (routes.rs path_matches, the
+  Rust twin of lib/router.warp route_matches). serve.rs binds the parameters from `request.path` with the page routes'
+  `let id:int = route_segment(…) as int` (routes.rs route_body_at), and the router module is loaded for them.
+- An /api/ or /rpc/ path that no route takes answers JSON 404 `{"error":"no route GET …"}`, never the page.
+- A page path: the single page answers every path a route matches, `route "*"` included, with 200 (user 2026-10-07,
+  supervisor 2026-10-09). The answer is 404 only when no route matches at all (site.rs matches_no_route_at) or when a
+  matched route's lookup misses (`users#9`).
+- Check by hand: `probes/server_edits/curl_checks.sh <warp binary> probes/server_edits/s1.warp <port>`.
