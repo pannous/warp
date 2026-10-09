@@ -7,6 +7,13 @@ before asking the user; nobody reads it front to back, the code, tests and wiki 
 notes/open_decisions.md.
 
 ## Decided 2026-10-09 (user, as recommended unless quoted)
+- The user's uncommitted main-checkout edits (supervisor; patch scratch/user_edits.patch) land:
+  literals.rs: `${}`, `$()`, `\()` and `\{}` interpolation are all fine, no hint (user: "${} $() \() \{} all fine");
+  the 2 test_interpolation tests expecting the hint change. orm.warp: `bo.age += 1` writes through without
+  `save bo`; the sample test must tolerate the age growing on each run. natural.warp: land the countdown check with
+  its stray trailing `,2` removed. extensions.rs: "should not be a copy, but a hard link to some dev folder, and it
+  should reflect the new state of this project": the current file has link count 1 and old content (wasp_parser,
+  `strings!`); restore warp's content and re-link it with the shared copy.
 - P231 (supervisor/warp-web): print rounds quantities with units to a decimal, `mean of [5km, 1.5km, 12km]` prints
   `6.17km`; str() and serialization keep the exact `(37/6)km`; plain numbers keep `7/3`. Replaces the interim
   `(37/6)km`-everywhere build.
@@ -880,6 +887,8 @@ notes/open_decisions.md.
   the other is text like dollar money". So `"${expr}"` interpolates, bare `"$x"` stays the literal text `$x`.
   Revises D1's "also `$x`": tests/text/test_interpolation.rs `dollar_holes_interpolate_too` follows (user decision). Swift
   `"\(expr)"` was not asked about and stays.
+- Interpolation holes (user, via the supervisor 2026-10-09, card brace-hole): all four interpolate, `\(…)` canonical,
+  `\{…}`, `${…}` and `$(…)` with the hint "prefer \(…)"; `\u{…}` stays a unicode escape.
 - Tuple returns (P2, asked by warp-d7/warp-5e): user "yes" (answer "no yes ?" in warp-5e's session, second item).
   `return a, b` and `x, y = f()`, compiled to wasm multi-value without allocating a list. Not built yet.
 - Closure Int->Int fast path (P3, asked by warp-5e): user "no" (same answer, first item). Closure calls keep boxing.

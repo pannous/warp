@@ -40,6 +40,18 @@ fn field_units(type_name: &str) -> Option<Vec<crate::units::Factor>> {
 	crate::units::unit_expression(&crate::warp_parser::parse(unit))
 }
 
+/// The units written in the arguments of constructor calls of `classes` (`1500 m` of `Run(1500 m)`)
+pub(super) fn stored_argument_units(program: &Node, classes: &HashMap<String, Fields>) -> Vec<&'static crate::units::Unit> {
+	let mut stored = vec![];
+	program.visit(&mut |node| {
+		let Node::List(items, Bracket::Round, _) = node else { return };
+		if let Some((_, arguments)) = items.split_first().filter(|(head, _)| classes.contains_key(&head.drop_meta().name())) {
+			arguments.iter().for_each(|argument| stored.extend(super::written_units(argument)));
+		}
+	});
+	stored
+}
+
 /// The signature of a field type that is a unit
 fn field_unit(type_name: &str) -> Option<Signature> {
 	field_units(type_name).map(|units| crate::units::signature(&units))
