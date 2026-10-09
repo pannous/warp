@@ -140,8 +140,9 @@ keeping its fields with id 0; the lazy `people·remove` drops bo from the loaded
 - A function with side effects (State, IO, FFI, Async, Eval of effects.rs) in a table filter is a compile-time warning
   (card orm-filter, `effectful_calls`); it still runs, once per row in id order, as the in-memory filter does.
 - Still loaded whole at registration: the query only picks ids. count/#i/paging and the identity map are step 2's rest.
-- An element changed without the write-through form `v.f op= e` (`people#1.age = 5`) leaves its row stale, and a
-  query of the table then disagrees with the list.
+- An element changed in place (`people#1.age = 5`, `(people where …)#1.age += 1`) is bound first,
+  `people·element = people#1; people·element.age = 5`, so it is written through as a variable's change is
+  (database_tables.rs with_bound_element; it was "people·at() gives a copy").
 
 ## How relations work (step 4; card orm)
 - database_tables.rs with_relations: a field whose type is another registered class (`team: Team`) is a foreign key,
