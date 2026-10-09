@@ -138,7 +138,7 @@ impl WarpParser {
 				self.parse_number()
 			}
 			ch if ch.is_alphabetic() || ch == '_' => {
-				let atom = self.parse_elixir_function().or_else(|| self.parse_python_lambda()).or_else(|| self.parse_f_string()).unwrap_or_else(|| self.parse_symbol_with_suffix());
+				let atom = self.parse_elixir_function().or_else(|| self.parse_python_lambda()).or_else(|| self.parse_f_string()).or_else(|| self.parse_shader_block()).unwrap_or_else(|| self.parse_symbol_with_suffix());
 				// the function's own atom takes the mark, not an atom parsed inside it (its parameters)
 				let head = match atom.drop_meta() {
 					Node::List(items, _, _) => items.first().map(Node::name),

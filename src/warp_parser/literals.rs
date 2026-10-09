@@ -7,6 +7,8 @@ const BACKTICK: char = '`';
 const BACKTICK_TOPIC: &str = "backtick text";
 const F_STRING_TOPIC: &str = "python f-string";
 const F_STRING_PREFIX: char = 'f';
+/// The words of a WGSL block, `shader { … }` (card g_oFJc)
+const SHADER_WORDS: [&str; 2] = ["shader", "wgsl"];
 /// `\e` in a text: the start of terminal codes like `\e[H`
 const ESCAPE_CHARACTER: char = '\u{1b}';
 
@@ -191,6 +193,33 @@ impl WarpParser {
 		let text = self.parse_string();
 		self.brace_holes = outer;
 		Some(text)
+	}
+
+	/// `shader { … }` (or `wgsl { … }`) at the cursor: WGSL as a sublanguage, the braces' content verbatim as text
+	/// without its common indentation (card g_oFJc); braces inside WGSL comments do not count
+	pub(super) fn parse_shader_block(&mut self) -> Option<Node> {
+		if self.options.data_mode {
+			return None;
+		}
+		let word = SHADER_WORDS.iter().find(|word| word.chars().enumerate().all(|(index, ch)| self.peek_char(index) == ch))?;
+		let mut open = word.len();
+		if self.is_identifier_start(open) || self.peek_char(open).is_ascii_digit() {
+			return None;
+		}
+		while matches!(self.peek_char(open), ' ' | '\t') {
+			open += 1;
+		}
+		if self.peek_char(open) != '{' {
+			return None;
+		}
+		let start = self.pos + open + 1;
+		let Some(end) = closing_brace(&self.chars[start..]).map(|length| start + length) else {
+			self.advance_by(self.chars.len() - self.pos);
+			return Some(error(&format!("the {{ of `{word} {{ … }}` is never closed")));
+		};
+		let source: String = self.chars[start..end].iter().collect();
+		self.advance_by(end + 1 - self.pos);
+		Some(Node::Text(without_common_indentation(&source)))
 	}
 
 	/// `\x1b` after the backslash: the character of the two hex digits, left at the second
@@ -576,4 +605,29 @@ impl WarpParser {
 		let comment_starts = self.peek_char(at) == '/' && matches!(self.peek_char(at + 1), '/' | '*');
 		blanks > 0 && (comment_starts || self.ends_optional_type(self.peek_char(at), self.peek_char(at + 1)))
 	}
+}
+
+/// The length of `chars` before the `}` that closes an already open `{`, skipping `//` and `/* */` comments
+fn closing_brace(chars: &[char]) -> Option<usize> {
+	let (mut depth, mut at) = (1, 0);
+	while at < chars.len() {
+		match (chars[at], chars.get(at + 1)) {
+			('/', Some('/')) => at += chars[at..].iter().position(|&ch| ch == '\n').unwrap_or(chars.len() - at),
+			('/', Some('*')) => at += chars[at..].windows(2).position(|pair| pair == ['*', '/']).map_or(chars.len() - at, |end| end + 1),
+			('{', _) => depth += 1,
+			('}', _) if depth == 1 => return Some(at),
+			('}', _) => depth -= 1,
+			_ => {}
+		}
+		at += 1;
+	}
+	None
+}
+
+/// The lines without the indentation all non-blank ones share, without the blank lines around them
+fn without_common_indentation(source: &str) -> String {
+	let lines: Vec<&str> = source.trim_matches(|ch| ch == '\n' || ch == '\r').lines().collect();
+	let indentation = |line: &&str| line.len() - line.trim_start().len();
+	let common = lines.iter().filter(|line| !line.trim().is_empty()).map(indentation).min().unwrap_or(0);
+	lines.iter().map(|line| line.get(common..).unwrap_or("").trim_end()).collect::<Vec<_>>().join("\n").trim().to_string()
 }
