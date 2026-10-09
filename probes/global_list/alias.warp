@@ -1,0 +1,6 @@
+out = [0]
+held = out
+add(i) := { global out; out += [i] }
+add(1)
+print count(held)
+print count(out)

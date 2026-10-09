@@ -60,12 +60,25 @@ pub fn repeats_text(left: Kind, op: &Op, right: Kind) -> bool {
 	*op == Op::Mul && ((is_text(left) && right == Kind::Int) || (left == Kind::Int && is_text(right)))
 }
 
-/// `base ^ 0.5`, `base ^ (1/3)`: an exact base with a non-integral constant exponent is no exact number, it is computed as f64
+/// `base ^ 0.5`, `base ^ (1/3)`: an exact base with a non-integral constant exponent is no exact number, it is computed as
+/// f64; `2^(n/12)`, an exponent that may be a ratio at run time, is decided then (node_pow): exact when it is whole
 pub fn arithmetic_kind_of_operands(left: Kind, op: &Op, right: Kind, right_operand: &Node) -> Kind {
-	let fractional_exponent = *op == Op::Pow && constant_value(right_operand).is_some_and(|exponent| exponent.fract() != 0.0);
+	let constant_exponent = if *op == Op::Pow { constant_value(right_operand) } else { None };
+	let fractional_exponent = constant_exponent.is_some_and(|exponent| exponent.fract() != 0.0);
+	let ratio_exponent = *op == Op::Pow && constant_exponent.is_none() && divides(right_operand);
 	match arithmetic_kind(left, op, right) {
 		Kind::Int if fractional_exponent => Kind::Float,
+		Kind::Int if ratio_exponent => Kind::Data,
 		kind => kind,
+	}
+}
+
+/// An expression with a division `/` in it, whose exact value may be a ratio
+fn divides(node: &Node) -> bool {
+	match node.drop_meta() {
+		Node::Key(left, op, right) => *op == Op::Div || divides(left) || divides(right),
+		Node::List(items, Bracket::Round, _) => items.iter().any(divides),
+		_ => false,
 	}
 }
 

@@ -1,0 +1,4 @@
+m = {}
+for i in 1 to 10000 { m[i] = i * 2 }
+print count(values(m))
+print count(keys(m))

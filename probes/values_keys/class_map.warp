@@ -1,0 +1,4 @@
+class Row { id: int; name: text }
+m = {}
+for i in 1 to 10000 { m[i] = Row(i, "r") }
+print count(values(m))
