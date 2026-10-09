@@ -44,20 +44,23 @@ const hasTaskWorkers = () => self.crossOriginIsolated && self.Worker;
 const TASKS_INLINE = "tasks take turns here, one runs to its end before the program goes on: the page is not cross-origin isolated (its service worker cannot run, as in a private window), so it has no shared memory for task Workers. A task that waits for another, or runs until stopped, never ends";
 
 // a built site's task Worker loads the site's scripts (site-worker.js siteScripts), the playground's all of them
-function addTaskWorker() {
+function addTaskWorker(loaded) {
 	const worker = new Worker(self.siteScripts ? `${TASK_WORKER}?scripts=${self.siteScripts.join(",")}` : TASK_WORKER);
 	// loaded: it can take tasks; later a fetch it made is done (startFetch)
-	worker.onmessage = ({ data }) => data === FETCH_DONE ? worker.fetched?.() : taskPool.push(worker);
+	worker.onmessage = ({ data }) => data === FETCH_DONE ? worker.fetched?.() : (taskPool.push(worker), loaded?.());
 }
 
-// the pool of task Workers, made by the workers that run programs (worker.js, test-worker.js) when they start
+// the pool of task Workers, made by the workers that run programs (worker.js, test-worker.js) when they start, one
+// after the other: in Firefox a worker's `new Worker` waits for the page's thread, and while siblings it just made are
+// still starting, that wait sometimes never ends (the tour's first example stalled 1 run in 8, card tour-firefox)
 function prepareTaskPool(size = TASK_POOL_SIZE) {
 	if (!hasTaskWorkers()) return;
-	for (let index = 0; index < size; index++) {
+	const addFrom = index => {
+		if (index === size) return self.diagnosticStage?.("task workers created");
 		self.diagnosticStage?.(`creating task worker ${index + 1} of ${size}`);
-		addTaskWorker();
-	}
-	self.diagnosticStage?.("task workers created");
+		addTaskWorker(() => addFrom(index + 1));
+	};
+	addFrom(0);
 }
 
 // resolves once every task Worker of the pool has loaded: a run that starts before would run its tasks inline, where
