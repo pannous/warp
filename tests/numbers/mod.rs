@@ -64,6 +64,8 @@ mod test_time_of_day;
 mod test_plus_minus;
 mod test_plus_minus_math;
 mod test_plus_minus_print;
+mod test_plus_minus_gaussian; // card plus-minus-gaussian
+mod test_trailing_symbol; // card trailing-symbol
 mod test_div_assign;
 mod test_unit_fields; // card unit-fields
 mod test_log_glyphs; // P226

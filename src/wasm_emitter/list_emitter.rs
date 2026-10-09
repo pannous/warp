@@ -724,12 +724,21 @@ impl WasmGcEmitter {
 		// only lists of atoms: a list with an operator (`foo x = 3`) names its undefined variable on its own
 		// a cast value counts too: `cube 3 as int` parses as `cube (3 as int)`
 		let is_atom = |item: &Node| matches!(item.drop_meta(), Node::Symbol(_) | Node::Number(_) | Node::Text(_) | Node::Char(_) | Node::List(..) | Node::Key(_, Op::As, _));
-		if self.data_context || !in_code || !items.iter().any(is_value) || !items.iter().all(is_atom) {
+		// a word after an assignment's value (`y = 1 zork`) would be dropped: card trailing-symbol
+		let is_assignment = |item: &Node| matches!(item.drop_meta(), Node::Key(_, Op::Assign | Op::Define, _));
+		let assigned = items.first().filter(|first| is_assignment(first));
+		let atoms = if assigned.is_some() { &items[1..] } else { items };
+		if self.data_context || !in_code || !items.iter().any(is_value) || !atoms.iter().all(is_atom) {
 			return None;
 		}
-		let name = items.iter().find_map(|item| self.unknown_word(item).filter(|name| self.is_undefined_word(name)))?;
 		let written = Node::List(items.to_vec(), bracket.clone(), separator.clone());
 		let text = crate::diagnostic::written_text(&written);
+		let Some(name) = items.iter().find_map(|item| self.unknown_word(item).filter(|name| self.is_undefined_word(name))) else {
+			let assigned = crate::diagnostic::written_text(assigned?);
+			let dropped = crate::diagnostic::written_text(&Node::List(atoms.to_vec(), Bracket::None, Separator::Space));
+			let message = format!("`{dropped}` after `{assigned}` does nothing; join it to the value with an operator, or start a new statement");
+			return Some(crate::diagnostic::Diagnostic::at(&written, message).remembered());
+		};
 		let diagnostic = match crate::modules::std_module_defining(&name) {
 			Some(_) => crate::ffi::undefined_function_diagnostic(&written, &name),
 			None => crate::diagnostic::Diagnostic::at(&written, format!("undefined: {name} in `{text}`; define {name}, or write `data {text}` for data")),
