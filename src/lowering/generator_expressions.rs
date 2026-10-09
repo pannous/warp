@@ -4,17 +4,13 @@
 //! Its parameters are the variables it reads, passed when it is made. An element of several words is no generator
 //! expression: `(upper w for w in words)` reads as the call `upper(w for w in words)` (comprehensions.rs).
 
-use crate::comprehensions::{bound_names, comprehension_parts, Comprehension};
+use crate::comprehensions::{bound_names, Comprehension};
 use crate::generators::{statements, symbol, symbol_name, FOR_WORD, NAME_SEPARATOR};
-use crate::library_words::substitute;
 use crate::node::{Bracket, Node, Separator};
 use crate::operators::Op;
-use crate::warp_parser::parse;
 use std::collections::BTreeSet;
 
 const NAME: &str = "generator·expression";
-const YIELDING_LOOP: &str = "for VARIABLE in SEQUENCE { yield ELEMENT }";
-const FILTERED_LOOP: &str = "for VARIABLE in SEQUENCE { if CONDITION { yield ELEMENT } }";
 
 pub fn lower(node: Node) -> Node {
 	if !node.mentions_any(&[FOR_WORD]) {
@@ -49,29 +45,22 @@ fn bound_variables(node: &Node) -> BTreeSet<String> {
 fn expressions(node: Node, variables: &BTreeSet<String>, definitions: &mut Vec<Node>) -> Node {
 	let node = node.map_children(|child| expressions(child, variables, definitions));
 	let Node::List(items, Bracket::Round, Separator::None | Separator::Space) = node.drop_meta() else { return node };
-	let Some(parts) = comprehension_parts(items).filter(|parts| parts.at == 1) else { return node };
+	let Some(comprehension) = Comprehension::of(items).filter(|comprehension| comprehension.at == 1) else { return node };
 	let name = symbol(&[NAME, &(definitions.len() + 1).to_string()].join(NAME_SEPARATOR));
-	let free = free_variables(&parts, variables);
+	let free = free_variables(&comprehension, variables);
 	let head = Node::List([name.clone()].into_iter().chain(free.iter().cloned()).collect(), Bracket::Round, Separator::None);
-	definitions.push(Node::Key(Box::new(head.clone()), Op::Define, Box::new(statements(vec![yielding_loop(parts)], Bracket::Curly))));
+	definitions.push(Node::Key(Box::new(head.clone()), Op::Define, Box::new(statements(vec![comprehension.yielding_loop()], Bracket::Curly))));
 	head.with_meta_of(&node)
 }
 
-/// The variables the expression reads besides its own loop variable
-fn free_variables(parts: &Comprehension, variables: &BTreeSet<String>) -> Vec<Node> {
+/// The variables the expression reads besides its own loop variables
+fn free_variables(comprehension: &Comprehension, variables: &BTreeSet<String>) -> Vec<Node> {
 	let mut read = BTreeSet::new();
-	for part in [Some(&parts.element), Some(&parts.sequence), parts.condition.as_ref()].into_iter().flatten() {
+	for part in comprehension.parts() {
 		part.visit(&mut |inner| read.extend(symbol_name(inner).filter(|name| variables.contains(*name)).cloned()));
 	}
-	read.remove(symbol_name(&parts.variable).map(String::as_str).unwrap_or_default());
+	for own in comprehension.loop_variables() {
+		read.remove(&own);
+	}
 	read.iter().map(|name| symbol(name)).collect()
-}
-
-fn yielding_loop(parts: Comprehension) -> Node {
-	let template = if parts.condition.is_some() { FILTERED_LOOP } else { YIELDING_LOOP };
-	let bindings = [("VARIABLE", Some(parts.variable)), ("SEQUENCE", Some(parts.sequence)), ("ELEMENT", Some(parts.element)), ("CONDITION", parts.condition)];
-	bindings.into_iter().fold(parse(template), |node, (placeholder, value)| match value {
-		Some(value) => substitute(node, placeholder, &value),
-		None => node,
-	})
 }

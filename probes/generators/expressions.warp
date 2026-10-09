@@ -13,3 +13,6 @@ print [next(g), next(g), next(g)]
 scaled(xs, k) := sum(x * k for x in xs)
 print scaled([1, 2], 10)
 print sum(x * x for x in [1, 2, 3])
+print list(x * y for x in [1, 2] for y in [10, 20])
+pairs = (x * y for x in [1, 2] for y in [10, 20] if y > x * 10)
+print pairs
