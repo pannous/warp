@@ -754,6 +754,46 @@ fn collect_defined_unit_names(node: &Node, names: &mut std::collections::HashSet
 	children(node).into_iter().for_each(|child| collect_defined_unit_names(child, names));
 }
 
+/// `f(s) := s * 2; f(3 s)`: a parameter named like a unit the program also writes outside the function is a name clash
+/// (card static-units-parameter); the parameter shadows the unit, so `3 s` would be an undefined variable
+pub fn check_unit_parameter_clashes(program: &Node) -> Option<crate::diagnostic::Diagnostic> {
+	let mut parameter_of = HashMap::new();
+	program.visit(&mut |node| if let Some((function, parameters)) = function_head(node) {
+		for parameter in parameters.iter().map(Node::name).filter(|name| is_unit(name)) {
+			parameter_of.insert(parameter, function.name());
+		}
+	});
+	let outside = without_function_definitions(program.clone());
+	let names_outside = defined_unit_names(&outside);
+	parameter_of.retain(|parameter, _| !names_outside.contains(parameter));
+	let used = first_word_of(&outside, &parameter_of)?;
+	let name = used.drop_meta().name();
+	Some(crate::diagnostic::Diagnostic::at(used, format!("{name} is a parameter of {} and a unit here: rename the parameter", parameter_of[&name])))
+}
+
+/// The name and parameters of a function definition `f(a, b) := …`
+fn function_head(node: &Node) -> Option<(&Node, &[Node])> {
+	let Node::Key(head, Op::Define | Op::Assign, _) = node.drop_meta() else { return None };
+	let Node::List(items, Bracket::Round, _) = head.drop_meta() else { return None };
+	items.split_first().map(|(function, parameters)| (function, parameters))
+}
+
+fn without_function_definitions(node: Node) -> Node {
+	match function_head(&node) {
+		Some(_) => Node::Empty,
+		None => node.map_children(without_function_definitions),
+	}
+}
+
+/// The first of `words` the code writes, not as a field name (`q.s`)
+fn first_word_of<'a>(node: &'a Node, words: &HashMap<String, String>) -> Option<&'a Node> {
+	match node.drop_meta() {
+		Node::Symbol(name) if words.contains_key(name) => Some(node),
+		Node::Key(object, Op::Dot, _) => first_word_of(object, words),
+		_ => children(node).into_iter().find_map(|child| first_word_of(child, words)),
+	}
+}
+
 /// Quantities assigned to variables earlier in the program: `x = 2 km; x + 1 m`
 type Variables = HashMap<String, Value>;
 
