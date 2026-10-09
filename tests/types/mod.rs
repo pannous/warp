@@ -31,6 +31,7 @@ mod test_class_aliases;
 mod test_class_interfaces;
 mod test_enums_ported;
 mod test_class_witnesses;
+mod test_parameter_text; // card param-text
 mod test_construction_checks;
 mod test_struct_field_of_constructor;
 #[cfg(feature = "native")] // wasmtime, files or network: not in the browser build
@@ -118,3 +119,4 @@ mod test_cyclic_objects; // card orm: objects pointing to each other
 mod test_field_named_like_builtin; // cards field-named-size, orm-members-word
 mod test_cycle_mark_depth; // card cycle-mark-depth
 mod test_as_number_variable; // card number-variable
+mod test_method_result_text; // card instance-result

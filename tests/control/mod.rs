@@ -147,3 +147,4 @@ mod test_database_nested_add; // card orm-nested
 mod test_database_dangling_key; // card orm-dangling
 mod test_database_members_add; // cards orm-nested, orm-list-add
 mod test_print_empty; // card print-error
+mod test_try_else_print; // card try-print
