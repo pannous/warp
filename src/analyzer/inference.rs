@@ -30,8 +30,7 @@ pub fn node_arithmetic(left: Kind, op: &Op, right: Kind) -> Option<&'static str>
 	if ![left, right].iter().any(is_run_time_kind) || ![left, right].iter().all(numeric) {
 		return None;
 	}
-	let index = [Op::Add, Op::Sub, Op::Mul, Op::Div].iter().position(|candidate| candidate == op)?;
-	Some(crate::wasm_emitter::list_ops::NODE_ARITHMETIC[index].0)
+	crate::wasm_emitter::list_ops::NODE_ARITHMETIC.iter().find(|(_, known, _)| known == op).map(|(name, _, _)| *name)
 }
 
 pub fn arithmetic_kind(left: Kind, op: &Op, right: Kind) -> Kind {
