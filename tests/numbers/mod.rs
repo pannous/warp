@@ -48,6 +48,7 @@ mod test_implicit_libm;
 mod test_unit_word_keys;
 mod test_round_to_digits;
 mod test_log_base;
+mod test_float_accumulator; // card float-accumulator
 mod test_duration_text;
 mod test_unit_conversion;
 mod test_unit_literals;

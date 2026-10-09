@@ -165,6 +165,7 @@ pub(super) fn collect_variables_inner(node: &Node, scope: &mut Scope, skip_first
 		Node::Key(left, op, right) if op.is_compound_assign() => {
 			if let Node::Symbol(name) = left.drop_meta() {
 				widen_to_float(scope, name, right);
+				widen_to_node(scope, name, &Node::Key(left.clone(), op.base_op(), right.clone()));
 				// `xs += [v]` (a lowered `xs.push(v)`) types xs as `xs = xs + [v]` does
 				if *op == Op::AddAssign {
 					type_list_by_first_append(name, &Node::Key(left.clone(), Op::Add, right.clone()), scope);
@@ -276,7 +277,9 @@ pub(super) fn widen_to_node(scope: &mut Scope, name: &str, value: &Node) {
 	let mixes = |a: Kind, b: Kind| a == b || [a, b].iter().all(|kind| matches!(kind, Kind::Int | Kind::Float)) || [a, b].iter().all(|kind| matches!(kind, Kind::Text | Kind::Codepoint));
 	// an element of unknown kind may be an object: `item = 2` earlier, then `for item in basket` (samples/natural.warp)
 	let unknown_element = assigned == Kind::Empty && matches!(value.drop_meta(), Node::Key(_, Op::Hash, _));
-	let other_kind = unknown_element || CONCRETE_KINDS.contains(&assigned) && !mixes(local.kind, assigned);
+	// a number of run-time kind (`out = out + x` of an element of unknown kind) may be a float: an exact local takes it as a Node
+	let run_time_number = local.kind == Kind::Int && crate::analyzer::inference::is_run_time_kind(&assigned) && !matches!(value.drop_meta(), Node::Empty);
+	let other_kind = unknown_element || run_time_number || CONCRETE_KINDS.contains(&assigned) && !mixes(local.kind, assigned);
 	if CONCRETE_KINDS.contains(&local.kind) && other_kind {
 		local.kind = Kind::Empty;
 		local.type_node = None;
