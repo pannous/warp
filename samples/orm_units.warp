@@ -12,5 +12,5 @@ if count(runs) == 0 {
 total = 0 km
 for run in runs { total += run.distance }
 print "total: " + total
-print total as km  // the same amount in another unit
+print "or " + (total as km)  // a conversion joins a text in its unit
 runs#2.distance

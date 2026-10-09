@@ -328,6 +328,7 @@ fn last_statement(node: &Node) -> Option<&Node> {
 fn conversion_target(node: &Node) -> Option<Vec<Factor>> {
 	match node.drop_meta() {
 		Node::Key(_, Op::As, unit) => super::unit_expression(unit),
+		Node::List(items, Bracket::Round, _) if items.len() == 1 => conversion_target(&items[0]),
 		Node::List(items, Bracket::None, Separator::Space) => match items.as_slice() {
 			[_, word, unit] if matches!(word.drop_meta(), Node::Symbol(w) if w == super::IN_WORD) => super::unit_expression(unit),
 			_ => None,
@@ -412,12 +413,13 @@ impl Inference {
 				}
 				Ok((quantity, given))
 			}
-			// `"distance " + d`: the quantity joins as its text
+			// `"distance " + d`: the quantity joins as its text, `"distance " + (d as km)` in km
 			Node::Key(left, Op::Add, right) if matches!(left.drop_meta(), Node::Text(_)) || matches!(right.drop_meta(), Node::Text(_)) => {
+				let (left_units, right_units) = (conversion_target(&left), conversion_target(&right));
 				let (left, left_signature) = self.infer(*left)?;
 				let (right, right_signature) = self.infer(*right)?;
-				let left = self.as_text(left, &left_signature, None)?;
-				let right = self.as_text(right, &right_signature, None)?;
+				let left = self.as_text(left, &left_signature, left_units)?;
+				let right = self.as_text(right, &right_signature, right_units)?;
 				Ok((Node::Key(Box::new(left), Op::Add, Box::new(right)), vec![]))
 			}
 			Node::Key(left, op, right) if matches!(op, Op::Add | Op::Sub | Op::Mul | Op::Div) || op.is_comparison() => {
@@ -852,6 +854,13 @@ impl Inference {
 	fn infer_list(&mut self, items: Vec<Node>, bracket: Bracket, separator: Separator) -> Result<(Node, Signature), Stop> {
 		if let Some(output) = self.output_form(&items, &bracket, &separator) {
 			return output;
+		}
+		// `(q as km)`: parentheses around one expression keep its signature
+		if let ([inner], Bracket::Round) = (items.as_slice(), &bracket) {
+			if matches!(inner.drop_meta(), Node::Key(..)) || conversion_target(inner).is_some() {
+				let (inner, signature) = self.infer(inner.clone())?;
+				return Ok((Node::List(vec![inner], bracket, separator), signature));
+			}
 		}
 		// a written object `{dist:500m name:"run"}` (only `:` entries: `{x = 1 m}` is a block); as the program's value its
 		// fields' units go into `warp.units`
