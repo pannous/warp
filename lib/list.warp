@@ -3,7 +3,6 @@ unique(xs) := { out = []; for x in xs { if not (x in out) { out = out + [x] } };
 zip(a, b) := { out = []; for i in 1 to min(count(a), count(b)) { out = out + [[a#i, b#i]] }; out }
 enumerate(xs) := { out = []; for i in 1 to count(xs) { out = out + [[i, xs#i]] }; out }
 product(xs) := { out = 1; for x in xs { out = out * x }; out }
-mean(xs) := sum(xs) / count(xs)
 take(xs, n) := { out = []; for i in 1 to min(n, count(xs)) { out = out + [xs#i] }; out }
 drop(xs, n) := { out = []; for i in n+1 to count(xs) { out = out + [xs#i] }; out }
 flatten(xs) := { out = []; for x in xs { out = out + x }; out }

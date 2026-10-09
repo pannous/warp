@@ -14,5 +14,6 @@ total = 0 km
 for run in runs { total += run.distance }
 print "total: " + total
 print "or " + (total as km)  // a conversion joins a text in its unit
+print "average: " + average(runs.map(r => r.distance))  // a decimal in the field's unit, mean without `use`
 print "flat runs: " + count(runs where it.climb == ø)
 runs#2.distance

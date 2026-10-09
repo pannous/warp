@@ -46,8 +46,8 @@ const TEXT_WORDS: [&str; 3] = [TEXT_WORD, "text_form", "serialize"];
 const ELEMENT_METHODS: [&str; 2] = ["add", "push"];
 /// `xs.map(f)`: a list of what f gives each element
 const MAP_WORD: &str = "map";
-/// List words that give an element: its signature
-const ELEMENT_WORDS: [&str; 5] = ["sum", "max", "min", "first", "last"];
+/// List words that give an element: its signature (`mean` also spelled `average`, library_words.rs)
+const ELEMENT_WORDS: [&str; 7] = ["sum", "max", "min", "first", "last", "mean", "average"];
 /// List words that give a plain number
 const COUNT_WORDS: [&str; 3] = ["count", "size", "length"];
 
@@ -749,6 +749,11 @@ impl Inference {
 		let (arguments, element) = match arguments {
 			[list] => match (list.drop_meta(), self.mapped_list(list)) {
 				(Node::Symbol(name), _) => (arguments.to_vec(), self.lists.get(name).cloned()?),
+				(Node::List(items, Bracket::Square, separator), _) => match self.list_elements(items.clone()) {
+					Ok((items, element)) if !element.is_empty() => (vec![Node::List(items, Bracket::Square, separator.clone())], element),
+					Ok(_) => return None,
+					Err(stop) => return Some(Err(stop)),
+				},
 				(_, Some(Ok((mapped, element)))) => (vec![mapped], element),
 				(_, Some(Err(stop))) => return Some(Err(stop)),
 				(_, None) => return None,
