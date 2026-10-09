@@ -65,6 +65,14 @@ impl WasmGcEmitter {
 				}
 				_ => self.emit_numeric_value(func, value),
 			},
+			// `n = "4" as number`, `"4.5" as number`: held as an exact Int (card number-variable)
+			"number" | "num" if crate::analyzer::literal_number(value).is_some() => {
+				self.emit_numeric_value(func, &crate::analyzer::literal_number(value).expect("guarded"));
+			}
+			"number" | "num" => {
+				self.emit_cast(func, value, target);
+				self.emit_call(func, "get_int_value");
+			}
 			_ if crate::analyzer::builtin_type_kind(&target.name()) == Some(Kind::Int) => {
 				self.emit_cast(func, value, target);
 				self.emit_call(func, "get_int_value");
@@ -358,8 +366,33 @@ impl WasmGcEmitter {
 				_ => self.emit_int_node(func, 0),
 			},
 			Node::Char(c) => self.emit_int_node(func, c.to_digit(10).map_or(*c as i64, |digit| digit as i64)),
+			_ if matches!(self.get_type(value), Kind::Text | Kind::Codepoint) => self.emit_runtime_text_as_number(func, value),
 			_ => self.emit_node_instructions(func, value),
 		}
+	}
+
+	/// `t as number` of a text known at run time (card number-variable): an Int when whole, else a Float, as the literal
+	/// `"4" as number` is; no number is invalid_number
+	fn emit_runtime_text_as_number(&mut self, func: &mut Function, value: &Node) {
+		let bits = self.scratch(0);
+		self.emit_node_instructions(func, value);
+		self.emit_call(func, list_ops::TEXT_AS_FLOAT);
+		Self::emit_list(func, &[I::I64ReinterpretF64, I::LocalSet(bits)]);
+		let float = [I::LocalGet(bits), I::F64ReinterpretI64];
+		Self::emit_list(func, &float);
+		Self::emit_list(func, &[I::F64Trunc]);
+		Self::emit_list(func, &float);
+		Self::emit_list(func, &[I::F64Eq]);
+		Self::emit_list(func, &float);
+		Self::emit_list(func, &[I::F64Abs, I::F64Const(I64_RANGE_LIMIT.into()), I::F64Lt, I::I32And, I::If(BlockType::Result(Ref(self.node_ref(false))))]);
+		Self::emit_list(func, &float);
+		func.instruction(&I::I64TruncF64S);
+		self.emit_int_from_machine(func);
+		self.emit_call(func, "new_int");
+		func.instruction(&I::Else);
+		Self::emit_list(func, &float);
+		self.emit_call(func, "new_float");
+		func.instruction(&I::End);
 	}
 
 	/// Extract numeric value from a block { expr } or plain expr
