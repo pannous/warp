@@ -9,10 +9,16 @@ class Point {
 p = Point(3, 4)
 print "fields \(p.fields), methods \(p.methods)"
 print dir(p)
+# help(Point)  TODO
+# help(p)
 
 // a function knows its parameters and its signature
 area(width: int, height: int) := width * height
 print "area takes \(area.params): \(area.signature)"
-
-print dir(area)       // what reflection knows of it: params, signature, body, effects
+print "$(area.body)"
+print "OK"
+print dir(&area)
 print type(&area)
+print dir(area)
+print type(area)
+print area.body
