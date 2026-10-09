@@ -27,12 +27,8 @@ Parked (user: "Later"):
 - Parked: #10 Polish notation for .wat/.wast, user "Keep parked" 2026-10-03.
 
 ## User to-dos (not questions)
-- Hosting: (1) log in once at https://lambda.pannous.com/auth/github?origin=https://warp.pannous.com, click
-  Authorize, report the page text to warp-hosting. (2) Create the private Cloudflare OAuth client (Manage Account →
-  OAuth clients; callback https://lambda.pannous.com/callback/cloudflare; scopes workers-scripts.write,
-  user-details.read, account-settings.read, offline_access), then in
-  /Users/me/dev/angles/warp.worktrees.noindex/hosting/web/hosting `wrangler secret put CLOUDFLARE_OAUTH_CLIENT_ID`
-  and `wrangler secret put CLOUDFLARE_OAUTH_CLIENT_SECRET`. GitHub app, Cloudflare token and the lambda proxy are
-  done (2026-10-09).
+- Hosting: try the playground Deploy buttons (GitHub-hosted and own Cloudflare account) once warp-hosting sends the
+  clicks. Done 2026-10-09: GitHub app and login round trip, Cloudflare token, private Cloudflare OAuth client
+  (secrets in .env / ~/.keys), lambda.pannous.com proxy.
 - Cloud-Microsoft environment setup script needs `rustup target add wasm32-wasip1` (claude.ai/code → chevron next to
   the session title → Edit cloud environment). From BOSS-cheeky-shannon.
