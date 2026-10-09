@@ -115,15 +115,22 @@ PYTHON
 echo "built $page/samples.js"
 
 # the editor colors the keywords of P165 from their one definition, src/lowering/soft_keywords.rs
-python3 - "$page/keywords.js" src/lowering/soft_keywords.rs <<'PYTHON'
+python3 - "$page/keywords.js" src/lowering/soft_keywords.rs src/modules.rs <<'PYTHON'
 import json, re, sys
 source = open(sys.argv[2], encoding="utf-8").read()
+modules = open(sys.argv[3], encoding="utf-8").read()
+# the standard modules `use` completes (completion.js): STD_MODULES' names, their aliases, the named constants'
+std_names = re.findall(r'\(\s*(?:"([a-z0-9_]+)"|([A-Z_]+_MODULE)),\s*include_str!', modules)
+constant = lambda name: re.search(rf'const {name}: &str = "([^"]+)"', modules).group(1)
+module_names = [text or constant(name) for text, name in std_names] + re.findall(r'\("([a-z_]+)", "[a-z_]+"\)', re.search(r"STD_MODULE_ALIASES.*?\];", modules, re.S).group(0))
 def words(name):
 	return re.findall(r'"([^"]+)"', re.search(rf"const {name}: \[&str; \d+\] = \[(.*?)\];", source, re.S).group(1))
 with open(sys.argv[1], "w", encoding="utf-8") as script:
-	script.write("// made by build.sh from src/lowering/soft_keywords.rs\nconst KEYWORDS = " + json.dumps({"hard": words("HARD_KEYWORDS"), "soft": words("SOFT_KEYWORDS") + words("HIGHLIGHTED_WORDS")}, ensure_ascii=False) + ";\n")
+	script.write("// made by build.sh from src/lowering/soft_keywords.rs\nconst KEYWORDS = " + json.dumps({"hard": words("HARD_KEYWORDS"), "soft": words("SOFT_KEYWORDS") + words("HIGHLIGHTED_WORDS"), "modules": module_names}, ensure_ascii=False) + ";\n")
 PYTHON
 echo "built $page/keywords.js"
+# the uniscript entities completion.js lists after \: and <:
+cp src/uniscript_entities.tsv "$page/entities.tsv"
 
 # the ⋯ menu names the commit the page was built from and when, so a deployed page tells which version it is
 # (cards version-commit, g_oMw8)

@@ -24,6 +24,11 @@ handles (playground.js dragToResize) set the guide's width and the editor's heig
 build switch, silenced hints) sit in the header's ⋯ menu; the run time is a small note in the output's corner.
 
 - The assistant (assistant.js, notes/agent.md): the API key field in the ⋯ menu, completion (Ctrl-Space), Ask ✦ chat.
+- Completion as you type (completion.js, card g_oQgw, like the Sublime packages Warp and Uniscript): words from the
+  second letter (keywords first, then the words of the code, examples and samples by use), the standard modules after
+  `use` (keywords.js `modules`, from src/modules.rs), uniscript entities after `\:` and `<:` (entities.tsv, a copy of
+  src/uniscript_entities.tsv fetched on first use) which become their character; a typed `<:name>` becomes it at `>`.
+  Tab takes the first, Enter only one chosen with Up/Down (else a new line). probes/web/completion.py checks it.
 
 ## The language guide (guide.md, guide.js)
 The left pane of the page (cards "core feature", "doc-example"; P188 one page): web/playground/guide.md, chapters `## Title` from

@@ -773,6 +773,7 @@ function initialize() {
 	fillExamples();
 	startWorker();
 	startAssistant(editor, tellEnvironment);
+	startCompletion(editor);
 	chooseExample(requestedExample() ?? DEFAULT_EXAMPLE);
 	addEventListener("hashchange", chooseExampleOfHash);
 }
