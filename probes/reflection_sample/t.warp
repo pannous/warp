@@ -1,0 +1,5 @@
+class Point { x: int
+ y: int
+ len() := x + y }
+p = Point(3, 4)
+print p.methods

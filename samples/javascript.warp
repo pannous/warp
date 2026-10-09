@@ -1,0 +1,14 @@
+// JavaScript from warp: `use js` names a browser global; WebIDL types it, so a misspelled member is a compile-time error
+
+use js Math
+print Math.floor(2.7)
+
+// a JavaScript text comes back as a warp text, with warp's own methods
+use js crypto
+id = crypto.randomUUID()
+print id.length
+
+// a constructor is a plain call: URL(text) is new URL(text)
+use js URL
+page = URL("https://wasp.pannous.com/docs?lang=en")
+page.hostname
