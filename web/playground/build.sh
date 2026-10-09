@@ -125,7 +125,8 @@ with open(sys.argv[1], "w", encoding="utf-8") as script:
 PYTHON
 echo "built $page/keywords.js"
 
-# the ⋯ menu names the commit the page was built from, so a deployed page tells which version it is (card version-commit)
+# the ⋯ menu names the commit the page was built from and when, so a deployed page tells which version it is
+# (cards version-commit, g_oMw8)
 echo "// made by build.sh: the commit built
-const PLAYGROUND_VERSION = { commit: \"$(git rev-parse HEAD)\", date: \"$(git log -1 --format=%cs)\" };" > "$page/version.js"
+const PLAYGROUND_VERSION = { commit: \"$(git rev-parse HEAD)\", date: \"$(git log -1 --format=%cs)\", built: \"$(date -u +%Y-%m-%dT%H:%M:%SZ)\" };" > "$page/version.js"
 echo "built $page/version.js"

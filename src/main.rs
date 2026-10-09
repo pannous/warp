@@ -224,7 +224,7 @@ fn run_command(args: &[String]) {
             }
         }
 
-        println!("Warp 🐝 {}", WARP_VERSION);
+        print_version();
         usage();
         console();
         return;
@@ -411,11 +411,29 @@ fn run_command(args: &[String]) {
             }
         }
     } else if arg_string == "version" || arg_string == "--version" || arg_string == "-v" {
-        println!("Warp 🐝 {}", WARP_VERSION);
+        print_version();
     } else {
         // Default: eval and print
         show_and_fail_on_error(&eval(&arg_string), RESULT_MARK);
     }
+}
+
+/// `Warp 🐝 1.2.4`; a debug build also names, on stderr, the commit of the checkout it was built from and the time of
+/// its binary (cards g_oMw8, g_oM-0): `debug build 75d67b068 · built 2026-10-09 14:32`
+fn print_version() {
+    println!("Warp 🐝 {}", WARP_VERSION);
+    if cfg!(debug_assertions) {
+        let commit = command_line("git", &["-C", env!("CARGO_MANIFEST_DIR"), "rev-parse", "--short=9", "HEAD"]);
+        let binary = env::current_exe().map(|path| path.display().to_string()).unwrap_or_default();
+        let built = command_line("date", &["-r", &binary, "+%Y-%m-%d %H:%M"]);
+        eprintln!("debug build {} · built {}", commit.as_deref().unwrap_or("of an unknown commit"), built.as_deref().unwrap_or("?"));
+    }
+}
+
+/// The first line a successful command prints
+fn command_line(program: &str, arguments: &[&str]) -> Option<String> {
+    let output = std::process::Command::new(program).args(arguments).output().ok().filter(|output| output.status.success())?;
+    String::from_utf8_lossy(&output.stdout).lines().next().map(str::to_string)
 }
 
 /// The program's value printed, its Int the exit status, an uncaught error status 1

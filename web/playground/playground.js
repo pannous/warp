@@ -640,11 +640,14 @@ function showBuildSwitch() {
 		title: debugBuild ? "warp.debug.wasm: Rust function names and lines in traces and the browser's debugger" : "warp.wasm, the small one" });
 }
 
-// the commit the page was built from (build.sh version.js), linked to it on GitHub
+// the commit the page was built from and the build time in the viewer's time zone (build.sh version.js), linked to
+// the commit on GitHub
 function showVersion() {
 	if (!PLAYGROUND_VERSION) return;
-	const { commit, date } = PLAYGROUND_VERSION;
-	Object.assign($("version"), { href: `${COMMIT_URL}${commit}`, textContent: `version ${commit.slice(0, SHORT_COMMIT)} · ${date}`, hidden: false });
+	const { commit, date, built } = PLAYGROUND_VERSION;
+	const when = built ? new Date(built).toLocaleString([], { dateStyle: "short", timeStyle: "short" }) : date;
+	Object.assign($("version"), { href: `${COMMIT_URL}${commit}`, textContent: `version ${commit.slice(0, SHORT_COMMIT)} · built ${when}`,
+		title: `committed ${date}`, hidden: false });
 }
 
 function downloadModule() {
