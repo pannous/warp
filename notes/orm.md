@@ -122,8 +122,9 @@ bo's row again, so it changes nothing after written-through changes; an instance
   `team: Team?`; the row stays in the database. An optional key (`team: Team?`) reads ø and is stored as 0
   (database_tables.rs opened, referenced, key_id).
 - Gaps: the getter scans the loaded list; natively it could be a SELECT once tables are queries.
-- Sample: samples/orm.warp (native and playground) has no relations yet: adding `team` to its Person would hit
-  orm-dangling on databases the sample already wrote.
+- Sample: samples/orm.warp (native and playground) has `team: Team?` and `players: [Person]`: optional, so databases
+  the sample wrote before the column read ø (card orm-dangling); `climbers.players.add(bo)` writes bo.team through.
+- An add or field write in a one-statement block (`if … { teams.add(t) }`) is lowered like a statement of its own.
 
 ## Steps
 1. **Prototype, native, eager** (done: lowering/database_tables.rs, src/database.rs, tests/control/test_database_tables.rs):

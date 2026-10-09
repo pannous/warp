@@ -498,6 +498,12 @@ fn with_tables(node: Node, tables: &HashMap<String, Table>, file: &str, open: &m
 			let statements = statements.into_iter().flat_map(|statement| table_statements(statement, tables, file, open)).collect();
 			Node::List(statements, bracket, separator)
 		}
+		// a block of one statement: `if count(teams) == 0 { teams.add(red) }`
+		Node::List(statements, Bracket::Curly, separator) if statements.len() == 1 => {
+			let statements: Vec<Node> = statements.into_iter().flat_map(|statement| table_statements(statement, tables, file, open)).collect();
+			let separator = if statements.len() == 1 { separator } else { Separator::Semicolon };
+			Node::List(statements, Bracket::Curly, separator)
+		}
 		other => other.map_children(|child| with_tables(child, tables, file, open)),
 	}
 }
