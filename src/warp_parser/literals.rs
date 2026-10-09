@@ -220,7 +220,7 @@ impl WarpParser {
 		};
 		let source: String = self.chars[start..end].iter().collect();
 		self.advance_by(end + 1 - self.pos);
-		Some(Node::Text(without_common_indentation(&source)))
+		Some(crate::shader_holes::shader_text(&without_common_indentation(&source)))
 	}
 
 	/// `\x1b` after the backslash: the character of the two hex digits, left at the second
