@@ -9,15 +9,20 @@
 const WORKER_ATTRIBUTE = "data-warp-worker";
 const REPLIES_ELEMENT = "warp-replies"; // src/site.rs REPLIES_ID: the Worker answers its first fetches from them (host-tasks.js)
 
-if (!self.crossOriginIsolated && "serviceWorker" in navigator && !sessionStorage.getItem("isolating")) {
+// resolves once no reload for isolation is coming: a Worker started before would have its request aborted (Firefox:
+// NS_BINDING_ABORTED, card firefox-worker)
+const siteStarts = new Promise(start => {
+	if (self.crossOriginIsolated || !("serviceWorker" in navigator) || sessionStorage.getItem("isolating")) return start();
 	navigator.serviceWorker.register("coi-serviceworker.js").then(() => {
 		sessionStorage.setItem("isolating", "1");
-		if (!navigator.serviceWorker.controller) location.reload();
-	}, () => {});
-}
+		if (navigator.serviceWorker.controller) start();
+		else location.reload();
+	}, start);
+});
 
 // the Worker running the program of the site's module (site.js SITE_MODULE), its markup shown in the root
-function startSiteWorker() {
+async function startSiteWorker() {
+	await siteStarts;
 	const root = document.getElementById(SITE_ROOT);
 	const worker = new Worker(`site-worker.js?scripts=${root.getAttribute(WORKER_ATTRIBUTE)}`);
 	worker.onmessage = ({ data }) => {
