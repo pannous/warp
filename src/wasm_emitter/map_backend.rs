@@ -6,7 +6,9 @@
 //! (`{}` is ø, one entry is the entry itself, more are a curly list).
 //! A lookup it cannot answer (a missing key, a key no name) takes the generic way on that copy, with its errors.
 
+use super::list_dispatch::Slot;
 use super::WasmGcEmitter;
+use crate::library_words::{COLLECTION_CONTAINS, COLLECTION_POSITION};
 use crate::node::{Bracket, Node};
 use crate::operators::Op;
 use crate::type_kinds::{Kind, CURLY_LIST_KIND, KIND_MASK};
@@ -28,8 +30,8 @@ const NODE_MAP_REHASH: &str = "node_map_rehash";
 /// The functions a program using a map variable calls; the rest come with them
 pub(super) const NODE_MAP_FUNCTIONS: [&str; 5] = [NODE_MAP_NEW, NODE_MAP_SET, NODE_MAP_LOOKUP, NODE_MAP_AS_NODE, NODE_MAP_OF];
 /// Words that read a map without holding on to it: a map variable given to them stays a hash table
-const READING_WORDS: [&str; 13] = ["count", "len", "size", "length", "print", "put", "string", "text", "type", "has", "contains",
-	crate::library_words::MAP_KEYS, crate::library_words::MAP_VALUES];
+const READING_WORDS: [&str; 15] = ["count", "len", "size", "length", "print", "put", "string", "text", "type", "has", "contains",
+	crate::library_words::MAP_KEYS, crate::library_words::MAP_VALUES, COLLECTION_CONTAINS, COLLECTION_POSITION];
 /// Entries and slots of a new table; both double when full (slots when half full)
 const FIRST_ENTRIES: i32 = 8;
 const FIRST_SLOTS: i32 = 16;
@@ -45,6 +47,24 @@ const SLOTS: u32 = 3;
 impl WasmGcEmitter {
 	/// The map variables of `program` held as hash tables: locals assigned only `{}` and entries with name keys
 	pub(super) fn find_typed_maps(&self, program: &Node) -> HashSet<String> {
+		let held_as_nodes = self.names_held_as_nodes(program);
+		self.map_candidates(program).into_iter()
+			.filter(|name| !held_as_nodes.contains(name))
+			.filter(|name| self.scope.lookup(name).is_some_and(|local| !local.is_param))
+			.collect()
+	}
+
+	/// The globals held as hash tables: those main and every function use only as find_typed_maps admits a local, so a
+	/// map a function fills (`global m; m[k] = v`) is set and found in O(1) too
+	pub(super) fn find_typed_map_globals(&self, program: &Node, globals: &std::collections::HashMap<String, crate::local::Local>) -> HashSet<String> {
+		let bodies = self.ctx.user_functions.values().map(|function| *function.body.clone());
+		let whole = Node::List(std::iter::once(program.clone()).chain(bodies).collect(), Bracket::None, crate::node::Separator::Newline);
+		let kept_as_nodes = self.names_kept_as_nodes(&whole);
+		self.map_candidates(&whole).into_iter().filter(|name| globals.contains_key(name) && !kept_as_nodes.contains(name)).collect()
+	}
+
+	/// The variables of `program` started as a map and only set, read and tested by name keys
+	fn map_candidates(&self, program: &Node) -> HashSet<String> {
 		let (mut started, mut keyed, mut excluded) = (HashSet::new(), HashSet::new(), HashSet::new());
 		program.visit(&mut |part| {
 			let Node::Key(target, op, value) = part else { return };
@@ -60,20 +80,23 @@ impl WasmGcEmitter {
 				_ => {}
 			}
 		});
-		excluded.extend(self.names_held_as_nodes(program));
 		// a map is a reference (P200b): one used whole (`n = m`, `[m]`, an argument) is the one Node every holder shares
 		let mut used_whole = vec![];
 		super::struct_backend::used_whole(&without_reads(super::struct_backend::without_final_variable(program)), &Default::default(), &mut used_whole);
 		excluded.extend(used_whole);
-		started.into_iter()
-			.filter(|name| keyed.contains(name) && !excluded.contains(name))
-			.filter(|name| self.scope.lookup(name).is_some_and(|local| !local.is_param))
-			.collect()
+		started.into_iter().filter(|name| keyed.contains(name) && !excluded.contains(name)).collect()
 	}
 
 	/// The variables a typed backend (hash table, struct) never holds: globals, captured ones and those assigned in a
 	/// block that may stop at an error (`RAN_WITHOUT_ERROR`)
 	pub(super) fn names_held_as_nodes(&self, program: &Node) -> HashSet<String> {
+		let mut names = self.names_kept_as_nodes(program);
+		names.extend(self.ctx.user_globals.keys().cloned());
+		names
+	}
+
+	/// The variables no typed backend holds, globals aside: captured ones and those a block that may stop assigns
+	fn names_kept_as_nodes(&self, program: &Node) -> HashSet<String> {
 		let mut names = HashSet::new();
 		program.visit(&mut |part| {
 			if matches!(part, Node::List(items, _, _) if matches!(items.first().map(Node::drop_meta), Some(Node::Symbol(word)) if word == super::RAN_WITHOUT_ERROR)) {
@@ -82,15 +105,37 @@ impl WasmGcEmitter {
 				});
 			}
 		});
-		names.extend(self.ctx.user_globals.keys().cloned());
 		names.extend(self.ctx.captures.values().flatten().map(|(name, _)| name.clone()));
 		names
 	}
 
-	/// The local slot of `target` when it is a map variable held as a hash table
-	pub(super) fn typed_map(&self, target: &Node) -> Option<u32> {
+	/// Where `target` lives when it is a map variable held as a hash table: a local of the body, else a typed global
+	pub(super) fn typed_map(&self, target: &Node) -> Option<Slot> {
 		let Node::Symbol(name) = target.drop_meta() else { return None };
-		self.typed_maps.contains(name).then(|| self.scope.lookup(name).map(|local| local.position)).flatten()
+		match self.scope.lookup(name) {
+			Some(local) => self.typed_maps.contains(name).then_some(Slot::Local(local.position)),
+			None => self.typed_map_globals.get(name).map(|&global| Slot::Global(global)),
+		}
+	}
+
+	/// A null-initialized mutable global holding a hash table
+	pub(super) fn declare_typed_map_global(&mut self) -> u32 {
+		self.declare_global_of(Ref(self.node_map_ref()), ConstExpr::ref_null(HeapType::Concrete(self.type_manager.node_map_type)))
+	}
+
+	/// `collection_contains(m, key)` and `collection_position(m, key)` (`key in m`, `m has key`) of a hash table with a
+	/// name key: 1 when it holds the key, else 0; false for any other call
+	pub(super) fn emit_typed_map_membership(&mut self, func: &mut Function, items: &[Node]) -> bool {
+		let [word, map, key] = items else { return false };
+		let is_membership = matches!(word.drop_meta(), Node::Symbol(word) if word == COLLECTION_CONTAINS || word == COLLECTION_POSITION);
+		let is_name = matches!(self.get_type(key), Kind::Symbol | Kind::Text | Kind::Codepoint);
+		let Some(slot) = self.typed_map(map).filter(|_| is_membership && is_name) else { return false };
+		func.instruction(&slot.get());
+		self.emit_node_instructions(func, key);
+		self.emit_call(func, NODE_MAP_LOOKUP);
+		Self::emit_list(func, &[I::RefIsNull, I::I32Eqz, I::I64ExtendI32U]);
+		self.emit_call(func, "new_int");
+		true
 	}
 
 	pub(super) fn node_map_ref(&self) -> RefType {
@@ -99,23 +144,23 @@ impl WasmGcEmitter {
 
 	/// `m = {}`, `m = {a:1}`, `m·map = m`: a table in m's local, left on the stack; `m = field_with(m, k, v)` sets the
 	/// entry in place
-	pub(super) fn emit_typed_map_store(&mut self, func: &mut Function, name: &str, slot: u32, value: &Node) {
+	pub(super) fn emit_typed_map_store(&mut self, func: &mut Function, name: &str, slot: Slot, value: &Node) {
 		if let Some((key, entry_value)) = entry_update(name, value) {
 			let key = self.map_key(&key).expect("find_typed_maps admits only name keys");
 			self.emit_typed_map_set(func, slot, &key, &entry_value);
-			func.instruction(&I::LocalGet(slot));
+			func.instruction(&slot.get());
 		} else if is_empty_map(value) {
 			self.emit_call(func, NODE_MAP_NEW);
 		} else {
 			self.emit_node_instructions(func, value);
 			self.emit_call(func, NODE_MAP_OF);
 		}
-		func.instruction(&I::LocalTee(slot));
+		slot.tee(func);
 	}
 
 	/// `m[key] = value`: the entry set in place
-	pub(super) fn emit_typed_map_set(&mut self, func: &mut Function, slot: u32, key: &Node, value: &Node) {
-		func.instruction(&I::LocalGet(slot));
+	pub(super) fn emit_typed_map_set(&mut self, func: &mut Function, slot: Slot, key: &Node, value: &Node) {
+		func.instruction(&slot.get());
 		self.emit_node_instructions(func, key);
 		self.emit_node_instructions(func, value);
 		self.emit_call(func, NODE_MAP_SET);
@@ -123,20 +168,20 @@ impl WasmGcEmitter {
 
 	/// Push the value of `m[key]` or null when the table cannot answer, inside a block the caller closes with the
 	/// generic lookup: `br_on_non_null` skips it
-	pub(super) fn emit_typed_map_lookup(&mut self, func: &mut Function, slot: u32, key: &Node) {
-		func.instruction(&I::LocalGet(slot));
+	pub(super) fn emit_typed_map_lookup(&mut self, func: &mut Function, slot: Slot, key: &Node) {
+		func.instruction(&slot.get());
 		self.emit_node_instructions(func, key);
 		self.emit_call(func, NODE_MAP_LOOKUP);
 		func.instruction(&I::BrOnNonNull(0));
 	}
 
-	pub(super) fn emit_typed_map_count(&self, func: &mut Function, slot: u32) {
+	pub(super) fn emit_typed_map_count(&self, func: &mut Function, slot: Slot) {
 		let map = self.type_manager.node_map_type;
-		Self::emit_list(func, &[I::LocalGet(slot), I::StructGet { struct_type_index: map, field_index: COUNT }, I::I64ExtendI32U]);
+		Self::emit_list(func, &[slot.get(), I::StructGet { struct_type_index: map, field_index: COUNT }, I::I64ExtendI32U]);
 	}
 
-	pub(super) fn emit_typed_map_as_node(&mut self, func: &mut Function, slot: u32) {
-		func.instruction(&I::LocalGet(slot));
+	pub(super) fn emit_typed_map_as_node(&mut self, func: &mut Function, slot: Slot) {
+		func.instruction(&slot.get());
 		self.emit_call(func, NODE_MAP_AS_NODE);
 	}
 

@@ -281,6 +281,7 @@ pub struct WasmGcEmitter {
 	typed_capture_globals: HashMap<u32, list_dispatch::TypedList>, // capture globals holding a typed list of main
 	main_typed_lists: Option<HashMap<String, list_dispatch::TypedList>>, // main's typed lists, worked out before the capture globals
 	bounded_counters: std::collections::HashSet<String>, // loop counters of the body being emitted proven to stay in 0..i32::MAX (big_int.rs)
+	typed_map_globals: HashMap<String, u32>, // globals held as hash tables (map_backend.rs find_typed_map_globals): their global
 	typed_maps: std::collections::HashSet<String>, // map variables of the body being emitted held as hash tables (map_backend.rs)
 	typed_structs: HashMap<String, String>, // instance variables of the body being emitted held as GC structs, with their class (struct_backend.rs)
 	instance_types: HashMap<String, struct_backend::InstanceType>, // the `P·instance` struct type of each class
@@ -356,6 +357,7 @@ impl WasmGcEmitter {
 			typed_capture_globals: HashMap::new(),
 			main_typed_lists: None,
 			bounded_counters: std::collections::HashSet::new(),
+			typed_map_globals: HashMap::new(),
 			typed_maps: std::collections::HashSet::new(),
 			typed_structs: HashMap::new(),
 			instance_types: HashMap::new(),

@@ -156,7 +156,7 @@ pub(super) enum Slot {
 }
 
 impl Slot {
-	fn get(self) -> Instruction<'static> {
+	pub(super) fn get(self) -> Instruction<'static> {
 		match self {
 			Slot::Local(index) => I::LocalGet(index),
 			Slot::Global(index) => I::GlobalGet(index),
@@ -164,7 +164,7 @@ impl Slot {
 	}
 
 	/// Store the list on the stack and leave it there
-	fn tee(self, func: &mut Function) {
+	pub(super) fn tee(self, func: &mut Function) {
 		match self {
 			Slot::Local(index) => { func.instruction(&I::LocalTee(index)); }
 			Slot::Global(index) => { func.instruction(&I::GlobalSet(index)); func.instruction(&I::GlobalGet(index)); }
