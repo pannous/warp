@@ -658,13 +658,13 @@ pub const RETURNED_ERROR: &str = "returned_error";
 /// `a % 0`, `a rem 0`: an integer divide by zero (big_int::emit_nonzero_divisor)
 pub const DIVIDE_BY_ZERO: &str = "divide_by_zero";
 
-pub const RUNTIME_ERRORS: [&str; 28] = [
+pub const RUNTIME_ERRORS: [&str; 29] = [
 	"index_out_of_range", INDEX_NOT_INTEGRAL, "invalid_number", "out_of_memory", "key_not_found", "float_out_of_int_range",
 	"min_of_an_empty_list", "max_of_an_empty_list", "reduce_of_an_empty_list",
 	"not_a_list", "not_a_text", "not_an_int", "non_ascii_text", "not_a_joinable_item", "empty_separator", "not_an_object",
 	"not_comparable", super::closures::NOT_A_FUNCTION, super::closures::WRONG_ARGUMENT_COUNT, super::tuple_emitter::WRONG_NUMBER_OF_VALUES,
 	RETURNED_ERROR, "not_a_character", COUNT_NOT_INTEGRAL, NOT_A_NUMBER, DIVIDE_BY_ZERO, INT_NOT_WHOLE, super::declared_values::LIST_CANNOT_HOLD,
-	super::uncertain::NEGATIVE_UNCERTAINTY,
+	super::uncertain::NEGATIVE_UNCERTAINTY, super::uncertain::INTERVAL_AND_GAUSSIAN,
 ];
 
 /// text_as_int(node) -> i64: a Text's optional sign and decimal digits, any other node's Int (get_int_value)
@@ -2059,28 +2059,48 @@ impl WasmGcEmitter {
 		if self.should_emit_function(STRUCT_BODY) {
 			let type_names: Vec<String> = self.ctx.type_registry.types().iter().map(|type_def| type_def.name.clone()).collect();
 			let type_symbols: Vec<(u32, u32)> = type_names.iter().map(|name| self.allocate_string(name)).collect();
-			self.runtime_function(STRUCT_BODY, vec![node_ref], vec![node_ref], vec![], |s, f| {
-				let field = |f: &mut Function, index: u32| {
-					f.instruction(&I::LocalGet(0));
+			self.runtime_function(STRUCT_BODY, vec![node_ref], vec![node_ref], vec![nullable_node_ref], |s, f| {
+				let entry = 1;
+				let field = |f: &mut Function, local: u32, index: u32| {
+					f.instruction(&I::LocalGet(local));
 					f.instruction(&I::StructGet { struct_type_index: node, field_index: index });
 				};
-				field(f, 0);
-				Self::emit_list(f, &[I::I64Const(KIND_MASK), I::I64And, I::I64Const(KEY_KIND), I::I64Ne, I::If(BlockType::Empty), I::LocalGet(0), I::Return, I::End]);
+				let kind_of = |f: &mut Function, local: u32| {
+					field(f, local, 0);
+					Self::emit_list(f, &[I::I64Const(KIND_MASK), I::I64And]);
+				};
+				// the fields of the key in `local` when it is named after a class
+				let fields_when_named = |f: &mut Function, local: u32| {
+					for &(pointer, length) in &type_symbols {
+						field(f, local, 1);
+						Self::emit_list(f, &[I::RefCastNonNull(HeapType::Concrete(node)), I::I32Const(pointer as i32), I::I32Const(length as i32)]);
+						s.call(f, "new_symbol");
+						s.call(f, VALUES_EQUAL);
+						f.instruction(&I::If(BlockType::Empty));
+						field(f, local, 2);
+						Self::emit_list(f, &[I::RefAsNonNull, I::Return, I::End]);
+					}
+				};
+				// `{"Todo": {…}}`, an instance as a server sends it (web_server.rs) and JSON decodes it: its one entry
+				kind_of(f, 0);
+				Self::emit_list(f, &[I::I64Const(Kind::List as i64), I::I64Eq, I::If(BlockType::Empty)]);
+				field(f, 0, 2);
+				Self::emit_list(f, &[I::RefIsNull, I::If(BlockType::Empty)]);
+				field(f, 0, 1);
+				Self::emit_list(f, &[I::RefCastNullable(HeapType::Concrete(node)), I::LocalTee(entry), I::RefIsNull, I::I32Eqz, I::If(BlockType::Empty)]);
+				kind_of(f, entry);
+				Self::emit_list(f, &[I::I64Const(KEY_KIND), I::I64Eq, I::If(BlockType::Empty)]);
+				fields_when_named(f, entry);
+				Self::emit_list(f, &[I::End, I::End, I::End, I::LocalGet(0), I::Return, I::End]);
+				kind_of(f, 0);
+				Self::emit_list(f, &[I::I64Const(KEY_KIND), I::I64Ne, I::If(BlockType::Empty), I::LocalGet(0), I::Return, I::End]);
 				// an instance carries its own op code (D4, type_constructor.rs): its fields, no type name compared
-				field(f, 0);
+				field(f, 0, 0);
 				Self::emit_list(f, &[I::I64Const(8), I::I64ShrU, I::I64Const(crate::operators::op_to_code(&crate::operators::Op::None)), I::I64Eq]);
 				Self::emit_list(f, &[I::If(BlockType::Empty)]);
-				field(f, 2);
+				field(f, 0, 2);
 				Self::emit_list(f, &[I::RefAsNonNull, I::Return, I::End]);
-				for (pointer, length) in type_symbols {
-					field(f, 1);
-					Self::emit_list(f, &[I::RefCastNonNull(HeapType::Concrete(node)), I::I32Const(pointer as i32), I::I32Const(length as i32)]);
-					s.call(f, "new_symbol");
-					s.call(f, VALUES_EQUAL);
-					f.instruction(&I::If(BlockType::Empty));
-					field(f, 2);
-					Self::emit_list(f, &[I::RefAsNonNull, I::Return, I::End]);
-				}
+				fields_when_named(f, 0);
 				f.instruction(&I::LocalGet(0));
 			});
 		}

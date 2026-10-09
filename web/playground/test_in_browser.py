@@ -193,7 +193,13 @@ class FirefoxDriver:
 		self.process.stdin.write(json.dumps(arguments) + "\n")
 		self.process.stdin.flush()
 		answer = self.process.stdout.readline()
-		return json.loads(answer) if answer else ""
+		# close quits the driver without an answer
+		if not answer and arguments[0] != "close":
+			sys.exit(f"error: firefox_driver.mjs ended (exit code {self.process.wait()}) without answering {arguments[0]}")
+		answer = json.loads(answer or '""')
+		if isinstance(answer, dict) and "timeout" in answer:
+			sys.exit(f"error: Firefox gave {answer['timeout']}")
+		return answer
 
 
 class FirefoxConsole:
@@ -242,7 +248,8 @@ def show_example(name):
 		{RUN_EXAMPLE % json.dumps(name)}
 		await new Promise(done => setTimeout(done, EXAMPLES[name].wait ?? 0));
 		const shown = {{ value: document.getElementById("value").textContent, printed: document.getElementById("printed").textContent,
-			canvases: document.querySelectorAll("#paintings canvas").length }};
+			canvases: document.querySelectorAll("#paintings canvas").length,
+			failed: document.getElementById("status").classList.contains("failed") ? document.getElementById("status").textContent : "" }};
 		const clicks = EXAMPLES[name].clicks ?? [];
 		const shownAddress = () => document.getElementById("address").hidden ? "" : document.getElementById("address").value;
 		const typed = EXAMPLES[name].typed;
@@ -315,7 +322,7 @@ def check_examples(names, page_url=None, site=None):
 			verdict(f"samples/{name}", [])
 		else:
 			expected, shown = examples[name], show_example(name)
-			verdict(name, [f"{part}: {shown[part]!r}, expected {expected[part]!r}" for part in ("value", "printed", "canvases", "clicked", "clickedPrinted", "kept", "keyed", "animated", "address") if part in expected and shown[part] != expected[part]])
+			verdict(name, [f"{part}: {shown[part]!r}, expected {expected[part]!r}" for part in ("value", "printed", "canvases", "clicked", "clickedPrinted", "kept", "keyed", "animated", "address") if part in expected and shown[part] != expected[part]] + [f"status: {shown['failed']}"] * bool(shown.get("failed")))
 	console.stop()
 	browser("close")
 	if server:
@@ -333,6 +340,8 @@ def build_components():
 
 
 def main():
+	# each verdict shows in a CI log as it comes, so a stuck run shows where it stuck (card deploy-firefox-hang)
+	sys.stdout.reconfigure(line_buffering=True)
 	if sys.argv[1:2] == ["--examples"]:
 		global firefox
 		names = [name for name in sys.argv[2:] if name != "--firefox"]

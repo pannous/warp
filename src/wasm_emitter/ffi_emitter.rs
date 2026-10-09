@@ -81,6 +81,13 @@ impl WasmGcEmitter {
 		// a host word giving a value (task_await_value): the Node it built, its number where one is wanted
 		if matches!(result_type, Some(ValType::Ref(_))) {
 			func.instruction(&I::RefCastNonNull(HeapType::Concrete(self.type_manager.node_type)));
+			// a failed adapter gives back its Error (host.rs std_call): raised here, where `try` catches it
+			if [crate::host::STD_PURE, crate::host::STD_IO].contains(&sig.name) {
+				let answer = self.node_scratch();
+				func.instruction(&I::LocalSet(answer));
+				self.emit_fail_if_error(func, answer);
+				Self::emit_list(func, &[I::LocalGet(answer), I::RefAsNonNull]);
+			}
 			match ctx {
 				None => {}
 				Some(Kind::Float) => {

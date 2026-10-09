@@ -7,7 +7,7 @@ impl WasmGcEmitter {
 		if let Some(identity) = self.object_identity(node) {
 			return self.emit_object_identity(func, identity);
 		}
-		if let Some(product) = self.numeric_times(node).or_else(|| self.identity_as_equality(node)) {
+		if let Some(product) = self.numeric_times(node).or_else(|| self.identity_as_equality(node)).or_else(|| crate::analyzer::spelled_number(node)) {
 			return self.emit_numeric_value(func, &product);
 		}
 		self.note_position(node);
@@ -228,6 +228,9 @@ impl WasmGcEmitter {
 			func.instruction(&I::F64ConvertI64S);
 			return;
 		}
+		if let Some(number) = crate::analyzer::spelled_number(node) {
+			return self.emit_float_value(func, &number);
+		}
 		let located = node;
 		let node = node.drop_meta();
 		match node {
@@ -294,6 +297,12 @@ impl WasmGcEmitter {
 			Node::Key(left, op, right) if op.is_arithmetic() => {
 				let kind = self.arithmetic_type(left, op, right);
 				if self.emit_arithmetic_type_error(func, left, op, right, kind) {
+					return;
+				}
+				if kind == Kind::Int && *op == Op::Div && self.int_runtime() && !self.wrapping_ints {
+					self.emit_numeric_value(func, left);
+					self.emit_numeric_value(func, right);
+					self.emit_float_quotient(func);
 					return;
 				}
 				if kind == Kind::Int {

@@ -1,7 +1,9 @@
 //! `x ± r` at run time (card plus-minus, notes/plus_minus.md, decision P217): an interval with its value, a $Node of
 //! Kind::Uncertain whose data is the f64 array [value, low, high]. The node_* arithmetic (list_ops.rs) hands an
 //! uncertain operand to uncertain_add and its siblings, which take the worst case of the endpoints: `(5 ± 1) + (2 ± 1)`
-//! is 7 ± 2 and `x - x` is 0 ± 2 (no correlation)
+//! is 7 ± 2 and `x - x` is 0 ± 2 (no correlation). A Gaussian `5 ± 1σ` (card plus-minus-gaussian) has a fourth part,
+//! its standard deviation, low and high one deviation from the value; its arithmetic propagates linearly and adds
+//! independent deviations in quadrature (gaussian_add and its siblings), so `(5 ± 1σ) + (2 ± 1σ)` is 7 ± 1.4σ
 
 use super::float_text::FLOAT_TEXT;
 use super::layout::BYTE;
@@ -13,12 +15,22 @@ use super::WasmGcEmitter;
 use crate::node::Node;
 use crate::operators::Op;
 use crate::type_kinds::{Kind, KIND_MASK};
-use crate::uncertain::{CERTAINLY, POSSIBLY};
+use crate::uncertain::{Extremum, CERTAINLY, INTERVAL_WORDS, POSSIBLY, SIGMA};
 use wasm_encoder::*;
 use Instruction as I;
 
 /// uncertain_new(value: f64, radius: f64) -> node: value - radius .. value + radius
 pub const UNCERTAIN_NEW: &str = "uncertain_new";
+/// gaussian_new(value: f64, deviation: f64) -> node: a Gaussian `value ± deviationσ`
+pub const GAUSSIAN_NEW: &str = "gaussian_new";
+/// `(5 ± 1σ) + (2 ± 1)`: which of the two the result would be is unclear, so it fails
+pub(super) const INTERVAL_AND_GAUSSIAN: &str = "an_interval_and_a_gaussian_do_not_mix";
+/// gaussian_combine(value, a parts, ∂a, b parts, ∂b) -> node
+const GAUSSIAN_COMBINE: &str = "gaussian_combine";
+/// node_add and its siblings with a Gaussian operand, in NODE_ARITHMETIC's order
+const GAUSSIAN_ARITHMETIC: [&str; 4] = ["gaussian_add", "gaussian_sub", "gaussian_mul", "gaussian_div"];
+/// A math word's slope at a Gaussian's value: the difference over this share of its deviation on either side
+const SLOPE_STEP: f64 = 1e-3;
 /// uncertain_parts(node) -> f64 array: an uncertain value's [value, low, high], any other number as [n, n, n]
 const UNCERTAIN_PARTS: &str = "uncertain_parts";
 /// uncertain_similar(a, b, tolerance) -> i32: `a ≈ b` when the intervals overlap (or the values are numbers_similar)
@@ -43,10 +55,16 @@ pub(super) const NEGATIVE_UNCERTAINTY: &str = "an_uncertainty_must_not_be_negati
 pub const UNCERTAIN_ARITHMETIC: [&str; 4] = ["uncertain_add", "uncertain_sub", "uncertain_mul", "uncertain_div"];
 /// uncertain_field(node, field) -> node or null: one of UNCERTAIN_FIELDS as a float
 const UNCERTAIN_FIELD: &str = "uncertain_field";
-const UNCERTAIN_FUNCTIONS: [&str; 4] = [UNCERTAIN_NEW, UNCERTAIN_PARTS, UNCERTAIN_FIELD, UNCERTAIN_SIMILAR];
+const UNCERTAIN_FUNCTIONS: [&str; 6] = [UNCERTAIN_NEW, GAUSSIAN_NEW, GAUSSIAN_COMBINE, UNCERTAIN_PARTS, UNCERTAIN_FIELD, UNCERTAIN_SIMILAR];
 const VALUE: i32 = 0;
 const LOW: i32 = 1;
 const HIGH: i32 = 2;
+const DEVIATION: i32 = 3;
+const INTERVAL_PARTS: u32 = 3;
+/// A Gaussian's parts: [value, low, high, σ], then per independent Gaussian it depends on its id and contribution
+/// (∂/∂that · its σ), so a value met twice is the same contribution twice, not an independent one
+const GAUSSIAN_PARTS: u32 = 4;
+const CONTRIBUTION_PARTS: u32 = 2;
 const RADIUS_FIELD: i32 = 3;
 /// The fields of an uncertain value, by their index in the parts (RADIUS_FIELD computed): `x.value`, `x.uncertainty`
 const UNCERTAIN_FIELDS: [(i32, &[&str]); 4] = [(VALUE, &["value"]), (LOW, &["low"]), (HIGH, &["high"]), (RADIUS_FIELD, &["uncertainty"])];
@@ -54,15 +72,19 @@ const PLUS_MINUS_SEPARATOR: &str = " ± ";
 /// More decimals than this, or a value of MAX_SCALED units of its place or more, shows as float_text
 const MAX_DECIMALS: i32 = 17;
 const MAX_SCALED: f64 = 1e17;
-/// Both numbers of at most 17 digits with sign and point, and the separator
+/// Both numbers of at most 17 digits with sign and point, the separator and σ
 const TEXT_BYTES: i32 = 64;
+/// The scaled ± part shows 2 digits: it rounds to 10 at least and below 100 (0.0999… shows as 0.10)
+const ROUNDS_TO_TEN: f64 = 9.5;
+const ROUNDS_TO_HUNDRED: f64 = 99.5;
 
 /// A program that makes uncertain values gets the whole family: any arithmetic may meet one
 pub fn add_dependencies(required: &mut std::collections::HashSet<&'static str>) {
-	if required.contains(UNCERTAIN_NEW) {
+	if required.contains(UNCERTAIN_NEW) || required.contains(GAUSSIAN_NEW) {
 		required.extend(UNCERTAIN_FUNCTIONS);
 		required.extend(UNCERTAIN_ARITHMETIC);
-		required.extend([TEXT_AS_FLOAT, NUMBERS_SIMILAR, NEGATIVE_UNCERTAINTY, "new_float", UNCERTAIN_ORDER, NODE_ORDER]);
+		required.extend(GAUSSIAN_ARITHMETIC);
+		required.extend([TEXT_AS_FLOAT, NUMBERS_SIMILAR, NEGATIVE_UNCERTAINTY, INTERVAL_AND_GAUSSIAN, "new_float", UNCERTAIN_ORDER, NODE_ORDER]);
 	}
 }
 
@@ -73,11 +95,125 @@ impl WasmGcEmitter {
 			return;
 		}
 		self.emit_uncertain_new();
+		self.emit_gaussian_new();
+		self.emit_gaussian_combine();
 		self.emit_uncertain_parts();
 		self.emit_uncertain_field();
-		for (name, operation) in UNCERTAIN_ARITHMETIC.into_iter().zip([I::F64Add, I::F64Sub, I::F64Mul, I::F64Div]) {
-			self.emit_uncertain_arithmetic(name, operation);
+		let operations = [I::F64Add, I::F64Sub, I::F64Mul, I::F64Div];
+		for (name, operation) in GAUSSIAN_ARITHMETIC.into_iter().zip(operations.clone()) {
+			self.emit_gaussian_arithmetic(name, operation);
 		}
+		for ((name, gaussian), operation) in UNCERTAIN_ARITHMETIC.into_iter().zip(GAUSSIAN_ARITHMETIC).zip(operations) {
+			self.emit_uncertain_arithmetic(name, gaussian, operation);
+		}
+		for (word, name, extrema) in &INTERVAL_WORDS {
+			if self.should_emit_function(name) {
+				self.emit_interval_word_function(word, name, extrema);
+			}
+		}
+	}
+
+	/// `sin(x)`, `√x` of a value held as a Node in a program with ± values: through the word's uncertain_<word>, which maps
+	/// an interval. False otherwise, and the caller computes the word on a float
+	pub(super) fn emit_interval_word(&mut self, func: &mut Function, word: &str, argument: &Node) -> bool {
+		let Some((_, name, _)) = INTERVAL_WORDS.iter().find(|(known, _, _)| *known == word) else { return false };
+		if !self.should_emit_function(UNCERTAIN_NEW) || !crate::analyzer::is_run_time_kind(&self.get_type(argument)) {
+			return false;
+		}
+		self.emit_node_instructions(func, argument);
+		self.emit_call(func, name);
+		true
+	}
+
+	/// The f64 on the stack → the word of it
+	fn apply_math_word(&mut self, func: &mut Function, word: &str) {
+		match word {
+			"sqrt" => { func.instruction(&I::F64Sqrt); }
+			"abs" => { func.instruction(&I::F64Abs); }
+			"cbrt" => { self.emit_libm_call(func, super::LIBM_CBRT); }
+			// imported when the program calls the word; a module emitting every runtime function has no call, nor import
+			import => { func.instruction(&self.ffi_func_index(import).map_or(I::Unreachable, I::Call)); }
+		}
+	}
+
+	/// uncertain_<word>(node) -> node: the word of a number, of an interval the least and greatest of it at the ends, or
+	/// the extremum the interval reaches
+	fn emit_interval_word_function(&mut self, word: &str, name: &'static str, extrema: &[Extremum]) {
+		let node_ref = ValType::Ref(self.node_ref(false));
+		let (node, parts, low, high) = (0, 1, 2, 3);
+		self.runtime_function(name, vec![node_ref], vec![node_ref], vec![self.parts_ref(), ValType::F64, ValType::F64], |s, f| {
+			s.is_uncertain(f, node);
+			Self::emit_list(f, &[I::I32Eqz, I::If(BlockType::Empty), I::LocalGet(node)]);
+			s.call(f, TEXT_AS_FLOAT);
+			s.apply_math_word(f, word);
+			s.call(f, "new_float");
+			Self::emit_list(f, &[I::Return, I::End, I::LocalGet(node)]);
+			s.call(f, UNCERTAIN_PARTS);
+			f.instruction(&I::LocalSet(parts));
+			s.is_gaussian(f, parts);
+			f.instruction(&I::If(BlockType::Empty));
+			s.gaussian_word(f, word, parts, (low, high));
+			Self::emit_list(f, &[I::Return, I::End]);
+			for (end, local) in [(LOW, low), (HIGH, high)] {
+				Self::emit_list(f, &s.part(parts, end));
+				s.apply_math_word(f, word);
+				f.instruction(&I::LocalSet(local));
+			}
+			Self::emit_list(f, &[
+				I::LocalGet(low), I::LocalGet(high), I::F64Min, I::LocalGet(low), I::LocalGet(high), I::F64Max,
+				I::LocalSet(high), I::LocalSet(low),
+			]);
+			for extremum in extrema {
+				let bound = if extremum.high { high } else { low };
+				Self::emit_list(f, &[I::F64Const(extremum.value.into()), I::LocalGet(bound)]);
+				s.reaches(f, parts, extremum);
+				Self::emit_list(f, &[I::Select, I::LocalSet(bound)]);
+			}
+			f.instruction(&I::I64Const(Kind::Uncertain as i64));
+			Self::emit_list(f, &s.part(parts, VALUE));
+			s.apply_math_word(f, word);
+			Self::emit_list(f, &[I::LocalGet(low), I::LocalGet(high)]);
+			s.new_uncertain_node(f);
+		});
+	}
+
+	/// The Gaussian of the word of the Gaussian in `parts`: the word of its value, its contributions times the word's
+	/// slope there (the difference across SLOPE_STEP of its σ on either side, so a word needs no formula for its slope).
+	/// Uses the f64 locals `at` and `step`; leaves the result node
+	fn gaussian_word(&mut self, func: &mut Function, word: &str, parts: u32, (at, step): (u32, u32)) {
+		Self::emit_list(func, &self.part(parts, VALUE));
+		func.instruction(&I::LocalSet(at));
+		Self::emit_list(func, &self.part(parts, DEVIATION));
+		Self::emit_list(func, &[I::F64Const(SLOPE_STEP.into()), I::F64Mul, I::LocalSet(step), I::LocalGet(at)]);
+		self.apply_math_word(func, word);
+		func.instruction(&I::LocalGet(parts));
+		for sign in [I::F64Add, I::F64Sub] {
+			Self::emit_list(func, &[I::LocalGet(at), I::LocalGet(step), sign]);
+			self.apply_math_word(func, word);
+		}
+		// (f(x + h) - f(x - h)) / 2h, 0 without a σ
+		Self::emit_list(func, &[I::F64Sub, I::LocalGet(step), I::F64Const(2.0.into()), I::F64Mul, I::F64Div]);
+		Self::emit_list(func, &[I::F64Const(0.0.into()), I::LocalGet(step), I::F64Const(0.0.into()), I::F64Gt, I::Select]);
+		Self::emit_list(func, &[I::LocalGet(parts), I::F64Const(0.0.into())]);
+		self.call(func, GAUSSIAN_COMBINE);
+	}
+
+	/// Push an i32: does the interval in `parts` reach the extremum: `at`, or the first `at + k·every` from its low end
+	fn reaches(&self, func: &mut Function, parts: u32, extremum: &Extremum) {
+		let at = I::F64Const(extremum.at.into());
+		if extremum.every == 0.0 {
+			func.instruction(&at);
+			Self::emit_list(func, &self.part(parts, LOW));
+			Self::emit_list(func, &[I::F64Ge, at]);
+			Self::emit_list(func, &self.part(parts, HIGH));
+			Self::emit_list(func, &[I::F64Le, I::I32And]);
+			return;
+		}
+		let every = I::F64Const(extremum.every.into());
+		Self::emit_list(func, &self.part(parts, LOW));
+		Self::emit_list(func, &[at.clone(), I::F64Sub, every.clone(), I::F64Div, I::F64Ceil, every, I::F64Mul, at, I::F64Add]);
+		Self::emit_list(func, &self.part(parts, HIGH));
+		func.instruction(&I::F64Le);
 	}
 
 	/// Push an i32: is the Node in `local` uncertain
@@ -109,11 +245,20 @@ impl WasmGcEmitter {
 		Self::emit_list(func, &[I::F64Sub, I::F64Max]);
 	}
 
-	/// The uncertain node of the three f64 on the stack
+	/// Push an i32: are the parts in `parts` a Gaussian's
+	fn is_gaussian(&self, func: &mut Function, parts: u32) {
+		Self::emit_list(func, &[I::LocalGet(parts), I::ArrayLen, I::I32Const(INTERVAL_PARTS as i32), I::I32GtU]);
+	}
+
+	/// The uncertain node of the kind and the three f64 on the stack
 	fn new_uncertain_node(&self, func: &mut Function) {
+		self.new_uncertain_node_of(func, INTERVAL_PARTS);
+	}
+
+	fn new_uncertain_node_of(&self, func: &mut Function, parts: u32) {
 		let node = self.type_manager.node_type;
 		Self::emit_list(func, &[
-			I::ArrayNewFixed { array_type_index: self.parts_array(), array_size: 3 },
+			I::ArrayNewFixed { array_type_index: self.parts_array(), array_size: parts },
 			I::RefNull(HeapType::Concrete(node)), I::StructNew(node),
 		]);
 	}
@@ -133,6 +278,169 @@ impl WasmGcEmitter {
 		});
 	}
 
+	/// gaussian_new(value, σ): a Gaussian of its own, the one contribution σ under a new id
+	fn emit_gaussian_new(&mut self) {
+		self.globals.global(GlobalType { val_type: ValType::F64, mutable: true, shared: false }, &ConstExpr::f64_const(0.0.into()));
+		self.next_global_idx += 1;
+		let last_id = self.next_global_idx - 1;
+		let (value, deviation) = (0, 1);
+		let node_ref = ValType::Ref(self.node_ref(false));
+		self.runtime_function(GAUSSIAN_NEW, vec![ValType::F64; 2], vec![node_ref], vec![], |s, f| {
+			Self::emit_list(f, &[I::LocalGet(deviation), I::F64Const(0.0.into()), I::F64Lt]);
+			s.emit_fail_if(f, NEGATIVE_UNCERTAINTY);
+			Self::emit_list(f, &[
+				I::I64Const(Kind::Uncertain as i64), I::LocalGet(value),
+				I::LocalGet(value), I::LocalGet(deviation), I::F64Sub,
+				I::LocalGet(value), I::LocalGet(deviation), I::F64Add, I::LocalGet(deviation),
+				I::GlobalGet(last_id), I::F64Const(1.0.into()), I::F64Add, I::GlobalSet(last_id), I::GlobalGet(last_id), I::LocalGet(deviation),
+			]);
+			s.new_uncertain_node_of(f, GAUSSIAN_PARTS + CONTRIBUTION_PARTS);
+		});
+	}
+
+	/// Push the i32 number of contributions in the parts in `parts`: none for a number's [n, n, n]
+	fn contributions(parts: u32) -> [I<'static>; 12] {
+		[
+			I::LocalGet(parts), I::ArrayLen, I::I32Const(GAUSSIAN_PARTS as i32), I::I32Sub, I::I32Const(1), I::I32ShrS, I::I32Const(0),
+			I::LocalGet(parts), I::ArrayLen, I::I32Const(INTERVAL_PARTS as i32), I::I32GtU, I::Select,
+		]
+	}
+
+	/// The index of the id (`offset` 0) or the amount (1) of the contribution numbered by the i32 local `entry`
+	fn contribution(entry: u32, offset: i32) -> [I<'static>; 5] {
+		[I::LocalGet(entry), I::I32Const(1), I::I32Shl, I::I32Const(GAUSSIAN_PARTS as i32 + offset), I::I32Add]
+	}
+
+	/// `for counter in 0..limit { body }`, limit an i32 the instructions push
+	fn repeat(func: &mut Function, counter: u32, limit: &[I<'static>], body: impl FnOnce(&mut Function)) {
+		Self::emit_list(func, &[I::I32Const(0), I::LocalSet(counter), I::Block(BlockType::Empty), I::Loop(BlockType::Empty), I::LocalGet(counter)]);
+		Self::emit_list(func, limit);
+		Self::emit_list(func, &[I::I32GeS, I::BrIf(1)]);
+		body(func);
+		Self::emit_list(func, &[I::LocalGet(counter), I::I32Const(1), I::I32Add, I::LocalSet(counter), I::Br(0), I::End, I::End]);
+	}
+
+	/// gaussian_combine(value, a parts, ∂a, b parts, ∂b) -> node: the Gaussian `value` whose contributions are a's times
+	/// ∂a and b's times ∂b, those of one id summed: `x - x` cancels, `x * x` doubles (Measurements.jl's linear
+	/// propagation). Its σ is √(Σ contribution²)
+	fn emit_gaussian_combine(&mut self) {
+		let array = self.parts_array();
+		let node = self.type_manager.node_type;
+		let node_ref = ValType::Ref(self.node_ref(false));
+		let params = vec![ValType::F64, self.parts_ref(), ValType::F64, self.parts_ref(), ValType::F64];
+		let locals = vec![self.parts_ref(), ValType::I32, ValType::I32, ValType::I32, ValType::F64, ValType::F64, self.parts_ref()];
+		self.runtime_function(GAUSSIAN_COMBINE, params, vec![node_ref], locals, |_, f| {
+			let (value, a, a_slope, b, b_slope) = (0, 1, 2, 3, 4);
+			let (sums, count, index, search, id, square_sum, parts) = (5, 6, 7, 8, 9, 10, 11);
+			let get = |parts: u32, entry: u32, offset: i32| {
+				let mut instructions = vec![I::LocalGet(parts)];
+				instructions.extend(Self::contribution(entry, offset));
+				instructions.push(I::ArrayGet(array));
+				instructions
+			};
+			let set_in_sums = |f: &mut Function, entry: u32, offset: i32, amount: &[I<'static>]| {
+				f.instruction(&I::LocalGet(sums));
+				Self::emit_list(f, &Self::contribution(entry, offset));
+				Self::emit_list(f, amount);
+				f.instruction(&I::ArraySet(array));
+			};
+			let scaled = |parts: u32, slope: u32| {
+				let mut amount = get(parts, index, 1);
+				amount.extend([I::LocalGet(slope), I::F64Mul]);
+				amount
+			};
+			let next = |f: &mut Function| Self::emit_list(f, &[I::LocalGet(count), I::I32Const(1), I::I32Add, I::LocalSet(count)]);
+
+			f.instruction(&I::I32Const(GAUSSIAN_PARTS as i32));
+			Self::emit_list(f, &Self::contributions(a));
+			Self::emit_list(f, &Self::contributions(b));
+			Self::emit_list(f, &[I::I32Add, I::I32Const(1), I::I32Shl, I::I32Add, I::ArrayNewDefault(array), I::LocalSet(sums)]);
+			Self::repeat(f, index, &Self::contributions(a), |f| {
+				set_in_sums(f, count, 0, &get(a, index, 0));
+				set_in_sums(f, count, 1, &scaled(a, a_slope));
+				next(f);
+			});
+			Self::repeat(f, index, &Self::contributions(b), |f| {
+				Self::emit_list(f, &get(b, index, 0));
+				Self::emit_list(f, &[I::LocalSet(id), I::I32Const(0), I::LocalSet(search)]);
+				Self::emit_list(f, &[I::Block(BlockType::Empty), I::Block(BlockType::Empty), I::Loop(BlockType::Empty)]);
+				Self::emit_list(f, &[I::LocalGet(search), I::LocalGet(count), I::I32GeS, I::BrIf(1)]);
+				Self::emit_list(f, &get(sums, search, 0));
+				Self::emit_list(f, &[I::LocalGet(id), I::F64Eq, I::If(BlockType::Empty)]);
+				let mut summed = get(sums, search, 1);
+				summed.extend(scaled(b, b_slope));
+				summed.push(I::F64Add);
+				set_in_sums(f, search, 1, &summed);
+				Self::emit_list(f, &[I::Br(3), I::End]);
+				Self::emit_list(f, &[I::LocalGet(search), I::I32Const(1), I::I32Add, I::LocalSet(search), I::Br(0), I::End, I::End]);
+				set_in_sums(f, count, 0, &[I::LocalGet(id)]);
+				set_in_sums(f, count, 1, &scaled(b, b_slope));
+				next(f);
+				f.instruction(&I::End);
+			});
+			Self::emit_list(f, &[I::F64Const(0.0.into()), I::LocalSet(square_sum)]);
+			Self::repeat(f, index, &[I::LocalGet(count)], |f| {
+				Self::emit_list(f, &get(sums, index, 1));
+				f.instruction(&I::LocalTee(id));
+				Self::emit_list(f, &[I::LocalGet(id), I::F64Mul, I::LocalGet(square_sum), I::F64Add, I::LocalSet(square_sum)]);
+			});
+			Self::emit_list(f, &[
+				I::I32Const(GAUSSIAN_PARTS as i32), I::LocalGet(count), I::I32Const(1), I::I32Shl, I::I32Add, I::ArrayNewDefault(array), I::LocalSet(parts),
+				I::LocalGet(parts), I::I32Const(GAUSSIAN_PARTS as i32), I::LocalGet(sums), I::I32Const(GAUSSIAN_PARTS as i32),
+				I::LocalGet(count), I::I32Const(1), I::I32Shl, I::ArrayCopy { array_type_index_dst: array, array_type_index_src: array },
+				I::LocalGet(square_sum), I::F64Sqrt, I::LocalSet(square_sum),
+			]);
+			let parts_of = [
+				(VALUE, vec![I::LocalGet(value)]),
+				(LOW, vec![I::LocalGet(value), I::LocalGet(square_sum), I::F64Sub]),
+				(HIGH, vec![I::LocalGet(value), I::LocalGet(square_sum), I::F64Add]),
+				(DEVIATION, vec![I::LocalGet(square_sum)]),
+			];
+			for (index, amount) in parts_of {
+				Self::emit_list(f, &[I::LocalGet(parts), I::I32Const(index)]);
+				Self::emit_list(f, &amount);
+				f.instruction(&I::ArraySet(array));
+			}
+			Self::emit_list(f, &[I::I64Const(Kind::Uncertain as i64), I::LocalGet(parts), I::RefNull(HeapType::Concrete(node)), I::StructNew(node)]);
+		});
+	}
+
+	/// gaussian_<op>(a, b) -> node: the operation on the values, the contributions through its partial derivatives
+	/// (gaussian_combine). A number contributes nothing, an interval fails
+	fn emit_gaussian_arithmetic(&mut self, name: &'static str, operation: I<'static>) {
+		let node_ref = ValType::Ref(self.node_ref(false));
+		let (a, b, a_value, b_value) = (2, 3, 4, 5);
+		let locals = vec![self.parts_ref(), self.parts_ref(), ValType::F64, ValType::F64];
+		self.runtime_function(name, vec![node_ref, node_ref], vec![node_ref], locals, |s, f| {
+			for (node, parts, value) in [(0, a, a_value), (1, b, b_value)] {
+				f.instruction(&I::LocalGet(node));
+				s.call(f, UNCERTAIN_PARTS);
+				f.instruction(&I::LocalTee(parts));
+				Self::emit_list(f, &[I::ArrayLen, I::I32Const(INTERVAL_PARTS as i32), I::I32Eq]);
+				s.is_uncertain(f, node);
+				f.instruction(&I::I32And);
+				s.emit_fail_if(f, INTERVAL_AND_GAUSSIAN);
+				Self::emit_list(f, &s.part(parts, VALUE));
+				f.instruction(&I::LocalSet(value));
+			}
+			let one = I::F64Const(1.0.into());
+			let (a_slope, b_slope): (Vec<I<'static>>, Vec<I<'static>>) = match operation {
+				I::F64Sub => (vec![one.clone()], vec![I::F64Const((-1.0).into())]),
+				I::F64Mul => (vec![I::LocalGet(b_value)], vec![I::LocalGet(a_value)]),
+				I::F64Div => (
+					vec![one, I::LocalGet(b_value), I::F64Div],
+					vec![I::LocalGet(a_value), I::F64Neg, I::LocalGet(b_value), I::LocalGet(b_value), I::F64Mul, I::F64Div],
+				),
+				_ => (vec![one.clone()], vec![one]),
+			};
+			Self::emit_list(f, &[I::LocalGet(a_value), I::LocalGet(b_value), operation, I::LocalGet(a)]);
+			Self::emit_list(f, &a_slope);
+			f.instruction(&I::LocalGet(b));
+			Self::emit_list(f, &b_slope);
+			s.call(f, GAUSSIAN_COMBINE);
+		});
+	}
+
 	fn emit_uncertain_parts(&mut self) {
 		let array = self.parts_array();
 		let node_ref = ValType::Ref(self.node_ref(false));
@@ -149,7 +457,7 @@ impl WasmGcEmitter {
 
 	/// uncertain_<op>(a, b) -> node: the operation on the values, the bounds the least and greatest of it on the four
 	/// pairs of endpoints (for + and - that is low with low and high with high, or crosswise)
-	fn emit_uncertain_arithmetic(&mut self, name: &'static str, operation: I<'static>) {
+	fn emit_uncertain_arithmetic(&mut self, name: &'static str, gaussian: &'static str, operation: I<'static>) {
 		let node_ref = ValType::Ref(self.node_ref(false));
 		let (a, b, low, high) = (2, 3, 4, 5);
 		let locals = vec![self.parts_ref(), self.parts_ref(), ValType::F64, ValType::F64];
@@ -159,6 +467,11 @@ impl WasmGcEmitter {
 				s.call(f, UNCERTAIN_PARTS);
 				f.instruction(&I::LocalSet(parts));
 			}
+			s.is_gaussian(f, a);
+			s.is_gaussian(f, b);
+			Self::emit_list(f, &[I::I32Or, I::If(BlockType::Empty), I::LocalGet(0), I::LocalGet(1)]);
+			s.call(f, gaussian);
+			Self::emit_list(f, &[I::Return, I::End]);
 			let pairs = [(LOW, LOW), (LOW, HIGH), (HIGH, LOW), (HIGH, HIGH)];
 			for (bound, fold) in [(low, I::F64Min), (high, I::F64Max)] {
 				for (index, (a_end, b_end)) in pairs.into_iter().enumerate() {
@@ -189,6 +502,7 @@ impl WasmGcEmitter {
 		self.emit_text_heap_global();
 		let node_ref = ValType::Ref(self.node_ref(false));
 		let separator = self.allocate_string(PLUS_MINUS_SEPARATOR);
+		let sigma = self.allocate_string(SIGMA);
 		let mut locals = vec![self.parts_ref()];
 		locals.extend([ValType::F64; 4]);
 		locals.extend([ValType::I32; 3]);
@@ -206,6 +520,13 @@ impl WasmGcEmitter {
 				s.call(f, TEXT_CONCAT);
 				f.instruction(&I::LocalGet(radius));
 				s.call(f, FLOAT_TEXT);
+				s.call(f, TEXT_CONCAT);
+				s.is_gaussian(f, parts);
+				f.instruction(&I::If(BlockType::Result(node_ref)));
+				new_text(f, sigma);
+				f.instruction(&I::Else);
+				new_text(f, (sigma.0, 0));
+				f.instruction(&I::End);
 				s.call(f, TEXT_CONCAT);
 				f.instruction(&I::Return);
 			};
@@ -258,17 +579,17 @@ impl WasmGcEmitter {
 			Self::emit_list(f, &[I::F64Const(0.0.into()), I::F64Gt, I::LocalGet(radius), I::F64Const(f64::INFINITY.into()), I::F64Lt, I::I32And, I::I32Eqz, I::If(BlockType::Empty)]);
 			each_as_float_text(f);
 			f.instruction(&I::End);
-			// scale: the power of ten that puts the ± part in [10, 100), its 2 significant digits before the point
+			// scale: the power of ten that puts the ± part, rounded, in [10, 100): its 2 significant digits before the point
 			let scaled_radius = [I::LocalGet(radius), I::LocalGet(scale), I::F64Mul];
 			Self::emit_list(f, &[I::F64Const(1.0.into()), I::LocalSet(scale)]);
 			let mut too_small = scaled_radius.to_vec();
-			too_small.extend([I::F64Const(10.0.into()), I::F64Lt, I::LocalGet(decimals), I::I32Const(MAX_DECIMALS), I::I32LeS, I::I32And]);
+			too_small.extend([I::F64Const(ROUNDS_TO_TEN.into()), I::F64Lt, I::LocalGet(decimals), I::I32Const(MAX_DECIMALS), I::I32LeS, I::I32And]);
 			while_true(f, &too_small, &[
 				I::LocalGet(scale), I::F64Const(10.0.into()), I::F64Mul, I::LocalSet(scale),
 				I::LocalGet(decimals), I::I32Const(1), I::I32Add, I::LocalSet(decimals),
 			]);
 			let mut too_large = scaled_radius.to_vec();
-			too_large.extend([I::F64Const(100.0.into()), I::F64Ge]);
+			too_large.extend([I::F64Const(ROUNDS_TO_HUNDRED.into()), I::F64Ge]);
 			while_true(f, &too_large, &[I::LocalGet(scale), I::F64Const(10.0.into()), I::F64Div, I::LocalSet(scale)]);
 			Self::emit_list(f, &[
 				I::LocalGet(decimals), I::I32Const(MAX_DECIMALS), I::I32GtS,
@@ -287,6 +608,12 @@ impl WasmGcEmitter {
 			}
 			Self::emit_list(f, &[I::LocalGet(radius), I::LocalSet(x)]);
 			fixed(f);
+			s.is_gaussian(f, parts);
+			f.instruction(&I::If(BlockType::Empty));
+			for byte in SIGMA.bytes() {
+				put(f, byte);
+			}
+			f.instruction(&I::End);
 			Self::emit_list(f, &[I::LocalGet(address), I::LocalGet(position), I::LocalGet(address), I::I32Sub]);
 			s.call(f, "new_text");
 		});

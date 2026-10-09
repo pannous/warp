@@ -26,34 +26,45 @@ enum Dimension {
 }
 
 #[derive(Debug, PartialEq)]
-/// `factor` counts the smallest unit of the dimension: 1 km = 1_000_000 mm
+/// `factor` counts the smallest step of the dimension, so every unit is a whole number of it: time in ms, length in
+/// 0.1 mm (1 ft = 3048, 1 km = 10_000_000), mass in 10 µg (1 lb = 45_359_237)
 struct Unit {
 	name: &'static str,
 	dimension: Dimension,
 	factor: i64,
 }
 
-const UNITS: [Unit; 12] = [
+const UNITS: [Unit; 17] = [
 	Unit { name: "ms", dimension: Dimension::Time, factor: 1 },
 	Unit { name: "s", dimension: Dimension::Time, factor: 1_000 },
 	Unit { name: "min", dimension: Dimension::Time, factor: 60_000 },
 	Unit { name: "h", dimension: Dimension::Time, factor: 3_600_000 },
-	Unit { name: "mm", dimension: Dimension::Length, factor: 1 },
-	Unit { name: "cm", dimension: Dimension::Length, factor: 10 },
-	Unit { name: "m", dimension: Dimension::Length, factor: 1_000 },
-	Unit { name: "km", dimension: Dimension::Length, factor: 1_000_000 },
-	Unit { name: "mg", dimension: Dimension::Mass, factor: 1 },
-	Unit { name: "g", dimension: Dimension::Mass, factor: 1_000 },
-	Unit { name: "kg", dimension: Dimension::Mass, factor: 1_000_000 },
+	Unit { name: "mm", dimension: Dimension::Length, factor: 10 },
+	Unit { name: "cm", dimension: Dimension::Length, factor: 100 },
+	Unit { name: "m", dimension: Dimension::Length, factor: 10_000 },
+	Unit { name: "km", dimension: Dimension::Length, factor: 10_000_000 },
+	// `inch`, not `in`: `x in xs` and `100 cm in m` keep the word
+	Unit { name: "inch", dimension: Dimension::Length, factor: 254 },
+	Unit { name: "ft", dimension: Dimension::Length, factor: 3_048 },
+	Unit { name: "yd", dimension: Dimension::Length, factor: 9_144 },
+	Unit { name: "mi", dimension: Dimension::Length, factor: 16_093_440 },
+	Unit { name: "mg", dimension: Dimension::Mass, factor: 100 },
+	Unit { name: "g", dimension: Dimension::Mass, factor: 100_000 },
+	Unit { name: "kg", dimension: Dimension::Mass, factor: 100_000_000 },
+	Unit { name: "lb", dimension: Dimension::Mass, factor: 45_359_237 },
 	Unit { name: "AD", dimension: Dimension::Era, factor: 1 },
 ];
 
+/// Unit words standing for a unit expression: `60 mph` is `60 mi/h`
+const UNIT_ALIASES: [(&str, &str); 1] = [("mph", "mi/h")];
+
 /// The long names a conversion target may use, singular or plural: `2 h in minutes` (P36). Quantities keep the short
 /// names, `2 minutes` stays a duration of the time module.
-const LONG_NAMES: [(&str, &str); 12] = [
+const LONG_NAMES: [(&str, &str); 19] = [
 	("millisecond", "ms"), ("second", "s"), ("minute", "min"), ("hour", "h"),
 	("millimeter", "mm"), ("centimeter", "cm"), ("meter", "m"), ("metre", "m"), ("kilometer", "km"),
-	("milligram", "mg"), ("gram", "g"), ("kilogram", "kg"),
+	("inches", "inch"), ("foot", "ft"), ("feet", "ft"), ("yard", "yd"), ("mile", "mi"),
+	("milligram", "mg"), ("gram", "g"), ("kilogram", "kg"), ("pound", "lb"), ("lbs", "lb"),
 ];
 /// `100 cm in m`: the word of a conversion written with spaces (`as` is an operator)
 const IN_WORD: &str = "in";
@@ -71,8 +82,152 @@ fn target_unit(node: &Node) -> Option<&'static Unit> {
 	unit_named(name).or_else(|| LONG_NAMES.iter().find(|(long, _)| *long == singular || *long == name).and_then(|(_, short)| unit_named(short)))
 }
 
+/// `60 mph` as `60 mi/h`: each unit alias the program does not define read as its unit expression (not a field name:
+/// `r.mph`, `{mph: 3}`)
+pub fn lower_unit_aliases(program: Node) -> Node {
+	let aliases: Vec<(&str, &str)> = UNIT_ALIASES.into_iter().filter(|(alias, _)| mentions_word(&program, alias)).collect();
+	if aliases.is_empty() {
+		return program;
+	}
+	let defined = defined_unit_names(&program);
+	let aliases: Vec<(&str, &str)> = aliases.into_iter().filter(|(alias, _)| !defined.contains(*alias)).collect();
+	with_unit_aliases(program, &aliases)
+}
+
+fn with_unit_aliases(node: Node, aliases: &[(&str, &str)]) -> Node {
+	let expansion = |unit: &Node| match unit.drop_meta() {
+		Node::Symbol(name) => aliases.iter().find(|(alias, _)| alias == name).map(|(_, expression)| crate::warp_parser::parse(expression)),
+		_ => None,
+	};
+	match node {
+		// `60 mph`, `60*mph`: the amount joins the first unit, `60 mi / h`, as a written `60 mi/h` reads
+		Node::List(items, Bracket::None, Separator::Space) if items.len() == 2 && expansion(&items[1]).is_some() => {
+			let [amount, unit] = <[Node; 2]>::try_from(items).expect("two items");
+			times_first_unit(with_unit_aliases(amount, aliases), expansion(&unit).expect("guarded"))
+		}
+		Node::Key(amount, Op::Mul, unit) if expansion(&unit).is_some() => times_first_unit(with_unit_aliases(*amount, aliases), expansion(&unit).expect("guarded")),
+		Node::Symbol(name) => expansion(&Node::Symbol(name.clone())).unwrap_or(Node::Symbol(name)),
+		// a field's type, `speed: mph`
+		Node::Type { name, body } if matches!(body.drop_meta(), Node::Empty) && expansion(&name).is_some() => expansion(&name).expect("guarded"),
+		Node::Type { name, body } => Node::Type { name, body: Box::new(with_unit_aliases(*body, aliases)) },
+		Node::Key(object, Op::Dot, field) => Node::Key(Box::new(with_unit_aliases(*object, aliases)), Op::Dot, field),
+		Node::Key(field, Op::Colon, value) => Node::Key(field, Op::Colon, Box::new(with_unit_aliases(*value, aliases))),
+		other => other.map_children(|child| with_unit_aliases(child, aliases)),
+	}
+}
+
+/// Whether the word occurs anywhere, class bodies and field types included
+fn mentions_word(node: &Node, word: &str) -> bool {
+	match node.drop_meta() {
+		Node::Symbol(name) => name == word,
+		Node::Type { name, body } => mentions_word(name, word) || mentions_word(body, word),
+		other => children(other).into_iter().any(|child| mentions_word(child, word)),
+	}
+}
+
+fn times_first_unit(amount: Node, expression: Node) -> Node {
+	match expression.drop_meta() {
+		Node::Key(first, op @ (Op::Mul | Op::Div), rest) => Node::Key(Box::new(times_first_unit(amount, *first.clone())), *op, rest.clone()),
+		_ => Node::Key(Box::new(amount), Op::Mul, Box::new(expression)),
+	}
+}
+
 pub fn is_unit(name: &str) -> bool {
 	unit_named(name).is_some()
+}
+
+/// A unit or a unit alias: the parser binds it to the amount before it, `60 mph` is `60*mph`
+pub fn names_unit(name: &str) -> bool {
+	is_unit(name) || UNIT_ALIASES.iter().any(|(alias, _)| *alias == name)
+}
+
+/// lib/units.warp's class of quantities whose unit is known only at run time, and the word making one
+pub const RUN_TIME_QUANTITY: &str = "Quantity";
+const RUN_TIME_QUANTITY_WORD: &str = "quantity";
+
+/// A unit written in the program (`1 m`, `5 m/s`, `6 m²`) as the run-time `quantity(1, "m")`, for where it meets one
+/// (card units-mixed)
+pub fn as_run_time_quantity(node: &Node) -> Option<Node> {
+	let (amount, unit) = unit_literal(node)?;
+	Some(run_time_quantity(amount, unit))
+}
+
+fn run_time_quantity(amount: Node, unit: String) -> Node {
+	Node::List(vec![Node::Symbol(RUN_TIME_QUANTITY_WORD.to_string()), amount, Node::Text(unit)], Bracket::Round, Separator::None)
+}
+
+/// `5 m ± 1 cm` in a program the compile-time evaluation cannot answer (arithmetic with it, a function given it) as the
+/// run-time `quantity(5 ± 1/100, "m")`: its amount an interval in the unit of the value (card plus-minus-units). A
+/// tolerance the evaluation answers (`2m ± 5cm`, `1950 AD ± 50 == 1900 - 2000 AD`) stays the compile-time Tolerance
+pub fn lower_run_time_tolerances(program: Node) -> Node {
+	if !has_unit_tolerance(&program) || answers_at_compile_time(&program) {
+		return program;
+	}
+	with_run_time_tolerances(program)
+}
+
+fn has_unit_tolerance(node: &Node) -> bool {
+	match node.drop_meta() {
+		Node::Key(value, Op::PlusMinus, spread) if unit_literal(value).is_some() || unit_literal(spread).is_some() => true,
+		other => children(other).into_iter().any(has_unit_tolerance),
+	}
+}
+
+fn answers_at_compile_time(program: &Node) -> bool {
+	!defines_unit_name(program) && match evaluate(program) {
+		Ok(_) => true,
+		Err(Stop::Error(message)) => !RUN_TIME_TOLERANCE_ERRORS.iter().any(|refusal| message.starts_with(refusal)),
+		Err(Stop::Unsupported) => false,
+	}
+}
+
+fn with_run_time_tolerances(node: Node) -> Node {
+	match node {
+		Node::Key(value, Op::PlusMinus, spread) if unit_literal(&value).is_some() || unit_literal(&spread).is_some() => {
+			run_time_tolerance(&value, &spread).unwrap_or_else(|message| error(&message))
+		}
+		other => other.map_children(with_run_time_tolerances),
+	}
+}
+
+/// `5 m ± 1 cm` is `quantity(5 ± 1/100, "m")`, `5 m ± 1` counts the 1 in m, `5 ± 1 cm` the 5 in cm
+fn run_time_tolerance(value: &Node, spread: &Node) -> Result<Node, String> {
+	let interval = |amount: Node, spread: Node| Node::Key(Box::new(amount), Op::PlusMinus, Box::new(spread));
+	let (amount, unit) = match (unit_literal(value), unit_literal(spread)) {
+		(Some((amount, unit)), Some(_)) => {
+			let (Ok(Value::Quantity(value)), Ok(Value::Quantity(spread))) = (evaluate(value), evaluate(spread)) else { return Err(format!("a tolerance applies to numbers and quantities: {}", spread.serialize())) };
+			aligned(&value, &spread).map_err(|stop| match stop { Stop::Error(message) => message, Stop::Unsupported => "incompatible units".to_string() })?;
+			let unit_of = |factor: &Factor| value.factors.iter().find(|own| own.unit.dimension == factor.unit.dimension).map_or(factor.unit, |own| own.unit);
+			(interval(amount, quotient_node(&spread.amount.mul(&scale(&spread.factors, unit_of)))), unit)
+		}
+		(Some((amount, unit)), None) => (interval(amount, spread.clone()), unit),
+		(None, Some((amount, unit))) => (interval(value.clone(), amount), unit),
+		(None, None) => unreachable!("guarded by has_unit_tolerance"),
+	};
+	Ok(run_time_quantity(amount, unit))
+}
+
+/// `5 m/s` as its amount and unit text: a number times units, then more units multiplied or divided
+fn unit_literal(node: &Node) -> Option<(Node, String)> {
+	match node.drop_meta() {
+		Node::Key(amount, Op::Mul, unit) if matches!(amount.drop_meta(), Node::Number(_)) => Some((amount.drop_meta().clone(), unit_text(unit)?)),
+		Node::Key(literal, op @ (Op::Mul | Op::Div), unit) => {
+			let (amount, written) = unit_literal(literal)?;
+			let joint = if *op == Op::Mul { "·" } else { "/" };
+			Some((amount, format!("{written}{joint}{}", unit_text(unit)?)))
+		}
+		Node::List(items, Bracket::Round, _) if items.len() == 1 => unit_literal(&items[0]),
+		_ => None,
+	}
+}
+
+/// `m`, `m²`: a unit's name, to a power
+fn unit_text(node: &Node) -> Option<String> {
+	match node.drop_meta() {
+		Node::Symbol(name) if is_unit(name) => Some(name.clone()),
+		Node::Key(base, power @ (Op::Square | Op::Cube), _) => Some(format!("{}{power}", unit_text(base)?)),
+		_ => None,
+	}
 }
 
 /// `meters`, `kilogram`: a long name of a quantity's unit; durations (`2 minutes`) belong to the time module
@@ -241,6 +396,12 @@ enum Stop {
 }
 
 type Evaluated = Result<Value, Stop>;
+
+/// The refusals of the compile-time evaluation that a run-time quantity answers (lower_run_time_tolerances)
+const TOLERANCE_ARITHMETIC: &str = "arithmetic on a value with tolerance or a range is not supported";
+const WHOLE_TOLERANCE: &str = "a tolerance counts whole numbers";
+const PLAIN_TOLERANCE: &str = "a tolerance applies to numbers and plain quantities";
+const RUN_TIME_TOLERANCE_ERRORS: [&str; 3] = [TOLERANCE_ARITHMETIC, WHOLE_TOLERANCE, PLAIN_TOLERANCE];
 
 fn fail<T>(message: impl Into<String>) -> Result<T, Stop> {
 	Err(Stop::Error(message.into()))
@@ -456,7 +617,7 @@ fn defined_unit_names(node: &Node) -> std::collections::HashSet<String> {
 
 fn collect_defined_unit_names(node: &Node, names: &mut std::collections::HashSet<String>) {
 	let mut add_unit = |node: &Node| if let Node::Symbol(name) = node.drop_meta() {
-		if unit_named(name).is_some() {
+		if unit_named(name).is_some() || UNIT_ALIASES.iter().any(|(alias, _)| alias == name) {
 			names.insert(name.clone());
 		}
 	};
@@ -614,7 +775,7 @@ fn arithmetic(left: Value, op: Op, right: Value) -> Evaluated {
 		(left, Op::Add | Op::Sub | Op::Mul | Op::Div, right) if [&left, &right].iter().all(|value| unitless_number(value))
 			&& [&left, &right].iter().any(|value| matches!(value, Value::Tolerance(_))) => Err(Stop::Unsupported),
 		(Value::Tolerance(_) | Value::Range(_), _, _) | (_, _, Value::Tolerance(_) | Value::Range(_)) => {
-			fail(format!("arithmetic on a value with tolerance or a range is not supported: {op}"))
+			fail(format!("{TOLERANCE_ARITHMETIC}: {op}"))
 		}
 		(left, Op::PlusMinus, right) => tolerance(left, right),
 		(Value::Number(from), Op::Sub, Value::Quantity(end)) if end.single_unit().is_some() => range(from, end),
@@ -819,8 +980,8 @@ fn sum(left: Quantity, op: Op, right: Quantity) -> Evaluated {
 
 /// `1950 ± 50`, `1950 cm ± 50` and `1950 ± 50 cm` all count in the unit that is present
 fn tolerance(center: Value, spread: Value) -> Evaluated {
-	let plain = |quantity: &Quantity| quantity.single_unit().ok_or_else(|| Stop::Error(format!("a tolerance applies to numbers and plain quantities, not {quantity}")));
-	let counted = |amount: &Rational| whole(amount).ok_or_else(|| Stop::Error(format!("a tolerance counts whole numbers, not {amount}")));
+	let plain = |quantity: &Quantity| quantity.single_unit().ok_or_else(|| Stop::Error(format!("{PLAIN_TOLERANCE}, not {quantity}")));
+	let counted = |amount: &Rational| whole(amount).ok_or_else(|| Stop::Error(format!("{WHOLE_TOLERANCE}, not {amount}")));
 	let (value, tolerance, unit) = match (center, spread) {
 		(Value::Number(value), Value::Number(tolerance)) => (value, tolerance, None),
 		(Value::Quantity(value), Value::Number(tolerance)) => (counted(&value.amount)?, tolerance, Some(plain(&value)?)),

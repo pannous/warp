@@ -228,6 +228,15 @@ users = ["Ann", "Bo"]
 route "/" { div{ h1{ "Users" } a{ href: "/users/2" "Bo" } } }
 route "/users/:id:int" { div{ h1{ users#id } a{ href: "/" "back" } } }
 route "*" { p{ "no such page" } }` },
+	forms: { value: 'div{form{method:"post" action:"/items" input:name:"item" button:"add"} ul:li:"milk"}', typed: "tea", clicks: ["add"], clicked: 'div{form{method:"post" action:"/items" input:name:"item" button:"add"} ul{li:"milk" li:"tea"}}', address: "/", code: `// a form posts to the program's own route: here the page answers it, \`warp serve\` serves it to every browser
+items = ["milk"]
+post "/items" { items.add(request.body.item) }
+route "/" {
+	div{
+		form{ method:"post" action:"/items" input{ name:"item" } button{ "add" } }
+		ul{ for item in items { li{ item } } }
+	}
+}` },
 	transitions: { value: 'div{button{data-warp-click:"1" "rotate"} button{data-warp-click:"2" "remove"} ul{li{key:1 data-warp-starting-style:opacity:0 style:transition:"opacity 150ms, transform 150ms" "milk"} li{key:2 data-warp-starting-style:opacity:0 style:transition:"opacity 150ms, transform 150ms" "eggs"} li{key:3 data-warp-starting-style:opacity:0 style:transition:"opacity 150ms, transform 150ms" "tea"}}}', clicks: ["rotate", "remove"], clicked: 'div{button{data-warp-click:"1" "rotate"} button{data-warp-click:"2" "remove"} ul{li{key:3 data-warp-starting-style:opacity:0 style:transition:"opacity 150ms, transform 150ms" "tea"} li{key:1 data-warp-starting-style:opacity:0 style:transition:"opacity 150ms, transform 150ms" "milk"}}}', keyed: true, animated: true, code: `// CSS transitions: removed items fade out, the others glide
 todos = [{id:1 text:"milk"} {id:2 text:"eggs"} {id:3 text:"tea"}]
 div{
@@ -244,5 +253,5 @@ c.increment(2)
 use c
 import tests/fixtures/wasm/zlib
 [strstr("haystack", "st"), strchr("a/b/c", 47), crc32(0, "wasp", 4), zlibVersion()]` },
-	"kitchen sink": { value: '"✓ 33 tests passed"', get code() { return SAMPLES.kitchensink; } },
+	"kitchen sink": { value: '"✓ 34 tests passed"', get code() { return SAMPLES.kitchensink; } },
 };

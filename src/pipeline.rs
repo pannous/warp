@@ -114,6 +114,8 @@ thread_local! {
 	/// whether it is for `warp dev`, whose page keeps the program's state across reloads
 	static FOR_DEV: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
 	static RENDERS_ITSELF: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+	/// whether the program compiled now ends in the print of its value that compile_printing_result added
+	static PRINTS_RESULT: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
 	/// whether the page is compiled to render its first HTML where the server's code is (site.rs, headless.rs)
 	static PRERENDERING: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
 	/// the values the page's calls of server functions gave its prerender, the shipped page's first values
@@ -255,7 +257,9 @@ pub struct CompiledModule {
 
 /// The passes over the source forms, in order, each reading what the one before it left: definitions and sugar become
 /// the forms every later pass knows (`def f(x) {…}` is `f(x) := {…}`), modules are resolved
-const SOURCE_PASSES: [fn(Node) -> Node; 91] = [
+const SOURCE_PASSES: [fn(Node) -> Node; 95] = [
+	// `"a \(x) b"` → `"a " + text_form(x) + " b"` (interpolation.rs) first, so every pass reads the holes as code
+	crate::interpolation::lower_program,
 	crate::analyzer::lower_inline_unions,
 	// `on ask {…} in {…}` before any pass reads `{…} in {…}` as membership or an emit as nothing
 	crate::scoped_handlers::lower,
@@ -275,6 +279,8 @@ const SOURCE_PASSES: [fn(Node) -> Node; 91] = [
 	crate::late_binding::split_global_assignments,
 	// `xs.keep only positive` is `xs where it > 0`, before lower_where reads it (list_phrases.rs)
 	crate::list_phrases::lower,
+	// `post "/todos/:id" { todos where it.id == id }`: the path's parameters bound before lower_where reads the variables
+	crate::serve::bind_path_parameters,
 	// `xs where it > 1` before welcome_forms reads its words and a function's `it` is read as its parameter
 	crate::comprehensions::lower_where,
 	// `go { … }` before any pass reads into the block (go_blocks.rs)
@@ -303,6 +309,10 @@ const SOURCE_PASSES: [fn(Node) -> Node; 91] = [
 	// the classes of used modules (`use shapes`, `use collections`) before class_methods lowers them with the program's
 	// `class Foo;` takes in the definitions after it before any pass reads class bodies (wiki/type.md)
 	crate::lowering::file_declarations::lower,
+	// `60 mph` is `60 mi/h` before any units pass reads it
+	crate::units::lower_unit_aliases,
+	// `5 m ± 1 cm; x * 2`: a run-time quantity with an interval amount (units.rs), before the units module is loaded for it
+	crate::units::lower_run_time_tolerances,
 	crate::modules::insert_module_classes,
 	// `type Name = string` resolved in `name: Name` before class_methods reads the fields
 	crate::type_aliases::lower,
@@ -388,7 +398,6 @@ fn lower_for_emission(node: Node) -> Result<Node, Node> {
 	if let Some(unsaid) = crate::uncertain::check_orderings(&node) {
 		return Err(unsaid.into_error());
 	}
-	let node = crate::interpolation::lower(crate::injection::lower_templates(node)?);
 	let node = crate::function_equality::decide_comparisons(node);
 	if let Node::Error(_) = node {
 		return Err(node);
@@ -414,6 +423,10 @@ fn lower_for_emission(node: Node) -> Result<Node, Node> {
 	let effects = EffectReport::of(&node).with_events_of(&as_written);
 	if let Some(answer) = effects.answer(&node) {
 		return Err(answer);
+	}
+	let node = effects.answer_queries(node);
+	if let Some(error) = node.first_error() {
+		return Err(error.clone());
 	}
 	if let Some((name, capability)) = effects.denied(GRANTED.with(|granted| granted.get())) {
 		return Err(crate::node::error(&format!(
@@ -443,8 +456,18 @@ pub fn compile(code: &str) -> Result<CompiledModule, Node> {
 /// compile for a standalone executable (`warp build`): the program prints its value at the end, as `warp <file>`
 /// shows it, since nobody reads the result of an executable
 pub fn compile_printing_result(code: &str) -> Result<CompiledModule, Node> {
+	PRINTS_RESULT.with(|prints| prints.set(false));
 	// the routes first: a program ending with a route prints the page its path shows, not the route statement
-	compile_program(code, |program| printing_result(crate::routes::lower(program)))
+	let compiled = compile_program(code, |program| printing_result(crate::routes::lower(program)));
+	PRINTS_RESULT.with(|prints| prints.set(false));
+	compiled
+}
+
+/// Whether the program compiled now ends in the print of its value that compile_printing_result added: that print
+/// shows nothing for ø (a loop or a call that gives nothing), as `warp <file>` shows nothing; a print of the program's
+/// own prints ø
+pub fn prints_result() -> bool {
+	PRINTS_RESULT.with(|prints| prints.get())
 }
 
 fn compile_program(code: &str, rewrite: fn(Node) -> Node) -> Result<CompiledModule, Node> {
@@ -472,7 +495,10 @@ fn printing_result(program: Node) -> Node {
 		}
 		Node::Empty => Node::Empty,
 		statement if crate::modules::is_declaration(&statement) || crate::warp_parser::starts_print(&statement) => statement,
-		value => crate::warp_parser::print_call([value]),
+		value => {
+			PRINTS_RESULT.with(|prints| prints.set(true));
+			crate::warp_parser::print_call([value])
+		}
 	}
 }
 

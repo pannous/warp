@@ -3,6 +3,8 @@
 //   ["open", url] → true once loaded · ["eval", js] → the value as agent-browser prints it (JSON text)
 //   ["messages"] → the console errors and warnings and failed requests since the last ask, workers included
 //   ["close"] → quits
+// A command still unanswered after COMMAND_SECONDS answers {"timeout": what, the page's state and console}; a Firefox that went away ends the driver
+// with exit code 1 and the reason on stderr (test_in_browser.py stops loudly on either, card deploy-firefox-hang).
 // FIREFOX names the binary (default `firefox`; on macOS the app, default /Applications/Firefox.app, started by `open`:
 // a terminal's child may not read ~/Library/Application Support/Firefox, which Firefox needs even with --profile).
 // A fresh profile per run, so the user's own Firefox is never touched.
@@ -16,6 +18,12 @@ import { createInterface } from "node:readline";
 const MAC = process.platform === "darwin";
 const FIREFOX = process.env.FIREFOX ?? (MAC ? "/Applications/Firefox.app" : "firefox");
 const START_SECONDS = 60;
+// a command not answered by then (a page that never finishes loading, an example that never ends) fails the run loudly
+// (FIREFOX_COMMAND_SECONDS: shorter, for a probe of that path)
+const COMMAND_SECONDS = Number(process.env.FIREFOX_COMMAND_SECONDS ?? 120);
+const STATE_SECONDS = 10; // then the page's state, asked after such a timeout
+// Firefox writes its profile until it has quit (card firefox-profile: ENOTEMPTY removing it right after the socket closed)
+const QUIT_SECONDS = 30;
 const REPORTED_LEVELS = new Set(["error", "warn", "warning", "assert"]);
 const FAILED_STATUS = 400;
 
@@ -27,21 +35,22 @@ const freePort = () => new Promise(found => {
 });
 const sleep = milliseconds => new Promise(done => setTimeout(done, milliseconds));
 
-// the BiDi socket of a Firefox started now, once it listens
+// the BiDi socket of a Firefox started now, once it listens, and a promise of its exit (`open -W` waits for the app)
 async function startFirefox(profile) {
 	const port = await freePort();
 	const options = ["--headless", "--no-remote", "--profile", profile, "--remote-debugging-port", String(port)];
-	spawn(MAC ? "open" : FIREFOX, MAC ? ["-n", "-g", "-a", FIREFOX, "--args", ...options] : options, { stdio: "ignore" });
+	const firefox = spawn(MAC ? "open" : FIREFOX, MAC ? ["-n", "-g", "-W", "-a", FIREFOX, "--args", ...options] : options, { stdio: "ignore" });
+	const exited = new Promise(done => firefox.on("exit", done));
 	for (const deadline = Date.now() + START_SECONDS * 1000; Date.now() < deadline; await sleep(250)) {
 		const socket = new WebSocket(`ws://127.0.0.1:${port}/session`);
 		const opened = await new Promise(settled => { socket.onopen = () => settled(true); socket.onerror = () => settled(false); });
-		if (opened) return socket;
+		if (opened) return { socket, exited };
 	}
 	throw new Error(`Firefox (${FIREFOX}) did not listen for WebDriver BiDi in ${START_SECONDS} s`);
 }
 
 const profile = mkdtempSync(join(tmpdir(), "warp-firefox-"));
-const socket = await startFirefox(profile);
+const { socket, exited } = await startFirefox(profile);
 let nextId = 1;
 const pending = new Map();
 const messages = [];
@@ -49,6 +58,10 @@ const report = (level, text, url = "") => REPORTED_LEVELS.has(level) && messages
 const events = {
 	"log.entryAdded": entry => report(entry.level, entry.text ?? entry.args?.map(arg => arg.value ?? arg.type).join(" "), entry.source?.realm ? entry.stackTrace?.callFrames?.[0]?.url : ""),
 	"network.responseCompleted": ({ response }) => response.status >= FAILED_STATUS && report("error", `${response.status} ${response.statusText}`.trim(), response.url),
+};
+socket.onclose = () => {
+	console.error(`firefox_driver.mjs: Firefox closed its WebDriver BiDi connection; ${pending.size} commands unanswered`);
+	process.exit(1);
 };
 socket.onmessage = message => {
 	const data = JSON.parse(message.data);
@@ -88,15 +101,34 @@ const commands = {
 		const closed = new Promise(done => socket.onclose = done);
 		await send("browser.close");
 		await closed;
-		// Firefox may still write its profile while it quits
-		rmSync(profile, { recursive: true, force: true, maxRetries: 20, retryDelay: 250 });
+		await Promise.race([exited, sleep(QUIT_SECONDS * 1000)]);
+		try {
+			rmSync(profile, { recursive: true, force: true, maxRetries: 20, retryDelay: 250 });
+		} catch (error) {
+			console.error(`firefox_driver.mjs: warning: the profile ${profile} stays behind: ${error.message}`);
+		}
 		process.exit(0);
 	},
 };
 
+// what the page was doing when a command got no answer: where it is, whether it is isolated, the playground's status
+const PAGE_STATE = `({ address: location.href, loaded: document.readyState, isolated: self.crossOriginIsolated,
+	controlled: !!navigator.serviceWorker?.controller, status: document.getElementById("status")?.textContent,
+	loading: document.getElementById("loading")?.hidden === false ? document.getElementById("loading").textContent : "",
+	playground: window.playground?.state?.() })`;
+const unanswered = seconds => sleep(seconds * 1000).then(() => `no answer in ${seconds} s`);
+
+// the command's answer, or {timeout} naming it, the page's state and its console when none came in COMMAND_SECONDS
+// (card firefox-hello-hang: a cold runner's first example once waited forever)
+const answeredInTime = (answer, line) => Promise.race([answer, sleep(COMMAND_SECONDS * 1000).then(async () => {
+	const state = await Promise.race([commands.eval(PAGE_STATE), unanswered(STATE_SECONDS)]);
+	const logged = messages.splice(0).map(({ level, text, url }) => `${level}: ${text}${url ? ` (${url})` : ""}`);
+	return { timeout: `no answer to ${line.slice(0, 200)} in ${COMMAND_SECONDS} s; the page: ${state}; its console: ${JSON.stringify(logged)}` };
+})]);
+
 console.log(JSON.stringify("ready"));
 for await (const line of createInterface({ input: process.stdin })) {
 	const [command, ...arguments_] = JSON.parse(line);
-	console.log(JSON.stringify(await commands[command](...arguments_)));
+	console.log(JSON.stringify(await answeredInTime(commands[command](...arguments_), line)));
 }
 await commands.close();

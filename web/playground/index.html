@@ -9,14 +9,18 @@
 	<script>
 		// tasks on Workers need shared memory, which needs cross-origin isolation: a service worker adds the headers
 		// GitHub Pages cannot send, then the page reloads once under it (coi-serviceworker.js), once it is active: a reload
-		// before comes back without it. A hard reload bypasses it, so an isolated page clears the flag for the next try
-		if (self.crossOriginIsolated) sessionStorage.removeItem("isolating");
-		else if ("serviceWorker" in navigator && !sessionStorage.getItem("isolating")) {
+		// before comes back without it. A hard reload bypasses it, so an isolated page clears the flag for the next try.
+		// The page starts (playground.js initialize) once no reload is coming: its Worker's request would be aborted
+		// (Firefox: NS_BINDING_ABORTED, card firefox-worker)
+		window.pageStarts = new Promise(start => {
+			if (self.crossOriginIsolated) sessionStorage.removeItem("isolating");
+			if (self.crossOriginIsolated || !("serviceWorker" in navigator) || sessionStorage.getItem("isolating")) return start();
 			navigator.serviceWorker.register("coi-serviceworker.js").then(() => navigator.serviceWorker.ready).then(() => {
 				sessionStorage.setItem("isolating", "1");
 				location.reload();
-			}, () => {});
-		}
+			}, start);
+			setTimeout(start, 5000); // a service worker that never gets ready leaves the page working, without isolation
+		});
 	</script>
 	<link rel="stylesheet" href="codemirror/codemirror.min.css">
 	<link rel="stylesheet" href="playground.css">
@@ -29,6 +33,7 @@
 	<script src="version.js" onerror="window.PLAYGROUND_VERSION = null"></script>
 	<script src="markup.js"></script>
 	<script src="markup-transitions.js"></script>
+	<script src="assistant.js" defer></script>
 	<script src="playground.js" defer></script>
 	<script src="guide.js" defer></script>
 </head>
@@ -44,6 +49,9 @@
 			<p>Run it on your machine: <code>warp hello.warp</code> <br/>
 				<a href="https://github.com/pannous/warp#install" target="_blank" rel="noopener">get warp</a>
 			</p>
+			<p><label>Anthropic API key, for <code>agent "…"</code>, completion (Ctrl-Space) and Ask ✦:<br/>
+				<input id="api-key" class="api-key" type="password" autocomplete="off" spellcheck="false" placeholder="sk-ant-…"></label><br/>
+				kept in this browser only, sent to api.anthropic.com only</p>
 			<p><a id="build" class="build"></a></p>
 			<p><a id="version" class="version" target="_blank" rel="noopener" hidden></a></p>
 			<div id="silenced" class="silenced" hidden>
@@ -69,11 +77,13 @@
 			<button id="run" title="Ctrl/Cmd-Enter">Run ▶</button>
 			<label><input id="auto" type="checkbox" checked> run while typing</label>
 			<a id="guide-link" class="guide-link" hidden></a>
+			<button id="ask" type="button" title="chat with Claude about this program (needs the API key in the ⋯ menu)">Ask ✦</button>
 		</nav>
 		<section class="editor-pane"><textarea id="code" spellcheck="false"></textarea></section>
 		<div id="editor-resizer" class="resizer rows" role="separator" aria-orientation="horizontal" aria-label="editor height" tabindex="0" title="drag to resize, double-click to reset"></div>
 		<section id="output" class="output-pane" tabindex="0">
 			<span id="status" class="status">loading the compiler…</span>
+			<span id="loading" class="status" hidden></span>
 			<div id="listening" class="listening-note" hidden></div>
 			<div class="result"><span class="prompt">»</span> <output id="value"></output></div>
 			<pre id="printed" class="printed" hidden></pre>
@@ -81,6 +91,10 @@
 			<div id="rendered" class="rendered" hidden></div>
 			<div id="paintings" class="paintings"></div>
 			<ul id="diagnostics" class="diagnostics"></ul>
+		</section>
+		<section id="assistant" class="assistant-pane" hidden>
+			<div id="chat-log" class="chat-log"></div>
+			<form id="chat-form" class="chat-form"><input id="chat-input" placeholder="ask about this program…" aria-label="question"><button>send</button></form>
 		</section>
 	</div>
 </main>

@@ -174,7 +174,7 @@ fn is_print_word(node: &Node) -> bool {
 /// `print` or the call `print(…)`: a print statement starts here
 pub(crate) fn starts_print(node: &Node) -> bool {
 	match node.drop_meta() {
-		Node::List(items, Bracket::Round, _) => items.first().is_some_and(is_print_word),
+		Node::List(items, Bracket::Round, _) | Node::List(items, Bracket::None, Separator::Space) => items.first().is_some_and(is_print_word),
 		other => is_print_word(other),
 	}
 }
@@ -597,9 +597,16 @@ pub fn parse(input: &str) -> Node {
 	WarpParser::parse(input)
 }
 
-/// The number a text spells if the whole text is one number literal, so `int "12a"` never guesses
+/// The number a text spells if the whole text is one number literal, so `int "12a"` never guesses; "1/3" spells the
+/// exact ratio of two Ints, as the code 1/3 does (card fraction-number)
 pub fn number_in_text(text: &str) -> Option<Number> {
 	let text = text.trim();
+	if let Some((numerator, denominator)) = text.split_once('/') {
+		return match (number_in_text(numerator)?, number_in_text(denominator)?) {
+			(numerator @ Number::Int(_), denominator @ Number::Int(_)) => Some(Number::ratio(numerator, denominator)),
+			_ => None,
+		};
+	}
 	let spells_number = !text.is_empty() && text.chars().all(|c| c.is_ascii_digit() || "+-._eE".contains(c));
 	if !spells_number {
 		return None;

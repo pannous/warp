@@ -91,6 +91,7 @@ mod test_atomic_arrays;
 mod test_task_list_literal;
 mod test_job_lists;
 mod test_try_stack_overflow;
+mod test_try_host_failure; // card try-catch
 mod test_run_time_blocks;
 mod test_run_time_block_cache;
 mod test_catch_binding;
@@ -141,8 +142,17 @@ mod test_multiline_errors;
 mod test_run_tests; // card run-tests
 mod test_data_quoting; // card data-quoting
 mod test_database_tables; // card orm
+mod test_database_field_named; // card orm-size-field
 mod test_database_filters; // card orm-filters
 mod test_database_relations; // card orm, step 4
 mod test_database_nested_add; // card orm-nested
 mod test_database_dangling_key; // card orm-dangling
 mod test_database_members_add; // cards orm-nested, orm-list-add
+mod test_database_optional; // card orm-optional
+mod test_database_optional_units; // card unit-field
+mod test_database_units_everywhere; // card browser-unit
+mod test_database_short_names; // card orm-one-letter-column
+mod test_print_empty; // card print-error
+mod test_database_bool_column; // card todo-app
+mod test_try_else_print; // card try-print
+mod test_database_busy; // card orm-sample-lock

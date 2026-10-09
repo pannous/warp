@@ -242,6 +242,7 @@ impl WarpParser {
 		let is_known_type = |word: &str| {
 			crate::analyzer::type_word_kind(word).is_some() || crate::analyzer::plural_element_type(word).is_some() || declared_types.contains(word)
 		};
+		let in_phrase = crate::type_name_matching::phrase_words(&words, &body, &is_known_type);
 		let (parameters, body) = match crate::type_name_matching::parameter_slots(&words, &body, &is_known_type) {
 			Ok(slots) => slots,
 			Err(message) => return Some(error(&message)),
@@ -260,7 +261,7 @@ impl WarpParser {
 			self.phrase_definitions.insert(name.clone(), parameters.clone());
 			let head = Node::List([vec![Symbol(name)], parameters].concat(), Bracket::Round, Separator::None);
 			// P52: the prepositions of the phrase, for phrase_calls to read calls like `add 1 to 2`
-			let pattern = crate::phrase_calls::pattern_text(&words);
+			let pattern = crate::phrase_calls::pattern_text(&words, &in_phrase);
 			// `To square a number: …` of one slot is called in English as `square of x` too (`square 3` stays a call)
 			let pattern = if pattern == crate::phrase_calls::SLOT { format!("{OF_WORD} {pattern}") } else { pattern };
 			if pattern.split(' ').any(|part| part != crate::phrase_calls::SLOT) {
@@ -303,7 +304,7 @@ impl WarpParser {
 			return self.parse_atom();
 		}
 		if !self.only_blanks_before_newline() {
-			return self.parse_expr(0);
+			return self.rest_of_statement(); // `to mail x to address: print address`
 		}
 		self.parse_indented_block().unwrap_or_else(|| error("a definition needs a body: `to name params: body`"))
 	}

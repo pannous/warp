@@ -172,9 +172,11 @@ impl WasmGcEmitter {
 			// Range operators: 0..3 (exclusive) or 0...3 / 0…3 (inclusive)
 			self.emit_range(func, left, right, *op == Op::To);
 		} else if *op == Op::PlusMinus {
+			// `5 ± 1σ` is a Gaussian (card plus-minus-gaussian), `5 ± 1` an interval
+			let gaussian = crate::uncertain::gaussian_spread(right);
 			self.emit_float_value(func, left);
-			self.emit_float_value(func, right);
-			self.emit_call(func, super::uncertain::UNCERTAIN_NEW);
+			self.emit_float_value(func, gaussian.unwrap_or(right));
+			self.emit_call(func, if gaussian.is_some() { super::uncertain::GAUSSIAN_NEW } else { super::uncertain::UNCERTAIN_NEW });
 		} else {
 			self.emit_default_key(func, left, right, op);
 		}
@@ -208,6 +210,10 @@ impl WasmGcEmitter {
 
 	/// Emit prefix operators: √x, -x, !x, ‖x‖
 	fn emit_prefix_op(&mut self, func: &mut Function, right: &Node, op: &Op) {
+		let word = match op { Op::Sqrt => "sqrt", Op::Cbrt => "cbrt", Op::Abs => "abs", _ => "" };
+		if self.emit_interval_word(func, word, right) {
+			return;
+		}
 		match op {
 			root @ (Op::Sqrt | Op::Cbrt) => {
 				self.emit_float_value(func, right);

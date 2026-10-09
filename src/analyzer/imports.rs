@@ -402,8 +402,8 @@ pub fn extract_host_words(ctx: &mut Context, node: &Node) {
 				}
 				if crate::host::HOST_WORDS.contains(&name.as_str()) && !ctx.user_functions.contains_key(name) {
 					add_ffi_import(ctx, name, crate::host::HOST_LIBRARY);
-					// the host builds a caught stack overflow's Error with the module's own error_of
-					if name == crate::host::GUARDED_CALL {
+					// the host builds a caught stack overflow's or a failed adapter's Error with the module's own error_of
+					if [crate::host::GUARDED_CALL, crate::host::STD_PURE, crate::host::STD_IO].contains(&name.as_str()) {
 						ctx.required_functions.insert(crate::wasm_emitter::text_builtins::ERROR_OF);
 					}
 					// a program that controls tasks polls at its loops, where a paused task waits (browser)

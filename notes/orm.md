@@ -58,6 +58,30 @@ bo's row again, so it changes nothing after written-through changes; an instance
   the whole page (IN (…)), which avoids N+1 queries without any annotation.
 - Keywords to tune it (eager, page size) come later (user).
 
+### How loading works now (branch orm-updates)
+- Registration migrates (`std_io("table", "migrate", …)`) and loads no rows. database_tables.rs `opened` generates per
+  table `people·load()` (rows via `std_io("table", "rows", …)` on the first call, `people·loaded`), `people·count()`
+  (SELECT COUNT(*) until loaded; a table with a required foreign key loads, since such rows can be left out),
+  `people·add(p)` (onto the list when loaded, else onto `people·met`), `people·at(i)` (until loaded the one row
+  `std_io("table", "page", […, i, 1])`, SELECT … LIMIT 1 OFFSET i-1, its instance kept in `people·met` by
+  `people·kept(row)`; a required foreign key, a position below 1 or past the end loads), `people·streamed(i)` (the
+  element of a loop: until loaded from the page of 100 rows holding i, cached in `people·page`/`people·start`) and `people·reset()`.
+- `with_lazy_reads` (last in database_tables::lower) turns each read `people` into `people·load()`, `count(people)` and
+  `people.count` into `people·count()`, `people.add(p)` into `people·add(p)`, `people#i` into `people·at(i)`, `for p in people {…}` into
+  `p·end = people·count(); for p·position in 1 to p·end { p: Person = people·streamed(p·position); … }` (break and
+  continue as in any range loop; rows the body adds are not walked); registrations, `global people`, assigned
+  lists and field names stay, and a table's own lazy functions keep its list. One-to-many getters read `people·load()`.
+- Identity: the load builds each row's instance unless `people·met` holds one with its id, so an instance added before
+  the load is the loaded row (test an_instance_added_before_loading_is_the_loaded_row).
+- A route reopening the table (`users = database.users`, serve.rs) is `users = users·reset()`: the next read loads anew.
+- Observed natively by `database::rows_read()` (tests a_table_loads_its_rows_only_when_read,
+  an_element_of_a_table_loads_one_row, iterating_a_table_reads_it_in_pages).
+- The identity map `people·met` is a list searched by id, so a loop over n unloaded rows costs n²/2 comparisons:
+  a map by id once tables grow large.
+- Not yet: paging of `where` results and comprehensions over a table (they load it), the IN (…) batching; a class method reading a table directly (not a
+  generated getter) is not rewritten. An empty list must be `parse("[]")` (ø): a built `[]` List node with Space
+  separator types `xs += [x]` as int + list.
+
 ## Writes and transactions
 - Default autocommit: each add/remove/field change is its own statement.
 - `transaction { … }` (optional) is BEGIN … COMMIT, ROLLBACK when the block fails; it also batches.
@@ -67,9 +91,12 @@ bo's row again, so it changes nothing after written-through changes; an instance
 |---|---|
 | a field added | ALTER TABLE ADD COLUMN, the field's default value (else ø/NULL) |
 | a field removed | the column stays, a warning names it (data is never dropped silently) |
-| a lossless type or unit change (int → float, km → m) | converted in place (UPDATE … SET d = d * 1000) |
+| a lossless type change (int → float) | converted in place (UPDATE … SET c = CAST(old AS type)) |
+| a unit change within its quantity (km → m) | only the column's declared type changes: a unit field holds SI amounts |
+| plain numbers given a unit (int → km) | read as that unit (UPDATE … SET d = old * 1000), a warning names the unit |
+| another quantity (km → kg), a unit dropped (km → float) | a loud error naming the column and both types |
 | a lossy change (float → int, text → int) | a loud error naming the column and both types |
-| a rename | the field's meta `@was: old_name` renames the column (RENAME COLUMN); without it, it reads as add + remove |
+| a rename | the field's annotation `@was(old_name) name: text` renames the column (RENAME COLUMN); without it, it reads as add + remove |
 
 ## How step 1 works
 - lowering/database_tables.rs (a source pass before class_methods): the registered class gets `id: int = 0`; the
@@ -87,6 +114,9 @@ bo's row again, so it changes nothing after written-through changes; an instance
   The list keeps its instances, so a filtered row is the same instance (`bo.age += 1` shows in `people`).
 - SQL keeps: comparisons, and/or, `+ - *` of numeric columns and number literals, `it.f` as its column, literals and
   variables as `?` values. Not `/` (warp's division is exact) and not `+` of texts or of unknown types.
+  `==` and `!=` are SQL's `IS` and `IS NOT`, so `it.email == ø` finds the NULLs as in warp.
+- An optional scalar field (`email: text?`, card orm-optional) is a nullable column: rows without a value (and rows
+  from before an added column) hold NULL and read as ø. `text` → `text?` keeps the column (the browser store too).
 - Every other part is `warp_call('table·call·N', id, columns…, values…)`: a generated function
   `table·call·N(table·arguments: any) := …` with `it.f` as its column's argument, `it` as the row's instance and the
   filter's variables as the values after the row. database.rs select registers warp_call for the query only
@@ -122,8 +152,9 @@ bo's row again, so it changes nothing after written-through changes; an instance
   `team: Team?`; the row stays in the database. An optional key (`team: Team?`) reads ø and is stored as 0
   (database_tables.rs opened, referenced, key_id).
 - Gaps: the getter scans the loaded list; natively it could be a SELECT once tables are queries.
-- Sample: samples/orm.warp (native and playground) has no relations yet: adding `team` to its Person would hit
-  orm-dangling on databases the sample already wrote.
+- Sample: samples/orm.warp (native and playground) has `team: Team?` and `players: [Person]`: optional, so databases
+  the sample wrote before the column read ø (card orm-dangling); `climbers.players.add(bo)` writes bo.team through.
+- An add or field write in a one-statement block (`if … { teams.add(t) }`) is lowered like a statement of its own.
 
 ## Steps
 1. **Prototype, native, eager** (done: lowering/database_tables.rs, src/database.rs, tests/control/test_database_tables.rs):
@@ -131,7 +162,8 @@ bo's row again, so it changes nothing after written-through changes; an instance
    - add and field updates written through;
    - migrations for added/removed columns;
    - the table loaded whole at registration, filters in memory.
-2. Queries instead of loading: SQL translation of filters (done, card orm-filters), count/#i/paging, the identity map.
+2. Queries instead of loading: SQL translation of filters (done, card orm-filters), lazy load + count + add without
+   loading + identity of added instances (done, orm-updates), #i/paging.
 3. Application functions for the rest of a filter (done, card orm-filters: warp_call into the module).
 4. Foreign keys and one-to-many (done, card orm; one-to-many lazy as getters), batched lazy loading of tables.
 5. `transaction { }`.
@@ -146,5 +178,15 @@ bo's row again, so it changes nothing after written-through changes; an instance
      type, `UPDATE … SET c = CAST(old AS type)`, drop the old one, in a SAVEPOINT); a fresh column because SQLite's
      affinity would turn the values back. Any other change (REAL → INTEGER, TEXT → INTEGER) fails the open: "its values
      would lose data". host-files.js `convertColumn` does the same to the stored rows (a real's text keeps ".0").
-   - Open: unit changes (km → m) wait for runtime units (a unit type is no column yet, notes/units_runtime.md); `@was`.
+   - `@was(nick) name: text` (an annotation on the field's name; class_methods::fields_marked) sends the column's old
+     name as a 4th schema entry: database.rs renames it (RENAME COLUMN) when the table has the old column and not the
+     new one, host-files.js `renameColumn` moves the stored values. `@was: nick` inside a class body is Ruby's `self.was`.
+   - Unit fields (card unit-fields): `class Run{distance: km}` (static_units/unit_fields.rs) holds the SI amount like
+     any quantity; the column is `NUMERIC km` (NUMERIC keeps a whole SI amount an integer, as the program holds it; REAL
+     gave 5000.0, which an exact `total = 0 km` refused: "not an int"). database.rs `conversion_factor` decides the
+     migrations above. The playground's store follows the same rules (card browser-unit-migrations): the schema
+     entry of a unit field carries its quantity and SI amount per unit (`[distance km ø ø m 1000]`, the 4th entry ø
+     unless renamed; units::static_units::unit_type), the store keeps each unit column's quantity (`quantities`).
+     An optional unit field (`climb: m?`, card unit-field) is a nullable `NUMERIC m` column declared `number?`; ø has
+     no dimension, so `Run(5 km, ø)` and `r.climb == ø` pass static units. Sample: samples/orm_units.warp.
    - A field named size/count/length reads as the builtin count off a typed list element (card field-named-size).

@@ -48,10 +48,30 @@ const hooks = {
 
 const compilerText = (pointer, length) => readText(compiler, pointer, length);
 
+// the response's bytes, each chunk told to the page as {type: "loading", loaded, total} (the page shows the progress,
+// card firefox-hello-hang); a compressed response's Content-Length counts other bytes, so its total stays unknown
+async function downloaded(response) {
+	const total = response.headers.get("Content-Encoding") ? 0 : Number(response.headers.get("Content-Length") ?? 0);
+	const chunks = [];
+	let loaded = 0;
+	for (const reader = response.body.getReader(); ;) {
+		const { done, value } = await reader.read();
+		if (done) break;
+		chunks.push(value);
+		loaded += value.length;
+		post({ type: "loading", loaded, total });
+	}
+	const bytes = new Uint8Array(loaded);
+	chunks.reduce((offset, chunk) => (bytes.set(chunk, offset), offset + chunk.length), 0);
+	return bytes;
+}
+
 async function loadCompiler() {
 	const response = await fetch(COMPILER_URL);
 	if (!response.ok) throw new Error(`${COMPILER_URL}: HTTP ${response.status}; build it with web/playground/build.sh`);
-	const { instance } = await WebAssembly.instantiate(await response.arrayBuffer(), { warp_host: warpHost(() => compiler.memory, hooks) });
+	const bytes = await downloaded(response);
+	post({ type: "compiling" });
+	const { instance } = await WebAssembly.instantiate(bytes, { warp_host: warpHost(() => compiler.memory, hooks) });
 	compiler = instance.exports;
 }
 
@@ -123,6 +143,11 @@ function handleNavigation(path) {
 // the page's path for the playground's address bar: only a program with routes has one (lowering/routes.rs)
 const addressOf = holder => holder.exports[PAGE_ROUTES_EXPORT] ? holder.pagePath ?? ROOT_PATH : undefined;
 
+// a form of the page was sent (playground.js submitForm): the live run's route answers it, then its page shows anew
+function handleSubmit(request) {
+	if (live) showHandled(live, runSubmitted(live, hooks, request));
+}
+
 // a page event (playground.js): the live run's handler
 function handleEvent({ event, detail }) {
 	if (live) showHandled(live, runPageEvent(live, hooks, event, detail));
@@ -181,21 +206,32 @@ function runHandler(holder, handler) {
 	if (handled.result === undefined) holder.stopTimers();
 }
 
+// where a message waits: the page keeps the last stage for the Firefox driver's timeout report (card firefox-hello-again)
+const stage = name => post({ type: "stage", stage: name });
+
 // the run's timers (host.js addTimer), each running its handler until the next run
 self.onmessage = async ({ data }) => {
 	if (data.pointer) return self.pagePointer = { values: new Int32Array(data.pointer.buffer), names: data.pointer.names }; // host.js system_value
 	if (data.system) return Object.assign(self.pageSystemValues ??= {}, data.system); // host.js system_value
+	if (data.environment) return Object.assign(self, { pageEnvironment: data.environment, pageSecrets: data.secrets }); // host-files.js os.env, withPageSecret
 	if (data.stored) return Object.assign(storedValues, data.stored) && Object.assign(sessionValues, data.session); // host-files.js STD_ADAPTERS.store
+	stage("waiting for the compiler");
 	await ready;
+	stage("loading the database");
 	await globalThis.loadDatabase?.(); // host-files.js: `database[k]`'s values, once
 	if (data.warm) return warmUp();
 	if (data.event) return handleEvent(data);
 	if (data.navigate) return handleNavigation(data.navigate);
+	if (data.submit) return handleSubmit(data.submit);
 	if (live) stopListening(live);
 	live = undefined;
+	stage("checking the compiler");
 	if (!compiler) await loadCompiler();
+	stage("preparing foreign runtimes");
 	await prepareForeignRuntimes(data.code); // host.js: a runtime that loads asynchronously loads before the run
+	stage("waiting for the task workers");
 	await taskPoolReady(); // host.js: tasks run on loaded Workers, not inline
+	stage(`evaluating run ${data.id}`);
 	const started = performance.now();
 	const report = evaluate(data.code, data.acknowledged ?? {});
 	post({ type: "report", id: data.id, report, milliseconds: performance.now() - started });

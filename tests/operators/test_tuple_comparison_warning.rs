@@ -1,12 +1,11 @@
 // `(a, b) == x, y` compares the tuple with x only (the comma binds looser than ==): a strong warning suggests
-// parentheses (user, P42)
+// parentheses (user, P42); since P227 (user, 2026-10-09) it is an error asking for them
 use warp::diagnostic::take_warnings;
 use crate::is;
 
 fn warns_about_parentheses(code: &str) -> bool {
 	take_warnings();
-	warp::wasm_emitter::eval(code);
-	take_warnings().iter().any(|warning| warning.message.contains("binds looser than ==: write"))
+	warp::wasm_emitter::eval(code).serialize().contains("binds looser than ==: write")
 }
 
 #[test]

@@ -1,0 +1,3 @@
+print "a"
+f() := emit x
+effects of f

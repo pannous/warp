@@ -18,6 +18,8 @@ handles (playground.js dragToResize) set the guide's width and the editor's heig
 (warp-playground-sizes), double-click resets, arrow keys when focused. The developer things (native install, ⤓ wasm,
 build switch, silenced hints) sit in the header's ⋯ menu; the run time is a small note in the output's corner.
 
+- The assistant (assistant.js, notes/agent.md): the API key field in the ⋯ menu, completion (Ctrl-Space), Ask ✦ chat.
+
 ## The language guide (guide.md, guide.js)
 The left pane of the page (cards "core feature", "doc-example"; P188 one page): web/playground/guide.md, chapters `## Title` from
 easy to advanced, one open at a time (anchor `#<title-in-kebab-case>`). A fence ```` ```warp => <value> ```` is a snippet
@@ -144,6 +146,12 @@ web/playground/tests.html in headless Chrome (agent-browser, session warp-browse
 - index.html reloaded under coi-serviceworker.js before the worker was active: the page came back unisolated and the
   `isolating` flag stopped retries (headless Chrome: no shared memory, tasks/mouse/kitchen sink failed live). It now
   waits for serviceWorker.ready; an isolated page clears the flag (a hard reload bypasses the worker).
+- The page started its Worker before that reload, which aborted the request (Firefox, live: NS_BINDING_ABORTED for
+  worker.js, card firefox-worker). index.html's `pageStarts` now resolves only when no reload is coming (isolated, no
+  service workers, already tried, registration failed, or 5 s passed), and playground.js initializes then; a built
+  site's startSiteWorker waits the same way (site-thread.js siteStarts). Probe: probes/firefox_worker/slow_server.py
+  (no isolation headers, worker.js 1.5 s late, `-v` logs each request): before, worker.js was asked ahead of the
+  reload; after, behind it, 12 of 12 Firefox page loads clean.
 - Gate: `test_in_browser.py --examples [--site D | --url U]` runs the tour and every sample and fails on any console
   error/warning/failed request of the page and its Workers. agent-browser's `console`/`network` see only the page, so
   console_watch.mjs attaches over CDP (`agent-browser get cdp-url`) to every target: Runtime + Log + Network (Chrome's
@@ -157,6 +165,20 @@ web/playground/tests.html in headless Chrome (agent-browser, session warp-browse
   it starts Firefox with `open -n -g`: a terminal's child may not read ~/Library/Application Support/Firefox (privacy
   protection), and Firefox then stops with "Could not find profile folder" even with --profile. pages.yml runs both
   browsers, before deploy and after.
+- Card firefox-hello-hang (deploy verify 2026-10-09 04:13, passed on rerun; 10 of 10 cold local runs against the live
+  page clean): the first example waited 120 s for an answer after a clean page load. The only endless wait in that path
+  is the page's `workerReady`: a worker that never says "ready" or "failed". Reproduced with a site missing worker.js
+  (scratch copy): the old page hung with status "running…", exactly the runner's symptom. Now (1) playground.js rejects
+  workerReady on the Worker's error event, so the first run shows "the compiler's worker failed to start: …" at once,
+  and an example's verdict lists a failed status; (2) firefox_driver.mjs answers a timeout with the page's state
+  (address, readyState, isolated, controlled by the service worker, #status) and its console, so the next hang names
+  its cause. A worker that loaded but whose warp.wasm fetch never ends still waits (no deadline: a slow network may
+  take over a minute for 3.7 MB), but (3) worker.js streams warp.wasm and posts its progress, shown in `#loading` beside
+  #status ("loading the compiler: 1.0 of 3.6 MB"; a compressed response has no total), with "; no progress for 30 s: a
+  slow or stalled connection" after LOADING_STALL_MS; the driver's state includes it. #status itself stays "running…":
+  test_in_browser.py and several probes wait while it is exactly that.
+  Probes: probes/firefox_hello_hang/unanswered.sh (FIREFOX_COMMAND_SECONDS=5, a promise that never resolves);
+  trickle_server.py [--stall] + progress.sh (warp.wasm at 400 KB/s, or stopping after 1 MB: the note at 30 s).
 
 ## Modules and packages in the browser (2026-10-04)
 The compiler reads files through the page: `warp_host.fetch(address)` / `take_fetched` (web.rs `read_bytes`, cached

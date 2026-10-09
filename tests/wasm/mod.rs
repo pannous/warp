@@ -17,6 +17,10 @@ mod test_dead_functions;
 mod test_standalone_executable;
 #[cfg(feature = "native")] // wasmtime, files or network: not in the browser build
 mod test_executable_size; // card g_gFs8
+#[cfg(feature = "native")] // wasmtime, files or network: not in the browser build
+mod test_executable_output; // card executable-exit
+#[cfg(feature = "native")] // wasmtime, files or network: not in the browser build
+mod test_own_runtime_stub; // card stub-race
 mod test_standalone_needs_runtime;
 mod test_runtime_stub_found;
 mod test_wasm;
@@ -33,3 +37,4 @@ mod test_component_exports; // card reflection-components
 mod test_parameter_names; // card reflection-classes
 #[cfg(feature = "native")] // a warp process in a temporary directory: not in the browser build
 mod test_no_cwd_debris; // card cwd-artifacts
+mod test_runtime_stub_note; // card runtime-stub-note

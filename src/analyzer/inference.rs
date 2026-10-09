@@ -16,14 +16,18 @@ pub(super) fn is_update(node: &Node) -> bool {
 /// Result kind of `left op right`: exact (Int, which includes ratios like `1/4`) unless an f64 is involved
 /// The runtime function of `a op b` when an operand's kind is known only at run time (a field of a map parameter, an
 /// element of a parsed JSON value): Int or Float is decided by the values (wasm_emitter list_ops NODE_ARITHMETIC)
+/// A value whose kind is known only at run time, held as a Node: maybe a number, maybe a ± interval
+pub fn is_run_time_kind(kind: &Kind) -> bool {
+	matches!(kind, Kind::Data | Kind::Empty)
+}
+
 pub fn node_arithmetic(left: Kind, op: &Op, right: Kind) -> Option<&'static str> {
-	let runtime_kind = |kind: &Kind| matches!(kind, Kind::Data | Kind::Empty);
-	let numeric = |kind: &Kind| matches!(kind, Kind::Int | Kind::Float) || runtime_kind(kind);
+	let numeric = |kind: &Kind| matches!(kind, Kind::Int | Kind::Float) || is_run_time_kind(kind);
 	// a value of run-time kind added to a list: node_add concatenates when it is a list too
 	if *op == Op::Add && [left, right].contains(&Kind::Data) && [left, right].contains(&Kind::List) {
 		return Some(crate::wasm_emitter::list_ops::NODE_ADD);
 	}
-	if ![left, right].iter().any(runtime_kind) || ![left, right].iter().all(numeric) {
+	if ![left, right].iter().any(is_run_time_kind) || ![left, right].iter().all(numeric) {
 		return None;
 	}
 	let index = [Op::Add, Op::Sub, Op::Mul, Op::Div].iter().position(|candidate| candidate == op)?;
@@ -94,6 +98,20 @@ pub fn written_kind(node: &Node, scope: &Scope) -> Kind {
 	}
 }
 
+/// A math word's result: a Node when its argument is one, which may be a ± interval (crate::uncertain::INTERVAL_WORDS)
+/// The number a text literal spells: `"4"` is 4
+pub fn literal_number(value: &Node) -> Option<Node> {
+	match value.drop_meta() {
+		Node::Text(text) => crate::warp_parser::number_in_text(text).map(Node::Number),
+		Node::Char(digit) => digit.to_digit(10).map(|digit| Node::Number(Number::Int(digit as i64))),
+		_ => None,
+	}
+}
+
+fn interval_or(kind: Kind, argument: &Node, scope: &Scope) -> Kind {
+	if is_run_time_kind(&infer_type(argument, scope)) { Kind::Data } else { kind }
+}
+
 pub fn infer_type(node: &Node, scope: &Scope) -> Kind {
 	let node = node.drop_meta();
 	match node {
@@ -106,6 +124,8 @@ pub fn infer_type(node: &Node, scope: &Scope) -> Kind {
 		// Text and char
 		Node::Text(_) => Kind::Text,
 		Node::Char(_) => Kind::Codepoint,
+		// ø, the empty value (card infer-type: it was the catch-all's Int)
+		Node::Empty => Kind::Empty,
 		// Symbol (identifier)
 		Node::Symbol(name) => {
 			if let Some(local) = scope.binding(name) {
@@ -155,6 +175,11 @@ pub fn infer_type(node: &Node, scope: &Scope) -> Kind {
 		Node::Key(_, Op::As, target) if matches!(target.name().to_lowercase().as_str(), "char" | "character") => Kind::Codepoint,
 		Node::Key(_, Op::As, target) if target.name().to_lowercase() == "list" => Kind::List,
 		Node::Key(_, Op::As, target) if matches!(target.name().to_lowercase().as_str(), "string" | "str" | "text") => Kind::Text,
+		// `"1/3" as number` is the number the text spells, of its kind (an exact ratio is an Int)
+		Node::Key(..) if spelled_number(node).is_some() => infer_type(&spelled_number(node).expect("spelled"), scope),
+		// `t as number` of a text known only at run time: an Int, a ratio or a Float, as the text says (card runtime-text-ratio)
+		Node::Key(value, Op::As, target) if matches!(target.name().to_lowercase().as_str(), "number" | "num")
+			&& matches!(infer_type(value, scope), Kind::Text | Kind::Codepoint) => Kind::Data,
 		// `v as float` is an f64; `as int`, `as exact` stay exact Ints
 		Node::Key(_, Op::As, target) if builtin_type_kind(&target.name()).is_some_and(|kind| kind.is_float()) => Kind::Float,
 		// `a or b`, `a and b` of a text or another Node give one of their operands (`"" or "d"` is "d"); of numbers an
@@ -165,8 +190,8 @@ pub fn infer_type(node: &Node, scope: &Scope) -> Kind {
 		},
 		// Comparison operators return Int (boolean as 0/1)
 		Node::Key(_, op, _) if op.is_comparison() => Kind::Int,
-		// √x is irrational in general: an f64
-		Node::Key(left, Op::Sqrt | Op::Cbrt, _) if matches!(left.drop_meta(), Node::Empty) => Kind::Float,
+		// √x is irrational in general: an f64; of a value held as a Node maybe an interval, which it maps (a Node)
+		Node::Key(left, Op::Sqrt | Op::Cbrt, right) if matches!(left.drop_meta(), Node::Empty) => interval_or(Kind::Float, right, scope),
 		// Prefix operators (neg, abs): inherit type from operand
 		Node::Key(left, op, right) if op.is_prefix() && matches!(left.drop_meta(), Node::Empty) => {
 			infer_type(right, scope)
@@ -329,7 +354,10 @@ pub(super) fn infer_list_type(node: &Node, items: &[Node], bracket: &Bracket, se
 			// FFI/builtin function calls return Int by default
 			// This handles strcmp, strlen, abs, etc.
 			if crate::ffi::is_ffi_function(s) {
-				return ffi_call_kind(s);
+				return match items {
+					[_, argument] if crate::uncertain::maps_intervals(s) => interval_or(ffi_call_kind(s), argument, scope),
+					_ => ffi_call_kind(s),
+				};
 			}
 		}
 	}
@@ -470,4 +498,11 @@ pub(super) fn branches_kind(then_kind: Kind, else_kind: Kind) -> Kind {
 	} else {
 		Kind::Int
 	}
+}
+
+/// `"1/3" as number`: the number a constant text spells, which the cast is (card fraction-number)
+pub fn spelled_number(node: &Node) -> Option<Node> {
+	let Node::Key(value, Op::As, target) = node.drop_meta() else { return None };
+	let is_number_word = matches!(target.name().to_lowercase().as_str(), "number" | "num");
+	is_number_word.then(|| literal_number(value)).flatten()
 }

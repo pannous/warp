@@ -55,6 +55,8 @@ const DEV_COMMAND: &str = "dev";
 /// `warp serve [app.warp] [port]`: serves the program, its page, server functions and routes (P222)
 const SERVE_COMMAND: &str = "serve";
 const SERVE_PORT: u16 = 8080;
+/// `warp register`: Finder and `open` run .warp files (macOS, src/file_type.rs)
+const REGISTER_COMMAND: &str = "register";
 /// The program `warp serve` serves when it is given none: the first of these in the current folder
 const DEFAULT_PROGRAMS: [&str; 2] = ["app.warp", "main.warp"];
 const WARP_VERSION: &str = env!("CARGO_PKG_VERSION");
@@ -66,11 +68,14 @@ const OLD_ANSWERS_FILE: &str = ".warp-answers";
 const NO_ASK_FLAG: &str = "--no-ask";
 /// What the console and `warp <code>` put before a program's value
 const RESULT_MARK: &str = "» ";
+/// The exit status of a run that ends in an uncaught error (card cli-error-exit)
+const ERROR_STATUS: i32 = 1;
 
 fn node_to_i32(node: &Node) -> i32 {
-    match node {
+    match node.drop_meta() {
         Node::Number(Number::Int(n)) => *n as i32,
         Node::Number(Number::Float(f)) => *f as i32,
+        Node::Error(_) => ERROR_STATUS,
         _ => 0,
     }
 }
@@ -110,6 +115,23 @@ fn apply_flags(args: &mut Vec<String>) {
     }
     diagnostic::adopt_acknowledgements(OLD_ANSWERS_FILE, ACKNOWLEDGEMENTS_FILE);
     diagnostic::use_acknowledgements_file(ACKNOWLEDGEMENTS_FILE);
+}
+
+#[cfg(all(not(test), target_os = "macos"))]
+fn register_file_type() {
+    match warp::file_type::register() {
+        Ok(app) => println!("registered .warp files: {} runs them in Terminal (Open With offers editors)", app.display()),
+        Err(failure) => {
+            eprintln!("warp register: {failure}");
+            std::process::exit(1);
+        }
+    }
+}
+
+#[cfg(all(not(test), not(target_os = "macos")))]
+fn register_file_type() {
+    eprintln!("warp register: only macOS so far");
+    std::process::exit(1);
 }
 
 /// `warp [run] prog.warp a b`: whether only to run, the program file and the arguments it gets (`use os; args`)
@@ -168,7 +190,7 @@ fn run_command(args: &[String]) {
             // Read from stdin pipe
             let mut input = String::new();
             if io::stdin().read_to_string(&mut input).is_ok() && !input.is_empty() {
-                show(&eval(&input), "");
+                show_and_fail_on_error(&eval(&input), "");
                 return;
             }
         }
@@ -206,6 +228,9 @@ fn run_command(args: &[String]) {
             eprintln!("{failure}");
             std::process::exit(1);
         }
+
+    } else if args[1] == REGISTER_COMMAND {
+        register_file_type();
     } else if args[1] == SERVE_COMMAND {
         match served_program(&args[2..]) {
             Ok((path, port)) => serve_file(path, port, ""),
@@ -320,7 +345,7 @@ fn run_command(args: &[String]) {
     } else if arg_string.starts_with("eval ") {
         let code = arg_string.strip_prefix("eval ").unwrap_or("");
         diagnostic::show_lines_of(code);
-        show(&eval(code), RESULT_MARK);
+        show_and_fail_on_error(&eval(code), RESULT_MARK);
     } else if let Some(code) = arg_string.strip_prefix("lower ") {
         match wasm_emitter::lower(code) {
             Ok(lowered) => println!("{}", lowered.serialize()),
@@ -360,14 +385,22 @@ fn run_command(args: &[String]) {
         println!("Warp 🐝 {}", WARP_VERSION);
     } else {
         // Default: eval and print
-        show(&eval(&arg_string), RESULT_MARK);
+        show_and_fail_on_error(&eval(&arg_string), RESULT_MARK);
     }
 }
 
-/// The program's value printed, its Int the exit status
+/// The program's value printed, its Int the exit status, an uncaught error status 1
 fn print_and_exit(result: Node) -> ! {
     show(&result, "");
     std::process::exit(node_to_i32(&result));
+}
+
+/// The value of inline code printed; an uncaught error exits with status 1, so scripts and CI see it failed
+fn show_and_fail_on_error(result: &Node, mark: &str) {
+    show(result, mark);
+    if matches!(result.drop_meta(), Node::Error(_)) {
+        std::process::exit(ERROR_STATUS);
+    }
 }
 
 /// A program's value after what it printed, behind `mark`; nothing for ø, the value of `print` (issue #18) and of a
@@ -592,7 +625,11 @@ fn build_runtime_stub(expected: &std::path::Path) -> Result<std::path::PathBuf, 
     if !source.join(RUNTIME_STUB_CRATE).is_dir() {
         return Err(format!("no runtime stub {}: put warp-runtime there or name one in {RUNTIME_STUB_VARIABLE} (the warp source {} that would build it is gone)", expected.display(), source.display()));
     }
-    eprintln!("note: building the runtime stub for executables once (cargo build -p {RUNTIME_STUB_NAME})");
+    // cargo runs every time (it keeps the stub current, quickly once built); the note only before the first build
+    let release_stub = expected.parent().and_then(std::path::Path::parent).map(|target| target.join("release").join(RUNTIME_STUB_NAME));
+    if !release_stub.is_some_and(|stub| stub.is_file()) {
+        eprintln!("note: building the runtime stub for executables once (cargo build -p {RUNTIME_STUB_NAME})");
+    }
     let mut build = std::process::Command::new(env::var("CARGO").unwrap_or_else(|_| "cargo".to_string()));
     build.args(["build", "--release", "--quiet", "--message-format=json", "-p", RUNTIME_STUB_NAME, "--bin", RUNTIME_STUB_NAME]).current_dir(source);
     let output = build.output().map_err(|failure| format!("cannot run cargo to build the runtime stub: {failure}"))?;
@@ -637,6 +674,7 @@ fn usage() {
     println!("  warp dev <file> [port]  Serve the file's page, reloaded when it changes (port 8008)");
     println!("  warp serve [file] [port]  Serve the program: its page, server functions and routes (app.warp, port 8080)");
     println!("  warp repl            Start interactive console");
+    println!("  warp register        Let Finder and `open` run .warp files (macOS)");
     println!("  --fuel <steps>       Execution budget before 'out of fuel' (env WARP_FUEL)");
     println!("  --no-ask             Never prompt \"got it?\" after a warning or note");
     println!("  The last compiled module is kept in ~/.cache/warp/last.wasm for inspection");

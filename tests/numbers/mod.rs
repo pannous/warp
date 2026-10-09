@@ -7,6 +7,7 @@ mod test_float_assignment;
 mod test_float_text;
 mod test_float_bit_operations;
 mod test_float_exact_context;
+mod test_float_quotient; // card exact-div
 mod test_float_parameters;
 mod test_float_promotion;
 mod test_float_to_int_range;
@@ -22,6 +23,8 @@ mod test_sum_of_decimals;
 mod test_unbounded_int;
 mod test_unit_composites;
 mod test_unit_polish;
+mod test_plus_minus_units; // card plus-minus-units
+mod test_mixed_quantity_arguments; // card mixed-arguments
 mod test_rational_quantities;
 mod test_static_units;
 mod test_static_units_compiled;
@@ -30,6 +33,8 @@ mod test_static_units_functions;
 mod test_static_units_lists;
 mod test_static_units_output;
 mod test_units_at_run_time;
+mod test_dynamic_units; // card units-dynamic
+mod test_mixed_units; // card units-mixed
 mod test_units_nospace;
 mod test_unit_products;
 mod test_units_arithmetic;
@@ -38,6 +43,7 @@ mod test_range_tolerance_compare;
 mod test_units_followup;
 mod test_zero_fill;
 mod test_float_zero_and_compound;
+mod test_fourth_root;
 mod test_implicit_libm;
 mod test_unit_word_keys;
 mod test_round_to_digits;
@@ -56,6 +62,11 @@ mod test_decimal_units;
 mod test_number_words;
 mod test_time_of_day;
 mod test_plus_minus;
+mod test_plus_minus_math;
 mod test_plus_minus_print;
+mod test_plus_minus_gaussian; // card plus-minus-gaussian
+mod test_trailing_symbol; // card trailing-symbol
 mod test_div_assign;
-mod test_abs_of_float_variable;
+mod test_unit_fields; // card unit-fields
+mod test_log_glyphs; // P226
+mod test_units_text; // card units-text

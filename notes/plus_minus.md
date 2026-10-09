@@ -47,11 +47,41 @@ unchanged (`f(x) := x*x; f(3 ± 0.1)` is 9.00 ± 0.61).
   `certainly`: an overlap counts as no and warns once per run through host.warn, naming the line; a program that
   makes ± values and orders values therefore imports the host (may_order_intervals).
 
+- Card plus-minus-playground (done): math words map an interval (P217). √ ∛ abs and the libm functions of one
+  argument (crate::uncertain::INTERVAL_WORDS), of a value held as a Node in a program with ± values, call
+  uncertain_<word> (wasm_emitter/uncertain.rs): f of a number as before, of an interval f at both ends, least and
+  greatest, and an extremum or pole the interval reaches is the bound (sin's ±1 at π/2 + 2πk, tan's ±∞ at its poles,
+  cosh's and abs's least at 0). The analyzer types the word's result a Node when its argument is one. `(y)` of a
+  variable now has the variable's kind (it read as the call y()). The playground reader (web.rs) reads ± values back.
+  Tests: tests/numbers/test_plus_minus_math.rs.
+
+## ± with units at run time (card plus-minus-units, 2026-10-09)
+`x = 5 m ± 1 cm; x * 2` gives `10.000 ± 0.020m`. units.rs lower_run_time_tolerances turns a written `v ± s` with a unit
+into `quantity(amount ± spread, "unit")` (spread converted to v's unit, a plain spread counts in it, another dimension
+is a DimensionError), but only when units::answer can't answer the whole program (RUN_TIME_TOLERANCE_ERRORS or
+Unsupported), so span comparisons and final-value tolerances stay compile time. Quantity's `amount:number` admits a ±
+value (type_tests.rs runtime_kind_mask; `float` stays strict). Function parameters get their class from the calls
+(class_methods.rs parameter_classes), so `f(x) := x * 2; f(5 m ± 1 cm)` dispatches to Quantity.times.
+A final Quantity value shows its text (card instance-final). `f` called with a quantity and with a plain number calls
+a copy `f_Quantity(x:Quantity)` for the quantity (card mixed-arguments, class_methods.rs specialized_calls). Tests: tests/numbers/test_plus_minus_units.rs, samples/measurements.warp.
+
+## Gaussian ± (card plus-minus-gaussian, 2026-10-09)
+`5 ± 1σ` or `5 ± 1 σ` (the spread times the symbol σ, joined like a unit word: card trailing-symbol) is a Gaussian: one standard deviation; a bare `5 ± 1` stays an
+interval (P217). Its parts are [value, low, high, σ, id₁, c₁, id₂, c₂, …]: each contribution c = ∂/∂xᵢ·σᵢ of an
+independent source xᵢ (a fresh id per written `±σ`), σ = √Σc² (Measurements.jl's linear propagation with
+correlations), so `x - x` is `0 ± 0σ` and `x * x` doubles the relative error. Arithmetic: wasm_emitter/uncertain.rs
+gaussian_add…div → gaussian_combine (merges contributions by id); math words use the numeric slope
+(f(x+h) − f(x−h))/2h with h = σ·1e-3. low/high are value ∓ σ. Text `7.0 ± 1.4σ`, read back the same.
+An interval and a Gaussian don't mix (run-time failure). Tests: tests/numbers/test_plus_minus_gaussian.rs.
+
 ## Open
+- `if area certainly > 10 then …` parses as `(if area) (then (certainly > 10) …)`: the condition stops at the second
+  word; `if (area certainly > 10) then` and `ok = area certainly > 10` work. `x + 1 certainly < 8` reads
+  `x + (1 certainly < 8)`; write `(x + 1) certainly < 8`.
 - `x + 1 certainly < 8` reads `x + (1 certainly < 8)`; write `(x + 1) certainly < 8`. (`if area certainly > 10 then`
   works since card parser-if-stops: a condition takes a braceless call with a variable argument, as a branch does.)
 - `"y=" + x` with an interval x is the general type error text + data (no implicit conversion of a run-time value);
   `"y=" + str(x)` works. Text interpolation does not exist in warp (notes/i18n.md).
-- Card plus-minus-playground: the playground reader (web.rs node_from_tree), math words (sqrt, sin: map the endpoints,
-  split at extrema), units with ± at run time (`5 m ± 1 cm`).
 - A typed parameter `f(x: float)` refuses an interval argument ("not a number"); the error should name the ± value.
+- Gaussian: comparisons (`certainly`, `possibly`) and ≈ treat it as its 1σ interval; units with σ (`5 m ± 1 cm σ`)
+  wait: Quantity carries its tolerance as a plain interval (agreed with warp-class).

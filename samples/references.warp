@@ -1,0 +1,34 @@
+// Instances and maps are shared, not copied: two names can hold the same object
+
+class Account {
+	owner: text
+	balance: int
+}
+
+mine = Account("Ada", 100)
+ours = mine
+ours.balance = 150
+print mine.balance
+
+// copy() makes a new object you can change on its own
+backup = copy(mine)
+backup.balance = 0
+print mine.balance
+
+// === asks: the same object? == asks: equal values?
+print mine === ours
+print backup == mine
+print copy(mine) == mine
+
+// copy() goes deep; copy(x, shallow: true) shares what the object holds
+class Team { name: text; members: list }
+red = Team("red", ["Ann"])
+shallow = copy(red, shallow: true)
+shallow.members.add("Bob")
+print red.members
+
+// maps share the same way
+settings = {theme: "dark"}
+view = settings
+view.theme = "light"
+settings.theme

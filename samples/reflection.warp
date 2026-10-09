@@ -1,0 +1,15 @@
+// Reflection: a program looks at its own classes and functions (notes/reflection.md)
+
+class Point {
+	x: int
+	y: int
+	length() := sqrt(x*x + y*y)
+}
+
+p = Point(3, 4)
+print "fields \(p.fields), methods \(p.methods)"
+print dir(p)
+
+// a function knows its parameters and its signature
+area(width: int, height: int) := width * height
+print "area takes \(area.params): \(area.signature)"

@@ -1253,7 +1253,7 @@ fn zero_declaration(statement: &Node, assigned: &std::collections::HashSet<Strin
 	Some(Node::Key(Box::new(typed), Op::Assign, Box::new(zero)))
 }
 
-fn zero_value(kind: crate::type_kinds::Kind) -> Option<Node> {
+pub(crate) fn zero_value(kind: crate::type_kinds::Kind) -> Option<Node> {
 	use crate::type_kinds::Kind;
 	Some(match kind {
 		Kind::Int => Node::int(0),

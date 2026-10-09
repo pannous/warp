@@ -127,7 +127,7 @@ pub fn insert_module_classes(mut program: Node) -> Node {
 	let program = with_std_aliases(crate::welcome_forms::module_calls(program, &class_modules), &aliases);
 	let std_classes = std_definitions.into_iter().filter(|definition| is_class(definition) && is_foreign(definition)).collect();
 	let file_classes: Vec<Node> = file_classes.into_iter().filter(is_foreign).collect();
-	let program = with_needed_definitions(program, std_classes);
+	let program = with_implicit_class_modules(with_needed_definitions(program, std_classes));
 	match file_classes.is_empty() {
 		true => program,
 		false => match program {
@@ -161,6 +161,35 @@ fn is_class(statement: &Node) -> bool {
 
 /// The program with the standard modules' definitions it calls, and those they call, in front: a word nobody calls
 /// is never compiled (its parameters would have no kinds)
+/// An implicit module with classes (units: `quantity("5 km")` gives a Quantity) in front of the program, the definitions
+/// it needs only, before class_methods: the instances its functions give then take their class's operators and methods.
+/// The program defining them now, implicit_std_modules loads it no more, nor its own `use units`
+fn with_implicit_class_modules(mut program: Node) -> Node {
+	for (module, needed) in IMPLICIT_MODULES {
+		if !needed(&program) {
+			continue;
+		}
+		let source = std_module(module).expect("an implicit module is embedded");
+		let definitions = statements(crate::normalize::without_hints(|| WarpParser::parse(source)));
+		if definitions.iter().any(is_class) {
+			program = with_needed_definitions(without_use_of(program, module), definitions);
+		}
+	}
+	program
+}
+
+/// The program without its `use <module>`
+fn without_use_of(program: Node, module: &str) -> Node {
+	match program {
+		Node::List(statements, Bracket::None, separator @ (Separator::Semicolon | Separator::Newline)) => {
+			let kept = statements.into_iter().filter(|statement| used_module(statement).is_none_or(|used| used.name != module)).collect();
+			Node::List(kept, Bracket::None, separator)
+		}
+		Node::Meta { node, data } => Node::Meta { node: Box::new(without_use_of(*node, module)), data },
+		single => single,
+	}
+}
+
 fn with_needed_definitions(program: Node, definitions: Vec<Node>) -> Node {
 	if definitions.is_empty() {
 		return program;
@@ -761,7 +790,7 @@ impl<'a> Loader<'a> {
 }
 
 /// The standard library's modules written in warp (notes/stdlib.md), embedded so `use list` needs no files
-const STD_MODULES: [(&str, &str); 20] = [
+const STD_MODULES: [(&str, &str); 22] = [
 	(PRELUDE_MODULE, include_str!("../lib/prelude.warp")),
 	("memory", include_str!("../lib/memory.warp")),
 	("net", include_str!("../lib/net.warp")),
@@ -782,6 +811,8 @@ const STD_MODULES: [(&str, &str); 20] = [
 	("markup", include_str!("../lib/markup.warp")),
 	("router", include_str!("../lib/router.warp")),
 	("i18n", include_str!("../lib/i18n.warp")),
+	(UNITS_MODULE, include_str!("../lib/units.warp")),
+	(AGENT_MODULE, include_str!("../lib/agent.warp")),
 ];
 /// The standard modules' folder (P194: std/ merged into lib/), embedded in the binary
 const STD_FOLDER: &str = "lib";
@@ -792,16 +823,31 @@ const QUALIFIER: char = '·';
 /// P171: module words a program calls without their `use` (the prelude); only these definitions come along
 const PRELUDE_WORDS: [(&str, &[&str]); 1] = [("file", &["write", "exists"])];
 const FILE_URL_PREFIX: &str = "file://";
+/// lib/units.warp: quantities whose unit is known only at run time, `quantity("5 km")` (notes/units_runtime.md)
+const UNITS_MODULE: &str = "units";
+const QUANTITY: &str = "quantity";
+/// A served route's path parameters (`post "/todos/:id:int/toggle"`, lowering/serve.rs) are read by the router's words
+const ROUTE_PARTS: [&str; 3] = ["route_segment", "route_parameter", "route_matches"];
+/// lib/agent.warp: `agent "prompt"` asks Claude (card g_X_F0)
+const AGENT_MODULE: &str = "agent";
 /// Whether a program needs a module
 type NeededBy = fn(&Node) -> bool;
 /// The standard modules a program needs without `use`: P183 a file URL → file, a page → markup (lowering/page_html.rs),
-/// routes → router, a route's regular expression → regex (lowering/routes.rs)
-const IMPLICIT_MODULES: [(&str, NeededBy); 4] = [
+/// routes → router, a route's regular expression → regex (lowering/routes.rs), a call of quantity → units (run-time units),
+/// a call of agent → agent
+const IMPLICIT_MODULES: [(&str, NeededBy); 6] = [
 	("file", mentions_file_url),
 	("markup", |_| crate::pipeline::renders_itself()),
-	("router", |program| defined(program, crate::routes::PAGE_ROUTES).is_some()),
+	("router", |program| defined(program, crate::routes::PAGE_ROUTES).is_some() || { let called = called_names(&statements(program.clone())); ROUTE_PARTS.iter().any(|word| called.contains(*word)) }),
 	("regex", |program| defined(program, crate::routes::PAGE_ROUTE_INDEX).is_some_and(|index| called_names(&[index]).contains(crate::routes::REGEX_MATCH))),
+	(UNITS_MODULE, |program| calls_undefined(program, QUANTITY)),
+	(AGENT_MODULE, |program| calls_undefined(program, AGENT_MODULE)),
 ];
+
+/// Whether the program calls `word` without defining it
+fn calls_undefined(program: &Node, word: &str) -> bool {
+	defined(program, word).is_none() && called_names(&statements(program.clone())).contains(word)
+}
 /// Other languages' names of the standard modules' classes and words (Java, Python, Rust, C#), each read as warp's with
 /// a note, when a used module defines that word
 const STD_ALIASES: [(&str, &str); 27] = [

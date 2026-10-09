@@ -1,6 +1,12 @@
 //! Casts: as int/float/text/char/bool/number/exact, list and run-time text casts
 
 use super::*;
+use crate::wasm_emitter::layout::BYTE;
+
+/// text_as_number(node): a text's number at run time, as the literal cast gives it: "1/3" the exact ratio, a whole
+/// number an Int, else a Float; no number is invalid_number
+pub const TEXT_AS_NUMBER: &str = "text_as_number";
+const RATIO_SLASH: i32 = '/' as i32;
 
 impl WasmGcEmitter {
 	/// Text converts only if it is a number literal (truncated for int); anything else is a runtime error, never a plausible 0
@@ -65,6 +71,14 @@ impl WasmGcEmitter {
 				}
 				_ => self.emit_numeric_value(func, value),
 			},
+			// `n = "4" as number`, `"4.5" as number`: held as an exact Int (card number-variable)
+			"number" | "num" if crate::analyzer::literal_number(value).is_some() => {
+				self.emit_numeric_value(func, &crate::analyzer::literal_number(value).expect("guarded"));
+			}
+			"number" | "num" => {
+				self.emit_cast(func, value, target);
+				self.emit_call(func, "get_int_value");
+			}
 			_ if crate::analyzer::builtin_type_kind(&target.name()) == Some(Kind::Int) => {
 				self.emit_cast(func, value, target);
 				self.emit_call(func, "get_int_value");
@@ -349,17 +363,71 @@ impl WasmGcEmitter {
 		}
 	}
 
-	/// `x as number`: a text parses as an Int, else as a float (0 when neither), a character is its digit or code point
+	/// `x as number`: a text is the number it spells ("1/3" the exact ratio), else the error invalid_number; a character
+	/// is its digit or code point
 	pub(super) fn emit_cast_to_number(&mut self, func: &mut Function, value: &Node) {
 		match value {
-			Node::Text(s) => match (s.parse::<i64>(), s.parse::<f64>()) {
-				(Ok(n), _) => self.emit_int_node(func, n),
-				(_, Ok(f)) => self.emit_float_node(func, f),
-				_ => self.emit_int_node(func, 0),
+			Node::Text(text) => match crate::warp_parser::number_in_text(text) {
+				Some(number) => self.emit_node_instructions(func, &Node::Number(number)),
+				None => self.emit_runtime_error(func, "invalid_number"),
 			},
 			Node::Char(c) => self.emit_int_node(func, c.to_digit(10).map_or(*c as i64, |digit| digit as i64)),
+			_ if matches!(self.get_type(value), Kind::Text | Kind::Codepoint) => self.emit_runtime_text_as_number(func, value),
 			_ => self.emit_node_instructions(func, value),
 		}
+	}
+
+	/// `t as number` of a text known at run time (cards number-variable, runtime-text-ratio)
+	fn emit_runtime_text_as_number(&mut self, func: &mut Function, value: &Node) {
+		self.emit_node_instructions(func, value);
+		self.emit_call(func, TEXT_AS_NUMBER);
+	}
+
+	pub(super) fn emit_text_as_number(&mut self) {
+		if !self.should_emit_function(TEXT_AS_NUMBER) {
+			return;
+		}
+		let node_ref = Ref(self.node_ref(false));
+		let locals = vec![ValType::I32, ValType::I32, ValType::I32, ValType::I64];
+		self.runtime_function(TEXT_AS_NUMBER, vec![node_ref], vec![node_ref], locals, |s, f| {
+			let (start, end, slash, bits) = (1, 2, 3, 4);
+			// a text with a slash: the exact ratio of the integers before and after it ("1/x" is invalid_number)
+			s.emit_field(f, 0, 0);
+			Self::emit_list(f, &[I::I64Const(KIND_MASK), I::I64And, I::I64Const(Kind::Text as i64), I::I64Eq, I::If(BlockType::Empty)]);
+			s.emit_text_bounds(f, start, end);
+			Self::emit_list(f, &[I::LocalGet(start), I::LocalSet(slash), I::Block(BlockType::Empty), I::Loop(BlockType::Empty)]);
+			Self::emit_list(f, &[I::LocalGet(slash), I::LocalGet(end), I::I32GeU, I::BrIf(1)]);
+			Self::emit_list(f, &[I::LocalGet(slash), I::I32Load8U(BYTE), I::I32Const(RATIO_SLASH), I::I32Eq, I::If(BlockType::Empty)]);
+			Self::emit_list(f, &[I::LocalGet(start), I::LocalGet(slash), I::LocalGet(start), I::I32Sub]);
+			s.call(f, "new_text");
+			s.call(f, list_ops::TEXT_AS_INT);
+			Self::emit_list(f, &[I::LocalGet(slash), I::I32Const(1), I::I32Add, I::LocalGet(end), I::LocalGet(slash), I::I32Sub, I::I32Const(1), I::I32Sub]);
+			s.call(f, "new_text");
+			s.call(f, list_ops::TEXT_AS_INT);
+			s.call(f, "exact_div");
+			s.call(f, "new_int");
+			Self::emit_list(f, &[I::Return, I::End]);
+			Self::emit_list(f, &[I::LocalGet(slash), I::I32Const(1), I::I32Add, I::LocalSet(slash), I::Br(0), I::End, I::End, I::End]);
+			// else its float: an Int when whole and in range
+			f.instruction(&I::LocalGet(0));
+			s.call(f, list_ops::TEXT_AS_FLOAT);
+			Self::emit_list(f, &[I::I64ReinterpretF64, I::LocalSet(bits)]);
+			let float = [I::LocalGet(bits), I::F64ReinterpretI64];
+			Self::emit_list(f, &float);
+			Self::emit_list(f, &[I::F64Trunc]);
+			Self::emit_list(f, &float);
+			Self::emit_list(f, &[I::F64Eq]);
+			Self::emit_list(f, &float);
+			Self::emit_list(f, &[I::F64Abs, I::F64Const(I64_RANGE_LIMIT.into()), I::F64Lt, I::I32And, I::If(BlockType::Result(node_ref))]);
+			Self::emit_list(f, &float);
+			f.instruction(&I::I64TruncF64S);
+			s.emit_int_from_machine_in(f, bits);
+			s.call(f, "new_int");
+			f.instruction(&I::Else);
+			Self::emit_list(f, &float);
+			s.call(f, "new_float");
+			f.instruction(&I::End);
+		});
 	}
 
 	/// Extract numeric value from a block { expr } or plain expr

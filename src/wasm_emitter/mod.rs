@@ -215,6 +215,10 @@ pub struct WasmGcEmitter {
 	code: CodeSection,
 	exports: ExportSection,
 	names: NameSection,
+	/// main's index, named in the name section (a trap's backtrace shows `main`, not `<wasm function N>`)
+	main_index: Option<u32>,
+	/// the address of the items of `print(value)` that ends main when the pipeline added it (pipeline::prints_result)
+	result_print: usize,
 	memory: MemorySection,
 	globals: GlobalSection,
 	tags: TagSection,
@@ -303,6 +307,8 @@ impl WasmGcEmitter {
 			code: CodeSection::new(),
 			exports: ExportSection::new(),
 			names: NameSection::new(),
+			main_index: None,
+			result_print: 0,
 			memory: MemorySection::new(),
 			globals: GlobalSection::new(),
 			tags: TagSection::new(),
@@ -492,6 +498,10 @@ impl WasmGcEmitter {
 					return crate::closures::closure_call_site_kind(callee, arity, &self.ctx, &kinds);
 				}
 				self.ctx.user_functions[name].return_kind
+			}
+			// `(x)` of a variable is its value, a global's too; `(random)` is a call
+			Node::List(items, Bracket::Round, _) if matches!(items.as_slice(), [item] if matches!(item.drop_meta(), Node::Symbol(name) if !self.is_unbound(name) && !self.ctx.user_functions.contains_key(name))) => {
+				self.get_type(&items[0])
 			}
 			// Arithmetic: recursively check operands with our get_type
 			Node::Key(left, op, right) if op.is_arithmetic() => {
@@ -968,6 +978,7 @@ impl WasmGcEmitter {
 		self.emit_node_type_name(); // after values_equal, which names an instance's declared type
 		self.emit_text_as_int(); // after the getters: it calls get_int_value
 		self.emit_text_as_float();
+		self.emit_text_as_number(); // after text_as_float and text_as_int, which it calls
 		self.emit_uncertain_runtime(); // after text_as_float, which it calls
 		if self.config.emit_reflection {
 			self.emit_reflection();
@@ -1144,6 +1155,7 @@ impl WasmGcEmitter {
 
 	/// Emit main function that constructs the node
 	pub fn emit_node_main(&mut self, node: &Node) {
+		self.result_print = if crate::pipeline::prints_result() { last_statement_items(node) } else { 0 };
 		// Pre-pass: collect variables first so scope is populated
 		let temp_locals = collect_variables(node, &mut self.scope);
 		self.typed_lists = self.main_typed_lists.take().unwrap_or_else(|| self.find_typed_lists(node));
@@ -1186,6 +1198,7 @@ impl WasmGcEmitter {
 
 		self.code.function(&func);
 		self.exports.export("main", ExportKind::Func, self.next_func_idx);
+		self.main_index = Some(self.next_func_idx);
 		self.next_func_idx += 1;
 	}
 
@@ -1435,6 +1448,7 @@ impl WasmGcEmitter {
 			.chain(self.ctx.user_functions.values().filter_map(|function| Some((function.func_index?, function.name.clone()))))
 			.chain(self.closures.entry_names())
 			.chain(self.tuple_packers.iter().map(|(function, index)| (*index, crate::tuples::packer_name(function))))
+			.chain(self.main_index.map(|index| (index, "main".to_string())))
 			.collect();
 		self.names.functions(&name_map(&mut functions.iter().map(|(idx, name)| (*idx, name.as_str())).collect()));
 
@@ -1683,6 +1697,18 @@ impl WasmGcEmitter {
 }
 
 /// A name map in index order (the name section requires it), one name per index
+/// The address of the items of the program's last statement when it is a call or a list, else 0
+fn last_statement_items(program: &Node) -> usize {
+	let last = match program.drop_meta() {
+		Node::List(statements, Bracket::None, Separator::Newline | Separator::Semicolon) => statements.last(),
+		statement => Some(statement),
+	};
+	match last.map(Node::drop_meta) {
+		Some(Node::List(items, _, _)) => items.as_ptr() as usize,
+		_ => 0,
+	}
+}
+
 fn name_map(names: &mut Vec<(u32, &str)>) -> NameMap {
 	names.sort_by_key(|(idx, _)| *idx);
 	names.dedup_by_key(|(idx, _)| *idx);
