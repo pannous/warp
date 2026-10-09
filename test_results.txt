@@ -3659,6 +3659,7 @@ PASSED:
   ✓ web::test_dev_server::the_dev_server_rebuilds_a_changed_program
   ✓ web::test_dom_pages::a_handler_draws_on_a_canvas_of_the_page
   ✓ web::test_dom_pages::a_handler_sets_and_reads_elements_of_the_page
+  ✓ web::test_editor_shortcuts::cmd_slash_comments_lines_out_and_back_in
   ✓ web::test_element_events::an_element_handler_marks_its_element
   ✓ web::test_element_events::each_element_handler_has_its_number
   ✓ web::test_element_events::the_page_shows_the_markup_after_a_handler
@@ -4031,7 +4032,10 @@ PASSED:
   ✓ welcoming::test_fuel_default::ten_million_float_fills_fit_the_default_fuel
   ✓ welcoming::test_function_bindings::a_const_in_one_function_leaves_another_alone
   ✓ welcoming::test_function_bindings::a_let_in_one_function_leaves_another_alone
+  ✓ welcoming::test_golf_words::a_bare_for_walks_a_method_chain
   ✓ welcoming::test_golf_words::a_char_loop_over_a_text_visits_every_char
+  ✓ welcoming::test_golf_words::a_text_word_without_its_module_names_the_module
+  ✓ welcoming::test_golf_words::bits_of_whole_numbers
   ✓ welcoming::test_golf_words::chr_of_an_expression_is_a_function_result
   ✓ welcoming::test_golf_words::print_without_parentheses_in_an_operand_or_branch
   ✓ welcoming::test_golf_words::walked_chars_are_the_list_of_chars
@@ -4220,4 +4224,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-10 ignored, 4215 passed, 0 failed, 4215 total tested
+10 ignored, 4219 passed, 0 failed, 4219 total tested
