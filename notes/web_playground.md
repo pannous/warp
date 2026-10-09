@@ -278,3 +278,7 @@ ends on about:blank), a declared memory maximum (still ~8 GB reserved).
   playground.js toggleFullScreen) puts them full screen: the last painting only, as large as fits at its own aspect
   ratio (CSS --aspect set by showPaintings, so the pointer mapping of clickDetail stays exact), black around it; Esc
   or ⛶ again leaves. Its click is no click of the program's `on click`. Check: probes/little_full.sh (after build.sh).
+- Tour example "shader mouse" (card second-shader, 2026-10-09, warp-web): a fragment shader under the pointer, the
+  inputs as shader holes (src/shader_holes.rs): `$mouse` (a list [mouse_x, mouse_y] → vec2f), `$mouse_down` (0/1)
+  and `$seconds` (from clock()), read at each paint. The ⛶ box (.painted) is as wide as its paintings, so ⛶ sits on
+  the painting's corner.
