@@ -56,6 +56,7 @@ pub mod introspection;
 pub mod reflection;
 pub mod word_operators;
 pub mod result_word;
+pub mod generator_consumers;
 pub mod generator_objects;
 pub mod generators;
 pub mod ruby_blocks;

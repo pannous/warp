@@ -16,7 +16,7 @@ use crate::warp_parser::{parse, while_do};
 use std::collections::{BTreeSet, HashMap, HashSet};
 
 /// `iter(count_to(3))` makes the object explicitly
-const ITER_WORD: &str = "iter";
+pub(crate) const ITER_WORD: &str = "iter";
 const CLASS_SUFFIX: &str = "generator";
 const STATE_FIELD: &str = "generator·state";
 /// The state of an ended generator: no state block matches it, `next()` gives ø
@@ -29,6 +29,7 @@ pub fn lower(node: Node) -> Node {
 	if generators.is_empty() {
 		return node;
 	}
+	let node = crate::generator_consumers::lower(node, &generators);
 	let advanced = advanced_variables(&node);
 	let mut classes = HashMap::new();
 	let node = with_objects(node, &generators, &advanced, &mut classes);
@@ -45,7 +46,7 @@ pub fn lower(node: Node) -> Node {
 }
 
 /// The variables `next(v)` or `v.next()` advances
-fn advanced_variables(node: &Node) -> HashSet<String> {
+pub(crate) fn advanced_variables(node: &Node) -> HashSet<String> {
 	let mut advanced = HashSet::new();
 	node.visit(&mut |part| match part {
 		Node::List(items, Bracket::Round | Bracket::None, _) if items.len() == 2 && is_word(&items[0], NEXT_METHOD) => {
@@ -61,10 +62,13 @@ fn is_next_call(call: &Node) -> bool {
 	matches!(call.drop_meta(), Node::List(items, Bracket::Round, _) if items.len() == 1 && is_word(&items[0], NEXT_METHOD)) || is_word(call, NEXT_METHOD)
 }
 
-/// `g(args)` of a generator: its name and arguments
-fn generator_call<'a>(node: &Node, generators: &'a HashMap<String, Generator>) -> Option<(&'a String, &'a Generator, Vec<Node>)> {
-	let Node::List(items, Bracket::Round | Bracket::None, _) = node.drop_meta() else { return None };
-	let (name, arguments) = items.split_first()?;
+/// `g(args)` of a generator: its name and arguments; an argument `naturals()` is parsed as the bare name
+pub(crate) fn generator_call<'a>(node: &Node, generators: &'a HashMap<String, Generator>) -> Option<(&'a String, &'a Generator, Vec<Node>)> {
+	let (name, arguments) = match node.drop_meta() {
+		Node::List(items, Bracket::Round | Bracket::None, _) => items.split_first()?,
+		Node::Symbol(_) => (node, &[][..]),
+		_ => return None,
+	};
 	let (name, generator) = generators.get_key_value(symbol_name(name)?)?;
 	let arguments: Vec<Node> = arguments.iter().flat_map(crate::ruby_blocks::arguments).collect();
 	(arguments.len() == generator.parameters.len()).then_some((name, generator, arguments))
