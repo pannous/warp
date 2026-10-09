@@ -16,6 +16,11 @@ Details: notes/todo_sweep_task.md (board), notes/semicolon_survey.md, notes/floa
 - (warp-types, card let-comma) what `let a, b = 3, 4` declares (also `var`, `const`). Today, assumed (recommended,
   Python, the same as the undeclared `a, b = 3, 4`): unpacking, a = 3 and b = 4. Alternative (JS): two declarations,
   a without a value (an error for let/const) and b = 3, the 4 left over.
+- (warp-types, card which-following) which tracked dot files may leave git besides .fleet .idea .vscode (untracked,
+  ignored). Recommended: untrack all four, they are unused: `.config/nextest.toml` (nothing runs nextest since
+  notes/OLD/nextest.sh), `.cargo/timeout-runner.sh` (only a commented-out runner line), `.claude/sessions.json` and
+  `.claude/session-config.json` (January session ids read by permissions_hook.js, stale), `.github/copilot-instructions.md`
+  (no Copilot, user 2026-10-06). Alternative: keep them.
 Parked (user: "Later"):
 - Parked: P237 (warp-class, card natural-phrases) what `numbers.sort by size` means; today a silent no-op. The user
   leans to `size` as an alias chain size → abs → norm ("carries over to vectors … that have a norm"; numbers |x|,
