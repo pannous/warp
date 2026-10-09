@@ -2,6 +2,7 @@
 # card single-page: a site with routes is one page; a deep link (/users/2) gets it as 404.html (as GitHub Pages serves
 # it, here from warp dev), its scripts load through <base href="/"> and its router shows the route of the path, in a
 # headless browser (agent-browser). Usage: probes/site/deep_link_in_browser.sh [warp binary]
+[ -n "${CI:-}" ] || { echo "browser tests run in CI only: skipped, Chrome is not started outside CI (user, 2026-10-09)"; exit 0; }
 cd "$(dirname "$0")/../.." || exit 1
 WARP=${1:-warp}
 PORT=8932
