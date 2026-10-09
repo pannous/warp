@@ -9,7 +9,9 @@ html_elements = ["html", "head", "body", "title", "meta", "link", "style", "scri
 	"a", "em", "strong", "b", "i", "u", "small", "code", "pre", "blockquote", "br", "hr", "img", "figure", "figcaption",
 	"ul", "ol", "li", "dl", "dt", "dd", "table", "thead", "tbody", "tfoot", "tr", "th", "td", "caption",
 	"form", "label", "input", "button", "select", "option", "textarea", "fieldset", "legend",
-	"canvas", "svg", "video", "audio", "source", "iframe", "details", "summary", "dialog", "template", "slot"]
+	"canvas", "svg", "video", "audio", "source", "iframe", "details", "summary", "dialog", "template", "slot", "js"]
+// elements whose content is their own language as written (JavaScript, CSS), not escaped text
+html_raw_text_elements = ["script", "style"]
 // elements without content or closing tag
 html_void_elements = ["br", "hr", "img", "input", "meta", "link", "base", "source", "col"]
 html_attributes = ["class", "id", "href", "src", "alt", "title", "style", "type", "name", "value", "for", "rel", "charset",
@@ -25,7 +27,7 @@ to_html(value:any) := html_render(value, ø)
 
 // `scope`: the component whose elements a style sheet styles (data-warp-scope, card web-scoped)
 html_render(value:any, scope:any) := {
-	if html_is_element(value) { return html_element(keys(value)#1, values(value)#1, scope) }
+	if html_is_element(value) { return html_element(html_tag(keys(value)#1), values(value)#1, scope) }
 	if value is list {
 		var out = ""
 		for item in value { out = out + html_render(item, scope) }
@@ -48,10 +50,13 @@ html_element(tag:any, content:any, scope:any) := {
 	for item in items {
 		if html_is_attribute(item, tag) { attributes = attributes + html_attribute(item) }
 		else if tag == "style" { children = children + html_style_rule(item, scope) + " " }
+		else if tag == "script" { children = children + html_plain(item) }
 		else { children = children + html_render(item, own_scope) }
 	}
 	if contains(html_void_elements, tag) { return "<" + tag + attributes + ">" }
-	if tag == "style" { children = replace(trim(children), "</", "<\\/") }
+	if tag == "style" { children = trim(children) }
+	// `</script>` inside a script would end it
+	if contains(html_raw_text_elements, tag) { children = replace(children, "</", "<\\/") }
 	"<" + tag + attributes + ">" + children + "</" + tag + ">"
 }
 
@@ -160,3 +165,6 @@ html_plain(value:any) := if value is text then value else str(value)
 html_is_true(value:any) := value == true or value == 1 or ((value is int or value is float) and value != 0)
 
 html_escaped(text:any) := replace(replace(replace(replace(text, "&", "&amp;"), "<", "&lt;"), ">", "&gt;"), "\"", "&quot;")
+
+// `js{…}` is the element script
+html_tag(name:any) := if name == "js" then "script" else name

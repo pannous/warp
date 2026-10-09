@@ -90,11 +90,14 @@ const readLine = () => {
 	return line;
 };
 // a request's answer; each `yield` waits for what may be a promise (lowering/foreign_modules.rs CONSTRUCTOR_MEMBER: member
-// "" constructs the module, `new URL(…)`)
+// "" constructs the module, `new URL(…)`; SETTER_PREFIX: "set innerHTML" sets the member to the one argument)
+const SETTER = /^set (.+)$/;
 function* answerOf(request) {
 	try {
 		let owner = null, value = typeof request.module === "object" ? unplain(request.module) : yield load(request.module);
+		const set = request.member.match(SETTER);
 		if (request.member === "") value = new value(...unplain(request.arguments));
+		else if (set) value = value[set[1]] = unplain(request.arguments)[0];
 		else {
 			for (const part of request.member.split(".")) {
 				if (value?.[part] === undefined) throw new ReferenceError(`${request.module} has no ${request.member}`);

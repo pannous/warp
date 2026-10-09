@@ -3,6 +3,7 @@ mod test_uniscript;
 #[cfg(feature = "native")] // wasmtime, files or network: not in the browser build
 mod test_web;
 mod test_markup_tags;
+mod test_markup_scripts;
 mod test_web_playground;
 mod test_missing_use; // card clickable-hint
 mod test_guide; // the language guide on the playground page

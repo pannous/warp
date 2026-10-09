@@ -14,6 +14,7 @@ mod test_foreign_js;
 mod test_web_idl;
 mod test_js_callbacks;
 mod test_foreign_handles;
+mod test_foreign_member_assignment;
 mod test_foreign_operators;
 #[cfg(feature = "native")] // wasmtime, files or network: not in the browser build
 mod test_host;
