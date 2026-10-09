@@ -114,6 +114,8 @@ thread_local! {
 	/// whether it is for `warp dev`, whose page keeps the program's state across reloads
 	static FOR_DEV: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
 	static RENDERS_ITSELF: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+	/// whether it is for WAGI (`warp build --wagi`): its routes answer the one request in its environment
+	static FOR_WAGI: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
 	/// whether the program compiled now ends in the print of its value that compile_printing_result added
 	static PRINTS_RESULT: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
 	/// whether the page is compiled to render its first HTML where the server's code is (site.rs, headless.rs)
@@ -163,6 +165,16 @@ pub fn component_imports() -> Vec<(String, crate::component_worlds::Signature)> 
 /// `run` compiling a program for a page: its page event handlers are expected, not warned about
 pub fn for_a_page<T>(run: impl FnOnce() -> T) -> T {
 	with_flag(&FOR_A_PAGE, run)
+}
+
+/// `run` compiling a program for WAGI (Spin, Akamai Functions): lowering/serve.rs ends it in the answer of its routes
+/// to the request (lib/wagi.warp), and it exports `_start`
+pub fn for_wagi<T>(run: impl FnOnce() -> T) -> T {
+	with_flag(&FOR_WAGI, run)
+}
+
+pub fn is_for_wagi() -> bool {
+	FOR_WAGI.with(|wagi| wagi.get())
 }
 
 /// Whether the program compiled now is for a page: it exports the reflection getters the page's host reads values with

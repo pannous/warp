@@ -61,6 +61,12 @@ pub fn worker_files(code: &str, name: &str) -> Result<Vec<SiteFile>, String> {
 	])
 }
 
+/// The Spin manifest running the WAGI module `source` (`warp build --wagi`) for every path, as the application `name`
+pub fn spin_manifest(name: &str, source: &str) -> String {
+	let name = worker_name(name);
+	format!("spin_manifest_version = 2\n\n[application]\nname = \"{name}\"\n\n[[trigger.http]]\nroute = \"/...\"\ncomponent = \"{name}\"\nexecutor = {{ type = \"wagi\" }}\n\n[component.{name}]\nsource = \"{source}\"\n")
+}
+
 /// The Worker of the program file written next to it: app.warp → app-worker/
 pub fn build(program: &Path) -> Result<BuiltSite, String> {
 	let code = std::fs::read_to_string(program).map_err(|failure| format!("cannot read {}: {failure}", program.display()))?;

@@ -82,7 +82,8 @@ const SUM: &str = "sum";
 pub const LIST_SUM: &str = "list_sum";
 
 /// Words the emitter implements as runtime functions, with the number of arguments including the receiver
-pub const RUNTIME_WORDS: [(&str, usize); 18] = [
+pub const RUNTIME_WORDS: [(&str, usize); 19] = [
+	(crate::wasm_emitter::wasi_emitter::WASI_ENVIRONMENT, 0),
 	(ORD, 1), ("upper", 1), ("lower", 1), ("reverse", 1), ("sort", 1), ("split", 2), ("join", 2), ("chars", 1), (FIELD_WITH, 3),
 	(MAP_KEYS, 1), (MAP_VALUES, 1), (MAP_ENTRIES, 1), (COLLECTION_CONTAINS, 2), (COLLECTION_POSITION, 2), (MAP_GET_OR, 3), (SLICE, 3),
 	(MAP_WITHOUT, 2), (INSTANCE_COPY, 2),
@@ -180,7 +181,7 @@ const LOOKUP_PLACEHOLDER: &str = "word_lookup";
 const TEMPORARY: &str = "word_tmp";
 
 /// Library words whose result is always a text, and those whose result is always a list
-const TEXT_RESULT_WORDS: [&str; 4] = ["upper", "lower", "trim", "join"];
+const TEXT_RESULT_WORDS: [&str; 5] = ["upper", "lower", "trim", "join", crate::wasm_emitter::wasi_emitter::WASI_ENVIRONMENT];
 const LIST_RESULT_WORDS: [&str; 8] = ["chars", "sort", "split", MAP_KEYS, MAP_VALUES, MAP_ENTRIES, MAP_WITHOUT, crate::wasm_emitter::list_ops::LIST_EXTEND];
 
 pub fn result_kind(word: &str) -> Option<crate::type_kinds::Kind> {

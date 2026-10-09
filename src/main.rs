@@ -31,7 +31,12 @@ const WIT_EXTENSION: &str = "wit";
 /// `warp build --component app.warp`: app.component.wasm, the component of that world (src/component_builder.rs)
 const COMPONENT_FLAG: &str = "--component";
 const COMPONENT_EXTENSION: &str = "component.wasm";
-const COMPILE_FLAGS: [&str; 6] = [EXE_FLAG, WASM_FLAG, AOT_FLAG, SITE_FLAG, WIT_FLAG, COMPONENT_FLAG];
+/// `warp build --wagi app.warp`: app.wagi.wasm, its routes answering one WAGI request (lib/wagi.warp), and app.spin.toml
+/// to run it: `spin up -f app.spin.toml` (Spin's wagi executor; Akamai Functions: `spin aka deploy`)
+const WAGI_FLAG: &str = "--wagi";
+const WAGI_EXTENSION: &str = "wagi.wasm";
+const SPIN_MANIFEST_EXTENSION: &str = "spin.toml";
+const COMPILE_FLAGS: [&str; 7] = [EXE_FLAG, WASM_FLAG, AOT_FLAG, SITE_FLAG, WIT_FLAG, COMPONENT_FLAG, WAGI_FLAG];
 const MACHINE_CODE_EXTENSION: &str = "cwasm";
 /// The name of an executable built from inline code (plus the platform's extension)
 const DEFAULT_EXECUTABLE_NAME: &str = "out";
@@ -311,6 +316,9 @@ fn run_command(args: &[String]) {
         }
         if flags.contains(&COMPONENT_FLAG) {
             return write_component(&code, &target);
+        }
+        if flags.contains(&WAGI_FLAG) {
+            return write_wagi(&code, &target);
         }
         if standalone {
             match write_standalone_executable(&code, &target) {
@@ -637,6 +645,25 @@ fn write_component(code: &str, target: &str) {
         }
         Err(failure) => {
             eprintln!("warp build --component: {failure}");
+            std::process::exit(1);
+        }
+    }
+}
+
+/// `warp build --wagi`: the WAGI module and its Spin manifest next to the program file
+fn write_wagi(code: &str, target: &str) {
+    let module_path = std::path::Path::new(&compiled_output_path(target)).with_extension(WAGI_EXTENSION);
+    let manifest_path = module_path.with_extension("").with_extension(SPIN_MANIFEST_EXTENSION);
+    let name = module_path.file_stem().and_then(|stem| stem.to_str()).and_then(|stem| stem.split('.').next()).unwrap_or(DEFAULT_EXECUTABLE_NAME).to_string();
+    match warp::pipeline::for_wagi(|| wasm_emitter::compile(code)) {
+        Ok(module) => {
+            fs::write(&module_path, &module.bytes).expect("could not write the WAGI module");
+            let source = module_path.file_name().unwrap_or_default().to_string_lossy();
+            fs::write(&manifest_path, warp::deploy::spin_manifest(&name, &source)).expect("could not write the Spin manifest");
+            println!("wrote {} ({} bytes) and {}", module_path.display(), module.bytes.len(), manifest_path.display());
+        }
+        Err(failure) => {
+            eprintln!("warp build --wagi: {failure}");
             std::process::exit(1);
         }
     }

@@ -48,6 +48,8 @@ pub const PAGE_SUBMITTED: &str = "page·submitted";
 const DATABASE_WORDS: [&str; 2] = ["database", "indexedDB"];
 /// `·` of a generated name as written in code (it would parse as a product)
 const NAME_DOT: &str = "_dot_";
+/// What a WAGI build (`warp build --wagi`, lib/wagi.warp, which the build uses) ends in: the routes' answer to the request
+const WAGI_ANSWER: &str = "try { wagi_answer(page·submitted(wagi_request())) } catch error { wagi_failed(error.message) }";
 
 /// A route as written: its method (upper case), path and body
 type Route = (String, Node, Node);
@@ -419,6 +421,9 @@ fn with_local_routes(program: Node) -> Node {
 	}
 	let unanswered = "throw \"no route answers \" + request.method + \" \" + request.path";
 	functions.push(parse_named(&format!("{PAGE_SUBMITTED}(request:any) := {{\n{}\n{unanswered}\n}}", answers.join("\n"))));
+	if crate::pipeline::is_for_wagi() {
+		statements.push(parse_named(WAGI_ANSWER));
+	}
 	// where the first route stands: a page route written last stays the program's value
 	statements.splice(first_route..first_route, functions);
 	Node::List(statements, bracket, separator)

@@ -127,6 +127,13 @@ impl ImportManager {
 			EntityType::Function(fd_write_type_idx),
 		);
 		Self::register_import(ctx, "wasi_fd_write");
+		if ctx.required_functions.contains(super::wasi_emitter::WASI_ENVIRONMENT) {
+			let sizes_type = type_manager.function_type(vec![ValType::I32, ValType::I32], vec![ValType::I32]);
+			for (name, registered) in super::wasi_emitter::ENVIRON_IMPORTS.into_iter().zip(["wasi_environ_sizes_get", "wasi_environ_get"]) {
+				self.imports.import("wasi_snapshot_preview1", name, EntityType::Function(sizes_type));
+				Self::register_import(ctx, registered);
+			}
+		}
 	}
 
 	/// Emit FFI imports for all registered FFI functions

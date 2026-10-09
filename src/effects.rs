@@ -36,6 +36,7 @@ const TRUSTED_EXTERNALS: &[(&str, Capability, &[Effect])] = &[
 	("putl", Wasi, &[IO]),
 	("putf", Wasi, &[IO]),
 	("fd_write", Wasi, &[IO, Unsafe]),
+	("wasi_environment", Wasi, &[IO]),
 	("execute", Sql, &[IO]),
 	("exec", Process, &[IO]),
 	// the standard library's adapters (src/std_adapters.rs): std_pure's words are pure like libm's, std_io's do IO

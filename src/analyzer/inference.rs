@@ -406,6 +406,9 @@ pub(super) fn infer_list_type(node: &Node, items: &[Node], bracket: &Bracket, se
 			if let Some(local) = scope.binding(s) {
 				return local.kind;
 			}
+			if let Some(kind) = crate::library_words::result_kind(s) {
+				return kind;
+			}
 			// Assume zero-arg user function returns Int
 			return Kind::Int;
 		}

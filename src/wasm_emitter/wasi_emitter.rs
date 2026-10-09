@@ -15,6 +15,16 @@ pub const PRINT_VALUE: &str = "print_value";
 /// put_value(x): writes the text form of x without a newline (puti, putl, putf of a run-time value), yields x
 pub const PUT_VALUE: &str = "put_value";
 const STDOUT: i32 = 1;
+/// wasi_environment(): the process environment as one text, each `NAME=value` ended by a NUL byte (environ_get's
+/// layout), so a WAGI program (`warp build --wagi`) reads its request: REQUEST_METHOD, PATH_INFO, QUERY_STRING
+pub const WASI_ENVIRONMENT: &str = "wasi_environment";
+/// The two WASI imports wasi_environment calls, imported only by a program that uses it (the browser has no environment)
+pub const ENVIRON_IMPORTS: [&str; 2] = ["environ_sizes_get", "environ_get"];
+/// environ_sizes_get writes the variable count and the bytes of their text into the scratch words at 0 and 4
+const ENVIRON_COUNT_ADDRESS: i32 = 0;
+const ENVIRON_BYTES_ADDRESS: i32 = 4;
+/// environ_get's table of pointers, one i32 per variable, before the text in the same allocation
+const POINTER_BYTES: i32 = 4;
 /// Scratch memory of the stdout writes: the iovec {buf_ptr, buf_len} at 0, fd_write's byte count at 8
 const IOVEC_ADDRESS: i32 = 0;
 const NWRITTEN_ADDRESS: i32 = 8;
@@ -141,6 +151,35 @@ impl WasmGcEmitter {
 		let known = self.type_errors.len();
 		self.emit_node_instructions(func, value);
 		self.type_errors.len() > known
+	}
+
+	/// wasi_environment(): environ_sizes_get, then environ_get into a fresh text-heap allocation of the pointer table
+	/// (aligned) and the text; the text becomes a text node. Locals: count, bytes, table size, allocation size, address
+	pub(super) fn emit_wasi_environment(&mut self) {
+		if !self.should_emit_function(WASI_ENVIRONMENT) {
+			return;
+		}
+		let [Some(sizes_get), Some(environ_get)] = ENVIRON_IMPORTS.map(|name| self.ctx.func_registry.get(&format!("wasi_{name}")).map(|f| f.call_index as u32)) else { return };
+		self.emit_text_heap_global();
+		let node_ref = ValType::Ref(self.node_ref(false));
+		self.runtime_function(WASI_ENVIRONMENT, vec![], vec![node_ref], vec![ValType::I32; 5], |s, f| {
+			let (count, bytes, table, size, address) = (0, 1, 2, 3, 4);
+			Self::emit_list(f, &[
+				I::I32Const(ENVIRON_COUNT_ADDRESS), I::I32Const(ENVIRON_BYTES_ADDRESS), I::Call(sizes_get), I::Drop,
+				I::I32Const(ENVIRON_COUNT_ADDRESS), I::I32Load(WORD), I::LocalSet(count),
+				I::I32Const(ENVIRON_BYTES_ADDRESS), I::I32Load(WORD), I::LocalSet(bytes),
+				I::LocalGet(count), I::I32Const(POINTER_BYTES), I::I32Mul, I::LocalSet(table),
+				I::LocalGet(table), I::LocalGet(bytes), I::I32Add, I::I32Const(POINTER_BYTES - 1), I::I32Add, I::LocalSet(size),
+			]);
+			s.emit_text_allocation(f, size, address);
+			// environ_get writes the pointer table at a pointer-aligned address
+			Self::emit_list(f, &[
+				I::LocalGet(address), I::I32Const(POINTER_BYTES - 1), I::I32Add, I::I32Const(-POINTER_BYTES), I::I32And, I::LocalSet(address),
+				I::LocalGet(address), I::LocalGet(address), I::LocalGet(table), I::I32Add, I::Call(environ_get), I::Drop,
+				I::LocalGet(address), I::LocalGet(table), I::I32Add, I::LocalGet(bytes),
+			]);
+			s.call(f, "new_text");
+		});
 	}
 
 	/// print_value(x) and put_value(x): the text of x by list_join of the one-element list [x]; locals: text
