@@ -256,36 +256,65 @@ impl Lowering {
 	/// An element or condition of several words is their phrase: `[upper w for w in words]`
 	fn comprehension(&self, items: &[Node]) -> Option<Node> {
 		let at = items.iter().position(starts_with_for).filter(|&at| at > 0)?;
-		let (element, clause, rest) = (phrase(&items[..at]), &items[at], &items[at + 1..]);
-		let Node::List(words, _, _) = clause.drop_meta() else { return None };
-		let [_, variable, in_word, sequence, tail @ ..] = words.as_slice() else { return None };
-		if !is_word(in_word, IN_WORD) || !matches!(variable.drop_meta(), Node::Symbol(_)) {
-			return None;
-		}
-		let condition = match (tail, rest) {
-			([], []) => None,
-			([nothing], []) if matches!(nothing.drop_meta(), Node::Empty) => None,
-			([filter_word], [_, ..]) if is_word(filter_word, IF_WORD) || is_word(filter_word, WHERE_WORD) => Some(phrase(rest)),
-			_ => return None,
-		};
-		Some(self.built(variable, sequence, &element, condition.as_ref()))
+		let qualifiers = qualifiers(&items[at], &items[at + 1..])?;
+		Some(self.built(&qualifiers, &phrase(&items[..at])))
 	}
 
-	/// `(made = []; for variable in sequence { if condition { made.push(element) } }; made)`
-	fn built(&self, variable: &Node, sequence: &Node, element: &Node, condition: Option<&Node>) -> Node {
+	/// `(made = []; for v in xs { if c { for w in ys { made.push(element) } } }; made)`, the clauses nested in order
+	fn built(&self, qualifiers: &[Qualifier], element: &Node) -> Node {
 		let number = self.count.get();
 		self.count.set(number + 1);
 		let made = format!("{MADE}_{number}");
-		let push = format!("{made}.push({ELEMENT})");
-		let body = if condition.is_some() { format!("if {CONDITION} {{ {push} }}") } else { push };
-		let template = format!("(var {made} = []; for {VARIABLE} in {SEQUENCE} {{ {body} }}; {made})");
-		let mut program = parse(&template);
-		for (placeholder, replacement) in [(VARIABLE, variable), (SEQUENCE, sequence), (ELEMENT, element)] {
-			program = substitute(program, placeholder, replacement);
-		}
-		if let Some(condition) = condition {
-			program = substitute(program, CONDITION, condition);
+		let placeholder = |name: &str, index: usize| format!("{name}_{index}");
+		let body = qualifiers.iter().enumerate().rev().fold(format!("{made}.push({ELEMENT})"), |inner, (index, qualifier)| match qualifier {
+			Qualifier::Each(..) => format!("for {} in {} {{ {inner} }}", placeholder(VARIABLE, index), placeholder(SEQUENCE, index)),
+			Qualifier::If(_) => format!("if {} {{ {inner} }}", placeholder(CONDITION, index)),
+		});
+		let mut program = substitute(parse(&format!("(var {made} = []; {body}; {made})")), ELEMENT, element);
+		for (index, qualifier) in qualifiers.iter().enumerate() {
+			program = match qualifier {
+				Qualifier::Each(variable, sequence) => {
+					let program = substitute(program, &placeholder(VARIABLE, index), variable);
+					substitute(program, &placeholder(SEQUENCE, index), sequence)
+				}
+				Qualifier::If(condition) => substitute(program, &placeholder(CONDITION, index), condition),
+			};
 		}
 		program
 	}
+}
+
+/// A clause of a comprehension: `for v in xs` or the filter `if c` after it
+enum Qualifier {
+	Each(Node, Node),
+	If(Node),
+}
+
+/// The clauses from `(for v in xs …)` and the items after it, as the parser groups them: a second `for` nests in the
+/// first clause (`for f in xs (for i in ys ø)`); a filter's condition follows the clause ending in `if`, up to the next
+/// `for` clause (`(for f in xs if) (f > 1) (for i in ys ø)`)
+fn qualifiers(clause: &Node, rest: &[Node]) -> Option<Vec<Qualifier>> {
+	let Node::List(words, _, _) = clause.drop_meta() else { return None };
+	let [_, variable, in_word, sequence, tail @ ..] = words.as_slice() else { return None };
+	if !is_word(in_word, IN_WORD) || !matches!(variable.drop_meta(), Node::Symbol(_)) {
+		return None;
+	}
+	let mut found = vec![Qualifier::Each(variable.clone(), sequence.clone())];
+	match (tail, rest) {
+		([], []) => {}
+		([nothing], []) if matches!(nothing.drop_meta(), Node::Empty) => {}
+		([nested], _) if starts_with_for(nested) => found.extend(qualifiers(nested, rest)?),
+		([filter_word], [_, ..]) if is_word(filter_word, IF_WORD) || is_word(filter_word, WHERE_WORD) => {
+			let end = rest.iter().position(starts_with_for).unwrap_or(rest.len());
+			if end == 0 {
+				return None;
+			}
+			found.push(Qualifier::If(phrase(&rest[..end])));
+			if end < rest.len() {
+				found.extend(qualifiers(&rest[end], &rest[end + 1..])?);
+			}
+		}
+		_ => return None,
+	}
+	Some(found)
 }
