@@ -23,4 +23,4 @@
 - Iterator protocol for classes: a class with `next()` returning ø at the end is walked by `for`.
 - `yield from xs` / `yield each xs`, a recursive generator lazily, a generator expression `(x*x for x in xs)` as a
   lazy value.
-- Ruby `loop do … end` and `while c … end` inside a `def … end` do not parse (found writing a Ruby fib generator).
+- Done (card ruby-loop): Ruby `loop do … end` and `while c … end` inside a `def … end` parse (parser skip_end_line, welcome_forms endless_loop).

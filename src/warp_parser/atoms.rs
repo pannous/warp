@@ -318,11 +318,12 @@ impl WarpParser {
 		self.chars[self.pos..].iter().skip_while(|ch| **ch != '\n').nth(1) == Some(&'\t')
 	}
 
-	/// The `end` on the line after a block read by indentation, the newline before the next statement kept
+	/// The `end` on the line after a block read by indentation, the newline before the next statement kept; an `end`
+	/// indented less than the block's head closes an outer block
 	pub(super) fn skip_end_line(&mut self) {
 		let before = (self.pos, self.line_nr, self.column, self.current_line.clone());
-		self.skip_whitespace();
-		if !self.matches_keyword(END_KEYWORD) {
+		let (_, indent) = self.skip_whitespace();
+		if indent != self.base_indent || !self.matches_keyword(END_KEYWORD) {
 			(self.pos, self.line_nr, self.column, self.current_line) = before;
 			return;
 		}
