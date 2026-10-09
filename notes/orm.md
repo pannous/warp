@@ -91,7 +91,10 @@ bo's row again, so it changes nothing after written-through changes; an instance
 |---|---|
 | a field added | ALTER TABLE ADD COLUMN, the field's default value (else ø/NULL) |
 | a field removed | the column stays, a warning names it (data is never dropped silently) |
-| a lossless type or unit change (int → float, km → m) | converted in place (UPDATE … SET d = d * 1000) |
+| a lossless type change (int → float) | converted in place (UPDATE … SET c = CAST(old AS type)) |
+| a unit change within its quantity (km → m) | only the column's declared type changes: a unit field holds SI amounts |
+| plain numbers given a unit (int → km) | read as that unit (UPDATE … SET d = old * 1000), a warning names the unit |
+| another quantity (km → kg), a unit dropped (km → float) | a loud error naming the column and both types |
 | a lossy change (float → int, text → int) | a loud error naming the column and both types |
 | a rename | the field's annotation `@was(old_name) name: text` renames the column (RENAME COLUMN); without it, it reads as add + remove |
 
@@ -175,5 +178,9 @@ bo's row again, so it changes nothing after written-through changes; an instance
    - `@was(nick) name: text` (an annotation on the field's name; class_methods::fields_marked) sends the column's old
      name as a 4th schema entry: database.rs renames it (RENAME COLUMN) when the table has the old column and not the
      new one, host-files.js `renameColumn` moves the stored values. `@was: nick` inside a class body is Ruby's `self.was`.
-   - Open: unit changes (km → m) wait for runtime units (a unit type is no column yet, notes/units_runtime.md).
+   - Unit fields (card unit-fields): `class Run{distance: km}` (static_units/unit_fields.rs) holds the SI amount like
+     any quantity; the column is `NUMERIC km` (NUMERIC keeps a whole SI amount an integer, as the program holds it; REAL
+     gave 5000.0, which an exact `total = 0 km` refused: "not an int"). database.rs `conversion_factor` decides the
+     migrations above. The playground's store refuses a unit change loudly (card browser-unit-migrations).
+     Sample: samples/orm_units.warp.
    - A field named size/count/length reads as the builtin count off a typed list element (card field-named-size).

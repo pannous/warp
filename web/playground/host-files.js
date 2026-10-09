@@ -159,6 +159,10 @@ const textOfColumn = (value, from) => from === REAL && Number.isInteger(value) ?
 // a converter of rows retyping the column as src/database.rs converted does, else the same loud error
 function convertColumn(table, name, storedType, type) {
 	const [from, to] = [widening(storedType), widening(type)];
+	// a unit field (`distance: km`) holds SI amounts; its unit's conversions are known natively (src/database.rs conversion_factor)
+	if (to < 0) {
+		throw new Error(`the column ${table}.${name} holds ${storedType}, the class's field is ${type}: a unit column is converted natively (warp serve)`);
+	}
 	if (from < 0 || to <= from) {
 		throw new Error(`the column ${table}.${name} holds ${storedType}, the class's field is ${type}: its values would lose data, so it is not converted`);
 	}
