@@ -24,6 +24,8 @@ const METHODS_WORD: &str = "methods";
 /// A class's definition as written, in its warp.meta entry: a program importing the module declares the class too
 pub const DEFINITION_WORD: &str = "definition";
 const DIR_WORD: &str = "dir";
+/// `help(x)`: a class's, an instance's or a function's description as text (card help-help)
+const HELP_WORD: &str = "help";
 const KEYS_WORD: &str = "keys";
 const EXPORTS_WORD: &str = "exports";
 /// The run-time choice of a class's names (Objects::dispatched)
@@ -41,7 +43,7 @@ pub const META_CLASSES: &str = "classes";
 type Functions = std::collections::BTreeMap<String, crate::context::UserFunctionDef>;
 
 pub fn lower(node: Node) -> Node {
-	if !node.mentions_any(&[EFFECTS_WORD, LISTENERS_WORD, SIGNATURE_WORD, BODY_WORD, PARAMS_WORDS[0], PARAMS_WORDS[1], DIR_WORD, crate::type_tests::TYPE_WORD]) {
+	if !node.mentions_any(&[EFFECTS_WORD, LISTENERS_WORD, SIGNATURE_WORD, BODY_WORD, PARAMS_WORDS[0], PARAMS_WORDS[1], DIR_WORD, HELP_WORD, crate::type_tests::TYPE_WORD]) {
 		return node;
 	}
 	let defined = crate::library_words::defined_names(&node);
@@ -127,6 +129,7 @@ fn function_word(node: &Node, functions: &Functions, defined: &HashSet<String>) 
 	match word {
 		DIR_WORD => Some(text_list(&FUNCTION_WORDS.map(String::from))),
 		crate::type_tests::TYPE_WORD => Some(Node::Symbol(crate::type_kinds::Kind::Function.to_string())),
+		HELP_WORD => Some(Node::Text(format!("{name}{}", signature(&functions[name])))),
 		_ => None,
 	}
 }
@@ -232,7 +235,7 @@ struct Objects {
 }
 
 pub fn lower_objects(node: Node) -> Node {
-	let words: Vec<&str> = CLASS_WORDS.iter().chain(&FIELDS_WORDS).chain(&[METHODS_WORD, DIR_WORD]).copied().collect();
+	let words: Vec<&str> = CLASS_WORDS.iter().chain(&FIELDS_WORDS).chain(&[METHODS_WORD, DIR_WORD, HELP_WORD]).copied().collect();
 	if !node.mentions_any(&words) {
 		return node;
 	}
@@ -425,6 +428,15 @@ impl Objects {
 		}
 	}
 
+	/// `help(P)`, `help(p)`: the class, its parent, fields and methods, one per line (an empty line left out)
+	fn help(&self, subject: &Node) -> Option<Node> {
+		let class = self.class_of(symbol(subject)?).filter(|_| !self.defined.contains(HELP_WORD))?;
+		let parent = self.layouts[class].parent.as_ref().map(|parent| format!(" {} {parent}", crate::warp_parser::EXTENDS_KEYWORD)).unwrap_or_default();
+		let members = [(FIELDS_WORDS[0], self.fields(class)), (METHODS_WORD, self.methods(class))];
+		let lines = members.into_iter().filter(|(_, names)| !names.is_empty()).map(|(word, names)| format!("{word}: {}", names.join(" ")));
+		Some(Node::Text(std::iter::once(format!("{} {class}{parent}", CLASS_WORDS[0])).chain(lines).collect::<Vec<_>>().join("\n")))
+	}
+
 	/// The names a reflection word lists for a class: its fields, its methods, or both for `dir`
 	fn listed(&self, class: &str, word: &str) -> Option<Vec<String>> {
 		listed_names(self.fields(class), self.methods(class), word)
@@ -479,6 +491,7 @@ fn with_object_words(node: Node, objects: &Objects) -> Node {
 	let reflected = match node.drop_meta() {
 		Node::Key(subject, Op::Dot, word) => symbol(word).and_then(|word| objects.dot_word(subject, word)),
 		Node::List(items, Bracket::Round | Bracket::None, _) if items.len() == 2 && symbol(&items[0]) == Some(DIR_WORD) => objects.dir(&items[1]),
+		Node::List(items, Bracket::Round | Bracket::None, _) if items.len() == 2 && symbol(&items[0]) == Some(HELP_WORD) => objects.help(&items[1]),
 		_ => None,
 	};
 	reflected.unwrap_or_else(|| node.map_children(|child| with_object_words(child, objects)))
