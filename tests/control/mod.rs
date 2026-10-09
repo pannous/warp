@@ -148,3 +148,4 @@ mod test_database_dangling_key; // card orm-dangling
 mod test_database_members_add; // cards orm-nested, orm-list-add
 mod test_print_empty; // card print-error
 mod test_try_else_print; // card try-print
+mod test_database_busy; // card orm-sample-lock

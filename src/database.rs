@@ -23,6 +23,12 @@ const ID_COLUMN: &str = "id";
 const LOSSLESS_ORDER: [&str; 3] = ["INTEGER", "REAL", "TEXT"];
 /// The SQL function a filter's query calls a warp function through: `warp_call('function', arguments…)`
 const WARP_CALL: &str = "warp_call";
+/// How long a write waits for another connection's (another program or thread) before "database is locked"
+const BUSY_MILLISECONDS: c_int = 5000;
+/// A folder set by cargo's test runs (.cargo/config.toml): each test thread keeps a sample's tables in its own copy there
+const TEST_TABLES: &str = "WARP_TEST_TABLES";
+/// The folder of the samples, which several tests run at once
+const SAMPLES_FOLDER: &str = "samples";
 
 /// The program's function by name, called with the list of its arguments (src/host.rs calls back into the instance)
 pub type Callback<'a> = dyn FnMut(&str, &Node) -> Result<Node, String> + 'a;
@@ -33,6 +39,7 @@ type Handle = *mut c_void;
 /// The functions of the SQLite C API the tables use
 struct Sqlite {
 	open: unsafe extern "C" fn(*const c_char, *mut Handle) -> c_int,
+	busy_timeout: unsafe extern "C" fn(Handle, c_int) -> c_int,
 	errmsg: unsafe extern "C" fn(Handle) -> *const c_char,
 	prepare: unsafe extern "C" fn(Handle, *const c_char, c_int, *mut Handle, *mut *const c_char) -> c_int,
 	bind_int64: unsafe extern "C" fn(Handle, c_int, i64) -> c_int,
@@ -76,6 +83,7 @@ fn load_sqlite() -> Result<Sqlite, String> {
 	}
 	Ok(Sqlite {
 		open: function!("sqlite3_open"),
+		busy_timeout: function!("sqlite3_busy_timeout"),
 		errmsg: function!("sqlite3_errmsg"),
 		prepare: function!("sqlite3_prepare_v2"),
 		bind_int64: function!("sqlite3_bind_int64"),
@@ -363,8 +371,8 @@ fn list(items: Vec<Node>) -> Node {
 /// The connection to the file's database, opened once per thread
 fn connection(file: &str) -> Result<Handle, String> {
 	let path = match file {
-		crate::database_tables::TABLES_FILE => IN_MEMORY,
-		file => file,
+		crate::database_tables::TABLES_FILE => IN_MEMORY.to_string(),
+		file => test_thread_copy(file).unwrap_or_else(|| file.to_string()),
 	};
 	if let Some(handle) = CONNECTIONS.with(|connections| connections.borrow().get(file).copied()) {
 		return Ok(handle as Handle);
@@ -375,8 +383,21 @@ fn connection(file: &str) -> Result<Handle, String> {
 	if unsafe { (sqlite.open)(c_path.as_ptr(), &mut handle) } != SQLITE_OK {
 		return Err(format!("{file}: {}", message(sqlite, handle)));
 	}
+	unsafe { (sqlite.busy_timeout)(handle, BUSY_MILLISECONDS) };
 	CONNECTIONS.with(|connections| connections.borrow_mut().insert(file.to_string(), handle as usize));
 	Ok(handle)
+}
+
+/// Under cargo's tests a named thread other than main (libtest names each test's thread) gets its own copy of a
+/// sample's file, so tests running one sample at once neither lock nor change each other's rows
+fn test_thread_copy(file: &str) -> Option<String> {
+	let file = std::path::Path::new(file);
+	let in_samples = file.parent().and_then(|folder| folder.file_name()).is_some_and(|folder| folder == SAMPLES_FOLDER);
+	let folder = std::env::var(TEST_TABLES).ok().filter(|_| in_samples)?;
+	let thread = std::thread::current().name().filter(|name| *name != "main")?.replace("::", ".");
+	let folder = std::path::Path::new(&folder).join(thread);
+	std::fs::create_dir_all(&folder).ok()?;
+	Some(folder.join(file.file_name()?).to_string_lossy().into_owned())
 }
 
 fn message(sqlite: &Sqlite, database: Handle) -> String {
