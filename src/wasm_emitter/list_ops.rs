@@ -8,6 +8,7 @@ use ValType::Ref;
 use crate::type_kinds::{Kind, CURLY_LIST_KIND, KIND_MASK, SQUARE_LIST_KIND, UNMARKED_KIND};
 use crate::wasm_emitter::layout::{utf8, BYTE};
 use crate::node::Node;
+use crate::operators::Op;
 use crate::extensions::strings::{GRAPHEME_EXTEND, GRAPHEME_PICTOGRAPHIC, REGIONAL_INDICATORS, ZERO_WIDTH_JOINER};
 
 /// The code points from which UTF-8 needs 2, 3 and 4 bytes
@@ -725,13 +726,16 @@ pub const RUNTIME_ERRORS: [&str; 29] = [
 
 /// text_as_int(node) -> i64: a Text's optional sign and decimal digits, any other node's Int (get_int_value)
 pub const TEXT_AS_INT: &str = "text_as_int";
-/// Arithmetic on two Nodes of run-time kind: (function, its f64 instruction, the exact Int function)
+/// Arithmetic on two Nodes of run-time kind: (function, its operator, the exact Int function); the first four in
+/// uncertain.rs UNCERTAIN_ARITHMETIC's order
 pub const NODE_ADD: &str = "node_add";
-pub const NODE_ARITHMETIC: [(&str, Instruction<'static>, &str); 4] = [
-	(NODE_ADD, I::F64Add, "exact_add"),
-	("node_sub", I::F64Sub, "exact_sub"),
-	("node_mul", I::F64Mul, "exact_mul"),
-	("node_div", I::F64Div, "exact_div"),
+pub const NODE_ARITHMETIC: [(&str, Op, &str); 6] = [
+	(NODE_ADD, Op::Add, "exact_add"),
+	("node_sub", Op::Sub, "exact_sub"),
+	("node_mul", Op::Mul, "exact_mul"),
+	("node_div", Op::Div, "exact_div"),
+	("node_mod", Op::Mod, "exact_mod"),
+	("node_rem", Op::Rem, "exact_rem"),
 ];
 
 /// text_as_float(node): the f64 of a text like "-12.5e3" (a number node converts as it is); anything else is invalid_number
@@ -792,12 +796,40 @@ impl WasmGcEmitter {
 		});
 	}
 
-	/// node_add(a, b) … node_div(a, b): arithmetic on two values whose kinds are known only at run time (fields of a parsed
-	/// JSON map): Floats when either is a Float, else exact Ints; anything else is the runtime error not_an_int
+	/// The f64 of `a op b` of the Nodes in params 0 and 1; a remainder reads them again instead of holding them in the
+	/// emitter's scratch locals, which a runtime function has not (arithmetic.rs emit_float_remainder)
+	fn emit_node_float_arithmetic(&mut self, f: &mut Function, op: Op) {
+		let operand = |s: &mut Self, f: &mut Function, param: u32, absolute: bool| {
+			f.instruction(&I::LocalGet(param));
+			s.call(f, TEXT_AS_FLOAT);
+			if absolute {
+				f.instruction(&I::F64Abs);
+			}
+		};
+		let (dividend, divisor) = (0, 1);
+		if !matches!(op, Op::Mod | Op::Rem) {
+			operand(self, f, dividend, false);
+			operand(self, f, divisor, false);
+			return self.emit_float_arithmetic(f, &op);
+		}
+		// `a - |b| * floor(a / |b|)` (euclidean) or `a - b * trunc(a / b)`
+		let euclidean = op == Op::Mod;
+		operand(self, f, dividend, false);
+		operand(self, f, dividend, false);
+		operand(self, f, divisor, euclidean);
+		f.instruction(&I::F64Div);
+		f.instruction(if euclidean { &I::F64Floor } else { &I::F64Trunc });
+		operand(self, f, divisor, euclidean);
+		Self::emit_list(f, &[I::F64Mul, I::F64Sub]);
+	}
+
+	/// node_add(a, b) … node_rem(a, b): arithmetic on two values whose kinds are known only at run time (fields of a parsed
+	/// JSON map, elements of a list parameter): Floats when either is a Float, else exact Ints; anything else is the
+	/// runtime error not_an_int
 	pub(super) fn emit_node_arithmetic(&mut self) {
 		let node_ref = Ref(self.node_ref(false));
 		let (int_kind, float_kind) = (crate::type_kinds::Kind::Int as i64, crate::type_kinds::Kind::Float as i64);
-		for (name, float_op, exact_op) in NODE_ARITHMETIC {
+		for (index, (name, op, exact_op)) in NODE_ARITHMETIC.into_iter().enumerate() {
 			if !self.should_emit_function(name) {
 				continue;
 			}
@@ -856,7 +888,8 @@ impl WasmGcEmitter {
 				for operand in [0, 1] {
 					s.emit_fail_if_error(f, operand);
 				}
-				let uncertain = s.should_emit_function(super::uncertain::UNCERTAIN_NEW);
+				// a remainder of a value with uncertainty is not a number here
+				let uncertain = s.should_emit_function(super::uncertain::UNCERTAIN_NEW) && index < super::uncertain::UNCERTAIN_ARITHMETIC.len();
 				// a text, a character or a list is no number here: "x" * 2 is no 240
 				for operand in [0, 1] {
 					s.emit_field(f, operand, 0);
@@ -874,7 +907,6 @@ impl WasmGcEmitter {
 					s.is_uncertain(f, 0);
 					s.is_uncertain(f, 1);
 					Self::emit_list(f, &[I::I32Or, I::If(BlockType::Empty), I::LocalGet(0), I::LocalGet(1)]);
-					let index = NODE_ARITHMETIC.iter().position(|(known, ..)| *known == name).expect("a node arithmetic");
 					s.call(f, super::uncertain::UNCERTAIN_ARITHMETIC[index]);
 					Self::emit_list(f, &[I::Return, I::End]);
 				}
@@ -882,16 +914,19 @@ impl WasmGcEmitter {
 					s.emit_field(f, operand, 0);
 					Self::emit_list(f, &[I::I64Const(KIND_MASK), I::I64And, I::I64Const(float_kind), I::I64Eq]);
 				}
-				Self::emit_list(f, &[I::I32Or, I::If(BlockType::Result(node_ref)), I::LocalGet(0)]);
-				s.call(f, TEXT_AS_FLOAT);
-				f.instruction(&I::LocalGet(1));
-				s.call(f, TEXT_AS_FLOAT);
-				f.instruction(&float_op);
+				Self::emit_list(f, &[I::I32Or, I::If(BlockType::Result(node_ref))]);
+				s.emit_node_float_arithmetic(f, op);
 				s.call(f, "new_float");
 				Self::emit_list(f, &[I::Else, I::LocalGet(0)]);
 				s.call(f, "get_int_value");
 				f.instruction(&I::LocalGet(1));
 				s.call(f, "get_int_value");
+				// P66: `a % 0` is the catchable error divide_by_zero, as exact_div makes it for `/`
+				if matches!(op, Op::Mod | Op::Rem) {
+					Self::emit_list(f, &[I::LocalTee(kind), I::I64Eqz]);
+					s.emit_fail_if(f, DIVIDE_BY_ZERO);
+					f.instruction(&I::LocalGet(kind));
+				}
 				s.call(f, exact_op);
 				s.call(f, "new_int");
 				f.instruction(&I::End);
