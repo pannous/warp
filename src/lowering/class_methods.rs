@@ -619,6 +619,8 @@ fn field_type_name(item: &Node) -> String {
 		Node::Key(_, Op::Colon, field_type) => match field_type.drop_meta() {
 			Node::Type { name, .. } => name.drop_meta().name(),
 			Node::List(items, Bracket::Square, _) if items.len() == 1 => format!("[{}]", items[0].drop_meta().name()),
+			// a compound unit, `speed: km/h` (card unit-fields)
+			unit @ Node::Key(_, Op::Div | Op::Mul, _) => unit.serialize().trim().to_string(),
 			other => other.name(),
 		},
 		Node::Key(field, Op::Assign, _) => field_type_name(field),
