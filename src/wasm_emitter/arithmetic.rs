@@ -458,11 +458,13 @@ impl WasmGcEmitter {
 	/// (`x = 3; x /= 2` → 3/2); only a variable declared `x:int` keeps a whole number
 	fn update_as_assignment(&self, target: &Node, op: &Op, operand: &Node) -> Option<Node> {
 		let global = self.global_update_as_assignment(target, op, operand);
-		if global.is_some() || *op != Op::DivAssign || self.declared_whole(target) {
+		// any update of a variable held as a Node: `out += x` of an accumulator widened to floats of unknown origin
+		let node_local = op.is_compound_assign() && matches!(target.drop_meta(), Node::Symbol(name) if self.scope.lookup(name).is_some_and(|local| local.kind.is_ref()));
+		if global.is_some() || !node_local && (*op != Op::DivAssign || self.declared_whole(target)) {
 			return global;
 		}
-		let quotient = Node::Key(Box::new(target.clone()), Op::Div, Box::new(operand.clone()));
-		Some(Node::Key(Box::new(target.clone()), Op::Assign, Box::new(quotient)))
+		let updated = Node::Key(Box::new(target.clone()), op.base_op(), Box::new(operand.clone()));
+		Some(Node::Key(Box::new(target.clone()), Op::Assign, Box::new(updated)))
 	}
 
 	/// `s += x` of a number s and a text x, or `s -= 1` of a text s (card text-crashes): the type error `s = s op x`
