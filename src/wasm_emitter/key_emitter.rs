@@ -208,6 +208,10 @@ impl WasmGcEmitter {
 
 	/// Emit prefix operators: √x, -x, !x, ‖x‖
 	fn emit_prefix_op(&mut self, func: &mut Function, right: &Node, op: &Op) {
+		let word = match op { Op::Sqrt => "sqrt", Op::Cbrt => "cbrt", Op::Abs => "abs", _ => "" };
+		if self.emit_interval_word(func, word, right) {
+			return;
+		}
 		match op {
 			root @ (Op::Sqrt | Op::Cbrt) => {
 				self.emit_float_value(func, right);

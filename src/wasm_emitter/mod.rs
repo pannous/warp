@@ -493,6 +493,10 @@ impl WasmGcEmitter {
 				}
 				self.ctx.user_functions[name].return_kind
 			}
+			// `(x)` of a variable is its value, a global's too; `(random)` is a call
+			Node::List(items, Bracket::Round, _) if matches!(items.as_slice(), [item] if matches!(item.drop_meta(), Node::Symbol(name) if !self.is_unbound(name) && !self.ctx.user_functions.contains_key(name))) => {
+				self.get_type(&items[0])
+			}
 			// Arithmetic: recursively check operands with our get_type
 			Node::Key(left, op, right) if op.is_arithmetic() => {
 				self.arithmetic_type(left, op, right)
