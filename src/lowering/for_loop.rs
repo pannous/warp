@@ -125,7 +125,7 @@ fn for_in(items: &[Node]) -> Option<Node> {
 	};
 	let mut body = block_items(&body);
 	// `for word in text: print it`: it is the loop variable too
-	if matches!(names.as_slice(), [name] if name != IMPLICIT_VARIABLE) {
+	if matches!(names.as_slice(), [name] if name != IMPLICIT_VARIABLE && !crate::lambdas::is_inlined_loop_variable(&name.name())) {
 		body = body.into_iter().map(|statement| it_as(statement, variable)).collect();
 	}
 	if names.len() > 1 {

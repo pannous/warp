@@ -20,6 +20,7 @@ const PARTIAL_LIST: &str = "partial_list";
 const LIST_PLACEHOLDER: &str = "loop_list";
 const START_PLACEHOLDER: &str = "loop_start";
 const CALL_PLACEHOLDER: &str = "loop_call";
+const LOOP_ITEM_PREFIX: &str = "loop_item_";
 
 /// An iteration word over a list: the arguments between the list and the function, the arguments of the function
 /// (`reduce` and `fold` take the accumulator and the item), and the loop it lowers to. `out`, `item`, `acc`, `list`, `index`
@@ -109,6 +110,12 @@ fn lowering(node: Node, strict: bool) -> Node {
 	extract_user_functions(&mut context, &node);
 	let first_fresh = first_fresh_number(&node);
 	Lowering { context, counter: Cell::new(first_fresh), strict }.expand(node)
+}
+
+/// `loop_item_1`, the variable of a loop inlined from a function: an `it` in its body is no loop item but the `it` of
+/// the code around the function (`scale := xs.map(x => x * it)`)
+pub(crate) fn is_inlined_loop_variable(name: &str) -> bool {
+	name.strip_prefix(LOOP_ITEM_PREFIX).is_some_and(|number| number.parse::<usize>().is_ok())
 }
 
 /// The number after every `loop_out_3`, `loop_item_4·items` an earlier run left: an inner loop lowered by a later run
