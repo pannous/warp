@@ -8,6 +8,13 @@ out
 
 .DS_Store
 **/.DS_Store
+# editor settings stay local (card which-following)
+.fleet/
+.idea/
+.vscode/
+# session data permissions_hook.js may write
+.claude/sessions.json
+.claude/session-config.json
 
 notes/session
 
