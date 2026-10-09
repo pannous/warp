@@ -6,7 +6,7 @@ use crate::is;
 use warp::wasm_emitter::eval;
 
 const CLASSES: &str = "class Team{name: text; players: [Person]}\nclass Person{name: text; team: Team}";
-const SEED: &str = "red = Team(\"Red\", [])\nteams.add(red)\npeople.add(Person(\"Bo\", red))";
+const SEED: &str = "red = Team(\"Red\")\nteams.add(red)\npeople.add(Person(\"Bo\", red))";
 
 fn program(tables: &str, rest: &str) -> String {
 	format!("{CLASSES}\nteams: [Team] = database.teams_{tables}\npeople: [Person] = database.people_{tables}\n{rest}")

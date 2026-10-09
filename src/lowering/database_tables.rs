@@ -33,6 +33,8 @@ const GENERATED_NAMES: [(&str, &str); 8] = [(ROW, "table·row"), (ROWS, "table·
 const SCHEMA_PLACEHOLDER: &str = "table_schema";
 const READ_PLACEHOLDER: &str = "table_read";
 const VALUE_PLACEHOLDER: &str = "table_value";
+/// `red.players.add(p)`: the instance whose one-to-many field is added to
+const OWNER_PLACEHOLDER: &str = "table_owner";
 /// A filter's query (notes/orm.md step 2): the ids it keeps, its SQL condition and parameters, the functions it calls
 const IDS_PLACEHOLDER: &str = "table_ids";
 const CONDITION_PLACEHOLDER: &str = "table_condition";
@@ -482,8 +484,8 @@ fn has_id(body: &Node) -> bool {
 /// The registrations, inserts and field changes of the tables as their table calls, in every block; `open` the tables
 /// registered so far, as a foreign key reads the rows of its table
 fn with_tables(node: Node, tables: &HashMap<String, Table>, file: &str, open: &mut Vec<String>) -> Node {
-	if let Some(saved) = saved(&node, tables, file) {
-		return saved;
+	if let Some(lowered) = saved(&node, tables, file).or_else(|| added_to_members(&node, tables, file)) {
+		return lowered;
 	}
 	match node {
 		Node::List(statements, bracket, separator @ (Separator::Semicolon | Separator::Newline)) => {
@@ -598,15 +600,39 @@ fn inserted(statement: &Node, tables: &HashMap<String, Table>, file: &str) -> Op
 	if word.drop_meta().name() != ADD_WORD {
 		return None;
 	}
+	let code = format!("{ADDED} = {VALUE_PLACEHOLDER}\n{insert}", insert = insert_code(table, &list, file));
+	let lowered = generated(&code, [(VALUE_PLACEHOLDER, value.clone())]);
+	Some(lowered.children())
+}
+
+/// `people.add(ADDED)` and its INSERT, ADDED taking the row's id; a foreign key without its row is an error
+fn insert_code(table: &Table, list: &str, file: &str) -> String {
 	let columns = columns_of(table);
 	let names: Vec<String> = columns.iter().map(|column| format!("{column:?}")).collect();
 	let values: Vec<String> = columns.iter().map(|column| column_value(table, ADDED, column)).collect();
 	let checks = table.references.iter().map(|(field, target)| format!(
 		"if {ADDED}.{field} != ø and {ADDED}.{field}.{ID_FIELD} == 0 {{ raise \"{class}.{field} is no row of {target}: add it to its table first\" }}\n", class = table.class));
-	let code = format!("{ADDED} = {VALUE_PLACEHOLDER}\n{checks}{list}.add({ADDED})\n{ADDED}.{ID_FIELD} = std_io(\"table\", \"insert\", [{table:?}, [{names}], [{values}], {file:?}])",
-		checks = checks.collect::<String>(), table = table.name, names = names.join(" "), values = values.join(" "));
-	let lowered = generated(&code, [(VALUE_PLACEHOLDER, value.clone())]);
-	Some(lowered.children())
+	format!("{checks}{list}.add({ADDED})\n{ADDED}.{ID_FIELD} = std_io(\"table\", \"insert\", [{table:?}, [{names}], [{values}], {file:?}])",
+		checks = checks.collect::<String>(), table = table.name, names = names.join(" "), values = values.join(" "))
+}
+
+/// `red.players.add(p)` of a one-to-many field, anywhere (`d.team.players.add(d)` too): p's key points to red, written
+/// to p's row, or p inserted into people when it has none (card orm-nested); the value p
+fn added_to_members(node: &Node, tables: &HashMap<String, Table>, file: &str) -> Option<Node> {
+	let Node::Key(members_of, Op::Dot, call) = node.drop_meta() else { return None };
+	let Node::Key(owner, Op::Dot, field) = members_of.drop_meta() else { return None };
+	let Node::List(parts, _, _) = call.drop_meta() else { return None };
+	let [word, value] = parts.as_slice() else { return None };
+	if word.drop_meta().name() != ADD_WORD {
+		return None;
+	}
+	let field = field.drop_meta().name();
+	let members = tables.values().flat_map(|table| &table.members).find(|members| members.field == field)?;
+	let (back, table) = (members.back.as_ref()?, &tables[&members.table]);
+	let code = format!("{ADDED} = {VALUE_PLACEHOLDER}\n{ADDED}.{back} = {OWNER_PLACEHOLDER}\nif {ADDED}.{ID_FIELD} > 0 {{ {update} }} else {{\n{insert}\n}}\n{ADDED}",
+		update = column_update(table, ADDED, back, file), insert = insert_code(table, &members.table, file));
+	let lowered = generated(&code, [(VALUE_PLACEHOLDER, value.clone()), (OWNER_PLACEHOLDER, *owner.clone())]);
+	Some(Node::List(lowered.children(), Bracket::Round, Separator::Semicolon))
 }
 
 /// What the column of `instance` stores: its field, the id of the row of a foreign key

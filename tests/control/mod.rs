@@ -145,3 +145,4 @@ mod test_database_filters; // card orm-filters
 mod test_database_relations; // card orm, step 4
 mod test_database_nested_add; // card orm-nested
 mod test_database_dangling_key; // card orm-dangling
+mod test_database_members_add; // cards orm-nested, orm-list-add
