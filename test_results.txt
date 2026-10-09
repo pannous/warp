@@ -476,6 +476,10 @@ PASSED:
   ✓ control::test_table_element_writes::a_filtered_row_field_change_is_written_to_its_row
   ✓ control::test_table_element_writes::an_element_field_change_is_written_to_its_row
   ✓ control::test_table_key_filter::rows_whose_foreign_key_is_a_given_row
+  ✓ control::test_table_method_reads::a_field_named_like_a_table_stays_the_field
+  ✓ control::test_table_method_reads::a_method_filters_a_list
+  ✓ control::test_table_method_reads::a_method_filters_the_table
+  ✓ control::test_table_method_reads::a_method_reads_the_table
   ✓ control::test_table_query_loading::a_filter_reads_only_the_rows_it_keeps
   ✓ control::test_table_query_loading::a_filtered_row_is_the_one_instance_of_its_row
   ✓ control::test_table_remove::removing_a_row_before_the_table_loads
@@ -1624,6 +1628,10 @@ PASSED:
   ✓ lists::test_where_filter::an_assigned_filter_may_start_with_not
   ✓ lists::test_where_filter::where_filters_by_it
   ✓ lists::test_where_filter::where_with_an_assignment_binds
+  ✓ lists::test_word_slices::a_bare_number_is_no_position
+  ✓ lists::test_word_slices::hash_positions_slice
+  ✓ lists::test_word_slices::ordinal_positions_slice
+  ✓ lists::test_word_slices::other_from_and_to_stay
   ✓ modules::test_agent::agent_answers_a_prompt_when_a_key_is_set
   ✓ modules::test_agent::agent_with_a_wrong_key_fails_with_the_api_reason
   ✓ modules::test_agent::agent_without_a_key_names_the_variable
@@ -2184,6 +2192,8 @@ PASSED:
   ✓ numbers::test_unit_fields::a_unit_field_holds_a_quantity
   ✓ numbers::test_unit_fields::a_unit_field_refuses_another_quantity_or_a_plain_number
   ✓ numbers::test_unit_fields::unit_fields_add_up_in_loops_over_lists_of_the_class
+  ✓ numbers::test_unit_glue_hint::a_glued_unit_or_a_spaced_word_has_no_glue_hint
+  ✓ numbers::test_unit_glue_hint::a_unit_apart_from_its_number_hints_the_glued_form
   ✓ numbers::test_unit_literals::a_long_unit_name_belongs_to_its_amount_in_a_condition
   ✓ numbers::test_unit_literals::a_unit_after_a_comparison_belongs_to_its_amount
   ✓ numbers::test_unit_literals::a_variable_named_like_a_unit_stays_a_variable
@@ -2230,6 +2240,10 @@ PASSED:
   ✓ numbers::test_units_text::a_conversion_joins_a_text_in_its_unit
   ✓ numbers::test_units_text::imperial_units_convert_exactly
   ✓ numbers::test_units_text::mph_is_miles_per_hour
+  ✓ numbers::test_units_type_holes::a_comparison_of_quantities_is_yes_or_no
+  ✓ numbers::test_units_type_holes::a_number_annotation_takes_no_quantity
+  ✓ numbers::test_units_type_holes::a_text_repeats_a_plain_count_of_times
+  ✓ numbers::test_units_type_holes::a_variable_keeps_its_dimension
   ✓ numbers::test_zero_fill::a_computed_size_is_a_runtime_count
   ✓ numbers::test_zero_fill::a_large_zero_list_has_its_size
   ✓ numbers::test_zero_fill::a_zero_list_is_still_a_list_of_zeros
@@ -2300,6 +2314,10 @@ PASSED:
   ✓ operators::test_mutating_bang::without_bang_the_value_is_unchanged
   ✓ operators::test_nand_spellings::test_nand_binds_like_and
   ✓ operators::test_nand_spellings::test_nand_spellings
+  ✓ operators::test_natural_phrases::glued_chain_after_a_prefix_function
+  ✓ operators::test_natural_phrases::modulo_is_mod
+  ✓ operators::test_natural_phrases::number_word_hint_is_where_it_is_written
+  ✓ operators::test_natural_phrases::sort_by_a_prefix_function
   ✓ operators::test_negated_call::test_builtin_name_bound_as_a_parameter_stays_subtraction
   ✓ operators::test_negated_call::test_function_applied_to_a_negative_number
   ✓ operators::test_negated_call::test_variable_minus_number_stays_subtraction
@@ -3635,6 +3653,8 @@ PASSED:
   ✓ web::test_css_transitions::a_made_up_kind_is_css_with_a_hint
   ✓ web::test_css_transitions::a_site_with_transitions_carries_their_script
   ✓ web::test_css_transitions::the_starting_style_is_data_for_the_page
+  ✓ web::test_deploy::a_deployed_program_answers_its_routes
+  ✓ web::test_deploy::a_program_without_routes_is_no_worker
   ✓ web::test_dev_server::a_dev_build_keeps_the_values_the_program_changed
   ✓ web::test_dev_server::the_dev_server_rebuilds_a_changed_program
   ✓ web::test_dom_pages::a_handler_draws_on_a_canvas_of_the_page
@@ -3846,6 +3866,9 @@ PASSED:
   ✓ welcoming::test_discarded_pure_warning::an_assigned_mutating_call_warns
   ✓ welcoming::test_discarded_pure_warning::the_warned_program_still_runs
   ✓ welcoming::test_discarded_pure_warning::used_and_mutating_calls_do_not_warn
+  ✓ welcoming::test_end_and_def_blocks::a_def_takes_its_indented_lines
+  ✓ welcoming::test_end_and_def_blocks::a_for_do_reads_its_lines_up_to_end
+  ✓ welcoming::test_end_and_def_blocks::an_end_in_a_comment_closes_no_else
   ✓ welcoming::test_english_operator_words::a_function_of_an_operator_word_stays_callable
   ✓ welcoming::test_english_operator_words::membership_ranges_and_loops
   ✓ welcoming::test_english_operator_words::operator_words
@@ -4008,6 +4031,10 @@ PASSED:
   ✓ welcoming::test_fuel_default::ten_million_float_fills_fit_the_default_fuel
   ✓ welcoming::test_function_bindings::a_const_in_one_function_leaves_another_alone
   ✓ welcoming::test_function_bindings::a_let_in_one_function_leaves_another_alone
+  ✓ welcoming::test_golf_words::a_char_loop_over_a_text_visits_every_char
+  ✓ welcoming::test_golf_words::chr_of_an_expression_is_a_function_result
+  ✓ welcoming::test_golf_words::print_without_parentheses_in_an_operand_or_branch
+  ✓ welcoming::test_golf_words::walked_chars_are_the_list_of_chars
   ✓ welcoming::test_got_it_scope::a_got_it_comment_silences_its_line
   ✓ welcoming::test_got_it_scope::got_it_for_all_silences_the_kind
   ✓ welcoming::test_got_it_scope::got_it_for_this_silences_only_that_expression
@@ -4193,4 +4220,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-10 ignored, 4188 passed, 0 failed, 4188 total tested
+10 ignored, 4215 passed, 0 failed, 4215 total tested
