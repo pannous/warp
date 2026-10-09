@@ -106,6 +106,10 @@ impl WarpParser {
 			';' | '>' | '}' | ')' | ']' => Empty, // Closing brackets/terminators handled by caller
 			'ø' => { self.advance(); return Empty }
 			'∞' => { self.advance(); return Node::Number(Number::Inf) } // the float infinity (P56)
+			_ if let Some((truth, length)) = self.truth_glyph_at() => {
+				self.advance_by(length);
+				return truth;
+			}
 			// $n parameter reference (e.g., $0 = first param)
 			'@' if self.peek_char(1).is_alphabetic() => self.parse_attribute(),
 			'@' if self.peek_char(1) == '(' && !self.options.data_mode => self.parse_matlab_lambda(),
@@ -488,6 +492,15 @@ impl WarpParser {
 	}
 
 	/// `🌍`, `🇩🇪`, `👍🏽` in code, one user-perceived character: one code point is a codepoint, several a text
+	/// `⊤`, `✅`, `❌` …: the truth value a glyph at the position spells, and its length in chars
+	fn truth_glyph_at(&self) -> Option<(Node, usize)> {
+		super::TRUTH_GLYPHS.iter().find_map(|(glyph, _)| {
+			let length = glyph.chars().count();
+			let ahead: String = self.chars[self.pos..].iter().take(length).collect();
+			(ahead == *glyph).then(|| (super::truth_glyph(glyph).expect("a truth glyph"), length))
+		})
+	}
+
 	fn parse_emoji(&mut self) -> Node {
 		let ahead: String = self.chars[self.pos..].iter().take(LONGEST_EMOJI).collect();
 		let emoji = crate::extensions::strings::grapheme_clusters(&ahead)[0].to_string();
