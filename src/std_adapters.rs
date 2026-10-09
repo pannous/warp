@@ -5,16 +5,20 @@
 
 use crate::node::Node;
 
+/// The text a host word's argument holds: a one-character text arrives as a Char (`"n"` parses as 'n')
+pub(crate) fn text_value(node: &Node) -> Option<String> {
+	match node.drop_meta() {
+		Node::Text(text) => Some(text.clone()),
+		Node::Char(character) => Some(character.to_string()),
+		_ => None,
+	}
+}
+
 /// module.member applied to the arguments (a list node)
 pub fn call(module: &str, member: &str, arguments: &Node) -> Result<Node, String> {
 	let arguments = arguments_of(arguments);
 	let failure = |problem: String| format!("{module}.{member}: {problem}");
-	// a one-character text arrives as a Char
-	let text_of = |node: &Node| match node.drop_meta() {
-		Node::Text(text) => Ok(text.clone()),
-		Node::Char(character) => Ok(character.to_string()),
-		other => Err(failure(format!("needs a text, got {}", other.serialize().trim()))),
-	};
+	let text_of = |node: &Node| text_value(node).ok_or_else(|| failure(format!("needs a text, got {}", node.serialize().trim())));
 	// what write puts into a file: a text as it is, any other value as warp writes it (`42`, `[1 2]`)
 	let content_of = |node: &Node| text_of(node).or_else(|_| Ok::<String, String>(node.serialize().trim().to_string()));
 	match (module, member, arguments.as_slice()) {
