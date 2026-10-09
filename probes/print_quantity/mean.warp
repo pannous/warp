@@ -1,0 +1,3 @@
+print mean([5 km, 1.5 km, 12 km])
+print average([5 km, 1.5 km, 12 km])
+str(mean([5 km, 1.5 km, 12 km]))

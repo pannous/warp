@@ -276,7 +276,9 @@ pub(super) fn widen_to_node(scope: &mut Scope, name: &str, value: &Node) {
 	let mixes = |a: Kind, b: Kind| a == b || [a, b].iter().all(|kind| matches!(kind, Kind::Int | Kind::Float)) || [a, b].iter().all(|kind| matches!(kind, Kind::Text | Kind::Codepoint));
 	// an element of unknown kind may be an object: `item = 2` earlier, then `for item in basket` (samples/natural.warp)
 	let unknown_element = assigned == Kind::Empty && matches!(value.drop_meta(), Node::Key(_, Op::Hash, _));
-	let other_kind = unknown_element || CONCRETE_KINDS.contains(&assigned) && !mixes(local.kind, assigned);
+	// arithmetic on such a value is an int or a float only at run time: `total = 1` then `total = total + run.load`
+	let run_time_number = assigned == Kind::Data && matches!(value.drop_meta(), Node::Key(_, op, _) if op.is_arithmetic());
+	let other_kind = unknown_element || run_time_number ||CONCRETE_KINDS.contains(&assigned) && !mixes(local.kind, assigned);
 	if CONCRETE_KINDS.contains(&local.kind) && other_kind {
 		local.kind = Kind::Empty;
 		local.type_node = None;
@@ -848,11 +850,12 @@ impl Scope {
 		local
 	}
 
-	/// Define a function parameter
-	pub fn define_param(&mut self, name: String, kind: Kind) -> Local {
-		let mut local = self.define(name.clone(), None, kind);
+	/// Define a function parameter, with its declared type (`r: any`)
+	pub fn define_param(&mut self, param: &crate::context::Param, kind: Kind) -> Local {
+		let mut local = self.define(param.name.clone(), param.annotation.clone().map(Box::new), kind);
 		local.is_param = true;
-		self.locals.insert(name, local.clone());
+		local.declared = param.annotation.is_some();
+		self.locals.insert(param.name.clone(), local.clone());
 		local
 	}
 

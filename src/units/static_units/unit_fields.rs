@@ -40,6 +40,18 @@ fn field_units(type_name: &str) -> Option<Vec<crate::units::Factor>> {
 	crate::units::unit_expression(&crate::warp_parser::parse(unit))
 }
 
+/// The units written in the arguments of constructor calls of `classes` (`1500 m` of `Run(1500 m)`)
+pub(super) fn stored_argument_units(program: &Node, classes: &HashMap<String, Fields>) -> Vec<&'static crate::units::Unit> {
+	let mut stored = vec![];
+	program.visit(&mut |node| {
+		let Node::List(items, Bracket::Round, _) = node else { return };
+		if let Some((_, arguments)) = items.split_first().filter(|(head, _)| classes.contains_key(&head.drop_meta().name())) {
+			arguments.iter().for_each(|argument| stored.extend(super::written_units(argument)));
+		}
+	});
+	stored
+}
+
 /// The signature of a field type that is a unit
 fn field_unit(type_name: &str) -> Option<Signature> {
 	field_units(type_name).map(|units| crate::units::signature(&units))
@@ -51,6 +63,13 @@ pub(crate) fn unit_type(type_name: &str) -> Option<(String, f64)> {
 	let units = field_units(type_name)?;
 	let per_unit = crate::units::scale(&units, |factor| super::base_unit(factor.unit.dimension));
 	Some((shown(&crate::units::signature(&units)), per_unit.to_f64()))
+}
+
+/// A constant quantity's SI amount and the quantity it measures, as unit_type gives a column's: `5 km` is (5000, "m")
+pub(crate) fn si_quantity(node: &Node) -> Option<(f64, String)> {
+	let Ok(crate::units::Value::Quantity(quantity)) = crate::units::evaluate(node) else { return None };
+	let per_unit = crate::units::scale(&quantity.factors, |factor| super::base_unit(factor.unit.dimension));
+	Some((quantity.amount.mul(&per_unit).to_f64(), shown(&crate::units::signature(&quantity.factors))))
 }
 
 /// `Run` of `r: Run`, and `Run` of a list `xs: [Run]` (true)
@@ -94,7 +113,8 @@ impl Inference {
 
 	/// The fields of the instances a list of a class holds (a final `runs` shows their units)
 	pub(super) fn list_instance_fields(&self, list: &Node) -> Option<Fields> {
-		self.classes.get(self.class_lists.get(&list.drop_meta().name())?).cloned()
+		let name = crate::database_tables::loaded_table(list).unwrap_or_else(|| list.drop_meta().name());
+		self.classes.get(self.class_lists.get(&name)?).cloned()
 	}
 
 	/// The fields of the instance `object` is, with their signatures

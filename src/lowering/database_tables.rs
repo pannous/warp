@@ -9,6 +9,7 @@
 use crate::node::{Bracket, Node, Separator};
 use crate::operators::Op;
 use crate::warp_parser::parse;
+use crate::units::static_units::si_quantity;
 use std::collections::{HashMap, HashSet};
 
 const DATABASE_WORDS: [&str; 2] = ["database", "indexedDB"];
@@ -17,6 +18,7 @@ pub const TABLES_FILE: &str = "database.sqlite";
 /// The row id every registered class gets, unless it declares one
 const ID_FIELD: &str = "id";
 const ADD_WORD: &str = "add";
+const REMOVE_WORD: &str = "remove";
 const GLOBAL_WORD: &str = "global";
 /// `@was(old) name: text`: the field's column was called old, so the table's column is renamed
 const RENAMED_MARK: &str = "was";
@@ -28,6 +30,7 @@ const ROW: &str = "table_row";
 const ROWS: &str = "table_rows";
 const MATCHES: &str = "table_matches";
 const ADDED: &str = "table_added";
+const REMOVED: &str = "table_removed";
 /// a foreign key's row, and a row of a one-to-many getter
 const REFERENCED: &str = "table_referenced";
 const MEMBER: &str = "table_member";
@@ -38,16 +41,18 @@ const KNOWN: &str = "table_known";
 const POSITION: &str = "table_position";
 /// the instance a row read before loading makes
 const MADE: &str = "table_made";
-const GENERATED_NAMES: [(&str, &str); 11] = [(POSITION, "table·position"), (MADE, "table·made"), (ROW, "table·row"), (ROWS, "table·rows"), (MATCHES, "table·matches"), (ADDED, "table·added"), (ARGUMENTS, "table·arguments"),
+const GENERATED_NAMES: [(&str, &str); 12] = [(POSITION, "table·position"), (MADE, "table·made"), (ROW, "table·row"), (ROWS, "table·rows"), (MATCHES, "table·matches"), (ADDED, "table·added"), (REMOVED, "table·removed"), (ARGUMENTS, "table·arguments"),
 	(REFERENCED, "table·referenced"), (MEMBER, "table·member"), (SAVED, "table·saved"), (KNOWN, "table·known")];
 /// Each table's lazy parts (notes/orm.md Loading), `people·load` of people: the function giving the list, loading its
-/// rows on the first call; the count, SELECT COUNT(*) until then; the add, inserting without loading; the reset of a
+/// rows on the first call; the count, SELECT COUNT(*) until then; the add, inserting without loading; the remove, deleting
+/// the row and dropping its instance from the loaded list and the known instances; the reset of a
 /// route reading the table anew; the element `people#i`, reading its one row until then; the element of a loop over the
 /// table, reading a page of rows until then; the instance of a row read before loading; whether the rows are loaded;
 /// the instances added or read before; the page read last and its start position
 const LOAD: &str = "table_load";
 const COUNTED: &str = "table_count";
 const ADDING: &str = "table_add";
+const REMOVING: &str = "table_remove";
 const RESET: &str = "table_reset";
 const LOADED: &str = "table_loaded";
 const MET: &str = "table_met";
@@ -56,7 +61,7 @@ const STREAMED: &str = "table_streamed";
 const KEPT: &str = "table_kept";
 const PAGE: &str = "table_page";
 const START: &str = "table_start";
-const LAZY_PARTS: [(&str, &str); 11] = [(LOAD, "load"), (COUNTED, "count"), (ADDING, "add"), (RESET, "reset"), (ELEMENT, "at"), (STREAMED, "streamed"),
+const LAZY_PARTS: [(&str, &str); 12] = [(LOAD, "load"), (COUNTED, "count"), (ADDING, "add"), (REMOVING, "remove"), (RESET, "reset"), (ELEMENT, "at"), (STREAMED, "streamed"),
 	(KEPT, "kept"), (LOADED, "loaded"), (MET, "met"), (PAGE, "page"), (START, "start")];
 /// The rows a loop over an unloaded table reads at once (notes/orm.md Loading)
 const PAGE_SIZE: usize = 100;
@@ -218,8 +223,11 @@ pub fn queried(subject: &Node, condition: &Node, variables: &HashSet<String>, ta
 	}
 	let table = tables.tables.get(&subject.drop_meta().name())?;
 	let first_function = tables.functions.len();
-	let mut query = Query { table, variables, parameters: vec![], functions: vec![], first_function };
+	let mut query = Query { table, variables, parameters: vec![], functions: vec![], first_function, mismatches: vec![] };
 	let sql = query.sql(condition);
+	if let Some(mismatch) = query.mismatches.into_iter().next() {
+		return Some(Err(mismatch.into_error()));
+	}
 	let (parameters, functions) = (query.parameters, query.functions);
 	if let Err(error) = crate::diagnostic::report(&effectful_calls(&functions, tables.effects.as_ref())) {
 		return Some(Err(error));
@@ -276,6 +284,8 @@ struct Query<'a> {
 	parameters: Vec<Node>,
 	functions: Vec<Node>,
 	first_function: usize,
+	/// a unit column compared with another kind of quantity: `it.distance > 5 s`
+	mismatches: Vec<crate::diagnostic::Diagnostic>,
 }
 
 impl Query<'_> {
@@ -306,12 +316,33 @@ impl Query<'_> {
 					Op::Mul if self.is_numeric(left) && self.is_numeric(right) => "*",
 					_ => return None,
 				};
-				Some(format!("({} {operator} {})", self.sql(left), self.sql(right)))
+				let (left_unit, right_unit) = (self.column_unit(left), self.column_unit(right));
+				Some(format!("({} {operator} {})", self.sql_beside(left, right_unit), self.sql_beside(right, left_unit)))
 			}
 			Node::Number(_) | Node::Text(_) | Node::True | Node::False => Some(self.parameter(node.drop_meta().clone())),
 			Node::Symbol(name) if self.variables.contains(name) => Some(self.parameter(node.drop_meta().clone())),
 			_ => None,
 		}
+	}
+
+	/// A part compared with a unit column: a constant quantity of its kind is its SI amount, as the column holds it
+	/// (`it.distance > 5 km` asks `"distance" > 5000`)
+	fn sql_beside(&mut self, node: &Node, column_unit: Option<String>) -> String {
+		match column_unit.zip(si_quantity(node)) {
+			Some((unit, (amount, quantity))) if quantity == unit => self.parameter(crate::node::float(amount)),
+			Some((unit, (_, quantity))) => {
+				self.mismatches.push(crate::diagnostic::Diagnostic::at(node, format!("DimensionError: a column of {unit} compared with {quantity}")));
+				self.sql(node)
+			}
+			None => self.sql(node),
+		}
+	}
+
+	/// The quantity a unit column measures (`m` of `distance: km`)
+	fn column_unit(&self, node: &Node) -> Option<String> {
+		let field = self.field_of_it(node)?;
+		let (_, field_type, _) = self.table.fields.iter().find(|(name, _, _)| *name == field)?;
+		crate::units::static_units::unit_type(class_of(field_type)).map(|(quantity, _)| quantity)
 	}
 
 	/// `it.age` as the column "age", `it.id` as id
@@ -349,7 +380,7 @@ impl Query<'_> {
 		let mut values = vec![];
 		free_variables(node, self.variables, &mut values);
 		let row_size = 1 + columns_of(self.table).len();
-		let body = with_arguments(node.clone(), self.table, &values, row_size);
+		let body = with_arguments(with_si_amounts(node.clone()), self.table, &values, row_size);
 		let function = generated(&format!("{FUNCTION_PLACEHOLDER}({ARGUMENTS}: any) := {BODY_PLACEHOLDER}"), [
 			(FUNCTION_PLACEHOLDER, Node::Symbol(name.clone())),
 			(BODY_PLACEHOLDER, body),
@@ -358,6 +389,14 @@ impl Query<'_> {
 		let row: Vec<String> = std::iter::once(ID_FIELD.to_string()).chain(columns_of(self.table).iter().map(|column| quote(column))).collect();
 		let values: Vec<String> = values.into_iter().map(|value| self.parameter(Node::Symbol(value))).collect();
 		format!("{WARP_CALL}('{name}', {})", [row, values].concat().join(", "))
+	}
+}
+
+/// A query's function gets a unit column as its SI amount: a constant quantity in it is one too (`5 km` is 5000.0)
+fn with_si_amounts(node: Node) -> Node {
+	match si_quantity(&node) {
+		Some((amount, _)) if !matches!(node.drop_meta(), Node::Symbol(_)) => crate::node::float(amount),
+		_ => node.map_children(with_si_amounts),
 	}
 }
 
@@ -670,6 +709,14 @@ global {MET}
 if {LOADED} {{ {variable}.add({ADDED}) }} else {{ {MET}.add({ADDED}) }}
 {ADDED}
 }}
+{REMOVING}({REMOVED}) := {{
+global {variable}
+global {MET}
+std_io(\"table\", \"delete\", [{name:?}, {REMOVED}.{ID_FIELD}, {file:?}])
+{variable} = [{ROW} for {ROW} in {variable} if {ROW}.{ID_FIELD} != {REMOVED}.{ID_FIELD}]
+{MET} = [{ROW} for {ROW} in {MET} if {ROW}.{ID_FIELD} != {REMOVED}.{ID_FIELD}]
+{REMOVED}
+}}
 {KEPT}({ROW}) := {{
 global {MET}
 {known}
@@ -699,7 +746,7 @@ global {PAGE}
 {MET} = []
 {PAGE} = []
 []
-}}");
+}}", name = table.name);
 	let placeholders = [(READ_PLACEHOLDER, table_call("migrate")), (ROWS_PLACEHOLDER, table_call("rows")), (COUNT_PLACEHOLDER, table_call("count")),
 		(ROW_PLACEHOLDER, table_call_with("page", &format!(", {POSITION}, 1"))), (PAGE_PLACEHOLDER, table_call_with("page", &format!(", {POSITION}, {PAGE_SIZE}")))].into_iter().chain(lazy_names(&variable));
 	let empty = parse("[]");
@@ -763,8 +810,8 @@ fn with_lazy_reads(node: Node, tables: &HashMap<String, Table>, own: Option<&str
 		}
 		Node::Key(left, Op::Dot, right) => match (table_of(&left), right.drop_meta()) {
 			(Some(variable), Node::Symbol(word)) if COUNT_WORDS.contains(&word.as_str()) => called(lazy_name(&variable, "count"), None),
-			(Some(variable), Node::List(parts, _, _)) if parts.len() == 2 && parts[0].drop_meta().name() == ADD_WORD => {
-				called(lazy_name(&variable, "add"), Some(rewrite(parts[1].clone())))
+			(Some(variable), Node::List(parts, _, _)) if parts.len() == 2 && [ADD_WORD, REMOVE_WORD].contains(&parts[0].drop_meta().name().as_str()) => {
+				called(lazy_name(&variable, &parts[0].drop_meta().name()), Some(rewrite(parts[1].clone())))
 			}
 			(_, Node::Symbol(_)) => Node::Key(Box::new(rewrite(*left)), Op::Dot, right),
 			_ => Node::Key(Box::new(rewrite(*left)), Op::Dot, Box::new(rewrite(*right))),

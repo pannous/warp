@@ -114,7 +114,7 @@ impl WarpParser {
 					self.text_until_closing('{', '}').map(Some)
 				}
 				'$' if interpolates => self.parse_dollar_hole(),
-				'\\' if interpolates && self.peek_char(1) == '(' => self.parse_swift_hole().map(Some),
+				'\\' if interpolates && matches!(self.peek_char(1), '(' | '{') => self.parse_swift_hole().map(Some),
 				_ => Ok(None),
 			};
 			match hole {
@@ -218,7 +218,6 @@ impl WarpParser {
 	/// `$ `). User decision D1: "only the one with the curly braces must interpolate the other is text like dollar
 	/// money"; card dollar-paren (user, 2026-10-07): `$()` behaves just like `${}`.
 	pub(super) fn parse_dollar_hole(&mut self) -> Result<Option<String>, String> {
-		let (line, column) = self.get_position();
 		let open = self.peek_char(1);
 		let close = match open {
 			'{' => '}',
@@ -227,15 +226,17 @@ impl WarpParser {
 		};
 		self.advance_by(2);
 		let expression = self.text_until_closing(open, close)?;
-		set_hint_position(line, column);
-		norm::interpolation(&format!("${open}{expression}{close}"), &expression);
 		Ok(Some(expression))
 	}
 
-	/// `\(expr)` inside interpolated text, the canonical hole: its expression
+	/// `\(expr)` inside interpolated text: its expression; `\{expr}` too. User, 2026-10-09: `${}` `$()` `\()` `\{}` are all fine, no hint
 	pub(super) fn parse_swift_hole(&mut self) -> Result<String, String> {
+		let open = self.peek_char(1);
 		self.advance_by(2);
-		self.text_until_closing('(', ')')
+		match open {
+			'(' => self.text_until_closing('(', ')'),
+			_ => self.text_until_closing('{', '}'),
+		}
 	}
 
 	/// The source up to the bracket closing an already opened `open`, skipping quoted text; consumes the closing bracket

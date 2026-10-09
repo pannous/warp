@@ -130,7 +130,7 @@ pub fn rows_read() -> usize {
 
 /// `std_io("table", member, arguments)`: open (create or migrate, give the rows), migrate and rows (its two halves), page (from a
 /// position), count, insert
-/// (give the id), update
+/// (give the id), delete (by id), update
 pub fn call(member: &str, arguments: &[Node]) -> Result<Node, String> {
 	let text = |node: &Node| crate::std_adapters::text_value(node).ok_or_else(|| format!("needs a text, got {}", node.serialize().trim()));
 	match (member, arguments) {
@@ -155,6 +155,10 @@ pub fn call(member: &str, arguments: &[Node]) -> Result<Node, String> {
 			let quoted: Vec<String> = columns.iter().map(|column| quote(column)).collect();
 			rows(database, &format!("INSERT INTO {} ({}) VALUES ({placeholders})", quote(&table), quoted.join(", ")), &values.children())?;
 			Ok(Node::int(unsafe { (sqlite()?.last_insert_rowid)(database) }))
+		}
+		("delete", [table, id, file]) => {
+			let sql = format!("DELETE FROM {} WHERE {ID_COLUMN} = ?", quote(&text(table)?));
+			rows(connection(&text(file)?)?, &sql, std::slice::from_ref(id)).map(|_| Node::Empty)
 		}
 		("update", [table, id, column, value, file]) => {
 			let sql = format!("UPDATE {} SET {} = ? WHERE {ID_COLUMN} = ?", quote(&text(table)?), quote(&text(column)?));
@@ -397,6 +401,7 @@ fn literal(value: &Node) -> Result<String, String> {
 		Node::Empty => Ok("NULL".to_string()),
 		Node::Number(Number::Int(number)) => Ok(number.to_string()),
 		Node::Number(Number::Float(number)) => Ok(format!("{number:?}")),
+		Node::Number(number @ Number::Quotient(..)) => Ok(format!("{:?}", f64::from(*number))),
 		Node::True => Ok("1".to_string()),
 		Node::False => Ok("0".to_string()),
 		Node::Text(text) => Ok(format!("'{}'", text.replace('\'', "''"))),
@@ -491,6 +496,8 @@ fn bind(sqlite: &Sqlite, statement: Handle, index: c_int, value: &Node) -> Resul
 			Node::Empty => (sqlite.bind_null)(statement, index),
 			Node::Number(Number::Int(number)) => (sqlite.bind_int64)(statement, index, *number),
 			Node::Number(Number::Float(number)) => (sqlite.bind_double)(statement, index, *number),
+			// an exact amount (500 g is 1/2 kg): the column keeps it as a REAL
+			Node::Number(number @ Number::Quotient(..)) => (sqlite.bind_double)(statement, index, f64::from(*number)),
 			Node::True => (sqlite.bind_int64)(statement, index, 1),
 			Node::False => (sqlite.bind_int64)(statement, index, 0),
 			Node::Text(_) | Node::Char(_) => {

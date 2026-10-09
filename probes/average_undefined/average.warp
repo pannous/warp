@@ -1,0 +1,5 @@
+class Run{distance: km}
+runs: [Run] = [Run(5 km), Run(1.5 km), Run(12 km)]
+print average(runs.map(r => r.distance))  // (37/6)km: decimal display is an open question
+print mean([1, 2, 4])
+print average([2 h, 3 h])

@@ -127,6 +127,9 @@ yd mi, mg g kg lb, ms s min h, mph, with powers (`m²`, `s^2`), products (`kg·m
   as_run_time_quantity: `5 m/s` is `quantity(5, "m/s")`). Static units alone stay static.
 - ± (card plus-minus-units): `5 m ± 1 cm` the program needs at run time is a Quantity whose amount is a ± value
   (notes/plus_minus.md).
+- Conversions and texts (card quantity-falls): `q as km/h` and `q in m` of a run-time quantity are `q.to("km/h")`, and
+  `"v: " + q` is `"v: " + str(q)` (class_methods.rs with_operator_calls; units.rs conversion is the one reading of
+  `as`/`in`). `w = q as m` and `q.to(…)` stay instances of Quantity (instance_classes, operand_class).
 
 ## Units in texts, imperial units (card units-text, 2026-10-09)
 - `"total: " + (total as km)` and `(v in m/s)` join a text in the conversion's unit (static_units.rs: a parenthesized

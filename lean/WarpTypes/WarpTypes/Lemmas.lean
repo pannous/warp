@@ -224,6 +224,34 @@ theorem fits_typed {Γ v t} (h : fits v t = true) : ∃ tv, HasType P Γ v tv �
   · exact ⟨_, valueType_typed (by assumption), h⟩
   · cases h
 
+/-- a conversion gives a value of the target type, or an error -/
+theorem convertValue_typed {Γ v} (μ : Store) (t : Ty) :
+    ∃ t', HasType P Γ (convertValue μ v t) t' ∧ sub t' t = true := by
+  have parsed (make : Int → Expr) (u : Ty) (hm : ∀ n, HasType P Γ (make n) u) (hu : sub u u = true) :
+      ∃ t', HasType P Γ (convertValue.parsed make v) t' ∧ sub t' u = true := by
+    unfold convertValue.parsed
+    split
+    · cases (‹String›).toInt? with
+      | some n => exact ⟨_, hm n, hu⟩
+      | none => exact ⟨_, .error, sub_never _⟩
+    · exact ⟨_, .error, sub_never _⟩
+  have checked (t : Ty) : ∃ t', HasType P Γ (if fits v t then v else .error "cannot cast") t' ∧ sub t' t = true := by
+    split
+    · exact fits_typed ‹_›
+    · exact ⟨_, .error, sub_never _⟩
+  cases t
+  case text => exact ⟨_, .text, sub_refl _⟩
+  case bool => exact ⟨_, .bool, sub_refl _⟩
+  case int =>
+    simp only [convertValue]; split
+    · exact ⟨_, .int, sub_refl _⟩
+    · exact parsed _ _ (fun _ => .int) (sub_refl _)
+  case number =>
+    simp only [convertValue]; split
+    · exact ⟨_, .num, sub_refl _⟩
+    · exact parsed _ _ (fun _ => .num) (sub_refl _)
+  all_goals exact checked _
+
 /-- a smaller object type reads a smaller field type -/
 theorem readTy_mono {te te' : Ty} (h : sub te' te = true) (f : String) :
     sub (P.readTy te' f) (P.readTy te f) = true := by
@@ -374,6 +402,10 @@ theorem narrow {Γ e t} (h : HasType P Γ e t) : ∀ {Γ'}, CtxSub Γ' Γ → �
     intro Γ' hs
     obtain ⟨_, h1, _⟩ := ih hs
     exact ⟨_, .cast h1, sub_refl _⟩
+  | conv _ ih =>
+    intro Γ' hs
+    obtain ⟨_, h1, _⟩ := ih hs
+    exact ⟨_, .conv h1, sub_refl _⟩
   | broadcast hf _ he ha ih =>
     intro Γ' hs
     obtain ⟨_, h1, s1⟩ := ih hs
@@ -502,6 +534,7 @@ theorem subst_typed {Γ0 e t} (h : HasType P Γ0 e t) :
   | error => intros; simp only [Expr.subst]; exact .error
   | tryCatch _ _ ih1 ih2 => intro Γ y tv v hΓ hv htv; simp only [Expr.subst]; exact .tryCatch (ih1 hΓ hv htv) (ih2 hΓ hv htv)
   | cast _ ih => intro Γ y tv v hΓ hv htv; simp only [Expr.subst]; exact .cast (ih hΓ hv htv)
+  | conv _ ih => intro Γ y tv v hΓ hv htv; simp only [Expr.subst]; exact .conv (ih hΓ hv htv)
   | broadcast hf _ he ha ih => intro Γ y tv v hΓ hv htv; simp only [Expr.subst]; exact .broadcast hf (ih hΓ hv htv) he ha
   | ref => intros; simp only [Expr.subst]; exact .ref
   | lref => intros; simp only [Expr.subst]; exact .lref

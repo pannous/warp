@@ -373,7 +373,8 @@ impl WasmGcEmitter {
 				None => self.emit_runtime_error(func, "invalid_number"),
 			},
 			Node::Char(c) => self.emit_int_node(func, c.to_digit(10).map_or(*c as i64, |digit| digit as i64)),
-			_ if matches!(self.get_type(value), Kind::Text | Kind::Codepoint) => self.emit_runtime_text_as_number(func, value),
+			// a value known only at run time (a field of an any) too: a number stays as it is
+			_ if matches!(self.get_type(value), Kind::Text | Kind::Codepoint | Kind::Empty) => self.emit_runtime_text_as_number(func, value),
 			_ => self.emit_node_instructions(func, value),
 		}
 	}
@@ -392,6 +393,14 @@ impl WasmGcEmitter {
 		let locals = vec![ValType::I32, ValType::I32, ValType::I32, ValType::I64];
 		self.runtime_function(TEXT_AS_NUMBER, vec![node_ref], vec![node_ref], locals, |s, f| {
 			let (start, end, slash, bits) = (1, 2, 3, 4);
+			// a number (any node but a text or character) as it is
+			let is_kind = |s: &mut Self, f: &mut Function, kind: Kind| {
+				s.emit_field(f, 0, 0);
+				Self::emit_list(f, &[I::I64Const(KIND_MASK), I::I64And, I::I64Const(kind as i64), I::I64Eq]);
+			};
+			is_kind(s, f, Kind::Text);
+			is_kind(s, f, Kind::Codepoint);
+			Self::emit_list(f, &[I::I32Or, I::I32Eqz, I::If(BlockType::Empty), I::LocalGet(0), I::Return, I::End]);
 			// a text with a slash: the exact ratio of the integers before and after it ("1/x" is invalid_number)
 			s.emit_field(f, 0, 0);
 			Self::emit_list(f, &[I::I64Const(KIND_MASK), I::I64And, I::I64Const(Kind::Text as i64), I::I64Eq, I::If(BlockType::Empty)]);

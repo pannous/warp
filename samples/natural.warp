@@ -67,3 +67,4 @@ create_user(
 // Ranges with words
 countdown = 10 down to 1
 letters = 'a' through 'z'
+check countdown == [10, 9, 8, 7, 6, 5, 4, 3, 2, 1]

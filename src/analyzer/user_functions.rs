@@ -77,7 +77,7 @@ pub fn function_body_scope(params: &[Param], body: &Node, function_kinds: &HashM
 	let mut scope = Scope::with_function_kinds(function_kinds.clone()).with_closure_targets(closure_variable_targets.clone());
 	scope.globals = globals.clone(); // `d = o; return d` of a declared global keeps the global's kind
 	for param in params {
-		scope.define_param(param.name.clone(), param_kind(param));
+		scope.define_param(param, param_kind(param));
 	}
 	collect_variables(body, &mut scope);
 	scope
@@ -587,7 +587,7 @@ pub(super) fn with_closure_captures(ctx: &Context, program: &Node, mut globals: 
 			Some(enclosing) => {
 				let mut enclosing_scope = Scope::new();
 				for param in &enclosing.params {
-					enclosing_scope.define_param(param.name.clone(), param_kind(param));
+					enclosing_scope.define_param(param, param_kind(param));
 				}
 				collect_variables(&enclosing.body, &mut enclosing_scope);
 				let mut captured = captured_variables(function, &enclosing_scope);
@@ -659,14 +659,19 @@ pub(super) fn infer_closure_parameters(ctx: &mut Context, program: &Node) {
 	let variable_kinds = variable_kinds(program, ctx, true);
 	loop {
 		let mut inferred: Vec<(String, usize, Kind)> = vec![];
-		let scopes = std::iter::once((program, HashMap::new())).chain(ctx.user_functions.values().map(|function| {
-			let params: HashMap<String, Kind> = function.params.iter().map(|param| (param.name.clone(), param_kind(param))).collect();
-			(function.body.as_ref(), params)
-		}));
-		for (body, params) in scopes {
+		// the kinds of each scope's parameters and variables: `m = float(2.5)` captured by a closure is a float
+		let function_kinds: HashMap<String, Kind> = ctx.user_functions.iter().map(|(name, function)| (name.clone(), function.return_kind)).collect();
+		let scope_kinds = |params: &[Param], body: &Node| -> HashMap<String, Kind> {
+			let scope = function_body_scope(params, body, &function_kinds, &HashMap::new(), &ctx.closure_variable_targets);
+			scope.locals.into_iter().map(|(name, local)| (name, local.kind)).collect()
+		};
+		let scopes: Vec<(&Node, HashMap<String, Kind>)> = std::iter::once((program, scope_kinds(&[], program)))
+			.chain(ctx.user_functions.values().map(|function| (function.body.as_ref(), scope_kinds(&function.params, &function.body))))
+			.collect();
+		for (body, kinds) in scopes {
 			body.visit(&mut |node| {
 				let value_kind = |value: &Node| match value.drop_meta() {
-					Node::Symbol(name) => params.get(name).or(variable_kinds.get(name)).copied(),
+					Node::Symbol(name) => kinds.get(name).or(variable_kinds.get(name)).copied(),
 					// a cell's value is a Node of any kind (a signal's new value, lowering/signal_values.rs)
 					Node::List(items, _, _) if items.first().is_some_and(|word| word.drop_meta().name() == crate::wasm_emitter::cells::CELL_GET) => Some(Kind::Empty),
 					_ => argument_literal_kind(value),

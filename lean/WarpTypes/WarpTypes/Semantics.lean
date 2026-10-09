@@ -239,6 +239,41 @@ def fits (v : Expr) (t : Ty) : Bool :=
   | some tv => sub tv t
   | none => false
 
+/-- a value as warp prints it, shared lists read in store μ down to `depth` levels; `?` where the model does not keep
+what warp prints (numbers, instances) -/
+def display (μ : Store) : Nat → Expr → String
+  | _, .bool b => if b then "yes" else "no"
+  | _, .int n => toString n
+  | _, .text s => s!"\"{s}\""
+  | depth + 1, .lref a t => display μ depth (μ.items (.lref a t))
+  | depth, .cons h t => "[" ++ " ".intercalate (showItems depth (.cons h t)) ++ "]"
+  | _, _ => "?"
+where showItems (depth : Nat) : Expr → List String
+  | .cons h t => display μ depth h :: showItems depth t
+  | _ => []
+
+/-- how deep `display` follows shared lists: a list that holds itself prints `?` there -/
+def DISPLAY_DEPTH : Nat := 8
+
+/-- `v as text`: a text as it is, the empty list ø, anything else as warp prints it -/
+def textForm (μ : Store) (v : Expr) : String :=
+  match μ.items v with
+  | .text s => s
+  | .nil => "ø"
+  | v => display μ DISPLAY_DEPTH v
+
+/-- `v as t` of a value: a scalar converts to text, int, number or bool (a number to int keeps its whole part, a text
+is parsed); to any other type the value is checked as a cast checks it -/
+def convertValue (μ : Store) (v : Expr) : Ty → Expr
+  | .text => .text (textForm μ v)
+  | .bool => .bool (truthy (μ.items v))
+  | .int => if isNumber v then .int (asNumber v) else parsed .int v
+  | .number => if isNumber v then .num (asNumber v) else parsed .num v
+  | t => if fits v t then v else .error "cannot cast"
+where parsed (make : Int → Expr) : Expr → Expr
+  | .text s => (s.toInt?.map make).getD (.error "invalid number")
+  | _ => .error "cannot cast"
+
 /-- `xs.add(v)` of values: v joins the shared list if it fits the list's element type -/
 def pushValues (μ : Store) : Expr → Expr → Expr × Store
   | .lref a t, v =>
@@ -292,6 +327,7 @@ inductive Frame where
   | letIn (y : String) (t : Ty) (b : Expr)
   | call (f : String)
   | cast (ts : List Ty)
+  | conv (t : Ty)
   | broadcast (f : String)
   | get (f : String)
   | setL (f : String) (v : Expr) | setR (o : Expr) (f : String)
@@ -332,6 +368,7 @@ def plug : Frame → Expr → Expr
   | letIn y t b, e => .letIn y t e b
   | call f, e => .call f e
   | cast ts, e => .cast e ts
+  | conv t, e => .conv e t
   | broadcast f, e => .broadcast f e
   | get f, e => .get e f
   | setL f v, e => .set e f v
@@ -402,6 +439,7 @@ inductive Step (P : Program) : Expr × Store → Expr × Store → Prop where
   | setAt {l i v μ} : l.isValue = true → i.isValue = true → v.isValue = true →
       Step P (.setAt l i v, μ) (setAtValues μ l i v)
   | cast {v ts μ} : v.isValue = true → Step P (.cast v ts, μ) (if ts.any (fits v) then v else .error "type mismatch", μ)
+  | conv {v t μ} : v.isValue = true → Step P (.conv v t, μ) (convertValue μ v t, μ)
   | new {p μ} : Step P (.new p, μ) (.ref μ.heap.length p, μ.alloc p)
   | get {o f μ} : o.isValue = true → Step P (.get o f, μ) (readField μ o f, μ)
   | set {o f v μ} : o.isValue = true → v.isValue = true → Step P (.set o f v, μ) (writeField μ o f v)
