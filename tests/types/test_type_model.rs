@@ -14,6 +14,9 @@ const AXIOM_DECLARATION: &str = "axiom ";
 /// Programs both sides judge alike
 const CORPUS: &[&str] = &[
 	"1 + 2",
+	// a conversion to bool is a bool (card bool-conversion)
+	"2 as bool",
+	"def f(x) -> bool { x }; f(2)",
 	"1 + 2.5",
 	"true + 1",
 	"\"a\" + 1",
@@ -432,9 +435,6 @@ const KNOWN_VALUE_DIFFERENCES: &[(&str, &str)] = &[
 	// a covariant alias's write: W0 checks it against the list's own element type when it runs, warp adds 2.5 to ints
 	("xs: ints = [1]; ys: numbers = xs; ys.add(2.5); xs", "p215-user"),
 	("xs: ints = [1, 2]; ys: numbers = xs; ys#1 = 2.5; xs", "p215-user"),
-	// a conversion to bool: W0 gives yes, warp the int 1
-	("2 as bool", "bool-conversion"),
-	("def f(x) -> bool { x }; f(2)", "bool-conversion"),
 ];
 /// What the model gives for a program it rejects, and for a value it does not keep
 const REJECTED: &str = "rejected";
