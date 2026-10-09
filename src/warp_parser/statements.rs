@@ -441,11 +441,17 @@ impl WarpParser {
 				_ => grouped_list(words, Bracket::None, Separator::Space), // `for c in s: print ord c` prints `ord c`
 			};
 		}
-		let mut arguments = vec![one_expression(&words[1..])]; // `for i in 1..3: print i, i*2` prints both
+		// `for i in 1..3: print i, i*2` prints both
+		self.print_call_from(one_expression(&words[1..]), |parser| one_expression(&parser.words_of_expression()))
+	}
+
+	/// The call print(first, …): the arguments after `first` follow commas, each read by `argument`
+	pub(super) fn print_call_from(&mut self, first: Node, argument: fn(&mut Self) -> Node) -> Node {
+		let mut arguments = vec![first];
 		while self.current_char() == ',' {
 			self.advance();
 			self.skip_blanks();
-			arguments.push(one_expression(&self.words_of_expression()));
+			arguments.push(argument(self));
 		}
 		print_call(arguments)
 	}
@@ -472,7 +478,10 @@ impl WarpParser {
 	/// A branch of an if, `print x+1` of `else print x+1` printing its one expression
 	pub(super) fn parse_branch(&mut self, min_bp: u8) -> Node {
 		match self.take_braceless_print() {
-			true => print_call([self.parse_expr(min_bp)]),
+			true => {
+				let first = self.parse_expr(min_bp);
+				self.print_call_from(first, |parser| parser.parse_expr(0)) // `else print x, y`
+			}
 			false => self.parse_expr(min_bp),
 		}
 	}
