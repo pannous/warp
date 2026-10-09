@@ -43,6 +43,21 @@ fn a_field_removed_from_the_class_keeps_its_column_with_a_warning() {
 	assert!(warnings.iter().any(|warning| warning.contains("color")), "{warnings:?}");
 }
 
+// a lossless type change converts the column in place, a lossy one is a loud error (notes/orm.md Migrations)
+#[test]
+fn a_field_changed_without_loss_converts_its_column() {
+	eval("class Box{width: int}\nboxes: [Box] = database.boxes_widened\nboxes.add(Box(3))");
+	is!("class Box{width: float}\nboxes: [Box] = database.boxes_widened\nboxes#1.width", 3.0);
+	eval("class Tag{code: int}\ntags: [Tag] = database.tags_spelled\ntags.add(Tag(7))");
+	is!("class Tag{code: text}\ntags: [Tag] = database.tags_spelled\ntags#1.code", "7");
+}
+
+#[test]
+fn a_field_changed_with_loss_is_an_error_naming_both_types() {
+	eval("class Bag{weight: float}\nbags: [Bag] = database.bags_narrowed\nbags.add(Bag(2.5))");
+	crate::common::fails_with("class Bag{weight: int}\nbags: [Bag] = database.bags_narrowed\nbags#1.weight", "bags_narrowed.weight holds");
+}
+
 #[cfg(feature = "native")]
 #[test]
 fn a_program_keeps_its_tables_in_a_file_beside_it() {

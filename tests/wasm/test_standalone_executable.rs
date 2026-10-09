@@ -118,6 +118,19 @@ fn test_running_without_a_stub_leaves_no_executable() {
 	assert!(!executable.exists());
 }
 
+/// A program the runtime cannot carry (a table needs std_io) notes it on its first run, not on every run (card
+/// standalone-std-io)
+#[test]
+fn test_an_executable_the_runtime_cannot_carry_is_noted_once() {
+	let source_path = PathBuf::from(OUTPUT_DIRECTORY).join("standalone_noted_once.warp");
+	std::fs::write(&source_path, "class P{n: int}\nstored ps: [P]\ncount(ps)").unwrap();
+	let run = || crate::common::warp_command().env("WARP_RUNTIME_STUB", crate::common::runtime_stub()).arg(&source_path).output().unwrap();
+	assert!(text(&run().stderr).contains("no executable"));
+	let again = run();
+	assert_eq!(text(&again.stdout), "0\n");
+	assert!(!text(&again.stderr).contains("no executable"), "{}", text(&again.stderr));
+}
+
 /// P105 (user): `warp run <file>` runs the program and leaves no executable
 #[test]
 fn test_warp_run_leaves_no_executable() {

@@ -185,7 +185,7 @@ impl WarpParser {
 		}
 		self.advance_by(word.len());
 		self.skip_spaces();
-		let condition = self.with_equals_comparing(true, |parser| parser.parse_expr(Op::If.binding_power().1));
+		let condition = self.parse_condition();
 		if guard == Op::While {
 			// a trailing `while` tests before the first round like the leading one; it is no do-while (user decision #22)
 			let (statement, test) = (crate::normalize::operand_text(lhs), crate::normalize::operand_text(&condition));

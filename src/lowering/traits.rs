@@ -769,6 +769,10 @@ impl InstanceTypes {
 						let unknown_for_good = self.final_round && !keeps_shape && self.shape(value).is_none();
 						Self::bind(variables, name, self.shape(value), is_plain || unknown_for_good)
 					}
+					// `xs: [C] = …` of a declared list type (before the instance case: the name of `[C]` is C)
+					(Node::Key(name, Op::Colon, type_node), _) if self.declared_element(type_node).is_some() => {
+						Self::bind(variables, &name.name(), self.declared_element(type_node).map(Shape::ListOf), false)
+					}
 					// `d:docx = …` of a declared type
 					(Node::Key(name, Op::Colon, type_node), _) if self.registry.get_by_name(&type_node.drop_meta().name()).is_some() => {
 						Self::bind(variables, &name.name(), Some(Shape::Instance(type_node.drop_meta().name())), false)
@@ -795,6 +799,14 @@ impl InstanceTypes {
 			}
 			_ => {}
 		}
+	}
+
+	/// The declared type of the elements of `[C]`
+	fn declared_element(&self, type_node: &Node) -> Option<String> {
+		let Node::List(items, Bracket::Square, _) = type_node.drop_meta() else { return None };
+		let [element] = items.as_slice() else { return None };
+		let name = element.drop_meta().name();
+		self.registry.get_by_name(&name).is_some().then_some(name)
 	}
 
 	/// Is `name` a field of any declared type: `v.x` then reads the field at run time, whatever v holds

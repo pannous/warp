@@ -78,7 +78,7 @@ bo's row again, so it changes nothing after written-through changes; an instance
   `if v is C and v.id > 0 { std_io("table", "update", …) }`.
 - src/database.rs: the SQLite C API through libloading (the system's libsqlite3, ffi/link.rs get_or_load_library), one
   connection per file and thread, `:memory:` for inline code. An added column takes the field's default, else the
-  type's zero. A changed column type is a loud error for now (step 7). Browser: `std_io("table", …)` is an error.
+  type's zero. A changed column type: see step 7. Browser: web/playground/host-files.js `table` (step 6).
 
 ## How filters work (steps 2 and 3, card orm-filters)
 - comprehensions::lower_where (early, before database_tables::lower) asks database_tables::queried for a subject that is
@@ -98,24 +98,32 @@ bo's row again, so it changes nothing after written-through changes; an instance
 - An element changed without the write-through form `v.f op= e` (`people#1.age = 5`) leaves its row stale, and a
   query of the table then disagrees with the list.
 
-## How relations work (step 4, eager; card orm)
+## How relations work (step 4; card orm)
 - database_tables.rs with_relations: a field whose type is another registered class (`team: Team`) is a foreign key,
   the column `team` INTEGER holding the row's id; a list field of one (`players: [Person]`) is one-to-many, no column:
   the rows of people whose field of class Team points back (an error when Person has none).
 - Opening people builds `team` as the row of teams with that id (`[r for r in teams if r.id == row#3]#1`), so a related
   row is the same instance as in its table. teams must be registered before people (a compile error otherwise).
-  After people is open, each team's `players` is filled with the people pointing to it.
-- `people.add(p)` stores `p.team.id` (an instance without a row raises "… add it to its table first") and adds p to
-  `p.team.players`; `bo.team = blue` writes blue's id through.
+  A one-to-many field is lazy: database_tables.rs with_member_getters makes `players: [Person]` the getter
+  `players := { global people; [m for m in people if m.team.id == id] }`, a query at each read, so it is no
+  constructor argument (`Team("Red")`) and a moved row (`bo.team = blue`) shows in both teams at once (card orm-moved).
+- `people.add(p)` stores `p.team.id` (an instance without a row raises "… add it to its table first"); `bo.team = blue`
+  writes blue's id through.
+- `red.players.add(p)` (anywhere, `d.team.players.add(d)` too; cards orm-nested, orm-list-add) sets `p.team = red`:
+  written to p's row, or p inserted into people when it has none; no duplicate row (database_tables.rs
+  added_to_members).
 - In a filter, `it.team` is no column for SQL (an id vs an instance): the part goes through a query's function, which
   builds the instance from the id.
 - Objects now point to each other, so a value read back from wasm can be cyclic: both readers mark a node met again
   inside itself as `…` (wasm_reader.rs, reader.js CYCLE_MARK). Printing one inside wasm (`print team`) still exhausts
   the call stack (card cyclic-print).
-- Gaps: a changed foreign key (`bo.team = blue`) leaves the old and new team's lists as they were until the next run;
-  a row pointing to a deleted row, or the 0 of a column added for a foreign key, fails the open (index out of range).
-  Both go away with lazy loading, where `players` is a query.
-- Sample: samples/orm.warp (native only, web/playground/excluded_samples.txt).
+- A key without its row (a deleted row, or the 0 of a column added for a foreign key; card orm-dangling): a required
+  key (`team: Team`) leaves its row out of the opened list with a runtime warning naming the row and suggesting
+  `team: Team?`; the row stays in the database. An optional key (`team: Team?`) reads ø and is stored as 0
+  (database_tables.rs opened, referenced, key_id).
+- Gaps: the getter scans the loaded list; natively it could be a SELECT once tables are queries.
+- Sample: samples/orm.warp (native and playground) has no relations yet: adding `team` to its Person would hit
+  orm-dangling on databases the sample already wrote.
 
 ## Steps
 1. **Prototype, native, eager** (done: lowering/database_tables.rs, src/database.rs, tests/control/test_database_tables.rs):
@@ -125,7 +133,7 @@ bo's row again, so it changes nothing after written-through changes; an instance
    - the table loaded whole at registration, filters in memory.
 2. Queries instead of loading: SQL translation of filters (done, card orm-filters), count/#i/paging, the identity map.
 3. Application functions for the rest of a filter (done, card orm-filters: warp_call into the module).
-4. Foreign keys and one-to-many (done eagerly, card orm), batched lazy loading.
+4. Foreign keys and one-to-many (done, card orm; one-to-many lazy as getters), batched lazy loading of tables.
 5. `transaction { }`.
 6. IndexedDB backend in the browser (async underneath: the page's host keeps a loaded mirror per table, like the
    key-value store). Done simply (branch orm-updates): web/playground/host-files.js `table` keeps each table as
@@ -133,4 +141,10 @@ bo's row again, so it changes nothing after written-through changes; an instance
    before the run and written back on every change. The browser-built compiler keeps a filter as the comprehension
    over the rows (database_tables::queried is native-only), since the browser has no SQL. One value per table rewrites
    the whole table on each change: fine for samples, slow for big tables (then one object store per table).
-7. Unit and type conversions in migrations, `@was` renames.
+7. Unit and type conversions in migrations, `@was` renames. Type conversions done (branch orm-updates):
+   - database.rs `converted`: INTEGER → REAL → TEXT converts forward (rename the column aside, add it with the new
+     type, `UPDATE … SET c = CAST(old AS type)`, drop the old one, in a SAVEPOINT); a fresh column because SQLite's
+     affinity would turn the values back. Any other change (REAL → INTEGER, TEXT → INTEGER) fails the open: "its values
+     would lose data". host-files.js `convertColumn` does the same to the stored rows (a real's text keeps ".0").
+   - Open: unit changes (km → m) wait for runtime units (a unit type is no column yet, notes/units_runtime.md); `@was`.
+   - A field named size/count/length reads as the builtin count off a typed list element (card field-named-size).

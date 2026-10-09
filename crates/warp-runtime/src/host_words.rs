@@ -57,6 +57,8 @@ pub const GPU_MAP_LINEAR: &str = "gpu_map_linear";
 /// `s = sum(xs.map(x => …) @gpu)`, min, max (src/lowering/gpu_maps.rs): the kernel leaves one partial result per
 /// workgroup, written into a block the program combines; 1, or 0 without an adapter, as gpu_map_linear
 pub const GPU_REDUCE_LINEAR: &str = "gpu_reduce_linear";
+/// What every exported handler name starts with
+pub const HANDLER_PREFIX: &str = "on·";
 /// `on·file·0`: the handler of the first `on file "x" change {…}`
 pub const FILE_HANDLER_PREFIX: &str = "on·file·";
 /// `exit(code)` ends the run, not the process (P121, system_signals.rs ExitRequest)

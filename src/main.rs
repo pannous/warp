@@ -44,6 +44,9 @@ const RUNTIME_STUB_VARIABLE: &str = "WARP_RUNTIME_STUB";
 const RUNTIME_STUB_CRATE: &str = "crates/warp-runtime";
 #[cfg(unix)]
 const EXECUTABLE_MODE: u32 = 0o755;
+/// Where a failed standalone build is remembered (one file per program path), so its note shows once per version of
+/// the program and of warp, not on every run
+const STANDALONE_NOTES_CACHE: &str = ".cache/warp/standalone_notes";
 const COMPILE_COMMANDS: [&str; 3] = ["compile", "build", "link"];
 /// `warp tool <package> [arguments…]`: runs the package's prebuilt <package>.wasm (src/package_tools.rs)
 const TOOL_COMMAND: &str = "tool";
@@ -197,6 +200,11 @@ fn run_command(args: &[String]) {
                 eprintln!("{failure}");
                 std::process::exit(1);
             }
+        }
+    } else if args[1] == warp::paint_window::COMMAND {
+        if let Err(failure) = warp::paint_window::run(args.get(2).is_some_and(|flag| flag == warp::paint_window::CHECK)) {
+            eprintln!("{failure}");
+            std::process::exit(1);
         }
     } else if args[1] == SERVE_COMMAND {
         match served_program(&args[2..]) {
@@ -426,18 +434,37 @@ fn leave_executable(path: &str) {
         return;
     }
     let program_file = std::path::Path::new(path);
+    let marker = standalone_note_marker(program_file);
+    let noted = marker.as_deref().and_then(modified);
+    let warp_binary = env::current_exe().ok().and_then(|binary| modified(&binary));
+    if noted.is_some_and(|noted| Some(noted) >= modified(program_file) && Some(noted) >= warp_binary) {
+        return;
+    }
     let written = diagnostic::quietly(|| warp::modules::with_program_file(program_file, || write_standalone_executable(&load_file(path), path)));
     if let Err(failure) = written {
-        eprintln!("note: no executable {}: {failure}", executable.display());
+        eprintln!("note: no executable {}: {failure} (said once until the file or warp changes)", executable.display());
+        if let Some(marker) = marker {
+            let _ = marker.parent().map(fs::create_dir_all);
+            let _ = fs::write(&marker, failure);
+        }
     }
+}
+
+/// The file remembering that the standalone build of `program` failed: ~/.cache/warp/standalone_notes/<hash of its path>
+fn standalone_note_marker(program: &std::path::Path) -> Option<std::path::PathBuf> {
+    use std::hash::{Hash, Hasher};
+    let mut hasher = std::collections::hash_map::DefaultHasher::new();
+    fs::canonicalize(program).ok()?.hash(&mut hasher);
+    Some(std::path::PathBuf::from(env::var_os("HOME")?).join(STANDALONE_NOTES_CACHE).join(format!("{:016x}", hasher.finish())))
 }
 
 /// The program, printing its value, compiled to machine code and appended to a copy of the compiler-less `warp-runtime`
 /// stub (crates/warp-runtime, notes/aot.md); Ok is the report of what was written
 fn write_standalone_executable(code: &str, target: &str) -> Result<String, String> {
     let program = wasm_emitter::compile_printing_result(code).map_err(|value| format!("nothing to compile: {}", value.serialize()))?;
-    let engine = util::gc_engine();
-    let module = run::module_cache::compiled_module(&engine, &program.bytes).map_err(|failure| failure.to_string())?;
+    let bytes = warp::dead_functions::keeping_exports(&program.bytes, warp_runtime::standalone::stub_calls_export)?;
+    let engine = warp_runtime::standalone::standalone_engine().map_err(|failure| failure.to_string())?;
+    let module = run::module_cache::compiled_module(&engine, &bytes).map_err(|failure| failure.to_string())?;
     let provided: Vec<(&str, &str)> = warp_runtime::standalone::provided_imports().collect();
     let mut missing: Vec<String> = vec![];
     for import in module.imports().filter(|import| !provided.contains(&(import.module(), import.name()))) {
@@ -551,14 +578,15 @@ fn runtime_stub_path() -> Result<std::path::PathBuf, String> {
     let warp = env::current_exe().map_err(|failure| failure.to_string())?;
     let resolved = fs::canonicalize(&warp).unwrap_or_else(|_| warp.clone());
     let next_to_warp = [&warp, &resolved].map(|binary| binary.with_file_name(RUNTIME_STUB_NAME));
-    match next_to_warp.iter().find(|stub| stub.is_file()) {
+    // a debug warp's neighbour is a debug stub (5 MB, it was 21 MB, card g_gFs8): build the release one instead
+    match next_to_warp.iter().find(|stub| stub.is_file() && !cfg!(debug_assertions)) {
         Some(stub) => Ok(stub.clone()),
         None => build_runtime_stub(&next_to_warp[0]),
     }
 }
 
-/// `cargo build -p warp-runtime` in warp's source checkout, in warp's own profile: the stub lands next to a warp built
-/// there; its path as cargo reports it
+/// `cargo build --release -p warp-runtime` in warp's source checkout, whatever warp's own profile: the stub lands next
+/// to a release warp built there; its path as cargo reports it
 fn build_runtime_stub(expected: &std::path::Path) -> Result<std::path::PathBuf, String> {
     let source = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
     if !source.join(RUNTIME_STUB_CRATE).is_dir() {
@@ -566,10 +594,7 @@ fn build_runtime_stub(expected: &std::path::Path) -> Result<std::path::PathBuf, 
     }
     eprintln!("note: building the runtime stub for executables once (cargo build -p {RUNTIME_STUB_NAME})");
     let mut build = std::process::Command::new(env::var("CARGO").unwrap_or_else(|_| "cargo".to_string()));
-    build.args(["build", "--quiet", "--message-format=json", "-p", RUNTIME_STUB_NAME, "--bin", RUNTIME_STUB_NAME]).current_dir(source);
-    if !cfg!(debug_assertions) {
-        build.arg("--release");
-    }
+    build.args(["build", "--release", "--quiet", "--message-format=json", "-p", RUNTIME_STUB_NAME, "--bin", RUNTIME_STUB_NAME]).current_dir(source);
     let output = build.output().map_err(|failure| format!("cannot run cargo to build the runtime stub: {failure}"))?;
     if !output.status.success() {
         return Err(format!("building the runtime stub failed (cargo build -p {RUNTIME_STUB_NAME} in {}): {}", source.display(), String::from_utf8_lossy(&output.stderr).trim()));
