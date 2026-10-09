@@ -791,7 +791,7 @@ impl<'a> Loader<'a> {
 }
 
 /// The standard library's modules written in warp (notes/stdlib.md), embedded so `use list` needs no files
-const STD_MODULES: [(&str, &str); 22] = [
+const STD_MODULES: [(&str, &str); 23] = [
 	(PRELUDE_MODULE, include_str!("../lib/prelude.warp")),
 	("memory", include_str!("../lib/memory.warp")),
 	("net", include_str!("../lib/net.warp")),
@@ -814,6 +814,7 @@ const STD_MODULES: [(&str, &str); 22] = [
 	("i18n", include_str!("../lib/i18n.warp")),
 	(UNITS_MODULE, include_str!("../lib/units.warp")),
 	(AGENT_MODULE, include_str!("../lib/agent.warp")),
+	(SOUND_MODULE, include_str!("../lib/sound.warp")),
 ];
 /// Other names of standard modules (word choices are aliases): `use graphics` is `use draw`
 const STD_MODULE_ALIASES: [(&str, &str); 1] = [("graphics", "draw")];
@@ -833,18 +834,22 @@ const QUANTITY: &str = "quantity";
 const ROUTE_PARTS: [&str; 3] = ["route_segment", "route_parameter", "route_matches"];
 /// lib/agent.warp: `agent "prompt"` asks Claude (card g_X_F0)
 const AGENT_MODULE: &str = "agent";
+/// lib/sound.warp: `play 440Hz for 0.5s`, `beep` (card basic-sound), loaded when a program calls one of its words
+const SOUND_MODULE: &str = "sound";
+const SOUND_WORDS: [&str; 4] = ["play", "melody", "tone", "beep"];
 /// Whether a program needs a module
 type NeededBy = fn(&Node) -> bool;
 /// The standard modules a program needs without `use`: P183 a file URL → file, a page → markup (lowering/page_html.rs),
 /// routes or a server route's path parameters → router, a route's regular expression → regex (lowering/routes.rs), a call of quantity → units (run-time units),
-/// a call of agent → agent
-const IMPLICIT_MODULES: [(&str, NeededBy); 6] = [
+/// a call of agent → agent, a call of play, melody, tone or beep → sound
+const IMPLICIT_MODULES: [(&str, NeededBy); 7] = [
 	("file", mentions_file_url),
 	("markup", |_| crate::pipeline::renders_itself()),
 	("router", |program| defined(program, crate::routes::PAGE_ROUTES).is_some() || { let called = called_names(&statements(program.clone())); ROUTE_PARTS.iter().any(|word| called.contains(*word)) }),
 	("regex", |program| defined(program, crate::routes::PAGE_ROUTE_INDEX).is_some_and(|index| called_names(&[index]).contains(crate::routes::REGEX_MATCH))),
 	(UNITS_MODULE, |program| calls_undefined(program, QUANTITY)),
 	(AGENT_MODULE, |program| calls_undefined(program, AGENT_MODULE)),
+	(SOUND_MODULE, |program| SOUND_WORDS.iter().any(|word| calls_undefined(program, word))),
 ];
 
 /// Whether the program calls `word` without defining it

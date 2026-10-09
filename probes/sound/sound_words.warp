@@ -1,0 +1,9 @@
+play 440Hz for 0.2s
+play C4
+play [C4 E4 G4] for 300ms
+play note("C#4") for 0.1
+melody [C4 E4 G4]
+tone(220, 0.1, "square")
+tone(220Hz, 100ms)
+beep()
+play 440 for 0.1

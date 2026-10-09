@@ -410,7 +410,7 @@ pub fn extract_host_words(ctx: &mut Context, node: &Node) {
 					if [crate::host::GPU_RENDER, crate::host::TEXT_COVERAGE].contains(&name.as_str()) {
 						ctx.required_functions.insert(crate::wasm_emitter::int_lists::INTS_TO_LIST);
 					}
-					if name == crate::host::PAINT {
+					if [crate::host::PAINT, crate::host::SOUND].contains(&name.as_str()) {
 						ctx.required_functions.insert(crate::wasm_emitter::int_lists::LIST_TO_INTS);
 					}
 					// a program that controls tasks polls at its loops, where a paused task waits (browser)

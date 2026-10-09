@@ -1,0 +1,12 @@
+#!/usr/bin/env warp
+// Sound without setup: frequencies in Hz, durations in s or ms, notes by name (lib/sound.warp).
+// The playground plays it with WebAudio, the warp command with the system's player.
+
+beep
+play 440Hz for 0.5s
+play C4
+play [C4 E4 G4] for 1s        // a chord: the notes sound together
+melody [C4 D4 E4 F4 G4]       // one note after another
+melody [G4 E4 C4] each 200ms  // each note 200 ms long
+tone(220Hz, 300ms, "square")  // sine, square, triangle or sawtooth
+play note("F#4") for 250ms

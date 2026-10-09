@@ -55,8 +55,8 @@ const UNITS: [Unit; 17] = [
 	Unit { name: "AD", dimension: Dimension::Era, factor: 1 },
 ];
 
-/// Unit words standing for a unit expression: `60 mph` is `60 mi/h`
-const UNIT_ALIASES: [(&str, &str); 1] = [("mph", "mi/h")];
+/// Unit words standing for a unit expression: `60 mph` is `60 mi/h`, `440Hz` is `440/s` (lib/sound.warp)
+const UNIT_ALIASES: [(&str, &str); 3] = [("mph", "mi/h"), ("Hz", "1/s"), ("kHz", "1/ms")];
 
 /// The long names a conversion target may use, singular or plural: `2 h in minutes` (P36). Quantities keep the short
 /// names, `2 minutes` stays a duration of the time module.

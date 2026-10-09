@@ -43,6 +43,7 @@ const PAINT_INK = 29;
 const PAINT_PAPER = 250;
 const PAINT_COLOR_FROM = 2 ** 24;
 const PAINT_SHOWN_SIDE = 288; // a small painting is shown this wide (or high), scaled by a whole factor so pixels stay square
+const SOUND_OFFSET = 32768; // a sound's samples cross as amplitude + 32768 (lib/sound.warp, src/sound.rs SAMPLE_OFFSET)
 
 const $ = id => document.getElementById(id);
 function element(tag, properties = {}, ...children) {
@@ -191,6 +192,7 @@ function startWorker(restarts = 0) {
 			if (data.type === "clipboard") return copyText(data.text);
 			if (data.type === "failed") return failed(new Error(data.message));
 			if (data.type === "bundle") return bundled(data.bundle); // deploy.js
+			if (data.type === "sound") return playSound(data);
 			if (!pending) return showEventOutput(data);
 			if (data.type === "listening") Object.assign(pending, { listening: data.events, address: data.address });
 			if (data.type === "print") printedChunk(pending, data);
@@ -260,6 +262,36 @@ function startsFrame(run, output) {
 	return starts;
 }
 
+// ---- sound ----------------------------------------------------------------------------------------------------
+
+let audio; // the page's AudioContext, made at the first sound after a click or key press
+let soundsEnd = 0; // when the queued sounds end, in the AudioContext's time: one plays after the other, as natively
+let sounding = []; // the playing and queued sounds, silenced when the next run starts (typing reruns the code)
+
+// before the page's first click or key press (the run on load, the CI tour) a sound stays silent: an AudioContext made
+// then cannot start and the browser warns
+function playSound({ samples, rate }) {
+	if (navigator.userActivation && !navigator.userActivation.hasBeenActive) return;
+	audio ??= new AudioContext();
+	audio.resume();
+	const buffer = audio.createBuffer(1, Math.max(samples.length, 1), rate);
+	buffer.getChannelData(0).set(Float32Array.from(samples, sample => (sample - SOUND_OFFSET) / SOUND_OFFSET));
+	const source = audio.createBufferSource();
+	source.buffer = buffer;
+	source.connect(audio.destination);
+	soundsEnd = Math.max(soundsEnd, audio.currentTime);
+	source.start(soundsEnd);
+	soundsEnd += buffer.duration;
+	source.onended = () => sounding = sounding.filter(other => other !== source);
+	sounding.push(source);
+}
+
+function silence() {
+	sounding.forEach(source => source.stop());
+	sounding = [];
+	soundsEnd = 0;
+}
+
 // each painting shows at once, while the program still runs: one the size of the last replaces it, as a frame (card
 // g_oldM: `if frame % 6 == 0 { render() }` animates without a sleep, as the native window does)
 function painted(run, painting) {
@@ -314,6 +346,7 @@ async function runInWorker(code) {
 		const run = { id: ++nextRunId, resolve, printed: [], paintings: [], frame: 0, framesShown: {} };
 		stopAfterTimeout(run);
 		pending = run;
+		silence();
 		worker.postMessage({ id: run.id, code, acknowledged: acknowledgements() });
 	});
 }
