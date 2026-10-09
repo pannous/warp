@@ -63,6 +63,8 @@ enum Need {
 	KeyOperator(i64),
 }
 
+/// The last compiled module, under the home directory (debug_module_path)
+const DEBUG_MODULE: &str = ".cache/warp/last.wasm";
 /// The texts `as bool` reads as false
 const FALSY_TEXTS: [&str; 8] = ["", "0", "false", "no", "ø", "nil", "null", "none"];
 /// wasmtime's words for an integer division or remainder by zero
@@ -1819,10 +1821,18 @@ pub fn bracket_info(bracket: &Bracket) -> i64 {
 	}
 }
 
-/// Leave the last module in `test.wasm` for inspection; a read-only directory must not fail the program
+/// Where the last compiled module is kept for inspection: one fixed path under the home directory, never the current
+/// directory, which would leave build debris beside the sources (card cwd-artifacts); None without a home (the browser)
+pub fn debug_module_path() -> Option<std::path::PathBuf> {
+	std::env::var_os("HOME").map(|home| std::path::PathBuf::from(home).join(DEBUG_MODULE))
+}
+
+/// Keep the last module at `debug_module_path`; a read-only cache must not fail the program
 pub(crate) fn write_debug_module(bytes: &[u8]) {
-	if let Err(failure) = std::fs::write("test.wasm", bytes) {
-		warn!("could not write test.wasm: {failure}");
+	let Some(path) = debug_module_path() else { return };
+	let written = path.parent().map_or(Ok(()), std::fs::create_dir_all).and_then(|()| std::fs::write(&path, bytes));
+	if let Err(failure) = written {
+		warn!("could not write {}: {failure}", path.display());
 	}
 }
 

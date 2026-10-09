@@ -85,8 +85,8 @@ function programImports(holder, hooks) {
 			},
 			// std_pure / std_io(module, member, arguments): a word of lib/<module>.warp (src/std_adapters.rs), by the
 			// adapters the parts add (host-hashes.js hash, json and regex; host-files.js file, net, store and os)
-			std_pure: (module, member, argumentList) => stdCall(program(), module, member, argumentList),
-			std_io: (module, member, argumentList) => stdCall(program(), module, member, argumentList),
+			std_pure: (module, member, argumentList) => stdCall(program(), module, member, argumentList, holder.warnings),
+			std_io: (module, member, argumentList) => stdCall(program(), module, member, argumentList, holder.warnings),
 			// `serve 8080 {…}` (src/web_server.rs): a page cannot listen on a port
 			serve_routes: port => { throw new Error(`serve ${port}: a server runs only in the native host (the warp CLI)`); },
 			// the host words (src/host.rs): a page cannot block, so sleep busy-waits
@@ -197,12 +197,14 @@ function buildValue(module, tree) {
 	}
 }
 
-function stdCall(program_, module, member, argumentList) {
+// an adapter reports a runtime warning with this.warn(message) (host-files.js openTable)
+function stdCall(program_, module, member, argumentList, warnings) {
 	const [moduleName, memberName, given] = [module, member, argumentList].map(node => plainOfTree(readNode(program_, node)));
 	const adapter = STD_ADAPTERS[moduleName]?.[memberName];
 	if (!adapter) throw new Error(`${moduleName}.${memberName}: no such word in the browser`);
 	try {
-		return buildValue(program_, treeOfPlain(adapter(...(Array.isArray(given) ? given : [given]))));
+		const context = { warn: message => warnings.push(message) };
+		return buildValue(program_, treeOfPlain(adapter.apply(context, Array.isArray(given) ? given : [given])));
 	} catch (error) {
 		throw new Error(`${moduleName}.${memberName}: ${error.message}`);
 	}

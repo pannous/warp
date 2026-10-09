@@ -693,7 +693,7 @@ fn serve_routes(mut caller: Caller<'_, HostState>, port: i64, routes: HostNode) 
 	let port = u16::try_from(port).map_err(|_| wasmtime::Error::new(crate::tasks::TaskFailure(format!("serve {port}: no port number"))))?;
 	let site = served_site(port);
 	serve(port, &routes, &site, |route, request| match route_value(&mut caller, &route.function, &request) {
-		Ok(value) => Answer::of(&value),
+		Ok(value) => route.answer_of(&value),
 		Err(problem) => Answer::failed(&problem.to_string()),
 	}).map_err(|problem| wasmtime::Error::new(crate::tasks::TaskFailure(problem)))?;
 	built_in_program(&mut caller, &Node::Empty, SERVE_ROUTES)

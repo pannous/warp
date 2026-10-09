@@ -619,6 +619,7 @@ fn usage() {
     println!("  warp repl            Start interactive console");
     println!("  --fuel <steps>       Execution budget before 'out of fuel' (env WARP_FUEL)");
     println!("  --no-ask             Never prompt \"got it?\" after a warning or note");
+    println!("  The last compiled module is kept in ~/.cache/warp/last.wasm for inspection");
     println!("  warp compile --wasm <file|code>  Only the module, <file>.wasm (out.wasm for inline code), without running");
     println!("  warp compile --aot <file|code>   The module and its machine code for this machine, <file>.cwasm");
     println!("  warp test            Run tests");

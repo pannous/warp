@@ -115,9 +115,15 @@ all. The page build now takes the definition: tests/web/test_server_functions_in
      Before, GET /api/users answered the table as it was at the start. Test: tests/web/test_served_tables.rs.
    - The page build leaves top-level `get`/`post` routes out (serve.rs is_serving), and with them the tables only
      they read. Before, the page logged "table.open: no such word in the browser".
+   - In the browser a table is kept in IndexedDB (host-files.js `table`, notes/orm.md step 6), so its rows outlast
+     the run. The browser-built compiler keeps a filter as a comprehension; a natively compiled filter (SQL) refuses.
+   - An empty table answers JSON null, because ø is the empty list (card served-empty).
    - In the browser a table lives in the page's memory (host-files.js `table`), and its first open prints a note.
      The playground shows no stderr, so the note goes to stdout. A filter (SQL) refuses. IndexedDB is ORM step 6.
-   - An empty table answers JSON null, because ø is the empty list (card served-empty).
+   - An empty table answered JSON null: ø is the empty list and reads back as nothing. A route whose value is a table
+     or a list literal is marked in the route table (serve.rs answers_a_list, web_server.rs LIST_ANSWER), so its ø
+     answers `[]` (card served-empty). A `server def` whose value is one (or a call of such a function) is a list word
+     too, so its POST /rpc/f answers `[]` (serve.rs ServerData, card server-def-giving).
 
 ## Undoable defaults taken
 - RPC in the page is async, like fetch (option a), starting from the prerendered value; a call with a local argument is refused.
