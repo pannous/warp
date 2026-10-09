@@ -206,13 +206,18 @@ function runHandler(holder, handler) {
 	if (handled.result === undefined) holder.stopTimers();
 }
 
+// where a message waits: the page keeps the last stage for the Firefox driver's timeout report (card firefox-hello-again)
+const stage = name => post({ type: "stage", stage: name });
+
 // the run's timers (host.js addTimer), each running its handler until the next run
 self.onmessage = async ({ data }) => {
 	if (data.pointer) return self.pagePointer = { values: new Int32Array(data.pointer.buffer), names: data.pointer.names }; // host.js system_value
 	if (data.system) return Object.assign(self.pageSystemValues ??= {}, data.system); // host.js system_value
 	if (data.environment) return Object.assign(self, { pageEnvironment: data.environment, pageSecrets: data.secrets }); // host-files.js os.env, withPageSecret
 	if (data.stored) return Object.assign(storedValues, data.stored) && Object.assign(sessionValues, data.session); // host-files.js STD_ADAPTERS.store
+	stage("waiting for the compiler");
 	await ready;
+	stage("loading the database");
 	await globalThis.loadDatabase?.(); // host-files.js: `database[k]`'s values, once
 	if (data.warm) return warmUp();
 	if (data.event) return handleEvent(data);
@@ -220,9 +225,13 @@ self.onmessage = async ({ data }) => {
 	if (data.submit) return handleSubmit(data.submit);
 	if (live) stopListening(live);
 	live = undefined;
+	stage("checking the compiler");
 	if (!compiler) await loadCompiler();
+	stage("preparing foreign runtimes");
 	await prepareForeignRuntimes(data.code); // host.js: a runtime that loads asynchronously loads before the run
+	stage("waiting for the task workers");
 	await taskPoolReady(); // host.js: tasks run on loaded Workers, not inline
+	stage(`evaluating run ${data.id}`);
 	const started = performance.now();
 	const report = evaluate(data.code, data.acknowledged ?? {});
 	post({ type: "report", id: data.id, report, milliseconds: performance.now() - started });

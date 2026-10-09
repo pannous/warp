@@ -46,6 +46,8 @@ function element(tag, properties = {}, ...children) {
 
 let worker;
 let workerReady;
+let workerStage = "not started"; // the worker's last stage (worker.js stage), for playground.state
+let workerSettled = "starting"; // workerReady's outcome
 let workerWarmed; // the worker was asked to compile the markup renderer ahead of the first markup run (worker.js warmUp)
 let nextRunId = 0;
 let pending; // {id, resolve, printed, timer} of the run in the worker
@@ -149,6 +151,7 @@ function startWorker() {
 		worker.onmessage = ({ data }) => {
 			if (data.type === "notify") data = notification(data.text);
 			if (!data) return;
+			if (data.type === "stage") return workerStage = data.stage;
 			if (data.type === "loading") return showLoading(`loading the compiler: ${megabytes(data.loaded)}${data.total ? ` of ${megabytes(data.total)}` : ""} MB`);
 			if (data.type === "compiling") return stopLoading();
 			if (data.type === "ready") return resolve();
@@ -167,6 +170,7 @@ function startWorker() {
 	});
 	// a slow start (the CI runner) finishes after the first run began: "ready" then must not hide its "running…"
 	workerReady.then(() => stopLoading() || showing || setStatus("ready"), failure => stopLoading() || setStatus(failure.message, true));
+	workerReady.then(() => workerSettled = "ready", failure => workerSettled = `failed: ${failure.message}`);
 	tellSystemValues();
 	sharePointer();
 	worker.postMessage({ stored: keptValues(), session: keptValues([SESSION_STORE]) });
@@ -714,6 +718,8 @@ function initialize() {
 }
 
 // for the headless probes (probes/web_playground.py, test_in_browser.py --examples): evaluate code as the page does and return the report
-window.playground = { evaluate, applyFix, chooseExample, runCode, code: () => editor.getValue(), setCode: source => editor.setValue(source), lastModule: () => lastModule, acknowledge: topic => saveAcknowledged([...acknowledged, topic]), forgetAll: () => saveAcknowledged([]) };
+window.playground = { evaluate, applyFix, chooseExample, runCode, code: () => editor.getValue(), setCode: source => editor.setValue(source), lastModule: () => lastModule, acknowledge: topic => saveAcknowledged([...acknowledged, topic]), forgetAll: () => saveAcknowledged([]),
+	// what a run waits for, for the Firefox driver's timeout report (card firefox-hello-again)
+	state: () => ({ worker: workerStage, ready: workerSettled, pending: pending?.id, queued: queued !== undefined, showing }) };
 
 (window.pageStarts ?? Promise.resolve()).then(initialize); // index.html: not before its reload for isolation
