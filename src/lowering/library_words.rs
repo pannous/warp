@@ -833,8 +833,9 @@ impl Lowering {
 				return Some(self.call(word, &items[0], vec![self.expand(object.clone()), self.expand(argument.clone())], false));
 			}
 		}
-		// `first of xs` has one argument
-		let argument_count = if items.get(1).is_some_and(is_of) { 1 } else { items.len() - 1 };
+		// `first of xs` has one argument, as `first sorted xs`: a library word after it is its argument's prefix
+		let prefixes_its_argument = *bracket == Bracket::None && items.get(1).is_some_and(|next| self.library_word(&next.drop_meta().name()).is_some());
+		let argument_count = if items.get(1).is_some_and(is_of) || prefixes_its_argument { 1 } else { items.len() - 1 };
 		let word = self.library_word_for(head, argument_count)?;
 		// `sorted "listen" == sorted "silent"`: the word takes the operand of the comparison, as a defined function of `it` does
 		if let ([_, argument], Bracket::None, Separator::Space) = (items, bracket, separator) {
