@@ -674,6 +674,9 @@ PASSED:
   ✓ ffi::header::tests::test_map_c_type_to_valtype
   ✓ ffi::header::tests::test_parse_header_file_math
   ✓ ffi::test_component_short_use::a_component_file_is_used_by_its_name
+  ✓ ffi::test_component_short_use::a_component_is_used_as_an_alias
+  ✓ ffi::test_component_short_use::an_alias_of_nothing_is_an_error
+  ✓ ffi::test_component_short_use::an_unknown_component_names_the_known_ones
   ✓ ffi::test_component_short_use::the_long_form_and_core_modules_stay
   ✓ ffi::test_components_anywhere::test_a_component_is_called_in_every_host
   ✓ ffi::test_components_anywhere::test_a_wit_char_is_a_codepoint_in_every_host
@@ -1848,6 +1851,7 @@ PASSED:
   ✓ modules::test_std_words::json_of_an_instance_given_its_classes
   ✓ modules::test_std_words::math_inverse_and_hyperbolic_words
   ✓ modules::test_std_words::router_words_match_a_pattern_and_read_its_parameters
+  ✓ modules::test_use_modules::a_module_is_used_as_an_alias
   ✓ modules::test_use_modules::a_program_variable_leaves_a_file_module_its_words
   ✓ modules::test_use_modules::a_quoted_path_uses_that_file
   ✓ modules::test_use_modules::module_function_locals_are_not_the_programs_variables
@@ -4330,4 +4334,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-10 ignored, 4325 passed, 0 failed, 4325 total tested
+10 ignored, 4329 passed, 0 failed, 4329 total tested
