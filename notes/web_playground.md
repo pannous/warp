@@ -29,6 +29,11 @@ build switch, silenced hints) sit in the header's ⋯ menu; the run time is a sm
   `use` (keywords.js `modules`, from src/modules.rs), uniscript entities after `\:` and `<:` (entities.tsv, a copy of
   src/uniscript_entities.tsv fetched on first use) which become their character; a typed `<:name>` becomes it at `>`.
   Tab takes the first, Enter only one chosen with Up/Down (else a new line). probes/web/completion.py checks it.
+- Keyboard shortcuts (shortcuts.js SHORTCUTS, card keyboard-shortcuts, user 2026-10-09): one table of CodeMirror key
+  names, the editor's extraKeys. Cmd/Ctrl-Enter runs; Cmd-/ (Ctrl-/ elsewhere) toggles `// ` on the selected lines or
+  the cursor's line (after their shallowest indentation; all commented: uncommented), one undo step, the selection kept.
+  tests/web/test_editor_shortcuts.rs runs commentEdits under node; the keys checked by hand headless (agent-browser
+  press Meta+/).
 
 ## The language guide (guide.md, guide.js)
 The left pane of the page (cards "core feature", "doc-example"; P188 one page): web/playground/guide.md, chapters `## Title` from
