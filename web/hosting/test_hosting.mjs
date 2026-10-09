@@ -1,7 +1,9 @@
 // End-to-end test of warp-hosting against the real Cloudflare API (no mocks): runs the control Worker under
-// wrangler dev, deploys samples/hosting.warp by `warp deploy --hosted` as warp-hosting-test, reads its live routes on
-// workers.dev, removes it.
-// node web/hosting/test_hosting.mjs   needs: scratch/warp (scripts/own-warp.sh), wrangler logged in, gh logged in.
+// wrangler dev, deploys samples/hosting.warp by `warp deploy --hosted` as warp-hosting-test and by the playground's
+// ☁ Deploy button (headless agent-browser, the GitHub session already stored) as warp-hosting-ui-test, reads their
+// live routes on workers.dev, removes them.
+// node web/hosting/test_hosting.mjs   needs: scratch/warp (scripts/own-warp.sh), web/playground/build.sh built,
+// wrangler logged in, gh logged in, agent-browser.
 // CLOUDFLARE_API_TOKEN defaults to wrangler's own OAuth token.
 import { execFileSync, spawn } from "node:child_process";
 import { copyFileSync, mkdirSync, openSync, readFileSync, writeFileSync } from "node:fs";
@@ -15,6 +17,12 @@ const PORT = Number(process.env.WARP_HOSTING_TEST_PORT ?? 8899); // outside the 
 const INSPECTOR_PORT = 9331; // not wrangler's default 9229, which another wrangler dev may hold
 const HOSTING = `http://localhost:${PORT}`;
 const NAME = "hosting-test";
+const PLAYGROUND_NAME = "hosting-ui-test";
+const PLAYGROUND = join(ROOT, "web/playground");
+const PLAYGROUND_PORT = Number(process.env.WARP_HOSTING_PLAYGROUND_PORT ?? 8896);
+const BROWSER_SESSION = "warp-hosting-test";
+const SESSION_KEY = "warp-hosting-session"; // web/playground/deploy.js SESSION_KEYS.github
+const PLAYGROUND_TRIES = 60;
 const SAMPLE = join(ROOT, "samples/hosting.warp");
 const EXPECTED_ROOT = "hello from the edge";
 const EXPECTED_FIB = { n: 20, fib: 6765 };
@@ -64,6 +72,49 @@ async function liveText(url) {
 	throw new Error(`${url} never answered`);
 }
 
+// polls a condition once a second
+async function until(condition, failure) {
+	for (let i = 0; i < PLAYGROUND_TRIES; i++) {
+		if (condition()) return;
+		await sleep(1000);
+	}
+	assert.fail(failure);
+}
+
+// agent-browser's eval prints the value as JSON
+function browser(...args) {
+	const output = execFileSync("agent-browser", ["--session", BROWSER_SESSION, ...args]).toString().trim();
+	try { return JSON.parse(output); } catch { return output; }
+}
+
+// the playground's ☁ Deploy (web/playground/deploy.js): the address it links when deployed, else its status
+async function deployedByPlayground(token) {
+	const server = spawn("python3", ["-m", "http.server", String(PLAYGROUND_PORT), "--bind", "127.0.0.1"], { cwd: PLAYGROUND, stdio: "ignore" });
+	try {
+		await sleep(1000);
+		browser("open", `http://localhost:${PLAYGROUND_PORT}/?hosting=${encodeURIComponent(HOSTING)}`);
+		await until(() => browser("eval", `typeof playground`) === "object", "the playground never started");
+		browser("eval", `localStorage.setItem(${JSON.stringify(SESSION_KEY)}, ${JSON.stringify(token)})`);
+		browser("eval", `playground.setCode(${JSON.stringify(readFileSync(SAMPLE, "utf8"))})`);
+		browser("eval", `document.getElementById("deploy-name").value = ${JSON.stringify(PLAYGROUND_NAME)}`);
+		browser("eval", `document.getElementById("deploy").click()`);
+		let status;
+		for (let i = 0; i < PLAYGROUND_TRIES; i++) {
+			const link = browser("eval", `document.querySelector("#deployed a")?.href ?? ""`);
+			if (link) return link.replace(/\/$/, "");
+			status = browser("eval", `document.getElementById("status").textContent`);
+			if (status.startsWith("not deployed") || status.includes("name to deploy")) break;
+			await sleep(1000);
+		}
+		assert.fail(`the playground did not deploy: ${status}`);
+	} finally {
+		browser("close");
+		server.kill();
+	}
+}
+
+const removed = async name => (await fetch(`${HOSTING}/deploy?name=${name}`, { method: "DELETE", headers: github }));
+
 mkdirSync(WORK, { recursive: true });
 const token = execFileSync("gh", ["auth", "token"]).toString().trim();
 const github = { authorization: `Bearer ${token}` };
@@ -78,8 +129,14 @@ try {
 	assert.equal(await liveText(url), EXPECTED_ROOT);
 	assert.deepEqual(JSON.parse(await liveText(`${url}/fib/20`)), EXPECTED_FIB);
 	console.log(`deployed and served: ${url}`);
-	const removed = await fetch(`${HOSTING}/deploy?name=${NAME}`, { method: "DELETE", headers: github });
-	assert.equal(removed.status, 200, await removed.text());
+	const playgroundUrl = await deployedByPlayground(token);
+	assert.match(playgroundUrl, /^https:\/\/warp-hosting-ui-test\.[a-z0-9-]+\.workers\.dev$/);
+	assert.deepEqual(JSON.parse(await liveText(`${playgroundUrl}/fib/20`)), EXPECTED_FIB);
+	console.log(`deployed by the playground and served: ${playgroundUrl}`);
+	for (const name of [NAME, PLAYGROUND_NAME]) {
+		const reply = await removed(name);
+		assert.equal(reply.status, 200, await reply.text());
+	}
 	console.log("hosting test passed");
 } finally {
 	dev.kill();
