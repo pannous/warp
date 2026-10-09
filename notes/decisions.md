@@ -7,6 +7,13 @@ before asking the user; nobody reads it front to back, the code, tests and wiki 
 notes/open_decisions.md.
 
 ## Decided 2026-10-09 (user, as recommended unless quoted)
+- Fermyon / Akamai Functions (warp-hosting, card fermyon-hosting): the user signs up and puts a personal access token
+  in .env as akamai_functions_token for a live test of "☁ Deploy to Fermyon"; visitors paste their own token, kept
+  in their browser.
+- `if c {1} else 3+1` (user's multiple choice, via the supervisor; card else-print, batch 74): the else takes the
+  whole `3+1`, giving 1 or 4, not `(if … else 3)+1`.
+- Bee/wasp entity names go into uniscript and are regenerated into src/uniscript_entities.tsv, never added by hand
+  in warp (user, via the supervisor).
 - P235b amended (the user's own edit of samples/webgpu.warp, `let uv = at.xy / $size;`; Integrator, card
   shader-holes for warp-web): `$name` in a shader block is an explicit hole, as in sql templates: the compiler
   passes that warp value as `values.name` and builds the values map itself. Bare WGSL names still never capture
