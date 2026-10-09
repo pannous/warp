@@ -25,3 +25,11 @@ fn number_word_hint_is_where_it_is_written() {
 	let two = hints.iter().find(|hint| hint.original == "two").expect("a hint for two");
 	assert!(two.position.starts_with("2:"), "{}", two.position);
 }
+
+/// card glued-chain: on one line `abs.take` is the key abs, then the method take, not abs of `.take`
+#[test]
+fn glued_chain_after_a_prefix_function() {
+	is!("xs = [3, -1, 2]; xs.keep only positive.sort by abs.take first 1", warp::ints(vec![2]));
+	is!("xs = [3, -5, 2]; xs.sort by abs.take first 2", warp::ints(vec![2, 3]));
+	is!("xs = [9, 1, 4]; xs.sort by sqrt.take first 1", warp::ints(vec![1]));
+}

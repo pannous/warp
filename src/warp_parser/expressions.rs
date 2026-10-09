@@ -41,7 +41,9 @@ impl WarpParser {
 			// lowering (ambiguous_forms) applies to the value before it or makes a function
 			let operator_word = chars > 1 && matches!(op, Op::Abs | Op::Sqrt | Op::Cbrt);
 			let fourth_root = self.current_char() == super::lookahead::FOURTH_ROOT;
-			let bare = operator_word && self.expression_ends_after(chars);
+			// `sort by abs.take first 1`: a glued method applies to the word, it is no operand
+			let method_follows = self.peek_char(chars) == '.' && self.peek_char(chars + 1).is_alphabetic();
+			let bare = operator_word && (self.expression_ends_after(chars) || method_follows);
 			self.hint_operator(chars, true);
 			self.advance_by(chars);
 			self.skip_spaces();
