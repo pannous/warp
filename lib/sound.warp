@@ -90,12 +90,12 @@ beep() := tone(880, 0.15, "square")
 pitches_of(x) := if x is list then [si_amount(f) for f in x] else [si_amount(x)]
 to play x for duration: sound(chord_samples(pitches_of(x), si_amount(duration), wave_shape))
 to play x: play x for note_seconds
-// one note (or chord) after another: melody [C4 E4 G4], melody([C4 E4 G4], 0.25s) each a quarter second
+// one note (or chord) after another: melody [C4 E4 G4], melody [C4 E4 G4] each 250ms (or melody([C4 E4 G4], 0.25s))
 // plain seconds: the unit check reads a quantity parameter in a loop as unsupported (notes/units_runtime.md)
 melody_samples(notes, seconds) := {
 	samples = []
 	for pitch in notes { samples = samples + chord_samples(pitches_of(pitch), seconds, wave_shape) }
 	samples
 }
-melody(notes, duration) := sound(melody_samples(notes, si_amount(duration)))
+to melody notes each duration: sound(melody_samples(notes, si_amount(duration)))
 to melody notes: melody(notes, note_seconds)

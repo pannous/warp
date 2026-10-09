@@ -8,7 +8,7 @@ play 440Hz for 0.5s
 play C4                         // note_seconds (0.5 s)
 play [C4 E4 G4] for 1s          // a chord
 melody [C4 D4 E4]               // one after another
-melody([G4 E4 C4], 200ms)       // each 200 ms
+melody [G4 E4 C4] each 200ms    // or melody([G4 E4 C4], 200ms)
 tone(220Hz, 300ms, "square")    // sine, square, triangle, sawtooth
 tone 330Hz for 0.1s
 play note("F#4") for 250ms      // note(name) needs `use sound` when called alone
@@ -23,8 +23,7 @@ play note("F#4") for 250ms      // note(name) needs `use sound` when called alon
   gesture: the run on page load stays silent, ▶ plays. A run without page hooks (tests) is silent.
 - Units: `Hz` is `1/s`, `kHz` `1/ms` (src/units.rs UNIT_ALIASES); `si_amount(x)` takes a quantity or a plain number.
 
-Limits found on the way: a phrase with the word `each` loses its unit argument (card phrase-each), so the per-note
-duration of melody is a plain call; assignments to the module's globals (`note_seconds = 0.25`) from the program do not
+Limits found on the way: assignments to the module's globals (`note_seconds = 0.25`) from the program do not
 reach the module.
 
 ## What professionals expect (user question 2026-10-09; roadmap, nothing of it built yet)
