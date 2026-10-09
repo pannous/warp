@@ -65,13 +65,15 @@ fn title_on_page(name: &str, directory: std::path::PathBuf, button: Option<&str>
 	};
 	// the browser first, then the page: a fresh browser asked for a page at once at times stays on about:blank
 	browser(&["open"]);
+	// an open that succeeds can still leave the page on about:blank: it counts once the page is at the url
 	let opened = (1..=OPEN_ATTEMPTS).any(|attempt| {
 		let output = run(&["open", &url]);
-		if !output.status.success() {
-			eprintln!("agent-browser open {url}, attempt {attempt} of {OPEN_ATTEMPTS}: {}", String::from_utf8_lossy(&output.stderr));
-			run(&["close"]);
+		let address = String::from_utf8_lossy(&run(&["eval", "location.href"]).stdout).to_string();
+		let arrived = output.status.success() && address.contains(&url);
+		if !arrived {
+			eprintln!("agent-browser open {url}, attempt {attempt} of {OPEN_ATTEMPTS}: at {address} {}", String::from_utf8_lossy(&output.stderr));
 		}
-		output.status.success()
+		arrived
 	});
 	assert!(opened, "agent-browser did not open {url} in {OPEN_ATTEMPTS} attempts");
 	browser(&["wait", "--load", "networkidle"]);
