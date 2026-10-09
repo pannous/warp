@@ -7,6 +7,11 @@ before asking the user; nobody reads it front to back, the code, tests and wiki 
 notes/open_decisions.md.
 
 ## Decided 2026-10-09 (user, as recommended unless quoted)
+- P235b amended (the user's own edit of samples/webgpu.warp, `let uv = at.xy / $size;`; Integrator, card
+  shader-holes for warp-web): `$name` in a shader block is an explicit hole, as in sql templates: the compiler
+  passes that warp value as `values.name` and builds the values map itself. Bare WGSL names still never capture
+  warp variables. `$` never occurs in WGSL, so no clash; the uniform layout exists (src/gpu.rs uniform_layout).
+  Defaults: the name is resolved where the block is written, the value read at each paint call.
 - Hosting login callback (warp-hosting): NOT as recommended: GitHub's callback stays https://lambda.pannous.com/callback;
   the pannous.com server proxies lambda.pannous.com → warp-hosting.pannous.workers.dev (Ferron block + certbot cert,
   edited in pannous-lockdown scripts/levels/rustweb.sh). The hosting Worker is live; secrets come from .env and ~/.keys.
