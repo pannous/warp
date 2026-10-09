@@ -2735,6 +2735,11 @@ PASSED:
   ✓ programs::test_shader_holes::values_not_written_out_cannot_take_the_holes
   ✓ programs::test_small_samples::error_samples
   ✓ programs::test_small_samples::text_samples
+  ✓ programs::test_sound::a_melody_is_its_notes_one_after_another
+  ✓ programs::test_sound::notes_are_frequencies
+  ✓ programs::test_sound::play_writes_the_tone_as_a_wav
+  ✓ programs::test_sound::sound_words_run_without_use
+  ✓ programs::test_sound::the_note_table_matches_note
   ✓ programs::test_warp_command::debug_build_names_its_commit
   ✓ programs::test_warp_command::warp_command_runs_this_checkouts_binary
   ✓ scope::test_colon_body_assignment::test_for_colon_body_with_assignments
@@ -4279,4 +4284,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-10 ignored, 4274 passed, 0 failed, 4274 total tested
+10 ignored, 4279 passed, 0 failed, 4279 total tested
