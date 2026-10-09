@@ -1041,7 +1041,10 @@ impl Dispatch {
 	fn expand(&self, node: Node) -> Node {
 		match node {
 			// a definition head names parameters, it calls nothing
-			Node::Key(head, op @ (Op::Assign | Op::Define), body) if definition_head(&head).is_some() => Node::Key(head, op, Box::new(self.expand(*body))),
+			Node::Key(head, op @ (Op::Assign | Op::Define), body) if definition_head(&head).is_some() => {
+				let body = self.types.in_definition(&head, || self.expand(*body));
+				Node::Key(head, op, Box::new(body))
+			}
 			Node::Key(left, op, right) => {
 				let (left, right) = (self.expand(*left), self.expand(*right));
 				if let (Op::Assign, Some((name, declared))) = (&op, typed_target(&left, &self.types.registry)) {

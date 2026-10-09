@@ -75,6 +75,40 @@ pub fn is_unit(name: &str) -> bool {
 	unit_named(name).is_some()
 }
 
+/// lib/units.warp's class of quantities whose unit is known only at run time, and the word making one
+pub const RUN_TIME_QUANTITY: &str = "Quantity";
+const RUN_TIME_QUANTITY_WORD: &str = "quantity";
+
+/// A unit written in the program (`1 m`, `5 m/s`, `6 m²`) as the run-time `quantity(1, "m")`, for where it meets one
+/// (card units-mixed)
+pub fn as_run_time_quantity(node: &Node) -> Option<Node> {
+	let (amount, unit) = unit_literal(node)?;
+	Some(Node::List(vec![Node::Symbol(RUN_TIME_QUANTITY_WORD.to_string()), amount, Node::Text(unit)], Bracket::Round, Separator::None))
+}
+
+/// `5 m/s` as its amount and unit text: a number times units, then more units multiplied or divided
+fn unit_literal(node: &Node) -> Option<(Node, String)> {
+	match node.drop_meta() {
+		Node::Key(amount, Op::Mul, unit) if matches!(amount.drop_meta(), Node::Number(_)) => Some((amount.drop_meta().clone(), unit_text(unit)?)),
+		Node::Key(literal, op @ (Op::Mul | Op::Div), unit) => {
+			let (amount, written) = unit_literal(literal)?;
+			let joint = if *op == Op::Mul { "·" } else { "/" };
+			Some((amount, format!("{written}{joint}{}", unit_text(unit)?)))
+		}
+		Node::List(items, Bracket::Round, _) if items.len() == 1 => unit_literal(&items[0]),
+		_ => None,
+	}
+}
+
+/// `m`, `m²`: a unit's name, to a power
+fn unit_text(node: &Node) -> Option<String> {
+	match node.drop_meta() {
+		Node::Symbol(name) if is_unit(name) => Some(name.clone()),
+		Node::Key(base, power @ (Op::Square | Op::Cube), _) => Some(format!("{}{power}", unit_text(base)?)),
+		_ => None,
+	}
+}
+
 /// `meters`, `kilogram`: a long name of a quantity's unit; durations (`2 minutes`) belong to the time module
 pub fn is_long_unit_name(name: &str) -> bool {
 	!is_unit(name) && target_unit(&Node::Symbol(name.to_string())).is_some_and(|unit| unit.dimension != Dimension::Time)

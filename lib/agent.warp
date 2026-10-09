@@ -1,0 +1,16 @@
+// The standard library module agent (card g_X_F0): `agent "summarize this text"` sends the prompt as given to Claude
+// (the Anthropic Messages API) and gives its answer as text; `agent(prompt, "claude-opus-5-5")` names another model.
+// The key is ANTHROPIC_API_KEY: the environment's natively, the playground's key setting in the browser (kept in that
+// browser only). Loaded when a program calls agent, like units
+use net
+use json
+use os
+agent(prompt:text) := agent(prompt, "claude-sonnet-5-5")
+agent(prompt:text, model:text) := {
+	key = env("ANTHROPIC_API_KEY")
+	if key == ø { raise "agent needs an Anthropic API key in the environment variable ANTHROPIC_API_KEY (in the playground: its key setting)" }
+	request = {model: model, max_tokens: 4096, messages: [{role: "user", content: prompt}]}
+	headers = {"x-api-key": key, "anthropic-version": "2023-06-01", "content-type": "application/json", "anthropic-dangerous-direct-browser-access": "true"}
+	answer = parse_json(post("https://api.anthropic.com/v1/messages", to_json(request), headers))
+	answer.content#1.text
+}
