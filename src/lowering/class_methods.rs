@@ -760,6 +760,14 @@ fn renamed_type_word_methods(node: Node) -> Node {
 pub(crate) fn instance_classes(node: &Node, classes: &[String]) -> std::collections::HashMap<String, String> {
 	let returned = returned_classes(node, classes);
 	let constructed_class = |value: &Node| instance_class(value, &returned);
+	// `[Point(1, 2), …]`: a list of constructions of one class
+	let list_class = |list: &Node| match list.drop_meta() {
+		Node::List(items, Bracket::Square, _) if !items.is_empty() => {
+			let first = constructed_class(&items[0])?;
+			items.iter().all(|item| constructed_class(item).as_ref() == Some(&first)).then_some(first)
+		}
+		_ => None,
+	};
 	let mut instances: std::collections::HashMap<String, String> = std::collections::HashMap::new();
 	node.visit(&mut |part| if let Node::Key(target, op, value) = part {
 		// `p:Point = …`: the annotation says it
@@ -781,6 +789,8 @@ pub(crate) fn instance_classes(node: &Node, classes: &[String]) -> std::collecti
 			// `w = q as m`, `w = q.to("m")` of a run-time quantity q: another one
 			(Op::Assign | Op::Define, conversion) if crate::units::conversion(conversion).is_some() => crate::units::conversion(conversion).and_then(|(quantity, _)| class_of(quantity)),
 			(Op::Assign | Op::Define, Node::Key(quantity, Op::Dot, call)) if is_call_of(call, CONVERSION_METHOD) => class_of(quantity),
+			// `s = sum([quantity("5 m"), …])`: the sum of instances is one (card quantity-sum)
+			(Op::Assign | Op::Define, summed) if summed_list(summed).is_some() => summed_list(summed).and_then(list_class),
 			(Op::Assign | Op::Define, _) => constructed_class(value),
 			// `p:Point`, the annotation a symbol or a type
 			(Op::Colon, Node::Symbol(_) | Node::Type { .. }) => Some(value.drop_meta().name()),
@@ -791,13 +801,6 @@ pub(crate) fn instance_classes(node: &Node, classes: &[String]) -> std::collecti
 		}
 	});
 	// `for p in ps {…}` over a list of constructions `ps = [Point(1, 2), …]`: p holds instances
-	let list_class = |list: &Node| match list.drop_meta() {
-		Node::List(items, Bracket::Square, _) if !items.is_empty() => {
-			let first = constructed_class(&items[0])?;
-			items.iter().all(|item| constructed_class(item).as_ref() == Some(&first)).then_some(first)
-		}
-		_ => None,
-	};
 	let mut instance_lists = std::collections::HashMap::new();
 	node.visit(&mut |part| if let Node::Key(target, Op::Assign | Op::Define, value) = part {
 		if let Some(class) = list_class(value).filter(|class| classes.contains(class)) {
@@ -1162,25 +1165,32 @@ fn with_certain_amounts(certainty: &Node, operands: &Operands) -> Node {
 
 /// The list of `sum([5 m ± 1 cm, 3 m ± 2 cm])` or `[…].sum()` when each item is a run-time quantity
 fn summed_quantities<'n>(node: &'n Node, operands: &Operands) -> Option<&'n Node> {
-	let list = match node.drop_meta() {
-		Node::List(items, Bracket::Round, _) => match items.as_slice() {
-			[word, list] if word.drop_meta().name() == SUM_WORD => list,
-			_ => return None,
-		},
-		Node::Key(list, Op::Dot, call) if is_call_of(call, SUM_WORD) || call.drop_meta().name() == SUM_WORD => list,
-		_ => return None,
-	};
+	let list = summed_list(node)?;
 	let Node::List(items, Bracket::Square, _) = list.drop_meta() else { return None };
 	let is_quantity = |item: &Node| operand_class(item, operands).as_deref() == Some(crate::units::RUN_TIME_QUANTITY);
 	(!items.is_empty() && items.iter().all(is_quantity)).then_some(list)
 }
 
-/// `quantities.reduce((sum, item) => sum.plus(item))`
+/// The list of `sum(xs)`, `xs.sum()`
+fn summed_list(node: &Node) -> Option<&Node> {
+	match node.drop_meta() {
+		Node::List(items, Bracket::Round, _) => match items.as_slice() {
+			[word, list] if word.drop_meta().name() == SUM_WORD => Some(list),
+			_ => None,
+		},
+		Node::Key(list, Op::Dot, call) if is_call_of(call, SUM_WORD) || call.drop_meta().name() == SUM_WORD => Some(list),
+		_ => None,
+	}
+}
+
+/// `quantities.reduce((sum, item) => sum.plus(item))`, marked a Quantity so `str()` and a final value show its text
+/// (card quantity-sum)
 fn quantities_reduced(quantities: Node) -> Node {
 	let [sum, item] = REDUCED_NAMES.map(|name| Node::Symbol(name.to_string()));
 	let parameters = Node::List(vec![sum.clone(), item.clone()], Bracket::Round, Separator::Colon);
 	let added = Node::Key(Box::new(parameters), Op::FatArrow, Box::new(method_call(sum, operator_method(Op::Add).expect("plus"), item)));
-	Node::Key(Box::new(quantities), Op::Dot, Box::new(Node::List(vec![Node::Symbol(REDUCE_WORD.to_string()), added], Bracket::Round, Separator::None)))
+	let reduced = Node::Key(Box::new(quantities), Op::Dot, Box::new(Node::List(vec![Node::Symbol(REDUCE_WORD.to_string()), added], Bracket::Round, Separator::None)));
+	Node::meta(reduced, Node::data(crate::lowering::traits::TypedAs(crate::units::RUN_TIME_QUANTITY.to_string())))
 }
 
 fn amount_of(quantity: Node) -> Node {
