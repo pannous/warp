@@ -1,15 +1,16 @@
 //! Card effects-value: `effects of f` (`f.effects`) is a value anywhere: assigned, printed, interpolated, and as the
 //! program's last statement it no longer replaces the program, whose prints run.
 
-use crate::common::printed;
 use crate::is;
 
+#[cfg(feature = "native")] // the warp binary: not in the browser build
 fn printed_lines(code: &str) -> Vec<String> {
-	printed(code).lines().filter(|line| !line.starts_with('»')).map(String::from).collect()
+	crate::common::printed(code).lines().filter(|line| !line.starts_with('»')).map(String::from).collect()
 }
 
 #[test]
 fn effects_of_last_keeps_the_prints() {
+	#[cfg(feature = "native")]
 	assert_eq!(printed_lines("print \"a\"\nsquare(x) := x*x\neffects of square"), ["a"]);
 	is!("print \"a\"\nsquare(x) := x*x\neffects of square", "Pure");
 }
