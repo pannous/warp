@@ -7,7 +7,8 @@ use crate::node::{Bracket, Node, Separator};
 use crate::operators::Op;
 
 const ARTICLES: [&str; 3] = ["a", "an", "the"];
-pub(crate) const PREPOSITIONS: [&str; 10] = ["to", "of", "from", "with", "in", "into", "at", "by", "for", "on"];
+/// The words that separate a phrase's slots; `each` too: `to hum notes each d: …` is called `hum [C4 E4] each 50ms`
+pub(crate) const PREPOSITIONS: [&str; 11] = ["to", "of", "from", "with", "in", "into", "at", "by", "for", "on", "each"];
 const IT: &str = "it";
 /// Statement words before a typed declaration that never name a function: `global number = 3`, `let int x = 1`
 const STATEMENT_WORDS: [&str; 20] = [
