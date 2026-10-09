@@ -120,3 +120,13 @@ fn a_generator_expression_is_a_generator() {
 	is!(&format!("{NATURALS}t = 0\nfor y in (x * x for x in naturals()) {{ if y > 20 {{ break }}; t += y }}\nt"), 30);
 	is!("factor = 3\ng = (x * factor for x in [1, 2])\n[next(g), next(g), next(g)]", parse("[3 6 ø]"));
 }
+
+#[test]
+fn yield_from_hands_on_what_another_yields() {
+	let inner = "inner() := { yield 1; yield 2 }\n";
+	is!(&format!("{inner}outer() := {{ yield 0; yield from inner(); yield 3 }}\nouter()"), ints(vec![0, 1, 2, 3]));
+	is!("pairs() := { yield each [1, 2]; yield* [3] }\npairs()", ints(vec![1, 2, 3]));
+	is!(&format!("{NATURALS}doubled() := {{ yield from (2 * x for x in naturals()) }}\ntake 3 of doubled()"), ints(vec![2, 4, 6]));
+	is!("countdown(n) := { if n > 0 { yield n; yield from countdown(n - 1) } }\ncountdown(3)", ints(vec![3, 2, 1]));
+	is!("def chained():\n    yield from [1, 2]\n    yield from [3]\n\nc = chained()\n[next(c), next(c), next(c), next(c)]", parse("[1 2 3 ø]"));
+}

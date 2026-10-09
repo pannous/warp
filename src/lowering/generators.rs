@@ -5,13 +5,15 @@
 //! body stops the generator, `continue` goes on after the yield, the generator's `return` ends the loop: a stop flag
 //! `count_to·stop·1` breaks out of each of the generator's loops, all of them inside one loop run once.
 //! Any other call collects what it yields into a list: `count_to(3)` is [1 2 3], `return` ends the list.
+//! `yield from xs`, `yield each xs` and `yield* xs` (Python, warp, JavaScript) yield each value of xs in turn: the
+//! loop `for yield·item·1 in xs { yield yield·item·1 }`, lazy like any loop over a generator.
 //! Runs after ruby_blocks, which takes the yielding functions some call passes a block to.
 
 use crate::for_loop::{block_items, loop_variables};
 use crate::inlining::renamed_names;
 use crate::node::{Bracket, Node, Separator};
 use crate::operators::Op;
-use crate::ruby_blocks::{arguments, contains_yield, yielded};
+use crate::ruby_blocks::{arguments, contains_yield, is_yield, yielded};
 use crate::warp_parser::while_do;
 use std::cell::Cell;
 use std::collections::{HashMap, HashSet};
@@ -32,6 +34,10 @@ const STOP_SUFFIX: &str = "stop";
 pub(crate) const NEXT_METHOD: &str = "next";
 /// The object a loop walks with next(), `x·iterator`
 const ITERATOR_SUFFIX: &str = "iterator";
+/// `yield from xs`, `yield each xs`
+const DELEGATING_WORDS: [&str; 2] = ["from", "each"];
+const DELEGATED_ITEM: &str = "yield·item";
+const DELEGATION: &str = "for ITEM in SOURCE { yield ITEM }";
 
 pub(crate) struct Generator {
 	pub(crate) parameters: Vec<String>,
@@ -50,7 +56,7 @@ enum Step {
 }
 
 pub fn lower(node: Node) -> Node {
-	let node = crate::generator_expressions::lower(node);
+	let node = delegations(crate::generator_expressions::lower(node), &Cell::new(0));
 	let generators = generators(&node);
 	if generators.is_empty() {
 		return node;
@@ -59,6 +65,25 @@ pub fn lower(node: Node) -> Node {
 	let node = lazy_loops(node, &generators, &Cell::new(0));
 	let node = crate::generator_objects::lower(node);
 	collected_definitions(node, &generators)
+}
+
+/// `yield from xs` as `for yield·item·1 in xs { yield yield·item·1 }`
+fn delegations(node: Node, counter: &Cell<usize>) -> Node {
+	let node = node.map_children(|child| delegations(child, counter));
+	let Some(source) = delegated_source(&node) else { return node };
+	counter.set(counter.get() + 1);
+	let item = symbol(&[DELEGATED_ITEM, &counter.get().to_string()].join(NAME_SEPARATOR));
+	crate::generator_consumers::template(DELEGATION, &[("ITEM", &item), ("SOURCE", &source)]).remove(0).with_meta_of(&node)
+}
+
+fn delegated_source(node: &Node) -> Option<Node> {
+	if let Node::Key(left, Op::Mul, source) = node.drop_meta() {
+		return is_yield(left).then(|| source.as_ref().clone());
+	}
+	match yielded(node)?.as_slice() {
+		[word, source] if DELEGATING_WORDS.iter().any(|delegating| is_word(word, delegating)) => Some(source.clone()),
+		_ => None,
+	}
 }
 
 pub(crate) fn symbol(name: &str) -> Node {

@@ -98,7 +98,7 @@ fn is_while(node: &Node) -> bool {
 }
 
 /// The statements of a template with its placeholders filled in
-fn template(text: &str, bindings: &[(&str, &Node)]) -> Vec<Node> {
+pub(crate) fn template(text: &str, bindings: &[(&str, &Node)]) -> Vec<Node> {
 	let filled = bindings.iter().fold(parse(text), |node, (placeholder, value)| substitute(node, placeholder, value));
 	match filled.drop_meta() {
 		Node::List(items, Bracket::None, Separator::Semicolon | Separator::Newline) => items.clone(),
