@@ -1,0 +1,2 @@
+k=0
+while 1 { while k < 9 { k+=1; if k > 3 {break} }; break }

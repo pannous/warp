@@ -292,7 +292,7 @@ impl WasmGcEmitter {
 			other => vec![other.clone()],
 		};
 		let kind = self.get_type(body);
-		!body.is_nothing() && (kind.is_ref() && !self.ends_in_number(&statements) || kind == Kind::Codepoint)
+		!body.is_nothing() && !loop_control::ends_in_jump(body) && (kind.is_ref() && !self.ends_in_number(&statements) || kind == Kind::Codepoint)
 	}
 
 	/// Declares the Node locals the loops of `body` hold their values in, after node_scratch; gives the enclosing

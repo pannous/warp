@@ -34,12 +34,12 @@ pub fn lower(node: Node) -> Node {
 	with_block_parameters(node, &called_with_block)
 }
 
-fn is_yield(node: &Node) -> bool {
+pub(crate) fn is_yield(node: &Node) -> bool {
 	matches!(node.drop_meta(), Node::Symbol(word) if word == YIELD_WORD)
 }
 
 /// `yield`, `yield v` or `yield a, b`: the values yielded
-fn yielded(node: &Node) -> Option<Vec<Node>> {
+pub(crate) fn yielded(node: &Node) -> Option<Vec<Node>> {
 	match node.drop_meta() {
 		_ if is_yield(node) => Some(vec![]),
 		Node::List(items, _, Separator::Space | Separator::None) if items.first().is_some_and(is_yield) => Some(items[1..].to_vec()),
@@ -52,7 +52,7 @@ fn yielded(node: &Node) -> Option<Vec<Node>> {
 	}
 }
 
-fn contains_yield(body: &Node) -> bool {
+pub(crate) fn contains_yield(body: &Node) -> bool {
 	let mut found = false;
 	body.visit(&mut |part| found |= is_yield(part));
 	found
@@ -105,7 +105,7 @@ fn call_parts(node: &Node, takers: &HashMap<String, BlockTaker>) -> Option<(Stri
 }
 
 /// `(3)` and `(a, b)` hold the arguments
-fn arguments(node: &Node) -> Vec<Node> {
+pub(crate) fn arguments(node: &Node) -> Vec<Node> {
 	match node.drop_meta() {
 		Node::List(items, Bracket::Round, Separator::Colon) => items.clone(),
 		Node::List(items, Bracket::Round, _) if items.len() == 1 => items.clone(),

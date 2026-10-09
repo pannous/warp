@@ -56,6 +56,7 @@ pub mod introspection;
 pub mod reflection;
 pub mod word_operators;
 pub mod result_word;
+pub mod generators;
 pub mod ruby_blocks;
 pub mod run_time_blocks;
 pub mod shared_arrays;

@@ -1,0 +1,8 @@
+def squares(n):
+    for i in range(n):
+        yield i * i
+
+print(list(squares(4)))
+print(sum(squares(4)))
+for s in squares(3):
+    print(s)
