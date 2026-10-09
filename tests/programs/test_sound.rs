@@ -33,6 +33,7 @@ fn play_writes_the_tone_as_a_wav() {
 fn a_melody_is_its_notes_one_after_another() {
 	assert_eq!(sounded("sound-melody", "melody([C4 E4 [C4 G4]], 20ms); 7").len(), 3 * 441);
 	assert_eq!(sounded("sound-melody-each", "melody [C4 E4] each 20ms; 7").len(), 2 * 441);
+	is!("use sound\ncount(melody_samples([C4 [E4 G4]], 0.01))", 2 * 220);
 }
 
 #[test]
