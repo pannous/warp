@@ -194,6 +194,8 @@ pub fn warp_command() -> std::process::Command {
 	// hints chosen explicitly (card hints-toggle): the tests read them without the closing "hide hints with" line
 	let mut command = std::process::Command::new(binary);
 	command.env("WARP_HINTS", "1");
+	// a sample that paints writes PNGs here, no window (src/paint.rs)
+	command.env(warp::paint::NO_WINDOW_VARIABLE, "1");
 	command
 }
 

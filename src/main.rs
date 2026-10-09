@@ -88,6 +88,7 @@ fn node_to_i32(node: &Node) -> i32 {
 #[cfg(not(test))]
 fn main() {
     let mut args: Vec<String> = env::args().collect();
+    warp::paint::allow_windows();
     apply_flags(&mut args);
     run_command(&args);
 }
