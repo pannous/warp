@@ -149,19 +149,21 @@ fn guarded_call(mut caller: Caller<'_, HostState>, name: i32, arguments: Option<
 			Val::F64(bits) => crate::tasks::TaskValue::Float(warp_runtime::floats::canonical_nan(f64::from_bits(bits))),
 			node => return Ok(node.unwrap_anyref().copied()),
 		},
-		Err(failure) if failure.downcast_ref::<wasmtime::Trap>() == Some(&wasmtime::Trap::StackOverflow) => {
-			crate::tasks::TaskValue::Text(STACK_EXHAUSTED.to_string())
-		}
+		Err(failure) if failure.downcast_ref::<wasmtime::Trap>() == Some(&wasmtime::Trap::StackOverflow) => return error_in_program(&mut caller, STACK_EXHAUSTED),
 		Err(failure) => return Err(failure),
 	};
 	let builders = crate::tasks::Builders::of(&mut |export| caller.get_export(export)).map_err(message)?;
 	let built = builders.build(&value, &mut caller.as_context_mut()).map_err(message)?;
-	if !matches!(value, crate::tasks::TaskValue::Text(_)) {
-		return Ok(built.unwrap_anyref().copied());
-	}
+	Ok(built.unwrap_anyref().copied())
+}
+
+/// The Error of `reason`, built with the module's own error_of: a failure the program's `try` catches
+#[cfg(feature = "native")]
+fn error_in_program(caller: &mut Caller<'_, HostState>, reason: &str) -> wasmtime::Result<HostNode> {
+	let text = built_in_program(caller, &Node::Text(reason.to_string()), crate::wasm_emitter::text_builtins::ERROR_OF)?;
 	let error_of = caller.get_export(crate::wasm_emitter::text_builtins::ERROR_OF).and_then(Extern::into_func).ok_or_else(|| wasmtime::Error::msg("no exported error_of"))?;
 	let mut error = [Val::AnyRef(None)];
-	error_of.call(&mut caller, &[built], &mut error)?;
+	error_of.call(&mut *caller, &[Val::AnyRef(text)], &mut error)?;
 	Ok(error[0].unwrap_anyref().copied())
 }
 
@@ -737,7 +739,11 @@ fn std_call(mut caller: Caller<'_, HostState>, module: HostNode, member: HostNod
 	let (module, member) = (module?.name(), member?.name());
 	let answer = match (module.as_str(), member.as_str()) {
 		("table", "select") => queried_rows(&mut caller, &arguments?)?,
-		_ => crate::std_adapters::call(&module, &member, &arguments?).map_err(|problem| wasmtime::Error::new(crate::tasks::TaskFailure(problem)))?,
+		_ => match crate::std_adapters::call(&module, &member, &arguments?) {
+			Ok(answer) => answer,
+			// the program raises it (emit_ffi_result): `try` catches it, uncaught it ends the run with this reason
+			Err(problem) => return error_in_program(&mut caller, &problem),
+		},
 	};
 	built_in_program(&mut caller, &answer, &format!("{module}.{member}"))
 }
