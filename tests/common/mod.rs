@@ -83,6 +83,14 @@ pub fn announce_skip(resource: &str, test_module: &str) {
 	let _ = writeln!(std::io::stderr(), "skipped: needs {resource} ({test_module})");
 }
 
+/// How close an @gpu result of sin, cos or exp must come to the CPU's f64 one: a real GPU's f32 within 1e-5; a software
+/// adapter only within what WGSL guarantees, 2^-11 for sin and cos on [-π, π]. SwiftShader, the adapter of CI's
+/// headless Chrome (named by web/playground/test-worker.js as WARP_GPU_ADAPTER), was off by up to 5.2e-5 (card browser-gpu)
+pub fn gpu_tolerance() -> &'static str {
+	let software = std::env::var("WARP_GPU_ADAPTER").is_ok_and(|adapter| adapter.ends_with("(software)"));
+	if software { "0.00048828125" } else { "0.00001" }
+}
+
 /// Whether a test may start Chrome (agent-browser): only in CI (user, 2026-10-09: no test launches Chrome or Chromium
 /// on the Mac); elsewhere it announces its skip
 #[cfg(feature = "native")]

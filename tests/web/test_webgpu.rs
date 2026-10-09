@@ -108,10 +108,11 @@ fn a_gpu_map_the_gpu_cannot_run_says_why() {
 // lambda the CPU's f64x2 kernel computes (~1 ns an item) never goes to the GPU, a warning says so
 #[test]
 fn a_gpu_map_runs_on_the_cpu_where_that_is_faster() {
+	let tolerance = crate::common::gpu_tolerance();
 	use warp::diagnostic::{with_warning_mode, WarningMode};
 	let filled = |n: usize| format!("linear xs = float[{n}]\nfor i in 1 to {n} {{ xs#i = i / 30000.0 }}\nys = xs.map(x => sin(x)) @gpu\n");
 	assert_eq!(eval(&format!("{}ys#1 == sin(xs#1)", filled(100))).serialize(), "yes");
-	assert_eq!(eval(&format!("{}abs(ys#40000 - sin(xs#40000)) < 0.00001", filled(40000))).serialize(), "yes");
+	assert_eq!(eval(&format!("{}abs(ys#40000 - sin(xs#40000)) < {tolerance}", filled(40000))).serialize(), "yes");
 	with_warning_mode(WarningMode::Error, || crate::common::fails_with("linear xs = float[2]\nys = xs.map(x => x * 2 + 1) @gpu", "f64x2"));
 }
 
@@ -129,8 +130,9 @@ fn a_gpu_map_reads_outer_numbers() {
 // the GPU and back once
 #[test]
 fn a_chain_of_gpu_maps_is_one_kernel() {
+	let tolerance = crate::common::gpu_tolerance();
 	let program = "linear xs = float[40000]\nfor i in 1 to 40000 { xs#i = i / 40000.0 }\nys = xs.map(x => x * 2).map(y => sin(y) + y) @gpu\n";
-	assert_eq!(eval(&format!("{program}abs(ys#40000 - (sin(2) + 2)) < 0.00001")).serialize(), "yes");
+	assert_eq!(eval(&format!("{program}abs(ys#40000 - (sin(2) + 2)) < {tolerance}")).serialize(), "yes");
 	let lowered = warp::pipeline::lower(&format!("{program}ys#1")).expect("a program").serialize();
 	assert_eq!(lowered.matches("gpu_map_linear").count(), 1, "{lowered}");
 }
@@ -139,9 +141,10 @@ fn a_chain_of_gpu_maps_is_one_kernel() {
 // that, so the list need not be declared `linear`
 #[test]
 fn a_gpu_map_takes_a_list_of_floats() {
+	let tolerance = crate::common::gpu_tolerance();
 	use warp::diagnostic::{with_warning_mode, WarningMode};
 	let program = "xs = float[40000]\nfor i in 1 to 40000 { xs#i = i / 40000.0 }\nys = xs.map(x => sin(x)) @gpu\n";
-	let checked = format!("{program}abs(ys#40000 - sin(1)) < 0.00001");
+	let checked = format!("{program}abs(ys#40000 - sin(1)) < {tolerance}");
 	assert_eq!(with_warning_mode(WarningMode::Error, || eval(&checked)).serialize(), "yes");
 	assert_eq!(eval("ys = [0.5, 1.5].map(x => sin(x)) @gpu\n[#ys, ys#2 == sin(1.5)]").serialize(), "[2 yes]");
 }
@@ -150,9 +153,10 @@ fn a_gpu_map_takes_a_list_of_floats() {
 // map is folded into theirs, one round trip; read on the CPU too, it is mapped on its own
 #[test]
 fn a_gpu_map_result_mapped_again_stays_on_the_gpu() {
+	let tolerance = crate::common::gpu_tolerance();
 	use warp::diagnostic::{with_warning_mode, WarningMode};
 	let program = "linear xs = float[40000]\nfor i in 1 to 40000 { xs#i = i / 40000.0 }\nys = xs.map(x => sin(x)) @gpu\nzs = ys.map(y => exp(y) + 1) @gpu\n";
-	let checked = format!("{program}abs(zs#40000 - (exp(sin(1)) + 1)) < 0.00001");
+	let checked = format!("{program}abs(zs#40000 - (exp(sin(1)) + 1)) < {tolerance}");
 	assert_eq!(with_warning_mode(WarningMode::Error, || eval(&checked)).serialize(), "yes");
 	let round_trips = |program: &str| warp::pipeline::lower(program).expect("a program").serialize().matches("gpu_map_linear").count();
 	assert_eq!(round_trips(&format!("{program}zs#1")), 1);
@@ -160,17 +164,18 @@ fn a_gpu_map_result_mapped_again_stays_on_the_gpu() {
 	// xs changed between the maps: ys keeps the items before the change
 	assert_eq!(round_trips(&program.replace("zs = ", "xs#1 = 5.0\nzs = ")), 2);
 	let light_after = program.replace("exp(y) + 1", "y * y + 1");
-	assert_eq!(with_warning_mode(WarningMode::Error, || eval(&format!("{light_after}abs(zs#40000 - (sin(1) * sin(1) + 1)) < 0.00001"))).serialize(), "yes");
+	assert_eq!(with_warning_mode(WarningMode::Error, || eval(&format!("{light_after}abs(zs#40000 - (sin(1) * sin(1) + 1)) < {tolerance}"))).serialize(), "yes");
 }
 
 // card gpu-vectors: sum, min and max of an @gpu map reduce on the GPU: each workgroup leaves one partial result, only
 // those come back and the CPU combines them; below GPU_MAP_MIN_COUNT items, on the CPU in f64
 #[test]
 fn a_reduction_of_a_gpu_map_reads_back_partial_results() {
+	let tolerance = crate::common::gpu_tolerance();
 	use warp::diagnostic::{with_warning_mode, WarningMode};
 	let filled = |n: usize| format!("linear xs = float[{n}]\nfor i in 1 to {n} {{ xs#i = i / {n}.0 }}\n");
 	let program = filled(40000);
-	let close = |reduction: &str, expected: &str| format!("{program}c = 0.0\nfor i in 1 to 40000 {{ c = c + sin(xs#i) }}\nr = {reduction}(xs.map(x => sin(x)) @gpu)\nabs(r - {expected}) * 100000 < {expected} + 1");
+	let close = |reduction: &str, expected: &str| format!("{program}c = 0.0\nfor i in 1 to 40000 {{ c = c + sin(xs#i) }}\nr = {reduction}(xs.map(x => sin(x)) @gpu)\nabs(r - {expected}) < {tolerance} * ({expected} + 1)");
 	for (reduction, expected) in [("sum", "c"), ("max", "sin(1)"), ("min", "sin(1 / 40000)")] {
 		assert_eq!(with_warning_mode(WarningMode::Error, || eval(&close(reduction, expected))).serialize(), "yes", "{reduction}");
 	}
@@ -182,19 +187,21 @@ fn a_reduction_of_a_gpu_map_reads_back_partial_results() {
 // a list of floats in GC memory is copied into a block once, as for a map
 #[test]
 fn a_reduction_of_a_gpu_map_takes_a_list_of_floats() {
+	let tolerance = crate::common::gpu_tolerance();
 	let program = "xs = float[40000]\nfor i in 1 to 40000 { xs#i = i / 40000.0 }\ns = max(xs.map(x => sin(x)) @gpu)\n";
 	let lowered = warp::pipeline::lower(&format!("{program}s")).expect("a program").serialize();
 	assert!(lowered.contains("gpu_reduce_linear"), "{lowered}");
-	assert_eq!(eval(&format!("{program}abs(s - sin(1)) < 0.00001")).serialize(), "yes");
+	assert_eq!(eval(&format!("{program}abs(s - sin(1)) < {tolerance}")).serialize(), "yes");
 }
 
 // card gpu-vectors: an @gpu map result read in a text hole between two maps is read on the CPU, so it is not folded
 // into the later map (it was: the hole read a block never filled, "index out of range")
 #[test]
 fn a_gpu_map_result_read_in_a_text_hole_is_not_folded() {
+	let tolerance = crate::common::gpu_tolerance();
 	let program = "linear xs = float[40000]\nfor i in 1 to 40000 { xs#i = i / 40000.0 }\nys = xs.map(x => sin(x)) @gpu\nprint \"\\(ys#1)\"\nzs = ys.map(y => exp(y) + 1) @gpu\n";
 	assert_eq!(warp::pipeline::lower(program).expect("a program").serialize().matches("gpu_map_linear").count(), 2);
-	crate::is!(&format!("{program}abs(zs#40000 - (exp(sin(1)) + 1)) < 0.00001"), true);
+	crate::is!(&format!("{program}abs(zs#40000 - (exp(sin(1)) + 1)) < {tolerance}"), true);
 }
 
 // card gpu-vectors kept-buffer: an @gpu map result read on the CPU comes back, but its buffer also stays on the GPU, and
@@ -202,6 +209,7 @@ fn a_gpu_map_result_read_in_a_text_hole_is_not_folded() {
 // a statement between writes it or hands it on
 #[test]
 fn a_gpu_map_result_read_on_the_cpu_is_kept_on_the_gpu_for_the_next_map() {
+	let tolerance = crate::common::gpu_tolerance();
 	use warp::diagnostic::{with_warning_mode, WarningMode};
 	let keeping = |program: &str| {
 		let mut flags = vec![];
@@ -214,7 +222,7 @@ fn a_gpu_map_result_read_on_the_cpu_is_kept_on_the_gpu_for_the_next_map() {
 	};
 	let program = "linear xs = float[40000]\nfor i in 1 to 40000 { xs#i = i / 40000.0 }\nys = xs.map(x => sin(x)) @gpu\nprint \"\\(ys#1) of \\(#ys)\"\nzs = ys.map(y => exp(y) + 1) @gpu\ns = sum(ys.map(y => cos(y)) @gpu)\n";
 	assert_eq!(keeping(program), ["1", "2", "2"]);
-	let checked = format!("{program}abs(zs#40000 - (exp(sin(1)) + 1)) < 0.00001 and abs(s - sum(ys.map(y => cos(y)))) < 0.01");
+	let checked = format!("{program}abs(zs#40000 - (exp(sin(1)) + 1)) < {tolerance} and abs(s - sum(ys.map(y => cos(y)))) < 0.01");
 	assert_eq!(with_warning_mode(WarningMode::Error, || eval(&checked)).serialize(), "yes");
 	assert_eq!(keeping(&program.replace("zs = ", "ys#1 = 5.0\nzs = ")), ["0", "0", "0"]);
 	assert_eq!(keeping(&program.replace("zs = ", "f(ys)\nzs = ")), ["0", "0", "0"]);
