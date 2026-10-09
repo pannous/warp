@@ -25,8 +25,10 @@ play note("F#4") for 250ms      // note(name) needs `use sound` when called alon
   the background (format by its first bytes), `stop_sound` stops them. Natively (src/sound.rs play_file) the first
   player the system has for the format: afplay (no ogg), paplay (no mp3), ffplay, mpv; headless only the check and a
   `sound file <format>: <path>` line (tests/programs/test_sound_files.rs). In the playground an `<audio>` by its URL
-  (host-files.js STD_ADAPTERS.sound → worker → playground.js playSoundFile); a new run stops it. A player that cannot
-  decode the file fails in the background unseen natively; in the browser it reaches the console.
+  (host-files.js STD_ADAPTERS.sound → worker → playground.js playSoundFile); a new run stops it. Card sound-file-failure: the
+  file is decoded first by ffprobe or afinfo (a broken one fails play, also headless); a player failing within 0.3 s
+  fails play, a later failure prints `sound file <path>: <player> failed (<status>): <its error output>`; without a
+  decoder on the machine only the format is checked. In the browser a failure reaches the console.
 - Units: `Hz` is `1/s`, `kHz` `1/ms` (src/units.rs UNIT_ALIASES); `si_amount(x)` takes a quantity or a plain number.
 
 Limits found on the way: assignments to the module's globals (`note_seconds = 0.25`) from the program do not

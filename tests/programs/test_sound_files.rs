@@ -27,10 +27,22 @@ fn errors_of(program: &str) -> String {
 fn a_music_file_plays_in_the_background() {
 	let wav = sound_file("sound-files", "beep.wav", &warp::sound::wav(&[32768, 40000, 32768], 22050));
 	assert!(errors_of(&format!("play \"{}\"\n7", wav.display())).contains(&format!("sound file wav: {}", wav.display())));
-	let mp3 = sound_file("sound-files", "song.mp3", b"ID3\x04\x00\x00\x00\x00\x00\x00");
-	assert!(errors_of(&format!("play_file(\"{}\")\nstop_sound\n7", mp3.display())).contains("sound file mp3: "));
-	let ogg = sound_file("sound-files", "song.ogg", b"OggS\x00\x02\x00\x00");
-	assert!(errors_of(&format!("play \"{}\"\n7", ogg.display())).contains("sound file ogg: "));
+	assert!(errors_of(&format!("play_file(\"{}\")\nstop_sound\n7", wav.display())).contains("sound file wav: "));
+}
+
+/// card sound-file-failure: a file only its first bytes call music is decoded first (ffprobe, afinfo), so a broken one
+/// fails play instead of its player failing unseen; without a decoder on the machine only the format is checked
+#[test]
+fn a_broken_music_file_fails() {
+	for (name, bytes, format) in [("song.mp3", b"ID3\x04\x00\x00\x00\x00\x00\x00".as_slice(), "mp3"), ("song.ogg", b"OggS\x00\x02\x00\x00", "ogg")] {
+		let path = sound_file("sound-files-broken", name, bytes);
+		let program = format!("play \"{}\"\n7", path.display());
+		if warp::sound::can_probe(format) {
+			fails_with(&program, &format!("cannot be decoded as {format}"));
+		} else {
+			assert!(errors_of(&program).contains(&format!("sound file {format}: ")));
+		}
+	}
 }
 
 #[test]
