@@ -415,14 +415,13 @@ fn test_polymorphism3() {
 	is!("fun test(string a){return a};\nfun test(int a){return a};\nfun test(float b){return b+1};\ntest(1.0)",2.0);
 }
 
+// a generic type: a list of int16, written [int16] or list<int16> (card vacuous-tests; checking its elements: card
+// typed-list-elements)
 #[test]
-#[ignore] // TODO: requires Generics implementation
 fn test_generics() {
-	// let typ = Type(Generics { kind: array, value_type: int16t });
-	//    let header= typ.let array : value;
-	//    let header= typ.let 0xFFFF0000 : value; //
-	// let header = typ.let 0x0000FFFF : value; //todo ?? - invalid Rust syntax
-	//     assert!(_eq!(header, array);
+	is!("xs: [int16] = [1, 2, 3]; xs#2", 2);
+	is!("xs: list<int16> = [1, 2]; xs#2 + 1", 3);
+	is!("xs: [int16] = [1, 2]; type(xs)", "list of int16");
 }
 
 #[test]
