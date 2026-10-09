@@ -349,6 +349,7 @@ PASSED:
   ✓ control::test_reactive_ports::the_signals_note_example_runs
   ✓ control::test_reflection_words::a_bindings_doc
   ✓ control::test_reflection_words::a_classes_methods
+  ✓ control::test_reflection_words::a_functions_dump
   ✓ control::test_reflection_words::a_functions_effects_as_a_dot_form
   ✓ control::test_reflection_words::a_functions_params
   ✓ control::test_reflection_words::a_functions_signature
@@ -4291,4 +4292,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-10 ignored, 4286 passed, 0 failed, 4286 total tested
+10 ignored, 4287 passed, 0 failed, 4287 total tested
