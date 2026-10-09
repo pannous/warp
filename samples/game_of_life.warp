@@ -63,7 +63,7 @@ for generation in 0 to generations {
     render()
     if generation < generations {
         step()
-        sleep 150 ms
+        sleep 150ms
     }
 }
 
