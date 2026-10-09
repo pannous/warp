@@ -36,6 +36,8 @@ MAX_SOURCE_BYTES = 256 * 1024
 START_TRIES = 40
 START_PAUSE = 0.25
 PROXY_TIMEOUT = 30
+CERTIFICATE_TRIES = 6  # Ferron issues a new name's certificate on its first HTTPS request, which fails meanwhile
+CERTIFICATE_PAUSE = 5
 NAME_PATTERN = re.compile(r"^[a-z0-9]([a-z0-9-]{0,38}[a-z0-9])?$")  # web/hosting/hosting.mjs NAME_PATTERN
 ALLOWED_ORIGINS = [re.compile(r"^https://warp\.pannous\.com$"), re.compile(r"^https://pannous\.github\.io$"), re.compile(r"^http://(localhost|127\.0\.0\.1)(:\d+)?$")]
 NATIVE = "/native"
@@ -178,7 +180,21 @@ def deploy(name, source, who):
         save(table)
     start(name, entry["port"])
     serving(name, entry["port"])
-    return {"url": f"https://{name}.{DOMAIN}", "name": name}
+    url = f"https://{name}.{DOMAIN}"
+    return {"url": url, "name": name, **({} if RUNNER == "process" or certified(url) else {"certificate": "pending"})}
+
+
+def certified(url):
+    """asks for the page over HTTPS until Ferron has the certificate, so the deployer's first click works"""
+    for _ in range(CERTIFICATE_TRIES):
+        try:
+            urllib.request.urlopen(urllib.request.Request(url, headers={"user-agent": "warp-lambda"}), timeout=PROXY_TIMEOUT).close()
+            return True
+        except urllib.error.HTTPError:
+            return True  # the program answered, over TLS
+        except OSError:
+            time.sleep(CERTIFICATE_PAUSE)
+    return False
 
 
 def remove(name, who):
