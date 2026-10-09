@@ -46,3 +46,10 @@ fn a_stored_unit_column_filters_and_sums() {
 	loads("ts.add(T(3))\nts.add(T(0.5))");
 	assert_eq!(loads("total = 0\nfor t in ts { total = total + t.load }\ntotal"), "3.5");
 }
+
+// `as` takes a compound unit whole: `speed as km/h` (card compound-unit)
+#[test]
+fn a_conversion_takes_a_compound_unit_whole() {
+	assert_eq!(eval("x = 10 km / 50 min\nx as km/h").serialize().trim(), "12km/h");
+	assert_eq!(shown("r = runs#1\n(r.distance / 25 min) as km/h"), "12km/h");
+}
