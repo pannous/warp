@@ -223,3 +223,6 @@ Running list of the small fixes done by the fixer session (branches fix-<topic>)
   by stopped tasks): host.js then runs a task inline, and threads.warp's `go spin(10^12)`; `stop endless` cannot stop
   an inline task. Reproduced with prepareTaskPool(0) (120 s timeout); fixed by taskPoolReady before each run and a
   replacement Worker for a stopped one. Alone the test takes 3.4 s in the browser.
+
+## 2026-10-09 print-km
+- `"a: " + x as km` parsed `("a: " + x) as km`: a conversion after a text join converts the last operand (units.rs with_converted_last_operand).

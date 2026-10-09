@@ -72,3 +72,4 @@ mod test_log_glyphs; // P226
 mod test_units_text; // card units-text
 mod test_as_compound_unit; // card compound-unit
 mod test_quantities_in_one_text; // card text-join
+mod test_text_then_conversion; // card print-km
