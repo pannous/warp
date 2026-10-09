@@ -32,7 +32,7 @@ needs no files on disk and works in the browser.
 | random | random random_below, choice shuffle sample, seed | host words + warp |
 | io / file | read, write, append, exists, list_files, lines | host words (WASI natively, a virtual FS in the browser) |
 | net / http | fetch, post, url parts | host word fetch (exists) + warp |
-| json | parse_json, to_json (warp data is a JSON superset: `Node::from_json` / `to_json` exist) | host words |
+| json | json.parse (alias parse_json), to_json (warp data is a JSON superset: `Node::from_json` / `to_json` exist) | host words |
 | os / process | args env exit exec | host words (exit exists), Process capability |
 | regex | matches find find_all replace_all | adapter (Rust regex as host word natively, JS RegExp in the browser) |
 | hash | hash sha256 md5 crc32 | adapter (xxHash/zlib C modules exist, notes/wasm_modules.md) |
@@ -212,7 +212,7 @@ run natively and in the browser.
 3b. Done: net (A, std_io): `use net` brings post(url, body), the body sent as UTF-8 text, the answer's text (ureq
    natively, a synchronous XMLHttpRequest in the browser; tests/modules/test_std_net.rs against httpbin.org).
 3c. Done: other ecosystems' names (src/lowering/std_aliases.rs, the source pass before welcome_forms): `JSON.parse` /
-   `json.loads` → parse_json, `JSON.stringify` / `json.dumps` → to_json, `re.findall(p, t)` → find_all(t, p),
+   `json.loads` → json.parse (warp's own form, card g_ogQg: lowered to lib/json.warp's parse_json, which written by hand gets the note too), `JSON.stringify` / `json.dumps` → to_json, `re.findall(p, t)` → find_all(t, p),
    `re.sub(p, r, t)` → replace_all(t, p, r), `fs.readFileSync` → read, `fs.writeFileSync` / `appendFileSync` /
    `existsSync` → write / append_file / exists, `os.getenv` → env, `process.exit` → exit: the got-it note names warp's
    word, and the alias brings its module as `use json` would. A program that names the module (`re = 3`) or imports

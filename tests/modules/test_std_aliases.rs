@@ -20,7 +20,7 @@ fn foreign_standard_names_are_warp_words() {
 fn a_foreign_name_says_the_warp_word() {
 	clear_shown_hints();
 	let (_, hints) = capture_hints(|| warp::wasm_emitter::eval("JSON.parse(\"[1]\")"));
-	assert!(hints.iter().any(|hint| hint.original == "JSON.parse" && hint.canonical == "parse_json"), "{hints:?}");
+	assert!(hints.iter().any(|hint| hint.original == "JSON.parse" && hint.canonical == "json.parse"), "{hints:?}");
 }
 
 #[test]
