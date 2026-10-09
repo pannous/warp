@@ -40,7 +40,7 @@ const LITERAL_SUFFIXES: [(char, &str); 6] = [('f', "float"), ('F', "float"), ('d
 /// `0.1:float`, `1.5:int`: a number literal directly typed with one of these binds tightly, unlike the loose `as`
 const LITERAL_NUMBER_TYPES: [&str; 11] = ["int", "i64", "integer", "exact", "real", "float", "fast", "f64", "double", "f32", "i32"];
 /// Words that may precede the name of a global besides a type word (`int`, `long` … see `analyzer::type_word_kind`)
-const ORDINAL_SUFFIXES: [&str; 4] = ["st", "nd", "rd", "th"];
+pub(crate) const ORDINAL_SUFFIXES: [&str; 4] = ["st", "nd", "rd", "th"];
 
 /// Type names that take type arguments in angle brackets besides the plural and user types: `list<int>`, `map<text, int>`
 const GENERIC_TYPE_HEADS: [&str; 7] = ["list", "array", "set", "map", "option", "result", "tuple"];
