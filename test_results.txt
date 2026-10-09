@@ -2891,6 +2891,8 @@ PASSED:
   ✓ types::test_bool_assign::a_bool_variable_refuses_other_kinds
   ✓ types::test_bool_assign::a_bool_variable_takes_bools_and_an_int_variable_takes_a_bool
   ✓ types::test_bool_assign::one_and_zero_are_yes_and_no_everywhere
+  ✓ types::test_bool_conversion::a_conversion_to_bool_is_a_bool
+  ✓ types::test_bool_conversion::a_function_declared_bool_returns_a_bool
   ✓ types::test_bool_literal_value::a_function_giving_its_bool_parameter_gives_a_bool
   ✓ types::test_bool_literal_value::an_assignment_to_a_bool_gives_a_bool
   ✓ types::test_bool_return::a_function_giving_a_bool_returns_a_bool
@@ -4097,4 +4099,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-14 ignored, 4092 passed, 0 failed, 4092 total tested
+14 ignored, 4094 passed, 0 failed, 4094 total tested
