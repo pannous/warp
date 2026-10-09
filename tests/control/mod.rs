@@ -152,3 +152,4 @@ mod test_try_else_print; // card try-print
 mod test_database_busy; // card orm-sample-lock
 mod test_if_instance_branches; // card if-instance-branch
 mod test_table_remove; // card table-remove
+mod test_table_key_filter; // card table-key-filter

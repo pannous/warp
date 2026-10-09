@@ -290,6 +290,9 @@ impl Query<'_> {
 		if let Some(column) = self.column(node) {
 			return Some(column);
 		}
+		if let Some(compared) = self.key_comparison(node) {
+			return Some(compared);
+		}
 		match node.drop_meta() {
 			Node::Key(left, op, right) => {
 				let operator = match op {
@@ -323,6 +326,18 @@ impl Query<'_> {
 			// a foreign key's column is an id, the field an instance: compared through a query's function
 			false => (columns_of(self.table).contains(&field) && self.table.reference(&field).is_none()).then(|| quote(&field)),
 		}
+	}
+
+	/// `it.team == red` of a foreign key team: its column against the id of red's row, 0 for ø
+	fn key_comparison(&mut self, node: &Node) -> Option<String> {
+		let Node::Key(left, op @ (Op::Eq | Op::Ne), right) = node.drop_meta() else { return None };
+		let field = self.field_of_it(left).filter(|field| self.table.reference(field).is_some())?;
+		if crate::lambdas::mentions(right, crate::lambdas::IMPLICIT_PARAMETER) {
+			return None;
+		}
+		let id = generated(&format!("(if {VALUE_PLACEHOLDER} == ø then 0 else {VALUE_PLACEHOLDER}.{ID_FIELD})"), [(VALUE_PLACEHOLDER, right.as_ref().clone())]);
+		let operator = if *op == Op::Eq { "=" } else { "<>" };
+		Some(format!("({} {operator} {})", quote(&field), self.parameter(id)))
 	}
 
 	fn field_of_it(&self, node: &Node) -> Option<String> {
