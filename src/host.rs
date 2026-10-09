@@ -695,8 +695,8 @@ fn serve_routes(mut caller: Caller<'_, HostState>, port: i64, routes: HostNode) 
 	let port = u16::try_from(port).map_err(|_| wasmtime::Error::new(crate::tasks::TaskFailure(format!("serve {port}: no port number"))))?;
 	let site = served_site(port);
 	serve(port, &routes, &site, |route, request| match route_value(&mut caller, &route.function, &request) {
-		Ok(value) => route.answer_of(&value),
-		Err(failure) => route.failed(&route_failure(&mut caller, &route.path, failure)),
+		Ok(value) => Ok(route.answer_of(&value)),
+		Err(failure) => Err(route_failure(&mut caller, &route.path, failure)),
 	}).map_err(|problem| wasmtime::Error::new(crate::tasks::TaskFailure(problem)))?;
 	built_in_program(&mut caller, &Node::Empty, SERVE_ROUTES)
 }
@@ -704,7 +704,7 @@ fn serve_routes(mut caller: Caller<'_, HostState>, port: i64, routes: HostNode) 
 /// What a failed route says to the client: the program's error message, read with the value the program left in
 /// trap_detail (as wasm_reader::with_trap_detail does for main); the whole trace goes to the server's log
 #[cfg(feature = "native")]
-fn route_failure(caller: &mut Caller<'_, HostState>, path: &str, failure: wasmtime::Error) -> String {
+fn route_failure(caller: &mut Caller<'_, HostState>, path: &str, failure: wasmtime::Error) -> crate::web_server::RouteFailure {
 	let detail = caller.get_export(crate::wasm_reader::TRAP_DETAIL).and_then(Extern::into_global);
 	let left = detail.map(|global| global.get(&mut *caller));
 	// read once: the next failure must not show this one's detail
@@ -722,7 +722,7 @@ fn route_failure(caller: &mut Caller<'_, HostState>, path: &str, failure: wasmti
 	let trace = format!("{failure:?}");
 	let message = crate::tasks::failure_message(failure);
 	eprintln!("{path} failed: {message}\n{trace}");
-	message
+	crate::web_server::RouteFailure { message, raised: trace.contains(crate::wasm_emitter::list_ops::RETURNED_ERROR) }
 }
 
 /// The site of the program file being run, which a program whose last line shows a page serves at / (src/site.rs); a

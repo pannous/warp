@@ -77,7 +77,7 @@ pub fn function_body_scope(params: &[Param], body: &Node, function_kinds: &HashM
 	let mut scope = Scope::with_function_kinds(function_kinds.clone()).with_closure_targets(closure_variable_targets.clone());
 	scope.globals = globals.clone(); // `d = o; return d` of a declared global keeps the global's kind
 	for param in params {
-		scope.define_param(param.name.clone(), param_kind(param));
+		scope.define_param(param, param_kind(param));
 	}
 	collect_variables(body, &mut scope);
 	scope
@@ -587,7 +587,7 @@ pub(super) fn with_closure_captures(ctx: &Context, program: &Node, mut globals: 
 			Some(enclosing) => {
 				let mut enclosing_scope = Scope::new();
 				for param in &enclosing.params {
-					enclosing_scope.define_param(param.name.clone(), param_kind(param));
+					enclosing_scope.define_param(param, param_kind(param));
 				}
 				collect_variables(&enclosing.body, &mut enclosing_scope);
 				let mut captured = captured_variables(function, &enclosing_scope);

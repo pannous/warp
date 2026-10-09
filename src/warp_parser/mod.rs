@@ -128,6 +128,7 @@ const TEST_WORDS: [&str; 6] = ["empty", "missing", "absent", "unknown", "undefin
 const FAILED_WORD: &str = "failed";
 /// The runtime test of `x failed` (wasm_emitter/text_builtins.rs)
 const IS_ERROR_CALL: &str = "is_error";
+const COUNT_CALL: &str = "count";
 const EMPTY_WORD: &str = "empty";
 /// Operators that may follow a suffix `!` directly: `x!+1`, `x!*2` (`!=` is the inequality)
 const INFIX_AFTER_BANG: [char; 9] = ['+', '-', '*', '/', '%', '^', '<', '>', ')'];
@@ -151,6 +152,9 @@ const PRINT_WORD: &str = "print";
 /// `print a  print b`: statements separated by spaces only (user decision 2026-10-03: a loud error)
 const TWO_STATEMENTS_ON_ONE_LINE: &str = "two statements on one line? separate them with `;` or a newline";
 const IN_KEYWORD: &str = "in";
+/// What ends a loop's iterable besides its body: the statement, a comprehension's bracket or condition (`if`)
+const ITERABLE_ENDS: [char; 6] = [';', '}', ']', ')', ',', '\0'];
+const IF_WORD: &str = "if";
 /// Ruby/Lua blocks: `while c do … end`, `if c then … else … end`
 const END_KEYWORD: &str = "end";
 const ELIXIR_FUNCTION_KEYWORD: &str = "fn";

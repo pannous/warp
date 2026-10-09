@@ -1882,11 +1882,14 @@ pub(crate) fn failed_run(failure: anyhow::Error) -> Node {
 	trap_error(&format!("{:?}", failure), trap.to_string())
 }
 
+/// How an index error of an empty list ends: a lookup that found nothing (a served route answers it 404)
+pub const EMPTY_RANGE: &str = "an empty list";
+
 /// "index out of range: 7 not in 1…3" from index_out_of_range_of's detail `7:3` (the index asked for, the list's count)
 fn index_range_message(detail: &str) -> Option<String> {
 	let numbers: Vec<i64> = detail.split(|c: char| !(c.is_ascii_digit() || c == '-')).filter_map(|part| part.parse().ok()).collect();
 	let [index, count] = numbers.as_slice() else { return None };
-	let range = if *count == 0 { "an empty list".to_string() } else { format!("1…{count}") };
+	let range = if *count == 0 { EMPTY_RANGE.to_string() } else { format!("1…{count}") };
 	Some(format!("{}: {index} not in {range}", list_ops::runtime_error_message("index_out_of_range")))
 }
 
@@ -1897,7 +1900,7 @@ pub fn trap_error(trace: &str, trap: String) -> Node {
 		// a meta key starts with its mark (`no_field_@source`); a later `@` begins the url of a Firefox or Safari frame
 		let mark = rest.strip_prefix(crate::node::ATTRIBUTE_MARK).map_or("", |_| "@");
 		let name: String = rest[mark.len()..].chars().take_while(|c| c.is_alphanumeric() || *c == '_').collect();
-		format!("no field {mark}{name}")
+		format!("{}{mark}{name}", list_ops::NO_FIELD_MESSAGE)
 	});
 	let no_case = trace.split_once(crate::switch::NO_CASE_PREFIX).map(|(_, rest)| {
 		let label: String = rest.chars().take_while(|c| c.is_alphanumeric() || *c == '_').collect();
