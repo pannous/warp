@@ -360,7 +360,7 @@ const SOURCE_PASSES: [fn(Node) -> Node; 100] = [
 ];
 
 /// The passes after the constant answers (time, units, reals), in order: types and traits, lambdas and closures, words
-const MEANING_PASSES: [fn(Node) -> Node; 29] = [
+const MEANING_PASSES: [fn(Node) -> Node; 30] = [
 	// first: the run-time item checks of declared lists see `names.add(v)` before any pass lowers the append
 	crate::lowering::list_element_checks::lower,
 	crate::lazy_ranges::lower, crate::declarations::resolve_tasks, crate::traits::lower_declarations, crate::type_tests::lower, crate::ambiguous_forms::lower, crate::analyzer::lower_list_times,
@@ -368,7 +368,7 @@ const MEANING_PASSES: [fn(Node) -> Node; 29] = [
 	crate::broadcasting::lower_scalar_element_wise, crate::broadcasting::lower_prefix_calls, crate::overloads::lower_arity_overloads,
 	crate::broadcasting::lower, crate::library_words::lower_count_in, crate::lambdas::lower, crate::function_values::lower, crate::closures::lower, crate::lambdas::lower_strict, crate::broadcasting::lower_several_arguments, crate::real::lower,
 	crate::type_constructor::lower, crate::printable::lower, crate::overloads::lower, crate::traits::lower_conformances, crate::min_max::lower,
-	crate::declarations::lower, crate::switch::lower, crate::phrase_words::lower, crate::library_words::lower,
+	crate::declarations::lower, crate::switch::lower, crate::phrase_words::lower, crate::library_words::lower, crate::number_keys::lower_key_words,
 	crate::traits::lower_dispatch, crate::memoization::lower,
 ];
 

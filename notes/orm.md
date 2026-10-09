@@ -79,10 +79,11 @@ keeping its fields with id 0; the lazy `people·remove` drops bo from the loaded
 - A route reopening the table (`users = database.users`, serve.rs) is `users = users·reset()`: the next read loads anew.
 - Observed natively by `database::rows_read()` (tests a_table_loads_its_rows_only_when_read,
   an_element_of_a_table_loads_one_row, iterating_a_table_reads_it_in_pages).
-- The identity map `people·met` is a list searched by id, so a loop over n unloaded rows costs n²/2 comparisons:
-  a map by id once tables grow large. It was n³: each comparison loop indexed and counted the cons list from its head
-  per step; the list cursor (list_ops.rs emit_list_cursor_globals) makes those O(1), so 2000 rows take 2.4 s instead
-  of running out of fuel (test walking_a_list_of_objects_takes_linear_steps).
+- The identity map `people·met = {}` is keyed by id (`people·met[id]`, `id in people·met`), a global hash table
+  (map_backend.rs find_typed_map_globals, card int-map): loading, adding and reading n rows is linear, 10 000 rows in
+  ~0.5 s with their inserts (test ten_thousand_rows_load_in_linear_time; a list searched by id took 11.6 s for 2000).
+  The INSERT runs before the add so the instance has its id as its key. A rollback's restore finds rows by id in a
+  local map too. Still n·m: a required foreign key's check per row (matching_rows) and `people where it.id in ids`.
 - A filter `people where c` is `people.table·found(sql, parameters)` until with_lazy_reads makes it `people·found(…)`:
   `std_io("table", "select", [table, schema, file, sql, parameters])` gives the kept rows whole, each made the one
   instance of its row by `people·kept` (no load); a loaded table, or one with a required foreign key, keeps its loaded
