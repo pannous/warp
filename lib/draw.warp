@@ -88,3 +88,15 @@ def line(x1, y1, x2, y2, color) {
 def show() {
 	paint(canvas_pixels, canvas_width, canvas_height)
 }
+
+// label(x, y, words, color, size): words set in a sans-serif font `size` pixels high from their top left corner, smooth
+// edges mixed with what is below (card paint-text): the host sets them, the playground with the browser's canvas,
+// natively a system font (src/text_raster.rs), so they look as text does on that system
+def label(x, y, words, color, size = 12) {
+	covered = text_coverage(words, size)
+	width = covered[0]
+	for at in 0..width * covered[1] {
+		amount = covered[at + 2]
+		if amount > 0 { dot(x + at % width, y + at//width, with_alpha(color, amount / 255)) }
+	}
+}
