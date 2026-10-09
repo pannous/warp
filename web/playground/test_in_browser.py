@@ -327,7 +327,7 @@ def check_examples(names, page_url=None, site=None):
 			if NO_GPU in str(shown.get("value")):
 				print(f"skip {name}: this browser {NO_GPU}")
 				shown = {**shown, "value": expected.get("value"), "canvases": expected.get("canvases")}
-			verdict(name, [f"{part}: {shown[part]!r}, expected {expected[part]!r}" for part in ("value", "printed", "canvases", "clicked", "clickedPrinted", "kept", "keyed", "animated", "address") if part in expected and shown[part] != expected[part]] + [f"status: {shown['failed']}"] * bool(shown.get("failed")))
+			verdict(name, [f"{part}: {shown.get(part)!r}, expected {expected[part]!r}" for part in ("value", "printed", "canvases", "clicked", "clickedPrinted", "kept", "keyed", "animated", "address") if part in expected and shown.get(part) != expected[part]] + [f"status: {shown.get('failed')}"] * bool(shown.get("failed")))
 	console.stop()
 	browser("close")
 	if server:
