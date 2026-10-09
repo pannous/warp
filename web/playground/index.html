@@ -52,7 +52,8 @@
 			<p>Put the program's routes (<code>get "/" {…}</code>) on the web as
 				<input id="deploy-name" class="deploy-name" autocomplete="off" spellcheck="false" placeholder="name"><br/>
 				<button id="deploy" title="log in with GitHub; it answers at https://warp-<name>.pannous.workers.dev">☁ Deploy</button>
-				<button id="deploy-own" title="log in with Cloudflare, or paste an API token below; it goes to your own account">☁ Deploy to my Cloudflare</button><br/>
+				<button id="deploy-own" title="log in with Cloudflare, or paste an API token below; it goes to your own account">☁ Deploy to my Cloudflare</button>
+				<button id="deploy-native" title="log in with GitHub; it runs sandboxed on pannous.com and answers at https://<name>.lambda.pannous.com">☁ Deploy to pannous.com</button><br/>
 				<input id="cloudflare-token" class="api-key" type="password" autocomplete="off" spellcheck="false" placeholder="or a Cloudflare API token (Workers Scripts: Edit)"><br/>
 				<span id="deployed"></span></p>
 			<p>Run it on your machine: 

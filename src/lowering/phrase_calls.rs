@@ -128,6 +128,23 @@ fn matched(arguments: &[Node], pattern: &[Part]) -> Option<Vec<Node>> {
 	Some(values)
 }
 
+/// `x = f [1] by 5`: an assigned value nests its words in pairs, `[[f, [1]], [by, 5]]`; a phrase call reads them flat
+fn assigned_words(value: Node, patterns: &HashMap<String, Vec<Vec<Part>>>) -> Node {
+	let Node::List(items, Bracket::None, Separator::Space) = value.drop_meta() else { return value };
+	let flat = spaced_words(items);
+	match flat.first().and_then(word) {
+		Some(name) if patterns.contains_key(name) && flat.len() > items.len() => Node::List(flat, Bracket::None, Separator::Space),
+		_ => value,
+	}
+}
+
+fn spaced_words(items: &[Node]) -> Vec<Node> {
+	items.iter().flat_map(|item| match item.drop_meta() {
+		Node::List(words, Bracket::None, Separator::Space) => spaced_words(words),
+		_ => vec![item.clone()],
+	}).collect()
+}
+
 fn rewrite(node: Node, patterns: &HashMap<String, Vec<Vec<Part>>>) -> Node {
 	match node {
 		Node::List(items, bracket, separator) => {
@@ -142,6 +159,7 @@ fn rewrite(node: Node, patterns: &HashMap<String, Vec<Vec<Part>>>) -> Node {
 			};
 			call.unwrap_or(Node::List(items, bracket, separator))
 		}
+		Node::Key(left, Op::Assign, right) => Node::Key(Box::new(rewrite(*left, patterns)), Op::Assign, Box::new(rewrite(assigned_words(*right, patterns), patterns))),
 		Node::Key(left, op, right) => Node::Key(Box::new(rewrite(*left, patterns)), op, Box::new(rewrite(*right, patterns))),
 		Node::Meta { node, data } => Node::Meta { node: Box::new(rewrite(*node, patterns)), data },
 		other => other,

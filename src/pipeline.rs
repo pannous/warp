@@ -100,6 +100,11 @@ thread_local! {
 	static GRANTED: std::cell::Cell<&'static [crate::effects::Capability]> = const { std::cell::Cell::new(&crate::effects::Capability::GRANTED_BY_EVAL) };
 }
 
+/// `run` with the program granted only what a sandboxed program gets (`warp --sandbox`, Capability::GRANTED_SANDBOXED)
+pub fn sandboxed<T>(run: impl FnOnce() -> T) -> T {
+	with_granted(&crate::effects::Capability::GRANTED_SANDBOXED, run)
+}
+
 /// `run` with the program granted only `granted`
 fn with_granted<T>(granted: &'static [crate::effects::Capability], run: impl FnOnce() -> T) -> T {
 	let before = GRANTED.with(|current| current.replace(granted));

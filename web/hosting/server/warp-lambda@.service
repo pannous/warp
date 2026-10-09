@@ -1,0 +1,47 @@
+# One hosted warp program (warp_lambda.py deploys it): `warp --sandbox serve` on 127.0.0.2:$PORT, reachable only through
+# the daemon's proxy. Sandboxed (user decision 2026-10-09): its own throwaway user, its files and SQLite only in its state
+# folder, no other program's source, no localhost or private network (the ssh gateway, the daemon), 192 MB, half a core.
+[Unit]
+Description=warp program %i (warp-lambda)
+After=network-online.target
+
+[Service]
+EnvironmentFile=/var/lib/warp-lambda/programs/%i/env
+Environment=WARP_SERVE_ADDRESS=127.0.0.2 WARP_NO_WINDOW=1 HOME=/var/lib/warp-lambda-data/%i
+ExecStart=/usr/local/bin/warp --sandbox --no-ask --no-hints serve /var/lib/warp-lambda/programs/%i/app.warp ${PORT}
+StandardOutput=truncate:/var/lib/warp-lambda/programs/%i/log
+StandardError=inherit
+Restart=on-failure
+RestartSec=3
+DynamicUser=yes
+StateDirectory=warp-lambda-data/%i
+WorkingDirectory=/var/lib/warp-lambda-data/%i
+TemporaryFileSystem=/var/lib/warp-lambda
+BindReadOnlyPaths=/var/lib/warp-lambda/programs/%i/app.warp
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+PrivateDevices=yes
+PrivateUsers=yes
+NoNewPrivileges=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectKernelLogs=yes
+ProtectControlGroups=yes
+ProtectClock=yes
+ProtectHostname=yes
+ProtectProc=invisible
+ProcSubset=pid
+RestrictNamespaces=yes
+RestrictRealtime=yes
+RestrictSUIDSGID=yes
+LockPersonality=yes
+CapabilityBoundingSet=
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+SystemCallArchitectures=native
+SystemCallFilter=@system-service
+IPAddressAllow=127.0.0.2
+IPAddressDeny=localhost link-local multicast 10.0.0.0/8 172.16.0.0/12 192.168.0.0/16 100.64.0.0/10 fc00::/7 81.169.181.160
+MemoryMax=192M
+CPUQuota=50%
+TasksMax=64

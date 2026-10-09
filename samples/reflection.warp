@@ -17,6 +17,8 @@ area(width: int, height: int) := width * height
 print "area takes \(area.params): \(area.signature)"
 print "$(area.body)"
 print "OK"
+# print area.dumb To do we have all the information so we can emit the complete function as it will be copy pastable: ≈
+# area(width: int, height: int) := width * height
 print dir(&area)
 print type(&area)
 print dir(area)

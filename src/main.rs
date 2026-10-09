@@ -70,6 +70,8 @@ const OLD_ANSWERS_FILE: &str = ".warp-answers";
 const NO_ASK_FLAG: &str = "--no-ask";
 /// Hints and notes (`prefer ^ over **`) are shown by default; `--no-hints` or WARP_HINTS=0 hide them (card hints-toggle)
 const NO_HINTS_FLAG: &str = "--no-hints";
+/// Run the program with no C, shell or other runtime (Capability::GRANTED_SANDBOXED), as warp-lambda hosts programs
+const SANDBOX_FLAG: &str = "--sandbox";
 const HINTS_VARIABLE: &str = "WARP_HINTS";
 /// The last line of a run that showed hints while nobody chose to see them (neither the flag nor WARP_HINTS was given)
 const HIDE_HINTS_TIP: &str = "hide hints with: warp --no-hints (or WARP_HINTS=0)";
@@ -92,7 +94,13 @@ fn main() {
     let mut args: Vec<String> = env::args().collect();
     warp::paint::allow_windows();
     apply_flags(&mut args);
-    run_command(&args);
+    match args.iter().position(|arg| arg == SANDBOX_FLAG) {
+        Some(flag) => {
+            args.remove(flag);
+            warp::pipeline::sandboxed(|| run_command(&args))
+        }
+        None => run_command(&args),
+    }
 }
 
 /// `--fuel <steps>`, `--strict`, `--no-ask`, `--no-hints` take effect and leave the arguments; the answers file is read
@@ -756,6 +764,7 @@ fn usage() {
     println!("  --fuel <steps>       Execution budget before 'out of fuel' (env WARP_FUEL)");
     println!("  --no-ask             Never prompt \"got it?\" after a warning or note");
     println!("  --no-hints           Hide hints and notes (prefer ^ over **), shown by default (env WARP_HINTS=0)");
+    println!("  --sandbox            No C, shell or other runtime for the program (as hosted programs run)");
     println!("  The last compiled module is kept in ~/.cache/warp/last.wasm for inspection");
     println!("  warp compile --wasm <file|code>  Only the module, <file>.wasm (out.wasm for inline code), without running");
     println!("  warp compile --aot <file|code>   The module and its machine code for this machine, <file>.cwasm");

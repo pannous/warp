@@ -1,0 +1,9 @@
+// The warp-lambda daemon may start, restart, stop and clean the units of hosted programs (warp-lambda@<name>.service),
+// and no other unit
+polkit.addRule(function (action, subject) {
+	if (action.id !== "org.freedesktop.systemd1.manage-units" || subject.user !== "warp-lambda") return polkit.Result.NOT_HANDLED;
+	var unit = action.lookup("unit") || "";
+	var verb = action.lookup("verb") || "";
+	if (/^warp-lambda@[a-z0-9-]+\.service$/.test(unit) && ["start", "restart", "stop", "clean"].indexOf(verb) >= 0) return polkit.Result.YES;
+	return polkit.Result.NOT_HANDLED;
+});

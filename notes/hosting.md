@@ -42,9 +42,8 @@ glue that turns a request into a call and the returned Node into a response. The
 7. **wasmCloud.** Self-hosted wasmtime with components. No hosted free tier to compare.
 8. **AWS Lambda.** No native wasm: a Node 22 handler instantiates the module (V8, GC fine). IAM keys only, so it's
    the heaviest for users to set up.
-- Also possible: **our own server** (pannous.com) running `warp serve` natively (wasmtime, SQLite, files) behind a
-  wildcard nginx vhost. It's the only option with the full native host (database, files), at the cost of
-  operating it ourselves.
+- **Our own server** (pannous.com, built: "Built: warp-lambda" below): `warp --sandbox serve` natively (wasmtime,
+  SQLite, files) behind Ferron. The only option with the full native host, at the cost of operating it ourselves.
 
 ## Built: warp-hosting (web/hosting/)
 One control Worker in our Cloudflare account, https://warp-hosting.pannous.workers.dev, reached as
@@ -68,6 +67,29 @@ lambda's DNS moves to Cloudflare):
   scripts, src/web.rs worker_bundle → src/host_parts.rs).
 - Tests: tests/web/test_deploy.rs (the bundle); `node web/hosting/test_hosting.mjs` against the real API (wrangler
   dev of the control Worker, `warp deploy --hosted`, the live routes, DELETE; needs ~/.keys CLOUDFLARE_API_TOKEN and gh).
+
+## Built: warp-lambda, native on pannous.com (card ferron-hosting)
+- Playground ⋯ menu "☁ Deploy to pannous.com" (same GitHub login as ☁ Deploy) sends the program's source to
+  https://lambda.pannous.com/native/deploy?name=x; it answers at https://x.lambda.pannous.com. Demo:
+  https://lambda-demo.lambda.pannous.com/fib/20.
+- web/hosting/server/: warp_lambda.py (Python stdlib daemon on 127.0.0.1:8890, user warp-lambda; who deploys comes
+  from the Worker's /me; names.json keeps owners; 20 programs, 5 per user), warp-lambda@.service (one unit per
+  program), warp-lambda.service, warp-lambda.rules (polkit: the daemon may start/restart/stop/clean only
+  warp-lambda@*.service), install.sh (over ssh, optional Linux binary:
+  `cargo zigbuild --release --target x86_64-unknown-linux-gnu.2.39 --bin warp`).
+- Sandboxed (user, 2026-10-09): `warp --sandbox` grants Host, Wasi, Libm, Sql only (no C/FFI, shell, foreign
+  runtimes: "capability denied" at deploy). The unit: DynamicUser, own state folder
+  /var/lib/warp-lambda-data/<name> (wiped by `systemctl clean` on remove), the source read-only, ProtectSystem=strict,
+  192 MB, half a core, 64 tasks. Network: the program listens on 127.0.0.2; IPAddressDeny of localhost, private
+  ranges and the server's own IP with only 127.0.0.2 allowed, so it reaches the internet but not the ssh gateway
+  (127.0.0.1:8888) or the daemon; the daemon connects from 127.0.0.2 (source_address), any other source is dropped.
+- Ferron (pannous-lockdown ferron.kdl): `*.lambda.pannous.com` proxies to the daemon (Host kept) with on-demand
+  Let's Encrypt certificates, `auto_tls_on_demand_ask` → /native/ask (200 only for deployed names), cached in
+  /var/lib/ferron/acme. The first HTTPS request to a new name fails while it's issued, so deploy fetches the URL
+  until it works (~15 s) and says `certificate: pending` otherwise. Let's Encrypt: 50 new certificates per week
+  for pannous.com.
+- Test: `node web/hosting/test_lambda.mjs` (daemon with child processes instead of systemd, the real /me, and the
+  playground button via agent-browser).
 
 ## Limits (no surprise bills)
 - Our account is on the Workers Free plan, which never bills: past 100k requests/day the Workers answer errors until

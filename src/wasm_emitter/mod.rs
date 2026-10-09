@@ -894,7 +894,10 @@ impl WasmGcEmitter {
 		self.config.emit_ffi_imports = !self.ctx.ffi_imports.is_empty();
 		self.config.emit_wasi_imports |= effects.needs(Capability::Wasi);
 		// another runtime's module is reached through the host word foreign_call
-		self.config.emit_host_imports |= effects.needs(Capability::Host) || effects.needs(Capability::Foreign);
+		// warp's own host words imported like C (sleep, the task words) are Host too, for warp --sandbox, but need no
+		// host import module
+		let host_import_word = effects.externals.iter().any(|(name, external)| external.capability == Capability::Host && !self.ctx.ffi_imports.contains_key(name));
+		self.config.emit_host_imports |= host_import_word || effects.needs(Capability::Foreign);
 		// an ordering of ± values that overlap warns through the host (P224b)
 		self.config.emit_host_imports |= crate::uncertain::may_order_intervals(node);
 	}
