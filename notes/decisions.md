@@ -7,6 +7,8 @@ before asking the user; nobody reads it front to back, the code, tests and wiki 
 notes/open_decisions.md.
 
 ## Decided 2026-10-09 (user, as recommended unless quoted)
+- /api and /rpc JSON give instances as plain objects, `[{"name":"Ann","id":1}]`, not wrapped in their class name
+  (undoable default, supervisor, asked by warp-class).
 - P225 (warp-worker, test_string_operations): a float joined to text uses its shortest form, as print does:
   `'say ' + 0.` → "say 0"; the old test expecting "say 0." changes.
 - P226 (warp-worker, test_logarithm2): the log glyphs come, and they differ (user: "yes add them but they are not the
