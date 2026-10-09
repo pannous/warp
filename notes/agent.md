@@ -13,8 +13,8 @@
   stand-in "playground-key", and host-files.js withPageSecret swaps it for the key only in a header of a request to
   api.anthropic.com; any other URL is an error. So a pasted program cannot send the key away.
 - assistant.js: completion (Ctrl-Space / Alt-Space, claude-haiku-5-5, gray at the cursor, Tab takes it, Esc or typing
-  drops it) and Ask ✦ (claude-sonnet-5-5, the program and its last output as context, guide-expert.md as the language
-  brief; code blocks get "put into the editor").
+  drops it) and Ask ✦ (claude-sonnet-5-5, the program and its last output as context, primer.md as the language
+  brief, also the site's /llms.txt; code blocks get "put into the editor").
 - Tests: tests/modules/test_agent.rs (native only: it sets the process environment; the live answer is checked only
   when a key is set), test_std_net post_sends_the_headers_of_a_map. samples/agent.warp catches the missing key with
   try, so it runs in every test run and stays in the playground menu.

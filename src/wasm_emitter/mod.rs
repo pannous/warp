@@ -823,7 +823,9 @@ impl WasmGcEmitter {
 			return false;
 		}
 		let value = crate::type_tests::compared_text(subject).unwrap_or_else(|| value.drop_meta().serialize().trim().to_string());
-		self.emit_type_error(func, format!("undefined variable: {name}; `is` compares, a definition is written `{name} be {value}`"));
+		let message = format!("undefined variable: {name}; `is` compares, a definition is written `{name} be {value}`");
+		let diagnostic = self.diagnostic_here(message).offer("a definition", format!("{name} is {value}"), format!("{name} be {value}"));
+		self.emit_type_error(func, diagnostic.remembered());
 		true
 	}
 
@@ -852,7 +854,14 @@ impl WasmGcEmitter {
 	fn emit_undefined_variable(&mut self, func: &mut Function, name: &str) {
 		// a unit reaches the emitter only where quantities are not computed yet (notes/units_runtime.md)
 		let unit_hint = if crate::units::is_unit(name) { UNIT_AT_RUN_TIME } else { "" };
-		self.emit_type_error(func, format!("undefined variable: {name}{unit_hint}"));
+		let diagnostic = self.offer_near_name(self.diagnostic_here(format!("undefined variable: {name}{unit_hint}")), name);
+		self.emit_type_error(func, diagnostic.remembered());
+	}
+
+	/// A diagnostic at the source position of the statement being emitted
+	fn diagnostic_here(&self, message: String) -> crate::diagnostic::Diagnostic {
+		let (line, column) = self.source_position.unwrap_or_default();
+		crate::diagnostic::Diagnostic { message, line, column, ..Default::default() }
 	}
 
 	/// The local slot of a defined variable; an undefined one is an error value at the use

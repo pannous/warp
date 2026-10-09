@@ -488,9 +488,11 @@ function submitForm(submitted) {
 }
 
 function showPaintings(paintings) {
+	$("full-screen").hidden = paintings.length === 0;
 	$("paintings").replaceChildren(...paintings.map(painting => {
 		const canvas = element("canvas", { width: painting.width, height: painting.height, className: "painting" });
 		canvas.style.width = `${painting.width * Math.max(1, Math.floor(PAINT_SHOWN_SIDE / Math.max(painting.width, painting.height, 1)))}px`;
+		canvas.style.setProperty("--aspect", painting.width / Math.max(painting.height, 1));
 		return drawn(canvas, painting);
 	}));
 }
@@ -504,6 +506,14 @@ function showFrame(paintings) {
 	const painting = paintings.at(-1);
 	if (shown.length === paintings.length && sameSize(canvas, painting)) drawn(canvas, painting);
 	else showPaintings(paintings);
+}
+
+// ⛶ (card little-full): the last painting fills the screen at its own aspect ratio, Esc or ⛶ again leaves; a click
+// on ⛶ is no click of the program's `on click`
+function toggleFullScreen(click) {
+	click.stopPropagation();
+	if (document.fullscreenElement) document.exitFullscreen();
+	else $("painted").requestFullscreen();
 }
 
 function drawn(canvas, { pixels, width, height }) {
@@ -746,7 +756,7 @@ function initialize() {
 	editor = CodeMirror.fromTextArea($("code"), {
 		// fixedGutter moves the gutter on every scroll, which Firefox warns about; wrapped lines never scroll sideways
 		lineNumbers: true, lineWrapping: true, fixedGutter: false, mode: "warp", indentWithTabs: true, tabSize: 4,
-		extraKeys: { "Ctrl-Enter": runPressed, "Cmd-Enter": runPressed },
+		extraKeys: SHORTCUTS, // shortcuts.js
 	});
 	editor.on("change", () => {
 		if (!$("auto").checked) return;
@@ -754,6 +764,7 @@ function initialize() {
 		typingTimer = setTimeout(runNow, TYPING_DELAY_MS);
 	});
 	$("run").onclick = runPressed;
+	$("full-screen").onclick = toggleFullScreen;
 	try { $("hints").checked = localStorage.getItem(HINTS_KEY) !== "off"; } catch { /* private window: on */ }
 	$("hints").onchange = () => {
 		try { localStorage.setItem(HINTS_KEY, $("hints").checked ? "on" : "off"); } catch { /* private window: lasts for this page */ }

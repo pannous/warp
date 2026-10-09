@@ -19,6 +19,6 @@ fn test_non_whole_results_are_exact() {
 fn test_exact_amounts_compute_on() {
 	assert_eq!(shown("(1 m / 3) * 3"), "1m");
 	assert_eq!(shown("90 minutes in hours"), "1.5h");
-	assert_eq!(shown("1 km/h < 1 m/s"), "1");
+	assert_eq!(shown("1 km/h < 1 m/s"), "yes");
 	assert_eq!(shown("150 cm in m"), "1.5m");
 }

@@ -13,7 +13,7 @@ fn test_products_of_lengths_are_areas() {
 	assert_eq!(shown("1 m * 10 cm"), "1000cm²");
 	assert_eq!(shown("2 m * 3 m * 4 m"), "24m³");
 	assert_eq!(shown("2km²"), "2km²");
-	assert_eq!(shown("3 m * 2 m == 60000 cm²"), "1");
+	assert_eq!(shown("3 m * 2 m == 60000 cm²"), "yes");
 }
 
 #[test]

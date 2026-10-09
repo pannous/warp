@@ -60,6 +60,15 @@ in case the user did indeed intend something different". Builds the "Later: chan
 | `xs#1..3` | warp_parser `hash_range_warning` | range from xs#1 | `xs#(1..3)` slice, `(xs#1)..3` |
 | kebab data key `a-b:2`, a and b variables (P81) | analyzer `kebab_fixes` | the data key | `"a-b":2` (only when nothing reads `a-b` bare); the subtraction `a - b` at every bare read (the key quoted); the key renamed `a_b` at the key and every bare read |
 | `for int in xs`, `for Friend in xs`, `for (it>2) in xs` (for-filter) | warp_parser `filtered_body` | the filter | the header `for x in xs.filter(x => x is int)` / `for it in xs.filter(it => it>2)`, the body unchanged (none when the body names the item by the type word) |
+| unterminated string, `(`/`[`/`{` open to the end, `name { …` never closed, `‖x` (errors, card more-fixes) | warp_parser `missing_closer` | none | add the closer: a quote at the end of the opening line, a bracket at the end of the input, `‖` at the end of the line |
+| `(7 // 2)`: the comment hides the closer (error) | warp_parser `glued_floor_division` | none | `7//2` |
+| `\alpha` (error) | atoms.rs | none | `\:alpha` |
+| undefined variable / function / word near a name (`coutn`, `sqaure(3)`) (errors) | wasm_emitter `offer_near_name` | none | the near name; an undefined word also `data …` |
+| `x is 5` of an undefined x (error) | wasm_emitter `emit_undefined_comparison` | none | `x be 5` |
+| `f(nmae: …)` (error) | named_arguments | none | the near parameter |
+| `f(x: flaot)` (error) | analyzer `unknown type` | none | the near type (built-in type words, the program's classes) |
+| `x:int = 2.5`, `x:int = ø` (errors) | analyzer `assignment_mismatch` | none | `int(2.5)`, `x:float`; `x:int?` |
+| `sort x` as a statement (unused copy) | mutation.rs | as written | `x.sort!` |
 | style hints, educate_once notes (`let`, `**`, quotes, `&&`, `len(x)`, `x == int`, `a.copy()`, `o.field`) | normalize, lowering | as written | the preferred form (when the text is literally in the source) |
 
 ## No fix yet (todo.md)
@@ -69,6 +78,22 @@ in case the user did indeed intend something different". Builds the "Later: chan
 - task control that never happens (declarations.rs `never_happens`), folder-scope module warnings (modules.rs):
   nothing in the source to rewrite.
 - hints whose original is a pattern (`x ? y : z`, `trait name{…}`): `start: null`, a disabled button.
+
+## Errors without an evident fix (card more-fixes, 2026-10-09)
+The ~330 error sites (data/more_fixes/sites.txt) were read; these kinds have no single edit to offer:
+- several equally plausible edits, none evident: arity errors (`f takes 1 argument, got 2`), `x is a block, no value`
+  (run it or assign it), `fits two definitions of f`, `try` needs an `else`, `times` needs a body, a lambda without
+  its arrow or body, `{+}` without operands, duplicate keys and twice-defined names (which one to keep), an unmatched
+  closing tag, a hard keyword as a name (which other name), class/mixin/trait declarations missing, a `nonlocal`/
+  `global` the program needs elsewhere, closures changing a captured variable, const reassignment.
+- values the compiler cannot invent: a missing named argument's value, missing data fields (`like`), a constructor
+  field to declare.
+- run-time and environment failures: modules/packages/includes not found or unreadable, foreign runtimes, FFI headers,
+  wasm tools (wasm-opt, metadce, split), channels, tasks (waits forever, closed channels, panics), web/host/database/
+  time/calendar/units dimension errors, numeric literal overflow (`Invalid int`, `Exponent too large`).
+- prose already naming the form but tied to text the compiler does not have: an unterminated interpolation hole (the
+  text's end is unknown), the `where` filter without `it` (the condition is rewritten, not located).
+Candidates for later: blocks.rs `name!` (needs the use's position), nonlocal outside a function (remove the line).
 
 ## Tests
 tests/welcoming/test_fixits.rs: one test per category applies the fix and checks the result's value with warnings as

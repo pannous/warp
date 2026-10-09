@@ -58,7 +58,7 @@ def typeOf (P : Program) (Γ : Ctx) : Expr → Option Ty
   | .int _ => some .int
   | .num _ => some .number
   | .qty _ d => some (.quantity d)
-  | .text _ => some .text
+  | .text s => some (textTy s)
   | .unit => some .unit
   | .nil => some (.list .never)
   | .cons h t =>
@@ -103,7 +103,7 @@ def typeOf (P : Program) (Γ : Ctx) : Expr → Option Ty
   -- a number index is checked when it runs: `xs[n/2]`
   | .index l i =>
     match typeOf P Γ l, typeOf P Γ i with
-    | some tl, some ti => if listy tl || tl == .text then (if consub ti .number then some (elementTy tl) else none) else none
+    | some tl, some ti => if listy tl || tl.isText then (if consub ti .number then some (elementTy tl) else none) else none
     | _, _ => none
   | .range a b =>
     match typeOf P Γ a, typeOf P Γ b with
@@ -173,7 +173,7 @@ def typeOf (P : Program) (Γ : Ctx) : Expr → Option Ty
   | .scope _ e => typeOf P Γ e
   | .abort ev _ e => (typeOf P Γ e).bind fun te => if sub te (P.aborts ev) then some .never else none
   | .forIn y l b d => (typeOf P Γ l).bind fun tl =>
-    if listy tl || tl == .text then (typeOf P (Γ.set y (elementTy tl)) b).bind fun tb =>
+    if listy tl || tl.isText then (typeOf P (Γ.set y (elementTy tl)) b).bind fun tb =>
       (typeOf P Γ d).map fun td => join tb (join td .unit)
     else none
   | .lam y b => (typeOf P (Γ.set y .any) b).map .fn
@@ -186,7 +186,8 @@ def typeOf (P : Program) (Γ : Ctx) : Expr → Option Ty
 theorem typeOf_sound {P : Program} : ∀ {e : Expr} {Γ t}, typeOf P Γ e = some t → HasType P Γ e t := by
   intro e
   induction e with
-  | bool | int | num | qty | text | unit | nil => intro Γ t h; simp [typeOf] at h; subst h; constructor
+  | text s => intro Γ t h; simp [typeOf] at h; subst h; exact .ofText s
+  | bool | int | num | qty | unit | nil => intro Γ t h; simp [typeOf] at h; subst h; constructor
   | cons h tl ih1 ih2 =>
     intro Γ t hs; simp only [typeOf] at hs; split at hs
     · rename_i a l ha hl
@@ -530,9 +531,10 @@ inductive Item where
   | statement (e : Expr)
 
 /-- a name given no annotation holds the type of its first value; a list stays a list of anything (list-element-types:
-an undeclared list may take items of any type) -/
+an undeclared list may take items of any type); a codepoint is a text (`x = "a"; x = "bc"`) -/
 def widen : Ty → Ty
   | .list _ => .list .any
+  | .codepoint => .text
   | t => t
 
 /-- the values a main-level name is given -/

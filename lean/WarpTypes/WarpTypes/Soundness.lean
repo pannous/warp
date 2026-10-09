@@ -530,12 +530,14 @@ theorem preservation (hP : ProgramOk P) {s s' : Expr × Store} (hs : Step P s s'
     intro t h hμ
     cases h with
     | forIn hl sT hb hd =>
-      cases hl
+      rename_i tl T tb td
+      have sT' : sub .codepoint T = true := by cases hl <;> simpa [elementTy, Ty.isText] using sT
       unfold walkText
       split
       · exact ⟨⟨_, hd, sub_trans (join_upper_left _ _) (join_upper_right _ _)⟩, hμ⟩
-      · obtain ⟨_, h1, s1⟩ := let_typed hb rfl .text (by simpa [elementTy] using sT)
-        exact ⟨⟨_, .forIn .text sT hb h1, loop_bound s1⟩, hμ⟩
+      · rename_i c rest hp
+        obtain ⟨_, h1, s1⟩ := let_typed hb rfl (.codepoint (peel_codepoint hp)) sT'
+        exact ⟨⟨_, .forIn (.ofText rest) (by simpa using sT') hb h1, loop_bound s1⟩, hμ⟩
   | @forCons y hd tl b v μ vh vt _ =>
     intro t h hμ
     cases h with
@@ -582,7 +584,7 @@ theorem steps {μ : Store} {e : Expr} {s'} (hs : Step P (e, μ) s') : Progresses
 theorem progress {Γ e t} (h : HasType P Γ e t) (hΓ : Γ = Ctx.empty) {μ : Store} (hμ : StoreOk P μ) :
     Progresses P μ e := by
   induction h generalizing μ with
-  | bool | int | intIn | num | qty | text | unit | nil => exact .inl rfl
+  | bool | int | intIn | num | qty | text | codepoint | unit | nil => exact .inl rfl
   | @cons _ a b _ _ _ _ _ _ ih1 ih2 =>
     exact in_frame (.consL b) rfl (ih1 hΓ hμ) fun va =>
       in_frame (.consR a) va (ih2 hΓ hμ) fun vb => .inl (by simp [Frame.plug, isValue, va, vb])

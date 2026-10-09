@@ -5,9 +5,12 @@ mod test_web;
 mod test_markup_tags;
 mod test_markup_scripts;
 mod test_web_playground;
+#[cfg(feature = "native")] // runs node
+mod test_editor_shortcuts; // card keyboard-shortcuts
 mod test_missing_use; // card clickable-hint
 mod test_guide; // the language guide on the playground page
 mod test_expert_guide;
+mod test_primer; // card language-primer: the assistant's system prompt, /llms.txt
 #[cfg(feature = "native")] // a server on a port, HTTP requests
 mod test_web_server;
 #[cfg(feature = "native")] // `warp dev` serves HTTP on a port
@@ -40,6 +43,8 @@ mod test_style_rules;
 mod test_headless_pages;
 #[cfg(feature = "native")] // builds a site natively, opens it in headless Chrome (agent-browser)
 mod test_dom_pages;
+#[cfg(feature = "native")] // wrangler dev runs the Worker (card cloud-deploy)
+mod test_deploy;
 mod test_page_tests;
 mod test_transitions;
 mod test_css_transitions;

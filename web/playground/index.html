@@ -35,6 +35,7 @@
 	<script src="markup-transitions.js"></script>
 	<script src="assistant.js" defer></script>
 	<script src="completion.js" defer></script>
+	<script src="shortcuts.js" defer></script>
 	<script src="playground.js" defer></script>
 	<script src="guide.js" defer></script>
 </head>
@@ -92,7 +93,10 @@
 			<pre id="printed" class="printed" hidden></pre>
 			<input id="address" class="address" hidden spellcheck="false" aria-label="page path" title="the page's path: type one and press Enter">
 			<div id="rendered" class="rendered" hidden></div>
-			<div id="paintings" class="paintings"></div>
+			<div id="painted" class="painted">
+				<button id="full-screen" class="full-screen" hidden title="full screen (Esc leaves)" aria-label="full screen">⛶</button>
+				<div id="paintings" class="paintings"></div>
+			</div>
 			<ul id="diagnostics" class="diagnostics"></ul>
 		</section>
 		<section id="assistant" class="assistant-pane" hidden>

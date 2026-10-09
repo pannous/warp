@@ -117,6 +117,13 @@ def peel (s : String) : Option (String × String) :=
   | [] => none
   | c :: cs => some (c.toString, String.ofList cs)
 
+/-- a walk over a text gives one-character texts: codepoints -/
+theorem peel_codepoint {s c rest : String} (h : peel s = some (c, rest)) : c.length = 1 := by
+  unfold peel at h
+  split at h
+  · cases h
+  · cases h; simp [Char.toString]
+
 /-- one step of a walk over a text: done at the end, else the body for the first character, then the rest -/
 def walkText (y : String) (s : String) (b last : Expr) : Expr :=
   match peel s with
@@ -263,7 +270,7 @@ def valueType : Expr → Option Ty
   | .int _ => some .int
   | .num _ => some .number
   | .qty _ d => some (.quantity d)
-  | .text _ => some .text
+  | .text s => some (textTy s)
   | .unit => some .unit
   | .nil => some (.list .never)
   | .ref _ p => some (.cls p)

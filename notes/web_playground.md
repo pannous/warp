@@ -29,6 +29,11 @@ build switch, silenced hints) sit in the header's ⋯ menu; the run time is a sm
   `use` (keywords.js `modules`, from src/modules.rs), uniscript entities after `\:` and `<:` (entities.tsv, a copy of
   src/uniscript_entities.tsv fetched on first use) which become their character; a typed `<:name>` becomes it at `>`.
   Tab takes the first, Enter only one chosen with Up/Down (else a new line). probes/web/completion.py checks it.
+- Keyboard shortcuts (shortcuts.js SHORTCUTS, card keyboard-shortcuts, user 2026-10-09): one table of CodeMirror key
+  names, the editor's extraKeys. Cmd/Ctrl-Enter runs; Cmd-/ (Ctrl-/ elsewhere) toggles `// ` on the selected lines or
+  the cursor's line (after their shallowest indentation; all commented: uncommented), one undo step, the selection kept.
+  tests/web/test_editor_shortcuts.rs runs commentEdits under node; the keys checked by hand headless (agent-browser
+  press Meta+/).
 
 ## The language guide (guide.md, guide.js)
 The left pane of the page (cards "core feature", "doc-example"; P188 one page): web/playground/guide.md, chapters `## Title` from
@@ -268,3 +273,8 @@ ends on about:blank), a declared memory maximum (still ~8 GB reserved).
   worker.js warmUp: `p{ "" }` evaluated with the worker's messages silenced, skipped over a live run). With it the
   first markup run was ~80 ms in Chrome and ~97 ms in WebKit (local build). Measured with a Playwright probe timing
   window.playground.evaluate in a fresh context (probes/*.mjs are not tracked; agent-browser eval works the same).
+
+- ⛶ (card little-full, 2026-10-09, warp-web): a small button over the paintings' corner (index.html #painted,
+  playground.js toggleFullScreen) puts them full screen: the last painting only, as large as fits at its own aspect
+  ratio (CSS --aspect set by showPaintings, so the pointer mapping of clickDetail stays exact), black around it; Esc
+  or ⛶ again leaves. Its click is no click of the program's `on click`. Check: probes/little_full.sh (after build.sh).

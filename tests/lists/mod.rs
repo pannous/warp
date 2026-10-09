@@ -82,3 +82,4 @@ mod test_first_items; // card first-first
 mod test_object_list_walk; // orm identity map: index walks of object lists
 mod test_count_after_function; // card print-people
 mod test_range_in_structure;
+mod test_word_slices;

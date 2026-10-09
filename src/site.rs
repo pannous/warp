@@ -31,7 +31,7 @@ const WORKER_FILES: [Script; 3] = [
 /// The root's attribute listing the scripts of the program's Worker (site-thread.js WORKER_ATTRIBUTE)
 const WORKER_ATTRIBUTE: &str = "data-warp-worker";
 const LIST_SEPARATOR: &str = ",";
-type Script = (&'static str, &'static str);
+pub(crate) type Script = (&'static str, &'static str);
 const WASI_LIBRARY: &str = "wasi_snapshot_preview1";
 const TASK_WORD_PREFIXES: [&str; 3] = ["task_", "channel_", "shared_"];
 
@@ -114,12 +114,16 @@ pub type SiteFile = (String, Vec<u8>);
 
 /// The site of the program `code` in `directory`, titled `title`: the page, the module and the scripts
 pub fn build(code: &str, title: &str, directory: &Path) -> Result<BuiltSite, String> {
-	let files = files(code, title, false)?;
+	write_files(&files(code, title, false)?, directory)
+}
+
+/// The files written into the directory, made if missing
+pub fn write_files(files: &[SiteFile], directory: &Path) -> Result<BuiltSite, String> {
 	std::fs::create_dir_all(directory).map_err(|failure| format!("cannot make {}: {failure}", directory.display()))?;
-	for (name, bytes) in &files {
+	for (name, bytes) in files {
 		std::fs::write(directory.join(name), bytes).map_err(|failure| format!("cannot write {name}: {failure}"))?;
 	}
-	Ok(BuiltSite { directory: directory.to_path_buf(), files: files.into_iter().map(|(name, _)| name).collect() })
+	Ok(BuiltSite { directory: directory.to_path_buf(), files: files.iter().map(|(name, _)| name.clone()).collect() })
 }
 
 /// The files of the site of `code`; `dev` adds dev.js. A failure names its position with the source line
@@ -285,7 +289,7 @@ pub fn content_type(name: &str) -> &'static str {
 }
 
 /// Does the module export a function of this name
-fn exports(module: &[u8], name: &str) -> bool {
+pub(crate) fn exports(module: &[u8], name: &str) -> bool {
 	wasmparser::Parser::new(0).parse_all(module).any(|payload| match payload {
 		Ok(wasmparser::Payload::ExportSection(exports)) => exports.into_iter().flatten().any(|export| export.name == name),
 		_ => false,
@@ -305,7 +309,7 @@ pub fn scripts_of(module: &[u8], dev: bool) -> Result<Vec<Script>, String> {
 }
 
 /// host.js with reader.js and the parts of the host a module imports words of, with the parts they need
-fn host_scripts_of(module: &[u8]) -> Result<Vec<Script>, String> {
+pub(crate) fn host_scripts_of(module: &[u8]) -> Result<Vec<Script>, String> {
 	let imports = imports_of(module)?;
 	let imported = |part: &HostPart| imports.iter().any(|(module, name)| (part.gives)(module, name));
 	let needed: Vec<&str> = HOST_PARTS.iter().filter(|part| imported(part)).flat_map(|part| part.needs.iter().copied().chain([part.script.0])).collect();
@@ -342,7 +346,7 @@ fn imports_of(module: &[u8]) -> Result<Vec<(String, String)>, String> {
 }
 
 /// The text of an error, else the value written out
-fn message_of(failure: &Node) -> String {
+pub(crate) fn message_of(failure: &Node) -> String {
 	match failure.drop_meta() {
 		Node::Error(message) => match message.drop_meta() {
 			Node::Text(text) => text.clone(),
@@ -353,7 +357,7 @@ fn message_of(failure: &Node) -> String {
 }
 
 /// A failure's message and, when it names a position, the source line there
-fn with_excerpt(code: &str, message: String) -> String {
+pub(crate) fn with_excerpt(code: &str, message: String) -> String {
 	let excerpt = crate::diagnostic::message_position(&message).and_then(|(line, column)| crate::diagnostic::excerpt(code, line, column));
 	[message].into_iter().chain(excerpt).collect::<Vec<_>>().join("\n")
 }

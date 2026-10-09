@@ -45,7 +45,9 @@ const QUOTE_WORDS: [&str; 3] = ["data", "code", "block"];
 /// The got-it topic of a lone word close to a defined name
 const NEAR_MISS_TOPIC: &str = "near-miss";
 /// Words the near-miss warning compares with besides the program's own names
-const KNOWN_WORDS: [&str; 6] = ["print", "count", "sum", "first", "last", "reverse"];
+const TEXT_TYPE: &str = "text";
+const CODEPOINT_TYPE: &str = "codepoint";
+const KNOWN_WORDS: [&str; 6] =["print", "count", "sum", "first", "last", "reverse"];
 
 impl WasmGcEmitter {
 	/// Does `name(args)` resolve to something callable: user function, import, builtin, type word or declared type?
@@ -96,7 +98,8 @@ impl WasmGcEmitter {
 			return false;
 		}
 		let call = Node::List(items.to_vec(), bracket.clone(), separator.clone());
-		self.emit_type_error(func, self.ctx.undefined_function_diagnostic(&call, name).remembered());
+		let diagnostic = self.offer_near_name(self.ctx.undefined_function_diagnostic(&call, name), name);
+		self.emit_type_error(func, diagnostic.remembered());
 		true
 	}
 
@@ -454,7 +457,9 @@ impl WasmGcEmitter {
 		}
 		let [_, subject, spec] = items.as_slice() else { return false };
 		let Node::Text(spec) = spec.drop_meta() else { return false };
-		let unknown = spec == crate::type_tests::ERROR_TYPE || self.has_unknown_static_type(subject);
+		// `for char in s`, `s#1 is char`: an item of a text is typed text but is a code point at run time
+		let item_of_text = self.static_type_name(subject) == TEXT_TYPE && crate::type_tests::canonical_spec_word(spec) == CODEPOINT_TYPE;
+		let unknown = spec == crate::type_tests::ERROR_TYPE || item_of_text || self.has_unknown_static_type(subject);
 		let declared_type = self.ctx.type_registry.get_by_name(spec).is_some();
 		match crate::type_tests::runtime_kind_mask(spec).filter(|_| unknown && !declared_type) {
 			Some(mask) => {
@@ -741,7 +746,8 @@ impl WasmGcEmitter {
 		};
 		let diagnostic = match crate::modules::std_module_defining(&name) {
 			Some(_) => crate::ffi::undefined_function_diagnostic(&written, &name),
-			None => crate::diagnostic::Diagnostic::at(&written, format!("undefined: {name} in `{text}`; define {name}, or write `data {text}` for data")),
+			None => self.offer_near_name(crate::diagnostic::Diagnostic::at(&written, format!("undefined: {name} in `{text}`; define {name}, or write `data {text}` for data")), &name)
+				.offer("data", &text, format!("data {text}")),
 		};
 		Some(diagnostic.remembered())
 	}
@@ -757,15 +763,28 @@ impl WasmGcEmitter {
 		if word.chars().count() < 3 || self.is_known_word(word) {
 			return Ok(());
 		}
-		let mut names: Vec<String> = self.ctx.user_functions.keys().chain(self.ctx.user_globals.keys()).cloned().collect();
-		names.extend(self.scope.local_names());
-		names.extend(KNOWN_WORDS.iter().map(|word| word.to_string()));
-		let Some(near) = crate::extensions::strings::near_miss(word, names) else { return Ok(()) };
+		let Some(near) = self.near_name(word) else { return Ok(()) };
 		let question = Ask::new(NEAR_MISS_TOPIC, format!("`{word}` names nothing: a symbol, or did you mean {near}?"),
 			vec![reading("the symbol", &format!("data {word}")), reading(&format!("the name {near}"), &near)], Fallback::Warning).written(word);
 		let (line, column) = self.source_position.unwrap_or((0, 0));
 		let question = question.at(line, column);
 		ask(&question).map(|_| ())
+	}
+
+	/// The name of the program or the language `word` is a typo of: `pirnt` → print
+	fn near_name(&self, word: &str) -> Option<String> {
+		let mut names: Vec<String> = self.ctx.user_functions.keys().chain(self.ctx.user_globals.keys()).cloned().collect();
+		names.extend(self.scope.local_names());
+		names.extend(KNOWN_WORDS.iter().map(|word| word.to_string()));
+		crate::extensions::strings::near_miss(word, names)
+	}
+
+	/// The fix of a misspelled `word`, when it is near a name
+	pub(super) fn offer_near_name(&self, diagnostic: crate::diagnostic::Diagnostic, word: &str) -> crate::diagnostic::Diagnostic {
+		match self.near_name(word) {
+			Some(near) => diagnostic.offer(format!("the name {near}"), word, near),
+			None => diagnostic,
+		}
 	}
 
 	fn is_known_word(&self, word: &str) -> bool {

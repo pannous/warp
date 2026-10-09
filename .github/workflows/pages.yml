@@ -29,7 +29,7 @@ env:
   # the runner has no GPU: headless Chrome gets SwiftShader's software WebGPU adapter, else samples/webgpu logs
   # "No available adapters." and the tour refuses the deploy
   AGENT_BROWSER_ARGS: --enable-unsafe-webgpu,--enable-unsafe-swiftshader,--use-webgpu-adapter=swiftshader,--enable-features=Vulkan
-  SITE_FILES: index.html playground.css playground.js assistant.js completion.js entities.tsv guide.js guide.md guide-expert.md markup.js markup-transitions.js worker.js task-worker.js coi-serviceworker.js host.js host-*.js components.js components foreign_python.py reader.js imports.js examples.js codemirror-warp-mode.js codemirror lib warp.wasm warp.debug.wasm samples.js keywords.js version.js
+  SITE_FILES: index.html playground.css playground.js assistant.js completion.js shortcuts.js entities.tsv guide.js guide.md guide-expert.md primer.md markup.js markup-transitions.js worker.js task-worker.js coi-serviceworker.js host.js host-*.js components.js components foreign_python.py reader.js imports.js examples.js codemirror-warp-mode.js codemirror lib warp.wasm warp.debug.wasm samples.js keywords.js version.js
 
 jobs:
   build:
@@ -56,12 +56,12 @@ jobs:
         tool: wasm-tools
     - name: Build the compiler, samples.js and the components
       run: web/playground/build.sh
-    - name: Install agent-browser (headless Chrome for the tour check)
-      run: npm install -g agent-browser && agent-browser install --with-deps
     - name: Collect the site
       run: |
         mkdir _site
         (cd web/playground && cp -r $SITE_FILES ../../_site/)
+        # the language primer for agents at the conventional path (llmstxt.org)
+        cp web/playground/primer.md _site/llms.txt
         # every host part the worker imports (host.js HOST_PART_FILES) is shipped, else no deploy
         for part in $(grep -o '"host-[a-z]*\.js"' web/playground/host.js | tr -d '"'); do test -f _site/$part || { echo "::error::$part missing from the site"; exit 1; }; done
         # the C module the tour imports (examples.js "C libraries"), at its repository path: the page's file root is the site
@@ -71,20 +71,51 @@ jobs:
         echo "warp.pannous.com" > _site/CNAME
         # the files the site serves, so the compiler asks only for those (host-files.js): no 404 in the console
         web/playground/build.sh served _site
-    - name: Every tour example shows what it promises (examples.js) and no example or sample writes an error or warning to the console, in the collected site, else no deploy
-      run: python3 web/playground/test_in_browser.py --examples --site _site
-    - name: The same in headless Firefox (the runner's own; firefox_driver.mjs), else no deploy
-      # a run takes about 3 minutes; a stuck one fails loudly instead of holding the deploy (card deploy-firefox-hang)
-      timeout-minutes: 15
-      run: python3 web/playground/test_in_browser.py --examples --firefox --site _site
     - uses: actions/upload-pages-artifact@v3
       with:
         path: _site
+    # the tour jobs check this very site, in parallel (user 2026-10-09): Chrome and Firefox each take minutes
+    - uses: actions/upload-artifact@v4
+      with:
+        name: site
+        path: _site
+        retention-days: 1
 
-  # only main may deploy (the github-pages environment); a branch check (workflow_dispatch on batchNN) ends after build,
-  # green, instead of a failed deploy mailing a failed run
-  deploy:
+  # every tour example shows what it promises (examples.js) and no example or sample writes an error or warning to the
+  # console, in the collected site, else no deploy
+  tour-chrome:
     needs: build
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+    - uses: actions/download-artifact@v4
+      with:
+        name: site
+        path: _site
+    - name: Install agent-browser (headless Chrome)
+      run: npm install -g agent-browser && agent-browser install --with-deps
+    - name: The tour in headless Chrome
+      run: python3 web/playground/test_in_browser.py --examples --site _site
+
+  # the same in headless Firefox: the runner's own, driven by firefox_driver.mjs
+  tour-firefox:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+    - uses: actions/download-artifact@v4
+      with:
+        name: site
+        path: _site
+    - name: The tour in headless Firefox
+      # a run takes about 3 minutes; a stuck one fails loudly instead of holding the deploy (card deploy-firefox-hang)
+      timeout-minutes: 15
+      run: python3 web/playground/test_in_browser.py --examples --firefox --site _site
+
+  # only main may deploy (the github-pages environment); a branch check (workflow_dispatch on batchNN) ends after the
+  # tours, green, instead of a failed deploy mailing a failed run
+  deploy:
+    needs: [ tour-chrome, tour-firefox ]
     if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     environment:

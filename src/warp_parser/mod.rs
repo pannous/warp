@@ -40,7 +40,7 @@ const LITERAL_SUFFIXES: [(char, &str); 6] = [('f', "float"), ('F', "float"), ('d
 /// `0.1:float`, `1.5:int`: a number literal directly typed with one of these binds tightly, unlike the loose `as`
 const LITERAL_NUMBER_TYPES: [&str; 11] = ["int", "i64", "integer", "exact", "real", "float", "fast", "f64", "double", "f32", "i32"];
 /// Words that may precede the name of a global besides a type word (`int`, `long` … see `analyzer::type_word_kind`)
-const ORDINAL_SUFFIXES: [&str; 4] = ["st", "nd", "rd", "th"];
+pub(crate) const ORDINAL_SUFFIXES: [&str; 4] = ["st", "nd", "rd", "th"];
 
 /// Type names that take type arguments in angle brackets besides the plural and user types: `list<int>`, `map<text, int>`
 const GENERIC_TYPE_HEADS: [&str; 7] = ["list", "array", "set", "map", "option", "result", "tuple"];
@@ -149,6 +149,7 @@ const AWAIT_OPERAND_BP: u8 = Op::Neg.binding_power().1;
 /// `1 + emit ask`: an emit inside an expression takes the words of its event like a call (card emit-operand)
 const EMIT_KEYWORDS: [&str; 2] = ["emit", "send"];
 const PRINT_WORD: &str = "print";
+const CODEPOINT_TYPE: &str = "codepoint";
 /// `print a  print b`: statements separated by spaces only (user decision 2026-10-03: a loud error)
 const TWO_STATEMENTS_ON_ONE_LINE: &str = "two statements on one line? separate them with `;` or a newline";
 const IN_KEYWORD: &str = "in";
@@ -219,6 +220,10 @@ pub(crate) fn print_arguments_of(call: &[Node], bracket: &Bracket) -> Vec<Node> 
 /// so the comma list [[print a], b] becomes the call print(a, b)
 fn grouped_list(items: Vec<Node>, bracket: Bracket, separator: Separator) -> Node {
 	let items = if separator == Separator::Space { with_arrow_bodies(items) } else { items };
+	let items = match (&separator, items.as_slice()) {
+		(Separator::Space, [print, value]) if is_print_word(print) => printed_when(print, value).map_or(items, |guarded| vec![guarded]),
+		_ => items,
+	};
 	// `{ print upper n }`: a block of the one statement prints the one expression too
 	let is_print_block = bracket == Bracket::Curly && separator == Separator::Space && items.len() > 2 && is_print_word(&items[0]);
 	if is_print_block {
@@ -240,6 +245,14 @@ fn grouped_list(items: Vec<Node>, bracket: Bracket, separator: Separator) -> Nod
 		}
 		_ => Node::List(items, bracket, separator),
 	}
+}
+
+/// `print it if it%2`: the condition guards the print, as in Ruby and Perl, rather than printing ø when it fails
+fn printed_when(print: &Node, value: &Node) -> Option<Node> {
+	let Node::Key(condition, Op::Then, guarded) = value.drop_meta() else { return None };
+	let Node::Key(nothing, Op::If, _) = condition.drop_meta() else { return None };
+	let printed = Node::List(vec![print.clone(), (**guarded).clone()], Bracket::None, Separator::Space);
+	(**nothing == Node::Empty).then(|| Node::Key(condition.clone(), Op::Then, Box::new(printed)))
 }
 
 /// `(x => print x)`: `=>` binds looser than the space, so the words after a lambda's arrow are its body (`print x`), not
@@ -399,7 +412,12 @@ fn item_named(node: Node, name: &str, item: &Node) -> Node {
 
 /// A list literal whose items all are literals of the type: `[1, 2]` for `number`
 fn literal_items_of_type(iterable: &Node, type_name: &str) -> bool {
-	let Node::List(items, Bracket::Square, _) = iterable.drop_meta() else { return false };
+	let items = match iterable.drop_meta() {
+		Node::List(items, Bracket::Square, _) => items,
+		// `for char in "abc"`: every item of a text is a char
+		Node::Text(_) => return crate::type_tests::canonical_spec_word(type_name) == CODEPOINT_TYPE,
+		_ => return false,
+	};
 	let spec = crate::analyzer::type_word_kind(type_name).map(|_| type_name).unwrap_or(type_name);
 	items.iter().all(|item| match item.drop_meta() {
 		Node::Number(_) | Node::Text(_) | Node::Char(_) => crate::type_tests::type_matches(&item.drop_meta().kind().to_string(), spec),
@@ -649,6 +667,22 @@ fn comment_hiding_a_closer(input: &str) -> Option<(usize, usize, char)> {
 		}
 	}
 	None
+}
+
+/// `(7 // 2)`: the fix `7//2`, the operands around the `//` at `line`:`column` glued to it
+fn glued_floor_division(diagnostic: Diagnostic, input: &str, line: usize, column: usize) -> Diagnostic {
+	let text: Vec<char> = input.lines().nth(line - 1).unwrap_or_default().chars().collect();
+	let before = text[..column - 1].iter().rposition(|c| !c.is_whitespace());
+	let after = text[column + 1..].iter().position(|c| !c.is_whitespace()).map(|offset| column + 1 + offset);
+	let (Some(before), Some(after)) = (before, after) else { return diagnostic };
+	let written: String = text[before..=after].iter().collect();
+	diagnostic.offer("floor division", written, format!("{}//{}", text[before], text[after]))
+}
+
+/// The error `message`, fixed by adding the missing `closer` at `at` (line, column)
+pub(super) fn missing_closer(message: String, closer: impl Into<String>, at: (usize, usize)) -> Node {
+	let closer = closer.into();
+	Diagnostic::default().message(message).offering(crate::fixits::inserted(format!("the closing {closer}"), closer, at)).into_error()
 }
 
 /// Parse-only path for untrusted data: nothing is evaluated, no word is guessed to be a boolean
@@ -1044,7 +1078,8 @@ impl WarpParser {
 
 	pub fn parse_with_options(input: &str, options: ParserOptions) -> Node {
 		if let Some((line, column, closer)) = comment_hiding_a_closer(input).filter(|_| !options.data_mode) {
-			return error(&format!("`//` at {line}:{column} starts a comment that hides the closing `{closer}`: floor division is written glued, a//b"));
+			let message = format!("`//` at {line}:{column} starts a comment that hides the closing `{closer}`: floor division is written glued, a//b");
+			return glued_floor_division(Diagnostic::default().message(message), input, line, column).into_error();
 		}
 		let mut parser = WarpParser::new_with_options(input.to_string(), options);
 		let program = parser.parse_list_with_separators(None, Bracket::None);
