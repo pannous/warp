@@ -33,3 +33,13 @@ fn dash_glyphs_subtract() {
 fn glyphs_inside_text_stay_text() {
 	is!("\"a–b\"", "a–b");
 }
+
+#[test] // card keyword-glyphs: the truth glyphs of the constants table are true and false, also as emoji
+fn truth_glyphs_are_true_and_false() {
+	is!("⊤", true);
+	is!("⊥", false);
+	is!("not ❌", true);
+	is!("x = ✅; x and ✓", true);
+	is!("[✔, ✔️, ✓️, ☑, 🗸, 🗹] == [⊤, ⊤, ⊤, ⊤, ⊤, ⊤]", true);
+	is!("if ⊥ {1} else {2}", 2);
+}
