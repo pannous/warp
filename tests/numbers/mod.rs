@@ -75,3 +75,5 @@ mod test_units_text; // card units-text
 mod test_as_compound_unit; // card compound-unit
 mod test_printed_quantity; // P231
 mod test_quantity_conversion; // card quantity-falls
+mod test_quantities_in_one_text; // card text-join
+mod test_text_then_conversion; // card print-km

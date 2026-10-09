@@ -226,3 +226,7 @@ Running list of the small fixes done by the fixer session (branches fix-<topic>)
 
 ## 2026-10-09 print-quantity (P231)
 - print rounds a quantity fraction to two decimals (6.17km, PRINTED_AMOUNT_TEXT in static_units.rs); str, joins and the result keep (37/6)km.
+## 2026-10-09 print-km
+- `"a: " + x as km` parsed `("a: " + x) as km`: a conversion after a text join converts the last operand (units.rs with_converted_last_operand).
+## 2026-10-09 text-join
+- a longer text join with several quantities: static_units takes any sum with a text in it as a join (units::joins_text, shared with print-km).

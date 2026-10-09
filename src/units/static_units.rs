@@ -429,7 +429,7 @@ impl Inference {
 				Ok((quantity, given))
 			}
 			// `"distance " + d`: the quantity joins as its text, `"distance " + (d as km)` in km
-			Node::Key(left, Op::Add, right) if matches!(left.drop_meta(), Node::Text(_)) || matches!(right.drop_meta(), Node::Text(_)) => {
+			Node::Key(left, Op::Add, right) if super::joins_text(&left) || super::joins_text(&right) => {
 				let (left_units, right_units) = (conversion_target(&left), conversion_target(&right));
 				let (left, left_signature) = self.infer(*left)?;
 				let (right, right_signature) = self.infer(*right)?;

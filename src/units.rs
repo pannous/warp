@@ -93,7 +93,7 @@ pub fn lower_unit_words(program: Node) -> Node {
 
 /// `60 mi/h as km/h` parses `(60 mi/h as km)/h`: the unit after `as` regrouped whole, as after `in`, when it is one
 fn with_whole_conversion_units(node: Node) -> Node {
-	match node.map_children(with_whole_conversion_units) {
+	let node = match node.map_children(with_whole_conversion_units) {
 		Node::Key(conversion, op @ (Op::Div | Op::Mul), rest) => match conversion.drop_meta() {
 			Node::Key(quantity, Op::As, unit) if unit_expression(&Node::Key(unit.clone(), op, rest.clone())).is_some() => {
 				Node::Key(quantity.clone(), Op::As, Box::new(Node::Key(unit.clone(), op, rest)))
@@ -101,6 +101,28 @@ fn with_whole_conversion_units(node: Node) -> Node {
 			_ => Node::Key(conversion, op, rest),
 		},
 		other => other,
+	};
+	with_converted_last_operand(node)
+}
+
+/// `"a: " + x as km` parses `("a: " + x) as km`: a text has no unit to convert, so `as` takes the operand after the
+/// last `+` (card print-km)
+fn with_converted_last_operand(node: Node) -> Node {
+	match node {
+		Node::Key(sum, Op::As, unit) if unit_expression(&unit).is_some() => match sum.drop_meta() {
+			Node::Key(text, Op::Add, last) if joins_text(text) => Node::Key(text.clone(), Op::Add, Box::new(Node::Key(last.clone(), Op::As, unit))),
+			_ => Node::Key(sum, Op::As, unit),
+		},
+		other => other,
+	}
+}
+
+/// `"a: "`, `"a: " + x + " or "`: a text, or a sum with a text in it, which every operand joins as its text
+pub(crate) fn joins_text(node: &Node) -> bool {
+	match node.drop_meta() {
+		Node::Text(_) => true,
+		Node::Key(left, Op::Add, right) => joins_text(left) || joins_text(right),
+		_ => false,
 	}
 }
 
