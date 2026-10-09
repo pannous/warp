@@ -1,0 +1,7 @@
+// card exact-div: `xs#i = i / n` into a float list; was an exact quotient allocated per item, then made a float
+n = 10000000 + random_below(1)
+xs = float[n]
+t0 = clock()
+for i in 1 to n { xs#i = i / n }
+t1 = clock()
+print "filled \(n) floats in \(t1 - t0) ms, last \(xs#n), middle \(xs#(n//2))"

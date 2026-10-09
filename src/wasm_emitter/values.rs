@@ -296,6 +296,12 @@ impl WasmGcEmitter {
 				if self.emit_arithmetic_type_error(func, left, op, right, kind) {
 					return;
 				}
+				if kind == Kind::Int && *op == Op::Div && self.int_runtime() && !self.wrapping_ints {
+					self.emit_numeric_value(func, left);
+					self.emit_numeric_value(func, right);
+					self.emit_float_quotient(func);
+					return;
+				}
 				if kind == Kind::Int {
 					// a wholly exact expression is computed exactly and rounded once: `float y = 0.1+0.2` is 0.3
 					self.emit_numeric_value(func, node);
