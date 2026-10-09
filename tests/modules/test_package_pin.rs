@@ -6,7 +6,7 @@ use std::path::{Path, PathBuf};
 use std::process::Command;
 use warp::modules::{fetch_package_into, package_repository};
 
-const PINNED: &str = ".cache/warp/packages/uniscript@1.0.6";
+const PINNED: &str = ".cache/warp/packages/uniscript@1.0.7";
 
 /// An empty packages directory of its own for a test
 fn packages_for(test: &str) -> PathBuf {
