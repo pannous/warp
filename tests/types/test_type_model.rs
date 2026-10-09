@@ -14,6 +14,8 @@ const AXIOM_DECLARATION: &str = "axiom ";
 /// Programs both sides judge alike
 const CORPUS: &[&str] = &[
 	"1 + 2",
+	// a conversion has its type's kind (card kind-name)
+	"x = 3.7 as int; x = \"a\"",
 	"1 + 2.5",
 	"true + 1",
 	"\"a\" + 1",
@@ -421,7 +423,7 @@ const CORPUS: &[&str] = &[
 ];
 
 /// Programs warp compiles although the model rejects them: holes in warp's checks, each with its card
-const KNOWN_HOLES: &[(&str, &str)] = &[("b: bool = no; b++; b", "bool-assign"), ("f(n) := { n = \"x\"; n }; f(3)", "param-assign-unchecked"), ("x = 3.7 as int; x = \"a\"", "kind-name")];
+const KNOWN_HOLES: &[(&str, &str)] = &[("b: bool = no; b++; b", "bool-assign"), ("f(n) := { n = \"x\"; n }; f(3)", "param-assign-unchecked")];
 
 /// Where warp's run-time admission differs from W0's subtyping: a bool is an Int at run time, so an int value passes
 /// a bool check (P199 lets only the literals 1 and 0 in; card bool-assign)
