@@ -19,6 +19,26 @@ pub fn without_dead_functions(module: &[u8]) -> Result<Vec<u8>, String> {
 	Ok(pruned.finish())
 }
 
+/// `module` exporting only the names `keep` accepts, without the functions only the dropped exports reached
+pub fn keeping_exports(module: &[u8], keep: fn(&str) -> bool) -> Result<Vec<u8>, String> {
+	let mut filtered = wasm_encoder::Module::new();
+	ExportFilter(keep).parse_core_module(&mut filtered, Parser::new(0), module).map_err(|failure| format!("{failure:?}"))?;
+	without_dead_functions(&filtered.finish())
+}
+
+struct ExportFilter(fn(&str) -> bool);
+
+impl Reencode for ExportFilter {
+	type Error = String;
+
+	fn parse_export(&mut self, exports: &mut wasm_encoder::ExportSection, export: wasmparser::Export<'_>) -> Result<(), Error<String>> {
+		if (self.0)(export.name) {
+			utils::parse_export(self, exports, export)?;
+		}
+		Ok(())
+	}
+}
+
 /// The functions each defined function reaches directly, and the roots
 #[derive(Default)]
 pub(crate) struct CallGraph {

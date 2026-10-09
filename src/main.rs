@@ -462,8 +462,9 @@ fn standalone_note_marker(program: &std::path::Path) -> Option<std::path::PathBu
 /// stub (crates/warp-runtime, notes/aot.md); Ok is the report of what was written
 fn write_standalone_executable(code: &str, target: &str) -> Result<String, String> {
     let program = wasm_emitter::compile_printing_result(code).map_err(|value| format!("nothing to compile: {}", value.serialize()))?;
-    let engine = util::gc_engine();
-    let module = run::module_cache::compiled_module(&engine, &program.bytes).map_err(|failure| failure.to_string())?;
+    let bytes = warp::dead_functions::keeping_exports(&program.bytes, warp_runtime::standalone::stub_calls_export)?;
+    let engine = warp_runtime::standalone::standalone_engine().map_err(|failure| failure.to_string())?;
+    let module = run::module_cache::compiled_module(&engine, &bytes).map_err(|failure| failure.to_string())?;
     let provided: Vec<(&str, &str)> = warp_runtime::standalone::provided_imports().collect();
     let mut missing: Vec<String> = vec![];
     for import in module.imports().filter(|import| !provided.contains(&(import.module(), import.name()))) {
@@ -577,14 +578,15 @@ fn runtime_stub_path() -> Result<std::path::PathBuf, String> {
     let warp = env::current_exe().map_err(|failure| failure.to_string())?;
     let resolved = fs::canonicalize(&warp).unwrap_or_else(|_| warp.clone());
     let next_to_warp = [&warp, &resolved].map(|binary| binary.with_file_name(RUNTIME_STUB_NAME));
-    match next_to_warp.iter().find(|stub| stub.is_file()) {
+    // a debug warp's neighbour is a debug stub (5 MB, it was 21 MB, card g_gFs8): build the release one instead
+    match next_to_warp.iter().find(|stub| stub.is_file() && !cfg!(debug_assertions)) {
         Some(stub) => Ok(stub.clone()),
         None => build_runtime_stub(&next_to_warp[0]),
     }
 }
 
-/// `cargo build -p warp-runtime` in warp's source checkout, in warp's own profile: the stub lands next to a warp built
-/// there; its path as cargo reports it
+/// `cargo build --release -p warp-runtime` in warp's source checkout, whatever warp's own profile: the stub lands next
+/// to a release warp built there; its path as cargo reports it
 fn build_runtime_stub(expected: &std::path::Path) -> Result<std::path::PathBuf, String> {
     let source = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
     if !source.join(RUNTIME_STUB_CRATE).is_dir() {
@@ -592,10 +594,7 @@ fn build_runtime_stub(expected: &std::path::Path) -> Result<std::path::PathBuf, 
     }
     eprintln!("note: building the runtime stub for executables once (cargo build -p {RUNTIME_STUB_NAME})");
     let mut build = std::process::Command::new(env::var("CARGO").unwrap_or_else(|_| "cargo".to_string()));
-    build.args(["build", "--quiet", "--message-format=json", "-p", RUNTIME_STUB_NAME, "--bin", RUNTIME_STUB_NAME]).current_dir(source);
-    if !cfg!(debug_assertions) {
-        build.arg("--release");
-    }
+    build.args(["build", "--release", "--quiet", "--message-format=json", "-p", RUNTIME_STUB_NAME, "--bin", RUNTIME_STUB_NAME]).current_dir(source);
     let output = build.output().map_err(|failure| format!("cannot run cargo to build the runtime stub: {failure}"))?;
     if !output.status.success() {
         return Err(format!("building the runtime stub failed (cargo build -p {RUNTIME_STUB_NAME} in {}): {}", source.display(), String::from_utf8_lossy(&output.stderr).trim()));
