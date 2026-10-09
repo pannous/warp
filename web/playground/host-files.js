@@ -161,7 +161,16 @@ function keepTable(file, table, stored) {
 
 // the table's rows [id, columns…], the table first created or migrated to the class's fields [name, type, default];
 // a removed field keeps its column (data is never dropped silently), loudly
+// the table migrated to the class's fields, then its rows; src/database.rs gives the two halves apart too: a table's
+// list migrates at registration and loads its rows at the first read (lowering/database_tables.rs)
 function openTable(table, schema, file) {
+	migrateTable.call(this, table, schema, file);
+	return tableRows(table, schema, file);
+}
+
+const tableRows = (table, schema, file) => storedTable(file, table).rows.map(row => [row[ID_COLUMN], ...schema.map(([name]) => row[name])]);
+
+function migrateTable(table, schema, file) {
 	const stored = storedTable(file, table);
 	for (const [name, , , oldName] of schema.filter(([name, , , oldName]) => oldName in stored.types && !(name in stored.types))) {
 		renameColumn(stored, oldName, name);
@@ -181,7 +190,7 @@ function openTable(table, schema, file) {
 		this.warn(`the table ${table} keeps its column ${name}, which the class no longer has (its data is kept)`);
 	}
 	keepTable(file, table, stored);
-	return stored.rows.map(row => [row[ID_COLUMN], ...schema.map(([name]) => row[name])]);
+	return null;
 }
 
 // a field marked `@was(oldName)`: its column keeps type and values under the new name
@@ -250,7 +259,7 @@ addHostPart({
 			},
 		},
 		// a filter compiled natively is an SQL query (a page compiled by the browser keeps filters as comprehensions)
-		table: { open: openTable, insert: insertRow, update: updateRow, select: table => { throw new Error(`a filter of the table ${table} is an SQL query: it runs natively (warp serve)`); } },
+		table: { open: openTable, migrate: migrateTable, rows: tableRows, page: (table, schema, file, start, size) => tableRows(table, schema, file).slice(start - 1, start - 1 + size), count: (table, schema, file) => storedTable(file, table).rows.length, insert: insertRow, update: updateRow, select: table => { throw new Error(`a filter of the table ${table} is an SQL query: it runs natively (warp serve)`); } },
 		net: { post: (url, body) => postSync(url, contentText(body)) },
 		// `clipboard.write(text)` (lowering/system_values.rs): a page writes it (markup.js copyText), a Worker has no
 		// clipboard and hands the text to its page (self.writeClipboard: worker.js)
