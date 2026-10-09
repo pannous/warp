@@ -775,7 +775,7 @@ pub fn check_unit_parameter_clashes(program: &Node) -> Option<crate::diagnostic:
 fn function_head(node: &Node) -> Option<(&Node, &[Node])> {
 	let Node::Key(head, Op::Define | Op::Assign, _) = node.drop_meta() else { return None };
 	let Node::List(items, Bracket::Round, _) = head.drop_meta() else { return None };
-	items.split_first().map(|(function, parameters)| (function, parameters))
+	items.split_first()
 }
 
 fn without_function_definitions(node: Node) -> Node {
