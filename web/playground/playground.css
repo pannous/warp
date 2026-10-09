@@ -113,6 +113,14 @@ output.error { color: var(--error); }
 .listening-note { color: var(--muted); font-size: 0.9em; margin-bottom: 6px; }
 .paintings { display: flex; flex-wrap: wrap; gap: 8px; }
 .painting { margin-top: 10px; max-width: 100%; image-rendering: pixelated; border: 1px solid var(--line); }
+/* ⛶ (playground.js toggleFullScreen): over the paintings' corner; full screen shows the last one, as large as fits */
+.painted { position: relative; }
+.full-screen { position: absolute; top: 14px; right: 4px; z-index: 1; padding: 0 6px; font-size: 1.1em; line-height: 1.4; color: var(--muted); background: var(--code-ground); border: 1px solid var(--line); border-radius: 4px; cursor: pointer; opacity: 0.7; }
+.full-screen:hover { opacity: 1; color: inherit; }
+.painted:fullscreen { display: flex; align-items: center; justify-content: center; background: #000; }
+.painted:fullscreen .full-screen { top: 8px; right: 8px; }
+.painted:fullscreen .painting:not(:last-child) { display: none; }
+.painted:fullscreen .painting { margin: 0; border: 0; max-width: none; width: min(100vw, 100vh * var(--aspect)) !important; }
 .printed { margin: 10px 0 0; padding: 8px 10px; background: var(--code-ground); border-radius: 6px; white-space: pre-wrap; max-height: 40vh; overflow: auto; }
 
 .diagnostics { list-style: none; padding: 0; margin: 12px 0 0; }
