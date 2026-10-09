@@ -162,3 +162,4 @@ mod test_if_instance_branches; // card if-instance-branch
 mod test_table_remove; // card table-remove
 mod test_table_key_filter; // card table-key-filter
 mod test_table_transactions; // card orm step 5
+mod test_table_query_loading; // orm: a filter reads only its rows
