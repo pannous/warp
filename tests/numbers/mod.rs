@@ -88,3 +88,4 @@ mod test_recursive_units; // card static-units
 mod test_unit_named_function; // card static-units-function
 mod test_unit_named_parameter; // card static-units-parameter
 mod test_unit_glue_hint; // card unit-glue
+mod test_units_type_holes; // cards units-compare units-reassign units-annotation units-text-repeat
