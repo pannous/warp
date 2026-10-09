@@ -9,6 +9,7 @@ custom section, `warp.meta`, kept unstripped.
 |---|---|---|---|
 | `dir(x)` | module, object, class, map | names: module words / fields + methods / keys | step 2: compile time for a known instance, class or map literal's variable; else undefined |
 | `dir(f)`, `type(f)` | user function, `f` or `&f` | `["params" "signature" "body" "effects"]` / `function` | card dir-function: the reflection words take the function itself, never its call (P83) |
+| `dir(job)` | task (`job = go f()`) | `["await" "stop" "pause" "cancel" "resume" "finishes"]`, no wait for the task | card g_oOJs (2026-10-09): declarations::Tasks::task_dir |
 | `x.type`, `type(x)` | any value | its type name (`int`, `P`) | works; `p.type` of a known instance since step 2 |
 | `x.class` | instance | its class, `P` | step 2: known instances (`type(p)`) |
 | `x.fields` (`attributes`, `members`) | instance, class, map | field names, in declared order | step 2: inherited fields first; a map's keys at run time |
@@ -20,6 +21,7 @@ custom section, `warp.meta`, kept unstripped.
 | `event.listeners` (= `listeners of e`) | event | handler count/list | `listeners of tick` broken (signal_listeners undefined) |
 | `module.exports` | `use wasm`, foreign module | export names | step 4: imported core modules; components natively |
 | `x.unit` | quantity | its unit | static units (static_units.rs), no `.unit` word yet |
+| `help(x)` | class, instance, user function | text: `class P extends Q` / `fields: …` / `methods: …` lines; a function's name and signature | card help-help (2026-10-09): compile time; no doc comment yet (P114 keeps comments off by default) |
 | `x.doc` | binding, function | its comment (P114, `use comments`) | step 4: `x.doc` = `x.@comment`, of functions too |
 
 ## Rule

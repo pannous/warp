@@ -9,8 +9,8 @@ class Point {
 p = Point(3, 4)
 print "fields \(p.fields), methods \(p.methods)"
 print dir(p)
-# help(Point)  TODO
-# help(p)
+print help(Point)
+print help(p)
 
 // a function knows its parameters and its signature
 area(width: int, height: int) := width * height
