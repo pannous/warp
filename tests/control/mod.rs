@@ -147,6 +147,7 @@ mod test_database_relations; // card orm, step 4
 mod test_database_nested_add; // card orm-nested
 mod test_database_dangling_key; // card orm-dangling
 mod test_database_members_add; // cards orm-nested, orm-list-add
+mod test_database_optional; // card orm-optional
 mod test_print_empty; // card print-error
 mod test_try_else_print; // card try-print
 mod test_database_busy; // card orm-sample-lock

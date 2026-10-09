@@ -152,7 +152,9 @@ const tableKey = (file, table) => `${TABLE_PREFIX}${file} ${table}`;
 // field types by column (src/database.rs column_of), each holding every value of the ones before it
 const LOSSLESS_ORDER = [["int", "i64", "i32", "bool"], ["float", "f64", "f32", "number"], ["text", "string", "str", "char"]];
 const REAL = 1;
-const widening = type => LOSSLESS_ORDER.findIndex(types => types.includes(type));
+// `text?`, an optional field: a column of its type that may hold null
+const plainType = type => type.replace(/\?$/, "");
+const widening = type => LOSSLESS_ORDER.findIndex(types => types.includes(plainType(type)));
 // texts as SQLite's CAST writes them: a real keeps its ".0"
 const textOfColumn = (value, from) => from === REAL && Number.isInteger(value) ? value.toFixed(1) : String(value);
 
@@ -196,8 +198,10 @@ function migrateTable(table, schema, file) {
 		if (storedType === undefined) {
 			stored.types[name] = type;
 			stored.rows.forEach(row => { row[name] = fallback; });
-		} else if (storedType !== type) {
+		} else if (plainType(storedType) !== plainType(type)) {
 			stored.rows.forEach(convertColumn(table, name, storedType, type));
+			stored.types[name] = type;
+		} else {
 			stored.types[name] = type;
 		}
 	}
