@@ -151,6 +151,29 @@ impl WarpParser {
 		Some(if names.len() == 1 { names.remove(0) } else { Node::List(names, bracket, Separator::Colon) })
 	}
 
+	/// `(i=0;i<n;i++)`: a group here whose top level holds a `;`
+	fn at_c_style_for_head(&self) -> bool {
+		if self.current_char() != '(' {
+			return false;
+		}
+		let (mut position, mut depth) = (self.pos, 0);
+		while position < self.chars.len() {
+			if let Some(after) = text_or_comment_end(&self.chars, position) {
+				position = after;
+				continue;
+			}
+			match self.chars[position] {
+				'(' | '[' | '{' => depth += 1,
+				')' | ']' | '}' if depth == 1 => return false,
+				')' | ']' | '}' => depth -= 1,
+				';' if depth == 1 => return true,
+				_ => {}
+			}
+			position += 1;
+		}
+		false
+	}
+
 	/// `for x in iterable: body` and `for x in iterable {body}`, after the word `for`; the body of a colon runs to the end of
 	/// the statement. `for 1..10 : print it` names no variable (wiki/for.md): `for iterable {body}`, whose items are `it`
 	pub(super) fn try_parse_for_in(&mut self) -> Option<Node> {
@@ -171,7 +194,7 @@ impl WarpParser {
 		} else {
 			(self.pos, self.line_nr, self.column, self.current_line) = before_header.clone();
 			self.skip_spaces();
-			if self.current_char() == '(' { // `for(i=0;i<n;i++)`
+			if self.at_c_style_for_head() { // `for(i=0;i<n;i++)`; `for (1…5).filter(f):` walks the list
 				(self.pos, self.line_nr, self.column, self.current_line) = before_header;
 				return None;
 			}
