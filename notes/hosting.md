@@ -62,6 +62,15 @@ lambda's DNS moves to Cloudflare):
   `DELETE /deploy?name=` removes one's own program.
 - "Deploy to my own account": the same upload with `X-Cloudflare-Token` (and `X-Cloudflare-Account` when the token
   reaches several accounts), passed through, never stored. api.cloudflare.com has no CORS, hence the Worker.
+- Login tickets (card deploy-opens-tab): GitHub's login page cuts the popup off from the playground (COOP: `opener`
+  is null afterwards, so postMessage never arrived and the user saw "Logged in as …, you can close this window" with
+  nothing deployed). The playground sends `&ticket=<random>` to /auth/…; the callback stores the login in KV under
+  `ticket:<ticket>` (10 minutes) and the playground polls `GET /ticket?ticket=`. After deploying it posts
+  `POST /ticket?ticket=&program=<url>` (only *.workers.dev and *.lambda.pannous.com addresses) or `&error=`, and the
+  login window, waiting on the same ticket, turns into the program's tab. Already logged in, the click opens a tab
+  at once ("deploying …") that goes to the program: only a click may open a window, so each deploy opens exactly one.
+  An expired session asks for another click. `claim` leaves ticket keys out of its program counts.
+  Probe: probes/hosting/login_ticket.sh (wrangler dev + curl; the popup itself only in CI).
 - Clients: `warp deploy --hosted app.warp` (src/deploy.rs; WARP_HOSTING, WARP_HOSTING_TOKEN); the playground's ⋯ menu
   (deploy.js: Deploy, Deploy to my Cloudflare, a pasted token; the browser compiler builds the module and names the
   scripts, src/web.rs worker_bundle → src/host_parts.rs).
