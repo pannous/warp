@@ -52,6 +52,10 @@ BROWSER_OWN_WARNINGS = {"No available adapters."}
 # an example on the GPU (paint of a shader) in a browser without WebGPU (the runner's Firefox): skipped, loudly
 NO_GPU = "offers no WebGPU adapter"
 PAGE_LOAD = "(loading the page)"
+# each GET the server began and finished, (seconds since it started, path, finished): shown after a failed tour, which
+# then says whether the browser asked for a stalled worker's scripts at all (card tour-firefox)
+served = []
+SERVED_SHOWN = 400  # the first requests: the page's and its workers' loading
 
 
 def include_dirs():
@@ -64,6 +68,19 @@ def find_header(name):
 	if not HEADER_NAME.match(name):
 		return None
 	return next((path for path in (os.path.join(directory, name) for directory in include_dirs()) if os.path.isfile(path)), None)
+
+
+def log_served(path, finished):
+	served.append((time.time() - SERVER_STARTED, path, finished))
+
+
+def show_served():
+	print(f"the server's first {SERVED_SHOWN} requests (s since it started, → asked, ✓ answered):")
+	for seconds, path, finished in served[:SERVED_SHOWN]:
+		print(f"  {seconds:7.2f} {'✓' if finished else '→'} {path}")
+
+
+SERVER_STARTED = time.time()
 
 
 def serve(binary, root=REPOSITORY):
@@ -87,7 +104,9 @@ def serve(binary, root=REPOSITORY):
 		def do_GET(self):
 			split = urllib.parse.urlsplit(self.path)
 			if split.path != STUB_PATH:
-				return super().do_GET()
+				log_served(self.path, False)
+				super().do_GET()
+				return log_served(self.path, True)
 			query = urllib.parse.parse_qs(split.query, keep_blank_values=True)
 			body = query.get("body", [""])[0].encode()
 			code, _, reason = query.get("status", ["200 OK"])[0].partition(" ")
@@ -340,6 +359,8 @@ def check_examples(names, page_url=None, site=None):
 	browser("close")
 	if server:
 		server.shutdown()
+		if failures:
+			show_served()
 	print(f"\nexamples and samples: {len(chosen) + 1 - len(failures)} of {len(chosen) + 1} show what they promise, without console errors" + (f"; failed: {', '.join(failures)}" if failures else ""))
 	sys.exit(101 if failures else 0)
 
