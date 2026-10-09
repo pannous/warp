@@ -203,6 +203,9 @@ PASSED:
   ✓ control::test_filter_loops::test_a_condition_loop_visits_only_matching_items
   ✓ control::test_filter_loops::test_a_filter_warns_once_with_its_explicit_form
   ✓ control::test_filter_loops::test_plain_loops_do_not_filter
+  ✓ control::test_for_forms::block_after_a_chained_iterable
+  ✓ control::test_for_forms::c_style_for_with_a_space_or_without_braces
+  ✓ control::test_for_forms::print_with_commas_in_a_loop_body
   ✓ control::test_for_implicit_it::a_colon_body_is_the_rest_of_the_line
   ✓ control::test_for_implicit_it::a_for_loop_without_a_variable_walks_it
   ✓ control::test_for_it::a_symbol_prints_its_name
@@ -3676,6 +3679,8 @@ PASSED:
   ✓ web::test_dev_server::the_dev_server_rebuilds_a_changed_program
   ✓ web::test_dom_pages::a_handler_draws_on_a_canvas_of_the_page
   ✓ web::test_dom_pages::a_handler_sets_and_reads_elements_of_the_page
+  ✓ web::test_dom_pages::main_sets_the_title_of_the_page
+  ✓ web::test_editor_mode::the_mode_advances_without_built_keywords
   ✓ web::test_editor_shortcuts::cmd_slash_comments_lines_out_and_back_in
   ✓ web::test_element_events::an_element_handler_marks_its_element
   ✓ web::test_element_events::each_element_handler_has_its_number
@@ -4251,4 +4256,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-10 ignored, 4246 passed, 0 failed, 4246 total tested
+10 ignored, 4251 passed, 0 failed, 4251 total tested
