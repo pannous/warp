@@ -222,11 +222,17 @@ async function upload({ token, account, script, program }) {
 	return `https://${script}.${subdomain}.workers.dev`;
 }
 
-// a name belongs to the first GitHub user who deploys it
+// a name belongs to the first GitHub user who deploys it; the caps keep spam within the free plan (notes/hosting.md
+// "Limits"), which never bills: past its daily requests the Workers answer errors until the next day
 async function claim(env, name, owner) {
 	const holder = await env.NAMES.get(name);
 	if (holder && holder !== String(owner.id)) throw new Refusal(409, `${name} belongs to someone else: choose another name`);
-	if (!holder) await env.NAMES.put(name, String(owner.id), { metadata: { login: owner.login } });
+	if (holder) return;
+	const { keys } = await env.NAMES.list();
+	if (keys.length >= Number(env.MAX_PROGRAMS)) throw new Refusal(507, "warp-hosting is full for now: deploy to your own Cloudflare account");
+	const own = keys.filter(key => key.metadata?.owner === String(owner.id)).map(key => key.name);
+	if (own.length >= Number(env.MAX_PROGRAMS_PER_USER)) throw new Refusal(429, `you host ${own.join(", ")} already, ${env.MAX_PROGRAMS_PER_USER} at most: redeploy one of those names or remove one (DELETE /deploy?name=…)`);
+	await env.NAMES.put(name, String(owner.id), { metadata: { owner: String(owner.id), login: owner.login } });
 }
 
 async function deployHere(request, env, name) {
