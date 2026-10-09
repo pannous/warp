@@ -23,5 +23,15 @@ tests/modules/test_import_compiled.rs (the browser too).
   (pipeline::for_any_host, about 700 bytes). The sample imports tests/fixtures/compiled/shapes.wasm, which the deploy
   (pages.yml) ships.
 
+- Shared changes (card import-shared): passing the reference itself does not work. Both modules canonicalize to the same
+  $Node type, so the module accepts the program's Node, but a Node's texts, field names among them, are offsets into its
+  own instance's linear memory. The module would compare "x" against the program's offsets read in the module's memory,
+  not find it, and grow a field whose name points into the module's memory: a corrupt object. So an argument still
+  crosses as a copy, and what the module changed in that copy is written back: the program's Node takes the fields of
+  a copy of it (wasm_modules.rs write_back natively, host-foreign.js writtenBack with the export reflect_assign in the
+  browser), so every holder of the instance or list sees the change. A list passed to such a function stays a Node list,
+  not a typed array (list_sharing.rs held_elsewhere).
+  Not covered: a reference the module keeps (in a global) and changes later, and nested objects: they are new copies.
+
 ## Left
-- An instance is copied, not shared: a change the module makes to an argument is not seen by the caller.
+- True sharing needs texts outside linear memory (GC arrays of bytes) or one memory for both instances.

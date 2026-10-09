@@ -178,17 +178,27 @@ function moduleImports(holder, hooks, path) {
 			const call = cCalls(holder.run).get(`${path}\t${name}`);
 			if (call) return callC(holder, exports, member, call, values, `${path} ${name}`);
 			const program = holder.exports;
-			return copied(exports, program, member(...values.map(value => copied(program, exports, value))));
+			const copies = values.map(value => copied(program, exports, value));
+			const result = copied(exports, program, member(...copies));
+			values.forEach((value, index) => writtenBack(program, value, exports, copies[index]));
+			return result;
 		},
 	});
+}
+
+// what the module changed in its copy of an argument, made to the program's own Node (src/wasm_modules.rs write_back)
+function writtenBack(program, value, module, copy) {
+	if (copy === value || !isNode(value) || !isNode(copy)) return;
+	const changed = readNode(module, copy);
+	if (JSON.stringify(changed) !== JSON.stringify(readNode(program, value))) program.reflect_assign(value, buildValue(program, changed));
 }
 
 // a module warp compiled reads its Nodes (reader.js) and builds them (host.js buildValue)
 const isWarpModule = exports => typeof exports.reflect_data === "function" && typeof exports.new_text === "function";
 // a Node of one warp instance as a copy in the other (src/wasm_modules.rs call_with_values): its texts live in the
 // memory of the instance that made it
-const copied = (from, to, value) => value !== null && typeof value === "object" && isWarpModule(from) && isWarpModule(to)
-	? buildValue(to, readNode(from, value)) : value;
+const isNode = value => value !== null && typeof value === "object";
+const copied = (from, to, value) => isNode(value) && isWarpModule(from) && isWarpModule(to) ? buildValue(to, readNode(from, value)) : value;
 
 addHostPart({
 	words: (holder, hooks, { program }) => ({

@@ -486,7 +486,11 @@ impl WasmGcEmitter {
 		}
 		let groups = alias_groups(&sources);
 		let group_updated = |name: &String| groups.get(name).is_some_and(|group| group.iter().any(|member| updated.contains(member)));
-		let held = super::list_sharing::held_elsewhere(program, &self.ctx.user_functions);
+		// a function of an imported warp module may change the Node it gets: the change is written back to it (wasm_modules.rs
+		// write_back), not to a typed array
+		let changes_arguments = |callee: &str| self.ctx.ffi_imports.get(callee).is_some_and(|import| crate::wasm_modules::is_module_path(import.library)
+			&& crate::wasm_modules::exports(import.library).get(import.name).is_some_and(|export| export.node_result.is_some()));
+		let held = super::list_sharing::held_elsewhere(program, &self.ctx.user_functions, &changes_arguments);
 		let written = super::list_sharing::written_roots(program, &self.ctx.user_functions);
 		loop {
 			let typed = self.typed_list_elements(&sources, &excluded, &declared_floats, &assigned_kinds);
