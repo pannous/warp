@@ -18,6 +18,8 @@ handles (playground.js dragToResize) set the guide's width and the editor's heig
 (warp-playground-sizes), double-click resets, arrow keys when focused. The developer things (native install, ⤓ wasm,
 build switch, silenced hints) sit in the header's ⋯ menu; the run time is a small note in the output's corner.
 
+- The assistant (assistant.js, notes/agent.md): the API key field in the ⋯ menu, completion (Ctrl-Space), Ask ✦ chat.
+
 ## The language guide (guide.md, guide.js)
 The left pane of the page (cards "core feature", "doc-example"; P188 one page): web/playground/guide.md, chapters `## Title` from
 easy to advanced, one open at a time (anchor `#<title-in-kebab-case>`). A fence ```` ```warp => <value> ```` is a snippet
