@@ -658,13 +658,13 @@ pub const RETURNED_ERROR: &str = "returned_error";
 /// `a % 0`, `a rem 0`: an integer divide by zero (big_int::emit_nonzero_divisor)
 pub const DIVIDE_BY_ZERO: &str = "divide_by_zero";
 
-pub const RUNTIME_ERRORS: [&str; 28] = [
+pub const RUNTIME_ERRORS: [&str; 29] = [
 	"index_out_of_range", INDEX_NOT_INTEGRAL, "invalid_number", "out_of_memory", "key_not_found", "float_out_of_int_range",
 	"min_of_an_empty_list", "max_of_an_empty_list", "reduce_of_an_empty_list",
 	"not_a_list", "not_a_text", "not_an_int", "non_ascii_text", "not_a_joinable_item", "empty_separator", "not_an_object",
 	"not_comparable", super::closures::NOT_A_FUNCTION, super::closures::WRONG_ARGUMENT_COUNT, super::tuple_emitter::WRONG_NUMBER_OF_VALUES,
 	RETURNED_ERROR, "not_a_character", COUNT_NOT_INTEGRAL, NOT_A_NUMBER, DIVIDE_BY_ZERO, INT_NOT_WHOLE, super::declared_values::LIST_CANNOT_HOLD,
-	super::uncertain::NEGATIVE_UNCERTAINTY,
+	super::uncertain::NEGATIVE_UNCERTAINTY, super::uncertain::INTERVAL_AND_GAUSSIAN,
 ];
 
 /// text_as_int(node) -> i64: a Text's optional sign and decimal digits, any other node's Int (get_int_value)

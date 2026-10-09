@@ -5,9 +5,9 @@
 
 // The units by name, their SI amount and dimension: the dimension packs the powers of length, mass and time as
 // length + 256·mass + 65536·time, so multiplying quantities adds dimensions
-unit_names = ["mm", "cm", "m", "km", "mg", "g", "kg", "ms", "s", "min", "h"]
-unit_scales = [1/1000, 1/100, 1, 1000, 1/1000000, 1/1000, 1, 1/1000, 1, 60, 3600]
-unit_dimensions = [1, 1, 1, 1, 256, 256, 256, 65536, 65536, 65536, 65536]
+unit_names = ["mm", "cm", "m", "km", "inch", "ft", "yd", "mi", "mg", "g", "kg", "lb", "ms", "s", "min", "h", "mph"]
+unit_scales = [1/1000, 1/100, 1, 1000, 127/5000, 381/1250, 1143/1250, 201168/125, 1/1000000, 1/1000, 1, 45359237/100000000, 1/1000, 1, 60, 3600, 1397/3125]
+unit_dimensions = [1, 1, 1, 1, 1, 1, 1, 1, 256, 256, 256, 256, 65536, 65536, 65536, 65536, 1 - 65536]
 
 class Quantity {
 	amount:number

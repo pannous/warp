@@ -91,7 +91,10 @@ bo's row again, so it changes nothing after written-through changes; an instance
 |---|---|
 | a field added | ALTER TABLE ADD COLUMN, the field's default value (else ø/NULL) |
 | a field removed | the column stays, a warning names it (data is never dropped silently) |
-| a lossless type or unit change (int → float, km → m) | converted in place (UPDATE … SET d = d * 1000) |
+| a lossless type change (int → float) | converted in place (UPDATE … SET c = CAST(old AS type)) |
+| a unit change within its quantity (km → m) | only the column's declared type changes: a unit field holds SI amounts |
+| plain numbers given a unit (int → km) | read as that unit (UPDATE … SET d = old * 1000), a warning names the unit |
+| another quantity (km → kg), a unit dropped (km → float) | a loud error naming the column and both types |
 | a lossy change (float → int, text → int) | a loud error naming the column and both types |
 | a rename | the field's annotation `@was(old_name) name: text` renames the column (RENAME COLUMN); without it, it reads as add + remove |
 
@@ -111,6 +114,9 @@ bo's row again, so it changes nothing after written-through changes; an instance
   The list keeps its instances, so a filtered row is the same instance (`bo.age += 1` shows in `people`).
 - SQL keeps: comparisons, and/or, `+ - *` of numeric columns and number literals, `it.f` as its column, literals and
   variables as `?` values. Not `/` (warp's division is exact) and not `+` of texts or of unknown types.
+  `==` and `!=` are SQL's `IS` and `IS NOT`, so `it.email == ø` finds the NULLs as in warp.
+- An optional scalar field (`email: text?`, card orm-optional) is a nullable column: rows without a value (and rows
+  from before an added column) hold NULL and read as ø. `text` → `text?` keeps the column (the browser store too).
 - Every other part is `warp_call('table·call·N', id, columns…, values…)`: a generated function
   `table·call·N(table·arguments: any) := …` with `it.f` as its column's argument, `it` as the row's instance and the
   filter's variables as the values after the row. database.rs select registers warp_call for the query only
@@ -175,5 +181,12 @@ bo's row again, so it changes nothing after written-through changes; an instance
    - `@was(nick) name: text` (an annotation on the field's name; class_methods::fields_marked) sends the column's old
      name as a 4th schema entry: database.rs renames it (RENAME COLUMN) when the table has the old column and not the
      new one, host-files.js `renameColumn` moves the stored values. `@was: nick` inside a class body is Ruby's `self.was`.
-   - Open: unit changes (km → m) wait for runtime units (a unit type is no column yet, notes/units_runtime.md).
+   - Unit fields (card unit-fields): `class Run{distance: km}` (static_units/unit_fields.rs) holds the SI amount like
+     any quantity; the column is `NUMERIC km` (NUMERIC keeps a whole SI amount an integer, as the program holds it; REAL
+     gave 5000.0, which an exact `total = 0 km` refused: "not an int"). database.rs `conversion_factor` decides the
+     migrations above. The playground's store follows the same rules (card browser-unit-migrations): the schema
+     entry of a unit field carries its quantity and SI amount per unit (`[distance km ø ø m 1000]`, the 4th entry ø
+     unless renamed; units::static_units::unit_type), the store keeps each unit column's quantity (`quantities`).
+     An optional unit field (`climb: m?`, card unit-field) is a nullable `NUMERIC m` column declared `number?`; ø has
+     no dimension, so `Run(5 km, ø)` and `r.climb == ø` pass static units. Sample: samples/orm_units.warp.
    - A field named size/count/length reads as the builtin count off a typed list element (card field-named-size).

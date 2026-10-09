@@ -31,7 +31,7 @@ pub fn lower(node: Node) -> Node {
 			// `(a, b) = 1, 2` arrives as `((a, b) = 1), 2`: the first item stays an assignment for regroup_destructuring
 			let takes_more_values = bracket == Bracket::None && separator == Separator::Colon;
 			if takes_more_values {
-				if let Err(error) = warn_tuple_comparison(&items) {
+				if let Err(error) = refuse_comma_next_to_comparison(&items) {
 					return error;
 				}
 			}
@@ -248,22 +248,37 @@ fn check_definition(node: &Node) -> Option<Node> {
 	(!ends_with_return).then(|| error(&format!("{name} returns {arity} values, so it must end with `return` and {arity} values")))
 }
 
-/// `(a, b) == x, y` reads as `((a, b) == x), y`: the comma binds looser than `==` (user, P42 keeps that parse), so a tuple
-/// compared with the first of several comma values gets a strong warning naming the parenthesized comparison
-fn warn_tuple_comparison(items: &[Node]) -> Result<(), Node> {
-	let Some(first) = items.first() else { return Ok(()) };
-	let comparison = match first.drop_meta() {
-		Node::Key(_, Op::Assign, value) => value.as_ref(),
+/// `a == b` among comma values (the first may assign it, `x = a == b, c`): its position, item, sides and operator
+fn comparison_in(index: usize, item: &Node) -> Option<(usize, &Node, &Node, Op, &Node)> {
+	let comparison = match item.drop_meta() {
+		Node::Key(_, Op::Assign, value) if index == 0 => value.as_ref(),
 		other => other,
 	};
-	let Node::Key(tuple, op @ (Op::Eq | Op::Ne), compared) = comparison.drop_meta() else { return Ok(()) };
-	if !matches!(tuple.drop_meta(), Node::List(parts, Bracket::Round, Separator::Colon) if parts.len() > 1) {
-		return Ok(());
+	match comparison.drop_meta() {
+		Node::Key(left, op @ (Op::Eq | Op::Ne), right) => Some((index, item, left.as_ref(), *op, right.as_ref())),
+		_ => None,
 	}
-	let values: Vec<String> = std::iter::once(compared.as_ref()).chain(&items[1..]).map(Node::serialize).collect();
-	let (tuple, values) = (tuple.serialize(), values.join(", "));
-	let message = format!("`{tuple} {op} {values}` compares the tuple with {} only, the comma binds looser than {op}: write `{tuple} {op} ({values})`", compared.serialize());
-	let warning = crate::diagnostic::Diagnostic::at(first, message)
-		.offer("compare the tuple with all the values", format!("{tuple} {op} {values}"), format!("{tuple} {op} ({values})"));
-	crate::diagnostic::report(&[warning])
+}
+
+/// `(a, b) == x, y` reads as `((a, b) == x), y`, `a, b == c` as `a, (b == c)`: the comma binds looser than `==` (P42),
+/// which misleads, so a comma next to a comparison without parentheses is an error asking for them (user, P227: "insist
+/// on braces to avoid errors"), with both parenthesized readings as fixes
+fn refuse_comma_next_to_comparison(items: &[Node]) -> Result<(), Node> {
+	let Some((index, item, left, op, right)) = items.iter().enumerate().find_map(|(index, item)| comparison_in(index, item)) else { return Ok(()) };
+	let before: Vec<&Node> = items[..index].iter().chain(std::iter::once(left)).collect();
+	let after: Vec<&Node> = std::iter::once(right).chain(&items[index + 1..]).collect();
+	let text = |node: &Node| node.serialize().trim().to_string();
+	let joined = |nodes: Vec<&Node>| nodes.into_iter().map(text).collect::<Vec<_>>().join(", ");
+	let (single_before, single_after) = (before.len() == 1, after.len() == 1);
+	let (before, after) = (joined(before), joined(after));
+	let group = |text: &str, single: bool| if single { text.to_string() } else { format!("({text})") };
+	let written = format!("{before} {op} {after}");
+	let all_values = format!("{} {op} {}", group(&before, single_before), group(&after, single_after));
+	let comparison = format!("({} {op} {})", text(left), text(right));
+	let apart = items[..index].iter().map(text).chain(std::iter::once(comparison)).chain(items[index + 1..].iter().map(text)).collect::<Vec<_>>().join(", ");
+	let message = format!("`{written}`: a comma next to {op} needs parentheses, the comma binds looser than {op}: write `{all_values}` or `{apart}`");
+	Err(crate::diagnostic::Diagnostic::at(item, message)
+		.offer("compare all the values", written.clone(), all_values)
+		.offer("keep the comparison apart", written, apart)
+		.into_error())
 }

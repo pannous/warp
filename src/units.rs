@@ -26,34 +26,45 @@ enum Dimension {
 }
 
 #[derive(Debug, PartialEq)]
-/// `factor` counts the smallest unit of the dimension: 1 km = 1_000_000 mm
+/// `factor` counts the smallest step of the dimension, so every unit is a whole number of it: time in ms, length in
+/// 0.1 mm (1 ft = 3048, 1 km = 10_000_000), mass in 10 µg (1 lb = 45_359_237)
 struct Unit {
 	name: &'static str,
 	dimension: Dimension,
 	factor: i64,
 }
 
-const UNITS: [Unit; 12] = [
+const UNITS: [Unit; 17] = [
 	Unit { name: "ms", dimension: Dimension::Time, factor: 1 },
 	Unit { name: "s", dimension: Dimension::Time, factor: 1_000 },
 	Unit { name: "min", dimension: Dimension::Time, factor: 60_000 },
 	Unit { name: "h", dimension: Dimension::Time, factor: 3_600_000 },
-	Unit { name: "mm", dimension: Dimension::Length, factor: 1 },
-	Unit { name: "cm", dimension: Dimension::Length, factor: 10 },
-	Unit { name: "m", dimension: Dimension::Length, factor: 1_000 },
-	Unit { name: "km", dimension: Dimension::Length, factor: 1_000_000 },
-	Unit { name: "mg", dimension: Dimension::Mass, factor: 1 },
-	Unit { name: "g", dimension: Dimension::Mass, factor: 1_000 },
-	Unit { name: "kg", dimension: Dimension::Mass, factor: 1_000_000 },
+	Unit { name: "mm", dimension: Dimension::Length, factor: 10 },
+	Unit { name: "cm", dimension: Dimension::Length, factor: 100 },
+	Unit { name: "m", dimension: Dimension::Length, factor: 10_000 },
+	Unit { name: "km", dimension: Dimension::Length, factor: 10_000_000 },
+	// `inch`, not `in`: `x in xs` and `100 cm in m` keep the word
+	Unit { name: "inch", dimension: Dimension::Length, factor: 254 },
+	Unit { name: "ft", dimension: Dimension::Length, factor: 3_048 },
+	Unit { name: "yd", dimension: Dimension::Length, factor: 9_144 },
+	Unit { name: "mi", dimension: Dimension::Length, factor: 16_093_440 },
+	Unit { name: "mg", dimension: Dimension::Mass, factor: 100 },
+	Unit { name: "g", dimension: Dimension::Mass, factor: 100_000 },
+	Unit { name: "kg", dimension: Dimension::Mass, factor: 100_000_000 },
+	Unit { name: "lb", dimension: Dimension::Mass, factor: 45_359_237 },
 	Unit { name: "AD", dimension: Dimension::Era, factor: 1 },
 ];
 
+/// Unit words standing for a unit expression: `60 mph` is `60 mi/h`
+const UNIT_ALIASES: [(&str, &str); 1] = [("mph", "mi/h")];
+
 /// The long names a conversion target may use, singular or plural: `2 h in minutes` (P36). Quantities keep the short
 /// names, `2 minutes` stays a duration of the time module.
-const LONG_NAMES: [(&str, &str); 12] = [
+const LONG_NAMES: [(&str, &str); 19] = [
 	("millisecond", "ms"), ("second", "s"), ("minute", "min"), ("hour", "h"),
 	("millimeter", "mm"), ("centimeter", "cm"), ("meter", "m"), ("metre", "m"), ("kilometer", "km"),
-	("milligram", "mg"), ("gram", "g"), ("kilogram", "kg"),
+	("inches", "inch"), ("foot", "ft"), ("feet", "ft"), ("yard", "yd"), ("mile", "mi"),
+	("milligram", "mg"), ("gram", "g"), ("kilogram", "kg"), ("pound", "lb"), ("lbs", "lb"),
 ];
 /// `100 cm in m`: the word of a conversion written with spaces (`as` is an operator)
 const IN_WORD: &str = "in";
@@ -71,8 +82,63 @@ fn target_unit(node: &Node) -> Option<&'static Unit> {
 	unit_named(name).or_else(|| LONG_NAMES.iter().find(|(long, _)| *long == singular || *long == name).and_then(|(_, short)| unit_named(short)))
 }
 
+/// `60 mph` as `60 mi/h`: each unit alias the program does not define read as its unit expression (not a field name:
+/// `r.mph`, `{mph: 3}`)
+pub fn lower_unit_aliases(program: Node) -> Node {
+	let aliases: Vec<(&str, &str)> = UNIT_ALIASES.into_iter().filter(|(alias, _)| mentions_word(&program, alias)).collect();
+	if aliases.is_empty() {
+		return program;
+	}
+	let defined = defined_unit_names(&program);
+	let aliases: Vec<(&str, &str)> = aliases.into_iter().filter(|(alias, _)| !defined.contains(*alias)).collect();
+	with_unit_aliases(program, &aliases)
+}
+
+fn with_unit_aliases(node: Node, aliases: &[(&str, &str)]) -> Node {
+	let expansion = |unit: &Node| match unit.drop_meta() {
+		Node::Symbol(name) => aliases.iter().find(|(alias, _)| alias == name).map(|(_, expression)| crate::warp_parser::parse(expression)),
+		_ => None,
+	};
+	match node {
+		// `60 mph`, `60*mph`: the amount joins the first unit, `60 mi / h`, as a written `60 mi/h` reads
+		Node::List(items, Bracket::None, Separator::Space) if items.len() == 2 && expansion(&items[1]).is_some() => {
+			let [amount, unit] = <[Node; 2]>::try_from(items).expect("two items");
+			times_first_unit(with_unit_aliases(amount, aliases), expansion(&unit).expect("guarded"))
+		}
+		Node::Key(amount, Op::Mul, unit) if expansion(&unit).is_some() => times_first_unit(with_unit_aliases(*amount, aliases), expansion(&unit).expect("guarded")),
+		Node::Symbol(name) => expansion(&Node::Symbol(name.clone())).unwrap_or(Node::Symbol(name)),
+		// a field's type, `speed: mph`
+		Node::Type { name, body } if matches!(body.drop_meta(), Node::Empty) && expansion(&name).is_some() => expansion(&name).expect("guarded"),
+		Node::Type { name, body } => Node::Type { name, body: Box::new(with_unit_aliases(*body, aliases)) },
+		Node::Key(object, Op::Dot, field) => Node::Key(Box::new(with_unit_aliases(*object, aliases)), Op::Dot, field),
+		Node::Key(field, Op::Colon, value) => Node::Key(field, Op::Colon, Box::new(with_unit_aliases(*value, aliases))),
+		other => other.map_children(|child| with_unit_aliases(child, aliases)),
+	}
+}
+
+/// Whether the word occurs anywhere, class bodies and field types included
+fn mentions_word(node: &Node, word: &str) -> bool {
+	match node.drop_meta() {
+		Node::Symbol(name) => name == word,
+		Node::Type { name, body } => mentions_word(name, word) || mentions_word(body, word),
+		other => children(other).into_iter().any(|child| mentions_word(child, word)),
+	}
+}
+
+fn times_first_unit(amount: Node, expression: Node) -> Node {
+	match expression.drop_meta() {
+		Node::Key(first, op @ (Op::Mul | Op::Div), rest) => Node::Key(Box::new(times_first_unit(amount, *first.clone())), *op, rest.clone()),
+		_ => Node::Key(Box::new(amount), Op::Mul, Box::new(expression)),
+	}
+}
+
 pub fn is_unit(name: &str) -> bool {
 	unit_named(name).is_some()
+}
+
+/// A unit or a unit alias: the parser binds it to the amount before it, `60 mph` is `60*mph`
+pub fn names_unit(name: &str) -> bool {
+	is_unit(name) || UNIT_ALIASES.iter().any(|(alias, _)| *alias == name)
 }
 
 /// lib/units.warp's class of quantities whose unit is known only at run time, and the word making one
@@ -551,7 +617,7 @@ fn defined_unit_names(node: &Node) -> std::collections::HashSet<String> {
 
 fn collect_defined_unit_names(node: &Node, names: &mut std::collections::HashSet<String>) {
 	let mut add_unit = |node: &Node| if let Node::Symbol(name) = node.drop_meta() {
-		if unit_named(name).is_some() {
+		if unit_named(name).is_some() || UNIT_ALIASES.iter().any(|(alias, _)| alias == name) {
 			names.insert(name.clone());
 		}
 	};

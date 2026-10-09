@@ -4,6 +4,8 @@ use super::*;
 
 /// `abs x`, `norm x`: the absolute value (card g-1pvQ: norm is a synonym)
 /// The prefix operators written as words: `sqrt x`, `cbrt x`, `abs x`, `norm x`
+/// `∜x`, read as `√√x`
+pub(super) const FOURTH_ROOT: char = '∜';
 pub const PREFIX_OPERATOR_WORDS: [(&str, Op); 4] = [("sqrt", Op::Sqrt), ("cbrt", Op::Cbrt), ("abs", Op::Abs), ("norm", Op::Abs)];
 /// Infix operators that may follow a suffix: `10% + 1`, `x abs * 2`
 const SUFFIX_FOLLOWERS: [char; 6] = ['+', '-', '*', '/', '<', '>'];
@@ -197,6 +199,8 @@ impl WarpParser {
 			'/' if c2 != '/' => Some((Op::Div, 1)), // Don't treat // as division - it's a comment
 			'%' => Some((Op::Mod, 1)),
 			'^' => Some((Op::Pow, 1)),
+			'⌞' => Some((Op::LogBase, 1)),
+			'⌟' => Some((Op::LogOf, 1)),
 			'×' | '⋅' => Some((Op::Mul, 1)),
 			'÷' => Some((Op::Div, 1)),
 			'<' | '>' if self.options.wit_mode => None, // angle brackets only delimit type arguments
@@ -471,7 +475,7 @@ impl WarpParser {
 			'-' => Some((Op::Neg, 1)),
 			dash if matches!(glyph_operator(dash), Some((Op::Sub, _))) => Some((Op::Neg, 1)),
 			'!' | '¬' => Some((Op::Not, 1)),
-			'√' => Some((Op::Sqrt, 1)),
+			'√' | FOURTH_ROOT => Some((Op::Sqrt, 1)), // ∜x is √√x (expressions.rs)
 			'∛' => Some((Op::Cbrt, 1)),
 			'‖' => Some((Op::Abs, 1)),
 			'#' => Some((Op::Hash, 1)), // prefix # means count/length
@@ -497,6 +501,8 @@ impl WarpParser {
 			('-', '-') => Some((Op::Dec, 2)),
 			// `10%`, `10% + x`: a percent, no remainder, when no operand follows
 			('%', next) if next != '=' && self.expression_ends_after(1) => Some((Op::Mod, 1)),
+			// `ℯ⌟`: the natural log when no base follows
+			('⌟', _) if self.expression_ends_after(1) => Some((Op::LogOf, 1)),
 			_ => None,
 		}
 	}

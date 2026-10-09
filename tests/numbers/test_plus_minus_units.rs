@@ -11,7 +11,7 @@ fn shown(code: &str) -> String {
 fn a_tolerance_with_units_flows_through_arithmetic() {
 	assert_eq!(shown("x = 5 m ± 1 cm; str(x * 2)"), "10.000 ± 0.020m");
 	assert_eq!(shown("area = (5 m ± 1 cm) * (2 m ± 1 cm); str(area)"), "10.000 ± 0.070m²");
-	assert_eq!(shown("str((5 m ± 1 cm) + 1 m)"), "6.0000 ± 0.0100m");
+	assert_eq!(shown("str((5 m ± 1 cm) + 1 m)"), "6.000 ± 0.010m");
 	assert_eq!(shown("x = 2 km/h ± 1 m/s; str(x * 2)"), "4.0 ± 7.2km/h");
 }
 

@@ -152,19 +152,32 @@ const tableKey = (file, table) => `${TABLE_PREFIX}${file} ${table}`;
 // field types by column (src/database.rs column_of), each holding every value of the ones before it
 const LOSSLESS_ORDER = [["int", "i64", "i32", "bool"], ["float", "f64", "f32", "number"], ["text", "string", "str", "char"]];
 const REAL = 1;
-const widening = type => LOSSLESS_ORDER.findIndex(types => types.includes(type));
+// `text?`, an optional field: a column of its type that may hold null
+const plainType = type => type.replace(/\?$/, "");
+const widening = type => LOSSLESS_ORDER.findIndex(types => types.includes(plainType(type)));
 // texts as SQLite's CAST writes them: a real keeps its ".0"
 const textOfColumn = (value, from) => from === REAL && Number.isInteger(value) ? value.toFixed(1) : String(value);
 
-// a converter of rows retyping the column as src/database.rs converted does, else the same loud error
-function convertColumn(table, name, storedType, type) {
+// a converter of rows retyping the column as src/database.rs converted does (conversion_factor), else the same loud
+// error. A unit column (`distance: km`) holds SI amounts: another unit of its quantity keeps them, plain numbers given a
+// unit are read as it, loudly. Each column is [type, quantity, SI amount per unit], the last two for units only
+function convertColumn(table, name, [storedType, storedQuantity], [type, quantity, perUnit], warn) {
+	const column = `the column ${table}.${name} holds ${storedType}, the class's field is ${type}`;
 	const [from, to] = [widening(storedType), widening(type)];
-	if (from < 0 || to <= from) {
-		throw new Error(`the column ${table}.${name} holds ${storedType}, the class's field is ${type}: its values would lose data, so it is not converted`);
+	if (storedQuantity && quantity) {
+		if (storedQuantity !== quantity) throw new Error(`${column}: ${storedQuantity} and ${quantity} are different quantities, so it is not converted`);
+		return () => {};
 	}
+	if (quantity && from >= 0 && from <= REAL) {
+		warn(`${column}: its plain numbers are read as ${plainType(type)} (each × ${perUnit} to the SI amount a unit field holds)`);
+		return row => { if (row[name] != null) row[name] = Number(row[name]) * perUnit; };
+	}
+	if (storedQuantity) throw new Error(`${column}: the unit would be lost, so it is not converted`);
+	if (from < 0 || to <= from) throw new Error(`${column}: its values would lose data, so it is not converted`);
 	return row => { row[name] = to === REAL ? Number(row[name]) : textOfColumn(row[name], from); };
 }
-const storedTable = (file, table) => databaseValues[tableKey(file, table)] ?? { types: {}, rows: [] };
+// a unit column's quantity is kept in quantities (`m` of km), the browser has no unit table to look it up later
+const storedTable = (file, table) => databaseValues[tableKey(file, table)] ?? { types: {}, quantities: {}, rows: [] };
 function keepTable(file, table, stored) {
 	const key = tableKey(file, table);
 	databaseValues[key] = stored;
@@ -184,18 +197,20 @@ const tableRows = (table, schema, file) => storedTable(file, table).rows.map(row
 
 function migrateTable(table, schema, file) {
 	const stored = storedTable(file, table);
+	stored.quantities ??= {};
 	for (const [name, , , oldName] of schema.filter(([name, , , oldName]) => oldName in stored.types && !(name in stored.types))) {
 		renameColumn(stored, oldName, name);
 	}
-	for (const [name, type, fallback] of schema) {
+	for (const [name, type, fallback, , quantity, perUnit] of schema) {
 		const storedType = stored.types[name];
 		if (storedType === undefined) {
-			stored.types[name] = type;
 			stored.rows.forEach(row => { row[name] = fallback; });
-		} else if (storedType !== type) {
-			stored.rows.forEach(convertColumn(table, name, storedType, type));
-			stored.types[name] = type;
+		} else if (plainType(storedType) !== plainType(type)) {
+			const warn = message => this.warn(message);
+			stored.rows.forEach(convertColumn(table, name, [storedType, stored.quantities[name]], [type, quantity, perUnit], warn));
 		}
+		stored.types[name] = type;
+		if (quantity) stored.quantities[name] = quantity; else delete stored.quantities[name];
 	}
 	const fields = schema.map(([name]) => name);
 	for (const name of Object.keys(stored.types).filter(name => !fields.includes(name))) {
@@ -209,6 +224,7 @@ function migrateTable(table, schema, file) {
 function renameColumn(stored, oldName, name) {
 	stored.types[name] = stored.types[oldName];
 	delete stored.types[oldName];
+	if (oldName in stored.quantities) { stored.quantities[name] = stored.quantities[oldName]; delete stored.quantities[oldName]; }
 	stored.rows.forEach(row => { row[name] = row[oldName]; delete row[oldName]; });
 }
 

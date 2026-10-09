@@ -110,8 +110,8 @@ The dynamic struct, written in warp: lib/units.warp's `class Quantity {amount; d
 reads text (a decimal stays exact: "2.5" is 5/2), `quantity(5, u)` takes a unit given as data. The amount is in SI
 base units, dims packs the powers of length, mass and time as length + 256·mass + 65536·time (so `*` adds them), and
 unit/scale is the display unit. `+ - < > ==` need equal dims, else "DimensionError: cannot add 3m and 2s"; `*` and `/`
-combine (`m·m` shows `m²`, `m/s`); `q.to("m/s")` converts, `q.in("m")` gives a plain number. Units: mm cm m km, mg g kg,
-ms s min h, with powers (`m²`, `s^2`), products (`kg·m`) and one `/`.
+combine (`m·m` shows `m²`, `m/s`); `q.to("m/s")` converts, `q.in("m")` gives a plain number. Units: mm cm m km inch ft
+yd mi, mg g kg lb, ms s min h, mph, with powers (`m²`, `s^2`), products (`kg·m`) and one `/`.
 - Loading (modules.rs): implicit when the program calls `quantity` and defines none, so hello world carries none of it.
   A module with classes is put in front of the program before class_methods (with_implicit_class_modules, needed
   definitions only), so `quantity(…) + …` dispatches to Quantity's operators. An explicit `use units` is replaced by it.
@@ -127,3 +127,13 @@ ms s min h, with powers (`m²`, `s^2`), products (`kg·m`) and one `/`.
   as_run_time_quantity: `5 m/s` is `quantity(5, "m/s")`). Static units alone stay static.
 - ± (card plus-minus-units): `5 m ± 1 cm` the program needs at run time is a Quantity whose amount is a ± value
   (notes/plus_minus.md).
+
+## Units in texts, imperial units (card units-text, 2026-10-09)
+- `"total: " + (total as km)` and `(v in m/s)` join a text in the conversion's unit (static_units.rs: a parenthesized
+  expression keeps its signature, the text arm reads conversion_target).
+- src/units.rs UNITS: inch ft yd mi, lb. Factors count the smallest step of a dimension, so length counts 0.1 mm and
+  mass 10 µg (1 ft = 3048, 1 lb = 45_359_237); time stays ms (milliseconds() reads the factor directly). The inch is
+  `inch` (`inches`): `in` is the word of `x in xs` and `100 cm in m`.
+- UNIT_ALIASES: `mph` is `mi/h`, rewritten by lower_unit_aliases before any units pass (the parser binds it to the
+  amount like a unit: names_unit); a program defining mph keeps its own.
+- Open: `60 mi/h as km/h` parses as `(60 mi/h as km)/h` (a DimensionError); `in km/h` works.

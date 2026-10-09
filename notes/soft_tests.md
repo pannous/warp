@@ -12,7 +12,7 @@ test "squares" {               // named: a failing check or any error fails only
   when it happens; the last line is `✓ 3 tests passed` (exit 0) or `2 of 3 failed` (exit 1).
 - `warp run` / `warp file.warp` / `use`: the tests are skipped (P209).
 - The playground has no `warp test`: its Run runs a program's tests (src/web.rs run_shown), so the kitchen sink shows
-  `✓ 33 tests passed`.
+  `✓ 34 tests passed`.
 - How: src/lowering/test_blocks.rs, a SOURCE_PASSES pass, rewrites top-level tests (and `test` lines inside test
   blocks) into counting code over hidden names `tests·run`, `tests·failed`; pipeline::for_tests sets the mode. The ✗
   line shows the statement as written (diagnostic::written_statement).

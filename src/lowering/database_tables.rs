@@ -93,7 +93,7 @@ const FUNCTION: &str = "table·call";
 /// The SQL function a query calls a warp function through (database.rs)
 const WARP_CALL: &str = "warp_call";
 /// `Team?`: an optional field
-const OPTIONAL_MARK: char = '?';
+pub(crate) const OPTIONAL_MARK: char = '?';
 const NUMERIC_TYPES: [&str; 4] = ["int", "float", "number", "real"];
 /// A bool field's column holds 0/1 (database.rs column types), read back as the bool
 const BOOL_TYPE: &str = "bool";
@@ -295,8 +295,9 @@ impl Query<'_> {
 		match node.drop_meta() {
 			Node::Key(left, op, right) => {
 				let operator = match op {
-					Op::Eq => "=",
-					Op::Ne => "<>",
+					// IS: ø (NULL) equals ø, as in warp (`it.email == ø` of an optional field)
+					Op::Eq => "IS",
+					Op::Ne => "IS NOT",
 					Op::Lt => "<",
 					Op::Gt => ">",
 					Op::Le => "<=",
@@ -595,10 +596,13 @@ fn opened(statement: &Node, tables: &HashMap<String, Table>, file: &str, open: &
 	open.push(variable.clone());
 	// the row is [id, column values…] in the order of the columns
 	let arguments = constructor_arguments(table, ROW);
-	// a column is [name type default] and its old name when renamed
+	// a column is [name type default] and its old name when renamed (ø when not); a unit field's adds its quantity and
+	// SI amount per unit, which the browser's store has no unit table for (`[distance km ø ø m 1000]`)
 	let schema = Node::List(column_fields(table).into_iter().map(|(name, field_type, default)| {
 		let old_name = table.renamed.iter().find(|(field, _)| *field == name).map(|(_, old)| Node::Text(old.clone()));
-		let column = [Node::Text(name), Node::Text(field_type), default.unwrap_or(Node::Empty)].into_iter().chain(old_name);
+		let unit = crate::units::static_units::unit_type(class_of(&field_type)).map(|(quantity, per_unit)| [Node::Text(quantity), crate::node::float(per_unit)]);
+		let old_name = if unit.is_some() { Some(old_name.unwrap_or(Node::Empty)) } else { old_name };
+		let column = [Node::Text(name), Node::Text(field_type), default.unwrap_or(Node::Empty)].into_iter().chain(old_name).chain(unit.into_iter().flatten());
 		Node::List(column.collect(), Bracket::Square, Separator::Space)
 	}).collect(), Bracket::Square, Separator::Space);
 	if !matches!(target.drop_meta(), Node::Key(_, Op::Colon, _)) {
@@ -763,7 +767,12 @@ fn with_lazy_reads(node: Node, tables: &HashMap<String, Table>, own: Option<&str
 			let variable = table_of(&parts[3]).unwrap_or_default();
 			paged_loop(&parts[1].drop_meta().name(), &variable, &tables[&variable].class, rewrite(parts[4].clone()))
 		}
-		Node::Key(left, Op::Hash, position) if table_of(&left).is_some() => called(lazy_name(&table_of(&left).unwrap_or_default(), "at"), Some(rewrite(*position))),
+		// the row keeps its class, so `cups#1.size` reads the field, not the builtin word (card orm-size-field)
+		Node::Key(left, Op::Hash, position) if table_of(&left).is_some() => {
+			let variable = table_of(&left).unwrap_or_default();
+			let row = called(lazy_name(&variable, "at"), Some(rewrite(*position)));
+			Node::meta(row, Node::data(crate::lowering::traits::TypedAs(tables[&variable].class.clone())))
+		}
 		Node::Key(left, Op::Dot, right) => match (table_of(&left), right.drop_meta()) {
 			(Some(variable), Node::Symbol(word)) if COUNT_WORDS.contains(&word.as_str()) => called(lazy_name(&variable, "count"), None),
 			(Some(variable), Node::List(parts, _, _)) if parts.len() == 2 && [ADD_WORD, REMOVE_WORD].contains(&parts[0].drop_meta().name().as_str()) => {
@@ -784,10 +793,36 @@ fn paged_loop(element: &str, variable: &str, class: &str, body: Node) -> Node {
 		.into_iter().chain(lazy_names(variable));
 	// the body's statements follow the element's in one block: a nested block of expressions would read as a list
 	let element_read = generated(&format!("{element}: {class} = {STREAMED}({LOOP_POSITION})"), names());
-	let statements = Node::List([vec![element_read], body.children()].concat(), Bracket::Curly, Separator::Semicolon);
+	let statements = Node::List([vec![element_read], body_statements(body)].concat(), Bracket::Curly, Separator::Semicolon);
 	let code = format!("{LOOP_END} = {COUNTED}()\nfor {LOOP_POSITION} in 1 to {LOOP_END} {VALUE_PLACEHOLDER}");
 	let lowered = generated(&code, names().chain([(VALUE_PLACEHOLDER, statements)]));
 	Node::List(lowered.children(), Bracket::None, Separator::Semicolon)
+}
+
+/// A block's statements: `{print p.name}` is one statement, its words a call, not the statements `print` and `p.name`
+fn body_statements(body: Node) -> Vec<Node> {
+	match body.drop_meta() {
+		Node::List(items, Bracket::Curly, Separator::Space) if items.len() > 1 => vec![Node::List(items.clone(), Bracket::None, Separator::Space)],
+		_ => body.children(),
+	}
+}
+
+/// The table of a generated element read, `people·at(i)` or `people·streamed(i)`: static units knows its class
+pub(crate) fn element_table(node: &Node) -> Option<String> {
+	lazy_part_table(node, &[ELEMENT, STREAMED])
+}
+
+/// The table of a generated read of its whole list, `people·load()` where the program reads `people`
+pub(crate) fn loaded_table(node: &Node) -> Option<String> {
+	lazy_part_table(node, &[LOAD])
+}
+
+/// The table of a call of one of its lazy parts `placeholders`
+fn lazy_part_table(node: &Node, placeholders: &[&str]) -> Option<String> {
+	let Node::List(items, Bracket::Round, _) = node.drop_meta() else { return None };
+	let name = items.first()?.drop_meta().name();
+	let (table, part) = name.rsplit_once('·')?;
+	LAZY_PARTS.iter().any(|(placeholder, lazy_part)| placeholders.contains(placeholder) && *lazy_part == part).then(|| table.to_string())
 }
 
 /// The variable an assignment's target names: `people` of `people: [Person]`

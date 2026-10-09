@@ -253,5 +253,5 @@ c.increment(2)
 use c
 import tests/fixtures/wasm/zlib
 [strstr("haystack", "st"), strchr("a/b/c", 47), crc32(0, "wasp", 4), zlibVersion()]` },
-	"kitchen sink": { value: '"✓ 33 tests passed"', get code() { return SAMPLES.kitchensink; } },
+	"kitchen sink": { value: '"✓ 34 tests passed"', get code() { return SAMPLES.kitchensink; } },
 };
