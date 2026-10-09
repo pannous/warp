@@ -66,3 +66,5 @@ mod test_serve_error_body; // card serve-error-body
 mod test_missing_row_404; // card missing-row-404
 #[cfg(feature = "native")] // a server on a port, HTTP requests
 mod test_server_route_paths; // cards server-path, route-star
+#[cfg(feature = "native")] // a server on a port and its SQLite table
+mod test_route_phrase_body; // card first-first

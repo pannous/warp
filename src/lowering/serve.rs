@@ -244,11 +244,7 @@ fn reading_tables(body: Node, tables: &[(String, Node)]) -> Node {
 		crate::warp_parser::parse(&format!("{} {name}", crate::late_binding::GLOBAL)),
 		Node::Key(Box::new(Node::Symbol(name.clone())), Op::Assign, Box::new(table.clone())),
 	]);
-	let statements = match body.drop_meta() {
-		Node::List(items, Bracket::Curly, _) => items.clone(),
-		_ => vec![body],
-	};
-	Node::List(reads.chain(statements).collect(), Bracket::Curly, Separator::Newline)
+	Node::List(reads.chain(crate::event_signals::statements_of(&body)).collect(), Bracket::Curly, Separator::Newline)
 }
 
 /// The item with each value reading server data as the call of a server function giving it; markup and blocks are
@@ -562,10 +558,7 @@ fn with_path_parameters(pattern: &str, body: Node) -> Node {
 	if !pattern.contains(PATH_PARAMETER_MARK) {
 		return body;
 	}
-	let items = match body.drop_meta() {
-		Node::List(items, Bracket::Curly, _) => items.clone(),
-		other => vec![other.clone()],
-	};
-	Node::List(crate::routes::route_body_at(pattern, &items, crate::warp_parser::parse(REQUEST_PATH)), Bracket::Curly, Separator::Newline)
+	let statements = crate::event_signals::statements_of(&body);
+	Node::List(crate::routes::route_body_at(pattern, &statements, crate::warp_parser::parse(REQUEST_PATH)), Bracket::Curly, Separator::Newline)
 }
 
