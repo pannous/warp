@@ -273,3 +273,8 @@ ends on about:blank), a declared memory maximum (still ~8 GB reserved).
   worker.js warmUp: `p{ "" }` evaluated with the worker's messages silenced, skipped over a live run). With it the
   first markup run was ~80 ms in Chrome and ~97 ms in WebKit (local build). Measured with a Playwright probe timing
   window.playground.evaluate in a fresh context (probes/*.mjs are not tracked; agent-browser eval works the same).
+
+- ⛶ (card little-full, 2026-10-09, warp-web): a small button over the paintings' corner (index.html #painted,
+  playground.js toggleFullScreen) puts them full screen: the last painting only, as large as fits at its own aspect
+  ratio (CSS --aspect set by showPaintings, so the pointer mapping of clickDetail stays exact), black around it; Esc
+  or ⛶ again leaves. Its click is no click of the program's `on click`. Check: probes/little_full.sh (after build.sh).
