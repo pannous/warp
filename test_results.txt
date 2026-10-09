@@ -2639,6 +2639,8 @@ PASSED:
   ✓ scope::test_colon_body_extent::test_colon_body_of_while_stops_at_newline
   ✓ scope::test_colon_body_extent::test_colon_body_of_while_stops_at_semicolon
   ✓ scope::test_constant_alias::constant_is_an_alias_of_const
+  ✓ scope::test_conversion_kind_clash::a_conversion_gives_its_type_s_kind
+  ✓ scope::test_conversion_kind_clash::conversions_that_mix_stay_allowed
   ✓ scope::test_data_scope::test_a_key_can_refer_to_an_earlier_key
   ✓ scope::test_data_scope::test_a_key_shadows_the_subtraction_of_its_parts
   ✓ scope::test_data_scope::test_kebab_keys_are_read_back
@@ -4109,4 +4111,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-14 ignored, 4104 passed, 0 failed, 4104 total tested
+14 ignored, 4106 passed, 0 failed, 4106 total tested
