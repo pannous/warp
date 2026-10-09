@@ -962,6 +962,9 @@ PASSED:
   ✓ functions::test_default_parameters::a_typed_parameter_may_have_a_default
   ✓ functions::test_default_parameters::calls_without_parentheses_take_defaults_too
   ✓ functions::test_default_parameters::named_arguments_skip_defaults_and_mix_with_positional_ones
+  ✓ functions::test_definition_bodies::a_method_body_keeps_its_suffix_word
+  ✓ functions::test_definition_bodies::of_phrase_as_a_value
+  ✓ functions::test_definition_bodies::ruby_def_indented_by_tabs
   ✓ functions::test_definition_value::a_definition_alone_is_empty
   ✓ functions::test_definition_value::a_spaced_definition_names_its_parameters
   ✓ functions::test_definition_value::it_names_the_one_parameter_of_a_definition
@@ -1055,6 +1058,10 @@ PASSED:
   ✓ functions::test_inlining::a_helper_with_free_variables_or_recursion_is_called
   ✓ functions::test_inlining::an_inlined_helper_leaves_its_argument_unchanged
   ✓ functions::test_inlining::an_inlined_helper_updates_the_list_handed_back
+  ✓ functions::test_it_arguments::an_it_argument_of_a_defined_function_is_a_function
+  ✓ functions::test_it_arguments::an_it_argument_of_an_iteration_word_is_a_function
+  ✓ functions::test_it_arguments::an_it_argument_reads_the_variables_around_it
+  ✓ functions::test_it_arguments::the_it_of_the_argument_is_not_the_parameter_of_the_function_around_it
   ✓ functions::test_kebab_members::a_missing_kebab_field_subtracts_the_variable
   ✓ functions::test_kebab_members::an_existing_kebab_field_is_read
   ✓ functions::test_lambda_global::a_lambda_with_global_changes_mains_variable
@@ -3221,6 +3228,11 @@ PASSED:
   ✓ types::test_loop_text_arithmetic::text_arithmetic_in_a_loop_body_is_no_type_error
   ✓ types::test_match_static_variant::a_bare_variant_skips_the_class_arms
   ✓ types::test_match_static_variant::an_instance_still_takes_its_arm
+  ✓ types::test_method_bodies::assignments_in_a_method
+  ✓ types::test_method_bodies::bodies_agree_with_functions
+  ✓ types::test_method_bodies::filters_and_comprehensions_in_a_method
+  ✓ types::test_method_bodies::phrases_in_a_method
+  ✓ types::test_method_bodies::units_in_a_method
   ✓ types::test_method_result_text::an_interpolated_method_result_uses_its_text
   ✓ types::test_mutating_methods::a_block_method_changes_its_object_and_gives_a_value
   ✓ types::test_mutating_methods::a_method_changes_its_object_and_gives_a_value
@@ -4239,4 +4251,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-10 ignored, 4234 passed, 0 failed, 4234 total tested
+10 ignored, 4246 passed, 0 failed, 4246 total tested
