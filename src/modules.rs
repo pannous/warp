@@ -826,7 +826,7 @@ const FILE_URL_PREFIX: &str = "file://";
 const UNITS_MODULE: &str = "units";
 const QUANTITY: &str = "quantity";
 /// A served route's path parameters (`post "/todos/:id:int/toggle"`, lowering/serve.rs) are read by the router's words
-const ROUTE_PARTS: [&str; 2] = ["route_segment", "route_parameter"];
+const ROUTE_PARTS: [&str; 3] = ["route_segment", "route_parameter", "route_matches"];
 /// Whether a program needs a module
 type NeededBy = fn(&Node) -> bool;
 /// The standard modules a program needs without `use`: P183 a file URL → file, a page → markup (lowering/page_html.rs),

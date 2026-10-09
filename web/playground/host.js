@@ -7,6 +7,7 @@ const TEXT_HEAP_EXPORT = "text_heap";
 const TRAP_DETAIL_EXPORT = "trap_detail";
 const SHARED_CHECK_MILLISECONDS = 10; // how often a busy sleep looks at its check points
 const PAGE_ROUTES_EXPORT = "page·routes";
+const PAGE_SUBMITTED_EXPORT = "page·submitted"; // lowering/serve.rs PAGE_SUBMITTED
 const PAGE_BITS = 16;
 const STDERR = 2;
 const DARK_MODE_QUERY = "(prefers-color-scheme: dark)";
@@ -331,7 +332,7 @@ function runMain(holder, hooks) {
 	const outcome = outcomeOf(holder, hooks, () => withExitHandler(holder, exports, () => exports.main()));
 	const events = pageEvents(exports);
 	// a program with routes stays for its links (lowering/routes.rs page·routes)
-	if ((events.length > 0 || holder.timers || holder.fetches || exports[PAGE_ROUTES_EXPORT]) && outcome.result) hooks.listen?.(holder, events);
+	if ((events.length > 0 || holder.timers || holder.fetches || exports[PAGE_ROUTES_EXPORT] || exports[PAGE_SUBMITTED_EXPORT]) && outcome.result) hooks.listen?.(holder, events);
 	// a run without page events (lib/markup.warp rendering the page's HTML, src/markup.rs) keeps the page's run
 	if (events.length > 0 && outcome.result) listeningRun = holder;
 	return outcome;
@@ -411,6 +412,15 @@ function runPageEvent(holder, hooks, event, detail) {
 	holder.warnings = [];
 	const handler = holder.exports[`on·${event}·node`];
 	return outcomeOf(holder, hooks, () => handler(buildValue(holder.exports, treeOfPlain([detail]))));
+}
+
+// a form's request {method, path, query, body} for the program's own routes, without a server (worker.js handleSubmit,
+// lowering/serve.rs with_local_routes)
+function runSubmitted(holder, hooks, request) {
+	holder.warnings = [];
+	const submitted = holder.exports[PAGE_SUBMITTED_EXPORT];
+	if (!submitted) return { failure: `a form sent ${request.method} ${request.path}, but the program has no route (post "${request.path}" {…})`, warnings: [] };
+	return outcomeOf(holder, hooks, () => submitted(buildValue(holder.exports, treeOfPlain(request))));
 }
 
 // a timer's handler (on·every·<id>), given ø when it reads `event`, as natively (system_signals.rs call_handler)

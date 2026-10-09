@@ -38,6 +38,8 @@ const PARAMETER_MARK: char = ':';
 /// (host-routes.js navigate)
 const PAGE_PATH: &str = "page·path";
 const PAGE_NAVIGATED: &str = "page·navigated";
+/// Without a server, a form of the page asks the program's own routes: page·submitted(request) (worker.js handleSubmit)
+const PAGE_SUBMITTED: &str = "page·submitted";
 const DATABASE_WORDS: [&str; 2] = ["database", "indexedDB"];
 /// `·` of a generated name as written in code (it would parse as a product)
 const NAME_DOT: &str = "_dot_";
@@ -51,6 +53,7 @@ pub fn lower(program: Node) -> Node {
 		return without_serving(program);
 	}
 	let port = crate::pipeline::serving_port();
+	let program = if port.is_none() { with_local_routes(program) } else { program };
 	let program = match program {
 		single if port.is_some() && !matches!(single.drop_meta(), Node::List(_, Bracket::None, Separator::Semicolon | Separator::Newline)) => {
 			Node::List(vec![single], Bracket::None, Separator::Newline)
@@ -319,15 +322,22 @@ fn reading_tables(body: Node, tables: &[(String, Node)]) -> Node {
 	if tables.is_empty() {
 		return body;
 	}
-	let reads = tables.iter().flat_map(|(name, table)| [
-		crate::warp_parser::parse(&format!("{} {name}", crate::late_binding::GLOBAL)),
-		Node::Key(Box::new(Node::Symbol(name.clone())), Op::Assign, Box::new(table.clone())),
-	]);
+	let reads = tables.iter().flat_map(|(name, table)| [global(name), Node::Key(Box::new(Node::Symbol(name.clone())), Op::Assign, Box::new(table.clone()))]);
+	prepended(reads.collect(), body)
+}
+
+/// `global name`
+fn global(name: &str) -> Node {
+	crate::warp_parser::parse(&format!("{} {name}", crate::late_binding::GLOBAL))
+}
+
+/// The block with these statements first
+fn prepended(first: Vec<Node>, body: Node) -> Node {
 	let statements = match body.drop_meta() {
 		Node::List(items, Bracket::Curly, _) => items.clone(),
 		_ => vec![body],
 	};
-	Node::List(reads.chain(statements).collect(), Bracket::Curly, Separator::Newline)
+	Node::List(first.into_iter().chain(statements).collect(), Bracket::Curly, Separator::Newline)
 }
 
 /// The item with each value reading server data as the call of a server function giving it; markup and blocks are
@@ -370,9 +380,47 @@ fn replaced(node: Node, old: &Node, new: &Node) -> Node {
 
 /// The code with its generated names (`page·path`, written so it parses as a name)
 fn parse_named(code: &str) -> Node {
-	let written = |name: &str| name.replace('·', NAME_DOT);
-	let names = [PAGE_PATH, PAGE_NAVIGATED].map(|name| (written(name), Node::Symbol(name.to_string())));
-	crate::law::substitute(&crate::warp_parser::parse(&written(code)), &names.into_iter().collect())
+	with_generated_names(crate::warp_parser::parse(&code.replace('·', NAME_DOT)))
+}
+
+fn with_generated_names(node: Node) -> Node {
+	match node {
+		Node::Symbol(name) if name.contains(NAME_DOT) => Node::Symbol(name.replace(NAME_DOT, "·")),
+		other => other.map_children(with_generated_names),
+	}
+}
+
+/// Without a server (`warp run`, the playground): each top-level route (`post "/todos" {…}`) is the function
+/// route·N(request), as served, and page·submitted(request) calls the one answering the request of a form of the page.
+/// Like an event handler, a route changes the page's variables: those it mentions are its globals
+fn with_local_routes(program: Node) -> Node {
+	let Node::List(statements, bracket, separator) = program else { return program };
+	let Some(first_route) = statements.iter().position(|statement| !top_level_routes(statement).is_empty()) else {
+		return Node::List(statements, bracket, separator);
+	};
+	let (routed, mut statements): (Vec<Node>, Vec<Node>) = statements.into_iter().partition(|statement| !top_level_routes(statement).is_empty());
+	let mut page_variables = crate::event_signals::main_level_variables(&statements);
+	page_variables.extend(statements.iter().filter_map(server_variable));
+	let mut functions = vec![];
+	let mut answers = vec![];
+	for (index, (method, path, body)) in routed.iter().flat_map(top_level_routes).enumerate() {
+		let function = format!("{ROUTE_PREFIX}{index}");
+		let globals = page_variables.iter().filter(|name| body.mentions_any(&[name.as_str()])).map(|name| global(name)).collect();
+		functions.push(route_function(&function, prepended(globals, body)));
+		answers.push(format!("if request.method == {method:?} and route_matches({}, request.path) {{ return {function}(request) }}", path.serialize()));
+	}
+	let unanswered = "throw \"no route answers \" + request.method + \" \" + request.path";
+	functions.push(parse_named(&format!("{PAGE_SUBMITTED}(request:any) := {{\n{}\n{unanswered}\n}}", answers.join("\n"))));
+	// where the first route stands: a page route written last stays the program's value
+	statements.splice(first_route..first_route, functions);
+	Node::List(statements, bracket, separator)
+}
+
+/// `route·N(request:any) := body`
+fn route_function(name: &str, body: Node) -> Node {
+	let request = Node::Key(Box::new(Node::Symbol(REQUEST_WORD.to_string())), Op::Colon, Box::new(Node::Symbol(ANY_TYPE.to_string())));
+	let head = Node::List(vec![Node::Symbol(name.to_string()), request], Bracket::Round, Separator::None);
+	Node::Key(Box::new(head), Op::Define, Box::new(body))
 }
 
 /// A program compiled for its page (pipeline::for_a_page) does not serve: the server runs it natively, the page in the
@@ -621,13 +669,11 @@ fn serving(port: Node, routes: Vec<Route>, server_data: &ServerData, count: &mut
 	for (method, path, body) in routes {
 		let function = format!("{ROUTE_PREFIX}{count}");
 		*count += 1;
-		let request = Node::Key(Box::new(Node::Symbol(REQUEST_WORD.to_string())), Op::Colon, Box::new(Node::Symbol(ANY_TYPE.to_string())));
-		let head = Node::List(vec![Node::Symbol(function.clone()), request], Bracket::Round, Separator::None);
-		let mut entry = vec![Node::Text(method), path, Node::Text(function)];
+		let mut entry = vec![Node::Text(method), path, Node::Text(function.clone())];
 		if answers_a_list(&body, &server_data.list_words) {
 			entry.push(Node::Text(LIST_ANSWER.to_string()));
 		}
-		statements.push(Node::Key(Box::new(head), Op::Define, Box::new(reading_tables(body, &server_data.tables))));
+		statements.push(route_function(&function, reading_tables(body, &server_data.tables)));
 		table.push(Node::List(entry, Bracket::Square, Separator::Colon));
 	}
 	let routes = Node::List(table, Bracket::Square, Separator::Colon);

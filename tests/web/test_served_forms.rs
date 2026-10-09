@@ -103,3 +103,10 @@ fn a_page_starts_from_rows_of_a_server_table() {
 	assert!(page.contains("<a href=\"/todos/1\">tea</a>"), "{page}");
 	server.join().expect("the server thread");
 }
+
+// without a server (`warp run`, the playground) the routes wait for the page's forms (page·submitted): the program
+// runs, its routes do not
+#[test]
+fn routes_without_a_server_wait_for_the_page() {
+	crate::is!(&format!("items = [1]\n{PROGRAM}\npost \"/items\" {{ items.add(2) }}\ncount(items)"), 1);
+}
