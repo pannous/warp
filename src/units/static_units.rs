@@ -267,6 +267,14 @@ fn combined(left: &Signature, right: &Signature, sign: i32) -> Signature {
 	signature(&factors)
 }
 
+fn is_text(node: &Node) -> bool {
+	matches!(node.drop_meta(), Node::Text(_) | Node::Char(_))
+}
+
+fn is_number_type(declared: &Node) -> bool {
+	crate::analyzer::builtin_type_kind(&declared.drop_meta().name()).is_some_and(|kind| matches!(kind, crate::type_kinds::Kind::Int | crate::type_kinds::Kind::Float))
+}
+
 fn shown(signature: &Signature) -> String {
 	let factors: Vec<Factor> = signature.iter().map(|(dimension, power)| Factor { unit: base_unit(*dimension), power: *power }).collect();
 	if factors.is_empty() { "a plain number".to_string() } else { units_text(&factors) }
@@ -466,6 +474,16 @@ impl Inference {
 				let (right, _) = self.infer(*right)?;
 				Ok((Node::Key(Box::new(left), op, Box::new(right)), vec![]))
 			}
+			// `2 m * "a"`: a text repeats a plain count of times (card units-text-repeat)
+			Node::Key(left, Op::Mul, right) if is_text(&left) || is_text(&right) => {
+				let (left, left_signature) = self.infer(*left)?;
+				let (right, right_signature) = self.infer(*right)?;
+				let count = combined(&left_signature, &right_signature, 1);
+				match count.is_empty() {
+					true => Ok((Node::Key(Box::new(left), Op::Mul, Box::new(right)), vec![])),
+					false => Err(Stop::Error(format!("DimensionError: a text repeats a plain number of times, is given {}", shown(&count)))),
+				}
+			}
 			Node::Key(left, op, right) if matches!(op, Op::Add | Op::Sub | Op::Mul | Op::Div) || op.is_comparison() => {
 				let (left, left_signature) = self.infer(*left)?;
 				let (right, right_signature) = self.infer(*right)?;
@@ -560,6 +578,8 @@ impl Inference {
 			Node::Key(name, Op::Colon, declared) if matches!(name.drop_meta(), Node::Symbol(_)) => match super::unit_expression(declared) {
 				// the unit is no type the emitter knows: the variable is a plain number with this signature
 				Some(units) => self.assign_variable(name.name(), name.as_ref().clone(), op, value, Some(signature(&units))),
+				// `x: int = 1 m`: a number type holds plain numbers only (card units-annotation)
+				None if is_number_type(declared) => self.assign_variable(name.name(), target.clone(), op, value, Some(vec![])),
 				None => {
 					self.declared_instance(&name.name(), declared);
 					match self.instances.contains_key(&name.name()) {

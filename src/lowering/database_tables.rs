@@ -120,6 +120,7 @@ const BOOL_TYPE: &str = "bool";
 const SIDE_EFFECTS: [crate::effects::Effect; 5] = [crate::effects::Effect::State, crate::effects::Effect::IO, crate::effects::Effect::FFI, crate::effects::Effect::Async, crate::effects::Effect::Eval];
 
 /// A registered table: the list variable holding it and its class's fields (name, type, default)
+#[derive(Clone)]
 struct Table {
 	name: String,
 	class: String,
@@ -133,6 +134,7 @@ struct Table {
 }
 
 /// `members: [Person]` of Team: the rows of `table` (people) whose field `back` (team) is the team
+#[derive(Clone)]
 struct Members {
 	field: String,
 	table: String,
@@ -919,7 +921,21 @@ fn with_lazy_reads(node: Node, tables: &HashMap<String, Table>, own: Option<&str
 			_ => Node::Key(Box::new(rewrite(*left)), Op::Dot, Box::new(rewrite(*right))),
 		},
 		Node::Key(target, op, value) if (op == Op::Assign || op.is_compound_assign()) && table_of(declared(&target)).is_some() => Node::Key(target, op, Box::new(rewrite(*value))),
+		// a class's own field named like a table is the field
+		Node::Type { name, body } => {
+			let fields: Vec<String> = crate::class_methods::field_declarations(&body).into_iter().map(|(field, ..)| field).collect();
+			let visible: HashMap<String, Table> = tables.iter().filter(|(variable, _)| !fields.contains(variable)).map(|(variable, table)| (variable.clone(), table.clone())).collect();
+			Node::Type { name, body: Box::new(in_method_bodies(*body, &|child| with_lazy_reads(child, &visible, own))) }
+		}
 		_ => node.map_children(rewrite),
+	}
+}
+
+/// A class's methods read its tables as functions do; its fields stay, also one named like a table
+fn in_method_bodies(node: Node, rewrite: &impl Fn(Node) -> Node) -> Node {
+	match node {
+		Node::Key(head, Op::Define, body) => Node::Key(head, Op::Define, Box::new(rewrite(*body))),
+		other => other.map_children(|child| in_method_bodies(child, rewrite)),
 	}
 }
 

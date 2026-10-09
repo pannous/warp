@@ -1,0 +1,7 @@
+// A serverless function: `warp deploy samples/worker.warp` puts these routes on Cloudflare Workers (wrangler logs you
+// in the first time), `warp deploy --dev samples/worker.warp` runs them on this machine. A text answers as text, any
+// other value as JSON; the program's variables live as long as the Worker's instance.
+visits = 0
+get "/" { "hello from warp" }
+get "/square/:n:int" { {n: n, square: n * n} }
+get "/visits" { visits += 1; visits }

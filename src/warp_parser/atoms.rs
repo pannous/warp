@@ -350,8 +350,9 @@ impl WarpParser {
 		let mut position = start;
 		while position < self.chars.len() {
 			let ch = self.chars[position];
-			if ch == '"' || ch == '\'' {
-				position += 2 + self.chars[position + 1..].iter().position(|quoted| *quoted == ch).unwrap_or(self.chars.len());
+			// an `end` in a text or a comment is no word of the code: `// … would end it`
+			if let Some(after) = text_or_comment_end(&self.chars, position) {
+				position = after;
 				continue;
 			}
 			if !is_identifier_char(ch) {
@@ -386,8 +387,9 @@ impl WarpParser {
 		let mut position = 0;
 		while position < self.chars.len() {
 			let ch = self.chars[position];
-			if ch == '"' || ch == '\'' {
-				position += 2 + self.chars[position + 1..].iter().position(|quoted| *quoted == ch).unwrap_or(self.chars.len());
+			// an `end` in a text or a comment is no word of the code: `// … would end it`
+			if let Some(after) = text_or_comment_end(&self.chars, position) {
+				position = after;
 				continue;
 			}
 			if !is_identifier_char(ch) {

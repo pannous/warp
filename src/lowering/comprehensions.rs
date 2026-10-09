@@ -105,7 +105,11 @@ fn where_filters(node: Node, lists: &mut Lists) -> Node {
 			return Node::List(filtered_loop, bracket.clone(), separator.clone());
 		}
 	}
-	let node = node.map_children(|child| where_filters(child, lists));
+	let node = match node {
+		// a method's filter as a function's (a class body is no child of map_children)
+		Node::Type { name, body } => return Node::Type { name, body: Box::new(where_filters(*body, lists)) },
+		other => other.map_children(|child| where_filters(child, lists)),
+	};
 	let Node::List(items, bracket, separator) = node else { return node };
 	let Some(at) = where_position(&items) else { return Node::List(items, bracket, separator) };
 	let filtered = match items[at + 1].drop_meta() {
@@ -186,6 +190,7 @@ fn where_reassociated(node: Node) -> Node {
 				_ => Node::Key(Box::new(left), op, Box::new(right)),
 			}
 		}
+		Node::Type { name, body } => Node::Type { name, body: Box::new(where_reassociated(*body)) },
 		other => other.map_children(where_reassociated),
 	}
 }

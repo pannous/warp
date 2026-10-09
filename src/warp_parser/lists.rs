@@ -152,6 +152,17 @@ impl WarpParser {
 				continue;
 			}
 
+			// `def f(n)` and the lines indented below it by spaces, as `def f(n):` (by tabs the rule below takes them); Ruby's
+			// `def f(n) … end` is read by its end
+			let defines = items_with_seps.get(statement_start).is_some_and(|(first, _)| matches!(first.drop_meta(), Symbol(word) if is_function_keyword(word)));
+			let ruby_definition = defines && self.closing_end_follows(&RUBY_END_OPENERS);
+			let item = match defines && !ruby_definition && self.only_blanks_before_newline() {
+				true => match self.parse_indented_block() {
+					Some(body) => Node::Key(Box::new(item), Op::Colon, Box::new(body)),
+					None => item,
+				},
+				false => item,
+			};
 			let (had_newline, line_indent, comment) = self.skip_whitespace_and_comments();
 			self.pending_comment = comment;
 

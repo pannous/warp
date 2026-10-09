@@ -339,6 +339,9 @@ impl WarpParser {
 		if !tight && !self.at_spaced_unit() {
 			return number;
 		}
+		if !tight {
+			self.hint_glued_unit(&number);
+		}
 		self.skip_spaces();
 		let factor = self.parse_atom();
 		let factor = self.try_parse_superscript_power(&factor, 0).unwrap_or(factor);
@@ -351,6 +354,15 @@ impl WarpParser {
 	pub(super) fn at_spaced_unit(&self) -> bool {
 		// `2 m²`: the power is no part of the unit's name
 		self.spaced_word().is_some_and(|word| word == crate::uncertain::SIGMA || crate::units::names_unit(word.trim_end_matches(|c: char| superscript_digit(c).is_some())))
+	}
+
+	/// `3 km` reads as `3km`, the form units are written in (user 2026-10-09: a soft hint)
+	fn hint_glued_unit(&self, number: &Node) {
+		let Some(unit) = self.spaced_word().filter(|word| word != crate::uncertain::SIGMA) else { return };
+		let amount = number.serialize();
+		let (line, column) = self.get_position();
+		set_hint_position(line, column);
+		crate::normalize::hint(&format!("{amount} {unit}"), &format!("{amount}{unit}"), "a unit is written on its number");
 	}
 
 	/// The word after one or more spaces, unless it starts the next entry or assignment
