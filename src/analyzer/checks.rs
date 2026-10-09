@@ -1188,6 +1188,20 @@ fn changing_list_method(call: &Node) -> bool {
 	method.is_some_and(|method| is_list_mutating_method(&method))
 }
 
+/// The names a `let`/`const` declaration binds, each with the text of its value, and the value nodes: `x = v`, or the
+/// lowered tuple pattern `let (a, b) = v, w` (`$destructure (a, b) v w`, one value unpacked when there is only one)
+fn declared_bindings(declaration: &Node) -> Option<(Vec<(String, String)>, &[Node])> {
+	if let Node::Key(target, Op::Assign | Op::Define, value) = declaration.drop_meta() {
+		return Some((vec![(target.name(), value.serialize())], std::slice::from_ref(value)));
+	}
+	let (names, values) = crate::tuples::destructuring(declaration)?;
+	let value_of = |index: usize| match values {
+		[single] => format!("{}#{}", single.serialize(), index + 1),
+		_ => values[index].serialize(),
+	};
+	Some((names.into_iter().enumerate().map(|(index, name)| (name, value_of(index))).collect(), values))
+}
+
 pub(super) fn check_constants(node: &Node, constants: &mut HashMap<String, (String, String)>) -> Option<Diagnostic> {
 	// a function's own `let`/`const` bind in it only; it still sees main's (card serve-var)
 	if let Some(body) = super::variables::function_definition_body(node) {
@@ -1198,13 +1212,13 @@ pub(super) fn check_constants(node: &Node, constants: &mut HashMap<String, (Stri
 			let statements = match items.as_slice() {
 				[keyword, declaration, rest @ ..] if is_constant_keyword(keyword) || is_word(keyword, IMMUTABLE_LET) => {
 					let keyword = keyword.name();
-					let Node::Key(target, Op::Assign | Op::Define, value) = declaration.drop_meta() else {
+					let Some((bindings, values)) = declared_bindings(declaration) else {
 						return Some(Diagnostic::at(declaration, format!("{keyword} needs a value: {}", declaration.serialize())).fix(format!("{keyword} x = 5")));
 					};
-					if let Some(found) = check_constants(value, constants) {
+					if let Some(found) = values.iter().find_map(|value| check_constants(value, constants)) {
 						return Some(found);
 					}
-					constants.insert(target.name(), (keyword, value.serialize()));
+					constants.extend(bindings.into_iter().map(|(name, value)| (name, (keyword.clone(), value))));
 					rest
 				}
 				_ => items.as_slice(),
