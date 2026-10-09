@@ -1169,6 +1169,7 @@ PASSED:
   ✓ functions::test_nested_it::test_named_lambda_parameter_leaves_the_outer_it
   ✓ functions::test_nested_it::test_trailing_block_of_a_lambda_body_method
   ✓ functions::test_nested_it::test_trailing_block_of_an_assigned_method_call
+  ✓ functions::test_nested_it::test_unbound_it_in_a_named_lambda
   ✓ functions::test_nested_prefix_calls::a_function_name_among_the_arguments_takes_the_ones_after_it
   ✓ functions::test_nested_prefix_calls::a_function_passed_as_a_value_stays_one
   ✓ functions::test_nested_two_deep::a_function_nested_two_deep_reads_the_outermost_variables
@@ -4326,4 +4327,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-10 ignored, 4321 passed, 0 failed, 4321 total tested
+10 ignored, 4322 passed, 0 failed, 4322 total tested
