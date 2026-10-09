@@ -901,13 +901,24 @@ fn gpu_compute(mut caller: Caller<'_, HostState>, shader: HostNode, numbers: Hos
 	let failure = gpu_failure(GPU_COMPUTE);
 	let shader = given_shader(&mut caller, shader, &failure)?;
 	let numbers = given_node(&mut caller, numbers)?;
-	let floats = numbers.iter().map(|number| match number.drop_meta() {
-		Node::Number(number) => Ok(f64::from(*number) as f32),
+	let numbers = numbers.iter().map(|number| match number.drop_meta() {
+		Node::Number(number) => Ok(*number),
 		other => Err(failure(format!("it computes over numbers, got {}", other.serialize()))),
-	}).collect::<wasmtime::Result<Vec<f32>>>()?;
+	}).collect::<wasmtime::Result<Vec<Number>>>()?;
 	let workgroups = u32::try_from(workgroups).map_err(|_| failure(format!("{workgroups} workgroups")))?;
-	let left = crate::gpu::compute(&shader, &floats, workgroups).map_err(failure)?;
-	let left = left.into_iter().map(|float| Node::Number(Number::Float(float as f64))).collect();
+	let left: Vec<Node> = match crate::gpu::element_of(&shader) {
+		crate::gpu::Element::Float => {
+			let floats: Vec<f32> = numbers.iter().map(|&number| f64::from(number) as f32).collect();
+			crate::gpu::compute(&shader, &floats, workgroups).map_err(&failure)?.into_iter().map(|float| Node::Number(Number::Float(float as f64))).collect()
+		}
+		element => {
+			let ints = numbers.iter().map(|number| match number {
+				Number::Int(int) => Ok(*int),
+				other => Err(failure(format!("an array<i32> or array<u32> shader computes over ints, got {other}"))),
+			}).collect::<wasmtime::Result<Vec<i64>>>()?;
+			crate::gpu::compute_ints(&shader, &ints, workgroups, element).map_err(&failure)?.into_iter().map(|int| Node::Number(Number::Int(int))).collect()
+		}
+	};
 	built_in_program(&mut caller, &Node::List(left, crate::node::Bracket::Square, crate::node::Separator::Space), GPU_COMPUTE)
 }
 

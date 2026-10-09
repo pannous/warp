@@ -39,7 +39,8 @@ let gpuWorker; // the program's side: the task Worker that ran the last GPU job,
 // before `numbers`, the `count` items of the buffer kept for block `source`; the buffer kept for block `keep` after
 async function gpuComputedFloats({ shader, numbers, workgroups, first = 0, source, count, keep }) {
 	const device = gpuDevice ??= await gpuDeviceOrFailure();
-	const input = numbers instanceof Float32Array ? numbers : new Float32Array(numbers);
+	const Elements = gpuElements(shader);
+	const input = numbers instanceof Elements ? numbers : new Elements(numbers);
 	const kept = source === undefined ? undefined : keptBuffers.get(source);
 	if (source !== undefined && kept?.count !== count) throw new Error(KEPT_MISSING);
 	const keptBytes = (kept?.count ?? 0) * Float32Array.BYTES_PER_ELEMENT;
@@ -61,7 +62,7 @@ async function gpuComputedFloats({ shader, numbers, workgroups, first = 0, sourc
 	pass.dispatchWorkgroups(workgroups);
 	pass.end();
 	encoder.copyBufferToBuffer(storage, offset, readback, 0, size - offset);
-	const floats = new Float32Array(await gpuReadBack(device, encoder, readback));
+	const floats = new Elements(await gpuReadBack(device, encoder, readback));
 	if (keep === undefined) storage.destroy();
 	else keepBuffer(keep.block, { storage, count: keep.count });
 	return floats;
@@ -164,6 +165,13 @@ async function gpuReadBack(device, encoder, readback) {
 	const bytes = readback.getMappedRange().slice(0);
 	readback.destroy();
 	return bytes;
+}
+
+// the typed array of the numbers a compute shader reads at @binding(0): f32 unless it declares array<i32> or array<u32>
+// (natively gpu.rs element_of)
+function gpuElements(shader) {
+	const declared = /@binding\(0\)[^]*?array<(i32|u32)>/.exec(shader)?.[1];
+	return declared === "i32" ? Int32Array : declared === "u32" ? Uint32Array : Float32Array;
 }
 
 // gpu_compute's {values} as a list; a kernel's {floats}, given back as raw bytes (writeSharedFloats), not as JSON
@@ -272,7 +280,8 @@ addHostPart({
 		return {
 			gpu_compute: (shader, numbers, workgroups) => {
 				const values = gpuJob("gpu_compute", { shader: plain(shader), numbers: plain(numbers).map(Number), workgroups: Number(workgroups) });
-				// floats, also the whole ones (treeOfPlain would make 3 an Int)
+				// floats, also the whole ones (treeOfPlain would make 3 an Int); ints of an array<i32> or array<u32> shader
+				if (gpuElements(plain(shader)) !== Float32Array) return list(values, int => ({ kind: KIND_INT, data: { int: String(int) }, chain: [] }));
 				return list(values, float => ({ kind: KIND_FLOAT, data: { float }, chain: [] }));
 			},
 			// over a `linear xs = float[n]`: its cells read and written in place, no list built (card gpu-vectors)

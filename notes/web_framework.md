@@ -383,7 +383,10 @@ Each step is useful on its own and is what the next ones stand on.
   8 / 16 bytes, rows of 16) and binds them through an explicit pipeline layout, so an unread value is no error. Leaving
   the map out passes a null node (ffi_emitter.rs fills a missing argument), i.e. no values. A frame's values change
   without interpolating them into the shader text.
-- Next: more buffers (a map of named arrays) for gpu_compute, typed results (ints as array<i32>), rendering straight
+- Ints (2026-10-09, warp-web): a shader declaring its numbers as array<i32> or array<u32> at @binding(0) gets them as
+  32-bit ints and gives back ints (gpu.rs element_of / compute_ints, host-gpu.js gpuElements); an int beyond 32 bits or a
+  float is a loud error. tests/web/test_webgpu_ints.rs.
+- Next: more buffers (a map of named arrays) for gpu_compute, rendering straight
   into a page canvas (GPUCanvasContext) without the pixel round trip; GPU vectors: card gpu-vectors, notes/gpu.md.
 
 ## web-apis: WebIDL (2026-10-08, warp-95)
