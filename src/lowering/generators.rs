@@ -50,13 +50,15 @@ enum Step {
 }
 
 pub fn lower(node: Node) -> Node {
-	let node = crate::generator_objects::lower(node);
+	let node = crate::generator_expressions::lower(node);
 	let generators = generators(&node);
 	if generators.is_empty() {
 		return node;
 	}
-	let counter = Cell::new(0);
-	collected_definitions(lazy_loops(node, &generators, &counter), &generators)
+	// first, so a generator looping over another (`(x * x for x in naturals())`) has it inlined before its object is made
+	let node = lazy_loops(node, &generators, &Cell::new(0));
+	let node = crate::generator_objects::lower(node);
+	collected_definitions(node, &generators)
 }
 
 pub(crate) fn symbol(name: &str) -> Node {
@@ -240,7 +242,9 @@ fn lazy_loops(node: Node, generators: &HashMap<String, Generator>, counter: &Cel
 	match generator_loop(&node, generators) {
 		Some((variable, name, generator, arguments, body)) => {
 			counter.set(counter.get() + 1);
-			inlined_loop(variable, name, generator, arguments, body, counter.get()).with_meta_of(&node)
+			// the generator may loop over another generator: inlined in turn
+			let inlined = inlined_loop(variable, name, generator, arguments, body, counter.get());
+			lazy_loops(inlined, generators, counter).with_meta_of(&node)
 		}
 		None => node,
 	}

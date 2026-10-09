@@ -20,6 +20,8 @@ const VARIABLE: &str = "comprehension_variable";
 const SEQUENCE: &str = "comprehension_sequence";
 const CONDITION: &str = "comprehension_condition";
 const ELEMENT: &str = "comprehension_element";
+/// Where the nested loops go in a template
+const LOOPS: &str = "comprehension_loops";
 
 pub fn lower(node: Node) -> Node {
 	Lowering { count: Cell::new(0) }.lower(node)
@@ -70,7 +72,7 @@ impl Lists {
 }
 
 /// The names a definition or assignment binds: `x`, `x: int`, the parameters of `f(a, b: int)`
-fn bound_names(target: &Node) -> Vec<String> {
+pub(crate) fn bound_names(target: &Node) -> Vec<String> {
 	match target.drop_meta() {
 		Node::Symbol(name) => vec![name.clone()],
 		Node::Key(name, Op::Colon, _) => bound_names(name),
@@ -252,26 +254,62 @@ impl Lowering {
 		}
 	}
 
-	/// The items `[element, (for v in xs), …]` as the parser groups them; with a filter `(for v in xs if) condition`.
-	/// An element or condition of several words is their phrase: `[upper w for w in words]`
 	fn comprehension(&self, items: &[Node]) -> Option<Node> {
-		let at = items.iter().position(starts_with_for).filter(|&at| at > 0)?;
-		let qualifiers = qualifiers(&items[at], &items[at + 1..])?;
-		Some(self.built(&qualifiers, &phrase(&items[..at])))
-	}
-
-	/// `(made = []; for v in xs { if c { for w in ys { made.push(element) } } }; made)`, the clauses nested in order
-	fn built(&self, qualifiers: &[Qualifier], element: &Node) -> Node {
+		let comprehension = Comprehension::of(items)?;
 		let number = self.count.get();
 		self.count.set(number + 1);
 		let made = format!("{MADE}_{number}");
+		Some(comprehension.looped(&format!("(var {made} = []; {LOOPS}; {made})"), &format!("{made}.push({ELEMENT})")))
+	}
+}
+
+/// `[element for v in xs if c for w in ys]`, `(element for v in xs)`
+pub(crate) struct Comprehension {
+	/// Where the first `for` clause starts: 1 after an element of one word
+	pub(crate) at: usize,
+	element: Node,
+	qualifiers: Vec<Qualifier>,
+}
+
+impl Comprehension {
+	/// The items `[element, (for v in xs), …]` as the parser groups them; with a filter `(for v in xs if) condition`.
+	/// An element or condition of several words is their phrase: `[upper w for w in words]`
+	pub(crate) fn of(items: &[Node]) -> Option<Self> {
+		let at = items.iter().position(starts_with_for).filter(|&at| at > 0)?;
+		let qualifiers = qualifiers(&items[at], &items[at + 1..])?;
+		Some(Comprehension { at, element: phrase(&items[..at]), qualifiers })
+	}
+
+	/// `for v in xs { if c { for w in ys { yield element } } }`
+	pub(crate) fn yielding_loop(&self) -> Node {
+		self.looped(LOOPS, &format!("yield {ELEMENT}"))
+	}
+
+	/// The element, sequences and conditions: what the comprehension reads
+	pub(crate) fn parts(&self) -> Vec<&Node> {
+		let clauses = self.qualifiers.iter().map(|qualifier| match qualifier {
+			Qualifier::Each(_, sequence) => sequence,
+			Qualifier::If(condition) => condition,
+		});
+		std::iter::once(&self.element).chain(clauses).collect()
+	}
+
+	pub(crate) fn loop_variables(&self) -> Vec<String> {
+		self.qualifiers.iter().filter_map(|qualifier| match qualifier {
+			Qualifier::Each(variable, _) => Some(variable.name()),
+			Qualifier::If(_) => None,
+		}).collect()
+	}
+
+	/// `template` with LOOPS replaced by the clauses nested in order around `inner`, which reads ELEMENT
+	fn looped(&self, template: &str, inner: &str) -> Node {
 		let placeholder = |name: &str, index: usize| format!("{name}_{index}");
-		let body = qualifiers.iter().enumerate().rev().fold(format!("{made}.push({ELEMENT})"), |inner, (index, qualifier)| match qualifier {
+		let body = self.qualifiers.iter().enumerate().rev().fold(inner.to_string(), |inner, (index, qualifier)| match qualifier {
 			Qualifier::Each(..) => format!("for {} in {} {{ {inner} }}", placeholder(VARIABLE, index), placeholder(SEQUENCE, index)),
 			Qualifier::If(_) => format!("if {} {{ {inner} }}", placeholder(CONDITION, index)),
 		});
-		let mut program = substitute(parse(&format!("(var {made} = []; {body}; {made})")), ELEMENT, element);
-		for (index, qualifier) in qualifiers.iter().enumerate() {
+		let mut program = substitute(parse(&template.replace(LOOPS, &body)), ELEMENT, &self.element);
+		for (index, qualifier) in self.qualifiers.iter().enumerate() {
 			program = match qualifier {
 				Qualifier::Each(variable, sequence) => {
 					let program = substitute(program, &placeholder(VARIABLE, index), variable);

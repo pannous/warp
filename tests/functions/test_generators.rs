@@ -111,3 +111,12 @@ fn list_and_sum_take_the_rest_of_a_generator_object() {
 	is!(&format!("{COUNT_TO}c = count_to(4)\nnext(c)\nlist(c)"), ints(vec![2, 3, 4]));
 	is!(&format!("{COUNT_TO}c = count_to(4)\nnext(c)\nsum(c)"), 9);
 }
+
+#[test]
+fn a_generator_expression_is_a_generator() {
+	is!("squares = (x * x for x in [1, 2, 3])\nsquares", ints(vec![1, 4, 9]));
+	is!("evens = (x for x in 1 to 9 if x % 2 == 0)\nsum(evens)", 20);
+	is!(&format!("{NATURALS}take 3 of (x * 10 for x in naturals())"), ints(vec![10, 20, 30]));
+	is!(&format!("{NATURALS}t = 0\nfor y in (x * x for x in naturals()) {{ if y > 20 {{ break }}; t += y }}\nt"), 30);
+	is!("factor = 3\ng = (x * factor for x in [1, 2])\n[next(g), next(g), next(g)]", parse("[3 6 ø]"));
+}
