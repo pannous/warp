@@ -8,7 +8,8 @@
 //! writes the directory. A host uploading the Worker itself (Cloudflare's API) sends worker.js as the main module,
 //! app.wasm as a compiled module and app.bin as data, the parts wrangler.toml names.
 
-use crate::site::{host_scripts_of, write_files, BuiltSite, Script, SiteFile};
+pub use crate::host_parts::worker_parts;
+use crate::site::{write_files, BuiltSite, SiteFile};
 use std::path::{Path, PathBuf};
 
 const WORKER_SCRIPT: &str = include_str!("../web/playground/cloud-worker.js");
@@ -45,18 +46,6 @@ const HOSTING_TOKEN_VARIABLE: &str = "WARP_HOSTING_TOKEN";
 const HOSTING_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(120);
 /// a Worker's name: lower-case letters, digits and dashes
 const NAME_LENGTH: usize = 63;
-
-/// The module of `code`'s Worker and the host scripts it needs (reader.js, host.js, its parts), which come before
-/// cloud-worker.js in worker.js; warp-hosting (web/hosting) takes the module and the scripts' names
-pub fn worker_parts(code: &str) -> Result<(Vec<u8>, Vec<Script>), String> {
-	// the reflection getters the JavaScript host reads values with
-	let module = crate::pipeline::for_any_host(|| crate::pipeline::compile(code)).map_err(|failure| format!("nothing to compile: {}", crate::site::with_excerpt(code, crate::site::message_of(&failure))))?;
-	if !crate::site::exports(&module.bytes, crate::serve::PAGE_SUBMITTED) {
-		return Err("the program answers no request: give it a route, `get \"/\" { \"hello\" }`".into());
-	}
-	let scripts = host_scripts_of(&module.bytes)?;
-	Ok((module.bytes, scripts))
-}
 
 /// The files of the Worker of `code`, named `name`
 pub fn worker_files(code: &str, name: &str) -> Result<Vec<SiteFile>, String> {

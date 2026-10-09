@@ -186,6 +186,18 @@ pub fn shown(outcome: &Value) -> Value {
 	json!({ "value": value.serialize(), "html": html_of(&value) })
 }
 
+/// The playground's Deploy (deploy.js, notes/hosting.md): `{scripts, module_length}` (the host scripts' names, which
+/// warp-hosting takes as ?scripts=) and the program's module for a Worker, or `{error}` and no module
+pub fn worker_bundle(code: &str) -> (Value, Vec<u8>) {
+	match crate::host_parts::worker_parts(code) {
+		Ok((module, scripts)) => {
+			let names: Vec<&str> = scripts.iter().map(|(name, _)| *name).collect();
+			(json!({ "scripts": names, "module_length": module.len() }), module)
+		}
+		Err(message) => (json!({ "error": message }), Vec::new()),
+	}
+}
+
 /// The page's run_block (host.js; src/host.rs natively): the block and what it sees as trees (`{block, names, values,
 /// definitions}`), its value as a tree back (`{"result": tree}`) or `{"error": message}`
 pub fn eval_block_report(request: &Value) -> Value {
@@ -472,6 +484,15 @@ mod exports {
 
 	thread_local! {
 		static REPORT: RefCell<Vec<u8>> = const { RefCell::new(Vec::new()) };
+		static MODULE: RefCell<Vec<u8>> = const { RefCell::new(Vec::new()) };
+	}
+
+	/// Keeps a report for `web_report()`; its length
+	fn kept(report: Vec<u8>) -> usize {
+		REPORT.with(|kept| {
+			*kept.borrow_mut() = report;
+			kept.borrow().len()
+		})
 	}
 
 	fn text<'a>(pointer: *const u8, length: usize) -> &'a str {
@@ -503,10 +524,7 @@ mod exports {
 		})));
 		let acknowledged = super::acknowledged_topics(text(acknowledged, acknowledged_length));
 		let report = evaluate(text(code, code_length), acknowledged).to_string().into_bytes();
-		REPORT.with(|kept| {
-			*kept.borrow_mut() = report;
-			kept.borrow().len()
-		})
+		kept(report)
 	}
 
 	/// Run a block of a running program (host.js run_block): the request JSON as eval_block_report takes it; returns the
@@ -515,10 +533,7 @@ mod exports {
 	pub extern "C" fn web_eval_block(request: *const u8, request_length: usize) -> usize {
 		let request = serde_json::from_str::<Value>(text(request, request_length)).unwrap_or_default();
 		let report = eval_block_report(&request).to_string().into_bytes();
-		REPORT.with(|kept| {
-			*kept.borrow_mut() = report;
-			kept.borrow().len()
-		})
+		kept(report)
 	}
 
 	/// The value of a run outcome (as run_outcome reads it) as warp text: what a page event handler gave (worker.js
@@ -527,10 +542,21 @@ mod exports {
 	pub extern "C" fn web_show(outcome: *const u8, outcome_length: usize) -> usize {
 		let outcome = serde_json::from_str::<Value>(text(outcome, outcome_length)).unwrap_or_default();
 		let shown = super::shown(&outcome).to_string().into_bytes();
-		REPORT.with(|kept| {
-			*kept.borrow_mut() = shown;
-			kept.borrow().len()
-		})
+		kept(shown)
+	}
+
+	/// The Worker bundle of the code (worker_bundle): returns the length of the report, read at `web_report()`; the
+	/// module's bytes are at `web_bundle_module()`
+	#[no_mangle]
+	pub extern "C" fn web_worker_bundle(code: *const u8, code_length: usize) -> usize {
+		let (report, module) = worker_bundle(text(code, code_length));
+		MODULE.with(|kept| *kept.borrow_mut() = module);
+		kept(report.to_string().into_bytes())
+	}
+
+	#[no_mangle]
+	pub extern "C" fn web_bundle_module() -> *const u8 {
+		MODULE.with(|kept| kept.borrow().as_ptr())
 	}
 
 	#[no_mangle]

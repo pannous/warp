@@ -51,6 +51,7 @@ pub mod operators;
 pub mod meta;
 pub mod meta_section;
 pub mod host;
+pub mod host_parts;
 #[cfg(feature = "native")]
 pub mod foreign;
 #[cfg(feature = "native")]
