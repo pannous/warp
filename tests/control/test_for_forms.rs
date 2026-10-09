@@ -20,3 +20,12 @@ fn print_with_commas_in_a_loop_body() {
 	assert_eq!(printed("for i in 1…2 { print i, i*2 }"), "1 2\n2 4\n");
 	assert_eq!(printed("for(i=1;i<3;i++) print i, i*2"), "1 2\n2 4\n");
 }
+
+#[cfg(feature = "native")]
+#[test]
+fn print_with_commas_in_an_if_branch() {
+	use crate::common::printed;
+	assert_eq!(printed("if 1: print 1, 2"), "1 2\n");
+	assert_eq!(printed("if 1: print 1, 2 else print 3"), "1 2\n");
+	assert_eq!(printed("if 0: print 1 else print 3, 4"), "3 4\n");
+}
