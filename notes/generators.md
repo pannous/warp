@@ -43,4 +43,4 @@
   generator without the state machine; not needed now.
 - `yield from xs` / `yield each xs`, a recursive generator lazily, a generator expression `(x*x for x in xs)` as a
   lazy value.
-- Ruby `loop do … end` and `while c … end` inside a `def … end` do not parse (found writing a Ruby fib generator).
+- Done (card ruby-loop): Ruby `loop do … end` and `while c … end` inside a `def … end` parse (parser skip_end_line, welcome_forms endless_loop).
