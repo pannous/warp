@@ -10,6 +10,7 @@ use std::time::Duration;
 pub const TEXT_HEAP_EXPORT: &str = "text_heap";
 #[cfg(feature = "native")]
 const PAGE_BITS: u32 = 16;
+const I64_BYTES: usize = 8;
 
 /// Other spellings of the host words, for any number of arguments or only for the given one (user decision #14e:
 /// `download <url>` is `fetch <url>`; `random(n)` is `random_below(n)`)
@@ -549,12 +550,51 @@ pub fn link_host_functions(linker: &mut Linker<HostState>, _engine: &Engine) -> 
 fn paint(mut caller: Caller<'_, HostState>, pixels: Option<wasmtime::Rooted<wasmtime::AnyRef>>, width: i64, height: i64) -> wasmtime::Result<()> {
 	let failure = |message: String| wasmtime::Error::new(crate::tasks::TaskFailure(message));
 	let Some(Extern::Memory(memory)) = caller.get_export("memory") else { return Err(failure("paint: the module exports no memory".into())) };
-	let pixels = crate::wasm_reader::node_in(&Val::AnyRef(pixels), &mut caller.as_context_mut(), memory);
-	let values: Vec<u64> = match pixels.drop_meta() {
-		crate::node::Node::List(items, _, _) => items.iter().map(pixel_value).collect(),
-		other => return Err(failure(format!("paint needs a list of pixels, got {}", other.serialize()))),
+	let (width, height) = (width.max(0) as usize, height.max(0) as usize);
+	let values = match ints_of_list(&mut caller, memory, pixels, width * height)? {
+		Some(values) => values,
+		None => match crate::wasm_reader::node_in(&Val::AnyRef(pixels), &mut caller.as_context_mut(), memory).drop_meta() {
+			crate::node::Node::List(items, _, _) => items.iter().map(pixel_value).collect(),
+			other => return Err(failure(format!("paint needs a list of pixels, got {}", other.serialize()))),
+		},
 	};
-	crate::paint::paint(&values, width.max(0) as usize, height.max(0) as usize).map(|_| ()).map_err(failure)
+	crate::paint::paint(&values, width, height).map(|_| ()).map_err(failure)
+}
+
+/// The first `room` items of a list of fixnum Ints read in one call of the module's list_to_ints (wasm_emitter/int_lists.rs), their magnitudes;
+/// None for any other value, which the caller reads node by node
+#[cfg(feature = "native")]
+fn ints_of_list(caller: &mut Caller<'_, HostState>, memory: Memory, list: HostNode, room: usize) -> wasmtime::Result<Option<Vec<u64>>> {
+	use crate::wasm_emitter::int_lists::LIST_TO_INTS;
+	let Some(Extern::Func(list_to_ints)) = caller.get_export(LIST_TO_INTS) else { return Ok(None) };
+	let list_to_ints = list_to_ints.typed::<(HostNode, i32, i32), i32>(&*caller)?;
+	let Some(address) = scratch(caller, memory, room * I64_BYTES)? else { return Ok(None) };
+	let written = list_to_ints.call(&mut *caller, (list, address as i32, room as i32))?;
+	let Ok(written) = usize::try_from(written) else { return Ok(None) };
+	let mut bytes = vec![0; written * I64_BYTES];
+	memory.read(&*caller, address as usize, &mut bytes)?;
+	Ok(Some(bytes.chunks_exact(I64_BYTES).map(|value| u64::from_le_bytes(value.try_into().expect("8 bytes"))).collect()))
+}
+
+/// Free memory for `bytes` bytes above the module's text heap, which the next text may take again (int_lists.rs), at
+/// an i64's alignment: the heap starts past the memory when unset, as write_to_heap starts it; None without a text heap
+#[cfg(feature = "native")]
+fn scratch(caller: &mut Caller<'_, HostState>, memory: Memory, bytes: usize) -> wasmtime::Result<Option<u32>> {
+	let Some(Extern::Global(heap)) = caller.get_export(TEXT_HEAP_EXPORT) else { return Ok(None) };
+	let memory_end = (memory.size(&*caller) as u32) << PAGE_BITS;
+	let address = match heap.get(&mut *caller).i32().unwrap_or(0) as u32 {
+		0 => {
+			heap.set(&mut *caller, Val::I32(memory_end as i32))?;
+			memory_end
+		}
+		top => top.next_multiple_of(I64_BYTES as u32),
+	};
+	let pages_needed = (address as usize + bytes).div_ceil(1 << PAGE_BITS);
+	let pages = memory.size(&*caller) as usize;
+	if pages_needed > pages {
+		memory.grow(&mut *caller, (pages_needed - pages) as u64)?;
+	}
+	Ok(Some(address))
 }
 
 /// A pixel as paint reads it: 0 for false, ø and 0, a number as it is (a color 0xAARRGGBB), any other value 1 (ink)
@@ -1030,8 +1070,23 @@ fn gpu_render(mut caller: Caller<'_, HostState>, shader: HostNode, width: i64, h
 	let values = shader_values(&given_node(&mut caller, values)?).map_err(&failure)?;
 	let side = |pixels: i64| u32::try_from(pixels).ok().filter(|&pixels| pixels > 0).ok_or_else(|| failure(format!("an image {width}×{height} pixels")));
 	let pixels = crate::gpu::render(&shader, side(width)?, side(height)?, &values).map_err(&failure)?;
+	if let Some(list) = list_of_ints(&mut caller, &pixels)? {
+		return Ok(list);
+	}
 	let pixels = pixels.into_iter().map(|pixel| Node::Number(Number::Int(i64::from(pixel)))).collect();
 	built_in_program(&mut caller, &Node::List(pixels, crate::node::Bracket::Square, crate::node::Separator::Space), GPU_RENDER)
+}
+
+/// The ints as a list built in one call of the module's ints_to_list (wasm_emitter/int_lists.rs); None when it has none
+#[cfg(feature = "native")]
+fn list_of_ints(caller: &mut Caller<'_, HostState>, ints: &[u32]) -> wasmtime::Result<Option<HostNode>> {
+	use crate::wasm_emitter::int_lists::INTS_TO_LIST;
+	let (Some(Extern::Func(ints_to_list)), Some(Extern::Memory(memory))) = (caller.get_export(INTS_TO_LIST), caller.get_export("memory")) else { return Ok(None) };
+	let ints_to_list = ints_to_list.typed::<(i32, i32), HostNode>(&*caller)?;
+	let Some(address) = scratch(caller, memory, std::mem::size_of_val(ints))? else { return Ok(None) };
+	let bytes: Vec<u8> = ints.iter().flat_map(|int| int.to_le_bytes()).collect();
+	memory.write(&mut *caller, address as usize, &bytes)?;
+	Ok(Some(ints_to_list.call(&mut *caller, (address as i32, ints.len() as i32))?))
 }
 
 #[cfg(feature = "native")]
