@@ -37,6 +37,9 @@ pub const FIXNUM_MAX: i128 = 1 << 62;
 const HANDLE_BASE: i64 = i64::MIN;
 /// Operands in [-2^31, 2^31) multiply without leaving the fixnum range
 const MUL_FAST_BIAS: i64 = 1 << 31;
+const MUL_FAST_BITS: u32 = 32;
+/// Integers in [-2^53, 2^53) are exact f64s
+const FLOAT_EXACT_BITS: u32 = 54;
 const INITIAL_HEAP_SIZE: i32 = 16;
 const LIMB_BASE: f64 = 4294967296.0;
 
@@ -253,23 +256,45 @@ impl WasmGcEmitter {
 		func.instruction(&I::End);
 	}
 
-	/// Push i32 1 when all locals are in [-2^31, 2^31): `((x + 2^31) | ...) >>u 32 == 0`
+	/// Push i32 1 when all locals are in [-2^31, 2^31)
 	fn emit_mul_fast_test(func: &mut Function, locals: &[u32]) {
+		Self::emit_signed_bits_test(func, locals, MUL_FAST_BITS);
+	}
+
+	/// Push i32 1 when all locals fit in `bits` signed bits: `((x + 2^(bits-1)) | ...) >>u bits == 0`
+	fn emit_signed_bits_test(func: &mut Function, locals: &[u32], bits: u32) {
 		if locals.is_empty() {
 			func.instruction(&I::I32Const(1));
 			return;
 		}
 		for (i, local) in locals.iter().enumerate() {
 			func.instruction(&I::LocalGet(*local));
-			func.instruction(&I::I64Const(MUL_FAST_BIAS));
+			func.instruction(&I::I64Const(1 << (bits - 1)));
 			func.instruction(&I::I64Add);
 			if i > 0 {
 				func.instruction(&I::I64Or);
 			}
 		}
-		func.instruction(&I::I64Const(32));
+		func.instruction(&I::I64Const(bits as i64));
 		func.instruction(&I::I64ShrU);
 		func.instruction(&I::I64Eqz);
+	}
+
+	/// Stack [a, b] (Ints) → [f64]: a/b rounded once. Where both are exact f64s and b is not 0, IEEE division rounds
+	/// their quotient correctly, without allocating the exact one (card exact-div); otherwise exact_div, which fails
+	/// for b = 0 as before, then exact_to_f64
+	pub(crate) fn emit_float_quotient(&mut self, func: &mut Function) {
+		let (a, b) = (self.scratch(0), self.scratch(1));
+		func.instruction(&I::LocalSet(b));
+		func.instruction(&I::LocalSet(a));
+		Self::emit_signed_bits_test(func, &[a, b], FLOAT_EXACT_BITS);
+		for instruction in [I::LocalGet(b), I::I64Const(0), I::I64Ne, I::I32And, I::If(BlockType::Result(ValType::F64)),
+			I::LocalGet(a), I::F64ConvertI64S, I::LocalGet(b), I::F64ConvertI64S, I::F64Div, I::Else, I::LocalGet(a), I::LocalGet(b)] {
+			func.instruction(&instruction);
+		}
+		self.emit_call(func, "exact_div");
+		self.emit_int_to_f64(func, None);
+		func.instruction(&I::End);
 	}
 
 	fn emit_machine_int_op(&mut self, func: &mut Function, op: &Op) {

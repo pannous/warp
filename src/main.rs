@@ -55,6 +55,8 @@ const DEV_COMMAND: &str = "dev";
 /// `warp serve [app.warp] [port]`: serves the program, its page, server functions and routes (P222)
 const SERVE_COMMAND: &str = "serve";
 const SERVE_PORT: u16 = 8080;
+/// `warp register`: Finder and `open` run .warp files (macOS, src/file_type.rs)
+const REGISTER_COMMAND: &str = "register";
 /// The program `warp serve` serves when it is given none: the first of these in the current folder
 const DEFAULT_PROGRAMS: [&str; 2] = ["app.warp", "main.warp"];
 const WARP_VERSION: &str = env!("CARGO_PKG_VERSION");
@@ -110,6 +112,23 @@ fn apply_flags(args: &mut Vec<String>) {
     }
     diagnostic::adopt_acknowledgements(OLD_ANSWERS_FILE, ACKNOWLEDGEMENTS_FILE);
     diagnostic::use_acknowledgements_file(ACKNOWLEDGEMENTS_FILE);
+}
+
+#[cfg(all(not(test), target_os = "macos"))]
+fn register_file_type() {
+    match warp::file_type::register() {
+        Ok(app) => println!("registered .warp files: {} runs them in Terminal (Open With offers editors)", app.display()),
+        Err(failure) => {
+            eprintln!("warp register: {failure}");
+            std::process::exit(1);
+        }
+    }
+}
+
+#[cfg(all(not(test), not(target_os = "macos")))]
+fn register_file_type() {
+    eprintln!("warp register: only macOS so far");
+    std::process::exit(1);
 }
 
 /// `warp [run] prog.warp a b`: whether only to run, the program file and the arguments it gets (`use os; args`)
@@ -201,6 +220,14 @@ fn run_command(args: &[String]) {
                 std::process::exit(1);
             }
         }
+    } else if args[1] == warp::paint_window::COMMAND {
+        if let Err(failure) = warp::paint_window::run(args.get(2).is_some_and(|flag| flag == warp::paint_window::CHECK)) {
+            eprintln!("{failure}");
+            std::process::exit(1);
+        }
+
+    } else if args[1] == REGISTER_COMMAND {
+        register_file_type();
     } else if args[1] == SERVE_COMMAND {
         match served_program(&args[2..]) {
             Ok((path, port)) => serve_file(path, port, ""),
@@ -245,7 +272,7 @@ fn run_command(args: &[String]) {
             }
             return;
         }
-        match wasm_emitter::compile(&code) {
+        match warp::pipeline::for_any_host(|| wasm_emitter::compile(&code)) {
             Ok(module) => {
                 let output_path = compiled_output_path(&target);
                 fs::write(&output_path, &module.bytes).expect("could not write the compiled module");
@@ -457,8 +484,9 @@ fn standalone_note_marker(program: &std::path::Path) -> Option<std::path::PathBu
 /// stub (crates/warp-runtime, notes/aot.md); Ok is the report of what was written
 fn write_standalone_executable(code: &str, target: &str) -> Result<String, String> {
     let program = wasm_emitter::compile_printing_result(code).map_err(|value| format!("nothing to compile: {}", value.serialize()))?;
-    let engine = util::gc_engine();
-    let module = run::module_cache::compiled_module(&engine, &program.bytes).map_err(|failure| failure.to_string())?;
+    let bytes = warp::dead_functions::keeping_exports(&program.bytes, warp_runtime::standalone::stub_calls_export)?;
+    let engine = warp_runtime::standalone::standalone_engine().map_err(|failure| failure.to_string())?;
+    let module = run::module_cache::compiled_module(&engine, &bytes).map_err(|failure| failure.to_string())?;
     let provided: Vec<(&str, &str)> = warp_runtime::standalone::provided_imports().collect();
     let mut missing: Vec<String> = vec![];
     for import in module.imports().filter(|import| !provided.contains(&(import.module(), import.name()))) {
@@ -572,14 +600,15 @@ fn runtime_stub_path() -> Result<std::path::PathBuf, String> {
     let warp = env::current_exe().map_err(|failure| failure.to_string())?;
     let resolved = fs::canonicalize(&warp).unwrap_or_else(|_| warp.clone());
     let next_to_warp = [&warp, &resolved].map(|binary| binary.with_file_name(RUNTIME_STUB_NAME));
-    match next_to_warp.iter().find(|stub| stub.is_file()) {
+    // a debug warp's neighbour is a debug stub (5 MB, it was 21 MB, card g_gFs8): build the release one instead
+    match next_to_warp.iter().find(|stub| stub.is_file() && !cfg!(debug_assertions)) {
         Some(stub) => Ok(stub.clone()),
         None => build_runtime_stub(&next_to_warp[0]),
     }
 }
 
-/// `cargo build -p warp-runtime` in warp's source checkout, in warp's own profile: the stub lands next to a warp built
-/// there; its path as cargo reports it
+/// `cargo build --release -p warp-runtime` in warp's source checkout, whatever warp's own profile: the stub lands next
+/// to a release warp built there; its path as cargo reports it
 fn build_runtime_stub(expected: &std::path::Path) -> Result<std::path::PathBuf, String> {
     let source = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
     if !source.join(RUNTIME_STUB_CRATE).is_dir() {
@@ -587,10 +616,7 @@ fn build_runtime_stub(expected: &std::path::Path) -> Result<std::path::PathBuf, 
     }
     eprintln!("note: building the runtime stub for executables once (cargo build -p {RUNTIME_STUB_NAME})");
     let mut build = std::process::Command::new(env::var("CARGO").unwrap_or_else(|_| "cargo".to_string()));
-    build.args(["build", "--quiet", "--message-format=json", "-p", RUNTIME_STUB_NAME, "--bin", RUNTIME_STUB_NAME]).current_dir(source);
-    if !cfg!(debug_assertions) {
-        build.arg("--release");
-    }
+    build.args(["build", "--release", "--quiet", "--message-format=json", "-p", RUNTIME_STUB_NAME, "--bin", RUNTIME_STUB_NAME]).current_dir(source);
     let output = build.output().map_err(|failure| format!("cannot run cargo to build the runtime stub: {failure}"))?;
     if !output.status.success() {
         return Err(format!("building the runtime stub failed (cargo build -p {RUNTIME_STUB_NAME} in {}): {}", source.display(), String::from_utf8_lossy(&output.stderr).trim()));
@@ -633,8 +659,10 @@ fn usage() {
     println!("  warp dev <file> [port]  Serve the file's page, reloaded when it changes (port 8008)");
     println!("  warp serve [file] [port]  Serve the program: its page, server functions and routes (app.warp, port 8080)");
     println!("  warp repl            Start interactive console");
+    println!("  warp register        Let Finder and `open` run .warp files (macOS)");
     println!("  --fuel <steps>       Execution budget before 'out of fuel' (env WARP_FUEL)");
     println!("  --no-ask             Never prompt \"got it?\" after a warning or note");
+    println!("  The last compiled module is kept in ~/.cache/warp/last.wasm for inspection");
     println!("  warp compile --wasm <file|code>  Only the module, <file>.wasm (out.wasm for inline code), without running");
     println!("  warp compile --aot <file|code>   The module and its machine code for this machine, <file>.cwasm");
     println!("  warp test            Run tests");

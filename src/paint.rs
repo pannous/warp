@@ -1,6 +1,6 @@
 //! paint(pixels, width, height) natively (card native-paint): the pixels as a PNG in the system's temporary
 //! folder (warp-paint/paint.png, then paint-2.png … within one run; the next run overwrites them, so no project folder
-//! collects images), named on stderr and opened in the system viewer when stderr is a terminal (never in tests or pipes). The playground draws the same pixels on a canvas (web/playground/playground.js showPaintings).
+//! collects images), named on stderr; in a terminal a window shows them instead (src/paint_window.rs; never in tests or pipes). The playground draws the same pixels on a canvas (web/playground/playground.js showPaintings).
 
 use std::io::{IsTerminal, Write};
 use std::path::PathBuf;
@@ -19,10 +19,6 @@ static PAINTED: AtomicUsize = AtomicUsize::new(0);
 const PNG_SIGNATURE: &[u8] = b"\x89PNG\r\n\x1a\n";
 const GRAYSCALE_8_BIT: [u8; 5] = [8, 0, 0, 0, 0]; // bit depth, color type gray, deflate, filter method, no interlace
 const RGB_8_BIT: [u8; 5] = [8, 2, 0, 0, 0]; // color type truecolor
-#[cfg(target_os = "macos")]
-const VIEWER: &str = "open";
-#[cfg(not(target_os = "macos"))]
-const VIEWER: &str = "xdg-open";
 
 /// What a pixel value shows: paper for 0, its color for a value with an alpha byte, else ink
 pub fn shade(value: u64) -> [u8; 3] {
@@ -33,19 +29,27 @@ pub fn shade(value: u64) -> [u8; 3] {
 	}
 }
 
-/// Write the image, say where, show it on a terminal
-pub fn paint(pixels: &[u64], width: usize, height: usize) -> Result<PathBuf, String> {
+/// In a terminal: show the image in a window (paint_window.rs), else (or without a window) write it, say where
+pub fn paint(pixels: &[u64], width: usize, height: usize) -> Result<Option<PathBuf>, String> {
 	if pixels.len() < width * height {
 		return Err(format!("paint: {width}×{height} needs {} pixels, got {}", width * height, pixels.len()));
 	}
+	if std::io::stderr().is_terminal() {
+		match crate::paint_window::show(pixels, width, height) {
+			Ok(()) => return Ok(None),
+			Err(failure) => eprintln!("{failure}, so it goes to a PNG"),
+		}
+	}
+	png_file(pixels, width, height).map(Some)
+}
+
+/// The image as a PNG in the temporary folder
+fn png_file(pixels: &[u64], width: usize, height: usize) -> Result<PathBuf, String> {
 	let folder = std::env::temp_dir().join(FOLDER);
 	std::fs::create_dir_all(&folder).map_err(|failure| format!("paint: cannot create {}: {failure}", folder.display()))?;
 	let path = folder.join(file_name(PAINTED.fetch_add(1, Ordering::Relaxed) + 1));
 	std::fs::write(&path, png(pixels, width, height)).map_err(|failure| format!("paint: cannot write {}: {failure}", path.display()))?;
 	eprintln!("painted {width}×{height}: {}", path.display());
-	if std::io::stderr().is_terminal() {
-		let _ = std::process::Command::new(VIEWER).arg(&path).spawn();
-	}
 	Ok(path)
 }
 

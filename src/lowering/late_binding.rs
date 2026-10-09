@@ -72,7 +72,12 @@ fn check_definitions(statements: &[Node], definitions: &[Definition], scope: &Sc
 			continue;
 		}
 		let bound_before = variables_of(&statements[..definition.index]);
+		// a call before the definition runs before its capture (`x = f(); def f(){ k }`): it reads main's variable as it is
+		let called_before = statements[..definition.index].iter().any(|statement| reads_any(statement, &|word| callers[&definition.function.name].contains(word)));
 		for variable in free {
+			if called_before && enclosing.is_none() {
+				late_bound.push(variable.clone());
+			}
 			let changes = changes_after(statements, &defines_functions, definition.index, &variable);
 			let parameter = enclosing.is_some_and(|function| function.params.iter().any(|param| param.name == variable));
 			let unbound_before = !parameter && bound_before.lookup(&variable).is_none();

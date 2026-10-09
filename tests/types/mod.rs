@@ -25,6 +25,8 @@ mod test_class_mixins;
 mod test_tagged_objects;
 mod test_class_forms_ported;
 mod test_class_operators;
+mod test_returned_instances; // card units-dynamic
+mod test_text_as_number; // card units-dynamic
 mod test_class_aliases;
 mod test_class_interfaces;
 mod test_enums_ported;
@@ -113,3 +115,6 @@ mod test_declared_list_marks;
 mod test_chained_assignments;
 mod test_loop_text_arithmetic;
 mod test_cyclic_objects; // card orm: objects pointing to each other
+mod test_field_named_like_builtin; // cards field-named-size, orm-members-word
+mod test_cycle_mark_depth; // card cycle-mark-depth
+mod test_as_number_variable; // card number-variable

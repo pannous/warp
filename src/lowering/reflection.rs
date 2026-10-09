@@ -206,6 +206,8 @@ struct Objects {
 	module_functions: HashMap<String, Node>,
 	module_classes: HashMap<String, Node>,
 	defined: HashSet<String>,
+	/// what is known of expressions that are no variable: `teams#1` of `teams: [Team]`
+	shapes: Option<crate::traits::InstanceTypes>,
 }
 
 pub fn lower_objects(node: Node) -> Node {
@@ -220,6 +222,7 @@ pub fn lower_objects(node: Node) -> Node {
 		maps: map_keys(&node),
 		defined: crate::library_words::defined_names(&node),
 		layouts,
+		shapes: Some(crate::traits::InstanceTypes::of(&node)),
 		..Objects::default()
 	};
 	with_object_words(node, &objects)
@@ -362,6 +365,9 @@ impl Objects {
 		if let Some(reflected) = self.module_member_word(subject, word) {
 			return Some(reflected);
 		}
+		if self.known_class(subject).is_some_and(|class| self.has_member(&class, word)) {
+			return None;
+		}
 		let Some(name) = symbol(subject) else { return self.dispatched(subject, word, written()) };
 		if let Some(class) = self.class_of(name) {
 			let is_instance = self.instances.contains_key(name);
@@ -409,6 +415,14 @@ impl Objects {
 
 	/// A subject whose class is known only at run time (`f(o) := o.fields`): a type test over the program's classes
 	/// picks the names, a class's own member of that name is read as written, anything else stays `written`
+	/// The class of the instance an expression holds, when known at compile time
+	fn known_class(&self, subject: &Node) -> Option<String> {
+		match self.shapes.as_ref()?.shape(subject)? {
+			crate::traits::Shape::Instance(class) => Some(class),
+			crate::traits::Shape::ListOf(_) => None,
+		}
+	}
+
 	fn dispatched(&self, subject: &Node, word: &str, written: Node) -> Option<Node> {
 		// a class without a layout lists nothing: whether the word lists names at all
 		if self.layouts.is_empty() || self.listed("", word).is_none() {
@@ -433,12 +447,29 @@ impl Objects {
 }
 
 fn with_object_words(node: Node, objects: &Objects) -> Node {
+	// `o.members = v`, `o.members.add(p)`: a field as a place, no reflection word (card orm-members)
+	if let Node::Key(place, op, rest) = node.drop_meta() {
+		if is_field_place(place, op, rest) {
+			let Node::Key(subject, Op::Dot, word) = place.drop_meta() else { unreachable!("guarded") };
+			let place = Node::Key(Box::new(with_object_words(subject.as_ref().clone(), objects)), Op::Dot, word.clone());
+			return Node::Key(Box::new(place), *op, Box::new(with_object_words(rest.as_ref().clone(), objects)));
+		}
+	}
 	let reflected = match node.drop_meta() {
 		Node::Key(subject, Op::Dot, word) => symbol(word).and_then(|word| objects.dot_word(subject, word)),
 		Node::List(items, Bracket::Round | Bracket::None, _) if items.len() == 2 && symbol(&items[0]) == Some(DIR_WORD) => objects.dir(&items[1]),
 		_ => None,
 	};
 	reflected.unwrap_or_else(|| node.map_children(|child| with_object_words(child, objects)))
+}
+
+/// `o.f = v`, `o.f += v` and `o.f.add(v)` (a list-mutating method) change the field f of o
+fn is_field_place(place: &Node, op: &Op, rest: &Node) -> bool {
+	let mutates = match op {
+		Op::Dot => matches!(rest.drop_meta(), Node::List(items, _, _) if items.first().is_some_and(|word| crate::analyzer::is_list_mutating_method(&word.drop_meta().name()))),
+		_ => *op == Op::Assign || op.is_compound_assign(),
+	};
+	mutates && matches!(place.drop_meta(), Node::Key(_, Op::Dot, _))
 }
 
 /// Names as a list of texts, as `dir(time)` gives them

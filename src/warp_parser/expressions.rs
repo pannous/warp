@@ -554,12 +554,22 @@ impl WarpParser {
 		let (left_bp, right_bp) = op.binding_power();
 		match op {
 			Op::Inc | Op::Dec => self.parse_expr(left_bp),
-			Op::If | Op::While => self.with_equals_comparing(true, |parser| parser.parse_expr(right_bp)),
+			Op::If | Op::While => self.parse_condition(),
 			// `#m#1` counts `m#1`: indexing a count is never meant
 			Op::Hash => self.parse_expr(left_bp - 1),
 			Op::Add => self.parse_expr(Op::Neg.binding_power().1), // `+2^2` like `-2^2`
 			_ => self.parse_expr(right_bp),
 		}
+	}
+
+	/// The condition of `if` and `while`: `=` compares, and a braceless call takes a variable argument as in a branch
+	/// (`if area certainly > 10 then`, `while square i < 10`)
+	pub(super) fn parse_condition(&mut self) -> Node {
+		let condition_bp = Op::If.binding_power().1;
+		let outer = self.branch_bp.replace(condition_bp);
+		let condition = self.with_equals_comparing(true, |parser| parser.parse_expr(condition_bp));
+		self.branch_bp = outer;
+		condition
 	}
 
 	pub(super) fn with_equals_comparing<T>(&mut self, compares: bool, parse: impl FnOnce(&mut Self) -> T) -> T {

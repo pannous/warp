@@ -7,6 +7,7 @@ mod test_float_assignment;
 mod test_float_text;
 mod test_float_bit_operations;
 mod test_float_exact_context;
+mod test_float_quotient; // card exact-div
 mod test_float_parameters;
 mod test_float_promotion;
 mod test_float_to_int_range;
@@ -30,6 +31,7 @@ mod test_static_units_functions;
 mod test_static_units_lists;
 mod test_static_units_output;
 mod test_units_at_run_time;
+mod test_dynamic_units; // card units-dynamic
 mod test_units_nospace;
 mod test_unit_products;
 mod test_units_arithmetic;
@@ -55,6 +57,7 @@ mod test_nan_observed;
 mod test_decimal_units;
 mod test_number_words;
 mod test_time_of_day;
-mod test_div_assign;
 mod test_plus_minus;
-mod test_abs_of_float_variable;
+mod test_plus_minus_math;
+mod test_plus_minus_print;
+mod test_div_assign;

@@ -114,12 +114,16 @@ thread_local! {
 	/// whether it is for `warp dev`, whose page keeps the program's state across reloads
 	static FOR_DEV: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
 	static RENDERS_ITSELF: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+	/// whether the program compiled now ends in the print of its value that compile_printing_result added
+	static PRINTS_RESULT: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
 	/// whether the page is compiled to render its first HTML where the server's code is (site.rs, headless.rs)
 	static PRERENDERING: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
 	/// the values the page's calls of server functions gave its prerender, the shipped page's first values
 	static SERVER_VALUES: std::cell::RefCell<Vec<Node>> = const { std::cell::RefCell::new(vec![]) };
 	/// the port `warp serve` serves a program at that has no `serve PORT {…}` of its own (lowering/serve.rs)
 	static SERVING_PORT: std::cell::Cell<Option<u16>> = const { std::cell::Cell::new(None) };
+	/// whether it is a module for any host (`warp compile --wasm`): a browser's host reads its values too
+	static FOR_ANY_HOST: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
 	/// whether it runs under `warp test`: its tests run and give its value (lowering/test_blocks.rs)
 	static FOR_TESTS: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
 }
@@ -164,6 +168,16 @@ pub fn for_a_page<T>(run: impl FnOnce() -> T) -> T {
 /// Whether the program compiled now is for a page: it exports the reflection getters the page's host reads values with
 pub fn is_for_a_page() -> bool {
 	FOR_A_PAGE.with(|page| page.get())
+}
+
+/// `run` compiling a module for any host (`warp compile --wasm`): it exports the reflection getters a host without GC
+/// field access (the browser) reads values with, so a browser program importing it copies values in and out
+pub fn for_any_host<T>(run: impl FnOnce() -> T) -> T {
+	with_flag(&FOR_ANY_HOST, run)
+}
+
+pub fn is_for_any_host() -> bool {
+	FOR_ANY_HOST.with(|any| any.get())
 }
 
 /// `run` compiling a page that calls its server functions directly, as the server does (lowering/serve.rs): for its
@@ -243,7 +257,7 @@ pub struct CompiledModule {
 
 /// The passes over the source forms, in order, each reading what the one before it left: definitions and sugar become
 /// the forms every later pass knows (`def f(x) {…}` is `f(x) := {…}`), modules are resolved
-const SOURCE_PASSES: [fn(Node) -> Node; 90] = [
+const SOURCE_PASSES: [fn(Node) -> Node; 91] = [
 	crate::analyzer::lower_inline_unions,
 	// `on ask {…} in {…}` before any pass reads `{…} in {…}` as membership or an emit as nothing
 	crate::scoped_handlers::lower,
@@ -317,7 +331,7 @@ const SOURCE_PASSES: [fn(Node) -> Node; 90] = [
 	crate::routes::lower, crate::page_html::use_markup, crate::modules::resolve,
 	// `fourty_two.exports`, `dir(fourty_two)` of an imported core module, once resolve found its file (reflection.rs)
 	crate::reflection::lower_module_words,
-	crate::units::lower_sleep_durations, crate::units::lower_quantity_comparisons, crate::stored_values::lower, crate::undo_history::lower, crate::declarations::lower_tasks, crate::system_values::name, crate::signal_values::poll_shared, crate::system_values::read, crate::shared_arrays::lower, crate::fetch_signals::lower, crate::system_signals::lower, crate::component_state::lower, crate::element_events::lower, crate::event_signals::lower, crate::page_html::lower, crate::signal_values::subscribe, crate::variable_signals::lower, crate::signal_values::lower, crate::declarations::lower_c_functions, crate::declarations::lower_bare_declarations, crate::declarations::lower_spaced_definitions, crate::lowering::number_words::lower, crate::parameter_shapes::lower, crate::ruby_blocks::lower, crate::declarations::lower_sized_arrays, crate::result_word::lower, crate::picked_calls::lower, crate::variadic::lower, crate::nonlocal_cells::lower_lambdas, crate::named_arguments::lower, crate::comprehensions::lower, crate::library_words::lower_function_methods, crate::tuples::lower, crate::run_time_blocks::warn_unresolved, crate::run_time_blocks::lower_interpret, crate::blocks::lower, crate::getters::lower, crate::run_time_blocks::lower_run_time_bangs, crate::mutation::warn_discarded, crate::mutation::lower, crate::nested_index::lower, crate::field_elements::lower, crate::host::lower_aliases,
+	crate::uncertain::lower_certainty, crate::units::lower_sleep_durations, crate::units::lower_quantity_comparisons, crate::stored_values::lower, crate::undo_history::lower, crate::declarations::lower_tasks, crate::system_values::name, crate::signal_values::poll_shared, crate::system_values::read, crate::shared_arrays::lower, crate::fetch_signals::lower, crate::system_signals::lower, crate::component_state::lower, crate::element_events::lower, crate::event_signals::lower, crate::page_html::lower, crate::signal_values::subscribe, crate::variable_signals::lower, crate::signal_values::lower, crate::declarations::lower_c_functions, crate::declarations::lower_bare_declarations, crate::declarations::lower_spaced_definitions, crate::lowering::number_words::lower, crate::parameter_shapes::lower, crate::ruby_blocks::lower, crate::declarations::lower_sized_arrays, crate::result_word::lower, crate::picked_calls::lower, crate::variadic::lower, crate::nonlocal_cells::lower_lambdas, crate::named_arguments::lower, crate::comprehensions::lower, crate::library_words::lower_function_methods, crate::tuples::lower, crate::run_time_blocks::warn_unresolved, crate::run_time_blocks::lower_interpret, crate::blocks::lower, crate::getters::lower, crate::run_time_blocks::lower_run_time_bangs, crate::mutation::warn_discarded, crate::mutation::lower, crate::nested_index::lower, crate::field_elements::lower, crate::host::lower_aliases,
 	// again: the getters of the modules used, which lower_module_source leaves for here, and the program's reads of them
 	crate::getters::lower,
 	crate::type_name_matching::lower, crate::meta_entries::lower, crate::versions::lower_versions,
@@ -372,6 +386,9 @@ fn lower_for_emission(node: Node) -> Result<Node, Node> {
 	}
 	if let Some(kind_change) = crate::analyzer::check_kind_changes(&node) {
 		return Err(kind_change.into_error());
+	}
+	if let Some(unsaid) = crate::uncertain::check_orderings(&node) {
+		return Err(unsaid.into_error());
 	}
 	let node = crate::interpolation::lower(crate::injection::lower_templates(node)?);
 	let node = crate::function_equality::decide_comparisons(node);
@@ -428,8 +445,18 @@ pub fn compile(code: &str) -> Result<CompiledModule, Node> {
 /// compile for a standalone executable (`warp build`): the program prints its value at the end, as `warp <file>`
 /// shows it, since nobody reads the result of an executable
 pub fn compile_printing_result(code: &str) -> Result<CompiledModule, Node> {
+	PRINTS_RESULT.with(|prints| prints.set(false));
 	// the routes first: a program ending with a route prints the page its path shows, not the route statement
-	compile_program(code, |program| printing_result(crate::routes::lower(program)))
+	let compiled = compile_program(code, |program| printing_result(crate::routes::lower(program)));
+	PRINTS_RESULT.with(|prints| prints.set(false));
+	compiled
+}
+
+/// Whether the program compiled now ends in the print of its value that compile_printing_result added: that print
+/// shows nothing for ø (a loop or a call that gives nothing), as `warp <file>` shows nothing; a print of the program's
+/// own prints ø
+pub fn prints_result() -> bool {
+	PRINTS_RESULT.with(|prints| prints.get())
 }
 
 fn compile_program(code: &str, rewrite: fn(Node) -> Node) -> Result<CompiledModule, Node> {
@@ -457,7 +484,10 @@ fn printing_result(program: Node) -> Node {
 		}
 		Node::Empty => Node::Empty,
 		statement if crate::modules::is_declaration(&statement) || crate::warp_parser::starts_print(&statement) => statement,
-		value => crate::warp_parser::print_call([value]),
+		value => {
+			PRINTS_RESULT.with(|prints| prints.set(true));
+			crate::warp_parser::print_call([value])
+		}
 	}
 }
 

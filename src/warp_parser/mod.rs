@@ -174,7 +174,7 @@ fn is_print_word(node: &Node) -> bool {
 /// `print` or the call `print(…)`: a print statement starts here
 pub(crate) fn starts_print(node: &Node) -> bool {
 	match node.drop_meta() {
-		Node::List(items, Bracket::Round, _) => items.first().is_some_and(is_print_word),
+		Node::List(items, Bracket::Round, _) | Node::List(items, Bracket::None, Separator::Space) => items.first().is_some_and(is_print_word),
 		other => is_print_word(other),
 	}
 }
@@ -680,8 +680,8 @@ pub struct WarpParser {
 	/// Inside `class Name {…}`: its fields named like a constant (`pi = 3`, `pi:int`), which its methods read instead
 	/// of the constant; None outside a type body
 	type_fields: Option<std::collections::HashSet<String>>,
-	/// The binding power of the `then` or `else` branch being parsed: there it is a statement, so a braceless call takes a
-	/// variable argument (`then count xs`), as at assignment level
+	/// The binding power of the `then` or `else` branch or the condition being parsed: there a braceless call takes a
+	/// variable argument (`then count xs`, `if square x > 5`), as at assignment level
 	branch_bp: Option<u8>,
 	/// The position of the sign in `1 -1` read as the list `[1 -1]`: no enclosing expression subtracts it either (`x=1 -1`)
 	signed_list_element: Option<usize>,

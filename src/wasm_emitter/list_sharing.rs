@@ -15,16 +15,18 @@ use crate::context::UserFunctionDef;
 const READING_WORDS: [&str; 15] = ["count", "len", "size", "length", "print", "put", "string", "text", "type", "has", "contains",
 	"join", "sum", crate::library_words::LIST_SUM, super::list_abi::RETURN];
 
-/// The variables `program` hands on as a whole Node: an argument of a function that changes that parameter, an item of
-/// a list or map, a field value (not the program's final variable, a value read or discarded)
-pub(super) fn held_elsewhere(program: &Node, functions: &BTreeMap<String, UserFunctionDef>) -> HashSet<String> {
-	let mut walk = Holders { functions, names: HashSet::new() };
+/// The variables `program` hands on as a whole Node: an argument of a function that changes that parameter (or of an
+/// imported one that `changes_arguments` may), an item of a list or map, a field value (not the program's final
+/// variable, a value read or discarded)
+pub(super) fn held_elsewhere(program: &Node, functions: &BTreeMap<String, UserFunctionDef>, changes_arguments: &dyn Fn(&str) -> bool) -> HashSet<String> {
+	let mut walk = Holders { functions, changes_arguments, names: HashSet::new() };
 	walk.value(program, true);
 	walk.names
 }
 
 struct Holders<'a> {
 	functions: &'a BTreeMap<String, UserFunctionDef>,
+	changes_arguments: &'a dyn Fn(&str) -> bool,
 	names: HashSet<String>,
 }
 
@@ -49,9 +51,10 @@ impl Holders<'_> {
 			Node::List(items, Bracket::Round, Separator::None) if matches!(items.first().map(Node::drop_meta), Some(Node::Symbol(_))) => {
 				let callee = items[0].drop_meta().name();
 				let function = self.functions.get(&callee);
+				let imported_changing = function.is_none() && (self.changes_arguments)(&callee);
 				for (index, argument) in items.iter().enumerate().skip(1) {
 					// a function that never changes the list it gets only reads it
-					self.value(argument, !function.is_some_and(|function| changes_parameter(function, index - 1)));
+					self.value(argument, !imported_changing && !function.is_some_and(|function| changes_parameter(function, index - 1)));
 				}
 			}
 			// `(x)`: the value itself

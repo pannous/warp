@@ -208,6 +208,10 @@ impl WasmGcEmitter {
 
 	/// Emit prefix operators: √x, -x, !x, ‖x‖
 	fn emit_prefix_op(&mut self, func: &mut Function, right: &Node, op: &Op) {
+		let word = match op { Op::Sqrt => "sqrt", Op::Cbrt => "cbrt", Op::Abs => "abs", _ => "" };
+		if self.emit_interval_word(func, word, right) {
+			return;
+		}
 		match op {
 			root @ (Op::Sqrt | Op::Cbrt) => {
 				self.emit_float_value(func, right);
@@ -217,7 +221,12 @@ impl WasmGcEmitter {
 			Op::Neg => {
 				// -x = 0 - x
 				let use_float = self.get_type(right).is_float();
-				if use_float {
+				if self.get_type(right) == crate::Kind::Data { // a number known only at run time: node_sub decides
+					func.instruction(&I::I64Const(0));
+					self.emit_call(func, "new_int");
+					self.emit_node_instructions(func, right);
+					self.emit_call(func, super::list_ops::NODE_ARITHMETIC[1].0);
+				} else if use_float {
 					func.instruction(&I::F64Const(0.0.into()));
 					self.emit_float_value(func, right);
 					func.instruction(&I::F64Sub);

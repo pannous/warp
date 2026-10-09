@@ -716,8 +716,35 @@ fn call_with_values(caller: &mut wasmtime::Caller<'_, crate::host::HostState>, i
 	let module_arguments = arguments.iter().map(|argument| copied(caller, argument, None, Some(instance))).collect::<wasmtime::Result<Vec<_>>>()?;
 	let mut returned = vec![wasmtime::Val::I32(0); function.ty(&*caller).results().len()];
 	function.call(&mut *caller, &module_arguments, &mut returned)?;
+	for (argument, module_argument) in arguments.iter().zip(&module_arguments) {
+		write_back(caller, argument, module_argument, instance)?;
+	}
 	for (slot, value) in results.iter_mut().zip(&returned) {
 		*slot = copied(caller, value, Some(instance), None)?;
+	}
+	Ok(())
+}
+
+/// A change the module made to its copy of an argument, made to the program's own value: its Node takes the fields of a
+/// copy of the changed one, so every reference to it sees the change. The reference itself cannot cross: a Node's texts
+/// (field names among them) live in its instance's linear memory, which the other instance reads at the same offsets
+#[cfg(feature = "native")]
+fn write_back(caller: &mut wasmtime::Caller<'_, crate::host::HostState>, argument: &wasmtime::Val, module_argument: &wasmtime::Val, instance: wasmtime::Instance) -> wasmtime::Result<()> {
+	use wasmtime::AsContextMut;
+	let (wasmtime::Val::AnyRef(Some(target)), wasmtime::Val::AnyRef(Some(_))) = (argument, module_argument) else { return Ok(()) };
+	let memory = |caller: &mut wasmtime::Caller<'_, crate::host::HostState>, from| export_of(caller, from, "memory").and_then(wasmtime::Extern::into_memory)
+		.ok_or_else(|| wasmtime::format_err!("a value's instance exports no memory"));
+	let (program_memory, module_memory) = (memory(caller, None)?, memory(caller, Some(instance))?);
+	let changed = crate::wasm_reader::node_in(module_argument, &mut caller.as_context_mut(), module_memory)
+		!= crate::wasm_reader::node_in(argument, &mut caller.as_context_mut(), program_memory);
+	if !changed {
+		return Ok(());
+	}
+	let wasmtime::Val::AnyRef(Some(changed)) = copied(caller, module_argument, Some(instance), None)? else { return Ok(()) };
+	let (Some(target), Some(changed)) = (target.as_struct(&*caller)?, changed.as_struct(&*caller)?) else { return Ok(()) };
+	for field in 0..NODE_FIELDS {
+		let value = changed.field(&mut *caller, field)?;
+		target.set_field(&mut *caller, field, value)?;
 	}
 	Ok(())
 }
@@ -735,6 +762,10 @@ fn copied(caller: &mut wasmtime::Caller<'_, crate::host::HostState>, value: &was
 	let builders = crate::tasks::Builders::of(&mut |name| export_of(caller, into, name)).map_err(|failure| wasmtime::format_err!("{failure}"))?;
 	builders.build(&value, &mut caller.as_context_mut()).map_err(|failure| wasmtime::format_err!("{failure}"))
 }
+
+/// kind, data, value (wasm_emitter/type_manager.rs $Node), each mutable
+#[cfg(feature = "native")]
+const NODE_FIELDS: usize = 3;
 
 /// The export `name` of the instance (None: the program's)
 #[cfg(feature = "native")]

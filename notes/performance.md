@@ -15,12 +15,20 @@ otherwise constant evaluation may hide the loop. Profile the generated module ap
 | `"\(i)"` 200000 times | 0.40 s | 0.10 s | GC heap growth |
 | `count(xs.filter(…))`, 2 million | 0.83 s | 0.10 s | the typed list became 2 million nodes just to count |
 | map of 2 million keys, write and read | call stack exhausted | 2.7 s | cons-list map: quadratic, recursive copy |
+| `xs#i = i / n` into float[10^7] | 29 s, 2.1 GB | 0.08 s, 0.1 GB | an exact quotient allocated per item (card exact-div) |
 
 - **GC collector**: wasmtime's DRC collector (warp's only enabled one) ran this program about 3× slower than the
   copying collector, which also collects cycles. Cargo.toml enables `gc-copying` and `Collector::Auto` picks it.
 - **Initial GC heap** (util.rs GC_HEAP_INITIAL_BYTES = 1 GB, reserved and committed lazily): the copying collector
   grows its heap too little, so a growing live set is copied again at every collection (400000 map entries: 6 s with
   64 MB, 0.3 s with 1 GB; the wasmtime CLI behaves the same with `-O gc-heap-initial-size`).
+- **Two float[10^7] lists** (card gc-heap, 2026-10-09): `xs = float[n]; ys = float[n]` with dot, `sum(xs .* ys)` and
+  `zs = xs .* ys` at n = 10^7 run (probes/memory/two_float_lists.warp). The "GC heap out of memory" seen on 2026-10-08
+  came from the `float * list` error path, gone with 51e8d5721. The fill loop `xs#i = i / n` made an exact quotient per
+  item, then its float (exact_div, exact_to_f64): 1.4 µs and garbage each, ~2 GB peak. Now (card exact-div) an Int
+  quotient going straight into a float is `f64(a) / f64(b)` when both lie in [-2^53, 2^53) and b ≠ 0
+  (big_int.rs emit_float_quotient): IEEE division rounds it once, as the exact quotient rounded. Otherwise, and for
+  b = 0 (divide_by_zero), the exact way. The whole probe now runs in 1.4 s. Elsewhere `i / n` stays exact.
 - **wasmtime's own build** (Cargo.toml `[profile.*.package.wasmtime] opt-level = 3`): release is size-optimized
   (`opt-level = "z"`, for the web build) and dev unoptimized; both ran the host side of GC-heavy programs slowly
   (2.5× and about 10× the CLI). The web build has no wasmtime, its size is unchanged.

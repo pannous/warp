@@ -17,12 +17,13 @@ required-features = ["engine"]
 [features]
 default = ["engine"]
 # running modules: wasmtime's runtime and GC, the host words; without it only the names of the host words
-engine = ["dep:wasmtime"]
+engine = ["dep:wasmtime", "dep:miniz_oxide"]
 # compiling modules too (warp itself): Cranelift and its settings; warp's wasmtime has the component model (through
 # wasmtime-wasi), which its engines turn off
 compiler = ["engine", "wasmtime/cranelift", "wasmtime/component-model"]
 
 [dependencies]
+miniz_oxide = { version = "0.9", optional = true } # the carried machine code is deflated (standalone.rs)
 wasmtime = { version = "49.0.1", default-features = false, features = ["anyhow", "gc", "gc-copying", "runtime", "std"], optional = true }
 
 [target.'cfg(unix)'.dependencies]

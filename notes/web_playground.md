@@ -144,6 +144,12 @@ web/playground/tests.html in headless Chrome (agent-browser, session warp-browse
 - index.html reloaded under coi-serviceworker.js before the worker was active: the page came back unisolated and the
   `isolating` flag stopped retries (headless Chrome: no shared memory, tasks/mouse/kitchen sink failed live). It now
   waits for serviceWorker.ready; an isolated page clears the flag (a hard reload bypasses the worker).
+- The page started its Worker before that reload, which aborted the request (Firefox, live: NS_BINDING_ABORTED for
+  worker.js, card firefox-worker). index.html's `pageStarts` now resolves only when no reload is coming (isolated, no
+  service workers, already tried, registration failed, or 5 s passed), and playground.js initializes then; a built
+  site's startSiteWorker waits the same way (site-thread.js siteStarts). Probe: probes/firefox_worker/slow_server.py
+  (no isolation headers, worker.js 1.5 s late, `-v` logs each request): before, worker.js was asked ahead of the
+  reload; after, behind it, 12 of 12 Firefox page loads clean.
 - Gate: `test_in_browser.py --examples [--site D | --url U]` runs the tour and every sample and fails on any console
   error/warning/failed request of the page and its Workers. agent-browser's `console`/`network` see only the page, so
   console_watch.mjs attaches over CDP (`agent-browser get cdp-url`) to every target: Runtime + Log + Network (Chrome's
@@ -207,7 +213,7 @@ the_strict_flag_turns_warnings_into_errors before).
 ## paint: a canvas in the page (2026-10-06, issue #15)
 `paint(pixels, width, height)` is a host word (src/host.rs PAINT): host.js reads the pixel list and hands it to the
 worker's hooks.paint, the page draws one canvas per call under the output (playground.js showPaintings: nonzero/true
-is ink, 0 paper). Natively it writes a grayscale PNG to <temp>/warp-paint/paint.png (src/paint.rs, flate2 + crc32fast), prints its path and opens it on a terminal. samples/circle.warp is the issue's demo as
+is ink, 0 paper). Natively it writes a grayscale PNG to <temp>/warp-paint/paint.png (src/paint.rs, flate2 + crc32fast), prints its path. In a terminal it shows the frames in a window instead (card g_gGsg, src/paint_window.rs): a viewer process `warp paint-window` (winit owns the main thread on macOS, the program runs there) takes them over its stdin and draws them through a wgpu surface (Metal); each paint replaces the frame, the last stays until the window is closed, and a viewer that cannot start falls back to the PNG. probes/paint_window.sh checks the surface with `paint-window --check` (center pixel read back). samples/circle.warp is the issue's demo as
 written (one loop moving x and y together, so it paints only a short diagonal), samples/filled_circle.warp the filled
 circle with two loops.
 

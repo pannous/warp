@@ -3,6 +3,8 @@
 //   ["open", url] → true once loaded · ["eval", js] → the value as agent-browser prints it (JSON text)
 //   ["messages"] → the console errors and warnings and failed requests since the last ask, workers included
 //   ["close"] → quits
+// A command still unanswered after COMMAND_SECONDS answers {"timeout": what}; a Firefox that went away ends the driver
+// with exit code 1 and the reason on stderr (test_in_browser.py stops loudly on either, card deploy-firefox-hang).
 // FIREFOX names the binary (default `firefox`; on macOS the app, default /Applications/Firefox.app, started by `open`:
 // a terminal's child may not read ~/Library/Application Support/Firefox, which Firefox needs even with --profile).
 // A fresh profile per run, so the user's own Firefox is never touched.
@@ -16,6 +18,8 @@ import { createInterface } from "node:readline";
 const MAC = process.platform === "darwin";
 const FIREFOX = process.env.FIREFOX ?? (MAC ? "/Applications/Firefox.app" : "firefox");
 const START_SECONDS = 60;
+// a command not answered by then (a page that never finishes loading, an example that never ends) fails the run loudly
+const COMMAND_SECONDS = 120;
 const REPORTED_LEVELS = new Set(["error", "warn", "warning", "assert"]);
 const FAILED_STATUS = 400;
 
@@ -49,6 +53,10 @@ const report = (level, text, url = "") => REPORTED_LEVELS.has(level) && messages
 const events = {
 	"log.entryAdded": entry => report(entry.level, entry.text ?? entry.args?.map(arg => arg.value ?? arg.type).join(" "), entry.source?.realm ? entry.stackTrace?.callFrames?.[0]?.url : ""),
 	"network.responseCompleted": ({ response }) => response.status >= FAILED_STATUS && report("error", `${response.status} ${response.statusText}`.trim(), response.url),
+};
+socket.onclose = () => {
+	console.error(`firefox_driver.mjs: Firefox closed its WebDriver BiDi connection; ${pending.size} commands unanswered`);
+	process.exit(1);
 };
 socket.onmessage = message => {
 	const data = JSON.parse(message.data);
@@ -94,9 +102,13 @@ const commands = {
 	},
 };
 
+// the command's answer, or {timeout} naming it when none came in COMMAND_SECONDS
+const answeredInTime = (answer, line) => Promise.race([answer,
+	sleep(COMMAND_SECONDS * 1000).then(() => ({ timeout: `no answer to ${line.slice(0, 200)} in ${COMMAND_SECONDS} s` }))]);
+
 console.log(JSON.stringify("ready"));
 for await (const line of createInterface({ input: process.stdin })) {
 	const [command, ...arguments_] = JSON.parse(line);
-	console.log(JSON.stringify(await commands[command](...arguments_)));
+	console.log(JSON.stringify(await answeredInTime(commands[command](...arguments_), line)));
 }
 await commands.close();

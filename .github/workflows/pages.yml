@@ -66,12 +66,16 @@ jobs:
         for part in $(grep -o '"host-[a-z]*\.js"' web/playground/host.js | tr -d '"'); do test -f _site/$part || { echo "::error::$part missing from the site"; exit 1; }; done
         # the C module the tour imports (examples.js "C libraries"), at its repository path: the page's file root is the site
         mkdir -p _site/tests/fixtures/wasm && cp tests/fixtures/wasm/zlib.wasm tests/fixtures/wasm/zlib.h _site/tests/fixtures/wasm/
+        # the warp-compiled module samples/import_compiled.warp imports
+        mkdir -p _site/tests/fixtures/compiled && cp tests/fixtures/compiled/shapes.wasm _site/tests/fixtures/compiled/
         echo "warp.pannous.com" > _site/CNAME
         # the files the site serves, so the compiler asks only for those (host-files.js): no 404 in the console
         web/playground/build.sh served _site
     - name: Every tour example shows what it promises (examples.js) and no example or sample writes an error or warning to the console, in the collected site, else no deploy
       run: python3 web/playground/test_in_browser.py --examples --site _site
     - name: The same in headless Firefox (the runner's own; firefox_driver.mjs), else no deploy
+      # a run takes about 3 minutes; a stuck one fails loudly instead of holding the deploy (card deploy-firefox-hang)
+      timeout-minutes: 15
       run: python3 web/playground/test_in_browser.py --examples --firefox --site _site
     - uses: actions/upload-pages-artifact@v3
       with:
@@ -98,4 +102,5 @@ jobs:
     - name: The live playground shows the tour and its console stays clean
       run: python3 web/playground/test_in_browser.py --examples --url https://warp.pannous.com/
     - name: The same in headless Firefox
+      timeout-minutes: 15
       run: python3 web/playground/test_in_browser.py --examples --firefox --url https://warp.pannous.com/

@@ -40,3 +40,18 @@ fn paint_writes_colors_as_a_truecolor_png() {
 	// the color, paper for 0, ink for any other value without an alpha byte
 	assert_eq!(rows, [0, 255, 128, 0, 250, 250, 250, 29, 29, 29]);
 }
+
+// card g_gGsg: in a terminal paint sends each frame to the window of `warp paint-window` (src/paint_window.rs) over its
+// stdin, as [width u32][height u32][RGBA bytes] shaded as the PNG is; the viewer reads back the same frames (the window
+// itself: probes/paint_window.sh, not here, where no window may open)
+#[test]
+fn paint_frames_for_the_window_read_back_as_sent() {
+	use warp::paint_window::{frame_bytes, read_frame, Frame};
+	let paper = warp::paint::PAPER;
+	let ink = warp::paint::INK;
+	let mut stream = [frame_bytes(&[0, 1, 0xFF12_C863], 3, 1), frame_bytes(&[1], 1, 1)].concat();
+	let mut reader = std::io::Cursor::new(&mut stream);
+	assert_eq!(read_frame(&mut reader), Some(Frame { width: 3, height: 1, rgba: vec![paper, paper, paper, 255, ink, ink, ink, 255, 0x12, 0xC8, 0x63, 255] }));
+	assert_eq!(read_frame(&mut reader), Some(Frame { width: 1, height: 1, rgba: vec![ink, ink, ink, 255] }));
+	assert_eq!(read_frame(&mut reader), None);
+}
