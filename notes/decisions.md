@@ -7,6 +7,9 @@ before asking the user; nobody reads it front to back, the code, tests and wiki 
 notes/open_decisions.md.
 
 ## Decided 2026-10-09 (user, as recommended unless quoted)
+- Ranges (user, via warp-class, branch range-descriptor 51cdcb2dd): "We don't need the colon syntax if we have the
+  dot-dot syntax": `r: 1..n` is the range itself, same as `r = 1..n`; `..` marks a value, so no uncharged-block
+  warning.
 - P236 (warp-keywords, card golf-echo): NOT as recommended: `warp run` keeps echoing the final value after the
   script's prints, as today (`for i in 1 to 2 { print i; x = 1 }` → 1, 2, 1).
 - P235 (warp-web, card g_oFJc): WGSL is written as a `shader { … }` block, read verbatim with balanced braces, its
