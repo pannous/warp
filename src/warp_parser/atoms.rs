@@ -749,7 +749,8 @@ impl WarpParser {
 		}
 
 		// Handle "global" keyword: global name = value
-		if symbol == "for" {
+		// `each x in xs: body` is `for each x in xs: body`
+		if symbol == "for" || (symbol == EACH_WORD && self.loop_variable_in_follows()) {
 			if let Some(loop_node) = self.try_parse_for_in() {
 				return loop_node;
 			}

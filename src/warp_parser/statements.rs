@@ -130,6 +130,18 @@ impl WarpParser {
 	}
 
 	/// The name of `for x in …`, or the names each element destructures into: `for (r, c) in …`, `for k, v in …`
+	/// A loop variable and the word `in` follow the blanks here: `x in xs` after `each`; nothing consumed
+	pub(super) fn loop_variable_in_follows(&mut self) -> bool {
+		let before = (self.pos, self.line_nr, self.column, self.current_line.clone());
+		self.skip_blanks();
+		let follows = self.parse_loop_variable().is_some() && {
+			self.skip_blanks();
+			self.matches_keyword("in")
+		};
+		(self.pos, self.line_nr, self.column, self.current_line) = before;
+		follows
+	}
+
 	pub(super) fn parse_loop_variable(&mut self) -> Option<Node> {
 		let bracket = if self.current_char() == '(' { self.advance(); Bracket::Round } else { Bracket::None };
 		let mut names = vec![];
