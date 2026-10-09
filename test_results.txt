@@ -1072,10 +1072,13 @@ PASSED:
   ✓ functions::test_generators::a_loop_walks_an_object_with_next_until_it_gives_nothing
   ✓ functions::test_generators::break_stops_an_endless_generator
   ✓ functions::test_generators::continue_goes_on_after_the_yield
+  ✓ functions::test_generators::list_and_sum_take_the_rest_of_a_generator_object
   ✓ functions::test_generators::next_resumes_a_generator_where_it_stopped
   ✓ functions::test_generators::python_generator
   ✓ functions::test_generators::return_ends_a_generator
+  ✓ functions::test_generators::take_stops_an_endless_generator
   ✓ functions::test_generators::two_generator_objects_advance_apart
+  ✓ functions::test_generators::zip_pairs_generators_and_lists
   ✓ functions::test_getter_warning_text::a_long_getter_body_is_not_spelled_out_in_its_warning
   ✓ functions::test_global_with_closures::global_in_a_program_with_a_lambda
   ✓ functions::test_go_functions::a_go_short_declaration_that_is_assigned_stays_an_error
@@ -1163,6 +1166,7 @@ PASSED:
   ✓ functions::test_nested_it::test_glued_block_after_a_method_is_a_lambda
   ✓ functions::test_nested_it::test_inner_dollar_zero_shadows_the_outer
   ✓ functions::test_nested_it::test_inner_it_shadows_the_outer_it
+  ✓ functions::test_nested_it::test_named_lambda_parameter_leaves_the_outer_it
   ✓ functions::test_nested_it::test_trailing_block_of_a_lambda_body_method
   ✓ functions::test_nested_it::test_trailing_block_of_an_assigned_method_call
   ✓ functions::test_nested_prefix_calls::a_function_name_among_the_arguments_takes_the_ones_after_it
@@ -2767,6 +2771,9 @@ PASSED:
   ✓ programs::test_shader_holes::values_not_written_out_cannot_take_the_holes
   ✓ programs::test_small_samples::error_samples
   ✓ programs::test_small_samples::text_samples
+  ✓ programs::test_sound_files::a_broken_music_file_fails
+  ✓ programs::test_sound_files::a_music_file_plays_in_the_background
+  ✓ programs::test_sound_files::only_a_music_file_plays
   ✓ programs::test_sound::a_melody_is_its_notes_one_after_another
   ✓ programs::test_sound::notes_are_frequencies
   ✓ programs::test_sound::notes_are_named_in_a_program_with_units
@@ -4161,6 +4168,7 @@ PASSED:
   ✓ welcoming::test_left_arrow::a_spaced_left_arrow_assigns_with_a_note
   ✓ welcoming::test_left_arrow::a_spaced_less_than_compares
   ✓ welcoming::test_let_const_changes::a_constant_assigned_its_own_value_again
+  ✓ welcoming::test_let_const_changes::a_declaration_unpacks_comma_values
   ✓ welcoming::test_let_const_changes::a_let_variable_changes
   ✓ welcoming::test_let_const_changes::let_and_const_unpack_a_tuple
   ✓ welcoming::test_list_phrases::a_chain_of_phrases
@@ -4318,4 +4326,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-10 ignored, 4313 passed, 0 failed, 4313 total tested
+10 ignored, 4321 passed, 0 failed, 4321 total tested
