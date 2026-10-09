@@ -7,6 +7,10 @@ before asking the user; nobody reads it front to back, the code, tests and wiki 
 notes/open_decisions.md.
 
 ## Decided 2026-10-09 (user, as recommended unless quoted)
+- Word slices (user to the Interviewer: "list from A to B. List starting from A. List items to B"): with
+  xs = [10, 20, 30, 40, 50], `xs from 2 to 4` → [20, 30, 40], `xs starting from 2` → [20, 30, 40, 50],
+  `xs up to 2` → [10, 20]; positions count like `xs#1` (first = 1), both ends inclusive. Slicing by position,
+  not by value and not building a range.
 - Hosting of deployed warp programs (user, via the supervisor): "let's start with our own login and let people log
   in with their own button". First our account hosts the programs: users log in with us and get a Deploy button.
   Second, a button deploying to the person's own provider account. Worker warp-hosting researches providers
