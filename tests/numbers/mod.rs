@@ -67,3 +67,4 @@ mod test_plus_minus_print;
 mod test_div_assign;
 mod test_unit_fields; // card unit-fields
 mod test_units_text; // card units-text
+mod test_as_compound_unit; // card compound-unit
