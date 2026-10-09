@@ -585,7 +585,7 @@ pub(super) fn with_closure_captures(ctx: &Context, program: &Node, mut globals: 
 		let enclosing = ctx.enclosing_functions.get(&function.name).and_then(|name| ctx.user_functions.get(name));
 		let captured: Vec<(String, Kind)> = match enclosing {
 			Some(enclosing) => {
-				let mut enclosing_scope = Scope::new();
+				let mut enclosing_scope = Scope::with_function_kinds(known_function_kinds(ctx));
 				for param in &enclosing.params {
 					enclosing_scope.define_param(param, param_kind(param));
 				}
