@@ -682,10 +682,15 @@ function runNow() {
 	return show(editor.getValue());
 }
 
-// Run pressed (the button, Ctrl/Cmd-Enter): the old value gives way to "…" at once, so it is not taken for the new one
+// Run pressed (the button, Ctrl/Cmd-Enter): the old value gives way to "…" at once, and the old errors, warnings,
+// underlines and printed text go, so none is taken for the new run's (card g_oc54)
 function runPressed() {
 	showValue(PENDING_VALUE);
 	$("value").classList.remove("located");
+	$("value").onclick = null;
+	$("diagnostics").replaceChildren();
+	markPositions({});
+	showPrinted([]);
 	return runNow();
 }
 
