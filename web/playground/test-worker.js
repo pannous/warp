@@ -45,9 +45,19 @@ const listed = args => runBinary(["--list", "--format", "terse", ...args]).outpu
 
 let compiled; // resolves when the binary is compiled: messages that arrive meanwhile wait for it
 
+// WARP_GPU_ADAPTER names the browser's WebGPU adapter to the tests, "(software)" marked: SwiftShader, CI's, computes
+// sin and exp only as exactly as WGSL requires (tests/common gpu_tolerance, card browser-gpu)
+async function announceGpuAdapter() {
+	const adapter = await self.navigator.gpu?.requestAdapter();
+	if (!adapter) return;
+	const { vendor, architecture, description } = adapter.info ?? {};
+	const software = adapter.info?.isFallbackAdapter || adapter.isFallbackAdapter || architecture === "swiftshader";
+	ENVIRONMENT.push(`WARP_GPU_ADAPTER=${[vendor, architecture, description].filter(Boolean).join(" ")}${software ? " (software)" : ""}`);
+}
+
 self.onmessage = async ({ data }) => {
 	if (data.type === "compile") {
-		compiled = WebAssembly.compileStreaming(fetch(data.url)).then(binary => { module = binary; });
+		compiled = Promise.all([WebAssembly.compileStreaming(fetch(data.url)).then(binary => { module = binary; }), announceGpuAdapter()]);
 		return;
 	}
 	await compiled;

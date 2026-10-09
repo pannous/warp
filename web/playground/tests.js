@@ -89,6 +89,7 @@ function runner(queue, total) {
 				record({ name: current.name, passed: false, timedOut: true, output: `stopped after ${TEST_TIMEOUT_MS / 1000} s` });
 			}, TEST_TIMEOUT_MS);
 			running.add(current.name);
+			showProgress(total); // a page stuck in this test names it (card browser-suite)
 			worker.postMessage({ type: "run", name: current.name, ignored: current.ignored });
 		};
 		const thisRunner = {
