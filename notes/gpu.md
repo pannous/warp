@@ -7,6 +7,7 @@ gpu_compute / gpu_render plumbing (src/gpu.rs, web/playground/host-gpu.js, notes
 ## Where the language stands (2026-10-08, measured on main)
 - `xs * 2` is an error by decision (D3: repeat or multiply?), `xs + ys` concatenates. Element-wise is the dotted form
   (P166): `xs .* 2` works, `[1 2 3] .* 2` → `[2 4 6]`.
+- `xs * ys` of two lists is their inner product, `dot(xs, ys)` (card g_n8GI, broadcasting.rs inner_product).
 - `xs .+ ys` and `xs .* ys` (list with list) are errors today ("element-wise arithmetic needs an explicit map"): the CPU
   form comes first, the GPU only accelerates what the CPU already answers.
 - `sum xs`, `xs.map(x => …)` work; `dot` does not exist (`sum(xs .* ys)` once list.*list works; `dot` an alias later).
