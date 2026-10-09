@@ -116,8 +116,8 @@ pub fn rows_read() -> usize {
 	ROWS_READ.get()
 }
 
-/// `std_io("table", member, arguments)`: open (create or migrate, give the rows), migrate and rows (its two halves), row (one,
-/// by position), count, insert
+/// `std_io("table", member, arguments)`: open (create or migrate, give the rows), migrate and rows (its two halves), page (from a
+/// position), count, insert
 /// (give the id), update
 pub fn call(member: &str, arguments: &[Node]) -> Result<Node, String> {
 	let text = |node: &Node| match node.drop_meta() {
@@ -130,10 +130,9 @@ pub fn call(member: &str, arguments: &[Node]) -> Result<Node, String> {
 			let columns = schema.children().iter().map(column_of).collect::<Result<Vec<_>, _>>()?;
 			selected(connection(&text(file)?)?, &text(table)?, &columns, None)
 		}
-		("row", [table, schema, file, index]) => {
+		("page", [table, schema, file, start, size]) => {
 			let columns = schema.children().iter().map(column_of).collect::<Result<Vec<_>, _>>()?;
-			let rows = selected(connection(&text(file)?)?, &text(table)?, &columns, Some(index))?;
-			Ok(rows.children().into_iter().next().unwrap_or(Node::Empty))
+			selected(connection(&text(file)?)?, &text(table)?, &columns, Some([start, size]))
 		}
 		("migrate", [table, schema, file]) => migrated(connection(&text(file)?)?, &text(table)?, &schema.children()).map(|_| Node::Empty),
 		("count", [table, _schema, file]) => {
@@ -242,11 +241,11 @@ fn opened(table: &str, schema: &[Node], file: &str) -> Result<Node, String> {
 	selected(database, table, &columns, None)
 }
 
-/// The table's rows `[id, columns…]` in id order, or only its row at a position counted from 1
-fn selected(database: Handle, table: &str, columns: &[(String, String, String)], position: Option<&Node>) -> Result<Node, String> {
+/// The table's rows `[id, columns…]` in id order, or only a page of them: its start position (counted from 1) and size
+fn selected(database: Handle, table: &str, columns: &[(String, String, String)], page: Option<[&Node; 2]>) -> Result<Node, String> {
 	let selected: Vec<String> = std::iter::once(ID_COLUMN.to_string()).chain(columns.iter().map(|(name, _, _)| quote(name))).collect();
-	let (limit, parameters) = match position {
-		Some(position) => (" LIMIT 1 OFFSET ? - 1", vec![position.clone()]),
+	let (limit, parameters) = match page {
+		Some([start, size]) => (" LIMIT ? OFFSET ? - 1", vec![size.clone(), start.clone()]),
 		None => ("", vec![]),
 	};
 	let rows = rows(database, &format!("SELECT {} FROM {} ORDER BY {ID_COLUMN}{limit}", selected.join(", "), quote(table)), &parameters)?;

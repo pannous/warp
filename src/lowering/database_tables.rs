@@ -36,12 +36,15 @@ const SAVED: &str = "table_saved";
 const KNOWN: &str = "table_known";
 /// the position of `people#i`
 const POSITION: &str = "table_position";
-const GENERATED_NAMES: [(&str, &str); 10] = [(POSITION, "table·position"), (ROW, "table·row"), (ROWS, "table·rows"), (MATCHES, "table·matches"), (ADDED, "table·added"), (ARGUMENTS, "table·arguments"),
+/// the instance a row read before loading makes
+const MADE: &str = "table_made";
+const GENERATED_NAMES: [(&str, &str); 11] = [(POSITION, "table·position"), (MADE, "table·made"), (ROW, "table·row"), (ROWS, "table·rows"), (MATCHES, "table·matches"), (ADDED, "table·added"), (ARGUMENTS, "table·arguments"),
 	(REFERENCED, "table·referenced"), (MEMBER, "table·member"), (SAVED, "table·saved"), (KNOWN, "table·known")];
 /// Each table's lazy parts (notes/orm.md Loading), `people·load` of people: the function giving the list, loading its
 /// rows on the first call; the count, SELECT COUNT(*) until then; the add, inserting without loading; the reset of a
-/// route reading the table anew; the element `people#i`, reading its one row until then; whether the rows are loaded;
-/// the instances added or read before
+/// route reading the table anew; the element `people#i`, reading its one row until then; the element of a loop over the
+/// table, reading a page of rows until then; the instance of a row read before loading; whether the rows are loaded;
+/// the instances added or read before; the page read last and its start position
 const LOAD: &str = "table_load";
 const COUNTED: &str = "table_count";
 const ADDING: &str = "table_add";
@@ -49,14 +52,27 @@ const RESET: &str = "table_reset";
 const LOADED: &str = "table_loaded";
 const MET: &str = "table_met";
 const ELEMENT: &str = "table_at";
-const LAZY_PARTS: [(&str, &str); 7] = [(LOAD, "load"), (COUNTED, "count"), (ADDING, "add"), (RESET, "reset"), (ELEMENT, "at"), (LOADED, "loaded"), (MET, "met")];
+const STREAMED: &str = "table_streamed";
+const KEPT: &str = "table_kept";
+const PAGE: &str = "table_page";
+const START: &str = "table_start";
+const LAZY_PARTS: [(&str, &str); 11] = [(LOAD, "load"), (COUNTED, "count"), (ADDING, "add"), (RESET, "reset"), (ELEMENT, "at"), (STREAMED, "streamed"),
+	(KEPT, "kept"), (LOADED, "loaded"), (MET, "met"), (PAGE, "page"), (START, "start")];
+/// The rows a loop over an unloaded table reads at once (notes/orm.md Loading)
+const PAGE_SIZE: usize = 100;
 /// `count(people)`, `people.count`: counted without loading
 const COUNT_WORDS: [&str; 4] = ["count", "size", "length", "len"];
+const FOR_WORD: &str = "for";
+/// a paged loop's count and position, `p·end` and `p·position` of `for p in people`
+const LOOP_END: &str = "table_loop_end";
+const LOOP_POSITION: &str = "table_loop_position";
+const IN_WORD: &str = "in";
 const SCHEMA_PLACEHOLDER: &str = "table_schema";
 const READ_PLACEHOLDER: &str = "table_read";
 const ROWS_PLACEHOLDER: &str = "table_rows_read";
 const COUNT_PLACEHOLDER: &str = "table_count_read";
 const ROW_PLACEHOLDER: &str = "table_row_read";
+const PAGE_PLACEHOLDER: &str = "table_page_read";
 const VALUE_PLACEHOLDER: &str = "table_value";
 /// `red.players.add(p)`: the instance whose one-to-many field is added to
 const OWNER_PLACEHOLDER: &str = "table_owner";
@@ -597,22 +613,23 @@ fn opened(statement: &Node, tables: &HashMap<String, Table>, file: &str, open: &
 	let constructed = format!("{class}({})", arguments.join(", "));
 	let instance = format!("({known}; if {KNOWN} then {KNOWN}#1 else {constructed})");
 	// the rows a required key leaves out are counted and positioned only by loading
-	let (unloaded_count, unloaded_element) = match required.is_empty() {
+	let (unloaded_count, unloaded_element, unloaded_streamed) = match required.is_empty() {
 		true => (COUNT_PLACEHOLDER.to_string(), format!("{{
-{ROW} = {ROW_PLACEHOLDER}
-if not {ROW} then {LOAD}()#{POSITION} else {{
-{known}
-if {KNOWN} then {KNOWN}#1 else {{
-{ADDED} = {constructed}
-{MET}.add({ADDED})
-{ADDED}
+{ROWS} = {ROW_PLACEHOLDER}
+if not {ROWS} then {LOAD}()#{POSITION} else {KEPT}({ROWS}#1)
+}}"), format!("{{
+if {POSITION} < {START} or {POSITION} >= {START} + count({PAGE}) {{
+{PAGE} = [{KEPT}({ROW}) for {ROW} in {PAGE_PLACEHOLDER}]
+{START} = {POSITION}
 }}
-}}
+{PAGE}#({POSITION} - {START} + 1)
 }}")),
-		false => (format!("count({LOAD}())"), format!("{LOAD}()#{POSITION}")),
+		false => (format!("count({LOAD}())"), format!("{LOAD}()#{POSITION}"), format!("{LOAD}()#{POSITION}")),
 	};
 	let code = format!("{LOADED} = no
 {MET}: [{class}] = []
+{PAGE}: [{class}] = []
+{START} = 0
 {READ_PLACEHOLDER}
 {LOAD}() := {{
 global {variable}
@@ -637,21 +654,38 @@ global {MET}
 if {LOADED} {{ {variable}.add({ADDED}) }} else {{ {MET}.add({ADDED}) }}
 {ADDED}
 }}
+{KEPT}({ROW}) := {{
+global {MET}
+{known}
+if {KNOWN} then {KNOWN}#1 else {{
+{MADE} = {constructed}
+{MET}.add({MADE})
+{MADE}
+}}
+}}
 {ELEMENT}({POSITION}) := {{
 global {variable}
 global {LOADED}
-global {MET}
 if {LOADED} or {POSITION} < 1 then {LOAD}()#{POSITION} else {unloaded_element}
+}}
+{STREAMED}({POSITION}) := {{
+global {variable}
+global {LOADED}
+global {PAGE}
+global {START}
+if {LOADED} then {variable}#{POSITION} else {unloaded_streamed}
 }}
 {RESET}() := {{
 global {LOADED}
 global {MET}
+global {PAGE}
 {LOADED} = no
 {MET} = []
+{PAGE} = []
 []
 }}");
 	let placeholders = [(READ_PLACEHOLDER, table_call("migrate")), (ROWS_PLACEHOLDER, table_call("rows")), (COUNT_PLACEHOLDER, table_call("count")),
-		(ROW_PLACEHOLDER, table_call_with("row", &format!(", {POSITION}")))].into_iter().chain(lazy_names(&variable));
+		(ROW_PLACEHOLDER, table_call_with("page", &format!(", {POSITION}, 1"))), (PAGE_PLACEHOLDER, table_call_with("page", &format!(", {POSITION}, {PAGE_SIZE}")))].into_iter().chain(lazy_names(&variable));
 	let empty = parse("[]");
 	Some([vec![Node::Key(Box::new(target.drop_meta().clone()), Op::Assign, Box::new(empty))], generated(&code, placeholders).children()].concat())
 }
@@ -700,6 +734,11 @@ fn with_lazy_reads(node: Node, tables: &HashMap<String, Table>, own: Option<&str
 		Node::List(parts, _, _) if parts.len() == 2 && COUNT_WORDS.contains(&parts[0].drop_meta().name().as_str()) && table_of(&parts[1]).is_some() => {
 			called(lazy_name(&table_of(&parts[1]).unwrap_or_default(), "count"), None)
 		}
+		Node::List(parts, _, _) if parts.len() == 5 && parts[0].drop_meta().name() == FOR_WORD && parts[2].drop_meta().name() == IN_WORD
+			&& matches!(parts[1].drop_meta(), Node::Symbol(_)) && table_of(&parts[3]).is_some() && matches!(parts[4].drop_meta(), Node::List(_, Bracket::Curly, _)) => {
+			let variable = table_of(&parts[3]).unwrap_or_default();
+			paged_loop(&parts[1].drop_meta().name(), &variable, &tables[&variable].class, rewrite(parts[4].clone()))
+		}
 		Node::Key(left, Op::Hash, position) if table_of(&left).is_some() => called(lazy_name(&table_of(&left).unwrap_or_default(), "at"), Some(rewrite(*position))),
 		Node::Key(left, Op::Dot, right) => match (table_of(&left), right.drop_meta()) {
 			(Some(variable), Node::Symbol(word)) if COUNT_WORDS.contains(&word.as_str()) => called(lazy_name(&variable, "count"), None),
@@ -712,6 +751,19 @@ fn with_lazy_reads(node: Node, tables: &HashMap<String, Table>, own: Option<&str
 		Node::Key(target, op, value) if (op == Op::Assign || op.is_compound_assign()) && table_of(declared(&target)).is_some() => Node::Key(target, op, Box::new(rewrite(*value))),
 		_ => node.map_children(rewrite),
 	}
+}
+
+/// `for p in people body` over an unloaded table walks positions up to its count, each element read from a page
+/// (`people·streamed`); the count is taken once, so rows the body adds are not walked
+fn paged_loop(element: &str, variable: &str, class: &str, body: Node) -> Node {
+	let names = || [(LOOP_END, "end"), (LOOP_POSITION, "position")].map(|(placeholder, part)| (placeholder, Node::Symbol(format!("{element}·{part}"))))
+		.into_iter().chain(lazy_names(variable));
+	// the body's statements follow the element's in one block: a nested block of expressions would read as a list
+	let element_read = generated(&format!("{element}: {class} = {STREAMED}({LOOP_POSITION})"), names());
+	let statements = Node::List([vec![element_read], body.children()].concat(), Bracket::Curly, Separator::Semicolon);
+	let code = format!("{LOOP_END} = {COUNTED}()\nfor {LOOP_POSITION} in 1 to {LOOP_END} {VALUE_PLACEHOLDER}");
+	let lowered = generated(&code, names().chain([(VALUE_PLACEHOLDER, statements)]));
+	Node::List(lowered.children(), Bracket::None, Separator::Semicolon)
 }
 
 /// The variable an assignment's target names: `people` of `people: [Person]`

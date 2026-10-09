@@ -88,6 +88,18 @@ fn an_element_of_a_table_loads_one_row() {
 	is!(&program("people_indexed", "oz = people#2\noz.age = 60\nsum = 0\nfor p in people { sum += p.age }\nsum + people#2.age"), 72 + 60);
 }
 
+// iterating an unloaded table reads it in pages of 100 rows: a loop that breaks early reads only the pages it reached
+#[cfg(feature = "native")]
+#[test]
+fn iterating_a_table_reads_it_in_pages() {
+	eval(&program("people_paged", "for i in 1 to 250 { people.add(Person(\"N\" + i, i)) }"));
+	let before = warp::database::rows_read();
+	is!(&program("people_paged", "found = 0\nfor p in people { if p.age == 150 { found = p.age; break } }\nfound"), 150);
+	assert_eq!(warp::database::rows_read(), before + 200, "a loop breaking at row 150 read other than two pages");
+	is!(&program("people_paged", "sum = 0\nfor p in people { if p.age > 3 { continue }; sum += p.age }\nsum"), 6);
+	is!(&program("people_paged", "for p in people { if p.age == 120 { p.name = \"Hundred20\" } }\npeople#120.name"), "Hundred20");
+}
+
 // an instance added before the rows load is the one the loaded list holds
 #[test]
 fn an_instance_added_before_loading_is_the_loaded_row() {
