@@ -4,7 +4,7 @@
 //! `y: outer·y` holds the cell itself, so inner's writes reach outer. A plain `y = 7` in inner is inner's own local,
 //! as in Python and warp.
 
-use super::{assigned_locals, cell_class, function_definition, mentions, parameter_name, statements};
+use super::{assigned_locals, cell_class, function_definition, mentions, parameter_name, result_type, statements};
 use crate::node::{Bracket, Node, Separator};
 use crate::operators::Op;
 
@@ -14,6 +14,7 @@ struct Nested {
 	name: String,
 	lifted: String,
 	parameters: Vec<Node>,
+	result: Option<Node>,
 	body: Node,
 	/// the names of outer it reads, in outer's order
 	captures: Vec<String>,
@@ -30,7 +31,7 @@ pub(super) fn lift(program: &Node, globals: &[String]) -> Result<Node, String> {
 	let mut lifted = vec![];
 	for statement in parts {
 		match function_definition(statement) {
-			Some((outer, parameters, body)) if has_nested(statement) => lifted.extend(lift_from(outer, &parameters, body, globals)?),
+			Some((outer, parameters, body)) if has_nested(statement) => lifted.extend(lift_from(outer, &parameters, body, result_type(statement), globals)?),
 			_ => lifted.push(statement.clone()),
 		}
 	}
@@ -50,7 +51,7 @@ fn body_items(body: &Node) -> &[Node] {
 }
 
 /// The lifted functions, then outer without them
-fn lift_from(outer: &str, parameters: &[&Node], body: &Node, globals: &[String]) -> Result<Vec<Node>, String> {
+fn lift_from(outer: &str, parameters: &[&Node], body: &Node, result: Option<&Node>, globals: &[String]) -> Result<Vec<Node>, String> {
 	let (definitions, rest): (Vec<&Node>, Vec<&Node>) = body_items(body).iter().partition(|item| function_definition(item).is_some());
 	let rest_body = Node::List(rest.into_iter().cloned().collect(), Bracket::Curly, Separator::Semicolon);
 	let mut outer_names: Vec<String> = parameters.iter().map(|parameter| parameter_name(parameter)).collect();
@@ -62,7 +63,7 @@ fn lift_from(outer: &str, parameters: &[&Node], body: &Node, globals: &[String])
 		let references = nonlocal_names(body);
 		let locals: Vec<String> = assigned_locals(body, globals).into_iter().filter(|local| !references.contains(local)).collect();
 		let captures = outer_names.iter().filter(|name| !own.contains(name) && !locals.contains(name) && mentions(body, name)).cloned().collect();
-		Nested { name: name.to_string(), lifted: cell_class(outer, name), parameters: parameters.into_iter().cloned().collect(), body: without_nonlocal(body), captures, references }
+		Nested { name: name.to_string(), lifted: cell_class(outer, name), parameters: parameters.into_iter().cloned().collect(), result: result_type(definition).cloned(), body: without_nonlocal(body), captures, references }
 	}).collect();
 	// a call of a sibling passes its captures on: the caller captures them too
 	loop {
@@ -94,10 +95,10 @@ fn lift_from(outer: &str, parameters: &[&Node], body: &Node, globals: &[String])
 			_ => parameters.iter().find(|parameter| parameter_name(parameter) == *capture).map_or_else(|| Node::Symbol(capture.clone()), |parameter| parameter.drop_meta().clone()),
 		});
 		let head = Node::List(std::iter::once(Node::Symbol(function.lifted.clone())).chain(function.parameters.iter().cloned()).chain(captured).collect(), Bracket::Round, Separator::None);
-		lifted.push(Node::Key(Box::new(head), Op::Define, Box::new(with_lifted_calls(&function.body, &nested))));
+		lifted.push(definition(head, function.result.as_ref(), with_lifted_calls(&function.body, &nested)));
 	}
 	let outer_head = Node::List(std::iter::once(Node::Symbol(outer.to_string())).chain(parameters.iter().map(|parameter| (*parameter).clone())).collect(), Bracket::Round, Separator::None);
-	lifted.push(Node::Key(Box::new(outer_head), Op::Define, Box::new(with_lifted_calls(&rest_body, &nested))));
+	lifted.push(definition(outer_head, result, with_lifted_calls(&rest_body, &nested)));
 	Ok(lifted)
 }
 
@@ -110,6 +111,15 @@ fn include(names: &mut Vec<String>, more: Vec<String>) -> bool {
 		}
 	}
 	names.len() > before
+}
+
+/// `head := body`, or `head: result := body`
+fn definition(head: Node, result: Option<&Node>, body: Node) -> Node {
+	let target = match result {
+		Some(result) => Node::Key(Box::new(head), Op::Colon, Box::new(result.clone())),
+		None => head,
+	};
+	Node::Key(Box::new(target), Op::Define, Box::new(body))
 }
 
 fn typed(name: &str, type_word: &str) -> Node {

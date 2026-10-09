@@ -28,6 +28,13 @@ def wholeNumber (t : Ty) : Bool := sub t .int || t == .any
 /-- what `*` repeats statically: a text times a whole number, in either order (P1) -/
 def repeats (a b : Ty) : Bool := (textual a && wholeNumber b) || (wholeNumber a && textual b)
 
+/-- what `as` converts statically: anything to text or bool, numbers and texts to a number type, else what a cast
+admits (`[1] as int` is refused) -/
+def convertible (te : Ty) : Ty → Bool
+  | .text | .bool => true
+  | .int | .number => consub te .number || consub te .text
+  | t => consub te t
+
 def typeOf (P : Program) (Γ : Ctx) : Expr → Option Ty
   | .bool _ => some .bool
   | .int _ => some .int
@@ -104,6 +111,7 @@ def typeOf (P : Program) (Γ : Ctx) : Expr → Option Ty
     | some te, some th => some (join te th)
     | _, _ => none
   | .cast e ts => (typeOf P Γ e).bind fun te => if ts.any (consub te) then some (joinAll ts) else none
+  | .conv e t => (typeOf P Γ e).bind fun te => if convertible te t then some t else none
   | .broadcast f e =>
     match P.funs f, typeOf P Γ e with
     | some fd, some te =>
@@ -254,6 +262,12 @@ theorem typeOf_sound {P : Program} : ∀ {e : Expr} {Γ t}, typeOf P Γ e = some
     obtain ⟨_, he, hc⟩ := h
     split at hc
     · cases hc; exact .cast (ih he)
+    · cases hc
+  | conv e t ih =>
+    intro Γ t' h; simp only [typeOf, Option.bind_eq_some_iff] at h
+    obtain ⟨_, he, hc⟩ := h
+    split at hc
+    · cases hc; exact .conv (ih he)
     · cases hc
   | broadcast f e ih =>
     intro Γ t h
@@ -500,7 +514,7 @@ def valuesOf (x : String) : Expr → List Expr
   | .ite c a b | .loop c a b | .forIn _ c a b => valuesOf x c ++ valuesOf x a ++ valuesOf x b
   | .letIn _ _ e b => valuesOf x e ++ valuesOf x b
   | .set a _ b => valuesOf x a ++ valuesOf x b
-  | .call _ e | .cast e _ | .broadcast _ e | .get e _ | .isA e _ | .emit _ e | .scope _ e | .abort _ _ e => valuesOf x e
+  | .call _ e | .cast e _ | .conv e _ | .broadcast _ e | .get e _ | .isA e _ | .emit _ e | .scope _ e | .abort _ _ e => valuesOf x e
   | .handle _ h b => valuesOf x h ++ valuesOf x b
   | .lam _ b => valuesOf x b
   | _ => []
@@ -534,6 +548,7 @@ def Expr.rewrite (P : Program) (f : Ctx → Expr → Expr) (Γ : Ctx) : Expr →
   | .letIn y t e b => f Γ (.letIn y t (e.rewrite P f Γ) (b.rewrite P f (Γ.set y t)))
   | .tryCatch e h => f Γ (.tryCatch (e.rewrite P f Γ) (h.rewrite P f Γ))
   | .cast e ts => f Γ (.cast (e.rewrite P f Γ) ts)
+  | .conv e t => f Γ (.conv (e.rewrite P f Γ) t)
   | .get e g => f Γ (.get (e.rewrite P f Γ) g)
   | .set e g v => f Γ (.set (e.rewrite P f Γ) g (v.rewrite P f Γ))
   | .isA e c => f Γ (.isA (e.rewrite P f Γ) c)
@@ -646,7 +661,7 @@ def observe (P : Program) (Γ : Ctx) : Expr → List Observation
   | .cons a b | .add a b | .arith _ a b | .lt a b | .eq _ a b | .seq a b | .index a b | .range a b | .append a b
   | .tryCatch a b | .app a b => observe P Γ a ++ observe P Γ b
   | .ite c a b | .loop c a b => observe P Γ c ++ observe P Γ a ++ observe P Γ b
-  | .assign _ e | .init _ e | .cast e _ | .broadcast _ e | .get e _ | .isA e _ | .emit _ e | .scope _ e => observe P Γ e
+  | .assign _ e | .init _ e | .cast e _ | .conv e _ | .broadcast _ e | .get e _ | .isA e _ | .emit _ e | .scope _ e => observe P Γ e
   | .handle ev h b => observeHandler P Γ ev h ++ observe P Γ b
   | .abort ev _ e => ((typeOf P Γ e).getD .any |> Observation.abort ev) :: observe P Γ e
   | .forIn y l b d => observe P Γ l ++ observe P (Γ.set y (((typeOf P Γ l).map elementTy).getD .any)) b ++ observe P Γ d
@@ -747,7 +762,7 @@ def Expr.breaksIn (ev : Option String) : Expr → Bool
   | .cons a b | .add a b | .arith _ a b | .lt a b | .eq _ a b | .seq a b | .index a b | .range a b | .append a b | .tryCatch a b
   | .set a _ b | .app a b => a.breaksIn ev && b.breaksIn ev
   | .ite c a b => c.breaksIn ev && a.breaksIn ev && b.breaksIn ev
-  | .assign _ e | .init _ e | .call _ e | .cast e _ | .broadcast _ e | .get e _ | .isA e _ | .emit _ e
+  | .assign _ e | .init _ e | .call _ e | .cast e _ | .conv e _ | .broadcast _ e | .get e _ | .isA e _ | .emit _ e
   | .scope _ e => e.breaksIn ev
   | _ => true
 
