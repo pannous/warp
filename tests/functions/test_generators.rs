@@ -51,3 +51,17 @@ fn a_loop_ending_in_break_has_a_value() {
 	is!("while 1 { break }", 0);
 	is!("while 1 { while 1 { break }; break }", 0);
 }
+
+const COUNTDOWN: &str = "class Countdown {\n  n: int\n  next() := { if n <= 0 { return ø }; n -= 1; n + 1 }\n}\n";
+
+#[test]
+fn a_loop_walks_an_object_with_next_until_it_gives_nothing() {
+	is!(&format!("{COUNTDOWN}c = Countdown(3)\ns = 0\nfor x in c {{ s = s * 10 + x }}\ns"), 321);
+	is!(&format!("{COUNTDOWN}s = 0\nfor x in Countdown(5) {{ if x == 4 {{ continue }}; if x == 1 {{ break }}; s += x }}\ns"), 10);
+}
+
+#[test]
+fn a_changing_method_returns_early() {
+	is!("class C { n: int; step() := { if n <= 0 { return 0 }; n -= 1; n } }\nc = C(1)\na = c.step()\nb = c.step()\n[a, b, c.n]", ints(vec![0, 0, 0]));
+	is!("class C { n: int; tick() := { if n > 5 { return }; n += 1 } }\nc = C(5)\nc.tick()\nc.tick()\nc.n", 6);
+}

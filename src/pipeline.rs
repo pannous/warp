@@ -340,6 +340,8 @@ const SOURCE_PASSES: &[fn(Node) -> Node] = &[
 	// `y certainly < x` is `certainly(y < x)` before class_methods compares the amounts of run-time quantities
 	crate::uncertain::lower_certainty,
 	// methods in a class body become functions over the class before any pass reads the body as fields
+	// `for x in c` of an object with next() (generators.rs) before class_methods lowers the next() calls
+	crate::generators::lower_iterators,
 	crate::class_methods::lower,
 	// `calc.exports` of a component (reflection.rs) before foreign_modules makes it a call into the component
 	crate::reflection::lower_component_words,

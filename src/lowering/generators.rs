@@ -28,6 +28,10 @@ const NAME_SEPARATOR: &str = "·";
 const YIELDED_SUFFIX: &str = "yielded";
 /// Set when an inlined generator is to stop, `count_to·stop·1`
 const STOP_SUFFIX: &str = "stop";
+/// The method an iterator object gives its next item with, ø at the end
+const NEXT_METHOD: &str = "next";
+/// The object a loop walks with next(), `x·iterator`
+const ITERATOR_SUFFIX: &str = "iterator";
 
 struct Generator {
 	parameters: Vec<String>,
@@ -304,6 +308,64 @@ fn loop_body_step(node: &Node, stop: &Node, continues: bool) -> Step {
 		inner if is_loop(inner) || is_own_scope(inner) => Step::Keep,
 		_ => Step::Descend,
 	}
+}
+
+/// Iterator objects (card generators-function): `for x in c {body}` of an object whose class has a method `next()`,
+/// `c = Countdown(3)` or `for x in Countdown(3)`, walks what `next()` gives until it gives ø:
+/// `x·iterator = c; x = x·iterator.next(); while x != ø { body; x = x·iterator.next() }` (the last a marked step,
+/// which `continue` runs too). Before class_methods, which lowers the `next()` calls.
+pub fn lower_iterators(node: Node) -> Node {
+	let classes = iterator_classes(&node);
+	if classes.is_empty() {
+		return node;
+	}
+	let mut objects = HashSet::new();
+	node.visit(&mut |part| if let Node::Key(target, Op::Assign, value) = part {
+		if constructed_iterator(value, &classes) {
+			objects.extend(symbol_name(target).cloned());
+		}
+	});
+	iterator_loops(node, &classes, &objects)
+}
+
+/// The classes with a method `next()`
+fn iterator_classes(node: &Node) -> HashSet<String> {
+	let mut classes = HashSet::new();
+	node.visit(&mut |part| if let Node::Type { name, body } = part {
+		let is_next = |member: &Node| matches!(member.drop_meta(), Node::Key(head, Op::Define, _)
+			if matches!(head.drop_meta(), Node::List(items, Bracket::Round, _) if items.len() == 1 && is_word(&items[0], NEXT_METHOD)));
+		let members = match body.drop_meta() {
+			Node::List(items, _, _) => items.clone(),
+			single => vec![single.clone()],
+		};
+		if members.iter().any(is_next) {
+			classes.extend(symbol_name(name).cloned());
+		}
+	});
+	classes
+}
+
+/// `Countdown(3)` of an iterator class
+fn constructed_iterator(value: &Node, classes: &HashSet<String>) -> bool {
+	matches!(value.drop_meta(), Node::List(items, Bracket::Round | Bracket::None, _)
+		if items.first().and_then(symbol_name).is_some_and(|class| classes.contains(class)))
+}
+
+fn iterator_loops(node: Node, classes: &HashSet<String>, objects: &HashSet<String>) -> Node {
+	let node = node.map_children(|child| iterator_loops(child, classes, objects));
+	let Node::List(items, _, _) = node.drop_meta() else { return node };
+	let (variable, iterable, body) = match items.as_slice() {
+		[keyword, variable, within, iterable, body] if is_word(keyword, FOR_WORD) && is_word(within, IN_WORD) => (variable, iterable, body),
+		_ => return node,
+	};
+	let is_object = symbol_name(iterable).is_some_and(|name| objects.contains(name)) || constructed_iterator(iterable, classes);
+	let Some(name) = symbol_name(variable).filter(|_| is_object && matches!(body.drop_meta(), Node::List(_, Bracket::Curly, _))) else { return node };
+	let iterator = symbol(&[name.as_str(), ITERATOR_SUFFIX].join(NAME_SEPARATOR));
+	let next = || assign(variable.clone(), Node::Key(Box::new(iterator.clone()), Op::Dot, Box::new(Node::List(vec![symbol(NEXT_METHOD)], Bracket::Round, Separator::None))));
+	let mut statements_of_body = block_items(body);
+	statements_of_body.push(crate::wasm_emitter::mark_step(next()));
+	let more = Node::Key(Box::new(variable.clone()), Op::Ne, Box::new(Node::Empty));
+	statements(vec![assign(iterator.clone(), iterable.clone()), next(), while_do(more, statements(statements_of_body, Bracket::Curly))], Bracket::None).with_meta_of(&node)
 }
 
 /// Each generator's definition collects what it yields: `{ g·yielded = []; …; g·yielded += [v]; …; g·yielded }`

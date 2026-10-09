@@ -33,6 +33,7 @@ const RESULT_SUFFIX: &str = "·result";
 const CAST_VALUE: &str = "cast·value";
 const CAST_PLACEHOLDER: &str = "cast_placeholder";
 const GIVING_MUTATIONS: [&str; 2] = ["pop", "remove"];
+const RETURN_WORD: &str = "return";
 /// Other languages' method names (Python's deque, Java's Deque and Queue, JS's Array and Set) and the warp methods they
 /// mean, the first one the class defines taken, with a note; only on a class that does not define the name itself
 const METHOD_ALIASES: [(&str, &[&str]); 23] = [
@@ -2527,10 +2528,12 @@ fn function(members: &Members, method: &str, parameters: Vec<Node>, body: Node) 
 	};
 	let body = match changes {
 		Change::None => body,
-		Change::Itself => Node::List(vec![body, receiver], Bracket::None, Separator::Semicolon),
+		Change::Itself => Node::List(vec![with_returns(body, &|_| receiver.clone()), receiver], Bracket::None, Separator::Semicolon),
 		Change::GivingValue => {
+			// an early `return v` gives the pair too: `if n <= 0 { return 0 }; n -= 1; n`
+			let paired = |value: Node| Node::List(vec![value, receiver.clone()], Bracket::Square, Separator::Space);
 			// the statements before the value run first: `x = items#1; items = …; x` gives x, not the block
-			let mut statements = statements_of(body);
+			let mut statements = statements_of(with_returns(body, &paired));
 			let value = statements.pop().unwrap_or(Node::Empty);
 			let result = Node::Symbol(format!("{method}{VALUE_SUFFIX}"));
 			let pair = Node::List(vec![result.clone(), receiver], Bracket::Square, Separator::Space);
@@ -2541,6 +2544,20 @@ fn function(members: &Members, method: &str, parameters: Vec<Node>, body: Node) 
 	let receiver = Node::Key(Box::new(Node::Symbol(RECEIVER.to_string())), Op::Colon, Box::new(Node::Symbol(class.to_string())));
 	let head = Node::List([vec![Node::Symbol(method.to_string()), receiver], parameters].concat(), Bracket::Round, Separator::None);
 	(Node::Key(Box::new(head), Op::Define, Box::new(body)), changes)
+}
+
+/// Each `return v` of the body (not of a function or lambda inside it) as `return given(v)`
+fn with_returns(node: Node, given: &dyn Fn(Node) -> Node) -> Node {
+	let is_return = |word: &Node| matches!(word.drop_meta(), Node::Symbol(name) if name == RETURN_WORD);
+	match node {
+		Node::Symbol(_) if is_return(&node) => Node::List(vec![node, given(Node::Empty)], Bracket::None, Separator::Space),
+		Node::List(items, bracket, separator) if items.len() <= 2 && items.first().is_some_and(is_return) => {
+			let value = items.get(1).cloned().unwrap_or(Node::Empty);
+			Node::List(vec![items[0].clone(), given(value)], bracket, separator)
+		}
+		Node::Key(_, Op::Define | Op::FatArrow | Op::Arrow, _) => node,
+		other => other.map_children(|child| with_returns(child, given)),
+	}
 }
 
 /// What a method does to its object: nothing, change it (giving it back), or change it and give a value

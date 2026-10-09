@@ -15,12 +15,19 @@
 - Fixed on the way: a loop whose body ends in `break`/`continue` (`while 1 { break }`) trapped "null reference": its
   value was taken as a reference the body never set (control_flow.rs ends_in_reference, loop_control.rs ends_in_jump).
 
+- Iterator objects (generators.rs `lower_iterators`, before class_methods): `for x in c` of `c = Countdown(3)` or
+  `for x in Countdown(3)`, a class with a method `next()` that gives ø at the end, is `x·iterator = c; x =
+  x·iterator.next(); while x != ø { body; x = x·iterator.next() }` (the last a marked step: `continue` runs it).
+  Only a variable assigned a constructor call of such a class, or the call itself, is known as one so far.
+- Fixed on the way: a method that changes its object and returns early (`if n <= 0 { return 0 }; n -= 1; n`) gave
+  "index out of range": its early `return v` now gives the pair `[v, self]` (`return self` for a method giving
+  its object), class_methods.rs `with_returns`.
+
 ## Next
 - Iterator objects: `it = iter(g(args))` / `next(it)` resumable at any point, zip of two generators, `take 5 of
   naturals()`. Needs the generator as a state machine (a struct of its locals plus a state index; each yield a
   state) or wasm stack switching (wasmtime 49 has `wasm_stack_switching`, x86-64 Linux only; no browser): the state
   machine works everywhere.
-- Iterator protocol for classes: a class with `next()` returning ø at the end is walked by `for`.
 - `yield from xs` / `yield each xs`, a recursive generator lazily, a generator expression `(x*x for x in xs)` as a
   lazy value.
 - Ruby `loop do … end` and `while c … end` inside a `def … end` do not parse (found writing a Ruby fib generator).
