@@ -1240,10 +1240,11 @@ fn test_logarithm2() {
 	is!("use math; ℯ⌟", 1.); // P226: the postfix ⌟ is the natural log
 	is!("use math; ℯ⌟", 1.);
 	is!("log10(100)", 2.); // requires pre-parsing lib and dictionary lookup
-	skip!( // P226b (queued): what ⌟ with the base first means
-		is!("use math; 10⌟100", 2.);
+	// P226b: x⌟b is log base b of x, so the base comes second
+	is!("use math; 10⌟100", 0.5);
+	is!("10⌟100", 0.5);
+	skip!( // a subscript base ₁₀ is undecided
 		is!("₁₀⌟100", 2.); // requires pre-parsing lib and dynamic operator-list extension OR 10⌟ as function name
-		is!("10⌟100", 2.); // requires pre-parsing lib and dynamic operator-list extension OR 10⌟ as function name
 	);
 
 	//    eq!(ln(e),abs(1));
