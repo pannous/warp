@@ -69,7 +69,7 @@ fn component_uses(node: Node) -> Node {
 }
 
 /// The component of `use rust_demo.wasm`, as the text of its path, or its path `as` an alias; a `.wasm` file that is
-/// not there the error naming the components that are
+/// not there, or an aliased name nothing resolves, the error naming the components that are
 fn component_module(items: &[Node]) -> Option<Result<Node, String>> {
 	let [word, used] = items else { return None };
 	if !matches!(word.drop_meta(), Node::Symbol(word) if crate::modules::USE_KEYWORDS.contains(&word.as_str())) {
@@ -79,7 +79,13 @@ fn component_module(items: &[Node]) -> Option<Result<Node, String>> {
 		Node::Key(file, Op::As, alias) => (file.as_ref(), Some(alias)),
 		_ => (used, None),
 	};
-	let path = component_path(&crate::modules::path_of(file)?)?;
+	let written = crate::modules::path_of(file)?;
+	let path = match (component_path(&written), alias) {
+		(Some(path), _) => path,
+		// `use nothere as x`: no C library without functions
+		(None, Some(_)) if !crate::modules::resolves(&written) => Err(format!("no module, component or library {written}; {}", listing(&known_components(&crate::modules::beside_program(&format!("{written}{COMPONENT_EXTENSION}")))))),
+		(None, _) => return None,
+	};
 	Some(path.map(|path| match alias {
 		Some(alias) => Node::Key(Box::new(Node::Text(path)), Op::As, alias.clone()),
 		None => Node::Text(path),

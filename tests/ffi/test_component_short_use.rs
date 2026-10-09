@@ -32,3 +32,12 @@ fn an_unknown_component_names_the_known_ones() {
 	let outcome = warp::wasm_emitter::eval("use tests/fixtures/components/rust_dem.wasm as demo\ndemo.fib(10)").serialize();
 	assert!(outcome.contains("no component") && outcome.contains("rust_dem.wasm;") && outcome.contains("rust_demo"), "{outcome}");
 }
+
+// `use nothere as x` that no component, warp module or C library resolves is one error naming all three, not a C
+// library without functions (card use-nothere); a C library under an alias stays one
+#[test]
+fn an_alias_of_nothing_is_an_error() {
+	let outcome = warp::wasm_emitter::eval("use tests/fixtures/components/nothere as x\nx.f(1)").serialize();
+	assert!(outcome.contains("no module, component or library tests/fixtures/components/nothere; the components here: rust_demo"), "{outcome}");
+	is!("use m as math\nsqrt(4)", 2);
+}

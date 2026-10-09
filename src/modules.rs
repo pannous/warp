@@ -295,6 +295,12 @@ pub fn wasm_module_file(name: &str) -> Option<PathBuf> {
 	program_loader().find_with(name, &crate::wasm_modules::MODULE_EXTENSIONS)
 }
 
+/// Does `use name` name anything: a module (warp, standard, WebAssembly), a scope, a package or a C library
+pub fn resolves(name: &str) -> bool {
+	names_a_module(name) || wasm_module_file(name).is_some() || scope_word(name).is_some() || package_repository(name).is_some()
+		|| is_builtin_library(name) || crate::ffi::is_ffi_library(name)
+}
+
 /// Is `name` a warp module beside the program or in the search directories, or a standard module
 pub fn names_a_module(name: &str) -> bool {
 	program_loader().find(name).is_some() || std_module(name).is_some()
