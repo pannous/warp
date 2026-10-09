@@ -81,8 +81,11 @@ jobs:
       with:
         path: _site
 
+  # only main may deploy (the github-pages environment); a branch check (workflow_dispatch on batchNN) ends after build,
+  # green, instead of a failed deploy mailing a failed run
   deploy:
     needs: build
+    if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     environment:
       name: github-pages

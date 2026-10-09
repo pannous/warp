@@ -142,6 +142,7 @@ mod test_multiline_errors;
 mod test_run_tests; // card run-tests
 mod test_data_quoting; // card data-quoting
 mod test_database_tables; // card orm
+mod test_database_field_named; // card orm-size-field
 mod test_database_filters; // card orm-filters
 mod test_database_relations; // card orm, step 4
 mod test_database_nested_add; // card orm-nested
