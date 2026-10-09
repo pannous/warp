@@ -159,6 +159,10 @@ pub fn call(member: &str, arguments: &[Node]) -> Result<Node, String> {
 			let sql = format!("UPDATE {} SET {} = ? WHERE {ID_COLUMN} = ?", quote(&text(table)?), quote(&text(column)?));
 			rows(connection(&text(file)?)?, &sql, &[value.clone(), id.clone()]).map(|_| Node::Empty)
 		}
+		("delete", [table, id, file]) => {
+			let sql = format!("DELETE FROM {} WHERE {ID_COLUMN} = ?", quote(&text(table)?));
+			rows(connection(&text(file)?)?, &sql, std::slice::from_ref(id)).map(|_| Node::Empty)
+		}
 		_ => Err(format!("no such word of {} arguments", arguments.len())),
 	}
 }

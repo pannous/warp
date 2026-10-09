@@ -17,6 +17,8 @@ pub const TABLES_FILE: &str = "database.sqlite";
 /// The row id every registered class gets, unless it declares one
 const ID_FIELD: &str = "id";
 const ADD_WORD: &str = "add";
+/// `people.remove(p)` deletes p's row, p keeping its fields without one (id 0)
+const REMOVE_WORD: &str = "remove";
 const GLOBAL_WORD: &str = "global";
 /// `@was(old) name: text`: the field's column was called old, so the table's column is renamed
 const RENAMED_MARK: &str = "was";
@@ -28,6 +30,7 @@ const ROW: &str = "table_row";
 const ROWS: &str = "table_rows";
 const MATCHES: &str = "table_matches";
 const ADDED: &str = "table_added";
+const REMOVED: &str = "table_removed";
 /// a foreign key's row, and a row of a one-to-many getter
 const REFERENCED: &str = "table_referenced";
 const MEMBER: &str = "table_member";
@@ -38,7 +41,7 @@ const KNOWN: &str = "table_known";
 const POSITION: &str = "table_position";
 /// the instance a row read before loading makes
 const MADE: &str = "table_made";
-const GENERATED_NAMES: [(&str, &str); 11] = [(POSITION, "table·position"), (MADE, "table·made"), (ROW, "table·row"), (ROWS, "table·rows"), (MATCHES, "table·matches"), (ADDED, "table·added"), (ARGUMENTS, "table·arguments"),
+const GENERATED_NAMES: [(&str, &str); 12] = [(POSITION, "table·position"), (MADE, "table·made"), (ROW, "table·row"), (ROWS, "table·rows"), (MATCHES, "table·matches"), (ADDED, "table·added"), (REMOVED, "table·removed"), (ARGUMENTS, "table·arguments"),
 	(REFERENCED, "table·referenced"), (MEMBER, "table·member"), (SAVED, "table·saved"), (KNOWN, "table·known")];
 /// Each table's lazy parts (notes/orm.md Loading), `people·load` of people: the function giving the list, loading its
 /// rows on the first call; the count, SELECT COUNT(*) until then; the add, inserting without loading; the reset of a
@@ -48,6 +51,7 @@ const GENERATED_NAMES: [(&str, &str); 11] = [(POSITION, "table·position"), (MAD
 const LOAD: &str = "table_load";
 const COUNTED: &str = "table_count";
 const ADDING: &str = "table_add";
+const REMOVING: &str = "table_remove";
 const RESET: &str = "table_reset";
 const LOADED: &str = "table_loaded";
 const MET: &str = "table_met";
@@ -56,7 +60,7 @@ const STREAMED: &str = "table_streamed";
 const KEPT: &str = "table_kept";
 const PAGE: &str = "table_page";
 const START: &str = "table_start";
-const LAZY_PARTS: [(&str, &str); 11] = [(LOAD, "load"), (COUNTED, "count"), (ADDING, "add"), (RESET, "reset"), (ELEMENT, "at"), (STREAMED, "streamed"),
+const LAZY_PARTS: [(&str, &str); 12] = [(LOAD, "load"), (COUNTED, "count"), (ADDING, "add"), (REMOVING, "remove"), (RESET, "reset"), (ELEMENT, "at"), (STREAMED, "streamed"),
 	(KEPT, "kept"), (LOADED, "loaded"), (MET, "met"), (PAGE, "page"), (START, "start")];
 /// The rows a loop over an unloaded table reads at once (notes/orm.md Loading)
 const PAGE_SIZE: usize = 100;
@@ -654,6 +658,16 @@ global {MET}
 if {LOADED} {{ {variable}.add({ADDED}) }} else {{ {MET}.add({ADDED}) }}
 {ADDED}
 }}
+{REMOVING}({REMOVED}) := {{
+global {variable}
+global {LOADED}
+global {MET}
+global {PAGE}
+if {LOADED} {{ if {variable} {{ {variable}.remove({REMOVED}) }} }}
+{MET}.remove({REMOVED})
+{PAGE} = []
+{REMOVED}
+}}
 {KEPT}({ROW}) := {{
 global {MET}
 {known}
@@ -742,8 +756,8 @@ fn with_lazy_reads(node: Node, tables: &HashMap<String, Table>, own: Option<&str
 		Node::Key(left, Op::Hash, position) if table_of(&left).is_some() => called(lazy_name(&table_of(&left).unwrap_or_default(), "at"), Some(rewrite(*position))),
 		Node::Key(left, Op::Dot, right) => match (table_of(&left), right.drop_meta()) {
 			(Some(variable), Node::Symbol(word)) if COUNT_WORDS.contains(&word.as_str()) => called(lazy_name(&variable, "count"), None),
-			(Some(variable), Node::List(parts, _, _)) if parts.len() == 2 && parts[0].drop_meta().name() == ADD_WORD => {
-				called(lazy_name(&variable, "add"), Some(rewrite(parts[1].clone())))
+			(Some(variable), Node::List(parts, _, _)) if parts.len() == 2 && [ADD_WORD, REMOVE_WORD].contains(&parts[0].drop_meta().name().as_str()) => {
+				called(lazy_name(&variable, &parts[0].drop_meta().name()), Some(rewrite(parts[1].clone())))
 			}
 			(_, Node::Symbol(_)) => Node::Key(Box::new(rewrite(*left)), Op::Dot, right),
 			_ => Node::Key(Box::new(rewrite(*left)), Op::Dot, Box::new(rewrite(*right))),
@@ -821,17 +835,25 @@ fn implicit_id(table: &Table) -> bool {
 /// `people.add(p)`: added to the list and inserted as a row, whose id p takes; a foreign key stores the id of its row
 /// (an instance without one is an error)
 fn inserted(statement: &Node, tables: &HashMap<String, Table>, file: &str) -> Option<Vec<Node>> {
+	let (list, table, word, value) = table_mutation(statement, tables)?;
+	let code = match word.as_str() {
+		ADD_WORD => format!("{ADDED} = {VALUE_PLACEHOLDER}\n{insert}", insert = insert_code(table, &list, file)),
+		REMOVE_WORD => format!("{REMOVED} = {VALUE_PLACEHOLDER}\n{list}.remove({REMOVED})
+if {REMOVED}.{ID_FIELD} > 0 {{ std_io(\"table\", \"delete\", [{name:?}, {REMOVED}.{ID_FIELD}, {file:?}]); {REMOVED}.{ID_FIELD} = 0 }}", name = table.name),
+		_ => return None,
+	};
+	let lowered = generated(&code, [(VALUE_PLACEHOLDER, value.clone())]);
+	Some(lowered.children())
+}
+
+/// `people.add(p)`, `people.remove(p)` of a table: its list, the table, the word and p
+fn table_mutation<'a>(statement: &'a Node, tables: &'a HashMap<String, Table>) -> Option<(String, &'a Table, String, &'a Node)> {
 	let Node::Key(list, Op::Dot, call) = statement.drop_meta() else { return None };
 	let list = list.drop_meta().name();
 	let table = tables.get(&list)?;
 	let Node::List(parts, _, _) = call.drop_meta() else { return None };
 	let [word, value] = parts.as_slice() else { return None };
-	if word.drop_meta().name() != ADD_WORD {
-		return None;
-	}
-	let code = format!("{ADDED} = {VALUE_PLACEHOLDER}\n{insert}", insert = insert_code(table, &list, file));
-	let lowered = generated(&code, [(VALUE_PLACEHOLDER, value.clone())]);
-	Some(lowered.children())
+	Some((list, table, word.drop_meta().name(), value))
 }
 
 /// `people.add(ADDED)` and its INSERT, ADDED taking the row's id; a foreign key without its row is an error
