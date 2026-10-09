@@ -491,7 +491,7 @@ pub(super) const POP_METHOD: &str = "pop";
 pub const LIST_DROP_LAST: &str = "list_drop_last";
 /// The list a pop template takes from, replaced by the variable or field popped
 const POP_PLACE: &str = "pop_place";
-pub(super) const REMOVE_METHOD: &str = "remove";
+pub const REMOVE_METHOD: &str = "remove";
 /// Pseudo-call `removed_value(collection, k)`: what `collection.remove(k)` gives, by the collection's kind: of a map the
 /// value of the key (P35, Python's dict.pop), of a list the list without the first element equal to k
 pub const REMOVED_VALUE_CALL: &str = "removed_value";

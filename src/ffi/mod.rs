@@ -103,23 +103,28 @@ pub fn unresolved_import_message(name: &str, library: &str) -> String {
     }
 }
 
-/// The error of a call nothing resolves: a libc function says how to import it
+/// The error of a call nothing resolves, always "undefined function: name", then where the name is found: a standard
+/// module or a libc function says how to bring it in
 pub fn undefined_function_message(name: &str) -> String {
-    if let Some(module) = crate::modules::std_module_defining(name) {
-        if let Some(file) = crate::modules::module_file_shadowing(module) {
-            return format!("{name} is in the standard module {module}, but `use {module}` finds the file {} first, which has no {name}: rename that file", file.display());
-        }
-        return format!("{name} is in the standard module {module}: write `use {module}`");
-    }
-    if get_ffi_signature_from_lib(name, "c").is_some() {
-        return format!("{name} is a C function: write `use c` or `import {name} from \"c\"`");
-    }
-    match get_ffi_signature_from_lib(name, "m") {
-        // only f64 functions link by themselves (analyzer imports.rs is_f64_header_function): an int parameter may be a
-        // pointer (frexp's int *), which the import's author knows
-        Some(_) => format!("{name} is a libm function with a parameter other than a float: write `import {name} from \"m\"`"),
+    match where_undefined_function_is(name) {
+        Some(hint) => format!("undefined function: {name} ({hint})"),
         None => format!("undefined function: {name}"),
     }
+}
+
+fn where_undefined_function_is(name: &str) -> Option<String> {
+    if let Some(module) = crate::modules::std_module_defining(name) {
+        if let Some(file) = crate::modules::module_file_shadowing(module) {
+            return Some(format!("{name} is in the standard module {module}, but `use {module}` finds the file {} first, which has no {name}: rename that file", file.display()));
+        }
+        return Some(format!("{name} is in the standard module {module}: write `use {module}`"));
+    }
+    if get_ffi_signature_from_lib(name, "c").is_some() {
+        return Some(format!("{name} is a C function: write `use c` or `import {name} from \"c\"`"));
+    }
+    // only f64 functions link by themselves (analyzer imports.rs is_f64_header_function): an int parameter may be a
+    // pointer (frexp's int *), which the import's author knows
+    get_ffi_signature_from_lib(name, "m").map(|_| format!("{name} is a libm function with a parameter other than a float: write `import {name} from \"m\"`"))
 }
 
 /// What a C pointer type crosses as (notes/ffi_handles.md)

@@ -613,9 +613,16 @@ impl WarpParser {
 			let if_cond = Node::Key(Box::new(Empty), Op::If, cond.clone());
 			// the body runs to the end of the statement, `if c: x+=1`, but not into the `else`
 			let outer = std::mem::replace(&mut self.stops_at_else, true);
-			let then_expr = match is_print_word(then_expr) && self.braceless_argument_follows() {
-				true => print_call([self.parse_expr(0)]), // `if it%2: print it`
-				false => self.continue_expr(then_expr.as_ref().clone(), 0),
+			let then_expr = match then_expr.drop_meta() {
+				_ if is_print_word(then_expr) && self.braceless_argument_follows() => { // `if it%2: print it`, `if c: print ord x`
+					let first = self.expression_of_words();
+					self.print_call_from(first, Self::expression_of_words)
+				}
+				// `if c: print a, b`: the colon took `print a`, the comma continues its arguments
+				Node::List(words, Bracket::None, Separator::Space) if words.len() > 1 && is_print_word(&words[0]) && self.current_char() == ',' => {
+					self.print_call_from(one_expression(&words[1..]), |parser| parser.parse_expr(0))
+				}
+				_ => self.continue_expr(then_expr.as_ref().clone(), 0),
 			};
 			self.stops_at_else = outer;
 			let if_then = Node::Key(Box::new(if_cond), Op::Then, Box::new(then_expr));

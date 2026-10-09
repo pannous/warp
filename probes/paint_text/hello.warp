@@ -1,0 +1,5 @@
+use draw
+canvas(120, 40)
+label(4, 2, "Hello 42!", red, 18)
+label(4, 24, "small text, gj", blue)
+show()
