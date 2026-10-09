@@ -257,7 +257,7 @@ pub struct CompiledModule {
 
 /// The passes over the source forms, in order, each reading what the one before it left: definitions and sugar become
 /// the forms every later pass knows (`def f(x) {…}` is `f(x) := {…}`), modules are resolved
-const SOURCE_PASSES: [fn(Node) -> Node; 96] = [
+const SOURCE_PASSES: [fn(Node) -> Node; 97] = [
 	// `"a \(x) b"` → `"a " + text_form(x) + " b"` (interpolation.rs) first, so every pass reads the holes as code
 	crate::interpolation::lower_program,
 	crate::analyzer::lower_inline_unions,
