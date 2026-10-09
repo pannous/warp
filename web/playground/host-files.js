@@ -163,6 +163,9 @@ function keepTable(file, table, stored) {
 // a removed field keeps its column (data is never dropped silently), loudly
 function openTable(table, schema, file) {
 	const stored = storedTable(file, table);
+	for (const [name, , , oldName] of schema.filter(([name, , , oldName]) => oldName in stored.types && !(name in stored.types))) {
+		renameColumn(stored, oldName, name);
+	}
 	for (const [name, type, fallback] of schema) {
 		const storedType = stored.types[name];
 		if (storedType === undefined) {
@@ -179,6 +182,13 @@ function openTable(table, schema, file) {
 	}
 	keepTable(file, table, stored);
 	return stored.rows.map(row => [row[ID_COLUMN], ...schema.map(([name]) => row[name])]);
+}
+
+// a field marked `@was(oldName)`: its column keeps type and values under the new name
+function renameColumn(stored, oldName, name) {
+	stored.types[name] = stored.types[oldName];
+	delete stored.types[oldName];
+	stored.rows.forEach(row => { row[name] = row[oldName]; delete row[oldName]; });
 }
 
 function insertRow(table, columns, values, file) {
