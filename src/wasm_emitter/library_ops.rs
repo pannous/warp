@@ -69,6 +69,7 @@ impl WasmGcEmitter {
 	pub(crate) fn emit_library_ops(&mut self) {
 		self.emit_text_reverse(); // list_reverse hands a text to it
 		self.emit_list_reverse();
+		self.emit_int_lists();
 		self.emit_text_chars(); // and it ends with list_reverse
 		if self.should_emit_function(NODE_ORDER) {
 			self.emit_node_order();
