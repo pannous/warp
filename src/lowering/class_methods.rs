@@ -2169,7 +2169,7 @@ fn function(members: &Members, method: &str, parameters: Vec<Node>, body: Node) 
 	let statics: Vec<&String> = members.statics.iter().filter(|name| unshadowed(name)).collect();
 	let readable = Readable { class, fields: [fields, getters].concat(), methods, statics };
 	// the holes of `"#\(n)"` as code first, so a field in one is read from self too
-	let body = crate::injection::lower_templates(body).map(crate::interpolation::lower).unwrap_or_else(|error| error);
+	let body = crate::interpolation::lower_program(body);
 	let body = receiver_reads(body, &readable);
 	let receiver = Node::Symbol(RECEIVER.to_string());
 	let changes = match changes_fields_of(&body, RECEIVER) {
