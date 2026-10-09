@@ -489,6 +489,15 @@ impl Node {
 				Key(Box::new(left), op, Box::new(rewrite(*right)))
 			}
 			Meta { node, data } => Meta { node: Box::new(rewrite(*node)), data },
+			// a class body: its methods are lowered as functions are, its field declarations stay (card method-bodies)
+			Type { name, body } => {
+				let mut rewrite_code = |item: Node| if is_class_code(&item) { rewrite(item) } else { item };
+				let body = match *body {
+					List(items, bracket, separator) => List(items.into_iter().map(&mut rewrite_code).collect(), bracket, separator),
+					single => rewrite_code(single),
+				};
+				Type { name, body: Box::new(body) }
+			}
 			other => other,
 		}
 	}
@@ -526,6 +535,10 @@ impl Node {
 				right.visit(action);
 			}
 			List(items, _, _) => items.iter().for_each(|item| item.visit(action)),
+			Type { body, .. } => match body.drop_meta() {
+				List(items, _, _) => items.iter().filter(|item| is_class_code(item)).for_each(|item| item.visit(action)),
+				single => if is_class_code(single) { single.visit(action) },
+			},
 			_ => {}
 		}
 	}
@@ -978,4 +991,19 @@ pub fn strings(p0: Vec<&str>) -> Node {
 /// Operators the parser reads in front of one operand, with ø as the left one (`#x`, `-x`, `not x`, `√x`, `if c`)
 fn writes_as_prefix(op: &Op) -> bool {
 	op.is_prefix() || matches!(op, Op::Hash | Op::Sub | Op::Add | Op::If | Op::While)
+}
+
+/// An item of a class body that is code, a method in any of its forms (`f() := …`, `fn f() {…}`, `f = x => …`), not a
+/// field declaration (`name: text`, `age: int = 0`): the lowering passes reach it as they reach a function
+fn is_class_code(item: &Node) -> bool {
+	let is_name = |node: &Node| matches!(node.drop_meta(), Symbol(_));
+	match item.drop_meta() {
+		Key(name, Op::Colon, _) if is_name(name) => return false,
+		Key(declared, Op::Assign, _) if matches!(declared.drop_meta(), Key(name, Op::Colon, _) if is_name(name)) => return false,
+		List(words, _, _) if words.first().is_some_and(|first| matches!(first.drop_meta(), Symbol(word) if crate::operators::is_function_keyword(word))) => return true,
+		_ => {}
+	}
+	let mut code = false;
+	item.visit(&mut |part| code |= matches!(part, Key(_, Op::Define | Op::Arrow | Op::FatArrow, _) | List(_, Bracket::Curly, _)));
+	code
 }
