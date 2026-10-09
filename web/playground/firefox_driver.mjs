@@ -113,7 +113,8 @@ const commands = {
 
 // what the page was doing when a command got no answer: where it is, whether it is isolated, the playground's status
 const PAGE_STATE = `({ address: location.href, loaded: document.readyState, isolated: self.crossOriginIsolated,
-	controlled: !!navigator.serviceWorker?.controller, status: document.getElementById("status")?.textContent })`;
+	controlled: !!navigator.serviceWorker?.controller, status: document.getElementById("status")?.textContent,
+	loading: document.getElementById("loading")?.hidden === false ? document.getElementById("loading").textContent : "" })`;
 const unanswered = seconds => sleep(seconds * 1000).then(() => `no answer in ${seconds} s`);
 
 // the command's answer, or {timeout} naming it, the page's state and its console when none came in COMMAND_SECONDS

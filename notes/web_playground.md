@@ -172,9 +172,13 @@ web/playground/tests.html in headless Chrome (agent-browser, session warp-browse
   workerReady on the Worker's error event, so the first run shows "the compiler's worker failed to start: …" at once,
   and an example's verdict lists a failed status; (2) firefox_driver.mjs answers a timeout with the page's state
   (address, readyState, isolated, controlled by the service worker, #status) and its console, so the next hang names
-  its cause. A worker that loaded but whose warp.wasm fetch never ends would still wait (no deadline: a slow network may
-  take over a minute for 3.7 MB); the driver's state then shows "running…" with a clean console.
-  Probe: probes/firefox_hello_hang/unanswered.sh (FIREFOX_COMMAND_SECONDS=5, a promise that never resolves).
+  its cause. A worker that loaded but whose warp.wasm fetch never ends still waits (no deadline: a slow network may
+  take over a minute for 3.7 MB), but (3) worker.js streams warp.wasm and posts its progress, shown in `#loading` beside
+  #status ("loading the compiler: 1.0 of 3.6 MB"; a compressed response has no total), with "; no progress for 30 s: a
+  slow or stalled connection" after LOADING_STALL_MS; the driver's state includes it. #status itself stays "running…":
+  test_in_browser.py and several probes wait while it is exactly that.
+  Probes: probes/firefox_hello_hang/unanswered.sh (FIREFOX_COMMAND_SECONDS=5, a promise that never resolves);
+  trickle_server.py [--stall] + progress.sh (warp.wasm at 400 KB/s, or stopping after 1 MB: the note at 30 s).
 
 ## Modules and packages in the browser (2026-10-04)
 The compiler reads files through the page: `warp_host.fetch(address)` / `take_fetched` (web.rs `read_bytes`, cached

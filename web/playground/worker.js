@@ -48,10 +48,30 @@ const hooks = {
 
 const compilerText = (pointer, length) => readText(compiler, pointer, length);
 
+// the response's bytes, each chunk told to the page as {type: "loading", loaded, total} (the page shows the progress,
+// card firefox-hello-hang); a compressed response's Content-Length counts other bytes, so its total stays unknown
+async function downloaded(response) {
+	const total = response.headers.get("Content-Encoding") ? 0 : Number(response.headers.get("Content-Length") ?? 0);
+	const chunks = [];
+	let loaded = 0;
+	for (const reader = response.body.getReader(); ;) {
+		const { done, value } = await reader.read();
+		if (done) break;
+		chunks.push(value);
+		loaded += value.length;
+		post({ type: "loading", loaded, total });
+	}
+	const bytes = new Uint8Array(loaded);
+	chunks.reduce((offset, chunk) => (bytes.set(chunk, offset), offset + chunk.length), 0);
+	return bytes;
+}
+
 async function loadCompiler() {
 	const response = await fetch(COMPILER_URL);
 	if (!response.ok) throw new Error(`${COMPILER_URL}: HTTP ${response.status}; build it with web/playground/build.sh`);
-	const { instance } = await WebAssembly.instantiate(await response.arrayBuffer(), { warp_host: warpHost(() => compiler.memory, hooks) });
+	const bytes = await downloaded(response);
+	post({ type: "compiling" });
+	const { instance } = await WebAssembly.instantiate(bytes, { warp_host: warpHost(() => compiler.memory, hooks) });
 	compiler = instance.exports;
 }
 

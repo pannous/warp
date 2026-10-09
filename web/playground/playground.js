@@ -10,6 +10,7 @@ const EDITOR_HEIGHT_RANGE = [120, 0.85]; // pixels, then the share of the window
 const RESIZE_STEP = 20; // pixels per arrow key on a focused resizer
 const OLD_ANSWERS_KEY = "warp-playground-answers"; // the Ask era kept {topic: form, "ack:<topic>": "acknowledged"}
 const RUN_TIMEOUT_MS = 10000;
+const LOADING_STALL_MS = 30000; // the compiler's download shows a note when it made no progress this long
 // the origin a link of the shown program resolves against: "/about" is a page of the program, "https://…" is not
 const PROGRAM_ORIGIN = "http://program.invalid";
 const TYPING_DELAY_MS = 300;
@@ -141,12 +142,15 @@ function startWorker() {
 	const slowStart = new URLSearchParams(location.search).get(SLOW_START_PARAMETER);
 	if (slowStart) options.set(SLOW_START_PARAMETER, slowStart);
 	worker = new Worker(options.size ? `worker.js?${options}` : "worker.js");
+	showLoading("starting the compiler's worker", false);
 	workerReady = new Promise((resolve, reject) => {
 		// worker.js or a script it imports failed to load: without this the first run waits for "ready" forever (card firefox-hello-hang)
 		worker.onerror = event => reject(new Error(`the compiler's worker failed to start: ${event.message || "worker.js did not load"}`));
 		worker.onmessage = ({ data }) => {
 			if (data.type === "notify") data = notification(data.text);
 			if (!data) return;
+			if (data.type === "loading") return showLoading(`loading the compiler: ${megabytes(data.loaded)}${data.total ? ` of ${megabytes(data.total)}` : ""} MB`);
+			if (data.type === "compiling") return stopLoading();
 			if (data.type === "ready") return resolve();
 			if (data.type === "stored") return keepValue(data.name, data.value, data.file);
 			if (data.type === "clipboard") return copyText(data.text);
@@ -162,12 +166,32 @@ function startWorker() {
 		};
 	});
 	// a slow start (the CI runner) finishes after the first run began: "ready" then must not hide its "running…"
-	workerReady.then(() => showing || setStatus("ready"), failure => setStatus(failure.message, true));
+	workerReady.then(() => stopLoading() || showing || setStatus("ready"), failure => stopLoading() || setStatus(failure.message, true));
 	tellSystemValues();
 	sharePointer();
 	worker.postMessage({ stored: keptValues(), session: keptValues([SESSION_STORE]) });
 	tellEnvironment();
 }
+
+// the compiler's download (worker.js downloaded), beside the status; without progress for LOADING_STALL_MS it says so,
+// so a stalled download is seen instead of a page that waits (card firefox-hello-hang)
+let loadingStall;
+function showLoading(progress, visible = true) {
+	$("loading").textContent = progress;
+	$("loading").hidden = !visible;
+	clearTimeout(loadingStall);
+	loadingStall = setTimeout(() => {
+		$("loading").textContent = `${progress}; no progress for ${LOADING_STALL_MS / 1000} s: a slow or stalled connection`;
+		$("loading").hidden = false;
+	}, LOADING_STALL_MS);
+}
+
+function stopLoading() {
+	clearTimeout(loadingStall);
+	$("loading").hidden = true;
+}
+
+const megabytes = bytes => (bytes / 1e6).toFixed(1);
 
 // the program's environment (assistant.js: the stand-in of the API key), sent again when the key changes
 const tellEnvironment = () => worker.postMessage(programEnvironment());
