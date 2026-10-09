@@ -772,10 +772,20 @@ fn paged_loop(element: &str, variable: &str, class: &str, body: Node) -> Node {
 
 /// The table of a generated element read, `people·at(i)` or `people·streamed(i)`: static units knows its class
 pub(crate) fn element_table(node: &Node) -> Option<String> {
+	lazy_part_table(node, &[ELEMENT, STREAMED])
+}
+
+/// The table of a generated read of its whole list, `people·load()` where the program reads `people`
+pub(crate) fn loaded_table(node: &Node) -> Option<String> {
+	lazy_part_table(node, &[LOAD])
+}
+
+/// The table of a call of one of its lazy parts `placeholders`
+fn lazy_part_table(node: &Node, placeholders: &[&str]) -> Option<String> {
 	let Node::List(items, Bracket::Round, _) = node.drop_meta() else { return None };
 	let name = items.first()?.drop_meta().name();
 	let (table, part) = name.rsplit_once('·')?;
-	LAZY_PARTS.iter().any(|(placeholder, lazy_part)| [ELEMENT, STREAMED].contains(placeholder) && *lazy_part == part).then(|| table.to_string())
+	LAZY_PARTS.iter().any(|(placeholder, lazy_part)| placeholders.contains(placeholder) && *lazy_part == part).then(|| table.to_string())
 }
 
 /// The variable an assignment's target names: `people` of `people: [Person]`
