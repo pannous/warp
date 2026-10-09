@@ -69,7 +69,7 @@ bo's row again, so it changes nothing after written-through changes; an instance
 | a field removed | the column stays, a warning names it (data is never dropped silently) |
 | a lossless type or unit change (int → float, km → m) | converted in place (UPDATE … SET d = d * 1000) |
 | a lossy change (float → int, text → int) | a loud error naming the column and both types |
-| a rename | the field's meta `@was: old_name` renames the column (RENAME COLUMN); without it, it reads as add + remove |
+| a rename | the field's annotation `@was(old_name) name: text` renames the column (RENAME COLUMN); without it, it reads as add + remove |
 
 ## How step 1 works
 - lowering/database_tables.rs (a source pass before class_methods): the registered class gets `id: int = 0`; the
@@ -140,5 +140,8 @@ bo's row again, so it changes nothing after written-through changes; an instance
      type, `UPDATE … SET c = CAST(old AS type)`, drop the old one, in a SAVEPOINT); a fresh column because SQLite's
      affinity would turn the values back. Any other change (REAL → INTEGER, TEXT → INTEGER) fails the open: "its values
      would lose data". host-files.js `convertColumn` does the same to the stored rows (a real's text keeps ".0").
-   - Open: unit changes (km → m) wait for runtime units (a unit type is no column yet, notes/units_runtime.md); `@was`.
+   - `@was(nick) name: text` (an annotation on the field's name; class_methods::fields_marked) sends the column's old
+     name as a 4th schema entry: database.rs renames it (RENAME COLUMN) when the table has the old column and not the
+     new one, host-files.js `renameColumn` moves the stored values. `@was: nick` inside a class body is Ruby's `self.was`.
+   - Open: unit changes (km → m) wait for runtime units (a unit type is no column yet, notes/units_runtime.md).
    - A field named size/count/length reads as the builtin count off a typed list element (card field-named-size).

@@ -212,14 +212,21 @@ unsafe fn give(sqlite: &Sqlite, context: Handle, value: &Node) -> Result<(), Str
 }
 
 /// The table's rows `[id, columns…]`, the table first created or migrated to the class's fields `[name, type, default]`
+/// (and the column's old name when the field is marked `@was(old)`)
 fn opened(table: &str, schema: &[Node], file: &str) -> Result<Node, String> {
 	let database = connection(file)?;
 	let columns = schema.iter().map(column_of).collect::<Result<Vec<_>, _>>()?;
 	let definitions: Vec<String> = columns.iter().map(|(name, column_type, _)| format!("{} {column_type}", quote(name))).collect();
 	let quoted_table = quote(table);
 	rows(database, &format!("CREATE TABLE IF NOT EXISTS {quoted_table} ({ID_COLUMN} INTEGER PRIMARY KEY{})", definitions.iter().map(|definition| format!(", {definition}")).collect::<String>()), &[])?;
-	let stored: Vec<(String, String)> = rows(database, &format!("PRAGMA table_info({quoted_table})"), &[])?.into_iter()
-		.map(|row| (row[1].drop_meta().name(), row[2].drop_meta().name())).collect();
+	let has_column = |stored: &[(String, String)], name: &str| stored.iter().any(|(stored_name, _)| stored_name == name);
+	let before_renames = stored_columns(database, &quoted_table)?;
+	for (name, old_name) in schema.iter().filter_map(renamed_column) {
+		if has_column(&before_renames, &old_name) && !has_column(&before_renames, &name) {
+			rows(database, &format!("ALTER TABLE {quoted_table} RENAME COLUMN {} TO {}", quote(&old_name), quote(&name)), &[])?;
+		}
+	}
+	let stored = stored_columns(database, &quoted_table)?;
 	for (name, column_type, default) in &columns {
 		match stored.iter().find(|(stored_name, _)| stored_name == name) {
 			None => { rows(database, &format!("ALTER TABLE {quoted_table} ADD COLUMN {} {column_type} DEFAULT {default}", quote(name)), &[])?; }
@@ -233,6 +240,19 @@ fn opened(table: &str, schema: &[Node], file: &str) -> Result<Node, String> {
 	let selected: Vec<String> = std::iter::once(ID_COLUMN.to_string()).chain(columns.iter().map(|(name, _, _)| quote(name))).collect();
 	let rows = rows(database, &format!("SELECT {} FROM {quoted_table} ORDER BY {ID_COLUMN}", selected.join(", ")), &[])?;
 	Ok(list(rows.into_iter().map(list).collect()))
+}
+
+/// Each column's name and SQL type as the table holds them
+fn stored_columns(database: Handle, quoted_table: &str) -> Result<Vec<(String, String)>, String> {
+	Ok(rows(database, &format!("PRAGMA table_info({quoted_table})"), &[])?.into_iter()
+		.map(|row| (row[1].drop_meta().name(), row[2].drop_meta().name())).collect())
+}
+
+/// A field `[name, type, default, old name]` of a renamed column: the name and the old one
+fn renamed_column(field: &Node) -> Option<(String, String)> {
+	let parts = field.children();
+	let [name, _, _, old_name] = parts.as_slice() else { return None };
+	Some((name.drop_meta().name(), old_name.drop_meta().name()))
 }
 
 /// The column retyped in place when no value loses anything (INTEGER → REAL → TEXT), else a loud error. A fresh column
@@ -262,7 +282,7 @@ fn converted(database: Handle, table: &str, name: &str, stored_type: &str, colum
 /// A field `[name, type, default]` as its column: name, SQL type, the SQL literal new rows of an added column take
 fn column_of(field: &Node) -> Result<(String, String, String), String> {
 	let parts = field.children();
-	let [name, field_type, default] = parts.as_slice() else { return Err(format!("no field [name type default]: {}", field.serialize().trim())) };
+	let ([name, field_type, default] | [name, field_type, default, _]) = parts.as_slice() else { return Err(format!("no field [name type default]: {}", field.serialize().trim())) };
 	let field_type = field_type.drop_meta().name();
 	let column_type = match field_type.as_str() {
 		"int" | "i64" | "i32" | "bool" => "INTEGER",

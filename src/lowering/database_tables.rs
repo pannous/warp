@@ -16,6 +16,8 @@ pub const TABLES_FILE: &str = "database.sqlite";
 /// The row id every registered class gets, unless it declares one
 const ID_FIELD: &str = "id";
 const ADD_WORD: &str = "add";
+/// `@was(old) name: text`: the field's column was called old, so the table's column is renamed
+const RENAMED_MARK: &str = "was";
 /// `save p` writes every column of p's row (field changes are written through already, so it changes nothing then)
 const SAVE_WORD: &str = "save";
 /// the generated code's variables, written as these placeholders (`·` would parse as a product)
@@ -54,6 +56,8 @@ struct Table {
 	references: Vec<(String, String)>,
 	/// list fields of another table's class, one-to-many: not a column, the other table's rows pointing back
 	members: Vec<Members>,
+	/// fields marked `@was(old)`: the field and its column's old name
+	renamed: Vec<(String, String)>,
 }
 
 /// `members: [Person]` of Team: the rows of `table` (people) whose field `back` (team) is the team
@@ -386,8 +390,10 @@ fn registration(statement: &Node, classes: &HashMap<String, Node>) -> Option<(St
 	let [class] = element.as_slice() else { return None };
 	let name = database_table(source)?;
 	let class = class.drop_meta().name();
-	let fields = crate::class_methods::field_declarations(classes.get(&class)?);
-	Some((variable.drop_meta().name(), Table { name, class, fields, references: vec![], members: vec![] }))
+	let body = classes.get(&class)?;
+	let fields = crate::class_methods::field_declarations(body);
+	let renamed = crate::class_methods::fields_marked(body, RENAMED_MARK).into_iter().map(|(field, old)| (field, old.drop_meta().name())).collect();
+	Some((variable.drop_meta().name(), Table { name, class, fields, references: vec![], members: vec![], renamed }))
 }
 
 /// The table `database.t` names
@@ -495,8 +501,11 @@ fn opened(statement: &Node, tables: &HashMap<String, Table>, file: &str, open: &
 	open.push(variable.clone());
 	// the row is [id, column values…] in the order of the columns
 	let arguments = constructor_arguments(table, ROW);
+	// a column is [name type default] and its old name when renamed
 	let schema = Node::List(column_fields(table).into_iter().map(|(name, field_type, default)| {
-		Node::List(vec![Node::Text(name), Node::Text(field_type), default.unwrap_or(Node::Empty)], Bracket::Square, Separator::Space)
+		let old_name = table.renamed.iter().find(|(field, _)| *field == name).map(|(_, old)| Node::Text(old.clone()));
+		let column = [Node::Text(name), Node::Text(field_type), default.unwrap_or(Node::Empty)].into_iter().chain(old_name);
+		Node::List(column.collect(), Bracket::Square, Separator::Space)
 	}).collect(), Bracket::Square, Separator::Space);
 	let code = format!("[{class}({arguments}) for {ROW} in std_io(\"table\", \"open\", [{name:?}, {SCHEMA_PLACEHOLDER}, {file:?}])]",
 		class = table.class, arguments = arguments.join(", "), name = table.name);

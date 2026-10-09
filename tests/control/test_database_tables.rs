@@ -58,6 +58,14 @@ fn a_field_changed_with_loss_is_an_error_naming_both_types() {
 	crate::common::fails_with("class Bag{weight: int}\nbags: [Bag] = database.bags_narrowed\nbags#1.weight", "bags_narrowed.weight holds");
 }
 
+// `@was(old)` on a field renames its column, keeping the data; without it a rename reads as add + remove
+#[test]
+fn a_field_marked_was_renames_its_column() {
+	eval("class Dog{nick: text}\ndogs: [Dog] = database.dogs_renamed\ndogs.add(Dog(\"Rex\"))");
+	is!("class Dog{@was(nick) name: text}\ndogs: [Dog] = database.dogs_renamed\ndogs#1.name", "Rex");
+	is!("class Dog{@was(nick) name: text}\ndogs: [Dog] = database.dogs_renamed\ndogs#1.name", "Rex");
+}
+
 #[cfg(feature = "native")]
 #[test]
 fn a_program_keeps_its_tables_in_a_file_beside_it() {
