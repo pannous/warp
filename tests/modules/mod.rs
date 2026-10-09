@@ -21,6 +21,7 @@ mod test_std_qualified;
 mod test_std_module_uses_module;
 mod test_std_prelude;
 mod test_std_net;
+mod test_agent; // card g_X_F0
 mod test_std_regex;
 mod test_std_matrix;
 mod test_use_modules;

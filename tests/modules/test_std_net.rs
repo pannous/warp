@@ -6,3 +6,8 @@ use crate::is;
 fn use_net_posts_a_text() {
 	is!("use net; use json; answer = parse_json(post(\"https://httpbin.org/post\", \"hello warp\")); answer.data", "hello warp");
 }
+
+#[test]
+fn post_sends_the_headers_of_a_map() {
+	is!("use net; use json; answer = parse_json(post(\"https://httpbin.org/post\", \"hi\", {\"X-Warp\": \"yes\"})); answer.headers[\"X-Warp\"]", "yes");
+}
