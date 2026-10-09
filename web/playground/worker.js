@@ -9,6 +9,7 @@ stage("loading its scripts");
 importScripts("reader.js", "imports.js", "host.js");
 importScripts(...HOST_PART_FILES, "components.js", "served-files.js");
 stage("starting the task workers");
+self.diagnosticStage = stage;
 prepareTaskPool(); // task Workers start while this worker is idle (host.js)
 
 // warp.wasm, the optimized build, or the one the page names (?compiler=warp.debug.wasm, build.sh)

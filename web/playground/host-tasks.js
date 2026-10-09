@@ -53,7 +53,11 @@ function addTaskWorker() {
 // the pool of task Workers, made by the workers that run programs (worker.js, test-worker.js) when they start
 function prepareTaskPool(size = TASK_POOL_SIZE) {
 	if (!hasTaskWorkers()) return;
-	for (let index = 0; index < size; index++) addTaskWorker();
+	for (let index = 0; index < size; index++) {
+		self.diagnosticStage?.(`creating task worker ${index + 1} of ${size}`);
+		addTaskWorker();
+	}
+	self.diagnosticStage?.("task workers created");
 }
 
 // resolves once every task Worker of the pool has loaded: a run that starts before would run its tasks inline, where

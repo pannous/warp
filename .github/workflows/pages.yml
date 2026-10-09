@@ -113,9 +113,17 @@ jobs:
         name: site
         path: _site
     - name: The tour in headless Firefox
+      env:
+        MOZ_LOG: "timestamp,WorkerPrivate:5,WorkerScriptLoader:5,ScriptLoader:4,RemoteWorker:5"
+        MOZ_LOG_FILE: ${{ github.workspace }}/moz_logs/firefox.log
       # a run takes about 3 minutes; a stuck one fails loudly instead of holding the deploy (card deploy-firefox-hang)
       timeout-minutes: 15
       run: python3 web/playground/test_in_browser.py --examples --firefox --site _site hello
+    - if: failure()
+      uses: actions/upload-artifact@v4
+      with:
+        name: moz-logs-${{ matrix.attempt }}
+        path: moz_logs
 
   # only main may deploy (the github-pages environment); a branch check (workflow_dispatch on batchNN) ends after the
   # tours, green, instead of a failed deploy mailing a failed run
