@@ -151,7 +151,7 @@ fn ends_with_on(node: &Node) -> bool {
 /// `a + on` → `a + phrase`, `on` → phrase
 fn with_last_operand(node: Node, phrase: Node) -> Node {
 	match node.drop_meta() {
-		Node::Key(left, op, right) => Node::Key(left.clone(), op.clone(), Box::new(with_last_operand(*right.clone(), phrase))),
+		Node::Key(left, op, right) => Node::Key(left.clone(), *op, Box::new(with_last_operand(*right.clone(), phrase))),
 		_ => phrase,
 	}
 }
