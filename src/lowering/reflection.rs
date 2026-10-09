@@ -34,6 +34,8 @@ pub(crate) const PARAMS_WORDS: [&str; 2] = ["params", "parameters"];
 const SIGNATURE_WORD: &str = "signature";
 /// `f.body`: the body as written, as data (card g_X_3s)
 const BODY_WORD: &str = "body";
+/// `f.dump`: the whole definition as warp text, to copy and paste (card reflection-area)
+const DUMP_WORD: &str = "dump";
 /// What `dir(f)` lists of a function: the words reflection answers for it
 const FUNCTION_WORDS: [&str; 4] = [PARAMS_WORDS[0], SIGNATURE_WORD, BODY_WORD, EFFECTS_WORD];
 /// The entries of the module's warp.meta section that name its functions and classes
@@ -43,7 +45,7 @@ pub const META_CLASSES: &str = "classes";
 type Functions = std::collections::BTreeMap<String, crate::context::UserFunctionDef>;
 
 pub fn lower(node: Node) -> Node {
-	if !node.mentions_any(&[EFFECTS_WORD, LISTENERS_WORD, SIGNATURE_WORD, BODY_WORD, PARAMS_WORDS[0], PARAMS_WORDS[1], DIR_WORD, HELP_WORD, crate::type_tests::TYPE_WORD]) {
+	if !node.mentions_any(&[EFFECTS_WORD, LISTENERS_WORD, SIGNATURE_WORD, BODY_WORD, DUMP_WORD, PARAMS_WORDS[0], PARAMS_WORDS[1], DIR_WORD, HELP_WORD, crate::type_tests::TYPE_WORD]) {
 		return node;
 	}
 	let defined = crate::library_words::defined_names(&node);
@@ -107,6 +109,7 @@ fn as_reflection_words(node: Node, functions: &Functions, listened: &HashSet<Str
 				(LISTENERS_WORD, _) if listened.contains(name) => Some(of_phrase(word, name)),
 				(word, Some(function)) if PARAMS_WORDS.contains(&word) => Some(text_list(&function.params.iter().map(|param| param.name.clone()).collect::<Vec<_>>())),
 				(SIGNATURE_WORD, Some(function)) => Some(Node::Text(signature(function))),
+				(DUMP_WORD, Some(function)) => Some(Node::Text(definition(function))),
 				(BODY_WORD, Some(function)) => Some(Node::List(vec![Node::Symbol(crate::blocks::DATA_WORD.into()), function.body.as_ref().clone()], Bracket::None, Separator::Space)),
 				_ => None,
 			};
@@ -203,6 +206,15 @@ fn meta_map(entries: Vec<(&str, Node)>) -> Node {
 /// `effects of f`
 fn of_phrase(word: &str, name: &str) -> Node {
 	Node::List(vec![Node::Symbol(word.into()), Node::Symbol(OF_WORD.into()), Node::Symbol(name.into())], Bracket::None, Separator::Space)
+}
+
+/// `area(width:int, height:int) := width * height`: the parameters as declared (no inferred types), the body as written
+fn definition(function: &crate::context::UserFunctionDef) -> String {
+	let params: Vec<String> = function.params.iter().map(|param| {
+		let typed = param.annotation.as_ref().map_or_else(|| param.name.clone(), |annotation| format!("{}:{}", param.name, annotation.serialize()));
+		param.default.as_ref().map_or(typed.clone(), |default| format!("{typed} = {}", default.serialize()))
+	}).collect();
+	format!("{}({}) := {}", function.name, params.join(", "), function.body.serialize())
 }
 
 /// `(a:int, b:int) -> int`: each parameter with its declared or demanded type, the result's kind when known
