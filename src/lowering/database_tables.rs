@@ -1,6 +1,7 @@
 //! Plain classes as database tables (card orm, notes/orm.md step 1): `people: [Person] = database.people` registers the
-//! table people for the class Person. The list starts as the table's rows (`std_io("table", "open", …)` creates the
-//! table or migrates it to the class's fields), `people.add(p)` inserts p and gives it its row's id, and a field change
+//! table people for the class Person. Registering creates the table or migrates it to the class's fields
+//! (`std_io("table", "migrate", …)`); the list loads the rows at its first read (`people·load()`, notes/orm.md
+//! Loading), `people.add(p)` inserts p and gives it its row's id, and a field change
 //! `p.age += 1` of an instance with a row is written through (`std_io("table", "update", …)`). Natively the tables live
 //! in `<program>.database.sqlite` (in memory for code without a file, database.rs); the browser keeps them in IndexedDB
 //! (web/playground/host-files.js), where a filter stays the list comprehension over the rows.
