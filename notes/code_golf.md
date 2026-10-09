@@ -44,6 +44,9 @@ value). It is close on catalan, collatz, niven and leap-years.
   text by decision.
 - Exact big integers: catalan's 57 digits and `((10^w-1)/9)^2` (the diamond rows 12321) need no special code.
 - One-line function definitions: `h(n):=n>4?h(…):n<2`.
+- A loop head or `f(n):=` ending its line takes the lines indented below it, by tabs or spaces, no `:` needed; a
+  comma line there is one statement (`a, b = b, a + b` swaps).
+- Open slices: `s[2…]` to the end, `s[…2]` from the start (inclusive; `..` excludes the end).
 
 ## What costs chars
 - The final-value echo: `warp run` prints a script's last value after its printed output, so a program must end with
@@ -52,13 +55,11 @@ value). It is close on catalan, collatz, niven and leap-years.
   (card golf-echo).
 - `print` is not an operand: `c&&print(it)` needs the parentheses (golf-print).
 - No bitwise operators or bit count (golf-bits): `to_base(it,2).count("1")`, `choose(i,j)%2`.
-- Negative indexes don't wrap (by design: `last(xs)`); `s[2…]` fails (golf-open).
-- Indented bodies need a `:` after the head in several places (golf-indented, golf-indented-while,
-  golf-bare, golf-indented-swap).
+- Negative indexes don't wrap (by design: `last(xs)`).
 - `text` is a type name, so `for text in args` filters by type, with a warning.
 
 ## Gaps filed (board column Next)
-golf-indented, golf-bare, golf-indented-while, golf-indented-swap,
-golf-chr, golf-chars, golf-print, golf-inline, golf-expression, golf-open,
+golf-chr, golf-chars, golf-print, golf-inline, golf-expression,
 golf-bits, golf-count.
-Fixed: golf-text, golf-sum (text arithmetic is no number for `||`/`or`). Decided: golf-echo (P236, kept).
+Fixed: golf-text, golf-sum (text arithmetic is no number for `||`/`or`); golf-indented, golf-bare,
+golf-indented-while, golf-indented-swap (indented bodies without `:`); golf-open (`s[2…]`, `s[…2]`). Decided: golf-echo (P236, kept).

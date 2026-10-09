@@ -183,11 +183,16 @@ impl WarpParser {
 		let body_word = if self.current_char() == ':' { Some(":") } else { Some("do").filter(|word| self.matches_keyword(word)) };
 		let Some(variable) = named else {
 			// only the colon and do forms: `for 1..3 {…}` is read where for loops are lowered
-			let Some(word) = body_word else {
-				(self.pos, self.line_nr, self.column, self.current_line) = before_header;
-				return None;
+			let body = match body_word {
+				Some(word) => self.colon_body(word),
+				None => match self.indented_lines_below() {
+					Some(block) => block, // `for 0 to 2` and the lines indented below it
+					None => {
+						(self.pos, self.line_nr, self.column, self.current_line) = before_header;
+						return None;
+					}
+				},
 			};
-			let body = self.colon_body(word);
 			let block = Node::List(vec![body], Bracket::Curly, Separator::Semicolon);
 			return Some(Node::List(vec![Symbol("for".to_string()), iterable, block], Bracket::None, Separator::Space));
 		};
@@ -198,7 +203,7 @@ impl WarpParser {
 		self.key_variables.extend(key_variable.clone());
 		let body = match body_word {
 			Some(word) => self.colon_body(word), // `for i in 0..n: body`, `for i in 0..n do body`
-			None => self.parse_atom(),
+			None => self.indented_lines_below().unwrap_or_else(|| self.parse_atom()),
 		};
 		if key_variable.is_some() {
 			self.key_variables.pop();
@@ -313,7 +318,7 @@ impl WarpParser {
 		let body_word = if self.current_char() == ':' { Some(":") } else { Some("do").filter(|word| self.matches_keyword(word)) };
 		let body = match body_word {
 			Some(word) => self.colon_body(word),
-			None => self.parse_atom(),
+			None => self.indented_lines_below().unwrap_or_else(|| self.parse_atom()),
 		};
 		let shown = crate::normalize::operand_text(&condition);
 		let collection = crate::normalize::operand_text(&iterable);
@@ -376,8 +381,17 @@ impl WarpParser {
 	/// The body after `:` or `do`: an indented block under a colon at the end of the line, else the rest of the line
 	pub(super) fn colon_body(&mut self, word: &str) -> Node {
 		self.advance_by(word.len());
-		let indented_block = if word == ":" && self.only_blanks_before_newline() { self.parse_indented_block() } else { None };
+		let indented_block = if word == ":" && self.only_blanks_before_newline() { self.parse_indented_block().map(statement_block) } else { None };
 		indented_block.unwrap_or_else(|| self.rest_of_statement())
+	}
+
+	/// The lines indented below a head that ends its line without `:`, as below `for x in xs:` (`while m > 1` and its
+	/// lines); None, with nothing consumed, for a head followed by anything else
+	pub(super) fn indented_lines_below(&mut self) -> Option<Node> {
+		if !self.only_blanks_before_newline() {
+			return None;
+		}
+		self.with_equals_comparing(false, |parser| parser.parse_indented_block()).map(statement_block) // its lines assign
 	}
 
 	/// The words up to the end of the line, one expression: the colon body `print i` of `for i in 1..3 : print i`
@@ -415,6 +429,9 @@ impl WarpParser {
 			return while_do(condition, body);
 		}
 
+		if let Some(body) = self.indented_lines_below() {
+			return while_do(rhs, body);
+		}
 		Node::Key(Box::new(Empty), Op::While, Box::new(rhs))
 	}
 
@@ -466,5 +483,15 @@ impl WarpParser {
 	pub(super) fn parse_else_if(&mut self) -> Node {
 		let condition = self.parse_prefix_operand(Op::If);
 		self.finish_if_prefix(condition)
+	}
+}
+
+/// A loop body of one comma line holds code, one statement: `x, y = y, x + y` swaps, as `{a, b=2}` would be data
+fn statement_block(block: Node) -> Node {
+	match block {
+		Node::List(items, Bracket::Curly, Separator::Colon) => {
+			Node::List(vec![Node::List(items, Bracket::None, Separator::Colon)], Bracket::Curly, Separator::Semicolon)
+		}
+		block => block,
 	}
 }

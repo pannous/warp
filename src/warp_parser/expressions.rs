@@ -413,8 +413,8 @@ impl WarpParser {
 			// `for:email "Email"`: the glued pair is for:email, the text the next item (card parser-tag)
 			let glued_pair = op == Op::Colon && glued_before && !self.current_char().is_whitespace();
 			let block_body = match op {
-				Op::Colon if self.only_blanks_before_newline() => {
-					self.with_equals_comparing(false, |parser| parser.parse_indented_block()) // the block of `if c:` assigns
+				Op::Colon | Op::Define if self.only_blanks_before_newline() => {
+					self.with_equals_comparing(false, |parser| parser.parse_indented_block()) // the block of `if c:` and `f(n):=` assigns
 				}
 				Op::Do | Op::Then | Op::Else if self.closing_end_follows(&END_BLOCK_OPENERS) => Some(self.parse_end_block(op == Op::Then)),
 				Op::Do if self.closing_end_follows(&["do"]) => Some(error(AMBIGUOUS_END)), // `do a; if c then b end`

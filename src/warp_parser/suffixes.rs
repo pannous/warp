@@ -4,6 +4,8 @@ use super::*;
 
 /// The word between a condition and its branch: `if c then x`
 const THEN_WORD: &str = "then";
+/// The marks of a slice from the start, `s[…3]`: the inclusive ones before `..`, which they begin with
+const SLICE_FROM_START: [(&str, Op); 4] = [(":", Op::Colon), ("…", Op::To), ("...", Op::To), ("..", Op::Range)];
 
 impl WarpParser {
 	/// The exponent written in superscript digits and signs at the cursor, its length in characters and whether it has a sign:
@@ -394,15 +396,15 @@ impl WarpParser {
 		Some(Node::Key(Box::new(lhs.clone()), Op::Colon, Box::new(body)))
 	}
 
-	/// `[:end]` and `[:]`, a slice from the start: `ø:end`
+	/// `[:end]`, `[…last]`, `[..end]` and `[:]`, a slice from the start: `ø:end`
 	pub(super) fn parse_slice_from_start(&mut self) -> Option<Node> {
-		if self.current_char() != ':' {
-			return None;
-		}
-		self.advance(); // skip ':'
+		let (op, chars) = SLICE_FROM_START.iter().copied()
+			.find(|(written, _)| written.chars().enumerate().all(|(offset, ch)| self.peek_char(offset) == ch))
+			.map(|(written, op)| (op, written.chars().count()))?;
+		self.advance_by(chars);
 		self.skip_whitespace();
 		let end = if self.current_char() == ']' { Empty } else { self.parse_expr(0) };
-		Some(Node::Key(Box::new(Empty), Op::Colon, Box::new(end)))
+		Some(Node::Key(Box::new(Empty), op, Box::new(end)))
 	}
 
 	/// The Java/C array type `int[]` is the list type `[int]`
