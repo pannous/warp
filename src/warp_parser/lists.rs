@@ -156,9 +156,17 @@ impl WarpParser {
 			// `def f(n) … end` is read by its end
 			let defines = items_with_seps.get(statement_start).is_some_and(|(first, _)| matches!(first.drop_meta(), Symbol(word) if is_function_keyword(word)));
 			let ruby_definition = defines && self.closing_end_follows(&RUBY_END_OPENERS);
-			let item = match defines && !ruby_definition && self.only_blanks_before_newline() {
+			// a top-level Ruby `def f(n)` with its lines indented by tabs: the indented block, then its `end` (the tab rule
+			// below would make each line the block of the one before)
+			let tab_indented_ruby = ruby_definition && self.base_indent == 0 && self.next_line_starts_with_tab();
+			let item = match defines && (!ruby_definition || tab_indented_ruby) && self.only_blanks_before_newline() {
 				true => match self.parse_indented_block() {
-					Some(body) => Node::Key(Box::new(item), Op::Colon, Box::new(body)),
+					Some(body) => {
+						if tab_indented_ruby {
+							self.skip_end_line();
+						}
+						Node::Key(Box::new(item), Op::Colon, Box::new(body))
+					}
 					None => item,
 				},
 				false => item,
