@@ -164,11 +164,17 @@ function programImports(holder, hooks) {
 				holder.exitCode = Number(code);
 				throw new Error(`exit(${code})`);
 			},
-			// paint(pixels, width, height) (src/host.rs): the page draws them on a canvas (playground.js showPaintings)
-			paint: (pixels, width, height) => {
+			// paint(pixels, width, height) (src/host.rs): the page draws them on a canvas (playground.js showPaintings);
+			// paint(shader, width, height, values) renders the WGSL fragment shader first, as gpu_render (P234)
+			paint: (pixels, width, height, values) => {
 				if (!hooks.paint) throw new Error("paint: no canvas here; it draws in the playground page");
 				const room = Number(width) * Number(height);
-				hooks.paint(intsOfList(program(), pixels, room) ?? plainOfTree(readNode(program(), pixels)), Number(width), Number(height));
+				let painted = intsOfList(program(), pixels, room) ?? plainOfTree(readNode(program(), pixels));
+				if (typeof painted === "string") {
+					if (!holder.gpuRendered) throw new Error("paint: a shader needs WebGPU (host-gpu.js), which this page has not");
+					painted = Array.from(holder.gpuRendered(painted, width, height, values));
+				}
+				hooks.paint(painted, Number(width), Number(height));
 			},
 			...Object.assign({}, ...eachHostPart("words", holder, hooks, access)),
 		},

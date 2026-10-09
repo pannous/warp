@@ -118,7 +118,7 @@ pub fn host_word_signatures() -> [(&'static str, Vec<wasm_encoder::ValType>, Vec
 	use wasm_encoder::ValType::{F64, I32, I64};
 	let node = wasm_encoder::ValType::Ref(wasm_encoder::RefType::ANYREF);
 	[(GPU_COMPUTE, vec![node, node, I64], vec![node]), (GPU_RENDER, vec![node, I64, I64, node], vec![node]), (GPU_COMPUTE_LINEAR, vec![node, I64, I64], vec![I64]), (GPU_MAP_LINEAR, vec![node, I64, node, I64, I64, I64], vec![I64]), (GPU_REDUCE_LINEAR, vec![node, I64, node, I64, I64, I64], vec![I64]), (FETCH_START, vec![I64, node], vec![]), (FETCH_REPLY, vec![I64], vec![node]), (SERVE_ROUTES, vec![I64, node], vec![node]), (STD_PURE, vec![node, node, node], vec![node]), (STD_IO, vec![node, node, node], vec![node]), (CHANNEL_LISTEN, vec![I64, node], vec![]), (CHANNEL_PENDING, vec![I64], vec![I64]), (CHANNEL_NEXT, vec![I64], vec![node]), (CLIPBOARD_TEXT, vec![], vec![node]), (PAGE_PATH, vec![], vec![node]), (NOTIFY, vec![node], vec![]), (CHANNEL_SEND, vec![node, node], vec![]),
-		(GUARDED_CALL, vec![I32, node], vec![node]), (PAINT, vec![node, I64, I64], vec![]), (RUN_BLOCK, vec![node, node, node, node], vec![node]), (BLOCK_VALUE, vec![I64], vec![node]), (FOREIGN_CALL, vec![node, node, node, node, node], vec![node]), (SLEEP, vec![I64], vec![]), (RANDOM, vec![], vec![F64]), (RANDOM_BELOW, vec![I64], vec![I64]), (RANDOM_SEED, vec![I64], vec![]), (CLOCK, vec![], vec![I64]), (SIGNAL_POLL, vec![], vec![]), (SIGNAL_EVERY, vec![I64, I64], vec![]), (SIGNAL_DAILY, vec![I64, I64, I64], vec![]), (SIGNAL_AT, vec![I64, I64], vec![]), (SIGNAL_WATCH, vec![I64, I32], vec![]), (SYSTEM_VALUE, vec![I32], vec![I64]), (EXIT, vec![I64], vec![]),
+		(GUARDED_CALL, vec![I32, node], vec![node]), (PAINT, vec![node, I64, I64, node], vec![]), (RUN_BLOCK, vec![node, node, node, node], vec![node]), (BLOCK_VALUE, vec![I64], vec![node]), (FOREIGN_CALL, vec![node, node, node, node, node], vec![node]), (SLEEP, vec![I64], vec![]), (RANDOM, vec![], vec![F64]), (RANDOM_BELOW, vec![I64], vec![I64]), (RANDOM_SEED, vec![I64], vec![]), (CLOCK, vec![], vec![I64]), (SIGNAL_POLL, vec![], vec![]), (SIGNAL_EVERY, vec![I64, I64], vec![]), (SIGNAL_DAILY, vec![I64, I64, I64], vec![]), (SIGNAL_AT, vec![I64, I64], vec![]), (SIGNAL_WATCH, vec![I64, I32], vec![]), (SYSTEM_VALUE, vec![I32], vec![I64]), (EXIT, vec![I64], vec![]),
 		(TASK_SPAWN, vec![I32, I64, I64, I64, I64], vec![I64]), (TASK_AWAIT, vec![I64], vec![I64]), (TASK_CONTROL, vec![I64, I64], vec![I64]),
 		(TASK_SPAWN_VALUES, vec![I32, node], vec![I64]), (TASK_AWAIT_VALUE, vec![I64], vec![node]),
 		(TASK_JOIN, vec![I64], vec![I64]), (TASK_FAILURE, vec![I64], vec![node]), (TASK_STATUS, vec![I64], vec![I64]), (TASK_POLL, vec![], vec![]),
@@ -545,20 +545,22 @@ pub fn link_host_functions(linker: &mut Linker<HostState>, _engine: &Engine) -> 
 	Ok(())
 }
 
-/// paint(pixels, width, height) natively: the pixels as a PNG (src/paint.rs)
+/// paint(pixels, width, height) natively: the pixels as a PNG (src/paint.rs); paint(shader, width, height, values)
+/// renders the WGSL fragment shader first, as gpu_render does (P234)
 #[cfg(feature = "native")]
-fn paint(mut caller: Caller<'_, HostState>, pixels: Option<wasmtime::Rooted<wasmtime::AnyRef>>, width: i64, height: i64) -> wasmtime::Result<()> {
+fn paint(mut caller: Caller<'_, HostState>, pixels: HostNode, width: i64, height: i64, shader_values: HostNode) -> wasmtime::Result<()> {
 	let failure = |message: String| wasmtime::Error::new(crate::tasks::TaskFailure(message));
 	let Some(Extern::Memory(memory)) = caller.get_export("memory") else { return Err(failure("paint: the module exports no memory".into())) };
-	let (width, height) = (width.max(0) as usize, height.max(0) as usize);
-	let values = match ints_of_list(&mut caller, memory, pixels, width * height)? {
+	let size = (width.max(0) as usize, height.max(0) as usize);
+	let values = match ints_of_list(&mut caller, memory, pixels, size.0 * size.1)? {
 		Some(values) => values,
 		None => match crate::wasm_reader::node_in(&Val::AnyRef(pixels), &mut caller.as_context_mut(), memory).drop_meta() {
 			crate::node::Node::List(items, _, _) => items.iter().map(pixel_value).collect(),
-			other => return Err(failure(format!("paint needs a list of pixels, got {}", other.serialize()))),
+			crate::node::Node::Text(shader) => rendered(&mut caller, shader, width, height, shader_values, &gpu_failure(PAINT))?.into_iter().map(u64::from).collect(),
+			other => return Err(failure(format!("paint needs a list of pixels or a shader text, got {}", other.serialize()))),
 		},
 	};
-	crate::paint::paint(&values, width, height).map(|_| ()).map_err(failure)
+	crate::paint::paint(&values, size.0, size.1).map(|_| ()).map_err(failure)
 }
 
 /// The first `room` items of a list of fixnum Ints read in one call of the module's list_to_ints (wasm_emitter/int_lists.rs), their magnitudes;
@@ -1067,14 +1069,20 @@ fn write_linear_floats(caller: &mut Caller<'_, HostState>, block: i64, floats: &
 fn gpu_render(mut caller: Caller<'_, HostState>, shader: HostNode, width: i64, height: i64, values: HostNode) -> wasmtime::Result<HostNode> {
 	let failure = gpu_failure(GPU_RENDER);
 	let shader = given_shader(&mut caller, shader, &failure)?;
-	let values = shader_values(&given_node(&mut caller, values)?).map_err(&failure)?;
-	let side = |pixels: i64| u32::try_from(pixels).ok().filter(|&pixels| pixels > 0).ok_or_else(|| failure(format!("an image {width}×{height} pixels")));
-	let pixels = crate::gpu::render(&shader, side(width)?, side(height)?, &values).map_err(&failure)?;
+	let pixels = rendered(&mut caller, &shader, width, height, values, &failure)?;
 	if let Some(list) = list_of_ints(&mut caller, &pixels)? {
 		return Ok(list);
 	}
 	let pixels = pixels.into_iter().map(|pixel| Node::Number(Number::Int(i64::from(pixel)))).collect();
 	built_in_program(&mut caller, &Node::List(pixels, crate::node::Bracket::Square, crate::node::Separator::Space), GPU_RENDER)
+}
+
+/// The pixels the fragment shader colors through wgpu (src/gpu.rs), 0xFFRRGGBB row by row
+#[cfg(feature = "native")]
+fn rendered(caller: &mut Caller<'_, HostState>, shader: &str, width: i64, height: i64, values: HostNode, failure: &impl Fn(String) -> wasmtime::Error) -> wasmtime::Result<Vec<u32>> {
+	let values = shader_values(&given_node(caller, values)?).map_err(failure)?;
+	let side = |pixels: i64| u32::try_from(pixels).ok().filter(|&pixels| pixels > 0).ok_or_else(|| failure(format!("an image {width}×{height} pixels")));
+	crate::gpu::render(shader, side(width)?, side(height)?, &values).map_err(failure)
 }
 
 /// The ints as a list built in one call of the module's ints_to_list (wasm_emitter/int_lists.rs); None when it has none

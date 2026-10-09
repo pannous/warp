@@ -144,6 +144,14 @@ for x in 0..32 {
   show()
 }
 "done"` },
+	shader: { value: '"done"', canvases: 1, code: `// paint a WGSL fragment shader: the GPU colors every pixel, values change each frame
+shader = "@fragment fn main(@builtin(position) at: vec4f) -> @location(0) vec4f {
+  return vec4f(at.x / 64.0, at.y / 32.0, values.blue, 1.0);
+}"
+for frame in 0..20 {
+  paint(shader, 64, 32, {blue: frame / 20})
+}
+"done"` },
 	mouse: { value: '"done"', canvases: 1, code: `// move the mouse over the canvas: the dot follows
 use draw
 canvas(48, 24)

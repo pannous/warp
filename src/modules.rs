@@ -96,7 +96,7 @@ pub fn insert_module_classes(mut program: Node) -> Node {
 				None => continue,
 			},
 			None => match std_module(&used.name) {
-				Some(source) => (std_path(&used.name), source.to_string(), true),
+				Some(source) => (std_path(std_module_name(&used.name)), source.to_string(), true),
 				None => continue,
 			},
 		};
@@ -611,6 +611,7 @@ impl<'a> Loader<'a> {
 	/// A standard module: its definitions wait aside until the program is resolved; its source shows the program
 	/// no style hints
 	fn use_std_module(&mut self, name: &str, source: &str) -> Result<Vec<Node>, Node> {
+		let name = std_module_name(name);
 		match self.inside_std_module {
 			true => self.std_modules_of_std_modules.insert(name.to_string()),
 			false => self.program_std_modules.insert(name.to_string()),
@@ -814,6 +815,8 @@ const STD_MODULES: [(&str, &str); 22] = [
 	(UNITS_MODULE, include_str!("../lib/units.warp")),
 	(AGENT_MODULE, include_str!("../lib/agent.warp")),
 ];
+/// Other names of standard modules (word choices are aliases): `use graphics` is `use draw`
+const STD_MODULE_ALIASES: [(&str, &str); 1] = [("graphics", "draw")];
 /// The standard modules' folder (P194: std/ merged into lib/), embedded in the binary
 const STD_FOLDER: &str = "lib";
 /// lib/prelude.warp: the warp-written words of every program, loaded when mentioned (Loader::use_prelude)
@@ -894,7 +897,13 @@ pub fn std_module_names() -> impl Iterator<Item = &'static str> {
 }
 
 fn std_module(name: &str) -> Option<&'static str> {
+	let name = std_module_name(name);
 	STD_MODULES.iter().find(|(module, _)| *module == name).map(|(_, source)| *source)
+}
+
+/// A standard module's own name for one of its aliases (`graphics` → draw), so each is loaded once
+fn std_module_name(name: &str) -> &str {
+	STD_MODULE_ALIASES.iter().find(|(alias, _)| *alias == name).map_or(name, |(_, module)| *module)
 }
 
 /// Each standard module with the names it defines, in their order

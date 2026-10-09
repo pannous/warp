@@ -4,7 +4,7 @@
 use std::io::Read;
 
 /// The gray levels of the PNG `code` paints into a folder of its own, row by row after each filter byte
-fn painted_rows(code: &str, folder: &str) -> Vec<u8> {
+pub(crate) fn painted_rows(code: &str, folder: &str) -> Vec<u8> {
 	let folder = std::path::PathBuf::from(env!("CARGO_TARGET_TMPDIR")).join(folder);
 	std::fs::create_dir_all(&folder).unwrap();
 	let run = crate::common::warp_command().env("TMPDIR", &folder).args(["--no-ask", "eval", code]).output().unwrap();

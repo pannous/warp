@@ -16,6 +16,7 @@ mod test_playground_samples;
 mod test_cli_help;
 mod test_paint;
 mod test_paint_lists;
+mod test_paint_shader; // P234
 mod test_draw;
 mod test_plain_hints_when_piped;
 mod test_warp_command;

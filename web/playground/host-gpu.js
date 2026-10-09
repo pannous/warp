@@ -278,6 +278,11 @@ addHostPart({
 				return 0n;
 			}
 		};
+		// the pixels as a Uint32Array, for gpu_render and for paint given a shader (host.js, P234)
+		holder.gpuRendered = (shader, width, height, values) => {
+			const given = values == null ? {} : plain(values);
+			return gpuJob("gpu_render", { shader, width: Number(width), height: Number(height), values: given }, [], Uint32Array);
+		};
 		return {
 			gpu_compute: (shader, numbers, workgroups) => {
 				const values = gpuJob("gpu_compute", { shader: plain(shader), numbers: plain(numbers).map(Number), workgroups: Number(workgroups) });
@@ -297,8 +302,7 @@ addHostPart({
 			// `s = sum(xs.map(x => …) @gpu)`, min, max: each workgroup's partial result, left after the values, into target
 			gpu_reduce_linear: (shader, source, values, target, workgroups, keeping) => gpuKernelLinear(shader, source, values, target, workgroups, true, keeping),
 			gpu_render: (shader, width, height, values) => {
-				const given = values == null ? {} : plain(values);
-				const pixels = gpuJob("gpu_render", { shader: plain(shader), width: Number(width), height: Number(height), values: given }, [], Uint32Array);
+				const pixels = holder.gpuRendered(plain(shader), width, height, values);
 				return listOfInts(program(), pixels) ?? list(Array.from(pixels), treeOfPlain);
 			},
 		};
