@@ -1,0 +1,25 @@
+class Team{name: text; players: [Person]}
+class Person{name: text; age: int; team: Team?}
+stored teams: [Team]
+stored people: [Person]
+if count(teams) == 0 {
+	teams.add(Team("Red"))
+	teams.add(Team("Blue"))
+	people.add(Person("Ann", 7, teams#1))
+	people.add(Person("Bo", 30, teams#1))
+	people.add(Person("Cy", 41, teams#2))
+	people.add(Person("Di", 52))
+}
+red = teams#1
+print "red: " + str(red.players.map(p => p.name))
+bo = (people where it.name == "Bo")#1
+bo.team = teams#2
+print "bo now: " + bo.team.name
+print "blue: " + str(teams#2.players.map(p => p.name))
+print "first 3: " + str(people.take first 3)
+print "first 3 slice: " + str((people#(1...3)).map(p => p.name))
+print "oldest: " + (people sorted by -it.age)#1.name
+print "red ones: " + count(people where it.team == red)
+print "teamless: " + str((people where it.team == ø).map(p => p.name))
+bo.team = red
+"done"

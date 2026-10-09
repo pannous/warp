@@ -11,8 +11,6 @@ server def user_count() {
 }
 
 get "/api/users" { users }                 // data for anyone: GET /api/users
-// a stored user from the request: `curl -d Cy localhost:8080/api/users` answers the new count, GET shows Cy
-post "/api/users" { users.add(User(request.body)); count(users) }
 
 route "/" {
 	div{
@@ -34,3 +32,7 @@ route "/users/:id:int" {
 }
 
 route "*" { p{ "no such page" } }
+
+// edits: a POST storing a user, the GET showing it
+post "/api/users" { users.add(User(request.body)); count(users) }
+get "/api/users/:id:int" { users#id }

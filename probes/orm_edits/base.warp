@@ -31,18 +31,6 @@ if count(teams) == 0 { teams.add(Team("Climbers")) }
 climbers = teams#1
 climbers.players.add(bo)  // writes bo.team through
 print climbers.name + ": " + count(climbers.players)
-// and the other way: the rows whose key is a given row, a filter in SQL too
-print "on no team: " + count(people where it.team == ø)
-
-// sorting by a key of each row, the first rows
-print "oldest first: " + str((people sorted by -it.age).map(p => p.name))
-print "first two: " + str((people.take first 2).map(p => p.name))
-
-// remove deletes the row
-guest = Person("Guest", 99)
-people.add(guest)
-people.remove(guest)
-for p in people where p.age > 90 { print "still here: " + p.name }
 
 bo.age += 1
 save bo
