@@ -1642,6 +1642,8 @@ PASSED:
   ✓ modules::test_include::including_a_file_twice_includes_it_once_and_cycles_terminate
   ✓ modules::test_include::require_and_import_are_use
   ✓ modules::test_include::use_imports_only_the_declarations
+  ✓ modules::test_json_parse_form::json_parse_reads_json
+  ✓ modules::test_json_parse_form::parse_json_is_an_alias_of_json_parse
   ✓ modules::test_module_cache::test_different_modules_not_cached
   ✓ modules::test_module_cache::test_module_cache_reuse
   ✓ modules::test_module_classes::a_used_modules_class_has_its_methods
@@ -2167,6 +2169,9 @@ PASSED:
   ✓ numbers::test_unit_literals::a_long_unit_name_belongs_to_its_amount_in_a_condition
   ✓ numbers::test_unit_literals::a_unit_after_a_comparison_belongs_to_its_amount
   ✓ numbers::test_unit_literals::a_variable_named_like_a_unit_stays_a_variable
+  ✓ numbers::test_unit_named_variable::a_loop_variable_named_like_a_unit
+  ✓ numbers::test_unit_named_variable::a_printed_loop_variable_named_like_a_unit
+  ✓ numbers::test_unit_named_variable::an_assigned_variable_named_like_a_unit
   ✓ numbers::test_unit_polish::test_as_converts_to_a_powered_unit
   ✓ numbers::test_unit_polish::test_middle_dot_multiplies
   ✓ numbers::test_unit_products::test_areas_add_divide_and_compare
@@ -3366,6 +3371,7 @@ PASSED:
   ✓ types::test_types::test_empty_typed_functions
   ✓ types::test_types::test_function_argument_cast
   ✓ types::test_types::test_function_return_types
+  ✓ types::test_types::test_generics
   ✓ types::test_types::test_go_types
   ✓ types::test_types::test_polymorphism
   ✓ types::test_types::test_polymorphism2
@@ -3731,8 +3737,12 @@ PASSED:
   ✓ web::test_uniscript::use_strict_makes_uniscript_warnings_errors
   ✓ web::test_warp_serve::a_program_without_serve_is_served_with_its_server_functions_and_routes
   ✓ web::test_warp_serve::a_server_is_known_without_running_it
+  ✓ web::test_web::test_canvas
+  ✓ web::test_web::test_dom
   ✓ web::test_web::test_fetch
   ✓ web::test_web::test_html_warp
+  ✓ web::test_web::test_inner_html
+  ✓ web::test_web::test_js
   ✓ web::test_web_apis::notify_is_a_host_word
   ✓ web::test_web_playground::a_returned_value_has_its_own_kind_on_every_platform
   ✓ web::test_web_playground::a_trap_in_the_page_names_the_runtime_error
@@ -4125,4 +4135,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-14 ignored, 4120 passed, 0 failed, 4120 total tested
+10 ignored, 4130 passed, 0 failed, 4130 total tested
