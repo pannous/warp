@@ -955,7 +955,10 @@ PASSED:
   ✓ functions::test_effects::test_effects_of_query
   ✓ functions::test_effects::test_effects_propagate_through_callers_and_recursion
   ✓ functions::test_effects::test_imports_follow_effects
+  ✓ functions::test_effects_symbols::a_trailing_effects_of_runs_the_program
+  ✓ functions::test_effects_symbols::effects_of_gives_symbols_as_a_value
   ✓ functions::test_effects_value::effects_of_as_a_value
+  ✓ functions::test_effects_value::effects_of_last_keeps_the_prints
   ✓ functions::test_empty_call::a_name_and_a_group_stay_symbols_and_defined_calls_run
   ✓ functions::test_empty_call::an_empty_call_of_an_undefined_name_is_an_error
   ✓ functions::test_empty_function_bodies::a_function_with_an_empty_body_leaves_the_program_alone
@@ -4086,4 +4089,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-14 ignored, 4081 passed, 0 failed, 4081 total tested
+14 ignored, 4084 passed, 0 failed, 4084 total tested
