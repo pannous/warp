@@ -1277,6 +1277,7 @@ PASSED:
   ✓ functions::test_python_ruby_definitions::test_python_rest_parameter_with_colon_body
   ✓ functions::test_python_ruby_definitions::test_python_spread_object
   ✓ functions::test_python_ruby_definitions::test_ruby_def_end
+  ✓ functions::test_python_ruby_definitions::test_ruby_loops_in_def
   ✓ functions::test_python_ruby_definitions::test_ruby_yield_calls_the_block
   ✓ functions::test_recursive_list_functions::a_recursive_maximum
   ✓ functions::test_recursive_list_functions::a_recursive_sum_over_slices
@@ -1572,6 +1573,8 @@ PASSED:
   ✓ lists::test_min_max::test_min_max_of_variables_and_expressions
   ✓ lists::test_min_max::test_min_needs_two_arguments
   ✓ lists::test_min_max::test_user_definition_wins_over_the_builtin
+  ✓ lists::test_nested_comprehension::filters_sit_between_and_after_the_clauses
+  ✓ lists::test_nested_comprehension::two_for_clauses_nest
   ✓ lists::test_nested_index_assignment::a_nested_index_assignment_sets_the_inner_item
   ✓ lists::test_nested_maps::a_map_inside_a_map_keeps_its_braces
   ✓ lists::test_node_lists::a_list_parameter_holds_whatever_elements_its_callers_pass
@@ -1583,6 +1586,7 @@ PASSED:
   ✓ lists::test_node_lists::loops_over_a_list_are_linear
   ✓ lists::test_none_word::a_bare_none_is_null
   ✓ lists::test_none_word::none_called_is_an_error_naming_the_null
+  ✓ lists::test_number_keys::a_declared_map_keys_its_number_subscripts
   ✓ lists::test_number_keys::a_list_keeps_its_positions
   ✓ lists::test_number_keys::a_number_subscript_keys_an_empty_map
   ✓ lists::test_numbered_fields::numbered_fields_of_a_tuple
@@ -4314,4 +4318,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-10 ignored, 4309 passed, 0 failed, 4309 total tested
+10 ignored, 4313 passed, 0 failed, 4313 total tested
