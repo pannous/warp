@@ -55,7 +55,9 @@ Programs themselves ran 0.1–0.2 s in total: compiling, not running, is what te
      quotes); exit code 0, 1 on a trap.
    - The stub provides print (WASI fd_write), libm ("m": Rust's f64 functions) and the host words sleep, random,
      random_below, clock. A program importing anything else (fetch, read, run_block, tasks, FFI libraries) is refused
-     at build time with the missing imports named.
+     at build time with the missing imports named. A plain run says so once per version of the file and of warp
+     (~/.cache/warp/standalone_notes remembers the failure; card standalone-std-io): std_io (tables, json, regex,
+     files) would need the Node reader in the stub.
    - One copy of the run-time code: crates/warp-runtime holds the engine settings (`deterministic_config`,
      `fueled_config`), the fuel default, the host words without compiler (`link_host_words`, which warp's host.rs
      links too), fd_write and libm for any store state, and the trailer format. warp depends on it with the

@@ -137,6 +137,21 @@ function keep(name, value, file) {
 const TABLE_PREFIX = "table ";
 const ID_COLUMN = "id";
 const tableKey = (file, table) => `${TABLE_PREFIX}${file} ${table}`;
+// field types by column (src/database.rs column_of), each holding every value of the ones before it
+const LOSSLESS_ORDER = [["int", "i64", "i32", "bool"], ["float", "f64", "f32", "number"], ["text", "string", "str", "char"]];
+const REAL = 1;
+const widening = type => LOSSLESS_ORDER.findIndex(types => types.includes(type));
+// texts as SQLite's CAST writes them: a real keeps its ".0"
+const textOfColumn = (value, from) => from === REAL && Number.isInteger(value) ? value.toFixed(1) : String(value);
+
+// a converter of rows retyping the column as src/database.rs converted does, else the same loud error
+function convertColumn(table, name, storedType, type) {
+	const [from, to] = [widening(storedType), widening(type)];
+	if (from < 0 || to <= from) {
+		throw new Error(`the column ${table}.${name} holds ${storedType}, the class's field is ${type}: its values would lose data, so it is not converted`);
+	}
+	return row => { row[name] = to === REAL ? Number(row[name]) : textOfColumn(row[name], from); };
+}
 const storedTable = (file, table) => databaseValues[tableKey(file, table)] ?? { types: {}, rows: [] };
 function keepTable(file, table, stored) {
 	const key = tableKey(file, table);
@@ -154,7 +169,8 @@ function openTable(table, schema, file) {
 			stored.types[name] = type;
 			stored.rows.forEach(row => { row[name] = fallback; });
 		} else if (storedType !== type) {
-			throw new Error(`the column ${table}.${name} holds ${storedType}, the class's field is ${type}: converting a column is not done yet (notes/orm.md step 7)`);
+			stored.rows.forEach(convertColumn(table, name, storedType, type));
+			stored.types[name] = type;
 		}
 	}
 	const fields = schema.map(([name]) => name);
