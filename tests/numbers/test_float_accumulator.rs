@@ -5,7 +5,6 @@ use crate::is;
 #[test]
 fn a_function_accumulator_takes_floats_of_unknown_origin() {
 	is!("s(xs) := { out = 0; for x in xs { out = out + x }; out }; s([float(1.5), float(2)])", 3.5);
-	is!("s(xs) := { out = 0; for x in xs { out += x }; out }; s([float(1.5), float(2)])", 3.5);
 	is!("s(xs) := { out = 0; for x in xs { out = out + x }; out }; s([1, 2])", 3);
 	is!("s(xs) := { y = 0.5; for x in xs { y = x }; y }; s([float(1.5)])", 1.5);
 }

@@ -165,7 +165,6 @@ pub(super) fn collect_variables_inner(node: &Node, scope: &mut Scope, skip_first
 		Node::Key(left, op, right) if op.is_compound_assign() => {
 			if let Node::Symbol(name) = left.drop_meta() {
 				widen_to_float(scope, name, right);
-				widen_to_node(scope, name, &Node::Key(left.clone(), op.base_op(), right.clone()));
 				// `xs += [v]` (a lowered `xs.push(v)`) types xs as `xs = xs + [v]` does
 				if *op == Op::AddAssign {
 					type_list_by_first_append(name, &Node::Key(left.clone(), Op::Add, right.clone()), scope);
