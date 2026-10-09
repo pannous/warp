@@ -15,7 +15,7 @@ use super::WasmGcEmitter;
 use crate::node::Node;
 use crate::operators::Op;
 use crate::type_kinds::{Kind, KIND_MASK};
-use crate::uncertain::{Extremum, CERTAINLY, INTERVAL_WORDS, POSSIBLY, SIGMA};
+use crate::uncertain::{Extremum, CERTAINLY, INTERVAL_FIELDS, INTERVAL_WORDS, POSSIBLY, SIGMA};
 use wasm_encoder::*;
 use Instruction as I;
 
@@ -67,7 +67,7 @@ const GAUSSIAN_PARTS: u32 = 4;
 const CONTRIBUTION_PARTS: u32 = 2;
 const RADIUS_FIELD: i32 = 3;
 /// The fields of an uncertain value, by their index in the parts (RADIUS_FIELD computed): `x.value`, `x.uncertainty`
-const UNCERTAIN_FIELDS: [(i32, &[&str]); 4] = [(VALUE, &["value"]), (LOW, &["low"]), (HIGH, &["high"]), (RADIUS_FIELD, &["uncertainty"])];
+const UNCERTAIN_FIELDS: [(i32, &str); 4] = [(VALUE, INTERVAL_FIELDS[0]), (LOW, INTERVAL_FIELDS[1]), (HIGH, INTERVAL_FIELDS[2]), (RADIUS_FIELD, INTERVAL_FIELDS[3])];
 const PLUS_MINUS_SEPARATOR: &str = " ± ";
 /// More decimals than this, or a value of MAX_SCALED units of its place or more, shows as float_text
 const MAX_DECIMALS: i32 = 17;
@@ -220,6 +220,17 @@ impl WasmGcEmitter {
 	pub(super) fn is_uncertain(&self, func: &mut Function, local: u32) {
 		self.emit_field(func, local, 0);
 		Self::emit_list(func, &[I::I64Const(KIND_MASK), I::I64And, I::I64Const(Kind::Uncertain as i64), I::I64Eq]);
+	}
+
+	/// An Int or a Float, not a bool
+	fn is_plain_number(&self, func: &mut Function, local: u32) {
+		for (index, kind) in [Kind::Int, Kind::Float].into_iter().enumerate() {
+			self.emit_field(func, local, 0);
+			Self::emit_list(func, &[I::I64Const(kind as i64), I::I64Eq]);
+			if index > 0 {
+				func.instruction(&I::I32Or);
+			}
+		}
 	}
 
 	fn parts_array(&self) -> u32 {
@@ -627,6 +638,11 @@ impl WasmGcEmitter {
 		let nullable = ValType::Ref(self.node_ref(true));
 		let (node, field, parts) = (0, 1, 2);
 		self.runtime_function(UNCERTAIN_FIELD, vec![node_ref, ValType::I32], vec![nullable], vec![self.parts_ref()], |s, f| {
+			// a plain number is the exact interval [x, x]: `q.amount.low` of an exact quantity (card quantity-tolerance)
+			s.is_plain_number(f, node);
+			Self::emit_list(f, &[I::If(BlockType::Empty), I::LocalGet(field), I::I32Const(RADIUS_FIELD), I::I32Eq, I::If(BlockType::Empty), I::F64Const(0.0.into())]);
+			s.call(f, "new_float");
+			Self::emit_list(f, &[I::Return, I::End, I::LocalGet(node), I::Return, I::End]);
 			s.is_uncertain(f, node);
 			Self::emit_list(f, &[I::I32Eqz, I::If(BlockType::Empty), I::RefNull(HeapType::Concrete(s.type_manager.node_type)), I::Return, I::End]);
 			s.emit_field(f, node, 1);
@@ -641,7 +657,7 @@ impl WasmGcEmitter {
 	/// Push `node.name` of an uncertain node, else nothing found: the general lookup of `target.name` follows. The node is
 	/// in `held`, inside the lookup's block, which a found field leaves
 	pub(super) fn emit_uncertain_field_lookup(&mut self, func: &mut Function, held: u32, name: &str) {
-		let Some(field) = UNCERTAIN_FIELDS.iter().position(|(_, names)| names.contains(&name)) else { return };
+		let Some(field) = UNCERTAIN_FIELDS.iter().position(|(_, field)| *field == name) else { return };
 		if !self.should_emit_function(UNCERTAIN_NEW) {
 			return;
 		}

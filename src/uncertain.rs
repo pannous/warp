@@ -14,6 +14,9 @@ pub const CERTAINLY: &str = "certainly";
 /// `y possibly < x`: some part of the interval is below
 pub const POSSIBLY: &str = "possibly";
 const CERTAINTY_WORDS: [&str; 2] = [CERTAINLY, POSSIBLY];
+/// `x.value`, `x.low`, `x.high`, `x.uncertainty` of a ± value (wasm_emitter/uncertain.rs); a class method of one of
+/// these names (Quantity's) is chosen by the receiver's class at run time (class_methods.rs)
+pub const INTERVAL_FIELDS: [&str; 4] = ["value", "low", "high", "uncertainty"];
 /// `5 ± 1σ`: a Gaussian ± (card plus-minus-gaussian), its spread one standard deviation; shown after its ± part
 pub const SIGMA: &str = "σ";
 
