@@ -473,6 +473,8 @@ PASSED:
   ✓ control::test_system_values::the_battery_is_a_percent_or_a_loud_error
   ✓ control::test_system_values::the_mouse_is_a_system_value_of_the_page
   ✓ control::test_system_values::yes_no_values_read_the_machine
+  ✓ control::test_table_element_writes::a_filtered_row_field_change_is_written_to_its_row
+  ✓ control::test_table_element_writes::an_element_field_change_is_written_to_its_row
   ✓ control::test_table_key_filter::rows_whose_foreign_key_is_a_given_row
   ✓ control::test_table_query_loading::a_filter_reads_only_the_rows_it_keeps
   ✓ control::test_table_query_loading::a_filtered_row_is_the_one_instance_of_its_row
@@ -1358,6 +1360,8 @@ PASSED:
   ✓ lists::test_captured_call_lists::a_captured_list_of_float_calls_holds_floats
   ✓ lists::test_concat_declared::concatenation_checks_declared_element_type
   ✓ lists::test_concat_declared::evident_other_items_are_a_compile_error
+  ✓ lists::test_count_after_function::a_count_after_a_function
+  ✓ lists::test_count_after_function::print_a_count
   ✓ lists::test_counting_word_variables::a_counting_word_variable_in_a_list_is_an_item
   ✓ lists::test_counting_word_variables::shared_values_named_like_counting_words_reach_a_go_block
   ✓ lists::test_decimal_list_elements::a_decimal_element_can_be_assigned
@@ -1617,6 +1621,7 @@ PASSED:
   ✓ modules::test_agent::agent_answers_a_prompt_when_a_key_is_set
   ✓ modules::test_agent::agent_with_a_wrong_key_fails_with_the_api_reason
   ✓ modules::test_agent::agent_without_a_key_names_the_variable
+  ✓ modules::test_agent::agent_without_a_key_says_where_to_set_it
   ✓ modules::test_dir::a_program_s_own_dir_wins
   ✓ modules::test_dir::dir_lists_the_names_of_a_standard_module
   ✓ modules::test_folder_scope::a_name_defined_in_two_siblings_is_ambiguous
@@ -2248,6 +2253,11 @@ PASSED:
   ✓ operators::test_increment_places::an_element_increments
   ✓ operators::test_increment_places::an_element_of_a_field_and_a_nested_element_change
   ✓ operators::test_infix_operand_names::test_infix_operands_named_left_and_right
+  ✓ operators::test_infix_word_operators::a_word_infix_operator_with_parameters
+  ✓ operators::test_infix_word_operators::a_word_infix_operator_without_parameters
+  ✓ operators::test_infix_word_operators::a_word_operator_is_still_a_word_elsewhere
+  ✓ operators::test_infix_word_operators::an_assigned_filter_by_an_operator
+  ✓ operators::test_infix_word_operators::infix_without_operator_is_an_alias
   ✓ operators::test_less_than_compare::test_a_less_than_after_a_variable_is_a_comparison
   ✓ operators::test_less_than_compare::test_generics_still_start_after_a_type_name
   ✓ operators::test_like::a_known_other_type_teaches_like
@@ -3379,6 +3389,8 @@ PASSED:
   ✓ types::test_typed_arrays::test_typed_array_declaration_with_count_first
   ✓ types::test_typed_arrays::test_typed_array_declaration_with_subscript
   ✓ types::test_typed_arrays::test_typed_array_of_other_types
+  ✓ types::test_typed_list_elements::a_bracketed_list_type_checks_its_items
+  ✓ types::test_typed_list_elements::a_fixed_width_list_checks_its_range
   ✓ types::test_types::test_auto_type
   ✓ types::test_types::test_auto_type_nan
   ✓ types::test_types::test_bad_type
@@ -4154,4 +4166,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-10 ignored, 4149 passed, 0 failed, 4149 total tested
+10 ignored, 4161 passed, 0 failed, 4161 total tested

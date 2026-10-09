@@ -1,0 +1,3 @@
+class Person{name: text; age: int}
+people: [Person] = database.people
+print people#1.age

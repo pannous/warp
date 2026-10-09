@@ -237,3 +237,4 @@ Running list of the small fixes done by the fixer session (branches fix-<topic>)
 - transaction { } = BEGIN … COMMIT, ROLLBACK + restore of held instances on failure, re-raised; native and browser.
 - 2026-10-09 orm-where-paging: a table filter reads only the rows it keeps (people·found), not the whole table.
 - 2026-10-09 orm-identity-map: list cursor: a loop over a list of objects indexed and counted it from the head each step (n² per walk); now O(1) per step.
+- 2026-10-09 orm-element-write: people#1.age = 5 (and a filtered row's field) is written to its row; it was refused as a copy.

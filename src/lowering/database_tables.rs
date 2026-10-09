@@ -99,6 +99,8 @@ const SELECT_PLACEHOLDER: &str = "table_select_read";
 const VALUE_PLACEHOLDER: &str = "table_value";
 /// `red.players.add(p)`: the instance whose one-to-many field is added to
 const OWNER_PLACEHOLDER: &str = "table_owner";
+/// the instance whose field change written_through writes to its row
+const INSTANCE_PLACEHOLDER: &str = "table_instance";
 /// A filter's query (notes/orm.md step 2): the ids it keeps, its SQL condition and parameters, the functions it calls
 const CONDITION_PLACEHOLDER: &str = "table_condition_text";
 const PARAMETERS_PLACEHOLDER: &str = "table_parameters";
@@ -649,8 +651,32 @@ fn table_statements(statement: Node, tables: &HashMap<String, Table>, file: &str
 	if let Some(lowered) = opened(&statement, tables, file, open).or_else(|| inserted(&statement, tables, file)) {
 		return lowered;
 	}
+	if let Some(bound) = with_bound_element(&statement, tables) {
+		return bound.into_iter().flat_map(|statement| table_statements(statement, tables, file, open)).collect();
+	}
 	let updates = written_through(&statement, tables, file);
 	[vec![with_tables(statement, tables, file, open)], updates].concat()
+}
+
+/// `people#1.age = 5`, `(people where …)#1.age += 1`: a column of an element of a table changed in place, as the
+/// element bound first, `people·element = people#1; people·element.age = 5`, whose change written_through writes to
+/// its row
+fn with_bound_element(statement: &Node, tables: &HashMap<String, Table>) -> Option<Vec<Node>> {
+	let Node::Key(target, op, value) = statement.drop_meta() else { return None };
+	if *op != Op::Assign && !op.is_compound_assign() {
+		return None;
+	}
+	let Node::Key(instance, Op::Dot, field) = target.drop_meta() else { return None };
+	if matches!(instance.drop_meta(), Node::Symbol(_)) {
+		return None;
+	}
+	let variable = tables.keys().find(|name| instance.mentions_any(&[name.as_str()]))?;
+	if !columns_of(&tables[variable]).contains(&field.drop_meta().name()) {
+		return None;
+	}
+	let element = Node::Symbol(lazy_name(variable, "element"));
+	let changed = Node::Key(Box::new(Node::Key(Box::new(element.clone()), Op::Dot, field.clone())), *op, value.clone());
+	Some(vec![Node::Key(Box::new(element), Op::Assign, instance.clone()), changed])
 }
 
 /// `people: [Person] = database.people` as the list of the table's rows, each an instance with its id; then the
@@ -1058,9 +1084,10 @@ fn written_through(statement: &Node, tables: &HashMap<String, Table>, file: &str
 	}
 	let Node::Key(instance, Op::Dot, field) = target.drop_meta() else { return vec![] };
 	let (Node::Symbol(instance), field) = (instance.drop_meta(), field.drop_meta().name()) else { return vec![] };
+	// the instance as a placeholder: a generated one (`people·element`) would parse as a product
 	tables.values().filter(|table| field != ID_FIELD && columns_of(table).contains(&field))
-		.map(|table| parse(&format!("if {instance} is {class} and {instance}.{ID_FIELD} > 0 {{ {update} }}",
-			class = table.class, update = column_update(table, instance, &field, file)))).collect()
+		.map(|table| generated(&format!("if {INSTANCE_PLACEHOLDER} is {class} and {INSTANCE_PLACEHOLDER}.{ID_FIELD} > 0 {{ {update} }}",
+			class = table.class, update = column_update(table, INSTANCE_PLACEHOLDER, &field, file)), [(INSTANCE_PLACEHOLDER, Node::Symbol(instance.clone()))])).collect()
 }
 
 /// The UPDATE of one column of `instance`'s row

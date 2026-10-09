@@ -18,7 +18,10 @@ if count(people) == 0 {
 grown = people where age > 18
 print "grown: " + count(grown)
 
-# infix operator divides(d:int,n:int) := { n % d == 0 }  TODO Also see card. 
+// a word can be an operator: `3 divides 12` calls it with d = 3 and n = 12
+infix operator divides(d:int,n:int) := { n % d == 0 }  # DONE Also see card.
+tens = people where 10 divides it.age
+print "ages that 10 divides: " + #tens
 
 // any warp function works inside a filter too: SQLite calls back into the program for each row
 prime(n) := not 0 in [n%d for d in 2..n] 

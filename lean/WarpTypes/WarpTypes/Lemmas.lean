@@ -18,6 +18,7 @@ theorem value_ctx {Γ v t} (h : HasType P Γ v t) (hv : v.isValue = true) (Γ' :
   | nil => exact .nil
   | ref => exact .ref
   | lref => exact .lref
+  | intIn h1 h2 => exact .intIn h1 h2
   | clo hb => exact .clo hb
   | cons _ _ he ih1 ih2 => simp [isValue] at hv; exact .cons (ih1 hv.1) (ih2 hv.2) he
   | _ => simp [isValue] at hv
@@ -46,7 +47,9 @@ theorem repeat_typed {Γ n tn} (s : String) (hn : HasType P Γ n tn) :
   unfold repeatValues
   split
   · rename_i k hk
-    cases n <;> simp [asInt] at hk <;> cases hn <;> exact ⟨_, .text, by decide, by decide⟩
+    cases n <;> simp [asInt] at hk <;> cases hn <;> first
+      | exact ⟨_, .text, by decide, by decide⟩
+      | exact ⟨_, .text, by simp [repeatTy, sub], by simp [repeatTy, sub]⟩
   · exact ⟨_, .error, sub_never _, sub_never _⟩
 
 -- the brute-force case split over operand values needs more than the default budget
@@ -73,7 +76,11 @@ theorem arith_typed {Γ op a b ta tb} (ha : HasType P Γ a ta) (hb : HasType P �
       · exact ⟨_, .num, n⟩
     all_goals cases ha <;> cases hb <;>
       simp_all [isValue, isNumber, asInt, asNumber, ArithOp.ty, ArithOp.widen, arithTy, Ty.arith, sub] <;>
-      first | exact ⟨_, .int, by decide⟩ | exact ⟨_, .num, by decide⟩
+      first
+        | exact ⟨_, .int, by decide⟩
+        | exact ⟨_, .num, by decide⟩
+        | exact ⟨_, .int, by simp [repeatTy, Ty.arith, sub]⟩
+        | exact ⟨_, .num, by simp [repeatTy, Ty.arith, sub]⟩
 
 theorem lt_typed {Γ a b} : ∃ t', HasType P Γ (ltValues a b) t' ∧ sub t' .bool = true := by
   unfold ltValues
@@ -218,11 +225,31 @@ theorem valueType_typed {Γ} : ∀ {v : Expr} {t}, valueType v = some t → HasT
     · cases hv
   | _ => intro t hv; simp [valueType] at hv <;> subst hv <;> constructor
 
-theorem fits_typed {Γ v t} (h : fits v t = true) : ∃ tv, HasType P Γ v tv ∧ sub tv t = true := by
-  unfold fits at h
-  split at h
-  · exact ⟨_, valueType_typed (by assumption), h⟩
-  · cases h
+theorem fits_typed {Γ} : ∀ {v : Expr} {t}, fits v t = true → ∃ tv, HasType P Γ v tv ∧ sub tv t = true := by
+  have byType {v t} (h : (match valueType v with | some tv => sub tv t | none => false) = true) :
+      ∃ tv, HasType P Γ v tv ∧ sub tv t = true := by
+    split at h
+    · exact ⟨_, valueType_typed ‹_›, h⟩
+    · cases h
+  intro v
+  induction v with
+  | int n =>
+    intro t h
+    cases t <;> first
+      | (simp only [fits, decide_eq_true_eq] at h; exact ⟨_, .intIn h.1 h.2, sub_refl _⟩)
+      | exact byType h
+  | cons hd tl ihh iht =>
+    intro t h
+    cases t with
+    | list e =>
+      simp only [fits, Bool.and_eq_true] at h
+      obtain ⟨th, hh, sh⟩ := ihh h.1
+      obtain ⟨tt, ht, st⟩ := iht h.2
+      rcases sub_to_list st with rfl | ⟨b, rfl, hb⟩
+      · exact ⟨_, .cons hh ht rfl, by cases th <;> simp_all [join]⟩
+      · exact ⟨_, .cons hh ht rfl, by simpa using join_least sh hb⟩
+    | _ => exact byType h
+  | _ => intro t h; cases t <;> exact byType h
 
 /-- a conversion gives a value of the target type, or an error -/
 theorem convertValue_typed {Γ v} (μ : Store) (t : Ty) :
@@ -308,6 +335,7 @@ theorem narrow {Γ e t} (h : HasType P Γ e t) : ∀ {Γ'}, CtxSub Γ' Γ → �
   induction h with
   | bool => intros; exact ⟨_, .bool, sub_refl _⟩
   | int => intros; exact ⟨_, .int, sub_refl _⟩
+  | intIn h1 h2 => intros; exact ⟨_, .intIn h1 h2, sub_refl _⟩
   | num => intros; exact ⟨_, .num, sub_refl _⟩
   | text => intros; exact ⟨_, .text, sub_refl _⟩
   | unit => intros; exact ⟨_, .unit, sub_refl _⟩
@@ -491,6 +519,7 @@ theorem subst_typed {Γ0 e t} (h : HasType P Γ0 e t) :
   induction h with
   | bool => intros; simp only [Expr.subst]; exact .bool
   | int => intros; simp only [Expr.subst]; exact .int
+  | intIn h1 h2 => intros; simp only [Expr.subst]; exact .intIn h1 h2
   | num => intros; simp only [Expr.subst]; exact .num
   | text => intros; simp only [Expr.subst]; exact .text
   | unit => intros; simp only [Expr.subst]; exact .unit
