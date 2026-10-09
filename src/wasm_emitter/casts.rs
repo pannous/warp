@@ -340,7 +340,7 @@ impl WasmGcEmitter {
 		self.emit_call(func, "new_codepoint");
 	}
 
-	/// `x as bool`: a literal's truth known at compile time, else non-zero is true
+	/// `x as bool`, a bool: a literal's truth known at compile time, else non-zero is true
 	pub(super) fn emit_cast_to_bool(&mut self, func: &mut Function, value: &Node) {
 		let literal_truth = match value {
 			Node::Text(s) => Some(!FALSY_TEXTS.contains(&s.to_lowercase().as_str())),
@@ -352,14 +352,10 @@ impl WasmGcEmitter {
 			_ => None,
 		};
 		match literal_truth {
-			Some(truth) => self.emit_int_node(func, truth as i64),
+			Some(truth) => self.emit_node_instructions(func, &if truth { Node::True } else { Node::False }),
 			None => {
 				self.emit_numeric_value(func, value);
-				func.instruction(&I::I64Eqz);
-				func.instruction(&I::I64ExtendI32U);
-				func.instruction(&I::I64Const(1));
-				func.instruction(&I::I64Xor);
-				self.emit_call(func, "new_int");
+				self.emit_call(func, "new_bool");
 			}
 		}
 	}

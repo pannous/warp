@@ -51,13 +51,15 @@ pub fn is_bool_function(name: &str) -> bool {
 	BOOL_FUNCTIONS.with(|known| known.borrow().contains(name))
 }
 
-/// `true`, `3 > 2`, `not x`, `a and b` of bools, `x is int`, a variable bound to one, `(…; x < 3)` ending in one
+/// `true`, `3 > 2`, `2 as bool`, `bool(2)`, `not x`, `a and b` of bools, `x is int`, a variable bound to one, `(…; x < 3)` ending in one
 pub fn is_boolean(node: &Node, scope: &Scope) -> bool {
 	match node.drop_meta() {
 		Node::True | Node::False => true,
 		Node::Key(left, op, right) => match op {
 			_ if op.is_comparison() => true,
 			Op::Not => matches!(left.drop_meta(), Node::Empty),
+			// `2 as bool`, also a function's declared `-> bool` result (card bool-conversion)
+			Op::As => is_bool_type(&right.drop_meta().name()),
 			Op::And | Op::Or => is_boolean(left, scope) && is_boolean(right, scope),
 			// `c ? yes : f(n)`, `if c then yes else f(n)`: both branches
 			Op::Question => matches!(right.drop_meta(), Node::Key(then, Op::Colon, otherwise) if is_boolean(then, scope) && is_boolean(otherwise, scope)),
@@ -71,7 +73,7 @@ pub fn is_boolean(node: &Node, scope: &Scope) -> bool {
 		Node::List(items, Bracket::Round | Bracket::Curly, _) if items.len() == 1 && is_boolean(&items[0], scope) => true,
 		Node::List(items, _, _) if matches!(items.as_slice(), [word, _] if word.drop_meta().name() == crate::lowering::tuples::RETURN) => is_boolean(&items[1], scope),
 		Node::List(items, _, Separator::Semicolon | Separator::Newline) => items.last().is_some_and(|last| is_boolean(last, scope)),
-		Node::List(items, _, _) => matches!(items.first().map(Node::drop_meta), Some(Node::Symbol(name)) if BOOL_CALLS.contains(&name.as_str()) || is_bool_function(name)),
+		Node::List(items, _, _) => matches!(items.first().map(Node::drop_meta), Some(Node::Symbol(name)) if BOOL_CALLS.contains(&name.as_str()) || is_bool_function(name) || (items.len() == 2 && is_bool_type(name))),
 		_ => false,
 	}
 }
