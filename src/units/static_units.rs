@@ -246,6 +246,15 @@ fn shown(signature: &Signature) -> String {
 	if factors.is_empty() { "a plain number".to_string() } else { units_text(&factors) }
 }
 
+/// `"a: "`, `"a: " + x + " or "`: a text, or a sum with a text in it, which every operand joins as its text
+fn joins_text(node: &Node) -> bool {
+	match node.drop_meta() {
+		Node::Text(_) => true,
+		Node::Key(left, Op::Add, right) => joins_text(left) || joins_text(right),
+		_ => false,
+	}
+}
+
 /// ø, which has no dimension: an optional unit field may hold it
 fn is_nothing(node: &Node) -> bool {
 	matches!(node.drop_meta(), Node::Empty)
@@ -418,7 +427,7 @@ impl Inference {
 				Ok((quantity, given))
 			}
 			// `"distance " + d`: the quantity joins as its text, `"distance " + (d as km)` in km
-			Node::Key(left, Op::Add, right) if matches!(left.drop_meta(), Node::Text(_)) || matches!(right.drop_meta(), Node::Text(_)) => {
+			Node::Key(left, Op::Add, right) if joins_text(&left) || joins_text(&right) => {
 				let (left_units, right_units) = (conversion_target(&left), conversion_target(&right));
 				let (left, left_signature) = self.infer(*left)?;
 				let (right, right_signature) = self.infer(*right)?;
