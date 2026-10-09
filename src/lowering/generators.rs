@@ -157,7 +157,7 @@ pub(crate) fn yielded_value(values: Vec<Node>) -> Node {
 }
 
 /// A list of statements: a block's, a sequence's, or a block of one
-fn is_statement_list(items: &[Node], bracket: &Bracket, separator: &Separator) -> bool {
+pub(crate) fn is_statement_list(items: &[Node], bracket: &Bracket, separator: &Separator) -> bool {
 	matches!(separator, Separator::Semicolon | Separator::Newline) || (*bracket == Bracket::Curly && items.len() == 1)
 }
 

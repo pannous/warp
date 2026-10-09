@@ -89,3 +89,25 @@ fn a_generator_object_jumps_like_its_loops() {
 fn a_loop_walks_a_generator_object() {
 	is!("evens(n) := { for i in 1 to n { if i % 2 == 0 { yield i } } }\ns = 0\nfor x in iter(evens(10)) { s += x }\ns", 30);
 }
+
+#[test]
+fn take_stops_an_endless_generator() {
+	is!(&format!("{NATURALS}take(naturals(), 3)"), ints(vec![1, 2, 3]));
+	is!(&format!("{NATURALS}n = naturals()\nfirst_two = take(n, 2)\ntake(n, 2)"), ints(vec![3, 4]));
+	is!(&format!("{COUNT_TO}take(count_to(2), 5)"), ints(vec![1, 2]));
+	is!(&format!("{NATURALS}take 3 of naturals()"), ints(vec![1, 2, 3]));
+	is!(&format!("{NATURALS}first 2 of naturals()"), ints(vec![1, 2]));
+	is!(&format!("{NATURALS}s = 0\nfor i in 1 to 2 {{ s += sum(take(naturals(), i)) }}\ns"), 4);
+}
+
+#[test]
+fn zip_pairs_generators_and_lists() {
+	is!(&format!("{NATURALS}zip(naturals(), [5, 6])"), parse("[[1 5] [2 6]]"));
+	is!(&format!("{NATURALS}{COUNT_TO}zip(count_to(2), naturals())"), parse("[[1 1] [2 2]]"));
+}
+
+#[test]
+fn list_and_sum_take_the_rest_of_a_generator_object() {
+	is!(&format!("{COUNT_TO}c = count_to(4)\nnext(c)\nlist(c)"), ints(vec![2, 3, 4]));
+	is!(&format!("{COUNT_TO}c = count_to(4)\nnext(c)\nsum(c)"), 9);
+}
