@@ -197,6 +197,8 @@ impl WarpParser {
 			'/' if c2 != '/' => Some((Op::Div, 1)), // Don't treat // as division - it's a comment
 			'%' => Some((Op::Mod, 1)),
 			'^' => Some((Op::Pow, 1)),
+			'⌞' => Some((Op::LogBase, 1)),
+			'⌟' => Some((Op::LogOf, 1)),
 			'×' | '⋅' => Some((Op::Mul, 1)),
 			'÷' => Some((Op::Div, 1)),
 			'<' | '>' if self.options.wit_mode => None, // angle brackets only delimit type arguments
@@ -497,6 +499,8 @@ impl WarpParser {
 			('-', '-') => Some((Op::Dec, 2)),
 			// `10%`, `10% + x`: a percent, no remainder, when no operand follows
 			('%', next) if next != '=' && self.expression_ends_after(1) => Some((Op::Mod, 1)),
+			// `ℯ⌟`: the natural log when no base follows
+			('⌟', _) if self.expression_ends_after(1) => Some((Op::LogOf, 1)),
 			_ => None,
 		}
 	}
