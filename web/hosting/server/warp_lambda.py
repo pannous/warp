@@ -124,9 +124,14 @@ def failure_of(name):
     return "\n".join(lines[-6:]) or "it stopped without a word"
 
 
+def program_connection(port, timeout):
+    """from PROGRAM_ADDRESS too: the program's unit drops every other localhost address, 127.0.0.1 included"""
+    return http.client.HTTPConnection(PROGRAM_ADDRESS, port, timeout=timeout, source_address=(PROGRAM_ADDRESS, 0))
+
+
 def answers(port):
     try:
-        connection = http.client.HTTPConnection(PROGRAM_ADDRESS, port, timeout=2)
+        connection = program_connection(port, 2)
         connection.request("GET", "/")
         connection.getresponse().read()
         return True
@@ -248,7 +253,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
         if not entry:
             raise Refusal(404, f"no program {name} on {DOMAIN}")
         headers = {key: value for key, value in self.headers.items() if key.lower() not in HOP_HEADERS}
-        connection = http.client.HTTPConnection(PROGRAM_ADDRESS, entry["port"], timeout=PROXY_TIMEOUT)
+        connection = program_connection(entry["port"], PROXY_TIMEOUT)
         try:
             connection.request(self.command, self.path, body=self.body() or None, headers=headers)
             answer = connection.getresponse()
