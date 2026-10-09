@@ -1,0 +1,16 @@
+naturals() := { k = 1; while yes { yield k; k += 1 } }
+inner() := { yield 1; yield 2 }
+outer() := { yield 0; yield from inner(); yield 3 }
+print outer()
+pairs() := { yield each [1, 2]; yield* [3] }
+print pairs()
+doubled() := { yield from (2 * x for x in naturals()) }
+print take 3 of doubled()
+countdown(n) := { if n > 0 { yield n; yield from countdown(n - 1) } }
+print countdown(3)
+def chained():
+    yield from [1, 2]
+    yield from [3]
+
+c = chained()
+print [next(c), next(c), next(c), next(c)]

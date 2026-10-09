@@ -120,3 +120,21 @@ fn a_generator_expression_is_a_generator() {
 	is!(&format!("{NATURALS}t = 0\nfor y in (x * x for x in naturals()) {{ if y > 20 {{ break }}; t += y }}\nt"), 30);
 	is!("factor = 3\ng = (x * factor for x in [1, 2])\n[next(g), next(g), next(g)]", parse("[3 6 ø]"));
 }
+
+#[test]
+fn yield_from_hands_on_what_another_yields() {
+	let inner = "inner() := { yield 1; yield 2 }\n";
+	is!(&format!("{inner}outer() := {{ yield 0; yield from inner(); yield 3 }}\nouter()"), ints(vec![0, 1, 2, 3]));
+	is!("pairs() := { yield each [1, 2]; yield* [3] }\npairs()", ints(vec![1, 2, 3]));
+	is!(&format!("{NATURALS}doubled() := {{ yield from (2 * x for x in naturals()) }}\ntake 3 of doubled()"), ints(vec![2, 4, 6]));
+	is!("countdown(n) := { if n > 0 { yield n; yield from countdown(n - 1) } }\ncountdown(3)", ints(vec![3, 2, 1]));
+	is!("def chained():\n    yield from [1, 2]\n    yield from [3]\n\nc = chained()\n[next(c), next(c), next(c), next(c)]", parse("[1 2 3 ø]"));
+}
+
+#[test]
+fn send_gives_the_yield_a_value() {
+	let averager = "averager() := { total = 0; n = 0; average = 0; while yes { value = yield average; total += value; n += 1; average = total / n } }\n";
+	is!(&format!("{averager}a = averager()\nnext(a)\n[a.send(10), a.send(20), a.send(60)]"), ints(vec![10, 15, 30]));
+	is!("echo() := { while yes { got = yield 1; if got == ø { return }; yield got } }\ne = echo()\n[next(e), e.send(7), next(e), next(e)]", parse("[1 7 1 ø]"));
+	is!("pairs() := { x = yield 1; yield [x] }\npairs()", parse("[1 [ø]]"));
+}

@@ -56,8 +56,23 @@
 - lazy_loops now runs before the generator objects and inlines the loops it made in turn: a generator looping over
   another (`(x * x for x in naturals())`) has it inlined first, so its object never collects the endless one.
 
+## yield from (generators.rs `delegations`, before the generators are found)
+- `yield from xs` (Python), `yield each xs`, `yield* xs` (JavaScript) become `for yield·item·1 in xs { yield yield·item·1 }`:
+  lazy over a generator (`yield from (2 * x for x in naturals())`), recursive ones collect (`yield from countdown(n - 1)`).
+- Python's `def chained():` without parameters stayed a def form for late_binding (P71, a getter); with a yield it is
+  the definition `chained() := …` now (declarations.rs), so a parameterless Python generator works.
+
 ## Next
 - wasm stack switching (wasmtime 49 has `wasm_stack_switching`, x86-64 Linux only; no browser) would resume any
   generator without the state machine; not needed now.
-- `yield from xs` / `yield each xs`, a recursive generator lazily.
+- a recursive generator lazily (each level an object of its own).
 - Done (card ruby-loop): Ruby `loop do … end` and `while c … end` inside a `def … end` parse (parser skip_end_line, welcome_forms endless_loop).
+
+## send (card generators-send)
+`x = yield v` receives what `g.send(w)` gives: the object has the field `generator·sent` and the method
+`send(generator·value) := { generator·sent = generator·value; self.next() }`; the state after the yield starts with
+`x = generator·sent; generator·sent = ø`, so `next(g)` gives x ø. A collected or inlined generator receives ø
+(`generators::yield_statement`, `receiving_nothing`). Prime with `next(g)` first, as in Python.
+Side fix: class_methods' temp pair of a changing method call is numbered per call site (`next·result·3`): send's
+`self.next()` and main's `a.next()` shared `next·result` and the scope analyzer asked whose it was.
+Probe: probes/generators/send.warp.
