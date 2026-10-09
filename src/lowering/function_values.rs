@@ -326,7 +326,8 @@ impl Specialising {
 		}
 		let mut targets = Vec::new();
 		for index in &indexes {
-			let argument = arguments.get(*index);
+			let argument = arguments.get(*index).map(|argument| crate::lambdas::it_function(argument).unwrap_or_else(|| argument.clone()));
+			let argument = argument.as_ref();
 			let Some(target) = argument.and_then(|argument| self.function_name(argument)) else {
 				// a function known only at run time is passed as a closure to the generic version (closures.rs)
 				if argument.is_some_and(may_be_function_value) {

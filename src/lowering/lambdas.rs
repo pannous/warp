@@ -152,7 +152,27 @@ fn operator_lambda(node: &Node) -> Option<Lambda> {
 
 /// A function written as a value: a lambda, a block or an operator
 fn literal_function(node: &Node) -> Option<Lambda> {
-	arrow_lambda(node).or_else(|| block_lambda(node)).or_else(|| operator_lambda(node))
+	arrow_lambda(node).or_else(|| block_lambda(node)).or_else(|| operator_lambda(node)).or_else(|| arrow_lambda(&it_function(node)?))
+}
+
+/// `map`, `filter`, `sorted` … as a word, whether or not the program defines a function of that name
+fn iteration_word(word: &Node) -> Option<&'static Iteration> {
+	let Node::Symbol(name) = word.drop_meta() else { return None };
+	let canonical = ITERATION_SPELLINGS.iter().find(|(_, spellings)| spellings.contains(&name.as_str())).map_or(name.as_str(), |(word, _)| word);
+	ITERATIONS.iter().find(|iteration| iteration.word == canonical)
+}
+
+/// `xs.map(it * 2)` in a function of one parameter: the `it` of the argument is the argument function's own
+pub(crate) fn has_own_it(head: &Node, argument: &Node) -> bool {
+	iteration_word(head).is_some() && it_function(argument).is_some()
+}
+
+/// `xs.map(it * 2)`, `apply(it + 1, 3)`: an expression of `it` where a function is expected is the function `it => …`
+/// (clear intent, notes/welcoming.md); a bare `it` stays the value it names
+pub(crate) fn it_function(node: &Node) -> Option<Node> {
+	let is_bare = matches!(node.drop_meta(), Node::Symbol(_));
+	let it = || Box::new(Node::Symbol(IMPLICIT_PARAMETER.to_string()));
+	(!is_bare && mentions_outside_blocks(node, IMPLICIT_PARAMETER)).then(|| Node::Key(it(), Op::FatArrow, Box::new(node.clone())))
 }
 
 /// `a > b`, also as the one statement of a block
@@ -537,9 +557,7 @@ impl Lowering {
 
 	/// The iteration a word names, unless the program defines a function of that name
 	fn iteration_of(&self, word: &Node) -> Option<&'static Iteration> {
-		let Node::Symbol(name) = word.drop_meta() else { return None };
-		let canonical = ITERATION_SPELLINGS.iter().find(|(_, spellings)| spellings.contains(&name.as_str())).map_or(name.as_str(), |(word, _)| word);
-		ITERATIONS.iter().find(|iteration| iteration.word == canonical && !self.context.user_functions.contains_key(name))
+		iteration_word(word).filter(|_| !self.context.user_functions.contains_key(&word.drop_meta().name()))
 	}
 
 	/// `word(extras, function)` after a dot: the iteration and its arguments, the function last

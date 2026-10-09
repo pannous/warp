@@ -54,6 +54,8 @@ User decisions from that round:
 - `#ident` with no space is count (`#s`); `# text` stays a comment; directives (#use, #include, #!) keep working
 - `upto` excludes the end, with a warning naming the explicit forms (`..<`/`..` exclusive, `to`/`...` inclusive)
 - missing map key `m["Z"]` stays an error (as in Python); `m.get(k)`, `m.get(k, default)`, `k in m`, `m.has(k)` are the soft forms
+- an expression of `it` where a function is expected is that function: `xs.map(it * 2)`, `apply(it + 3, 1)`; inside a
+  function of one parameter its `it` stays the argument function's (card map-it, src/lowering/lambdas.rs it_function)
 
 ## Ask: how it works (src/diagnostic.rs)
 - `Ask { topic, written, question, readings: [Reading{meaning, explicit_form}], default, fallback: Fallback::{Warning, Error}, line, column }`;
