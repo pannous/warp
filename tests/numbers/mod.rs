@@ -85,3 +85,4 @@ mod test_text_then_conversion; // card print-km
 mod test_compound_accumulator; // card compound-accumulator
 mod test_unit_named_variable; // card loop-variable
 mod test_unit_named_function; // card static-units-function
+mod test_units_type_holes; // cards units-compare units-reassign units-annotation units-text-repeat

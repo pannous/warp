@@ -487,6 +487,8 @@ pub fn describe(data: &DataValue) -> Option<String> {
 #[derive(Clone, Debug)]
 enum Value {
 	Number(i64),
+	/// a comparison's answer, yes or no as a plain comparison's (card units-compare)
+	Bool(bool),
 	Quantity(Quantity),
 	Tolerance(Tolerance),
 	Range(Range),
@@ -521,6 +523,7 @@ fn answer_shadowed(program: &Node) -> Option<Node> {
 	}
 	match evaluate(program) {
 		Ok(Value::Number(n)) => Some(Node::int(n)),
+		Ok(Value::Bool(truth)) => Some(truth_node(truth)),
 		// a ratio of two quantities of one dimension that is no whole number: `1 m / 3 m` is 1/3
 		Ok(Value::Quantity(quantity)) if quantity.factors.is_empty() => Some(quotient_node(&quantity.amount)),
 		Ok(Value::Quantity(quantity)) => Some(Node::data(quantity)),
@@ -632,6 +635,7 @@ fn fold_comparisons(node: Node, constants: &Variables, clock: bool) -> Node {
 	let reads_quantities = needs_quantities(&node) || constants.keys().any(|name| crate::warp_parser::mentions(&node, name));
 	match evaluate_in(&node, &mut constants.clone()).ok().filter(|_| reads_quantities) {
 		Some(Value::Number(answer)) => Node::int(answer),
+		Some(Value::Bool(truth)) => truth_node(truth),
 		_ => match evaluate_in(&node, &mut constants.clone()) {
 			Err(Stop::Error(message)) if reads_quantities => error(&message),
 			_ => node.map_children(|child| fold_comparisons(child, constants, clock)),
@@ -771,6 +775,9 @@ fn evaluate_in(node: &Node, variables: &mut Variables) -> Evaluated {
 		Node::Key(target, Op::Assign | Op::Define, value) => {
 			let Node::Symbol(name) = target.drop_meta() else { return Err(Stop::Unsupported) };
 			let value = evaluate_in(value, variables)?;
+			if let Some(earlier) = variables.get(name) {
+				same_dimension_kept(name, earlier, &value)?;
+			}
 			variables.insert(name.clone(), value.clone());
 			Ok(value)
 		}
@@ -894,6 +901,7 @@ fn negate(value: Value) -> Evaluated {
 		Value::Number(n) => Ok(Value::Number(-n)),
 		Value::Quantity(quantity) => Ok(Value::Quantity(quantity.with_amount(quantity.amount.neg()))),
 		Value::Tolerance(_) | Value::Range(_) => fail("cannot negate a value with tolerance or a range"),
+		Value::Bool(_) => Err(Stop::Unsupported),
 	}
 }
 
@@ -1063,7 +1071,7 @@ fn aligned(left: &Quantity, right: &Quantity) -> Result<(Rational, Rational, Vec
 	Ok((amount(left), amount(right), factors))
 }
 
-/// Comparison of two quantities in their finer units: `3km == 3000m`, answered 1 or 0
+/// Comparison of two quantities in their finer units: `3km == 3000m`, answered yes or no
 fn compare(left: Quantity, op: Op, right: Quantity) -> Evaluated {
 	let (x, y, _) = aligned(&left, &right)?;
 	let order = x.compare(&y);
@@ -1075,7 +1083,25 @@ fn compare(left: Quantity, op: Op, right: Quantity) -> Evaluated {
 		Op::Le => order.is_le(),
 		_ => order.is_ge(),
 	};
-	Ok(Value::Number(holds as i64))
+	Ok(Value::Bool(holds))
+}
+
+/// `x = 1 m; x = 2 s`: a variable keeps its dimension, as the static units pass checks (card units-reassign)
+fn same_dimension_kept(name: &str, earlier: &Value, given: &Value) -> Result<(), Stop> {
+	let dimension = |value: &Value| match value {
+		Value::Number(_) => Some((vec![], "a plain number".to_string())),
+		Value::Quantity(quantity) => Some((signature(&quantity.factors), units_text(&quantity.factors))),
+		_ => None,
+	};
+	let (Some((was, was_shown)), Some((is, is_shown))) = (dimension(earlier), dimension(given)) else { return Ok(()) };
+	match was.len() == is.len() && was.iter().all(|power| is.contains(power)) {
+		true => Ok(()),
+		false => fail(format!("DimensionError: {name} was {was_shown}, is given {is_shown}")),
+	}
+}
+
+fn truth_node(truth: bool) -> Node {
+	if truth { Node::True } else { Node::False }
 }
 
 fn unitless_number(value: &Value) -> bool {
@@ -1098,7 +1124,7 @@ fn same_span(left: Value, op: Op, right: Value) -> Evaluated {
 		return fail(format!("cannot compare spans in different units: {} and {}", unit.unwrap_or("no unit"), other_unit.unwrap_or("no unit")));
 	}
 	let same = (from, to) == (other_from, other_to);
-	Ok(Value::Number((same == (op == Op::Eq)) as i64))
+	Ok(Value::Bool(same == (op == Op::Eq)))
 }
 
 fn sum(left: Quantity, op: Op, right: Quantity) -> Evaluated {
