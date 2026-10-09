@@ -80,8 +80,12 @@ enum Stop {
 /// The program with unit literals as SI amounts and the units of its final value; None when it uses no units or uses
 /// quantities beyond stage 1; Err for a dimension error
 pub fn lower(program: &Node) -> Option<Result<Node, Node>> {
+	super::shadowing(program, || lower_shadowed(program))
+}
+
+fn lower_shadowed(program: &Node) -> Option<Result<Node, Node>> {
 	let classes = unit_fields::unit_classes(program);
-	if (!super::needs_quantities(program) && classes.is_empty()) || super::defines_unit_name(program) {
+	if !super::needs_quantities(program) && classes.is_empty() {
 		return None;
 	}
 	// a unit a constructor argument is written in (`Run(1500 m)`) is stored in its field's unit, which shows it
