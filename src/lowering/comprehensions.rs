@@ -100,11 +100,13 @@ fn fields_of_it(condition: Node, fields: &[String], variables: &HashSet<String>)
 }
 
 fn where_filters(node: Node, lists: &mut Lists) -> Node {
+	if let Node::List(items, bracket, separator) = node.drop_meta() {
+		if let Some(filtered_loop) = loop_over_filtered(items, lists) {
+			return Node::List(filtered_loop, bracket.clone(), separator.clone());
+		}
+	}
 	let node = node.map_children(|child| where_filters(child, lists));
 	let Node::List(items, bracket, separator) = node else { return node };
-	if let Some(filtered_loop) = loop_over_filtered(&items, lists) {
-		return Node::List(filtered_loop, bracket, separator);
-	}
 	let Some(at) = where_position(&items) else { return Node::List(items, bracket, separator) };
 	let filtered = match items[at + 1].drop_meta() {
 		// Haskell's binding `x * 2 where x = 3`: the assignment, then the expression
@@ -131,14 +133,16 @@ fn where_filters(node: Node, lists: &mut Lists) -> Node {
 /// `for p in people where p.age > 18 { … }` walks `people where it.age > 18`, the loop variable read as `it` (a
 /// table's filter stays its SQL)
 fn loop_over_filtered(items: &[Node], lists: &mut Lists) -> Option<Vec<Node>> {
-	let [for_word, variable, in_word, sequence, where_word, condition, body] = items else { return None };
+	// `for x in (xs where c) {…}` as the parser groups the filter
+	let items = crate::list_phrases::words(items);
+	let [for_word, variable, in_word, sequence, where_word, condition, body] = items.as_slice() else { return None };
 	if !is_word(for_word, FOR_WORD) || !is_word(in_word, IN_WORD) || !is_word(where_word, WHERE_WORD) || !matches!(body.drop_meta(), Node::List(_, Bracket::Curly, _)) {
 		return None;
 	}
 	let Node::Symbol(name) = variable.drop_meta() else { return None };
 	let condition = substitute(condition.clone(), name, &Node::Symbol(crate::lambdas::IMPLICIT_PARAMETER.to_string()));
 	let filter = Node::List(vec![sequence.clone(), where_word.clone(), condition], Bracket::None, Separator::Space);
-	Some(vec![for_word.clone(), variable.clone(), in_word.clone(), where_filters(filter, lists), body.clone()])
+	Some(vec![for_word.clone(), variable.clone(), in_word.clone(), where_filters(filter, lists), where_filters(body.clone(), lists)])
 }
 
 /// `[it, (for it in xs if), condition]`, as the parser groups a comprehension

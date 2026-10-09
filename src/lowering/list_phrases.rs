@@ -42,7 +42,8 @@ fn expand(node: Node, context: &Context) -> Node {
 
 /// `xs sorted by it.age`, `xs sorted by -it.age` (read as `by - it.age`), `xs sort by name`: `xs.sort_by(it => key)`
 fn sorted_by(items: &[Node], context: &Context) -> Option<Node> {
-	let items = &words(items);
+	let flat = words(items);
+	let items = flat.as_slice();
 	let is_word = |node: &Node, words: &[&str]| matches!(node.drop_meta(), Node::Symbol(word) if words.contains(&canonical(word).as_str()));
 	// `xs.sort by -it` parses as `[xs.sort, by - it]`
 	if let [Node::Key(receiver, Op::Dot, sort), descending] = items.iter().map(Node::drop_meta).collect::<Vec<_>>().as_slice() {
@@ -85,8 +86,10 @@ fn chain(items: &[Node], context: &Context) -> Option<Node> {
 	}
 	// `str(xs.take first 3)` parses as the call `[str, xs.take, first, 3]`: the chain is its argument
 	if let [callee, argument @ ..] = items {
-		if matches!(callee.drop_meta(), Node::Symbol(_)) && argument.len() > 1 {
-			return chain(argument, context).map(|chained| call(&callee.drop_meta().name(), chained));
+		if let (Node::Symbol(function), true) = (callee.drop_meta(), argument.len() > 1) {
+			if let Some(chained) = chain(argument, context) {
+				return Some(call(function, chained));
+			}
 		}
 	}
 	let items = words(items);
