@@ -79,6 +79,9 @@ Markup values show as warp data there (`p{class:"note" "hello"}`), not as HTML l
 - Copies of warp share target/debug/warp: a probe must copy its binary right after building it.
 
 ## The test suite in the browser: `cargo browser-test [filter]`
+In CI only (user, 2026-10-09): outside CI (no `CI` variable) the runner starts no Chrome and prints "browser tests run
+in CI only", exit 0; the tour likewise (`--firefox` and `--serve` start no Chrome). Run them on GitHub: dispatch the
+Playground workflow on a branch.
 One configuration (.cargo/config.toml): the alias builds tests/main.rs for wasm32-wasip1 with `--no-default-features`,
 and the wasm32-wasip1 runner web/playground/test_in_browser.py serves the repository root plus the binary, opens
 web/playground/tests.html in headless Chrome (agent-browser, session warp-browser-tests) and prints a libtest summary

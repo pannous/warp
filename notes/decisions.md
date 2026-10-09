@@ -7,6 +7,10 @@ before asking the user; nobody reads it front to back, the code, tests and wiki 
 notes/open_decisions.md.
 
 ## Decided 2026-10-09 (user, as recommended unless quoted)
+- warp-ast.wit moves from the repo root to samples/wit/warp-ast.wit; test_wit_parse reads it there (user chose the
+  move over deleting it).
+- scripts/own-warp.sh stays (the user's checkout deletion is not landed): uniscript build, hosting test, probes and
+  notes/agents/common.md still use its private scratch/warp copy. Revisit once callers move elsewhere.
 - Fermyon / Akamai Functions (warp-hosting, card fermyon-hosting): the user signs up and puts a personal access token
   in .env as akamai_functions_token for a live test of "☁ Deploy to Fermyon"; visitors paste their own token, kept
   in their browser.

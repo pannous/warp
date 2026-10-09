@@ -55,13 +55,11 @@
 				<button id="deploy-own" title="log in with Cloudflare, or paste an API token below; it goes to your own account">☁ Deploy to my Cloudflare</button><br/>
 				<input id="cloudflare-token" class="api-key" type="password" autocomplete="off" spellcheck="false" placeholder="or a Cloudflare API token (Workers Scripts: Edit)"><br/>
 				<span id="deployed"></span></p>
-			<p>Run it on your machine: <code>warp hello.warp</code> <br/>
+			<p>Run it on your machine: 
 				<a href="https://github.com/pannous/warp#install" target="_blank" rel="noopener">get warp</a>
 			</p>
 			<p><label>Anthropic API key, for <code>agent "…"</code>, completion and Ask ✦:<br/>
 				<input id="api-key" class="api-key" type="password" autocomplete="off" spellcheck="false" placeholder="sk-ant-…"></label><br/>
-				kept in this browser only, sent to api.anthropic.com only.<br/>
-				On your machine: <code>export ANTHROPIC_API_KEY=sk-ant-…</code> (in <code>~/.zshrc</code> to keep it)</p>
 			<p><a id="build" class="build"></a></p>
 			<p><a id="version" class="version" target="_blank" rel="noopener" hidden></a></p>
 			<div id="silenced" class="silenced" hidden>

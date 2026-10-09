@@ -37,6 +37,7 @@ CLICK_MILLISECONDS = 300  # a click's handler runs in the worker and its markup 
 ISOLATION_SECONDS = 30  # how long a deployed page may take to reload under its service worker
 STALL_SECONDS = 300  # no test finished for this long: the page is stuck (a crashed renderer), stop with what is known
 REPOSITORY = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+CI_ONLY = "browser tests run in CI only: skipped here, Chrome is not started outside CI (dispatch the Playground workflow on your branch)"
 IGNORED_ARGUMENTS = ("--nocapture", "--quiet", "-q", "--color", "--format")
 # the console of the page and its workers (console_watch.mjs): any error or warning there fails the tour check
 CONSOLE_WATCHER = os.path.join(REPOSITORY, "web", "playground", "console_watch.mjs")
@@ -156,13 +157,20 @@ def open_page(url):
 	sys.exit(f"error: the browser did not start after {LAUNCH_ATTEMPTS} attempts (agent-browser, session {SESSION})")
 
 
+browser_complaint = ""  # what agent-browser said on stderr at its last command
+
+
 def browser(*arguments):
 	if firefox:
 		return firefox.command(*arguments)
+	global browser_complaint
 	try:
-		return subprocess.run(["agent-browser", "--session", SESSION, *arguments], capture_output=True, text=True, timeout=60).stdout.strip()
+		ran = subprocess.run(["agent-browser", "--session", SESSION, *arguments], capture_output=True, text=True, timeout=60)
 	except subprocess.TimeoutExpired:
+		browser_complaint = f"agent-browser {arguments[0]} took over 60 s"
 		return ""  # a busy or crashed page: the stall check decides
+	browser_complaint = ran.stderr.strip()
+	return ran.stdout.strip()
 
 
 # shows an example or sample (%s: its name as JSON) and waits until its run finished
@@ -279,7 +287,7 @@ def show_example(name):
 		return JSON.stringify({{ ...shown, clicked: document.getElementById("value").textContent, clickedPrinted, kept, keyed, animated: animations > 0, address: shownAddress() }});
 	}})()"""
 	shown = browser("eval", script)
-	return json.loads(json.loads(shown)) if shown.startswith('"') else {"value": f"(page gave no answer: {shown})", "printed": ""}
+	return json.loads(json.loads(shown)) if shown.startswith('"') else {"value": f"(page gave no answer: {shown or browser_complaint})", "printed": ""}
 
 
 def wait_for_isolation():
@@ -344,9 +352,18 @@ def build_components():
 		print(f"warning: build.sh components failed, `use wasm` tests will fail:\n{built.stderr.strip()}", file=sys.stderr)
 
 
+def chrome_allowed():
+	"""Chrome runs only in CI (user, 2026-10-09: no test launches Chrome or Chromium on the Mac): --serve starts none,
+	--firefox runs Firefox"""
+	return bool(os.environ.get("CI")) or sys.argv[1:2] == ["--serve"] or "--firefox" in sys.argv[2:]
+
+
 def main():
 	# each verdict shows in a CI log as it comes, so a stuck run shows where it stuck (card deploy-firefox-hang)
 	sys.stdout.reconfigure(line_buffering=True)
+	if not chrome_allowed():
+		print(CI_ONLY)
+		return
 	if sys.argv[1:2] == ["--examples"]:
 		global firefox
 		names = [name for name in sys.argv[2:] if name != "--firefox"]

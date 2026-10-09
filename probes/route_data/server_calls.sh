@@ -5,6 +5,7 @@
 #   "/users/2" once each: home comes from the replies in the HTML, later visits from host-tasks.js routeDataReplies.
 # - worker_app.warp (card ssr-worker-replies): a direct visit of /users/2 POSTs nothing; its program runs in a Worker
 #   (site-worker.js), which answers from the replies the page sends it.
+[ -n "${CI:-}" ] || { echo "browser tests run in CI only: skipped, Chrome is not started outside CI (user, 2026-10-09)"; exit 0; }
 set -e
 PORT=8395
 PROXY=8396
