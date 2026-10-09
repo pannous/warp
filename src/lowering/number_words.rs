@@ -16,6 +16,8 @@ pub fn lower(program: Node) -> Node {
 	if unnamed.is_empty() {
 		return program;
 	}
+	// a hint is where its word is written, never where the parser stopped last (another source)
+	crate::normalize::set_position_of(&program);
 	as_numbers(program, &unnamed)
 }
 
@@ -32,6 +34,10 @@ fn as_numbers(node: Node, words: &[(&str, i64)]) -> Node {
 			let key = if op == Op::Dot { Box::new(as_numbers(*key, words)) } else { key };
 			let value = if op == Op::Dot { value } else { Box::new(as_numbers(*value, words)) };
 			Node::Key(key, op, value)
+		}
+		positioned @ Node::Meta { .. } => {
+			crate::normalize::set_position_of(&positioned);
+			positioned.map_children(|child| as_numbers(child, words))
 		}
 		other => other.map_children(|child| as_numbers(child, words)),
 	}
