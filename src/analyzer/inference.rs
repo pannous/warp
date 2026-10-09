@@ -115,6 +115,8 @@ pub fn infer_type(node: &Node, scope: &Scope) -> Kind {
 		// Text and char
 		Node::Text(_) => Kind::Text,
 		Node::Char(_) => Kind::Codepoint,
+		// ø, the empty value (card infer-type: it was the catch-all's Int)
+		Node::Empty => Kind::Empty,
 		// Symbol (identifier)
 		Node::Symbol(name) => {
 			if let Some(local) = scope.binding(name) {
