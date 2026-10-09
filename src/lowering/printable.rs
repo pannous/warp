@@ -39,7 +39,8 @@ impl Operations {
 		for (operation, types) in [(TEXT_OPERATION, &self.printable), (ITERATE_OPERATION, &self.iterable)] {
 			if let Some((type_name, parameter, body)) = definition(&node, types, operation) {
 				let head = Node::List(vec![Node::Symbol(witness_name(operation, &type_name)), parameter], Bracket::Round, Separator::None);
-				return Node::Key(Box::new(head), Op::Define, Box::new(self.rewrite(body)));
+				let body = self.types.in_definition(&head, || self.rewrite(body));
+				return Node::Key(Box::new(head), Op::Define, Box::new(body));
 			}
 		}
 		match node {
@@ -63,6 +64,10 @@ impl Operations {
 					_ => None,
 				};
 				called.unwrap_or_else(|| Node::List(items.into_iter().map(|item| self.rewrite(item)).collect(), bracket, separator))
+			}
+			Node::Key(head, Op::Define, body) => {
+				let body = self.types.in_definition(&head, || self.rewrite(*body));
+				Node::Key(head, Op::Define, Box::new(body))
 			}
 			Node::Key(left, op, right) => Node::Key(Box::new(self.rewrite(*left)), op, Box::new(self.rewrite(*right))),
 			Node::Meta { node, data } => Node::Meta { node: Box::new(self.rewrite(*node)), data },
