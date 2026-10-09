@@ -1219,6 +1219,8 @@ PASSED:
   ✓ functions::test_phrase_colon_body::a_block_of_one_call_returns_the_calls_value
   ✓ functions::test_phrase_colon_body::a_colon_body_is_the_whole_statement
   ✓ functions::test_phrase_colon_body::a_colon_body_prints_its_argument
+  ✓ functions::test_phrase_each::assigned_phrase_call
+  ✓ functions::test_phrase_each::each_in_a_phrase
   ✓ functions::test_phrase_slot_words::an_unused_word_after_a_preposition_belongs_to_the_phrase
   ✓ functions::test_phrase_slot_words::the_phrases_sample_runs
   ✓ functions::test_phrase_slot_words::used_words_stay_parameters
@@ -4275,4 +4277,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-10 ignored, 4270 passed, 0 failed, 4270 total tested
+10 ignored, 4272 passed, 0 failed, 4272 total tested
