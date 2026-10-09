@@ -147,7 +147,7 @@ pub fn lower(node: Node) -> Node {
 	let node = if statics.is_empty() { node } else { static_reads(node, &statics) };
 	// `s.area`, `s.scaled(3)` of a shared method: the call `area(s)` before traits rename each class's method;
 	// `c.inc()` of a method changing its object: `c = inc(c)` (P116)
-	let node = if shared.is_empty() && changing.is_empty() { node } else { method_calls(node, &shared, &changing) };
+	let node = if shared.is_empty() && changing.is_empty() { node } else { method_calls(node, &shared, &changing, &std::cell::Cell::new(0)) };
 	match (traits.is_empty(), node) {
 		(true, node) => node,
 		(false, Node::List(items, bracket, separator)) if separator != Separator::Space => Node::List([traits, items].concat(), bracket, separator),
@@ -2334,9 +2334,10 @@ fn trait_operation(declaration: &Node) -> Option<String> {
 }
 
 /// `x.m` and `x.m(args)` of the methods `m` as calls `m(x)`, `m(x, args)`; of a method changing its object, on a variable,
-/// the update `x = m(x, args)`
-fn method_calls(node: Node, called: &[String], changing: &Changing) -> Node {
-	let recurse = |child: Node| method_calls(child, called, changing);
+/// the update `x = m(x, args)`; each call's pair is a temp of its own, `pop·result·1`, so a call inside a method shares
+/// no name with one in main
+fn method_calls(node: Node, called: &[String], changing: &Changing, calls: &std::cell::Cell<usize>) -> Node {
+	let recurse = |child: Node| method_calls(child, called, changing, calls);
 	let Node::Key(receiver, Op::Dot, member) = node else { return node.map_children(recurse) };
 	let receiver = recurse(*receiver);
 	let (name, arguments) = match member.drop_meta() {
@@ -2352,7 +2353,8 @@ fn method_calls(node: Node, called: &[String], changing: &Changing) -> Node {
 	match receiver.drop_meta() {
 		// `s.pop()`: the pair (value, changed object) of the call, the object stored back, the value given
 		Node::Symbol(_) if changing.giving_value.contains(&name) => {
-			let pair = Node::Symbol(format!("{name}{RESULT_SUFFIX}"));
+			calls.set(calls.get() + 1);
+			let pair = Node::Symbol(format!("{name}{RESULT_SUFFIX}·{}", calls.get()));
 			Node::List(vec![
 				Node::Key(Box::new(pair.clone()), Op::Assign, Box::new(call)),
 				Node::Key(Box::new(receiver), Op::Assign, Box::new(item(pair.clone(), 2))),
