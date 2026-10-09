@@ -52,3 +52,9 @@ fn else_after_a_block_takes_the_whole_expression() {
 fn else_print_after_a_block() {
 	assert_eq!(crate::common::printed("if 0 {print 1} else print 3+1"), "4\n");
 }
+
+#[test]
+fn each_starts_a_loop() {
+	is!("s=0; each x in [1, 2]: s+=x; s", 3);
+	is!("s=0; each x in [1, 2] { s+=x }; s", 3);
+}
