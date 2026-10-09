@@ -870,6 +870,8 @@ notes/open_decisions.md.
   the other is text like dollar money". So `"${expr}"` interpolates, bare `"$x"` stays the literal text `$x`.
   Revises D1's "also `$x`": tests/text/test_interpolation.rs `dollar_holes_interpolate_too` follows (user decision). Swift
   `"\(expr)"` was not asked about and stays.
+- Interpolation holes (user, via the supervisor 2026-10-09, card brace-hole): all four interpolate, `\(…)` canonical,
+  `\{…}`, `${…}` and `$(…)` with the hint "prefer \(…)"; `\u{…}` stays a unicode escape.
 - Tuple returns (P2, asked by warp-d7/warp-5e): user "yes" (answer "no yes ?" in warp-5e's session, second item).
   `return a, b` and `x, y = f()`, compiled to wasm multi-value without allocating a list. Not built yet.
 - Closure Int->Int fast path (P3, asked by warp-5e): user "no" (same answer, first item). Closure calls keep boxing.
