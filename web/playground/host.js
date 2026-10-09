@@ -176,6 +176,13 @@ function programImports(holder, hooks) {
 				}
 				hooks.paint(painted, Number(width), Number(height));
 			},
+			// sound_samples(samples, count, rate) (src/host.rs, lib/sound.warp): the page plays them with WebAudio
+			// (playground.js playSound); a run without a page (tests, node) has no speakers and stays silent, as natively
+			sound_samples: (samples, count, rate) => {
+				if (!hooks.sound) return;
+				const values = intsOfList(program(), samples, Number(count)) ?? plainOfTree(readNode(program(), samples));
+				hooks.sound(values, Number(rate));
+			},
 			...Object.assign({}, ...eachHostPart("words", holder, hooks, access)),
 		},
 		wasi_snapshot_preview1: {

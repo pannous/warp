@@ -32,6 +32,7 @@ const hooks = {
 	print: (text, stream) => post({ type: "print", text, stream }),
 	module: bytes => post({ type: "module", bytes }),
 	paint: (pixels, width, height) => post({ type: "paint", pixels, width, height }),
+	sound: (samples, rate) => post({ type: "sound", samples, rate }), // a worker has no AudioContext: the page plays it
 	sleeping: () => post({ type: "sleep" }),
 	tasksInline: reason => post({ type: "tasks inline", reason }),
 	notify: text => post({ type: "notify", text }),
