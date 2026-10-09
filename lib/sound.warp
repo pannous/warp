@@ -80,16 +80,20 @@ chord_samples(pitches, duration, shape) := {
 }
 sound(samples) := sound_samples(samples, count(samples), sample_rate)
 
+// one wave shape: tone 440Hz for 0.5s (a sine), tone(220Hz, 100ms, "square")
 tone(pitch, duration, shape) := sound(chord_samples([si_amount(pitch)], si_amount(duration), shape))
-tone(pitch, duration) := tone(pitch, duration, wave_shape)
+to tone pitch for duration: tone(pitch, duration, wave_shape)
 beep() := tone(880, 0.15, "square")
 // a frequency, or a list of them sounding together (a chord)
 pitches_of(x) := if x is list then [si_amount(f) for f in x] else [si_amount(x)]
 to play x for duration: sound(chord_samples(pitches_of(x), si_amount(duration), wave_shape))
 to play x: play x for note_seconds
-// one note (or chord) after another, each for note_seconds
-melody(notes) := {
+// one note (or chord) after another: melody [C4 E4 G4], melody([C4 E4 G4], 0.25s) each a quarter second
+// plain seconds: the unit check reads a quantity parameter in a loop as unsupported (notes/units_runtime.md)
+melody_samples(notes, seconds) := {
 	samples = []
-	for pitch in notes { samples = samples + chord_samples(pitches_of(pitch), note_seconds, wave_shape) }
-	sound(samples)
+	for pitch in notes { samples = samples + chord_samples(pitches_of(pitch), seconds, wave_shape) }
+	samples
 }
+melody(notes, duration) := sound(melody_samples(notes, si_amount(duration)))
+to melody notes: melody(notes, note_seconds)
