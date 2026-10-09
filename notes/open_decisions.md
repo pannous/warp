@@ -2,7 +2,7 @@
 
 Only the Interviewer asks the user (notes/roles.md). Nothing here blocks: each question names the assumption the code
 already follows. Answers move to notes/decisions.md (newest Decided section on top) with the date and the user's
-words; this file keeps only what is open: pending and parked questions and user to-dos. (user 2026-10-08: "It's called open
+words; this file keeps only open decisions: pending and parked questions, nothing else (user 2026-10-09: remove what is decided and what is not a decision; user to-dos go on the board). (user 2026-10-08: "It's called open
 decisions for a reason. Open"). Rules belong where they are applied: AGENTS.md, notes/agents/, the wiki. Older references to
 "open_decisions.md" Decided sections, P-, D- or #-numbers mean notes/decisions.md.
 Details: notes/todo_sweep_task.md (board), notes/semicolon_survey.md, notes/float_truncation_survey.md.
@@ -26,9 +26,3 @@ Parked (user: "Later"):
   run-time blocks are always pure. Asked by warp-29.
 - Parked: #10 Polish notation for .wat/.wast, user "Keep parked" 2026-10-03.
 
-## User to-dos (not questions)
-- Hosting: try the playground Deploy buttons (GitHub-hosted and own Cloudflare account) once warp-hosting sends the
-  clicks. Done 2026-10-09: GitHub app and login round trip, Cloudflare token, private Cloudflare OAuth client
-  (secrets in .env / ~/.keys), lambda.pannous.com proxy.
-- Cloud-Microsoft environment setup script needs `rustup target add wasm32-wasip1` (claude.ai/code → chevron next to
-  the session title → Edit cloud environment). From BOSS-cheeky-shannon.
