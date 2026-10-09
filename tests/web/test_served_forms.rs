@@ -9,12 +9,21 @@ const PORT: u16 = 18630;
 const FORM_TYPE: &str = "application/x-www-form-urlencoded";
 
 fn served(requests: usize) -> std::thread::JoinHandle<String> {
+	served_from(PORT, PROGRAM, None, requests)
+}
+
+/// The program served at the port for `requests` requests, from the program file (its tables beside it) when given
+fn served_from(port: u16, code: &'static str, file: Option<std::path::PathBuf>, requests: usize) -> std::thread::JoinHandle<String> {
 	let server = std::thread::spawn(move || {
 		warp::web_server::stop_after(requests);
-		warp::pipeline::serving_at(PORT, || warp::wasm_emitter::eval(PROGRAM)).serialize()
+		let serving = || warp::pipeline::serving_at(port, || warp::wasm_emitter::eval(code));
+		match file {
+			Some(file) => warp::modules::with_program_file(&file, serving),
+			None => serving(),
+		}.serialize()
 	});
 	let started = std::time::Instant::now();
-	while std::net::TcpStream::connect(("127.0.0.1", PORT)).is_err() {
+	while std::net::TcpStream::connect(("127.0.0.1", port)).is_err() {
 		assert!(started.elapsed() < Duration::from_secs(60), "the server did not start");
 		std::thread::sleep(Duration::from_millis(50));
 	}
@@ -44,5 +53,34 @@ fn a_form_posts_to_a_served_route() {
 	assert_eq!(not_an_int.status().as_u16(), 404);
 	let hello = agent().get(&url("/hello/Ann")).call().expect("an answer").body_mut().read_to_string().expect("a text");
 	assert_eq!(hello, "hi Ann");
+	server.join().expect("the server thread");
+}
+
+// a path parameter is a variable of the route's block for a table's filter too (it went to SQL as an unknown word)
+#[test]
+fn a_path_parameter_filters_a_table() {
+	const TABLE_PORT: u16 = 18639;
+	const TABLE: &str = "class Todo{title: text; done: bool}\nstored todos: [Todo]\npost \"/todos/:id:int\" { (todos where it.id == id)#1.title }";
+	let folder = std::path::Path::new("scratch").join("served_filter");
+	std::fs::create_dir_all(&folder).expect("scratch folder");
+	let _ = std::fs::remove_file(folder.join("app.database.sqlite"));
+	let program = folder.join("app.warp");
+	std::fs::write(&program, TABLE).expect("the program file");
+	warp::modules::with_program_file(&program, || warp::wasm_emitter::eval("class Todo{title: text; done: bool}\nstored todos: [Todo]\ntodos.add(Todo(\"milk\", false))\ntodos.add(Todo(\"tea\", false))"));
+	let server = served_from(TABLE_PORT, TABLE, Some(program), 1);
+	let title = agent().post(&format!("http://127.0.0.1:{TABLE_PORT}/todos/2")).send("").expect("an answer").body_mut().read_to_string().expect("a text");
+	assert_eq!(title, "tea");
+	server.join().expect("the server thread");
+}
+
+// a route that traps answers 500 with what went wrong, as a failing run says it (it gave the wasm backtrace only)
+#[test]
+fn a_failing_route_answers_its_failure() {
+	const FAILING_PORT: u16 = 18640;
+	let server = served_from(FAILING_PORT, "get \"/boom\" { xs = [1, 2]; xs#5 }", None, 1);
+	let mut answer = agent().get(&format!("http://127.0.0.1:{FAILING_PORT}/boom")).call().expect("an answer");
+	assert_eq!(answer.status().as_u16(), 500);
+	let message = answer.body_mut().read_to_string().expect("a text");
+	assert!(message.contains("index out of range"), "{message}");
 	server.join().expect("the server thread");
 }

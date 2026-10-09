@@ -236,8 +236,51 @@ fn answers_a_list(value: &Node, list_words: &[String]) -> bool {
 }
 
 /// The route's body after the statements reading the program's tables anew
-/// `post "/todos/:id:int/toggle" {…}`: the block with its path's parameters bound from the request's path, as a page's
-/// route binds them from page_path() (routes.rs route_body); web_server.rs path_fits picks the route
+/// `post "/todos/:id:int/toggle" {…}`, at the top level or in `serve PORT {…}`, with its path's parameters bound;
+/// before lower_where reads the block's variables (a table's filter sends `id` to SQL as a value, card todo-app)
+pub fn bind_path_parameters(program: Node) -> Node {
+	match program {
+		Node::List(statements, bracket @ Bracket::None, separator @ (Separator::Newline | Separator::Semicolon)) => Node::List(statements.into_iter().map(with_bound_routes).collect(), bracket, separator),
+		single => with_bound_routes(single),
+	}
+}
+
+/// The statement's routes with their path's parameters bound
+fn with_bound_routes(statement: Node) -> Node {
+	let Node::List(items, bracket, separator) = statement.drop_meta().clone() else { return statement };
+	match served(&statement).is_some() {
+		true => {
+			let [serve, port, block] = <[Node; 3]>::try_from(items).expect("served");
+			let Node::List(routes, block_bracket, block_separator) = block.drop_meta().clone() else { unreachable!("served") };
+			let routes = routes.into_iter().map(|route| match route.drop_meta() {
+				Node::List(words, Bracket::None, words_separator) => Node::List(bound_routes(words.clone()), Bracket::None, words_separator.clone()),
+				_ => route,
+			}).collect();
+			Node::List(vec![serve, port, Node::List(bound_routes(routes), block_bracket, block_separator)], bracket, separator)
+		}
+		false if !top_level_routes(&statement).is_empty() => Node::List(bound_routes(items), bracket, separator),
+		false => statement,
+	}
+}
+
+/// `get "/a/:id" {…} post …` as words, each block with its path's parameters bound
+fn bound_routes(words: Vec<Node>) -> Vec<Node> {
+	let mut bound = words.clone();
+	let mut index = 0;
+	while index + 2 < bound.len() {
+		match METHODS.contains(&bound[index].drop_meta().name().as_str()) {
+			true => {
+				bound[index + 2] = with_path_parameters(&bound[index + 1], bound[index + 2].clone());
+				index += 3;
+			}
+			false => index += 1,
+		}
+	}
+	bound
+}
+
+/// The route's block with its path's parameters bound from the request's path, as a page's route binds them from
+/// page_path() (routes.rs route_body); web_server.rs path_fits picks the route
 fn with_path_parameters(path: &Node, body: Node) -> Node {
 	let pattern = match path.drop_meta() {
 		Node::Text(text) => text.clone(),
@@ -563,7 +606,6 @@ fn serving(port: Node, routes: Vec<Route>, server_data: &ServerData, count: &mut
 		*count += 1;
 		let request = Node::Key(Box::new(Node::Symbol(REQUEST_WORD.to_string())), Op::Colon, Box::new(Node::Symbol(ANY_TYPE.to_string())));
 		let head = Node::List(vec![Node::Symbol(function.clone()), request], Bracket::Round, Separator::None);
-		let body = with_path_parameters(&path, body);
 		let mut entry = vec![Node::Text(method), path, Node::Text(function)];
 		if answers_a_list(&body, &server_data.list_words) {
 			entry.push(Node::Text(LIST_ANSWER.to_string()));
