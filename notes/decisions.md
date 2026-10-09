@@ -7,6 +7,9 @@ before asking the user; nobody reads it front to back, the code, tests and wiki 
 notes/open_decisions.md.
 
 ## Decided 2026-10-09 (user, as recommended unless quoted)
+- P237 (warp-class, card natural-phrases): NOT as recommended: `numbers.sort by size` sorts numbers by value, like
+  plain sort (user: "sort by value makes more sense"): `[3, -5, 2].sort by size` → [-5 2 3]; texts and lists keep
+  sorting by length. Replaces the silent no-op.
 - Hosting (warp-hosting, card cloud-hosting; each program is its own Cloudflare Worker uploaded by the hosting
   Worker https://warp-hosting.pannous.workers.dev): Q1 the user creates a GitHub OAuth App for "Log in with
   GitHub"; Q2 the user creates a Cloudflare "Edit Cloudflare Workers" API token for uploads; Q3 free Workers plan
