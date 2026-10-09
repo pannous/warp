@@ -187,6 +187,9 @@ pub(crate) fn annotated_kind(type_node: &Node) -> Option<Kind> {
 	if crate::type_constructor::instance_parts_marked(type_node) {
 		return Some(Kind::Key); // `p:person` of a declared type (traits::lower_conformances): an instance
 	}
+	if crate::uncertain::is_interval_number(type_node) {
+		return Some(Kind::Empty); // `a:number` given a ± value: a Node, checked at run time (wasm_emitter admitted)
+	}
 	let type_name = type_node.name();
 	if bracketed_list_type(type_node).is_some() || names_list_type(&type_name) {
 		return Some(Kind::List);

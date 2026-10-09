@@ -356,6 +356,27 @@ impl fmt::Display for Quantity {
 	}
 }
 
+/// A ± amount of units, a final unit field given `5 m ± 1 cm`: `5.000 ± 0.010m`; a Gaussian keeps its σ apart from the
+/// unit, `12.00 ± 0.60σ m`, as lib/units.warp quantity_text shows it (card quantity-final)
+#[derive(Clone, Debug, PartialEq)]
+pub struct UncertainQuantity {
+	amount: crate::uncertain::Uncertain,
+	factors: Vec<Factor>,
+}
+
+impl UncertainQuantity {
+	pub(crate) fn new(amount: crate::uncertain::Uncertain, factors: &[Factor]) -> UncertainQuantity {
+		UncertainQuantity { amount, factors: factors.to_vec() }
+	}
+}
+
+impl fmt::Display for UncertainQuantity {
+	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+		let apart = if self.amount.gaussian { " " } else { "" };
+		write!(f, "{}{apart}{}", self.amount, unit_suffix(&self.factors))
+	}
+}
+
 impl Quantity {
 	fn of(amount: i64, unit: &'static Unit) -> Quantity {
 		Quantity { amount: Rational::integer(amount), factors: vec![Factor { unit, power: 1 }] }
@@ -431,6 +452,9 @@ pub fn describe(data: &DataValue) -> Option<String> {
 		return Some(tolerance.to_string());
 	}
 	if let Some(uncertain) = data.downcast_ref::<crate::uncertain::Uncertain>() {
+		return Some(uncertain.to_string());
+	}
+	if let Some(uncertain) = data.downcast_ref::<UncertainQuantity>() {
 		return Some(uncertain.to_string());
 	}
 	if let Some(duration) = data.downcast_ref::<crate::time::Duration>() {
