@@ -230,3 +230,5 @@ Running list of the small fixes done by the fixer session (branches fix-<topic>)
 - `"a: " + x as km` parsed `("a: " + x) as km`: a conversion after a text join converts the last operand (units.rs with_converted_last_operand).
 ## 2026-10-09 text-join
 - a longer text join with several quantities: static_units takes any sum with a text in it as a join (units::joins_text, shared with print-km).
+## 2026-10-09 prebuilt-stub
+- an installed warp (not in a cargo target) never builds warp-runtime; it uses the one shipped next to it (main.rs in_cargo_target).
