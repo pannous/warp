@@ -11,5 +11,5 @@ rings = shader {
 }
 for frame in 1..30 {
 	paint(rings, size, size, {frame: frame, size: [size, size]})
-	sleep 40 ms
+	sleep 40ms
 }

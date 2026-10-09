@@ -23,7 +23,7 @@ Unbounded ints, exact fractions, `mod`, `^`; numbers carry units.
 ```
 
 ```warp => 150min
-2 h + 30 min
+2h + 30min
 ```
 
 ## Text

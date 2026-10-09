@@ -78,7 +78,7 @@ Fractions stay exact.
 Numbers can have units.
 
 ```warp => 150min
-2 h + 30 min
+2h + 30min
 ```
 
 Examples: numbers; samples: factorial, power, gcd, collatz, quadratic, sum, sin, sine
@@ -526,7 +526,7 @@ Examples: "emit and on", events, timers, animation, mouse, "game of life", "syst
 Tasks do several things at the same time. 
 ```warp
 go {
-	sleep(100 ms)
+	sleep(100ms)
 	print "I'm late;)"
 }
 print("first!")
