@@ -536,7 +536,9 @@ pub fn resolve_main_variable_assignments(program: Node) -> Result<Node, Node> {
 	let mut ctx = Context::new();
 	extract_user_functions_inner(&mut ctx, &program);
 	let mut main = Scope::new();
-	collect_variables(&program, &mut main);
+	// `f := (y = 1; y * it)`: y is f's own, no main-level variable
+	let defined: HashSet<String> = ctx.user_functions.keys().cloned().collect();
+	collect_variables(&without_block_bodies(program.clone(), &defined), &mut main);
 	let mut functions: Vec<&UserFunctionDef> = ctx.user_functions.values().collect();
 	functions.sort_by(|a, b| a.name.cmp(&b.name));
 	let mut meant_global: Vec<String> = vec![];
