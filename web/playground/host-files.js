@@ -287,6 +287,28 @@ function updateRow(table, id, column, value, file) {
 	return null;
 }
 
+// `transaction { … }` (src/lowering/database_tables.rs): its file's tables as they were at the start, put back with every
+// row's kept value by a rollback; writes go on to IndexedDB meanwhile, as SQLite's would to its journal
+const tablesBefore = {};
+const tablesOf = file => Object.keys(databaseValues).filter(key => key.startsWith(tableKey(file, "")) && !ROW_KEY.test(key));
+
+function beginTransaction(file) {
+	tablesBefore[file] = Object.fromEntries(tablesOf(file).map(key => [key, structuredClone(databaseValues[key])]));
+	return null;
+}
+
+function rollBack(file) {
+	const before = tablesBefore[file] ?? {};
+	delete tablesBefore[file];
+	for (const key of tablesOf(file)) {
+		const table = key.slice(tableKey(file, "").length);
+		const keptIds = new Set((before[key]?.rows ?? []).map(row => row[ID_COLUMN]));
+		databaseValues[key].rows.filter(row => !keptIds.has(row[ID_COLUMN])).forEach(row => keep(rowKey(file, table, row[ID_COLUMN]), undefined, DATABASE_STORE));
+		if (key in before) keepTable(file, table, before[key], true); else { delete databaseValues[key]; keep(key, undefined, DATABASE_STORE); }
+	}
+	return null;
+}
+
 addHostPart({
 	words: (holder, hooks, { program, text }) => {
 		const fetchUrl = (pointer, length, timeout) => {
@@ -331,7 +353,7 @@ addHostPart({
 			},
 		},
 		// a filter compiled natively is an SQL query (a page compiled by the browser keeps filters as comprehensions)
-		table: { open: openTable, migrate: migrateTable, rows: tableRows, page: (table, schema, file, start, size) => tableRows(table, schema, file).slice(start - 1, start - 1 + size), count: (table, schema, file) => storedTable(file, table).rows.length, insert: insertRow, delete: deleteRow, update: updateRow, select: table => { throw new Error(`a filter of the table ${table} is an SQL query: it runs natively (warp serve)`); } },
+		table: { open: openTable, migrate: migrateTable, rows: tableRows, page: (table, schema, file, start, size) => tableRows(table, schema, file).slice(start - 1, start - 1 + size), count: (table, schema, file) => storedTable(file, table).rows.length, insert: insertRow, delete: deleteRow, update: updateRow, begin: beginTransaction, commit: file => { delete tablesBefore[file]; return null; }, rollback: rollBack, select: table => { throw new Error(`a filter of the table ${table} is an SQL query: it runs natively (warp serve)`); } },
 		net: { post: (url, body, headers) => postSync(url, contentText(body), headers ?? {}) },
 		// `clipboard.write(text)` (lowering/system_values.rs): a page writes it (markup.js copyText), a Worker has no
 		// clipboard and hands the text to its page (self.writeClipboard: worker.js)

@@ -19,6 +19,8 @@ const SQLITE_TEXT: c_int = 3;
 const SQLITE_TRANSIENT: isize = -1;
 const SQLITE_UTF8: c_int = 1;
 const IN_MEMORY: &str = ":memory:";
+/// `transaction { … }` (database_tables.rs): its members of `std_io("table", …)` and their SQL
+const TRANSACTION_STATEMENTS: [(&str, &str); 3] = [("begin", "BEGIN"), ("commit", "COMMIT"), ("rollback", "ROLLBACK")];
 const ID_COLUMN: &str = "id";
 /// column types each holding every value of the ones before it: a column converts forward without loss
 const LOSSLESS_ORDER: [&str; 3] = ["INTEGER", "REAL", "TEXT"];
@@ -164,8 +166,15 @@ pub fn call(member: &str, arguments: &[Node]) -> Result<Node, String> {
 			let sql = format!("UPDATE {} SET {} = ? WHERE {ID_COLUMN} = ?", quote(&text(table)?), quote(&text(column)?));
 			rows(connection(&text(file)?)?, &sql, &[value.clone(), id.clone()]).map(|_| Node::Empty)
 		}
+		(member, [file]) if transaction_statement(member).is_some() => {
+			rows(connection(&text(file)?)?, transaction_statement(member).expect("guarded"), &[]).map(|_| Node::Empty)
+		}
 		_ => Err(format!("no such word of {} arguments", arguments.len())),
 	}
+}
+
+fn transaction_statement(member: &str) -> Option<&'static str> {
+	TRANSACTION_STATEMENTS.iter().find(|(word, _)| *word == member).map(|(_, sql)| *sql)
 }
 
 /// `std_io("table", "select", [table, condition, parameters, file])`: the ids of the rows the SQL condition keeps, in

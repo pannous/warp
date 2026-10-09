@@ -1,0 +1,20 @@
+// A transaction: every write of its block lands, or none does
+class Account{owner: text; balance: int}
+accounts: [Account] = database.accounts
+if count(accounts) == 0 {
+	accounts.add(Account("Al", 100))
+	accounts.add(Account("Bo", 0))
+}
+al = accounts#1
+bo = accounts#2
+
+transfer(amount) := transaction {
+	al.balance -= amount
+	bo.balance += amount
+	if al.balance < 0 { raise "Al cannot pay " + str(amount) }
+}
+
+transfer(30)
+print "after 30: Al " + str(al.balance) + ", Bo " + str(bo.balance)
+try transfer(500) catch e { print e.message }
+print "after the refused 500: Al " + str(al.balance) + ", stored " + str((accounts where it.owner == "Al")#1.balance)

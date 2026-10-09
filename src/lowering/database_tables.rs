@@ -24,6 +24,8 @@ const GLOBAL_WORD: &str = "global";
 const RENAMED_MARK: &str = "was";
 /// `save p` writes every column of p's row (field changes are written through already, so it changes nothing then)
 const SAVE_WORD: &str = "save";
+/// `transaction { … }`: BEGIN, the block, COMMIT; ROLLBACK when the block fails, which then fails on (notes/orm.md)
+const TRANSACTION_WORD: &str = "transaction";
 /// the generated code's variables, written as these placeholders (`·` would parse as a product)
 const ROW: &str = "table_row";
 /// the rows a table's open reads, and the rows a foreign key's id matches
@@ -35,25 +37,31 @@ const REMOVED: &str = "table_removed";
 const REFERENCED: &str = "table_referenced";
 const MEMBER: &str = "table_member";
 const SAVED: &str = "table_saved";
+/// a transaction's value, and the failure of its block
+const TRANSACTION_VALUE: &str = "table_transaction";
+const FAILURE: &str = "table_failure";
 /// the instances given a row before the table loaded, of a loading row's id: the loaded list holds that instance
 const KNOWN: &str = "table_known";
 /// the position of `people#i`
 const POSITION: &str = "table_position";
 /// the instance a row read before loading makes
 const MADE: &str = "table_made";
-const GENERATED_NAMES: [(&str, &str); 12] = [(POSITION, "table·position"), (MADE, "table·made"), (ROW, "table·row"), (ROWS, "table·rows"), (MATCHES, "table·matches"), (ADDED, "table·added"), (REMOVED, "table·removed"), (ARGUMENTS, "table·arguments"),
-	(REFERENCED, "table·referenced"), (MEMBER, "table·member"), (SAVED, "table·saved"), (KNOWN, "table·known")];
+const GENERATED_NAMES: [(&str, &str); 14] = [(POSITION, "table·position"), (MADE, "table·made"), (ROW, "table·row"), (ROWS, "table·rows"), (MATCHES, "table·matches"), (ADDED, "table·added"), (REMOVED, "table·removed"), (ARGUMENTS, "table·arguments"),
+	(REFERENCED, "table·referenced"), (MEMBER, "table·member"), (SAVED, "table·saved"), (KNOWN, "table·known"),
+	(TRANSACTION_VALUE, "table·transaction"), (FAILURE, "table·failure")];
 /// Each table's lazy parts (notes/orm.md Loading), `people·load` of people: the function giving the list, loading its
 /// rows on the first call; the count, SELECT COUNT(*) until then; the add, inserting without loading; the remove, deleting
 /// the row and dropping its instance from the loaded list and the known instances; the reset of a
 /// route reading the table anew; the element `people#i`, reading its one row until then; the element of a loop over the
 /// table, reading a page of rows until then; the instance of a row read before loading; whether the rows are loaded;
-/// the instances added or read before; the page read last and its start position
+/// the instances added or read before; the page read last and its start position; the restore after a rolled-back
+/// transaction, giving each instance held its row's values again (id 0 when its row is gone) and loading anew
 const LOAD: &str = "table_load";
 const COUNTED: &str = "table_count";
 const ADDING: &str = "table_add";
 const REMOVING: &str = "table_remove";
 const RESET: &str = "table_reset";
+const RESTORE: &str = "table_restore";
 const LOADED: &str = "table_loaded";
 const MET: &str = "table_met";
 const ELEMENT: &str = "table_at";
@@ -61,7 +69,7 @@ const STREAMED: &str = "table_streamed";
 const KEPT: &str = "table_kept";
 const PAGE: &str = "table_page";
 const START: &str = "table_start";
-const LAZY_PARTS: [(&str, &str); 12] = [(LOAD, "load"), (COUNTED, "count"), (ADDING, "add"), (REMOVING, "remove"), (RESET, "reset"), (ELEMENT, "at"), (STREAMED, "streamed"),
+const LAZY_PARTS: [(&str, &str); 13] = [(LOAD, "load"), (COUNTED, "count"), (ADDING, "add"), (REMOVING, "remove"), (RESET, "reset"), (RESTORE, "restore"), (ELEMENT, "at"), (STREAMED, "streamed"),
 	(KEPT, "kept"), (LOADED, "loaded"), (MET, "met"), (PAGE, "page"), (START, "start")];
 /// The rows a loop over an unloaded table reads at once (notes/orm.md Loading)
 const PAGE_SIZE: usize = 100;
@@ -474,6 +482,19 @@ fn key_id(instance: &str, field: &str, optional: bool) -> String {
 	}
 }
 
+/// Each instance of `list` given the values of its row in `table_rows` again, as constructor_arguments reads them; id 0
+/// when its row is gone
+fn restored_rows(table: &Table, arguments: &[String], list: &str) -> String {
+	let fields = table.fields.iter().filter(|(name, _, _)| !table.is_members(name)).map(|(name, _, _)| name);
+	let restored: String = fields.zip(arguments).filter(|(name, _)| *name != ID_FIELD).map(|(name, argument)| format!("{MADE}.{name} = {argument}\n")).collect();
+	format!("for {MADE} in {list} {{
+{KNOWN} = [{ROW} for {ROW} in {ROWS} if {ROW}#1 == {MADE}.{ID_FIELD}]
+if {KNOWN} {{
+{ROW} = {KNOWN}#1
+{restored}}} else {{ {MADE}.{ID_FIELD} = 0 }}
+}}")
+}
+
 /// The cell of column `name` in `row`, a row being `[id, column values…]`
 fn column_cell(table: &Table, row: &str, name: &str) -> String {
 	format!("{row}#{}", 2 + columns_of(table).iter().position(|column| column == name).unwrap_or_default())
@@ -598,6 +619,9 @@ fn has_id(body: &Node) -> bool {
 fn with_tables(node: Node, tables: &HashMap<String, Table>, file: &str, open: &mut Vec<String>) -> Node {
 	if let Some(lowered) = saved(&node, tables, file).or_else(|| added_to_members(&node, tables, file)) {
 		return lowered;
+	}
+	if let Some(wrapped) = in_transaction(&node, file, open) {
+		return with_tables(wrapped, tables, file, open);
 	}
 	match node {
 		Node::List(statements, bracket, separator @ (Separator::Semicolon | Separator::Newline)) => {
@@ -761,7 +785,23 @@ global {PAGE}
 {MET} = []
 {PAGE} = []
 []
-}}", name = table.name);
+}}
+{RESTORE}() := {{
+global {variable}
+global {LOADED}
+global {MET}
+global {PAGE}
+{ROWS} = {ROWS_PLACEHOLDER}
+{restore_met}
+if {LOADED} {{
+{restore_loaded}
+for {MADE} in {variable} {{ if {MADE}.{ID_FIELD} != 0 {{ {MET}.add({MADE}) }} }}
+}}
+{MET} = [{MADE} for {MADE} in {MET} if {MADE}.{ID_FIELD} != 0]
+{LOADED} = no
+{PAGE} = []
+[]
+}}", name = table.name, restore_met = restored_rows(table, &arguments, MET), restore_loaded = restored_rows(table, &arguments, &variable));
 	let placeholders = [(READ_PLACEHOLDER, table_call("migrate")), (ROWS_PLACEHOLDER, table_call("rows")), (COUNT_PLACEHOLDER, table_call("count")),
 		(ROW_PLACEHOLDER, table_call_with("page", &format!(", {POSITION}, 1"))), (PAGE_PLACEHOLDER, table_call_with("page", &format!(", {POSITION}, {PAGE_SIZE}")))].into_iter().chain(lazy_names(&variable));
 	let empty = parse("[]");
@@ -1010,6 +1050,24 @@ fn column_update(table: &Table, instance: &str, column: &str, file: &str) -> Str
 
 /// `save p`, anywhere (`print(save p)` of a standalone build too): every column of p's row written, the value p; an
 /// instance of a table's class without a row is an error
+/// `transaction { block }` as the block between BEGIN and COMMIT, rolled back and raised again when it fails; its value
+/// the block's
+fn in_transaction(node: &Node, file: &str, open: &[String]) -> Option<Node> {
+	let Node::List(parts, _, Separator::Space) = node.drop_meta() else { return None };
+	let [word, block] = parts.as_slice() else { return None };
+	if word.drop_meta().name() != TRANSACTION_WORD || !matches!(block.drop_meta(), Node::List(_, Bracket::Curly, _)) {
+		return None;
+	}
+	let code = format!("std_io(\"table\", \"begin\", [{file:?}])\n\
+		{TRANSACTION_VALUE} = try {VALUE_PLACEHOLDER} catch {FAILURE} {{ std_io(\"table\", \"rollback\", [{file:?}]); {restores}raise {FAILURE} }}\n\
+		std_io(\"table\", \"commit\", [{file:?}])\n{TRANSACTION_VALUE}",
+		restores = (0..open.len()).map(|index| format!("{RESTORE}_{index}(); ")).collect::<String>());
+	// each open table's restore, `people·restore` (written as a placeholder: `·` would parse as a product)
+	let restores: Vec<(String, Node)> = open.iter().enumerate().map(|(index, variable)| (format!("{RESTORE}_{index}"), Node::Symbol(lazy_name(variable, "restore")))).collect();
+	let placeholders = restores.iter().map(|(placeholder, name)| (placeholder.as_str(), name.clone())).chain([(VALUE_PLACEHOLDER, block.clone())]);
+	Some(Node::List(generated(&code, placeholders).children(), Bracket::Round, Separator::Semicolon))
+}
+
 fn saved(node: &Node, tables: &HashMap<String, Table>, file: &str) -> Option<Node> {
 	let Node::List(parts, _, Separator::Space) = node.drop_meta() else { return None };
 	let [word, value] = parts.as_slice() else { return None };
