@@ -27,9 +27,8 @@ Parked (user: "Later"):
 - Parked: #10 Polish notation for .wat/.wast, user "Keep parked" 2026-10-03.
 
 ## User to-dos (not questions)
-- Hosting (warp-hosting sends exact steps once its Worker is deployed): create the GitHub OAuth App "warp hosting"
-  and set GITHUB_CLIENT_ID / GITHUB_CLIENT_SECRET; create the Cloudflare API token (Edit Cloudflare Workers) and
-  set CLOUDFLARE_API_TOKEN; create the private Cloudflare OAuth client (scopes workers-scripts.write,
-  user-details.read, account-settings.read). Accepted 2026-10-09.
+- Hosting: create the private Cloudflare OAuth client (Manage Account → OAuth clients; callback
+  https://warp-hosting.pannous.workers.dev/auth/cloudflare/callback; scopes workers-scripts.write,
+  user-details.read, account-settings.read). GitHub app and Cloudflare token are done and set (2026-10-09).
 - Cloud-Microsoft environment setup script needs `rustup target add wasm32-wasip1` (claude.ai/code → chevron next to
   the session title → Edit cloud environment). From BOSS-cheeky-shannon.

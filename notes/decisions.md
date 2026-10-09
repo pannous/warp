@@ -7,6 +7,9 @@ before asking the user; nobody reads it front to back, the code, tests and wiki 
 notes/open_decisions.md.
 
 ## Decided 2026-10-09 (user, as recommended unless quoted)
+- Hosting login callback (warp-hosting): NOT as recommended: GitHub's callback stays https://lambda.pannous.com/callback;
+  the pannous.com server proxies lambda.pannous.com → warp-hosting.pannous.workers.dev (Ferron block + certbot cert,
+  edited in pannous-lockdown scripts/levels/rustweb.sh). The hosting Worker is live; secrets come from .env and ~/.keys.
 - Units are written glued to their numbers, as a soft hint (user to warp-types, via the supervisor; card
   unit-glue, branch unit-glue-hint 12da9e1d0): `3 km` works with the hint "prefer 3km over 3 km"; samples write
   `3km`.
