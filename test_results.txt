@@ -483,6 +483,8 @@ PASSED:
   ✓ control::test_table_element_writes::a_filtered_row_field_change_is_written_to_its_row
   ✓ control::test_table_element_writes::an_element_field_change_is_written_to_its_row
   ✓ control::test_table_key_filter::rows_whose_foreign_key_is_a_given_row
+  ✓ control::test_table_linear_lookups::a_loaded_table_filters_in_linear_time
+  ✓ control::test_table_linear_lookups::ten_thousand_rows_with_a_required_key_load_in_linear_time
   ✓ control::test_table_method_reads::a_field_named_like_a_table_stays_the_field
   ✓ control::test_table_method_reads::a_method_filters_a_list
   ✓ control::test_table_method_reads::a_method_filters_the_table
@@ -4277,4 +4279,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-10 ignored, 4272 passed, 0 failed, 4272 total tested
+10 ignored, 4274 passed, 0 failed, 4274 total tested
