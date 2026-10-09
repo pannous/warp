@@ -21,9 +21,9 @@ ambiguous forms per notes/welcoming.md), never less, except at a listed hole.
 ## W0: syntax
 
 ```
-types      τ ::= never | bool | int | number | text | unit | list τ | cls [C₀ … Cₙ] | ranged lo hi | any
+types      τ ::= never | bool | int | number | text | unit | list τ | cls [C₀ … Cₙ] | ranged lo hi | quantity D | any
 modes      m ::= var | const | charged
-values     v ::= b | n | q | "s" | ø | [] | v :: v | ref a [C…]      (lists are cons cells, as the GC $Node)
+values     v ::= b | n | q | n D | "s" | ø | [] | v :: v | ref a [C…]      (lists are cons cells, as the GC $Node)
 expr       e ::= v | x                          main-level name (store)
                | y                              local (parameter or let), bound by substitution
                | e + e | e - e | e * e | e < e | e == e     (`-` takes numbers only; `+` also texts; `*` a text and a whole number)
@@ -59,6 +59,7 @@ exact decimals/rationals (Kind::Int holding a ratio, wasm_emitter/exact.rs) and 
 | list σ ≤ list τ if σ ≤ τ | **covariant lists** | probes/variance/ |
 | ranged a b ≤ ranged c d if c ≤ a, b ≤ d; ranged ≤ int | a fixed width (`int16`) is the range of ints it holds | fixed_width.rs |
 | cls p ≤ cls q if q is a prefix of p | a subclass or variant extends its parent's chain | class_methods.rs inherit, traits.rs IS_TYPE |
+| quantity D ≤ quantity D only | a quantity is no number: `1 m + 1` is a DimensionError | static_units.rs |
 
 Lists are shared (P200b): `ys = xs` makes an alias and `xs.add(v)` changes the one list both see, so covariant
 lists alone are TypeScript's hole (`xs: [Circle] = [c]; ys: [Shape] = xs; ys.add(square); xs#2`). P215 closes it:
@@ -439,7 +440,7 @@ inside a handler body loses the outer handler).
 
 Optional and auto-unwrap (P179: `a: int = Some(3)`), payload-free variants (`red`: one shared instance per variant),
 the value comparison above, errors as stored values (`r = f(-1); if r failed …`: a `τ or error` sum),
-exact vs float, codepoints (`"a"` parses as one; `codepoint ≤ text` for parameters), maps, units, then tasks.
+exact vs float, codepoints (`"a"` parses as one; `codepoint ≤ text` for parameters), maps, then tasks.
 
 ## Named arguments, defaults, nested functions (exporter only)
 
@@ -511,3 +512,18 @@ checks.rs `misfit_item`; soundness is untouched (rejecting more never is unsound
 `int` (`arith`): looser than warp, which traps when an int16 sum leaves int16 (a value difference only on overflow,
 not yet in the corpus). The exporter reads `[int]` as `list int` and `int16s` as `list (ranged …)` (card
 typed-list-elements).
+
+## Units (quantities)
+A quantity `2 m` is the value `qty n D`: D the powers of its base dimensions (`[("Length", 1), ("Time", -1)]`, sorted,
+none zero: `Dims.times`), n its number of the dimension's smallest steps (units.rs `factor`: 0.1 mm, ms, 10 µg, so
+every unit is whole). Its type `quantity D` stands beside the numbers: below only itself (and above `never`), since
+`1 m + 1` is a DimensionError in warp. `+`, `-`, `<` take one dimension on both sides (`sameQuantity`, else the value
+is an error and the type `never`), `*` and `/` combine a quantity with a quantity or a number (`ArithOp.dims`,
+`ofDims`: dimensions that cancel give a number, `6 m / 3 m` is 2), `%` and `^` raise. `ArithOp.ty` checks `never`,
+`any`, then a quantity side, before the number rules (`numberTy`). The checker refuses what warp's static units pass
+refuses (`dimensionsAgree`, `dimensionsCombine`): mixed dimensions in `+ - < == if`, a quantity with a number in `+`,
+`%`/`^` of a quantity. The exporter turns a unit word into `.qty factor [(dimension, 1)]` (`2 km` parses as `2 * km`).
+Amounts are whole and `/` truncates, so the model's quantity values are not compared (printed `?`) beyond `<`/`==`.
+Known differences: warp gives the int 1 for `1 m < 2 m` (card units-compare); warp compiles `x = 1 m; x = 2 s`
+(units-reassign), `x: int = 1 m` (units-annotation) and `2 m * "a"` (units-text-repeat).
+
