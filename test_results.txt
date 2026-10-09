@@ -205,7 +205,9 @@ PASSED:
   ✓ control::test_filter_loops::test_plain_loops_do_not_filter
   ✓ control::test_for_forms::block_after_a_chained_iterable
   ✓ control::test_for_forms::c_style_for_with_a_space_or_without_braces
+  ✓ control::test_for_forms::print_of_a_call_without_parentheses_in_an_if_branch
   ✓ control::test_for_forms::print_with_commas_in_a_loop_body
+  ✓ control::test_for_forms::print_with_commas_in_an_if_branch
   ✓ control::test_for_implicit_it::a_colon_body_is_the_rest_of_the_line
   ✓ control::test_for_implicit_it::a_for_loop_without_a_variable_walks_it
   ✓ control::test_for_it::a_symbol_prints_its_name
@@ -1447,6 +1449,12 @@ PASSED:
   ✓ lists::test_index_assignment::test_index_assign_with_variable
   ✓ lists::test_index_assignment::test_simple_index_assign
   ✓ lists::test_index_out_of_range::an_index_out_of_range_names_the_range
+  ✓ lists::test_int_map::a_global_map_is_set_in_a_function
+  ✓ lists::test_int_map::a_global_map_takes_constant_time_per_entry
+  ✓ lists::test_int_map::a_number_is_found_in_a_map
+  ✓ lists::test_int_map::a_number_variable_keys_an_empty_map
+  ✓ lists::test_int_map::an_entry_is_removed_by_its_number
+  ✓ lists::test_int_map::ten_thousand_rows_load_in_linear_time
   ✓ lists::test_key_lookup::test_key_is_evaluated
   ✓ lists::test_key_lookup::test_looked_up_value_takes_part_in_arithmetic
   ✓ lists::test_key_lookup::test_missing_key_is_an_error
@@ -2658,6 +2666,8 @@ PASSED:
   ✓ programs::test_draw::colors_are_numbers_with_an_alpha_byte
   ✓ programs::test_draw::shapes_set_the_pixels_they_cover
   ✓ programs::test_draw::with_alpha_is_a_method_of_a_color
+  ✓ programs::test_draw_label::a_label_covers_pixels_in_its_color
+  ✓ programs::test_draw_label::text_coverage_grows_with_the_size_and_the_words
   ✓ programs::test_hints_toggle::a_plain_run_shows_its_hints_and_how_to_hide_them
   ✓ programs::test_hints_toggle::a_run_without_hints_has_no_tip
   ✓ programs::test_hints_toggle::hints_chosen_explicitly_need_no_tip
@@ -4257,4 +4267,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-10 ignored, 4252 passed, 0 failed, 4252 total tested
+10 ignored, 4262 passed, 0 failed, 4262 total tested
