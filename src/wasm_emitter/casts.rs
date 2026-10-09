@@ -349,13 +349,13 @@ impl WasmGcEmitter {
 		}
 	}
 
-	/// `x as number`: a text parses as an Int, else as a float (0 when neither), a character is its digit or code point
+	/// `x as number`: a text is the number it spells ("1/3" the exact ratio), else the error invalid_number; a character
+	/// is its digit or code point
 	pub(super) fn emit_cast_to_number(&mut self, func: &mut Function, value: &Node) {
 		match value {
-			Node::Text(s) => match (s.parse::<i64>(), s.parse::<f64>()) {
-				(Ok(n), _) => self.emit_int_node(func, n),
-				(_, Ok(f)) => self.emit_float_node(func, f),
-				_ => self.emit_int_node(func, 0),
+			Node::Text(text) => match crate::warp_parser::number_in_text(text) {
+				Some(number) => self.emit_node_instructions(func, &Node::Number(number)),
+				None => self.emit_runtime_error(func, "invalid_number"),
 			},
 			Node::Char(c) => self.emit_int_node(func, c.to_digit(10).map_or(*c as i64, |digit| digit as i64)),
 			_ => self.emit_node_instructions(func, value),
