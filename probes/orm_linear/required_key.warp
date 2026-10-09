@@ -1,0 +1,12 @@
+class Team{name: text}
+class Person{name: text; age: int; team: Team}
+teams: [Team] = database.teams_probe
+people: [Person] = database.people_probe
+t0 = clock()
+for i in 1 to 2000 { t = Team("t"); teams.add(t); people.add(Person("p", i, t)) }
+t1 = clock()
+s = 0; for p in people { s += p.team.id }
+t2 = clock()
+kept = people where it.age > 10
+t3 = clock()
+[t1 - t0, t2 - t1, t3 - t2, s, count(kept)]

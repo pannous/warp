@@ -47,14 +47,13 @@ const KEY: &str = "table_key";
 const POSITION: &str = "table_position";
 /// the instance a row read before loading makes
 const MADE: &str = "table_made";
-/// a filter's SQL condition and its parameters, and the ids of the rows it kept
+/// a filter's SQL condition and its parameters
 const CONDITION: &str = "table_condition";
 const CONDITION_VALUES: &str = "table_condition_values";
-const FOUND_IDS: &str = "table_found_ids";
-const GENERATED_NAMES: [(&str, &str); 18] = [(POSITION, "table·position"), (MADE, "table·made"), (ROW, "table·row"), (ROWS, "table·rows"), (MATCHES, "table·matches"), (ADDED, "table·added"), (REMOVED, "table·removed"), (ARGUMENTS, "table·arguments"),
+const GENERATED_NAMES: [(&str, &str); 17] = [(POSITION, "table·position"), (MADE, "table·made"), (ROW, "table·row"), (ROWS, "table·rows"), (MATCHES, "table·matches"), (ADDED, "table·added"), (REMOVED, "table·removed"), (ARGUMENTS, "table·arguments"),
 	(REFERENCED, "table·referenced"), (MEMBER, "table·member"), (SAVED, "table·saved"), (KNOWN, "table·known"), (KEY, "table·key"),
 	(TRANSACTION_VALUE, "table·transaction"), (FAILURE, "table·failure"), (CONDITION, "table·condition"),
-	(CONDITION_VALUES, "table·condition_values"), (FOUND_IDS, "table·found_ids")];
+	(CONDITION_VALUES, "table·condition_values")];
 /// Each table's lazy parts (notes/orm.md Loading), `people·load` of people: the function giving the list, loading its
 /// rows on the first call; the count, SELECT COUNT(*) until then; the add, inserting without loading; the remove, deleting
 /// the row and dropping its instance from the loaded list and the known instances; the reset of a
@@ -62,7 +61,8 @@ const GENERATED_NAMES: [(&str, &str); 18] = [(POSITION, "table·position"), (MAD
 /// table, reading a page of rows until then; the instance of a row read before loading; whether the rows are loaded;
 /// the instances added or read before; the page read last and its start position; the restore after a rolled-back
 /// transaction, giving each instance held its row's values again (id 0 when its row is gone) and loading anew; the
-/// rows a filter keeps, read alone as their instances until the table loads (the loaded ones after)
+/// rows a filter keeps, read alone as their instances until the table loads (the loaded ones after); the instance of an id,
+/// ø when no row has it, found in the instances met, which hold each loaded one
 const LOAD: &str = "table_load";
 const COUNTED: &str = "table_count";
 const ADDING: &str = "table_add";
@@ -77,9 +77,12 @@ const KEPT: &str = "table_kept";
 const PAGE: &str = "table_page";
 const START: &str = "table_start";
 const FOUND: &str = "table_found";
+const OF: &str = "table_of";
 /// `people.table·found(condition, parameters)`: a filter's query until with_lazy_reads
 const FOUND_WORD: &str = "table·found";
-const LAZY_PARTS: [(&str, &str); 14] = [(FOUND, "found"), (LOAD, "load"), (COUNTED, "count"), (ADDING, "add"), (REMOVING, "remove"), (RESET, "reset"), (RESTORE, "restore"), (ELEMENT, "at"), (STREAMED, "streamed"),
+/// `teams.table_instance_of(id)`: the instance of an id until with_lazy_reads makes it `teams·of(id)`
+const INSTANCE_OF_WORD: &str = "table_instance_of";
+const LAZY_PARTS: [(&str, &str); 15] = [(FOUND, "found"), (OF, "of"), (LOAD, "load"), (COUNTED, "count"), (ADDING, "add"), (REMOVING, "remove"), (RESET, "reset"), (RESTORE, "restore"), (ELEMENT, "at"), (STREAMED, "streamed"),
 	(KEPT, "kept"), (LOADED, "loaded"), (MET, "met"), (PAGE, "page"), (START, "start")];
 /// The rows a loop over an unloaded table reads at once (notes/orm.md Loading)
 const PAGE_SIZE: usize = 100;
@@ -725,10 +728,13 @@ fn opened(statement: &Node, tables: &HashMap<String, Table>, file: &str, open: &
 	let class = &table.class;
 	let required: Vec<&str> = table.references.iter().map(|(field, _)| field.as_str()).filter(|field| !table.is_optional(field)).collect();
 	// a required key without its row (deleted, or the 0 of a column added for it) leaves its row out, reported
-	let found = |field: &str| format!("count({}) > 0", matching_rows(table, field, &column_cell(table, ROW, field)));
+	let found = |field: &str, present: bool| match is_own_reference(table, field) {
+		true => format!("count({}) {} 0", matching_rows(table, field, &column_cell(table, ROW, field)), if present { ">" } else { "==" }),
+		false => format!("({}) {} ø", referenced_instance(table, field, &column_cell(table, ROW, field)), if present { "!=" } else { "==" }),
+	};
 	let warnings: String = required.iter().map(|field| format!(
-		"if not ({found}) {{ warning(\"{variable} row \" + {ROW}#1 + \": {field} \" + {cell} + \" is no row of {target}; the row is left out (declare {field}: {class}? to keep it, with ø)\") }}\n",
-		found = found(field), cell = column_cell(table, ROW, field), target = table.reference(field).unwrap_or_default(),
+		"if {missing} {{ warning(\"{variable} row \" + {ROW}#1 + \": {field} \" + {cell} + \" is no row of {target}; the row is left out (declare {field}: {class}? to keep it, with ø)\") }}\n",
+		missing = found(field, false), cell = column_cell(table, ROW, field), target = table.reference(field).unwrap_or_default(),
 		class = class_of(&table.fields.iter().find(|(name, _, _)| name == field).map(|(_, field_type, _)| field_type.clone()).unwrap_or_default()))).collect();
 	let checks = match warnings.is_empty() {
 		true => String::new(),
@@ -736,7 +742,7 @@ fn opened(statement: &Node, tables: &HashMap<String, Table>, file: &str, open: &
 	};
 	let kept = match required.is_empty() {
 		true => String::new(),
-		false => format!(" if {}", required.iter().map(|field| found(field)).collect::<Vec<_>>().join(" and ")),
+		false => format!(" if {}", required.iter().map(|field| found(field, true)).collect::<Vec<_>>().join(" and ")),
 	};
 	// the identity map: the instance of each id met, a hash table keyed by the id (card int-map)
 	let known = format!("{ROW}#1 in {MET}");
@@ -768,6 +774,7 @@ global {MET}
 if not {LOADED} {{
 {ROWS} = {ROWS_PLACEHOLDER}
 {checks}{variable} = [{instance} for {ROW} in {ROWS}{kept}]
+for {MADE} in {variable} {{ {MET}[{MADE}.{ID_FIELD}] = {MADE} }}
 {LOADED} = yes
 }}
 {variable}
@@ -781,7 +788,8 @@ if {LOADED} then count({variable}) else {unloaded_count}
 global {variable}
 global {LOADED}
 global {MET}
-if {LOADED} {{ {variable}.add({ADDED}) }} else {{ {MET}[{ADDED}.{ID_FIELD}] = {ADDED} }}
+if {LOADED} {{ {variable}.add({ADDED}) }}
+{MET}[{ADDED}.{ID_FIELD}] = {ADDED}
 {ADDED}
 }}
 {REMOVING}({REMOVED}) := {{
@@ -826,8 +834,16 @@ global {variable}
 global {LOADED}
 global {MET}
 {ROWS} = {SELECT_PLACEHOLDER}
-{FOUND_IDS} = [{ROW}#1 for {ROW} in {ROWS}]
-if {loaded_found} then [{MADE} for {MADE} in {LOAD}() if {MADE}.{ID_FIELD} in {FOUND_IDS}] else [{KEPT}({ROW}) for {ROW} in {ROWS}]
+if {loaded_found} {{
+{LOAD}()
+[{MET}[{ROW}#1] for {ROW} in {ROWS} if {ROW}#1 in {MET}]
+}} else [{KEPT}({ROW}) for {ROW} in {ROWS}]
+}}
+{OF}({KEY}) := {{
+global {LOADED}
+global {MET}
+if not {LOADED} {{ {LOAD}() }}
+if {KEY} in {MET} then {MET}[{KEY}] else ø
 }}
 {RESTORE}() := {{
 global {variable}
@@ -918,6 +934,9 @@ fn with_lazy_reads(node: Node, tables: &HashMap<String, Table>, own: Option<&str
 			}
 			(Some(variable), Node::List(parts, _, _)) if parts.len() == 2 && [ADD_WORD, REMOVE_WORD].contains(&parts[0].drop_meta().name().as_str()) => {
 				called(lazy_name(&variable, &parts[0].drop_meta().name()), Some(rewrite(parts[1].clone())))
+			}
+			(Some(variable), Node::List(parts, _, _)) if parts.len() == 2 && parts[0].drop_meta().name() == INSTANCE_OF_WORD => {
+				called(lazy_name(&variable, "of"), Some(rewrite(parts[1].clone())))
 			}
 			(_, Node::Symbol(_)) => Node::Key(Box::new(rewrite(*left)), Op::Dot, right),
 			_ => Node::Key(Box::new(rewrite(*left)), Op::Dot, Box::new(rewrite(*right))),
@@ -1016,11 +1035,25 @@ fn column_fields(table: &Table) -> Vec<(String, String, Option<Node>)> {
 /// The row whose id is the value of `id` (the instance the foreign key `field` points to); ø for an optional key
 /// without its row
 fn referenced(table: &Table, field: &str, id: &str) -> String {
+	if !is_own_reference(table, field) {
+		return referenced_instance(table, field, id);
+	}
 	let matches = matching_rows(table, field, id);
 	match table.is_optional(field) {
 		true => format!("({MATCHES} = {matches}; if {MATCHES} then {MATCHES}#1 else ø)"),
 		false => format!("{matches}#1"),
 	}
+}
+
+/// The instance of the row of the other table whose id is the value of `id`, found in its identity map, ø when none
+fn referenced_instance(table: &Table, field: &str, id: &str) -> String {
+	format!("{}.{INSTANCE_OF_WORD}({id})", table.reference(field).unwrap_or_default())
+}
+
+/// A foreign key to the table's own class (`boss: Person?`): its rows are read while the table loads, so they are
+/// matched in the list read so far rather than in the identity map, whose finding would load the table again
+fn is_own_reference(table: &Table, field: &str) -> bool {
+	table.fields.iter().any(|(name, field_type, _)| name == field && class_of(field_type) == table.class)
 }
 
 /// The rows of the table the foreign key `field` points to whose id is the value of `id`: one, or none when dangling

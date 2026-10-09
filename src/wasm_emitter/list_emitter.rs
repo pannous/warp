@@ -878,8 +878,9 @@ impl WasmGcEmitter {
 		})
 	}
 
-	/// An `if` statement whose branches store a typed list (`if x > 10 then {out = out + [x]}`, what filter lowers to): its
-	/// branches run as statements, so the stored list never becomes a Node; leaves a value for the caller to drop
+	/// An `if` statement whose branches store or extend a typed list (`if x > 10 then {out = out + [x]}`, what filter lowers
+	/// to, `out += [x]` of a comprehension): its branches run as statements, so the list never becomes a Node, which
+	/// copied it per item; leaves a value for the caller to drop
 	fn emit_discarded_branches(&mut self, func: &mut Function, item: &Node) -> bool {
 		let (if_then, otherwise) = match item.drop_meta() {
 			Node::Key(if_then, Op::Else, otherwise) => (if_then.as_ref(), Some(otherwise.as_ref())),
@@ -889,7 +890,7 @@ impl WasmGcEmitter {
 		let Node::Key(_, Op::If, condition) = condition.drop_meta() else { return false };
 		let stores_typed_list = |branch: &Node| {
 			let mut found = false;
-			branch.visit(&mut |part| found |= self.typed_list_store(part).is_some());
+			branch.visit(&mut |part| found |= self.typed_list_store(part).is_some() || self.typed_list_extension(part).is_some());
 			found
 		};
 		if !stores_typed_list(then) && !otherwise.is_some_and(stores_typed_list) {

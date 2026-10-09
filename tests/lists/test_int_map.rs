@@ -3,10 +3,10 @@
 use crate::is;
 
 /// Entries set, and the milliseconds that may take: ~100 at constant time per entry, minutes when each copies the map
-const ENTRIES: i64 = 10_000;
+pub(crate) const ENTRIES: i64 = 10_000;
 const MILLISECONDS: i64 = 3000;
 
-fn timed(statements: &str, result: &str) -> String {
+pub(crate) fn timed(statements: &str, result: &str) -> String {
 	format!("t0 = clock(); {statements}; t1 = clock(); if t1 - t0 < {MILLISECONDS} then {result} else -1")
 }
 

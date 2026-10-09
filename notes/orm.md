@@ -83,7 +83,13 @@ keeping its fields with id 0; the lazy `people·remove` drops bo from the loaded
   (map_backend.rs find_typed_map_globals, card int-map): loading, adding and reading n rows is linear, 10 000 rows in
   ~0.5 s with their inserts (test ten_thousand_rows_load_in_linear_time; a list searched by id took 11.6 s for 2000).
   The INSERT runs before the add so the instance has its id as its key. A rollback's restore finds rows by id in a
-  local map too. Still n·m: a required foreign key's check per row (matching_rows) and `people where it.id in ids`.
+  local map too. The map holds every loaded and added instance, so a foreign key finds its row by `teams·of(id)`
+  (`teams.table_instance_of(id)` until with_lazy_reads; ø when no row has it) and a loaded table's filter maps its
+  selected ids through it (card orm-linear, tests/control/test_table_linear_lookups.rs). A key to the table's own class
+  still walks the list read so far (`teams·of` there would load the table again).
+- Linear loads also needed two list cursor fixes (list_ops.rs): an append (list_extend) keeps the index cursor and the
+  count of other lists, so a comprehension over the rows read walks on; a short index or count (`row#4`) leaves the
+  cursor where it is. A conditional typed-list append (`if c { out += [x] }`) runs as a statement, not as a Node copy.
 - A filter `people where c` is `people.table·found(sql, parameters)` until with_lazy_reads makes it `people·found(…)`:
   `std_io("table", "select", [table, schema, file, sql, parameters])` gives the kept rows whole, each made the one
   instance of its row by `people·kept` (no load); a loaded table, or one with a required foreign key, keeps its loaded
