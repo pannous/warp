@@ -1262,7 +1262,12 @@ pub(super) fn check_parameter_annotations(program: &Node) -> Option<Diagnostic> 
 			Some(element) => is_known_name(element) || names_list_type(element),
 			None => annotated_kind(annotation).is_some() || user_types.get_by_name(type_name.trim_end_matches('?')).is_some() || traits.is_trait(&type_name),
 		};
-		(!known).then(|| Diagnostic::at(annotation, format!("unknown type {type_name} of parameter {}", param.name)))
+		let names = crate::law::type_model::BUILTIN_TYPE_WORDS.iter().map(|word| word.to_string()).chain(user_types.types().iter().map(|type_def| type_def.name.clone()));
+		let diagnostic = || Diagnostic::at(annotation, format!("unknown type {type_name} of parameter {}", param.name));
+		(!known).then(|| match crate::extensions::strings::near_miss(&type_name, names) {
+			Some(near) => diagnostic().offer(format!("the type {near}"), &type_name, near),
+			None => diagnostic(),
+		})
 	})
 }
 
@@ -1510,7 +1515,8 @@ pub(super) fn assignment_mismatch(assignment: &Node, name: &str, type_name: &str
 	}
 	if matches!(value.drop_meta(), Node::Empty) && builtin_type_kind(type_name).is_some() {
 		let message = format!("type mismatch: {name} is declared {type_name}, cannot assign ø");
-		return Some(Diagnostic::at(assignment, message).fix(format!("declare {name}:{type_name}? to allow ø")));
+		return Some(Diagnostic::at(assignment, message).fix(format!("declare {name}:{type_name}? to allow ø"))
+			.offer("allow ø", format!("{name}:{type_name}"), format!("{name}:{type_name}?")));
 	}
 	if let Some(element) = list_element_type(type_name) {
 		return list_items_mismatch(assignment, name, type_name, element, value);
@@ -1518,7 +1524,10 @@ pub(super) fn assignment_mismatch(assignment: &Node, name: &str, type_name: &str
 	let actual = literal_misfit(type_name, value)?;
 	let value_text = value.serialize();
 	let message = format!("type mismatch: {name} is declared {type_name}, cannot assign {} {value_text}", format!("{actual:?}").to_lowercase());
-	Some(Diagnostic::at(assignment, message).fix(format!("{name}={type_name}({value_text}) or declare {name}:{}", format!("{actual:?}").to_lowercase())))
+	let actual = format!("{actual:?}").to_lowercase();
+	Some(Diagnostic::at(assignment, message).fix(format!("{name}={type_name}({value_text}) or declare {name}:{actual}"))
+		.offer(format!("the {type_name} of the value"), &value_text, format!("{type_name}({value_text})"))
+		.offer(format!("{name} holds {actual}"), format!("{name}:{type_name}"), format!("{name}:{actual}")))
 }
 
 /// The kind of a literal `value` that does not fit the built-in type `type_name`; None when it fits or is no literal

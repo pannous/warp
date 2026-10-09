@@ -297,7 +297,13 @@ fn collect_extras(node: &Node, functions: &mut HashMap<String, Function>, unknow
 		}
 		let used = bodies.get(&name).map(symbols_in_order).unwrap_or_default();
 		if !used.contains(&argument) {
-			unknown.get_or_insert_with(|| Diagnostic::at(&call, format!("{name} has no parameter {argument}")).into_error());
+			let diagnostic = Diagnostic::at(&call, format!("{name} has no parameter {argument}"));
+			let near = crate::extensions::strings::near_miss(&argument, function.parameters.clone());
+			let diagnostic = match near {
+				Some(parameter) => diagnostic.offer(format!("the parameter {parameter}"), &argument, parameter),
+				None => diagnostic,
+			};
+			unknown.get_or_insert_with(|| diagnostic.into_error());
 			continue;
 		}
 		function.extras.push(argument);
