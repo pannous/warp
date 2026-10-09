@@ -17,6 +17,7 @@
 use super::{finest_units, signature, unit_named, units_text, Dimension, Factor, Quantity, Unit, UNITS};
 
 mod unit_fields;
+pub(crate) use unit_fields::si_quantity;
 pub(crate) use unit_fields::unit_type;
 use crate::extensions::numbers::Number;
 use crate::extensions::reals::Rational;
@@ -35,6 +36,8 @@ const SPECIALISATION_SEPARATOR: &str = "·u";
 const TEXT_WORD: &str = "str";
 /// A run-time amount as text that reads back: `1.5`, or a fraction `str` shows as `10/3` in parentheses, `(10/3)km/h`
 const AMOUNT_TEXT: &str = r#"(if str(the_amount).contains("/") then "(" + str(the_amount) + ")" else str(the_amount))"#;
+/// `print` rounds a fraction to two decimals, `6.17km`; `str` keeps it exact (P231)
+const PRINTED_AMOUNT_TEXT: &str = r#"(if str(the_amount).contains("/") then str(round(the_amount * 100) / 100.0) else str(the_amount))"#;
 const AMOUNT_PLACEHOLDER: &str = "the_amount";
 const PRINT_WORD: &str = "print";
 /// `std_io("table", "insert", [r.distance, …])`: a host call takes SI amounts as they are (stored rows hold SI amounts)
@@ -46,8 +49,8 @@ const TEXT_WORDS: [&str; 3] = [TEXT_WORD, "text_form", "serialize"];
 const ELEMENT_METHODS: [&str; 2] = ["add", "push"];
 /// `xs.map(f)`: a list of what f gives each element
 const MAP_WORD: &str = "map";
-/// List words that give an element: its signature
-const ELEMENT_WORDS: [&str; 5] = ["sum", "max", "min", "first", "last"];
+/// List words that give an element: its signature (`mean` also spelled `average`, library_words.rs)
+const ELEMENT_WORDS: [&str; 7] = ["sum", "max", "min", "first", "last", "mean", "average"];
 /// List words that give a plain number
 const COUNT_WORDS: [&str; 3] = ["count", "size", "length"];
 
@@ -345,21 +348,16 @@ fn last_statement(node: &Node) -> Option<&Node> {
 /// The units a conversion shows: `q as km`, `q in km/h`
 fn conversion_target(node: &Node) -> Option<Vec<Factor>> {
 	match node.drop_meta() {
-		Node::Key(_, Op::As, unit) => super::unit_expression(unit),
 		Node::List(items, Bracket::Round, _) if items.len() == 1 => conversion_target(&items[0]),
-		Node::List(items, Bracket::None, Separator::Space) => match items.as_slice() {
-			[_, word, unit] if matches!(word.drop_meta(), Node::Symbol(w) if w == super::IN_WORD) => super::unit_expression(unit),
-			_ => None,
-		},
-		_ => None,
+		other => super::conversion(other).map(|(_, units)| units),
 	}
 }
 
 /// The quantity in `quantity` (an SI amount at run time) as text in `units`: `str(amount / 1000) + "km"`, a fraction in parentheses
-fn quantity_text(quantity: Node, units: &[Factor]) -> Option<Node> {
+fn quantity_text(quantity: Node, units: &[Factor], amount_text: &str) -> Option<Node> {
 	let per_unit = number_node(&super::scale(units, |factor| base_unit(factor.unit.dimension)))?;
 	let amount = Node::Key(Box::new(quantity), Op::Div, Box::new(per_unit));
-	let text = crate::lowering::library_words::substitute(crate::warp_parser::parse(AMOUNT_TEXT), AMOUNT_PLACEHOLDER, &amount);
+	let text = crate::lowering::library_words::substitute(crate::warp_parser::parse(amount_text), AMOUNT_PLACEHOLDER, &amount);
 	Some(Node::Key(Box::new(text), Op::Add, Box::new(Node::Text(super::unit_suffix(units)))))
 }
 
@@ -432,12 +430,12 @@ impl Inference {
 				Ok((quantity, given))
 			}
 			// `"distance " + d`: the quantity joins as its text, `"distance " + (d as km)` in km
-			Node::Key(left, Op::Add, right) if matches!(left.drop_meta(), Node::Text(_)) || matches!(right.drop_meta(), Node::Text(_)) => {
+			Node::Key(left, Op::Add, right) if super::joins_text(&left) || super::joins_text(&right) => {
 				let (left_units, right_units) = (conversion_target(&left), conversion_target(&right));
 				let (left, left_signature) = self.infer(*left)?;
 				let (right, right_signature) = self.infer(*right)?;
-				let left = self.as_text(left, &left_signature, left_units)?;
-				let right = self.as_text(right, &right_signature, right_units)?;
+				let left = self.as_text(left, &left_signature, left_units, AMOUNT_TEXT)?;
+				let right = self.as_text(right, &right_signature, right_units, AMOUNT_TEXT)?;
 				Ok((Node::Key(Box::new(left), Op::Add, Box::new(right)), vec![]))
 			}
 			// `r.distance == ø` of an optional unit field: ø has no dimension, any value may be it
@@ -645,7 +643,7 @@ impl Inference {
 		let is_text = TEXT_WORDS.contains(&method) && arguments.is_empty();
 		let (object, signature) = self.infer(object)?;
 		if is_text && !signature.is_empty() {
-			return Ok((self.as_text(object, &signature, None)?, vec![]));
+			return Ok((self.as_text(object, &signature, None, AMOUNT_TEXT)?, vec![]));
 		}
 		let (call, _) = self.infer(call)?;
 		if !signature.is_empty() {
@@ -665,30 +663,30 @@ impl Inference {
 	}
 
 	/// The source of a quantity's text at run time, `amount` an SI amount: `str(amount / (1/100)) + " cm"`
-	fn quantity_source(&self, amount: &str, signature: &Signature) -> Result<String, Stop> {
+	fn quantity_source(&self, amount: &str, signature: &Signature, amount_text: &str) -> Result<String, Stop> {
 		let units = display_factors(&self.display, signature);
 		let per_unit = number_node(&super::scale(&units, |factor| base_unit(factor.unit.dimension))).ok_or(Stop::Unsupported)?;
-		let amount_text = AMOUNT_TEXT.replace(AMOUNT_PLACEHOLDER, &format!("({amount} / ({}))", per_unit.serialize().trim()));
+		let amount_text = amount_text.replace(AMOUNT_PLACEHOLDER, &format!("({amount} / ({}))", per_unit.serialize().trim()));
 		Ok(format!("{amount_text} + \"{}\"", super::unit_suffix(&units)))
 	}
 
 	/// A whole list of quantities as text, built at run time: `"[" + join(map(xs, x => str(x / 1/100) + " cm"), " ") + "]"`
-	fn list_text(&self, name: &str) -> Result<Node, Stop> {
+	fn list_text(&self, name: &str, amount_text: &str) -> Result<Node, Stop> {
 		let element = self.lists.get(name).ok_or(Stop::Unsupported)?;
-		let source = format!("\"[\" + join(map({name}, item => {}), \" \") + \"]\"", self.quantity_source("item", element)?);
+		let source = format!("\"[\" + join(map({name}, item => {}), \" \") + \"]\"", self.quantity_source("item", element, amount_text)?);
 		Ok(crate::warp_parser::parse(&source))
 	}
 
 	/// A whole object with quantity fields as text, built at run time: `{dist:500 m name:"run"}`. The quantity fields come
 	/// first, the plain ones follow as an object of them shows them
-	fn object_text(&self, name: &str) -> Result<Node, Stop> {
+	fn object_text(&self, name: &str, amount_text: &str) -> Result<Node, Stop> {
 		let fields = self.objects.get(name).ok_or(Stop::Unsupported)?;
 		let mut quantities = vec![];
 		let mut plain = vec![];
 		for (field, signature) in fields {
 			match signature.is_empty() {
 				true => plain.push(format!("{field}: {name}.{field}")),
-				false => quantities.push(format!("\"{field}:\" + {}", self.quantity_source(&format!("{name}.{field}"), signature)?)),
+				false => quantities.push(format!("\"{field}:\" + {}", self.quantity_source(&format!("{name}.{field}"), signature, amount_text)?)),
 			}
 		}
 		let rest = match plain.is_empty() {
@@ -699,10 +697,10 @@ impl Inference {
 	}
 
 	/// The text of a whole list or object with quantities (`print xs`, `"${p}"`); None for any other value
-	fn whole_text(&self, value: &Node) -> Option<Result<Node, Stop>> {
+	fn whole_text(&self, value: &Node, amount_text: &str) -> Option<Result<Node, Stop>> {
 		match value.drop_meta() {
-			Node::Symbol(name) if self.lists.contains_key(name) => Some(self.list_text(name)),
-			Node::Symbol(name) if self.objects.contains_key(name) => Some(self.object_text(name)),
+			Node::Symbol(name) if self.lists.contains_key(name) => Some(self.list_text(name, amount_text)),
+			Node::Symbol(name) if self.objects.contains_key(name) => Some(self.object_text(name, amount_text)),
 			_ => None,
 		}
 	}
@@ -710,18 +708,18 @@ impl Inference {
 	/// The last statement of the program when it is a whole list of quantities: its text
 	fn final_list(&self, statement: &Node) -> Option<Result<Node, Stop>> {
 		match statement.drop_meta() {
-			Node::Symbol(name) if self.lists.contains_key(name) => Some(self.list_text(name)),
+			Node::Symbol(name) if self.lists.contains_key(name) => Some(self.list_text(name, AMOUNT_TEXT)),
 			_ => None,
 		}
 	}
 
 	/// A value as it joins a text: a quantity as its text in `units` (else in the finest written units), anything else as it is
-	fn as_text(&self, value: Node, signature: &Signature, units: Option<Vec<Factor>>) -> Result<Node, Stop> {
+	fn as_text(&self, value: Node, signature: &Signature, units: Option<Vec<Factor>>, amount_text: &str) -> Result<Node, Stop> {
 		if signature.is_empty() {
 			return Ok(value);
 		}
 		let units = units.unwrap_or_else(|| display_factors(&self.display, signature));
-		quantity_text(value, &units).ok_or(Stop::Unsupported)
+		quantity_text(value, &units, amount_text).ok_or(Stop::Unsupported)
 	}
 
 	/// The items of a list literal and their one signature: items of different units are a DimensionError
@@ -749,6 +747,11 @@ impl Inference {
 		let (arguments, element) = match arguments {
 			[list] => match (list.drop_meta(), self.mapped_list(list)) {
 				(Node::Symbol(name), _) => (arguments.to_vec(), self.lists.get(name).cloned()?),
+				(Node::List(items, Bracket::Square, separator), _) => match self.list_elements(items.clone()) {
+					Ok((items, element)) if !element.is_empty() => (vec![Node::List(items, Bracket::Square, separator.clone())], element),
+					Ok(_) => return None,
+					Err(stop) => return Some(Err(stop)),
+				},
 				(_, Some(Ok((mapped, element)))) => (vec![mapped], element),
 				(_, Some(Err(stop))) => return Some(Err(stop)),
 				(_, None) => return None,
@@ -825,23 +828,23 @@ impl Inference {
 			}
 		}
 		match items {
-			[head, value] if call_or_words && TEXT_WORDS.iter().any(|text| word(head, text)) && self.whole_text(value).is_some() => {
-				self.whole_text(value).map(|text| text.map(|text| (text, vec![])))
+			[head, value] if call_or_words && TEXT_WORDS.iter().any(|text| word(head, text)) && self.whole_text(value, AMOUNT_TEXT).is_some() => {
+				self.whole_text(value, AMOUNT_TEXT).map(|text| text.map(|text| (text, vec![])))
 			}
 			[head, value] if call_or_words && TEXT_WORDS.iter().any(|text| word(head, text)) => Some((|| {
 				let (value, signature) = self.infer(value.clone())?;
 				if signature.is_empty() {
 					return Ok((Node::List(vec![head.clone(), value], bracket.clone(), separator.clone()), vec![]));
 				}
-				Ok((self.as_text(value, &signature, None)?, vec![]))
+				Ok((self.as_text(value, &signature, None, AMOUNT_TEXT)?, vec![]))
 			})()),
-			[head, value] if call_or_words && word(head, PRINT_WORD) && self.whole_text(value).is_some() => {
-				self.whole_text(value).map(|text| text.map(|text| (Node::List(vec![head.clone(), text], bracket.clone(), separator.clone()), vec![])))
+			[head, value] if call_or_words && word(head, PRINT_WORD) && self.whole_text(value, PRINTED_AMOUNT_TEXT).is_some() => {
+				self.whole_text(value, PRINTED_AMOUNT_TEXT).map(|text| text.map(|text| (Node::List(vec![head.clone(), text], bracket.clone(), separator.clone()), vec![])))
 			}
 			[head, value] if call_or_words && word(head, PRINT_WORD) => Some((|| {
 				let shown_units = conversion_target(value);
 				let (value, signature) = self.infer(value.clone())?;
-				let text = self.as_text(value, &signature, shown_units)?;
+				let text = self.as_text(value, &signature, shown_units, PRINTED_AMOUNT_TEXT)?;
 				Ok((Node::List(vec![head.clone(), text], bracket.clone(), separator.clone()), vec![]))
 			})()),
 			[head, value] if *bracket == Bracket::None && word(head, RETURN_WORD) => Some((|| {
@@ -967,6 +970,8 @@ impl Inference {
 		let is_amount_and_unit = items.len() == 2 && bracket == Bracket::None && separator == Separator::Space && is_amount(&items[0])
 			&& matches!(items[1].drop_meta(), Node::Symbol(name) if unit_named(name).is_some() && !self.variables.contains_key(name));
 		let is_host_call = bracket == Bracket::Round && matches!(items.first().map(Node::drop_meta), Some(Node::Symbol(word)) if word == HOST_CALL);
+		// `(r.distance)`, `(a + b)`: parentheses around one expression group it (a lone word `(f)` may be a call)
+		let grouping = bracket == Bracket::Round && matches!(items.as_slice(), [single] if !matches!(single.drop_meta(), Node::Symbol(_)));
 		let in_host_call = self.in_host_call || is_host_call;
 		let outer_host_call = std::mem::replace(&mut self.in_host_call, in_host_call);
 		let mut lowered = vec![];
@@ -1002,7 +1007,7 @@ impl Inference {
 			return Ok((product, signature));
 		}
 		let in_host_call = std::mem::replace(&mut self.in_host_call, outer_host_call);
-		let signature = if statements { signatures.last().cloned().unwrap_or_default() } else if is_loop || in_host_call || signatures.iter().all(Vec::is_empty) {
+		let signature = if statements || grouping { signatures.last().cloned().unwrap_or_default() } else if is_loop || in_host_call || signatures.iter().all(Vec::is_empty) {
 			vec![]
 		} else {
 			return Err(Stop::Unsupported); // a call, print, a list literal or interpolation of a quantity

@@ -1,0 +1,11 @@
+class Trip{distance: km; time: min; load: kg; note: text}
+stored trips: [Trip]
+if count(trips) == 0 {
+	trips.add(Trip(10 km, 50 min, 3 kg, "a"))
+	trips.add(Trip(2 km, 20 min, 500 g, "b"))
+}
+t = trips#1
+print t.distance / t.time
+print sum(trips.map(x => x.load))
+print sum(trips.map(x => x.time)) as h
+count(trips where it.time < 30 min)

@@ -1,0 +1,7 @@
+class T{load: number}
+stored ts: [T]
+if count(ts) == 0 {
+	ts.add(T(3))
+	ts.add(T(0.5))
+}
+sum(ts.map(x => x.load))

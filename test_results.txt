@@ -1135,6 +1135,7 @@ PASSED:
   ✓ functions::test_optional_parameters::a_missing_optional_argument_is_empty
   ✓ functions::test_optional_parameters::coalescing_keeps_zero_and_false
   ✓ functions::test_optional_parameters::maybe_marks_an_optional_parameter
+  ✓ functions::test_optional_words::is_empty_holds_for_an_empty_text_list_or_map
   ✓ functions::test_optional_words::is_with_a_test_word
   ✓ functions::test_optional_words::test_words_read_as_not
   ✓ functions::test_optional_words::test_words_work_in_other_conditions
@@ -1857,6 +1858,10 @@ PASSED:
   ✓ numbers::test_angle::test_truthy_and
   ✓ numbers::test_as_compound_unit::a_compound_unit_after_as_is_the_target
   ✓ numbers::test_as_compound_unit::a_run_time_quantity_converts_to_a_compound_unit
+  ✓ numbers::test_average::a_captured_float_stays_a_float
+  ✓ numbers::test_average::a_program_may_define_its_own_mean
+  ✓ numbers::test_average::average_needs_no_use
+  ✓ numbers::test_average::the_average_of_quantities_has_their_unit
   ✓ numbers::test_big_ratio::test_big_ratio_readback_stays_exact
   ✓ numbers::test_big_ratio::test_big_ratio_terminating_decimal
   ✓ numbers::test_big_ratio::test_big_ratio_unit_amounts_stay_exact
@@ -2022,6 +2027,13 @@ PASSED:
   ✓ numbers::test_plus_minus_units::a_tolerance_with_units_flows_through_arithmetic
   ✓ numbers::test_plus_minus_units::a_tolerance_with_units_passes_through_functions
   ✓ numbers::test_plus_minus_units::compile_time_tolerances_stay_at_compile_time
+  ✓ numbers::test_printed_quantity::print_keeps_a_plain_fraction
+  ✓ numbers::test_printed_quantity::print_rounds_a_quantity_to_two_decimals
+  ✓ numbers::test_printed_quantity::str_and_the_result_keep_the_exact_quantity
+  ✓ numbers::test_quantities_in_one_text::a_sum_of_quantities_still_adds
+  ✓ numbers::test_quantities_in_one_text::two_quantities_join_one_text
+  ✓ numbers::test_quantity_conversion::a_run_time_quantity_converts_with_as
+  ✓ numbers::test_quantity_conversion::a_run_time_quantity_joins_a_text
   ✓ numbers::test_range_tolerance_compare::a_range_equals_the_same_span_with_tolerance
   ✓ numbers::test_range_tolerance_compare::spans_in_different_units_do_not_compare
   ✓ numbers::test_rational_quantities::test_exact_amounts_compute_on
@@ -2071,6 +2083,8 @@ PASSED:
   ✓ numbers::test_sum_of_decimals::the_sum_of_decimal_elements
   ✓ numbers::test_superscript_variables::test_a_negative_superscript_variable_exponent
   ✓ numbers::test_superscript_variables::test_a_superscript_variable_exponent
+  ✓ numbers::test_text_then_conversion::a_conversion_after_a_text_join_converts_the_last_operand
+  ✓ numbers::test_text_then_conversion::a_grouped_conversion_still_works
   ✓ numbers::test_time_of_day::a_program_naming_time_keeps_its_own
   ✓ numbers::test_time_of_day::constant_quantities_compare_in_a_condition
   ✓ numbers::test_time_of_day::time_is_the_time_of_day
@@ -2088,6 +2102,11 @@ PASSED:
   ✓ numbers::test_unbounded_int::test_overflow_promotes_neg_abs
   ✓ numbers::test_unbounded_int::test_overflow_promotes_pow
   ✓ numbers::test_unbounded_int::test_small_arithmetic_unchanged
+  ✓ numbers::test_unit_columns::a_column_sums_and_peaks_in_its_unit
+  ✓ numbers::test_unit_columns::a_conversion_takes_a_compound_unit_whole
+  ✓ numbers::test_unit_columns::a_number_field_adds_into_an_exact_total
+  ✓ numbers::test_unit_columns::a_stored_unit_column_filters_and_sums
+  ✓ numbers::test_unit_columns::parentheses_keep_a_unit_field
   ✓ numbers::test_unit_composites::test_converting_powered_and_composite_units
   ✓ numbers::test_unit_composites::test_products_of_different_dimensions
   ✓ numbers::test_unit_composites::test_sums_need_the_same_dimensions
@@ -2674,7 +2693,7 @@ PASSED:
   ✓ text::test_backtick_templates::a_backtick_template_interpolates
   ✓ text::test_backtick_templates::a_backtick_text_is_text
   ✓ text::test_backtick_templates::an_unclosed_backtick_says_so
-  ✓ text::test_brace_hole::a_backslash_brace_hints_the_canonical_hole
+  ✓ text::test_brace_hole::a_backslash_brace_gets_no_hint
   ✓ text::test_brace_hole::a_backslash_brace_is_a_hole
   ✓ text::test_case_table::every_cased_code_point_maps_as_rust_does
   ✓ text::test_case_table::upper_and_lower_map_as_rust_does
@@ -3595,6 +3614,7 @@ PASSED:
   ✓ web::test_served_forms::a_form_posts_to_a_served_route
   ✓ web::test_served_forms::a_page_starts_from_rows_of_a_server_table
   ✓ web::test_served_forms::a_path_parameter_filters_a_table
+  ✓ web::test_served_forms::a_refused_request_answers_400_or_404
   ✓ web::test_served_forms::an_empty_filter_answers_an_empty_list
   ✓ web::test_served_forms::routes_without_a_server_wait_for_the_page
   ✓ web::test_served_forms::the_todo_sample_creates_toggles_and_lists
@@ -4047,4 +4067,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-14 ignored, 4042 passed, 0 failed, 4042 total tested
+14 ignored, 4062 passed, 0 failed, 4062 total tested
