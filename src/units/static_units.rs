@@ -78,6 +78,9 @@ enum Stop {
 /// The program with unit literals as SI amounts and the units of its final value; None when it uses no units or uses
 /// quantities beyond stage 1; Err for a dimension error
 pub fn lower(program: &Node) -> Option<Result<Node, Node>> {
+	if let Some(field) = unit_fields::field_tolerance(program) {
+		return Some(Err(crate::node::error(&format!("a field type with a tolerance is not supported yet: {field}; give the value its tolerance instead, `5 m ± 1 mm`"))));
+	}
 	let classes = unit_fields::unit_classes(program);
 	if (!super::needs_quantities(program) && classes.is_empty()) || super::defines_unit_name(program) {
 		return None;

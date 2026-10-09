@@ -25,6 +25,21 @@ pub(super) fn unit_classes(program: &Node) -> HashMap<String, Fields> {
 	}).collect()
 }
 
+/// `class Part{length: m ± 1 mm}`: a field type with a tolerance, which no class field holds yet (the tolerance goes in
+/// the value, `Part(5 m ± 1 mm)`); loud, as dropping it would leave a plain `m` (card quantity-tolerance)
+pub(super) fn field_tolerance(program: &Node) -> Option<String> {
+	let mut found = None;
+	program.visit(&mut |node| if let Node::Type { name, body } = node {
+		body.visit(&mut |member| if let Node::Key(field, Op::Colon, type_name) = member {
+			let is_unit_type = |unit: &Node| crate::units::unit_expression(unit).is_some();
+			if found.is_none() && matches!(type_name.drop_meta(), Node::Key(unit, Op::PlusMinus, _) if is_unit_type(unit)) {
+				found = Some(format!("{}.{}: {}", name.drop_meta().name(), field.drop_meta().name(), type_name.serialize().trim()));
+			}
+		});
+	});
+	found
+}
+
 /// The units the program's unit fields are written in: `distance: km` shows km like a written `5 km`
 pub(super) fn written_field_units(program: &Node) -> Vec<crate::units::Factor> {
 	let fields = crate::class_methods::class_fields(program).into_values().flatten();
@@ -73,6 +88,16 @@ pub(crate) fn si_quantity(node: &Node) -> Option<(f64, String)> {
 }
 
 /// The construction `P{…}` with `body` in place of its fields, its marks kept
+/// A unit field given a run-time quantity `quantity(5 ± 1/100, "m")` (`Rope(5 m ± 1 cm)`, units.rs
+/// lower_run_time_tolerances) holds it as written, `(5 ± 1/100) * m`: its amount in the field's base units (card
+/// quantity-tolerance)
+fn written_quantity(argument: &Node) -> Node {
+	match crate::units::run_time_quantity_parts(argument) {
+		Some((amount, unit)) => Node::Key(Box::new(amount.clone()), Op::Mul, Box::new(crate::warp_parser::parse(unit))),
+		None => argument.clone(),
+	}
+}
+
 fn with_instance_body(node: &Node, body: Node) -> Node {
 	match node {
 		Node::Meta { node, data } => Node::Meta { node: Box::new(with_instance_body(node, body)), data: data.clone() },
@@ -191,7 +216,7 @@ impl Inference {
 				lowered.push(argument.clone());
 				continue;
 			}
-			let (argument, given) = match self.infer(argument.clone()) {
+			let (argument, given) = match self.infer(written_quantity(argument)) {
 				Ok(inferred) => inferred,
 				Err(stop) => return Some(Err(stop)),
 			};
@@ -233,7 +258,7 @@ impl Inference {
 				lowered.push(entry.clone());
 				continue;
 			};
-			let (value, given) = match self.infer(value.as_ref().clone()) {
+			let (value, given) = match self.infer(written_quantity(value)) {
 				Ok(inferred) => inferred,
 				Err(stop) => return Some(Err(stop)),
 			};
