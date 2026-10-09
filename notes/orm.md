@@ -111,6 +111,9 @@ bo's row again, so it changes nothing after written-through changes; an instance
   The list keeps its instances, so a filtered row is the same instance (`bo.age += 1` shows in `people`).
 - SQL keeps: comparisons, and/or, `+ - *` of numeric columns and number literals, `it.f` as its column, literals and
   variables as `?` values. Not `/` (warp's division is exact) and not `+` of texts or of unknown types.
+  `==` and `!=` are SQL's `IS` and `IS NOT`, so `it.email == ø` finds the NULLs as in warp.
+- An optional scalar field (`email: text?`, card orm-optional) is a nullable column: rows without a value (and rows
+  from before an added column) hold NULL and read as ø. `text` → `text?` keeps the column (the browser store too).
 - Every other part is `warp_call('table·call·N', id, columns…, values…)`: a generated function
   `table·call·N(table·arguments: any) := …` with `it.f` as its column's argument, `it` as the row's instance and the
   filter's variables as the values after the row. database.rs select registers warp_call for the query only

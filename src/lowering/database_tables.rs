@@ -89,7 +89,7 @@ const FUNCTION: &str = "table·call";
 /// The SQL function a query calls a warp function through (database.rs)
 const WARP_CALL: &str = "warp_call";
 /// `Team?`: an optional field
-const OPTIONAL_MARK: char = '?';
+pub(crate) const OPTIONAL_MARK: char = '?';
 const NUMERIC_TYPES: [&str; 4] = ["int", "float", "number", "real"];
 /// What a filter's function should not do: not being sure to end (Div) or allocating is fine
 const SIDE_EFFECTS: [crate::effects::Effect; 5] = [crate::effects::Effect::State, crate::effects::Effect::IO, crate::effects::Effect::FFI, crate::effects::Effect::Async, crate::effects::Effect::Eval];
@@ -289,8 +289,9 @@ impl Query<'_> {
 		match node.drop_meta() {
 			Node::Key(left, op, right) => {
 				let operator = match op {
-					Op::Eq => "=",
-					Op::Ne => "<>",
+					// IS: ø (NULL) equals ø, as in warp (`it.email == ø` of an optional field)
+					Op::Eq => "IS",
+					Op::Ne => "IS NOT",
 					Op::Lt => "<",
 					Op::Gt => ">",
 					Op::Le => "<=",

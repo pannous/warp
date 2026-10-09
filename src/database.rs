@@ -4,6 +4,7 @@
 
 use crate::node::{Bracket, Node, Separator};
 use crate::Number;
+use crate::lowering::database_tables::OPTIONAL_MARK;
 use std::collections::HashMap;
 use std::ffi::{c_char, c_int, c_void, CStr, CString};
 
@@ -322,7 +323,9 @@ fn column_of(field: &Node) -> Result<(String, String, String), String> {
 	let parts = field.children();
 	let ([name, field_type, default] | [name, field_type, default, _]) = parts.as_slice() else { return Err(format!("no field [name type default]: {}", field.serialize().trim())) };
 	let field_type = field_type.drop_meta().name();
-	let column_type = match field_type.as_str() {
+	// `email: text?`: a nullable column, its rows default to NULL (ø)
+	let optional = field_type.ends_with(OPTIONAL_MARK);
+	let column_type = match field_type.trim_end_matches(OPTIONAL_MARK) {
 		"int" | "i64" | "i32" | "bool" => "INTEGER",
 		"float" | "f64" | "f32" | "number" => "REAL",
 		"text" | "string" | "str" | "char" => "TEXT",
@@ -330,6 +333,7 @@ fn column_of(field: &Node) -> Result<(String, String, String), String> {
 		other => return Err(format!("a field of type {other} is no column yet (notes/orm.md step 4: foreign keys)")),
 	};
 	let default = match (default.drop_meta(), column_type) {
+		(Node::Empty, _) if optional => "NULL".to_string(),
 		(Node::Empty, "INTEGER") => "0".to_string(),
 		(Node::Empty, "REAL") => "0.0".to_string(),
 		(Node::Empty, "TEXT") => "''".to_string(),
