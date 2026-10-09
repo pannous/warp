@@ -44,6 +44,10 @@ FIREFOX_DRIVER = os.path.join(REPOSITORY, "web", "playground", "firefox_driver.m
 firefox = None  # the FirefoxDriver of a --firefox run: browser() and the console go to it instead of agent-browser
 CONSOLE_READY = "ready"
 CONSOLE_SETTLE_SECONDS = 0.3  # a shown example's last messages reach the watcher
+# warnings the browser logs itself, which no page code can silence, and what the program does instead (card
+# browser-tour): Chrome without WebGPU says this on every navigator.gpu.requestAdapter(); @gpu then maps on the CPU and
+# says so in the program's own warning, gpu_render fails with the program's error (shown on the page, not the console)
+BROWSER_OWN_WARNINGS = {"No available adapters."}
 PAGE_LOAD = "(loading the page)"
 
 
@@ -168,6 +172,11 @@ def run_sample(name):
 	browser("eval", f"(async () => {{ {RUN_EXAMPLE % json.dumps(name)} }})()")
 
 
+def reported(message):
+	"""whether a console message fails the check: any error or warning but the browser's own BROWSER_OWN_WARNINGS"""
+	return not (message["level"] == "warning" and message["text"] in BROWSER_OWN_WARNINGS)
+
+
 def console_line(message):
 	return f"{message['level']}: {message['text']}" + (f" ({message['url']})" if message["url"] else "")
 
@@ -192,7 +201,7 @@ class FirefoxConsole:
 
 	def take(self):
 		time.sleep(CONSOLE_SETTLE_SECONDS)
-		return list(dict.fromkeys(console_line(message) for message in firefox.command("messages")))
+		return list(dict.fromkeys(console_line(message) for message in firefox.command("messages") if reported(message)))
 
 	def stop(self):
 		pass
@@ -212,8 +221,8 @@ class ConsoleWatch:
 		for line in self.process.stdout:
 			if line.strip() == CONSOLE_READY:
 				self.ready.set()
-			else:
-				self.messages.append(console_line(json.loads(line)))
+			elif reported(message := json.loads(line)):
+				self.messages.append(console_line(message))
 
 	def take(self):
 		"""the messages since the last take, each once"""

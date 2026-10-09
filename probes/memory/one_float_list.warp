@@ -1,0 +1,4 @@
+n = 10000000
+linear xs = float[n]
+for i in 1 to n { xs#i = i * 1.0 / n }
+print xs#n

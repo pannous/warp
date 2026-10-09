@@ -1,10 +1,11 @@
 #!/usr/bin/env warp
 // dot(xs, ys) is sum(xs .* ys) in one loop, no list of the products. Over two linear float arrays it multiplies and
 // adds two pairs at a time in SIMD lanes (f64x2), after checking both have the same length. A dot is too light for
-// the GPU: copying the two arrays there costs more than the CPU's whole loop
+// the GPU: copying the two arrays there costs more than the CPU's whole loop. Float arrays paired by dot or .* live in
+// linear memory by themselves, as long as every other use reads, writes or counts their items
 n = 1000000
-linear xs = float[n]
-linear ys = float[n]
+xs = float[n]
+ys = float[n]
 for i in 1 to n { xs#i = i / n; ys#i = 1 - i / n }
 
 t0 = clock()
