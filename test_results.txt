@@ -1077,8 +1077,10 @@ PASSED:
   ✓ functions::test_generators::next_resumes_a_generator_where_it_stopped
   ✓ functions::test_generators::python_generator
   ✓ functions::test_generators::return_ends_a_generator
+  ✓ functions::test_generators::send_gives_the_yield_a_value
   ✓ functions::test_generators::take_stops_an_endless_generator
   ✓ functions::test_generators::two_generator_objects_advance_apart
+  ✓ functions::test_generators::yield_from_hands_on_what_another_yields
   ✓ functions::test_generators::zip_pairs_generators_and_lists
   ✓ functions::test_getter_warning_text::a_long_getter_body_is_not_spelled_out_in_its_warning
   ✓ functions::test_global_with_closures::global_in_a_program_with_a_lambda
@@ -4328,4 +4330,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-10 ignored, 4323 passed, 0 failed, 4323 total tested
+10 ignored, 4325 passed, 0 failed, 4325 total tested
