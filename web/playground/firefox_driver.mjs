@@ -20,6 +20,8 @@ const FIREFOX = process.env.FIREFOX ?? (MAC ? "/Applications/Firefox.app" : "fir
 const START_SECONDS = 60;
 // a command not answered by then (a page that never finishes loading, an example that never ends) fails the run loudly
 const COMMAND_SECONDS = 120;
+// Firefox writes its profile until it has quit (card firefox-profile: ENOTEMPTY removing it right after the socket closed)
+const QUIT_SECONDS = 30;
 const REPORTED_LEVELS = new Set(["error", "warn", "warning", "assert"]);
 const FAILED_STATUS = 400;
 
@@ -31,21 +33,22 @@ const freePort = () => new Promise(found => {
 });
 const sleep = milliseconds => new Promise(done => setTimeout(done, milliseconds));
 
-// the BiDi socket of a Firefox started now, once it listens
+// the BiDi socket of a Firefox started now, once it listens, and a promise of its exit (`open -W` waits for the app)
 async function startFirefox(profile) {
 	const port = await freePort();
 	const options = ["--headless", "--no-remote", "--profile", profile, "--remote-debugging-port", String(port)];
-	spawn(MAC ? "open" : FIREFOX, MAC ? ["-n", "-g", "-a", FIREFOX, "--args", ...options] : options, { stdio: "ignore" });
+	const firefox = spawn(MAC ? "open" : FIREFOX, MAC ? ["-n", "-g", "-W", "-a", FIREFOX, "--args", ...options] : options, { stdio: "ignore" });
+	const exited = new Promise(done => firefox.on("exit", done));
 	for (const deadline = Date.now() + START_SECONDS * 1000; Date.now() < deadline; await sleep(250)) {
 		const socket = new WebSocket(`ws://127.0.0.1:${port}/session`);
 		const opened = await new Promise(settled => { socket.onopen = () => settled(true); socket.onerror = () => settled(false); });
-		if (opened) return socket;
+		if (opened) return { socket, exited };
 	}
 	throw new Error(`Firefox (${FIREFOX}) did not listen for WebDriver BiDi in ${START_SECONDS} s`);
 }
 
 const profile = mkdtempSync(join(tmpdir(), "warp-firefox-"));
-const socket = await startFirefox(profile);
+const { socket, exited } = await startFirefox(profile);
 let nextId = 1;
 const pending = new Map();
 const messages = [];
@@ -96,8 +99,12 @@ const commands = {
 		const closed = new Promise(done => socket.onclose = done);
 		await send("browser.close");
 		await closed;
-		// Firefox may still write its profile while it quits
-		rmSync(profile, { recursive: true, force: true, maxRetries: 20, retryDelay: 250 });
+		await Promise.race([exited, sleep(QUIT_SECONDS * 1000)]);
+		try {
+			rmSync(profile, { recursive: true, force: true, maxRetries: 20, retryDelay: 250 });
+		} catch (error) {
+			console.error(`firefox_driver.mjs: warning: the profile ${profile} stays behind: ${error.message}`);
+		}
 		process.exit(0);
 	},
 };
