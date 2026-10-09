@@ -1,7 +1,7 @@
 //! Generators (card generators-function): a function whose body yields. A loop over its call runs lazily, any other
 //! call collects what it yields into a list (src/lowering/generators.rs)
 use crate::is;
-use warp::ints;
+use warp::{ints, parse};
 
 const COUNT_TO: &str = "count_to(n) := { k = 1; while k <= n { yield k; k += 1 } }\n";
 const NATURALS: &str = "naturals() := { k = 1; while yes { yield k; k += 1 } }\n";
@@ -64,4 +64,28 @@ fn a_loop_walks_an_object_with_next_until_it_gives_nothing() {
 fn a_changing_method_returns_early() {
 	is!("class C { n: int; step() := { if n <= 0 { return 0 }; n -= 1; n } }\nc = C(1)\na = c.step()\nb = c.step()\n[a, b, c.n]", ints(vec![0, 0, 0]));
 	is!("class C { n: int; tick() := { if n > 5 { return }; n += 1 } }\nc = C(5)\nc.tick()\nc.tick()\nc.n", 6);
+}
+
+#[test]
+fn next_resumes_a_generator_where_it_stopped() {
+	is!(&format!("{COUNT_TO}counter = count_to(3)\n[next(counter), next(counter), counter.next(), next(counter)]"), parse("[1 2 3 ø]"));
+	is!("evens(n) := { for i in 1 to n { if i % 2 == 0 { yield i } } }\ne = evens(6)\n[next(e), next(e), next(e), next(e)]", parse("[2 4 6 ø]"));
+	is!("def countdown(n):\n    while n > 0:\n        yield n\n        n -= 1\n\nc = countdown(3)\nnext(c) * 10 + next(c)", 32);
+}
+
+#[test]
+fn two_generator_objects_advance_apart() {
+	let fib = "fib() := { a = 0; b = 1; while yes { yield a; t = a; a = b; b = t + b } }\n";
+	is!(&format!("{fib}f = fib()\ng = fib()\nnext(g)\n[next(f), next(f), next(f), next(f), next(f), next(f), next(g)]"), ints(vec![0, 1, 1, 2, 3, 5, 1]));
+}
+
+#[test]
+fn a_generator_object_jumps_like_its_loops() {
+	let skipping = "skipping() := { k = 0; while yes { k += 1; if k % 3 == 0 { continue }; if k > 8 { break }; yield k }; yield 100 }\n";
+	is!(&format!("{skipping}n = skipping()\n[next(n), next(n), next(n), next(n), next(n), next(n), next(n), next(n)]"), parse("[1 2 4 5 7 8 100 ø]"));
+}
+
+#[test]
+fn a_loop_walks_a_generator_object() {
+	is!("evens(n) := { for i in 1 to n { if i % 2 == 0 { yield i } } }\ns = 0\nfor x in iter(evens(10)) { s += x }\ns", 30);
 }

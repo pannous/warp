@@ -16,28 +16,28 @@ use crate::warp_parser::while_do;
 use std::cell::Cell;
 use std::collections::{HashMap, HashSet};
 
-const FOR_WORD: &str = "for";
-const IN_WORD: &str = "in";
+pub(crate) const FOR_WORD: &str = "for";
+pub(crate) const IN_WORD: &str = "in";
 const IMPLICIT_VARIABLE: &str = "it";
-const RETURN_WORD: &str = "return";
-const BREAK_WORD: &str = "break";
-const CONTINUE_WORD: &str = "continue";
+pub(crate) const RETURN_WORD: &str = "return";
+pub(crate) const BREAK_WORD: &str = "break";
+pub(crate) const CONTINUE_WORD: &str = "continue";
 const GLOBAL_WORD: &str = "global";
-const NAME_SEPARATOR: &str = "·";
+pub(crate) const NAME_SEPARATOR: &str = "·";
 /// The list a collecting generator returns, `count_to·yielded`
 const YIELDED_SUFFIX: &str = "yielded";
 /// Set when an inlined generator is to stop, `count_to·stop·1`
 const STOP_SUFFIX: &str = "stop";
 /// The method an iterator object gives its next item with, ø at the end
-const NEXT_METHOD: &str = "next";
+pub(crate) const NEXT_METHOD: &str = "next";
 /// The object a loop walks with next(), `x·iterator`
 const ITERATOR_SUFFIX: &str = "iterator";
 
-struct Generator {
-	parameters: Vec<String>,
-	body: Node,
+pub(crate) struct Generator {
+	pub(crate) parameters: Vec<String>,
+	pub(crate) body: Node,
 	/// The parameters and locals, renamed per inlined loop
-	locals: HashSet<String>,
+	pub(crate) locals: HashSet<String>,
 	/// Inlined into a loop over its call: not recursive, no `global`
 	inlinable: bool,
 }
@@ -50,6 +50,7 @@ enum Step {
 }
 
 pub fn lower(node: Node) -> Node {
+	let node = crate::generator_objects::lower(node);
 	let generators = generators(&node);
 	if generators.is_empty() {
 		return node;
@@ -58,30 +59,30 @@ pub fn lower(node: Node) -> Node {
 	collected_definitions(lazy_loops(node, &generators, &counter), &generators)
 }
 
-fn symbol(name: &str) -> Node {
+pub(crate) fn symbol(name: &str) -> Node {
 	Node::Symbol(name.to_string())
 }
 
-fn symbol_name(node: &Node) -> Option<&String> {
+pub(crate) fn symbol_name(node: &Node) -> Option<&String> {
 	match node.drop_meta() {
 		Node::Symbol(name) => Some(name),
 		_ => None,
 	}
 }
 
-fn is_word(node: &Node, word: &str) -> bool {
+pub(crate) fn is_word(node: &Node, word: &str) -> bool {
 	symbol_name(node).is_some_and(|name| name == word)
 }
 
-fn assign(target: Node, value: Node) -> Node {
+pub(crate) fn assign(target: Node, value: Node) -> Node {
 	Node::Key(Box::new(target), Op::Assign, Box::new(value))
 }
 
-fn statements(items: Vec<Node>, bracket: Bracket) -> Node {
+pub(crate) fn statements(items: Vec<Node>, bracket: Bracket) -> Node {
 	Node::List(items, bracket, Separator::Semicolon)
 }
 
-fn number(value: i64) -> Node {
+pub(crate) fn number(value: i64) -> Node {
 	Node::Number(crate::extensions::numbers::Number::Int(value))
 }
 
@@ -107,7 +108,7 @@ fn definition(node: &Node) -> Option<(String, Vec<String>, &Node)> {
 	contains_yield(body).then(|| (name, parameters, body.as_ref()))
 }
 
-fn generators(node: &Node) -> HashMap<String, Generator> {
+pub(crate) fn generators(node: &Node) -> HashMap<String, Generator> {
 	let mut generators = HashMap::new();
 	node.visit(&mut |part| if let Some((name, parameters, body)) = definition(part) {
 		let mut locals: HashSet<String> = parameters.iter().cloned().collect();
@@ -126,7 +127,7 @@ fn generators(node: &Node) -> HashMap<String, Generator> {
 	generators
 }
 
-fn is_return(node: &Node) -> bool {
+pub(crate) fn is_return(node: &Node) -> bool {
 	match node.drop_meta() {
 		Node::List(items, _, _) => items.first().is_some_and(|word| is_word(word, RETURN_WORD)),
 		other => is_word(other, RETURN_WORD),
@@ -147,7 +148,7 @@ fn is_own_scope(node: &Node) -> bool {
 }
 
 /// The value a `yield` gives: one value, the list of several, or nothing
-fn yielded_value(values: Vec<Node>) -> Node {
+pub(crate) fn yielded_value(values: Vec<Node>) -> Node {
 	match values.len() {
 		0 => Node::Empty,
 		1 => values.into_iter().next().expect("one value"),
@@ -191,7 +192,7 @@ fn parts(node: &Node) -> Vec<&Node> {
 }
 
 /// Whether `node` holds `word` outside its loops and own scopes: a `break` or `continue` of the loop body itself
-fn holds_own(node: &Node, word: &str) -> bool {
+pub(crate) fn holds_own(node: &Node, word: &str) -> bool {
 	match node.drop_meta() {
 		inner if is_word(inner, word) => true,
 		inner if is_loop(inner) || is_own_scope(inner) => false,
@@ -200,7 +201,7 @@ fn holds_own(node: &Node, word: &str) -> bool {
 }
 
 /// Whether `node` yields or returns outside its own scopes: where an inlined generator may stop
-fn holds_stop(node: &Node) -> bool {
+pub(crate) fn holds_stop(node: &Node) -> bool {
 	match node.drop_meta() {
 		inner if yielded(inner).is_some() || is_return(inner) => true,
 		inner if is_own_scope(inner) => false,

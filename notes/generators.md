@@ -23,11 +23,24 @@
   "index out of range": its early `return v` now gives the pair `[v, self]` (`return self` for a method giving
   its object), class_methods.rs `with_returns`.
 
+## Generator objects (src/lowering/generator_objects.rs, first step of generators::lower)
+- `counter = count_to(3)` of a variable some `next(counter)` or `counter.next()` advances, and `iter(count_to(3))`:
+  a resumable object, `next` gives the next yielded value, ø once the generator ended (Python's generator object,
+  without StopIteration). Two objects of one generator advance apart (`f = fib(); g = fib()`).
+- The generator becomes the class `count_to·generator`: parameters and locals are `any` fields, plus
+  `generator·state`; `next()` is a state machine `while 1 { if generator·state == 0 {…}; …; return ø }`, cut at the
+  yields. A while, if/else or for (lowered to its while, its step a state of its own so `continue` runs it) that
+  yields, returns, breaks or continues inside becomes states and jumps; any other statement stays as it is. The
+  class goes first in the program, then lower_iterators and class_methods::lower run once more for it.
+- Chosen without asking (undoable): a plain call still collects, the object is made only for a variable advanced
+  with next or by `iter(…)`; Python makes every call an object.
+- Not yet: a yield inside an expression (`x = yield v`, Python's send) leaves the call collecting; each field
+  update copies the object (`field_with`), fine for a few fields.
+
 ## Next
-- Iterator objects: `it = iter(g(args))` / `next(it)` resumable at any point, zip of two generators, `take 5 of
-  naturals()`. Needs the generator as a state machine (a struct of its locals plus a state index; each yield a
-  state) or wasm stack switching (wasmtime 49 has `wasm_stack_switching`, x86-64 Linux only; no browser): the state
-  machine works everywhere.
+- `zip`, `take 5 of naturals()`, `list(g)` / `sum(g)` over an object.
+- wasm stack switching (wasmtime 49 has `wasm_stack_switching`, x86-64 Linux only; no browser) would resume any
+  generator without the state machine; not needed now.
 - `yield from xs` / `yield each xs`, a recursive generator lazily, a generator expression `(x*x for x in xs)` as a
   lazy value.
 - Ruby `loop do … end` and `while c … end` inside a `def … end` do not parse (found writing a Ruby fib generator).
