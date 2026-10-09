@@ -44,6 +44,13 @@ fn notes_are_frequencies() {
 	is!("use sound\nC4", 261.63);
 }
 
+/// card module-text: note() reads the module's plain text constant scale_letters, also in a program with units
+#[test]
+fn notes_are_named_in_a_program_with_units() {
+	is!("use sound\nx = 300ms\nround(note(\"D4\"))", 294);
+	is!("play [C4 E4 G4] for 3ms\nplay note(\"C#4\") for 0.003\n7", 7);
+}
+
 /// Every note name lib/sound.warp defines (C2 … B6) is its frequency as note(name) computes it, to a hundredth of a Hz
 #[test]
 fn the_note_table_matches_note() {

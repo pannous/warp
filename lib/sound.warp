@@ -15,7 +15,7 @@ loudest_sample = 32767
 // a short fade at both ends keeps the speaker from clicking
 fade_seconds = 0.005
 // a note letter's semitone above C is its place here, from 0
-global scale_letters = "C.D.EF.G.A.B"
+scale_letters = "C.D.EF.G.A.B"
 // the twelfth root of 2, a float: an exact decimal would make note() an ever longer fraction
 global semitone_ratio = float(1.059463094359)
 
