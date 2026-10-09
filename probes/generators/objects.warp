@@ -1,0 +1,6 @@
+count_to(n) := { k = 1; while k <= n { yield k; k += 1 } }
+counter = count_to(3)
+print next(counter)
+print next(counter)
+print counter.next()
+print next(counter)

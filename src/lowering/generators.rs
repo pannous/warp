@@ -16,24 +16,28 @@ use crate::warp_parser::while_do;
 use std::cell::Cell;
 use std::collections::{HashMap, HashSet};
 
-const FOR_WORD: &str = "for";
-const IN_WORD: &str = "in";
+pub(crate) const FOR_WORD: &str = "for";
+pub(crate) const IN_WORD: &str = "in";
 const IMPLICIT_VARIABLE: &str = "it";
-const RETURN_WORD: &str = "return";
-const BREAK_WORD: &str = "break";
-const CONTINUE_WORD: &str = "continue";
+pub(crate) const RETURN_WORD: &str = "return";
+pub(crate) const BREAK_WORD: &str = "break";
+pub(crate) const CONTINUE_WORD: &str = "continue";
 const GLOBAL_WORD: &str = "global";
-const NAME_SEPARATOR: &str = "·";
+pub(crate) const NAME_SEPARATOR: &str = "·";
 /// The list a collecting generator returns, `count_to·yielded`
 const YIELDED_SUFFIX: &str = "yielded";
 /// Set when an inlined generator is to stop, `count_to·stop·1`
 const STOP_SUFFIX: &str = "stop";
+/// The method an iterator object gives its next item with, ø at the end
+pub(crate) const NEXT_METHOD: &str = "next";
+/// The object a loop walks with next(), `x·iterator`
+const ITERATOR_SUFFIX: &str = "iterator";
 
-struct Generator {
-	parameters: Vec<String>,
-	body: Node,
+pub(crate) struct Generator {
+	pub(crate) parameters: Vec<String>,
+	pub(crate) body: Node,
 	/// The parameters and locals, renamed per inlined loop
-	locals: HashSet<String>,
+	pub(crate) locals: HashSet<String>,
 	/// Inlined into a loop over its call: not recursive, no `global`
 	inlinable: bool,
 }
@@ -46,6 +50,7 @@ enum Step {
 }
 
 pub fn lower(node: Node) -> Node {
+	let node = crate::generator_objects::lower(node);
 	let generators = generators(&node);
 	if generators.is_empty() {
 		return node;
@@ -54,30 +59,30 @@ pub fn lower(node: Node) -> Node {
 	collected_definitions(lazy_loops(node, &generators, &counter), &generators)
 }
 
-fn symbol(name: &str) -> Node {
+pub(crate) fn symbol(name: &str) -> Node {
 	Node::Symbol(name.to_string())
 }
 
-fn symbol_name(node: &Node) -> Option<&String> {
+pub(crate) fn symbol_name(node: &Node) -> Option<&String> {
 	match node.drop_meta() {
 		Node::Symbol(name) => Some(name),
 		_ => None,
 	}
 }
 
-fn is_word(node: &Node, word: &str) -> bool {
+pub(crate) fn is_word(node: &Node, word: &str) -> bool {
 	symbol_name(node).is_some_and(|name| name == word)
 }
 
-fn assign(target: Node, value: Node) -> Node {
+pub(crate) fn assign(target: Node, value: Node) -> Node {
 	Node::Key(Box::new(target), Op::Assign, Box::new(value))
 }
 
-fn statements(items: Vec<Node>, bracket: Bracket) -> Node {
+pub(crate) fn statements(items: Vec<Node>, bracket: Bracket) -> Node {
 	Node::List(items, bracket, Separator::Semicolon)
 }
 
-fn number(value: i64) -> Node {
+pub(crate) fn number(value: i64) -> Node {
 	Node::Number(crate::extensions::numbers::Number::Int(value))
 }
 
@@ -103,7 +108,7 @@ fn definition(node: &Node) -> Option<(String, Vec<String>, &Node)> {
 	contains_yield(body).then(|| (name, parameters, body.as_ref()))
 }
 
-fn generators(node: &Node) -> HashMap<String, Generator> {
+pub(crate) fn generators(node: &Node) -> HashMap<String, Generator> {
 	let mut generators = HashMap::new();
 	node.visit(&mut |part| if let Some((name, parameters, body)) = definition(part) {
 		let mut locals: HashSet<String> = parameters.iter().cloned().collect();
@@ -122,7 +127,7 @@ fn generators(node: &Node) -> HashMap<String, Generator> {
 	generators
 }
 
-fn is_return(node: &Node) -> bool {
+pub(crate) fn is_return(node: &Node) -> bool {
 	match node.drop_meta() {
 		Node::List(items, _, _) => items.first().is_some_and(|word| is_word(word, RETURN_WORD)),
 		other => is_word(other, RETURN_WORD),
@@ -143,7 +148,7 @@ fn is_own_scope(node: &Node) -> bool {
 }
 
 /// The value a `yield` gives: one value, the list of several, or nothing
-fn yielded_value(values: Vec<Node>) -> Node {
+pub(crate) fn yielded_value(values: Vec<Node>) -> Node {
 	match values.len() {
 		0 => Node::Empty,
 		1 => values.into_iter().next().expect("one value"),
@@ -187,7 +192,7 @@ fn parts(node: &Node) -> Vec<&Node> {
 }
 
 /// Whether `node` holds `word` outside its loops and own scopes: a `break` or `continue` of the loop body itself
-fn holds_own(node: &Node, word: &str) -> bool {
+pub(crate) fn holds_own(node: &Node, word: &str) -> bool {
 	match node.drop_meta() {
 		inner if is_word(inner, word) => true,
 		inner if is_loop(inner) || is_own_scope(inner) => false,
@@ -196,7 +201,7 @@ fn holds_own(node: &Node, word: &str) -> bool {
 }
 
 /// Whether `node` yields or returns outside its own scopes: where an inlined generator may stop
-fn holds_stop(node: &Node) -> bool {
+pub(crate) fn holds_stop(node: &Node) -> bool {
 	match node.drop_meta() {
 		inner if yielded(inner).is_some() || is_return(inner) => true,
 		inner if is_own_scope(inner) => false,
@@ -304,6 +309,64 @@ fn loop_body_step(node: &Node, stop: &Node, continues: bool) -> Step {
 		inner if is_loop(inner) || is_own_scope(inner) => Step::Keep,
 		_ => Step::Descend,
 	}
+}
+
+/// Iterator objects (card generators-function): `for x in c {body}` of an object whose class has a method `next()`,
+/// `c = Countdown(3)` or `for x in Countdown(3)`, walks what `next()` gives until it gives ø:
+/// `x·iterator = c; x = x·iterator.next(); while x != ø { body; x = x·iterator.next() }` (the last a marked step,
+/// which `continue` runs too). Before class_methods, which lowers the `next()` calls.
+pub fn lower_iterators(node: Node) -> Node {
+	let classes = iterator_classes(&node);
+	if classes.is_empty() {
+		return node;
+	}
+	let mut objects = HashSet::new();
+	node.visit(&mut |part| if let Node::Key(target, Op::Assign, value) = part {
+		if constructed_iterator(value, &classes) {
+			objects.extend(symbol_name(target).cloned());
+		}
+	});
+	iterator_loops(node, &classes, &objects)
+}
+
+/// The classes with a method `next()`
+fn iterator_classes(node: &Node) -> HashSet<String> {
+	let mut classes = HashSet::new();
+	node.visit(&mut |part| if let Node::Type { name, body } = part {
+		let is_next = |member: &Node| matches!(member.drop_meta(), Node::Key(head, Op::Define, _)
+			if matches!(head.drop_meta(), Node::List(items, Bracket::Round, _) if items.len() == 1 && is_word(&items[0], NEXT_METHOD)));
+		let members = match body.drop_meta() {
+			Node::List(items, _, _) => items.clone(),
+			single => vec![single.clone()],
+		};
+		if members.iter().any(is_next) {
+			classes.extend(symbol_name(name).cloned());
+		}
+	});
+	classes
+}
+
+/// `Countdown(3)` of an iterator class
+fn constructed_iterator(value: &Node, classes: &HashSet<String>) -> bool {
+	matches!(value.drop_meta(), Node::List(items, Bracket::Round | Bracket::None, _)
+		if items.first().and_then(symbol_name).is_some_and(|class| classes.contains(class)))
+}
+
+fn iterator_loops(node: Node, classes: &HashSet<String>, objects: &HashSet<String>) -> Node {
+	let node = node.map_children(|child| iterator_loops(child, classes, objects));
+	let Node::List(items, _, _) = node.drop_meta() else { return node };
+	let (variable, iterable, body) = match items.as_slice() {
+		[keyword, variable, within, iterable, body] if is_word(keyword, FOR_WORD) && is_word(within, IN_WORD) => (variable, iterable, body),
+		_ => return node,
+	};
+	let is_object = symbol_name(iterable).is_some_and(|name| objects.contains(name)) || constructed_iterator(iterable, classes);
+	let Some(name) = symbol_name(variable).filter(|_| is_object && matches!(body.drop_meta(), Node::List(_, Bracket::Curly, _))) else { return node };
+	let iterator = symbol(&[name.as_str(), ITERATOR_SUFFIX].join(NAME_SEPARATOR));
+	let next = || assign(variable.clone(), Node::Key(Box::new(iterator.clone()), Op::Dot, Box::new(Node::List(vec![symbol(NEXT_METHOD)], Bracket::Round, Separator::None))));
+	let mut statements_of_body = block_items(body);
+	statements_of_body.push(crate::wasm_emitter::mark_step(next()));
+	let more = Node::Key(Box::new(variable.clone()), Op::Ne, Box::new(Node::Empty));
+	statements(vec![assign(iterator.clone(), iterable.clone()), next(), while_do(more, statements(statements_of_body, Bracket::Curly))], Bracket::None).with_meta_of(&node)
 }
 
 /// Each generator's definition collects what it yields: `{ g·yielded = []; …; g·yielded += [v]; …; g·yielded }`

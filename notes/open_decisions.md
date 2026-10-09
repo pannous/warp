@@ -8,7 +8,11 @@ decisions for a reason. Open"). Rules belong where they are applied: AGENTS.md, 
 Details: notes/todo_sweep_task.md (board), notes/semicolon_survey.md, notes/float_truncation_survey.md.
 
 ## Pending questions (ordered by impact; recommended option first)
-(none)
+- P238 (warp-fixer, card generators-function) what a plain call of a generator gives. Today (recommended):
+  `count_to(3)` collects the list [1 2 3], and `sum(count_to(4))` is 10. It is an object only when a variable
+  holding it is advanced with `next(c)`/`c.next()` or when written `iter(count_to(3))`. A `for` over it always runs
+  lazily. Alternative (Python): every call gives a generator object, so `count_to(3)` prints as an object and
+  `list(count_to(3))` collects.
 Parked (user: "Later"):
 - Parked: P237 (warp-class, card natural-phrases) what `numbers.sort by size` means; today a silent no-op. The user
   leans to `size` as an alias chain size → abs → norm ("carries over to vectors … that have a norm"; numbers |x|,
