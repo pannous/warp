@@ -12,6 +12,7 @@ mod test_construction_defaults;
 mod test_class_destructuring;
 mod test_class_json;
 mod test_class_methods;
+mod test_method_bodies; // card method-bodies
 mod test_class_method_changes;
 mod test_mutating_methods;
 mod test_class_extends;

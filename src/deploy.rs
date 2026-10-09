@@ -8,7 +8,8 @@
 //! writes the directory. A host uploading the Worker itself (Cloudflare's API) sends worker.js as the main module,
 //! app.wasm as a compiled module and app.bin as data, the parts wrangler.toml names.
 
-use crate::site::{host_scripts_of, write_files, BuiltSite, SiteFile};
+pub use crate::host_parts::worker_parts;
+use crate::site::{write_files, BuiltSite, SiteFile};
 use std::path::{Path, PathBuf};
 
 const WORKER_SCRIPT: &str = include_str!("../web/playground/cloud-worker.js");
@@ -31,26 +32,31 @@ pub enum Deployment {
 	Local,
 	/// `--dry-run`: only the directory
 	DryRun,
+	/// `--hosted`: to warp-hosting, as warp-<name>.pannous.workers.dev, logged in with GitHub (notes/hosting.md)
+	Hosted,
 }
 pub const DEV_FLAG: &str = "--dev";
 pub const DRY_RUN_FLAG: &str = "--dry-run";
+pub const HOSTED_FLAG: &str = "--hosted";
+/// warp-hosting's address (web/hosting), WARP_HOSTING overrides it (its `wrangler dev`, say)
+const HOSTING_VARIABLE: &str = "WARP_HOSTING";
+const HOSTING: &str = "https://lambda.pannous.com";
+/// a GitHub token for warp-hosting; without it, `gh auth token`'s
+const HOSTING_TOKEN_VARIABLE: &str = "WARP_HOSTING_TOKEN";
+const HOSTING_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(120);
 /// a Worker's name: lower-case letters, digits and dashes
 const NAME_LENGTH: usize = 63;
 
 /// The files of the Worker of `code`, named `name`
 pub fn worker_files(code: &str, name: &str) -> Result<Vec<SiteFile>, String> {
-	// the reflection getters the JavaScript host reads values with
-	let module = crate::pipeline::for_any_host(|| crate::pipeline::compile(code)).map_err(|failure| format!("nothing to compile: {}", crate::site::with_excerpt(code, crate::site::message_of(&failure))))?;
-	if !crate::site::exports(&module.bytes, crate::serve::PAGE_SUBMITTED) {
-		return Err("the program answers no request: give it a route, `get \"/\" { \"hello\" }`".into());
-	}
-	let mut worker: String = host_scripts_of(&module.bytes)?.iter().map(|(_, script)| *script).collect();
+	let (module, scripts) = worker_parts(code)?;
+	let mut worker: String = scripts.iter().map(|(_, script)| *script).collect();
 	worker.push_str(WORKER_SCRIPT);
 	let config = format!("name = \"{}\"\nmain = \"{WORKER_FILE}\"\ncompatibility_date = \"{COMPATIBILITY_DATE}\"\n\n[[rules]]\ntype = \"Data\"\nglobs = [\"**/*.bin\"]\n", worker_name(name));
 	Ok(vec![
 		(WORKER_FILE.to_string(), worker.into_bytes()),
-		(MODULE_FILE.to_string(), module.bytes.clone()),
-		(MODULE_BYTES_FILE.to_string(), module.bytes),
+		(MODULE_FILE.to_string(), module.clone()),
+		(MODULE_BYTES_FILE.to_string(), module),
 		(CONFIG_FILE.to_string(), config.into_bytes()),
 	])
 }
@@ -69,12 +75,17 @@ pub fn worker_directory(program: &Path) -> PathBuf {
 
 /// `warp deploy [--dev|--dry-run] app.warp`: the Worker built, then deployed by wrangler (or run on this machine)
 pub fn deploy(program: &Path, deployment: Deployment) -> Result<(), String> {
+	if deployment == Deployment::Hosted {
+		let url = deploy_hosted(program)?;
+		println!("deployed: {url}");
+		return Ok(());
+	}
 	let built = build(program)?;
 	println!("built the Worker {} ({})", built.directory.display(), built.files.join(", "));
 	let command = match deployment {
 		Deployment::Cloud => "deploy",
 		Deployment::Local => "dev",
-		Deployment::DryRun => return Ok(()),
+		Deployment::DryRun | Deployment::Hosted => return Ok(()),
 	};
 	let wrangler = std::env::var(WRANGLER_VARIABLE).unwrap_or_else(|_| WRANGLER.to_string());
 	let mut words = wrangler.split_whitespace();
@@ -90,4 +101,32 @@ fn worker_name(name: &str) -> String {
 	let trimmed = dashed.trim_matches('-');
 	let name = if trimmed.is_empty() { "warp-app" } else { trimmed };
 	name.chars().take(NAME_LENGTH).collect()
+}
+
+/// `warp deploy --hosted app.warp`: the module and its host scripts' names to warp-hosting, which uploads the Worker
+/// warp-<name> into our Cloudflare account; answers its address
+pub fn deploy_hosted(program: &Path) -> Result<String, String> {
+	let code = std::fs::read_to_string(program).map_err(|failure| format!("cannot read {}: {failure}", program.display()))?;
+	let name = worker_name(&program.file_stem().map(|stem| stem.to_string_lossy().into_owned()).unwrap_or_default());
+	let (module, scripts) = worker_parts(&code)?;
+	let names: Vec<&str> = scripts.iter().map(|(name, _)| *name).collect();
+	let hosting = std::env::var(HOSTING_VARIABLE).unwrap_or_else(|_| HOSTING.to_string());
+	let address = format!("{hosting}/deploy?name={name}&scripts={}", names.join(","));
+	let agent: ureq::Agent = ureq::Agent::config_builder().timeout_global(Some(HOSTING_TIMEOUT)).http_status_as_error(false).build().into();
+	let mut response = agent.post(&address).header("authorization", &format!("Bearer {}", github_token()?)).send(&module[..])
+		.map_err(|failure| format!("{hosting} does not answer: {failure}"))?;
+	let text = response.body_mut().read_to_string().map_err(|failure| format!("{hosting} answered nothing: {failure}"))?;
+	let reply: serde_json::Value = serde_json::from_str(&text).map_err(|_| format!("{hosting} answered no JSON: {text}"))?;
+	match reply["url"].as_str() {
+		Some(url) => Ok(url.to_string()),
+		None => Err(format!("{hosting}: {}", reply["error"].as_str().unwrap_or("no address"))),
+	}
+}
+
+fn github_token() -> Result<String, String> {
+	if let Ok(token) = std::env::var(HOSTING_TOKEN_VARIABLE) { return Ok(token) }
+	let output = std::process::Command::new("gh").args(["auth", "token"]).output()
+		.map_err(|_| format!("warp-hosting needs a GitHub login: `gh auth login`, or a token in {HOSTING_TOKEN_VARIABLE}"))?;
+	let token = String::from_utf8_lossy(&output.stdout).trim().to_string();
+	if token.is_empty() { Err(format!("warp-hosting needs a GitHub login: `gh auth login`, or a token in {HOSTING_TOKEN_VARIABLE}")) } else { Ok(token) }
 }

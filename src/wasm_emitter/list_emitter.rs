@@ -76,6 +76,9 @@ impl WasmGcEmitter {
 	fn emit_library_word_call(&mut self, func: &mut Function, items: &[Node], bracket: &Bracket, separator: &Separator) -> bool {
 		let Some(name) = call_name(items, bracket, separator) else { return false };
 		let Some((_, function)) = super::library_ops::LIBRARY_FUNCTIONS.iter().find(|(word, _)| *word == name) else { return false };
+		if self.emit_typed_map_membership(func, items) {
+			return true;
+		}
 		if name == crate::library_words::SLICE {
 			for bound in items.iter().skip(2) {
 				self.emit_integral_index_check(func, bound); // `a[0:n/2]` like `a[n/2]`: an integer, with the `n//2` hint

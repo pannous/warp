@@ -1569,7 +1569,7 @@ fn class_items(body: &Node) -> Vec<Node> {
 		Node::Empty => vec![],
 		single => vec![single.clone()],
 	};
-	items.into_iter().map(without_modifiers).flat_map(|item| match item.drop_meta() {
+	items.into_iter().map(without_modifiers).map(with_body_words).flat_map(|item| match item.drop_meta() {
 		Node::List(words, _, _) if keyword_method(words).is_some() => keyword_method(words).into_iter().collect(),
 		Node::List(words, _, _) if braced_method(words).is_some() => braced_method(words).into_iter().collect(),
 		Node::List(words, _, _) if value_block(words).is_some() => value_block(words).into_iter().collect(),
@@ -1584,6 +1584,21 @@ fn class_items(body: &Node) -> Vec<Node> {
 		Node::List(group, Bracket::None, _) => group.clone(),
 		_ => vec![item],
 	}).map(as_member).collect()
+}
+
+/// `fn f() := 3 squared`: the parser ends the definition before a suffix word, `(f() := 3) squared`; the words after it
+/// are its body's, as ambiguous_forms regroups them outside a class
+fn with_body_words(item: Node) -> Node {
+	let Node::List(words, Bracket::None, Separator::Space) = item.drop_meta() else { return item };
+	let Some(at) = words.iter().position(|word| matches!(word.drop_meta(), Node::Key(head, Op::Define, _) if matches!(head.drop_meta(), Node::List(_, Bracket::Round, _)))) else { return item };
+	let (before, rest) = words.split_at(at + 1);
+	if rest.is_empty() {
+		return item;
+	}
+	let Node::Key(head, op, value) = before[at].drop_meta() else { return item };
+	let body = Node::List([vec![value.as_ref().clone()], rest.to_vec()].concat(), Bracket::None, Separator::Space);
+	let definition = Node::Key(head.clone(), *op, Box::new(body));
+	Node::List([before[..at].to_vec(), vec![definition]].concat(), Bracket::None, Separator::Space)
 }
 
 /// `def area() -> int {…}`, `fun area(): Int {…}`, `func area() {…}`: the method `area() := …` (with its result type)

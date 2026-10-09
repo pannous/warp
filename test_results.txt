@@ -203,6 +203,11 @@ PASSED:
   ✓ control::test_filter_loops::test_a_condition_loop_visits_only_matching_items
   ✓ control::test_filter_loops::test_a_filter_warns_once_with_its_explicit_form
   ✓ control::test_filter_loops::test_plain_loops_do_not_filter
+  ✓ control::test_for_forms::block_after_a_chained_iterable
+  ✓ control::test_for_forms::c_style_for_with_a_space_or_without_braces
+  ✓ control::test_for_forms::print_of_a_call_without_parentheses_in_an_if_branch
+  ✓ control::test_for_forms::print_with_commas_in_a_loop_body
+  ✓ control::test_for_forms::print_with_commas_in_an_if_branch
   ✓ control::test_for_implicit_it::a_colon_body_is_the_rest_of_the_line
   ✓ control::test_for_implicit_it::a_for_loop_without_a_variable_walks_it
   ✓ control::test_for_it::a_symbol_prints_its_name
@@ -962,6 +967,9 @@ PASSED:
   ✓ functions::test_default_parameters::a_typed_parameter_may_have_a_default
   ✓ functions::test_default_parameters::calls_without_parentheses_take_defaults_too
   ✓ functions::test_default_parameters::named_arguments_skip_defaults_and_mix_with_positional_ones
+  ✓ functions::test_definition_bodies::a_method_body_keeps_its_suffix_word
+  ✓ functions::test_definition_bodies::of_phrase_as_a_value
+  ✓ functions::test_definition_bodies::ruby_def_indented_by_tabs
   ✓ functions::test_definition_value::a_definition_alone_is_empty
   ✓ functions::test_definition_value::a_spaced_definition_names_its_parameters
   ✓ functions::test_definition_value::it_names_the_one_parameter_of_a_definition
@@ -1055,6 +1063,10 @@ PASSED:
   ✓ functions::test_inlining::a_helper_with_free_variables_or_recursion_is_called
   ✓ functions::test_inlining::an_inlined_helper_leaves_its_argument_unchanged
   ✓ functions::test_inlining::an_inlined_helper_updates_the_list_handed_back
+  ✓ functions::test_it_arguments::an_it_argument_of_a_defined_function_is_a_function
+  ✓ functions::test_it_arguments::an_it_argument_of_an_iteration_word_is_a_function
+  ✓ functions::test_it_arguments::an_it_argument_reads_the_variables_around_it
+  ✓ functions::test_it_arguments::the_it_of_the_argument_is_not_the_parameter_of_the_function_around_it
   ✓ functions::test_kebab_members::a_missing_kebab_field_subtracts_the_variable
   ✓ functions::test_kebab_members::an_existing_kebab_field_is_read
   ✓ functions::test_lambda_global::a_lambda_with_global_changes_mains_variable
@@ -1437,6 +1449,12 @@ PASSED:
   ✓ lists::test_index_assignment::test_index_assign_with_variable
   ✓ lists::test_index_assignment::test_simple_index_assign
   ✓ lists::test_index_out_of_range::an_index_out_of_range_names_the_range
+  ✓ lists::test_int_map::a_global_map_is_set_in_a_function
+  ✓ lists::test_int_map::a_global_map_takes_constant_time_per_entry
+  ✓ lists::test_int_map::a_number_is_found_in_a_map
+  ✓ lists::test_int_map::a_number_variable_keys_an_empty_map
+  ✓ lists::test_int_map::an_entry_is_removed_by_its_number
+  ✓ lists::test_int_map::ten_thousand_rows_load_in_linear_time
   ✓ lists::test_key_lookup::test_key_is_evaluated
   ✓ lists::test_key_lookup::test_looked_up_value_takes_part_in_arithmetic
   ✓ lists::test_key_lookup::test_missing_key_is_an_error
@@ -2648,6 +2666,8 @@ PASSED:
   ✓ programs::test_draw::colors_are_numbers_with_an_alpha_byte
   ✓ programs::test_draw::shapes_set_the_pixels_they_cover
   ✓ programs::test_draw::with_alpha_is_a_method_of_a_color
+  ✓ programs::test_draw_label::a_label_covers_pixels_in_its_color
+  ✓ programs::test_draw_label::text_coverage_grows_with_the_size_and_the_words
   ✓ programs::test_hints_toggle::a_plain_run_shows_its_hints_and_how_to_hide_them
   ✓ programs::test_hints_toggle::a_run_without_hints_has_no_tip
   ✓ programs::test_hints_toggle::hints_chosen_explicitly_need_no_tip
@@ -2701,6 +2721,10 @@ PASSED:
   ✓ programs::test_shader_blocks::a_shader_block_over_lines_loses_its_indentation
   ✓ programs::test_shader_blocks::paint_takes_a_shader_block
   ✓ programs::test_shader_blocks::shader_stays_a_name
+  ✓ programs::test_shader_holes::a_hole_is_read_from_the_values
+  ✓ programs::test_shader_holes::a_shader_with_holes_paints_as_with_the_values_given
+  ✓ programs::test_shader_holes::each_paint_passes_the_holes_given_no_value
+  ✓ programs::test_shader_holes::values_not_written_out_cannot_take_the_holes
   ✓ programs::test_small_samples::error_samples
   ✓ programs::test_small_samples::text_samples
   ✓ programs::test_warp_command::debug_build_names_its_commit
@@ -3217,6 +3241,11 @@ PASSED:
   ✓ types::test_loop_text_arithmetic::text_arithmetic_in_a_loop_body_is_no_type_error
   ✓ types::test_match_static_variant::a_bare_variant_skips_the_class_arms
   ✓ types::test_match_static_variant::an_instance_still_takes_its_arm
+  ✓ types::test_method_bodies::assignments_in_a_method
+  ✓ types::test_method_bodies::bodies_agree_with_functions
+  ✓ types::test_method_bodies::filters_and_comprehensions_in_a_method
+  ✓ types::test_method_bodies::phrases_in_a_method
+  ✓ types::test_method_bodies::units_in_a_method
   ✓ types::test_method_result_text::an_interpolated_method_result_uses_its_text
   ✓ types::test_mutating_methods::a_block_method_changes_its_object_and_gives_a_value
   ✓ types::test_mutating_methods::a_method_changes_its_object_and_gives_a_value
@@ -3655,10 +3684,13 @@ PASSED:
   ✓ web::test_css_transitions::the_starting_style_is_data_for_the_page
   ✓ web::test_deploy::a_deployed_program_answers_its_routes
   ✓ web::test_deploy::a_program_without_routes_is_no_worker
+  ✓ web::test_deploy::the_playground_bundles_a_program_for_warp_hosting
   ✓ web::test_dev_server::a_dev_build_keeps_the_values_the_program_changed
   ✓ web::test_dev_server::the_dev_server_rebuilds_a_changed_program
   ✓ web::test_dom_pages::a_handler_draws_on_a_canvas_of_the_page
   ✓ web::test_dom_pages::a_handler_sets_and_reads_elements_of_the_page
+  ✓ web::test_dom_pages::main_sets_the_title_of_the_page
+  ✓ web::test_editor_mode::the_mode_advances_without_built_keywords
   ✓ web::test_editor_shortcuts::cmd_slash_comments_lines_out_and_back_in
   ✓ web::test_element_events::an_element_handler_marks_its_element
   ✓ web::test_element_events::each_element_handler_has_its_number
@@ -3834,6 +3866,7 @@ PASSED:
   ✓ web::test_webgpu::a_chain_of_gpu_maps_is_one_kernel
   ✓ web::test_webgpu::a_compute_shader_runs_over_a_linear_array_in_place
   ✓ web::test_webgpu::a_compute_shader_runs_over_the_numbers
+  ✓ web::test_webgpu::a_fragment_shader_reads_lists_of_vectors
   ✓ web::test_webgpu::a_fragment_shader_reads_the_values_given
   ✓ web::test_webgpu::a_fragment_shader_renders_the_pixels
   ✓ web::test_webgpu::a_gpu_map_of_a_cpu_mapped_result_uploads_it
@@ -4234,4 +4267,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-10 ignored, 4229 passed, 0 failed, 4229 total tested
+10 ignored, 4262 passed, 0 failed, 4262 total tested

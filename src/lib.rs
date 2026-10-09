@@ -43,6 +43,8 @@ pub mod shared;
 pub mod paint;
 #[cfg(feature = "native")]
 pub mod paint_window;
+#[cfg(feature = "native")]
+pub mod text_raster;
 pub mod wasm_optimizer;
 pub mod warp_parser;
 pub mod wisp_parser;
@@ -51,6 +53,7 @@ pub mod operators;
 pub mod meta;
 pub mod meta_section;
 pub mod host;
+pub mod host_parts;
 #[cfg(feature = "native")]
 pub mod foreign;
 #[cfg(feature = "native")]
@@ -87,6 +90,7 @@ pub mod function_equality;
 pub mod effects;
 pub mod injection;
 pub mod interpolation;
+pub mod shader_holes;
 pub mod diagnostic;
 pub mod markup;
 pub mod headless;

@@ -813,6 +813,12 @@ impl Lowering {
 
 	/// `word(x, args)` and `word x args`
 	fn word_call(&self, items: &[Node], bracket: &Bracket, separator: &Separator) -> Option<Node> {
+		// `x = sum of xs`, `f() := sum of xs`: an assigned value nests the words after the first, `[sum, [of, xs]]`
+		if let [head, Node::List(rest, Bracket::None, Separator::Space)] = items {
+			if rest.first().is_some_and(is_of) {
+				return self.word_call(&[vec![head.clone()], rest.clone()].concat(), bracket, separator);
+			}
+		}
 		if let Some(lookup) = self.of_lookup(items) {
 			return Some(lookup);
 		}

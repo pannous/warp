@@ -204,7 +204,14 @@ impl WasmGcEmitter {
 		let mut names: Vec<&String> = main.globals.keys().filter(|name| !self.ctx.user_globals.contains_key(*name)).collect();
 		names.sort();
 		let typed = self.find_typed_globals(program, &main);
+		let typed_maps = self.find_typed_map_globals(program, &main.globals);
 		for name in names {
+			if typed_maps.contains(name) {
+				let global = self.declare_typed_map_global();
+				self.ctx.user_globals.insert(name.to_string(), (global, main.globals[name].kind));
+				self.typed_map_globals.insert(name.to_string(), global);
+				continue;
+			}
 			match typed.get(name) {
 				Some(&list) => {
 					let global = self.declare_typed_list_global(list.element);

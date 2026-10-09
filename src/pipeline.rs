@@ -257,9 +257,11 @@ pub struct CompiledModule {
 
 /// The passes over the source forms, in order, each reading what the one before it left: definitions and sugar become
 /// the forms every later pass knows (`def f(x) {…}` is `f(x) := {…}`), modules are resolved
-const SOURCE_PASSES: [fn(Node) -> Node; 99] = [
+const SOURCE_PASSES: [fn(Node) -> Node; 100] = [
 	// `"a \(x) b"` → `"a " + text_form(x) + " b"` (interpolation.rs) first, so every pass reads the holes as code
 	crate::interpolation::lower_program,
+	// a shader's `$name` holes (shader_holes.rs) as `name: name` in the values map of each paint of it
+	crate::shader_holes::lower,
 	crate::analyzer::lower_inline_unions,
 	// `on ask {…} in {…}` before any pass reads `{…} in {…}` as membership or an emit as nothing
 	crate::scoped_handlers::lower,
@@ -358,7 +360,7 @@ const SOURCE_PASSES: [fn(Node) -> Node; 99] = [
 ];
 
 /// The passes after the constant answers (time, units, reals), in order: types and traits, lambdas and closures, words
-const MEANING_PASSES: [fn(Node) -> Node; 29] = [
+const MEANING_PASSES: [fn(Node) -> Node; 30] = [
 	// first: the run-time item checks of declared lists see `names.add(v)` before any pass lowers the append
 	crate::lowering::list_element_checks::lower,
 	crate::lazy_ranges::lower, crate::declarations::resolve_tasks, crate::traits::lower_declarations, crate::type_tests::lower, crate::ambiguous_forms::lower, crate::analyzer::lower_list_times,
@@ -366,7 +368,7 @@ const MEANING_PASSES: [fn(Node) -> Node; 29] = [
 	crate::broadcasting::lower_scalar_element_wise, crate::broadcasting::lower_prefix_calls, crate::overloads::lower_arity_overloads,
 	crate::broadcasting::lower, crate::library_words::lower_count_in, crate::lambdas::lower, crate::function_values::lower, crate::closures::lower, crate::lambdas::lower_strict, crate::broadcasting::lower_several_arguments, crate::real::lower,
 	crate::type_constructor::lower, crate::printable::lower, crate::overloads::lower, crate::traits::lower_conformances, crate::min_max::lower,
-	crate::declarations::lower, crate::switch::lower, crate::phrase_words::lower, crate::library_words::lower,
+	crate::declarations::lower, crate::switch::lower, crate::phrase_words::lower, crate::library_words::lower, crate::number_keys::lower_key_words,
 	crate::traits::lower_dispatch, crate::memoization::lower,
 ];
 

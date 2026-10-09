@@ -38,3 +38,5 @@ mod test_parameter_names; // card reflection-classes
 #[cfg(feature = "native")] // a warp process in a temporary directory: not in the browser build
 mod test_no_cwd_debris; // card cwd-artifacts
 mod test_runtime_stub_note; // card runtime-stub-note
+#[cfg(feature = "native")] // wasmtime stores: not in the browser build
+mod test_memory_cap;

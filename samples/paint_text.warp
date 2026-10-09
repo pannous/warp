@@ -1,0 +1,12 @@
+#!/usr/bin/env warp
+// paint without the GPU: use draw keeps a canvas of colored pixels, and show() paints it, natively in a window (a PNG
+// without one) and in the playground on its canvas. label sets words in the system's sans-serif font, any size
+use draw
+canvas(200, 100)
+clear(paper)
+rect(10, 56, 60, 34, blue)
+circle(120, 72, 20, orange)
+line(156, 90, 190, 54, green)
+label(10, 6, "hello", red, 32)
+label(120, 16, "warp paints", purple)
+show()

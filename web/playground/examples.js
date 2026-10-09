@@ -164,6 +164,24 @@ for frame in 0..200 {
   sleep(30)
 }
 "done"` },
+	"shader mouse": { value: '"done"', canvases: 1, code: `// a shader under the mouse: rings ripple out from the pointer, a press lights them up
+// $name in a shader is the warp variable name, read at each paint
+start = clock()
+ripples = shader {
+  @fragment fn main(@builtin(position) at: vec4f) -> @location(0) vec4f {
+    let away = distance(at.xy, $mouse);
+    let ring = 0.5 + 0.5 * sin(away * 0.8 - $seconds * 6.0);
+    let light = 0.35 + 0.65 * $mouse_down;
+    return vec4f(ring * light, ring * light * 0.4, light * (1.0 - away / 64.0), 1.0);
+  }
+}
+for frame in 0..300 {
+  mouse = [mouse_x + 0.5, mouse_y + 0.5]
+  seconds = (clock() - start) / 1000
+  paint(ripples, 64, 32)
+  sleep(30)
+}
+"done"` },
 	"game of life": { value: "15", wait: 1200, code: `// Conway's Game of Life, a step every half second
 width = 24
 height = 12

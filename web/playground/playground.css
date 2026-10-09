@@ -114,7 +114,7 @@ output.error { color: var(--error); }
 .paintings { display: flex; flex-wrap: wrap; gap: 8px; }
 .painting { margin-top: 10px; max-width: 100%; image-rendering: pixelated; border: 1px solid var(--line); }
 /* ⛶ (playground.js toggleFullScreen): over the paintings' corner; full screen shows the last one, as large as fits */
-.painted { position: relative; }
+.painted { position: relative; display: inline-block; max-width: 100%; }
 .full-screen { position: absolute; top: 14px; right: 4px; z-index: 1; padding: 0 6px; font-size: 1.1em; line-height: 1.4; color: var(--muted); background: var(--code-ground); border: 1px solid var(--line); border-radius: 4px; cursor: pointer; opacity: 0.7; }
 .full-screen:hover { opacity: 1; color: inherit; }
 .painted:fullscreen { display: flex; align-items: center; justify-content: center; background: #000; }
@@ -173,6 +173,7 @@ button.position { border: none; background: none; padding: 0; color: inherit; fo
 output.located { cursor: pointer; }
 
 /* the assistant (assistant.js): the key field, completion in gray at the cursor, the chat under the output */
+.deploy-name { width: 9em; margin: 4px 0; }
 .api-key { box-sizing: border-box; width: 100%; margin: 4px 0; font-family: ui-monospace, Menlo, Consolas, monospace; }
 .completion { color: var(--muted); opacity: 0.8; white-space: pre-wrap; }
 .completion-pending, .completion-failed { font-size: 0.85em; color: var(--muted); padding-left: 4px; }

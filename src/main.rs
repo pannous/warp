@@ -271,14 +271,15 @@ fn run_command(args: &[String]) {
             }
         }
     } else if args[1] == DEPLOY_COMMAND && args.len() >= 3 {
-        use warp::deploy::{Deployment, DEV_FLAG, DRY_RUN_FLAG};
+        use warp::deploy::{Deployment, DEV_FLAG, DRY_RUN_FLAG, HOSTED_FLAG};
         let deployment = match args[2].as_str() {
             DEV_FLAG => Deployment::Local,
             DRY_RUN_FLAG => Deployment::DryRun,
+            HOSTED_FLAG => Deployment::Hosted,
             _ => Deployment::Cloud,
         };
         let Some(program) = args.get(if deployment == Deployment::Cloud { 2 } else { 3 }) else {
-            eprintln!("warp deploy: which program? warp deploy [{DEV_FLAG}|{DRY_RUN_FLAG}] app.warp");
+            eprintln!("warp deploy: which program? warp deploy [{DEV_FLAG}|{DRY_RUN_FLAG}|{HOSTED_FLAG}] app.warp");
             std::process::exit(1);
         };
         if let Err(failure) = warp::deploy::deploy(std::path::Path::new(program), deployment) {
@@ -435,10 +436,10 @@ fn run_command(args: &[String]) {
     }
 }
 
-/// `Warp 🐝 1.2.4`; a debug build also names, on stderr, the commit of the checkout it was built from and the time of
+/// `Warp 🌀 1.2.4`; a debug build also names, on stderr, the commit of the checkout it was built from and the time of
 /// its binary (cards g_oMw8, g_oM-0): `debug build 75d67b068 · built 2026-10-09 14:32`
 fn print_version() {
-    println!("Warp 🐝 {}", WARP_VERSION);
+    println!("🌀 Warp {}", WARP_VERSION);
     if cfg!(debug_assertions) {
         let commit = command_line("git", &["-C", env!("CARGO_MANIFEST_DIR"), "rev-parse", "--short=9", "HEAD"]);
         let binary = env::current_exe().map(|path| path.display().to_string()).unwrap_or_default();
@@ -749,7 +750,7 @@ fn usage() {
     println!("  warp tool <package> [args]  Run a package's prebuilt <package>.wasm in its directory");
     println!("  warp dev <file> [port]  Serve the file's page, reloaded when it changes (port 8008)");
     println!("  warp serve [file] [port]  Serve the program: its page, server functions and routes (app.warp, port 8080)");
-    println!("  warp deploy [--dev|--dry-run] <file>  The program's routes as a Cloudflare Worker, by wrangler (--dev: on this machine, --dry-run: only <file>-worker/)");
+    println!("  warp deploy [--dev|--dry-run|--hosted] <file>  The program's routes as a Cloudflare Worker, by wrangler (--dev: on this machine, --dry-run: only <file>-worker/, --hosted: at warp-<file>.pannous.workers.dev, by your GitHub login)");
     println!("  warp repl            Start interactive console");
     println!("  warp register        Let Finder and `open` run .warp files (macOS)");
     println!("  --fuel <steps>       Execution budget before 'out of fuel' (env WARP_FUEL)");
@@ -784,7 +785,7 @@ fn console() {
     let _ = rl.load_history(&history_path);
 
     loop {
-        match rl.readline("🐝 ") {
+        match rl.readline("🌀") { // warp language symbol for prompt
             Ok(line) => {
                 let input = line.trim();
                 if input.is_empty() { continue; }

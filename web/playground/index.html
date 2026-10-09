@@ -5,7 +5,7 @@
 	<meta name="viewport" content="width=device-width, initial-scale=1">
 	<title>warp playground</title>
 	<!-- inline, so no favicon.ico request fails in the console (card console-errors) -->
-	<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🐝</text></svg>">
+	<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🌀</text></svg>">
 	<script>
 		// tasks on Workers need shared memory, which needs cross-origin isolation: a service worker adds the headers
 		// GitHub Pages cannot send, then the page reloads once under it (coi-serviceworker.js), once it is active: a reload
@@ -26,7 +26,7 @@
 	<link rel="stylesheet" href="playground.css">
 	<script src="codemirror/codemirror.min.js"></script>
 	<script src="codemirror/codeeditor-simple-mode.js"></script>
-	<script src="keywords.js" onerror="window.KEYWORDS = {hard: [], soft: []}"></script>
+	<script src="keywords.js" onerror="window.KEYWORDS = {hard: [], soft: []}; console.warn('keywords.js is not built (web/playground/build.sh): no keyword highlighting or completion')"></script>
 	<script src="codemirror-warp-mode.js"></script>
 	<script src="examples.js"></script>
 	<script src="samples.js" onerror="window.SAMPLES = {}"></script>
@@ -38,16 +38,23 @@
 	<script src="shortcuts.js" defer></script>
 	<script src="playground.js" defer></script>
 	<script src="guide.js" defer></script>
+	<script src="deploy.js" defer></script>
 </head>
 <body>
 <header>
-	<h1>🐝 <a href="https://github.com/pannous/warp">warp</a> <span>playground</span></h1>
+	<h1>🌀<a href="https://github.com/pannous/warp">warp</a> <span>playground</span></h1>
 	<p class="tagline">warp, running in your browser</p>
 	<a class="source" href="https://github.com/pannous/warp" target="_blank" rel="noopener">source</a>
 	<details class="tools">
 		<summary title="more">⋯</summary>
 		<div class="tools-menu">
 			<p><button id="download" title="the WebAssembly module of the last run">⤓ download the wasm</button></p>
+			<p>Put the program's routes (<code>get "/" {…}</code>) on the web as
+				<input id="deploy-name" class="deploy-name" autocomplete="off" spellcheck="false" placeholder="name"><br/>
+				<button id="deploy" title="log in with GitHub; it answers at https://warp-<name>.pannous.workers.dev">☁ Deploy</button>
+				<button id="deploy-own" title="log in with Cloudflare, or paste an API token below; it goes to your own account">☁ Deploy to my Cloudflare</button><br/>
+				<input id="cloudflare-token" class="api-key" type="password" autocomplete="off" spellcheck="false" placeholder="or a Cloudflare API token (Workers Scripts: Edit)"><br/>
+				<span id="deployed"></span></p>
 			<p>Run it on your machine: <code>warp hello.warp</code> <br/>
 				<a href="https://github.com/pannous/warp#install" target="_blank" rel="noopener">get warp</a>
 			</p>

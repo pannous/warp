@@ -1,0 +1,23 @@
+# warp-hosting, the control Worker that hosts warp programs (notes/hosting.md). Deploy: wrangler deploy (in this folder)
+# Secrets (wrangler secret put …): SESSION_SECRET, CLOUDFLARE_API_TOKEN, GITHUB_CLIENT_ID, GITHUB_CLIENT_SECRET,
+# optional CLOUDFLARE_OAUTH_CLIENT_ID (+ CLOUDFLARE_OAUTH_CLIENT_SECRET) for "deploy to my own account" by login
+name = "warp-hosting"
+main = "hosting.mjs"
+compatibility_date = "2026-09-01"
+
+[vars]
+ACCOUNT_ID = "3c4ff005785f4576ab288e320f715c87"
+PUBLIC_ORIGIN = "https://lambda.pannous.com" # the GitHub OAuth app's callback is <this>/callback
+# the free plan allows 100 Workers per account (a few are the user's own) and never bills (notes/hosting.md "Limits")
+MAX_PROGRAMS = "80"
+MAX_PROGRAMS_PER_USER = "5"
+
+[[kv_namespaces]]
+binding = "NAMES"
+id = "fbc48262165e4483b7c48282bfdfbb4e"
+
+# the host scripts and cloud-worker.js (web/playground) are uploaded with each program as text, not run here
+[[rules]]
+type = "Text"
+globs = ["**/playground/*.js"]
+fallthrough = false

@@ -314,6 +314,21 @@ impl WarpParser {
 		self.parse_indented_block().unwrap_or_else(|| error("a definition needs a body: `to name params: body`"))
 	}
 
+	pub(super) fn next_line_starts_with_tab(&self) -> bool {
+		self.chars[self.pos..].iter().skip_while(|ch| **ch != '\n').nth(1) == Some(&'\t')
+	}
+
+	/// The `end` on the line after a block read by indentation, the newline before the next statement kept
+	pub(super) fn skip_end_line(&mut self) {
+		let before = (self.pos, self.line_nr, self.column, self.current_line.clone());
+		self.skip_whitespace();
+		if !self.matches_keyword(END_KEYWORD) {
+			(self.pos, self.line_nr, self.column, self.current_line) = before;
+			return;
+		}
+		self.advance_by(END_KEYWORD.len());
+	}
+
 	/// Offside rule: the lines indented (by tabs or spaces) below a line ending in `:` are its `{…}` block;
 	/// None, with nothing consumed, when the next line is not indented deeper
 	pub(super) fn parse_indented_block(&mut self) -> Option<Node> {
