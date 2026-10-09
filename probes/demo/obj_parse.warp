@@ -1,0 +1,12 @@
+obj = "v 0 0 0
+v 1 0 0
+v 0 1 0
+f 1 2 3"
+vertices = []
+corners = []
+for line in obj.split("\n") {
+	words = line.split(" ")
+	if words#1 == "v" { vertices = vertices + [[float(words#2), float(words#3), float(words#4)]] }
+	if words#1 == "f" { for w in [words#2, words#3, words#4] { corners = corners + [vertices#int(w)] } }
+}
+corners

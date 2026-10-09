@@ -26,8 +26,16 @@ const VALUES_BINDING: u32 = 0;
 /// A uniform struct is a whole number of 16-byte rows
 const UNIFORM_ALIGNMENT: usize = 16;
 
-/// A value the shader reads as `values.<name>`: one to four floats (f32, vec2f, vec3f, vec4f)
-pub type ShaderValue = (String, Vec<f32>);
+/// The floats of one vector in an array value
+pub const VECTOR_FLOATS: usize = 4;
+
+/// A value the shader reads as `values.<name>`: one to four floats (f32, vec2f, vec3f, vec4f), or an array of vec4f
+/// (`values.<name>[i]`), its floats four by four
+pub struct ShaderValue {
+	pub name: String,
+	pub floats: Vec<f32>,
+	pub array: bool,
+}
 
 struct Gpu {
 	device: wgpu::Device,
@@ -226,23 +234,27 @@ pub fn render(shader: &str, width: u32, height: u32, values: &[ShaderValue]) -> 
 }
 
 /// The WGSL declaring `values` (appended to the shader, so its line numbers stay the user's) and the bytes of the
-/// uniform, laid out as WGSL aligns its members: f32 by 4, vec2f by 8, vec3f and vec4f by 16
+/// uniform, laid out as WGSL aligns its members: f32 by 4, vec2f by 8, vec3f, vec4f and arrays of vec4f by 16
 pub fn uniform_layout(values: &[ShaderValue]) -> Result<(String, Vec<u8>), String> {
 	if values.is_empty() {
 		return Ok((String::new(), Vec::new()));
 	}
 	let mut members = Vec::new();
 	let mut bytes = Vec::new();
-	for (name, floats) in values {
+	for ShaderValue { name, floats, array } in values {
 		let (wgsl_type, alignment) = match floats.len() {
-			1 => ("f32", 4),
-			2 => ("vec2f", 8),
-			3 => ("vec3f", 16),
-			4 => ("vec4f", 16),
+			_ if *array => (format!("array<vec4f, {}>", floats.len().div_ceil(VECTOR_FLOATS).max(1)), 16),
+			1 => ("f32".into(), 4),
+			2 => ("vec2f".into(), 8),
+			3 => ("vec3f".into(), 16),
+			4 => ("vec4f".into(), 16),
 			count => return Err(format!("{VALUES_NAME}.{name} is one number or a list of two to four, got {count}")),
 		};
 		bytes.resize(bytes.len().next_multiple_of(alignment), 0);
 		bytes.extend(floats.iter().flat_map(|float| float.to_le_bytes()));
+		if *array {
+			bytes.resize(bytes.len().next_multiple_of(UNIFORM_ALIGNMENT), 0);
+		}
 		members.push(format!("{name}: {wgsl_type}"));
 	}
 	bytes.resize(bytes.len().next_multiple_of(UNIFORM_ALIGNMENT), 0);
