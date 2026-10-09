@@ -114,8 +114,7 @@ fn where_filters(node: Node, lists: &mut Lists) -> Node {
 		_ => {
 			let condition = lists.with_fields_of_it(&items[at - 1], items[at + 1].clone());
 			match crate::database_tables::queried(&items[at - 1], &condition, &lists.variables, &mut lists.tables) {
-				Some(Ok((ids, kept))) => Node::List(vec![ids, where_comprehension(&items[at - 1], &kept)], Bracket::Round, Separator::Semicolon),
-				Some(Err(error)) => error,
+				Some(Ok(found) | Err(found)) => found,
 				None => where_comprehension(&items[at - 1], &condition),
 			}
 		}

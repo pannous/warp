@@ -4,7 +4,6 @@ use crate::is;
 
 #[test]
 fn a_libm_function_of_the_headers_links_by_itself() {
-	crate::requires!(crate::common::MACOS_C_HEADERS);
 	is!("exp2(3)", 8);
 	is!("x = exp2(3); x + 1", 9);
 	is!("cbrt(27) + erf(0)", 3);
@@ -12,7 +11,6 @@ fn a_libm_function_of_the_headers_links_by_itself() {
 
 #[test]
 fn a_libm_function_with_an_int_parameter_says_so() {
-	crate::requires!(crate::common::MACOS_C_HEADERS);
 	crate::common::fails_with("ldexp(1, 3)", "ldexp is a libm function with a parameter other than a float");
 }
 
@@ -30,7 +28,6 @@ fn the_table_serves_every_listed_libm_function() {
 /// card ffi-mixed: a C function with float and int parameters gets each in its register (ldexp gave its first argument)
 #[test]
 fn a_c_function_with_float_and_int_parameters() {
-	crate::requires!(crate::common::MACOS_C_HEADERS);
 	is!("import ldexp from \"m\"; ldexp(1.0, 3)", 8.0);
 	is!("import ldexp from \"m\"; ldexp(3.0, -1)", 1.5);
 }

@@ -53,7 +53,7 @@ pub(crate) mod wasi_emitter;
 pub use big_int::{is_fixnum, EXACT_BUILDERS, INT_RUNTIME};
 
 /// Something emission found it must have that the analysis pass did not request
-#[derive(Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 enum Need {
 	/// A runtime function, by registry name
 	Function(&'static str),
@@ -263,6 +263,8 @@ pub struct WasmGcEmitter {
 	text_heap_global: Option<u32>, // bump pointer for texts built at runtime, in memory grown past the string table
 	// Needs the analyzer could not foresee (they depend on inferred types); emission reruns with them
 	discovered_needs: std::collections::HashSet<Need>,
+	/// The needs this emitter was rerun with: one still missing after the rerun cannot be provided, another rerun would loop
+	inherited_needs: std::collections::HashSet<Need>,
 	/// The highest operator code list_text writes as written, from the needs (any code above it is written `:`)
 	written_operator_bound: i64,
 	/// The program quotes a tag (`data point{x:1}`), which list_text writes as an instance: only then does it check for one
@@ -339,6 +341,7 @@ impl WasmGcEmitter {
 			tuple_packers: HashMap::new(),
 			text_heap_global: None,
 			discovered_needs: Default::default(),
+			inherited_needs: Default::default(),
 			written_operator_bound: crate::operators::op_to_code(&crate::operators::Op::Colon),
 			writes_tags: false,
 			type_errors: Vec::new(),
@@ -707,10 +710,14 @@ impl WasmGcEmitter {
 		self.emit_component_adapters();
 		self.emit_compare_dispatcher();
 		self.emit_node_main(node);
-		if self.discovered_needs.iter().any(|need| !self.is_provided(need)) {
+		let missing: Vec<Need> = self.discovered_needs.iter().filter(|need| !self.is_provided(need)).copied().collect();
+		if let Some(unprovidable) = missing.iter().find(|need| self.inherited_needs.contains(need)) {
+			self.type_errors.push(format!("the compiler found it needs {unprovidable:?} but cannot provide it"));
+		} else if !missing.is_empty() {
 			let mut rerun = Self::new();
 			rerun.config = self.config.clone();
 			rerun.discovered_needs = std::mem::take(&mut self.discovered_needs);
+			rerun.inherited_needs = rerun.discovered_needs.clone();
 			crate::normalize::without_hints(|| rerun.emit_for_node(node)); // the first pass already hinted the same program
 			*self = rerun;
 		}

@@ -34,6 +34,7 @@ mod test_unwrap;
 mod test_unwrap_message;
 mod test_switch_no_case_value;
 mod test_switch_value;
+mod test_task_dir;
 mod test_times_count_once;
 mod test_top_level_block;
 mod test_trap_messages;
@@ -161,3 +162,5 @@ mod test_database_busy; // card orm-sample-lock
 mod test_if_instance_branches; // card if-instance-branch
 mod test_table_remove; // card table-remove
 mod test_table_key_filter; // card table-key-filter
+mod test_table_transactions; // card orm step 5
+mod test_table_query_loading; // orm: a filter reads only its rows

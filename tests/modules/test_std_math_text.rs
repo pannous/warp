@@ -115,8 +115,6 @@ fn use_math_brings_descriptive_names_and_cmath_the_c_library() {
 	for (call, expected) in calls {
 		is!(&format!("use math; {call}"), expected);
 	}
-	// glibc's math.h overflows the stack of the header reader (card use-cmath)
-	crate::requires!(crate::common::MACOS_C_HEADERS);
 	is!("use cmath; cos(0) + cbrt(8)", 3);
 }
 
