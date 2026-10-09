@@ -14,6 +14,7 @@ mod test_welcoming_elements;
 mod test_welcoming_empty_push;
 mod test_welcoming_globals;
 mod test_welcoming_indent;
+mod test_indented_body_without_colon; // cards golf-indented, golf-bare, golf-indented-while, golf-indented-swap
 mod test_welcoming_listexpr;
 mod test_welcoming_listparams;
 mod test_welcoming_maps;
