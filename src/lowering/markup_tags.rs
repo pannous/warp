@@ -11,6 +11,10 @@ const FOR_WORD: &str = "for";
 const IN_WORD: &str = "in";
 const ALL_WORD: &str = "all";
 const TAG_ITEM: &str = "tag·item"; // the loop variable of `li all xs`
+/// `form post "/todos" { … }`: a form written as the route it sends to (card g_mSEw)
+const FORM_TAG: &str = "form";
+const METHOD_ATTRIBUTE: &str = "method";
+const ACTION_ATTRIBUTE: &str = "action";
 
 pub fn lower(node: Node) -> Node {
 	// `label(for:pwd):"Password"` itself would read as a definition: only `:=`, function keywords and assignments define
@@ -127,6 +131,38 @@ fn attributes(node: &Node, defined: &HashSet<String>) -> Option<(String, Vec<Nod
 	let Node::Symbol(name) = name.drop_meta() else { return None };
 	let all_pairs = !pairs.is_empty() && pairs.iter().all(|pair| matches!(pair.drop_meta(), Node::Key(_, Op::Colon, _)));
 	(all_pairs && !defined.contains(name)).then(|| (name.clone(), pairs.to_vec()))
+}
+
+/// `form post "/todos" { body }` → `form{ method:"post" action:"/todos" body }`, unless the program defines form
+pub fn lower_form_routes(node: Node) -> Node {
+	if !node.mentions_any(&[FORM_TAG]) || crate::library_words::defined_names(&node).contains(FORM_TAG) {
+		return node;
+	}
+	with_form_routes(node)
+}
+
+fn with_form_routes(node: Node) -> Node {
+	let Node::List(items, bracket, separator) = node else { return node.map_children(with_form_routes) };
+	let (mut written, mut rewritten): (Vec<Node>, bool) = (vec![], false);
+	for item in items.into_iter().map(with_form_routes) {
+		written.push(item);
+		if let [.., form, method, action, block] = written.as_slice() {
+			let method = method.drop_meta().name();
+			if let (FORM_TAG, true, Node::List(body, Bracket::Curly, body_separator)) = (form.drop_meta().name().as_str(), crate::serve::METHODS.contains(&method.as_str()), block.drop_meta()) {
+				let (action, body, body_separator) = (action.clone(), body.clone(), body_separator.clone());
+				written.pop();
+				written.truncate(written.len() - 3);
+				let attribute = |name: &str, value: Node| Node::Key(Box::new(Node::Symbol(name.into())), Op::Colon, Box::new(value));
+				let fields = [attribute(METHOD_ATTRIBUTE, Node::Text(method)), attribute(ACTION_ATTRIBUTE, action)].into_iter().chain(body);
+				written.push(Node::Key(Box::new(Node::Symbol(FORM_TAG.into())), Op::Colon, Box::new(Node::List(fields.collect(), Bracket::Curly, body_separator))));
+				rewritten = true;
+			}
+		}
+	}
+	match written.len() {
+		1 if rewritten && bracket == Bracket::None => written.pop().expect("one"),
+		_ => Node::List(written, bracket, separator),
+	}
 }
 
 /// HTML's own attribute form (P188): `input{type="text"}`, `label(for="pwd")` and `p {class="note"}` are

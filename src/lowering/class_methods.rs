@@ -72,6 +72,13 @@ const IMPL_WORD: &str = "impl";
 const COPY_WORD: &str = "copy";
 /// lib/units.warp's `q.to("km/h")`: a run-time quantity in other units
 const CONVERSION_METHOD: &str = "to";
+/// lib/units.warp's check that two quantities measure the same, and a quantity's amount in base units
+const SAME_DIMENSION: &str = "same_dimension";
+const QUANTITY_AMOUNT: &str = "amount";
+const SUM_WORD: &str = "sum";
+/// The sum of a list of run-time quantities folds their `plus` (quantities_reduced)
+const REDUCE_WORD: &str = "reduce";
+const REDUCED_NAMES: [&str; 2] = ["quantity·sum", "quantity·item"];
 /// `str(q)`: a run-time quantity's text
 const TEXT_WORD: &str = "str";
 /// The methods an operator on an instance calls (wiki/operator.md aliases, Python's special methods)
@@ -733,7 +740,7 @@ fn renamed_type_word_methods(node: Node) -> Node {
 	let (mut names, mut classes, mut defined_by) = (vec![], vec![], vec![]);
 	node.visit(&mut |part| if let Node::Type { name, body } = part {
 		let clashing: Vec<String> = class_items(body).iter().filter_map(method_parts).map(|(name, _, _)| name)
-			.filter(|name| !is_witness_method(name) && (crate::analyzer::type_word_kind(name).is_some() || is_library_method(name))).collect();
+			.filter(|name| !is_witness_method(name) && (crate::analyzer::type_word_kind(name).is_some() || is_library_method(name) || crate::uncertain::INTERVAL_FIELDS.contains(&name.as_str()))).collect();
 		if !clashing.is_empty() {
 			classes.push(name.drop_meta().name());
 		}
@@ -1067,6 +1074,11 @@ struct Operands<'a> {
 fn with_operator_calls(node: Node, operands: &Operands) -> (Node, Option<String>) {
 	let recurse = |child: Node| with_operator_calls(child, operands).0;
 	match node {
+		certainty if crate::uncertain::certainty_parts(&certainty).is_some() => (with_certain_amounts(&certainty, operands), None),
+		sum if summed_quantities(&sum, operands).is_some() => {
+			let quantities = with_operator_calls(summed_quantities(&sum, operands).expect("guarded").clone(), operands).0;
+			(quantities_reduced(quantities), Some(crate::units::RUN_TIME_QUANTITY.to_string()))
+		}
 		Node::Key(left, op, right) if OPERATOR_METHODS.iter().any(|(known, _)| *known == op) => {
 			let (left, class) = with_operator_calls(*left, operands);
 			let (right, right_class) = with_operator_calls(*right, operands);
@@ -1129,6 +1141,52 @@ fn with_operator_calls(node: Node, operands: &Operands) -> (Node, Option<String>
 
 /// `receiver.method(argument)`; `(quantity(…)) * 2`: the receiver without its parentheses, else `(f(…)).times` reads as
 /// a call of f
+/// `rope certainly > 4 m` of a run-time quantity rope: its amount and the other's in the same base units compare, a ±
+/// amount as the interval it is; `Quantity.more` would answer a plain yes (card quantity-tolerance)
+fn with_certain_amounts(certainty: &Node, operands: &Operands) -> Node {
+	let (word, ordering) = crate::uncertain::certainty_parts(certainty).expect("guarded");
+	let Node::Key(left, op, right) = ordering.drop_meta() else { unreachable!("certainty_parts takes orderings") };
+	let (left, class) = with_operator_calls(left.as_ref().clone(), operands);
+	let (right, right_class) = with_operator_calls(right.as_ref().clone(), operands);
+	let class = class.or_else(|| operand_class(&left, operands));
+	let (left, class, right) = with_run_time_units(left, class, right, right_class, operands);
+	let compared = match class.as_deref() == Some(crate::units::RUN_TIME_QUANTITY) {
+		true => {
+			let comparable = Node::List(vec![Node::Symbol(SAME_DIMENSION.to_string()), left.clone(), right, Node::Text("compare".to_string())], Bracket::Round, Separator::None);
+			Node::Key(Box::new(amount_of(left)), *op, Box::new(amount_of(comparable)))
+		}
+		false => Node::Key(Box::new(left), *op, Box::new(right)),
+	};
+	Node::List(vec![Node::Symbol(word.to_string()), compared], Bracket::None, Separator::Space).with_meta_of(certainty)
+}
+
+/// The list of `sum([5 m ± 1 cm, 3 m ± 2 cm])` or `[…].sum()` when each item is a run-time quantity
+fn summed_quantities<'n>(node: &'n Node, operands: &Operands) -> Option<&'n Node> {
+	let list = match node.drop_meta() {
+		Node::List(items, Bracket::Round, _) => match items.as_slice() {
+			[word, list] if word.drop_meta().name() == SUM_WORD => list,
+			_ => return None,
+		},
+		Node::Key(list, Op::Dot, call) if is_call_of(call, SUM_WORD) || call.drop_meta().name() == SUM_WORD => list,
+		_ => return None,
+	};
+	let Node::List(items, Bracket::Square, _) = list.drop_meta() else { return None };
+	let is_quantity = |item: &Node| operand_class(item, operands).as_deref() == Some(crate::units::RUN_TIME_QUANTITY);
+	(!items.is_empty() && items.iter().all(is_quantity)).then_some(list)
+}
+
+/// `quantities.reduce((sum, item) => sum.plus(item))`
+fn quantities_reduced(quantities: Node) -> Node {
+	let [sum, item] = REDUCED_NAMES.map(|name| Node::Symbol(name.to_string()));
+	let parameters = Node::List(vec![sum.clone(), item.clone()], Bracket::Round, Separator::Colon);
+	let added = Node::Key(Box::new(parameters), Op::FatArrow, Box::new(method_call(sum, operator_method(Op::Add).expect("plus"), item)));
+	Node::Key(Box::new(quantities), Op::Dot, Box::new(Node::List(vec![Node::Symbol(REDUCE_WORD.to_string()), added], Bracket::Round, Separator::None)))
+}
+
+fn amount_of(quantity: Node) -> Node {
+	Node::Key(Box::new(quantity), Op::Dot, Box::new(Node::Symbol(QUANTITY_AMOUNT.to_string())))
+}
+
 fn method_call(receiver: Node, method: &str, argument: Node) -> Node {
 	let receiver = match receiver.drop_meta() {
 		Node::List(items, Bracket::Round, _) if items.len() == 1 => items[0].clone(),
@@ -1241,7 +1299,7 @@ fn with_method_names(node: Node, methods: &MethodNames, in_class: bool) -> Node 
 			Node::List(items, Bracket::Round, _) => items.first().map(|first| first.drop_meta().name()).unwrap_or_default(),
 			other => other.name(),
 		};
-		match is_library_method(&name) {
+		match is_library_method(&name) || crate::uncertain::INTERVAL_FIELDS.contains(&name.as_str()) {
 			true => match receiver.drop_meta() {
 				Node::Symbol(variable) => methods.instances.contains(variable),
 				// `Stack([]).count()`, a construction

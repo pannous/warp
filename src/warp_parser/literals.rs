@@ -7,6 +7,8 @@ const BACKTICK: char = '`';
 const BACKTICK_TOPIC: &str = "backtick text";
 const F_STRING_TOPIC: &str = "python f-string";
 const F_STRING_PREFIX: char = 'f';
+/// `\e` in a text: the start of terminal codes like `\e[H`
+const ESCAPE_CHARACTER: char = '\u{1b}';
 
 impl WarpParser {
 	/// Parse a complete value/expression - calls parse_expr(0) for operator chaining
@@ -151,6 +153,8 @@ impl WarpParser {
 					'n' => '\n',
 					't' => '\t',
 					'r' => '\r',
+					'e' => ESCAPE_CHARACTER,
+					'x' if self.peek_char(1).is_ascii_hexdigit() && self.peek_char(2).is_ascii_hexdigit() => self.hex_byte_escape(),
 					'u' if self.peek_char(1) == '{' => match self.unicode_escape() {
 						Ok(c) => c,
 						Err(message) => return error(&message),
@@ -187,6 +191,14 @@ impl WarpParser {
 		let text = self.parse_string();
 		self.brace_holes = outer;
 		Some(text)
+	}
+
+	/// `\x1b` after the backslash: the character of the two hex digits, left at the second
+	fn hex_byte_escape(&mut self) -> char {
+		let hex: String = [self.peek_char(1), self.peek_char(2)].iter().collect();
+		self.advance();
+		self.advance();
+		char::from(u8::from_str_radix(&hex, 16).expect("two hex digits"))
 	}
 
 	/// `\u{e9}` after the backslash: the code point of the hex digits; the closing `}` is left for the caller to skip

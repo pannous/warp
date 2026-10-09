@@ -81,13 +81,23 @@ keeping its fields with id 0; the lazy `people·remove` drops bo from the loaded
   an_element_of_a_table_loads_one_row, iterating_a_table_reads_it_in_pages).
 - The identity map `people·met` is a list searched by id, so a loop over n unloaded rows costs n²/2 comparisons:
   a map by id once tables grow large.
-- Not yet: paging of `where` results and comprehensions over a table (they load it), the IN (…) batching; a class method reading a table directly (not a
+- A filter `people where c` is `people.table·found(sql, parameters)` until with_lazy_reads makes it `people·found(…)`:
+  `std_io("table", "select", [table, schema, file, sql, parameters])` gives the kept rows whole, each made the one
+  instance of its row by `people·kept` (no load); a loaded table, or one with a required foreign key, keeps its loaded
+  instances of those ids (test a_filter_reads_only_the_rows_it_keeps). A served route answering one answers [] when
+  empty (serve.rs answers_a_list, database_tables::is_filter_query).
+- Not yet: comprehensions over a table (they load it), the IN (…) batching; a class method reading a table directly (not a
   generated getter) is not rewritten. An empty list must be `parse("[]")` (ø): a built `[]` List node with Space
   separator types `xs += [x]` as int + list.
 
 ## Writes and transactions
 - Default autocommit: each add/remove/field change is its own statement.
-- `transaction { … }` (optional) is BEGIN … COMMIT, ROLLBACK when the block fails; it also batches.
+- `transaction { … }` (optional) is BEGIN … COMMIT, ROLLBACK when the block fails; it also batches. Done (branch
+  orm-transaction, database_tables.rs in_transaction): `std_io("table", "begin"/"commit"/"rollback", [file])`, the block
+  under `try … catch`; a failure rolls back, then each open table's `people·restore()` gives the instances the program
+  holds their rows' values again (an instance whose row is gone gets id 0) and loads anew, then the failure is raised
+  again. Its value is the block's. The browser's store snapshots the file's tables at begin (host-files.js).
+  Sample: samples/orm_transaction.warp.
 
 ## Migrations: stored schema vs class layout, at registration
 | change | what happens |
@@ -169,7 +179,7 @@ keeping its fields with id 0; the lazy `people·remove` drops bo from the loaded
    loading + identity of added instances (done, orm-updates), #i/paging.
 3. Application functions for the rest of a filter (done, card orm-filters: warp_call into the module).
 4. Foreign keys and one-to-many (done, card orm; one-to-many lazy as getters), batched lazy loading of tables.
-5. `transaction { }`.
+5. `transaction { }` (done, branch orm-transaction).
 6. IndexedDB backend in the browser (async underneath: the page's host keeps a loaded mirror per table, like the
    key-value store). Done simply (branch orm-updates): web/playground/host-files.js `table` keeps each table as
    one value `table <file> <name>` = {types, rows: [{id, column…}]} of the `database[k]` store, so it is loaded

@@ -196,6 +196,20 @@ pub fn as_run_time_quantity(node: &Node) -> Option<Node> {
 	Some(run_time_quantity(amount, unit))
 }
 
+/// The amount and the unit text of `quantity(amount, "unit")`
+pub fn run_time_quantity_parts(node: &Node) -> Option<(&Node, &str)> {
+	match node.drop_meta() {
+		Node::List(items, Bracket::Round, _) => match items.as_slice() {
+			[word, amount, unit] if word.drop_meta().name() == RUN_TIME_QUANTITY_WORD => match unit.drop_meta() {
+				Node::Text(unit) => Some((amount, unit.as_str())),
+				_ => None,
+			},
+			_ => None,
+		},
+		_ => None,
+	}
+}
+
 fn run_time_quantity(amount: Node, unit: String) -> Node {
 	Node::List(vec![Node::Symbol(RUN_TIME_QUANTITY_WORD.to_string()), amount, Node::Text(unit)], Bracket::Round, Separator::None)
 }

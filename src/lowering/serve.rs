@@ -14,7 +14,7 @@ const SERVE_WORD: &str = "serve";
 const ROUTE_PREFIX: &str = "route·";
 const REQUEST_WORD: &str = "request";
 const ANY_TYPE: &str = "any";
-const METHODS: [&str; 5] = ["get", "post", "put", "delete", "patch"];
+pub(crate) const METHODS: [&str; 5] = ["get", "post", "put", "delete", "patch"];
 const SERVER_WORD: &str = "server";
 const RPC_PREFIX: &str = "/rpc/";
 const RPC_METHOD: &str = "POST";
@@ -34,6 +34,11 @@ const PAGE_PATH_CALL: &str = "page_path()";
 /// The path a served route was asked at, which binds its parameters
 const REQUEST_PATH: &str = "request.path";
 const PARAMETER_MARK: char = ':';
+/// `$title` in a route is the request's field title (card g_mQ9U): of a get its query, of the other methods its body
+const FIELD_MARK: char = '$';
+const QUERY_METHOD: &str = "get";
+const QUERY_PART: &str = "query";
+const BODY_PART: &str = "body";
 /// The page's path as a main-level variable, which page·navigated sets anew when the page goes to another path
 /// (host-routes.js navigate)
 const PAGE_PATH: &str = "page·path";
@@ -242,14 +247,14 @@ impl ServerData {
 }
 
 /// Whether a value (a block's last statement) is a list: a list word, its call, a list literal or a filter (`todos where
-/// not done`, a comprehension by now), so its ø answers []
+/// not done`, a comprehension or a table's query by now), so its ø answers []
 fn answers_a_list(value: &Node, list_words: &[String]) -> bool {
 	match value.drop_meta() {
 		Node::List(items, Bracket::Curly, _) | Node::List(items, Bracket::Round, Separator::Semicolon | Separator::Newline) => items.last().is_some_and(|last| answers_a_list(last, list_words)),
 		Node::Symbol(name) => list_words.contains(name) || name.starts_with(crate::comprehensions::MADE),
 		Node::List(items, Bracket::Round, _) => items.first().is_some_and(|word| matches!(word.drop_meta(), Node::Symbol(name) if list_words.contains(name))),
 		Node::List(_, Bracket::Square, _) => true,
-		_ => false,
+		_ => crate::database_tables::is_filter_query(value),
 	}
 }
 
@@ -281,14 +286,15 @@ fn with_bound_routes(statement: Node) -> Node {
 	}
 }
 
-/// `get "/a/:id" {…} post …` as words, each block with its path's parameters bound
+/// `get "/a/:id" {…} post …` as words, each block with its path's parameters and its `$field`s bound
 fn bound_routes(words: Vec<Node>) -> Vec<Node> {
 	let mut bound = words.clone();
 	let mut index = 0;
 	while index + 2 < bound.len() {
 		match METHODS.contains(&bound[index].drop_meta().name().as_str()) {
 			true => {
-				bound[index + 2] = with_path_parameters(&bound[index + 1], bound[index + 2].clone());
+				let part = if bound[index].drop_meta().name() == QUERY_METHOD { QUERY_PART } else { BODY_PART };
+				bound[index + 2] = with_request_fields(with_path_parameters(&bound[index + 1], bound[index + 2].clone()), part);
 				index += 3;
 			}
 			false => index += 1,
@@ -299,6 +305,17 @@ fn bound_routes(words: Vec<Node>) -> Vec<Node> {
 
 /// The route's block with its path's parameters bound from the request's path, as a page's route binds them from
 /// page_path() (routes.rs route_body); web_server.rs route_at picks the route
+/// `$title` → `request.body.title` (or `request.query.title`); `$1` stays a positional parameter
+fn with_request_fields(body: Node, part: &str) -> Node {
+	match body {
+		Node::Symbol(ref name) => match name.strip_prefix(FIELD_MARK) {
+			Some(field) if field.starts_with(|first: char| first.is_alphabetic() || first == '_') => crate::warp_parser::parse(&format!("{REQUEST_WORD}.{part}.{field}")),
+			_ => body,
+		},
+		other => other.map_children(|child| with_request_fields(child, part)),
+	}
+}
+
 fn with_path_parameters(path: &Node, body: Node) -> Node {
 	let pattern = match path.drop_meta() {
 		Node::Text(text) => text.clone(),

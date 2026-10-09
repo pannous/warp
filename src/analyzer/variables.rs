@@ -165,6 +165,11 @@ pub(super) fn collect_variables_inner(node: &Node, scope: &mut Scope, skip_first
 		Node::Key(left, op, right) if op.is_compound_assign() => {
 			if let Node::Symbol(name) = left.drop_meta() {
 				widen_to_float(scope, name, right);
+				// `out += x` of a number of run-time kind may add a float, as `out = out + x` does; an evident other kind
+				// (`s += "ab"` of an Int) stays the type error of emit_compound_type_error
+				if crate::analyzer::inference::is_run_time_kind(&binding_kind(right, scope)) {
+					widen_to_node(scope, name, &Node::Key(left.clone(), op.base_op(), right.clone()));
+				}
 				// `xs += [v]` (a lowered `xs.push(v)`) types xs as `xs = xs + [v]` does
 				if *op == Op::AddAssign {
 					type_list_by_first_append(name, &Node::Key(left.clone(), Op::Add, right.clone()), scope);
@@ -294,6 +299,8 @@ pub(super) fn evident_kind(value: &Node, known: &HashMap<String, Kind>) -> Optio
 		Node::Number(_) => Some(Kind::Int),
 		Node::Text(_) | Node::Char(_) => Some(Kind::Text),
 		Node::List(_, Bracket::Square, _) => Some(Kind::List),
+		// `3.7 as int`: the type's kind (card kind-name)
+		Node::Key(_, Op::As, type_name) => super::checks::builtin_type_kind(&type_name.drop_meta().name()),
 		Node::Key(left, op, right) if op.is_arithmetic() => match (evident_kind(left, known)?, evident_kind(right, known)?) {
 			(Kind::Int, Kind::Int) => Some(Kind::Int),
 			(Kind::Int | Kind::Float, Kind::Int | Kind::Float) => Some(Kind::Float),
@@ -377,6 +384,7 @@ impl EvidentKind {
 		match value.drop_meta() {
 			Node::True | Node::False => Some(EvidentKind::Bool),
 			Node::Key(_, op, _) if op.is_comparison() => Some(EvidentKind::Bool),
+			Node::Key(_, Op::As, type_name) if super::checks::is_bool_type(&type_name.drop_meta().name()) => Some(EvidentKind::Bool),
 			Node::Key(_, Op::Arrow | Op::FatArrow, _) => Some(EvidentKind::Function),
 			_ => evident_kind(value, results).map(EvidentKind::Of),
 		}

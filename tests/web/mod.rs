@@ -61,7 +61,10 @@ mod test_route_data; // P221
 mod test_served_tables; // card sample-server
 #[cfg(feature = "native")] // a server on a port, HTTP requests and its SQLite tables
 mod test_served_forms; // card todo-app
+#[cfg(feature = "native")] // a server on a port, HTTP requests
+mod test_request_fields; // card g_mQ9U
 mod test_markup_lines; // card todo-app
+mod test_form_routes; // card g_mSEw
 mod test_guide_sections; // card guide-lists
 mod test_typed_variable_not_markup; // card annotation-html
 #[cfg(feature = "native")] // a server on a port, HTTP requests

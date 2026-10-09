@@ -30,6 +30,7 @@ mod test_text_search;
 mod test_nested_list_text;
 mod test_chr;
 mod test_unicode_escape;
+mod test_terminal_escapes;
 mod test_put_runtime_values;
 mod test_print_juxtaposed;
 mod test_print_lists;
@@ -51,3 +52,4 @@ mod test_error_as_text;
 mod test_count_method;
 mod test_codepoint_bytes;
 mod test_repeat_typed; // card repeat-int
+mod test_split_default; // card split-without

@@ -24,6 +24,7 @@ mod test_unbounded_int;
 mod test_unit_composites;
 mod test_unit_polish;
 mod test_plus_minus_units; // card plus-minus-units
+mod test_quantity_tolerance; // card quantity-tolerance
 mod test_mixed_quantity_arguments; // card mixed-arguments
 mod test_rational_quantities;
 mod test_static_units;
@@ -71,6 +72,7 @@ mod test_div_assign;
 mod test_unit_fields; // card unit-fields
 mod test_unit_columns; // card units-stress
 mod test_unit_field_display; // card unit-value
+mod test_named_unit_fields; // card map-units
 mod test_average; // card average-undefined
 mod test_log_glyphs; // P226
 mod test_units_text; // card units-text
@@ -79,3 +81,4 @@ mod test_printed_quantity; // P231
 mod test_quantity_conversion; // card quantity-falls
 mod test_quantities_in_one_text; // card text-join
 mod test_text_then_conversion; // card print-km
+mod test_compound_accumulator; // card compound-accumulator

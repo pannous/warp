@@ -17,7 +17,7 @@
 use super::{finest_units, signature, unit_named, units_text, Dimension, Factor, Quantity, Unit, UNITS};
 
 mod unit_fields;
-pub(crate) use unit_fields::si_quantity;
+pub(crate) use unit_fields::{lower_field_tolerances, si_quantity};
 pub(crate) use unit_fields::unit_type;
 use crate::extensions::numbers::Number;
 use crate::extensions::reals::Rational;
@@ -395,6 +395,9 @@ impl Inference {
 			// a body with unit literals compiles only in its specialisations
 			let kept = if mentions_units(&definition.body) { Node::Empty } else { node };
 			return Ok((kept, vec![]));
+		}
+		if let Some(construction) = self.named_construction(&node) {
+			return construction;
 		}
 		match node {
 			Node::Meta { node, data } => {

@@ -7,6 +7,20 @@ before asking the user; nobody reads it front to back, the code, tests and wiki 
 notes/open_decisions.md.
 
 ## Decided 2026-10-09 (user, as recommended unless quoted)
+- P234 (warp-web, card graphics-names, from the user's TODO "We want elegance, but not black magic"): paint also
+  takes a WGSL shader text and renders it on the GPU: `paint(shader, size, size, {frame: frame})`; given pixels it
+  shows them as before. gpu_render stays for getting the pixels. Word choice, not asked: `use graphics` is an alias
+  of `use draw`.
+- P233 (warp-keywords, card field-tolerance): a field typed with a tolerance gives every value that tolerance:
+  `class Part{length: m ± 1 mm}`, `Part(5 m).length` → `5.000 ± 0.001m` (a spec attached to each value). Replaces
+  the interim "not supported yet" error.
+- Undoable default (warp-class, card g_mSEw "a less explicit form"): `form post "/todos" { input{name:"title"}
+  button{"add"} }` = `form{ method:"post" action:"/todos" … }`, matching the route `post "/todos" {…}`;
+  samples/todo_app.warp. Not built: naming the route function (`form add_todo {…}`) or finding the only matching
+  post route by the form's inputs.
+- P232 (warp-class, card g_mQ9U): `$x` as "field x of the implicit subject" stays in served routes only
+  (`$title` = request.body.title / request.query.title); not in event handlers, `it` contexts or component props.
+  `$a` in data literals keeps referencing the enclosing node `a{…}` (references.rs).
 - The user's uncommitted main-checkout edits (supervisor; patch scratch/user_edits.patch) land:
   literals.rs: `${}`, `$()`, `\()` and `\{}` interpolation are all fine, no hint (user: "${} $() \() \{} all fine");
   the 2 test_interpolation tests expecting the hint change. orm.warp: `bo.age += 1` writes through without
@@ -20,7 +34,9 @@ notes/open_decisions.md.
 - P230 (card effects-value): NOT as recommended: `effects of f` gives symbols `(State IO)`, not texts; needs symbol
   values in the emitter. The interim text-list default and its test edit are undone.
 - P228 (warp-fixer, card standalone-std-io): no; programs using tables or JSON don't build stand-alone, the runtime
-  stays ~1 MB; a native run notes "host.std_io needs runtime." on the first run only.
+  stays ~1 MB; a native run notes "host.std_io needs runtime." on the first run only. Wording changed the same day
+  (user's own src/main.rs edit, via the supervisor): the note reads "<features> used runtime.", without the
+  "(said once until the file or warp changes)" remark.
 - P226b (test_logarithm2): `x⌟b` is log base b of x: `100⌟10` → 2, `10⌟100` → 0.5; `x⌟` alone is ln x.
 - P229 (card g_gHmE): settled by the user outside the code: "I already changed it to open my editor. Nothing to fix
   here." Double-clicking a .warp file opens the editor; nothing to build.

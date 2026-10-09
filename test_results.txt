@@ -474,8 +474,15 @@ PASSED:
   ✓ control::test_system_values::the_mouse_is_a_system_value_of_the_page
   ✓ control::test_system_values::yes_no_values_read_the_machine
   ✓ control::test_table_key_filter::rows_whose_foreign_key_is_a_given_row
+  ✓ control::test_table_query_loading::a_filter_reads_only_the_rows_it_keeps
+  ✓ control::test_table_query_loading::a_filtered_row_is_the_one_instance_of_its_row
   ✓ control::test_table_remove::removing_a_row_before_the_table_loads
   ✓ control::test_table_remove::removing_a_row_of_a_loaded_table
+  ✓ control::test_table_transactions::a_failing_transaction_rolls_back_and_fails
+  ✓ control::test_table_transactions::a_field_change_in_a_failing_transaction_is_rolled_back
+  ✓ control::test_table_transactions::a_rolled_back_transaction_restores_the_instances_held
+  ✓ control::test_table_transactions::a_transaction_commits_its_writes
+  ✓ control::test_table_transactions::a_transaction_gives_its_block_value
   ✓ control::test_task_bools::a_bool_given_through_a_value_task_is_a_bool
   ✓ control::test_task_bools::an_awaited_bool_is_a_bool
   ✓ control::test_task_bools::bools_of_a_job_list_are_bools
@@ -1464,6 +1471,7 @@ PASSED:
   ✓ lists::test_list_plus_number::each_reading_has_its_explicit_form
   ✓ lists::test_list_plus_number::the_explicit_forms_never_ask
   ✓ lists::test_list_retype::a_list_variable_given_another_element_type_holds_both
+  ✓ lists::test_list_times_list::list_times_list_is_the_dot_product
   ✓ lists::test_list_truthiness::a_list_of_nothing_is_truthy
   ✓ lists::test_lists::test_array_creation
   ✓ lists::test_lists::test_array_indices
@@ -1621,6 +1629,7 @@ PASSED:
   ✓ modules::test_header_search::an_import_nothing_declares_says_why
   ✓ modules::test_header_search::only_sdl_names_read_the_sdl_headers
   ✓ modules::test_header_search::the_sdl_headers_declare_the_window_functions
+  ✓ modules::test_import_compiled::a_bare_name_imports_a_compiled_module
   ✓ modules::test_import_compiled::a_compiled_fixtures_change_of_an_instance_is_the_programs
   ✓ modules::test_import_compiled::a_compiled_fixtures_values_and_classes_cross
   ✓ modules::test_import_compiled::a_compiled_modules_classes_are_the_programs_too
@@ -1887,6 +1896,7 @@ PASSED:
   ✓ numbers::test_big_ratio::test_big_ratio_readback_stays_exact
   ✓ numbers::test_big_ratio::test_big_ratio_terminating_decimal
   ✓ numbers::test_big_ratio::test_big_ratio_unit_amounts_stay_exact
+  ✓ numbers::test_compound_accumulator::a_compound_accumulator_takes_floats_of_unknown_origin
   ✓ numbers::test_counting_units::count_unit_of_text
   ✓ numbers::test_counting_units::size_of_text_in_unit
   ✓ numbers::test_decimal_units::a_decimal_amount_of_a_unit_is_exact
@@ -2015,6 +2025,8 @@ PASSED:
   ✓ numbers::test_mixed_units::a_static_unit_on_the_left_compares_too
   ✓ numbers::test_mixed_units::other_dimensions_still_fail_loudly
   ✓ numbers::test_mixed_units::static_units_alone_stay_static
+  ✓ numbers::test_named_unit_fields::a_map_over_named_instances_keeps_the_unit
+  ✓ numbers::test_named_unit_fields::a_named_field_checks_its_dimension
   ✓ numbers::test_nan_observed::a_nan_leaving_the_run_is_canonical
   ✓ numbers::test_nan_observed::a_nan_prints_as_nan
   ✓ numbers::test_norm::norm_is_abs
@@ -2059,6 +2071,12 @@ PASSED:
   ✓ numbers::test_quantities_in_one_text::two_quantities_join_one_text
   ✓ numbers::test_quantity_conversion::a_run_time_quantity_converts_with_as
   ✓ numbers::test_quantity_conversion::a_run_time_quantity_joins_a_text
+  ✓ numbers::test_quantity_tolerance::a_field_type_with_tolerance_gives_its_values_the_tolerance
+  ✓ numbers::test_quantity_tolerance::a_gaussian_quantity_shows_sigma_apart_from_its_unit
+  ✓ numbers::test_quantity_tolerance::a_quantity_with_tolerance_compares_certainly_or_possibly
+  ✓ numbers::test_quantity_tolerance::a_quantity_with_tolerance_has_its_bounds
+  ✓ numbers::test_quantity_tolerance::a_unit_field_takes_a_quantity_with_tolerance
+  ✓ numbers::test_quantity_tolerance::quantities_with_tolerance_sum
   ✓ numbers::test_range_tolerance_compare::a_range_equals_the_same_span_with_tolerance
   ✓ numbers::test_range_tolerance_compare::spans_in_different_units_do_not_compare
   ✓ numbers::test_rational_quantities::test_exact_amounts_compute_on
@@ -2620,6 +2638,7 @@ PASSED:
   ✓ programs::test_samples_run_cleanly::every_sample_runs_without_a_compiler_error
   ✓ programs::test_small_samples::error_samples
   ✓ programs::test_small_samples::text_samples
+  ✓ programs::test_warp_command::debug_build_names_its_commit
   ✓ programs::test_warp_command::warp_command_runs_this_checkouts_binary
   ✓ scope::test_colon_body_assignment::test_for_colon_body_with_assignments
   ✓ scope::test_colon_body_assignment::test_if_colon_body_assignment_stops_at_else
@@ -2630,6 +2649,8 @@ PASSED:
   ✓ scope::test_colon_body_extent::test_colon_body_of_while_stops_at_newline
   ✓ scope::test_colon_body_extent::test_colon_body_of_while_stops_at_semicolon
   ✓ scope::test_constant_alias::constant_is_an_alias_of_const
+  ✓ scope::test_conversion_kind_clash::a_conversion_gives_its_type_s_kind
+  ✓ scope::test_conversion_kind_clash::conversions_that_mix_stay_allowed
   ✓ scope::test_data_scope::test_a_key_can_refer_to_an_earlier_key
   ✓ scope::test_data_scope::test_a_key_shadows_the_subtraction_of_its_parts
   ✓ scope::test_data_scope::test_kebab_keys_are_read_back
@@ -2804,6 +2825,7 @@ PASSED:
   ✓ text::test_runtime_text_as_int::a_text_beyond_i64_parses_unbounded
   ✓ text::test_runtime_text_as_int::a_text_variable_converts_to_int
   ✓ text::test_runtime_text_as_int::a_text_without_a_number_is_a_runtime_error
+  ✓ text::test_split_default::split_without_separator_splits_at_spaces
   ✓ text::test_split_element_kind::split_elements_concatenate
   ✓ text::test_string::test_first_char
   ✓ text::test_string::test_interpolation
@@ -2826,6 +2848,7 @@ PASSED:
   ✓ text::test_string::test_string_set_at
   ✓ text::test_string::test_string_substring
   ✓ text::test_string::test_string_substring_from
+  ✓ text::test_terminal_escapes::escape_and_hex_escapes_are_their_characters
   ✓ text::test_text_as_float::test_text_as_float
   ✓ text::test_text_building::a_text_grown_in_place_leaves_its_earlier_value
   ✓ text::test_text_building::appending_in_a_loop_is_linear
@@ -3570,6 +3593,8 @@ PASSED:
   ✓ web::test_form_bindings::a_bound_checkbox_is_checked_by_its_variable
   ✓ web::test_form_bindings::a_bound_input_shows_its_variable_and_handles_input
   ✓ web::test_form_bindings::boolean_attributes_are_present_or_absent
+  ✓ web::test_form_routes::a_form_route_inside_an_element
+  ✓ web::test_form_routes::a_form_written_as_its_route
   ✓ web::test_guide::every_example_a_chapter_links_exists
   ✓ web::test_guide::every_guide_snippet_prints_what_the_guide_shows
   ✓ web::test_guide::every_guide_snippet_shows_its_value
@@ -3623,6 +3648,7 @@ PASSED:
   ✓ web::test_rendering_itself::a_program_with_markup_exports_its_renderer
   ✓ web::test_rendering_itself::only_a_program_with_markup_renders_itself
   ✓ web::test_rendering_itself::the_renderer_inside_the_module_gives_the_html
+  ✓ web::test_request_fields::a_dollar_name_is_the_request_s_field
   ✓ web::test_route_data::a_route_reading_a_table_ships_without_it
   ✓ web::test_route_data::the_first_visit_gets_finished_html
   ✓ web::test_route_data::the_server_gives_only_what_the_route_shows
@@ -4099,4 +4125,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-14 ignored, 4094 passed, 0 failed, 4094 total tested
+14 ignored, 4120 passed, 0 failed, 4120 total tested

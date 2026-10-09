@@ -25,6 +25,79 @@ pub(super) fn unit_classes(program: &Node) -> HashMap<String, Fields> {
 	}).collect()
 }
 
+/// Each field typed with a tolerance (`length: m ± 1 mm`) by class: its position among the fields, its name, its spread
+type Tolerances = HashMap<String, Vec<(usize, String, Node)>>;
+
+/// `class Part{length: m ± 1 mm}`: the value carries the tolerance (user decision P233): `Part(5 m)` holds `5 m ± 1 mm`
+/// (a run-time quantity, lower_run_time_tolerances runs next), a value given with its own tolerance keeps it, and the
+/// field type is the plain unit
+pub(crate) fn lower_field_tolerances(program: Node) -> Node {
+	let tolerances = field_tolerances(&program);
+	if tolerances.is_empty() {
+		return program;
+	}
+	with_field_tolerances(program, &tolerances)
+}
+
+fn field_tolerances(program: &Node) -> Tolerances {
+	let fields = crate::class_methods::class_fields(program);
+	let mut tolerances = Tolerances::new();
+	program.visit(&mut |node| if let Node::Type { name, body } = node {
+		let class = name.drop_meta().name();
+		body.visit(&mut |member| if let Some((field, _, spread)) = tolerance_parts(member) {
+			let position = fields.get(&class).and_then(|fields| fields.iter().position(|(name, _)| *name == field));
+			if let Some(position) = position {
+				tolerances.entry(class.clone()).or_default().push((position, field, spread.clone()));
+			}
+		});
+	});
+	tolerances
+}
+
+/// `length: m ± 1 mm`: the field name, its unit and its spread
+fn tolerance_parts(member: &Node) -> Option<(String, &Node, &Node)> {
+	let Node::Key(field, Op::Colon, type_name) = member.drop_meta() else { return None };
+	match type_name.drop_meta() {
+		Node::Key(unit, Op::PlusMinus, spread) if crate::units::unit_expression(unit).is_some() => Some((field.drop_meta().name(), unit, spread)),
+		_ => None,
+	}
+}
+
+fn with_field_tolerances(node: Node, tolerances: &Tolerances) -> Node {
+	let toleranced = |value: Node, spread: &Node| match value.drop_meta() {
+		Node::Key(_, Op::PlusMinus, _) => value,
+		_ => Node::Key(Box::new(value), Op::PlusMinus, Box::new(spread.clone())),
+	};
+	let class_tolerances = |class: &Node| tolerances.get(&class.drop_meta().name());
+	match node {
+		Node::Type { name, body } => Node::Type { name, body: Box::new(body.map_children(|member| match tolerance_parts(&member) {
+			Some((field, unit, _)) => Node::Key(Box::new(Node::Symbol(field)), Op::Colon, Box::new(unit.clone())),
+			None => member,
+		})) },
+		Node::List(items, Bracket::Round, separator) if items.first().and_then(class_tolerances).is_some() => {
+			let fields = class_tolerances(&items[0]).unwrap();
+			let items = items.into_iter().enumerate().map(|(index, item)| {
+				let tolerance = fields.iter().find(|(position, _, _)| index == position + 1);
+				let item = with_field_tolerances(item, tolerances);
+				tolerance.map_or(item.clone(), |(_, _, spread)| toleranced(item, spread))
+			});
+			Node::List(items.collect(), Bracket::Round, separator)
+		}
+		Node::Key(class, op @ (Op::Colon | Op::None), body) if class_tolerances(&class).is_some() && matches!(body.drop_meta(), Node::List(_, Bracket::Curly, _)) => {
+			let fields = class_tolerances(&class).unwrap();
+			let body = body.map_children(|entry| match entry.drop_meta() {
+				Node::Key(field, entry_op, value) => match fields.iter().find(|(_, name, _)| *name == field.drop_meta().name()) {
+					Some((_, _, spread)) => Node::Key(field.clone(), *entry_op, Box::new(toleranced(with_field_tolerances(*value.clone(), tolerances), spread))),
+					None => with_field_tolerances(entry, tolerances),
+				},
+				_ => with_field_tolerances(entry, tolerances),
+			});
+			Node::Key(class, op, Box::new(body))
+		}
+		other => other.map_children(|child| with_field_tolerances(child, tolerances)),
+	}
+}
+
 /// The units the program's unit fields are written in: `distance: km` shows km like a written `5 km`
 pub(super) fn written_field_units(program: &Node) -> Vec<crate::units::Factor> {
 	let fields = crate::class_methods::class_fields(program).into_values().flatten();
@@ -72,6 +145,25 @@ pub(crate) fn si_quantity(node: &Node) -> Option<(f64, String)> {
 	Some((quantity.amount.mul(&per_unit).to_f64(), shown(&crate::units::signature(&quantity.factors))))
 }
 
+/// The construction `P{…}` with `body` in place of its fields, its marks kept
+/// A unit field given a run-time quantity `quantity(5 ± 1/100, "m")` (`Rope(5 m ± 1 cm)`, units.rs
+/// lower_run_time_tolerances) holds it as written, `(5 ± 1/100) * m`: its amount in the field's base units (card
+/// quantity-tolerance)
+fn written_quantity(argument: &Node) -> Node {
+	match crate::units::run_time_quantity_parts(argument) {
+		Some((amount, unit)) => Node::Key(Box::new(amount.clone()), Op::Mul, Box::new(crate::warp_parser::parse(unit))),
+		None => argument.clone(),
+	}
+}
+
+fn with_instance_body(node: &Node, body: Node) -> Node {
+	match node {
+		Node::Meta { node, data } => Node::Meta { node: Box::new(with_instance_body(node, body)), data: data.clone() },
+		Node::Key(name, op, _) => Node::Key(name.clone(), *op, Box::new(body)),
+		other => other.clone(),
+	}
+}
+
 /// `Run` of `r: Run`, and `Run` of a list `xs: [Run]` (true)
 fn declared_class(declared: &Node) -> Option<(String, bool)> {
 	match declared.drop_meta() {
@@ -85,6 +177,9 @@ impl Inference {
 	/// The class of an instance static units can see: a variable holding one, a constructor call, an element of a list or
 	/// table of the class
 	pub(super) fn instance_class(&self, node: &Node) -> Option<String> {
+		if let Some(class) = self.named_construction_class(node) {
+			return Some(class);
+		}
 		match node.drop_meta() {
 			Node::Symbol(name) => self.instances.get(name).cloned(),
 			Node::List(items, Bracket::Round, _) => match items.first().map(Node::drop_meta) {
@@ -179,7 +274,7 @@ impl Inference {
 				lowered.push(argument.clone());
 				continue;
 			}
-			let (argument, given) = match self.infer(argument.clone()) {
+			let (argument, given) = match self.infer(written_quantity(argument)) {
 				Ok(inferred) => inferred,
 				Err(stop) => return Some(Err(stop)),
 			};
@@ -189,6 +284,49 @@ impl Inference {
 			lowered.push(argument);
 		}
 		Some(Ok((Node::List(lowered, Bracket::Round, crate::node::Separator::None), vec![])))
+	}
+
+	/// `Run` and the fields of a construction with named fields `Run{distance: 5 km}` of a class with unit fields; the
+	/// construction may still be plain data, as type_constructor leaves a class with unit field types unmarked
+	fn named_construction_parts<'n>(&self, node: &'n Node) -> Option<(String, &'n Node)> {
+		let (name, body) = match crate::type_constructor::instance_parts(node) {
+			Some(parts) => parts,
+			None => match node.drop_meta() {
+				Node::Key(name, Op::Colon | Op::None, body) => (name.as_ref(), body.as_ref()),
+				_ => return None,
+			},
+		};
+		let class = name.drop_meta().name();
+		let is_named_fields = matches!(body.drop_meta(), Node::List(_, Bracket::Curly, _));
+		(is_named_fields && matches!(name.drop_meta(), Node::Symbol(_)) && self.classes.contains_key(&class)).then_some((class, body))
+	}
+
+	fn named_construction_class(&self, node: &Node) -> Option<String> {
+		self.named_construction_parts(node).map(|(class, _)| class)
+	}
+
+	/// `Run{distance: 5 km}`: each named field has its field's signature, as the arguments of `Run(5 km)` (card map-units)
+	pub(super) fn named_construction(&mut self, node: &Node) -> Option<Result<(Node, Signature), Stop>> {
+		let (class, body) = self.named_construction_parts(node)?;
+		let fields = self.classes.get(&class)?.clone();
+		let Node::List(entries, bracket, separator) = body.drop_meta() else { return None };
+		let mut lowered = vec![];
+		for entry in entries {
+			let Node::Key(field, op, value) = entry.drop_meta() else {
+				lowered.push(entry.clone());
+				continue;
+			};
+			let (value, given) = match self.infer(written_quantity(value)) {
+				Ok(inferred) => inferred,
+				Err(stop) => return Some(Err(stop)),
+			};
+			let held = fields.iter().find(|(name, _)| *name == field.drop_meta().name()).map(|(_, held)| held);
+			if let Some(held) = held.filter(|held| **held != given && !super::is_nothing(&value)) {
+				return Some(Err(Stop::Error(format!("DimensionError: {class}.{} holds {}, is given {}", field.drop_meta().name(), shown(held), shown(&given)))));
+			}
+			lowered.push(Node::Key(field.clone(), *op, Box::new(value)));
+		}
+		Some(Ok((with_instance_body(node, Node::List(lowered, bracket.clone(), separator.clone())), vec![])))
 	}
 
 	/// The class declaration with its unit fields declared numbers; a default value (`distance: km = 0 km`) has the unit
