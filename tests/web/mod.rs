@@ -54,7 +54,6 @@ mod test_web_apis;
 mod test_accessibility;
 mod test_i18n;
 mod test_webgpu;
-mod test_gpu_precision_probe; // DIAGNOSTIC card browser-gpu
 mod test_webgpu_ints;
 mod test_tag_lists;
 mod test_safari_imports;

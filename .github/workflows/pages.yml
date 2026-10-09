@@ -121,7 +121,7 @@ jobs:
         done
         ls -l packages
     - name: The test suite in headless Chrome
-      run: cargo browser-test -- test_gpu_precision_probe test_webgpu test_packages test_text_bytes
+      run: cargo browser-test
 
   # every tour example shows what it promises (examples.js) and no example or sample writes an error or warning to the
   # console, in the collected site, else no deploy

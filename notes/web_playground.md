@@ -81,7 +81,12 @@ Markup values show as warp data there (`p{class:"note" "hello"}`), not as HTML l
 ## The test suite in the browser: `cargo browser-test [filter]`
 In CI only (user, 2026-10-09): outside CI (no `CI` variable) the runner starts no Chrome and prints "browser tests run
 in CI only", exit 0; the tour likewise (`--firefox` and `--serve` start no Chrome). Run them on GitHub: dispatch the
-Playground workflow on a branch.
+Playground workflow on a branch. Its job browser-suite runs the whole suite (~27 min: 6 for installing Chrome, ~19 in
+the browser), beside the deploy, so a batch's CI check takes ~27 min instead of ~6 (card browser-suite, 2026-10-09).
+- The job clones each pinned package of packages.warp the way the native fetch does (the browser runs no git).
+- CI's Chrome has SwiftShader's software WebGPU adapter, whose sin and exp are off by up to 5.2e-5 (within WGSL's
+  2^-11): test-worker.js names the adapter as WARP_GPU_ADAPTER, and tests/common gpu_tolerance() loosens the @gpu
+  checks for a software adapter only.
 One configuration (.cargo/config.toml): the alias builds tests/main.rs for wasm32-wasip1 with `--no-default-features`,
 and the wasm32-wasip1 runner web/playground/test_in_browser.py serves the repository root plus the binary, opens
 web/playground/tests.html in headless Chrome (agent-browser, session warp-browser-tests) and prints a libtest summary
