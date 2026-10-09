@@ -52,3 +52,11 @@ reports.
 ### r/rust
 Title: Reading Wasm GC structs back into Rust types: wasm_struct!/is! in a wasm-first language compiler
 Focus: gc_traits.rs, `GcObject`, wasm-encoder usage, playground built as a plain C-ABI cdylib without wasm-bindgen.
+
+## .warp files in Finder (macOS, card g_gHmE, 2026-10-09)
+`warp register` builds ~/Applications/Warp Lang.app (an osacompile applet, src/file_type.rs): it exports the type
+com.pannous.warp.source (.warp, .wasp; conforms to public.source-code and public.plain-text, so editors are offered under
+Open With) and runs an opened file with `warp <file>` in a Terminal window. The Info.plist edit needs an ad hoc
+re-sign (codesign --sign -), otherwise Launch Services keeps the file's dynamic type. Verified on this Mac:
+mdls gives com.pannous.warp.source and NSWorkspace names Warp Lang.app as the default app; the double-click itself (a
+Terminal window) was not run headless. Idea: the Homebrew formula's post_install could run `warp register`.

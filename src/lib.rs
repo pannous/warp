@@ -64,6 +64,8 @@ pub mod site;
 pub mod route_split;
 #[cfg(feature = "native")]
 pub mod dev_server;
+#[cfg(all(feature = "native", target_os = "macos"))]
+pub mod file_type;
 #[cfg(feature = "native")]
 pub mod fetches;
 #[cfg(feature = "native")]
