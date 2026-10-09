@@ -18,10 +18,6 @@ use Capability::*;
 use Effect::*;
 
 const PURE: &str = "Pure";
-/// The switch point of a pending user decision (card effects-value): false keeps the old answer to a program ending in
-/// `effects of f`, the symbols `(State IO)` at compile time without running its top level; true runs the program and
-/// ends it with the texts `["State" "IO"]` of the value form (tests/control/test_variable_signals.rs pins the old form)
-const TRAILING_QUERY_RUNS: bool = false;
 const ENTRY: &str = "main";
 const QUERY_WORDS: [&str; 2] = ["effects", "of"];
 const DECLARATION_KEYWORDS: [&str; 2] = ["import", "use"];
@@ -425,26 +421,23 @@ impl EffectReport {
 				constraint.line, constraint.column, constraint.allowed)))));
 		}
 		let name = effects_query(last_statement(program))?;
-		if !TRAILING_QUERY_RUNS {
-			return Some(self.query_answer(&name, false));
-		}
 		// the query mentions f, which reads as a call of it: the top level without the query
-		EffectReport::of(&statements_before_last(program)).entry_effects().is_pure().then(|| self.query_answer(&name, true))
+		EffectReport::of(&statements_before_last(program)).entry_effects().is_pure().then(|| self.query_answer(&name))
 	}
 
 	/// Every `effects of f` in the program as its constant answer (`IO`, `(IO ask)`), so it is a value anywhere: assigned,
 	/// printed, the program's result
 	pub fn answer_queries(&self, program: Node) -> Node {
 		match effects_query(&program) {
-			Some(name) => self.query_answer(&name, true),
+			Some(name) => quoted(self.query_answer(&name)),
 			None => program.map_children(|child| self.answer_queries(child)),
 		}
 	}
 
-	fn query_answer(&self, name: &str, as_value: bool) -> Node {
+	fn query_answer(&self, name: &str) -> Node {
 		match (self.functions.get(name), self.effects_of(name)) {
-			(Some(function), _) => effects_node(function.reported, &function.events, as_value),
-			(None, Some(effects)) => effects_node(effects, &BTreeSet::new(), as_value),
+			(Some(function), _) => effects_node(function.reported, &function.events),
+			(None, Some(effects)) => effects_node(effects, &BTreeSet::new()),
 			(None, None) => Node::Error(Box::new(Node::Text(format!("effects of {name}: unknown function")))),
 		}
 	}
@@ -576,16 +569,21 @@ fn is_plumbing_declaration(node: &Node) -> bool {
 
 /// The effects and then the events: as a value texts like the other reflection words' answers (`f.params`), `"IO"`,
 /// `["IO" "ask"]`, `"Pure"`; else symbols, `IO`, `(IO ask)`, `Pure`
-fn effects_node(effects: EffectSet, events: &BTreeSet<String>, as_value: bool) -> Node {
-	let (word, bracket): (fn(String) -> Node, _) = match as_value {
-		true => (Node::Text, crate::node::Bracket::Square),
-		false => (Node::Symbol, crate::node::Bracket::Round),
-	};
-	let mut names: Vec<Node> = effects.iter().map(|effect| format!("{effect:?}")).chain(events.iter().cloned()).map(word).collect();
+/// `data (State IO)`: the symbols as a value, not as variables to read
+fn quoted(answer: Node) -> Node {
+	match answer {
+		Node::Error(_) => answer,
+		_ => Node::List(vec![Node::Symbol(crate::lowering::blocks::DATA_WORD.into()), answer], Bracket::None, crate::node::Separator::Space),
+	}
+}
+
+/// P230: symbols, `(State IO)`, `Pure`
+fn effects_node(effects: EffectSet, events: &BTreeSet<String>) -> Node {
+	let mut names: Vec<Node> = effects.iter().map(|effect| format!("{effect:?}")).chain(events.iter().cloned()).map(Node::Symbol).collect();
 	match names.len() {
-		0 => word(PURE.into()),
+		0 => Node::Symbol(PURE.into()),
 		1 => names.remove(0),
-		_ => Node::List(names, bracket, crate::node::Separator::Space),
+		_ => Node::List(names, Bracket::Round, crate::node::Separator::Space),
 	}
 }
 
