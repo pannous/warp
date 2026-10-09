@@ -207,7 +207,7 @@ pub fn infer_type(node: &Node, scope: &Scope) -> Kind {
 			match (raises_error(then_expr), raises_error(else_expr)) {
 				(true, false) => branch_kind(else_expr, scope),
 				(false, true) => branch_kind(then_expr, scope),
-				_ => branches_kind(infer_type(if_then, scope), branch_kind(else_expr, scope)),
+				_ => branches_kind(branch_kind(then_expr, scope), branch_kind(else_expr, scope)),
 			}
 		}
 		Node::Key(if_condition, Op::Then, then_expr) if matches!(if_condition.drop_meta(), Node::Key(_, Op::If, _)) => {
@@ -480,8 +480,9 @@ pub(crate) fn branch_kind(branch: &Node, scope: &Scope) -> Kind {
 /// Either branch a reference type (Text, Symbol, List…) or a character: the value is a Node, else a number
 pub(super) fn branches_kind(then_kind: Kind, else_kind: Kind) -> Kind {
 	let kinds = [then_kind, else_kind];
-	if then_kind == Kind::Codepoint && else_kind == Kind::Codepoint {
-		Kind::Codepoint
+	if then_kind == else_kind && (then_kind.is_ref() || then_kind == Kind::Codepoint) {
+		// two instances or two maps (`if c then T{…} else T{…}`) stay what they are
+		then_kind
 	} else if kinds.contains(&Kind::List) {
 		// a list and a list (or ø, the empty list) is a list; a list and anything else a Node of its run-time kind
 		if kinds.iter().all(|kind| matches!(kind, Kind::List | Kind::Empty)) { Kind::List } else { Kind::Data }

@@ -298,7 +298,7 @@ fn bound_routes(words: Vec<Node>) -> Vec<Node> {
 }
 
 /// The route's block with its path's parameters bound from the request's path, as a page's route binds them from
-/// page_path() (routes.rs route_body); web_server.rs path_fits picks the route
+/// page_path() (routes.rs route_body); web_server.rs route_at picks the route
 fn with_path_parameters(path: &Node, body: Node) -> Node {
 	let pattern = match path.drop_meta() {
 		Node::Text(text) => text.clone(),
@@ -307,10 +307,7 @@ fn with_path_parameters(path: &Node, body: Node) -> Node {
 	if !pattern.contains(PARAMETER_MARK) {
 		return body;
 	}
-	let items = match body.drop_meta() {
-		Node::List(items, Bracket::Curly, _) => items.clone(),
-		_ => vec![body],
-	};
+	let items = crate::event_signals::statements_of(&body);
 	let (page_path, request_path) = (crate::warp_parser::parse(PAGE_PATH_CALL), crate::warp_parser::parse(REQUEST_PATH));
 	let bound = crate::routes::route_body(&pattern, &items).into_iter().map(|item| replaced(item, &page_path, &request_path));
 	Node::List(bound.collect(), Bracket::Curly, Separator::Newline)
@@ -329,13 +326,9 @@ fn global(name: &str) -> Node {
 	crate::warp_parser::parse(&format!("{} {name}", crate::late_binding::GLOBAL))
 }
 
-/// The block with these statements first
+/// The block with these statements first; a one-line block of words, `{ last 2 of users }`, is one statement
 fn prepended(first: Vec<Node>, body: Node) -> Node {
-	let statements = match body.drop_meta() {
-		Node::List(items, Bracket::Curly, _) => items.clone(),
-		_ => vec![body],
-	};
-	Node::List(first.into_iter().chain(statements).collect(), Bracket::Curly, Separator::Newline)
+	Node::List(first.into_iter().chain(crate::event_signals::statements_of(&body)).collect(), Bracket::Curly, Separator::Newline)
 }
 
 /// The item with each value reading server data as the call of a server function giving it; markup and blocks are

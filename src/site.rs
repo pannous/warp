@@ -137,6 +137,8 @@ pub fn served_files(code: &str, title: &str) -> Result<Option<ServedSite>, Strin
 pub struct ServedSite {
 	pub files: Vec<SiteFile>,
 	renderer: Option<Renderer>,
+	/// the patterns of the page's routes in order (page·routes)
+	page_routes: Vec<String>,
 }
 
 /// P221 (user: the first visit gets finished HTML): the prerender's module run for the request's path gives the page's
@@ -151,6 +153,12 @@ struct Renderer {
 }
 
 impl ServedSite {
+	/// Whether no route of the page matches `path`, a path of no file (`route "*"` matches any: the single page answers
+	/// every path, user 2026-10-07)
+	pub fn matches_no_route_at(&self, path: &str) -> bool {
+		file_at(&self.files, path).is_some_and(|(name, _)| name == ROUTED_PAGE_FILE) && !self.page_routes.iter().any(|pattern| crate::routes::path_matches(pattern, path))
+	}
+
 	/// The file a request path names (file_at); a page of a program asking the server is rendered for the path
 	pub fn file_at(&self, path: &str) -> Option<Result<SiteFile, String>> {
 		let (name, bytes) = file_at(&self.files, path)?;
@@ -168,7 +176,8 @@ impl Renderer {
 	fn page_at(&self, path: &str, root: &str) -> Result<String, String> {
 		let names = [crate::page_html::PAGE_HTML, crate::serve::RPC_REQUESTS, crate::serve::RPC_VALUES];
 		let read = crate::host::with_page_path(path, || crate::wasm_reader::read_exports_after_main(&self.bytes, self.imports, &names));
-		let [html, requests, values]: [Node; 3] = read.map_err(|failure| format!("the page of {path} failed: {failure}"))?.try_into().expect("three exports");
+		let failed = |failure| format!("the page of {path} failed: {}", message_of(&crate::wasm_emitter::failed_run(failure)));
+		let [html, requests, values]: [Node; 3] = read.map_err(failed)?.try_into().expect("three exports");
 		let Node::Text(html) = html.drop_meta() else { return Err(format!("{} gave no text: {}", crate::page_html::PAGE_HTML, html.serialize())) };
 		Ok(page(&self.title, html, &replies_script(&items_of(&requests), &items_of(&values)), &self.scripts, &self.worker_scripts, root))
 	}
@@ -214,6 +223,10 @@ fn site_files(code: &str, title: &str, dev: bool) -> Result<Option<ServedSite>, 
 		crate::wasm_reader::read_export_after_main(&rendering.bytes, imports, name).map_err(|failure| format!("the program failed at build time: {}", with_excerpt(code, failure.to_string())))
 	};
 	let rendered = read_after_main(crate::page_html::PAGE_HTML)?;
+	let page_routes: Vec<String> = match exports(&rendering.bytes, crate::routes::PAGE_ROUTES) {
+		true => items_of(&read_after_main(crate::routes::PAGE_ROUTES)?).iter().map(crate::routes::pattern_text).collect(),
+		false => vec![],
+	};
 	// a page calling server functions ships without them, starting from the values they gave here (lowering/serve.rs)
 	let asks_the_server = exports(&rendering.bytes, crate::serve::RPC_VALUES);
 	let rendering_bytes = rendering.bytes.clone();
@@ -254,7 +267,7 @@ fn site_files(code: &str, title: &str, dev: bool) -> Result<Option<ServedSite>, 
 	let shipped = scripts.iter().chain(worker_scripts.iter().filter(|script| !scripts.contains(script))).chain(worker_files);
 	files.extend(shipped.map(|(name, text)| (name.to_string(), compacted(text).into_bytes())));
 	let renderer = asks_the_server.then(|| Renderer { bytes: rendering_bytes, imports, title: title.to_string(), scripts, worker_scripts });
-	Ok(Some(ServedSite { files, renderer }))
+	Ok(Some(ServedSite { files, renderer, page_routes }))
 }
 
 /// The file of a site a request path names: "/" is the page, "/app.wasm" the module, …, any other path the page of a

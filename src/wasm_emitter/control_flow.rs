@@ -97,7 +97,7 @@ impl WasmGcEmitter {
 		// A branch yielding a text, character, list or error (`if x {x} else {"offline"}`): both branches are Node values
 		let branch_value = |branch: &Node| match branch.drop_meta() {
 			Node::List(items, Bracket::Curly, _) if items.len() == 1 => items[0].clone(),
-			other => other.clone(),
+			_ => branch.clone(), // keeps a construction's Instance mark
 		};
 		let then_value = branch_value(then_expr);
 		let else_value = else_expr.map(branch_value);
