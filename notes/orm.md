@@ -184,6 +184,8 @@ bo's row again, so it changes nothing after written-through changes; an instance
    - Unit fields (card unit-fields): `class Run{distance: km}` (static_units/unit_fields.rs) holds the SI amount like
      any quantity; the column is `NUMERIC km` (NUMERIC keeps a whole SI amount an integer, as the program holds it; REAL
      gave 5000.0, which an exact `total = 0 km` refused: "not an int"). database.rs `conversion_factor` decides the
-     migrations above. The playground's store refuses a unit change loudly (card browser-unit-migrations).
+     migrations above. The playground's store follows the same rules (card browser-unit-migrations): the schema
+     entry of a unit field carries its quantity and SI amount per unit (`[distance km ø ø m 1000]`, the 4th entry ø
+     unless renamed; units::static_units::unit_type), the store keeps each unit column's quantity (`quantities`).
      Sample: samples/orm_units.warp.
    - A field named size/count/length reads as the builtin count off a typed list element (card field-named-size).

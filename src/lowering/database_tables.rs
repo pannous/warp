@@ -580,10 +580,13 @@ fn opened(statement: &Node, tables: &HashMap<String, Table>, file: &str, open: &
 	open.push(variable.clone());
 	// the row is [id, column values…] in the order of the columns
 	let arguments = constructor_arguments(table, ROW);
-	// a column is [name type default] and its old name when renamed
+	// a column is [name type default] and its old name when renamed (ø when not); a unit field's adds its quantity and
+	// SI amount per unit, which the browser's store has no unit table for (`[distance km ø ø m 1000]`)
 	let schema = Node::List(column_fields(table).into_iter().map(|(name, field_type, default)| {
 		let old_name = table.renamed.iter().find(|(field, _)| *field == name).map(|(_, old)| Node::Text(old.clone()));
-		let column = [Node::Text(name), Node::Text(field_type), default.unwrap_or(Node::Empty)].into_iter().chain(old_name);
+		let unit = crate::units::static_units::unit_type(class_of(&field_type)).map(|(quantity, per_unit)| [Node::Text(quantity), crate::node::float(per_unit)]);
+		let old_name = if unit.is_some() { Some(old_name.unwrap_or(Node::Empty)) } else { old_name };
+		let column = [Node::Text(name), Node::Text(field_type), default.unwrap_or(Node::Empty)].into_iter().chain(old_name).chain(unit.into_iter().flatten());
 		Node::List(column.collect(), Bracket::Square, Separator::Space)
 	}).collect(), Bracket::Square, Separator::Space);
 	if !matches!(target.drop_meta(), Node::Key(_, Op::Colon, _)) {

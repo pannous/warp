@@ -17,7 +17,6 @@
 use super::{finest_units, signature, unit_named, units_text, Dimension, Factor, Quantity, Unit, UNITS};
 
 mod unit_fields;
-#[cfg(feature = "native")]
 pub(crate) use unit_fields::unit_type;
 use crate::extensions::numbers::Number;
 use crate::extensions::reals::Rational;
