@@ -113,7 +113,9 @@ function allowedOrigin(origin) {
 
 function handOver(origin, message) {
 	const script = `opener && opener.postMessage(${JSON.stringify(message)}, ${JSON.stringify(origin)}); close();`;
-	const page = `<!doctype html><meta charset="utf-8"><title>warp hosting</title><p>${message.error ? "Login failed: " + message.error.replace(/</g, "&lt;") : "Logged in, you can close this window."}</p><script>${script}</script>`;
+	const escaped = text => text.replace(/</g, "&lt;");
+	const login = message.warpHosting?.login ? ` as ${escaped(message.warpHosting.login)}` : "";
+	const page = `<!doctype html><meta charset="utf-8"><title>warp hosting</title><p>${message.error ? "Login failed: " + escaped(message.error) : `Logged in${login}, you can close this window.`}</p><script>${script}</script>`;
 	return new Response(page, { headers: { "content-type": "text/html; charset=utf-8" } });
 }
 
