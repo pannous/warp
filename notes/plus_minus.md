@@ -55,10 +55,17 @@ unchanged (`f(x) := x*x; f(3 ± 0.1)` is 9.00 ± 0.61).
   variable now has the variable's kind (it read as the call y()). The playground reader (web.rs) reads ± values back.
   Tests: tests/numbers/test_plus_minus_math.rs.
 
+## ± with units at run time (card plus-minus-units, 2026-10-09)
+`x = 5 m ± 1 cm; x * 2` gives `10.000 ± 0.020m`. units.rs lower_run_time_tolerances turns a written `v ± s` with a unit
+into `quantity(amount ± spread, "unit")` (spread converted to v's unit, a plain spread counts in it, another dimension
+is a DimensionError), but only when units::answer can't answer the whole program (RUN_TIME_TOLERANCE_ERRORS or
+Unsupported), so span comparisons and final-value tolerances stay compile time. Quantity's `amount:number` admits a ±
+value (type_tests.rs runtime_kind_mask; `float` stays strict). Function parameters get their class from the calls
+(class_methods.rs parameter_classes), so `f(x) := x * 2; f(5 m ± 1 cm)` dispatches to Quantity.times.
+Open: a final Quantity value prints its record (instance-result-text); `f` called with a quantity and a plain number
+fails "not an int". Tests: tests/numbers/test_plus_minus_units.rs, samples/measurements.warp.
+
 ## Open
-- ± with units at run time (`x = 5 m ± 1 cm; x * 2`, `f(5 m ± 1 cm)`) waits on run-time quantities (card units-p64,
-  notes/units_runtime.md: the amount is the run-time value, so it can be an interval there). Today units.rs evaluates
-  `5 m ± 1 cm` at compile time as a whole-number Tolerance and refuses arithmetic on it.
 - `if area certainly > 10 then …` parses as `(if area) (then (certainly > 10) …)`: the condition stops at the second
   word; `if (area certainly > 10) then` and `ok = area certainly > 10` work. `x + 1 certainly < 8` reads
   `x + (1 certainly < 8)`; write `(x + 1) certainly < 8`.

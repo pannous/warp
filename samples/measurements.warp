@@ -15,4 +15,9 @@ if maybe_huge then print "possibly more than 14 m²"
 pendulum = 2.0 ± 0.01
 period = 2 * π * √(pendulum / 9.81)
 print "period: " + str(period) + " s"
+// with units, ± converts its spread into the value's unit and carries both through Quantity arithmetic
+rope = 5 m ± 1 cm
+print "two ropes: " + str(rope * 2)
+room = (5 m ± 1 cm) * (2 m ± 1 cm)
+print "room: " + str(room)
 area.value
