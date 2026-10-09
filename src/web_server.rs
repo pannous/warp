@@ -2,7 +2,7 @@
 //! lowering/web_server.rs makes each route a function `route·N(request:any)` and the statement the host call
 //! `serve_routes(port, [[method, path, function] …])`; this serves HTTP on the port and calls the route's function with
 //! the request {method, path, query, body} (a JSON body parsed). The value answers: a text as text/plain, any other
-//! value as JSON (as std json's to_json writes it); no route is 404, a failing route 500 with its message.
+//! value as JSON (as std json's to_json writes it); no route is 404, a failing route 500 with its message, 404 when a lookup found nothing.
 
 use crate::node::Node;
 use crate::site::ServedSite;
@@ -16,6 +16,8 @@ const NOT_FOUND: u16 = 404;
 const FAILED: u16 = 500;
 /// Routes under these paths answer a failure as JSON `{"error": …}`, the others as text
 const JSON_PATHS: [&str; 2] = ["/api/", "/rpc/"];
+/// The runtime errors of a lookup that found nothing (`users#id` of a missing row): the request names no such thing, 404
+const NOT_FOUND_ERRORS: [&str; 2] = ["index_out_of_range", "key_not_found"];
 const SITE_METHOD: &str = "GET";
 
 thread_local! {
@@ -57,7 +59,7 @@ impl Route {
 		if !JSON_PATHS.iter().any(|prefix| self.path.starts_with(prefix)) {
 			return Answer::failed(message);
 		}
-		Answer { status: FAILED, content_type: JSON_TYPE, body: serde_json::json!({ "error": message }).to_string().into_bytes() }
+		Answer { status: failure_status(message), content_type: JSON_TYPE, body: serde_json::json!({ "error": message }).to_string().into_bytes() }
 	}
 }
 
@@ -79,7 +81,15 @@ impl Answer {
 	}
 
 	pub fn failed(message: &str) -> Answer {
-		Answer { status: FAILED, content_type: TEXT_TYPE, body: message.as_bytes().to_vec() }
+		Answer { status: failure_status(message), content_type: TEXT_TYPE, body: message.as_bytes().to_vec() }
+	}
+}
+
+/// 404 for a lookup that found nothing, else 500
+fn failure_status(message: &str) -> u16 {
+	match NOT_FOUND_ERRORS.iter().any(|error| message.contains(&error.replace('_', " "))) {
+		true => NOT_FOUND,
+		false => FAILED,
 	}
 }
 

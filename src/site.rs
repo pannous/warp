@@ -168,7 +168,8 @@ impl Renderer {
 	fn page_at(&self, path: &str, root: &str) -> Result<String, String> {
 		let names = [crate::page_html::PAGE_HTML, crate::serve::RPC_REQUESTS, crate::serve::RPC_VALUES];
 		let read = crate::host::with_page_path(path, || crate::wasm_reader::read_exports_after_main(&self.bytes, self.imports, &names));
-		let [html, requests, values]: [Node; 3] = read.map_err(|failure| format!("the page of {path} failed: {failure}"))?.try_into().expect("three exports");
+		let failed = |failure| format!("the page of {path} failed: {}", message_of(&crate::wasm_emitter::failed_run(failure)));
+		let [html, requests, values]: [Node; 3] = read.map_err(failed)?.try_into().expect("three exports");
 		let Node::Text(html) = html.drop_meta() else { return Err(format!("{} gave no text: {}", crate::page_html::PAGE_HTML, html.serialize())) };
 		Ok(page(&self.title, html, &replies_script(&items_of(&requests), &items_of(&values)), &self.scripts, &self.worker_scripts, root))
 	}
