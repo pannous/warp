@@ -16,8 +16,8 @@ loudest_sample = 32767
 fade_seconds = 0.005
 // a note letter's semitone above C is its place here, from 0
 global scale_letters = "C.D.EF.G.A.B"
-// the twelfth root of 2
-global semitone_ratio = 1.059463094359
+// the twelfth root of 2, a float: an exact decimal would make note() an ever longer fraction
+global semitone_ratio = float(1.059463094359)
 
 // the frequency of a note name: note("A4") is 440, note("C#4") a semitone above C4, note("Eb5") one below E5
 note(name) := {

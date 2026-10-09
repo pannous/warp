@@ -264,11 +264,14 @@ function startsFrame(run, output) {
 
 // ---- sound ----------------------------------------------------------------------------------------------------
 
-let audio; // the page's AudioContext, made at the first sound: a browser starts one only after a click or key press
+let audio; // the page's AudioContext, made at the first sound after a click or key press
 let soundsEnd = 0; // when the queued sounds end, in the AudioContext's time: one plays after the other, as natively
 let sounding = []; // the playing and queued sounds, silenced when the next run starts (typing reruns the code)
 
+// before the page's first click or key press (the run on load, the CI tour) a sound stays silent: an AudioContext made
+// then cannot start and the browser warns
 function playSound({ samples, rate }) {
+	if (navigator.userActivation && !navigator.userActivation.hasBeenActive) return;
 	audio ??= new AudioContext();
 	audio.resume();
 	const buffer = audio.createBuffer(1, Math.max(samples.length, 1), rate);

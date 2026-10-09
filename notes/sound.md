@@ -26,3 +26,29 @@ play note("F#4") for 250ms      // note(name) needs `use sound` when called alon
 Limits found on the way: a phrase with the word `each` loses its unit argument (card phrase-each), so the per-note
 duration of melody is a plain call; assignments to the module's globals (`note_seconds = 0.25`) from the program do not
 reach the module.
+
+## What professionals expect (user question 2026-10-09; roadmap, nothing of it built yet)
+
+The words above are layer 1, the toy layer. Each layer below keeps the ones above working and lowers to them.
+
+1. Non-blocking, clocked playback. Today `play` renders the whole sound and blocks (natively afplay runs to its end).
+   Expected: a shared audio clock, sample-accurate scheduling (`at 2 beats play C4`), `play` returns a handle (stop,
+   ramp its gain), voices overlap. Tempo as a unit: `bpm`, `beat`, `bar` (`play C4 for 1/4 beat`).
+2. Music values, not frequencies. `Note` (pitch class, octave, MIDI number, cents), `Interval`, `Chord(C4, major7)`,
+   `Scale(D, dorian)`, transposition, tuning (A4 = 442Hz, just intonation), velocity. Note names parsed, not a table.
+3. Synthesis. Oscillators (sine, saw, square, triangle, noise, wavetable, band-limited, detune, unison), ADSR
+   envelopes, filters (lowpass/highpass/bandpass with resonance), LFOs and parameter automation (ramps), gain in dB,
+   stereo pan, polyphony with voice stealing.
+4. A signal graph. `osc(220Hz, saw) |> lowpass(1.2kHz, q: 4) |> delay(3/8 beat) |> reverb(0.3) |> gain(-6dB) |> out`:
+   nodes and buses as values, effects (delay, reverb, compressor, distortion, EQ), a mixer.
+5. Samples and files. Load WAV/MP3/OGG/FLAC, play at a pitch or rate, slice, loop points; render offline to a file
+   (`render 8 bars to "song.wav"`), which is also how tests check audio without speakers.
+6. Patterns and sequencing. Sonic Pi `live_loop`, Tidal mini-notation (`"c4 e4 [g4 b4]*2"`), Euclidean rhythms,
+   swing, randomness with seeds; live coding: redefine a loop while it plays.
+7. MIDI and devices. MIDI in/out (CoreMIDI, Web MIDI), choosing the output device, channels, buffer size and latency.
+8. Real-time DSP in warp itself. A user-written `process(block)` compiled to wasm runs in an AudioWorklet in the
+   browser and in a CoreAudio render callback natively: the same code both ways, which is where wasm-first warp beats
+   other languages. Needs f32 arrays without boxing (today samples cross as a list of Ints), no allocation in the
+   callback, 44.1/48 kHz stereo.
+
+Order of value: 1 + 5 (handles, clock, offline render) first, they change the architecture; then 2, 3, 4; 8 last.
