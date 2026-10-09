@@ -135,6 +135,15 @@ for x in 0..32 {
   sleep(30)
 }
 "done"` },
+	frames: { value: '"done"', canvases: 1, code: `// without a sleep too: each show() replaces the picture of the same size
+use draw
+canvas(32, 16)
+for x in 0..32 {
+  clear(paper)
+  circle(x, 8, 4, purple)
+  show()
+}
+"done"` },
 	mouse: { value: '"done"', canvases: 1, code: `// move the mouse over the canvas: the dot follows
 use draw
 canvas(48, 24)
