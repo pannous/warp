@@ -65,7 +65,8 @@ impl WasmGcEmitter {
 				}
 				_ => self.emit_numeric_value(func, value),
 			},
-			_ if crate::analyzer::builtin_type_kind(&target.name()) == Some(Kind::Int) => {
+			// `"5" as number` the analyzer reads as an Int (type_word_kind)
+			_ if crate::analyzer::type_word_kind(&target.name().to_lowercase()) == Some(Kind::Int) => {
 				self.emit_cast(func, value, target);
 				self.emit_call(func, "get_int_value");
 			}
