@@ -46,7 +46,9 @@ Programs themselves ran 0.1–0.2 s in total: compiling, not running, is what te
    warp-runtime`, issue #10: building an executable just works; a debug warp always takes this release stub, its own
    neighbour is a debug stub, card g_gFs8); only without that source nothing is
    written (P104: never a ~120 MB copy of warp; a plain run notes it on stderr, build exits 1).
-   Tests build the stub once per run (tests/common runtime_stub). `warp run <file>` runs without leaving an
+   Tests build the stub once per run (tests/common runtime_stub) and copy this checkout's build from deps, found
+   by its dep-info (the debug stub names CARGO_MANIFEST_DIR, BUILT_FROM): the shared target/debug/warp-runtime is
+   any worktree's latest build (card stub-race: 12 empty outputs in a gate). `warp run <file>` runs without leaving an
    executable (P105). Release stub (`cargo build --release -p warp-runtime`): **805 KB**; ackermann.exe **972 KB**
    (167 KB machine code), starts and finishes in well under 10 ms (probe build: 0.33 ms in total).
    - The program prints its value: build compiles `print(<last statement>)` (pipeline::compile_printing_result;

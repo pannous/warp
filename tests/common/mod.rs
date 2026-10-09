@@ -151,7 +151,9 @@ pub fn printed(code: &str) -> String {
 }
 
 /// The warp-runtime stub executables are built from (P104: warp never copies itself into one): built once per test run
-/// and kept as this checkout's own copy, as warp_command keeps its warp
+/// and kept as this checkout's own copy, as warp_command keeps its warp. Never the shared target/debug/warp-runtime:
+/// another checkout's build replaces it at any moment (card stub-race); this checkout's build in deps is found by
+/// its dep-info, which names the checkout (BUILT_FROM in crates/warp-runtime/src/main.rs)
 #[cfg(feature = "native")]
 pub fn runtime_stub() -> &'static std::path::Path {
 	static STUB: std::sync::OnceLock<std::path::PathBuf> = std::sync::OnceLock::new();
@@ -161,7 +163,8 @@ pub fn runtime_stub() -> &'static std::path::Path {
 		assert!(built.success(), "cargo build -p warp-runtime failed");
 		let shared = std::path::Path::new(env!("CARGO_BIN_EXE_warp")).with_file_name("warp-runtime");
 		let runtime_manifest = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("crates").join("warp-runtime");
-		let build = checkout_build(&shared, "warp_runtime-", &runtime_manifest.to_string_lossy(), None).unwrap_or(shared);
+		let build = checkout_build(&shared, "warp_runtime-", &runtime_manifest.to_string_lossy(), Some(env!("CARGO_PKG_VERSION")))
+			.unwrap_or_else(|| panic!("target/debug/deps holds no warp-runtime {} built from {}", env!("CARGO_PKG_VERSION"), runtime_manifest.display()));
 		own_copy(&build, "warp-runtime").expect("copy the warp-runtime stub")
 	})
 }
