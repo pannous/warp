@@ -2798,6 +2798,7 @@ PASSED:
   ✓ scope::test_colon_body_assignment::test_while_colon_body_with_compound_assignment
   ✓ scope::test_colon_body_extent::test_colon_body_of_while_stops_at_newline
   ✓ scope::test_colon_body_extent::test_colon_body_of_while_stops_at_semicolon
+  ✓ scope::test_compiler_temporaries::compiler_temporaries_ask_no_scope_question
   ✓ scope::test_constant_alias::constant_is_an_alias_of_const
   ✓ scope::test_conversion_kind_clash::a_conversion_gives_its_type_s_kind
   ✓ scope::test_conversion_kind_clash::conversions_that_mix_stay_allowed
@@ -4334,4 +4335,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-10 ignored, 4329 passed, 0 failed, 4329 total tested
+10 ignored, 4330 passed, 0 failed, 4330 total tested
