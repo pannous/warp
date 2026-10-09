@@ -130,8 +130,8 @@ fn collect<'a>(node: &'a Node, inside_label: bool, found: &mut Vec<Element<'a>>)
 	}
 	match node.drop_meta() {
 		Node::List(items, _, _) => items.iter().for_each(|item| collect(item, inside_label, found)),
-		// the head of `add(a: i32) := …` holds parameters, not markup
-		Node::Key(_, Op::Define, body) => collect(body, inside_label, found),
+		// the head of `add(a: i32) := …` holds parameters, the target of `a:V = …` a typed variable: not markup
+		Node::Key(_, Op::Define | Op::Assign, body) => collect(body, inside_label, found),
 		// `c ? then : else`: the colon parts the branches, it makes no element
 		Node::Key(condition, Op::Question, branches) if let Node::Key(then, Op::Colon, otherwise) = branches.drop_meta() => {
 			[condition, then, otherwise].into_iter().for_each(|part| collect(part, inside_label, found));
