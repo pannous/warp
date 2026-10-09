@@ -534,7 +534,8 @@ impl Lowering {
 			Node::List(items, bracket, separator) => {
 				let items = named_function_arguments(items, &bracket);
 				let items = flatten_prefix_application(items, &bracket, &separator);
-				let items: Vec<Node> = if separator == Separator::Space {
+				// a one-item group `(x != ø)` is no operand list: its explicit ø stays the operand
+				let items: Vec<Node> = if separator == Separator::Space && items.len() > 1 {
 					items
 						.into_iter()
 						.flat_map(|item| match dangling_operator(&item) {
