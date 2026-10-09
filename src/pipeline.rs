@@ -309,8 +309,8 @@ const SOURCE_PASSES: [fn(Node) -> Node; 95] = [
 	// the classes of used modules (`use shapes`, `use collections`) before class_methods lowers them with the program's
 	// `class Foo;` takes in the definitions after it before any pass reads class bodies (wiki/type.md)
 	crate::lowering::file_declarations::lower,
-	// `60 mph` is `60 mi/h` before any units pass reads it
-	crate::units::lower_unit_aliases,
+	// `60 mph` is `60 mi/h`, `q as km/h` converts to km/h, before any units pass reads them
+	crate::units::lower_unit_words,
 	// `5 m ± 1 cm; x * 2`: a run-time quantity with an interval amount (units.rs), before the units module is loaded for it
 	crate::units::lower_run_time_tolerances,
 	crate::modules::insert_module_classes,

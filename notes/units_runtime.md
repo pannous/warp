@@ -136,4 +136,5 @@ yd mi, mg g kg lb, ms s min h, mph, with powers (`m²`, `s^2`), products (`kg·m
   `inch` (`inches`): `in` is the word of `x in xs` and `100 cm in m`.
 - UNIT_ALIASES: `mph` is `mi/h`, rewritten by lower_unit_aliases before any units pass (the parser binds it to the
   amount like a unit: names_unit); a program defining mph keeps its own.
-- Open: `60 mi/h as km/h` parses as `(60 mi/h as km)/h` (a DimensionError); `in km/h` works.
+- `60 mi/h as km/h` parses `(60 mi/h as km)/h`; lower_unit_words regroups the whole unit after `as` (bottom-up, so
+  `as g*cm/s²` too) when it is a unit expression and the program defines no unit name (card compound-unit).
