@@ -2057,6 +2057,7 @@ PASSED:
   ✓ numbers::test_plus_minus_math::a_math_word_maps_the_endpoints
   ✓ numbers::test_plus_minus_math::a_plain_number_still_takes_the_math_word
   ✓ numbers::test_plus_minus_math::an_extremum_inside_the_interval_is_its_bound
+  ✓ numbers::test_plus_minus_parameter::a_number_parameter_takes_a_plus_minus_value
   ✓ numbers::test_plus_minus_print::a_known_interval_says_how_it_compares
   ✓ numbers::test_plus_minus_print::an_interval_known_only_at_run_time_compares_certainly_with_a_warning
   ✓ numbers::test_plus_minus_print::an_interval_negated
@@ -2076,9 +2077,11 @@ PASSED:
   ✓ numbers::test_quantity_conversion::a_run_time_quantity_converts_with_as
   ✓ numbers::test_quantity_conversion::a_run_time_quantity_joins_a_text
   ✓ numbers::test_quantity_tolerance::a_field_type_with_tolerance_gives_its_values_the_tolerance
+  ✓ numbers::test_quantity_tolerance::a_final_unit_field_with_tolerance_shows_its_unit
   ✓ numbers::test_quantity_tolerance::a_gaussian_quantity_shows_sigma_apart_from_its_unit
   ✓ numbers::test_quantity_tolerance::a_quantity_with_tolerance_compares_certainly_or_possibly
   ✓ numbers::test_quantity_tolerance::a_quantity_with_tolerance_has_its_bounds
+  ✓ numbers::test_quantity_tolerance::a_sum_of_quantities_is_a_quantity
   ✓ numbers::test_quantity_tolerance::a_unit_field_takes_a_quantity_with_tolerance
   ✓ numbers::test_quantity_tolerance::quantities_with_tolerance_sum
   ✓ numbers::test_range_tolerance_compare::a_range_equals_the_same_span_with_tolerance
@@ -2845,6 +2848,9 @@ PASSED:
   ✓ text::test_runtime_text_as_int::a_text_without_a_number_is_a_runtime_error
   ✓ text::test_split_default::split_without_separator_splits_at_spaces
   ✓ text::test_split_element_kind::split_elements_concatenate
+  ✓ text::test_str_computed::str_of_a_field_read_is_its_value
+  ✓ text::test_str_computed::str_of_data_reads_as_written
+  ✓ text::test_str_computed::str_of_literal_arithmetic_is_its_value
   ✓ text::test_string::test_first_char
   ✓ text::test_string::test_interpolation
   ✓ text::test_string::test_map
@@ -4148,4 +4154,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-10 ignored, 4143 passed, 0 failed, 4143 total tested
+10 ignored, 4149 passed, 0 failed, 4149 total tested
