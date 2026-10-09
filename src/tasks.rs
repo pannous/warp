@@ -748,7 +748,7 @@ fn task_name(function: &str) -> String {
 	crate::go_blocks::written_name(function.strip_suffix(crate::declarations::NODE_WRAPPER_SUFFIX).unwrap_or(function))
 }
 
-fn failure_message(failure: anyhow::Error) -> String {
+pub(crate) fn failure_message(failure: anyhow::Error) -> String {
 	match crate::wasm_emitter::failed_run(failure) {
 		crate::node::Node::Error(message) => message.serialize().trim_matches('"').to_string(),
 		other => other.serialize(),

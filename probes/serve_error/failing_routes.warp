@@ -1,0 +1,5 @@
+serve 18494 {
+  get "/fail" { raise "boom" }
+  get "/api/fail" { raise "boom" }
+  get "/ok" { "fine" }
+}
