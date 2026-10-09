@@ -68,6 +68,9 @@ const LONG_NAMES: [(&str, &str); 19] = [
 ];
 /// `100 cm in m`: the word of a conversion written with spaces (`as` is an operator)
 const IN_WORD: &str = "in";
+/// `for g in 0 to 2 {…}`, `for each g in …`: a loop variable named like a unit is the variable (card loop-variable)
+const FOR_WORD: &str = "for";
+const EACH_WORD: &str = "each";
 /// The local time of day, unless the program names something so (card time-day-value)
 const TIME_WORD: &str = "time";
 
@@ -659,6 +662,16 @@ fn defined_unit_names(node: &Node) -> std::collections::HashSet<String> {
 	names
 }
 
+/// The variable a loop binds, `g` of `for g in 0 to 2 {…}` and of `for each g in …`
+fn loop_variable(words: &[Node]) -> Option<&Node> {
+	let word = |index: usize| words.get(index).map(|word| word.drop_meta().name());
+	match (word(0)?.as_str(), word(1)?.as_str()) {
+		(FOR_WORD, EACH_WORD) => words.get(2),
+		(FOR_WORD, _) => words.get(1),
+		_ => None,
+	}
+}
+
 fn collect_defined_unit_names(node: &Node, names: &mut std::collections::HashSet<String>) {
 	let mut add_unit = |node: &Node| if let Node::Symbol(name) = node.drop_meta() {
 		if unit_named(name).is_some() || UNIT_ALIASES.iter().any(|(alias, _)| alias == name) {
@@ -676,6 +689,7 @@ fn collect_defined_unit_names(node: &Node, names: &mut std::collections::HashSet
 		Node::Key(head, Op::Assign | Op::Define, _) if matches!(head.drop_meta(), Node::List(..)) => add_parameters(head),
 		Node::Key(target, Op::Assign | Op::Define | Op::Colon, _) => add_parameters(target),
 		Node::Key(parameters, Op::Arrow | Op::FatArrow, _) => add_parameters(parameters),
+		Node::List(words, _, _) => if let Some(variable) = loop_variable(words) { add_unit(variable) },
 		_ => {}
 	}
 	children(node).into_iter().for_each(|child| collect_defined_unit_names(child, names));
