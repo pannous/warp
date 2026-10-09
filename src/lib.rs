@@ -43,6 +43,8 @@ pub mod shared;
 pub mod paint;
 #[cfg(feature = "native")]
 pub mod paint_window;
+#[cfg(feature = "native")]
+pub mod sound;
 pub mod wasm_optimizer;
 pub mod warp_parser;
 pub mod wisp_parser;
