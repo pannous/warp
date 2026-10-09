@@ -442,11 +442,20 @@ impl WarpParser {
 			};
 		}
 		// `for i in 1..3: print i, i*2` prints both
-		self.print_call_from(one_expression(&words[1..]), |parser| one_expression(&parser.words_of_expression()))
+		self.print_call_from(one_expression(&words[1..]), Self::expression_of_words)
+	}
+
+	/// The words up to the end of the line, a comma or an `else` as one expression: `ord c` of `print ord c, 2`
+	pub(super) fn expression_of_words(&mut self) -> Node {
+		self.expression_binding(0)
+	}
+
+	fn expression_binding(&mut self, min_bp: u8) -> Node {
+		one_expression(&self.words_binding(min_bp))
 	}
 
 	/// The call print(first, …): the arguments after `first` follow commas, each read by `argument`
-	pub(super) fn print_call_from(&mut self, first: Node, argument: fn(&mut Self) -> Node) -> Node {
+	pub(super) fn print_call_from(&mut self, first: Node, argument: impl Fn(&mut Self) -> Node) -> Node {
 		let mut arguments = vec![first];
 		while self.current_char() == ',' {
 			self.advance();
@@ -456,11 +465,16 @@ impl WarpParser {
 		print_call(arguments)
 	}
 
-	/// The words up to the end of the line or a comma, `ord c` of `print ord c`
-	fn words_of_expression(&mut self) -> Vec<Node> {
-		let mut words = vec![self.with_equals_comparing(false, |parser| parser.parse_expr(0))];
-		while self.braceless_argument_follows() {
-			words.push(self.with_equals_comparing(false, |parser| parser.parse_expr(0)));
+	/// The words up to the end of the line, a comma or an `else`, `ord c` of `print ord c`
+	pub(super) fn words_of_expression(&mut self) -> Vec<Node> {
+		self.words_binding(0)
+	}
+
+	/// The words of an expression, each binding at least as tight as `min_bp`: `print 1` of `then print 1 else …`
+	fn words_binding(&mut self, min_bp: u8) -> Vec<Node> {
+		let mut words = vec![self.with_equals_comparing(false, |parser| parser.parse_expr(min_bp))];
+		while self.braceless_argument_follows() && !self.matches_keyword("else") && self.at_else_if_word().is_none() {
+			words.push(self.with_equals_comparing(false, |parser| parser.parse_expr(min_bp)));
 		}
 		words
 	}
@@ -479,8 +493,8 @@ impl WarpParser {
 	pub(super) fn parse_branch(&mut self, min_bp: u8) -> Node {
 		match self.take_braceless_print() {
 			true => {
-				let first = self.parse_expr(min_bp);
-				self.print_call_from(first, |parser| parser.parse_expr(0)) // `else print x, y`
+				let first = self.expression_binding(min_bp);
+				self.print_call_from(first, |parser| parser.expression_binding(min_bp)) // `else print x, y`, `else print ord x`
 			}
 			false => self.parse_expr(min_bp),
 		}
