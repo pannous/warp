@@ -739,7 +739,12 @@ fn with_lazy_reads(node: Node, tables: &HashMap<String, Table>, own: Option<&str
 			let variable = table_of(&parts[3]).unwrap_or_default();
 			paged_loop(&parts[1].drop_meta().name(), &variable, &tables[&variable].class, rewrite(parts[4].clone()))
 		}
-		Node::Key(left, Op::Hash, position) if table_of(&left).is_some() => called(lazy_name(&table_of(&left).unwrap_or_default(), "at"), Some(rewrite(*position))),
+		// the row keeps its class, so `cups#1.size` reads the field, not the builtin word (card orm-size-field)
+		Node::Key(left, Op::Hash, position) if table_of(&left).is_some() => {
+			let variable = table_of(&left).unwrap_or_default();
+			let row = called(lazy_name(&variable, "at"), Some(rewrite(*position)));
+			Node::meta(row, Node::data(crate::lowering::traits::TypedAs(tables[&variable].class.clone())))
+		}
 		Node::Key(left, Op::Dot, right) => match (table_of(&left), right.drop_meta()) {
 			(Some(variable), Node::Symbol(word)) if COUNT_WORDS.contains(&word.as_str()) => called(lazy_name(&variable, "count"), None),
 			(Some(variable), Node::List(parts, _, _)) if parts.len() == 2 && parts[0].drop_meta().name() == ADD_WORD => {
@@ -760,10 +765,18 @@ fn paged_loop(element: &str, variable: &str, class: &str, body: Node) -> Node {
 		.into_iter().chain(lazy_names(variable));
 	// the body's statements follow the element's in one block: a nested block of expressions would read as a list
 	let element_read = generated(&format!("{element}: {class} = {STREAMED}({LOOP_POSITION})"), names());
-	let statements = Node::List([vec![element_read], body.children()].concat(), Bracket::Curly, Separator::Semicolon);
+	let statements = Node::List([vec![element_read], body_statements(body)].concat(), Bracket::Curly, Separator::Semicolon);
 	let code = format!("{LOOP_END} = {COUNTED}()\nfor {LOOP_POSITION} in 1 to {LOOP_END} {VALUE_PLACEHOLDER}");
 	let lowered = generated(&code, names().chain([(VALUE_PLACEHOLDER, statements)]));
 	Node::List(lowered.children(), Bracket::None, Separator::Semicolon)
+}
+
+/// A block's statements: `{print p.name}` is one statement, its words a call, not the statements `print` and `p.name`
+fn body_statements(body: Node) -> Vec<Node> {
+	match body.drop_meta() {
+		Node::List(items, Bracket::Curly, Separator::Space) if items.len() > 1 => vec![Node::List(items.clone(), Bracket::None, Separator::Space)],
+		_ => body.children(),
+	}
 }
 
 /// The table of a generated element read, `people·at(i)` or `people·streamed(i)`: static units knows its class
