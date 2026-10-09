@@ -110,7 +110,9 @@ impl WasmGcEmitter {
 		if self.ctx.user_functions.contains_key(fn_name) {
 			self.emit_user_function_call(func, fn_name, &items[1..]);
 		} else if self.ctx.ffi_imports.contains_key(fn_name) {
-			self.emit_ffi_call(func, fn_name, &items[1..], None);
+			if !matches!(items, [_, argument] if self.emit_interval_word(func, fn_name, argument)) {
+				self.emit_ffi_call(func, fn_name, &items[1..], None);
+			}
 		} else if items.len() >= 2 && super::text_builtins::text_builtin_kind(fn_name, items.len() - 1).is_some() {
 			self.emit_text_builtin(func, fn_name, &items[1..]);
 		} else {
@@ -174,6 +176,10 @@ impl WasmGcEmitter {
 		}
 		let Node::Symbol(word) = items[0].drop_meta() else { return false };
 		match word.as_str() {
+			PRINT if items.as_ptr() as usize == self.result_print => {
+				self.emit_result_print(func, &printed_value(items, bracket));
+				return true;
+			}
 			PRINT => {
 				self.emit_print(func, &printed_value(items, bracket));
 				return true;

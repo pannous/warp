@@ -1,0 +1,9 @@
+// card gc-heap: two GC float lists of 10^7 items (no `linear`): 2 × 80 MB of f64 cells
+n = 10000000
+xs = float[n]
+ys = float[n]
+for i in 1 to n { xs#i = i / n; ys#i = 2.0 }
+print dot(xs, ys)
+print sum(xs .* ys)
+zs = xs .* ys
+print zs#n

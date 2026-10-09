@@ -114,12 +114,16 @@ thread_local! {
 	/// whether it is for `warp dev`, whose page keeps the program's state across reloads
 	static FOR_DEV: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
 	static RENDERS_ITSELF: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+	/// whether the program compiled now ends in the print of its value that compile_printing_result added
+	static PRINTS_RESULT: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
 	/// whether the page is compiled to render its first HTML where the server's code is (site.rs, headless.rs)
 	static PRERENDERING: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
 	/// the values the page's calls of server functions gave its prerender, the shipped page's first values
 	static SERVER_VALUES: std::cell::RefCell<Vec<Node>> = const { std::cell::RefCell::new(vec![]) };
 	/// the port `warp serve` serves a program at that has no `serve PORT {…}` of its own (lowering/serve.rs)
 	static SERVING_PORT: std::cell::Cell<Option<u16>> = const { std::cell::Cell::new(None) };
+	/// whether it is a module for any host (`warp compile --wasm`): a browser's host reads its values too
+	static FOR_ANY_HOST: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
 	/// whether it runs under `warp test`: its tests run and give its value (lowering/test_blocks.rs)
 	static FOR_TESTS: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
 }
@@ -164,6 +168,16 @@ pub fn for_a_page<T>(run: impl FnOnce() -> T) -> T {
 /// Whether the program compiled now is for a page: it exports the reflection getters the page's host reads values with
 pub fn is_for_a_page() -> bool {
 	FOR_A_PAGE.with(|page| page.get())
+}
+
+/// `run` compiling a module for any host (`warp compile --wasm`): it exports the reflection getters a host without GC
+/// field access (the browser) reads values with, so a browser program importing it copies values in and out
+pub fn for_any_host<T>(run: impl FnOnce() -> T) -> T {
+	with_flag(&FOR_ANY_HOST, run)
+}
+
+pub fn is_for_any_host() -> bool {
+	FOR_ANY_HOST.with(|any| any.get())
 }
 
 /// `run` compiling a page that calls its server functions directly, as the server does (lowering/serve.rs): for its
@@ -431,8 +445,18 @@ pub fn compile(code: &str) -> Result<CompiledModule, Node> {
 /// compile for a standalone executable (`warp build`): the program prints its value at the end, as `warp <file>`
 /// shows it, since nobody reads the result of an executable
 pub fn compile_printing_result(code: &str) -> Result<CompiledModule, Node> {
+	PRINTS_RESULT.with(|prints| prints.set(false));
 	// the routes first: a program ending with a route prints the page its path shows, not the route statement
-	compile_program(code, |program| printing_result(crate::routes::lower(program)))
+	let compiled = compile_program(code, |program| printing_result(crate::routes::lower(program)));
+	PRINTS_RESULT.with(|prints| prints.set(false));
+	compiled
+}
+
+/// Whether the program compiled now ends in the print of its value that compile_printing_result added: that print
+/// shows nothing for ø (a loop or a call that gives nothing), as `warp <file>` shows nothing; a print of the program's
+/// own prints ø
+pub fn prints_result() -> bool {
+	PRINTS_RESULT.with(|prints| prints.get())
 }
 
 fn compile_program(code: &str, rewrite: fn(Node) -> Node) -> Result<CompiledModule, Node> {
@@ -460,7 +484,10 @@ fn printing_result(program: Node) -> Node {
 		}
 		Node::Empty => Node::Empty,
 		statement if crate::modules::is_declaration(&statement) || crate::warp_parser::starts_print(&statement) => statement,
-		value => crate::warp_parser::print_call([value]),
+		value => {
+			PRINTS_RESULT.with(|prints| prints.set(true));
+			crate::warp_parser::print_call([value])
+		}
 	}
 }
 

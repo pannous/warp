@@ -43,6 +43,35 @@ fn a_field_removed_from_the_class_keeps_its_column_with_a_warning() {
 	assert!(warnings.iter().any(|warning| warning.contains("color")), "{warnings:?}");
 }
 
+// a lossless type change converts the column in place, a lossy one is a loud error (notes/orm.md Migrations)
+#[test]
+fn a_field_changed_without_loss_converts_its_column() {
+	eval("class Box{width: int}\nboxes: [Box] = database.boxes_widened\nboxes.add(Box(3))");
+	is!("class Box{width: float}\nboxes: [Box] = database.boxes_widened\nboxes#1.width", 3.0);
+	eval("class Tag{code: int}\ntags: [Tag] = database.tags_spelled\ntags.add(Tag(7))");
+	is!("class Tag{code: text}\ntags: [Tag] = database.tags_spelled\ntags#1.code", "7");
+}
+
+#[test]
+fn a_field_changed_with_loss_is_an_error_naming_both_types() {
+	eval("class Bag{weight: float}\nbags: [Bag] = database.bags_narrowed\nbags.add(Bag(2.5))");
+	crate::common::fails_with("class Bag{weight: int}\nbags: [Bag] = database.bags_narrowed\nbags#1.weight", "bags_narrowed.weight holds");
+}
+
+#[test]
+fn an_add_in_a_block_of_one_statement_inserts() {
+	eval(&program("people_blocked", "if count(people) == 0 { people.add(Person(\"Hal\", 9)) }"));
+	is!(&program("people_blocked", "people#1.id"), 1);
+}
+
+// `@was(old)` on a field renames its column, keeping the data; without it a rename reads as add + remove
+#[test]
+fn a_field_marked_was_renames_its_column() {
+	eval("class Dog{nick: text}\ndogs: [Dog] = database.dogs_renamed\ndogs.add(Dog(\"Rex\"))");
+	is!("class Dog{@was(nick) name: text}\ndogs: [Dog] = database.dogs_renamed\ndogs#1.name", "Rex");
+	is!("class Dog{@was(nick) name: text}\ndogs: [Dog] = database.dogs_renamed\ndogs#1.name", "Rex");
+}
+
 #[cfg(feature = "native")]
 #[test]
 fn a_program_keeps_its_tables_in_a_file_beside_it() {

@@ -359,6 +359,19 @@ pub(crate) fn field_declarations(body: &Node) -> Vec<(String, String, Option<Nod
 	}).collect()
 }
 
+/// The fields annotated `@attribute(value)` (`@was(nick) name: text`): each name and its value
+pub(crate) fn fields_marked(body: &Node, attribute: &str) -> Vec<(String, Node)> {
+	class_items(body).iter().filter_map(|item| Some((field_name(item)?, field_attribute(item, attribute)?.clone()))).collect()
+}
+
+/// The annotation on a field or on its name (`@was(nick) name: text` annotates the word name)
+fn field_attribute<'a>(item: &'a Node, attribute: &str) -> Option<&'a Node> {
+	item.attribute(attribute).or_else(|| match item.drop_meta() {
+		Node::Key(field, Op::Colon | Op::Assign, _) => field_attribute(field, attribute),
+		_ => None,
+	})
+}
+
 /// Each class's parent and the names of its own fields and methods (`class Circle extends Shape { r: int }`)
 pub(crate) fn class_members(node: &Node) -> std::collections::HashMap<String, (Option<String>, Vec<String>)> {
 	let mut classes = std::collections::HashMap::new();

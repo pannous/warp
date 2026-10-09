@@ -109,3 +109,13 @@ matches warp's value semantics (index assignment already copies, aliases never c
   one-cell shared arrays (lowering/shared_arrays.rs): reads are `shared_get(n, 1)`, `n = v` / `n += v` the atomic set
   and add, true/false the Ints 1/0. A go block reading one gets it as a parameter, which shares it like a shared array
   parameter; only `shared` names cross between tasks, everything else is copied.
+- Browser task hangs (card task-hang, 2026-10-09): about half of the browser runs of the control:: tests hung one task
+  test for 120 s (go_blocks, task_values, after, await_any), a different one each time. Two ways a run waited forever:
+  (a) a go block nobody awaits whose Worker could not instantiate it (out of Wasm memory: the record says `unstarted`,
+  which only finishedTask retried, so `after done` spun forever on the go block that sets done), and (b) a task its
+  Worker never took (or a Worker that failed outside runTask, which never wrote the shared buffer). Now finishedTask
+  waits in 100 ms slices and in between runs the run's stalled tasks here: an unstarted one, or one not taken
+  within 15 s (the task Worker sets the control buffer's second word when it takes a task), which also replaces that
+  Worker and prints why to stderr and the console. task-worker.js writes a failure record for any exception of its
+  own. 4 of 4 runs clean after (before: 2 of 3 hung). Which of (a)/(b) it was is not proven: a passing test's stderr
+  is not shown. Not covered yet: a channel receive (channelWait) waiting for a stalled task.

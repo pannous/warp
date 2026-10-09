@@ -7,6 +7,7 @@ mod test_float_assignment;
 mod test_float_text;
 mod test_float_bit_operations;
 mod test_float_exact_context;
+mod test_float_quotient; // card exact-div
 mod test_float_parameters;
 mod test_float_promotion;
 mod test_float_to_int_range;
@@ -57,6 +58,6 @@ mod test_decimal_units;
 mod test_number_words;
 mod test_time_of_day;
 mod test_plus_minus;
+mod test_plus_minus_math;
 mod test_plus_minus_print;
 mod test_div_assign;
-mod test_abs_of_float_variable;

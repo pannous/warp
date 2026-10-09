@@ -15,6 +15,10 @@ mod test_compiled_module_cache;
 mod test_dead_functions;
 #[cfg(feature = "native")] // wasmtime, files or network: not in the browser build
 mod test_standalone_executable;
+#[cfg(feature = "native")] // wasmtime, files or network: not in the browser build
+mod test_executable_size; // card g_gFs8
+#[cfg(feature = "native")] // wasmtime, files or network: not in the browser build
+mod test_executable_output; // card executable-exit
 mod test_standalone_needs_runtime;
 mod test_runtime_stub_found;
 mod test_wasm;

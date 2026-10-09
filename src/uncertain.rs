@@ -15,6 +15,44 @@ pub const CERTAINLY: &str = "certainly";
 pub const POSSIBLY: &str = "possibly";
 const CERTAINTY_WORDS: [&str; 2] = [CERTAINLY, POSSIBLY];
 
+/// Where a math word turns or jumps: an interval reaching `at + k·every` (just `at` when `every` is 0) has `value` as
+/// its low (`high` false) or high bound
+pub struct Extremum {
+	pub at: f64,
+	pub every: f64,
+	pub high: bool,
+	pub value: f64,
+}
+
+const fn turns(at: f64, every: f64, high: bool, value: f64) -> Extremum {
+	Extremum { at, every, high, value }
+}
+
+const TAU: f64 = std::f64::consts::TAU;
+const PI: f64 = std::f64::consts::PI;
+const HALF_PI: f64 = std::f64::consts::FRAC_PI_2;
+const LEAST_AT_ZERO: [Extremum; 1] = [turns(0.0, 0.0, false, 0.0)];
+/// The math words an interval passes through (card plus-minus-playground, P217): √ ∛ abs and the libm functions of one
+/// argument map the endpoints, an extremum or pole inside the interval is a bound. With the run-time function of each
+/// (wasm_emitter/uncertain.rs)
+pub const INTERVAL_WORDS: [(&str, &str, &[Extremum]); 23] = [
+	("sqrt", "uncertain_sqrt", &[]), ("cbrt", "uncertain_cbrt", &[]),
+	("abs", "uncertain_abs", &LEAST_AT_ZERO), ("fabs", "uncertain_fabs", &LEAST_AT_ZERO),
+	("sin", "uncertain_sin", &[turns(HALF_PI, TAU, true, 1.0), turns(-HALF_PI, TAU, false, -1.0)]),
+	("cos", "uncertain_cos", &[turns(0.0, TAU, true, 1.0), turns(PI, TAU, false, -1.0)]),
+	("tan", "uncertain_tan", &[turns(HALF_PI, PI, true, f64::INFINITY), turns(HALF_PI, PI, false, f64::NEG_INFINITY)]),
+	("asin", "uncertain_asin", &[]), ("acos", "uncertain_acos", &[]), ("atan", "uncertain_atan", &[]),
+	("sinh", "uncertain_sinh", &[]), ("cosh", "uncertain_cosh", &[turns(0.0, 0.0, false, 1.0)]), ("tanh", "uncertain_tanh", &[]),
+	("exp", "uncertain_exp", &[]), ("expm1", "uncertain_expm1", &[]),
+	("log", "uncertain_log", &[]), ("log2", "uncertain_log2", &[]), ("log10", "uncertain_log10", &[]), ("log1p", "uncertain_log1p", &[]),
+	("floor", "uncertain_floor", &[]), ("ceil", "uncertain_ceil", &[]), ("round", "uncertain_round", &[]), ("trunc", "uncertain_trunc", &[]),
+];
+
+/// A math word an interval passes through
+pub fn maps_intervals(word: &str) -> bool {
+	INTERVAL_WORDS.iter().any(|(name, _, _)| *name == word)
+}
+
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Uncertain {
 	pub value: f64,

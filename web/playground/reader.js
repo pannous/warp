@@ -45,14 +45,24 @@ function readCell(module, node, path) {
 	return cell;
 }
 
-// `path` the nodes it is read inside of: one of them again is a cycle, read as CYCLE_MARK
-function readNode(module, node, path = []) {
-	if (path.includes(node)) return { kind: KIND_SYMBOL, data: { text: CYCLE_MARK }, chain: [] };
-	path.push(node);
+// `path` the nodes it is read inside of, each cell of a chain too as natively (wasm_reader.rs node_along): one of them
+// again is a cycle, read as CYCLE_MARK; a Set, as a long list's cells are all on it
+function readNode(module, node, path = new Set()) {
+	if (path.has(node)) return { kind: KIND_SYMBOL, data: { text: CYCLE_MARK }, chain: [] };
+	const entered = [node];
+	path.add(node);
 	const tree = readCell(module, node, path);
 	tree.chain = [];
-	for (let next = module.reflect_value(node); next !== null; next = module.reflect_value(next)) tree.chain.push(readCell(module, next, path));
-	path.pop();
+	for (let next = module.reflect_value(node); next !== null; next = module.reflect_value(next)) {
+		if (path.has(next)) {
+			tree.chain.push({ kind: KIND_SYMBOL, data: { text: CYCLE_MARK } });
+			break;
+		}
+		entered.push(next);
+		path.add(next);
+		tree.chain.push(readCell(module, next, path));
+	}
+	entered.forEach(cell => path.delete(cell));
 	return tree;
 }
 

@@ -1,4 +1,3 @@
-#![cfg(feature = "native")]
 // ORM relations (card orm, notes/orm.md step 4): a field of a registered class is a foreign key, a list field of one is
 // the rows of the other table pointing back (one-to-many). Rows are instances, so a team read through a person is the
 // team of the teams table
@@ -7,7 +6,7 @@ use crate::is;
 use warp::wasm_emitter::eval;
 
 const CLASSES: &str = "class Team{name: text; players: [Person]}\nclass Person{name: text; team: Team}";
-const SEED: &str = "red = Team(\"Red\", [])\nteams.add(red)\nteams.add(Team(\"Blue\", []))\npeople.add(Person(\"Bo\", red))\npeople.add(Person(\"Cy\", red))";
+const SEED: &str = "red = Team(\"Red\")\nteams.add(red)\nteams.add(Team(\"Blue\"))\npeople.add(Person(\"Bo\", red))\npeople.add(Person(\"Cy\", red))";
 
 fn program(tables: &str, rest: &str) -> String {
 	format!("{CLASSES}\nteams: [Team] = database.teams_{tables}\npeople: [Person] = database.people_{tables}\n{rest}")
@@ -44,9 +43,18 @@ fn a_changed_foreign_key_is_written_through() {
 	is!(&program("moved", "count(teams#1.players)"), 1);
 }
 
+/// one-to-many is a query of the rows pointing back, made at each read (lazy, notes/orm.md step 4): not a list
+/// filled at the open, so a moved row is seen at once, and the list field is no constructor argument
+#[test]
+fn a_list_field_reads_the_rows_pointing_back_now() {
+	eval(&program("now", SEED));
+	is!(&program("now", "bo = people#1\nbo.team = teams#2\ncount(teams#1.players) * 10 + count(teams#2.players)"), 11);
+	is!(&program("now", "people.add(Person(\"Di\", teams#1))\ncount(teams#1.players)"), 2);
+}
+
 #[test]
 fn a_row_pointing_to_an_instance_without_a_row_is_an_error() {
-	fails_with(&program("unsaved", "people.add(Person(\"Ed\", Team(\"Green\", [])))"), "add it to its table first");
+	fails_with(&program("unsaved", "people.add(Person(\"Ed\", Team(\"Green\")))"), "add it to its table first");
 }
 
 #[test]
