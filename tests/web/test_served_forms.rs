@@ -121,11 +121,11 @@ fn the_todo_sample_creates_toggles_and_lists() {
 	let at = |path: &str| format!("http://127.0.0.1:{TODO_PORT}{path}");
 	let posted = |path: &str, body: &str| agent().post(&at(path)).header("Content-Type", FORM_TYPE).send(body).expect("an answer").body_mut().read_to_string().expect("a text");
 	let got = |path: &str| agent().get(&at(path)).call().expect("an answer").body_mut().read_to_string().expect("a text");
-	assert_eq!(posted("/todos", "title=tea"), r#"{"Todo":{"title":"tea","done":false,"id":1}}"#);
-	assert_eq!(posted("/todos", "title=buy+milk"), r#"{"Todo":{"title":"buy milk","done":false,"id":2}}"#);
-	assert_eq!(posted("/todos/1/toggle", ""), r#"{"Todo":{"title":"tea","done":true,"id":1}}"#);
-	assert_eq!(got("/api/todos"), r#"[{"Todo":{"title":"tea","done":true,"id":1}},{"Todo":{"title":"buy milk","done":false,"id":2}}]"#);
-	assert_eq!(got("/api/open"), r#"[{"Todo":{"title":"buy milk","done":false,"id":2}}]"#);
+	assert_eq!(posted("/todos", "title=tea"), r#"{"title":"tea","done":false,"id":1}"#);
+	assert_eq!(posted("/todos", "title=buy+milk"), r#"{"title":"buy milk","done":false,"id":2}"#);
+	assert_eq!(posted("/todos/1/toggle", ""), r#"{"title":"tea","done":true,"id":1}"#);
+	assert_eq!(got("/api/todos"), r#"[{"title":"tea","done":true,"id":1},{"title":"buy milk","done":false,"id":2}]"#);
+	assert_eq!(got("/api/open"), r#"[{"title":"buy milk","done":false,"id":2}]"#);
 	server.join().expect("the server thread");
 }
 

@@ -35,8 +35,39 @@ pub fn lower(node: Node) -> Node {
 fn expand(node: Node, context: &Context) -> Node {
 	let node = node.map_children(|child| expand(child, context));
 	match node.drop_meta() {
-		Node::List(items, _, _) => chain(items, context).unwrap_or(node),
+		Node::List(items, _, _) => sorted_by(items, context).or_else(|| chain(items, context)).unwrap_or(node),
 		_ => node,
+	}
+}
+
+/// `xs sorted by it.age`, `xs sorted by -it.age` (read as `by - it.age`), `xs sort by name`: `xs.sort_by(it => key)`
+fn sorted_by(items: &[Node], context: &Context) -> Option<Node> {
+	let flat = words(items);
+	let items = flat.as_slice();
+	let is_word = |node: &Node, words: &[&str]| matches!(node.drop_meta(), Node::Symbol(word) if words.contains(&canonical(word).as_str()));
+	// `xs.sort by -it` parses as `[xs.sort, by - it]`
+	if let [Node::Key(receiver, Op::Dot, sort), descending] = items.iter().map(Node::drop_meta).collect::<Vec<_>>().as_slice() {
+		if is_word(sort, &[SORT.0]) {
+			return sorted_by(&[receiver.as_ref().clone(), sort.as_ref().clone(), (*descending).clone()], context);
+		}
+	}
+	let (receiver, key_written) = match items {
+		[receiver, sort, by, key] if is_word(sort, &[SORT.0]) && is_word(by, &[SORT.1]) => (receiver, key.clone()),
+		[receiver, sort, descending] if is_word(sort, &[SORT.0]) => match descending.drop_meta() {
+			Node::Key(by, Op::Sub, key) if is_word(by, &[SORT.1]) => (receiver, Node::Key(Box::new(Node::Empty), Op::Neg, key.clone())),
+			_ => return None,
+		},
+		_ => return None,
+	};
+	Some(method_call(receiver.clone(), SORT_BY, vec![sort_key(&key_written, context)?]))
+}
+
+/// The key of `sort by it.age` as `it => it.age`, of `sort by size` as key names it
+fn sort_key(written: &Node, context: &Context) -> Option<Node> {
+	let it = crate::lambdas::IMPLICIT_PARAMETER;
+	match crate::lambdas::mentions(written, it) {
+		true => Some(Node::Key(Box::new(symbol(it)), Op::Arrow, Box::new(written.clone()))),
+		false => key(written, context),
 	}
 }
 
@@ -52,6 +83,14 @@ fn chain(items: &[Node], context: &Context) -> Option<Node> {
 	if let Some(Node::Key(target, op @ (Op::Assign | Op::Define), value)) = items.first().map(Node::drop_meta) {
 		let chained = chain(&[vec![value.as_ref().clone()], items[1..].to_vec()].concat(), context)?;
 		return Some(Node::Key(target.clone(), *op, Box::new(chained)));
+	}
+	// `str(xs.take first 3)` parses as the call `[str, xs.take, first, 3]`: the chain is its argument
+	if let [callee, argument @ ..] = items {
+		if let (Node::Symbol(function), true) = (callee.drop_meta(), argument.len() > 1) {
+			if let Some(chained) = chain(argument, context) {
+				return Some(call(function, chained));
+			}
+		}
 	}
 	let items = words(items);
 	let mut tokens = vec![];
@@ -110,7 +149,7 @@ fn phrase(method: &str, word: &str, receiver: Node, argument: &Node, context: &C
 			let filter = Node::List(vec![receiver, symbol(WHERE_WORD), condition(argument, context)?], Bracket::None, Separator::Space);
 			Some(Node::List(vec![filter], Bracket::Round, Separator::None))
 		}
-		SORT => Some(method_call(receiver, SORT_BY, vec![key(argument, context)?])),
+		SORT => Some(method_call(receiver, SORT_BY, vec![sort_key(argument, context)?])),
 		TAKE => Some(method_call(receiver, SLICE, vec![Node::Number(crate::extensions::numbers::Number::Int(0)), argument.clone()])),
 		_ => None,
 	}

@@ -1,0 +1,6 @@
+class T{n:text; id:int=0}
+met = []
+rows = [[1, "x"]]
+ts = [(k = [r for r in met if r.id == row#1]; if k then k#1 else T{n:row#2 id:row#1}) for row in rows]
+print ts
+print ts#1

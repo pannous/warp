@@ -32,6 +32,9 @@ Its elements are ordinary instances of C. An instance read from a table remember
 written through: `bo.age += 1` is an UPDATE of that row. `save bo` (a statement, its value bo) writes every column of
 bo's row again, so it changes nothing after written-through changes; an instance without a row is an error there
 ("add it to people first"). Supervisor default, 2026-10-08, decisions.md.
+`people.remove(bo)` (card table-remove) is a DELETE of bo's row (`std_io("table", "delete", …)`, IndexedDB too), bo
+keeping its fields with id 0; the lazy `people·remove` drops bo from the loaded list or the instances met before.
+`for p in people where p.age > 18 { … }` walks `people where it.age > 18`, so the filter stays SQL (card for-where).
 
 ## Filters: any warp expression
 - `people where it.age > 20 and it.name.starts_with("B")`: the parts SQL has (comparisons, and/or/not, arithmetic,

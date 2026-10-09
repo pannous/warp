@@ -241,6 +241,8 @@ PASSED:
   ✓ control::test_if_call_condition::a_call_with_arguments_as_condition_keeps_its_arguments
   ✓ control::test_if_empty_branch::a_branch_printing_a_number_gives_empty
   ✓ control::test_if_empty_branch::an_if_with_an_empty_branch_yields_empty_or_the_number
+  ✓ control::test_if_instance_branches::an_instance_in_one_branch_prints_as_an_instance
+  ✓ control::test_if_instance_branches::two_instance_branches_are_an_instance
   ✓ control::test_if_then_assign::a_branch_value_is_still_a_value
   ✓ control::test_if_then_assign::a_then_branch_takes_an_assignment
   ✓ control::test_if_then_assign::an_else_branch_takes_an_assignment
@@ -467,6 +469,9 @@ PASSED:
   ✓ control::test_system_values::the_battery_is_a_percent_or_a_loud_error
   ✓ control::test_system_values::the_mouse_is_a_system_value_of_the_page
   ✓ control::test_system_values::yes_no_values_read_the_machine
+  ✓ control::test_table_key_filter::rows_whose_foreign_key_is_a_given_row
+  ✓ control::test_table_remove::removing_a_row_before_the_table_loads
+  ✓ control::test_table_remove::removing_a_row_of_a_loaded_table
   ✓ control::test_task_bools::a_bool_given_through_a_value_task_is_a_bool
   ✓ control::test_task_bools::an_awaited_bool_is_a_bool
   ✓ control::test_task_bools::bools_of_a_job_list_are_bools
@@ -865,6 +870,7 @@ PASSED:
   ✓ functions::test_captured_containers::test_a_captured_list_element_keeps_its_kind
   ✓ functions::test_captured_containers::test_a_captured_object_field_keeps_its_kind
   ✓ functions::test_captured_copy_of_global::a_lambda_captures_a_local_copied_from_main
+  ✓ functions::test_captured_node_return::a_nested_function_returns_a_float_from_a_captured_float
   ✓ functions::test_character_results::a_returned_character_stays_a_character
   ✓ functions::test_charged_getters::a_function_factory_gets_no_hint_of_lowered_code
   ✓ functions::test_charged_getters::a_getter_of_now_reads_the_clock_at_every_use
@@ -950,7 +956,10 @@ PASSED:
   ✓ functions::test_effects::test_effects_of_query
   ✓ functions::test_effects::test_effects_propagate_through_callers_and_recursion
   ✓ functions::test_effects::test_imports_follow_effects
+  ✓ functions::test_effects_symbols::a_trailing_effects_of_runs_the_program
+  ✓ functions::test_effects_symbols::effects_of_gives_symbols_as_a_value
   ✓ functions::test_effects_value::effects_of_as_a_value
+  ✓ functions::test_effects_value::effects_of_last_keeps_the_prints
   ✓ functions::test_empty_call::a_name_and_a_group_stay_symbols_and_defined_calls_run
   ✓ functions::test_empty_call::an_empty_call_of_an_undefined_name_is_an_error
   ✓ functions::test_empty_function_bodies::a_function_with_an_empty_body_leaves_the_program_alone
@@ -1374,8 +1383,12 @@ PASSED:
   ✓ lists::test_field_count::a_parameter_counts_with_the_call_form
   ✓ lists::test_field_count::test_count_of_a_field
   ✓ lists::test_find_any_all::find_any_and_all_test_the_elements
+  ✓ lists::test_first_items::first_and_last_take_a_number_of_items
+  ✓ lists::test_first_items::first_of_a_list_is_its_first_item
+  ✓ lists::test_first_items::first_of_a_phrase_stays_one_item
   ✓ lists::test_float_array_writes::numbers_written_into_a_float_array_are_floats
   ✓ lists::test_float_array_writes::walking_a_typed_array_reads_every_item
+  ✓ lists::test_for_where::a_loop_over_the_elements_a_condition_keeps
   ✓ lists::test_fractional_count::a_fractional_count_in_a_variable_is_an_error
   ✓ lists::test_fractional_count::a_whole_count_in_a_variable_repeats
   ✓ lists::test_generated_name_hints::comprehension_and_where_give_no_hint_about_their_list
@@ -1504,6 +1517,8 @@ PASSED:
   ✓ lists::test_one_entry_map_text::print_keeps_the_braces_of_a_one_entry_map
   ✓ lists::test_one_entry_map_text::the_text_of_a_one_entry_map_keeps_its_braces
   ✓ lists::test_pair_values::a_value_of_a_pair_is_held_as_a_node
+  ✓ lists::test_phrase_in_call::a_list_phrase_as_the_argument_of_a_call
+  ✓ lists::test_phrase_in_call::sort_by_an_expression_of_it
   ✓ lists::test_picked_linear::float_arrays_paired_by_dot_are_linear
   ✓ lists::test_picked_linear::float_arrays_used_otherwise_stay_lists
   ✓ lists::test_picked_linear::the_linear_hint_names_float_arrays
@@ -1536,6 +1551,7 @@ PASSED:
   ✓ lists::test_size_count::test_size_of_text_is_character_count
   ✓ lists::test_size_property_word::test_property_word_after_a_name_counts_like_dot_property
   ✓ lists::test_size_property_word::test_property_word_agrees_with_size_of
+  ✓ lists::test_sorted_by_phrase::a_list_sorted_by_a_key_of_it
   ✓ lists::test_tuple_items_of_lists::a_tuple_from_a_list_keeps_its_items
   ✓ lists::test_tuples::test_loop_over_list_with_global_tuple
   ✓ lists::test_tuples::test_tuple_of_computed_items
@@ -1895,6 +1911,9 @@ PASSED:
   ✓ numbers::test_fixed_width_ints::test_fixed_width_declaration_traps_on_overflow
   ✓ numbers::test_fixed_width_ints::test_fixed_width_values_in_range
   ✓ numbers::test_fixed_width_ints::test_plain_int_stays_unbounded
+  ✓ numbers::test_float_accumulator::a_captured_node_local_is_set_before_its_first_value
+  ✓ numbers::test_float_accumulator::a_function_accumulator_takes_floats_of_unknown_origin
+  ✓ numbers::test_float_accumulator::sum_by_takes_a_float_lambda
   ✓ numbers::test_float_assignment::test_as_float_promotes_and_never_truncates
   ✓ numbers::test_float_assignment::test_float_assignment_in_exact_context_is_refused_loudly
   ✓ numbers::test_float_assignment::test_float_local_assignment_keeps_its_float_value
@@ -3586,6 +3605,7 @@ PASSED:
   ✓ web::test_markup_tags::rendering_markup_warns_nothing_more
   ✓ web::test_markup_tags::repeated_keys_in_a_tag_block_are_children
   ✓ web::test_markup_tags::the_html_dsl_sample_runs
+  ✓ web::test_missing_row_404::a_missing_row_is_not_found
   ✓ web::test_missing_use::a_missing_use_offers_to_add_it
   ✓ web::test_missing_use::the_added_use_makes_it_run
   ✓ web::test_page_tests::a_failing_check_names_its_test_and_the_page
@@ -3600,6 +3620,7 @@ PASSED:
   ✓ web::test_route_data::the_server_gives_only_what_the_route_shows
   ✓ web::test_route_modules::a_dev_site_and_a_site_without_routes_ship_one_module
   ✓ web::test_route_modules::each_route_comes_in_a_module_of_its_own
+  ✓ web::test_route_phrase_body::a_one_line_route_block_reading_a_table_is_one_statement
   ✓ web::test_routes::a_layout_shows_the_route_at_its_outlet
   ✓ web::test_routes::a_typed_route_parameter_computes_with_its_type
   ✓ web::test_routes::nested_routes_show_inside_their_layout
@@ -3626,6 +3647,8 @@ PASSED:
   ✓ web::test_server_functions_in_page::a_page_build_takes_a_server_function
   ✓ web::test_server_functions_in_page::a_page_build_warns_that_a_server_function_ships
   ✓ web::test_server_functions_in_page::the_asking_form_of_a_server_call_hints_nothing
+  ✓ web::test_server_route_paths::a_get_route_takes_typed_parameters_and_answers_plain_objects
+  ✓ web::test_server_route_paths::a_page_path_no_route_matches_is_not_found
   ✓ web::test_server_rpc_everywhere::a_call_in_a_handler_asks_the_server
   ✓ web::test_server_rpc_everywhere::a_call_in_markup_asks_the_server
   ✓ web::test_server_rpc_everywhere::a_call_with_a_local_argument_is_refused
@@ -4067,4 +4090,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-14 ignored, 4062 passed, 0 failed, 4062 total tested
+14 ignored, 4085 passed, 0 failed, 4085 total tested

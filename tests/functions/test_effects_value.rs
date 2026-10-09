@@ -9,7 +9,6 @@ fn printed_lines(code: &str) -> Vec<String> {
 }
 
 #[test]
-#[ignore = "waits for the user's decision on card effects-value: the switch TRAILING_QUERY_RUNS in src/effects.rs"]
 fn effects_of_last_keeps_the_prints() {
 	#[cfg(feature = "native")]
 	assert_eq!(printed_lines("print \"a\"\nsquare(x) := x*x\neffects of square"), ["a"]);

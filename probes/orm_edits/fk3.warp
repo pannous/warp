@@ -1,0 +1,9 @@
+class T{n:text}
+class P{a:int; t:T?}
+ts = [T("x")]
+pick(k) := (m = [r for r in ts if r.n == k]; if m then m#1 else ø)
+p = P(1, pick("x"))
+print p
+ps = [P(0, pick("y")), p]
+print ps#2
+print ps

@@ -1,0 +1,10 @@
+class Team { name: text; players: [Person] }
+class Person { name: text; age: int; team: Team? }
+stored teams: [Team]
+stored people: [Person]
+if teams.count == 0 { teams.add(Team("Climbers")) }
+if people.count == 0 { people.add(Person("Bo", 32, teams#1)) }
+print teams#1
+t = people#1.team
+print t
+print people#1

@@ -833,7 +833,7 @@ const AGENT_MODULE: &str = "agent";
 /// Whether a program needs a module
 type NeededBy = fn(&Node) -> bool;
 /// The standard modules a program needs without `use`: P183 a file URL → file, a page → markup (lowering/page_html.rs),
-/// routes → router, a route's regular expression → regex (lowering/routes.rs), a call of quantity → units (run-time units),
+/// routes or a server route's path parameters → router, a route's regular expression → regex (lowering/routes.rs), a call of quantity → units (run-time units),
 /// a call of agent → agent
 const IMPLICIT_MODULES: [(&str, NeededBy); 6] = [
 	("file", mentions_file_url),

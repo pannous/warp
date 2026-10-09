@@ -298,6 +298,9 @@ impl Query<'_> {
 		if let Some(column) = self.column(node) {
 			return Some(column);
 		}
+		if let Some(compared) = self.key_comparison(node) {
+			return Some(compared);
+		}
 		match node.drop_meta() {
 			Node::Key(left, op, right) => {
 				let operator = match op {
@@ -353,6 +356,18 @@ impl Query<'_> {
 			// a foreign key's column is an id, the field an instance: compared through a query's function
 			false => (columns_of(self.table).contains(&field) && self.table.reference(&field).is_none()).then(|| quote(&field)),
 		}
+	}
+
+	/// `it.team == red` of a foreign key team: its column against the id of red's row, 0 for ø
+	fn key_comparison(&mut self, node: &Node) -> Option<String> {
+		let Node::Key(left, op @ (Op::Eq | Op::Ne), right) = node.drop_meta() else { return None };
+		let field = self.field_of_it(left).filter(|field| self.table.reference(field).is_some())?;
+		if crate::lambdas::mentions(right, crate::lambdas::IMPLICIT_PARAMETER) {
+			return None;
+		}
+		let id = generated(&format!("(if {VALUE_PLACEHOLDER} == ø then 0 else {VALUE_PLACEHOLDER}.{ID_FIELD})"), [(VALUE_PLACEHOLDER, right.as_ref().clone())]);
+		let operator = if *op == Op::Eq { "=" } else { "<>" };
+		Some(format!("({} {operator} {})", quote(&field), self.parameter(id)))
 	}
 
 	fn field_of_it(&self, node: &Node) -> Option<String> {
@@ -915,17 +930,25 @@ fn implicit_id(table: &Table) -> bool {
 /// `people.add(p)`: added to the list and inserted as a row, whose id p takes; a foreign key stores the id of its row
 /// (an instance without one is an error)
 fn inserted(statement: &Node, tables: &HashMap<String, Table>, file: &str) -> Option<Vec<Node>> {
+	let (list, table, word, value) = table_mutation(statement, tables)?;
+	let code = match word.as_str() {
+		ADD_WORD => format!("{ADDED} = {VALUE_PLACEHOLDER}\n{insert}", insert = insert_code(table, &list, file)),
+		REMOVE_WORD => format!("{REMOVED} = {VALUE_PLACEHOLDER}\n{list}.remove({REMOVED})
+if {REMOVED}.{ID_FIELD} > 0 {{ std_io(\"table\", \"delete\", [{name:?}, {REMOVED}.{ID_FIELD}, {file:?}]); {REMOVED}.{ID_FIELD} = 0 }}", name = table.name),
+		_ => return None,
+	};
+	let lowered = generated(&code, [(VALUE_PLACEHOLDER, value.clone())]);
+	Some(lowered.children())
+}
+
+/// `people.add(p)`, `people.remove(p)` of a table: its list, the table, the word and p
+fn table_mutation<'a>(statement: &'a Node, tables: &'a HashMap<String, Table>) -> Option<(String, &'a Table, String, &'a Node)> {
 	let Node::Key(list, Op::Dot, call) = statement.drop_meta() else { return None };
 	let list = list.drop_meta().name();
 	let table = tables.get(&list)?;
 	let Node::List(parts, _, _) = call.drop_meta() else { return None };
 	let [word, value] = parts.as_slice() else { return None };
-	if word.drop_meta().name() != ADD_WORD {
-		return None;
-	}
-	let code = format!("{ADDED} = {VALUE_PLACEHOLDER}\n{insert}", insert = insert_code(table, &list, file));
-	let lowered = generated(&code, [(VALUE_PLACEHOLDER, value.clone())]);
-	Some(lowered.children())
+	Some((list, table, word.drop_meta().name(), value))
 }
 
 /// `people.add(ADDED)` and its INSERT, ADDED taking the row's id; a foreign key without its row is an error

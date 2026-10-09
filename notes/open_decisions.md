@@ -10,6 +10,8 @@ Details: notes/todo_sweep_task.md (board), notes/semicolon_survey.md, notes/floa
 ## Pending questions (ordered by impact; recommended option first)
 (none)
 Parked (user: "Later"):
+- Parked: P226c subscript log base `₁₀⌟100` → 2 (recommended yes) next to the decided `100⌟10` → 2. User
+  2026-10-09: "later". Stays in skip! in test_logarithm2 (warp-class).
 - Parked: P150 license: warp (and warp) have none, so package managers list no license and nobody may legally reuse the
   code. MIT (recommended, as uniscript) / Apache-2.0 / MIT OR Apache-2.0 (Rust convention). User 2026-10-06: "let's
   postpone the license". Blocks the crates.io upload of P151 (crates.io refuses a crate without license metadata).

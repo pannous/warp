@@ -1,0 +1,7 @@
+class Team{name: text; players: [Person]}
+class Person{name: text; age: int; team: Team?}
+stored teams: [Team]
+stored people: [Person]
+print teams#1
+print people#2.team
+print people#2
