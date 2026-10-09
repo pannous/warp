@@ -1,0 +1,16 @@
+// A field typed with a unit holds a quantity (card unit-fields); stored, its column keeps the unit (NUMERIC km), so a
+// class changed to `distance: m` keeps every distance, and a change to another quantity is a loud error.
+
+class Run{distance: km; note: text}
+stored runs: [Run]
+
+if count(runs) == 0 {
+	runs.add(Run(5 km, "park"))
+	runs.add(Run(1500 m, "track"))  // any length unit: the row holds the amount
+}
+
+total = 0 km
+for run in runs { total += run.distance }
+print "total: " + total
+print total as km  // the same amount in another unit
+runs#2.distance
