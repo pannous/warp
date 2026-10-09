@@ -58,6 +58,25 @@ fn a_field_changed_with_loss_is_an_error_naming_both_types() {
 	crate::common::fails_with("class Bag{weight: int}\nbags: [Bag] = database.bags_narrowed\nbags#1.weight", "bags_narrowed.weight holds");
 }
 
+// a unit field's column keeps its unit (NUMERIC km) and the SI amount: km → m keeps the distances, km → kg is a loud
+// error, plain numbers given a unit are read as that unit with a warning (card unit-fields); natively only so far (the
+// playground's store refuses a unit change loudly, card browser-unit-migrations)
+#[cfg(feature = "native")]
+#[test]
+fn a_unit_field_is_stored_and_migrates_within_its_quantity() {
+	let runs = |class: &str, table: &str, rest: &str| format!("class Run{{{class}}}\nruns: [Run] = database.{table}\n{rest}");
+	eval(&runs("distance: km", "runs_km", "runs.add(Run(5 km))\nruns.add(Run(1500 m))"));
+	assert_eq!(eval(&runs("distance: km", "runs_km", "runs#2.distance")).serialize().trim(), "1.5km");
+	assert_eq!(eval(&runs("distance: m", "runs_km", "runs#1.distance")).serialize().trim(), "5000m");
+	crate::common::fails_with(&runs("distance: kg", "runs_km", "runs#1.distance"), "different quantities");
+	crate::common::fails_with(&runs("distance: float", "runs_km", "runs#1.distance"), "the unit would be lost");
+	eval(&runs("distance: int", "runs_plain", "runs.add(Run(3))"));
+	warp::diagnostic::take_runtime_warnings();
+	assert_eq!(eval(&runs("distance: km", "runs_plain", "runs#1.distance")).serialize().trim(), "3km");
+	let warnings = warp::diagnostic::take_runtime_warnings();
+	assert!(warnings.iter().any(|warning| warning.contains("read as km")), "{warnings:?}");
+}
+
 #[test]
 fn an_add_in_a_block_of_one_statement_inserts() {
 	eval(&program("people_blocked", "if count(people) == 0 { people.add(Person(\"Hal\", 9)) }"));

@@ -795,6 +795,14 @@ fn paged_loop(element: &str, variable: &str, class: &str, body: Node) -> Node {
 	Node::List(lowered.children(), Bracket::None, Separator::Semicolon)
 }
 
+/// The table of a generated element read, `people·at(i)` or `people·streamed(i)`: static units knows its class
+pub(crate) fn element_table(node: &Node) -> Option<String> {
+	let Node::List(items, Bracket::Round, _) = node.drop_meta() else { return None };
+	let name = items.first()?.drop_meta().name();
+	let (table, part) = name.rsplit_once('·')?;
+	LAZY_PARTS.iter().any(|(placeholder, lazy_part)| [ELEMENT, STREAMED].contains(placeholder) && *lazy_part == part).then(|| table.to_string())
+}
+
 /// The variable an assignment's target names: `people` of `people: [Person]`
 fn declared(target: &Node) -> &Node {
 	match target.drop_meta() {

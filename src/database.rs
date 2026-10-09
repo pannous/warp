@@ -21,6 +21,9 @@ const IN_MEMORY: &str = ":memory:";
 const ID_COLUMN: &str = "id";
 /// column types each holding every value of the ones before it: a column converts forward without loss
 const LOSSLESS_ORDER: [&str; 3] = ["INTEGER", "REAL", "TEXT"];
+const NUMBER_COLUMNS: [&str; 2] = ["INTEGER", "REAL"];
+/// The column of a unit field (`NUMERIC km`): NUMERIC keeps a whole SI amount an integer, as the program holds it
+const UNIT_COLUMN: &str = "NUMERIC";
 /// The SQL function a filter's query calls a warp function through: `warp_call('function', arguments…)`
 const WARP_CALL: &str = "warp_call";
 /// How long a write waits for another connection's (another program or thread) before "database is locked"
@@ -305,20 +308,20 @@ fn renamed_column(field: &Node) -> Option<(String, String)> {
 	Some((name.drop_meta().name(), old_name.drop_meta().name()))
 }
 
-/// The column retyped in place when no value loses anything (INTEGER → REAL → TEXT), else a loud error. A fresh column
-/// with the new type: SQLite's column affinity would turn the converted values back
+/// The column retyped in place when no value loses anything (INTEGER → REAL → TEXT, km → m), else a loud error. A fresh
+/// column with the new type: SQLite's column affinity would turn the converted values back
 fn converted(database: Handle, table: &str, name: &str, stored_type: &str, column_type: &str) -> Result<(), String> {
-	let widening = |sql_type: &str| LOSSLESS_ORDER.iter().position(|known| known.eq_ignore_ascii_case(sql_type));
-	match (widening(stored_type), widening(column_type)) {
-		(Some(from), Some(to)) if from < to => {}
-		_ => return Err(format!("the column {table}.{name} holds {stored_type}, the class's field is {column_type}: its values would lose data, so it is not converted")),
-	}
+	let factor = conversion_factor(table, name, stored_type, column_type)?;
 	let (quoted_table, column, kept) = (quote(table), quote(name), quote(&format!("{name} before {column_type}")));
+	let value = match factor == 1.0 {
+		true => format!("CAST({kept} AS {column_type})"),
+		false => format!("CAST({kept} AS REAL) * {factor:?}"),
+	};
 	rows(database, "SAVEPOINT converted", &[])?;
 	let steps = [
 		format!("ALTER TABLE {quoted_table} RENAME COLUMN {column} TO {kept}"),
 		format!("ALTER TABLE {quoted_table} ADD COLUMN {column} {column_type}"),
-		format!("UPDATE {quoted_table} SET {column} = CAST({kept} AS {column_type})"),
+		format!("UPDATE {quoted_table} SET {column} = {value}"),
 		format!("ALTER TABLE {quoted_table} DROP COLUMN {kept}"),
 	];
 	let done = steps.iter().try_for_each(|statement| rows(database, statement, &[]).map(drop));
@@ -329,25 +332,64 @@ fn converted(database: Handle, table: &str, name: &str, stored_type: &str, colum
 	done.map_err(|failure| format!("converting the column {table}.{name} from {stored_type} to {column_type} failed: {failure}"))
 }
 
+/// The factor a column's values take to the class's field type, or the loud error of a change losing data. A unit
+/// column (`NUMERIC km`, unit fields hold SI amounts) changes its unit within its quantity unchanged; plain numbers given a
+/// unit are read as that unit, said loudly
+fn conversion_factor(table: &str, name: &str, stored_type: &str, column_type: &str) -> Result<f64, String> {
+	let column = format!("the column {table}.{name} holds {stored_type}, the class's field is {column_type}");
+	let (stored_base, stored_unit) = split_unit(stored_type);
+	let (base, unit) = split_unit(column_type);
+	let widening = |sql_type: &str| LOSSLESS_ORDER.iter().position(|known| known.eq_ignore_ascii_case(sql_type));
+	let lossless = matches!((widening(stored_base), widening(base)), (Some(from), Some(to)) if from <= to);
+	let quantity = |unit: &str| crate::units::static_units::unit_type(unit).ok_or_else(|| format!("{column}: {unit} is no unit"));
+	match (stored_unit, unit) {
+		(Some(stored_unit), Some(unit)) => {
+			let ((stored_quantity, _), (field_quantity, _)) = (quantity(stored_unit)?, quantity(unit)?);
+			match stored_quantity == field_quantity {
+				true => Ok(1.0),
+				false => Err(format!("{column}: {stored_quantity} and {field_quantity} are different quantities, so it is not converted")),
+			}
+		}
+		(None, Some(unit)) if NUMBER_COLUMNS.iter().any(|number| number.eq_ignore_ascii_case(stored_base)) => {
+			let (_, per_unit) = quantity(unit)?;
+			crate::diagnostic::report_runtime_warning(&format!("{column}: its plain numbers are read as {unit} (each × {per_unit} to the SI amount a unit field holds)"));
+			Ok(per_unit)
+		}
+		(Some(_), None) => Err(format!("{column}: the unit would be lost, so it is not converted")),
+		(None, None) if lossless && stored_base != base => Ok(1.0),
+		_ => Err(format!("{column}: its values would lose data, so it is not converted")),
+	}
+}
+
+/// `NUMERIC km` as NUMERIC and km
+fn split_unit(column_type: &str) -> (&str, Option<&str>) {
+	match column_type.split_once(' ') {
+		Some((base, unit)) => (base, Some(unit)),
+		None => (column_type, None),
+	}
+}
+
 /// A field `[name, type, default]` as its column: name, SQL type, the SQL literal new rows of an added column take
 fn column_of(field: &Node) -> Result<(String, String, String), String> {
 	let parts = field.children();
 	let ([name, field_type, default] | [name, field_type, default, _]) = parts.as_slice() else { return Err(format!("no field [name type default]: {}", field.serialize().trim())) };
 	let field_type = field_type.drop_meta().name();
 	let column_type = match field_type.as_str() {
-		"int" | "i64" | "i32" | "bool" => "INTEGER",
-		"float" | "f64" | "f32" | "number" => "REAL",
-		"text" | "string" | "str" | "char" => "TEXT",
-		"" => "",
+		"int" | "i64" | "i32" | "bool" => "INTEGER".to_string(),
+		"float" | "f64" | "f32" | "number" => "REAL".to_string(),
+		"text" | "string" | "str" | "char" => "TEXT".to_string(),
+		"" => String::new(),
+		// a unit field (`distance: km`) holds SI amounts; its column keeps the unit for migrations
+		unit if crate::units::static_units::unit_type(unit).is_some() => format!("{UNIT_COLUMN} {unit}"),
 		other => return Err(format!("a field of type {other} is no column yet (notes/orm.md step 4: foreign keys)")),
 	};
-	let default = match (default.drop_meta(), column_type) {
-		(Node::Empty, "INTEGER") => "0".to_string(),
+	let default = match (default.drop_meta(), split_unit(&column_type).0) {
+		(Node::Empty, "INTEGER" | UNIT_COLUMN) => "0".to_string(),
 		(Node::Empty, "REAL") => "0.0".to_string(),
 		(Node::Empty, "TEXT") => "''".to_string(),
 		(value, _) => literal(value)?,
 	};
-	Ok((name.drop_meta().name(), column_type.to_string(), default))
+	Ok((name.drop_meta().name(), column_type, default))
 }
 
 fn literal(value: &Node) -> Result<String, String> {

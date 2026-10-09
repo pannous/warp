@@ -43,6 +43,7 @@ mod test_range_tolerance_compare;
 mod test_units_followup;
 mod test_zero_fill;
 mod test_float_zero_and_compound;
+mod test_fourth_root;
 mod test_implicit_libm;
 mod test_unit_word_keys;
 mod test_round_to_digits;
@@ -64,3 +65,4 @@ mod test_plus_minus;
 mod test_plus_minus_math;
 mod test_plus_minus_print;
 mod test_div_assign;
+mod test_unit_fields; // card unit-fields
