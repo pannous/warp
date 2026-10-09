@@ -28,9 +28,9 @@ Chars as code.golf counts them: Unicode characters, so `…` is one. Best = code
 | diamonds | 342 | 85 | 56 | 47 | 75 |
 | collatz | 258 | 61 | 57 | 46 | 54 |
 | look-and-say | 376 | 112 | 60 | 51 | 60 |
-| evil-numbers | 162 | 71 | 40 | 26 | 37 |
+| evil-numbers | 162 | 60 | 40 | 26 | 37 |
 | niven-numbers | 143 | 48 | 44 | 29 | 42 |
-| pernicious-numbers | 172 | 62 | 40 | 28 | 34 |
+| pernicious-numbers | 172 | 51 | 40 | 28 | 34 |
 | rot13 | 337 | 109 | 59 | 35 | 89 |
 
 The leaderboard entries are years of collective golfing; the warp ones are a first pass. Warp wins fizz-buzz (51 to
@@ -51,6 +51,7 @@ value). It is close on catalan, collatz, niven and leap-years.
   trailing `if` (`print it if it%2` prints nothing when false).
 - `s.chars` walked (`for c in s.chars`, `s.chars.map(…)`) is the list of chars; elsewhere it is the count.
   `for char in s` visits every char of a text.
+- `for (1…5).filter(f):` walks any expression; only a `;` in the group makes it C's `for(i=0;i<n;i++)`.
 - `chr(…)` of any expression as a function result: `f(x):=chr(x+1)`.
 
 ## What costs chars
@@ -58,11 +59,11 @@ value). It is close on catalan, collatz, niven and leap-years.
   a print. `for …:{print a;a,b=b,a+b}` adds a line with b; ending with `ø` or `()` still echoes the loop's value; a
   text echoes quoted. Workarounds: `print (…).filter(f).join("\n")` or a last `print`. Kept by decision P236
   (card golf-echo).
-- No bitwise operators or bit count (golf-bits): `to_base(it,2).count("1")`, `choose(i,j)%2`.
+- `&` and `|` are logical (by decision); bits by word: `bit_and`, `bit_or`, `bit_count` (`use math`), `xor` is bitwise.
 - Negative indexes don't wrap (by design: `last(xs)`).
 - `text` is a type name, so `for text in args` filters by type, with a warning.
 
 ## Gaps filed (board column Next)
-golf-expression, golf-bits, golf-count.
-Fixed: golf-chr, golf-chars, golf-print, golf-inline; golf-text, golf-sum (text arithmetic is no number for `||`/`or`); golf-indented, golf-bare,
+none open.
+Fixed: golf-expression (`for (…).filter(f):`), golf-bits (bit_and, bit_or, bit_count), golf-count (the error names `use text`); golf-chr, golf-chars, golf-print, golf-inline; golf-text, golf-sum (text arithmetic is no number for `||`/`or`); golf-indented, golf-bare,
 golf-indented-while, golf-indented-swap (indented bodies without `:`); golf-open (`s[2…]`, `s[…2]`). Decided: golf-echo (P236, kept).
