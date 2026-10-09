@@ -7,6 +7,9 @@ before asking the user; nobody reads it front to back, the code, tests and wiki 
 notes/open_decisions.md.
 
 ## Decided 2026-10-09 (user, as recommended unless quoted)
+- Served routes (undoable defaults, supervisor, card served-route): a route that raises on a browser form answers 400
+  and re-renders the page with the message; a missing form field gives 400, an unknown id 404.
+- `is empty` covers "", [] and {} as well as ø, following wiki/null.md (undoable default, supervisor).
 - /api and /rpc JSON give instances as plain objects, `[{"name":"Ann","id":1}]`, not wrapped in their class name
   (undoable default, supervisor, asked by warp-class).
 - P225 (warp-worker, test_string_operations): a float joined to text uses its shortest form, as print does:
