@@ -72,6 +72,9 @@ const IMPL_WORD: &str = "impl";
 const COPY_WORD: &str = "copy";
 /// lib/units.warp's `q.to("km/h")`: a run-time quantity in other units
 const CONVERSION_METHOD: &str = "to";
+/// lib/units.warp's check that two quantities measure the same, and a quantity's amount in base units
+const SAME_DIMENSION: &str = "same_dimension";
+const QUANTITY_AMOUNT: &str = "amount";
 /// `str(q)`: a run-time quantity's text
 const TEXT_WORD: &str = "str";
 /// The methods an operator on an instance calls (wiki/operator.md aliases, Python's special methods)
@@ -1067,6 +1070,7 @@ struct Operands<'a> {
 fn with_operator_calls(node: Node, operands: &Operands) -> (Node, Option<String>) {
 	let recurse = |child: Node| with_operator_calls(child, operands).0;
 	match node {
+		certainty if crate::uncertain::certainty_parts(&certainty).is_some() => (with_certain_amounts(&certainty, operands), None),
 		Node::Key(left, op, right) if OPERATOR_METHODS.iter().any(|(known, _)| *known == op) => {
 			let (left, class) = with_operator_calls(*left, operands);
 			let (right, right_class) = with_operator_calls(*right, operands);
@@ -1129,6 +1133,29 @@ fn with_operator_calls(node: Node, operands: &Operands) -> (Node, Option<String>
 
 /// `receiver.method(argument)`; `(quantity(…)) * 2`: the receiver without its parentheses, else `(f(…)).times` reads as
 /// a call of f
+/// `rope certainly > 4 m` of a run-time quantity rope: its amount and the other's in the same base units compare, a ±
+/// amount as the interval it is; `Quantity.more` would answer a plain yes (card quantity-tolerance)
+fn with_certain_amounts(certainty: &Node, operands: &Operands) -> Node {
+	let (word, ordering) = crate::uncertain::certainty_parts(certainty).expect("guarded");
+	let Node::Key(left, op, right) = ordering.drop_meta() else { unreachable!("certainty_parts takes orderings") };
+	let (left, class) = with_operator_calls(left.as_ref().clone(), operands);
+	let (right, right_class) = with_operator_calls(right.as_ref().clone(), operands);
+	let class = class.or_else(|| operand_class(&left, operands));
+	let (left, class, right) = with_run_time_units(left, class, right, right_class, operands);
+	let compared = match class.as_deref() == Some(crate::units::RUN_TIME_QUANTITY) {
+		true => {
+			let comparable = Node::List(vec![Node::Symbol(SAME_DIMENSION.to_string()), left.clone(), right, Node::Text("compare".to_string())], Bracket::Round, Separator::None);
+			Node::Key(Box::new(amount_of(left)), *op, Box::new(amount_of(comparable)))
+		}
+		false => Node::Key(Box::new(left), *op, Box::new(right)),
+	};
+	Node::List(vec![Node::Symbol(word.to_string()), compared], Bracket::None, Separator::Space).with_meta_of(certainty)
+}
+
+fn amount_of(quantity: Node) -> Node {
+	Node::Key(Box::new(quantity), Op::Dot, Box::new(Node::Symbol(QUANTITY_AMOUNT.to_string())))
+}
+
 fn method_call(receiver: Node, method: &str, argument: Node) -> Node {
 	let receiver = match receiver.drop_meta() {
 		Node::List(items, Bracket::Round, _) if items.len() == 1 => items[0].clone(),

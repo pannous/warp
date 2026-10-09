@@ -141,6 +141,17 @@ pub fn lower_certainty(node: Node) -> Node {
 	Node::List(vec![Node::Symbol(word.drop_meta().name()), comparison], Bracket::None, Separator::Space).with_meta_of(&node)
 }
 
+/// The word and the ordering of a lowered `certainly(y < x)`
+pub fn certainty_parts(node: &Node) -> Option<(&str, &Node)> {
+	match node.drop_meta() {
+		Node::List(items, Bracket::None, _) => match items.as_slice() {
+			[Node::Symbol(word), ordering] if CERTAINTY_WORDS.contains(&word.as_str()) && matches!(ordering.drop_meta(), Node::Key(_, op, _) if op.is_ordering()) => Some((word, ordering)),
+			_ => None,
+		},
+		_ => None,
+	}
+}
+
 /// P224b: `<`, `>`, `<=`, `>=` on a value the compiler knows to be ± must say how it compares; data read at run time
 /// compares certainly (wasm_emitter/uncertain.rs)
 pub fn check_orderings(program: &Node) -> Option<Diagnostic> {
