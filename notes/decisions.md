@@ -7,6 +7,16 @@ before asking the user; nobody reads it front to back, the code, tests and wiki 
 notes/open_decisions.md.
 
 ## Decided 2026-10-09 (user, as recommended unless quoted)
+- P231 (supervisor/warp-web): print rounds quantities with units to a decimal, `mean of [5km, 1.5km, 12km]` prints
+  `6.17km`; str() and serialization keep the exact `(37/6)km`; plain numbers keep `7/3`. Replaces the interim
+  `(37/6)km`-everywhere build.
+- P230 (card effects-value): NOT as recommended: `effects of f` gives symbols `(State IO)`, not texts; needs symbol
+  values in the emitter. The interim text-list default and its test edit are undone.
+- P228 (warp-fixer, card standalone-std-io): no; programs using tables or JSON don't build stand-alone, the runtime
+  stays ~1 MB; a native run notes "host.std_io needs runtime." on the first run only.
+- P226b (test_logarithm2): `x⌟b` is log base b of x: `100⌟10` → 2, `10⌟100` → 0.5; `x⌟` alone is ln x.
+- P229 (card g_gHmE): settled by the user outside the code: "I already changed it to open my editor. Nothing to fix
+  here." Double-clicking a .warp file opens the editor; nothing to build.
 - Served routes (undoable defaults, supervisor, card served-route): a route that raises on a browser form answers 400
   and re-renders the page with the message; a missing form field gives 400, an unknown id 404.
 - `is empty` covers "", [] and {} as well as ø, following wiki/null.md (undoable default, supervisor).

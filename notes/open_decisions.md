@@ -8,24 +8,7 @@ decisions for a reason. Open"). Rules belong where they are applied: AGENTS.md, 
 Details: notes/todo_sweep_task.md (board), notes/semicolon_survey.md, notes/float_truncation_survey.md.
 
 ## Pending questions (ordered by impact; recommended option first)
-Held until 9 AM 2026-10-09 (user: "no more questions till 9 AM"):
-- P226b (warp-worker, test_logarithm2): ⌟ is a postfix log (`ℯ⌟` → 1, natural log). What do the forms with a base
-  give: `100⌟10` (log base 10 → 2?), `10⌟100`, `₁₀⌟100` (C++ wasp had `10⌟` as one token = log10)? Default: `x⌟` is
-  ln x, `x⌟b` is log base b of x (→ `100⌟10` = 2); `10⌟100` reads as log base 100 of 10 = 0.5.
-- P228 (warp-fixer, card standalone-std-io): should a program using tables or JSON also build as a stand-alone
-  executable? It puts the Node reader, SQLite and adapters into the ~1 MB runtime, against notes/aot.md. Options:
-  (a) no (default): a native run notes "host.std_io needs runtime." on the first run only; (b) yes, a bigger runtime;
-  (c) yes, only the pieces the program uses (linked per program).
-- P229 (warp-worker, card g_gHmE): double-clicking a .warp file in Finder: (a) runs `warp <file>` in Terminal
-  (default, registered on this Mac); (b) opens it in the text editor, running stays a command; (c) asks Run or Edit.
-- P230 (warp-worker, card effects-value): `effects of f` is now a value; should it be a list of texts
-  `["State" "IO"]` like f.params (a, default on branch interpolation-passes; one assertion in
-  tests/control/test_variable_signals.rs changes from "(State IO)") or symbols `(State IO)` (b, needs symbol values
-  in the emitter)?
-- P231 (supervisor/warp-web): how does an exact quantity print? mean of 5, 1.5 and 12 km is exactly 37/6 km.
-  (b, recommended) print rounds quantities with units to a decimal, `6.17km`, while str()/serialization keeps
-  `(37/6)km`; plain numbers keep `7/3`. (a, building meanwhile) `(37/6)km` everywhere, exact and reads back.
-  (c) mean/average return floats, `6.16666666666667km` (needs card float-accumulator first).
+(none)
 Parked (user: "Later"):
 - Parked: P150 license: warp (and warp) have none, so package managers list no license and nobody may legally reuse the
   code. MIT (recommended, as uniscript) / Apache-2.0 / MIT OR Apache-2.0 (Rust convention). User 2026-10-06: "let's
