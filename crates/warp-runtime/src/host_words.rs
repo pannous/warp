@@ -31,6 +31,8 @@ pub const CLIPBOARD_COUNT: &str = "clipboard count";
 pub const MOUSE_X: &str = "mouse_x";
 pub const MOUSE_Y: &str = "mouse_y";
 pub const MOUSE_DOWN: &str = "mouse_down";
+/// The local time of day in milliseconds since midnight, what the word `time` is compared with a duration (src/units.rs)
+pub const TIME_OF_DAY: &str = "time of day";
 pub const SYSTEM_VALUES: [(&str, bool); 8] = [(BATTERY, false), (CHARGING, true), (ONLINE, true), (DARK_MODE, true), (CLIPBOARD_COUNT, false),
 	(MOUSE_X, false), (MOUSE_Y, false), (MOUSE_DOWN, true)];
 /// `clipboard`: the clipboard's text, read only when the program reads it (host.rs clipboard_text)
@@ -43,6 +45,20 @@ pub const NOTIFY: &str = "notify";
 /// `gpu_compute(shader, numbers, workgroups)`: a WGSL compute shader run over the numbers on the GPU (WebGPU in the
 /// browser, web/playground/host-gpu.js), the numbers it left (card web-apis, notes/web_framework.md "web-apis: WebGPU")
 pub const GPU_COMPUTE: &str = "gpu_compute";
+/// `gpu_render(shader, width, height)`: a WGSL fragment shader `main` run over every pixel, the pixels paint shows
+/// (0xFFRRGGBB row by row; card g_YqWY, notes/web_framework.md "web-apis: WebGPU")
+pub const GPU_RENDER: &str = "gpu_render";
+/// `gpu_compute(shader, xs, workgroups)` of a `linear xs = float[n]`: the shader runs over the cells of the block in linear
+/// memory, read and written in place without building a list (card gpu-vectors, notes/gpu.md); gives the block back
+pub const GPU_COMPUTE_LINEAR: &str = "gpu_compute_linear";
+/// `ys = xs.map(x => …) @gpu` of a linear float array (src/lowering/gpu_maps.rs): the WGSL kernel run over xs's cells,
+/// written into ys's; gives 1, or 0 without an adapter (said once), when the CPU maps them instead
+pub const GPU_MAP_LINEAR: &str = "gpu_map_linear";
+/// `s = sum(xs.map(x => …) @gpu)`, min, max (src/lowering/gpu_maps.rs): the kernel leaves one partial result per
+/// workgroup, written into a block the program combines; 1, or 0 without an adapter, as gpu_map_linear
+pub const GPU_REDUCE_LINEAR: &str = "gpu_reduce_linear";
+/// What every exported handler name starts with
+pub const HANDLER_PREFIX: &str = "on·";
 /// `on·file·0`: the handler of the first `on file "x" change {…}`
 pub const FILE_HANDLER_PREFIX: &str = "on·file·";
 /// `exit(code)` ends the run, not the process (P121, system_signals.rs ExitRequest)

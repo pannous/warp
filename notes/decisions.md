@@ -1,11 +1,165 @@
 # Decided questions (user answers)
 
-Answered decisions, newest first; moved out of notes/open_decisions.md on 2026-10-06 (user: "move all the old
-answered questions to a new file"). Older references to "notes/open_decisions.md" + a Decided section, P-number,
-D-number or #number mean this file. Open questions, parked ones and the standing rules stay in notes/open_decisions.md.
+History of answered decisions, newest first. Grep-only: look up a cited number (P71, D5, #10) or grep a topic
+before asking the user; nobody reads it front to back, the code, tests and wiki are the truth (user 2026-10-08:
+"If it's really grep-only, then it's perfect. Otherwise, move them to a history file"). References to
+"notes/open_decisions.md" + a Decided section, P-, D- or #-numbers mean this file. Open and parked questions:
+notes/open_decisions.md.
+
+## Decided 2026-10-08 (user, as recommended unless quoted)
+- ORM updates (undoable default, supervisor, from the user's own edit of samples/orm.warp; warp-fixer): assigning a
+  field of a stored row (`bo.age += 1`) writes through as an SQL UPDATE; `save bo` is accepted as an explicit write,
+  a no-op when the row is already written.
+- Every major or semi-major feature ships with a sample in samples/, especially the ORM and the server (user, to the
+  supervisor; rule in notes/agents/common.md 2ca368e9f; cards sample-orm, warp-fixer, and sample-server,
+  warp-functions).
+- P224 (card plus-minus-print, warp-class): `<`, `>`, `<=`, `>=` on a ± interval answer only when certain, like
+  Julia's IntervalArithmetic: with `y = 6 ± 1` (5..7) `y < 8` → yes, `y < 4` → no. `≈` stays as P218.
+  P224b (user: "we don't want the application to crash" on values read from outside): no run-time crash.
+  Where the compiler knows a value is ±, a bare comparison is a compile error asking for one of
+  `y certainly < x`, `y possibly < x`, `y.value < x`. Where it can't know (data read at run time), an overlap
+  counts as not certain (`certainly`, the condition is no) and a warning is printed once naming the line, with
+  the hint to write `certainly`, `possibly` or `.value`.
+- `//` is a comment only when followed by a space or the end of the line; otherwise floor division: `x //= 3`,
+  `x//=3`, `7//2`, `a //b` divide; `a // b`, `x = 1 // note` are comments (user, emphatic, via the supervisor;
+  replaces the 2026-10-03 rule, rewritten in place below). warp-worker implements it.
+- P223 (card orm, warp-functions): filters may name an element's fields bare, like SQL: `people where age > 20`
+  means `people where it.age > 20` when the list holds a known class with that field (database tables included)
+  and no variable of that name is in scope; a variable `age` in scope wins, with a warning that it is also a field.
+- With P222 (user: "warp serve can also get an argument; can we just call warp server.warp if the file is
+  obviously a server?"; criteria are the supervisor's undoable default): `warp serve [file] [port]`; plain
+  `warp app.warp` serves when the program declares a route/get/post handler or a server def (static check),
+  printing the URL and the `warp run` escape; markup-only programs don't auto-serve; `warp run` and `warp test`
+  never serve.
+- ORM (card orm, warp-functions; user in a discussion with the supervisor): plain classes connect to the database
+  without inheritance or annotations, they are only registered. Transactions are completely optional (an
+  optimization only). Filters work for any warp expression ("magic": SQLite application functions run warp code
+  inside queries). Lazy loading: a smart default chosen by us, fine-tuning keywords later. Migrations: start with
+  the supervisor's proposal.
+- `x /= y` means exactly `x = x / y`: `x = 3; x /= 2` → 3/2, prints 1.5; floor division is `x //= y`; a variable
+  declared `x:int` keeps a whole number. Card div-assign, warp-worker switches the floor tests to `//=` (user,
+  asked directly by the supervisor).
+- P221 (card route-sample, warp-functions; discussed in free form): one line serves both sides. A route such as
+  `route "/users/:id:int" { h1{ users#id } }` whose block reads server data (a database, files, secrets) runs on the
+  server: the first visit gets finished HTML, later in-app clicks fetch only the data and render in the browser
+  (like Next.js/SvelteKit); the compiler splits it, the user writes no JavaScript and nothing secret ships. Routes
+  that don't touch server data stay static. The browser never talks to the database itself. User: "both from your
+  single line YES!!". The single-page decision (2026-10-07) holds only for the playground web demo; real
+  applications can have as many pages and server routes as they want (user).
+- P217 (card plus-minus, warp-class): `5 ± 1` is an interval now (user: "I thought they are just interval"):
+  worst-case bounds, `(5 ± 1) + (2 ± 1)` → `7 ± 2`, functions map the endpoints (`sqrt(4 ± 1)` → √3..√5).
+  Gaussian propagation (Measurements.jl) comes later with an explicit form such as `5 ± 1σ` (user chose
+  "interval now, Gaussian later").
+- P218 `x ≈ r ± 1` holds when |x - r| ≤ 1, the tolerance as written (user: no preference; the default stands).
+- P219 ± values print with 2 significant digits of the ± part, the value rounded to the same place: `7.0 ± 1.4`.
+- P220 one meaning of ±: `1950 ± 50 AD` is the same ± value (an interval of years), not a separate units span.
+- P222 (card route-sample, warp-functions): the CGI mode of `warp serve` is retired; `warp serve app.warp 8080`
+  serves the page program (its routes, `server def` functions as POST /rpc/f), the production twin of `warp dev`.
+- From P200b (not asked; card shared-lists-typed, warp-class): a typed list read from a field shares too:
+  `p = {xs: [1, 2]}; ys = p.xs; p.xs#1 = 7; ys#1` → 7. The fast unboxed copy is kept only where the compiler proves
+  that neither alias is written afterwards; otherwise the list is shared, never a silent snapshot.
+- P216 (warp-types): named arguments run as written, left to right (like Python): with `global i = 0;
+  g() := { i = i*10+1; i }; h() := { i = i*10+2; i }; f(a, b) := a*100 + b`, `f(b=h(), a=g())` runs h first
+  (b=2), then g (a=21) → 2102; the corpus pin 112 (parameter order) changes. Applies to constructors too
+  (card named-constructor-args).
+- P214 (card gpu-vectors, warp-web; revises P118): big list math moves to the GPU automatically only where the result
+  is identical to the CPU's: Int lists fitting i32, with an overflow flag (the CPU redoes it on overflow). Float lists
+  go to the GPU only when the program allows f32: `@gpu …` or a `float32[n]` list. `sum(int[10^7] .* 3)` → GPU;
+  `sum(float[10^7] .* 0.1)` → CPU. User: "for @gpu give a warning or hint if the GPU does not apply" (it then runs on
+  the CPU). The GPU covers the dotted element-wise operators (`xs .* 2`, `xs .+ ys`).
+  Threshold (user): offloading usually pays off from about 10⁵–10⁶ elements, clearly from 10⁶–10⁷; one cheap op
+  like `xs .* 3` may never pay off unless several ops are fused or the data stays on the GPU. Err on the CPU side.
+  Once the feature works, measure where and when to enable it and set safety bounds from real measurements.
+- P215 (card shared-lists, warp-class): with shared lists, element types are checked both ways, per P203: where the
+  alias is visible a covariant assignment is a compile error (`xs: [Circle] = [c]; ys: [Shape] = xs` → error unless ys
+  is read-only); otherwise each write (add/insert/`xs#i = v`) checks the declared element type and fails loudly at
+  run time.
+- P213 (card loop-value, warp-worker): a loop ending in `print` gives ø, because print gives ø (#18) and a loop's
+  value is its last body value (P55); no pass-count special case. `for f in [foe1, friend1]: print it` → ø
+  (tests/control/test_for_it.rs pinned 2, changes to ø); `for i in [1,2]: i*10` stays 20. Loops stay expressions
+  (the user asked; "loops are statements" like Lean's Unit was offered and not chosen).
+- Language name (user): the language is named warp everywhere; wasp remains only in README history and other history
+  markdown. Defaults (supervisor): `*.wasp` → `*.warp`, with `.wasp` still readable; URLs and domains
+  (github.com/pannous/wasp, wasp.pannous.com) unchanged; wisp unchanged. Card rename-warp, warp-fixer.
+- P203 general rule, lax versus strict: annotations make it strict. Unannotated code is lax (Python-like, checked at
+  run time); anything annotated (`x: T`, field types, `implements`, a declared parent type) is a promise the compiler
+  enforces. `--strict` adds warnings for the lax spots. Asked after the user saw "a general conflict between pythonic
+  type laxity and strict typing".
+- P201 (from P203, card upcast-field): `s: Shape = Circle("a", 2); s.r` is a compile error "Shape has no field r"
+  with the hint to match `Circle(r)` or use `s as Circle`; likewise `c: Color = rgb(1,2,3); c.r`. Unannotated
+  `s = Circle("a", 2); s.r` works.
+- P204 (refines P203) a value of static type any going into an annotated place (`y: any = 3; x: int = y`, `f(y)` for
+  `f(n: int)`, `x = xs#1` of a mixed list, `level = event.level`) compiles with a run-time check: the value must have
+  the annotated type when it runs, else an error; the annotated place never holds a wrong value. Card int-unchecked.
+- P202 an `emit` that no handler receives gives a warning (chosen over P163's silence and a compile error).
+- `when` by shape (user to warp-dc): `when click {…}` = `on click`; `when x > 3 {…}` = `whenever` (edge-triggered,
+  P156); a block of `->` arms stays Kotlin's switch. Card signals-shape.
+- Effect handlers steps 1+2 approved (user to warp-dc): block-scoped `on` handlers, and emitted events as named typed
+  effects, lowered to plain calls. Card effect-handlers.
+- Effect handlers step 3 (default, warp-e4, word choice): a block handler ends its `on … in` block with `break value`
+  (abort via its own WASM tag); return resumes; raise/stop stay errors.
+- Next big topic (user to warp-dc): stdlib-standard, the standard library as importable modules; warp-e4 leads.
+- Reflection streamlined (user to warp-dc, card reflection, warp-70): `dir(x)` from compile time when known, else at
+  run time from the WASM metadata. Words: x.type, x.class, x.fields/attributes/members, x.methods,
+  f.params/signature, f.effects, event.listeners, module.exports, x.unit, x.doc. Lookup order field → meta →
+  reflection. One warp custom section (warp.meta), kept unstripped.
+  Built (default, warp-web): run-time reflection on the program's own classes is a compiled type dispatch
+  (`o.fields` → `if o is P then ["x" "y"] else …`), no host call; warp.meta plus a host call serve values from outside
+  the program (card reflection-foreign-meta). `members` is an alias of `fields` (field names only).
+- P200b real references without exceptions (card real-references, warp-58): maps share like class instances
+  (`m = {a: 1}; n = m; n.a = 2; m.a` → 2), and adding a new field keeps the same object (`q = p; q.color = "red";
+  p.color` → "red"). `x.copy()` is the explicit independent copy.
+- P200c (user): every object has `copy()` and `clone()` by inheritance from the root type (instances, maps, lists,
+  texts), overridable by a class. Discussed first ("in C++ there are sometimes very complicated copy footguns"):
+- P205 `copy()` is deep: everything mutable inside is copied, numbers and texts are shared (they never change);
+  cycles and shared parts are copied once. Shallow is a default argument, not a method (user): `x.copy()` =
+  `x.copy(shallow: false)`; `x.copy(shallow: true)` is shallow.
+- P206 a resource inside (file, socket, timer, listener, closure) is shared by both copies, with a got-it note;
+  --strict makes it an error.
+- P207 one overridable `copy` method; `clone` is an alias that always calls it, so they cannot diverge; an override
+  returns its own class (checked when annotated); a copy keeps the real class (no slicing).
+- P208 `===` on objects (instances, maps, lists) is identity (chosen over a new `same(a, b)`): `q = p; q === p` yes,
+  `p.copy() === p` no. On scalars `===` stays P196/P196b (type + value). `==` stays loose. The preferred spelling
+  is `same`: `a same b`, `a same as b`, `a is the same as b`; `===` is its alias (user). `identical` was proposed
+  and dropped as bloat (each phrase alias costs parser special cases). Plain `is` stays the type
+  test (`red is Color`).
+- check-assert (user to warp-dc): `check` acts like assert; float parameters stay IEEE and `==` stays exact (no
+  tolerance); samples/polymorphism.warp uses `combine number with number`, so `check combine 1.1 with 2.2 == 3.3`
+  passes with exact numbers.
+- Quantities print without a space (user to warp-dc): `500m`, not `500 m`, in print, interpolation, serialize and
+  the playground (warp-99).
+- test-soft (user to warp-dc, card test-soft, warp-99): `test C` is a soft check that records pass/fail and
+  continues; `check C` stays assert; `test "name" { … }` is a named test block beside functions.
+- Copy details (defaults, warp-class, branch shared-maps): copy shares closures and Data nodes silently for now (P206's
+  note would be a run-time warning, not built yet); `x.copy(true)` positional also means shallow, and in the
+  Kotlin-style `p.copy(shallow = yes, y = 5)` shallow is the flag; each event handler still gets a copy of the event
+  as raised; lists are still values until card shared-lists (P200b's "everything shares" includes lists).
+- Soft tests (defaults, warp-worker, notes/soft_tests.md): bare `test C` lines are skipped by `warp run` too (P209);
+  the playground's Run runs a program's tests and shows the summary (no separate Test button); page tests still run
+  under a plain run for now; a program's own `test` function keeps the word.
+- P211 `~` is looser than `≈` (card g_YHSM, "two levels of approximation"): `~` compares numbers within 1% (setting
+  `rough_tolerance`) and texts also ignoring surrounding whitespace and punctuation ("Hello!" ~ "hello"); `≈` stays:
+  numbers within 1e-9 relative, texts ignoring case and accents, lists and objects field by field.
+- P212 a class may define `approximately` (≈) and/or `similar` (~); with only one defined, both operators use it;
+  with neither, the built-in field-by-field rule applies.
+- P209 test blocks run only under `warp test` (chosen over running with the main program); `warp run` and `use` skip
+  them.
+- P210 when all tests pass, one summary line ("✓ 12 tests passed"); failures print ✗ lines and "m of n failed" and
+  exit nonzero.
+- P199 bool slots accept 1 and 0 as yes/no everywhere (variables, fields, list items); other ints and texts are
+  errors. Card bool-assign.
+- P200 class instances passed to functions are shared references (like Python/JS). Card instance-field.
+  Built as copy-in/copy-out (warp-c6): a parameter whose field a function changes is shared (maps too); aliases
+  don't share (`q = p; q.x = 7` leaves p.x); only a variable argument gets the change back (`f(bags#1)` doesn't);
+  a function passed as a value keeps value semantics. User: interim OK; real references (struct_backend's mutable
+  per-class structs; WASM GC structs are references) on card real-references. Later the same day the user moved it
+  to Next with the plan: $Node.value mutable, `p.x = 7` as an in-place struct.set instead of field_with, literal
+  objects copied at construction; struct_backend not needed.
+- `type(ø)` prints "empty" (word choice, not asked; warp-79, card type-static): matches the run-time kind name;
+  unit, nil, ø may be aliases where a type name is read. `type(1.5)` stays "rational".
 
 ## Decided 2026-10-07 (user, multiple-choice interview, as recommended unless quoted)
-- P169 `use math` loads a NEW wasp math module (to be designed) with beautiful names, not the historic C names: "we
+- P169 `use math` loads a NEW warp math module (to be designed) with beautiful names, not the historic C names: "we
   need to educate people about beautiful names". The raw C library stays available as `use cmath`. Owner warp-67.
 - P170 after `use list` its words work bare `zip(a, b)` and qualified `list.zip(a, b)`.
 - P171 new words (zip, enumerate, unique, …) stay in their modules; a bare use without `use` is an error naming the
@@ -31,7 +185,7 @@ D-number or #number mean this file. Open questions, parked ones and the standing
 - P181 the Integrator may merge branch write-hook-d2 (caf229b10, claudeignore-hook.sh: reason on stderr, printf).
   The Integrator wants the user's word directly (hook rule); warp-03 arranges that.
 - P182 Set, Stack, Queue, Deque, Counter: module `collections` only; without `use collections` the error names it.
-- P183 std modules are backed only by wasp, host words or C compiled to wasm (never python3, node or system
+- P183 std modules are backed only by warp, host words or C compiled to wasm (never python3, node or system
   libraries); regex is the common subset of Rust regex and JS RegExp with a loud error for the rest; file append is
   `file.append(path, text)`, bare `append` stays the list method. argmax/argmin not switched: stay 0-based.
 - P184 English number words are numbers (`one plus two` = 3) when no variable of that name exists, with a hint to
@@ -48,10 +202,64 @@ D-number or #number mean this file. Open questions, parked ones and the standing
   special quoting instead of guessing.
 - P190 page-test words (test / render / click / fill … with / check): "idk": the default stands.
 - P191 `square(x)` lives in the math module, not as a builtin. "Very important that we have many more functions in
-  there, especially sin and so on": the math module may forward to cmath until wasp has its own implementations.
+  there, especially sin and so on": the math module may forward to cmath until warp has its own implementations.
 - P192 netbase backend: later, as a first external-module experiment (Later card); if the server is revived, a
   smaller version, not the full multi-GB one.
-- P193 the netbase wasp package lives inside pannous/netbase.
+- P193 the netbase warp package lives inside pannous/netbase.
+- P194 (to warp-84): std/ merges into lib/ ("it would be libraries plural, so lib is probably better"; the user first
+  said library/). netbase does not belong among the standard modules: "lib/extra/ or just a completely external
+  module". Now lib/extra/netbase.warp; later an external module in pannous/netbase (P193, card netbase-first).
+  Rule: long, readable names, as long as they don't get too long. Card lib-rename (worker session).
+- Web words (defaults from P188 + the word-choice rule, no user answer; warp-19, branch web-words 23b405bb1): storage
+  `local["k"]` canonical (localStorage), `storage["k"]` alias, `session["k"]` sessionStorage (natively in memory);
+  clipboard `clipboard.write("text")` (navigator.clipboard.writeText), `clipboard.read()` = `clipboard` (native only;
+  in a browser page reading stays a loud error, it is async).
+  IndexedDB (word choice, warp-web, branch database-store 020211abc): `database["k"]` canonical, `indexedDB["k"]`
+  alias, same forms as local/session (database.k, delete, keys); natively <program>.database.json beside the program.
+- Trailing percent (default, warp-d0, card postfix-words): a `%` with nothing after it is a percent, x/100 exact:
+  `10%` = 1/10, `200 * 10%` = 20, `50 % of 200` = 100 (`of` multiplies after a percent). CSS values like
+  `width: 50%` stay as written; `whenever battery < 20%` keeps its battery-level reading. Infix `%` stays remainder.
+- `time` (default, warp-ad, card time-day-value): the machine's local time of day as a duration since midnight (as in
+  `on every day at 9am`); a program's own `time` wins; comparisons of constant quantities are decided at compile
+  time; `time < 12` fails with the hint `time < 12h`, a non-duration gives a DimensionError; `print time` alone still
+  fails until run-time quantities exist (units-p64).
+- P56 revised (user's card unknown-entity, 2026-10-07: "must not stop the program"): an unknown entity `\:name` stays
+  as written, in texts and outside them, with a compile-time warning; an error only with --strict. A bare `\alpha`
+  stays the error "write \:alpha". Branch unknown-entity ecc9c2fcf (warp-ad).
+- Bool type (user, card bool-type, via warp-84): "Yes is 1, no is 0", but true/false (yes/no) become a shallow type
+  of their own: they act like 1/0 in arithmetic and comparisons, `type(yes)` is bool. They print as yes/no (warp-84,
+  correcting the first relay's true/false); true/false stay accepted as input. == stays loose.
+  Replaces the rule that True/False are encoded as Int 1/0. Default following from it (card zero-false, class):
+  `0 == false` is true, `0 === false` is false (strict identity compares the type too).
+- P195 `true + 1` = 2: a literal bool in arithmetic acts as 1/0 like a bool variable; the analyzer error "arithmetic
+  on a boolean" goes.
+- P196 `===` compares the full (static) type: `0 === false` is false. P196b: `1.0` is the exact int 1, so `1 === 1.0`
+  stays yes; `1 === 1.5` and `1 === (1.0 as float)` are no.
+- P197 warp-ee (class) updates AGENTS.md "True/False: encoded as Int 1/0" to the bool type once bool is on main.
+- uniscript v1.0.4 released (user, via warp-84): restored LaTeX names (circ = ∘, varepsilon ε, varphi φ, plus to,
+  neq, land, lor, lnot, ldots, dots, nat, complex, euler, degree, cbrt) and the algorithmic Unicode names; warp pins it.
+- Emoji in code (user, via warp-84): a single emoji is a codepoint; multi-codepoint emoji (flags, skin tones, ZWJ)
+  are texts, equal to their quoted form and not assignable names.
+- P198 names HTML and LaTeX define differently: as recommended, HTML for letter names (ocirc ô, oslash ø), LaTeX for
+  operators (asymp ≍, circ ∘). The user: context-dependent "is probably ugly but the best we can do"; list in
+  notes/footguns.md how many such names there are.
+  Follow-up default (warp-84): "letter names" means Latin letters with diacritics (ocirc ô, oslash ø, imath ı, jmath
+  ȷ); cdot ⋅, varepsilon ε, varphi φ take LaTeX as exceptions. 36 names differ, listed in notes/footguns.md.
+- uniscript 1.0.5 released (user, via warp-84) with the P198 letter/operator rule and its exceptions; warp pins it.
+- try-finally (default, warp-a1, card try-finally): `try X finally Z` without catch is accepted; Z always runs and X's
+  value is the result; if X fails (raised or trapped), the Error becomes the value, as in `try X catch e { e } finally
+  Z`. Alternative: re-raise the Error after Z.
+- Mutating a main-level list in a function (default, warp-7c, card uncalled-list-param): `names = ["a"]; grow() := {
+  names.add(420) }` gets the same educating error as `names = names + [420]` there: "declare it `global names`";
+  with `global names` it works. Alternative: Python's silent mutation without a declaration.
+- Undeclared lists (default, warp-a1, card list-element-types): an undeclared list stays `list any` (`xs = [1];
+  xs = ["a"]` is fine), while a scalar's first value fixes its kind.
+- Method broadcast (default following P50, warp-c9, card method-broadcast): the method form of scalar library words
+  (upper lower trim floor ceil round) broadcasts over lists like the prefix form: `names.upper` = `upper names`.
+- Defaults shown to the user and kept (no objection): error highlighting (CLI carets under the word on stderr; web
+  demo red/amber wavy underlines, message on hover; card g-_ZNg); P168 detail (an object whose fields are unknown at
+  compile time keeps the field read `p.phone-number`); char as Text (card char-text, follows from P173: an untyped
+  parameter given a one-character text takes it as Text, `g(t) := t as float; g("3")` → 3, `ord` still works).
 
 ## Decided 2026-10-06 (user, multiple-choice interview, as recommended unless quoted)
 - P165b soft keywords vs tests: strict P165. tests/functions/test_named_arguments.rs:22 renames `fun` → `g`
@@ -66,7 +274,7 @@ D-number or #number mean this file. Open questions, parked ones and the standing
   exists: commit 0b687e03 on branch late-binding (warp-29). Object entries `{s := clock()}` follow (§4 is revisited).
   Tests pinning "now" may be edited, each in its own commit naming P71.
 - P63 (rest) a comma tuple `(frobnicate, 3)` in code is data, never called (worker default stands). Asked by warp-90.
-- P94 WIT `char` maps to wasp's Codepoint, not a one-character text. Asked by warp-d6 (branch web-components).
+- P94 WIT `char` maps to warp's Codepoint, not a one-character text. Asked by warp-d6 (branch web-components).
 - P93 the "Batch board writes" paragraph is deleted from AGENTS.md.
 - P95 tests/lists/test_map_starts.rs and its `mod` line: a worker checks it passes and commits it on a branch; the
   user's checkout is cleaned once main has it.
@@ -78,20 +286,20 @@ D-number or #number mean this file. Open questions, parked ones and the standing
   Correction (user, same day): test_wasm's test_dom_property did assert ($canvas.width == 300); it moves into
   web/test_web.rs, replacing that file's empty namesake, still ignored for the browser host (warp-f6, branch
   p96-obsolete-ignored).
-- P102 (card g-1KS4) `warp build hello.wasp` makes the native executable by default; on macOS/Linux it is named
+- P102 (card g-1KS4) `warp build hello.warp` makes the native executable by default; on macOS/Linux it is named
   `hello` (no extension), on Windows hello.exe; `warp compile` makes the executable too (user chose this over the
   recommended "compile stays .wasm"); the .wasm only with `--wasm`; `--exe` still accepted. Asked by warp-f6 (branch
   build-exe-default).
 - P103 (replaces P102's command words) user: "we don't need the build and compile flags at all. Just giving it a file
-  will compile it." `warp hello.wasp` compiles once, runs the program right away (output as before) and leaves the
+  will compile it." `warp hello.warp` compiles once, runs the program right away (output as before) and leaves the
   executable `hello` beside it (hello.exe on Windows); `build`/`compile` stay accepted as synonyms, not in the help.
   Assumed (undoable): `--wasm` and `--aot` stay for the module only. warp-f6, branch build-exe-default.
-- P104 (after P103, warp-f6, branch p102-exe-naming) a plain `warp file.wasp` always writes the small stub executable
+- P104 (after P103, warp-f6, branch p102-exe-naming) a plain `warp file.warp` always writes the small stub executable
   (1–5 MB); without a warp-runtime stub it prints a note and writes nothing, never a ~120 MB copy of warp. `build`/
   `compile` write the executable without running (exit 1 on failure). Worker assumptions standing: rebuild only when
   the source is newer; a program the runtime can't carry (fetch, read, run, warn) gets "note: no executable …" and
   runs; `--wasm`/`--aot` give the module.
-- P105 user: "We also need `warp run` which shall do the opposite": `warp run hello.wasp` runs the program and writes
+- P105 user: "We also need `warp run` which shall do the opposite": `warp run hello.warp` runs the program and writes
   no executable (the opposite of `build`, which writes without running). Assumed (undoable): bare `warp run` without
   a file still opens the REPL. warp-f6, branch p102-exe-naming.
   Purpose (user): "the point is to avoid the ahead-of-time compilation because that's too slow": `warp run` must
@@ -99,10 +307,10 @@ D-number or #number mean this file. Open questions, parked ones and the standing
 - P106 tasks share a variable with main only when it is declared `shared` (`shared done = false; go { …; done = true
   }; after done …`), scalars like P44's shared arrays; every other variable stays an isolate copy (P33). Asked by
   warp-d9 (branch async); as recommended. wiki/thread.md's example gets `shared`.
-- P107 (issue #16, card g-1sPM) the playground offers only the .wasm download plus a one-line `warp hello.wasp`
+- P107 (issue #16, card g-1sPM) the playground offers only the .wasm download plus a one-line `warp hello.warp`
   instruction, no native executable (user chose this over a static Cranelift stub with the .wasm appended in the
   browser, and over a pannous.com build endpoint). Asked by warp-76.
-- P108 (Sublime package, pannous/wasp-sublime-text) Angle.sublime-syntax is retired; Wasp.sublime-syntax (scope
+- P108 (Sublime package, pannous/warp-sublime-text) Angle.sublime-syntax is retired; Warp.sublime-syntax (scope
   source.wasp) takes .wasp/.warp/.a/.angle (user chose this over the recommended split by extension). Asked by
   warp-76 for the Sublime worker. FYI there: ⚠️ no longer starts a comment (warp reads it as an error constant).
 - Signals (warp-54, branch signals, notes/signals.md): P109 every variable can be watched (implicit), checks only
@@ -165,7 +373,7 @@ D-number or #number mean this file. Open questions, parked ones and the standing
   `use` / `require` only declare (ø); `include m` runs m's main/start export and is its value (test_import_wasm → 42).
   P140 assigning an imported global: a mutable wasm global is set in the module, an immutable one is a loud error
   (P130's rule). P141 REVISED (user: "if the built-in wins, then what's the point of even allowing to define it? It
-  should be an error then, no?" … "at the definition side if we don't define it, then you decide"): a wasp
+  should be an error then, no?" … "at the definition side if we don't define it, then you decide"): a warp
   definition named like a builtin (`def double(x)…`) is a loud error at the definition. A foreign .wasm export
   can't be renamed, so (Interviewer's choice, as the user delegated) `import m` works, `m.double(21)` always works
   (qualified calls get built), and a bare `double(21)` is a loud error "double is ambiguous: m.double(21) for the
@@ -220,7 +428,7 @@ D-number or #number mean this file. Open questions, parked ones and the standing
   P155 channels are one concept: `ch = channel()` is local, `channel "chat"` machine-wide, both with send (blocks
   until received), receive, `for v in ch {…}` and close; `send v to "chat"` (P129) is that channel's send.
 - P167 (classes, warp-e0) Go's positional literal `Point{1, 2}` builds `Point(1, 2)` when Point is a known class,
-  with a got-it note "wasp writes Point(1, 2)"; for an unknown name it stays tagged data.
+  with a got-it note "warp writes Point(1, 2)"; for an unknown name it stays tagged data.
 - P165 Kotlin-style soft keywords (user's proposal: with so many synonyms in so many situations, allow overwriting
   keywords except the main ones). Hard keywords, never redefinable: control flow (if, then, else, while, for, in,
   return, break, continue), declarations (def/fun/fn, class, var/let/const/val, global), literal values (true,
@@ -245,7 +453,7 @@ D-number or #number mean this file. Open questions, parked ones and the standing
   subtraction, and reading such a field uses `p.phone-number` / `p["phone-number"]`.
 - P162 (classes, warp-e0) `init(…){…}` in a class is always the constructor (user chose this over the recommended
   "unless called explicitly"). User, correcting: `init` is THE constructor name, not `value`. `value`, JS
-  `constructor` and Python `__init__` still work as aliases with a got-it note "wasp says init" and an "I meant:
+  `constructor` and Python `__init__` still work as aliases with a got-it note "warp says init" and an "I meant:
   init" fix; docs, hints and examples use `init`. User, extending: all common constructor names are aliases
   of `init` with that note: `value` (wiki 2023), `constructor` (JS/TS), `__init__` (Python), `initialize` (Ruby),
   `__construct` (PHP), `New` (VB.NET), `Create` (Delphi), Rust's `new` inside a class/impl, and a method named like
@@ -254,14 +462,14 @@ D-number or #number mean this file. Open questions, parked ones and the standing
   stays the definition name (it initializes an existing instance; Rust's `new` is a factory).
 - P161 (functions, warp-41; the user told the worker directly) no Swift-style argument labels: "we don't do this
   here, I don't like that redundancy". Ported labels (`func greet(person name: String)`, `_ x: Int`) compile like P157,
-  with a got-it note "wasp names a parameter once"; docs and examples never use labels.
+  with a got-it note "warp names a parameter once"; docs and examples never use labels.
 - P160 (warp-42, wiki/reference.md; survey notes/implicit_params.md) `$0`/`$1` were overloaded three ways (lambda
   parameters, WebAssembly positional arguments, node ids). The user chose a different syntax for ids: `@1` is the
   node whose `@id` is 1 (`a[id=1]{ b c { parent=@1 } }`), `ref 1` / `ref a` say the same in words, and `$a` stays
   the reference by name (nearest enclosing node with key a). `$<digits>` is only ever positional, never an id.
-- P157 (functions, card functions-generic, warp-41) no generic syntax in wasp: untyped functions (`def id(x)`,
+- P157 (functions, card functions-generic, warp-41) no generic syntax in warp: untyped functions (`def id(x)`,
   `max(a, b)`) already work for every type, with copies made per call. Ported `fn id<T>(x: T) -> T { x }` compiles as
-  the untyped form with a got-it note "wasp infers types: write def id(x)"; wasp's docs never use `<T>`.
+  the untyped form with a got-it note "warp infers types: write def id(x)"; warp's docs never use `<T>`.
 - P158 (warp-42) `then` pipes only when the right side is a function stage missing its argument (`… then sort`,
   `… then filter(x => x > 5)`) and no `else` follows; otherwise it is the condition (`it<2 then 1 else …`). In the
   collision `x > 2 then print` the condition wins, with a got-it note naming `|>`.
@@ -291,7 +499,7 @@ D-number or #number mean this file. Open questions, parked ones and the standing
 - P122 (classes, warp-8e, card g-1nug) static members take the explicit keyword (user chose this over the
   recommended "`pi = 3` in the class body is a constant"): `class circle{r:int; static pi = 3}; circle.pi` → 3, also
   `c.pi`, never stored per instance; a plain `pi = 3` stays a per-instance field with a default value. `static` no
-  longer gets the "no meaning in wasp" note (P78).
+  longer gets the "no meaning in warp" note (P78).
 - P123 (classes, warp-8e) an object's text is the constructor form `point{x:1 y:2}` everywhere: as a result, from
   `string(p)` and from `print p`; it reads back in as the same value.
   Follow-up (user): "Maybe Point{x:1 y:2} to distinguish it from untyped data (but that's just optional convention
@@ -340,11 +548,11 @@ D-number or #number mean this file. Open questions, parked ones and the standing
   fix offer `codepoint('x') as float`; P27 stands. tests/text/test_text_casts.rs may be edited for the hint text (user
   decision). Asked by warp-ea (fixits).
 - P75 fix buttons read "I meant: <replacement>", the meaning as a tooltip (warp-ea's default).
-- P77 `warp build --exe prog.wasp`: the executable prints what the program prints, then its value as `print` shows
+- P77 `warp build --exe prog.warp`: the executable prints what the program prints, then its value as `print` shows
   it (texts without quotes); exit code 0, 1 on a trap (asked by the aot worker warp-ec; as recommended).
 - P78 modifiers from other languages before a definition (`public`, `static`, `extern C`, `inline`, `virtual`,
   `final`, `private`, `volatile`, `native`, …): accepted and skipped with a got-it note "public has no meaning in
-  wasp"; words with a wasp meaning (`global`, `const`) keep it; a lone definition stays ø, so test_modifiers is edited
+  warp"; words with a warp meaning (`global`, `const`) keep it; a lone definition stays ø, so test_modifiers is edited
   to call the function (user decision). Asked by warp-90; as recommended.
 - P79 the 13 inherent browser-suite failures (notes/web_playground.md: test_download, test_use_modules, test_package_pin,
   test_law lean, test_eval_state threads, test_use_scopes) are marked `#[cfg_attr(not(feature = "native"), ignore =
@@ -477,7 +685,7 @@ D-number or #number mean this file. Open questions, parked ones and the standing
 - P46 type-name and condition patterns in `for` (`for friend in [foe1, friend1, …]`, `for (it>2) in xs`): user:
   "this should give a warning, though if the user is unfamiliar, he needs to confirm that he understands the filter".
   So the wiki forms filter as written, with an educate_once "got it" warning naming the filter (the user confirms
-  with got-it; notes/welcoming.md). Done (branch p46-filter-loops, wasp_parser try_parse_for_in): `for friend in xs`
+  with got-it; notes/welcoming.md). Done (branch p46-filter-loops, warp_parser try_parse_for_in): `for friend in xs`
   with a declared class (instance_of, the item is `it` and `friend` in the body), `for (it>2) in xs`; got-it topic
   `for-filter`. Built-in type words filter too (`for number in xs`, under their own name; a literal list of matching
   items needs no filter) and an adjective with a type word is a condition (`for (even number) in xs`: even/odd built
@@ -562,7 +770,7 @@ D-number or #number mean this file. Open questions, parked ones and the standing
 
 ## Decided 2026-10-03 (relayed by BOSS-cheeky-shannon to the fixer, playground `print greeting*2 print(g, g) print g, g`)
 - `print a    print b` on one line: "Error with hint". Loud error "two statements on one line? separate them with `;`
-  or a newline" (wasp_parser.rs grouped_list, tests/parser/test_one_line_statements.rs).
+  or a newline" (warp_parser.rs grouped_list, tests/parser/test_one_line_statements.rs).
 - text * number: first "Always ask", then superseded (Asks are being replaced by got-it warnings, warp-b8): repeat the
   text, with an educate_once "got it" warning naming `n times text` (and `int("5")*3` for a number-like text).
   Confirmed by the user as "Python repeat" (P1 below); implemented on fix-text-repeat (tests/text/test_text_repeat.rs).
@@ -581,7 +789,7 @@ D-number or #number mean this file. Open questions, parked ones and the standing
   double quotes (user decision) and the 5 ignored tests un-ignored.
 - `try` syntax (P21, asked by warp-bc, branch claude/try-exits-and-naming), user verbatim: "try X else
   otherValueOrAction     I never invented the => Y syntax". The form is `try X else Y`, Y a value or an action;
-  the named binding `else e => Y` is not wasp syntax and is removed (the question how e binds is moot).
+  the named binding `else e => Y` is not warp syntax and is removed (the question how e binds is moot).
 - Objects as arguments (asked by warp-bc for Cloud-Microsoft, branch claude/object-arguments). CENTRAL PHILOSOPHY,
   to be written into the wiki and implemented. User, verbatim: "if it's truly unknown then this is a duct typing like a
   python if it has all the fields but is a known different type then we should create an error and get the user about
@@ -607,7 +815,7 @@ D-number or #number mean this file. Open questions, parked ones and the standing
   folders". A new agent condenses the `probe_*.rs` files into real tests (keeping what matters) and groups tests/ into
   topic folders.
 - CLAUDE.md (P15, code quality 8): "Symlink to AGENTS.md".
-- Root clutter (P16, code quality 9): "Move to notes/OLD" (the dangling `wasp`/`warp` links are deleted).
+- Root clutter (P16, code quality 9): "Move to notes/OLD" (the dangling `warp`/`warp` links are deleted).
 - D10 return-type polymorphism (P17): "Dispatch on return type" (un-parked). `render "hello" as pdf` /
   `docx example = render "x"` pick the overload by the expected type; ambiguous → got-it warning (assumed under the
   Asks-become-warnings rule).
@@ -721,43 +929,41 @@ D-number or #number mean this file. Open questions, parked ones and the standing
     length is 0 (C++ counted the 3-item list `[y = 0]`). Correct for the current model, closed.
 - D15 REVISED (user to warp-b8, 2026-10-03): "revision of my previous decision create special keyword use folder and
   use package and use Project to automatically include everything but not by default anymore". No automatic folder
-  scope; `use folder` (the program's folder), `use package` (below the nearest folder holding <name>.wasp),
+  scope; `use folder` (the program's folder), `use package` (below the nearest folder holding <name>.warp),
   `use project` (below the nearest .git), lazy per-name lookup, same conflict rules.
 - #30 type tests: "Only `is` tests types". `3 is int` → 1, `3 is rational` → 1; `3 == int` educates toward `is`.
 
-## Decided 2026-10-02 (relayed by warp-f3): eat newcomer syntax, compile its intent, hint the wasp form
+## Decided 2026-10-02 (relayed by warp-f3): eat newcomer syntax, compile its intent, hint the warp form
 - Text + number concatenates, the number in its text form (`"F:" + 13` → `"F:13"`, `"5"+3` → `"53"`, JS/Kotlin), with a
   hint `str(13)`. Reversed: the 2026-09 "no implicit conversion" rule (DESIGN.md "Dangerous implicitness", wiki/Footguns.md
   "String + number"), which was there because one-character strings used to add as code points (`"5"+3` → 56). `"5"*3`
   stays a type error. Flipped tests: test_text_concat::text_plus_number_stays_an_error,
   test_footguns::test_text_plus_number_is_a_type_error, test_text_bytes::text_plus_number_stays_a_type_error.
   Not yet: a runtime ratio (`y=2.5; "x"+y`, also `y as string`) prints garbage: list_join has no text form for ratios.
-- `//` glued to its operand (`7//2`, `x//=2`) is Python floor division, the Euclidean quotient that goes with `%`
-  (`floor_quotient(a, b)` since 2026-10-04, same results as the earlier `(a - a%b)/b`: floor for a positive divisor,
-  `-7//-2` gives 4 where Python gives 3); `x // note` (space before) stays a comment, and one whose comment hides a
-  closing bracket (`(col // 3)`) is a parse error naming the `//` (no reinterpretation).
-  `a div b` is the same floor division. An index that divides (`xs[n/2]`) traps `index must be an integer` unless the
-  division is exact, with the hint `n//2`.
-- Spaced `a // b` — USER DECISION 2026-10-03 (fix-floor-ask-3): "just make it a warning to the user that it's read
-  as a comment, don't do heuristics". A spaced `//` is always a comment, only glued `a//b` / `x//=b` divide. A `//`
-  comment after code on its line educates once (diagnostic::educate_once, topic `slash-comment`): "`// …` after code
-  is a comment; floor division is written glued: a//b", shown until acknowledged, never again after. The earlier
-  floor-or-comment Ask and its spacing/ASCII/default heuristics (fix-floor-ask, -2) are gone.
+- `//` not followed by a space is Python floor division (`7//2`, `a //b`, `x//=3`, `x //= 3`), the Euclidean
+  quotient that goes with `%` (`floor_quotient(a, b)`: floor for a positive divisor, `-7//-2` gives 4 where Python
+  gives 3). `a div b` is the same floor division. An index that divides (`xs[n/2]`) traps `index must be an
+  integer` unless the division is exact, with the hint `n//2`.
+- `//` is a comment only when followed by a space or the end of the line: `a // b`, `x = 1 // note` are comments
+  (user decision 2026-10-08, emphatic, via the supervisor; it replaces the 2026-10-03 rule that keyed on the space
+  before `//`). A comment that hides a closing bracket (`(col // 3)`) is a parse error naming the `//`. A `//`
+  comment after code on its line educates once (topic `slash-comment`): "`// …` after code is a comment; floor
+  division is written without a space after it: a //b".
 - #28 decided (supervisor warp-f3 under the welcoming policy, reported to the user): `x=ø; x.size` and `xs=[]; xs.count`
   are 0; arithmetic on ø still needs the check. Changed line: tests/welcoming/test_footguns.rs test_null_needs_a_check
   (`x=ø; x.size` → 0); tests/lists/test_empty_list_count.rs un-ignored.
 - `#` directly followed by a non-space starts an expression (count): `#s`, `#a-1`, `#f(x)`, also at line start
   (fix-sugar-4; before only `#name` as a whole statement counted). Comments: `# text` (space or tab), `#!` (shebang),
-  `##` (doc comment) and the directives in wasp_parser.rs HASH_DIRECTIVES: `#use`, `#include`, `#import`.
-  Side effect: commented-out code written `#code` in samples (samples/raylib_*.wasp `#while(1>0){`, `#sleep(2000)`,
-  samples/main.wasp `#print …`, `#fun …`, samples/lib.wasp `#fun ok(){`, tests/wasp/ffi/*/*.wasp) is now live code
+  `##` (doc comment) and the directives in warp_parser.rs HASH_DIRECTIVES: `#use`, `#include`, `#import`.
+  Side effect: commented-out code written `#code` in samples (samples/raylib_*.warp `#while(1>0){`, `#sleep(2000)`,
+  samples/main.warp `#print …`, `#fun …`, samples/lib.warp `#fun ok(){`, tests/warp/ffi/*/*.warp) is now live code
   when run; test_all_samples still parses all 72 samples.
 - `let x = …` / `var x = …` declare a variable in any block. USER DECISION (fix-sugar-2): `let` is immutable as
   wiki/variable.md says: `let x=1; x=2` (also `+=`, `++`, `x#i=`) → "x is let (immutable), cannot assign it again;
   fix: declare it with var or plain `x =` if it changes" (check_constants, like const). `var` stays mutable. The `let`
-  style hint carries the education "in wasp `let` is immutable (unlike JS) …" (one hint, test_normalization pins one).
+  style hint carries the education "in warp `let` is immutable (unlike JS) …" (one hint, test_normalization pins one).
   fix-sugar-3: the note is `diagnostic::educate_once("let", …)`: shown once per run until the user acknowledges it,
-  then remembered as `ack:let` (.wasp-answers) and never shown again.
+  then remembered as `ack:let` (.warp-answers) and never shown again.
 - A bare word statement that names nothing (`x=1; foo; x`, `foo x = 3`) is `undefined variable: foo` (was silently dropped).
 - `len(x)` counts like `#x` (hint `#x`); `n times [x]` fills a list; `b=[]; b.count` is 0.
 - Rule (user, via warp-f3): newcomer forms are eaten only where they do not clash with a known footgun (text + number
@@ -767,12 +973,12 @@ D-number or #number mean this file. Open questions, parked ones and the standing
   - `xs.insert(a, b)` never guesses the order (Footguns "Guessing intent"): `insert(x, at: i)` names the position;
     otherwise the kinds decide (the one Int is the position, `insert(0, "z")`, `insert("z", 1)`); two Ints
     (`insert(0, 4)`, `insert(i, v)`) are an error listing both readings, `insert(v, at: i)` / `insert(i, at: v)`.
-    So the ignored wasp test form `pixel.insert(4,0)` is refused too. Positions are 0-based slots, past the end or
+    So the ignored warp test form `pixel.insert(4,0)` is refused too. Positions are 0-based slots, past the end or
     negative appends. `xs.insert(v)` appends.
   - fix-sugar-3: both are Asks with fallback Error (src/diagnostic.rs). Topic `list-times` (analyzer::lower_list_times,
     a list literal times a number): answers "repeat the list" → `n times [x]`, "multiply each element" →
     `[x].map(x => x*n)`; a list variable times a number stays the plain type error. Topic `insert-order`
-    (list_emitter insert_position_and_value, two Int arguments): "position first, as Python" / "value first, as wasp".
+    (list_emitter insert_position_and_value, two Int arguments): "position first, as Python" / "value first, as warp".
     Unanswered (tests, CI, pipes): "<question> (too ambiguous to guess); fix: <both explicit forms>". The list-times
     question starts with "type error: list * number:" so test_footguns' `[1 2 3]*2` → "type error" still holds.
   Not yet: `insert 4 at 0`, `at end/start/head`, `x is 100 times [0]` (`is` compares).
@@ -803,7 +1009,7 @@ D-number or #number mean this file. Open questions, parked ones and the standing
 9. **Types**: `type([1 2 3])` → `list` or generic `list<int>`? Should `Data(Vec<i32>)` equal a List of ints?
 10. **Polish notation for .wat/.wast**: `(module a b)` → node `module` with children, as a ParserOptions mode (test_wast).
 11. **C-style declaration blocks** `double S1 = …, S2 = …` and float literals expected equal to truncated ints (test_primitive_types).
-12. **`use <file>`** module import (test_sinus_wasp_import).
+12. **`use <file>`** module import (test_sinus_warp_import).
 13. **Web host (L1)**: `$b.ok` / externref need a real webview host (C++ WebApp.cpp; Rust: wry?).
 
 14a. **Shift operators**: `2 << 1` silently gives 0 (parsed as `<` + angle group), `8 >> 1` a cryptic error.

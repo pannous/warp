@@ -46,3 +46,52 @@ fn a_float_map_of_a_linear_array_is_a_simd_kernel() {
 	assert!(!lowered(&format!("{fill}{k}ys = xs.map(x => x * k); ys#1")).contains("linear_mapf"));
 	is!(&format!("{fill}{k}ys = xs.map(x => x * k); ys#2"), 12.0);
 }
+
+// card linear-map: a numeric map the f64x2 kernel cannot compute (sin, min …) writes a new linear block in one loop,
+// and a linear array read as a whole fills a typed list of its count, no list grown item by item (that was superlinear)
+#[test]
+fn a_numeric_map_of_a_linear_array_writes_a_new_block() {
+	let fill = "linear xs = float[3]; for i in 1 to 3 { xs#i = i * 1.0 }; ";
+	is!(&format!("{fill}ys = xs.map(x => max(x, 2) * 2); [ys#1, ys#3, #ys]"), list(vec![float(4.0), float(6.0), int(3)]));
+	is!(&format!("{fill}ys = xs.map(x => floor(x / 2)); ys"), list(vec![float(0.0), float(1.0), float(1.0)]));
+	is!(&format!("{fill}sum(xs)"), 6.0);
+	is!("linear xs = int[3]; xs#2 = 5; xs", ints(vec![0, 5, 0]));
+	let lowered = warp::pipeline::lower(&format!("{fill}ys = xs.map(x => sin(x)); ys#1")).expect("a program").serialize();
+	assert!(lowered.contains("linear_new") && !lowered.contains(".map"), "{lowered}");
+}
+
+// a map of a numeric map's result is a linear array too (the results found until none is added)
+#[test]
+fn a_numeric_map_of_a_mapped_linear_array_writes_a_block_too() {
+	let program = "linear xs = float[2]; xs#2 = 1.0; ys = xs.map(x => sin(x)); zs = ys.map(y => max(y, 0.5)); [zs#1, #zs]";
+	is!(program, list(vec![float(0.5), int(2)]));
+	assert!(!warp::pipeline::lower(program).expect("a program").serialize().contains(".map"));
+}
+
+// a chain of numeric maps over a linear array is one loop of g after f, not a list of f's results mapped again
+#[test]
+fn a_chain_of_numeric_maps_of_a_linear_array_is_one_loop() {
+	let program = "linear xs = float[2]; xs#2 = 1.0; zs = xs.map(x => sin(x)).map(y => max(y, 0.5)); [zs#1, #zs]";
+	is!(program, list(vec![float(0.5), int(2)]));
+	let lowered = warp::pipeline::lower(program).expect("a program").serialize();
+	assert!(lowered.contains("linear_setf") && !lowered.contains("+["), "{lowered}");
+}
+
+// card linear-interpolation: a text hole reads a linear array's item like any other expression
+#[test]
+fn an_item_of_a_linear_array_reads_in_a_text_hole() {
+	is!("linear xs = float[3]; xs#1 = 2.5; \"a \\(xs#1) b\"", "a 2.5 b");
+	is!("linear xs = int[2]; xs#2 = 7; \"\\(#xs): ${xs#2}\"", "2: 7");
+}
+
+// `xs .* ys` of two linear arrays pairs their items by index, as of two lists (it multiplied by ys's address)
+#[test]
+fn element_wise_operators_pair_two_linear_arrays() {
+	let filled = "linear xs = float[3]; linear ys = float[3]; xs#1 = 2.0; ys#1 = 3.0; xs#2 = 4.0; ys#2 = 0.5\n";
+	is!(&format!("{filled}zs = xs .* ys; [zs#1, zs#2, #zs]"), list(vec![float(6.0), float(2.0), int(3)]));
+	is!(&format!("{filled}sum(xs .* ys)"), 8.0);
+	is!(&format!("{filled}dot(xs, ys)"), 8.0);
+	is!(&format!("{filled}zs = xs .+ ys .* 2; zs#2"), 5.0);
+	fails_with("linear xs = float[3]; linear ys = float[2]; zs = xs .* ys; zs#1", "differ in length");
+	fails_with("linear xs = float[3]; linear ys = float[2]; sum(xs .* ys)", "differ in length");
+}

@@ -4,6 +4,9 @@ mod test_uniscript;
 mod test_web;
 mod test_markup_tags;
 mod test_web_playground;
+mod test_missing_use; // card clickable-hint
+mod test_guide; // the language guide on the playground page
+mod test_expert_guide;
 #[cfg(feature = "native")] // a server on a port, HTTP requests
 mod test_web_server;
 #[cfg(feature = "native")] // `warp dev` serves HTTP on a port
@@ -20,7 +23,7 @@ mod test_host_parts; // the parts of host.js a site ships
 #[cfg(feature = "native")] // builds a site natively
 mod test_site_tasks; // card site-tasks
 mod test_rendering_itself; // card playground-render
-#[cfg(feature = "native")] // std/markup.wasp against src/html.rs, natively
+#[cfg(feature = "native")] // lib/markup.warp against src/html.rs, natively
 mod test_html_render;
 mod test_markup_renderer;
 #[cfg(feature = "native")] // the page path of a native render (host::with_page_path)
@@ -41,3 +44,18 @@ mod test_web_apis;
 mod test_accessibility;
 mod test_i18n;
 mod test_webgpu;
+mod test_tag_lists;
+mod test_safari_imports;
+#[cfg(feature = "native")] // a site build with the native compiler
+mod test_server_functions_in_page; // card route-sample
+#[cfg(feature = "native")] // a site build with the native compiler
+mod test_server_rpc_stub; // card rpc-stub
+#[cfg(feature = "native")] // a site build with the native compiler
+mod test_server_rpc_everywhere; // card rpc-everywhere
+#[cfg(feature = "native")] // a server on a port, HTTP requests
+mod test_warp_serve; // P222
+#[cfg(feature = "native")] // a site build and a server on a port
+mod test_route_data; // P221
+#[cfg(feature = "native")] // a server on a port and its SQLite tables
+mod test_served_tables; // card sample-server
+mod test_guide_sections; // card guide-lists

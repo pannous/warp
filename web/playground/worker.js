@@ -1,12 +1,14 @@
 // The warp compiler (warp.wasm, built by build.sh) and the programs it compiles (host.js), run off the page's thread:
 // a worker may compile any module synchronously and block on a synchronous fetch, which the host calls need.
 
-importScripts("reader.js", "host.js");
-importScripts(...HOST_PART_FILES, "components.js");
+importScripts("reader.js", "imports.js", "host.js");
+importScripts(...HOST_PART_FILES, "components.js", "served-files.js");
 prepareTaskPool(); // task Workers start while this worker is idle (host.js)
 
 // warp.wasm, the optimized build, or the one the page names (?compiler=warp.debug.wasm, build.sh)
 const COMPILER_URL = new URL(self.location.href).searchParams.get("compiler") ?? "warp.wasm";
+// ?slow_start=<ms> (playground.js passes the page's one): ready that much later, as on a slow CI runner
+const SLOW_START_MS = Number(new URL(self.location.href).searchParams.get("slow_start") ?? 0);
 self.BLOCK_COMPILER_URL = COMPILER_URL; // run_block compiles with the same compiler (host.js blockCompiler)
 
 let compiler; // the compiler instance's exports
@@ -18,14 +20,20 @@ const PATH_JOINER = "·";
 const VALUE_DELAY_MILLISECONDS = 50;
 let panicMessage; // the compiler's last panic message
 
-const post = message => self.postMessage(message);
+let warming = false; // the warm-up's run says nothing to the page
+const post = message => warming || self.postMessage(message);
+// the first markup program compiles the markup renderer (lib/markup.warp's to_html) once: ~0.5 s in Chrome, seconds in
+// Safari. The page asks for it while idle after its first run (card guide-warmup), so a guide's first ▶ is quick too
+const WARM_UP_CODE = 'p{ "" }';
 self.keepStored = (name, value, file) => post({ type: "stored", name, value, file }); // host-files.js STD_ADAPTERS.store
+self.writeClipboard = text => post({ type: "clipboard", text }); // host-files.js STD_ADAPTERS.clipboard
 const hooks = {
 	renders: true, // each outcome carries its HTML by the program's own renderer (host.js renderedHtml)
 	print: (text, stream) => post({ type: "print", text, stream }),
 	module: bytes => post({ type: "module", bytes }),
 	paint: (pixels, width, height) => post({ type: "paint", pixels, width, height }),
 	sleeping: () => post({ type: "sleep" }),
+	tasksInline: reason => post({ type: "tasks inline", reason }),
 	notify: text => post({ type: "notify", text }),
 	listen: (holder, events) => {
 		live = holder;
@@ -70,7 +78,19 @@ function evaluate(code, acknowledged) {
 	}
 }
 
-const ready = loadCompiler().then(() => post({ type: "ready" }), failure => post({ type: "failed", message: failure.message }));
+// not over a live run (its listeners and timers stay), nor without a compiler (after a crash: the next run loads it)
+function warmUp() {
+	if (live || !compiler) return;
+	warming = true;
+	try {
+		evaluate(WARM_UP_CODE, {});
+	} finally {
+		warming = false;
+	}
+}
+
+const ready = loadCompiler().then(() => new Promise(done => setTimeout(done, SLOW_START_MS)))
+	.then(() => post({ type: "ready" }), failure => post({ type: "failed", message: failure.message }));
 
 // `use python` runs in Pyodide (host.js registers its call): loaded on first use, since a host call cannot wait for it
 const PYODIDE_URL = "https://cdn.jsdelivr.net/pyodide/v0.29.5/full/";
@@ -165,8 +185,10 @@ function runHandler(holder, handler) {
 self.onmessage = async ({ data }) => {
 	if (data.pointer) return self.pagePointer = { values: new Int32Array(data.pointer.buffer), names: data.pointer.names }; // host.js system_value
 	if (data.system) return Object.assign(self.pageSystemValues ??= {}, data.system); // host.js system_value
-	if (data.stored) return Object.assign(storedValues, data.stored); // host-files.js STD_ADAPTERS.store
+	if (data.stored) return Object.assign(storedValues, data.stored) && Object.assign(sessionValues, data.session); // host-files.js STD_ADAPTERS.store
 	await ready;
+	await globalThis.loadDatabase?.(); // host-files.js: `database[k]`'s values, once
+	if (data.warm) return warmUp();
 	if (data.event) return handleEvent(data);
 	if (data.navigate) return handleNavigation(data.navigate);
 	if (live) stopListening(live);

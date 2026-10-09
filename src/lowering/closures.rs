@@ -173,7 +173,7 @@ fn lift_closures(program: Node) -> Node {
 	let mut values = FunctionValues { functions, returning: HashSet::new(), variables: HashSet::new(), lists: HashSet::new(), passing_through: passing_through.clone() };
 	values.settle(&context, &program);
 	let FunctionValues { functions, returning: returns_function, variables: function_variables, lists: function_lists, .. } = values;
-	let mut lifting = Lifting { functions, variables, function_variables, function_lists, returns_function, passing_through, lifted: vec![], enclosing: vec![] };
+	let mut lifting = Lifting { functions, variables, function_variables, function_lists, returns_function, passing_through, lifted: vec![], enclosing: vec![], locals: vec![] };
 	let program = lifting.walk(program, &HashSet::new());
 	if lifting.lifted.is_empty() {
 		return program;
@@ -284,7 +284,7 @@ fn holder_path(node: &Node) -> Option<String> {
 	match node.drop_meta() {
 		Node::Symbol(name) => Some(name.clone()),
 		Node::Key(object, Op::Dot, field) => Some(format!("{}.{}", holder_path(object)?, field_word(field)?)),
-		Node::Key(object, Op::Hash, index) => Some(format!("{}.{}", holder_path(object)?, field_word(crate::wasp_parser::subscript_key(index)?)?)),
+		Node::Key(object, Op::Hash, index) => Some(format!("{}.{}", holder_path(object)?, field_word(crate::warp_parser::subscript_key(index)?)?)),
 		Node::List(items, Bracket::Round, _) if items.len() == 1 => holder_path(&items[0]),
 		_ => None,
 	}
@@ -320,7 +320,7 @@ impl FunctionValues {
 			Node::List(items, Bracket::Round, Separator::None) if matches!(items.first().map(Node::drop_meta), Some(Node::Symbol(name)) if self.returning.contains(name) || self.variables.contains(name)) => true,
 			// `g(y => y*2)` of `g = x => x`: the function value it was given
 			Node::List(items, Bracket::Round, _) if matches!(items.first().map(Node::drop_meta), Some(Node::Symbol(name)) if self.passing_through.get(name).and_then(|index| items.get(index + 1)).is_some_and(|argument| self.is_function_value(argument))) => true,
-			Node::List(items, _, _) if matches!(items.as_slice(), [marker, _, _, ..] if matches!(marker.drop_meta(), Node::Symbol(word) if word == crate::wasp_parser::TRY_MARKER)) => {
+			Node::List(items, _, _) if matches!(items.as_slice(), [marker, _, _, ..] if matches!(marker.drop_meta(), Node::Symbol(word) if word == crate::warp_parser::TRY_MARKER)) => {
 				self.is_function_value(&items[1]) || self.is_function_value(&items[2])
 			}
 			// a block is worth its last statement: `{fallback}`
@@ -450,6 +450,8 @@ struct Lifting {
 	lifted: Vec<Node>,
 	/// The functions whose bodies the walk is in, innermost last, by their full names (`outer·inner`)
 	enclosing: Vec<String>,
+	/// The variables those bodies assign, innermost last (assigned_variables)
+	locals: Vec<HashSet<String>>,
 }
 
 impl Lifting {
@@ -457,6 +459,12 @@ impl Lifting {
 	fn function_named(&self, name: &str) -> Option<String> {
 		let nested = self.enclosing.iter().rev().map(|outer| crate::analyzer::qualify_nested_name(Some(outer), name));
 		nested.chain(std::iter::once(name.to_string())).find(|candidate| self.functions.contains(candidate))
+	}
+
+	/// A local of an enclosing body holding a plain value: `angle = 0.5; cos(angle)` beside math's angle(x, y) reads
+	/// the local, never the function
+	fn is_local_value(&self, name: &str) -> bool {
+		!self.function_variables.contains(name) && self.locals.iter().any(|locals| locals.contains(name))
 	}
 
 	fn is_variable(&self, name: &str, bound: &HashSet<String>) -> bool {
@@ -479,10 +487,12 @@ impl Lifting {
 			};
 			let full_name = self.function_named(&name).unwrap_or(name);
 			self.enclosing.push(full_name);
+			self.locals.push(assigned_variables(&body));
 			// `g(a, b) := { $0 - $1 }`: with parameters the block is the body, its `$0` the first parameter, no closure
 			let body = if has_parameters { self.walk_body_block(*body, &inner) } else { self.walk(*body, &inner) };
 			let body = self.function_value(body, &inner);
 			self.enclosing.pop();
+			self.locals.pop();
 			return Node::Key(head, op, Box::new(body));
 		}
 		if let Some(lambda) = arrow_lambda(&node) {
@@ -522,6 +532,12 @@ impl Lifting {
 			_ => None,
 		};
 		let is_call = bracket == Bracket::Round && separator == Separator::None;
+		// `sqrt(angle)` parses as `√ (angle)`: the group of a local is its value
+		if let (true, [_], Some(name)) = (bracket == Bracket::Round, items.as_slice(), &head_name) {
+			if self.is_local_value(name) && self.function_named(name).is_some() {
+				return items[0].clone();
+			}
+		}
 		if let (true, Some(name)) = (is_call, &head_name) {
 			let arguments: Vec<Node> = items[1..].iter().map(|argument| self.function_value(argument.clone(), bound)).collect();
 			if self.may_hold_function(name, bound) {
@@ -604,7 +620,7 @@ impl Lifting {
 			return closure_new(&target, vec![]);
 		}
 		match node {
-			Node::Symbol(ref name) if !bound.contains(name) && self.function_named(name).is_some() => closure_new(&self.function_named(name).expect("guarded"), vec![]),
+			Node::Symbol(ref name) if !bound.contains(name) && !self.is_local_value(name) && self.function_named(name).is_some() => closure_new(&self.function_named(name).expect("guarded"), vec![]),
 			Node::Key(choice, op @ (Op::Then | Op::Else), chosen) => {
 				let choice = if op == Op::Else { self.function_value(*choice, bound) } else { *choice };
 				Node::Key(Box::new(choice), op, Box::new(self.function_value(*chosen, bound)))
@@ -658,6 +674,17 @@ impl Lifting {
 		});
 		captured
 	}
+}
+
+/// The names a body assigns, `angle = 0.5`: its local variables, never a function of the same name
+fn assigned_variables(body: &Node) -> HashSet<String> {
+	let mut assigned = HashSet::new();
+	body.visit(&mut |node| if let Node::Key(target, Op::Assign, _) = node {
+		if let Node::Symbol(name) = target.drop_meta() {
+			assigned.insert(name.clone());
+		}
+	});
+	assigned
 }
 
 /// The names a body declares `global n`: the closure reads and changes the program's own n

@@ -2,7 +2,7 @@
 // does; it used to change a copy and leave m as it was. `row = m#2; row#1 = 9` still leaves m alone (values are never
 // shared)
 use crate::is;
-use warp::wasp_parser::parse;
+use warp::warp_parser::parse;
 
 #[test]
 fn a_nested_index_assignment_sets_the_inner_item() {
@@ -10,6 +10,6 @@ fn a_nested_index_assignment_sets_the_inner_item() {
 	is!("m = [[1, 2], [3, 4]]; m[1][0] = 9; m", parse("[[1 2] [9 4]]"));
 	is!("m = [[1, 2], [3, 4]]; m#2#1 += 5; m", parse("[[1 2] [8 4]]"));
 	is!("c = [[[1, 2]], [[3, 4]]]; c#2#1#2 = 7; c", parse("[[[1 2]] [[3 7]]]"));
-	is!("m = [[1, 2], [3, 4]]; row = m#2; row#1 = 9; m", parse("[[1 2] [3 4]]"));
+	is!("m = [[1, 2], [3, 4]]; row = m#2; row#1 = 9; m", parse("[[1 2] [9 4]]")); // P200b: row is the inner list
 	is!("p = {xs: [[1, 2], [3, 4]]}; p.xs#2#1 = 9; p.xs", parse("[[1 2] [9 4]]"));
 }

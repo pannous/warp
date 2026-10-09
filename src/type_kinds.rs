@@ -11,6 +11,29 @@ pub const CURLY_BRACKET_INFO: i64 = 0;
 pub const SQUARE_BRACKET_INFO: i64 = 1;
 pub const CURLY_LIST_KIND: i64 = (CURLY_BRACKET_INFO << KIND_BITS) | Kind::List as i64;
 pub const SQUARE_LIST_KIND: i64 = (SQUARE_BRACKET_INFO << KIND_BITS) | Kind::List as i64;
+/// true/false: a shallow type of its own (user, card bool-type), an Int 1/0 marked above the kind bits, so everything
+/// that reads the kind masked takes it as the Int it is, and printing, `type` and reading back see a bool
+pub const BOOL_INFO: i64 = 1;
+pub const BOOL_KIND: i64 = (BOOL_INFO << KIND_BITS) | Kind::Int as i64;
+/// The bit of a bool in the kind masks of run-time type tests (node_kind_in): no Kind is that high
+pub const BOOL_MASK_BIT: i64 = 62;
+/// P215: the head cell of a declared list carries the run-time kinds its element type admits, its element mark, in the
+/// kind field above the bracket byte; everything that reads the bracket masks it with KIND_MASK
+pub const ELEMENT_MARK_SHIFT: i64 = 16;
+/// A mark holds the kind mask's bits of every Kind, room for new kinds included, then the bool bit
+const MARK_KIND_BITS: i64 = 24;
+const _: () = assert!((Kind::Function as i64) < MARK_KIND_BITS, "every Kind has its bit in the element mark");
+pub const MARK_KINDS_MASK: i64 = (1 << MARK_KIND_BITS) - 1;
+pub const MARK_BOOL_BIT: i64 = MARK_KIND_BITS;
+/// A kind field without its element mark, for the comparisons of whole kinds (bracket and kind)
+pub const UNMARKED_KIND: i64 = (1 << ELEMENT_MARK_SHIFT) - 1;
+const _: () = assert!(MARK_BOOL_BIT + ELEMENT_MARK_SHIFT < 63, "the element mark fits in the kind field");
+
+/// The element mark of a node_kind_in mask, shifted to its place in the kind field
+pub fn element_mark(mask: i64) -> i64 {
+	let compact = (mask & MARK_KINDS_MASK) | ((mask >> BOOL_MASK_BIT) & 1) << MARK_BOOL_BIT;
+	compact << ELEMENT_MARK_SHIFT
+}
 
 /// Node type tags for runtime type checking and WASM encoding
 /// Compact repr(u8) for efficient storage in WASM GC structs
@@ -35,6 +58,7 @@ pub enum Kind {
 	Int32 = 14,    // explicit i32 (for FFI)
 	Float32 = 15,  // explicit f32 (for FFI)
 	Function = 16, // closure: data = $Closure struct (typed function reference + captured values), value = name symbol
+	Uncertain = 17, // x ± σ: data = $f64 array [value, source id, contribution, …] (wasm_emitter/uncertain.rs)
 }
 
 impl Kind {
@@ -91,11 +115,11 @@ impl std::fmt::Display for Kind {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
 		match self {
 			Kind::Empty => write!(f, "empty"),
-			Kind::Int => write!(f, "int"),      // wasp uses "int" for i64
+			Kind::Int => write!(f, "int"),      // warp uses "int" for i64
 			Kind::Int32 => write!(f, "i32"),
-			Kind::Float => write!(f, "float"),  // wasp uses "float" for f64
+			Kind::Float => write!(f, "float"),  // warp uses "float" for f64
 			Kind::Float32 => write!(f, "f32"),
-			Kind::Text => write!(f, "text"),    // wasp uses "text" for strings
+			Kind::Text => write!(f, "text"),    // warp uses "text" for strings
 			Kind::Codepoint => write!(f, "codepoint"),
 			Kind::Symbol => write!(f, "symbol"),
 			Kind::Key => write!(f, "key"),
@@ -107,6 +131,7 @@ impl std::fmt::Display for Kind {
 			Kind::TypeDef => write!(f, "typedef"),
 			Kind::Pointer => write!(f, "pointer"),
 			Kind::Function => write!(f, "function"),
+			Kind::Uncertain => write!(f, "uncertain"),
 		}
 	}
 }

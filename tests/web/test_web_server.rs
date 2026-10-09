@@ -27,8 +27,8 @@ fn serve_answers_routes() {
 		std::thread::sleep(Duration::from_millis(50));
 	}
 	assert_eq!(get("/api/users"), r#"[{"name":"Ann","age":31},{"name":"Bo","age":7}]"#);
-	let echoed = ureq::post(&format!("http://127.0.0.1:{PORT}/echo")).send("hello wasp").expect("an answer").body_mut().read_to_string().expect("a text");
-	assert_eq!(echoed, "hello wasp");
+	let echoed = ureq::post(&format!("http://127.0.0.1:{PORT}/echo")).send("hello warp").expect("an answer").body_mut().read_to_string().expect("a text");
+	assert_eq!(echoed, "hello warp");
 	assert_eq!(get("/hello?name=Ann"), "hello Ann");
 	let missing = ureq::get(&format!("http://127.0.0.1:{PORT}/nowhere")).call();
 	assert!(matches!(missing, Err(ureq::Error::StatusCode(404))), "{missing:?}");
@@ -66,7 +66,7 @@ fn a_program_serves_its_own_page() {
 	const PAGE_PORT: u16 = 18433;
 	let server = std::thread::spawn(|| {
 		warp::web_server::stop_after(4);
-		let value = warp::wasm_emitter::eval("tests/fixtures/served_page.wasp");
+		let value = warp::wasm_emitter::eval("tests/fixtures/served_page.warp");
 		(value.first_error().is_none(), value.serialize())
 	});
 	let started = std::time::Instant::now();
@@ -100,13 +100,14 @@ fn a_served_page_s_events_draw_no_warning() {
 	assert!(warnings.iter().all(|warning| !warning.message.contains("never raises it")), "{warnings:?}");
 }
 
-// card serve-route: a served program with routes answers each path with that route's page, rendered for the path
+// card serve-route, made single-page by the user's decision (2026-10-07, via warp-03): a served program with routes
+// answers any other path with its one page, whose router shows that path's route in the browser
 #[test]
-fn a_served_page_is_rendered_for_each_route() {
+fn a_served_page_with_routes_answers_every_path() {
 	const ROUTES_PORT: u16 = 18441;
 	let server = std::thread::spawn(|| {
 		warp::web_server::stop_after(4);
-		let value = warp::wasm_emitter::eval("tests/fixtures/served_routes.wasp");
+		let value = warp::wasm_emitter::eval("tests/fixtures/served_routes.warp");
 		(value.first_error().is_none(), value.serialize())
 	});
 	let started = std::time::Instant::now();
@@ -118,8 +119,8 @@ fn a_served_page_is_rendered_for_each_route() {
 	assert!(page("/").contains("<h1>Users</h1>"), "{}", page("/"));
 	let user = page("/users/2");
 	// its scripts, module and route modules come from the server's root (its <base>), not from /users/
-	assert!(user.contains("<p>User Bo</p>") && user.contains("<base href=\"/\">") && user.contains("<script src=\"site.js\"></script>"), "{user}");
-	assert!(page("/elsewhere").contains("<p>no such page</p>"));
+	assert!(user.contains("<h1>Users</h1>") && user.contains("<base href=\"/\">") && user.contains("<script src=\"site.js\"></script>"), "{user}");
+	assert_eq!(page("/elsewhere"), user);
 	assert_eq!(page("/api/users"), r#"["Ann","Bo"]"#);
 	let (fine, value) = server.join().expect("the server thread");
 	assert!(fine, "{value}");

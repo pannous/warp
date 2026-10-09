@@ -5,14 +5,17 @@ pub(crate) mod component_adapters;
 mod arithmetic;
 mod globals;
 mod control_flow;
+use control_flow::LoopValues;
 mod casts;
 mod values;
 mod big_int;
+mod declared_values;
 pub mod cells;
 mod closures;
-pub use closures::{CLOSURE_CAPTURED, CLOSURE_REBUILD};
+pub use closures::{CLOSURE_APPLY, CLOSURE_CAPTURED, CLOSURE_REBUILD};
 pub(crate) mod exact;
 mod constructors;
+pub use constructors::NEW_BOOL;
 mod equality;
 mod function_builder;
 mod config;
@@ -24,22 +27,26 @@ mod layout;
 pub(crate) mod linear_arrays;
 mod list_emitter;
 mod list_dispatch;
+pub(crate) mod list_sharing;
 mod library_ops;
 mod text_unicode;
+mod similarity;
+mod uncertain;
+pub use similarity::NUMBERS_SIMILAR;
 pub(crate) mod list_ops;
 mod list_abi;
 mod map_backend;
 mod struct_backend;
 pub use map_backend::MAP_COPY_SUFFIX;
 mod loop_control;
-pub(crate) use loop_control::mark_step;
+pub(crate) use loop_control::{is_step, mark_step, split_step};
 pub(crate) mod text_builtins;
 mod reflection;
 mod string_table;
 mod type_manager;
 mod try_guard;
 mod tuple_emitter;
-pub use try_guard::{CAUGHT_ERROR, RAN_WITHOUT_ERROR};
+pub use try_guard::{ABORT_TO, CAUGHT_ERROR, RAN_WITHOUT_ABORT, RAN_WITHOUT_ERROR};
 mod witness;
 pub(crate) mod wasi_emitter;
 
@@ -52,14 +59,20 @@ enum Need {
 	Function(&'static str),
 	/// A libm import, keyed like ffi_imports (`m.pow`) so it never shadows a user function
 	MathImport(&'static str),
+	/// The operator code of a Key the program makes at run time, which list_text writes as written (`x+1`)
+	KeyOperator(i64),
 }
 
+/// The last compiled module, under the home directory (debug_module_path)
+const DEBUG_MODULE: &str = ".cache/warp/last.wasm";
 /// The texts `as bool` reads as false
 const FALSY_TEXTS: [&str; 8] = ["", "0", "false", "no", "ø", "nil", "null", "none"];
 /// wasmtime's words for an integer division or remainder by zero
 const ENGINE_DIVIDE_BY_ZERO: &str = "integer divide by zero";
 /// The position a diagnostic without a recorded one names (diagnostic::Diagnostic::at)
 const UNKNOWN_POSITION: &str = " at 0:0";
+/// Node locals every function has after its Int scratch: node_scratch and container_scratch (globals.rs)
+const NODE_SCRATCH_LOCALS: u32 = 2;
 /// What `use { memory, table } from "env"` imports instead of defining: the linear memory and a function table
 pub const MEMORY_ENTITY: &str = "memory";
 pub const TABLE_ENTITY: &str = "table";
@@ -72,10 +85,10 @@ const FIX_SEPARATOR: &str = "; fix: ";
 pub const CAPTURE_EXPORT_PREFIX: &str = "capture·";
 /// The WASI output words besides print: each gives an Int (analyzer)
 pub const OUTPUT_WORDS: [&str; 4] = ["puts", "puti", "putl", "putf"];
-const OUTPUT_CALLS: [&str; 5] = ["print", OUTPUT_WORDS[0], OUTPUT_WORDS[1], OUTPUT_WORDS[2], OUTPUT_WORDS[3]];
+pub(crate) const OUTPUT_CALLS: [&str; 5] = ["print", OUTPUT_WORDS[0], OUTPUT_WORDS[1], OUTPUT_WORDS[2], OUTPUT_WORDS[3]];
 
 /// Builtins that round a float to an exact Int
-pub(crate) const ROUNDING_FUNCTIONS: [&str; 6] = ["ceil", "floor", "round", "round_half_up", "round_half_even", crate::wasp_parser::FLOOR_QUOTIENT];
+pub(crate) const ROUNDING_FUNCTIONS: [&str; 6] = ["ceil", "floor", "round", "round_half_up", "round_half_even", crate::warp_parser::FLOOR_QUOTIENT];
 
 /// 2^63: floats with a magnitude at or beyond it do not fit an i64
 const I64_RANGE_LIMIT: f64 = 9223372036854775808.0;
@@ -84,6 +97,8 @@ const LOGICAL_SCRATCH: u32 = 2;
 
 /// ffi_imports key of libm's pow for float powers; the `m.` prefix keeps it apart from a user function named pow
 const LIBM_POW: &str = "m.pow";
+/// ffi_imports key of libm's cbrt for ∛ of a run-time value
+const LIBM_CBRT: &str = "m.cbrt";
 
 /// Traps of the exact runtime with the message a user should read instead of a wasm backtrace
 const EXACT_TRAP_MESSAGES: [(&str, &str); 2] = [
@@ -96,9 +111,36 @@ const EXACT_TRAP_MESSAGES: [(&str, &str); 2] = [
 pub const TRAP_DETAIL: &str = "trap_detail";
 /// How a trapped run carries that value into its error: `trap detail: <value>`
 pub const TRAP_DETAIL_PREFIX: &str = "trap detail: ";
+
+/// The `trap detail: <value>` line of a trapped run; an Error value raised as it is (Node arithmetic on an Error, a text
+/// builtin of an Error) names its message
+pub fn trap_detail_line(detail: &Node) -> String {
+	let shown = match detail {
+		Node::Error(reason) => reason.serialize(),
+		value => value.serialize(),
+	};
+	// one line in the trace, whatever lines the value has: `\` and line breaks escaped, trap_detail reads them back
+	format!("{TRAP_DETAIL_PREFIX}{}", shown.replace('\\', "\\\\").replace('\n', "\\n"))
+}
+
+/// The value a trace's `trap detail: …` line carries, its line breaks back
+fn trap_detail(trace: &str) -> Option<String> {
+	let line = trace.split_once(TRAP_DETAIL_PREFIX)?.1.lines().next()?;
+	let mut detail = String::with_capacity(line.len());
+	let mut characters = line.chars();
+	while let Some(character) = characters.next() {
+		detail.push(match (character, (character == '\\').then(|| characters.next()).flatten()) {
+			(_, Some('n')) => '\n',
+			(_, Some(escaped)) => escaped,
+			(plain, None) => plain,
+		});
+	}
+	Some(detail)
+}
+
 /// Why a unit word is an undefined variable: quantities are computed in constant expressions only
 const UNIT_AT_RUN_TIME: &str = " (a unit: quantities compute only in constant expressions so far, not yet in functions, loops, lists, branches or print; notes/units_runtime.md)";
-/// The global behind the export `trap_detail`: not a wasp name, so no user global meets it
+/// The global behind the export `trap_detail`: not a warp name, so no user global meets it
 const TRAP_DETAIL_GLOBAL: &str = "trap·detail";
 
 const TERNARY_BRANCHES: &str = "`condition ? then : else`";
@@ -120,7 +162,7 @@ fn if_then_parts(node: &Node) -> Option<(&Node, &Node)> {
 	Some((condition, then_branch))
 }
 
-pub use equality::{IS_TRUTHY, VALUES_EQUAL};
+pub use equality::{IS_TRUTHY, SAME_NODE, VALUES_EQUAL};
 pub use config::{EmitterConfig, EmitterConfigBuilder};
 pub use import_manager::ImportManager;
 pub use string_table::StringTable;
@@ -134,7 +176,7 @@ use crate::function::Function as FuncDef;
 #[cfg(feature = "native")]
 use crate::gc_traits::GcObject as ErgonomicGcObject;
 use crate::node::{Bracket, Node, Separator};
-use crate::operators::{op_to_code, Op};
+use crate::operators::Op;
 use crate::type_kinds::{field_def_to_val_type, Kind, RawFieldValue, TypeDef, TypeRegistry, KIND_MASK};
 #[cfg(feature = "native")]
 use crate::util::gc_engine;
@@ -177,9 +219,12 @@ pub struct WasmGcEmitter {
 	globals: GlobalSection,
 	tags: TagSection,
 	guards_errors: bool, // the program has a `try` that catches runtime errors
+	/// The program declares a list type (`names: texts`), so its lists may carry element marks (P215)
+	declares_list_types: bool,
 	/// Emitting data, not code: the value of an object entry or a quoted form, where unknown words stay words (P62)
 	data_context: bool,
 	error_catching: Option<try_guard::ErrorCatching>, // the tag and globals of that `try`
+	abort_catching: Option<try_guard::AbortCatching>, // the tag of aborting effect handlers
 	memo_caches: HashMap<i64, (u32, u32)>, // per memoized function id: the globals of its values and known flags (memoization.rs)
 	extra_global_names: Vec<(u32, &'static str)>,
 
@@ -203,6 +248,7 @@ pub struct WasmGcEmitter {
 
 	// Unbounded Int (big_int.rs)
 	int_scratch: u32,      // first of INT_SCRATCH_LOCALS i64 locals in the current function
+	loop_values: LoopValues, // the Node locals holding text loop values (control_flow.rs)
 	wrapping_ints: bool,   // inside `expr as i64`: machine arithmetic
 	int_heap_global: u32,  // $BigInts heap that handles index
 	int_count_global: u32, // used slots in that heap
@@ -213,6 +259,10 @@ pub struct WasmGcEmitter {
 	text_heap_global: Option<u32>, // bump pointer for texts built at runtime, in memory grown past the string table
 	// Needs the analyzer could not foresee (they depend on inferred types); emission reruns with them
 	discovered_needs: std::collections::HashSet<Need>,
+	/// The highest operator code list_text writes as written, from the needs (any code above it is written `:`)
+	written_operator_bound: i64,
+	/// The program quotes a tag (`data point{x:1}`), which list_text writes as an instance: only then does it check for one
+	writes_tags: bool,
 	type_errors: Vec<String>,
 	/// The latest source position among the nodes being emitted (note_position)
 	source_position: Option<(usize, usize)>,
@@ -257,8 +307,10 @@ impl WasmGcEmitter {
 			globals: GlobalSection::new(),
 			tags: TagSection::new(),
 			guards_errors: false,
+			declares_list_types: false,
 			data_context: false,
 			error_catching: None,
+			abort_catching: None,
 			memo_caches: HashMap::new(),
 			extra_global_names: Vec::new(),
 			config: EmitterConfig::default(),
@@ -271,6 +323,7 @@ impl WasmGcEmitter {
 			ctx: Context::new(),
 			scope: Default::default(),
 			int_scratch: 0,
+			loop_values: LoopValues::default(),
 			wrapping_ints: false,
 			int_heap_global: 0,
 			int_count_global: 0,
@@ -280,6 +333,8 @@ impl WasmGcEmitter {
 			tuple_packers: HashMap::new(),
 			text_heap_global: None,
 			discovered_needs: Default::default(),
+			written_operator_bound: crate::operators::op_to_code(&crate::operators::Op::Colon),
+			writes_tags: false,
 			type_errors: Vec::new(),
 			source_position: None,
 			loop_labels: Vec::new(),
@@ -608,14 +663,22 @@ impl WasmGcEmitter {
 		crate::analyzer::extract_signal_polls(&mut self.ctx);
 		self.type_errors.append(&mut self.ctx.parameter_conflicts);
 		self.scope.function_kinds = self.user_function_kinds();
+		crate::analyzer::note_bool_functions(self.ctx.user_functions.values());
 		self.derive_imports_from_effects(node);
+		self.declares_list_types = declared_values::declares_list_types(node);
 		analyze_required_functions(&mut self.ctx, node);
 		self.ctx.required_functions.extend(self.discovered_needs.iter().filter_map(|need| match need {
 			Need::Function(name) => Some(*name),
-			Need::MathImport(_) => None,
+			Need::MathImport(_) | Need::KeyOperator(_) => None,
 		}));
+		let key_operators = self.discovered_needs.iter().filter_map(|need| if let Need::KeyOperator(code) = need { Some(*code) } else { None });
+		self.written_operator_bound = key_operators.fold(self.written_operator_bound, i64::max);
+		self.writes_tags = library_ops::mentions_quoted_tag(node);
 		component_adapters::add_dependencies(&mut self.ctx.required_functions);
+		uncertain::add_dependencies(&mut self.ctx.required_functions); // before the similarity's: uncertain_similar needs numbers_similar
+		similarity::add_dependencies(&mut self.ctx.required_functions); // before the text builtins': values_equal needs text_of
 		text_builtins::add_dependencies(&mut self.ctx.required_functions);
+		self.require_list_marks(); // before any function emits a list writer, which reads marks_lists
 		self.guards_errors = try_guard::guards_errors(node);
 		let len = self.ctx.required_functions.len();
 		trace!(
@@ -647,6 +710,7 @@ impl WasmGcEmitter {
 		match need {
 			Need::Function(name) => self.ctx.required_functions.contains(name),
 			Need::MathImport(key) => self.ctx.ffi_imports.contains_key(*key),
+			Need::KeyOperator(code) => *code <= self.written_operator_bound || !self.ctx.required_functions.contains(library_ops::LIST_TEXT),
 		}
 	}
 
@@ -696,12 +760,13 @@ impl WasmGcEmitter {
 		}
 	}
 
-	/// Does the node call a function of the program (`str(f(1))` is the text of f's result, not of the call)
+	/// Does the node call a function of the program or a host word giving a value (`str(f(1))` is the text of f's result, not of the call)
 	fn mentions_call(&self, node: &Node) -> bool {
 		let mut found = false;
 		node.visit(&mut |part| {
 			if let Node::List(items, _, _) = part {
-				found |= matches!(items.first().map(Node::drop_meta), Some(Node::Symbol(name)) if self.ctx.user_functions.contains_key(name));
+				// a user function's call, or a host word's that gives a value (`foreign_call`, `fetch_reply`)
+				found |= matches!(items.first().map(Node::drop_meta), Some(Node::Symbol(name)) if self.ctx.user_functions.contains_key(name) || crate::host::VALUE_GIVING_WORDS.contains(&name.as_str()));
 			}
 		});
 		found
@@ -712,6 +777,13 @@ impl WasmGcEmitter {
 		let mut found = false;
 		node.visit(&mut |part| found |= matches!(part, Node::Symbol(name) if self.scope.lookup(name).is_some() || self.ctx.user_globals.contains_key(name)));
 		found
+	}
+
+	/// A variable named like a function of the program is the variable: a parameter (`f(inc) := inc(3)`), and inside a
+	/// function its locals too (`angle = 0.5; cos(angle)` beside math's angle). main also holds a local for each
+	/// `sq := it * 2`, which is the function
+	fn is_variable(&self, name: &str) -> bool {
+		self.scope.lookup(name).is_some_and(|local| local.is_param || self.compiling.is_some())
 	}
 
 	/// A name that is no variable, global, function or `$n` parameter here
@@ -789,6 +861,8 @@ impl WasmGcEmitter {
 		self.config.emit_wasi_imports |= effects.needs(Capability::Wasi);
 		// another runtime's module is reached through the host word foreign_call
 		self.config.emit_host_imports |= effects.needs(Capability::Host) || effects.needs(Capability::Foreign);
+		// an ordering of ± values that overlap warns through the host (P224b)
+		self.config.emit_host_imports |= crate::uncertain::may_order_intervals(node);
 	}
 
 	/// Import modules this module declares, known after `emit_for_node`
@@ -849,8 +923,7 @@ impl WasmGcEmitter {
 		let params: Vec<ValType> = type_def.fields.iter().map(|f| field_def_to_val_type(f, self)).collect();
 
 		// Function type: (params...) -> (ref $TypeName)
-		let func_type = self.type_manager.types().len();
-		self.type_manager.types_mut().ty().function(params.clone(), vec![Ref(type_ref)]);
+		let func_type = self.type_manager.function_type(params.clone(), vec![Ref(type_ref)]);
 		self.functions.function(func_type);
 
 		// Function body: get all params, struct.new
@@ -892,17 +965,20 @@ impl WasmGcEmitter {
 		self.emit_cells();
 		self.emit_text_of();
 		self.emit_equality_ops();
+		self.emit_node_type_name(); // after values_equal, which names an instance's declared type
 		self.emit_text_as_int(); // after the getters: it calls get_int_value
 		self.emit_text_as_float();
+		self.emit_uncertain_runtime(); // after text_as_float, which it calls
 		if self.config.emit_reflection {
 			self.emit_reflection();
 		}
 		self.emit_math_helpers();
 		self.emit_text_builtins();
-		self.emit_node_arithmetic(); // after text_as_float, get_int_value and text_concat, which it calls
 		self.emit_map_get(); // after the text builtins: map keys are compared by text_of
 		self.emit_node_map_runtime();
 		self.emit_library_ops(); // after the text builtins: the library words call text_of
+		self.emit_similarity_ops(); // after the library ops and the equality ops it calls
+		self.emit_node_arithmetic(); // after text_as_float, get_int_value, text_concat and list_join, which it calls
 	}
 
 	fn emit_getters(&mut self) {
@@ -942,7 +1018,6 @@ impl WasmGcEmitter {
 			});
 			s.emit_int_from_payload(func);
 		});
-
 		// get_text_ptr / get_text_len(node: ref $Node) -> i32: the $String of a Text, Symbol or Error, 0 for any other node,
 		// so a host without GC field access (JavaScript) can read a result text from memory
 		for (name, field_index) in [("get_text_ptr", 0), ("get_text_len", 1)] {
@@ -1082,8 +1157,7 @@ impl WasmGcEmitter {
 		self.next_temp_local = var_count; // Temp locals start after variables
 
 		let node_ref = self.node_ref(false);
-		let func_type = self.type_manager.types().len();
-		self.type_manager.types_mut().ty().function(vec![], vec![Ref(node_ref)]);
+		let func_type = self.type_manager.function_type(vec![], vec![Ref(node_ref)]);
 		self.functions.function(func_type);
 
 		// Build locals list based on variable types
@@ -1097,7 +1171,8 @@ impl WasmGcEmitter {
 		}
 		self.int_scratch = var_count + temp_locals;
 		locals.push((big_int::INT_SCRATCH_LOCALS, ValType::I64));
-		locals.push((1, Ref(self.node_ref(true)))); // node_scratch
+		locals.push((NODE_SCRATCH_LOCALS, Ref(self.node_ref(true)))); // node_scratch, container_scratch
+		self.declare_loop_values(&mut locals, node);
 
 		let mut func = Function::new(locals);
 		self.emit_node_local_defaults(&mut func, node, 0);
@@ -1118,6 +1193,14 @@ impl WasmGcEmitter {
 		self.string_table.collect_from_node(node, &mut self.scope);
 	}
 
+	/// A Key of its two sides on the stack, joined by `op` (list_text writes the op as written, a need when it is new)
+	fn emit_new_key(&mut self, func: &mut Function, op: &crate::operators::Op) {
+		let code = crate::operators::op_to_code(op);
+		self.discovered_needs.insert(Need::KeyOperator(code));
+		func.instruction(&I::I64Const(code));
+		self.emit_call(func, "new_key");
+	}
+
 	fn emit_call(&mut self, func: &mut Function, name: &'static str) {
 		if !self.ctx.func_registry.contains(name) && !self.ctx.user_functions.contains_key(name) {
 			assert!(!self.ctx.required_functions.contains(name), "Unknown function: {}", name);
@@ -1136,6 +1219,21 @@ impl WasmGcEmitter {
 
 	/// Emit instructions to construct a Node
 	fn emit_node_instructions(&mut self, func: &mut Function, node: &Node) {
+		self.emit_node_value(func, node);
+		// a comparison, `not`, a bool variable…: its Int 1/0 as the bool it is (card bool-type)
+		if !matches!(node.drop_meta(), Node::True | Node::False) && crate::analyzer::is_boolean(node, &self.scope) {
+			self.emit_call(func, constructors::AS_BOOL);
+		}
+	}
+
+	fn emit_node_value(&mut self, func: &mut Function, node: &Node) {
+		if let Some(identity) = self.object_identity(node) {
+			self.emit_object_identity(func, identity);
+			return self.emit_call(func, "new_int");
+		}
+		if let Some(equality) = self.identity_as_equality(node) {
+			return self.emit_node_value(func, &equality);
+		}
 		self.note_position(node);
 		if self.emit_undefined_comparison(func, node) {
 			return;
@@ -1143,8 +1241,12 @@ impl WasmGcEmitter {
 		if self.emit_loop_jump(func, node) || self.emit_tuple_statement(func, node, Self::emit_node_instructions) {
 			return;
 		}
+		if let Some((value, declared)) = declared_values::declared_field_value(node) {
+			return self.emit_declared_value(func, Some(declared), value, Kind::Empty);
+		}
 		if let Some((name, fields)) = crate::type_constructor::instance_parts(node) {
-			self.emit_default_key(func, name, fields, &Op::None); // an instance is no data: its own op code (D4)
+			let fields = self.with_declared_field_types(name, fields);
+			self.emit_default_key(func, name, &fields, &Op::None); // an instance is no data: its own op code (D4)
 			return;
 		}
 		if let Some((target, captured)) = crate::closures::as_closure_new(node) {
@@ -1182,9 +1284,8 @@ impl WasmGcEmitter {
 				self.emit_call(func, "new_codepoint");
 			}
 			Node::Symbol(s) => {
-				// a parameter named like a function of the program (`f(inc) := inc(3)`) is the parameter
-				let parameter = self.scope.lookup(s).is_some_and(|local| local.is_param);
-				if let Some(user_fn) = self.ctx.user_functions.get(s).filter(|_| !parameter) {
+				let variable = self.is_variable(s);
+				if let Some(user_fn) = self.ctx.user_functions.get(s).filter(|_| !variable) {
 					match user_fn.params.iter().filter(|param| param.default.is_none()).count() {
 						0 => self.emit_user_function_call(func, s, &[]),
 						count => {
@@ -1251,11 +1352,11 @@ impl WasmGcEmitter {
 			}
 			&Node::False => {
 				func.instruction(&I::I64Const(0));
-				self.emit_call(func, "new_int");
+				self.emit_call(func, constructors::NEW_BOOL);
 			}
 			&Node::True => {
 				func.instruction(&I::I64Const(1));
-				self.emit_call(func, "new_int");
+				self.emit_call(func, constructors::NEW_BOOL);
 			}
 		}
 	}
@@ -1327,7 +1428,7 @@ impl WasmGcEmitter {
 
 	/// The name section: subsections in id order (module, functions, types, globals, fields, tags), every map by index
 	fn emit_names(&mut self) {
-		self.names.module("wasp_compact");
+		self.names.module("warp_compact");
 
 		let functions: Vec<(u32, String)> = self.ctx.func_registry.all().iter()
 			.map(|f| (f.call_index as u32, f.name.clone()))
@@ -1336,6 +1437,15 @@ impl WasmGcEmitter {
 			.chain(self.tuple_packers.iter().map(|(function, index)| (*index, crate::tuples::packer_name(function))))
 			.collect();
 		self.names.functions(&name_map(&mut functions.iter().map(|(idx, name)| (*idx, name.as_str())).collect()));
+
+		// a user function's parameter names, for debuggers and wasm-tools; a page leaves them out for size, an importer
+		// reads them from warp.meta (wasm_modules.rs read_exports)
+		if !crate::pipeline::is_for_a_page() {
+			let parameter_names = self.ctx.user_functions.values()
+				.filter_map(|function| Some((function.func_index?, function.params.iter().enumerate().map(|(i, param)| (i as u32, param.name.as_str())).collect())))
+				.collect();
+			self.names.locals(&indirect_name_map(parameter_names));
+		}
 
 		let tm = &self.type_manager;
 		let mut types = vec![(tm.string_type, "String"), (tm.i64_box_type, "i64box"), (tm.f64_box_type, "f64box"), (tm.node_type, "Node"),
@@ -1349,7 +1459,7 @@ impl WasmGcEmitter {
 			const KIND_GLOBALS: [&str; 12] = ["kind_empty", "kind_int", "kind_float", "kind_text", "kind_codepoint", "kind_symbol",
 				"kind_key", "kind_block", "kind_list", "kind_data", "kind_meta", "kind_error"];
 			let mut globals: Vec<(u32, &str)> = KIND_GLOBALS.iter().enumerate()
-				.filter(|(idx, _)| (*idx as u32) < self.next_global_idx).map(|(idx, name)| (idx as u32, *name)).collect();
+				.filter(|(idx, _)| (*idx as u32) < self.ctx.kind_global_indices.len() as u32).map(|(idx, name)| (idx as u32, *name)).collect();
 			globals.extend(self.extra_global_names.iter().copied());
 			self.names.globals(&name_map(&mut globals));
 		}
@@ -1368,13 +1478,7 @@ impl WasmGcEmitter {
 			}
 		}
 		fields.extend(self.instance_types.values().map(|instance| (instance.type_index, instance.fields.iter().enumerate().map(|(i, (field, _))| (i as u32, field.as_str())).collect())));
-		fields.sort_by_key(|(type_idx, _)| *type_idx);
-		fields.dedup_by_key(|(type_idx, _)| *type_idx);
-		let mut type_field_names = IndirectNameMap::new();
-		for (type_idx, mut names) in fields {
-			type_field_names.append(type_idx, &name_map(&mut names));
-		}
-		self.names.fields(&type_field_names);
+		self.names.fields(&indirect_name_map(fields));
 
 		if let Some(tag_names) = self.error_tag_names() {
 			self.names.tags(&tag_names);
@@ -1589,6 +1693,17 @@ fn name_map(names: &mut Vec<(u32, &str)>) -> NameMap {
 	map
 }
 
+/// Name maps of several functions or types, in index order, one map per index
+fn indirect_name_map(mut entries: Vec<(u32, Vec<(u32, &str)>)>) -> IndirectNameMap {
+	entries.sort_by_key(|(idx, _)| *idx);
+	entries.dedup_by_key(|(idx, _)| *idx);
+	let mut map = IndirectNameMap::new();
+	for (idx, mut names) in entries {
+		map.append(idx, &name_map(&mut names));
+	}
+	map
+}
+
 #[cfg(feature = "native")]
 /// Run raw struct WASM and return GcObject wrapped in Node::Data
 pub fn run_raw_struct(wasm_bytes: &[u8]) -> Result<Node, String> {
@@ -1706,10 +1821,18 @@ pub fn bracket_info(bracket: &Bracket) -> i64 {
 	}
 }
 
-/// Leave the last module in `test.wasm` for inspection; a read-only directory must not fail the program
+/// Where the last compiled module is kept for inspection: one fixed path under the home directory, never the current
+/// directory, which would leave build debris beside the sources (card cwd-artifacts); None without a home (the browser)
+pub fn debug_module_path() -> Option<std::path::PathBuf> {
+	std::env::var_os("HOME").map(|home| std::path::PathBuf::from(home).join(DEBUG_MODULE))
+}
+
+/// Keep the last module at `debug_module_path`; a read-only cache must not fail the program
 pub(crate) fn write_debug_module(bytes: &[u8]) {
-	if let Err(failure) = std::fs::write("test.wasm", bytes) {
-		warn!("could not write test.wasm: {failure}");
+	let Some(path) = debug_module_path() else { return };
+	let written = path.parent().map_or(Ok(()), std::fs::create_dir_all).and_then(|()| std::fs::write(&path, bytes));
+	if let Err(failure) = written {
+		warn!("could not write {}: {failure}", path.display());
 	}
 }
 
@@ -1728,6 +1851,14 @@ pub(crate) fn failed_run(failure: anyhow::Error) -> Node {
 	trap_error(&format!("{:?}", failure), trap.to_string())
 }
 
+/// "index out of range: 7 not in 1…3" from index_out_of_range_of's detail `7:3` (the index asked for, the list's count)
+fn index_range_message(detail: &str) -> Option<String> {
+	let numbers: Vec<i64> = detail.split(|c: char| !(c.is_ascii_digit() || c == '-')).filter_map(|part| part.parse().ok()).collect();
+	let [index, count] = numbers.as_slice() else { return None };
+	let range = if *count == 0 { "an empty list".to_string() } else { format!("1…{count}") };
+	Some(format!("{}: {index} not in {range}", list_ops::runtime_error_message("index_out_of_range")))
+}
+
 /// The runtime error a trap means, read from its trace: the function names on the stack and the `trap detail: …`
 /// line; `trap` (the engine's own words) when the trace names none. Shared by wasmtime and the browser (web.rs).
 pub fn trap_error(trace: &str, trap: String) -> Node {
@@ -1739,7 +1870,7 @@ pub fn trap_error(trace: &str, trap: String) -> Node {
 	});
 	let no_case = trace.split_once(crate::switch::NO_CASE_PREFIX).map(|(_, rest)| {
 		let label: String = rest.chars().take_while(|c| c.is_alphanumeric() || *c == '_').collect();
-		match trace.split_once(TRAP_DETAIL_PREFIX).and_then(|(_, rest)| rest.lines().next()) {
+		match trap_detail(trace) {
 			Some(value) => format!("no case for {label} = {value}"),
 			None => format!("no case for {label}"),
 		}
@@ -1749,9 +1880,9 @@ pub fn trap_error(trace: &str, trap: String) -> Node {
 		crate::fixed_width::overflow_message(&type_name)
 	});
 	// `return error("…")` from a number function: the message is the trap detail
-	let returned_error = trace.contains(list_ops::RETURNED_ERROR).then(|| trace.split_once(TRAP_DETAIL_PREFIX).and_then(|(_, rest)| rest.lines().next()))
-		.flatten().map(|detail| detail.trim_matches('"').to_string());
-	let runtime_error = returned_error.or(missing_field).or(no_case).or(overflow).or_else(|| list_ops::RUNTIME_ERRORS.iter().find(|name| trace.contains(*name)).map(|name| list_ops::runtime_error_message(name)));
+	let returned_error = trace.contains(list_ops::RETURNED_ERROR).then(|| trap_detail(trace)).flatten().map(|detail| detail.trim_matches('"').to_string());
+	let index_range = trace.contains(list_ops::INDEX_OUT_OF_RANGE_OF).then(|| index_range_message(&trap_detail(trace)?)).flatten();
+	let runtime_error = returned_error.or(index_range).or(missing_field).or(no_case).or(overflow).or_else(|| list_ops::RUNTIME_ERRORS.iter().find(|name| trace.contains(*name)).map(|name| list_ops::runtime_error_message(name)));
 	let exact_trap = EXACT_TRAP_MESSAGES.iter().find(|(function, _)| trace.contains(function)).map(|(_, message)| message.to_string());
 	// the engine's own integer divide trap (a division the emitter did not guard) reads as the guarded one
 	let divide_trap = trap.ends_with(ENGINE_DIVIDE_BY_ZERO).then(|| list_ops::runtime_error_message(list_ops::DIVIDE_BY_ZERO));

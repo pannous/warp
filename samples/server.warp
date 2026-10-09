@@ -1,0 +1,34 @@
+// One source for a server and its page: `warp serve samples/server.warp` (or `warp samples/server.warp`), then open
+// http://localhost:8080/ (notes/server_routes.md). The playground runs it as one page, the table in IndexedDB
+class User{name: text}
+stored users: [User]                       // the table users, kept on the server in server.database.sqlite
+
+// a server function runs on the server; the page asks it with POST /rpc/user_count
+server def user_count() {
+	global users
+	if count(users) == 0 { users.add(User("Ann")); users.add(User("Bo")) }
+	count(users)
+}
+
+get "/api/users" { users }                 // data for anyone: GET /api/users
+
+route "/" {
+	div{
+		h1{ "Users: " + user_count() }
+		ul{
+			li{ a{ href:"/users/1" "the first" } }
+			li{ a{ href:"/users/2" "the second" } }
+		}
+	}
+}
+
+// a typed parameter; the block reads server data, so the server renders it for each request and the page asks
+// it again for each link it follows; nothing of the table but this name ships to the browser
+route "/users/:id:int" {
+	div{
+		h1{ "User " + users#id.name }
+		a{ href:"/" "all users" }
+	}
+}
+
+route "*" { p{ "no such page" } }

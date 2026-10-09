@@ -2,7 +2,7 @@
 
 use warp::effects::{effects_of, Effect::*, EffectReport, EffectSet};
 use warp::wasm_emitter::eval;
-use warp::wasp_parser::WaspParser;
+use warp::warp_parser::WarpParser;
 use warp::{Node, WasmGcEmitter};
 use crate::is;
 
@@ -13,7 +13,7 @@ fn effects(code: &str, function: &str) -> EffectSet {
 /// (module, name) of every import the compiled program declares
 fn imports_of(code: &str) -> Vec<(String, String)> {
 	let mut emitter = WasmGcEmitter::new();
-	emitter.emit_for_node(&WaspParser::parse(code));
+	emitter.emit_for_node(&WarpParser::parse(code));
 	let bytes = emitter.finish();
 	let mut imports = vec![];
 	for payload in wasmparser::Parser::new(0).parse_all(&bytes) {
@@ -59,7 +59,7 @@ fn test_effects_are_inferred_from_calls() {
 #[test]
 fn test_effects_propagate_through_callers_and_recursion() {
 	let code = "log(x) := puts x\nhelper(x) := log(x)\nloop(x) := x<1 ? helper(x) : loop(x-1)\nfib(n) := n<2 ? n : fib(n-1)+fib(n-2)";
-	let report = EffectReport::of(&WaspParser::parse(code));
+	let report = EffectReport::of(&WarpParser::parse(code));
 	assert_eq!(report.effects_of("helper"), Some(EffectSet::of(&[IO])));
 	assert_eq!(report.effects_of("loop"), Some(EffectSet::of(&[IO])));
 	assert_eq!(report.effects_of("fib"), Some(EffectSet::PURE));
@@ -105,4 +105,18 @@ fn test_imports_follow_effects() {
 	assert_eq!(imports_of("puts('ok')"), [("wasi_snapshot_preview1".into(), "fd_write".into())]);
 	assert_eq!(imports_of("use m;floor(4.5)"), [("m".into(), "floor".into())]);
 	assert!(imports_of("x=fetch https://a.com/t;x").contains(&("host".into(), "fetch".into())));
+}
+
+// card effects-infer: Allocation (construction) is reported but stays pure (wiki/pure.md), Async is a real effect
+#[test]
+fn test_allocation_and_async_are_inferred() {
+	assert_eq!(effects("pair(x) := [x, x]", "pair"), EffectSet::of(&[Allocation]));
+	assert_eq!(effects("person(n) := {name: n}", "person"), EffectSet::of(&[Allocation]));
+	assert_eq!(effects("greet(n) := \"hi \" + n", "greet"), EffectSet::of(&[Allocation]));
+	assert!(EffectSet::of(&[Allocation]).is_pure());
+	is!("pair(x) := [x, x]\neffects of pair", Node::Symbol("Allocation".into()));
+	is!("first(x) := [x, x]#1 ! Pure\nfirst(3)", 3);
+	is!("g() := 1\nf() := await go g()\neffects of f", Node::Symbol("Async".into()));
+	let message = error_text(eval("g() := 1\nf() := await go g() ! Pure\nf()"));
+	assert!(message.contains("f is declared ! Pure but performs Async"), "{message}");
 }

@@ -28,8 +28,10 @@ through `int_list_as_node`, which builds exactly the square cons list the litera
 printing, returning, passing to a function, `sort`, comparisons… are unchanged, they just pay one O(n) conversion.
 Errors are the same runtime functions (`index_out_of_range`, `index_must_be_an_integer`).
 
-Value semantics: wasp lists are values (`node_with_at` copies). A typed list is updated in place, so `ys = xs` copies the
-list (`int_list_copy`) when either side is ever updated by index or append; otherwise the two share it.
+Lists are shared (P200b, card shared-lists): `ys = xs` shares the typed array, so an item set or added through either
+shows in both; `xs = xs + [v]` copies first while the list is aliased (TypedList.aliased). A typed list some holder keeps
+as Nodes (an argument to a function that changes it, an item or field, an untyped alias) stays a Node list
+(wasm_emitter/list_sharing.rs held_elsewhere, find_typed_lists), as one conversion would part the two.
 
 `sum`, `map`, `each`, element-wise `xs * 2` are lowered to loops before emission (library_words.rs, lambdas.rs,
 analyzer::element_wise); those loops reach the dispatch layer as count / element / append, so they get the array for free.
@@ -109,3 +111,52 @@ cons cells: every read walked i links and n reads ran out of fuel at n = 10^5. N
 - Measured (probes/numeric_lists_bench.sh, `global` row): n = 10^5 out of fuel before, 0.07 s after; n = 10^6 0.08 s.
 - The automatic choice of linear memory (the card's first idea) gains nothing yet: linear memory and GC arrays run at
   the same speed (notes/linear_arrays.md); it pays only once a host or GPU backend takes the block.
+
+## Element types are checked (card list-element-types, 2026-10-08)
+A declared list (`names: texts`, `names: list of text`, a field `items: texts`) holds only items of its element type,
+checked like a declared scalar:
+- Literal items are compile-time errors (analyzer `check_declared_types`, `list_items_mismatch`): the declaration
+  `names: texts = [420]`, a reassignment `names = [420]`, an append `names.add(420)` / `names = names + [420]`, an element
+  `names#1 = 420`; a field's constructor (`type_constructor::field_error`) and its append `b.items.add(420)`
+  (`struct_backend::misfit_list_item`).
+- Items known only at run time are checked at the store (lowering/list_element_checks.rs, first MEANING pass):
+  `if not (v is text) { raise "…" }` as a statement before the store, a call's item held in a temporary `checked·N`
+  first, a whole list from a call checked item by item. The store keeps its form, so a typed int list stays an array.
+- `names = other + [v]` checks the items of `other` in a for-loop too, unless `other` is `names` itself or declared
+  with the same element type (card list-element-runtime).
+- A field's run-time append `b.items.add(f())` and a whole field store `b.items = f()` are checked the same way when
+  b's class is known in the pass (`b = bag(…)`, `b: bag`; class_methods `instance_classes`, `class_fields`): "items of
+  bag is declared texts". Of an instance whose class is unknown (a parameter `x.items.add(v)`) each class with a list
+  field `items` guards its check, `if (x is bag) and not (v is text)`, so a map with an `items` key stays unchecked and
+  a literal item is checked at run time too (card list-element-field).
+- A float or number list takes ints (`is number`), as a declared float does.
+- Parameters (`f(xs: texts)` called with `[420]`): warp-7c's param-types work (functions2, checks.rs
+  `declared_element_type`, `elements_fit`).
+- A receiver inside an element (`bags#1.n = 5`, `bags#1.items.add(v)`, `bags#1.items#1 = v`) is taken out into
+  `nested·N`, changed, checked and written back (lowering/nested_index.rs); a receiver that is a call's result
+  (`make().n = 5`) is the error "make() gives a copy" (card list-field-receivers).
+- A character stored into a list of unknown static type (one read from a field) goes as its Node; node_with_at took
+  it as an Int, so `x#1 = "z"` gave `[122]` (list_ops `is_exact_int_element`).
+- Variance (TypeScript's covariant arrays), P215: lists are shared (P200b), so a view of a declared list under a wider
+  element type that changes it (`widen(xs: list) := xs.add(420)` of `names: texts`, `ys: [Shape] = circles;
+  ys.add(…)`) is a compile error where the alias is visible (src/analyzer/list_views.rs); a view that only reads, or of
+  a fitting element type (a subclass), is fine. Not yet: the run-time half (a lax alias, an unannotated parameter,
+  writes checked against the list's own declared element type), probes/variance/.
+
+## Appends copy only while aliased (card map-typed, 2026-10-08)
+`xs = xs + [v]` copies the array first when another variable may hold it (P200b). That was decided for the whole alias
+group, so every lowered map and filter, `d = (out = ø; for … { out = out + [x] }; out)`, copied on each append: the
+alias `d = out` exists, though only after the loop (int[20000].map 0.5 s, 80000 out of fuel). Now
+(list_dispatch.rs appends_while_aliased) an append copies only if it can run after an assignment between its own
+variable and another (`ys = xs`, `xs = ys`) in program order, or in a loop around one. map / filter of 10^6 ints: 7–9
+ms (release); a variable given a second map result (`d = d.map(…)`) stays linear. Tests: tests/lists/test_map_typed.rs.
+  a fitting element type (a subclass), is fine. The run-time half (a lax alias `ys = names`, an unannotated parameter
+  `f(xs) := xs.add(420)`): a declared Node-held list's head cell carries an element mark, the node_kind_in kinds its
+  element type admits, in kind bits 16+ (type_kinds::element_mark, set by list_mark at the assignment);
+  list_extend, list_insert_at and list_with_at check each new item (list_item_check, error "list cannot hold this
+  item"). Whole-kind compares mask the mark off (UNMARKED_KIND: equality, similarity, is_map, element_children).
+  Only a type written in the source marks (Local.declared): the `list of int` inferred for `ys = [1]` leaves the list
+  open. An empty declared list (ø) is marked too and keeps its mark when it becomes a cell or ø again
+  (list_extend, list_insert_at, emit_become_empty; ø compares mask with KIND_MASK; card p215-empty).
+  Limits: a class element type checks only that the item is an object (OBJECT_KINDS), not its class; typed arrays
+  need none. Probes: probes/variance/runtime_*.warp.

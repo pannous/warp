@@ -11,7 +11,7 @@ from a data file.
   `data_context`, in which unknown words stay words.
 - Not judged (unchanged): all-word lists (`hello world`, `[red green blue]`) and lists with operators (`foo x = 3`
   names its undefined variable itself). Comma tuples `(frobnicate, 3)` stay data.
-- samples/data_structures.wasp: `mixed = data [1 "two" three 4.0]`.
+- samples/data_structures.warp: `mixed = data [1 "two" three 4.0]`.
 Tests: tests/welcoming/test_unknown_word_error.rs.
 
 ## Refinement (user, 2026-10-05, P62/P63)

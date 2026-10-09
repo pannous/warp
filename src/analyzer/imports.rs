@@ -15,7 +15,7 @@ pub fn analyze_required_functions(ctx: &mut Context, node: &Node) {
 			}
 		}
 		Node::Text(text) => {
-			if let Some(number) = crate::wasp_parser::number_in_text(text) {
+			if let Some(number) = crate::warp_parser::number_in_text(text) {
 				analyze_required_functions(ctx, &Node::Number(number));
 			}
 		}
@@ -33,8 +33,15 @@ pub fn analyze_required_functions(ctx: &mut Context, node: &Node) {
 			if matches!(op, Op::Eq | Op::Ne) {
 				ctx.required_functions.insert(crate::wasm_emitter::VALUES_EQUAL);
 			}
+			if matches!(op, Op::Identical | Op::NotIdentical) {
+				ctx.required_functions.extend([crate::wasm_emitter::VALUES_EQUAL, crate::wasm_emitter::SAME_NODE]);
+			}
 			if matches!(op, Op::If | Op::While | Op::Question | Op::Not | Op::And | Op::Or) {
 				ctx.required_functions.insert(crate::wasm_emitter::IS_TRUTHY);
+			}
+			// `xs += [v]`, what `xs.add(v)` lowers to: the list grows in place
+			if *op == Op::AddAssign && matches!(value.drop_meta(), Node::List(_, Bracket::Square, _)) {
+				ctx.required_functions.insert(crate::wasm_emitter::list_ops::LIST_EXTEND);
 			}
 			if *op == Op::Assign || op.is_compound_assign() {
 				if let Node::Key(_, Op::Hash, _) = key.drop_meta() {
@@ -64,7 +71,10 @@ pub fn analyze_required_functions(ctx: &mut Context, node: &Node) {
 				} else {
 					ctx.required_functions.insert("node_index_at");
 					ctx.required_functions.insert("map_get");
-					if let Some(name) = crate::wasp_parser::subscript_key(value).and_then(constant_field_name) {
+					if let Some(name) = crate::warp_parser::subscript_key(value).and_then(constant_field_name) {
+						if name == crate::wasm_emitter::list_ops::MESSAGE_FIELD {
+							ctx.required_functions.insert(crate::wasm_emitter::list_ops::ERROR_MESSAGE);
+						}
 						ctx.missing_field_names.insert(name);
 					}
 					ctx.required_functions.insert(crate::wasm_emitter::VALUES_EQUAL);
@@ -108,6 +118,9 @@ pub fn analyze_required_functions(ctx: &mut Context, node: &Node) {
 				if let Some(word) = crate::wasm_emitter::cells::CELL_WORDS.iter().find(|word| **word == fn_name) {
 					ctx.required_functions.insert(word);
 				}
+				if fn_name == LIST_DROP_LAST {
+					ctx.required_functions.insert(LIST_DROP_LAST);
+				}
 				if fn_name == REMOVED_VALUE_CALL {
 					ctx.required_functions.extend([crate::library_words::MAP_GET_OR, crate::library_words::MAP_WITHOUT]);
 				}
@@ -117,6 +130,13 @@ pub fn analyze_required_functions(ctx: &mut Context, node: &Node) {
 				if fn_name == crate::type_tests::IS_TYPE {
 					ctx.required_functions.insert(crate::type_tests::NODE_KIND_IN);
 				}
+				if fn_name == crate::type_tests::TYPE_WORD {
+					ctx.required_functions.insert(crate::type_tests::NODE_TYPE_NAME);
+					// node_type_name names an instance by comparing its data with each declared type's name
+					if !ctx.type_registry.types().is_empty() {
+						ctx.required_functions.insert(crate::wasm_emitter::VALUES_EQUAL);
+					}
+				}
 				if fn_name == crate::switch::NO_CASE_CALL {
 					ctx.missing_case_labels.extend(items.get(1).map(|label| label.name()));
 				}
@@ -125,6 +145,12 @@ pub fn analyze_required_functions(ctx: &mut Context, node: &Node) {
 				}
 				if fn_name == crate::library_words::FIELD_WITH {
 					ctx.required_functions.extend([crate::library_words::FIELD_WITH, crate::wasm_emitter::VALUES_EQUAL]);
+				}
+				if crate::library_words::is_similarity_call(fn_name) {
+					ctx.required_functions.insert(crate::wasm_emitter::NUMBERS_SIMILAR); // values_similar when needed
+				}
+				if fn_name == crate::library_words::INSTANCE_COPY {
+					ctx.required_functions.insert(crate::library_words::INSTANCE_COPY);
 				}
 				if ctx.ffi_imports.contains_key(fn_name.as_str()) {
 					for item in items.iter().skip(1) {
@@ -202,8 +228,13 @@ pub(super) fn ffi_call_kind(name: &str) -> Kind {
 	crate::ffi::get_ffi_signature(name).map_or(Kind::Int, |signature| signature_kind(&signature))
 }
 
-/// The kind of a foreign function's result: a float, a text (a C string), a host word's Node, else an int
+/// The kind of a foreign function's result: a float, a text (a C string), a host word's Node, what a function of a module
+/// warp compiled declares, else an int
 pub(crate) fn signature_kind(signature: &crate::ffi::FfiSignature) -> Kind {
+	let declared = crate::wasm_modules::is_module_path(signature.library).then(|| crate::wasm_modules::exports(signature.library).get(signature.name)?.node_result).flatten();
+	if let Some(kind) = declared {
+		return kind;
+	}
 	match signature.results.first() {
 		Some(wasm_encoder::ValType::F64 | wasm_encoder::ValType::F32) => Kind::Float,
 		Some(wasm_encoder::ValType::Ref(_)) if signature.library != crate::host::HOST_LIBRARY => Kind::Text,
@@ -435,8 +466,13 @@ pub(super) fn add_ffi_import(ctx: &mut Context, name: &str, library: &str) {
 	let sig = get_ffi_signature_from_lib(name, library)
 		.or_else(|| get_ffi_signature(name));
 
-	if let Some(sig) = sig {
-		ctx.ffi_imports.insert(name.to_string(), sig);
+	match sig {
+		Some(sig) => {
+			ctx.ffi_imports.insert(name.to_string(), sig);
+		}
+		None => {
+			ctx.unresolved_imports.insert(name.to_string(), library.to_string());
+		}
 	}
 }
 

@@ -16,8 +16,9 @@ use std::path::PathBuf;
 use std::time::SystemTime;
 use wasmtime::{AsContextMut, Func, Instance, Result, Store, Val};
 
-const NEW_EMPTY: &str = "new_empty";
-const NEW_INT: &str = "new_int";
+/// The constructors a handler's `event` is built with: exports the stub calls besides the handlers
+pub const NEW_EMPTY: &str = "new_empty";
+pub const NEW_INT: &str = "new_int";
 /// How often a watched file's modification time is read: polling, no file-system events yet
 const FILE_CHECK_PERIOD: Duration = Duration::from_millis(100);
 /// How often an awaited thing (await_ready) is looked at
@@ -205,7 +206,17 @@ pub fn seconds_until_on(minute_of_day: i64, weekdays: i64, weekday: i64, second_
 
 /// The local weekday (0 Sunday) and seconds since local midnight (UTC where the platform gives no time zone)
 fn local_time() -> (i64, i64) {
-	let now = SystemTime::now().duration_since(SystemTime::UNIX_EPOCH).map_or(0, |since| since.as_secs() as i64);
+	local_time_at(SystemTime::now().duration_since(SystemTime::UNIX_EPOCH).unwrap_or_default())
+}
+
+/// The local time of day in milliseconds since midnight (system value "time of day", the word `time`)
+pub fn millisecond_of_day() -> i64 {
+	let since = SystemTime::now().duration_since(SystemTime::UNIX_EPOCH).unwrap_or_default();
+	local_time_at(since).1 * 1000 + since.subsec_millis() as i64
+}
+
+fn local_time_at(since_epoch: Duration) -> (i64, i64) {
+	let now = since_epoch.as_secs() as i64;
 	#[cfg(unix)]
 	{
 		let time = now as libc::time_t;

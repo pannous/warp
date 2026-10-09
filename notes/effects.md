@@ -10,7 +10,13 @@ Code: `src/effects.rs` · Tests: `tests/functions/test_effects.rs` · Design: DE
   counts as a call. Nested definitions and `import`/`use` statements are skipped. Top-level code is the
   pseudo-function `main`, so defining an IO function is not IO; calling it is.
 - Effects = union over callees, iterated to a fixpoint (recursion safe).
-- Only `State` (the `global` keyword) is inferred beyond calls; Allocation/Async are not inferred yet.
+- Inferred beyond calls: `State` (the `global` keyword), `Div`, `Allocation` (a written list `[a b]`, record
+  `{name: a}` or text join `"hi " + n`; not the arguments a lowering pass builds for a host word), `Async` (the task,
+  signal and channel host words `host::TASK_WORDS` that `go`/`await`/`stop`/channels lower to; before, they counted
+  as FFI).
+- Allocation is reported (`effects of f` says `Allocation`) but pure (wiki/pure.md: construction is pure):
+  `EffectSet::is_pure`/`is_subset_of` and the `! Pure` check look at `observable()`, so folding, memoization and
+  `! Pure` behave as before. Async is observable: `f() := await go g() ! Pure` is a violation.
 
 ## API
 - `EffectReport::of(&node)` → `effects_of(name)`, `entry_effects()`, `needs(Capability)`, `call_chain(f, effect)`, `violations`.

@@ -1,6 +1,6 @@
 //! A time unit word that starts the next entry is a key, no unit: `{year:1970 month:1 day:1}` (card key-unit)
 use crate::is;
-use warp::wasp_parser::parse;
+use warp::warp_parser::parse;
 
 #[test]
 fn a_unit_word_before_a_colon_is_a_key() {

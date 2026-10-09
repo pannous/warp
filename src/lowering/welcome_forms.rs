@@ -1,4 +1,4 @@
-//! Forms other languages use, lowered to wasp's own (notes/welcoming.md), before any other pass:
+//! Forms other languages use, lowered to warp's own (notes/welcoming.md), before any other pass:
 //! - `match v { 0 => "zero"; _ => "other" }`: the cases of switch/match written with `=>`, `_` the default
 //! - `loop { … }`: `while true { … }`, left by `break`
 //! - anonymous functions `function(a, b) { … }`, `fn(x) { … }` (JS, Rust-ish), `f <- function(x) x * 2` (R) and
@@ -30,16 +30,20 @@ const CASE_WORD: &str = "case";
 /// Kotlin's `when (x) { a -> 1; is T -> 2; else -> 3 }`, an if chain
 const WHEN_WORD: &str = "when";
 const ELSE_WORD: &str = "else";
+/// The listeners a `when` without arms is: of an event, of a condition
+const ON_WORD: &str = "on";
+const WHENEVER_WORD: &str = "whenever";
+const WHEN_CONDITION_TOPIC: &str = "when-condition";
 const IS_WORD: &str = "is";
 /// The if chain a `when` arm adds, its conditions joined by `or`
 const WHEN_ARM: &str = "if CONDITION then VALUE else OTHERWISE";
 const LAST_WHEN_ARM: &str = "if CONDITION then VALUE";
 const OCAML_FUNCTION_KEYWORD: &str = "fun";
-/// F#/OCaml (and Elixir's Enum) modules whose iteration functions are wasp's words: `List.map f xs` is `map f xs`
+/// F#/OCaml (and Elixir's Enum) modules whose iteration functions are warp's words: `List.map f xs` is `map f xs`
 const ITERATION_MODULES: [&str; 4] = ["List", "Seq", "Array", "Enum"];
 const MODULE_ITERATIONS: [&str; 5] = ["map", "filter", "fold", "reduce", "sum"];
-/// C# LINQ methods and the wasp words they are (the alias rule: they work, with a note naming wasp's word)
-/// Iteration functions of other languages and the wasp word they are (alias rule, with a note): R's `sapply(xs, f)` is
+/// C# LINQ methods and the warp words they are (the alias rule: they work, with a note naming warp's word)
+/// Iteration functions of other languages and the warp word they are (alias rule, with a note): R's `sapply(xs, f)` is
 /// `map(xs, f)`; PHP's `array_map(f, xs)` takes the function first (true), `array_filter(xs, f)` the list
 const FOREIGN_ITERATIONS: [(&str, &str, bool, &str); 6] = [
 	("sapply", "map", false, "R's apply function"), ("lapply", "map", false, "R's apply function"), ("vapply", "map", false, "R's apply function"),
@@ -48,12 +52,15 @@ const FOREIGN_ITERATIONS: [(&str, &str, bool, &str); 6] = [
 ];
 /// JavaScript's math namespace: `Math.sqrt(16)` is `sqrt(16)`
 const JS_MATH: &str = "Math";
+/// Module words written only qualified, as the module's own name for them (P183: `file.append(path, text)`; a bare
+/// `append` stays the list method)
+const QUALIFIED_WORDS: [(&str, &str, &str); 1] = [("file", "append", "append_file")];
 /// R's vector constructor: `c(1, 2, 3)` is the list `[1, 2, 3]` unless the program names something c
 const R_VECTOR_WORD: &str = "c";
 /// Ruby's `xs.sum { |x| x * 2 }`, Kotlin's `xs.sumOf { it * 2 }`, `xs.count { it > 1 }`: a reduction of the list
 /// the block makes, `sum(map(xs, block))`, `count(filter(xs, block))`
 const BLOCK_REDUCTIONS: [(&str, &str, &str); 3] = [("sum", "sum", "map"), ("sumOf", "sum", "map"), ("count", "count", "filter")];
-/// Ruby's conversion and case methods and the wasp words they are: `x.to_s` is `string(x)`
+/// Ruby's conversion and case methods and the warp words they are: `x.to_s` is `string(x)`
 const RUBY_METHODS: [(&str, &str); 5] = [("to_s", "string"), ("to_i", "int"), ("to_f", "float"), ("upcase", "upper"), ("downcase", "lower")];
 /// Elixir's `def sq(x), do: x * x` and its private `defp`
 const ELIXIR_DO_WORD: &str = "do";
@@ -102,7 +109,7 @@ fn forms(node: Node) -> Node {
 		Node::List(items, bracket, separator) if generic_names(&items).is_some() => {
 			let (function, names) = generic_names(&items).expect("guarded");
 			crate::normalize::set_position_of(&items[0]);
-			crate::normalize::hint(&format!("{function}<{}>", names.join(", ")), &function, "wasp infers types: write the function without type parameters");
+			crate::normalize::hint(&format!("{function}<{}>", names.join(", ")), &function, "warp infers types: write the function without type parameters");
 			forms(without_type_parameters(Node::List(items, bracket, separator), &names))
 		}
 		Node::List(items, bracket, separator) => {
@@ -116,7 +123,7 @@ fn forms(node: Node) -> Node {
 			// C++'s `auto x = 3`: wasp infers every type
 			if items.len() > 1 && is_word(&items[0], CPP_AUTO_WORD) && matches!(items[1].drop_meta(), Node::Key(_, Op::Assign, _)) {
 				crate::normalize::set_position_of(&items[0]);
-				crate::normalize::hint(&format!("{CPP_AUTO_WORD} "), "", "wasp infers types: write the assignment without auto");
+				crate::normalize::hint(&format!("{CPP_AUTO_WORD} "), "", "warp infers types: write the assignment without auto");
 				let rest = items[1..].to_vec();
 				return forms(if rest.len() == 1 { rest[0].clone() } else { Node::List(rest, bracket, separator) });
 			}
@@ -133,6 +140,9 @@ fn forms(node: Node) -> Node {
 			if let Some(chain) = when_chain(&items) {
 				return chain;
 			}
+			if let Some(listener) = when_listener(&items) {
+				return Node::List(listener, bracket, separator);
+			}
 			endless_loop(&items).unwrap_or_else(|| Node::List(arrow_cases(items), bracket, separator))
 		}
 		Node::Key(left, Op::Colon, body) if lambda_parameters(&left).is_some() => lambda(lambda_parameters(&left).expect("guarded"), forms(*body)),
@@ -140,18 +150,18 @@ fn forms(node: Node) -> Node {
 			let (parameters, fields) = destructured_parameters(&parameters).expect("guarded");
 			lambda(parameters, Node::List([fields, vec![forms(*body)]].concat(), Bracket::Curly, Separator::Semicolon))
 		}
-		// Elixir's `Enum.map(xs, f)`: the call `map(xs, f)`, with a note naming wasp's word
+		// Elixir's `Enum.map(xs, f)`: the call `map(xs, f)`, with a note naming warp's word
 		Node::Key(module, Op::Dot, call) if module_call(&module, &call).is_some() => {
 			let iteration = module_call(&module, &call).expect("guarded");
-			crate::normalize::hint(&format!("{}.{iteration}(", module.serialize()), &format!("{iteration}("), "wasp's word for the module function");
+			crate::normalize::hint(&format!("{}.{iteration}(", module.serialize()), &format!("{iteration}("), "warp's word for the module function");
 			forms(*call)
 		}
-		// Ruby's `x.to_s`, `t.upcase`: wasp's word called on x, `string(x)`, `upper(t)` (alias rule, with a note)
+		// Ruby's `x.to_s`, `t.upcase`: warp's word called on x, `string(x)`, `upper(t)` (alias rule, with a note)
 		Node::Key(subject, Op::Dot, method) if ruby_method(&method).is_some() => {
-			let wasp_word = ruby_method(&method).expect("guarded");
+			let warp_word = ruby_method(&method).expect("guarded");
 			crate::normalize::set_position_of(&method);
-			crate::normalize::hint(&format!(".{}", method.name()), &format!("{wasp_word}(…)"), "wasp's word for Ruby's method");
-			Node::List(vec![Node::Symbol(wasp_word.to_string()), forms(*subject)], Bracket::Round, Separator::None)
+			crate::normalize::hint(&format!(".{}", method.name()), &format!("{warp_word}(…)"), "warp's word for Ruby's method");
+			Node::List(vec![Node::Symbol(warp_word.to_string()), forms(*subject)], Bracket::Round, Separator::None)
 		}
 		// `f = lambda *xs: …`, JS `f = (...xs) => …`: the definition `f(*xs) := …`, which variadic.rs reads
 		Node::Key(name, Op::Assign, value) if starred_lambda(&name, &value).is_some() => forms(starred_lambda(&name, &value).expect("guarded")),
@@ -290,9 +300,26 @@ fn when_chain(items: &[Node]) -> Option<Node> {
 		let template = if otherwise.is_some() { WHEN_ARM } else { LAST_WHEN_ARM };
 		let bindings = [("CONDITION", condition), ("VALUE", forms(value)), ("OTHERWISE", otherwise.unwrap_or(Node::Empty))];
 		let bindings = bindings.into_iter().map(|(placeholder, node)| (placeholder.to_string(), node)).collect();
-		Some(crate::law::substitute(&crate::wasp_parser::parse(template), &bindings).drop_meta().clone())
+		Some(crate::law::substitute(&crate::warp_parser::parse(template), &bindings).drop_meta().clone())
 	});
 	chain
+}
+
+/// `when click {…}` is `on click {…}`, `when x > 3 {…}` is `whenever x > 3 {…}` (card signals-shape, user 2026-10-08):
+/// a `when` whose block holds no `->` arms listens, to the event a bare word names or to the condition otherwise
+fn when_listener(items: &[Node]) -> Option<Vec<Node>> {
+	let [word, subject, body] = items else { return None };
+	let Node::List(statements, Bracket::Curly, _) = body.drop_meta() else { return None };
+	let has_arms = statements.iter().any(|statement| matches!(statement.drop_meta(), Node::Key(_, Op::Arrow, _)));
+	if !is_word(word, WHEN_WORD) || has_arms {
+		return None;
+	}
+	let listener = if matches!(subject.drop_meta(), Node::Symbol(_)) { ON_WORD } else { WHENEVER_WORD };
+	if listener == WHENEVER_WORD {
+		crate::normalize::set_position_of(word);
+		crate::diagnostic::educate_once(WHEN_CONDITION_TOPIC, WHEN_WORD, WHENEVER_WORD, "it reacts to every later write that makes the condition true; write if for a one-time check now");
+	}
+	Some(vec![Node::Symbol(listener.to_string()), subject.clone(), body.clone()])
 }
 
 /// The patterns and value of a `when` arm: `5 -> 50`, `1, 2 -> 10`, `is Circle -> 3`, `else -> 0`
@@ -378,7 +405,7 @@ fn without_type_parameters(node: Node, names: &[String]) -> Node {
 					kept.pop();
 					let Node::Key(name, _, _) = item.drop_meta() else { unreachable!("a generic parameter") };
 					crate::normalize::set_position_of(&item);
-					crate::normalize::hint(&format!("{WILDCARD} {}", item.serialize()), &name.serialize(), "wasp names a parameter once, no label");
+					crate::normalize::hint(&format!("{WILDCARD} {}", item.serialize()), &name.serialize(), "warp names a parameter once, no label");
 				}
 				kept.push(item);
 			}
@@ -411,7 +438,7 @@ fn braceless_lambdas(items: Vec<Node>) -> Vec<Node> {
 	merged
 }
 
-/// `to_s` of `x.to_s` (or `x.to_s()`): the wasp word of the Ruby method (RUBY_METHODS)
+/// `to_s` of `x.to_s` (or `x.to_s()`): the warp word of the Ruby method (RUBY_METHODS)
 fn ruby_method(method: &Node) -> Option<&'static str> {
 	let word = match method.drop_meta() {
 		Node::Symbol(word) => word.as_str(),
@@ -421,7 +448,7 @@ fn ruby_method(method: &Node) -> Option<&'static str> {
 		},
 		_ => return None,
 	};
-	RUBY_METHODS.iter().find(|(ruby, _)| *ruby == word).map(|(_, wasp_word)| *wasp_word)
+	RUBY_METHODS.iter().find(|(ruby, _)| *ruby == word).map(|(_, warp_word)| *warp_word)
 }
 
 /// Elixir's one-line `def sq(x), do: x * x`, parsed as `def sq(x)`, `do: x * x`: the definition `sq(x) := x * x`.
@@ -444,7 +471,7 @@ fn elixir_definition(items: &[Node]) -> Option<Node> {
 }
 
 /// C++'s `sq = [](int x) { return x * x; }`, parsed as `sq = []`, `(int x)`, `{…}`, the capture list `[]`, `[&]` or
-/// `[=]` is the value assigned: the assignment of the lambda `x => {…}` (a wasp closure captures what it reads)
+/// `[=]` is the value assigned: the assignment of the lambda `x => {…}` (a warp closure captures what it reads)
 /// A declared type before it, `std::function<int(int)> sq = …` or `function<int(int)> sq = …`, is dropped like `auto`
 fn cpp_lambda(items: &[Node]) -> Option<Node> {
 	let (assignment, parameters, body) = match items {
@@ -489,21 +516,21 @@ fn block_reduction(items: &[Node]) -> Option<Node> {
 	}
 	if written != reduction {
 		crate::normalize::set_position_of(method);
-		crate::normalize::hint(&format!(".{written} {{"), &format!(".{reduction} {{"), "wasp's word");
+		crate::normalize::hint(&format!(".{written} {{"), &format!(".{reduction} {{"), "warp's word");
 	}
 	let call = |word: &str, arguments: Vec<Node>| Node::List([vec![Node::Symbol(word.to_string())], arguments].concat(), Bracket::Round, Separator::None);
 	Some(call(reduction, vec![call(iteration, vec![subject.as_ref().clone(), block.clone()])]))
 }
 
-/// R's `sapply(xs, f)`, PHP's `array_map(f, xs)`: `map(xs, f)`, with a note naming wasp's word (FOREIGN_ITERATIONS)
+/// R's `sapply(xs, f)`, PHP's `array_map(f, xs)`: `map(xs, f)`, with a note naming warp's word (FOREIGN_ITERATIONS)
 fn foreign_iteration(mut items: Vec<Node>) -> Vec<Node> {
-	let Some(&(word, wasp_word, function_first, source)) = items.first().and_then(|first| FOREIGN_ITERATIONS.iter().find(|(word, ..)| is_word(first, word))) else { return items };
+	let Some(&(word, warp_word, function_first, source)) = items.first().and_then(|first| FOREIGN_ITERATIONS.iter().find(|(word, ..)| is_word(first, word))) else { return items };
 	if items.len() < 2 {
 		return items;
 	}
 	crate::normalize::set_position_of(&items[0]);
-	crate::normalize::hint(&format!("{word}("), &format!("{wasp_word}("), &format!("wasp's word for {source}"));
-	items[0] = Node::Symbol(wasp_word.to_string());
+	crate::normalize::hint(&format!("{word}("), &format!("{warp_word}("), &format!("warp's word for {source}"));
+	items[0] = Node::Symbol(warp_word.to_string());
 	if function_first && items.len() == 3 {
 		items.swap(1, 2);
 	}
@@ -546,8 +573,13 @@ pub(crate) fn module_calls(node: Node, modules: &[&str]) -> Node {
 				Node::List(items, _, _) => items[0].name(),
 				_ => unreachable!("guarded"),
 			};
-			crate::normalize::hint(&format!("{}.{word}(", module.name()), &format!("{word}("), "wasp calls a module's word by its name");
-			let operator = crate::wasp_parser::PREFIX_OPERATOR_WORDS.iter().find(|(written, _)| *written == word).map(|(_, op)| *op);
+			if let Some((_, _, own_word)) = QUALIFIED_WORDS.iter().find(|(owner, written, _)| is_word(&module, owner) && *written == word) {
+				let Node::List(mut items, bracket, separator) = call.drop_meta().clone() else { unreachable!("guarded") };
+				items[0] = Node::Symbol(own_word.to_string());
+				return Node::List(items.into_iter().map(|item| module_calls(item, modules)).collect(), bracket, separator);
+			}
+			crate::normalize::hint(&format!("{}.{word}(", module.name()), &format!("{word}("), "warp calls a module's word by its name");
+			let operator = crate::warp_parser::PREFIX_OPERATOR_WORDS.iter().find(|(written, _)| *written == word).map(|(_, op)| *op);
 			match (operator, call.drop_meta()) {
 				// `Math.sqrt(16)`: the parser reads `sqrt(16)` as the operator √
 				(Some(op), Node::List(items, _, _)) if items.len() == 2 => {
@@ -566,7 +598,7 @@ fn r_vectors(node: Node) -> Node {
 	match node {
 		Node::List(items, Bracket::Round, separator) if items.len() > 1 && is_word(&items[0], R_VECTOR_WORD) => {
 			crate::normalize::set_position_of(&items[0]);
-			crate::normalize::hint(&format!("{R_VECTOR_WORD}("), "[", "wasp writes a list in brackets");
+			crate::normalize::hint(&format!("{R_VECTOR_WORD}("), "[", "warp writes a list in brackets");
 			let elements = items.into_iter().skip(1).map(r_vectors).flat_map(|element| match element {
 				Node::List(group, Bracket::Round, Separator::Colon) => group, // `c(1, 2, 3)` holds its arguments as one group
 				other => vec![other],
@@ -585,7 +617,7 @@ fn module_call(module: &Node, call: &Node) -> Option<&'static str> {
 	(is_module && items.len() > 1).then(|| MODULE_ITERATIONS.iter().find(|name| is_word(word, name)).copied()).flatten()
 }
 
-/// F#'s `List.map f xs` (also `Seq.`, `Array.`): `map f xs`, with a note naming wasp's word (alias rule)
+/// F#'s `List.map f xs` (also `Seq.`, `Array.`): `map f xs`, with a note naming warp's word (alias rule)
 fn module_qualified_iteration(mut items: Vec<Node>) -> Vec<Node> {
 	let Some(Node::Key(module, Op::Dot, word)) = items.first().map(Node::drop_meta) else { return items };
 	let is_module = ITERATION_MODULES.iter().any(|name| is_word(module, name));
@@ -594,7 +626,7 @@ fn module_qualified_iteration(mut items: Vec<Node>) -> Vec<Node> {
 		return items;
 	}
 	crate::normalize::set_position_of(&items[0]);
-	crate::normalize::hint(&format!("{}.{iteration}", module.serialize()), iteration, "wasp's word for the module function");
+	crate::normalize::hint(&format!("{}.{iteration}", module.serialize()), iteration, "warp's word for the module function");
 	items[0] = Node::Symbol(iteration.to_string());
 	items
 }
@@ -679,15 +711,15 @@ fn starred_lambda(name: &Node, value: &Node) -> Option<Node> {
 	Some(Node::Key(Box::new(head), Op::Define, body.clone()))
 }
 
-/// C#'s `xs.Sum()`, `xs.Select(x => x * 2)`: the LINQ name, wasp's word and the arguments (a called method only:
+/// C#'s `xs.Sum()`, `xs.Select(x => x * 2)`: the LINQ name, warp's word and the arguments (a called method only:
 /// `obj.Count` may be a field)
-/// `xs.Select(f)`: wasp's `xs.map(f)`, with a note; a method the program defines itself (Go's `Sum()`) stays
+/// `xs.Select(f)`: warp's `xs.map(f)`, with a note; a method the program defines itself (Go's `Sum()`) stays
 fn linq_calls(node: Node, defined: &HashSet<String>) -> Node {
 	match node {
 		Node::Key(receiver, Op::Dot, method) if linq_method(&method).is_some_and(|(written, _, _)| !defined.contains(written)) => {
 			let (written, word, arguments) = linq_method(&method).expect("guarded");
 			crate::normalize::set_position_of(&method);
-			crate::normalize::hint(&format!(".{written}("), &format!(".{word}("), "wasp's word for the LINQ method");
+			crate::normalize::hint(&format!(".{written}("), &format!(".{word}("), "warp's word for the LINQ method");
 			let arguments = arguments.into_iter().map(|argument| linq_calls(argument, defined));
 			let call = Node::List([vec![Node::Symbol(word.to_string())], arguments.collect()].concat(), Bracket::Round, Separator::None);
 			Node::Key(Box::new(linq_calls(*receiver, defined)), Op::Dot, Box::new(call))
@@ -718,8 +750,8 @@ pub(crate) fn defined_names(node: &Node) -> HashSet<String> {
 fn linq_method(method: &Node) -> Option<(&'static str, &'static str, Vec<Node>)> {
 	let Node::List(items, Bracket::Round, _) = method.drop_meta() else { return None };
 	let (word, arguments) = items.split_first()?;
-	let (written, wasp_word) = LINQ_METHODS.iter().find(|(linq, _)| is_word(word, linq))?;
-	Some((written, wasp_word, arguments.to_vec()))
+	let (written, warp_word) = LINQ_METHODS.iter().find(|(linq, _)| is_word(word, linq))?;
+	Some((written, warp_word, arguments.to_vec()))
 }
 
 /// `call(3)`, `call 3`: the arguments of Ruby's `.call`

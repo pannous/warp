@@ -18,7 +18,7 @@ const INCLUDE_DIRS: &[&str] = &[
 const PAGE_INCLUDE: &str = "page:lib";
 /// `:`-separated include directories replacing INCLUDE_DIRS (web/playground's test runner serves exactly one)
 const INCLUDE_VARIABLE: &str = "WARP_INCLUDE";
-const SDL_HEADERS: [&str; 4] = ["SDL.h", "SDL_events.h", "SDL_render.h", "SDL_timer.h"];
+const SDL_HEADERS: [&str; 5] = ["SDL.h", "SDL_events.h", "SDL_render.h", "SDL_timer.h", "SDL_video.h"];
 /// libc's headers: strings, conversions and memory, stdio, character classes (`toupper`). macOS declares much of them
 /// in the _stdlib.h, _stdio.h and _ctype.h that stdlib.h, stdio.h and ctype.h include (`getenv`, `fopen`, `toupper`); a header missing on Linux is skipped
 #[cfg(not(all(target_arch = "wasm32", target_os = "unknown")))]
@@ -47,7 +47,7 @@ pub fn find_header_in(header: &str, dirs: &[impl AsRef<str>]) -> Option<String> 
 /// The headers that declare a library's functions, each found once in the include directories
 pub fn find_library_headers(library: &str) -> Vec<String> {
     let headers: Vec<String> = match library {
-        "m" | "math" | "libm" => vec!["math.h".into()],
+        "m" | "math" | "cmath" | "libm" => vec!["math.h".into()],
         "c" | "libc" => LIBC_HEADERS.iter().map(|header| header.to_string()).collect(),
         "SDL2" | "sdl2" | "sdl" => SDL_HEADERS.iter().map(|header| format!("SDL2/{header}")).collect(),
         _ => match LIBRARY_HEADERS.iter().find(|(name, _)| *name == library) {

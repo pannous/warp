@@ -220,18 +220,16 @@ pub fn lower_tasks(node: Node) -> Node {
 	let mut functions = std::collections::HashSet::new();
 	let mut tasks = std::collections::HashSet::new();
 	let mut started = std::collections::HashMap::new();
-	node.visit(&mut |part| if let Node::Key(head, Op::Define | Op::Assign, value) = part {
+	node.visit(&mut |part| if let Node::Key(head, Op::Define | Op::Assign, _) = part {
 		let name = match head.drop_meta() {
 			Node::List(items, Bracket::Round, _) => items.first().map(|name| name.drop_meta().name()),
 			Node::Symbol(name) => Some(name.clone()),
 			_ => None,
 		};
-		if let (Node::Symbol(variable), Node::List(items, _, _)) = (head.drop_meta(), value.drop_meta()) {
-			if matches!(items.first().map(Node::drop_meta), Some(Node::Symbol(word)) if word == TASK_WORDS[0]) {
-				tasks.insert(variable.clone());
-				if let Some((function, _)) = started_call(&items[1..]) {
-					started.insert(variable.clone(), function);
-				}
+		if let Some((variable, items)) = task_start(part) {
+			tasks.insert(variable.clone());
+			if let Some((function, _)) = started_call(&items[1..]) {
+				started.insert(variable.clone(), function);
 			}
 		}
 		if matches!(head.drop_meta(), Node::List(..)) {
@@ -262,6 +260,15 @@ pub fn lower_tasks(node: Node) -> Node {
 	started.retain(|_, function| functions.contains(function));
 	let job_lists = job_lists(&node, &functions);
 	Tasks { words, tasks, started, functions, job_lists }.lower(node)
+}
+
+/// `job = go f(x)`: the task variable and the words of its start
+fn task_start(node: &Node) -> Option<(&String, &Vec<Node>)> {
+	let Node::Key(head, Op::Define | Op::Assign, value) = node else { return None };
+	match (head.drop_meta(), value.drop_meta()) {
+		(Node::Symbol(variable), Node::List(items, _, _)) if matches!(items.first().map(Node::drop_meta), Some(Node::Symbol(word)) if word == TASK_WORDS[0]) => Some((variable, items)),
+		_ => None,
+	}
 }
 
 /// The words of a statement the parser paired, flat: `(await any) [a, b]`, `await (all [go f(1), …])`
@@ -331,20 +338,34 @@ fn is_start(node: &Node) -> bool {
 	matches!(node.drop_meta(), Node::List(words, Bracket::None, Separator::Space) if words.len() > 1 && words[0].name() == TASK_WORDS[0])
 }
 
-/// The list variables that collect started tasks, `jobs.add(go f(i))` (P47), with the functions they start
+/// The list variables that collect started tasks, `jobs.add(go f(i))` (P47) or `jobs = [go f(3), go f(1)]`, with the
+/// functions they start
 fn job_lists(node: &Node, functions: &std::collections::HashSet<String>) -> std::collections::HashMap<String, Vec<String>> {
 	let mut lists: std::collections::HashMap<String, Vec<String>> = std::collections::HashMap::new();
-	node.visit(&mut |part| if let Node::Key(receiver, Op::Dot, method) = part {
-		if let (Node::Symbol(list), Some((function, _))) = (receiver.drop_meta(), added_start(method)) {
-			if functions.contains(&function) {
-				let started = lists.entry(list.clone()).or_default();
-				if !started.contains(&function) {
-					started.push(function);
-				}
+	node.visit(&mut |part| {
+		let (list, started_functions) = match part {
+			Node::Key(receiver, Op::Dot, method) => (receiver, added_start(method).map(|(function, _)| function).into_iter().collect()),
+			Node::Key(target, Op::Assign | Op::Define, value) => (target, listed_starts(value)),
+			_ => return,
+		};
+		let Node::Symbol(list) = list.drop_meta() else { return };
+		for function in started_functions.into_iter().filter(|function| functions.contains(function)) {
+			let started = lists.entry(list.clone()).or_default();
+			if !started.contains(&function) {
+				started.push(function);
 			}
 		}
 	});
 	lists
+}
+
+/// `[go f(3), go g(1)]`: the functions its items start
+fn listed_starts(value: &Node) -> Vec<String> {
+	let Node::List(items, Bracket::Square, _) = value.drop_meta() else { return vec![] };
+	items.iter().filter(|item| is_start(item)).filter_map(|item| match item.drop_meta() {
+		Node::List(words, _, _) => started_call(&words[1..]).map(|(function, _)| function),
+		_ => None,
+	}).collect()
 }
 
 /// `add(go f(x))`, `add go f(x)`: the `go …` items after `add`
@@ -404,6 +425,7 @@ fn marker(word: &str, parts: Vec<Node>) -> Node {
 	Node::List([vec![Node::Symbol(word.to_string())], parts].concat(), Bracket::Round, Separator::None)
 }
 
+#[derive(Clone)]
 struct Tasks<'a> {
 	words: Vec<&'a str>,
 	/// task variables and the functions `go` starts
@@ -460,7 +482,26 @@ impl Tasks<'_> {
 		marker(marker_word, [vec![read], functions.collect()].concat())
 	}
 
+	/// Inside a function that binds a task variable's name itself (a parameter, a local, a loop variable: a joined
+	/// module's `for c in …` under a main-level `c = go f()`) other than by starting a task, that name is its own (card
+	/// task-name)
 	fn lower(&self, node: Node) -> Node {
+		let mut own_tasks = vec![];
+		node.visit(&mut |part| own_tasks.extend(task_start(part).map(|(variable, _)| variable.clone())));
+		let shadowed: Vec<String> = crate::lowering::getters::shadowed_names(&node).into_iter().filter(|name| !own_tasks.contains(name)).collect();
+		if !shadowed.iter().any(|name| self.started.contains_key(name) || self.job_lists.contains_key(name)) {
+			return self.lower_unshadowed(node);
+		}
+		let mut narrowed = self.clone();
+		for name in &shadowed {
+			narrowed.started.remove(name);
+			narrowed.job_lists.remove(name);
+			narrowed.tasks.remove(name);
+		}
+		narrowed.lower_unshadowed(node)
+	}
+
+	fn lower_unshadowed(&self, node: Node) -> Node {
 		match node {
 			Node::Symbol(name) if self.started.contains_key(&name) => self.value_of(&name).expect("a started task"),
 			Node::Symbol(name) if self.job_lists.contains_key(&name) => self.job_list_read(&name, Node::Symbol(name.clone()), TASK_LIST),
@@ -521,7 +562,7 @@ impl Tasks<'_> {
 	/// `x = await job within 100 ms or 5` arrives as go_blocks' `try·else((await job) (within 100 ms), 5)`
 	fn within_or(&self, items: &[Node]) -> Option<Node> {
 		let [marker_word, awaited, fallback] = items else { return None };
-		if word(marker_word) != crate::wasp_parser::TRY_MARKER {
+		if word(marker_word) != crate::warp_parser::TRY_MARKER {
 			return None;
 		}
 		fn words(node: &Node) -> Vec<Node> {
@@ -721,12 +762,13 @@ const CROSSING_KINDS: [crate::type_kinds::Kind; 8] = {
 pub fn resolve_tasks(node: Node) -> Node {
 	use crate::type_kinds::Kind;
 	let mut has_task = false;
-	node.visit(&mut |part| has_task |= matches!(part, Node::List(items, _, _) if matches!(read_marker(&word(items.first().unwrap_or(&Node::Empty))).0, TASK_GO | TASK_VALUE | TASK_CONTROL_MARK | TASK_LIST | TASK_ELEMENT | crate::wasp_parser::TRY_MARKER)));
+	node.visit(&mut |part| has_task |= matches!(part, Node::List(items, _, _) if matches!(read_marker(&word(items.first().unwrap_or(&Node::Empty))).0, TASK_GO | TASK_VALUE | TASK_CONTROL_MARK | TASK_LIST | TASK_ELEMENT | crate::warp_parser::TRY_MARKER)));
 	if !has_task {
 		return node;
 	}
 	let mut context = crate::context::Context::new();
 	crate::analyzer::extract_user_functions(&mut context, &node);
+	crate::analyzer::note_bool_functions(context.user_functions.values());
 	let int_starts = int_starts(&node, &crate::analyzer::literal_variable_kinds(&node, &context));
 	let path = |function: &str| {
 		let Some(definition) = context.user_functions.get(function) else { return TaskPath::Inline };
@@ -934,7 +976,7 @@ fn forwarded_raises(node: Node, wrapped: &std::cell::RefCell<std::collections::B
 				wrapped.borrow_mut().insert(function.clone(), items.len() - 1);
 				let arguments = Node::List(items[1..].to_vec(), Bracket::Square, Separator::Colon);
 				let send = marker(crate::host::SIGNAL_SEND, vec![Node::Text(format!("{function}{NODE_WRAPPER_SUFFIX}")), arguments]);
-				let template = crate::wasp_parser::parse(&format!("if {}() {{ {FORWARD_PLACEHOLDER} }} else {{ {BODY_PLACEHOLDER} }}", crate::host::TASK_INSIDE));
+				let template = crate::warp_parser::parse(&format!("if {}() {{ {FORWARD_PLACEHOLDER} }} else {{ {BODY_PLACEHOLDER} }}", crate::host::TASK_INSIDE));
 				let body = crate::library_words::substitute(crate::library_words::substitute(template, FORWARD_PLACEHOLDER, &send), BODY_PLACEHOLDER, &body);
 				Node::Key(head, Op::Define, Box::new(body))
 			}
@@ -949,10 +991,18 @@ const BODY_PLACEHOLDER: &str = "handler_body_placeholder";
 
 /// `task·check(task_join(job), task_failure(job)); task_await(job)`: a failed task raises its error from wasm, which
 /// `try` catches, before the result is read
-fn checked_await(await_word: &str, job: &Node) -> Node {
+fn checked_await(await_word: &str, job: &Node, bools: bool) -> Node {
 	use crate::host::{TASK_CHECK, TASK_FAILURE, TASK_JOIN};
 	let check = marker(TASK_CHECK, vec![marker(TASK_JOIN, vec![job.clone()]), marker(TASK_FAILURE, vec![job.clone()])]);
-	Node::List(vec![check, marker(await_word, vec![job.clone()])], Bracket::None, Separator::Semicolon)
+	let result = marker(await_word, vec![job.clone()]);
+	// a bool crosses as 1/0: comparing it makes it a bool again (card bool-crossing)
+	let result = if bools { Node::Key(Box::new(result), Op::Ne, Box::new(Node::Number(crate::extensions::numbers::Number::Int(0)))) } else { result };
+	Node::List(vec![check, result], Bracket::None, Separator::Semicolon)
+}
+
+/// Whether every started function gives a bool (analyzer::note_bool_functions)
+fn gives_bools(functions: &[Node]) -> bool {
+	!functions.is_empty() && functions.iter().all(|function| crate::analyzer::is_bool_function(&word(function)))
 }
 
 /// `try f(a, b) else Y` of a user function f: the guarded call goes through the host, `guarded_call("f·node", [a, b])`,
@@ -960,7 +1010,7 @@ fn checked_await(await_word: &str, job: &Node) -> Node {
 /// guarded expression stays as it is
 fn guarded_calls(node: Node, guardable: &dyn Fn(&str) -> Option<Option<&'static str>>, wrapped: &std::cell::RefCell<std::collections::BTreeMap<String, usize>>) -> Node {
 	match node {
-		Node::List(items, bracket, separator) if items.len() >= 3 && word(&items[0]) == crate::wasp_parser::TRY_MARKER => {
+		Node::List(items, bracket, separator) if items.len() >= 3 && word(&items[0]) == crate::warp_parser::TRY_MARKER => {
 			let items: Vec<Node> = items.into_iter().map(|item| guarded_calls(item, guardable, wrapped)).collect();
 			let guarded = match items[1].drop_meta() {
 				Node::List(call, Bracket::Round, _) if matches!(call.first().map(Node::drop_meta), Some(Node::Symbol(function)) if guardable(function).is_some()) => {
@@ -983,10 +1033,10 @@ fn guarded_calls(node: Node, guardable: &dyn Fn(&str) -> Option<Option<&'static 
 }
 
 /// Every result of a job list: `jobs.map(awaited_job => <checked await of awaited_job>)`
-fn awaited_jobs(list: &Node) -> Node {
+fn awaited_jobs(list: &Node, bools: bool) -> Node {
 	use crate::host::TASK_AWAIT_VALUE;
-	let template = crate::wasp_parser::parse(&format!("{TASK_LIST_PLACEHOLDER}.map({AWAITED_JOB} => {AWAITED_PLACEHOLDER})"));
-	let awaited = checked_await(TASK_AWAIT_VALUE, &Node::Symbol(AWAITED_JOB.to_string()));
+	let template = crate::warp_parser::parse(&format!("{TASK_LIST_PLACEHOLDER}.map({AWAITED_JOB} => {AWAITED_PLACEHOLDER})"));
+	let awaited = checked_await(TASK_AWAIT_VALUE, &Node::Symbol(AWAITED_JOB.to_string()), bools);
 	let template = crate::library_words::substitute(template, TASK_LIST_PLACEHOLDER, list);
 	crate::library_words::substitute(template, AWAITED_PLACEHOLDER, &awaited)
 }
@@ -1027,17 +1077,21 @@ fn resolved(node: Node, path: &dyn Fn(&str) -> TaskPath, wrapped: &std::cell::Re
 						TaskPath::Inline => Node::List(items[1..].to_vec(), Bracket::Round, Separator::None),
 					}
 				}
-				TASK_VALUE => match path(&word(&items[2])) {
-					TaskPath::Ints => checked_await(TASK_AWAIT, &items[1]),
-					TaskPath::Values(_) => checked_await(TASK_AWAIT_VALUE, &items[1]),
-					TaskPath::Inline => items[1].clone(),
-				},
+				TASK_VALUE => {
+					let bools = gives_bools(&items[2..3]);
+					match path(&word(&items[2])) {
+						TaskPath::Ints => checked_await(TASK_AWAIT, &items[1], bools),
+						TaskPath::Values(_) => checked_await(TASK_AWAIT_VALUE, &items[1], bools),
+						TaskPath::Inline => items[1].clone(),
+					}
+				}
 				TASK_LIST | TASK_ELEMENT => {
 					let threaded = items[2..].iter().all(|function| path(&word(function)) != TaskPath::Inline);
+					let bools = gives_bools(&items[2..]);
 					match (threaded, read == TASK_LIST) {
 						(false, _) => items[1].clone(),
-						(true, false) => checked_await(TASK_AWAIT_VALUE, &items[1]),
-						(true, true) => awaited_jobs(&items[1]),
+						(true, false) => checked_await(TASK_AWAIT_VALUE, &items[1], bools),
+						(true, true) => awaited_jobs(&items[1], bools),
 					}
 				}
 				TASK_CONTROL_MARK => match path(&word(&items[2])) {
@@ -1282,9 +1336,9 @@ fn haskell_definition(statement: &Node, later: &[Node]) -> Option<Node> {
 	let [name, parameters @ .., last] = items.as_slice() else { return None };
 	let Node::Key(last_name, Op::Assign, body) = last.drop_meta() else { return None };
 	let Node::Symbol(function) = name.drop_meta() else { return None };
-	let is_parameter = |node: &Node| matches!(node.drop_meta(), Node::Symbol(word) if word == PLACEHOLDER || crate::wasp_parser::mentions(body, word));
+	let is_parameter = |node: &Node| matches!(node.drop_meta(), Node::Symbol(word) if word == PLACEHOLDER || crate::warp_parser::mentions(body, word));
 	let is_free_name = !is_function_keyword(function) && !crate::library_words::is_library_word(function) && crate::analyzer::type_word_kind(function).is_none();
-	let is_used_later = later.iter().any(|statement| crate::wasp_parser::mentions(statement, function));
+	let is_used_later = later.iter().any(|statement| crate::warp_parser::mentions(statement, function));
 	if !is_free_name || !is_used_later || !parameters.iter().chain([last_name.as_ref()]).all(is_parameter) {
 		return None;
 	}
@@ -1309,7 +1363,7 @@ fn colon_iteration(items: &[Node]) -> Option<Node> {
 		Node::Key(collection, op, value) if op.is_comparison() => {
 			let condition = Node::Key(Box::new(Node::Symbol(IT_PARAMETER.to_string())), *op, value.clone());
 			let written = format!("{} {op} {}", word.drop_meta().name(), crate::normalize::operand_text(value));
-			let question = crate::diagnostic::Ask::new(crate::wasp_parser::FILTER_LOOP_TOPIC, format!("`{written}: …` visits only the items that pass its filter"),
+			let question = crate::diagnostic::Ask::new(crate::warp_parser::FILTER_LOOP_TOPIC, format!("`{written}: …` visits only the items that pass its filter"),
 				vec![crate::diagnostic::reading("filter the items", &format!("for it in … {{ if it {op} {} {{ … }} }}", crate::normalize::operand_text(value)))],
 				crate::diagnostic::Fallback::Warning).written(&written).at_node(word);
 			if let Err(error) = crate::diagnostic::ask(&question) {
@@ -1353,7 +1407,7 @@ fn spaced_definition(items: &[Node]) -> Option<(Node, Vec<Node>, Node)> {
 	let (definition, extra) = rest.split_first()?;
 	let Node::Key(last, op, body) = definition.drop_meta() else { return None };
 	// with `=` only a recursive definition (wiki/Home.md `fibonacci number = … fibonacci …`): `print x = 5` stays
-	if *op == Op::Assign && !crate::wasp_parser::mentions(body, &name.name()) {
+	if *op == Op::Assign && !crate::warp_parser::mentions(body, &name.name()) {
 		return None;
 	}
 	let words: Vec<Node> = parameters.iter().map(|parameter| parameter.drop_meta().clone()).chain(std::iter::once(last.drop_meta().clone())).collect();
@@ -1454,8 +1508,10 @@ pub fn lower_c_functions(node: Node) -> Node {
 	lower_lists(end_definitions(node), |items| definition_then_statements(items).or_else(|| function_definition(items)).or_else(|| extension_block(items)).or_else(|| smart_scope(items)).or_else(|| partial_application(items)))
 }
 
+/// The definition keeps the comment and position of its first word (`// doubles` before `def f(x) {…}`)
 fn function_definition(items: &[Node]) -> Option<Node> {
-	c_function(items).or_else(|| keyword_definition(items))
+	let definition = c_function(items).or_else(|| keyword_definition(items))?;
+	Some(definition.with_meta_of(items.first()?))
 }
 
 /// `function f(x) { return x * 2 } f(3)` (JS, PHP, Go, Rust): the body's closing brace ends the definition, what
@@ -1657,7 +1713,7 @@ fn smart_scope(items: &[Node]) -> Option<Node> {
 /// The body with `it` read as the receiver
 fn renamed_it(node: Node, receiver: &Node) -> Node {
 	match node {
-		Node::Symbol(word) if word == crate::wasp_parser::IT_WORD => receiver.clone(),
+		Node::Symbol(word) if word == crate::warp_parser::IT_WORD => receiver.clone(),
 		other => other.map_children(|child| renamed_it(child, receiver)),
 	}
 }
@@ -1695,7 +1751,7 @@ fn extension_block(items: &[Node]) -> Option<Node> {
 
 /// `f(x) -> int { body }`, `f(x): int { body }` (Rust/Swift/Python, TypeScript/Kotlin) and `f(x) -> int: body`
 /// (Python): the definition `(f(x) { body })` without its result type, and the type
-fn typed_result(definition: &Node) -> Option<(Node, Node)> {
+pub(crate) fn typed_result(definition: &Node) -> Option<(Node, Node)> {
 	let Node::Key(head, Op::Arrow | Op::Colon, typed_body) = definition else { return None };
 	if !matches!(head.drop_meta(), Node::List(items, Bracket::Round, _) if matches!(items.first().map(Node::drop_meta), Some(Node::Symbol(_)))) {
 		return None;
@@ -1827,11 +1883,11 @@ fn labeled_parameter(parameter: Node, labeled_names: &mut Vec<Node>) -> Node {
 	let [label, typed] = words.as_slice() else { return parameter };
 	let Some(label) = argument_label(label, typed) else { return parameter };
 	let name = typed_parameter_name(typed).expect("a labeled parameter has a name");
-	// user 2026-10-06: wasp names a parameter once, Swift's label and name are redundant; ported code still compiles
+	// user 2026-10-06: warp names a parameter once, Swift's label and name are redundant; ported code still compiles
 	let written = format!("{label} {}", typed.serialize());
 	let preferred = if label == WILDCARD_LABEL { typed.clone() } else { renamed_parameter(typed, label) };
 	crate::normalize::set_position_of(&parameter);
-	crate::normalize::hint(&written, &preferred.serialize(), "wasp names a parameter once, no label");
+	crate::normalize::hint(&written, &preferred.serialize(), "warp names a parameter once, no label");
 	if label == WILDCARD_LABEL {
 		return preferred;
 	}

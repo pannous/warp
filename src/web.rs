@@ -41,7 +41,7 @@ impl Acknowledger for PageAcknowledger {
 	}
 }
 
-/// Compile and run `code` as `warp file.wasp` does, with the topics the page acknowledged. The report (JSON):
+/// Compile and run `code` as `warp file.warp` does, with the topics the page acknowledged. The report (JSON):
 /// `value` (what the CLI prints), `error`, `errors` (the failed program's errors with fixes), `warnings`, `hints`,
 /// `notes` (topics of the warnings and notes shown that the user can say "got it" to), `got_it` (each of them with the
 /// `topic@expression` key that silences only its expression; a warning carries its own as `expression_key`) and
@@ -80,26 +80,27 @@ pub fn evaluate(code: &str, acknowledged: HashSet<String>) -> Value {
 	report
 }
 
-/// Markup the page shows as DOM (card web-dom), rendered by std/markup.wasp: inside the program's module when it renders
+/// Markup the page shows as DOM (card web-dom), rendered by lib/markup.warp: inside the program's module when it renders
 /// itself, else by the renderer compiled on its own
 fn html_of(value: &Node) -> Value {
 	let rendered = RENDERED.with(|rendered| rendered.borrow_mut().take());
 	json!(crate::markup::is_markup(value).then(|| rendered.unwrap_or_else(|| crate::markup::to_html(value))))
 }
 
-/// `code` compiled and run; a program holding markup renders itself (pipeline::rendering_itself)
+/// `code` compiled and run; a program holding markup renders itself (pipeline::rendering_itself). The page has no
+/// `warp test`: a program's tests run, and their summary is its value (lowering/test_blocks.rs)
 fn run_shown(code: &str) -> Node {
-	match renders_itself(code) {
+	crate::pipeline::for_tests(|| match renders_itself(code) {
 		true => crate::pipeline::rendering_itself(|| crate::wasm_emitter::eval(code)),
 		false => crate::wasm_emitter::eval(code),
-	}
+	})
 }
 
 /// Does the program hold markup (`div{…}`): only then it carries the renderer, which a plain program does not need
 pub fn renders_itself(code: &str) -> bool {
 	let mut holds_markup = false;
 	// quietly: the compile that follows says what the parse finds
-	diagnostic::quietly(|| crate::wasp_parser::parse(code)).visit(&mut |part| holds_markup |= crate::markup::is_markup(part));
+	diagnostic::quietly(|| crate::warp_parser::parse(code)).visit(&mut |part| holds_markup |= crate::markup::is_markup(part));
 	holds_markup
 }
 
@@ -167,7 +168,7 @@ pub fn run_outcome(outcome: &Value) -> Node {
 	if let Some(message) = outcome.get("trap").and_then(Value::as_str) {
 		let mut trace = outcome.get("trace").and_then(Value::as_str).unwrap_or_default().to_string();
 		if let Some(detail) = outcome.get("detail").filter(|detail| !detail.is_null()) {
-			trace.push_str(&format!("\n{}{}", crate::wasm_emitter::TRAP_DETAIL_PREFIX, node_from_tree(detail).serialize()));
+			trace.push_str(&format!("\n{}", crate::wasm_emitter::trap_detail_line(&node_from_tree(detail))));
 		}
 		return crate::wasm_emitter::trap_error(&trace, engine_words(message));
 	}
@@ -275,6 +276,9 @@ fn cell_node(cell: &Value, value: Option<Node>) -> Node {
 	let value_node = || value.clone().unwrap_or(Node::Empty);
 	match kind & KIND_MASK {
 		tag if tag == Kind::Empty as i64 => Node::Empty,
+		tag if tag == Kind::Int as i64 && info == crate::type_kinds::BOOL_INFO => {
+			if matches!(payload_number(data), Some(Number::Int(0))) { Node::False } else { Node::True }
+		}
 		tag if tag == Kind::Int as i64 => payload_number(data).map_or_else(|| crate::node::error("unreadable Int"), Node::Number),
 		tag if tag == Kind::Float as i64 => Node::Number(Number::Float(payload_float(data).unwrap_or(0.0))),
 		tag if tag == Kind::Text as i64 => Node::Text(text()),
@@ -292,6 +296,10 @@ fn cell_node(cell: &Value, value: Option<Node>) -> Node {
 		}
 		tag if tag == Kind::Function as i64 => value_node(), // a closure reads as the name of its function
 		tag if tag == Kind::TypeDef as i64 => Node::Type { name: Box::new(data_node()), body: Box::new(value_node()) },
+		tag if tag == Kind::Uncertain as i64 => {
+			let floats = data.get("floats").and_then(Value::as_array);
+			crate::uncertain::Uncertain::read_node(floats.map(|parts| parts.iter().filter_map(float_value).collect()))
+		}
 		tag => Node::Text(format!("Unknown Kind: {tag}")),
 	}
 }
@@ -319,7 +327,12 @@ fn list_node(first: Option<Node>, rest: Option<Node>, bracket: Bracket) -> Node 
 
 /// A Float payload: `{"float": number}`, or a text for what JSON has no number for (`"NaN"`, `"Infinity"`, `"-0"`)
 fn payload_float(payload: &Value) -> Option<f64> {
-	match payload.get("float")? {
+	float_value(payload.get("float")?)
+}
+
+/// A float as reader.js floatPayload sends it: a number, or text for NaN, the infinities and -0
+fn float_value(float: &Value) -> Option<f64> {
+	match float {
 		Value::String(text) => text.parse().ok(),
 		number => number.as_f64(),
 	}
@@ -508,7 +521,7 @@ mod exports {
 		})
 	}
 
-	/// The value of a run outcome (as run_outcome reads it) as wasp text: what a page event handler gave (worker.js
+	/// The value of a run outcome (as run_outcome reads it) as warp text: what a page event handler gave (worker.js
 	/// handleEvent, notes/signals.md phase 7); returns the length of the text, read at `web_report()`
 	#[no_mangle]
 	pub extern "C" fn web_show(outcome: *const u8, outcome_length: usize) -> usize {

@@ -17,3 +17,23 @@ fn except_as_binds_the_error() {
 	fails_with("try:\n  [1 2]#5\nexcept IndexError as e:\n  e", "index out of range");
 	is!("try:\n  [1 2]#5\nexcept:\n  7", 7);
 }
+
+// card try-raise: a caught Error joined with text reads as its message
+#[test]
+fn a_caught_error_reads_as_its_message_in_text() {
+	is!("try { raise \"boom\" } catch e { \"caught: \" + e }", "caught: boom");
+	is!("try { [1 2]#5 } catch e { e + \"!\" }", "index out of range!");
+}
+
+// card try-raise: whatever was raised, the caught Error's message is its text
+#[test]
+fn a_raised_value_is_caught_as_its_text() {
+	is!("try { raise 42 } catch e { \"caught \" + e }", "caught 42");
+	fails_with("raise 42", "42");
+}
+
+// card try-raise: an interpolation hole reads the caught Error too
+#[test]
+fn an_interpolation_reads_the_caught_error() {
+	is!("try { raise \"boom\" } catch e { \"caught: \\(e)\" }", "caught: boom");
+}

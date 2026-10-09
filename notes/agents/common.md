@@ -7,12 +7,18 @@ relays an explicit user decision counts as the user's decision.
 
 Read first: AGENTS.md, notes/roles.md (roles, enforcement), notes/welcoming.md (clear intent → compile it; ambiguous →
 warning with "got it" or a loud error naming the explicit forms; preferred syntax differs → educate), and the decided
-standing rules in notes/open_decisions.md and wiki/Footguns.md. Decisions reach you from the Interviewer or Supervisor;
+rules in wiki/Footguns.md. Decisions reach you from the Interviewer or Supervisor;
 once built, the code, tests and wiki are the truth. notes/decisions.md is the history: look something up there only
 when a message or comment cites a number (P71, D5) and you need its wording; never read it front to back.
 
 - Find the others with ListAgents: Supervisor (the session that spawned you, or tmux `warp-supervisor`), Integrator
   (tmux `warp-integrator`), Interviewer (tmux `warp-interviewer`).
+- One name per session (user, 2026-10-08: "I often have to guess who is actually responsible"): every session is named
+  `warp-<role>`: its claude.ai title, its SendMessage/ListAgents address and its tmux session (claude-remote.sh starts
+  `claude --name warp-<role> --remote-control warp-<role>`; a swap's replacement gets the same name). Address peers
+  by role (`warp-integrator`, `warp-types`) and write role names, not session hashes like warp-3f, in messages,
+  cards and reports to the user. Older sessions are renamed with `/rename warp-<role>` while idle
+  (~/dev/bin/rename-when-idle; typed into a busy session it is lost).
 - Never block on a decision: take the recommended default, mark it as an assumption (an existing-test edit goes in its
   own commit, named in the message), keep working, and SendMessage the Interviewer the question.
 - Never ask the user yourself (user, 2026-10-06: questions go "either through the Supervisor or through the
@@ -38,6 +44,10 @@ when a message or comment cites a number (P71, D5) and you need its wording; nev
 - The warp CLI binary is shared too: `<target-dir>/debug/warp` is whichever worktree built last. To probe your own code,
   run `scripts/own-warp.sh` (builds offline and atomically copies into `scratch/warp`) and run that path; a copy taken
   later can be another session's build.
+- Samples (user, 2026-10-08): every major or semi-major feature (a new syntax form, library area, server/ORM/GPU
+  capability, playground ability) ships with a sample in samples/<topic>.warp that shows it the way a user would
+  write it, in the same branch. tests/programs/test_all_samples.rs and the playground menu pick it up; a sample that
+  cannot run in the browser goes in web/playground/excluded_samples.txt. Name the sample in the Integrator message.
 - Done = push the branch, SendMessage the Integrator "branch, tip, new tests, filters", fix what it reports, clean up,
   report one line to the Supervisor.
 - Clean up after the merge: you are allowed and expected to remove your own worktree and branch, nobody else will.
@@ -52,6 +62,7 @@ when a message or comment cites a number (P71, D5) and you need its wording; nev
 - A card or issue is closed only with a commit linked in its description (user, 2026-10-06): `todo done <card>
   <commit>` (a commit URL for wiki changes), never `gh issue close`; `todo move <card> Done` refuses without a link.
 - Picking a card: `todo take <card> <your session name>` (user, 2026-10-06): assigns the user on GitHub, names you in
-  the board field Agent, moves the card to Now.
+  the board field Agent, moves the card to Now. Prefer fresh, easy cards in column Next (user, 2026-10-06).
+- Deleting old stuff needs no confirmation (user, 2026-10-03): merged branches, stale copies, leftover stashes.
 - Wiki (`wiki/`, its own repo pannous/warp.wiki): GitHub wikis can only serve `master` (notes/wiki_branch.md), so wiki
   edits go to master (`git push origin HEAD:master`); there is no `main` branch in the wiki.

@@ -67,7 +67,7 @@ fn a_field_write_of_a_struct_variable_sets_the_field() {
 	is!(&format!("{POINT}p.x = 7; p.y += 1; p.x * p.y"), 35);
 	is!(&format!("{POINT}i=0; while i<3 {{ p.x += i; i++ }}; string(p)"), "Point{x:6 y:4}");
 	is!(&format!("{POINT}p.x++; p.y--; p.x - p.y"), 1);
-	is!(&format!("{POINT}q = p; q.x = 9; p.x"), 3); // value semantics: q is a copy
+	is!(&format!("{POINT}q = p; q.x = 9; p.x"), 9); // P200: an instance is a reference, q is p
 }
 
 #[test]
@@ -89,8 +89,8 @@ fn a_method_changing_its_struct_variable_keeps_the_struct() {
 	let calls = called_function_names(&format!("{COUNTER}c = Counter(0); c.inc(); c.n"));
 	assert!(!calls.iter().any(|name| ["map_find", "struct_body", "field_with"].contains(&name.as_str())), "{calls:?}");
 	is!(&format!("{COUNTER}c = Counter(0); i=0; while i<5 {{ c.inc(); i++ }}; c.n"), 5);
-	is!(&format!("{COUNTER}c = Counter(0); d = c; c.inc(); d.n"), 0); // d is a copy
-	is!(&format!("{COUNTER}c = Counter(1); d = inc(c); c.n * 10 + d.n"), 12); // inc gives a changed copy
+	is!(&format!("{COUNTER}c = Counter(0); d = c; c.inc(); d.n"), 1); // P200: d is c
+	is!(&format!("{COUNTER}c = Counter(1); d = inc(c); c.n * 10 + d.n"), 22); // P200: inc changes c and gives it back
 }
 
 #[test]

@@ -424,7 +424,7 @@ impl WasmGcEmitter {
 	}
 
 	/// Is the variable `node` declared a whole-number type (`int`, `long`, `byte` …, not `exact`)
-	fn declared_whole(&self, node: &Node) -> bool {
+	pub(super) fn declared_whole(&self, node: &Node) -> bool {
 		let Node::Symbol(name) = node.drop_meta() else { return false };
 		let type_node = self.scope.lookup(name).and_then(|local| local.type_node.as_ref());
 		type_node.is_some_and(|type_node| crate::analyzer::is_whole_type(&type_node.name()))
@@ -581,8 +581,7 @@ impl WasmGcEmitter {
 			f.instruction(&I::RefNull(HeapType::Concrete(node_type)));
 			f.instruction(&I::StructNew(node_type));
 		});
-		let idx = self.func_index("new_int");
-		self.exports.export("new_int", ExportKind::Func, idx);
+		self.export_runtime_function("new_int");
 	}
 
 	pub(super) fn emit_heap_get(&self, func: &mut Function, handle_local: u32) {

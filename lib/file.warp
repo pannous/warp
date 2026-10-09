@@ -1,0 +1,8 @@
+// The standard library module file (notes/stdlib.md section 7): `use file`, or a file URL in the program (P183). read,
+// write and exists are prelude words (P171), the rest needs the module; append is written file.append(path, text).
+// They call the adapter std_io: the file system natively, the page's in-memory files in the browser
+write(path:any, text:any) := std_io("file", "write", [path, text])
+append_file(path:any, text:any) := std_io("file", "append", [path, text])
+exists(path:any) := std_io("file", "exists", [path])
+list_files(folder:any) := std_io("file", "list", [folder])
+lines(path) := split(read(path), "\n")

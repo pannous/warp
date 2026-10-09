@@ -17,7 +17,7 @@ const HOST_ALIASES: [(&str, Option<usize>, &str); 2] = [("download", None, "fetc
 
 /// The words of the program's environment, imported from the "host" module and called like C functions (ffi.rs);
 /// sleep, random, random_below and clock need no compiler and live in warp-runtime (runtime/src/host_words.rs)
-pub use warp_runtime::host_words::{CLOCK, EXIT, FILE_HANDLER_PREFIX, HOST_LIBRARY, SIGNAL_WATCH, INTERRUPT_HANDLER, RANDOM, RANDOM_BELOW, RANDOM_SEED, SHARED_HANDLER, SIGNAL_AT, SIGNAL_DAILY, SIGNAL_EVERY, SIGNAL_POLL, SLEEP, SYSTEM_VALUE, CLIPBOARD_TEXT, NOTIFY, GPU_COMPUTE, PAGE_PATH, TIMER_HANDLER_PREFIX, FETCH_HANDLER_PREFIX};
+pub use warp_runtime::host_words::{CLOCK, EXIT, FILE_HANDLER_PREFIX, HOST_LIBRARY, SIGNAL_WATCH, INTERRUPT_HANDLER, RANDOM, RANDOM_BELOW, RANDOM_SEED, SHARED_HANDLER, SIGNAL_AT, SIGNAL_DAILY, SIGNAL_EVERY, SIGNAL_POLL, SLEEP, SYSTEM_VALUE, CLIPBOARD_TEXT, NOTIFY, GPU_COMPUTE, GPU_RENDER, GPU_COMPUTE_LINEAR, GPU_MAP_LINEAR, GPU_REDUCE_LINEAR, PAGE_PATH, TIMER_HANDLER_PREFIX, FETCH_HANDLER_PREFIX};
 /// `go f(x)` on a thread (tasks.rs): task_spawn(function name, up to four Int arguments) → task id, task_await(id) → result
 pub const TASK_SPAWN: &str = "task_spawn";
 pub const TASK_AWAIT: &str = "task_await";
@@ -84,7 +84,7 @@ pub const CHANNEL_PENDING: &str = "channel_pending";
 pub const CHANNEL_NEXT: &str = "channel_next";
 pub const CHANNEL_SEND: &str = "channel_send";
 /// std_pure(module, member, arguments) and std_io(…): the standard library's adapters (src/std_adapters.rs, host.js),
-/// called by the words of std/<module>.wasp; std_pure's words have no effect (json), std_io's touch the outside
+/// called by the words of lib/<module>.warp; std_pure's words have no effect (json), std_io's touch the outside
 pub const STD_PURE: &str = "std_pure";
 pub const STD_IO: &str = "std_io";
 /// serve_routes(port, [[method, path, function] …]): `serve 8080 { get "/" { … } }` (src/web_server.rs), blocks while
@@ -92,6 +92,8 @@ pub const STD_IO: &str = "std_io";
 pub const SERVE_ROUTES: &str = "serve_routes";
 /// `users := fetch url` (src/fetches.rs): fetch_start(id, url) fetches without waiting, the handler on·fetch·id runs once
 /// the reply arrived, fetch_reply(id) → [value, error]: the parsed JSON (else the text) and ø, or ø and the failure
+/// `users := fetch url` (lowering/fetch_signals.rs)
+pub const FETCH_WORD: &str = "fetch";
 pub const FETCH_START: &str = "fetch_start";
 pub const FETCH_REPLY: &str = "fetch_reply";
 /// The host words whose result is any Node, its kind decided at run time (held like a map value)
@@ -100,17 +102,21 @@ pub const ANY_VALUE_WORDS: [&str; 4] = [FETCH_REPLY, FOREIGN_CALL, STD_PURE, STD
 /// channel_put(id, value) waits until a receiver took it, channel_take(id) waits for a value (ø once closed and empty),
 /// channel_more(id) waits until a value is offered (1) or the channel is closed (0), channel_close(id)
 pub const CHANNEL_WORDS: [&str; 5] = ["channel_new", "channel_put", "channel_take", "channel_more", "channel_close"];
+/// The host words of tasks, their signals and channels: a module calling one runs tasks (tasks.rs), a function that
+/// calls one has the effect Async (effects.rs)
+pub const TASK_WORDS: [&str; 16] = [TASK_SPAWN, TASK_AWAIT, TASK_CONTROL, TASK_SPAWN_VALUES, TASK_AWAIT_VALUE, TASK_JOIN, TASK_FAILURE, TASK_STATUS, TASK_POLL,
+	TASK_INSIDE, SIGNAL_SEND, CHANNEL_WORDS[0], CHANNEL_WORDS[1], CHANNEL_WORDS[2], CHANNEL_WORDS[3], CHANNEL_WORDS[4]];
 /// The host words that build a value in the program (tasks.rs Builders): it exports its constructors
-pub const VALUE_GIVING_WORDS: [&str; 12] = [GPU_COMPUTE, FETCH_REPLY, RUN_BLOCK, FOREIGN_CALL, BLOCK_VALUE, CHANNEL_NEXT, CLIPBOARD_TEXT, PAGE_PATH, CHANNEL_WORDS[2], STD_PURE, STD_IO, SERVE_ROUTES];
-pub const HOST_WORDS: [&str; 55] = [GPU_COMPUTE, FETCH_START, FETCH_REPLY, SERVE_ROUTES, STD_PURE, STD_IO, CHANNEL_LISTEN, CHANNEL_PENDING, CHANNEL_NEXT, CHANNEL_SEND, CLIPBOARD_TEXT, NOTIFY, PAGE_PATH, GUARDED_CALL, PAINT, RUN_BLOCK, BLOCK_VALUE, FOREIGN_CALL, SLEEP, RANDOM, RANDOM_BELOW, RANDOM_SEED, CLOCK, SIGNAL_POLL, SIGNAL_EVERY, SIGNAL_DAILY, SIGNAL_AT, SIGNAL_WATCH, SYSTEM_VALUE, EXIT, TASK_SPAWN, TASK_AWAIT, TASK_CONTROL, TASK_SPAWN_VALUES, TASK_AWAIT_VALUE, TASK_JOIN, TASK_FAILURE, TASK_STATUS, TASK_POLL, TASK_INSIDE, SIGNAL_SEND,
+pub const VALUE_GIVING_WORDS: [&str; 13] = [GPU_COMPUTE, GPU_RENDER, FETCH_REPLY, RUN_BLOCK, FOREIGN_CALL, BLOCK_VALUE, CHANNEL_NEXT, CLIPBOARD_TEXT, PAGE_PATH, CHANNEL_WORDS[2], STD_PURE, STD_IO, SERVE_ROUTES];
+pub const HOST_WORDS: [&str; 59] = [GPU_COMPUTE, GPU_RENDER, GPU_COMPUTE_LINEAR, GPU_MAP_LINEAR, GPU_REDUCE_LINEAR, FETCH_START, FETCH_REPLY, SERVE_ROUTES, STD_PURE, STD_IO, CHANNEL_LISTEN, CHANNEL_PENDING, CHANNEL_NEXT, CHANNEL_SEND, CLIPBOARD_TEXT, NOTIFY, PAGE_PATH, GUARDED_CALL, PAINT, RUN_BLOCK, BLOCK_VALUE, FOREIGN_CALL, SLEEP, RANDOM, RANDOM_BELOW, RANDOM_SEED, CLOCK, SIGNAL_POLL, SIGNAL_EVERY, SIGNAL_DAILY, SIGNAL_AT, SIGNAL_WATCH, SYSTEM_VALUE, EXIT, TASK_SPAWN, TASK_AWAIT, TASK_CONTROL, TASK_SPAWN_VALUES, TASK_AWAIT_VALUE, TASK_JOIN, TASK_FAILURE, TASK_STATUS, TASK_POLL, TASK_INSIDE, SIGNAL_SEND,
 	SHARED_WORDS[0], SHARED_WORDS[1], SHARED_WORDS[2], SHARED_WORDS[3], SHARED_WORDS[4], SHARED_WRITES, SHARED_FLOAT_WORDS[0], SHARED_FLOAT_WORDS[1], SHARED_FLOAT_WORDS[2],
 	CHANNEL_WORDS[0], CHANNEL_WORDS[1], CHANNEL_WORDS[2], CHANNEL_WORDS[3], CHANNEL_WORDS[4]];
 
 /// name, parameters, results of the host words
-pub fn host_word_signatures() -> [(&'static str, Vec<wasm_encoder::ValType>, Vec<wasm_encoder::ValType>); 55] {
+pub fn host_word_signatures() -> [(&'static str, Vec<wasm_encoder::ValType>, Vec<wasm_encoder::ValType>); 59] {
 	use wasm_encoder::ValType::{F64, I32, I64};
 	let node = wasm_encoder::ValType::Ref(wasm_encoder::RefType::ANYREF);
-	[(GPU_COMPUTE, vec![node, node, I64], vec![node]), (FETCH_START, vec![I64, node], vec![]), (FETCH_REPLY, vec![I64], vec![node]), (SERVE_ROUTES, vec![I64, node], vec![node]), (STD_PURE, vec![node, node, node], vec![node]), (STD_IO, vec![node, node, node], vec![node]), (CHANNEL_LISTEN, vec![I64, node], vec![]), (CHANNEL_PENDING, vec![I64], vec![I64]), (CHANNEL_NEXT, vec![I64], vec![node]), (CLIPBOARD_TEXT, vec![], vec![node]), (PAGE_PATH, vec![], vec![node]), (NOTIFY, vec![node], vec![]), (CHANNEL_SEND, vec![node, node], vec![]),
+	[(GPU_COMPUTE, vec![node, node, I64], vec![node]), (GPU_RENDER, vec![node, I64, I64, node], vec![node]), (GPU_COMPUTE_LINEAR, vec![node, I64, I64], vec![I64]), (GPU_MAP_LINEAR, vec![node, I64, node, I64, I64, I64], vec![I64]), (GPU_REDUCE_LINEAR, vec![node, I64, node, I64, I64, I64], vec![I64]), (FETCH_START, vec![I64, node], vec![]), (FETCH_REPLY, vec![I64], vec![node]), (SERVE_ROUTES, vec![I64, node], vec![node]), (STD_PURE, vec![node, node, node], vec![node]), (STD_IO, vec![node, node, node], vec![node]), (CHANNEL_LISTEN, vec![I64, node], vec![]), (CHANNEL_PENDING, vec![I64], vec![I64]), (CHANNEL_NEXT, vec![I64], vec![node]), (CLIPBOARD_TEXT, vec![], vec![node]), (PAGE_PATH, vec![], vec![node]), (NOTIFY, vec![node], vec![]), (CHANNEL_SEND, vec![node, node], vec![]),
 		(GUARDED_CALL, vec![I32, node], vec![node]), (PAINT, vec![node, I64, I64], vec![]), (RUN_BLOCK, vec![node, node, node, node], vec![node]), (BLOCK_VALUE, vec![I64], vec![node]), (FOREIGN_CALL, vec![node, node, node, node, node], vec![node]), (SLEEP, vec![I64], vec![]), (RANDOM, vec![], vec![F64]), (RANDOM_BELOW, vec![I64], vec![I64]), (RANDOM_SEED, vec![I64], vec![]), (CLOCK, vec![], vec![I64]), (SIGNAL_POLL, vec![], vec![]), (SIGNAL_EVERY, vec![I64, I64], vec![]), (SIGNAL_DAILY, vec![I64, I64, I64], vec![]), (SIGNAL_AT, vec![I64, I64], vec![]), (SIGNAL_WATCH, vec![I64, I32], vec![]), (SYSTEM_VALUE, vec![I32], vec![I64]), (EXIT, vec![I64], vec![]),
 		(TASK_SPAWN, vec![I32, I64, I64, I64, I64], vec![I64]), (TASK_AWAIT, vec![I64], vec![I64]), (TASK_CONTROL, vec![I64, I64], vec![I64]),
 		(TASK_SPAWN_VALUES, vec![I32, node], vec![I64]), (TASK_AWAIT_VALUE, vec![I64], vec![node]),
@@ -185,7 +191,7 @@ pub struct HostState {
 	pub wasi: wasmtime_wasi::p1::WasiP1Ctx,
 	/// Whether this store runs a task's instance (tasks.rs): a raise there goes to the starting thread's handlers
 	pub in_task: bool,
-	/// The C pointers this run got (sqlite3 *, FILE *), handed to wasp as ids (notes/ffi_handles.md)
+	/// The C pointers this run got (sqlite3 *, FILE *), handed to warp as ids (notes/ffi_handles.md)
 	pub c_handles: crate::ffi::CHandles,
 	/// The WebAssembly modules the program imports, instantiated at their first call (wasm_modules.rs), by path
 	pub wasm_modules: std::collections::HashMap<String, wasmtime::Instance>,
@@ -339,7 +345,7 @@ fn run_wasm_simple(bytes: &[u8]) -> Result<i64> {
 pub fn fetch(url: &str, timeout: Duration) -> Result<String, String> {
 	let mut content = download_within(url, timeout).map_err(|reason| format!("fetch {url} failed: {reason}"))?;
 	if !content.ends_with('\n') {
-		content.push('\n'); // wasp convention
+		content.push('\n'); // warp convention
 	}
 	Ok(content)
 }
@@ -398,7 +404,7 @@ pub fn fetch_call(node: &Node) -> Option<(Node, Option<Duration>)> {
 	if !matches!(node.drop_meta(), Node::List(_, Bracket::None, _)) {
 		return None;
 	}
-	let is_fetch = |head: &Node| matches!(head, Node::Symbol(name) if name == "fetch");
+	let is_fetch = |head: &Node| matches!(head, Node::Symbol(name) if name == FETCH_WORD);
 	match parts(node).as_slice() {
 		[head, url] if is_fetch(head) => Some((url.clone(), None)),
 		[head, url, keyword, Node::Number(seconds)] if is_fetch(head) && matches!(keyword, Node::Symbol(k) if k == "timeout") => {
@@ -461,6 +467,10 @@ pub fn link_host_functions(linker: &mut Linker<HostState>, _engine: &Engine) -> 
 	linker.func_wrap(HOST_LIBRARY, PAGE_PATH, page_path)?;
 	linker.func_wrap(HOST_LIBRARY, NOTIFY, notify)?;
 	linker.func_wrap(HOST_LIBRARY, GPU_COMPUTE, gpu_compute)?;
+	linker.func_wrap(HOST_LIBRARY, GPU_RENDER, gpu_render)?;
+	linker.func_wrap(HOST_LIBRARY, GPU_COMPUTE_LINEAR, gpu_compute_linear)?;
+	linker.func_wrap(HOST_LIBRARY, GPU_MAP_LINEAR, gpu_map_linear)?;
+	linker.func_wrap(HOST_LIBRARY, GPU_REDUCE_LINEAR, gpu_reduce_linear)?;
 	linker.func_wrap(HOST_LIBRARY, CHANNEL_SEND, channel_send)?;
 	linker.func_wrap(HOST_LIBRARY, PAINT, paint)?;
 
@@ -607,12 +617,69 @@ fn foreign_call(mut caller: Caller<'_, HostState>, runtime: Option<wasmtime::Roo
 	let failure = |message: String| wasmtime::Error::new(TaskFailure(message));
 	let Some(Extern::Memory(memory)) = caller.get_export("memory") else { return Err(failure("foreign_call: the module exports no memory".into())) };
 	let mut store = caller.as_context_mut();
+	let functions = function_arguments(&mut store, arguments)?;
 	let [runtime, module, member, call, arguments] = [runtime, module, member, call, arguments].map(|value| crate::wasm_reader::node_in(&Val::AnyRef(value), &mut store, memory));
-	let answer = crate::foreign::call(&runtime.name(), &module, &member.name(), call == 1, &arguments).map_err(failure)?;
-	let value = TaskValue::of(&answer).map_err(|problem| failure(problem.to_string()))?;
+	let arguments = with_function_markers(arguments, &functions);
 	let builders = Builders::of(&mut |export| caller.get_export(export)).map_err(|problem| failure(problem.to_string()))?;
+	let mut callback = |index: usize, values: Node| -> Result<Node, String> {
+		let Some(Extern::Func(apply)) = caller.get_export(crate::wasm_emitter::CLOSURE_APPLY) else { return Err("the module exports no closure_apply".into()) };
+		let function = functions.iter().flatten().nth(index).copied().ok_or(format!("no warp function {index}"))?;
+		let values = TaskValue::of(&values).and_then(|values| builders.build(&values, &mut caller.as_context_mut())).map_err(|problem| problem.to_string())?;
+		let mut result = [Val::AnyRef(None)];
+		apply.call(&mut caller, &[Val::AnyRef(Some(function)), values], &mut result).map_err(|trap| trap.root_cause().to_string())?;
+		given_node(&mut caller, result[0].unwrap_anyref().copied()).map_err(|problem| problem.to_string())
+	};
+	let answer = crate::foreign::call(&runtime.name(), &module, &member.name(), call == 1, &arguments, &mut callback).map_err(failure)?;
+	let value = TaskValue::of(&answer).map_err(|problem| failure(problem.to_string()))?;
 	let built = builders.build(&value, &mut caller.as_context_mut()).map_err(|problem| failure(problem.to_string()))?;
 	Ok(built.unwrap_anyref().copied())
+}
+
+/// A foreign call's arguments, the list's items or the one argument, each a closure or None
+#[cfg(feature = "native")]
+fn function_arguments(store: &mut wasmtime::StoreContextMut<'_, HostState>, arguments: HostNode) -> wasmtime::Result<Vec<Option<wasmtime::Rooted<wasmtime::AnyRef>>>> {
+	use crate::wasm_reader::{FIELD_DATA, FIELD_KIND, FIELD_VALUE};
+	use crate::type_kinds::{Kind, KIND_MASK};
+	let node_of = |value: &Val, store: &wasmtime::StoreContextMut<'_, HostState>| value.unwrap_anyref().and_then(|reference| reference.unwrap_struct(store).ok());
+	let kind_of = |node: &wasmtime::StructRef, store: &mut wasmtime::StoreContextMut<'_, HostState>| node.field(&mut *store, FIELD_KIND).map(|kind| (kind.unwrap_i64() & KIND_MASK) as u8);
+	let mut items = vec![];
+	let mut cell = node_of(&Val::AnyRef(arguments), store);
+	match &cell {
+		Some(node) if kind_of(node, store)? == Kind::List as u8 => {}
+		_ => cell = None,
+	}
+	if cell.is_none() {
+		items.extend(arguments.into_iter().map(|argument| Val::AnyRef(Some(argument))));
+	}
+	while let Some(current) = cell {
+		let first = current.field(&mut *store, FIELD_DATA)?;
+		if first.unwrap_anyref().is_some() {
+			items.push(first);
+		}
+		cell = node_of(&current.field(&mut *store, FIELD_VALUE)?, store);
+	}
+	items.iter().map(|item| Ok(match node_of(item, store) {
+		Some(node) if kind_of(&node, store)? == Kind::Function as u8 => item.unwrap_anyref().copied(),
+		_ => None,
+	})).collect()
+}
+
+/// The arguments with each closure `{$warp_function: index}`, its index among the closures (crate::foreign)
+#[cfg(feature = "native")]
+fn with_function_markers(arguments: Node, functions: &[Option<wasmtime::Rooted<wasmtime::AnyRef>>]) -> Node {
+	if functions.iter().all(Option::is_none) {
+		return arguments;
+	}
+	let marker = |index: usize| Node::List(vec![Node::Key(Box::new(Node::Symbol(crate::foreign::WARP_FUNCTION_KEY.into())), crate::operators::Op::Colon, Box::new(Node::int(index as i64)))], crate::node::Bracket::Curly, crate::node::Separator::Space);
+	let mut index = 0;
+	let mut marked = |item: Node, function: &Option<_>| match function {
+		Some(_) => (marker(index), index += 1).0,
+		None => item,
+	};
+	match arguments.drop_meta().clone() {
+		Node::List(items, bracket, separator) if items.len() == functions.len() => Node::List(items.into_iter().zip(functions).map(|(item, function)| marked(item, function)).collect(), bracket, separator),
+		single => marked(single, &functions[0]),
+	}
 }
 
 #[cfg(feature = "native")]
@@ -625,8 +692,8 @@ fn serve_routes(mut caller: Caller<'_, HostState>, port: i64, routes: HostNode) 
 	let routes = routes_of(&given_node(&mut caller, routes)?);
 	let port = u16::try_from(port).map_err(|_| wasmtime::Error::new(crate::tasks::TaskFailure(format!("serve {port}: no port number"))))?;
 	let site = served_site(port);
-	serve(port, &routes, site.as_ref(), |route, request| match route_value(&mut caller, &route.function, &request) {
-		Ok(value) => Answer::of(&value),
+	serve(port, &routes, &site, |route, request| match route_value(&mut caller, &route.function, &request) {
+		Ok(value) => route.answer_of(&value),
 		Err(problem) => Answer::failed(&problem.to_string()),
 	}).map_err(|problem| wasmtime::Error::new(crate::tasks::TaskFailure(problem)))?;
 	built_in_program(&mut caller, &Node::Empty, SERVE_ROUTES)
@@ -635,14 +702,14 @@ fn serve_routes(mut caller: Caller<'_, HostState>, port: i64, routes: HostNode) 
 /// The site of the program file being run, which a program whose last line shows a page serves at / (src/site.rs); a
 /// page that fails to build is said, and the routes are served without it
 #[cfg(feature = "native")]
-fn served_site(port: u16) -> Option<crate::site::ServedSite> {
-	let file = crate::modules::program_file()?;
+fn served_site(port: u16) -> crate::site::ServedSite {
+	let Some(file) = crate::modules::program_file() else { return Default::default() };
 	let title = file.file_stem().map_or(String::new(), |stem| stem.to_string_lossy().to_string());
-	let site = std::fs::read_to_string(&file).map_err(|failure| failure.to_string()).and_then(|code| crate::site::served_site(&code, &title));
-	site.unwrap_or_else(|failure| {
+	let rendered = std::fs::read_to_string(&file).map_err(|failure| failure.to_string()).and_then(|code| crate::site::served_files(&code, &title));
+	rendered.unwrap_or_else(|failure| {
 		eprintln!("warning: serve {port} serves no page: {failure}");
 		None
-	})
+	}).unwrap_or_default()
 }
 
 /// The value of a route's function called with the request (if it takes one), as a Node
@@ -668,8 +735,28 @@ fn route_value(caller: &mut Caller<'_, HostState>, function: &str, request: &Nod
 fn std_call(mut caller: Caller<'_, HostState>, module: HostNode, member: HostNode, arguments: HostNode) -> wasmtime::Result<HostNode> {
 	let [module, member, arguments] = [module, member, arguments].map(|value| given_node(&mut caller, value));
 	let (module, member) = (module?.name(), member?.name());
-	let answer = crate::std_adapters::call(&module, &member, &arguments?).map_err(|problem| wasmtime::Error::new(crate::tasks::TaskFailure(problem)))?;
+	let answer = match (module.as_str(), member.as_str()) {
+		("table", "select") => queried_rows(&mut caller, &arguments?)?,
+		_ => crate::std_adapters::call(&module, &member, &arguments?).map_err(|problem| wasmtime::Error::new(crate::tasks::TaskFailure(problem)))?,
+	};
 	built_in_program(&mut caller, &answer, &format!("{module}.{member}"))
+}
+
+/// The ids a filter's query keeps (database.rs select), its warp_call calling the program's functions back; a function
+/// that fails fails the query with its own error (the trap, whose trap_detail says what went wrong)
+#[cfg(feature = "native")]
+fn queried_rows(caller: &mut Caller<'_, HostState>, arguments: &Node) -> wasmtime::Result<Node> {
+	let mut trapped = None;
+	let rows = crate::database::select(&arguments.children(), &mut |function, request| route_value(caller, function, request).map_err(|trap| {
+		let problem = format!("{trap:#}");
+		trapped.get_or_insert(trap);
+		problem
+	}));
+	match (rows, trapped) {
+		(Ok(rows), _) => Ok(rows),
+		(Err(_), Some(trap)) => Err(trap),
+		(Err(problem), None) => Err(wasmtime::Error::new(crate::tasks::TaskFailure(format!("table.select: {problem}")))),
+	}
 }
 
 /// The node a host word was given, read out of the caller's instance
@@ -686,11 +773,20 @@ fn channel_listen(mut caller: Caller<'_, HostState>, id: i64, channel: HostNode)
 	crate::channels::listen(id, &channel.name()).map_err(|problem| wasmtime::Error::new(crate::tasks::TaskFailure(problem)))
 }
 
+/// A fetch's URL, or `[url, body]`: a POST of the body as JSON (a server function the page calls, lowering/serve.rs)
+#[cfg(feature = "native")]
+fn request_of(request: &Node) -> crate::fetches::Request {
+	match request.drop_meta() {
+		Node::List(items, _, _) if items.len() == 2 => (items[0].name(), Some(crate::foreign::json_of(&items[1]).to_string())),
+		url => (url.name(), None),
+	}
+}
+
 /// `users := fetch url` starts the fetch (src/fetches.rs)
 #[cfg(feature = "native")]
 fn fetch_start(mut caller: Caller<'_, HostState>, id: i64, url: HostNode) -> wasmtime::Result<()> {
-	let url = given_node(&mut caller, url)?;
-	crate::fetches::start(id, url.name(), FETCH_TIMEOUT);
+	let request = given_node(&mut caller, url)?;
+	crate::fetches::start(id, request_of(&request), FETCH_TIMEOUT);
 	Ok(())
 }
 
@@ -703,7 +799,7 @@ fn fetch_reply(mut caller: Caller<'_, HostState>, id: i64) -> wasmtime::Result<H
 /// The oldest message the listener got, as the value it was sent as (ø when none waits)
 #[cfg(feature = "native")]
 fn channel_next(mut caller: Caller<'_, HostState>, id: i64) -> wasmtime::Result<HostNode> {
-	let message = crate::web_sockets::next(id).unwrap_or_else(|| crate::channels::next(id).map(|text| crate::wasp_parser::parse(&text).drop_meta().clone()).unwrap_or(Node::Empty));
+	let message = crate::web_sockets::next(id).unwrap_or_else(|| crate::channels::next(id).map(|text| crate::warp_parser::parse(&text).drop_meta().clone()).unwrap_or(Node::Empty));
 	built_in_program(&mut caller, &message, "on message")
 }
 
@@ -748,7 +844,7 @@ fn built_in_program(caller: &mut Caller<'_, HostState>, value: &Node, word: &str
 	Ok(built.unwrap_anyref().copied())
 }
 
-/// `broadcast value on "chat"`: the value as wasp text to every listener of the channel
+/// `broadcast value on "chat"`: the value as warp text to every listener of the channel
 #[cfg(feature = "native")]
 fn channel_send(mut caller: Caller<'_, HostState>, channel: HostNode, message: HostNode) -> wasmtime::Result<()> {
 	let channel = given_node(&mut caller, channel)?;
@@ -759,7 +855,7 @@ fn channel_send(mut caller: Caller<'_, HostState>, channel: HostNode, message: H
 	crate::channels::send(&channel.name(), message.serialize().trim()).map_err(|problem| wasmtime::Error::new(crate::tasks::TaskFailure(problem)))
 }
 
-/// `notify "text"`: a desktop notification of the text (a value other than a text as wasp writes it)
+/// `notify "text"`: a desktop notification of the text (a value other than a text as warp writes it)
 #[cfg(feature = "native")]
 fn notify(mut caller: Caller<'_, HostState>, text: HostNode) -> wasmtime::Result<()> {
 	let text = match given_node(&mut caller, text)? {
@@ -772,12 +868,8 @@ fn notify(mut caller: Caller<'_, HostState>, text: HostNode) -> wasmtime::Result
 /// `gpu_compute(shader, numbers, workgroups)` through wgpu (src/gpu.rs): the floats the shader left
 #[cfg(feature = "native")]
 fn gpu_compute(mut caller: Caller<'_, HostState>, shader: HostNode, numbers: HostNode, workgroups: i64) -> wasmtime::Result<HostNode> {
-	let failure = |problem: String| wasmtime::Error::new(crate::tasks::TaskFailure(format!("{GPU_COMPUTE}: {problem}")));
-	let shader = match given_node(&mut caller, shader)? {
-		Node::Text(shader) => shader,
-		Node::Char(letter) => letter.to_string(), // a one-letter text reads as a code point
-		other => return Err(failure(format!("the shader is a text of WGSL, got {}", other.serialize()))),
-	};
+	let failure = gpu_failure(GPU_COMPUTE);
+	let shader = given_shader(&mut caller, shader, &failure)?;
 	let numbers = given_node(&mut caller, numbers)?;
 	let floats = numbers.iter().map(|number| match number.drop_meta() {
 		Node::Number(number) => Ok(f64::from(*number) as f32),
@@ -787,6 +879,157 @@ fn gpu_compute(mut caller: Caller<'_, HostState>, shader: HostNode, numbers: Hos
 	let left = crate::gpu::compute(&shader, &floats, workgroups).map_err(failure)?;
 	let left = left.into_iter().map(|float| Node::Number(Number::Float(float as f64))).collect();
 	built_in_program(&mut caller, &Node::List(left, crate::node::Bracket::Square, crate::node::Separator::Space), GPU_COMPUTE)
+}
+
+/// `gpu_compute(shader, xs, workgroups)` of a linear float array: its block `[count: i64][count f64 cells]`
+/// (wasm_emitter/linear_arrays.rs) read and written in place, as f32 on the GPU
+#[cfg(feature = "native")]
+fn gpu_compute_linear(mut caller: Caller<'_, HostState>, shader: HostNode, block: i64, workgroups: i64) -> wasmtime::Result<i64> {
+	let failure = gpu_failure(GPU_COMPUTE);
+	let shader = given_shader(&mut caller, shader, &failure)?;
+	let floats = linear_floats(&mut caller, block, &failure)?;
+	let workgroups = u32::try_from(workgroups).map_err(|_| failure(format!("{workgroups} workgroups")))?;
+	let left = crate::gpu::compute(&shader, &floats, workgroups).map_err(&failure)?;
+	write_linear_floats(&mut caller, block, &left, &failure)?;
+	Ok(block)
+}
+
+/// `ys = xs.map(x => …) @gpu` (src/lowering/gpu_maps.rs): the kernel over the cells of the block `source`, then the
+/// values of the program's numbers it reads, written into the block `target` of the same count; 1, or 0 without an
+/// adapter (a warning, once), when the program maps on the CPU. `keeping` (gpu_maps.rs KEEP_RESULT, SOURCE_KEPT): the
+/// result's buffer stays on the GPU for a later map of it, the source's items come from such a buffer
+#[cfg(feature = "native")]
+fn gpu_map_linear(caller: Caller<'_, HostState>, shader: HostNode, source: i64, values: HostNode, target: i64, workgroups: i64, keeping: i64) -> wasmtime::Result<i64> {
+	gpu_kernel_linear(caller, GPU_MAP_LINEAR, shader, source, values, target, workgroups, keeping, false)
+}
+
+/// `s = sum(xs.map(x => …) @gpu)`, min, max: as gpu_map_linear, but each workgroup leaves its partial result in a cell
+/// after the values, and those, the only ones read back, go into the block `target` of `workgroups` cells
+#[cfg(feature = "native")]
+fn gpu_reduce_linear(caller: Caller<'_, HostState>, shader: HostNode, source: i64, values: HostNode, target: i64, workgroups: i64, keeping: i64) -> wasmtime::Result<i64> {
+	gpu_kernel_linear(caller, GPU_REDUCE_LINEAR, shader, source, values, target, workgroups, keeping, true)
+}
+
+#[cfg(feature = "native")]
+#[allow(clippy::too_many_arguments)]
+fn gpu_kernel_linear(mut caller: Caller<'_, HostState>, word: &'static str, shader: HostNode, source: i64, values: HostNode, target: i64, workgroups: i64, keeping: i64, reduces: bool) -> wasmtime::Result<i64> {
+	static WARNED: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+	let failure = gpu_failure(word);
+	if let Err(problem) = crate::gpu::available() {
+		if !WARNED.swap(true, std::sync::atomic::Ordering::Relaxed) {
+			crate::diagnostic::report_runtime_warning(&format!("@gpu: {problem}, so the map runs on the CPU"));
+		}
+		return Ok(0);
+	}
+	let shader = given_shader(&mut caller, shader, &failure)?;
+	let kept = (keeping & crate::gpu_maps::SOURCE_KEPT != 0).then(|| crate::gpu::kept_count(source)).flatten();
+	let mut floats = if kept.is_some() { vec![] } else { linear_floats(&mut caller, source, &failure)? };
+	let items = kept.unwrap_or(floats.len());
+	for value in given_node(&mut caller, values)?.iter() {
+		match value.drop_meta() {
+			Node::Number(number) => floats.push(f64::from(*number) as f32),
+			other => return Err(failure(format!("the lambda reads {}, not a number", other.serialize()))),
+		}
+	}
+	let partials = kept.unwrap_or(0) + floats.len();
+	let workgroups = u32::try_from(workgroups).map_err(|_| failure(format!("{workgroups} workgroups")))?;
+	if reduces {
+		floats.resize(floats.len() + workgroups as usize, 0.0);
+	}
+	let keeping = crate::gpu::Keeping { source: kept.map(|_| source), result: (keeping & crate::gpu_maps::KEEP_RESULT != 0).then_some((target, items)) };
+	let left = crate::gpu::compute_kept(&shader, &floats, workgroups, if reduces { partials } else { 0 }, keeping).map_err(&failure)?;
+	write_linear_floats(&mut caller, target, &left, &failure)?;
+	Ok(1)
+}
+
+#[cfg(feature = "native")]
+const LINEAR_CELL_BYTES: usize = 8;
+
+/// The byte range of the cells of a linear array's block `[count: i64][count f64 cells]` (wasm_emitter/linear_arrays.rs)
+#[cfg(feature = "native")]
+fn linear_cells(memory: &[u8], block: i64) -> Option<std::ops::Range<usize>> {
+	let start = usize::try_from(block).ok()?;
+	let count = i64::from_le_bytes(memory.get(start..start + LINEAR_CELL_BYTES)?.try_into().ok()?);
+	let end = start + LINEAR_CELL_BYTES + usize::try_from(count).ok()? * LINEAR_CELL_BYTES;
+	(end <= memory.len()).then_some(start + LINEAR_CELL_BYTES..end)
+}
+
+#[cfg(feature = "native")]
+fn linear_memory(caller: &mut Caller<'_, HostState>, failure: &impl Fn(String) -> wasmtime::Error) -> wasmtime::Result<wasmtime::Memory> {
+	match caller.get_export("memory") {
+		Some(Extern::Memory(memory)) => Ok(memory),
+		_ => Err(failure("the module exports no memory".into())),
+	}
+}
+
+/// A linear float array's cells as f32, as the GPU takes them
+#[cfg(feature = "native")]
+fn linear_floats(caller: &mut Caller<'_, HostState>, block: i64, failure: &impl Fn(String) -> wasmtime::Error) -> wasmtime::Result<Vec<f32>> {
+	let memory = linear_memory(caller, failure)?;
+	let bytes = memory.data(&*caller);
+	let cells = linear_cells(bytes, block).ok_or_else(|| failure(format!("no linear array at {block}")))?;
+	Ok(bytes[cells].chunks_exact(LINEAR_CELL_BYTES).map(|cell| f64::from_le_bytes(cell.try_into().expect("8 bytes")) as f32).collect())
+}
+
+/// The f32 the GPU left, written into a linear float array's cells
+#[cfg(feature = "native")]
+fn write_linear_floats(caller: &mut Caller<'_, HostState>, block: i64, floats: &[f32], failure: &impl Fn(String) -> wasmtime::Error) -> wasmtime::Result<()> {
+	let memory = linear_memory(caller, failure)?;
+	let cells = linear_cells(memory.data(&*caller), block).ok_or_else(|| failure(format!("no linear array at {block}")))?;
+	let written = &mut memory.data_mut(caller)[cells];
+	written.chunks_exact_mut(LINEAR_CELL_BYTES).zip(floats).for_each(|(cell, float)| cell.copy_from_slice(&f64::from(*float).to_le_bytes()));
+	Ok(())
+}
+
+/// `gpu_render(shader, width, height)` through wgpu (src/gpu.rs): the pixels the fragment shader colored
+#[cfg(feature = "native")]
+fn gpu_render(mut caller: Caller<'_, HostState>, shader: HostNode, width: i64, height: i64, values: HostNode) -> wasmtime::Result<HostNode> {
+	let failure = gpu_failure(GPU_RENDER);
+	let shader = given_shader(&mut caller, shader, &failure)?;
+	let values = shader_values(&given_node(&mut caller, values)?).map_err(&failure)?;
+	let side = |pixels: i64| u32::try_from(pixels).ok().filter(|&pixels| pixels > 0).ok_or_else(|| failure(format!("an image {width}×{height} pixels")));
+	let pixels = crate::gpu::render(&shader, side(width)?, side(height)?, &values).map_err(&failure)?;
+	let pixels = pixels.into_iter().map(|pixel| Node::Number(Number::Int(i64::from(pixel)))).collect();
+	built_in_program(&mut caller, &Node::List(pixels, crate::node::Bracket::Square, crate::node::Separator::Space), GPU_RENDER)
+}
+
+#[cfg(feature = "native")]
+fn gpu_failure(word: &'static str) -> impl Fn(String) -> wasmtime::Error {
+	move |problem| wasmtime::Error::new(crate::tasks::TaskFailure(format!("{word}: {problem}")))
+}
+
+/// gpu_render's values (none when left out): each entry a number or a list of numbers
+#[cfg(feature = "native")]
+fn shader_values(values: &Node) -> Result<Vec<crate::gpu::ShaderValue>, String> {
+	let float = |name: &str, value: &Node| match value.drop_meta() {
+		Node::Number(number) => Ok(f64::from(*number) as f32),
+		other => Err(format!("values.{name} is a number or a list of numbers, got {}", other.serialize())),
+	};
+	// a map of one entry arrives as that key
+	let entries = match values.drop_meta() {
+		Node::Empty => vec![],
+		single @ Node::Key(..) => vec![single.clone()],
+		map => map.iter().collect(),
+	};
+	entries.iter().map(|entry| {
+		let Node::Key(name, _, value) = entry.drop_meta() else { return Err(format!("values is a map of names, got {}", entry.serialize())) };
+		let name = name.drop_meta().name();
+		let floats = match value.drop_meta() {
+			Node::List(items, _, _) => items.iter().map(|item| float(&name, item)).collect::<Result<Vec<f32>, String>>()?,
+			single => vec![float(&name, single)?],
+		};
+		Ok((name, floats))
+	}).collect()
+}
+
+/// The WGSL text of a gpu word's shader
+#[cfg(feature = "native")]
+fn given_shader(caller: &mut Caller<'_, HostState>, shader: HostNode, failure: &impl Fn(String) -> wasmtime::Error) -> wasmtime::Result<String> {
+	match given_node(caller, shader)? {
+		Node::Text(shader) => Ok(shader),
+		Node::Char(letter) => Ok(letter.to_string()), // a one-letter text reads as a code point
+		other => Err(failure(format!("the shader is a text of WGSL, got {}", other.serialize()))),
+	}
 }
 
 #[cfg(feature = "native")]

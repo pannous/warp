@@ -3,8 +3,8 @@
     "allow": [
       "Bash(cargo test 2>&1 | tail -50)",
       "Bash(cargo test --lib 2>&1 | tail -20)",
-      "Bash(cargo test --lib wasp_parser::tests::test_parse_named_block -- --nocapture 2>&1 | tail -30)",
-      "Read(/Users/me/dev/angles/warp/src/wasp_parser.rs)",
+      "Bash(cargo test --lib warp_parser::tests::test_parse_named_block -- --nocapture 2>&1 | tail -30)",
+      "Read(/Users/me/dev/angles/warp/src/warp_parser.rs)",
       "Bash(rustup override:*)",
       "Bash(rustup show:*)",
       "Bash(cargo build:*)",
@@ -65,6 +65,18 @@
             "type": "command",
             "command": "sh ${CLAUDE_PROJECT_DIR:-.}/.claude/hooks/local-only.sh node $CLAUDE_PROJECT_DIR/.claude/hooks/permissions_hook.js",
             "timeout": 300
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "sh ${CLAUDE_PROJECT_DIR:-.}/.claude/hooks/local-only.sh $CLAUDE_PROJECT_DIR/.claude/hooks/watch-playground-deploy.sh",
+            "asyncRewake": true
           }
         ]
       }

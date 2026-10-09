@@ -1,5 +1,5 @@
 // card g-_alg (wiki/mark.md): inside a tag's block `label(for:pwd)` is the tag `label{for:pwd}` and
-// `label(for:pwd):"Password"` the tag `label{for:pwd "Password"}`; samples/html.wasp, the playground's HTML demo, runs
+// `label(for:pwd):"Password"` the tag `label{for:pwd "Password"}`; samples/html.warp, the playground's HTML demo, runs
 use crate::common::fails_with;
 use crate::eq;
 use warp::wasm_emitter::eval;
@@ -8,13 +8,13 @@ use warp::wasm_emitter::eval;
 fn a_tag_takes_its_attributes_in_parentheses() {
 	eq!(eval("html{ div{ label(for:pwd):\"Password\" } }"), eval("html{ div{ label{for:pwd, \"Password\"} } }"));
 	eq!(eval("div{ label(for:pwd a:b) }"), eval("div{ label{for:pwd a:b} }"));
-	runs("samples/html.wasp");
+	runs("samples/html.warp");
 }
 
 // card g-_bGo: the playground's HTML DSL demo runs; its list items are tags li{…}, children as repeated XML elements
 #[test]
 fn the_html_dsl_sample_runs() {
-	runs("samples/html_dsl.wasp");
+	runs("samples/html_dsl.warp");
 }
 
 fn runs(sample: &str) {
@@ -68,4 +68,12 @@ fn a_tag_takes_html_attributes_with_equals() {
 	assert_eq!(html_of("a{href=\"/about\" data-page=\"about\" \"About\"}"), "<a href=\"/about\" data-page=\"about\">About</a>");
 	assert_eq!(html_of("div{ label(for=\"pwd\"):\"Password\" }"), "<div><label for=\"pwd\">Password</label></div>");
 	assert_eq!(html_of("p{ shown = \"seen\" }"), "<p>seen</p>");
+}
+
+// card html-dsl-style: inside an element a spaced child `ul { … }` is the element as the glued `ul{ … }` is, so its
+// loop gives one child per item (it was a block whose loop ran: undefined variable fruit·index)
+#[test]
+fn a_spaced_child_element_takes_its_loop_as_children() {
+	eq!(eval("fruits = [\"A\", \"B\"]\nsection { ul { for fruit in fruits { li: fruit } } }"), eval("section{ ul{ li: \"A\" li: \"B\" } }"));
+	eq!(eval("section { h3: \"x\"\n ul { for f in [\"A\"] { li: f } } }"), eval("section{ h3: \"x\" ul{ li: \"A\" } }"));
 }

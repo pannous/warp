@@ -1,4 +1,0 @@
-// Greatest common divisor - Euclidean algorithm
-def gcd(a, b) := b == 0 ? a : gcd(b, a % b)
-
-gcd(48, 18)

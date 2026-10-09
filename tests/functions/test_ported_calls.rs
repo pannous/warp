@@ -291,10 +291,10 @@ twice 4"#, r#"8"#),
 	(r#"int add({int a = 1, int b = 2}) => a + b; add(b: 5)"#, r#"6"#),
 	(r#"To square a number: return it times it; square 3"#, r#"9"#),
 	(r#"To square a number: return it times it; square of 3"#, r#"9"#),
-	(r#"To square a number: return it times it; x = 3; square of x is 9"#, r#"1"#),
+	(r#"To square a number: return it times it; x = 3; square of x is 9"#, r#"yes"#),
 	(r#"3 times 4"#, r#"12"#),
 	(r#"x = 3; y = x times x; y"#, r#"9"#),
-	(r#"to add number a to number b: a + b; add 1 to 2 == 3"#, r#"1"#),
+	(r#"to add number a to number b: a + b; add 1 to 2 == 3"#, r#"yes"#),
 	(r#"fn id<T>(x: T) -> T { x }; id(5)"#, r#"5"#),
 	(r#"function id<T>(x: T): T { return x }; id(5)"#, r#"5"#),
 	(r#"fn pair<A, B>(a: A, b: B) -> A { a }; pair(1, 2)"#, r#"1"#),
@@ -339,15 +339,15 @@ fn every_ported_call_form_keeps_its_value() {
 }
 
 #[test]
-fn linq_methods_work_with_a_note_naming_wasps_word() {
-	// the alias rule (user 2026-10-06): a different word for the same meaning works and the note names wasp's word
+fn linq_methods_work_with_a_note_naming_warps_word() {
+	// the alias rule (user 2026-10-06): a different word for the same meaning works and the note names warp's word
 	let (value, hints) = warp::normalize::capture_hints(|| shown("xs = [1, 2, 3]; xs.Select(x => x * 2).Where(x => x > 2)"));
 	assert_eq!(value, "[4 6]");
 	assert!(hints.iter().any(|hint| hint.canonical == ".map(" && hint.original == ".Select("), "{hints:?}");
 }
 
 #[test]
-fn r_words_work_with_a_note_naming_wasps_form() {
+fn r_words_work_with_a_note_naming_warps_form() {
 	let (value, hints) = warp::normalize::capture_hints(|| shown("sapply(c(1, 2, 3), function(x) x * 2)"));
 	assert_eq!(value, "[2 4 6]");
 	assert!(hints.iter().any(|hint| hint.canonical == "map(" && hint.original == "sapply("), "{hints:?}");

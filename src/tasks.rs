@@ -20,8 +20,7 @@ use wasmtime::{AnyRef, AsContextMut, Caller, Engine, Func, Global, Linker, Memor
 const EPOCH_TICK: Duration = Duration::from_millis(5);
 /// The main program's epoch deadline: it never stops at an epoch check
 pub const MAIN_EPOCH_DEADLINE: u64 = 1 << 62;
-const TASK_WORDS: [&str; 16] = [TASK_SPAWN, TASK_AWAIT, TASK_CONTROL, TASK_SPAWN_VALUES, TASK_AWAIT_VALUE, TASK_JOIN, TASK_FAILURE, TASK_STATUS, crate::host::TASK_POLL,
-	crate::host::TASK_INSIDE, crate::host::SIGNAL_SEND, CHANNEL_NEW, CHANNEL_PUT, CHANNEL_TAKE, CHANNEL_MORE, CHANNEL_CLOSE];
+use crate::host::TASK_WORDS;
 const CHANNEL_NEW: &str = crate::host::CHANNEL_WORDS[0];
 const CHANNEL_PUT: &str = crate::host::CHANNEL_WORDS[1];
 const CHANNEL_TAKE: &str = crate::host::CHANNEL_WORDS[2];
@@ -32,7 +31,7 @@ const CHANNEL_CHECK: Duration = Duration::from_millis(20);
 /// The failure a stopped task ends with (TaskControl::checkpoint), told apart by task_status
 const STOPPED: &str = "task stopped";
 /// The exported constructors a value is rebuilt with in an instance
-const CONSTRUCTORS: [&str; 9] = ["new_empty", "new_int", "new_float", "new_codepoint", "new_text", "new_symbol", "new_key", "new_list",
+const CONSTRUCTORS: [&str; 10] = ["new_empty", "new_int", crate::wasm_emitter::NEW_BOOL, "new_float", "new_codepoint", "new_text", "new_symbol", "new_key", "new_list",
 	crate::wasm_emitter::CLOSURE_REBUILD];
 use crate::wasm_emitter::EXACT_BUILDERS;
 const LIMB_BITS: i64 = 32;
@@ -48,6 +47,7 @@ const CAPTURED_FIELD: usize = 1;
 pub enum TaskValue {
 	Empty,
 	Int(i64),
+	Bool(bool),
 	Float(f64),
 	Char(char),
 	Text(String),
@@ -67,6 +67,7 @@ impl TaskValue {
 		use crate::extensions::numbers::Number;
 		Ok(match node.drop_meta() {
 			Node::Empty => TaskValue::Empty,
+			Node::True | Node::False => TaskValue::Bool(matches!(node.drop_meta(), Node::True)),
 			Node::Number(Number::Int(n)) if crate::wasm_emitter::is_fixnum(*n) => TaskValue::Int(*n),
 			Node::Number(Number::Int(n)) => TaskValue::Exact((*n).into(), 1.into()),
 			Node::Number(Number::BigInt(n)) => TaskValue::Exact((*n).clone(), 1.into()),
@@ -168,6 +169,7 @@ impl Builders {
 		match value {
 			TaskValue::Empty => self.call("new_empty", &[], store),
 			TaskValue::Int(n) => self.call("new_int", &[Val::I64(*n)], store),
+			TaskValue::Bool(truth) => self.call(crate::wasm_emitter::NEW_BOOL, &[Val::I64(*truth as i64)], store),
 			TaskValue::Float(x) => self.call("new_float", &[Val::F64(x.to_bits())], store),
 			TaskValue::Char(c) => self.call("new_codepoint", &[Val::I32(*c as i32)], store),
 			TaskValue::Text(text) | TaskValue::Symbol(text) => {

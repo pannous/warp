@@ -11,16 +11,16 @@ fn html_of(code: &str) -> String {
 
 #[test]
 fn a_transition_is_data_on_its_element() {
-	assert_eq!(html_of("ul{ li{ transition: fade 200ms\n \"a\" } }"), "<ul><li data-wasp-starting-style=\"opacity: 0\" style=\"transition: opacity 200ms, transform 200ms\">a</li></ul>");
-	assert_eq!(html_of("p{ transition: scale 2s ease-out\n \"b\" }"), "<p data-wasp-starting-style=\"opacity: 0; transform: scale(0.8)\" style=\"transition: opacity 2000ms ease-out, transform 2000ms ease-out\">b</p>");
-	assert_eq!(html_of("p{ transition: slide\n \"c\" }"), "<p data-wasp-starting-style=\"opacity: 0; transform: translateY(-1em)\" style=\"transition: opacity 200ms, transform 200ms\">c</p>");
-	assert_eq!(html_of("p{ transition: \"fade 1s\"\n \"d\" }"), "<p data-wasp-starting-style=\"opacity: 0\" style=\"transition: opacity 1s, transform 1s\">d</p>");
+	assert_eq!(html_of("ul{ li{ transition: fade 200ms\n \"a\" } }"), "<ul><li data-warp-starting-style=\"opacity: 0\" style=\"transition: opacity 200ms, transform 200ms\">a</li></ul>");
+	assert_eq!(html_of("p{ transition: scale 2s ease-out\n \"b\" }"), "<p data-warp-starting-style=\"opacity: 0; transform: scale(0.8)\" style=\"transition: opacity 2000ms ease-out, transform 2000ms ease-out\">b</p>");
+	assert_eq!(html_of("p{ transition: slide\n \"c\" }"), "<p data-warp-starting-style=\"opacity: 0; transform: translateY(-1em)\" style=\"transition: opacity 200ms, transform 200ms\">c</p>");
+	assert_eq!(html_of("p{ transition: \"fade 1s\"\n \"d\" }"), "<p data-warp-starting-style=\"opacity: 0\" style=\"transition: opacity 1s, transform 1s\">d</p>");
 }
 
 #[test]
 fn a_keyed_item_keeps_its_transition() {
 	let html = html_of("todos = [{id:7 text:\"a\"}]\nul{ [li{ key: todo.id transition: fade todo.text } for todo in todos] }");
-	assert_eq!(html, "<ul><li data-wasp-key=\"7\" data-wasp-starting-style=\"opacity: 0\" style=\"transition: opacity 200ms, transform 200ms\">a</li></ul>");
+	assert_eq!(html, "<ul><li data-warp-key=\"7\" data-warp-starting-style=\"opacity: 0\" style=\"transition: opacity 200ms, transform 200ms\">a</li></ul>");
 }
 
 // in a style, transition stays the CSS property
@@ -32,5 +32,5 @@ fn a_style_transition_is_css() {
 // the words of a transition end where its element's children begin
 #[test]
 fn a_transition_ends_before_the_children() {
-	assert_eq!(html_of("p{ transition: fade 200ms \"a\" }"), "<p data-wasp-starting-style=\"opacity: 0\" style=\"transition: opacity 200ms, transform 200ms\">a</p>");
+	assert_eq!(html_of("p{ transition: fade 200ms \"a\" }"), "<p data-warp-starting-style=\"opacity: 0\" style=\"transition: opacity 200ms, transform 200ms\">a</p>");
 }

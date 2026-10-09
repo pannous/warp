@@ -6,6 +6,10 @@ web/playground/tests.html with agent-browser and prints the results like libtest
 `test_in_browser.py --examples [name…]` runs the tour (examples.js) in the playground page itself, built by build.sh:
 each example's value and printed output must be the ones it names (a broken example fails CI, .github/workflows/pages.yml).
 `test_in_browser.py --examples --url https://warp.pannous.com/ [name…]` checks the tour of a deployed playground instead.
+`test_in_browser.py --examples --firefox [--url …|--site …] [name…]` runs the same check in headless Firefox
+(firefox_driver.mjs, WebDriver BiDi) instead of agent-browser's Chrome.
+`test_in_browser.py --examples --site _site [name…]` checks it in a collected site (pages.yml), served as its root: a file
+the deploy forgot fails here, not on the live page.
 `test_in_browser.py --serve [tests.wasm]` only serves (http://127.0.0.1:PORT/web/playground/ and tests.html), for any browser.
 Besides the repository it serves /__stub__?status=…&body=… (that response, for fetch tests) and /__include__/<header>: the C header of that name from the first include directory of
 src/ffi_parser.rs INCLUDE_DIRS that holds it (the page sets WARP_INCLUDE=/include), nothing else of the machine."""
@@ -14,6 +18,9 @@ import functools, http.server, json, os, re, subprocess, sys, threading, time, u
 # a free port per run (0: the system picks one), so runs of several sessions never meet; WARP_BROWSER_TEST_PORT fixes it
 PORT = int(os.environ.get("WARP_BROWSER_TEST_PORT", "0"))
 WORKERS = os.environ.get("WARP_BROWSER_TEST_WORKERS", "2")
+# the tour's page starts its worker this late (playground.js ?slow_start): a fast machine then meets the races a slow
+# CI runner meets, e.g. "ready" hiding the first example's "running…" (empty value, the failed deploys of 2026-10-08)
+SLOW_START_MS = 2000
 PER_WORKER = os.environ.get("WARP_BROWSER_TEST_PER_WORKER")  # tests before a worker is replaced (tests.js TESTS_PER_WORKER)
 # one browser per run: runs at the same time (the suite, a tour check) must never drive or close each other's page
 SESSION = f"warp-browser-tests-{os.getpid()}"
@@ -31,6 +38,17 @@ ISOLATION_SECONDS = 30  # how long a deployed page may take to reload under its 
 STALL_SECONDS = 300  # no test finished for this long: the page is stuck (a crashed renderer), stop with what is known
 REPOSITORY = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 IGNORED_ARGUMENTS = ("--nocapture", "--quiet", "-q", "--color", "--format")
+# the console of the page and its workers (console_watch.mjs): any error or warning there fails the tour check
+CONSOLE_WATCHER = os.path.join(REPOSITORY, "web", "playground", "console_watch.mjs")
+FIREFOX_DRIVER = os.path.join(REPOSITORY, "web", "playground", "firefox_driver.mjs")
+firefox = None  # the FirefoxDriver of a --firefox run: browser() and the console go to it instead of agent-browser
+CONSOLE_READY = "ready"
+CONSOLE_SETTLE_SECONDS = 0.3  # a shown example's last messages reach the watcher
+# warnings the browser logs itself, which no page code can silence, and what the program does instead (card
+# browser-tour): Chrome without WebGPU says this on every navigator.gpu.requestAdapter(); @gpu then maps on the CPU and
+# says so in the program's own warning, gpu_render fails with the program's error (shown on the page, not the console)
+BROWSER_OWN_WARNINGS = {"No available adapters."}
+PAGE_LOAD = "(loading the page)"
 
 
 def include_dirs():
@@ -45,7 +63,7 @@ def find_header(name):
 	return next((path for path in (os.path.join(directory, name) for directory in include_dirs()) if os.path.isfile(path)), None)
 
 
-def serve(binary):
+def serve(binary, root=REPOSITORY):
 	class Handler(http.server.SimpleHTTPRequestHandler):
 		def translate_path(self, path):
 			path = urllib.parse.unquote(urllib.parse.urlsplit(path).path)
@@ -99,7 +117,7 @@ def serve(binary):
 		request_queue_size = 512  # every worker fetches the binary at once
 	global PORT
 	try:
-		server = Server(("127.0.0.1", PORT), functools.partial(Handler, directory=REPOSITORY))
+		server = Server(("127.0.0.1", PORT), functools.partial(Handler, directory=root))
 	except OSError as busy:
 		sys.exit(f"error: port {PORT} (WARP_BROWSER_TEST_PORT) is taken{port_holder(PORT)}: {busy.strerror}; unset it for a free port")
 	PORT = server.server_address[1]
@@ -117,6 +135,8 @@ def port_holder(port):
 def open_page(url):
 	"""open `url` in this run's browser and wait until it loaded; a launch that fails is reported and retried, and after
 	LAUNCH_ATTEMPTS the run fails with the reason instead of waiting for the stall check"""
+	if firefox:
+		return firefox.command("open", url) or sys.exit(f"error: Firefox could not open {url}")
 	for attempt in range(1, LAUNCH_ATTEMPTS + 1):
 		try:
 			opened = subprocess.run(["agent-browser", "--session", SESSION, "open", url], capture_output=True, text=True, timeout=LAUNCH_SECONDS)
@@ -135,10 +155,83 @@ def open_page(url):
 
 
 def browser(*arguments):
+	if firefox:
+		return firefox.command(*arguments)
 	try:
 		return subprocess.run(["agent-browser", "--session", SESSION, *arguments], capture_output=True, text=True, timeout=60).stdout.strip()
 	except subprocess.TimeoutExpired:
 		return ""  # a busy or crashed page: the stall check decides
+
+
+# shows an example or sample (%s: its name as JSON) and waits until its run finished
+RUN_EXAMPLE = """await playground.chooseExample(%s);
+		while (document.getElementById("status").textContent === "running…") await new Promise(done => setTimeout(done, 50));"""
+
+
+def run_sample(name):
+	browser("eval", f"(async () => {{ {RUN_EXAMPLE % json.dumps(name)} }})()")
+
+
+def reported(message):
+	"""whether a console message fails the check: any error or warning but the browser's own BROWSER_OWN_WARNINGS"""
+	return not (message["level"] == "warning" and message["text"] in BROWSER_OWN_WARNINGS)
+
+
+def console_line(message):
+	return f"{message['level']}: {message['text']}" + (f" ({message['url']})" if message["url"] else "")
+
+
+class FirefoxDriver:
+	"""headless Firefox (firefox_driver.mjs): a command is a JSON line, its answer one JSON line"""
+
+	def __init__(self):
+		self.process = subprocess.Popen(["node", FIREFOX_DRIVER], stdin=subprocess.PIPE, stdout=subprocess.PIPE, text=True)
+		if self.process.stdout.readline().strip() != '"ready"':
+			sys.exit("error: firefox_driver.mjs did not start Firefox")
+
+	def command(self, *arguments):
+		self.process.stdin.write(json.dumps(arguments) + "\n")
+		self.process.stdin.flush()
+		answer = self.process.stdout.readline()
+		return json.loads(answer) if answer else ""
+
+
+class FirefoxConsole:
+	"""the errors and warnings Firefox reported (firefox_driver.mjs), taken per shown example like ConsoleWatch's"""
+
+	def take(self):
+		time.sleep(CONSOLE_SETTLE_SECONDS)
+		return list(dict.fromkeys(console_line(message) for message in firefox.command("messages") if reported(message)))
+
+	def stop(self):
+		pass
+
+
+class ConsoleWatch:
+	"""the errors and warnings of the page's console and its workers' (console_watch.mjs), taken per shown example"""
+
+	def __init__(self):
+		self.process = subprocess.Popen(["node", CONSOLE_WATCHER, browser("get", "cdp-url")], stdout=subprocess.PIPE, text=True)
+		self.messages, self.ready = [], threading.Event()
+		threading.Thread(target=self.read, daemon=True).start()
+		if not self.ready.wait(30):
+			sys.exit("error: console_watch.mjs did not attach to the browser")
+
+	def read(self):
+		for line in self.process.stdout:
+			if line.strip() == CONSOLE_READY:
+				self.ready.set()
+			elif reported(message := json.loads(line)):
+				self.messages.append(console_line(message))
+
+	def take(self):
+		"""the messages since the last take, each once"""
+		time.sleep(CONSOLE_SETTLE_SECONDS)
+		taken, self.messages = self.messages, []
+		return list(dict.fromkeys(taken))
+
+	def stop(self):
+		self.process.terminate()
 
 
 def show_example(name):
@@ -146,8 +239,7 @@ def show_example(name):
 	`typed` (into the first input) and `clicks` also the value after typing and clicking those buttons or links, whether every element shown stayed (`kept`), kept its key (`keyed`) and whether anything animated (`animated`) and the address bar's path (`address`)"""
 	script = f"""(async () => {{
 		const name = {json.dumps(name)};
-		await playground.chooseExample(name);
-		while (document.getElementById("status").textContent === "running…") await new Promise(done => setTimeout(done, 50));
+		{RUN_EXAMPLE % json.dumps(name)}
 		await new Promise(done => setTimeout(done, EXAMPLES[name].wait ?? 0));
 		const shown = {{ value: document.getElementById("value").textContent, printed: document.getElementById("printed").textContent,
 			canvases: document.querySelectorAll("#paintings canvas").length }};
@@ -157,7 +249,7 @@ def show_example(name):
 		if (!clicks.length && typed === undefined) return JSON.stringify(shown);
 		const rendered = document.getElementById("rendered").shadowRoot;
 		const elements = [...rendered.querySelectorAll("*")];
-		const keys = elements.map(element => element.getAttribute("data-wasp-key"));
+		const keys = elements.map(element => element.getAttribute("data-warp-key"));
 		const field = rendered.querySelector("input");
 		let animations = 0;
 		const animate = Element.prototype.animate;
@@ -173,7 +265,7 @@ def show_example(name):
 		}}
 		Element.prototype.animate = animate;
 		const kept = elements.every(element => element.isConnected);
-		const keyed = elements.every((element, index) => keys[index] === null || element.getAttribute("data-wasp-key") === keys[index]);
+		const keyed = elements.every((element, index) => keys[index] === null || element.getAttribute("data-warp-key") === keys[index]);
 		const clickedPrinted = document.getElementById("printed").textContent;
 		return JSON.stringify({{ ...shown, clicked: document.getElementById("value").textContent, clickedPrinted, kept, keyed, animated: animations > 0, address: shownAddress() }});
 	}})()"""
@@ -189,30 +281,46 @@ def wait_for_isolation():
 		time.sleep(0.5)
 
 
-def check_examples(names, page_url=None):
-	"""every example of the tour shows its value and prints its text in the playground (the local build, or the deployed
-	one at `page_url`); exit code 101 on a difference"""
+def check_examples(names, page_url=None, site=None):
+	"""every example of the tour shows its value and prints its text in the playground (the local build, the collected
+	`site` directory, or the deployed one at `page_url`), and neither loading the page nor showing an example or a sample
+	writes an error or warning to the console (card console-errors); exit code 101 on a difference"""
 	server = None
-	if not page_url:
+	if site:
+		server = serve(None, os.path.abspath(site))
+		page_url = f"http://127.0.0.1:{PORT}/"
+	elif not page_url:
 		if not os.path.isfile(os.path.join(REPOSITORY, "web", "playground", "warp.wasm")):
 			sys.exit("error: web/playground/warp.wasm is missing; build it with web/playground/build.sh")
 		server = serve(None)
 		page_url = f"http://127.0.0.1:{PORT}/web/playground/"
-	open_page(page_url)
+	open_page("about:blank")
+	console = FirefoxConsole() if firefox else ConsoleWatch()  # before the page, so its loading is watched too
+	open_page(f"{page_url}{'&' if '?' in page_url else '?'}slow_start={SLOW_START_MS}")
 	wait_for_isolation()
 	examples = json.loads(json.loads(browser("eval", "JSON.stringify(EXAMPLES)")))
+	samples = json.loads(json.loads(browser("eval", "JSON.stringify(Object.keys(SAMPLES).sort())")))
 	failures = []
-	names = names or list(examples)
-	for name in names:
-		expected, shown = examples[name], show_example(name)
-		wrong = [f"{part}: {shown[part]!r}, expected {expected[part]!r}" for part in ("value", "printed", "canvases", "clicked", "clickedPrinted", "kept", "keyed", "animated", "address") if part in expected and shown[part] != expected[part]]
+	def verdict(name, wrong):
+		wrong += [f"console {message}" for message in console.take()]
 		print(f"{'FAIL' if wrong else 'ok  '} {name}" + "".join(f"\n     {line}" for line in wrong))
 		if wrong:
 			failures.append(name)
+	verdict(PAGE_LOAD, [])
+	chosen = [(name, False) for name in examples] + [(name, True) for name in samples]
+	chosen = [(name, sample) for name, sample in chosen if not names or name in names]
+	for name, sample in chosen:
+		if sample:
+			run_sample(name)
+			verdict(f"samples/{name}", [])
+		else:
+			expected, shown = examples[name], show_example(name)
+			verdict(name, [f"{part}: {shown[part]!r}, expected {expected[part]!r}" for part in ("value", "printed", "canvases", "clicked", "clickedPrinted", "kept", "keyed", "animated", "address") if part in expected and shown[part] != expected[part]])
+	console.stop()
 	browser("close")
 	if server:
 		server.shutdown()
-	print(f"\nexamples: {len(names) - len(failures)} of {len(names)} show what they promise" + (f"; failed: {', '.join(failures)}" if failures else ""))
+	print(f"\nexamples and samples: {len(chosen) + 1 - len(failures)} of {len(chosen) + 1} show what they promise, without console errors" + (f"; failed: {', '.join(failures)}" if failures else ""))
 	sys.exit(101 if failures else 0)
 
 
@@ -226,9 +334,11 @@ def build_components():
 
 def main():
 	if sys.argv[1:2] == ["--examples"]:
-		names = sys.argv[2:]
-		page_url = names[1] if names[:1] == ["--url"] else None
-		check_examples(names[2:] if page_url else names, page_url)
+		global firefox
+		names = [name for name in sys.argv[2:] if name != "--firefox"]
+		firefox = FirefoxDriver() if "--firefox" in sys.argv[2:] else None
+		place = {names[0]: names[1]} if names[:1] in (["--url"], ["--site"]) else {}
+		check_examples(names[2:] if place else names, place.get("--url"), place.get("--site"))
 	if sys.argv[1:2] == ["--serve"]:
 		binary = os.path.abspath(sys.argv[2]) if len(sys.argv) > 2 else None
 		serve(binary)

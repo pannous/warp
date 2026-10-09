@@ -36,7 +36,7 @@ fn test_nested_for() {
 	is!("n=0;for a in [1 2] {for b in [1 2 3] {n+=1}};n", 6);
 }
 
-#[test] // samples/snake.wasp: a list-valued statement in a loop body was read as a number ("not an int")
+#[test] // samples/snake.warp: a list-valued statement in a loop body was read as a number ("not an int")
 fn test_loop_body_with_a_list_statement() {
 	is!("x=[1]; for t in 1 to 2 { x }; 0", 0);
 	is!("def f() { return [1] }; for t in [1,2] { f() }; 0", 0);

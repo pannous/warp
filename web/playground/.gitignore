@@ -3,3 +3,5 @@ keywords.js
 warp.wasm
 warp.debug.wasm
 components/
+served-files.js
+version.js

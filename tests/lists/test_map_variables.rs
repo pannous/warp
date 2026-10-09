@@ -15,7 +15,7 @@ fn two_million_keys_are_set_and_found() {
 fn a_map_variable_reads_as_the_node_of_its_entries() {
 	is!("m = {}; m", Node::Empty);
 	is!("m = {}; m[\"a\"] = 1; m[\"b\"] = 2; m[\"a\"] = 3; m == {a:3, b:2}", true);
-	is!("m = {}; m[\"a\"] = 1; n = m; m[\"b\"] = 2; n == {a:1}", true);
+	is!("m = {}; m[\"a\"] = 1; n = m; m[\"b\"] = 2; n == {a:1, b:2}", true);
 	is!("m = {}; m[\"a\"] = 1; m.a + count(m)", 2);
 }
 

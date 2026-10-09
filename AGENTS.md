@@ -7,7 +7,7 @@ Always commit work and progress, even when a task is not fully solved or tests r
 https://github.com/pannous/wasp
 https://wasp.pannous.com/
 
-wasp is a data format and wasm first programming language
+warp is a data format and wasm first programming language
 C++ source code locally at ~/wasp/ documentation and specification at ./wiki 
 The specification is not fully implemented yet 
 
@@ -21,7 +21,7 @@ The specification is not fully implemented yet
 Wasp Wisp and Warp are similar to lisp in that they are a data format from first principles,
 but instead of s-expressions they use a more modern syntax with blocks, lists, key-value pairs, tags, comments, and rich atomic types.
 
-```wasp
+```warp
 Person {
     name: "Alice"    
     age: 30             
@@ -42,7 +42,7 @@ The central data structure is `Node`, an enum representing all AST node types:
 - **Data** - Generic container using `Dada` for arbitrary Rust types with `CloneAny` trait
 - **Meta** - Node wrapper that adds `Meta` (comments, line/column positions)
 
-### Parser (`src/wasp_parser/`)
+### Parser (`src/warp_parser/`)
 
 Recursive descent parser that converts text input to Node AST:
 
@@ -57,7 +57,7 @@ parse → `lower_for_emission` (the lowering passes, flat `src/*.rs` files such 
 
 ### Emitters
 
-0. **Text**: `Node::serialize` (`src/node/serialization.rs`), wasp notation similar to json5; `src/wisp_parser.rs` reads and writes Wisp
+0. **Text**: `Node::serialize` (`src/node/serialization.rs`), warp notation similar to json5; `src/wisp_parser.rs` reads and writes Wisp
 1. **WASM GC Emitter** (`src/wasm_emitter/`)
     - Generates WASM GC bytecode using the `wasm-encoder` crate; `mod.rs` emits programs, the other files the runtime
       functions (texts, lists, maps, unbounded ints, exact numbers, equality, WASI, FFI)
@@ -191,7 +191,7 @@ Current spec lives in `src/wasm_emitter/type_manager.rs` and `src/wasm_emitter/c
    - Key: `data = left node`, `value = right node`
    - List/Block: `data = first node`, `value = rest list node` (cons cells)
    - TypeDef: `data = name node`, `value = body node`
-   - True/False: encoded as Int 1/0
+   - True/False: a bool, the Int 1/0 marked BOOL_INFO above the kind bits (kind = BOOL_KIND); prints yes/no (notes/bool_type.md)
    - Meta is dropped during emission; Error currently emits the inner node
    - Data nodes currently serialize as `Symbol(type_name)` in the emitter
 
@@ -231,7 +231,7 @@ One branch per task, in a git worktree outside the repo: /Users/me/dev/angles/wa
 Create worktrees with `cowtree add <path> -b <branch> [<commit>]` (same arguments as `git worktree add`, which a hook blocks).
 
 ## Folders
-- `probes/` = hand-written probe sources only (.wasp .md .rs .py .sh .lean .html, each under 100 KB), tracked: commit them, no `git add -f` needed.
+- `probes/` = hand-written probe sources only (.warp .md .rs .py .sh .lean .html, each under 100 KB), tracked: commit them, no `git add -f` needed.
 - `scratch/` = disposable, ignored: repo exports/copies, worktrees, cargo homes, private index files (`scratch/<topic>.index`), temp builds. Deletable any time.
 - `data/` = kept but ignored: logs, test result dumps, patches, json/txt outputs, benchmark data, agent logs (`data/<topic>/`).
 - Rust build output goes to the one shared target dir set in ~/.cargo/config.toml (`target-dir`), never into the repo; agents and exports don't set CARGO_TARGET_DIR (a per-agent dir is ~20 GB and recompiles every dependency).

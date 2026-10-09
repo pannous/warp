@@ -5,9 +5,9 @@ use warp::wasm_emitter::eval;
 
 #[test]
 fn a_decimal_amount_of_a_unit_is_exact() {
-	assert_eq!(eval("0.3 s in ms").serialize(), "300 ms");
-	assert_eq!(eval("1.5 km + 20 m").serialize(), "1520 m");
-	assert_eq!(eval("0.1 s + 0.2 s in ms").serialize(), "300 ms");
+	assert_eq!(eval("0.3 s in ms").serialize(), "300ms");
+	assert_eq!(eval("1.5 km + 20 m").serialize(), "1520m");
+	assert_eq!(eval("0.1 s + 0.2 s in ms").serialize(), "300ms");
 	is!("0.25km == 250 m", true);
 }
 

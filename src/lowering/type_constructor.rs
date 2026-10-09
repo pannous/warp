@@ -2,7 +2,7 @@
 //! `P{x:1 y:2}` (glued, parsed as the key `P` Op::None `{…}`) constructs and validates one too, while `P:{…}` is plain
 //! data (D4): an instance is the data key marked `Instance`, emitted with its own op code, so it never equals the data.
 
-use crate::analyzer::{builtin_type_kind, call_name, collect_all_types, literal_kind};
+use crate::analyzer::{builtin_type_kind, call_name, collect_all_types, list_element_type, literal_misfit, misfit_item};
 use crate::diagnostic::Diagnostic;
 use crate::node::{Bracket, Node, Separator};
 use crate::operators::Op;
@@ -36,7 +36,7 @@ pub fn lower(node: Node) -> Node {
 	let mut registry = TypeRegistry::new();
 	collect_all_types(&mut registry, &node);
 	let constructors = defined_constructors(&node, &registry);
-	construct(node, &Classes { registry: &registry, constructors: &constructors })
+	construct(node, &Classes { registry: &registry, constructors: &constructors, defaulting: Default::default() })
 }
 
 /// The declared types and their `init{…}` / `init(name){…}` constructors (class_methods::constructor_name), each
@@ -44,9 +44,24 @@ pub fn lower(node: Node) -> Node {
 struct Classes<'a> {
 	registry: &'a TypeRegistry,
 	constructors: &'a [(String, usize)],
+	/// The types whose field defaults are being constructed: a default constructing its own type stays as written
+	defaulting: std::cell::RefCell<Vec<String>>,
 }
 
 impl Classes<'_> {
+	/// A field's declared default, constructed as any other value: `p: Point = Point(0)` is a Point, made anew by each
+	/// construction that leaves p out, so no two instances share it (P200)
+	fn default_of(&self, type_def: &TypeDef, field: &crate::type_kinds::FieldDef) -> Option<Node> {
+		let value = self.registry.default_of(type_def, field)?.clone();
+		if self.defaulting.borrow().contains(&type_def.name) {
+			return Some(value);
+		}
+		self.defaulting.borrow_mut().push(type_def.name.clone());
+		let constructed = construct(value, self);
+		self.defaulting.borrow_mut().pop();
+		Some(constructed)
+	}
+
 	fn constructor(&self, class: &str, parameters: usize) -> Option<Node> {
 		let name = crate::class_methods::constructor_name(class);
 		self.constructors.iter().any(|(defined, count)| *defined == name && *count == parameters).then_some(Node::Symbol(name))
@@ -67,7 +82,7 @@ impl Classes<'_> {
 		let constructor = self.constructor(class, items.len() - 1)?;
 		let type_def = self.registry.get_by_name(class)?;
 		let fields = type_def.fields.iter().map(|field| {
-			let value = self.registry.default_of(type_def, field).cloned().unwrap_or(Node::Empty);
+			let value = self.default_of(type_def, field).unwrap_or(Node::Empty);
 			Node::Key(Box::new(Node::Symbol(field.name.clone())), Op::Colon, Box::new(value))
 		}).collect();
 		let arguments = std::iter::once(constructor).chain(std::iter::once(instance_node(class, fields))).chain(items[1..].iter().cloned());
@@ -98,7 +113,7 @@ fn construct(node: Node, classes: &Classes) -> Node {
 			if let Some(constructed) = classes.constructed_by_parameters(&items, &bracket, &separator) {
 				return constructed;
 			}
-			instance(&items, &bracket, &separator, registry).map(|instance| match call_name(&items, &bracket, &separator) {
+			instance(&items, &bracket, &separator, classes).map(|instance| match call_name(&items, &bracket, &separator) {
 				Some(class) => classes.constructed(class, instance),
 				None => instance,
 			}).unwrap_or(Node::List(items, bracket, separator))
@@ -109,7 +124,7 @@ fn construct(node: Node, classes: &Classes) -> Node {
 				Some(type_def) => match field_error(type_def, registry, &name, &entries) {
 					Some(error) => error,
 					None => {
-						let fields = Node::List(with_defaults(type_def, registry, entries), Bracket::Curly, Separator::Space);
+						let fields = Node::List(with_defaults(type_def, classes, entries), Bracket::Curly, Separator::Space);
 						let class = name.drop_meta().name();
 						classes.constructed(&class, Node::meta(Node::Key(name, Op::Colon, Box::new(fields)), Node::data(Instance)))
 					}
@@ -126,7 +141,8 @@ fn construct(node: Node, classes: &Classes) -> Node {
 
 /// The instance a call of a declared type constructs, `P(1, 2)`, `P(x:1, y:2)` or `P(1, y:2)`; fields are checked as
 /// the braces `P{…}` check them; a wrong argument count is an error value at the call
-fn instance(items: &[Node], bracket: &Bracket, separator: &Separator, registry: &TypeRegistry) -> Option<Node> {
+fn instance(items: &[Node], bracket: &Bracket, separator: &Separator, classes: &Classes) -> Option<Node> {
+	let registry = classes.registry;
 	let name = call_name(items, bracket, separator)?;
 	let type_def = registry.get_by_name(name)?;
 	let arguments = &items[1..];
@@ -149,16 +165,22 @@ fn instance(items: &[Node], bracket: &Bracket, separator: &Separator, registry: 
 	}
 	let fields = type_def.fields.iter().map(|field| {
 		let value = given.iter().find(|entry| entry_name(entry).as_ref() == Some(&field.name)).map(entry_value)
-			.or_else(|| registry.default_of(type_def, field)).cloned().unwrap_or(Node::Empty);
+			.cloned().or_else(|| classes.default_of(type_def, field)).unwrap_or(Node::Empty);
 		entry(&field.name, &value)
 	}).collect();
 	Some(instance_node(name, fields))
 }
 
-/// `x:1` among the arguments of a construction: the declared field x given by name; an instance `engine(90)` is a value
+/// `x:1` or `x=1` (as a function's named argument, P37) among the arguments of a construction: the declared field x
+/// given by name; an instance `engine(90)` is a value
 fn is_named(argument: &Node, type_def: &TypeDef) -> bool {
 	let names_field = |field: &Node| matches!(field.drop_meta(), Node::Symbol(name) if type_def.fields.iter().any(|declared| declared.name == *name));
-	!instance_parts_marked(argument) && matches!(argument.drop_meta(), Node::Key(field, Op::Colon, _) if names_field(field))
+	// `z=2` names a field even where P has none: "P has no field z", as a function's "f has no parameter z"
+	!instance_parts_marked(argument) && match argument.drop_meta() {
+		Node::Key(field, Op::Colon, _) => names_field(field),
+		Node::Key(field, Op::Assign, _) => matches!(field.drop_meta(), Node::Symbol(_)),
+		_ => false,
+	}
 }
 
 pub(crate) fn entry_value(entry: &Node) -> &Node {
@@ -190,11 +212,11 @@ pub(crate) fn entry_name(entry: &Node) -> Option<String> {
 }
 
 /// The given fields, then every left out field that has a default, with its default value, and every left out optional one
-fn with_defaults(type_def: &TypeDef, registry: &TypeRegistry, mut entries: Vec<Node>) -> Vec<Node> {
+fn with_defaults(type_def: &TypeDef, classes: &Classes, mut entries: Vec<Node>) -> Vec<Node> {
 	let given: Vec<String> = entries.iter().filter_map(entry_name).collect();
 	for field in type_def.fields.iter().filter(|field| !given.contains(&field.name)) {
 		// a left out optional field `left?` is there, holding ø: reading it is no error, assigning it changes it
-		let value = registry.default_of(type_def, field).cloned().or_else(|| field.is_optional().then_some(Node::Empty));
+		let value = classes.default_of(type_def, field).or_else(|| field.is_optional().then_some(Node::Empty));
 		if let Some(value) = value {
 			entries.push(Node::Key(Box::new(Node::Symbol(field.name.clone())), Op::Colon, Box::new(value)));
 		}
@@ -218,16 +240,18 @@ fn field_error(type_def: &TypeDef, registry: &TypeRegistry, located: &Node, entr
 			return Some(Diagnostic::at(located, message).fix(format!("declare {field} in {name}, or write the data {name}:{{…}}")).into_error());
 		};
 		let declared_type = declared.type_name.trim_end_matches('?');
-		let expected = builtin_type_kind(declared_type)?;
-		let actual = literal_kind(value)?;
-		let fits = expected == actual || (expected == Kind::Float && actual == Kind::Int) || (expected == Kind::Text && actual == Kind::Codepoint);
-		(!fits).then(|| {
-			let mut message = format!("{name}.{field} is {declared_type}, got {} {}", format!("{actual:?}").to_lowercase(), value.serialize());
-			if expected == Kind::Int && actual == Kind::Float {
-				message += ": an int must be a whole number"; // as the run-time check says (list_ops INT_NOT_WHOLE)
-			}
-			Diagnostic::at(located, message).into_error()
-		})
+		// a list field `items: texts` takes a literal list of fitting items (card list-element-types)
+		if let Some(element) = list_element_type(declared_type) {
+			let (item, actual) = misfit_item(element, value)?;
+			let message = format!("{name}.{field} is {declared_type}, got the {} item {}", format!("{actual:?}").to_lowercase(), item.serialize());
+			return Some(Diagnostic::at(located, message).into_error());
+		}
+		let actual = literal_misfit(declared_type, value)?;
+		let mut message = format!("{name}.{field} is {declared_type}, got {} {}", format!("{actual:?}").to_lowercase(), value.serialize());
+		if builtin_type_kind(declared_type) == Some(Kind::Int) && actual == Kind::Float {
+			message += ": an int must be a whole number"; // as the run-time check says (list_ops INT_NOT_WHOLE)
+		}
+		Some(Diagnostic::at(located, message).into_error())
 	});
 	wrong_entry.or_else(|| {
 		let given: Vec<String> = entries.iter().filter_map(entry_name).collect();

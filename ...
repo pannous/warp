@@ -1,29 +1,29 @@
   ✓ extensions::strings::tests::test_char_str_eq
   ✓ extensions::strings::tests::test_str_plus
-  ✓ wasp_parser::tests::test_parse_number
-  ✓ wasp_parser::tests::test_parse_symbol
-  ✓ wasp_parser::tests::test_parse_named_block
-  ✓ wasp_parser::tests::test_parse_string
-  ✓ wasp_parser::tests::test_current_line
-  ✓ wasp_parser::tests::test_parse_list
-  ✓ wasp_parser::tests::test_parse_key_value
-  ✓ wasp_parser::tests::test_parse_multiple_values
-  ✓ wasp_parser::tests::test_parse_function
-  ✓ wasp_parser::tests::test_parse_complex
+  ✓ warp_parser::tests::test_parse_number
+  ✓ warp_parser::tests::test_parse_symbol
+  ✓ warp_parser::tests::test_parse_named_block
+  ✓ warp_parser::tests::test_parse_string
+  ✓ warp_parser::tests::test_current_line
+  ✓ warp_parser::tests::test_parse_list
+  ✓ warp_parser::tests::test_parse_key_value
+  ✓ warp_parser::tests::test_parse_multiple_values
+  ✓ warp_parser::tests::test_parse_function
+  ✓ warp_parser::tests::test_parse_complex
   ✓ wasm_gc_reader::tests::test_field_map
-  ✓ wasp_parser::tests::test_current_line
+  ✓ warp_parser::tests::test_current_line
   ✓ extensions::strings::tests::test_char_str_eq
   ✓ extensions::strings::tests::test_str_plus
-  ✓ wasp_parser::tests::test_parse_key_value
-  ✓ wasp_parser::tests::test_parse_function
-  ✓ wasp_parser::tests::test_parse_list
+  ✓ warp_parser::tests::test_parse_key_value
+  ✓ warp_parser::tests::test_parse_function
+  ✓ warp_parser::tests::test_parse_list
   ✓ wasm_gc_reader::tests::test_field_map
-  ✓ wasp_parser::tests::test_parse_named_block
-  ✓ wasp_parser::tests::test_parse_number
-  ✓ wasp_parser::tests::test_parse_multiple_values
-  ✓ wasp_parser::tests::test_parse_string
-  ✓ wasp_parser::tests::test_parse_symbol
-  ✓ wasp_parser::tests::test_parse_complex
+  ✓ warp_parser::tests::test_parse_named_block
+  ✓ warp_parser::tests::test_parse_number
+  ✓ warp_parser::tests::test_parse_multiple_values
+  ✓ warp_parser::tests::test_parse_string
+  ✓ warp_parser::tests::test_parse_symbol
+  ✓ warp_parser::tests::test_parse_complex
   ✓ test_add_item_list
   ✓ test_add_lists
   ✓ test_add_list_item
@@ -190,8 +190,8 @@
   ✓ test_comments_in_html_structure
   ✓ test_list_operations
   ✓ test_empty_structures
-  ✓ test_wasp_roundtrip
-  ✓ test_wasp_to_json
+  ✓ test_warp_roundtrip
+  ✓ test_warp_to_json
   ✓ test_function_syntax
   ✓ test_mixed_syntax
   ✓ test_nested_structures
@@ -204,5 +204,5 @@
   ✓ test_dom_property
   ✓ test_html
   ✓ test_inner_html
-  ✓ test_html_wasp
+  ✓ test_html_warp
   ✓ test_timeout_protection

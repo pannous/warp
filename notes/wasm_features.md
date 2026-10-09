@@ -29,6 +29,6 @@ backend choice lives in warp's list-operation table, not in wasm instructions.
 
 ## Multi-memory ideas
 - Separate the constant string table (read-only data) from the runtime text heap, so a stray write can never corrupt literals.
-- A memory per FFI library: raylib/SDL buffers in their own memory, shared with the host, isolated from wasp texts.
+- A memory per FFI library: raylib/SDL buffers in their own memory, shared with the host, isolated from warp texts.
 - A GPU staging memory: typed-array payloads copied into one memory that the host maps straight to a GPU buffer.
 - Scratch memory for big-int limbs or temporary texts, dropped wholesale after a call.

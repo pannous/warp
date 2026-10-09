@@ -7,6 +7,8 @@ mod test_on_error_of_function;
 mod test_empty_block_binding;
 mod test_empty_block;
 mod test_for_loop;
+mod test_for_over_a_number;
+mod test_mixed_range_bounds;
 mod test_if_call_condition;
 mod test_if_value_kind;
 mod test_if_then_assign;
@@ -35,10 +37,14 @@ mod test_times_count_once;
 mod test_top_level_block;
 mod test_trap_messages;
 mod test_try_else;
+mod test_try_finally;
 mod test_try_exits_and_naming;
 mod test_try_deep;
 mod test_while_paren_condition;
 mod test_while_value;
+mod test_text_loop_value;
+mod test_loop_value_at_run_time;
+mod test_loop_if_value;
 mod test_try_else_value;
 mod test_block_statements;
 mod test_try_named_traps;
@@ -59,6 +65,8 @@ mod test_empty_bodies;
 mod test_colon_handlers;
 mod test_clipboard;
 mod test_reactive_ports;
+mod test_when_signals;
+mod test_unhandled_emits;
 mod test_variable_signals;
 mod test_welcome_forms;
 mod test_loop_value;
@@ -94,12 +102,14 @@ mod test_after;
 mod test_parallel_map;
 mod test_implicit_await;
 mod test_task_parameter_shadows;
+mod test_task_name_scope;
 mod test_task_signals;
 mod test_empty_reset_in_if;
 mod test_signal_values;
 mod test_stored_signals;
 mod test_storage;
 mod test_undo_history;
+mod test_scoped_handlers;
 mod test_shared_signals;
 mod test_signal_reflection;
 mod test_broadcast;
@@ -116,3 +126,23 @@ mod test_braceless_call_in_branch;
 mod test_event_handler_lists;
 mod test_for_underscore;
 mod test_await_any_values;
+mod test_constant_listener;
+mod test_task_bools;
+mod test_error_values;
+mod test_emit_operands;
+mod test_handler_globals;
+mod test_aborting_handlers;
+mod test_check_assert;
+mod test_soft_tests;
+mod test_reflection_words; // card reflection
+mod test_function_body; // card g_X_3s
+mod test_data_string; // card data-string
+mod test_multiline_errors;
+mod test_run_tests; // card run-tests
+mod test_data_quoting; // card data-quoting
+mod test_database_tables; // card orm
+mod test_database_filters; // card orm-filters
+mod test_database_relations; // card orm, step 4
+mod test_database_nested_add; // card orm-nested
+mod test_database_dangling_key; // card orm-dangling
+mod test_database_members_add; // cards orm-nested, orm-list-add

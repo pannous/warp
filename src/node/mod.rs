@@ -15,6 +15,7 @@ use crate::node::Node::*;
 use crate::type_kinds::Kind;
 
 mod serialization;
+pub use serialization::{NO, YES};
 mod json_xml;
 mod indexing;
 mod comparison;
@@ -489,6 +490,14 @@ impl Node {
 			}
 			Meta { node, data } => Meta { node: Box::new(rewrite(*node)), data },
 			other => other,
+		}
+	}
+
+	/// This node under the Meta layers (comments, positions) of `original`, which it replaces
+	pub fn with_meta_of(self, original: &Node) -> Node {
+		match original {
+			Meta { node, data } => Meta { node: Box::new(self.with_meta_of(node)), data: data.clone() },
+			_ => self,
 		}
 	}
 

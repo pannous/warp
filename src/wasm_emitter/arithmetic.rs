@@ -5,13 +5,18 @@ use super::*;
 impl WasmGcEmitter {
 	/// Emit arithmetic operation: evaluate operands and apply operator
 	pub(super) fn emit_arithmetic(&mut self, func: &mut Function, left: &Node, op: &Op, right: &Node) {
-		if let Some(assignment) = self.global_update_as_assignment(left, op, right) {
+		if let Some(assignment) = self.update_as_assignment(left, op, right) {
 			self.emit_node_instructions(func, &assignment);
 			return;
 		}
 		if op.is_shift() {
 			self.emit_shift(func, left, op, right);
 			self.emit_call(func, "new_int");
+			return;
+		}
+		// `s++` of a text is `s += 1`, "a" → "a1" (card inc-text); the int step below holds an i64 local only
+		if matches!(op, Op::Inc | Op::Dec) && !matches!(self.get_type(left), Kind::Int | Kind::Float) {
+			self.emit_node_instructions(func, &crate::library_words::stepped(left.clone(), *op));
 			return;
 		}
 		if op.is_arithmetic() && self.emit_typed_arithmetic(func, left, op, right) {
@@ -98,10 +103,11 @@ impl WasmGcEmitter {
 		}
 
 		// x:=42 or x=42 → emit value, store to local, return value
+		let declared = self.declared_type_of(left);
 		if use_float {
-			self.emit_float_value(func, right);
+			self.emit_declared_value(func, declared.as_ref(), right, Kind::Float);
 		} else {
-			self.emit_numeric_value(func, right);
+			self.emit_declared_value(func, declared.as_ref(), right, Kind::Int);
 			self.emit_fits_declared(func, left);
 		}
 		if let Node::Symbol(name) = left.drop_meta() {
@@ -160,7 +166,7 @@ impl WasmGcEmitter {
 		if self.emit_compound_index_assignment(func, left, op, right) {
 			return true;
 		}
-		if let Some(assignment) = self.global_update_as_assignment(left, op, right) {
+		if let Some(assignment) = self.update_as_assignment(left, op, right) {
 			if use_float { self.emit_float_value(func, &assignment) } else { self.emit_numeric_value(func, &assignment) }
 			return true;
 		}
@@ -201,9 +207,9 @@ impl WasmGcEmitter {
 			Op::Sqrt if self.get_type(right) == Kind::Codepoint => {
 				self.emit_type_error(func, format!("type error: √ of a codepoint: {}", list_ops::CHARACTER_IS_NO_NUMBER));
 			}
-			Op::Sqrt => {
+			root @ (Op::Sqrt | Op::Cbrt) => {
 				self.emit_float_value(func, right);
-				func.instruction(&I::F64Sqrt);
+				self.emit_float_root(func, root);
 				self.emit_float_in_exact_context(func, &located.serialize());
 			}
 			Op::Neg => {
@@ -240,19 +246,22 @@ impl WasmGcEmitter {
 			self.emit_call(func, "get_int_value");
 		} else if let Some(local) = self.scope.lookup(name) {
 			func.instruction(&I::LocalGet(local.position));
-			if local.kind.is_ref() {
-				// an optional held as a Node, checked non-ø before use (analyzer::check_null_use)
-				self.emit_call(func, "get_int_value");
-			} else if local.kind.is_float() {
-				self.emit_float_in_exact_context(func, name);
-			}
+			self.emit_as_numeric(func, name, local.kind);
 		} else if let Some(&(idx, kind)) = self.ctx.user_globals.get(name) {
 			func.instruction(&I::GlobalGet(idx));
-			if kind.is_float() {
-				self.emit_float_in_exact_context(func, name);
-			}
+			self.emit_as_numeric(func, name, kind);
 		} else {
 			self.emit_undefined_variable(func, name);
+		}
+	}
+
+	/// The variable `name` of `kind` just read, as a number
+	fn emit_as_numeric(&mut self, func: &mut Function, name: &str, kind: Kind) {
+		if kind.is_ref() {
+			// an optional held as a Node, checked non-ø before use (analyzer::check_null_use); a handler's abort value
+			self.emit_call(func, "get_int_value");
+		} else if kind.is_float() {
+			self.emit_float_in_exact_context(func, name);
 		}
 	}
 
@@ -412,7 +421,8 @@ impl WasmGcEmitter {
 					}
 					return;
 				}
-				self.emit_value_of_kind(func, right, kind);
+				let declared = self.declared_type_of(left);
+				self.emit_declared_value(func, declared.as_ref(), right, kind);
 				self.emit_fits_declared(func, left);
 				func.instruction(&I::LocalTee(position));
 			} else if let Some(kind) = self.emit_global_store(func, name, right) {
@@ -444,11 +454,23 @@ impl WasmGcEmitter {
 		}
 	}
 
-	/// `s += x` of a number s and a text x: the type error `s = s + x` is, never the text's code points added
+	/// An update the plain assignment does: of a global, and `x /= y`, which is exactly `x = x / y`
+	/// (`x = 3; x /= 2` → 3/2); only a variable declared `x:int` keeps a whole number
+	fn update_as_assignment(&self, target: &Node, op: &Op, operand: &Node) -> Option<Node> {
+		let global = self.global_update_as_assignment(target, op, operand);
+		if global.is_some() || *op != Op::DivAssign || self.declared_whole(target) {
+			return global;
+		}
+		let quotient = Node::Key(Box::new(target.clone()), Op::Div, Box::new(operand.clone()));
+		Some(Node::Key(Box::new(target.clone()), Op::Assign, Box::new(quotient)))
+	}
+
+	/// `s += x` of a number s and a text x, or `s -= 1` of a text s (card text-crashes): the type error `s = s op x`
+	/// is, never the text's code points added
 	pub(super) fn emit_compound_type_error(&mut self, func: &mut Function, left: &Node, base_op: &Op, right: &Node) -> bool {
 		let kind = self.arithmetic_type(left, base_op, right);
 		let numeric_target = matches!(self.get_type(left), Kind::Int | Kind::Float);
-		numeric_target && matches!(kind, Kind::Error | Kind::Text) && self.emit_arithmetic_type_error(func, left, base_op, right, kind)
+		(kind == Kind::Error || numeric_target && kind == Kind::Text) && self.emit_arithmetic_type_error(func, left, base_op, right, kind)
 	}
 
 	/// Stack [x, y] → [x op y] for `x op= y` on Ints; `/=` keeps an integer x an integer
@@ -595,13 +617,33 @@ impl WasmGcEmitter {
 	}
 
 	/// base ^ exponent through libm's pow; a NaN (negative base with a fractional exponent) traps as invalid_number
-	pub(super) fn emit_float_power(&mut self, func: &mut Function) {
-		let Some(pow) = self.ffi_func_index(LIBM_POW) else {
-			self.discovered_needs.insert(Need::MathImport(LIBM_POW));
+	/// Call a libm function (`m.pow`), imported once the emitter has found it is needed: false while it is not yet
+	pub(super) fn emit_libm_call(&mut self, func: &mut Function, key: &'static str) -> bool {
+		let Some(index) = self.ffi_func_index(key) else {
+			self.discovered_needs.insert(Need::MathImport(key));
 			func.instruction(&I::Unreachable);
-			return;
+			return false;
 		};
-		func.instruction(&I::Call(pow));
+		func.instruction(&I::Call(index));
+		true
+	}
+
+	/// f64 → its √ (a wasm instruction) or ∛ (libm's cbrt)
+	pub(super) fn emit_float_root(&mut self, func: &mut Function, root: &Op) {
+		match root {
+			Op::Cbrt => {
+				self.emit_libm_call(func, LIBM_CBRT);
+			}
+			_ => {
+				func.instruction(&I::F64Sqrt);
+			}
+		}
+	}
+
+	pub(super) fn emit_float_power(&mut self, func: &mut Function) {
+		if !self.emit_libm_call(func, LIBM_POW) {
+			return;
+		}
 		self.pop_float_scratch(func, 0);
 		self.push_float_scratch(func, 0);
 		self.push_float_scratch(func, 0);
@@ -643,6 +685,9 @@ impl WasmGcEmitter {
 				if held(kind) && !matches!(other_kind, Kind::Text | Kind::Codepoint) && matches!(side.drop_meta(), Node::Key(_, Op::Hash, _)) {
 					self.emit_codepoint_as_int_node(func);
 				}
+			}
+			if self.emit_bare_uncertain_order(func, left, *op, right) {
+				return;
 			}
 			self.emit_call(func, library_ops::NODE_ORDER);
 			let sign_test = match op {

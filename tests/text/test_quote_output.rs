@@ -3,7 +3,7 @@ use crate::is;
 use std::sync::Mutex;
 use warp::normalize::*;
 use warp::wasm_emitter::eval;
-use warp::wasp_parser::{parse, WaspParser};
+use warp::warp_parser::{parse, WarpParser};
 
 /// The style is global: tests that read or swap it run one at a time
 static GLOBAL_STYLE: Mutex<()> = Mutex::new(());
@@ -41,9 +41,9 @@ fn test_texts_inside_lists_print_with_the_canonical_quote() {
 fn test_serialized_text_parses_back() {
 	for quotes in [QuoteStyle::Double, QuoteStyle::Single] {
 		with_quotes(quotes, || {
-			let node = WaspParser::parse("[\"hello\" \"a b\"]");
+			let node = WarpParser::parse("[\"hello\" \"a b\"]");
 			assert_eq!(parse(&node.serialize()), node);
-			let keyed = WaspParser::parse("name:\"Alice\"");
+			let keyed = WarpParser::parse("name:\"Alice\"");
 			assert_eq!(parse(&keyed.serialize()), keyed);
 		});
 	}

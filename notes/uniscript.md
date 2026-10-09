@@ -1,4 +1,4 @@
-# Uniscript in wasp: what it took (uniscript.wasp of the uniscript package)
+# Uniscript in warp: what it took (uniscript.wasp of the uniscript package)
 Rust implementation over the same data files: https://github.com/pannous/uniscript (~/dev/uniscript).
 
 `use uniscript; uniscript("<:fracture A>")` → 𝔄, `unicode_to_uniscript("α")` → `<:alpha>`. `use uniscript` fetches github.com/pannous/uniscript into packages/uniscript and loads its uniscript.wasp (notes/packages.md); index format: its src/index.rs.
@@ -23,7 +23,7 @@ Tests: tests/web/test_uniscript.rs (spec examples, round trip, index check), tes
 - A dropped statement that updates a text (`s += "a"`, `if c { s += "a" }`, a while body doing that) was emitted as a number.
 - `f("a")` for `f(t:text)`: a one-character literal is a codepoint and is now converted to text at the call.
 
-## Language pitfalls to know when writing wasp (not fixed)
+## Language pitfalls to know when writing warp (not fixed)
 - `"a"` with one character is a codepoint: a variable first assigned `"x"` is a codepoint variable, `s = s + "ab"` then fails loudly. Start texts with `""`.
 - `/` is exact division (rationals): use `>> 1` for halving indices.
 - `global g = read(…)` fails ("undefined variable: read"); `const g = read(…)` works and is imported by `use`.

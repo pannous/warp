@@ -1,6 +1,10 @@
-//! Writing a node as wasp text: serialize and its annotation prefixes
+//! Writing a node as warp text: serialize and its annotation prefixes
 
 use super::*;
+
+/// How a bool prints (user, card bool-type): yes and no; true and false stay accepted as input
+pub const YES: &str = "yes";
+pub const NO: &str = "no";
 
 impl Node {
 	/// An operator in front of its one operand, ø on the left in the tree (`#x`, `-x`)
@@ -47,6 +51,18 @@ impl Node {
 		self.own_attribute().map(Self::attribute_source).unwrap_or_default()
 	}
 
+	/// The left side of `op`: a text or character operand keeps its quotes (`"ab"+x`), a key of `:` stays bare (`name: 1`)
+	fn key_text(&self, op: &Op, meta: bool) -> String {
+		if *op == Op::Colon { self.to_string() } else { self.operand_text(meta) }
+	}
+
+	fn operand_text(&self, meta: bool) -> String {
+		match self.drop_meta() {
+			Text(_) | Char(_) => self.serialize_recurse(meta),
+			_ => self.to_string(),
+		}
+	}
+
 	/// A key prints the annotations of its value in front of itself: `tee{@unit(cm) a:1}`
 	pub(super) fn serialize_with(&self, meta: bool, attributes: bool) -> String {
 		match self {
@@ -75,18 +91,18 @@ impl Node {
 				let space = if op.as_str().starts_with(char::is_alphabetic) { " " } else { "" };
 				format!("{op}{space}{}", v.serialize_recurse(meta))
 			}
-			Key(k, op, v) if matches!(v.drop_meta(), Empty) && op.is_suffix() => format!("{k}{op}"),
-			Key(k, op, v) if op.as_str().starts_with(char::is_alphabetic) => format!("{} {} {}", k, op, v.serialize_recurse(meta)), // 0.1 as float, not 0.1asfloat
+			Key(k, op, v) if matches!(v.drop_meta(), Empty) && op.is_suffix() => format!("{}{op}", k.operand_text(meta)),
+			Key(k, op, v) if op.as_str().starts_with(char::is_alphabetic) => format!("{} {} {}", k.operand_text(meta), op, v.serialize_recurse(meta)), // 0.1 as float, not 0.1asfloat
 			Key(k, Op::Colon, v) if matches!(v.drop_meta(), List(_, Bracket::Curly, _)) => format!("{}{}{}", v.attribute_prefix(), k, v.serialize_with(meta, false)), // tee{a:1}
 			// `1- -x`: a prefix operand glued to the operator would read as another operator (`1--x`)
 			// `g[i]` is the ungrouped `g#(i+1)` in the tree: an operation after `#` needs its parentheses back
-			Key(k, Op::Hash, v) if matches!(v.drop_meta(), Key(..)) && !v.is_prefix_form() => format!("{k}#({})", v.serialize_recurse(meta)),
-			Key(k, op, v) if v.is_prefix_form() => format!("{}{}{} {}", v.attribute_prefix(), k, op, v.serialize_with(meta, false)),
-			Key(k, op, v) => format!("{}{}{}{}", v.attribute_prefix(), k, op, v.serialize_with(meta, false)),
+			Key(k, Op::Hash, v) if matches!(v.drop_meta(), Key(..)) && !v.is_prefix_form() => format!("{}#({})", k.operand_text(meta), v.serialize_recurse(meta)),
+			Key(k, op, v) if v.is_prefix_form() => format!("{}{}{} {}", v.attribute_prefix(), k.key_text(op, meta), op, v.serialize_with(meta, false)),
+			Key(k, op, v) => format!("{}{}{}{}", v.attribute_prefix(), k.key_text(op, meta), op, v.serialize_with(meta, false)),
 			Error(e) => format!("Error({})", e.serialize_recurse(meta)),
 			Empty => "ø".to_string(),
-			True => "true".to_string(),
-			False => "false".to_string(),
+			True => YES.to_string(),
+			False => NO.to_string(),
 			Meta { node, data } => {
 				if let Some(literal) = self.source_literal() {
 					return literal.to_string();

@@ -1,0 +1,3 @@
+// assert stops the program when something is not true
+assert 1 + 1 == 2
+"all good"

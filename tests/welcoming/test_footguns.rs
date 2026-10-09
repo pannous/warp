@@ -79,7 +79,7 @@ fn test_norway_problem_in_data() {
 	assert_eq!(parse_data("country: NO").serialize(), "country:NO"); // YAML 1.1: false
 	assert_eq!(parse_data("answer: yes").serialize(), "answer:yes"); // YAML 1.1: true
 	assert_eq!(parse_data("[de gb no]").serialize(), "[de gb no]");
-	assert_eq!(parse_data("flag: true").serialize(), "flag:true");
+	assert_eq!(parse_data("flag: true").serialize(), "flag:yes");
 	assert_eq!(parse_data("missing: null")["missing"], Node::Empty);
 }
 
@@ -232,7 +232,7 @@ fn test_negative_literals_after_power_fix() {
 #[test]
 fn test_mutation_through_alias_is_not_visible() {
 	is!("x=\"ab\";y=x;y#1=\"z\";x", "ab");
-	is!("a=(1 2);b=a;b#1=9;a#1", 1);
+	is!("a=(1 2);b=a;b#1=9;a#1", 9); // P200b: lists share, as in Python and JS
 }
 
 #[test]
@@ -245,7 +245,7 @@ fn test_equal_literals_are_not_shared() {
 #[test]
 fn test_compound_index_assignment() {
 	is!("a=(1 2);a#1 += 1;a#1", 2);
-	is!("a=(1 2);b=a;a#2 *= 5;b#2", 2);
+	is!("a=(1 2);b=a;a#2 *= 5;b#2", 10); // P200b
 }
 
 #[test]
@@ -268,7 +268,7 @@ fn test_list_plus_concatenates() {
 fn test_append_method_rebinds_the_list() {
 	is!("pixel=(1 2);pixel.add(5);pixel", warp::ints(vec![1, 2, 5])); // was unchanged
 	is!("pixel=[1 2 3];pixel.add(4);pixel#4", 4);
-	is!("a=(1 2);b=a;a.add(3);#b", 2); // value semantics: b keeps its value
+	is!("a=(1 2);b=a;a.add(3);#b", 3); // P200b: b is the same list
 	is!("x=[4];x#1", 4); // a one-element list stays a list
 }
 
@@ -737,8 +737,8 @@ fn test_modulo_and_remainder_are_both_named() {
 	is!("-6 % 3", 0);
 	is!("x=-7; x % 3", 2);
 	is!("x=-7; x %= 3; x", 2);
-	is!("x=-7; x /= 3; x", -3); // integer /= is the Euclidean quotient: -7 == 3*-3 + 2
-	is!("x=7; x /= -3; x", -2); // 7 == -3*-2 + 1
+	is!("x=-7; x//=3; x", -3); // //= is the Euclidean quotient: -7 == 3*-3 + 2
+	is!("x=7; x//=-3; x", -2); // 7 == -3*-2 + 1
 	is!("(-7/2 % 3) * 2", 5); // exact ratios too: -3.5 % 3 == 2.5
 	// mod is the same operation as %
 	is!("-7 mod 3", 2);
@@ -774,11 +774,12 @@ fn test_rounding_mode_is_named() {
 }
 
 #[test]
-fn test_booleans_are_not_numbers() {
-	fails_with("true + true", "arithmetic on a boolean"); // Python True + True → 2
-	fails_with("false * 3", "fix: int(false) * 3");
-	fails_with("(1<2) + 1", "arithmetic on a boolean");
-	fails_with("(not 1) + 2", "arithmetic on a boolean");
+fn test_booleans_count_as_numbers() {
+	// P195 (user): a bool counts as 1/0 in arithmetic, a literal like a variable (was the error "arithmetic on a boolean")
+	is!("true + true", 2); // Python True + True → 2
+	is!("false * 3", 0);
+	is!("(1<2) + 1", 2);
+	is!("(not 1) + 2", 2);
 	let accepted = |code: &str| warp::analyzer::diagnose(&warp::parse(code)).is_none();
 	assert!(accepted("int(true) + int(true)"));
 	assert!(accepted("x = 1 < 2; if x {1} else {2}"));

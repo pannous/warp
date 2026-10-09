@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """Headless probe of web/playground: serves the repository, loads the page with agent-browser (headless Chrome),
-evaluates the tour, the Ask flow and every samples/*.wasp in the browser, and compares each value with the CLI's
+evaluates the tour, the Ask flow and every samples/*.warp in the browser, and compares each value with the CLI's
 (`warp --no-ask`). Needs web/playground/build.sh run first and the native warp binary built.
 Usage: probes/web_playground.py [sample names…]"""
 import json, os, shutil, subprocess, sys, time, http.server, threading, functools
@@ -166,8 +166,8 @@ def main():
 	if not ok: failures.append("debug build")
 	browser("open", PAGE)
 
-	names = sys.argv[1:] or sorted(name[:-5] for name in os.listdir(os.path.join(REPOSITORY, "samples")) if name.endswith(".wasp"))
-	sources = [open(os.path.join(REPOSITORY, "samples", name + ".wasp"), encoding="utf-8").read() for name in names]
+	names = sys.argv[1:] or sorted(name[:-5] for name in os.listdir(os.path.join(REPOSITORY, "samples")) if name.endswith(".warp"))
+	sources = [open(os.path.join(REPOSITORY, "samples", name + ".warp"), encoding="utf-8").read() for name in names]
 	reports = evaluate_in_page(sources)
 	same = 0
 	for name, source, report in zip(names, sources, reports):
@@ -175,7 +175,7 @@ def main():
 		if report["value"] == cli:
 			same += 1
 		else:
-			print(f"DIFF samples/{name}.wasp\n     page: {report['value'][:200]}\n     cli:  {cli[:200]}")
+			print(f"DIFF samples/{name}.warp\n     page: {report['value'][:200]}\n     cli:  {cli[:200]}")
 	print(f"samples: {same}/{len(names)} give the CLI's value in the page")
 	browser("close")
 	server.shutdown()

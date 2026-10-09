@@ -3,7 +3,7 @@
 User decision 2026-10-03 (notes/open_decisions.md, D5): "General rule". Any noun can name a type or a parameter
 (wiki/matching.md, wiki/type.md, wiki/signature.md). This note sets the rule for the open details: unknown words
 (`photo`) and multi-word names. Status: approved by warp-43 (2026-10-03) as an assumption for the user to review;
-implemented in src/lowering/type_name_matching.rs (`parameter_slots`, used by the `to` phrase in wasp_parser.rs and by the spaced
+implemented in src/lowering/type_name_matching.rs (`parameter_slots`, used by the `to` phrase in warp_parser.rs and by the spaced
 `f T x = …` form), tests/types/test_type_name_matching.rs.
 
 ## Forms covered
@@ -56,7 +56,7 @@ Object arguments (tests/functions/test_object_arguments.rs): an untyped paramete
 class-typed parameter is an error (`keep 3`, `keep(page{…})` for `keep(p:photo)`: "keep needs a photo for parameter p,
 got 3 (an Int)"). An argument of unknown type, or a written map, is judged by the fields its uses read ("no field width").
 
-Repeated type words (samples/polymorphism.wasp, tests/types/test_repeated_type_parameters.rs): a type word repeated
+Repeated type words (samples/polymorphism.warp, tests/types/test_repeated_type_parameters.rs): a type word repeated
 alone in a head numbers its parameters, `combine float with float = float#1 + float#2` is
 `combine(float·1:float, float·2:float) := float·1 + float·2`; `$0`, `$1` read them by position as in any definition.
 Other repeated names stay the error "two parameters are named …" (type_name_matching.rs numbered_repeated_types).

@@ -1,0 +1,14 @@
+// a built page whose main awaits three one-second tasks (card site-worker): on the page's thread they run one after
+// the other (3 s), in the site's Worker on the pool of task Workers together (about 1 s); a click reaches the Worker;
+// the Worker reads the tab's session values and hands clipboard writes to the page (card site-worker-js)
+nap(ms) := { sleep(ms); 1 }
+t0 = clock()
+first = go nap(1000)
+second = go nap(1000)
+third = go nap(1000)
+naps = (await first) + (await second) + (await third)
+took = clock() - t0
+run = if took < 1800 then "together" else "one after the other"
+clicks = 0
+greeting = session["greeting"] or "nothing"
+div{ p{ "naps: " + naps } p{ "tasks ran " + run } p{ "session says " + greeting } button{ on click { clicks += 1; clipboard.write("copied " + clicks) } "clicked " + clicks } }

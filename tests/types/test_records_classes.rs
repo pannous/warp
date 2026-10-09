@@ -51,3 +51,13 @@ fn a_class_declares_a_nested_block_of_fields() {
 	is!(&format!("{contact}c = contact{{name:\"Ann\" address:{{street:\"Main\" city:\"X\"}}}}\nc.address.city"), "X");
 	is!(&format!("{contact}c = contact{{name:\"Ann\" address:{{street:\"Main\" city:\"X\"}}}}\nc.name"), "Ann");
 }
+
+#[test]
+fn a_constructor_takes_named_arguments_as_functions_do() {
+	// card named-constructor: `P(y=2, x=7)` as `f(b=1, a=5)` (P37), in any order, mixed with positional ones
+	is!("class P { x: int; y: int }; p = P(y=2, x=7); p.x * 10 + p.y", 72);
+	is!("class P { x: int; y: int }; p = P(7, y=2); p.x * 10 + p.y", 72);
+	is!("class P { x: int; y: int }; p = P(y: 2, x: 7); p.x * 10 + p.y", 72);
+	fails_with("class P { x: int; y: int }; P(z=2, x=7)", "no field z");
+	is!("class P { x: int; y = 5 }; p = P(x=7); p.x * 10 + p.y", 75); // no Java declaration `P x = 7`
+}

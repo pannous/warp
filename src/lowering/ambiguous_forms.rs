@@ -1,37 +1,65 @@
 //! Asks about written forms the analyzer sees whole (notes/welcoming.md): unbracketed list assignments (D12)
-//! and suffix words mixed with infix arithmetic (D9)
+//! and suffix words mixed with infix arithmetic (D9); a trailing percent `10%` is read as `10/100` here too
 
 use crate::diagnostic::{ask, reading, Ask, Fallback};
 use crate::node::{Bracket, Node, Separator};
 use crate::operators::Op;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 const BARE_LIST_TOPIC: &str = "bare-list";
 const SUFFIX_PRECEDENCE_TOPIC: &str = "suffix-precedence";
 /// `squared` is the suffix form of `square`, `sorted` of `sort` (wiki/function.md: every function generates a suffix operator)
 const SUFFIX_WORD_ENDINGS: [&str; 2] = ["d", "ed"];
+const PERCENT: i64 = 100;
 const ARITHMETIC: [Op; 7] = [Op::Add, Op::Sub, Op::Mul, Op::Div, Op::Mod, Op::Rem, Op::Pow];
 
 pub fn lower(node: Node) -> Node {
 	let words = suffix_words(&node);
-	lower_node(node, &words)
+	operator_values(library_word_values(lower_node(node, &words), &words))
+}
+
+/// The parameter of the function an operator word stands for
+const OPERAND_NAME: &str = "value";
+
+fn operand() -> Box<Node> {
+	Box::new(Node::Symbol(OPERAND_NAME.to_string()))
+}
+
+/// `f = abs`, `xs.map(sqrt)`: an operator word left without an operand is the function `value => abs value`
+fn operator_values(node: Node) -> Node {
+	match operator_reference(&node) {
+		Some(op) => Node::Key(operand(), Op::FatArrow, Box::new(Node::Key(Box::new(Node::Empty), op, operand()))),
+		None => node.map_children(operator_values),
+	}
+}
+
+/// `xs.map(upper)`, `map(xs, upper)`: a library word passed to an iteration word is the function `value => upper value`
+fn library_word_values(node: Node, words: &SuffixWords) -> Node {
+	let node = node.map_children(|child| library_word_values(child, words));
+	let Node::List(mut items, bracket, separator) = node else { return node };
+	let is_iteration = items.first().is_some_and(|head| matches!(head.drop_meta(), Node::Symbol(name) if crate::function_values::ITERATION_WORDS.contains(&name.as_str())));
+	if let Some(function) = items.last_mut().filter(|last| is_iteration && words.is_library_word(last)) {
+		let call = Node::List(vec![function.clone(), *operand()], Bracket::None, Separator::Space);
+		*function = Node::Key(operand(), Op::FatArrow, Box::new(call));
+	}
+	Node::List(items, bracket, separator)
 }
 
 /// The suffix words of the program's functions with the function each applies, `squared` → `square`; a name the
 /// program assigns is its variable, never a suffix word (`solved = solve(x); return solved`)
 fn suffix_words(node: &Node) -> SuffixWords {
-	let mut variables = std::collections::HashSet::new();
+	let mut variables = HashSet::new();
 	crate::library_words::collect_assigned_names(node, &mut variables);
 	let functions = crate::analyzer::applicable_function_names(node);
 	let words = functions.iter().flat_map(|function| past_forms(function).into_iter().map(|word| (word, function.clone())));
-	let mut words: SuffixWords = words.filter(|(word, _)| word.ends_with("ed") && !variables.contains(word)).collect();
+	let mut words: HashMap<String, String> = words.filter(|(word, _)| word.ends_with("ed") && !variables.contains(word)).collect();
 	// the library's own: `xs sorted`, `xs reversed`, `x squared` (x²), `x cubed` (x³), unless the program names them
 	for (word, function) in LIBRARY_SUFFIX_WORDS {
 		if !variables.contains(word) && !functions.contains(function.trim_start_matches(POWER_MARK)) {
 			words.entry(word.to_string()).or_insert(function.to_string());
 		}
 	}
-	words
+	SuffixWords { words, variables, functions }
 }
 
 const VOWELS: [char; 5] = ['a', 'e', 'i', 'o', 'u'];
@@ -61,12 +89,27 @@ fn past_forms(function: &str) -> Vec<String> {
 const LIBRARY_SUFFIX_WORDS: [(&str, &str); 4] = [("sorted", "sort"), ("reversed", "reverse"), ("squared", "^square"), ("cubed", "^cube")];
 const POWER_MARK: char = '^';
 
-/// suffix word → function
-type SuffixWords = HashMap<String, String>;
+struct SuffixWords {
+	/// suffix word → function
+	words: HashMap<String, String>,
+	/// the names the program assigns
+	variables: HashSet<String>,
+	/// the program's own functions
+	functions: HashSet<String>,
+}
+
+impl SuffixWords {
+	/// A library word the program does not name itself: `first sorted xs` is `first(sort(xs))`, `xs.map(upper)` maps it
+	fn is_library_word(&self, node: &Node) -> bool {
+		matches!(node.drop_meta(), Node::Symbol(name) if crate::library_words::is_library_word(name) && !self.variables.contains(name) && !self.functions.contains(name))
+	}
+}
 
 fn lower_node(node: Node, functions: &SuffixWords) -> Node {
 	match node {
 		Node::Meta { node, data } => Node::Meta { node: Box::new(lower_node(*node, functions)), data },
+		// `10%`: a percent is a hundredth, `10/100`
+		Node::Key(left, Op::Mod, right) if matches!(right.drop_meta(), Node::Empty) => Node::Key(Box::new(lower_node(*left, functions)), Op::Div, Box::new(Node::int(PERCENT))),
 		Node::Key(left, op, right) => Node::Key(Box::new(lower_node(*left, functions)), op, Box::new(lower_node(*right, functions))),
 		Node::List(items, bracket, separator) => {
 			if let Some(asked) = bare_list_assignment(&items, &bracket, &separator) {
@@ -107,13 +150,40 @@ fn bare_list_assignment(items: &[Node], bracket: &Bracket, separator: &Separator
 	Some(ask(&question).map(|chosen| if chosen == 0 { list } else { statements }))
 }
 
-/// The function a suffix word applies: `squared` → `square`
-fn suffix_function(word: &Node, functions: &SuffixWords) -> Option<String> {
-	let Node::Symbol(word) = word.drop_meta() else { return None };
-	functions.get(word).cloned()
+/// What a suffix word applies: a function (`squared` → `square`) or an operator word after its value (`-7 abs`)
+enum Suffix {
+	Function(String),
+	Operator(Op),
 }
 
-fn call(function: &str, argument: Node) -> Node {
+/// The function a suffix word applies: `squared` → `square`; `abs` with no operand (the parser's `‖ø`) → ‖
+fn suffix_function(word: &Node, functions: &SuffixWords) -> Option<Suffix> {
+	if let Some(op) = operator_reference(word) {
+		return Some(Suffix::Operator(op));
+	}
+	let Node::Symbol(word) = word.drop_meta() else { return None };
+	functions.words.get(word).cloned().map(Suffix::Function)
+}
+
+/// The word as written: `sqrt` for the parser's `√ø`
+fn written_word(word: &Node) -> Node {
+	let spelling = operator_reference(word).and_then(|op| crate::warp_parser::PREFIX_OPERATOR_WORDS.into_iter().find(|(_, known)| *known == op));
+	spelling.map_or_else(|| word.clone(), |(spelling, _)| Node::Symbol(spelling.to_string()))
+}
+
+/// `abs`, `sqrt`, `cbrt` written without an operand: the operator itself
+fn operator_reference(node: &Node) -> Option<Op> {
+	match node.drop_meta() {
+		Node::Key(nothing, op @ (Op::Abs | Op::Sqrt | Op::Cbrt), operand) if nothing.is_nothing() && operand.is_nothing() => Some(*op),
+		_ => None,
+	}
+}
+
+fn call(suffix: &Suffix, argument: Node) -> Node {
+	let function = match suffix {
+		Suffix::Operator(op) => return Node::Key(Box::new(Node::Empty), *op, Box::new(argument)),
+		Suffix::Function(function) => function,
+	};
 	match function.strip_prefix(POWER_MARK) {
 		Some(power) => {
 			let exponent = if power == "square" { 2 } else { 3 };
@@ -142,7 +212,7 @@ fn with_rightmost(node: Node, replace: impl FnOnce(Node) -> Node) -> Node {
 }
 
 /// The suffix word heading `item`: `squared` or `squared+1`
-fn heading_suffix_word(item: &Node, functions: &SuffixWords) -> Option<(Node, String)> {
+fn heading_suffix_word(item: &Node, functions: &SuffixWords) -> Option<(Node, Suffix)> {
 	let mut leftmost = None;
 	with_leftmost(item.clone(), |leaf| {
 		leftmost = Some(leaf.clone());
@@ -168,26 +238,48 @@ fn apply_suffix_words(items: Vec<Node>, functions: &SuffixWords, bracket: Bracke
 	let item_count = items.len();
 	let mut applied: Vec<Node> = Vec::new();
 	for item in items {
-		let (Some(operand), Some((word, function))) = (applied.last(), heading_suffix_word(&item, functions)) else {
+		let suffix = heading_suffix_word(&item, functions);
+		// `map xs abs` passes abs to map: an operator word applies only to a whole first operand (`-7 abs`, `x = -7 abs`)
+		let suffix = suffix.filter(|(_, suffix)| matches!(suffix, Suffix::Function(_)) || applied.len() == 1);
+		let (Some(operand), Some((word, function))) = (applied.last().filter(|operand| !functions.is_library_word(operand)), suffix) else {
 			applied.push(item);
 			continue;
 		};
 		let operand = operand.clone();
-		let argument = match is_infix_arithmetic(&operand) {
-			true => match suffix_precedence(&operand, &word) {
-				Ok(true) => with_rightmost(operand, |leaf| call(&function, leaf)),
-				Ok(false) => call(&function, operand),
-				Err(error) => error,
-			},
-			false => call(&function, operand),
-		};
 		applied.pop();
-		applied.push(with_leftmost(item, |_| argument));
+		applied.push(suffix_applied(operand, item, &word, &function));
 	}
 	match applied.len() {
 		1 if applied.len() < item_count => applied.pop().expect("one item"),
 		_ => Node::List(applied, bracket, separator),
 	}
+}
+
+/// `operand item`, where `item` heads with the suffix word: `x = 7 squared + 1` squares the assigned value, `x = 49 + 1`
+fn suffix_applied(operand: Node, item: Node, word: &Node, function: &Suffix) -> Node {
+	match operand {
+		Node::Meta { node, data } if is_assignment(&node) => Node::Meta { node: Box::new(suffix_applied(*node, item, word, function)), data },
+		Node::Key(target, op, value) if is_assignment_op(&op) => Node::Key(target, op, Box::new(suffix_applied(*value, item, word, function))),
+		operand => {
+			let argument = match is_infix_arithmetic(&operand) {
+				true => match suffix_precedence(&operand, &written_word(word)) {
+					Ok(true) => with_rightmost(operand, |leaf| call(function, leaf)),
+					Ok(false) => call(function, operand),
+					Err(error) => error,
+				},
+				false => call(function, operand),
+			};
+			with_leftmost(item, |_| argument)
+		}
+	}
+}
+
+fn is_assignment_op(op: &Op) -> bool {
+	matches!(op, Op::Assign | Op::Define) || op.is_compound_assign()
+}
+
+fn is_assignment(node: &Node) -> bool {
+	matches!(node.drop_meta(), Node::Key(_, op, _) if is_assignment_op(op))
 }
 
 /// `1+2 squared`: does the word bind to the nearest operand (`1+(2 squared)`, true) or apply to the whole (`(1+2) squared`)?

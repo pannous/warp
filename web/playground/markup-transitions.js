@@ -5,7 +5,7 @@
 // its new place (FLIP). Loaded after markup.js only by pages that have transitions (src/site.rs), it replaces
 // markup.js's transitionPlaces, enter, leave and moveFrom.
 
-const STARTING_STYLE_ATTRIBUTE = "data-wasp-starting-style";
+const STARTING_STYLE_ATTRIBUTE = "data-warp-starting-style";
 const MOVING_PROPERTIES = ["transform", "all"]; // a CSS transition of these glides a keyed element to its new place
 
 // what an element enters from and leaves towards (its starting style: CSS's @starting-style, which an inline style

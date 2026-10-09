@@ -1,4 +1,4 @@
-// card web-i18n (std/i18n.wasp, notes/i18n.md): translations as data, a message per key and language, plural forms
+// card web-i18n (lib/i18n.warp, notes/i18n.md): translations as data, a message per key and language, plural forms
 // chosen by the CLDR category of `count`
 use crate::common::fails_with;
 use crate::eq;

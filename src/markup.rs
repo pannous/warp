@@ -1,6 +1,6 @@
 //! Markup values (card web-dom, notes/web_framework.md): `div{ class:"box" h1{"Hi"} }` is the element div with the
 //! attribute class and the child h1. Which values are markup is decided here; their HTML comes from the one renderer,
-//! std/markup.wasp's to_html, also for the CLI and the playground (a page runs it itself as page·html).
+//! lib/markup.warp's to_html, also for the CLI and the playground (a page runs it itself as page·html).
 
 use crate::node::{Bracket, Node};
 use crate::operators::Op;
@@ -8,12 +8,12 @@ use std::collections::HashMap;
 use std::sync::OnceLock;
 
 const MARKUP_MODULE: &str = "markup";
-/// The lists of std/markup.wasp naming the HTML elements a markup key may name (custom elements are not markup yet)
+/// The lists of lib/markup.warp naming the HTML elements a markup key may name (custom elements are not markup yet)
 /// and the attributes
 const ELEMENTS_LIST: &str = "html_elements";
 const ATTRIBUTES_LIST: &str = "html_attributes";
 const HEAD: &str = "head";
-/// `data-wasp-click` (element_events.rs) and any other data attribute
+/// `data-warp-click` (element_events.rs) and any other data attribute
 const DATA_ATTRIBUTE_PREFIX: &str = "data-";
 /// `li{ key: todo.id … }` names a list item (card web-keyed)
 const KEY: &str = "key";
@@ -23,7 +23,7 @@ const RENDERED: &str = "rendered";
 /// the element of a style sheet and the attribute of an inline style (card web-styles)
 const STYLE: &str = "style";
 /// the attribute naming the component of an element, whose style sheets style only its elements (card web-scoped)
-pub const SCOPE_ATTRIBUTE: &str = "data-wasp-scope";
+pub const SCOPE_ATTRIBUTE: &str = "data-warp-scope";
 
 /// Does the word name an HTML element
 pub fn is_element_tag(word: &str) -> bool {
@@ -140,11 +140,11 @@ fn is_declarations(value: &Node) -> bool {
 	content_items(value).iter().all(|item| matches!(item.drop_meta(), Node::Key(_, Op::Colon, value) if !matches!(value.drop_meta(), Node::Key(..) | Node::List(_, Bracket::Curly, _))))
 }
 
-/// The HTML of a markup value, any other value as escaped text, by std/markup.wasp's to_html; a failed rendering is
+/// The HTML of a markup value, any other value as escaped text, by lib/markup.warp's to_html; a failed rendering is
 /// its error, shown, never an empty page. Quietly: the program that made the value already warned about it, and the
 /// renderer's positions are not the program's
 pub fn to_html(node: &Node) -> String {
-	let program = crate::law::substitute(&crate::wasp_parser::parse(RENDER_PROGRAM), &HashMap::from([(RENDERED.to_string(), node.clone())]));
+	let program = crate::law::substitute(&crate::warp_parser::parse(RENDER_PROGRAM), &HashMap::from([(RENDERED.to_string(), node.clone())]));
 	match crate::diagnostic::quietly(|| crate::pipeline::eval_parsed(program, RENDER_PROGRAM)).drop_meta() {
 		Node::Text(html) => html.clone(),
 		failed => format!("<pre>{}</pre>", failed.serialize().replace('&', "&amp;").replace('<', "&lt;")),

@@ -35,3 +35,11 @@ fn the_extremes_of_job_results_are_numbers() {
 	is!(&format!("{jobs}max(results) - min(results)"), 4);
 	is!(&format!("{jobs}(if count(results) == 0 then 0 else results#1) + 1"), 3);
 }
+
+// a job list written as a literal is a job list too (card job-list): not the task ids
+#[test]
+fn a_job_list_literal_gives_the_results() {
+	is!("f(x) := x*2; jobs = [go f(3), go f(1)]; await all jobs", warp::ints(vec![6, 2]));
+	is!("f(x) := x*2; jobs = [go f(3), go f(1)]; jobs#1 + 1", 7);
+	is!("jobs = [go { 1 + 1 }, go { 2 * 3 }]; await all jobs", warp::ints(vec![2, 6]));
+}

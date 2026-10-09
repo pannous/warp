@@ -99,6 +99,26 @@ fn compiled(path: &str) -> Result<Component, String> {
 	Ok(component)
 }
 
+/// The functions and resource types the component at `path` exports, also those of its exported interfaces, in warp's
+/// spelling (`stats_of` for `stats-of`), sorted; constructors and methods are its resources' own
+pub fn export_names(path: &str) -> Result<Vec<String>, String> {
+	let component = compiled(path)?;
+	let mut names = vec![];
+	let mut add = |name: &str, item: &ComponentItem| {
+		if matches!(item, ComponentItem::ComponentFunc(_) | ComponentItem::Resource(_)) && !name.starts_with('[') {
+			names.push(name.replace('-', "_"));
+		}
+	};
+	for (name, item) in component.component_type().exports(engine()) {
+		match &item.ty {
+			ComponentItem::ComponentInstance(interface) => interface.exports(engine()).for_each(|(inner, item)| add(inner, &item.ty)),
+			other => add(name, other),
+		}
+	}
+	names.sort();
+	Ok(names)
+}
+
 fn load(path: &str) -> Result<Loaded, String> {
 	let component = compiled(path)?;
 	let mut linker = Linker::new(engine());
@@ -129,7 +149,7 @@ fn load(path: &str) -> Result<Loaded, String> {
 	Ok(Loaded { store, instance, functions, kinds, held: vec![] })
 }
 
-/// What warp's host gives a component importing `host` (a wasp component's world, `import host: { time: () -> i64 }`,
+/// What warp's host gives a component importing `host` (a warp component's world, `import host: { time: () -> i64 }`,
 /// component_worlds.rs): its words print, time (milliseconds since 1970) and read (a file's text); any other function
 /// of the import traps when called, naming itself
 fn serve_host_imports(linker: &mut Linker<ComponentState>, component: &Component) -> wasmtime::Result<()> {

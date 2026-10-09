@@ -85,6 +85,24 @@ pub fn get_signatures_from_headers(library: &str) -> &'static HashMap<String, Ff
     signatures
 }
 
+/// The error of a call nothing resolves at `call`; a word of a standard module offers to add its `use` line
+pub fn undefined_function_diagnostic(call: &crate::node::Node, name: &str) -> crate::diagnostic::Diagnostic {
+    let diagnostic = crate::diagnostic::Diagnostic::at(call, undefined_function_message(name));
+    match crate::modules::std_module_defining(name).filter(|module| crate::modules::module_file_shadowing(module).is_none()) {
+        Some(module) => diagnostic.offering(crate::fixits::added_first_line(format!("{name} from the standard module {module}"), format!("use {module}"))),
+        None => diagnostic,
+    }
+}
+
+/// The error of a call of `import name from 'library'` whose headers are missing or do not declare it
+pub fn unresolved_import_message(name: &str, library: &str) -> String {
+    let headers = crate::ffi_parser::find_library_headers(library);
+    match headers.is_empty() {
+        true => format!("{name} is imported from {library}, but no header of {library} is found in the include directories"),
+        false => format!("{name} is imported from {library}, but its headers do not declare it: {}", headers.join(", ")),
+    }
+}
+
 /// The error of a call nothing resolves: a libc function says how to import it
 pub fn undefined_function_message(name: &str) -> String {
     if let Some(module) = crate::modules::std_module_defining(name) {
@@ -107,13 +125,13 @@ pub fn undefined_function_message(name: &str) -> String {
 /// What a C pointer type crosses as (notes/ffi_handles.md)
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum CPointer {
-    /// `char *`, `const unsigned char *`: a wasp text (a parameter its NUL-terminated letters in linear memory)
+    /// `char *`, `const unsigned char *`: a warp text (a parameter its NUL-terminated letters in linear memory)
     Text,
     /// `void *`, `int *`: a parameter points into linear memory; a result is a handle
     Memory,
     /// `sqlite3 *`, `FILE *`: an id into the run's handle table (CHandles), 0 is NULL
     Handle,
-    /// `sqlite3 **ppDb`: left out of the wasp call; the first one becomes the result, the others receive NULL
+    /// `sqlite3 **ppDb`: left out of the warp call; the first one becomes the result, the others receive NULL
     Out,
 }
 
@@ -140,8 +158,8 @@ pub fn pointer_kind(c_type: &str) -> Option<CPointer> {
     }
 }
 
-/// The C parameters a wasp call passes: all but the out-pointers
-fn wasp_parameters(param_types: &[String]) -> impl Iterator<Item = &String> {
+/// The C parameters a warp call passes: all but the out-pointers
+fn warp_parameters(param_types: &[String]) -> impl Iterator<Item = &String> {
     param_types.iter().filter(|t| pointer_kind(t) != Some(CPointer::Out))
 }
 
@@ -183,7 +201,7 @@ pub fn header_text_parameters(library: &str) -> &'static HashMap<String, Vec<boo
         return texts;
     }
     let texts = get_library_header_paths(library).iter().flat_map(|path| parse_header_file(path, library))
-        .map(|declared| (declared.name.clone(), wasp_parameters(&declared.param_types).map(|c_type| pointer_kind(c_type) == Some(CPointer::Text)).collect()))
+        .map(|declared| (declared.name.clone(), warp_parameters(&declared.param_types).map(|c_type| pointer_kind(c_type) == Some(CPointer::Text)).collect()))
         .collect();
     let texts: &'static HashMap<String, Vec<bool>> = Box::leak(Box::new(texts));
     parsed.push((library.to_string(), texts));
@@ -366,7 +384,7 @@ pub fn get_ffi_signature(name: &str) -> Option<FfiSignature> {
     if let Some(sig) = implicit_header_libraries(name).iter().filter_map(declared).find(text_result) {
         return Some(sig);
     }
-    // the cached signatures of well-known libraries first (wasp's own `random` is no libc random), then the headers
+    // the cached signatures of well-known libraries first (warp's own `random` is no libc random), then the headers
     get_ffi_signatures().get(name).cloned().or_else(|| implicit_header_libraries(name).iter().find_map(declared))
 }
 
@@ -392,7 +410,7 @@ pub fn get_ffi_signature_from_lib(name: &str, library: &str) -> Option<FfiSignat
 /// Resolve library alias to canonical name
 pub fn resolve_library_alias(alias: &str) -> &'static str {
     match alias {
-        "m" | "math" | "libm" => "m",
+        "m" | "math" | "cmath" | "libm" => "m",
         "c" | "libc" => "c",
         "SDL2" | "sdl2" | "sdl" => "SDL2",
         "z" | "zlib" => "z",

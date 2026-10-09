@@ -1,9 +1,0 @@
-// a program serving its own page with routes (card serve-route, tests/web/test_web_server.rs): each path is that
-// route's page, rendered when asked
-users = ["Ann", "Bo"]
-serve 18441 {
-	get "/api/users" { users }
-}
-route "/" { h1{ "Users" } }
-route "/users/:id:int" { p{ "User " + users#id } }
-route "*" { p{ "no such page" } }

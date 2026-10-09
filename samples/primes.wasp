@@ -1,5 +1,0 @@
-// Prime check with helper recursion
-def is_prime(n) := n < 2 ? false : check(n, 2)
-def check(n, i) := i*i > n ? true : n % i == 0 ? false : check(n, i+1)
-
-is_prime(97)

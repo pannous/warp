@@ -10,12 +10,14 @@ use crate::meta::DataValue;
 use crate::node::{error, Bracket, Node, Separator};
 use std::collections::HashMap;
 use crate::operators::Op;
+pub mod static_units;
+
 use std::fmt;
 use crate::extensions::reals::Rational;
 use num_bigint::BigInt;
 use num_traits::ToPrimitive;
 
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 enum Dimension {
 	Length,
 	Mass,
@@ -55,6 +57,8 @@ const LONG_NAMES: [(&str, &str); 12] = [
 ];
 /// `100 cm in m`: the word of a conversion written with spaces (`as` is an operator)
 const IN_WORD: &str = "in";
+/// The local time of day, unless the program names something so (card time-day-value)
+const TIME_WORD: &str = "time";
 
 fn unit_named(name: &str) -> Option<&'static Unit> {
 	UNITS.iter().find(|unit| unit.name == name)
@@ -71,9 +75,14 @@ pub fn is_unit(name: &str) -> bool {
 	unit_named(name).is_some()
 }
 
+/// `meters`, `kilogram`: a long name of a quantity's unit; durations (`2 minutes`) belong to the time module
+pub fn is_long_unit_name(name: &str) -> bool {
+	!is_unit(name) && target_unit(&Node::Symbol(name.to_string())).is_some_and(|unit| unit.dimension != Dimension::Time)
+}
+
 /// A unit to a power within a quantity: km¹, h⁻¹, m²
 #[derive(Clone, Copy, Debug, PartialEq)]
-struct Factor {
+pub(crate) struct Factor {
 	unit: &'static Unit,
 	power: i32,
 }
@@ -111,9 +120,23 @@ fn units_text(factors: &[Factor]) -> String {
 	}
 }
 
+/// An amount as it reads back before a unit: 3, 9.81, and a fraction without a finite decimal in parentheses, (23/18)
+pub(crate) fn amount_text(amount: &Rational) -> String {
+	amount.decimal_text().unwrap_or_else(|| format!("({amount})"))
+}
+
+/// The units as they follow an amount, right after it (user 2026-10-08: no space): m, m/s², and /m for 1/m (3/m)
+pub(crate) fn unit_suffix(factors: &[Factor]) -> String {
+	let units = units_text(factors);
+	match units.strip_prefix("1/") {
+		Some(below) => format!("/{below}"),
+		None => units,
+	}
+}
+
 impl fmt::Display for Quantity {
 	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-		write!(f, "{} {}", self.amount, units_text(&self.factors))
+		write!(f, "{}{}", amount_text(&self.amount), unit_suffix(&self.factors))
 	}
 }
 
@@ -165,7 +188,7 @@ pub struct Tolerance {
 impl fmt::Display for Tolerance {
 	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
 		write!(f, "{} ± {}", self.value, self.tolerance)?;
-		self.unit.map_or(Ok(()), |unit| write!(f, " {}", unit.name))
+		self.unit.map_or(Ok(()), |unit| write!(f, "{}", unit.name))
 	}
 }
 
@@ -179,7 +202,7 @@ pub struct Range {
 
 impl fmt::Display for Range {
 	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-		write!(f, "{} - {} {}", self.from, self.to, self.unit.name)
+		write!(f, "{} - {}{}", self.from, self.to, self.unit.name)
 	}
 }
 
@@ -190,6 +213,9 @@ pub fn describe(data: &DataValue) -> Option<String> {
 	}
 	if let Some(tolerance) = data.downcast_ref::<Tolerance>() {
 		return Some(tolerance.to_string());
+	}
+	if let Some(uncertain) = data.downcast_ref::<crate::uncertain::Uncertain>() {
+		return Some(uncertain.to_string());
 	}
 	if let Some(duration) = data.downcast_ref::<crate::time::Duration>() {
 		return Some(duration.to_string());
@@ -270,6 +296,109 @@ pub fn lower_sleep_durations(program: Node) -> Node {
 	}
 	let shadowed = defined_unit_names(&program);
 	lower(program, &shadowed)
+}
+
+/// Comparisons of quantities where the rest of the program runs (card time-day-value): a comparison of constant
+/// quantities, also of a main-level variable assigned one once (`x = 2 km; if x > 1500 m : …`), is its answer 1 or 0,
+/// and such a variable no other statement reads is dropped; the word `time` of a program that names nothing so is the
+/// local time of day, compared with a constant duration in milliseconds: `time < 24h` is
+/// `system·time of day < 86400000` (lowering/system_values.rs reads it, so `whenever time > 18h {…}` listens too)
+pub fn lower_quantity_comparisons(program: Node) -> Node {
+	if defines_unit_name(&program) || !(needs_quantities(&program) || mentions_clock(&program)) {
+		return program;
+	}
+	let bound = crate::system_values::bound_names(&program);
+	let constants = constant_quantities(&program);
+	let clock = !bound.contains(TIME_WORD);
+	let folded = fold_comparisons(program, &constants, clock);
+	without_unread_constants(folded, &constants)
+}
+
+fn mentions_clock(node: &Node) -> bool {
+	let mut found = false;
+	node.visit(&mut |part| found |= matches!(part, Node::Symbol(name) if name == TIME_WORD));
+	found
+}
+
+/// The main-level variables assigned a quantity once, and nowhere else: `x = 2 km`
+fn constant_quantities(program: &Node) -> Variables {
+	let mut assignments: HashMap<String, usize> = HashMap::new();
+	program.visit(&mut |part| if let Node::Key(target, Op::Assign | Op::Define | Op::Arrow | Op::FatArrow, _) | Node::Key(target, Op::AddAssign | Op::SubAssign | Op::MulAssign | Op::DivAssign, _) = part {
+		crate::variable_signals::symbols(target).into_iter().for_each(|name| *assignments.entry(name).or_default() += 1);
+	});
+	let mut constants = Variables::new();
+	for statement in crate::variable_signals::main_statements(program).0 {
+		let Node::Key(target, Op::Assign, value) = statement.drop_meta() else { continue };
+		let Node::Symbol(name) = target.drop_meta() else { continue };
+		if assignments.get(name) == Some(&1) && needs_quantities(value) {
+			if let Ok(quantity @ Value::Quantity(_)) = evaluate_in(value, &mut constants.clone()) {
+				constants.insert(name.clone(), quantity);
+			}
+		}
+	}
+	constants
+}
+
+fn fold_comparisons(node: Node, constants: &Variables, clock: bool) -> Node {
+	let Node::Key(left, op, right) = node.drop_meta() else { return node.map_children(|child| fold_comparisons(child, constants, clock)) };
+	if !op.is_comparison() {
+		return node.map_children(|child| fold_comparisons(child, constants, clock));
+	}
+	let is_clock = |side: &Node| clock && matches!(side.drop_meta(), Node::Symbol(name) if name == TIME_WORD);
+	if is_clock(left) || is_clock(right) {
+		let (duration, clock_left) = if is_clock(left) { (right, true) } else { (left, false) };
+		return match clock_milliseconds(duration, constants) {
+			Ok(Some(amount)) => {
+				let time_of_day = Node::Symbol(format!("{}{}", crate::system_values::SYSTEM_PREFIX, warp_runtime::host_words::TIME_OF_DAY));
+				let (left, right) = if clock_left { (time_of_day, Node::int(amount)) } else { (Node::int(amount), time_of_day) };
+				Node::Key(Box::new(left), *op, Box::new(right))
+			}
+			Ok(None) => node,
+			Err(message) => error(&message),
+		};
+	}
+	let reads_quantities = needs_quantities(&node) || constants.keys().any(|name| crate::warp_parser::mentions(&node, name));
+	match evaluate_in(&node, &mut constants.clone()).ok().filter(|_| reads_quantities) {
+		Some(Value::Number(answer)) => Node::int(answer),
+		_ => match evaluate_in(&node, &mut constants.clone()) {
+			Err(Stop::Error(message)) if reads_quantities => error(&message),
+			_ => node.map_children(|child| fold_comparisons(child, constants, clock)),
+		},
+	}
+}
+
+/// What the time of day is compared with, in milliseconds; None when it is no constant (left as written, loud later)
+fn clock_milliseconds(duration: &Node, constants: &Variables) -> Result<Option<i64>, String> {
+	if let Some(amount) = milliseconds(duration) {
+		return Ok(Some(amount));
+	}
+	match evaluate_in(duration, &mut constants.clone()) {
+		Ok(Value::Quantity(quantity)) => match quantity.factors.as_slice() {
+			[factor] if factor.unit.dimension == Dimension::Time && factor.power == 1 => Ok(whole(&quantity.amount.mul(&Rational::integer(factor.unit.factor)))),
+			_ => Err(format!("DimensionError: the time of day is a duration, {quantity} is none")),
+		},
+		Ok(Value::Number(amount)) => Err(format!("the time of day is a duration: compare it with one, e.g. time < {amount}h")),
+		_ => Ok(None),
+	}
+}
+
+/// The program without the assignments of constant quantities no other statement reads (all compared away); the last
+/// statement stays, it is the program's value
+fn without_unread_constants(program: Node, constants: &Variables) -> Node {
+	if constants.is_empty() {
+		return program;
+	}
+	let (statements, bracket, separator) = crate::variable_signals::main_statements(&program);
+	let assigns = |statement: &Node, name: &str| matches!(statement.drop_meta(), Node::Key(target, Op::Assign, _) if matches!(target.drop_meta(), Node::Symbol(assigned) if assigned == name));
+	let unread = |name: &str| statements.iter().all(|statement| assigns(statement, name) || !crate::warp_parser::mentions(statement, name));
+	let last = statements.len().saturating_sub(1);
+	let kept: Vec<Node> = statements.iter().enumerate()
+		.filter(|(index, statement)| *index == last || !constants.keys().any(|name| assigns(statement, name) && unread(name)))
+		.map(|(_, statement)| statement.clone()).collect();
+	if kept.len() == statements.len() {
+		return program;
+	}
+	Node::List(kept, bracket, separator)
 }
 
 /// User #17: `sleep(1)` reads as milliseconds but says nothing; a bare number gets the warning that names the units
@@ -392,6 +521,14 @@ fn evaluate_in(node: &Node, variables: &mut Variables) -> Evaluated {
 				Node::Key(..) => evaluate_in(&with_unit(amount, unit), variables),
 				_ => amount_times(amount, Value::Quantity(Quantity::of(1, target_unit(unit).expect("guarded"))), variables),
 			},
+			// `(23/18)m/s`, as a fraction amount shows: the amount in parentheses, then compound units
+			[amount, unit] if matches!(amount.drop_meta(), Node::List(_, Bracket::Round, _)) && unit_expression(unit).is_some() => {
+				let factors = unit_expression(unit).expect("guarded");
+				match written_fraction(amount) {
+					Some(fraction) => Ok(Value::Quantity(Quantity { amount: fraction, factors })),
+					None => amount_times(amount, Value::Quantity(Quantity { amount: Rational::integer(1), factors }), variables),
+				}
+			}
 			[quantity, word, unit] if matches!(word.drop_meta(), Node::Symbol(w) if w == IN_WORD) && unit_expression(unit).is_some() => {
 				convert(evaluate_in(quantity, variables)?, unit_expression(unit).expect("guarded"))
 			}
@@ -410,6 +547,16 @@ fn amount_times(amount: &Node, unit: Value, variables: &mut Variables) -> Evalua
 	match (decimal, unit) {
 		(Some(exact), Value::Quantity(quantity)) => Ok(Value::Quantity(quantity.with_amount(quantity.amount.mul(&exact)))),
 		(_, unit) => arithmetic(evaluate_in(amount, variables)?, Op::Mul, unit),
+	}
+}
+
+/// `(23/18)`, the exact fraction a quantity shows as its amount
+fn written_fraction(amount: &Node) -> Option<Rational> {
+	let Node::List(items, Bracket::Round, _) = amount.drop_meta() else { return None };
+	let [Node::Key(numerator, Op::Div, denominator)] = items.as_slice().iter().map(Node::drop_meta).collect::<Vec<_>>()[..] else { return None };
+	match (numerator.drop_meta(), denominator.drop_meta()) {
+		(Node::Number(Number::Int(n)), Node::Number(Number::Int(d))) if *d != 0 => Some(Rational::new(BigInt::from(*n), BigInt::from(*d))),
+		_ => None,
 	}
 }
 
@@ -463,6 +610,9 @@ fn negate(value: Value) -> Evaluated {
 fn arithmetic(left: Value, op: Op, right: Value) -> Evaluated {
 	match (left, op, right) {
 		(left @ (Value::Tolerance(_) | Value::Range(_)), Op::Eq | Op::Ne, right @ (Value::Tolerance(_) | Value::Range(_))) => same_span(left, op, right),
+		// `(5 ± 1) * 2` without units: an uncertain value, propagated at run time (wasm_emitter/uncertain.rs)
+		(left, Op::Add | Op::Sub | Op::Mul | Op::Div, right) if [&left, &right].iter().all(|value| unitless_number(value))
+			&& [&left, &right].iter().any(|value| matches!(value, Value::Tolerance(_))) => Err(Stop::Unsupported),
 		(Value::Tolerance(_) | Value::Range(_), _, _) | (_, _, Value::Tolerance(_) | Value::Range(_)) => {
 			fail(format!("arithmetic on a value with tolerance or a range is not supported: {op}"))
 		}
@@ -636,6 +786,10 @@ fn compare(left: Quantity, op: Op, right: Quantity) -> Evaluated {
 		_ => order.is_ge(),
 	};
 	Ok(Value::Number(holds as i64))
+}
+
+fn unitless_number(value: &Value) -> bool {
+	matches!(value, Value::Number(_) | Value::Tolerance(Tolerance { unit: None, .. }))
 }
 
 /// A range or a value with tolerance as the closed span it covers, and its unit: `1950 ± 50 AD` is 1900 to 2000 AD

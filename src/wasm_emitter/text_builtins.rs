@@ -5,7 +5,7 @@
 
 use crate::node::Node;
 use crate::type_kinds::{Kind, KIND_MASK};
-use crate::wasm_emitter::{WasmGcEmitter, RAN_WITHOUT_ERROR};
+use crate::wasm_emitter::{WasmGcEmitter, ABORT_TO, RAN_WITHOUT_ABORT, RAN_WITHOUT_ERROR};
 use std::collections::HashSet;
 use wasm_encoder::*;
 use Instruction as I;
@@ -14,17 +14,22 @@ use crate::wasm_emitter::layout::BYTE;
 
 pub const TEXT_CONCAT: &str = "text_concat";
 pub const TEXT_OF: &str = "text_of";
+/// text_argument(node): the text a text builtin reads (text_of), but an Error fails with its own message (card byte-slice)
+const TEXT_ARGUMENT: &str = "text_argument";
+/// The builtins that read their text through text_argument
+const TEXT_ARGUMENT_USERS: [&str; 5] = [BYTE_AT, BYTE_SLICE, TEXT_TRIM, TEXT_STARTS_WITH, TEXT_ENDS_WITH];
 /// c_string(text) -> i32: a zero-terminated copy of a text known only at run time, for a C function's `char*`
 pub const C_STRING: &str = "c_string";
 const BYTE_AT: &str = "byte_at";
 const BYTE_SLICE: &str = "byte_slice";
-/// `memory_byte(address)`, `memory_set_byte(address, value)`: one byte of linear memory, what std/memory.wasp's
-/// `memory.slice` and `memory.copy` are made of (samples/wasm_interop.wasp)
+/// `memory_byte(address)`, `memory_set_byte(address, value)`: one byte of linear memory, what lib/memory.warp's
+/// `memory.slice` and `memory.copy` are made of (samples/wasm_interop.warp)
 const MEMORY_BYTE: &str = "memory_byte";
 const MEMORY_SET_BYTE: &str = "memory_set_byte";
 /// `trim(text)`: the text without the whitespace at either end, sharing its memory
 const TRIM: &str = "trim";
 const TEXT_TRIM: &str = "text_trim";
+pub const TEXT_ROUGH_TRIM: &str = "text_rough_trim";
 /// `chr(n)`: the character of a code point, the inverse of `ord(c)`
 const CHR: &str = "chr";
 /// `starts_with(text, prefix)`, `ends_with(text, suffix)`: 1 or 0
@@ -38,6 +43,9 @@ const TEXT_MATCHES_AT: &str = "text_matches_at";
 pub const TEXT_FIND: &str = "text_find";
 /// The bytes trim drops: space, tab, line feed, carriage return
 const WHITESPACE_BYTES: [i32; 4] = [b' ' as i32, b'\t' as i32, b'\n' as i32, b'\r' as i32];
+/// The bytes below are ASCII; text_rough_trim keeps any byte of a longer UTF-8 character
+const ASCII_END: i32 = 0x80;
+const ASCII_ALPHANUMERIC_RANGES: [(u8, u8); 3] = [(b'0', b'9'), (b'A', b'Z'), (b'a', b'z')];
 const READ: &str = "read";
 const READ_TEXT: &str = "read_text";
 const HOST_READ: &str = "host_read";
@@ -45,24 +53,25 @@ const ERROR: &str = "error";
 /// `raise X` (`throw X`): an exception, the runtime error returned_error with X as its detail, which `try` catches
 pub const RAISE: &str = "raise";
 /// `is_error(x)`: 1 when x is an Error value; `try X else Y` tests its result with it
-const IS_ERROR: &str = "is_error";
+pub const IS_ERROR: &str = "is_error";
 /// error_of(text) → Error: exported, the host builds the Error of a caught stack overflow with it (guarded_call)
 pub const ERROR_OF: &str = "error_of";
 const WARNING: &str = "warning";
 const WARN_TEXT: &str = "warn_text";
-const HOST_WARN: &str = "host_warn";
+pub(super) const HOST_WARN: &str = "host_warn";
 /// text_with_char_at encodes a code point as UTF-8; it is emitted with node_with_at
 const CHARACTER_ENCODER: &str = "node_with_at";
 /// `text_form(x)`: the text of a value, what an interpolation hole `"\(x)"` becomes (interpolation.rs)
 pub const TEXT_FORM: &str = "text_form";
 
 /// name, number of arguments, result kind
-const TEXT_BUILTINS: [(&str, usize, Kind); 19] = [
+const TEXT_BUILTINS: [(&str, usize, Kind); 23] = [
 	(MEMORY_BYTE, 1, Kind::Int), (MEMORY_SET_BYTE, 2, Kind::Int),
 	(crate::memoization::MEMO_KNOWN, 2, Kind::Int), (crate::memoization::MEMO_VALUE, 2, Kind::Int), (crate::memoization::MEMO_STORE, 3, Kind::Int),
 	(READ, 1, Kind::Text), (BYTE_AT, 2, Kind::Int), (BYTE_SLICE, 3, Kind::Text), (ERROR, 1, Kind::Text), (RAISE, 1, Kind::Text), (IS_ERROR, 1, Kind::Int),
 	(WARNING, 1, Kind::Text), (TEXT_FORM, 1, Kind::Text), (RAN_WITHOUT_ERROR, 1, Kind::Int), (TRIM, 1, Kind::Text),
 	(STARTS_WITH, 2, Kind::Int), (ENDS_WITH, 2, Kind::Int), (CHR, 1, Kind::Codepoint), (crate::wasm_emitter::CAUGHT_ERROR, 2, Kind::Error),
+	(RAN_WITHOUT_ABORT, 2, Kind::Int), (ABORT_TO, 1, Kind::Int), (crate::uncertain::CERTAINLY, 1, Kind::Int), (crate::uncertain::POSSIBLY, 1, Kind::Int),
 ];
 
 pub fn text_builtin_kind(name: &str, arguments: usize) -> Option<Kind> {
@@ -81,7 +90,8 @@ pub fn is_text_builtin(name: &str) -> bool {
 /// `+` of two texts or characters is a text; a number joins a text in its text form (`"F:" + 13` → `"F:13"`, as JS/Kotlin)
 pub fn concatenates(left: Kind, right: Kind) -> bool {
 	let is_text = |kind: &Kind| matches!(kind, Kind::Text | Kind::Codepoint);
-	[left, right].iter().any(is_text) && [left, right].iter().all(|kind| is_text(kind) || is_number(*kind))
+	// an Error joins as its message (card try-raise: `"caught: " + e` of `catch e`)
+	[left, right].iter().any(is_text) && [left, right].iter().all(|kind| is_text(kind) || is_number(*kind) || *kind == Kind::Error)
 }
 
 fn is_number(kind: Kind) -> bool {
@@ -103,8 +113,15 @@ pub fn add_dependencies(required: &mut HashSet<&'static str>) {
 	if crate::library_words::MAP_WORD_FUNCTIONS.iter().any(|name| required.contains(name)) {
 		required.insert("map_find");
 	}
+	if required.contains(super::list_ops::ELEMENT_BODY) {
+		required.insert(super::list_ops::ELEMENT_CHILDREN);
+	}
 	if required.contains(super::list_ops::NODE_AT_KEY) {
 		required.extend(["node_index_at", "map_get"]);
+	}
+	// instance_copy is emitted with field_with, both looking into an instance's fields; `shallow` is tested for truth
+	if required.contains(crate::library_words::INSTANCE_COPY) {
+		required.extend([crate::library_words::FIELD_WITH, super::equality::IS_TRUTHY]);
 	}
 	if required.contains(crate::library_words::FIELD_WITH) {
 		required.insert(super::list_ops::STRUCT_BODY); // an instance keeps its type
@@ -130,8 +147,11 @@ pub fn add_dependencies(required: &mut HashSet<&'static str>) {
 	if required.contains("exact_euclid_div") {
 		required.insert(super::INT_RUNTIME);
 	}
+	if required.contains(super::list_ops::LIST_EXTEND) {
+		required.insert("list_concat"); // of a non-list
+	}
 	if required.contains(super::list_ops::NODE_ADD) {
-		required.extend(["list_concat", TEXT_CONCAT, TEXT_OF]); // two lists added are concatenated, two texts too
+		required.extend(["list_concat", TEXT_CONCAT, TEXT_OF, super::library_ops::LIST_JOIN]); // two lists added are concatenated, two texts too, a text and a number joined
 	}
 	if super::list_ops::NODE_ARITHMETIC.iter().any(|(name, _, _)| required.contains(name)) {
 		required.extend([super::list_ops::TEXT_AS_FLOAT, super::INT_RUNTIME, "exact_add", "exact_sub", "exact_mul", "exact_div", "new_float"]);
@@ -149,7 +169,7 @@ pub fn add_dependencies(required: &mut HashSet<&'static str>) {
 		required.extend(["exact_mul", "exact_add", "exact_sub"]);
 	}
 	if required.contains("list_sort") {
-		required.insert(super::library_ops::NODE_ORDER);
+		required.extend([super::library_ops::NODE_ORDER, "text_chars", "list_join"]);
 	}
 	if [TEXT_FIND, TEXT_STARTS_WITH, TEXT_ENDS_WITH].iter().any(|name| required.contains(name)) {
 		required.insert(TEXT_MATCHES_AT);
@@ -164,6 +184,9 @@ pub fn add_dependencies(required: &mut HashSet<&'static str>) {
 	// the text of a list (list_text) is emitted with join, as the analyzer requires list_join for both
 	if required.contains("list_join") {
 		required.extend([super::float_text::FLOAT_TEXT, TEXT_CONCAT, super::library_ops::LIST_TEXT, super::library_ops::TEXT_QUOTED]); // a float joins as its text, a nested list as "[…]", a text quoted
+		if required.contains(super::uncertain::UNCERTAIN_NEW) {
+			required.insert(super::uncertain::UNCERTAIN_TEXT); // `7.0 ± 2.0`
+		}
 	}
 	// numbers that are no fixnum (big integers, ratios) join as their exact text, built by text_concat
 	if required.contains("list_join") && required.contains(super::INT_RUNTIME) {
@@ -173,7 +196,13 @@ pub fn add_dependencies(required: &mut HashSet<&'static str>) {
 	if required.contains(super::library_ops::CODEPOINT_OF) {
 		required.extend(["string_char_at", "text_grapheme_count"]);
 	}
-	let calls_text_of = [crate::wasm_emitter::VALUES_EQUAL, TEXT_CONCAT, BYTE_AT, BYTE_SLICE, TEXT_TRIM, C_STRING, ERROR_OF, WARN_TEXT, "list_join", "text_upper", "text_lower", "text_split", "list_reverse", "text_chars", "list_sort", super::library_ops::NODE_ORDER];
+	if TEXT_ARGUMENT_USERS.iter().any(|name| required.contains(name)) {
+		required.insert(TEXT_ARGUMENT);
+	}
+	if required.contains(TEXT_ARGUMENT) {
+		required.insert(TEXT_OF);
+	}
+	let calls_text_of = [crate::wasm_emitter::VALUES_EQUAL, TEXT_CONCAT, BYTE_AT, BYTE_SLICE, TEXT_TRIM, TEXT_ROUGH_TRIM, C_STRING, ERROR_OF, WARN_TEXT, "list_join", "text_upper", "text_lower", "text_split", "list_reverse", "text_chars", "list_sort", super::library_ops::NODE_ORDER];
 	if calls_text_of.iter().any(|name| required.contains(name)) {
 		required.insert(TEXT_OF);
 	}
@@ -227,7 +256,7 @@ impl WasmGcEmitter {
 				Node::Symbol(name) if self.is_unbound(name) => self.emit_undefined_variable(func, name),
 				_ => self.emit_runtime_text_cast(func, value),
 			},
-			(BYTE_AT | MEMORY_BYTE | MEMORY_SET_BYTE | IS_ERROR | RAN_WITHOUT_ERROR | STARTS_WITH | ENDS_WITH | crate::memoization::MEMO_KNOWN | crate::memoization::MEMO_VALUE | crate::memoization::MEMO_STORE, _) => {
+			(BYTE_AT | MEMORY_BYTE | MEMORY_SET_BYTE | IS_ERROR | RAN_WITHOUT_ERROR | RAN_WITHOUT_ABORT | ABORT_TO | STARTS_WITH | ENDS_WITH | crate::memoization::MEMO_KNOWN | crate::memoization::MEMO_VALUE | crate::memoization::MEMO_STORE | crate::uncertain::CERTAINLY | crate::uncertain::POSSIBLY, _) => {
 				self.emit_integer_text_builtin(func, name, arguments);
 				self.emit_call(func, "new_int");
 			}
@@ -254,7 +283,7 @@ impl WasmGcEmitter {
 	fn emit_text_argument(&mut self, func: &mut Function, text: &Node) {
 		self.emit_node_instructions(func, text);
 		if !matches!(text.drop_meta(), Node::Text(_)) {
-			self.emit_call(func, TEXT_OF);
+			self.emit_call(func, TEXT_ARGUMENT);
 		}
 	}
 
@@ -284,6 +313,9 @@ impl WasmGcEmitter {
 				Self::emit_list(func, &[I::I64Const(KIND_MASK), I::I64And, I::I64Const(Kind::Error as i64), I::I64Eq, I::I64ExtendI32U]);
 			}
 			(RAN_WITHOUT_ERROR, [statement]) => self.emit_ran_without_error(func, statement),
+			(RAN_WITHOUT_ABORT, [handler, statement]) => self.emit_ran_without_abort(func, handler, statement),
+			(ABORT_TO, [handler]) => self.emit_abort_to(func, handler),
+			(crate::uncertain::CERTAINLY | crate::uncertain::POSSIBLY, [comparison]) => self.emit_certainty(func, name, comparison),
 			(STARTS_WITH | ENDS_WITH, [text, part]) => {
 				self.emit_text_argument(func, text);
 				self.emit_text_argument(func, part);
@@ -357,9 +389,13 @@ impl WasmGcEmitter {
 
 	/// A text operand as is, a number in its text form; the implicit conversion is hinted
 	fn emit_concatenated(&mut self, func: &mut Function, operand: &Node) {
-		if self.get_type(operand) == Kind::Empty {
-			// a value held as a Node (a map value) may be a number at runtime: joined, a number takes its text form
+		if matches!(self.get_type(operand), Kind::Empty | Kind::Data) {
+			// a value held as a Node (a map value, arithmetic of an any value) may be a number at runtime: joined, a number takes its text form
 			self.emit_node_instructions(func, &super::joined_text(std::slice::from_ref(operand), ""));
+			return;
+		}
+		if self.get_type(operand) == Kind::Error {
+			self.emit_runtime_text_cast(func, operand);
 			return;
 		}
 		if !is_number(self.get_type(operand)) {
@@ -416,6 +452,13 @@ impl WasmGcEmitter {
 			s.call(f, "text_with_char_at");
 			Self::emit_list(f, &[I::Else, I::LocalGet(0), I::End]);
 		});
+		if self.should_emit_function(TEXT_ARGUMENT) {
+			self.runtime_function(TEXT_ARGUMENT, vec![node_ref], vec![node_ref], vec![], |s, f| {
+				s.emit_fail_if_error(f, 0);
+				f.instruction(&I::LocalGet(0));
+				s.call(f, TEXT_OF);
+			});
+		}
 	}
 
 	pub(super) fn emit_text_builtins(&mut self) {
@@ -523,34 +566,54 @@ impl WasmGcEmitter {
 
 		// text_trim(text): the bytes between the whitespace at either end, sharing the memory of text
 		if self.should_emit_function(TEXT_TRIM) {
-			self.runtime_function(TEXT_TRIM, vec![node_ref], vec![node_ref], vec![ValType::I32, ValType::I32, ValType::I32], |s, f| {
-				let (address, start, end) = (1, 2, 3);
-				s.emit_text_field(f, 0, 0);
-				f.instruction(&I::LocalSet(address));
-				s.emit_text_field(f, 0, 1);
-				f.instruction(&I::LocalSet(end));
-				let is_whitespace = |f: &mut Function, offset: Vec<I<'static>>| {
-					for (index, byte) in WHITESPACE_BYTES.iter().enumerate() {
-						Self::emit_list(f, &[I::LocalGet(address)]);
-						Self::emit_list(f, &offset);
-						Self::emit_list(f, &[I::I32Add, I::I32Load8U(BYTE), I::I32Const(*byte), I::I32Eq]);
-						if index > 0 {
-							f.instruction(&I::I32Or);
-						}
+			self.emit_trim(TEXT_TRIM, |f, byte| {
+				for (index, whitespace) in WHITESPACE_BYTES.iter().enumerate() {
+					Self::emit_list(f, &[I::LocalGet(byte), I::I32Const(*whitespace), I::I32Eq]);
+					if index > 0 {
+						f.instruction(&I::I32Or);
 					}
-				};
-				// leading: start moves right while it is before end and at whitespace
-				Self::emit_list(f, &[I::Block(BlockType::Empty), I::Loop(BlockType::Empty), I::LocalGet(start), I::LocalGet(end), I::I32GeU, I::BrIf(1)]);
-				is_whitespace(f, vec![I::LocalGet(start)]);
-				Self::emit_list(f, &[I::I32Eqz, I::BrIf(1), I::LocalGet(start), I::I32Const(1), I::I32Add, I::LocalSet(start), I::Br(0), I::End, I::End]);
-				// trailing: end moves left while the byte before it is whitespace
-				Self::emit_list(f, &[I::Block(BlockType::Empty), I::Loop(BlockType::Empty), I::LocalGet(end), I::LocalGet(start), I::I32LeU, I::BrIf(1)]);
-				is_whitespace(f, vec![I::LocalGet(end), I::I32Const(1), I::I32Sub]);
-				Self::emit_list(f, &[I::I32Eqz, I::BrIf(1), I::LocalGet(end), I::I32Const(1), I::I32Sub, I::LocalSet(end), I::Br(0), I::End, I::End]);
-				Self::emit_list(f, &[I::LocalGet(address), I::LocalGet(start), I::I32Add, I::LocalGet(end), I::LocalGet(start), I::I32Sub]);
-				s.call(f, "new_text");
+				}
 			});
 		}
+		// text_rough_trim(text): without the whitespace, control characters and ASCII punctuation at either end (`a ~ b`, P211)
+		if self.should_emit_function(TEXT_ROUGH_TRIM) {
+			self.emit_trim(TEXT_ROUGH_TRIM, |f, byte| {
+				Self::emit_list(f, &[I::LocalGet(byte), I::I32Const(ASCII_END), I::I32LtU]);
+				for (first, last) in ASCII_ALPHANUMERIC_RANGES {
+					Self::emit_list(f, &[I::LocalGet(byte), I::I32Const(first as i32), I::I32Sub, I::I32Const((last - first) as i32), I::I32LeU, I::I32Eqz, I::I32And]);
+				}
+			});
+		}
+	}
+
+	/// name(text): the bytes between the ones `is_trimmed` holds for (given the local of a byte) at either end, sharing
+	/// the memory of text
+	fn emit_trim(&mut self, name: &'static str, is_trimmed: impl Fn(&mut Function, u32)) {
+		let node_ref = Ref(self.node_ref(false));
+		self.runtime_function(name, vec![node_ref], vec![node_ref], vec![ValType::I32; 4], |s, f| {
+			let (address, start, end, byte) = (1, 2, 3, 4);
+			s.emit_text_field(f, 0, 0);
+			f.instruction(&I::LocalSet(address));
+			s.emit_text_field(f, 0, 1);
+			f.instruction(&I::LocalSet(end));
+			let load = |f: &mut Function, offset: &[I<'static>]| {
+				f.instruction(&I::LocalGet(address));
+				Self::emit_list(f, offset);
+				Self::emit_list(f, &[I::I32Add, I::I32Load8U(BYTE), I::LocalSet(byte)]);
+			};
+			// leading: start moves right while it is before end and at a trimmed byte
+			Self::emit_list(f, &[I::Block(BlockType::Empty), I::Loop(BlockType::Empty), I::LocalGet(start), I::LocalGet(end), I::I32GeU, I::BrIf(1)]);
+			load(f, &[I::LocalGet(start)]);
+			is_trimmed(f, byte);
+			Self::emit_list(f, &[I::I32Eqz, I::BrIf(1), I::LocalGet(start), I::I32Const(1), I::I32Add, I::LocalSet(start), I::Br(0), I::End, I::End]);
+			// trailing: end moves left while the byte before it is trimmed
+			Self::emit_list(f, &[I::Block(BlockType::Empty), I::Loop(BlockType::Empty), I::LocalGet(end), I::LocalGet(start), I::I32LeU, I::BrIf(1)]);
+			load(f, &[I::LocalGet(end), I::I32Const(1), I::I32Sub]);
+			is_trimmed(f, byte);
+			Self::emit_list(f, &[I::I32Eqz, I::BrIf(1), I::LocalGet(end), I::I32Const(1), I::I32Sub, I::LocalSet(end), I::Br(0), I::End, I::End]);
+			Self::emit_list(f, &[I::LocalGet(address), I::LocalGet(start), I::I32Add, I::LocalGet(end), I::LocalGet(start), I::I32Sub]);
+			s.call(f, "new_text");
+		});
 	}
 
 	/// c_string, error_of, warn_text, text_concat and read_text

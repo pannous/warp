@@ -2,15 +2,17 @@
 // changes only what differs (morphChildren), and an event inside it names its element's handler (elementEvent). The page
 // also keeps the values of `stored x = v` and those a `warp dev` page keeps across reloads (keptValues, keepValue).
 
-const INSTANCE_ATTRIBUTE = "data-wasp-instance"; // a component instance's elements (src/lowering/element_events.rs)
-const KEY_ATTRIBUTE = "data-wasp-key"; // a list item's element (std/markup.wasp)
+const INSTANCE_ATTRIBUTE = "data-warp-instance"; // a component instance's elements (src/lowering/element_events.rs)
+const KEY_ATTRIBUTE = "data-warp-key"; // a list item's element (lib/markup.warp)
 const NUMBER_FIELDS = ["number", "range"]; // fields whose bound value is a number
-const LEAVING_ATTRIBUTE = "data-wasp-leaving"; // an element animating out: no longer matched, removed when done
-const DEV_STORE = "wasp-dev"; // the store of the values a `warp dev` page keeps (src/lowering/stored_values.rs DEV_STORE)
-const STORED_PREFIX = "wasp stored "; // a stored value in localStorage, kept across visits
-const DEV_PREFIX = "wasp dev "; // a value a `warp dev` page keeps in sessionStorage, across its reloads
+const LEAVING_ATTRIBUTE = "data-warp-leaving"; // an element animating out: no longer matched, removed when done
+const DEV_STORE = "warp-dev"; // the store of the values a `warp dev` page keeps (src/lowering/stored_values.rs DEV_STORE)
+const STORED_PREFIX = "warp stored "; // a stored value in localStorage, kept across visits
+const DEV_PREFIX = "warp dev "; // a value a `warp dev` page keeps in sessionStorage, across its reloads
+const SESSION_STORE = "warp-session"; // the store of `session[k]` (src/lowering/stored_values.rs SESSION_STORE)
+const SESSION_PREFIX = "warp session "; // a value of `session[k]` in sessionStorage, while the tab lasts
 
-// the children of shown become those of wanted: an element with a key (data-wasp-key, card web-keyed) is the shown one
+// the children of shown become those of wanted: an element with a key (data-warp-key, card web-keyed) is the shown one
 // of that key, moved into place; any other node is matched by position; a node of another kind or tag is replaced.
 // An element with a transition (card web-transitions, markup-transitions.js) animates in, out and, keyed, to its new
 // place; nothing animates when shown was empty (the first render)
@@ -35,7 +37,12 @@ function morphChildren(shown, wanted, animated = shown.hasChildNodes()) {
 		else if (old.nodeType === Node.ELEMENT_NODE) morphElement(old, node);
 		else if (old.nodeValue !== node.nodeValue) old.nodeValue = node.nodeValue;
 	}
-	for (; current; current = nextLive(current.nextSibling)) leave(current);
+	// the next node is found before leave removes this one, which has no next sibling after
+	while (current) {
+		const next = nextLive(current.nextSibling);
+		leave(current);
+		current = next;
+	}
 	placesBefore.forEach((before, element) => moveFrom(element, before));
 }
 
@@ -62,10 +69,10 @@ function morphElement(shown, wanted) {
 	morphChildren(shown, wanted, true);
 }
 
-// an event inside shown markup, for the handler of the element it happened in (data-wasp-click="1": click·1), with
-// its detail; in a component (data-wasp-instance="2", element_events.rs) the detail names its instance
+// an event inside shown markup, for the handler of the element it happened in (data-warp-click="1": click·1), with
+// its detail; in a component (data-warp-instance="2", element_events.rs) the detail names its instance
 function elementEvent(event, happened, detail) {
-	const attribute = `data-wasp-${event}`;
+	const attribute = `data-warp-${event}`;
 	const path = happened.composedPath();
 	const element = path.find(node => node.getAttribute?.(attribute));
 	const instance = path.find(node => node.getAttribute?.(INSTANCE_ATTRIBUTE))?.getAttribute(INSTANCE_ATTRIBUTE);
@@ -77,14 +84,21 @@ function inputDetail(field) {
 	return { value: NUMBER_FIELDS.includes(field.type) ? field.valueAsNumber : field.value, checked: field.checked ?? false };
 }
 
-// where a value of a store is kept: the dev store in sessionStorage, any other in localStorage, as JSON
-function keptStorage(file) {
-	return file === DEV_STORE ? [sessionStorage, DEV_PREFIX] : [localStorage, STORED_PREFIX];
+// text on the page's clipboard (`clipboard.write`, host-files.js); the browser refuses it without a recent user action
+// (a click), loudly on the console
+function copyText(text) {
+	navigator.clipboard.writeText(text).catch(failure => console.error("clipboard:", failure));
 }
 
-// the kept values of both stores by name, for host-files.js STD_ADAPTERS.store
-function keptValues() {
-	return Object.assign({}, ...["", DEV_STORE].map(file => {
+// where a value of a store is kept: the dev store and the session's in sessionStorage, any other in localStorage, as JSON
+function keptStorage(file) {
+	return file === DEV_STORE ? [sessionStorage, DEV_PREFIX] : file === SESSION_STORE ? [sessionStorage, SESSION_PREFIX] : [localStorage, STORED_PREFIX];
+}
+
+// the kept values of the stores by name, for host-files.js STD_ADAPTERS.store: the program's and the dev store
+// (storedValues), else those named (the session's: sessionValues)
+function keptValues(files = ["", DEV_STORE]) {
+	return Object.assign({}, ...files.map(file => {
 		try {
 			const [storage, prefix] = keptStorage(file);
 			const keys = Object.keys(storage).filter(key => key.startsWith(prefix));

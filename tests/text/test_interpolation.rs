@@ -6,12 +6,12 @@
 use crate::common::fails_with;
 use crate::is;
 use warp::normalize::{capture_hints, set_hint_mode, HintMode};
-use warp::wasp_parser::{parse_data, WaspParser};
+use warp::warp_parser::{parse_data, WarpParser};
 use warp::Node;
 
 fn hints_of(code: &str) -> Vec<(String, String)> {
 	set_hint_mode(HintMode::Always);
-	let (_, hints) = capture_hints(|| WaspParser::parse(code));
+	let (_, hints) = capture_hints(|| WarpParser::parse(code));
 	hints.into_iter().map(|hint| (hint.original, hint.canonical)).collect()
 }
 
@@ -86,4 +86,24 @@ fn the_normalizer_hints_the_swift_form() {
 	assert_eq!(hints_of("x=1; \"a ${x} b\""), vec![("${x}".to_string(), "\\(x)".to_string())]);
 	assert_eq!(hints_of("x=1; \"a $x b\""), vec![]); // a bare $x is text, nothing to hint
 	assert_eq!(hints_of("x=1; \"a \\(x) b\""), vec![]);
+}
+
+// card dollar-paren (user, 2026-10-07): `$(expr)` interpolates exactly like `${expr}`
+#[test]
+fn round_dollar_holes_interpolate_like_curly_ones() {
+	is!("\"sum: $(1+2)\"", "sum: 3");
+	is!("\"sum: $(1+2)\" == \"sum: ${1+2}\"", true);
+	is!("x=3; \"a $(x+1) b $(x*(x+1))\"", "a 4 b 12");
+	is!("name=\"Bob\"; \"hi $(name)! $name\"", "hi Bob! $name");
+	is!("\"a\\$(b)\"", "a$(b)"); // an escaped dollar is never a hole
+	is!("a=\"x\";q=sql \"SELECT * FROM t WHERE a = $(a)\";q#1", "SELECT * FROM t WHERE a = ?");
+	assert_eq!(hints_of("x=1; \"a $(x) b\""), vec![("$(x)".to_string(), "\\(x)".to_string())]);
+}
+
+// card crypto-randomuuid: a hole calling a foreign module is lowered with the module's calls (foreign_modules.rs)
+#[test]
+fn holes_call_foreign_modules() {
+	is!("use js Math; \"m \\(Math.max(1, 5))\"", "m 5");
+	is!("use js JSON; \"j ${JSON.stringify([1])}!\"", "j [1]!");
+	is!("use js crypto; count \"id \\(crypto.randomUUID())\"", 39);
 }

@@ -1,0 +1,5 @@
+// Kotlin habit: `0..n-1` meant inclusive; warp's `..` excludes n-1
+n = 4
+count = 0
+for i in 0..n-1 { count += 1 }
+count

@@ -4,7 +4,10 @@ use super::*;
 
 impl WasmGcEmitter {
 	pub(super) fn emit_numeric_value(&mut self, func: &mut Function, node: &Node) {
-		if let Some(product) = self.numeric_times(node) {
+		if let Some(identity) = self.object_identity(node) {
+			return self.emit_object_identity(func, identity);
+		}
+		if let Some(product) = self.numeric_times(node).or_else(|| self.identity_as_equality(node)) {
 			return self.emit_numeric_value(func, &product);
 		}
 		self.note_position(node);
@@ -172,8 +175,14 @@ impl WasmGcEmitter {
 				}
 			}
 		}
+		if let [word, left, right, tolerance] = items {
+			if crate::library_words::is_similarity_call(&word.drop_meta().name()) {
+				self.emit_similarity(func, &word.drop_meta().name(), left, right, tolerance);
+				return true;
+			}
+		}
 		if let [word, dividend, divisor] = items {
-			if matches!(word.drop_meta(), Node::Symbol(name) if name == crate::wasp_parser::FLOOR_QUOTIENT) {
+			if matches!(word.drop_meta(), Node::Symbol(name) if name == crate::warp_parser::FLOOR_QUOTIENT) {
 				self.emit_floor_quotient(func, dividend, divisor);
 				return true;
 			}
@@ -262,7 +271,8 @@ impl WasmGcEmitter {
 			Node::Key(left, Op::Define | Op::Assign, right) => {
 				if let Node::Symbol(name) = left.drop_meta() {
 					if let Some(position) = self.scope.lookup(name).map(|local| local.position) {
-						self.emit_float_value(func, right);
+						let declared = self.declared_type_of(left);
+						self.emit_declared_value(func, declared.as_ref(), right, Kind::Float);
 						func.instruction(&I::LocalTee(position));
 					} else if let Some(kind) = self.emit_global_store(func, name, right) {
 						if !kind.is_float() {
@@ -310,10 +320,10 @@ impl WasmGcEmitter {
 				self.emit_float_value(func, left);
 				func.instruction(&I::F64Mul);
 			}
-			// Prefix operators: √x = sqrt(x) (returns f64)
-			Node::Key(left, Op::Sqrt, right) if matches!(left.drop_meta(), Node::Empty) => {
+			// Prefix operators: √x, ∛x (return f64)
+			Node::Key(left, root @ (Op::Sqrt | Op::Cbrt), right) if matches!(left.drop_meta(), Node::Empty) => {
 				self.emit_float_value(func, right);
-				func.instruction(&I::F64Sqrt);
+				self.emit_float_root(func, root);
 			}
 			// Prefix negation: -x (returns f64)
 			Node::Key(left, Op::Neg, right) if matches!(left.drop_meta(), Node::Empty) => {
@@ -388,8 +398,7 @@ impl WasmGcEmitter {
 			Node::Key(left, op, right) => {
 				self.emit_literal(func, left);
 				self.emit_literal(func, right);
-				func.instruction(&I::I64Const(crate::operators::op_to_code(op)));
-				self.emit_call(func, "new_key");
+				self.emit_new_key(func, op);
 			}
 			Node::List(items, bracket, _) if !items.is_empty() => self.emit_list_structure_with(func, items, bracket, Self::emit_literal),
 			Node::List(..) | Node::Empty => self.emit_call(func, "new_empty"),

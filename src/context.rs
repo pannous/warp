@@ -43,6 +43,8 @@ pub struct Context {
     pub used_functions: HashSet<&'static str>,
     pub required_functions: HashSet<&'static str>,
     pub ffi_imports: HashMap<String, FfiSignature>,
+    /// `import foo from 'nolib'` that no header declares: name → library, so a call of it says why it is undefined
+    pub unresolved_imports: HashMap<String, String>,
     /// `use { memory, table } from "env"`: the memory and table the module imports instead of defining, (module, name)
     pub imported_entities: Vec<(String, String)>,
     pub kind_global_indices: HashMap<Kind, u32>,
@@ -73,6 +75,24 @@ pub struct Context {
     pub missing_case_labels: std::collections::BTreeSet<String>,
 }
 
+impl Context {
+    /// The error of a call nothing resolves; an import that resolved to nothing says why
+    pub fn undefined_function_message(&self, name: &str) -> String {
+        match self.unresolved_imports.get(name) {
+            Some(library) => crate::ffi::unresolved_import_message(name, library),
+            None => crate::ffi::undefined_function_message(name),
+        }
+    }
+
+    /// The error of a call nothing resolves at `call`, as undefined_function_message says it
+    pub fn undefined_function_diagnostic(&self, call: &crate::node::Node, name: &str) -> crate::diagnostic::Diagnostic {
+        match self.unresolved_imports.get(name) {
+            Some(library) => crate::diagnostic::Diagnostic::at(call, crate::ffi::unresolved_import_message(name, library)),
+            None => crate::ffi::undefined_function_diagnostic(call, name),
+        }
+    }
+}
+
 impl Default for Context {
     fn default() -> Self {
         Self::new()
@@ -87,6 +107,8 @@ impl Context {
             required_functions: HashSet::from([
                 "new_empty",
                 "new_int",
+                "new_bool",
+                "as_bool",
                 "new_float",
                 "new_text",
                 "new_symbol",
@@ -95,6 +117,7 @@ impl Context {
                 "new_list",
             ]),
             ffi_imports: HashMap::new(),
+            unresolved_imports: HashMap::new(),
             imported_entities: Vec::new(),
             kind_global_indices: HashMap::new(),
             string_table: HashMap::new(),

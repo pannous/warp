@@ -12,15 +12,18 @@ mod test_c_style_definitions;
 mod test_character_results;
 mod test_broadcasting;
 mod test_broadcasting_declared;
+mod test_broadcast_reassigned;
 mod test_closures;
 mod test_concatenated_text_argument;
 mod test_concatenating_parameter;
 mod test_conversion_methods;
 mod test_round8_call_forms;
 mod test_def_forms;
+mod test_def_bool_result;
 mod test_python_ruby_definitions;
 mod test_field_function_values;
 mod test_default_parameters;
+mod test_event_effects;
 mod test_effects;
 mod test_function_keyword;
 mod test_function_values;
@@ -126,5 +129,15 @@ mod test_generator_arguments;
 mod test_all_calls;
 mod test_builtin_clash;
 mod test_parameter_any;
+mod test_parameter_retype;
 mod test_captured_copy_of_global;
+mod test_braced_it_warning;
 mod test_text_joined_parameter;
+mod test_words_in_phrases;
+mod test_library_word_values;
+mod test_empty_function_bodies;
+mod test_nested_two_deep; // card nested-two
+mod test_nonlocal_kind_change; // card nonlocal-assign
+mod test_operator_word_methods;
+mod test_parameter_assignment;
+mod test_typed_global_capture; // card typed-global

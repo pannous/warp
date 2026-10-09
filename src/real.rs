@@ -149,9 +149,6 @@ fn lower_reals(node: Node) -> Node {
 			Real::Exact(exact) if exact.has_epsilon() => error(&format!("{exact} is a hyperreal: ε and ω are only supported in constant expressions")),
 			_ => Node::Number(Number::Float(real.to_f64())),
 		},
-		Node::Key(left, Op::Cbrt, _) if matches!(left.drop_meta(), Node::Empty) => {
-			error("∛ of a runtime value is not supported yet, only of constants")
-		}
 		Node::Key(left, op, right) => Node::Key(Box::new(lower_reals(*left)), op, Box::new(lower_reals(*right))),
 		Node::List(items, _, _) if is_type_of_real(&items) => Node::Symbol(type_name_before_lowering(&items[1])),
 		// `π is real`: answered before π becomes a float
@@ -175,8 +172,11 @@ fn is_type_test_of_real(items: &[Node]) -> bool {
 		&& matches!(spec.drop_meta(), Node::Text(_)) && mentions_real(argument))
 }
 
+/// The type of the written number, else of the exact value of a constant expression (`2 * π` is real, `π / π` int)
 fn type_name_before_lowering(argument: &Node) -> String {
-	match crate::analyzer::literal_number_type_word(argument) {
+	let exact_value = || evaluate(argument, &mut Scope::new()).ok().map(Value::into_node);
+	let word = crate::analyzer::literal_number_type_word(argument).or_else(|| exact_value().and_then(|value| crate::analyzer::literal_number_type_word(&value)));
+	match word {
 		Some(word) => word.to_string(),
 		None => crate::analyzer::shown_list_type_name(argument, &crate::analyzer::Scope::new()),
 	}

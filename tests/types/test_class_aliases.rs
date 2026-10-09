@@ -1,16 +1,16 @@
 // Class words of other languages are aliases (user 2026-10-06, the alias mechanism): they work, with a got-it note
-// naming the wasp word and an "I meant: <wasp word>" fix
+// naming the warp word and an "I meant: <warp word>" fix
 use crate::is;
 
-/// The notes (written → wasp word) a program's compilation gives
+/// The notes (written → warp word) a program's compilation gives
 fn alias_notes(code: &str) -> Vec<(String, String)> {
 	let (_, hints) = warp::normalize::capture_hints(|| warp::wasm_emitter::eval(code));
 	hints.iter().filter(|hint| hint.fix().is_some()).map(|hint| (hint.original.clone(), hint.canonical.clone())).collect()
 }
 
-fn assert_alias(code: &str, written: &str, wasp_word: &str) {
+fn assert_alias(code: &str, written: &str, warp_word: &str) {
 	let notes = alias_notes(code);
-	assert!(notes.contains(&(written.to_string(), wasp_word.to_string())), "{written} → {wasp_word} not in {notes:?}");
+	assert!(notes.contains(&(written.to_string(), warp_word.to_string())), "{written} → {warp_word} not in {notes:?}");
 }
 
 /// P162: `init` is the constructor; every common constructor name works as its alias
@@ -51,7 +51,7 @@ fn new_before_a_construction_is_superfluous() {
 }
 
 #[test]
-fn foreign_operator_methods_say_the_wasp_name() {
+fn foreign_operator_methods_say_the_warp_name() {
 	assert_alias("class V{x:int; __add__(o) := V(x + o.x)}; (V(1) + V(2)).x", "__add__", "plus");
 	assert_alias("class V{x:int; add(o) := V(x + o.x)}; (V(1) + V(2)).x", "add", "plus");
 }
@@ -71,7 +71,7 @@ fn member_modifiers_and_field_keywords_are_dropped() {
 }
 
 #[test]
-fn the_wasp_words_give_no_note() {
+fn the_warp_words_give_no_note() {
 	let code = "class V{x:int; plus(o) := V(x + o.x)}; (V(1) + V(2)).x";
 	assert_eq!(alias_notes(code), vec![]);
 	is!(code, 3);
@@ -100,7 +100,7 @@ fn a_loop_in_init_keeps_its_variables_local() {
 	is!(&format!("{counter}count(C([7 8 8]).keys)"), 2);
 }
 
-/// P157: a ported type parameter `class Box<T>` compiles untyped, with a note that wasp infers types
+/// P157: a ported type parameter `class Box<T>` compiles untyped, with a note that warp infers types
 #[test]
 fn a_type_parameter_of_a_class_is_noted() {
 	let code = "class Box<T> { item: T }\nBox(3).item";

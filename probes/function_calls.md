@@ -53,7 +53,7 @@ def gcd(a,b){ b==0 ? a : gcd(b, a%b) }; gcd(48,18) ||| 6
 def ack(m,n){ if m==0 {n+1} else if n==0 {ack(m-1,1)} else {ack(m-1, ack(m, n-1))} }; ack(2,3) ||| 9
 # mutual recursion
 def even(n){ n==0 ? 1 : odd(n-1) }; def odd(n){ n==0 ? 0 : even(n-1) }; even(10) ||| 1
-# without parentheses (wasp/Ruby style)
+# without parentheses (warp/Ruby style)
 square(n) := n*n; square 3 ||| 9
 square(n) := n*n; square square 2 ||| 16
 add(a,b) := a+b; add 1 2 ||| 3

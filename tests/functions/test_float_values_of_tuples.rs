@@ -1,4 +1,4 @@
-// Card destructured-float (samples/neural_net.wasp): a float a tuple function gives back with `return a, b` stays a
+// Card destructured-float (samples/neural_net.warp): a float a tuple function gives back with `return a, b` stays a
 // float through a destructuring statement, a call taking it and a float global a function changes
 use crate::is;
 
@@ -24,5 +24,5 @@ fn a_function_changes_a_float_global() {
 fn a_held_value_adds_into_a_float() {
 	let loop_calls = "ex = [([0, 0], 0)]; for (i, t) in ex { f(t) }";
 	is!(&format!("b = random(); def f(t) {{ global b; d = t - random(); b = b + 0.5 * d }}; {loop_calls}; b < 3"), true);
-	is!(&format!("def f(t) {{ b = 0.25 + random() * 0; d = t + 0.5 + random() * 0; b = b + d; print b }}; {loop_calls}"), 1);
+	is!(&format!("def f(t) {{ b = 0.25 + random() * 0; d = t + 0.5 + random() * 0; b = b + d; print b }}; {loop_calls}"), warp::Node::Empty); // P213: f ends in print
 }

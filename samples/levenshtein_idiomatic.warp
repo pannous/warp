@@ -1,0 +1,28 @@
+// Levenshtein edit distance via dynamic programming (two-row variant), 1-based `#` indexing
+def levenshtein(a, b) {
+    s = a
+    t = b
+    prev = []
+    for j in 0...(#t) { prev.push(j) }
+    for i in 1...(#s) {
+        curr = [i]
+        for j in 1...(#t) {
+            cost = if s#i == t#j then 0 else 1
+            deletion = prev#(j + 1) + 1
+            insertion = curr#j + 1
+            substitution = prev#j + cost
+            best = min(deletion, insertion, substitution)
+            curr.push(best)
+        }
+        prev = curr
+    }
+    prev#(#t + 1)
+}
+
+total = 0
+total = total + levenshtein("kitten", "sitting")   // 3
+total = total + levenshtein("flaw", "lawn")        // 2
+total = total + levenshtein("", "abc")             // 3
+total = total + levenshtein("abc", "abc")          // 0
+total = total + levenshtein("saturday", "sunday")  // 3
+total

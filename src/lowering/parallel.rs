@@ -1,8 +1,9 @@
 //! Data parallelism with the task keyword (user, 2026-10-06: "a dual use for the go keyword … later running on the
 //! GPU"): `go f(x)` and `go { … }` start one task, `go xs.map(f)` and `go for x in xs { … }` one task per chunk of xs.
-//! `xs.map(f) @parallel` is the same map. The items are split into PARALLEL_CHUNKS slices, each mapped (or looped) in
-//! a go block; the map's results come back in order, the loop ends when every chunk is done. A loop body updating an
-//! outer variable (`t += x`) updates its task's copy: a warning names `shared` (P106). notes/go_blocks.md
+//! `xs.map(f) @parallel` and `@parallel f all xs` are the same map; `@parallel` on another form warns. The items are
+//! split into PARALLEL_CHUNKS slices, each mapped (or looped) in a go block; the map's results come back in order, the
+//! loop ends when every chunk is done. A loop body updating an outer variable (`t += x`) updates its task's copy: a
+//! warning names `shared` (P106). notes/go_blocks.md
 
 use crate::node::{Bracket, Node, Separator};
 use crate::operators::Op;
@@ -29,21 +30,61 @@ fn chunked(work: &str) -> String {
 		parallel_parts = await all parallel_jobs")
 }
 
-/// `go xs.map(f)` among a list's items, `xs.map(f) @parallel`, `@parallel xs.map(f)`: xs and f
+/// `go xs.map(f)` among a list's items, `xs.map(f) @parallel`, `@parallel xs.map(f)`, `@parallel f all xs`: xs and f
 pub(crate) fn parallel_map(node: &Node) -> Option<(Node, Node)> {
 	if let Node::List(items, _, _) = node.drop_meta() {
-		return match items.as_slice() {
-			[go, map] if go.drop_meta().name() == GO_WORD => map_call(map),
-			_ => None,
-		};
+		if let [go, map] = items.as_slice() {
+			if go.drop_meta().name() == GO_WORD {
+				return map_call(map);
+			}
+		}
 	}
-	let Node::Key(list, Op::Dot, _) = node.drop_meta() else { return None };
-	let annotated = node.attribute(PARALLEL_ATTRIBUTE).is_some() || list.attribute(PARALLEL_ATTRIBUTE).is_some();
-	annotated.then(|| map_call(node)).flatten()
+	is_annotated(node, PARALLEL_ATTRIBUTE).then(|| map_call(node).or_else(|| all_call(node))).flatten()
+}
+
+/// `@parallel` on a form parallel_map can't split into tasks (`@parallel square xs`): a warning (an error under strict)
+/// instead of running it in sequence without a word; said once, by the innermost form the annotation is on
+pub(crate) fn sequential_warning(node: &Node) -> Option<Node> {
+	if !annotated_here(node, PARALLEL_ATTRIBUTE) {
+		return None;
+	}
+	let message = "@parallel runs this in sequence: only `xs.map(f)`, `f all xs` and `go for x in xs { … }` run in parallel";
+	crate::diagnostic::report(&[crate::diagnostic::Diagnostic::at(node, message.to_string())]).err()
+}
+
+/// `@parallel` (or another attribute, `@gpu`) on a form or on the start of its first part: `@parallel xs.map(f)`
+/// annotates xs, `@parallel square all xs` (read as `(square all) xs`) square
+pub(crate) fn is_annotated(node: &Node, attribute: &str) -> bool {
+	annotated_here(node, attribute) || head(node).is_some_and(|head| is_form(head) && is_annotated(head, attribute))
+}
+
+/// The attribute on a form or on its first part when that is no form itself
+pub(crate) fn annotated_here(node: &Node, attribute: &str) -> bool {
+	head(node).is_some_and(|head| node.attribute(attribute).is_some() || (!is_form(head) && head.attribute(attribute).is_some()))
+}
+
+/// The first part of a form: the left of a key, the first item of a list
+fn head(node: &Node) -> Option<&Node> {
+	match node.drop_meta() {
+		Node::Key(left, _, _) => Some(left.as_ref()),
+		Node::List(items, _, _) => items.first(),
+		_ => None,
+	}
+}
+
+fn is_form(node: &Node) -> bool {
+	matches!(node.drop_meta(), Node::Key(..) | Node::List(_, Bracket::None | Bracket::Round, _))
+}
+
+/// `f all xs` (wiki/all.md): xs and f
+fn all_call(node: &Node) -> Option<(Node, Node)> {
+	let Node::List(items, Bracket::None | Bracket::Round, Separator::Space | Separator::None) = node.drop_meta() else { return None };
+	let (function, list) = crate::broadcasting::all_call_parts(items)?;
+	Some((list.drop_meta().clone(), function.clone()))
 }
 
 /// `xs.map(f)`: xs and f
-fn map_call(node: &Node) -> Option<(Node, Node)> {
+pub(crate) fn map_call(node: &Node) -> Option<(Node, Node)> {
 	let Node::Key(list, Op::Dot, call) = node.drop_meta() else { return None };
 	let Node::List(items, _, _) = call.drop_meta() else { return None };
 	let [map, function] = items.as_slice() else { return None };
@@ -88,7 +129,7 @@ pub(crate) fn loop_in_tasks(variable: Node, list: Node, body: Node, number: usiz
 /// The template with its temporaries named apart, then the placeholders filled (the program's own `parallel_…` names
 /// stay as they are)
 fn filled(program: &str, number: usize, fills: &[(&str, Node)]) -> Node {
-	let template = named_apart(crate::wasp_parser::parse(program), number);
+	let template = named_apart(crate::warp_parser::parse(program), number);
 	fills.iter().fold(template, |node, (placeholder, value)| crate::library_words::substitute(node, placeholder, value))
 }
 
@@ -110,7 +151,7 @@ fn copied_updates(body: &Node, shared: &[String]) -> Option<Node> {
 	let mut updated: Option<(String, Node)> = None;
 	body.visit(&mut |part| if let Node::Key(target, op, value) = part {
 		let Node::Symbol(name) = target.drop_meta() else { return };
-		let updates = op.is_compound_assign() || matches!(op, Op::Inc | Op::Dec) || (*op == Op::Assign && crate::wasp_parser::mentions(value, name));
+		let updates = op.is_compound_assign() || matches!(op, Op::Inc | Op::Dec) || (*op == Op::Assign && crate::warp_parser::mentions(value, name));
 		if updates && !shared.contains(name) && updated.is_none() {
 			updated = Some((name.clone(), part.clone()));
 		}

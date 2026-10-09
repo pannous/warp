@@ -4,6 +4,16 @@
 #[cfg(feature = "native")]
 use super::*;
 
+/// Takes turns for calls into libraries with global state that is not thread-safe (SDL_Init and SDL_Quit crash when
+/// two runs of one process call them at once): programs running on several threads queue here. Thread-safe
+/// libraries (libm, sqlite with its own connections) are called in parallel
+#[cfg(feature = "native")]
+static NATIVE_CALL_TURN: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
+/// Lowercase name prefixes of the libraries whose calls take the native call turn
+#[cfg(feature = "native")]
+const NOT_THREAD_SAFE_LIBRARIES: [&str; 2] = ["sdl", "raylib"];
+
 // Extern C Functions and Hardcoded Signatures (Fallback)
 
 #[cfg(feature = "native")]
@@ -304,7 +314,7 @@ static LOADED_LIBRARIES: OnceLock<std::sync::Mutex<HashMap<String, Arc<Library>>
 
 /// Get or load a dynamic library
 #[cfg(feature = "native")]
-fn get_or_load_library(lib_name: &str) -> Option<Arc<Library>> {
+pub(crate) fn get_or_load_library(lib_name: &str) -> Option<Arc<Library>> {
     let cache = LOADED_LIBRARIES.get_or_init(|| std::sync::Mutex::new(HashMap::new()));
     let mut guard = cache.lock().ok()?;
 
@@ -500,7 +510,7 @@ fn link_single_function(
         return Err(anyhow::anyhow!("Null function pointer for {}", func_name));
     }
 
-    let wasm_params: Vec<ValType> = wasp_parameters(&sig.param_types)
+    let wasm_params: Vec<ValType> = warp_parameters(&sig.param_types)
         .filter_map(|t| c_type_to_wasm_valtype(t))
         .collect();
 
@@ -579,7 +589,7 @@ fn create_ffi_wrapper(
     match sig_key {
         // void -> void
         "_V" => {
-            linker.func_new(lib_name, func_name, func_type, move |_, _, _| {
+            link_native(linker, lib_name, func_name, func_type, move |_, _, _| {
                 let f: extern "C" fn() = unsafe { std::mem::transmute(func_ptr) };
                 f();
                 Ok(())
@@ -587,7 +597,7 @@ fn create_ffi_wrapper(
         }
         // void -> int (WindowShouldClose, GetMouseX, etc.)
         "_I" => {
-            linker.func_new(lib_name, func_name, func_type, move |_, _, results| {
+            link_native(linker, lib_name, func_name, func_type, move |_, _, results| {
                 let f: extern "C" fn() -> i32 = unsafe { std::mem::transmute(func_ptr) };
                 results[0] = Val::I32(f());
                 Ok(())
@@ -595,7 +605,7 @@ fn create_ffi_wrapper(
         }
         // void -> bool
         "_B" => {
-            linker.func_new(lib_name, func_name, func_type, move |_, _, results| {
+            link_native(linker, lib_name, func_name, func_type, move |_, _, results| {
                 let f: extern "C" fn() -> i32 = unsafe { std::mem::transmute(func_ptr) };
                 results[0] = Val::I32(if f() != 0 { 1 } else { 0 });
                 Ok(())
@@ -603,7 +613,7 @@ fn create_ffi_wrapper(
         }
         // void -> float
         "_F" => {
-            linker.func_new(lib_name, func_name, func_type, move |_, _, results| {
+            link_native(linker, lib_name, func_name, func_type, move |_, _, results| {
                 let f: extern "C" fn() -> f32 = unsafe { std::mem::transmute(func_ptr) };
                 results[0] = Val::F32(f().to_bits());
                 Ok(())
@@ -611,7 +621,7 @@ fn create_ffi_wrapper(
         }
         // void -> double
         "_D" => {
-            linker.func_new(lib_name, func_name, func_type, move |_, _, results| {
+            link_native(linker, lib_name, func_name, func_type, move |_, _, results| {
                 let f: extern "C" fn() -> f64 = unsafe { std::mem::transmute(func_ptr) };
                 results[0] = Val::F64(f().to_bits());
                 Ok(())
@@ -619,7 +629,7 @@ fn create_ffi_wrapper(
         }
         // int -> void (SetTargetFPS, etc.)
         "I_V" => {
-            linker.func_new(lib_name, func_name, func_type, move |_, params, _| {
+            link_native(linker, lib_name, func_name, func_type, move |_, params, _| {
                 let f: extern "C" fn(i32) = unsafe { std::mem::transmute(func_ptr) };
                 f(params[0].unwrap_i32());
                 Ok(())
@@ -627,7 +637,7 @@ fn create_ffi_wrapper(
         }
         // int -> int (IsKeyPressed, etc.)
         "I_I" => {
-            linker.func_new(lib_name, func_name, func_type, move |_, params, results| {
+            link_native(linker, lib_name, func_name, func_type, move |_, params, results| {
                 let f: extern "C" fn(i32) -> i32 = unsafe { std::mem::transmute(func_ptr) };
                 results[0] = Val::I32(f(params[0].unwrap_i32()));
                 Ok(())
@@ -635,7 +645,7 @@ fn create_ffi_wrapper(
         }
         // int -> bool
         "I_B" => {
-            linker.func_new(lib_name, func_name, func_type, move |_, params, results| {
+            link_native(linker, lib_name, func_name, func_type, move |_, params, results| {
                 let f: extern "C" fn(i32) -> i32 = unsafe { std::mem::transmute(func_ptr) };
                 results[0] = Val::I32(if f(params[0].unwrap_i32()) != 0 { 1 } else { 0 });
                 Ok(())
@@ -643,7 +653,7 @@ fn create_ffi_wrapper(
         }
         // int,int -> void
         "II_V" => {
-            linker.func_new(lib_name, func_name, func_type, move |_, params, _| {
+            link_native(linker, lib_name, func_name, func_type, move |_, params, _| {
                 let f: extern "C" fn(i32, i32) = unsafe { std::mem::transmute(func_ptr) };
                 f(params[0].unwrap_i32(), params[1].unwrap_i32());
                 Ok(())
@@ -651,7 +661,7 @@ fn create_ffi_wrapper(
         }
         // int,int -> int
         "II_I" => {
-            linker.func_new(lib_name, func_name, func_type, move |_, params, results| {
+            link_native(linker, lib_name, func_name, func_type, move |_, params, results| {
                 let f: extern "C" fn(i32, i32) -> i32 = unsafe { std::mem::transmute(func_ptr) };
                 results[0] = Val::I32(f(params[0].unwrap_i32(), params[1].unwrap_i32()));
                 Ok(())
@@ -659,7 +669,7 @@ fn create_ffi_wrapper(
         }
         // int,int,ptr -> void (InitWindow with title)
         "IIP_V" => {
-            linker.func_new(lib_name, func_name, func_type, move |mut caller, params, _| {
+            link_native(linker, lib_name, func_name, func_type, move |mut caller, params, _| {
                 let f: extern "C" fn(i32, i32, *const u8) = unsafe { std::mem::transmute(func_ptr) };
                 let ptr = get_memory_ptr(&mut caller, params[2].unwrap_i32() as usize);
                 f(params[0].unwrap_i32(), params[1].unwrap_i32(), ptr);
@@ -668,7 +678,7 @@ fn create_ffi_wrapper(
         }
         // int,int,float,int -> void (DrawCircle: x, y, radius, color)
         "IIFI_V" => {
-            linker.func_new(lib_name, func_name, func_type, move |_, params, _| {
+            link_native(linker, lib_name, func_name, func_type, move |_, params, _| {
                 let f: extern "C" fn(i32, i32, f32, i32) = unsafe { std::mem::transmute(func_ptr) };
                 f(
                     params[0].unwrap_i32(),
@@ -681,7 +691,7 @@ fn create_ffi_wrapper(
         }
         // int,int,int,int,int -> void (DrawRectangle: x, y, w, h, color)
         "IIIII_V" => {
-            linker.func_new(lib_name, func_name, func_type, move |_, params, _| {
+            link_native(linker, lib_name, func_name, func_type, move |_, params, _| {
                 let f: extern "C" fn(i32, i32, i32, i32, i32) = unsafe { std::mem::transmute(func_ptr) };
                 f(
                     params[0].unwrap_i32(),
@@ -695,7 +705,7 @@ fn create_ffi_wrapper(
         }
         // ptr,int,int,int -> void (DrawText: text, x, y, fontSize, color)
         "PIII_V" => {
-            linker.func_new(lib_name, func_name, func_type, move |mut caller, params, _| {
+            link_native(linker, lib_name, func_name, func_type, move |mut caller, params, _| {
                 let f: extern "C" fn(*const u8, i32, i32, i32) = unsafe { std::mem::transmute(func_ptr) };
                 let ptr = get_memory_ptr(&mut caller, params[0].unwrap_i32() as usize);
                 f(ptr, params[1].unwrap_i32(), params[2].unwrap_i32(), params[3].unwrap_i32());
@@ -704,7 +714,7 @@ fn create_ffi_wrapper(
         }
         // ptr,int,int,int,int -> void (DrawText with color: text, x, y, fontSize, color)
         "PIIII_V" => {
-            linker.func_new(lib_name, func_name, func_type, move |mut caller, params, _| {
+            link_native(linker, lib_name, func_name, func_type, move |mut caller, params, _| {
                 let f: extern "C" fn(*const u8, i32, i32, i32, i32) = unsafe { std::mem::transmute(func_ptr) };
                 let ptr = get_memory_ptr(&mut caller, params[0].unwrap_i32() as usize);
                 f(ptr, params[1].unwrap_i32(), params[2].unwrap_i32(), params[3].unwrap_i32(), params[4].unwrap_i32());
@@ -713,7 +723,7 @@ fn create_ffi_wrapper(
         }
         // float -> float
         "F_F" => {
-            linker.func_new(lib_name, func_name, func_type, move |_, params, results| {
+            link_native(linker, lib_name, func_name, func_type, move |_, params, results| {
                 let f: extern "C" fn(f32) -> f32 = unsafe { std::mem::transmute(func_ptr) };
                 results[0] = Val::F32(f(params[0].unwrap_f32()).to_bits());
                 Ok(())
@@ -721,7 +731,7 @@ fn create_ffi_wrapper(
         }
         // double -> double
         "D_D" => {
-            linker.func_new(lib_name, func_name, func_type, move |_, params, results| {
+            link_native(linker, lib_name, func_name, func_type, move |_, params, results| {
                 let f: extern "C" fn(f64) -> f64 = unsafe { std::mem::transmute(func_ptr) };
                 results[0] = Val::F64(f(warp_runtime::floats::canonical_nan(params[0].unwrap_f64())).to_bits());
                 Ok(())
@@ -729,7 +739,7 @@ fn create_ffi_wrapper(
         }
         // double,double -> double
         "DD_D" => {
-            linker.func_new(lib_name, func_name, func_type, move |_, params, results| {
+            link_native(linker, lib_name, func_name, func_type, move |_, params, results| {
                 let f: extern "C" fn(f64, f64) -> f64 = unsafe { std::mem::transmute(func_ptr) };
                 results[0] = Val::F64(f(warp_runtime::floats::canonical_nan(params[0].unwrap_f64()), warp_runtime::floats::canonical_nan(params[1].unwrap_f64())).to_bits());
                 Ok(())
@@ -784,6 +794,32 @@ pub fn link_module_libraries(
     Ok(())
 }
 
+#[cfg(feature = "native")]
+fn is_thread_safe(lib_name: &str) -> bool {
+    let name = lib_name.to_lowercase();
+    !NOT_THREAD_SAFE_LIBRARIES.iter().any(|prefix| name.trim_start_matches("lib").starts_with(prefix))
+}
+
+/// Link a wrapper of a library function; one of a library that is not thread-safe holds the native call turn while it runs
+#[cfg(feature = "native")]
+fn link_native(
+    linker: &mut Linker<FfiState>,
+    lib_name: &str,
+    func_name: &str,
+    func_type: FuncType,
+    call: impl Fn(wasmtime::Caller<'_, FfiState>, &[Val], &mut [Val]) -> wasmtime::Result<()> + Send + Sync + 'static,
+) -> Result<()> {
+    if is_thread_safe(lib_name) {
+        linker.func_new(lib_name, func_name, func_type, call)?;
+        return Ok(());
+    }
+    linker.func_new(lib_name, func_name, func_type, move |caller, params, results| {
+        let _turn = NATIVE_CALL_TURN.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
+        call(caller, params, results)
+    })?;
+    Ok(())
+}
+
 /// Generic FFI wrapper for uncommon signatures - uses dynamic argument handling
 #[cfg(feature = "native")]
 fn create_generic_ffi_wrapper(
@@ -797,7 +833,7 @@ fn create_generic_ffi_wrapper(
 ) -> Result<()> {
     let param_types = param_types.to_vec();
 
-    linker.func_new(lib_name, func_name, func_type, move |mut caller, params, results| {
+    link_native(linker, lib_name, func_name, func_type, move |mut caller, params, results| {
         let args = native_arguments(&mut caller, "", params, &param_types, &mut 0)?;
 
         let ret = unsafe { call_native_function(func_ptr, &args, ret_type) };
@@ -828,13 +864,13 @@ struct NativeArguments {
 fn native_arguments(caller: &mut wasmtime::Caller<'_, FfiState>, name: &str, params: &[Val], param_types: &[ParamType], out_slot: &mut usize) -> wasmtime::Result<NativeArguments> {
     let mut args = NativeArguments::default();
     let (mut integer, mut float) = (0, 0);
-    let mut wasp_params = params.iter();
+    let mut warp_params = params.iter();
     let mut out_slot = Some(out_slot);
     for ptype in param_types {
         let value = if *ptype == ParamType::Out {
             Some(out_slot.take().map_or(0, |slot| slot as *mut usize as u64))
         } else {
-            let Some(param) = wasp_params.next() else { break };
+            let Some(param) = warp_params.next() else { break };
             match ptype {
                 ParamType::I32 => Some(param.unwrap_i32() as u64),
                 ParamType::I64 => Some(param.unwrap_i64() as u64),
@@ -860,7 +896,7 @@ fn native_arguments(caller: &mut wasmtime::Caller<'_, FfiState>, name: &str, par
     Ok(args)
 }
 
-/// The C pointers a run got, handed to wasp as ids: id n is the n-th pointer, 0 is NULL; the same pointer keeps its id.
+/// The C pointers a run got, handed to warp as ids: id n is the n-th pointer, 0 is NULL; the same pointer keeps its id.
 /// The table lives in the run's HostState and goes with it: ids are never addresses, and never outlive the run
 #[cfg(feature = "native")]
 #[derive(Default)]
@@ -905,11 +941,11 @@ struct PointerCall {
 
 /// One wrapper for every C function crossing pointers: `sqlite3_column_text(stmt, i)` takes a handle and gives a text,
 /// `sqlite3_open(name)` gives the handle its out-pointer received (NULL there is an error naming the C status), a
-/// `char *` result is copied into the module as a wasp text (NULL is ø)
+/// `char *` result is copied into the module as a warp text (NULL is ø)
 #[cfg(feature = "native")]
 fn create_pointer_wrapper(linker: &mut Linker<FfiState>, lib_name: &str, func_type: FuncType, call: PointerCall) -> Result<()> {
     let name = call.name.clone();
-    linker.func_new(lib_name, &name, func_type, move |mut caller, params, results| {
+    link_native(linker, lib_name, &name, func_type, move |mut caller, params, results| {
         let mut out_slot: usize = 0;
         let args = native_arguments(&mut caller, &call.name, params, &call.param_types, &mut out_slot)?;
         let returned = unsafe { call_native_function(call.func_ptr, &args, call.ret_type) };
@@ -947,7 +983,7 @@ fn native_result(returned: u64, ret_type: RetType) -> Val {
     }
 }
 
-/// A wasp text of `bytes` in the calling module (its memory, text heap and new_text), or ø
+/// A warp text of `bytes` in the calling module (its memory, text heap and new_text), or ø
 #[cfg(feature = "native")]
 pub(crate) fn text_node(caller: &mut wasmtime::Caller<'_, FfiState>, bytes: Option<&[u8]>) -> Result<Val> {
     let export = |caller: &mut wasmtime::Caller<'_, FfiState>, name: &str| caller.get_export(name).ok_or_else(|| anyhow::anyhow!("a C text result needs the module's {name}"));

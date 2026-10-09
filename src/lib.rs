@@ -1,5 +1,5 @@
 
-// shared code with wasp tests etc
+// shared code with warp tests etc
 // only lib.rs allows reexporting as:
 // use warp::extensions::*; etc
 // use crate::extensions::*; // crate for F12
@@ -26,7 +26,7 @@ pub mod wasm_emitter;
 pub mod pipeline;
 /// The lowering passes the pipeline runs (src/pipeline.rs), each a module of its own; re-exported at the crate root
 pub mod lowering;
-pub use lowering::{ambiguous_forms, blocks, broadcasting, class_methods, closures, component_state, component_worlds, comprehensions, declarations, element_events, event_signals, fetch_signals, field_elements, system_signals, system_values, folding, for_loop, function_values, getters, go_blocks, inlining, channel_words, lambdas, lazy_ranges, late_binding, foreign_modules, library_words, nonlocal_cells, memoization, markup_tags, style_rules, meta_entries, min_max, mutation, named_arguments, nested_index, number_keys, object_groups, shared_arrays, signal_values, overloads, page_html, parallel, parameter_shapes, phrase_calls, phrase_words, list_phrases, picked_calls, pipes, printable, references, result_word, routes, ruby_blocks, run_time_blocks, serve, soft_keywords, std_aliases, stored_values, switch, traits, transitions, tuples, type_aliases, type_constructor, type_name_matching, type_tests, undo_history, variable_signals, variadic, versions, welcome_forms, word_operators};
+pub use lowering::{ambiguous_forms, blocks, broadcasting, class_methods, closures, component_state, component_worlds, comprehensions, declarations, element_events, event_signals, scoped_handlers, fetch_signals, field_elements, system_signals, system_values, folding, for_loop, function_values, getters, go_blocks, gpu_maps, inlining, introspection, reflection, channel_words, lambdas, lazy_ranges, late_binding, foreign_modules, library_words, nonlocal_cells, memoization, markup_tags, style_rules, meta_entries, min_max, mutation, named_arguments, nested_index, number_keys, object_groups, shared_arrays, signal_values, overloads, page_html, parallel, parameter_shapes, phrase_calls, phrase_words, list_phrases, optional_casts, picked_calls, pipes, printable, references, result_word, routes, ruby_blocks, run_time_blocks, serve, soft_keywords, std_aliases, stored_values, database_tables, switch, traits, transitions, tuples, type_aliases, type_constructor, type_name_matching, type_tests, undo_history, variable_signals, variadic, versions, welcome_forms, word_operators};
 #[cfg(feature = "native")]
 pub mod wasm_reader;
 #[cfg(feature = "native")]
@@ -41,17 +41,21 @@ pub mod gpu;
 pub mod shared;
 #[cfg(feature = "native")]
 pub mod paint;
+#[cfg(feature = "native")]
+pub mod paint_window;
 pub mod wasm_optimizer;
-pub mod wasp_parser;
+pub mod warp_parser;
 pub mod wisp_parser;
 pub mod uniscript_entities;
 pub mod operators;
 pub mod meta;
+pub mod meta_section;
 pub mod host;
 #[cfg(feature = "native")]
 pub mod foreign;
 #[cfg(feature = "native")]
 pub mod std_adapters;
+pub mod std_docs;
 #[cfg(feature = "native")]
 pub mod web_server;
 #[cfg(feature = "native")]
@@ -63,11 +67,14 @@ pub mod dev_server;
 #[cfg(feature = "native")]
 pub mod fetches;
 #[cfg(feature = "native")]
+pub mod database;
+#[cfg(feature = "native")]
 pub mod components;
 #[cfg(feature = "native")]
 pub mod component_builder;
 pub mod ffi;
 pub mod ffi_parser;
+pub mod web_idl;
 pub mod function;
 pub mod normalize;
 pub mod local;
@@ -85,6 +92,7 @@ pub mod fixits;
 pub mod time;
 pub mod real;
 pub mod units;
+pub mod uncertain;
 pub mod fixed_width;
 pub mod modules;
 pub mod wasm_modules;
@@ -93,7 +101,7 @@ pub mod package_tools;
 pub mod web;
 
 // ==================== Core Re-exports ====================
-// Node AST - the heart of wasp
+// Node AST - the heart of warp
 pub use node::{Bracket, Node, Separator};
 pub use operators::{is_function_keyword, Op, FUNCTION_KEYWORDS};
 // Node convenience constructors
@@ -101,7 +109,7 @@ pub use node::{block, codepoint, error, error_node, float, floats, data, int, in
 // Node variants (except Number/List which conflict with extension types)
 pub use node::Node::{Char, Data, Empty, Error, False, Key, Meta, Symbol, Text, True};
 // Parser
-pub use wasp_parser::{parse, parse_data, parse_file, parse_xml, WaspParser};
+pub use warp_parser::{parse, parse_data, parse_file, parse_xml, WarpParser};
 pub use wisp_parser::{emit_wisp, parse_wisp, WispEmitter, WispParser};
 // Type system
 pub use type_kinds::{AstKind, NodeKind, Kind, TypeRegistry, TypeDef, FieldDef, USER_TYPE_TAG_START, extract_instance_values, RawFieldValue};

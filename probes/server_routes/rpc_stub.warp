@@ -1,0 +1,8 @@
+// card rpc-stub: the page asks the server (POST /rpc/greeting); the secret stays out of app.wasm
+// warp run probes/server_routes/rpc_stub.warp, then open http://localhost:18462/
+server def greeting(name) { "hi " + name + ", the server knows s3cret-token" }
+g := greeting("Ann")
+serve 18462 {
+	get "/api/ping" { "pong" }
+}
+p{ "said: " + (g ?? "…") }

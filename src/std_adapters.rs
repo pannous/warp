@@ -1,4 +1,4 @@
-//! The standard library's adapters (notes/stdlib.md section 7, adapter A): the words of std/<module>.wasp that wasp
+//! The standard library's adapters (notes/stdlib.md section 7, adapter A): the words of lib/<module>.warp that warp
 //! cannot write itself call the host words std_pure / std_io (module, member, arguments), answered here natively and
 //! by host.js's twin in the browser. Nodes in, a Node out; a failure is the error naming module.member. JSON crosses as
 //! for the foreign runtimes (foreign.rs json_of / node_of, host.js plainOfTree / treeOfPlain): null ø, booleans 1/0.
@@ -15,7 +15,7 @@ pub fn call(module: &str, member: &str, arguments: &Node) -> Result<Node, String
 		Node::Char(character) => Ok(character.to_string()),
 		other => Err(failure(format!("needs a text, got {}", other.serialize().trim()))),
 	};
-	// what write puts into a file: a text as it is, any other value as wasp writes it (`42`, `[1 2]`)
+	// what write puts into a file: a text as it is, any other value as warp writes it (`42`, `[1 2]`)
 	let content_of = |node: &Node| text_of(node).or_else(|_| Ok::<String, String>(node.serialize().trim().to_string()));
 	match (module, member, arguments.as_slice()) {
 		("json", "parse", [text]) => {
@@ -59,7 +59,11 @@ pub fn call(module: &str, member: &str, arguments: &Node) -> Result<Node, String
 			}
 		}
 		("net", "post", [url, body]) => crate::extensions::utils::post_within(&text_of(url)?, &content_of(body)?, crate::host::FETCH_TIMEOUT).map(Node::Text).map_err(failure),
+		// `clipboard.write(text)` (lowering/system_values.rs)
+		#[cfg(feature = "native")]
+		("clipboard", "write", [text]) => warp_runtime::system_values::write_clipboard(&text_of(text)?).map(|_| Node::Empty).map_err(failure),
 		("os", "env", [name]) => Ok(std::env::var(text_of(name)?).map_or(Node::Empty, Node::Text)),
+		("os", "args", []) => Ok(texts(PROGRAM_ARGUMENTS.with(|arguments| arguments.borrow().clone()))),
 		// `stored theme = "dark"` (lowering/stored_values.rs): the value kept under its name, or the default
 		("store", "load", [name, default, file]) => {
 			let kept = stored_values(&text_of(file)?).map_err(failure)?.remove(&text_of(name)?);
@@ -78,6 +82,9 @@ pub fn call(module: &str, member: &str, arguments: &Node) -> Result<Node, String
 			values.remove(&text_of(name)?);
 			save_stored_values(&file, values).map(|_| Node::Empty).map_err(failure)
 		}
+		// the tables of registered classes (lowering/database_tables.rs)
+		#[cfg(feature = "native")]
+		("table", member, arguments) => crate::database::call(member, arguments).map_err(failure),
 		("store", "names", [file]) => Ok(texts(stored_values(&text_of(file)?).map_err(failure)?.into_iter().map(|(name, _)| name))),
 		_ => Err(failure(format!("no such word of {} arguments", arguments.len()))),
 	}
@@ -86,19 +93,36 @@ pub fn call(module: &str, member: &str, arguments: &Node) -> Result<Node, String
 type StoredValues = serde_json::Map<String, serde_json::Value>;
 
 thread_local! {
-	/// The stored values of a program run without a file (`warp eval`, tests): kept while the process runs
-	static UNFILED_STORE: std::cell::RefCell<StoredValues> = std::cell::RefCell::new(StoredValues::new());
+	/// The command line arguments after the program file (`warp run prog.warp a b`), what `use os; args` gives
+	static PROGRAM_ARGUMENTS: std::cell::RefCell<Vec<String>> = Default::default();
 }
 
-/// Values kept in memory: of a program without a file, and those a `warp dev` page keeps itself (its sessionStorage)
-fn is_unfiled(file: &str) -> bool {
-	file.is_empty() || file == crate::stored_values::DEV_STORE
+/// The arguments the running program gets as `args`
+pub fn set_program_arguments(arguments: Vec<String>) {
+	PROGRAM_ARGUMENTS.with(|kept| *kept.borrow_mut() = arguments);
+}
+
+thread_local! {
+	/// The stored values kept in memory while the process runs, by store: of a program without a file (`warp eval`,
+	/// tests) and a dev page's under "", the session's (`session[k]`) under its own
+	static UNFILED_STORES: std::cell::RefCell<std::collections::HashMap<&'static str, StoredValues>> = Default::default();
+}
+
+/// The store in memory a file stands for: of a program without a file, those a `warp dev` page keeps itself (its
+/// sessionStorage), the session's, inline code's database; none for a store file
+fn unfiled_store(file: &str) -> Option<&'static str> {
+	match file {
+		"" | crate::stored_values::DEV_STORE => Some(""),
+		crate::stored_values::SESSION_STORE => Some(crate::stored_values::SESSION_STORE),
+		crate::stored_values::DATABASE_STORE => Some(crate::stored_values::DATABASE_STORE),
+		_ => None,
+	}
 }
 
 /// The stored values in the program's store file (a JSON object by name), none when it does not exist yet
 fn stored_values(file: &str) -> Result<StoredValues, String> {
-	if is_unfiled(file) {
-		return Ok(UNFILED_STORE.with(|store| store.borrow().clone()));
+	if let Some(store) = unfiled_store(file) {
+		return Ok(UNFILED_STORES.with(|stores| stores.borrow().get(store).cloned().unwrap_or_default()));
 	}
 	match std::fs::read_to_string(file) {
 		Ok(text) => serde_json::from_str(&text).map_err(|problem| format!("{file} holds no stored values: {problem}")),
@@ -108,8 +132,8 @@ fn stored_values(file: &str) -> Result<StoredValues, String> {
 }
 
 fn save_stored_values(file: &str, values: StoredValues) -> Result<(), String> {
-	if is_unfiled(file) {
-		UNFILED_STORE.with(|store| *store.borrow_mut() = values);
+	if let Some(store) = unfiled_store(file) {
+		UNFILED_STORES.with(|stores| stores.borrow_mut().insert(store, values));
 		return Ok(());
 	}
 	let text = serde_json::to_string_pretty(&values).map_err(|problem| problem.to_string())?;
@@ -125,7 +149,7 @@ fn texts(items: impl IntoIterator<Item = String>) -> Node {
 /// use them either (host.js checks the same); every other syntax error is the regex crate's own
 fn regex_of(pattern: &str) -> Result<regex::Regex, String> {
 	if let Some(feature) = unshared_feature(pattern) {
-		return Err(format!("{feature} is not in wasp's regex (one engine lacks it): {pattern}"));
+		return Err(format!("{feature} is not in warp's regex (one engine lacks it): {pattern}"));
 	}
 	regex::Regex::new(pattern).map_err(|problem| problem.to_string())
 }

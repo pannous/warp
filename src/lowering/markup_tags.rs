@@ -1,5 +1,5 @@
 //! wiki/mark.md: inside a tag's block `div(class:"form-group")` is the tag `div{class:"form-group"}`, and
-//! `label(for:pwd):"Password"` the tag `label{for:pwd "Password"}` (samples/html.wasp, card g-_alg). Only data takes
+//! `label(for:pwd):"Password"` the tag `label{for:pwd "Password"}` (samples/html.warp, card g-_alg). Only data takes
 //! this reading: a name the program defines stays its call, and outside a tag block a call of an unbound name stays
 //! the loud error (P92). A comprehension or method call among an element's children gives children (card web-keyed).
 
@@ -9,6 +9,8 @@ use std::collections::HashSet;
 
 const FOR_WORD: &str = "for";
 const IN_WORD: &str = "in";
+const ALL_WORD: &str = "all";
+const TAG_ITEM: &str = "tag·item"; // the loop variable of `li all xs`
 
 pub fn lower(node: Node) -> Node {
 	// `label(for:pwd):"Password"` itself would read as a definition: only `:=`, function keywords and assignments define
@@ -33,8 +35,8 @@ fn outside_tags(node: Node, defined: &HashSet<String>) -> Node {
 	}
 }
 
-/// `ul { … }` with a blank, as a statement: the element `ul{ … }` when the program does not define the name, so its
-/// children read as the glued tag's do (`ul { for item in items { li: item } }`, samples/html_dsl.wasp);
+/// `ul { … }` with a blank, as a statement or a child of an element: the element `ul{ … }` when the program does not define the name, so its
+/// children read as the glued tag's do (`ul { for item in items { li: item } }`, samples/html_dsl.warp);
 /// glued `html(lang: "en"){ … }` (a round list) the element `html{ lang: "en" … }`, its attributes before its children
 /// (card markup-attribute)
 fn spaced_element(node: Node, defined: &HashSet<String>) -> Node {
@@ -75,6 +77,7 @@ fn tag_with_attributes(node: Node, defined: &HashSet<String>) -> Node {
 		Node::Key(name, Op::Colon, body) => match *body {
 			Node::List(items, Bracket::Curly, separator) => {
 				let is_element = matches!(name.drop_meta(), Node::Symbol(tag) if crate::markup::is_element_tag(tag));
+				let items = if is_element { tags_over_values(spaced_children(items, &separator, defined), defined) } else { items };
 				let items = items.into_iter().map(|item| tag_with_attributes(attributed_tag(item, defined), defined))
 					.map(|item| if is_element { loop_as_comprehension(item) } else { item })
 					.map(|item| if is_element && is_computed_children(&item) { Node::List(vec![item], Bracket::Square, Separator::None) } else { item })
@@ -84,6 +87,14 @@ fn tag_with_attributes(node: Node, defined: &HashSet<String>) -> Node {
 			body => Node::Key(name, Op::Colon, Box::new(body)),
 		},
 		other => other,
+	}
+}
+
+/// An element's children with each spaced `ul { … }` the element; a lone one is the whole block, `{ ul { … } }`
+fn spaced_children(items: Vec<Node>, separator: &Separator, defined: &HashSet<String>) -> Vec<Node> {
+	match spaced_element(Node::List(items, Bracket::None, separator.clone()), defined) {
+		Node::List(items, Bracket::None, _) => items.into_iter().map(|item| spaced_element(item, defined)).collect(),
+		element => vec![element],
 	}
 }
 
@@ -185,6 +196,47 @@ fn loop_as_comprehension(item: Node) -> Node {
 	};
 	let header = Node::List(vec![for_word.clone(), variable.clone(), in_word.clone(), sequence.clone(), Node::Empty], Bracket::None, Separator::Space);
 	Node::List(vec![element, header], Bracket::Square, Separator::Space)
+}
+
+/// Among an element's children a tag word applied to values, as broadcasting applies a function (card ul-li):
+/// `li all fruits` and `li ["apple" "pear"]` give one tag per item (`[li{item} for item in …]`), `li "apple"` the
+/// one tag `li{"apple"}`; a bare word before anything else stays a child
+fn tags_over_values(children: Vec<Node>, defined: &HashSet<String>) -> Vec<Node> {
+	let tag_word = |node: &Node| match node.drop_meta() {
+		Node::Symbol(word) if crate::markup::is_element_tag(word) && !defined.contains(word) => Some(word.clone()),
+		_ => None,
+	};
+	let is_word = |node: &Node, word: &str| matches!(node.drop_meta(), Node::Symbol(symbol) if symbol == word);
+	let mut result = Vec::with_capacity(children.len());
+	let mut rest = children.into_iter().peekable();
+	while let Some(child) = rest.next() {
+		let Some(tag) = tag_word(&child) else {
+			result.push(child);
+			continue;
+		};
+		let next = rest.peek().map(Node::drop_meta);
+		if next.is_some_and(|node| is_word(node, ALL_WORD)) {
+			rest.next();
+			match rest.next() {
+				Some(values) => result.push(tag_per_item(tag, values)),
+				None => result.extend([child, Node::Symbol(ALL_WORD.into())]),
+			}
+		} else if matches!(next, Some(Node::List(_, Bracket::Square, _))) {
+			result.push(tag_per_item(tag, rest.next().unwrap()));
+		} else if matches!(next, Some(Node::Text(_) | Node::Number(_))) {
+			result.push(tag_node(tag, vec![rest.next().unwrap()]));
+		} else {
+			result.push(child);
+		}
+	}
+	result
+}
+
+/// `[tag{item} for item in values]`, the comprehension markup reads as children
+fn tag_per_item(tag: String, values: Node) -> Node {
+	let item = Node::Symbol(TAG_ITEM.into());
+	let header = Node::List(vec![Node::Symbol(FOR_WORD.into()), item.clone(), Node::Symbol(IN_WORD.into()), values, Node::Empty], Bracket::None, Separator::Space);
+	Node::List(vec![tag_node(tag, vec![item]), header], Bracket::Square, Separator::Space)
 }
 
 fn tag_node(name: String, items: Vec<Node>) -> Node {

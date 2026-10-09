@@ -210,12 +210,12 @@ fn expand_home(path: &str) -> PathBuf {
 	}
 }
 
-fn lean_executable(name: &str) -> PathBuf {
+pub(crate) fn lean_executable(name: &str) -> PathBuf {
 	let elan = expand_home(&format!("~/.elan/bin/{}", name));
 	if elan.exists() { elan } else { PathBuf::from(name) }
 }
 
-fn run_with_timeout(mut command: Command) -> Result<String, String> {
+pub(crate) fn run_with_timeout(mut command: Command) -> Result<String, String> {
 	let mut child = command
 		.stdout(Stdio::piped())
 		.stderr(Stdio::piped())

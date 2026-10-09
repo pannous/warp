@@ -4,7 +4,7 @@
 //! declared with a scalar type (`x:int`, `square number`, P50) or, undeclared, is an arithmetic operand of the body; a
 //! function of a list (`count(xs)`, `xs#2`, `xs:list`) takes the list whole. Operators never broadcast (`[1 2 3]*2`).
 
-use crate::analyzer::annotated_kind;
+use crate::analyzer::{annotated_kind, list_element_type};
 use crate::function_values::{definitions, Definition};
 use crate::type_kinds::Kind;
 use crate::lambdas::IMPLICIT_PARAMETER;
@@ -16,7 +16,7 @@ const ARITHMETIC: [Op; 6] = [Op::Add, Op::Sub, Op::Mul, Op::Div, Op::Mod, Op::Po
 const MAP_WORD: &str = "map";
 const ALL_WORD: &str = "all";
 /// Methods that append to a list variable (analyzer APPEND_METHODS)
-const APPEND_METHODS: [&str; 3] = ["add", "append", "push"];
+pub(crate) const APPEND_METHODS: [&str; 3] = ["add", "append", "push"];
 const EXTREMUM_WORDS: [&str; 2] = ["max", "min"];
 /// Parameter types a comparison's result fits
 const TRUTH_TYPES: [&str; 3] = ["bool", "boolean", "any"];
@@ -29,6 +29,16 @@ const SCALAR_OPERATORS: [Op; 3] = [Op::Abs, Op::Sqrt, Op::Cbrt];
 const ALL_ITEM: &str = "all_item";
 /// Declared parameter kinds that take one element of a list (P50)
 const SCALAR_KINDS: [Kind; 4] = [Kind::Int, Kind::Float, Kind::Text, Kind::Codepoint];
+/// `xs .op ys` of two lists (card gpu-vectors, notes/gpu.md): the lists held once, their items paired by index
+pub(crate) const PAIRED_TEMPLATE: &str = "(LEFT = paired_left; RIGHT = paired_right; (1 to COUNT).map(paired_index => paired_item))";
+const PAIRED_ITEM: &str = "LEFT#paired_index + RIGHT#paired_index";
+pub(crate) const PAIRED_COUNT: &str = "(if #LEFT == #RIGHT then #LEFT else raise \"element-wise operator: the lists differ in length\")";
+/// `sum(xs .* ys)` and `sum(xs .* 3)` fused into one loop, no list of the products built (5–20× faster, notes/gpu.md)
+pub(crate) const PAIRED_SUM_TEMPLATE: &str = "(LEFT = paired_left; RIGHT = paired_right; SUM = 0; for paired_index in 1 to COUNT { SUM = SUM + paired_item }; SUM)";
+const FUSED_SUM_TEMPLATE: &str = "(ITEMS = fused_list; SUM = 0; for ITEM in ITEMS { SUM = SUM + fused_item }; SUM)";
+const SUM_WORD: &str = "sum";
+/// `dot(xs, ys)` is `sum(xs .* ys)`, unless the program defines dot
+const DOT_WORD: &str = "dot";
 
 /// P84 (user: "This should have already been done with broadcasting"): several juxtaposed arguments of a function of one
 /// parameter are one list, `sum 1 2 3` is `sum [1 2 3]`, and a scalar function broadcasts over it (`square 1 2 3`).
@@ -103,7 +113,7 @@ fn all_marked(argument: &Node) -> Option<&Node> {
 }
 
 /// The function and the list of `f all xs`, also as the parser nests a known function's argument, `f (all xs)`
-fn all_call_parts(items: &[Node]) -> Option<(&Node, &Node)> {
+pub(crate) fn all_call_parts(items: &[Node]) -> Option<(&Node, &Node)> {
 	let is_all = |node: &Node| matches!(node.drop_meta(), Node::Symbol(word) if word == ALL_WORD);
 	match items {
 		[function, all, list] if is_all(all) => Some((function, list)),
@@ -266,10 +276,11 @@ pub fn lower(program: Node) -> Node {
 	let defined: HashSet<&String> = found.iter().map(|definition| &definition.name).collect();
 	broadcasting.extend(SCALAR_LIBRARY_WORDS.iter().map(|word| word.to_string()).filter(|word| !defined.contains(word)));
 	let mut assigned = HashMap::new();
-	collect_list_variables(&program, &mut assigned);
+	collect_list_variables(&program, &broadcasting, &mut assigned);
 	let list_variables = assigned.into_iter().filter(|(_, only_lists)| *only_lists).map(|(name, _)| name).collect();
 	let scalar_parameters = found.iter().map(|definition| (definition.name.clone(), definition.params.iter().map(|param| takes_a_scalar(param, &definition.body)).collect())).collect();
-	Broadcast { functions: broadcasting, list_variables, scalar_parameters }.rewrite(program)
+	let [defines_dot, defines_sum] = [DOT_WORD, SUM_WORD].map(|word| defined.contains(&word.to_string()));
+	Broadcast { functions: broadcasting, list_variables, scalar_parameters, defines_dot, defines_sum, paired: Default::default() }.rewrite(program)
 }
 
 /// `map(list, broadcast_item => applied(broadcast_item))`
@@ -323,10 +334,24 @@ fn is_arithmetic_operand(body: &Node, name: &str) -> bool {
 	found
 }
 
-/// Variable → whether every value assigned to it is a list literal that is no object
-fn collect_list_variables(node: &Node, assigned: &mut HashMap<String, bool>) {
+/// The function and argument of `f x` or `f(x)` when f broadcasts
+fn broadcasting_call<'a>(items: &'a [Node], bracket: &Bracket, separator: &Separator, functions: &HashSet<String>) -> Option<(&'a str, &'a Node)> {
+	let is_call = matches!((bracket, separator), (Bracket::Round, Separator::None) | (Bracket::None | Bracket::Round, Separator::Space)); // also `(f [1 2])`
+	let [head, argument] = items else { return None };
+	let Node::Symbol(name) = head.drop_meta() else { return None };
+	(is_call && functions.contains(name)).then_some((name.as_str(), argument))
+}
+
+/// Variable → whether every value assigned to it is a list literal that is no object; a broadcast over the variable itself
+/// (`ps = moved ps`) keeps what it is, so it needs a list assigned elsewhere (`up(x) := { x = upper x }` maps no text)
+fn collect_list_variables(node: &Node, functions: &HashSet<String>, assigned: &mut HashMap<String, bool>) {
 	// `xs = []` (which parses as ø) is a list once the program appends to xs: `xs.add(i)`, `xs = xs + [i]`
 	let mut appended: HashSet<String> = HashSet::new();
+	// `float[n]` is the subscript `float#(n+1)` still: a zero-filled list unless float names a variable
+	let mut variables: HashSet<String> = HashSet::new();
+	node.visit(&mut |part| if let Node::Key(target, Op::Assign | Op::Define, _) = part {
+		variables.extend(assigned_variable(target).map(|(name, _)| name.clone()));
+	});
 	node.visit(&mut |part| match part {
 		Node::Key(list, Op::Dot, call) => {
 			if let (Node::Symbol(name), Node::List(items, _, _)) = (list.drop_meta(), call.drop_meta()) {
@@ -346,9 +371,17 @@ fn collect_list_variables(node: &Node, assigned: &mut HashMap<String, bool>) {
 	});
 	node.visit(&mut |part| {
 		if let Node::Key(target, Op::Assign | Op::Define, value) = part {
-			if let Node::Symbol(name) = target.drop_meta() {
-				let is_list = match value.drop_meta() {
+			if let Some((name, declared_type)) = assigned_variable(target) {
+				if is_broadcast_over(value, name, functions) {
+					return;
+				}
+				let declared_list = declared_type.is_some_and(|type_node| list_element_type(&type_node.serialize()).is_some());
+				let is_list = declared_list || match value.drop_meta() {
 					Node::List(items, Bracket::Square, _) => !items.iter().any(is_pair),
+					_ if is_range(value) => true,
+					_ if element_wise_parts(value).is_some() => true,
+					_ if crate::analyzer::typed_array_value(value).is_some() => true,
+					Node::Key(element, Op::Hash, one_based) => crate::analyzer::zero_filled_subscript(element, one_based, &variables).is_some(),
 					Node::Empty => appended.contains(name),
 					// `xs = xs + [i]`
 					Node::Key(left, Op::Add, right) => matches!(left.drop_meta(), Node::Symbol(same) if same == name) && matches!(right.drop_meta(), Node::List(_, Bracket::Square, _)),
@@ -358,6 +391,33 @@ fn collect_list_variables(node: &Node, assigned: &mut HashMap<String, bool>) {
 			}
 		}
 	});
+}
+
+/// The variable `x = …` or `x: type = …` assigns, and its declared type
+fn assigned_variable(target: &Node) -> Option<(&String, Option<&Node>)> {
+	match target.drop_meta() {
+		Node::Symbol(name) => Some((name, None)),
+		Node::Key(name, Op::Colon, declared_type) => match name.drop_meta() {
+			Node::Symbol(name) => Some((name, Some(declared_type))),
+			_ => None,
+		},
+		_ => None,
+	}
+}
+
+/// `1 to 4`, `(1 to 4)`, `1..4`
+fn is_range(node: &Node) -> bool {
+	match node.drop_meta() {
+		Node::Key(_, Op::Range | Op::To, _) => true,
+		Node::List(items, Bracket::Round, _) => matches!(items.as_slice(), [only] if is_range(only)),
+		_ => false,
+	}
+}
+
+/// `moved ps`, `moved(ps)` of a broadcasting function
+fn is_broadcast_over(value: &Node, variable: &str, functions: &HashSet<String>) -> bool {
+	let Node::List(items, bracket, separator) = value.drop_meta() else { return false };
+	broadcasting_call(items, bracket, separator, functions).is_some_and(|(_, argument)| matches!(argument.drop_meta(), Node::Symbol(same) if same == variable))
 }
 
 fn is_pair(node: &Node) -> bool {
@@ -373,16 +433,24 @@ struct Broadcast {
 	list_variables: HashSet<String>,
 	/// Per function of several parameters: which parameters take one value (`add(a, b) := a + b`: both)
 	scalar_parameters: HashMap<String, Vec<bool>>,
+	defines_dot: bool,
+	defines_sum: bool,
+	/// element-wise operators between two lists so far: each holds its lists under names of its own
+	paired: std::cell::Cell<usize>,
 }
 
 impl Broadcast {
 	fn rewrite(&self, node: Node) -> Node {
 		match node {
 			Node::List(items, bracket, separator) => {
-				// `map square [1 2 3]`: the iteration word applies square itself (lambdas.rs), no broadcast inside it
+				if let Some(reduced) = self.dot(&items, &bracket).or_else(|| self.fused_sum(&items, &bracket)) {
+					return reduced;
+				}
+				// `map square [1 2 3]`: the iteration word applies square itself (lambdas.rs), no broadcast inside it; a
+				// parenthesized argument is a value of its own, `(square xs) |> filter(…)` is `filter (square xs) …`
 				let iterates = matches!(items.first().map(Node::drop_meta), Some(Node::Symbol(word)) if crate::function_values::ITERATION_WORDS.contains(&word.as_str()));
 				let items: Vec<Node> = items.into_iter().map(|item| match item.drop_meta() {
-					Node::List(inner, inner_bracket, inner_separator) if iterates => {
+					Node::List(inner, inner_bracket, inner_separator) if iterates && *inner_bracket != Bracket::Round => {
 						Node::List(inner.iter().cloned().map(|part| self.rewrite(part)).collect(), inner_bracket.clone(), inner_separator.clone())
 					}
 					_ => self.rewrite(item),
@@ -395,7 +463,16 @@ impl Broadcast {
 				let right = self.rewrite(*right);
 				self.broadcast_operator(op, &right).unwrap_or(Node::Key(left, op, Box::new(right)))
 			}
-			Node::Key(left, op, right) => Node::Key(Box::new(self.rewrite(*left)), op, Box::new(self.rewrite(*right))),
+			Node::Key(left, op, right) => {
+				let (left, right) = (self.rewrite(*left), self.rewrite(*right));
+				let key = Node::Key(Box::new(left), op, Box::new(right));
+				if let Some(paired) = self.paired_lists(&key) {
+					return paired;
+				}
+				let Node::Key(left, op, right) = key else { unreachable!() };
+				let method_call = (op == Op::Dot).then(|| self.broadcast_method(&left, &right)).flatten();
+				method_call.unwrap_or(Node::Key(left, op, right))
+			}
 			Node::Meta { node, data } => Node::Meta { node: Box::new(self.rewrite(*node)), data },
 			other => other,
 		}
@@ -403,20 +480,40 @@ impl Broadcast {
 
 	/// `f [1 2]`, `f([1 2])`, `f xs` of a broadcasting function `f`
 	fn broadcast_call(&self, items: &[Node], bracket: &Bracket, separator: &Separator) -> Option<Node> {
-		let is_call = matches!((bracket, separator), (Bracket::Round, Separator::None) | (Bracket::None | Bracket::Round, Separator::Space)); // also `(f [1 2])`
-		let [head, argument] = items else { return None };
-		let Node::Symbol(name) = head.drop_meta() else { return None };
-		if !is_call || !self.functions.contains(name) {
-			return None;
-		}
+		let (name, argument) = broadcasting_call(items, bracket, separator, &self.functions)?;
 		match argument.drop_meta() {
 			Node::List(elements, Bracket::Square, element_separator) if !elements.is_empty() => {
 				let applied = elements.iter().map(|element| self.apply(name, element.clone())).collect();
 				Some(Node::List(applied, Bracket::Square, element_separator.clone()))
 			}
-			Node::Symbol(variable) if self.list_variables.contains(variable) => Some(each_item(argument.clone(), |item| call(name, item))),
+			_ if self.is_list_value(argument) => Some(each_item(argument.clone(), |item| call(name, item))),
 			_ => None,
 		}
+	}
+
+	/// `names.upper`, `names.upper()`: the method form of a broadcasting function maps over the list as `upper names`
+	/// does (card method-broadcast, default pending the user's decision)
+	fn broadcast_method(&self, receiver: &Node, method: &Node) -> Option<Node> {
+		let name = match method.drop_meta() {
+			Node::Symbol(name) => name,
+			Node::List(items, Bracket::Round, _) => match items.as_slice() {
+				[only] => match only.drop_meta() {
+					Node::Symbol(name) => name,
+					_ => return None,
+				},
+				_ => return None,
+			},
+			_ => return None,
+		};
+		if !self.is_list(receiver) {
+			return None;
+		}
+		self.broadcast_call(&[Node::Symbol(name.clone()), receiver.clone()], &Bracket::Round, &Separator::None)
+	}
+
+	/// A list variable or a range: `sqrt xs`, `sqrt (1 to 4)` map over its items
+	fn is_list_value(&self, node: &Node) -> bool {
+		is_range(node) || matches!(node.drop_meta(), Node::Symbol(variable) if self.list_variables.contains(variable))
 	}
 
 	/// `add [1 2] 10`, `add(10, xs)`, `add(all xs, 10)`, `square(all xs)`: a call whose one list argument goes to a
@@ -446,12 +543,68 @@ impl Broadcast {
 		}))
 	}
 
+	/// `xs .op ys` with both sides lists: the items paired by index (lists of different lengths are an error)
+	fn paired_lists(&self, node: &Node) -> Option<Node> {
+		let (receiver, op, operand) = element_wise_parts(node)?;
+		if !self.is_list_expression(&receiver) || !self.is_list_expression(&operand) {
+			return None;
+		}
+		Some(self.paired(receiver, op, operand, PAIRED_TEMPLATE))
+	}
+
+	/// Two lists, their items paired by index in `template`: a list of `left op right`, or their sum
+	fn paired(&self, receiver: Node, op: Op, operand: Node, template: &str) -> Node {
+		paired_by(receiver, op, operand, template, self.namer())
+	}
+
+	/// The template's names made this rewrite's own: LEFT → paired_left_3 …
+	fn namer(&self) -> impl Fn(&str) -> String {
+		named_by(self.paired.replace(self.paired.get() + 1).to_string())
+	}
+
+	/// `sum(xs .op ys)`, `sum(xs .op k)`: one loop adding the items, the element-wise list never built
+	fn fused_sum(&self, items: &[Node], bracket: &Bracket) -> Option<Node> {
+		let [head, argument] = items else { return None };
+		if self.defines_sum || *bracket != Bracket::Round || head.name() != SUM_WORD {
+			return None;
+		}
+		let (receiver, op, operand) = element_wise_parts(ungrouped(argument))?;
+		if !self.is_list_expression(&receiver) {
+			return None;
+		}
+		let (receiver, operand) = (self.rewrite(receiver), self.rewrite(operand));
+		if self.is_list_expression(&operand) {
+			return Some(self.paired(receiver, op, operand, PAIRED_SUM_TEMPLATE));
+		}
+		let named = self.namer();
+		let item = Node::Key(Box::new(Node::Symbol(named("ITEM"))), op, Box::new(operand));
+		let bindings = HashMap::from([("fused_list".to_string(), receiver), ("fused_item".to_string(), item)]);
+		Some(crate::law::substitute(&crate::warp_parser::parse(&named(FUSED_SUM_TEMPLATE)), &bindings))
+	}
+
+	/// A list, or an element-wise expression giving one: `xs`, `[1 2]`, `(xs .* 2)`
+	fn is_list_expression(&self, node: &Node) -> bool {
+		match node.drop_meta() {
+			Node::List(items, Bracket::Round, _) if items.len() == 1 => self.is_list_expression(&items[0]),
+			_ => self.is_list(node) || element_wise_parts(node).is_some_and(|(receiver, _, _)| self.is_list_expression(&receiver)),
+		}
+	}
+
+	/// `dot(xs, ys)`: `sum(xs .* ys)`
+	fn dot(&self, items: &[Node], bracket: &Bracket) -> Option<Node> {
+		let [head, left, right] = items else { return None };
+		if self.defines_dot || *bracket != Bracket::Round || !matches!(head.drop_meta(), Node::Symbol(word) if word == DOT_WORD) {
+			return None;
+		}
+		let sum = [Node::Symbol(SUM_WORD.to_string()), crate::analyzer::element_wise(left.clone(), Op::Mul, right.clone())];
+		self.fused_sum(&sum, bracket).or_else(|| Some(Node::List(vec![sum[0].clone(), self.rewrite(sum[1].clone())], Bracket::Round, Separator::None)))
+	}
+
 	/// A list literal that is no object, or a variable only ever assigned one
 	fn is_list(&self, node: &Node) -> bool {
 		match node.drop_meta() {
 			Node::List(elements, Bracket::Square, _) => !elements.is_empty() && !elements.iter().any(is_pair),
-			Node::Symbol(variable) => self.list_variables.contains(variable),
-			_ => false,
+			_ => self.is_list_value(node),
 		}
 	}
 
@@ -462,7 +615,7 @@ impl Broadcast {
 			Node::List(elements, Bracket::Square, separator) if !elements.is_empty() && !elements.iter().any(is_pair) => {
 				Some(Node::List(elements.iter().cloned().map(applied).collect(), Bracket::Square, separator.clone()))
 			}
-			Node::Symbol(variable) if self.list_variables.contains(variable) => Some(each_item(argument.clone(), applied)),
+			_ if self.is_list_value(argument) => Some(each_item(argument.clone(), applied)),
 			_ => None,
 		}
 	}
@@ -505,7 +658,32 @@ fn scalar_element_wise(node: Node, parameters: &[String]) -> Node {
 }
 
 /// `x.map(each_element => each_element op operand)`: x, op, operand
-fn element_wise_parts(node: &Node) -> Option<(Node, Op, Node)> {
+/// `(x)` → x
+fn ungrouped(node: &Node) -> &Node {
+	match node.drop_meta() {
+		Node::List(items, Bracket::Round, _) if items.len() == 1 => ungrouped(&items[0]),
+		other => other,
+	}
+}
+
+/// Two lists, their items paired by index in `template`: a list of `left op right`, or their sum; `named` makes the
+/// template's names the rewrite's own
+pub(crate) fn paired_by(receiver: Node, op: Op, operand: Node, template: &str, named: impl Fn(&str) -> String) -> Node {
+	let item = match crate::warp_parser::parse(&named(PAIRED_ITEM)).drop_meta() {
+		Node::Key(left, _, right) => Node::Key(left.clone(), op, right.clone()),
+		other => unreachable!("{other:?}"),
+	};
+	let bindings = HashMap::from([("paired_left".to_string(), receiver), ("paired_right".to_string(), operand), ("paired_item".to_string(), item)]);
+	crate::law::substitute(&crate::warp_parser::parse(&named(&template.replace("COUNT", PAIRED_COUNT))), &bindings)
+}
+
+/// The templates' names with `unique` appended: LEFT → paired_left_3 …
+pub(crate) fn named_by(unique: String) -> impl Fn(&str) -> String {
+	move |text: &str| [("LEFT", "paired_left"), ("RIGHT", "paired_right"), ("SUM", "fused_sum"), ("ITEMS", "fused_items"), ("ITEM", "fused_item")]
+		.iter().fold(text.to_string(), |text, (placeholder, name)| text.replace(placeholder, &format!("{name}_{unique}")))
+}
+
+pub(crate) fn element_wise_parts(node: &Node) -> Option<(Node, Op, Node)> {
 	let Node::Key(receiver, Op::Dot, call) = node.drop_meta() else { return None };
 	let Node::List(items, Bracket::Round, _) = call.drop_meta() else { return None };
 	let [word, lambda] = items.as_slice() else { return None };

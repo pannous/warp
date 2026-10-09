@@ -1,0 +1,5 @@
+// The hole the variance probes found: the element type of a declared list was never checked.
+// Fixed (card list-element-types): "type mismatch: names is declared texts, cannot hold int 420"
+names: texts = ["hi"]
+names.add(420)
+names

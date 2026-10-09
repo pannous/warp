@@ -4,24 +4,33 @@
 // might have meant is an "I meant: …" button that rewrites the code at the warning and runs it again (notes/fixits.md).
 
 const ACKNOWLEDGED_KEY = "warp-playground-acknowledged";
+const SIZES_KEY = "warp-playground-sizes"; // the guide's width and the editor's height as the resizers left them
+const GUIDE_WIDTH_RANGE = [200, 0.6]; // pixels, then the share of the page's width
+const EDITOR_HEIGHT_RANGE = [120, 0.85]; // pixels, then the share of the window's height
+const RESIZE_STEP = 20; // pixels per arrow key on a focused resizer
 const OLD_ANSWERS_KEY = "warp-playground-answers"; // the Ask era kept {topic: form, "ack:<topic>": "acknowledged"}
 const RUN_TIMEOUT_MS = 10000;
 // the origin a link of the shown program resolves against: "/about" is a page of the program, "https://…" is not
 const PROGRAM_ORIGIN = "http://program.invalid";
 const TYPING_DELAY_MS = 300;
-const DEFAULT_EXAMPLE = "welcome";
+const PENDING_VALUE = "…"; // the value shown from Run until the new one arrives
+const DEFAULT_EXAMPLE = "hello";
+const COMMIT_URL = "https://github.com/pannous/warp/commit/";
+const SHORT_COMMIT = 9;
+const EXAMPLE_PARAMETERS = ["example", "sample"]; // ?example=fizzbuzz (or #fizzbuzz) picks a tour example or sample; the address shows the chosen one as #fizzbuzz
 const DEBUG_PARAMETER = "debug"; // ?debug runs warp.debug.wasm: Rust names and lines in traces and the debugger
 const DEBUG_COMPILER = "warp.debug.wasm";
+const SLOW_START_PARAMETER = "slow_start"; // ?slow_start=<ms>: the worker reports ready that much later (a slow machine)
 const ACKNOWLEDGED = "acknowledged";
 const ACKNOWLEDGED_PREFIX = "ack:";
 const STDERR = 2;
 const STDOUT = 1;
-const NOTIFICATION_TITLE = "wasp";
+const NOTIFICATION_TITLE = "warp";
 // a page event, or one element's (`on click·1`, src/lowering/element_events.rs)
 const PAGE_EVENT = /^on ((?:click|key|input)(?:·\d+)?)$/;
 const DARK_MODE_QUERY = "(prefers-color-scheme: dark)";
 // the gray levels of paint: a nonzero pixel, a zero pixel; from PAINT_COLOR_FROM on a value is a color 0xAARRGGBB
-// (src/paint.rs shade, std/draw.wasp)
+// (src/paint.rs shade, lib/draw.warp)
 const PAINT_INK = 29;
 const PAINT_PAPER = 250;
 const PAINT_COLOR_FROM = 2 ** 24;
@@ -36,6 +45,7 @@ function element(tag, properties = {}, ...children) {
 
 let worker;
 let workerReady;
+let workerWarmed; // the worker was asked to compile the markup renderer ahead of the first markup run (worker.js warmUp)
 let nextRunId = 0;
 let pending; // {id, resolve, printed, timer} of the run in the worker
 let runs = Promise.resolve(); // the evaluations, one after another
@@ -63,6 +73,51 @@ function saveAcknowledged(topics) {
 
 let acknowledged = loadAcknowledged();
 
+// ---- the resizers: the guide's width and the editor's height, remembered in this browser -------------------
+
+let sizes = (() => { try { return JSON.parse(localStorage.getItem(SIZES_KEY)) ?? {}; } catch { return {}; } })();
+const clamp = (value, [least, share], whole) => Math.round(Math.min(Math.max(value, least), whole * share));
+
+function applySizes() {
+	const main = document.querySelector("main");
+	if (sizes.guide) main.style.setProperty("--guide-width", `${clamp(sizes.guide, GUIDE_WIDTH_RANGE, main.clientWidth)}px`);
+	else main.style.removeProperty("--guide-width");
+	editor.getWrapperElement().style.height = sizes.editor ? `${clamp(sizes.editor, EDITOR_HEIGHT_RANGE, innerHeight)}px` : "";
+	editor.refresh();
+}
+
+function setSize(name, value) {
+	if (value === undefined) delete sizes[name];
+	else sizes[name] = Math.round(value);
+	applySizes();
+	try { localStorage.setItem(SIZES_KEY, JSON.stringify(sizes)); } catch { /* private window: lasts for this page */ }
+}
+
+// drag the handle (or press its arrow keys) to set a size; sizeAt(pointer event) is the size there, current() the size now
+function dragToResize(handle, name, sizeAt, current, [lessKey, moreKey]) {
+	handle.addEventListener("pointerdown", down => {
+		down.preventDefault();
+		handle.setPointerCapture(down.pointerId);
+		handle.classList.add("dragging");
+		const move = event => setSize(name, sizeAt(event));
+		handle.addEventListener("pointermove", move);
+		handle.addEventListener("pointerup", () => { handle.removeEventListener("pointermove", move); handle.classList.remove("dragging"); }, { once: true });
+	});
+	handle.addEventListener("keydown", key => {
+		const step = { [lessKey]: -RESIZE_STEP, [moreKey]: RESIZE_STEP }[key.key];
+		if (step) { key.preventDefault(); setSize(name, current() + step); }
+	});
+	handle.ondblclick = () => setSize(name, undefined);
+}
+
+function startResizers() {
+	const main = document.querySelector("main"), editorPane = document.querySelector(".editor-pane");
+	dragToResize($("guide-resizer"), "guide", event => event.clientX - main.getBoundingClientRect().left, () => $("guide").offsetWidth, ["ArrowLeft", "ArrowRight"]);
+	dragToResize($("editor-resizer"), "editor", event => event.clientY - editorPane.getBoundingClientRect().top, () => editorPane.offsetHeight, ["ArrowUp", "ArrowDown"]);
+	addEventListener("resize", applySizes);
+	applySizes();
+}
+
 // what web_evaluate takes: `ack:<topic>` keys (the newer compiler also takes the plain list of topics)
 const acknowledgements = () => Object.fromEntries(acknowledged.map(topic => [ACKNOWLEDGED_PREFIX + topic, ACKNOWLEDGED]));
 
@@ -79,27 +134,36 @@ function showAgain(topic) {
 // ---- the worker ---------------------------------------------------------------------------------------------
 
 function startWorker() {
-	worker = new Worker(debugBuild ? `worker.js?compiler=${DEBUG_COMPILER}` : "worker.js");
+	workerWarmed = false;
+	const options = new URLSearchParams();
+	if (debugBuild) options.set("compiler", DEBUG_COMPILER);
+	// test_in_browser.py --examples: a worker that starts as late as on a slow CI runner
+	const slowStart = new URLSearchParams(location.search).get(SLOW_START_PARAMETER);
+	if (slowStart) options.set(SLOW_START_PARAMETER, slowStart);
+	worker = new Worker(options.size ? `worker.js?${options}` : "worker.js");
 	workerReady = new Promise((resolve, reject) => {
 		worker.onmessage = ({ data }) => {
 			if (data.type === "notify") data = notification(data.text);
 			if (!data) return;
 			if (data.type === "ready") return resolve();
 			if (data.type === "stored") return keepValue(data.name, data.value, data.file);
+			if (data.type === "clipboard") return copyText(data.text);
 			if (data.type === "failed") return reject(new Error(data.message));
 			if (!pending) return showEventOutput(data);
 			if (data.type === "listening") Object.assign(pending, { listening: data.events, address: data.address });
-			if (data.type === "print") pending.printed.push(data);
-			if (data.type === "sleep") pending.slept = true;
+			if (data.type === "print") printedChunk(pending, data);
+			if (data.type === "sleep") pending.frame++;
+			if (data.type === "tasks inline") pending.tasksInline = data.reason;
 			if (data.type === "paint") painted(pending, data);
 			if (data.type === "module") lastModule = data.bytes;
 			if (data.type === "report" && data.id === pending.id) finish(pending, { ...data.report, printed: pending.printed, paintings: pending.paintings, listening: pending.listening ?? [], address: pending.address, milliseconds: data.milliseconds });
 		};
 	});
-	workerReady.then(() => setStatus("ready"), failure => setStatus(failure.message, true));
+	// a slow start (the CI runner) finishes after the first run began: "ready" then must not hide its "running…"
+	workerReady.then(() => showing || setStatus("ready"), failure => setStatus(failure.message, true));
 	tellSystemValues();
 	sharePointer();
-	worker.postMessage({ stored: keptValues() });
+	worker.postMessage({ stored: keptValues(), session: keptValues([SESSION_STORE]) });
 }
 
 // `notify "text"`: the browser's notification once the page may show them; until then (or when refused) a printed
@@ -115,20 +179,37 @@ const darkMode = matchMedia(DARK_MODE_QUERY);
 const tellSystemValues = () => worker.postMessage({ system: { "dark mode": darkMode.matches } });
 darkMode.addEventListener("change", tellSystemValues);
 
-// `loop { …; show(); sleep(16) }`: a paint after a sleep is an animation's next frame, shown at once in place of the
-// last one; frames keep the run alive past RUN_TIMEOUT_MS, the next run stops it (card drawing-frames)
+// `loop { …; show(); sleep(16) }`: each sleep starts an animation's next frame, what the run paints or prints in it
+// replaces the last frame's; frames keep the run alive past RUN_TIMEOUT_MS, the next run stops it (cards
+// drawing-frames, snake-frames)
+function startsFrame(run, output) {
+	const starts = run.frame > 0 && run.framesShown[output] !== run.frame;
+	run.framesShown[output] = run.frame;
+	if (starts) {
+		run.animating = true;
+		stopAfterTimeout(run);
+	}
+	return starts;
+}
+
 function painted(run, painting) {
-	if (!run.slept) return run.paintings.push(painting);
-	run.slept = false;
-	run.animating = true;
+	if (!startsFrame(run, "paintings")) return run.paintings.push(painting);
 	run.paintings = [painting];
 	showFrame(painting);
-	stopAfterTimeout(run);
+}
+
+// a text frame (`render(); sleep(.1s)`) arrives line by line: the last one is shown whole once the next one begins
+function printedChunk(run, chunk) {
+	if (startsFrame(run, "printed")) {
+		showPrinted(run.printed);
+		run.printed = [];
+	}
+	run.printed.push(chunk);
 }
 
 function stopAfterTimeout(run) {
 	clearTimeout(run.timer);
-	run.timer = setTimeout(() => stopRun(run, `stopped after ${RUN_TIMEOUT_MS / 1000} s: the program may not terminate`), RUN_TIMEOUT_MS);
+	run.timer = setTimeout(() => stopRun(run, `stopped after ${RUN_TIMEOUT_MS / 1000} s: ${run.tasksInline ?? "the program may not terminate"}`), RUN_TIMEOUT_MS);
 }
 
 // a program that does not stop blocks the worker: replace it
@@ -156,7 +237,7 @@ function evaluate(code) {
 async function runInWorker(code) {
 	await workerReady;
 	return new Promise(resolve => {
-		const run = { id: ++nextRunId, resolve, printed: [], paintings: [] };
+		const run = { id: ++nextRunId, resolve, printed: [], paintings: [], frame: 0, framesShown: {} };
 		stopAfterTimeout(run);
 		pending = run;
 		worker.postMessage({ id: run.id, code, acknowledged: acknowledgements() });
@@ -172,8 +253,24 @@ function setStatus(text, failed = false) {
 
 const at = (line, column) => line ? `${line}:${column}` : "";
 
+const POSITION = /^(\d+):(\d+)$/;
+
+// the editor's cursor at the 1-based line and column, in view
+function jumpTo(line, column) {
+	editor.focus();
+	editor.setCursor({ line: line - 1, ch: column - 1 });
+	editor.scrollIntoView(null, 40);
+}
+
+// a line:column goes there when clicked
+function positionLink(position) {
+	const [, line, column] = position.match(POSITION) ?? [];
+	if (!line) return element("span", { className: "position" }, position);
+	return element("button", { className: "position", title: "go there", onclick: () => jumpTo(Number(line), Number(column)) }, position);
+}
+
 function diagnostic(kind, position, ...content) {
-	return element("li", { className: kind }, element("span", { className: "label" }, kind), position ? element("span", { className: "position" }, position) : "", ...content);
+	return element("li", { className: kind }, element("span", { className: "label" }, kind), position ? positionLink(position) : "", ...content);
 }
 
 const code = text => element("code", {}, text);
@@ -220,12 +317,20 @@ function showAcknowledged() {
 	$("silenced").hidden = acknowledged.length === 0;
 }
 
+// the » value line; markup the page renders (#rendered) is shown there only, its text would repeat it (card hide-html)
+function showValue(value, error, html) {
+	$("value").textContent = value;
+	$("value").classList.toggle("error", Boolean(error));
+	$("value").parentElement.hidden = Boolean(html) && !error;
+}
+
 function showReport(report) {
-	$("value").textContent = report.value;
-	$("value").classList.toggle("error", report.error);
-	const printed = report.printed.map(chunk => chunk.stream === STDERR ? "" : chunk.text).join("");
-	$("printed").textContent = printed;
-	$("printed").hidden = printed === "";
+	showValue(report.value, report.error, report.html);
+	const errorAt = report.error ? report.error_at : null; // the failing place: clicking the error goes there
+	$("value").classList.toggle("located", Boolean(errorAt));
+	$("value").title = errorAt ? `go to ${at(errorAt.line, errorAt.column)}` : "";
+	$("value").onclick = errorAt ? () => jumpTo(errorAt.line, errorAt.column) : null;
+	showPrinted(report.printed);
 	showRendered(report.html);
 	showPaintings(report.paintings ?? []);
 	listenTo(report.listening ?? []);
@@ -280,7 +385,7 @@ function paintShade(value) {
 	return [PAINT_INK, PAINT_INK, PAINT_INK];
 }
 
-// a markup value as DOM (std/markup.wasp, card web-dom), in a shadow root so its own style cannot restyle the page.
+// a markup value as DOM (lib/markup.warp, card web-dom), in a shadow root so its own style cannot restyle the page.
 // Markup shown anew after a handler changes only the text nodes and attributes that differ (card web-fine): the
 // elements stay, with their focus, input and scroll state.
 function showRendered(html) {
@@ -382,6 +487,12 @@ function clickDetail(click) {
 	return { x: Math.floor((click.clientX - bounds.left) * scale), y: Math.floor((click.clientY - bounds.top) * scale) };
 }
 
+function showPrinted(chunks) {
+	const printed = chunks.map(chunk => chunk.stream === STDERR ? "" : chunk.text).join("");
+	$("printed").textContent = printed;
+	$("printed").hidden = printed === "";
+}
+
 // what a handler printed, painted and gave, while no run is pending
 function showEventOutput(data) {
 	if (data.type === "print" && data.stream !== STDERR) {
@@ -391,10 +502,7 @@ function showEventOutput(data) {
 	if (data.type === "paint") showPaintings([data]);
 	if (data.type === "address") showAddress(data.path);
 	if (data.type !== "handled") return;
-	if (data.value !== undefined) {
-		$("value").textContent = data.value;
-		$("value").classList.toggle("error", data.error);
-	}
+	if (data.value !== undefined) showValue(data.value, data.error, data.html);
 	if (data.html !== undefined) showRendered(data.html);
 	(data.patches ?? []).forEach(showPatch);
 }
@@ -428,7 +536,16 @@ async function show(code) {
 		const next = queued;
 		queued = undefined;
 		show(next);
+		return;
 	}
+	warmWorker();
+}
+
+// once per worker, after a run is shown: the page is idle, the worker free
+function warmWorker() {
+	if (workerWarmed) return;
+	workerWarmed = true;
+	worker.postMessage({ warm: true });
 }
 
 // a link to the same page with the other compiler build
@@ -438,6 +555,13 @@ function showBuildSwitch() {
 	else url.searchParams.set(DEBUG_PARAMETER, "");
 	Object.assign($("build"), { href: url.href, textContent: debugBuild ? "debug build ⇄ optimized" : "optimized build ⇄ debug",
 		title: debugBuild ? "warp.debug.wasm: Rust function names and lines in traces and the browser's debugger" : "warp.wasm, the small one" });
+}
+
+// the commit the page was built from (build.sh version.js), linked to it on GitHub
+function showVersion() {
+	if (!PLAYGROUND_VERSION) return;
+	const { commit, date } = PLAYGROUND_VERSION;
+	Object.assign($("version"), { href: `${COMMIT_URL}${commit}`, textContent: `version ${commit.slice(0, SHORT_COMMIT)} · ${date}`, hidden: false });
 }
 
 function downloadModule() {
@@ -455,16 +579,53 @@ function runNow() {
 	return show(editor.getValue());
 }
 
+// Run pressed (the button, Ctrl/Cmd-Enter): the old value gives way to "…" at once, so it is not taken for the new one
+function runPressed() {
+	showValue(PENDING_VALUE);
+	$("value").classList.remove("located");
+	return runNow();
+}
+
 const exampleSource = name => EXAMPLES[name]?.code ?? SAMPLES[name];
+
+// puts the code in the editor and runs it once; resolves once its report is shown
+function runCode(source) {
+	editor.setValue(source);
+	clearTimeout(typingTimer); // the change event's run would run it twice
+	return runNow();
+}
 
 // shows the example or sample; resolves once its report is shown
 function chooseExample(name) {
 	const source = exampleSource(name);
 	if (source === undefined) return;
 	$("examples").value = name;
-	editor.setValue(source);
-	clearTimeout(typingTimer); // the change event's run would run it twice
-	return runNow();
+	showExampleInAddress(name);
+	return runCode(source);
+}
+
+// the address names the chosen example as its hash (#circle), so it can be shared or reloaded; the default one leaves
+// it plain, and a guide chapter's hash (#guide-lists) stays (card sample-hash)
+function showExampleInAddress(name) {
+	const address = new URL(location.href);
+	EXAMPLE_PARAMETERS.forEach(parameter => address.searchParams.delete(parameter));
+	if (name !== DEFAULT_EXAMPLE) address.hash = name;
+	else if (exampleSource(hashName()) !== undefined) address.hash = "";
+	if (address.href !== location.href) history.replaceState(history.state, "", address);
+}
+
+const hashName = () => decodeURIComponent(location.hash.slice(1));
+
+// the example the address names: ?example=circle (?sample=circle), else #circle
+function requestedExample() {
+	const parameters = new URLSearchParams(location.search);
+	return [...EXAMPLE_PARAMETERS.map(parameter => parameters.get(parameter)), hashName()].find(name => name && exampleSource(name) !== undefined);
+}
+
+// #circle typed into the address shows that example
+function chooseExampleOfHash() {
+	const name = hashName();
+	if (exampleSource(name) !== undefined && name !== $("examples").value) chooseExample(name);
 }
 
 function fillExamples() {
@@ -475,15 +636,16 @@ function fillExamples() {
 
 function initialize() {
 	editor = CodeMirror.fromTextArea($("code"), {
-		lineNumbers: true, mode: "wasp", indentWithTabs: true, tabSize: 4,
-		extraKeys: { "Ctrl-Enter": runNow, "Cmd-Enter": runNow },
+		// fixedGutter moves the gutter on every scroll, which Firefox warns about; wrapped lines never scroll sideways
+		lineNumbers: true, lineWrapping: true, fixedGutter: false, mode: "warp", indentWithTabs: true, tabSize: 4,
+		extraKeys: { "Ctrl-Enter": runPressed, "Cmd-Enter": runPressed },
 	});
 	editor.on("change", () => {
 		if (!$("auto").checked) return;
 		clearTimeout(typingTimer);
 		typingTimer = setTimeout(runNow, TYPING_DELAY_MS);
 	});
-	$("run").onclick = runNow;
+	$("run").onclick = runPressed;
 	$("address").onkeydown = goToAddress;
 	$("rendered").onclick = click => followLink(click) || sendElementEvent("click", click, clickDetail(click));
 	$("rendered").oninput = input => sendElementEvent("input", input, inputDetail(input.composedPath()[0]));
@@ -492,14 +654,16 @@ function initialize() {
 	for (const event of ["pointermove", "pointerdown", "pointerup"]) $("output").addEventListener(event, trackPointer);
 	document.addEventListener("pointerup", () => pointer && Atomics.store(pointer, POINTER_NAMES.indexOf("mouse_down"), 0));
 	$("download").onclick = downloadModule;
+	startResizers();
 	showBuildSwitch();
+	showVersion();
 	fillExamples();
 	startWorker();
-	const requested = new URLSearchParams(location.search).get("example");
-	chooseExample(requested && exampleSource(requested) !== undefined ? requested : DEFAULT_EXAMPLE);
+	chooseExample(requestedExample() ?? DEFAULT_EXAMPLE);
+	addEventListener("hashchange", chooseExampleOfHash);
 }
 
 // for the headless probes (probes/web_playground.py, test_in_browser.py --examples): evaluate code as the page does and return the report
-window.playground = { evaluate, applyFix, chooseExample, code: () => editor.getValue(), setCode: source => editor.setValue(source), lastModule: () => lastModule, acknowledge: topic => saveAcknowledged([...acknowledged, topic]), forgetAll: () => saveAcknowledged([]) };
+window.playground = { evaluate, applyFix, chooseExample, runCode, code: () => editor.getValue(), setCode: source => editor.setValue(source), lastModule: () => lastModule, acknowledge: topic => saveAcknowledged([...acknowledged, topic]), forgetAll: () => saveAcknowledged([]) };
 
 initialize();

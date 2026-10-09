@@ -1,26 +1,31 @@
 //! `use <name>` file modules: `name.wasp` or `name.warp` is loaded and its definitions become part of the program.
-//! A name found nowhere locally but in the registry packages.wasp is a package: its git repository, fetched into packages/<name>.
+//! A name found nowhere locally but in the registry packages.warp is a package: its git repository, fetched into packages/<name>.
 use crate::node::{error, Bracket, Node, Separator};
 use crate::operators::{is_function_keyword, Op};
 use crate::versions::{declared_version, is_version_keyword, version_of, Requirement, Version, MINIMUM_KEYWORD};
-use crate::wasp_parser::WaspParser;
+use crate::warp_parser::WarpParser;
 use std::collections::HashSet;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::sync::Mutex;
 
-/// Where modules are looked for, in this order: the current directory, the samples, the library
-pub const SEARCH_DIRECTORIES: [&str; 6] = [".", "include", "lib", "src", "source", "samples"];
+/// Where modules are looked for, in this order: the current directory, the samples, the library (lib/extra: modules
+/// that are not standard, like netbase, P194)
+pub const SEARCH_DIRECTORIES: [&str; 7] = [".", "include", "lib", "lib/extra", "src", "source", "samples"];
 pub const MODULE_EXTENSIONS: [&str; 2] = ["wasp", "warp"];
 /// `use x`, and its aliases `require x` and `import x`: the declarations of the file x
 pub(crate) const USE_KEYWORDS: [&str; 3] = ["use", "require", "import"];
 /// `include x`: the whole file, spliced in place
 const INCLUDE_KEYWORD: &str = "include";
 const USE_KEYWORD: &str = "use";
+/// `from list import zip, unique`: only those words of the module
+const IMPORT_KEYWORD: &str = "import";
 /// name: "git url" for every package, compiled in so warp finds it from any directory
-const PACKAGE_REGISTRY: &str = include_str!("../packages.wasp");
+const PACKAGE_REGISTRY: &str = include_str!("../packages.warp");
 /// the directory of the file it is written in, as text: `read(module_directory + "/data/x")` finds a module's own files
 const MODULE_DIRECTORY: &str = "module_directory";
+/// A module word a program variable shadows is renamed apart: `words` of lib/text is `lib·words` in its definitions
+const SHADOWED_WORD_PREFIX: &str = "lib·";
 /// where packages are fetched to, below the working directory
 pub const PACKAGES_DIRECTORY: &str = "packages";
 /// where a tagged version of a package is fetched once per machine and linked from packages/: a tag never changes
@@ -53,13 +58,14 @@ pub fn resolve_in(program: Node, directories: &[&str]) -> Node {
 	let own_names: Vec<String> = statements(program.clone()).iter().filter_map(declared_name).collect();
 	let file = PROGRAM_FILE.with(|current| current.borrow().clone());
 	let mut loader = Loader::new(directories, file.as_deref().map(folder_of));
+	loader.program_variables = program_variables(&program);
 	let folder = loader.including_directory.clone();
 	let program = with_module_directory(program, folder.as_deref().unwrap_or(Path::new(".")));
-	let resolved = loader.resolve(program).and_then(|program| match loader.scope {
+	let resolved = loader.resolve(program).and_then(|program| loader.implicit_std_modules(&program).map(|_| program)).and_then(|program| match loader.scope {
 		Some(scope) => loader.with_scope(program, scope, file.as_deref()),
 		None => Ok(program),
 	}).map(|program| crate::wasm_modules::rewrite_uses(program, &loader.wasm_modules))
-		.map(|program| with_needed_definitions(program, loader.std_definitions));
+		.map(|program| with_needed_definitions(program, loader.hidden_apart()));
 	EARLY_CLASS_MODULES.with(|modules| modules.borrow_mut().clear()); // for this program only
 	MODULE_DEFINITIONS.with(|names| own_names.iter().for_each(|own| { names.borrow_mut().remove(own); })); // the program's own word wins
 	resolved.unwrap_or_else(|failure| failure)
@@ -69,12 +75,21 @@ pub fn resolve_in(program: Node, directories: &[&str]) -> Node {
 /// module the program names (`use collections; s = Stack()`). class_methods, which turns a class's methods into
 /// functions and its method calls into theirs, runs before `resolve` loads a module's other definitions; the loader
 /// then leaves these modules' classes out (EARLY_CLASS_MODULES). A class the program declares itself wins.
-pub fn insert_module_classes(program: Node) -> Node {
+pub fn insert_module_classes(mut program: Node) -> Node {
 	let file = PROGRAM_FILE.with(|current| current.borrow().clone());
 	let loader = Loader::new(&SEARCH_DIRECTORIES, file.as_deref().map(folder_of));
 	let own_names: HashSet<String> = statements(program.clone()).iter().filter_map(declared_name).collect();
 	let (mut std_definitions, mut file_classes, mut early, mut class_modules) = (vec![], vec![], HashSet::new(), vec![]);
+	let mut defined: Vec<String> = vec![]; // every used module's words, a file's copy of a standard module's too
 	for used in statements(program.clone()).iter().filter_map(used_module).filter(|used| used.import == Import::Use) {
+		if let Some(module) = loader.find(&used.name).is_none().then(|| loader.find_with(&used.name, &crate::wasm_modules::MODULE_EXTENSIONS)).flatten() {
+			let module = module.to_string_lossy();
+			let classes = crate::wasm_modules::classes(&module);
+			let names: Vec<String> = classes.iter().filter_map(declared_name).collect();
+			program = crate::wasm_modules::with_bare_classes(program, &crate::wasm_modules::module_alias(&module), &names);
+			file_classes.extend(classes);
+			continue;
+		}
 		let (path, source, is_std) = match loader.find(&used.name) {
 			Some(path) => match crate::web::read_text(&path.to_string_lossy()) {
 				Some(source) => (path, source, false),
@@ -85,11 +100,13 @@ pub fn insert_module_classes(program: Node) -> Node {
 				None => continue,
 			},
 		};
-		let module = WaspParser::parse(&source);
+		// a look for classes only: the loader's own read of a file module hints it, a standard module never
+		let module = crate::normalize::without_hints(|| WarpParser::parse(&source));
 		if module.first_error().is_some() {
 			continue; // the loader reports it
 		}
-		let definitions = crate::normalize::without_hints(|| statements(module));
+		let definitions = statements(module);
+		defined.extend(definitions.iter().filter_map(declared_name));
 		match is_std {
 			true => {
 				if definitions.iter().any(is_class) {
@@ -103,7 +120,6 @@ pub fn insert_module_classes(program: Node) -> Node {
 	}
 	EARLY_CLASS_MODULES.with(|modules| *modules.borrow_mut() = early);
 	let is_foreign = |class: &Node| declared_name(class).is_none_or(|name| !own_names.contains(&name));
-	let defined: Vec<String> = std_definitions.iter().filter_map(declared_name).collect();
 	let aliases: Vec<(&str, &str)> = STD_ALIASES.into_iter().filter(|(alias, word)| defined.iter().any(|name| name == word) && !own_names.contains(*alias)).collect();
 	// `collections.Counter(xs)`: the bare class before class_methods reads its construction; other qualified calls
 	// (`math.factorial` of `use python math`, `json.loads`) wait for foreign_modules and welcome_forms
@@ -123,6 +139,10 @@ pub fn insert_module_classes(program: Node) -> Node {
 
 /// `HashSet(xs)` as `Set(xs)`, with a note
 fn with_std_aliases(node: Node, aliases: &[(&str, &str)]) -> Node {
+	// a note points at the innermost positioned node around the written word
+	if node.get_lineinfo().is_some() {
+		crate::normalize::set_position_of(&node);
+	}
 	match node {
 		Node::Symbol(name) => match aliases.iter().find(|(alias, _)| *alias == name) {
 			Some((alias, class)) => {
@@ -146,15 +166,13 @@ fn with_needed_definitions(program: Node, definitions: Vec<Node>) -> Node {
 		return program;
 	}
 	let mut needed: Vec<Node> = vec![];
-	// a standard word called as a method (`"hé".to_utf8()`) is needed too
-	let mentioned_or_called = |statements: &[Node]| mentioned_names(statements).into_iter().chain(method_names(statements));
-	let mut mentioned: HashSet<String> = mentioned_or_called(std::slice::from_ref(&program)).collect();
+	let mut mentioned = called_names(std::slice::from_ref(&program));
 	loop {
 		let now_needed: Vec<Node> = definitions.iter().filter(|definition| declared_name(definition).is_some_and(|name| mentioned.contains(&name))).cloned().collect();
 		if now_needed.len() == needed.len() {
 			break;
 		}
-		mentioned.extend(mentioned_or_called(&now_needed));
+		mentioned.extend(called_names(&now_needed));
 		needed = now_needed;
 	}
 	if needed.is_empty() {
@@ -167,6 +185,53 @@ fn with_needed_definitions(program: Node, definitions: Vec<Node>) -> Node {
 	Node::List([needed, statements].concat(), Bracket::None, separator)
 }
 
+
+/// The names the statements mention or call, as methods too (`"hé".to_utf8()`), in interpolations too, with the library
+/// words they spell
+fn called_names(statements: &[Node]) -> HashSet<String> {
+	with_library_words(mentioned_names(statements).into_iter().chain(method_names(statements)).collect())
+}
+
+/// The names with the library words they spell (`isdigit` → is_digit, `round` → round_to) and the prelude names of
+/// those (`prelude·is_digit`): library_words, which writes them so, runs after the modules are resolved
+fn with_library_words(names: HashSet<String>) -> HashSet<String> {
+	let spelled: Vec<&str> = names.iter().flat_map(|name| crate::library_words::words_spelled_by(name)).collect();
+	let qualified: Vec<String> = names.iter().map(String::as_str).chain(spelled.iter().copied()).filter_map(prelude_name).collect();
+	let spelled: Vec<String> = spelled.into_iter().map(str::to_string).collect();
+	names.into_iter().chain(spelled).chain(qualified).collect()
+}
+
+/// The variables a program assigns at its top: `words = […]`
+fn program_variables(program: &Node) -> HashSet<String> {
+	statements(program.clone()).iter().filter_map(|statement| match statement.drop_meta() {
+		Node::Key(variable, Op::Assign, _) => match variable.drop_meta() {
+			Node::Symbol(name) => Some(name.clone()),
+			_ => None,
+		},
+		_ => None,
+	}).collect()
+}
+
+/// Module words a program variable shadows, renamed in the module's definitions (`words` → `lib·words`): the module's
+/// own code calls its own words (lexical scope), the program's `words` is its variable
+fn shadowed_apart(definitions: Vec<Node>, variables: &HashSet<String>) -> Vec<Node> {
+	let shadowed: Vec<String> = definitions.iter().filter_map(declared_name).filter(|name| variables.contains(name)).collect();
+	renamed_apart(definitions, &shadowed)
+}
+
+/// `names` renamed `lib·name` in the definitions: the definitions still call them, the program does not see them
+fn renamed_apart(definitions: Vec<Node>, names: &[String]) -> Vec<Node> {
+	definitions.into_iter().map(|definition| names.iter().fold(definition, |node, name| renamed_word(node, name, &format!("{SHADOWED_WORD_PREFIX}{name}")))).collect()
+}
+
+/// `from` as a word renamed `to`; a field `x.from` keeps its name
+fn renamed_word(node: Node, from: &str, to: &str) -> Node {
+	match node {
+		Node::Symbol(name) if name == from => Node::Symbol(to.to_string()),
+		Node::Key(receiver, Op::Dot, field) => Node::Key(Box::new(renamed_word(*receiver, from, to)), Op::Dot, field),
+		other => other.map_children(|child| renamed_word(child, from, to)),
+	}
+}
 
 thread_local! {
 	/// The file being compiled; its folder is in scope (D15). None for inline code
@@ -223,7 +288,7 @@ struct Sibling {
 enum Scope {
 	/// the files of the program's folder
 	Folder,
-	/// every file below the package folder: the nearest folder holding `<folder name>.wasp`
+	/// every file below the package folder: the nearest folder holding `<folder name>.warp`
 	Package,
 	/// every file below the project root: the nearest folder holding .git
 	Project,
@@ -276,7 +341,7 @@ fn package_root(folder: &Path) -> Result<PathBuf, Node> {
 		MODULE_EXTENSIONS.iter().any(|extension| directory.join(format!("{name}.{extension}")).is_file())
 	};
 	absolute.ancestors().find(holds_its_module).map(Path::to_path_buf)
-		.ok_or_else(|| error(&format!("use package: no package folder around {}: a package folder holds <folder name>.wasp", folder.display())))
+		.ok_or_else(|| error(&format!("use package: no package folder around {}: a package folder holds <folder name>.warp", folder.display())))
 }
 
 fn project_root(folder: &Path) -> Result<PathBuf, Node> {
@@ -289,7 +354,7 @@ impl Sibling {
 	/// The statements of the file; a file that does not parse is reported and contributes nothing
 	fn statements(&mut self) -> Result<&[Node], Node> {
 		if self.statements.is_none() {
-			let module = WaspParser::parse(&self.source);
+			let module = WarpParser::parse(&self.source);
 			let parsed = match module.first_error() {
 				Some(failure) => {
 					let warning = crate::diagnostic::Diagnostic::at(&module, format!("folder scope skips {}: {}", self.path.display(), failure.serialize()));
@@ -328,16 +393,50 @@ struct Loader<'a> {
 	wasm_modules: Vec<String>,
 	/// the definitions of the standard modules used: the program gets those it calls (with_needed_definitions)
 	std_definitions: Vec<Node>,
+	/// the program's top-level variables: a module word of the same name is renamed apart in the module (shadowed_apart)
+	program_variables: HashSet<String>,
+	/// whether a standard module's source is being loaded: its `use`s are its own, not the program's
+	inside_std_module: bool,
+	/// the standard modules the program (or a file module) uses, and those only standard modules use (hidden_apart)
+	program_std_modules: HashSet<String>,
+	std_modules_of_std_modules: HashSet<String>,
 }
 
 impl<'a> Loader<'a> {
 	fn new(directories: &'a [&'a str], including_directory: Option<PathBuf>) -> Self {
-		Loader { directories, loaded: HashSet::new(), included: HashSet::new(), including_directory, scope: None, wasm_modules: vec![], std_definitions: vec![] }
+		Loader {
+			directories,
+			loaded: HashSet::new(),
+			included: HashSet::new(),
+			including_directory,
+			scope: None,
+			wasm_modules: vec![],
+			std_definitions: vec![],
+			program_variables: HashSet::new(),
+			inside_std_module: false,
+			program_std_modules: HashSet::new(),
+			std_modules_of_std_modules: HashSet::new(),
+		}
+	}
+
+	/// The standard definitions with the words of a module only other standard modules use renamed apart
+	/// (`take` → `lib·take` when lib/text.warp's `use list` brought it): the program sees a module's words only with
+	/// its own `use`, a bare `take` is the error naming the module
+	fn hidden_apart(&self) -> Vec<Node> {
+		let hidden: Vec<&String> = self.std_modules_of_std_modules.iter().filter(|module| !self.program_std_modules.contains(*module)).flat_map(|module| std_module_definitions(module).unwrap_or_default()).collect();
+		MODULE_DEFINITIONS.with(|names| {
+			let mut names = names.borrow_mut();
+			hidden.iter().for_each(|word| { names.remove(*word); names.insert(format!("{SHADOWED_WORD_PREFIX}{word}")); });
+		});
+		self.std_definitions.iter().map(|definition| hidden.iter().fold(definition.clone(), |node, word| renamed_word(node, word, &format!("{SHADOWED_WORD_PREFIX}{word}")))).collect()
 	}
 
 	fn resolve(&mut self, node: Node) -> Result<Node, Node> {
-		if let Some(used) = used_module(&node) {
-			return Ok(match self.import(&used, &node)? {
+		if let Some((used, statement, words)) = imported_words(&node) {
+			return Ok(Node::List(self.import_words(&used, &statement, &words)?, Bracket::None, Separator::Semicolon));
+		}
+		if let Some(uses) = used_modules(&node) {
+			return Ok(match self.import_all(uses)? {
 				imported if imported.is_empty() => Node::Empty,
 				imported => Node::List(imported, Bracket::None, Separator::Semicolon),
 			});
@@ -346,9 +445,10 @@ impl<'a> Loader<'a> {
 			Node::List(items, bracket, separator) => {
 				let mut resolved = Vec::with_capacity(items.len());
 				for item in items {
-					match used_module(&item) {
-						Some(used) => resolved.extend(self.import(&used, &item)?),
-						None => resolved.push(self.resolve(item)?),
+					match (imported_words(&item), used_modules(&item)) {
+						(Some((used, statement, words)), _) => resolved.extend(self.import_words(&used, &statement, &words)?),
+						(None, Some(uses)) => resolved.extend(self.import_all(uses)?),
+						(None, None) => resolved.push(self.resolve(item)?),
 					}
 				}
 				Ok(Node::List(resolved, bracket, separator))
@@ -356,6 +456,33 @@ impl<'a> Loader<'a> {
 			Node::Meta { node, data } => Ok(Node::Meta { node: Box::new(self.resolve(*node)?), data }),
 			other => Ok(other),
 		}
+	}
+
+	/// The statements of each module a `use` names
+	fn import_all(&mut self, uses: Vec<(Used, Node)>) -> Result<Vec<Node>, Node> {
+		let mut imported = vec![];
+		for (used, statement) in uses {
+			imported.extend(self.import(&used, &statement)?);
+		}
+		Ok(imported)
+	}
+
+	/// A module's statements with only `words` visible to the program: its other words are renamed apart.
+	/// A module loaded already brings nothing new
+	fn import_words(&mut self, used: &Used, statement: &Node, words: &[String]) -> Result<Vec<Node>, Node> {
+		let first_std_definition = self.std_definitions.len();
+		let imported = self.import(used, statement)?;
+		let std_definitions = self.std_definitions.split_off(first_std_definition);
+		let module_words: HashSet<String> = imported.iter().chain(&std_definitions).filter_map(declared_name).collect();
+		if module_words.is_empty() {
+			return Ok(imported);
+		}
+		if let Some(missing) = words.iter().find(|word| !module_words.contains(*word)) {
+			return Err(error(&format!("{} has no {missing}", used.name)));
+		}
+		let hidden: Vec<String> = module_words.into_iter().filter(|word| !words.contains(word)).collect();
+		self.std_definitions.extend(renamed_apart(std_definitions, &hidden));
+		Ok(renamed_apart(imported, &hidden))
 	}
 
 	/// The statements a `use` stands for: the module's definitions, nothing for a module already loaded,
@@ -394,7 +521,7 @@ impl<'a> Loader<'a> {
 		self.load(import, name, path)
 	}
 
-	/// A registered package: fetched once, then its module `<name>.wasp` if it has one; a package without is data.
+	/// A registered package: fetched once, then its module `<name>.warp` if it has one; a package without is data.
 	/// A required version the default branch does not declare comes from the matching git tag.
 	fn use_package(&mut self, name: &str, requirement: Option<&Requirement>) -> Result<Vec<Node>, Node> {
 		let mut directory = package_directory(name).map_err(|failure| error(&failure))?;
@@ -410,11 +537,59 @@ impl<'a> Loader<'a> {
 		}
 	}
 
+	/// The standard modules a program uses without `use`: those IMPLICIT_MODULES picks for it, the prelude words it
+	/// mentions (P171); a module the program used is loaded already
+	fn implicit_std_modules(&mut self, program: &Node) -> Result<(), Node> {
+		for (module, needed) in IMPLICIT_MODULES {
+			if needed(program) {
+				self.use_std_module(module, std_module(module).expect("an implicit module is embedded"))?;
+			}
+		}
+		let mut mentioned = HashSet::new();
+		program.visit(&mut |node| if let Node::Symbol(name) = node { mentioned.insert(name.clone()); });
+		// a program's own `write(x, y)` wins
+		let own: HashSet<String> = statements(program.clone()).iter().filter_map(declared_name).collect();
+		for (module, words) in PRELUDE_WORDS {
+			let words: Vec<&str> = words.iter().copied().filter(|word| mentioned.contains(*word) && !own.contains(*word)).collect();
+			if !words.is_empty() {
+				let source = std_module(module).expect("a prelude module is embedded");
+				let definitions = crate::normalize::without_hints(|| self.load_source(Import::Use, std_path(module), source))?;
+				self.std_definitions.extend(definitions.into_iter().filter(|definition| declared_name(definition).is_some_and(|name| words.contains(&name.as_str()))));
+			}
+		}
+		self.use_prelude(program)
+	}
+
+	/// lib/prelude.warp, its words named `prelude·first` (prelude_name), when the program or a used standard module
+	/// mentions one of them in any spelling (`isdigit`); with_needed_definitions keeps those called
+	fn use_prelude(&mut self, program: &Node) -> Result<(), Node> {
+		let mentioned = called_names(&[std::slice::from_ref(program), &self.std_definitions].concat());
+		let prelude = std_module_definitions(PRELUDE_MODULE).unwrap_or_default();
+		if !prelude.iter().any(|word| mentioned.contains(word)) {
+			return Ok(());
+		}
+		let source = std_module(PRELUDE_MODULE).expect("lib/prelude.warp is embedded");
+		let definitions = crate::normalize::without_hints(|| self.load_source(Import::Use, std_path(PRELUDE_MODULE), source))?;
+		let qualified = |definition: Node| prelude.iter().fold(definition, |node, word| renamed_word(node, word, &prelude_name(word).unwrap_or_default()));
+		self.std_definitions.extend(definitions.into_iter().map(qualified));
+		MODULE_DEFINITIONS.with(|names| {
+			let mut names = names.borrow_mut();
+			prelude.iter().for_each(|word| { names.remove(word); names.extend(prelude_name(word)); });
+		});
+		Ok(())
+	}
+
 	/// A standard module: its definitions wait aside until the program is resolved; its source shows the program
 	/// no style hints
 	fn use_std_module(&mut self, name: &str, source: &str) -> Result<Vec<Node>, Node> {
-		let definitions = crate::normalize::without_hints(|| self.load_source(Import::Use, std_path(name), source))?;
-		self.std_definitions.extend(definitions);
+		match self.inside_std_module {
+			true => self.std_modules_of_std_modules.insert(name.to_string()),
+			false => self.program_std_modules.insert(name.to_string()),
+		};
+		let outer = std::mem::replace(&mut self.inside_std_module, true);
+		let definitions = crate::normalize::without_hints(|| self.load_source(Import::Use, std_path(name), source));
+		self.inside_std_module = outer;
+		self.std_definitions.extend(definitions?);
 		Ok(vec![])
 	}
 
@@ -432,7 +607,7 @@ impl<'a> Loader<'a> {
 		if !loaded.insert(path.canonicalize().unwrap_or_else(|_| path.clone())) {
 			return Ok(vec![]);
 		}
-		let module = WaspParser::parse(source);
+		let module = WarpParser::parse(source);
 		if let Some(failure) = module.first_error() {
 			return Err(failure.clone());
 		}
@@ -450,7 +625,7 @@ impl<'a> Loader<'a> {
 		let statements = statements(module?);
 		Ok(match import {
 			Import::Use => {
-				let declarations: Vec<Node> = statements.into_iter().filter(is_declaration).collect();
+				let declarations = shadowed_apart(statements.into_iter().filter(is_declaration).collect(), &self.program_variables);
 				MODULE_DEFINITIONS.with(|names| names.borrow_mut().extend(declarations.iter().filter_map(declared_name)));
 				declarations
 			}
@@ -464,11 +639,17 @@ impl<'a> Loader<'a> {
 		self.find_with(name, &MODULE_EXTENSIONS)
 	}
 
-	/// never the program's own file: hash.wasp saying `use hash` means the standard module
+	/// never the program's own file: hash.warp saying `use hash` means the standard module; nor warp's own lib/hash.warp,
+	/// which is the embedded standard module itself (found in lib when a program runs in warp's repository).
+	/// In the browser a program without a file (the playground's) has no folder of its own: a standard module's name is
+	/// the standard module, no request looks next to the page for a file shadowing it (card playground-module)
 	fn find_with(&self, name: &str, extensions: &[&str]) -> Option<PathBuf> {
+		if !cfg!(feature = "native") && program_file().is_none() && std_module(name).is_some() {
+			return None;
+		}
 		let program = program_file().and_then(|file| file.canonicalize().ok());
 		let is_program = |path: &PathBuf| program.is_some() && path.canonicalize().ok() == program;
-		self.candidates_with(name, extensions).into_iter().find(|path| module_exists(path) && !is_program(path))
+		self.candidates_with(name, extensions).into_iter().find(|path| module_exists(path) && !is_program(path) && !is_embedded_std_file(path))
 	}
 
 	fn candidates(&self, name: &str) -> Vec<PathBuf> {
@@ -476,14 +657,19 @@ impl<'a> Loader<'a> {
 	}
 
 	fn candidates_with(&self, name: &str, extensions: &[&str]) -> Vec<PathBuf> {
-		if !is_plain_relative_path(name) {
-			return vec![];
-		}
 		let has_extension = extensions.iter().any(|extension| name.ends_with(&format!(".{extension}")));
 		let file_names: Vec<String> = match has_extension {
 			true => vec![name.to_string()],
 			false => extensions.iter().map(|extension| format!("{name}.{extension}")).collect(),
 		};
+		// `use "./helper.warp"`, `use "/srv/helper.warp"`: that file, `./` from the including file's folder
+		if is_explicit_path(name) {
+			let base = self.including_directory.clone().unwrap_or_default();
+			return file_names.iter().map(|file_name| base.join(file_name)).collect();
+		}
+		if !is_plain_relative_path(name) {
+			return vec![];
+		}
 		let bases: Vec<PathBuf> = self.including_directory.iter().cloned().chain(std::iter::once(PathBuf::new())).collect();
 		let mut candidates = Vec::new();
 		for base in &bases {
@@ -543,7 +729,7 @@ impl<'a> Loader<'a> {
 
 	/// The modules a sibling file uses, resolved from its folder
 	fn uses_of(&mut self, sibling: &mut Sibling) -> Result<Vec<Node>, Node> {
-		let uses: Vec<Node> = sibling.statements()?.iter().filter(|statement| used_module(statement).is_some()).cloned().collect();
+		let uses: Vec<Node> = sibling.statements()?.iter().filter(|statement| used_modules(statement).is_some()).cloned().collect();
 		let outer_directory = self.including_directory.replace(folder_of(&sibling.path));
 		let resolved = uses.into_iter().map(|statement| self.resolve(statement)).collect::<Result<Vec<Node>, Node>>();
 		self.including_directory = outer_directory;
@@ -574,40 +760,86 @@ impl<'a> Loader<'a> {
 	}
 }
 
-/// The standard library's modules written in wasp (notes/stdlib.md), embedded so `use list` needs no files
-const STD_MODULES: [(&str, &str); 19] = [
-	("memory", include_str!("../std/memory.wasp")),
-	("net", include_str!("../std/net.wasp")),
-	("collections", include_str!("../std/collections.wasp")),
-	("hash", include_str!("../std/hash.wasp")),
-	("regex", include_str!("../std/regex.wasp")),
-	("file", include_str!("../std/file.wasp")),
-	("json", include_str!("../std/json.wasp")),
-	("os", include_str!("../std/os.wasp")),
-	("list", include_str!("../std/list.wasp")),
-	("math", include_str!("../std/math.wasp")),
-	("text", include_str!("../std/text.wasp")),
-	("random", include_str!("../std/random.wasp")),
-	("map", include_str!("../std/map.wasp")),
-	("time", include_str!("../std/time.wasp")),
-	("matrix", include_str!("../std/matrix.wasp")),
-	("draw", include_str!("../std/draw.wasp")),
-	("markup", include_str!("../std/markup.wasp")),
-	("router", include_str!("../std/router.wasp")),
-	("i18n", include_str!("../std/i18n.wasp")),
+/// The standard library's modules written in warp (notes/stdlib.md), embedded so `use list` needs no files
+const STD_MODULES: [(&str, &str); 20] = [
+	(PRELUDE_MODULE, include_str!("../lib/prelude.warp")),
+	("memory", include_str!("../lib/memory.warp")),
+	("net", include_str!("../lib/net.warp")),
+	("collections", include_str!("../lib/collections.warp")),
+	("hash", include_str!("../lib/hash.warp")),
+	("regex", include_str!("../lib/regex.warp")),
+	("file", include_str!("../lib/file.warp")),
+	("json", include_str!("../lib/json.warp")),
+	("os", include_str!("../lib/os.warp")),
+	("list", include_str!("../lib/list.warp")),
+	("math", include_str!("../lib/math.warp")),
+	("text", include_str!("../lib/text.warp")),
+	("random", include_str!("../lib/random.warp")),
+	("map", include_str!("../lib/map.warp")),
+	("time", include_str!("../lib/time.warp")),
+	("matrix", include_str!("../lib/matrix.warp")),
+	("draw", include_str!("../lib/draw.warp")),
+	("markup", include_str!("../lib/markup.warp")),
+	("router", include_str!("../lib/router.warp")),
+	("i18n", include_str!("../lib/i18n.warp")),
 ];
-const STD_FOLDER: &str = "std";
-/// Other languages' names of the standard modules' classes and words (Java, Python, Rust, C#), each read as wasp's with
+/// The standard modules' folder (P194: std/ merged into lib/), embedded in the binary
+const STD_FOLDER: &str = "lib";
+/// lib/prelude.warp: the warp-written words of every program, loaded when mentioned (Loader::use_prelude)
+const PRELUDE_MODULE: &str = "prelude";
+/// Between a module's name and its word in a qualified definition name, as between a nested function's outer and own
+const QUALIFIER: char = '·';
+/// P171: module words a program calls without their `use` (the prelude); only these definitions come along
+const PRELUDE_WORDS: [(&str, &[&str]); 1] = [("file", &["write", "exists"])];
+const FILE_URL_PREFIX: &str = "file://";
+/// Whether a program needs a module
+type NeededBy = fn(&Node) -> bool;
+/// The standard modules a program needs without `use`: P183 a file URL → file, a page → markup (lowering/page_html.rs),
+/// routes → router, a route's regular expression → regex (lowering/routes.rs)
+const IMPLICIT_MODULES: [(&str, NeededBy); 4] = [
+	("file", mentions_file_url),
+	("markup", |_| crate::pipeline::renders_itself()),
+	("router", |program| defined(program, crate::routes::PAGE_ROUTES).is_some()),
+	("regex", |program| defined(program, crate::routes::PAGE_ROUTE_INDEX).is_some_and(|index| called_names(&[index]).contains(crate::routes::REGEX_MATCH))),
+];
+/// Other languages' names of the standard modules' classes and words (Java, Python, Rust, C#), each read as warp's with
 /// a note, when a used module defines that word
-const STD_ALIASES: [(&str, &str); 9] = [
+const STD_ALIASES: [(&str, &str); 27] = [
 	("HashSet", "Set"), ("TreeSet", "Set"), ("LinkedHashSet", "Set"), ("frozenset", "Set"),
 	("ArrayDeque", "Deque"), ("VecDeque", "Deque"), ("deque", "Deque"),
 	("OrderedDict", "OrderedMap"), ("LinkedHashMap", "OrderedMap"),
+	// P169: the C library's historic names of `use math`'s words (atan2 takes y first, angle(x, y) does not: no alias)
+	// sqrt and cbrt are the operators √ and ∛ already
+	("pow", "power"), ("exp", "exponential"), ("log2", "binary_log"),
+	("log10", "decimal_log"), ("sin", "sine"), ("cos", "cosine"), ("tan", "tangent"), ("asin", "arc_sine"),
+	("acos", "arc_cosine"), ("atan", "arc_tangent"), ("sinh", "hyperbolic_sine"), ("cosh", "hyperbolic_cosine"),
+	("tanh", "hyperbolic_tangent"), ("hypot", "hypotenuse"), ("ceil", "ceiling"), ("trunc", "whole_part"),
+	("fmod", "remainder"), ("ln", "natural_log"),
 ];
+
+/// warp's own lib/<module>.warp of a standard module: the source the binary embeds (natively the lib folder of the
+/// repository it was built from; in the browser lib/ of the served repository, the page's file root)
+fn is_embedded_std_file(path: &Path) -> bool {
+	let stem = path.file_stem().and_then(|stem| stem.to_str());
+	if stem.is_none_or(|stem| std_module(stem).is_none()) {
+		return false;
+	}
+	let folder = path.parent().unwrap_or(Path::new(""));
+	if !cfg!(feature = "native") {
+		return folder == Path::new(STD_FOLDER);
+	}
+	let standard_folder = Path::new(env!("CARGO_MANIFEST_DIR")).join(STD_FOLDER).canonicalize().ok();
+	standard_folder.is_some() && folder.canonicalize().ok() == standard_folder
+}
 
 /// The name an embedded module is loaded under, once per program
 fn std_path(name: &str) -> PathBuf {
-	PathBuf::from(format!("{STD_FOLDER}/{name}.wasp"))
+	PathBuf::from(format!("{STD_FOLDER}/{name}.warp"))
+}
+
+/// The source of the standard module `name` (lib/<name>.warp, embedded)
+pub fn std_module_source(name: &str) -> Option<&'static str> {
+	std_module(name)
 }
 
 /// The standard modules' names: `list`, `math`, …
@@ -619,17 +851,48 @@ fn std_module(name: &str) -> Option<&'static str> {
 	STD_MODULES.iter().find(|(module, _)| *module == name).map(|(_, source)| *source)
 }
 
+/// Each standard module with the names it defines, in their order
+fn std_module_words() -> &'static [(&'static str, Vec<String>)] {
+	static DEFINED: std::sync::OnceLock<Vec<(&'static str, Vec<String>)>> = std::sync::OnceLock::new();
+	DEFINED.get_or_init(|| STD_MODULES.iter().map(|(module, source)| (*module, statements(crate::normalize::without_hints(|| WarpParser::parse(source))).iter().filter(|statement| used_module(statement).is_none()).filter_map(declared_name).collect())).collect())
+}
+
 /// The standard module that defines `word` (`zip` → list), for the error of a word used without its `use`
 pub fn std_module_defining(word: &str) -> Option<&'static str> {
-	static DEFINED: std::sync::OnceLock<Vec<(&'static str, Vec<String>)>> = std::sync::OnceLock::new();
-	let defined = DEFINED.get_or_init(|| STD_MODULES.iter().map(|(module, source)| (*module, statements(crate::normalize::without_hints(|| WaspParser::parse(source))).iter().filter_map(declared_name).collect())).collect());
-	defined.iter().find(|(_, names)| names.iter().any(|name| name == word)).map(|(module, _)| *module)
+	std_module_words().iter().find(|(_, names)| names.iter().any(|name| name == word)).map(|(module, _)| *module)
+}
+
+/// The names a standard module defines, in their order (`dir(time)`); None for no standard module
+pub fn std_module_definitions(module: &str) -> Option<&'static [String]> {
+	std_module_words().iter().find(|(name, _)| *name == module).map(|(_, names)| names.as_slice())
+}
+
+/// The number of parameters of a prelude word (`replace(t, old, new) := …` → 3); None for no prelude word
+pub fn prelude_word_arity(word: &str) -> Option<usize> {
+	static ARITIES: std::sync::OnceLock<Vec<(String, usize)>> = std::sync::OnceLock::new();
+	let arities = ARITIES.get_or_init(|| {
+		let source = std_module(PRELUDE_MODULE).unwrap_or_default();
+		statements(crate::normalize::without_hints(|| WarpParser::parse(source))).iter().filter_map(|statement| match statement.drop_meta() {
+			Node::Key(head, Op::Define, _) => match head.drop_meta() {
+				Node::List(items, _, _) => Some((leftmost_symbol(head)?, items.len() - 1)),
+				_ => None,
+			},
+			_ => None,
+		}).collect()
+	});
+	arities.iter().find(|(name, _)| name == word).map(|(_, arity)| *arity)
+}
+
+/// The name a prelude word's definition has in the program (`first` → `prelude·first`): a program's own `first`, or
+/// a local of that name, never meets it; library_words writes the calls of the word so. None for no prelude word
+pub fn prelude_name(word: &str) -> Option<String> {
+	prelude_word_arity(word).map(|_| format!("{PRELUDE_MODULE}{QUALIFIER}{word}"))
 }
 
 /// The texts of a list a standard module assigns at its top: `html_elements = ["html", …]` of markup; empty if missing
 pub fn std_module_list(module: &str, list: &str) -> Vec<String> {
 	let source = std_module(module).unwrap_or_default();
-	statements(crate::normalize::without_hints(|| WaspParser::parse(source))).iter().find_map(|statement| match statement.drop_meta() {
+	statements(crate::normalize::without_hints(|| WarpParser::parse(source))).iter().find_map(|statement| match statement.drop_meta() {
 		Node::Key(name, Op::Assign, items) if name.drop_meta().name() == list => match items.drop_meta() {
 			// "p" parses as a character
 			Node::List(items, _, _) => Some(items.iter().map(|item| match item.drop_meta() {
@@ -669,7 +932,7 @@ struct Registered {
 }
 
 fn registered(name: &str) -> Option<Registered> {
-	statements(WaspParser::parse(PACKAGE_REGISTRY)).iter().find_map(|entry| {
+	statements(WarpParser::parse(PACKAGE_REGISTRY)).iter().find_map(|entry| {
 		let Node::Key(key, _, value) = entry.drop_meta() else { return None };
 		if !matches!(key.drop_meta(), Node::Symbol(key) if key == name) {
 			return None;
@@ -869,7 +1132,7 @@ fn package_directory(name: &str) -> Result<PathBuf, String> {
 /// The version a module file declares with a top level `version 1.2.3`
 fn module_version(path: &Path) -> Option<Version> {
 	let source = crate::web::read_text(&path.to_string_lossy())?;
-	declared_version(&statements(WaspParser::parse(&source)))
+	declared_version(&statements(WarpParser::parse(&source)))
 }
 
 /// A local module a `use … version` names must declare a version the requirement allows
@@ -887,7 +1150,53 @@ struct Used {
 	requirement: Option<Requirement>,
 }
 
-/// `use name`, `require name`, `import name` and `include name`: the name is a symbol, a text or a path `lib/name`, `name.wasp`.
+/// The words of a statement, commas flattened: the parser groups `use list` before the comma of `use list, text`
+fn statement_words(node: &Node) -> Option<Vec<&Node>> {
+	match node.drop_meta() {
+		Node::List(items, _, Separator::Colon) => match items.split_first()?.0.drop_meta() {
+			Node::List(head, _, _) => Some(head.iter().chain(&items[1..]).collect()),
+			_ => None,
+		},
+		Node::List(items, _, _) => Some(items.iter().collect()),
+		_ => None,
+	}
+}
+
+/// The modules a `use` statement names, each with the statement that uses it alone: `use list, text` and
+/// `use list text` (card std-use) use each; `use js Math` is a foreign module (lowering/foreign_modules.rs), not two
+fn used_modules(node: &Node) -> Option<Vec<(Used, Node)>> {
+	if let Some(used) = used_module(node) {
+		return Some(vec![(used, node.clone())]);
+	}
+	let words = statement_words(node)?;
+	let [keyword, names @ ..] = words.as_slice() else { return None };
+	let plain_name = |name: &&Node| matches!(name.drop_meta(), Node::Symbol(word) if !crate::foreign_modules::FOREIGN_RUNTIMES.contains(&word.as_str()) && ![MINIMUM_KEYWORD, "as", "from"].contains(&word.as_str()) && !is_version_keyword(name));
+	if names.len() < 2 || !names.iter().all(plain_name) {
+		return None;
+	}
+	names.iter().map(|name| {
+		let statement = Node::List(vec![(*keyword).clone(), (*name).clone()], Bracket::None, Separator::Space);
+		used_module(&statement).map(|used| (used, statement))
+	}).collect()
+}
+
+/// `from list import zip, unique`: the module, the statement that uses it, and the only words it brings (card std-import)
+fn imported_words(node: &Node) -> Option<(Used, Node, Vec<String>)> {
+	let words = statement_words(node)?;
+	let [from, module, import, names @ ..] = words.as_slice() else { return None };
+	let is_word = |node: &Node, word: &str| matches!(node.drop_meta(), Node::Symbol(name) if name == word);
+	if !is_word(from, MINIMUM_KEYWORD) || !is_word(import, IMPORT_KEYWORD) || names.is_empty() {
+		return None;
+	}
+	let names = names.iter().map(|name| match name.drop_meta() {
+		Node::Symbol(name) => Some(name.clone()),
+		_ => None,
+	}).collect::<Option<Vec<String>>>()?;
+	let statement = Node::List(vec![Node::Symbol(USE_KEYWORD.into()), (*module).clone()], Bracket::None, Separator::Space);
+	used_module(&statement).map(|used| (used, statement, names))
+}
+
+/// `use name`, `require name`, `import name` and `include name`: the name is a symbol, a text or a path `lib/name`, `name.warp`.
 /// A version may follow: `use name version 1.2.3` exactly that one, `use name from 1.2.3` / `use name >= 1.2.3` that or later
 fn used_module(node: &Node) -> Option<Used> {
 	let Node::List(items, _, _) = node.drop_meta() else { return None };
@@ -929,9 +1238,25 @@ pub(crate) fn path_of(node: &Node) -> Option<String> {
 	}
 }
 
+/// A path naming its file itself rather than a name to search for: absolute, or starting at `./` or `../`
+fn is_explicit_path(name: &str) -> bool {
+	Path::new(name).is_absolute() || name.starts_with("./") || name.starts_with("../")
+}
+
 /// A relative path that stays below its directory
 fn is_plain_relative_path(name: &str) -> bool {
 	Path::new(name).components().all(|component| matches!(component, std::path::Component::Normal(_)))
+}
+
+fn mentions_file_url(program: &Node) -> bool {
+	let mut file_url = false;
+	program.visit(&mut |node| if let Node::Text(text) = node { file_url |= text.starts_with(FILE_URL_PREFIX) });
+	file_url
+}
+
+/// The program's main-level definition of `name`
+fn defined(program: &Node, name: &str) -> Option<Node> {
+	statements(program.clone()).into_iter().find(|statement| declared_name(statement).as_deref() == Some(name))
 }
 
 fn statements(module: Node) -> Vec<Node> {
@@ -957,6 +1282,9 @@ pub(crate) fn is_declaration(statement: &Node) -> bool {
 
 /// The name a declaration defines: `f(x) := …`, `x = …`, `x:int = 1`, `fun f(x) {…}`, `global x = …`, `class T {…}`
 fn declared_name(statement: &Node) -> Option<String> {
+	if !is_declaration(statement) {
+		return None; // a list `[a, b]` declares nothing
+	}
 	match statement.drop_meta() {
 		Node::Type { name, .. } => leftmost_symbol(name),
 		Node::Key(target, Op::Assign | Op::Define, _) => leftmost_symbol(target),
@@ -1038,7 +1366,34 @@ fn method_names(statements: &[Node]) -> Vec<String> {
 			}
 		});
 	}
+	let holes = template_holes(statements);
+	if !holes.is_empty() {
+		names.extend(method_names(&holes));
+	}
 	names
+}
+
+/// The expressions in the interpolations of the statements (`"\(x.round(2))"`), which are lowered after the modules
+/// are resolved
+fn template_holes(statements: &[Node]) -> Vec<Node> {
+	fn collect(node: &Node, holes: &mut Vec<Node>) {
+		match node {
+			Node::Meta { node: inner, .. } => {
+				holes.extend(crate::interpolation::holes(node));
+				collect(inner, holes);
+			}
+			Node::Key(left, _, right) => {
+				collect(left, holes);
+				collect(right, holes);
+			}
+			Node::List(items, _, _) => items.iter().for_each(|item| collect(item, holes)),
+			Node::Type { body, .. } => collect(body, holes),
+			_ => {}
+		}
+	}
+	let mut holes = vec![];
+	statements.iter().for_each(|statement| collect(statement, &mut holes));
+	holes
 }
 
 fn mentioned_names(statements: &[Node]) -> Vec<String> {
@@ -1056,7 +1411,8 @@ fn mentioned_names(statements: &[Node]) -> Vec<String> {
 				collect(right, names);
 			}
 			Node::List(items, _, _) => items.iter().for_each(|item| collect(item, names)),
-			Node::Meta { node, .. } => collect(node, names),
+			// an interpolation is lowered after the modules are resolved: `"\(zip(a, b))"` calls zip
+			Node::Meta { node: inner, .. } => crate::interpolation::holes(node).iter().chain([inner.as_ref()]).for_each(|part| collect(part, names)),
 			Node::Type { name, body } => {
 				collect(name, names);
 				collect(body, names);

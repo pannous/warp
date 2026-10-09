@@ -1,4 +1,4 @@
-//! A pinned package (packages.wasp `name: {repository: "git url", version: 1.2.3}`) is the clone of its version's tag,
+//! A pinned package (packages.warp `name: {repository: "git url", version: 1.2.3}`) is the clone of its version's tag,
 //! fetched once per machine into ~/.cache/warp/packages and linked as packages/<name>: no fetch per checkout or export.
 //! Each test fetches into its own packages directory below scratch/, whatever the checkout's packages/ holds.
 
@@ -6,7 +6,7 @@ use std::path::{Path, PathBuf};
 use std::process::Command;
 use warp::modules::{fetch_package_into, package_repository};
 
-const PINNED: &str = ".cache/warp/packages/uniscript@1.0.0";
+const PINNED: &str = ".cache/warp/packages/uniscript@1.0.6";
 
 /// An empty packages directory of its own for a test
 fn packages_for(test: &str) -> PathBuf {

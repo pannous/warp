@@ -32,7 +32,7 @@ pub fn lower(program: Node) -> Node {
 				let members: Vec<Node> = std::iter::from_fn(|| statements.next_if(is_member)).collect();
 				let body = match members.is_empty() {
 					true => body.clone(),
-					false => Box::new(crate::wasp_parser::WaspParser::class_body(Node::List(members, Bracket::Curly, Separator::Semicolon))),
+					false => Box::new(crate::warp_parser::WarpParser::class_body(Node::List(members, Bracket::Curly, Separator::Semicolon))),
 				};
 				lowered.push(Node::Type { name: Box::new(unmarked(*name.clone())), body });
 			}

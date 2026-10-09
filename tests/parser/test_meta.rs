@@ -2,7 +2,7 @@
 // Migrated from tests_*.rs files
 
 use warp::Node;
-use warp::wasp_parser::parse;
+use warp::warp_parser::parse;
 use warp::exists;
 use crate::{eq, skip};
 

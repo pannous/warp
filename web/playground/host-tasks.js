@@ -5,6 +5,9 @@
 // the checks of the listeners on shared values (src/lowering/signal_values.rs), run at every check point
 const SHARED_HANDLER = "on·shared";
 const SOCKET_ADDRESS = /^wss?:\/\//; // src/web_sockets.rs SOCKET_SCHEMES
+const TEXT_REPLY_TYPE = "text/plain"; // src/web_server.rs TEXT_REPLY_TYPE: a text reply of a server function
+const SERVER_REPLIES_ID = "warp-replies"; // src/site.rs REPLIES_ID
+const ROUTE_DATA_URL = "/rpc/route·data·"; // src/lowering/serve.rs RPC_PREFIX + ROUTE_DATA_PREFIX
 
 const TASK_FINISHED = 1n; // src/host.rs TASK_FINISHED, TASK_FAILED, TASK_STOPPED, TASK_STOP
 const TASK_FAILED = 2n;
@@ -31,9 +34,13 @@ const TASK_POOL_SIZE = Math.min(4, self.navigator?.hardwareConcurrency ?? 2);
 const TASK_POOL_WAIT_MS = 10000;
 const TASK_POOL_POLL_MS = 10;
 const hasTaskWorkers = () => self.crossOriginIsolated && self.Worker;
+// why a run's tasks take turns: said once per run, as a warning and at once to the page (hooks.tasksInline), whose
+// timeout then names it instead of "the program may not terminate" (card coi-headless)
+const TASKS_INLINE = "tasks take turns here, one runs to its end before the program goes on: the page is not cross-origin isolated (its service worker cannot run, as in a private window), so it has no shared memory for task Workers. A task that waits for another, or runs until stopped, never ends";
 
+// a built site's task Worker loads the site's scripts (site-worker.js siteScripts), the playground's all of them
 function addTaskWorker() {
-	const worker = new Worker(TASK_WORKER);
+	const worker = new Worker(self.siteScripts ? `${TASK_WORKER}?scripts=${self.siteScripts.join(",")}` : TASK_WORKER);
 	// loaded: it can take tasks; later a fetch it made is done (startFetch)
 	worker.onmessage = ({ data }) => data === FETCH_DONE ? worker.fetched?.() : taskPool.push(worker);
 }
@@ -45,7 +52,7 @@ function prepareTaskPool(size = TASK_POOL_SIZE) {
 }
 
 // resolves once every task Worker of the pool has loaded: a run that starts before would run its tasks inline, where
-// `stop` cannot end one (samples/threads.wasp's endless spin hung the browser suite, card flaky-browser)
+// `stop` cannot end one (samples/threads.warp's endless spin hung the browser suite, card flaky-browser)
 function taskPoolReady() {
 	if (!hasTaskWorkers()) return Promise.resolve();
 	const deadline = performance.now() + TASK_POOL_WAIT_MS;
@@ -92,8 +99,8 @@ const CHANNEL_CHECK_MS = 20; // how often a waiting side looks whether it waits 
 const CHANNEL_INTS = CHANNEL_HEADER + CHANNEL_SLOTS * SLOT_FIELDS;
 
 // a run's channel table, when its program makes channels and the page has shared memory
-function channelTable(module) {
-	if (!WebAssembly.Module.imports(module).some(entry => entry.name === "channel_new")) return null;
+function channelTable(bytes) {
+	if (!importDescriptors(bytes).some(entry => entry.name === "channel_new")) return null;
 	if (!hasTaskWorkers()) return null;
 	return new Int32Array(new SharedArrayBuffer(4 * CHANNEL_INTS + CHANNEL_SLOTS * CHANNEL_VALUE_BYTES));
 }
@@ -218,13 +225,20 @@ function endChannels(run) {
 	unlockChannels(table, true);
 }
 
+function sayTasksInline(run, holder, hooks) {
+	if (run.saidTasksInline) return;
+	run.saidTasksInline = true;
+	holder.warnings.push(TASKS_INLINE);
+	hooks.tasksInline?.(TASKS_INLINE);
+}
+
 // a task of the run: f(arguments) in a fresh instance of the program (src/tasks.rs TaskTable::run), the Int arguments as
 // they are or the argument list (`values`, a tree of reader.js) rebuilt for a wrapper f·node. On a Worker of the pool
 // (shared memory needs cross-origin isolation), which writes the result into a SharedArrayBuffer; else at once, here
 function startTask(holder, hooks, name, ints, values) {
 	const run = holder.run;
 	const id = BigInt(run.tasks.size + 1);
-	const captured = capturedValues(holder.exports, run.module);
+	const captured = capturedValues(holder.exports);
 	if (taskPool.length > 0) {
 		const shared = new SharedArrayBuffer(TASK_HEADER + TASK_RESULT_BYTES, { maxByteLength: TASK_RESULT_LIMIT });
 		const worker = taskPool.pop();
@@ -232,6 +246,7 @@ function startTask(holder, hooks, name, ints, values) {
 		worker.postMessage({ module: run.module, name, ints, values, shared, arrays: run.shared, captured, control, channels: run.channels });
 		run.tasks.set(id, { name, worker, shared, control, inline: () => runTask(run.module, hooks, holder.warnings, name, ints, values, run.shared, captured, null, run.channels) });
 	} else {
+		if (!hasTaskWorkers()) sayTasksInline(run, holder, hooks);
 		run.tasks.set(id, runTask(run.module, hooks, holder.warnings, name, ints, values, run.shared, captured, null, run.channels));
 	}
 	return id;
@@ -362,8 +377,6 @@ function trapMessage(trap, callee) {
 	return runtime ? runtime.replaceAll("_", " ") : String(trap.message ?? trap);
 }
 
-const KIND_FUNCTION = 16n; // src/type_kinds.rs Kind::Function: a closure
-
 const CAPTURE_PREFIX = "capture·"; // src/wasm_emitter CAPTURE_EXPORT_PREFIX
 
 // a value of the program for a task: a closure as its target's name and captured values ({closure, captured}, rebuilt
@@ -387,8 +400,8 @@ function readTaskValue(module, node) {
 }
 
 // the capture globals of the program's closures (src/tasks.rs captured): their values now, for the task's instance
-function capturedValues(exports, module) {
-	const names = WebAssembly.Module.exports(module).map(entry => entry.name).filter(name => name.startsWith(CAPTURE_PREFIX));
+function capturedValues(exports) {
+	const names = Object.keys(exports).filter(name => name.startsWith(CAPTURE_PREFIX));
 	return names.map(name => {
 		const value = exports[name].value;
 		return [name, typeof value === "object" && value !== null ? { tree: readTaskValue(exports, value) } : { raw: value }];
@@ -408,18 +421,38 @@ function taskTree(value) {
 // the page runs the handler (worker.js hooks.arrived). A fetch started anew drops the reply of the one before, going
 // to another page (navigate) the pending ones, a run that ended all.
 const FETCH_HANDLER_PREFIX = "on·fetch·";
-function startFetch(holder, hooks, id, url) {
+// the replies of the server calls of a page a server rendered for its path (src/site.rs replies_script): each answers
+// the first fetch of its request, so the page starts showing what the server rendered (P221)
+const serverReplies = JSON.parse(globalThis.document?.getElementById(SERVER_REPLIES_ID)?.textContent ?? "[]");
+function serverReply(url, body) {
+	const asked = JSON.stringify(JSON.parse(body));
+	const index = serverReplies.findIndex(reply => reply.url === url && JSON.stringify(reply.arguments) === asked);
+	return index < 0 ? undefined : serverReplies.splice(index, 1)[0];
+}
+
+// the replies of route data in so far, by request (card route-data-cache): what a route shows for a path is asked once,
+// so going back to a page, or to a path of another route (ø), asks the server nothing
+const routeDataReplies = new Map();
+const routeDataKey = (url, body) => body !== undefined && decodeURI(url).startsWith(ROUTE_DATA_URL) ? url + " " + body : undefined;
+
+// A request [url, body] POSTs the body as JSON: a server function the page calls (src/lowering/serve.rs)
+function startFetch(holder, hooks, id, request) {
+	const [url, body] = Array.isArray(request) ? [request[0], JSON.stringify(request[1])] : [request];
 	if (!hooks.arrived && taskPool.length === 0) return holder.warnings.push(`fetch ${url}: replies arriving later are not handled here`);
-	const started = { url };
+	const started = { url, posted: body !== undefined };
 	(holder.fetches ??= new Map()).set(id, started);
 	const current = () => holder.fetches.get(id) === started && !holder.stopped;
+	const routeData = routeDataKey(url, body);
 	const arrive = reply => {
+		if (routeData && !reply.error) routeDataReplies.set(routeData, reply);
 		if (!current() || started.reply) return;
 		started.reply = reply;
 		hooks.arrived?.(holder, FETCH_HANDLER_PREFIX + id);
 	};
 	const failed = reason => ({ error: `fetch ${url} failed: ${reason}` });
-	if (taskPool.length === 0) return void fetchReplyOf(url).then(({ body, error }) => arrive(error ? failed(error) : { body }));
+	const rendered = routeDataReplies.get(routeData) ?? (body !== undefined && serverReply(url, body));
+	if (rendered) return void queueMicrotask(() => arrive({ body: rendered.body, text: rendered.text }));
+	if (taskPool.length === 0) return void fetchReplyOf(url, body).then(reply => arrive(reply.error ? failed(reply.error) : reply));
 	const worker = taskPool.pop();
 	started.shared = new SharedArrayBuffer(TASK_HEADER + TASK_RESULT_BYTES, { maxByteLength: TASK_RESULT_LIMIT });
 	started.failed = failed;
@@ -433,7 +466,7 @@ function startFetch(holder, hooks, id, url) {
 		const reply = sharedFetchReply(started);
 		if (reply) arrive(reply);
 	};
-	worker.postMessage({ fetch: new URL(url, self.location.href).href, shared: started.shared });
+	worker.postMessage({ fetch: new URL(url, self.location.href).href, body, shared: started.shared });
 }
 
 // the page went to another path (card fetch-cancel): a reply still pending runs no handler; the ones in stay the values
@@ -444,8 +477,10 @@ function dropPendingFetches(holder) {
 }
 
 // {body} or {error} of a URL: the HTTP status of a failed request, or why it failed
-function fetchReplyOf(url) {
-	return fetch(url).then(async response => response.ok ? { body: await response.text() } : { error: `HTTP status ${response.status}` }, failure => ({ error: failure.message }));
+function fetchReplyOf(url, body) {
+	const request = body === undefined ? undefined : { method: "POST", body };
+	const replied = async response => ({ body: await response.text(), text: response.headers.get("content-type")?.startsWith(TEXT_REPLY_TYPE) });
+	return fetch(url, request).then(response => response.ok ? replied(response) : { error: `HTTP status ${response.status}` }, failure => ({ error: failure.message }));
 }
 
 // a task Worker's answer: the JSON of `record` in the shared buffer, then its state set to done for the waiting side
@@ -472,8 +507,7 @@ function readShared(shared, wait = false) {
 function sharedFetchReply(started) {
 	const answer = started.reply ? undefined : readShared(started.shared);
 	if (!answer) return undefined;
-	const { body, error } = answer;
-	return error ? started.failed(error) : { body };
+	return answer.error ? started.failed(answer.error) : answer;
 }
 
 // a check point of a running main (sleep, loop starts): the handlers of the fetches whose reply is in shared memory
@@ -489,12 +523,15 @@ function deliverFetches(holder) {
 
 // [value, error] as src/fetches.rs reply gives it: a JSON object or array parsed, any other body the text
 function fetchReply(holder, id) {
-	const { reply } = holder.fetches?.get(id) ?? {};
+	const { reply, posted } = holder.fetches?.get(id) ?? {};
 	if (!reply) return [null, `fetch ${id} has no reply yet`];
 	if (reply.error) return [null, reply.error];
+	// a server function's reply (src/lowering/serve.rs) is a text as text/plain, JSON of any other value (src/web_server.rs)
+	if (posted && reply.text) return [reply.body, null];
+	if (posted) try { return [JSON.parse(reply.body), null]; } catch (failure) { return [null, `the server's reply is no JSON: ${failure.message}`]; }
 	const structure = structureOf(reply.body);
 	if (structure !== undefined) return [structure, null];
-	return [reply.body.endsWith("\n") ? reply.body : reply.body + "\n", null]; // wasp convention (src/host.rs fetch)
+	return [reply.body.endsWith("\n") ? reply.body : reply.body + "\n", null]; // warp convention (src/host.rs fetch)
 }
 
 // a JSON object or array of the text, undefined for any other text (src/web_server.rs value_of_body)
@@ -633,7 +670,7 @@ addHostPart({
 			}
 		},
 	}),
-	started: run => Object.assign(run, { tasks: new Map(), shared: [], channels: channelTable(run.module) }),
+	started: run => Object.assign(run, { tasks: new Map(), shared: [], channels: channelTable(run.bytes) }),
 	poll: holder => {
 		checkShared(holder);
 		deliverFetches(holder);

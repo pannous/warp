@@ -39,7 +39,7 @@ fn typed_names_are_no_elements() {
 }
 
 /// a ternary's branches (`b == 0 ? a : gcd(b, a % b)`) and a number field (`{a:1}`, `P{a:1}`) are no elements
-/// (sweep of samples/: gcd.wasp, control_flow.wasp warned "a without href")
+/// (sweep of samples/: gcd.warp, control_flow.warp warned "a without href")
 #[test]
 fn ternaries_and_number_fields_are_no_elements() {
 	assert!(warnings_of("def gcd(a, b) := b == 0 ? a : gcd(b, a % b)\ngcd(48, 18)").is_empty());
@@ -48,7 +48,7 @@ fn ternaries_and_number_fields_are_no_elements() {
 	assert!(!warnings_of("ok = true\nok ? div{ a{ \"home\" } } : p: \"none\"").is_empty(), "markup in a branch still warns");
 }
 
-/// attributes in the head, `label(for:pwd): "Password"` (samples/html.wasp), label the field like `label{ for:pwd … }`
+/// attributes in the head, `label(for:pwd): "Password"` (samples/html.warp), label the field like `label{ for:pwd … }`
 #[test]
 fn head_attributes_count() {
 	assert!(warnings_of("html{ lang:\"en\" body{ label(for:pwd):\"Password\"\n input{ id:pwd type:password } } }").is_empty());

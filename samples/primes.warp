@@ -1,0 +1,5 @@
+// Prime check with helper recursion
+def is_prime(n) = if n < 2 then false else check(n, 2)
+def check(n, i) = if i * i > n then true else if n % i == 0 then false else check(n, i + 1)
+
+is_prime(97)

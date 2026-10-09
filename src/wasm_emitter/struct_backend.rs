@@ -6,7 +6,7 @@
 
 use super::map_backend::{entry_update, is_update};
 use super::WasmGcEmitter;
-use crate::node::Node;
+use crate::node::{Node, Separator};
 use crate::operators::Op;
 use crate::type_constructor::{entry_name, entry_value, instance_parts};
 use crate::type_kinds::{field_storage, FieldStorage, Kind, TypeDef};
@@ -50,14 +50,14 @@ impl WasmGcEmitter {
 	/// The variables of `program` held as GC structs, with their class: locals assigned only constructions of one class
 	/// that give every field in declared order, and field writes, all with values of the field's kind
 	pub(super) fn find_typed_structs(&self, program: &Node) -> HashMap<String, String> {
-		let mut classes = self.struct_variables(program, &self.struct_results);
+		let mut classes = self.struct_variables(program, &(self.struct_abi.clone(), self.struct_results.clone()));
 		classes.retain(|name, _| self.scope.lookup(name).is_some_and(|local| !local.is_param));
 		classes
 	}
 
 	/// find_typed_structs before the scope is known: the variables a program, or a function body except its
 	/// parameters, holds as structs
-	fn struct_variables(&self, program: &Node, results: &HashMap<String, String>) -> HashMap<String, String> {
+	fn struct_variables(&self, program: &Node, (abi, results): &StructAbi) -> HashMap<String, String> {
 		let (mut classes, mut excluded): (HashMap<String, String>, Vec<String>) = (HashMap::new(), vec![]);
 		// (variable, the one-based field index, the value written)
 		let mut writes: Vec<(String, Node, Node)> = vec![];
@@ -90,6 +90,9 @@ impl WasmGcEmitter {
 			}
 		}
 		excluded.extend(self.names_held_as_nodes(program));
+		// an instance is a reference (P200): a variable used whole (`q = p`, `[p]`, `print(p)`, an argument that is no
+		// struct parameter) is the one Node every holder shares, never a struct copied into a Node there
+		used_whole(&without_final_variable(program), abi, &mut excluded);
 		classes.retain(|name, _| !excluded.contains(name));
 		classes
 	}
@@ -170,6 +173,10 @@ impl WasmGcEmitter {
 	/// (emit_assigned_entry_value); false otherwise
 	pub(super) fn emit_struct_field_set(&mut self, func: &mut Function, target: &Node, index: &Node, value: &Node) -> bool {
 		let Some(access) = self.field_access(target, index) else { return false };
+		if let Some(message) = self.misfit_list_item(target, access.field_index as usize, value) {
+			self.emit_type_error(func, message);
+			return true;
+		}
 		if self.misfits(value, access.kind) {
 			let class = self.typed_structs[&target.drop_meta().name()].clone();
 			let field = &self.ctx.type_registry.get_by_name(&class).expect("a declared class").fields[access.field_index as usize];
@@ -182,9 +189,19 @@ impl WasmGcEmitter {
 		let class = self.typed_structs[&target.drop_meta().name()].clone();
 		self.emit_field_value(func, &class, access.field_index as usize, value, access.kind);
 		func.instruction(&I::StructSet { struct_type_index: access.type_index, field_index: access.field_index });
-		let key = crate::wasp_parser::subscript_key(index).expect("a field by name").clone();
+		let key = crate::warp_parser::subscript_key(index).expect("a field by name").clone();
 		self.emit_assigned_entry_value(func, target, &key, value);
 		true
+	}
+
+	/// `b.items.add(420)` of a field `items: texts`: the literal item its list field does not take (card list-element-types)
+	fn misfit_list_item(&self, target: &Node, field_index: usize, value: &Node) -> Option<String> {
+		let class = self.typed_structs.get(&target.drop_meta().name())?;
+		let field = &self.ctx.type_registry.get_by_name(class)?.fields[field_index];
+		let element = crate::analyzer::list_element_type(&field.type_name)?;
+		let (item, actual) = crate::analyzer::misfit_item(element, value)?;
+		let given = crate::analyzer::kind_with_article(actual);
+		Some(format!("{} of {class} is {} field, got the item {} ({given})", field.name, crate::analyzer::with_article(&field.type_name), item.serialize()))
 	}
 
 	/// `p = P{…}`: the struct of the field values in p's local; `p = field_with(p, "x", v)`: the field set in place.
@@ -212,8 +229,9 @@ impl WasmGcEmitter {
 
 	/// The value of a field as its kind stores it; an int field never takes a fraction (`p.x = 0.5` traps)
 	fn emit_field_value(&mut self, func: &mut Function, class: &str, field_index: usize, value: &Node, kind: Kind) {
-		self.emit_value_of_kind(func, value, kind);
-		let field = self.ctx.type_registry.get_by_name(class).and_then(|type_def| type_def.fields.get(field_index));
+		let field = self.ctx.type_registry.get_by_name(class).and_then(|type_def| type_def.fields.get(field_index)).cloned();
+		let declared = field.as_ref().map(|field| Node::Symbol(field.type_name.clone()));
+		self.emit_declared_value(func, declared.as_ref(), value, kind);
 		// an optional int is stored as a Node (ø or the number): no whole check there
 		if kind == Kind::Int && field.is_some_and(|field| crate::analyzer::is_whole_type(&field.type_name)) {
 			self.emit_whole_check(func);
@@ -252,9 +270,10 @@ impl WasmGcEmitter {
 		// while the functions they are assigned from give structs
 		loop {
 			let results: HashMap<String, String> = candidates.iter().filter_map(|candidate| Some((candidate.name.clone(), candidate.result.clone()?))).collect();
-			let trees: Vec<(&Node, HashMap<String, String>)> = std::iter::once((program, self.struct_variables(program, &results)))
+			let abi = (candidates.iter().map(|candidate| (candidate.name.clone(), candidate.classes.clone())).collect(), results);
+			let trees: Vec<(&Node, HashMap<String, String>)> = std::iter::once((program, self.struct_variables(program, &abi)))
 				.chain(functions.iter().map(|function| {
-					let mut variables = self.struct_variables(&function.body, &results);
+					let mut variables = self.struct_variables(&function.body, &abi);
 					variables.retain(|name, _| function.params.iter().all(|param| param.name != *name));
 					(function.body.as_ref(), variables)
 				}))
@@ -335,6 +354,55 @@ impl WasmGcEmitter {
 	}
 }
 
+/// The body without its value when that is a bare variable (`…; p`): nothing changes it after, so its Node copy is it
+pub(super) fn without_final_variable(body: &Node) -> Node {
+	match body.drop_meta() {
+		Node::List(statements, bracket, separator) if matches!(separator, Separator::Semicolon | Separator::Newline)
+			&& statements.last().is_some_and(|last| matches!(last.drop_meta(), Node::Symbol(_))) => {
+			Node::List(statements[..statements.len() - 1].to_vec(), bracket.clone(), separator.clone())
+		}
+		_ => body.clone(),
+	}
+}
+
+/// The variables a node uses as a whole value: not as an assignment's target, a field's object `p#x`, or an argument
+/// to a struct parameter
+pub(super) fn used_whole(node: &Node, abi: &HashMap<String, Vec<Option<String>>>, names: &mut Vec<String>) {
+	let mut recurse = |child: &Node| used_whole(child, abi, names);
+	match node.drop_meta() {
+		Node::Symbol(name) => names.push(name.clone()),
+		Node::Key(target, op, value) if matches!(op, Op::Assign | Op::Define) || op.is_compound_assign() || is_update(op) => {
+			match target.drop_meta() {
+				// a field write `p = field_with(p, "x", v)` uses only v
+				Node::Symbol(name) => {
+					if let Some((_, written)) = entry_update(name, value) {
+						return recurse(&written);
+					}
+				}
+				Node::Key(object, Op::Hash, index) if matches!(object.drop_meta(), Node::Symbol(_)) => recurse(index),
+				other => recurse(other),
+			}
+			recurse(value);
+		}
+		Node::Key(object, Op::Hash, index) if matches!(object.drop_meta(), Node::Symbol(_)) => recurse(index),
+		Node::List(items, _, _) if super::list_abi::called_function(node).is_some_and(|function| abi.contains_key(function)) => {
+			let parameters = &abi[super::list_abi::called_function(node).expect("guarded")];
+			for (index, argument) in items.iter().enumerate().skip(1) {
+				let struct_parameter = parameters.get(index - 1).is_some_and(Option::is_some);
+				if !(struct_parameter && matches!(argument.drop_meta(), Node::Symbol(_))) {
+					recurse(argument);
+				}
+			}
+		}
+		Node::Key(left, _, right) => {
+			recurse(left);
+			recurse(right);
+		}
+		Node::List(items, _, _) => items.iter().for_each(recurse),
+		_ => {}
+	}
+}
+
 /// The class of the struct a call of a function giving one back gives
 fn struct_call_class(value: &Node, results: &HashMap<String, String>) -> Option<String> {
 	results.get(super::list_abi::called_function(value)?).cloned()
@@ -392,13 +460,14 @@ impl StructFunction {
 			});
 		}
 		let replaced = if self.changed.is_some() { replacing } else { calls };
-		calls == replaced && mentions == heads + replaced
+		// a function the program never calls keeps the Node parameter: only a program importing the module calls it
+		replaced > 0 && calls == replaced && mentions == heads + replaced
 	}
 }
 
 /// The index and stored kind of the field a one-based subscript `"x" + 1` names
 fn field_of(instance: &InstanceType, index: &Node) -> Option<(u32, Kind)> {
-	let name = match crate::wasp_parser::subscript_key(index)?.drop_meta() {
+	let name = match crate::warp_parser::subscript_key(index)?.drop_meta() {
 		Node::Text(name) => name.clone(),
 		Node::Char(letter) => letter.to_string(),
 		_ => return None,

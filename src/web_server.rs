@@ -10,6 +10,8 @@ use std::cell::Cell;
 
 const JSON_TYPE: &str = "application/json";
 const TEXT_TYPE: &str = "text/plain; charset=utf-8";
+/// A reply of this type is a text (host-tasks.js TEXT_REPLY_TYPE)
+pub const TEXT_REPLY_TYPE: &str = "text/plain";
 const NOT_FOUND: u16 = 404;
 const FAILED: u16 = 500;
 const SITE_METHOD: &str = "GET";
@@ -29,11 +31,22 @@ pub(crate) fn take_request_limit() -> usize {
 	REQUEST_LIMIT.with(|limit| limit.replace(0))
 }
 
-/// A route of the program: method, path and the function answering it
+/// A route of the program: method, path, the function answering it and whether its value is a list
 pub struct Route {
 	pub method: String,
 	pub path: String,
 	pub function: String,
+	pub lists: bool,
+}
+
+impl Route {
+	/// The answer of the route's value; ø is the empty list, which reads back as nothing, so a list route says []
+	pub fn answer_of(&self, value: &Node) -> Answer {
+		match value.drop_meta() {
+			Node::Empty if self.lists => Answer { status: 200, content_type: JSON_TYPE, body: b"[]".to_vec() },
+			_ => Answer::of(value),
+		}
+	}
 }
 
 /// What a route's function gave, as the HTTP answer: status, content type, body
@@ -58,11 +71,16 @@ impl Answer {
 	}
 }
 
-/// The routes of `[[method, path, function] …]`
+/// The routes of `[[method, path, function] …]`, a list route marked `[method, path, function, serve::LIST_ANSWER]`
 pub fn routes_of(routes: &Node) -> Vec<Route> {
 	let Node::List(items, _, _) = routes.drop_meta() else { return vec![] };
 	items.iter().filter_map(|route| match route.drop_meta() {
-		Node::List(parts, _, _) if parts.len() == 3 => Some(Route { method: text_of(&parts[0]), path: text_of(&parts[1]), function: text_of(&parts[2]) }),
+		Node::List(parts, _, _) if (3..=4).contains(&parts.len()) => Some(Route {
+			method: text_of(&parts[0]),
+			path: text_of(&parts[1]),
+			function: text_of(&parts[2]),
+			lists: parts.get(3).is_some_and(|mark| text_of(mark) == crate::serve::LIST_ANSWER),
+		}),
 		_ => None,
 	}).collect()
 }
@@ -76,14 +94,15 @@ fn text_of(node: &Node) -> String {
 }
 
 /// Serve on `port` until the request limit (if any): `answer(route, request)` runs the route's function; a GET no route
-/// takes is a file of the program's `site` (src/site.rs), its page at / (with routes the page at any path)
-pub fn serve(port: u16, routes: &[Route], site: Option<&ServedSite>, mut answer: impl FnMut(&Route, Node) -> Answer) -> Result<(), String> {
+/// takes is a file of the program's `site` (src/site.rs), its page at /
+pub fn serve(port: u16, routes: &[Route], site: &ServedSite, mut answer: impl FnMut(&Route, Node) -> Answer) -> Result<(), String> {
 	let server = tiny_http::Server::http(("0.0.0.0", port)).map_err(|problem| format!("serve {port}: {problem}"))?;
 	let limit = take_request_limit();
 	let mut served = 0;
 	for mut request in server.incoming_requests() {
 		let method = request.method().as_str().to_uppercase();
 		let (path, query) = request.url().split_once('?').map_or((request.url().to_string(), String::new()), |(path, query)| (path.to_string(), query.to_string()));
+		let path = percent_decoded(&path);
 		let mut body = String::new();
 		let _ = request.as_reader().read_to_string(&mut body);
 		let answered = match routes.iter().find(|route| route.method == method && route.path == path) {
@@ -100,12 +119,14 @@ pub fn serve(port: u16, routes: &[Route], site: Option<&ServedSite>, mut answer:
 	Ok(())
 }
 
-/// `GET /` is the site's page, `GET /app.wasm` its module and so on; a page that fails to render is said
-fn site_file(site: Option<&ServedSite>, method: &str, path: &str) -> Option<Answer> {
-	let file = site.filter(|_| method == SITE_METHOD)?.file(path)?;
-	Some(match file {
-		Ok((name, bytes)) => Answer { status: 200, content_type: crate::site::content_type(&name), body: bytes },
-		Err(failure) => Answer::failed(&format!("the page at {path}: {failure}")),
+/// `GET /` is the site's page, `GET /app.wasm` its module and so on
+fn site_file(site: &ServedSite, method: &str, path: &str) -> Option<Answer> {
+	if method != SITE_METHOD {
+		return None;
+	}
+	Some(match site.file_at(path)? {
+		Ok((name, body)) => Answer { status: 200, content_type: crate::site::content_type(&name), body },
+		Err(failure) => Answer::failed(&failure),
 	})
 }
 
@@ -113,6 +134,21 @@ fn site_file(site: Option<&ServedSite>, method: &str, path: &str) -> Option<Answ
 pub fn value_of_body(body: String) -> Node {
 	serde_json::from_str::<serde_json::Value>(&body).ok().filter(|value| value.is_object() || value.is_array())
 		.map_or(Node::Text(body), |value| crate::foreign::node_of(&value))
+}
+
+/// `/rpc/route%C2%B7data%C2%B70` → `/rpc/route·data·0` (a browser's fetch encodes the path); an invalid escape stays
+fn percent_decoded(path: &str) -> String {
+	let bytes = path.as_bytes();
+	let mut decoded = Vec::with_capacity(bytes.len());
+	let mut index = 0;
+	while index < bytes.len() {
+		let escaped = (bytes[index] == b'%').then(|| path.get(index + 1..index + 3)).flatten().and_then(|hex| u8::from_str_radix(hex, 16).ok());
+		match escaped {
+			Some(byte) => { decoded.push(byte); index += 3; }
+			None => { decoded.push(bytes[index]); index += 1; }
+		}
+	}
+	String::from_utf8(decoded).unwrap_or_else(|_| path.to_string())
 }
 
 /// The request as the route's `request`: {method, path, query, body}, a JSON body parsed into its value

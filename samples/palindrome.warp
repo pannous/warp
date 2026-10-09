@@ -1,0 +1,3 @@
+// a palindrome reads the same backwards
+word = "level"
+word == (reverse word)

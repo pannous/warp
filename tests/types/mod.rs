@@ -1,4 +1,6 @@
 mod test_array_types;
+mod test_inline_unions;
+mod test_list_element_types;
 mod test_cast_bugs;
 mod test_constructor_vs_data;
 mod test_data;
@@ -6,6 +8,7 @@ mod test_generic_types;
 #[cfg(feature = "native")] // wasmtime, files or network: not in the browser build
 mod test_person_struct;
 mod test_records_classes;
+mod test_construction_defaults;
 mod test_class_destructuring;
 mod test_class_json;
 mod test_class_methods;
@@ -77,4 +80,37 @@ mod test_sum_types;
 mod test_type_alias_fields;
 mod test_optional_number_fields;
 mod test_variant_payloads;
+mod test_enum_cases;
+mod test_conformance_claims;
 mod test_file_declarations;
+mod test_match_static_variant;
+mod test_bool_type;
+mod test_element_field_writes;
+#[cfg(feature = "native")] // runs lean and lake
+mod test_type_model;
+mod test_bool_assign;
+mod test_checked_call_kinds;
+mod test_class_field_type_phrases;
+mod test_optional_casts;
+mod test_bool_literal_value;
+mod test_bool_return; // card bool-return
+mod test_type_of_node_values;
+mod test_shared_instances;
+mod test_type_static;
+mod test_upcast_fields;
+mod test_empty_type_aliases;
+mod test_real_references;
+mod test_shared_lists; // card shared-lists
+mod test_widened_list_views; // card p215-user
+mod test_optional_list_items;
+mod test_any_into_annotated;
+mod test_any_into_annotated_types;
+mod test_copies;
+mod test_any_field_text;
+mod test_same_identity;
+mod test_loop_item_into_annotated;
+mod test_declared_list_marks;
+mod test_chained_assignments;
+mod test_loop_text_arithmetic;
+mod test_cyclic_objects; // card orm: objects pointing to each other
+mod test_field_named_like_builtin; // cards field-named-size, orm-members-word

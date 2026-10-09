@@ -67,7 +67,7 @@ fn an_unanswered_error_ask_names_every_explicit_form() {
 fn an_educating_note_shows_until_acknowledged() {
 	use warp::diagnostic::educate_once;
 	use warp::normalize::capture_hints;
-	let note = || capture_hints(|| educate_once("let", "let x", "x", "in wasp let is immutable")).1.len();
+	let note = || capture_hints(|| educate_once("let", "let x", "x", "in warp let is immutable")).1.len();
 	with_acknowledger(Acknowledging(vec![]), || {
 		assert_eq!(note(), 1);
 		assert_eq!(note(), 0, "once per run");
@@ -89,7 +89,7 @@ fn an_educating_note_shows_until_acknowledged() {
 
 #[test]
 fn every_for_header_bound_minus_one_asks() {
-	let forms = "probes/ask/kotlin_range_forms.wasp"; // 7 loops of n-1 forms, nested in parentheses, `do`, a function
+	let forms = "probes/ask/kotlin_range_forms.warp"; // 7 loops of n-1 forms, nested in parentheses, `do`, a function
 	take_warnings();
 	is!(forms, 21);
 	let warned = take_warnings().iter().filter(|warning| warning.message.contains("include")).count();
@@ -98,16 +98,16 @@ fn every_for_header_bound_minus_one_asks() {
 
 #[test]
 fn a_runtime_error_names_the_range_hint_and_the_guesses_behind_it() {
-	let failure = format!("{:?}", eval("samples/life_kotlin_ranges.wasp"));
+	let failure = format!("{:?}", eval("samples/life_kotlin_ranges.warp"));
 	assert!(failure.contains("index out of range"), "{failure}");
 	assert!(failure.contains("`..` excludes the end; `...` or `to` include it"), "{failure}");
 	assert!(failure.contains("assumed at 23:13, 24:15") && failure.contains("loop bound `..size-1`"), "{failure}");
-	is!("a=[1,2]; a#3", warp::error("index out of range"));
+	is!("a=[1,2]; a#3", warp::error("index out of range: 3 not in 1…2"));
 }
 
 #[test]
 fn questions_quote_prefix_operators_as_written() {
-	let value_text = |code: &str| match warp::wasp_parser::WaspParser::parse(code).drop_meta() {
+	let value_text = |code: &str| match warp::warp_parser::WarpParser::parse(code).drop_meta() {
 		warp::Node::Key(_, _, value) => warp::normalize::operand_text(value),
 		other => panic!("not an assignment: {other:?}"),
 	};

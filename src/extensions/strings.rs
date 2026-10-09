@@ -259,6 +259,11 @@ fn in_ranges(c: u32, ranges: &[(u32, u32)]) -> bool {
 	ranges.iter().any(|&(low, high)| c.wrapping_sub(low) <= high - low)
 }
 
+/// The first code point of an emoji: a pictograph or a flag's regional indicator
+pub fn starts_an_emoji(c: char) -> bool {
+	in_ranges(c as u32, &GRAPHEME_PICTOGRAPHIC) || in_ranges(c as u32, &[REGIONAL_INDICATORS])
+}
+
 /// Controls end a cluster at once; CR LF is the one pair that stays together
 pub fn is_control(c: u32) -> bool {
 	c < 0x20 || (0x7F..0xA0).contains(&c)

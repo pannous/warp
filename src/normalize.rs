@@ -1,6 +1,6 @@
 //! Normalization hints for guiding users toward canonical syntax
 //!
-//! Wasp accepts many syntactic forms but has preferred canonical forms.
+//! Warp accepts many syntactic forms but has preferred canonical forms.
 //! This module emits gentle hints to educate users about the preferred way.
 //!
 //! # Configuration
@@ -533,8 +533,9 @@ pub mod hints {
     pub fn conditional(used_ternary: bool) {
         let s = style();
         match (used_ternary, s.conditional) {
+            // shown until the user acknowledges it once (card hint-dismiss)
             (true, ConditionalStyle::IfThenElse) => {
-                hint("x ? y : z", "if x then y else z", "if-then-else is more readable")
+                crate::diagnostic::educate_once(CONDITIONAL_TOPIC, "x ? y : z", "if x then y else z", "if-then-else is more readable")
             }
             (false, ConditionalStyle::Ternary) => {
                 hint("if x then y else z", "x ? y : z", "ternary operator is more concise")
@@ -567,7 +568,7 @@ pub mod hints {
         match used_style {
             // shown until the user acknowledges it once (diagnostic::educate_once)
             VarStyle::Let => crate::diagnostic::educate_once(LET_TOPIC, &spell(used_style), &spell(preferred),
-                &format!("{reason}; in wasp `let` is immutable (unlike JS), use var or plain = for variables that change")),
+                &format!("{reason}; in warp `let` is immutable (unlike JS), use var or plain = for variables that change")),
             _ => hint(&spell(used_style), &spell(preferred), reason),
         }
     }
@@ -661,8 +662,8 @@ pub mod hints {
     /// Bracket indexing (counts from 0) vs hash indexing (counts from 1)
     pub fn index_operator(var: &str, idx: &str, used_bracket: bool) {
         let looks_up_a_key = idx.starts_with(['"', '\'']); // `ages["alice"]` counts no position
-        // card g-2WPo (user): only a simple index, a literal or a name; `xs[i+1]` stays as written
-        if looks_up_a_key || !is_simple_index(idx) {
+        // cards g-2WPo, g_YiSA (user): only a number, where `xs#2` is as short as `xs[1]`; `xs[i]` and `xs[i+1]` stay
+        if looks_up_a_key || !is_number_index(idx) {
             return;
         }
         let s = style();
@@ -681,11 +682,9 @@ pub mod hints {
         }
     }
 
-    fn is_simple_index(idx: &str) -> bool {
+    fn is_number_index(idx: &str) -> bool {
         let digits = idx.strip_prefix('-').unwrap_or(idx);
-        let is_number = !digits.is_empty() && digits.chars().all(|c| c.is_ascii_digit());
-        let is_name = idx.chars().next().is_some_and(|c| c.is_alphabetic() || c == '_') && idx.chars().all(|c| c.is_alphanumeric() || c == '_');
-        is_number || is_name
+        !digits.is_empty() && digits.chars().all(|c| c.is_ascii_digit())
     }
 
     /// Length method vs # operator
@@ -714,8 +713,10 @@ pub mod hints {
 /// Type word of the list types; `list<int>`, `list of int` and `ints` all denote a list of int
 const LIST_TYPE_HEAD: &str = "list";
 const OF_WORD: &str = "of";
-/// The acknowledge-once note that `let` is immutable in wasp
+/// The acknowledge-once note that `let` is immutable in warp
 pub const LET_TOPIC: &str = "let";
+/// The acknowledge-once note on `x ? y : z` against `if x then y else z`
+pub const CONDITIONAL_TOPIC: &str = "conditional";
 const STRING_TYPE_NAMES: [&str; 2] = ["str", "String"];
 
 /// The quote character of the canonical string style
@@ -738,7 +739,7 @@ pub fn operand_text(node: &Node) -> String {
 fn as_written(node: Node) -> Node {
     match node {
         Node::List(items, bracket, separator) => match items.as_slice() {
-            [word, dividend, divisor] if matches!(word.drop_meta(), Node::Symbol(name) if name == crate::wasp_parser::FLOOR_QUOTIENT) => {
+            [word, dividend, divisor] if matches!(word.drop_meta(), Node::Symbol(name) if name == crate::warp_parser::FLOOR_QUOTIENT) => {
                 Node::Symbol(format!("{}//{}", operand_text(dividend), operand_text(divisor)))
             }
             _ => Node::List(items.into_iter().map(as_written).collect(), bracket, separator),
@@ -969,9 +970,9 @@ mod tests {
 		set_hint_position(10, 5);
 		assert_eq!(position_string(), "10:5");
 
-		set_hint_file("test.wasp");
+		set_hint_file("test.warp");
 		set_hint_position(42, 13);
-		assert_eq!(position_string(), "test.wasp:42:13");
+		assert_eq!(position_string(), "test.warp:42:13");
 
 		// Clear again
 		clear_hint_position();

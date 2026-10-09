@@ -1,7 +1,7 @@
 # Sample sweep (samples/, started 2026-10-03)
 
-Goal: every `samples/*.wasp` runs, ideally by fixing the language rather than the sample. Each fixed sample gets an
-`is!("samples/x.wasp", …)` line in tests/programs/test_samples.rs.
+Goal: every `samples/*.warp` runs, ideally by fixing the language rather than the sample. Each fixed sample gets an
+`is!("samples/x.warp", …)` line in tests/programs/test_samples.rs.
 
 ## How to sweep
 - Build a private CLI copy: `WARP=$(scripts/own-warp.sh)` then run `"$WARP" …` (or `probes/samples/…`).
@@ -9,10 +9,10 @@ Goal: every `samples/*.wasp` runs, ideally by fixing the language rather than th
 - Skip `raylib_*` / `sdl_*` in sweeps: they open real windows.
 - `test.wasm` in the cwd is the last emitted module, written before validation: `wasm-tools print test.wasm` shows the
   function behind an "internal error: WASM validation failed".
-- `samples/life_kotlin_ranges.wasp` fails on purpose (tests/welcoming/test_welcoming_ask.rs pins its explanation).
+- `samples/life_kotlin_ranges.warp` fails on purpose (tests/welcoming/test_welcoming_ask.rs pins its explanation).
 
-## Wasp habits the old samples get wrong (sample-side fixes)
-- Lists are values: a function cannot change a list it is passed. Return the new list, or make the state `global`.
+## Warp habits the old samples get wrong (sample-side fixes)
+- Lists are shared (P200b): a function changes the list it is passed, as in Python; `+` and `copy()` make new lists.
 - A function sees main-level constants; to change (or read a computed) main-level value, declare it `global`.
 - `/` is exact division (`7/3` stays a fraction); use `//` for floor division, written glued: ` // ` with spaces is a comment.
 - `1e10` is an exact number and cannot later hold a float: `1e10 as float`.
@@ -38,11 +38,13 @@ Branch samples-2 / implicit-libm (warp-d2): a character variable compares by cod
 functions since 3da746b), `x="5"; x as int` is 5, and libm called without import links libm (exp/sin/… compiled to
 their argument at run time before).
 
-## Still failing (2026-10-03 night)
-Split 2026-10-03: sample fixer (branch samples) takes async … mandelbrot; warp-d2 takes modules … webgpu.
-neural_net next blockers: `Matrix(r, c, fn)`, `Array(n, fn)`, `m[i, j]`, `round(x, 3)` (todo.md), plus `global` for
-the weights (sample side). calculator / json_parser now pass the character tests and stop at nested functions sharing
-`pos` and dynamic objects.
-async, calculator, circle, control_flow, data_structures, errors, functions, html, html_dsl, json_parser, mandelbrot,
-modules, natural, netbase, neural_net, particles, polymorphism (needs parameter overloading, todo.md), sample,
-test_ffi_extended, types, wasm_interop, webgpu; raylib/sdl not run (windows).
+## Still failing (2026-10-08, branch samples-run)
+All other samples run (exit code = the program's value, so sweep for `Error(` in the output, not for exit codes).
+The failures left, each with its reason in web/playground/excluded_samples.txt:
+- errors (malformed on purpose), life_kotlin_ranges (fails on purpose), modules (sketch: card module-manager),
+  webgpu (WGSL block), netbase (needs a netbase server).
+- natural: given its data it runs to `send email to … with subject …`; that phrase and `results where country is
+  germany` wait for decisions (card natural-phrases), `10 down to 1` is card down-wasm.
+- raylib/sdl: not run in sweeps (windows). SDL_video.h is among the SDL headers now (SDL_CreateWindow).
+Fixed on samples-run: a loop variable reusing a number's name reads fields (`item = 2; for item in basket {
+item.price }`); an import no header declares says so; `xs where country is germany` hints `it.country==germany`.

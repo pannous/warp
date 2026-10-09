@@ -25,7 +25,7 @@ the uniscript repository's `fonts/dist` (`UNISCRIPT_FONTS`) or `~/Library/Fonts`
   synchronous, so the page fetches the index before instantiating; any other path falls back to a synchronous XHR
   (charset `x-user-defined` keeps the bytes).
 - Imports come from `WebAssembly.Module.imports()`: `host.read`, `host.fetch`, `host.fetch_within`, `host.warn` are real
-  (`warning(message)` in wasp lists under the output of the conversion that raised it, cleared on the next one),
+  (`warning(message)` in warp lists under the output of the conversion that raised it, cleared on the next one),
   `host.run` and anything unknown warn in the page and return 0 / -1.
 - Bytes go into memory by the rule of `src/host.rs write_bytes_to_caller` (the exported `text_heap` bump pointer, fresh
   pages when it is 0 or full), then `new_text(ptr, len)`.

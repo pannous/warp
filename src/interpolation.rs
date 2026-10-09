@@ -23,6 +23,36 @@ fn is_template_mark(data: &Node) -> bool {
 	matches!(data, Node::Key(name, _, _) if matches!(name.as_ref(), Node::Symbol(mark) | Node::Text(mark) if mark == TEMPLATE_MARK))
 }
 
+/// Does a hole of a template mention a name (`"caught: \(e)"` mentions e), as `mentions` tells of each hole
+pub fn template_mentions(node: &Node, mentions: impl Fn(&Node) -> bool) -> bool {
+	let Node::Meta { node, data } = node else { return false };
+	if !is_template_mark(data) {
+		return template_mentions(node, mentions);
+	}
+	let Node::Text(template) = node.drop_meta() else { return false };
+	parts_with(template, false).is_ok_and(|parts| parts.iter().any(|part| matches!(part, Part::Hole(expression) if mentions(expression))))
+}
+
+/// The expressions in the holes of a template (`"a \(x.round(2))"` → x.round(2)); none for other nodes
+pub fn holes(node: &Node) -> Vec<Node> {
+	let found = std::cell::RefCell::new(vec![]);
+	template_mentions(node, |hole| {
+		found.borrow_mut().push(hole.clone());
+		false
+	});
+	found.into_inner()
+}
+
+/// The template as the concatenation of its pieces now, when a hole mentions a name (`"\(Math.max(1, 5))"` mentions
+/// Math): for a pass that gives such names their meaning before this lowering runs
+pub fn interpolated_mentioning(node: &Node, mentions: impl Fn(&Node) -> bool) -> Option<Node> {
+	let Node::Meta { node: inner, data } = node else { return None };
+	match inner.drop_meta() {
+		Node::Text(template) if is_template_mark(data) && template_mentions(node, mentions) => Some(interpolated(template)),
+		_ => None,
+	}
+}
+
 /// Every template left after the sql/sh lowering becomes the concatenation of its pieces
 pub fn lower(node: Node) -> Node {
 	match node {

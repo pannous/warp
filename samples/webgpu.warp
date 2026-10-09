@@ -1,0 +1,13 @@
+#!/usr/bin/env warp
+// WebGPU: a WGSL fragment shader colors every pixel on the GPU (gpu_render gives the pixels), paint shows each frame.
+// The shader reads the map given last as `values`: the frame changes without compiling the shader anew
+size = 128
+shader = "@fragment fn main(@builtin(position) at: vec4f) -> @location(0) vec4f {
+	let uv = at.xy / values.size;
+	let rings = 0.5 + 0.5 * cos(length(uv - 0.5) * 40.0 - values.frame * 0.3);
+	return vec4f(uv.x, rings, uv.y, 1.0);
+}"
+for frame in 1..30 {
+	paint(gpu_render(shader, size, size, {frame: frame, size: [size, size]}), size, size)
+	sleep 40 ms
+}

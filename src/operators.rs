@@ -5,6 +5,10 @@ use serde::{Deserialize, Serialize};
 pub const FUNCTION_KEYWORDS: [&str; 6] = ["fun", "fn", "def", "define", "function", "func"];
 /// Right binding power of `as`: higher than every infix operator, so the target type is a single atom
 pub const TYPE_OPERAND_BP: u8 = 250;
+/// Left binding power of the suffix operators ² ³ ++ --: below `.` (180) and `#` (170), above `^` (160)
+const SUFFIX_BP: u8 = 165;
+/// Right binding power of the prefix operators √ ∛ abs: between ^ (160) and the suffix operators (SUFFIX_BP)
+const PREFIX_BP: u8 = 162;
 
 /// Unicode spellings of operators (wiki/alias.md): glyph, operator and the canonical spelling the style hints suggest.
 /// One table for the lexer and the hints; the dashes 0x2010..0x2015 and the minus sign 0x2212 all mean `-`.
@@ -28,11 +32,11 @@ pub fn is_function_keyword(s: &str) -> bool {
 
 // node[i]
 
-// Wasp ABI GC Node representation design:
+// Warp ABI GC Node representation design:
 // This is a single struct that can represent any node type
 
-// todo move node layout to wasp_abi.rs
-// todo ... any change to node layout must be reflected in wasm_gc_reader.rs wasp_abi.md ...
+// todo move node layout to warp_abi.rs
+// todo ... any change to node layout must be reflected in wasm_gc_reader.rs warp_abi.md ...
 
 /* restructure the whole emitter emit_node_instructions serialization to use
 (type $Node (struct
@@ -85,7 +89,10 @@ pub enum Op {
 	Ge,  // >=  ≥
 	Eq,  // ==
 	Ne,  // !=  ≠
-	Similar, // ≈  ~  circa  approximately: equal within the relative `tolerance` (default 1e-9)
+	Identical,    // ===  equal and of the same type: 0 === false is false (card zero-false)
+	NotIdentical, // !==
+	Similar, // ≈  ⋍  circa  approximately: equal within the relative `tolerance` (default 1e-9)
+	Rough,   // ~  ~~: looser than ≈, within `rough_tolerance` (default 1%), texts without surrounding punctuation (P211)
 
 	// Logical operators
 	And, // and  &&  ∧
@@ -139,9 +146,9 @@ impl Op {
 	/// Prefix operators: (0, right_bp) - only binds to right
 	pub const fn binding_power(&self) -> (u8, u8) {
 		match self {
-			// Suffix operators (bind very tight to left, no right operand)
-			Op::Square | Op::Cube => (200, 0),
-			Op::Inc | Op::Dec => (195, 0),
+			// Suffix operators (no right operand), below member access and indexing: `xs#1++`, `bags#1.n++` change the
+			// whole place and `p.x²` squares it, not its index or field name
+			Op::Square | Op::Cube | Op::Inc | Op::Dec => (SUFFIX_BP, 0),
 
 			// Member access (tightest infix)
 			Op::Dot | Op::SafeDot => (180, 181),
@@ -174,7 +181,7 @@ impl Op {
 			Op::Lt | Op::Gt | Op::Le | Op::Ge => (120, 121),
 
 			// Equality binds weaker and never chains: a<b == c<d compares the two results, a==b==c is ambiguous
-			Op::Eq | Op::Ne | Op::Similar => (115, 116),
+			Op::Eq | Op::Ne | Op::Identical | Op::NotIdentical | Op::Similar | Op::Rough => (115, 116),
 
 			// Logical not binds weaker than comparison: not a==b → not (a==b)
 			Op::Not => (0, 105),
@@ -209,8 +216,9 @@ impl Op {
 			Op::ModAssign | Op::PowAssign | Op::AndAssign | Op::OrAssign |
 			Op::XorAssign => (60, 59),
 
-			// Prefix operators (no left operand, binds to right)
-			Op::Sqrt | Op::Cbrt | Op::Abs => (0, 190),
+			// Prefix operators (no left operand, binds to right): looser than a suffix power (√x² is √(x²)) and member
+			// access (√p.x is √(p.x)), tighter than ^ (√x^2 is (√x)^2)
+			Op::Sqrt | Op::Cbrt | Op::Abs => (0, PREFIX_BP),
 			// Unary minus binds weaker than power: -2^2 → -(2^2)
 			Op::Neg => (0, 155),
 
@@ -262,7 +270,10 @@ impl Op {
 			Op::Ge => ">=",
 			Op::Eq => "==",
 			Op::Ne => "!=",
+			Op::Identical => "===",
+			Op::NotIdentical => "!==",
 			Op::Similar => "≈",
+			Op::Rough => "~",
 
 			// Logical
 			Op::And => "and",
@@ -341,7 +352,7 @@ impl Op {
 
 	/// Check if this is a comparison operator
 	pub fn is_comparison(&self) -> bool {
-		matches!(self, Op::Eq | Op::Ne | Op::Lt | Op::Gt | Op::Le | Op::Ge)
+		matches!(self, Op::Eq | Op::Ne | Op::Identical | Op::NotIdentical | Op::Lt | Op::Gt | Op::Le | Op::Ge)
 	}
 
 	/// Ordering comparisons chain (a<b<c), equality does not
@@ -392,14 +403,14 @@ impl fmt::Display for Op {
 
 /// Every operator by its code in the kind field of a Key node (`(code << 8) | Kind::Key`); the first five are the
 /// codes earlier modules stored, the rest follow, so a quoted expression (`data 1+2`) reads back with its operator
-const OP_CODES: [Op; 58] = [
+const OP_CODES: [Op; 61] = [
 	Op::None, Op::Colon, Op::Assign, Op::Define, Op::Dot,
 	Op::SafeDot, Op::Scope, Op::Arrow, Op::FatArrow, Op::Add, Op::Sub, Op::Mul, Op::Div, Op::Mod, Op::Rem, Op::Pow,
 	Op::Shl, Op::Shr, Op::AddAssign, Op::SubAssign, Op::MulAssign, Op::DivAssign, Op::ModAssign, Op::PowAssign,
 	Op::AndAssign, Op::OrAssign, Op::XorAssign, Op::Lt, Op::Gt, Op::Le, Op::Ge, Op::Eq, Op::Ne, Op::Similar, Op::And,
 	Op::Or, Op::Xor, Op::Not, Op::Neg, Op::Sqrt, Op::Cbrt, Op::Abs, Op::Inc, Op::Dec, Op::Square, Op::Cube,
 	Op::Question, Op::If, Op::Then, Op::Else, Op::While, Op::Do, Op::Hash, Op::Range, Op::To, Op::As, Op::PlusMinus,
-	Op::Coalesce,
+	Op::Coalesce, Op::Identical, Op::NotIdentical, Op::Rough,
 ];
 
 /// Encode Op as i64 for storage in kind field
@@ -415,4 +426,14 @@ pub fn op_named(text: &str) -> Option<Op> {
 /// Decode i64 back to Op
 pub fn code_to_op(code: i64) -> Op {
 	usize::try_from(code).ok().and_then(|index| OP_CODES.get(index)).copied().unwrap_or(Op::None)
+}
+
+/// What Node::serialize writes between an entry's key and value, by operator code: `x+1`, `0.1 as float`, nothing for
+/// an instance `p{x:1}` (Op::None); a code no operator has reads as `:`
+pub fn written_operator(code: usize) -> String {
+	match OP_CODES.get(code).map(Op::as_str) {
+		None => Op::Colon.as_str().to_string(),
+		Some(word) if word.starts_with(char::is_alphabetic) => format!(" {word} "),
+		Some(symbol) => symbol.to_string(),
+	}
 }

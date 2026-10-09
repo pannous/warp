@@ -9,15 +9,15 @@ use Instruction as I;
 use ValType::Ref;
 
 /// `reflect_tag(payload)`: which struct a payload is; the JavaScript reader (web/playground/reader.js) uses the same numbers
-pub const PAYLOAD_TAGS: [&str; 9] = ["null", "node", "int", "float", "string", "i31", "big_int", "ratio", "other"];
+pub const PAYLOAD_TAGS: [&str; 10] = ["null", "node", "int", "float", "string", "i31", "big_int", "ratio", "floats", "other"];
 
 impl WasmGcEmitter {
 	pub(super) fn emit_reflection(&mut self) {
 		let any = Ref(RefType { nullable: true, heap_type: any_heap_type() });
 		let node = Ref(self.node_ref(true));
 		let tm = &self.type_manager;
-		let (node_type, string, int, float, big, ratio, limbs) =
-			(tm.node_type, tm.string_type, tm.i64_box_type, tm.f64_box_type, tm.big_int_type, tm.ratio_type, tm.limbs_type);
+		let (node_type, string, int, float, big, ratio, limbs, floats) =
+			(tm.node_type, tm.string_type, tm.i64_box_type, tm.f64_box_type, tm.big_int_type, tm.ratio_type, tm.limbs_type, tm.float_array_type);
 		let field = |struct_type_index: u32, field_index: u32| I::StructGet { struct_type_index, field_index };
 		let cast = |type_index: u32| I::RefCastNonNull(HeapType::Concrete(type_index));
 
@@ -34,10 +34,27 @@ impl WasmGcEmitter {
 		self.reflect("reflect_numerator", vec![any], vec![any], &[I::LocalGet(0), cast(ratio), field(ratio, 0)]);
 		self.reflect("reflect_denominator", vec![any], vec![any], &[I::LocalGet(0), cast(ratio), field(ratio, 1)]);
 
+		// the parts of a ± value (Kind::Uncertain), only in programs that make one
+		let reads_floats = self.should_emit_function(super::uncertain::UNCERTAIN_NEW);
+		if reads_floats {
+			self.reflect("reflect_float_count", vec![any], vec![ValType::I32], &[I::LocalGet(0), cast(floats), I::ArrayLen]);
+			self.reflect("reflect_float", vec![any, ValType::I32], vec![ValType::F64], &[I::LocalGet(0), cast(floats), I::LocalGet(1), I::ArrayGet(floats)]);
+		}
+
+		// reflect_assign(target, source): the target node takes the source's fields, in a program importing a module: what
+		// the module changed in its copy of an argument is written back (host-foreign.js, wasm_modules.rs write_back)
+		if self.ctx.ffi_imports.values().any(|import| crate::wasm_modules::is_module_path(import.library)) {
+			let assign = (0..3).flat_map(|field_index| [I::LocalGet(0), I::LocalGet(1), field(node_type, field_index), I::StructSet { struct_type_index: node_type, field_index }]);
+			self.reflect("reflect_assign", vec![node, node], vec![], &assign.collect::<Vec<_>>());
+		}
+
 		// reflect_tag: the index in PAYLOAD_TAGS of the first type the payload is
 		let mut tag = vec![I::LocalGet(0), I::RefIsNull, I::If(BlockType::Empty), I::I32Const(0), I::Return, I::End];
-		let tested = [HeapType::Concrete(node_type), HeapType::Concrete(int), HeapType::Concrete(float), HeapType::Concrete(string),
+		let mut tested = vec![HeapType::Concrete(node_type), HeapType::Concrete(int), HeapType::Concrete(float), HeapType::Concrete(string),
 			HeapType::I31, HeapType::Concrete(big), HeapType::Concrete(ratio)];
+		if reads_floats {
+			tested.push(HeapType::Concrete(floats));
+		}
 		for (index, heap_type) in tested.into_iter().enumerate() {
 			tag.extend([I::LocalGet(0), I::RefTestNonNull(heap_type), I::If(BlockType::Empty), I::I32Const(index as i32 + 1), I::Return, I::End]);
 		}

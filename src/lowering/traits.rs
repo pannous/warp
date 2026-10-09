@@ -390,13 +390,14 @@ fn declaration(node: &Node) -> Option<Result<Trait, Node>> {
 	if keyword_name != TRAIT_KEYWORDS[0] {
 		let written = format!("{keyword_name} {name}{{…}}");
 		crate::normalize::set_position_of(node);
-		crate::normalize::hint(&written, &format!("{} {name}{{…}}", TRAIT_KEYWORDS[0]), "wasp calls it a trait");
+		crate::normalize::hint(&written, &format!("{} {name}{{…}}", TRAIT_KEYWORDS[0]), "warp calls it a trait");
 	}
 	if is_builtin_trait(name) {
 		return Some(Err(Diagnostic::at(keyword, format!("{name} is a built-in trait")).fix(format!("name your trait otherwise than {name}")).into_error()));
 	}
 	let requirements = match requirements.drop_meta() {
-		Node::List(items, Bracket::Curly, _) => items.clone(),
+		// Kotlin's `fun area(): Int`, Swift's `func area() -> Double` on one line: the keyword stands apart from the signature
+		Node::List(items, Bracket::Curly, _) => items.iter().filter(|item| !matches!(item.drop_meta(), Node::Symbol(word) if crate::operators::is_function_keyword(word))).cloned().collect(),
 		Node::Empty => vec![],
 		single => vec![single.clone()],
 	};
@@ -668,9 +669,19 @@ fn claim_error(declaration: &Node, claimed: &Trait, traits: &Traits, witnesses: 
 	Some(Diagnostic::at(declaration, message).fix(operation.fix(&type_name)).into_error())
 }
 
+/// P177: `class Square implements Shape {…}`, `struct Square: Shape {…}`: the declared traits the parser put on the name
+fn named_claims<'a>(node: &'a Node, traits: &'a Traits) -> Vec<&'a Trait> {
+	let Node::Type { name, .. } = node.drop_meta() else { return vec![] };
+	let Some(Node::List(claimed, _, _)) = name.attribute(crate::warp_parser::IMPLEMENTS_WORD).map(Node::drop_meta) else { return vec![] };
+	claimed.iter().filter_map(|claimed| traits.named(&claimed.drop_meta().name())).collect()
+}
+
 fn first_unkept_claim(node: &Node, traits: &Traits, witnesses: &[String]) -> Option<Node> {
 	if let Some((declaration, claimed)) = claim(node, traits) {
 		return claim_error(declaration, claimed, traits, witnesses);
+	}
+	if let Some(error) = named_claims(node, traits).into_iter().find_map(|claimed| claim_error(node, claimed, traits, witnesses)) {
+		return Some(error);
 	}
 	match node.drop_meta() {
 		Node::Key(left, _, right) => first_unkept_claim(left, traits, witnesses).or_else(|| first_unkept_claim(right, traits, witnesses)),
@@ -758,6 +769,10 @@ impl InstanceTypes {
 						let unknown_for_good = self.final_round && !keeps_shape && self.shape(value).is_none();
 						Self::bind(variables, name, self.shape(value), is_plain || unknown_for_good)
 					}
+					// `xs: [C] = …` of a declared list type (before the instance case: the name of `[C]` is C)
+					(Node::Key(name, Op::Colon, type_node), _) if self.declared_element(type_node).is_some() => {
+						Self::bind(variables, &name.name(), self.declared_element(type_node).map(Shape::ListOf), false)
+					}
 					// `d:docx = …` of a declared type
 					(Node::Key(name, Op::Colon, type_node), _) if self.registry.get_by_name(&type_node.drop_meta().name()).is_some() => {
 						Self::bind(variables, &name.name(), Some(Shape::Instance(type_node.drop_meta().name())), false)
@@ -784,6 +799,14 @@ impl InstanceTypes {
 			}
 			_ => {}
 		}
+	}
+
+	/// The declared type of the elements of `[C]`
+	fn declared_element(&self, type_node: &Node) -> Option<String> {
+		let Node::List(items, Bracket::Square, _) = type_node.drop_meta() else { return None };
+		let [element] = items.as_slice() else { return None };
+		let name = element.drop_meta().name();
+		self.registry.get_by_name(&name).is_some().then_some(name)
 	}
 
 	/// Is `name` a field of any declared type: `v.x` then reads the field at run time, whatever v holds

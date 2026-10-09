@@ -3,7 +3,7 @@
 Benchmarks: `probes/night/bench_lists.sh [n]` (lists, closures, maps, text building), run with the release CLI
 (`WARP=…/release/warp`). Keep n unknown at compile time when timing one idiom by hand (`n=2000000+random_below(1)`),
 otherwise constant evaluation may hide the loop. Profile the generated module apart from warp:
-`warp compile x.wasp`, then `wasmtime run -W gc=y,function-references=y,exceptions=y,tail-call=y --profile=guest,out.json
+`warp compile x.warp`, then `wasmtime run -W gc=y,function-references=y,exceptions=y,tail-call=y --profile=guest,out.json
 --invoke main x.wasm` (Firefox profiler); `/usr/bin/sample <pid>` on the debug CLI shows the host's side.
 
 ## Fixed
@@ -21,6 +21,11 @@ otherwise constant evaluation may hide the loop. Profile the generated module ap
 - **Initial GC heap** (util.rs GC_HEAP_INITIAL_BYTES = 1 GB, reserved and committed lazily): the copying collector
   grows its heap too little, so a growing live set is copied again at every collection (400000 map entries: 6 s with
   64 MB, 0.3 s with 1 GB; the wasmtime CLI behaves the same with `-O gc-heap-initial-size`).
+- **Two float[10^7] lists** (card gc-heap, 2026-10-09): `xs = float[n]; ys = float[n]` with dot, `sum(xs .* ys)` and
+  `zs = xs .* ys` at n = 10^7 run (probes/memory/two_float_lists.warp). The "GC heap out of memory" seen on 2026-10-08
+  came from the `float * list` error path, gone with 51e8d5721. The ~2 GB peak footprint is the GC heap of the fill
+  loop, linear arrays alike: `xs#i = i / n` is an exact quotient (`1.0` is the exact 1 too), allocated per item and then
+  made a float (exact_div, exact_to_f64): 1.4 µs and garbage per item; `xs#i = 2.0` fills 10^7 in 0.44 s and 90 MB.
 - **wasmtime's own build** (Cargo.toml `[profile.*.package.wasmtime] opt-level = 3`): release is size-optimized
   (`opt-level = "z"`, for the web build) and dev unoptimized; both ran the host side of GC-heavy programs slowly
   (2.5× and about 10× the CLI). The web build has no wasmtime, its size is unchanged.

@@ -7,6 +7,9 @@ passes goes into tests/functions/test_ported_calls.rs (one table), so no ported 
 ## Decided forms (defaults taken, Interviewer asked where marked)
 - Defaults: `f(a, b=2)`, typed `f(a, b:int=2)`, a default may read earlier parameters `f(a, b=a*2)`. Named
   arguments `f(b=1)` / `f(b:1)` skip defaults and mix with positional ones (P37).
+  A bare flag name sets it: `f(3, loud)` of a parameter `loud = no` (default yes or no) is `f(3, loud: yes)` when no
+  variable loud is in scope, as `x.copy(shallow)` is `x.copy(shallow: yes)` (card copy-shallow, named_arguments.rs
+  flag_arguments).
 - Overloading by arity: `def f(a)` + `def f(a,b)` become `f·1`, `f·2` (src/lowering/overloads.rs
   `lower_arity_overloads`, a MEANING pass before broadcasting reads arities). A call names the variant its argument
   count fits; none or two fitting (`f(a)` + `f(a, b=2)` called `f(5)`) is an error. Methods: class_methods prepends
@@ -65,6 +68,11 @@ passes goes into tests/functions/test_ported_calls.rs (one table), so no ported 
 - Python `list()` is `[]` (library_words `empty_list_calls`, unless the program defines list).
 - Spreading into a function parameter `def apply(f, *args){ f(*args) }`: variadic.rs keeps the spread of a call of a
   parameter, function_values.rs runs variadic::lower again once f is known.
+- Card speak-parens (user asked why `speak() :=`): `speak := …` and `speak() := …` both run the body at every use;
+  `:=` is the canonical form (examples, kitchensink: `speak := name + " barks"`, read as `rex.speak`). The empty
+  parentheses stay for actions: a body with effects (`step() := { cells = next }`, `print`, `random()`) written
+  `step := …` warns "step runs … at every read", since a bare read should not change anything; `step()` says "call".
+  A constant body (`x := "hi"`) hints `x = "hi"`.
 - Python colon definitions with parameters become definitions in lower_c_functions (keyword_definition), so the
   function value passes see them; without parameters they stay def forms for late_binding (a `z() := e` is a getter).
 - OCaml/F# `let f x = body in rest` (welcome_forms.rs `let_binding`); JS IIFE `(() => 7)()` (parser: a glued `()`
@@ -132,7 +140,7 @@ passes goes into tests/functions/test_ported_calls.rs (one table), so no ported 
   `$0` (arithmetic.rs), closures.rs `tail` stops at a closure, a definition with parameters walks its block body
   (card functions-calling); Swift `-> (Int) -> Int` results and Scala's curried `def add(x)(y) = …`
   (declarations.rs `function_typed_result`, `curried_definition`); `xs.max()` was "max of an empty list" (min_max.rs);
-  C# LINQ `Select`/`Where`/`Aggregate`/`Sum` … work with a note naming wasp's word (welcome_forms.rs, alias rule).
+  C# LINQ `Select`/`Where`/`Aggregate`/`Sum` … work with a note naming warp's word (welcome_forms.rs, alias rule).
 - Batch 24: round 7 (probes/function_calls_round7.md). Regression fix: Python's one-line `def f(x): return a if c
   else b` was "undefined function: f" since batch 21 (try_parse_return continues at binding power 0 after the
   phrase). OCaml `let inc = fun x -> x + 1 in inc 4` printed nothing (split_at_in descends into the lambda body),
@@ -147,7 +155,7 @@ passes goes into tests/functions/test_ported_calls.rs (one table), so no ported 
   and P157 (user) generics compile untyped with a note; Dart named parameters `{required int a, int b = 2}`; English
   `To square a number: return it times it`, `square of x`, `square of x is 9` (P149), numeric `times` multiplies
   (alias rule). Fix: `def add(a, b: int) -> int` lost a parameter (flat call arguments were read as a Swift label;
-  now only after `func`). P161 (user): Swift argument labels compile with the note "wasp names a parameter once"
+  now only after `func`). P161 (user): Swift argument labels compile with the note "warp names a parameter once"
   (tests/functions/test_argument_labels.rs). Round 7 still open: MATLAB `@(x)`, R `sapply(c(…), function(x) …)`,
   `func id<T>(_ x: T)`.
 - Batch 26: `it` and `$0` belong to the innermost lambda (Kotlin): `xs.map{ it.map{ it*10 } }` shadows, a function's

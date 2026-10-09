@@ -4,7 +4,7 @@ use std::cell::Cell;
 use warp::analysis_memo::analysed;
 use warp::context::Context;
 use warp::diagnostic::{report, take_warnings, Diagnostic};
-use warp::wasp_parser::parse;
+use warp::warp_parser::parse;
 
 #[test]
 fn test_the_same_tree_is_analysed_once() {

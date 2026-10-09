@@ -69,8 +69,8 @@ cargo build --release && cargo build --release -p warp-runtime   # binaries in t
 ## Run
 
 ```bash
-warp run samples/fibonacci.wasp   # run a file
-warp samples/fibonacci.wasp       # run it and leave the standalone executable samples/fibonacci
+warp run samples/fibonacci.warp   # run a file
+warp samples/fibonacci.warp       # run it and leave the standalone executable samples/fibonacci
 warp eval "6*7"                   # evaluate code: 42
 warp repl                         # interactive console
 warp help                         # all commands

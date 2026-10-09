@@ -25,7 +25,7 @@ fn a_raise_inside_a_function_reaches_the_handler() {
 // The async side (tasks forward a raise to the starting thread) finds the exported handler functions
 #[test]
 fn the_handled_signals_name_their_functions() {
-	let lowered = warp::event_signals::lower(warp::wasp_parser::parse("n=0; on stop the machine {n+=1}; on alarm {n+=2}; emit alarm; emit stop the machine; on idle {n}; n"));
+	let lowered = warp::event_signals::lower(warp::warp_parser::parse("n=0; on stop the machine {n+=1}; on alarm {n+=2}; emit alarm; emit stop the machine; on idle {n}; n"));
 	let mut handled = warp::event_signals::handled_signals(&lowered);
 	handled.sort();
 	assert_eq!(handled, vec![("alarm".to_string(), "on·alarm".to_string()), ("stop the machine".to_string(), "on·stop·the·machine".to_string())]);
@@ -35,7 +35,7 @@ fn the_handled_signals_name_their_functions() {
 #[test]
 fn a_body_of_one_raise_stays_a_block() {
 	is!("n=0; on alarm {n+=1}; check() := { emit alarm }; check(); check(); n", 2);
-	let lowered = warp::event_signals::lower(warp::wasp_parser::parse("n=0; on alarm {n+=1}; check() := { emit alarm }; n"));
+	let lowered = warp::event_signals::lower(warp::warp_parser::parse("n=0; on alarm {n+=1}; check() := { emit alarm }; n"));
 	let mut body_is_block = false;
 	lowered.visit(&mut |part| if let Node::Key(head, Op::Define, body) = part {
 		if head.serialize().contains("check") {
@@ -49,6 +49,6 @@ fn a_body_of_one_raise_stays_a_block() {
 #[test]
 fn a_page_event_handler_waits_for_the_page() {
 	is!("n=0; on click {n+=1}; n", 0);
-	let lowered = warp::event_signals::lower(warp::wasp_parser::parse("n=0; on click {n+=1}; n"));
+	let lowered = warp::event_signals::lower(warp::warp_parser::parse("n=0; on click {n+=1}; n"));
 	assert_eq!(warp::event_signals::handled_signals(&lowered), vec![("click".to_string(), "on·click".to_string())]);
 }

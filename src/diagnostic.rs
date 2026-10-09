@@ -50,12 +50,17 @@ impl Diagnostic {
 
 	/// The error, remembered with its fixes for a host to offer (take_error_diagnostics)
 	pub fn into_error(self) -> Node {
-		let error = crate::node::error(&self.to_string());
+		crate::node::error(&self.remembered())
+	}
+
+	/// The error's text, the error remembered with its fixes for a host to offer (an emitter error is a text)
+	pub fn remembered(self) -> String {
+		let text = self.to_string();
 		if !self.fixes.is_empty() {
 			note_said();
 			ERROR_DIAGNOSTICS.with(|errors| errors.borrow_mut().push(self));
 		}
-		error
+		text
 	}
 }
 
@@ -129,11 +134,16 @@ pub fn written_text(node: &Node) -> String {
 	if !serialized.contains(crate::analyzer::TEMPORARY_SEPARATOR) {
 		return serialized;
 	}
+	written_statement(node).unwrap_or(serialized)
+}
+
+/// The source of the program from `node`'s position to the end of its statement, as the program wrote it
+pub fn written_statement(node: &Node) -> Option<String> {
 	let source_line = |(line, column): (usize, usize)| SOURCE.with(|source| {
 		let rest: String = source.borrow().lines().nth(line.checked_sub(1)?)?.chars().skip(column.saturating_sub(1)).collect();
 		Some(statement_prefix(&rest).trim().to_string())
 	});
-	position(node).and_then(source_line).filter(|text| !text.is_empty()).unwrap_or(serialized)
+	position(node).and_then(source_line).filter(|text| !text.is_empty())
 }
 
 /// The start of `text` up to the end of its statement: a `;` or a closing bracket it did not open (`[cube 1..n]`)
@@ -189,7 +199,7 @@ pub enum WarningMode {
 	Quiet,
 }
 
-/// `use strict` in wasp source makes warnings errors for that program
+/// `use strict` in warp source makes warnings errors for that program
 const STRICT_PRAGMA: [&str; 2] = [PRAGMA_WORD, "strict"];
 const PRAGMA_WORD: &str = "use";
 /// `use comments`: a comment before a binding becomes its meta information (P114, lowering/meta_entries.rs)
@@ -335,7 +345,7 @@ pub enum Fallback {
 	Error,
 }
 
-/// One reading of an ambiguous construct and the explicit wasp form that says it without ambiguity
+/// One reading of an ambiguous construct and the explicit warp form that says it without ambiguity
 /// (the seed of a later "change the code" action that rewrites `written` to it)
 #[derive(Clone, Debug, PartialEq)]
 pub struct Reading {
@@ -597,15 +607,15 @@ fn noted_once(topic: &str, written: &str, show: impl FnOnce()) {
 	offer_acknowledgement(topic, written);
 }
 
-/// Another language's word for a wasp word (`__add__` for `plus`, user 2026-10-06): it works, with a got-it note
-/// naming the wasp word and its "I meant: <wasp word>" fix; a word wasp needs not at all (`data class`, `val x`) is
+/// Another language's word for a warp word (`__add__` for `plus`, user 2026-10-06): it works, with a got-it note
+/// naming the warp word and its "I meant: <warp word>" fix; a word warp needs not at all (`data class`, `val x`) is
 /// written with the word it stands before
-pub fn note_alias(written: &str, wasp_word: &str) {
-	let (foreign_word, reason) = match written.strip_suffix(wasp_word).map(str::trim) {
-		Some(dropped) if !dropped.is_empty() => (dropped, format!("{dropped} is superfluous: write {wasp_word}")),
-		_ => (written, format!("wasp says {wasp_word}")),
+pub fn note_alias(written: &str, warp_word: &str) {
+	let (foreign_word, reason) = match written.strip_suffix(warp_word).map(str::trim) {
+		Some(dropped) if !dropped.is_empty() => (dropped, format!("{dropped} is superfluous: write {warp_word}")),
+		_ => (written, format!("warp says {warp_word}")),
 	};
-	educate_once(&format!("alias-{foreign_word}"), written, wasp_word, &reason);
+	educate_once(&format!("alias-{foreign_word}"), written, warp_word, &reason);
 }
 
 /// The reading the program gets: an error-fallback ambiguity is an error naming every explicit form; otherwise the

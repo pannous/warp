@@ -17,7 +17,7 @@ use crate::node::Node;
 use serde_json::{json, Map, Value};
 
 /// the attribute naming the component instance an element belongs to (component_state.rs), passed as event.instance
-const INSTANCE_ATTRIBUTE: &str = "data-wasp-instance";
+const INSTANCE_ATTRIBUTE: &str = "data-warp-instance";
 const INSTANCE: &str = "instance";
 const CLICK: &str = "click";
 const INPUT: &str = "input";
@@ -38,8 +38,8 @@ pub struct Page {
 impl Page {
 	/// Runs the program; Err is its value when it fails or needs no module
 	pub fn render(code: &str) -> Result<Page, Node> {
-		// compiled for a page: its page events do come
-		let module = crate::pipeline::for_a_page(|| crate::pipeline::compile(code))?;
+		// compiled for a page: its page events do come; it runs where the server's code is, so it calls it directly
+		let module = crate::pipeline::for_a_page(|| crate::pipeline::prerendering(|| crate::pipeline::compile(code)))?;
 		#[cfg(feature = "native")]
 		let page = native::Run::start(module).map(|(markup, run)| Page { markup, run });
 		#[cfg(not(feature = "native"))]
@@ -157,7 +157,7 @@ fn add_text(found: &mut [Element], open: &[usize], text: &mut String, html: &str
 	text.push_str(&plain);
 }
 
-/// ` data-wasp-click="1" checked`: the attributes of a start tag, a bare one with an empty value
+/// ` data-warp-click="1" checked`: the attributes of a start tag, a bare one with an empty value
 fn attributes(mut rest: &str) -> Vec<(String, String)> {
 	let mut found = vec![];
 	loop {

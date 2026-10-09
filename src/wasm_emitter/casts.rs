@@ -20,7 +20,7 @@ impl WasmGcEmitter {
 	}
 
 	pub(super) fn emit_text_cast(&mut self, func: &mut Function, text: &str, target_type: &Node) {
-		match crate::wasp_parser::number_in_text(text) {
+		match crate::warp_parser::number_in_text(text) {
 			Some(number) => self.emit_cast(func, &Node::Number(number), target_type),
 			None => self.emit_runtime_error(func, "invalid_number"),
 		}
@@ -102,8 +102,14 @@ impl WasmGcEmitter {
 			// user decision #35: an int list joins to "[1 2]", like its literal; a general runtime serializer comes later
 			// a list known only at run time (an element, a parsed value) too: "[1 2]", nested lists as their literals;
 			// an instance as its literal "point{x:1 y:2}" (P123), an entry "a:1"
-			Kind::List | Kind::Empty | Kind::Key => {
+			// and a value of a kind known only at run time (`p.dist / 2` of an any-typed field, card text-arithmetic)
+			Kind::List | Kind::Empty | Kind::Key | Kind::Data => {
 				self.emit_dynamic_text(func, value);
+				return;
+			}
+			// card try-raise: an Error (a caught one, `catch e`) reads as its message
+			Kind::Error => {
+				self.emit_error_message(func, value);
 				return;
 			}
 			_ => {
@@ -112,6 +118,17 @@ impl WasmGcEmitter {
 			}
 		};
 		self.emit_node_instructions(func, &node);
+	}
+
+	/// The message of an Error as a Text: error_of builds an Error as a Text is built, its $String in the data field
+	fn emit_error_message(&mut self, func: &mut Function, error: &Node) {
+		let (held, node_type) = (self.node_scratch(), self.type_manager.node_type);
+		self.emit_node_instructions(func, error);
+		Self::emit_list(func, &[
+			I::LocalSet(held), I::I64Const(Kind::Text as i64),
+			I::LocalGet(held), I::StructGet { struct_type_index: node_type, field_index: 1 },
+			I::RefNull(HeapType::Concrete(node_type)), I::StructNew(node_type),
+		]);
 	}
 
 	/// The text of a Node of unknown kind, as list_text writes the one item of a list: "[1 2]" for a list, "{a:1 b:2}" for
@@ -180,8 +197,7 @@ impl WasmGcEmitter {
 				// Unknown type, emit as key node for dynamic dispatch
 				self.emit_node_instructions(func, value);
 				self.emit_node_instructions(func, target_type);
-				func.instruction(&I::I64Const(op_to_code(&Op::As)));
-				self.emit_call(func, "new_key");
+				self.emit_new_key(func, &Op::As);
 			}
 		}
 	}
@@ -270,10 +286,16 @@ impl WasmGcEmitter {
 
 	/// `x as text`, `str(x)`
 	pub(super) fn emit_cast_to_text(&mut self, func: &mut Function, value: &Node) {
+		// `string(data x+1)` is "x+1"
+		if let Some(quoted) = crate::blocks::quoted_data(value) {
+			return self.emit_string_call(func, &quoted.serialize(), "new_text");
+		}
 		match value {
 			Node::Number(n) => self.emit_string_call(func, &n.to_string(), "new_text"),
 			Node::Char(c) => self.emit_string_call(func, &c.to_string(), "new_text"),
 			Node::Text(s) => self.emit_string_call(func, s, "new_text"),
+			// `str(data a and b)`: quoted data reads as written
+			_ if let Some(source) = quoted_source(value) => self.emit_string_call(func, &source, "new_text"),
 			// a list of numbers and texts reads as it prints, its texts quoted (P126)
 			Node::List(..) if is_plain_data(value) => self.emit_runtime_text_cast(func, value),
 			// data and names are their source text; a number expression (`str(1+2)`, `str(f(1))` of a float f) is the
@@ -354,8 +376,8 @@ impl WasmGcEmitter {
 	/// Emit the numeric value of a node onto the stack (as i64)
 	/// `print x`, `puti x`: an output builtin (not shadowed by a user function), whose value is the printed node
 	pub(super) fn is_output_call(&self, node: &Node) -> bool {
-		matches!(node.drop_meta(), Node::List(items, _, _) if matches!(items.as_slice(), [word, _]
-			if matches!(word.drop_meta(), Node::Symbol(name) if OUTPUT_CALLS.contains(&name.as_str()) && !self.ctx.user_functions.contains_key(name))))
+		crate::analyzer::is_output_call(node)
+			&& matches!(node.drop_meta(), Node::List(items, _, _) if !self.ctx.user_functions.contains_key(&items[0].name()))
 	}
 }
 
@@ -363,7 +385,15 @@ impl WasmGcEmitter {
 fn is_plain_data(node: &Node) -> bool {
 	match node.drop_meta() {
 		Node::Number(_) | Node::Text(_) | Node::Char(_) => true,
-		Node::List(items, Bracket::Square, _) => items.iter().all(is_plain_data),
+		Node::List(items, Bracket::Square, _) => items.iter().all(|item| is_plain_data(item) || quoted_source(item).is_some()), // card data-list
 		_ => false,
+	}
+}
+
+/// The source text of `data e`, which never runs
+fn quoted_source(value: &Node) -> Option<String> {
+	match value.drop_meta() {
+		Node::List(items, Bracket::None, _) if items.len() == 2 && crate::lowering::run_time_blocks::is_data(value) => Some(items[1].serialize()),
+		_ => None,
 	}
 }

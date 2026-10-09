@@ -1,5 +1,5 @@
 // The values of a pair are Nodes of any type: `y = values(a: {b: 8})#1` holds the pair b: 8, not an int (it was the
-// runtime error "not an int"; std/markup.wasp reads an element's block this way)
+// runtime error "not an int"; lib/markup.warp reads an element's block this way)
 use crate::is;
 
 #[test]

@@ -57,6 +57,9 @@ pub struct TypeManager {
 	/// Next available type index
 	next_type_idx: u32,
 
+	/// The index of each function type added, by its params and results: equal signatures share one type
+	function_types: HashMap<(Vec<ValType>, Vec<ValType>), u32>,
+
 	/// Struct fields declared with a type no one defines; the module must not run then
 	pub type_errors: Vec<String>,
 
@@ -91,6 +94,7 @@ impl TypeManager {
 			node_list_type: 0,
 			node_map_type: 0,
 			next_type_idx: 0,
+			function_types: HashMap::new(),
 			type_errors: Vec::new(),
 			user_type_indices: HashMap::new(),
 		}
@@ -128,7 +132,7 @@ impl TypeManager {
 		self.types.ty().struct_(vec![
 			FieldType {
 				element_type: Val(ValType::I64),
-				mutable: false,
+				mutable: true, // mutable for a new field grown in place: objects are references (P200b)
 			}, // kind
 			FieldType {
 				element_type: Val(Ref(any_ref)),
@@ -136,7 +140,7 @@ impl TypeManager {
 			}, // data
 			FieldType {
 				element_type: Val(Ref(node_ref)),
-				mutable: false,
+				mutable: true, // mutable for a field set in place: instances are references (P200)
 			}, // value
 		]);
 		self.node_type = node_type_idx;
@@ -308,12 +312,17 @@ impl TypeManager {
 		idx
 	}
 
-	/// Add a function type and return its index
-	pub fn add_function_type(&mut self, params: Vec<ValType>, results: Vec<ValType>) -> u32 {
-		let idx = self.next_type_idx;
-		self.types.ty().function(params, results);
-		self.next_type_idx += 1;
-		idx
+	/// The index of the function type params → results, added the first time it is asked for
+	pub fn function_type(&mut self, params: Vec<ValType>, results: Vec<ValType>) -> u32 {
+		let signature = (params, results);
+		if let Some(&index) = self.function_types.get(&signature) {
+			return index;
+		}
+		let index = self.types.len();
+		self.types.ty().function(signature.0.clone(), signature.1.clone());
+		self.function_types.insert(signature, index);
+		self.next_type_idx = index + 1;
+		index
 	}
 
 	/// Get the type section (for adding to WASM module)

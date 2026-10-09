@@ -5,13 +5,13 @@
 
 use crate::node::{Bracket, Node, Separator};
 use crate::operators::Op;
-use crate::wasp_parser::parse;
+use crate::warp_parser::parse;
 
 const UNDO_WORD: &str = "undo";
 const REDO_WORD: &str = "redo";
 /// the names of x's history, plain words so the templates parse: `undo_past_x`, `undo_future_x`, `undo_moving_x`
 const HISTORY_TEMPLATE: &str = "undo_past_X = []; undo_future_X = []; undo_moving_X = false; on change X { if not undo_moving_X { undo_future_X = []; undo_past_X = undo_past_X + [old] } }";
-const UNDO_TEMPLATE: &str = "if undo_past_X != [] { undo_moving_X = true; undo_future_X = [X] + undo_future_X; X = last(undo_past_X); undo_past_X.pop(); undo_moving_X = false }";
+const UNDO_TEMPLATE: &str = "if undo_past_X != [] { undo_moving_X = true; undo_future_X = [X] + undo_future_X; X = undo_past_X#(count(undo_past_X)); undo_past_X.pop(); undo_moving_X = false }";
 const REDO_TEMPLATE: &str = "if undo_future_X != [] { undo_moving_X = true; undo_past_X = undo_past_X + [X]; X = undo_future_X#1; undo_future_X = undo_future_X[1..]; undo_moving_X = false }";
 const NAME_PLACEHOLDER: &str = "X";
 

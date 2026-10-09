@@ -1,6 +1,6 @@
 //! Type tests: `x is int`, `x is a number`, `[1 2] is list of int`, `[1 2] is ints`, `x is pair`, `p is friend` (a declared
 //! type) lower to `is_type(x, "spec")`, which the emitter answers in any position from the static type name of `x` (the same
-//! as `type(x)`) when it is known, else from the value's kind at run time (`runtime_kinds`, node_kind_in) or, for a
+//! as `type(x)`) when it is known, else from the value's kind at run time (`runtime_kind_mask`, node_kind_in) or, for a
 //! declared type, its instance type (instance_of). `type of x` is `type(x)`.
 //! A type word on the right of `is` switches from equality to a type test; `x is y` with a variable stays equality.
 //! `x == int` is no type test (user decision #30): a value never equals a type, so it is false and hints `x is int`.
@@ -15,6 +15,12 @@ use std::collections::HashSet;
 pub const IS_TYPE: &str = "is_type";
 /// `node_kind_in(node, mask)`: 1 when the run-time kind of node is in the bit mask of kinds (wasm_emitter list_ops.rs)
 pub const NODE_KIND_IN: &str = "node_kind_in";
+/// `node_type_name(node)`: `type(x)` of a value of unknown static type, its run-time type as a symbol (list_ops.rs)
+pub const NODE_TYPE_NAME: &str = "node_type_name";
+/// `x is error`: any value may turn out an Error at run time, so this test always reads the kind (card catch-message)
+pub const ERROR_TYPE: &str = "error";
+/// The type of ø, as type(ø) names it; unit, nil … are its aliases (canonical_spec_word)
+pub const EMPTY_TYPE: &str = "empty";
 const ARTICLES: [&str; 2] = ["a", "an"];
 const LIST_WORD: &str = "list";
 /// `x is pair`: a `key: value` pair
@@ -23,7 +29,7 @@ const OF_WORD: &str = "of";
 pub const TYPE_WORD: &str = "type";
 
 /// Words that name the same type
-fn canonical_spec_word(word: &str) -> &str {
+pub(crate) fn canonical_spec_word(word: &str) -> &str {
 	match word {
 		"integer" | "long" | "i64" | "i32" => "int",
 		"str" | "string" => "text",
@@ -31,6 +37,8 @@ fn canonical_spec_word(word: &str) -> &str {
 		"double" | "f64" | "f32" | "fast" => "float",
 		"exact" => "rational",
 		"pair" => "key",
+		"boolean" => "bool",
+		"unit" | "nil" | "ø" | "none" | "null" | "void" => EMPTY_TYPE,
 		other => other,
 	}
 }
@@ -55,13 +63,15 @@ pub fn type_matches(actual: &str, spec: &str) -> bool {
 	}
 }
 
-/// The run-time kinds of a value of type `spec`, for a value whose static type is unknown (an item of a mixed list, a Node);
-/// None for a spec only the static type answers. The empty list ø is a list, as `count` takes it
-pub fn runtime_kinds(spec: &str) -> Option<Vec<crate::type_kinds::Kind>> {
+/// The run-time kinds of a value of type `spec` as a mask of their bits (node_kind_in), for a value whose static type is
+/// unknown (an item of a mixed list, a Node); None for a spec only the static type answers. The empty list ø is a list,
+/// as `count` takes it; a bool is an Int marked bool and has a bit of its own (BOOL_MASK_BIT): no int, no number
+pub fn runtime_kind_mask(spec: &str) -> Option<i64> {
 	use crate::type_kinds::Kind;
 	let spec = canonical_spec_word(spec);
-	Some(match spec {
+	let kinds = match spec {
 		_ if spec == LIST_WORD || spec.starts_with("list of ") => vec![Kind::List, Kind::Block, Kind::Empty],
+		crate::analyzer::BOOL_TYPE => return Some(1 << crate::type_kinds::BOOL_MASK_BIT),
 		"int" => vec![Kind::Int],
 		"float" => vec![Kind::Float],
 		"number" | "real" | "rational" => vec![Kind::Int, Kind::Float],
@@ -69,8 +79,11 @@ pub fn runtime_kinds(spec: &str) -> Option<Vec<crate::type_kinds::Kind>> {
 		"codepoint" => vec![Kind::Codepoint],
 		"symbol" => vec![Kind::Symbol],
 		"key" => vec![Kind::Key],
+		ERROR_TYPE => vec![Kind::Error],
+		EMPTY_TYPE => vec![Kind::Empty],
 		_ => return None,
-	})
+	};
+	Some(kinds.iter().fold(0, |mask, kind| mask | 1 << (*kind as i64)))
 }
 
 /// The program's variables (a name of one is no type in a test) and its declared types (`class friend`: `x is friend`)
@@ -111,6 +124,8 @@ fn type_spec(words: &[&str], shadowed: &Names) -> Option<String> {
 	match (*first, rest) {
 		(LIST_WORD, []) => Some(LIST_WORD.to_string()),
 		(PAIR_WORD, []) => Some(canonical_spec_word(PAIR_WORD).to_string()),
+		(ERROR_TYPE, []) => Some(ERROR_TYPE.to_string()),
+		(word, []) if canonical_spec_word(word) == EMPTY_TYPE => Some(EMPTY_TYPE.to_string()),
 		(LIST_WORD, [of, element @ ..]) if *of == OF_WORD => Some(format!("{LIST_WORD} of {}", type_spec(element, shadowed)?)),
 		(word, []) => match plural_element_type(word) {
 			Some(element) => Some(format!("{LIST_WORD} of {}", canonical_spec_word(element))),

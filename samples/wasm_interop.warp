@@ -1,0 +1,68 @@
+// WebAssembly interop
+// warp compiles to wasm and interoperates seamlessly
+
+// Import from wasm module: a core module's functions with `import name` (counter.wasm), a component's with
+// `use name.wasm`; the host's memory and function table by name instead of the module's own
+use { memory, table } from "env"
+use text
+use memory
+
+// Export function for wasm
+export def add(a: i32, b: i32) -> i32 {
+    return a + b
+}
+
+// Export with explicit wasm type
+export def compute(x: f64, y: f64) -> f64 {
+    return sqrt(x * x + y * y)
+}
+
+// Strings as bytes, the way they lie in linear memory: memory.copy(bytes, ptr) writes them, memory.slice(ptr, end) reads
+def read_string(bytes) -> string {
+    return string.from_utf8(bytes)
+}
+
+def round_trip(s: string) -> string {
+    bytes = s.to_utf8()
+    memory.copy(bytes, 60000)
+    return read_string(memory.slice(60000, 60000 + count(bytes)))
+}
+
+def write_string(s: string) {
+    s.to_utf8()
+}
+
+// GC types (wasm-gc): every warp class is a GC struct, its own type a nullable reference
+type Node: gc struct {
+    tag: i32
+    value: i64
+    left: ref Node? right: ref Node?
+}
+
+// Create GC object
+tree = Node {
+    tag: 1
+    value: 42
+    left: Node { tag: 2 value: 8 left: None right: None }
+    right: None
+}
+
+// Interface types (WIT)
+interface calculator {
+    add: (i32, i32) -> i32
+    sub: (i32, i32) -> i32
+    mul: (i32, i32) -> i32
+}
+
+// Component model: the world of this program as a component; `warp build --wit` writes it as WIT, `warp build
+// --component` builds the component, which other programs use with `use name.wasm`. Its code calls what the world
+// imports as `host.time()`; warp's host serves a component's `host` import (print, time, read)
+component my_component {
+    import host: {
+        print: (string) -> ()
+        time: () -> i64
+    }
+    export api: calculator
+}
+
+[add(2, 3), compute(3.0, 4.0), round_trip("wasm ✓"), tree.value + tree.left.value]

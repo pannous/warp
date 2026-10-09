@@ -262,6 +262,10 @@ pub fn run_wasm_gc_object(path: &str) -> Result<GcObject> {
 
 /// Load WASM bytes and return Node (calls from_gc_object)
 pub fn read_bytes(bytes: &[u8]) -> Result<Node> {
+	read_main_result(bytes).map(|result| crate::units::static_units::with_module_units(bytes, result))
+}
+
+fn read_main_result(bytes: &[u8]) -> Result<Node> {
 	let (result, mut store, instance) = run_main(bytes, (), |_, _, _| Ok(()))?;
 	match result {
 		Val::AnyRef(Some(reference)) => {
@@ -426,7 +430,7 @@ pub fn read_bytes_with_imports(bytes: &[u8], imports: Imports) -> Result<Node> {
 	let mut tasks = None;
 	let outcome = run_main(bytes, crate::host::HostState::new(), |linker, engine, module| link_run(linker, engine, module, imports, &mut tasks));
 	let (result, mut store, instance) = finish_tasks(outcome, tasks.as_deref())?;
-	val_to_node(&result, &mut store, &instance)
+	val_to_node(&result, &mut store, &instance).map(|result| crate::units::static_units::with_module_units(bytes, result))
 }
 
 /// Link a run's imports, with the shared arrays and the task words when the module uses them (`tasks` gets the run's)
@@ -458,17 +462,24 @@ fn finish_tasks<R>(outcome: Result<(R, Store<crate::host::HostState>, Instance)>
 
 /// Run main, then call the parameterless export `name` (a page's page·html, src/site.rs): its value
 pub fn read_export_after_main(bytes: &[u8], imports: Imports, name: &str) -> Result<Node> {
+	Ok(read_exports_after_main(bytes, imports, &[name])?.remove(0))
+}
+
+/// The values of the exported functions `names` after one run of main
+pub fn read_exports_after_main(bytes: &[u8], imports: Imports, names: &[&str]) -> Result<Vec<Node>> {
 	let mut tasks = None;
 	let outcome = run_main(bytes, crate::host::HostState::new(), |linker, engine, module| link_run(linker, engine, module, imports, &mut tasks));
 	let (_, mut store, instance) = finish_tasks(outcome, tasks.as_deref())?;
-	let export = instance.get_func(&mut store, name).ok_or_else(|| anyhow!("the module exports no {name}"))?;
-	let mut results = vec![Val::AnyRef(None); export.ty(&store).results().len()];
-	let outcome = export.call(&mut store, &[], &mut results);
-	with_trap_detail(outcome, &mut store, &instance)?;
-	val_to_node(&results.first().copied().unwrap_or(Val::AnyRef(None)), &mut store, &instance)
+	names.iter().map(|name| {
+		let export = instance.get_func(&mut store, name).ok_or_else(|| anyhow!("the module exports no {name}"))?;
+		let mut results = vec![Val::AnyRef(None); export.ty(&store).results().len()];
+		let outcome = export.call(&mut store, &[], &mut results);
+		with_trap_detail(outcome, &mut store, &instance)?;
+		val_to_node(&results.first().copied().unwrap_or(Val::AnyRef(None)), &mut store, &instance)
+	}).collect()
 }
 
-pub use crate::wasm_emitter::{TRAP_DETAIL, TRAP_DETAIL_PREFIX};
+pub use crate::wasm_emitter::{trap_detail_line, TRAP_DETAIL, TRAP_DETAIL_PREFIX};
 
 /// A trapped run, with the value the program left in `trap_detail` before trapping as the error's context
 pub(crate) fn with_trap_detail<T, R>(outcome: wasmtime::Result<R>, store: &mut Store<T>, instance: &Instance) -> Result<R> {
@@ -476,9 +487,7 @@ pub(crate) fn with_trap_detail<T, R>(outcome: wasmtime::Result<R>, store: &mut S
 		let failure = anyhow::Error::from(failure);
 		let detail = instance.get_global(&mut *store, TRAP_DETAIL).map(|global| global.get(&mut *store));
 		match detail.filter(|value| !matches!(value, Val::AnyRef(None))).and_then(|value| val_to_node(&value, store, instance).ok()) {
-			// an Error value raised as it is (Node arithmetic on an Error) names its message
-			Some(Node::Error(reason)) => failure.context(format!("{TRAP_DETAIL_PREFIX}{}", reason.serialize())),
-			Some(value) => failure.context(format!("{TRAP_DETAIL_PREFIX}{}", value.serialize())),
+			Some(value) => failure.context(trap_detail_line(&value)),
 			None => failure,
 		}
 	})
@@ -507,16 +516,39 @@ pub fn node_of<T>(value: &Val, store: &mut StoreContextMut<'_, T>, instance: &In
 /// The Node a GC `$Node` struct encodes, its texts read from `memory`: also from a host function, which has the memory
 /// of its caller but no Instance (tasks.rs)
 pub fn node_in<T>(value: &Val, store: &mut StoreContextMut<'_, T>, memory: wasmtime::Memory) -> Node {
-	use crate::node::Bracket;
+	node_along(value, store, memory, &mut vec![])
+}
+
+/// What a node met again inside itself reads as: objects may point to each other (a team's players and each player's
+/// team), a Node is a tree
+pub const CYCLE_MARK: &str = "…";
+
+/// The node of `value`, `path` the structs it is read inside of: a struct among them is a cycle, read as CYCLE_MARK
+fn node_along<T>(value: &Val, store: &mut StoreContextMut<'_, T>, memory: wasmtime::Memory, path: &mut Vec<wasmtime::Rooted<wasmtime::StructRef>>) -> Node {
 	let Some(structref) = value.unwrap_anyref().and_then(|reference| reference.unwrap_struct(&*store).ok()) else { return Node::Empty };
+	if path.iter().any(|outer| wasmtime::Rooted::ref_eq(&*store, outer, &structref).unwrap_or(false)) {
+		return Node::Symbol(CYCLE_MARK.to_string());
+	}
+	path.push(structref);
+	let node = struct_node(&structref, store, memory, path);
+	path.pop();
+	node
+}
+
+fn struct_node<T>(structref: &wasmtime::Rooted<wasmtime::StructRef>, store: &mut StoreContextMut<'_, T>, memory: wasmtime::Memory, path: &mut Vec<wasmtime::Rooted<wasmtime::StructRef>>) -> Node {
+	use crate::node::Bracket;
 	let mut field = |index: usize| structref.field(&mut *store, index);
 	let (Ok(kind), Ok(data), Ok(child)) = (field(FIELD_KIND), field(FIELD_DATA), field(FIELD_VALUE)) else { return Node::Empty };
 	let kind = kind.unwrap_i64();
 	let tag = (kind & KIND_MASK) as u8;
 	let high_byte = (kind >> 8) & 0xFF;
-	let mut node = |val: &Val| node_in(val, store, memory);
+	let mut node = |val: &Val| node_along(val, store, memory, path);
 	match tag {
 		t if t == Kind::Empty as u8 => Node::Empty,
+		t if t == Kind::Int as u8 && high_byte == crate::type_kinds::BOOL_INFO => match read_payload(store, &data) {
+			Ok(Number::Int(0)) => Node::False,
+			_ => Node::True,
+		},
 		t if t == Kind::Int as u8 => match read_payload(store, &data) {
 			Ok(number) => Node::Number(number),
 			Err(failure) => Node::Error(Box::new(Node::Text(format!("unreadable Int: {failure}")))),
@@ -530,7 +562,7 @@ pub fn node_in<T>(value: &Val, store: &mut StoreContextMut<'_, T>, memory: wasmt
 		t if t == Kind::Symbol as u8 => Node::Symbol(text_of(store, &data, memory)),
 		t if t == Kind::Error as u8 => Node::Error(Box::new(Node::Text(text_of(store, &data, memory)))),
 		t if t == Kind::Key as u8 => Node::Key(Box::new(node(&data)), crate::operators::code_to_op(high_byte), Box::new(node(&child))),
-		t if t == Kind::Block as u8 => list_in(data, child, Bracket::Curly, store, memory),
+		t if t == Kind::Block as u8 => list_in(data, child, Bracket::Curly, store, memory, path),
 		t if t == Kind::List as u8 => {
 			let bracket = match high_byte {
 				0 => Bracket::Curly,
@@ -539,7 +571,7 @@ pub fn node_in<T>(value: &Val, store: &mut StoreContextMut<'_, T>, memory: wasmt
 				3 => Bracket::Less,
 				_ => Bracket::None,
 			};
-			list_in(data, child, bracket, store, memory)
+			list_in(data, child, bracket, store, memory, path)
 		}
 		t if t == Kind::Data as u8 => {
 			let type_name = text_of(store, &data, memory);
@@ -551,24 +583,25 @@ pub fn node_in<T>(value: &Val, store: &mut StoreContextMut<'_, T>, memory: wasmt
 			None => Node::Symbol("function".to_string()),
 		},
 		t if t == Kind::TypeDef as u8 => Node::Type { name: Box::new(node(&data)), body: Box::new(node(&child)) },
+		t if t == Kind::Uncertain as u8 => crate::uncertain::Uncertain::read_node(float_array(store, &data)),
 		_ => Node::Text(format!("Unknown Kind: {tag}")),
 	}
 }
 
 /// The items of a list of cons cells, walked in a loop (a long list must not take a stack frame per item): each cell's
 /// first item, then its rest, itself a cell of a list or block or a last single item; ø items stay
-fn list_in<T>(mut first: Val, mut rest: Val, bracket: crate::node::Bracket, store: &mut StoreContextMut<'_, T>, memory: wasmtime::Memory) -> Node {
+fn list_in<T>(mut first: Val, mut rest: Val, bracket: crate::node::Bracket, store: &mut StoreContextMut<'_, T>, memory: wasmtime::Memory, path: &mut Vec<wasmtime::Rooted<wasmtime::StructRef>>) -> Node {
 	let mut items = Vec::new();
 	loop {
 		// a null first item is the empty list's cell; a ø element is a node of kind Empty, kept
 		if first.unwrap_anyref().is_some() {
-			items.push(node_in(&first, store, memory));
+			items.push(node_along(&first, store, memory, path));
 		}
 		let Some(cell) = rest.unwrap_anyref().and_then(|reference| reference.unwrap_struct(&*store).ok()) else { break };
 		let (Ok(kind), Ok(data), Ok(child)) = (cell.field(&mut *store, FIELD_KIND), cell.field(&mut *store, FIELD_DATA), cell.field(&mut *store, FIELD_VALUE)) else { break };
 		let tag = (kind.unwrap_i64() & KIND_MASK) as u8;
 		if tag != Kind::List as u8 && tag != Kind::Block as u8 {
-			match node_in(&rest, store, memory) {
+			match node_along(&rest, store, memory, path) {
 				Node::Empty => {}
 				last => items.push(last),
 			}
@@ -582,6 +615,12 @@ fn list_in<T>(mut first: Val, mut rest: Val, bracket: crate::node::Bracket, stor
 fn boxed_f64<T>(store: &mut StoreContextMut<'_, T>, data: &Val) -> Option<f64> {
 	let float_box = data.unwrap_anyref()?.unwrap_struct(&*store).ok()?;
 	float_box.field(&mut *store, 0).ok().map(|value| warp_runtime::floats::canonical_nan(value.unwrap_f64()))
+}
+
+fn float_array<T>(store: &mut StoreContextMut<'_, T>, data: &Val) -> Option<Vec<f64>> {
+	let array = data.unwrap_anyref()?.unwrap_array(&*store).ok()?;
+	let parts = array.elems(&mut *store).ok()?.map(|element| element.unwrap_f64()).collect();
+	Some(parts)
 }
 
 /// The letters of a `$String(ptr, len)` in linear memory

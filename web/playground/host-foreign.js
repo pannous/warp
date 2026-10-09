@@ -9,6 +9,8 @@ const MODULE_PATH = /\.(wasm|wat)$/; // src/wasm_modules.rs MODULE_EXTENSIONS
 const SETTER_PREFIX = "set "; // src/wasm_modules.rs SETTER_PREFIX: the import that sets a mutable global
 const C_CALLS_SECTION = "warp.c_calls"; // src/wasm_modules.rs C_CALLS_SECTION
 const IMPORTED_MEMORY_PAGES = 1; // src/wasm_emitter/mod.rs MEMORY: one page at least
+// a foreign call is synchronous here: the program cannot wait for a promise (card js-callbacks)
+const PROMISE_REFUSAL = "gives a promise, which a program in the browser cannot wait for yet; natively (the warp CLI) node awaits it";
 
 // the runtimes foreign_call reaches in the page, by their name in `use <runtime> …`: call(module, member, arguments,
 // hooks) gives the member's plain value (arguments null: a read, no call); prepare(code), when given, readies the runtime
@@ -20,7 +22,7 @@ function registerForeignRuntime(name, runtime) {
 }
 const prepareForeignRuntimes = code => Promise.all([...foreignRuntimes.values()].map(runtime => runtime.prepare?.(code)));
 
-// what wasp's operators on a value of the page forward to (src/lowering/foreign_modules.rs), as in src/foreign.rs's loop
+// what warp's operators on a value of the page forward to (src/lowering/foreign_modules.rs), as in src/foreign.rs's loop
 const FOREIGN_OPERATORS = { add: (a, b) => a + b, sub: (a, b) => a - b, mul: (a, b) => a * b, truediv: (a, b) => a / b, mod: (a, b) => a % b, pow: (a, b) => a ** b,
 	lt: (a, b) => a < b, gt: (a, b) => a > b, le: (a, b) => a <= b, ge: (a, b) => a >= b, eq: (a, b) => a === b, ne: (a, b) => a !== b, neg: a => -a,
 	getitem: (a, i) => typeof a.get === "function" ? a.get(i) : a[i], len: a => a.length ?? a.size, list: a => Array.from(a) };
@@ -43,11 +45,18 @@ registerForeignRuntime("js", {
 		// a module's name, or a handle: an object of the page kept behind an id (src/foreign.rs)
 		let owner = null, value = typeof moduleName === "object" ? unhandled(moduleName) : moduleName === "operator" ? FOREIGN_OPERATORS : globalThis[moduleName];
 		if (value === undefined) throw new Error(`js ${moduleName}.${memberName}: the page has no global ${moduleName} (modules need the native host)`);
+		// member "": the module constructed, `new URL(…)` (src/lowering/foreign_modules.rs CONSTRUCTOR_MEMBER)
+		if (memberName === "") return new value(...argumentValues.map(unhandled));
 		for (const part of memberName.split(".")) {
 			if (value?.[part] === undefined) throw new Error(`js ${moduleName}.${memberName}: ReferenceError: ${moduleName} has no ${memberName}`);
 			[owner, value] = [value, value[part]];
 		}
-		return argumentValues === null ? value : value.apply(owner, argumentValues.map(unhandled));
+		const result = argumentValues === null ? value : value.apply(owner, argumentValues.map(unhandled));
+		if (typeof result?.then === "function") {
+			result.then(undefined, () => {}); // its failure is not the program's: no unhandled rejection
+			throw new Error(`js ${moduleName}.${memberName}: ${PROMISE_REFUSAL}`);
+		}
+		return result;
 	},
 });
 
@@ -167,10 +176,29 @@ function moduleImports(holder, hooks, path) {
 			if (member instanceof WebAssembly.Global) return member.value;
 			if (!member) throw new Error(`${path} exports no ${name}`);
 			const call = cCalls(holder.run).get(`${path}\t${name}`);
-			return call ? callC(holder, exports, member, call, values, `${path} ${name}`) : member(...values);
+			if (call) return callC(holder, exports, member, call, values, `${path} ${name}`);
+			const program = holder.exports;
+			const copies = values.map(value => copied(program, exports, value));
+			const result = copied(exports, program, member(...copies));
+			values.forEach((value, index) => writtenBack(program, value, exports, copies[index]));
+			return result;
 		},
 	});
 }
+
+// what the module changed in its copy of an argument, made to the program's own Node (src/wasm_modules.rs write_back)
+function writtenBack(program, value, module, copy) {
+	if (copy === value || !isNode(value) || !isNode(copy)) return;
+	const changed = readNode(module, copy);
+	if (JSON.stringify(changed) !== JSON.stringify(readNode(program, value))) program.reflect_assign(value, buildValue(program, changed));
+}
+
+// a module warp compiled reads its Nodes (reader.js) and builds them (host.js buildValue)
+const isWarpModule = exports => typeof exports.reflect_data === "function" && typeof exports.new_text === "function";
+// a Node of one warp instance as a copy in the other (src/wasm_modules.rs call_with_values): its texts live in the
+// memory of the instance that made it
+const isNode = value => value !== null && typeof value === "object";
+const copied = (from, to, value) => isNode(value) && isWarpModule(from) && isWarpModule(to) ? buildValue(to, readNode(from, value)) : value;
 
 addHostPart({
 	words: (holder, hooks, { program }) => ({

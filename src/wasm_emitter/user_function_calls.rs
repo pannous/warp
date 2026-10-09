@@ -2,6 +2,9 @@
 
 use super::*;
 
+/// The kinds a call's argument has for sure when inference names them: what a declared parameter type is checked against
+const SCALAR_KINDS: [Kind; 5] = [Kind::Int, Kind::Float, Kind::Text, Kind::Codepoint, Kind::List];
+
 impl WasmGcEmitter {
 	// ═══════════════════════════════════════════════════════════════════════════
 	// User-defined function compilation (extraction done in analyzer)
@@ -92,12 +95,13 @@ impl WasmGcEmitter {
 	}
 
 	/// The parameters and variables of the function whose body defines `function` (`outer` for `outer·inner`), with the
-	/// kinds its compiled body gives them (compile_user_function_body); main's variables behind them, which outer reads
-	/// too (`under = paper` copies main's kind, card captured-copy)
+	/// kinds its compiled body gives them (compile_user_function_body); behind them those of the functions enclosing it
+	/// (`outer·mid·deep` reads outer's too, card nested-two), then main's, which outer reads too (`under = paper` copies
+	/// main's kind, card captured-copy)
 	pub(super) fn enclosing_scope(&self, function: &str, main: &Scope) -> Option<Scope> {
 		let enclosing = self.ctx.enclosing_functions.get(function).and_then(|name| self.ctx.user_functions.get(name))?;
 		let mut scope = Scope::with_function_kinds(self.user_function_kinds()).with_closure_targets(self.ctx.closure_variable_targets.clone());
-		scope.parent = Some(Box::new(main.clone()));
+		scope.parent = Some(Box::new(self.enclosing_scope(&enclosing.name, main).unwrap_or_else(|| main.clone())));
 		scope.globals = self.ctx.declared_globals.clone();
 		for (index, param) in enclosing.params.iter().enumerate() {
 			let kind = if self.takes_list_abi(&enclosing.name, index) { Kind::List } else { param_kind(param) };
@@ -175,7 +179,6 @@ impl WasmGcEmitter {
 		let returns_node = user_fn.return_kind.is_ref();  // Text, Symbol, List, etc. return Node refs
 
 		// Create function type: (params...) -> i64 or (ref $Node) depending on return type
-		let func_type_idx = self.type_manager.types().len();
 		let param_types: Vec<ValType> = user_fn.params.iter().enumerate()
 			.map(|(index, param)| match self.struct_parameter(name, index) {
 				Some(class) => Ref(self.instance_ref(class)),
@@ -194,7 +197,7 @@ impl WasmGcEmitter {
 		} else {
 			vec![self.storage_type(user_fn.return_kind)]
 		};
-		self.type_manager.types_mut().ty().function(param_types, result_types);
+		let func_type_idx = self.type_manager.function_type(param_types, result_types);
 
 		// Register function in function section
 		self.functions.function(func_type_idx);
@@ -241,7 +244,7 @@ impl WasmGcEmitter {
 		let mut typed_lists = self.find_typed_lists(&user_fn.body);
 		for (index, param) in user_fn.params.iter().enumerate().filter(|(index, _)| self.takes_list_abi(name, *index)) {
 			let _ = index;
-			typed_lists.insert(param.name.clone(), list_dispatch::TypedList { element: list_dispatch::ElementType::Node, updated: true });
+			typed_lists.insert(param.name.clone(), list_dispatch::TypedList { element: list_dispatch::ElementType::Node, updated: true, aliased: true });
 		}
 		let saved_typed_lists = std::mem::replace(&mut self.typed_lists, typed_lists);
 		let typed_maps = self.find_typed_maps(&user_fn.body);
@@ -267,7 +270,8 @@ impl WasmGcEmitter {
 			locals.push((temp_locals, ValType::I64));
 		}
 		locals.push((big_int::INT_SCRATCH_LOCALS, ValType::I64));
-		locals.push((1, Ref(self.node_ref(true)))); // node_scratch
+		locals.push((NODE_SCRATCH_LOCALS, Ref(self.node_ref(true)))); // node_scratch, container_scratch
+		let saved_loop_values = self.declare_loop_values(&mut locals, &user_fn.body);
 		let mut func = Function::new(locals);
 		self.emit_node_local_defaults(&mut func, &user_fn.body, num_params as usize);
 
@@ -318,6 +322,7 @@ impl WasmGcEmitter {
 		self.scope = saved_scope;
 		self.int_scratch = saved_scratch;
 		self.next_temp_local = saved_temp_local;
+		self.loop_values = saved_loop_values;
 		self.returns_node = saved_returns_node;
 		self.returns_float = saved_returns_float;
 		self.returns_list = saved_returns_list;
@@ -336,7 +341,7 @@ impl WasmGcEmitter {
 	/// Emit a call to a user-defined function (returns Node)
 	pub(super) fn emit_user_function_call(&mut self, func: &mut Function, fn_name: &str, args: &[Node]) {
 		let Some(user_fn) = self.ctx.user_functions.get(fn_name).cloned() else {
-			self.emit_type_error(func, crate::ffi::undefined_function_message(fn_name));
+			self.emit_type_error(func, self.ctx.undefined_function_message(fn_name));
 			return;
 		};
 		let returns_node = user_fn.return_kind.is_ref();
@@ -385,7 +390,7 @@ impl WasmGcEmitter {
 	/// Note: For Node-returning functions, this extracts the integer value from the Node
 	pub(super) fn emit_user_function_call_numeric(&mut self, func: &mut Function, fn_name: &str, args: &[Node]) {
 		let Some(user_fn) = self.ctx.user_functions.get(fn_name).cloned() else {
-			self.emit_type_error(func, crate::ffi::undefined_function_message(fn_name));
+			self.emit_type_error(func, self.ctx.undefined_function_message(fn_name));
 			return;
 		};
 		let returns_node = user_fn.return_kind.is_ref();
@@ -438,6 +443,14 @@ impl WasmGcEmitter {
 			};
 			given.insert(param.name.clone(), argument.clone());
 			let argument = &argument;
+			// `f(xs: texts)` refuses a list of ints (W0: list int ≰ list text)
+			let element = param.annotation.as_ref().and_then(crate::analyzer::declared_element_type);
+			let list_type = crate::analyzer::list_type_name(argument, &self.scope);
+			if let Some(element) = element.filter(|element| !crate::analyzer::elements_fit(element, &list_type)) {
+				let message = format!("{} needs a list of {element} for parameter {}, got {} (a {list_type})", user_fn.name, param.name, argument.serialize());
+				self.emit_type_error(func, message);
+				return;
+			}
 			if self.takes_list_abi(&user_fn.name, i) {
 				self.emit_list_abi_value(func, argument);
 				continue;
@@ -451,12 +464,23 @@ impl WasmGcEmitter {
 			// a declared list (`xs:list`, `xs:ints`) refuses a number or text loudly (wiki/Footguns.md "Type annotations not enforced loudly")
 			let declared_list = expected == Kind::List && param.annotation.is_some();
 			let refused: &[Kind] = if declared_list { &[Kind::Int, Kind::Float, Kind::Text, Kind::Codepoint] } else { &[Kind::List, Kind::Text] };
-			if (!expected.is_ref() || declared_list) && refused.contains(&given) && given != expected {
+			// a declared builtin type takes only its subtypes, `f(x: text)` refuses 3 (W0, notes/type_theory.md)
+			let declared_misfit = param.annotation.as_ref().and_then(crate::analyzer::annotated_builtin_type).is_some_and(|type_name| SCALAR_KINDS.contains(&given) && !crate::analyzer::admits(type_name, given));
+			// `f(b: bool)` refuses 2 but takes yes, no, 1 and 0 (card bool-assign, P199)
+			let annotated_bool = param.annotation.as_ref().map(Node::name).filter(|type_name| crate::analyzer::is_bool_type(type_name));
+			if annotated_bool.is_some_and(|type_name| crate::analyzer::literal_misfit(&type_name, argument).is_some()) {
+				let message = format!("{} needs a bool for parameter {}, got {} ({})", user_fn.name, param.name, argument.serialize(), kind_with_article(given));
+				self.emit_type_error(func, message);
+				return;
+			}
+			// `[]` is ø here: the empty list fits every declared list
+			let is_empty_list = matches!(argument.drop_meta(), Node::Empty);
+			if declared_misfit || ((!expected.is_ref() || declared_list) && refused.contains(&given) && given != expected && !is_empty_list) {
 				let message = format!("{} needs {} for parameter {}, got {} ({})", user_fn.name, kind_with_article(expected), param.name, argument.serialize(), kind_with_article(given));
 				self.emit_type_error(func, message);
 				return;
 			}
-			self.emit_value_of_kind(func, argument, expected);
+			self.emit_declared_value(func, param.annotation.as_ref(), argument, expected);
 			if expected == Kind::Text && given == Kind::Codepoint { // f("a") for f(t:text): "a" lexes as a character
 				self.emit_call(func, text_builtins::TEXT_OF);
 			}

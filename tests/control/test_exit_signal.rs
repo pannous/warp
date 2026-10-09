@@ -15,7 +15,7 @@ fn on_exit_runs_when_main_returns() {
 #[test]
 fn on_exit_runs_at_exit_and_keeps_its_code() {
 	assert_eq!(lines("n = 1\non exit { print \"bye \" + n }\nn = 2\nexit(3)\nprint \"never\""), ["bye 2"]);
-	let file = std::path::Path::new(env!("CARGO_TARGET_TMPDIR")).join("on_exit_code.wasp");
+	let file = std::path::Path::new(env!("CARGO_TARGET_TMPDIR")).join("on_exit_code.warp");
 	std::fs::write(&file, "on exit { print \"bye\" }\nexit(3)\n").expect("write the program");
 	let output = warp_command().args(["run", file.to_str().unwrap()]).output().expect("warp runs");
 	assert_eq!(String::from_utf8_lossy(&output.stdout), "bye\n");

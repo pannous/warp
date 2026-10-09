@@ -1,4 +1,4 @@
-// Card natural-phrases (samples/natural.wasp), the phrases of one obvious meaning: operator words as aliases
+// Card natural-phrases (samples/natural.warp), the phrases of one obvious meaning: operator words as aliases
 // (wiki/operator.md lists `plus` and `equals`), `is in` for `in`, `through` for `to`, `for each x in xs`
 use crate::is;
 

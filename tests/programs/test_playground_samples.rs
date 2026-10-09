@@ -1,4 +1,4 @@
-// Every sample of the playground menu (samples/*.wasp but those web/playground/excluded_samples.txt names) runs to a
+// Every sample of the playground menu (samples/*.warp but those web/playground/excluded_samples.txt names) runs to a
 // value, never to an error (card g-_fHI): an excluded sample is back in the menu once it works and its line is deleted.
 // The browser suite runs it too.
 use std::fs;
@@ -7,8 +7,10 @@ use warp::Node;
 
 const EXCLUDED_LIST: &str = "web/playground/excluded_samples.txt";
 const SAMPLES: &str = "samples";
-/// paint directly or through the draw module (std/draw.wasp show)
+/// paint directly or through the draw module (lib/draw.warp show)
 const PAINTING: [&str; 2] = ["paint(", "use draw"];
+/// A sample on the GPU (samples/webgpu.warp) is skipped, loudly, on a machine without one (CI)
+const NO_GPU: &str = "no WebGPU adapter";
 
 /// The names excluded_samples.txt lists: the first word of each line that is no comment
 fn excluded_samples() -> Vec<String> {
@@ -19,7 +21,7 @@ fn excluded_samples() -> Vec<String> {
 }
 
 fn sample_path(name: &str) -> String {
-	format!("{SAMPLES}/{name}.wasp")
+	format!("{SAMPLES}/{name}.warp")
 }
 
 /// A sample that paints needs the page's canvas, which the browser suite's worker has not: natively it writes a PNG
@@ -31,11 +33,15 @@ fn runs_here(name: &str) -> bool {
 fn every_playground_sample_runs_without_an_error() {
 	let excluded = excluded_samples();
 	let mut menu: Vec<String> = fs::read_dir(SAMPLES).expect(SAMPLES)
-		.filter_map(|entry| entry.ok()?.path().file_name()?.to_str()?.strip_suffix(".wasp").map(str::to_string))
+		.filter_map(|entry| entry.ok()?.path().file_name()?.to_str()?.strip_suffix(".warp").map(str::to_string))
 		.filter(|name| !excluded.contains(name) && runs_here(name))
 		.collect();
 	menu.sort();
 	let failures: Vec<String> = menu.iter().filter_map(|name| match eval(&sample_path(name)) {
+		Node::Error(message) if message.to_string().contains(NO_GPU) => {
+			crate::common::announce_skip("a WebGPU adapter", name);
+			None
+		}
 		failed @ Node::Error(_) => Some(format!("{name}: {}", failed.serialize())),
 		_ => None,
 	}).collect();

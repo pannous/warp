@@ -9,6 +9,7 @@
 //! stated → asserted (debug builds, at concrete call sites) → tested (generated inputs) → proved (Lean).
 //! Laws will later attach to the semantic FunctionDecl; until that IR exists they live beside the Node AST.
 pub mod lean;
+pub mod type_model;
 
 use crate::analyzer::{collect_functions, extract_user_functions};
 use crate::context::Context;
@@ -97,7 +98,8 @@ pub struct FunctionDefinition {
 
 fn law_statement(node: &Node) -> Option<&Node> {
 	match node.drop_meta() {
-		Node::List(items, _, _) if items.len() == 2 && items[0].drop_meta() == &Node::Symbol(LAW_KEYWORD.into()) => {
+		// the word itself: Node's loose == takes `true` for any non-empty symbol, `[true, 2]` is no law
+		Node::List(items, _, _) if items.len() == 2 && matches!(items[0].drop_meta(), Node::Symbol(word) if word == LAW_KEYWORD) => {
 			Some(&items[1])
 		}
 		_ => None,
@@ -367,7 +369,7 @@ pub fn property_test(lawful: &Lawful, law: &Law, trials: usize, code: &str) -> V
 
 /// Raise every law as far as it goes: property tests first (they find counterexamples), then Lean.
 pub fn verify(code: &str) -> Vec<LawReport> {
-	let lawful = separate_laws(crate::wasp_parser::WaspParser::parse(code));
+	let lawful = separate_laws(crate::warp_parser::WarpParser::parse(code));
 	lawful
 		.laws
 		.iter()

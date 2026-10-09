@@ -12,6 +12,8 @@ mod test_operator_declarations;
 mod test_operator_precedence;
 mod test_superscript_operator_declarations;
 mod test_operator_parsing;
+mod test_increment_places;
+mod test_suffix_power_places;
 mod test_operators;
 mod test_structural_equality;
 mod test_truthiness_of_objects;
@@ -27,3 +29,6 @@ mod test_compound_assignment;
 mod test_tuple_comparison_warning;
 mod test_like_known_type_mismatch;
 mod test_logical_values_in_functions;
+mod test_postfix_words;
+mod test_approximately; // cards approximately, approximately-all
+mod test_rough_similarity; // card g_YHSM

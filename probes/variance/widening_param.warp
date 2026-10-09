@@ -1,0 +1,6 @@
+// TypeScript's array-covariance hole: a list of text handed to a parameter that takes any list, which appends a number.
+// Result (P215, lists shared since P200b): compile error "widen(xs: list) changes names, which is declared texts" (before: values, names stayed ["hi"]).
+names: texts = ["hi"]
+widen(xs: list) := { xs.add(420); xs.add("uh oh"); xs }
+widen(names)
+names

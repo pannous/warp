@@ -129,8 +129,26 @@ pub fn lower(node: Node) -> Node {
 		depth: 0,
 		remote: vec![],
 	};
+	if let Some(error) = signals.warn_constant_listeners(&main_statements, &node) {
+		return error;
+	}
 	let node = signals.lower(node, &[]);
 	signals.remote_checks(node)
+}
+
+/// How often the program writes each variable (by its root: a write of `p.age` is one of p), anywhere
+fn write_counts(program: &Node) -> HashMap<String, usize> {
+	let mut counts: HashMap<String, usize> = HashMap::new();
+	program.visit(&mut |part| {
+		if let Some(path) = statement_write(part) {
+			*counts.entry(root_name(&path).to_string()).or_default() += 1;
+		}
+	});
+	counts
+}
+
+fn root_name(path: &str) -> &str {
+	path.split(FIELD_SEPARATOR).next().unwrap_or(path)
 }
 
 struct Signals {
@@ -188,6 +206,46 @@ impl Signals {
 			Node::Meta { node, data } => Node::Meta { node: Box::new(self.lower(*node, listeners)), data },
 			other => other,
 		}
+	}
+
+	/// `age = alice.age; whenever age > 40 {…}`: a once or whenever listener reading only main-level copies that nothing
+	/// writes again never fires; warn, offering the derived value `age := alice.age` (card whenever-constant). In strict
+	/// mode the warning is the error
+	fn warn_constant_listeners(&self, statements: &[Node], program: &Node) -> Option<Node> {
+		let writes = write_counts(program);
+		let mut copies: HashMap<String, &Node> = HashMap::new();
+		for statement in statements {
+			if let Node::Key(target, Op::Assign, value) = statement.drop_meta() {
+				if let Node::Symbol(name) = target.drop_meta() {
+					copies.insert(name.clone(), value);
+				}
+				continue;
+			}
+			let (keyword, condition) = match listener_parts(statement) {
+				Some((ListenerWord::Once, condition, _)) => (ONCE_WORD, condition),
+				Some((ListenerWord::Whenever, condition, _)) => (WHENEVER_WORD, condition),
+				_ => continue,
+			};
+			let mut roots: Vec<String> = self.sources(&condition).iter().map(|name| root_name(name).to_string()).collect::<HashSet<_>>().into_iter().collect();
+			roots.sort();
+			let constant = |root: &String| copies.contains_key(root) && writes.get(root) == Some(&1);
+			let Some(name) = roots.first().filter(|_| roots.iter().all(constant)) else { continue };
+			let value = copies[name];
+			let never_fires = format!("{keyword} {} never fires", condition.serialize().trim());
+			let value_text = value.serialize().trim().to_string();
+			let warning = match symbols(value).is_empty() {
+				true => crate::diagnostic::Diagnostic::at(statement, format!("{never_fires}: nothing writes {name} again")),
+				false => {
+					let derived = format!("{name} := {value_text}");
+					let message = format!("{never_fires}: {name} is a copy of {value_text} that nothing writes again; did you mean {derived}?");
+					crate::diagnostic::Diagnostic::at(statement, message).fix(derived.clone()).offer("a derived value", format!("{name} = {value_text}"), derived)
+				}
+			};
+			if let Err(error) = crate::diagnostic::report(&[warning]) {
+				return Some(error);
+			}
+		}
+		None
 	}
 
 	/// A listener applies to the statements after it; a write as a whole statement is followed by the checks
@@ -356,13 +414,15 @@ impl Signals {
 		};
 		let body = self.lower(with_value(&body, &variable), &[]);
 		let changed = Node::Key(Box::new(variable.clone()), Op::Ne, Box::new(Node::Symbol(last.clone())));
+		// a copy: a list or map changed in place (`x.add(2)`, P200b) is no longer the one remembered
+		let remember = || assign(&last, crate::library_words::copy_call(variable.clone(), Node::False));
 		Some(Listener {
 			trigger: Trigger::Write(self.sources(&variable)),
 			condition: Some(changed),
-			body: block([remembered, vec![assign(&last, variable.clone()), body]].concat()),
+			body: block([remembered, vec![remember(), body]].concat()),
 			fired: None,
 			held: None,
-			start: Some(assign(&last, variable)),
+			start: Some(remember()),
 		})
 	}
 

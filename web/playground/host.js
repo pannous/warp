@@ -10,50 +10,14 @@ const PAGE_ROUTES_EXPORT = "page·routes";
 const PAGE_BITS = 16;
 const STDERR = 2;
 const DARK_MODE_QUERY = "(prefers-color-scheme: dark)";
-// random_seed (crates/warp-runtime host_words.rs): after a seed, xorshift64* as natively, so a seeded program gives the
-// same numbers in both; unseeded, Math.random
-const U64 = (1n << 64n) - 1n;
-let seededRandom = null;
-const seedRandom = seed => { seededRandom = (BigInt.asUintN(64, seed) * 0x9E3779B97F4A7C15n & U64) | 1n; };
-function nextSeeded() {
-	let x = seededRandom;
-	x ^= x >> 12n;
-	x = (x ^ (x << 25n)) & U64;
-	x ^= x >> 27n;
-	seededRandom = x;
-	return x * 0x2545F4914F6CDD1Dn & U64;
-}
-const randomFloat = () => seededRandom === null ? Math.random() : Number(nextSeeded() >> 11n) / 2 ** 53;
-const randomBelow = bound => bound <= 0n ? 0n : seededRandom === null ? BigInt(Math.floor(Math.random() * Number(bound))) : nextSeeded() % bound;
-
 // the standard library's adapters (src/std_adapters.rs, notes/stdlib.md section 7): module → member → function of
-// plain values (plainOfTree / treeOfPlain, as for foreign_call); the parts add theirs (host-files.js file, net and store)
-const STD_ADAPTERS = {
-	json: { parse: text => JSON.parse(text), to_json: (value, classes) => JSON.stringify(classes ? withoutClassTags(value, new Set(classes)) : value) },
-	os: { env: () => null }, // a page has no environment
-	regex: {
-		matches: (subject, pattern) => regexOf(pattern).test(subject),
-		first: (subject, pattern) => subject.match(regexOf(pattern))?.[0] ?? null,
-		all: (subject, pattern) => [...subject.matchAll(regexOf(pattern, "g"))].map(found => found[0]),
-		replace: (subject, pattern, replacement) => subject.replace(regexOf(pattern, "g"), replacement),
-	},
-};
-// an instance of one of the program's classes is its fields: {Point: {x: 1}} is {x: 1} (src/std_adapters.rs)
-function withoutClassTags(value, classes) {
-	if (Array.isArray(value)) return value.map(item => withoutClassTags(item, classes));
-	if (value === null || typeof value !== "object") return value;
-	const keys = Object.keys(value);
-	if (keys.length === 1 && classes.has(keys[0]) && value[keys[0]] !== null && typeof value[keys[0]] === "object" && !Array.isArray(value[keys[0]])) return withoutClassTags(value[keys[0]], classes);
-	return Object.fromEntries(keys.map(key => [key, withoutClassTags(value[key], classes)]));
-}
-// what Rust's regex lacks is refused here too, so a pattern means the same in both hosts (src/std_adapters.rs regex_of)
-function regexOf(pattern, flags = "") {
-	const feature = /\(\?<?[=!]/.test(pattern) ? "look-around" : /\\[1-9]/.test(pattern) ? "a backreference" : null;
-	if (feature) throw new Error(`${feature} is not in wasp's regex (one engine lacks it): ${pattern}`);
-	return new RegExp(pattern, flags + "u");
-}
-// the stored values of `stored x = v`, by name: the page's localStorage as the worker started (playground.js)
+// plain values (plainOfTree / treeOfPlain, as for foreign_call); the parts add them (host-hashes.js, host-files.js)
+const STD_ADAPTERS = {};
+
+// the stored values of `stored x = v` and `local[k]`, by name: the page's localStorage as the worker started
+// (playground.js); those of `session[k]`, its sessionStorage
 const storedValues = {};
+const sessionValues = {};
 const contentText = content => typeof content === "string" ? content : JSON.stringify(content);
 const utf8 = new TextEncoder();
 
@@ -72,7 +36,8 @@ function writeBytes(program, bytes) {
 }
 
 // The parts of the host a program reaches only through some of its imports, each a file that adds itself here:
-// host-files.js, host-hashes.js, host-tasks.js, host-foreign.js (needs host-files.js), host-compiler.js, host-routes.js. A built site
+// host-files.js, host-hashes.js, host-tasks.js, host-foreign.js (needs host-files.js), host-compiler.js, host-routes.js,
+// host-gpu.js, host-timers.js, host-random.js. A built site
 // ships a part only when its module imports one of the part's words (src/site.rs HOST_PARTS); the playground's workers
 // load them all. A part gives any of: words(holder, hooks, access) the host words it adds, access being {program, text,
 // cString} of programImports; imports(holder, hooks) import modules of their own (m, c); importModule(holder, hooks,
@@ -80,7 +45,7 @@ function writeBytes(program, bytes) {
 // started(run) as a run begins; poll(holder) at each check point (sleep, signal_poll); finished(holder, hooks) after a
 // call into the run returned, a failure nobody read or nothing; ended(holder) after the call failed; stopped(holder)
 // when the page drops the run (stopListening); navigated(holder) when the page goes to another path (navigate)
-const HOST_PART_FILES = ["host-files.js", "host-hashes.js", "host-tasks.js", "host-foreign.js", "host-compiler.js", "host-routes.js", "host-gpu.js"];
+const HOST_PART_FILES = ["host-files.js", "host-hashes.js", "host-tasks.js", "host-foreign.js", "host-compiler.js", "host-routes.js", "host-gpu.js", "host-timers.js", "host-random.js"];
 const hostParts = [];
 function addHostPart(part) {
 	hostParts.push(part);
@@ -90,7 +55,6 @@ const eachHostPart = (step, ...values) => hostParts.map(part => part[step]?.(...
 
 // hooks: print(text, fd), module(bytes) (each compiled module), panicked(message) (the compiler's)
 function programImports(holder, hooks) {
-	seededRandom = null; // each run starts unseeded
 	const program = () => holder.exports;
 	const text = (pointer, length) => readText(program(), pointer, length);
 	const cString = pointer => {
@@ -119,9 +83,10 @@ function programImports(holder, hooks) {
 					return module.error_of(module.new_text(pointer, length));
 				}
 			},
-			// std_pure / std_io(module, member, arguments): a word of std/<module>.wasp (src/std_adapters.rs)
-			std_pure: (module, member, argumentList) => stdCall(program(), module, member, argumentList),
-			std_io: (module, member, argumentList) => stdCall(program(), module, member, argumentList),
+			// std_pure / std_io(module, member, arguments): a word of lib/<module>.warp (src/std_adapters.rs), by the
+			// adapters the parts add (host-hashes.js hash, json and regex; host-files.js file, net, store and os)
+			std_pure: (module, member, argumentList) => stdCall(program(), module, member, argumentList, holder.warnings),
+			std_io: (module, member, argumentList) => stdCall(program(), module, member, argumentList, holder.warnings),
 			// `serve 8080 {…}` (src/web_server.rs): a page cannot listen on a port
 			serve_routes: port => { throw new Error(`serve ${port}: a server runs only in the native host (the warp CLI)`); },
 			// the host words (src/host.rs): a page cannot block, so sleep busy-waits
@@ -137,20 +102,15 @@ function programImports(holder, hooks) {
 				}
 				checkPoint();
 			},
-			random: randomFloat,
-			random_below: randomBelow,
-			random_seed: seedRandom,
 			clock: () => BigInt(Date.now()),
 			// a page has no ctrl-c: `on interrupt {…}` never runs here (notes/system_signals.md); shared listeners do
 			signal_poll: checkPoint,
-			signal_every: (id, milliseconds) => addTimer(holder, hooks, id, { every: Number(milliseconds) }, "on every …"),
-			signal_daily: (id, minute, weekdays) => addTimer(holder, hooks, id, { minute: Number(minute), weekdays: Number(weekdays) }, "on every day at …"),
-			signal_at: (id, minute) => addTimer(holder, hooks, id, { minute: Number(minute), once: true }, "at 9:00 {…}"),
 			signal_watch: () => { holder.warnings.push("on file … change: a page has no files to watch"); },
 			// system values (crates/warp-runtime/src/system_values.rs): what the browser tells, a loud error for the rest
 			system_value: name => {
 				const value = decode(cString(name));
 				if (value === "online") return BigInt(navigator.onLine);
+				if (value === "time of day") { const now = new Date(); return BigInt(now - new Date(now).setHours(0, 0, 0, 0)); }
 				const pointerIndex = self.pagePointer?.names.indexOf(value) ?? -1; // playground.js trackPointer
 				if (pointerIndex >= 0) return BigInt(Atomics.load(self.pagePointer.values, pointerIndex));
 				// a Worker has no matchMedia: the page tells it (playground.js tellSystemValues)
@@ -202,7 +162,6 @@ function programImports(holder, hooks) {
 	});
 }
 
-const KIND_MASK = 0xFFn;
 const decode = bytes => utf8Decoder.decode(bytes);
 
 const textTree = text => ({ kind: "3", data: { text }, chain: [] });
@@ -230,6 +189,10 @@ function buildValue(module, tree) {
 			return Number(kind & KIND_MASK) === 3 ? module.new_text(pointer, length) : module.new_symbol(pointer, length);
 		}
 		case 4: return module.new_codepoint(payload.i31);
+		case 6: { // a key (an instance among them): its right side the first cell of the chain, which holds that side's own chain
+			const [right, ...rest] = tree.chain;
+			return module.new_key(buildValue(module, payload.node), right ? buildValue(module, { ...right, chain: rest }) : module.new_empty(), kind >> 8n);
+		}
 		case 7: case 8: {
 			const items = [payload.node, ...tree.chain.map(cell => cell.data?.node)].filter(Boolean);
 			return items.reduceRight((rest, item) => module.new_list(buildValue(module, item), rest, kind >> 8n), null) ?? module.new_empty();
@@ -238,12 +201,14 @@ function buildValue(module, tree) {
 	}
 }
 
-function stdCall(program_, module, member, argumentList) {
+// an adapter reports a runtime warning with this.warn(message) (host-files.js openTable)
+function stdCall(program_, module, member, argumentList, warnings) {
 	const [moduleName, memberName, given] = [module, member, argumentList].map(node => plainOfTree(readNode(program_, node)));
 	const adapter = STD_ADAPTERS[moduleName]?.[memberName];
 	if (!adapter) throw new Error(`${moduleName}.${memberName}: no such word in the browser`);
 	try {
-		return buildValue(program_, treeOfPlain(adapter(...(Array.isArray(given) ? given : [given]))));
+		const context = { warn: message => warnings.push(message) };
+		return buildValue(program_, treeOfPlain(adapter.apply(context, Array.isArray(given) ? given : [given])));
 	} catch (error) {
 		throw new Error(`${moduleName}.${memberName}: ${error.message}`);
 	}
@@ -275,8 +240,15 @@ function plainOfTree(tree) {
 			const isObject = (kind >> 8n) === 0n && values.length > 0 && values.every(item => item !== null && (BigInt(item.kind) & KIND_MASK) === KIND_KEY);
 			return isObject ? Object.assign({}, ...values.map(plainOfTree)) : values.map(plainOfItem);
 		}
+		case Number(KIND_FUNCTION): return tree.warpFunction ? callableOf(tree.warpFunction) : null;
 		default: return null;
 	}
+}
+
+// a warp function given to foreign code: a JavaScript function calling it back through the module's closure_apply
+// (src/wasm_emitter/closures.rs), synchronously, with as many of its arguments as it takes
+function callableOf({ module, node }) {
+	return (...values) => plainOfTree(readResult(module, module.closure_apply(node, buildValue(module, treeOfPlain(values)))));
 }
 
 // objects of the page without a plain form (a Date, a Map, an instance, a function), kept for foreign_call behind ids:
@@ -323,49 +295,6 @@ function exactHandle(module, numerator, denominator) {
 	return denominator === 1n ? integer(numerator) : module.exact_div(integer(numerator), integer(denominator));
 }
 
-// Timers (crates/warp-runtime/src/system_signals.rs): main records them, the page starts them after it (startTimers,
-// in the playground's worker.js and a built site's site.js); a host without a page that stays (test-worker.js) only warns
-const TIMER_HANDLER_PREFIX = "on·every·";
-function addTimer(holder, hooks, id, timer, written) {
-	if (!hooks.listen) return holder.warnings.push(`${written}: timers do not run here`);
-	(holder.timers ??= []).push({ id: Number(id), handler: TIMER_HANDLER_PREFIX + id, ...timer });
-}
-
-// milliseconds from now to the next local minute_of_day on a weekday of the mask (bit 0 Sunday), as seconds_until_on
-const EVERY_DAY = 0b1111111;
-const DAY_MILLISECONDS = 24 * 3600 * 1000;
-function millisecondsUntil(minuteOfDay, weekdays = EVERY_DAY, now = new Date()) {
-	const midnight = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-	for (let daysAhead = 0; daysAhead <= 7; daysAhead++) {
-		const due = new Date(midnight.getFullYear(), midnight.getMonth(), midnight.getDate() + daysAhead, 0, minuteOfDay);
-		if (due > now && (weekdays || EVERY_DAY) & (1 << due.getDay())) return due - now;
-	}
-	return 7 * DAY_MILLISECONDS;
-}
-
-// a run's timers started: `fire(handler)` runs the handler on·every·<id> of each when it is due; stopTimers ends them
-function startTimers(holder, fire) {
-	const handles = [];
-	const atClock = timer => handles.push(setTimeout(() => {
-		fire(timer.handler);
-		if (!timer.once) atClock(timer);
-	}, millisecondsUntil(timer.minute, timer.weekdays)));
-	for (const timer of holder.timers ?? []) {
-		if (timer.every !== undefined) handles.push(setInterval(() => fire(timer.handler), timer.every));
-		else atClock(timer);
-	}
-	holder.stopTimers = () => handles.forEach(handle => { clearTimeout(handle); clearInterval(handle); });
-}
-
-// what a timer says in the page: "every 500 ms", "at 09:00", "every day at 09:00", or the channel its listener reads
-function timerLabel(holder, { id, every, minute, once }) {
-	const channel = holder.channels?.get(id);
-	if (channel) return `message from "${channel.name}"`;
-	if (every !== undefined) return every % 1000 ? `every ${every} ms` : `every ${every / 1000} s`;
-	const time = `${String(Math.floor(minute / 60)).padStart(2, "0")}:${String(minute % 60).padStart(2, "0")}`;
-	return once ? `at ${time}` : `every day at ${time}`;
-}
-
 // a run's timers and channels end with it (the next run, worker.js)
 function stopListening(holder) {
 	holder.stopped = true;
@@ -386,7 +315,7 @@ function instantiateProgram(bytes, hooks) {
 	const holder = { warnings: [], pagePath: hooks.pagePath?.() };
 	try {
 		const module = new WebAssembly.Module(bytes);
-		holder.run = { module };
+		holder.run = { module, bytes };
 		eachHostPart("started", holder.run);
 		holder.exports = new WebAssembly.Instance(holder.run.module, programImports(holder, hooks)).exports;
 		hooks.instantiated?.(holder);
@@ -403,7 +332,7 @@ function runMain(holder, hooks) {
 	const events = pageEvents(exports);
 	// a program with routes stays for its links (lowering/routes.rs page·routes)
 	if ((events.length > 0 || holder.timers || holder.fetches || exports[PAGE_ROUTES_EXPORT]) && outcome.result) hooks.listen?.(holder, events);
-	// a run without page events (std/markup.wasp rendering the page's HTML, src/markup.rs) keeps the page's run
+	// a run without page events (lib/markup.warp rendering the page's HTML, src/markup.rs) keeps the page's run
 	if (events.length > 0 && outcome.result) listeningRun = holder;
 	return outcome;
 }
@@ -413,7 +342,7 @@ let listeningRun;
 const PAGE_VALUE_EXPORT = "page·value";
 const PAGE_RENDER_EXPORT = "page·render"; // src/lowering/page_html.rs PAGE_RENDER
 
-// the HTML of a value by the program's own renderer (std/markup.wasp's to_html, exported as page·render by a program
+// the HTML of a value by the program's own renderer (lib/markup.warp's to_html, exported as page·render by a program
 // holding markup): undefined for a number, a program without one, or a rendering that failed (the compiler then
 // renders the value itself, src/web.rs html_of)
 function renderedHtml(exports, value) {

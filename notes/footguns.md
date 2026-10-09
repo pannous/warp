@@ -32,7 +32,7 @@
   `probes/footguns/inspiration/injection-time-effects.md`, rerun the merge script.
 
 ## Work area "literals" (2026-09-27, 9682281d)
-- Fixed in `src/wasp_parser.rs` `parse_number`: `1e3` → exact Int 1000 (`MAX_INTEGER_EXPONENT` 4096 digits, beyond → error),
+- Fixed in `src/warp_parser.rs` `parse_number`: `1e3` → exact Int 1000 (`MAX_INTEGER_EXPONENT` 4096 digits, beyond → error),
   mantissa with `.` or negative exponent → Float; `_` accepted only between two digits; `.5`/`-.5` start a number
   (`number_starts_at`), a space before `.5` makes it a new list item instead of `Op::Dot`.
 - `‖x‖`: the closing bar used to be re-read as a new prefix Abs with an empty operand ("Unexpected character"); now
@@ -43,7 +43,7 @@
 - Fixed: `-2^2` → -4 (prefix `-` is always `Op::Neg` at bp 155, folded into a literal via `impl Neg for Number`);
   `not` bp (0,105): weaker than comparisons, tighter than and/or; chained comparisons (all comparisons one level 120,
   parse_expr rewrites `a<b<c` → `a<b and b<c`, the middle operand is duplicated, so side effects in it run twice);
-  `=` inside `if`/`while` conditions parses as `==` (`WaspParser::equals_compares`, off again inside `{}` and after `:`);
+  `=` inside `if`/`while` conditions parses as `==` (`WarpParser::equals_compares`, off again inside `{}` and after `:`);
   `x++` as a statement was emitted as data (key_emitter skipped Inc/Dec), `++i`/`--i` parse as `i++`/`i--`;
   braceless call as operand of `+ - * /` (MAX_BP_FOR_APPLICATION 130 → 151).
 - `warp parse <code>` prints the parse tree as s-expressions: `(op left right)`, lists as `(items`.
@@ -204,7 +204,7 @@
 ## Work area "syntax decisions" (2026-09-28)
 - Decided and fixed: `&`/`|` vs comparison. `&`/`|` stay logical and/or (wiki/&.md); the parser turns a single-char `&`/`|`
   next to an ungrouped comparison into an error value with both groupings as fix-it (`logic_mixed_with_comparison` in
-  src/wasp_parser.rs). `and`/`or`/`&&`/`||` are not affected. Alternatives recorded in Footguns.md.
+  src/warp_parser.rs). `and`/`or`/`&&`/`||` are not affected. Alternatives recorded in Footguns.md.
 - Decided and fixed: braceless calls. The argument takes arithmetic and stops at ranges/comparisons (ARGUMENT_BP 140), in operand
   position and, for functions of the implicit `it`, at statement level: `1 + f 3-1` → 21, `f 3-1 > 15` → true. This matches the
   legacy wasp tests (`3 + id 3+3` → 9, test_wasm.rs, ignored). A braceless call inside a braceless argument is rejected by
@@ -250,7 +250,7 @@
   `2 * 1.5 as int` → 2. Now `as` is (125, TYPE_OPERAND_BP=250): it converts the whole arithmetic expression to its left
   (C#, TypeScript), `2 * 1.5 as int` → 3, and its target type is one atom. An ungrouped mix is linted:
   fix `(2*1.5) as int or 2 * 1.5:int`.
-- Tight conversion is written on the literal (`literal_type_suffix` in wasp_parser.rs, code only, not data mode):
+- Tight conversion is written on the literal (`literal_type_suffix` in warp_parser.rs, code only, not data mode):
   `0.1:float`, `1.5:int` and the C/Java/C# suffixes `0.1f`/`F`, `0.1d`/`D` (double) → float, `0.1l`/`L` (long double) → exact.
 - Word operators serialize with spaces (`0.1 as float`, was `0.1asfloat`).
 - /usr/local/bin/warp is a symlink to target/debug/warp: every cargo build/test updates it.
@@ -282,7 +282,7 @@ User decision 2026-09-28: exact numbers beyond Q with π, ℯ and square/cube ro
   `cranelift_nan_canonicalization`) is the one Config of the project's engines: `gc_engine`, `run_wat`, `run_wasm`.
   Test helpers under tests/ that build their own Config were left unchanged. Test: test_nan_bits_are_canonical (0/0 is 0x7ff8… on x86 too).
 - Implemented: fuel. `gc_engine` consumes fuel; every store comes from `util::fueled_store`, with the budget
-  `util::DEFAULT_FUEL` = 10^10 steps, overridable by `WARP_FUEL=<steps>`, `warp --fuel <steps>` or `util::with_fuel` (per thread).
+  `util::DEFAULT_FUEL` = 10^11 steps (10^10 until card fuel-default), overridable by `WARP_FUEL=<steps>`, `warp --fuel <steps>` or `util::with_fuel` (per thread).
   Running out is the error `out of fuel after N steps: the program may not terminate …` (`failed_run`, also `run_wat`).
   `while 1 {}` used to fail at compile time (`cannot extract a numeric value from ø`): an empty body `{}` (parsed as ø)
   is now a spinning loop. Tests: test_infinite_loop_runs_out_of_fuel, test_fuel_budget_can_be_raised. The CI test step
@@ -296,6 +296,12 @@ User decision 2026-09-28: exact numbers beyond Q with π, ℯ and square/cube ro
 - Decision: the default budget is 10^10 steps (several seconds), not 10^9 (alternatives: 10^9, which ends a hang in about
   a second but cuts off legitimate long runs such as fib(35); no default, i.e. unlimited unless asked). A budget per thread
   lets tests use small budgets while running in parallel.
+- Decision (2026-10-08, card fuel-default, worker default): the default budget is 10^11. Filling `float[10^7]` item by
+  item (`xs#i = i * 0.5`) costs ~1000 fuel a step, right at 10^10 (warp-web hit it). 10^11 leaves ten times that;
+  runaways still stop with the WARP_FUEL error: `while 1 {}` after 8 s, `i = i + 1` forever after 3 s,
+  `xs = xs + [1]` forever after 29 s (debug build). Alternative not taken: counting fuel per loop iteration (a counter
+  at every loop's back edge, natively, in the browser and in standalone executables) instead of per instruction.
+  Test: test_fuel_default.
 - Decision: the measure check assumes finite numbers. A float NaN or ∞ argument can still make `n<2 ? n : f(n-1)` recurse
   forever; the fuel budget catches it at runtime (alternatives: Div for every function whose parameter may be a float,
   which would make most numeric code Div; excluding NaN via the type once parameters have inferred types).
@@ -336,7 +342,7 @@ Test: test_nan_bits_are_canonical.
 
 ### Termination (halting problem)
 Truly impossible to decide in general; Warp handles both sides without a proof assistant.
-Runtime: every run has a fuel budget (default 10^10 steps, `WARP_FUEL=<steps>` or `warp --fuel <steps>`); `while 1 {}` ends
+Runtime: every run has a fuel budget (default 10^11 steps, `WARP_FUEL=<steps>` or `warp --fuel <steps>`); `while 1 {}` ends
 with `Error('out of fuel after N steps: the program may not terminate …')` instead of hanging.
 Compile time: the effect system has Koka's `Div`. Recursion that moves one parameter by a positive literal toward a guarded
 literal bound (`fib(n) := n<2 ? n : fib(n-1)+fib(n-2)`) is total; `while`, unguarded or unbounded recursion
@@ -536,7 +542,71 @@ Tests still pinning the old rule (not edited, supervisor decides): tests/welcomi
   `xs#i = v`, `y = n; n = y+1`. A body whose first mention is a fresh `name = value` not reading it (`primes = []`)
   is ambiguous and asks (topic `local-or-global`, analyzer::resolve_main_variable_assignments): "a new local of f"
   (default, explicit form `let n = …`) or "the main-level n" (`global n`, which turns main's first `n = …` into the
-  global declaration). Unanswered it warns and takes the local, as Python does (samples/sieve_idiomatic.wasp relies on
+  global declaration). Unanswered it warns and takes the local, as Python does (samples/sieve_idiomatic.warp relies on
   this); `use strict` makes it an error. `let`/`var n = …`, a parameter of the same name, or a local whose name main does
   not use, is the function's own without a question.
 - Tests: tests/welcoming/test_welcoming_globals.rs.
+
+## Uniscript names HTML and LaTeX define differently (user decision P198, 2026-10-07)
+- **Elsewhere:** HTML entities and LaTeX commands share many names with different glyphs: `&circ;` is the modifier
+  letter ˆ but `\circ` is the ring operator ∘; HTML swaps `varepsilon`/`varphi` against LaTeX; `&cdot;` is the letter ċ.
+- **Warp/uniscript:** the LaTeX reading wins (`\:asymp` ≍, `\:circ` ∘, `\:cdot` ⋅, `\:varepsilon` ε), except for Latin
+  letters with a diacritic, which take the HTML one (`\:ocirc` ô, `\:oslash` ø; also `\:imath` ı, `\:jmath` ȷ). The user:
+  "probably ugly but the best we can do"; the letter names meant letters with diacritics, not math names that happen
+  to be letters (exceptions cdot, varepsilon, varphi). A Unicode name ranks above both (`\:tilde` ~, `\:breve` ˘).
+  In uniscript since 131b627 (after v1.0.4); warp reads it once its pin is raised past 1.0.4 (src/uniscript_entities.tsv,
+  tests/parser/test_entity_table.rs).
+- Generated, not hand-written: `python3 probes/entities_index/html_latex.py ~/dev/uniscript` (latex.warp keeps the
+  LaTeX readings HTML wins over as commented `// name: …` lines).
+
+36 names differ:
+
+| name | HTML | LaTeX | P198 picks | in effect |
+|---|---|---|---|---|
+| acute | ´ (Sk) | ◌́ (Mn) | LaTeX | ◌́ (Mn) |
+| ast | * (Po) | ∗ (Sm) | LaTeX | ∗ (Sm) |
+| asymp | ≈ (Sm) | ≍ (Sm) | LaTeX | ≍ (Sm) |
+| barwedge | ⌅ (So) | ⊼ (Sm) | LaTeX | ⊼ (Sm) |
+| blacktriangleleft | ◂ (So) | ◀ (So) | LaTeX | ◀ (So) |
+| blacktriangleright | ▸ (So) | ▶ (So) | LaTeX | ▶ (So) |
+| boxbox | ⧉ (Sm) | ⧈ (Sm) | LaTeX | ⧈ (Sm) |
+| breve | ˘ (Sk) | ◌̆ (Mn) | LaTeX | ˘ (Sk), the Unicode name wins |
+| cdot | ċ (Ll) | ⋅ (Sm) | LaTeX (exception: a math name) | ⋅ (Sm) |
+| check | ✓ (So) | ◌̌ (Mn) | LaTeX | ◌̌ (Mn) |
+| circ | ˆ (Lm) | ∘ (Sm) | LaTeX | ∘ (Sm) |
+| diamondsuit | ♦ (So) | ♢ (So) | LaTeX | ♢ (So) |
+| dot | ˙ (Sk) | ◌̇ (Mn) | LaTeX | ◌̇ (Mn) |
+| doublebarwedge | ⌆ (So) | ⩞ (Sm) | LaTeX | ⩞ (Sm) |
+| fltns | ▱ (So) | ⏥ (So) | LaTeX | ⏥ (So) |
+| grave | ` (Sk) | ◌̀ (Mn) | LaTeX | ◌̀ (Mn) |
+| Gt | ≫ (Sm) | ⪢ (Sm) | LaTeX | ⪢ (Sm) |
+| heartsuit | ♥ (So) | ♡ (So) | LaTeX | ♡ (So) |
+| imath | ı (Ll) | 𝚤 (Ll) | HTML | ı (Ll) |
+| jmath | ȷ (Ll) | 𝚥 (Ll) | HTML | ȷ (Ll) |
+| Lt | ≪ (Sm) | ⪡ (Sm) | LaTeX | ⪡ (Sm) |
+| nsubset | ⊂⃒ (Sm,Mn) | ⊄ (Sm) | LaTeX | ⊄ (Sm) |
+| nsupset | ⊃⃒ (Sm,Mn) | ⊅ (Sm) | LaTeX | ⊅ (Sm) |
+| ocirc | ô (Ll) | ◌̊ (Mn) | HTML | ô (Ll) |
+| oslash | ø (Ll) | ⊘ (Sm) | HTML | ø (Ll) |
+| perp | ⊥ (Sm) | ⟂ (Sm) | LaTeX | ⟂ (Sm) |
+| rightsquigarrow | ↝ (So) | ⇝ (So) | LaTeX | ⇝ (So) |
+| star | ☆ (So) | ⋆ (Sm) | LaTeX | ⋆ (Sm) |
+| strns | ¯ (Sk) | ⏤ (So) | LaTeX | ⏤ (So) |
+| tilde | ˜ (Sk) | ◌̃ (Mn) | LaTeX | ~ (Sm), the Unicode name wins |
+| triangleleft | ◃ (So) | ◁ (Sm) | LaTeX | ◁ (Sm) |
+| triangleright | ▹ (So) | ▷ (Sm) | LaTeX | ▷ (Sm) |
+| varepsilon | ϵ (Ll) | ε (Ll) | LaTeX (exception: a math name) | ε (Ll) |
+| varphi | ϕ (Ll) | φ (Ll) | LaTeX (exception: a math name) | φ (Ll) |
+| Vee | ⋁ (Sm) | ⩔ (Sm) | LaTeX | ⩔ (Sm) |
+| Wedge | ⋀ (Sm) | ⩓ (Sm) | LaTeX | ⩓ (Sm) |
+
+## Array covariance (TypeScript's `Array<string>` passed as `Array<string | number>`), probed 2026-10-08
+- Not a hole in warp: lists are values, so a callee that widens the element type (`xs: list`,
+  `xs: list of (text or number)`) appends to its own copy. The caller's `names: texts` stays `["hi"]`; the same goes for a
+  typed class field, a `const` list and a list a closure reads. Probes: probes/variance/widening_*.warp.
+- The actual hole is simpler: the element type of a declared list is not checked at all. `names: texts = ["hi"];
+  names.add(420)` gives `["hi" 420]` silently, as do `names: texts = [420]`, `names = [420]` and `b.items.add(420)` on a
+  field `items: texts`. A scalar `x: text = "a"; x = 3` is a compile error. Fixed (card list-element-types): items are
+  checked like scalars, at compile time where known, at the store otherwise (notes/typed_lists.md); the variance design
+  above needs no extra rule while lists stay values. Found on the way: const-list-add, typed-list-upper, class-field-list-of, uncalled-list-param,
+  map-function-name.

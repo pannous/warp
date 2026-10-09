@@ -131,6 +131,9 @@ fn task_phrases(node: Node, phrases: &Phrases) -> Node {
 	if let Some((list, function)) = crate::parallel::parallel_map(&node) {
 		return crate::parallel::map_in_tasks(task_phrases(list, phrases), task_phrases(function, phrases), phrases.next_parallel());
 	}
+	if let Some(error) = crate::parallel::sequential_warning(&node) {
+		return error;
+	}
 	match node {
 		Node::List(items, bracket, separator) => {
 			let items: Vec<Node> = items.into_iter().map(|item| task_phrases(item, phrases)).collect();
@@ -143,7 +146,7 @@ fn task_phrases(node: Node, phrases: &Phrases) -> Node {
 			}
 		}
 		Node::Key(awaited, Op::Or, fallback) if matches!(awaited.drop_meta(), Node::List(items, _, _) if items.first().is_some_and(|word| word.drop_meta().name() == AWAIT_WORD)) => {
-			let guarded = Node::List(vec![Node::Symbol(crate::wasp_parser::TRY_MARKER.to_string()), *awaited, task_phrases(*fallback, phrases)], Bracket::Round, Separator::None);
+			let guarded = Node::List(vec![Node::Symbol(crate::warp_parser::TRY_MARKER.to_string()), *awaited, task_phrases(*fallback, phrases)], Bracket::Round, Separator::None);
 			task_phrases_inside(guarded, phrases)
 		}
 		other => other.map_children(|child| task_phrases(child, phrases)),
@@ -164,7 +167,7 @@ fn task_phrases_inside(guarded: Node, phrases: &Phrases) -> Node {
 /// `after C return V`: C and V, from the parser's `after·return(C, V)` or written flat or in spaced groups
 fn after_parts(items: &[Node]) -> Option<(Node, Node)> {
 	if let [marker, condition, value] = items {
-		if marker.drop_meta().name() == crate::wasp_parser::AFTER_MARKER {
+		if marker.drop_meta().name() == crate::warp_parser::AFTER_MARKER {
 			return Some((condition.clone(), value.clone()));
 		}
 	}
@@ -189,7 +192,7 @@ fn after_task(condition: Node, value: Node, phrases: &Phrases) -> Node {
 	if let Some(name) = copied.first() {
 		return crate::node::error(&format!("after {name}: a task gets a copy of {name}, which never changes there; share it: `shared {name} = …` (P106)"));
 	}
-	let template = crate::wasp_parser::parse(&format!("{GO_WORD} {{ while not ({AFTER_CONDITION}) {{ sleep({AFTER_POLL_MILLISECONDS} ms) }}; {AFTER_VALUE} }}"));
+	let template = crate::warp_parser::parse(&format!("{GO_WORD} {{ while not ({AFTER_CONDITION}) {{ sleep({AFTER_POLL_MILLISECONDS} ms) }}; {AFTER_VALUE} }}"));
 	let template = crate::library_words::substitute(template, AFTER_CONDITION, &condition);
 	crate::library_words::substitute(template, AFTER_VALUE, &value)
 }

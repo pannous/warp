@@ -42,17 +42,23 @@ body {
 	font: 15px/1.45 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
 }
 
-header { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 16px; padding-top: 12px; }
-h1 { margin: 0; font-size: 1.5rem; }
+header { display: flex; align-items: baseline; gap: 4px 16px; padding: 12px 0; }
+h1 { margin: 0; font-size: 1.4rem; white-space: nowrap; }
 h1 span { color: var(--accent); font-weight: 500; }
 .tagline { margin: 0; color: var(--muted); flex: 1; }
 .source { color: var(--muted); }
 
-.toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 16px; padding: 12px 0; }
-.status { color: var(--muted); font-size: 0.9em; }
-.native { color: var(--muted); font-size: 0.9em; }
-.native a { color: inherit; }
-.build { color: var(--muted); font-size: 0.9em; margin-left: auto; }
+/* the developer things, out of the way: native install, the module, the build, silenced hints */
+.tools { position: relative; }
+.tools > summary { list-style: none; cursor: pointer; color: var(--muted); padding: 0 6px; border-radius: 6px; font-size: 1.2em; line-height: 1; }
+.tools > summary::-webkit-details-marker { display: none; }
+.tools > summary:hover { color: var(--ink); background: var(--code-ground); }
+.tools-menu { position: absolute; right: 0; top: 1.8em; z-index: 10; width: min(22rem, 90vw); padding: 4px 14px; background: var(--panel); border: 1px solid var(--line); border-radius: 8px; box-shadow: 0 6px 24px rgb(0 0 0 / 0.12); font-size: 0.9em; color: var(--muted); }
+.tools-menu a { color: inherit; }
+.tools-menu .version { opacity: 0.6; font-size: 0.85em; }
+
+.toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px; }
+.status { float: right; color: var(--muted); font-size: 0.8em; margin-left: 8px; }
 .status.failed { color: var(--error); }
 
 button, select {
@@ -67,12 +73,20 @@ button, select {
 button:hover { border-color: var(--accent); }
 #run { background: var(--accent); border-color: var(--accent); color: #1d1d1f; font-weight: 600; }
 
-main { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 16px; }
-@media (max-width: 800px) { main { grid-template-columns: minmax(0, 1fr); } }
+main { display: grid; grid-template-columns: var(--guide-width, minmax(16rem, 26rem)) 10px minmax(0, 1fr); gap: 0 6px; align-items: stretch; }
+.workspace { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.workspace > .toolbar { margin-bottom: 6px; }
+@media (max-width: 900px) { main { grid-template-columns: minmax(0, 1fr); gap: 16px; } #guide-resizer { display: none; } }
 
-.editor-pane, .output-pane { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; min-height: 60vh; }
+/* drag handles (playground.js dragToResize): the guide's width, the editor's height */
+.resizer { border-radius: 4px; touch-action: none; background: linear-gradient(var(--line), var(--line)) center / var(--grip) no-repeat; }
+.resizer:hover, .resizer:focus-visible, .resizer.dragging { background-color: var(--line); outline: none; }
+.resizer.columns { cursor: col-resize; --grip: 2px 40px; }
+.resizer.rows { cursor: row-resize; height: 8px; --grip: 40px 2px; }
+
+.guide-pane, .editor-pane, .output-pane { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; }
 .editor-pane { overflow: hidden; }
-.CodeMirror { height: 100%; min-height: 60vh; font: 14px/1.5 ui-monospace, Menlo, Consolas, monospace; background: var(--panel); color: var(--ink); }
+.CodeMirror { height: 44vh; min-height: 120px; font: 14px/1.5 ui-monospace, Menlo, Consolas, monospace; background: var(--panel); color: var(--ink); }
 .CodeMirror-gutters { background: var(--panel); border-right: 1px solid var(--line); }
 .CodeMirror-cursor { border-left-color: var(--ink); }
 .cm-s-default .cm-comment { color: var(--muted); }
@@ -83,7 +97,7 @@ main { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap:
 .cm-s-default .cm-type { color: var(--hint); }
 @media (prefers-color-scheme: dark) { .cm-s-default .cm-string { color: #8bd17c; } .cm-s-default .cm-number, .cm-s-default .cm-atom { color: #f0a54a; } .cm-s-default .cm-variable { color: var(--ink); } }
 
-.output-pane { padding: 12px 14px; overflow-x: auto; }
+.output-pane { padding: 12px 14px; overflow-x: auto; min-height: 10rem; }
 code, .result, .printed { font-family: ui-monospace, Menlo, Consolas, monospace; }
 /* a markup value shown as DOM (playground.js showRendered) */
 .address { box-sizing: border-box; width: 100%; margin: 10px 0 0; padding: 4px 8px; font-family: ui-monospace, Menlo, Consolas, monospace; border: 1px solid var(--line); border-radius: 6px; }
@@ -119,7 +133,33 @@ output.error { color: var(--error); }
 .got-it-choices { display: inline-flex; flex-wrap: wrap; gap: 4px; margin-left: 6px; }
 .got-it { font-size: 0.85em; padding: 0 6px; }
 
-.silenced { margin-top: 16px; color: var(--muted); }
+.silenced { color: var(--muted); }
 .silenced ul { padding-left: 1.2em; }
 .forget { font-size: 0.85em; padding: 0 6px; margin-left: 6px; }
 main.single { grid-template-columns: minmax(0, 1fr); }
+
+/* the language guide (guide.js renders guide.md): one open chapter at a time */
+.guide-pane { padding: 8px 14px; max-height: calc(100vh - 80px); position: sticky; top: 8px; overflow-y: auto; font-size: 0.93em; }
+.guide-pane > summary { color: var(--muted); cursor: pointer; }
+.guide-level { display: flex; gap: 4px; margin: 6px 0; }
+.guide-level button { font: inherit; font-size: 0.85em; padding: 1px 8px; border: 1px solid var(--line); border-radius: 10px; background: none; color: var(--muted); cursor: pointer; }
+.guide-level button[aria-pressed="true"] { color: inherit; border-color: currentColor; }
+.guide-chapters > p { color: var(--muted); }
+.guide-chapter { border-top: 1px solid var(--line); padding: 4px 0; }
+.guide-chapter > summary { cursor: pointer; font-weight: 600; }
+.guide-chapter > summary a { color: inherit; text-decoration: none; }
+.guide-chapter[open] > summary { color: var(--accent); }
+.guide-section { font-size: 1em; margin: 14px 0 4px; }
+.guide-snippet { position: relative; margin: 8px 0; background: var(--code-ground); border-radius: 6px; padding: 6px 8px; }
+.guide-snippet pre { margin: 0; tab-size: 2; padding-right: 3.5em; white-space: pre-wrap; word-break: break-word; }
+.guide-snippet code { padding: 0; background: none; }
+.guide-try { position: absolute; top: 4px; right: 4px; padding: 0 6px; font-size: 0.85em; }
+.guide-printed { margin: 4px 0 0; padding-top: 4px; border-top: 1px dashed var(--muted); color: var(--ink); white-space: pre-wrap; font-size: 0.95em; }
+.guide-value { font-family: ui-monospace, Menlo, Consolas, monospace; color: var(--muted); margin-top: 2px; }
+.guide-examples a, .guide-link { color: var(--accent); }
+.guide-link { font-size: 0.9em; }
+@media (max-width: 900px) { .guide-pane { position: static; max-height: 50vh; } .tagline { display: none; } }
+
+/* a position goes to its place in the editor (playground.js positionLink, an error value with error_at) */
+button.position { border: none; background: none; padding: 0; color: inherit; font: inherit; text-decoration: underline dotted; cursor: pointer; }
+output.located { cursor: pointer; }

@@ -1,7 +1,0 @@
-// The standard library module file (notes/stdlib.md section 7): `use file`. read is a prelude word; these call the
-// adapter std_io: the file system natively, the page's in-memory files in the browser (read sees what write wrote)
-write(path:any, text:any) := std_io("file", "write", [path, text])
-append_file(path:any, text:any) := std_io("file", "append", [path, text])
-exists(path:any) := std_io("file", "exists", [path])
-list_files(folder:any) := std_io("file", "list", [folder])
-lines(path) := split(read(path), "\n")

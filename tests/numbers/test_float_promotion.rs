@@ -41,3 +41,11 @@ fn test_undefined_float_power_is_refused_loudly() {
 	common::fails_with("f(x:float) := (0 - 2.0) ^ x; f(0.5)", "invalid number");
 	common::fails_with("y = 0.5; 2 ^ y", "integer exponent");
 }
+
+#[test]
+fn test_constant_fractional_exponent_is_a_float_power() {
+	is!("abs(27 ^ (1/3) - 3) < 0.000001", true);
+	is!("a = 8; abs(a ^ (1.0 / 3) - 2) < 0.000001", true);
+	is!("f(x) := x ^ (1/2); f(16)", 4.0);
+	is!("2 ^ (4/2)", 4);
+}

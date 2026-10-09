@@ -1,4 +1,4 @@
-//! Newcomer syntax from Python/JS is eaten: it compiles to its intent, and a hint names the wasp form
+//! Newcomer syntax from Python/JS is eaten: it compiles to its intent, and a hint names the warp form
 //! (probes/sugar/cases.txt; decisions in notes/open_decisions.md)
 use crate::is;
 use crate::common::fails_with;
@@ -67,10 +67,10 @@ fn insert_never_guesses_the_argument_order() {
 	// the kinds decide: the one Int is the position, in either order
 	is!("xs=[\"a\" \"b\"]; xs.insert(0, \"z\"); xs", strings(vec!["z", "a", "b"]));
 	is!("xs=[\"a\" \"b\"]; xs.insert(\"z\", 1); xs", strings(vec!["a", "z", "b"]));
-	// two Ints: Python `insert(i, x)` and wasp `insert(x, i)` disagree (wiki/Footguns.md "Guessing intent")
+	// two Ints: Python `insert(i, x)` and warp `insert(x, i)` disagree (wiki/Footguns.md "Guessing intent")
 	// unanswered the Ask is an error naming both explicit forms
-	fails_with("xs=[1 2]; xs.insert(0, 4); xs", "does insert(0, 4) put 4 at 0 (Python) or 0 at 4 (wasp)? (too ambiguous to guess)");
-	fails_with("xs=[1 2]; i=1; v=9; xs.insert(i, v); xs", "`insert(v, at: i)` for position first, as Python or `insert(i, at: v)` for value first, as wasp");
+	fails_with("xs=[1 2]; xs.insert(0, 4); xs", "does insert(0, 4) put 4 at 0 (Python) or 0 at 4 (warp)? (too ambiguous to guess)");
+	fails_with("xs=[1 2]; i=1; v=9; xs.insert(i, v); xs", "`insert(v, at: i)` for position first, as Python or `insert(i, at: v)` for value first, as warp");
 }
 
 #[test]
@@ -153,11 +153,11 @@ fn a_hash_glued_to_an_expression_counts_at_line_start() {
 fn a_spaced_double_slash_is_always_a_comment_and_says_so_once() {
 	use warp::diagnostic::{use_acknowledgements_file, with_acknowledger, Acknowledging};
 	use warp::normalize::capture_hints;
-	// user decision: no guessing; only glued `a//b` divides, `a // b` is a comment
+	// user decision 2026-10-08: `//` before a space is a comment, `x //= 3` and `a//b` divide
 	is!("items=[1 2 3 4 5]\nmid = len(items) // 2\nmid", 5);
 	is!("x = 7 // 2\nx", 7);
 	is!("x = 7    // 2\nx", 7);
-	is!("n = 10; n //= 3\nn", 10);
+	is!("n = 10; n //= 3\nn", 3);
 	is!("items=[1 2 3 4 5]\nmid = len(items)//2\nmid", 2);
 	is!("n = 10; n//=3; n", 3);
 	// the note "`// …` after code is a comment" shows until acknowledged; a `//` line of its own is no news

@@ -5,21 +5,32 @@
 //! `x = std_io("store", "load", ["x", v, file])` and `on change x { std_io("store", "save", ["x", value, file]) }`.
 //! `storage` is the same store as a map keyed at run time (card web-apis): `storage[k] = v` saves, `storage[k]` loads (ø
 //! when absent), `delete storage[k]` removes, `keys(storage)` names the kept values; `storage.k` is the key "k".
-//! A program that defines its own `storage` keeps it.
+//! `local` is that store under its browser name (localStorage; `storage` its alias), `session` a store of its own
+//! (sessionStorage: while the page's tab lasts; natively while the process runs) (P188, warp-03's default).
+//! A program that defines its own `storage`, `local` or `session` keeps it.
 
 use crate::node::{Bracket, Node, Separator};
 use crate::operators::Op;
-use crate::wasp_parser::parse;
+use crate::warp_parser::parse;
 use std::collections::{HashMap, HashSet};
 
 pub const STORED_WORD: &str = "stored";
 /// The store of the values a `warp dev` page keeps across reloads (in memory natively; dev.js, site.js)
-pub const DEV_STORE: &str = "wasp-dev";
-/// `app.wasp` keeps its stored values in `app.stored.json`
+pub const DEV_STORE: &str = "warp-dev";
+/// `app.warp` keeps its stored values in `app.stored.json`
 const STORE_FILE_EXTENSION: &str = "stored.json";
 /// stands for the default value in the template of the load
 const DEFAULT_PLACEHOLDER: &str = "stored_default_value";
-pub const STORAGE_WORD: &str = "storage";
+/// The words of the stores keyed at run time: the program's store (localStorage) and the session's
+const LOCAL_WORDS: [&str; 2] = ["local", "storage"];
+const SESSION_WORD: &str = "session";
+/// The store of `session[k]` (in memory natively, std_adapters.rs; sessionStorage in the browser, markup.js SESSION_STORE)
+pub const SESSION_STORE: &str = "warp-session";
+/// `database[k]` (alias indexedDB): the store for values beyond localStorage's ~5 MB. Its file ends in this, `app.warp`'s
+/// is `app.database.json`, inline code's this name alone (in memory natively, std_adapters.rs); in the browser any
+/// store whose file ends so is IndexedDB (host-files.js DATABASE_STORE)
+pub const DATABASE_STORE: &str = "database.json";
+const DATABASE_WORDS: [&str; 2] = ["database", "indexedDB"];
 const DELETE_WORD: &str = "delete";
 const KEYS_WORD: &str = "keys";
 /// stand for the key and the value in the templates of a storage access
@@ -27,8 +38,9 @@ const KEY_PLACEHOLDER: &str = "storage_key";
 const VALUE_PLACEHOLDER: &str = "storage_value";
 
 pub fn lower(program: Node) -> Node {
-	let program = if uses_storage(&program) { storage_accesses(program, &store_file()) } else { program };
-	let stores = crate::wasp_parser::mentions(&program, STORED_WORD) && !crate::soft_keywords::program_names(&program, STORED_WORD);
+	let stores = stores_used(&program);
+	let program = if stores.is_empty() { program } else { storage_accesses(program, &stores) };
+	let stores = crate::warp_parser::mentions(&program, STORED_WORD) && !crate::soft_keywords::program_names(&program, STORED_WORD);
 	let dev = crate::pipeline::is_for_dev();
 	if !stores && !dev {
 		return program;
@@ -54,7 +66,16 @@ pub fn lower(program: Node) -> Node {
 
 /// The program's store file, "" for inline code
 fn store_file() -> String {
-	crate::modules::program_file().map(|file| file.with_extension(STORE_FILE_EXTENSION).to_string_lossy().into_owned()).unwrap_or_default()
+	program_file_with(STORE_FILE_EXTENSION).unwrap_or_default()
+}
+
+/// The program's database file, DATABASE_STORE for inline code
+fn database_file() -> String {
+	program_file_with(DATABASE_STORE).unwrap_or_else(|| DATABASE_STORE.to_string())
+}
+
+fn program_file_with(extension: &str) -> Option<String> {
+	crate::modules::program_file().map(|file| file.with_extension(extension).to_string_lossy().into_owned())
 }
 
 /// `stored x = v` as its load and the listener that saves each change
@@ -110,43 +131,57 @@ fn changed_names(statements: &[Node]) -> HashSet<String> {
 	changed
 }
 
-fn uses_storage(program: &Node) -> bool {
-	crate::wasp_parser::mentions(program, STORAGE_WORD) && !crate::soft_keywords::program_names(program, STORAGE_WORD)
+/// The store words the program uses and does not name itself, with the file of each store
+fn stores_used(program: &Node) -> Vec<(&'static str, String)> {
+	let (local, database) = (store_file(), database_file());
+	let words = LOCAL_WORDS.iter().map(|word| (*word, local.clone())).chain([(SESSION_WORD, SESSION_STORE.to_string())]);
+	let words = words.chain(DATABASE_WORDS.iter().map(|word| (*word, database.clone())));
+	words.filter(|(word, _)| crate::warp_parser::mentions(program, word) && !crate::soft_keywords::program_names(program, word)).collect()
 }
 
-/// Each access of `storage` as the store's call
-fn storage_accesses(node: Node, file: &str) -> Node {
-	storage_access(&node, file).unwrap_or_else(|| node.map_children(|child| storage_accesses(child, file)))
+/// Each access of a store word as the store's call
+fn storage_accesses(node: Node, stores: &[(&str, String)]) -> Node {
+	storage_access(&node, stores).unwrap_or_else(|| node.map_children(|child| storage_accesses(child, stores)))
 }
 
-fn storage_access(node: &Node, file: &str) -> Option<Node> {
+fn storage_access(node: &Node, stores: &[(&str, String)]) -> Option<Node> {
 	match node.drop_meta() {
 		Node::Key(target, Op::Assign, value) => {
-			let key = entry_key(target)?;
-			Some(store_call("save", Some(key), Some(storage_accesses(value.as_ref().clone(), file)), file))
+			let (key, file) = entry_key(target, stores)?;
+			Some(store_call("save", Some(key), Some(storage_accesses(value.as_ref().clone(), stores)), file))
 		}
 		Node::List(items, _, _) => match items.as_slice() {
-			[word, target] if is_word(word, DELETE_WORD) => Some(store_call("remove", Some(entry_key(target)?), None, file)),
-			[word, store] if is_word(word, KEYS_WORD) && is_word(store, STORAGE_WORD) => Some(store_call("names", None, None, file)),
+			[word, target] if is_word(word, DELETE_WORD) => {
+				let (key, file) = entry_key(target, stores)?;
+				Some(store_call("remove", Some(key), None, file))
+			}
+			[word, store] if is_word(word, KEYS_WORD) => Some(store_call("names", None, None, file_of(store, stores)?)),
 			_ => None,
 		},
 		// ø: the value of an absent key
-		_ => Some(store_call("load", Some(entry_key(node)?), Some(Node::Empty), file)),
+		_ => {
+			let (key, file) = entry_key(node, stores)?;
+			Some(store_call("load", Some(key), Some(Node::Empty), file))
+		}
 	}
 }
 
-/// The key of `storage[k]` (parsed as `storage#(k+1)`), `storage#k` or `storage.k`
-fn entry_key(target: &Node) -> Option<Node> {
+/// The key and the store's file of `local[k]` (parsed as `local#(k+1)`), `local#k` or `local.k`
+fn entry_key<'a>(target: &Node, stores: &'a [(&str, String)]) -> Option<(Node, &'a str)> {
 	let Node::Key(store, op, index) = target.drop_meta() else { return None };
-	if !is_word(store, STORAGE_WORD) {
-		return None;
-	}
-	match (op, index.drop_meta()) {
-		(Op::Dot, Node::Symbol(field)) => Some(Node::Text(field.clone())),
-		(Op::Hash, Node::Key(key, Op::Add, one)) if *one.drop_meta() == Node::int(1) => Some(key.as_ref().clone()),
-		(Op::Hash, key) => Some(key.clone()),
-		_ => None,
-	}
+	let file = file_of(store, stores)?;
+	let key = match (op, index.drop_meta()) {
+		(Op::Dot, Node::Symbol(field)) => Node::Text(field.clone()),
+		(Op::Hash, Node::Key(key, Op::Add, one)) if *one.drop_meta() == Node::int(1) => key.as_ref().clone(),
+		(Op::Hash, key) => key.clone(),
+		_ => return None,
+	};
+	Some((key, file))
+}
+
+/// The file of the store a word names
+fn file_of<'a>(word: &Node, stores: &'a [(&str, String)]) -> Option<&'a str> {
+	stores.iter().find(|(name, _)| is_word(word, name)).map(|(_, file)| file.as_str())
 }
 
 fn is_word(node: &Node, word: &str) -> bool {

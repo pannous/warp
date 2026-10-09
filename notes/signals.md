@@ -21,20 +21,20 @@ for "first class": listeners on derived values, change detection, batching, writ
 that can be passed around, named event signals (`raise stop the machine` → `on stop the machine`), and crossing tasks
 and the browser page.
 
-## How others do it, and what fits wasp
+## How others do it, and what fits warp
 
-| system | model | fits wasp? |
+| system | model | fits warp? |
 |---|---|---|
 | Solid / Preact signals | runtime cells, auto-tracked dependencies (read inside an effect subscribes), push dirty + pull values, glitch-free by topological order, `batch()` | the semantics yes; the runtime tracking only where static analysis cannot see |
-| Svelte 5 runes | `$state`, `$derived`, `$effect`, compiled to signals | closest: a compiler that knows the reactive names; wasp can do without the `$` marks because the whole module is known |
+| Svelte 5 runes | `$state`, `$derived`, `$effect`, compiled to signals | closest: a compiler that knows the reactive names; warp can do without the `$` marks because the whole module is known |
 | Vue refs | `ref(x)` boxes, `.value`, `computed`, `watch` | the box is what an *escaping* signal needs (`$Signal` below), never written by the user |
-| Elm / FRP | values over time, pure update functions, no mutation | inspiration for `whenever` being declarative; full FRP clashes with wasp's plain assignment |
-| Qt signals/slots | named events with payload, `connect(sender, signal, receiver, slot)` | the wiki's `raise name{data}` / `on name {…}`: an event is a wasp node, so its payload is data |
+| Elm / FRP | values over time, pure update functions, no mutation | inspiration for `whenever` being declarative; full FRP clashes with warp's plain assignment |
+| Qt signals/slots | named events with payload, `connect(sender, signal, receiver, slot)` | the wiki's `raise name{data}` / `on name {…}`: an event is a warp node, so its payload is data |
 | Go channels | values sent between goroutines, `select` | the task side: an event raised in a task is a message to the starting thread (copied like every task value, P33) |
 
 Data-format-first consequence: an event signal is a **node**: `stop the machine{time:now reason:"…"}` is a tag with
 data, so it serializes across tasks, the host, the page and the network with the existing machinery (TaskValue,
-JSON, wasp text). A state signal is a **variable**: nothing new to write, `x = 3` stays `x = 3`.
+JSON, warp text). A state signal is a **variable**: nothing new to write, `x = 3` stays `x = 3`.
 
 ## What a signal is in warp
 
@@ -76,7 +76,7 @@ JSON, wasp text). A state signal is a **variable**: nothing new to write, `x = 3
 
 ### Syntax that reads naturally (notes/welcoming.md)
 
-```wasp
+```warp
 price = 3
 count = 2
 total := price * count               // derived

@@ -13,8 +13,9 @@ repository="$(cd "$page/../.." && pwd)"
 cd "$repository"
 
 warp="$(scripts/own-warp.sh)"
-"$warp" compile web/uniscript/uniscript.wasp  # → uniscript.wasm, fetches packages/uniscript
+"$warp" compile --wasm web/uniscript/uniscript.warp  # → uniscript.wasm (compile alone builds an executable), fetches packages/uniscript
 
+cp web/playground/imports.js "$page/"  # importDescriptors, shared with the playground
 mkdir -p "$page/packages/uniscript/data" "$page/fonts"
 cp packages/uniscript/data/entities.idx "$page/packages/uniscript/data/"  # fetched by the compile
 

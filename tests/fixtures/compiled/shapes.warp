@@ -1,0 +1,6 @@
+class P{x:int; y:int; sum() := x + y}
+def area(w:int, h:int) { w * h }
+def greet(name:text) { "hi " + name }
+def width(p:P) { p.x }
+def origin() { P(0, 7) }
+def moved(p:P) { p.x = 9; 0 }

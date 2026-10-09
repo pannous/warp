@@ -5,7 +5,7 @@
 use crate::node::{Bracket, Node, Separator};
 use crate::operators::Op;
 use crate::wasm_emitter::{emit_module, find_struct_instantiation, WasmGcEmitter};
-use crate::wasp_parser::WaspParser;
+use crate::warp_parser::WarpParser;
 #[cfg(feature = "native")]
 use log::warn;
 
@@ -76,7 +76,7 @@ fn explain_runtime_error(result: Node, exclusive_range: bool) -> Node {
 
 /// Parse the source and check its laws; `Err` is the violation.
 fn lawful_program(code: &str) -> Result<Node, Node> {
-	let lawful = crate::law::separate_laws(crate::diagnostic::in_source_mode(code, || WaspParser::parse(code)));
+	let lawful = crate::law::separate_laws(crate::diagnostic::in_source_mode(code, || WarpParser::parse(code)));
 	match crate::law::assert_laws(&lawful, code) {
 		Some(violation) => Err(violation),
 		None => Ok(lawful.program),
@@ -87,7 +87,7 @@ fn lawful_program(code: &str) -> Result<Node, Node> {
 /// function is refused before it is compiled. To only read data, use `parse_data`, which evaluates nothing.
 pub fn eval_untrusted(code: &str) -> Node {
 	crate::diagnostic::begin_program();
-	let program = WaspParser::parse(code);
+	let program = WarpParser::parse(code);
 	match crate::effects::EffectReport::of(&program).denied(&crate::effects::Capability::GRANTED_UNTRUSTED) {
 		Some((external, _)) => crate::node::error(&format!("untrusted code has no capabilities but pure libm, refusing to call {external}")),
 		None => with_granted(&crate::effects::Capability::GRANTED_UNTRUSTED, || eval_parsed(program, code)),
@@ -114,6 +114,16 @@ thread_local! {
 	/// whether it is for `warp dev`, whose page keeps the program's state across reloads
 	static FOR_DEV: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
 	static RENDERS_ITSELF: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+	/// whether the page is compiled to render its first HTML where the server's code is (site.rs, headless.rs)
+	static PRERENDERING: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+	/// the values the page's calls of server functions gave its prerender, the shipped page's first values
+	static SERVER_VALUES: std::cell::RefCell<Vec<Node>> = const { std::cell::RefCell::new(vec![]) };
+	/// the port `warp serve` serves a program at that has no `serve PORT {…}` of its own (lowering/serve.rs)
+	static SERVING_PORT: std::cell::Cell<Option<u16>> = const { std::cell::Cell::new(None) };
+	/// whether it is a module for any host (`warp compile --wasm`): a browser's host reads its values too
+	static FOR_ANY_HOST: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+	/// whether it runs under `warp test`: its tests run and give its value (lowering/test_blocks.rs)
+	static FOR_TESTS: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
 }
 
 /// `run` with `flag` set on this thread
@@ -158,6 +168,52 @@ pub fn is_for_a_page() -> bool {
 	FOR_A_PAGE.with(|page| page.get())
 }
 
+/// `run` compiling a module for any host (`warp compile --wasm`): it exports the reflection getters a host without GC
+/// field access (the browser) reads values with, so a browser program importing it copies values in and out
+pub fn for_any_host<T>(run: impl FnOnce() -> T) -> T {
+	with_flag(&FOR_ANY_HOST, run)
+}
+
+pub fn is_for_any_host() -> bool {
+	FOR_ANY_HOST.with(|any| any.get())
+}
+
+/// `run` compiling a page that calls its server functions directly, as the server does (lowering/serve.rs): for its
+/// first HTML, rendered at build time
+pub fn prerendering<T>(run: impl FnOnce() -> T) -> T {
+	with_flag(&PRERENDERING, run)
+}
+
+pub fn is_prerendering() -> bool {
+	PRERENDERING.with(|prerendering| prerendering.get())
+}
+
+/// `run` compiling the shipped page, whose calls of server functions start as `values`
+pub fn with_server_values<T>(values: Vec<Node>, run: impl FnOnce() -> T) -> T {
+	let before = SERVER_VALUES.with(|current| current.replace(values));
+	let result = run();
+	SERVER_VALUES.with(|current| current.replace(before));
+	result
+}
+
+/// `run` compiling a program `warp serve` serves at the port: its server functions, its top-level `get`/`post` routes
+/// and its page, without a `serve PORT {…}` statement
+pub fn serving_at<T>(port: u16, run: impl FnOnce() -> T) -> T {
+	let before = SERVING_PORT.with(|current| current.replace(Some(port)));
+	let result = run();
+	SERVING_PORT.with(|current| current.set(before));
+	result
+}
+
+pub fn serving_port() -> Option<u16> {
+	SERVING_PORT.with(|port| port.get())
+}
+
+/// The first value of the page's `index`th call of a server function, ø when none was rendered
+pub fn server_value(index: usize) -> Node {
+	SERVER_VALUES.with(|values| values.borrow().get(index).cloned().unwrap_or(Node::Empty))
+}
+
 /// `run` compiling a program that renders its own markup (the playground, web.rs renders_itself): it exports page·html
 /// and page·render as a page does (lowering/page_html.rs); nothing else of a page changes (it may still serve)
 pub fn rendering_itself<T>(run: impl FnOnce() -> T) -> T {
@@ -178,6 +234,15 @@ pub fn is_for_dev() -> bool {
 	FOR_DEV.with(|dev| dev.get())
 }
 
+/// `run` a program under `warp test`: its `test` lines and blocks run, its value is their summary (P209, P210)
+pub fn for_tests<T>(run: impl FnOnce() -> T) -> T {
+	with_flag(&FOR_TESTS, run)
+}
+
+pub fn is_for_tests() -> bool {
+	FOR_TESTS.with(|tests| tests.get())
+}
+
 /// A compiled program and the host capabilities its imports need.
 #[cfg_attr(not(feature = "native"), allow(dead_code))] // the browser host links every import itself
 #[derive(Clone)]
@@ -190,7 +255,10 @@ pub struct CompiledModule {
 
 /// The passes over the source forms, in order, each reading what the one before it left: definitions and sugar become
 /// the forms every later pass knows (`def f(x) {…}` is `f(x) := {…}`), modules are resolved
-const SOURCE_PASSES: [fn(Node) -> Node; 79] = [
+const SOURCE_PASSES: [fn(Node) -> Node; 91] = [
+	crate::analyzer::lower_inline_unions,
+	// `on ask {…} in {…}` before any pass reads `{…} in {…}` as membership or an emit as nothing
+	crate::scoped_handlers::lower,
 	// `component name {…}` declares a WIT world (`warp build --wit`) and does nothing at run time
 	crate::component_worlds::lower,
 	// `ch.send(v)` of `ch = channel()` before go_blocks renames ch in a go block and system_signals reads the send
@@ -199,6 +267,8 @@ const SOURCE_PASSES: [fn(Node) -> Node; 79] = [
 	crate::markup_tags::lower_html_attributes,
 	// P165: a hard keyword redefined, a soft one defined at the top level, before any pass gives the word its meaning
 	crate::soft_keywords::lower,
+	// `test C` and `test "name" { … }` run under `warp test` only, before library_words lowers their checks and tries
+	crate::lowering::test_blocks::lower,
 	// P179: `red is Color` of a variant without payload, before any pass lowers the type test
 	crate::lowering::sum_variants::lower,
 	// `global n = 5` in a function body is `global n; n = 5` before any pass reads its `global n`
@@ -219,9 +289,13 @@ const SOURCE_PASSES: [fn(Node) -> Node; 79] = [
 	// `label(for:pwd):"Password"` in a tag block is the tag label{for:pwd "Password"} (markup_tags.rs), before any pass
 	// reads it as a call
 	crate::markup_tags::lower,
-	// `li{ transition: fade 200ms }`: words as data, the attribute data-wasp-transition (transitions.rs), before any pass
+	// `li{ transition: fade 200ms }`: words as data, the attribute data-warp-transition (transitions.rs), before any pass
 	// reads fade as a variable
 	crate::transitions::lower,
+	// `dir(time)`: the names of the standard module (introspection.rs), before any pass reads time as a value
+	crate::introspection::lower,
+	// `f.effects`, `e.listeners`: the reflection words' dot forms (reflection.rs), before any pass reads them as fields
+	crate::reflection::lower,
 	// `root` is sqrt (word_operators.rs), before pipes.rs reads `2|square|root`
 	crate::word_operators::lower,
 	// `x | f` (pipes.rs) before any pass reads the or
@@ -234,17 +308,28 @@ const SOURCE_PASSES: [fn(Node) -> Node; 79] = [
 	crate::type_aliases::lower,
 	// `f(s:Shape)` of a trait takes any conforming instance: untyped before class_methods reads typed parameters
 	crate::traits::lower_trait_parameters,
+	// `people: [Person] = database.people`: the table's rows, inserts and field changes written through
+	// (database_tables.rs), before class_methods lowers the class (its row id) and stored_values reads `database.people`
+	crate::database_tables::lower,
+	// `p.fields`, `p.methods`, `dir(p)`: the class layout (reflection.rs), before class_methods lowers the class bodies
+	crate::reflection::lower_objects,
 	// methods in a class body become functions over the class before any pass reads the body as fields
 	crate::class_methods::lower,
+	// `calc.exports` of a component (reflection.rs) before foreign_modules makes it a call into the component
+	crate::reflection::lower_component_words,
 	// first: `math.sqrt(2)` of `use python math` is no method call of the built-in word
 	crate::foreign_modules::lower,
+	// `x as text?` keeps ø, after foreign_modules types a nullable WebIDL result so
+	crate::optional_casts::lower,
 	crate::phrase_calls::lower,
 	crate::std_aliases::lower, crate::class_methods::lower_json_classes, crate::welcome_forms::lower, crate::analyzer::lower_kebab_members, crate::number_keys::lower,
 	// `{ a: 1, b: 2\n c: 3 }`: one row of fields (object_groups.rs)
 	crate::object_groups::lower,
 	// the used modules join the program before the signal passes: a listener of the program sees the writes of their functions
 	crate::routes::lower, crate::page_html::use_markup, crate::modules::resolve,
-	crate::units::lower_sleep_durations, crate::stored_values::lower, crate::undo_history::lower, crate::declarations::lower_tasks, crate::system_values::name, crate::signal_values::poll_shared, crate::system_values::read, crate::shared_arrays::lower, crate::fetch_signals::lower, crate::system_signals::lower, crate::component_state::lower, crate::element_events::lower, crate::event_signals::lower, crate::page_html::lower, crate::signal_values::subscribe, crate::variable_signals::lower, crate::signal_values::lower, crate::declarations::lower_c_functions, crate::declarations::lower_bare_declarations, crate::declarations::lower_spaced_definitions, crate::lowering::number_words::lower, crate::parameter_shapes::lower, crate::ruby_blocks::lower, crate::declarations::lower_sized_arrays, crate::result_word::lower, crate::picked_calls::lower, crate::variadic::lower, crate::nonlocal_cells::lower_lambdas, crate::named_arguments::lower, crate::comprehensions::lower, crate::library_words::lower_function_methods, crate::tuples::lower, crate::run_time_blocks::warn_unresolved, crate::run_time_blocks::lower_interpret, crate::blocks::lower, crate::getters::lower, crate::run_time_blocks::lower_run_time_bangs, crate::mutation::warn_discarded, crate::mutation::lower, crate::nested_index::lower, crate::field_elements::lower, crate::host::lower_aliases,
+	// `fourty_two.exports`, `dir(fourty_two)` of an imported core module, once resolve found its file (reflection.rs)
+	crate::reflection::lower_module_words,
+	crate::uncertain::lower_certainty, crate::units::lower_sleep_durations, crate::units::lower_quantity_comparisons, crate::stored_values::lower, crate::undo_history::lower, crate::declarations::lower_tasks, crate::system_values::name, crate::signal_values::poll_shared, crate::system_values::read, crate::shared_arrays::lower, crate::fetch_signals::lower, crate::system_signals::lower, crate::component_state::lower, crate::element_events::lower, crate::event_signals::lower, crate::page_html::lower, crate::signal_values::subscribe, crate::variable_signals::lower, crate::signal_values::lower, crate::declarations::lower_c_functions, crate::declarations::lower_bare_declarations, crate::declarations::lower_spaced_definitions, crate::lowering::number_words::lower, crate::parameter_shapes::lower, crate::ruby_blocks::lower, crate::declarations::lower_sized_arrays, crate::result_word::lower, crate::picked_calls::lower, crate::variadic::lower, crate::nonlocal_cells::lower_lambdas, crate::named_arguments::lower, crate::comprehensions::lower, crate::library_words::lower_function_methods, crate::tuples::lower, crate::run_time_blocks::warn_unresolved, crate::run_time_blocks::lower_interpret, crate::blocks::lower, crate::getters::lower, crate::run_time_blocks::lower_run_time_bangs, crate::mutation::warn_discarded, crate::mutation::lower, crate::nested_index::lower, crate::field_elements::lower, crate::host::lower_aliases,
 	// again: the getters of the modules used, which lower_module_source leaves for here, and the program's reads of them
 	crate::getters::lower,
 	crate::type_name_matching::lower, crate::meta_entries::lower, crate::versions::lower_versions,
@@ -252,7 +337,9 @@ const SOURCE_PASSES: [fn(Node) -> Node; 79] = [
 ];
 
 /// The passes after the constant answers (time, units, reals), in order: types and traits, lambdas and closures, words
-const MEANING_PASSES: [fn(Node) -> Node; 28] = [
+const MEANING_PASSES: [fn(Node) -> Node; 29] = [
+	// first: the run-time item checks of declared lists see `names.add(v)` before any pass lowers the append
+	crate::lowering::list_element_checks::lower,
 	crate::lazy_ranges::lower, crate::declarations::resolve_tasks, crate::traits::lower_declarations, crate::type_tests::lower, crate::ambiguous_forms::lower, crate::analyzer::lower_list_times,
 	// before any pass reads a call's arity: `square square 2` nests, `f(a)` and `f(a, b)` become `f·1`, `f·2`
 	crate::broadcasting::lower_scalar_element_wise, crate::broadcasting::lower_prefix_calls, crate::overloads::lower_arity_overloads,
@@ -284,13 +371,22 @@ fn lower_for_emission(node: Node) -> Result<Node, Node> {
 	if let Some(clash) = crate::analyzer::check_operator_word_functions(&node) {
 		return Err(clash.into_error());
 	}
+	if let Some(misread) = crate::analyzer::check_upcast_fields(&node) {
+		return Err(misread.into_error());
+	}
 	crate::diagnostic::report(&crate::accessibility::warnings(&node))?;
+	crate::diagnostic::report(&crate::analyzer::source_warnings(&node))?;
+	// emits and handler blocks as written: the passes lower them to calls, the named effects are read from them
+	let as_written = node.clone();
 	let node = run_passes(node, &SOURCE_PASSES);
 	if let Some(error) = node.first_error() {
 		return Err(error.clone());
 	}
 	if let Some(kind_change) = crate::analyzer::check_kind_changes(&node) {
 		return Err(kind_change.into_error());
+	}
+	if let Some(unsaid) = crate::uncertain::check_orderings(&node) {
+		return Err(unsaid.into_error());
 	}
 	let node = crate::interpolation::lower(crate::injection::lower_templates(node)?);
 	let node = crate::function_equality::decide_comparisons(node);
@@ -303,6 +399,11 @@ fn lower_for_emission(node: Node) -> Result<Node, Node> {
 	if let Some(answer) = crate::units::answer(&node) {
 		return Err(answer);
 	}
+	// quantities in loops and branches: SI amounts at run time, the units checked here (static units, stage 1)
+	let node = match crate::units::static_units::lower(&node) {
+		Some(lowered) => lowered?,
+		None => node,
+	};
 	if let Some(answer) = crate::real::answer(&node) {
 		return Err(answer);
 	}
@@ -310,7 +411,7 @@ fn lower_for_emission(node: Node) -> Result<Node, Node> {
 	if let Some(error) = node.first_error() {
 		return Err(error.clone());
 	}
-	let effects = EffectReport::of(&node);
+	let effects = EffectReport::of(&node).with_events_of(&as_written);
 	if let Some(answer) = effects.answer(&node) {
 		return Err(answer);
 	}
@@ -349,9 +450,13 @@ pub fn compile_printing_result(code: &str) -> Result<CompiledModule, Node> {
 fn compile_program(code: &str, rewrite: fn(Node) -> Node) -> Result<CompiledModule, Node> {
 	crate::diagnostic::begin_program();
 	crate::diagnostic::in_program_mode(rewrite(lawful_program(code)?), |program| {
+		let source = program.clone();
 		let node = crate::folding::precompute(lower_for_emission(program)?);
+		let reflected = crate::reflection::meta_entries(&source, &node, code);
 		warn_about_run_time_blocks(&node)?;
-		choose_module(&node)
+		// the module's `warp.meta` section: a final quantity's unit, the program's functions and classes
+		let entries: Vec<_> = crate::units::static_units::result_units_entry().into_iter().chain(reflected).collect();
+		choose_module(&node).map(|module| CompiledModule { bytes: crate::meta_section::with_entries(module.bytes, entries), ..module })
 	})
 }
 
@@ -366,8 +471,8 @@ fn printing_result(program: Node) -> Node {
 			Node::List(statements, Bracket::None, separator)
 		}
 		Node::Empty => Node::Empty,
-		statement if crate::modules::is_declaration(&statement) || crate::wasp_parser::starts_print(&statement) => statement,
-		value => crate::wasp_parser::print_call([value]),
+		statement if crate::modules::is_declaration(&statement) || crate::warp_parser::starts_print(&statement) => statement,
+		value => crate::warp_parser::print_call([value]),
 	}
 }
 
@@ -415,9 +520,9 @@ fn eval_program(node: Node) -> Node {
 		}
 	}
 
-	// Fallback to standard Node encoding
+	// Fallback to standard Node encoding; a final quantity's unit travels in the module (`warp.meta`) and is read back
 	match emit_module(&node) {
-		Ok(module) => run_module(module),
+		Ok(module) => run_module(CompiledModule { bytes: crate::units::static_units::with_result_units(module.bytes), ..module }),
 		Err(type_error) => type_error,
 	}
 }
@@ -598,10 +703,11 @@ pub(crate) fn run_module(CompiledModule { bytes, needs_host, needs_wasi, needs_f
 	result.unwrap_or_else(failed_run)
 }
 
-/// Without wasmtime the embedding host runs the program (the browser playground: web.rs)
+/// Without wasmtime the embedding host runs the program (the browser playground: web.rs); a final quantity's unit is
+/// read back from the module's `warp.meta` section (entry units), as wasm_reader does natively
 #[cfg(not(feature = "native"))]
 pub(crate) fn run_module(module: CompiledModule) -> Node {
-	crate::web::run_in_host(&module.bytes)
+	crate::units::static_units::with_module_units(&module.bytes, crate::web::run_in_host(&module.bytes))
 }
 
 /// The run used up its fuel: it probably does not terminate, or needs a larger budget

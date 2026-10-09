@@ -1,6 +1,6 @@
 //! Handlers on elements (card web-element, notes/web_framework.md step 2): `button{ on click { count += 1 } "Add" }`
 //! becomes the main-level handler `on click·1 { count += 1 }` (a page event of its own, event_signals.rs) and the element
-//! the attribute `data-wasp-click: "1"`. The page calls handler 1 on a click inside that element and shows the
+//! the attribute `data-warp-click: "1"`. The page calls handler 1 on a click inside that element and shows the
 //! program's markup anew (playground.js, worker.js showHandled).
 //! `input{ bind: name }` (card web-bind) is `input{ value: name on input { name = event.value } }`; a checkbox or radio
 //! binds `checked` to `event.checked`.
@@ -17,8 +17,8 @@ const TYPE_ATTRIBUTE: &str = "type";
 const CHECKED_TYPES: [&str; 2] = ["checkbox", "radio"];
 const VALUE: &str = "value";
 const CHECKED: &str = "checked";
-/// `data-wasp-click`: the attribute naming an element's handler of an event
-pub const HANDLER_ATTRIBUTE_PREFIX: &str = "data-wasp-";
+/// `data-warp-click`: the attribute naming an element's handler of an event
+pub const HANDLER_ATTRIBUTE_PREFIX: &str = "data-warp-";
 
 pub fn lower(program: Node) -> Node {
 	let Node::List(statements, bracket, separator) = program else { return program };

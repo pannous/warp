@@ -73,3 +73,25 @@ route \"*\" { p{ \"not found\" } }";
 	assert_eq!(page_at("/teams/red", program), "<section></section>");
 	assert_eq!(page_at("/users/2/more", program), "<p>not found</p>");
 }
+
+// card route-urlpattern (P188: stay close to the web's own APIs): a pattern may also use the browser's URLPattern
+// syntax: a parameter matching a regular expression (":id(\\d+)"), an optional last part (":tab?") and a last part
+// taking the rest of the path (":path*" zero or more parts, ":path+" one or more, "*" any, unnamed)
+#[test]
+fn route_patterns_accept_the_url_pattern_syntax() {
+	let program = r#"route "/users/:id(\\d+)" { p{ "user " + id } }
+route "/posts/:slug/:tab?" { p{ slug + " " + (tab or "main") } }
+route "/files/:path+" { p{ "file " + path } }
+route "/docs/*" { p{ "docs" } }
+route "*" { p{ "not found" } }"#;
+	assert_eq!(page_at("/users/7", program), "<p>user 7</p>");
+	assert_eq!(page_at("/users/bo", program), "<p>not found</p>");
+	assert_eq!(page_at("/posts/hello", program), "<p>hello main</p>");
+	assert_eq!(page_at("/posts/hello/comments", program), "<p>hello comments</p>");
+	assert_eq!(page_at("/posts/hello/a/b", program), "<p>not found</p>");
+	assert_eq!(page_at("/files/a/b.txt", program), "<p>file a/b.txt</p>");
+	assert_eq!(page_at("/files", program), "<p>not found</p>");
+	assert_eq!(page_at("/docs/a/b", program), "<p>docs</p>");
+	let misplaced = warp::wasm_emitter::eval("route \"/:part?/end\" { p{ \"x\" } }").serialize();
+	assert!(misplaced.contains("only the last part"), "{misplaced}");
+}

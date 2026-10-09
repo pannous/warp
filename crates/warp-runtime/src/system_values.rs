@@ -9,9 +9,9 @@
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::time::{Duration, Instant};
-use crate::host_words::{BATTERY, CHARGING, CLIPBOARD_COUNT, DARK_MODE, MOUSE_DOWN, MOUSE_X, MOUSE_Y, ONLINE, SYSTEM_VALUES};
+use crate::host_words::{BATTERY, CHARGING, CLIPBOARD_COUNT, DARK_MODE, MOUSE_DOWN, MOUSE_X, MOUSE_Y, ONLINE, SYSTEM_VALUES, TIME_OF_DAY};
 
-const NOTIFICATION_TITLE: &str = "wasp";
+const NOTIFICATION_TITLE: &str = "warp";
 const READING_LIFETIME: Duration = Duration::from_secs(1);
 /// Any public address: connecting a UDP socket only asks the routing table
 const INTERNET_ADDRESS: &str = "1.1.1.1:53";
@@ -22,6 +22,10 @@ thread_local! {
 
 /// The current value of a system value, read anew at most once per READING_LIFETIME
 pub fn read(name: &str) -> Result<i64, String> {
+	// the clock moves on: never a kept reading
+	if name == TIME_OF_DAY {
+		return Ok(crate::system_signals::millisecond_of_day());
+	}
 	let kept = READINGS.with(|readings| readings.borrow().get(name).filter(|(when, _)| when.elapsed() < READING_LIFETIME).map(|(_, value)| *value));
 	if let Some(value) = kept {
 		return Ok(value);
@@ -141,6 +145,24 @@ pub fn notify(text: &str) -> Result<(), String> {
 		Ok(output) => Err(format!("notify: {}", String::from_utf8_lossy(&output.stderr).trim())),
 		Err(problem) => Err(format!("notify: no notifier on this machine ({problem})")),
 	}
+}
+
+/// Puts text on the clipboard: macOS `pbcopy`, Linux `wl-copy` or `xclip`
+pub fn write_clipboard(text: &str) -> Result<(), String> {
+	#[cfg(target_os = "macos")]
+	return input("pbcopy", &[], text);
+	#[cfg(not(target_os = "macos"))]
+	input("wl-copy", &[], text).or_else(|_| input("xclip", &["-selection", "clipboard", "-i"], text))
+		.map_err(|problem| format!("clipboard: needs wl-copy or xclip ({problem})"))
+}
+
+/// Runs a program with `text` as its input
+fn input(program: &str, arguments: &[&str], text: &str) -> Result<(), String> {
+	use std::io::Write;
+	let mut child = std::process::Command::new(program).args(arguments).stdin(std::process::Stdio::piped()).spawn().map_err(|problem| format!("{program}: {problem}"))?;
+	child.stdin.take().expect("a piped input").write_all(text.as_bytes()).map_err(|problem| format!("{program}: {problem}"))?;
+	let status = child.wait().map_err(|problem| format!("{program}: {problem}"))?;
+	status.success().then_some(()).ok_or_else(|| format!("{program} failed: {status}"))
 }
 
 /// The clipboard's text: macOS `pbpaste`, Linux `wl-paste` or `xclip`
