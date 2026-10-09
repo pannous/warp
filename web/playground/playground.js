@@ -423,7 +423,26 @@ function showRendered(html) {
 	host.hidden = !html;
 	const template = document.createElement("template");
 	template.innerHTML = html ?? "";
-	morphChildren(host.shadowRoot ?? host.attachShadow({ mode: "open" }), template.content);
+	morphChildren(host.shadowRoot ?? renderedRoot(host), template.content);
+}
+
+// a form's submit stays inside the shadow root (it is not composed): listened to there
+function renderedRoot(host) {
+	const root = host.attachShadow({ mode: "open" });
+	root.addEventListener("submit", submitForm);
+	return root;
+}
+
+// a form of the shown markup asks the program's own route (lowering/serve.rs page·submitted), as `warp serve` would:
+// its fields are the body of a POST, the query of a GET (src/web_server.rs request_node), not a request leaving here
+function submitForm(submitted) {
+	submitted.preventDefault();
+	const form = submitted.target;
+	const method = (form.getAttribute("method") ?? "get").toUpperCase();
+	const fields = Object.fromEntries(new FormData(form, submitted.submitter));
+	const path = new URL(form.getAttribute("action") ?? "", PROGRAM_ORIGIN + ($("address").value || "/")).pathname;
+	const posted = method !== "GET";
+	worker.postMessage({ submit: { method, path, query: posted ? {} : fields, body: posted ? fields : null } });
 }
 
 function showPaintings(paintings) {

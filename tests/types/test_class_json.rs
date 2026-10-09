@@ -37,3 +37,11 @@ fn lists_of_instances_from_json() {
 	is!(&format!("{POINT}ps = parse_json(\"[{{\\\"x\\\":1,\\\"y\\\":2}},{{\\\"x\\\":3,\\\"y\\\":4}}]\") as [Point]; ps#2.x"), 3);
 	is!(&format!("{POINT}class Poly{{points:[Point]}}; p = Poly.from_json(to_json(Poly([Point(1, 2), Point(5, 6)]))); p.points#2.y"), 6);
 }
+
+// how a server sends an instance (src/web_server.rs): its class's name over its fields, as a page's route data gets it
+#[test]
+fn a_named_instance_from_json_is_of_its_class() {
+	const ROWS: &str = r#"use json; class Todo{title: text}; todos: [Todo] = parse_json("[{\"Todo\":{\"title\":\"tea\"}},{\"Todo\":{\"title\":\"milk\"}}]"); "#;
+	is!(&format!("{ROWS}todos#2.title"), "milk");
+	is!(&format!("{ROWS}titles = []; for todo in todos {{ titles.add(todo.title) }}; titles#1 + titles#2"), "teamilk");
+}

@@ -143,6 +143,11 @@ function handleNavigation(path) {
 // the page's path for the playground's address bar: only a program with routes has one (lowering/routes.rs)
 const addressOf = holder => holder.exports[PAGE_ROUTES_EXPORT] ? holder.pagePath ?? ROOT_PATH : undefined;
 
+// a form of the page was sent (playground.js submitForm): the live run's route answers it, then its page shows anew
+function handleSubmit(request) {
+	if (live) showHandled(live, runSubmitted(live, hooks, request));
+}
+
 // a page event (playground.js): the live run's handler
 function handleEvent({ event, detail }) {
 	if (live) showHandled(live, runPageEvent(live, hooks, event, detail));
@@ -212,6 +217,7 @@ self.onmessage = async ({ data }) => {
 	if (data.warm) return warmUp();
 	if (data.event) return handleEvent(data);
 	if (data.navigate) return handleNavigation(data.navigate);
+	if (data.submit) return handleSubmit(data.submit);
 	if (live) stopListening(live);
 	live = undefined;
 	if (!compiler) await loadCompiler();
