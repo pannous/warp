@@ -1,0 +1,3 @@
+class Cup{name: text}
+cups: [Cup] = database.cups_named
+for cup in cups { upper cup.name }
