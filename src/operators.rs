@@ -68,6 +68,8 @@ pub enum Op {
 	Mod,  // %  mod  Euclidean: 0 ≤ a % b < |b|
 	Rem,  // rem  truncated remainder, sign of the dividend (C, Java, JS, Rust %)
 	Pow,  // ^  **
+	LogBase, // ⌞  b⌞x: log base b of x (P226)
+	LogOf,   // ⌟  x⌟: the natural log of x, x⌟b: log base b of x (P226)
 	Shl,  // <<  shift left: a * 2^n
 	Shr,  // >>  shift right: floor(a / 2^n)
 
@@ -158,6 +160,7 @@ impl Op {
 
 			// Power (right-assoc: 2^3^4 = 2^(3^4))
 			Op::Pow => (160, 159),
+			Op::LogBase | Op::LogOf => (160, 161),
 
 
 			// Multiplicative (left-assoc)
@@ -249,6 +252,8 @@ impl Op {
 			Op::Mod => "%",
 			Op::Rem => "rem",
 			Op::Pow => "^",
+			Op::LogBase => "⌞",
+			Op::LogOf => "⌟",
 			Op::Shl => "<<",
 			Op::Shr => ">>",
 
@@ -403,14 +408,14 @@ impl fmt::Display for Op {
 
 /// Every operator by its code in the kind field of a Key node (`(code << 8) | Kind::Key`); the first five are the
 /// codes earlier modules stored, the rest follow, so a quoted expression (`data 1+2`) reads back with its operator
-const OP_CODES: [Op; 61] = [
+const OP_CODES: [Op; 63] = [
 	Op::None, Op::Colon, Op::Assign, Op::Define, Op::Dot,
 	Op::SafeDot, Op::Scope, Op::Arrow, Op::FatArrow, Op::Add, Op::Sub, Op::Mul, Op::Div, Op::Mod, Op::Rem, Op::Pow,
 	Op::Shl, Op::Shr, Op::AddAssign, Op::SubAssign, Op::MulAssign, Op::DivAssign, Op::ModAssign, Op::PowAssign,
 	Op::AndAssign, Op::OrAssign, Op::XorAssign, Op::Lt, Op::Gt, Op::Le, Op::Ge, Op::Eq, Op::Ne, Op::Similar, Op::And,
 	Op::Or, Op::Xor, Op::Not, Op::Neg, Op::Sqrt, Op::Cbrt, Op::Abs, Op::Inc, Op::Dec, Op::Square, Op::Cube,
 	Op::Question, Op::If, Op::Then, Op::Else, Op::While, Op::Do, Op::Hash, Op::Range, Op::To, Op::As, Op::PlusMinus,
-	Op::Coalesce, Op::Identical, Op::NotIdentical, Op::Rough,
+	Op::Coalesce, Op::Identical, Op::NotIdentical, Op::Rough, Op::LogBase, Op::LogOf,
 ];
 
 /// Encode Op as i64 for storage in kind field

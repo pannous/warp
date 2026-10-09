@@ -151,11 +151,10 @@ fn test_string_basics() {
 }
 
 #[test]
-#[ignore]
 fn test_string_operations() {
-	is!("'say ' + 0.", "say 0.");
+	is!("'say ' + 0.", "say 0"); // P225: a float joined to text in its shortest form
 	is!("'hello'", "hello");
-	is!("`${1+1}`", 2);
+	is!("`${1+1}`", "2"); // a template literal is a text (warp's meaning of a legacy line, as decided for test_recent_random_bugs)
 }
 
 
