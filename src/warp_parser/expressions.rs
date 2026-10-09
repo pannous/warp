@@ -442,7 +442,7 @@ impl WarpParser {
 				Some(block) => block,
 				None if matches!(op, Op::Then | Op::Else) => {
 					let outer = self.branch_bp.replace(r_bp);
-					let branch = self.parse_expr(r_bp);
+					let branch = self.parse_branch(r_bp);
 					let branch = self.branch_assignment(branch, r_bp);
 					self.branch_bp = outer;
 					branch
@@ -452,6 +452,10 @@ impl WarpParser {
 					let value = self.parse_expr(r_bp);
 					self.glued_pair_bp = outer;
 					value
+				}
+				// `it%2 and print it`, `x || print "none"`: print takes the rest of the statement, as at its start
+				None if matches!(op, Op::And | Op::Or) && self.take_braceless_print() => {
+					print_call([self.rest_of_statement()])
 				}
 				None => self.parse_expr(r_bp),
 			};
@@ -607,7 +611,10 @@ impl WarpParser {
 			let if_cond = Node::Key(Box::new(Empty), Op::If, cond.clone());
 			// the body runs to the end of the statement, `if c: x+=1`, but not into the `else`
 			let outer = std::mem::replace(&mut self.stops_at_else, true);
-			let then_expr = self.continue_expr(then_expr.as_ref().clone(), 0);
+			let then_expr = match is_print_word(then_expr) && self.braceless_argument_follows() {
+				true => print_call([self.parse_expr(0)]), // `if it%2: print it`
+				false => self.continue_expr(then_expr.as_ref().clone(), 0),
+			};
 			self.stops_at_else = outer;
 			let if_then = Node::Key(Box::new(if_cond), Op::Then, Box::new(then_expr));
 			return self.parse_optional_else(if_then, ElseParseMode::Expr);

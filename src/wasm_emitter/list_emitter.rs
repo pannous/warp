@@ -45,7 +45,9 @@ const QUOTE_WORDS: [&str; 3] = ["data", "code", "block"];
 /// The got-it topic of a lone word close to a defined name
 const NEAR_MISS_TOPIC: &str = "near-miss";
 /// Words the near-miss warning compares with besides the program's own names
-const KNOWN_WORDS: [&str; 6] = ["print", "count", "sum", "first", "last", "reverse"];
+const TEXT_TYPE: &str = "text";
+const CODEPOINT_TYPE: &str = "codepoint";
+const KNOWN_WORDS: [&str; 6] =["print", "count", "sum", "first", "last", "reverse"];
 
 impl WasmGcEmitter {
 	/// Does `name(args)` resolve to something callable: user function, import, builtin, type word or declared type?
@@ -454,7 +456,9 @@ impl WasmGcEmitter {
 		}
 		let [_, subject, spec] = items.as_slice() else { return false };
 		let Node::Text(spec) = spec.drop_meta() else { return false };
-		let unknown = spec == crate::type_tests::ERROR_TYPE || self.has_unknown_static_type(subject);
+		// `for char in s`, `s#1 is char`: an item of a text is typed text but is a code point at run time
+		let item_of_text = self.static_type_name(subject) == TEXT_TYPE && crate::type_tests::canonical_spec_word(spec) == CODEPOINT_TYPE;
+		let unknown = spec == crate::type_tests::ERROR_TYPE || item_of_text || self.has_unknown_static_type(subject);
 		let declared_type = self.ctx.type_registry.get_by_name(spec).is_some();
 		match crate::type_tests::runtime_kind_mask(spec).filter(|_| unknown && !declared_type) {
 			Some(mask) => {

@@ -22,16 +22,16 @@ Chars as code.golf counts them: Unicode characters, so `…` is one. Best = code
 | arabic-to-roman | 435 | 175 | 88 | 63 | 90 |
 | divisors | 130 | 47 | 53 | 41 | 49 |
 | happy-numbers | 223 | 88 | 48 | 30 | 51 |
-| leap-years | 203 | 51 | 43 | 33 | 40 |
+| leap-years | 203 | 50 | 43 | 33 | 40 |
 | catalan-numbers | 159 | 46 | 44 | 32 | 41 |
 | sierpiński-triangle | 249 | 85 | 54 | 46 | 47 |
 | diamonds | 342 | 85 | 56 | 47 | 75 |
 | collatz | 258 | 61 | 57 | 46 | 54 |
 | look-and-say | 376 | 112 | 60 | 51 | 60 |
 | evil-numbers | 162 | 71 | 40 | 26 | 37 |
-| niven-numbers | 143 | 49 | 44 | 29 | 42 |
-| pernicious-numbers | 172 | 63 | 40 | 28 | 34 |
-| rot13 | 337 | 110 | 59 | 35 | 89 |
+| niven-numbers | 143 | 48 | 44 | 29 | 42 |
+| pernicious-numbers | 172 | 62 | 40 | 28 | 34 |
+| rot13 | 337 | 109 | 59 | 35 | 89 |
 
 The leaderboard entries are years of collective golfing; the warp ones are a first pass. Warp wins fizz-buzz (51 to
 Python's 53), divisors (the math module's `divisors`) and the quine (`1` + a line break: a script echoes its final
@@ -47,19 +47,22 @@ value). It is close on catalan, collatz, niven and leap-years.
 - A loop head or `f(n):=` ending its line takes the lines indented below it, by tabs or spaces, no `:` needed; a
   comma line there is one statement (`a, b = b, a + b` swaps).
 - Open slices: `s[2…]` to the end, `s[…2]` from the start (inclusive; `..` excludes the end).
+- `print x` without parentheses after `&&`/`||`/`and`/`or`, in an `if c:`/`then`/`else` branch, and guarded by a
+  trailing `if` (`print it if it%2` prints nothing when false).
+- `s.chars` walked (`for c in s.chars`, `s.chars.map(…)`) is the list of chars; elsewhere it is the count.
+  `for char in s` visits every char of a text.
+- `chr(…)` of any expression as a function result: `f(x):=chr(x+1)`.
 
 ## What costs chars
 - The final-value echo: `warp run` prints a script's last value after its printed output, so a program must end with
   a print. `for …:{print a;a,b=b,a+b}` adds a line with b; ending with `ø` or `()` still echoes the loop's value; a
   text echoes quoted. Workarounds: `print (…).filter(f).join("\n")` or a last `print`. Kept by decision P236
   (card golf-echo).
-- `print` is not an operand: `c&&print(it)` needs the parentheses (golf-print).
 - No bitwise operators or bit count (golf-bits): `to_base(it,2).count("1")`, `choose(i,j)%2`.
 - Negative indexes don't wrap (by design: `last(xs)`).
 - `text` is a type name, so `for text in args` filters by type, with a warning.
 
 ## Gaps filed (board column Next)
-golf-chr, golf-chars, golf-print, golf-inline, golf-expression,
-golf-bits, golf-count.
-Fixed: golf-text, golf-sum (text arithmetic is no number for `||`/`or`); golf-indented, golf-bare,
+golf-expression, golf-bits, golf-count.
+Fixed: golf-chr, golf-chars, golf-print, golf-inline; golf-text, golf-sum (text arithmetic is no number for `||`/`or`); golf-indented, golf-bare,
 golf-indented-while, golf-indented-swap (indented bodies without `:`); golf-open (`s[2…]`, `s[…2]`). Decided: golf-echo (P236, kept).
