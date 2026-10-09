@@ -222,7 +222,9 @@ fn a_gpu_map_result_read_on_the_cpu_is_kept_on_the_gpu_for_the_next_map() {
 	};
 	let program = "linear xs = float[40000]\nfor i in 1 to 40000 { xs#i = i / 40000.0 }\nys = xs.map(x => sin(x)) @gpu\nprint \"\\(ys#1) of \\(#ys)\"\nzs = ys.map(y => exp(y) + 1) @gpu\ns = sum(ys.map(y => cos(y)) @gpu)\n";
 	assert_eq!(keeping(program), ["1", "2", "2"]);
-	let checked = format!("{program}abs(zs#40000 - (exp(sin(1)) + 1)) < {tolerance} and abs(s - sum(ys.map(y => cos(y)))) < 0.01");
+	// a software adapter's 40000 cosines may each be off by 2^-11 (SwiftShader's sum was off by 1.8)
+	let sum_tolerance = if crate::common::software_gpu() { "19.53125" } else { "0.01" };
+	let checked = format!("{program}abs(zs#40000 - (exp(sin(1)) + 1)) < {tolerance} and abs(s - sum(ys.map(y => cos(y)))) < {sum_tolerance}");
 	assert_eq!(with_warning_mode(WarningMode::Error, || eval(&checked)).serialize(), "yes");
 	assert_eq!(keeping(&program.replace("zs = ", "ys#1 = 5.0\nzs = ")), ["0", "0", "0"]);
 	assert_eq!(keeping(&program.replace("zs = ", "f(ys)\nzs = ")), ["0", "0", "0"]);
