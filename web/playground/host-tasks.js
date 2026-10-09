@@ -150,10 +150,12 @@ function waitsAlone(holder) {
 	return ![...holder.run.tasks.values()].some(task => task.worker && Atomics.load(new Int32Array(task.shared, 0, 1), 0) === 0);
 }
 
-// wait on channel id until `ready` answers ({value} or {error}), under the lock; it may change the channel
-function channelWait(holder, id, waiting, ready) {
+// wait on channel id until `ready` answers ({value} or {error}), under the lock; it may change the channel. The run's
+// stalled tasks run here meanwhile, since the answer may have to come from one (card task-hang-channels)
+function channelWait(holder, hooks, id, waiting, ready) {
 	const table = channelsOf(holder.run);
 	for (;;) {
+		runStalledTasks(holder.run, hooks);
 		lockChannels(table);
 		const seen = Atomics.load(table, CHANNEL_CHANGED);
 		let answer;
@@ -173,10 +175,10 @@ function channelWait(holder, id, waiting, ready) {
 }
 
 // `ch.send(v)`: offers v once the channel is free, then waits until a receiver took it
-function putOnChannel(holder, id, bytes) {
+function putOnChannel(holder, hooks, id, bytes) {
 	if (bytes.length > CHANNEL_VALUE_BYTES) throw new Error(`ch.send: a value of ${bytes.length} bytes is more than the playground's ${CHANNEL_VALUE_BYTES} per channel`);
 	let mine;
-	channelWait(holder, id, "ch.send", slot => {
+	channelWait(holder, hooks, id, "ch.send", slot => {
 		if (mine === undefined) {
 			if (slot.get(SLOT_CLOSED)) return { error: "send on a closed channel" };
 			if (slot.get(SLOT_FULL)) return null;
@@ -193,8 +195,8 @@ function putOnChannel(holder, id, bytes) {
 }
 
 // `ch.receive()`: the value offered, waiting for one; null (ø) once the channel is closed and empty
-function takeFromChannel(holder, id) {
-	return channelWait(holder, id, "ch.receive()", slot => {
+function takeFromChannel(holder, hooks, id) {
+	return channelWait(holder, hooks, id, "ch.receive()", slot => {
 		if (slot.get(SLOT_FULL)) {
 			const bytes = slot.bytes.slice(0, slot.get(SLOT_LENGTH));
 			slot.set(SLOT_FULL, 0);
@@ -206,8 +208,8 @@ function takeFromChannel(holder, id) {
 }
 
 // `for v in ch`: 1 when a value is offered, 0 once the channel is closed and empty
-function moreOnChannel(holder, id) {
-	return channelWait(holder, id, "for … in ch", slot => slot.get(SLOT_FULL) ? { value: 1n } : slot.get(SLOT_CLOSED) ? { value: 0n } : null);
+function moreOnChannel(holder, hooks, id) {
+	return channelWait(holder, hooks, id, "for … in ch", slot => slot.get(SLOT_FULL) ? { value: 1n } : slot.get(SLOT_CLOSED) ? { value: 0n } : null);
 }
 
 function closeChannel(run, id) {
@@ -623,12 +625,12 @@ addHostPart({
 		},
 		// channels inside one run (P155, src/tasks.rs Channels): Go's unbuffered channel between the task Workers
 		channel_new: () => openChannel(holder.run),
-		channel_put: (id, value) => putOnChannel(holder, id, utf8.encode(JSON.stringify(readTaskValue(program(), value)))),
+		channel_put: (id, value) => putOnChannel(holder, hooks, id, utf8.encode(JSON.stringify(readTaskValue(program(), value)))),
 		channel_take: id => {
-			const bytes = takeFromChannel(holder, id);
+			const bytes = takeFromChannel(holder, hooks, id);
 			return bytes ? buildValue(program(), JSON.parse(decode(bytes))) : null;
 		},
-		channel_more: id => moreOnChannel(holder, id),
+		channel_more: id => moreOnChannel(holder, hooks, id),
 		channel_close: id => closeChannel(holder.run, id),
 		fetch_start: (id, url) => startFetch(holder, hooks, Number(id), plainOfTree(readNode(program(), url))),
 		fetch_reply: id => buildValue(program(), treeOfPlain(fetchReply(holder, Number(id)))),

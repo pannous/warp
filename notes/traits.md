@@ -56,6 +56,8 @@ area·square(x)` picks the witness at run time (traits::with_dispatchers; `insta
 - `InstanceTypes`: flow-insensitive static shapes (instance of T, list of T) of constructions, variables, `xs#i`, `sort
   xs`, `c ? a : b`, `if … then … else`, for-loop variables and marked parameters. library_words reads fields of such
   values like of object literals, so `p.age` works on a parameter `p:person` and on `first = (sort xs)#1`.
+  `in_definition` scopes a definition's parameters over its body (printable's rewrite): `q` of `f(q:V)` is a V there,
+  so `str(q)` calls V's text() (card param-text); an untyped parameter hides an outer variable of its name.
 - `lower_dispatch` (after library_words): `p < q` of known instances is `compare·T(p, q) < 0`, `p == q` is
   `equals·T(p, q) != 0` when T overrides equality, `op(x, …)` is `op·T(x, …)`. `sort`, `<`, `min`/`max` (lowered to `<`)
   and declared operations on a type without the witness are compile errors:

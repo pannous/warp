@@ -271,7 +271,8 @@ impl WarpParser {
 			self.skip_spaces();
 			caught = if word == ELSE_KEYWORD { None } else { self.parse_caught_name(word) };
 			self.skip_python_colon();
-			self.parse_expr(0)
+			// `try X else print "msg"`: a braceless call as on the guarded side (card try-print)
+			self.parse_guarded_phrase()
 		} else if marker == TRY_MARKER && self.finally_ahead().is_some() {
 			// `try X finally Z` is `try X catch e { e } finally Z`: a failure of X, trap included, stays the value after Z
 			caught = Some(UNCAUGHT_ERROR.to_string());
@@ -397,7 +398,7 @@ impl WarpParser {
 		}
 	}
 
-	/// The guarded part of `try X else Y`: one expression, or a braceless call of several (`try raise "boom" else 3`)
+	/// Either part of `try X else Y`: one expression, or a braceless call of several (`try raise "boom" else print 3`)
 	pub(super) fn parse_guarded_phrase(&mut self) -> Node {
 		let mut items = vec![self.parse_expr(0)];
 		loop {

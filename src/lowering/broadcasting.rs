@@ -443,6 +443,15 @@ struct Broadcast {
 }
 
 impl Broadcast {
+	/// `run` with a function's `parameters` among the shadowed names: its own values inside its body
+	fn with_parameters<T>(&self, parameters: Vec<String>, run: impl FnOnce() -> T) -> T {
+		let outer = self.shadowed.borrow().len();
+		self.shadowed.borrow_mut().extend(parameters);
+		let result = run();
+		self.shadowed.borrow_mut().truncate(outer);
+		result
+	}
+
 	fn rewrite(&self, node: Node) -> Node {
 		match node {
 			Node::List(items, bracket, separator) => {
@@ -468,7 +477,7 @@ impl Broadcast {
 			}
 			// a definition head names parameters, it calls nothing
 			Node::Key(head, op @ (Op::Define | Op::Assign | Op::FatArrow | Op::Arrow), body) if is_function_head(&head, op) => {
-				let body = crate::traits::shadowing(&self.shadowed, untyped_parameters(&head, op), || self.rewrite(*body));
+				let body = self.with_parameters(untyped_parameters(&head, op), || self.rewrite(*body));
 				Node::Key(head, op, Box::new(body))
 			}
 			Node::Key(left, op, right) => {
