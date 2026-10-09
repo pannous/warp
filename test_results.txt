@@ -1629,6 +1629,7 @@ PASSED:
   ✓ modules::test_header_search::an_import_nothing_declares_says_why
   ✓ modules::test_header_search::only_sdl_names_read_the_sdl_headers
   ✓ modules::test_header_search::the_sdl_headers_declare_the_window_functions
+  ✓ modules::test_import_compiled::a_bare_name_imports_a_compiled_module
   ✓ modules::test_import_compiled::a_compiled_fixtures_change_of_an_instance_is_the_programs
   ✓ modules::test_import_compiled::a_compiled_fixtures_values_and_classes_cross
   ✓ modules::test_import_compiled::a_compiled_modules_classes_are_the_programs_too
@@ -2070,6 +2071,12 @@ PASSED:
   ✓ numbers::test_quantities_in_one_text::two_quantities_join_one_text
   ✓ numbers::test_quantity_conversion::a_run_time_quantity_converts_with_as
   ✓ numbers::test_quantity_conversion::a_run_time_quantity_joins_a_text
+  ✓ numbers::test_quantity_tolerance::a_field_type_with_tolerance_gives_its_values_the_tolerance
+  ✓ numbers::test_quantity_tolerance::a_gaussian_quantity_shows_sigma_apart_from_its_unit
+  ✓ numbers::test_quantity_tolerance::a_quantity_with_tolerance_compares_certainly_or_possibly
+  ✓ numbers::test_quantity_tolerance::a_quantity_with_tolerance_has_its_bounds
+  ✓ numbers::test_quantity_tolerance::a_unit_field_takes_a_quantity_with_tolerance
+  ✓ numbers::test_quantity_tolerance::quantities_with_tolerance_sum
   ✓ numbers::test_range_tolerance_compare::a_range_equals_the_same_span_with_tolerance
   ✓ numbers::test_range_tolerance_compare::spans_in_different_units_do_not_compare
   ✓ numbers::test_rational_quantities::test_exact_amounts_compute_on
@@ -2818,6 +2825,7 @@ PASSED:
   ✓ text::test_runtime_text_as_int::a_text_beyond_i64_parses_unbounded
   ✓ text::test_runtime_text_as_int::a_text_variable_converts_to_int
   ✓ text::test_runtime_text_as_int::a_text_without_a_number_is_a_runtime_error
+  ✓ text::test_split_default::split_without_separator_splits_at_spaces
   ✓ text::test_split_element_kind::split_elements_concatenate
   ✓ text::test_string::test_first_char
   ✓ text::test_string::test_interpolation
@@ -3585,6 +3593,8 @@ PASSED:
   ✓ web::test_form_bindings::a_bound_checkbox_is_checked_by_its_variable
   ✓ web::test_form_bindings::a_bound_input_shows_its_variable_and_handles_input
   ✓ web::test_form_bindings::boolean_attributes_are_present_or_absent
+  ✓ web::test_form_routes::a_form_route_inside_an_element
+  ✓ web::test_form_routes::a_form_written_as_its_route
   ✓ web::test_guide::every_example_a_chapter_links_exists
   ✓ web::test_guide::every_guide_snippet_prints_what_the_guide_shows
   ✓ web::test_guide::every_guide_snippet_shows_its_value
@@ -4115,4 +4125,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-14 ignored, 4110 passed, 0 failed, 4110 total tested
+14 ignored, 4120 passed, 0 failed, 4120 total tested
