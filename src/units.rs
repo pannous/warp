@@ -765,6 +765,18 @@ fn unit_expression(node: &Node) -> Option<Vec<Factor>> {
 	}
 }
 
+/// `q as km/h`, `q in km/h`: the quantity converted and the units it converts to
+pub(crate) fn conversion(node: &Node) -> Option<(&Node, Vec<Factor>)> {
+	match node.drop_meta() {
+		Node::Key(quantity, Op::As, unit) => Some((quantity, unit_expression(unit)?)),
+		Node::List(items, Bracket::None, Separator::Space) => match items.as_slice() {
+			[quantity, word, unit] if matches!(word.drop_meta(), Node::Symbol(w) if w == IN_WORD) => Some((quantity, unit_expression(unit)?)),
+			_ => None,
+		},
+		_ => None,
+	}
+}
+
 fn inverse(factors: &[Factor]) -> Vec<Factor> {
 	factors.iter().map(|factor| Factor { power: -factor.power, ..*factor }).collect()
 }

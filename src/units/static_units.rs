@@ -326,13 +326,8 @@ fn last_statement(node: &Node) -> Option<&Node> {
 /// The units a conversion shows: `q as km`, `q in km/h`
 fn conversion_target(node: &Node) -> Option<Vec<Factor>> {
 	match node.drop_meta() {
-		Node::Key(_, Op::As, unit) => super::unit_expression(unit),
 		Node::List(items, Bracket::Round, _) if items.len() == 1 => conversion_target(&items[0]),
-		Node::List(items, Bracket::None, Separator::Space) => match items.as_slice() {
-			[_, word, unit] if matches!(word.drop_meta(), Node::Symbol(w) if w == super::IN_WORD) => super::unit_expression(unit),
-			_ => None,
-		},
-		_ => None,
+		other => super::conversion(other).map(|(_, units)| units),
 	}
 }
 
