@@ -223,3 +223,6 @@ Running list of the small fixes done by the fixer session (branches fix-<topic>)
   by stopped tasks): host.js then runs a task inline, and threads.warp's `go spin(10^12)`; `stop endless` cannot stop
   an inline task. Reproduced with prepareTaskPool(0) (120 s timeout); fixed by taskPoolReady before each run and a
   replacement Worker for a stopped one. Alone the test takes 3.4 s in the browser.
+
+## 2026-10-09 prebuilt-stub
+- an installed warp (not in a cargo target) never builds warp-runtime; it uses the one shipped next to it (main.rs in_cargo_target).
