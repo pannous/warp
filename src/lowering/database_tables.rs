@@ -52,6 +52,8 @@ const WARP_CALL: &str = "warp_call";
 /// `Team?`: an optional field
 const OPTIONAL_MARK: char = '?';
 const NUMERIC_TYPES: [&str; 4] = ["int", "float", "number", "real"];
+/// A bool field's column holds 0/1 (database.rs column types), read back as the bool
+const BOOL_TYPE: &str = "bool";
 /// What a filter's function should not do: not being sure to end (Div) or allocating is fine
 const SIDE_EFFECTS: [crate::effects::Effect; 5] = [crate::effects::Effect::State, crate::effects::Effect::IO, crate::effects::Effect::FFI, crate::effects::Effect::Async, crate::effects::Effect::Eval];
 
@@ -362,9 +364,10 @@ fn with_arguments(node: Node, table: &Table, values: &[String], row_size: usize)
 /// The constructor's arguments of an instance from a row `[id, column values…]` held in `row`
 fn constructor_arguments(table: &Table, row: &str) -> Vec<String> {
 	let column = |name: &str| column_cell(table, row, name);
-	table.fields.iter().filter(|(name, _, _)| !table.is_members(name)).map(|(name, _, _)| match (name == ID_FIELD, table.reference(name)) {
+	table.fields.iter().filter(|(name, _, _)| !table.is_members(name)).map(|(name, field_type, _)| match (name == ID_FIELD, table.reference(name)) {
 		(true, _) => format!("{row}#1"),
 		(false, Some(_)) => referenced(table, name, &column(name)),
+		_ if field_type == BOOL_TYPE => format!("({} != 0)", column(name)),
 		_ => column(name),
 	}).chain(implicit_id(table).then(|| format!("{row}#1"))).collect()
 }
