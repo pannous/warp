@@ -118,3 +118,4 @@ mod test_cyclic_objects; // card orm: objects pointing to each other
 mod test_field_named_like_builtin; // cards field-named-size, orm-members-word
 mod test_cycle_mark_depth; // card cycle-mark-depth
 mod test_as_number_variable; // card number-variable
+mod test_param_named_like_global; // card param-named-like-global

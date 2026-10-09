@@ -571,6 +571,15 @@ pub fn untyped_parameters(head: &Node) -> Vec<String> {
 	parameters.iter().filter_map(untyped).collect()
 }
 
+/// `run` with a function's `parameters` added to the names `shadowed` holds, its own values inside its body
+pub(crate) fn shadowing<T>(shadowed: &RefCell<Vec<String>>, parameters: Vec<String>, run: impl FnOnce() -> T) -> T {
+	let outer = shadowed.borrow().len();
+	shadowed.borrow_mut().extend(parameters);
+	let result = run();
+	shadowed.borrow_mut().truncate(outer);
+	result
+}
+
 /// The declared type a parameter `name:T` names
 fn parameter_type<'a>(parameter: &'a Node, registry: &TypeRegistry) -> Option<&'a str> {
 	let Node::Key(_, Op::Colon, type_node) = parameter.drop_meta() else { return None };
@@ -722,6 +731,9 @@ pub struct InstanceTypes {
 	registry: TypeRegistry,
 	/// The last inference round: a value whose shape is still unknown is unknown for good
 	final_round: bool,
+	/// The untyped parameters of the function being expanded: its own values, not the program's variables of the same
+	/// names (card param-named-like-global)
+	shadowed: RefCell<Vec<String>>,
 }
 
 /// Fixpoint rounds over the assignments: a variable can be assigned from another one defined later in the text
@@ -731,7 +743,7 @@ impl InstanceTypes {
 	pub fn of(node: &Node) -> Self {
 		let mut registry = TypeRegistry::new();
 		collect_all_types(&mut registry, node);
-		let mut types = InstanceTypes { variables: HashMap::new(), results: HashMap::new(), registry, final_round: false };
+		let mut types = InstanceTypes { variables: HashMap::new(), results: HashMap::new(), registry, final_round: false, shadowed: RefCell::new(Vec::new()) };
 		if types.registry.types().is_empty() {
 			return types;
 		}
@@ -823,6 +835,7 @@ impl InstanceTypes {
 			return Some(Shape::Instance(type_name));
 		}
 		match node.drop_meta() {
+			Node::Symbol(name) if self.shadowed.borrow().contains(name) => None,
 			Node::Symbol(name) => self.variables.get(name).cloned().flatten(),
 			Node::List(items, Bracket::Square, _) if !items.is_empty() => {
 				let first = self.shape(&items[0])?;
@@ -1011,7 +1024,10 @@ impl Dispatch {
 	fn expand(&self, node: Node) -> Node {
 		match node {
 			// a definition head names parameters, it calls nothing
-			Node::Key(head, op @ (Op::Assign | Op::Define), body) if definition_head(&head).is_some() => Node::Key(head, op, Box::new(self.expand(*body))),
+			Node::Key(head, op @ (Op::Assign | Op::Define), body) if definition_head(&head).is_some() => {
+				let body = shadowing(&self.types.shadowed, untyped_parameters(&head), || self.expand(*body));
+				Node::Key(head, op, Box::new(body))
+			}
 			Node::Key(left, op, right) => {
 				let (left, right) = (self.expand(*left), self.expand(*right));
 				if let (Op::Assign, Some((name, declared))) = (&op, typed_target(&left, &self.types.registry)) {
