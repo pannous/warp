@@ -103,7 +103,8 @@ impl WasmGcEmitter {
 			"sqrt" => { func.instruction(&I::F64Sqrt); }
 			"abs" => { func.instruction(&I::F64Abs); }
 			"cbrt" => { self.emit_libm_call(func, super::LIBM_CBRT); }
-			import => { func.instruction(&I::Call(self.ffi_func_index(import).expect("a called libm word is imported"))); }
+			// imported when the program calls the word; a module emitting every runtime function has no call, nor import
+			import => { func.instruction(&self.ffi_func_index(import).map_or(I::Unreachable, I::Call)); }
 		}
 	}
 
