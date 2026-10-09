@@ -7,6 +7,13 @@ before asking the user; nobody reads it front to back, the code, tests and wiki 
 notes/open_decisions.md.
 
 ## Decided 2026-10-09 (user, as recommended unless quoted)
+- Hosting (warp-hosting, card cloud-hosting; each program is its own Cloudflare Worker uploaded by the hosting
+  Worker https://warp-hosting.pannous.workers.dev): Q1 the user creates a GitHub OAuth App for "Log in with
+  GitHub"; Q2 the user creates a Cloudflare "Edit Cloudflare Workers" API token for uploads; Q3 free Workers plan
+  for now (~90 programs, 100k requests/day), Workers for Platforms ($25/month) only near the cap; Q4 programs live
+  at warp-<name>.pannous.workers.dev, <name>.warp.pannous.com later (pannous.com's nameservers are mixed);
+  Q5 a private Cloudflare OAuth client now for deploying to one's own account, others paste a scoped API token
+  kept in their browser.
 - Word slices (user to the Interviewer: "list from A to B. List starting from A. List items to B"): with
   xs = [10, 20, 30, 40, 50], `xs from 2 to 4` → [20, 30, 40], `xs starting from 2` → [20, 30, 40, 50],
   `xs up to 2` → [10, 20]; positions count like `xs#1` (first = 1), both ends inclusive. Slicing by position,
