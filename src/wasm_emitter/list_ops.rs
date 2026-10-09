@@ -729,13 +729,15 @@ pub const TEXT_AS_INT: &str = "text_as_int";
 /// Arithmetic on two Nodes of run-time kind: (function, its operator, the exact Int function); the first four in
 /// uncertain.rs UNCERTAIN_ARITHMETIC's order
 pub const NODE_ADD: &str = "node_add";
-pub const NODE_ARITHMETIC: [(&str, Op, &str); 6] = [
+pub const NODE_POW: &str = "node_pow";
+pub const NODE_ARITHMETIC: [(&str, Op, &str); 7] = [
 	(NODE_ADD, Op::Add, "exact_add"),
 	("node_sub", Op::Sub, "exact_sub"),
 	("node_mul", Op::Mul, "exact_mul"),
 	("node_div", Op::Div, "exact_div"),
 	("node_mod", Op::Mod, "exact_mod"),
 	("node_rem", Op::Rem, "exact_rem"),
+	(NODE_POW, Op::Pow, "exact_pow"),
 ];
 
 /// text_as_float(node): the f64 of a text like "-12.5e3" (a number node converts as it is); anything else is invalid_number
@@ -798,7 +800,7 @@ impl WasmGcEmitter {
 
 	/// The f64 of `a op b` of the Nodes in params 0 and 1; a remainder reads them again instead of holding them in the
 	/// emitter's scratch locals, which a runtime function has not (arithmetic.rs emit_float_remainder)
-	fn emit_node_float_arithmetic(&mut self, f: &mut Function, op: Op) {
+	fn emit_node_float_arithmetic(&mut self, f: &mut Function, op: Op, power: u32) {
 		let operand = |s: &mut Self, f: &mut Function, param: u32, absolute: bool| {
 			f.instruction(&I::LocalGet(param));
 			s.call(f, TEXT_AS_FLOAT);
@@ -807,6 +809,17 @@ impl WasmGcEmitter {
 			}
 		};
 		let (dividend, divisor) = (0, 1);
+		// libm's pow; a NaN (a negative base with a fractional exponent) is invalid_number, as emit_float_power makes it
+		if op == Op::Pow {
+			operand(self, f, dividend, false);
+			operand(self, f, divisor, false);
+			if self.emit_libm_call(f, super::LIBM_POW) {
+				Self::emit_list(f, &[I::LocalTee(power), I::LocalGet(power), I::F64Ne]);
+				self.emit_fail_if(f, "invalid_number");
+				f.instruction(&I::LocalGet(power));
+			}
+			return;
+		}
 		if !matches!(op, Op::Mod | Op::Rem) {
 			operand(self, f, dividend, false);
 			operand(self, f, divisor, false);
@@ -833,8 +846,8 @@ impl WasmGcEmitter {
 			if !self.should_emit_function(name) {
 				continue;
 			}
-			self.runtime_function(name, vec![node_ref, node_ref], vec![node_ref], vec![ValType::I64], |s, f| {
-				let kind = 2;
+			self.runtime_function(name, vec![node_ref, node_ref], vec![node_ref], vec![ValType::I64, ValType::F64], |s, f| {
+				let (kind, power) = (2, 3);
 				// node_add of two lists (ø is the empty list): their concatenation, `out = out + row`
 				if name == NODE_ADD {
 					let is_list = |f: &mut Function, operand: u32| {
@@ -914,8 +927,16 @@ impl WasmGcEmitter {
 					s.emit_field(f, operand, 0);
 					Self::emit_list(f, &[I::I64Const(KIND_MASK), I::I64And, I::I64Const(float_kind), I::I64Eq]);
 				}
-				Self::emit_list(f, &[I::I32Or, I::If(BlockType::Result(node_ref))]);
-				s.emit_node_float_arithmetic(f, op);
+				f.instruction(&I::I32Or);
+				// an exact power of a ratio exponent is no exact number: 2^(7/12) is computed as f64
+				if op == Op::Pow {
+					Self::emit_list(f, &[I::If(BlockType::Result(ValType::I32)), I::I32Const(1), I::Else, I::LocalGet(1)]);
+					s.call(f, "get_int_value");
+					s.call(f, "is_ratio");
+					f.instruction(&I::End);
+				}
+				f.instruction(&I::If(BlockType::Result(node_ref)));
+				s.emit_node_float_arithmetic(f, op, power);
 				s.call(f, "new_float");
 				Self::emit_list(f, &[I::Else, I::LocalGet(0)]);
 				s.call(f, "get_int_value");

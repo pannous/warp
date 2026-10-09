@@ -262,8 +262,10 @@ impl WasmGcEmitter {
 
 	/// Emit absolute value: ‖x‖
 	fn emit_abs_op(&mut self, func: &mut Function, right: &Node) {
-		let use_float = self.get_type(right).is_float();
-		if use_float {
+		let kind = self.get_type(right);
+		if crate::analyzer::is_run_time_kind(&kind) {
+			self.emit_node_abs(func, right);
+		} else if kind.is_float() {
 			self.emit_float_value(func, right);
 			func.instruction(&I::F64Abs);
 			self.emit_call(func, "new_float");

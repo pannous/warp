@@ -18,16 +18,14 @@ fade_seconds = 0.005
 scale_letters = "C.D.EF.G.A.B"
 // the twelfth root of 2, a float: an exact decimal would make note() an ever longer fraction
 global semitone_ratio = float(1.059463094359)
+global scale_letters = "C.D.EF.G.A.B"
 
 // the frequency of a note name: note("A4") is 440, note("C#4") a semitone above C4, note("Eb5") one below E5
 note(name) := {
 	accidental = if count(name) == 3 then (if name#2 == "#" then 1 else -1) else 0
 	octave = number(name#(count(name)))
 	key = 12 * (octave + 1) + scale_letters.index_of(name#1) - 1 + accidental
-	// a semitone apart from A4 (key 69) at a time: a power 2^(steps/12) fails in a program with units (card unit-power)
-	frequency = 440.0
-	for step in 1 to abs(key - 69) { frequency = if key > 69 then frequency * semitone_ratio else frequency / semitone_ratio }
-	frequency
+	440.0 * 2^((key - 69) / 12)
 }
 C2 = 65.41
 D2 = 73.42
