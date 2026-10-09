@@ -733,8 +733,8 @@ fn renamed_type_word_methods(node: Node) -> Node {
 /// function returning one, annotated `p:Point`, or iterating a list of constructions `for p in ps`
 pub(crate) fn instance_classes(node: &Node, classes: &[String]) -> std::collections::HashMap<String, String> {
 	let returned = returned_classes(node, classes);
-	let constructed_class = |value: &Node| constructed_class(value).map(|name| returned.get(&name).cloned().unwrap_or(name));
-	let mut instances = std::collections::HashMap::new();
+	let constructed_class = |value: &Node| instance_class(value, &returned);
+	let mut instances: std::collections::HashMap<String, String> = std::collections::HashMap::new();
 	node.visit(&mut |part| if let Node::Key(target, op, value) = part {
 		// `p:Point = …`: the annotation says it
 		if let (Node::Key(variable, Op::Colon, class), Op::Assign) = (target.drop_meta(), op) {
@@ -746,6 +746,11 @@ pub(crate) fn instance_classes(node: &Node, classes: &[String]) -> std::collecti
 		}
 		let Node::Symbol(variable) = target.drop_meta() else { return };
 		let class = match (op, value.drop_meta()) {
+			// `c = a + b` of an instance a: the operation gives one of a's class, as with_operator_calls reads it
+			(Op::Assign | Op::Define, Node::Key(left, Op::Add | Op::Sub | Op::Mul | Op::Div | Op::Mod, _)) => match left.drop_meta() {
+				Node::Symbol(operand) => instances.get(operand).cloned(),
+				other => constructed_class(other),
+			},
 			(Op::Assign | Op::Define, _) => constructed_class(value),
 			// `p:Point`, the annotation a symbol or a type
 			(Op::Colon, Node::Symbol(_) | Node::Type { .. }) => Some(value.drop_meta().name()),
@@ -805,6 +810,11 @@ fn returned_classes(node: &Node, classes: &[String]) -> std::collections::HashMa
 	}
 }
 
+/// The class of an instance a construction or a call of a function of `returned` gives
+fn instance_class(value: &Node, returned: &std::collections::HashMap<String, String>) -> Option<String> {
+	constructed_class(value).map(|name| returned.get(&name).cloned().unwrap_or(name))
+}
+
 /// The value of a body: its last statement
 fn last_value(body: &Node) -> &Node {
 	match body.drop_meta() {
@@ -850,23 +860,32 @@ fn operator_calls(node: Node) -> Node {
 	}
 	let classes: Vec<String> = methods.iter().map(|(class, _, _)| class.clone()).collect();
 	let instances = instance_classes(&node, &classes);
-	with_operator_calls(node, &methods, &instances).0
+	let returned = returned_classes(&node, &classes);
+	with_operator_calls(node, &Operands { methods: &methods, instances: &instances, returned: &returned }).0
+}
+
+/// What tells an operator's operand an instance: the classes' operator methods, the variables holding instances, the
+/// functions returning them
+struct Operands<'a> {
+	methods: &'a [(String, Op, String)],
+	instances: &'a std::collections::HashMap<String, String>,
+	returned: &'a std::collections::HashMap<String, String>,
 }
 
 /// The node with its operator calls, and the class of the instance it gives when it is one
-fn with_operator_calls(node: Node, methods: &[(String, Op, String)], instances: &std::collections::HashMap<String, String>) -> (Node, Option<String>) {
-	let recurse = |child: Node| with_operator_calls(child, methods, instances).0;
+fn with_operator_calls(node: Node, operands: &Operands) -> (Node, Option<String>) {
+	let recurse = |child: Node| with_operator_calls(child, operands).0;
 	match node {
 		Node::Key(left, op, right) if OPERATOR_METHODS.iter().any(|(known, _)| *known == op) => {
-			let (left, class) = with_operator_calls(*left, methods, instances);
+			let (left, class) = with_operator_calls(*left, operands);
 			let right = recurse(*right);
 			let class = class.or_else(|| match left.drop_meta() {
-				Node::Symbol(variable) => instances.get(variable).cloned(),
+				Node::Symbol(variable) => operands.instances.get(variable).cloned(),
 				// `(a + b).x`: the parenthesized operation
-				Node::List(items, Bracket::Round, _) if items.len() == 1 => with_operator_calls(items[0].clone(), methods, instances).1,
-				other => constructed_class(other),
+				Node::List(items, Bracket::Round, _) if items.len() == 1 => with_operator_calls(items[0].clone(), operands).1,
+				other => instance_class(other, operands.returned),
 			});
-			match class.as_ref().and_then(|class| methods.iter().find(|(owner, known, _)| owner == class && *known == op)) {
+			match class.as_ref().and_then(|class| operands.methods.iter().find(|(owner, known, _)| owner == class && *known == op)) {
 				Some((_, _, method)) => {
 					let call = Node::List(vec![Node::Symbol(method.clone()), right], Bracket::Round, Separator::None);
 					(Node::Key(Box::new(left), Op::Dot, Box::new(call)), class)
@@ -875,8 +894,19 @@ fn with_operator_calls(node: Node, methods: &[(String, Op, String)], instances: 
 			}
 		}
 		Node::List(items, Bracket::Round, separator) if items.len() == 1 => {
-			let (item, class) = with_operator_calls(items[0].clone(), methods, instances);
+			let (item, class) = with_operator_calls(items[0].clone(), operands);
 			(Node::List(vec![item], Bracket::Round, separator), class)
+		}
+		// `f(a) := a + 1`: its parameters are none of the program's instance variables of the same names
+		Node::Key(head, Op::Define, body) if matches!(head.drop_meta(), Node::List(items, Bracket::Round, _) if items.len() > 1) => {
+			let Node::List(items, _, _) = head.drop_meta() else { unreachable!("guarded") };
+			let mut instances = operands.instances.clone();
+			for parameter in &items[1..] {
+				let name = match parameter.drop_meta() { Node::Key(name, Op::Colon, _) => name.drop_meta().name(), other => other.name() };
+				instances.remove(&name);
+			}
+			let body = with_operator_calls(*body, &Operands { instances: &instances, ..*operands }).0;
+			(Node::Key(head, Op::Define, Box::new(body)), None)
 		}
 		other => (other.map_children(recurse), None),
 	}
