@@ -1,2 +1,2 @@
 // how many words are in a sentence?
-#"the quick brown fox".split # todo default = " "
+#"the quick brown fox".split(" ")

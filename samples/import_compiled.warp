@@ -1,7 +1,7 @@
 // A module warp compiled is imported like any WebAssembly module (notes/import_compiled.md), here one compiled by
 //   warp compile --wasm tests/fixtures/compiled/shapes.warp
 // Texts, lists and instances cross between the two modules as values
-import shapes # .wasm
+import "../tests/fixtures/compiled/shapes.wasm"
 
 print(area(2, 3))                     // a function on numbers
 print(shapes.greet("Ann"))            // a text in and out, qualified by the module's name
