@@ -137,7 +137,7 @@ fn compute_bytes(shader: &str, bytes: &[u8], workgroups: u32, first: usize, keep
 	let usage = wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_SRC | wgpu::BufferUsages::COPY_DST;
 	let storage = device.create_buffer(&wgpu::BufferDescriptor { label: Some("gpu_compute numbers"), size: (total * WORD_BYTES) as u64, usage, mapped_at_creation: false });
 	if !bytes.is_empty() {
-		queue.write_buffer(&storage, (items * WORD_BYTES) as u64, &bytes);
+		queue.write_buffer(&storage, (items * WORD_BYTES) as u64, bytes);
 	}
 	let readback = device.create_buffer(&wgpu::BufferDescriptor { label: Some("gpu_compute readback"), size, usage: wgpu::BufferUsages::MAP_READ | wgpu::BufferUsages::COPY_DST, mapped_at_creation: false });
 
