@@ -43,7 +43,7 @@ pub fn lower(node: Node) -> Node {
 			};
 			let items: Vec<Node> = items.into_iter().enumerate().map(lower_item).collect();
 			let regrouped = match (&bracket, &separator) {
-				(Bracket::None, Separator::Colon) => regroup_return(&items).or_else(|| regroup_destructuring(&items)),
+				(Bracket::None, Separator::Colon) => regroup_return(&items).or_else(|| regroup_destructuring(&items)).or_else(|| regroup_declared_destructuring(&items)),
 				// `{ return a, b }` keeps its one statement; `{a, b=2}` stays data
 				(Bracket::Curly, Separator::Colon) => regroup_return(&items).map(|statement| Node::List(vec![statement], Bracket::Curly, Separator::Semicolon)),
 				_ => None,
@@ -172,6 +172,20 @@ fn regroup_destructuring(items: &[Node]) -> Option<Node> {
 	let values: Vec<Node> = std::iter::once(first_value.as_ref()).chain(&items[assignment + 1..]).cloned().collect();
 	let written = Node::List(items.to_vec(), Bracket::None, Separator::Colon).serialize();
 	Some(destructure(names, values, written.trim(), ""))
+}
+
+/// `let a, b = 3, 4` → `let ($destructure (a, b) 3 4)`, like `let (a, b) = 3, 4`: Python's unpacking, assumed (card
+/// let-comma; JS would declare a without a value and b = 3: notes/open_decisions.md)
+fn regroup_declared_destructuring(items: &[Node]) -> Option<Node> {
+	let (first, rest) = items.split_first()?;
+	let Node::List(declared, Bracket::None, Separator::Space) = first.drop_meta() else { return None };
+	let [keyword, target] = declared.as_slice() else { return None };
+	if !crate::analyzer::is_declaration_keyword(keyword) {
+		return None;
+	}
+	let targets: Vec<Node> = std::iter::once(target.clone()).chain(rest.iter().cloned()).collect();
+	let destructuring = regroup_destructuring(&targets)?;
+	Some(Node::List(vec![keyword.clone(), destructuring], Bracket::None, Separator::Space))
 }
 
 /// `[a, b] = v` and `(a, b) = v`: the bracketed targets assigned one value
