@@ -18,3 +18,4 @@ mod test_paint;
 mod test_draw;
 mod test_plain_hints_when_piped;
 mod test_warp_command;
+mod test_hints_toggle; // card hints-toggle

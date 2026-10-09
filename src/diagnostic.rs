@@ -579,7 +579,8 @@ fn offer_acknowledgement(topic: &str, written: &str) {
 	if !NOTES_SHOWN.with(|shown| shown.borrow_mut().insert(topic.to_string())) {
 		return;
 	}
-	let acknowledger = ACKNOWLEDGER.with(|current| current.borrow().clone());
+	// "got it?" about a hint nobody saw (hints not printed) is not asked
+	let acknowledger = ACKNOWLEDGER.with(|current| current.borrow().clone()).filter(|_| crate::normalize::hints_printed());
 	match acknowledger.map_or(GotIt::No, |acknowledger| acknowledger.acknowledge(topic, written)) {
 		GotIt::This => remember_acknowledged(&expression_key(topic, written)),
 		GotIt::All => remember_acknowledged(topic),
