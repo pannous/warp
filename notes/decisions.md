@@ -11,6 +11,10 @@ notes/open_decisions.md.
   xs = [10, 20, 30, 40, 50], `xs from 2 to 4` → [20, 30, 40], `xs starting from 2` → [20, 30, 40, 50],
   `xs up to 2` → [10, 20]; positions count like `xs#1` (first = 1), both ends inclusive. Slicing by position,
   not by value and not building a range.
+  Amended the same day (user, via the supervisor: "up to 2 is very confusing when it also contains the number 2"):
+  positions are marked, with the hash (`xs from #2 to #4`, `xs up to #2`) or ordinals (`from second to fourth`,
+  `up to 2nd`, `nth`). A bare number in a word slice is a loud error naming both forms (undoable default,
+  warp-class); whether bare numbers mean values instead is open.
 - Hosting of deployed warp programs (user, via the supervisor): "let's start with our own login and let people log
   in with their own button". First our account hosts the programs: users log in with us and get a Deploy button.
   Second, a button deploying to the person's own provider account. Worker warp-hosting researches providers
