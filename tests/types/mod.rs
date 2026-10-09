@@ -33,6 +33,7 @@ mod test_enums_ported;
 mod test_class_witnesses;
 mod test_number_field; // card number-field
 mod test_parameter_text; // card param-text
+mod test_instance_final_text; // card instance-final
 mod test_construction_checks;
 mod test_struct_field_of_constructor;
 #[cfg(feature = "native")] // wasmtime, files or network: not in the browser build
