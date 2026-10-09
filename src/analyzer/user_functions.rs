@@ -2,6 +2,9 @@
 
 use super::*;
 
+/// The type word of a value that is an int or a float
+const NUMBER_TYPE: &str = "number";
+
 /// Kind of a value known before running the program
 pub(crate) fn literal_kind(value: &Node) -> Option<Kind> {
 	match value.drop_meta() {
@@ -216,7 +219,9 @@ pub fn field_kind_key(field: &str) -> String {
 pub fn declared_field_kinds(registry: &crate::type_kinds::TypeRegistry) -> HashMap<String, Kind> {
 	let mut kinds: HashMap<String, Option<Kind>> = HashMap::new();
 	for field in registry.types().iter().flat_map(|type_def| &type_def.fields) {
-		let kind = type_word_kind(&field.type_name.to_lowercase());
+		let type_name = field.type_name.to_lowercase();
+		// a number field holds an int or a float: read at run time (card number-field)
+		let kind = type_word_kind(&type_name).filter(|_| type_name != NUMBER_TYPE);
 		kinds.entry(field_kind_key(&field.name)).and_modify(|known| if *known != kind { *known = None }).or_insert(kind);
 	}
 	kinds.into_iter().filter_map(|(key, kind)| Some((key, kind?))).collect()
@@ -231,7 +236,7 @@ pub(super) fn program_field_kinds(program: &Node) -> HashMap<String, Kind> {
 
 pub fn type_word_kind(type_name: &str) -> Option<Kind> {
 	match type_name {
-		"number" => Some(Kind::Int),
+		NUMBER_TYPE => Some(Kind::Int),
 		_ => builtin_type_kind(type_name),
 	}
 }

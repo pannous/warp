@@ -163,3 +163,18 @@ main.single { grid-template-columns: minmax(0, 1fr); }
 /* a position goes to its place in the editor (playground.js positionLink, an error value with error_at) */
 button.position { border: none; background: none; padding: 0; color: inherit; font: inherit; text-decoration: underline dotted; cursor: pointer; }
 output.located { cursor: pointer; }
+
+/* the assistant (assistant.js): the key field, completion in gray at the cursor, the chat under the output */
+.api-key { box-sizing: border-box; width: 100%; margin: 4px 0; font-family: ui-monospace, Menlo, Consolas, monospace; }
+.completion { color: var(--muted); opacity: 0.8; white-space: pre-wrap; }
+.completion-pending, .completion-failed { font-size: 0.85em; color: var(--muted); padding-left: 4px; }
+.completion-failed { color: var(--error); }
+.assistant-pane { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 10px 14px; }
+.chat-log { max-height: 40vh; overflow: auto; }
+.chat-question { font-weight: 600; margin-top: 8px; }
+.chat-answer p { margin: 4px 0; white-space: pre-wrap; }
+.chat-code pre { margin: 4px 0; padding: 8px 10px; background: var(--code-ground); border-radius: 6px; white-space: pre-wrap; font-family: ui-monospace, Menlo, Consolas, monospace; }
+.chat-pending { color: var(--muted); }
+.chat-failed { color: var(--error); }
+.chat-form { display: flex; gap: 6px; margin-top: 8px; }
+.chat-form input { flex: 1; font: inherit; padding: 3px 8px; border: 1px solid var(--line); border-radius: 6px; background: var(--panel); color: inherit; }

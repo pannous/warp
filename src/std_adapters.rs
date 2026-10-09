@@ -58,7 +58,12 @@ pub fn call(module: &str, member: &str, arguments: &Node) -> Result<Node, String
 				_ => Err(failure(format!("no such word of {} arguments", arguments.len()))),
 			}
 		}
-		("net", "post", [url, body]) => crate::extensions::utils::post_within(&text_of(url)?, &content_of(body)?, crate::host::FETCH_TIMEOUT).map(Node::Text).map_err(failure),
+		("net", "post", [url, body]) => crate::extensions::utils::post_within(&text_of(url)?, &content_of(body)?, &[], crate::host::FETCH_TIMEOUT).map(Node::Text).map_err(failure),
+		// `post(url, body, {"x-api-key": key})`: the map's pairs are the request's headers
+		("net", "post", [url, body, headers]) => {
+			let headers = header_pairs(headers).map_err(failure)?;
+			crate::extensions::utils::post_within(&text_of(url)?, &content_of(body)?, &headers, crate::host::FETCH_TIMEOUT).map(Node::Text).map_err(failure)
+		}
 		// `clipboard.write(text)` (lowering/system_values.rs)
 		#[cfg(feature = "native")]
 		("clipboard", "write", [text]) => warp_runtime::system_values::write_clipboard(&text_of(text)?).map(|_| Node::Empty).map_err(failure),
@@ -163,6 +168,17 @@ fn unshared_feature(pattern: &str) -> Option<&'static str> {
 		(_, true) => Some("a backreference"),
 		_ => None,
 	}
+}
+
+/// A map of texts `{"x-api-key": key}` as (name, value) pairs
+fn header_pairs(headers: &Node) -> Result<Vec<(String, String)>, String> {
+	let serde_json::Value::Object(pairs) = crate::foreign::json_of(headers) else {
+		return Err(format!("headers are a map of texts, got {}", headers.serialize().trim()));
+	};
+	pairs.into_iter().map(|(name, value)| match value {
+		serde_json::Value::String(text) => Ok((name, text)),
+		other => Err(format!("header {name} needs a text, got {other}")),
+	}).collect()
 }
 
 fn arguments_of(arguments: &Node) -> Vec<Node> {

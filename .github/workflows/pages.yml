@@ -29,7 +29,7 @@ env:
   # the runner has no GPU: headless Chrome gets SwiftShader's software WebGPU adapter, else samples/webgpu logs
   # "No available adapters." and the tour refuses the deploy
   AGENT_BROWSER_ARGS: --enable-unsafe-webgpu,--enable-unsafe-swiftshader,--use-webgpu-adapter=swiftshader,--enable-features=Vulkan
-  SITE_FILES: index.html playground.css playground.js guide.js guide.md guide-expert.md markup.js markup-transitions.js worker.js task-worker.js coi-serviceworker.js host.js host-*.js components.js components foreign_python.py reader.js imports.js examples.js codemirror-warp-mode.js codemirror lib warp.wasm warp.debug.wasm samples.js keywords.js version.js
+  SITE_FILES: index.html playground.css playground.js assistant.js guide.js guide.md guide-expert.md markup.js markup-transitions.js worker.js task-worker.js coi-serviceworker.js host.js host-*.js components.js components foreign_python.py reader.js imports.js examples.js codemirror-warp-mode.js codemirror lib warp.wasm warp.debug.wasm samples.js keywords.js version.js
 
 jobs:
   build:

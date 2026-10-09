@@ -33,7 +33,7 @@ pub fn start(id: i64, (url, body): Request, timeout: Duration) {
 	let awaited = format!("fetch {url}");
 	POSTED.with(|posted| if body.is_some() { posted.borrow_mut().insert(id) } else { posted.borrow_mut().remove(&id) });
 	std::thread::spawn(move || sender.send(match body {
-		Some(body) => crate::extensions::utils::post_within(&url, &body, timeout).map_err(|reason| format!("fetch {url} failed: {reason}")),
+		Some(body) => crate::extensions::utils::post_within(&url, &body, &[], timeout).map_err(|reason| format!("fetch {url} failed: {reason}")),
 		None => crate::host::fetch(&url, timeout),
 	}));
 	FETCHES.with(|fetches| fetches.borrow_mut().insert(id, Fetch::Pending(receiver)));

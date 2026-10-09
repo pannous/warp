@@ -1,3 +1,6 @@
 // The standard library module net (notes/stdlib.md section 7): `use net`; fetch (GET) is a prelude word. post sends a
 // text through the adapter std_io and gives the answer's text (ureq natively, a synchronous request in the browser)
 post(url:any, body:any) := std_io("net", "post", [url, body])
+// post(url, body, {"x-api-key": key}): the map's pairs are the request's headers; an answer of status >= 400 is the
+// error, with the answer's text
+post(url:any, body:any, headers:any) := std_io("net", "post", [url, body, headers])
