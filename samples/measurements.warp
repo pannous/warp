@@ -19,6 +19,8 @@ print "period: " + period + " s"
 rope = 5 m ± 1 cm
 print "two ropes: " + str(rope * 2)
 # print "two ropes: " + rope * 2 // TODO Error("wasm trap: cast failure")
+print "with a 20 cm knot: " + str(rope + 20 cm)  // the exact 20 cm adds no spread
+print "pulled in 2 s: " + str(rope / 2 s)
 // one function serves a quantity and a plain number alike
 twice(x) := x * 2
 print "twice: \(twice(rope)) and \(twice(3))"

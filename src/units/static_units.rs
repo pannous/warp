@@ -17,6 +17,7 @@
 use super::{finest_units, signature, unit_named, units_text, Dimension, Factor, Quantity, Unit, UNITS};
 
 mod unit_fields;
+pub(crate) use unit_fields::si_quantity;
 pub(crate) use unit_fields::unit_type;
 use crate::extensions::numbers::Number;
 use crate::extensions::reals::Rational;
@@ -969,6 +970,8 @@ impl Inference {
 		let is_amount_and_unit = items.len() == 2 && bracket == Bracket::None && separator == Separator::Space && is_amount(&items[0])
 			&& matches!(items[1].drop_meta(), Node::Symbol(name) if unit_named(name).is_some() && !self.variables.contains_key(name));
 		let is_host_call = bracket == Bracket::Round && matches!(items.first().map(Node::drop_meta), Some(Node::Symbol(word)) if word == HOST_CALL);
+		// `(r.distance)`, `(a + b)`: parentheses around one expression group it (a lone word `(f)` may be a call)
+		let grouping = bracket == Bracket::Round && matches!(items.as_slice(), [single] if !matches!(single.drop_meta(), Node::Symbol(_)));
 		let in_host_call = self.in_host_call || is_host_call;
 		let outer_host_call = std::mem::replace(&mut self.in_host_call, in_host_call);
 		let mut lowered = vec![];
@@ -1004,7 +1007,7 @@ impl Inference {
 			return Ok((product, signature));
 		}
 		let in_host_call = std::mem::replace(&mut self.in_host_call, outer_host_call);
-		let signature = if statements { signatures.last().cloned().unwrap_or_default() } else if is_loop || in_host_call || signatures.iter().all(Vec::is_empty) {
+		let signature = if statements || grouping { signatures.last().cloned().unwrap_or_default() } else if is_loop || in_host_call || signatures.iter().all(Vec::is_empty) {
 			vec![]
 		} else {
 			return Err(Stop::Unsupported); // a call, print, a list literal or interpolation of a quantity

@@ -8,12 +8,28 @@ stored runs: [Run]
 if count(runs) == 0 {
 	runs.add(Run(5 km, "park", 120 m))
 	runs.add(Run(1500 m, "track", ø))  // any length unit: the row holds the amount
+	runs.add(Run(12 km, "river", 80 m))
 }
 
 total = 0 km
 for run in runs { total += run.distance }
 print "total: " + total
+print total as m  // the same amount in another unit
 print "or " + (total as km)  // a conversion joins a text in its unit
 print "average: " + average(runs.map(r => r.distance))  // a decimal in the field's unit, mean without `use`
 print "flat runs: " + count(runs where it.climb == ø)
+distances = runs.map(run => run.distance)
+print max(distances) as km
+print sum(distances) / count(runs) as km  // the average
+print count(runs where it.distance > 5 km)  // the filter runs in SQLite, on the stored amounts
+
+// each column keeps its own quantity: a speed is a distance over a time
+class Ride{distance: km; time: min; load: kg}
+stored rides: [Ride]
+if count(rides) == 0 {
+	rides.add(Ride(10 km, 50 min, 3 kg))
+	rides.add(Ride(2 km, 20 min, 500 g))
+}
+for ride in rides { print ride.distance / ride.time as km/h }
+print sum(rides.map(ride => ride.load))
 runs#2.distance

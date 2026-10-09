@@ -68,6 +68,7 @@ mod test_plus_minus_gaussian; // card plus-minus-gaussian
 mod test_trailing_symbol; // card trailing-symbol
 mod test_div_assign;
 mod test_unit_fields; // card unit-fields
+mod test_unit_columns; // card units-stress
 mod test_unit_field_display; // card unit-value
 mod test_average; // card average-undefined
 mod test_log_glyphs; // P226

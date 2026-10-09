@@ -1,0 +1,8 @@
+class Run{distance: km; note: text}
+stored runs: [Run]
+if count(runs) == 0 {
+	runs.add(Run(5 km, "park"))
+	runs.add(Run(1500 m, "track"))
+	runs.add(Run(12 km, "river"))
+}
+count(runs where it.distance > 5 km)
