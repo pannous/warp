@@ -282,7 +282,7 @@ div{
 	ul{ [li{ key: todo.id starting-style: { opacity: 0 } transition: "opacity 150ms, transform 150ms" todo.text } for todo in todos] }
 }` },
 	"wasm components": { value: '[12586269025 ["a" "bc" "d"] 7]', code: `// a Rust library compiled to a WebAssembly component
-use rust_demo.wasm as demo
+use rust_demo as demo
 c = demo.counter(5)
 c.increment(2)
 [demo.fib(50), demo.words("a bc d"), c.value()]` },

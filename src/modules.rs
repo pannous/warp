@@ -289,11 +289,19 @@ pub fn beside_program(path: &str) -> String {
 /// The WebAssembly file `use name` finds when no warp module and no standard module has that name: `use rust_demo` →
 /// ./rust_demo.wasm
 pub fn wasm_module_file(name: &str) -> Option<PathBuf> {
-	let loader = Loader::new(&SEARCH_DIRECTORIES, program_file().as_deref().map(folder_of));
-	if loader.find(name).is_some() || std_module(name).is_some() {
+	if names_a_module(name) {
 		return None;
 	}
-	loader.find_with(name, &crate::wasm_modules::MODULE_EXTENSIONS)
+	program_loader().find_with(name, &crate::wasm_modules::MODULE_EXTENSIONS)
+}
+
+/// Is `name` a warp module beside the program or in the search directories, or a standard module
+pub fn names_a_module(name: &str) -> bool {
+	program_loader().find(name).is_some() || std_module(name).is_some()
+}
+
+fn program_loader() -> Loader<'static> {
+	Loader::new(&SEARCH_DIRECTORIES, program_file().as_deref().map(folder_of))
 }
 
 /// The file being compiled, None for inline code

@@ -24,3 +24,11 @@ fn a_component_is_used_as_an_alias() {
 	is!("use tests/fixtures/components/rust_demo as demo\ndemo.fib(10)", 55);
 	is!("use tests/fixtures/components/rust_demo\nrust_demo.fib(10)", 55);
 }
+
+// a component that is not there is an error naming those that are, natively those in its folder, in the page those
+// build.sh made (components/names.txt; card playground-use)
+#[test]
+fn an_unknown_component_names_the_known_ones() {
+	let outcome = warp::wasm_emitter::eval("use tests/fixtures/components/rust_dem.wasm as demo\ndemo.fib(10)").serialize();
+	assert!(outcome.contains("no component") && outcome.contains("rust_dem.wasm;") && outcome.contains("rust_demo"), "{outcome}");
+}
