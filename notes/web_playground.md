@@ -146,6 +146,12 @@ web/playground/tests.html in headless Chrome (agent-browser, session warp-browse
 - index.html reloaded under coi-serviceworker.js before the worker was active: the page came back unisolated and the
   `isolating` flag stopped retries (headless Chrome: no shared memory, tasks/mouse/kitchen sink failed live). It now
   waits for serviceWorker.ready; an isolated page clears the flag (a hard reload bypasses the worker).
+- The page started its Worker before that reload, which aborted the request (Firefox, live: NS_BINDING_ABORTED for
+  worker.js, card firefox-worker). index.html's `pageStarts` now resolves only when no reload is coming (isolated, no
+  service workers, already tried, registration failed, or 5 s passed), and playground.js initializes then; a built
+  site's startSiteWorker waits the same way (site-thread.js siteStarts). Probe: probes/firefox_worker/slow_server.py
+  (no isolation headers, worker.js 1.5 s late, `-v` logs each request): before, worker.js was asked ahead of the
+  reload; after, behind it, 12 of 12 Firefox page loads clean.
 - Gate: `test_in_browser.py --examples [--site D | --url U]` runs the tour and every sample and fails on any console
   error/warning/failed request of the page and its Workers. agent-browser's `console`/`network` see only the page, so
   console_watch.mjs attaches over CDP (`agent-browser get cdp-url`) to every target: Runtime + Log + Network (Chrome's

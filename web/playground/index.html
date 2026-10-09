@@ -9,14 +9,18 @@
 	<script>
 		// tasks on Workers need shared memory, which needs cross-origin isolation: a service worker adds the headers
 		// GitHub Pages cannot send, then the page reloads once under it (coi-serviceworker.js), once it is active: a reload
-		// before comes back without it. A hard reload bypasses it, so an isolated page clears the flag for the next try
-		if (self.crossOriginIsolated) sessionStorage.removeItem("isolating");
-		else if ("serviceWorker" in navigator && !sessionStorage.getItem("isolating")) {
+		// before comes back without it. A hard reload bypasses it, so an isolated page clears the flag for the next try.
+		// The page starts (playground.js initialize) once no reload is coming: its Worker's request would be aborted
+		// (Firefox: NS_BINDING_ABORTED, card firefox-worker)
+		window.pageStarts = new Promise(start => {
+			if (self.crossOriginIsolated) sessionStorage.removeItem("isolating");
+			if (self.crossOriginIsolated || !("serviceWorker" in navigator) || sessionStorage.getItem("isolating")) return start();
 			navigator.serviceWorker.register("coi-serviceworker.js").then(() => navigator.serviceWorker.ready).then(() => {
 				sessionStorage.setItem("isolating", "1");
 				location.reload();
-			}, () => {});
-		}
+			}, start);
+			setTimeout(start, 5000); // a service worker that never gets ready leaves the page working, without isolation
+		});
 	</script>
 	<link rel="stylesheet" href="codemirror/codemirror.min.css">
 	<link rel="stylesheet" href="playground.css">
