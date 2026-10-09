@@ -2,10 +2,15 @@
 
 use super::*;
 
+/// The got-it note on `infix divides(d, n) := …`, the alias of `infix operator divides(d, n) := …` (card g_mnvA)
+const INFIX_WORD_TOPIC: &str = "infix-operator-word";
+
 impl WarpParser {
 	/// The declared operator written at the cursor, of one of the kinds
 	pub(super) fn user_operator_at(&self, kinds: &[UserOperatorKind]) -> Option<UserOperator> {
-		self.user_operators.iter().find(|operator| kinds.contains(&operator.kind) && self.chars[self.pos..].starts_with(&operator.glyph)).cloned()
+		let is_name_char = |c: char| c.is_alphanumeric() || c == '_';
+		let whole_word = |operator: &UserOperator| !is_operator_word(&operator.glyph) || !is_name_char(self.peek_char(operator.glyph.len()));
+		self.user_operators.iter().find(|operator| kinds.contains(&operator.kind) && self.chars[self.pos..].starts_with(&operator.glyph) && whole_word(operator)).cloned()
 	}
 
 	/// `3‼`: the call of the suffix operator on the left operand
@@ -61,19 +66,28 @@ impl WarpParser {
 			});
 		}
 		let (_, kind) = OPERATOR_KINDS.iter().find(|(keyword, _)| *keyword == word)?;
-		let glyph = declared_glyph(&words).filter(|glyph| is_operator_glyph(glyph))?;
-		let has_operator_word = words.first() == Some(&"operator");
-		let glyph: Vec<char> = glyph.chars().collect();
+		let glyph: Vec<char> = declared_operator(*kind, &words)?.chars().collect();
+		let has_operator_word = words.first() == Some(&OPERATOR_WORD);
 		self.skip_spaces();
 		if has_operator_word {
-			self.advance_by("operator".chars().count());
+			self.advance_by(OPERATOR_WORD.chars().count());
 			self.skip_spaces();
+		} else if is_operator_word(&glyph) {
+			self.set_hint_pos();
+			let name: String = glyph.iter().collect();
+			crate::diagnostic::educate_once(INFIX_WORD_TOPIC, &format!("{word} {name}"), &format!("{word} {OPERATOR_WORD} {name}"), "a declared operator says operator");
 		}
 		self.advance_by(glyph.len());
+		// `divides(d:int, n:int)`: the operands named and typed as a function's parameters
+		let declared_parameters = (self.current_char() == '(').then(|| self.parse_expr(Op::Define.binding_power().0 + 1));
 		self.skip_spaces();
 		self.advance_by(":=".len());
 		let body = self.parse_expr(0);
 		let parameters = match kind {
+			UserOperatorKind::Infix if declared_parameters.is_some() => match declared_parameters.expect("guarded").drop_meta() {
+				Node::List(items, Bracket::Round, _) => items.clone(),
+				one => vec![one.clone()],
+			},
 			// P48 names the operands `left` and `right`; `a` and `b` stay accepted
 			UserOperatorKind::Infix => {
 				let names = if mentions(&body, "left") || mentions(&body, "right") { ["left", "right"] } else { ["a", "b"] };
