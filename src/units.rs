@@ -74,8 +74,24 @@ const EACH_WORD: &str = "each";
 /// The local time of day, unless the program names something so (card time-day-value)
 const TIME_WORD: &str = "time";
 
+thread_local! {
+	/// The unit words the program being lowered defines itself (`m = 2`, `g(x) := …`): no units while it is lowered
+	static SHADOWED_UNITS: std::cell::RefCell<std::collections::HashSet<String>> = std::cell::RefCell::new(Default::default());
+}
+
 fn unit_named(name: &str) -> Option<&'static Unit> {
+	if SHADOWED_UNITS.with(|shadowed| shadowed.borrow().contains(name)) {
+		return None;
+	}
 	UNITS.iter().find(|unit| unit.name == name)
+}
+
+/// `run` with the unit words `program` defines as its names, not units: `g(x) := x + 1 m` keeps m a unit
+fn shadowing<T>(program: &Node, run: impl FnOnce() -> T) -> T {
+	let outer = SHADOWED_UNITS.with(|shadowed| shadowed.replace(defined_unit_names(program)));
+	let result = run();
+	SHADOWED_UNITS.with(|shadowed| *shadowed.borrow_mut() = outer);
+	result
 }
 
 /// A conversion target: a unit by its short name or its long name, `minute` or `minutes`
@@ -88,10 +104,7 @@ fn target_unit(node: &Node) -> Option<&'static Unit> {
 /// The unit words as the units passes read them: aliases expanded (`60 mph`), the whole unit after `as` (`q as km/h`)
 pub fn lower_unit_words(program: Node) -> Node {
 	let program = lower_unit_aliases(program);
-	match defines_unit_name(&program) {
-		true => program,
-		false => with_whole_conversion_units(program),
-	}
+	shadowing(&program.clone(), || with_whole_conversion_units(program))
 }
 
 /// `60 mi/h as km/h` parses `(60 mi/h as km)/h`: the unit after `as` regrouped whole, as after `in`, when it is one
@@ -226,10 +239,10 @@ fn run_time_quantity(amount: Node, unit: String) -> Node {
 /// run-time `quantity(5 ± 1/100, "m")`: its amount an interval in the unit of the value (card plus-minus-units). A
 /// tolerance the evaluation answers (`2m ± 5cm`, `1950 AD ± 50 == 1900 - 2000 AD`) stays the compile-time Tolerance
 pub fn lower_run_time_tolerances(program: Node) -> Node {
-	if !has_unit_tolerance(&program) || answers_at_compile_time(&program) {
-		return program;
-	}
-	with_run_time_tolerances(program)
+	shadowing(&program.clone(), || match !has_unit_tolerance(&program) || answers_at_compile_time(&program) {
+		true => program,
+		false => with_run_time_tolerances(program),
+	})
 }
 
 fn has_unit_tolerance(node: &Node) -> bool {
@@ -240,7 +253,7 @@ fn has_unit_tolerance(node: &Node) -> bool {
 }
 
 fn answers_at_compile_time(program: &Node) -> bool {
-	!defines_unit_name(program) && match evaluate(program) {
+	match evaluate(program) {
 		Ok(_) => true,
 		Err(Stop::Error(message)) => !RUN_TIME_TOLERANCE_ERRORS.iter().any(|refusal| message.starts_with(refusal)),
 		Err(Stop::Unsupported) => false,
@@ -499,7 +512,11 @@ fn fail<T>(message: impl Into<String>) -> Result<T, Stop> {
 
 /// The value of a program that uses units, None for any other program
 pub fn answer(program: &Node) -> Option<Node> {
-	if !needs_quantities(program) || defines_unit_name(program) {
+	shadowing(program, || answer_shadowed(program))
+}
+
+fn answer_shadowed(program: &Node) -> Option<Node> {
+	if !needs_quantities(program) {
 		return None;
 	}
 	match evaluate(program) {
@@ -555,7 +572,11 @@ pub fn lower_sleep_durations(program: Node) -> Node {
 /// local time of day, compared with a constant duration in milliseconds: `time < 24h` is
 /// `system·time of day < 86400000` (lowering/system_values.rs reads it, so `whenever time > 18h {…}` listens too)
 pub fn lower_quantity_comparisons(program: Node) -> Node {
-	if defines_unit_name(&program) || !(needs_quantities(&program) || mentions_clock(&program)) {
+	shadowing(&program.clone(), || quantity_comparisons_folded(program))
+}
+
+fn quantity_comparisons_folded(program: Node) -> Node {
+	if !(needs_quantities(&program) || mentions_clock(&program)) {
 		return program;
 	}
 	let bound = crate::system_values::bound_names(&program);
@@ -693,11 +714,6 @@ fn needs_quantities(node: &Node) -> bool {
 	}
 }
 
-/// `m=5;3m`: a variable of that name shadows the unit, and so does a parameter: `s => s + t`, `f(s) := …`
-fn defines_unit_name(node: &Node) -> bool {
-	!defined_unit_names(node).is_empty()
-}
-
 /// The unit words the program defines as variables, parameters or functions (`m = 2`, `f(s) := …`)
 fn defined_unit_names(node: &Node) -> std::collections::HashSet<String> {
 	let mut names = std::collections::HashSet::new();
@@ -717,7 +733,7 @@ fn loop_variable(words: &[Node]) -> Option<&Node> {
 
 fn collect_defined_unit_names(node: &Node, names: &mut std::collections::HashSet<String>) {
 	let mut add_unit = |node: &Node| if let Node::Symbol(name) = node.drop_meta() {
-		if unit_named(name).is_some() || UNIT_ALIASES.iter().any(|(alias, _)| alias == name) {
+		if UNITS.iter().any(|unit| unit.name == name) || UNIT_ALIASES.iter().any(|(alias, _)| alias == name) {
 			names.insert(name.clone());
 		}
 	};
