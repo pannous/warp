@@ -51,3 +51,38 @@ The words above are layer 1, the toy layer. Each layer below keeps the ones abov
    callback, 44.1/48 kHz stereo.
 
 Order of value: 1 + 5 (handles, clock, offline render) first, they change the architecture; then 2, 3, 4; 8 last.
+
+## Our own API or the platform's? (card our-sound)
+
+Recommendation: warp's own small vocabulary on top, Web Audio's model underneath, the platform APIs only as the
+last stage that moves samples to the speaker.
+
+- **Web Audio is the model to stay close to.** Its concepts (an AudioContext with one clock `currentTime`, nodes
+  connected into a graph, AudioParams with scheduled ramps, AudioBuffers, AudioWorklet for custom DSP) are the
+  common ground every modern system converged on, and the playground must run on it anyway. Layers 1, 3, 4 and 8
+  map one to one: `osc |> lowpass |> out` is OscillatorNode → BiquadFilterNode → destination; a handle's `ramp` is
+  `linearRampToValueAtTime`; `process(block)` is an AudioWorkletProcessor. Copying its names where they are good
+  (gain, frequency, detune, Q) keeps warp code readable to anyone who knows the web.
+- **But not its API shape.** Web Audio is verbose (`ctx.createOscillator()`, `.connect()`, `.start(t)`) and has no
+  music values. warp keeps its own words: units (`440Hz`, `200ms`, `-6dB`, `1/4 beat`), notes and chords as values,
+  `play … for …` phrases and `|>` pipes. Those lower to the graph; a program never sees a context object.
+- **Natively, the same graph runs in our own engine, written in warp/wasm** (layer 8): it renders blocks of f32
+  samples, so the browser and the Mac produce the same samples and offline rendering (tests!) is the same code path.
+  Only the output differs:
+  - macOS: **CoreAudio** — AudioUnit/AudioQueue with a render callback (low latency, the device's rate, typically
+    48 kHz, 128–512 frame buffers); AVAudioEngine is the higher-level Swift/ObjC wrapper (graph of nodes, players
+    for files, effects — Apple's own Web-Audio-like model) and AVAudioPlayer plays whole files. CoreMIDI for MIDI.
+  - Linux: **ALSA** is the kernel-level PCM interface (open `default`, write interleaved frames); on desktops the
+    sound server sits on top: **PipeWire** (now standard, also speaks the PulseAudio and JACK protocols), formerly
+    PulseAudio; JACK for pro low-latency routing. A program should talk to PipeWire/PulseAudio or ALSA `default`,
+    never pick one hardware device itself.
+  - Windows: WASAPI.
+  - The Rust crate **cpal** wraps all of these (CoreAudio, ALSA, PipeWire via ALSA/JACK, WASAPI, even Web Audio) with
+    one callback interface: the natural native backend for warp's engine. **rodio** (on cpal) decodes WAV, MP3,
+    OGG/Vorbis, FLAC and mixes sources: the shortest path to layer 5 file playback. **symphonia** decodes more formats.
+- **Today's stopgap** (a WAV file handed to afplay/paplay/aplay) stays the fallback when no audio device is reachable
+  and for CI, where the file itself is what tests check.
+
+So: Web Audio semantics, warp words, one engine for rendering, cpal (CoreAudio/ALSA/PipeWire/WASAPI) or Web Audio's
+destination for output. Not a wrapper over each platform's own high-level API (AVAudioEngine, GStreamer): those
+differ in model and would make the browser and native sound differ.
