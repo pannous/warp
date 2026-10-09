@@ -7,6 +7,29 @@ before asking the user; nobody reads it front to back, the code, tests and wiki 
 notes/open_decisions.md.
 
 ## Decided 2026-10-09 (user, as recommended unless quoted)
+- Hosting (warp-hosting, card cloud-hosting; each program is its own Cloudflare Worker uploaded by the hosting
+  Worker https://warp-hosting.pannous.workers.dev): Q1 the user creates a GitHub OAuth App for "Log in with
+  GitHub"; Q2 the user creates a Cloudflare "Edit Cloudflare Workers" API token for uploads; Q3 free Workers plan
+  for now (~90 programs, 100k requests/day), Workers for Platforms ($25/month) only near the cap; Q4 programs live
+  at warp-<name>.pannous.workers.dev, <name>.warp.pannous.com later (pannous.com's nameservers are mixed);
+  Q5 a private Cloudflare OAuth client now for deploying to one's own account, others paste a scoped API token
+  kept in their browser.
+- Word slices (user to the Interviewer: "list from A to B. List starting from A. List items to B"): with
+  xs = [10, 20, 30, 40, 50], `xs from 2 to 4` → [20, 30, 40], `xs starting from 2` → [20, 30, 40, 50],
+  `xs up to 2` → [10, 20]; positions count like `xs#1` (first = 1), both ends inclusive. Slicing by position,
+  not by value and not building a range.
+  Amended the same day (user, via the supervisor: "up to 2 is very confusing when it also contains the number 2"):
+  positions are marked, with the hash (`xs from #2 to #4`, `xs up to #2`) or ordinals (`from second to fourth`,
+  `up to 2nd`, `nth`). A bare number in a word slice (`xs up to 2`) is a loud error naming `#2` and `second`
+  (user's multiple choice, via the supervisor); positions are only `#n` or ordinals.
+- Playground CI (user, via the supervisor): pages.yml runs Chrome and Firefox as parallel jobs; workers are not
+  required to tour new examples with --firefox before a merge request.
+- Standing rule (user, via the supervisor): "always present questions in multiple choice form so I get informed
+  either here or via the interviewer": every user question, the Supervisor's included, is an AskUserQuestion popup.
+- Hosting of deployed warp programs (user, via the supervisor): "let's start with our own login and let people log
+  in with their own button". First our account hosts the programs: users log in with us and get a Deploy button.
+  Second, a button deploying to the person's own provider account. Worker warp-hosting researches providers
+  (notes/hosting.md), builds both, and sends account, cost and DNS questions here.
 - Ranges (user, via warp-class, branch range-descriptor 51cdcb2dd): "We don't need the colon syntax if we have the
   dot-dot syntax": `r: 1..n` is the range itself, same as `r = 1..n`; `..` marks a value, so no uncharged-block
   warning.
