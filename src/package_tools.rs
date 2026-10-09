@@ -167,6 +167,7 @@ fn run_wasi_command(tool: &Path, name: &str, arguments: &[&str], directory: &Pat
 	context.args(&[name]).args(arguments).stdout(stdout.clone()).stderr(stderr.clone());
 	context.preopened_dir(directory, ".", FsPerms::ReadWrite)?;
 	let mut store = Store::new(&engine, context.build_p1());
+	warp_runtime::engine::cap_memory(&mut store);
 	let mut linker: Linker<p1::WasiP1Ctx> = Linker::new(&engine);
 	p1::add_to_linker_sync(&mut linker, |context| context)?;
 	let start = linker.instantiate(&mut store, &module)?.get_typed_func::<(), ()>(&mut store, "_start")?;

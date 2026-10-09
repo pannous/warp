@@ -39,3 +39,11 @@ fn test_min_max_arguments_must_be_side_effect_free() {
 fn test_min_needs_two_arguments() {
 	fails_with("min(1)", "min takes at least 2");
 }
+
+/// Each comparison names the best so far twice: unbound, a list of n calls was 2ⁿ nodes (154 GB for 35, 2026-10-09)
+#[test]
+fn test_many_extremum_arguments_compile_linearly() {
+	let calls: Vec<String> = (1..=40).map(|i| format!("abs({i} - 0.5)")).collect();
+	is!(&format!("max([{}])", calls.join(", ")), 39.5);
+	is!(&format!("min({})", calls.join(", ")), 0.5);
+}
