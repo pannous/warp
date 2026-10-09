@@ -178,10 +178,10 @@ fn test_emit_cast() {
 }
 
 #[test]
-#[ignore = "tuple comparison with cast - complex"]
 fn test_emit_cast_tuple() {
-	is!("(2 as float, 4.3 as int)  == 2.0 ,4", 1);
-	is!("(2 as float, 4.3 as int)  == 2,4", 1);
+	// P227: a comma next to == needs parentheses (tests/operators/test_comma_next_to_comparison.rs)
+	is!("(2 as float, 4.3 as int)  == (2.0 ,4)", 1);
+	is!("(2 as float, 4.3 as int)  == (2,4)", 1);
 }
 
 #[test]
