@@ -156,13 +156,20 @@ def open_page(url):
 	sys.exit(f"error: the browser did not start after {LAUNCH_ATTEMPTS} attempts (agent-browser, session {SESSION})")
 
 
+browser_complaint = ""  # what agent-browser said on stderr at its last command
+
+
 def browser(*arguments):
 	if firefox:
 		return firefox.command(*arguments)
+	global browser_complaint
 	try:
-		return subprocess.run(["agent-browser", "--session", SESSION, *arguments], capture_output=True, text=True, timeout=60).stdout.strip()
+		ran = subprocess.run(["agent-browser", "--session", SESSION, *arguments], capture_output=True, text=True, timeout=60)
 	except subprocess.TimeoutExpired:
+		browser_complaint = f"agent-browser {arguments[0]} took over 60 s"
 		return ""  # a busy or crashed page: the stall check decides
+	browser_complaint = ran.stderr.strip()
+	return ran.stdout.strip()
 
 
 # shows an example or sample (%s: its name as JSON) and waits until its run finished
@@ -279,7 +286,7 @@ def show_example(name):
 		return JSON.stringify({{ ...shown, clicked: document.getElementById("value").textContent, clickedPrinted, kept, keyed, animated: animations > 0, address: shownAddress() }});
 	}})()"""
 	shown = browser("eval", script)
-	return json.loads(json.loads(shown)) if shown.startswith('"') else {"value": f"(page gave no answer: {shown})", "printed": ""}
+	return json.loads(json.loads(shown)) if shown.startswith('"') else {"value": f"(page gave no answer: {shown or browser_complaint})", "printed": ""}
 
 
 def wait_for_isolation():
