@@ -25,31 +25,27 @@ const PATH_SEPARATOR: char = '/';
 /// The patterns of the routes in order, exported for the site's loader (warp-cf: a module per route, card web-bundle)
 pub const PAGE_ROUTES: &str = "page·routes";
 const PAGE_ROUTED: &str = "page·routed";
-/// lib/router.warp's words binding a parameter: a program calling one needs the router (modules.rs)
-pub const PATH_WORDS: [&str; 2] = ["route_segment", "route_parameter"];
 pub const PAGE_ROUTE_INDEX: &str = "page·route_index";
 /// A parameter's regular expression (":id(\\d+)") is checked with std regex's word, which GROUP_TEMPLATE calls: modules.rs
 /// brings regex when page·route_index calls it, router when the program has page·routes
 pub const REGEX_MATCH: &str = "matches";
 /// Where a layout shows the matched route
 const OUTLET: &str = "outlet";
-const PARAMETER_MARK: &str = ":";
+pub const PARAMETER_MARK: &str = ":";
 /// The types a parameter may declare (lib/router.warp route_fits)
 const PARAMETER_TYPES: [&str; 4] = ["int", "float", "text", "string"];
 /// URLPattern (card route-urlpattern): how often the last part may come ("?", "*", "+"), a regular expression "(…)"
 const PART_MARKS: [char; 3] = ['?', '*', '+'];
 const GROUP_START: char = '(';
-pub const ANY_PARTS: &str = "*";
+const ANY_PARTS: &str = "*";
 /// `id` of the pattern bound in the route's function: without a type a number when it is digits, else its text
-const PARAMETER_CALL: &str = "route_parameter(pattern, routed_path, parameter_name)";
+const PARAMETER_CALL: &str = "route_parameter(pattern, page_path(), parameter_name)";
 /// the text of a typed one, which the `let` casts to its type (`as`: float(text) is card float-of-text)
-const SEGMENT_CALL: &str = "route_segment(pattern, routed_path, parameter_name)";
-/// the path a page's route binds its parameters from
-const PAGE_PATH_CALL: &str = "page_path()";
+const SEGMENT_CALL: &str = "route_segment(pattern, page_path(), parameter_name)";
 const PATH_TEMPLATE: &str = "let routed_path = page_path()";
 const MATCH_TEMPLATE: &str = "if route_matches(pattern, routed_path) and groups_fit { return index }";
 /// a parameter with a regular expression: absent (optional) or its part matching all of it
-const GROUP_TEMPLATE: &str = "route_segment(pattern, routed_path, parameter_name) == ø or matches(route_segment(pattern, routed_path, parameter_name), expression)";
+const GROUP_TEMPLATE: &str = "route_segment(pattern, page_path(), parameter_name) == ø or matches(route_segment(pattern, page_path(), parameter_name), expression)";
 const NO_ROUTE: &str = "-1";
 const INDEX_TEMPLATE: &str = "let routed_index = index_of_route()";
 const CHOICE_TEMPLATE: &str = "if routed_index == index { return chosen() }";
@@ -209,11 +205,6 @@ fn pattern_problem(pattern: &str) -> Option<String> {
 
 /// The route's block after a `let` for each parameter of its pattern, typed when the parameter declares its type
 pub(crate) fn route_body(pattern: &str, body: &[Node]) -> Vec<Node> {
-	route_body_at(pattern, body, crate::warp_parser::parse(PAGE_PATH_CALL))
-}
-
-/// The block with its parameters bound from the path `path` gives (a server route's `request.path`)
-pub(crate) fn route_body_at(pattern: &str, body: &[Node], path: Node) -> Vec<Node> {
 	if let Some(problem) = pattern_problem(pattern) {
 		return vec![crate::node::error(&problem)];
 	}
@@ -222,7 +213,7 @@ pub(crate) fn route_body_at(pattern: &str, body: &[Node], path: Node) -> Vec<Nod
 			None => format!("let {name} = {PARAMETER_CALL}"),
 			Some(kind) => format!("let {name}:{kind} = {SEGMENT_CALL} as {kind}"),
 		};
-		template(&value, [("pattern", text(pattern)), ("parameter_name", text(name)), ("routed_path", path.clone())])
+		template(&value, [("pattern", text(pattern)), ("parameter_name", text(name))])
 	});
 	bindings.chain(body.iter().cloned()).collect()
 }

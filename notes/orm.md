@@ -117,6 +117,9 @@ keeping its fields with id 0; the lazy `people·remove` drops bo from the loaded
   The list keeps its instances, so a filtered row is the same instance (`bo.age += 1` shows in `people`).
 - SQL keeps: comparisons, and/or, `+ - *` of numeric columns and number literals, `it.f` as its column, literals and
   variables as `?` values. Not `/` (warp's division is exact) and not `+` of texts or of unknown types.
+  `==` and `!=` are SQL's `IS` and `IS NOT`, so `it.email == ø` finds the NULLs as in warp.
+- An optional scalar field (`email: text?`, card orm-optional) is a nullable column: rows without a value (and rows
+  from before an added column) hold NULL and read as ø. `text` → `text?` keeps the column (the browser store too).
 - Every other part is `warp_call('table·call·N', id, columns…, values…)`: a generated function
   `table·call·N(table·arguments: any) := …` with `it.f` as its column's argument, `it` as the row's instance and the
   filter's variables as the values after the row. database.rs select registers warp_call for the query only
@@ -184,6 +187,8 @@ keeping its fields with id 0; the lazy `people·remove` drops bo from the loaded
    - Unit fields (card unit-fields): `class Run{distance: km}` (static_units/unit_fields.rs) holds the SI amount like
      any quantity; the column is `NUMERIC km` (NUMERIC keeps a whole SI amount an integer, as the program holds it; REAL
      gave 5000.0, which an exact `total = 0 km` refused: "not an int"). database.rs `conversion_factor` decides the
-     migrations above. The playground's store refuses a unit change loudly (card browser-unit-migrations).
+     migrations above. The playground's store follows the same rules (card browser-unit-migrations): the schema
+     entry of a unit field carries its quantity and SI amount per unit (`[distance km ø ø m 1000]`, the 4th entry ø
+     unless renamed; units::static_units::unit_type), the store keeps each unit column's quantity (`quantities`).
      Sample: samples/orm_units.warp.
    - A field named size/count/length reads as the builtin count off a typed list element (card field-named-size).

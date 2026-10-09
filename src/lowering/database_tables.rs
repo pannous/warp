@@ -93,8 +93,10 @@ const FUNCTION: &str = "table·call";
 /// The SQL function a query calls a warp function through (database.rs)
 const WARP_CALL: &str = "warp_call";
 /// `Team?`: an optional field
-const OPTIONAL_MARK: char = '?';
+pub(crate) const OPTIONAL_MARK: char = '?';
 const NUMERIC_TYPES: [&str; 4] = ["int", "float", "number", "real"];
+/// A bool field's column holds 0/1 (database.rs column types), read back as the bool
+const BOOL_TYPE: &str = "bool";
 /// What a filter's function should not do: not being sure to end (Div) or allocating is fine
 const SIDE_EFFECTS: [crate::effects::Effect; 5] = [crate::effects::Effect::State, crate::effects::Effect::IO, crate::effects::Effect::FFI, crate::effects::Effect::Async, crate::effects::Effect::Eval];
 
@@ -296,8 +298,9 @@ impl Query<'_> {
 		match node.drop_meta() {
 			Node::Key(left, op, right) => {
 				let operator = match op {
-					Op::Eq => "=",
-					Op::Ne => "<>",
+					// IS: ø (NULL) equals ø, as in warp (`it.email == ø` of an optional field)
+					Op::Eq => "IS",
+					Op::Ne => "IS NOT",
 					Op::Lt => "<",
 					Op::Gt => ">",
 					Op::Le => "<=",
@@ -420,9 +423,10 @@ fn with_arguments(node: Node, table: &Table, values: &[String], row_size: usize)
 /// The constructor's arguments of an instance from a row `[id, column values…]` held in `row`
 fn constructor_arguments(table: &Table, row: &str) -> Vec<String> {
 	let column = |name: &str| column_cell(table, row, name);
-	table.fields.iter().filter(|(name, _, _)| !table.is_members(name)).map(|(name, _, _)| match (name == ID_FIELD, table.reference(name)) {
+	table.fields.iter().filter(|(name, _, _)| !table.is_members(name)).map(|(name, field_type, _)| match (name == ID_FIELD, table.reference(name)) {
 		(true, _) => format!("{row}#1"),
 		(false, Some(_)) => referenced(table, name, &column(name)),
+		_ if field_type == BOOL_TYPE => format!("({} != 0)", column(name)),
 		_ => column(name),
 	}).chain(implicit_id(table).then(|| format!("{row}#1"))).collect()
 }
@@ -521,6 +525,15 @@ fn with_member_getters(body: Node, table: &Table) -> Node {
 	}
 }
 
+/// The named classes with their row's `id: int = 0`: a page leaving their table on the server still reads `todo.id` of
+/// the rows it is sent (lowering/serve.rs)
+pub(crate) fn with_row_ids(node: Node, classes: &[String]) -> Node {
+	match node {
+		Node::Type { name, body } if classes.contains(&name.drop_meta().name()) => Node::Type { name, body: Box::new(with_id(*body)) },
+		other => other.map_children(|child| with_row_ids(child, classes)),
+	}
+}
+
 fn with_id(body: Node) -> Node {
 	if has_id(&body) {
 		return body;
@@ -598,10 +611,13 @@ fn opened(statement: &Node, tables: &HashMap<String, Table>, file: &str, open: &
 	open.push(variable.clone());
 	// the row is [id, column values…] in the order of the columns
 	let arguments = constructor_arguments(table, ROW);
-	// a column is [name type default] and its old name when renamed
+	// a column is [name type default] and its old name when renamed (ø when not); a unit field's adds its quantity and
+	// SI amount per unit, which the browser's store has no unit table for (`[distance km ø ø m 1000]`)
 	let schema = Node::List(column_fields(table).into_iter().map(|(name, field_type, default)| {
 		let old_name = table.renamed.iter().find(|(field, _)| *field == name).map(|(_, old)| Node::Text(old.clone()));
-		let column = [Node::Text(name), Node::Text(field_type), default.unwrap_or(Node::Empty)].into_iter().chain(old_name);
+		let unit = crate::units::static_units::unit_type(class_of(&field_type)).map(|(quantity, per_unit)| [Node::Text(quantity), crate::node::float(per_unit)]);
+		let old_name = if unit.is_some() { Some(old_name.unwrap_or(Node::Empty)) } else { old_name };
+		let column = [Node::Text(name), Node::Text(field_type), default.unwrap_or(Node::Empty)].into_iter().chain(old_name).chain(unit.into_iter().flatten());
 		Node::List(column.collect(), Bracket::Square, Separator::Space)
 	}).collect(), Bracket::Square, Separator::Space);
 	if !matches!(target.drop_meta(), Node::Key(_, Op::Colon, _)) {

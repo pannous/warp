@@ -12,7 +12,7 @@ until curl -s -o /dev/null "localhost:$PORT/"; do sleep 0.5; done
 check() {
 	local method=$1 path=$2 body=$3
 	local answer
-	answer=$(curl -s -X "$method" ${body:+-d "$body"} -w '\n%{http_code}' "localhost:$PORT$path")
+	answer=$(curl -s -X "$method" ${body:+-H 'Content-Type: text/plain' -d "$body"} -w '\n%{http_code}' "localhost:$PORT$path")
 	local status=${answer##*$'\n'}
 	local content=${answer%$'\n'*}
 	content=${content//$'\n'/ }

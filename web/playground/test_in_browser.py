@@ -248,7 +248,8 @@ def show_example(name):
 		{RUN_EXAMPLE % json.dumps(name)}
 		await new Promise(done => setTimeout(done, EXAMPLES[name].wait ?? 0));
 		const shown = {{ value: document.getElementById("value").textContent, printed: document.getElementById("printed").textContent,
-			canvases: document.querySelectorAll("#paintings canvas").length }};
+			canvases: document.querySelectorAll("#paintings canvas").length,
+			failed: document.getElementById("status").classList.contains("failed") ? document.getElementById("status").textContent : "" }};
 		const clicks = EXAMPLES[name].clicks ?? [];
 		const shownAddress = () => document.getElementById("address").hidden ? "" : document.getElementById("address").value;
 		const typed = EXAMPLES[name].typed;
@@ -321,7 +322,7 @@ def check_examples(names, page_url=None, site=None):
 			verdict(f"samples/{name}", [])
 		else:
 			expected, shown = examples[name], show_example(name)
-			verdict(name, [f"{part}: {shown[part]!r}, expected {expected[part]!r}" for part in ("value", "printed", "canvases", "clicked", "clickedPrinted", "kept", "keyed", "animated", "address") if part in expected and shown[part] != expected[part]])
+			verdict(name, [f"{part}: {shown[part]!r}, expected {expected[part]!r}" for part in ("value", "printed", "canvases", "clicked", "clickedPrinted", "kept", "keyed", "animated", "address") if part in expected and shown[part] != expected[part]] + [f"status: {shown['failed']}"] * bool(shown.get("failed")))
 	console.stop()
 	browser("close")
 	if server:

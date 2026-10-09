@@ -22,6 +22,13 @@ const JSON_PATHS: [&str; 2] = ["/api/", "/rpc/"];
 /// The runtime errors of a lookup that found nothing (`users#id` of a missing row): the request names no such thing, 404
 const NOT_FOUND_ERRORS: [&str; 2] = ["index_out_of_range", "key_not_found"];
 const SITE_METHOD: &str = "GET";
+/// A body of this type is the fields of an HTML form, `title=buy+milk&done=on`
+const FORM_TYPE: &str = "application/x-www-form-urlencoded";
+/// A browser's form asks for a page; it gets See Other back to the page it was sent from (post/redirect/get)
+const PAGE_TYPE: &str = "text/html";
+const SEE_OTHER: u16 = 303;
+const HOME: &str = "/";
+const PATH_SEPARATOR: char = '/';
 
 thread_local! {
 	/// How many requests this thread's next serve answers before it returns: 0 serves on (tests stop it so)
@@ -57,9 +64,11 @@ impl Route {
 	}
 
 	/// The answer of the route failing with `message`: JSON `{"error": message}` where a program reads JSON (an
-	/// /api/ or /rpc/ path), else the message as text
+	/// /api/ or /rpc/ path), else the message as text. A lookup missing is 404 only where the path named what to look up
+	/// (`/api/users/:id`); in a route without parameters (`get "/boom" { xs#5 }`) it is the server's fault, 500
 	pub fn failed(&self, message: &str) -> Answer {
-		answer_failing(&self.path, failure_status(message), message)
+		let status = if self.path.contains(crate::routes::PARAMETER_MARK) { failure_status(message) } else { FAILED };
+		answer_failing(&self.path, status, message)
 	}
 }
 
@@ -152,12 +161,21 @@ pub fn serve(port: u16, routes: &[Route], site: &ServedSite, mut answer: impl Fn
 		let path = percent_decoded(&path);
 		let mut body = String::new();
 		let _ = request.as_reader().read_to_string(&mut body);
+		let header_of = |name: &'static str| request.headers().iter().find(|header| header.field.equiv(name)).map(|header| header.value.to_string());
+		let is_form = header_of("Content-Type").is_some_and(|content_type| content_type.starts_with(FORM_TYPE));
+		let from_a_browser_form = is_form && header_of("Accept").is_some_and(|accepted| accepted.contains(PAGE_TYPE));
+		let back = header_of("Referer").map_or(HOME.to_string(), |referer| page_of(&referer));
+		let body = if is_form { form_fields(&body) } else { value_of_body(body) };
 		let answered = match route_at(routes, &method, &path) {
 			Some(route) => answer(route, request_node(&method, &path, &query, body)),
 			None => site_file(site, &method, &path).unwrap_or_else(|| answer_failing(&path, NOT_FOUND, &format!("no route {method} {path}"))),
 		};
-		let header = tiny_http::Header::from_bytes("Content-Type", answered.content_type).expect("a valid header");
-		let _ = request.respond(tiny_http::Response::from_data(answered.body).with_status_code(answered.status).with_header(header));
+		let content_type = tiny_http::Header::from_bytes("Content-Type", answered.content_type).expect("a valid header");
+		let response = match from_a_browser_form && answered.status == 200 {
+			true => tiny_http::Response::from_data(vec![]).with_status_code(SEE_OTHER).with_header(tiny_http::Header::from_bytes("Location", back).expect("a valid header")),
+			false => tiny_http::Response::from_data(answered.body).with_status_code(answered.status).with_header(content_type),
+		};
+		let _ = request.respond(response);
 		served += 1;
 		if limit > 0 && served >= limit {
 			break;
@@ -207,17 +225,27 @@ fn percent_decoded(path: &str) -> String {
 	String::from_utf8(decoded).unwrap_or_else(|_| path.to_string())
 }
 
-/// The request as the route's `request`: {method, path, query, body}, a JSON body parsed into its value
-fn request_node(method: &str, path: &str, query: &str, body: String) -> Node {
-	let body = value_of_body(body);
-	let query = query.split('&').filter(|pair| !pair.is_empty()).map(|pair| {
+/// The path and query of a Referer URL, where a browser's form goes back to
+fn page_of(referer: &str) -> String {
+	let after_scheme = referer.split_once("://").map_or(referer, |(_, rest)| rest);
+	after_scheme.find(PATH_SEPARATOR).map_or(HOME.to_string(), |start| after_scheme[start..].to_string())
+}
+
+/// `title=buy+milk&done=on`, a form's body or a query, as the map {title: "buy milk", done: "on"}
+fn form_fields(encoded: &str) -> Node {
+	let fields = encoded.split('&').filter(|pair| !pair.is_empty()).map(|pair| {
 		let (key, value) = pair.split_once('=').unwrap_or((pair, ""));
-		entry(key, Node::Text(value.replace('+', " ")))
+		entry(&percent_decoded(&key.replace('+', " ")), Node::Text(percent_decoded(&value.replace('+', " "))))
 	}).collect();
+	Node::List(fields, crate::node::Bracket::Curly, crate::node::Separator::Space)
+}
+
+/// The request as the route's `request`: {method, path, query, body}, the body a JSON value or a form's fields
+fn request_node(method: &str, path: &str, query: &str, body: Node) -> Node {
 	Node::List(vec![
 		entry("method", Node::Text(method.to_string())),
 		entry("path", Node::Text(path.to_string())),
-		entry("query", Node::List(query, crate::node::Bracket::Curly, crate::node::Separator::Space)),
+		entry("query", form_fields(query)),
 		entry("body", body),
 	], crate::node::Bracket::Curly, crate::node::Separator::Space)
 }

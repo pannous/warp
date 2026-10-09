@@ -65,6 +65,15 @@ value (type_tests.rs runtime_kind_mask; `float` stays strict). Function paramete
 A final Quantity value shows its text (card instance-final). `f` called with a quantity and with a plain number calls
 a copy `f_Quantity(x:Quantity)` for the quantity (card mixed-arguments, class_methods.rs specialized_calls). Tests: tests/numbers/test_plus_minus_units.rs, samples/measurements.warp.
 
+## Gaussian ± (card plus-minus-gaussian, 2026-10-09)
+`5 ± 1σ` or `5 ± 1 σ` (the spread times the symbol σ, joined like a unit word: card trailing-symbol) is a Gaussian: one standard deviation; a bare `5 ± 1` stays an
+interval (P217). Its parts are [value, low, high, σ, id₁, c₁, id₂, c₂, …]: each contribution c = ∂/∂xᵢ·σᵢ of an
+independent source xᵢ (a fresh id per written `±σ`), σ = √Σc² (Measurements.jl's linear propagation with
+correlations), so `x - x` is `0 ± 0σ` and `x * x` doubles the relative error. Arithmetic: wasm_emitter/uncertain.rs
+gaussian_add…div → gaussian_combine (merges contributions by id); math words use the numeric slope
+(f(x+h) − f(x−h))/2h with h = σ·1e-3. low/high are value ∓ σ. Text `7.0 ± 1.4σ`, read back the same.
+An interval and a Gaussian don't mix (run-time failure). Tests: tests/numbers/test_plus_minus_gaussian.rs.
+
 ## Open
 - `if area certainly > 10 then …` parses as `(if area) (then (certainly > 10) …)`: the condition stops at the second
   word; `if (area certainly > 10) then` and `ok = area certainly > 10` work. `x + 1 certainly < 8` reads
@@ -74,3 +83,5 @@ a copy `f_Quantity(x:Quantity)` for the quantity (card mixed-arguments, class_me
 - `"y=" + x` with an interval x is the general type error text + data (no implicit conversion of a run-time value);
   `"y=" + str(x)` works. Text interpolation does not exist in warp (notes/i18n.md).
 - A typed parameter `f(x: float)` refuses an interval argument ("not a number"); the error should name the ± value.
+- Gaussian: comparisons (`certainly`, `possibly`) and ≈ treat it as its 1σ interval; units with σ (`5 m ± 1 cm σ`)
+  wait: Quantity carries its tolerance as a plain interval (agreed with warp-class).

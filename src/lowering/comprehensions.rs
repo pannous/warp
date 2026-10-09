@@ -15,7 +15,7 @@ const IF_WORD: &str = "if";
 const WHERE_WORD: &str = "where";
 /// The element a `where` condition reads as `it`
 const WHERE_ELEMENT: &str = "where·element";
-const MADE: &str = "comprehension_list";
+pub(crate) const MADE: &str = "comprehension_list";
 const VARIABLE: &str = "comprehension_variable";
 const SEQUENCE: &str = "comprehension_sequence";
 const CONDITION: &str = "comprehension_condition";

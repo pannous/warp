@@ -125,6 +125,31 @@ all. The page build now takes the definition: tests/web/test_server_functions_in
      answers `[]` (card served-empty). A `server def` whose value is one (or a call of such a function) is a list word
      too, so its POST /rpc/f answers `[]` (serve.rs ServerData, card server-def-giving).
 
+8. **samples/todo_app.warp** (card todo-app, 2026-10-09): a stored `Todo{title: text; done: bool}` table, a list page,
+   a form POSTing a todo, `post "/todos/:id:int/toggle"`, `todos where not done`. It runs under `warp serve`, `warp run`
+   and in the playground. Checks: tests/web/test_served_forms.rs `the_todo_sample_creates_toggles_and_lists` (create,
+   toggle, list over HTTP), probes/todo_app/check_served.sh (the same with curl against a running `warp serve`), and the
+   tour example `forms` (test_in_browser.py --examples forms: types, clicks add, the item shows). What it took:
+   - Forms (web_server.rs): an urlencoded body is the map of its fields (`request.body.title`). A browser's form
+     (Accept text/html) gets 303 back to its Referer (post/redirect/get), any other client the route's value.
+   - A get/post path holds parameters as a page route does. serve.rs bind_path_parameters binds them from
+     `request.path` before lower_where, so a table's filter takes `id` as a value.
+   - A bool column reads back as a bool, and a one-character text is stored as its text (database.rs c_text).
+   - A failing route answers 500 with the failure message instead of a wasm backtrace.
+   - The page build leaves the table out but keeps `id` on its class (database_tables.rs with_row_ids).
+   - A served instance arrives as JSON `{"Todo": {…}}` and decodes to a one-entry object. STRUCT_BODY (list_ops.rs)
+     reads that object as its class, so `todo.title` works in route data. Before, the hydrated list trapped on its
+     first field. That left the server's list or an empty one, depending on timing.
+   - Without a server (`warp run`, the playground), top-level get/post routes are local routes
+     (serve.rs with_local_routes). Each becomes `route·N(request)`, with `global` for the page variables it mentions,
+     like an event handler. `page·submitted(request)` calls the matching one, or throws "no route answers …". The
+     playground listens for submit on the shadow root (playground.js submitForm). The Worker runs the route and shows
+     the page anew (worker.js handleSubmit, host.js runSubmitted). The functions stand where the first route stood,
+     so a page route written last stays the program's value.
+   - A route giving a filter answers `[]` when it keeps no row (answers_a_list follows the comprehension).
+   - Left: card where-assigned (`waiting = xs where not it` fails to parse). In the playground the table lives in
+     the browser's store (stored values outlast the run, as `stored` means), not purely in memory.
+
 ## Undoable defaults taken
 - RPC in the page is async, like fetch (option a), starting from the prerendered value; a call with a local argument is refused.
 - /api and /rpc JSON shows an instance as a plain object, `{"name":"Ann","id":1}`, with no class wrapper (supervisor,
@@ -134,10 +159,10 @@ all. The page build now takes the definition: tests/web/test_server_functions_in
 ## Server route paths (cards server-path, route-star)
 - `get "/api/users/:id:int" { users#id }`: a server route's path takes the page routes' patterns. web_server.rs
   route_at prefers the route with exactly the path, then the first whose pattern matches (routes.rs path_matches, the
-  Rust twin of lib/router.warp route_matches). serve.rs binds the parameters from `request.path` with the page routes'
-  `let id:int = route_segment(…) as int` (routes.rs route_body_at), and the router module is loaded for them.
+  Rust twin of lib/router.warp route_matches). serve.rs bind_path_parameters binds them from `request.path` with the
+  page routes' `let id:int = route_segment(…) as int`, and the router module is loaded for them (modules.rs ROUTE_PARTS).
 - An /api/ or /rpc/ path that no route takes answers JSON 404 `{"error":"no route GET …"}`, never the page.
 - A page path: the single page answers every path a route matches, `route "*"` included, with 200 (user 2026-10-07,
   supervisor 2026-10-09). The answer is 404 only when no route matches at all (site.rs matches_no_route_at) or when a
   matched route's lookup misses (`users#9`).
-- Check by hand: `probes/server_edits/curl_checks.sh <warp binary> probes/server_edits/s1.warp <port>`.
+- Check by hand: `probes/server_edits/curl_checks.sh <warp binary> samples/server.warp <port>`.

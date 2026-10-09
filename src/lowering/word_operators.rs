@@ -1,13 +1,17 @@
 //! Words for operators (word-choice rule: the canonical word plus aliases that work with a note): `root 4`,
 //! `root(4)` and the pipe stage `2|square|root` (wiki/pipe.md) are sqrt; a variable or function the program names
-//! root wins (P142)
+//! root wins (P142). The other way round, the log glyphs are the log words (P226): `b⌞x` is `log(x, b)`, `x⌟` is
+//! `ln(x)` and `x⌟b` is `log(x, b)`
 
-use crate::node::Node;
+use crate::node::{Bracket, Node, Separator};
 use crate::operators::Op;
 
 const OPERATOR_ALIASES: [(&str, &str, Op); 1] = [("root", "sqrt", Op::Sqrt)];
+const LOG: &str = "log";
+const NATURAL_LOG: &str = "ln";
 
 pub fn lower(node: Node) -> Node {
+	let node = log_calls(node);
 	let words = OPERATOR_ALIASES.map(|(alias, _, _)| alias);
 	if !node.mentions_any(&words) {
 		return node;
@@ -49,4 +53,17 @@ fn operators(node: Node, aliases: &[(&str, &str, Op)]) -> Node {
 		}
 		other => other.map_children(|child| operators(child, aliases)),
 	}
+}
+
+fn log_calls(node: Node) -> Node {
+	match node {
+		Node::Key(base, Op::LogBase, value) => call(LOG, vec![log_calls(*value), log_calls(*base)]),
+		Node::Key(value, Op::LogOf, base) if matches!(base.drop_meta(), Node::Empty) => call(NATURAL_LOG, vec![log_calls(*value)]),
+		Node::Key(value, Op::LogOf, base) => call(LOG, vec![log_calls(*value), log_calls(*base)]),
+		other => other.map_children(log_calls),
+	}
+}
+
+fn call(name: &str, arguments: Vec<Node>) -> Node {
+	Node::List([vec![Node::Symbol(name.to_string())], arguments].concat(), Bracket::Round, Separator::None)
 }
