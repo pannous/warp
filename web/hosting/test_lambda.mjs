@@ -1,12 +1,14 @@
 // End-to-end test of warp-lambda (web/hosting/server/warp_lambda.py), the native hosting on pannous.com, without
 // systemd: the daemon runs its programs as child processes (WARP_LAMBDA_RUNNER=process), asks the live warp-hosting
-// Worker who is logged in (a GitHub token, gh auth token), and serves the deployed program by its Host name.
-// node web/hosting/test_lambda.mjs   needs: scratch/warp (built from this checkout), gh logged in, python3.
+// Worker who is logged in (a GitHub token, gh auth token), and serves the deployed program by its Host name. Then the
+// playground's ☁ Deploy to pannous.com button deploys it too (headless agent-browser).
+// node web/hosting/test_lambda.mjs   needs: scratch/warp (built from this checkout), gh logged in, python3, agent-browser.
 import { execFileSync, spawn } from "node:child_process";
 import { mkdirSync, readFileSync, rmSync } from "node:fs";
 import { get } from "node:http";
 import { join, resolve } from "node:path";
 import assert from "node:assert/strict";
+import { deployedByPlayground } from "./playground_driver.mjs";
 
 const ROOT = resolve(import.meta.dirname, "../..");
 const STATE = join(ROOT, "scratch/lambda_test");
@@ -14,6 +16,8 @@ const PORT = Number(process.env.WARP_LAMBDA_TEST_PORT ?? 8894); // outside the t
 const DAEMON = `http://127.0.0.1:${PORT}`;
 const DOMAIN = "lambda.pannous.com";
 const NAME = "lambda-test";
+const PLAYGROUND_NAME = "lambda-ui-test";
+const PLAYGROUND_PORT = Number(process.env.WARP_LAMBDA_PLAYGROUND_PORT ?? 8898);
 const SAMPLE = join(ROOT, "samples/hosting.warp");
 const EXPECTED_FIB = { n: 20, fib: 6765 };
 const STARTS = 40;
@@ -61,6 +65,11 @@ try {
 	const unsafe = await deploy("lambda-ffi-test", 'import strlen from "c"\nget "/" { strlen("ab") }');
 	assert.equal(unsafe.status, 400);
 	assert.match((await unsafe.json()).error, /capability denied/);
+	const playgroundUrl = await deployedByPlayground({ hosting: DAEMON, button: "deploy-native", name: PLAYGROUND_NAME,
+		source: readFileSync(SAMPLE, "utf8"), token, port: PLAYGROUND_PORT, session: "warp-lambda-test" });
+	assert.equal(playgroundUrl, `https://${PLAYGROUND_NAME}.${DOMAIN}`);
+	assert.deepEqual(JSON.parse((await hosted(PLAYGROUND_NAME, "/fib/20")).body), EXPECTED_FIB);
+	assert.equal((await remove(PLAYGROUND_NAME)).status, 200);
 	assert.equal((await remove(NAME)).status, 200);
 	assert.equal((await hosted(NAME, "/")).status, 404);
 	assert.equal(await asked(`${NAME}.${DOMAIN}`), 404);

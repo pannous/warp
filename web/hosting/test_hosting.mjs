@@ -10,6 +10,7 @@ import { copyFileSync, mkdirSync, openSync, readFileSync, writeFileSync } from "
 import { homedir } from "node:os";
 import { join, resolve } from "node:path";
 import assert from "node:assert/strict";
+import { deployedByPlayground } from "./playground_driver.mjs";
 
 const ROOT = resolve(import.meta.dirname, "../..");
 const WORK = join(ROOT, "scratch/hosting_test");
@@ -18,11 +19,8 @@ const INSPECTOR_PORT = 9331; // not wrangler's default 9229, which another wrang
 const HOSTING = `http://localhost:${PORT}`;
 const NAME = "hosting-test";
 const PLAYGROUND_NAME = "hosting-ui-test";
-const PLAYGROUND = join(ROOT, "web/playground");
 const PLAYGROUND_PORT = Number(process.env.WARP_HOSTING_PLAYGROUND_PORT ?? 8896);
 const BROWSER_SESSION = "warp-hosting-test";
-const SESSION_KEY = "warp-hosting-session"; // web/playground/deploy.js SESSION_KEYS.github
-const PLAYGROUND_TRIES = 60;
 const SAMPLE = join(ROOT, "samples/hosting.warp");
 const EXPECTED_ROOT = "hello from the edge";
 const EXPECTED_FIB = { n: 20, fib: 6765 };
@@ -73,46 +71,6 @@ async function liveText(url) {
 }
 
 // polls a condition once a second
-async function until(condition, failure) {
-	for (let i = 0; i < PLAYGROUND_TRIES; i++) {
-		if (condition()) return;
-		await sleep(1000);
-	}
-	assert.fail(failure);
-}
-
-// agent-browser's eval prints the value as JSON
-function browser(...args) {
-	const output = execFileSync("agent-browser", ["--session", BROWSER_SESSION, ...args]).toString().trim();
-	try { return JSON.parse(output); } catch { return output; }
-}
-
-// the playground's ☁ Deploy (web/playground/deploy.js): the address it links when deployed, else its status
-async function deployedByPlayground(token) {
-	const server = spawn("python3", ["-m", "http.server", String(PLAYGROUND_PORT), "--bind", "127.0.0.1"], { cwd: PLAYGROUND, stdio: "ignore" });
-	try {
-		await sleep(1000);
-		browser("open", `http://localhost:${PLAYGROUND_PORT}/?hosting=${encodeURIComponent(HOSTING)}`);
-		await until(() => browser("eval", `typeof playground`) === "object", "the playground never started");
-		browser("eval", `localStorage.setItem(${JSON.stringify(SESSION_KEY)}, ${JSON.stringify(token)})`);
-		browser("eval", `playground.setCode(${JSON.stringify(readFileSync(SAMPLE, "utf8"))})`);
-		browser("eval", `document.getElementById("deploy-name").value = ${JSON.stringify(PLAYGROUND_NAME)}`);
-		browser("eval", `document.getElementById("deploy").click()`);
-		let status;
-		for (let i = 0; i < PLAYGROUND_TRIES; i++) {
-			const link = browser("eval", `document.querySelector("#deployed a")?.href ?? ""`);
-			if (link) return link.replace(/\/$/, "");
-			status = browser("eval", `document.getElementById("status").textContent`);
-			if (status.startsWith("not deployed") || status.includes("name to deploy")) break;
-			await sleep(1000);
-		}
-		assert.fail(`the playground did not deploy: ${status}`);
-	} finally {
-		browser("close");
-		server.kill();
-	}
-}
-
 const removed = async name => (await fetch(`${HOSTING}/deploy?name=${name}`, { method: "DELETE", headers: github }));
 
 mkdirSync(WORK, { recursive: true });
@@ -129,7 +87,8 @@ try {
 	assert.equal(await liveText(url), EXPECTED_ROOT);
 	assert.deepEqual(JSON.parse(await liveText(`${url}/fib/20`)), EXPECTED_FIB);
 	console.log(`deployed and served: ${url}`);
-	const playgroundUrl = await deployedByPlayground(token);
+	const playgroundUrl = await deployedByPlayground({ hosting: HOSTING, button: "deploy", name: PLAYGROUND_NAME,
+		source: readFileSync(SAMPLE, "utf8"), token, port: PLAYGROUND_PORT, session: BROWSER_SESSION });
 	assert.match(playgroundUrl, /^https:\/\/warp-hosting-ui-test\.[a-z0-9-]+\.workers\.dev$/);
 	assert.deepEqual(JSON.parse(await liveText(`${playgroundUrl}/fib/20`)), EXPECTED_FIB);
 	console.log(`deployed by the playground and served: ${playgroundUrl}`);
