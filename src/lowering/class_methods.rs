@@ -729,9 +729,11 @@ fn renamed_type_word_methods(node: Node) -> Node {
 	with_method_names(node, &MethodNames { names, instances, classes, defined_by }, false)
 }
 
-/// The variables known to hold an instance of one of `classes`, with its class: assigned a construction, annotated
-/// `p:Point`, or iterating a list of constructions `for p in ps`
+/// The variables known to hold an instance of one of `classes`, with its class: assigned a construction or a call of a
+/// function returning one, annotated `p:Point`, or iterating a list of constructions `for p in ps`
 pub(crate) fn instance_classes(node: &Node, classes: &[String]) -> std::collections::HashMap<String, String> {
+	let returned = returned_classes(node, classes);
+	let constructed_class = |value: &Node| constructed_class(value).map(|name| returned.get(&name).cloned().unwrap_or(name));
 	let mut instances = std::collections::HashMap::new();
 	node.visit(&mut |part| if let Node::Key(target, op, value) = part {
 		// `p:Point = …`: the annotation says it
@@ -776,6 +778,39 @@ pub(crate) fn instance_classes(node: &Node, classes: &[String]) -> std::collecti
 		}
 	});
 	instances
+}
+
+/// The functions whose value is an instance of one of `classes`, with its class: `make(n) := V(n)`, a body ending in
+/// a construction, or in a call of another such function
+fn returned_classes(node: &Node, classes: &[String]) -> std::collections::HashMap<String, String> {
+	let mut definitions = vec![];
+	node.visit(&mut |part| if let Node::Key(head, Op::Define, body) = part {
+		if let Node::List(items, Bracket::Round, _) = head.drop_meta() {
+			definitions.extend(items.first().map(|name| (name.drop_meta().name(), last_value(body))));
+		}
+	});
+	let mut returned = std::collections::HashMap::new();
+	// a function returning another's result: until no function is added
+	loop {
+		let known = returned.len();
+		for (function, value) in &definitions {
+			let class = constructed_class(value).and_then(|name| if classes.contains(&name) { Some(name) } else { returned.get(&name).cloned() });
+			if let Some(class) = class {
+				returned.entry(function.clone()).or_insert(class);
+			}
+		}
+		if returned.len() == known {
+			return returned;
+		}
+	}
+}
+
+/// The value of a body: its last statement
+fn last_value(body: &Node) -> &Node {
+	match body.drop_meta() {
+		Node::List(items, Bracket::Curly, _) if !items.is_empty() => last_value(&items[items.len() - 1]),
+		other => other,
+	}
 }
 
 /// The class a construction `Point(1, 2)`, `Point{…}` builds (by its name, before the constructions are lowered)
