@@ -113,3 +113,4 @@ mod test_declared_list_marks;
 mod test_chained_assignments;
 mod test_loop_text_arithmetic;
 mod test_cyclic_objects; // card orm: objects pointing to each other
+mod test_field_named_like_builtin; // cards field-named-size, orm-members-word
