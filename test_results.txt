@@ -1065,6 +1065,7 @@ PASSED:
   ✓ functions::test_generator_arguments::any_and_all_of_a_list
   ✓ functions::test_generators::a_changing_method_returns_early
   ✓ functions::test_generators::a_generator_call_collects_what_it_yields
+  ✓ functions::test_generators::a_generator_expression_is_a_generator
   ✓ functions::test_generators::a_generator_object_jumps_like_its_loops
   ✓ functions::test_generators::a_loop_ending_in_break_has_a_value
   ✓ functions::test_generators::a_loop_over_a_generator_runs_its_body_per_yield
@@ -4327,4 +4328,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-10 ignored, 4322 passed, 0 failed, 4322 total tested
+10 ignored, 4323 passed, 0 failed, 4323 total tested
