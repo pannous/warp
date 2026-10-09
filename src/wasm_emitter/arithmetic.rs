@@ -632,7 +632,29 @@ impl WasmGcEmitter {
 	pub(super) fn emit_float_root(&mut self, func: &mut Function, root: &Op) {
 		match root {
 			Op::Cbrt => {
-				self.emit_libm_call(func, LIBM_CBRT);
+				// libm's cbrt may miss a perfect cube by an ulp (glibc: ∛27 = 3.0000000000000004): its nearest whole
+				// number is the root when that cubes back to the radicand exactly
+				let (root, radicand) = (0, 1);
+				self.pop_float_scratch(func, radicand);
+				self.push_float_scratch(func, radicand);
+				if !self.emit_libm_call(func, LIBM_CBRT) {
+					return;
+				}
+				self.pop_float_scratch(func, root);
+				let push_nearest = |emitter: &Self, func: &mut Function| {
+					emitter.push_float_scratch(func, root);
+					func.instruction(&I::F64Nearest);
+				};
+				push_nearest(self, func);
+				self.push_float_scratch(func, root);
+				for _ in 0..3 {
+					push_nearest(self, func);
+				}
+				func.instruction(&I::F64Mul);
+				func.instruction(&I::F64Mul);
+				self.push_float_scratch(func, radicand);
+				func.instruction(&I::F64Eq);
+				func.instruction(&I::Select);
 			}
 			_ => {
 				func.instruction(&I::F64Sqrt);
