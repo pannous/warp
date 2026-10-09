@@ -21,7 +21,7 @@ fn test_js() {
 }
 
 /// A page program reaches the DOM through `use js document`: it compiles to the host's foreign calls naming each member;
-/// running it needs a page's document, which neither the native runner nor the browser suite's Worker has (card dom-tests)
+/// running it needs a page's document, which neither the native runner nor the browser suite's Worker has: tests/web/test_dom_pages.rs runs such programs on a page
 fn calls_the_page(code: &str, members: &[&str]) {
 	let bytes = warp::wasm_emitter::compile(code).unwrap_or_else(|error| panic!("{code} does not compile: {error:?}")).bytes;
 	for member in members {

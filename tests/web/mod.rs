@@ -38,6 +38,8 @@ mod test_form_bindings;
 mod test_styles;
 mod test_style_rules;
 mod test_headless_pages;
+#[cfg(feature = "native")] // builds a site natively, opens it in headless Chrome (agent-browser)
+mod test_dom_pages;
 mod test_page_tests;
 mod test_transitions;
 mod test_css_transitions;
