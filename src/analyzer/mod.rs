@@ -27,7 +27,7 @@ const VAR_KEYWORD: &str = "var";
 /// `let x = 1` may change, with a note teaching `var` (P159; check_constants)
 const IMMUTABLE_LET: &str = "let";
 
-fn is_declaration_keyword(node: &Node) -> bool {
+pub(crate) fn is_declaration_keyword(node: &Node) -> bool {
 	is_constant_keyword(node) || is_word(node, VAR_KEYWORD) || is_word(node, IMMUTABLE_LET)
 }
 

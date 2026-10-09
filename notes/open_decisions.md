@@ -13,6 +13,9 @@ Details: notes/todo_sweep_task.md (board), notes/semicolon_survey.md, notes/floa
   holding it is advanced with `next(c)`/`c.next()` or when written `iter(count_to(3))`. A `for` over it always runs
   lazily. Alternative (Python): every call gives a generator object, so `count_to(3)` prints as an object and
   `list(count_to(3))` collects.
+- (warp-types, card let-comma) what `let a, b = 3, 4` declares (also `var`, `const`). Today, assumed (recommended,
+  Python, the same as the undeclared `a, b = 3, 4`): unpacking, a = 3 and b = 4. Alternative (JS): two declarations,
+  a without a value (an error for let/const) and b = 3, the 4 left over.
 Parked (user: "Later"):
 - Parked: P237 (warp-class, card natural-phrases) what `numbers.sort by size` means; today a silent no-op. The user
   leans to `size` as an alias chain size → abs → norm ("carries over to vectors … that have a norm"; numbers |x|,
