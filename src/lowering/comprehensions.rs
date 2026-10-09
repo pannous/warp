@@ -190,14 +190,18 @@ fn where_reassociated(node: Node) -> Node {
 	}
 }
 
-/// `[[xs, where], it]`, as the right side of an assignment parses, as `[xs, where, it]`
+/// `[[xs, where], it]` and `[xs, [where, 4 + it]]`, as the right side of an assignment parses, as `[xs, where, it]`
 fn where_flattened(node: Node) -> Node {
 	let Node::List(items, bracket, separator) = node else { return node };
-	let Some(Node::List(inner, Bracket::None, _)) = items.first().map(Node::drop_meta) else { return Node::List(items, bracket, separator) };
-	if !inner.last().is_some_and(|word| matches!(word.drop_meta(), Node::Symbol(symbol) if symbol == WHERE_WORD)) {
-		return Node::List(items, bracket, separator);
-	}
-	let flat = inner.clone().into_iter().chain(items[1..].iter().cloned()).collect();
+	let words_of = |item: Option<&Node>| match item.map(Node::drop_meta) {
+		Some(Node::List(inner, Bracket::None, _)) => Some(inner.clone()),
+		_ => None,
+	};
+	let flat = match (words_of(items.first()), words_of(items.last())) {
+		(Some(inner), _) if inner.last().is_some_and(|word| is_word(word, WHERE_WORD)) => inner.into_iter().chain(items[1..].iter().cloned()).collect(),
+		(_, Some(inner)) if items.len() > 1 && inner.len() == 2 && is_word(&inner[0], WHERE_WORD) => items[..items.len() - 1].iter().cloned().chain(inner).collect(),
+		_ => items,
+	};
 	Node::List(flat, bracket, separator)
 }
 
