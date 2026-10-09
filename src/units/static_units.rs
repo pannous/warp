@@ -396,6 +396,9 @@ impl Inference {
 			let kept = if mentions_units(&definition.body) { Node::Empty } else { node };
 			return Ok((kept, vec![]));
 		}
+		if let Some(construction) = self.named_construction(&node) {
+			return construction;
+		}
 		match node {
 			Node::Meta { node, data } => {
 				let (node, signature) = self.infer(*node)?;
