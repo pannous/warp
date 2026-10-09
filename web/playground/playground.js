@@ -4,6 +4,7 @@
 // might have meant is an "I meant: …" button that rewrites the code at the warning and runs it again (notes/fixits.md).
 
 const ACKNOWLEDGED_KEY = "warp-playground-acknowledged";
+const HINTS_KEY = "warp-playground-hints"; // the hints checkbox, on by default (card hints-toggle)
 const SIZES_KEY = "warp-playground-sizes"; // the guide's width and the editor's height as the resizers left them
 const GUIDE_WIDTH_RANGE = [200, 0.6]; // pixels, then the share of the page's width
 const EDITOR_HEIGHT_RANGE = [120, 0.85]; // pixels, then the share of the window's height
@@ -46,6 +47,8 @@ function element(tag, properties = {}, ...children) {
 
 let worker;
 let workerReady;
+let workerStage = "not started"; // the worker's last stage (worker.js stage), for playground.state
+let workerSettled = "starting"; // workerReady's outcome
 let workerWarmed; // the worker was asked to compile the markup renderer ahead of the first markup run (worker.js warmUp)
 let nextRunId = 0;
 let pending; // {id, resolve, printed, timer} of the run in the worker
@@ -149,6 +152,7 @@ function startWorker() {
 		worker.onmessage = ({ data }) => {
 			if (data.type === "notify") data = notification(data.text);
 			if (!data) return;
+			if (data.type === "stage") return workerStage = data.stage;
 			if (data.type === "loading") return showLoading(`loading the compiler: ${megabytes(data.loaded)}${data.total ? ` of ${megabytes(data.total)}` : ""} MB`);
 			if (data.type === "compiling") return stopLoading();
 			if (data.type === "ready") return resolve();
@@ -167,6 +171,7 @@ function startWorker() {
 	});
 	// a slow start (the CI runner) finishes after the first run began: "ready" then must not hide its "running…"
 	workerReady.then(() => stopLoading() || showing || setStatus("ready"), failure => stopLoading() || setStatus(failure.message, true));
+	workerReady.then(() => workerSettled = "ready", failure => workerSettled = `failed: ${failure.message}`);
 	tellSystemValues();
 	sharePointer();
 	worker.postMessage({ stored: keptValues(), session: keptValues([SESSION_STORE]) });
@@ -365,6 +370,7 @@ function showReport(report) {
 	showPaintings(report.paintings ?? []);
 	listenTo(report.listening ?? []);
 	showAddress(report.address);
+	const hints = $("hints").checked ? report.hints : [];
 	const notes = report.notes ?? [];
 	const inline = new Set((report.warnings ?? []).map(warning => warning.topic).filter(topic => notes.includes(topic)));
 	const expressionOf = topic => (report.got_it ?? []).find(offer => offer.topic === topic)?.expression;
@@ -374,9 +380,9 @@ function showReport(report) {
 		...(report.errors ?? []).map(error => shown("error", error)),
 		...report.warnings.map(warning => shown("warning", warning, inline.has(warning.topic) ? gotIt(warning.topic, warning.expression_key, warning.line) : "")),
 		...report.runtime_warnings.map(message => diagnostic("warning", "runtime", message)),
-		...report.hints.map(hint => diagnostic("hint", hint.position, "prefer ", code(hint.canonical), " over ", code(hint.original),
+		...hints.map(hint => diagnostic("hint", hint.position, "prefer ", code(hint.canonical), " over ", code(hint.original),
 			element("span", { className: "reason" }, hint.reason), fixButtons(hint.fixes))),
-		...notes.filter(topic => !inline.has(topic)).map(topic => diagnostic("note", "", `the ${topic} note above shows until you say `, gotIt(topic, expressionOf(topic)))),
+		...notes.filter(topic => !inline.has(topic) && $("hints").checked).map(topic => diagnostic("note", "", `the ${topic} note above shows until you say `, gotIt(topic, expressionOf(topic)))),
 	];
 	$("diagnostics").replaceChildren(...items);
 	markPositions(report);
@@ -695,6 +701,11 @@ function initialize() {
 		typingTimer = setTimeout(runNow, TYPING_DELAY_MS);
 	});
 	$("run").onclick = runPressed;
+	try { $("hints").checked = localStorage.getItem(HINTS_KEY) !== "off"; } catch { /* private window: on */ }
+	$("hints").onchange = () => {
+		try { localStorage.setItem(HINTS_KEY, $("hints").checked ? "on" : "off"); } catch { /* private window: lasts for this page */ }
+		runNow();
+	};
 	$("address").onkeydown = goToAddress;
 	$("rendered").onclick = click => followLink(click) || sendElementEvent("click", click, clickDetail(click));
 	$("rendered").oninput = input => sendElementEvent("input", input, inputDetail(input.composedPath()[0]));
@@ -714,6 +725,8 @@ function initialize() {
 }
 
 // for the headless probes (probes/web_playground.py, test_in_browser.py --examples): evaluate code as the page does and return the report
-window.playground = { evaluate, applyFix, chooseExample, runCode, code: () => editor.getValue(), setCode: source => editor.setValue(source), lastModule: () => lastModule, acknowledge: topic => saveAcknowledged([...acknowledged, topic]), forgetAll: () => saveAcknowledged([]) };
+window.playground = { evaluate, applyFix, chooseExample, runCode, code: () => editor.getValue(), setCode: source => editor.setValue(source), lastModule: () => lastModule, acknowledge: topic => saveAcknowledged([...acknowledged, topic]), forgetAll: () => saveAcknowledged([]),
+	// what a run waits for, for the Firefox driver's timeout report (card firefox-hello-again)
+	state: () => ({ worker: workerStage, ready: workerSettled, pending: pending?.id, queued: queued !== undefined, showing }) };
 
 (window.pageStarts ?? Promise.resolve()).then(initialize); // index.html: not before its reload for isolation
