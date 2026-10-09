@@ -87,8 +87,12 @@ jobs:
         cargo rustc --lib --no-default-features -- -D warnings
         cargo rustc --test tests --all-features -- -D warnings
       continue-on-error: ${{ startsWith(github.ref, 'refs/heads/claude/') }}
+    # `use cmath` reads glibc's math.h, deeper than the macOS one: a test thread's default 2 MB overflowed and aborted
+    # every later test (nightly since 10-05, card ci-linux-headers)
     - id: tests
       run: cargo test --verbose --no-fail-fast
+      env:
+        RUST_MIN_STACK: 33554432
       continue-on-error: ${{ startsWith(github.ref, 'refs/heads/claude/') }}
     # Clippy is denied everywhere: src/, the binary and tests/
     - id: clippy
