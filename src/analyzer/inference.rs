@@ -99,6 +99,15 @@ pub fn written_kind(node: &Node, scope: &Scope) -> Kind {
 }
 
 /// A math word's result: a Node when its argument is one, which may be a ± interval (crate::uncertain::INTERVAL_WORDS)
+/// The number a text literal spells: `"4"` is 4
+pub fn literal_number(value: &Node) -> Option<Node> {
+	match value.drop_meta() {
+		Node::Text(text) => crate::warp_parser::number_in_text(text).map(Node::Number),
+		Node::Char(digit) => digit.to_digit(10).map(|digit| Node::Number(Number::Int(digit as i64))),
+		_ => None,
+	}
+}
+
 fn interval_or(kind: Kind, argument: &Node, scope: &Scope) -> Kind {
 	if is_run_time_kind(&infer_type(argument, scope)) { Kind::Data } else { kind }
 }
@@ -164,6 +173,10 @@ pub fn infer_type(node: &Node, scope: &Scope) -> Kind {
 		Node::Key(_, Op::As, target) if matches!(target.name().to_lowercase().as_str(), "char" | "character") => Kind::Codepoint,
 		Node::Key(_, Op::As, target) if target.name().to_lowercase() == "list" => Kind::List,
 		Node::Key(_, Op::As, target) if matches!(target.name().to_lowercase().as_str(), "string" | "str" | "text") => Kind::Text,
+		// `"4" as number` is the number the text reads as: an Int, `"4.5" as number` a Float (card number-variable)
+		Node::Key(value, Op::As, target) if target.name().to_lowercase() == "number" && literal_number(value).is_some() => {
+			infer_type(&literal_number(value).expect("guarded"), scope)
+		}
 		// `v as float` is an f64; `as int`, `as exact` stay exact Ints
 		Node::Key(_, Op::As, target) if builtin_type_kind(&target.name()).is_some_and(|kind| kind.is_float()) => Kind::Float,
 		// `a or b`, `a and b` of a text or another Node give one of their operands (`"" or "d"` is "d"); of numbers an
