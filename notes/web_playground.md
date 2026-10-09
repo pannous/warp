@@ -179,6 +179,13 @@ web/playground/tests.html in headless Chrome (agent-browser, session warp-browse
   test_in_browser.py and several probes wait while it is exactly that.
   Probes: probes/firefox_hello_hang/unanswered.sh (FIREFOX_COMMAND_SECONDS=5, a promise that never resolves);
   trickle_server.py [--stall] + progress.sh (warp.wasm at 400 KB/s, or stopping after 1 MB: the note at 30 s).
+- The hang caught (2026-10-09, verify run 37895933962, live site, Firefox): isolated and service-worker controlled, but
+  playground.state() said worker "not started": worker.js never posted a single message, nothing in the console; the
+  run queued behind it. Root cause (a Worker spawned under coi-serviceworker in Firefox that never runs) still open.
+  Now playground.js restarts a starting worker silent for STALLED_START_MS (60 s; every message restarts the clock, so a
+  slow download that progresses is fine) once, with a console warning naming its stage (the verdict still fails:
+  loud, not hidden), and a second silent start rejects workerReady naming the stage, so the run fails instead of
+  waiting for ever. Probe: trickle_server.py --stall-once + restart.sh (the example shows after ~76 s).
 
 ## Modules and packages in the browser (2026-10-04)
 The compiler reads files through the page: `warp_host.fetch(address)` / `take_fetched` (web.rs `read_bytes`, cached
