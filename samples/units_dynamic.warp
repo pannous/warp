@@ -1,0 +1,19 @@
+#!/usr/bin/env warp
+// Units known only at run time: quantity("5 km") reads a quantity from text, quantity(5, unit) takes a unit given as
+// data. Each carries its unit with it. Units written in the program (`5 km`) stay static: checked at compile time,
+// plain numbers at run time. A program calling quantity loads lib/units.warp by itself
+legs = ["5 km", "250m", "1.5 km", "800 m"]
+var total = quantity(0, "km")
+for leg in legs { total = total + quantity(leg) }
+print "run: \(total), in metres \(total.in("m"))"
+
+time = quantity("45 min")
+speed = total / time
+pace = speed.to("km/h")
+print "pace: \(pace), about \(round(pace.in("km/h") * 10) / 10) km/h"
+
+unit = "kg"
+print quantity(3, unit) > quantity("2500 g")
+
+mixed = try str(total + time) else "a distance and a time do not add"
+print mixed

@@ -25,6 +25,8 @@ mod test_class_mixins;
 mod test_tagged_objects;
 mod test_class_forms_ported;
 mod test_class_operators;
+mod test_returned_instances; // card units-dynamic
+mod test_text_as_number; // card units-dynamic
 mod test_class_aliases;
 mod test_class_interfaces;
 mod test_enums_ported;

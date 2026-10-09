@@ -104,3 +104,22 @@ is any-typed at run time; its arithmetic has a text since card text-arithmetic (
 `q = p` and `ys = xs` copy the signatures (maps and lists are values). Recursion with quantities stays a loud error
 (card static-units, Later). Since card reflection step 5 the text lives in the entry `units` of the module's one
 `warp.meta` section (src/meta_section.rs), byte for byte as it was in `warp.units`; the section name below is history.
+
+## Stage 8 done (card units-dynamic, 2026-10-09): units known only at run time
+The dynamic struct, written in warp: lib/units.warp's `class Quantity {amount; dims; unit; scale}`. `quantity("5 km")`
+reads text (a decimal stays exact: "2.5" is 5/2), `quantity(5, u)` takes a unit given as data. The amount is in SI
+base units, dims packs the powers of length, mass and time as length + 256·mass + 65536·time (so `*` adds them), and
+unit/scale is the display unit. `+ - < > ==` need equal dims, else "DimensionError: cannot add 3m and 2s"; `*` and `/`
+combine (`m·m` shows `m²`, `m/s`); `q.to("m/s")` converts, `q.in("m")` gives a plain number. Units: mm cm m km, mg g kg,
+ms s min h, with powers (`m²`, `s^2`), products (`kg·m`) and one `/`.
+- Loading (modules.rs): implicit when the program calls `quantity` and defines none, so hello world carries none of it.
+  A module with classes is put in front of the program before class_methods (with_implicit_class_modules, needed
+  definitions only), so `quantity(…) + …` dispatches to Quantity's operators. An explicit `use units` is replaced by it.
+- Static units stay as they were: `5 km` written in the program is checked at compile time and has no struct.
+- Fixed on the way: `t as number` of a run-time text was the text itself (now text_as_number: an Int when whole, else
+  a Float); a function's result or an operation of instances counts as an instance for operators (class_methods.rs
+  returned_classes); a parameter named like an instance variable is its own value.
+- Open (cards): param-text-witness (`str(q)` of a parameter `q:Quantity` prints the record, the library uses
+  quantity_text), instance-result-text (`"\(q.to("m"))"` prints the record; assign it first), number-field-float.
+  A non-terminating ratio shows as a fraction (`151/15km/h`); mixing a static `1 m` with a run-time quantity is not
+  supported yet.
