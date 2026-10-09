@@ -2362,7 +2362,6 @@ impl WasmGcEmitter {
 		}
 		let node = self.type_manager.node_type;
 		let (node_ref, nullable) = (Ref(self.node_ref(false)), Ref(self.node_ref(true)));
-		let next_index = |s: &Self| s.ctx.func_registry.import_count() + s.ctx.func_registry.code_count();
 		let is_entry = |s: &Self, f: &mut Function, local: u32| {
 			s.emit_field(f, local, 0);
 			Self::emit_list(f, &[I::I64Const(KIND_MASK), I::I64And, I::I64Const(KEY_KIND), I::I64Eq]);
@@ -2395,24 +2394,25 @@ impl WasmGcEmitter {
 			s.emit_field(f, key, 2);
 			Self::emit_list(f, &[I::StructNew(node), I::Else, I::LocalGet(key), I::RefAsNonNull, I::End]);
 		});
-		// map_column_cells(cells, part): a `[…]` list of that part of every entry
-		let column_cells = next_index(self);
-		self.runtime_function(MAP_COLUMN_CELLS, vec![nullable, ValType::I32], vec![nullable], vec![], |s, f| {
-			Self::emit_list(f, &[I::LocalGet(0), I::RefIsNull, I::If(BlockType::Empty), I::RefNull(HeapType::Concrete(node)), I::Return, I::End]);
+		// map_column_cells(cells, part): a `[…]` list of that part of every entry, appended at its last cell in a loop
+		// (a call per entry exhausted the call stack near ten thousand entries)
+		self.runtime_function(MAP_COLUMN_CELLS, vec![nullable, ValType::I32], vec![nullable], vec![nullable, nullable, nullable], |s, f| {
+			let (cell, part, head, last, made) = (0, 1, 2, 3, 4);
+			Self::emit_list(f, &[I::Block(BlockType::Empty), I::Loop(BlockType::Empty), I::LocalGet(cell), I::RefIsNull, I::BrIf(1)]);
 			// a meta entry `@name:value` is no key, value or entry of the map
-			s.emit_field(f, 0, 1);
+			s.emit_field(f, cell, 1);
 			s.call(f, super::equality::IS_META_ENTRY);
-			f.instruction(&I::If(BlockType::Empty));
-			s.emit_field(f, 0, 2);
-			Self::emit_list(f, &[I::LocalGet(1), I::Call(column_cells), I::Return, I::End]);
-			f.instruction(&I::I64Const(SQUARE_LIST_KIND));
-			s.emit_field(f, 0, 1);
-			Self::emit_list(f, &[I::RefCastNonNull(HeapType::Concrete(node)), I::LocalGet(1)]);
+			Self::emit_list(f, &[I::I32Eqz, I::If(BlockType::Empty), I::I64Const(SQUARE_LIST_KIND)]);
+			s.emit_field(f, cell, 1);
+			Self::emit_list(f, &[I::RefCastNonNull(HeapType::Concrete(node)), I::LocalGet(part)]);
 			s.call(f, MAP_PART);
-			s.emit_field(f, 0, 2);
-			Self::emit_list(f, &[I::LocalGet(1), I::Call(column_cells), I::StructNew(node)]);
+			Self::emit_list(f, &[I::RefNull(HeapType::Concrete(node)), I::StructNew(node), I::LocalSet(made)]);
+			Self::emit_list(f, &[I::LocalGet(last), I::RefIsNull, I::If(BlockType::Empty), I::LocalGet(made), I::LocalSet(head), I::Else]);
+			Self::emit_list(f, &[I::LocalGet(last), I::LocalGet(made), I::StructSet { struct_type_index: node, field_index: 2 }, I::End]);
+			Self::emit_list(f, &[I::LocalGet(made), I::LocalSet(last), I::End]);
+			s.emit_field(f, cell, 2);
+			Self::emit_list(f, &[I::LocalSet(cell), I::Br(0), I::End, I::End, I::LocalGet(head)]);
 		});
-		assert_eq!(self.func_index(MAP_COLUMN_CELLS), column_cells, "recursive call index");
 		// map_column(xs, part): that part of every entry of a map, as a list; anything else unchanged
 		self.runtime_function(MAP_COLUMN, vec![node_ref, ValType::I32], vec![node_ref], vec![], |s, f| {
 			is_entry(s, f, 0);
