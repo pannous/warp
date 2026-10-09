@@ -1,0 +1,10 @@
+size := 4.0
+blue := 0.5
+glow := shader {
+	@fragment fn main(@builtin(position) at: vec4f) -> @location(0) vec4f {
+		let uv = at.xy / $size;
+		return vec4f(uv, $blue, 1.0);
+	}
+}
+paint(glow, 2, 2)
+paint(glow, 2, 2, {blue: 0.9})

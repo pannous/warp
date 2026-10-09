@@ -29,6 +29,13 @@ fn agent_without_a_key_names_the_variable() {
 	with_key(None, || fails_with("agent \"say hi\"", "ANTHROPIC_API_KEY"));
 }
 
+// card g_n6vg: the failure says where the key goes, in a terminal and in the playground
+#[test]
+fn agent_without_a_key_says_where_to_set_it() {
+	with_key(None, || fails_with("agent \"say hi\"", "export ANTHROPIC_API_KEY="));
+	with_key(None, || fails_with("agent \"say hi\"", "⋯ menu"));
+}
+
 #[test]
 fn agent_with_a_wrong_key_fails_with_the_api_reason() {
 	with_key(Some("not-a-key"), || fails_with("agent \"say hi\"", "invalid x-api-key"));

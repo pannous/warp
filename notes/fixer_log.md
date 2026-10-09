@@ -223,3 +223,23 @@ Running list of the small fixes done by the fixer session (branches fix-<topic>)
   by stopped tasks): host.js then runs a task inline, and threads.warp's `go spin(10^12)`; `stop endless` cannot stop
   an inline task. Reproduced with prepareTaskPool(0) (120 s timeout); fixed by taskPoolReady before each run and a
   replacement Worker for a stopped one. Alone the test takes 3.4 s in the browser.
+
+## 2026-10-09 print-quantity (P231)
+- print rounds a quantity fraction to two decimals (6.17km, PRINTED_AMOUNT_TEXT in static_units.rs); str, joins and the result keep (37/6)km.
+## 2026-10-09 print-km
+- `"a: " + x as km` parsed `("a: " + x) as km`: a conversion after a text join converts the last operand (units.rs with_converted_last_operand).
+## 2026-10-09 text-join
+- a longer text join with several quantities: static_units takes any sum with a text in it as a join (units::joins_text, shared with print-km).
+## 2026-10-09 prebuilt-stub
+- an installed warp (not in a cargo target) never builds warp-runtime; it uses the one shipped next to it (main.rs in_cargo_target).
+
+## 2026-10-09 orm-transaction (card orm step 5)
+- transaction { } = BEGIN … COMMIT, ROLLBACK + restore of held instances on failure, re-raised; native and browser.
+- 2026-10-09 orm-where-paging: a table filter reads only the rows it keeps (people·found), not the whole table.
+- 2026-10-09 orm-identity-map: list cursor: a loop over a list of objects indexed and counted it from the head each step (n² per walk); now O(1) per step.
+- 2026-10-09 orm-element-write: people#1.age = 5 (and a filtered row's field) is written to its row; it was refused as a copy.
+- 2026-10-09 units-function-name: a function, parameter or variable named like a unit (g(x) := x + 1 m) shadows only that unit; it switched all units passes off ("undefined variable: m").
+- 2026-10-09 units-holes: quantity comparisons give yes/no, reassigning another dimension / an int annotation / a text repeated by a quantity are DimensionErrors (four W0-model holes).
+- 2026-10-09 orm-method-reads: a class method reading a table saw it empty, and any where-filter in a method was not lowered (class bodies are no map_children children).
+- 2026-10-09 int-map: maps keyed by a run-time number gave "index out of range" (only written numbers keyed a `{}` map); global maps were cons lists (n² fills); the ORM identity map was a list searched by id (n² loads). Now keys are texts of the number, global maps and removals are hash tables, the identity map is one.
+- 2026-10-09 method-bodies: passes before class_methods::lower skipped methods (xs.keep only positive in a method failed); map_children/visit now enter class code, not fields.

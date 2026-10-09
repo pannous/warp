@@ -11,6 +11,9 @@ const INCLUDE_DIRS: &[&str] = &[
     "/opt/homebrew/include",
     "/usr/local/include",
     "/usr/include",
+    // Debian and Ubuntu: glibc's bits/ headers, which math.h includes (bits/mathcalls.h declares cbrt, pow, …)
+    "/usr/include/x86_64-linux-gnu",
+    "/usr/include/aarch64-linux-gnu",
     "/Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include",
 ];
 /// The page's include directory: the C headers of what its host provides (web/playground/lib/libc.h, P147)

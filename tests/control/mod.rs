@@ -7,6 +7,8 @@ mod test_on_error_of_function;
 mod test_empty_block_binding;
 mod test_empty_block;
 mod test_for_loop;
+mod test_for_forms; // cards print-comma, forms-space, chain-block
+mod test_help_word;
 mod test_for_over_a_number;
 mod test_mixed_range_bounds;
 mod test_if_call_condition;
@@ -33,6 +35,7 @@ mod test_unwrap;
 mod test_unwrap_message;
 mod test_switch_no_case_value;
 mod test_switch_value;
+mod test_task_dir;
 mod test_times_count_once;
 mod test_top_level_block;
 mod test_trap_messages;
@@ -136,6 +139,7 @@ mod test_aborting_handlers;
 mod test_check_assert;
 mod test_soft_tests;
 mod test_reflection_words; // card reflection
+mod test_function_dir; // card dir-function
 mod test_function_body; // card g_X_3s
 mod test_data_string; // card data-string
 mod test_multiline_errors;
@@ -156,3 +160,10 @@ mod test_print_empty; // card print-error
 mod test_database_bool_column; // card todo-app
 mod test_try_else_print; // card try-print
 mod test_database_busy; // card orm-sample-lock
+mod test_if_instance_branches; // card if-instance-branch
+mod test_table_remove; // card table-remove
+mod test_table_key_filter; // card table-key-filter
+mod test_table_transactions; // card orm step 5
+mod test_table_query_loading; // orm: a filter reads only its rows
+mod test_table_method_reads;
+mod test_table_element_writes; // orm: people#1.age = 5 writes through

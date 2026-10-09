@@ -1,0 +1,9 @@
+class T{n:text}
+class P{a:int; t:T}
+ts = [T("x")]
+p = P(1, [r for r in ts if r.n == "x"]#1)
+print p
+q = P(2, ts#1)
+print q
+r = [r for r in ts if r.n == "x"]#1
+print r

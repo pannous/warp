@@ -26,7 +26,7 @@ pub mod wasm_emitter;
 pub mod pipeline;
 /// The lowering passes the pipeline runs (src/pipeline.rs), each a module of its own; re-exported at the crate root
 pub mod lowering;
-pub use lowering::{ambiguous_forms, blocks, broadcasting, class_methods, closures, component_state, component_worlds, comprehensions, declarations, element_events, event_signals, scoped_handlers, fetch_signals, field_elements, system_signals, system_values, folding, for_loop, function_values, getters, go_blocks, gpu_maps, inlining, introspection, reflection, channel_words, lambdas, lazy_ranges, late_binding, foreign_modules, library_words, nonlocal_cells, memoization, markup_tags, style_rules, meta_entries, min_max, mutation, named_arguments, nested_index, number_keys, object_groups, shared_arrays, signal_values, overloads, page_html, parallel, parameter_shapes, phrase_calls, phrase_words, list_phrases, optional_casts, picked_calls, pipes, printable, references, result_word, routes, ruby_blocks, run_time_blocks, serve, soft_keywords, std_aliases, stored_values, database_tables, switch, traits, transitions, tuples, type_aliases, type_constructor, type_name_matching, type_tests, undo_history, variable_signals, variadic, versions, welcome_forms, word_operators};
+pub use lowering::{ambiguous_forms, blocks, broadcasting, class_methods, closures, component_state, component_worlds, comprehensions, declarations, element_events, event_signals, scoped_handlers, fetch_signals, field_elements, system_signals, system_values, folding, for_loop, function_values, getters, go_blocks, gpu_maps, inlining, introspection, reflection, channel_words, lambdas, lazy_ranges, late_binding, foreign_modules, library_words, nonlocal_cells, memoization, markup_tags, style_rules, meta_entries, min_max, mutation, named_arguments, nested_index, number_keys, object_groups, shared_arrays, signal_values, overloads, page_html, parallel, parameter_shapes, phrase_calls, phrase_words, list_phrases, word_slices, optional_casts, picked_calls, pipes, printable, references, result_word, routes, ruby_blocks, run_time_blocks, serve, soft_keywords, std_aliases, stored_values, database_tables, switch, traits, transitions, tuples, type_aliases, type_constructor, type_name_matching, type_tests, undo_history, variable_signals, variadic, versions, welcome_forms, word_operators};
 #[cfg(feature = "native")]
 pub mod wasm_reader;
 #[cfg(feature = "native")]
@@ -43,6 +43,8 @@ pub mod shared;
 pub mod paint;
 #[cfg(feature = "native")]
 pub mod paint_window;
+#[cfg(feature = "native")]
+pub mod text_raster;
 pub mod wasm_optimizer;
 pub mod warp_parser;
 pub mod wisp_parser;
@@ -51,6 +53,7 @@ pub mod operators;
 pub mod meta;
 pub mod meta_section;
 pub mod host;
+pub mod host_parts;
 #[cfg(feature = "native")]
 pub mod foreign;
 #[cfg(feature = "native")]
@@ -60,6 +63,8 @@ pub mod std_docs;
 pub mod web_server;
 #[cfg(feature = "native")]
 pub mod site;
+#[cfg(feature = "native")]
+pub mod deploy;
 #[cfg(feature = "native")]
 pub mod route_split;
 #[cfg(feature = "native")]
@@ -85,6 +90,7 @@ pub mod function_equality;
 pub mod effects;
 pub mod injection;
 pub mod interpolation;
+pub mod shader_holes;
 pub mod diagnostic;
 pub mod markup;
 pub mod headless;

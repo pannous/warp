@@ -41,6 +41,14 @@ a GPU backend (P118: only for explicit `@gpu`) receives a descriptor instead of 
   the collected list: the range may read its parameter twice.
 - Not yet: a body with statements before the range, a range of globals, a range stored in a structure.
 
+## Ranges held by a structure (card range-descriptor, 2026-10-09)
+- `r: 1..n` is the range like `r = 1..n` (user: `..` already says it is a value): blocks.rs `is_computed` and
+  checks.rs `data_binding` take a range as a value, so `{r: 1..10}`, `r: 1..5; r` read it, with no block warning.
+- A held range (`{r = 1..10^5}`, `[1..10^5, 5]`, `zs = 1..10^5; y = [zs, 5]`) is collected in linear time: a list an
+  item or a field holds only after its last append stays a typed array, converted once where it is held
+  (list_dispatch.rs `held_complete`, list_sharing.rs `Holds.places`). It was a Node list, O(n) per append. Not
+  relaxed: a list passed to a function that changes it, an `xs += …` (a written root), any shared list changed in place.
+
 ## Not yet
 - No step (`1..10 step 2` has no syntax yet); a step joins the descriptor as its third field.
 - A range printed, stored in a structure or returned from a body with statements is collected; a range value at run time (a descriptor struct the

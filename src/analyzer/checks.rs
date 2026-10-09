@@ -531,9 +531,14 @@ pub(super) fn call_arity_error(node: &Node, context: &Context) -> Option<Diagnos
 /// `sqrt(x) := …`, `def abs(x): …`: a prefix operator word reads as the operator, so the definition could never be
 /// called (P141); it arrives as `(√ ø x) := …`. Checked on the source, before a pass reads the operator
 pub fn check_operator_word_functions(program: &Node) -> Option<Diagnostic> {
+	// a method may be named so: `p.norm()` reads as the method (card class-method-named)
+	let mut methods = std::collections::HashSet::new();
+	program.visit(&mut |node| if let Node::Type { body, .. } = node {
+		body.visit(&mut |part| { methods.insert(part as *const Node); });
+	});
 	let mut clash = None;
 	program.visit(&mut |node| {
-		if clash.is_some() {
+		if clash.is_some() || methods.contains(&(node as *const Node)) {
 			return;
 		}
 		let defined = match node {
@@ -718,7 +723,8 @@ pub(super) fn data_binding(item: &Node) -> Option<(&str, &Node)> {
 	let Node::Symbol(name) = key.drop_meta() else { return None };
 	// a value, or data made of values: `colors:{red:(1 0 0)}` is read by a sibling as `colors.red` (wiki variable.md)
 	let is_data = matches!(value.drop_meta(), Node::Number(_) | Node::Text(_) | Node::Char(_))
-		|| matches!(value.drop_meta(), Node::List(items, _, _) if !items.is_empty()) && is_data_node(value);
+		|| matches!(value.drop_meta(), Node::List(items, _, _) if !items.is_empty()) && is_data_node(value)
+		|| matches!(value.drop_meta(), Node::Key(from, Op::Range | Op::To, to) if is_data_node(from) && is_data_node(to));
 	is_data.then(|| (name.as_str(), value.drop_meta()))
 }
 
@@ -1261,7 +1267,12 @@ pub(super) fn check_parameter_annotations(program: &Node) -> Option<Diagnostic> 
 			Some(element) => is_known_name(element) || names_list_type(element),
 			None => annotated_kind(annotation).is_some() || user_types.get_by_name(type_name.trim_end_matches('?')).is_some() || traits.is_trait(&type_name),
 		};
-		(!known).then(|| Diagnostic::at(annotation, format!("unknown type {type_name} of parameter {}", param.name)))
+		let names = crate::law::type_model::BUILTIN_TYPE_WORDS.iter().map(|word| word.to_string()).chain(user_types.types().iter().map(|type_def| type_def.name.clone()));
+		let diagnostic = || Diagnostic::at(annotation, format!("unknown type {type_name} of parameter {}", param.name));
+		(!known).then(|| match crate::extensions::strings::near_miss(&type_name, names) {
+			Some(near) => diagnostic().offer(format!("the type {near}"), &type_name, near),
+			None => diagnostic(),
+		})
 	})
 }
 
@@ -1273,6 +1284,11 @@ pub(crate) fn declaring_name_and_type(target: &Node) -> Option<(String, String)>
 	};
 	match (name, type_name) {
 		(Node::Symbol(name), Node::Symbol(type_name)) => Some((name, type_name)),
+		// `xs: [int]` is `xs: list of int`
+		(Node::Symbol(name), Node::List(items, Bracket::Square, _)) => match items.as_slice() {
+			[element] => Some((name, format!("{LIST_OF_PREFIX}{}", element.drop_meta().name()))),
+			_ => None,
+		},
 		(Node::Symbol(name), union) => Some((name, union_type_name(&union)?)),
 		_ => None,
 	}
@@ -1504,7 +1520,8 @@ pub(super) fn assignment_mismatch(assignment: &Node, name: &str, type_name: &str
 	}
 	if matches!(value.drop_meta(), Node::Empty) && builtin_type_kind(type_name).is_some() {
 		let message = format!("type mismatch: {name} is declared {type_name}, cannot assign ø");
-		return Some(Diagnostic::at(assignment, message).fix(format!("declare {name}:{type_name}? to allow ø")));
+		return Some(Diagnostic::at(assignment, message).fix(format!("declare {name}:{type_name}? to allow ø"))
+			.offer("allow ø", format!("{name}:{type_name}"), format!("{name}:{type_name}?")));
 	}
 	if let Some(element) = list_element_type(type_name) {
 		return list_items_mismatch(assignment, name, type_name, element, value);
@@ -1512,7 +1529,10 @@ pub(super) fn assignment_mismatch(assignment: &Node, name: &str, type_name: &str
 	let actual = literal_misfit(type_name, value)?;
 	let value_text = value.serialize();
 	let message = format!("type mismatch: {name} is declared {type_name}, cannot assign {} {value_text}", format!("{actual:?}").to_lowercase());
-	Some(Diagnostic::at(assignment, message).fix(format!("{name}={type_name}({value_text}) or declare {name}:{}", format!("{actual:?}").to_lowercase())))
+	let actual = format!("{actual:?}").to_lowercase();
+	Some(Diagnostic::at(assignment, message).fix(format!("{name}={type_name}({value_text}) or declare {name}:{actual}"))
+		.offer(format!("the {type_name} of the value"), &value_text, format!("{type_name}({value_text})"))
+		.offer(format!("{name} holds {actual}"), format!("{name}:{type_name}"), format!("{name}:{actual}")))
 }
 
 /// The kind of a literal `value` that does not fit the built-in type `type_name`; None when it fits or is no literal
@@ -1578,9 +1598,16 @@ fn evident_items_mismatch(assignment: &Node, name: &str, type_name: &str, value:
 	Some(Diagnostic::at(assignment, message).fix(format!("declare {name}:list to hold any items")))
 }
 
-/// The first literal item of a list value that does not fit `element`, with its kind
+/// The first literal item of a list value that does not fit `element`, with its kind: of another kind, or an int
+/// outside a fixed width (`xs: [int16] = [70000]`)
 pub(crate) fn misfit_item<'a>(element: &str, value: &'a Node) -> Option<(&'a Node, Kind)> {
-	added_items(value)?.iter().find_map(|item| Some((item, literal_misfit(element, item)?)))
+	added_items(value)?.iter().find_map(|item| Some((item, literal_misfit(element, item).or_else(|| out_of_width(element, item))?)))
+}
+
+fn out_of_width(element: &str, item: &Node) -> Option<Kind> {
+	let width = crate::fixed_width::fixed_width(element)?;
+	let Node::Number(Number::Int(value)) = item.drop_meta() else { return None };
+	(!(width.low..=width.high).contains(&(*value as i128))).then_some(Kind::Int)
 }
 
 /// The list variable `names` of an element `names#i`

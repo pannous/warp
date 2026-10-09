@@ -207,7 +207,7 @@ pub fn infer_type(node: &Node, scope: &Scope) -> Kind {
 			match (raises_error(then_expr), raises_error(else_expr)) {
 				(true, false) => branch_kind(else_expr, scope),
 				(false, true) => branch_kind(then_expr, scope),
-				_ => branches_kind(infer_type(if_then, scope), branch_kind(else_expr, scope)),
+				_ => branches_kind(branch_kind(then_expr, scope), branch_kind(else_expr, scope)),
 			}
 		}
 		Node::Key(if_condition, Op::Then, then_expr) if matches!(if_condition.drop_meta(), Node::Key(_, Op::If, _)) => {
@@ -215,10 +215,11 @@ pub fn infer_type(node: &Node, scope: &Scope) -> Kind {
 		}
 		// An element: `xs#i`, `xs[i]`, `text#i`
 		// a value looked up by a name in a map of unknown values (`graph[node]` of a parameter) is held as a Node
-		// a field read by name with a declared kind: `v.x` of `type V {x: float}`
+		// a field read by name with a declared kind: `v.x` of `type V {x: float}`; a field of a value known only at run time
+		// (`request.body.priority` of an any) holds what it holds, whatever a class's field of that name declares
 		Node::Key(indexed, Op::Hash, index) if crate::warp_parser::subscript_key(index)
 			.and_then(|key| match key.drop_meta() { Node::Text(name) => scope.function_kind(&field_kind_key(name)), _ => None })
-			.is_some() && !matches!(indexed.drop_meta(), Node::Empty) => {
+			.is_some() && !matches!(indexed.drop_meta(), Node::Empty) && !declared_any(indexed, scope) => {
 			let Some(Node::Text(name)) = crate::warp_parser::subscript_key(index).map(Node::drop_meta) else { unreachable!("guarded") };
 			scope.function_kind(&field_kind_key(name)).expect("guarded")
 		}
@@ -479,8 +480,9 @@ pub(crate) fn branch_kind(branch: &Node, scope: &Scope) -> Kind {
 /// Either branch a reference type (Text, Symbol, List…) or a character: the value is a Node, else a number
 pub(super) fn branches_kind(then_kind: Kind, else_kind: Kind) -> Kind {
 	let kinds = [then_kind, else_kind];
-	if then_kind == Kind::Codepoint && else_kind == Kind::Codepoint {
-		Kind::Codepoint
+	if then_kind == else_kind && (then_kind.is_ref() || then_kind == Kind::Codepoint) {
+		// two instances or two maps (`if c then T{…} else T{…}`) stay what they are
+		then_kind
 	} else if kinds.contains(&Kind::List) {
 		// a list and a list (or ø, the empty list) is a list; a list and anything else a Node of its run-time kind
 		if kinds.iter().all(|kind| matches!(kind, Kind::List | Kind::Empty)) { Kind::List } else { Kind::Data }
@@ -505,4 +507,14 @@ pub fn spelled_number(node: &Node) -> Option<Node> {
 	let Node::Key(value, Op::As, target) = node.drop_meta() else { return None };
 	let is_number_word = matches!(target.name().to_lowercase().as_str(), "number" | "num");
 	is_number_word.then(|| literal_number(value)).flatten()
+}
+
+/// A value declared `any` (`r: any`, a route's `request`) or a field of one (`request.body`): known only at run time
+fn declared_any(node: &Node, scope: &Scope) -> bool {
+	match node.drop_meta() {
+		Node::Symbol(name) => scope.lookup(name).and_then(|local| local.type_node.as_deref())
+			.is_some_and(|type_node| matches!(type_node.drop_meta(), Node::Symbol(type_name) if type_name == crate::type_kinds::UNTYPED_FIELD)),
+		Node::Key(indexed, Op::Hash, _) => declared_any(indexed, scope),
+		_ => false,
+	}
 }

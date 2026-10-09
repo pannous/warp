@@ -3,6 +3,7 @@
 # WARP_BRIDGE_LOOP = False and calls answer() itself.
 import sys, json, importlib, numbers, operator, types
 handles = {}
+SETTER_PREFIX = "set "  # src/lowering/foreign_modules.rs: "set name" sets the attribute to the one argument
 operators = types.SimpleNamespace(**vars(operator), len=len, list=list)
 def handle(value):
     handles[len(handles) + 1] = value
@@ -33,7 +34,12 @@ def answer(line):
     try:
         module = request["module"]
         value = unplain(module) if isinstance(module, dict) else operators if module == "operator" else importlib.import_module(module)
-        for part in request["member"].split("."):
+        member = request["member"]
+        if member.startswith(SETTER_PREFIX):
+            given = unplain(request["arguments"])[0]
+            setattr(value, member[len(SETTER_PREFIX):], given)
+            return json.dumps({"value": plain(given)})
+        for part in member.split("."):
             value = getattr(value, part)
         if request["arguments"] is not None:
             value = value(*unplain(request["arguments"]))

@@ -1,0 +1,13 @@
+class Person{name: text; age: int}
+stored people: [Person]
+if count(people) < 3 {
+	people.add(Person("Cy", 41))
+	people.add(Person("Di", 52))
+}
+print "before: " + count(people)
+for gone in people where gone.name == "Cy" { people.remove(gone) }
+print "after: " + count(people) + " " + str(people.map(p => p.name))
+di = people#(count(people))
+people.remove(di)
+print "di gone: " + di.id + " " + count(people)
+people.map(p => p.name)

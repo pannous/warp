@@ -111,7 +111,8 @@ impl WarpParser {
 			if at_end {
 				if let Some(closer) = close.filter(|_| ch == '\0') {
 					let (line, column) = self.group_start;
-					return error(&format!("`{closer}` is missing: the group opened at {line}:{column} runs to the end of the input"));
+					let message = format!("`{closer}` is missing: the group opened at {line}:{column} runs to the end of the input");
+					return missing_closer(message, closer, crate::fixits::end_of_source(&self.input));
 				}
 				if close.is_some() {
 					self.advance(); // consume closing bracket
@@ -151,6 +152,25 @@ impl WarpParser {
 				continue;
 			}
 
+			// `def f(n)` and the lines indented below it by spaces, as `def f(n):` (by tabs the rule below takes them); Ruby's
+			// `def f(n) … end` is read by its end
+			let defines = items_with_seps.get(statement_start).is_some_and(|(first, _)| matches!(first.drop_meta(), Symbol(word) if is_function_keyword(word)));
+			let ruby_definition = defines && self.closing_end_follows(&RUBY_END_OPENERS);
+			// a top-level Ruby `def f(n)` with its lines indented by tabs: the indented block, then its `end` (the tab rule
+			// below would make each line the block of the one before)
+			let tab_indented_ruby = ruby_definition && self.base_indent == 0 && self.next_line_starts_with_tab();
+			let item = match defines && (!ruby_definition || tab_indented_ruby) && self.only_blanks_before_newline() {
+				true => match self.parse_indented_block() {
+					Some(body) => {
+						if tab_indented_ruby {
+							self.skip_end_line();
+						}
+						Node::Key(Box::new(item), Op::Colon, Box::new(body))
+					}
+					None => item,
+				},
+				false => item,
+			};
 			let (had_newline, line_indent, comment) = self.skip_whitespace_and_comments();
 			self.pending_comment = comment;
 

@@ -14,12 +14,12 @@ fn build_errors(name: &str, source: &str) -> String {
 #[test]
 fn a_program_with_tasks_says_tasks_need_runtime() {
 	let errors = build_errors("standalone_tasks", "twice(x) := x * 2\njob = go twice(21)\nawait job");
-	assert!(errors.contains("tasks need runtime."), "{errors}");
+	assert!(errors.contains("tasks used runtime."), "{errors}");
 	assert!(!errors.contains("task_spawn"), "{errors}");
 }
 
 #[test]
 fn fetch_says_fetch_and_files_need_runtime() {
 	let errors = build_errors("standalone_fetch_needs", "fetch \"https://example.com\"");
-	assert!(errors.contains("fetch and files need runtime."), "{errors}");
+	assert!(errors.contains("fetch and files used runtime."), "{errors}");
 }

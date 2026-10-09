@@ -4,6 +4,7 @@
 // might have meant is an "I meant: …" button that rewrites the code at the warning and runs it again (notes/fixits.md).
 
 const ACKNOWLEDGED_KEY = "warp-playground-acknowledged";
+const HINTS_KEY = "warp-playground-hints"; // the hints checkbox, on by default (card hints-toggle)
 const SIZES_KEY = "warp-playground-sizes"; // the guide's width and the editor's height as the resizers left them
 const GUIDE_WIDTH_RANGE = [200, 0.6]; // pixels, then the share of the page's width
 const EDITOR_HEIGHT_RANGE = [120, 0.85]; // pixels, then the share of the window's height
@@ -18,10 +19,16 @@ const PENDING_VALUE = "…"; // the value shown from Run until the new one arriv
 const DEFAULT_EXAMPLE = "hello";
 const COMMIT_URL = "https://github.com/pannous/warp/commit/";
 const SHORT_COMMIT = 9;
+// terminal codes in printed text (`print "\e[H"`, samples/game_of_life.warp): clearing the screen or moving the cursor
+// home starts the text anew, the other codes (colors, cursor moves) are dropped
+const TERMINAL_RESTART = /\x1b\[(?:2J|H|1;1H)/g;
+const TERMINAL_CODE = /\x1b\[[0-9;?]*[A-Za-z]/g;
 const EXAMPLE_PARAMETERS = ["example", "sample"]; // ?example=fizzbuzz (or #fizzbuzz) picks a tour example or sample; the address shows the chosen one as #fizzbuzz
 const DEBUG_PARAMETER = "debug"; // ?debug runs warp.debug.wasm: Rust names and lines in traces and the debugger
 const DEBUG_COMPILER = "warp.debug.wasm";
 const SLOW_START_PARAMETER = "slow_start"; // ?slow_start=<ms>: the worker reports ready that much later (a slow machine)
+// a starting worker silent this long is stuck (card firefox-hello-hang, three of six deploys): started again once, loudly
+const STALLED_START_MS = 60_000;
 const ACKNOWLEDGED = "acknowledged";
 const ACKNOWLEDGED_PREFIX = "ack:";
 const STDERR = 2;
@@ -136,7 +143,17 @@ function showAgain(topic) {
 
 // ---- the worker ---------------------------------------------------------------------------------------------
 
-function startWorker() {
+// a starting worker silent for STALLED_START_MS: started again once (a warning), then its runs fail naming its stage
+function restartStalledWorker(stalledWorker, restarts, resolve, reject) {
+	const stall = `the compiler's worker gave no sign for ${STALLED_START_MS / 1000} s at stage "${workerStage}"`;
+	if (restarts > 0) return reject(new Error(stall));
+	console.warn(`${stall}: starting it again`);
+	stalledWorker.terminate();
+	startWorker(restarts + 1);
+	resolve(workerReady);
+}
+
+function startWorker(restarts = 0) {
 	workerWarmed = false;
 	const options = new URLSearchParams();
 	if (debugBuild) options.set("compiler", DEBUG_COMPILER);
@@ -146,18 +163,34 @@ function startWorker() {
 	worker = new Worker(options.size ? `worker.js?${options}` : "worker.js");
 	showLoading("starting the compiler's worker", false);
 	workerReady = new Promise((resolve, reject) => {
+		const starting = worker;
+		let stalled;
+		// each message of the starting worker shows it alive: the stall timer starts over
+		const watchStart = () => {
+			clearTimeout(stalled);
+			stalled = setTimeout(() => restartStalledWorker(starting, restarts, resolve, reject), STALLED_START_MS);
+		};
+		const settled = outcome => value => {
+			clearTimeout(stalled);
+			stalled = undefined;
+			outcome(value);
+		};
+		const [ready, failed] = [settled(resolve), settled(reject)];
+		watchStart();
 		// worker.js or a script it imports failed to load: without this the first run waits for "ready" forever (card firefox-hello-hang)
-		worker.onerror = event => reject(new Error(`the compiler's worker failed to start: ${event.message || "worker.js did not load"}`));
+		worker.onerror = event => failed(new Error(`the compiler's worker failed to start: ${event.message || "worker.js did not load"}`));
 		worker.onmessage = ({ data }) => {
 			if (data.type === "notify") data = notification(data.text);
 			if (!data) return;
+			if (stalled) watchStart();
 			if (data.type === "stage") return workerStage = data.stage;
 			if (data.type === "loading") return showLoading(`loading the compiler: ${megabytes(data.loaded)}${data.total ? ` of ${megabytes(data.total)}` : ""} MB`);
 			if (data.type === "compiling") return stopLoading();
-			if (data.type === "ready") return resolve();
+			if (data.type === "ready") return ready();
 			if (data.type === "stored") return keepValue(data.name, data.value, data.file);
 			if (data.type === "clipboard") return copyText(data.text);
-			if (data.type === "failed") return reject(new Error(data.message));
+			if (data.type === "failed") return failed(new Error(data.message));
+			if (data.type === "bundle") return bundled(data.bundle); // deploy.js
 			if (!pending) return showEventOutput(data);
 			if (data.type === "listening") Object.assign(pending, { listening: data.events, address: data.address });
 			if (data.type === "print") printedChunk(pending, data);
@@ -170,6 +203,7 @@ function startWorker() {
 	});
 	// a slow start (the CI runner) finishes after the first run began: "ready" then must not hide its "running…"
 	workerReady.then(() => stopLoading() || showing || setStatus("ready"), failure => stopLoading() || setStatus(failure.message, true));
+	workerSettled = "starting";
 	workerReady.then(() => workerSettled = "ready", failure => workerSettled = `failed: ${failure.message}`);
 	tellSystemValues();
 	sharePointer();
@@ -226,19 +260,25 @@ function startsFrame(run, output) {
 	return starts;
 }
 
+// each painting shows at once, while the program still runs: one the size of the last replaces it, as a frame (card
+// g_oldM: `if frame % 6 == 0 { render() }` animates without a sleep, as the native window does)
 function painted(run, painting) {
-	if (!startsFrame(run, "paintings")) return run.paintings.push(painting);
-	run.paintings = [painting];
-	showFrame(painting);
+	const last = run.paintings.at(-1);
+	if (startsFrame(run, "paintings")) run.paintings = [];
+	else if (last && sameSize(last, painting)) run.paintings.pop();
+	run.paintings.push(painting);
+	showFrame(run.paintings);
 }
 
-// a text frame (`render(); sleep(.1s)`) arrives line by line: the last one is shown whole once the next one begins
+// a text frame (`render(); sleep(.1s)`) arrives line by line: the last one is shown whole once the next one begins.
+// Before any frame each print shows at once, so a print before a slow paint is read while it renders (card print-watch)
 function printedChunk(run, chunk) {
 	if (startsFrame(run, "printed")) {
 		showPrinted(run.printed);
 		run.printed = [];
 	}
 	run.printed.push(chunk);
+	if (!run.animating) showPrinted(run.printed);
 }
 
 function stopAfterTimeout(run) {
@@ -369,6 +409,7 @@ function showReport(report) {
 	showPaintings(report.paintings ?? []);
 	listenTo(report.listening ?? []);
 	showAddress(report.address);
+	const hints = $("hints").checked ? report.hints : [];
 	const notes = report.notes ?? [];
 	const inline = new Set((report.warnings ?? []).map(warning => warning.topic).filter(topic => notes.includes(topic)));
 	const expressionOf = topic => (report.got_it ?? []).find(offer => offer.topic === topic)?.expression;
@@ -378,9 +419,9 @@ function showReport(report) {
 		...(report.errors ?? []).map(error => shown("error", error)),
 		...report.warnings.map(warning => shown("warning", warning, inline.has(warning.topic) ? gotIt(warning.topic, warning.expression_key, warning.line) : "")),
 		...report.runtime_warnings.map(message => diagnostic("warning", "runtime", message)),
-		...report.hints.map(hint => diagnostic("hint", hint.position, "prefer ", code(hint.canonical), " over ", code(hint.original),
+		...hints.map(hint => diagnostic("hint", hint.position, "prefer ", code(hint.canonical), " over ", code(hint.original),
 			element("span", { className: "reason" }, hint.reason), fixButtons(hint.fixes))),
-		...notes.filter(topic => !inline.has(topic)).map(topic => diagnostic("note", "", `the ${topic} note above shows until you say `, gotIt(topic, expressionOf(topic)))),
+		...notes.filter(topic => !inline.has(topic) && $("hints").checked).map(topic => diagnostic("note", "", `the ${topic} note above shows until you say `, gotIt(topic, expressionOf(topic)))),
 	];
 	$("diagnostics").replaceChildren(...items);
 	markPositions(report);
@@ -450,19 +491,32 @@ function submitForm(submitted) {
 }
 
 function showPaintings(paintings) {
+	$("full-screen").hidden = paintings.length === 0;
 	$("paintings").replaceChildren(...paintings.map(painting => {
 		const canvas = element("canvas", { width: painting.width, height: painting.height, className: "painting" });
 		canvas.style.width = `${painting.width * Math.max(1, Math.floor(PAINT_SHOWN_SIDE / Math.max(painting.width, painting.height, 1)))}px`;
+		canvas.style.setProperty("--aspect", painting.width / Math.max(painting.height, 1));
 		return drawn(canvas, painting);
 	}));
 }
 
-// an animation's next frame drawn into the canvas shown, which keeps the pointer over it; another size is a new canvas
-function showFrame(painting) {
+const sameSize = (one, other) => one.width === other.width && one.height === other.height;
+
+// the run's paintings, its last one drawn into the canvas shown for it, which keeps the pointer over it
+function showFrame(paintings) {
 	const shown = $("paintings").querySelectorAll("canvas");
-	const [canvas] = shown;
-	if (shown.length === 1 && canvas.width === painting.width && canvas.height === painting.height) drawn(canvas, painting);
-	else showPaintings([painting]);
+	const canvas = shown[shown.length - 1];
+	const painting = paintings.at(-1);
+	if (shown.length === paintings.length && sameSize(canvas, painting)) drawn(canvas, painting);
+	else showPaintings(paintings);
+}
+
+// ⛶ (card little-full): the last painting fills the screen at its own aspect ratio, Esc or ⛶ again leaves; a click
+// on ⛶ is no click of the program's `on click`
+function toggleFullScreen(click) {
+	click.stopPropagation();
+	if (document.fullscreenElement) document.exitFullscreen();
+	else $("painted").requestFullscreen();
 }
 
 function drawn(canvas, { pixels, width, height }) {
@@ -540,8 +594,14 @@ function clickDetail(click) {
 	return { x: Math.floor((click.clientX - bounds.left) * scale), y: Math.floor((click.clientY - bounds.top) * scale) };
 }
 
+function terminalText(text) {
+	const restarts = [...text.matchAll(TERMINAL_RESTART)];
+	const last = restarts.at(-1);
+	return (last ? text.slice(last.index + last[0].length) : text).replace(TERMINAL_CODE, "");
+}
+
 function showPrinted(chunks) {
-	const printed = chunks.map(chunk => chunk.stream === STDERR ? "" : chunk.text).join("");
+	const printed = terminalText(chunks.map(chunk => chunk.stream === STDERR ? "" : chunk.text).join(""));
 	$("printed").textContent = printed;
 	$("printed").hidden = printed === "";
 }
@@ -549,7 +609,7 @@ function showPrinted(chunks) {
 // what a handler printed, painted and gave, while no run is pending
 function showEventOutput(data) {
 	if (data.type === "print" && data.stream !== STDERR) {
-		$("printed").textContent += data.text;
+		$("printed").textContent = terminalText($("printed").textContent + data.text);
 		$("printed").hidden = false;
 	}
 	if (data.type === "paint") showPaintings([data]);
@@ -610,11 +670,14 @@ function showBuildSwitch() {
 		title: debugBuild ? "warp.debug.wasm: Rust function names and lines in traces and the browser's debugger" : "warp.wasm, the small one" });
 }
 
-// the commit the page was built from (build.sh version.js), linked to it on GitHub
+// the commit the page was built from and the build time in the viewer's time zone (build.sh version.js), linked to
+// the commit on GitHub
 function showVersion() {
 	if (!PLAYGROUND_VERSION) return;
-	const { commit, date } = PLAYGROUND_VERSION;
-	Object.assign($("version"), { href: `${COMMIT_URL}${commit}`, textContent: `version ${commit.slice(0, SHORT_COMMIT)} · ${date}`, hidden: false });
+	const { commit, date, built } = PLAYGROUND_VERSION;
+	const when = built ? new Date(built).toLocaleString([], { dateStyle: "short", timeStyle: "short" }) : date;
+	Object.assign($("version"), { href: `${COMMIT_URL}${commit}`, textContent: `version ${commit.slice(0, SHORT_COMMIT)} · built ${when}`,
+		title: `committed ${date}`, hidden: false });
 }
 
 function downloadModule() {
@@ -632,10 +695,15 @@ function runNow() {
 	return show(editor.getValue());
 }
 
-// Run pressed (the button, Ctrl/Cmd-Enter): the old value gives way to "…" at once, so it is not taken for the new one
+// Run pressed (the button, Ctrl/Cmd-Enter): the old value gives way to "…" at once, and the old errors, warnings,
+// underlines and printed text go, so none is taken for the new run's (card g_oc54)
 function runPressed() {
 	showValue(PENDING_VALUE);
 	$("value").classList.remove("located");
+	$("value").onclick = null;
+	$("diagnostics").replaceChildren();
+	markPositions({});
+	showPrinted([]);
 	return runNow();
 }
 
@@ -691,7 +759,7 @@ function initialize() {
 	editor = CodeMirror.fromTextArea($("code"), {
 		// fixedGutter moves the gutter on every scroll, which Firefox warns about; wrapped lines never scroll sideways
 		lineNumbers: true, lineWrapping: true, fixedGutter: false, mode: "warp", indentWithTabs: true, tabSize: 4,
-		extraKeys: { "Ctrl-Enter": runPressed, "Cmd-Enter": runPressed },
+		extraKeys: SHORTCUTS, // shortcuts.js
 	});
 	editor.on("change", () => {
 		if (!$("auto").checked) return;
@@ -699,6 +767,12 @@ function initialize() {
 		typingTimer = setTimeout(runNow, TYPING_DELAY_MS);
 	});
 	$("run").onclick = runPressed;
+	$("full-screen").onclick = toggleFullScreen;
+	try { $("hints").checked = localStorage.getItem(HINTS_KEY) !== "off"; } catch { /* private window: on */ }
+	$("hints").onchange = () => {
+		try { localStorage.setItem(HINTS_KEY, $("hints").checked ? "on" : "off"); } catch { /* private window: lasts for this page */ }
+		runNow();
+	};
 	$("address").onkeydown = goToAddress;
 	$("rendered").onclick = click => followLink(click) || sendElementEvent("click", click, clickDetail(click));
 	$("rendered").oninput = input => sendElementEvent("input", input, inputDetail(input.composedPath()[0]));
@@ -713,6 +787,7 @@ function initialize() {
 	fillExamples();
 	startWorker();
 	startAssistant(editor, tellEnvironment);
+	startCompletion(editor);
 	chooseExample(requestedExample() ?? DEFAULT_EXAMPLE);
 	addEventListener("hashchange", chooseExampleOfHash);
 }

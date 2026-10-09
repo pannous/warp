@@ -15,5 +15,5 @@ print "pace: \(pace), about \(round(pace.in("km/h") * 10) / 10) km/h"
 unit = "kg"
 print quantity(3, unit) > quantity("2500 g")
 
-mixed = try str(total + time) else "a distance and a time do not add"
+mixed = try str(total + time) else "distance and time do not add"
 print mixed

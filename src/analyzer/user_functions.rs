@@ -4,6 +4,8 @@ use super::*;
 
 /// The type word of a value that is an int or a float
 const NUMBER_TYPE: &str = "number";
+/// The printing words, which `print #xs` and `print -1` call like a function of the program (card print-people)
+const PRINT_WORDS: [&str; 2] = ["print", "puts"];
 
 /// Kind of a value known before running the program
 pub(crate) fn literal_kind(value: &Node) -> Option<Kind> {
@@ -77,7 +79,7 @@ pub fn function_body_scope(params: &[Param], body: &Node, function_kinds: &HashM
 	let mut scope = Scope::with_function_kinds(function_kinds.clone()).with_closure_targets(closure_variable_targets.clone());
 	scope.globals = globals.clone(); // `d = o; return d` of a declared global keeps the global's kind
 	for param in params {
-		scope.define_param(param.name.clone(), param_kind(param));
+		scope.define_param(param, param_kind(param));
 	}
 	collect_variables(body, &mut scope);
 	scope
@@ -186,6 +188,9 @@ fn is_loop(node: &Node) -> bool {
 pub(crate) fn annotated_kind(type_node: &Node) -> Option<Kind> {
 	if crate::type_constructor::instance_parts_marked(type_node) {
 		return Some(Kind::Key); // `p:person` of a declared type (traits::lower_conformances): an instance
+	}
+	if crate::uncertain::is_interval_number(type_node) {
+		return Some(Kind::Empty); // `a:number` given a ± value: a Node, checked at run time (wasm_emitter admitted)
 	}
 	let type_name = type_node.name();
 	if bracketed_list_type(type_node).is_some() || names_list_type(&type_name) {
@@ -585,9 +590,9 @@ pub(super) fn with_closure_captures(ctx: &Context, program: &Node, mut globals: 
 		let enclosing = ctx.enclosing_functions.get(&function.name).and_then(|name| ctx.user_functions.get(name));
 		let captured: Vec<(String, Kind)> = match enclosing {
 			Some(enclosing) => {
-				let mut enclosing_scope = Scope::new();
+				let mut enclosing_scope = Scope::with_function_kinds(known_function_kinds(ctx));
 				for param in &enclosing.params {
-					enclosing_scope.define_param(param.name.clone(), param_kind(param));
+					enclosing_scope.define_param(param, param_kind(param));
 				}
 				collect_variables(&enclosing.body, &mut enclosing_scope);
 				let mut captured = captured_variables(function, &enclosing_scope);
@@ -616,8 +621,9 @@ pub(crate) fn declared_globals(program: &Node) -> HashMap<String, Local> {
 	scope.globals
 }
 
-/// `f -x` with a user or built-in function `f` is the call `f(-x)`: a function is never an operand of a subtraction.
-/// A built-in name that the program also binds as a variable or parameter (`exp-1`) stays a subtraction.
+/// `f -x` with a user or built-in function `f` is the call `f(-x)`, and `print #xs` is `print(#xs)`: a function is never
+/// an operand of a subtraction nor indexed (card print-people). A built-in name that the program also binds as a
+/// variable or parameter (`exp-1`) stays a subtraction.
 pub fn lower_negated_calls(node: Node) -> Node {
 	let mut ctx = Context::new();
 	extract_user_functions_inner(&mut ctx, &node);
@@ -637,13 +643,14 @@ pub fn applicable_function_names(node: &Node) -> HashSet<String> {
 pub(super) fn negate_calls(node: Node, functions: &std::collections::BTreeMap<String, UserFunctionDef>, bound: &HashSet<String>) -> Node {
 	let is_function = |operand: &Node| match operand.drop_meta() {
 		Node::Symbol(name) => functions.get(name).is_some_and(|function| !function.params.is_empty())
-			|| (crate::real::FUNCTIONS.contains(&name.as_str()) && !bound.contains(name)),
+			|| ((crate::real::FUNCTIONS.contains(&name.as_str()) || PRINT_WORDS.contains(&name.as_str())) && !bound.contains(name)),
 		_ => false,
 	};
 	match node {
-		Node::Key(function, Op::Sub, argument) if is_function(&function) => {
-			let negated = Node::Key(Box::new(Node::Empty), Op::Neg, Box::new(negate_calls(*argument, functions, bound)));
-			Node::List(vec![*function, negated], Bracket::Round, Separator::None)
+		Node::Key(function, op @ (Op::Sub | Op::Hash), argument) if is_function(&function) => {
+			let prefix = if op == Op::Sub { Op::Neg } else { Op::Hash };
+			let argument = Node::Key(Box::new(Node::Empty), prefix, Box::new(negate_calls(*argument, functions, bound)));
+			Node::List(vec![*function, argument], Bracket::Round, Separator::None)
 		}
 		Node::Key(left, op, right) => Node::Key(Box::new(negate_calls(*left, functions, bound)), op, Box::new(negate_calls(*right, functions, bound))),
 		Node::List(items, bracket, separator) => Node::List(items.into_iter().map(|item| negate_calls(item, functions, bound)).collect(), bracket, separator),
@@ -659,14 +666,19 @@ pub(super) fn infer_closure_parameters(ctx: &mut Context, program: &Node) {
 	let variable_kinds = variable_kinds(program, ctx, true);
 	loop {
 		let mut inferred: Vec<(String, usize, Kind)> = vec![];
-		let scopes = std::iter::once((program, HashMap::new())).chain(ctx.user_functions.values().map(|function| {
-			let params: HashMap<String, Kind> = function.params.iter().map(|param| (param.name.clone(), param_kind(param))).collect();
-			(function.body.as_ref(), params)
-		}));
-		for (body, params) in scopes {
+		// the kinds of each scope's parameters and variables: `m = float(2.5)` captured by a closure is a float
+		let function_kinds: HashMap<String, Kind> = ctx.user_functions.iter().map(|(name, function)| (name.clone(), function.return_kind)).collect();
+		let scope_kinds = |params: &[Param], body: &Node| -> HashMap<String, Kind> {
+			let scope = function_body_scope(params, body, &function_kinds, &HashMap::new(), &ctx.closure_variable_targets);
+			scope.locals.into_iter().map(|(name, local)| (name, local.kind)).collect()
+		};
+		let scopes: Vec<(&Node, HashMap<String, Kind>)> = std::iter::once((program, scope_kinds(&[], program)))
+			.chain(ctx.user_functions.values().map(|function| (function.body.as_ref(), scope_kinds(&function.params, &function.body))))
+			.collect();
+		for (body, kinds) in scopes {
 			body.visit(&mut |node| {
 				let value_kind = |value: &Node| match value.drop_meta() {
-					Node::Symbol(name) => params.get(name).or(variable_kinds.get(name)).copied(),
+					Node::Symbol(name) => kinds.get(name).or(variable_kinds.get(name)).copied(),
 					// a cell's value is a Node of any kind (a signal's new value, lowering/signal_values.rs)
 					Node::List(items, _, _) if items.first().is_some_and(|word| word.drop_meta().name() == crate::wasm_emitter::cells::CELL_GET) => Some(Kind::Empty),
 					_ => argument_literal_kind(value),

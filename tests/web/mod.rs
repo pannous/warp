@@ -3,10 +3,16 @@ mod test_uniscript;
 #[cfg(feature = "native")] // wasmtime, files or network: not in the browser build
 mod test_web;
 mod test_markup_tags;
+mod test_markup_scripts;
 mod test_web_playground;
+#[cfg(feature = "native")] // runs node
+mod test_editor_shortcuts; // card keyboard-shortcuts
+#[cfg(feature = "native")] // runs node
+mod test_editor_mode; // card playground-editor
 mod test_missing_use; // card clickable-hint
 mod test_guide; // the language guide on the playground page
 mod test_expert_guide;
+mod test_primer; // card language-primer: the assistant's system prompt, /llms.txt
 #[cfg(feature = "native")] // a server on a port, HTTP requests
 mod test_web_server;
 #[cfg(feature = "native")] // `warp dev` serves HTTP on a port
@@ -37,6 +43,10 @@ mod test_form_bindings;
 mod test_styles;
 mod test_style_rules;
 mod test_headless_pages;
+#[cfg(feature = "native")] // builds a site natively, opens it in headless Chrome (agent-browser)
+mod test_dom_pages;
+#[cfg(feature = "native")] // wrangler dev runs the Worker (card cloud-deploy)
+mod test_deploy;
 mod test_page_tests;
 mod test_transitions;
 mod test_css_transitions;
@@ -44,6 +54,7 @@ mod test_web_apis;
 mod test_accessibility;
 mod test_i18n;
 mod test_webgpu;
+mod test_webgpu_ints;
 mod test_tag_lists;
 mod test_safari_imports;
 #[cfg(feature = "native")] // a site build with the native compiler
@@ -60,8 +71,17 @@ mod test_route_data; // P221
 mod test_served_tables; // card sample-server
 #[cfg(feature = "native")] // a server on a port, HTTP requests and its SQLite tables
 mod test_served_forms; // card todo-app
+#[cfg(feature = "native")] // a server on a port, HTTP requests
+mod test_request_fields; // card g_mQ9U
 mod test_markup_lines; // card todo-app
+mod test_form_routes; // card g_mSEw
 mod test_guide_sections; // card guide-lists
 mod test_typed_variable_not_markup; // card annotation-html
 #[cfg(feature = "native")] // a server on a port, HTTP requests
 mod test_serve_error_body; // card serve-error-body
+#[cfg(feature = "native")] // a server on a port, HTTP requests
+mod test_missing_row_404; // card missing-row-404
+#[cfg(feature = "native")] // a server on a port, HTTP requests
+mod test_server_route_paths; // cards server-path, route-star
+#[cfg(feature = "native")] // a server on a port and its SQLite table
+mod test_route_phrase_body; // card first-first

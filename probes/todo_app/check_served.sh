@@ -16,8 +16,8 @@ done
 expect() {
 	[ "$2" = "$3" ] && echo "ok   $1" || { echo "FAIL $1: $2, expected $3"; exit 1; }
 }
-expect "create" "$(curl -s -d title=tea localhost:$PORT/todos)" '{"Todo":{"title":"tea","done":false,"id":1}}'
-expect "toggle" "$(curl -s -X POST localhost:$PORT/todos/1/toggle)" '{"Todo":{"title":"tea","done":true,"id":1}}'
-expect "list" "$(curl -s localhost:$PORT/api/todos)" '[{"Todo":{"title":"tea","done":true,"id":1}}]'
+expect "create" "$(curl -s -d title=tea localhost:$PORT/todos)" '{"title":"tea","done":false,"id":1}'
+expect "toggle" "$(curl -s -X POST localhost:$PORT/todos/1/toggle)" '{"title":"tea","done":true,"id":1}'
+expect "list" "$(curl -s localhost:$PORT/api/todos)" '[{"title":"tea","done":true,"id":1}]'
 expect "open" "$(curl -s localhost:$PORT/api/open)" '[]'
 expect "page" "$(curl -s localhost:$PORT/ | grep -o '<p>0 open</p>')" '<p>0 open</p>'

@@ -26,6 +26,7 @@ mod key_emitter;
 mod layout;
 pub(crate) mod linear_arrays;
 mod list_emitter;
+pub(crate) mod int_lists;
 mod list_dispatch;
 pub(crate) mod list_sharing;
 mod library_ops;
@@ -53,7 +54,7 @@ pub(crate) mod wasi_emitter;
 pub use big_int::{is_fixnum, EXACT_BUILDERS, INT_RUNTIME};
 
 /// Something emission found it must have that the analysis pass did not request
-#[derive(Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 enum Need {
 	/// A runtime function, by registry name
 	Function(&'static str),
@@ -181,7 +182,7 @@ use crate::type_kinds::{field_def_to_val_type, Kind, RawFieldValue, TypeDef, Typ
 #[cfg(feature = "native")]
 use crate::util::gc_engine;
 use log::{trace, warn};
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use wasm_encoder::*;
 use Instruction as I;
 #[cfg(feature = "validate")]
@@ -256,6 +257,8 @@ pub struct WasmGcEmitter {
 	wrapping_ints: bool,   // inside `expr as i64`: machine arithmetic
 	int_heap_global: u32,  // $BigInts heap that handles index
 	int_count_global: u32, // used slots in that heap
+	/// the cursor of cons-list indexing: the first of the globals list, cell, index (list_ops.rs emit_list_cursor_globals)
+	list_cursor_global: Option<u32>,
 	returns_node: bool, // the function being compiled returns a Node (main does), so `return x` returns x's Node
 	returns_float: bool, // the function being compiled returns an f64, so `return 7` returns 7.0
 	returned_tuple: Vec<Kind>, // the value kinds of the tuple function being compiled (`return a, b`), else empty
@@ -263,6 +266,8 @@ pub struct WasmGcEmitter {
 	text_heap_global: Option<u32>, // bump pointer for texts built at runtime, in memory grown past the string table
 	// Needs the analyzer could not foresee (they depend on inferred types); emission reruns with them
 	discovered_needs: std::collections::HashSet<Need>,
+	/// The needs this emitter was rerun with: one still missing after the rerun cannot be provided, another rerun would loop
+	inherited_needs: std::collections::HashSet<Need>,
 	/// The highest operator code list_text writes as written, from the needs (any code above it is written `:`)
 	written_operator_bound: i64,
 	/// The program quotes a tag (`data point{x:1}`), which list_text writes as an instance: only then does it check for one
@@ -276,6 +281,7 @@ pub struct WasmGcEmitter {
 	typed_capture_globals: HashMap<u32, list_dispatch::TypedList>, // capture globals holding a typed list of main
 	main_typed_lists: Option<HashMap<String, list_dispatch::TypedList>>, // main's typed lists, worked out before the capture globals
 	bounded_counters: std::collections::HashSet<String>, // loop counters of the body being emitted proven to stay in 0..i32::MAX (big_int.rs)
+	typed_map_globals: HashMap<String, u32>, // globals held as hash tables (map_backend.rs find_typed_map_globals): their global
 	typed_maps: std::collections::HashSet<String>, // map variables of the body being emitted held as hash tables (map_backend.rs)
 	typed_structs: HashMap<String, String>, // instance variables of the body being emitted held as GC structs, with their class (struct_backend.rs)
 	instance_types: HashMap<String, struct_backend::InstanceType>, // the `P·instance` struct type of each class
@@ -333,12 +339,14 @@ impl WasmGcEmitter {
 			wrapping_ints: false,
 			int_heap_global: 0,
 			int_count_global: 0,
+			list_cursor_global: None,
 			returns_node: true,
 			returns_float: false,
 			returned_tuple: vec![],
 			tuple_packers: HashMap::new(),
 			text_heap_global: None,
 			discovered_needs: Default::default(),
+			inherited_needs: Default::default(),
 			written_operator_bound: crate::operators::op_to_code(&crate::operators::Op::Colon),
 			writes_tags: false,
 			type_errors: Vec::new(),
@@ -349,6 +357,7 @@ impl WasmGcEmitter {
 			typed_capture_globals: HashMap::new(),
 			main_typed_lists: None,
 			bounded_counters: std::collections::HashSet::new(),
+			typed_map_globals: HashMap::new(),
 			typed_maps: std::collections::HashSet::new(),
 			typed_structs: HashMap::new(),
 			instance_types: HashMap::new(),
@@ -517,7 +526,9 @@ impl WasmGcEmitter {
 		let node = node.drop_meta();
 		match node {
 			Node::Number(_) | Node::True | Node::False => true,
-			Node::Key(_left, op, _right) if op.is_arithmetic() || op.is_shift() || op.is_comparison() => true,
+			// `"a"*n` repeats and `"a"+"b"` joins texts: arithmetic that is no number
+			Node::Key(_left, op, _right) if op.is_arithmetic() => !matches!(self.get_type(node), Kind::Text | Kind::Codepoint | Kind::List),
+			Node::Key(_left, op, _right) if op.is_shift() || op.is_comparison() => true,
 			Node::Key(left, op, right) if op.is_logical() => self.is_numeric(left) && self.is_numeric(right),
 			// `not x` is always 1 or 0
 			Node::Key(left, Op::Not, _) if matches!(left.drop_meta(), Node::Empty) => true,
@@ -707,10 +718,14 @@ impl WasmGcEmitter {
 		self.emit_component_adapters();
 		self.emit_compare_dispatcher();
 		self.emit_node_main(node);
-		if self.discovered_needs.iter().any(|need| !self.is_provided(need)) {
+		let missing: Vec<Need> = self.discovered_needs.iter().filter(|need| !self.is_provided(need)).copied().collect();
+		if let Some(unprovidable) = missing.iter().find(|need| self.inherited_needs.contains(need)) {
+			self.type_errors.push(format!("the compiler found it needs {unprovidable:?} but cannot provide it"));
+		} else if !missing.is_empty() {
 			let mut rerun = Self::new();
 			rerun.config = self.config.clone();
 			rerun.discovered_needs = std::mem::take(&mut self.discovered_needs);
+			rerun.inherited_needs = rerun.discovered_needs.clone();
 			crate::normalize::without_hints(|| rerun.emit_for_node(node)); // the first pass already hinted the same program
 			*self = rerun;
 		}
@@ -810,7 +825,9 @@ impl WasmGcEmitter {
 			return false;
 		}
 		let value = crate::type_tests::compared_text(subject).unwrap_or_else(|| value.drop_meta().serialize().trim().to_string());
-		self.emit_type_error(func, format!("undefined variable: {name}; `is` compares, a definition is written `{name} be {value}`"));
+		let message = format!("undefined variable: {name}; `is` compares, a definition is written `{name} be {value}`");
+		let diagnostic = self.diagnostic_here(message).offer("a definition", format!("{name} is {value}"), format!("{name} be {value}"));
+		self.emit_type_error(func, diagnostic.remembered());
 		true
 	}
 
@@ -839,7 +856,14 @@ impl WasmGcEmitter {
 	fn emit_undefined_variable(&mut self, func: &mut Function, name: &str) {
 		// a unit reaches the emitter only where quantities are not computed yet (notes/units_runtime.md)
 		let unit_hint = if crate::units::is_unit(name) { UNIT_AT_RUN_TIME } else { "" };
-		self.emit_type_error(func, format!("undefined variable: {name}{unit_hint}"));
+		let diagnostic = self.offer_near_name(self.diagnostic_here(format!("undefined variable: {name}{unit_hint}")), name);
+		self.emit_type_error(func, diagnostic.remembered());
+	}
+
+	/// A diagnostic at the source position of the statement being emitted
+	fn diagnostic_here(&self, message: String) -> crate::diagnostic::Diagnostic {
+		let (line, column) = self.source_position.unwrap_or_default();
+		crate::diagnostic::Diagnostic { message, line, column, ..Default::default() }
 	}
 
 	/// The local slot of a defined variable; an undefined one is an error value at the use
@@ -960,6 +984,7 @@ impl WasmGcEmitter {
 	fn emit_constructors(&mut self) {
 		// Emit basic Node constructors using macros
 		self.emit_int_heap_globals();
+		self.emit_list_cursor_globals();
 		constructors::emit_all_constructors(self);
 		self.emit_runtime_errors(); // before the int runtime: exact_div fails divide_by_zero
 		self.emit_int_runtime();
@@ -1128,16 +1153,21 @@ impl WasmGcEmitter {
 	}
 
 	/// Node locals not first assigned by a statement of the body itself (`if c { n = "a" } else { n = "b" }; n`) start
-	/// as ø: wasm reads a non-nullable local only after a set on every path, and a set inside a block ends with it
+	/// as ø: wasm reads a non-nullable local only after a set on every path, and a set inside a block ends with it.
+	/// So do Node locals a nested function captures: each call refreshes the captures, also one in the local's own
+	/// first value (`m = mean(xs); f = x => x - m`)
 	fn emit_node_local_defaults(&mut self, func: &mut Function, body: &Node, skipped: usize) {
 		let statements = match body.drop_meta() {
 			Node::List(items, Bracket::Curly | Bracket::Round, Separator::Semicolon | Separator::Newline) => items.as_slice(),
 			_ => std::slice::from_ref(body),
 		};
+		let captured: HashSet<String> = self.compiling.clone().map(|compiling| self.nested_functions(&compiling)).unwrap_or_default().iter()
+			.flat_map(|nested| self.ctx.captures.get(nested).into_iter().flatten().map(|(name, _)| name.clone()))
+			.collect();
 		let node_storage = Ref(self.node_ref(false));
 		let mut defaulted: Vec<u32> = self.scope.locals.values()
 			.filter(|local| local.position as usize >= skipped && self.local_storage_type(&local.name, local.kind) == node_storage)
-			.filter(|local| !first_mention_assigns(statements, &local.name))
+			.filter(|local| captured.contains(&local.name) || !first_mention_assigns(statements, &local.name))
 			.map(|local| local.position).collect();
 		defaulted.sort();
 		for slot in defaulted {
@@ -1877,11 +1907,14 @@ pub(crate) fn failed_run(failure: anyhow::Error) -> Node {
 	trap_error(&format!("{:?}", failure), trap.to_string())
 }
 
+/// How an index error of an empty list ends: a lookup that found nothing (a served route answers it 404)
+pub const EMPTY_RANGE: &str = "an empty list";
+
 /// "index out of range: 7 not in 1…3" from index_out_of_range_of's detail `7:3` (the index asked for, the list's count)
 fn index_range_message(detail: &str) -> Option<String> {
 	let numbers: Vec<i64> = detail.split(|c: char| !(c.is_ascii_digit() || c == '-')).filter_map(|part| part.parse().ok()).collect();
 	let [index, count] = numbers.as_slice() else { return None };
-	let range = if *count == 0 { "an empty list".to_string() } else { format!("1…{count}") };
+	let range = if *count == 0 { EMPTY_RANGE.to_string() } else { format!("1…{count}") };
 	Some(format!("{}: {index} not in {range}", list_ops::runtime_error_message("index_out_of_range")))
 }
 
@@ -1892,7 +1925,7 @@ pub fn trap_error(trace: &str, trap: String) -> Node {
 		// a meta key starts with its mark (`no_field_@source`); a later `@` begins the url of a Firefox or Safari frame
 		let mark = rest.strip_prefix(crate::node::ATTRIBUTE_MARK).map_or("", |_| "@");
 		let name: String = rest[mark.len()..].chars().take_while(|c| c.is_alphanumeric() || *c == '_').collect();
-		format!("no field {mark}{name}")
+		format!("{}{mark}{name}", list_ops::NO_FIELD_MESSAGE)
 	});
 	let no_case = trace.split_once(crate::switch::NO_CASE_PREFIX).map(|(_, rest)| {
 		let label: String = rest.chars().take_while(|c| c.is_alphanumeric() || *c == '_').collect();

@@ -458,11 +458,13 @@ impl WasmGcEmitter {
 	/// (`x = 3; x /= 2` → 3/2); only a variable declared `x:int` keeps a whole number
 	fn update_as_assignment(&self, target: &Node, op: &Op, operand: &Node) -> Option<Node> {
 		let global = self.global_update_as_assignment(target, op, operand);
-		if global.is_some() || *op != Op::DivAssign || self.declared_whole(target) {
+		// any update of a variable held as a Node: `out += x` of an accumulator widened to floats of unknown origin
+		let node_local = op.is_compound_assign() && matches!(target.drop_meta(), Node::Symbol(name) if self.scope.lookup(name).is_some_and(|local| local.kind.is_ref()));
+		if global.is_some() || !node_local && (*op != Op::DivAssign || self.declared_whole(target)) {
 			return global;
 		}
-		let quotient = Node::Key(Box::new(target.clone()), Op::Div, Box::new(operand.clone()));
-		Some(Node::Key(Box::new(target.clone()), Op::Assign, Box::new(quotient)))
+		let updated = Node::Key(Box::new(target.clone()), op.base_op(), Box::new(operand.clone()));
+		Some(Node::Key(Box::new(target.clone()), Op::Assign, Box::new(updated)))
 	}
 
 	/// `s += x` of a number s and a text x, or `s -= 1` of a text s (card text-crashes): the type error `s = s op x`
@@ -632,7 +634,29 @@ impl WasmGcEmitter {
 	pub(super) fn emit_float_root(&mut self, func: &mut Function, root: &Op) {
 		match root {
 			Op::Cbrt => {
-				self.emit_libm_call(func, LIBM_CBRT);
+				// libm's cbrt may miss a perfect cube by an ulp (glibc: ∛27 = 3.0000000000000004): its nearest whole
+				// number is the root when that cubes back to the radicand exactly
+				let (root, radicand) = (0, 1);
+				self.pop_float_scratch(func, radicand);
+				self.push_float_scratch(func, radicand);
+				if !self.emit_libm_call(func, LIBM_CBRT) {
+					return;
+				}
+				self.pop_float_scratch(func, root);
+				let push_nearest = |emitter: &Self, func: &mut Function| {
+					emitter.push_float_scratch(func, root);
+					func.instruction(&I::F64Nearest);
+				};
+				push_nearest(self, func);
+				self.push_float_scratch(func, root);
+				for _ in 0..3 {
+					push_nearest(self, func);
+				}
+				func.instruction(&I::F64Mul);
+				func.instruction(&I::F64Mul);
+				self.push_float_scratch(func, radicand);
+				func.instruction(&I::F64Eq);
+				func.instruction(&I::Select);
 			}
 			_ => {
 				func.instruction(&I::F64Sqrt);

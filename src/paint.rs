@@ -1,10 +1,11 @@
 //! paint(pixels, width, height) natively (card native-paint): the pixels as a PNG in the system's temporary
 //! folder (warp-paint/paint.png, then paint-2.png … within one run; the next run overwrites them, so no project folder
-//! collects images), named on stderr; in a terminal a window shows them instead (src/paint_window.rs; never in tests or pipes). The playground draws the same pixels on a canvas (web/playground/playground.js showPaintings).
+//! collects images), named on stderr; run by `warp` itself a window shows them instead (src/paint_window.rs), also
+//! from an editor's build or a pipe; never in tests (WARP_NO_WINDOW, CI, or warp used as a library). The playground draws the same pixels on a canvas (web/playground/playground.js showPaintings).
 
-use std::io::{IsTerminal, Write};
+use std::io::Write;
 use std::path::PathBuf;
-use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 
 /// The gray levels of a nonzero pixel and of a zero one, as the playground draws them
 pub const INK: u8 = 29;
@@ -14,6 +15,11 @@ pub const PAPER: u8 = 250;
 pub const COLOR_FROM: u64 = 1 << 24;
 const FILE_STEM: &str = "paint";
 const FOLDER: &str = "warp-paint";
+/// Set when tests or a headless machine must not see windows (tests/common warp_command, tests/queue.sh)
+pub const NO_WINDOW_VARIABLE: &str = "WARP_NO_WINDOW";
+const CI_VARIABLE: &str = "CI";
+/// Whether paint shows a window: only the warp binary turns it on (allow_windows); a library caller writes PNGs
+static WINDOWS: AtomicBool = AtomicBool::new(false);
 /// The paint calls of this run so far
 static PAINTED: AtomicUsize = AtomicUsize::new(0);
 const PNG_SIGNATURE: &[u8] = b"\x89PNG\r\n\x1a\n";
@@ -29,12 +35,18 @@ pub fn shade(value: u64) -> [u8; 3] {
 	}
 }
 
-/// In a terminal: show the image in a window (paint_window.rs), else (or without a window) write it, say where
+/// The warp binary's paint calls show windows, unless WARP_NO_WINDOW or CI is set (main.rs)
+pub fn allow_windows() {
+	let headless = [NO_WINDOW_VARIABLE, CI_VARIABLE].iter().any(|variable| std::env::var_os(variable).is_some());
+	WINDOWS.store(!headless, Ordering::Relaxed);
+}
+
+/// Show the image in a window (paint_window.rs) when windows are allowed, else (or without a window) write it, say where
 pub fn paint(pixels: &[u64], width: usize, height: usize) -> Result<Option<PathBuf>, String> {
 	if pixels.len() < width * height {
 		return Err(format!("paint: {width}×{height} needs {} pixels, got {}", width * height, pixels.len()));
 	}
-	if std::io::stderr().is_terminal() {
+	if WINDOWS.load(Ordering::Relaxed) {
 		match crate::paint_window::show(pixels, width, height) {
 			Ok(()) => return Ok(None),
 			Err(failure) => eprintln!("{failure}, so it goes to a PNG"),

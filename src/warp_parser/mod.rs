@@ -40,7 +40,7 @@ const LITERAL_SUFFIXES: [(char, &str); 6] = [('f', "float"), ('F', "float"), ('d
 /// `0.1:float`, `1.5:int`: a number literal directly typed with one of these binds tightly, unlike the loose `as`
 const LITERAL_NUMBER_TYPES: [&str; 11] = ["int", "i64", "integer", "exact", "real", "float", "fast", "f64", "double", "f32", "i32"];
 /// Words that may precede the name of a global besides a type word (`int`, `long` … see `analyzer::type_word_kind`)
-const ORDINAL_SUFFIXES: [&str; 4] = ["st", "nd", "rd", "th"];
+pub(crate) const ORDINAL_SUFFIXES: [&str; 4] = ["st", "nd", "rd", "th"];
 
 /// Type names that take type arguments in angle brackets besides the plural and user types: `list<int>`, `map<text, int>`
 const GENERIC_TYPE_HEADS: [&str; 7] = ["list", "array", "set", "map", "option", "result", "tuple"];
@@ -128,6 +128,7 @@ const TEST_WORDS: [&str; 6] = ["empty", "missing", "absent", "unknown", "undefin
 const FAILED_WORD: &str = "failed";
 /// The runtime test of `x failed` (wasm_emitter/text_builtins.rs)
 const IS_ERROR_CALL: &str = "is_error";
+const COUNT_CALL: &str = "count";
 const EMPTY_WORD: &str = "empty";
 /// Operators that may follow a suffix `!` directly: `x!+1`, `x!*2` (`!=` is the inequality)
 const INFIX_AFTER_BANG: [char; 9] = ['+', '-', '*', '/', '%', '^', '<', '>', ')'];
@@ -148,9 +149,13 @@ const AWAIT_OPERAND_BP: u8 = Op::Neg.binding_power().1;
 /// `1 + emit ask`: an emit inside an expression takes the words of its event like a call (card emit-operand)
 const EMIT_KEYWORDS: [&str; 2] = ["emit", "send"];
 const PRINT_WORD: &str = "print";
+const CODEPOINT_TYPE: &str = "codepoint";
 /// `print a  print b`: statements separated by spaces only (user decision 2026-10-03: a loud error)
 const TWO_STATEMENTS_ON_ONE_LINE: &str = "two statements on one line? separate them with `;` or a newline";
 const IN_KEYWORD: &str = "in";
+/// What ends a loop's iterable besides its body: the statement, a comprehension's bracket or condition (`if`)
+const ITERABLE_ENDS: [char; 6] = [';', '}', ']', ')', ',', '\0'];
+const IF_WORD: &str = "if";
 /// Ruby/Lua blocks: `while c do … end`, `if c then … else … end`
 const END_KEYWORD: &str = "end";
 const ELIXIR_FUNCTION_KEYWORD: &str = "fn";
@@ -215,10 +220,20 @@ pub(crate) fn print_arguments_of(call: &[Node], bracket: &Bracket) -> Vec<Node> 
 /// so the comma list [[print a], b] becomes the call print(a, b)
 fn grouped_list(items: Vec<Node>, bracket: Bracket, separator: Separator) -> Node {
 	let items = if separator == Separator::Space { with_arrow_bodies(items) } else { items };
+	let items = match (&separator, items.as_slice()) {
+		(Separator::Space, [print, value]) if is_print_word(print) => printed_when(print, value).map_or(items, |guarded| vec![guarded]),
+		_ => items,
+	};
 	// `{ print upper n }`: a block of the one statement prints the one expression too
 	let is_print_block = bracket == Bracket::Curly && separator == Separator::Space && items.len() > 2 && is_print_word(&items[0]);
 	if is_print_block {
 		return Node::List(vec![items[0].clone(), one_expression(&items[1..])], bracket, separator);
+	}
+	// `{ print i, i*2 }`: the block of the one call print(i, i*2)
+	if let (Bracket::Curly, Separator::Colon, Some(Node::List(head, Bracket::None, Separator::Space))) = (&bracket, &separator, items.first().map(Node::drop_meta)) {
+		if is_print_word(&head[0]) {
+			return Node::List(vec![print_call(head[1..].iter().chain(&items[1..]).cloned())], bracket, Separator::None);
+		}
 	}
 	if bracket != Bracket::None || !matches!(separator, Separator::Space | Separator::Colon) {
 		return Node::List(items, bracket, separator);
@@ -236,6 +251,14 @@ fn grouped_list(items: Vec<Node>, bracket: Bracket, separator: Separator) -> Nod
 		}
 		_ => Node::List(items, bracket, separator),
 	}
+}
+
+/// `print it if it%2`: the condition guards the print, as in Ruby and Perl, rather than printing ø when it fails
+fn printed_when(print: &Node, value: &Node) -> Option<Node> {
+	let Node::Key(condition, Op::Then, guarded) = value.drop_meta() else { return None };
+	let Node::Key(nothing, Op::If, _) = condition.drop_meta() else { return None };
+	let printed = Node::List(vec![print.clone(), (**guarded).clone()], Bracket::None, Separator::Space);
+	(**nothing == Node::Empty).then(|| Node::Key(condition.clone(), Op::Then, Box::new(printed)))
 }
 
 /// `(x => print x)`: `=>` binds looser than the space, so the words after a lambda's arrow are its body (`print x`), not
@@ -395,7 +418,12 @@ fn item_named(node: Node, name: &str, item: &Node) -> Node {
 
 /// A list literal whose items all are literals of the type: `[1, 2]` for `number`
 fn literal_items_of_type(iterable: &Node, type_name: &str) -> bool {
-	let Node::List(items, Bracket::Square, _) = iterable.drop_meta() else { return false };
+	let items = match iterable.drop_meta() {
+		Node::List(items, Bracket::Square, _) => items,
+		// `for char in "abc"`: every item of a text is a char
+		Node::Text(_) => return crate::type_tests::canonical_spec_word(type_name) == CODEPOINT_TYPE,
+		_ => return false,
+	};
 	let spec = crate::analyzer::type_word_kind(type_name).map(|_| type_name).unwrap_or(type_name);
 	items.iter().all(|item| match item.drop_meta() {
 		Node::Number(_) | Node::Text(_) | Node::Char(_) => crate::type_tests::type_matches(&item.drop_meta().kind().to_string(), spec),
@@ -647,6 +675,22 @@ fn comment_hiding_a_closer(input: &str) -> Option<(usize, usize, char)> {
 	None
 }
 
+/// `(7 // 2)`: the fix `7//2`, the operands around the `//` at `line`:`column` glued to it
+fn glued_floor_division(diagnostic: Diagnostic, input: &str, line: usize, column: usize) -> Diagnostic {
+	let text: Vec<char> = input.lines().nth(line - 1).unwrap_or_default().chars().collect();
+	let before = text[..column - 1].iter().rposition(|c| !c.is_whitespace());
+	let after = text[column + 1..].iter().position(|c| !c.is_whitespace()).map(|offset| column + 1 + offset);
+	let (Some(before), Some(after)) = (before, after) else { return diagnostic };
+	let written: String = text[before..=after].iter().collect();
+	diagnostic.offer("floor division", written, format!("{}//{}", text[before], text[after]))
+}
+
+/// The error `message`, fixed by adding the missing `closer` at `at` (line, column)
+pub(super) fn missing_closer(message: String, closer: impl Into<String>, at: (usize, usize)) -> Node {
+	let closer = closer.into();
+	Diagnostic::default().message(message).offering(crate::fixits::inserted(format!("the closing {closer}"), closer, at)).into_error()
+}
+
 /// Parse-only path for untrusted data: nothing is evaluated, no word is guessed to be a boolean
 pub fn parse_data(input: &str) -> Node {
 	WarpParser::parse_with_options(input, ParserOptions::data())
@@ -787,6 +831,28 @@ fn declared_glyph<'a>(words: &'a [&'a str]) -> Option<&'a str> {
 	}
 }
 
+/// The operator a `prefix|suffix|infix` declaration declares: a glyph (`infix operator ⊕ := …`), or for infix a word with
+/// optional parameters, `infix operator divides(d:int, n:int) := …` (card g_mnvA); `infix divides(d, n) := …` is the
+/// alias without `operator`
+fn declared_operator(kind: UserOperatorKind, words: &[&str]) -> Option<String> {
+	if let Some(glyph) = declared_glyph(words).filter(|glyph| is_operator_glyph(glyph)) {
+		return Some(glyph.to_string());
+	}
+	let head = match words {
+		[OPERATOR_WORD, head, ..] | [head, ..] if kind == UserOperatorKind::Infix && words.contains(&":=") => head,
+		_ => return None,
+	};
+	let word: String = head.chars().take_while(|c| c.is_alphanumeric() || *c == '_').collect();
+	let parameters = &head[word.len()..];
+	let is_word = word.starts_with(char::is_alphabetic) && word != OPERATOR_WORD;
+	(is_word && (parameters.is_empty() || parameters.starts_with('('))).then_some(word)
+}
+
+/// `divides`: a declared operator that is a word, ending where the word ends (not `dividesx`)
+fn is_operator_word(glyph: &[char]) -> bool {
+	glyph.first().is_some_and(|c| c.is_alphabetic())
+}
+
 fn is_plain_name(word: &str) -> bool {
 	!word.is_empty() && word.chars().all(|c| c.is_alphanumeric() || c == '_')
 }
@@ -847,14 +913,15 @@ fn scan_user_operators(source: &str) -> Vec<UserOperator> {
 	let mut found: Vec<UserOperator> = Vec::new();
 	for statement in source.lines().flat_map(|line| line.split(';')) {
 		let words: Vec<&str> = statement.split_whitespace().collect();
-		let declared = match words.as_slice() {
-			[kind, rest @ ..] if declared_glyph(rest).is_some() => {
-				OPERATOR_KINDS.iter().find(|(word, _)| word == kind).and_then(|(_, kind)| Some((declared_glyph(rest)?, *kind)))
-			}
-			[left, glyph, right, ":=", ..] if is_plain_name(left) && is_plain_name(right) => Some((*glyph, UserOperatorKind::Infix)),
+		let by_kind = words.split_first().and_then(|(word, rest)| {
+			let (_, kind) = OPERATOR_KINDS.iter().find(|(keyword, _)| keyword == word)?;
+			Some((declared_operator(*kind, rest)?, *kind))
+		});
+		let declared = by_kind.or_else(|| match words.as_slice() {
+			[left, glyph, right, ":=", ..] if is_plain_name(left) && is_plain_name(right) && is_operator_glyph(glyph) => Some((glyph.to_string(), UserOperatorKind::Infix)),
 			_ => None,
-		};
-		if let Some((glyph, kind)) = declared.filter(|(glyph, _)| is_operator_glyph(glyph)) {
+		});
+		if let Some((glyph, kind)) = declared {
 			found.push(UserOperator { glyph: glyph.chars().collect(), kind, level: kind.default_level() });
 		}
 	}
@@ -1017,7 +1084,8 @@ impl WarpParser {
 
 	pub fn parse_with_options(input: &str, options: ParserOptions) -> Node {
 		if let Some((line, column, closer)) = comment_hiding_a_closer(input).filter(|_| !options.data_mode) {
-			return error(&format!("`//` at {line}:{column} starts a comment that hides the closing `{closer}`: floor division is written glued, a//b"));
+			let message = format!("`//` at {line}:{column} starts a comment that hides the closing `{closer}`: floor division is written glued, a//b");
+			return glued_floor_division(Diagnostic::default().message(message), input, line, column).into_error();
 		}
 		let mut parser = WarpParser::new_with_options(input.to_string(), options);
 		let program = parser.parse_list_with_separators(None, Bracket::None);
@@ -1042,14 +1110,26 @@ fn real(exact: Exact) -> Node {
 	Node::Number(Number::real(Real::Exact(exact)))
 }
 
+/// The glyphs that are true or false (card keyword-glyphs), longest spelling first: `✔️` is `✔` with an emoji variation
+/// selector. Most start an emoji, which would otherwise be a codepoint (atoms.rs, parse_emoji)
+pub(crate) const TRUTH_GLYPHS: [(&str, bool); 13] = [
+	("✔️", true), ("✓️", true), ("☑️", true), ("⊤", true), ("✓", true), ("✔", true), ("☑", true), ("✅", true), ("🗸", true), ("🗹", true),
+	("⊥", false), ("❌", false), ("✗", false),
+];
+
+pub(crate) fn truth_glyph(glyph: &str) -> Option<Node> {
+	TRUTH_GLYPHS.iter().find(|(spelling, _)| *spelling == glyph).map(|(_, truth)| if *truth { Node::True } else { Node::False })
+}
+
 fn check_constants(s: &str, data_mode: bool) -> Option<Node> {
 	let is_word = s.chars().all(|c| c.is_ascii_alphabetic());
 	if data_mode && is_word && !DATA_WORD_LITERALS.contains(&s) {
 		return None;
 	}
 	match s.to_lowercase().as_str() {
-		"⊤" | "true" | "yes" | "✓" | "🗸" | "✔" | "✓️" | "🗹" | "☑" | "✅" | "⊨" => Some(Node::True),
-		"⊥" | "false" | "no" | "⊭" | "❌" | "" => Some(Node::False),
+		"true" | "yes" => Some(Node::True),
+		"false" | "no" | "" => Some(Node::False),
+		glyph if TRUTH_GLYPHS.iter().any(|(spelling, _)| *spelling == glyph) => truth_glyph(glyph),
 		"ø" | "null" | "nul" | "none" | "nil" | "nill" | "nix" | "nada" | "nothing" | "empty" | "void" => Some(Empty),
 		// exact generators (extensions/reals.rs); a bare `e` or `i` stays a free name
 		"π" | "pi" => Some(real(Exact::pi())),
@@ -1059,7 +1139,6 @@ fn check_constants(s: &str, data_mode: bool) -> Option<Node> {
 		// hyperreals (wiki/hyperreals.md): the glyphs only, `epsilon` stays a free name like `e`
 		"ε" => Some(real(Exact::epsilon())),
 		"ω" => Some(real(Exact::omega())),
-		"⚠️" | "⚡" | "⚡️" => Some(error(s)),
 		_ => None,
 	}
 }
@@ -1185,7 +1264,7 @@ fn slice_bounds(index: &Node) -> Option<(Node, Node)> {
 	let Node::Key(start, op, end) = index.drop_meta() else { return None };
 	let end = match op {
 		Op::Colon | Op::Range => end.as_ref().clone(),
-		Op::To => Node::Key(end.clone(), Op::Add, Box::new(Node::Number(Number::Int(1)))),
+		Op::To => unless_open(end, |end| Node::Key(Box::new(end.clone()), Op::Add, Box::new(Node::Number(Number::Int(1))))),
 		_ => return None,
 	};
 	Some((start.as_ref().clone(), end))
@@ -1212,8 +1291,16 @@ fn hash_slice_bounds(index: &Node) -> Option<(Node, Node)> {
 	let [range] = items.as_slice() else { return None };
 	let Node::Key(start, op @ (Op::Range | Op::To), end) = range.drop_meta() else { return None };
 	let minus_one = |bound: &Node| Node::Key(Box::new(bound.clone()), Op::Sub, Box::new(Node::Number(Number::Int(1))));
-	let end = if *op == Op::To { end.as_ref().clone() } else { minus_one(end) };
-	Some((minus_one(start), end))
+	let end = if *op == Op::To { end.as_ref().clone() } else { unless_open(end, minus_one) };
+	Some((unless_open(start, minus_one), end))
+}
+
+/// A slice bound shifted by `shift`; an open bound (`s[2…]`, `s[…3]`) stays open, ø
+fn unless_open(bound: &Node, shift: impl Fn(&Node) -> Node) -> Node {
+	match bound.drop_meta() {
+		Node::Empty => Node::Empty,
+		_ => shift(bound),
+	}
 }
 
 /// The written index of a subscript's 1-based index `index+1`, when it was not a number (inverse of `subscript`)

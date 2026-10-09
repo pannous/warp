@@ -1,2 +1,4 @@
 // does a text contain another one?
+# "fun" in "warp is fun" same as
 "warp is fun" contains "fun"
+

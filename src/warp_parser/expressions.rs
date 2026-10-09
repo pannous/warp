@@ -41,7 +41,9 @@ impl WarpParser {
 			// lowering (ambiguous_forms) applies to the value before it or makes a function
 			let operator_word = chars > 1 && matches!(op, Op::Abs | Op::Sqrt | Op::Cbrt);
 			let fourth_root = self.current_char() == super::lookahead::FOURTH_ROOT;
-			let bare = operator_word && self.expression_ends_after(chars);
+			// `sort by abs.take first 1`: a glued method applies to the word, it is no operand
+			let method_follows = self.peek_char(chars) == '.' && self.peek_char(chars + 1).is_alphabetic();
+			let bare = operator_word && (self.expression_ends_after(chars) || method_follows);
 			self.hint_operator(chars, true);
 			self.advance_by(chars);
 			self.skip_spaces();
@@ -223,8 +225,9 @@ impl WarpParser {
 
 	/// The operator after `lhs` that the infix table does not hold, its width in characters and its binding power
 	pub(super) fn special_infix(&self, lhs: &Node) -> Option<(SpecialInfix, usize, (u8, u8))> {
-		// `a mod b` is `a % b` (Euclidean, 0 ≤ r < |b|), `a rem b` the truncated remainder (sign of the dividend, as C)
-		for (word, op) in [("mod", Op::Mod), ("rem", Op::Rem)] {
+		// `a mod b` (`a modulo b`) is `a % b` (Euclidean, 0 ≤ r < |b|), `a rem b` the truncated remainder (sign of the
+		// dividend, as C)
+		for (word, op) in [("mod", Op::Mod), ("modulo", Op::Mod), ("rem", Op::Rem)] {
 			if self.matches_keyword(word) {
 				return Some((SpecialInfix::Keyword(op), word.len(), op.binding_power()));
 			}
@@ -342,7 +345,10 @@ impl WarpParser {
 			}
 
 			// Step 3: Check for infix operator
-			let (op, chars) = match self.peek_operator() {
+			// `whenever not x {…}`, `waiting = xs where not done`: the word `not` negates what follows, it is no infix
+			// (the effect constraint `f := … ! IO` is written with `!`)
+			let prefix_not = self.matches_keyword("not");
+			let (op, chars) = match self.peek_operator().filter(|_| !prefix_not) {
 				Some(pair) => pair,
 				None if self.stops_at_else && self.at_else_if_word().is_some() => break, // `if c: x elif d: y`
 				None if self.at_block_close() => break, // `do x end`: the `end` is no argument of x
@@ -375,10 +381,8 @@ impl WarpParser {
 
 			// `sleep 1s and print "x"`: the statement ends before the `and`, the statement list runs both (parse_list_with_separators)
 			let ends_command = op == Op::And && (self.in_command || (min_bp == 0 && is_command(&lhs))) && self.and_starts_statement();
-			// `whenever not x {…}`, `print not done`: the word `not` after a bare name negates what follows, it is no infix
-			let prefix_not = op == Op::Not && self.matches_keyword("not") && matches!(lhs.drop_meta(), Symbol(_));
 			// Stop if operator binds less tightly than our minimum
-			if ends_command || prefix_not || l_bp < min_bp || (op == Op::Else && self.stops_at_else) {
+			if ends_command || l_bp < min_bp || (op == Op::Else && self.stops_at_else) {
 				break;
 			}
 			if let Err(refused) = self.left_arrow_assignment(op, &lhs) {
@@ -412,8 +416,8 @@ impl WarpParser {
 			// `for:email "Email"`: the glued pair is for:email, the text the next item (card parser-tag)
 			let glued_pair = op == Op::Colon && glued_before && !self.current_char().is_whitespace();
 			let block_body = match op {
-				Op::Colon if self.only_blanks_before_newline() => {
-					self.with_equals_comparing(false, |parser| parser.parse_indented_block()) // the block of `if c:` assigns
+				Op::Colon | Op::Define if self.only_blanks_before_newline() => {
+					self.with_equals_comparing(false, |parser| parser.parse_indented_block()) // the block of `if c:` and `f(n):=` assigns
 				}
 				Op::Do | Op::Then | Op::Else if self.closing_end_follows(&END_BLOCK_OPENERS) => Some(self.parse_end_block(op == Op::Then)),
 				Op::Do if self.closing_end_follows(&["do"]) => Some(error(AMBIGUOUS_END)), // `do a; if c then b end`
@@ -440,7 +444,7 @@ impl WarpParser {
 				Some(block) => block,
 				None if matches!(op, Op::Then | Op::Else) => {
 					let outer = self.branch_bp.replace(r_bp);
-					let branch = self.parse_expr(r_bp);
+					let branch = self.parse_branch(r_bp);
 					let branch = self.branch_assignment(branch, r_bp);
 					self.branch_bp = outer;
 					branch
@@ -450,6 +454,10 @@ impl WarpParser {
 					let value = self.parse_expr(r_bp);
 					self.glued_pair_bp = outer;
 					value
+				}
+				// `it%2 and print it`, `x || print "none"`: print takes the rest of the statement, as at its start
+				None if matches!(op, Op::And | Op::Or) && self.take_braceless_print() => {
+					print_call([self.rest_of_statement()])
 				}
 				None => self.parse_expr(r_bp),
 			};
@@ -545,7 +553,7 @@ impl WarpParser {
 		let inner = self.parse_expr(0);
 		self.skip_spaces();
 		if self.current_char() != '‖' {
-			return error("Missing closing ‖");
+			return missing_closer("Missing closing ‖".into(), "‖", crate::fixits::end_of_line(&self.input, self.line_nr));
 		}
 		self.advance();
 		self.finish_prefix(Op::Abs, inner)
@@ -605,7 +613,17 @@ impl WarpParser {
 			let if_cond = Node::Key(Box::new(Empty), Op::If, cond.clone());
 			// the body runs to the end of the statement, `if c: x+=1`, but not into the `else`
 			let outer = std::mem::replace(&mut self.stops_at_else, true);
-			let then_expr = self.continue_expr(then_expr.as_ref().clone(), 0);
+			let then_expr = match then_expr.drop_meta() {
+				_ if is_print_word(then_expr) && self.braceless_argument_follows() => { // `if it%2: print it`, `if c: print ord x`
+					let first = self.expression_of_words();
+					self.print_call_from(first, Self::expression_of_words)
+				}
+				// `if c: print a, b`: the colon took `print a`, the comma continues its arguments
+				Node::List(words, Bracket::None, Separator::Space) if words.len() > 1 && is_print_word(&words[0]) && self.current_char() == ',' => {
+					self.print_call_from(one_expression(&words[1..]), |parser| parser.parse_expr(0))
+				}
+				_ => self.continue_expr(then_expr.as_ref().clone(), 0),
+			};
 			self.stops_at_else = outer;
 			let if_then = Node::Key(Box::new(if_cond), Op::Then, Box::new(then_expr));
 			return self.parse_optional_else(if_then, ElseParseMode::Expr);

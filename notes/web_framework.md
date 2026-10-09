@@ -383,7 +383,17 @@ Each step is useful on its own and is what the next ones stand on.
   8 / 16 bytes, rows of 16) and binds them through an explicit pipeline layout, so an unread value is no error. Leaving
   the map out passes a null node (ffi_emitter.rs fills a missing argument), i.e. no values. A frame's values change
   without interpolating them into the shader text.
-- Next: more buffers (a map of named arrays) for gpu_compute, typed results (ints as array<i32>), rendering straight
+- Holes (card shader-holes, 2026-10-09, warp-web, P235b amended): `$name` in a shader block is a warp variable, written
+  as `values.name` (the parser, src/shader_holes.rs shader_text, marks the text with attribute shader_holes). The source
+  pass shader_holes::lower adds `name: name` to the values map of each paint / gpu_render of that block or of a variable
+  holding it, so the value is read at each call; an entry written out wins (samples/webgpu.warp: `$size` is the vec2
+  given). A values map that is not a literal (a variable) cannot take entries: a loud error naming them. Bare WGSL
+  names never capture; `$1` stays. This also answers would-blue: `$blue` is the warp spelling, `values.blue` the WGSL
+  it becomes. tests/programs/test_shader_holes.rs.
+- Ints (2026-10-09, warp-web): a shader declaring its numbers as array<i32> or array<u32> at @binding(0) gets them as
+  32-bit ints and gives back ints (gpu.rs element_of / compute_ints, host-gpu.js gpuElements); an int beyond 32 bits or a
+  float is a loud error. tests/web/test_webgpu_ints.rs.
+- Next: more buffers (a map of named arrays) for gpu_compute, rendering straight
   into a page canvas (GPUCanvasContext) without the pixel round trip; GPU vectors: card gpu-vectors, notes/gpu.md.
 
 ## web-apis: WebIDL (2026-10-08, warp-95)

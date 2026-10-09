@@ -23,7 +23,25 @@ pub fn fix(meaning: impl Into<String>, written: impl Into<String>, replacement: 
 
 /// A fix that adds `line` above the first line of the source: a missing `use math`
 pub fn added_first_line(meaning: impl Into<String>, line: impl Into<String>) -> Fix {
-	Fix { meaning: meaning.into(), written: String::new(), replacement: format!("{}\n", line.into()), at: Some((1, 1)), also: vec![] }
+	inserted(meaning, format!("{}\n", line.into()), (1, 1))
+}
+
+/// A fix that adds `text` at `at` (line, column): a missing closing quote
+pub fn inserted(meaning: impl Into<String>, text: impl Into<String>, at: (usize, usize)) -> Fix {
+	Fix { meaning: meaning.into(), written: String::new(), replacement: text.into(), at: Some(at), also: vec![] }
+}
+
+/// The position after the last character of `line` (1-based) of `source`, trailing spaces aside
+pub fn end_of_line(source: &str, line: usize) -> (usize, usize) {
+	match source.split('\n').nth(line.saturating_sub(1)) {
+		Some(text) => (line, text.trim_end().chars().count() + 1),
+		None => end_of_source(source),
+	}
+}
+
+/// The position after the last character of `source`, trailing whitespace aside
+pub fn end_of_source(source: &str) -> (usize, usize) {
+	line_and_column(source, source.trim_end().len())
 }
 
 impl Fix {

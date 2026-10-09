@@ -15,6 +15,7 @@ mod test_use_scopes;
 mod test_variable_kind_change;
 mod test_variable_kind_clash;
 mod test_function_name_kind_clash;
+mod test_conversion_kind_clash;
 mod test_result_word;
 mod test_global_assignment_in_function;
 mod test_constant_alias;

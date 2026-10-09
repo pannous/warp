@@ -1,5 +1,5 @@
 // Conway's Game of Life
-// Cellular automaton simulation on a torus (the edges wrap)
+// Cellular automaton simulation on a torus (the edges wrap), animated in the terminal
 // the grid is a flat list of cells, row by row; the grid is global, shared by the functions
 
 width = 20
@@ -55,12 +55,17 @@ def render() {
     }
 }
 
-// Main loop: a few generations instead of forever
-for generation in 1 to generations {
-    step()
-    sleep 10 ms
+// Main loop: a few generations instead of forever; each one is drawn over the last:
+// "\e[2J" clears the terminal, "\e[H" puts the cursor back at its top left (the playground shows frames alike)
+print "\e[2J"
+for generation in 0 to generations {
+    print "\e[H" + "generation ${generation}"
+    render()
+    if generation < generations {
+        step()
+        sleep 150ms
+    }
 }
-render()
 
 // the glider moved two cells right and down: sum of y*100+x over live cells
 checksum = 0

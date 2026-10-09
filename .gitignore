@@ -7,6 +7,7 @@ out
 /Users/me/dev/angles/warp/vendor
 
 .DS_Store
+**/.DS_Store
 
 notes/session
 
@@ -44,6 +45,8 @@ data/
 !/samples/*.*
 !/samples/*/
 /samples/*.wasm
+# the compiled module samples/import_compiled.warp imports by its bare name: a link to tests/fixtures/compiled/shapes.wasm
+!/samples/shapes.wasm
 /samples/*.wast
 # the database tables of samples/orm.warp (a run keeps them beside it), after the exception above
 samples/*.database.sqlite

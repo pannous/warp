@@ -169,12 +169,25 @@ fn save_is_an_expression() {
 }
 
 // samples/orm.warp keeps its rows beside it (in the browser in IndexedDB) and seeds them once; each run makes Bo (row 2)
-// a year older and saves him
+// a year older (the sample ends with `bo.age += 1`, no save needed; the test appends `bo` to read him back)
 #[test]
 fn the_orm_sample_runs_twice_on_the_same_rows() {
-	let runs = [eval("samples/orm.warp").serialize(), eval("samples/orm.warp").serialize()];
+	let sample = format!("{}\nbo", std::fs::read_to_string("samples/orm.warp").unwrap());
+	let runs = [eval(&sample).serialize(), eval(&sample).serialize()];
 	for run in &runs {
 		assert!(run.contains("Bo") && run.contains("id:2"), "{run}");
 	}
 	assert_ne!(runs[0], runs[1], "the second run reads the age the first one wrote");
+}
+
+// card todo-app robustness: `people.remove(p)` deletes p's row, loaded or not, in a function too
+#[test]
+fn remove_deletes_the_row() {
+	let run = |rest: &str| eval(&program("people_removed", rest));
+	run("people.add(Person(\"Al\", 1))\npeople.add(Person(\"Bo\", 2))\npeople.add(Person(\"Cy\", 3))");
+	is!(&program("people_removed", "people.remove((people where it.name == \"Bo\")#1)\ncount(people)"), 2);
+	is!(&program("people_removed", "count(people)"), 2);
+	is!(&program("people_removed", "gone(name) := { people.remove((people where it.name == name)#1) }\ngone(\"Al\").age"), 1);
+	is!(&program("people_removed", "people#1.name"), "Cy");
+	is!(&program("people_removed", "people.remove(people#1)\npeople.add(Person(\"Di\", 4))\npeople#1.name"), "Di");
 }

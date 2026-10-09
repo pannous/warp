@@ -1,0 +1,10 @@
+// card unit-value: a stored km column shows km, whatever unit a row was added in
+class Run{distance: km}
+runs: [Run] = database.probe_unit_value
+if count(runs) == 0 { runs.add(Run(5 km)); runs.add(Run(1500 m)); runs.add(Run(12 km)) }
+for run in runs { print run.distance }
+total = 0 km
+for run in runs { total += run.distance }
+print total
+print max(runs.map(r => r.distance))
+runs#2.distance

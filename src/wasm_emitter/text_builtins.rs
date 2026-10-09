@@ -90,8 +90,9 @@ pub fn is_text_builtin(name: &str) -> bool {
 /// `+` of two texts or characters is a text; a number joins a text in its text form (`"F:" + 13` → `"F:13"`, as JS/Kotlin)
 pub fn concatenates(left: Kind, right: Kind) -> bool {
 	let is_text = |kind: &Kind| matches!(kind, Kind::Text | Kind::Codepoint);
-	// an Error joins as its message (card try-raise: `"caught: " + e` of `catch e`)
-	[left, right].iter().any(is_text) && [left, right].iter().all(|kind| is_text(kind) || is_number(*kind) || *kind == Kind::Error)
+	// an Error joins as its message (card try-raise: `"caught: " + e` of `catch e`), a symbol value as its name (P230:
+	// `"square is " + effects of square`)
+	[left, right].iter().any(is_text) && [left, right].iter().all(|kind| is_text(kind) || is_number(*kind) || matches!(kind, Kind::Error | Kind::Symbol))
 }
 
 fn is_number(kind: Kind) -> bool {

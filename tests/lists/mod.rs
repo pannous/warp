@@ -14,6 +14,7 @@ mod test_list_number_comparison;
 mod test_list_plus_number;
 mod test_element_wise_scalar;
 mod test_element_wise_lists;
+mod test_list_times_list;
 mod test_map_parameter_keys;
 mod test_list_parameters;
 mod test_list_truthiness;
@@ -43,6 +44,7 @@ mod test_remove_and_index_of;
 mod test_find_any_all;
 mod test_set_past_the_end;
 mod test_number_keys;
+mod test_int_map; // card int-map
 mod test_byte_size;
 mod test_long_list_result;
 mod test_empty_items;
@@ -74,3 +76,11 @@ mod test_range_returns;
 mod test_list_retype;
 mod test_linear_hint; // card linear-hint
 mod test_picked_linear; // card compiler-picks-dot
+mod test_sorted_by_phrase; // card sorted-by-phrase
+mod test_for_where; // card for-where
+mod test_phrase_in_call; // card phrase-in-call
+mod test_first_items; // card first-first
+mod test_object_list_walk; // orm identity map: index walks of object lists
+mod test_count_after_function; // card print-people
+mod test_range_in_structure;
+mod test_word_slices;

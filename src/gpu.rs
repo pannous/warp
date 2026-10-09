@@ -1,6 +1,6 @@
 //! gpu_compute natively (card web-apis, notes/web_framework.md "web-apis: WebGPU"): the WGSL compute shader runs through
 //! wgpu (Metal, Vulkan or DX12) exactly as web/playground/host-gpu.js runs it through the browser's WebGPU: entry point
-//! `main`, the numbers as array<f32> at @group(0) @binding(0), dispatched over `workgroups` workgroups, and the value is
+//! `main`, the numbers as array<f32> (or array<i32>, array<u32>) at @group(0) @binding(0), dispatched over `workgroups` workgroups, and the value is
 //! the numbers it left. gpu_render runs a WGSL fragment shader `main` over every pixel of a width×height image, as
 //! host-gpu.js does, and gives the pixels as paint takes them.
 
@@ -9,7 +9,8 @@ use wgpu::util::DeviceExt;
 
 const ENTRY_POINT: &str = "main";
 const BINDING: u32 = 0;
-const FLOAT_BYTES: usize = size_of::<f32>();
+/// f32, i32 and u32 alike
+const WORD_BYTES: usize = size_of::<f32>();
 /// Appended to the shader of gpu_render (after it, so its line numbers stay the user's): one triangle covering the image
 const FULL_IMAGE_VERTICES: &str = "
 @vertex fn warp_full_image(@builtin(vertex_index) corner: u32) -> @builtin(position) vec4f {
@@ -25,8 +26,16 @@ const VALUES_BINDING: u32 = 0;
 /// A uniform struct is a whole number of 16-byte rows
 const UNIFORM_ALIGNMENT: usize = 16;
 
-/// A value the shader reads as `values.<name>`: one to four floats (f32, vec2f, vec3f, vec4f)
-pub type ShaderValue = (String, Vec<f32>);
+/// The floats of one vector in an array value
+pub const VECTOR_FLOATS: usize = 4;
+
+/// A value the shader reads as `values.<name>`: one to four floats (f32, vec2f, vec3f, vec4f), or an array of vec4f
+/// (`values.<name>[i]`), its floats four by four
+pub struct ShaderValue {
+	pub name: String,
+	pub floats: Vec<f32>,
+	pub array: bool,
+}
 
 struct Gpu {
 	device: wgpu::Device,
@@ -87,17 +96,56 @@ fn kept_buffer(block: i64) -> Option<(wgpu::Buffer, usize)> {
 
 /// As compute_from, the items taken from a kept buffer and the result's buffer kept, as `keeping` says
 pub fn compute_kept(shader: &str, numbers: &[f32], workgroups: u32, first: usize, keeping: Keeping) -> Result<Vec<f32>, String> {
+	let bytes: Vec<u8> = numbers.iter().flat_map(|number| number.to_le_bytes()).collect();
+	Ok(words(&compute_bytes(shader, &bytes, workgroups, first, keeping)?).map(f32::from_le_bytes).collect())
+}
+
+/// The element type of the numbers a compute shader reads at @binding(0): f32 unless it declares array<i32> or array<u32>
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum Element {
+	Float,
+	Int,
+	Unsigned,
+}
+
+pub fn element_of(shader: &str) -> Element {
+	let declared = shader.find("@binding(0)").and_then(|binding| shader[binding..].find("array<").map(|array| &shader[binding + array + "array<".len()..]));
+	match declared.map(|rest| rest.get(..3)) {
+		Some(Some("i32")) => Element::Int,
+		Some(Some("u32")) => Element::Unsigned,
+		_ => Element::Float,
+	}
+}
+
+/// Run a shader over 32-bit ints (array<i32> or array<u32>, as `element` says): the ints it left
+pub fn compute_ints(shader: &str, numbers: &[i64], workgroups: u32, element: Element) -> Result<Vec<i64>, String> {
+	let bytes: Vec<u8> = numbers.iter().map(|&number| match element {
+		Element::Unsigned => u32::try_from(number).map(u32::to_le_bytes).map_err(|_| format!("{number} is no u32")),
+		_ => i32::try_from(number).map(i32::to_le_bytes).map_err(|_| format!("{number} is no i32")),
+	}).collect::<Result<Vec<_>, _>>()?.concat();
+	let left = compute_bytes(shader, &bytes, workgroups, 0, Keeping::default())?;
+	Ok(words(&left).map(|word| match element {
+		Element::Unsigned => u32::from_le_bytes(word) as i64,
+		_ => i32::from_le_bytes(word) as i64,
+	}).collect())
+}
+
+fn words(bytes: &[u8]) -> impl Iterator<Item = [u8; 4]> + '_ {
+	bytes.chunks_exact(WORD_BYTES).map(|chunk| chunk.try_into().expect("four bytes"))
+}
+
+/// The shader over the 4-byte numbers in `bytes`: the bytes it left from number `first` on
+fn compute_bytes(shader: &str, bytes: &[u8], workgroups: u32, first: usize, keeping: Keeping) -> Result<Vec<u8>, String> {
 	let Gpu { device, queue } = gpu()?;
 	let kept = keeping.source.and_then(kept_buffer);
 	let items = kept.as_ref().map_or(0, |(_, count)| *count);
-	let bytes: Vec<u8> = numbers.iter().flat_map(|number| number.to_le_bytes()).collect();
-	let total = items + numbers.len();
-	let offset = (first.min(total) * FLOAT_BYTES) as u64;
-	let size = (total * FLOAT_BYTES) as u64 - offset;
+	let total = items + bytes.len() / WORD_BYTES;
+	let offset = (first.min(total) * WORD_BYTES) as u64;
+	let size = (total * WORD_BYTES) as u64 - offset;
 	let usage = wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_SRC | wgpu::BufferUsages::COPY_DST;
-	let storage = device.create_buffer(&wgpu::BufferDescriptor { label: Some("gpu_compute numbers"), size: (total * FLOAT_BYTES) as u64, usage, mapped_at_creation: false });
+	let storage = device.create_buffer(&wgpu::BufferDescriptor { label: Some("gpu_compute numbers"), size: (total * WORD_BYTES) as u64, usage, mapped_at_creation: false });
 	if !bytes.is_empty() {
-		queue.write_buffer(&storage, (items * FLOAT_BYTES) as u64, &bytes);
+		queue.write_buffer(&storage, (items * WORD_BYTES) as u64, bytes);
 	}
 	let readback = device.create_buffer(&wgpu::BufferDescriptor { label: Some("gpu_compute readback"), size, usage: wgpu::BufferUsages::MAP_READ | wgpu::BufferUsages::COPY_DST, mapped_at_creation: false });
 
@@ -118,7 +166,7 @@ pub fn compute_kept(shader: &str, numbers: &[f32], workgroups: u32, first: usize
 	});
 	let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor::default());
 	if let Some((buffer, count)) = &kept {
-		encoder.copy_buffer_to_buffer(buffer, 0, &storage, 0, (count * FLOAT_BYTES) as u64);
+		encoder.copy_buffer_to_buffer(buffer, 0, &storage, 0, (count * WORD_BYTES) as u64);
 	}
 	{
 		let mut pass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor::default());
@@ -137,7 +185,7 @@ pub fn compute_kept(shader: &str, numbers: &[f32], workgroups: u32, first: usize
 		}
 		kept.push((block, storage, count));
 	}
-	Ok(bytes.chunks_exact(FLOAT_BYTES).map(|chunk| f32::from_le_bytes(chunk.try_into().expect("four bytes"))).collect())
+	Ok(bytes)
 }
 
 /// Run the fragment shader `main` over a width×height image: its pixels row by row as 0xFFRRGGBB (alpha dropped:
@@ -186,23 +234,27 @@ pub fn render(shader: &str, width: u32, height: u32, values: &[ShaderValue]) -> 
 }
 
 /// The WGSL declaring `values` (appended to the shader, so its line numbers stay the user's) and the bytes of the
-/// uniform, laid out as WGSL aligns its members: f32 by 4, vec2f by 8, vec3f and vec4f by 16
+/// uniform, laid out as WGSL aligns its members: f32 by 4, vec2f by 8, vec3f, vec4f and arrays of vec4f by 16
 pub fn uniform_layout(values: &[ShaderValue]) -> Result<(String, Vec<u8>), String> {
 	if values.is_empty() {
 		return Ok((String::new(), Vec::new()));
 	}
 	let mut members = Vec::new();
 	let mut bytes = Vec::new();
-	for (name, floats) in values {
+	for ShaderValue { name, floats, array } in values {
 		let (wgsl_type, alignment) = match floats.len() {
-			1 => ("f32", 4),
-			2 => ("vec2f", 8),
-			3 => ("vec3f", 16),
-			4 => ("vec4f", 16),
+			_ if *array => (format!("array<vec4f, {}>", floats.len().div_ceil(VECTOR_FLOATS).max(1)), 16),
+			1 => ("f32".into(), 4),
+			2 => ("vec2f".into(), 8),
+			3 => ("vec3f".into(), 16),
+			4 => ("vec4f".into(), 16),
 			count => return Err(format!("{VALUES_NAME}.{name} is one number or a list of two to four, got {count}")),
 		};
 		bytes.resize(bytes.len().next_multiple_of(alignment), 0);
 		bytes.extend(floats.iter().flat_map(|float| float.to_le_bytes()));
+		if *array {
+			bytes.resize(bytes.len().next_multiple_of(UNIFORM_ALIGNMENT), 0);
+		}
 		members.push(format!("{name}: {wgsl_type}"));
 	}
 	bytes.resize(bytes.len().next_multiple_of(UNIFORM_ALIGNMENT), 0);

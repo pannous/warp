@@ -1,0 +1,7 @@
+class P{age: int}
+ps: [P] = []
+for i in 1 to 3000 { ps += [P(i)] }
+kept = [p for p in ps if p.age > 2990]
+total = 0
+for p in ps { total += p.age }
+count(kept) + total

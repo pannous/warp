@@ -7,6 +7,89 @@ before asking the user; nobody reads it front to back, the code, tests and wiki 
 notes/open_decisions.md.
 
 ## Decided 2026-10-09 (user, as recommended unless quoted)
+- P235b amended (the user's own edit of samples/webgpu.warp, `let uv = at.xy / $size;`; Integrator, card
+  shader-holes for warp-web): `$name` in a shader block is an explicit hole, as in sql templates: the compiler
+  passes that warp value as `values.name` and builds the values map itself. Bare WGSL names still never capture
+  warp variables. `$` never occurs in WGSL, so no clash; the uniform layout exists (src/gpu.rs uniform_layout).
+  Defaults: the name is resolved where the block is written, the value read at each paint call.
+- Hosting login callback (warp-hosting): NOT as recommended: GitHub's callback stays https://lambda.pannous.com/callback;
+  the pannous.com server proxies lambda.pannous.com → warp-hosting.pannous.workers.dev (Ferron block + certbot cert,
+  edited in pannous-lockdown scripts/levels/rustweb.sh). The hosting Worker is live; secrets come from .env and ~/.keys.
+- Units are written glued to their numbers, as a soft hint (user to warp-types, via the supervisor; card
+  unit-glue, branch unit-glue-hint 12da9e1d0): `3 km` works with the hint "prefer 3km over 3 km"; samples write
+  `3km`.
+- Hosting (warp-hosting, card cloud-hosting; each program is its own Cloudflare Worker uploaded by the hosting
+  Worker https://warp-hosting.pannous.workers.dev): Q1 the user creates a GitHub OAuth App for "Log in with
+  GitHub"; Q2 the user creates a Cloudflare "Edit Cloudflare Workers" API token for uploads; Q3 free Workers plan
+  for now (~90 programs, 100k requests/day), Workers for Platforms ($25/month) only near the cap; Q4 programs live
+  at warp-<name>.pannous.workers.dev, <name>.warp.pannous.com later (pannous.com's nameservers are mixed);
+  Q5 a private Cloudflare OAuth client now for deploying to one's own account, others paste a scoped API token
+  kept in their browser.
+- Word slices (user to the Interviewer: "list from A to B. List starting from A. List items to B"): with
+  xs = [10, 20, 30, 40, 50], `xs from 2 to 4` → [20, 30, 40], `xs starting from 2` → [20, 30, 40, 50],
+  `xs up to 2` → [10, 20]; positions count like `xs#1` (first = 1), both ends inclusive. Slicing by position,
+  not by value and not building a range.
+  Amended the same day (user, via the supervisor: "up to 2 is very confusing when it also contains the number 2"):
+  positions are marked, with the hash (`xs from #2 to #4`, `xs up to #2`) or ordinals (`from second to fourth`,
+  `up to 2nd`, `nth`). A bare number in a word slice (`xs up to 2`) is a loud error naming `#2` and `second`
+  (user's multiple choice, via the supervisor); positions are only `#n` or ordinals.
+- Playground CI (user, via the supervisor): pages.yml runs Chrome and Firefox as parallel jobs; workers are not
+  required to tour new examples with --firefox before a merge request.
+- Standing rule (user, via the supervisor): "always present questions in multiple choice form so I get informed
+  either here or via the interviewer": every user question, the Supervisor's included, is an AskUserQuestion popup.
+- Hosting of deployed warp programs (user, via the supervisor): "let's start with our own login and let people log
+  in with their own button". First our account hosts the programs: users log in with us and get a Deploy button.
+  Second, a button deploying to the person's own provider account. Worker warp-hosting researches providers
+  (notes/hosting.md), builds both, and sends account, cost and DNS questions here.
+- Ranges (user, via warp-class, branch range-descriptor 51cdcb2dd): "We don't need the colon syntax if we have the
+  dot-dot syntax": `r: 1..n` is the range itself, same as `r = 1..n`; `..` marks a value, so no uncharged-block
+  warning.
+- P236 (warp-keywords, card golf-echo): NOT as recommended: `warp run` keeps echoing the final value after the
+  script's prints, as today (`for i in 1 to 2 { print i; x = 1 }` → 1, 2, 1).
+- P235 (warp-web, card g_oFJc): WGSL is written as a `shader { … }` block, read verbatim with balanced braces, its
+  value the shader text; `wgsl { … }` is an alias. `shader{…}` is no longer tagged data (`Shader{…}` still is).
+  P235b: a shader does not capture warp variables; inputs stay explicit, `paint(rings, w, h, {frame: frame})` and
+  `values.frame` inside.
+- Not asked (word choice, warp-class, card g_mnvA): word infix operators are declared as in the user's own line,
+  `infix operator divides(d:int, n:int) := n % d == 0` (parameters optional, `left`/`right` otherwise, precedence
+  of `+` per P48); `infix divides(d, n) := …` is an alias. samples/orm.warp's `n divides d` in is_prime is reversed
+  under that definition and becomes `d divides n`.
+- P234 (warp-web, card graphics-names, from the user's TODO "We want elegance, but not black magic"): paint also
+  takes a WGSL shader text and renders it on the GPU: `paint(shader, size, size, {frame: frame})`; given pixels it
+  shows them as before. gpu_render stays for getting the pixels. Word choice, not asked: `use graphics` is an alias
+  of `use draw`.
+- P233 (warp-keywords, card field-tolerance): a field typed with a tolerance gives every value that tolerance:
+  `class Part{length: m ± 1 mm}`, `Part(5 m).length` → `5.000 ± 0.001m` (a spec attached to each value). Replaces
+  the interim "not supported yet" error.
+- Undoable default (warp-class, card g_mSEw "a less explicit form"): `form post "/todos" { input{name:"title"}
+  button{"add"} }` = `form{ method:"post" action:"/todos" … }`, matching the route `post "/todos" {…}`;
+  samples/todo_app.warp. Not built: naming the route function (`form add_todo {…}`) or finding the only matching
+  post route by the form's inputs.
+- P232 (warp-class, card g_mQ9U): `$x` as "field x of the implicit subject" stays in served routes only
+  (`$title` = request.body.title / request.query.title); not in event handlers, `it` contexts or component props.
+  `$a` in data literals keeps referencing the enclosing node `a{…}` (references.rs).
+- The user's uncommitted main-checkout edits (supervisor; patch scratch/user_edits.patch) land:
+  literals.rs: `${}`, `$()`, `\()` and `\{}` interpolation are all fine, no hint (user: "${} $() \() \{} all fine");
+  the 2 test_interpolation tests expecting the hint change. orm.warp: `bo.age += 1` writes through without
+  `save bo`; the sample test must tolerate the age growing on each run. natural.warp: land the countdown check with
+  its stray trailing `,2` removed. extensions.rs: "should not be a copy, but a hard link to some dev folder, and it
+  should reflect the new state of this project": the current file has link count 1 and old content (wasp_parser,
+  `strings!`); restore warp's content and re-link it with the shared copy.
+- P231 (supervisor/warp-web): print rounds quantities with units to a decimal, `mean of [5km, 1.5km, 12km]` prints
+  `6.17km`; str() and serialization keep the exact `(37/6)km`; plain numbers keep `7/3`. Replaces the interim
+  `(37/6)km`-everywhere build.
+- P230 (card effects-value): NOT as recommended: `effects of f` gives symbols `(State IO)`, not texts; needs symbol
+  values in the emitter. The interim text-list default and its test edit are undone.
+- P228 (warp-fixer, card standalone-std-io): no; programs using tables or JSON don't build stand-alone, the runtime
+  stays ~1 MB; a native run notes "host.std_io needs runtime." on the first run only. Wording changed the same day
+  (user's own src/main.rs edit, via the supervisor): the note reads "<features> used runtime.", without the
+  "(said once until the file or warp changes)" remark.
+- P226b (test_logarithm2): `x⌟b` is log base b of x: `100⌟10` → 2, `10⌟100` → 0.5; `x⌟` alone is ln x.
+- P229 (card g_gHmE): settled by the user outside the code: "I already changed it to open my editor. Nothing to fix
+  here." Double-clicking a .warp file opens the editor; nothing to build.
+- Served routes (undoable defaults, supervisor, card served-route): a route that raises on a browser form answers 400
+  and re-renders the page with the message; a missing form field gives 400, an unknown id 404.
+- `is empty` covers "", [] and {} as well as ø, following wiki/null.md (undoable default, supervisor).
 - /api and /rpc JSON give instances as plain objects, `[{"name":"Ann","id":1}]`, not wrapped in their class name
   (undoable default, supervisor, asked by warp-class).
 - P225 (warp-worker, test_string_operations): a float joined to text uses its shortest form, as print does:
@@ -867,6 +950,8 @@ notes/open_decisions.md.
   the other is text like dollar money". So `"${expr}"` interpolates, bare `"$x"` stays the literal text `$x`.
   Revises D1's "also `$x`": tests/text/test_interpolation.rs `dollar_holes_interpolate_too` follows (user decision). Swift
   `"\(expr)"` was not asked about and stays.
+- Interpolation holes (user, via the supervisor 2026-10-09, card brace-hole): all four interpolate, `\(…)` canonical,
+  `\{…}`, `${…}` and `$(…)` with the hint "prefer \(…)"; `\u{…}` stays a unicode escape.
 - Tuple returns (P2, asked by warp-d7/warp-5e): user "yes" (answer "no yes ?" in warp-5e's session, second item).
   `return a, b` and `x, y = f()`, compiled to wasm multi-value without allocating a list. Not built yet.
 - Closure Int->Int fast path (P3, asked by warp-5e): user "no" (same answer, first item). Closure calls keep boxing.

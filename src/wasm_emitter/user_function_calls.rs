@@ -105,7 +105,7 @@ impl WasmGcEmitter {
 		scope.globals = self.ctx.declared_globals.clone();
 		for (index, param) in enclosing.params.iter().enumerate() {
 			let kind = if self.takes_list_abi(&enclosing.name, index) { Kind::List } else { param_kind(param) };
-			scope.define_param(param.name.clone(), kind);
+			scope.define_param(param, kind);
 		}
 		collect_variables(&enclosing.body, &mut scope);
 		Some(scope)
@@ -226,7 +226,7 @@ impl WasmGcEmitter {
 		self.scope.globals = self.function_globals(name);
 		for (index, param) in user_fn.params.iter().enumerate() {
 			let kind = if self.takes_list_abi(name, index) { Kind::List } else { param_kind(param) };
-			self.scope.define_param(param.name.clone(), kind);
+			self.scope.define_param(param, kind);
 		}
 
 		// a captured typed list of main is read from its capture global (shadowing a typed global of that name)
@@ -476,7 +476,12 @@ impl WasmGcEmitter {
 			// `[]` is ø here: the empty list fits every declared list
 			let is_empty_list = matches!(argument.drop_meta(), Node::Empty);
 			if declared_misfit || ((!expected.is_ref() || declared_list) && refused.contains(&given) && given != expected && !is_empty_list) {
-				let message = format!("{} needs {} for parameter {}, got {} ({})", user_fn.name, kind_with_article(expected), param.name, argument.serialize(), kind_with_article(given));
+				// a number parameter held as a Node (`a:number` of a program with ± values) names its type, not its kind
+				let wanted = match param.annotation.as_ref().filter(|annotation| crate::uncertain::is_interval_number(annotation)) {
+					Some(annotation) => crate::analyzer::with_article(&annotation.drop_meta().name()),
+					None => kind_with_article(expected),
+				};
+				let message = format!("{} needs {wanted} for parameter {}, got {} ({})", user_fn.name, param.name, argument.serialize(), kind_with_article(given));
 				self.emit_type_error(func, message);
 				return;
 			}

@@ -132,6 +132,14 @@ all. The page build now takes the definition: tests/web/test_server_functions_in
    tour example `forms` (test_in_browser.py --examples forms: types, clicks add, the item shows). What it took:
    - Forms (web_server.rs): an urlencoded body is the map of its fields (`request.body.title`). A browser's form
      (Accept text/html) gets 303 back to its Referer (post/redirect/get), any other client the route's value.
+   - `$title` in a route is the request's field (card g_mQ9U, 2026-10-09): `request.query.title` of a get,
+     `request.body.title` of the other methods (serve.rs with_request_fields, beside the path parameters); `$1`
+     stays positional. Open (Interviewer): one mechanism for context variables elsewhere, `$x` as the field x of the
+     context's implicit subject: an event handler's event (`on click { $x }`), a loop's or lambda's `it` (`$name` =
+     `it.name`), a component's props. It would take `$a` from references.rs inside data literals.
+   - `form post "/todos" { … }` is `form{ method:"post" action:"/todos" … }`: a form written as the route it sends
+     to (card g_mSEw, 2026-10-09, markup_tags::lower_form_routes, first source pass so serve never reads it as a
+     route); any method word of serve::METHODS, any path expression (`"/todos/\(todo.id)/toggle"`).
    - A get/post path holds parameters as a page route does. serve.rs bind_path_parameters binds them from
      `request.path` before lower_where, so a table's filter takes `id` as a value.
    - A bool column reads back as a bool, and a one-character text is stored as its text (database.rs c_text).
@@ -152,3 +160,17 @@ all. The page build now takes the definition: tests/web/test_server_functions_in
 
 ## Undoable defaults taken
 - RPC in the page is async, like fetch (option a), starting from the prerendered value; a call with a local argument is refused.
+- /api and /rpc JSON shows an instance as a plain object, `{"name":"Ann","id":1}`, with no class wrapper (supervisor,
+  2026-10-09). An instance reads back as `Key(Class, Op::None, {…})`, and web_server.rs without_classes strips it where a
+  value stands. An object's own entries (`address:{…}`) keep their names.
+
+## Server route paths (cards server-path, route-star)
+- `get "/api/users/:id:int" { users#id }`: a server route's path takes the page routes' patterns. web_server.rs
+  route_at prefers the route with exactly the path, then the first whose pattern matches (routes.rs path_matches, the
+  Rust twin of lib/router.warp route_matches). serve.rs bind_path_parameters binds them from `request.path` with the
+  page routes' `let id:int = route_segment(…) as int`, and the router module is loaded for them (modules.rs ROUTE_PARTS).
+- An /api/ or /rpc/ path that no route takes answers JSON 404 `{"error":"no route GET …"}`, never the page.
+- A page path: the single page answers every path a route matches, `route "*"` included, with 200 (user 2026-10-07,
+  supervisor 2026-10-09). The answer is 404 only when no route matches at all (site.rs matches_no_route_at) or when a
+  matched route's lookup misses (`users#9`).
+- Check by hand: `probes/server_edits/curl_checks.sh <warp binary> samples/server.warp <port>`.

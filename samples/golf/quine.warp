@@ -1,0 +1,6 @@
+// code.golf quine: the program prints its own source, its template filled with the template itself
+use text
+quote = chr(34)
+newline = chr(10)
+template = "// code.golf quine: the program prints its own source, its template filled with the template itself{}use text{}quote = chr(34){}newline = chr(10){}template = {}{}{}{}print format(template, [newline, newline, newline, newline, quote, template, quote, newline])"
+print format(template, [newline, newline, newline, newline, quote, template, quote, newline])

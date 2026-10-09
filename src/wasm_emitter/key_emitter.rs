@@ -51,13 +51,14 @@ impl WasmGcEmitter {
 		if *op == Op::AddAssign && self.emit_list_extend_assignment(func, left, right) {
 			return;
 		}
-		if op.is_compound_assign() && op.base_op() == Op::Add {
-			let concatenation = Node::Key(Box::new(left.clone()), Op::Add, Box::new(right.clone()));
+		if op.is_compound_assign() {
+			let updated = Node::Key(Box::new(left.clone()), op.base_op(), Box::new(right.clone()));
 			let list_or_text = |kind| matches!(kind, crate::type_kinds::Kind::Text | crate::type_kinds::Kind::List);
-			// `xs = []` holds ø until something is added
+			// `xs = []` holds ø until something is added; a variable held as a Node updates as `x = x op y` does
 			let left_kind = self.get_type(left);
-			if list_or_text(self.get_type(&concatenation)) || matches!(left_kind, crate::type_kinds::Kind::List | crate::type_kinds::Kind::Empty) {
-				self.emit_key_node(func, left, &Op::Assign, &concatenation);
+			let concatenation = op.base_op() == Op::Add && (list_or_text(self.get_type(&updated)) || left_kind == crate::type_kinds::Kind::List);
+			if concatenation || left_kind == crate::type_kinds::Kind::Empty {
+				self.emit_key_node(func, left, &Op::Assign, &updated);
 				return;
 			}
 		}

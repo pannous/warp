@@ -70,6 +70,17 @@ const GO_FUNCTION_WORD: &str = "func";
 const IMPL_WORD: &str = "impl";
 /// Kotlin's `p.copy(y = 5)`
 const COPY_WORD: &str = "copy";
+/// lib/units.warp's `q.to("km/h")`: a run-time quantity in other units
+const CONVERSION_METHOD: &str = "to";
+/// lib/units.warp's check that two quantities measure the same, and a quantity's amount in base units
+const SAME_DIMENSION: &str = "same_dimension";
+const QUANTITY_AMOUNT: &str = "amount";
+const SUM_WORD: &str = "sum";
+/// The sum of a list of run-time quantities folds their `plus` (quantities_reduced)
+const REDUCE_WORD: &str = "reduce";
+const REDUCED_NAMES: [&str; 2] = ["quantity·sum", "quantity·item"];
+/// `str(q)`: a run-time quantity's text
+const TEXT_WORD: &str = "str";
 /// The methods an operator on an instance calls (wiki/operator.md aliases, Python's special methods)
 const OPERATOR_METHODS: [(Op, &[&str]); 9] = [
 	(Op::Add, &["plus", "add", "__add__"]),
@@ -729,7 +740,7 @@ fn renamed_type_word_methods(node: Node) -> Node {
 	let (mut names, mut classes, mut defined_by) = (vec![], vec![], vec![]);
 	node.visit(&mut |part| if let Node::Type { name, body } = part {
 		let clashing: Vec<String> = class_items(body).iter().filter_map(method_parts).map(|(name, _, _)| name)
-			.filter(|name| !is_witness_method(name) && (crate::analyzer::type_word_kind(name).is_some() || is_library_method(name))).collect();
+			.filter(|name| !is_witness_method(name) && (crate::analyzer::type_word_kind(name).is_some() || is_library_method(name) || crate::uncertain::INTERVAL_FIELDS.contains(&name.as_str()))).collect();
 		if !clashing.is_empty() {
 			classes.push(name.drop_meta().name());
 		}
@@ -749,6 +760,14 @@ fn renamed_type_word_methods(node: Node) -> Node {
 pub(crate) fn instance_classes(node: &Node, classes: &[String]) -> std::collections::HashMap<String, String> {
 	let returned = returned_classes(node, classes);
 	let constructed_class = |value: &Node| instance_class(value, &returned);
+	// `[Point(1, 2), …]`: a list of constructions of one class
+	let list_class = |list: &Node| match list.drop_meta() {
+		Node::List(items, Bracket::Square, _) if !items.is_empty() => {
+			let first = constructed_class(&items[0])?;
+			items.iter().all(|item| constructed_class(item).as_ref() == Some(&first)).then_some(first)
+		}
+		_ => None,
+	};
 	let mut instances: std::collections::HashMap<String, String> = std::collections::HashMap::new();
 	node.visit(&mut |part| if let Node::Key(target, op, value) = part {
 		// `p:Point = …`: the annotation says it
@@ -760,12 +779,18 @@ pub(crate) fn instance_classes(node: &Node, classes: &[String]) -> std::collecti
 			}
 		}
 		let Node::Symbol(variable) = target.drop_meta() else { return };
+		let class_of = |operand: &Node| match operand.drop_meta() {
+			Node::Symbol(operand) => instances.get(operand).cloned(),
+			other => constructed_class(other),
+		};
 		let class = match (op, value.drop_meta()) {
 			// `c = a + b` of an instance a: the operation gives one of a's class, as with_operator_calls reads it
-			(Op::Assign | Op::Define, Node::Key(left, Op::Add | Op::Sub | Op::Mul | Op::Div | Op::Mod, _)) => match left.drop_meta() {
-				Node::Symbol(operand) => instances.get(operand).cloned(),
-				other => constructed_class(other),
-			},
+			(Op::Assign | Op::Define, Node::Key(left, Op::Add | Op::Sub | Op::Mul | Op::Div | Op::Mod, _)) => class_of(left),
+			// `w = q as m`, `w = q.to("m")` of a run-time quantity q: another one
+			(Op::Assign | Op::Define, conversion) if crate::units::conversion(conversion).is_some() => crate::units::conversion(conversion).and_then(|(quantity, _)| class_of(quantity)),
+			(Op::Assign | Op::Define, Node::Key(quantity, Op::Dot, call)) if is_call_of(call, CONVERSION_METHOD) => class_of(quantity),
+			// `s = sum([quantity("5 m"), …])`: the sum of instances is one (card quantity-sum)
+			(Op::Assign | Op::Define, summed) if summed_list(summed).is_some() => summed_list(summed).and_then(list_class),
 			(Op::Assign | Op::Define, _) => constructed_class(value),
 			// `p:Point`, the annotation a symbol or a type
 			(Op::Colon, Node::Symbol(_) | Node::Type { .. }) => Some(value.drop_meta().name()),
@@ -776,13 +801,6 @@ pub(crate) fn instance_classes(node: &Node, classes: &[String]) -> std::collecti
 		}
 	});
 	// `for p in ps {…}` over a list of constructions `ps = [Point(1, 2), …]`: p holds instances
-	let list_class = |list: &Node| match list.drop_meta() {
-		Node::List(items, Bracket::Square, _) if !items.is_empty() => {
-			let first = constructed_class(&items[0])?;
-			items.iter().all(|item| constructed_class(item).as_ref() == Some(&first)).then_some(first)
-		}
-		_ => None,
-	};
 	let mut instance_lists = std::collections::HashMap::new();
 	node.visit(&mut |part| if let Node::Key(target, Op::Assign | Op::Define, value) = part {
 		if let Some(class) = list_class(value).filter(|class| classes.contains(class)) {
@@ -1059,22 +1077,34 @@ struct Operands<'a> {
 fn with_operator_calls(node: Node, operands: &Operands) -> (Node, Option<String>) {
 	let recurse = |child: Node| with_operator_calls(child, operands).0;
 	match node {
+		certainty if crate::uncertain::certainty_parts(&certainty).is_some() => (with_certain_amounts(&certainty, operands), None),
+		sum if summed_quantities(&sum, operands).is_some() => {
+			let quantities = with_operator_calls(summed_quantities(&sum, operands).expect("guarded").clone(), operands).0;
+			(quantities_reduced(quantities), Some(crate::units::RUN_TIME_QUANTITY.to_string()))
+		}
 		Node::Key(left, op, right) if OPERATOR_METHODS.iter().any(|(known, _)| *known == op) => {
 			let (left, class) = with_operator_calls(*left, operands);
 			let (right, right_class) = with_operator_calls(*right, operands);
 			let class = class.or_else(|| operand_class(&left, operands));
+			let right_class = right_class.or_else(|| operand_class(&right, operands));
+			// `"v: " + q` of a run-time quantity q joins its text, as a static quantity does (card quantity-falls)
+			if op == Op::Add && (is_text(&left) || is_text(&right)) {
+				return (Node::Key(Box::new(joined_text(left, class)), op, Box::new(joined_text(right, right_class))), None);
+			}
 			let (left, class, right) = with_run_time_units(left, class, right, right_class, operands);
 			match class.as_ref().and_then(|class| operands.methods.iter().find(|(owner, known, _)| owner == class && *known == op)) {
-				Some((_, _, method)) => {
-					let call = Node::List(vec![Node::Symbol(method.clone()), right], Bracket::Round, Separator::None);
-					// `(quantity(…)) * 2`: the receiver without its parentheses, else `(f(…)).times` reads as a call of f
-					let left = match left.drop_meta() {
-						Node::List(items, Bracket::Round, _) if items.len() == 1 => items[0].clone(),
-						_ => left,
-					};
-					(Node::Key(Box::new(left), Op::Dot, Box::new(call)), class)
-				}
+				Some((_, _, method)) => (method_call(left, method, right), class),
 				None => (Node::Key(Box::new(left), op, Box::new(right)), None),
+			}
+		}
+		// `q as km/h`, `q in m` of a run-time quantity q: its conversion `q.to("km/h")` (card quantity-falls)
+		conversion if crate::units::conversion(&conversion).is_some() => {
+			let (quantity, units) = crate::units::conversion(&conversion).map(|(quantity, units)| (quantity.clone(), units)).expect("guarded");
+			let (quantity, class) = with_operator_calls(quantity, operands);
+			let run_time = Some(crate::units::RUN_TIME_QUANTITY);
+			match class.or_else(|| operand_class(&quantity, operands)).as_deref() == run_time {
+				true => (method_call(quantity, CONVERSION_METHOD, Node::Text(crate::units::unit_suffix(&units))), run_time.map(str::to_string)),
+				false => (conversion.map_children(recurse), None),
 			}
 		}
 		// `1 min == q` of a run-time quantity q (the equality witness compares them)
@@ -1112,6 +1142,70 @@ fn with_operator_calls(node: Node, operands: &Operands) -> (Node, Option<String>
 	}
 }
 
+/// `receiver.method(argument)`; `(quantity(…)) * 2`: the receiver without its parentheses, else `(f(…)).times` reads as
+/// a call of f
+/// `rope certainly > 4 m` of a run-time quantity rope: its amount and the other's in the same base units compare, a ±
+/// amount as the interval it is; `Quantity.more` would answer a plain yes (card quantity-tolerance)
+fn with_certain_amounts(certainty: &Node, operands: &Operands) -> Node {
+	let (word, ordering) = crate::uncertain::certainty_parts(certainty).expect("guarded");
+	let Node::Key(left, op, right) = ordering.drop_meta() else { unreachable!("certainty_parts takes orderings") };
+	let (left, class) = with_operator_calls(left.as_ref().clone(), operands);
+	let (right, right_class) = with_operator_calls(right.as_ref().clone(), operands);
+	let class = class.or_else(|| operand_class(&left, operands));
+	let (left, class, right) = with_run_time_units(left, class, right, right_class, operands);
+	let compared = match class.as_deref() == Some(crate::units::RUN_TIME_QUANTITY) {
+		true => {
+			let comparable = Node::List(vec![Node::Symbol(SAME_DIMENSION.to_string()), left.clone(), right, Node::Text("compare".to_string())], Bracket::Round, Separator::None);
+			Node::Key(Box::new(amount_of(left)), *op, Box::new(amount_of(comparable)))
+		}
+		false => Node::Key(Box::new(left), *op, Box::new(right)),
+	};
+	Node::List(vec![Node::Symbol(word.to_string()), compared], Bracket::None, Separator::Space).with_meta_of(certainty)
+}
+
+/// The list of `sum([5 m ± 1 cm, 3 m ± 2 cm])` or `[…].sum()` when each item is a run-time quantity
+fn summed_quantities<'n>(node: &'n Node, operands: &Operands) -> Option<&'n Node> {
+	let list = summed_list(node)?;
+	let Node::List(items, Bracket::Square, _) = list.drop_meta() else { return None };
+	let is_quantity = |item: &Node| operand_class(item, operands).as_deref() == Some(crate::units::RUN_TIME_QUANTITY);
+	(!items.is_empty() && items.iter().all(is_quantity)).then_some(list)
+}
+
+/// The list of `sum(xs)`, `xs.sum()`
+fn summed_list(node: &Node) -> Option<&Node> {
+	match node.drop_meta() {
+		Node::List(items, Bracket::Round, _) => match items.as_slice() {
+			[word, list] if word.drop_meta().name() == SUM_WORD => Some(list),
+			_ => None,
+		},
+		Node::Key(list, Op::Dot, call) if is_call_of(call, SUM_WORD) || call.drop_meta().name() == SUM_WORD => Some(list),
+		_ => None,
+	}
+}
+
+/// `quantities.reduce((sum, item) => sum.plus(item))`, marked a Quantity so `str()` and a final value show its text
+/// (card quantity-sum)
+fn quantities_reduced(quantities: Node) -> Node {
+	let [sum, item] = REDUCED_NAMES.map(|name| Node::Symbol(name.to_string()));
+	let parameters = Node::List(vec![sum.clone(), item.clone()], Bracket::Round, Separator::Colon);
+	let added = Node::Key(Box::new(parameters), Op::FatArrow, Box::new(method_call(sum, operator_method(Op::Add).expect("plus"), item)));
+	let reduced = Node::Key(Box::new(quantities), Op::Dot, Box::new(Node::List(vec![Node::Symbol(REDUCE_WORD.to_string()), added], Bracket::Round, Separator::None)));
+	Node::meta(reduced, Node::data(crate::lowering::traits::TypedAs(crate::units::RUN_TIME_QUANTITY.to_string())))
+}
+
+fn amount_of(quantity: Node) -> Node {
+	Node::Key(Box::new(quantity), Op::Dot, Box::new(Node::Symbol(QUANTITY_AMOUNT.to_string())))
+}
+
+fn method_call(receiver: Node, method: &str, argument: Node) -> Node {
+	let receiver = match receiver.drop_meta() {
+		Node::List(items, Bracket::Round, _) if items.len() == 1 => items[0].clone(),
+		_ => receiver,
+	};
+	let call = Node::List(vec![Node::Symbol(method.to_string()), argument], Bracket::Round, Separator::None);
+	Node::Key(Box::new(receiver), Op::Dot, Box::new(call))
+}
+
 /// `2 km < q`, `q + 1 m` of a run-time quantity q: the unit written in the program is one too (card units-mixed); the
 /// operands with the left one's class
 fn with_run_time_units(left: Node, class: Option<String>, right: Node, right_class: Option<String>, operands: &Operands) -> (Node, Option<String>, Node) {
@@ -1137,8 +1231,31 @@ fn operand_class(operand: &Node, operands: &Operands) -> Option<String> {
 		Node::List(items, Bracket::Round, _) if items.len() == 1 => with_operator_calls(items[0].clone(), operands).1.or_else(|| operand_class(&items[0], operands)),
 		// `f(quantity("5 m") / 5)`: an operation of an instance as an argument
 		Node::Key(_, op, _) if OPERATOR_METHODS.iter().any(|(known, _)| known == op) => with_operator_calls(operand.drop_meta().clone(), operands).1,
+		// `q.times(2)`: an operator method already called on an instance gives one of its class
+		Node::Key(receiver, Op::Dot, call) if is_operator_method_call(call, operands) || is_call_of(call, CONVERSION_METHOD) => operand_class(receiver, operands),
 		other => instance_class(other, operands.returned),
 	}
+}
+
+fn is_text(node: &Node) -> bool {
+	matches!(node.drop_meta(), Node::Text(_))
+}
+
+/// An operand joining a text: a run-time quantity as `str(q)`
+fn joined_text(operand: Node, class: Option<String>) -> Node {
+	match class.as_deref() == Some(crate::units::RUN_TIME_QUANTITY) {
+		true => Node::List(vec![Node::Symbol(TEXT_WORD.to_string()), operand], Bracket::Round, Separator::None),
+		false => operand,
+	}
+}
+
+fn is_operator_method_call(call: &Node, operands: &Operands) -> bool {
+	operands.methods.iter().any(|(_, _, method)| is_call_of(call, method))
+}
+
+/// `to("m")` is a call of `to`
+fn is_call_of(call: &Node, method: &str) -> bool {
+	matches!(call.drop_meta(), Node::List(items, Bracket::Round, _) if items.first().is_some_and(|word| word.drop_meta().name() == method))
 }
 
 /// A name the library gives lists and texts too (`pop`, `sum`, `count`): a method of that name is one only on an
@@ -1192,7 +1309,7 @@ fn with_method_names(node: Node, methods: &MethodNames, in_class: bool) -> Node 
 			Node::List(items, Bracket::Round, _) => items.first().map(|first| first.drop_meta().name()).unwrap_or_default(),
 			other => other.name(),
 		};
-		match is_library_method(&name) {
+		match is_library_method(&name) || crate::uncertain::INTERVAL_FIELDS.contains(&name.as_str()) {
 			true => match receiver.drop_meta() {
 				Node::Symbol(variable) => methods.instances.contains(variable),
 				// `Stack([]).count()`, a construction
@@ -1452,7 +1569,7 @@ fn class_items(body: &Node) -> Vec<Node> {
 		Node::Empty => vec![],
 		single => vec![single.clone()],
 	};
-	items.into_iter().map(without_modifiers).flat_map(|item| match item.drop_meta() {
+	items.into_iter().map(without_modifiers).map(with_body_words).flat_map(|item| match item.drop_meta() {
 		Node::List(words, _, _) if keyword_method(words).is_some() => keyword_method(words).into_iter().collect(),
 		Node::List(words, _, _) if braced_method(words).is_some() => braced_method(words).into_iter().collect(),
 		Node::List(words, _, _) if value_block(words).is_some() => value_block(words).into_iter().collect(),
@@ -1467,6 +1584,21 @@ fn class_items(body: &Node) -> Vec<Node> {
 		Node::List(group, Bracket::None, _) => group.clone(),
 		_ => vec![item],
 	}).map(as_member).collect()
+}
+
+/// `fn f() := 3 squared`: the parser ends the definition before a suffix word, `(f() := 3) squared`; the words after it
+/// are its body's, as ambiguous_forms regroups them outside a class
+fn with_body_words(item: Node) -> Node {
+	let Node::List(words, Bracket::None, Separator::Space) = item.drop_meta() else { return item };
+	let Some(at) = words.iter().position(|word| matches!(word.drop_meta(), Node::Key(head, Op::Define, _) if matches!(head.drop_meta(), Node::List(_, Bracket::Round, _)))) else { return item };
+	let (before, rest) = words.split_at(at + 1);
+	if rest.is_empty() {
+		return item;
+	}
+	let Node::Key(head, op, value) = before[at].drop_meta() else { return item };
+	let body = Node::List([vec![value.as_ref().clone()], rest.to_vec()].concat(), Bracket::None, Separator::Space);
+	let definition = Node::Key(head.clone(), *op, Box::new(body));
+	Node::List([before[..at].to_vec(), vec![definition]].concat(), Bracket::None, Separator::Space)
 }
 
 /// `def area() -> int {…}`, `fun area(): Int {…}`, `func area() {…}`: the method `area() := …` (with its result type)

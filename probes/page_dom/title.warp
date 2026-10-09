@@ -1,0 +1,5 @@
+use js document
+document.title = "main ran"
+div{
+	p{ id: "out" "shown" }
+}

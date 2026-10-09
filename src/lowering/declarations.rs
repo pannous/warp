@@ -36,6 +36,8 @@ const ON_WORD: &str = "on";
 /// What a task signals when it is done, and the controls that would interrupt one
 const FINISH_EVENTS: [&str; 5] = ["finishes", "finished", "completes", "ends", "done"];
 const TASK_CONTROLS: [&str; 4] = ["stop", "pause", "cancel", "resume"];
+/// `dir(job)` of a task: the words it takes (card g_oOJs), no read of its value
+const DIR_WORD: &str = "dir";
 /// `go f(x)` of a user function and a read of its task variable, until resolve_tasks knows whether f runs on a thread
 pub(crate) const TASK_GO: &str = "task·go";
 const TASK_VALUE: &str = "task·value";
@@ -259,7 +261,8 @@ pub fn lower_tasks(node: Node) -> Node {
 	});
 	started.retain(|_, function| functions.contains(function));
 	let job_lists = job_lists(&node, &functions);
-	Tasks { words, tasks, started, functions, job_lists }.lower(node)
+	let own_dir = defined.contains(DIR_WORD);
+	Tasks { words, own_dir, tasks, started, functions, job_lists }.lower(node)
 }
 
 /// `job = go f(x)`: the task variable and the words of its start
@@ -428,6 +431,8 @@ fn marker(word: &str, parts: Vec<Node>) -> Node {
 #[derive(Clone)]
 struct Tasks<'a> {
 	words: Vec<&'a str>,
+	/// the program defines its own `dir`
+	own_dir: bool,
 	/// task variables and the functions `go` starts
 	tasks: std::collections::HashSet<String>,
 	/// task variable → the user function its `go` started
@@ -439,6 +444,13 @@ struct Tasks<'a> {
 }
 
 impl Tasks<'_> {
+	/// `dir(job)`: await, the controls and the finish event, as texts
+	fn task_dir(&self, items: &[Node]) -> Option<Node> {
+		let [dir, subject] = items else { return None };
+		let names: Vec<String> = [TASK_WORDS[1]].iter().chain(&TASK_CONTROLS).chain(&[FINISH_EVENT]).map(|name| name.to_string()).collect();
+		(word(dir) == DIR_WORD && !self.own_dir && self.is_task(subject)).then(|| crate::reflection::text_list(&names))
+	}
+
 	fn is_task(&self, node: &Node) -> bool {
 		match node.drop_meta() {
 			Node::Symbol(name) => self.tasks.contains(name),
@@ -535,6 +547,9 @@ impl Tasks<'_> {
 				// `await any [a, b]` and `await job within 100 ms` read the tasks themselves, before a read of one waits
 				if let Some(race) = self.raced(&items).or_else(|| self.within(&items, None)).or_else(|| self.within_or(&items)) {
 					return race;
+				}
+				if let Some(names) = self.task_dir(&items) {
+					return names;
 				}
 				let items: Vec<Node> = items.into_iter().map(|item| self.lower(item)).collect();
 				match self.task_statement(&items) {
@@ -1427,8 +1442,10 @@ fn spaced_definition(items: &[Node]) -> Option<(Node, Vec<Node>, Node)> {
 /// (returned, assigned, an argument): `mk(k) := { return {it * k} }` returns the function `it => it * k`
 fn bind_it(node: Node, parameter: &str, is_value: bool) -> Node {
 	let values = |items: Vec<Node>| -> Vec<Node> {
+		let head = items.first().cloned().unwrap_or(Node::Empty);
 		let mut items = items.into_iter();
-		items.next().map(|head| bind_it(head, parameter, false)).into_iter().chain(items.map(|item| bind_it(item, parameter, true))).collect()
+		let bound = |item: Node| if crate::lambdas::has_own_it(&head, &item) { item } else { bind_it(item, parameter, true) };
+		items.next().map(|head| bind_it(head, parameter, false)).into_iter().chain(items.map(bound)).collect()
 	};
 	match node {
 		Node::Symbol(name) if name == IT_PARAMETER => Node::Symbol(parameter.to_string()),

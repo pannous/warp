@@ -1,13 +1,10 @@
 // Web/Browser tests
 // Migrated from tests_*.rs files
 
-use warp::analyzer::analyze;
-use warp::extensions::print;
 use warp::util::fetch;
 use warp::wasm_emitter::eval;
-use warp::warp_parser::parse;
 use warp::type_kinds::NodeKind;
-use crate::{is, eq, skip, put};
+use crate::{is, eq};
 
 #[test]
 fn test_html_warp() {
@@ -16,36 +13,29 @@ fn test_html_warp() {
 	                                //	eval("html{bold($myid style=red){Hello}}"); // => <bold id=myid style=red>Hello</bold>
 }
 
+// a script element holds JavaScript, as written (card vacuous-tests; `js{…}` as its alias: card js-element)
 #[test]
-#[ignore]
 fn test_js() {
-	// todo remove (local $getContext i32)  !
-	eval("$canvas.getContext('2d')"); // => invokeReference(canvas, getContext, '2d');
-	skip!(
-
-		eval("js{alert('Hello')}"); // => <script>alert('Hello')</script>
-		eval("script{alert('Hello')}"); // => <script>alert('Hello')</script>
-	);
+	is!("use markup; to_html(script{\"alert('Hello')\"})", "<script>alert('Hello')</script>");
+	calls_the_page("use js document; ctx = document.getElementById(\"canvas\").getContext(\"2d\")", &["getElementById", "getContext"]);
 }
 
+/// A page program reaches the DOM through `use js document`: it compiles to the host's foreign calls naming each member;
+/// running it needs a page's document, which neither the native runner nor the browser suite's Worker has: tests/web/test_dom_pages.rs runs such programs on a page
+fn calls_the_page(code: &str, members: &[&str]) {
+	let bytes = warp::wasm_emitter::compile(code).unwrap_or_else(|error| panic!("{code} does not compile: {error:?}")).bytes;
+	for member in members {
+		assert!(bytes.windows(member.len()).any(|window| window == member.as_bytes()), "{code} calls no {member}");
+	}
+}
+
+// markup is HTML, and a page's element takes HTML as its content
 #[test]
-#[ignore = "later"]
 fn test_inner_html() {
-	// let html = parse_xml("<html><bold>test</bold></html>");
-	// let html = parse("<html><bold>test</bold></html>");
-	// eq!(*html.value(), "<bold>test</bold>");
-	// let serialized = html.serialize();
-	// eq!(serialized, "<html><bold>test</bold></html>");
-	//	eval("<html><script>alert('ok')");
-	//	eval("<html><script>alert('ok')</script></html>");
-	//	eval("$b.innerHTML='<i>ok</i>'");
-	//	eval("<html><bold id='anchor'>…</bold></html>");
-	//	eval("$anchor.innerHTML='<i>ok</i>'");
-	//
-	////	eval("x=<html><bold>test</bold></html>;$results.innerHTML=x");
-	//	eval("$results.innerHTML='<bold>test</bold>'");
+	is!("use markup; to_html(html{b{\"test\"}})", "<html><b>test</b></html>");
+	is!("use markup; to_html(html{script{\"alert('ok')\"}})", "<html><script>alert('ok')</script></html>");
+	calls_the_page("use js document; results = document.getElementById(\"results\"); results.innerHTML = \"<i>ok</i>\"", &["getElementById", "innerHTML"]);
 }
-
 
 #[test]
 fn test_fetch() {
@@ -58,36 +48,19 @@ fn test_fetch() {
 	is!("string x=fetch https://pannous.com/files/test", "test 2 5 3 7\n");
 }
 
+// a red rectangle on a canvas: drawn by `use draw` (the playground's canvas, natively a PNG), or on a page's canvas
 #[test]
-#[ignore]
 fn test_canvas() {
-	let _result = analyze(parse("$canvas"));
-	// TODO: Externref type not yet implemented in Kind
-	// eq!(result.kind(), NodeKind::Externref);
-	let nod = eval("    ctx = $canvas.getContext('2d');\n    ctx.fillStyle = 'red';\n    ctx.fillRect(10, 10, 150, 100);");
-	put!(nod);
+	let corners = "[canvas_pixels[10 * 200 + 10], canvas_pixels[109 * 200 + 159], canvas_pixels[110 * 200 + 160], canvas_pixels[0]]";
+	is!(&format!("use draw\ncanvas(200, 150)\nrect(10, 10, 150, 100, red)\n{corners}.map(p => p == red)"), warp::ints(vec![1, 1, 0, 0]));
+	calls_the_page("use js document\nctx = document.getElementById(\"canvas\").getContext(\"2d\")\nctx.fillStyle = \"red\"\nctx.fillRect(10, 10, 150, 100)", &["fillStyle", "fillRect"]);
 }
 
+// an element of the page by its id is a WebIDL Element, its members checked at compile time
 #[test]
-#[ignore]
 fn test_dom() {
-	print("test_dom");
-	// preRegisterFunctions();
-	let mut _result = analyze(parse("getElementById('canvas')"));
-	// eq!(result.kind(), AstKind::Call);
-	_result = eval("getElementById('canvas');");
-	//	print(typeName(result.kind));
-	//	eq!(result.kind(), strings); // why?
-	//	eq!(result.kind(), longs); // todo: can't use smart pointers for elusive externref
-	//	eq!(result.kind(), bools); // todo: can't use smart pointers for elusive externref
-	// print(typeName(30));
-	// print(typeName(9));
-	//	eq!(result.kind(), 30);//
-	//	eq!(result.kind(),9);//
-	//	eq!(result.kind(),  externref); // todo: can't use smart pointers for elusive externref
-	//	result = eval("document.getElementById('canvas');");
-	//	result = analyze(parse("$canvas"));
-	//	eq!(result.kind(),  externref);
+	calls_the_page("use js document; document.getElementById(\"canvas\").id", &["getElementById"]);
+	crate::common::fails_with("use js document; document.getElementById(\"canvas\").innerHtml", "did you mean innerHTML");
 }
 
 #[test]

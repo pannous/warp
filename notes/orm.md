@@ -32,6 +32,9 @@ Its elements are ordinary instances of C. An instance read from a table remember
 written through: `bo.age += 1` is an UPDATE of that row. `save bo` (a statement, its value bo) writes every column of
 bo's row again, so it changes nothing after written-through changes; an instance without a row is an error there
 ("add it to people first"). Supervisor default, 2026-10-08, decisions.md.
+`people.remove(bo)` (card table-remove) is a DELETE of bo's row (`std_io("table", "delete", …)`, IndexedDB too), bo
+keeping its fields with id 0; the lazy `people·remove` drops bo from the loaded list or the instances met before.
+`for p in people where p.age > 18 { … }` walks `people where it.age > 18`, so the filter stays SQL (card for-where).
 
 ## Filters: any warp expression
 - `people where it.age > 20 and it.name.starts_with("B")`: the parts SQL has (comparisons, and/or/not, arithmetic,
@@ -76,15 +79,29 @@ bo's row again, so it changes nothing after written-through changes; an instance
 - A route reopening the table (`users = database.users`, serve.rs) is `users = users·reset()`: the next read loads anew.
 - Observed natively by `database::rows_read()` (tests a_table_loads_its_rows_only_when_read,
   an_element_of_a_table_loads_one_row, iterating_a_table_reads_it_in_pages).
-- The identity map `people·met` is a list searched by id, so a loop over n unloaded rows costs n²/2 comparisons:
-  a map by id once tables grow large.
-- Not yet: paging of `where` results and comprehensions over a table (they load it), the IN (…) batching; a class method reading a table directly (not a
-  generated getter) is not rewritten. An empty list must be `parse("[]")` (ø): a built `[]` List node with Space
+- The identity map `people·met = {}` is keyed by id (`people·met[id]`, `id in people·met`), a global hash table
+  (map_backend.rs find_typed_map_globals, card int-map): loading, adding and reading n rows is linear, 10 000 rows in
+  ~0.5 s with their inserts (test ten_thousand_rows_load_in_linear_time; a list searched by id took 11.6 s for 2000).
+  The INSERT runs before the add so the instance has its id as its key. A rollback's restore finds rows by id in a
+  local map too. Still n·m: a required foreign key's check per row (matching_rows) and `people where it.id in ids`.
+- A filter `people where c` is `people.table·found(sql, parameters)` until with_lazy_reads makes it `people·found(…)`:
+  `std_io("table", "select", [table, schema, file, sql, parameters])` gives the kept rows whole, each made the one
+  instance of its row by `people·kept` (no load); a loaded table, or one with a required foreign key, keeps its loaded
+  instances of those ids (test a_filter_reads_only_the_rows_it_keeps). A served route answering one answers [] when
+  empty (serve.rs answers_a_list, database_tables::is_filter_query).
+- A class method reads and filters tables as a function does: with_lazy_reads and lower_where enter class bodies (a
+  `Node::Type` is no child of map_children), only method bodies, and a field named like a table stays the field.
+- Not yet: comprehensions over a table (they load it), the IN (…) batching. An empty list must be `parse("[]")` (ø): a built `[]` List node with Space
   separator types `xs += [x]` as int + list.
 
 ## Writes and transactions
 - Default autocommit: each add/remove/field change is its own statement.
-- `transaction { … }` (optional) is BEGIN … COMMIT, ROLLBACK when the block fails; it also batches.
+- `transaction { … }` (optional) is BEGIN … COMMIT, ROLLBACK when the block fails; it also batches. Done (branch
+  orm-transaction, database_tables.rs in_transaction): `std_io("table", "begin"/"commit"/"rollback", [file])`, the block
+  under `try … catch`; a failure rolls back, then each open table's `people·restore()` gives the instances the program
+  holds their rows' values again (an instance whose row is gone gets id 0) and loads anew, then the failure is raised
+  again. Its value is the block's. The browser's store snapshots the file's tables at begin (host-files.js).
+  Sample: samples/orm_transaction.warp.
 
 ## Migrations: stored schema vs class layout, at registration
 | change | what happens |
@@ -124,9 +141,9 @@ bo's row again, so it changes nothing after written-through changes; an instance
   function that fails fails the query with its own trap (`raise "boom"` gives "boom").
 - A function with side effects (State, IO, FFI, Async, Eval of effects.rs) in a table filter is a compile-time warning
   (card orm-filter, `effectful_calls`); it still runs, once per row in id order, as the in-memory filter does.
-- Still loaded whole at registration: the query only picks ids. count/#i/paging and the identity map are step 2's rest.
-- An element changed without the write-through form `v.f op= e` (`people#1.age = 5`) leaves its row stale, and a
-  query of the table then disagrees with the list.
+- An element changed in place (`people#1.age = 5`, `(people where …)#1.age += 1`) is bound first,
+  `people·element = people#1; people·element.age = 5`, so it is written through as a variable's change is
+  (database_tables.rs with_bound_element; it was "people·at() gives a copy").
 
 ## How relations work (step 4; card orm)
 - database_tables.rs with_relations: a field whose type is another registered class (`team: Team`) is a foreign key,
@@ -166,7 +183,7 @@ bo's row again, so it changes nothing after written-through changes; an instance
    loading + identity of added instances (done, orm-updates), #i/paging.
 3. Application functions for the rest of a filter (done, card orm-filters: warp_call into the module).
 4. Foreign keys and one-to-many (done, card orm; one-to-many lazy as getters), batched lazy loading of tables.
-5. `transaction { }`.
+5. `transaction { }` (done, branch orm-transaction).
 6. IndexedDB backend in the browser (async underneath: the page's host keeps a loaded mirror per table, like the
    key-value store). Done simply (branch orm-updates): web/playground/host-files.js `table` keeps each table as
    one value `table <file> <name>` = {types, rows: [{id, column…}]} of the `database[k]` store, so it is loaded

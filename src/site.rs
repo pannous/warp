@@ -5,16 +5,15 @@
 //! The page loads the playground's own reader.js, host.js and markup.js, carried in the warp binary, and the parts of
 //! host.js its module imports words of (HOST_PARTS, card web-bundle).
 
-use crate::host::{FETCH_REPLY, FETCH_START, FOREIGN_CALL, GPU_COMPUTE, GPU_COMPUTE_LINEAR, GPU_MAP_LINEAR, GPU_REDUCE_LINEAR, GPU_RENDER, HOST_LIBRARY, PAGE_PATH, RUN_BLOCK, SIGNAL_SEND, STD_IO, STD_PURE};
 use crate::node::Node;
-use warp_runtime::host_words::{RANDOM, RANDOM_BELOW, RANDOM_SEED, SIGNAL_AT, SIGNAL_DAILY, SIGNAL_EVERY};
+pub use crate::host_parts::{HostPart, Script, HOST_PARTS};
+pub(crate) use crate::host_parts::{exports, host_scripts_of, imports_of, message_of, with_excerpt, TASK_WORD_PREFIXES};
+use crate::host::{FOREIGN_CALL, HOST_LIBRARY};
 use std::path::{Path, PathBuf};
 
 const PAGE_FILE: &str = "index.html";
 const MODULE_FILE: &str = "app.wasm";
-/// The scripts every page loads before the parts of the host, with their text
-const HOST_SCRIPTS: [Script; 2] = [("reader.js", include_str!("../web/playground/reader.js")), ("host.js", include_str!("../web/playground/host.js"))];
-/// The scripts every page loads after them
+/// The scripts every page loads after the host's (host_parts.rs HOST_SCRIPTS)
 const PAGE_SCRIPTS: [Script; 2] = [("markup.js", include_str!("../web/playground/markup.js")), ("site.js", include_str!("../web/playground/site.js"))];
 /// The part of markup.js for elements with a CSS transition, after it: only a module that names a transition has them
 const TRANSITIONS_SCRIPT: Script = ("markup-transitions.js", include_str!("../web/playground/markup-transitions.js"));
@@ -31,43 +30,7 @@ const WORKER_FILES: [Script; 3] = [
 /// The root's attribute listing the scripts of the program's Worker (site-thread.js WORKER_ATTRIBUTE)
 const WORKER_ATTRIBUTE: &str = "data-warp-worker";
 const LIST_SEPARATOR: &str = ",";
-type Script = (&'static str, &'static str);
-const WASI_LIBRARY: &str = "wasi_snapshot_preview1";
-const TASK_WORD_PREFIXES: [&str; 3] = ["task_", "channel_", "shared_"];
 
-/// A part of host.js (its addHostPart): shipped when the module imports a word it gives, with the parts it needs
-pub struct HostPart {
-	pub script: Script,
-	pub gives: fn(module: &str, name: &str) -> bool,
-	pub needs: &'static [&'static str],
-}
-
-/// The parts of host.js, in load order (host.js HOST_PART_FILES); the tasks and routes parts start with imports.js, which they
-/// read their module's imports with. std_pure and std_io are coarse: they carry every std
-/// module's words, so a program using json (std_pure) also gets the hashes
-pub const HOST_PARTS: [HostPart; 9] = [
-	HostPart {
-		script: ("host-files.js", include_str!("../web/playground/host-files.js")),
-		gives: |module, name| module == HOST_LIBRARY && ["fetch", "fetch_within", "read", STD_IO].contains(&name),
-		needs: &[],
-	},
-	HostPart { script: ("host-hashes.js", include_str!("../web/playground/host-hashes.js")), gives: |module, name| module == HOST_LIBRARY && name == STD_PURE, needs: &[] },
-	HostPart {
-		script: ("host-tasks.js", concat!(include_str!("../web/playground/imports.js"), include_str!("../web/playground/host-tasks.js"))),
-		gives: |module, name| module == HOST_LIBRARY && (TASK_WORD_PREFIXES.iter().any(|prefix| name.starts_with(prefix)) || [FETCH_START, FETCH_REPLY, SIGNAL_SEND].contains(&name)),
-		needs: &[],
-	},
-	HostPart {
-		script: ("host-foreign.js", include_str!("../web/playground/host-foreign.js")),
-		gives: |module, name| (module == HOST_LIBRARY && name == FOREIGN_CALL) || ![HOST_LIBRARY, WASI_LIBRARY].contains(&module),
-		needs: &["host-files.js"],
-	},
-	HostPart { script: ("host-compiler.js", include_str!("../web/playground/host-compiler.js")), gives: |module, name| module == HOST_LIBRARY && name == RUN_BLOCK, needs: &["host-files.js"] },
-	HostPart { script: ("host-routes.js", concat!(include_str!("../web/playground/imports.js"), include_str!("../web/playground/host-routes.js"))), gives: |module, name| module == HOST_LIBRARY && name == PAGE_PATH, needs: &[] },
-	HostPart { script: ("host-gpu.js", include_str!("../web/playground/host-gpu.js")), gives: |module, name| module == HOST_LIBRARY && [GPU_COMPUTE, GPU_COMPUTE_LINEAR, GPU_MAP_LINEAR, GPU_REDUCE_LINEAR, GPU_RENDER].contains(&name), needs: &["host-tasks.js"] },
-	HostPart { script: ("host-timers.js", include_str!("../web/playground/host-timers.js")), gives: |module, name| module == HOST_LIBRARY && [SIGNAL_EVERY, SIGNAL_DAILY, SIGNAL_AT].contains(&name), needs: &[] },
-	HostPart { script: ("host-random.js", include_str!("../web/playground/host-random.js")), gives: |module, name| module == HOST_LIBRARY && [RANDOM, RANDOM_BELOW, RANDOM_SEED].contains(&name), needs: &[] },
-];
 /// The parts the page keeps when the program runs in a Worker: host-routes.js follows links and the back button and
 /// moves the focus, which only the page can (site-thread.js)
 const PAGE_SIDE_PARTS: [&str; 1] = ["host-routes.js"];
@@ -114,12 +77,16 @@ pub type SiteFile = (String, Vec<u8>);
 
 /// The site of the program `code` in `directory`, titled `title`: the page, the module and the scripts
 pub fn build(code: &str, title: &str, directory: &Path) -> Result<BuiltSite, String> {
-	let files = files(code, title, false)?;
+	write_files(&files(code, title, false)?, directory)
+}
+
+/// The files written into the directory, made if missing
+pub fn write_files(files: &[SiteFile], directory: &Path) -> Result<BuiltSite, String> {
 	std::fs::create_dir_all(directory).map_err(|failure| format!("cannot make {}: {failure}", directory.display()))?;
-	for (name, bytes) in &files {
+	for (name, bytes) in files {
 		std::fs::write(directory.join(name), bytes).map_err(|failure| format!("cannot write {name}: {failure}"))?;
 	}
-	Ok(BuiltSite { directory: directory.to_path_buf(), files: files.into_iter().map(|(name, _)| name).collect() })
+	Ok(BuiltSite { directory: directory.to_path_buf(), files: files.iter().map(|(name, _)| name.clone()).collect() })
 }
 
 /// The files of the site of `code`; `dev` adds dev.js. A failure names its position with the source line
@@ -137,6 +104,8 @@ pub fn served_files(code: &str, title: &str) -> Result<Option<ServedSite>, Strin
 pub struct ServedSite {
 	pub files: Vec<SiteFile>,
 	renderer: Option<Renderer>,
+	/// the patterns of the page's routes in order (page·routes)
+	page_routes: Vec<String>,
 }
 
 /// P221 (user: the first visit gets finished HTML): the prerender's module run for the request's path gives the page's
@@ -151,6 +120,12 @@ struct Renderer {
 }
 
 impl ServedSite {
+	/// Whether no route of the page matches `path`, a path of no file (`route "*"` matches any: the single page answers
+	/// every path, user 2026-10-07)
+	pub fn matches_no_route_at(&self, path: &str) -> bool {
+		file_at(&self.files, path).is_some_and(|(name, _)| name == ROUTED_PAGE_FILE) && !self.page_routes.iter().any(|pattern| crate::routes::path_matches(pattern, path))
+	}
+
 	/// The file a request path names (file_at); a page of a program asking the server is rendered for the path
 	pub fn file_at(&self, path: &str) -> Option<Result<SiteFile, String>> {
 		let (name, bytes) = file_at(&self.files, path)?;
@@ -168,7 +143,8 @@ impl Renderer {
 	fn page_at(&self, path: &str, root: &str) -> Result<String, String> {
 		let names = [crate::page_html::PAGE_HTML, crate::serve::RPC_REQUESTS, crate::serve::RPC_VALUES];
 		let read = crate::host::with_page_path(path, || crate::wasm_reader::read_exports_after_main(&self.bytes, self.imports, &names));
-		let [html, requests, values]: [Node; 3] = read.map_err(|failure| format!("the page of {path} failed: {failure}"))?.try_into().expect("three exports");
+		let failed = |failure| format!("the page of {path} failed: {}", message_of(&crate::wasm_emitter::failed_run(failure)));
+		let [html, requests, values]: [Node; 3] = read.map_err(failed)?.try_into().expect("three exports");
 		let Node::Text(html) = html.drop_meta() else { return Err(format!("{} gave no text: {}", crate::page_html::PAGE_HTML, html.serialize())) };
 		Ok(page(&self.title, html, &replies_script(&items_of(&requests), &items_of(&values)), &self.scripts, &self.worker_scripts, root))
 	}
@@ -213,7 +189,20 @@ fn site_files(code: &str, title: &str, dev: bool) -> Result<Option<ServedSite>, 
 	let read_after_main = |name: &str| {
 		crate::wasm_reader::read_export_after_main(&rendering.bytes, imports, name).map_err(|failure| format!("the program failed at build time: {}", with_excerpt(code, failure.to_string())))
 	};
-	let rendered = read_after_main(crate::page_html::PAGE_HTML)?;
+	// card page-dom: a main calling into the page (`use js document`) fails here, natively, where there is no page; the
+	// page then starts empty and shows what main renders in the browser
+	let rendered_here = read_after_main(crate::page_html::PAGE_HTML);
+	let rendered = match rendered_here {
+		Err(_) if calls_foreign_code(&rendering.bytes)? => {
+			eprintln!("warning: main calls into the page (use js), which exists only in the browser: the page is rendered there, without JavaScript it is empty");
+			Node::Text(String::new())
+		}
+		other => other?,
+	};
+	let page_routes: Vec<String> = match exports(&rendering.bytes, crate::routes::PAGE_ROUTES) {
+		true => items_of(&read_after_main(crate::routes::PAGE_ROUTES)?).iter().map(crate::routes::pattern_text).collect(),
+		false => vec![],
+	};
 	// a page calling server functions ships without them, starting from the values they gave here (lowering/serve.rs)
 	let asks_the_server = exports(&rendering.bytes, crate::serve::RPC_VALUES);
 	let rendering_bytes = rendering.bytes.clone();
@@ -254,7 +243,7 @@ fn site_files(code: &str, title: &str, dev: bool) -> Result<Option<ServedSite>, 
 	let shipped = scripts.iter().chain(worker_scripts.iter().filter(|script| !scripts.contains(script))).chain(worker_files);
 	files.extend(shipped.map(|(name, text)| (name.to_string(), compacted(text).into_bytes())));
 	let renderer = asks_the_server.then(|| Renderer { bytes: rendering_bytes, imports, title: title.to_string(), scripts, worker_scripts });
-	Ok(Some(ServedSite { files, renderer }))
+	Ok(Some(ServedSite { files, renderer, page_routes }))
 }
 
 /// The file of a site a request path names: "/" is the page, "/app.wasm" the module, …, any other path the page of a
@@ -271,14 +260,6 @@ pub fn content_type(name: &str) -> &'static str {
 	CONTENT_TYPES.iter().find(|(known, _)| *known == extension).map_or(OTHER_CONTENT, |(_, content_type)| content_type)
 }
 
-/// Does the module export a function of this name
-fn exports(module: &[u8], name: &str) -> bool {
-	wasmparser::Parser::new(0).parse_all(module).any(|payload| match payload {
-		Ok(wasmparser::Payload::ExportSection(exports)) => exports.into_iter().flatten().any(|export| export.name == name),
-		_ => false,
-	})
-}
-
 /// The page `warp dev` shows before any build succeeded: only dev.js, which shows the failure
 pub fn dev_shell(title: &str) -> Vec<SiteFile> {
 	let page = page(title, "", "", &[DEV_SCRIPT], &[], BESIDE);
@@ -289,15 +270,6 @@ pub fn dev_shell(title: &str) -> Vec<SiteFile> {
 /// need, and markup-transitions.js when it names a transition; `dev` adds dev.js
 pub fn scripts_of(module: &[u8], dev: bool) -> Result<Vec<Script>, String> {
 	Ok(host_scripts_of(module)?.into_iter().chain(page_scripts_of(module)).chain(dev.then_some(DEV_SCRIPT)).collect())
-}
-
-/// host.js with reader.js and the parts of the host a module imports words of, with the parts they need
-fn host_scripts_of(module: &[u8]) -> Result<Vec<Script>, String> {
-	let imports = imports_of(module)?;
-	let imported = |part: &HostPart| imports.iter().any(|(module, name)| (part.gives)(module, name));
-	let needed: Vec<&str> = HOST_PARTS.iter().filter(|part| imported(part)).flat_map(|part| part.needs.iter().copied().chain([part.script.0])).collect();
-	let parts = HOST_PARTS.iter().map(|part| part.script).filter(|(name, _)| needed.contains(name));
-	Ok(HOST_SCRIPTS.into_iter().chain(parts).collect())
 }
 
 /// markup.js, its transitions part when the module names a transition, and site.js
@@ -314,35 +286,8 @@ fn runs_in_a_worker(imports: &[(String, String)]) -> bool {
 	imports.iter().any(|(module, name)| module == HOST_LIBRARY && TASK_WORD_PREFIXES.iter().any(|prefix| name.starts_with(prefix)))
 }
 
-/// The (module, name) of each import of a module
-fn imports_of(module: &[u8]) -> Result<Vec<(String, String)>, String> {
-	let mut imports = Vec::new();
-	for payload in wasmparser::Parser::new(0).parse_all(module) {
-		if let wasmparser::Payload::ImportSection(section) = payload.map_err(|failure| failure.to_string())? {
-			for import in section.into_imports() {
-				let import = import.map_err(|failure| failure.to_string())?;
-				imports.push((import.module.to_string(), import.name.to_string()));
-			}
-		}
-	}
-	Ok(imports)
-}
-
-/// The text of an error, else the value written out
-fn message_of(failure: &Node) -> String {
-	match failure.drop_meta() {
-		Node::Error(message) => match message.drop_meta() {
-			Node::Text(text) => text.clone(),
-			other => other.serialize(),
-		},
-		other => other.serialize(),
-	}
-}
-
-/// A failure's message and, when it names a position, the source line there
-fn with_excerpt(code: &str, message: String) -> String {
-	let excerpt = crate::diagnostic::message_position(&message).and_then(|(line, column)| crate::diagnostic::excerpt(code, line, column));
-	[message].into_iter().chain(excerpt).collect::<Vec<_>>().join("\n")
+fn calls_foreign_code(module: &[u8]) -> Result<bool, String> {
+	Ok(imports_of(module)?.iter().any(|(module, name)| module == HOST_LIBRARY && name == FOREIGN_CALL))
 }
 
 /// A page served at a deeper path than the site's files finds them, and the module and route modules they load,
@@ -372,6 +317,6 @@ pub fn compacted(script: &str) -> String {
 	kept
 }
 
-fn escaped(text: &str) -> String {
+pub(crate) fn escaped(text: &str) -> String {
 	text.replace('&', "&amp;").replace('<', "&lt;").replace('>', "&gt;")
 }

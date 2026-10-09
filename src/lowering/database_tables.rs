@@ -9,6 +9,7 @@
 use crate::node::{Bracket, Node, Separator};
 use crate::operators::Op;
 use crate::warp_parser::parse;
+use crate::units::static_units::si_quantity;
 use std::collections::{HashMap, HashSet};
 
 const DATABASE_WORDS: [&str; 2] = ["database", "indexedDB"];
@@ -17,38 +18,57 @@ pub const TABLES_FILE: &str = "database.sqlite";
 /// The row id every registered class gets, unless it declares one
 const ID_FIELD: &str = "id";
 const ADD_WORD: &str = "add";
+const REMOVE_WORD: &str = "remove";
 const GLOBAL_WORD: &str = "global";
 /// `@was(old) name: text`: the field's column was called old, so the table's column is renamed
 const RENAMED_MARK: &str = "was";
 /// `save p` writes every column of p's row (field changes are written through already, so it changes nothing then)
 const SAVE_WORD: &str = "save";
+/// `transaction { … }`: BEGIN, the block, COMMIT; ROLLBACK when the block fails, which then fails on (notes/orm.md)
+const TRANSACTION_WORD: &str = "transaction";
 /// the generated code's variables, written as these placeholders (`·` would parse as a product)
 const ROW: &str = "table_row";
 /// the rows a table's open reads, and the rows a foreign key's id matches
 const ROWS: &str = "table_rows";
 const MATCHES: &str = "table_matches";
 const ADDED: &str = "table_added";
+const REMOVED: &str = "table_removed";
 /// a foreign key's row, and a row of a one-to-many getter
 const REFERENCED: &str = "table_referenced";
 const MEMBER: &str = "table_member";
 const SAVED: &str = "table_saved";
-/// the instances given a row before the table loaded, of a loading row's id: the loaded list holds that instance
+/// a transaction's value, and the failure of its block
+const TRANSACTION_VALUE: &str = "table_transaction";
+const FAILURE: &str = "table_failure";
+/// a restore's rows by their id, and a key of the identity map
 const KNOWN: &str = "table_known";
+const KEY: &str = "table_key";
 /// the position of `people#i`
 const POSITION: &str = "table_position";
 /// the instance a row read before loading makes
 const MADE: &str = "table_made";
-const GENERATED_NAMES: [(&str, &str); 11] = [(POSITION, "table·position"), (MADE, "table·made"), (ROW, "table·row"), (ROWS, "table·rows"), (MATCHES, "table·matches"), (ADDED, "table·added"), (ARGUMENTS, "table·arguments"),
-	(REFERENCED, "table·referenced"), (MEMBER, "table·member"), (SAVED, "table·saved"), (KNOWN, "table·known")];
+/// a filter's SQL condition and its parameters, and the ids of the rows it kept
+const CONDITION: &str = "table_condition";
+const CONDITION_VALUES: &str = "table_condition_values";
+const FOUND_IDS: &str = "table_found_ids";
+const GENERATED_NAMES: [(&str, &str); 18] = [(POSITION, "table·position"), (MADE, "table·made"), (ROW, "table·row"), (ROWS, "table·rows"), (MATCHES, "table·matches"), (ADDED, "table·added"), (REMOVED, "table·removed"), (ARGUMENTS, "table·arguments"),
+	(REFERENCED, "table·referenced"), (MEMBER, "table·member"), (SAVED, "table·saved"), (KNOWN, "table·known"), (KEY, "table·key"),
+	(TRANSACTION_VALUE, "table·transaction"), (FAILURE, "table·failure"), (CONDITION, "table·condition"),
+	(CONDITION_VALUES, "table·condition_values"), (FOUND_IDS, "table·found_ids")];
 /// Each table's lazy parts (notes/orm.md Loading), `people·load` of people: the function giving the list, loading its
-/// rows on the first call; the count, SELECT COUNT(*) until then; the add, inserting without loading; the reset of a
+/// rows on the first call; the count, SELECT COUNT(*) until then; the add, inserting without loading; the remove, deleting
+/// the row and dropping its instance from the loaded list and the known instances; the reset of a
 /// route reading the table anew; the element `people#i`, reading its one row until then; the element of a loop over the
 /// table, reading a page of rows until then; the instance of a row read before loading; whether the rows are loaded;
-/// the instances added or read before; the page read last and its start position
+/// the instances added or read before; the page read last and its start position; the restore after a rolled-back
+/// transaction, giving each instance held its row's values again (id 0 when its row is gone) and loading anew; the
+/// rows a filter keeps, read alone as their instances until the table loads (the loaded ones after)
 const LOAD: &str = "table_load";
 const COUNTED: &str = "table_count";
 const ADDING: &str = "table_add";
+const REMOVING: &str = "table_remove";
 const RESET: &str = "table_reset";
+const RESTORE: &str = "table_restore";
 const LOADED: &str = "table_loaded";
 const MET: &str = "table_met";
 const ELEMENT: &str = "table_at";
@@ -56,7 +76,10 @@ const STREAMED: &str = "table_streamed";
 const KEPT: &str = "table_kept";
 const PAGE: &str = "table_page";
 const START: &str = "table_start";
-const LAZY_PARTS: [(&str, &str); 11] = [(LOAD, "load"), (COUNTED, "count"), (ADDING, "add"), (RESET, "reset"), (ELEMENT, "at"), (STREAMED, "streamed"),
+const FOUND: &str = "table_found";
+/// `people.table·found(condition, parameters)`: a filter's query until with_lazy_reads
+const FOUND_WORD: &str = "table·found";
+const LAZY_PARTS: [(&str, &str); 14] = [(FOUND, "found"), (LOAD, "load"), (COUNTED, "count"), (ADDING, "add"), (REMOVING, "remove"), (RESET, "reset"), (RESTORE, "restore"), (ELEMENT, "at"), (STREAMED, "streamed"),
 	(KEPT, "kept"), (LOADED, "loaded"), (MET, "met"), (PAGE, "page"), (START, "start")];
 /// The rows a loop over an unloaded table reads at once (notes/orm.md Loading)
 const PAGE_SIZE: usize = 100;
@@ -73,18 +96,19 @@ const ROWS_PLACEHOLDER: &str = "table_rows_read";
 const COUNT_PLACEHOLDER: &str = "table_count_read";
 const ROW_PLACEHOLDER: &str = "table_row_read";
 const PAGE_PLACEHOLDER: &str = "table_page_read";
+const SELECT_PLACEHOLDER: &str = "table_select_read";
 const VALUE_PLACEHOLDER: &str = "table_value";
 /// `red.players.add(p)`: the instance whose one-to-many field is added to
 const OWNER_PLACEHOLDER: &str = "table_owner";
+/// the instance whose field change written_through writes to its row
+const INSTANCE_PLACEHOLDER: &str = "table_instance";
 /// A filter's query (notes/orm.md step 2): the ids it keeps, its SQL condition and parameters, the functions it calls
-const IDS_PLACEHOLDER: &str = "table_ids";
-const CONDITION_PLACEHOLDER: &str = "table_condition";
+const CONDITION_PLACEHOLDER: &str = "table_condition_text";
 const PARAMETERS_PLACEHOLDER: &str = "table_parameters";
 const FUNCTION_PLACEHOLDER: &str = "table_function";
 const BODY_PLACEHOLDER: &str = "table_body";
 /// The one parameter of a query's function: [id, columns…, the filter's values…] of a row
 const ARGUMENTS: &str = "table_arguments";
-const IDS: &str = "table·ids";
 const FUNCTION: &str = "table·call";
 /// The SQL function a query calls a warp function through (database.rs)
 const WARP_CALL: &str = "warp_call";
@@ -97,6 +121,7 @@ const BOOL_TYPE: &str = "bool";
 const SIDE_EFFECTS: [crate::effects::Effect; 5] = [crate::effects::Effect::State, crate::effects::Effect::IO, crate::effects::Effect::FFI, crate::effects::Effect::Async, crate::effects::Effect::Eval];
 
 /// A registered table: the list variable holding it and its class's fields (name, type, default)
+#[derive(Clone)]
 struct Table {
 	name: String,
 	class: String,
@@ -110,6 +135,7 @@ struct Table {
 }
 
 /// `members: [Person]` of Team: the rows of `table` (people) whose field `back` (team) is the team
+#[derive(Clone)]
 struct Members {
 	field: String,
 	table: String,
@@ -209,32 +235,34 @@ pub fn registered(program: &Node) -> Tables {
 	Tables { tables, functions: vec![], effects }
 }
 
-/// `people where age > 7 and is_prime(age)` of a table: the query `SELECT id … WHERE "age" > ? AND warp_call(…)` as a
-/// binding of the ids it keeps, and the condition keeping the list's instances of those ids, so a filtered row is the
-/// same instance. What SQL can say stays SQL; any other part is a function of the program the query calls per row.
-pub fn queried(subject: &Node, condition: &Node, variables: &HashSet<String>, tables: &mut Tables) -> Option<Result<(Node, Node), Node>> {
+/// `people where age > 7 and is_prime(age)` of a table: `people.table·found(condition, parameters)` of the query
+/// `SELECT … WHERE "age" > ? AND warp_call(…)`, which with_lazy_reads makes `people·found(…)`: it reads only the rows
+/// the query keeps, each the one instance of its row. The table stays named, so a page reading the filter keeps it. What
+/// SQL can say stays SQL; any other part is a function of the program the query calls per row.
+pub fn queried(subject: &Node, condition: &Node, variables: &HashSet<String>, tables: &mut Tables) -> Option<Result<Node, Node>> {
 	if cfg!(not(feature = "native")) {
 		return None; // the browser's tables have no SQL: their rows are the list already
 	}
 	let table = tables.tables.get(&subject.drop_meta().name())?;
 	let first_function = tables.functions.len();
-	let mut query = Query { table, variables, parameters: vec![], functions: vec![], first_function };
+	let mut query = Query { table, variables, parameters: vec![], functions: vec![], first_function, mismatches: vec![] };
 	let sql = query.sql(condition);
+	if let Some(mismatch) = query.mismatches.into_iter().next() {
+		return Some(Err(mismatch.into_error()));
+	}
 	let (parameters, functions) = (query.parameters, query.functions);
 	if let Err(error) = crate::diagnostic::report(&effectful_calls(&functions, tables.effects.as_ref())) {
 		return Some(Err(error));
 	}
 	tables.functions.extend(functions);
-	let ids = format!("{IDS}·{}", first_function + 1);
-	let code = format!("{IDS_PLACEHOLDER} = std_io(\"table\", \"select\", [{name:?}, {CONDITION_PLACEHOLDER}, {PARAMETERS_PLACEHOLDER}, {file:?}])",
-		name = table.name, file = tables_file());
-	let binding = generated(&code, [
-		(IDS_PLACEHOLDER, Node::Symbol(ids.clone())),
-		(CONDITION_PLACEHOLDER, Node::Text(sql)),
-		(PARAMETERS_PLACEHOLDER, Node::List(parameters, Bracket::Square, Separator::Space)),
-	]);
-	let kept = generated(&format!("{}.{ID_FIELD} in {IDS_PLACEHOLDER}", crate::lambdas::IMPLICIT_PARAMETER), [(IDS_PLACEHOLDER, Node::Symbol(ids))]);
-	Some(Ok((binding, kept)))
+	let parameters = if parameters.is_empty() { parse("[]") } else { Node::List(parameters, Bracket::Square, Separator::Space) };
+	let query = Node::List(vec![Node::Symbol(FOUND_WORD.to_string()), Node::Text(sql), parameters], Bracket::None, Separator::Space);
+	Some(Ok(Node::Key(Box::new(subject.drop_meta().clone()), Op::Dot, Box::new(query))))
+}
+
+/// `people.table·found(…)`: a table's filter, a list
+pub(crate) fn is_filter_query(node: &Node) -> bool {
+	matches!(node.drop_meta(), Node::Key(_, Op::Dot, query) if matches!(query.drop_meta(), Node::List(parts, _, _) if parts.first().is_some_and(|word| word.drop_meta().name() == FOUND_WORD)))
 }
 
 /// A warning for each function with side effects that a query's functions call: SQLite calls it once per row, and
@@ -276,6 +304,8 @@ struct Query<'a> {
 	parameters: Vec<Node>,
 	functions: Vec<Node>,
 	first_function: usize,
+	/// a unit column compared with another kind of quantity: `it.distance > 5 s`
+	mismatches: Vec<crate::diagnostic::Diagnostic>,
 }
 
 impl Query<'_> {
@@ -287,6 +317,9 @@ impl Query<'_> {
 	fn translated(&mut self, node: &Node) -> Option<String> {
 		if let Some(column) = self.column(node) {
 			return Some(column);
+		}
+		if let Some(compared) = self.key_comparison(node) {
+			return Some(compared);
 		}
 		match node.drop_meta() {
 			Node::Key(left, op, right) => {
@@ -306,12 +339,33 @@ impl Query<'_> {
 					Op::Mul if self.is_numeric(left) && self.is_numeric(right) => "*",
 					_ => return None,
 				};
-				Some(format!("({} {operator} {})", self.sql(left), self.sql(right)))
+				let (left_unit, right_unit) = (self.column_unit(left), self.column_unit(right));
+				Some(format!("({} {operator} {})", self.sql_beside(left, right_unit), self.sql_beside(right, left_unit)))
 			}
 			Node::Number(_) | Node::Text(_) | Node::True | Node::False => Some(self.parameter(node.drop_meta().clone())),
 			Node::Symbol(name) if self.variables.contains(name) => Some(self.parameter(node.drop_meta().clone())),
 			_ => None,
 		}
+	}
+
+	/// A part compared with a unit column: a constant quantity of its kind is its SI amount, as the column holds it
+	/// (`it.distance > 5 km` asks `"distance" > 5000`)
+	fn sql_beside(&mut self, node: &Node, column_unit: Option<String>) -> String {
+		match column_unit.zip(si_quantity(node)) {
+			Some((unit, (amount, quantity))) if quantity == unit => self.parameter(crate::node::float(amount)),
+			Some((unit, (_, quantity))) => {
+				self.mismatches.push(crate::diagnostic::Diagnostic::at(node, format!("DimensionError: a column of {unit} compared with {quantity}")));
+				self.sql(node)
+			}
+			None => self.sql(node),
+		}
+	}
+
+	/// The quantity a unit column measures (`m` of `distance: km`)
+	fn column_unit(&self, node: &Node) -> Option<String> {
+		let field = self.field_of_it(node)?;
+		let (_, field_type, _) = self.table.fields.iter().find(|(name, _, _)| *name == field)?;
+		crate::units::static_units::unit_type(class_of(field_type)).map(|(quantity, _)| quantity)
 	}
 
 	/// `it.age` as the column "age", `it.id` as id
@@ -322,6 +376,18 @@ impl Query<'_> {
 			// a foreign key's column is an id, the field an instance: compared through a query's function
 			false => (columns_of(self.table).contains(&field) && self.table.reference(&field).is_none()).then(|| quote(&field)),
 		}
+	}
+
+	/// `it.team == red` of a foreign key team: its column against the id of red's row, 0 for ø
+	fn key_comparison(&mut self, node: &Node) -> Option<String> {
+		let Node::Key(left, op @ (Op::Eq | Op::Ne), right) = node.drop_meta() else { return None };
+		let field = self.field_of_it(left).filter(|field| self.table.reference(field).is_some())?;
+		if crate::lambdas::mentions(right, crate::lambdas::IMPLICIT_PARAMETER) {
+			return None;
+		}
+		let id = generated(&format!("(if {VALUE_PLACEHOLDER} == ø then 0 else {VALUE_PLACEHOLDER}.{ID_FIELD})"), [(VALUE_PLACEHOLDER, right.as_ref().clone())]);
+		let operator = if *op == Op::Eq { "=" } else { "<>" };
+		Some(format!("({} {operator} {})", quote(&field), self.parameter(id)))
 	}
 
 	fn field_of_it(&self, node: &Node) -> Option<String> {
@@ -349,7 +415,7 @@ impl Query<'_> {
 		let mut values = vec![];
 		free_variables(node, self.variables, &mut values);
 		let row_size = 1 + columns_of(self.table).len();
-		let body = with_arguments(node.clone(), self.table, &values, row_size);
+		let body = with_arguments(with_si_amounts(node.clone()), self.table, &values, row_size);
 		let function = generated(&format!("{FUNCTION_PLACEHOLDER}({ARGUMENTS}: any) := {BODY_PLACEHOLDER}"), [
 			(FUNCTION_PLACEHOLDER, Node::Symbol(name.clone())),
 			(BODY_PLACEHOLDER, body),
@@ -358,6 +424,14 @@ impl Query<'_> {
 		let row: Vec<String> = std::iter::once(ID_FIELD.to_string()).chain(columns_of(self.table).iter().map(|column| quote(column))).collect();
 		let values: Vec<String> = values.into_iter().map(|value| self.parameter(Node::Symbol(value))).collect();
 		format!("{WARP_CALL}('{name}', {})", [row, values].concat().join(", "))
+	}
+}
+
+/// A query's function gets a unit column as its SI amount: a constant quantity in it is one too (`5 km` is 5000.0)
+fn with_si_amounts(node: Node) -> Node {
+	match si_quantity(&node) {
+		Some((amount, _)) if !matches!(node.drop_meta(), Node::Symbol(_)) => crate::node::float(amount),
+		_ => node.map_children(with_si_amounts),
 	}
 }
 
@@ -418,6 +492,18 @@ fn key_id(instance: &str, field: &str, optional: bool) -> String {
 		true => format!("(if {instance}.{field} == ø then 0 else {instance}.{field}.{ID_FIELD})"),
 		false => format!("{instance}.{field}.{ID_FIELD}"),
 	}
+}
+
+/// Each instance of `list` given the values of its row in `table_rows` again, as constructor_arguments reads them; id 0
+/// when its row is gone
+fn restored_rows(table: &Table, arguments: &[String], list: &str) -> String {
+	let fields = table.fields.iter().filter(|(name, _, _)| !table.is_members(name)).map(|(name, _, _)| name);
+	let restored: String = fields.zip(arguments).filter(|(name, _)| *name != ID_FIELD).map(|(name, argument)| format!("{MADE}.{name} = {argument}\n")).collect();
+	format!("for {MADE} in {list} {{
+if {MADE}.{ID_FIELD} in {KNOWN} {{
+{ROW} = {KNOWN}[{MADE}.{ID_FIELD}]
+{restored}}} else {{ {MADE}.{ID_FIELD} = 0 }}
+}}")
 }
 
 /// The cell of column `name` in `row`, a row being `[id, column values…]`
@@ -545,6 +631,9 @@ fn with_tables(node: Node, tables: &HashMap<String, Table>, file: &str, open: &m
 	if let Some(lowered) = saved(&node, tables, file).or_else(|| added_to_members(&node, tables, file)) {
 		return lowered;
 	}
+	if let Some(wrapped) = in_transaction(&node, file, open) {
+		return with_tables(wrapped, tables, file, open);
+	}
 	match node {
 		Node::List(statements, bracket, separator @ (Separator::Semicolon | Separator::Newline)) => {
 			let statements = statements.into_iter().flat_map(|statement| table_statements(statement, tables, file, open)).collect();
@@ -564,8 +653,32 @@ fn table_statements(statement: Node, tables: &HashMap<String, Table>, file: &str
 	if let Some(lowered) = opened(&statement, tables, file, open).or_else(|| inserted(&statement, tables, file)) {
 		return lowered;
 	}
+	if let Some(bound) = with_bound_element(&statement, tables) {
+		return bound.into_iter().flat_map(|statement| table_statements(statement, tables, file, open)).collect();
+	}
 	let updates = written_through(&statement, tables, file);
 	[vec![with_tables(statement, tables, file, open)], updates].concat()
+}
+
+/// `people#1.age = 5`, `(people where …)#1.age += 1`: a column of an element of a table changed in place, as the
+/// element bound first, `people·element = people#1; people·element.age = 5`, whose change written_through writes to
+/// its row
+fn with_bound_element(statement: &Node, tables: &HashMap<String, Table>) -> Option<Vec<Node>> {
+	let Node::Key(target, op, value) = statement.drop_meta() else { return None };
+	if *op != Op::Assign && !op.is_compound_assign() {
+		return None;
+	}
+	let Node::Key(instance, Op::Dot, field) = target.drop_meta() else { return None };
+	if matches!(instance.drop_meta(), Node::Symbol(_)) {
+		return None;
+	}
+	let variable = tables.keys().find(|name| instance.mentions_any(&[name.as_str()]))?;
+	if !columns_of(&tables[variable]).contains(&field.drop_meta().name()) {
+		return None;
+	}
+	let element = Node::Symbol(lazy_name(variable, "element"));
+	let changed = Node::Key(Box::new(Node::Key(Box::new(element.clone()), Op::Dot, field.clone())), *op, value.clone());
+	Some(vec![Node::Key(Box::new(element), Op::Assign, instance.clone()), changed])
 }
 
 /// `people: [Person] = database.people` as the list of the table's rows, each an instance with its id; then the
@@ -625,9 +738,10 @@ fn opened(statement: &Node, tables: &HashMap<String, Table>, file: &str, open: &
 		true => String::new(),
 		false => format!(" if {}", required.iter().map(|field| found(field)).collect::<Vec<_>>().join(" and ")),
 	};
-	let known = format!("{KNOWN} = [{REFERENCED} for {REFERENCED} in {MET} if {REFERENCED}.{ID_FIELD} == {ROW}#1]");
+	// the identity map: the instance of each id met, a hash table keyed by the id (card int-map)
+	let known = format!("{ROW}#1 in {MET}");
 	let constructed = format!("{class}({})", arguments.join(", "));
-	let instance = format!("({known}; if {KNOWN} then {KNOWN}#1 else {constructed})");
+	let instance = format!("(if {known} then {MET}[{ROW}#1] else {constructed})");
 	// the rows a required key leaves out are counted and positioned only by loading
 	let (unloaded_count, unloaded_element, unloaded_streamed) = match required.is_empty() {
 		true => (COUNT_PLACEHOLDER.to_string(), format!("{{
@@ -643,7 +757,7 @@ if {POSITION} < {START} or {POSITION} >= {START} + count({PAGE}) {{
 		false => (format!("count({LOAD}())"), format!("{LOAD}()#{POSITION}"), format!("{LOAD}()#{POSITION}")),
 	};
 	let code = format!("{LOADED} = no
-{MET}: [{class}] = []
+{MET} = {{}}
 {PAGE}: [{class}] = []
 {START} = 0
 {READ_PLACEHOLDER}
@@ -667,15 +781,22 @@ if {LOADED} then count({variable}) else {unloaded_count}
 global {variable}
 global {LOADED}
 global {MET}
-if {LOADED} {{ {variable}.add({ADDED}) }} else {{ {MET}.add({ADDED}) }}
+if {LOADED} {{ {variable}.add({ADDED}) }} else {{ {MET}[{ADDED}.{ID_FIELD}] = {ADDED} }}
 {ADDED}
+}}
+{REMOVING}({REMOVED}) := {{
+global {variable}
+global {MET}
+std_io(\"table\", \"delete\", [{name:?}, {REMOVED}.{ID_FIELD}, {file:?}])
+{variable} = [{ROW} for {ROW} in {variable} if {ROW}.{ID_FIELD} != {REMOVED}.{ID_FIELD}]
+{MET}.remove({REMOVED}.{ID_FIELD})
+{REMOVED}
 }}
 {KEPT}({ROW}) := {{
 global {MET}
-{known}
-if {KNOWN} then {KNOWN}#1 else {{
+if {known} then {MET}[{ROW}#1] else {{
 {MADE} = {constructed}
-{MET}.add({MADE})
+{MET}[{MADE}.{ID_FIELD}] = {MADE}
 {MADE}
 }}
 }}
@@ -696,12 +817,40 @@ global {LOADED}
 global {MET}
 global {PAGE}
 {LOADED} = no
-{MET} = []
+{MET} = {{}}
 {PAGE} = []
 []
-}}");
+}}
+{FOUND}({CONDITION}, {CONDITION_VALUES}) := {{
+global {variable}
+global {LOADED}
+global {MET}
+{ROWS} = {SELECT_PLACEHOLDER}
+{FOUND_IDS} = [{ROW}#1 for {ROW} in {ROWS}]
+if {loaded_found} then [{MADE} for {MADE} in {LOAD}() if {MADE}.{ID_FIELD} in {FOUND_IDS}] else [{KEPT}({ROW}) for {ROW} in {ROWS}]
+}}
+{RESTORE}() := {{
+global {variable}
+global {LOADED}
+global {MET}
+global {PAGE}
+{ROWS} = {ROWS_PLACEHOLDER}
+{KNOWN} = {{}}
+for {ROW} in {ROWS} {{ {KNOWN}[{ROW}#1] = {ROW} }}
+{restore_met}
+for {KEY} in keys({MET}) {{ if {MET}[{KEY}].{ID_FIELD} == 0 {{ {MET}.remove({KEY}) }} }}
+if {LOADED} {{
+{restore_loaded}
+for {MADE} in {variable} {{ if {MADE}.{ID_FIELD} != 0 {{ {MET}[{MADE}.{ID_FIELD}] = {MADE} }} }}
+}}
+{LOADED} = no
+{PAGE} = []
+[]
+}}", name = table.name, restore_met = restored_rows(table, &arguments, &format!("values({MET})")), restore_loaded = restored_rows(table, &arguments, &variable),
+		loaded_found = if required.is_empty() { LOADED } else { "yes" });
 	let placeholders = [(READ_PLACEHOLDER, table_call("migrate")), (ROWS_PLACEHOLDER, table_call("rows")), (COUNT_PLACEHOLDER, table_call("count")),
-		(ROW_PLACEHOLDER, table_call_with("page", &format!(", {POSITION}, 1"))), (PAGE_PLACEHOLDER, table_call_with("page", &format!(", {POSITION}, {PAGE_SIZE}")))].into_iter().chain(lazy_names(&variable));
+		(ROW_PLACEHOLDER, table_call_with("page", &format!(", {POSITION}, 1"))), (PAGE_PLACEHOLDER, table_call_with("page", &format!(", {POSITION}, {PAGE_SIZE}"))),
+		(SELECT_PLACEHOLDER, table_call_with("select", &format!(", {CONDITION}, {CONDITION_VALUES}")))].into_iter().chain(lazy_names(&variable));
 	let empty = parse("[]");
 	Some([vec![Node::Key(Box::new(target.drop_meta().clone()), Op::Assign, Box::new(empty))], generated(&code, placeholders).children()].concat())
 }
@@ -763,14 +912,33 @@ fn with_lazy_reads(node: Node, tables: &HashMap<String, Table>, own: Option<&str
 		}
 		Node::Key(left, Op::Dot, right) => match (table_of(&left), right.drop_meta()) {
 			(Some(variable), Node::Symbol(word)) if COUNT_WORDS.contains(&word.as_str()) => called(lazy_name(&variable, "count"), None),
-			(Some(variable), Node::List(parts, _, _)) if parts.len() == 2 && parts[0].drop_meta().name() == ADD_WORD => {
-				called(lazy_name(&variable, "add"), Some(rewrite(parts[1].clone())))
+			(Some(variable), Node::List(parts, _, _)) if parts.len() == 3 && parts[0].drop_meta().name() == FOUND_WORD => {
+				let code = format!("{FUNCTION_PLACEHOLDER}({CONDITION_PLACEHOLDER}, {PARAMETERS_PLACEHOLDER})");
+				generated(&code, [(FUNCTION_PLACEHOLDER, Node::Symbol(lazy_name(&variable, "found"))), (CONDITION_PLACEHOLDER, parts[1].clone()), (PARAMETERS_PLACEHOLDER, rewrite(parts[2].clone()))])
+			}
+			(Some(variable), Node::List(parts, _, _)) if parts.len() == 2 && [ADD_WORD, REMOVE_WORD].contains(&parts[0].drop_meta().name().as_str()) => {
+				called(lazy_name(&variable, &parts[0].drop_meta().name()), Some(rewrite(parts[1].clone())))
 			}
 			(_, Node::Symbol(_)) => Node::Key(Box::new(rewrite(*left)), Op::Dot, right),
 			_ => Node::Key(Box::new(rewrite(*left)), Op::Dot, Box::new(rewrite(*right))),
 		},
 		Node::Key(target, op, value) if (op == Op::Assign || op.is_compound_assign()) && table_of(declared(&target)).is_some() => Node::Key(target, op, Box::new(rewrite(*value))),
+		// a class's own field named like a table is the field
+		Node::Type { name, body } => {
+			let fields: Vec<String> = crate::class_methods::field_declarations(&body).into_iter().map(|(field, ..)| field).collect();
+			let visible: HashMap<String, Table> = tables.iter().filter(|(variable, _)| !fields.contains(variable)).map(|(variable, table)| (variable.clone(), table.clone())).collect();
+			Node::Type { name, body: Box::new(in_method_bodies(*body, &|child| with_lazy_reads(child, &visible, own))) }
+		}
 		_ => node.map_children(rewrite),
+	}
+}
+
+/// A class's methods read its tables as functions do; its fields stay, also one named like a table (map_children would
+/// read a field declaration `people: int` as a read of the table)
+fn in_method_bodies(node: Node, rewrite: &impl Fn(Node) -> Node) -> Node {
+	match node {
+		Node::Key(head, Op::Define, body) => Node::Key(head, Op::Define, Box::new(rewrite(*body))),
+		other => other.map_children(|child| in_method_bodies(child, rewrite)),
 	}
 }
 
@@ -868,27 +1036,36 @@ fn implicit_id(table: &Table) -> bool {
 /// `people.add(p)`: added to the list and inserted as a row, whose id p takes; a foreign key stores the id of its row
 /// (an instance without one is an error)
 fn inserted(statement: &Node, tables: &HashMap<String, Table>, file: &str) -> Option<Vec<Node>> {
+	let (list, table, word, value) = table_mutation(statement, tables)?;
+	let code = match word.as_str() {
+		ADD_WORD => format!("{ADDED} = {VALUE_PLACEHOLDER}\n{insert}", insert = insert_code(table, &list, file)),
+		REMOVE_WORD => format!("{REMOVED} = {VALUE_PLACEHOLDER}\n{list}.remove({REMOVED})
+if {REMOVED}.{ID_FIELD} > 0 {{ std_io(\"table\", \"delete\", [{name:?}, {REMOVED}.{ID_FIELD}, {file:?}]); {REMOVED}.{ID_FIELD} = 0 }}", name = table.name),
+		_ => return None,
+	};
+	let lowered = generated(&code, [(VALUE_PLACEHOLDER, value.clone())]);
+	Some(lowered.children())
+}
+
+/// `people.add(p)`, `people.remove(p)` of a table: its list, the table, the word and p
+fn table_mutation<'a>(statement: &'a Node, tables: &'a HashMap<String, Table>) -> Option<(String, &'a Table, String, &'a Node)> {
 	let Node::Key(list, Op::Dot, call) = statement.drop_meta() else { return None };
 	let list = list.drop_meta().name();
 	let table = tables.get(&list)?;
 	let Node::List(parts, _, _) = call.drop_meta() else { return None };
 	let [word, value] = parts.as_slice() else { return None };
-	if word.drop_meta().name() != ADD_WORD {
-		return None;
-	}
-	let code = format!("{ADDED} = {VALUE_PLACEHOLDER}\n{insert}", insert = insert_code(table, &list, file));
-	let lowered = generated(&code, [(VALUE_PLACEHOLDER, value.clone())]);
-	Some(lowered.children())
+	Some((list, table, word.drop_meta().name(), value))
 }
 
-/// `people.add(ADDED)` and its INSERT, ADDED taking the row's id; a foreign key without its row is an error
+/// The INSERT of ADDED, which takes the row's id, and `people.add(ADDED)`; a foreign key without its row is an error
 fn insert_code(table: &Table, list: &str, file: &str) -> String {
 	let columns = columns_of(table);
 	let names: Vec<String> = columns.iter().map(|column| format!("{column:?}")).collect();
 	let values: Vec<String> = columns.iter().map(|column| column_value(table, ADDED, column)).collect();
 	let checks = table.references.iter().map(|(field, target)| format!(
 		"if {ADDED}.{field} != ø and {ADDED}.{field}.{ID_FIELD} == 0 {{ raise \"{class}.{field} is no row of {target}: add it to its table first\" }}\n", class = table.class));
-	format!("{checks}{list}.add({ADDED})\n{ADDED}.{ID_FIELD} = std_io(\"table\", \"insert\", [{table:?}, [{names}], [{values}], {file:?}])",
+	// the id first: the identity map keeps the instance by it
+	format!("{checks}{ADDED}.{ID_FIELD} = std_io(\"table\", \"insert\", [{table:?}, [{names}], [{values}], {file:?}])\n{list}.add({ADDED})",
 		checks = checks.collect::<String>(), table = table.name, names = names.join(" "), values = values.join(" "))
 }
 
@@ -927,9 +1104,10 @@ fn written_through(statement: &Node, tables: &HashMap<String, Table>, file: &str
 	}
 	let Node::Key(instance, Op::Dot, field) = target.drop_meta() else { return vec![] };
 	let (Node::Symbol(instance), field) = (instance.drop_meta(), field.drop_meta().name()) else { return vec![] };
+	// the instance as a placeholder: a generated one (`people·element`) would parse as a product
 	tables.values().filter(|table| field != ID_FIELD && columns_of(table).contains(&field))
-		.map(|table| parse(&format!("if {instance} is {class} and {instance}.{ID_FIELD} > 0 {{ {update} }}",
-			class = table.class, update = column_update(table, instance, &field, file)))).collect()
+		.map(|table| generated(&format!("if {INSTANCE_PLACEHOLDER} is {class} and {INSTANCE_PLACEHOLDER}.{ID_FIELD} > 0 {{ {update} }}",
+			class = table.class, update = column_update(table, INSTANCE_PLACEHOLDER, &field, file)), [(INSTANCE_PLACEHOLDER, Node::Symbol(instance.clone()))])).collect()
 }
 
 /// The UPDATE of one column of `instance`'s row
@@ -940,6 +1118,24 @@ fn column_update(table: &Table, instance: &str, column: &str, file: &str) -> Str
 
 /// `save p`, anywhere (`print(save p)` of a standalone build too): every column of p's row written, the value p; an
 /// instance of a table's class without a row is an error
+/// `transaction { block }` as the block between BEGIN and COMMIT, rolled back and raised again when it fails; its value
+/// the block's
+fn in_transaction(node: &Node, file: &str, open: &[String]) -> Option<Node> {
+	let Node::List(parts, _, Separator::Space) = node.drop_meta() else { return None };
+	let [word, block] = parts.as_slice() else { return None };
+	if word.drop_meta().name() != TRANSACTION_WORD || !matches!(block.drop_meta(), Node::List(_, Bracket::Curly, _)) {
+		return None;
+	}
+	let code = format!("std_io(\"table\", \"begin\", [{file:?}])\n\
+		{TRANSACTION_VALUE} = try {VALUE_PLACEHOLDER} catch {FAILURE} {{ std_io(\"table\", \"rollback\", [{file:?}]); {restores}raise {FAILURE} }}\n\
+		std_io(\"table\", \"commit\", [{file:?}])\n{TRANSACTION_VALUE}",
+		restores = (0..open.len()).map(|index| format!("{RESTORE}_{index}(); ")).collect::<String>());
+	// each open table's restore, `people·restore` (written as a placeholder: `·` would parse as a product)
+	let restores: Vec<(String, Node)> = open.iter().enumerate().map(|(index, variable)| (format!("{RESTORE}_{index}"), Node::Symbol(lazy_name(variable, "restore")))).collect();
+	let placeholders = restores.iter().map(|(placeholder, name)| (placeholder.as_str(), name.clone())).chain([(VALUE_PLACEHOLDER, block.clone())]);
+	Some(Node::List(generated(&code, placeholders).children(), Bracket::Round, Separator::Semicolon))
+}
+
 fn saved(node: &Node, tables: &HashMap<String, Table>, file: &str) -> Option<Node> {
 	let Node::List(parts, _, Separator::Space) = node.drop_meta() else { return None };
 	let [word, value] = parts.as_slice() else { return None };

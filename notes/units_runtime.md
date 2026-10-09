@@ -101,8 +101,7 @@ input) would need the dynamic struct.
 `print p`, `"${p}"` and `text_form(p)` of an object with quantity fields build its text at run time: the quantity fields
 come first, then the plain ones as an object of them prints them (`{dist:500 m name:"run"}`). A field of a mixed object
 is any-typed at run time; its arithmetic has a text since card text-arithmetic (casts.rs: Kind::Data reads dynamically).
-`q = p` and `ys = xs` copy the signatures (maps and lists are values). Recursion with quantities stays a loud error
-(card static-units, Later). Since card reflection step 5 the text lives in the entry `units` of the module's one
+`q = p` and `ys = xs` copy the signatures (maps and lists are values). Recursion: see card static-units below. Since card reflection step 5 the text lives in the entry `units` of the module's one
 `warp.meta` section (src/meta_section.rs), byte for byte as it was in `warp.units`; the section name below is history.
 
 ## Stage 8 done (card units-dynamic, 2026-10-09): units known only at run time
@@ -127,6 +126,9 @@ yd mi, mg g kg lb, ms s min h, mph, with powers (`m²`, `s^2`), products (`kg·m
   as_run_time_quantity: `5 m/s` is `quantity(5, "m/s")`). Static units alone stay static.
 - ± (card plus-minus-units): `5 m ± 1 cm` the program needs at run time is a Quantity whose amount is a ± value
   (notes/plus_minus.md).
+- Conversions and texts (card quantity-falls): `q as km/h` and `q in m` of a run-time quantity are `q.to("km/h")`, and
+  `"v: " + q` is `"v: " + str(q)` (class_methods.rs with_operator_calls; units.rs conversion is the one reading of
+  `as`/`in`). `w = q as m` and `q.to(…)` stay instances of Quantity (instance_classes, operand_class).
 
 ## Units in texts, imperial units (card units-text, 2026-10-09)
 - `"total: " + (total as km)` and `(v in m/s)` join a text in the conversion's unit (static_units.rs: a parenthesized
@@ -136,4 +138,14 @@ yd mi, mg g kg lb, ms s min h, mph, with powers (`m²`, `s^2`), products (`kg·m
   `inch` (`inches`): `in` is the word of `x in xs` and `100 cm in m`.
 - UNIT_ALIASES: `mph` is `mi/h`, rewritten by lower_unit_aliases before any units pass (the parser binds it to the
   amount like a unit: names_unit); a program defining mph keeps its own.
-- Open: `60 mi/h as km/h` parses as `(60 mi/h as km)/h` (a DimensionError); `in km/h` works.
+- `60 mi/h as km/h` parses `(60 mi/h as km)/h`; lower_unit_words regroups the whole unit after `as` (bottom-up, so
+  `as g*cm/s²` too) when it is a unit expression and the program defines no unit name (card compound-unit).
+
+## Recursion done (card static-units, 2026-10-09)
+A recursive function with quantities specialises: a recursive call into the specialisation being inferred gives
+`Stop::Recursive`, the if/else takes the other branch's (base case's) signature, and the body is then inferred a second
+time with recursive calls returning that result, which must come out the same (else DimensionError: `x * p(n-1, x)` with
+a base case `1` is "the branches give a plain number and m"). `fact(n, x) := if n < 1 { x } else { fact(n - 1, x + 1 m) }`
+→ 3m. Recursion that changes the arguments' units (`f(x * x)`, polymorphic recursion) stays left to the evaluator.
+Test: tests/numbers/test_recursive_units.rs.
+

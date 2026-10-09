@@ -116,8 +116,9 @@ impl WasmGcEmitter {
 			// user decision #35: an int list joins to "[1 2]", like its literal; a general runtime serializer comes later
 			// a list known only at run time (an element, a parsed value) too: "[1 2]", nested lists as their literals;
 			// an instance as its literal "point{x:1 y:2}" (P123), an entry "a:1"
-			// and a value of a kind known only at run time (`p.dist / 2` of an any-typed field, card text-arithmetic)
-			Kind::List | Kind::Empty | Kind::Key | Kind::Data => {
+			// and a value of a kind known only at run time (`p.dist / 2` of an any-typed field, card text-arithmetic);
+			// a symbol value as its name (P230: `"f does \(f.effects)"`)
+			Kind::List | Kind::Empty | Kind::Key | Kind::Data | Kind::Symbol => {
 				self.emit_dynamic_text(func, value);
 				return;
 			}
@@ -314,7 +315,7 @@ impl WasmGcEmitter {
 			Node::List(..) if is_plain_data(value) => self.emit_runtime_text_cast(func, value),
 			// data and names are their source text; a number expression (`str(1+2)`, `str(f(1))` of a float f) is the
 			// text of its value
-			_ if !self.mentions_variable(value) && !self.mentions_call(value) && !matches!(self.get_type(value), Kind::Int | Kind::Float) => {
+			_ if !self.mentions_variable(value) && !self.mentions_call(value) && !computes_value(value) && !matches!(self.get_type(value), Kind::Int | Kind::Float) => {
 				self.emit_string_call(func, &value.serialize(), "new_text");
 			}
 			_ => self.emit_runtime_text_cast(func, value),
@@ -339,7 +340,7 @@ impl WasmGcEmitter {
 		self.emit_call(func, "new_codepoint");
 	}
 
-	/// `x as bool`: a literal's truth known at compile time, else non-zero is true
+	/// `x as bool`, a bool: a literal's truth known at compile time, else non-zero is true
 	pub(super) fn emit_cast_to_bool(&mut self, func: &mut Function, value: &Node) {
 		let literal_truth = match value {
 			Node::Text(s) => Some(!FALSY_TEXTS.contains(&s.to_lowercase().as_str())),
@@ -351,14 +352,10 @@ impl WasmGcEmitter {
 			_ => None,
 		};
 		match literal_truth {
-			Some(truth) => self.emit_int_node(func, truth as i64),
+			Some(truth) => self.emit_node_instructions(func, &if truth { Node::True } else { Node::False }),
 			None => {
 				self.emit_numeric_value(func, value);
-				func.instruction(&I::I64Eqz);
-				func.instruction(&I::I64ExtendI32U);
-				func.instruction(&I::I64Const(1));
-				func.instruction(&I::I64Xor);
-				self.emit_call(func, "new_int");
+				self.emit_call(func, "new_bool");
 			}
 		}
 	}
@@ -372,7 +369,8 @@ impl WasmGcEmitter {
 				None => self.emit_runtime_error(func, "invalid_number"),
 			},
 			Node::Char(c) => self.emit_int_node(func, c.to_digit(10).map_or(*c as i64, |digit| digit as i64)),
-			_ if matches!(self.get_type(value), Kind::Text | Kind::Codepoint) => self.emit_runtime_text_as_number(func, value),
+			// a value known only at run time (a field of an any) too: a number stays as it is
+			_ if matches!(self.get_type(value), Kind::Text | Kind::Codepoint | Kind::Empty) => self.emit_runtime_text_as_number(func, value),
 			_ => self.emit_node_instructions(func, value),
 		}
 	}
@@ -391,6 +389,14 @@ impl WasmGcEmitter {
 		let locals = vec![ValType::I32, ValType::I32, ValType::I32, ValType::I64];
 		self.runtime_function(TEXT_AS_NUMBER, vec![node_ref], vec![node_ref], locals, |s, f| {
 			let (start, end, slash, bits) = (1, 2, 3, 4);
+			// a number (any node but a text or character) as it is
+			let is_kind = |s: &mut Self, f: &mut Function, kind: Kind| {
+				s.emit_field(f, 0, 0);
+				Self::emit_list(f, &[I::I64Const(KIND_MASK), I::I64And, I::I64Const(kind as i64), I::I64Eq]);
+			};
+			is_kind(s, f, Kind::Text);
+			is_kind(s, f, Kind::Codepoint);
+			Self::emit_list(f, &[I::I32Or, I::I32Eqz, I::If(BlockType::Empty), I::LocalGet(0), I::Return, I::End]);
 			// a text with a slash: the exact ratio of the integers before and after it ("1/x" is invalid_number)
 			s.emit_field(f, 0, 0);
 			Self::emit_list(f, &[I::I64Const(KIND_MASK), I::I64And, I::I64Const(Kind::Text as i64), I::I64Eq, I::If(BlockType::Empty)]);
@@ -456,6 +462,24 @@ fn is_plain_data(node: &Node) -> bool {
 		Node::List(items, Bracket::Square, _) => items.iter().all(|item| is_plain_data(item) || quoted_source(item).is_some()), // card data-list
 		_ => false,
 	}
+}
+
+/// An index or field read (`P{x:5}.x`, `{a:"x"}#1`) or arithmetic of literals without names (`"a"+"b"`): a value to
+/// compute, not data that reads as written (card str-inline)
+fn computes_value(node: &Node) -> bool {
+	let mut found = false;
+	node.visit(&mut |part| found |= match part {
+		Node::Key(_, Op::Hash, _) => true,
+		Node::Key(_, op, _) if op.is_arithmetic() => !names_anything(part),
+		_ => false,
+	});
+	found
+}
+
+fn names_anything(node: &Node) -> bool {
+	let mut found = false;
+	node.visit(&mut |part| found |= matches!(part, Node::Symbol(_)));
+	found
 }
 
 /// The source text of `data e`, which never runs

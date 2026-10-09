@@ -130,9 +130,15 @@ const requested = request => new Promise((resolve, reject) => {
 function loadDatabase() {
 	return databaseLoaded ??= databaseObjects("readonly")
 		.then(objects => Promise.all([requested(objects.getAllKeys()), requested(objects.getAll())]))
-		.then(([names, values]) => names.forEach((name, index) => { databaseValues[name] = values[index]; }))
+		.then(([names, values]) => names.forEach((name, index) => takeDatabaseValue(name, values[index])))
 		.catch(failure => console.error("database values could not be read:", failure));
 }
+
+// the other tabs' workers keep the same database: each change is told to them, so their tables stay current (a row
+// another tab added is there, the next id is past it) and none writes back rows it did not change (card playground-two)
+const DATABASE_CHANNEL = "warp database";
+const databaseChannel = typeof BroadcastChannel === "undefined" ? null : new BroadcastChannel(DATABASE_CHANNEL);
+if (databaseChannel) databaseChannel.onmessage = ({ data: { name, value } }) => takeDatabaseValue(name, value);
 
 // a change of `database[k]` (value undefined: deleted), written to IndexedDB where the host keeps values
 function keep(name, value, file) {
@@ -141,14 +147,36 @@ function keep(name, value, file) {
 	databaseObjects("readwrite")
 		.then(objects => requested(value === undefined ? objects.delete(name) : objects.put(value, name)))
 		.catch(failure => console.error(`${name} could not be kept in the database:`, failure));
+	databaseChannel?.postMessage({ name, value });
 }
 
-// `people: [Person] = database.people` (src/lowering/database_tables.rs): a table of the browser, kept as one value of
-// the database store (IndexedDB, as `database[k]`), where natively SQLite keeps it (src/database.rs): its column types
-// and its rows, objects with their id. Filters stay list comprehensions over the rows (no SQL here).
+// a value of the database read or told: a table's row goes into its table's rows, a table keeps the rows it has (a
+// table kept as one value before rows had keys of their own brings its rows, which its next migration keeps one by one)
+function takeDatabaseValue(name, value) {
+	const row = name.match(ROW_KEY);
+	if (!row) {
+		const keptWhole = Array.isArray(value?.rows);
+		databaseValues[name] = name.startsWith(TABLE_PREFIX) && value ? { rows: databaseValues[name]?.rows ?? [], ...value, keptWhole } : value;
+		if (value === undefined) delete databaseValues[name];
+		return;
+	}
+	const [, table, id] = row;
+	const stored = databaseValues[table] ??= { types: {}, quantities: {}, rows: [] };
+	stored.rows = stored.rows.filter(kept => kept[ID_COLUMN] !== Number(id));
+	if (value !== undefined) stored.rows.push(value);
+	stored.rows.sort((first, second) => first[ID_COLUMN] - second[ID_COLUMN]);
+}
+
+// `people: [Person] = database.people` (src/lowering/database_tables.rs): a table of the browser, kept in the database
+// store (IndexedDB, as `database[k]`), where natively SQLite keeps it (src/database.rs): its column types under the
+// table's key, each row, an object with its id, under its own (`table people.database.json people #3`), so a change
+// writes only its row. In memory a table holds its rows. Filters stay list comprehensions over the rows (no SQL here).
 const TABLE_PREFIX = "table ";
 const ID_COLUMN = "id";
 const tableKey = (file, table) => `${TABLE_PREFIX}${file} ${table}`;
+const ROW_MARK = " #";
+const ROW_KEY = /^(table .*) #(\d+)$/;
+const rowKey = (file, table, id) => `${tableKey(file, table)}${ROW_MARK}${id}`;
 // field types by column (src/database.rs column_of), each holding every value of the ones before it
 const LOSSLESS_ORDER = [["int", "i64", "i32", "bool"], ["float", "f64", "f32", "number"], ["text", "string", "str", "char"]];
 const REAL = 1;
@@ -178,11 +206,16 @@ function convertColumn(table, name, [storedType, storedQuantity], [type, quantit
 }
 // a unit column's quantity is kept in quantities (`m` of km), the browser has no unit table to look it up later
 const storedTable = (file, table) => databaseValues[tableKey(file, table)] ?? { types: {}, quantities: {}, rows: [] };
-function keepTable(file, table, stored) {
+// the table's column types, with every row when `rows` (a migration changed them, or they were kept as one value)
+function keepTable(file, table, stored, rows) {
 	const key = tableKey(file, table);
-	databaseValues[key] = stored;
-	keep(key, stored, DATABASE_STORE);
+	const { rows: kept, keptWhole, ...columns } = stored;
+	databaseValues[key] = { ...columns, rows: kept };
+	keep(key, columns, DATABASE_STORE);
+	if (rows || keptWhole) kept.forEach(row => keepRow(file, table, row));
 }
+
+const keepRow = (file, table, row) => keep(rowKey(file, table, row[ID_COLUMN]), row, DATABASE_STORE);
 
 // the table's rows [id, columns…], the table first created or migrated to the class's fields [name, type, default];
 // a removed field keeps its column (data is never dropped silently), loudly
@@ -197,6 +230,7 @@ const tableRows = (table, schema, file) => storedTable(file, table).rows.map(row
 
 function migrateTable(table, schema, file) {
 	const stored = storedTable(file, table);
+	const before = JSON.stringify(stored);
 	stored.quantities ??= {};
 	for (const [name, , , oldName] of schema.filter(([name, , , oldName]) => oldName in stored.types && !(name in stored.types))) {
 		renameColumn(stored, oldName, name);
@@ -216,7 +250,7 @@ function migrateTable(table, schema, file) {
 	for (const name of Object.keys(stored.types).filter(name => !fields.includes(name))) {
 		this.warn(`the table ${table} keeps its column ${name}, which the class no longer has (its data is kept)`);
 	}
-	keepTable(file, table, stored);
+	keepTable(file, table, stored, JSON.stringify(stored) !== before);
 	return null;
 }
 
@@ -231,16 +265,47 @@ function renameColumn(stored, oldName, name) {
 function insertRow(table, columns, values, file) {
 	const stored = storedTable(file, table);
 	const id = Math.max(0, ...stored.rows.map(row => row[ID_COLUMN])) + 1;
-	stored.rows.push(Object.fromEntries([[ID_COLUMN, id], ...columns.map((column, index) => [column, values[index]])]));
-	keepTable(file, table, stored);
+	const row = Object.fromEntries([[ID_COLUMN, id], ...columns.map((column, index) => [column, values[index]])]);
+	stored.rows.push(row);
+	databaseValues[tableKey(file, table)] = stored;
+	keepRow(file, table, row);
 	return id;
+}
+
+function deleteRow(table, id, file) {
+	const stored = storedTable(file, table);
+	stored.rows = stored.rows.filter(row => row[ID_COLUMN] !== id);
+	keep(rowKey(file, table, id), undefined, DATABASE_STORE);
+	return null;
 }
 
 function updateRow(table, id, column, value, file) {
 	const stored = storedTable(file, table);
 	const row = stored.rows.find(row => row[ID_COLUMN] === id);
 	if (row) row[column] = value;
-	keepTable(file, table, stored);
+	if (row) keepRow(file, table, row);
+	return null;
+}
+
+// `transaction { … }` (src/lowering/database_tables.rs): its file's tables as they were at the start, put back with every
+// row's kept value by a rollback; writes go on to IndexedDB meanwhile, as SQLite's would to its journal
+const tablesBefore = {};
+const tablesOf = file => Object.keys(databaseValues).filter(key => key.startsWith(tableKey(file, "")) && !ROW_KEY.test(key));
+
+function beginTransaction(file) {
+	tablesBefore[file] = Object.fromEntries(tablesOf(file).map(key => [key, structuredClone(databaseValues[key])]));
+	return null;
+}
+
+function rollBack(file) {
+	const before = tablesBefore[file] ?? {};
+	delete tablesBefore[file];
+	for (const key of tablesOf(file)) {
+		const table = key.slice(tableKey(file, "").length);
+		const keptIds = new Set((before[key]?.rows ?? []).map(row => row[ID_COLUMN]));
+		databaseValues[key].rows.filter(row => !keptIds.has(row[ID_COLUMN])).forEach(row => keep(rowKey(file, table, row[ID_COLUMN]), undefined, DATABASE_STORE));
+		if (key in before) keepTable(file, table, before[key], true); else { delete databaseValues[key]; keep(key, undefined, DATABASE_STORE); }
+	}
 	return null;
 }
 
@@ -288,7 +353,7 @@ addHostPart({
 			},
 		},
 		// a filter compiled natively is an SQL query (a page compiled by the browser keeps filters as comprehensions)
-		table: { open: openTable, migrate: migrateTable, rows: tableRows, page: (table, schema, file, start, size) => tableRows(table, schema, file).slice(start - 1, start - 1 + size), count: (table, schema, file) => storedTable(file, table).rows.length, insert: insertRow, update: updateRow, select: table => { throw new Error(`a filter of the table ${table} is an SQL query: it runs natively (warp serve)`); } },
+		table: { open: openTable, migrate: migrateTable, rows: tableRows, page: (table, schema, file, start, size) => tableRows(table, schema, file).slice(start - 1, start - 1 + size), count: (table, schema, file) => storedTable(file, table).rows.length, insert: insertRow, delete: deleteRow, update: updateRow, begin: beginTransaction, commit: file => { delete tablesBefore[file]; return null; }, rollback: rollBack, select: table => { throw new Error(`a filter of the table ${table} is an SQL query: it runs natively (warp serve)`); } },
 		net: { post: (url, body, headers) => postSync(url, contentText(body), headers ?? {}) },
 		// `clipboard.write(text)` (lowering/system_values.rs): a page writes it (markup.js copyText), a Worker has no
 		// clipboard and hands the text to its page (self.writeClipboard: worker.js)

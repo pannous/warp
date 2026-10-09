@@ -28,10 +28,9 @@ const BOOL_TYPE: &str = ".bool";
 const ANY_TYPE: &str = ".any";
 const LIST_TYPE_PREFIX: &str = ".list ";
 /// The builtin scalar type words warp checks a value against (analyzer admits) that W0 has a type for
-const BUILTIN_TYPE_WORDS: [&str; 11] = ["int", "integer", "long", "exact", "float", "number", "text", "string", "str", "bool", "boolean"];
+pub(crate) const BUILTIN_TYPE_WORDS: [&str; 13] = ["int", "integer", "long", "exact", "float", "number", "text", "string", "str", "codepoint", "char", "bool", "boolean"];
 /// A value of each W0 scalar type and the run-time kind warp sees it as (a bool is an Int)
-const VALUE_KINDS: [(&str, Kind); 4] = [(BOOL_TYPE, Kind::Int), (".int", Kind::Int), (".number", Kind::Float), (".text", Kind::Text)];
-const DEF_KEYWORD: &str = "def";
+const VALUE_KINDS: [(&str, Kind); 5] = [(BOOL_TYPE, Kind::Int), (".int", Kind::Int), (".number", Kind::Float), (".text", Kind::Text), (".codepoint", Kind::Codepoint)];
 const UNIT_TYPE: &str = ".unit";
 /// the parameter of a function that takes none
 const UNIT_PARAMETER: &str = "·";
@@ -43,6 +42,7 @@ const VARIABLE_KEYWORDS: [&str; 2] = ["let", "shared"];
 const CELL_FIELD: &str = "·value";
 /// An inline union `int | text` or an optional `int?` is the join of its alternatives, every value given to it a cast
 const UNION_TYPE: &str = "(Ty.joinAll ";
+const RANGED_TYPE_PREFIX: &str = ".ranged ";
 const UNION_JOINER: &str = " or ";
 const OPTIONAL_MARK: char = '?';
 /// the type of ø, the empty part of an optional (ø is the empty list)
@@ -92,24 +92,28 @@ fn quoted(text: &str) -> String {
 	format!("\"{}\"", text.replace('\\', "\\\\").replace('"', "\\\""))
 }
 
-/// `int`, `texts`, `list`: the W0 type a warp type word names
+/// `int`, `texts`, `list`, `int16` (the range of ints it holds): the W0 type a warp type word names
 fn type_of_word(word: &str) -> Option<String> {
-	let scalar = |word: &str| -> Option<&str> {
+	let scalar = |word: &str| -> Option<String> {
+		if let Some(width) = crate::fixed_width::fixed_width(word) {
+			return Some(format!("{RANGED_TYPE_PREFIX}({}) ({})", width.low, width.high));
+		}
 		Some(match crate::type_kinds::canonical_type_name(&word.to_lowercase()) {
 			"int" | "integer" | "long" => ".int",
 			"float" | "number" | "exact" => ".number",
 			"text" | "string" | "str" => ".text",
+			"codepoint" | "char" => ".codepoint",
 			"bool" | "boolean" => BOOL_TYPE,
 			"any" => ANY_TYPE,
 			_ => return None,
-		})
+		}.to_string())
 	};
 	if word == "list" {
 		return Some(".list .any".to_string());
 	}
 	match scalar(word) {
-		Some(lean) => Some(lean.to_string()),
-		None => word.strip_suffix('s').and_then(scalar).map(|element| format!(".list {element}")),
+		Some(lean) => Some(lean),
+		None => word.strip_suffix('s').and_then(scalar).map(|element| format!(".list ({element})")),
 	}
 }
 
@@ -118,10 +122,12 @@ fn union_alternatives(declared: &str) -> Option<&str> {
 	declared.strip_prefix(UNION_TYPE)?.strip_suffix(')')
 }
 
-/// a value given to a declared place: a union checks it against its alternatives when it runs
+/// a value given to a declared place: a union checks it against its alternatives when it runs, a fixed width
+/// against its range (an int literal is an `int`, not below the range: `x: int16 = 5`)
 fn admitted(declared: &str, value: String) -> String {
 	match union_alternatives(declared) {
 		Some(alternatives) => format!(".cast ({value}) {alternatives}"),
+		None if declared.starts_with(RANGED_TYPE_PREFIX) => format!(".cast ({value}) [{declared}]"),
 		None => value,
 	}
 }
@@ -311,11 +317,48 @@ fn function_head(head: &Node) -> Option<(&str, Vec<&Node>)> {
 
 /// `f(a, b) := body` and `def f(a, b) { body }`: the name, the parameters and the body
 fn function_definition(statement: &Node) -> Option<(&str, Vec<&Node>, &Node)> {
+	let (head, body, _) = typed_definition(statement)?;
+	function_head(head).map(|(name, parameters)| (name, parameters, body))
+}
+
+/// The declared result type of a function definition, `int` of `def f(x) -> int { … }`
+fn result_type(statement: &Node) -> Option<&Node> {
+	typed_definition(statement).and_then(|(_, _, result)| result)
+}
+
+fn is_function_keyword(node: &Node) -> bool {
+	matches!(node.drop_meta(), Node::Symbol(word) if crate::operators::is_function_keyword(word))
+}
+
+/// A definition's head, body and declared result type (warp converts the result to it, lowering/declarations.rs):
+/// `f(x) := body`, `f(x): int := body`, `f(x) as int := body`, `int f(x) := body`, `def f(x) { body }`,
+/// `def f(x) -> int { body }`, `fun f(x): Int { body }`, `def f(x) -> int: body`, `def f(x) as int = body`
+fn typed_definition(statement: &Node) -> Option<(&Node, &Node, Option<&Node>)> {
 	match statement.drop_meta() {
-		Node::Key(head, Op::Define, body) => function_head(head).map(|(name, parameters)| (name, parameters, &**body)),
-		Node::List(items, _, _) if items.len() == 2 && is_word(&items[0], DEF_KEYWORD) => match items[1].drop_meta() {
-			Node::List(parts, _, _) if parts.len() == 2 => function_head(&parts[0]).map(|(name, parameters)| (name, parameters, &parts[1])),
+		Node::Key(target, Op::Define, body) => Some(match target.drop_meta() {
+			Node::Key(head, Op::Colon | Op::As, result) if function_head(head).is_some() => (&**head, &**body, Some(&**result)),
+			_ => (&**target, &**body, None),
+		}),
+		Node::List(items, _, _) if items.len() == 2 && is_function_keyword(&items[0]) => match items[1].drop_meta() {
+			Node::List(parts, _, _) if parts.len() == 2 => Some((&parts[0], &parts[1], None)),
+			Node::Key(head, Op::Arrow | Op::Colon, typed_body) => match typed_body.drop_meta() {
+				Node::List(parts, _, Separator::Space) if parts.len() == 2 && matches!(parts[1].drop_meta(), Node::List(_, Bracket::Curly, _)) => Some((&**head, &parts[1], Some(&parts[0]))),
+				Node::Key(result, Op::Colon, body) => Some((&**head, &**body, Some(&**result))),
+				_ => None,
+			},
+			Node::Key(target, Op::Assign, body) => match target.drop_meta() {
+				Node::Key(head, Op::Colon | Op::As, result) => Some((&**head, &**body, Some(&**result))),
+				_ => None,
+			},
 			_ => None,
+		},
+		// C style: the result type before the name
+		Node::List(items, _, _) if items.len() == 2 && type_of_word(&items[0].name()).is_some() => match items[1].drop_meta() {
+			Node::Key(head, Op::Assign, body) if function_head(head).is_some() => Some((&**head, &**body, Some(&items[0]))),
+			_ => match typed_definition(&items[1])? {
+				(head, body, None) => Some((head, body, Some(&items[0]))),
+				_ => None,
+			},
 		},
 		_ => None,
 	}
@@ -443,6 +486,12 @@ fn bool_literal(declared: Option<&str>, value: &Node) -> Option<String> {
 }
 
 /// A value whose type is evidently bool: `true`, `1 < 2`
+/// One `unit` as a W0 quantity: its number of smallest steps of its base dimension
+fn quantity_literal(unit: &str) -> String {
+	let (dimension, factor) = crate::units::dimension_and_factor(unit).expect("a unit");
+	format!(".qty {factor} [({}, 1)]", quoted(&dimension))
+}
+
 fn is_evident_bool(value: &Node) -> bool {
 	matches!(value.drop_meta(), Node::True | Node::False | Node::Key(_, Op::Lt | Op::Le | Op::Gt | Op::Ge | Op::Eq | Op::Ne, _))
 }
@@ -534,6 +583,8 @@ impl Exporter {
 		match annotation.drop_meta() {
 			Node::Symbol(word) if word.ends_with(OPTIONAL_MARK) => self.union_type(word),
 			Node::Symbol(word) => self.type_of(word),
+			// `[int]`: a list of int
+			Node::List(items, Bracket::Square, _) if items.len() == 1 => Ok(format!("{LIST_TYPE_PREFIX}({})", self.annotation_type(&items[0])?)),
 			other => unsupported(other),
 		}
 	}
@@ -772,7 +823,7 @@ impl Exporter {
 			Node::Type { name, .. } => self.class_definition(&name.drop_meta().name()),
 			_ if function_definition(statement).is_some() => {
 				let (name, parameters, body) = function_definition(statement).expect("a function definition");
-				self.function(name, &parameters, body)
+				self.function(name, &parameters, body, result_type(statement))
 			}
 			Node::Key(head, Op::Define, body) => match head.drop_meta() {
 				Node::Symbol(name) => {
@@ -921,8 +972,8 @@ impl Exporter {
 	}
 
 	/// A function of one parameter as it is; of none, a function of `unit`; of several, a function of its
-	/// arguments object, whose fields the parameters read
-	fn function(&mut self, name: &str, parameters: &[&Node], body: &Node) -> Lean {
+	/// arguments object, whose fields the parameters read; a declared result converts the body's value (`body as int`)
+	fn function(&mut self, name: &str, parameters: &[&Node], body: &Node, result: Option<&Node>) -> Lean {
 		let declared = format!("(some ({}))", self.functions[name]);
 		let (parameter, fields, parameter_type) = match parameters {
 			[parameter] => {
@@ -968,6 +1019,10 @@ impl Exporter {
 			let path = lean_strings(&[cell]);
 			format!(".letIn {} (.cls {path}) (.get (.loc {}) {}) ({body})", quoted(reference), quoted(&parameter), quoted(reference))
 		});
+		let body = match result {
+			Some(result) => self.conversion_of(body, result)?,
+			None => body,
+		};
 		Ok(format!(".function {} {} {parameter_type} ({body})", quoted(name), quoted(&parameter)))
 	}
 
@@ -1096,6 +1151,17 @@ impl Exporter {
 		Ok(format!("{constructor} ({}) ({})", self.expression(left)?, self.expression(right)?))
 	}
 
+	/// `x as int`: warp's conversion to a scalar type (to a class or a list it is another operation)
+	fn conversion(&mut self, value: &Node, target: &Node) -> Lean {
+		let value = self.expression(value)?;
+		self.conversion_of(value, target)
+	}
+
+	fn conversion_of(&self, value: String, target: &Node) -> Lean {
+		let Some(target) = type_of_word(&target.name()).filter(|lean| !lean.starts_with(LIST_TYPE_PREFIX)) else { return Err(format!("not in W0: as {}", target.serialize().trim())) };
+		Ok(format!(".conv ({value}) ({target})"))
+	}
+
 	/// `if c then a else b` and `c ? a : b`
 	fn conditional(&mut self, condition: &Node, then: &Node, otherwise: &Node) -> Lean {
 		Ok(format!(".ite ({}) ({}) ({})", self.expression(condition)?, self.expression(then)?, self.expression(otherwise)?))
@@ -1108,7 +1174,9 @@ impl Exporter {
 		}
 		match node.drop_meta() {
 			Node::Number(Number::Int(n)) => Ok(format!(".int ({n})")),
-			Node::Number(Number::Float(_) | Number::Quotient(_, _)) => Ok(".num 0".to_string()),
+			// a number keeps its whole part, which `as int` gives (W0 keeps no fractions)
+			Node::Number(Number::Float(x)) => Ok(format!(".num ({})", x.trunc() as i64)),
+			Node::Number(Number::Quotient(numerator, denominator)) => Ok(format!(".num ({})", numerator / denominator)),
 			Node::True => Ok(".bool true".to_string()),
 			Node::False => Ok(".bool false".to_string()),
 			Node::Text(text) => Ok(format!(".text {}", quoted(text))),
@@ -1124,6 +1192,8 @@ impl Exporter {
 			Node::Symbol(name) if self.functions.get(name).is_some_and(|parameter| parameter == UNIT_TYPE) => Ok(format!(".call {} .unit", quoted(name))),
 			Node::Symbol(name) if self.lambda_names.contains(name) => Err(format!("not in W0: {name} as a value (warp calls it; `function {name}` is the function)")),
 			Node::Symbol(name) if self.names.contains_key(name) => Ok(format!(".glob {}", quoted(name))),
+			// a unit word is a quantity of one unit (`2 km` parses as `2 * km`)
+			Node::Symbol(name) if crate::units::is_unit(name) => Ok(quantity_literal(name)),
 			_ if map_entries(node).is_some() && self.classes.contains_key(MAP_CLASS) => self.instance(MAP_CLASS, map_entries(node).expect("a map")),
 			Node::List(items, Bracket::Square, _) => {
 				let elements: Result<Vec<String>, String> = items.iter().map(|item| self.expression(item)).collect();
@@ -1276,6 +1346,7 @@ impl Exporter {
 			Node::Key(list, Op::Hash, index) if !list.is_nothing() => self.binary(".index", list, index),
 			Node::Key(empty, Op::Not, operand) if empty.is_nothing() => Ok(negation(self.expression(operand)?)),
 			Node::Key(parameter, Op::FatArrow, body) => self.lambda(parameter, body),
+			Node::Key(value, Op::As, target) => self.conversion(value, target),
 			// `a and b` is b when a is truthy, else a; `a or b` the other way round: a, free of effects, evaluated twice
 			Node::Key(left, op @ (Op::And | Op::Or), right) if self.is_pure(left) => {
 				let (left, right) = (self.expression(left)?, self.expression(right)?);

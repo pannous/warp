@@ -11,6 +11,11 @@ server def user_count() {
 }
 
 get "/api/users" { users }                 // data for anyone: GET /api/users
+// a stored user from the request: `curl -d Cy localhost:8080/api/users` answers the new count, GET shows Cy
+post "/api/users" { users.add(User(request.body)); count(users) }
+// a typed parameter as a page route's: GET /api/users/2 is {"name":"Bo","id":2}, /api/users/9 a JSON 404
+get "/api/users/:id:int" { users#id }
+get "/api/newest" { last 2 of users }      // the two users added last
 
 route "/" {
 	div{
@@ -31,4 +36,5 @@ route "/users/:id:int" {
 	}
 }
 
+// any other path, /users/abc too: the one page shows this (without it such a path answers 404)
 route "*" { p{ "no such page" } }

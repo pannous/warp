@@ -4,6 +4,8 @@ use super::*;
 
 /// The word between a condition and its branch: `if c then x`
 const THEN_WORD: &str = "then";
+/// The marks of a slice from the start, `s[…3]`: the inclusive ones before `..`, which they begin with
+const SLICE_FROM_START: [(&str, Op); 4] = [(":", Op::Colon), ("…", Op::To), ("...", Op::To), ("..", Op::Range)];
 
 impl WarpParser {
 	/// The exponent written in superscript digits and signs at the cursor, its length in characters and whether it has a sign:
@@ -140,7 +142,8 @@ impl WarpParser {
 
 	/// `x empty`, `x missing`, `x is absent` … at the end of a condition are `not x` (wiki/null.md); `x failed` is `is_error(x)`.
 	/// The word must end the condition: a block, colon, `then`/`else`/`and`/`or` or the end of the statement follows.
-	/// `x is empty` stays the comparison with ø.
+	/// `x is empty` holds for ø, "", [] and {} alike (wiki/null.md: empty checks missing or empty): `count(x) == 0`, as a
+	/// number or a bool counts one.
 	pub(super) fn try_parse_test_word(&mut self, lhs: &Node, min_bp: u8) -> Option<Node> {
 		if self.options.data_mode || min_bp > Op::Not.binding_power().1 || matches!(lhs.drop_meta(), Empty) {
 			return None;
@@ -149,9 +152,6 @@ impl WarpParser {
 		let after_is = self.matches_keyword("is");
 		let word_start = if after_is { is_length + (is_length..).take_while(|&offset| matches!(self.peek_char(offset), ' ' | '\t')).count() } else { 0 };
 		let word = TEST_WORDS.iter().find(|word| word.chars().enumerate().all(|(index, letter)| self.peek_char(word_start + index) == letter) && !is_identifier_char(self.peek_char(word_start + word.len())))?;
-		if after_is && *word == EMPTY_WORD {
-			return None;
-		}
 		let end = word_start + word.len();
 		let blanks = (end..).take_while(|&offset| matches!(self.peek_char(offset), ' ' | '\t')).count();
 		let next = self.peek_char(end + blanks);
@@ -164,6 +164,10 @@ impl WarpParser {
 		self.advance_by(end);
 		if *word == FAILED_WORD {
 			return Some(Node::List(vec![Symbol(IS_ERROR_CALL.to_string()), lhs.clone()], Bracket::Round, Separator::None));
+		}
+		if after_is && *word == EMPTY_WORD {
+			let counted = Node::List(vec![Symbol(COUNT_CALL.to_string()), lhs.clone()], Bracket::Round, Separator::None);
+			return Some(Node::Key(Box::new(counted), Op::Eq, Box::new(Node::int(0))));
 		}
 		Some(Node::Key(Box::new(Empty), Op::Not, Box::new(lhs.clone())))
 	}
@@ -392,15 +396,15 @@ impl WarpParser {
 		Some(Node::Key(Box::new(lhs.clone()), Op::Colon, Box::new(body)))
 	}
 
-	/// `[:end]` and `[:]`, a slice from the start: `ø:end`
+	/// `[:end]`, `[…last]`, `[..end]` and `[:]`, a slice from the start: `ø:end`
 	pub(super) fn parse_slice_from_start(&mut self) -> Option<Node> {
-		if self.current_char() != ':' {
-			return None;
-		}
-		self.advance(); // skip ':'
+		let (op, chars) = SLICE_FROM_START.iter().copied()
+			.find(|(written, _)| written.chars().enumerate().all(|(offset, ch)| self.peek_char(offset) == ch))
+			.map(|(written, op)| (op, written.chars().count()))?;
+		self.advance_by(chars);
 		self.skip_whitespace();
 		let end = if self.current_char() == ']' { Empty } else { self.parse_expr(0) };
-		Some(Node::Key(Box::new(Empty), Op::Colon, Box::new(end)))
+		Some(Node::Key(Box::new(Empty), op, Box::new(end)))
 	}
 
 	/// The Java/C array type `int[]` is the list type `[int]`

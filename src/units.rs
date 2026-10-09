@@ -68,11 +68,30 @@ const LONG_NAMES: [(&str, &str); 19] = [
 ];
 /// `100 cm in m`: the word of a conversion written with spaces (`as` is an operator)
 const IN_WORD: &str = "in";
+/// `for g in 0 to 2 {…}`, `for each g in …`: a loop variable named like a unit is the variable (card loop-variable)
+const FOR_WORD: &str = "for";
+const EACH_WORD: &str = "each";
 /// The local time of day, unless the program names something so (card time-day-value)
 const TIME_WORD: &str = "time";
 
+thread_local! {
+	/// The unit words the program being lowered defines itself (`m = 2`, `g(x) := …`): no units while it is lowered
+	static SHADOWED_UNITS: std::cell::RefCell<std::collections::HashSet<String>> = std::cell::RefCell::new(Default::default());
+}
+
 fn unit_named(name: &str) -> Option<&'static Unit> {
+	if SHADOWED_UNITS.with(|shadowed| shadowed.borrow().contains(name)) {
+		return None;
+	}
 	UNITS.iter().find(|unit| unit.name == name)
+}
+
+/// `run` with the unit words `program` defines as its names, not units: `g(x) := x + 1 m` keeps m a unit
+fn shadowing<T>(program: &Node, run: impl FnOnce() -> T) -> T {
+	let outer = SHADOWED_UNITS.with(|shadowed| shadowed.replace(defined_unit_names(program)));
+	let result = run();
+	SHADOWED_UNITS.with(|shadowed| *shadowed.borrow_mut() = outer);
+	result
 }
 
 /// A conversion target: a unit by its short name or its long name, `minute` or `minutes`
@@ -82,9 +101,50 @@ fn target_unit(node: &Node) -> Option<&'static Unit> {
 	unit_named(name).or_else(|| LONG_NAMES.iter().find(|(long, _)| *long == singular || *long == name).and_then(|(_, short)| unit_named(short)))
 }
 
+/// The unit words as the units passes read them: aliases expanded (`60 mph`), the whole unit after `as` (`q as km/h`)
+pub fn lower_unit_words(program: Node) -> Node {
+	let program = lower_unit_aliases(program);
+	shadowing(&program.clone(), || with_whole_conversion_units(program))
+}
+
+/// `60 mi/h as km/h` parses `(60 mi/h as km)/h`: the unit after `as` regrouped whole, as after `in`, when it is one
+fn with_whole_conversion_units(node: Node) -> Node {
+	let node = match node.map_children(with_whole_conversion_units) {
+		Node::Key(conversion, op @ (Op::Div | Op::Mul), rest) => match conversion.drop_meta() {
+			Node::Key(quantity, Op::As, unit) if unit_expression(&Node::Key(unit.clone(), op, rest.clone())).is_some() => {
+				Node::Key(quantity.clone(), Op::As, Box::new(Node::Key(unit.clone(), op, rest)))
+			}
+			_ => Node::Key(conversion, op, rest),
+		},
+		other => other,
+	};
+	with_converted_last_operand(node)
+}
+
+/// `"a: " + x as km` parses `("a: " + x) as km`: a text has no unit to convert, so `as` takes the operand after the
+/// last `+` (card print-km)
+fn with_converted_last_operand(node: Node) -> Node {
+	match node {
+		Node::Key(sum, Op::As, unit) if unit_expression(&unit).is_some() => match sum.drop_meta() {
+			Node::Key(text, Op::Add, last) if joins_text(text) => Node::Key(text.clone(), Op::Add, Box::new(Node::Key(last.clone(), Op::As, unit))),
+			_ => Node::Key(sum, Op::As, unit),
+		},
+		other => other,
+	}
+}
+
+/// `"a: "`, `"a: " + x + " or "`: a text, or a sum with a text in it, which every operand joins as its text
+pub(crate) fn joins_text(node: &Node) -> bool {
+	match node.drop_meta() {
+		Node::Text(_) => true,
+		Node::Key(left, Op::Add, right) => joins_text(left) || joins_text(right),
+		_ => false,
+	}
+}
+
 /// `60 mph` as `60 mi/h`: each unit alias the program does not define read as its unit expression (not a field name:
 /// `r.mph`, `{mph: 3}`)
-pub fn lower_unit_aliases(program: Node) -> Node {
+fn lower_unit_aliases(program: Node) -> Node {
 	let aliases: Vec<(&str, &str)> = UNIT_ALIASES.into_iter().filter(|(alias, _)| mentions_word(&program, alias)).collect();
 	if aliases.is_empty() {
 		return program;
@@ -132,6 +192,11 @@ fn times_first_unit(amount: Node, expression: Node) -> Node {
 	}
 }
 
+/// A unit word's base dimension and how many of the dimension's smallest steps it is (`km`: Length, 10_000_000)
+pub fn dimension_and_factor(name: &str) -> Option<(String, i64)> {
+	unit_named(name).map(|unit| (format!("{:?}", unit.dimension), unit.factor))
+}
+
 pub fn is_unit(name: &str) -> bool {
 	unit_named(name).is_some()
 }
@@ -152,6 +217,20 @@ pub fn as_run_time_quantity(node: &Node) -> Option<Node> {
 	Some(run_time_quantity(amount, unit))
 }
 
+/// The amount and the unit text of `quantity(amount, "unit")`
+pub fn run_time_quantity_parts(node: &Node) -> Option<(&Node, &str)> {
+	match node.drop_meta() {
+		Node::List(items, Bracket::Round, _) => match items.as_slice() {
+			[word, amount, unit] if word.drop_meta().name() == RUN_TIME_QUANTITY_WORD => match unit.drop_meta() {
+				Node::Text(unit) => Some((amount, unit.as_str())),
+				_ => None,
+			},
+			_ => None,
+		},
+		_ => None,
+	}
+}
+
 fn run_time_quantity(amount: Node, unit: String) -> Node {
 	Node::List(vec![Node::Symbol(RUN_TIME_QUANTITY_WORD.to_string()), amount, Node::Text(unit)], Bracket::Round, Separator::None)
 }
@@ -160,10 +239,10 @@ fn run_time_quantity(amount: Node, unit: String) -> Node {
 /// run-time `quantity(5 ± 1/100, "m")`: its amount an interval in the unit of the value (card plus-minus-units). A
 /// tolerance the evaluation answers (`2m ± 5cm`, `1950 AD ± 50 == 1900 - 2000 AD`) stays the compile-time Tolerance
 pub fn lower_run_time_tolerances(program: Node) -> Node {
-	if !has_unit_tolerance(&program) || answers_at_compile_time(&program) {
-		return program;
-	}
-	with_run_time_tolerances(program)
+	shadowing(&program.clone(), || match !has_unit_tolerance(&program) || answers_at_compile_time(&program) {
+		true => program,
+		false => with_run_time_tolerances(program),
+	})
 }
 
 fn has_unit_tolerance(node: &Node) -> bool {
@@ -174,7 +253,7 @@ fn has_unit_tolerance(node: &Node) -> bool {
 }
 
 fn answers_at_compile_time(program: &Node) -> bool {
-	!defines_unit_name(program) && match evaluate(program) {
+	match evaluate(program) {
 		Ok(_) => true,
 		Err(Stop::Error(message)) => !RUN_TIME_TOLERANCE_ERRORS.iter().any(|refusal| message.starts_with(refusal)),
 		Err(Stop::Unsupported) => false,
@@ -295,6 +374,27 @@ impl fmt::Display for Quantity {
 	}
 }
 
+/// A ± amount of units, a final unit field given `5 m ± 1 cm`: `5.000 ± 0.010m`; a Gaussian keeps its σ apart from the
+/// unit, `12.00 ± 0.60σ m`, as lib/units.warp quantity_text shows it (card quantity-final)
+#[derive(Clone, Debug, PartialEq)]
+pub struct UncertainQuantity {
+	amount: crate::uncertain::Uncertain,
+	factors: Vec<Factor>,
+}
+
+impl UncertainQuantity {
+	pub(crate) fn new(amount: crate::uncertain::Uncertain, factors: &[Factor]) -> UncertainQuantity {
+		UncertainQuantity { amount, factors: factors.to_vec() }
+	}
+}
+
+impl fmt::Display for UncertainQuantity {
+	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+		let apart = if self.amount.gaussian { " " } else { "" };
+		write!(f, "{}{apart}{}", self.amount, unit_suffix(&self.factors))
+	}
+}
+
 impl Quantity {
 	fn of(amount: i64, unit: &'static Unit) -> Quantity {
 		Quantity { amount: Rational::integer(amount), factors: vec![Factor { unit, power: 1 }] }
@@ -372,6 +472,9 @@ pub fn describe(data: &DataValue) -> Option<String> {
 	if let Some(uncertain) = data.downcast_ref::<crate::uncertain::Uncertain>() {
 		return Some(uncertain.to_string());
 	}
+	if let Some(uncertain) = data.downcast_ref::<UncertainQuantity>() {
+		return Some(uncertain.to_string());
+	}
 	if let Some(duration) = data.downcast_ref::<crate::time::Duration>() {
 		return Some(duration.to_string());
 	}
@@ -384,6 +487,8 @@ pub fn describe(data: &DataValue) -> Option<String> {
 #[derive(Clone, Debug)]
 enum Value {
 	Number(i64),
+	/// a comparison's answer, yes or no as a plain comparison's (card units-compare)
+	Bool(bool),
 	Quantity(Quantity),
 	Tolerance(Tolerance),
 	Range(Range),
@@ -409,11 +514,16 @@ fn fail<T>(message: impl Into<String>) -> Result<T, Stop> {
 
 /// The value of a program that uses units, None for any other program
 pub fn answer(program: &Node) -> Option<Node> {
-	if !needs_quantities(program) || defines_unit_name(program) {
+	shadowing(program, || answer_shadowed(program))
+}
+
+fn answer_shadowed(program: &Node) -> Option<Node> {
+	if !needs_quantities(program) {
 		return None;
 	}
 	match evaluate(program) {
 		Ok(Value::Number(n)) => Some(Node::int(n)),
+		Ok(Value::Bool(truth)) => Some(truth_node(truth)),
 		// a ratio of two quantities of one dimension that is no whole number: `1 m / 3 m` is 1/3
 		Ok(Value::Quantity(quantity)) if quantity.factors.is_empty() => Some(quotient_node(&quantity.amount)),
 		Ok(Value::Quantity(quantity)) => Some(Node::data(quantity)),
@@ -465,7 +575,11 @@ pub fn lower_sleep_durations(program: Node) -> Node {
 /// local time of day, compared with a constant duration in milliseconds: `time < 24h` is
 /// `system·time of day < 86400000` (lowering/system_values.rs reads it, so `whenever time > 18h {…}` listens too)
 pub fn lower_quantity_comparisons(program: Node) -> Node {
-	if defines_unit_name(&program) || !(needs_quantities(&program) || mentions_clock(&program)) {
+	shadowing(&program.clone(), || quantity_comparisons_folded(program))
+}
+
+fn quantity_comparisons_folded(program: Node) -> Node {
+	if !(needs_quantities(&program) || mentions_clock(&program)) {
 		return program;
 	}
 	let bound = crate::system_values::bound_names(&program);
@@ -521,6 +635,7 @@ fn fold_comparisons(node: Node, constants: &Variables, clock: bool) -> Node {
 	let reads_quantities = needs_quantities(&node) || constants.keys().any(|name| crate::warp_parser::mentions(&node, name));
 	match evaluate_in(&node, &mut constants.clone()).ok().filter(|_| reads_quantities) {
 		Some(Value::Number(answer)) => Node::int(answer),
+		Some(Value::Bool(truth)) => truth_node(truth),
 		_ => match evaluate_in(&node, &mut constants.clone()) {
 			Err(Stop::Error(message)) if reads_quantities => error(&message),
 			_ => node.map_children(|child| fold_comparisons(child, constants, clock)),
@@ -603,11 +718,6 @@ fn needs_quantities(node: &Node) -> bool {
 	}
 }
 
-/// `m=5;3m`: a variable of that name shadows the unit, and so does a parameter: `s => s + t`, `f(s) := …`
-fn defines_unit_name(node: &Node) -> bool {
-	!defined_unit_names(node).is_empty()
-}
-
 /// The unit words the program defines as variables, parameters or functions (`m = 2`, `f(s) := …`)
 fn defined_unit_names(node: &Node) -> std::collections::HashSet<String> {
 	let mut names = std::collections::HashSet::new();
@@ -615,9 +725,19 @@ fn defined_unit_names(node: &Node) -> std::collections::HashSet<String> {
 	names
 }
 
+/// The variable a loop binds, `g` of `for g in 0 to 2 {…}` and of `for each g in …`
+fn loop_variable(words: &[Node]) -> Option<&Node> {
+	let word = |index: usize| words.get(index).map(|word| word.drop_meta().name());
+	match (word(0)?.as_str(), word(1)?.as_str()) {
+		(FOR_WORD, EACH_WORD) => words.get(2),
+		(FOR_WORD, _) => words.get(1),
+		_ => None,
+	}
+}
+
 fn collect_defined_unit_names(node: &Node, names: &mut std::collections::HashSet<String>) {
 	let mut add_unit = |node: &Node| if let Node::Symbol(name) = node.drop_meta() {
-		if unit_named(name).is_some() || UNIT_ALIASES.iter().any(|(alias, _)| alias == name) {
+		if UNITS.iter().any(|unit| unit.name == name) || UNIT_ALIASES.iter().any(|(alias, _)| alias == name) {
 			names.insert(name.clone());
 		}
 	};
@@ -632,9 +752,50 @@ fn collect_defined_unit_names(node: &Node, names: &mut std::collections::HashSet
 		Node::Key(head, Op::Assign | Op::Define, _) if matches!(head.drop_meta(), Node::List(..)) => add_parameters(head),
 		Node::Key(target, Op::Assign | Op::Define | Op::Colon, _) => add_parameters(target),
 		Node::Key(parameters, Op::Arrow | Op::FatArrow, _) => add_parameters(parameters),
+		Node::List(words, _, _) => if let Some(variable) = loop_variable(words) { add_unit(variable) },
 		_ => {}
 	}
 	children(node).into_iter().for_each(|child| collect_defined_unit_names(child, names));
+}
+
+/// `f(s) := s * 2; f(3 s)`: a parameter named like a unit the program also writes outside the function is a name clash
+/// (card static-units-parameter); the parameter shadows the unit, so `3 s` would be an undefined variable
+pub fn check_unit_parameter_clashes(program: &Node) -> Option<crate::diagnostic::Diagnostic> {
+	let mut parameter_of = HashMap::new();
+	program.visit(&mut |node| if let Some((function, parameters)) = function_head(node) {
+		for parameter in parameters.iter().map(Node::name).filter(|name| is_unit(name)) {
+			parameter_of.insert(parameter, function.name());
+		}
+	});
+	let outside = without_function_definitions(program.clone());
+	let names_outside = defined_unit_names(&outside);
+	parameter_of.retain(|parameter, _| !names_outside.contains(parameter));
+	let used = first_word_of(&outside, &parameter_of)?;
+	let name = used.drop_meta().name();
+	Some(crate::diagnostic::Diagnostic::at(used, format!("{name} is a parameter of {} and a unit here: rename the parameter", parameter_of[&name])))
+}
+
+/// The name and parameters of a function definition `f(a, b) := …`
+fn function_head(node: &Node) -> Option<(&Node, &[Node])> {
+	let Node::Key(head, Op::Define | Op::Assign, _) = node.drop_meta() else { return None };
+	let Node::List(items, Bracket::Round, _) = head.drop_meta() else { return None };
+	items.split_first()
+}
+
+fn without_function_definitions(node: Node) -> Node {
+	match function_head(&node) {
+		Some(_) => Node::Empty,
+		None => node.map_children(without_function_definitions),
+	}
+}
+
+/// The first of `words` the code writes, not as a field name (`q.s`)
+fn first_word_of<'a>(node: &'a Node, words: &HashMap<String, String>) -> Option<&'a Node> {
+	match node.drop_meta() {
+		Node::Symbol(name) if words.contains_key(name) => Some(node),
+		Node::Key(object, Op::Dot, _) => first_word_of(object, words),
+		_ => children(node).into_iter().find_map(|child| first_word_of(child, words)),
+	}
 }
 
 /// Quantities assigned to variables earlier in the program: `x = 2 km; x + 1 m`
@@ -654,6 +815,9 @@ fn evaluate_in(node: &Node, variables: &mut Variables) -> Evaluated {
 		Node::Key(target, Op::Assign | Op::Define, value) => {
 			let Node::Symbol(name) = target.drop_meta() else { return Err(Stop::Unsupported) };
 			let value = evaluate_in(value, variables)?;
+			if let Some(earlier) = variables.get(name) {
+				same_dimension_kept(name, earlier, &value)?;
+			}
 			variables.insert(name.clone(), value.clone());
 			Ok(value)
 		}
@@ -743,6 +907,18 @@ fn unit_expression(node: &Node) -> Option<Vec<Factor>> {
 	}
 }
 
+/// `q as km/h`, `q in km/h`: the quantity converted and the units it converts to
+pub(crate) fn conversion(node: &Node) -> Option<(&Node, Vec<Factor>)> {
+	match node.drop_meta() {
+		Node::Key(quantity, Op::As, unit) => Some((quantity, unit_expression(unit)?)),
+		Node::List(items, Bracket::None, Separator::Space) => match items.as_slice() {
+			[quantity, word, unit] if matches!(word.drop_meta(), Node::Symbol(w) if w == IN_WORD) => Some((quantity, unit_expression(unit)?)),
+			_ => None,
+		},
+		_ => None,
+	}
+}
+
 fn inverse(factors: &[Factor]) -> Vec<Factor> {
 	factors.iter().map(|factor| Factor { power: -factor.power, ..*factor }).collect()
 }
@@ -765,6 +941,7 @@ fn negate(value: Value) -> Evaluated {
 		Value::Number(n) => Ok(Value::Number(-n)),
 		Value::Quantity(quantity) => Ok(Value::Quantity(quantity.with_amount(quantity.amount.neg()))),
 		Value::Tolerance(_) | Value::Range(_) => fail("cannot negate a value with tolerance or a range"),
+		Value::Bool(_) => Err(Stop::Unsupported),
 	}
 }
 
@@ -934,7 +1111,7 @@ fn aligned(left: &Quantity, right: &Quantity) -> Result<(Rational, Rational, Vec
 	Ok((amount(left), amount(right), factors))
 }
 
-/// Comparison of two quantities in their finer units: `3km == 3000m`, answered 1 or 0
+/// Comparison of two quantities in their finer units: `3km == 3000m`, answered yes or no
 fn compare(left: Quantity, op: Op, right: Quantity) -> Evaluated {
 	let (x, y, _) = aligned(&left, &right)?;
 	let order = x.compare(&y);
@@ -946,7 +1123,25 @@ fn compare(left: Quantity, op: Op, right: Quantity) -> Evaluated {
 		Op::Le => order.is_le(),
 		_ => order.is_ge(),
 	};
-	Ok(Value::Number(holds as i64))
+	Ok(Value::Bool(holds))
+}
+
+/// `x = 1 m; x = 2 s`: a variable keeps its dimension, as the static units pass checks (card units-reassign)
+fn same_dimension_kept(name: &str, earlier: &Value, given: &Value) -> Result<(), Stop> {
+	let dimension = |value: &Value| match value {
+		Value::Number(_) => Some((vec![], "a plain number".to_string())),
+		Value::Quantity(quantity) => Some((signature(&quantity.factors), units_text(&quantity.factors))),
+		_ => None,
+	};
+	let (Some((was, was_shown)), Some((is, is_shown))) = (dimension(earlier), dimension(given)) else { return Ok(()) };
+	match was.len() == is.len() && was.iter().all(|power| is.contains(power)) {
+		true => Ok(()),
+		false => fail(format!("DimensionError: {name} was {was_shown}, is given {is_shown}")),
+	}
+}
+
+fn truth_node(truth: bool) -> Node {
+	if truth { Node::True } else { Node::False }
 }
 
 fn unitless_number(value: &Value) -> bool {
@@ -969,7 +1164,7 @@ fn same_span(left: Value, op: Op, right: Value) -> Evaluated {
 		return fail(format!("cannot compare spans in different units: {} and {}", unit.unwrap_or("no unit"), other_unit.unwrap_or("no unit")));
 	}
 	let same = (from, to) == (other_from, other_to);
-	Ok(Value::Number((same == (op == Op::Eq)) as i64))
+	Ok(Value::Bool(same == (op == Op::Eq)))
 }
 
 fn sum(left: Quantity, op: Op, right: Quantity) -> Evaluated {

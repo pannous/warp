@@ -23,6 +23,7 @@ to mail message to address { print "\(message) → \(address)" }
 result = one plus two
 total = three times four
 half = ten divided by two
+rest = ten modulo three
 
 // Boolean logic
 valid = age >= 18 and has_id
@@ -54,7 +55,7 @@ mail "Hello" to "user@example.com"
 // Method chaining reads naturally
 result = numbers
     .keep only positive
-    .sort by size
+    .sort by abs
     .take first 10
 
 // Named arguments for clarity
@@ -67,3 +68,10 @@ create_user(
 // Ranges with words
 countdown = 10 down to 1
 letters = 'a' through 'z'
+
+// Slices with words, by position (first = 1), both ends inclusive
+middle = countdown from #2 to #4
+opening = countdown up to third
+tail = countdown starting from 9th
+check middle == [9, 8, 7] and opening == [10, 9, 8] and tail == [2, 1]
+check countdown == [10, 9, 8, 7, 6, 5, 4, 3, 2, 1]

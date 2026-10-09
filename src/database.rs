@@ -19,6 +19,8 @@ const SQLITE_TEXT: c_int = 3;
 const SQLITE_TRANSIENT: isize = -1;
 const SQLITE_UTF8: c_int = 1;
 const IN_MEMORY: &str = ":memory:";
+/// `transaction { … }` (database_tables.rs): its members of `std_io("table", …)` and their SQL
+const TRANSACTION_STATEMENTS: [(&str, &str); 3] = [("begin", "BEGIN"), ("commit", "COMMIT"), ("rollback", "ROLLBACK")];
 const ID_COLUMN: &str = "id";
 /// column types each holding every value of the ones before it: a column converts forward without loss
 const LOSSLESS_ORDER: [&str; 3] = ["INTEGER", "REAL", "TEXT"];
@@ -130,18 +132,18 @@ pub fn rows_read() -> usize {
 
 /// `std_io("table", member, arguments)`: open (create or migrate, give the rows), migrate and rows (its two halves), page (from a
 /// position), count, insert
-/// (give the id), update
+/// (give the id), delete (by id), update
 pub fn call(member: &str, arguments: &[Node]) -> Result<Node, String> {
 	let text = |node: &Node| crate::std_adapters::text_value(node).ok_or_else(|| format!("needs a text, got {}", node.serialize().trim()));
 	match (member, arguments) {
 		("open", [table, schema, file]) => opened(&text(table)?, &schema.children(), &text(file)?),
 		("rows", [table, schema, file]) => {
 			let columns = schema.children().iter().map(column_of).collect::<Result<Vec<_>, _>>()?;
-			selected(connection(&text(file)?)?, &text(table)?, &columns, None)
+			selected(connection(&text(file)?)?, &text(table)?, &columns, "", "", &[])
 		}
 		("page", [table, schema, file, start, size]) => {
 			let columns = schema.children().iter().map(column_of).collect::<Result<Vec<_>, _>>()?;
-			selected(connection(&text(file)?)?, &text(table)?, &columns, Some([start, size]))
+			selected(connection(&text(file)?)?, &text(table)?, &columns, "", " LIMIT ? OFFSET ? - 1", &[size.clone(), start.clone()])
 		}
 		("migrate", [table, schema, file]) => migrated(connection(&text(file)?)?, &text(table)?, &schema.children()).map(|_| Node::Empty),
 		("count", [table, _schema, file]) => {
@@ -156,28 +158,40 @@ pub fn call(member: &str, arguments: &[Node]) -> Result<Node, String> {
 			rows(database, &format!("INSERT INTO {} ({}) VALUES ({placeholders})", quote(&table), quoted.join(", ")), &values.children())?;
 			Ok(Node::int(unsafe { (sqlite()?.last_insert_rowid)(database) }))
 		}
+		("delete", [table, id, file]) => {
+			let sql = format!("DELETE FROM {} WHERE {ID_COLUMN} = ?", quote(&text(table)?));
+			rows(connection(&text(file)?)?, &sql, std::slice::from_ref(id)).map(|_| Node::Empty)
+		}
 		("update", [table, id, column, value, file]) => {
 			let sql = format!("UPDATE {} SET {} = ? WHERE {ID_COLUMN} = ?", quote(&text(table)?), quote(&text(column)?));
 			rows(connection(&text(file)?)?, &sql, &[value.clone(), id.clone()]).map(|_| Node::Empty)
+		}
+		(member, [file]) if transaction_statement(member).is_some() => {
+			rows(connection(&text(file)?)?, transaction_statement(member).expect("guarded"), &[]).map(|_| Node::Empty)
 		}
 		_ => Err(format!("no such word of {} arguments", arguments.len())),
 	}
 }
 
-/// `std_io("table", "select", [table, condition, parameters, file])`: the ids of the rows the SQL condition keeps, in
-/// order; the condition's `warp_call('f', …)` calls the program's function f, registered for this query only
+fn transaction_statement(member: &str) -> Option<&'static str> {
+	TRANSACTION_STATEMENTS.iter().find(|(word, _)| *word == member).map(|(_, sql)| *sql)
+}
+
+/// `std_io("table", "select", [table, schema, file, condition, parameters])`: the rows `[id, columns…]` the SQL
+/// condition keeps, in order; the condition's `warp_call('f', …)` calls the program's function f, registered for this
+/// query only
 pub fn select(arguments: &[Node], callback: &mut Callback) -> Result<Node, String> {
-	let [table, condition, parameters, file] = arguments else { return Err(format!("select needs 4 arguments, got {}", arguments.len())) };
+	let [table, schema, file, condition, parameters] = arguments else { return Err(format!("select needs 5 arguments, got {}", arguments.len())) };
 	let database = connection(&file.drop_meta().name())?;
-	let sql = format!("SELECT {ID_COLUMN} FROM {} WHERE {} ORDER BY {ID_COLUMN}", quote(&table.drop_meta().name()), condition.drop_meta().name());
+	let columns = schema.children().iter().map(column_of).collect::<Result<Vec<_>, _>>()?;
 	let mut call = WarpCall { callback, failure: None };
 	register_warp_call(database, Some((&mut call as *mut WarpCall).cast()))?;
-	let found = rows(database, &sql, &parameters.children());
+	let found = selected(database, &table.drop_meta().name(), &columns, &format!(" WHERE {}", condition.drop_meta().name()), "", &parameters.children());
 	register_warp_call(database, None)?;
 	if let Some(failure) = call.failure {
 		return Err(failure);
 	}
-	Ok(list(found?.into_iter().flatten().collect()))
+	found
 }
 
 /// What warp_call reaches during one query: the program, and its first failure
@@ -247,17 +261,15 @@ unsafe fn give(sqlite: &Sqlite, context: Handle, value: &Node) -> Result<(), Str
 fn opened(table: &str, schema: &[Node], file: &str) -> Result<Node, String> {
 	let database = connection(file)?;
 	let columns = migrated(database, table, schema)?;
-	selected(database, table, &columns, None)
+	selected(database, table, &columns, "", "", &[])
 }
 
 /// The table's rows `[id, columns…]` in id order, or only a page of them: its start position (counted from 1) and size
-fn selected(database: Handle, table: &str, columns: &[(String, String, String)], page: Option<[&Node; 2]>) -> Result<Node, String> {
+/// The rows `[id, columns…]` of a table in order, those of `filter` (` WHERE …`) within `limit` (` LIMIT …`), whose
+/// parameters come in that order
+fn selected(database: Handle, table: &str, columns: &[(String, String, String)], filter: &str, limit: &str, parameters: &[Node]) -> Result<Node, String> {
 	let selected: Vec<String> = std::iter::once(ID_COLUMN.to_string()).chain(columns.iter().map(|(name, _, _)| quote(name))).collect();
-	let (limit, parameters) = match page {
-		Some([start, size]) => (" LIMIT ? OFFSET ? - 1", vec![size.clone(), start.clone()]),
-		None => ("", vec![]),
-	};
-	let rows = rows(database, &format!("SELECT {} FROM {} ORDER BY {ID_COLUMN}{limit}", selected.join(", "), quote(table)), &parameters)?;
+	let rows = rows(database, &format!("SELECT {} FROM {}{filter} ORDER BY {ID_COLUMN}{limit}", selected.join(", "), quote(table)), parameters)?;
 	ROWS_READ.set(ROWS_READ.get() + rows.len());
 	Ok(list(rows.into_iter().map(list).collect()))
 }
@@ -397,6 +409,7 @@ fn literal(value: &Node) -> Result<String, String> {
 		Node::Empty => Ok("NULL".to_string()),
 		Node::Number(Number::Int(number)) => Ok(number.to_string()),
 		Node::Number(Number::Float(number)) => Ok(format!("{number:?}")),
+		Node::Number(number @ Number::Quotient(..)) => Ok(format!("{:?}", f64::from(*number))),
 		Node::True => Ok("1".to_string()),
 		Node::False => Ok("0".to_string()),
 		Node::Text(text) => Ok(format!("'{}'", text.replace('\'', "''"))),
@@ -491,6 +504,8 @@ fn bind(sqlite: &Sqlite, statement: Handle, index: c_int, value: &Node) -> Resul
 			Node::Empty => (sqlite.bind_null)(statement, index),
 			Node::Number(Number::Int(number)) => (sqlite.bind_int64)(statement, index, *number),
 			Node::Number(Number::Float(number)) => (sqlite.bind_double)(statement, index, *number),
+			// an exact amount (500 g is 1/2 kg): the column keeps it as a REAL
+			Node::Number(number @ Number::Quotient(..)) => (sqlite.bind_double)(statement, index, f64::from(*number)),
 			Node::True => (sqlite.bind_int64)(statement, index, 1),
 			Node::False => (sqlite.bind_int64)(statement, index, 0),
 			Node::Text(_) | Node::Char(_) => {

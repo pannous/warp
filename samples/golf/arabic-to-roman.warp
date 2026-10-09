@@ -1,0 +1,12 @@
+// code.golf arabic-to-roman: each argument, 1 to 3999, in roman numerals: the largest symbol that fits, again and again
+use os
+symbols = [1000: "M", 900: "CM", 500: "D", 400: "CD", 100: "C", 90: "XC", 50: "L", 40: "XL", 10: "X", 9: "IX", 5: "V", 4: "IV", 1: "I"]
+def roman(n)
+	numeral = ""
+	for value, symbol in symbols:
+		while n >= value:
+			numeral += symbol
+			n -= value
+	numeral
+for argument in args:
+	print roman(int(argument))

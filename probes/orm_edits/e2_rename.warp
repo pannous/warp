@@ -1,0 +1,37 @@
+// Plain classes as database tables (notes/orm.md): no base class, no annotations, a table is a list of a class.
+// Natively the rows live in orm.database.sqlite beside this file, so a second run finds them there.
+
+class Team{@was(name) title: text; players: [Person]}
+class Person{name: text; age: int; team: Team?}
+
+// registering a list of a class from the database makes it a table, with an implicit id per row;
+stored teams: [Team]
+stored people: [Person]
+
+if count(people) == 0 {
+	people.add(Person("Ann", 7))  // INSERT: the instance gets the id of its row
+	people.add(Person("Bo", 30))
+	people.add(Person("Cy", 41))
+}
+
+// a filter is SQL where SQL says the same; the fields of each row can be named bare
+grown = people where it.age > 18
+print "grown: " + count(grown)
+
+// any warp function works inside a filter too: SQLite calls back into the program for each row
+is_prime(n) := n > 1 and count([d for d in 2..n if n % d == 0]) == 0
+print "prime ages: " + count(people where is_prime(it.age))
+
+// a row read from the table is an ordinary instance that knows its row
+bo = grown#1
+bo.name + " has row " + bo.id
+
+// a field of a table's class is a foreign key; a list of one is the rows pointing back, read when used
+if count(teams) == 0 { teams.add(Team("Climbers")) }
+climbers = teams#1
+climbers.players.add(bo)  // writes bo.team through
+print climbers.title + ": " + count(climbers.players)
+
+bo.age += 1
+save bo
+print "teams: " + str(teams.map(t => t.title))

@@ -1,0 +1,6 @@
+// code.golf diamonds: diamonds of sizes 1 to 9 from the digits 1 up to the size and back, all centered alike
+def row(width) := " " * (9 - width) + (1 to width).join("") + (width - 1 down to 1).join("")
+for size in 1 to 9:
+	for width in 1 to size: print row(width)
+	for width in size - 1 down to 1: print row(width)
+	if size < 9 then print ""

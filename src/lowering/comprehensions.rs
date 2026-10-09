@@ -100,6 +100,11 @@ fn fields_of_it(condition: Node, fields: &[String], variables: &HashSet<String>)
 }
 
 fn where_filters(node: Node, lists: &mut Lists) -> Node {
+	if let Node::List(items, bracket, separator) = node.drop_meta() {
+		if let Some(filtered_loop) = loop_over_filtered(items, lists) {
+			return Node::List(filtered_loop, bracket.clone(), separator.clone());
+		}
+	}
 	let node = node.map_children(|child| where_filters(child, lists));
 	let Node::List(items, bracket, separator) = node else { return node };
 	let Some(at) = where_position(&items) else { return Node::List(items, bracket, separator) };
@@ -109,8 +114,7 @@ fn where_filters(node: Node, lists: &mut Lists) -> Node {
 		_ => {
 			let condition = lists.with_fields_of_it(&items[at - 1], items[at + 1].clone());
 			match crate::database_tables::queried(&items[at - 1], &condition, &lists.variables, &mut lists.tables) {
-				Some(Ok((ids, kept))) => Node::List(vec![ids, where_comprehension(&items[at - 1], &kept)], Bracket::Round, Separator::Semicolon),
-				Some(Err(error)) => error,
+				Some(Ok(found) | Err(found)) => found,
 				None => where_comprehension(&items[at - 1], &condition),
 			}
 		}
@@ -123,6 +127,21 @@ fn where_filters(node: Node, lists: &mut Lists) -> Node {
 	items.truncate(at - 1);
 	items.push(filtered);
 	Node::List(items, bracket, separator)
+}
+
+/// `for p in people where p.age > 18 { … }` walks `people where it.age > 18`, the loop variable read as `it` (a
+/// table's filter stays its SQL)
+fn loop_over_filtered(items: &[Node], lists: &mut Lists) -> Option<Vec<Node>> {
+	// `for x in (xs where c) {…}` as the parser groups the filter
+	let items = crate::list_phrases::words(items);
+	let [for_word, variable, in_word, sequence, where_word, condition, body] = items.as_slice() else { return None };
+	if !is_word(for_word, FOR_WORD) || !is_word(in_word, IN_WORD) || !is_word(where_word, WHERE_WORD) || !matches!(body.drop_meta(), Node::List(_, Bracket::Curly, _)) {
+		return None;
+	}
+	let Node::Symbol(name) = variable.drop_meta() else { return None };
+	let condition = substitute(condition.clone(), name, &Node::Symbol(crate::lambdas::IMPLICIT_PARAMETER.to_string()));
+	let filter = Node::List(vec![sequence.clone(), where_word.clone(), condition], Bracket::None, Separator::Space);
+	Some(vec![for_word.clone(), variable.clone(), in_word.clone(), where_filters(filter, lists), where_filters(body.clone(), lists)])
 }
 
 /// `[it, (for it in xs if), condition]`, as the parser groups a comprehension
@@ -171,14 +190,18 @@ fn where_reassociated(node: Node) -> Node {
 	}
 }
 
-/// `[[xs, where], it]`, as the right side of an assignment parses, as `[xs, where, it]`
+/// `[[xs, where], it]` and `[xs, [where, 4 + it]]`, as the right side of an assignment parses, as `[xs, where, it]`
 fn where_flattened(node: Node) -> Node {
 	let Node::List(items, bracket, separator) = node else { return node };
-	let Some(Node::List(inner, Bracket::None, _)) = items.first().map(Node::drop_meta) else { return Node::List(items, bracket, separator) };
-	if !inner.last().is_some_and(|word| matches!(word.drop_meta(), Node::Symbol(symbol) if symbol == WHERE_WORD)) {
-		return Node::List(items, bracket, separator);
-	}
-	let flat = inner.clone().into_iter().chain(items[1..].iter().cloned()).collect();
+	let words_of = |item: Option<&Node>| match item.map(Node::drop_meta) {
+		Some(Node::List(inner, Bracket::None, _)) => Some(inner.clone()),
+		_ => None,
+	};
+	let flat = match (words_of(items.first()), words_of(items.last())) {
+		(Some(inner), _) if inner.last().is_some_and(|word| is_word(word, WHERE_WORD)) => inner.into_iter().chain(items[1..].iter().cloned()).collect(),
+		(_, Some(inner)) if items.len() > 1 && inner.len() == 2 && is_word(&inner[0], WHERE_WORD) => items[..items.len() - 1].iter().cloned().chain(inner).collect(),
+		_ => items,
+	};
 	Node::List(flat, bracket, separator)
 }
 

@@ -31,7 +31,7 @@ pub const PAGE_ROUTE_INDEX: &str = "page·route_index";
 pub const REGEX_MATCH: &str = "matches";
 /// Where a layout shows the matched route
 const OUTLET: &str = "outlet";
-const PARAMETER_MARK: &str = ":";
+pub const PARAMETER_MARK: &str = ":";
 /// The types a parameter may declare (lib/router.warp route_fits)
 const PARAMETER_TYPES: [&str; 4] = ["int", "float", "text", "string"];
 /// URLPattern (card route-urlpattern): how often the last part may come ("?", "*", "+"), a regular expression "(…)"
@@ -45,7 +45,7 @@ const SEGMENT_CALL: &str = "route_segment(pattern, page_path(), parameter_name)"
 const PATH_TEMPLATE: &str = "let routed_path = page_path()";
 const MATCH_TEMPLATE: &str = "if route_matches(pattern, routed_path) and groups_fit { return index }";
 /// a parameter with a regular expression: absent (optional) or its part matching all of it
-const GROUP_TEMPLATE: &str = "route_segment(pattern, routed_path, parameter_name) == ø or matches(route_segment(pattern, routed_path, parameter_name), expression)";
+const GROUP_TEMPLATE: &str = "route_segment(pattern, page_path(), parameter_name) == ø or matches(route_segment(pattern, page_path(), parameter_name), expression)";
 const NO_ROUTE: &str = "-1";
 const INDEX_TEMPLATE: &str = "let routed_index = index_of_route()";
 const CHOICE_TEMPLATE: &str = "if routed_index == index { return chosen() }";
@@ -88,16 +88,23 @@ pub(crate) fn is_route(statement: &Node) -> bool {
 	route(statement).is_some()
 }
 
+/// A pattern's text; "/" parses as a character
+pub(crate) fn pattern_text(pattern: &Node) -> String {
+	match pattern.drop_meta() {
+		Node::Char(character) => character.to_string(),
+		other => other.name(),
+	}
+}
+
 /// `route "/users/:id" {…}`: the pattern ("/" parses as a character) and the block's items
 pub(crate) fn route(statement: &Node) -> Option<Route> {
 	let Node::List(items, _, _) = statement.drop_meta() else { return None };
 	let [word, pattern, block] = items.as_slice() else { return None };
 	let Node::List(body, Bracket::Curly, _) = block.drop_meta() else { return None };
-	let pattern = match pattern.drop_meta() {
-		Node::Text(text) => text.clone(),
-		Node::Char(character) => character.to_string(),
-		_ => return None,
-	};
+	if !matches!(pattern.drop_meta(), Node::Text(_) | Node::Char(_)) {
+		return None;
+	}
+	let pattern = pattern_text(pattern);
 	(word.drop_meta().name() == ROUTE_WORD).then(|| (pattern, body.clone()))
 }
 
@@ -147,6 +154,39 @@ fn parameters(pattern: &str) -> impl Iterator<Item = Parameter<'_>> {
 		let (name, kind) = declared.split_once(PARAMETER_MARK).map_or((declared, None), |(name, kind)| (name, Some(kind)));
 		Parameter { name, kind: kind.filter(|_| !marked && group.is_none()), group }
 	})
+}
+
+/// Whether `path` matches `pattern`, as lib/router.warp route_matches, for a server choosing its route before any warp
+/// code runs: fixed parts equal, a typed parameter's part of its type, a mark on the last part, "*" any path
+pub fn path_matches(pattern: &str, path: &str) -> bool {
+	if pattern == ANY_PARTS {
+		return true;
+	}
+	let parts = |text: &'_ str| text.split(PATH_SEPARATOR).filter(|part| !part.is_empty()).map(str::to_string).collect::<Vec<String>>();
+	let (wanted, given) = (parts(pattern), parts(path));
+	let mark = wanted.last().and_then(|last| if last == ANY_PARTS { Some('*') } else { last.strip_prefix(PARAMETER_MARK)?.chars().last().filter(|end| PART_MARKS.contains(end)) });
+	let fixed = wanted.len() - usize::from(mark.is_some());
+	let counted = match mark {
+		None => given.len() == fixed,
+		Some('?') => (fixed..=fixed + 1).contains(&given.len()),
+		Some('+') => given.len() > fixed,
+		Some(_) => given.len() >= fixed,
+	};
+	counted && wanted.iter().zip(&given).take(fixed).all(|(part, segment)| match part.strip_prefix(PARAMETER_MARK) {
+		None => part == segment,
+		Some(_) => parameters(part).next().and_then(|parameter| parameter.kind).is_none_or(|kind| part_fits(kind, segment)),
+	})
+}
+
+/// Whether a path part is a value of the type a parameter declares (lib/router.warp route_fits): digits, a float's
+/// with at most one dot
+fn part_fits(kind: &str, segment: &str) -> bool {
+	let dots = match kind {
+		"int" => 0,
+		"float" => 1,
+		_ => return true,
+	};
+	!segment.is_empty() && segment.chars().all(|character| character.is_ascii_digit() || character == '.') && segment.matches('.').count() <= dots
 }
 
 /// What a pattern says wrong, loudly: a mark on a part before the last, a group without a name, a type no path part has

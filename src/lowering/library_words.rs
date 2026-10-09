@@ -43,9 +43,10 @@ const COUNT_SUBSTRING_TEMPLATE: &str = "count(split(counted_haystack, counted_ne
 const FOR_WORD: &str = "for";
 /// `log(x)` is libm's natural logarithm; `log(x, base)` divides by the base's
 const LOG_WORD: &str = "log";
+const OF_WORD: &str = "of";
 
 /// Canonical word and the spellings that mean it
-const SYNONYMS: [(&str, &[&str]); 25] = [
+const SYNONYMS: [(&str, &[&str]); 26] = [
 	(LIST_WORD, &[]),
 	(MAP_KEYS, &["keys"]),
 	(MAP_VALUES, &["values"]),
@@ -70,6 +71,7 @@ const SYNONYMS: [(&str, &[&str]); 25] = [
 	("replace", &[]),
 	(ORD, &["ordinal", CODEPOINT]),
 	(IS_DIGIT, &["isdigit"]),
+	("mean", &["average"]),
 	(IS_ALPHA, &["is_letter", "isalpha"]),
 	("is_alphanumeric", &["is_alnum", "isalnum"]),
 	(crate::mutation::UNWRAP, &[]),
@@ -92,8 +94,19 @@ pub const ORD: &str = "ord";
 pub const CODEPOINT: &str = "codepoint";
 /// `slice(x, start, end)`: the items or characters start…end-1, 0-based (`a[1:3]`, `s.slice(1)`)
 pub const SLICE: &str = "slice";
-/// Trailing arguments a word may leave out, passed as ø: `m.get(k)` is ø for a missing key, `s.slice(2)` slices to the end
-const OPTIONAL_ARGUMENTS: [(&str, usize); 2] = [(MAP_GET_OR, 1), (SLICE, 1)];
+/// Trailing arguments a word may leave out, passed as ø: `m.get(k)` is ø for a missing key, `s.slice(2)` slices to the end;
+/// `s.split` splits at spaces (left_out_argument)
+const OPTIONAL_ARGUMENTS: [(&str, usize); 3] = [(MAP_GET_OR, 1), (SLICE, 1), (SPLIT, 1)];
+const SPLIT: &str = "split";
+const SPLIT_SEPARATOR: &str = " ";
+/// What an optional argument left out is: the space `s.split` splits at, else ø
+fn left_out_argument(word: &str) -> Node {
+	match word {
+		SPLIT => Node::Text(SPLIT_SEPARATOR.to_string()),
+		_ => Node::Empty,
+	}
+}
+
 /// `b = a.copy()`: values are never shared, so the copy is the value itself
 const COPY: &str = "copy";
 /// `field_with(object, "name", value)`: a copy of the object with the field set; what `object.name = value` lowers to
@@ -131,9 +144,10 @@ const LIST_WORD: &str = "list";
 /// Conversions a method may name, `x.string` being `string(x)`
 const CONVERSION_METHODS: [&str; 4] = ["string", "str", "int", "float"];
 const LIST_CONSTRUCTORS: [&str; 4] = ["listOf", "mutableListOf", "arrayOf", "arrayListOf"];
-/// `round(x, 3)`, `x.round(3)`: x rounded to 3 digits after the point; `round(x)` stays the builtin
-const ROUND_TO: &str = "round_to";
-const ROUND: &str = "round";
+/// Words that mean another word with that many arguments (receiver included): `round(x, 3)`, `x.round(3)` is x rounded
+/// to 3 digits after the point (`round(x)` stays the builtin); `xs.first(3)`, `first 3 of xs` the first 3 items,
+/// `last(xs, 2)` the last 2 (lib/prelude.warp)
+const ARITY_VARIANTS: [(&str, usize, &str); 3] = [("round", 2, "round_to"), ("first", 2, "first_items"), ("last", 2, "last_items")];
 const IS_ALPHA: &str = "is_alpha";
 /// Hidden variables and placeholders of the `try`/`assert` templates
 const TRY_TEMPORARY: &str = "try_tmp";
@@ -217,10 +231,10 @@ fn arity(word: &str) -> usize {
 }
 
 /// The library words a name may stand for once this pass has run: its canonical spelling (`isdigit` → is_digit) and,
-/// for `round`, round_to (`round(x, 2)`). modules::resolve, which runs before, loads the prelude words by them
+/// its ARITY_VARIANTS (`round(x, 2)` round_to). modules::resolve, which runs before, loads the prelude words by them
 pub fn words_spelled_by(name: &str) -> Vec<&'static str> {
-	let rounding = (name == ROUND).then_some(ROUND_TO);
-	canonical_word(name).into_iter().chain(rounding).collect()
+	let variants = ARITY_VARIANTS.iter().filter(|(word, _, _)| *word == name).map(|(_, _, variant)| *variant);
+	canonical_word(name).into_iter().chain(variants).collect()
 }
 
 pub fn lower(node: Node) -> Node {
@@ -788,12 +802,23 @@ impl Lowering {
 
 	/// The library word a call of `name` with that many arguments (receiver included) means
 	fn library_word_for(&self, name: &str, argument_count: usize) -> Option<&'static str> {
-		let rounds_to_digits = name == ROUND && argument_count == 2 && !self.shadowed.contains(name);
-		if rounds_to_digits { Some(ROUND_TO) } else { self.library_word(name) }
+		self.arity_variant(name, argument_count).or_else(|| self.library_word(name))
+	}
+
+	/// The word `name` means with that many arguments, unless the program defines `name`
+	fn arity_variant(&self, name: &str, argument_count: usize) -> Option<&'static str> {
+		let variant = ARITY_VARIANTS.iter().find(|(word, count, _)| *word == name && *count == argument_count).map(|(_, _, variant)| *variant);
+		variant.filter(|_| !self.shadowed.contains(name))
 	}
 
 	/// `word(x, args)` and `word x args`
 	fn word_call(&self, items: &[Node], bracket: &Bracket, separator: &Separator) -> Option<Node> {
+		// `x = sum of xs`, `f() := sum of xs`: an assigned value nests the words after the first, `[sum, [of, xs]]`
+		if let [head, Node::List(rest, Bracket::None, Separator::Space)] = items {
+			if rest.first().is_some_and(is_of) {
+				return self.word_call(&[vec![head.clone()], rest.clone()].concat(), bracket, separator);
+			}
+		}
 		if let Some(lookup) = self.of_lookup(items) {
 			return Some(lookup);
 		}
@@ -820,7 +845,16 @@ impl Lowering {
 				return Some(Node::Key(Box::new(log_of(value)), Op::Div, Box::new(log_of(base))));
 			}
 		}
-		let word = self.library_word_for(head, items.len() - 1)?;
+		// `first 3 of xs` is `first_items(xs, 3)`
+		if let [_, argument, of, object] = items {
+			if let (true, Some(word)) = (is_of(of), self.arity_variant(head, 2)) {
+				return Some(self.call(word, &items[0], vec![self.expand(object.clone()), self.expand(argument.clone())], false));
+			}
+		}
+		// `first of xs` has one argument, as `first sorted xs`: a library word after it is its argument's prefix
+		let prefixes_its_argument = *bracket == Bracket::None && items.get(1).is_some_and(|next| self.library_word(&next.drop_meta().name()).is_some());
+		let argument_count = if items.get(1).is_some_and(is_of) || prefixes_its_argument { 1 } else { items.len() - 1 };
+		let word = self.library_word_for(head, argument_count)?;
 		// `sorted "listen" == sorted "silent"`: the word takes the operand of the comparison, as a defined function of `it` does
 		if let ([_, argument], Bracket::None, Separator::Space) = (items, bracket, separator) {
 			if is_comparison(argument) {
@@ -828,7 +862,7 @@ impl Lowering {
 			}
 		}
 		if let [_, of, rest @ ..] = items {
-			if matches!(of.drop_meta(), Node::Symbol(word) if word == "of") && !rest.is_empty() {
+			if is_of(of) && !rest.is_empty() {
 				// `first of xs` is `first(xs)`
 				let argument = match rest {
 					[single] => single.clone(),
@@ -1084,12 +1118,12 @@ impl Lowering {
 	fn of_lookup(&self, items: &[Node]) -> Option<Node> {
 		let [word_node, of, rest @ ..] = items else { return None };
 		let Node::Symbol(name) = word_node.drop_meta() else { return None };
-		if !matches!(of.drop_meta(), Node::Symbol(word) if word == "of") || rest.is_empty() {
+		if !is_of(of) || rest.is_empty() {
 			return None;
 		}
 		let object = match rest {
 			[single] => single.clone(),
-			[_, next_of, ..] if matches!(next_of.drop_meta(), Node::Symbol(word) if word == "of") => self.of_lookup(rest)?,
+			[_, next_of, ..] if is_of(next_of) => self.of_lookup(rest)?,
 			_ => return None,
 		};
 		let literal = self.object_literal(&object);
@@ -1105,7 +1139,7 @@ impl Lowering {
 		let wanted = arity(word);
 		let optional = OPTIONAL_ARGUMENTS.iter().find(|(name, _)| *name == word).map_or(0, |(_, optional)| *optional);
 		if arguments.len() < wanted && arguments.len() + optional >= wanted {
-			arguments.resize(wanted, Node::Empty);
+			arguments.resize(wanted, left_out_argument(word));
 		}
 		// objects are references (P200): `x.copy()` is a new deep copy, `x.copy(shallow: true)` a shallow one (P205)
 		if let (COPY, [receiver], shallow) | (COPY, [receiver, shallow], _) = (word, arguments.as_slice(), &Node::False) {
@@ -1318,4 +1352,9 @@ fn keyword_definition_parameters(items: &[Node]) -> Option<Vec<String>> {
 		Node::Key(name, Op::Assign, _) => Some(name.name()),
 		_ => None,
 	}).collect())
+}
+
+/// The word `of` (`first of xs`, `name of person`)
+fn is_of(node: &Node) -> bool {
+	matches!(node.drop_meta(), Node::Symbol(word) if word == OF_WORD)
 }

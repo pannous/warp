@@ -1,6 +1,4 @@
-use warp::analyzer::analyze;
 use warp::extensions::{assert_throws, print};
-use warp::wasm_emitter::eval;
 use warp::warp_parser::parse;
 use warp::Node;
 use warp::Node::{Empty, False, True};
@@ -1240,10 +1238,11 @@ fn test_logarithm2() {
 	is!("use math; ℯ⌟", 1.); // P226: the postfix ⌟ is the natural log
 	is!("use math; ℯ⌟", 1.);
 	is!("log10(100)", 2.); // requires pre-parsing lib and dictionary lookup
-	skip!( // P226b (queued): what ⌟ with the base first means
-		is!("use math; 10⌟100", 2.);
+	// P226b: x⌟b is log base b of x, so the base comes second
+	is!("use math; 10⌟100", 0.5);
+	is!("10⌟100", 0.5);
+	skip!( // a subscript base ₁₀ is undecided
 		is!("₁₀⌟100", 2.); // requires pre-parsing lib and dynamic operator-list extension OR 10⌟ as function name
-		is!("10⌟100", 2.); // requires pre-parsing lib and dynamic operator-list extension OR 10⌟ as function name
 	);
 
 	//    eq!(ln(e),abs(1));
@@ -1567,23 +1566,8 @@ fn test_all_wasm() {
 // run in APP (or browser?);
 #[test]
 fn test_dom() {
-	print("test_dom");
-	// preRegisterFunctions();
-	let mut _result = analyze(parse("getElementById('canvas')"));
-	// eq!(result.kind, call);
-	_result = eval("getElementById('canvas');");
-	//	print(typeName(result.kind));
-	//	eq!(result.kind, strings); // why?
-	//	eq!(result.kind, longs); // todo: can't use smart pointers for elusive externref
-	//	eq!(result.kind, bools); // todo: can't use smart pointers for elusive externref
-	// print(typeName(30));
-	// print(typeName(9));
-	//	eq!(result.kind, 30);//
-	//	eq!(result.kind,9);//
-	//	eq!(result.kind,  externref); // todo: can't use smart pointers for elusive externref
-	//	result = eval("document.getElementById('canvas');");
-	//	result = analyze(parse("$canvas"));
-	//	eq!(result.kind,  externref);
+	// the page's document is a module the program asks for (`use js document`, tests/web/test_web.rs test_dom)
+	crate::common::fails_with("getElementById('canvas')", "undefined function: getElementById");
 }
 
 #[test]

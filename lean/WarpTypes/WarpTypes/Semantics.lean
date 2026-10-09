@@ -117,6 +117,13 @@ def peel (s : String) : Option (String × String) :=
   | [] => none
   | c :: cs => some (c.toString, String.ofList cs)
 
+/-- a walk over a text gives one-character texts: codepoints -/
+theorem peel_codepoint {s c rest : String} (h : peel s = some (c, rest)) : c.length = 1 := by
+  unfold peel at h
+  split at h
+  · cases h
+  · cases h; simp [Char.toString]
+
 /-- one step of a walk over a text: done at the end, else the body for the first character, then the rest -/
 def walkText (y : String) (s : String) (b last : Expr) : Expr :=
   match peel s with
@@ -133,7 +140,40 @@ def repeatValues (s : String) (n : Expr) : Expr :=
   | some k => .text (String.join (List.replicate k.toNat s))
   | none => .error "a text repeats a whole number of times"
 
-def arithValues (op : ArithOp) (a b : Expr) : Expr :=
+def isQuantityValue : Expr → Bool
+  | .qty _ _ => true
+  | _ => false
+
+/-- a quantity's dimensions, a number's none (`[]`) -/
+def valueDims : Expr → Option Dims
+  | .qty _ d => some d
+  | v => if isNumber v then some [] else none
+
+def amount : Expr → Int
+  | .qty n _ => n
+  | v => asNumber v
+
+/-- the value of an amount in dimensions d: a number when they cancel -/
+def quantityValue (n : Int) (d : Dims) : Expr := if d = [] then .num n else .qty n d
+
+def DIMENSION_ERROR : String := "DimensionError"
+
+/-- `-`, `*` and `/` with a quantity side (ArithOp.quantityTy) -/
+def quantityValues (op : ArithOp) (a b : Expr) : Expr :=
+  if op = .sub then
+    match a, b with
+    | .qty x d, .qty y e => if d = e then .qty (x - y) d else .error DIMENSION_ERROR
+    | _, _ => .error DIMENSION_ERROR
+  else
+  match valueDims a, valueDims b with
+  | some d, some e =>
+    match op.dims d e with
+    | some dims => if op = .div && amount b == 0 then .error "divide by zero" else quantityValue (op.apply (amount a) (amount b)) dims
+    | none => .error DIMENSION_ERROR
+  | _, _ => .error DIMENSION_ERROR
+
+/-- `-`, `*`, `%`, `/` and `^` without quantities: numbers, or a text repeated -/
+def plainArithValues (op : ArithOp) (a b : Expr) : Expr :=
   match op, a, b with
   | .mul, .text s, n | .mul, n, .text s => repeatValues s n
   | _, _, _ => numberValues op a b
@@ -143,6 +183,10 @@ where numberValues (op : ArithOp) (a b : Expr) : Expr :=
   match asInt a, asInt b with
   | some x, some y => if (op == .div && x % y != 0) || (op == .pow && y < 0) then .num (op.apply x y) else .int (op.apply x y)
   | _, _ => .num (op.apply (asNumber a) (asNumber b))
+
+/-- `-`, `*`, `%`, `/` and `^` on values -/
+def arithValues (op : ArithOp) (a b : Expr) : Expr :=
+  if (isQuantityValue a || isQuantityValue b) = true then quantityValues op a b else plainArithValues op a b
 
 def isList : Expr → Bool
   | .nil | .cons _ _ => true
@@ -154,6 +198,9 @@ def concat : Expr → Expr → Expr
 
 /-- `+`: two lists concatenate (`xs + ys`), numbers add, a text side makes a text -/
 def addValues (a b : Expr) : Expr :=
+  match a, b with
+  | .qty x d, .qty y e => if d = e then .qty (x + y) d else .error DIMENSION_ERROR
+  | _, _ =>
   if isList a && isList b then concat a b else
   if !((isNumber a || isText a) && (isNumber b || isText b)) then .error "not addable" else
   if isText a || isText b then .text (render a ++ render b) else
@@ -163,6 +210,9 @@ def addValues (a b : Expr) : Expr :=
 
 /-- numbers by value, texts in codepoint order (`"a" < "b"`) -/
 def ltValues (a b : Expr) : Expr :=
+  match a, b with
+  | .qty x d, .qty y e => if d = e then .bool (decide (x < y)) else .error DIMENSION_ERROR
+  | _, _ =>
   if isNumber a && isNumber b then .bool (decide (asNumber a < asNumber b)) else
   match a, b with
   | .text x, .text y => .bool (decide (x < y))
@@ -219,7 +269,8 @@ def valueType : Expr → Option Ty
   | .bool _ => some .bool
   | .int _ => some .int
   | .num _ => some .number
-  | .text _ => some .text
+  | .qty _ d => some (.quantity d)
+  | .text s => some (textTy s)
   | .unit => some .unit
   | .nil => some (.list .never)
   | .ref _ p => some (.cls p)
@@ -233,11 +284,50 @@ def valueType : Expr → Option Ty
     | _, _ => none
   | _ => none
 
-/-- the run-time type test of a cast -/
-def fits (v : Expr) (t : Ty) : Bool :=
-  match valueType v with
-  | some tv => sub tv t
-  | none => false
+/-- the run-time type test of a cast: an int fits a fixed width when it is in its range, a list fits a list type when
+each item fits its element type, any other value when its type is below t -/
+def fits : Expr → Ty → Bool
+  | .int n, .ranged lo hi => decide (lo ≤ n ∧ n ≤ hi)
+  | .cons h t, .list e => fits h e && fits t (.list e)
+  | v, t =>
+    match valueType v with
+    | some tv => sub tv t
+    | none => false
+
+/-- a value as warp prints it, shared lists read in store μ down to `depth` levels; `?` where the model does not keep
+what warp prints (numbers, instances) -/
+def display (μ : Store) : Nat → Expr → String
+  | _, .bool b => if b then "yes" else "no"
+  | _, .int n => toString n
+  | _, .text s => s!"\"{s}\""
+  | depth + 1, .lref a t => display μ depth (μ.items (.lref a t))
+  | depth, .cons h t => "[" ++ " ".intercalate (showItems depth (.cons h t)) ++ "]"
+  | _, _ => "?"
+where showItems (depth : Nat) : Expr → List String
+  | .cons h t => display μ depth h :: showItems depth t
+  | _ => []
+
+/-- how deep `display` follows shared lists: a list that holds itself prints `?` there -/
+def DISPLAY_DEPTH : Nat := 8
+
+/-- `v as text`: a text as it is, the empty list ø, anything else as warp prints it -/
+def textForm (μ : Store) (v : Expr) : String :=
+  match μ.items v with
+  | .text s => s
+  | .nil => "ø"
+  | v => display μ DISPLAY_DEPTH v
+
+/-- `v as t` of a value: a scalar converts to text, int, number or bool (a number to int keeps its whole part, a text
+is parsed); to any other type the value is checked as a cast checks it -/
+def convertValue (μ : Store) (v : Expr) : Ty → Expr
+  | .text => .text (textForm μ v)
+  | .bool => .bool (truthy (μ.items v))
+  | .int => if isNumber v then .int (asNumber v) else parsed .int v
+  | .number => if isNumber v then .num (asNumber v) else parsed .num v
+  | t => if fits v t then v else .error "cannot cast"
+where parsed (make : Int → Expr) : Expr → Expr
+  | .text s => (s.toInt?.map make).getD (.error "invalid number")
+  | _ => .error "cannot cast"
 
 /-- `xs.add(v)` of values: v joins the shared list if it fits the list's element type -/
 def pushValues (μ : Store) : Expr → Expr → Expr × Store
@@ -292,6 +382,7 @@ inductive Frame where
   | letIn (y : String) (t : Ty) (b : Expr)
   | call (f : String)
   | cast (ts : List Ty)
+  | conv (t : Ty)
   | broadcast (f : String)
   | get (f : String)
   | setL (f : String) (v : Expr) | setR (o : Expr) (f : String)
@@ -332,6 +423,7 @@ def plug : Frame → Expr → Expr
   | letIn y t b, e => .letIn y t e b
   | call f, e => .call f e
   | cast ts, e => .cast e ts
+  | conv t, e => .conv e t
   | broadcast f, e => .broadcast f e
   | get f, e => .get e f
   | setL f v, e => .set e f v
@@ -402,6 +494,7 @@ inductive Step (P : Program) : Expr × Store → Expr × Store → Prop where
   | setAt {l i v μ} : l.isValue = true → i.isValue = true → v.isValue = true →
       Step P (.setAt l i v, μ) (setAtValues μ l i v)
   | cast {v ts μ} : v.isValue = true → Step P (.cast v ts, μ) (if ts.any (fits v) then v else .error "type mismatch", μ)
+  | conv {v t μ} : v.isValue = true → Step P (.conv v t, μ) (convertValue μ v t, μ)
   | new {p μ} : Step P (.new p, μ) (.ref μ.heap.length p, μ.alloc p)
   | get {o f μ} : o.isValue = true → Step P (.get o f, μ) (readField μ o f, μ)
   | set {o f v μ} : o.isValue = true → v.isValue = true → Step P (.set o f v, μ) (writeField μ o f v)

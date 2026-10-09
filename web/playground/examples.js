@@ -135,6 +135,25 @@ for x in 0..32 {
   sleep(30)
 }
 "done"` },
+	frames: { value: '"done"', canvases: 1, code: `// without a sleep too: each show() replaces the picture of the same size
+use draw
+canvas(32, 16)
+for x in 0..32 {
+  clear(paper)
+  circle(x, 8, 4, purple)
+  show()
+}
+"done"` },
+	shader: { value: '"done"', canvases: 1, code: `// paint a WGSL fragment shader: the GPU colors every pixel, values change each frame
+gradient = shader {
+  @fragment fn main(@builtin(position) at: vec4f) -> @location(0) vec4f {
+    return vec4f(at.x / 64.0, at.y / 32.0, values.blue, 1.0);
+  }
+}
+for frame in 0..20 {
+  paint(gradient, 64, 32, {blue: frame / 20})
+}
+"done"` },
 	mouse: { value: '"done"', canvases: 1, code: `// move the mouse over the canvas: the dot follows
 use draw
 canvas(48, 24)
@@ -142,6 +161,24 @@ for frame in 0..200 {
   clear(paper)
   circle(mouse_x, mouse_y, 3, if mouse_down then red else blue)
   show()
+  sleep(30)
+}
+"done"` },
+	"shader mouse": { value: '"done"', canvases: 1, code: `// a shader under the mouse: rings ripple out from the pointer, a press lights them up
+// $name in a shader is the warp variable name, read at each paint
+start = clock()
+ripples = shader {
+  @fragment fn main(@builtin(position) at: vec4f) -> @location(0) vec4f {
+    let away = distance(at.xy, $mouse);
+    let ring = 0.5 + 0.5 * sin(away * 0.8 - $seconds * 6.0);
+    let light = 0.35 + 0.65 * $mouse_down;
+    return vec4f(ring * light, ring * light * 0.4, light * (1.0 - away / 64.0), 1.0);
+  }
+}
+for frame in 0..300 {
+  mouse = [mouse_x + 0.5, mouse_y + 0.5]
+  seconds = (clock() - start) / 1000
+  paint(ripples, 64, 32)
   sleep(30)
 }
 "done"` },
@@ -166,7 +203,7 @@ step() := {
 }
 population = 15
 paint(cells, width, height)
-on every 500 ms { step(); population = sum(cells); paint(cells, width, height) }
+on every 500ms { step(); population = sum(cells); paint(cells, width, height) }
 population` },
 	"system values": { value: '"online"', code: `// system values like dark mode and online are signals too
 on change dark mode { if value { print "dark mode on" } else { print "light mode on" } }
@@ -177,7 +214,7 @@ print "working"
 42` },
 	tasks: { value: '"done"', printed: "first!\nlate\n", code: `// a task runs beside the program, which waits for it at the end
 go {
-	sleep(100 ms)
+	sleep(100ms)
 	print "late"
 }
 print "first!"

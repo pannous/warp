@@ -56,6 +56,7 @@ theorem frame_typing {Γ} (F : Frame) {e t} (h : HasType P Γ (F.plug e) t) :
   case call =>
     cases h with | call hf he st => exact ⟨_, he, fun h' s => ⟨_, .call hf h' (sub_trans s st), sub_refl _⟩⟩
   case cast => cases h with | cast he => exact ⟨_, he, fun h' _ => ⟨_, .cast h', sub_refl _⟩⟩
+  case conv => cases h with | conv he => exact ⟨_, he, fun h' _ => ⟨_, .conv h', sub_refl _⟩⟩
   case broadcast =>
     cases h with | broadcast hf he hel ha =>
     refine ⟨_, he, fun h' s => ?_⟩
@@ -437,6 +438,10 @@ theorem preservation (hP : ProgramOk P) {s s' : Expr × Store} (hs : Step P s s'
         obtain ⟨tv, htv, st⟩ := fits_typed (P := P) (Γ := Ctx.empty) hfit
         exact ⟨tv, htv, sub_trans st (sub_joinAll ht)⟩
       · exact ⟨_, .error, sub_never _⟩
+  | @conv v t μ hv =>
+    intro t' h hμ
+    cases h with
+    | conv _ => exact ⟨convertValue_typed μ t, hμ⟩
   | new => intro t h hμ; cases h; exact ⟨⟨_, .ref, sub_refl _⟩, hμ.1, hμ.2.1.alloc _, hμ.2.2⟩
   | @get o f μ vo =>
     intro t h hμ
@@ -525,12 +530,14 @@ theorem preservation (hP : ProgramOk P) {s s' : Expr × Store} (hs : Step P s s'
     intro t h hμ
     cases h with
     | forIn hl sT hb hd =>
-      cases hl
+      rename_i tl T tb td
+      have sT' : sub .codepoint T = true := by cases hl <;> simpa [elementTy, Ty.isText] using sT
       unfold walkText
       split
       · exact ⟨⟨_, hd, sub_trans (join_upper_left _ _) (join_upper_right _ _)⟩, hμ⟩
-      · obtain ⟨_, h1, s1⟩ := let_typed hb rfl .text (by simpa [elementTy] using sT)
-        exact ⟨⟨_, .forIn .text sT hb h1, loop_bound s1⟩, hμ⟩
+      · rename_i c rest hp
+        obtain ⟨_, h1, s1⟩ := let_typed hb rfl (.codepoint (peel_codepoint hp)) sT'
+        exact ⟨⟨_, .forIn (.ofText rest) (by simpa using sT') hb h1, loop_bound s1⟩, hμ⟩
   | @forCons y hd tl b v μ vh vt _ =>
     intro t h hμ
     cases h with
@@ -577,7 +584,7 @@ theorem steps {μ : Store} {e : Expr} {s'} (hs : Step P (e, μ) s') : Progresses
 theorem progress {Γ e t} (h : HasType P Γ e t) (hΓ : Γ = Ctx.empty) {μ : Store} (hμ : StoreOk P μ) :
     Progresses P μ e := by
   induction h generalizing μ with
-  | bool | int | num | text | unit | nil => exact .inl rfl
+  | bool | int | intIn | num | qty | text | codepoint | unit | nil => exact .inl rfl
   | @cons _ a b _ _ _ _ _ _ ih1 ih2 =>
     exact in_frame (.consL b) rfl (ih1 hΓ hμ) fun va =>
       in_frame (.consR a) va (ih2 hΓ hμ) fun vb => .inl (by simp [Frame.plug, isValue, va, vb])
@@ -627,6 +634,7 @@ theorem progress {Γ e t} (h : HasType P Γ e t) (hΓ : Γ = Ctx.empty) {μ : St
     · exact steps (.tryAbort hv)
     · exact steps (.tryStep hs)
   | @cast _ _ ts _ _ ih => exact in_frame (.cast ts) rfl (ih hΓ hμ) fun v => steps (.cast v)
+  | @conv _ _ t _ _ ih => exact in_frame (.conv t) rfl (ih hΓ hμ) fun v => steps (.conv v)
   | @broadcast _ f _ _ _ _ _ he _ _ ih =>
     refine in_frame (.broadcast f) rfl (ih hΓ hμ) fun v => ?_
     rename_i hel _

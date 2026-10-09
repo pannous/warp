@@ -165,6 +165,11 @@ pub(super) fn collect_variables_inner(node: &Node, scope: &mut Scope, skip_first
 		Node::Key(left, op, right) if op.is_compound_assign() => {
 			if let Node::Symbol(name) = left.drop_meta() {
 				widen_to_float(scope, name, right);
+				// `out += x` of a number of run-time kind may add a float, as `out = out + x` does; an evident other kind
+				// (`s += "ab"` of an Int) stays the type error of emit_compound_type_error
+				if crate::analyzer::inference::is_run_time_kind(&binding_kind(right, scope)) {
+					widen_to_node(scope, name, &Node::Key(left.clone(), op.base_op(), right.clone()));
+				}
 				// `xs += [v]` (a lowered `xs.push(v)`) types xs as `xs = xs + [v]` does
 				if *op == Op::AddAssign {
 					type_list_by_first_append(name, &Node::Key(left.clone(), Op::Add, right.clone()), scope);
@@ -276,7 +281,10 @@ pub(super) fn widen_to_node(scope: &mut Scope, name: &str, value: &Node) {
 	let mixes = |a: Kind, b: Kind| a == b || [a, b].iter().all(|kind| matches!(kind, Kind::Int | Kind::Float)) || [a, b].iter().all(|kind| matches!(kind, Kind::Text | Kind::Codepoint));
 	// an element of unknown kind may be an object: `item = 2` earlier, then `for item in basket` (samples/natural.warp)
 	let unknown_element = assigned == Kind::Empty && matches!(value.drop_meta(), Node::Key(_, Op::Hash, _));
-	let other_kind = unknown_element || CONCRETE_KINDS.contains(&assigned) && !mixes(local.kind, assigned);
+	// a number of run-time kind may be a float: `out = out + x` of an element of unknown kind, `total = total + run.load`
+	let run_time_number = local.kind == Kind::Int && crate::analyzer::inference::is_run_time_kind(&assigned) && !matches!(value.drop_meta(), Node::Empty)
+		|| assigned == Kind::Data && matches!(value.drop_meta(), Node::Key(_, op, _) if op.is_arithmetic());
+	let other_kind = unknown_element || run_time_number || CONCRETE_KINDS.contains(&assigned) && !mixes(local.kind, assigned);
 	if CONCRETE_KINDS.contains(&local.kind) && other_kind {
 		local.kind = Kind::Empty;
 		local.type_node = None;
@@ -291,6 +299,8 @@ pub(super) fn evident_kind(value: &Node, known: &HashMap<String, Kind>) -> Optio
 		Node::Number(_) => Some(Kind::Int),
 		Node::Text(_) | Node::Char(_) => Some(Kind::Text),
 		Node::List(_, Bracket::Square, _) => Some(Kind::List),
+		// `3.7 as int`: the type's kind (card kind-name)
+		Node::Key(_, Op::As, type_name) => super::checks::builtin_type_kind(&type_name.drop_meta().name()),
 		Node::Key(left, op, right) if op.is_arithmetic() => match (evident_kind(left, known)?, evident_kind(right, known)?) {
 			(Kind::Int, Kind::Int) => Some(Kind::Int),
 			(Kind::Int | Kind::Float, Kind::Int | Kind::Float) => Some(Kind::Float),
@@ -374,6 +384,7 @@ impl EvidentKind {
 		match value.drop_meta() {
 			Node::True | Node::False => Some(EvidentKind::Bool),
 			Node::Key(_, op, _) if op.is_comparison() => Some(EvidentKind::Bool),
+			Node::Key(_, Op::As, type_name) if super::checks::is_bool_type(&type_name.drop_meta().name()) => Some(EvidentKind::Bool),
 			Node::Key(_, Op::Arrow | Op::FatArrow, _) => Some(EvidentKind::Function),
 			_ => evident_kind(value, results).map(EvidentKind::Of),
 		}
@@ -848,11 +859,12 @@ impl Scope {
 		local
 	}
 
-	/// Define a function parameter
-	pub fn define_param(&mut self, name: String, kind: Kind) -> Local {
-		let mut local = self.define(name.clone(), None, kind);
+	/// Define a function parameter, with its declared type (`r: any`)
+	pub fn define_param(&mut self, param: &crate::context::Param, kind: Kind) -> Local {
+		let mut local = self.define(param.name.clone(), param.annotation.clone().map(Box::new), kind);
 		local.is_param = true;
-		self.locals.insert(name, local.clone());
+		local.declared = param.annotation.is_some();
+		self.locals.insert(param.name.clone(), local.clone());
 		local
 	}
 

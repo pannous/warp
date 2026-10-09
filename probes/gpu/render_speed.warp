@@ -1,0 +1,11 @@
+// card g_odW4: what one frame of samples/webgpu.warp costs: gpu_render alone, then gpu_render + paint
+size = 256
+shader = "@fragment fn main(@builtin(position) at: vec4f) -> @location(0) vec4f {
+	let uv = at.xy / values.size;
+	return vec4f(uv.x, 0.5 + 0.5 * cos(values.frame), uv.y, 1.0);
+}"
+start = clock()
+for frame in 1..11 { pixels = gpu_render(shader, size, size, {frame: frame, size: [size, size]}) }
+rendered = clock()
+for frame in 1..11 { paint(gpu_render(shader, size, size, {frame: frame, size: [size, size]}), size, size) }
+print "gpu_render: " + (rendered - start) / 10 + " ms a frame; with paint: " + (clock() - rendered) / 10 + " ms"

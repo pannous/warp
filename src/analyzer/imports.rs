@@ -406,6 +406,13 @@ pub fn extract_host_words(ctx: &mut Context, node: &Node) {
 					if [crate::host::GUARDED_CALL, crate::host::STD_PURE, crate::host::STD_IO].contains(&name.as_str()) {
 						ctx.required_functions.insert(crate::wasm_emitter::text_builtins::ERROR_OF);
 					}
+					// an image's pixels cross in one call (wasm_emitter/int_lists.rs)
+					if [crate::host::GPU_RENDER, crate::host::TEXT_COVERAGE].contains(&name.as_str()) {
+						ctx.required_functions.insert(crate::wasm_emitter::int_lists::INTS_TO_LIST);
+					}
+					if name == crate::host::PAINT {
+						ctx.required_functions.insert(crate::wasm_emitter::int_lists::LIST_TO_INTS);
+					}
 					// a program that controls tasks polls at its loops, where a paused task waits (browser)
 					if name == crate::host::TASK_CONTROL {
 						add_ffi_import(ctx, crate::host::TASK_POLL, crate::host::HOST_LIBRARY);

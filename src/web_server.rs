@@ -2,9 +2,12 @@
 //! lowering/web_server.rs makes each route a function `route·N(request:any)` and the statement the host call
 //! `serve_routes(port, [[method, path, function] …])`; this serves HTTP on the port and calls the route's function with
 //! the request {method, path, query, body} (a JSON body parsed). The value answers: a text as text/plain, any other
-//! value as JSON (as std json's to_json writes it); no route is 404, a failing route 500 with its message.
+//! value as JSON (as std json's to_json writes it, an instance as a plain object); a route's path may have typed
+//! parameters as a page route's (`get "/api/users/:id:int"`). No route is 404, a failing route 500 with its message,
+//! a refused request 400 or 404 (Route::failure_answer); a page path no route of the page matches is 404 too.
 
-use crate::node::Node;
+use crate::node::{Bracket, Node};
+use crate::operators::Op;
 use crate::site::ServedSite;
 use std::cell::Cell;
 
@@ -12,10 +15,17 @@ const JSON_TYPE: &str = "application/json";
 const TEXT_TYPE: &str = "text/plain; charset=utf-8";
 /// A reply of this type is a text (host-tasks.js TEXT_REPLY_TYPE)
 pub const TEXT_REPLY_TYPE: &str = "text/plain";
+const BAD_REQUEST: u16 = 400;
 const NOT_FOUND: u16 = 404;
 const FAILED: u16 = 500;
+const MISSING_FIELD: &str = "missing field ";
+/// The request's parts that hold its fields (request_node)
+const FIELD_PARTS: [&str; 2] = ["body", "query"];
+const PAGE_BODY_TAG: &str = "<body>";
 /// Routes under these paths answer a failure as JSON `{"error": …}`, the others as text
 const JSON_PATHS: [&str; 2] = ["/api/", "/rpc/"];
+/// The runtime errors of a lookup that found nothing (`users#id` of a missing row): the request names no such thing, 404
+const NOT_FOUND_ERRORS: [&str; 2] = ["index_out_of_range", "key_not_found"];
 const SITE_METHOD: &str = "GET";
 /// A body of this type is the fields of an HTML form, `title=buy+milk&done=on`
 const FORM_TYPE: &str = "application/x-www-form-urlencoded";
@@ -23,8 +33,6 @@ const FORM_TYPE: &str = "application/x-www-form-urlencoded";
 const PAGE_TYPE: &str = "text/html";
 const SEE_OTHER: u16 = 303;
 const HOME: &str = "/";
-/// `:id`, `:id:int` in a route's path (lowering/routes.rs)
-const PARAMETER_MARK: char = ':';
 const PATH_SEPARATOR: char = '/';
 
 thread_local! {
@@ -40,6 +48,13 @@ pub fn stop_after(requests: usize) {
 /// The request limit stop_after set for this serve, 0 serving on; the next serve starts unlimited
 pub(crate) fn take_request_limit() -> usize {
 	REQUEST_LIMIT.with(|limit| limit.replace(0))
+}
+
+/// Why a route failed (host.rs route_failure): its message, and whether the program raised it (`raise "…"`, a refusal
+/// such as a form's validation) rather than broke
+pub struct RouteFailure {
+	pub message: String,
+	pub raised: bool,
 }
 
 /// A route of the program: method, path, the function answering it and whether its value is a list
@@ -61,12 +76,29 @@ impl Route {
 	}
 
 	/// The answer of the route failing with `message`: JSON `{"error": message}` where a program reads JSON (an
-	/// /api/ or /rpc/ path), else the message as text
+	/// /api/ or /rpc/ path), else the message as text. A lookup missing is 404 only where the path named what to look up
+	/// (`/api/users/:id`); in a route without parameters (`get "/boom" { xs#5 }`) it is the server's fault, 500
 	pub fn failed(&self, message: &str) -> Answer {
-		if !JSON_PATHS.iter().any(|prefix| self.path.starts_with(prefix)) {
-			return Answer::failed(message);
+		self.failed_with(self.lookup_status(message), message)
+	}
+
+	fn failed_with(&self, status: u16, message: &str) -> Answer {
+		answer_failing(&self.path, status, message)
+	}
+
+	fn lookup_status(&self, message: &str) -> u16 {
+		let found_nothing = message.ends_with(crate::wasm_emitter::EMPTY_RANGE) || failure_status(message) == NOT_FOUND;
+		if found_nothing && self.path.contains(crate::routes::PARAMETER_MARK) { NOT_FOUND } else { FAILED }
+	}
+
+	/// The answer of a failure by its cause: a field the request lacks is 400 "missing field …", a path parameter's
+	/// lookup that found nothing (`(todos where it.id == id)#1`, `users#id`) 404, anything else a bug of the program, 500
+	fn failure_answer(&self, failure: &RouteFailure, request: &Node) -> Answer {
+		let missing = failure.message.strip_prefix(crate::wasm_emitter::list_ops::NO_FIELD_MESSAGE).filter(|field| !has_field(request, field));
+		match missing {
+			Some(field) => self.failed_with(BAD_REQUEST, &format!("{MISSING_FIELD}{field}")),
+			None => self.failed(&failure.message),
 		}
-		Answer { status: FAILED, content_type: JSON_TYPE, body: serde_json::json!({ "error": message }).to_string().into_bytes() }
 	}
 }
 
@@ -83,12 +115,56 @@ impl Answer {
 			Node::Text(text) => Answer { status: 200, content_type: TEXT_TYPE, body: text.clone().into_bytes() },
 			Node::Char(character) => Answer { status: 200, content_type: TEXT_TYPE, body: character.to_string().into_bytes() },
 			Node::Error(message) => Answer::failed(&message.to_string()),
-			other => Answer { status: 200, content_type: JSON_TYPE, body: crate::foreign::json_of(other).to_string().into_bytes() },
+			other => Answer { status: 200, content_type: JSON_TYPE, body: crate::foreign::json_of(&without_classes(other)).to_string().into_bytes() },
 		}
 	}
 
 	pub fn failed(message: &str) -> Answer {
-		Answer { status: FAILED, content_type: TEXT_TYPE, body: message.as_bytes().to_vec() }
+		answer_failing("", failure_status(message), message)
+	}
+
+	/// A page with `message` shown at its top, as an alert: the first thing after <body>, else before the whole page
+	fn with_message(self, message: &str) -> Answer {
+		let page = String::from_utf8_lossy(&self.body).to_string();
+		let alert = format!("<p role=\"alert\">{}</p>", crate::site::escaped(message));
+		let at = page.find(PAGE_BODY_TAG).map_or(0, |start| start + PAGE_BODY_TAG.len());
+		Answer { body: format!("{}{alert}{}", &page[..at], &page[at..]).into_bytes(), ..self }
+	}
+}
+
+/// A reply's instances as plain objects, `User{name:"Ann"}` as `{"name":"Ann"}` (supervisor default 2026-10-09, undoable:
+/// no class wrapper in /api and /rpc JSON); an object's own entries stay, so a map field `address:{…}` keeps its name
+fn without_classes(value: &Node) -> Node {
+	match value.drop_meta() {
+		Node::Key(_, Op::None, body) if matches!(body.drop_meta(), Node::List(_, Bracket::Curly, _)) => without_classes(body),
+		Node::List(items, Bracket::Curly, separator) => Node::List(items.iter().map(|item| match item.drop_meta() {
+			Node::Key(key, op, entry) => Node::Key(key.clone(), *op, Box::new(without_classes(entry))),
+			other => without_classes(other),
+		}).collect(), Bracket::Curly, separator.clone()),
+		Node::List(items, bracket, separator) => Node::List(items.iter().map(without_classes).collect(), bracket.clone(), separator.clone()),
+		other => other.clone(),
+	}
+}
+
+/// The answer `status` with `message`: JSON `{"error": message}` where a program reads JSON (an /api/ or /rpc/ path),
+/// else the message as text
+fn answer_failing(path: &str, status: u16, message: &str) -> Answer {
+	match is_json_path(path) {
+		true => Answer { status, content_type: JSON_TYPE, body: serde_json::json!({ "error": message }).to_string().into_bytes() },
+		false => Answer { status, content_type: TEXT_TYPE, body: message.as_bytes().to_vec() },
+	}
+}
+
+/// An /api/ or /rpc/ path, which a program reads: its answers are JSON, and no page stands there
+fn is_json_path(path: &str) -> bool {
+	JSON_PATHS.iter().any(|prefix| path.starts_with(prefix))
+}
+
+/// 404 for a lookup that found nothing, else 500
+fn failure_status(message: &str) -> u16 {
+	match NOT_FOUND_ERRORS.iter().any(|error| message.contains(&error.replace('_', " "))) {
+		true => NOT_FOUND,
+		false => FAILED,
 	}
 }
 
@@ -108,15 +184,12 @@ pub fn routes_of(routes: &Node) -> Vec<Route> {
 
 /// A text of the route table; the path "/" arrives as a one-character Char
 fn text_of(node: &Node) -> String {
-	match node.drop_meta() {
-		Node::Char(character) => character.to_string(),
-		other => other.name(),
-	}
+	crate::routes::pattern_text(node)
 }
 
 /// Serve on `port` until the request limit (if any): `answer(route, request)` runs the route's function; a GET no route
 /// takes is a file of the program's `site` (src/site.rs), its page at /
-pub fn serve(port: u16, routes: &[Route], site: &ServedSite, mut answer: impl FnMut(&Route, Node) -> Answer) -> Result<(), String> {
+pub fn serve(port: u16, routes: &[Route], site: &ServedSite, mut answer: impl FnMut(&Route, Node) -> Result<Answer, RouteFailure>) -> Result<(), String> {
 	let server = tiny_http::Server::http(("0.0.0.0", port)).map_err(|problem| format!("serve {port}: {problem}"))?;
 	let limit = take_request_limit();
 	let mut served = 0;
@@ -131,9 +204,24 @@ pub fn serve(port: u16, routes: &[Route], site: &ServedSite, mut answer: impl Fn
 		let from_a_browser_form = is_form && header_of("Accept").is_some_and(|accepted| accepted.contains(PAGE_TYPE));
 		let back = header_of("Referer").map_or(HOME.to_string(), |referer| page_of(&referer));
 		let body = if is_form { form_fields(&body) } else { value_of_body(body) };
-		let answered = match routes.iter().find(|route| route.method == method && path_fits(&route.path, &path)) {
-			Some(route) => answer(route, request_node(&method, &path, &query, body)),
-			None => site_file(site, &method, &path).unwrap_or_else(|| Answer { status: NOT_FOUND, content_type: TEXT_TYPE, body: format!("no route {method} {path}").into_bytes() }),
+		let mut answer_at = |method: &str, path: &str, query: &str, body: Node| match route_at(routes, method, path) {
+			Some(route) => {
+				let request = request_node(method, path, query, body);
+				answer(route, request.clone()).map_err(|failure| (route, failure, request))
+			}
+			None => Ok(site_file(site, method, path).unwrap_or_else(|| answer_failing(path, NOT_FOUND, &format!("no route {method} {path}")))),
+		};
+		let answered = match answer_at(&method, &path, &query, body) {
+			Ok(answered) => answered,
+			// a refusal the program raised to a browser's form: the page it came from again, saying why
+			Err((_, failure, _)) if failure.raised && from_a_browser_form => {
+				let (page_path, page_query) = back.split_once('?').unwrap_or((&back, ""));
+				match answer_at(SITE_METHOD, page_path, page_query, Node::Empty) {
+					Ok(page) if page.status == 200 => Answer { status: BAD_REQUEST, ..page.with_message(&failure.message) },
+					_ => Answer { status: BAD_REQUEST, ..Answer::failed(&failure.message) },
+				}
+			}
+			Err((route, failure, request)) => route.failure_answer(&failure, &request),
 		};
 		let content_type = tiny_http::Header::from_bytes("Content-Type", answered.content_type).expect("a valid header");
 		let response = match from_a_browser_form && answered.status == 200 {
@@ -149,13 +237,22 @@ pub fn serve(port: u16, routes: &[Route], site: &ServedSite, mut answer: impl Fn
 	Ok(())
 }
 
-/// `GET /` is the site's page, `GET /app.wasm` its module and so on
+/// The route answering `method path`: the one of exactly that path, else the first whose pattern matches it
+/// (`get "/api/users/:id:int"`)
+fn route_at<'a>(routes: &'a [Route], method: &str, path: &str) -> Option<&'a Route> {
+	let of_method = || routes.iter().filter(|route| route.method == method);
+	of_method().find(|route| route.path == path).or_else(|| of_method().find(|route| crate::routes::path_matches(&route.path, path)))
+}
+
+/// `GET /` is the site's page, `GET /app.wasm` its module and so on; the page at a path none of its routes matches is
+/// not found
 fn site_file(site: &ServedSite, method: &str, path: &str) -> Option<Answer> {
-	if method != SITE_METHOD {
+	if method != SITE_METHOD || is_json_path(path) {
 		return None;
 	}
+	let status = if site.matches_no_route_at(path) { NOT_FOUND } else { 200 };
 	Some(match site.file_at(path)? {
-		Ok((name, body)) => Answer { status: 200, content_type: crate::site::content_type(&name), body },
+		Ok((name, body)) => Answer { status, content_type: crate::site::content_type(&name), body },
 		Err(failure) => Answer::failed(&failure),
 	})
 }
@@ -181,21 +278,6 @@ fn percent_decoded(path: &str) -> String {
 	String::from_utf8(decoded).unwrap_or_else(|_| path.to_string())
 }
 
-/// Whether a route's path takes the request's: each part the same, a parameter part (`:id`) any part, of its type when
-/// it declares one (`:id:int`, lowering/routes.rs binds it)
-fn path_fits(pattern: &str, path: &str) -> bool {
-	let parts = |text: &str| text.trim_end_matches(PATH_SEPARATOR).split(PATH_SEPARATOR).map(str::to_string).collect::<Vec<String>>();
-	let (pattern_parts, path_parts) = (parts(pattern), parts(path));
-	pattern_parts.len() == path_parts.len() && pattern_parts.iter().zip(&path_parts).all(|(expected, part)| match expected.strip_prefix(PARAMETER_MARK) {
-		None => expected == part,
-		Some(parameter) => !part.is_empty() && match parameter.split_once(PARAMETER_MARK).map(|(_, kind)| kind) {
-			Some("int") => part.parse::<i64>().is_ok(),
-			Some("float") => part.parse::<f64>().is_ok(),
-			_ => true,
-		},
-	})
-}
-
 /// The path and query of a Referer URL, where a browser's form goes back to
 fn page_of(referer: &str) -> String {
 	let after_scheme = referer.split_once("://").map_or(referer, |(_, rest)| rest);
@@ -219,6 +301,20 @@ fn request_node(method: &str, path: &str, query: &str, body: Node) -> Node {
 		entry("query", form_fields(query)),
 		entry("body", body),
 	], crate::node::Bracket::Curly, crate::node::Separator::Space)
+}
+
+/// Whether the request's body or query holds the field
+fn has_field(request: &Node, field: &str) -> bool {
+	FIELD_PARTS.iter().filter_map(|part| entry_value(request, part)).any(|fields| entry_value(fields, field).is_some())
+}
+
+/// The value of a map's entry by key
+fn entry_value<'map>(map: &'map Node, key: &str) -> Option<&'map Node> {
+	let Node::List(entries, _, _) = map.drop_meta() else { return None };
+	entries.iter().find_map(|entry| match entry.drop_meta() {
+		Node::Key(name, _, value) if name.name() == key => Some(value.as_ref()),
+		_ => None,
+	})
 }
 
 fn entry(key: &str, value: Node) -> Node {

@@ -24,3 +24,19 @@ fn is_with_a_test_word() {
 	is!("a=3; a is missing", false);
 	is!("a=3; a is absent", false);
 }
+
+// wiki/null.md: the empty keyword checks missing or empty, so `x is empty` holds for "", [] and {} as for ø (a number
+// or a bool is never empty); `x is ø` stays the comparison with ø
+#[test]
+fn is_empty_holds_for_an_empty_text_list_or_map() {
+	is!("\"\" is empty", true);
+	is!("t=\"\"; if t is empty {1} else {2}", 1);
+	is!("xs=[]; xs is empty", true);
+	is!("m={}; m is empty", true);
+	is!("t=\"a\"; t is empty", false);
+	is!("xs=[1]; xs is empty", false);
+	is!("0 is empty", false);
+	is!("no is empty", false);
+	is!("f(r: any) := r.title is empty; f({title: \"\"})", true);
+	is!("t=\"\"; t is ø", false);
+}

@@ -26,6 +26,11 @@ class Quantity {
 	// its amount counted in a unit of its dimension: `q.in("m")` is a plain number
 	in(u) := to(u).shown()
 	shown() := amount / scale
+	// the bounds of an amount with tolerance in the same unit, `rope.low` of `rope = 5 m ± 1 cm`; an exact amount is its own
+	low() := Quantity(bound_of(amount, "low"), dims, unit, scale)
+	high() := Quantity(bound_of(amount, "high"), dims, unit, scale)
+	value() := Quantity(bound_of(amount, "value"), dims, unit, scale)
+	uncertainty() := Quantity(bound_of(amount, "uncertainty"), dims, unit, scale)
 	text() := quantity_text(this)
 }
 
@@ -37,8 +42,15 @@ same_dimension(q:Quantity, o:any, action) := {
 	other
 }
 
-// "5km": the amount in its own unit (str(q) of a parameter q:Quantity misses the text witness, card param-text-witness)
-quantity_text(q:Quantity) := str(q.shown()) + q.unit
+// the bound of an amount with tolerance by name (inside Quantity, `amount.low` would call its method low)
+bound_of(x, bound) := if bound == "low" then x.low else if bound == "high" then x.high else if bound == "value" then x.value else x.uncertainty
+
+// "5km": the amount in its own unit (str(q) of a parameter q:Quantity misses the text witness, card param-text-witness);
+// a Gaussian amount keeps its σ apart from the unit, "12.00 ± 0.60σ m"
+quantity_text(q:Quantity) := {
+	shown = str(q.shown())
+	if shown.ends_with("σ") then shown + " " + q.unit else shown + q.unit
+}
 
 // `m·m` is `m²`
 unit_product(first, second) := if first == second then first + "²" else first + "·" + second

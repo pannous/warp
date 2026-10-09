@@ -1,6 +1,8 @@
 // warp syntax for CodeMirror's simple mode, after ~/wasp/docs/codemirror-wasp-mode.js, with warp's comment rules:
 // `//` and `/* */`, `#` followed by a space (`#s` is count, src/warp_parser.rs), `##` doc comments
-const words = list => new RegExp(`(?:${list.join("|")})\\b`);
+// no words match nothing: an empty alternation would match the empty string, and the mode would never advance
+const NOTHING = /(?!)/;
+const words = list => list.length ? new RegExp(`(?:${list.join("|")})\\b`) : NOTHING;
 
 CodeMirror.defineSimpleMode("warp", {
 	start: [

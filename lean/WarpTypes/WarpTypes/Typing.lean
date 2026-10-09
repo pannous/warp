@@ -22,8 +22,13 @@ def Program.writeTy (P : Program) : Ty → String → Option Ty
 inductive HasType (P : Program) : Ctx → Expr → Ty → Prop where
   | bool {Γ b} : HasType P Γ (.bool b) .bool
   | int {Γ n} : HasType P Γ (.int n) .int
+  /-- an int in the range of a fixed width (`int16`), what a checked declaration holds -/
+  | intIn {Γ n lo hi} : lo ≤ n → n ≤ hi → HasType P Γ (.int n) (.ranged lo hi)
   | num {Γ n} : HasType P Γ (.num n) .number
-  | text {Γ s} : HasType P Γ (.text s) .text
+  | qty {Γ n d} : HasType P Γ (.qty n d) (.quantity d)
+  | text {Γ s} : s.length ≠ 1 → HasType P Γ (.text s) .text
+  /-- a one-character text: the parser reads `"a"` as a codepoint -/
+  | codepoint {Γ s} : s.length = 1 → HasType P Γ (.text s) .codepoint
   | unit {Γ} : HasType P Γ .unit .unit
   | nil {Γ} : HasType P Γ .nil (.list .never)
   /-- inference.rs infer_list_type: the elements' join -/
@@ -70,6 +75,8 @@ inductive HasType (P : Program) : Ctx → Expr → Ty → Prop where
   | tryCatch {Γ e h te th} : HasType P Γ e te → HasType P Γ h th → HasType P Γ (.tryCatch e h) (join te th)
   /-- a run-time checked cast: statically any source type, the alternatives' join -/
   | cast {Γ e ts te} : HasType P Γ e te → HasType P Γ (.cast e ts) (joinAll ts)
+  /-- a conversion `e as t`: statically any source type, t (a value that does not convert is an error when it runs) -/
+  | conv {Γ e t te} : HasType P Γ e te → HasType P Γ (.conv e t) t
   /-- broadcasting: f : A → B over a list of A gives a list of B -/
   | broadcast {Γ f e fn te a} : P.funs f = some fn → HasType P Γ e te → element te = some a → sub a fn.paramTy = true →
       HasType P Γ (.broadcast f e) (.list fn.result)
@@ -114,5 +121,11 @@ def ProgramOk (P : Program) : Prop :=
     (∃ tb, HasType P (Ctx.empty.set fn.param fn.paramTy) fn.body tb ∧ sub tb fn.result = true) ∧
     ∀ x ∈ fn.body.assigned, P.globals x = true) ∧
   ∀ ev h, P.handlers ev = some h → HandlerOk P ev h
+
+/-- a text value's type: a codepoint when it is one character -/
+theorem HasType.ofText {P Γ} (s : String) : HasType P Γ (.text s) (Ty.textTy s) := by
+  unfold Ty.textTy; split
+  · exact .codepoint ‹_›
+  · exact .text ‹_›
 
 end Warp

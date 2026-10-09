@@ -1,7 +1,8 @@
 #!/usr/bin/env warp
 // agent sends a prompt as given to Claude and gives its answer as text (lib/agent.warp); agent(prompt, "claude-opus-5-5")
-// names another model. It needs an Anthropic API key: natively the environment variable ANTHROPIC_API_KEY, in the
-// playground its key setting (kept in your browser)
+// names another model. It needs an Anthropic API key (console.anthropic.com): in a terminal
+// `export ANTHROPIC_API_KEY=sk-ant-…` (in ~/.zshrc to keep it), in the playground the API key field of its ⋯ menu
+// (kept in your browser)
 notes = "Warp is a data format and a wasm-first programming language. Its syntax has blocks, lists, pairs and tags."
-summary = try agent "Summarize in one short sentence: \(notes)" else "no answer: set ANTHROPIC_API_KEY (in the playground: the key setting)"
+summary = try agent "Summarize in one short sentence: \(notes)" else "no answer: export ANTHROPIC_API_KEY=sk-ant-… (in the playground: the API key field of its ⋯ menu)"
 print summary

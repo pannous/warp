@@ -65,6 +65,29 @@ value (type_tests.rs runtime_kind_mask; `float` stays strict). Function paramete
 A final Quantity value shows its text (card instance-final). `f` called with a quantity and with a plain number calls
 a copy `f_Quantity(x:Quantity)` for the quantity (card mixed-arguments, class_methods.rs specialized_calls). Tests: tests/numbers/test_plus_minus_units.rs, samples/measurements.warp.
 
+## Quantities with tolerance (card quantity-tolerance, 2026-10-09)
+- `rope certainly > 4 m`: lower_certainty runs before class_methods, whose with_certain_amounts compares
+  `rope.amount` with `same_dimension(rope, 4 m, "compare").amount`, so the interval survives (Quantity.more is a plain yes).
+- `rope.low/.high/.value/.uncertainty`: Quantity methods (lib/units.warp) over `bound_of`; the names are
+  uncertain::INTERVAL_FIELDS, renamed and dispatched by class like library-word methods, so `x.low` of a ± number stays
+  the field. A plain Int/Float reads as the exact interval [x, x] (uncertain_field).
+- `sum([5 m ± 1 cm, 3 m ± 2 cm])`: a literal list of run-time quantities folds `reduce((s, i) => s.plus(i))`.
+- `Rope(5 m ± 1 cm)` of a unit field: unit_fields::written_quantity reads `quantity(a, "m")` back as `a * m`.
+- A Gaussian quantity shows `12.00 ± 0.60σ m`.
+- A field type with a tolerance (P233, card field-tolerance): `class Part{length: m ± 1 mm}`, `Part(5 m).length` is
+  `5.0000 ± 0.0010m`; unit_fields::lower_field_tolerances (a source pass before lower_run_time_tolerances) writes the
+  spread into each construction (`Part(5 m)`, `Part{length: 5 m}`) and leaves the field type `m`; a value given with its
+  own tolerance keeps it.
+- A final ± value of a unit field (quantity-final) is a units::UncertainQuantity: static_units::quantity_of scales the
+  Uncertain to the field's unit, `Rope(5 m ± 1 cm).length` shows `5.000 ± 0.010m`.
+- `str(Rope(5 m).length)` is `5m`: casts::computes_value makes str of a field read or of literal arithmetic compute
+  the value instead of serializing the code (str-inline).
+- `s = sum([quantity("5 m"), …])` is a Quantity (quantity-sum): class_methods::quantities_reduced marks the fold
+  TypedAs Quantity and instance_classes gives the variable that class, so `s * 2` is `16m`.
+- `lo(a:number) := a.low; lo(5 ± 1)` (number-param): in a program with ± values, uncertain::lower_interval_parameters
+  marks a `number` parameter type with IntervalNumber, which annotated_kind reads as a Node parameter (Kind::Empty)
+  with the run-time mask of `number`; a wrong argument says "needs a number".
+
 ## Gaussian ± (card plus-minus-gaussian, 2026-10-09)
 `5 ± 1σ` or `5 ± 1 σ` (the spread times the symbol σ, joined like a unit word: card trailing-symbol) is a Gaussian: one standard deviation; a bare `5 ± 1` stays an
 interval (P217). Its parts are [value, low, high, σ, id₁, c₁, id₂, c₂, …]: each contribution c = ∂/∂xᵢ·σᵢ of an

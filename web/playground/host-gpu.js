@@ -24,8 +24,9 @@ const VALUES_BINDING = 0;
 const UNIFORM_ALIGNMENT = 16; // a uniform struct is a whole number of 16-byte rows
 // the WGSL type of a value of 1…4 floats and its alignment in bytes
 const VALUE_TYPES = [, ["f32", 4], ["vec2f", 8], ["vec3f", 16], ["vec4f", 16]];
+const VECTOR_FLOATS = 4; // the floats of one vector in an array value, `values.<name>[i]` (src/gpu.rs)
 let gpuDevice; // the task Worker's device, asked for once
-const FLOATS_STATE = 2; // the shared buffer's state when it holds raw floats (writeShared's JSON is state 1)
+const WORDS_STATE = 2; // the shared buffer's state when it holds raw 32-bit words, floats or pixels (writeShared's JSON is state 1)
 // kept buffers (src/lowering/gpu_maps.rs marked_kept): a map result read on the CPU stays on the GPU for the next map of
 // it, by block, the last MOST_KEPT of them (src/gpu.rs KEPT); flags as gpu_map_linear's last argument
 const KEEP_RESULT = 1n;
@@ -39,7 +40,8 @@ let gpuWorker; // the program's side: the task Worker that ran the last GPU job,
 // before `numbers`, the `count` items of the buffer kept for block `source`; the buffer kept for block `keep` after
 async function gpuComputedFloats({ shader, numbers, workgroups, first = 0, source, count, keep }) {
 	const device = gpuDevice ??= await gpuDeviceOrFailure();
-	const input = numbers instanceof Float32Array ? numbers : new Float32Array(numbers);
+	const Elements = gpuElements(shader);
+	const input = numbers instanceof Elements ? numbers : new Elements(numbers);
 	const kept = source === undefined ? undefined : keptBuffers.get(source);
 	if (source !== undefined && kept?.count !== count) throw new Error(KEPT_MISSING);
 	const keptBytes = (kept?.count ?? 0) * Float32Array.BYTES_PER_ELEMENT;
@@ -61,7 +63,7 @@ async function gpuComputedFloats({ shader, numbers, workgroups, first = 0, sourc
 	pass.dispatchWorkgroups(workgroups);
 	pass.end();
 	encoder.copyBufferToBuffer(storage, offset, readback, 0, size - offset);
-	const floats = new Float32Array(await gpuReadBack(device, encoder, readback));
+	const floats = new Elements(await gpuReadBack(device, encoder, readback));
 	if (keep === undefined) storage.destroy();
 	else keepBuffer(keep.block, { storage, count: keep.count });
 	return floats;
@@ -79,7 +81,7 @@ function keepBuffer(block, buffer) {
 	}
 }
 
-// {values}: the pixels the fragment shader colored, row by row
+// the pixels the fragment shader colored, row by row
 async function gpuRendered({ shader, width, height, values }) {
 	const device = gpuDevice ??= await gpuDeviceOrFailure();
 	const { declarations, bytes: valueBytes } = uniformLayout(values);
@@ -104,11 +106,11 @@ async function gpuRendered({ shader, width, height, values }) {
 	encoder.copyTextureToBuffer({ texture: image }, { buffer: readback, bytesPerRow: rowBytes, rowsPerImage: height }, [width, height]);
 	const bytes = new Uint8Array(await gpuReadBack(device, encoder, readback));
 	image.destroy();
-	const pixels = [];
-	for (let row = 0; row < height; row++)
+	const pixels = new Uint32Array(width * height);
+	for (let row = 0, pixel = 0; row < height; row++)
 		for (let at = row * rowBytes; at < row * rowBytes + width * PIXEL_BYTES; at += PIXEL_BYTES)
-			pixels.push((OPAQUE | bytes[at] << 16 | bytes[at + 1] << 8 | bytes[at + 2]) >>> 0);
-	return { values: pixels };
+			pixels[pixel++] = (OPAQUE | bytes[at] << 16 | bytes[at + 1] << 8 | bytes[at + 2]) >>> 0;
+	return pixels;
 }
 
 // the WGSL declaring `values` (appended, so the shader's line numbers stay the user's) and the uniform's bytes, laid out
@@ -117,16 +119,22 @@ function uniformLayout(values) {
 	const entries = Object.entries(values ?? {});
 	if (!entries.length) return { declarations: "", bytes: new ArrayBuffer(0) };
 	const members = [], floats = [];
+	const padded = alignment => { while (floats.length % (alignment / 4)) floats.push(0); };
 	for (const [name, value] of entries) {
-		const numbers = [value].flat();
+		// a list of lists: one vec4f per item, its missing coordinates 0
+		const vectors = Array.isArray(value) && value.some(Array.isArray);
+		if (vectors && value.some(item => [item].flat().length > VECTOR_FLOATS)) throw new Error(`${VALUES_NAME}.${name} is a list of vectors of up to four numbers, got ${JSON.stringify(value)}`);
+		const numbers = vectors ? value.flatMap(item => [...[item].flat(), 0, 0, 0, 0].slice(0, VECTOR_FLOATS)) : [value].flat();
 		if (!numbers.every(number => typeof number === "number")) throw new Error(`${VALUES_NAME}.${name} is a number or a list of numbers, got ${JSON.stringify(value)}`);
-		const [type, alignment] = VALUE_TYPES[numbers.length] ?? [];
+		const array = vectors || numbers.length > VECTOR_FLOATS;
+		const [type, alignment] = array ? [`array<vec4f, ${Math.max(1, Math.ceil(numbers.length / VECTOR_FLOATS))}>`, UNIFORM_ALIGNMENT] : VALUE_TYPES[numbers.length] ?? [];
 		if (!type) throw new Error(`${VALUES_NAME}.${name} is one number or a list of two to four, got ${numbers.length}`);
-		while (floats.length % (alignment / 4)) floats.push(0);
+		padded(alignment);
 		floats.push(...numbers);
+		if (array) padded(UNIFORM_ALIGNMENT);
 		members.push(`${name}: ${type}`);
 	}
-	while (floats.length % (UNIFORM_ALIGNMENT / 4)) floats.push(0);
+	padded(UNIFORM_ALIGNMENT);
 	const declarations = `\nstruct WarpValues { ${members.join(", ")} }\n@group(0) @binding(${VALUES_BINDING}) var<uniform> ${VALUES_NAME}: WarpValues;`;
 	return { declarations, bytes: new Float32Array(floats).buffer };
 }
@@ -166,11 +174,19 @@ async function gpuReadBack(device, encoder, readback) {
 	return bytes;
 }
 
-// gpu_compute's {values} as a list; a kernel's {floats}, given back as raw bytes (writeSharedFloats), not as JSON
+// the typed array of the numbers a compute shader reads at @binding(0): f32 unless it declares array<i32> or array<u32>
+// (natively gpu.rs element_of)
+function gpuElements(shader) {
+	const declared = /@binding\(0\)[^]*?array<(i32|u32)>/.exec(shader)?.[1];
+	return declared === "i32" ? Int32Array : declared === "u32" ? Uint32Array : Float32Array;
+}
+
+// gpu_compute's {values} as a list; a kernel's floats and an image's pixels as {words}, given back as raw bytes
+// (writeSharedWords), not as JSON
 const GPU_JOBS = {
 	gpu_compute: async job => ({ values: Array.from(await gpuComputedFloats(job)) }),
-	gpu_kernel: async job => ({ floats: await gpuComputedFloats(job) }),
-	gpu_render: gpuRendered,
+	gpu_kernel: async job => ({ words: await gpuComputedFloats(job) }),
+	gpu_render: async job => ({ words: await gpuRendered(job) }),
 };
 
 // a task Worker's job (task-worker.js): the shader's answer, or why not, into the shared buffer the program waits on
@@ -181,22 +197,22 @@ async function gpuJobInto({ gpu: { word, job }, shared }) {
 	} catch (failure) {
 		answer = { error: String(failure.message ?? failure) };
 	}
-	if (answer.floats) writeSharedFloats(shared, answer.floats);
+	if (answer.words) writeSharedWords(shared, answer.words);
 	else writeShared(shared, answer);
 }
 
-// a kernel's floats into the shared buffer as they are: a million floats as JSON took longer than the GPU
-function writeSharedFloats(shared, floats) {
-	if (TASK_HEADER + floats.byteLength > shared.byteLength) shared.grow(TASK_HEADER + floats.byteLength);
-	new Float32Array(shared, TASK_HEADER, floats.length).set(floats);
+// 32-bit words into the shared buffer as they are: a million floats as JSON took longer than the GPU
+function writeSharedWords(shared, words) {
+	if (TASK_HEADER + words.byteLength > shared.byteLength) shared.grow(TASK_HEADER + words.byteLength);
+	new Uint32Array(shared, TASK_HEADER, words.length).set(new Uint32Array(words.buffer, words.byteOffset, words.length));
 	const header = new Int32Array(shared, 0, 2);
-	header[1] = floats.length;
-	Atomics.store(header, 0, FLOATS_STATE);
+	header[1] = words.length;
+	Atomics.store(header, 0, WORDS_STATE);
 	Atomics.notify(header, 0);
 }
 
-// the program's side: hand the job to a task Worker and wait for the values it gives
-function gpuJob(word, job, transfer = []) {
+// the program's side: hand the job to a task Worker and wait for the values it gives, raw words as `Words`
+function gpuJob(word, job, transfer = [], Words = Float32Array) {
 	if (!hasTaskWorkers()) throw new Error(`${word} needs task Workers, which only a cross-origin isolated page has (the playground)`);
 	const worker = gpuTaskWorker();
 	if (!worker) throw new Error(`${word}: every task Worker is busy`);
@@ -204,7 +220,7 @@ function gpuJob(word, job, transfer = []) {
 	worker.postMessage({ gpu: { word, job }, shared }, transfer);
 	const header = new Int32Array(shared, 0, 2);
 	Atomics.wait(header, 0, 0);
-	const { values, error } = header[0] === FLOATS_STATE ? { values: new Float32Array(shared, TASK_HEADER, header[1]) } : readShared(shared);
+	const { values, error } = header[0] === WORDS_STATE ? { values: new Words(shared, TASK_HEADER, header[1]) } : readShared(shared);
 	taskPool.push(worker);
 	if (error) throw new Error(`${word}: ${error}`);
 	return values;
@@ -269,10 +285,16 @@ addHostPart({
 				return 0n;
 			}
 		};
+		// the pixels as a Uint32Array, for gpu_render and for paint given a shader (host.js, P234)
+		holder.gpuRendered = (shader, width, height, values) => {
+			const given = values == null ? {} : plain(values);
+			return gpuJob("gpu_render", { shader, width: Number(width), height: Number(height), values: given }, [], Uint32Array);
+		};
 		return {
 			gpu_compute: (shader, numbers, workgroups) => {
 				const values = gpuJob("gpu_compute", { shader: plain(shader), numbers: plain(numbers).map(Number), workgroups: Number(workgroups) });
-				// floats, also the whole ones (treeOfPlain would make 3 an Int)
+				// floats, also the whole ones (treeOfPlain would make 3 an Int); ints of an array<i32> or array<u32> shader
+				if (gpuElements(plain(shader)) !== Float32Array) return list(values, int => ({ kind: KIND_INT, data: { int: String(int) }, chain: [] }));
 				return list(values, float => ({ kind: KIND_FLOAT, data: { float }, chain: [] }));
 			},
 			// over a `linear xs = float[n]`: its cells read and written in place, no list built (card gpu-vectors)
@@ -287,9 +309,8 @@ addHostPart({
 			// `s = sum(xs.map(x => …) @gpu)`, min, max: each workgroup's partial result, left after the values, into target
 			gpu_reduce_linear: (shader, source, values, target, workgroups, keeping) => gpuKernelLinear(shader, source, values, target, workgroups, true, keeping),
 			gpu_render: (shader, width, height, values) => {
-				const given = values == null ? {} : plain(values);
-				const pixels = gpuJob("gpu_render", { shader: plain(shader), width: Number(width), height: Number(height), values: given });
-				return list(pixels, treeOfPlain);
+				const pixels = holder.gpuRendered(plain(shader), width, height, values);
+				return listOfInts(program(), pixels) ?? list(Array.from(pixels), treeOfPlain);
 			},
 		};
 	},

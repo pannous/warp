@@ -70,6 +70,12 @@ jobs:
       run: |
         curl -sSfL https://raw.githubusercontent.com/leanprover/elan/master/elan-init.sh | sh -s -- -y --default-toolchain $LEAN_TOOLCHAIN
         echo "$HOME/.elan/bin" >> $GITHUB_PATH
+    - name: Install a sans-serif font (label of use draw sets text natively, src/text_raster.rs)
+      run: sudo apt-get install -y fonts-dejavu-core
+    - name: Install agent-browser (headless Chrome for the page tests, tests/web/test_dom_pages.rs)
+      run: npm install -g agent-browser && agent-browser install --with-deps
+    - name: Install wrangler (wrangler dev runs the Worker of warp deploy, tests/web/test_deploy.rs)
+      run: npm install -g wrangler
     # claude/* branches are the cloud agents' build farm (their sandboxes cannot reach crates.io):
     # a red build there is expected mid-work and belongs to the agent, so it must not fail the job
     # and mail the maintainer. The real outcome is reported to the agent in the last step.

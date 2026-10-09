@@ -15,7 +15,6 @@ fn linked(signatures: &[warp::ffi::FfiHeaderSignature], names: &[&str]) -> (Libm
 
 #[test]
 fn libm_comes_from_the_headers_when_they_declare_it() {
-	crate::requires!(crate::common::MACOS_C_HEADERS);
 	let (source, found) = linked(&libm_header_signatures(), &["sin", "pow", "hypot"]);
 	assert!(matches!(source, LibmSource::Headers(count) if count > 0), "{source:?}");
 	assert_eq!(found, [true, true, true], "hypot is in the headers, not in the table");

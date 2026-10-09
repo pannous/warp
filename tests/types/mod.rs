@@ -12,6 +12,7 @@ mod test_construction_defaults;
 mod test_class_destructuring;
 mod test_class_json;
 mod test_class_methods;
+mod test_method_bodies; // card method-bodies
 mod test_class_method_changes;
 mod test_mutating_methods;
 mod test_class_extends;
@@ -90,6 +91,7 @@ mod test_conformance_claims;
 mod test_file_declarations;
 mod test_match_static_variant;
 mod test_bool_type;
+mod test_bool_conversion;
 mod test_element_field_writes;
 #[cfg(feature = "native")] // runs lean and lake
 mod test_type_model;
@@ -126,3 +128,4 @@ mod test_as_number_variable; // card number-variable
 mod test_param_named_like_global; // card param-named-like-global
 mod test_runtime_text_ratio;
 mod test_method_result_text; // card instance-result
+mod test_typed_list_elements; // card typed-list-elements

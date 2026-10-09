@@ -257,9 +257,11 @@ pub struct CompiledModule {
 
 /// The passes over the source forms, in order, each reading what the one before it left: definitions and sugar become
 /// the forms every later pass knows (`def f(x) {…}` is `f(x) := {…}`), modules are resolved
-const SOURCE_PASSES: [fn(Node) -> Node; 95] = [
+const SOURCE_PASSES: [fn(Node) -> Node; 100] = [
 	// `"a \(x) b"` → `"a " + text_form(x) + " b"` (interpolation.rs) first, so every pass reads the holes as code
 	crate::interpolation::lower_program,
+	// a shader's `$name` holes (shader_holes.rs) as `name: name` in the values map of each paint of it
+	crate::shader_holes::lower,
 	crate::analyzer::lower_inline_unions,
 	// `on ask {…} in {…}` before any pass reads `{…} in {…}` as membership or an emit as nothing
 	crate::scoped_handlers::lower,
@@ -268,6 +270,9 @@ const SOURCE_PASSES: [fn(Node) -> Node; 95] = [
 	// `ch.send(v)` of `ch = channel()` before go_blocks renames ch in a go block and system_signals reads the send
 	crate::channel_words::lower,
 	// `input{type="text"}`: HTML's attribute form is the attribute (markup_tags.rs), before soft_keywords refuses `class = …`
+	// `form post "/todos" { … }` is `form{ method:"post" action:"/todos" … }` (markup_tags.rs), before serve reads its
+	// `post "/todos" { … }` as a route
+	crate::markup_tags::lower_form_routes,
 	crate::markup_tags::lower_html_attributes,
 	// P165: a hard keyword redefined, a soft one defined at the top level, before any pass gives the word its meaning
 	crate::soft_keywords::lower,
@@ -277,6 +282,8 @@ const SOURCE_PASSES: [fn(Node) -> Node; 95] = [
 	crate::lowering::sum_variants::lower,
 	// `global n = 5` in a function body is `global n; n = 5` before any pass reads its `global n`
 	crate::late_binding::split_global_assignments,
+	// `xs from #2 to #4`, `xs up to second`: a slice by position (word_slices.rs), before a pass reads `to` as a range
+	crate::word_slices::lower,
 	// `xs.keep only positive` is `xs where it > 0`, before lower_where reads it (list_phrases.rs)
 	crate::list_phrases::lower,
 	// `post "/todos/:id" { todos where it.id == id }`: the path's parameters bound before lower_where reads the variables
@@ -309,8 +316,10 @@ const SOURCE_PASSES: [fn(Node) -> Node; 95] = [
 	// the classes of used modules (`use shapes`, `use collections`) before class_methods lowers them with the program's
 	// `class Foo;` takes in the definitions after it before any pass reads class bodies (wiki/type.md)
 	crate::lowering::file_declarations::lower,
-	// `60 mph` is `60 mi/h` before any units pass reads it
-	crate::units::lower_unit_aliases,
+	// `60 mph` is `60 mi/h`, `q as km/h` converts to km/h, before any units pass reads them
+	crate::units::lower_unit_words,
+	// `class Part{length: m ± 1 mm}`: `Part(5 m)` holds `5 m ± 1 mm` (unit_fields.rs), a tolerance the next pass reads
+	crate::units::static_units::lower_field_tolerances,
 	// `5 m ± 1 cm; x * 2`: a run-time quantity with an interval amount (units.rs), before the units module is loaded for it
 	crate::units::lower_run_time_tolerances,
 	crate::modules::insert_module_classes,
@@ -323,6 +332,8 @@ const SOURCE_PASSES: [fn(Node) -> Node; 95] = [
 	crate::database_tables::lower,
 	// `p.fields`, `p.methods`, `dir(p)`: the class layout (reflection.rs), before class_methods lowers the class bodies
 	crate::reflection::lower_objects,
+	// `y certainly < x` is `certainly(y < x)` before class_methods compares the amounts of run-time quantities
+	crate::uncertain::lower_certainty,
 	// methods in a class body become functions over the class before any pass reads the body as fields
 	crate::class_methods::lower,
 	// `calc.exports` of a component (reflection.rs) before foreign_modules makes it a call into the component
@@ -339,15 +350,17 @@ const SOURCE_PASSES: [fn(Node) -> Node; 95] = [
 	crate::routes::lower, crate::page_html::use_markup, crate::modules::resolve,
 	// `fourty_two.exports`, `dir(fourty_two)` of an imported core module, once resolve found its file (reflection.rs)
 	crate::reflection::lower_module_words,
-	crate::uncertain::lower_certainty, crate::units::lower_sleep_durations, crate::units::lower_quantity_comparisons, crate::stored_values::lower, crate::undo_history::lower, crate::declarations::lower_tasks, crate::system_values::name, crate::signal_values::poll_shared, crate::system_values::read, crate::shared_arrays::lower, crate::fetch_signals::lower, crate::system_signals::lower, crate::component_state::lower, crate::element_events::lower, crate::event_signals::lower, crate::page_html::lower, crate::signal_values::subscribe, crate::variable_signals::lower, crate::signal_values::lower, crate::declarations::lower_c_functions, crate::declarations::lower_bare_declarations, crate::declarations::lower_spaced_definitions, crate::lowering::number_words::lower, crate::parameter_shapes::lower, crate::ruby_blocks::lower, crate::declarations::lower_sized_arrays, crate::result_word::lower, crate::picked_calls::lower, crate::variadic::lower, crate::nonlocal_cells::lower_lambdas, crate::named_arguments::lower, crate::comprehensions::lower, crate::library_words::lower_function_methods, crate::tuples::lower, crate::run_time_blocks::warn_unresolved, crate::run_time_blocks::lower_interpret, crate::blocks::lower, crate::getters::lower, crate::run_time_blocks::lower_run_time_bangs, crate::mutation::warn_discarded, crate::mutation::lower, crate::nested_index::lower, crate::field_elements::lower, crate::host::lower_aliases,
+	crate::units::lower_sleep_durations, crate::units::lower_quantity_comparisons, crate::stored_values::lower, crate::undo_history::lower, crate::declarations::lower_tasks, crate::system_values::name, crate::signal_values::poll_shared, crate::system_values::read, crate::shared_arrays::lower, crate::fetch_signals::lower, crate::system_signals::lower, crate::component_state::lower, crate::element_events::lower, crate::event_signals::lower, crate::page_html::lower, crate::signal_values::subscribe, crate::variable_signals::lower, crate::signal_values::lower, crate::declarations::lower_c_functions, crate::declarations::lower_bare_declarations, crate::declarations::lower_spaced_definitions, crate::lowering::number_words::lower, crate::parameter_shapes::lower, crate::ruby_blocks::lower, crate::declarations::lower_sized_arrays, crate::result_word::lower, crate::picked_calls::lower, crate::variadic::lower, crate::nonlocal_cells::lower_lambdas, crate::named_arguments::lower, crate::comprehensions::lower, crate::library_words::lower_function_methods, crate::tuples::lower, crate::run_time_blocks::warn_unresolved, crate::run_time_blocks::lower_interpret, crate::blocks::lower, crate::getters::lower, crate::run_time_blocks::lower_run_time_bangs, crate::mutation::warn_discarded, crate::mutation::lower, crate::nested_index::lower, crate::field_elements::lower, crate::host::lower_aliases,
 	// again: the getters of the modules used, which lower_module_source leaves for here, and the program's reads of them
 	crate::getters::lower,
 	crate::type_name_matching::lower, crate::meta_entries::lower, crate::versions::lower_versions,
 	crate::analyzer::lower_negated_calls,
+	// `lo(a:number) := a.low; lo(5 ± 1)`: a number parameter of a program with ± values holds one (uncertain.rs)
+	crate::uncertain::lower_interval_parameters,
 ];
 
 /// The passes after the constant answers (time, units, reals), in order: types and traits, lambdas and closures, words
-const MEANING_PASSES: [fn(Node) -> Node; 29] = [
+const MEANING_PASSES: [fn(Node) -> Node; 30] = [
 	// first: the run-time item checks of declared lists see `names.add(v)` before any pass lowers the append
 	crate::lowering::list_element_checks::lower,
 	crate::lazy_ranges::lower, crate::declarations::resolve_tasks, crate::traits::lower_declarations, crate::type_tests::lower, crate::ambiguous_forms::lower, crate::analyzer::lower_list_times,
@@ -355,7 +368,7 @@ const MEANING_PASSES: [fn(Node) -> Node; 29] = [
 	crate::broadcasting::lower_scalar_element_wise, crate::broadcasting::lower_prefix_calls, crate::overloads::lower_arity_overloads,
 	crate::broadcasting::lower, crate::library_words::lower_count_in, crate::lambdas::lower, crate::function_values::lower, crate::closures::lower, crate::lambdas::lower_strict, crate::broadcasting::lower_several_arguments, crate::real::lower,
 	crate::type_constructor::lower, crate::printable::lower, crate::overloads::lower, crate::traits::lower_conformances, crate::min_max::lower,
-	crate::declarations::lower, crate::switch::lower, crate::phrase_words::lower, crate::library_words::lower,
+	crate::declarations::lower, crate::switch::lower, crate::phrase_words::lower, crate::library_words::lower, crate::number_keys::lower_key_words,
 	crate::traits::lower_dispatch, crate::memoization::lower,
 ];
 
@@ -379,6 +392,9 @@ fn lower_for_emission(node: Node) -> Result<Node, Node> {
 	use crate::effects::{without_constraints, EffectReport};
 
 	if let Some(clash) = crate::analyzer::check_operator_word_functions(&node) {
+		return Err(clash.into_error());
+	}
+	if let Some(clash) = crate::units::check_unit_parameter_clashes(&node) {
 		return Err(clash.into_error());
 	}
 	if let Some(misread) = crate::analyzer::check_upcast_fields(&node) {

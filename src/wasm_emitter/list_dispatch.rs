@@ -2,7 +2,8 @@
 //! index assignment, storing a list in a variable, reading it as a value) asks `list_backend` which implementation runs.
 //!
 //! Backends are interchangeable, the result is the same Node either way:
-//! - `NodeCells`: the generic cons-cell list (data = first, value = rest) of any elements; index walks i links
+//! - `NodeCells`: the generic cons-cell list (data = first, value = rest) of any elements; index walks i links, or on
+//!   from the list cursor (list_ops.rs emit_list_cursor_globals), so a loop's `items#(i+1)` and `#items` are O(1)
 //! - `TypedArray`: a list variable proven to hold only ints (floats) is an `$IntList` (`$FloatList`), a length and a
 //!   wasm GC `(array (mut i64))` (`f64`) with spare capacity, see `find_typed_lists`: O(1) index and count, amortised
 //!   O(1) append (`out = out + [x]`, which `map` lowers to, or `out.add(x)`), no box per element. Wherever the program needs it as a value (a
@@ -155,7 +156,7 @@ pub(super) enum Slot {
 }
 
 impl Slot {
-	fn get(self) -> Instruction<'static> {
+	pub(super) fn get(self) -> Instruction<'static> {
 		match self {
 			Slot::Local(index) => I::LocalGet(index),
 			Slot::Global(index) => I::GlobalGet(index),
@@ -163,7 +164,7 @@ impl Slot {
 	}
 
 	/// Store the list on the stack and leave it there
-	fn tee(self, func: &mut Function) {
+	pub(super) fn tee(self, func: &mut Function) {
 		match self {
 			Slot::Local(index) => { func.instruction(&I::LocalTee(index)); }
 			Slot::Global(index) => { func.instruction(&I::GlobalSet(index)); func.instruction(&I::GlobalGet(index)); }
@@ -350,17 +351,18 @@ impl WasmGcEmitter {
 	/// The source of `target = value`
 	/// Whether an append to `name` (`xs = xs + [v]`) can run while another variable holds its list: after an assignment
 	/// between it and another (`ys = xs`, `xs = ys`) or in a loop around one. A list aliased only once its appends are
-	/// done (`d = (out = ø; for … { out = out + [x] }; out)`, every lowered map and filter) grows in place (card map-typed)
-	fn appends_while_aliased(&self, program: &Node, name: &str) -> bool {
+	/// done (`d = (out = ø; for … { out = out + [x] }; out)`, every lowered map and filter) grows in place (card map-typed).
+	/// `holds`: the places a holder takes the list as Nodes (`[xs, 5]`, `{r = xs}`), aliases too
+	fn appends_while_aliased(&self, program: &Node, name: &str, holds: &[&Node]) -> bool {
 		let mut events = vec![];
-		self.list_events(program, name, &mut vec![], &mut 0, &mut events);
+		self.list_events(program, name, holds, &mut vec![], &mut 0, &mut events);
 		let runs_after = |append: &ListEvent, alias: &ListEvent| append.order > alias.order || append.loops.iter().any(|ring| alias.loops.contains(ring));
 		events.iter().filter(|alias| !alias.append).any(|alias| events.iter().any(|append| append.append && runs_after(append, alias)))
 	}
 
 	/// The appends to `name` and the assignments between it and another variable, in the order they run (an assignment
 	/// after its value), each with the loops around it
-	fn list_events(&self, node: &Node, name: &str, loops: &mut Vec<usize>, count: &mut usize, events: &mut Vec<ListEvent>) {
+	fn list_events(&self, node: &Node, name: &str, holds: &[&Node], loops: &mut Vec<usize>, count: &mut usize, events: &mut Vec<ListEvent>) {
 		let node = node.drop_meta();
 		let is_loop = matches!(node, Node::Key(condition, Op::Do, _) if matches!(condition.drop_meta(), Node::Key(_, Op::While, _)));
 		if is_loop {
@@ -368,11 +370,12 @@ impl WasmGcEmitter {
 			*count += 1;
 		}
 		match node {
-			Node::Key(left, _, right) => [left, right].into_iter().for_each(|part| self.list_events(part, name, loops, count, events)),
-			Node::List(items, _, _) => items.iter().for_each(|item| self.list_events(item, name, loops, count, events)),
+			Node::Key(left, _, right) => [left, right].into_iter().for_each(|part| self.list_events(part, name, holds, loops, count, events)),
+			Node::List(items, _, _) => items.iter().for_each(|item| self.list_events(item, name, holds, loops, count, events)),
 			_ => {}
 		}
 		let append = match node {
+			_ if holds.iter().any(|place| std::ptr::eq(*place, node)) => Some(false),
 			Node::Key(target, Op::Assign | Op::Define, value) => match target.drop_meta() {
 				Node::Symbol(target) => match self.number_source_of(target, value) {
 					Source::Append(_) if target == name => Some(true),
@@ -491,7 +494,9 @@ impl WasmGcEmitter {
 		let changes_arguments = |callee: &str| self.ctx.ffi_imports.get(callee).is_some_and(|import| crate::wasm_modules::is_module_path(import.library)
 			&& crate::wasm_modules::exports(import.library).get(import.name).is_some_and(|export| export.node_result.is_some()));
 		let held = super::list_sharing::held_elsewhere(program, &self.ctx.user_functions, &changes_arguments);
-		let written = super::list_sharing::written_roots(program, &self.ctx.user_functions);
+		// a counter `i++` changes no list
+		let is_number = |name: &String| self.scope.lookup(name).is_some_and(|local| matches!(local.kind, Kind::Int | Kind::Float));
+		let written: HashSet<String> = super::list_sharing::written_roots(program, &self.ctx.user_functions).into_iter().filter(|root| !is_number(root)).collect();
 		loop {
 			let typed = self.typed_list_elements(&sources, &excluded, &declared_floats, &assigned_kinds);
 			// such a copy is no snapshot only while no list but the typed arrays is changed in place (shared-lists-typed):
@@ -505,7 +510,14 @@ impl WasmGcEmitter {
 			// a changing list is no typed array where a holder keeps it as Nodes: an untyped variable or one of another
 			// element type holding the same list, a field or a call's argument it came from or goes to
 			let element_of = |name: &String| typed.get(name).copied().flatten().or_else(|| self.typed_globals.get(name).map(|(_, list)| list.element));
-			let shared_as_nodes = |name: &String| held.contains(name) || (group_updated(name) && (
+			// a list an item or a field holds once it is complete (`o = {r = 1..n}`, `[xs, 5]`) is converted there, never
+			// changed after: its Node copy and the array stay equal
+			let held_complete = |name: &String| {
+				let places: Vec<&Node> = groups[name].iter().filter_map(|member| held.places.get(member)).flatten().copied().collect();
+				!writes_shared_lists && groups[name].iter().all(|member| !written.contains(member) && !self.appends_while_aliased(program, member, &places))
+			};
+			let held_as_nodes = |name: &String| held.passed.contains(name) || (held.places.contains_key(name) && !held_complete(name));
+			let shared_as_nodes = |name: &String| held_as_nodes(name) || (group_updated(name) && (
 				groups[name].iter().any(|member| element_of(member).is_none() || element_of(member) != element_of(name))
 				|| sources[name].iter().any(|source| matches!(source, Source::Converted { fresh: false }))));
 			let parted: Vec<String> = typed.keys().filter(|name| shared_as_nodes(name)).cloned().collect();
@@ -517,7 +529,7 @@ impl WasmGcEmitter {
 				return typed.into_iter()
 					.filter(|(name, element)| *element != Some(ElementType::Node) || indexed.contains(name) || appended(name))
 					.filter_map(|(name, element)| {
-						let aliased = groups[&name].len() > 1 && self.appends_while_aliased(program, &name);
+						let aliased = groups[&name].len() > 1 && self.appends_while_aliased(program, &name, &[]);
 						let list = TypedList { element: element?, updated: group_updated(&name), aliased };
 						Some((name, list))
 					})

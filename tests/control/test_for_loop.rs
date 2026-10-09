@@ -42,3 +42,11 @@ fn test_loop_body_with_a_list_statement() {
 	is!("def f() { return [1] }; for t in [1,2] { f() }; 0", 0);
 	is!("def f() { return [1] }; t=0; while t < 2 { f(); t++ }; t", 2);
 }
+
+/// card todo-app robustness: the iterable of a loop may be a phrase, `for todo in todos sorted by priority {…}`
+#[test]
+fn a_loop_walks_a_filter_or_a_sorted_list() {
+	is!("xs = [3, 1, 2]; s = 0; for x in xs where it > 1 { s += x }; s", 5);
+	is!("xs = [{p: 3}, {p: 1}]; s = \"\"; for x in xs sorted by p { s += x.p }; s", "13");
+	is!("xs = [3, 1, 2]; s = 0; for x in xs where it > 1 and it < 3 { s += x }; s", 2);
+}

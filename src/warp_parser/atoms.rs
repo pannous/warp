@@ -106,6 +106,10 @@ impl WarpParser {
 			';' | '>' | '}' | ')' | ']' => Empty, // Closing brackets/terminators handled by caller
 			'ø' => { self.advance(); return Empty }
 			'∞' => { self.advance(); return Node::Number(Number::Inf) } // the float infinity (P56)
+			_ if let Some((truth, length)) = self.truth_glyph_at() => {
+				self.advance_by(length);
+				return truth;
+			}
 			// $n parameter reference (e.g., $0 = first param)
 			'@' if self.peek_char(1).is_alphabetic() => self.parse_attribute(),
 			'@' if self.peek_char(1) == '(' && !self.options.data_mode => self.parse_matlab_lambda(),
@@ -134,7 +138,7 @@ impl WarpParser {
 				self.parse_number()
 			}
 			ch if ch.is_alphabetic() || ch == '_' => {
-				let atom = self.parse_elixir_function().or_else(|| self.parse_python_lambda()).or_else(|| self.parse_f_string()).unwrap_or_else(|| self.parse_symbol_with_suffix());
+				let atom = self.parse_elixir_function().or_else(|| self.parse_python_lambda()).or_else(|| self.parse_f_string()).or_else(|| self.parse_shader_block()).unwrap_or_else(|| self.parse_symbol_with_suffix());
 				// the function's own atom takes the mark, not an atom parsed inside it (its parameters)
 				let head = match atom.drop_meta() {
 					Node::List(items, _, _) => items.first().map(Node::name),
@@ -155,7 +159,8 @@ impl WarpParser {
 			}
 			'\\' if let Some(name) = crate::uniscript_entities::bare_entity_name_at(&self.chars, self.pos) => {
 				(0..=name.len()).for_each(|_| self.advance());
-				error(&format!("a uniscript entity is written \\:{name}, not \\{name}"))
+				Diagnostic::default().message(format!("a uniscript entity is written \\:{name}, not \\{name}"))
+					.offer("the uniscript entity", format!("\\{name}"), format!("\\:{name}")).into_error()
 			}
 			_ if let Some((operator, length)) = self.bare_operator_in_block() => {
 				(0..length).for_each(|_| self.advance());
@@ -309,6 +314,21 @@ impl WarpParser {
 		self.parse_indented_block().unwrap_or_else(|| error("a definition needs a body: `to name params: body`"))
 	}
 
+	pub(super) fn next_line_starts_with_tab(&self) -> bool {
+		self.chars[self.pos..].iter().skip_while(|ch| **ch != '\n').nth(1) == Some(&'\t')
+	}
+
+	/// The `end` on the line after a block read by indentation, the newline before the next statement kept
+	pub(super) fn skip_end_line(&mut self) {
+		let before = (self.pos, self.line_nr, self.column, self.current_line.clone());
+		self.skip_whitespace();
+		if !self.matches_keyword(END_KEYWORD) {
+			(self.pos, self.line_nr, self.column, self.current_line) = before;
+			return;
+		}
+		self.advance_by(END_KEYWORD.len());
+	}
+
 	/// Offside rule: the lines indented (by tabs or spaces) below a line ending in `:` are its `{…}` block;
 	/// None, with nothing consumed, when the next line is not indented deeper
 	pub(super) fn parse_indented_block(&mut self) -> Option<Node> {
@@ -345,8 +365,9 @@ impl WarpParser {
 		let mut position = start;
 		while position < self.chars.len() {
 			let ch = self.chars[position];
-			if ch == '"' || ch == '\'' {
-				position += 2 + self.chars[position + 1..].iter().position(|quoted| *quoted == ch).unwrap_or(self.chars.len());
+			// an `end` in a text or a comment is no word of the code: `// … would end it`
+			if let Some(after) = text_or_comment_end(&self.chars, position) {
+				position = after;
 				continue;
 			}
 			if !is_identifier_char(ch) {
@@ -381,8 +402,9 @@ impl WarpParser {
 		let mut position = 0;
 		while position < self.chars.len() {
 			let ch = self.chars[position];
-			if ch == '"' || ch == '\'' {
-				position += 2 + self.chars[position + 1..].iter().position(|quoted| *quoted == ch).unwrap_or(self.chars.len());
+			// an `end` in a text or a comment is no word of the code: `// … would end it`
+			if let Some(after) = text_or_comment_end(&self.chars, position) {
+				position = after;
 				continue;
 			}
 			if !is_identifier_char(ch) {
@@ -488,6 +510,15 @@ impl WarpParser {
 	}
 
 	/// `🌍`, `🇩🇪`, `👍🏽` in code, one user-perceived character: one code point is a codepoint, several a text
+	/// `⊤`, `✅`, `❌` …: the truth value a glyph at the position spells, and its length in chars
+	fn truth_glyph_at(&self) -> Option<(Node, usize)> {
+		super::TRUTH_GLYPHS.iter().find_map(|(glyph, _)| {
+			let length = glyph.chars().count();
+			let ahead: String = self.chars[self.pos..].iter().take(length).collect();
+			(ahead == *glyph).then(|| (super::truth_glyph(glyph).expect("a truth glyph"), length))
+		})
+	}
+
 	fn parse_emoji(&mut self) -> Node {
 		let ahead: String = self.chars[self.pos..].iter().take(LONGEST_EMOJI).collect();
 		let emoji = crate::extensions::strings::grapheme_clusters(&ahead)[0].to_string();

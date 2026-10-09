@@ -24,6 +24,7 @@ mod test_unbounded_int;
 mod test_unit_composites;
 mod test_unit_polish;
 mod test_plus_minus_units; // card plus-minus-units
+mod test_quantity_tolerance; // card quantity-tolerance
 mod test_mixed_quantity_arguments; // card mixed-arguments
 mod test_rational_quantities;
 mod test_static_units;
@@ -48,6 +49,7 @@ mod test_implicit_libm;
 mod test_unit_word_keys;
 mod test_round_to_digits;
 mod test_log_base;
+mod test_float_accumulator; // card float-accumulator
 mod test_duration_text;
 mod test_unit_conversion;
 mod test_unit_literals;
@@ -65,8 +67,25 @@ mod test_plus_minus;
 mod test_plus_minus_math;
 mod test_plus_minus_print;
 mod test_plus_minus_gaussian; // card plus-minus-gaussian
+mod test_plus_minus_parameter; // card number-param
 mod test_trailing_symbol; // card trailing-symbol
 mod test_div_assign;
 mod test_unit_fields; // card unit-fields
+mod test_unit_columns; // card units-stress
+mod test_unit_field_display; // card unit-value
+mod test_named_unit_fields; // card map-units
+mod test_average; // card average-undefined
 mod test_log_glyphs; // P226
 mod test_units_text; // card units-text
+mod test_as_compound_unit; // card compound-unit
+mod test_printed_quantity; // P231
+mod test_quantity_conversion; // card quantity-falls
+mod test_quantities_in_one_text; // card text-join
+mod test_text_then_conversion; // card print-km
+mod test_compound_accumulator; // card compound-accumulator
+mod test_unit_named_variable; // card loop-variable
+mod test_recursive_units; // card static-units
+mod test_unit_named_function; // card static-units-function
+mod test_unit_named_parameter; // card static-units-parameter
+mod test_unit_glue_hint; // card unit-glue
+mod test_units_type_holes; // cards units-compare units-reassign units-annotation units-text-repeat

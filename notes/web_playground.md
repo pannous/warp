@@ -2,7 +2,12 @@
 
 Run it: `web/playground/build.sh && python3 -m http.server 8000` in the repository root, then open
 http://localhost:8000/web/playground/ (`?example=<name>` picks a tour example or a samples/ file).
-Probe: `probes/web_playground.py [sample…]` (headless agent-browser; compares every sample's value with the CLI's).
+Probe: `probes/web_playground.py [sample…]` (headless agent-browser; compares every sample's value with the CLI's,
+exit 1 on a difference). Presentation is no difference: markup the page renders (report.html) is compared with the
+HTML text the CLI prints, a program with `test` lines with `warp test` (the page's Run runs tests), a value ø with a
+CLI run that shows no » line. Samples in excluded_samples.txt are skipped (no native raylib/SDL window opens).
+Each step waits for its run to finish (#status), not a fixed sleep: after `use python` the worker is busy loading
+Pyodide and 1.5 s sleeps read the previous run (six false FAILs, card web-playground-probe).
 
 ## The tour (examples.js)
 In the order of the guide's chapters (card playground-redesign, 2026-10-07): small examples with one idea each and an
@@ -19,6 +24,16 @@ handles (playground.js dragToResize) set the guide's width and the editor's heig
 build switch, silenced hints) sit in the header's ⋯ menu; the run time is a small note in the output's corner.
 
 - The assistant (assistant.js, notes/agent.md): the API key field in the ⋯ menu, completion (Ctrl-Space), Ask ✦ chat.
+- Completion as you type (completion.js, card g_oQgw, like the Sublime packages Warp and Uniscript): words from the
+  second letter (keywords first, then the words of the code, examples and samples by use), the standard modules after
+  `use` (keywords.js `modules`, from src/modules.rs), uniscript entities after `\:` and `<:` (entities.tsv, a copy of
+  src/uniscript_entities.tsv fetched on first use) which become their character; a typed `<:name>` becomes it at `>`.
+  Tab takes the first, Enter only one chosen with Up/Down (else a new line). probes/web/completion.py checks it.
+- Keyboard shortcuts (shortcuts.js SHORTCUTS, card keyboard-shortcuts, user 2026-10-09): one table of CodeMirror key
+  names, the editor's extraKeys. Cmd/Ctrl-Enter runs; Cmd-/ (Ctrl-/ elsewhere) toggles `// ` on the selected lines or
+  the cursor's line (after their shallowest indentation; all commented: uncommented), one undo step, the selection kept.
+  tests/web/test_editor_shortcuts.rs runs commentEdits under node; the keys checked by hand headless (agent-browser
+  press Meta+/).
 
 ## The language guide (guide.md, guide.js)
 The left pane of the page (cards "core feature", "doc-example"; P188 one page): web/playground/guide.md, chapters `## Title` from
@@ -179,6 +194,13 @@ web/playground/tests.html in headless Chrome (agent-browser, session warp-browse
   test_in_browser.py and several probes wait while it is exactly that.
   Probes: probes/firefox_hello_hang/unanswered.sh (FIREFOX_COMMAND_SECONDS=5, a promise that never resolves);
   trickle_server.py [--stall] + progress.sh (warp.wasm at 400 KB/s, or stopping after 1 MB: the note at 30 s).
+- The hang caught (2026-10-09, verify run 37895933962, live site, Firefox): isolated and service-worker controlled, but
+  playground.state() said worker "not started": worker.js never posted a single message, nothing in the console; the
+  run queued behind it. Root cause (a Worker spawned under coi-serviceworker in Firefox that never runs) still open.
+  Now playground.js restarts a starting worker silent for STALLED_START_MS (60 s; every message restarts the clock, so a
+  slow download that progresses is fine) once, with a console warning naming its stage (the verdict still fails:
+  loud, not hidden), and a second silent start rejects workerReady naming the stage, so the run fails instead of
+  waiting for ever. Probe: trickle_server.py --stall-once + restart.sh (the example shows after ~76 s).
 
 ## Modules and packages in the browser (2026-10-04)
 The compiler reads files through the page: `warp_host.fetch(address)` / `take_fetched` (web.rs `read_bytes`, cached
@@ -229,9 +251,12 @@ the_strict_flag_turns_warnings_into_errors before).
 ## paint: a canvas in the page (2026-10-06, issue #15)
 `paint(pixels, width, height)` is a host word (src/host.rs PAINT): host.js reads the pixel list and hands it to the
 worker's hooks.paint, the page draws one canvas per call under the output (playground.js showPaintings: nonzero/true
-is ink, 0 paper). Natively it writes a grayscale PNG to <temp>/warp-paint/paint.png (src/paint.rs, flate2 + crc32fast), prints its path. In a terminal it shows the frames in a window instead (card g_gGsg, src/paint_window.rs): a viewer process `warp paint-window` (winit owns the main thread on macOS, the program runs there) takes them over its stdin and draws them through a wgpu surface (Metal); each paint replaces the frame, the last stays until the window is closed, and a viewer that cannot start falls back to the PNG. probes/paint_window.sh checks the surface with `paint-window --check` (center pixel read back). samples/circle.warp is the issue's demo as
+is ink, 0 paper). Natively it writes a grayscale PNG to <temp>/warp-paint/paint.png (src/paint.rs, flate2 + crc32fast), prints its path. Run by `warp` itself it shows the frames in a window instead, also from an editor's build or a pipe (card g_gGsg, src/paint_window.rs; PNGs only with WARP_NO_WINDOW or CI set, as tests/common warp_command and tests/queue.sh do, or for warp used as a library): a viewer process `warp paint-window` (winit owns the main thread on macOS, the program runs there) takes them over its stdin and draws them through a wgpu surface (Metal); each paint replaces the frame, the last stays until the window is closed (the playground likewise: a painting the size of the last replaces it at once, sleep or not, card g_oldM). Pixels cross between host and module in one call each way (card g_odW4, src/wasm_emitter/int_lists.rs: ints_to_list for gpu_render, list_to_ints for paint, through scratch memory above the text heap): a 256×256 frame of samples/webgpu went from 43 to 5 ms for gpu_render natively (paint 44 → 1 ms) and from 31 to 7 ms in Chrome (probes/gpu/render_speed.warp, probes/gpu/web_speed.py),, and a viewer that cannot start falls back to the PNG. probes/paint_window.sh checks the surface with `paint-window --check` (center pixel read back). samples/circle.warp is the issue's demo as
 written (one loop moving x and y together, so it paints only a short diagonal), samples/filled_circle.warp the filled
 circle with two loops.
+Prints show as they arrive, like paintings (card print-watch, 2026-10-09): `print "Watch it turn blue."` before a
+slow paint is read while it renders. Only an animation (after its first sleep) holds a text frame back until the next
+one begins (playground.js printedChunk). probes/print_watch.sh.
 
 ### Wasm memory limit across Workers (card browser-test, 2026-10-06)
 Chrome holds ~124 live Wasm memories per page, all its Workers together (V8's sandbox: each 32-bit memory reserves
@@ -251,3 +276,12 @@ ends on about:blank), a declared memory maximum (still ~8 GB reserved).
   worker.js warmUp: `p{ "" }` evaluated with the worker's messages silenced, skipped over a live run). With it the
   first markup run was ~80 ms in Chrome and ~97 ms in WebKit (local build). Measured with a Playwright probe timing
   window.playground.evaluate in a fresh context (probes/*.mjs are not tracked; agent-browser eval works the same).
+
+- ⛶ (card little-full, 2026-10-09, warp-web): a small button over the paintings' corner (index.html #painted,
+  playground.js toggleFullScreen) puts them full screen: the last painting only, as large as fits at its own aspect
+  ratio (CSS --aspect set by showPaintings, so the pointer mapping of clickDetail stays exact), black around it; Esc
+  or ⛶ again leaves. Its click is no click of the program's `on click`. Check: probes/little_full.sh (after build.sh).
+- Tour example "shader mouse" (card second-shader, 2026-10-09, warp-web): a fragment shader under the pointer, the
+  inputs as shader holes (src/shader_holes.rs): `$mouse` (a list [mouse_x, mouse_y] → vec2f), `$mouse_down` (0/1)
+  and `$seconds` (from clock()), read at each paint. The ⛶ box (.painted) is as wide as its paintings, so ⛶ sits on
+  the painting's corner.

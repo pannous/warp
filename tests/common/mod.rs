@@ -191,7 +191,12 @@ pub fn warp_command() -> std::process::Command {
 		});
 		own.unwrap_or_else(|| panic!("neither target/debug/deps nor {} holds a warp of version {} built from {}, also after building it", shared.display(), env!("CARGO_PKG_VERSION"), env!("CARGO_MANIFEST_DIR")))
 	});
-	std::process::Command::new(binary)
+	// hints chosen explicitly (card hints-toggle): the tests read them without the closing "hide hints with" line
+	let mut command = std::process::Command::new(binary);
+	command.env("WARP_HINTS", "1");
+	// a sample that paints writes PNGs here, no window (src/paint.rs)
+	command.env(warp::paint::NO_WINDOW_VARIABLE, "1");
+	command
 }
 
 /// A copy of `binary` that only this checkout writes: named by the checkout's version and path, put in place by a

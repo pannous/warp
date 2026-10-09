@@ -53,5 +53,6 @@ while drop_stale_tickets; [ "$(first_ticket)" != "${ticket##*/}" ]; do sleep $PO
 
 # exec keeps our PID, so the ticket stays valid while we wait for the lock and run; it is removed when the run ends
 export WARP_TEST_LOCKED=1
+export WARP_NO_WINDOW=1 # a painting program writes PNGs, never a window during tests (src/paint.rs)
 exec "${hold_lock[@]}" bash -c 'trap "rm -f $1" EXIT; echo "$PPID $PWD ${*:2}" > "$0.owner"; "${@:2}"' \
 	"$LOCK" "$ticket" nice -n "$niceness" "${run[@]}"

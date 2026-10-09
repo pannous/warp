@@ -37,7 +37,7 @@ pub(crate) const PAIRED_COUNT: &str = "(if #LEFT == #RIGHT then #LEFT else raise
 pub(crate) const PAIRED_SUM_TEMPLATE: &str = "(LEFT = paired_left; RIGHT = paired_right; SUM = 0; for paired_index in 1 to COUNT { SUM = SUM + paired_item }; SUM)";
 const FUSED_SUM_TEMPLATE: &str = "(ITEMS = fused_list; SUM = 0; for ITEM in ITEMS { SUM = SUM + fused_item }; SUM)";
 const SUM_WORD: &str = "sum";
-/// `dot(xs, ys)` is `sum(xs .* ys)`, unless the program defines dot
+/// `dot(xs, ys)` is `sum(xs .* ys)`, unless the program defines dot; `xs * ys` of two lists is the same
 const DOT_WORD: &str = "dot";
 
 /// P84 (user: "This should have already been done with broadcasting"): several juxtaposed arguments of a function of one
@@ -487,6 +487,9 @@ impl Broadcast {
 					return paired;
 				}
 				let Node::Key(left, op, right) = key else { unreachable!() };
+				if op == Op::Mul && self.is_list(&left) && self.is_list(&right) {
+					return self.inner_product(*left, *right);
+				}
 				let method_call = (op == Op::Dot).then(|| self.broadcast_method(&left, &right)).flatten();
 				method_call.unwrap_or(Node::Key(left, op, right))
 			}
@@ -613,8 +616,13 @@ impl Broadcast {
 		if self.defines_dot || *bracket != Bracket::Round || !matches!(head.drop_meta(), Node::Symbol(word) if word == DOT_WORD) {
 			return None;
 		}
-		let sum = [Node::Symbol(SUM_WORD.to_string()), crate::analyzer::element_wise(left.clone(), Op::Mul, right.clone())];
-		self.fused_sum(&sum, bracket).or_else(|| Some(Node::List(vec![sum[0].clone(), self.rewrite(sum[1].clone())], Bracket::Round, Separator::None)))
+		Some(self.inner_product(left.clone(), right.clone()))
+	}
+
+	/// `xs * ys` of two lists, as `dot(xs, ys)`: `sum(xs .* ys)` (card g_n8GI)
+	fn inner_product(&self, left: Node, right: Node) -> Node {
+		let sum = [Node::Symbol(SUM_WORD.to_string()), crate::analyzer::element_wise(left, Op::Mul, right)];
+		self.fused_sum(&sum, &Bracket::Round).unwrap_or_else(|| Node::List(vec![sum[0].clone(), self.rewrite(sum[1].clone())], Bracket::Round, Separator::None))
 	}
 
 	/// A list literal that is no object, or a variable only ever assigned one

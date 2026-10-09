@@ -16,6 +16,8 @@ Read notes/agents/common.md and notes/roles.md ("Integrator").
 - Browser suite and tour: `web/playground/build.sh optimized` FIRST (worker.js loads served-files.js, which build.sh
   writes; without it every browser test fails with an importScripts NetworkError), then `cargo browser-test`, then
   `build.sh components` and `python3 web/playground/test_in_browser.py --examples` (and `--firefox`).
+  Samples check: `python3 probes/web_playground.py` (after build.sh; exit 0 = every menu sample gives the CLI's value
+  in the page, the Ask flow and the fix buttons work; ~3 min).
 - Before pushing also check the browser build (the playground deploys from main; a native-only item breaks it):
   `cargo check --offline --lib --target wasm32-unknown-unknown --no-default-features`, and compile the browser test
   build (native-only API in a test broke it twice): `tests/queue.sh cargo --offline test --target wasm32-wasip1

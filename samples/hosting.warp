@@ -1,0 +1,6 @@
+// A program to host: in the playground's ⋯ menu, Deploy (log in with GitHub) puts its routes on the web at
+// https://warp-<name>.pannous.workers.dev, and "Deploy to my Cloudflare" puts them in your own Cloudflare account
+// (notes/hosting.md). On this machine: warp deploy --dev samples/hosting.warp
+fib(n) := if n < 2 then n else fib(n-1) + fib(n-2)
+get "/" { "hello from the edge" }
+get "/fib/:n:int" { {n: n, fib: fib(n)} }

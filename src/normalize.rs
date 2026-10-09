@@ -340,6 +340,28 @@ pub enum HintMode {
     Off,
 }
 
+/// Hints and notes are printed by default; the CLI's `--no-hints` or WARP_HINTS=0 turn printing off for the whole
+/// process (user 2026-10-09, card hints-toggle). Off, they are still recorded: `capture_hints` (the playground's
+/// report, its fix buttons, the tests) sees every hint
+static HINTS_PRINTED: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(true);
+/// Whether this process printed a hint: the CLI then ends with how to hide them
+static ANY_HINT_PRINTED: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+
+/// Print hints and notes to stderr (on, the default) or only record them (off)
+pub fn print_hints(on: bool) {
+    HINTS_PRINTED.store(on, std::sync::atomic::Ordering::Relaxed);
+}
+
+/// Whether hints and notes are printed to stderr
+pub fn hints_printed() -> bool {
+    HINTS_PRINTED.load(std::sync::atomic::Ordering::Relaxed)
+}
+
+/// Whether this process printed a hint or note
+pub fn any_hint_printed() -> bool {
+    ANY_HINT_PRINTED.load(std::sync::atomic::Ordering::Relaxed)
+}
+
 /// Set the hint mode of this thread's compilations
 pub fn set_hint_mode(mode: HintMode) {
     HINT_MODE.with(|current| current.set(mode));
@@ -389,6 +411,10 @@ fn emit_hint(original: &str, canonical: &str, reason: &str, rewrites: bool) {
             hints.push(CapturedHint { original: original.to_string(), canonical: canonical.to_string(), position: pos.clone(), reason: reason.to_string(), rewrites });
         }
     });
+    if !hints_printed() {
+        return;
+    }
+    ANY_HINT_PRINTED.store(true, std::sync::atomic::Ordering::Relaxed);
     use crate::diagnostic::{paint, Color};
     let position = if pos.is_empty() { String::new() } else { format!(" {}", paint(Color::Gray, &pos)) };
     // a note about the text as written (`await job within 100 ms`) prefers nothing else
@@ -456,11 +482,6 @@ pub mod hints {
         };
         let canonical_quote = text_quote();
         hint(&format!("{used}{content}{used}"), &format!("{canonical_quote}{content}{canonical_quote}"), reason);
-    }
-
-    /// A dollar hole `${expr}` / `$x` in interpolated text: the Swift hole `\(expr)` is canonical (decision D1)
-    pub fn interpolation(written: &str, expression: &str) {
-        hint(written, &format!("\\({expression})"), "canonical interpolation hole");
     }
 
     /// The operator as written in the source; `is_prefix` tells `!x` from an infix use

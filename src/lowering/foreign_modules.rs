@@ -15,6 +15,8 @@ pub const FOREIGN_RUNTIMES: [&str; 3] = ["python", JS_RUNTIME, COMPONENT_RUNTIME
 const JS_RUNTIME: &str = "js";
 /// The member of a foreign call that constructs its module (`new URL(…)`, src/foreign.rs and host-foreign.js)
 const CONSTRUCTOR_MEMBER: &str = "";
+/// The member a call sets to its one argument: `e.innerHTML = "x"` is the member "set innerHTML" (src/foreign.rs)
+const SETTER_PREFIX: &str = "set ";
 /// `use wasm "lib.wasm" as lib`: a WebAssembly component (src/components.rs); its module is the file, found next to the
 /// program, and named after the file by default
 pub const COMPONENT_RUNTIME: &str = "wasm";
@@ -312,6 +314,26 @@ impl Foreign<'_> {
 		Some(foreign_call(&runtime, Node::Text(module), CONSTRUCTOR_MEMBER, true, Node::List(arguments, Bracket::Square, Separator::Space)))
 	}
 
+	/// `receiver.member = value` of a foreign receiver: the member set in its runtime, checked by WebIDL when it declares
+	/// the receiver (`document.getElementById("r").innerHTML = "x"`)
+	fn member_set(&mut self, target: &Node, value: &Node) -> Option<Node> {
+		let Node::Key(receiver, Op::Dot, member) = target.drop_meta() else { return None };
+		let Node::Symbol(member) = member.drop_meta() else { return None };
+		let receiver = self.rewrite(receiver.as_ref().clone());
+		let (runtime, module) = self.receiver(&receiver)?;
+		let checked = match runtime == JS_RUNTIME {
+			true => self.web_idl_receiver(&receiver).and_then(|declared| match declared {
+				Some((interface, path)) => crate::web_idl::check_member(&interface, &path, member, None),
+				None => Ok(()),
+			}),
+			false => Ok(()),
+		};
+		if let Err(problem) = checked {
+			return Some(crate::diagnostic::Diagnostic::at(target, problem).into_error());
+		}
+		Some(foreign_call(&runtime, module, &format!("{SETTER_PREFIX}{member}"), true, Node::List(vec![value.clone()], Bracket::Square, Separator::Space)))
+	}
+
 	/// Does the node name a used foreign module or a variable holding a foreign value
 	fn mentions_foreign_name(&self, node: &Node) -> bool {
 		let mut found = false;
@@ -388,6 +410,9 @@ impl Foreign<'_> {
 			// `d = datetime.date(2020, 1, 2)`: d holds a value of that runtime, `d.isoformat()` asks it
 			Node::Key(target, op @ (Op::Assign | Op::Define), value) => {
 				let value = self.rewrite(*value);
+				if let Some(set) = (op == Op::Assign).then(|| self.member_set(&target, &value)).flatten() {
+					return set;
+				}
 				if let Node::Symbol(name) = target.drop_meta() {
 					match foreign_runtime(&value) {
 						Some(runtime) => self.values.insert(name.clone(), runtime),

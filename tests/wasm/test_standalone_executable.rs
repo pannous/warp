@@ -40,7 +40,7 @@ fn test_build_exe_prints_lists_as_print_does() {
 fn test_build_exe_refuses_imports_the_runtime_lacks() {
 	let (build, executable) = build_executable("standalone_fetch", "fetch \"https://example.com\"");
 	assert!(!build.status.success());
-	assert!(text(&build.stderr).contains("fetch and files need runtime."), "{}", text(&build.stderr));
+	assert!(text(&build.stderr).contains("fetch and files used runtime."), "{}", text(&build.stderr));
 	assert!(!executable.exists());
 }
 

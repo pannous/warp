@@ -52,6 +52,8 @@ const COMPILE_COMMANDS: [&str; 3] = ["compile", "build", "link"];
 const TOOL_COMMAND: &str = "tool";
 /// `warp dev <file> [port]`: serves the file's site and builds it anew when it changes (src/dev_server.rs, card web-dev)
 const DEV_COMMAND: &str = "dev";
+/// `warp deploy [--dev|--dry-run] app.warp`: the program as a Cloudflare Worker, deployed by wrangler (src/deploy.rs)
+const DEPLOY_COMMAND: &str = "deploy";
 /// `warp serve [app.warp] [port]`: serves the program, its page, server functions and routes (P222)
 const SERVE_COMMAND: &str = "serve";
 const SERVE_PORT: u16 = 8080;
@@ -66,6 +68,11 @@ const ACKNOWLEDGEMENTS_FILE: &str = ".warp-acknowledged";
 const OLD_ANSWERS_FILE: &str = ".warp-answers";
 /// Never prompt "got it?" after a warning or note (as in CI or a pipe)
 const NO_ASK_FLAG: &str = "--no-ask";
+/// Hints and notes (`prefer ^ over **`) are shown by default; `--no-hints` or WARP_HINTS=0 hide them (card hints-toggle)
+const NO_HINTS_FLAG: &str = "--no-hints";
+const HINTS_VARIABLE: &str = "WARP_HINTS";
+/// The last line of a run that showed hints while nobody chose to see them (neither the flag nor WARP_HINTS was given)
+const HIDE_HINTS_TIP: &str = "hide hints with: warp --no-hints (or WARP_HINTS=0)";
 /// What the console and `warp <code>` put before a program's value
 const RESULT_MARK: &str = "» ";
 /// The exit status of a run that ends in an uncaught error (card cli-error-exit)
@@ -83,11 +90,12 @@ fn node_to_i32(node: &Node) -> i32 {
 #[cfg(not(test))]
 fn main() {
     let mut args: Vec<String> = env::args().collect();
+    warp::paint::allow_windows();
     apply_flags(&mut args);
     run_command(&args);
 }
 
-/// `--fuel <steps>`, `--strict`, `--no-ask` take effect and leave the arguments; the answers file is read
+/// `--fuel <steps>`, `--strict`, `--no-ask`, `--no-hints` take effect and leave the arguments; the answers file is read
 #[cfg(not(test))]
 fn apply_flags(args: &mut Vec<String>) {
     // `--fuel <steps>`: execution budget of every run (default util::DEFAULT_FUEL, env WARP_FUEL)
@@ -108,6 +116,14 @@ fn apply_flags(args: &mut Vec<String>) {
         args.remove(flag);
     }
 
+    let no_hints = args.iter().position(|arg| arg == NO_HINTS_FLAG).map(|flag| args.remove(flag)).is_some();
+    let hints_variable = env::var(HINTS_VARIABLE).ok();
+    let hints_wanted = hints_variable.as_deref().is_none_or(|value| !matches!(value, "0" | "false" | "no" | "off"));
+    warp::normalize::print_hints(hints_wanted && !no_hints);
+    if hints_wanted && !no_hints && hints_variable.is_none() {
+        tip_hiding_hints_at_exit();
+    }
+
     // "got it?" is asked on the terminal after a warning or note unless nobody is there to answer
     let no_ask = args.iter().position(|arg| arg == NO_ASK_FLAG).map(|flag| args.remove(flag)).is_some();
     if !no_ask && env::var_os("CI").is_none() && io::stdin().is_terminal() && io::stderr().is_terminal() {
@@ -115,6 +131,21 @@ fn apply_flags(args: &mut Vec<String>) {
     }
     diagnostic::adopt_acknowledgements(OLD_ANSWERS_FILE, ACKNOWLEDGEMENTS_FILE);
     diagnostic::use_acknowledgements_file(ACKNOWLEDGEMENTS_FILE);
+}
+
+/// After the run (also one ending in process::exit), one line telling how to hide the hints it showed
+#[cfg(not(test))]
+fn tip_hiding_hints_at_exit() {
+    extern "C" fn tip() {
+        if warp::normalize::any_hint_printed() {
+            eprintln!("{}", diagnostic::paint(diagnostic::Color::Gray, HIDE_HINTS_TIP));
+        }
+    }
+    extern "C" {
+        fn atexit(callback: extern "C" fn()) -> i32;
+    }
+    // SAFETY: atexit only stores the function pointer; tip touches no state torn down before exit handlers run
+    unsafe { atexit(tip) };
 }
 
 #[cfg(all(not(test), target_os = "macos"))]
@@ -195,7 +226,7 @@ fn run_command(args: &[String]) {
             }
         }
 
-        println!("Warp 🐝 {}", WARP_VERSION);
+        print_version();
         usage();
         console();
         return;
@@ -238,6 +269,22 @@ fn run_command(args: &[String]) {
                 eprintln!("warp serve: {failure}");
                 std::process::exit(1);
             }
+        }
+    } else if args[1] == DEPLOY_COMMAND && args.len() >= 3 {
+        use warp::deploy::{Deployment, DEV_FLAG, DRY_RUN_FLAG, HOSTED_FLAG};
+        let deployment = match args[2].as_str() {
+            DEV_FLAG => Deployment::Local,
+            DRY_RUN_FLAG => Deployment::DryRun,
+            HOSTED_FLAG => Deployment::Hosted,
+            _ => Deployment::Cloud,
+        };
+        let Some(program) = args.get(if deployment == Deployment::Cloud { 2 } else { 3 }) else {
+            eprintln!("warp deploy: which program? warp deploy [{DEV_FLAG}|{DRY_RUN_FLAG}|{HOSTED_FLAG}] app.warp");
+            std::process::exit(1);
+        };
+        if let Err(failure) = warp::deploy::deploy(std::path::Path::new(program), deployment) {
+            eprintln!("warp deploy: {failure}");
+            std::process::exit(1);
         }
     } else if args[1] == DEV_COMMAND && args.len() >= 3 {
         let port = args.get(3).map_or(Ok(warp::dev_server::DEV_PORT), |port| port.parse::<u16>());
@@ -382,11 +429,29 @@ fn run_command(args: &[String]) {
             }
         }
     } else if arg_string == "version" || arg_string == "--version" || arg_string == "-v" {
-        println!("Warp 🐝 {}", WARP_VERSION);
+        print_version();
     } else {
         // Default: eval and print
         show_and_fail_on_error(&eval(&arg_string), RESULT_MARK);
     }
+}
+
+/// `Warp 🌀 1.2.4`; a debug build also names, on stderr, the commit of the checkout it was built from and the time of
+/// its binary (cards g_oMw8, g_oM-0): `debug build 75d67b068 · built 2026-10-09 14:32`
+fn print_version() {
+    println!("🌀 Warp {}", WARP_VERSION);
+    if cfg!(debug_assertions) {
+        let commit = command_line("git", &["-C", env!("CARGO_MANIFEST_DIR"), "rev-parse", "--short=9", "HEAD"]);
+        let binary = env::current_exe().map(|path| path.display().to_string()).unwrap_or_default();
+        let built = command_line("date", &["-r", &binary, "+%Y-%m-%d %H:%M"]);
+        eprintln!("debug build {} · built {}", commit.as_deref().unwrap_or("of an unknown commit"), built.as_deref().unwrap_or("?"));
+    }
+}
+
+/// The first line a successful command prints
+fn command_line(program: &str, arguments: &[&str]) -> Option<String> {
+    let output = std::process::Command::new(program).args(arguments).output().ok().filter(|output| output.status.success())?;
+    String::from_utf8_lossy(&output.stdout).lines().next().map(str::to_string)
 }
 
 /// The program's value printed, its Int the exit status, an uncaught error status 1
@@ -475,7 +540,8 @@ fn leave_executable(path: &str) {
     }
     let written = diagnostic::quietly(|| warp::modules::with_program_file(program_file, || write_standalone_executable(&load_file(path), path)));
     if let Err(failure) = written {
-        eprintln!("note: no executable {}: {failure} (said once until the file or warp changes)", executable.display());
+        // (said once until the file or warp changes)
+        eprintln!("note: no executable {}: {failure}", executable.display());
         if let Some(marker) = marker {
             let _ = marker.parent().map(fs::create_dir_all);
             let _ = fs::write(&marker, failure);
@@ -507,8 +573,7 @@ fn write_standalone_executable(code: &str, target: &str) -> Result<String, Strin
         }
     }
     if !missing.is_empty() {
-        let need = if missing.len() == 1 && !missing[0].ends_with('s') { "needs" } else { "need" };
-        return Err(format!("{} {need} runtime.", missing.join(", ")));
+        return Err(format!("{} used runtime.", missing.join(", ")));
     }
     let machine_code = module.serialize().map_err(|failure| failure.to_string())?;
     let stub = runtime_stub_path()?;
@@ -611,11 +676,23 @@ fn runtime_stub_path() -> Result<std::path::PathBuf, String> {
     let warp = env::current_exe().map_err(|failure| failure.to_string())?;
     let resolved = fs::canonicalize(&warp).unwrap_or_else(|_| warp.clone());
     let next_to_warp = [&warp, &resolved].map(|binary| binary.with_file_name(RUNTIME_STUB_NAME));
-    // a debug warp's neighbour is a debug stub (5 MB, it was 21 MB, card g_gFs8): build the release one instead
-    match next_to_warp.iter().find(|stub| stub.is_file() && !cfg!(debug_assertions)) {
+    let neighbour = next_to_warp.iter().find(|stub| stub.is_file());
+    if !in_cargo_target(&resolved) {
+        // an installed warp (brew, a release tarball, ~/dev/bin) uses the prebuilt stub shipped next to it and never
+        // builds one (user 2026-10-09)
+        return neighbour.cloned().ok_or_else(|| format!("no runtime stub {}: warp-runtime ships next to warp (brew, the release tarball); put it there or name one in {RUNTIME_STUB_VARIABLE}", next_to_warp[0].display()));
+    }
+    // a debug warp's neighbour in a cargo target is a debug stub (5 MB, it was 21 MB, card g_gFs8): build the release one
+    match neighbour.filter(|_| !cfg!(debug_assertions)) {
         Some(stub) => Ok(stub.clone()),
         None => build_runtime_stub(&next_to_warp[0]),
     }
+}
+
+/// Whether `binary` lies in a cargo profile folder (debug/, release/, deps/ under them; cargo keeps its .fingerprint
+/// there): a development build, which may build its runtime stub from its source checkout
+fn in_cargo_target(binary: &std::path::Path) -> bool {
+    binary.ancestors().skip(1).take(2).any(|folder| folder.join(".fingerprint").is_dir())
 }
 
 /// `cargo build --release -p warp-runtime` in warp's source checkout, whatever warp's own profile: the stub lands next
@@ -673,10 +750,12 @@ fn usage() {
     println!("  warp tool <package> [args]  Run a package's prebuilt <package>.wasm in its directory");
     println!("  warp dev <file> [port]  Serve the file's page, reloaded when it changes (port 8008)");
     println!("  warp serve [file] [port]  Serve the program: its page, server functions and routes (app.warp, port 8080)");
+    println!("  warp deploy [--dev|--dry-run|--hosted] <file>  The program's routes as a Cloudflare Worker, by wrangler (--dev: on this machine, --dry-run: only <file>-worker/, --hosted: at warp-<file>.pannous.workers.dev, by your GitHub login)");
     println!("  warp repl            Start interactive console");
     println!("  warp register        Let Finder and `open` run .warp files (macOS)");
     println!("  --fuel <steps>       Execution budget before 'out of fuel' (env WARP_FUEL)");
     println!("  --no-ask             Never prompt \"got it?\" after a warning or note");
+    println!("  --no-hints           Hide hints and notes (prefer ^ over **), shown by default (env WARP_HINTS=0)");
     println!("  The last compiled module is kept in ~/.cache/warp/last.wasm for inspection");
     println!("  warp compile --wasm <file|code>  Only the module, <file>.wasm (out.wasm for inline code), without running");
     println!("  warp compile --aot <file|code>   The module and its machine code for this machine, <file>.cwasm");
@@ -706,7 +785,7 @@ fn console() {
     let _ = rl.load_history(&history_path);
 
     loop {
-        match rl.readline("🐝 ") {
+        match rl.readline("🌀") { // warp language symbol for prompt
             Ok(line) => {
                 let input = line.trim();
                 if input.is_empty() { continue; }
