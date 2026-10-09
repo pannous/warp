@@ -140,3 +140,59 @@ fn an_empty_filter_answers_an_empty_list() {
 	assert_eq!(open, "[]");
 	server.join().expect("the server thread");
 }
+
+// the edits a user makes to the todo sample (card todo-app robust): a priority field the old table gains, delete, a
+// title edit, the list sorted by priority, the open ones counted in the header, an empty title refused with a message
+const EDITED_TODO_APP: &str = r#"class Todo{title: text; done: bool; priority: int}
+stored todos: [Todo]
+get "/api/todos" { todos sorted by priority }
+post "/todos" {
+	if not request.body.title { raise "a todo needs a title" }
+	todos.add(Todo(request.body.title, false, int(request.body.priority)))
+}
+post "/todos/:id:int/toggle" {
+	todo = (todos where it.id == id)#1
+	todo.done = not todo.done
+	todo
+}
+post "/todos/:id:int/title" {
+	todo = (todos where it.id == id)#1
+	todo.title = request.body.title
+	todo
+}
+post "/todos/:id:int/delete" { todos.remove((todos where it.id == id)#1) }
+route "/" {
+	div{
+		h1{ "Todos (" + count(todos where not done) + " open)" }
+		ul{ for todo in todos sorted by priority { li{ todo.title } } }
+	}
+}"#;
+
+#[test]
+fn the_todo_sample_takes_a_users_edits() {
+	const EDITED_PORT: u16 = 18651;
+	let program = program_with_rows("served_todo_edits", EDITED_TODO_APP, "class Todo{title: text; done: bool}\nstored todos: [Todo]\ntodos.add(Todo(\"tea\", false))");
+	let server = served_from(EDITED_PORT, EDITED_TODO_APP, Some(program), 8);
+	let answer = |path: &str, body: &str| {
+		let mut answer = agent().post(&format!("http://127.0.0.1:{EDITED_PORT}{path}")).header("Content-Type", FORM_TYPE).send(body).expect("an answer");
+		(answer.status().as_u16(), answer.body_mut().read_to_string().expect("a text"))
+	};
+	let got = |path: &str| agent().get(&format!("http://127.0.0.1:{EDITED_PORT}{path}")).call().expect("an answer").body_mut().read_to_string().expect("a text");
+	let (_, milk) = answer("/todos", "title=milk&priority=2");
+	assert!(milk.contains(r#""title":"milk""#) && milk.contains(r#""priority":2"#), "{milk}");
+	let (_, bread) = answer("/todos", "title=bread&priority=1");
+	assert!(bread.contains(r#""id":3"#), "{bread}");
+	let (status, refused) = answer("/todos", "title=&priority=1");
+	assert_eq!((status, refused.contains("a todo needs a title")), (500, true), "{refused}");
+	let (_, toggled) = answer("/todos/1/toggle", "");
+	assert!(toggled.contains(r#""title":"tea","done":true"#) && toggled.contains(r#""priority":0"#), "{toggled}");
+	let (_, renamed) = answer("/todos/2/title", "title=oat+milk");
+	assert!(renamed.contains(r#""title":"oat milk""#), "{renamed}");
+	answer("/todos/3/delete", "");
+	let listed = got("/api/todos");
+	let position = |title: &str| listed.find(&format!(r#""title":"{title}""#));
+	assert!(position("tea") < position("oat milk") && position("bread").is_none(), "{listed}");
+	let page = got("/");
+	assert!(page.contains("Todos (1 open)"), "{page}");
+	server.join().expect("the server thread");
+}
