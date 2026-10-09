@@ -148,10 +148,9 @@ pub(super) fn infer_function_return_kind(params: &[Param], body: &Node, function
 			}
 		}
 	});
-	let last = match body.drop_meta() {
-		Node::List(statements, Bracket::Curly, _) if !statements.is_empty() => &statements[statements.len() - 1],
-		other => other,
-	};
+	// `{ print b }`: the words of one statement, whose value is print's, not b's
+	let statements = crate::lowering::event_signals::statements_of(body);
+	let last = statements.last().unwrap_or(body);
 	// `f() := {}`, a handler `{{}}`: a body doing nothing returns ø
 	// `f() = ø` too
 	let empty_block = matches!(last.drop_meta(), Node::List(items, Bracket::Curly, _) if items.is_empty()) || matches!(last.drop_meta(), Node::Empty);
