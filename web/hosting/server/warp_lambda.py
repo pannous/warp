@@ -40,6 +40,9 @@ NAME_PATTERN = re.compile(r"^[a-z0-9]([a-z0-9-]{0,38}[a-z0-9])?$")  # web/hostin
 ALLOWED_ORIGINS = [re.compile(r"^https://warp\.pannous\.com$"), re.compile(r"^https://pannous\.github\.io$"), re.compile(r"^http://(localhost|127\.0\.0\.1)(:\d+)?$")]
 NATIVE = "/native"
 UNIT = "warp-lambda@{}.service"
+SOURCE = "app.warp"
+LOG = "log"
+WARP_ARGUMENTS = ["--sandbox", "--no-ask", "--no-hints", "serve"]  # warp-lambda@.service ExecStart says the same
 HOP_HEADERS = {"connection", "keep-alive", "transfer-encoding", "upgrade", "proxy-connection", "te", "trailer"}
 
 NAMES = os.path.join(STATE, "names.json")
@@ -91,32 +94,33 @@ def free_port(table):
 
 
 def start(name, port):
-    folder = program_folder(name)
     if RUNNER == "systemd":
-        subprocess.run(["sudo", "systemctl", "restart", UNIT.format(name)], check=True, capture_output=True)
+        systemctl("restart", name)
         return
     stop(name)
+    folder = program_folder(name)
     environment = {**os.environ, "WARP_SERVE_ADDRESS": PROGRAM_ADDRESS, "WARP_NO_WINDOW": "1"}
-    log = open(os.path.join(folder, "log"), "w")
-    children[name] = subprocess.Popen([WARP, "--sandbox", "--no-ask", "--no-hints", "serve", os.path.join(folder, "app.warp"), str(port)],
+    log = open(os.path.join(folder, LOG), "w")
+    children[name] = subprocess.Popen([WARP, *WARP_ARGUMENTS, os.path.join(folder, SOURCE), str(port)],
                                       cwd=folder, env=environment, stdout=log, stderr=subprocess.STDOUT)
 
 
 def stop(name):
     if RUNNER == "systemd":
-        subprocess.run(["sudo", "systemctl", "stop", UNIT.format(name)], capture_output=True)
+        systemctl("stop", name)
     elif name in children:
         children.pop(name).kill()
 
 
+def systemctl(verb, name):
+    """the polkit rule (warp-lambda.rules) lets this daemon's user start, stop and clean warp-lambda@ units only"""
+    subprocess.run(["systemctl", verb, *(["--what=state"] if verb == "clean" else []), UNIT.format(name)], check=verb == "restart", capture_output=True)
+
+
 def failure_of(name):
-    """what the program said before it stopped serving"""
-    if RUNNER == "systemd":
-        output = subprocess.run(["sudo", "journalctl", "-u", UNIT.format(name), "-n", "20", "-o", "cat", "--no-pager"], capture_output=True, text=True).stdout
-    else:
-        with open(os.path.join(program_folder(name), "log")) as file:
-            output = file.read()
-    lines = [line for line in output.splitlines() if line.strip() and not line.startswith("serving ")]
+    """what the program said before it stopped serving (its unit writes the same log)"""
+    with open(os.path.join(program_folder(name), LOG)) as file:
+        lines = [line for line in file.read().splitlines() if line.strip() and not line.startswith("serving ")]
     return "\n".join(lines[-6:]) or "it stopped without a word"
 
 
@@ -160,7 +164,7 @@ def deploy(name, source, who):
             entry = {"owner": who["id"], "login": who["login"], "port": free_port(table)}
         folder = program_folder(name)
         os.makedirs(folder, exist_ok=True)
-        with open(os.path.join(folder, "app.warp"), "wb") as file:
+        with open(os.path.join(folder, SOURCE), "wb") as file:
             file.write(source)
         with open(os.path.join(folder, "env"), "w") as file:
             file.write(f"PORT={entry['port']}\n")
@@ -181,6 +185,8 @@ def remove(name, who):
         if entry["owner"] != who["id"]:
             raise Refusal(403, f"{name} belongs to someone else")
         stop(name)
+        if RUNNER == "systemd":
+            systemctl("clean", name)  # its files and SQLite go with it: the name's next owner starts empty
         del table[name]
         save(table)
     return {"removed": name}

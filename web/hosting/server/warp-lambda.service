@@ -1,0 +1,28 @@
+# The warp-lambda daemon (warp_lambda.py): deploys, removes and proxies the hosted programs on *.lambda.pannous.com,
+# behind Ferron on 127.0.0.1:8890. It manages warp-lambda@ units by the polkit rule warp-lambda.rules, nothing else.
+[Unit]
+Description=warp-lambda: warp programs hosted on pannous.com
+After=network-online.target
+
+[Service]
+User=warp-lambda
+Group=warp-lambda
+ExecStart=/usr/bin/python3 /opt/warp-lambda/warp_lambda.py
+Environment=WARP_LAMBDA_PORT=8890 PYTHONUNBUFFERED=1
+Restart=always
+RestartSec=3
+StateDirectory=warp-lambda
+StateDirectoryMode=0755
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+PrivateDevices=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+RestrictNamespaces=yes
+LockPersonality=yes
+MemoryMax=256M
+
+[Install]
+WantedBy=multi-user.target
