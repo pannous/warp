@@ -1,0 +1,92 @@
+// The standard library units module (card units-dynamic, notes/units_runtime.md): quantities whose unit is known only
+// at run time, `quantity("5 km")` read from text or `quantity(5, unit)` of a unit named by data. A quantity carries its
+// unit as data: the amount in SI base units (exact where the text is), its dimension and the unit it shows in.
+// Units written in the program stay static (src/units): checked at compile time, plain numbers at run time.
+
+// The units by name, their SI amount and dimension: the dimension packs the powers of length, mass and time as
+// length + 256·mass + 65536·time, so multiplying quantities adds dimensions
+unit_names = ["mm", "cm", "m", "km", "mg", "g", "kg", "ms", "s", "min", "h"]
+unit_scales = [1/1000, 1/100, 1, 1000, 1/1000000, 1/1000, 1, 1/1000, 1, 60, 3600]
+unit_dimensions = [1, 1, 1, 1, 256, 256, 256, 65536, 65536, 65536, 65536]
+
+class Quantity {
+	amount:number
+	dims:int
+	unit:text
+	scale:number
+	plus(o) := Quantity(amount + same_dimension(this, o, "add").amount, dims, unit, scale)
+	minus(o) := Quantity(amount - same_dimension(this, o, "subtract").amount, dims, unit, scale)
+	times(o:any) := if o is Quantity then Quantity(amount * o.amount, dims + o.dims, unit_product(unit, o.unit), scale * o.scale) else Quantity(amount * o, dims, unit, scale)
+	divide(o:any) := if o is Quantity then Quantity(amount / o.amount, dims - o.dims, unit + "/" + o.unit, scale / o.scale) else Quantity(amount / o, dims, unit, scale)
+	less(o) := amount < same_dimension(this, o, "compare").amount
+	more(o) := amount > same_dimension(this, o, "compare").amount
+	equals(o) := o is Quantity and dims == o.dims and amount == o.amount
+	// the same quantity shown in another unit of its dimension: `q.to("m")`
+	to(u) := { target = same_dimension(this, quantity(1, u), "convert"); Quantity(amount, dims, u, target.scale) }
+	// its amount counted in a unit of its dimension: `q.in("m")` is a plain number
+	in(u) := to(u).shown()
+	shown() := amount / scale
+	text() := quantity_text(this)
+}
+
+// o when it measures what q measures, else the loud DimensionError
+same_dimension(q:Quantity, o:any, action) := {
+	if not (o is Quantity) { raise "DimensionError: cannot " + action + " " + quantity_text(q) + " and the plain number " + str(o) }
+	other:Quantity = o
+	if q.dims != other.dims { raise "DimensionError: cannot " + action + " " + quantity_text(q) + " and " + quantity_text(other) }
+	other
+}
+
+// "5km": the amount in its own unit (str(q) of a parameter q:Quantity misses the text witness, card param-text-witness)
+quantity_text(q:Quantity) := str(q.shown()) + q.unit
+
+// `m·m` is `m²`
+unit_product(first, second) := if first == second then first + "²" else first + "·" + second
+
+// one unit by name, a power of one (`m²`, `s^2`) or a product of them (`m·kg`, `kg*m`): [its SI amount, its dimension]
+unit_factor(u) := {
+	if u.contains("·") or u.contains("*") {
+		var denominator = 1
+		var dimension = 0
+		for part in u.replace("*", "·").split("·") { factor = unit_factor(part); scale = scale * factor#1; dimension = dimension + factor#2 }
+		return [scale, dimension]
+	}
+	if u.ends_with("²") or u.ends_with("^2") { one = unit_factor(u.replace("^2", "").replace("²", "")); return [one#1 * one#1, 2 * one#2] }
+	if u.ends_with("³") or u.ends_with("^3") { one = unit_factor(u.replace("^3", "").replace("³", "")); return [one#1 * one#1 * one#1, 3 * one#2] }
+	position = u in unit_names
+	if position == 0 { raise "unknown unit: " + u }
+	[unit_scales#position, unit_dimensions#position]
+}
+
+// a unit as written, `km/h` or `m/s²`: [its SI amount, its dimension]
+unit_measure(u) := {
+	if u.contains("/") {
+		parts = u.split("/")
+		above = unit_factor(parts#1)
+		below = unit_factor(parts#2)
+		return [above#1 / below#1, above#2 - below#2]
+	}
+	unit_factor(u)
+}
+
+// `quantity(5, "km")`: amount of the unit u; `quantity("5 km")`, `quantity("2.5km/h")`: read from text
+quantity(amount, u) := { measure = unit_measure(u); Quantity(amount * measure#1, measure#2, u, measure#1) }
+quantity(t:text) := {
+	var amount_text = ""
+	var u = ""
+	for c in t.trim().chars() {
+		if u == "" and "0123456789.+-".contains(c) { amount_text = amount_text + c } else if c != " " { u = u + c }
+	}
+	if amount_text == "" or u == "" { raise "not a quantity: " + t }
+	quantity(exact_decimal(amount_text), u)
+}
+
+// "-2.5" as the exact -5/2 (`as number` would read a float)
+exact_decimal(t:text) := {
+	if not t.contains(".") { return t as int }
+	parts = t.replace("-", "").replace("+", "").split(".")
+	var denominator = 1
+	for c in parts#2.chars() { denominator = denominator * 10 }
+	magnitude = ((parts#1 + parts#2) as int) / denominator
+	if t.starts_with("-") then -magnitude else magnitude
+}

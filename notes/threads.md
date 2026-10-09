@@ -118,4 +118,5 @@ matches warp's value semantics (index assignment already copies, aliases never c
   within 15 s (the task Worker sets the control buffer's second word when it takes a task), which also replaces that
   Worker and prints why to stderr and the console. task-worker.js writes a failure record for any exception of its
   own. 4 of 4 runs clean after (before: 2 of 3 hung). Which of (a)/(b) it was is not proven: a passing test's stderr
-  is not shown. Not covered yet: a channel receive (channelWait) waiting for a stalled task.
+  is not shown. A channel wait (send, receive, `for … in ch`: channelWait) runs the stalled tasks too, before each
+  look at the channel (card task-hang-channels).

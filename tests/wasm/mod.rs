@@ -19,6 +19,8 @@ mod test_standalone_executable;
 mod test_executable_size; // card g_gFs8
 #[cfg(feature = "native")] // wasmtime, files or network: not in the browser build
 mod test_executable_output; // card executable-exit
+#[cfg(feature = "native")] // wasmtime, files or network: not in the browser build
+mod test_own_runtime_stub; // card stub-race
 mod test_standalone_needs_runtime;
 mod test_runtime_stub_found;
 mod test_wasm;
