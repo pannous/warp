@@ -7,6 +7,10 @@ before asking the user; nobody reads it front to back, the code, tests and wiki 
 notes/open_decisions.md.
 
 ## Decided 2026-10-09 (user, as recommended unless quoted)
+- Hosting of deployed warp programs (user, via the supervisor): "let's start with our own login and let people log
+  in with their own button". First our account hosts the programs: users log in with us and get a Deploy button.
+  Second, a button deploying to the person's own provider account. Worker warp-hosting researches providers
+  (notes/hosting.md), builds both, and sends account, cost and DNS questions here.
 - Ranges (user, via warp-class, branch range-descriptor 51cdcb2dd): "We don't need the colon syntax if we have the
   dot-dot syntax": `r: 1..n` is the range itself, same as `r = 1..n`; `..` marks a value, so no uncharged-block
   warning.
