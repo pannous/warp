@@ -41,10 +41,13 @@ their argument at run time before).
 ## Still failing (2026-10-08, branch samples-run)
 All other samples run (exit code = the program's value, so sweep for `Error(` in the output, not for exit codes).
 The failures left, each with its reason in web/playground/excluded_samples.txt:
-- errors (malformed on purpose), life_kotlin_ranges (fails on purpose), modules (sketch: card module-manager),
-  webgpu (WGSL block), netbase (needs a netbase server).
-- natural: given its data it runs to `send email to … with subject …`; that phrase and `results where country is
-  germany` wait for decisions (card natural-phrases), `10 down to 1` is card down-wasm.
+- errors (malformed on purpose), life_kotlin_ranges (fails on purpose), webgpu (WGSL block), netbase (needs a
+  netbase server).
+- natural runs (card samples-uncaught, 2026-10-09): `send email to … with subject …` became the `to` phrase
+  `mail "Hello" to "user@example.com"` (send is a keyword, P165); whether that phrase itself should work, and
+  `results where country is germany`, wait on card natural-phrases.
+- modules runs (card samples-uncaught): it shows `use` of a standard module, one with classes and a file beside
+  the program; the module-system sketch it was moved to notes/module_manager.md (card module-manager).
 - raylib/sdl: not run in sweeps (windows). SDL_video.h is among the SDL headers now (SDL_CreateWindow).
 Fixed on samples-run: a loop variable reusing a number's name reads fields (`item = 2; for item in basket {
 item.price }`); an import no header declares says so; `xs where country is germany` hints `it.country==germany`.
