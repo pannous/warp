@@ -1,0 +1,7 @@
+class Person{name: text; age: int}
+people: [Person] = database.people
+if count(people) == 0 { people.add(Person("Al", 40)) }
+people#1.age = 5
+(people where it.name == "Al")#1.age = 6
+for p in people { p.age += 1 }
+print count(people where it.age == 7)
