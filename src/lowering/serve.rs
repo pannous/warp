@@ -57,15 +57,16 @@ pub fn lower(program: Node) -> Node {
 		other => other,
 	};
 	match program {
-		Node::List(statements, bracket, separator) if port.is_some() || statements.iter().any(|statement| served(statement).is_some() || server_definition(statement).is_some()) => {
+		Node::List(statements, bracket, separator) if port.is_some() || statements.iter().any(|statement| is_serving(statement) || server_definition(statement).is_some()) => {
 			let servers = server_names(&statements);
 			let statements: Vec<Node> = statements.into_iter().map(|statement| server_definition(&statement).unwrap_or_else(|| assigned_asking(statement, &servers))).collect();
 			let calls: Vec<Route> = statements.iter().filter_map(rpc_route).collect();
 			let server_data = ServerData::of(&statements);
 			let mut routes = 0;
 			let serves_itself = statements.iter().any(|statement| served(statement).is_some());
-			// `warp serve`: the top-level routes and the server functions at its port, after the program's statements
-			let (top_level, statements): (Vec<Node>, Vec<Node>) = statements.into_iter().partition(|statement| !serves_itself && port.is_some() && !top_level_routes(statement).is_empty());
+			// `warp serve`: the top-level routes and the server functions at its port, after the program's statements; a run
+			// without serving leaves the routes out (a top-level `post "/api" {…}` is no call of net's post)
+			let (top_level, statements): (Vec<Node>, Vec<Node>) = statements.into_iter().partition(|statement| !serves_itself && !top_level_routes(statement).is_empty());
 			let mut statements: Vec<Node> = statements.into_iter().flat_map(|statement| match served(&statement) {
 				Some((port, mut routed)) => {
 					routed.extend(calls.iter().cloned());
