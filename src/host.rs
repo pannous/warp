@@ -690,15 +690,39 @@ type HostNode = Option<wasmtime::Rooted<wasmtime::AnyRef>>;
 /// serve_routes(port, routes): HTTP on the port, each request answered by its route's function (src/web_server.rs)
 #[cfg(feature = "native")]
 fn serve_routes(mut caller: Caller<'_, HostState>, port: i64, routes: HostNode) -> wasmtime::Result<HostNode> {
-	use crate::web_server::{routes_of, serve, Answer};
+	use crate::web_server::{routes_of, serve};
 	let routes = routes_of(&given_node(&mut caller, routes)?);
 	let port = u16::try_from(port).map_err(|_| wasmtime::Error::new(crate::tasks::TaskFailure(format!("serve {port}: no port number"))))?;
 	let site = served_site(port);
 	serve(port, &routes, &site, |route, request| match route_value(&mut caller, &route.function, &request) {
 		Ok(value) => route.answer_of(&value),
-		Err(problem) => Answer::failed(&problem.to_string()),
+		Err(failure) => route.failed(&route_failure(&mut caller, &route.path, failure)),
 	}).map_err(|problem| wasmtime::Error::new(crate::tasks::TaskFailure(problem)))?;
 	built_in_program(&mut caller, &Node::Empty, SERVE_ROUTES)
+}
+
+/// What a failed route says to the client: the program's error message, read with the value the program left in
+/// trap_detail (as wasm_reader::with_trap_detail does for main); the whole trace goes to the server's log
+#[cfg(feature = "native")]
+fn route_failure(caller: &mut Caller<'_, HostState>, path: &str, failure: wasmtime::Error) -> String {
+	let detail = caller.get_export(crate::wasm_reader::TRAP_DETAIL).and_then(Extern::into_global);
+	let left = detail.map(|global| global.get(&mut *caller));
+	// read once: the next failure must not show this one's detail
+	if let Some(global) = detail {
+		let _ = global.set(&mut *caller, Val::AnyRef(None));
+	}
+	let failure = anyhow::Error::from(failure);
+	let failure = match left {
+		Some(Val::AnyRef(Some(value))) => match given_node(caller, Some(value)) {
+			Ok(node) => failure.context(crate::wasm_reader::trap_detail_line(&node)),
+			Err(_) => failure,
+		},
+		_ => failure,
+	};
+	let trace = format!("{failure:?}");
+	let message = crate::tasks::failure_message(failure);
+	eprintln!("{path} failed: {message}\n{trace}");
+	message
 }
 
 /// The site of the program file being run, which a program whose last line shows a page serves at / (src/site.rs); a
