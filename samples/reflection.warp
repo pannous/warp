@@ -13,3 +13,6 @@ print dir(p)
 // a function knows its parameters and its signature
 area(width: int, height: int) := width * height
 print "area takes \(area.params): \(area.signature)"
+
+print dir(area)       // what reflection knows of it: params, signature, body, effects
+print type(&area)

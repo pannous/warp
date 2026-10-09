@@ -8,6 +8,7 @@ custom section, `warp.meta`, kept unstripped.
 | word (aliases) | on | answer | today (2026-10-08, probed) |
 |---|---|---|---|
 | `dir(x)` | module, object, class, map | names: module words / fields + methods / keys | step 2: compile time for a known instance, class or map literal's variable; else undefined |
+| `dir(f)`, `type(f)` | user function, `f` or `&f` | `["params" "signature" "body" "effects"]` / `function` | card dir-function: the reflection words take the function itself, never its call (P83) |
 | `x.type`, `type(x)` | any value | its type name (`int`, `P`) | works; `p.type` of a known instance since step 2 |
 | `x.class` | instance | its class, `P` | step 2: known instances (`type(p)`) |
 | `x.fields` (`attributes`, `members`) | instance, class, map | field names, in declared order | step 2: inherited fields first; a map's keys at run time |
