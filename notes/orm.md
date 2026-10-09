@@ -109,6 +109,9 @@ bo's row again, so it changes nothing after written-through changes; an instance
   constructor argument (`Team("Red")`) and a moved row (`bo.team = blue`) shows in both teams at once (card orm-moved).
 - `people.add(p)` stores `p.team.id` (an instance without a row raises "… add it to its table first"); `bo.team = blue`
   writes blue's id through.
+- `red.players.add(p)` (anywhere, `d.team.players.add(d)` too; cards orm-nested, orm-list-add) sets `p.team = red`:
+  written to p's row, or p inserted into people when it has none; no duplicate row (database_tables.rs
+  added_to_members).
 - In a filter, `it.team` is no column for SQL (an id vs an instance): the part goes through a query's function, which
   builds the instance from the id.
 - Objects now point to each other, so a value read back from wasm can be cyclic: both readers mark a node met again
