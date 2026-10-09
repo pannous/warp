@@ -20,6 +20,60 @@ const FORMAT_CHUNK_SIZE: u32 = 16;
 const HEADER_SIZE_AFTER_RIFF: u32 = 36;
 /// The sound calls of this run so far
 static SOUNDED: AtomicUsize = AtomicUsize::new(0);
+/// The music files' formats by their first bytes: (format, magic bytes, offset of the magic)
+const FILE_FORMATS: [(&str, &[u8], usize); 7] = [
+	("wav", b"WAVE", 8), ("mp3", b"ID3", 0), ("mp3", b"\xFF\xFB", 0), ("ogg", b"OggS", 0), ("flac", b"fLaC", 0), ("aiff", b"AIFF", 8), ("m4a", b"ftyp", 4),
+];
+/// The players a music file plays by in the background, the first the system has that knows its format: macOS's
+/// CoreAudio player, PulseAudio/PipeWire's (libsndfile: no mp3 before 1.1), FFmpeg's and mpv
+const FILE_PLAYERS: [(&str, &[&str], &[&str]); 4] = [
+	("afplay", &[], &["wav", "mp3", "flac", "aiff", "m4a"]),
+	("paplay", &[], &["wav", "ogg", "flac", "aiff"]),
+	("ffplay", &["-nodisp", "-autoexit", "-loglevel", "quiet"], &["wav", "mp3", "ogg", "flac", "aiff", "m4a"]),
+	("mpv", &["--no-video", "--really-quiet"], &["wav", "mp3", "ogg", "flac", "aiff", "m4a"]),
+];
+/// The music files playing in the background, stopped by stop_sound
+static PLAYING: std::sync::Mutex<Vec<std::process::Child>> = std::sync::Mutex::new(Vec::new());
+
+/// `play "song.mp3"`: a music file played in the background when the user may hear it, else checked and named
+pub fn play_file(path: &str) -> Result<(), String> {
+	let format = file_format(path)?;
+	if !crate::paint::shows_windows() {
+		eprintln!("sound file {format}: {path}");
+		return Ok(());
+	}
+	let players = || FILE_PLAYERS.iter().filter(|(_, _, formats)| formats.contains(&format));
+	for (player, options, _) in players() {
+		let spawned = std::process::Command::new(player).args(*options).arg(path)
+			.stdin(std::process::Stdio::null()).stdout(std::process::Stdio::null()).spawn();
+		if let Ok(child) = spawned {
+			PLAYING.lock().map_err(|_| "the players' list is poisoned".to_string())?.push(child);
+			return Ok(());
+		}
+	}
+	let names: Vec<&str> = players().map(|(player, _, _)| *player).collect();
+	Err(format!("no player for {format} found ({}) to play {path}", names.join(", ")))
+}
+
+/// Stop the music files playing in the background
+pub fn stop_files() {
+	if let Ok(mut playing) = PLAYING.lock() {
+		for mut child in playing.drain(..) {
+			let _ = child.kill();
+			let _ = child.wait();
+		}
+	}
+}
+
+/// The format of a music file by its first bytes
+fn file_format(path: &str) -> Result<&'static str, String> {
+	use std::io::Read;
+	let mut start = [0u8; 12];
+	let mut file = std::fs::File::open(path).map_err(|failure| format!("cannot open {path}: {failure}"))?;
+	let read = file.read(&mut start).map_err(|failure| format!("cannot read {path}: {failure}"))?;
+	FILE_FORMATS.iter().find(|(_, magic, at)| start[..read].get(*at..at + magic.len()) == Some(magic)).map(|(format, _, _)| *format)
+		.ok_or_else(|| format!("{path} is not a sound file (wav, mp3, ogg, flac, aiff, m4a)"))
+}
 
 /// Write the samples as a WAV and play it when the user may hear it, else say where it is; played to its end, so
 /// sounds one after another play in order

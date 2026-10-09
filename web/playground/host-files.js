@@ -358,5 +358,11 @@ addHostPart({
 		// `clipboard.write(text)` (lowering/system_values.rs): a page writes it (markup.js copyText), a Worker has no
 		// clipboard and hands the text to its page (self.writeClipboard: worker.js)
 		clipboard: { write: text => { (self.writeClipboard ?? copyText)(contentText(text)); return null; } },
+		// `play "song.mp3"`, `stop_sound` (lib/sound.warp, card sound-library): the page plays it with an <audio>
+		// (worker.js self.playSoundFile, playground.js); a run without a page (tests, node) stays silent, as natively
+		sound: {
+			play_file: path => { self.playSoundFile?.(contentText(path)); return null; },
+			stop: () => { self.stopSoundFiles?.(); return null; },
+		},
 	},
 });
