@@ -863,6 +863,7 @@ impl WasmGcEmitter {
 		let (node_ref, nullable) = (Ref(self.node_ref(false)), Ref(self.node_ref(true)));
 		let node_type = self.type_manager.node_type;
 		self.runtime_function(FIELD_SET_IN_PLACE, vec![nullable, node_ref, node_ref], vec![ValType::I32], vec![nullable, ValType::I64], |s, f| {
+			Self::emit_list(f, &s.forget_list_cursor());
 			let (cells, name, value, entry, kind) = (0, 1, 2, 3, 4);
 			Self::emit_list(f, &[I::Block(BlockType::Empty), I::Loop(BlockType::Empty)]);
 			Self::emit_list(f, &[I::LocalGet(cells), I::RefIsNull, I::BrIf(1)]);
@@ -892,6 +893,7 @@ impl WasmGcEmitter {
 		let node_type = self.type_manager.node_type;
 		let set = |field_index: u32| I::StructSet { struct_type_index: node_type, field_index };
 		self.runtime_function(FIELDS_GROW, vec![node_ref, node_ref], vec![], vec![ValType::I64, nullable], |s, f| {
+			Self::emit_list(f, &s.forget_list_cursor());
 			let (fields, entry, kind, cells) = (0, 1, 2, 3);
 			s.emit_field(f, fields, 0);
 			Self::emit_list(f, &[I::I64Const(KIND_MASK), I::I64And, I::LocalSet(kind)]);

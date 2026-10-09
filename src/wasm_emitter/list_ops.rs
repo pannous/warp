@@ -25,6 +25,12 @@ pub(super) const ELEMENT_BODY: &str = "element_body";
 const TEXT_UNIT_USERS: [&str; 7] =
 	["node_count", "node_bytes", "string_char_at", "node_with_at", "text_byte_count", "text_codepoint_count", "text_grapheme_count"];
 
+/// The globals of the list cursor (emit_list_cursor_globals): the list indexed last, the cell and index found there, the
+/// list counted last and its count
+#[derive(Clone, Copy)]
+enum CursorPart { List, Cell, Index, Counted, Count }
+const LIST_CURSOR_PARTS: [CursorPart; 5] = [CursorPart::List, CursorPart::Cell, CursorPart::Index, CursorPart::Counted, CursorPart::Count];
+
 /// The locals of a copy of a list's first cells (emit_collect_cells, emit_rebuild_cells), consecutive from `cell`
 pub(super) struct CopyCells {
 	cell: u32,
@@ -62,6 +68,37 @@ impl WasmGcEmitter {
 		self.emit_element_children();
 		self.emit_element_body();
 		self.emit_list_insert_at();
+	}
+
+	/// The cursor of list_at, list_node_at and node_count: the list, cell and index found last, so a walk on from it (a
+	/// loop's `items#(i+1)` after `items#i`) takes the links between, not all from the head; and the list counted last
+	/// with its count (a loop's `index < #items`). A function changing a list's links in place forgets both
+	/// (forget_list_cursor). Globals in the order of LIST_CURSOR_PARTS.
+	pub(super) fn emit_list_cursor_globals(&mut self) {
+		if !["list_at", "list_node_at", "node_count"].iter().any(|function| self.should_emit_function(function)) {
+			return;
+		}
+		let node_type = self.type_manager.node_type;
+		self.list_cursor_global = Some(self.next_global_idx);
+		for part in LIST_CURSOR_PARTS {
+			let (val_type, initial) = match part {
+				CursorPart::Index | CursorPart::Count => (ValType::I64, ConstExpr::i64_const(0)),
+				_ => (Ref(self.node_ref(true)), ConstExpr::ref_null(HeapType::Concrete(node_type))),
+			};
+			self.globals.global(GlobalType { val_type, mutable: true, shared: false }, &initial);
+			self.next_global_idx += 1;
+		}
+	}
+
+	/// The global of a part of the list cursor
+	fn list_cursor(&self, part: CursorPart) -> Option<u32> {
+		self.list_cursor_global.map(|first| first + part as u32)
+	}
+
+	/// The instructions forgetting the list cursor, before a list's links change in place
+	pub(super) fn forget_list_cursor(&self) -> Vec<Instruction<'static>> {
+		let forget = |global: u32| [I::RefNull(HeapType::Concrete(self.type_manager.node_type)), I::GlobalSet(global)];
+		[CursorPart::List, CursorPart::Counted].into_iter().filter_map(|part| self.list_cursor(part)).flat_map(forget).collect()
 	}
 
 	/// list_at and list_node_at: the element of a cons list at a 1-based index
@@ -215,6 +252,11 @@ impl WasmGcEmitter {
 				func.instruction(&I::Return);
 				func.instruction(&I::End);
 
+				// the list counted last, unchanged since
+				if let (Some(counted), Some(count)) = (s.list_cursor(CursorPart::Counted), s.list_cursor(CursorPart::Count)) {
+					Self::emit_list(func, &[I::GlobalGet(counted), I::LocalGet(0), I::RefEq, I::If(BlockType::Empty), I::GlobalGet(count), I::Return, I::End]);
+				}
+
 				// count = 0
 				func.instruction(&I::I64Const(0));
 				func.instruction(&I::LocalSet(1));
@@ -254,6 +296,9 @@ impl WasmGcEmitter {
 				func.instruction(&I::End); // end loop
 				func.instruction(&I::End); // end block
 
+				if let (Some(counted), Some(count)) = (s.list_cursor(CursorPart::Counted), s.list_cursor(CursorPart::Count)) {
+					Self::emit_list(func, &[I::LocalGet(0), I::GlobalSet(counted), I::LocalGet(1), I::GlobalSet(count)]);
+				}
 				// return count
 				func.instruction(&I::LocalGet(1));
 			});
@@ -365,6 +410,7 @@ impl WasmGcEmitter {
 		let set = |field_index: u32| I::StructSet { struct_type_index: node_type, field_index };
 		let params = vec![node_ref_nullable, ValType::I64, node_ref];
 		self.runtime_function(crate::analyzer::INSERT_AT_CALL, params, vec![node_ref], vec![node_ref_nullable], |s, f| {
+			Self::emit_list(f, &s.forget_list_cursor());
 			let (list, position, value, cell) = (0, 1, 2, 3);
 			let lone_cell = [I::I64Const(SQUARE_LIST_KIND), I::LocalGet(value), I::RefNull(HeapType::Concrete(node_type)), I::StructNew(node_type)];
 			s.emit_item_check(f, super::declared_values::LIST_ITEM_CHECK, list, value);
@@ -1117,6 +1163,11 @@ impl WasmGcEmitter {
 		self.emit_fail_out_of_range_if(func, asked);
 		func.instruction(&I::LocalGet(0));
 		func.instruction(&I::LocalSet(current));
+		// at or past the cursor of this list: walk on from its cell, the rest of the index
+		if let (Some(list), Some(cell), Some(index)) = (self.list_cursor(CursorPart::List), self.list_cursor(CursorPart::Cell), self.list_cursor(CursorPart::Index)) {
+			Self::emit_list(func, &[I::GlobalGet(list), I::LocalGet(0), I::RefEq, I::LocalGet(asked), I::GlobalGet(index), I::I64GeS, I::I32And, I::If(BlockType::Empty),
+				I::GlobalGet(cell), I::LocalSet(current), I::LocalGet(asked), I::GlobalGet(index), I::I64Sub, I::I64Const(1), I::I64Add, I::LocalSet(1), I::End]);
+		}
 		func.instruction(&I::Block(BlockType::Empty));
 		func.instruction(&I::Loop(BlockType::Empty));
 		func.instruction(&I::LocalGet(current));
@@ -1135,6 +1186,9 @@ impl WasmGcEmitter {
 		self.emit_field(func, current, 1);
 		self.call(func, super::equality::IS_META_ENTRY);
 		self.emit_fail_out_of_range_if(func, asked);
+		if let (Some(list), Some(cell), Some(index)) = (self.list_cursor(CursorPart::List), self.list_cursor(CursorPart::Cell), self.list_cursor(CursorPart::Index)) {
+			Self::emit_list(func, &[I::LocalGet(0), I::GlobalSet(list), I::LocalGet(current), I::GlobalSet(cell), I::LocalGet(asked), I::GlobalSet(index)]);
+		}
 	}
 
 	/// The text heap is exported: the host allocates the texts it returns (`read`, `fetch`) from it too
@@ -1469,6 +1523,7 @@ impl WasmGcEmitter {
 	pub(super) fn emit_become_empty(&self, func: &mut Function, node: u32) {
 		let node_type = self.type_manager.node_type;
 		let set = |field_index: u32| I::StructSet { struct_type_index: node_type, field_index };
+		Self::emit_list(func, &self.forget_list_cursor());
 		Self::emit_list(func, &[I::LocalGet(node), I::I64Const(Kind::Empty as i64)]);
 		self.emit_or_element_mark(func, node);
 		Self::emit_list(func, &[
@@ -1511,6 +1566,7 @@ impl WasmGcEmitter {
 		let set = |field_index: u32| I::StructSet { struct_type_index: node_type, field_index };
 		let locals = [self.copy_cells_locals(), vec![ValType::I64]].concat();
 		self.runtime_function(LIST_EXTEND, vec![node_ref_nullable, node_ref_nullable], vec![node_ref], locals, |s, f| {
+			Self::emit_list(f, &s.forget_list_cursor());
 			let (list, items) = (0, 1);
 			let copy = CopyCells::at(2);
 			let kind = copy.result + 1;
@@ -1560,6 +1616,7 @@ impl WasmGcEmitter {
 		let set = |field_index: u32| I::StructSet { struct_type_index: node_type, field_index };
 		let no_node = || I::RefNull(HeapType::Concrete(node_type));
 		self.runtime_function(crate::analyzer::LIST_DROP_LAST, vec![node_ref_nullable], vec![node_ref], vec![node_ref_nullable], |s, f| {
+			Self::emit_list(f, &s.forget_list_cursor());
 			let (list, cell) = (0, 1);
 			s.emit_empty_as_null(f, list);
 			Self::emit_list(f, &[I::LocalGet(list), I::RefIsNull, I::If(BlockType::Empty)]);
@@ -2357,6 +2414,7 @@ impl WasmGcEmitter {
 		// the second's item and rest, a lone entry or cell becomes ø itself
 		let set = |field_index: u32| I::StructSet { struct_type_index: node, field_index };
 		self.runtime_function(MAP_WITHOUT, vec![node_ref, node_ref], vec![node_ref], vec![nullable, nullable], |s, f| {
+			Self::emit_list(f, &s.forget_list_cursor());
 			let (map, key, previous, cell) = (0, 1, 2, 3);
 			let holds_key = |s: &Self, f: &mut Function, cell: u32| {
 				s.emit_field(f, cell, 1);
