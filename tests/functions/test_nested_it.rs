@@ -44,3 +44,11 @@ fn test_named_lambda_parameter_leaves_the_outer_it() {
 	is!("scale := [1 2].map(x => x * it); scale 3", parse("[3 6]"));
 	is!("scale(it) := [1 2].map(x => x * it); scale(3)", parse("[3 6]"));
 }
+
+// `x => it` with no `it` around it is an error, not the symbol it (card unbound-lambda)
+#[test]
+fn test_unbound_it_in_a_named_lambda() {
+	let unbound = warp::wasm_emitter::eval("[1 2].map(x => it)").serialize();
+	assert!(unbound.contains("undefined variable: it"), "{unbound}");
+	is!("it = 3; [1 2].map(x => x * it)", parse("[3 6]"));
+}
