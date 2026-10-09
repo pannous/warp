@@ -63,6 +63,10 @@ when a message or comment cites a number (P71, D5) and you need its wording; nev
   <commit>` (a commit URL for wiki changes), never `gh issue close`; `todo move <card> Done` refuses without a link.
 - Picking a card: `todo take <card> <your session name>` (user, 2026-10-06): assigns the user on GitHub, names you in
   the board field Agent, moves the card to Now. Prefer fresh, easy cards in column Next (user, 2026-10-06).
+  Card keys (user, 2026-10-09): every card has a meaningful key, never a GitHub id like g_oncU. Cron
+  (urgent-card-watch) runs `todo keys` every 2 minutes, which gives each new card a key from its title. Whoever takes
+  a card renames a poor key at once (`todo key <card> <short-meaningful-name>`) and uses the key in branch names and
+  messages.
 - Deleting old stuff needs no confirmation (user, 2026-10-03): merged branches, stale copies, leftover stashes.
 - Wiki (`wiki/`, its own repo pannous/warp.wiki): GitHub wikis can only serve `master` (notes/wiki_branch.md), so wiki
   edits go to master (`git push origin HEAD:master`); there is no `main` branch in the wiki.

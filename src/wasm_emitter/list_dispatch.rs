@@ -2,7 +2,8 @@
 //! index assignment, storing a list in a variable, reading it as a value) asks `list_backend` which implementation runs.
 //!
 //! Backends are interchangeable, the result is the same Node either way:
-//! - `NodeCells`: the generic cons-cell list (data = first, value = rest) of any elements; index walks i links
+//! - `NodeCells`: the generic cons-cell list (data = first, value = rest) of any elements; index walks i links, or on
+//!   from the list cursor (list_ops.rs emit_list_cursor_globals), so a loop's `items#(i+1)` and `#items` are O(1)
 //! - `TypedArray`: a list variable proven to hold only ints (floats) is an `$IntList` (`$FloatList`), a length and a
 //!   wasm GC `(array (mut i64))` (`f64`) with spare capacity, see `find_typed_lists`: O(1) index and count, amortised
 //!   O(1) append (`out = out + [x]`, which `map` lowers to, or `out.add(x)`), no box per element. Wherever the program needs it as a value (a

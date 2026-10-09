@@ -48,6 +48,8 @@ CONSOLE_SETTLE_SECONDS = 0.3  # a shown example's last messages reach the watche
 # browser-tour): Chrome without WebGPU says this on every navigator.gpu.requestAdapter(); @gpu then maps on the CPU and
 # says so in the program's own warning, gpu_render fails with the program's error (shown on the page, not the console)
 BROWSER_OWN_WARNINGS = {"No available adapters."}
+# an example on the GPU (paint of a shader) in a browser without WebGPU (the runner's Firefox): skipped, loudly
+NO_GPU = "offers no WebGPU adapter"
 PAGE_LOAD = "(loading the page)"
 
 
@@ -322,6 +324,9 @@ def check_examples(names, page_url=None, site=None):
 			verdict(f"samples/{name}", [])
 		else:
 			expected, shown = examples[name], show_example(name)
+			if NO_GPU in str(shown.get("value")):
+				print(f"skip {name}: this browser {NO_GPU}")
+				shown = {**shown, "value": expected.get("value"), "canvases": expected.get("canvases")}
 			verdict(name, [f"{part}: {shown[part]!r}, expected {expected[part]!r}" for part in ("value", "printed", "canvases", "clicked", "clickedPrinted", "kept", "keyed", "animated", "address") if part in expected and shown[part] != expected[part]] + [f"status: {shown['failed']}"] * bool(shown.get("failed")))
 	console.stop()
 	browser("close")
