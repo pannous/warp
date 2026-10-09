@@ -474,6 +474,8 @@ PASSED:
   ✓ control::test_system_values::the_mouse_is_a_system_value_of_the_page
   ✓ control::test_system_values::yes_no_values_read_the_machine
   ✓ control::test_table_key_filter::rows_whose_foreign_key_is_a_given_row
+  ✓ control::test_table_query_loading::a_filter_reads_only_the_rows_it_keeps
+  ✓ control::test_table_query_loading::a_filtered_row_is_the_one_instance_of_its_row
   ✓ control::test_table_remove::removing_a_row_before_the_table_loads
   ✓ control::test_table_remove::removing_a_row_of_a_loaded_table
   ✓ control::test_table_transactions::a_failing_transaction_rolls_back_and_fails
@@ -1893,6 +1895,7 @@ PASSED:
   ✓ numbers::test_big_ratio::test_big_ratio_readback_stays_exact
   ✓ numbers::test_big_ratio::test_big_ratio_terminating_decimal
   ✓ numbers::test_big_ratio::test_big_ratio_unit_amounts_stay_exact
+  ✓ numbers::test_compound_accumulator::a_compound_accumulator_takes_floats_of_unknown_origin
   ✓ numbers::test_counting_units::count_unit_of_text
   ✓ numbers::test_counting_units::size_of_text_in_unit
   ✓ numbers::test_decimal_units::a_decimal_amount_of_a_unit_is_exact
@@ -3635,6 +3638,7 @@ PASSED:
   ✓ web::test_rendering_itself::a_program_with_markup_exports_its_renderer
   ✓ web::test_rendering_itself::only_a_program_with_markup_renders_itself
   ✓ web::test_rendering_itself::the_renderer_inside_the_module_gives_the_html
+  ✓ web::test_request_fields::a_dollar_name_is_the_request_s_field
   ✓ web::test_route_data::a_route_reading_a_table_ships_without_it
   ✓ web::test_route_data::the_first_visit_gets_finished_html
   ✓ web::test_route_data::the_server_gives_only_what_the_route_shows
@@ -4111,4 +4115,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-14 ignored, 4106 passed, 0 failed, 4106 total tested
+14 ignored, 4110 passed, 0 failed, 4110 total tested
