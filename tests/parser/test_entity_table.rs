@@ -53,3 +53,9 @@ fn latex_names_of_uniscript_1_0_4() {
 fn html_letters_of_uniscript_1_0_5() {
 	is!("\"\\:ocirc \\:cdot\"", "ô ⋅"); // in texts: ô and ⋅ are no characters of code yet (card emoji-code)
 }
+
+// uniscript 1.0.7: nicknames.wasp names a character Unicode never named this way (🐝 is \:honeybee there)
+#[test]
+fn nicknames_of_uniscript_1_0_7() {
+	is!("\"\\:bee \\:wasp\"", "🐝 🐝");
+}
