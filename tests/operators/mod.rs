@@ -34,3 +34,4 @@ mod test_approximately; // cards approximately, approximately-all
 mod test_rough_similarity; // card g_YHSM
 mod test_comma_next_to_comparison; // P227
 mod test_infix_word_operators; // card g_mnvA
+mod test_text_or_number; // cards golf-text, golf-sum
