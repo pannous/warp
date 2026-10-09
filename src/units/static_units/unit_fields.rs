@@ -72,6 +72,15 @@ pub(crate) fn si_quantity(node: &Node) -> Option<(f64, String)> {
 	Some((quantity.amount.mul(&per_unit).to_f64(), shown(&crate::units::signature(&quantity.factors))))
 }
 
+/// The construction `P{…}` with `body` in place of its fields, its marks kept
+fn with_instance_body(node: &Node, body: Node) -> Node {
+	match node {
+		Node::Meta { node, data } => Node::Meta { node: Box::new(with_instance_body(node, body)), data: data.clone() },
+		Node::Key(name, op, _) => Node::Key(name.clone(), *op, Box::new(body)),
+		other => other.clone(),
+	}
+}
+
 /// `Run` of `r: Run`, and `Run` of a list `xs: [Run]` (true)
 fn declared_class(declared: &Node) -> Option<(String, bool)> {
 	match declared.drop_meta() {
@@ -85,6 +94,9 @@ impl Inference {
 	/// The class of an instance static units can see: a variable holding one, a constructor call, an element of a list or
 	/// table of the class
 	pub(super) fn instance_class(&self, node: &Node) -> Option<String> {
+		if let Some(class) = self.named_construction_class(node) {
+			return Some(class);
+		}
 		match node.drop_meta() {
 			Node::Symbol(name) => self.instances.get(name).cloned(),
 			Node::List(items, Bracket::Round, _) => match items.first().map(Node::drop_meta) {
@@ -189,6 +201,49 @@ impl Inference {
 			lowered.push(argument);
 		}
 		Some(Ok((Node::List(lowered, Bracket::Round, crate::node::Separator::None), vec![])))
+	}
+
+	/// `Run` and the fields of a construction with named fields `Run{distance: 5 km}` of a class with unit fields; the
+	/// construction may still be plain data, as type_constructor leaves a class with unit field types unmarked
+	fn named_construction_parts<'n>(&self, node: &'n Node) -> Option<(String, &'n Node)> {
+		let (name, body) = match crate::type_constructor::instance_parts(node) {
+			Some(parts) => parts,
+			None => match node.drop_meta() {
+				Node::Key(name, Op::Colon | Op::None, body) => (name.as_ref(), body.as_ref()),
+				_ => return None,
+			},
+		};
+		let class = name.drop_meta().name();
+		let is_named_fields = matches!(body.drop_meta(), Node::List(_, Bracket::Curly, _));
+		(is_named_fields && matches!(name.drop_meta(), Node::Symbol(_)) && self.classes.contains_key(&class)).then_some((class, body))
+	}
+
+	fn named_construction_class(&self, node: &Node) -> Option<String> {
+		self.named_construction_parts(node).map(|(class, _)| class)
+	}
+
+	/// `Run{distance: 5 km}`: each named field has its field's signature, as the arguments of `Run(5 km)` (card map-units)
+	pub(super) fn named_construction(&mut self, node: &Node) -> Option<Result<(Node, Signature), Stop>> {
+		let (class, body) = self.named_construction_parts(node)?;
+		let fields = self.classes.get(&class)?.clone();
+		let Node::List(entries, bracket, separator) = body.drop_meta() else { return None };
+		let mut lowered = vec![];
+		for entry in entries {
+			let Node::Key(field, op, value) = entry.drop_meta() else {
+				lowered.push(entry.clone());
+				continue;
+			};
+			let (value, given) = match self.infer(value.as_ref().clone()) {
+				Ok(inferred) => inferred,
+				Err(stop) => return Some(Err(stop)),
+			};
+			let held = fields.iter().find(|(name, _)| *name == field.drop_meta().name()).map(|(_, held)| held);
+			if let Some(held) = held.filter(|held| **held != given && !super::is_nothing(&value)) {
+				return Some(Err(Stop::Error(format!("DimensionError: {class}.{} holds {}, is given {}", field.drop_meta().name(), shown(held), shown(&given)))));
+			}
+			lowered.push(Node::Key(field.clone(), *op, Box::new(value)));
+		}
+		Some(Ok((with_instance_body(node, Node::List(lowered, bracket.clone(), separator.clone())), vec![])))
 	}
 
 	/// The class declaration with its unit fields declared numbers; a default value (`distance: km = 0 km`) has the unit
