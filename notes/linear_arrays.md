@@ -8,8 +8,8 @@ picking it automatically."
   `[count: i64][n cells of i64 or f64]`, 8-byte aligned, from the bump heap texts use (never freed, like texts).
 - Declaring one shows the hint (educate_once, topic `linear-array`, "got it" silences it), naming its element type:
   `prefer xs = float[n] over linear xs = float[n]: the compiler picks where a list of numbers lives by itself, linear
-  memory included; linear only forces it`. Not where linear arrays are paired by `dot` or `.*` (card linear-hint,
-  pinned by tests/lists/test_linear_hint.rs).
+  memory included; linear only forces it`. Not where they are paired in a way the compiler would not pick linear
+  memory for (tests/lists/test_linear_hint.rs).
 - The compiler picks linear memory (card compiler-picks-dot, shared_arrays.rs picked_linear): a plain `xs = float[n]`
   assigned once, paired by `dot` or `.*` with another such float array, every other mention a cell read/write/add,
   `#xs`, `count(xs)`, `xs.count` or `for x in xs`, becomes `linear xs = float[n]`. dot of 10^6 then runs as

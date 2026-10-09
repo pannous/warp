@@ -82,11 +82,11 @@ fn element_words(kind: Shared) -> [&'static str; 3] {
 pub fn lower(node: Node) -> Node {
 	let node = crate::gpu_maps::kept_on_gpu(node);
 	// the first array the program itself declares linear, before the compiler picks any
-	let mut first_linear: Option<(Node, Element)> = None;
-	node.visit(&mut |part| if let Some((_, _, shared)) = declaration(part).filter(|(_, _, shared)| shared.storage == Storage::Linear) {
-		first_linear.get_or_insert((part.clone(), shared.element));
+	let mut first_linear: Option<(Node, String, Element)> = None;
+	node.visit(&mut |part| if let Some((name, _, shared)) = declaration(part).filter(|(_, _, shared)| shared.storage == Storage::Linear) {
+		first_linear.get_or_insert((part.clone(), name, shared.element));
 	});
-	let mut node = picked_linear(node);
+	let (mut node, picked) = picked_linear(node);
 	let mut declared = HashMap::new();
 	node.visit(&mut |part| if let Some((name, _, shared)) = declaration(part) {
 		declared.insert(name, shared);
@@ -105,8 +105,8 @@ pub fn lower(node: Node) -> Node {
 	if (declared.is_empty() && !reduces_on_gpu(&node)) || matches!(node, Node::Error(_)) {
 		return node;
 	}
-	// a program pairing linear arrays by dot or `.*` keeps its word unhinted (card linear-hint, tests/lists/test_linear_hint.rs)
-	if let Some((linear, element)) = first_linear.filter(|_| pairs == 0) {
+	// hinted unless paired in a way the compiler would not pick linear memory for
+	if let Some((linear, _, element)) = first_linear.filter(|(_, name, _)| pairs == 0 || picked.contains(name)) {
 		crate::normalize::set_position_of(&linear);
 		let array = if element == Element::Float { FLOAT_WORDS[0] } else { "int" };
 		crate::diagnostic::educate_once(LINEAR_TOPIC, &format!("linear xs = {array}[n]"), &format!("xs = {array}[n]"),
@@ -119,8 +119,8 @@ pub fn lower(node: Node) -> Node {
 
 /// Plain `xs = float[n]` arrays paired by dot or `.*` with another float array, every other use one linear arrays
 /// support (cells, count, `for x in xs`): declared `linear`, so dot runs as linear_dotf over the blocks (10^6: 3 ms
-/// instead of 13 ms over GC lists)
-fn picked_linear(node: Node) -> Node {
+/// instead of 13 ms over GC lists). The names picked, those declared linear already included
+fn picked_linear(node: Node) -> (Node, HashSet<String>) {
 	let mut assignments: HashMap<String, usize> = HashMap::new();
 	node.visit(&mut |part| if let Some(name) = float_array_assignment(part) {
 		*assignments.entry(name).or_default() += 1;
@@ -134,7 +134,7 @@ fn picked_linear(node: Node) -> Node {
 		}
 		picked = kept;
 	}
-	if picked.is_empty() { node } else { declared_linear(node, &picked) }
+	(declared_linear(node, &picked), picked)
 }
 
 /// `xs = float[n]`, plain or declared linear: xs
