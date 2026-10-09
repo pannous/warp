@@ -143,8 +143,11 @@ fn forms(node: Node) -> Node {
 			if let Some(listener) = when_listener(&items) {
 				return Node::List(listener, bracket, separator);
 			}
-			endless_loop(&items).unwrap_or_else(|| Node::List(arrow_cases(items), bracket, separator))
+			let endless = match items.as_slice() { [word, body] => endless_loop(word, body), _ => None };
+			endless.unwrap_or_else(|| Node::List(arrow_cases(items), bracket, separator))
 		}
+		// Ruby's `loop do … end`
+		Node::Key(word, Op::Do, body) if endless_loop(&word, &body).is_some() => endless_loop(&word, &forms(*body)).expect("guarded"),
 		Node::Key(left, Op::Colon, body) if lambda_parameters(&left).is_some() => lambda(lambda_parameters(&left).expect("guarded"), forms(*body)),
 		Node::Key(parameters, Op::FatArrow, body) if destructured_parameters(&parameters).is_some() => {
 			let (parameters, fields) = destructured_parameters(&parameters).expect("guarded");
@@ -338,9 +341,8 @@ fn when_arm(arm: &Node) -> Option<(Vec<Node>, Node)> {
 	}
 }
 
-/// `loop { body }`
-fn endless_loop(items: &[Node]) -> Option<Node> {
-	let [word, body] = items else { return None };
+/// `loop { body }`, Ruby's `loop do body end`
+fn endless_loop(word: &Node, body: &Node) -> Option<Node> {
 	if !is_word(word, LOOP_WORD) || !matches!(body.drop_meta(), Node::List(_, Bracket::Curly, _)) {
 		return None;
 	}

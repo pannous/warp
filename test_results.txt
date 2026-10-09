@@ -1072,10 +1072,13 @@ PASSED:
   ✓ functions::test_generators::a_loop_walks_an_object_with_next_until_it_gives_nothing
   ✓ functions::test_generators::break_stops_an_endless_generator
   ✓ functions::test_generators::continue_goes_on_after_the_yield
+  ✓ functions::test_generators::list_and_sum_take_the_rest_of_a_generator_object
   ✓ functions::test_generators::next_resumes_a_generator_where_it_stopped
   ✓ functions::test_generators::python_generator
   ✓ functions::test_generators::return_ends_a_generator
+  ✓ functions::test_generators::take_stops_an_endless_generator
   ✓ functions::test_generators::two_generator_objects_advance_apart
+  ✓ functions::test_generators::zip_pairs_generators_and_lists
   ✓ functions::test_getter_warning_text::a_long_getter_body_is_not_spelled_out_in_its_warning
   ✓ functions::test_global_with_closures::global_in_a_program_with_a_lambda
   ✓ functions::test_go_functions::a_go_short_declaration_that_is_assigned_stays_an_error
@@ -1163,8 +1166,10 @@ PASSED:
   ✓ functions::test_nested_it::test_glued_block_after_a_method_is_a_lambda
   ✓ functions::test_nested_it::test_inner_dollar_zero_shadows_the_outer
   ✓ functions::test_nested_it::test_inner_it_shadows_the_outer_it
+  ✓ functions::test_nested_it::test_named_lambda_parameter_leaves_the_outer_it
   ✓ functions::test_nested_it::test_trailing_block_of_a_lambda_body_method
   ✓ functions::test_nested_it::test_trailing_block_of_an_assigned_method_call
+  ✓ functions::test_nested_it::test_unbound_it_in_a_named_lambda
   ✓ functions::test_nested_prefix_calls::a_function_name_among_the_arguments_takes_the_ones_after_it
   ✓ functions::test_nested_prefix_calls::a_function_passed_as_a_value_stays_one
   ✓ functions::test_nested_two_deep::a_function_nested_two_deep_reads_the_outermost_variables
@@ -1238,6 +1243,8 @@ PASSED:
   ✓ functions::test_phrase_colon_body::a_colon_body_is_the_whole_statement
   ✓ functions::test_phrase_colon_body::a_colon_body_prints_its_argument
   ✓ functions::test_phrase_each::assigned_phrase_call
+  ✓ functions::test_phrase_each::assigned_to_phrase
+  ✓ functions::test_phrase_each::assigned_to_phrase_compared
   ✓ functions::test_phrase_each::each_in_a_phrase
   ✓ functions::test_phrase_slot_words::an_unused_word_after_a_preposition_belongs_to_the_phrase
   ✓ functions::test_phrase_slot_words::the_phrases_sample_runs
@@ -1275,6 +1282,7 @@ PASSED:
   ✓ functions::test_python_ruby_definitions::test_python_rest_parameter_with_colon_body
   ✓ functions::test_python_ruby_definitions::test_python_spread_object
   ✓ functions::test_python_ruby_definitions::test_ruby_def_end
+  ✓ functions::test_python_ruby_definitions::test_ruby_loops_in_def
   ✓ functions::test_python_ruby_definitions::test_ruby_yield_calls_the_block
   ✓ functions::test_recursive_list_functions::a_recursive_maximum
   ✓ functions::test_recursive_list_functions::a_recursive_sum_over_slices
@@ -1454,6 +1462,7 @@ PASSED:
   ✓ lists::test_generated_name_hints::comprehension_and_where_give_no_hint_about_their_list
   ✓ lists::test_global_comprehension::a_function_writes_a_float_into_a_global_list
   ✓ lists::test_global_comprehension::a_global_comprehension_list_takes_writes
+  ✓ lists::test_global_typed_lists::a_function_appends_to_a_global_list_in_place
   ✓ lists::test_global_typed_lists::a_global_array_a_function_writes_stays_an_array
   ✓ lists::test_global_typed_lists::a_global_float_list_a_function_changes_keeps_its_floats
   ✓ lists::test_global_typed_lists::a_global_list_a_function_changes_stays_as_before
@@ -1554,6 +1563,7 @@ PASSED:
   ✓ lists::test_map_typed::map_and_filter_of_a_typed_list_take_linear_time
   ✓ lists::test_map_variables::a_map_variable_reads_as_the_node_of_its_entries
   ✓ lists::test_map_variables::a_missing_key_of_a_map_variable_is_the_same_error
+  ✓ lists::test_map_variables::keys_and_values_of_a_big_map
   ✓ lists::test_map_variables::two_million_keys_are_set_and_found
   ✓ lists::test_min_max_lists::test_a_single_number_is_still_refused
   ✓ lists::test_min_max_lists::test_extremum_of_a_list_literal
@@ -1568,6 +1578,8 @@ PASSED:
   ✓ lists::test_min_max::test_min_max_of_variables_and_expressions
   ✓ lists::test_min_max::test_min_needs_two_arguments
   ✓ lists::test_min_max::test_user_definition_wins_over_the_builtin
+  ✓ lists::test_nested_comprehension::filters_sit_between_and_after_the_clauses
+  ✓ lists::test_nested_comprehension::two_for_clauses_nest
   ✓ lists::test_nested_index_assignment::a_nested_index_assignment_sets_the_inner_item
   ✓ lists::test_nested_maps::a_map_inside_a_map_keeps_its_braces
   ✓ lists::test_node_lists::a_list_parameter_holds_whatever_elements_its_callers_pass
@@ -1579,6 +1591,7 @@ PASSED:
   ✓ lists::test_node_lists::loops_over_a_list_are_linear
   ✓ lists::test_none_word::a_bare_none_is_null
   ✓ lists::test_none_word::none_called_is_an_error_naming_the_null
+  ✓ lists::test_number_keys::a_declared_map_keys_its_number_subscripts
   ✓ lists::test_number_keys::a_list_keeps_its_positions
   ✓ lists::test_number_keys::a_number_subscript_keys_an_empty_map
   ✓ lists::test_numbered_fields::numbered_fields_of_a_tuple
@@ -2160,6 +2173,10 @@ PASSED:
   ✓ numbers::test_round_to_digits::round_to_digits
   ✓ numbers::test_round_to_digits::round_without_digits_is_whole
   ✓ numbers::test_rounding_in_functions::test_rounding_builtins_work_inside_function_bodies
+  ✓ numbers::test_run_time_power::a_run_time_kind_call_is_rounded
+  ✓ numbers::test_run_time_power::a_run_time_kind_has_a_power
+  ✓ numbers::test_run_time_power::a_run_time_kind_has_an_absolute_value
+  ✓ numbers::test_run_time_power::a_run_time_ratio_exponent_is_a_float_power
   ✓ numbers::test_run_time_remainder::a_float_element_has_a_float_remainder
   ✓ numbers::test_run_time_remainder::a_long_float_literal_element_has_a_remainder
   ✓ numbers::test_run_time_remainder::an_int_element_keeps_an_exact_remainder
@@ -2755,6 +2772,9 @@ PASSED:
   ✓ programs::test_shader_holes::values_not_written_out_cannot_take_the_holes
   ✓ programs::test_small_samples::error_samples
   ✓ programs::test_small_samples::text_samples
+  ✓ programs::test_sound_files::a_broken_music_file_fails
+  ✓ programs::test_sound_files::a_music_file_plays_in_the_background
+  ✓ programs::test_sound_files::only_a_music_file_plays
   ✓ programs::test_sound::a_melody_is_its_notes_one_after_another
   ✓ programs::test_sound::notes_are_frequencies
   ✓ programs::test_sound::notes_are_named_in_a_program_with_units
@@ -4149,6 +4169,7 @@ PASSED:
   ✓ welcoming::test_left_arrow::a_spaced_left_arrow_assigns_with_a_note
   ✓ welcoming::test_left_arrow::a_spaced_less_than_compares
   ✓ welcoming::test_let_const_changes::a_constant_assigned_its_own_value_again
+  ✓ welcoming::test_let_const_changes::a_declaration_unpacks_comma_values
   ✓ welcoming::test_let_const_changes::a_let_variable_changes
   ✓ welcoming::test_let_const_changes::let_and_const_unpack_a_tuple
   ✓ welcoming::test_list_phrases::a_chain_of_phrases
@@ -4306,4 +4327,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-10 ignored, 4301 passed, 0 failed, 4301 total tested
+10 ignored, 4322 passed, 0 failed, 4322 total tested

@@ -11,3 +11,13 @@ fn each_in_a_phrase() {
 fn assigned_phrase_call() {
 	is!("to f xs by d: d\nx = f [1] by 5\nx", 5);
 }
+
+#[test]
+fn assigned_to_phrase() {
+	is!("to add a to b: a+b; y = add 1 to 2; y", 3);
+}
+
+#[test]
+fn assigned_to_phrase_compared() {
+	is!("to add a to b: a+b; y = add 1 to 2 == 3; y", true);
+}

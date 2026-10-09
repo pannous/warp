@@ -2,7 +2,7 @@
 // in Sonic Pi), `play note("C#4")`, `melody [C4 E4 G4]` (one note after another), `beep`, `tone(frequency, seconds, "square")`. Frequencies
 // and durations are numbers or quantities (440Hz, 0.5s, 250ms), read by si_amount as plain numbers (src/units/static_units.rs). The samples are made here and played by the host word
 // sound_samples: natively a WAV file and the system's player (src/sound.rs; silent under tests and WARP_NO_WINDOW),
-// in the browser WebAudio. Loaded when a program calls play, melody, tone or beep
+// in the browser WebAudio. Loaded when a program calls play, melody, tone, beep, play_file or stop_sound
 global sample_rate = 22050
 // the share of the loudest sample: chords and melodies stay below it
 global loudness = 0.3
@@ -16,18 +16,13 @@ loudest_sample = 32767
 fade_seconds = 0.005
 // a note letter's semitone above C is its place here, from 0
 scale_letters = "C.D.EF.G.A.B"
-// the twelfth root of 2, a float: an exact decimal would make note() an ever longer fraction
-global semitone_ratio = float(1.059463094359)
 
 // the frequency of a note name: note("A4") is 440, note("C#4") a semitone above C4, note("Eb5") one below E5
 note(name) := {
 	accidental = if count(name) == 3 then (if name#2 == "#" then 1 else -1) else 0
 	octave = number(name#(count(name)))
 	key = 12 * (octave + 1) + scale_letters.index_of(name#1) - 1 + accidental
-	// a semitone apart from A4 (key 69) at a time: a power 2^(steps/12) fails in a program with units (card unit-power)
-	frequency = 440.0
-	for step in 1 to abs(key - 69) { frequency = if key > 69 then frequency * semitone_ratio else frequency / semitone_ratio }
-	frequency
+	440.0 * 2^((key - 69) / 12)
 }
 C2 = 65.41
 D2 = 73.42
@@ -87,7 +82,10 @@ beep() := tone(880, 0.15, "square")
 // a frequency, or a list of them sounding together (a chord)
 pitches_of(x) := if x is list then [si_amount(f) for f in x] else [si_amount(x)]
 to play x for duration: sound(chord_samples(pitches_of(x), si_amount(duration), wave_shape))
-to play x: play x for note_seconds
+// a music file in the background (wav, mp3, ogg, flac, aiff, m4a): play "song.mp3"; stop_sound stops it
+play_file(path) := std_io("sound", "play_file", [path])
+stop_sound() := std_io("sound", "stop", [])
+to play x: if x is text then play_file(x) else sound(chord_samples(pitches_of(x), note_seconds, wave_shape))
 // one note (or chord) after another: melody [C4 E4 G4], melody [C4 E4 G4] each 250ms (or melody([C4 E4 G4], 0.25s))
 // plain seconds: the unit check reads a quantity parameter in a loop as unsupported (notes/units_runtime.md)
 melody_samples(notes, seconds) := {

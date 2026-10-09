@@ -1,8 +1,14 @@
 // The warp compiler (warp.wasm, built by build.sh) and the programs it compiles (host.js), run off the page's thread:
 // a worker may compile any module synchronously and block on a synchronous fetch, which the host calls need.
 
+// where a message waits: the page keeps the last stage for its stall warning and the Firefox driver's timeout report
+// (cards firefox-hello-again, tour-firefox)
+const stage = name => self.postMessage({ type: "stage", stage: name });
+
+stage("loading its scripts");
 importScripts("reader.js", "imports.js", "host.js");
 importScripts(...HOST_PART_FILES, "components.js", "served-files.js");
+stage("starting the task workers");
 prepareTaskPool(); // task Workers start while this worker is idle (host.js)
 
 // warp.wasm, the optimized build, or the one the page names (?compiler=warp.debug.wasm, build.sh)
@@ -27,6 +33,8 @@ const post = message => warming || self.postMessage(message);
 const WARM_UP_CODE = 'p{ "" }';
 self.keepStored = (name, value, file) => post({ type: "stored", name, value, file }); // host-files.js STD_ADAPTERS.store
 self.writeClipboard = text => post({ type: "clipboard", text }); // host-files.js STD_ADAPTERS.clipboard
+self.playSoundFile = url => post({ type: "sound file", url }); // host-files.js STD_ADAPTERS.sound: a worker has no <audio>
+self.stopSoundFiles = () => post({ type: "stop sound files" });
 const hooks = {
 	renders: true, // each outcome carries its HTML by the program's own renderer (host.js renderedHtml)
 	print: (text, stream) => post({ type: "print", text, stream }),
@@ -68,7 +76,9 @@ async function downloaded(response) {
 }
 
 async function loadCompiler() {
+	stage(`requesting ${COMPILER_URL}`);
 	const response = await fetch(COMPILER_URL);
+	stage(`downloading ${COMPILER_URL}`);
 	if (!response.ok) throw new Error(`${COMPILER_URL}: HTTP ${response.status}; build it with web/playground/build.sh`);
 	const bytes = await downloaded(response);
 	post({ type: "compiling" });
@@ -225,9 +235,6 @@ function runHandler(holder, handler) {
 	showHandled(holder, handled, true);
 	if (handled.result === undefined) holder.stopTimers();
 }
-
-// where a message waits: the page keeps the last stage for the Firefox driver's timeout report (card firefox-hello-again)
-const stage = name => post({ type: "stage", stage: name });
 
 // the run's timers (host.js addTimer), each running its handler until the next run
 self.onmessage = async ({ data }) => {

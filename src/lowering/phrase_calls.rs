@@ -128,19 +128,27 @@ fn matched(arguments: &[Node], pattern: &[Part]) -> Option<Vec<Node>> {
 	Some(values)
 }
 
-/// `x = f [1] by 5`: an assigned value nests its words in pairs, `[[f, [1]], [by, 5]]`; a phrase call reads them flat
+/// `x = f [1] by 5`: an assigned value nests its words in pairs, `[[f, [1]], [by, 5]]`, and `y = add 1 to 2` reads
+/// `(add 1) to 2`; a phrase call reads them flat
 fn assigned_words(value: Node, patterns: &HashMap<String, Vec<Vec<Part>>>) -> Node {
-	let Node::List(items, Bracket::None, Separator::Space) = value.drop_meta() else { return value };
-	let flat = spaced_words(items);
-	match flat.first().and_then(word) {
-		Some(name) if patterns.contains_key(name) && flat.len() > items.len() => Node::List(flat, Bracket::None, Separator::Space),
-		_ => value,
+	// `y = add 1 to 2 == 3` compares the phrase's value
+	if let Node::Key(left, op, right) = value.drop_meta() {
+		if op.is_comparison() {
+			return Node::Key(Box::new(assigned_words(left.as_ref().clone(), patterns)), *op, right.clone());
+		}
 	}
+	let flat = spaced_words(std::slice::from_ref(&value));
+	let Some((head, arguments)) = flat.split_first() else { return value };
+	let calls_a_phrase = word(head).and_then(|name| patterns.get(name)).is_some_and(|forms| forms.iter().any(|pattern| phrase_call("", arguments, pattern).is_some()));
+	if calls_a_phrase && flat.len() > 1 { Node::List(flat, Bracket::None, Separator::Space) } else { value }
 }
 
 fn spaced_words(items: &[Node]) -> Vec<Node> {
 	items.iter().flat_map(|item| match item.drop_meta() {
 		Node::List(words, Bracket::None, Separator::Space) => spaced_words(words),
+		Node::Key(left, op, right) if op.as_str().chars().all(char::is_alphabetic) => {
+			[spaced_words(std::slice::from_ref(left)), vec![Node::Symbol(op.as_str().to_string())], spaced_words(std::slice::from_ref(right))].concat()
+		}
 		_ => vec![item.clone()],
 	}).collect()
 }

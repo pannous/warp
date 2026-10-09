@@ -91,6 +91,11 @@ pub fn call(module: &str, member: &str, arguments: &Node) -> Result<Node, String
 			values.remove(&text_of(name)?);
 			save_stored_values(&file, values).map(|_| Node::Empty).map_err(failure)
 		}
+		// `play "song.mp3"`, `stop_sound` (lib/sound.warp, card sound-library)
+		#[cfg(feature = "native")]
+		("sound", "play_file", [path]) => crate::sound::play_file(&text_of(path)?).map(|_| Node::Empty).map_err(failure),
+		#[cfg(feature = "native")]
+		("sound", "stop", []) => { crate::sound::stop_files(); Ok(Node::Empty) }
 		// the tables of registered classes (lowering/database_tables.rs)
 		#[cfg(feature = "native")]
 		("table", member, arguments) => crate::database::call(member, arguments).map_err(failure),

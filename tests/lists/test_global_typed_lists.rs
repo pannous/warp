@@ -60,3 +60,12 @@ fn a_global_array_a_function_writes_stays_an_array() {
 	is!("global s = [0]; def f(n) { s = int[n] }; f(4); s[3] = 9; s", ints(vec![0, 0, 0, 9]));
 	is!("use draw; canvas(200, 200); clear(red); canvas_pixels[39999] == red", true);
 }
+
+// card global-list: a function's `out += [i]` on a global Node list grows it in place like a local's (list_extend):
+// the concat copy was quadratic (10^5 appends ran out of fuel) and a list held elsewhere missed the new items
+#[test]
+fn a_function_appends_to_a_global_list_in_place() {
+	is!("out = []; add(i) := { global out; out += [i] }; for i in 1 to 100000 { add(i) }; count(out)", 100000);
+	is!("out = [0]; held = out; add(i) := { global out; out += [i] }; add(1); count(held)", 2);
+	is!("out = [\"a\"]; add(t) := { global out; out += [t] }; add(\"b\"); out#2", "b");
+}

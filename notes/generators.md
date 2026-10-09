@@ -37,10 +37,19 @@
 - Not yet: a yield inside an expression (`x = yield v`, Python's send) leaves the call collecting; each field
   update copies the object (`field_with`), fine for a few fields.
 
+## take, zip, list, sum (src/lowering/generator_consumers.rs, first step of generator_objects::lower)
+- `take(naturals(), 3)`, `take 3 of naturals()`, `first 2 of g()`, `first(g(), 2)` and `zip(naturals(), xs)` pull only
+  the values they need; `n = naturals(); take(n, 2)` takes from the object and leaves it advanced (a later take goes
+  on); `list(c)`, `sum(c)` (count max min mean sort) of a variable advanced with next take the rest of its values.
+- Each call becomes statements before its statement: `take·1 = []; while count(take·1) < limit { v = source.next();
+  if v == ø { break }; take·1 += [v] }`, the call replaced by `take·1`. A source is a generator call (made an object
+  with `iter(…)`), a variable holding one, or any list (pulled by index). Calls with no generator source stay as they
+  are (lib/list.warp, `use list`). A call in a `while` condition is not rewritten (it would be computed once).
+- An argument `naturals()` arrives as the bare symbol `naturals`: generator_call takes it as the call.
+
 ## Next
-- `zip`, `take 5 of naturals()`, `list(g)` / `sum(g)` over an object.
 - wasm stack switching (wasmtime 49 has `wasm_stack_switching`, x86-64 Linux only; no browser) would resume any
   generator without the state machine; not needed now.
 - `yield from xs` / `yield each xs`, a recursive generator lazily, a generator expression `(x*x for x in xs)` as a
   lazy value.
-- Ruby `loop do … end` and `while c … end` inside a `def … end` do not parse (found writing a Ruby fib generator).
+- Done (card ruby-loop): Ruby `loop do … end` and `while c … end` inside a `def … end` parse (parser skip_end_line, welcome_forms endless_loop).

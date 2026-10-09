@@ -1,0 +1,15 @@
+naturals() := { k = 1; while yes { yield k; k += 1 } }
+count_to(n) := { k = 1; while k <= n { yield k; k += 1 } }
+print take(naturals(), 3)
+n = naturals()
+first_two = take(n, 2)
+print take(n, 2)
+print zip(naturals(), [5, 6])
+print zip(count_to(2), naturals())
+c = count_to(4)
+next(c)
+print sum(c)
+print take 3 of naturals()
+print first 2 of count_to(5)
+print first(naturals(), 4)
+print first 2 of [7, 8, 9]

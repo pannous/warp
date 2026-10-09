@@ -246,3 +246,4 @@ Running list of the small fixes done by the fixer session (branches fix-<topic>)
 - 2026-10-09 method-bodies: passes before class_methods::lower skipped methods (xs.keep only positive in a method failed); map_children/visit now enter class code, not fields.
 - 2026-10-09 generators: a function with yield is a generator (user: high priority). for x in g() inlines its body lazily (break/continue/return, endless generators), any other call collects a list. A loop ending in break trapped 'null reference'. notes/generators.md.
 - 2026-10-09 generator-objects: next(counter) / iter(g()) resume a generator (a class with a state-machine next()), for walks objects with next(); a field-changing method's early return gave 'index out of range'.
+- 2026-10-09 generators-zip: take/first/zip/list/sum over generators pull lazily (generator_consumers.rs); a 0-argument generator call in an argument list is a bare symbol.
