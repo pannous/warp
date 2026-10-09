@@ -7,6 +7,8 @@ if count(accounts) == 0 {
 }
 al = accounts#1
 bo = accounts#2
+al.balance = 100  // every run starts from the same balances: the table is stored next to this file
+bo.balance = 0
 
 transfer(amount) := transaction {
 	al.balance -= amount
