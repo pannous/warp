@@ -26,3 +26,11 @@ fn a_run_time_kind_call_is_rounded() {
 	is!("pick(xs) := { f = xs#1; f * 1 }; round(pick([sqrt(2)]) * 1000)", 1414);
 	is!("pick(xs) := { f = xs#1; f * 1 }; round(pick([7]))", 7);
 }
+
+/// ‖x‖ of a run-time-kind number: a Float's is a Float, an Int's stays exact (it read the Float as an Int)
+#[test]
+fn a_run_time_kind_has_an_absolute_value() {
+	is!("ratio(k) := 2^((k - 69) / 12); round(abs(ratio(57)) * 1000)", 500);
+	is!("ratio(k) := 2^((k - 69) / 12); abs(-ratio(40)) < 0.19", true);
+	is!("ratio(k) := 2^((k - 69) / 12); abs(ratio(81))", 2);
+}
