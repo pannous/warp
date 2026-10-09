@@ -35,6 +35,13 @@ fn a_global_map_is_set_in_a_function() {
 }
 
 #[test]
+fn an_entry_is_removed_by_its_number() {
+	is!("m = {}; for i in 1 to 100 { m[i] = i }; for i in 1 to 99 { m.remove(i) }; [count(m), m[100]]", warp::parse("[1 100]"));
+	is!("m = {}; f(k) := { global m; m.remove(k) }; m[1] = 1; m[2] = 2; f(1); if 1 in m then 0 else m[2]", 2);
+	is!("m = {}; m[1] = 5; m.remove(1)", 5);
+}
+
+#[test]
 fn a_global_map_takes_constant_time_per_entry() {
 	let filled = format!("m = {{}}; put(k, v) := {{ global m; m[k] = v }}; for i in 1 to {ENTRIES} {{ put(i, i * 2) }}");
 	is!(&timed(&filled, "m[777]"), 1554);
