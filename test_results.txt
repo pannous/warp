@@ -2607,6 +2607,13 @@ PASSED:
   ✓ programs::test_paint::paint_frames_for_the_window_read_back_as_sent
   ✓ programs::test_paint::paint_writes_a_png_natively
   ✓ programs::test_paint::paint_writes_colors_as_a_truecolor_png
+  ✓ programs::test_paint_lists::paint_of_too_few_ints_fails
+  ✓ programs::test_paint_lists::paint_reads_ints_from_a_built_list
+  ✓ programs::test_paint_lists::paint_reads_other_pixels_node_by_node
+  ✓ programs::test_paint_lists::paint_takes_the_first_pixels_of_a_longer_list
+  ✓ programs::test_paint_shader::paint_of_a_shader_without_values_reads_none
+  ✓ programs::test_paint_shader::paint_renders_a_shader_text
+  ✓ programs::test_paint_shader::use_graphics_is_use_draw
   ✓ programs::test_plain_hints_when_piped::a_hint_on_piped_stderr_has_no_escape_codes
   ✓ programs::test_playground_samples::every_excluded_sample_exists
   ✓ programs::test_playground_samples::every_playground_sample_runs_without_an_error
@@ -4125,4 +4132,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-14 ignored, 4120 passed, 0 failed, 4120 total tested
+14 ignored, 4127 passed, 0 failed, 4127 total tested
