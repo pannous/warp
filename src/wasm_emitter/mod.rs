@@ -181,7 +181,7 @@ use crate::type_kinds::{field_def_to_val_type, Kind, RawFieldValue, TypeDef, Typ
 #[cfg(feature = "native")]
 use crate::util::gc_engine;
 use log::{trace, warn};
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use wasm_encoder::*;
 use Instruction as I;
 #[cfg(feature = "validate")]
@@ -1128,16 +1128,21 @@ impl WasmGcEmitter {
 	}
 
 	/// Node locals not first assigned by a statement of the body itself (`if c { n = "a" } else { n = "b" }; n`) start
-	/// as ø: wasm reads a non-nullable local only after a set on every path, and a set inside a block ends with it
+	/// as ø: wasm reads a non-nullable local only after a set on every path, and a set inside a block ends with it.
+	/// So do Node locals a nested function captures: each call refreshes the captures, also one in the local's own
+	/// first value (`m = mean(xs); f = x => x - m`)
 	fn emit_node_local_defaults(&mut self, func: &mut Function, body: &Node, skipped: usize) {
 		let statements = match body.drop_meta() {
 			Node::List(items, Bracket::Curly | Bracket::Round, Separator::Semicolon | Separator::Newline) => items.as_slice(),
 			_ => std::slice::from_ref(body),
 		};
+		let captured: HashSet<String> = self.compiling.clone().map(|compiling| self.nested_functions(&compiling)).unwrap_or_default().iter()
+			.flat_map(|nested| self.ctx.captures.get(nested).into_iter().flatten().map(|(name, _)| name.clone()))
+			.collect();
 		let node_storage = Ref(self.node_ref(false));
 		let mut defaulted: Vec<u32> = self.scope.locals.values()
 			.filter(|local| local.position as usize >= skipped && self.local_storage_type(&local.name, local.kind) == node_storage)
-			.filter(|local| !first_mention_assigns(statements, &local.name))
+			.filter(|local| captured.contains(&local.name) || !first_mention_assigns(statements, &local.name))
 			.map(|local| local.position).collect();
 		defaulted.sort();
 		for slot in defaulted {
