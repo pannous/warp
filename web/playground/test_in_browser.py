@@ -193,7 +193,13 @@ class FirefoxDriver:
 		self.process.stdin.write(json.dumps(arguments) + "\n")
 		self.process.stdin.flush()
 		answer = self.process.stdout.readline()
-		return json.loads(answer) if answer else ""
+		# close quits the driver without an answer
+		if not answer and arguments[0] != "close":
+			sys.exit(f"error: firefox_driver.mjs ended (exit code {self.process.wait()}) without answering {arguments[0]}")
+		answer = json.loads(answer or '""')
+		if isinstance(answer, dict) and "timeout" in answer:
+			sys.exit(f"error: Firefox gave {answer['timeout']}")
+		return answer
 
 
 class FirefoxConsole:
@@ -333,6 +339,8 @@ def build_components():
 
 
 def main():
+	# each verdict shows in a CI log as it comes, so a stuck run shows where it stuck (card deploy-firefox-hang)
+	sys.stdout.reconfigure(line_buffering=True)
 	if sys.argv[1:2] == ["--examples"]:
 		global firefox
 		names = [name for name in sys.argv[2:] if name != "--firefox"]
