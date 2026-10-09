@@ -1188,9 +1188,12 @@ fn changing_list_method(call: &Node) -> bool {
 	method.is_some_and(|method| is_list_mutating_method(&method))
 }
 
+/// Each bound name with the text of its value, and the value nodes
+type Bindings<'a> = (Vec<(String, String)>, &'a [Node]);
+
 /// The names a `let`/`const` declaration binds, each with the text of its value, and the value nodes: `x = v`, or the
 /// lowered tuple pattern `let (a, b) = v, w` (`$destructure (a, b) v w`, one value unpacked when there is only one)
-fn declared_bindings(declaration: &Node) -> Option<(Vec<(String, String)>, &[Node])> {
+fn declared_bindings(declaration: &Node) -> Option<Bindings<'_>> {
 	if let Node::Key(target, Op::Assign | Op::Define, value) = declaration.drop_meta() {
 		return Some((vec![(target.name(), value.serialize())], std::slice::from_ref(value)));
 	}
