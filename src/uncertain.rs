@@ -14,6 +14,8 @@ pub const CERTAINLY: &str = "certainly";
 /// `y possibly < x`: some part of the interval is below
 pub const POSSIBLY: &str = "possibly";
 const CERTAINTY_WORDS: [&str; 2] = [CERTAINLY, POSSIBLY];
+/// `5 ± 1σ`: a Gaussian ± (card plus-minus-gaussian), its spread one standard deviation; shown after its ± part
+pub const SIGMA: &str = "σ";
 
 /// Where a math word turns or jumps: an interval reaching `at + k·every` (just `at` when `every` is 0) has `value` as
 /// its low (`high` false) or high bound
@@ -58,13 +60,16 @@ pub struct Uncertain {
 	pub value: f64,
 	pub low: f64,
 	pub high: f64,
+	/// `5 ± 1σ`: low and high are one standard deviation from the value, and the ± part propagates in quadrature
+	pub gaussian: bool,
 }
 
 impl Uncertain {
-	/// From the run-time array [value, low, high]
+	/// From the run-time array [value, low, high], a Gaussian's [value, low, high, σ, its contributions…]
 	pub fn from_parts(parts: &[f64]) -> Option<Uncertain> {
 		match *parts {
-			[value, low, high] => Some(Uncertain { value, low, high }),
+			[value, low, high] => Some(Uncertain { value, low, high, gaussian: false }),
+			[value, low, high, _, ..] => Some(Uncertain { value, low, high, gaussian: true }),
 			_ => None,
 		}
 	}
@@ -86,13 +91,26 @@ impl Uncertain {
 impl fmt::Display for Uncertain {
 	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
 		let radius = self.radius();
+		let sigma = if self.gaussian { SIGMA } else { "" };
 		if radius == 0.0 || !radius.is_finite() {
-			return write!(f, "{} ± {}", self.value, radius);
+			return write!(f, "{} ± {}{sigma}", self.value, radius);
 		}
-		let place = radius.log10().floor() as i32 + 1 - SHOWN_DIGITS;
+		let mut place = radius.log10().floor() as i32 + 1 - SHOWN_DIGITS;
+		// 0.0999… rounds up to 0.10, two digits of the next place
+		if (radius / 10f64.powi(place)).round() >= 10f64.powi(SHOWN_DIGITS) {
+			place += 1;
+		}
 		let decimals = (-place).max(0) as usize;
 		let rounded = |x: f64| if place < 0 { x } else { (x / 10f64.powi(place)).round() * 10f64.powi(place) };
-		write!(f, "{:.*} ± {:.*}", decimals, rounded(self.value), decimals, rounded(radius))
+		write!(f, "{:.*} ± {:.*}{sigma}", decimals, rounded(self.value), decimals, rounded(radius))
+	}
+}
+
+/// The spread of a Gaussian `5 ± 1σ` (the right side of its ±, `1*σ`), None for an interval's
+pub fn gaussian_spread(right: &Node) -> Option<&Node> {
+	match right.drop_meta() {
+		Node::Key(spread, Op::Mul, sigma) if matches!(sigma.drop_meta(), Node::Symbol(name) if name == SIGMA) => Some(spread),
+		_ => None,
 	}
 }
 
