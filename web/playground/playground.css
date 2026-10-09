@@ -178,3 +178,10 @@ output.located { cursor: pointer; }
 .chat-failed { color: var(--error); }
 .chat-form { display: flex; gap: 6px; margin-top: 8px; }
 .chat-form input { flex: 1; font: inherit; padding: 3px 8px; border: 1px solid var(--line); border-radius: 6px; background: var(--panel); color: inherit; }
+/* completion.js: the words or uniscript entities that complete the one being typed */
+.completions { position: absolute; z-index: 20; margin: 0; padding: 2px 0; list-style: none; max-height: 16em; overflow-y: auto;
+	background: var(--panel); color: var(--ink); border: 1px solid var(--line); border-radius: 4px;
+	font-family: monospace; font-size: 0.9em; box-shadow: 0 2px 8px rgb(0 0 0 / 0.2); }
+.completions li { padding: 1px 8px; cursor: pointer; white-space: nowrap; }
+.completions li.chosen { background: var(--code-ground); color: var(--keyword); }
+.completions .glyph { margin-left: 1em; float: right; }
