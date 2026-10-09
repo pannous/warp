@@ -109,13 +109,19 @@ bo's row again, so it changes nothing after written-through changes; an instance
   constructor argument (`Team("Red")`) and a moved row (`bo.team = blue`) shows in both teams at once (card orm-moved).
 - `people.add(p)` stores `p.team.id` (an instance without a row raises "… add it to its table first"); `bo.team = blue`
   writes blue's id through.
+- `red.players.add(p)` (anywhere, `d.team.players.add(d)` too; cards orm-nested, orm-list-add) sets `p.team = red`:
+  written to p's row, or p inserted into people when it has none; no duplicate row (database_tables.rs
+  added_to_members).
 - In a filter, `it.team` is no column for SQL (an id vs an instance): the part goes through a query's function, which
   builds the instance from the id.
 - Objects now point to each other, so a value read back from wasm can be cyclic: both readers mark a node met again
   inside itself as `…` (wasm_reader.rs, reader.js CYCLE_MARK). Printing one inside wasm (`print team`) still exhausts
   the call stack (card cyclic-print).
-- Gaps: a row pointing to a deleted row, or the 0 of a column added for a foreign key, fails the open (index out of
-  range; card orm-dangling). The getter scans the loaded list; natively it could be a SELECT once tables are queries.
+- A key without its row (a deleted row, or the 0 of a column added for a foreign key; card orm-dangling): a required
+  key (`team: Team`) leaves its row out of the opened list with a runtime warning naming the row and suggesting
+  `team: Team?`; the row stays in the database. An optional key (`team: Team?`) reads ø and is stored as 0
+  (database_tables.rs opened, referenced, key_id).
+- Gaps: the getter scans the loaded list; natively it could be a SELECT once tables are queries.
 - Sample: samples/orm.warp (native and playground) has no relations yet: adding `team` to its Person would hit
   orm-dangling on databases the sample already wrote.
 

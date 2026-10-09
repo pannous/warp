@@ -22,15 +22,21 @@ const RENAMED_MARK: &str = "was";
 const SAVE_WORD: &str = "save";
 /// the generated code's variables, written as these placeholders (`·` would parse as a product)
 const ROW: &str = "table_row";
+/// the rows a table's open reads, and the rows a foreign key's id matches
+const ROWS: &str = "table_rows";
+const MATCHES: &str = "table_matches";
 const ADDED: &str = "table_added";
 /// a foreign key's row, and a row of a one-to-many getter
 const REFERENCED: &str = "table_referenced";
 const MEMBER: &str = "table_member";
 const SAVED: &str = "table_saved";
-const GENERATED_NAMES: [(&str, &str); 6] = [(ROW, "table·row"), (ADDED, "table·added"), (ARGUMENTS, "table·arguments"),
+const GENERATED_NAMES: [(&str, &str); 8] = [(ROW, "table·row"), (ROWS, "table·rows"), (MATCHES, "table·matches"), (ADDED, "table·added"), (ARGUMENTS, "table·arguments"),
 	(REFERENCED, "table·referenced"), (MEMBER, "table·member"), (SAVED, "table·saved")];
 const SCHEMA_PLACEHOLDER: &str = "table_schema";
+const READ_PLACEHOLDER: &str = "table_read";
 const VALUE_PLACEHOLDER: &str = "table_value";
+/// `red.players.add(p)`: the instance whose one-to-many field is added to
+const OWNER_PLACEHOLDER: &str = "table_owner";
 /// A filter's query (notes/orm.md step 2): the ids it keeps, its SQL condition and parameters, the functions it calls
 const IDS_PLACEHOLDER: &str = "table_ids";
 const CONDITION_PLACEHOLDER: &str = "table_condition";
@@ -43,6 +49,8 @@ const IDS: &str = "table·ids";
 const FUNCTION: &str = "table·call";
 /// The SQL function a query calls a warp function through (database.rs)
 const WARP_CALL: &str = "warp_call";
+/// `Team?`: an optional field
+const OPTIONAL_MARK: char = '?';
 const NUMERIC_TYPES: [&str; 4] = ["int", "float", "number", "real"];
 /// What a filter's function should not do: not being sure to end (Div) or allocating is fine
 const SIDE_EFFECTS: [crate::effects::Effect; 5] = [crate::effects::Effect::State, crate::effects::Effect::IO, crate::effects::Effect::FFI, crate::effects::Effect::Async, crate::effects::Effect::Eval];
@@ -65,6 +73,8 @@ struct Members {
 	field: String,
 	table: String,
 	back: Option<String>,
+	/// whether `back` is optional (`team: Team?`), so a row may point to no team
+	optional_back: bool,
 }
 
 impl Table {
@@ -75,6 +85,16 @@ impl Table {
 	fn is_members(&self, field: &str) -> bool {
 		self.members.iter().any(|members| members.field == field)
 	}
+
+	/// `team: Team?`: a foreign key that may point to no row, ø
+	fn is_optional(&self, field: &str) -> bool {
+		self.fields.iter().any(|(name, field_type, _)| name == field && field_type.ends_with(OPTIONAL_MARK))
+	}
+}
+
+/// The class of a field's type: `Team` of `Team?`
+fn class_of(field_type: &str) -> &str {
+	field_type.trim_end_matches(OPTIONAL_MARK)
 }
 
 pub fn lower(program: Node) -> Node {
@@ -112,13 +132,14 @@ fn with_relations(mut tables: HashMap<String, Table>) -> HashMap<String, Table> 
 		.map(|table| (table.class.clone(), table.fields.iter().map(|(name, field_type, _)| (name.clone(), field_type.clone())).collect())).collect();
 	for table in tables.values_mut() {
 		for (field, field_type, _) in &table.fields {
-			if let Some(target) = variable_of.get(field_type) {
+			if let Some(target) = variable_of.get(class_of(field_type)) {
 				table.references.push((field.clone(), target.clone()));
 			}
 			let element = field_type.strip_prefix('[').and_then(|rest| rest.strip_suffix(']')).unwrap_or_default();
 			if let Some(target) = variable_of.get(element) {
-				let back = fields_of[element].iter().find(|(_, back_type)| *back_type == table.class).map(|(name, _)| name.clone());
-				table.members.push(Members { field: field.clone(), table: target.clone(), back });
+				let back_field = fields_of[element].iter().find(|(_, back_type)| class_of(back_type) == table.class);
+				let (back, optional_back) = (back_field.map(|(name, _)| name.clone()), back_field.is_some_and(|(_, back_type)| back_type.ends_with(OPTIONAL_MARK)));
+				table.members.push(Members { field: field.clone(), table: target.clone(), back, optional_back });
 			}
 		}
 	}
@@ -327,7 +348,7 @@ fn with_arguments(node: Node, table: &Table, values: &[String], row_size: usize)
 			name if columns.contains(&name) => {
 				let index = 2 + columns.iter().position(|column| *column == name).unwrap_or_default();
 				match table.reference(&name) {
-					Some(target) => generated(&referenced(target, &format!("{ARGUMENTS}#{index}")), []),
+					Some(_) => generated(&referenced(table, &name, &format!("{ARGUMENTS}#{index}")), []),
 					None => argument(index),
 				}
 			}
@@ -340,13 +361,25 @@ fn with_arguments(node: Node, table: &Table, values: &[String], row_size: usize)
 
 /// The constructor's arguments of an instance from a row `[id, column values…]` held in `row`
 fn constructor_arguments(table: &Table, row: &str) -> Vec<String> {
-	let columns = columns_of(table);
-	let column = |name: &str| format!("{row}#{}", 2 + columns.iter().position(|column| column == name).unwrap_or_default());
+	let column = |name: &str| column_cell(table, row, name);
 	table.fields.iter().filter(|(name, _, _)| !table.is_members(name)).map(|(name, _, _)| match (name == ID_FIELD, table.reference(name)) {
 		(true, _) => format!("{row}#1"),
-		(false, Some(target)) => referenced(target, &column(name)),
+		(false, Some(_)) => referenced(table, name, &column(name)),
 		_ => column(name),
 	}).chain(implicit_id(table).then(|| format!("{row}#1"))).collect()
+}
+
+/// The id a foreign key of `instance` stores: its row's, 0 for an optional key holding ø
+fn key_id(instance: &str, field: &str, optional: bool) -> String {
+	match optional {
+		true => format!("(if {instance}.{field} == ø then 0 else {instance}.{field}.{ID_FIELD})"),
+		false => format!("{instance}.{field}.{ID_FIELD}"),
+	}
+}
+
+/// The cell of column `name` in `row`, a row being `[id, column values…]`
+fn column_cell(table: &Table, row: &str, name: &str) -> String {
+	format!("{row}#{}", 2 + columns_of(table).iter().position(|column| column == name).unwrap_or_default())
 }
 
 /// "name" as an SQL identifier
@@ -421,7 +454,7 @@ fn with_member_getters(body: Node, table: &Table) -> Node {
 		let Node::Key(field, Op::Colon, _) = item.drop_meta() else { return item };
 		let Some(members) = table.members.iter().find(|members| members.field == field.drop_meta().name()) else { return item };
 		let Some(back) = &members.back else { return item };
-		generated(&format!("{field} := {{ global {list}; [{MEMBER} for {MEMBER} in {list} if {MEMBER}.{back}.{ID_FIELD} == {ID_FIELD}] }}",
+		generated(&format!("{field} := {{ global {list}; [{MEMBER} for {MEMBER} in {list} if {key} == {ID_FIELD}] }}", key = key_id(MEMBER, back, members.optional_back),
 			field = members.field, list = members.table), [])
 	};
 	match body {
@@ -457,8 +490,8 @@ fn has_id(body: &Node) -> bool {
 /// The registrations, inserts and field changes of the tables as their table calls, in every block; `open` the tables
 /// registered so far, as a foreign key reads the rows of its table
 fn with_tables(node: Node, tables: &HashMap<String, Table>, file: &str, open: &mut Vec<String>) -> Node {
-	if let Some(saved) = saved(&node, tables, file) {
-		return saved;
+	if let Some(lowered) = saved(&node, tables, file).or_else(|| added_to_members(&node, tables, file)) {
+		return lowered;
 	}
 	match node {
 		Node::List(statements, bracket, separator @ (Separator::Semicolon | Separator::Newline)) => {
@@ -507,10 +540,22 @@ fn opened(statement: &Node, tables: &HashMap<String, Table>, file: &str, open: &
 		let column = [Node::Text(name), Node::Text(field_type), default.unwrap_or(Node::Empty)].into_iter().chain(old_name);
 		Node::List(column.collect(), Bracket::Square, Separator::Space)
 	}).collect(), Bracket::Square, Separator::Space);
-	let code = format!("[{class}({arguments}) for {ROW} in std_io(\"table\", \"open\", [{name:?}, {SCHEMA_PLACEHOLDER}, {file:?}])]",
-		class = table.class, arguments = arguments.join(", "), name = table.name);
-	let rows = generated(&code, [(SCHEMA_PLACEHOLDER, schema)]);
-	Some(std::iter::once(Node::Key(Box::new(target.drop_meta().clone()), Op::Assign, Box::new(rows))).collect())
+	let read = generated(&format!("std_io(\"table\", \"open\", [{:?}, {SCHEMA_PLACEHOLDER}, {file:?}])", table.name), [(SCHEMA_PLACEHOLDER, schema)]);
+	let instances = |rows: &str, kept: &str| format!("[{}({}) for {ROW} in {rows}{kept}]", table.class, arguments.join(", "));
+	let required: Vec<&str> = table.references.iter().map(|(field, _)| field.as_str()).filter(|field| !table.is_optional(field)).collect();
+	let assigned = |rows: Node| Node::Key(Box::new(target.drop_meta().clone()), Op::Assign, Box::new(rows));
+	if required.is_empty() {
+		return Some(vec![assigned(generated(&instances(READ_PLACEHOLDER, ""), [(READ_PLACEHOLDER, read)]))]);
+	}
+	// a required key without its row (deleted, or the 0 of a column added for it) leaves its row out, reported
+	let found = |field: &str| format!("count({}) > 0", matching_rows(table, field, &column_cell(table, ROW, field)));
+	let warnings: String = required.iter().map(|field| format!(
+		"if not ({found}) {{ warning(\"{variable} row \" + {ROW}#1 + \": {field} \" + {cell} + \" is no row of {target}; the row is left out (declare {field}: {class}? to keep it, with ø)\") }}\n",
+		found = found(field), cell = column_cell(table, ROW, field), target = table.reference(field).unwrap_or_default(),
+		class = class_of(&table.fields.iter().find(|(name, _, _)| name == field).map(|(_, field_type, _)| field_type.clone()).unwrap_or_default()))).collect();
+	let kept = format!(" if {}", required.iter().map(|field| found(field)).collect::<Vec<_>>().join(" and "));
+	let checked = generated(&format!("{ROWS} = {READ_PLACEHOLDER}\nfor {ROW} in {ROWS} {{\n{warnings}}}"), [(READ_PLACEHOLDER, read)]);
+	Some([checked.children(), vec![assigned(generated(&instances(ROWS, &kept), []))]].concat())
 }
 
 
@@ -533,9 +578,20 @@ fn column_fields(table: &Table) -> Vec<(String, String, Option<Node>)> {
 	}).collect()
 }
 
-/// The row of table `target` whose id is the value of `id` (the instance a foreign key points to)
-fn referenced(target: &str, id: &str) -> String {
-	format!("[{REFERENCED} for {REFERENCED} in {target} if {REFERENCED}.{ID_FIELD} == {id}]#1")
+/// The row whose id is the value of `id` (the instance the foreign key `field` points to); ø for an optional key
+/// without its row
+fn referenced(table: &Table, field: &str, id: &str) -> String {
+	let matches = matching_rows(table, field, id);
+	match table.is_optional(field) {
+		true => format!("({MATCHES} = {matches}; if {MATCHES} then {MATCHES}#1 else ø)"),
+		false => format!("{matches}#1"),
+	}
+}
+
+/// The rows of the table the foreign key `field` points to whose id is the value of `id`: one, or none when dangling
+fn matching_rows(table: &Table, field: &str, id: &str) -> String {
+	let target = table.reference(field).unwrap_or_default();
+	format!("[{REFERENCED} for {REFERENCED} in {target} if {REFERENCED}.{ID_FIELD} == {id}]")
 }
 
 fn implicit_id(table: &Table) -> bool {
@@ -553,21 +609,45 @@ fn inserted(statement: &Node, tables: &HashMap<String, Table>, file: &str) -> Op
 	if word.drop_meta().name() != ADD_WORD {
 		return None;
 	}
+	let code = format!("{ADDED} = {VALUE_PLACEHOLDER}\n{insert}", insert = insert_code(table, &list, file));
+	let lowered = generated(&code, [(VALUE_PLACEHOLDER, value.clone())]);
+	Some(lowered.children())
+}
+
+/// `people.add(ADDED)` and its INSERT, ADDED taking the row's id; a foreign key without its row is an error
+fn insert_code(table: &Table, list: &str, file: &str) -> String {
 	let columns = columns_of(table);
 	let names: Vec<String> = columns.iter().map(|column| format!("{column:?}")).collect();
 	let values: Vec<String> = columns.iter().map(|column| column_value(table, ADDED, column)).collect();
 	let checks = table.references.iter().map(|(field, target)| format!(
-		"if {ADDED}.{field}.{ID_FIELD} == 0 {{ raise \"{class}.{field} is no row of {target}: add it to its table first\" }}\n", class = table.class));
-	let code = format!("{ADDED} = {VALUE_PLACEHOLDER}\n{checks}{list}.add({ADDED})\n{ADDED}.{ID_FIELD} = std_io(\"table\", \"insert\", [{table:?}, [{names}], [{values}], {file:?}])",
-		checks = checks.collect::<String>(), table = table.name, names = names.join(" "), values = values.join(" "));
-	let lowered = generated(&code, [(VALUE_PLACEHOLDER, value.clone())]);
-	Some(lowered.children())
+		"if {ADDED}.{field} != ø and {ADDED}.{field}.{ID_FIELD} == 0 {{ raise \"{class}.{field} is no row of {target}: add it to its table first\" }}\n", class = table.class));
+	format!("{checks}{list}.add({ADDED})\n{ADDED}.{ID_FIELD} = std_io(\"table\", \"insert\", [{table:?}, [{names}], [{values}], {file:?}])",
+		checks = checks.collect::<String>(), table = table.name, names = names.join(" "), values = values.join(" "))
+}
+
+/// `red.players.add(p)` of a one-to-many field, anywhere (`d.team.players.add(d)` too): p's key points to red, written
+/// to p's row, or p inserted into people when it has none (card orm-nested); the value p
+fn added_to_members(node: &Node, tables: &HashMap<String, Table>, file: &str) -> Option<Node> {
+	let Node::Key(members_of, Op::Dot, call) = node.drop_meta() else { return None };
+	let Node::Key(owner, Op::Dot, field) = members_of.drop_meta() else { return None };
+	let Node::List(parts, _, _) = call.drop_meta() else { return None };
+	let [word, value] = parts.as_slice() else { return None };
+	if word.drop_meta().name() != ADD_WORD {
+		return None;
+	}
+	let field = field.drop_meta().name();
+	let members = tables.values().flat_map(|table| &table.members).find(|members| members.field == field)?;
+	let (back, table) = (members.back.as_ref()?, &tables[&members.table]);
+	let code = format!("{ADDED} = {VALUE_PLACEHOLDER}\n{ADDED}.{back} = {OWNER_PLACEHOLDER}\nif {ADDED}.{ID_FIELD} > 0 {{ {update} }} else {{\n{insert}\n}}\n{ADDED}",
+		update = column_update(table, ADDED, back, file), insert = insert_code(table, &members.table, file));
+	let lowered = generated(&code, [(VALUE_PLACEHOLDER, value.clone()), (OWNER_PLACEHOLDER, *owner.clone())]);
+	Some(Node::List(lowered.children(), Bracket::Round, Separator::Semicolon))
 }
 
 /// What the column of `instance` stores: its field, the id of the row of a foreign key
 fn column_value(table: &Table, instance: &str, column: &str) -> String {
 	match table.reference(column) {
-		Some(_) => format!("{instance}.{column}.{ID_FIELD}"),
+		Some(_) => key_id(instance, column, table.is_optional(column)),
 		None => format!("{instance}.{column}"),
 	}
 }
