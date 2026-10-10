@@ -597,6 +597,10 @@ pub mod hints {
             VarStyle::Any => format!("{name} = {value}"),
         };
         let reason = match preferred {
+            // a style hint never changes the meaning: let and := cannot change, a variable stays one (card var-hint)
+            VarStyle::ColonEquals | VarStyle::Let if used_style == VarStyle::Var => {
+                return hint(&spell(used_style), &spell(VarStyle::Any), "a variable is a plain assignment (let and := cannot change)");
+            }
             VarStyle::ColonEquals => "use := for definition",
             VarStyle::Let => "use 'let' for definition",
             VarStyle::Var => "use 'var' for definition",
