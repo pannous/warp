@@ -766,7 +766,6 @@ pub(super) fn assignment_target_root(node: &Node) -> Option<&String> {
 #[derive(Clone, Debug, Default)]
 pub struct Scope {
 	pub locals: HashMap<String, Local>,
-	pub types: HashMap<String, Node>,  // User-defined types
 	pub function_kinds: HashMap<String, Kind>,  // Return kinds of user functions, which shadow FFI names like `pow`
 	/// Variables that hold a closure → `closure_new` targets they may contain (per-site closure_call kinds)
 	pub closure_variable_targets: HashMap<String, HashSet<String>>,
@@ -782,7 +781,6 @@ impl Scope {
 	pub fn child(&self) -> Self {
 		Scope {
 			locals: HashMap::new(),
-			types: HashMap::new(),
 			function_kinds: HashMap::new(),
 			closure_variable_targets: HashMap::new(),
 			globals: HashMap::new(),
@@ -878,16 +876,6 @@ impl Scope {
 		}
 	}
 
-	/// Define a type in current scope
-	pub fn define_type(&mut self, name: String, def: Node) {
-		self.types.insert(name, def);
-	}
-
-	/// Look up a type by name
-	pub fn lookup_type(&self, name: &str) -> Option<&Node> {
-		self.types.get(name).or_else(||
-			self.parent.as_ref().and_then(|p| p.lookup_type(name)))
-	}
 
 	/// Get total number of locals (for WASM local declaration)
 	pub fn local_count(&self) -> u32 {

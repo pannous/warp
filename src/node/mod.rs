@@ -328,9 +328,6 @@ impl Node {
 	pub fn key(s: &str, v: Node) -> Self {
 		Key(Box::new(Symbol(s.to_string())), Op::Colon, Box::new(v))
 	}
-	pub fn key_with_op(k: Node, op: Op, v: Node) -> Self {
-		Key(Box::new(k), op, Box::new(v))
-	}
 	pub fn keys(s: &str, v: &str) -> Self {
 		Key(
 			Box::new(Symbol(s.to_string())),
@@ -549,14 +546,6 @@ impl Node {
 			// Meta { node: _ , data} =>
 			Meta { data, .. } => data.as_ref(),
 			_ => &Empty,
-		}
-	}
-
-	pub fn get_meta_data(&self) -> Option<&Node> {
-		match self {
-			// Meta { node: _ , data} => Some(data.as_ref()),
-			Meta { data, .. } => Some(data.as_ref()),
-			_ => None,
 		}
 	}
 
@@ -787,17 +776,6 @@ pub enum Separator {
 }
 
 impl Separator {
-	pub fn from_char(ch: char) -> Self {
-		match ch {
-			' ' => Separator::Space,
-			',' => Separator::Colon,
-			';' => Separator::Semicolon,
-			'\n' => Separator::Newline,
-			'\t' => Separator::Tab,
-			_ => Separator::None,
-		}
-	}
-
 	pub fn to_char(&self) -> Option<char> {
 		match self {
 			Separator::Space => Some(' '),
@@ -917,13 +895,6 @@ pub fn key(k: &str, v: Node) -> Node {
 pub fn types(name: &str) -> Node {
 	// Returns a Symbol with the type name, matching what type() introspection returns
 	Symbol(name.to_string())
-}
-
-pub fn type_definition(name: &str, body: Node) -> Node {
-	Type {
-		name: Box::new(Symbol(name.to_string())),
-		body: Box::new(body),
-	}
 }
 
 
