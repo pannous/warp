@@ -275,7 +275,7 @@ fn type_of_word(items: &[Node], shadowed: &Names) -> Option<Node> {
 		return None;
 	}
 	let Node::Type { name, body } = head.drop_meta() else { return None };
-	if !matches!(name.drop_meta(), Node::Symbol(word) if word == OF_WORD) || !matches!(body.drop_meta(), Node::Empty) {
+	if !name.is_symbol(OF_WORD) || !matches!(body.drop_meta(), Node::Empty) {
 		return None;
 	}
 	let argument = match argument {

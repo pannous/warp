@@ -155,7 +155,7 @@ fn getter_definition(statement: Node) -> Node {
 /// `z()` of a getter written `z := e`, not `z() := e`
 pub(crate) fn is_written_bare(left: &Node) -> bool {
 	match left {
-		Node::Meta { node, data } => matches!(data.drop_meta(), Node::Symbol(mark) if mark == BARE_GETTER_MARK) || is_written_bare(node),
+		Node::Meta { node, data } => data.is_symbol(BARE_GETTER_MARK) || is_written_bare(node),
 		_ => false,
 	}
 }

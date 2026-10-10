@@ -209,7 +209,7 @@ fn where_flattened(node: Node) -> Node {
 
 /// The position of `where` in `[… subject, where, condition]`
 fn where_position(items: &[Node]) -> Option<usize> {
-	(items.len() >= 3).then(|| items.len() - 2).filter(|&at| matches!(items[at].drop_meta(), Node::Symbol(symbol) if symbol == WHERE_WORD))
+	(items.len() >= 3).then(|| items.len() - 2).filter(|&at| items[at].is_symbol(WHERE_WORD))
 }
 
 /// The clause `for v in xs …`

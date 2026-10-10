@@ -173,7 +173,7 @@ fn has_component(path: &str, known: &[String]) -> bool {
 /// `use python "math"` → (alias math, (python, math)); `use python "os.path" as path` → (path, (python, os.path))
 fn foreign_use(items: &[Node]) -> Option<(String, (String, String))> {
 	let [word, runtime, module] = items else { return None };
-	if !matches!(word.drop_meta(), Node::Symbol(word) if word == USE_WORD) {
+	if !word.is_symbol(USE_WORD) {
 		return None;
 	}
 	let Node::Symbol(runtime) = runtime.drop_meta() else { return None };

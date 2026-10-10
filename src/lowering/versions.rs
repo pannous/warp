@@ -144,7 +144,7 @@ pub fn version_of(node: &Node) -> Option<Version> {
 }
 
 pub fn is_version_keyword(node: &Node) -> bool {
-	matches!(node.drop_meta(), Node::Symbol(keyword) if keyword == VERSION_KEYWORD)
+	node.is_symbol(VERSION_KEYWORD)
 }
 
 /// `1.2.3` and `v1.2.3` as the lexer reads them; `v2` stays a name
