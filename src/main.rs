@@ -62,10 +62,11 @@ const REGISTER_COMMAND: &str = "register";
 /// The program `warp serve` serves when it is given none: the first of these in the current folder
 const DEFAULT_PROGRAMS: [&str; 2] = ["app.warp", "main.warp"];
 const WARP_VERSION: &str = env!("CARGO_PKG_VERSION");
-/// The warnings and notes the user said "got it" to, remembered per project: one `ack:<topic> = acknowledged` per line
+/// The warnings, notes and hints the user said "got it" to, in the home folder: one `ack:<topic> = acknowledged` per
+/// line. A "got it" holds wherever warp runs next (card hints-dismissed)
 const ACKNOWLEDGEMENTS_FILE: &str = ".warp-acknowledged";
-/// What earlier versions called the acknowledgements file: its `ack:` lines are adopted
-const OLD_ANSWERS_FILE: &str = ".warp-answers";
+/// Where earlier versions remembered "got it", in the current folder: their `ack:` lines are adopted
+const LOCAL_ACKNOWLEDGEMENTS_FILES: [&str; 2] = [".warp-answers", ACKNOWLEDGEMENTS_FILE];
 /// Never prompt "got it?" after a warning or note (as in CI or a pipe)
 const NO_ASK_FLAG: &str = "--no-ask";
 /// Hints and notes (`prefer ^ over **`) are shown by default; `--no-hints` or WARP_HINTS=0 hide them (card hints-toggle)
@@ -137,8 +138,11 @@ fn apply_flags(args: &mut Vec<String>) {
     if !no_ask && env::var_os("CI").is_none() && io::stdin().is_terminal() && io::stderr().is_terminal() {
         diagnostic::set_acknowledger(Some(std::rc::Rc::new(diagnostic::TerminalAcknowledger)));
     }
-    diagnostic::adopt_acknowledgements(OLD_ANSWERS_FILE, ACKNOWLEDGEMENTS_FILE);
-    diagnostic::use_acknowledgements_file(ACKNOWLEDGEMENTS_FILE);
+    let acknowledgements = dirs_home().join(ACKNOWLEDGEMENTS_FILE);
+    for local_file in LOCAL_ACKNOWLEDGEMENTS_FILES {
+        diagnostic::adopt_acknowledgements(local_file, &acknowledgements);
+    }
+    diagnostic::use_acknowledgements_file(acknowledgements);
 }
 
 /// After the run (also one ending in process::exit), one line telling how to hide the hints it showed
