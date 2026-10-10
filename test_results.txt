@@ -2786,6 +2786,8 @@ PASSED:
   ✓ programs::test_sound_files::a_broken_music_file_fails
   ✓ programs::test_sound_files::a_music_file_plays_in_the_background
   ✓ programs::test_sound_files::only_a_music_file_plays
+  ✓ programs::test_sound_render::a_render_takes_the_sounds_after_the_last_one
+  ✓ programs::test_sound_render::sounds_render_into_one_wav_file
   ✓ programs::test_sound::a_melody_is_its_notes_one_after_another
   ✓ programs::test_sound::notes_are_frequencies
   ✓ programs::test_sound::notes_are_named_in_a_program_with_units
@@ -3771,6 +3773,10 @@ PASSED:
   ✓ web::test_form_bindings::boolean_attributes_are_present_or_absent
   ✓ web::test_form_routes::a_form_route_inside_an_element
   ✓ web::test_form_routes::a_form_written_as_its_route
+  ✓ web::test_gpu_auto::a_heavy_map_of_many_floats_runs_on_the_gpu_by_itself
+  ✓ web::test_gpu_auto::a_map_below_the_count_or_of_only_arithmetic_stays_on_the_cpu
+  ✓ web::test_gpu_auto::cpu_pins_a_map_its_block_or_its_function_to_the_cpu
+  ✓ web::test_gpu_auto::gpu_and_cpu_on_one_map_is_an_error
   ✓ web::test_guide_sections::whole_lists_at_once_is_a_section_of_lists
   ✓ web::test_guide::every_example_a_chapter_links_exists
   ✓ web::test_guide::every_guide_snippet_prints_what_the_guide_shows
@@ -4339,4 +4345,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-10 ignored, 4334 passed, 0 failed, 4334 total tested
+10 ignored, 4340 passed, 0 failed, 4340 total tested
