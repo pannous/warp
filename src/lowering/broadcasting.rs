@@ -390,7 +390,7 @@ fn collect_list_variables(node: &Node, functions: &HashSet<String>, assigned: &m
 					return;
 				}
 				let declared_list = declared_type.is_some_and(|type_node| list_element_type(&type_node.serialize()).is_some());
-				let is_list = declared_list || match value.drop_meta() {
+				let is_list = declared_list || is_list_literal(value) || match value.drop_meta() {
 					Node::List(items, Bracket::Square, _) => !items.iter().any(is_colon_pair),
 					_ if is_range(value) => true,
 					_ if element_wise_parts(value).is_some() => true,
@@ -415,6 +415,15 @@ fn assigned_variable(target: &Node) -> Option<(&String, Option<&Node>)> {
 			_ => None,
 		},
 		_ => None,
+	}
+}
+
+/// `[1 2]`, and `(1 2)` or `{3 4}` of several literal values: no call and no block (wiki/list.md)
+fn is_list_literal(node: &Node) -> bool {
+	match node.drop_meta() {
+		Node::List(items, Bracket::Square, _) => !items.is_empty() && !items.iter().any(is_colon_pair),
+		Node::List(items, Bracket::Round | Bracket::Curly, _) => items.len() > 1 && items.iter().all(|item| matches!(item.drop_meta(), Node::Number(_) | Node::Text(_) | Node::Char(_))),
+		_ => false,
 	}
 }
 
@@ -648,10 +657,7 @@ impl Broadcast {
 
 	/// A list literal that is no object, or a variable only ever assigned one
 	fn is_list(&self, node: &Node) -> bool {
-		match node.drop_meta() {
-			Node::List(elements, Bracket::Square, _) => !elements.is_empty() && !elements.iter().any(is_colon_pair),
-			_ => self.is_list_value(node),
-		}
+		is_list_literal(node) || self.is_list_value(node)
 	}
 
 	/// `abs [-1 2]`, `sqrt xs`: a scalar prefix operator over a list literal or a list variable
