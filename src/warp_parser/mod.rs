@@ -586,7 +586,12 @@ fn is_number_glyph(ch: char) -> bool {
 }
 
 fn is_identifier_char(c: char) -> bool {
-	c.is_alphanumeric() || c == '_'
+	c.is_alphanumeric() || c == '_' || is_music_accidental(c)
+}
+
+/// The sharp and flat signs continue a name: `C♯4`, `D♭5` are note names (lowering/music_words.rs)
+fn is_music_accidental(c: char) -> bool {
+	matches!(c, '♯' | '♭')
 }
 
 /// `floor_quotient(a, b)`: what `a // b` and `a div b` are, the Euclidean quotient that goes with `%`
