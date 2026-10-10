@@ -185,7 +185,10 @@ function startWorker(restarts = 0) {
 			if (!data) return;
 			if (stalled) watchStart();
 			if (data.type === "stage") return workerStage = data.stage;
-			if (data.type === "loading") return showLoading(`loading the compiler: ${megabytes(data.loaded)}${data.total ? ` of ${megabytes(data.total)}` : ""} MB`);
+			if (data.type === "loading") {
+				workerStage = `downloading the compiler: ${megabytes(data.loaded)} MB so far`; // a stalled download says how far
+				return showLoading(`loading the compiler: ${megabytes(data.loaded)}${data.total ? ` of ${megabytes(data.total)}` : ""} MB`);
+			}
 			if (data.type === "compiling") return stopLoading();
 			if (data.type === "ready") return ready();
 			if (data.type === "stored") return keepValue(data.name, data.value, data.file);

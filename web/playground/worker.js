@@ -91,7 +91,11 @@ async function loadCompiler() {
 	if (!response.ok) throw new Error(`${COMPILER_URL}: HTTP ${response.status}; build it with web/playground/build.sh`);
 	const bytes = await downloaded(response);
 	post({ type: "compiling" });
-	const { instance } = await WebAssembly.instantiate(bytes, { warp_host: warpHost(() => compiler.memory, hooks, true) });
+	// a stage per step, so a stalled start names it (card tour-firefox-stall)
+	stage(`compiling ${COMPILER_URL} (${bytes.length} bytes)`);
+	const module = await WebAssembly.compile(bytes);
+	stage(`instantiating ${COMPILER_URL}`);
+	const instance = await WebAssembly.instantiate(module, { warp_host: warpHost(() => compiler.memory, hooks, true) });
 	compiler = instance.exports;
 	webEvaluate = awaitedEntry(compiler.web_evaluate);
 }
