@@ -525,6 +525,8 @@ PASSED:
   ✓ control::test_task_dir::the_task_still_runs_after_its_dir
   ✓ control::test_task_exact::a_big_integer_crosses_to_a_task_and_back
   ✓ control::test_task_exact::a_ratio_crosses_to_a_task_and_back
+  ✓ control::test_task_globals::a_go_block_plays_notes
+  ✓ control::test_task_globals::a_task_reads_an_exact_global
   ✓ control::test_task_list_literal::a_list_of_task_values_holds_each_result
   ✓ control::test_task_name_scope::a_loop_variable_leaves_the_main_variable_alone
   ✓ control::test_task_name_scope::a_loop_variable_named_like_a_task_is_the_loop_variable
@@ -627,6 +629,7 @@ PASSED:
   ✓ control::test_type_word_filter_loops::test_a_text_appended_with_an_item_of_a_mixed_list_inside_an_if
   ✓ control::test_type_word_filter_loops::test_a_type_word_loop_visits_only_items_of_that_type
   ✓ control::test_type_word_filter_loops::test_an_adjective_with_a_type_word_is_a_condition
+  ✓ control::test_type_word_filter_loops::test_the_codepoints_of_a_text_need_no_filter
   ✓ control::test_uncharged_blocks::test_a_block_is_no_value
   ✓ control::test_uncharged_blocks::test_a_computed_colon_warns_where_it_is_written
   ✓ control::test_uncharged_blocks::test_bang_runs_a_block
@@ -3562,6 +3565,7 @@ PASSED:
   ✓ types::test_type_tests::test_a_variable_on_the_right_stays_equality
   ✓ types::test_type_tests::test_articles_are_optional
   ✓ types::test_type_tests::test_as_declaration
+  ✓ types::test_type_tests::test_bare_type_names_are_type_values
   ✓ types::test_type_tests::test_list_type_tests
   ✓ types::test_type_tests::test_pi_is_real_and_a_number
   ✓ types::test_type_tests::test_scalar_type_tests
@@ -4433,4 +4437,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-10 ignored, 4428 passed, 0 failed, 4428 total tested
+10 ignored, 4432 passed, 0 failed, 4432 total tested
