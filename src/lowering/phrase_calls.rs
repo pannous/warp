@@ -6,7 +6,7 @@
 //! `name(values…)`. Elsewhere `to` stays a range and `of` a field lookup.
 
 use super::nodes::{call, key};
-use crate::node::{Bracket, Node, Separator};
+use crate::node::{symbol, Bracket, Node, Separator};
 use crate::operators::Op;
 use crate::type_name_matching::prepositions_among;
 use std::collections::HashMap;
@@ -148,7 +148,7 @@ fn spaced_words(items: &[Node]) -> Vec<Node> {
 	items.iter().flat_map(|item| match item.drop_meta() {
 		Node::List(words, Bracket::None, Separator::Space) => spaced_words(words),
 		Node::Key(left, op, right) if op.as_str().chars().all(char::is_alphabetic) => {
-			[spaced_words(std::slice::from_ref(left)), vec![Node::Symbol(op.as_str().to_string())], spaced_words(std::slice::from_ref(right))].concat()
+			[spaced_words(std::slice::from_ref(left)), vec![symbol(op.as_str())], spaced_words(std::slice::from_ref(right))].concat()
 		}
 		_ => vec![item.clone()],
 	}).collect()

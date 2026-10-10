@@ -13,7 +13,7 @@
 //! `shared_get(n, 1)`, `n = v` is `shared_set(n, 1, v)`, `n += v` is `shared_add(n, 1, v)`; a boolean is the Int 1 or 0.
 
 use super::nodes::{call, is_word, key};
-use crate::node::{Bracket, Node, Separator};
+use crate::node::{symbol, Bracket, Node, Separator};
 use crate::operators::Op;
 use std::collections::{HashMap, HashSet};
 
@@ -192,7 +192,7 @@ fn declared_linear(node: Node, picked: &HashSet<String>) -> Node {
 		return node;
 	}
 	if float_array_assignment(&node).is_some_and(|name| picked.contains(&name)) {
-		return Node::List(vec![Node::Symbol(LINEAR_WORD.into()), node], Bracket::None, Separator::Space);
+		return Node::List(vec![symbol(LINEAR_WORD), node], Bracket::None, Separator::Space);
 	}
 	node.map_children(|child| declared_linear(child, picked))
 }

@@ -7,7 +7,7 @@
 use super::nodes::key;
 use crate::diagnostic::Diagnostic;
 use crate::min_max::{is_plain, with_bindings};
-use crate::node::{Bracket, Node, Separator};
+use crate::node::{symbol, Bracket, Node, Separator};
 use crate::operators::Op;
 use std::collections::{HashMap, HashSet};
 
@@ -105,7 +105,7 @@ fn literal_default(parameter: Node) -> Node {
 		Node::Key(name, Op::Colon, value) if matches!(value.drop_meta(), Node::Number(_) | Node::Text(_) | Node::Char(_) | Node::True | Node::False) => Node::Key(name, Op::Assign, value),
 		// the value may be ø or of the type: it is held boxed, as any value
 		Node::Key(name, Op::Colon, type_name) if type_name.drop_meta().name().ends_with(OPTIONAL_MARK) => optional(*name),
-		Node::Symbol(name) if name.len() > 1 && name.ends_with(OPTIONAL_MARK) => optional(Node::Symbol(name.trim_end_matches(OPTIONAL_MARK).to_string())),
+		Node::Symbol(name) if name.len() > 1 && name.ends_with(OPTIONAL_MARK) => optional(symbol(name.trim_end_matches(OPTIONAL_MARK))),
 		Node::Meta { node, data } => Node::Meta { node: Box::new(literal_default(*node)), data },
 		other => other,
 	}

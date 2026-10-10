@@ -5,7 +5,7 @@
 //! loop ends when every chunk is done. A loop body updating an outer variable (`t += x`) updates its task's copy: a
 //! warning names `shared` (P106). notes/go_blocks.md
 
-use crate::node::{Bracket, Node, Separator};
+use crate::node::{symbol, Bracket, Node, Separator};
 use crate::operators::Op;
 
 /// How many slices a parallel map or loop splits its items into: tasks are threads with an instance each, so never one
@@ -122,7 +122,7 @@ pub(crate) fn loop_in_tasks(variable: Node, list: Node, body: Node, number: usiz
 	if let Some(error) = copied_updates(&body, shared) {
 		return error;
 	}
-	let walk = Node::List(vec![Node::Symbol(FOR_WORD.into()), variable, Node::Symbol(IN_WORD.into()), temporary("part", number), body], Bracket::None, Separator::Space);
+	let walk = Node::List(vec![symbol(FOR_WORD), variable, symbol(IN_WORD), temporary("part", number), body], Bracket::None, Separator::Space);
 	let program = format!("({}; ø)", chunked(&format!("{LOOP_PLACEHOLDER}; 0")));
 	filled(&program, number, &[(LIST_PLACEHOLDER, list), (LOOP_PLACEHOLDER, walk)])
 }

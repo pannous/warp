@@ -15,7 +15,7 @@
 use super::nodes::{call, key};
 use crate::diagnostic::{ask, reading, Ask, Fallback};
 use crate::mutation::bang_target;
-use crate::node::{Bracket, Node, Separator};
+use crate::node::{symbol, Bracket, Node, Separator};
 use crate::operators::Op;
 use std::collections::HashMap;
 
@@ -108,7 +108,7 @@ fn substitute_block(node: Node, parameter: &str, argument: &Node) -> Node {
 		}
 	}
 	match node {
-		Node::Symbol(name) if name == parameter => Node::List(vec![Node::Symbol(DATA_WORD.to_string()), argument.clone()], Bracket::None, Separator::Space),
+		Node::Symbol(name) if name == parameter => Node::List(vec![symbol(DATA_WORD), argument.clone()], Bracket::None, Separator::Space),
 		Node::Key(left, op, right) => key(substitute_block(*left, parameter, argument), op, substitute_block(*right, parameter, argument)),
 		Node::List(items, bracket, separator) => Node::List(items.into_iter().map(|item| substitute_block(item, parameter, argument)).collect(), bracket, separator),
 		Node::Meta { node, data } => Node::Meta { node: Box::new(substitute_block(*node, parameter, argument)), data },
@@ -257,7 +257,7 @@ fn object_parameter(path: &str) -> String {
 
 /// `o.a.f` as the field reads it names
 fn path_node(path: &str) -> Node {
-	let mut parts = path.split('.').map(|part| Node::Symbol(part.to_string()));
+	let mut parts = path.split('.').map(symbol);
 	let first = parts.next().unwrap_or(Node::Empty);
 	parts.fold(first, |object, field| key(object, Op::Dot, field))
 }
@@ -404,7 +404,7 @@ impl Blocks {
 					Node::Key(head, _, value) if matches!(head.drop_meta(), Node::Symbol(_)) => value.as_ref().clone(),
 					whole => whole.clone(),
 				};
-				let written = Node::List(vec![Node::Symbol(DATA_WORD.to_string()), written], Bracket::None, Separator::Space);
+				let written = Node::List(vec![symbol(DATA_WORD), written], Bracket::None, Separator::Space);
 				lowered.push(key(Node::Symbol(field), Op::Colon, written));
 				continue;
 			}
@@ -420,7 +420,7 @@ impl Blocks {
 					self.warn_uncharged(&field, &block, entry)?;
 					let block = self.rewrite(block);
 					self.blocks.insert(format!("{path}.{field}"), block.clone());
-					let data = Node::List(vec![Node::Symbol(DATA_WORD.to_string()), block], Bracket::None, Separator::Space);
+					let data = Node::List(vec![symbol(DATA_WORD), block], Bracket::None, Separator::Space);
 					key(Node::Symbol(field), Op::Colon, data)
 				}
 				// `s3 = a+b`, `s3 := a+b` (P71 open: now): a value entry, evaluated now
@@ -458,7 +458,7 @@ impl Blocks {
 		let takes_object = !fields.is_empty();
 		if takes_object {
 			if parameters.is_empty() && crate::warp_parser::mentions(&body, IT) {
-				parameters.push(Node::Symbol(IT.to_string()));
+				parameters.push(symbol(IT));
 			}
 			parameters.insert(0, Node::Symbol(object_parameter(object)));
 		}
@@ -596,7 +596,7 @@ impl Blocks {
 		}
 		match node {
 			Node::Symbol(name) if self.blocks.contains_key(&name) => {
-				Node::List(vec![Node::Symbol(DATA_WORD.to_string()), self.blocks[&name].clone()], Bracket::None, Separator::Space)
+				Node::List(vec![symbol(DATA_WORD), self.blocks[&name].clone()], Bracket::None, Separator::Space)
 			}
 			// `x = …` ends the block named x
 			Node::Key(target, op @ (Op::Assign | Op::Define), value) => {

@@ -4,7 +4,7 @@
 //! the loud error (P92). A comprehension or method call among an element's children gives children (card web-keyed).
 
 use super::nodes::key;
-use crate::node::{Bracket, Node, Separator};
+use crate::node::{symbol, Bracket, Node, Separator};
 use crate::operators::Op;
 use std::collections::HashSet;
 
@@ -153,9 +153,9 @@ fn with_form_routes(node: Node) -> Node {
 				let (action, body, body_separator) = (action.clone(), body.clone(), body_separator.clone());
 				written.pop();
 				written.truncate(written.len() - 3);
-				let attribute = |name: &str, value: Node| key(Node::Symbol(name.into()), Op::Colon, value);
+				let attribute = |name: &str, value: Node| key(symbol(name), Op::Colon, value);
 				let fields = [attribute(METHOD_ATTRIBUTE, Node::Text(method)), attribute(ACTION_ATTRIBUTE, action)].into_iter().chain(body);
-				written.push(key(Node::Symbol(FORM_TAG.into()), Op::Colon, Node::List(fields.collect(), Bracket::Curly, body_separator)));
+				written.push(key(symbol(FORM_TAG), Op::Colon, Node::List(fields.collect(), Bracket::Curly, body_separator)));
 				rewritten = true;
 			}
 		}
@@ -256,7 +256,7 @@ fn tags_over_values(children: Vec<Node>, defined: &HashSet<String>) -> Vec<Node>
 			rest.next();
 			match rest.next() {
 				Some(values) => result.push(tag_per_item(tag, values)),
-				None => result.extend([child, Node::Symbol(ALL_WORD.into())]),
+				None => result.extend([child, symbol(ALL_WORD)]),
 			}
 		} else if matches!(next, Some(Node::List(_, Bracket::Square, _))) {
 			result.push(tag_per_item(tag, rest.next().unwrap()));
@@ -271,8 +271,8 @@ fn tags_over_values(children: Vec<Node>, defined: &HashSet<String>) -> Vec<Node>
 
 /// `[tag{item} for item in values]`, the comprehension markup reads as children
 fn tag_per_item(tag: String, values: Node) -> Node {
-	let item = Node::Symbol(TAG_ITEM.into());
-	let header = Node::List(vec![Node::Symbol(FOR_WORD.into()), item.clone(), Node::Symbol(IN_WORD.into()), values, Node::Empty], Bracket::None, Separator::Space);
+	let item = symbol(TAG_ITEM);
+	let header = Node::List(vec![symbol(FOR_WORD), item.clone(), symbol(IN_WORD), values, Node::Empty], Bracket::None, Separator::Space);
 	Node::List(vec![tag_node(tag, vec![item]), header], Bracket::Square, Separator::Space)
 }
 

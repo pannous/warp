@@ -9,7 +9,7 @@
 use super::nodes::{call, key};
 use crate::analyzer::{call_name, collect_all_types};
 use crate::diagnostic::Diagnostic;
-use crate::node::{Bracket, Node, Separator};
+use crate::node::{symbol, Bracket, Node, Separator};
 use crate::operators::Op;
 use crate::type_constructor::{instance_parts, Instance};
 use crate::type_kinds::TypeRegistry;
@@ -975,7 +975,7 @@ fn dispatcher(operation: &str, arity: usize, types: &[String]) -> Node {
 		key(then, Op::Else, otherwise)
 	});
 	// the first parameter is an instance of some type: held as a Node, like a parameter `s:square`
-	let instance = key(parameters[0].clone(), Op::Colon, Node::meta(Node::Symbol(DISPATCH.to_string()), Node::data(Instance)));
+	let instance = key(parameters[0].clone(), Op::Colon, Node::meta(symbol(DISPATCH), Node::data(Instance)));
 	let head = Node::List([vec![Node::Symbol(witness_name(operation, DISPATCH)), instance], parameters[1..].to_vec()].concat(), Bracket::Round, Separator::None);
 	key(head, Op::Define, body)
 }
@@ -1235,7 +1235,7 @@ fn trait_constraints(node: &Node, traits: &Traits) -> HashMap<String, Vec<(usize
 /// `(found = 0; at = 0; for item in xs { at = at + 1; if found == 0 and equals·T(item, x) != 0 { found = at } }; found)`:
 /// the 1-based position of the first item equal to x, 0 when there is none
 fn position_by_equals(list: &Node, element: &Node, type_name: &str) -> Node {
-	let symbol = |name: &str| Node::Symbol(name.to_string());
+	let symbol = |name: &str| symbol(name);
 	let (found, at, item) = (symbol(FOUND_VARIABLE), symbol(POSITION_VARIABLE), symbol(ITEM_VARIABLE));
 	let assign = |target: &Node, value: Node| key(target.clone(), Op::Assign, value);
 	let equal = key(witness_call(EQUALS, type_name, vec![item.clone(), element.clone()]), Op::Ne, Node::int(0));

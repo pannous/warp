@@ -11,7 +11,7 @@ use crate::context::{Context, Param, UserFunctionDef};
 use crate::diagnostic::Diagnostic;
 use crate::lambdas::arrow_lambda;
 use crate::library_words::collect_assigned_names;
-use crate::node::{Bracket, Node, Separator};
+use crate::node::{symbol, Bracket, Node, Separator};
 use crate::operators::Op;
 use crate::type_kinds::Kind;
 use std::collections::{HashMap, HashSet};
@@ -60,7 +60,7 @@ pub fn closure_call(function: Node, arguments: Vec<Node>) -> Node {
 }
 
 fn closure_new(target: &str, captured: Vec<Node>) -> Node {
-	call(CLOSURE_NEW, [vec![Node::Symbol(target.to_string())], captured].concat())
+	call(CLOSURE_NEW, [vec![symbol(target)], captured].concat())
 }
 
 /// `closure_new(target, captured…)`: the target and its captured values

@@ -10,7 +10,7 @@
 
 use super::nodes::key;
 use crate::analyzer::call_name;
-use crate::node::{Bracket, Node, Separator};
+use crate::node::{symbol, Bracket, Node, Separator};
 use crate::operators::Op;
 use crate::tuples::STARRED;
 use std::collections::{HashMap, HashSet};
@@ -232,7 +232,7 @@ impl Variadic {
 fn arguments_in_order(arguments: &[Node], fixed: &[String], object: &str) -> Vec<Node> {
 	let (named, positional): (Vec<&Node>, Vec<&Node>) = arguments.iter().partition(|argument| named_argument(argument).is_some());
 	let named: Vec<(String, Node)> = named.into_iter().filter_map(named_argument).collect();
-	let field = |parameter: &String| key(Node::Symbol(object.to_string()), Op::Dot, Node::Symbol(parameter.clone()));
+	let field = |parameter: &String| key(symbol(object), Op::Dot, Node::Symbol(parameter.clone()));
 	let filled = fixed.iter().skip(positional.len()).map(|parameter| named.iter().find(|(name, _)| name == parameter).map_or_else(|| field(parameter), |(_, value)| value.clone()));
 	let others = named.iter().filter(|(name, _)| !fixed.contains(name)).map(|(name, value)| key(Node::Symbol(name.clone()), Op::Assign, value.clone()));
 	positional.into_iter().cloned().chain(filled).chain(others).collect()

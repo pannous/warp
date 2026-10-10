@@ -10,7 +10,7 @@ use crate::analyzer::{call_name, extract_user_functions};
 use crate::context::Context;
 use crate::diagnostic::Diagnostic;
 use crate::library_words::substitute;
-use crate::node::{Bracket, Node, Separator};
+use crate::node::{symbol, Bracket, Node, Separator};
 use crate::operators::Op;
 use crate::warp_parser::parse;
 use std::cell::Cell;
@@ -149,7 +149,7 @@ const OPERATOR_PARAMETERS: [&str; 2] = ["operator_left", "operator_right"];
 const OPERATOR_IDENTITIES: [(&str, i64); 2] = [("+", 0), ("*", 1)];
 
 fn operator_symbol(op: Op) -> Option<Node> {
-	OPERATOR_VALUES.iter().find(|(known, _)| *known == op).map(|(_, text)| Node::Symbol(text.to_string()))
+	OPERATOR_VALUES.iter().find(|(known, _)| *known == op).map(|(_, text)| symbol(text))
 }
 
 /// `+` as the function `(a b)->a+b`; also the operator with nothing on either side, as `by: >` parses
@@ -159,7 +159,7 @@ fn operator_lambda(node: &Node) -> Option<Lambda> {
 		Node::Key(left, op, right) if matches!((left.drop_meta(), right.drop_meta()), (Node::Empty, Node::Empty)) => operator_symbol(*op).map(|_| *op)?,
 		_ => return None,
 	};
-	let [left, right] = OPERATOR_PARAMETERS.map(|name| Node::Symbol(name.to_string()));
+	let [left, right] = OPERATOR_PARAMETERS.map(symbol);
 	Some(Lambda::new(OPERATOR_PARAMETERS.map(String::from).to_vec(), key(left, op, right)))
 }
 
@@ -184,7 +184,7 @@ pub(crate) fn has_own_it(head: &Node, argument: &Node) -> bool {
 /// (clear intent, notes/welcoming.md); a bare `it` stays the value it names
 pub(crate) fn it_function(node: &Node) -> Option<Node> {
 	let is_bare = matches!(node.drop_meta(), Node::Symbol(_));
-	let it = || Box::new(Node::Symbol(IMPLICIT_PARAMETER.to_string()));
+	let it = || Box::new(symbol(IMPLICIT_PARAMETER));
 	(!is_bare && mentions_outside_blocks(node, IMPLICIT_PARAMETER)).then(|| Node::Key(it(), Op::FatArrow, Box::new(node.clone())))
 }
 
@@ -234,7 +234,7 @@ fn subtract_kebab_parameters(node: Node, params: &[String]) -> Node {
 		Node::Symbol(name) => {
 			let parts: Vec<&str> = name.split('-').collect();
 			if parts.len() > 1 && parts.iter().all(|part| params.iter().any(|param| param == part)) {
-				let mut terms = parts.into_iter().map(|part| Node::Symbol(part.to_string()));
+				let mut terms = parts.into_iter().map(symbol);
 				let first = terms.next().expect("split gives a part");
 				terms.fold(first, |difference, term| key(difference, Op::Sub, term))
 			} else {
@@ -670,7 +670,7 @@ impl Lowering {
 			};
 			// Python's `any(xs)`, `all(xs)`: the items themselves are the conditions
 			if let ([list], true) = (rest.as_slice(), is_call && TRUTH_WORDS.contains(&iteration.word)) {
-				let item = Node::Symbol(TRUTH_ITEM.to_string());
+				let item = symbol(TRUTH_ITEM);
 				return self.iterate(iteration, list.clone(), vec![], key(item.clone(), Op::FatArrow, item));
 			}
 			let [list, extras @ .., function] = rest.as_slice() else { return None };
@@ -707,7 +707,7 @@ impl Lowering {
 		if !self.is_function_value(&function) {
 			return None;
 		}
-		let list = Node::Symbol(PARTIAL_LIST.to_string());
+		let list = symbol(PARTIAL_LIST);
 		let identity = match function.drop_meta() {
 			Node::Symbol(text) => OPERATOR_IDENTITIES.iter().find(|(known, _)| known == text).map(|(_, identity)| Node::int(*identity)),
 			_ => None,

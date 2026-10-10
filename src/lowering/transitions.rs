@@ -8,7 +8,7 @@
 
 use super::nodes::{is_word, key};
 use crate::element_events::with_element_items;
-use crate::node::{Bracket, Node, Separator};
+use crate::node::{symbol, text, Bracket, Node, Separator};
 use crate::operators::Op;
 
 const TRANSITION: &str = "transition";
@@ -113,7 +113,7 @@ fn is_timing_word(item: &Node) -> bool {
 }
 
 fn css_pair(name: &str, value: Node) -> Node {
-	key(Node::Symbol(name.to_string()), Op::Colon, value)
+	key(symbol(name), Op::Colon, value)
 }
 
 /// `starting-style: { opacity: 0 }` is the attribute the page applies
@@ -147,7 +147,7 @@ fn css_of_kind(spec: &str) -> String {
 
 /// `{ opacity: "0" }`: CSS declarations as an element's block holds them
 fn declarations(pairs: &[(&str, &str)]) -> Node {
-	Node::List(pairs.iter().map(|(name, value)| css_pair(name, Node::Text(value.to_string()))).collect(), Bracket::Curly, Separator::Space)
+	Node::List(pairs.iter().map(|(name, value)| css_pair(name, text(value))).collect(), Bracket::Curly, Separator::Space)
 }
 
 /// `transition: fade 200ms` → `transition: "opacity 200ms, transform 200ms" starting-style: { opacity: 0 }`

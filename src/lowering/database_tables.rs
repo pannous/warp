@@ -7,7 +7,7 @@
 //! (web/playground/host-files.js), where a filter stays the list comprehension over the rows.
 
 use super::nodes::key;
-use crate::node::{Bracket, Node, Separator};
+use crate::node::{symbol, Bracket, Node, Separator};
 use crate::operators::Op;
 use crate::warp_parser::parse;
 use crate::units::static_units::si_quantity;
@@ -260,7 +260,7 @@ pub fn queried(subject: &Node, condition: &Node, variables: &HashSet<String>, ta
 	}
 	tables.functions.extend(functions);
 	let parameters = if parameters.is_empty() { parse("[]") } else { Node::List(parameters, Bracket::Square, Separator::Space) };
-	let query = Node::List(vec![Node::Symbol(FOUND_WORD.to_string()), Node::Text(sql), parameters], Bracket::None, Separator::Space);
+	let query = Node::List(vec![symbol(FOUND_WORD), Node::Text(sql), parameters], Bracket::None, Separator::Space);
 	Some(Ok(key(subject.drop_meta().clone(), Op::Dot, query)))
 }
 
@@ -530,7 +530,7 @@ fn with_stored_tables(node: Node, classes: &HashMap<String, Node>) -> Node {
 					_ => String::new(),
 				};
 				if word.drop_meta().name() == crate::stored_values::STORED_WORD && classes.contains_key(&class) {
-					let table = key(Node::Symbol(DATABASE_WORDS[0].to_string()), Op::Dot, variable.drop_meta().clone());
+					let table = key(symbol(DATABASE_WORDS[0]), Op::Dot, variable.drop_meta().clone());
 					return key(declaration.drop_meta().clone(), Op::Assign, table);
 				}
 			}
@@ -875,7 +875,7 @@ for {MADE} in {variable} {{ if {MADE}.{ID_FIELD} != 0 {{ {MET}[{MADE}.{ID_FIELD}
 
 /// The code with each placeholder as its node and the generated variables named
 fn generated<'a>(code: &str, placeholders: impl IntoIterator<Item = (&'a str, Node)>) -> Node {
-	let names = GENERATED_NAMES.iter().map(|(written, name)| (written.to_string(), Node::Symbol(name.to_string())));
+	let names = GENERATED_NAMES.iter().map(|(written, name)| (written.to_string(), symbol(name)));
 	crate::law::substitute(&parse(code), &names.chain(placeholders.into_iter().map(|(placeholder, node)| (placeholder.to_string(), node))).collect())
 }
 

@@ -7,7 +7,7 @@
 //! the pragma such a read is an error naming it.
 
 use super::nodes::key;
-use crate::node::{meta_entry, Bracket, Node, Separator, ATTRIBUTE_MARK};
+use crate::node::{meta_entry, symbol, ATTRIBUTE_MARK, Bracket, Node, Separator};
 use crate::operators::Op;
 
 pub fn lower(node: Node) -> Node {
@@ -96,7 +96,7 @@ fn comment_reads(node: Node, bindings: &[Commented]) -> Node {
 						_ if field.strip_prefix(ATTRIBUTE_MARK) == Some(COMMENT_KEY) => comment,
 						_ if binding.fields.iter().any(|own| own == field) => return None,
 						DOC_WORD => comment,
-						META_WORD =>Node::List(vec![key(Node::Symbol(COMMENT_KEY.to_string()), Op::Colon, comment)], Bracket::Curly, Separator::Space),
+						META_WORD =>Node::List(vec![key(symbol(COMMENT_KEY), Op::Colon, comment)], Bracket::Curly, Separator::Space),
 						_ => return None,
 					};
 					Some(match crate::diagnostic::comments_as_meta() {

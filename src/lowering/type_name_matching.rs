@@ -4,7 +4,7 @@
 
 use super::nodes::{call, key};
 use crate::analyzer::type_word_kind;
-use crate::node::{Bracket, Node, Separator};
+use crate::node::{symbol, Bracket, Node, Separator};
 use crate::operators::Op;
 
 const ARTICLES: [&str; 3] = ["a", "an", "the"];
@@ -34,7 +34,7 @@ fn is_type_word(word: &str) -> bool {
 }
 
 fn typed(name: &str, type_name: &str) -> Node {
-	key(Node::Symbol(name.to_string()), Op::Colon, Node::Symbol(type_name.to_string()))
+	key(symbol(name), Op::Colon, symbol(type_name))
 }
 
 /// Which head words are prepositions
@@ -82,13 +82,13 @@ pub fn parameter_slots(words: &[&str], body: &Node, is_known_type: &dyn Fn(&str)
 		} else if ARTICLES.contains(&word) && next.is_some_and(|next| is_known_type(next) || !uses_name(body, word)) {
 			let noun: Vec<&str> = (index + 1..words.len()).take_while(|later| !ends_slot(*later) && !ARTICLES.contains(&words[*later])).map(|later| words[later]).collect();
 			let head = noun[noun.len() - 1];
-			parameters.push(if is_known_type(head) { typed(head, head) } else { Node::Symbol(head.to_string()) });
+			parameters.push(if is_known_type(head) { typed(head, head) } else { symbol(head) });
 			index += 1 + noun.len();
 		} else if is_known_type(word) && next.is_some_and(|next| is_name(next) && (!ARTICLES.contains(&next) || ends_slot(index + 2))) {
 			parameters.push(typed(next.unwrap_or_default(), word));
 			index += 2;
 		} else {
-			parameters.push(if is_known_type(word) { typed(word, word) } else { Node::Symbol(word.to_string()) });
+			parameters.push(if is_known_type(word) { typed(word, word) } else { symbol(word) });
 			index += 1;
 		}
 	}

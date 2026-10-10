@@ -9,7 +9,7 @@ use crate::analyzer::{annotated_kind, list_element_type};
 use crate::function_values::{definitions, Definition};
 use crate::type_kinds::Kind;
 use crate::lambdas::IMPLICIT_PARAMETER;
-use crate::node::{Bracket, Node, Separator};
+use crate::node::{symbol, Bracket, Node, Separator};
 use crate::operators::Op;
 use std::collections::{HashMap, HashSet};
 
@@ -96,7 +96,7 @@ fn all_calls(node: Node) -> Node {
 				let calls = elements.iter().map(|element| Node::List(vec![function.clone(), all_calls(element.clone())], Bracket::None, Separator::Space)).collect();
 				return Node::List(calls, Bracket::Square, element_separator.clone());
 			}
-			let item = Node::Symbol(ALL_ITEM.to_string());
+			let item = symbol(ALL_ITEM);
 			let applied = Node::List(vec![function.clone(), item.clone()], Bracket::Round, Separator::None);
 			let each = key(item, Op::FatArrow, applied);
 			call(MAP_WORD, vec![all_calls(list.clone()), each])
@@ -286,7 +286,7 @@ pub fn lower(program: Node) -> Node {
 
 /// `map(list, broadcast_item => applied(broadcast_item))`
 fn each_item(list: Node, applied: impl Fn(Node) -> Node) -> Node {
-	let item = Node::Symbol(BROADCAST_ITEM.to_string());
+	let item = symbol(BROADCAST_ITEM);
 	let each = key(item.clone(), Op::FatArrow, applied(item));
 	call(MAP_WORD, vec![list, each])
 }
@@ -301,7 +301,7 @@ fn implicit_definitions(node: &Node, found: &mut Vec<Definition>) {
 			let params = lambda.params.iter().map(|param| Node::Symbol(param.clone())).collect();
 			found.push(Definition { name: name.clone(), params, body: lambda.body });
 		} else if *op == Op::Define {
-			let params = vec![Node::Symbol(IMPLICIT_PARAMETER.to_string())];
+			let params = vec![symbol(IMPLICIT_PARAMETER)];
 			found.push(Definition { name: name.clone(), params, body: body.as_ref().clone() });
 		}
 	});
@@ -618,7 +618,7 @@ impl Broadcast {
 
 	/// `xs * ys` of two lists, as `dot(xs, ys)`: `sum(xs .* ys)` (card g_n8GI)
 	fn inner_product(&self, left: Node, right: Node) -> Node {
-		let sum = [Node::Symbol(SUM_WORD.to_string()), crate::analyzer::element_wise(left, Op::Mul, right)];
+		let sum = [symbol(SUM_WORD), crate::analyzer::element_wise(left, Op::Mul, right)];
 		self.fused_sum(&sum, &Bracket::Round).unwrap_or_else(|| Node::List(vec![sum[0].clone(), self.rewrite(sum[1].clone())], Bracket::Round, Separator::None))
 	}
 
@@ -647,7 +647,7 @@ impl Broadcast {
 		match element.drop_meta() {
 			Node::Key(key, Op::Colon, value) => Node::Key(key.clone(), Op::Colon, Box::new(self.apply(name, value.as_ref().clone()))),
 			_ => {
-				let items = vec![Node::Symbol(name.to_string()), element];
+				let items = vec![symbol(name), element];
 				self.broadcast_call(&items, &Bracket::Round, &Separator::None).unwrap_or_else(|| call(name, vec![items[1].clone()]))
 			}
 		}

@@ -4,7 +4,7 @@
 
 use super::nodes::key;
 use crate::lowering::variable_signals::if_then_else;
-use crate::node::{Bracket, Node, Separator};
+use crate::node::{symbol, Bracket, Node, Separator};
 use crate::operators::Op;
 use std::cell::Cell;
 
@@ -34,7 +34,7 @@ impl Optionals {
 	fn keeping_empty(&self, value: Node, warp_type: &str) -> Node {
 		let cast = |held: Node| {
 			let is_empty = key(held.clone(), Op::Eq, Node::Empty);
-			if_then_else(is_empty, Node::Empty, key(held, Op::As, Node::Symbol(warp_type.to_string())))
+			if_then_else(is_empty, Node::Empty, key(held, Op::As, symbol(warp_type)))
 		};
 		if let Node::Symbol(_) = value.drop_meta() {
 			return cast(value);

@@ -6,7 +6,7 @@
 
 use super::nodes::call;
 use crate::diagnostic::{ask, reading, Ask, Fallback};
-use crate::node::{Bracket, Node, Separator};
+use crate::node::{symbol, Bracket, Node, Separator};
 use crate::operators::Op;
 
 const UNRESOLVED_TOPIC: &str = "unresolved-block";
@@ -255,7 +255,7 @@ fn interpret_argument(node: &Node) -> Option<Node> {
 }
 
 fn as_data(node: Node) -> Node {
-	Node::List(vec![Node::Symbol(crate::blocks::DATA_WORD.to_string()), node], Bracket::None, Separator::Space)
+	Node::List(vec![symbol(crate::blocks::DATA_WORD), node], Bracket::None, Separator::Space)
 }
 
 impl Site {

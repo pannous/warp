@@ -10,7 +10,7 @@
 
 use super::nodes::{call, key};
 use crate::declarations::{handler_parts, word};
-use crate::node::{Bracket, Node, Separator};
+use crate::node::{symbol, Bracket, Node, Separator};
 use crate::operators::Op;
 use crate::signal_values::ungrouped_reflection;
 use crate::variable_signals::{assign, block, if_then, symbols};
@@ -283,7 +283,7 @@ fn subscriptions(node: Node, raised: &HashSet<String>, subscribed: &mut Vec<Stri
 			crate::diagnostic::advise_once(LOOP_SUBSCRIPTION_TOPIC, &format!("on {event} {{…}}"), "on … before the loop", &reason);
 		}
 		let list = Node::Symbol(subscribers_name(&event));
-		let listener = key(Node::Symbol(EVENT_WORD.to_string()), Op::FatArrow, body);
+		let listener = key(symbol(EVENT_WORD), Op::FatArrow, body);
 		let added = key(list.clone(), Op::Add, Node::List(vec![listener], Bracket::Square, Separator::None));
 		if !subscribed.contains(&event) {
 			subscribed.push(event);
@@ -379,7 +379,7 @@ impl Listeners {
 			return crate::node::error(&format!("{name} is no named listener of {event}"));
 		}
 		// evaluated once: `(listeners of alarm)#1` names another handler after the first removal
-		let place = Node::Symbol(REMOVED_PLACE.to_string());
+		let place = symbol(REMOVED_PLACE);
 		let at_place = |(index, flag): (usize, String)| {
 			let condition = key(place.clone(), Op::Eq, Node::int(index as i64 + 1));
 			if_then(condition, block(vec![assign(&flag, Node::False)]))
@@ -479,7 +479,7 @@ fn function_error_handler(statement: &Node) -> Option<(String, Node)> {
 
 /// The definition with its body `try body else handler`: `f(x) := body`, `def f(x): body`, `fun f(x) {body}`
 fn guarded_definition(definition: &Node, handler: &Node) -> Option<Node> {
-	let guarded = |body: &Node| Node::List(vec![Node::Symbol(crate::warp_parser::TRY_MARKER.to_string()), body.clone(), handler.clone()], Bracket::Round, Separator::Space);
+	let guarded = |body: &Node| Node::List(vec![symbol(crate::warp_parser::TRY_MARKER), body.clone(), handler.clone()], Bracket::Round, Separator::Space);
 	match definition.drop_meta() {
 		Node::Key(head, op @ (Op::Define | Op::Assign | Op::Colon), body) => Some(Node::Key(head.clone(), *op, Box::new(guarded(body)))),
 		Node::List(items, bracket, separator) if items.len() >= 2 => {
@@ -624,7 +624,7 @@ pub(crate) fn function_with_globals(name: &str, takes_event: bool, bodies: &[Nod
 	let statements: Vec<Node> = global_declarations(bodies, main_variables, &[EVENT_WORD]).into_iter().chain(bodies.iter().cloned()).collect();
 	let template = if takes_event { FUNCTION_TEMPLATE } else { PARAMETERLESS_TEMPLATE };
 	let Node::Key(head, op, _) = parse(template).drop_meta().clone() else { unreachable!("the template is a definition") };
-	let name = Node::Symbol(name.to_string());
+	let name = symbol(name);
 	let head = crate::law::substitute(&head, &HashMap::from([(TEMPLATE_NAME.to_string(), name)]));
 	key(head, op, Node::List(statements, Bracket::Curly, Separator::Semicolon))
 }
@@ -654,7 +654,7 @@ pub(crate) fn statements_of(block: &Node) -> Vec<Node> {
 
 /// `global name`, built rather than parsed: a generated name (`users·loading`) parses as a product
 pub(crate) fn global_declaration(name: &str) -> Node {
-	crate::law::substitute(&parse(&format!("global {TEMPLATE_NAME}")), &HashMap::from([(TEMPLATE_NAME.to_string(), Node::Symbol(name.to_string()))]))
+	crate::law::substitute(&parse(&format!("global {TEMPLATE_NAME}")), &HashMap::from([(TEMPLATE_NAME.to_string(), symbol(name))]))
 }
 
 /// Each handler gets the event as raised (the DOM hands one mutable event object down the listeners): when a body
@@ -679,7 +679,7 @@ fn each_its_event(bodies: &[Node]) -> Vec<Node> {
 		return bodies.to_vec();
 	}
 	// an event is an object, so a reference (P200b): kept and handed on as copies
-	let copy_of = |name: &str| crate::library_words::copy_call(Node::Symbol(name.to_string()), Node::False);
+	let copy_of = |name: &str| crate::library_words::copy_call(symbol(name), Node::False);
 	let restored = |index: usize| (index > 0 && bodies[..index].iter().any(changes_event)).then(|| assign(EVENT_WORD, copy_of(RAISED_EVENT)));
 	let kept = assign(RAISED_EVENT, copy_of(EVENT_WORD));
 	std::iter::once(kept).chain(bodies.iter().enumerate().flat_map(|(index, body)| restored(index).into_iter().chain([body.clone()]))).collect()

@@ -4,7 +4,7 @@
 //! `real f(real x, int n) { … }`, the C way, defines `f(x:real, n:int) := { … }`.
 
 use super::nodes::{call, is_type_word, key};
-use crate::node::{Bracket, Node, Separator};
+use crate::node::{symbol, Bracket, Node, Separator};
 use crate::operators::{is_function_keyword, Op};
 
 /// The receiver of an extension method, as Kotlin (`this`) and Swift (`self`) name it
@@ -412,7 +412,7 @@ fn awaited(node: Node) -> Node {
 		Node::List(mut items, bracket, separator) if AWAITED_MARKERS.iter().any(|(read, _)| word(items.first().unwrap_or(&Node::Empty)) == *read) => {
 			let read = word(&items[0]);
 			let (_, named) = AWAITED_MARKERS.iter().find(|(marker, _)| *marker == read).expect("guarded");
-			items[0] = Node::Symbol(named.to_string());
+			items[0] = symbol(named);
 			Node::List(items, bracket, separator)
 		}
 		Node::Meta { node, data } => Node::Meta { node: Box::new(awaited(*node)), data },
@@ -467,7 +467,7 @@ impl Tasks<'_> {
 			other => other.name(),
 		};
 		match self.started.get(&variable) {
-			Some(function) => marker(TASK_CONTROL_MARK, vec![Node::Symbol(variable), Node::Symbol(function.clone()), Node::Symbol(control.to_string())]),
+			Some(function) => marker(TASK_CONTROL_MARK, vec![Node::Symbol(variable), Node::Symbol(function.clone()), symbol(control)]),
 			None => nothing_to_stop(&Node::Symbol(variable), control),
 		}
 	}
@@ -475,7 +475,7 @@ impl Tasks<'_> {
 	/// A read of a task variable: its value once the task is done (`await job`, `job + 1`)
 	fn value_of(&self, variable: &str) -> Option<Node> {
 		let function = self.started.get(variable)?;
-		Some(marker(TASK_VALUE, vec![Node::Symbol(variable.to_string()), Node::Symbol(function.clone())]))
+		Some(marker(TASK_VALUE, vec![symbol(variable), Node::Symbol(function.clone())]))
 	}
 
 	/// `count(jobs)`, `count jobs`, `#jobs`, `jobs.size` (count, length) of a job list: a count needs no result (P47)
@@ -630,7 +630,7 @@ impl Tasks<'_> {
 		let waiting = key(key(Node::Empty, Op::While, key(runs.clone(), Op::And, in_time)), Op::Do, block(vec![marker(SLEEP_WORD, vec![crate::node::int(RACE_POLL_MILLISECONDS)])]));
 		let timed_out = match &fallback {
 			Some(value) => value.clone(),
-			None => Node::List(vec![Node::Symbol(RAISE_WORD.to_string()), Node::Symbol(TIMEOUT_EVENT.to_string())], Bracket::None, Separator::Space),
+			None => Node::List(vec![symbol(RAISE_WORD), symbol(TIMEOUT_EVENT)], Bracket::None, Separator::Space),
 		};
 		let written = format!("await {} within {milliseconds} ms", job_name.serialize().trim());
 		let outcome = fallback.as_ref().map_or_else(|| "it fails with timeout".to_string(), |value| format!("the result is {}", value.serialize().trim()));
@@ -741,7 +741,7 @@ impl Tasks<'_> {
 	fn handler(&self, subject: &Node, event: &str, body: &Node) -> Node {
 		if let Some(function) = self.started.get(&subject.name()) {
 			let event = if FINISH_EVENTS.contains(&event) { FINISH_EVENT } else { event };
-			return marker(TASK_ON, vec![Node::Symbol(subject.name()), Node::Symbol(function.clone()), Node::Symbol(event.to_string()), self.lower(body.clone())]);
+			return marker(TASK_ON, vec![Node::Symbol(subject.name()), Node::Symbol(function.clone()), symbol(event), self.lower(body.clone())]);
 		}
 		if FINISH_EVENTS.contains(&event) {
 			return match self.value_of(&subject.name()) {
@@ -945,13 +945,13 @@ pub(crate) fn with_node_wrappers(node: Node, wrapped: &std::collections::BTreeMa
 		return node;
 	}
 	let items: Vec<Node> = wrapped.into_iter().map(|(function, count)| {
-		let arguments = Node::Symbol(WRAPPER_ARGUMENTS.to_string());
+		let arguments = symbol(WRAPPER_ARGUMENTS);
 		// declared a list: a function of no arguments leaves it unused, which would make it an Int (the host passes a Node)
-		let declared = key(arguments.clone(), Op::Colon, Node::Symbol("list".to_string()));
+		let declared = key(arguments.clone(), Op::Colon, symbol("list"));
 		let head = call(&format!("{function}{NODE_WRAPPER_SUFFIX}"), vec![declared]);
 		let argument = |index: usize| key(arguments.clone(), Op::Hash, Node::Number(crate::extensions::numbers::Number::Int(index as i64 + 1)));
 		let call = call(&function.clone(), (0..*count).map(argument).collect());
-		let result = Node::Symbol(WRAPPER_RESULT.to_string());
+		let result = symbol(WRAPPER_RESULT);
 		let body = Node::List(vec![key(result.clone(), Op::Assign, call), result], Bracket::Curly, Separator::Semicolon);
 		key(head, Op::Define, body)
 	}).collect();
@@ -1035,7 +1035,7 @@ fn guarded_calls(node: Node, guardable: &dyn Fn(&str) -> Option<Option<&'static 
 					let guarded = marker(crate::host::GUARDED_CALL, vec![Node::Text(format!("{function}{NODE_WRAPPER_SUFFIX}")), arguments]);
 					// an Int or Float result is that again (a caught overflow's Error fails the conversion, which `try` catches)
 					match guardable(&function).flatten() {
-						Some(type_word) => key(guarded, Op::As, Node::Symbol(type_word.to_string())),
+						Some(type_word) => key(guarded, Op::As, symbol(type_word)),
 						None => guarded,
 					}
 				}
@@ -1051,7 +1051,7 @@ fn guarded_calls(node: Node, guardable: &dyn Fn(&str) -> Option<Option<&'static 
 fn awaited_jobs(list: &Node, bools: bool) -> Node {
 	use crate::host::TASK_AWAIT_VALUE;
 	let template = crate::warp_parser::parse(&format!("{TASK_LIST_PLACEHOLDER}.map({AWAITED_JOB} => {AWAITED_PLACEHOLDER})"));
-	let awaited = checked_await(TASK_AWAIT_VALUE, &Node::Symbol(AWAITED_JOB.to_string()), bools);
+	let awaited = checked_await(TASK_AWAIT_VALUE, &symbol(AWAITED_JOB), bools);
 	let template = crate::library_words::substitute(template, TASK_LIST_PLACEHOLDER, list);
 	crate::library_words::substitute(template, AWAITED_PLACEHOLDER, &awaited)
 }
@@ -1076,7 +1076,7 @@ fn resolved(node: Node, path: &dyn Fn(&str) -> TaskPath, wrapped: &std::cell::Re
 					match path(&function) {
 						TaskPath::Ints => marker(TASK_SPAWN, [vec![Node::Text(function)], arguments].concat()),
 						TaskPath::Values(parameters) => {
-							let float = |argument: Node| key(argument, Op::As, Node::Symbol("float".to_string()));
+							let float = |argument: Node| key(argument, Op::As, symbol("float"));
 							// a character crosses as a one-character text, as a variable holds it
 							let arguments = arguments.into_iter().zip(parameters.iter().chain(std::iter::repeat(&crate::type_kinds::Kind::Empty)))
 								.map(|(argument, kind)| match argument.drop_meta() {
@@ -1229,7 +1229,7 @@ fn collection_declarations(node: Node, named: &[&str]) -> Node {
 				crate::normalize::set_position_of(&node);
 				crate::diagnostic::note_alias(written, meaning);
 			}
-			let target = Node::Key(name, Op::Colon, Box::new(Node::Symbol(meaning.to_string())));
+			let target = Node::Key(name, Op::Colon, Box::new(symbol(meaning)));
 			key(target, Op::Assign, collection_declarations(*value, named))
 		}
 		None => node.map_children(|child| collection_declarations(child, named)),
@@ -1308,7 +1308,7 @@ pub fn lower_spaced_definitions(node: Node) -> Node {
 		// `1…5 do print it` (wiki/range.md): a loop over the range, the item is `it`
 		Node::Key(range, Op::Do, body) if matches!(range.drop_meta(), Node::Key(_, Op::Range | Op::To, _)) => {
 			let block = Node::List(vec![lower_spaced_definitions(*body)], Bracket::Curly, Separator::Semicolon);
-			Node::List(vec![Node::Symbol("for".into()), *range, block], Bracket::None, Separator::Space)
+			Node::List(vec![symbol("for"), *range, block], Bracket::None, Separator::Space)
 		}
 		// a phrase `name p… = body`, never the items of a comma list (`(a, b = a * 2) => …` has a default)
 		Node::List(items, bracket, separator @ (Separator::Space | Separator::None)) if spaced_definition(&items).is_some() => {
@@ -1376,7 +1376,7 @@ fn colon_iteration(items: &[Node]) -> Option<Node> {
 	// `all numbers > 2: body`: the comparison acts on every item (wiki/iteration.md), a filter loop (P46, its warning)
 	let (list, body) = match list.drop_meta() {
 		Node::Key(collection, op, value) if op.is_comparison() => {
-			let condition = Node::Key(Box::new(Node::Symbol(IT_PARAMETER.to_string())), *op, value.clone());
+			let condition = Node::Key(Box::new(symbol(IT_PARAMETER)), *op, value.clone());
 			let written = format!("{} {op} {}", word.drop_meta().name(), crate::normalize::operand_text(value));
 			let question = crate::diagnostic::Ask::new(crate::warp_parser::FILTER_LOOP_TOPIC, format!("`{written}: …` visits only the items that pass its filter"),
 				vec![crate::diagnostic::reading("filter the items", &format!("for it in … {{ if it {op} {} {{ … }} }}", crate::normalize::operand_text(value)))],
@@ -1390,7 +1390,7 @@ fn colon_iteration(items: &[Node]) -> Option<Node> {
 		_ => (list, body),
 	};
 	let block = Node::List(vec![body], Bracket::Curly, Separator::Semicolon);
-	Some(Node::List(vec![Node::Symbol("for".into()), list, block], Bracket::None, Separator::Space))
+	Some(Node::List(vec![symbol("for"), list, block], Bracket::None, Separator::Space))
 }
 
 /// `[1,2,3]: s += it`, parsed as `([1,2,3]: s) += it`: the part before the colon and the body after it
@@ -1448,7 +1448,7 @@ fn bind_it(node: Node, parameter: &str, is_value: bool) -> Node {
 		items.next().map(|head| bind_it(head, parameter, false)).into_iter().chain(items.map(bound)).collect()
 	};
 	match node {
-		Node::Symbol(name) if name == IT_PARAMETER => Node::Symbol(parameter.to_string()),
+		Node::Symbol(name) if name == IT_PARAMETER => symbol(parameter),
 		// a lambda of its own `it`: `mk(k) := it => it * k`
 		Node::Key(ref parameters, Op::FatArrow, _) if names_it(parameters) => node,
 		// `{it * k}`, Swift's `{ $0 + k }`
@@ -1696,7 +1696,7 @@ fn extension_definition(definition: Node) -> Node {
 /// The head `name(receiver:T, parameters…)` of a method on T whose call is `name(parameters…)`
 fn with_receiver(call: &[Node], separator: &Separator, receiver_type: &Node, body: &Node) -> Node {
 	let receiver = if body.mentions_any(&[SELF_WORD]) { SELF_WORD } else { THIS_WORD };
-	let receiver = key(Node::Symbol(receiver.to_string()), Op::Colon, receiver_type.clone());
+	let receiver = key(symbol(receiver), Op::Colon, receiver_type.clone());
 	let parameters = call[1..].iter().flat_map(|parameter| match parameter.drop_meta() {
 		Node::List(group, Bracket::Round, _) => group.clone(),
 		Node::Empty => vec![],
@@ -1719,7 +1719,7 @@ fn smart_scope(items: &[Node]) -> Option<Node> {
 	if crate::analyzer::type_word_kind(&type_name.to_lowercase()).is_none() || definitions.is_empty() || !definitions.iter().all(is_method) {
 		return None;
 	}
-	let receiver = Node::Symbol(SELF_WORD.to_string());
+	let receiver = symbol(SELF_WORD);
 	let methods = definitions.iter().map(|definition| {
 		let Node::Key(name, _, body) = definition.drop_meta() else { unreachable!("guarded") };
 		let head = Node::List(vec![name.as_ref().clone(), key(receiver.clone(), Op::Colon, receiver_type.clone())], Bracket::Round, Separator::None);
@@ -1888,7 +1888,7 @@ fn typed_parameter_name(typed: &Node) -> Option<&Node> {
 /// The typed parameter under another name: `name: T` → `label: T`
 fn renamed_parameter(typed: &Node, label: &str) -> Node {
 	match typed.drop_meta() {
-		Node::Key(_, Op::Colon, type_node) => Node::Key(Box::new(Node::Symbol(label.to_string())), Op::Colon, type_node.clone()),
+		Node::Key(_, Op::Colon, type_node) => Node::Key(Box::new(symbol(label)), Op::Colon, type_node.clone()),
 		Node::Key(parameter, op, result) => Node::Key(Box::new(renamed_parameter(parameter, label)), *op, result.clone()),
 		other => other.clone(),
 	}
@@ -1909,7 +1909,7 @@ fn labeled_parameter(parameter: Node, labeled_names: &mut Vec<Node>) -> Node {
 	if label == WILDCARD_LABEL {
 		return preferred;
 	}
-	labeled_names.push(key(name.clone(), Op::Assign, Node::Symbol(label.to_string())));
+	labeled_names.push(key(name.clone(), Op::Assign, symbol(label)));
 	preferred
 }
 

@@ -7,7 +7,7 @@
 use super::nodes::{call, key};
 use crate::analyzer::extract_user_functions;
 use crate::context::Context;
-use crate::node::{Bracket, Node, Separator};
+use crate::node::{text, Bracket, Node, Separator};
 use crate::operators::Op;
 use std::cell::Cell;
 
@@ -152,7 +152,7 @@ fn item(path: &Node, position: usize) -> Node {
 fn pattern_tests(pattern: &Node, path: Node, tests: &mut Vec<Node>, bindings: &mut Vec<Node>) {
 	match pattern.drop_meta() {
 		Node::List(items, Bracket::Square, _) => {
-			tests.push(call(crate::type_tests::IS_TYPE, vec![path.clone(), Node::Text(LIST_SPEC.to_string())]));
+			tests.push(call(crate::type_tests::IS_TYPE, vec![path.clone(), text(LIST_SPEC)]));
 			tests.push(key(call(COUNT_WORD, vec![path.clone()]), Op::Eq, Node::int(items.len() as i64)));
 			for (index, part) in items.iter().enumerate() {
 				pattern_tests(part, item(&path, index + 1), tests, bindings);
@@ -160,7 +160,7 @@ fn pattern_tests(pattern: &Node, path: Node, tests: &mut Vec<Node>, bindings: &m
 		}
 		// `a: x` matches the pair whose key is a (a name, never bound) and matches its value against x
 		Node::Key(name, Op::Colon, value) => {
-			tests.push(call(crate::type_tests::IS_TYPE, vec![path.clone(), Node::Text(PAIR_SPEC.to_string())]));
+			tests.push(call(crate::type_tests::IS_TYPE, vec![path.clone(), text(PAIR_SPEC)]));
 			tests.push(key(call(TEXT_WORD, vec![item(&path, 1)]), Op::Eq, Node::Text(name.name())));
 			pattern_tests(value, item(&path, 2), tests, bindings);
 		}

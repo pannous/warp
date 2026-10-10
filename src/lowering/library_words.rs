@@ -9,7 +9,7 @@ use super::nodes::{call, is_word, key};
 use crate::analyzer::{call_name, counting_method, extract_user_functions, is_list_mutating_method};
 use crate::context::Context;
 use crate::diagnostic::Diagnostic;
-use crate::node::{Bracket, Node, Separator};
+use crate::node::{symbol, text, Bracket, Node, Separator};
 use crate::operators::Op;
 use crate::warp_parser::{parse, ASSERT_MARKER, TRY_MARKER};
 use crate::wasm_emitter::{CAUGHT_ERROR, RAN_WITHOUT_ERROR};
@@ -103,7 +103,7 @@ const SPLIT_SEPARATOR: &str = " ";
 /// What an optional argument left out is: the space `s.split` splits at, else ø
 fn left_out_argument(word: &str) -> Node {
 	match word {
-		SPLIT => Node::Text(SPLIT_SEPARATOR.to_string()),
+		SPLIT => text(SPLIT_SEPARATOR),
 		_ => Node::Empty,
 	}
 }
@@ -333,7 +333,7 @@ fn count_method(receiver: &Node, call: &Node) -> Option<Node> {
 }
 
 fn counted_in(count: &Node, needle: &Node, haystack: &Node) -> Option<Node> {
-	count_in(&[count.clone(), needle.clone(), Node::Symbol(IN_WORD.to_string()), haystack.clone()])
+	count_in(&[count.clone(), needle.clone(), symbol(IN_WORD), haystack.clone()])
 }
 
 /// `count x in y`: how often x occurs in y. A text of several characters counts as a substring of a text (`count "an"
@@ -356,7 +356,7 @@ fn count_in(items: &[Node]) -> Option<Node> {
 		several => Node::List(several.to_vec(), Bracket::None, Separator::Space),
 	};
 	if let Some(unit) = matches!(needle.drop_meta(), Node::Symbol(_)).then(|| crate::analyzer::text_unit(&needle.name())).flatten() {
-		return Some(key(haystack, Op::Dot, Node::Symbol(unit.to_string())));
+		return Some(key(haystack, Op::Dot, symbol(unit)));
 	}
 	let substring = matches!(needle.drop_meta(), Node::Text(text) if text.chars().count() > 1) && !matches!(haystack.drop_meta(), Node::List(_, Bracket::Square, _));
 	let template = if substring { COUNT_SUBSTRING_TEMPLATE } else { COUNT_ITEM_TEMPLATE };
@@ -447,8 +447,8 @@ pub(crate) fn stepped(place: Node, step: Op) -> Node {
 /// `object.name`, `name of object`, `object["name"]`: the entry named `name`, a subscript by a text key
 fn field_lookup(object: &Node, name: &str, position: &Node) -> Node {
 	let key = match position {
-		Node::Meta { data, .. } => Node::Meta { node: Box::new(Node::Text(name.to_string())), data: data.clone() },
-		_ => Node::Text(name.to_string()),
+		Node::Meta { data, .. } => Node::Meta { node: Box::new(text(name)), data: data.clone() },
+		_ => text(name),
 	};
 	crate::warp_parser::subscript(object.clone(), key)
 }
@@ -708,7 +708,7 @@ impl Lowering {
 			}
 			// P66: `x / 0.0`, a float division by a written zero, is IEEE's ∞ (an exact division by zero is divide_by_zero)
 			Node::Key(left, Op::Div, right) if is_float_zero(&right) => {
-				let as_float = |operand: Node| key(operand, Op::As, Node::Symbol(FLOAT_WORD.to_string()));
+				let as_float = |operand: Node| key(operand, Op::As, symbol(FLOAT_WORD));
 				key(as_float(self.expand(*left)), Op::Div, as_float(*right))
 			}
 			Node::Key(left, op, right) => key(self.expand(*left), op, self.expand(*right)),
@@ -768,7 +768,7 @@ impl Lowering {
 	fn lower_similar(&self, op: Op, left: Node, right: Node) -> Node {
 		let (_, function, variable, default) = SIMILARITY_LEVELS.iter().find(|(level, ..)| *level == op).expect("a similarity operator");
 		let tolerance = if self.shadowed.contains(*variable) { variable } else { default };
-		let call = vec![Node::Symbol(function.to_string()), left, right, crate::warp_parser::parse(tolerance)];
+		let call = vec![symbol(function), left, right, crate::warp_parser::parse(tolerance)];
 		Node::List(call, Bracket::Round, Separator::None)
 	}
 
@@ -1165,7 +1165,7 @@ impl Lowering {
 			// a prelude word calls its definition from lib/prelude.warp (modules::prelude_name)
 			None if let Some(qualified) = crate::modules::prelude_name(word) => call(&qualified, arguments),
 			None => {
-				let name = if matches!(head.drop_meta(), Node::Symbol(written) if written == word) { head.clone() } else { Node::Symbol(word.to_string()) };
+				let name = if matches!(head.drop_meta(), Node::Symbol(written) if written == word) { head.clone() } else { symbol(word) };
 				Node::List([vec![name], arguments].concat(), Bracket::Round, Separator::None)
 			}
 		}

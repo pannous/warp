@@ -7,7 +7,7 @@
 
 use super::nodes::key;
 use crate::event_signals::{ELEMENT_EVENT_JOINER, PAGE_EVENTS};
-use crate::node::{Bracket, Node, Separator};
+use crate::node::{symbol, Bracket, Node, Separator};
 use crate::operators::Op;
 
 const ON_WORD: &str = "on";
@@ -60,10 +60,10 @@ fn bound_property(items: &[Node]) -> &'static str {
 
 /// `bind: name` as the attribute `value: name` and the handler `on input { name = event.value }`
 fn bound(variable: Node, property: &str) -> [Node; 4] {
-	let attribute = key(Node::Symbol(property.to_string()), Op::Colon, variable.clone());
-	let read = key(Node::Symbol(crate::event_signals::EVENT_WORD.to_string()), Op::Dot, Node::Symbol(property.to_string()));
+	let attribute = key(symbol(property), Op::Colon, variable.clone());
+	let read = key(symbol(crate::event_signals::EVENT_WORD), Op::Dot, symbol(property));
 	let update = Node::List(vec![key(variable, Op::Assign, read)], Bracket::Curly, Separator::Semicolon);
-	[attribute, Node::Symbol(ON_WORD.to_string()), Node::Symbol(INPUT_EVENT.to_string()), update]
+	[attribute, symbol(ON_WORD), symbol(INPUT_EVENT), update]
 }
 
 /// The items of an element's block: `button{ … }` (a block of anything else is code, its `on click` page-wide)
@@ -131,7 +131,7 @@ impl Marker {
 					self.numbered += 1;
 					kept.push(key(Node::Symbol(format!("{HANDLER_ATTRIBUTE_PREFIX}{event}")), Op::Colon, Node::Text(self.numbered.to_string())));
 					let handled = Node::Symbol(format!("{event}{ELEMENT_EVENT_JOINER}{}", self.numbered));
-					self.handlers.push(Node::List(vec![Node::Symbol(ON_WORD.to_string()), handled, body], Bracket::None, Separator::Space));
+					self.handlers.push(Node::List(vec![symbol(ON_WORD), handled, body], Bracket::None, Separator::Space));
 					index += length;
 				}
 				None => {

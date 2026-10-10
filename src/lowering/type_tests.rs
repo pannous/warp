@@ -9,7 +9,7 @@ use super::nodes::{call, key};
 use crate::analyzer::{extract_user_functions, plural_element_type, type_word_kind};
 use crate::context::Context;
 use crate::library_words::collect_assigned_names;
-use crate::node::{Bracket, Node, Separator};
+use crate::node::{text, Bracket, Node, Separator};
 use crate::operators::Op;
 use std::collections::HashSet;
 
@@ -165,7 +165,7 @@ pub const COMPARED_WITH: &str = "compared with";
 
 pub fn with_compared_text(subject: Node, written: &str) -> Node {
 	match subject.drop_meta() {
-		Node::Symbol(_) => Node::Meta { node: Box::new(subject), data: Box::new(Node::key(COMPARED_WITH, Node::Text(written.to_string()))) },
+		Node::Symbol(_) => Node::Meta { node: Box::new(subject), data: Box::new(Node::key(COMPARED_WITH, text(written))) },
 		_ => subject,
 	}
 }

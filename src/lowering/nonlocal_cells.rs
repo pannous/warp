@@ -6,7 +6,7 @@
 
 use super::nodes::{call, key};
 use crate::late_binding::{changes_in, declared_nonlocals, NONLOCAL};
-use crate::node::{Bracket, Node, Separator};
+use crate::node::{symbol, Bracket, Node, Separator};
 use crate::operators::Op;
 use crate::wasm_emitter::cells::{CELL_GET, CELL_NEW, CELL_SET};
 
@@ -66,7 +66,7 @@ fn written_nonlocals(body: &Node) -> Vec<String> {
 /// The body with `variable` in a cell, made first (holding the parameter's value for a parameter, else ø)
 fn celled(body: Node, variable: &str, is_param: bool) -> Node {
 	let cell = Node::Symbol(format!("{variable}{CELL_SUFFIX}"));
-	let initial = if is_param { Node::Symbol(variable.to_string()) } else { Node::Empty };
+	let initial = if is_param { symbol(variable) } else { Node::Empty };
 	let made = key(cell.clone(), Op::Assign, call(CELL_NEW, vec![initial]));
 	match through_cell(body, variable, &cell) {
 		Node::List(items, bracket @ (Bracket::Curly | Bracket::None), separator @ (Separator::Semicolon | Separator::Newline)) => {
@@ -188,7 +188,7 @@ fn in_enclosing(node: Node, locals: &[String], count: &mut usize, hoisted: &mut 
 			let params = lambda_parameters(&lambda_params);
 			// a lambda changing an enclosing local shares it, as in JS, Kotlin, Swift, C#, Ruby and Julia
 			let shared: Vec<Node> = undeclared_changes(&body, &params, locals).into_iter()
-				.map(|(_, name)| key(Node::Symbol(NONLOCAL.to_string()), Op::Colon, Node::Symbol(name))).collect();
+				.map(|(_, name)| key(symbol(NONLOCAL), Op::Colon, Node::Symbol(name))).collect();
 			let body = nonlocal_lambdas(with_first(shared, *body), count);
 			if declared_nonlocals(&body).is_empty() {
 				return Node::Key(lambda_params, Op::FatArrow, Box::new(body));

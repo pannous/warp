@@ -5,7 +5,7 @@
 //! in page_tests.rs.
 
 use crate::lowering::library_words::substitute;
-use crate::node::{Bracket, Node, Separator};
+use crate::node::{symbol, Bracket, Node, Separator};
 use crate::warp_parser::parse;
 
 const TEST_WORD: &str = "test";
@@ -74,7 +74,7 @@ fn run_test(statement: Node) -> Vec<Node> {
 
 /// A template's source with the hidden names, which a program cannot write
 fn template(source: &str) -> Node {
-	[COUNT, FAILED, CAUGHT].iter().fold(parse(source), |node, (placeholder, hidden)| substitute(node, placeholder, &Node::Symbol(hidden.to_string())))
+	[COUNT, FAILED, CAUGHT].iter().fold(parse(source), |node, (placeholder, hidden)| substitute(node, placeholder, &symbol(hidden)))
 }
 
 fn statements(node: &Node) -> Vec<Node> {

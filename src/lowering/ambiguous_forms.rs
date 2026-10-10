@@ -3,7 +3,7 @@
 
 use super::nodes::{call, key};
 use crate::diagnostic::{ask, reading, Ask, Fallback};
-use crate::node::{Bracket, Node, Separator};
+use crate::node::{symbol, Bracket, Node, Separator};
 use crate::operators::Op;
 use std::collections::{HashMap, HashSet};
 
@@ -23,7 +23,7 @@ pub fn lower(node: Node) -> Node {
 const OPERAND_NAME: &str = "value";
 
 fn operand() -> Box<Node> {
-	Box::new(Node::Symbol(OPERAND_NAME.to_string()))
+	Box::new(symbol(OPERAND_NAME))
 }
 
 /// `f = abs`, `xs.map(sqrt)`: an operator word left without an operand is the function `value => abs value`
@@ -169,7 +169,7 @@ fn suffix_function(word: &Node, functions: &SuffixWords) -> Option<Suffix> {
 /// The word as written: `sqrt` for the parser's `√ø`
 fn written_word(word: &Node) -> Node {
 	let spelling = operator_reference(word).and_then(|op| crate::warp_parser::PREFIX_OPERATOR_WORDS.into_iter().find(|(_, known)| *known == op));
-	spelling.map_or_else(|| word.clone(), |(spelling, _)| Node::Symbol(spelling.to_string()))
+	spelling.map_or_else(|| word.clone(), |(spelling, _)| symbol(spelling))
 }
 
 /// `abs`, `sqrt`, `cbrt` written without an operand: the operator itself

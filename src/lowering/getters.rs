@@ -7,7 +7,7 @@
 
 use super::nodes::{call, key};
 use crate::diagnostic::Diagnostic;
-use crate::node::{Bracket, Node, Separator};
+use crate::node::{symbol, Bracket, Node, Separator};
 use crate::operators::Op;
 
 /// marks the `name()` that `name := e` became: written without parentheses, read as a value (late_binding warns of effects)
@@ -148,7 +148,7 @@ fn getter_definition(statement: Node) -> Node {
 	match statement {
 		Node::Meta { node, data } => Node::Meta { node: Box::new(getter_definition(*node)), data },
 		Node::Key(left, Op::Define, body) => match left.drop_meta() {
-			Node::Symbol(name) => Node::Key(Box::new(Node::meta(call(name, vec![]), Node::Symbol(BARE_GETTER_MARK.to_string()))), Op::Define, body),
+			Node::Symbol(name) => Node::Key(Box::new(Node::meta(call(name, vec![]), symbol(BARE_GETTER_MARK))), Op::Define, body),
 			_ => Node::Key(left, Op::Define, body),
 		},
 		other => other,

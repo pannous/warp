@@ -13,7 +13,7 @@
 
 use super::nodes::{call, key};
 use crate::declarations::word;
-use crate::node::{Bracket, Node};
+use crate::node::{symbol, Bracket, Node};
 use crate::operators::Op;
 use std::collections::HashSet;
 use warp_runtime::host_words::{BATTERY, CLIPBOARD, CLIPBOARD_COUNT, CLIPBOARD_TEXT, SYSTEM_VALUE, SYSTEM_VALUES};
@@ -161,7 +161,7 @@ fn clipboard_listeners(node: Node) -> Node {
 			if !listens {
 				return Node::List(items, bracket, separator);
 			}
-			let listener = [Node::Symbol(ON_WORD.to_string()), Node::Symbol(CHANGE_WORDS[0].to_string()), Node::Symbol(CLIPBOARD_COUNT.to_string())];
+			let listener = [symbol(ON_WORD), symbol(CHANGE_WORDS[0]), symbol(CLIPBOARD_COUNT)];
 			Node::List(listener.into_iter().chain(items.into_iter().skip(3)).collect(), bracket, separator)
 		}
 		Node::Meta { node, data } => Node::Meta { node: Box::new(clipboard_listeners(*node)), data },

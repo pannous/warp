@@ -14,7 +14,7 @@
 
 use super::nodes::{call, key};
 use crate::declarations::word;
-use crate::node::{Bracket, Node, Separator};
+use crate::node::{symbol, Bracket, Node, Separator};
 use crate::operators::Op;
 use crate::variable_signals::{assign, block, defines_function, if_then, is_call_head, listener_parts, symbols, with_old, with_value, ListenerWord};
 use crate::wasm_emitter::cells::{CELL_GET, CELL_NEW, CELL_SET, SIGNAL_LISTENERS, SIGNAL_LISTENERS_SET, SIGNAL_NEW};
@@ -308,7 +308,7 @@ fn reflected_lists(node: Node, reflected: &mut HashSet<String>) -> Node {
 			if let Some(Node::Key(variable, Op::SubAssign, name)) = rest.peek().map(|next| next.drop_meta().clone()) {
 				rest.next();
 				reflected.insert(word(&variable));
-				out.extend([Node::Symbol(REMOVE_WORD.into()), *name, Node::Symbol(FROM_WORD.into()), call(SIGNAL_LISTENERS, vec![*variable])]);
+				out.extend([symbol(REMOVE_WORD), *name, symbol(FROM_WORD), call(SIGNAL_LISTENERS, vec![*variable])]);
 				continue;
 			}
 			if let Some(variable) = rest.next() {
@@ -370,17 +370,17 @@ impl Subscriptions {
 		if watched.is_empty() {
 			return None;
 		}
-		let value = Node::Symbol(VALUE_WORD.to_string());
+		let value = symbol(VALUE_WORD);
 		let mut statements = vec![];
 		// `old` in `on set` / `on change` reads the listener closure's old value
 		let body = match (listener_word, with_old(&body, &self.main_variables)) {
-			(ListenerWord::Set | ListenerWord::Change, Some(with_old)) => with_old(&Node::Symbol(OLD_WORD.to_string())),
+			(ListenerWord::Set | ListenerWord::Change, Some(with_old)) => with_old(&symbol(OLD_WORD)),
 			_ => body,
 		};
 		let check = match listener_word {
 			ListenerWord::Set => with_value(&body, &value),
 			ListenerWord::Change => {
-				if_then(key(value.clone(), Op::Ne, Node::Symbol(OLD_WORD.to_string())), block(vec![with_value(&body, &value)]))
+				if_then(key(value.clone(), Op::Ne, symbol(OLD_WORD)), block(vec![with_value(&body, &value)]))
 			}
 			// P156: when the condition becomes true; the cell holds whether it held at the last write
 			ListenerWord::Whenever => {
@@ -389,7 +389,7 @@ impl Subscriptions {
 				statements.push(assign(&held, call(CELL_NEW, vec![Node::False])));
 				let held_cell = Node::Symbol(held);
 				// cells hold nodes: compared, not read as conditions
-				let not_before = key(Node::Symbol(WAS_WORD.to_string()), Op::Eq, Node::False);
+				let not_before = key(symbol(WAS_WORD), Op::Eq, Node::False);
 				let holds = key(call(CELL_GET, vec![held_cell.clone()]), Op::Eq, Node::True);
 				let became_true = key(holds, Op::And, not_before);
 				let parts = vec![assign(WAS_WORD, call(CELL_GET, vec![held_cell.clone()])), call(CELL_SET, vec![held_cell, subject]), if_then(became_true, block(vec![body]))];
@@ -412,14 +412,14 @@ impl Subscriptions {
 		// a named listener (P128) is a function of that name, and remembers where it sits in each list
 		let listener = match name {
 			Some(name) => {
-				let head = call(name, vec![Node::Symbol(VALUE_WORD.to_string()), Node::Symbol(OLD_WORD.to_string())]);
+				let head = call(name, vec![symbol(VALUE_WORD), symbol(OLD_WORD)]);
 				let body = globals.into_iter().chain([check, crate::node::int(0)]).collect();
 				statements.push(key(head, Op::Define, block(body)));
 				for variable in &watched {
 					let place = call(COUNT_WORD, vec![call(SIGNAL_LISTENERS, vec![Node::Symbol(variable.clone())])]);
 					statements.push(assign(&index_name(name, variable), place));
 				}
-				Node::Symbol(name.to_string())
+				symbol(name)
 			}
 			None => listener,
 		};
@@ -686,7 +686,7 @@ fn set_function() -> Node {
 /// The code parsed, its placeholders replaced: the generated names (`signal·old`) and the given nodes
 fn from_template(code: &str, nodes: &[(&str, Node)]) -> Node {
 	let names = [(SET_PLACEHOLDER, SET_FUNCTION), (OLD_PLACEHOLDER, OLD_WORD), (LISTENER_PLACEHOLDER, LISTENER_WORD), (WITHOUT_PLACEHOLDER, WITHOUT_FUNCTION)];
-	let bindings = names.iter().map(|(placeholder, name)| (placeholder.to_string(), Node::Symbol(name.to_string())))
+	let bindings = names.iter().map(|(placeholder, name)| (placeholder.to_string(), symbol(name)))
 		.chain(nodes.iter().map(|(placeholder, node)| (placeholder.to_string(), node.clone()))).collect();
 	crate::law::substitute(&crate::warp_parser::parse(code), &bindings).drop_meta().clone()
 }

@@ -6,7 +6,7 @@
 //! In a style sheet the parser keeps a blank before `.x` or `#x` (`#main .x`, the descendant combinator) as the next item.
 
 use super::nodes::key;
-use crate::node::{Bracket, Node, Separator};
+use crate::node::{symbol, Bracket, Node, Separator};
 use crate::operators::Op;
 
 const STYLE: &str = "style";
@@ -41,7 +41,7 @@ fn styled(items: Vec<Node>, separator: &Separator) -> Vec<Node> {
 			// `.card { … }`: a leading-dot name stays apart from its block
 			output.push(rule(joined_selector(&mut pending, None, joiner), &item));
 		} else if let Some((selector, value)) = selector_value(&item) {
-			output.push(rule(selector, &key(Node::Symbol(SELECTOR_VALUE_PROPERTY.into()), Op::Colon, value.clone())));
+			output.push(rule(selector, &key(symbol(SELECTOR_VALUE_PROPERTY), Op::Colon, value.clone())));
 		} else if let Some((name, value)) = declaration_value(&item) {
 			let value = css_length(value).map(Node::Text).unwrap_or_else(|| value.clone());
 			output.push(key(name.clone(), Op::Colon, value));

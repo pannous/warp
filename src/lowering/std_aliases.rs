@@ -5,7 +5,7 @@
 //! already turned into calls) keeps its meaning. Runs before welcome_forms' module_calls: Python's json is also the
 //! name of warp's module.
 
-use crate::node::{Bracket, Node, Separator};
+use crate::node::{symbol, Bracket, Node, Separator};
 use crate::operators::Op;
 use std::collections::HashSet;
 
@@ -94,7 +94,7 @@ fn aliased(node: Node, kept: &[&str], used: &mut HashSet<&'static str>) -> Node 
 				used.insert(alias.std_module);
 			}
 			let arguments = alias.order.iter().map(|&index| aliased(arguments[index].clone(), kept, used));
-			Node::List(std::iter::once(Node::Symbol(alias.word.to_string())).chain(arguments).collect(), Bracket::Round, Separator::None)
+			Node::List(std::iter::once(symbol(alias.word)).chain(arguments).collect(), Bracket::Round, Separator::None)
 		}
 		None => node.map_children(|child| aliased(child, kept, used)),
 	}
@@ -126,7 +126,7 @@ fn with_uses(program: Node, used: HashSet<&'static str>) -> Node {
 	}
 	let mut modules: Vec<&str> = used.into_iter().collect();
 	modules.sort();
-	let uses = modules.into_iter().map(|module| Node::List(vec![Node::Symbol(USE_WORD.to_string()), Node::Symbol(module.to_string())], Bracket::None, Separator::Space));
+	let uses = modules.into_iter().map(|module| Node::List(vec![symbol(USE_WORD), symbol(module)], Bracket::None, Separator::Space));
 	match program {
 		Node::List(statements, Bracket::None, separator @ (Separator::Semicolon | Separator::Newline)) => Node::List(uses.chain(statements).collect(), Bracket::None, separator),
 		single => Node::List(uses.chain(std::iter::once(single)).collect(), Bracket::None, Separator::Semicolon),

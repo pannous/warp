@@ -6,7 +6,7 @@
 //! - `x, y = v` / `x, y = v, w` → `$destructure (x, y) v …` (a statement binding each name, values evaluated first)
 
 use super::nodes::{is_word, key};
-use crate::node::{error, Bracket, Node, Separator};
+use crate::node::{error, symbol, Bracket, Node, Separator};
 use crate::operators::Op;
 
 pub const RETURN: &str = "return";
@@ -224,7 +224,7 @@ fn destructure(names: Vec<Node>, values: Vec<Node>, written: &str, path: &str) -
 		}
 		None => name,
 	}).collect();
-	let head = Node::Symbol(DESTRUCTURE.to_string());
+	let head = symbol(DESTRUCTURE);
 	let names = Node::List(names, Bracket::Round, Separator::Colon);
 	let statement = Node::List([head, names].into_iter().chain(values).collect(), Bracket::None, Separator::Space);
 	if nested.is_empty() {

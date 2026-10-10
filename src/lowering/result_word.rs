@@ -3,7 +3,7 @@
 //! that assigns `result` itself keeps its own variable.
 
 use super::nodes::key;
-use crate::node::{Bracket, Node, Separator};
+use crate::node::{symbol, Bracket, Node, Separator};
 use crate::operators::Op;
 
 const RESULT_WORD: &str = "result";
@@ -32,7 +32,7 @@ fn is_statement_list(bracket: &Bracket, separator: &Separator) -> bool {
 }
 
 fn result_of(value: Node) -> Node {
-	key(Node::Symbol(RESULT_WORD.to_string()), Op::Assign, value)
+	key(symbol(RESULT_WORD), Op::Assign, value)
 }
 
 fn with_results(node: Node) -> Node {

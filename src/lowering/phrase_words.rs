@@ -5,7 +5,7 @@
 use super::nodes::key;
 use crate::analyzer::extract_user_functions;
 use crate::context::Context;
-use crate::node::{Bracket, Node, Separator};
+use crate::node::{symbol, Bracket, Node, Separator};
 use crate::operators::Op;
 
 const DO_WORD: &str = "do";
@@ -66,6 +66,6 @@ fn appended_to(argument: &Node) -> Option<Node> {
 	if !matches!(list.drop_meta(), Node::Symbol(_)) {
 		return None;
 	}
-	let call = Node::List(vec![Node::Symbol(ADD_WORD.to_string()), element.as_ref().clone()], Bracket::Round, Separator::Space);
+	let call = Node::List(vec![symbol(ADD_WORD), element.as_ref().clone()], Bracket::Round, Separator::Space);
 	Some(Node::Key(list.clone(), Op::Dot, Box::new(call)))
 }

@@ -7,7 +7,7 @@
 //! declares `dog like animal`, so a dog is accepted where an animal is wanted.
 
 use super::nodes::{call, key};
-use crate::node::{Bracket, Node, Separator};
+use crate::node::{symbol, text, Bracket, Node, Separator};
 use crate::operators::Op;
 
 /// The receiver parameter of a method
@@ -248,7 +248,7 @@ fn with_json_classes(node: Node, classes: &Node) -> Node {
 		}
 		Node::List(items, Bracket::Round, separator) if items.len() == 2 && items[0].drop_meta().name() == TO_JSON_WORD => {
 			let value = with_json_classes(items[1].clone(), classes);
-			Node::List(vec![Node::Symbol(TO_JSON_OF_CLASSES_WORD.to_string()), value, classes.clone()], Bracket::Round, separator)
+			Node::List(vec![symbol(TO_JSON_OF_CLASSES_WORD), value, classes.clone()], Bracket::Round, separator)
 		}
 		other => other.map_children(|child| with_json_classes(child, classes)),
 	}
@@ -482,7 +482,7 @@ fn by_position(node: Node, fields: &std::collections::HashMap<String, Vec<(Strin
 
 fn taken_apart(node: Node, fields: &std::collections::HashMap<String, Vec<(String, String)>>, class_of: &dyn Fn(&Node) -> Option<String>) -> Node {
 	let recurse = |child: Node| taken_apart(child, fields, class_of);
-	let subject = Node::Symbol(PARTS_WORD.to_string());
+	let subject = symbol(PARTS_WORD);
 	match node {
 		// `{x, start: Point{x: a}} = l`: names only, no constant to test (a class in it is no test either)
 		Node::Key(target, Op::Assign, value) if matched_fields(&target, &subject, fields).is_some_and(|matched| matched.tests.is_empty()) => {
@@ -529,7 +529,7 @@ struct Matched {
 }
 
 fn field_of(path: &Node, field: &str) -> Node {
-	key(path.clone(), Op::Dot, Node::Symbol(field.to_string()))
+	key(path.clone(), Op::Dot, symbol(field))
 }
 
 /// `Point{…}` or `Point(…)` of a declared class
@@ -544,7 +544,7 @@ fn is_class_pattern(pattern: &Node, fields: &std::collections::HashMap<String, V
 /// A pattern at `path`: `_` matches anything, a name binds, a number or text is compared, `Point{x, y: b}` and
 /// `Point(a, 0)` test the class and match each field; None for anything else (the arm stays as written)
 fn matched_pattern(pattern: &Node, path: &Node, fields: &std::collections::HashMap<String, Vec<(String, String)>>, matched: &mut Matched) -> Option<()> {
-	let class_test = |class: &str| key(path.clone(), Op::Eq, Node::Symbol(class.to_string()));
+	let class_test = |class: &str| key(path.clone(), Op::Eq, symbol(class));
 	match pattern.drop_meta() {
 		Node::Symbol(name) if name == "_" => {}
 		Node::Symbol(name) if !fields.contains_key(name) => matched.bindings.push((path.clone(), name.clone())),
@@ -590,7 +590,7 @@ fn matched_fields(parts: &Node, path: &Node, fields: &std::collections::HashMap<
 
 /// `(parts·from = value; x = parts·from.x; …; body)`
 fn bound_parts(value: Node, bindings: &[(Node, String)], body: Option<Node>) -> Node {
-	let subject = Node::Symbol(PARTS_WORD.to_string());
+	let subject = symbol(PARTS_WORD);
 	let mut statements = match value.drop_meta() {
 		Node::Symbol(name) if name == PARTS_WORD => vec![],
 		_ => vec![key(subject, Op::Assign, value)],
@@ -682,7 +682,7 @@ fn is_place(node: &Node) -> bool {
 
 /// `(cast·value = s; if not (cast·value is Circle) { raise "s is no Circle" }; cast·value)`: the value is computed once
 fn checked_cast(object: Node, class: &str) -> Node {
-	let held = Node::Symbol(CAST_VALUE.to_string());
+	let held = symbol(CAST_VALUE);
 	let message = format!("{} is no {class}", object.serialize());
 	let check = crate::warp_parser::parse(&format!("if not ({CAST_PLACEHOLDER} is {class}) {{ raise {message:?} }}"));
 	let statements = vec![key(held.clone(), Op::Assign, object), crate::library_words::substitute(check, CAST_PLACEHOLDER, &held), held];
@@ -723,7 +723,7 @@ fn instance_of(path: &Node, class: &str, fields: &std::collections::HashMap<Stri
 			(false, None) => value,
 		});
 	}
-	Node::List(std::iter::once(Node::Symbol(class.to_string())).chain(values).collect(), Bracket::Round, Separator::None)
+	Node::List(std::iter::once(symbol(class)).chain(values).collect(), Bracket::Round, Separator::None)
 }
 
 /// `list.map(Point·element => Point(Point·element.x, …))`
@@ -1157,12 +1157,12 @@ fn with_certain_amounts(certainty: &Node, operands: &Operands) -> Node {
 	let (left, class, right) = with_run_time_units(left, class, right, right_class, operands);
 	let compared = match class.as_deref() == Some(crate::units::RUN_TIME_QUANTITY) {
 		true => {
-			let comparable = call(SAME_DIMENSION, vec![left.clone(), right, Node::Text("compare".to_string())]);
+			let comparable = call(SAME_DIMENSION, vec![left.clone(), right, text("compare")]);
 			key(amount_of(left), *op, amount_of(comparable))
 		}
 		false => key(left, *op, right),
 	};
-	Node::List(vec![Node::Symbol(word.to_string()), compared], Bracket::None, Separator::Space).with_meta_of(certainty)
+	Node::List(vec![symbol(word), compared], Bracket::None, Separator::Space).with_meta_of(certainty)
 }
 
 /// The list of `sum([5 m ± 1 cm, 3 m ± 2 cm])` or `[…].sum()` when each item is a run-time quantity
@@ -1188,7 +1188,7 @@ fn summed_list(node: &Node) -> Option<&Node> {
 /// `quantities.reduce((sum, item) => sum.plus(item))`, marked a Quantity so `str()` and a final value show its text
 /// (card quantity-sum)
 fn quantities_reduced(quantities: Node) -> Node {
-	let [sum, item] = REDUCED_NAMES.map(|name| Node::Symbol(name.to_string()));
+	let [sum, item] = REDUCED_NAMES.map(symbol);
 	let parameters = Node::List(vec![sum.clone(), item.clone()], Bracket::Round, Separator::Colon);
 	let added = key(parameters, Op::FatArrow, method_call(sum, operator_method(Op::Add).expect("plus"), item));
 	let reduced = key(quantities, Op::Dot, call(REDUCE_WORD, vec![added]));
@@ -1196,7 +1196,7 @@ fn quantities_reduced(quantities: Node) -> Node {
 }
 
 fn amount_of(quantity: Node) -> Node {
-	key(quantity, Op::Dot, Node::Symbol(QUANTITY_AMOUNT.to_string()))
+	key(quantity, Op::Dot, symbol(QUANTITY_AMOUNT))
 }
 
 fn method_call(receiver: Node, method: &str, argument: Node) -> Node {
@@ -1442,7 +1442,7 @@ fn go_method(words: &[Node]) -> Option<(String, Vec<Node>)> {
 		[Node::List(group, Bracket::None, _)] => group.clone(),
 		_ => rest.to_vec(),
 	};
-	let bindings = [(variable.clone(), Node::Symbol(RECEIVER.to_string()))].into_iter().collect();
+	let bindings = [(variable.clone(), symbol(RECEIVER))].into_iter().collect();
 	let method = crate::law::substitute(&Node::List([vec![keyword.clone()], rest].concat(), Bracket::None, Separator::Space), &bindings);
 	Some((class.clone(), class_items(&Node::List(vec![method], Bracket::Curly, Separator::Semicolon))))
 }
@@ -1466,7 +1466,7 @@ fn copies(node: Node) -> Node {
 				Some(mut changes) => {
 					let shallow = changes.iter().position(|(field, _)| field == crate::library_words::SHALLOW).map_or(Node::False, |at| changes.remove(at).1);
 					changes.into_iter().fold(crate::library_words::copy_call(receiver, shallow), |object, (field, value)| {
-						let call = vec![Node::Symbol(crate::library_words::FIELD_WITH.to_string()), object, Node::Text(field), value];
+						let call = vec![symbol(crate::library_words::FIELD_WITH), object, Node::Text(field), value];
 						Node::List(call, Bracket::Round, Separator::None)
 					})
 				}
@@ -1553,7 +1553,7 @@ fn inherit(node: Node) -> Result<(Node, Vec<Node>), Node> {
 	for (class, parent, _) in &classes {
 		if let Some(parent) = parent {
 			inherited_items(class, &classes, &mut vec![])?;
-			let words = [class.as_str(), crate::traits::LIKE_WORD, parent.as_str()].map(|word| Node::Symbol(word.to_string()));
+			let words = [class.as_str(), crate::traits::LIKE_WORD, parent.as_str()].map(symbol);
 			likenesses.push(Node::List(words.to_vec(), Bracket::None, Separator::Space));
 		}
 	}
@@ -1631,7 +1631,7 @@ fn accessors(words: &[Node]) -> Option<Vec<Node>> {
 	let [first, second] = words else { return None };
 	let method = |name: &str, parameters: Vec<Node>, body: &Node| {
 		let head = match parameters.is_empty() {
-			true => Node::Symbol(name.to_string()),
+			true => symbol(name),
 			false => call(name, parameters),
 		};
 		key(head, Op::Define, body.clone())
@@ -1902,7 +1902,7 @@ fn witness_method(item: Node, class: &str) -> Node {
 		crate::diagnostic::note_alias(&method, witness);
 	}
 	let typed = |parameter: Node| match parameter.drop_meta() {
-		Node::Symbol(_) if *witness != "text" => key(parameter, Op::Colon, Node::Symbol(class.to_string())),
+		Node::Symbol(_) if *witness != "text" => key(parameter, Op::Colon, symbol(class)),
 		_ => parameter,
 	};
 	let head = call(witness, parameters.into_iter().map(typed).collect());
@@ -2061,7 +2061,7 @@ fn as_member(definition: Node) -> Node {
 		Some(first) if is_self(first) => parameters[1..].to_vec(),
 		_ => parameters,
 	};
-	let name = glyph_method(&name.drop_meta().name()).map_or(name.clone(), |method| Node::Symbol(method.to_string()));
+	let name = glyph_method(&name.drop_meta().name()).map_or(name.clone(), symbol);
 	Node::Key(Box::new(Node::List([vec![name], parameters].concat(), Bracket::Round, separator)), Op::Define, body)
 }
 
@@ -2206,7 +2206,7 @@ fn super_calls(node: Node, class: &str, called: &mut Vec<String>) -> Node {
 		}
 		other => other,
 	};
-	key(Node::Symbol(RECEIVER.to_string()), Op::Dot, member)
+	key(symbol(RECEIVER), Op::Dot, member)
 }
 
 /// `speak·super·dog`, the name of the speak dog inherits; speak goes to `called`
@@ -2226,8 +2226,8 @@ fn renamed(method: &Node, name: &str) -> Node {
 		return with_result_type(untyped, Some(result_type));
 	}
 	let head = match head.drop_meta() {
-		Node::List(parts, bracket, separator) => Node::List([vec![Node::Symbol(name.to_string())], parts[1..].to_vec()].concat(), bracket.clone(), separator.clone()),
-		_ => Node::Symbol(name.to_string()),
+		Node::List(parts, bracket, separator) => Node::List([vec![symbol(name)], parts[1..].to_vec()].concat(), bracket.clone(), separator.clone()),
+		_ => symbol(name),
 	};
 	Node::Key(Box::new(head), Op::Define, body.clone())
 }
@@ -2258,7 +2258,7 @@ fn shared_method_traits(node: &Node) -> Vec<Node> {
 		let Node::Type { body, .. } = part else { return };
 		for item in class_items(body) {
 			if let Some((name, parameters)) = instance_member(&item) {
-				let receiver = Node::Symbol(RECEIVER.to_string());
+				let receiver = symbol(RECEIVER);
 				let requirement = match parameters.is_empty() {
 					true => Node::Symbol(name.clone()),
 					false => Node::List([vec![Node::Symbol(name.clone()), receiver], parameters].concat(), Bracket::Round, Separator::None),
@@ -2274,7 +2274,7 @@ fn shared_method_traits(node: &Node) -> Vec<Node> {
 		if first && shared {
 			let requirements = Node::List(vec![requirement.clone()], Bracket::Curly, Separator::Space);
 			let declaration = key(Node::Symbol(format!("{IMPLICIT_TRAIT_PREFIX}{name}")), Op::Colon, requirements);
-			traits.push(Node::List(vec![Node::Symbol(TRAIT_KEYWORD.to_string()), declaration], Bracket::None, Separator::Space));
+			traits.push(Node::List(vec![symbol(TRAIT_KEYWORD), declaration], Bracket::None, Separator::Space));
 		}
 	}
 	traits
@@ -2435,7 +2435,7 @@ fn split_class(node: &Node, changing: &mut Changing) -> Option<(Node, Vec<Node>)
 	let members = Members { class: &class, fields: &field_names, methods: &siblings, statics: &static_names };
 	let mut functions: Vec<Node> = statics.iter().flat_map(|member| static_definitions(&members, member)).collect();
 	// the constructor gives the instance it was handed, its fields set
-	let gives_itself = |body: &Node| Node::List(vec![body.clone(), Node::Symbol(RECEIVER.to_string())], Bracket::None, Separator::Semicolon);
+	let gives_itself = |body: &Node| Node::List(vec![body.clone(), symbol(RECEIVER)], Bracket::None, Separator::Semicolon);
 	functions.extend(constructors.iter().filter_map(constructor_parts).map(|(parameters, body)| function(&members, &constructor_name(&class), parameters, gives_itself(body)).0));
 	functions.extend(methods.iter().map(|method| {
 		let (method_name, parameters, method_body) = method_parts(method).expect("partitioned");
@@ -2463,11 +2463,11 @@ fn static_definitions(members: &Members, member: &Node) -> Vec<Node> {
 	let Some(name) = field_name(member) else { return vec![] };
 	let Node::Key(_, Op::Assign, value) = member.drop_meta() else { return vec![] };
 	let global = Node::Symbol(static_name(class, &name));
-	let receiver = key(Node::Symbol(RECEIVER.to_string()), Op::Colon, Node::Symbol(class.to_string()));
+	let receiver = key(symbol(RECEIVER), Op::Colon, symbol(class));
 	let getter_head = call(&name, vec![receiver]);
 	let declaration = Node::Key(Box::new(global.clone()), Op::Assign, value.clone());
 	// `global c·n = 0`: methods may change it (`n += 1`)
-	let declaration = key(Node::Symbol(GLOBAL_KEYWORD.to_string()), Op::Colon, declaration);
+	let declaration = key(symbol(GLOBAL_KEYWORD), Op::Colon, declaration);
 	vec![declaration, key(getter_head, Op::Define, global)]
 }
 
@@ -2523,7 +2523,7 @@ fn function(members: &Members, method: &str, parameters: Vec<Node>, body: Node) 
 	// the holes of `"#\(n)"` as code first, so a field in one is read from self too
 	let body = crate::interpolation::lower_program(body);
 	let body = receiver_reads(body, &readable);
-	let receiver = Node::Symbol(RECEIVER.to_string());
+	let receiver = symbol(RECEIVER);
 	let changes = match changes_fields_of(&body, RECEIVER) {
 		false => Change::None,
 		true if gives_value(&body) => Change::GivingValue,
@@ -2544,8 +2544,8 @@ fn function(members: &Members, method: &str, parameters: Vec<Node>, body: Node) 
 			Node::List(statements, Bracket::None, Separator::Semicolon)
 		}
 	};
-	let receiver = key(Node::Symbol(RECEIVER.to_string()), Op::Colon, Node::Symbol(class.to_string()));
-	let head = Node::List([vec![Node::Symbol(method.to_string()), receiver], parameters].concat(), Bracket::Round, Separator::None);
+	let receiver = key(symbol(RECEIVER), Op::Colon, symbol(class));
+	let head = Node::List([vec![symbol(method), receiver], parameters].concat(), Bracket::Round, Separator::None);
 	(key(head, Op::Define, body), changes)
 }
 
@@ -2607,7 +2607,7 @@ struct Readable<'a> {
 /// The body with each field name and getter read from self, each call of a method of the class a call on self (as in
 /// Java), `this` as self; the member name right of a dot stays as it is
 fn receiver_reads(node: Node, readable: &Readable) -> Node {
-	let on_receiver = |member: Node| key(Node::Symbol(RECEIVER.to_string()), Op::Dot, member);
+	let on_receiver = |member: Node| key(symbol(RECEIVER), Op::Dot, member);
 	let is_call_of = |items: &[Node], names: &[&String]| matches!(items.first().map(Node::drop_meta), Some(Node::Symbol(name)) if names.contains(&name));
 	match node {
 		Node::Symbol(name) if readable.statics.contains(&&name) => Node::Symbol(static_name(readable.class, &name)),
@@ -2617,7 +2617,7 @@ fn receiver_reads(node: Node, readable: &Readable) -> Node {
 			Node::List(std::iter::once(function).chain(arguments).collect(), Bracket::Round, separator)
 		}
 		Node::Symbol(name) if readable.fields.contains(&&name) => on_receiver(Node::Symbol(name)),
-		Node::Symbol(name) if RECEIVER_ALIASES.contains(&name.as_str()) => Node::Symbol(RECEIVER.to_string()),
+		Node::Symbol(name) if RECEIVER_ALIASES.contains(&name.as_str()) => symbol(RECEIVER),
 		Node::List(items, Bracket::Round, separator) if is_call_of(&items, &readable.methods) => {
 			let arguments = items[1..].iter().cloned().map(|argument| receiver_reads(argument, readable));
 			on_receiver(Node::List(std::iter::once(items[0].clone()).chain(arguments).collect(), Bracket::Round, separator))

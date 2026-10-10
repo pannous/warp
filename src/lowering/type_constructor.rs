@@ -5,7 +5,7 @@
 use super::nodes::key;
 use crate::analyzer::{builtin_type_kind, call_name, collect_all_types, list_element_type, literal_misfit, misfit_item};
 use crate::diagnostic::Diagnostic;
-use crate::node::{Bracket, Node, Separator};
+use crate::node::{symbol, Bracket, Node, Separator};
 use crate::operators::Op;
 use crate::type_kinds::{Kind, TypeDef, TypeRegistry};
 
@@ -166,7 +166,7 @@ fn instance(items: &[Node], bracket: &Bracket, separator: &Separator, classes: &
 		};
 		return Some(Diagnostic::at(&items[0], message).into_error());
 	}
-	let entry = |field: &str, value: &Node| key(Node::Symbol(field.to_string()), Op::Colon, value.clone());
+	let entry = |field: &str, value: &Node| key(symbol(field), Op::Colon, value.clone());
 	let given: Vec<Node> = type_def.fields.iter().zip(&positional).map(|(field, value)| entry(&field.name, value))
 		.chain(named.into_iter().cloned())
 		.collect();
@@ -203,7 +203,7 @@ pub(crate) fn entry_value(entry: &Node) -> &Node {
 /// The instance of the type `name` with these field entries
 pub fn instance_node(name: &str, entries: Vec<Node>) -> Node {
 	let body = Node::List(entries, Bracket::Curly, Separator::Space);
-	Node::meta(key(Node::Symbol(name.to_string()), Op::Colon, body), Node::data(Instance))
+	Node::meta(key(symbol(name), Op::Colon, body), Node::data(Instance))
 }
 
 fn entries(fields: &Node) -> Vec<Node> {

@@ -5,7 +5,7 @@
 //! Values cross as JSON; the result is any Node.
 
 use super::nodes::{call, key};
-use crate::node::{Bracket, Node, Separator};
+use crate::node::{symbol, text, Bracket, Node, Separator};
 use crate::operators::Op;
 use std::collections::HashMap;
 use std::path::Path;
@@ -64,7 +64,7 @@ fn component_uses(node: Node) -> Node {
 	};
 	match (module, node) {
 		(Some(Err(problem)), _) => crate::node::error(&problem),
-		(Some(Ok(module)), Node::List(_, bracket, separator)) => Node::List(vec![Node::Symbol(USE_WORD.to_string()), Node::Symbol(COMPONENT_RUNTIME.to_string()), module], bracket, separator),
+		(Some(Ok(module)), Node::List(_, bracket, separator)) => Node::List(vec![symbol(USE_WORD), symbol(COMPONENT_RUNTIME), module], bracket, separator),
 		(_, node) => node.map_children(component_uses),
 	}
 }
@@ -270,7 +270,6 @@ fn operator_member(op: &Op) -> Option<&'static str> {
 }
 
 fn foreign_call(runtime: &str, module: Node, member: &str, is_call: bool, arguments: Node) -> Node {
-	let text = |text: &str| Node::Text(text.to_string());
 	call(crate::host::FOREIGN_CALL, vec![text(runtime), module, text(member), Node::int(i64::from(is_call)), arguments])
 }
 
@@ -290,7 +289,7 @@ fn javascript_member(node: &Node) -> Option<(&Node, &str, bool, &Node)> {
 
 /// `operator.member(arguments…)` in `runtime`
 fn operator_call(runtime: &str, member: &str, arguments: Vec<Node>) -> Node {
-	foreign_call(runtime, Node::Text(OPERATOR_MODULE.to_string()), member, true, Node::List(arguments, Bracket::Square, Separator::Space))
+	foreign_call(runtime, text(OPERATOR_MODULE), member, true, Node::List(arguments, Bracket::Square, Separator::Space))
 }
 
 impl Foreign<'_> {

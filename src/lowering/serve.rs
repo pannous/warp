@@ -7,7 +7,7 @@
 //! for a server function's value (without_serving).
 
 use super::nodes::{call, key};
-use crate::node::{Bracket, Node, Separator};
+use crate::node::{symbol, text, Bracket, Node, Separator};
 use crate::operators::Op;
 use std::collections::HashSet;
 
@@ -220,7 +220,7 @@ fn table_variable(statement: &Node) -> Option<(String, Node)> {
 			Some((name, source.drop_meta().clone()))
 		}
 		Node::List(..) => {
-			let table = key(Node::Symbol(DATABASE_WORDS[0].to_string()), Op::Dot, Node::Symbol(name.clone()));
+			let table = key(symbol(DATABASE_WORDS[0]), Op::Dot, Node::Symbol(name.clone()));
 			Some((name, table))
 		}
 		_ => None,
@@ -359,14 +359,14 @@ fn data_read(node: Node, pattern: &str, reads_server_data: &dyn Fn(&Node) -> boo
 		return node.map_children(|child| data_read(child, pattern, reads_server_data, functions));
 	}
 	let name = format!("{ROUTE_DATA_PREFIX}{}", functions.len());
-	let path = Node::Symbol(PATH_PARAMETER.to_string());
+	let path = symbol(PATH_PARAMETER);
 	let page_path = crate::warp_parser::parse(PAGE_PATH_CALL);
 	let body: Vec<Node> = crate::routes::route_body(pattern, &[node]).into_iter().map(|item| replaced(item, &page_path, &path)).collect();
 	let guard = crate::warp_parser::parse(&format!("if not route_matches({pattern:?}, {PATH_PARAMETER}) {{ return ø }}"));
-	let head = call(&name.clone(), vec![key(path, Op::Colon, Node::Symbol("text".to_string()))]);
+	let head = call(&name.clone(), vec![key(path, Op::Colon, symbol("text"))]);
 	let definition = key(head, Op::Define, Node::List([vec![guard], body].concat(), Bracket::Curly, Separator::Newline));
-	functions.push(Node::List(vec![Node::Symbol(SERVER_WORD.to_string()), definition], Bracket::None, Separator::Space));
-	call(&name, vec![Node::Symbol(PAGE_PATH.to_string())])
+	functions.push(Node::List(vec![symbol(SERVER_WORD), definition], Bracket::None, Separator::Space));
+	call(&name, vec![symbol(PAGE_PATH)])
 }
 
 /// `h1{…}`, `{…}`: markup or a block, whose items are looked into
@@ -427,7 +427,7 @@ fn with_local_routes(program: Node) -> Node {
 
 /// `route·N(request:any) := body`
 fn route_function(name: &str, body: Node) -> Node {
-	let request = key(Node::Symbol(REQUEST_WORD.to_string()), Op::Colon, Node::Symbol(ANY_TYPE.to_string()));
+	let request = key(symbol(REQUEST_WORD), Op::Colon, symbol(ANY_TYPE));
 	let head = call(name, vec![request]);
 	key(head, Op::Define, body)
 }
@@ -471,7 +471,7 @@ fn asking_the_server(statements: Vec<Node>, servers: &[String]) -> Result<Vec<No
 		let value = if prerendering {
 			call.clone()
 		} else {
-			let fetch = Node::List(vec![Node::Symbol(crate::host::FETCH_WORD.to_string()), rpc_request(&call)], Bracket::None, Separator::Space);
+			let fetch = Node::List(vec![symbol(crate::host::FETCH_WORD), rpc_request(&call)], Bracket::None, Separator::Space);
 			key(fetch, Op::Coalesce, crate::pipeline::server_value(index))
 		};
 		let op = if prerendering { Op::Assign } else { Op::Define };
@@ -566,7 +566,7 @@ fn call_items(call: &Node) -> Vec<Node> {
 		},
 		several => several.to_vec(),
 	};
-	std::iter::once(Node::Symbol(name.to_string())).chain(arguments).collect()
+	std::iter::once(symbol(name)).chain(arguments).collect()
 }
 
 /// `["/rpc/f", [a, b]]`, the request fetch_start POSTs
@@ -635,7 +635,7 @@ fn with_any_parameters(definition: Node) -> Node {
 	let Node::Key(head, Op::Define, body) = definition.drop_meta().clone() else { return definition };
 	let Node::List(items, bracket, separator) = head.drop_meta().clone() else { return definition };
 	let any = |parameter: Node| match parameter.drop_meta() {
-		Node::Symbol(_) => key(parameter, Op::Colon, Node::Symbol(ANY_TYPE.to_string())),
+		Node::Symbol(_) => key(parameter, Op::Colon, symbol(ANY_TYPE)),
 		_ => parameter,
 	};
 	let mut items = items.into_iter();
@@ -680,7 +680,7 @@ fn serving(port: Node, routes: Vec<Route>, server_data: &ServerData, count: &mut
 		*count += 1;
 		let mut entry = vec![Node::Text(method), path, Node::Text(function.clone())];
 		if answers_a_list(&body, &server_data.list_words) {
-			entry.push(Node::Text(LIST_ANSWER.to_string()));
+			entry.push(text(LIST_ANSWER));
 		}
 		statements.push(route_function(&function, reading_tables(body, &server_data.tables)));
 		table.push(Node::List(entry, Bracket::Square, Separator::Colon));

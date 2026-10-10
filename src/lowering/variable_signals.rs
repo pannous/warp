@@ -13,7 +13,7 @@
 
 use super::nodes::{call, key};
 use crate::declarations::{handler_parts, word};
-use crate::node::{Bracket, Node, Separator};
+use crate::node::{symbol, Bracket, Node, Separator};
 use crate::operators::Op;
 use std::collections::{HashMap, HashSet};
 
@@ -108,9 +108,9 @@ impl Listener {
 /// `whenever cond {body}` runs the body when cond becomes true (P156): `was = held; held = cond; if held and not was
 /// {body}`, the two flags remembered between the checks
 pub(crate) fn edge_check(held: &str, was: &str, condition: Node, body: Node) -> Node {
-	let not_before = key(Node::Empty, Op::Not, Node::Symbol(was.to_string()));
-	let became_true = key(Node::Symbol(held.to_string()), Op::And, not_before);
-	let parts = vec![assign(was, Node::Symbol(held.to_string())), assign(held, condition), if_then(became_true, block(vec![body]))];
+	let not_before = key(Node::Empty, Op::Not, symbol(was));
+	let became_true = key(symbol(held), Op::And, not_before);
+	let parts = vec![assign(was, symbol(held)), assign(held, condition), if_then(became_true, block(vec![body]))];
 	Node::List(parts, Bracket::Round, Separator::Semicolon)
 }
 
@@ -430,7 +430,7 @@ impl Signals {
 	/// A body reading `old` (made by with_old): `change_old_0 = last` first, the body reading it
 	fn remembering_old(&mut self, with_old: impl Fn(&Node) -> Node, last: &str) -> (Vec<Node>, Node) {
 		let old = self.fresh_name(OLD_PREFIX);
-		(vec![assign(&old, Node::Symbol(last.to_string()))], with_old(&Node::Symbol(old)))
+		(vec![assign(&old, symbol(last))], with_old(&Node::Symbol(old)))
 	}
 
 	/// `after tested: body`, `before test {body}`: test must be a function of the program
@@ -501,7 +501,7 @@ fn with_watched_expressions(node: Node, count: &mut usize) -> Node {
 			let name = Node::Symbol(format!("{WATCHED_PREFIX}{count}"));
 			*count += 1;
 			let derived = key(name.clone(), Op::Define, expression);
-			vec![derived, Node::List(vec![Node::Symbol(ON_WORD.to_string()), listener_word, name, body], Bracket::None, Separator::Space)]
+			vec![derived, Node::List(vec![symbol(ON_WORD), listener_word, name, body], Bracket::None, Separator::Space)]
 		}
 		None => vec![statement.clone()],
 	});
@@ -801,5 +801,5 @@ pub(crate) fn block(statements: Vec<Node>) -> Node {
 }
 
 pub(crate) fn assign(name: &str, value: Node) -> Node {
-	key(Node::Symbol(name.to_string()), Op::Assign, value)
+	key(symbol(name), Op::Assign, value)
 }

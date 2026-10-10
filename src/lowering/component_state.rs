@@ -14,7 +14,7 @@
 use super::nodes::{call, key};
 use crate::element_events::{element_items, handler_at, has_element_handler, HANDLER_ATTRIBUTE_PREFIX};
 use crate::law::substitute;
-use crate::node::{Bracket, Node, Separator};
+use crate::node::{symbol, Bracket, Node, Separator};
 use crate::operators::Op;
 use crate::warp_parser::parse;
 use std::collections::HashMap;
@@ -72,10 +72,10 @@ pub fn lower(program: Node) -> Node {
 	let resets = components.iter().map(|component| filled(RESET, &[("COUNTER", &component.counter)]));
 	let rendered = crate::variable_signals::assign(SHOWN, shown);
 	let after = components.iter().flat_map(Component::after_render);
-	let render_body = resets.chain([rendered]).chain(after).chain([Node::Symbol(SHOWN.into())]).collect();
-	let render = key(Node::Symbol(RENDER.into()), Op::Define, Node::List(render_body, Bracket::Curly, Separator::Semicolon));
+	let render_body = resets.chain([rendered]).chain(after).chain([symbol(SHOWN)]).collect();
+	let render = key(symbol(RENDER), Op::Define, Node::List(render_body, Bracket::Curly, Separator::Semicolon));
 	let cleanups = components.iter().filter_map(Component::cleanup_function);
-	Node::List(declarations.into_iter().chain(cleanups).chain(lowered).chain([render, Node::Symbol(RENDER.into())]).collect(), bracket, separator)
+	Node::List(declarations.into_iter().chain(cleanups).chain(lowered).chain([render, symbol(RENDER)]).collect(), bracket, separator)
 }
 
 /// `on mount {…}` or `on cleanup {…}` among a component's statements: the word and the body
@@ -135,7 +135,7 @@ fn scoped_component(statement: &Node) -> Option<Node> {
 	let Node::Key(head, op @ (Op::Define | Op::Assign), body) = crate::declarations::lower_c_functions(statement.clone()).drop_meta().clone() else { return None };
 	let Node::List(parts, Bracket::Round, _) = head.drop_meta() else { return None };
 	let name = parts.first()?.name();
-	let attribute = key(Node::Symbol(crate::markup::SCOPE_ATTRIBUTE.into()), Op::Colon, Node::Text(name));
+	let attribute = key(symbol(crate::markup::SCOPE_ATTRIBUTE), Op::Colon, Node::Text(name));
 	let body = match *body {
 		Node::List(mut items, Bracket::Curly, separator) => {
 			let root = with_attribute(items.pop()?, attribute)?;
@@ -184,7 +184,7 @@ fn handler_symbols(statements: &[Node]) -> Vec<String> {
 
 /// A template with its placeholders filled by names
 fn filled(template: &str, names: &[(&str, &str)]) -> Node {
-	with(template, names.iter().map(|(placeholder, name)| (*placeholder, Node::Symbol(name.to_string()))).collect())
+	with(template, names.iter().map(|(placeholder, name)| (*placeholder, symbol(name))).collect())
 }
 
 fn with(template: &str, bindings: Vec<(&str, Node)>) -> Node {

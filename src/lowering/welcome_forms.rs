@@ -8,7 +8,7 @@
 //! - JS destructured parameters `({a, b}) => a + b`: the object taken apart into its fields
 
 use super::nodes::{call, is_type_word, is_word, key};
-use crate::node::{Bracket, Node, Separator};
+use crate::node::{symbol, Bracket, Node, Separator};
 use crate::operators::Op;
 use std::collections::HashSet;
 
@@ -261,7 +261,7 @@ fn colon_cases(block: &Node) -> Node {
 		}
 		Node::List(words, _, _) if matches!(words.as_slice(), [word, _] if is_word(word, CASE_WORD)) => words[1].clone(),
 		Node::Key(pattern, Op::FatArrow, body) => {
-			let pattern = if is_word(pattern, WILDCARD) { Node::Symbol(DEFAULT_CASE.to_string()) } else { pattern.as_ref().clone() };
+			let pattern = if is_word(pattern, WILDCARD) { symbol(DEFAULT_CASE) } else { pattern.as_ref().clone() };
 			Node::Key(Box::new(pattern), Op::Colon, body.clone())
 		}
 		_ => case.clone(),
@@ -319,7 +319,7 @@ fn when_listener(items: &[Node]) -> Option<Vec<Node>> {
 		crate::normalize::set_position_of(word);
 		crate::diagnostic::educate_once(WHEN_CONDITION_TOPIC, WHEN_WORD, WHENEVER_WORD, "it reacts to every later write that makes the condition true; write if for a one-time check now");
 	}
-	Some(vec![Node::Symbol(listener.to_string()), subject.clone(), body.clone()])
+	Some(vec![symbol(listener), subject.clone(), body.clone()])
 }
 
 /// The patterns and value of a `when` arm: `5 -> 50`, `1, 2 -> 10`, `is Circle -> 3`, `else -> 0`
@@ -529,7 +529,7 @@ fn foreign_iteration(mut items: Vec<Node>) -> Vec<Node> {
 	}
 	crate::normalize::set_position_of(&items[0]);
 	crate::normalize::hint(&format!("{word}("), &format!("{warp_word}("), &format!("warp's word for {source}"));
-	items[0] = Node::Symbol(warp_word.to_string());
+	items[0] = symbol(warp_word);
 	if function_first && items.len() == 3 {
 		items.swap(1, 2);
 	}
@@ -606,7 +606,7 @@ pub(crate) fn module_calls(node: Node, modules: &[&str]) -> Node {
 			};
 			if let Some((_, _, own_word)) = QUALIFIED_WORDS.iter().find(|(owner, written, _)| is_word(&module, owner) && *written == word) {
 				let Node::List(mut items, bracket, separator) = call.drop_meta().clone() else { unreachable!("guarded") };
-				items[0] = Node::Symbol(own_word.to_string());
+				items[0] = symbol(own_word);
 				return Node::List(items.into_iter().map(|item| module_calls(item, modules)).collect(), bracket, separator);
 			}
 			crate::normalize::hint(&format!("{}.{word}(", module.name()), &format!("{word}("), "warp calls a module's word by its name");
@@ -658,7 +658,7 @@ fn module_qualified_iteration(mut items: Vec<Node>) -> Vec<Node> {
 	}
 	crate::normalize::set_position_of(&items[0]);
 	crate::normalize::hint(&format!("{}.{iteration}", module.serialize()), iteration, "warp's word for the module function");
-	items[0] = Node::Symbol(iteration.to_string());
+	items[0] = symbol(iteration);
 	items
 }
 
