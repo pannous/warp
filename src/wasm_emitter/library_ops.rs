@@ -228,6 +228,7 @@ impl WasmGcEmitter {
 			if let Some(table) = witness {
 				s.emit_instance_order(f, table, kinds, first, second);
 			}
+			s.emit_instant_order(f, kinds, first, second);
 			// numbers only from here
 			for kind in kinds {
 				is_kind(f, kind, Kind::Int);
@@ -400,6 +401,7 @@ impl WasmGcEmitter {
 		self.emit_exact_text();
 		self.emit_float_text(); // after int_to_decimal, which it calls
 		self.emit_uncertain_text(); // after float_text and text_concat, which it calls
+		self.emit_instant_text(); // after int_to_decimal, which it calls
 		for (name, nested) in joinings {
 			self.emit_joining(name, nested);
 		}
@@ -587,6 +589,12 @@ impl WasmGcEmitter {
 					is_kind(f, Kind::Uncertain);
 					Self::emit_list(f, &[I::If(BlockType::Empty), I::LocalGet(element), I::RefAsNonNull]);
 					s.call(f, super::uncertain::UNCERTAIN_TEXT);
+					Self::emit_list(f, &[I::LocalSet(element), I::End]);
+				}
+				if s.should_emit_function(super::times::INSTANT_TEXT) {
+					is_kind(f, Kind::Time);
+					Self::emit_list(f, &[I::If(BlockType::Empty), I::LocalGet(element), I::RefAsNonNull]);
+					s.call(f, super::times::INSTANT_TEXT);
 					Self::emit_list(f, &[I::LocalSet(element), I::End]);
 				}
 				is_kind(f, Kind::Float);
