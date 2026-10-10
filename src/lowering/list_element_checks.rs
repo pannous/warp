@@ -6,6 +6,7 @@
 //! b's class (`b = bag(…)`), else guarded by each class with a list field of that name, `if (b is bag) and not (v is text)`.
 //! The check is a statement before the store, so the store keeps its form (a typed int list stays an array).
 
+use super::nodes::{assign, key};
 use crate::analyzer::{added_items, appended_items, builtin_type_kind, computed_literal_kind, declaring_name_and_type, indexed_list, list_element_type, of_type_declaration};
 use crate::library_words::substitute;
 use crate::node::{Bracket, Node, Separator};
@@ -133,7 +134,7 @@ impl ElementChecks {
 				match value {
 					Node::Key(list, Op::Add, appended) if !self.holds_checked_items(&list, stored) => {
 						let held = self.temporary();
-						checks.push(assignment(held.clone(), *list));
+						checks.push(assign(held.clone(), *list));
 						checks.extend(tests.iter().map(|test| each_item_check(&held, test)));
 						Node::Key(Box::new(held), Op::Add, appended)
 					}
@@ -143,12 +144,12 @@ impl ElementChecks {
 			None if matches!(value.drop_meta(), Node::Empty) || checked_at_compile_time(&value, tests) => value,
 			None => {
 				let list = self.temporary();
-				checks.push(assignment(list.clone(), value));
+				checks.push(assign(list.clone(), value));
 				checks.extend(tests.iter().map(|test| each_item_check(&list, test)));
 				list
 			}
 		};
-		self.with_checks(checks, Node::Key(Box::new(target), op, Box::new(value)))
+		self.with_checks(checks, key(target, op, value))
 	}
 
 	/// `names.add(v)`
@@ -172,7 +173,7 @@ impl ElementChecks {
 				Node::Symbol(_) => item,
 				_ => {
 					let temporary = self.temporary();
-					checks.push(assignment(temporary.clone(), item));
+					checks.push(assign(temporary.clone(), item));
 					temporary
 				}
 			};
@@ -254,10 +255,6 @@ fn each_item_check(list: &Node, test: &ElementTest) -> Node {
 	let template = substitute(template, CHECK_PLACEHOLDER, &test.check());
 	let item = Node::Symbol(format!("{}·item", list.name()));
 	substitute(substitute(template, LIST_PLACEHOLDER, list), ITEM_PLACEHOLDER, &item)
-}
-
-fn assignment(target: Node, value: Node) -> Node {
-	Node::Key(Box::new(target), Op::Assign, Box::new(value))
 }
 
 

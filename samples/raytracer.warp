@@ -1,3 +1,4 @@
+#!/usr/bin/env warp
 // Simple ray tracer
 // Renders spheres with lighting
 

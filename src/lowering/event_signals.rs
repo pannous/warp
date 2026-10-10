@@ -8,15 +8,16 @@
 //! event (web/playground/worker.js); natively nothing does, which a warning says. System events (`on interrupt`) are
 //! kept the same way: the runtime calls their handlers (notes/system_signals.md).
 
+use super::words::{COUNT_WORD, FROM_WORD, OF_WORD, ON_WORD};
+use super::nodes::{block, call, children_rewritten, if_then, key};
 use crate::declarations::{handler_parts, word};
-use crate::node::{Bracket, Node, Separator};
+use crate::node::{symbol, Bracket, Node, Separator};
 use crate::operators::Op;
 use crate::signal_values::ungrouped_reflection;
-use crate::variable_signals::{assign, block, if_then, symbols};
+use crate::variable_signals::{assign, symbols};
 use crate::warp_parser::parse;
 use std::collections::{HashMap, HashSet};
 
-const ON_WORD: &str = "on";
 /// `once alarm {…}`: the handler runs at the first raise only (Node's emitter.once, DOM `{once: true}`)
 const ONCE_WORD: &str = "once";
 /// `once_fired_0`: whether the once handler ran (a plain word: `global once_fired_0` is parsed)
@@ -24,12 +25,9 @@ const FIRED_PREFIX: &str = "once_fired_";
 /// `h_listening`: whether the named handler h still listens (plain words: `global h_listening` is parsed)
 const LISTENING_SUFFIX: &str = "_listening";
 const REMOVE_WORD: &str = "remove";
-const FROM_WORD: &str = "from";
 const LISTENERS_WORD: &str = "listeners";
-const OF_WORD: &str = "of";
 /// `on error of f {…}` catches the errors of f's calls
 const ERROR_WORD: &str = "error";
-const COUNT_WORD: &str = "count";
 const CLEAR_WORD: &str = "clear";
 /// `alarm_handler_3`: the flag name of an unnamed handler of a cleared event
 const HANDLER_SUFFIX: &str = "_handler_";
@@ -251,7 +249,7 @@ fn defines_timer(statement: &Node) -> bool {
 fn run_once(body: Node, flags: &mut Vec<(String, Node)>) -> Node {
 	let flag = format!("{FIRED_PREFIX}{}", flags.len());
 	flags.push((flag.clone(), Node::False));
-	let not_fired = Node::Key(Box::new(Node::Symbol(flag.clone())), Op::Eq, Box::new(Node::False));
+	let not_fired = key(Node::Symbol(flag.clone()), Op::Eq, Node::False);
 	if_then(not_fired, block(vec![assign(&flag, Node::True), body]))
 }
 
@@ -282,12 +280,12 @@ fn subscriptions(node: Node, raised: &HashSet<String>, subscribed: &mut Vec<Stri
 			crate::diagnostic::advise_once(LOOP_SUBSCRIPTION_TOPIC, &format!("on {event} {{…}}"), "on … before the loop", &reason);
 		}
 		let list = Node::Symbol(subscribers_name(&event));
-		let listener = Node::Key(Box::new(Node::Symbol(EVENT_WORD.to_string())), Op::FatArrow, Box::new(body));
-		let added = Node::Key(Box::new(list.clone()), Op::Add, Box::new(Node::List(vec![listener], Bracket::Square, Separator::None)));
+		let listener = key(symbol(EVENT_WORD), Op::FatArrow, body);
+		let added = key(list.clone(), Op::Add, Node::List(vec![listener], Bracket::Square, Separator::None));
 		if !subscribed.contains(&event) {
 			subscribed.push(event);
 		}
-		return Node::Key(Box::new(list), Op::Assign, Box::new(added));
+		return key(list, Op::Assign, added);
 	}
 	let in_loop = in_loop || is_loop(&node);
 	match node.drop_meta() {
@@ -378,9 +376,9 @@ impl Listeners {
 			return crate::node::error(&format!("{name} is no named listener of {event}"));
 		}
 		// evaluated once: `(listeners of alarm)#1` names another handler after the first removal
-		let place = Node::Symbol(REMOVED_PLACE.to_string());
+		let place = symbol(REMOVED_PLACE);
 		let at_place = |(index, flag): (usize, String)| {
-			let condition = Node::Key(Box::new(place.clone()), Op::Eq, Box::new(Node::int(index as i64 + 1)));
+			let condition = key(place.clone(), Op::Eq, Node::int(index as i64 + 1));
 			if_then(condition, block(vec![assign(&flag, Node::False)]))
 		};
 		let removal = std::iter::once(assign(REMOVED_PLACE, reflected(removed.clone(), self)));
@@ -478,7 +476,7 @@ fn function_error_handler(statement: &Node) -> Option<(String, Node)> {
 
 /// The definition with its body `try body else handler`: `f(x) := body`, `def f(x): body`, `fun f(x) {body}`
 fn guarded_definition(definition: &Node, handler: &Node) -> Option<Node> {
-	let guarded = |body: &Node| Node::List(vec![Node::Symbol(crate::warp_parser::TRY_MARKER.to_string()), body.clone(), handler.clone()], Bracket::Round, Separator::Space);
+	let guarded = |body: &Node| Node::List(vec![symbol(crate::warp_parser::TRY_MARKER), body.clone(), handler.clone()], Bracket::Round, Separator::Space);
 	match definition.drop_meta() {
 		Node::Key(head, op @ (Op::Define | Op::Assign | Op::Colon), body) => Some(Node::Key(head.clone(), *op, Box::new(guarded(body)))),
 		Node::List(items, bracket, separator) if items.len() >= 2 => {
@@ -623,9 +621,9 @@ pub(crate) fn function_with_globals(name: &str, takes_event: bool, bodies: &[Nod
 	let statements: Vec<Node> = global_declarations(bodies, main_variables, &[EVENT_WORD]).into_iter().chain(bodies.iter().cloned()).collect();
 	let template = if takes_event { FUNCTION_TEMPLATE } else { PARAMETERLESS_TEMPLATE };
 	let Node::Key(head, op, _) = parse(template).drop_meta().clone() else { unreachable!("the template is a definition") };
-	let name = Node::Symbol(name.to_string());
+	let name = symbol(name);
 	let head = crate::law::substitute(&head, &HashMap::from([(TEMPLATE_NAME.to_string(), name)]));
-	Node::Key(Box::new(head), op, Box::new(Node::List(statements, Bracket::Curly, Separator::Semicolon)))
+	key(head, op, Node::List(statements, Bracket::Curly, Separator::Semicolon))
 }
 
 /// A program serving (serve_routes, lowering/serve.rs) serves its page too: the page raises its events
@@ -653,7 +651,7 @@ pub(crate) fn statements_of(block: &Node) -> Vec<Node> {
 
 /// `global name`, built rather than parsed: a generated name (`users·loading`) parses as a product
 pub(crate) fn global_declaration(name: &str) -> Node {
-	crate::law::substitute(&parse(&format!("global {TEMPLATE_NAME}")), &HashMap::from([(TEMPLATE_NAME.to_string(), Node::Symbol(name.to_string()))]))
+	crate::law::substitute(&parse(&format!("global {TEMPLATE_NAME}")), &HashMap::from([(TEMPLATE_NAME.to_string(), symbol(name))]))
 }
 
 /// Each handler gets the event as raised (the DOM hands one mutable event object down the listeners): when a body
@@ -678,7 +676,7 @@ fn each_its_event(bodies: &[Node]) -> Vec<Node> {
 		return bodies.to_vec();
 	}
 	// an event is an object, so a reference (P200b): kept and handed on as copies
-	let copy_of = |name: &str| crate::library_words::copy_call(Node::Symbol(name.to_string()), Node::False);
+	let copy_of = |name: &str| crate::library_words::copy_call(symbol(name), Node::False);
 	let restored = |index: usize| (index > 0 && bodies[..index].iter().any(changes_event)).then(|| assign(EVENT_WORD, copy_of(RAISED_EVENT)));
 	let kept = assign(RAISED_EVENT, copy_of(EVENT_WORD));
 	std::iter::once(kept).chain(bodies.iter().enumerate().flat_map(|(index, body)| restored(index).into_iter().chain([body.clone()]))).collect()
@@ -742,7 +740,7 @@ fn emits_as_calls(node: Node, handled: &HashMap<String, Vec<Node>>, verbs: &[Str
 		let call = match handled.get(&name) {
 			Some(bodies) => {
 				let arguments = if reads_event(bodies) { vec![data] } else { vec![] };
-				Node::List([vec![Node::Symbol(handler_function_name(&name))], arguments].concat(), Bracket::Round, Separator::None)
+				call(&handler_function_name(&name), arguments)
 			}
 			None => {
 				// P202: an emit no handler anywhere receives does nothing, with a got-it note
@@ -757,12 +755,7 @@ fn emits_as_calls(node: Node, handled: &HashMap<String, Vec<Node>>, verbs: &[Str
 		let braced = matches!(node.drop_meta(), Node::List(_, Bracket::Curly, _));
 		return if braced { Node::List(vec![call], Bracket::Curly, Separator::Semicolon) } else { call };
 	}
-	match node {
-		Node::List(items, bracket, separator) => Node::List(items.into_iter().map(|item| emits_as_calls(item, handled, verbs, block_handled)).collect(), bracket, separator),
-		Node::Key(left, op, right) => Node::Key(Box::new(emits_as_calls(*left, handled, verbs, block_handled)), op, Box::new(emits_as_calls(*right, handled, verbs, block_handled))),
-		Node::Meta { node, data } => Node::Meta { node: Box::new(emits_as_calls(*node, handled, verbs, block_handled)), data },
-		other => other,
-	}
+	children_rewritten(node, |child| emits_as_calls(child, handled, verbs, block_handled))
 }
 
 /// The variables the main level assigns (`n = 0`, `n += 1`, `n: int = 0`)

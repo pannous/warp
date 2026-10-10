@@ -114,8 +114,7 @@ impl WasmGcEmitter {
 			self.emit_node_instructions(func, &then_value);
 			func.instruction(&I::Else);
 			self.emit_node_instructions(func, else_value.as_ref().unwrap_or(&Node::Empty));
-			func.instruction(&I::End);
-			func.instruction(&I::RefAsNonNull);
+			Self::emit_list(func, &[I::End, I::RefAsNonNull]);
 			return;
 		}
 		// a float branch (`if c then {x} else {0}` of a float x): both branches as floats, the value its Float node
@@ -182,10 +181,7 @@ impl WasmGcEmitter {
 		let ran_local = self.next_temp_local;
 		self.next_temp_local += 1;
 
-		func.instruction(&I::I64Const(0));
-		func.instruction(&I::LocalSet(result_local));
-		func.instruction(&I::I64Const(0));
-		func.instruction(&I::LocalSet(ran_local));
+		Self::emit_list(func, &[I::I64Const(0), I::LocalSet(result_local), I::I64Const(0), I::LocalSet(ran_local)]);
 
 		func.instruction(&I::Block(BlockType::Empty));
 		let break_frame = loop_control::open_control_frames(func);
@@ -200,11 +196,9 @@ impl WasmGcEmitter {
 		}
 
 		self.emit_condition(func, condition, Self::emit_block_value);
-		func.instruction(&I::I32Eqz);
-		func.instruction(&I::BrIf(1));
+		Self::emit_list(func, &[I::I32Eqz, I::BrIf(1)]);
 
-		func.instruction(&I::I64Const(1));
-		func.instruction(&I::LocalSet(ran_local));
+		Self::emit_list(func, &[I::I64Const(1), I::LocalSet(ran_local)]);
 		let (statements, step) = loop_control::split_step(body);
 		// a body ending in a text or list: that value is the loop's (P55)
 		let value = if wrap_result && self.ends_in_reference(&statements) { self.loop_value(&statements) } else { LoopValue::Number };
@@ -231,18 +225,14 @@ impl WasmGcEmitter {
 		}
 		func.instruction(&I::Br(0));
 
-		func.instruction(&I::End);
-		func.instruction(&I::End);
+		Self::emit_list(func, &[I::End, I::End]);
 
 		if wrap_result {
 			// the value of a loop is its last body value; a loop whose body never ran is empty
-			func.instruction(&I::LocalGet(ran_local));
-			func.instruction(&I::I32WrapI64);
-			func.instruction(&I::If(BlockType::Result(Ref(self.node_ref(false)))));
+			Self::emit_list(func, &[I::LocalGet(ran_local), I::I32WrapI64, I::If(BlockType::Result(Ref(self.node_ref(false))))]);
 			match value {
 				LoopValue::Held(local) => {
-					func.instruction(&I::LocalGet(local));
-					func.instruction(&I::RefAsNonNull);
+					Self::emit_list(func, &[I::LocalGet(local), I::RefAsNonNull]);
 					self.loop_values.depth -= 1;
 				}
 				LoopValue::Updated(variable) => self.emit_node_instructions(func, &variable),
@@ -292,7 +282,7 @@ impl WasmGcEmitter {
 			other => vec![other.clone()],
 		};
 		let kind = self.get_type(body);
-		!body.is_nothing() && (kind.is_ref() && !self.ends_in_number(&statements) || kind == Kind::Codepoint)
+		!body.is_nothing() && !loop_control::ends_in_jump(body) && (kind.is_ref() && !self.ends_in_number(&statements) || kind == Kind::Codepoint)
 	}
 
 	/// Declares the Node locals the loops of `body` hold their values in, after node_scratch; gives the enclosing

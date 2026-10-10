@@ -3,6 +3,7 @@
 //! name wins with a got-it note ("send is a keyword; here it is your variable"); redefining one at the top level is a
 //! loud error. Passes that give a soft keyword its meaning ask `program_names` whether the program took the word.
 
+use super::nodes::is_function_keyword;
 use crate::diagnostic::Diagnostic;
 use crate::node::{Bracket, Node};
 use crate::operators::Op;
@@ -59,7 +60,7 @@ fn defined_name(node: &Node) -> Option<String> {
 	match node.drop_meta() {
 		Node::Key(target, Op::Define | Op::Assign, _) => match target.drop_meta() {
 			Node::Symbol(name) => Some(name.clone()),
-			Node::List(items, Bracket::Round, _) => items.first().and_then(symbol_name),
+			Node::List(items, Bracket::Round, _) => items.first().and_then(Node::symbol_name).map(String::from),
 			_ => None,
 		},
 		// `def ((init ø) {1})`: the name leads the head
@@ -70,16 +71,6 @@ fn defined_name(node: &Node) -> Option<String> {
 	}
 }
 
-fn symbol_name(node: &Node) -> Option<String> {
-	match node.drop_meta() {
-		Node::Symbol(name) => Some(name.clone()),
-		_ => None,
-	}
-}
-
-fn is_function_keyword(node: &Node) -> bool {
-	matches!(node.drop_meta(), Node::Symbol(word) if crate::operators::is_function_keyword(word))
-}
 
 /// The got-it note for each soft keyword the program uses as a local name
 fn note_local_names(program: &Node) {
@@ -97,8 +88,8 @@ fn walk_names(node: &Node, found: &mut dyn FnMut(&str, &str)) {
 			match target.drop_meta() {
 				Node::Symbol(name) => found(name, "variable"),
 				Node::List(items, Bracket::Round, _) => {
-					if let Some(name) = items.first().and_then(symbol_name) {
-						found(&name, "function");
+					if let Some(name) = items.first().and_then(Node::symbol_name) {
+						found(name, "function");
 					}
 					items.iter().skip(1).filter_map(parameter_name).for_each(|name| found(&name, "parameter"));
 				}
@@ -116,8 +107,8 @@ fn walk_names(node: &Node, found: &mut dyn FnMut(&str, &str)) {
 		}
 		Node::List(entries, Bracket::Curly, _) => entries.iter().for_each(|entry| {
 			if let Node::Key(key, Op::Colon, _) = entry.drop_meta() {
-				if let Some(name) = symbol_name(key) {
-					found(&name, "field");
+				if let Some(name) = key.symbol_name() {
+					found(name, "field");
 				}
 			}
 			walk_names(entry, found);
@@ -135,7 +126,7 @@ fn walk_names(node: &Node, found: &mut dyn FnMut(&str, &str)) {
 fn parameter_name(parameter: &Node) -> Option<String> {
 	match parameter.drop_meta() {
 		Node::Symbol(name) => Some(name.clone()),
-		Node::Key(name, Op::Colon | Op::Assign, _) => symbol_name(name),
+		Node::Key(name, Op::Colon | Op::Assign, _) => name.symbol_name().map(String::from),
 		_ => None,
 	}
 }

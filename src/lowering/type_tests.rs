@@ -5,10 +5,12 @@
 //! A type word on the right of `is` switches from equality to a type test; `x is y` with a variable stays equality.
 //! `x == int` is no type test (user decision #30): a value never equals a type, so it is false and hints `x is int`.
 
-use crate::analyzer::{extract_user_functions, plural_element_type, type_word_kind};
-use crate::context::Context;
+use super::memoization::{definition_parts, Rebuild};
+use super::words::OF_WORD;
+use super::nodes::{call, is_call_head, key, parameter_name};
+use crate::analyzer::{plural_element_type, type_word_kind};
 use crate::library_words::collect_assigned_names;
-use crate::node::{Bracket, Node, Separator};
+use crate::node::{text, Bracket, Node, Separator};
 use crate::operators::Op;
 use std::collections::HashSet;
 
@@ -25,7 +27,6 @@ const ARTICLES: [&str; 2] = ["a", "an"];
 const LIST_WORD: &str = "list";
 /// `x is pair`: a `key: value` pair
 const PAIR_WORD: &str = "pair";
-const OF_WORD: &str = "of";
 pub const TYPE_WORD: &str = "type";
 
 /// Words that name the same type
@@ -88,8 +89,8 @@ pub fn runtime_kind_mask(spec: &str) -> Option<i64> {
 	Some(kinds.iter().fold(0, |mask, kind| mask | 1 << (*kind as i64)))
 }
 
-/// The program's variables (a name of one is no type in a test) and its declared types (`class friend`: `x is friend`)
-#[derive(Default)]
+/// The variables in scope (a name of one is no type in a test) and the program's declared types (`class friend`: `x is friend`)
+#[derive(Default, Clone)]
 struct Names {
 	variables: HashSet<String>,
 	types: HashSet<String>,
@@ -99,14 +100,48 @@ impl Names {
 	fn contains(&self, name: &str) -> bool {
 		self.variables.contains(name)
 	}
+
+	/// In the body of a function: also its parameters and the names it assigns, which no other function sees
+	fn within(&self, head: &Node, body: &Node) -> Names {
+		let mut inner = self.clone();
+		if let Node::List(items, _, _) = head.drop_meta() {
+			inner.variables.extend(items.iter().skip(1).filter_map(parameter_name));
+		}
+		collect_assigned_names(body, &mut inner.variables);
+		inner
+	}
+}
+
+/// `f(x) := body`, not `x := value`: its head and body
+fn function_definition(node: &Node) -> Option<(Node, Node, Rebuild)> {
+	definition_parts(node).filter(|(head, _, _)| is_call_head(head))
+}
+
+/// The names assigned outside the bodies of functions, which every function sees
+fn collect_outer_assigned_names(node: &Node, names: &mut HashSet<String>) {
+	if function_definition(node).is_some() {
+		return;
+	}
+	match node.drop_meta() {
+		Node::Key(target, Op::Assign | Op::Define, value) => {
+			if let Node::Symbol(name) = target.drop_meta() {
+				names.insert(name.clone());
+			}
+			collect_outer_assigned_names(value, names);
+		}
+		Node::Key(left, _, right) => {
+			collect_outer_assigned_names(left, names);
+			collect_outer_assigned_names(right, names);
+		}
+		Node::List(items, _, _) => items.iter().for_each(|item| collect_outer_assigned_names(item, names)),
+		_ => {}
+	}
 }
 
 pub fn lower(node: Node) -> Node {
-	let mut context = Context::new();
-	extract_user_functions(&mut context, &node);
+	let context = crate::analyzer::function_context(&node);
 	let mut variables: HashSet<String> = context.user_functions.keys().cloned().collect();
-	collect_assigned_names(&node, &mut variables);
-	variables.extend(context.user_functions.values().flat_map(|function| function.params.iter().map(|param| param.name.clone())));
+	collect_outer_assigned_names(&node, &mut variables);
 	let mut registry = crate::type_kinds::TypeRegistry::new();
 	crate::analyzer::collect_all_types(&mut registry, &node);
 	let types = registry.types().iter().map(|definition| definition.name.clone()).collect();
@@ -164,7 +199,7 @@ pub const COMPARED_WITH: &str = "compared with";
 
 pub fn with_compared_text(subject: Node, written: &str) -> Node {
 	match subject.drop_meta() {
-		Node::Symbol(_) => Node::Meta { node: Box::new(subject), data: Box::new(Node::key(COMPARED_WITH, Node::Text(written.to_string()))) },
+		Node::Symbol(_) => Node::Meta { node: Box::new(subject), data: Box::new(Node::key(COMPARED_WITH, text(written))) },
 		_ => subject,
 	}
 }
@@ -197,10 +232,14 @@ fn compared_with_type(subject: Node, word: &Node, spec: String, shadowed: &Names
 }
 
 fn is_type_call(subject: Node, spec: String) -> Node {
-	Node::List(vec![Node::Symbol(IS_TYPE.to_string()), subject, Node::Text(spec)], Bracket::Round, Separator::None)
+	call(IS_TYPE, vec![subject, Node::Text(spec)])
 }
 
 fn expand(node: Node, shadowed: &Names) -> Node {
+	if let Some((head, body, rebuild)) = function_definition(&node) {
+		let inner = shadowed.within(&head, &body);
+		return rebuild(head, expand(body, &inner));
+	}
 	match node {
 		Node::List(items, bracket, separator) => {
 			if let Some(call) = type_of_word(&items, shadowed).or_else(|| spaced_type_test(&items, shadowed)) {
@@ -211,9 +250,9 @@ fn expand(node: Node, shadowed: &Names) -> Node {
 		Node::Key(subject, Op::Eq, right) => match symbol_words(std::slice::from_ref(&*right)).and_then(|words| type_spec(&words, shadowed)) {
 			Some(spec) if is_equality_operand(&right) => compared_with_type(*subject, &right, spec, shadowed),
 			Some(spec) => is_type_call(expand(*subject, shadowed), spec),
-			None => Node::Key(Box::new(expand(*subject, shadowed)), Op::Eq, Box::new(expand(*right, shadowed))),
+			None => key(expand(*subject, shadowed), Op::Eq, expand(*right, shadowed)),
 		},
-		Node::Key(left, op, right) => Node::Key(Box::new(expand(*left, shadowed)), op, Box::new(expand(*right, shadowed))),
+		Node::Key(left, op, right) => key(expand(*left, shadowed), op, expand(*right, shadowed)),
 		Node::Meta { node, data } => Node::Meta { node: Box::new(expand(*node, shadowed)), data },
 		other => other,
 	}
@@ -243,5 +282,5 @@ fn type_of_word(items: &[Node], shadowed: &Names) -> Option<Node> {
 		[single] => single.clone(),
 		many => Node::List(many.to_vec(), Bracket::None, Separator::Space),
 	};
-	Some(Node::List(vec![Node::Symbol(TYPE_WORD.to_string()), argument], Bracket::Round, Separator::None))
+	Some(call(TYPE_WORD, vec![argument]))
 }

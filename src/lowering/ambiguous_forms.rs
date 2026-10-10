@@ -1,8 +1,9 @@
 //! Asks about written forms the analyzer sees whole (notes/welcoming.md): unbracketed list assignments (D12)
 //! and suffix words mixed with infix arithmetic (D9); a trailing percent `10%` is read as `10/100` here too
 
+use super::nodes::{call, is_binding, key};
 use crate::diagnostic::{ask, reading, Ask, Fallback};
-use crate::node::{Bracket, Node, Separator};
+use crate::node::{symbol, Bracket, Node, Separator};
 use crate::operators::Op;
 use std::collections::{HashMap, HashSet};
 
@@ -22,7 +23,7 @@ pub fn lower(node: Node) -> Node {
 const OPERAND_NAME: &str = "value";
 
 fn operand() -> Box<Node> {
-	Box::new(Node::Symbol(OPERAND_NAME.to_string()))
+	Box::new(symbol(OPERAND_NAME))
 }
 
 /// `f = abs`, `xs.map(sqrt)`: an operator word left without an operand is the function `value => abs value`
@@ -109,8 +110,8 @@ fn lower_node(node: Node, functions: &SuffixWords) -> Node {
 	match node {
 		Node::Meta { node, data } => Node::Meta { node: Box::new(lower_node(*node, functions)), data },
 		// `10%`: a percent is a hundredth, `10/100`
-		Node::Key(left, Op::Mod, right) if matches!(right.drop_meta(), Node::Empty) => Node::Key(Box::new(lower_node(*left, functions)), Op::Div, Box::new(Node::int(PERCENT))),
-		Node::Key(left, op, right) => Node::Key(Box::new(lower_node(*left, functions)), op, Box::new(lower_node(*right, functions))),
+		Node::Key(left, Op::Mod, right) if matches!(right.drop_meta(), Node::Empty) => key(lower_node(*left, functions), Op::Div, Node::int(PERCENT)),
+		Node::Key(left, op, right) => key(lower_node(*left, functions), op, lower_node(*right, functions)),
 		Node::List(items, bracket, separator) => {
 			if let Some(asked) = bare_list_assignment(&items, &bracket, &separator) {
 				return asked.map_or_else(|error| error, |chosen| lower_node(chosen, functions));
@@ -168,7 +169,7 @@ fn suffix_function(word: &Node, functions: &SuffixWords) -> Option<Suffix> {
 /// The word as written: `sqrt` for the parser's `√ø`
 fn written_word(word: &Node) -> Node {
 	let spelling = operator_reference(word).and_then(|op| crate::warp_parser::PREFIX_OPERATOR_WORDS.into_iter().find(|(_, known)| *known == op));
-	spelling.map_or_else(|| word.clone(), |(spelling, _)| Node::Symbol(spelling.to_string()))
+	spelling.map_or_else(|| word.clone(), |(spelling, _)| symbol(spelling))
 }
 
 /// `abs`, `sqrt`, `cbrt` written without an operand: the operator itself
@@ -179,17 +180,17 @@ fn operator_reference(node: &Node) -> Option<Op> {
 	}
 }
 
-fn call(suffix: &Suffix, argument: Node) -> Node {
+fn suffix_call(suffix: &Suffix, argument: Node) -> Node {
 	let function = match suffix {
-		Suffix::Operator(op) => return Node::Key(Box::new(Node::Empty), *op, Box::new(argument)),
+		Suffix::Operator(op) => return key(Node::Empty, *op, argument),
 		Suffix::Function(function) => function,
 	};
 	match function.strip_prefix(POWER_MARK) {
 		Some(power) => {
 			let exponent = if power == "square" { 2 } else { 3 };
-			Node::Key(Box::new(argument), Op::Pow, Box::new(Node::int(exponent)))
+			key(argument, Op::Pow, Node::int(exponent))
 		}
-		None => Node::List(vec![Node::Symbol(function.to_string()), argument], Bracket::Round, Separator::None),
+		None => call(function, vec![argument]),
 	}
 }
 
@@ -259,27 +260,24 @@ fn apply_suffix_words(items: Vec<Node>, functions: &SuffixWords, bracket: Bracke
 fn suffix_applied(operand: Node, item: Node, word: &Node, function: &Suffix) -> Node {
 	match operand {
 		Node::Meta { node, data } if is_assignment(&node) => Node::Meta { node: Box::new(suffix_applied(*node, item, word, function)), data },
-		Node::Key(target, op, value) if is_assignment_op(&op) => Node::Key(target, op, Box::new(suffix_applied(*value, item, word, function))),
+		Node::Key(target, op, value) if is_binding(&op) => Node::Key(target, op, Box::new(suffix_applied(*value, item, word, function))),
 		operand => {
 			let argument = match is_infix_arithmetic(&operand) {
 				true => match suffix_precedence(&operand, &written_word(word)) {
-					Ok(true) => with_rightmost(operand, |leaf| call(function, leaf)),
-					Ok(false) => call(function, operand),
+					Ok(true) => with_rightmost(operand, |leaf| suffix_call(function, leaf)),
+					Ok(false) => suffix_call(function, operand),
 					Err(error) => error,
 				},
-				false => call(function, operand),
+				false => suffix_call(function, operand),
 			};
 			with_leftmost(item, |_| argument)
 		}
 	}
 }
 
-fn is_assignment_op(op: &Op) -> bool {
-	matches!(op, Op::Assign | Op::Define) || op.is_compound_assign()
-}
 
 fn is_assignment(node: &Node) -> bool {
-	matches!(node.drop_meta(), Node::Key(_, op, _) if is_assignment_op(op))
+	matches!(node.drop_meta(), Node::Key(_, op, _) if is_binding(op))
 }
 
 /// `1+2 squared`: does the word bind to the nearest operand (`1+(2 squared)`, true) or apply to the whole (`(1+2) squared`)?

@@ -4,6 +4,8 @@ table must keep both, with different ids. Serve the repository root on PORT afte
 Prints what each tab shows (tab 2 keeps its page until it runs again); exits 1 when a todo is lost or two share an id."""
 import json, os, pathlib, sys, time
 from playwright.sync_api import sync_playwright
+if not os.environ.get("CI"):
+	sys.exit(print("browser tests run in CI only: skipped, Chrome is not started outside CI (user, 2026-10-09)"))
 
 PORT = os.environ.get("PORT", "18671")
 PAGE = f"http://localhost:{PORT}/web/playground/?debug"

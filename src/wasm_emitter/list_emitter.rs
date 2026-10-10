@@ -21,6 +21,13 @@ const PRINT: &str = "print";
 const PRINT_ARGUMENT_SEPARATOR: &str = " ";
 
 /// The value `print` writes: its one argument, or several joined by a space
+/// The word a list calls: `f a b`, `f(a, b)`, `(f)`; none for a `;`/newline sequence, whose first statement may be a
+/// word of its own (`{beep⏎ play 440}` runs beep, then play; card error-beep)
+pub(super) fn called_word<'a>(items: &'a [Node], bracket: &Bracket, separator: &Separator) -> Option<&'a str> {
+	let calls = (items.len() >= 2 && !separator.separates_statements()) || *bracket == Bracket::Round && items.len() == 1;
+	items.first().filter(|_| calls)?.symbol_name()
+}
+
 fn printed_value(call: &[Node], bracket: &Bracket) -> Node {
 	match crate::warp_parser::print_arguments_of(call, bracket).as_slice() {
 		[single] => juxtaposed_text(single).unwrap_or_else(|| single.clone()),
@@ -76,6 +83,9 @@ impl WasmGcEmitter {
 	fn emit_library_word_call(&mut self, func: &mut Function, items: &[Node], bracket: &Bracket, separator: &Separator) -> bool {
 		let Some(name) = call_name(items, bracket, separator) else { return false };
 		let Some((_, function)) = super::library_ops::LIBRARY_FUNCTIONS.iter().find(|(word, _)| *word == name) else { return false };
+		if self.emit_typed_map_membership(func, items) {
+			return true;
+		}
 		if name == crate::library_words::SLICE {
 			for bound in items.iter().skip(2) {
 				self.emit_integral_index_check(func, bound); // `a[0:n/2]` like `a[n/2]`: an integer, with the `n//2` hint
@@ -104,10 +114,10 @@ impl WasmGcEmitter {
 	}
 
 	/// `f(a, b…)` or `(f)` of a user function, an FFI import or a text builtin
-	fn emit_function_call(&mut self, func: &mut Function, items: &[Node], bracket: &Bracket) -> bool {
-		let Some(Node::Symbol(fn_name)) = items.first().map(Node::drop_meta) else { return false };
+	fn emit_function_call(&mut self, func: &mut Function, items: &[Node], bracket: &Bracket, separator: &Separator) -> bool {
+		let Some(fn_name) = called_word(items, bracket, separator) else { return false };
 		// `(angle)` of a variable is its value
-		if items.len() < 2 && (*bracket != Bracket::Round || self.is_variable(fn_name)) {
+		if items.len() < 2 && self.is_variable(fn_name) {
 			return false;
 		}
 		if self.ctx.user_functions.contains_key(fn_name) {
@@ -228,7 +238,7 @@ impl WasmGcEmitter {
 
 		if items.len() == 1 && *bracket != Bracket::Square {
 			// `f()` of a name bound to nothing is an undefined function (P92); the group `(f)` is its item
-			if !self.emit_function_call(func, items, bracket) && !self.emit_empty_print(func, items) && !self.emit_library_word_call(func, items, bracket, separator) && !self.reject_unresolved_call(func, items, bracket, separator) {
+			if !self.emit_function_call(func, items, bracket, separator) && !self.emit_empty_print(func, items) && !self.emit_library_word_call(func, items, bracket, separator) && !self.reject_unresolved_call(func, items, bracket, separator) {
 				self.emit_node_instructions(func, &items[0]);
 			}
 			return;
@@ -303,7 +313,7 @@ impl WasmGcEmitter {
 			}
 		}
 
-		if self.emit_function_call(func, items, bracket) {
+		if self.emit_function_call(func, items, bracket, separator) {
 			return;
 		}
 
@@ -464,8 +474,7 @@ impl WasmGcEmitter {
 		match crate::type_tests::runtime_kind_mask(spec).filter(|_| unknown && !declared_type) {
 			Some(mask) => {
 				self.emit_node_instructions(func, subject);
-				func.instruction(&I::RefAsNonNull);
-				func.instruction(&I::I64Const(mask));
+				Self::emit_list(func, &[I::RefAsNonNull, I::I64Const(mask)]);
 				self.emit_call(func, crate::type_tests::NODE_KIND_IN);
 			}
 			// an instance's static kind is no type name: its declared type is read at run time
@@ -526,8 +535,7 @@ impl WasmGcEmitter {
 			"type" => {
 				let type_name = self.static_type_name(arg);
 				let (ptr, len) = self.allocate_string(&type_name);
-				func.instruction(&I::I32Const(ptr as i32));
-				func.instruction(&I::I32Const(len as i32));
+				Self::emit_list(func, &[I::I32Const(ptr as i32), I::I32Const(len as i32)]);
 				self.emit_call(func, "new_symbol");
 				true
 			}
@@ -552,20 +560,11 @@ impl WasmGcEmitter {
 			"round_half_up" => {
 				let bits = self.scratch(0);
 				self.emit_float_value(func, arg);
-				func.instruction(&I::I64ReinterpretF64);
-				func.instruction(&I::LocalTee(bits));
-				func.instruction(&I::F64ReinterpretI64);
-				func.instruction(&I::F64Floor);
-				func.instruction(&I::LocalGet(bits));
-				func.instruction(&I::F64ReinterpretI64);
-				func.instruction(&I::LocalGet(bits));
-				func.instruction(&I::F64ReinterpretI64);
-				func.instruction(&I::F64Floor);
-				func.instruction(&I::F64Sub);
-				func.instruction(&I::F64Const(0.5f64.into()));
-				func.instruction(&I::F64Ge);
-				func.instruction(&I::F64ConvertI32U);
-				func.instruction(&I::F64Add);
+				Self::emit_list(func, &[
+					I::I64ReinterpretF64, I::LocalTee(bits), I::F64ReinterpretI64, I::F64Floor, I::LocalGet(bits), I::F64ReinterpretI64,
+					I::LocalGet(bits), I::F64ReinterpretI64, I::F64Floor, I::F64Sub, I::F64Const(0.5f64.into()), I::F64Ge,
+					I::F64ConvertI32U, I::F64Add,
+				]);
 				self.emit_integral_float_as_int(func);
 				true
 			}
@@ -622,12 +621,9 @@ impl WasmGcEmitter {
 		let (quotient, divisor_bits) = (self.scratch(0), self.scratch(1));
 		self.emit_float_value(func, dividend);
 		self.emit_float_value(func, divisor);
-		func.instruction(&I::I64ReinterpretF64);
-		func.instruction(&I::LocalTee(divisor_bits));
-		func.instruction(&I::F64ReinterpretI64);
-		func.instruction(&I::F64Div);
-		func.instruction(&I::I64ReinterpretF64);
-		func.instruction(&I::LocalSet(quotient));
+		Self::emit_list(func, &[
+			I::I64ReinterpretF64, I::LocalTee(divisor_bits), I::F64ReinterpretI64, I::F64Div, I::I64ReinterpretF64, I::LocalSet(quotient),
+		]);
 		// a negative divisor rounds the quotient up, a positive one down
 		Self::emit_list(func, &[
 			I::LocalGet(quotient), I::F64ReinterpretI64, I::F64Ceil,
@@ -875,8 +871,9 @@ impl WasmGcEmitter {
 		})
 	}
 
-	/// An `if` statement whose branches store a typed list (`if x > 10 then {out = out + [x]}`, what filter lowers to): its
-	/// branches run as statements, so the stored list never becomes a Node; leaves a value for the caller to drop
+	/// An `if` statement whose branches store or extend a typed list (`if x > 10 then {out = out + [x]}`, what filter lowers
+	/// to, `out += [x]` of a comprehension): its branches run as statements, so the list never becomes a Node, which
+	/// copied it per item; leaves a value for the caller to drop
 	fn emit_discarded_branches(&mut self, func: &mut Function, item: &Node) -> bool {
 		let (if_then, otherwise) = match item.drop_meta() {
 			Node::Key(if_then, Op::Else, otherwise) => (if_then.as_ref(), Some(otherwise.as_ref())),
@@ -886,7 +883,7 @@ impl WasmGcEmitter {
 		let Node::Key(_, Op::If, condition) = condition.drop_meta() else { return false };
 		let stores_typed_list = |branch: &Node| {
 			let mut found = false;
-			branch.visit(&mut |part| found |= self.typed_list_store(part).is_some());
+			branch.visit(&mut |part| found |= self.typed_list_store(part).is_some() || self.typed_list_extension(part).is_some());
 			found
 		};
 		if !stores_typed_list(then) && !otherwise.is_some_and(stores_typed_list) {

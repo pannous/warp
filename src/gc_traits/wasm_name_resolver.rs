@@ -212,10 +212,8 @@ impl ParsedModule {
 			let group = group?;
 			let group_start = next_index;
 			for subtype in group.into_types() {
-				let actual_index = next_index;
-				let info = ParsedTypeInfo::from_subtype(actual_index, subtype, group_start)?;
-				types.push(info);
-				next_index = actual_index + 1;
+				types.push(ParsedTypeInfo::from_subtype(subtype, group_start)?);
+				next_index += 1;
 			}
 		}
 		Ok(next_index)
@@ -300,28 +298,12 @@ enum ParsedTypeInfo {
 }
 
 impl ParsedTypeInfo {
-	fn from_subtype(
-		type_index: u32,
-		subtype: wp::SubType,
-		group_start: u32,
-	) -> Result<Self> {
+	fn from_subtype(subtype: wp::SubType, group_start: u32) -> Result<Self> {
 		use wp::CompositeInnerType::*;
 		match subtype.composite_type.inner {
-			Struct(ty) => Ok(Self::Struct(ParsedStructType::from_parser(
-				type_index,
-				ty,
-				group_start,
-			)?)),
-			Array(ty) => Ok(Self::Array(ParsedArrayType::from_parser(
-				type_index,
-				ty,
-				group_start,
-			)?)),
-			Func(ty) => Ok(Self::Func(ParsedFuncType::from_parser(
-				type_index,
-				ty,
-				group_start,
-			)?)),
+			Struct(ty) => Ok(Self::Struct(ParsedStructType::from_parser(ty, group_start)?)),
+			Array(ty) => Ok(Self::Array(ParsedArrayType::from_parser(ty, group_start)?)),
+			Func(ty) => Ok(Self::Func(ParsedFuncType::from_parser(ty, group_start)?)),
 			_ => Ok(Self::Other),
 		}
 	}
@@ -329,22 +311,19 @@ impl ParsedTypeInfo {
 
 #[derive(Clone)]
 struct ParsedStructType {
-	#[allow(dead_code)]
-	type_index: u32,
 	type_name: Option<String>,
 	fields: Vec<ParsedField>,
 	field_names: Vec<Option<String>>,
 }
 
 impl ParsedStructType {
-	fn from_parser(type_index: u32, ty: wp::StructType, group_start: u32) -> Result<Self> {
+	fn from_parser(ty: wp::StructType, group_start: u32) -> Result<Self> {
 		let mut fields = Vec::with_capacity(ty.fields.len());
 		for field in ty.fields.iter() {
 			fields.push(ParsedField::from_parser(field, group_start)?);
 		}
 		let field_names = vec![None; fields.len()];
 		Ok(Self {
-			type_index,
 			type_name: None,
 			fields,
 			field_names,
@@ -354,15 +333,12 @@ impl ParsedStructType {
 
 #[derive(Clone)]
 struct ParsedArrayType {
-	#[allow(dead_code)]
-	type_index: u32,
 	field: ParsedField,
 }
 
 impl ParsedArrayType {
-	fn from_parser(type_index: u32, ty: wp::ArrayType, group_start: u32) -> Result<Self> {
+	fn from_parser(ty: wp::ArrayType, group_start: u32) -> Result<Self> {
 		Ok(Self {
-			type_index,
 			field: ParsedField::from_parser(&ty.0, group_start)?,
 		})
 	}
@@ -370,14 +346,12 @@ impl ParsedArrayType {
 
 #[derive(Clone)]
 struct ParsedFuncType {
-	#[allow(dead_code)]
-	type_index: u32,
 	params: Vec<ParsedValType>,
 	results: Vec<ParsedValType>,
 }
 
 impl ParsedFuncType {
-	fn from_parser(type_index: u32, ty: wp::FuncType, group_start: u32) -> Result<Self> {
+	fn from_parser(ty: wp::FuncType, group_start: u32) -> Result<Self> {
 		let params = ty
 			.params()
 			.iter()
@@ -389,7 +363,6 @@ impl ParsedFuncType {
 			.map(|r| ParsedValType::from_parser(r, group_start))
 			.collect::<Result<Vec<_>>>()?;
 		Ok(Self {
-			type_index,
 			params,
 			results,
 		})
@@ -471,29 +444,15 @@ impl ParsedRefType {
 
 #[derive(Clone)]
 enum ParsedHeapType {
-	Abstract {
-		#[allow(dead_code)]
-		shared: bool,
-		kind: ParsedAbstractHeapType,
-	},
+	Abstract(ParsedAbstractHeapType),
 	Concrete(u32),
 }
 
 impl ParsedHeapType {
 	fn from_parser(ty: &wp::HeapType, group_start: u32) -> Result<Self> {
 		Ok(match ty {
-			wp::HeapType::Abstract { shared, ty } => ParsedHeapType::Abstract {
-				shared: *shared,
-				kind: ParsedAbstractHeapType::from_parser(*ty),
-			},
-			wp::HeapType::Concrete(idx) => {
-				let resolved = resolve_index(*idx, group_start)?;
-				ParsedHeapType::Concrete(resolved)
-			}
-			wp::HeapType::Exact(idx) => {
-				let resolved = resolve_index(*idx, group_start)?;
-				ParsedHeapType::Concrete(resolved)
-			}
+			wp::HeapType::Abstract { ty, .. } => ParsedHeapType::Abstract(ParsedAbstractHeapType::from_parser(*ty)),
+			wp::HeapType::Concrete(idx) | wp::HeapType::Exact(idx) => ParsedHeapType::Concrete(resolve_index(*idx, group_start)?),
 		})
 	}
 }
@@ -662,7 +621,7 @@ impl<'a> MatchContext<'a> {
 
 	fn match_heap_type(&mut self, parsed: &ParsedHeapType, ty: &HeapType) -> bool {
 		match (parsed, ty) {
-			(ParsedHeapType::Abstract { kind, .. }, _) => matches_abstract_heap(*kind, ty),
+			(ParsedHeapType::Abstract(kind), _) => matches_abstract_heap(*kind, ty),
 			(ParsedHeapType::Concrete(idx), HeapType::ConcreteStruct(s)) => {
 				self.match_struct(*idx, s)
 			}

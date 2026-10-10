@@ -1,0 +1,13 @@
+count_to(n) := { i = 1; while i <= n { yield i; i += 1 } }
+naturals() := { i = 1; while 1 { yield i; i += 1 } }
+print count_to(4)
+print sum(count_to(4))
+s = 0
+for x in count_to(4) { s += x }
+print s
+t = 0
+for x in naturals() { if x == 2 { continue }; if x > 5 { break }; t += x }
+print t
+i = 100
+for count_to(3) { i += it }
+print i

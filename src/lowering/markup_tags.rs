@@ -3,12 +3,12 @@
 //! this reading: a name the program defines stays its call, and outside a tag block a call of an unbound name stays
 //! the loud error (P92). A comprehension or method call among an element's children gives children (card web-keyed).
 
-use crate::node::{Bracket, Node, Separator};
+use super::words::{FOR_WORD, IN_WORD};
+use super::nodes::key;
+use crate::node::{symbol, Bracket, Node, Separator};
 use crate::operators::Op;
 use std::collections::HashSet;
 
-const FOR_WORD: &str = "for";
-const IN_WORD: &str = "in";
 const ALL_WORD: &str = "all";
 const TAG_ITEM: &str = "tag·item"; // the loop variable of `li all xs`
 /// `form post "/todos" { … }`: a form written as the route it sends to (card g_mSEw)
@@ -48,7 +48,7 @@ fn spaced_element(node: Node, defined: &HashSet<String>) -> Node {
 		if let [head, body] = items.as_slice() {
 			if let (Some((tag, mut content)), Node::List(children, Bracket::Curly, separator)) = (element_head(head, defined), body.drop_meta()) {
 				content.extend(children.iter().cloned());
-				return Node::Key(Box::new(Node::Symbol(tag)), Op::Colon, Box::new(Node::List(content, Bracket::Curly, separator.clone())));
+				return key(Node::Symbol(tag), Op::Colon, Node::List(content, Bracket::Curly, separator.clone()));
 			}
 		}
 	}
@@ -152,9 +152,9 @@ fn with_form_routes(node: Node) -> Node {
 				let (action, body, body_separator) = (action.clone(), body.clone(), body_separator.clone());
 				written.pop();
 				written.truncate(written.len() - 3);
-				let attribute = |name: &str, value: Node| Node::Key(Box::new(Node::Symbol(name.into())), Op::Colon, Box::new(value));
+				let attribute = |name: &str, value: Node| key(symbol(name), Op::Colon, value);
 				let fields = [attribute(METHOD_ATTRIBUTE, Node::Text(method)), attribute(ACTION_ATTRIBUTE, action)].into_iter().chain(body);
-				written.push(Node::Key(Box::new(Node::Symbol(FORM_TAG.into())), Op::Colon, Box::new(Node::List(fields.collect(), Bracket::Curly, body_separator))));
+				written.push(key(symbol(FORM_TAG), Op::Colon, Node::List(fields.collect(), Bracket::Curly, body_separator)));
 				rewritten = true;
 			}
 		}
@@ -255,7 +255,7 @@ fn tags_over_values(children: Vec<Node>, defined: &HashSet<String>) -> Vec<Node>
 			rest.next();
 			match rest.next() {
 				Some(values) => result.push(tag_per_item(tag, values)),
-				None => result.extend([child, Node::Symbol(ALL_WORD.into())]),
+				None => result.extend([child, symbol(ALL_WORD)]),
 			}
 		} else if matches!(next, Some(Node::List(_, Bracket::Square, _))) {
 			result.push(tag_per_item(tag, rest.next().unwrap()));
@@ -270,11 +270,11 @@ fn tags_over_values(children: Vec<Node>, defined: &HashSet<String>) -> Vec<Node>
 
 /// `[tag{item} for item in values]`, the comprehension markup reads as children
 fn tag_per_item(tag: String, values: Node) -> Node {
-	let item = Node::Symbol(TAG_ITEM.into());
-	let header = Node::List(vec![Node::Symbol(FOR_WORD.into()), item.clone(), Node::Symbol(IN_WORD.into()), values, Node::Empty], Bracket::None, Separator::Space);
+	let item = symbol(TAG_ITEM);
+	let header = Node::List(vec![symbol(FOR_WORD), item.clone(), symbol(IN_WORD), values, Node::Empty], Bracket::None, Separator::Space);
 	Node::List(vec![tag_node(tag, vec![item]), header], Bracket::Square, Separator::Space)
 }
 
 fn tag_node(name: String, items: Vec<Node>) -> Node {
-	Node::Key(Box::new(Node::Symbol(name)), Op::Colon, Box::new(Node::List(items, Bracket::Curly, Separator::Space)))
+	key(Node::Symbol(name), Op::Colon, Node::List(items, Bracket::Curly, Separator::Space))
 }

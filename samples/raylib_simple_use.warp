@@ -1,4 +1,5 @@
 #!/usr/bin/env warp
+#!/usr/bin/env warp
 import raylib
 // Above should preload/offer ALL functions including:
 #import InitWindow from "raylib"

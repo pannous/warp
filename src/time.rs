@@ -8,7 +8,6 @@ pub use calendar::{with_rules, Disambiguation, Duration, Overflow, Time, TzRules
 use crate::extensions::numbers::Number;
 use crate::node::{error, Node, Separator};
 use crate::operators::Op;
-use std::cmp::Ordering;
 use std::collections::HashMap;
 
 /// A date or time literal as written; validated when evaluated, like `date(2024,2,30)`
@@ -149,11 +148,15 @@ fn place_in_zone(time: &Node, zone: &Node, scope: &mut Scope) -> Result<Value, S
 		Value::Duration(duration) => return converted(&duration, zone),
 		other => return Err(format!("`in` places a time in a zone, got {}", other.kind())),
 	};
-	let zone = match evaluate(zone, scope)? {
-		Value::Text(name) | Value::Symbol(name) => calendar::zone_named(&name)?,
-		other => return Err(format!("`in` needs a zone name like \"Europe/Berlin\", got {}", other.kind())),
-	};
-	time.in_zone(zone).map(Value::Time)
+	time.in_zone(zone_argument("`in`", zone, scope)?).map(Value::Time)
+}
+
+/// The zone a word's argument names: "Europe/Berlin"
+fn zone_argument(word: &str, zone: &Node, scope: &mut Scope) -> Result<&'static calendar::Zone, String> {
+	match evaluate(zone, scope)? {
+		Value::Text(name) | Value::Symbol(name) => calendar::zone_named(&name),
+		other => Err(format!("{word} needs a zone name like \"Europe/Berlin\", got {}", other.kind())),
+	}
 }
 
 fn int_argument(node: &Node, scope: &mut Scope) -> Result<i64, String> {
@@ -218,10 +221,7 @@ fn zoned(args: &[Node], scope: &mut Scope) -> Result<Value, String> {
 	let [time, zone, rest @ ..] = args else {
 		return Err("zoned(local time, \"Zone/Name\", disambiguation: earlier) takes a local time and a zone".to_string());
 	};
-	let zone = match evaluate(zone, scope)? {
-		Value::Text(name) | Value::Symbol(name) => calendar::zone_named(&name)?,
-		other => return Err(format!("zoned needs a zone name like \"Europe/Berlin\", got {}", other.kind())),
-	};
+	let zone = zone_argument("zoned", zone, scope)?;
 	let (_, choice) = options("zoned", rest, scope)?;
 	match evaluate(time, scope)? {
 		Value::Time(Time::Local(date, clock)) => zone.resolve(date, clock, choice).map(|zoned| Value::Time(Time::Zoned(zoned))),
@@ -265,17 +265,6 @@ fn binary(left: &Node, op: Op, right: &Node, scope: &mut Scope) -> Result<Value,
 	}
 }
 
-fn compared(op: Op, ordering: Ordering) -> bool {
-	match op {
-		Op::Eq => ordering == Ordering::Equal,
-		Op::Ne => ordering != Ordering::Equal,
-		Op::Lt => ordering == Ordering::Less,
-		Op::Le => ordering != Ordering::Greater,
-		Op::Gt => ordering == Ordering::Greater,
-		_ => ordering != Ordering::Less, // Ge
-	}
-}
-
 fn apply(left: Value, op: Op, right: Value) -> Result<Value, String> {
 	match (left, op, right) {
 		(Value::Time(time), Op::Add, Value::Duration(duration)) | (Value::Duration(duration), Op::Add, Value::Time(time)) => {
@@ -288,13 +277,13 @@ fn apply(left: Value, op: Op, right: Value) -> Result<Value, String> {
 			Ok(days) => Value::Int(days),
 			Err(duration) => Value::Duration(duration),
 		}),
-		(Value::Time(a), op, Value::Time(b)) if op.is_comparison() => Ok(Value::Bool(compared(op, a.compare(b)?))),
+		(Value::Time(a), op, Value::Time(b)) if op.is_comparison() => Ok(Value::Bool(op.holds(a.compare(b)?))),
 		(Value::Duration(a), Op::Add, Value::Duration(b)) => Ok(Value::Duration(a.plus(b))),
 		(Value::Duration(a), Op::Sub, Value::Duration(b)) => Ok(Value::Duration(a.plus(b.times(-1)))),
 		(Value::Duration(duration), Op::Mul, Value::Int(n)) | (Value::Int(n), Op::Mul, Value::Duration(duration)) => Ok(Value::Duration(duration.times(n))),
 		(Value::Duration(a), Op::Eq, Value::Duration(b)) => a.equals(b).map(Value::Bool),
 		(Value::Duration(a), Op::Ne, Value::Duration(b)) => a.equals(b).map(|equal| Value::Bool(!equal)),
-		(Value::Int(a), op, Value::Int(b)) if op.is_comparison() => Ok(Value::Bool(compared(op, a.cmp(&b)))),
+		(Value::Int(a), op, Value::Int(b)) if op.is_comparison() => Ok(Value::Bool(op.holds(a.cmp(&b)))),
 		(Value::Int(a), Op::Add, Value::Int(b)) => Ok(Value::Int(a + b)),
 		(Value::Int(a), Op::Sub, Value::Int(b)) => Ok(Value::Int(a - b)),
 		(Value::Int(a), Op::Mul, Value::Int(b)) => Ok(Value::Int(a * b)),

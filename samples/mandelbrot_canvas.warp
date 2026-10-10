@@ -1,3 +1,4 @@
+#!/usr/bin/env warp
 // the Mandelbrot set painted on the playground's canvas (natively a PNG): ink inside the set and on every other
 // escape-time band around it; mandelbrot.warp draws it in ASCII
 width = 240

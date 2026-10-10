@@ -159,6 +159,10 @@ pub fn add_dependencies(required: &mut HashSet<&'static str>) {
 	}
 	if super::list_ops::NODE_ARITHMETIC.iter().any(|(name, _, _)| required.contains(name)) {
 		required.extend([super::list_ops::TEXT_AS_FLOAT, super::INT_RUNTIME, "exact_add", "exact_sub", "exact_mul", "exact_div", "new_float"]);
+		required.extend(super::list_ops::NODE_ARITHMETIC.iter().filter(|(name, _, _)| required.contains(name)).map(|(_, _, exact)| *exact).collect::<Vec<_>>());
+		if required.contains(super::list_ops::NODE_POW) {
+			required.extend(["is_ratio", "invalid_number"]);
+		}
 	}
 	if required.contains(super::list_ops::TEXT_AS_INT) || required.contains(super::list_ops::TEXT_AS_FLOAT) {
 		required.insert("get_int_value");
@@ -412,13 +416,9 @@ impl WasmGcEmitter {
 	/// An Error node carrying `reason`, the way a failed fetch reports
 	fn emit_runtime_error_value(&mut self, func: &mut Function, reason: &str) {
 		let (ptr, len) = self.allocate_string(reason);
-		func.instruction(&I::I32Const(ptr as i32));
-		func.instruction(&I::I32Const(-(len as i32)));
+		Self::emit_list(func, &[I::I32Const(ptr as i32), I::I32Const(-(len as i32))]);
 		let (length, pointer) = (self.scratch(0), self.scratch(1));
-		func.instruction(&I::I64ExtendI32S);
-		func.instruction(&I::LocalSet(length));
-		func.instruction(&I::I64ExtendI32U);
-		func.instruction(&I::LocalSet(pointer));
+		Self::emit_list(func, &[I::I64ExtendI32S, I::LocalSet(length), I::I64ExtendI32U, I::LocalSet(pointer)]);
 		self.emit_host_text_result(func, length, pointer);
 	}
 
@@ -650,11 +650,9 @@ impl WasmGcEmitter {
 			self.exported_function(ERROR_OF, vec![node_ref], vec![node_ref], vec![], |s, f| {
 				Self::emit_list(f, &[I::LocalGet(0)]);
 				s.call(f, TEXT_OF);
-				f.instruction(&I::LocalSet(0));
-				f.instruction(&I::I64Const(Kind::Error as i64));
+				Self::emit_list(f, &[I::LocalSet(0), I::I64Const(Kind::Error as i64)]);
 				s.emit_field(f, 0, 1);
-				f.instruction(&I::RefNull(HeapType::Concrete(s.type_manager.node_type)));
-				f.instruction(&I::StructNew(s.type_manager.node_type));
+				Self::emit_list(f, &[I::RefNull(HeapType::Concrete(s.type_manager.node_type)), I::StructNew(s.type_manager.node_type)]);
 			});
 		}
 
@@ -702,8 +700,7 @@ impl WasmGcEmitter {
 				Self::emit_list(f, &[I::I32Eq]);
 				s.emit_text_field(f, 1, 0);
 				Self::emit_list(f, &[I::LocalGet(right_length), I::I32Add, I::GlobalGet(heap), I::I32Eq, I::I32And, I::LocalGet(left_length), I::I32Const(0), I::I32Ne, I::I32And]);
-				f.instruction(&I::If(BlockType::Empty));
-				f.instruction(&I::Else);
+				Self::emit_list(f, &[I::If(BlockType::Empty), I::Else]);
 				Self::emit_list(f, &[I::LocalGet(copy), I::LocalGet(left_length), I::I32Add, I::GlobalGet(heap), I::I32Eq, I::LocalGet(left_length), I::I32Const(0), I::I32Ne, I::I32And]);
 				f.instruction(&I::If(BlockType::Empty));
 				s.emit_memory_room(f, heap, right_length);

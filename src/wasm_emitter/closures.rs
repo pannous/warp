@@ -109,9 +109,8 @@ impl WasmGcEmitter {
 			let Some(function) = self.ctx.user_functions.get(&target) else { continue };
 			let arity = function.params.len().saturating_sub(captured);
 			let entry_type = self.entry_type(arity);
-			self.functions.function(entry_type);
-			self.closures.entry_functions.push((target, self.next_func_idx, captured, arity));
-			self.next_func_idx += 1;
+			let entry = self.reserve_function(entry_type);
+			self.closures.entry_functions.push((target, entry, captured, arity));
 		}
 		// a program that starts tasks may pass closures to them: the carriers, exported
 		let starts_tasks = self.ctx.ffi_imports.contains_key(crate::host::TASK_SPAWN_VALUES);
@@ -119,10 +118,7 @@ impl WasmGcEmitter {
 			let node = self.nullable_node();
 			let rebuild_type = self.type_manager.function_type(vec![node, node], vec![node]);
 			let captured_type = self.type_manager.function_type(vec![node], vec![node]);
-			let (rebuild, captured) = (self.next_func_idx, self.next_func_idx + 1);
-			self.functions.function(rebuild_type);
-			self.functions.function(captured_type);
-			self.next_func_idx += 2;
+			let (rebuild, captured) = (self.reserve_function(rebuild_type), self.reserve_function(captured_type));
 			self.exports.export(CLOSURE_REBUILD, ExportKind::Func, rebuild);
 			self.exports.export(CLOSURE_CAPTURED, ExportKind::Func, captured);
 			self.closures.carriers = Some((rebuild, captured));
@@ -132,10 +128,9 @@ impl WasmGcEmitter {
 		if calls_foreign && !self.closures.entry_functions.is_empty() {
 			let node = self.nullable_node();
 			let apply_type = self.type_manager.function_type(vec![node, node], vec![node]);
-			self.functions.function(apply_type);
-			self.exports.export(CLOSURE_APPLY, ExportKind::Func, self.next_func_idx);
-			self.closures.apply = Some(self.next_func_idx);
-			self.next_func_idx += 1;
+			let apply = self.reserve_function(apply_type);
+			self.exports.export(CLOSURE_APPLY, ExportKind::Func, apply);
+			self.closures.apply = Some(apply);
 		}
 	}
 
@@ -148,48 +143,45 @@ impl WasmGcEmitter {
 		let (node_type, closure) = (self.type_manager.node_type, self.closure_type());
 		let (arguments, closure_local, item) = (1, 2, 3);
 		let nullable_node = self.nullable_node();
-		let mut func = Function::new(vec![(1, Ref(RefType { nullable: true, heap_type: HeapType::Concrete(closure) })), (1, nullable_node)]);
-		func.instruction(&I::LocalGet(0));
-		func.instruction(&I::RefAsNonNull);
-		func.instruction(&I::StructGet { struct_type_index: node_type, field_index: NODE_DATA_FIELD });
-		func.instruction(&I::RefTestNonNull(HeapType::Concrete(closure)));
-		self.emit_fail_unless(&mut func, NOT_A_FUNCTION);
-		func.instruction(&I::LocalGet(0));
-		func.instruction(&I::StructGet { struct_type_index: node_type, field_index: NODE_DATA_FIELD });
-		func.instruction(&I::RefCastNonNull(HeapType::Concrete(closure)));
-		func.instruction(&I::LocalSet(closure_local));
-		let mut arities = self.closures.entries.keys().copied().collect::<Vec<_>>();
-		arities.sort();
-		for arity in arities {
-			let entry = self.entry_type(arity);
-			let typed = self.typed_entry(arity);
-			let helper = self.ctx.user_functions.get(&crate::closures::closure_call_name(arity)).cloned();
-			func.instruction(&I::LocalGet(closure_local));
-			func.instruction(&I::StructGet { struct_type_index: closure, field_index: ENTRY_FIELD });
-			func.instruction(&I::RefTestNonNull(HeapType::Concrete(entry)));
-			func.instruction(&I::If(BlockType::Empty));
-			func.instruction(&I::LocalGet(closure_local));
-			func.instruction(&I::StructGet { struct_type_index: closure, field_index: CAPTURED_FIELD });
-			for index in 0..arity {
-				self.emit_next_argument(&mut func, arguments, item);
-				if let Some(helper) = helper.as_ref().filter(|_| typed) {
-					func.instruction(&I::RefAsNonNull);
-					self.emit_node_as_kind(&mut func, param_kind(&helper.params[1 + index]));
+		self.function_body(vec![Ref(RefType { nullable: true, heap_type: HeapType::Concrete(closure) }), nullable_node], |s, func| {
+			Self::emit_list(func, &[
+				I::LocalGet(0), I::RefAsNonNull, I::StructGet { struct_type_index: node_type, field_index: NODE_DATA_FIELD },
+				I::RefTestNonNull(HeapType::Concrete(closure)),
+			]);
+			s.emit_fail_unless(func, NOT_A_FUNCTION);
+			Self::emit_list(func, &[
+				I::LocalGet(0), I::StructGet { struct_type_index: node_type, field_index: NODE_DATA_FIELD },
+				I::RefCastNonNull(HeapType::Concrete(closure)), I::LocalSet(closure_local),
+			]);
+			let mut arities = s.closures.entries.keys().copied().collect::<Vec<_>>();
+			arities.sort();
+			for arity in arities {
+				let entry = s.entry_type(arity);
+				let typed = s.typed_entry(arity);
+				let helper = s.ctx.user_functions.get(&crate::closures::closure_call_name(arity)).cloned();
+				Self::emit_list(func, &[
+					I::LocalGet(closure_local), I::StructGet { struct_type_index: closure, field_index: ENTRY_FIELD },
+					I::RefTestNonNull(HeapType::Concrete(entry)), I::If(BlockType::Empty), I::LocalGet(closure_local),
+					I::StructGet { struct_type_index: closure, field_index: CAPTURED_FIELD },
+				]);
+				for index in 0..arity {
+					s.emit_next_argument(func, arguments, item);
+					if let Some(helper) = helper.as_ref().filter(|_| typed) {
+						func.instruction(&I::RefAsNonNull);
+						s.emit_node_as_kind(func, param_kind(&helper.params[1 + index]));
+					}
 				}
+				Self::emit_list(func, &[
+					I::LocalGet(closure_local), I::StructGet { struct_type_index: closure, field_index: ENTRY_FIELD },
+					I::RefCastNonNull(HeapType::Concrete(entry)), I::CallRef(entry),
+				]);
+				if let Some(helper) = helper.filter(|_| typed) {
+					s.emit_primitive_as_node(func, helper.return_kind);
+				}
+				Self::emit_list(func, &[I::Return, I::End]);
 			}
-			func.instruction(&I::LocalGet(closure_local));
-			func.instruction(&I::StructGet { struct_type_index: closure, field_index: ENTRY_FIELD });
-			func.instruction(&I::RefCastNonNull(HeapType::Concrete(entry)));
-			func.instruction(&I::CallRef(entry));
-			if let Some(helper) = helper.filter(|_| typed) {
-				self.emit_primitive_as_node(&mut func, helper.return_kind);
-			}
-			func.instruction(&I::Return);
-			func.instruction(&I::End);
-		}
-		self.emit_runtime_error(&mut func, WRONG_ARGUMENT_COUNT);
-		func.instruction(&I::End);
-		self.code.function(&func);
+			s.emit_runtime_error(func, WRONG_ARGUMENT_COUNT);
+		});
 	}
 
 	/// The first item of the list in local `arguments` (ø when it has none), the list advanced to its rest
@@ -216,28 +208,21 @@ impl WasmGcEmitter {
 		}
 		let closure = self.closure_type();
 		let node_type = self.type_manager.node_type;
-		let mut rebuild = Function::new(vec![]);
-		for (target, entry, _, _) in self.closures.entry_functions.clone() {
-			rebuild.instruction(&I::LocalGet(0));
-			self.emit_string_call(&mut rebuild, &target, "new_symbol");
-			self.emit_call(&mut rebuild, super::equality::VALUES_EQUAL);
-			rebuild.instruction(&I::If(BlockType::Empty));
-			self.emit_kind(&mut rebuild, Kind::Function);
-			for instruction in [I::RefFunc(entry), I::LocalGet(1), I::StructNew(closure), I::LocalGet(0), I::StructNew(node_type), I::Return, I::End] {
-				rebuild.instruction(&instruction);
+		self.function_body(vec![], |s, rebuild| {
+			for (target, entry, _, _) in s.closures.entry_functions.clone() {
+				rebuild.instruction(&I::LocalGet(0));
+				s.emit_string_call(rebuild, &target, "new_symbol");
+				s.emit_call(rebuild, super::equality::VALUES_EQUAL);
+				rebuild.instruction(&I::If(BlockType::Empty));
+				s.emit_kind(rebuild, Kind::Function);
+				Self::emit_list(rebuild, &[I::RefFunc(entry), I::LocalGet(1), I::StructNew(closure), I::LocalGet(0), I::StructNew(node_type), I::Return, I::End]);
 			}
-		}
-		self.emit_call(&mut rebuild, "new_empty");
-		rebuild.instruction(&I::End);
-		self.code.function(&rebuild);
-		let mut captured = Function::new(vec![]);
-		for instruction in [
+			s.emit_call(rebuild, "new_empty");
+		});
+		self.function_body(vec![], |_, captured| Self::emit_list(captured, &[
 			I::LocalGet(0), I::RefAsNonNull, I::StructGet { struct_type_index: node_type, field_index: NODE_DATA_FIELD },
-			I::RefCastNonNull(HeapType::Concrete(closure)), I::StructGet { struct_type_index: closure, field_index: CAPTURED_FIELD }, I::End,
-		] {
-			captured.instruction(&instruction);
-		}
-		self.code.function(&captured);
+			I::RefCastNonNull(HeapType::Concrete(closure)), I::StructGet { struct_type_index: closure, field_index: CAPTURED_FIELD },
+		]));
 	}
 
 	/// Pass 2: the entry bodies, in the order of their registration
@@ -245,32 +230,25 @@ impl WasmGcEmitter {
 		for (target, _, captured, arity) in self.closures.entry_functions.clone() {
 			let function = self.ctx.user_functions[&target].clone();
 			let typed = self.typed_entry(arity);
-			let mut func = Function::new(vec![]);
-			self.emit_nested_captures_restored(&mut func, &target);
-			for (index, param) in function.params.iter().enumerate() {
-				if index < captured {
-					// the index-th value of the captured list: data of the index-th cons cell
-					func.instruction(&I::LocalGet(0));
-					for _ in 0..index {
-						func.instruction(&I::StructGet { struct_type_index: self.type_manager.node_type, field_index: NODE_VALUE_FIELD });
+			self.function_body(vec![], |s, func| {
+				s.emit_nested_captures_restored(func, &target);
+				for (index, param) in function.params.iter().enumerate() {
+					if index < captured {
+						func.instruction(&I::LocalGet(0));
+						s.emit_nth_cell_data(func, index);
+					} else if typed {
+						func.instruction(&I::LocalGet((1 + index - captured) as u32)); // an i64 or f64 already
+						continue;
+					} else {
+						Self::emit_list(func, &[I::LocalGet((1 + index - captured) as u32), I::RefAsNonNull]);
 					}
-					func.instruction(&I::StructGet { struct_type_index: self.type_manager.node_type, field_index: NODE_DATA_FIELD });
-					func.instruction(&I::RefCastNonNull(HeapType::Concrete(self.type_manager.node_type)));
-				} else if typed {
-					func.instruction(&I::LocalGet((1 + index - captured) as u32)); // an i64 or f64 already
-					continue;
-				} else {
-					func.instruction(&I::LocalGet((1 + index - captured) as u32));
-					func.instruction(&I::RefAsNonNull);
+					s.emit_node_as_kind(func, param_kind(param));
 				}
-				self.emit_node_as_kind(&mut func, param_kind(param));
-			}
-			self.emit_call_user_function(&mut func, &function);
-			if !function.return_kind.is_ref() && !typed {
-				self.emit_primitive_as_node(&mut func, function.return_kind);
-			}
-			func.instruction(&I::End);
-			self.code.function(&func);
+				s.emit_call_user_function(func, &function);
+				if !function.return_kind.is_ref() && !typed {
+					s.emit_primitive_as_node(func, function.return_kind);
+				}
+			});
 			debug_assert!(arity + captured == function.params.len());
 		}
 		self.compile_closure_carriers();
@@ -292,6 +270,17 @@ impl WasmGcEmitter {
 		}).collect()
 	}
 
+	/// The cons list on the stack → its `index`-th (0-based) item: the data of that cell
+	fn emit_nth_cell_data(&self, func: &mut Function, index: usize) {
+		let node_type = self.type_manager.node_type;
+		for _ in 0..index {
+			func.instruction(&I::StructGet { struct_type_index: node_type, field_index: NODE_VALUE_FIELD });
+		}
+		Self::emit_list(func, &[
+			I::StructGet { struct_type_index: node_type, field_index: NODE_DATA_FIELD }, I::RefCastNonNull(HeapType::Concrete(node_type)),
+		]);
+	}
+
 	/// The entry of a nested function's closure: its capture globals set from the closure's captured values first
 	fn emit_nested_captures_restored(&mut self, func: &mut Function, target: &str) {
 		if !self.ctx.enclosing_functions.contains_key(target) {
@@ -300,11 +289,7 @@ impl WasmGcEmitter {
 		let captures = self.ctx.captures.get(target).cloned().unwrap_or_default();
 		for (index, (_, (global, kind))) in captures.into_iter().enumerate() {
 			func.instruction(&I::LocalGet(0));
-			for _ in 0..index {
-				func.instruction(&I::StructGet { struct_type_index: self.type_manager.node_type, field_index: NODE_VALUE_FIELD });
-			}
-			func.instruction(&I::StructGet { struct_type_index: self.type_manager.node_type, field_index: NODE_DATA_FIELD });
-			func.instruction(&I::RefCastNonNull(HeapType::Concrete(self.type_manager.node_type)));
+			self.emit_nth_cell_data(func, index);
 			self.emit_node_as_kind(func, kind);
 			func.instruction(&I::GlobalSet(global));
 		}
@@ -323,9 +308,11 @@ impl WasmGcEmitter {
 			return;
 		}
 		if kind.is_float() {
-			func.instruction(&I::StructGet { struct_type_index: self.type_manager.node_type, field_index: NODE_DATA_FIELD });
-			func.instruction(&I::RefCastNonNull(HeapType::Concrete(self.type_manager.f64_box_type)));
-			func.instruction(&I::StructGet { struct_type_index: self.type_manager.f64_box_type, field_index: 0 });
+			Self::emit_list(func, &[
+				I::StructGet { struct_type_index: self.type_manager.node_type, field_index: NODE_DATA_FIELD },
+				I::RefCastNonNull(HeapType::Concrete(self.type_manager.f64_box_type)),
+				I::StructGet { struct_type_index: self.type_manager.f64_box_type, field_index: 0 },
+			]);
 		} else if kind == Kind::Codepoint {
 			self.emit_codepoint_of_node(func);
 		} else {
@@ -335,10 +322,10 @@ impl WasmGcEmitter {
 
 	/// Stack [Codepoint node] → [i64 code point]
 	pub(super) fn emit_codepoint_of_node(&self, func: &mut Function) {
-		func.instruction(&I::StructGet { struct_type_index: self.type_manager.node_type, field_index: NODE_DATA_FIELD });
-		func.instruction(&I::RefCastNonNull(HeapType::I31));
-		func.instruction(&I::I31GetU);
-		func.instruction(&I::I64ExtendI32U);
+		Self::emit_list(func, &[
+			I::StructGet { struct_type_index: self.type_manager.node_type, field_index: NODE_DATA_FIELD }, I::RefCastNonNull(HeapType::I31),
+			I::I31GetU, I::I64ExtendI32U,
+		]);
 	}
 
 	/// Is `name` a helper `closure_call_n` whose body the emitter writes
@@ -352,33 +339,31 @@ impl WasmGcEmitter {
 		let arity = closure_call_arity(name).expect("a closure call");
 		let (closure, entry) = (self.closure_type(), self.entry_type(arity));
 		let closure_local = (arity + 1) as u32;
-		let mut func = Function::new(vec![(1, Ref(RefType { nullable: true, heap_type: HeapType::Concrete(closure) }))]);
-		func.instruction(&I::LocalGet(0));
-		func.instruction(&I::StructGet { struct_type_index: self.type_manager.node_type, field_index: NODE_DATA_FIELD });
-		func.instruction(&I::RefTestNonNull(HeapType::Concrete(closure)));
-		self.emit_fail_unless(&mut func, NOT_A_FUNCTION);
-		func.instruction(&I::LocalGet(0));
-		func.instruction(&I::StructGet { struct_type_index: self.type_manager.node_type, field_index: NODE_DATA_FIELD });
-		func.instruction(&I::RefCastNonNull(HeapType::Concrete(closure)));
-		func.instruction(&I::LocalTee(closure_local));
-		func.instruction(&I::StructGet { struct_type_index: closure, field_index: ENTRY_FIELD });
-		func.instruction(&I::RefTestNonNull(HeapType::Concrete(entry)));
-		self.emit_fail_unless(&mut func, WRONG_ARGUMENT_COUNT);
-		func.instruction(&I::LocalGet(closure_local));
-		func.instruction(&I::StructGet { struct_type_index: closure, field_index: CAPTURED_FIELD });
-		for argument in 1..=arity {
-			func.instruction(&I::LocalGet(argument as u32));
-		}
-		func.instruction(&I::LocalGet(closure_local));
-		func.instruction(&I::StructGet { struct_type_index: closure, field_index: ENTRY_FIELD });
-		func.instruction(&I::RefCastNonNull(HeapType::Concrete(entry)));
-		func.instruction(&I::CallRef(entry));
-		if !self.typed_entry(arity) {
-			func.instruction(&I::RefAsNonNull);
-			self.emit_node_as_kind(&mut func, function.return_kind);
-		}
-		func.instruction(&I::End);
-		self.code.function(&func);
+		self.function_body(vec![Ref(RefType { nullable: true, heap_type: HeapType::Concrete(closure) })], |s, func| {
+			Self::emit_list(func, &[
+				I::LocalGet(0), I::StructGet { struct_type_index: s.type_manager.node_type, field_index: NODE_DATA_FIELD },
+				I::RefTestNonNull(HeapType::Concrete(closure)),
+			]);
+			s.emit_fail_unless(func, NOT_A_FUNCTION);
+			Self::emit_list(func, &[
+				I::LocalGet(0), I::StructGet { struct_type_index: s.type_manager.node_type, field_index: NODE_DATA_FIELD },
+				I::RefCastNonNull(HeapType::Concrete(closure)), I::LocalTee(closure_local),
+				I::StructGet { struct_type_index: closure, field_index: ENTRY_FIELD }, I::RefTestNonNull(HeapType::Concrete(entry)),
+			]);
+			s.emit_fail_unless(func, WRONG_ARGUMENT_COUNT);
+			Self::emit_list(func, &[I::LocalGet(closure_local), I::StructGet { struct_type_index: closure, field_index: CAPTURED_FIELD }]);
+			for argument in 1..=arity {
+				func.instruction(&I::LocalGet(argument as u32));
+			}
+			Self::emit_list(func, &[
+				I::LocalGet(closure_local), I::StructGet { struct_type_index: closure, field_index: ENTRY_FIELD },
+				I::RefCastNonNull(HeapType::Concrete(entry)), I::CallRef(entry),
+			]);
+			if !s.typed_entry(arity) {
+				func.instruction(&I::RefAsNonNull);
+				s.emit_node_as_kind(func, function.return_kind);
+			}
+		});
 		let index = function.func_index.expect("registered in pass 1");
 		self.exports.export(name, ExportKind::Func, index);
 	}
@@ -394,9 +379,10 @@ impl WasmGcEmitter {
 		}
 		let closure = self.closure_type();
 		self.emit_node_instructions(func, callee);
-		func.instruction(&I::StructGet { struct_type_index: self.type_manager.node_type, field_index: NODE_DATA_FIELD });
-		func.instruction(&I::RefCastNonNull(HeapType::Concrete(closure)));
-		func.instruction(&I::StructGet { struct_type_index: closure, field_index: CAPTURED_FIELD });
+		Self::emit_list(func, &[
+			I::StructGet { struct_type_index: self.type_manager.node_type, field_index: NODE_DATA_FIELD },
+			I::RefCastNonNull(HeapType::Concrete(closure)), I::StructGet { struct_type_index: closure, field_index: CAPTURED_FIELD },
+		]);
 		for (value, param) in values.iter().zip(&helper.params[1..]) {
 			self.emit_value_of_kind(func, value, param_kind(param));
 		}
@@ -440,19 +426,14 @@ impl WasmGcEmitter {
 		let (_, position) = crate::closures::capture_reader(name).expect("a capture reader");
 		let closure = self.closure_type();
 		let node_type = self.type_manager.node_type;
-		let mut func = Function::new(vec![]);
-		func.instruction(&I::LocalGet(0));
-		func.instruction(&I::StructGet { struct_type_index: node_type, field_index: NODE_DATA_FIELD });
-		func.instruction(&I::RefCastNonNull(HeapType::Concrete(closure)));
-		func.instruction(&I::StructGet { struct_type_index: closure, field_index: CAPTURED_FIELD });
-		for _ in 0..position {
-			func.instruction(&I::StructGet { struct_type_index: node_type, field_index: NODE_VALUE_FIELD });
-		}
-		func.instruction(&I::StructGet { struct_type_index: node_type, field_index: NODE_DATA_FIELD });
-		func.instruction(&I::RefCastNonNull(HeapType::Concrete(node_type)));
-		self.emit_node_as_kind(&mut func, reader.return_kind);
-		func.instruction(&I::End);
-		self.code.function(&func);
+		self.function_body(vec![], |s, func| {
+			Self::emit_list(func, &[
+				I::LocalGet(0), I::StructGet { struct_type_index: node_type, field_index: NODE_DATA_FIELD },
+				I::RefCastNonNull(HeapType::Concrete(closure)), I::StructGet { struct_type_index: closure, field_index: CAPTURED_FIELD },
+			]);
+			s.emit_nth_cell_data(func, position);
+			s.emit_node_as_kind(func, reader.return_kind);
+		});
 		self.exports.export(name, ExportKind::Func, reader.func_index.expect("registered in pass 1"));
 	}
 
@@ -471,8 +452,7 @@ impl WasmGcEmitter {
 
 	/// The runtime error `error` unless the i32 on the stack is true
 	fn emit_fail_unless(&mut self, func: &mut Function, error: &'static str) {
-		func.instruction(&I::I32Eqz);
-		func.instruction(&I::If(BlockType::Empty));
+		Self::emit_list(func, &[I::I32Eqz, I::If(BlockType::Empty)]);
 		self.emit_runtime_error(func, error);
 		func.instruction(&I::End);
 	}

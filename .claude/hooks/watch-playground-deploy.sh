@@ -36,6 +36,13 @@ if gh run watch $run_id -R $REPO --exit-status >/dev/null 2>&1; then
   [[ -n $by_hand ]] && echo "playground deployed: ${commit:0:9} (run $run_id)"
   exit 0
 fi
+# a newer push to main cancels this run's remaining jobs (usually verify, after the deploy): no job failed, so nothing
+# is broken, and the newer push's own watch reports its deploy
+failed_jobs=$(gh run view $run_id -R $REPO --json jobs -q '[.jobs[] | select(.conclusion == "failure")] | length' 2>/dev/null)
+if [[ $failed_jobs == 0 ]]; then
+  [[ -n $by_hand ]] && echo "playground run $run_id for ${commit:0:9} was cancelled by a newer push, no job failed"
+  exit 0
+fi
 {
   echo "PLAYGROUND DEPLOY FAILED for ${commit:0:9}: https://github.com/$REPO/actions/runs/$run_id"
   echo "The live playground keeps the last good deploy until this is fixed. Failing lines:"

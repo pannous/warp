@@ -22,6 +22,9 @@ const sessionValues = {};
 const contentText = content => typeof content === "string" ? content : JSON.stringify(content);
 const utf8 = new TextEncoder();
 
+// the pointer the page shares (canvas.js pointerMessage) as the worker keeps it: self.pagePointer, read by system_value
+const sharedPointer = ({ buffer, names }) => ({ values: new Int32Array(buffer), names });
+
 // copy bytes into the program's memory from its text heap, the rule of src/host.rs write_bytes_to_caller
 function writeBytes(program, bytes) {
 	const heap = program[TEXT_HEAP_EXPORT];
@@ -46,6 +49,26 @@ function scratch(program, byteCount) {
 	const missing = address + byteCount - program.memory.buffer.byteLength;
 	if (missing > 0) program.memory.grow(Math.ceil(missing / (1 << PAGE_BITS)));
 	return address;
+}
+
+// [width, height, then how much each pixel is covered from 0 to 255, row by row] of the words set in a sans-serif font
+// `size` pixels per em on one line, as src/text_raster.rs does natively: an OffscreenCanvas works in the run's Worker too
+const TEXT_FONT = "sans-serif";
+function textCoverage(words, size) {
+	const font = `${size}px ${TEXT_FONT}`;
+	const measured = new OffscreenCanvas(1, 1).getContext("2d");
+	measured.font = font;
+	const metrics = measured.measureText(words);
+	const width = Math.max(1, Math.ceil(metrics.width));
+	const height = Math.max(1, Math.ceil(metrics.fontBoundingBoxAscent + metrics.fontBoundingBoxDescent));
+	const context = new OffscreenCanvas(width, height).getContext("2d");
+	context.font = font;
+	context.fillText(words, 0, metrics.fontBoundingBoxAscent);
+	const pixels = context.getImageData(0, 0, width, height).data;
+	const covered = new Uint32Array(2 + width * height);
+	covered.set([width, height]);
+	for (let pixel = 0; pixel < width * height; pixel++) covered[2 + pixel] = pixels[pixel * 4 + 3];
+	return covered;
 }
 
 // u32s as a list of Ints, built in one call of the program's ints_to_list (gpu_render's pixels); undefined without it
@@ -119,8 +142,8 @@ function programImports(holder, hooks) {
 			},
 			// std_pure / std_io(module, member, arguments): a word of lib/<module>.warp (src/std_adapters.rs), by the
 			// adapters the parts add (host-hashes.js hash, json and regex; host-files.js file, net, store and os)
-			std_pure: (module, member, argumentList) => stdCall(program(), module, member, argumentList, holder.warnings),
-			std_io: (module, member, argumentList) => stdCall(program(), module, member, argumentList, holder.warnings),
+			std_pure: (module, member, argumentList) => stdCall(program(), module, member, argumentList, holder),
+			std_io: (module, member, argumentList) => stdCall(program(), module, member, argumentList, holder),
 			// `serve 8080 {…}` (src/web_server.rs): a page cannot listen on a port
 			serve_routes: port => { throw new Error(`serve ${port}: a server runs only in the native host (the warp CLI)`); },
 			// the host words (src/host.rs): a page cannot block, so sleep busy-waits
@@ -145,7 +168,7 @@ function programImports(holder, hooks) {
 				const value = decode(cString(name));
 				if (value === "online") return BigInt(navigator.onLine);
 				if (value === "time of day") { const now = new Date(); return BigInt(now - new Date(now).setHours(0, 0, 0, 0)); }
-				const pointerIndex = self.pagePointer?.names.indexOf(value) ?? -1; // playground.js trackPointer
+				const pointerIndex = self.pagePointer?.names.indexOf(value) ?? -1; // canvas.js trackPointer
 				if (pointerIndex >= 0) return BigInt(Atomics.load(self.pagePointer.values, pointerIndex));
 				// a Worker has no matchMedia: the page tells it (playground.js tellSystemValues)
 				const known = value === "dark mode" && globalThis.matchMedia ? matchMedia(DARK_MODE_QUERY).matches : self.pageSystemValues?.[value];
@@ -157,6 +180,11 @@ function programImports(holder, hooks) {
 				const shown = plainOfTree(readNode(program(), text));
 				if (!hooks.notify) throw new Error(`notify ${JSON.stringify(shown)}: this page shows no notifications`);
 				hooks.notify(typeof shown === "string" ? shown : JSON.stringify(shown));
+			},
+			// text_coverage(words, size) (label of use draw, card paint-text): the words set by the browser's canvas
+			text_coverage: (words, size) => {
+				const covered = textCoverage(String(plainOfTree(readNode(program(), words))), Number(size));
+				return listOfInts(program(), covered) ?? buildValue(program(), treeOfPlain(Array.from(covered)));
 			},
 			clipboard_text: () => { throw new Error("clipboard: the playground cannot read it (the browser's clipboard is asynchronous)"); },
 			// `exit(code)` ends the run, its value ø (P121): runProgram tells it from a failure by holder.exitCode
@@ -175,6 +203,14 @@ function programImports(holder, hooks) {
 					painted = Array.from(holder.gpuRendered(painted, width, height, values));
 				}
 				hooks.paint(painted, Number(width), Number(height));
+			},
+			// sound_samples(samples, count, rate) (src/host.rs, lib/sound.warp): the page plays them with WebAudio
+			// (playground.js playSound); a run without a page (tests, node) has no speakers and stays silent, as natively
+			// render_sound writes them, played or not, into a WAV (host-files.js STD_ADAPTERS.sound.render)
+			sound_samples: (samples, count, rate) => {
+				const values = intsOfList(program(), samples, Number(count)) ?? plainOfTree(readNode(program(), samples));
+				(holder.unrenderedSounds ??= []).push({ samples: values, rate: Number(rate) });
+				hooks.sound?.(values, Number(rate));
 			},
 			...Object.assign({}, ...eachHostPart("words", holder, hooks, access)),
 		},
@@ -242,13 +278,14 @@ function buildValue(module, tree) {
 	}
 }
 
-// an adapter reports a runtime warning with this.warn(message) (host-files.js openTable)
-function stdCall(program_, module, member, argumentList, warnings) {
+// an adapter reports a runtime warning with this.warn(message) (host-files.js openTable) and reaches its run's state as
+// this.holder (host-files.js sound.render)
+function stdCall(program_, module, member, argumentList, holder) {
 	const [moduleName, memberName, given] = [module, member, argumentList].map(node => plainOfTree(readNode(program_, node)));
 	const adapter = STD_ADAPTERS[moduleName]?.[memberName];
 	if (!adapter) throw new Error(`${moduleName}.${memberName}: no such word in the browser`);
 	try {
-		const context = { warn: message => warnings.push(message) };
+		const context = { warn: message => holder.warnings.push(message), holder };
 		return buildValue(program_, treeOfPlain(adapter.apply(context, Array.isArray(given) ? given : [given])));
 	} catch (error) {
 		// the program raises it (src/wasm_emitter/ffi_emitter.rs emit_ffi_result): `try` catches it
@@ -344,18 +381,25 @@ function stopListening(holder) {
 	holder.stopTimers?.();
 }
 
+// JSPI (WebAssembly.Suspending and promising; Safari has none): an awaited run's main waits for the promise a foreign
+// call gives, suspended until it settles (card jspi-page). Its outcome is then a promise too
+const JSPI = typeof WebAssembly.Suspending === "function" && typeof WebAssembly.promising === "function";
+// next(value), once value settles when it is a promise
+const whenSettled = (value, next) => value instanceof Promise ? value.then(next) : next(value);
+
 // run a compiled program: the outcome src/web.rs run_outcome reads
-function runProgram(bytes, hooks) {
-	const holder = instantiateProgram(bytes, hooks);
+function runProgram(bytes, hooks, awaited = false) {
+	const holder = instantiateProgram(bytes, hooks, undefined, awaited && JSPI);
 	return holder.failure ? holder : runMain(holder, hooks);
 }
 
 // the program's instance, its main not run yet (a built site first loads the module of the route it shows, site.js);
 // { failure } when it cannot be instantiated
-// `compiled`: the module compiled already, where a host compiles none from bytes (a Cloudflare Worker, cloud-worker.js)
-function instantiateProgram(bytes, hooks, compiled) {
+// `compiled`: the module compiled already, where a host compiles none from bytes (a Cloudflare Worker, cloud-worker.js);
+// `awaited`: main may wait for promises (JSPI)
+function instantiateProgram(bytes, hooks, compiled, awaited = false) {
 	// the runtime warnings go back to the compiler, which reports them (src/web.rs); the page's path is the page's own
-	const holder = { warnings: [], pagePath: hooks.pagePath?.() };
+	const holder = { warnings: [], pagePath: hooks.pagePath?.(), awaited };
 	try {
 		const module = compiled ?? new WebAssembly.Module(bytes);
 		holder.run = { module, bytes };
@@ -371,13 +415,18 @@ function instantiateProgram(bytes, hooks, compiled) {
 // main of an instantiated program, and what it left
 function runMain(holder, hooks) {
 	const { exports } = holder;
-	const outcome = outcomeOf(holder, hooks, () => withExitHandler(holder, exports, () => exports.main()));
-	const events = pageEvents(exports);
-	// a program with routes stays for its links (lowering/routes.rs page·routes)
-	if ((events.length > 0 || holder.timers || holder.fetches || exports[PAGE_ROUTES_EXPORT] || exports[PAGE_SUBMITTED_EXPORT]) && outcome.result) hooks.listen?.(holder, events);
-	// a run without page events (lib/markup.warp rendering the page's HTML, src/markup.rs) keeps the page's run
-	if (events.length > 0 && outcome.result) listeningRun = holder;
-	return outcome;
+	// a foreign call's promise suspends main only while it runs: a page event's handler cannot wait (host-foreign.js)
+	const main = holder.awaited ? WebAssembly.promising(exports.main) : exports.main;
+	holder.waiting = holder.awaited;
+	return whenSettled(outcomeOf(holder, hooks, () => withExitHandler(holder, exports, () => main())), outcome => {
+		holder.waiting = false;
+		const events = pageEvents(exports);
+		// a program with routes stays for its links (lowering/routes.rs page·routes)
+		if ((events.length > 0 || holder.timers || holder.fetches || exports[PAGE_ROUTES_EXPORT] || exports[PAGE_SUBMITTED_EXPORT]) && outcome.result) hooks.listen?.(holder, events);
+		// a run without page events (lib/markup.warp rendering the page's HTML, src/markup.rs) keeps the page's run
+		if (events.length > 0 && outcome.result) listeningRun = holder;
+		return outcome;
+	});
 }
 
 // the last run that handles page events, for the compiler's warp_host.page_event (src/headless.rs in the browser tests)
@@ -414,13 +463,17 @@ function withExitHandler(holder, exports, call) {
 		}
 	};
 	const runHandler = () => (handler.length ? withCode() : handler());
+	const failed = trap => {
+		if (holder.exitCode !== undefined) runHandler();
+		throw trap;
+	};
 	let result;
 	try {
 		result = call();
 	} catch (trap) {
-		if (holder.exitCode !== undefined) runHandler();
-		throw trap;
+		failed(trap);
 	}
+	if (result instanceof Promise) return result.then(value => (runHandler(), value), failed);
 	runHandler();
 	return result;
 }
@@ -428,18 +481,25 @@ function withExitHandler(holder, exports, call) {
 // the outcome of a call into a run's instance (main, or a page event's handler), as src/web.rs run_outcome reads it
 function outcomeOf(holder, hooks, call) {
 	const { warnings, exports } = holder;
-	try {
-		const result = call();
+	const finished = result => {
 		const unread = eachHostPart("finished", holder, hooks).find(Boolean);
 		if (unread) return { failure: unread, warnings };
 		return { result: readResult(exports, result), html: hooks.renders ? renderedHtml(exports, result) : undefined, warnings };
-	} catch (trap) {
+	};
+	const failed = trap => {
 		eachHostPart("ended", holder);
 		if (holder.exitCode !== undefined) return { result: { kind: "0", data: null, chain: [] }, warnings };
 		if (holder.blockError !== undefined) return { error: holder.blockError, warnings };
+		if (holder.lastPromised && SUSPENSION_FAILURE.test(trap.message)) return { failure: `${holder.lastPromised}: ${NESTED_PROMISE_REFUSAL}`, warnings };
 		if (!(trap instanceof WebAssembly.RuntimeError || trap instanceof RangeError)) return { failure: String(trap.message ?? trap), warnings };
 		const detail = exports[TRAP_DETAIL_EXPORT]?.value;
 		return { trap: trap.message, trace: trap.stack ?? "", detail: detail ? readNode(exports, detail) : null, warnings };
+	};
+	try {
+		const result = call();
+		return result instanceof Promise ? result.then(finished).catch(failed) : finished(result);
+	} catch (trap) {
+		return failed(trap);
 	}
 }
 

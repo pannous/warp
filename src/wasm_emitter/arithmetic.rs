@@ -22,7 +22,8 @@ impl WasmGcEmitter {
 		if op.is_arithmetic() && self.emit_typed_arithmetic(func, left, op, right) {
 			return;
 		}
-		if let Some(function) = crate::analyzer::node_arithmetic(self.get_type(left), op, self.get_type(right)) {
+		let run_time_power = *op == Op::Pow && self.arithmetic_type(left, op, right) == Kind::Data;
+		if let Some(function) = crate::analyzer::node_arithmetic(self.get_type(left), op, self.get_type(right)).or(run_time_power.then_some(super::list_ops::NODE_POW)) {
 			self.emit_node_instructions(func, left);
 			self.emit_node_instructions(func, right);
 			self.emit_call(func, function);
@@ -31,11 +32,7 @@ impl WasmGcEmitter {
 		let use_float = self.should_use_float(left, right, op);
 
 		if self.emit_assign_or_define(func, left, op, right, use_float) {
-			if use_float {
-				self.emit_call(func, "new_float");
-			} else {
-				self.emit_call(func, "new_int");
-			}
+			self.emit_call(func, if use_float { "new_float" } else { "new_int" });
 			return;
 		}
 		if self.emit_inc_dec(func, left, op) {
@@ -43,25 +40,14 @@ impl WasmGcEmitter {
 			return;
 		}
 		if self.emit_compound_assign(func, left, op, right, use_float) {
-			if use_float {
-				self.emit_call(func, "new_float");
-			} else {
-				self.emit_call(func, "new_int");
-			}
+			self.emit_call(func, if use_float { "new_float" } else { "new_int" });
 			return;
 		}
 
-		let wrap = if use_float {
-			if self.emit_float_truthy_logical(func, left, op, right) {
-				return;
-			}
-			self.emit_float_binary(func, left, op, right)
-		} else {
-			if self.emit_int_truthy_logical(func, left, op, right) {
-				return;
-			}
-			self.emit_int_binary(func, left, op, right)
-		};
+		if self.emit_numeric_logical(func, left, op, right, use_float) {
+			return;
+		}
+		let wrap = if use_float { self.emit_float_binary(func, left, op, right) } else { self.emit_int_binary(func, left, op, right) };
 
 		self.wrap_arithmetic_result(func, wrap);
 	}
@@ -82,9 +68,8 @@ impl WasmGcEmitter {
 			return false;
 		}
 
-		// Check for string assignment in WASI mode - skip emit (tracked in Local)
+		// a text assigned in WASI mode lives in its Local's data_pointer/data_length (string_table.rs): the value is 0
 		if self.config.emit_wasi_imports && matches!(right.drop_meta(), Node::Text(_)) {
-			// String data stored in Local's data_pointer/data_length, just emit 0
 			func.instruction(&I::I64Const(0));
 			return true;
 		}
@@ -126,20 +111,20 @@ impl WasmGcEmitter {
 		if *op != Op::Inc && *op != Op::Dec {
 			return false;
 		}
+		self.emit_local_step(func, left, op);
+		true
+	}
 
-		// i++ → i = i + 1 (returns new value)
-		// i-- → i = i - 1 (returns new value)
-		if let Node::Symbol(name) = left.drop_meta() {
-			let Some(local_pos) = self.defined_local_position(func, name) else { return true };
-			self.emit_int_step(func, local_pos, self.int_range(left), op);
-			self.emit_fits_declared(func, left);
-			// Store and return new value
-			func.instruction(&I::LocalTee(local_pos));
-			true
-		} else {
+	/// `i++` → `i = i + 1`, `i--` → `i = i - 1` of a local: the new value stored and left on the stack
+	fn emit_local_step(&mut self, func: &mut Function, left: &Node, op: &Op) {
+		let Some(name) = left.symbol_name() else {
 			self.emit_malformed(func, left, "a variable to increment or decrement");
-			true
-		}
+			return;
+		};
+		let Some(local_pos) = self.defined_local_position(func, name) else { return };
+		self.emit_int_step(func, local_pos, self.int_range(left), op);
+		self.emit_fits_declared(func, left);
+		func.instruction(&I::LocalTee(local_pos));
 	}
 
 	/// A local holding a float, or a global (`global b` in a function) that no local of the same name shadows
@@ -177,22 +162,15 @@ impl WasmGcEmitter {
 			if !use_float && self.emit_compound_type_error(func, left, &base_op, right) {
 				return true;
 			}
-			// Get current value of x
 			func.instruction(&I::LocalGet(local_pos));
-			// Emit y
 			if use_float {
 				self.emit_float_value(func, right);
-			} else {
-				self.emit_numeric_value(func, right);
-			}
-			// Apply base operation
-			if use_float {
 				self.emit_float_arithmetic(func, &base_op);
 			} else {
+				self.emit_numeric_value(func, right);
 				self.emit_int_compound_op(func, &base_op, right);
 				self.emit_fits_declared(func, left);
 			}
-			// Store result and leave on stack
 			func.instruction(&I::LocalTee(local_pos));
 			true
 		} else {
@@ -220,8 +198,7 @@ impl WasmGcEmitter {
 			Op::Not => {
 				// not x = x is falsy: 0, ø and errors
 				self.emit_condition(func, right, Self::emit_numeric_value);
-				func.instruction(&I::I32Eqz);
-				func.instruction(&I::I64ExtendI32U);
+				Self::emit_list(func, &[I::I32Eqz, I::I64ExtendI32U]);
 			}
 			Op::Abs => {
 				self.emit_numeric_value(func, right);
@@ -271,18 +248,11 @@ impl WasmGcEmitter {
 			func.instruction(&I::I64Const(0));
 			return;
 		}
-		// Check for return statement: [Symbol("return"), value]
-		if items.len() == 2 {
-			if let Node::Symbol(keyword) = items[0].drop_meta() {
-				if keyword == "return" {
-					// Emit the return value, as the Node a Node-returning function gives back
-					self.emit_returned_value(func, &items[1]);
-					func.instruction(&I::Return);
-					// After return, emit unreachable to satisfy block types
-					func.instruction(&I::I64Const(0));
-					return;
-				}
-			}
+		// `return value`: the value as the Node a Node-returning function gives back; the 0 after it types the block
+		if items.len() == 2 && items[0].is_symbol("return") {
+			self.emit_returned_value(func, &items[1]);
+			Self::emit_list(func, &[I::Return, I::I64Const(0)]);
+			return;
 		}
 		// Integer conversion: int("5") + 3
 		if items.len() == 2 && self.get_type(node) == Kind::Int && matches!(items[0].drop_meta(), Node::Symbol(s) if type_word_kind(s) == Some(Kind::Int)) {
@@ -291,17 +261,14 @@ impl WasmGcEmitter {
 			return;
 		}
 		// a call of a user or FFI function: `(f)` without arguments, `f(a, b…)`
-		if items.len() >= 2 || *bracket == Bracket::Round {
-			if let Node::Symbol(fn_name) = items[0].drop_meta() {
-				if self.ctx.user_functions.contains_key(fn_name) {
-					self.emit_user_function_call_numeric(func, fn_name, &items[1..]);
-					return;
-				}
-				// Check for FFI function call
-				if self.ctx.ffi_imports.contains_key(fn_name) {
-					self.emit_ffi_call(func, fn_name, &items[1..], Some(Kind::Int));
-					return;
-				}
+		if let Some(fn_name) = super::list_emitter::called_word(items, bracket, separator) {
+			if self.ctx.user_functions.contains_key(fn_name) {
+				self.emit_user_function_call_numeric(func, fn_name, &items[1..]);
+				return;
+			}
+			if self.ctx.ffi_imports.contains_key(fn_name) {
+				self.emit_ffi_call(func, fn_name, &items[1..], Some(Kind::Int));
+				return;
 			}
 		}
 		// Rounding and counting builtins build a node: its Int is the number
@@ -351,21 +318,19 @@ impl WasmGcEmitter {
 		if self.is_library_word_call(items, bracket, separator) {
 			return self.emit_node_as_f64(func, &Node::List(items.to_vec(), bracket.clone(), separator.clone()));
 		}
-		if items.len() >= 2 || *bracket == Bracket::Round {
-			if let Node::Symbol(fn_name) = items[0].drop_meta() {
-				if self.ctx.ffi_imports.contains_key(fn_name) {
-					self.emit_ffi_call(func, fn_name, &items[1..], Some(Kind::Float));
-					return;
-				}
-				if self.ctx.user_functions.contains_key(fn_name) {
-					self.emit_user_function_call_float(func, fn_name, &items[1..]);
-					return;
-				}
-				// `float(x)` is `x as float` (a text parses its digits)
-				if let [type_word, value] = items {
-					if crate::type_kinds::canonical_type_name(fn_name) == "float" {
-						return self.emit_float_value(func, &Node::Key(Box::new(value.clone()), Op::As, Box::new(type_word.clone())));
-					}
+		if let Some(fn_name) = super::list_emitter::called_word(items, bracket, separator) {
+			if self.ctx.ffi_imports.contains_key(fn_name) {
+				self.emit_ffi_call(func, fn_name, &items[1..], Some(Kind::Float));
+				return;
+			}
+			if self.ctx.user_functions.contains_key(fn_name) {
+				self.emit_user_function_call_float(func, fn_name, &items[1..]);
+				return;
+			}
+			// `float(x)` is `x as float` (a text parses its digits)
+			if let [type_word, value] = items {
+				if crate::type_kinds::canonical_type_name(fn_name) == "float" {
+					return self.emit_float_value(func, &Node::Key(Box::new(value.clone()), Op::As, Box::new(type_word.clone())));
 				}
 			}
 		}
@@ -406,8 +371,7 @@ impl WasmGcEmitter {
 					return;
 				}
 				if self.emit_typed_list_store(func, name, right) {
-					func.instruction(&I::Drop);
-					func.instruction(&I::I64Const(0));
+					Self::emit_list(func, &[I::Drop, I::I64Const(0)]);
 					return;
 				}
 				if kind.is_ref() {
@@ -443,15 +407,7 @@ impl WasmGcEmitter {
 			self.emit_numeric_value(func, &assignment);
 			return;
 		}
-		if let Node::Symbol(name) = left.drop_meta() {
-			let Some(local_pos) = self.defined_local_position(func, name) else { return };
-			self.emit_int_step(func, local_pos, self.int_range(left), op);
-			self.emit_fits_declared(func, left);
-			// Store and return new value
-			func.instruction(&I::LocalTee(local_pos));
-		} else {
-			self.emit_malformed(func, left, "a variable to increment or decrement");
-		}
+		self.emit_local_step(func, left, op);
 	}
 
 	/// An update the plain assignment does: of a global, and `x /= y`, which is exactly `x = x / y`
@@ -493,25 +449,19 @@ impl WasmGcEmitter {
 		}
 	}
 
-	pub(super) fn emit_float_truthy_logical(
-		&mut self,
-		func: &mut Function,
-		left: &Node,
-		op: &Op,
-		right: &Node,
-	) -> bool {
+	/// `a and b`, `a or b` of numbers, as a new Float or Int: and gives a falsy left, else right; or gives a truthy
+	/// left, else right. Left is evaluated once.
+	fn emit_numeric_logical(&mut self, func: &mut Function, left: &Node, op: &Op, right: &Node, is_float: bool) -> bool {
 		if *op != Op::And && *op != Op::Or {
 			return false;
 		}
-
-		// and: a falsy left is the value, else right; or: a truthy left is the value, else right. Left is evaluated once.
-		self.emit_held_left_is_falsy(func, left, true);
-		func.instruction(&I::If(BlockType::Result(ValType::F64)));
-		self.emit_logical_branch(func, op == &Op::And, right, true);
+		self.emit_held_left_is_falsy(func, left, is_float);
+		func.instruction(&I::If(BlockType::Result(if is_float { ValType::F64 } else { ValType::I64 })));
+		self.emit_logical_branch(func, op == &Op::And, right, is_float);
 		func.instruction(&I::Else);
-		self.emit_logical_branch(func, op == &Op::Or, right, true);
+		self.emit_logical_branch(func, op == &Op::Or, right, is_float);
 		func.instruction(&I::End);
-		self.emit_call(func, "new_float");
+		self.emit_call(func, if is_float { "new_float" } else { "new_int" });
 		true
 	}
 
@@ -545,42 +495,13 @@ impl WasmGcEmitter {
 		}
 	}
 
-	pub(super) fn emit_int_truthy_logical(
-		&mut self,
-		func: &mut Function,
-		left: &Node,
-		op: &Op,
-		right: &Node,
-	) -> bool {
-		if *op != Op::And && *op != Op::Or {
-			return false;
-		}
-
-		self.emit_held_left_is_falsy(func, left, false);
-		func.instruction(&I::If(BlockType::Result(ValType::I64)));
-		self.emit_logical_branch(func, op == &Op::And, right, false);
-		func.instruction(&I::Else);
-		self.emit_logical_branch(func, op == &Op::Or, right, false);
-		func.instruction(&I::End);
-		self.emit_call(func, "new_int");
-		true
-	}
-
 	/// Apply an arithmetic operator to the two f64 on the stack. Mod is euclidean like the exact Ints, Rem truncates.
 	pub(super) fn emit_float_arithmetic(&mut self, func: &mut Function, op: &Op) {
 		match op {
-			Op::Add => {
-				func.instruction(&I::F64Add);
-			}
-			Op::Sub => {
-				func.instruction(&I::F64Sub);
-			}
-			Op::Mul => {
-				func.instruction(&I::F64Mul);
-			}
-			Op::Div => {
-				func.instruction(&I::F64Div);
-			}
+			Op::Add => { func.instruction(&I::F64Add); }
+			Op::Sub => { func.instruction(&I::F64Sub); }
+			Op::Mul => { func.instruction(&I::F64Mul); }
+			Op::Div => { func.instruction(&I::F64Div); }
 			Op::Mod | Op::Rem => self.emit_float_remainder(func, *op == Op::Mod),
 			Op::Pow => self.emit_float_power(func),
 			_ => self.emit_type_error(func, format!("`{op}` is not an operator on floats")),
@@ -588,13 +509,11 @@ impl WasmGcEmitter {
 	}
 
 	pub(super) fn push_float_scratch(&self, func: &mut Function, index: u32) {
-		func.instruction(&I::LocalGet(self.scratch(index)));
-		func.instruction(&I::F64ReinterpretI64);
+		Self::emit_list(func, &[I::LocalGet(self.scratch(index)), I::F64ReinterpretI64]);
 	}
 
 	pub(super) fn pop_float_scratch(&self, func: &mut Function, index: u32) {
-		func.instruction(&I::I64ReinterpretF64);
-		func.instruction(&I::LocalSet(self.scratch(index)));
+		Self::emit_list(func, &[I::I64ReinterpretF64, I::LocalSet(self.scratch(index))]);
 	}
 
 	/// `a - |b| * floor(a / |b|)` (euclidean) or `a - b * trunc(a / b)`; the f64 operands live in the i64 scratch locals as bits
@@ -614,8 +533,7 @@ impl WasmGcEmitter {
 		func.instruction(&I::F64Div);
 		func.instruction(if euclidean { &I::F64Floor } else { &I::F64Trunc });
 		push_divisor(self, func);
-		func.instruction(&I::F64Mul);
-		func.instruction(&I::F64Sub);
+		Self::emit_list(func, &[I::F64Mul, I::F64Sub]);
 	}
 
 	/// base ^ exponent through libm's pow; a NaN (negative base with a fractional exponent) traps as invalid_number
@@ -652,11 +570,9 @@ impl WasmGcEmitter {
 				for _ in 0..3 {
 					push_nearest(self, func);
 				}
-				func.instruction(&I::F64Mul);
-				func.instruction(&I::F64Mul);
+				Self::emit_list(func, &[I::F64Mul, I::F64Mul]);
 				self.push_float_scratch(func, radicand);
-				func.instruction(&I::F64Eq);
-				func.instruction(&I::Select);
+				Self::emit_list(func, &[I::F64Eq, I::Select]);
 			}
 			_ => {
 				func.instruction(&I::F64Sqrt);
@@ -746,8 +662,7 @@ impl WasmGcEmitter {
 
 	/// `local ± 1` for i++ / i--
 	pub(super) fn emit_int_step(&mut self, func: &mut Function, local_pos: u32, range: super::big_int::IntRange, op: &Op) {
-		func.instruction(&I::LocalGet(local_pos));
-		func.instruction(&I::I64Const(1));
+		Self::emit_list(func, &[I::LocalGet(local_pos), I::I64Const(1)]);
 		let step = if *op == Op::Inc { Op::Add } else { Op::Sub };
 		self.emit_int_op(func, &step, range, Some((1, 1)));
 	}
@@ -830,14 +745,37 @@ impl WasmGcEmitter {
 
 	/// The Node on the stack as f64: a Float's value, an Int's converted
 	pub(super) fn emit_held_node_as_f64(&mut self, func: &mut Function) {
-		let (held, node_type, float_box) = (self.node_scratch(), self.type_manager.node_type, self.type_manager.f64_box_type);
-		Self::emit_list(func, &[I::LocalTee(held), I::StructGet { struct_type_index: node_type, field_index: 0 }]);
-		Self::emit_list(func, &[I::I64Const(KIND_MASK), I::I64And, I::I64Const(Kind::Float as i64), I::I64Eq]);
+		let (node_type, float_box) = (self.type_manager.node_type, self.type_manager.f64_box_type);
+		let held = self.emit_held_node_is_float(func);
 		Self::emit_list(func, &[I::If(BlockType::Result(ValType::F64)), I::LocalGet(held), I::RefAsNonNull]);
 		Self::emit_list(func, &[I::StructGet { struct_type_index: node_type, field_index: 1 }, I::RefCastNonNull(HeapType::Concrete(float_box))]);
 		Self::emit_list(func, &[I::StructGet { struct_type_index: float_box, field_index: 0 }, I::Else, I::LocalGet(held), I::RefAsNonNull]);
 		self.emit_call(func, "get_int_value");
 		self.emit_int_to_f64(func, None);
+		func.instruction(&I::End);
+	}
+
+	/// The Node on the stack kept in the node scratch local, and whether it is a Float (an i32) on the stack
+	fn emit_held_node_is_float(&mut self, func: &mut Function) -> u32 {
+		let (held, node_type) = (self.node_scratch(), self.type_manager.node_type);
+		Self::emit_list(func, &[I::LocalTee(held), I::StructGet { struct_type_index: node_type, field_index: 0 }]);
+		Self::emit_list(func, &[I::I64Const(KIND_MASK), I::I64And, I::I64Const(Kind::Float as i64), I::I64Eq]);
+		held
+	}
+
+	/// ‖x‖ of a number Node computed at run time: a Float's is a Float, an Int's stays exact
+	pub(super) fn emit_node_abs(&mut self, func: &mut Function, node: &Node) {
+		let node_ref = RefType { nullable: false, heap_type: HeapType::Concrete(self.type_manager.node_type) };
+		self.emit_node_instructions(func, node);
+		let held = self.emit_held_node_is_float(func);
+		Self::emit_list(func, &[I::If(BlockType::Result(Ref(node_ref))), I::LocalGet(held)]);
+		self.emit_held_node_as_f64(func);
+		func.instruction(&I::F64Abs);
+		self.emit_call(func, "new_float");
+		Self::emit_list(func, &[I::Else, I::LocalGet(held), I::RefAsNonNull]);
+		self.emit_call(func, "get_int_value");
+		self.emit_int_abs(func, None);
+		self.emit_call(func, "new_int");
 		func.instruction(&I::End);
 	}
 

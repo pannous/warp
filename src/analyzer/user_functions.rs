@@ -129,7 +129,7 @@ pub(super) fn infer_function_return_kind(params: &[Param], body: &Node, function
 	// `return error("…")` is the failure path: it does not decide what the function returns
 	let is_error = |value: &Node| {
 		let value = match value.drop_meta() {
-			Node::List(items, _, _) if items.len() == 2 && matches!(items[0].drop_meta(), Node::Symbol(word) if word == "return") => &items[1],
+			Node::List(items, _, _) if items.len() == 2 && items[0].is_symbol("return") => &items[1],
 			other => other,
 		};
 		crate::pipeline::returned_error_message(value).is_some() // `error("…")` or `raise …`
@@ -140,7 +140,7 @@ pub(super) fn infer_function_return_kind(params: &[Param], body: &Node, function
 	let mut returned: Vec<Kind> = vec![];
 	body.visit(&mut |node| {
 		if let Node::List(items, _, _) = node {
-			if items.len() == 2 && matches!(items[0].drop_meta(), Node::Symbol(word) if word == "return") && !is_error(&items[1]) {
+			if items.len() == 2 && items[0].is_symbol("return") && !is_error(&items[1]) {
 				// `return` alone returns ø: a Node, so the function's numbers are Nodes too
 				let kind = if matches!(items[1].drop_meta(), Node::Empty) { Kind::Empty } else { infer_type(&items[1], &scope) };
 				returned.push(kind);
@@ -342,10 +342,7 @@ fn given_to_foreign_code(node: &Node) -> impl Iterator<Item = &str> {
 		},
 		_ => vec![],
 	};
-	given.into_iter().filter_map(|item| match item.drop_meta() {
-		Node::Symbol(name) => Some(name.as_str()),
-		_ => None,
-	})
+	given.into_iter().filter_map(Node::symbol_name)
 }
 
 /// The name `+` joins to a text: `" " + t`, `t + "!"`, `n times " " + t`, `t[0 ..< n] + "…"`; a list never
@@ -445,6 +442,13 @@ pub(super) fn infer_forwarded_parameters(ctx: &mut Context) {
 /// - `name := body` → Key(Symbol(name), Define, body) (uses implicit `it`)
 pub fn extract_user_functions(ctx: &mut Context, node: &Node) {
 	crate::analysis_memo::analysed(ctx, node, analyse_user_functions);
+}
+
+/// A fresh context holding the functions the program defines (extract_user_functions)
+pub fn function_context(node: &Node) -> Context {
+	let mut context = Context::new();
+	extract_user_functions(&mut context, node);
+	context
 }
 
 /// The functions a program defines (nested ones lifted as `outer·inner`) and the closure helpers it calls, without the
@@ -859,7 +863,7 @@ fn assigned_literal_kinds(body: &Node, name: &str) -> Vec<Kind> {
 	let mut kinds = vec![];
 	body.visit(&mut |node| {
 		let Node::Key(target, Op::Assign, value) = node else { return };
-		if !matches!(target.drop_meta(), Node::Symbol(target) if target == name) {
+		if !target.is_symbol(name) {
 			return;
 		}
 		if let Some(kind) = argument_literal_kind(value).map(|kind| if kind == Kind::Codepoint { Kind::Text } else { kind }) {

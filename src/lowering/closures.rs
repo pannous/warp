@@ -5,12 +5,13 @@
 //! becomes `closure_call_1(f, x)`, a helper per arity that call_refs the closure's entry (wasm_emitter/closures.rs).
 //! notes/closures.md describes the representation.
 
-use crate::analyzer::extract_user_functions;
+use super::words::{FOR_WORD, GLOBAL_WORD, IN_WORD};
+use super::nodes::{call, key, parameter_name};
 use crate::context::{Context, Param, UserFunctionDef};
 use crate::diagnostic::Diagnostic;
 use crate::lambdas::arrow_lambda;
 use crate::library_words::collect_assigned_names;
-use crate::node::{Bracket, Node, Separator};
+use crate::node::{symbol, Bracket, Node, Separator};
 use crate::operators::Op;
 use crate::type_kinds::Kind;
 use std::collections::{HashMap, HashSet};
@@ -41,8 +42,6 @@ const CAPTURE_LOCAL_MARK: &str = "·capture·";
 const CAPTURE_READER_MARK: &str = "·captured·";
 const LIFTED_PREFIX: &str = "closure_lambda_";
 const IMPLICIT_PARAMETER: &str = "it";
-const FOR_WORD: &str = "for";
-const IN_WORD: &str = "in";
 
 pub fn closure_call_name(arity: usize) -> String {
 	format!("{CLOSURE_CALL_PREFIX}{arity}")
@@ -53,17 +52,13 @@ pub fn closure_call_arity(name: &str) -> Option<usize> {
 	name.strip_prefix(CLOSURE_CALL_PREFIX)?.parse().ok()
 }
 
-fn call(name: &str, arguments: Vec<Node>) -> Node {
-	Node::List([vec![Node::Symbol(name.to_string())], arguments].concat(), Bracket::Round, Separator::None)
-}
-
 /// The call of the function value `function` with `arguments`
 pub fn closure_call(function: Node, arguments: Vec<Node>) -> Node {
 	call(&closure_call_name(arguments.len()), [vec![function], arguments].concat())
 }
 
 fn closure_new(target: &str, captured: Vec<Node>) -> Node {
-	call(CLOSURE_NEW, [vec![Node::Symbol(target.to_string())], captured].concat())
+	call(CLOSURE_NEW, [vec![symbol(target)], captured].concat())
 }
 
 /// `closure_new(target, captured…)`: the target and its captured values
@@ -162,8 +157,7 @@ fn for_loop_parts(node: &Node) -> Option<(&str, &Node)> {
 }
 
 fn lift_closures(program: Node) -> Node {
-	let mut context = Context::new();
-	extract_user_functions(&mut context, &program);
+	let context = crate::analyzer::function_context(&program);
 	let variables = captured_variables_of(&program);
 	let functions: HashSet<String> = context.user_functions.keys().cloned().collect();
 	// `g = x => x`: the parameter a function hands back, so `g(y => y*2)(4)` calls what it was given
@@ -239,7 +233,7 @@ fn with_capture_readers(node: Node, hoisted: &HashMap<String, (String, usize)>) 
 				}
 				for position in 0..*captured {
 					let reader = call(&format!("{closure_target}{CAPTURE_READER_MARK}{position}"), vec![Node::Symbol(variable.clone())]);
-					statements.push(Node::Key(Box::new(Node::Symbol(capture_local(variable, position))), Op::Assign, Box::new(reader)));
+					statements.push(key(Node::Symbol(capture_local(variable, position)), Op::Assign, reader));
 				}
 			}
 			Node::List(statements, bracket, separator)
@@ -410,7 +404,6 @@ fn is_field(node: &Node) -> bool {
 	holder_path(node).is_some_and(|path| path.contains('.'))
 }
 
-const GLOBAL_WORD: &str = "global";
 /// Methods that append one value to a list variable (analyzer APPEND_METHODS)
 const APPEND_METHODS: [&str; 3] = ["add", "append", "push"];
 
@@ -424,14 +417,6 @@ fn definition_parameters(node: &Node, functions: &HashSet<String>) -> Option<Vec
 			functions.contains(name).then(|| params.iter().filter_map(parameter_name).collect())
 		}
 		Node::Symbol(name) if functions.contains(name) => Some(vec![IMPLICIT_PARAMETER.to_string()]),
-		_ => None,
-	}
-}
-
-fn parameter_name(param: &Node) -> Option<String> {
-	match param.drop_meta() {
-		Node::Symbol(name) => Some(name.clone()),
-		Node::Key(name, _, _) => parameter_name(name),
 		_ => None,
 	}
 }
@@ -515,7 +500,7 @@ impl Lifting {
 				let arguments = arguments.into_iter().map(|argument| self.walk(argument, bound)).collect();
 				closure_call(Node::Key(list, Op::Hash, Box::new(position)), arguments)
 			}
-			Node::Key(left, op, right) => Node::Key(Box::new(self.walk(*left, bound)), op, Box::new(self.walk(*right, bound))),
+			Node::Key(left, op, right) => key(self.walk(*left, bound), op, self.walk(*right, bound)),
 			Node::List(items, bracket, separator) => {
 				let items: Vec<Node> = items.into_iter().map(|item| self.walk(item, bound)).collect();
 				self.called_value(items, bracket, separator, bound)
@@ -623,7 +608,7 @@ impl Lifting {
 			Node::Symbol(ref name) if !bound.contains(name) && !self.is_local_value(name) && self.function_named(name).is_some() => closure_new(&self.function_named(name).expect("guarded"), vec![]),
 			Node::Key(choice, op @ (Op::Then | Op::Else), chosen) => {
 				let choice = if op == Op::Else { self.function_value(*choice, bound) } else { *choice };
-				Node::Key(Box::new(choice), op, Box::new(self.function_value(*chosen, bound)))
+				key(choice, op, self.function_value(*chosen, bound))
 			}
 			Node::Meta { node, data } => Node::Meta { node: Box::new(self.function_value(*node, bound)), data },
 			// `return function add`
@@ -654,8 +639,8 @@ impl Lifting {
 		}
 		let name = format!("{LIFTED_PREFIX}{}", self.lifted.len() + 1);
 		let all_params = captured.iter().chain(&params).map(|param| Node::Symbol(param.clone()));
-		let head = Node::List([vec![Node::Symbol(name.clone())], all_params.collect()].concat(), Bracket::Round, Separator::None);
-		self.lifted.push(Node::Key(Box::new(head), Op::Define, Box::new(body)));
+		let head = call(&name.clone(), all_params.collect());
+		self.lifted.push(key(head, Op::Define, body));
 		self.functions.insert(name.clone());
 		closure_new(&name, captured.into_iter().map(Node::Symbol).collect())
 	}

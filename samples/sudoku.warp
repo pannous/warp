@@ -1,3 +1,4 @@
+#!/usr/bin/env warp
 // Sudoku Solver
 // Backtracking algorithm
 // the grid is a flat list of 81 cells, row by row; lists are shared, so each try fills a copy and solve returns the

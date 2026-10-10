@@ -11,14 +11,15 @@
 //! `after tested: print "ok"` (or `after test`) runs after every later statement that calls the function test,
 //! `before test {…}` before it.
 
+use super::words::{GLOBAL_WORD, ON_WORD};
+use super::nodes::{block, call, children_rewritten, if_then, key};
 use crate::declarations::{handler_parts, word};
-use crate::node::{Bracket, Node, Separator};
+use crate::node::{symbol, Bracket, Node, Separator};
 use crate::operators::Op;
 use std::collections::{HashMap, HashSet};
 
 const ONCE_WORD: &str = "once";
 const WHENEVER_WORD: &str = "whenever";
-const ON_WORD: &str = "on";
 const SET_WORD: &str = "set";
 const CHANGE_WORD: &str = "change";
 const AFTER_WORD: &str = "after";
@@ -47,7 +48,6 @@ const LAST_PREFIX: &str = "change_last_";
 const CHECK_PREFIX: &str = "signal·check·";
 /// `signal_listening_0`: whether the listener was declared yet
 const LISTENING_PREFIX: &str = "signal_listening_";
-const GLOBAL_WORD: &str = "global";
 /// `p.age` as a watched or written name
 const FIELD_SEPARATOR: char = '.';
 
@@ -96,8 +96,8 @@ impl Listener {
 		match &self.fired {
 			None => if_then(condition.clone(), block(vec![self.body.clone()])),
 			Some(fired) => {
-				let not_fired = Node::Key(Box::new(Node::Empty), Op::Not, Box::new(Node::Symbol(fired.clone())));
-				let condition = Node::Key(Box::new(not_fired), Op::And, Box::new(condition.clone()));
+				let not_fired = key(Node::Empty, Op::Not, Node::Symbol(fired.clone()));
+				let condition = key(not_fired, Op::And, condition.clone());
 				if_then(condition, block(vec![assign(fired, Node::True), self.body.clone()]))
 			}
 		}
@@ -107,9 +107,9 @@ impl Listener {
 /// `whenever cond {body}` runs the body when cond becomes true (P156): `was = held; held = cond; if held and not was
 /// {body}`, the two flags remembered between the checks
 pub(crate) fn edge_check(held: &str, was: &str, condition: Node, body: Node) -> Node {
-	let not_before = Node::Key(Box::new(Node::Empty), Op::Not, Box::new(Node::Symbol(was.to_string())));
-	let became_true = Node::Key(Box::new(Node::Symbol(held.to_string())), Op::And, Box::new(not_before));
-	let parts = vec![assign(was, Node::Symbol(held.to_string())), assign(held, condition), if_then(became_true, block(vec![body]))];
+	let not_before = key(Node::Empty, Op::Not, symbol(was));
+	let became_true = key(symbol(held), Op::And, not_before);
+	let parts = vec![assign(was, symbol(held)), assign(held, condition), if_then(became_true, block(vec![body]))];
 	Node::List(parts, Bracket::Round, Separator::Semicolon)
 }
 
@@ -318,10 +318,7 @@ impl Signals {
 				let proxies = self.proxies(&Node::List(items.clone(), bracket.clone(), separator.clone()));
 				Node::List(items.into_iter().map(|item| self.lower(item, &proxies)).collect(), bracket, separator)
 			}
-			Node::List(items, bracket, separator) => Node::List(items.into_iter().map(|item| self.function_bodies(item)).collect(), bracket, separator),
-			Node::Key(left, op, right) => Node::Key(Box::new(self.function_bodies(*left)), op, Box::new(self.function_bodies(*right))),
-			Node::Meta { node, data } => Node::Meta { node: Box::new(self.function_bodies(*node)), data },
-			other => other,
+			other => children_rewritten(other, |child| self.function_bodies(child)),
 		}
 	}
 
@@ -330,7 +327,7 @@ impl Signals {
 		let globals = declared_globals(body);
 		self.remote.iter().enumerate().filter_map(|(number, listener)| {
 			let watched: HashSet<String> = listener.watched()?.intersection(&globals).cloned().collect();
-			let call = Node::List(vec![Node::Symbol(format!("{CHECK_PREFIX}{number}"))], Bracket::Round, Separator::None);
+			let call = call(&format!("{CHECK_PREFIX}{number}"), vec![]);
 			(!watched.is_empty()).then(|| Listener { trigger: Trigger::Write(watched), condition: None, body: call, fired: None, held: None, start: None })
 		}).collect()
 	}
@@ -413,7 +410,7 @@ impl Signals {
 			None => (vec![], body),
 		};
 		let body = self.lower(with_value(&body, &variable), &[]);
-		let changed = Node::Key(Box::new(variable.clone()), Op::Ne, Box::new(Node::Symbol(last.clone())));
+		let changed = key(variable.clone(), Op::Ne, Node::Symbol(last.clone()));
 		// a copy: a list or map changed in place (`x.add(2)`, P200b) is no longer the one remembered
 		let remember = || assign(&last, crate::library_words::copy_call(variable.clone(), Node::False));
 		Some(Listener {
@@ -429,7 +426,7 @@ impl Signals {
 	/// A body reading `old` (made by with_old): `change_old_0 = last` first, the body reading it
 	fn remembering_old(&mut self, with_old: impl Fn(&Node) -> Node, last: &str) -> (Vec<Node>, Node) {
 		let old = self.fresh_name(OLD_PREFIX);
-		(vec![assign(&old, Node::Symbol(last.to_string()))], with_old(&Node::Symbol(old)))
+		(vec![assign(&old, symbol(last))], with_old(&Node::Symbol(old)))
 	}
 
 	/// `after tested: body`, `before test {body}`: test must be a function of the program
@@ -499,8 +496,8 @@ fn with_watched_expressions(node: Node, count: &mut usize) -> Node {
 		Some((listener_word, expression, body)) => {
 			let name = Node::Symbol(format!("{WATCHED_PREFIX}{count}"));
 			*count += 1;
-			let derived = Node::Key(Box::new(name.clone()), Op::Define, Box::new(expression));
-			vec![derived, Node::List(vec![Node::Symbol(ON_WORD.to_string()), listener_word, name, body], Bracket::None, Separator::Space)]
+			let derived = key(name.clone(), Op::Define, expression);
+			vec![derived, Node::List(vec![symbol(ON_WORD), listener_word, name, body], Bracket::None, Separator::Space)]
 		}
 		None => vec![statement.clone()],
 	});
@@ -786,19 +783,6 @@ fn value_after_write(write: &Node) -> Node {
 	Node::Key(target.clone(), undo, Box::new(crate::node::int(1)))
 }
 
-pub(crate) fn if_then(condition: Node, body: Node) -> Node {
-	let head = Node::Key(Box::new(Node::Empty), Op::If, Box::new(condition));
-	Node::Key(Box::new(head), Op::Then, Box::new(body))
-}
-
-pub(crate) fn if_then_else(condition: Node, body: Node, otherwise: Node) -> Node {
-	Node::Key(Box::new(if_then(condition, body)), Op::Else, Box::new(otherwise))
-}
-
-pub(crate) fn block(statements: Vec<Node>) -> Node {
-	Node::List(statements, Bracket::Curly, Separator::Semicolon)
-}
-
 pub(crate) fn assign(name: &str, value: Node) -> Node {
-	Node::Key(Box::new(Node::Symbol(name.to_string())), Op::Assign, Box::new(value))
+	key(symbol(name), Op::Assign, value)
 }

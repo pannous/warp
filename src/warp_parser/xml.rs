@@ -121,147 +121,95 @@ impl WarpParser {
 			return self.skip_doctype();
 		}
 
-		// Check for closing tag </tag>
 		if self.current_char() == '/' {
-			// This is a closing tag, should be handled by parent
-			// Return error for unmatched closing tag
-			self.advance(); // skip '/'
-			let tag_name = self.parse_symbol().unwrap_or_default();
-			self.skip_until('>');
-			self.advance(); // skip '>'
+			// an unmatched closing tag; a matched one is consumed by its element
+			let tag_name = self.parse_closing_tag();
 			return error(&format!("Unmatched closing tag </{}>", tag_name));
 		}
 
-		let tag_name = match self.parse_symbol() {
-			Ok(name) => name,
-			Err(e) => return error(&e),
-		};
+		let tag_name = or_return_error!(self.parse_symbol());
 
 		let mut attributes = Vec::new();
 		self.skip_whitespace_and_comments();
-
 		while self.current_char() != '>' && self.current_char() != '/' && !self.end_of_input() {
-			let attr_name = match self.parse_symbol() {
-				Ok(name) => name,
-				Err(_) => break,
-			};
-
-			self.skip_whitespace_and_comments();
-
-			// Check for = sign
-			if self.current_char() == '=' {
-				self.advance(); // skip '='
-				self.skip_whitespace_and_comments();
-
-				// Parse attribute value (must be quoted)
-				let attr_value = if self.current_char() == '"' || self.current_char() == '\'' {
-					self.parse_string()
-				} else {
-					// Try to parse unquoted value
-					match self.parse_symbol() {
-						Ok(val) => Node::Text(val),
-						Err(_) => Empty,
-					}
-				};
-
-				// Store attribute as dotted key
-				attributes.push(key_ops(attr_name, Op::Assign, attr_value));
-				// attributes.push(Node::Key(Box::new(Symbol(format!(".{}", attr_name))), Op::Assign, Box::new(attr_value)));
-			} else {
-				// Boolean attribute (no value)
-				attributes.push(Node::Key(
-					Box::new(Symbol(format!(".{}", attr_name))),
-					Op::Assign,
-					Box::new(Node::True),
-				));
-			}
-
+			let Ok(attr_name) = self.parse_symbol() else { break };
+			attributes.push(key_ops(attr_name, Op::Assign, self.parse_attribute_value()));
 			self.skip_whitespace_and_comments();
 		}
 
-		// Check for self-closing tag
 		if self.current_char() == '/' {
 			self.advance(); // skip '/'
 			self.skip_whitespace_and_comments();
 			if self.current_char() == '>' {
-				self.advance(); // skip '>'
+				self.advance();
 			}
-			// Return self-closing tag with only attributes
-			return if attributes.is_empty() {
-				Node::Key(Box::new(Symbol(tag_name)), Op::Colon, Box::new(Empty))
-			} else {
-				Node::Key(
-					Box::new(Symbol(tag_name)),
-					Op::Colon,
-					Box::new(Node::List(attributes, Bracket::Curly, Separator::None)),
-				)
-			};
+			return xml_element(tag_name, curly_or_empty(attributes));
 		}
 
-		// Skip closing '>' of opening tag
 		if self.current_char() == '>' {
 			self.advance();
 		}
 
-		// Parse content until closing tag
-		let mut content_items = Vec::new();
-
+		let mut body_items = attributes;
 		while !self.end_of_input() {
-			// Check for closing tag (before skipping whitespace)
 			if self.current_char() == '<' && self.peek_char(1) == '/' {
 				self.advance(); // skip '<'
-				self.advance(); // skip '/'
-				let closing_name = self.parse_symbol().unwrap_or_default();
-				self.skip_until('>');
-				self.advance(); // skip '>'
-
+				let closing_name = self.parse_closing_tag();
 				if closing_name != tag_name {
-					return error(&format!(
-						"Mismatched tags: <{}> closed with </{}>",
-						tag_name, closing_name
-					));
+					return error(&format!("Mismatched tags: <{}> closed with </{}>", tag_name, closing_name));
 				}
-				break; // Successfully closed
+				break;
 			}
-
-			// Check for nested tag
-			if self.current_char() == '<' && self.peek_char(1) != '/' {
+			if self.current_char() == '<' {
 				let nested = self.parse_xml_tag();
 				if nested != Empty {
-					content_items.push(nested);
+					body_items.push(nested);
 				}
 				continue;
 			}
-
-			// Parse text content until next tag
 			let text = self.parse_xml_text_content();
 			if !text.is_empty() {
-				content_items.push(Node::Text(text));
+				body_items.push(Node::Text(text));
 			}
 		}
 
-		// Combine attributes and content
-		let mut body_items = attributes;
-		body_items.extend(content_items);
+		let body = match <[Node; 1]>::try_from(body_items) {
+			Ok([only]) => only,
+			Err(items) => curly_or_empty(items),
+		};
+		xml_element(tag_name, body)
+	}
 
-		if body_items.is_empty() {
-			Node::Key(
-				Box::new(Symbol(tag_name.clone())),
-				Op::Colon,
-				Box::new(Empty),
-			)
-		} else if body_items.len() == 1 {
-			Node::Key(
-				Box::new(Symbol(tag_name)),
-				Op::Colon,
-				Box::new(body_items.into_iter().next().unwrap()),
-			)
+	/// The value after an attribute name: `="quoted"`, `=unquoted`, or true for a bare boolean attribute
+	fn parse_attribute_value(&mut self) -> Node {
+		self.skip_whitespace_and_comments();
+		if self.current_char() != '=' {
+			return Node::True;
+		}
+		self.advance(); // skip '='
+		self.skip_whitespace_and_comments();
+		if self.current_char() == '"' || self.current_char() == '\'' {
+			self.parse_string()
 		} else {
-			Node::Key(
-				Box::new(Symbol(tag_name)),
-				Op::Colon,
-				Box::new(Node::List(body_items, Bracket::Curly, Separator::None)),
-			)
+			self.parse_symbol().map_or(Empty, Node::Text)
 		}
 	}
+
+	/// `/name>` after a `<`: the closing tag's name
+	fn parse_closing_tag(&mut self) -> String {
+		self.advance(); // skip '/'
+		let name = self.parse_symbol().unwrap_or_default();
+		self.skip_until('>');
+		self.advance(); // skip '>'
+		name
+	}
+}
+
+/// `tag: body`, how an XML element is written in warp
+fn xml_element(tag_name: String, body: Node) -> Node {
+	Node::Key(Box::new(Symbol(tag_name)), Op::Colon, Box::new(body))
+}
+
+fn curly_or_empty(items: Vec<Node>) -> Node {
+	if items.is_empty() { Empty } else { Node::List(items, Bracket::Curly, Separator::None) }
 }

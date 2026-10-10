@@ -132,8 +132,7 @@ impl WasmGcEmitter {
 			}
 			let stored_alike = |local: &&Local| self.storage_type(local.kind) == self.storage_type(kind);
 			if let Some(local) = self.scope.lookup(&name).filter(stored_alike) {
-				func.instruction(&I::LocalGet(local.position));
-				func.instruction(&I::GlobalSet(global));
+				Self::emit_list(func, &[I::LocalGet(local.position), I::GlobalSet(global)]);
 			}
 		}
 		for nested in self.nested_functions(function_name) {
@@ -149,7 +148,6 @@ impl WasmGcEmitter {
 	}
 
 	pub(super) fn compile_user_functions(&mut self) {
-		// Clone the function names to avoid borrow issues
 		let func_names: Vec<String> = self.ctx.user_functions.keys().cloned().collect();
 
 		self.list_abi = self.find_list_abi();
@@ -199,15 +197,11 @@ impl WasmGcEmitter {
 		};
 		let func_type_idx = self.type_manager.function_type(param_types, result_types);
 
-		// Register function in function section
-		self.functions.function(func_type_idx);
-		let func_idx = self.next_func_idx;
-		self.next_func_idx += 1;
+		let func_idx = self.reserve_function(func_type_idx);
 		if !user_fn.tuple_kinds.is_empty() {
 			self.register_tuple_packer(name, &user_fn.tuple_kinds);
 		}
 
-		// Store the function index and whether it returns a Node
 		if let Some(fn_def) = self.ctx.user_functions.get_mut(name) {
 			fn_def.func_index = Some(func_idx);
 		}
@@ -242,8 +236,7 @@ impl WasmGcEmitter {
 		// Collect any additional variables in the body, and the temp locals its loops need
 		let temp_locals = collect_variables(&user_fn.body, &mut self.scope);
 		let mut typed_lists = self.find_typed_lists(&user_fn.body);
-		for (index, param) in user_fn.params.iter().enumerate().filter(|(index, _)| self.takes_list_abi(name, *index)) {
-			let _ = index;
+		for (_, param) in user_fn.params.iter().enumerate().filter(|(index, _)| self.takes_list_abi(name, *index)) {
 			typed_lists.insert(param.name.clone(), list_dispatch::TypedList { element: list_dispatch::ElementType::Node, updated: true, aliased: true });
 		}
 		let saved_typed_lists = std::mem::replace(&mut self.typed_lists, typed_lists);
@@ -289,8 +282,7 @@ impl WasmGcEmitter {
 		} else if !user_fn.tuple_kinds.is_empty() {
 			// every path ends in `return a, b` (tuples::check_definition): the body's own value is never reached
 			self.emit_node_instructions(&mut func, &user_fn.body);
-			func.instruction(&I::Drop);
-			func.instruction(&I::Unreachable);
+			Self::emit_list(&mut func, &[I::Drop, I::Unreachable]);
 		} else if returns_node {
 			self.emit_node_instructions(&mut func, &user_fn.body);
 		} else {
@@ -311,14 +303,12 @@ impl WasmGcEmitter {
 			};
 		}
 
-		// Add to code section
 		self.code.function(&func);
 		if !user_fn.tuple_kinds.is_empty() {
 			self.compile_tuple_packer(&user_fn.tuple_kinds);
 		}
 		self.returned_tuple = saved_returned_tuple;
 
-		// Restore scope
 		self.scope = saved_scope;
 		self.int_scratch = saved_scratch;
 		self.next_temp_local = saved_temp_local;
@@ -333,22 +323,24 @@ impl WasmGcEmitter {
 		self.bounded_counters = saved_bounded_counters;
 		self.compiling = saved_compiling;
 
-		// Export the function (get func_idx from the stored function definition)
 		let func_idx = self.ctx.user_functions.get(name).unwrap().func_index.unwrap();
 		self.exports.export(name, ExportKind::Func, func_idx);
 	}
 
-	/// Emit a call to a user-defined function (returns Node)
-	pub(super) fn emit_user_function_call(&mut self, func: &mut Function, fn_name: &str, args: &[Node]) {
+	/// The call of `fn_name` with its own result on the stack, and its definition; a type error when it is undefined
+	fn emit_defined_user_function_call(&mut self, func: &mut Function, fn_name: &str, args: &[Node]) -> Option<UserFunctionDef> {
 		let Some(user_fn) = self.ctx.user_functions.get(fn_name).cloned() else {
 			self.emit_type_error(func, self.ctx.undefined_function_message(fn_name));
-			return;
+			return None;
 		};
-		let returns_node = user_fn.return_kind.is_ref();
-
-		// Emit arguments and call
 		self.emit_user_function_call_inner(func, &user_fn, args);
+		Some(user_fn)
+	}
 
+	/// A call of a user function whose result is wanted as a Node
+	pub(super) fn emit_user_function_call(&mut self, func: &mut Function, fn_name: &str, args: &[Node]) {
+		let Some(user_fn) = self.emit_defined_user_function_call(func, fn_name, args) else { return };
+		let returns_node = user_fn.return_kind.is_ref();
 		if self.returns_list_abi(fn_name) {
 			self.emit_call(func, "node_list_as_node");
 		} else if user_fn.return_kind.is_float() {
@@ -380,24 +372,20 @@ impl WasmGcEmitter {
 		let user_fn = self.ctx.user_functions[fn_name].clone();
 		if user_fn.return_kind.is_float() {
 			self.emit_user_function_call_inner(func, &user_fn, args);
+		} else if user_fn.return_kind.is_ref() && !self.returns_list_abi(fn_name) {
+			// a Node result (a number whose kind is decided at run time) is a Float or an Int
+			self.emit_user_function_call_inner(func, &user_fn, args);
+			self.emit_held_node_as_f64(func);
 		} else {
 			self.emit_user_function_call_numeric(func, fn_name, args);
 			self.emit_int_to_f64(func, None);
 		}
 	}
 
-	/// Emit a call to a user-defined function (returns raw i64)
-	/// Note: For Node-returning functions, this extracts the integer value from the Node
+	/// A call of a user function whose result is wanted as a raw i64: the Int of a Node result
 	pub(super) fn emit_user_function_call_numeric(&mut self, func: &mut Function, fn_name: &str, args: &[Node]) {
-		let Some(user_fn) = self.ctx.user_functions.get(fn_name).cloned() else {
-			self.emit_type_error(func, self.ctx.undefined_function_message(fn_name));
-			return;
-		};
+		let Some(user_fn) = self.emit_defined_user_function_call(func, fn_name, args) else { return };
 		let returns_node = user_fn.return_kind.is_ref();
-
-		// Emit arguments and call
-		self.emit_user_function_call_inner(func, &user_fn, args);
-
 		if self.returns_list_abi(fn_name) {
 			self.emit_call(func, "node_list_as_node");
 		}
@@ -491,7 +479,6 @@ impl WasmGcEmitter {
 			}
 		}
 
-		// Call the function
 		func.instruction(&I::Call(func_index));
 	}
 }

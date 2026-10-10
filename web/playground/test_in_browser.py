@@ -17,7 +17,8 @@ import functools, http.server, json, os, re, subprocess, sys, threading, time, u
 
 # a free port per run (0: the system picks one), so runs of several sessions never meet; WARP_BROWSER_TEST_PORT fixes it
 PORT = int(os.environ.get("WARP_BROWSER_TEST_PORT", "0"))
-WORKERS = os.environ.get("WARP_BROWSER_TEST_WORKERS", "2")
+WORKERS = os.environ.get("WARP_BROWSER_TEST_WORKERS", str(os.cpu_count() or 2))  # tests in flight: one per core
+SHARD = os.environ.get("WARP_BROWSER_TEST_SHARD")  # i/n: every n-th test from the i-th (pages.yml's matrix)
 # the tour's page starts its worker this late (playground.js ?slow_start): a fast machine then meets the races a slow
 # CI runner meets, e.g. "ready" hiding the first example's "running…" (empty value, the failed deploys of 2026-10-08)
 SLOW_START_MS = 2000
@@ -37,6 +38,7 @@ CLICK_MILLISECONDS = 300  # a click's handler runs in the worker and its markup 
 ISOLATION_SECONDS = 30  # how long a deployed page may take to reload under its service worker
 STALL_SECONDS = 300  # no test finished for this long: the page is stuck (a crashed renderer), stop with what is known
 REPOSITORY = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+CI_ONLY = "browser tests run in CI only: skipped here, Chrome is not started outside CI (dispatch the Playground workflow on your branch)"
 IGNORED_ARGUMENTS = ("--nocapture", "--quiet", "-q", "--color", "--format")
 # the console of the page and its workers (console_watch.mjs): any error or warning there fails the tour check
 CONSOLE_WATCHER = os.path.join(REPOSITORY, "web", "playground", "console_watch.mjs")
@@ -51,6 +53,10 @@ BROWSER_OWN_WARNINGS = {"No available adapters."}
 # an example on the GPU (paint of a shader) in a browser without WebGPU (the runner's Firefox): skipped, loudly
 NO_GPU = "offers no WebGPU adapter"
 PAGE_LOAD = "(loading the page)"
+# each GET the server began and finished, (seconds since it started, path, finished): shown after a failed tour, which
+# then says whether the browser asked for a stalled worker's scripts at all (card tour-firefox)
+served = []
+SERVED_SHOWN = 400  # the first requests: the page's and its workers' loading
 
 
 def include_dirs():
@@ -63,6 +69,19 @@ def find_header(name):
 	if not HEADER_NAME.match(name):
 		return None
 	return next((path for path in (os.path.join(directory, name) for directory in include_dirs()) if os.path.isfile(path)), None)
+
+
+def log_served(path, finished):
+	served.append((time.time() - SERVER_STARTED, path, finished))
+
+
+def show_served():
+	print(f"the server's first {SERVED_SHOWN} requests (s since it started, → asked, ✓ answered):")
+	for seconds, path, finished in served[:SERVED_SHOWN]:
+		print(f"  {seconds:7.2f} {'✓' if finished else '→'} {path}")
+
+
+SERVER_STARTED = time.time()
 
 
 def serve(binary, root=REPOSITORY):
@@ -86,7 +105,9 @@ def serve(binary, root=REPOSITORY):
 		def do_GET(self):
 			split = urllib.parse.urlsplit(self.path)
 			if split.path != STUB_PATH:
-				return super().do_GET()
+				log_served(self.path, False)
+				super().do_GET()
+				return log_served(self.path, True)
 			query = urllib.parse.parse_qs(split.query, keep_blank_values=True)
 			body = query.get("body", [""])[0].encode()
 			code, _, reason = query.get("status", ["200 OK"])[0].partition(" ")
@@ -156,13 +177,20 @@ def open_page(url):
 	sys.exit(f"error: the browser did not start after {LAUNCH_ATTEMPTS} attempts (agent-browser, session {SESSION})")
 
 
+browser_complaint = ""  # what agent-browser said on stderr at its last command
+
+
 def browser(*arguments):
 	if firefox:
 		return firefox.command(*arguments)
+	global browser_complaint
 	try:
-		return subprocess.run(["agent-browser", "--session", SESSION, *arguments], capture_output=True, text=True, timeout=60).stdout.strip()
+		ran = subprocess.run(["agent-browser", "--session", SESSION, *arguments], capture_output=True, text=True, timeout=60)
 	except subprocess.TimeoutExpired:
+		browser_complaint = f"agent-browser {arguments[0]} took over 60 s"
 		return ""  # a busy or crashed page: the stall check decides
+	browser_complaint = ran.stderr.strip()
+	return ran.stdout.strip()
 
 
 # shows an example or sample (%s: its name as JSON) and waits until its run finished
@@ -279,7 +307,7 @@ def show_example(name):
 		return JSON.stringify({{ ...shown, clicked: document.getElementById("value").textContent, clickedPrinted, kept, keyed, animated: animations > 0, address: shownAddress() }});
 	}})()"""
 	shown = browser("eval", script)
-	return json.loads(json.loads(shown)) if shown.startswith('"') else {"value": f"(page gave no answer: {shown})", "printed": ""}
+	return json.loads(json.loads(shown)) if shown.startswith('"') else {"value": f"(page gave no answer: {shown or browser_complaint})", "printed": ""}
 
 
 def wait_for_isolation():
@@ -327,11 +355,13 @@ def check_examples(names, page_url=None, site=None):
 			if NO_GPU in str(shown.get("value")):
 				print(f"skip {name}: this browser {NO_GPU}")
 				shown = {**shown, "value": expected.get("value"), "canvases": expected.get("canvases")}
-			verdict(name, [f"{part}: {shown[part]!r}, expected {expected[part]!r}" for part in ("value", "printed", "canvases", "clicked", "clickedPrinted", "kept", "keyed", "animated", "address") if part in expected and shown[part] != expected[part]] + [f"status: {shown['failed']}"] * bool(shown.get("failed")))
+			verdict(name, [f"{part}: {shown.get(part)!r}, expected {expected[part]!r}" for part in ("value", "printed", "canvases", "clicked", "clickedPrinted", "kept", "keyed", "animated", "address") if part in expected and shown.get(part) != expected[part]] + [f"status: {shown.get('failed')}"] * bool(shown.get("failed")))
 	console.stop()
 	browser("close")
 	if server:
 		server.shutdown()
+		if failures:
+			show_served()
 	print(f"\nexamples and samples: {len(chosen) + 1 - len(failures)} of {len(chosen) + 1} show what they promise, without console errors" + (f"; failed: {', '.join(failures)}" if failures else ""))
 	sys.exit(101 if failures else 0)
 
@@ -344,9 +374,18 @@ def build_components():
 		print(f"warning: build.sh components failed, `use wasm` tests will fail:\n{built.stderr.strip()}", file=sys.stderr)
 
 
+def chrome_allowed():
+	"""Chrome runs only in CI (user, 2026-10-09: no test launches Chrome or Chromium on the Mac): --serve starts none,
+	--firefox runs Firefox"""
+	return bool(os.environ.get("CI")) or sys.argv[1:2] == ["--serve"] or "--firefox" in sys.argv[2:]
+
+
 def main():
 	# each verdict shows in a CI log as it comes, so a stuck run shows where it stuck (card deploy-firefox-hang)
 	sys.stdout.reconfigure(line_buffering=True)
+	if not chrome_allowed():
+		print(CI_ONLY)
+		return
 	if sys.argv[1:2] == ["--examples"]:
 		global firefox
 		names = [name for name in sys.argv[2:] if name != "--firefox"]
@@ -362,7 +401,7 @@ def main():
 	binary, arguments = sys.argv[1], [argument for argument in sys.argv[2:] if not argument.startswith(IGNORED_ARGUMENTS)]
 	build_components()
 	server = serve(binary)
-	query = urllib.parse.urlencode({"wasm": BINARY_PATH, "args": json.dumps(arguments), "workers": WORKERS, **({"perWorker": PER_WORKER} if PER_WORKER else {})})
+	query = urllib.parse.urlencode({"wasm": BINARY_PATH, "args": json.dumps(arguments), "workers": WORKERS, **({"perWorker": PER_WORKER} if PER_WORKER else {}), **({"shard": SHARD} if SHARD else {})})
 	open_page(f"http://127.0.0.1:{PORT}/web/playground/tests.html?{query}")
 	summary, shown, changed = None, "", time.time()
 	while summary is None:

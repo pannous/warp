@@ -60,23 +60,23 @@ impl WasmGcEmitter {
 			Self::emit_list(f, &[I::LocalGet(cell), I::RefIsNull, I::If(BlockType::Empty), I::I32Const(0), I::Return, I::End]);
 			kind_is(f, cell, Kind::List);
 			Self::emit_list(f, &[I::I32Eqz, I::If(BlockType::Empty), I::I32Const(NOT_INTS), I::Return, I::End]);
-			Self::emit_list(f, &[I::Block(BlockType::Empty), I::Loop(BlockType::Empty), I::LocalGet(cell), I::RefIsNull, I::BrIf(1)]);
-			Self::emit_list(f, &[I::LocalGet(count), I::LocalGet(room), I::I32GeU, I::BrIf(1)]);
-			s.emit_field(f, cell, 1);
-			Self::emit_list(f, &[I::RefCastNullable(HeapType::Concrete(node_type)), I::LocalSet(item)]);
-			// an Int whose payload is an $i64box (not a big Int's handle), else the host reads the list
-			Self::emit_list(f, &[I::LocalGet(item), I::RefIsNull, I::If(BlockType::Empty), I::I32Const(NOT_INTS), I::Return, I::End]);
-			kind_is(f, item, Kind::Int);
-			s.emit_field(f, item, 1);
-			Self::emit_list(f, &[I::RefTestNonNull(HeapType::Concrete(box_type)), I::I32And, I::I32Eqz, I::If(BlockType::Empty), I::I32Const(NOT_INTS), I::Return, I::End]);
-			s.emit_field(f, item, 1);
-			Self::emit_list(f, &[I::RefCastNonNull(HeapType::Concrete(box_type)), I::StructGet { struct_type_index: box_type, field_index: 0 }, I::LocalSet(value)]);
-			// |value|: (value ^ sign) - sign
-			Self::emit_list(f, &[I::LocalGet(address), I::LocalGet(count), I::I32Const(8), I::I32Mul, I::I32Add]);
-			Self::emit_list(f, &[I::LocalGet(value), I::LocalGet(value), I::I64Const(63), I::I64ShrS, I::I64Xor, I::LocalGet(value), I::I64Const(63), I::I64ShrS, I::I64Sub, I::I64Store(I64)]);
-			Self::emit_list(f, &[I::LocalGet(count), I::I32Const(1), I::I32Add, I::LocalSet(count)]);
-			s.emit_field(f, cell, 2);
-			Self::emit_list(f, &[I::LocalSet(cell), I::Br(0), I::End, I::End, I::LocalGet(count)]);
+			s.emit_cell_walk(f, cell, |f| {
+				Self::emit_list(f, &[I::LocalGet(count), I::LocalGet(room), I::I32GeU, I::BrIf(1)]);
+				s.emit_field(f, cell, 1);
+				Self::emit_list(f, &[I::RefCastNullable(HeapType::Concrete(node_type)), I::LocalSet(item)]);
+				// an Int whose payload is an $i64box (not a big Int's handle), else the host reads the list
+				Self::emit_list(f, &[I::LocalGet(item), I::RefIsNull, I::If(BlockType::Empty), I::I32Const(NOT_INTS), I::Return, I::End]);
+				kind_is(f, item, Kind::Int);
+				s.emit_field(f, item, 1);
+				Self::emit_list(f, &[I::RefTestNonNull(HeapType::Concrete(box_type)), I::I32And, I::I32Eqz, I::If(BlockType::Empty), I::I32Const(NOT_INTS), I::Return, I::End]);
+				s.emit_field(f, item, 1);
+				Self::emit_list(f, &[I::RefCastNonNull(HeapType::Concrete(box_type)), I::StructGet { struct_type_index: box_type, field_index: 0 }, I::LocalSet(value)]);
+				// |value|: (value ^ sign) - sign
+				Self::emit_list(f, &[I::LocalGet(address), I::LocalGet(count), I::I32Const(8), I::I32Mul, I::I32Add]);
+				Self::emit_list(f, &[I::LocalGet(value), I::LocalGet(value), I::I64Const(63), I::I64ShrS, I::I64Xor, I::LocalGet(value), I::I64Const(63), I::I64ShrS, I::I64Sub, I::I64Store(I64)]);
+				Self::emit_list(f, &[I::LocalGet(count), I::I32Const(1), I::I32Add, I::LocalSet(count)]);
+			});
+			f.instruction(&I::LocalGet(count));
 		});
 	}
 }

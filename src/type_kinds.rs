@@ -76,9 +76,6 @@ impl Kind {
 	/// Check if this is a reference type (stored as WASM ref $Node)
 	pub fn is_ref(&self) -> bool { !self.is_primitive() }
 
-	/// Check if this is a pointer type (FFI)
-	pub fn is_pointer(&self) -> bool { matches!(self, Kind::Pointer | Kind::Text) }
-
 	/// Parse a C type string to Kind with smart defaults
 	pub fn from_c_type(s: &str) -> Kind {
 		let s = s.trim();
@@ -181,55 +178,6 @@ impl FieldDef {
 	/// A field declared `email?` or `x:int?` may be left out of the constructor call (it is then ø)
 	pub fn is_optional(&self) -> bool {
 		self.type_name.ends_with(OPTIONAL_SUFFIX)
-	}
-}
-
-impl TypeDef {
-	/// Extract TypeDef from a parsed class definition Node
-	/// Expected structure: Type { name: Symbol("Person"), body: List([Key(name, :, Type), ...]) }
-	pub fn from_node(node: &crate::node::Node) -> Option<Self> {
-		use crate::node::Node;
-		match node.drop_meta() {
-			Node::Type { name, body } => {
-				let type_name = name.drop_meta().to_string();
-				let fields = Self::extract_fields(body);
-				Some(TypeDef {
-					name: type_name,
-					tag: USER_TYPE_TAG_START, // will be assigned by registry
-					fields,
-					wasm_type_idx: None,
-				})
-			}
-			_ => None,
-		}
-	}
-
-	fn extract_fields(body: &crate::node::Node) -> Vec<FieldDef> {
-		use crate::node::Node;
-		let mut fields = Vec::new();
-
-		// body is List([Key(field_name, op, Type), ...], bracket, separator)
-		let items = match body.drop_meta() {
-			Node::List(items, _, _) => items,
-			_ => return fields,
-		};
-
-		for item in items.iter() {
-			// Key(key_node, op, value_node) tuple struct
-			if let Node::Key(key, _op, value) = item.drop_meta() {
-				let field_name = key.drop_meta().to_string();
-				// value is Type { name: Symbol("String"), body: Empty }
-				let type_name = match value.drop_meta() {
-					Node::Type { name, .. } => name.drop_meta().to_string(),
-					Node::Symbol(s) => s.to_string(),
-					other => other.to_string(),
-				};
-				fields.push(FieldDef { name: field_name, type_name });
-			} else if let Node::Symbol(word) = item.drop_meta() {
-				fields.push(FieldDef::untyped(word));
-			}
-		}
-		fields
 	}
 }
 
@@ -372,13 +320,6 @@ impl TypeRegistry {
 		}
 	}
 
-	/// Set WASM type index for a registered type
-	pub fn set_wasm_type_idx(&mut self, name: &str, wasm_idx: u32) {
-		if let Some(&idx) = self.name_to_idx.get(name) {
-			self.types[idx].wasm_type_idx = Some(wasm_idx);
-		}
-	}
-
 	/// Register a type from a Type node, extracting name and fields
 	/// Returns the assigned tag, or None if the node isn't a valid Type definition
 	/// Skips type references (Type nodes with empty body - just type names)
@@ -390,10 +331,7 @@ impl TypeRegistry {
 			if matches!(body.drop_meta(), Node::Empty) {
 				return None;
 			}
-			let type_name = match name.drop_meta() {
-				Node::Symbol(s) | Node::Text(s) => s.clone(),
-				_ => return None,
-			};
+			let type_name = Self::written_name(name)?;
 			let fields = Self::extract_fields(body);
 			for (field, value) in Self::field_items(body).filter_map(Self::field_default) {
 				self.defaults.insert((type_name.clone(), field), value);
@@ -406,25 +344,16 @@ impl TypeRegistry {
 
 	/// Extract FieldDefs from a type body (typically a List of Key nodes)
 	fn extract_fields(body: &crate::node::Node) -> Vec<FieldDef> {
+		Self::field_items(body).filter_map(Self::extract_field).collect()
+	}
+
+	/// The word or text a name is written as
+	fn written_name(node: &crate::node::Node) -> Option<String> {
 		use crate::node::Node;
-		let mut fields = Vec::new();
-		let body = body.drop_meta();
-		match body {
-			Node::List(items, _, _) => {
-				for item in items {
-					if let Some(field) = Self::extract_field(item) {
-						fields.push(field);
-					}
-				}
-			}
-			// Single field without list wrapper
-			other => {
-				if let Some(field) = Self::extract_field(other) {
-					fields.push(field);
-				}
-			}
+		match node.drop_meta() {
+			Node::Symbol(s) | Node::Text(s) => Some(s.clone()),
+			_ => None,
 		}
-		fields
 	}
 
 	/// Extract a single FieldDef from a Key node (name:Type)
@@ -442,20 +371,12 @@ impl TypeRegistry {
 				Some(FieldDef { type_name: format!("{}{OPTIONAL_SUFFIX}", field.type_name), ..field })
 			}
 			Node::Key(name_node, _, type_node) => {
-				let name = match name_node.drop_meta() {
-					Node::Symbol(s) | Node::Text(s) => s.clone(),
-					_ => return None,
-				};
+				let name = Self::written_name(name_node)?;
 				let type_name = match type_node.drop_meta() {
-					Node::Symbol(s) | Node::Text(s) => s.clone(),
-					Node::Type { name: type_name_node, .. } => {
-						match type_name_node.drop_meta() {
-							Node::Symbol(s) | Node::Text(s) => s.clone(),
-							_ => UNTYPED_FIELD.to_string(),
-						}
-					}
-					_ => UNTYPED_FIELD.to_string(), // a default value `x=0` or `x:0`, no type
+					Node::Type { name: type_name_node, .. } => Self::written_name(type_name_node),
+					written => Self::written_name(written), // none for a default value `x=0` or `x:0`
 				};
+				let type_name = type_name.unwrap_or_else(|| UNTYPED_FIELD.to_string());
 				Some(FieldDef { name, type_name })
 			}
 			Node::Symbol(word) => Some(FieldDef::untyped(word)),

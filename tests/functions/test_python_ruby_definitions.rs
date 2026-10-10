@@ -57,3 +57,12 @@ fn test_julia_definitions() {
 	is!("function f(x)\n  x * 2\nend\nf(4)", 8);
 	is!("f(x; y=2) = x*y; f(3, y=4)", 12);
 }
+
+// Ruby's loops inside a `def … end` (card ruby-loop): `while c` … `end` and `loop do` … `end`
+#[test]
+fn test_ruby_loops_in_def() {
+	is!("def f(n)\n  k = 0\n  while k < n\n    k += 1\n  end\n  k\nend\nf(3)", 3);
+	is!("k = 0\nwhile k < 3\n  k += 1\nend\nk", 3);
+	is!("def f\n  k = 0\n  loop do\n    k += 1\n    break if k > 2\n  end\n  k\nend\nf()", 3);
+	is!("k = 0\nloop do\n  k += 1\n  break if k > 2\nend\nk", 3);
+}

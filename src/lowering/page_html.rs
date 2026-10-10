@@ -5,8 +5,8 @@
 //! anew, so it is read again after each handler.
 
 use crate::event_signals::{function_with_globals, main_level_variables, PAGE_VALUE};
-use crate::node::Node;
-use crate::system_signals::call;
+use crate::node::{symbol, Node};
+use super::nodes::call;
 use crate::operators::Op;
 use std::collections::HashSet;
 
@@ -26,7 +26,7 @@ pub fn use_markup(program: Node) -> Node {
 	let (mut statements, bracket, separator) = crate::variable_signals::main_statements(&program);
 	let rendered = call(TO_HTML, vec![call(PAGE_VALUE, vec![])]);
 	statements.insert(statements.len().saturating_sub(1), function_with_globals(PAGE_HTML, false, &[rendered], &HashSet::new()));
-	let any_value = call(TO_HTML, vec![Node::Symbol(crate::event_signals::EVENT_WORD.to_string())]);
+	let any_value = call(TO_HTML, vec![symbol(crate::event_signals::EVENT_WORD)]);
 	statements.insert(statements.len().saturating_sub(1), function_with_globals(PAGE_RENDER, true, &[any_value], &HashSet::new()));
 	Node::List(statements, bracket, separator)
 }

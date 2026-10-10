@@ -2,9 +2,10 @@
 //! `P{x:1 y:2}` (glued, parsed as the key `P` Op::None `{…}`) constructs and validates one too, while `P:{…}` is plain
 //! data (D4): an instance is the data key marked `Instance`, emitted with its own op code, so it never equals the data.
 
+use super::nodes::key;
 use crate::analyzer::{builtin_type_kind, call_name, collect_all_types, list_element_type, literal_misfit, misfit_item};
 use crate::diagnostic::Diagnostic;
-use crate::node::{Bracket, Node, Separator};
+use crate::node::{symbol, Bracket, Node, Separator};
 use crate::operators::Op;
 use crate::type_kinds::{Kind, TypeDef, TypeRegistry};
 
@@ -83,7 +84,7 @@ impl Classes<'_> {
 		let type_def = self.registry.get_by_name(class)?;
 		let fields = type_def.fields.iter().map(|field| {
 			let value = self.default_of(type_def, field).unwrap_or_else(|| unset_field(field));
-			Node::Key(Box::new(Node::Symbol(field.name.clone())), Op::Colon, Box::new(value))
+			key(Node::Symbol(field.name.clone()), Op::Colon, value)
 		}).collect();
 		let arguments = std::iter::once(constructor).chain(std::iter::once(instance_node(class, fields))).chain(items[1..].iter().cloned());
 		Some(Node::List(arguments.collect(), Bracket::Round, Separator::None))
@@ -128,7 +129,7 @@ fn construct(node: Node, classes: &Classes) -> Node {
 			}).unwrap_or(Node::List(items, bracket, separator))
 		}
 		Node::Key(name, Op::None, fields) if matches!(name.drop_meta(), Node::Symbol(_)) => {
-			let entries = entries(&construct(*fields, classes));
+			let entries = construct(*fields, classes).as_items();
 			match registry.get_by_name(&name.name()) {
 				Some(type_def) => match field_error(type_def, registry, &name, &entries) {
 					Some(error) => error,
@@ -142,7 +143,7 @@ fn construct(node: Node, classes: &Classes) -> Node {
 				None => Node::Key(name, Op::Colon, Box::new(Node::List(entries, Bracket::Curly, Separator::Space))),
 			}
 		}
-		Node::Key(left, op, right) => Node::Key(Box::new(construct(*left, classes)), op, Box::new(construct(*right, classes))),
+		Node::Key(left, op, right) => key(construct(*left, classes), op, construct(*right, classes)),
 		Node::Meta { node, data } => Node::Meta { node: Box::new(construct(*node, classes)), data },
 		other => other,
 	}
@@ -165,7 +166,7 @@ fn instance(items: &[Node], bracket: &Bracket, separator: &Separator, classes: &
 		};
 		return Some(Diagnostic::at(&items[0], message).into_error());
 	}
-	let entry = |field: &str, value: &Node| Node::Key(Box::new(Node::Symbol(field.to_string())), Op::Colon, Box::new(value.clone()));
+	let entry = |field: &str, value: &Node| key(symbol(field), Op::Colon, value.clone());
 	let given: Vec<Node> = type_def.fields.iter().zip(&positional).map(|(field, value)| entry(&field.name, value))
 		.chain(named.into_iter().cloned())
 		.collect();
@@ -202,16 +203,9 @@ pub(crate) fn entry_value(entry: &Node) -> &Node {
 /// The instance of the type `name` with these field entries
 pub fn instance_node(name: &str, entries: Vec<Node>) -> Node {
 	let body = Node::List(entries, Bracket::Curly, Separator::Space);
-	Node::meta(Node::Key(Box::new(Node::Symbol(name.to_string())), Op::Colon, Box::new(body)), Node::data(Instance))
+	Node::meta(key(symbol(name), Op::Colon, body), Node::data(Instance))
 }
 
-fn entries(fields: &Node) -> Vec<Node> {
-	match fields.drop_meta() {
-		Node::List(items, _, _) => items.clone(),
-		Node::Empty => vec![],
-		single => vec![single.clone()],
-	}
-}
 
 pub(crate) fn entry_name(entry: &Node) -> Option<String> {
 	match entry.drop_meta() {
@@ -227,7 +221,7 @@ fn with_defaults(type_def: &TypeDef, classes: &Classes, mut entries: Vec<Node>) 
 		// a left out optional field `left?` is there, holding ø: reading it is no error, assigning it changes it
 		let value = classes.default_of(type_def, field).or_else(|| field.is_optional().then_some(Node::Empty));
 		if let Some(value) = value {
-			entries.push(Node::Key(Box::new(Node::Symbol(field.name.clone())), Op::Colon, Box::new(value)));
+			entries.push(key(Node::Symbol(field.name.clone()), Op::Colon, value));
 		}
 	}
 	entries

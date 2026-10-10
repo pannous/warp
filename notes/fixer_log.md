@@ -241,4 +241,13 @@ Running list of the small fixes done by the fixer session (branches fix-<topic>)
 - 2026-10-09 units-function-name: a function, parameter or variable named like a unit (g(x) := x + 1 m) shadows only that unit; it switched all units passes off ("undefined variable: m").
 - 2026-10-09 units-holes: quantity comparisons give yes/no, reassigning another dimension / an int annotation / a text repeated by a quantity are DimensionErrors (four W0-model holes).
 - 2026-10-09 orm-method-reads: a class method reading a table saw it empty, and any where-filter in a method was not lowered (class bodies are no map_children children).
+- 2026-10-09 orm-linear: loading rows with a required foreign key and filtering a loaded table were n·m (a list walk per key, `id in ids`) and three list costs made any comprehension over read rows quadratic (append forgot the index cursor and the count of every list, a conditional typed append copied the list). Now keys and filters use the identity map; 2000→8000 rows load in 41→169 ms.
+- 2026-10-09 int-map: maps keyed by a run-time number gave "index out of range" (only written numbers keyed a `{}` map); global maps were cons lists (n² fills); the ORM identity map was a list searched by id (n² loads). Now keys are texts of the number, global maps and removals are hash tables, the identity map is one.
 - 2026-10-09 method-bodies: passes before class_methods::lower skipped methods (xs.keep only positive in a method failed); map_children/visit now enter class code, not fields.
+- 2026-10-09 generators: a function with yield is a generator (user: high priority). for x in g() inlines its body lazily (break/continue/return, endless generators), any other call collects a list. A loop ending in break trapped 'null reference'. notes/generators.md.
+- 2026-10-09 generator-objects: next(counter) / iter(g()) resume a generator (a class with a state-machine next()), for walks objects with next(); a field-changing method's early return gave 'index out of range'.
+- 2026-10-09 generators-zip: take/first/zip/list/sum over generators pull lazily (generator_consumers.rs); a 0-argument generator call in an argument list is a bare symbol.
+- 2026-10-09 generators-generator: (x*x for x in xs) standing alone gave ø; now a generator (generator_expressions.rs); lazy_loops before generator objects. Filed sum-helper (word_sum warning).
+- 2026-10-09 generators-yield: yield from / yield each / yield* delegate (generators.rs delegations); a parameterless Python def with yield was a getter form, now a definition.
+- 2026-10-09 generators-send: x = yield v + g.send(w); numbered ·result temps in class_methods
+- 2026-10-09 sum-helper: compiler temporaries marked with · and skipped by the scope check (notes/compiler_temporaries.md)

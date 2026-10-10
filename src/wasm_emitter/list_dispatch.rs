@@ -26,7 +26,11 @@ use wasm_encoder::*;
 use Instruction as I;
 use ValType::Ref;
 
-/// The field of a typed list struct holding its array (type_manager emit_typed_list_types: length, items)
+/// The locals of an as_node(list) runtime function after its parameter: the item index and the cells built so far
+const AS_NODE_POSITION: u32 = 1;
+const AS_NODE_REST: u32 = 2;
+
+/// The field of a typed list struct holding its array (type_manager emit_growable_list_types: length, items)
 const TYPED_LIST_ITEMS: u32 = 1;
 
 /// Capacity of the first items array a push into an empty list allocates; it doubles when full
@@ -56,6 +60,30 @@ pub enum Wanted {
 /// What the fast int sum returns when an element or the sum leaves the fixnum range: the exact loop takes over. It is a
 /// handle (big_int.rs), never a fixnum the fast path could have produced.
 const SUM_NOT_FIXNUM: i64 = i64::MIN;
+
+/// push(list, value) body for a list struct (length, items, …): value appended in place, the items doubled when full;
+/// for ø a new list from (0, items) and `new_list_tail`
+fn push_in_place(list: u32, array: u32, new_list_tail: &[I<'static>]) -> Vec<I<'static>> {
+	let grown = 2;
+	let length = || I::StructGet { struct_type_index: list, field_index: 0 };
+	let items = || I::StructGet { struct_type_index: list, field_index: 1 };
+	let mut body = vec![I::LocalGet(0), I::RefIsNull, I::If(BlockType::Empty), I::I32Const(0), I::I32Const(FIRST_CAPACITY), I::ArrayNewDefault(array)];
+	body.extend_from_slice(new_list_tail);
+	body.extend([
+		I::LocalSet(0),
+		I::End,
+		I::LocalGet(0), length(), I::LocalGet(0), items(), I::ArrayLen, I::I32Eq, I::If(BlockType::Empty),
+		I::LocalGet(0), length(), I::I32Const(1), I::I32Shl, I::I32Const(FIRST_CAPACITY), I::I32Add, I::ArrayNewDefault(array), I::LocalSet(grown),
+		I::LocalGet(grown), I::I32Const(0), I::LocalGet(0), items(), I::I32Const(0), I::LocalGet(0), length(),
+		I::ArrayCopy { array_type_index_dst: array, array_type_index_src: array },
+		I::LocalGet(0), I::LocalGet(grown), I::RefAsNonNull, I::StructSet { struct_type_index: list, field_index: 1 },
+		I::End,
+		I::LocalGet(0), items(), I::LocalGet(0), length(), I::LocalGet(1), I::ArraySet(array),
+		I::LocalGet(0), I::LocalGet(0), length(), I::I32Const(1), I::I32Add, I::StructSet { struct_type_index: list, field_index: 0 },
+		I::LocalGet(0),
+	]);
+	body
+}
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum ElementType {
@@ -156,7 +184,7 @@ pub(super) enum Slot {
 }
 
 impl Slot {
-	fn get(self) -> Instruction<'static> {
+	pub(super) fn get(self) -> Instruction<'static> {
 		match self {
 			Slot::Local(index) => I::LocalGet(index),
 			Slot::Global(index) => I::GlobalGet(index),
@@ -164,7 +192,7 @@ impl Slot {
 	}
 
 	/// Store the list on the stack and leave it there
-	fn tee(self, func: &mut Function) {
+	pub(super) fn tee(self, func: &mut Function) {
 		match self {
 			Slot::Local(index) => { func.instruction(&I::LocalTee(index)); }
 			Slot::Global(index) => { func.instruction(&I::GlobalSet(index)); func.instruction(&I::GlobalGet(index)); }
@@ -1068,44 +1096,17 @@ impl WasmGcEmitter {
 		}
 		if self.should_emit_function(NODE_RUNTIME.push) {
 			self.runtime_function(NODE_RUNTIME.push, vec![list_ref, node_ref], vec![list_ref], vec![array_ref], |_, f| {
-				let grown = 2;
-				Self::emit_list(f, &[
-					I::LocalGet(0), I::RefIsNull, I::If(BlockType::Empty),
-					I::I32Const(0), I::I32Const(FIRST_CAPACITY), I::ArrayNewDefault(array), I::I64Const(crate::type_kinds::SQUARE_LIST_KIND), new_list.clone(), I::LocalSet(0),
-					I::End,
-					I::LocalGet(0), length.clone(), I::LocalGet(0), items.clone(), I::ArrayLen, I::I32Eq, I::If(BlockType::Empty),
-					I::LocalGet(0), length.clone(), I::I32Const(1), I::I32Shl, I::I32Const(FIRST_CAPACITY), I::I32Add, I::ArrayNewDefault(array), I::LocalSet(grown),
-					I::LocalGet(grown), I::I32Const(0), I::LocalGet(0), items.clone(), I::I32Const(0), I::LocalGet(0), length.clone(),
-					I::ArrayCopy { array_type_index_dst: array, array_type_index_src: array },
-					I::LocalGet(0), I::LocalGet(grown), I::RefAsNonNull, I::StructSet { struct_type_index: list, field_index: 1 },
-					I::End,
-					I::LocalGet(0), items.clone(), I::LocalGet(0), length.clone(), I::LocalGet(1), I::ArraySet(array),
-					I::LocalGet(0), I::LocalGet(0), length.clone(), I::I32Const(1), I::I32Add, I::StructSet { struct_type_index: list, field_index: 0 },
-					I::LocalGet(0),
-				]);
+				Self::emit_list(f, &push_in_place(list, array, &[I::I64Const(crate::type_kinds::SQUARE_LIST_KIND), I::StructNew(list)]));
 			});
 		}
 		// as_node(list): the cons cells of the items under the list's own kind (brackets); ø when empty or unassigned
 		if self.should_emit_function(NODE_RUNTIME.as_node) {
 			self.runtime_function(NODE_RUNTIME.as_node, vec![list_ref], vec![node_ref], vec![ValType::I32, nullable_node], |s, f| {
-				let (position, rest) = (1, 2);
-				Self::emit_list(f, &[I::LocalGet(0), I::RefIsNull, I::If(BlockType::Empty)]);
-				s.call(f, "new_empty");
-				Self::emit_list(f, &[I::Return, I::End]);
-				Self::emit_list(f, &[
-					I::RefNull(HeapType::Concrete(node)), I::LocalSet(rest),
-					I::LocalGet(0), length.clone(), I::LocalSet(position),
-					I::Block(BlockType::Empty), I::Loop(BlockType::Empty),
-					I::LocalGet(position), I::I32Eqz, I::BrIf(1),
-					I::LocalGet(position), I::I32Const(1), I::I32Sub, I::LocalSet(position),
+				s.emit_cells_from_last(f, list, |_, f| Self::emit_list(f, &[
 					I::LocalGet(0), kind.clone(),
-					I::LocalGet(0), items.clone(), I::LocalGet(position), I::ArrayGet(array),
-					I::LocalGet(rest), I::StructNew(node), I::LocalSet(rest),
-					I::Br(0), I::End, I::End,
-					I::LocalGet(rest), I::RefIsNull, I::If(BlockType::Result(node_ref)),
-				]);
-				s.call(f, "new_empty");
-				Self::emit_list(f, &[I::Else, I::LocalGet(rest), I::RefAsNonNull, I::End]);
+					I::LocalGet(0), items.clone(), I::LocalGet(AS_NODE_POSITION), I::ArrayGet(array),
+					I::LocalGet(AS_NODE_REST), I::StructNew(node),
+				]));
 			});
 		}
 		// node_list_of(node): the items of a list's cells (up to a meta entry, as a walk ends there), ø no items, any
@@ -1200,21 +1201,7 @@ impl WasmGcEmitter {
 		// push(list, value) -> list: value appended in place, the items doubled when full; a new list for ø
 		if self.should_emit_function(runtime.push) {
 			self.runtime_function(runtime.push, vec![list_ref, value], vec![list_ref], vec![array_ref], |_, f| {
-				let grown = 2;
-				Self::emit_list(f, &[
-					I::LocalGet(0), I::RefIsNull, I::If(BlockType::Empty),
-					I::I32Const(0), I::I32Const(FIRST_CAPACITY), I::ArrayNewDefault(array), I::StructNew(list), I::LocalSet(0),
-					I::End,
-					I::LocalGet(0), length.clone(), I::LocalGet(0), items.clone(), I::ArrayLen, I::I32Eq, I::If(BlockType::Empty),
-					I::LocalGet(0), length.clone(), I::I32Const(1), I::I32Shl, I::I32Const(FIRST_CAPACITY), I::I32Add, I::ArrayNewDefault(array), I::LocalSet(grown),
-					I::LocalGet(grown), I::I32Const(0), I::LocalGet(0), items.clone(), I::I32Const(0), I::LocalGet(0), length.clone(),
-					I::ArrayCopy { array_type_index_dst: array, array_type_index_src: array },
-					I::LocalGet(0), I::LocalGet(grown), I::RefAsNonNull, I::StructSet { struct_type_index: list, field_index: 1 },
-					I::End,
-					I::LocalGet(0), items.clone(), I::LocalGet(0), length.clone(), I::LocalGet(1), I::ArraySet(array),
-					I::LocalGet(0), I::LocalGet(0), length.clone(), I::I32Const(1), I::I32Add, I::StructSet { struct_type_index: list, field_index: 0 },
-					I::LocalGet(0),
-				]);
+				Self::emit_list(f, &push_in_place(list, array, &[I::StructNew(list)]));
 			});
 		}
 		// sum(list) -> element: left to right like the loop; an int sum gives SUM_NOT_FIXNUM when it leaves the fixnum range
@@ -1266,30 +1253,38 @@ impl WasmGcEmitter {
 		}
 		// as_node(list) -> ref $Node: the square list of element nodes, built from the last element; ø when empty
 		if self.should_emit_function(runtime.as_node) {
-			let node = self.type_manager.node_type;
 			let nullable_node = Ref(self.node_ref(true));
+			// a typed list variable read before its first assignment is ø, as any unassigned list variable
 			self.runtime_function(runtime.as_node, vec![list_ref], vec![node_ref], vec![ValType::I32, nullable_node], |s, f| {
-				let (position, rest) = (1, 2);
-				// a typed list variable read before its first assignment is ø, as any unassigned list variable
-				Self::emit_list(f, &[I::LocalGet(0), I::RefIsNull, I::If(BlockType::Empty)]);
-				s.call(f, "new_empty");
-				Self::emit_list(f, &[I::Return, I::End]);
-				Self::emit_list(f, &[
-					I::RefNull(HeapType::Concrete(node)), I::LocalSet(rest),
-					I::LocalGet(0), length.clone(), I::LocalSet(position),
-					I::Block(BlockType::Empty), I::Loop(BlockType::Empty),
-					I::LocalGet(position), I::I32Eqz, I::BrIf(1),
-					I::LocalGet(position), I::I32Const(1), I::I32Sub, I::LocalSet(position),
-					I::LocalGet(0), items.clone(), I::LocalGet(position), I::ArrayGet(array),
-				]);
-				s.call(f, runtime.new_node);
-				Self::emit_list(f, &[I::LocalGet(rest), I::I64Const(SQUARE_BRACKET_INFO)]);
-				s.call(f, "new_list");
-				Self::emit_list(f, &[I::LocalSet(rest), I::Br(0), I::End, I::End, I::LocalGet(rest), I::RefIsNull, I::If(BlockType::Result(node_ref))]);
-				s.call(f, "new_empty");
-				Self::emit_list(f, &[I::Else, I::LocalGet(rest), I::RefAsNonNull, I::End]);
+				s.emit_cells_from_last(f, list, |s, f| {
+					Self::emit_list(f, &[I::LocalGet(0), items.clone(), I::LocalGet(AS_NODE_POSITION), I::ArrayGet(array)]);
+					s.call(f, runtime.new_node);
+					Self::emit_list(f, &[I::LocalGet(AS_NODE_REST), I::I64Const(SQUARE_BRACKET_INFO)]);
+					s.call(f, "new_list");
+				});
 			});
 		}
+	}
+
+	/// The body of an as_node(list) runtime function (locals: position i32, rest nullable node): ø for a null or empty
+	/// list, else the cells `cell` builds from the last item to the first, each in front of the cells after it (local
+	/// AS_NODE_REST) from the item at AS_NODE_POSITION
+	fn emit_cells_from_last(&mut self, f: &mut Function, list: u32, cell: impl FnOnce(&mut Self, &mut Function)) {
+		let (position, rest) = (AS_NODE_POSITION, AS_NODE_REST);
+		Self::emit_list(f, &[I::LocalGet(0), I::RefIsNull, I::If(BlockType::Empty)]);
+		self.call(f, "new_empty");
+		Self::emit_list(f, &[I::Return, I::End]);
+		Self::emit_list(f, &[
+			I::RefNull(HeapType::Concrete(self.type_manager.node_type)), I::LocalSet(rest),
+			I::LocalGet(0), I::StructGet { struct_type_index: list, field_index: 0 }, I::LocalSet(position),
+			I::Block(BlockType::Empty), I::Loop(BlockType::Empty),
+			I::LocalGet(position), I::I32Eqz, I::BrIf(1),
+			I::LocalGet(position), I::I32Const(1), I::I32Sub, I::LocalSet(position),
+		]);
+		cell(self, f);
+		Self::emit_list(f, &[I::LocalSet(rest), I::Br(0), I::End, I::End, I::LocalGet(rest), I::RefIsNull, I::If(BlockType::Result(Ref(self.node_ref(false))))]);
+		self.call(f, "new_empty");
+		Self::emit_list(f, &[I::Else, I::LocalGet(rest), I::RefAsNonNull, I::End]);
 	}
 
 	/// Push a number list variable as a $NodeList; false for any other variable

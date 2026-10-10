@@ -1,0 +1,110 @@
+// The standard library module sound (card basic-sound): `play 440Hz for 0.5s`, `play C4`, `play [C4 E4 G4]` (a chord, as
+// in Sonic Pi), `play note("C#4")`, `melody [C4 E4 G4]` (one note after another), `beep`, `tone(frequency, seconds, "square")`. Frequencies
+// and durations are numbers or quantities (440Hz, 0.5s, 250ms), read by si_amount as plain numbers (src/units/static_units.rs). The samples are made here and played by the host word
+// sound_samples: natively a WAV file and the system's player (src/sound.rs; silent under tests and WARP_NO_WINDOW),
+// in the browser WebAudio. Loaded when a program calls one of its words (src/modules.rs SOUND_WORDS)
+global sample_rate = 22050
+// the share of the loudest sample: chords and melodies stay below it
+global loudness = 0.3
+// sine, square, triangle or sawtooth
+global wave_shape = "sine"
+global note_seconds = 0.5
+// the samples cross to the host as whole numbers ≥ 0: amplitude + 32768 (src/sound.rs SAMPLE_OFFSET)
+sample_offset = 32768
+loudest_sample = 32767
+// a short fade at both ends keeps the speaker from clicking
+fade_seconds = 0.005
+// a note letter's semitone above C is its place here, from 0
+scale_letters = "C.D.EF.G.A.B"
+
+// the frequency of a note name: note("A4") is 440, note("C#4") a semitone above C4, note("Eb5") one below E5
+note(name) := {
+	accidental = if count(name) == 3 then (if name#2 == "#" then 1 else -1) else 0
+	octave = number(name#(count(name)))
+	key = 12 * (octave + 1) + scale_letters.index_of(name#1) - 1 + accidental
+	440.0 * 2^((key - 69) / 12)
+}
+C2 = 65.41
+D2 = 73.42
+E2 = 82.41
+F2 = 87.31
+G2 = 98.0
+A2 = 110.0
+B2 = 123.47
+C3 = 130.81
+D3 = 146.83
+E3 = 164.81
+F3 = 174.61
+G3 = 196.0
+A3 = 220.0
+B3 = 246.94
+C4 = 261.63
+D4 = 293.66
+E4 = 329.63
+F4 = 349.23
+G4 = 392.0
+A4 = 440.0
+B4 = 493.88
+C5 = 523.25
+D5 = 587.33
+E5 = 659.26
+F5 = 698.46
+G5 = 783.99
+A5 = 880.0
+B5 = 987.77
+C6 = 1046.5
+D6 = 1174.66
+E6 = 1318.51
+F6 = 1396.91
+G6 = 1567.98
+A6 = 1760.0
+B6 = 1975.53
+
+// one wave at phase p (0 to 1) of its period, from -1 to 1
+wave(shape, p) := if shape == "square" then (if p < 0.5 then 1.0 else -1.0)
+	else if shape == "triangle" then 1 - 4 * abs(p - 0.5)
+	else if shape == "sawtooth" then 2 * p - 1
+	else sin(2 * pi * p)
+// the fade of sample i of n: 0 at both ends, 1 in between
+envelope(i, n) := min(1.0, min(i, n - 1 - i) / (fade_seconds * sample_rate))
+// the samples of frequencies sounding together
+chord_samples(pitches, duration, shape) := {
+	n = round(duration * sample_rate) as int
+	share = loudness * loudest_sample / count(pitches)
+	[sample_offset + (round(share * envelope(i, n) * sum([wave(shape, (f * i / sample_rate) % 1) for f in pitches])) as int) for i in 0..n]
+}
+// the sound's handle: its number in the run, for stop_sound(handle)
+sound(samples) := {
+	sound_samples(samples, count(samples), sample_rate)
+	handle = std_io("sound", "last", []) // named: a bare std_io call after sound_samples gives the block as data
+	handle
+}
+
+// one wave shape: tone 440Hz for 0.5s (a sine), tone(220Hz, 100ms, "square")
+tone(pitch, duration, shape) := sound(chord_samples([si_amount(pitch)], si_amount(duration), shape))
+to tone pitch for duration: tone(pitch, duration, wave_shape)
+beep() := tone(880, 0.15, "square")
+// a frequency, or a list of them sounding together (a chord)
+pitches_of(x) := if x is list then [si_amount(f) for f in x] else [si_amount(x)]
+to play x for duration: sound(chord_samples(pitches_of(x), si_amount(duration), wave_shape))
+// a music file in the background (wav, mp3, ogg, flac, aiff, m4a): play "song.mp3"; stop_sound stops it
+play_file(path) := std_io("sound", "play_file", [path])
+// play gives the sound's handle: h = play C4 for 2s; stop_sound(h) stops that one alone, stop_sound (handle 0) all
+stop_sound(handle = 0) := std_io("sound", "stop", [handle])
+// play returns at once, its sound queued behind those before it: sound_queued() is how many seconds still sound,
+// wait_sound waits for them (a program's end does too)
+sound_queued() := std_io("sound", "queued", [])
+wait_sound() := std_io("sound", "wait", [])
+// the sounds since the last render (or the start) one after another in one WAV file, offline (also without speakers):
+// render_sound("song.wav") gives its seconds
+render_sound(path) := std_io("sound", "render", [path])
+to play x: if x is text then play_file(x) else sound(chord_samples(pitches_of(x), note_seconds, wave_shape))
+// one note (or chord) after another: melody [C4 E4 G4], melody [C4 E4 G4] each 250ms (or melody([C4 E4 G4], 0.25s))
+// plain seconds: the unit check reads a quantity parameter in a loop as unsupported (notes/units_runtime.md)
+melody_samples(notes, seconds) := {
+	samples = []
+	for pitch in notes { samples = samples + chord_samples(pitches_of(pitch), seconds, wave_shape) }
+	samples
+}
+to melody notes each duration: sound(melody_samples(notes, si_amount(duration)))
+to melody notes: melody(notes, note_seconds)

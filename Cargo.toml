@@ -11,7 +11,7 @@ resolver = "2"
 
 [package]
 name = "warp-lang" # crates.io: `warp` is the web framework (user 2026-10-06: "lang is perfect"); the library stays `warp`
-version = "1.2.4"
+version = "1.2.5"
 edition = "2021"  # Cargo edition! NOT package edition!
 description = "Warp: the Warp language, a data notation that is also a programming language, compiled to WebAssembly GC"
 repository = "https://github.com/pannous/warp"
@@ -20,7 +20,7 @@ readme = "README.md"
 keywords = ["wasm", "webassembly", "language", "compiler", "notation"]
 categories = ["compilers", "wasm", "command-line-utilities"]
 # the published crate: the sources and the two files they include_str!, not the tests, wiki or playground
-include = ["src/**", "packages.warp", "web/playground/foreign_python.py", "README.md"]
+include = ["src/**", "build.rs", "packages.warp", "web/playground/foreign_python.py", "README.md"]
 # One test binary: cargo would otherwise build and link every tests/*.rs as its own crate (~200 links)
 autotests = false
 
@@ -46,7 +46,7 @@ deprecated = "warn"
 [features]
 # native: running programs (wasmtime), the network, FFI and the console; off for the compiler-in-the-browser build (web/playground)
 default = ["native", "validate"]
-native = ["dep:wasmtime", "dep:wasmtime-wasi", "dep:sha2", "dep:flate2", "dep:crc32fast", "warp-runtime/compiler", "dep:ureq", "dep:rustyline", "dep:libloading", "dep:wat", "dep:regex", "dep:tiny_http", "dep:tungstenite", "dep:wit-component", "dep:wit-parser", "dep:wgpu", "dep:pollster", "dep:winit"]
+native = ["dep:wasmtime", "dep:wasmtime-wasi", "dep:sha2", "dep:flate2", "dep:crc32fast", "warp-runtime/compiler", "dep:ureq", "dep:rustyline", "dep:libloading", "dep:wat", "dep:regex", "dep:tiny_http", "dep:tungstenite", "dep:wit-component", "dep:wit-parser", "dep:wgpu", "dep:pollster", "dep:winit", "dep:ab_glyph"]
 # validate: check every emitted module with wasmparser's validator (a compiler bug becomes an internal error); a quarter
 # of the browser build, whose engine validates anyway: web/playground/build.sh leaves it out of the optimized warp.wasm
 validate = []
@@ -77,6 +77,7 @@ tungstenite = { version = "0.30", optional = true, features = ["rustls-tls-webpk
 # gpu_compute natively (src/gpu.rs): WGSL compute shaders on Metal, Vulkan or DX12, as WebGPU runs them in the browser
 wgpu = { version = "30", optional = true, default-features = false, features = ["std", "parking_lot", "wgsl", "metal", "vulkan", "dx12"] }
 pollster = { version = "0.4", optional = true } # wgpu answers with futures: block on them
+ab_glyph = { version = "0.2", optional = true } # label of use draw natively: text set in a system font (src/text_raster.rs)
 # paint() in a terminal shows its frames in a window (src/paint_window.rs), drawn through a wgpu surface (Metal on macOS)
 winit = { version = "0.30", optional = true, default-features = false, features = ["rwh_06", "x11", "wayland", "wayland-dlopen"] }
 regex = { version = "1.12", optional = true }
@@ -102,7 +103,7 @@ wasmtime-wasi = { version = "49.0.1", optional = true }
 # wasmtime itself builds with (its own wasm-encoder copy)
 wit-component = { version = "0.258", optional = true }
 wit-parser = { version = "0.258", optional = true }
-warp-runtime = { path = "crates/warp-runtime", version = "1.2.4", default-features = false } # without features: the names of the host words only
+warp-runtime = { path = "crates/warp-runtime", version = "1.2.5", default-features = false } # without features: the names of the host words only
 flate2 = { version = "1.1", optional = true } # paint() writes a PNG natively (src/paint.rs); in the tree through wasmtime already
 crc32fast = { version = "1.5", optional = true } # the PNG chunk checksums
 sha2 = { version = "0.10", optional = true } # keys the compiled-module cache (src/run/module_cache.rs); wasmtime uses it already

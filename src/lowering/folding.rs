@@ -5,6 +5,7 @@
 //! The values come from running the definitions and the calls as one small module, so they are exactly what the
 //! program computes; a call that fails or runs out of fuel stays a call.
 
+use super::nodes::{call, children_rewritten, key};
 use crate::analyzer::{captured_variables, collect_variables, Scope};
 use crate::effects::EffectReport;
 use crate::extensions::numbers::Number;
@@ -131,12 +132,7 @@ fn is_read_as_value_only(node: &Node, name: &str) -> bool {
 /// Int arithmetic of constants computed (`3*4` → `12`) and a condition on constants decided: what is left of a body
 /// once its free variables are constants. A comparison is computed only as a condition (its value is a boolean)
 fn computed(node: Node) -> Node {
-	let node = match node {
-		Node::List(items, bracket, separator) => Node::List(items.into_iter().map(computed).collect(), bracket, separator),
-		Node::Key(left, op, right) => Node::Key(Box::new(computed(*left)), op, Box::new(computed(*right))),
-		Node::Meta { node, data } => Node::Meta { node: Box::new(computed(*node)), data },
-		other => other,
-	};
+	let node = children_rewritten(node, computed);
 	match node.drop_meta() {
 		Node::Key(left, op @ (Op::Add | Op::Sub | Op::Mul), right) => match decided(Node::Key(left.clone(), *op, right.clone())) {
 			value @ Node::Number(Number::Int(_)) => value,
@@ -269,8 +265,8 @@ impl Specialiser {
 
 	/// `f(y, 3)` → `f·n3(y)`, or None when f is no pure function, no argument or every argument is constant (folding
 	/// takes that), or the chain of variants would be too deep
-	fn specialised_call(&mut self, call: &Node, depth: usize) -> Option<Node> {
-		let Node::List(items, Bracket::Round, _) = call.drop_meta() else { return None };
+	fn specialised_call(&mut self, called: &Node, depth: usize) -> Option<Node> {
+		let Node::List(items, Bracket::Round, _) = called.drop_meta() else { return None };
 		let (head, arguments) = items.split_first()?;
 		let Node::Symbol(name) = head.drop_meta() else { return None };
 		let definition = self.definitions.get(name)?.clone();
@@ -285,22 +281,22 @@ impl Specialiser {
 		}
 		let variant = self.variant(&definition, &constants, depth)?;
 		let kept: Vec<Node> = arguments.iter().filter(|argument| !constant(argument)).cloned().collect();
-		Some(Node::List([vec![Node::Symbol(variant)], kept].concat(), Bracket::Round, Separator::None))
+		Some(call(&variant, kept))
 	}
 
 	/// The variant of `definition` with `constants` in place, made once per key; None (and nothing kept of the attempt)
 	/// when its chain reaches MAX_VARIANTS
 	fn variant(&mut self, definition: &Definition, constants: &[(String, Node)], depth: usize) -> Option<String> {
 		let suffix: Vec<String> = constants.iter().map(|(parameter, value)| format!("{parameter}{}", value.serialize())).collect();
-		let key = format!("{}{VARIANT_SEPARATOR}{}", definition.name, suffix.join(VARIANT_SEPARATOR));
-		if self.names.contains(&key) {
-			return Some(key);
+		let name = format!("{}{VARIANT_SEPARATOR}{}", definition.name, suffix.join(VARIANT_SEPARATOR));
+		if self.names.contains(&name) {
+			return Some(name);
 		}
 		if depth >= MAX_VARIANTS {
 			return None;
 		}
 		let checkpoint = (self.variants.len(), self.names.len());
-		self.names.push(key.clone());
+		self.names.push(name.clone());
 		let mut body = definition.body.clone();
 		for (parameter, value) in constants {
 			body = crate::library_words::substitute(body, parameter, value);
@@ -309,9 +305,9 @@ impl Specialiser {
 			Some(body) => {
 				let parameters: Vec<Node> = definition.params.iter().zip(definition.param_names())
 					.filter(|(_, name)| !constants.iter().any(|(constant, _)| constant == name)).map(|(parameter, _)| parameter.clone()).collect();
-				let head = Node::List([vec![Node::Symbol(key.clone())], parameters].concat(), Bracket::Round, Separator::None);
-				self.variants.push((key.clone(), Node::Key(Box::new(head), Op::Define, Box::new(body))));
-				Some(key)
+				let head = call(&name, parameters);
+				self.variants.push((name.clone(), key(head, Op::Define, body)));
+				Some(name)
 			}
 			None => {
 				self.variants.truncate(checkpoint.0);
@@ -344,7 +340,7 @@ impl Specialiser {
 	fn specialise_body(&mut self, node: Node, depth: usize) -> Option<Node> {
 		let node = match node {
 			Node::List(items, bracket, separator) => Node::List(items.into_iter().map(|item| self.specialise_body(item, depth)).collect::<Option<_>>()?, bracket, separator),
-			Node::Key(left, op, right) => Node::Key(Box::new(self.specialise_body(*left, depth)?), op, Box::new(self.specialise_body(*right, depth)?)),
+			Node::Key(left, op, right) => key(self.specialise_body(*left, depth)?, op, self.specialise_body(*right, depth)?),
 			Node::Meta { node, data } => Node::Meta { node: Box::new(self.specialise_body(*node, depth)?), data },
 			other => other,
 		};
@@ -365,12 +361,7 @@ impl Specialiser {
 /// Arithmetic and comparisons of Int constants computed, and a condition that is a constant decided: what is left of a
 /// body once a parameter is a constant
 fn decided(node: Node) -> Node {
-	let node = match node {
-		Node::List(items, bracket, separator) => Node::List(items.into_iter().map(decided).collect(), bracket, separator),
-		Node::Key(left, op, right) => Node::Key(Box::new(decided(*left)), op, Box::new(decided(*right))),
-		Node::Meta { node, data } => Node::Meta { node: Box::new(decided(*node)), data },
-		other => other,
-	};
+	let node = children_rewritten(node, decided);
 	let int = |node: &Node| match node.drop_meta() {
 		Node::Number(Number::Int(value)) => Some(*value),
 		_ => None,

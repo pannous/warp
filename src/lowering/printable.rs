@@ -4,6 +4,8 @@
 //! Iterable (wiki/trait.md): `iterate(b:bag) := …` gives what a bag holds; `for x in b` walks it and `x in b` searches it.
 //! Each definition becomes its witness (`text·person`, `iterate·bag`); every other value keeps its own text and items.
 
+use super::words::{FOR_WORD, IN_WORD};
+use super::nodes::{call, key};
 use crate::node::{Bracket, Node, Separator};
 use crate::operators::Op;
 use crate::traits::{witness_name, InstanceTypes, Shape};
@@ -14,8 +16,6 @@ const ITERATE_OPERATION: &str = "iterate";
 /// The words whose call or cast gives a value's text
 const TEXT_WORDS: [&str; 4] = ["text", "string", "str", "String"];
 const PRINT_WORD: &str = "print";
-const FOR_WORD: &str = "for";
-const IN_WORD: &str = "in";
 
 pub fn lower(node: Node) -> Node {
 	let declared = declared_types(&node);
@@ -52,9 +52,9 @@ impl Operations {
 	fn rewrite(&self, node: Node) -> Node {
 		for (operation, types) in [(TEXT_OPERATION, &self.printable), (ITERATE_OPERATION, &self.iterable)] {
 			if let Some((type_name, parameter, body)) = definition(&node, types, operation) {
-				let head = Node::List(vec![Node::Symbol(witness_name(operation, &type_name)), parameter], Bracket::Round, Separator::None);
+				let head = call(&witness_name(operation, &type_name), vec![parameter]);
 				let body = self.types.in_definition(&head, || self.rewrite(body));
-				return Node::Key(Box::new(head), Op::Define, Box::new(body));
+				return key(head, Op::Define, body);
 			}
 		}
 		match node {
@@ -83,7 +83,7 @@ impl Operations {
 				let body = self.types.in_definition(&head, || self.rewrite(*body));
 				Node::Key(head, Op::Define, Box::new(body))
 			}
-			Node::Key(left, op, right) => Node::Key(Box::new(self.rewrite(*left)), op, Box::new(self.rewrite(*right))),
+			Node::Key(left, op, right) => key(self.rewrite(*left), op, self.rewrite(*right)),
 			Node::Meta { node, data } => Node::Meta { node: Box::new(self.rewrite(*node)), data },
 			other => other,
 		}
@@ -93,7 +93,7 @@ impl Operations {
 	fn call(&self, operation: &str, types: &HashSet<String>, value: &Node) -> Option<Node> {
 		let Some(Shape::Instance(type_name)) = self.types.shape(value) else { return None };
 		types.contains(&type_name).then(|| {
-			Node::List(vec![Node::Symbol(witness_name(operation, &type_name)), self.rewrite(value.clone())], Bracket::Round, Separator::None)
+			call(&witness_name(operation, &type_name), vec![self.rewrite(value.clone())])
 		})
 	}
 }

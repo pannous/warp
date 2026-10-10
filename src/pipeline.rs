@@ -100,6 +100,11 @@ thread_local! {
 	static GRANTED: std::cell::Cell<&'static [crate::effects::Capability]> = const { std::cell::Cell::new(&crate::effects::Capability::GRANTED_BY_EVAL) };
 }
 
+/// `run` with the program granted only what a sandboxed program gets (`warp --sandbox`, Capability::GRANTED_SANDBOXED)
+pub fn sandboxed<T>(run: impl FnOnce() -> T) -> T {
+	with_granted(&crate::effects::Capability::GRANTED_SANDBOXED, run)
+}
+
 /// `run` with the program granted only `granted`
 fn with_granted<T>(granted: &'static [crate::effects::Capability], run: impl FnOnce() -> T) -> T {
 	let before = GRANTED.with(|current| current.replace(granted));
@@ -269,7 +274,7 @@ pub struct CompiledModule {
 
 /// The passes over the source forms, in order, each reading what the one before it left: definitions and sugar become
 /// the forms every later pass knows (`def f(x) {…}` is `f(x) := {…}`), modules are resolved
-const SOURCE_PASSES: [fn(Node) -> Node; 100] = [
+const SOURCE_PASSES: &[fn(Node) -> Node] = &[
 	// `"a \(x) b"` → `"a " + text_form(x) + " b"` (interpolation.rs) first, so every pass reads the holes as code
 	crate::interpolation::lower_program,
 	// a shader's `$name` holes (shader_holes.rs) as `name: name` in the values map of each paint of it
@@ -347,6 +352,8 @@ const SOURCE_PASSES: [fn(Node) -> Node; 100] = [
 	// `y certainly < x` is `certainly(y < x)` before class_methods compares the amounts of run-time quantities
 	crate::uncertain::lower_certainty,
 	// methods in a class body become functions over the class before any pass reads the body as fields
+	// `for x in c` of an object with next() (generators.rs) before class_methods lowers the next() calls
+	crate::generators::lower_iterators,
 	crate::class_methods::lower,
 	// `calc.exports` of a component (reflection.rs) before foreign_modules makes it a call into the component
 	crate::reflection::lower_component_words,
@@ -360,9 +367,11 @@ const SOURCE_PASSES: [fn(Node) -> Node; 100] = [
 	crate::object_groups::lower,
 	// the used modules join the program before the signal passes: a listener of the program sees the writes of their functions
 	crate::routes::lower, crate::page_html::use_markup, crate::modules::resolve,
+	// again: a used module's phrases, `play 440Hz for 0.5s` of lib/sound.warp's `to play x for d:`
+	crate::phrase_calls::lower,
 	// `fourty_two.exports`, `dir(fourty_two)` of an imported core module, once resolve found its file (reflection.rs)
 	crate::reflection::lower_module_words,
-	crate::units::lower_sleep_durations, crate::units::lower_quantity_comparisons, crate::stored_values::lower, crate::undo_history::lower, crate::declarations::lower_tasks, crate::system_values::name, crate::signal_values::poll_shared, crate::system_values::read, crate::shared_arrays::lower, crate::fetch_signals::lower, crate::system_signals::lower, crate::component_state::lower, crate::element_events::lower, crate::event_signals::lower, crate::page_html::lower, crate::signal_values::subscribe, crate::variable_signals::lower, crate::signal_values::lower, crate::declarations::lower_c_functions, crate::declarations::lower_bare_declarations, crate::declarations::lower_spaced_definitions, crate::lowering::number_words::lower, crate::parameter_shapes::lower, crate::ruby_blocks::lower, crate::declarations::lower_sized_arrays, crate::result_word::lower, crate::picked_calls::lower, crate::variadic::lower, crate::nonlocal_cells::lower_lambdas, crate::named_arguments::lower, crate::comprehensions::lower, crate::library_words::lower_function_methods, crate::tuples::lower, crate::run_time_blocks::warn_unresolved, crate::run_time_blocks::lower_interpret, crate::blocks::lower, crate::getters::lower, crate::run_time_blocks::lower_run_time_bangs, crate::mutation::warn_discarded, crate::mutation::lower, crate::nested_index::lower, crate::field_elements::lower, crate::host::lower_aliases,
+	crate::units::lower_sleep_durations, crate::units::lower_quantity_comparisons, crate::stored_values::lower, crate::undo_history::lower, crate::declarations::lower_tasks, crate::system_values::name, crate::signal_values::poll_shared, crate::system_values::read, crate::shared_arrays::lower, crate::fetch_signals::lower, crate::system_signals::lower, crate::component_state::lower, crate::element_events::lower, crate::event_signals::lower, crate::page_html::lower, crate::signal_values::subscribe, crate::variable_signals::lower, crate::signal_values::lower, crate::declarations::lower_c_functions, crate::declarations::lower_bare_declarations, crate::declarations::lower_spaced_definitions, crate::lowering::number_words::lower, crate::parameter_shapes::lower, crate::ruby_blocks::lower, crate::generators::lower, crate::declarations::lower_sized_arrays, crate::result_word::lower, crate::picked_calls::lower, crate::variadic::lower, crate::nonlocal_cells::lower_lambdas, crate::named_arguments::lower, crate::comprehensions::lower, crate::library_words::lower_function_methods, crate::tuples::lower, crate::run_time_blocks::warn_unresolved, crate::run_time_blocks::lower_interpret, crate::blocks::lower, crate::getters::lower, crate::run_time_blocks::lower_run_time_bangs, crate::mutation::warn_discarded, crate::mutation::lower, crate::nested_index::lower, crate::field_elements::lower, crate::host::lower_aliases,
 	// again: the getters of the modules used, which lower_module_source leaves for here, and the program's reads of them
 	crate::getters::lower,
 	crate::type_name_matching::lower, crate::meta_entries::lower, crate::versions::lower_versions,
@@ -372,7 +381,7 @@ const SOURCE_PASSES: [fn(Node) -> Node; 100] = [
 ];
 
 /// The passes after the constant answers (time, units, reals), in order: types and traits, lambdas and closures, words
-const MEANING_PASSES: [fn(Node) -> Node; 29] = [
+const MEANING_PASSES: &[fn(Node) -> Node] = &[
 	// first: the run-time item checks of declared lists see `names.add(v)` before any pass lowers the append
 	crate::lowering::list_element_checks::lower,
 	crate::lazy_ranges::lower, crate::declarations::resolve_tasks, crate::traits::lower_declarations, crate::type_tests::lower, crate::ambiguous_forms::lower, crate::analyzer::lower_list_times,
@@ -380,7 +389,7 @@ const MEANING_PASSES: [fn(Node) -> Node; 29] = [
 	crate::broadcasting::lower_scalar_element_wise, crate::broadcasting::lower_prefix_calls, crate::overloads::lower_arity_overloads,
 	crate::broadcasting::lower, crate::library_words::lower_count_in, crate::lambdas::lower, crate::function_values::lower, crate::closures::lower, crate::lambdas::lower_strict, crate::broadcasting::lower_several_arguments, crate::real::lower,
 	crate::type_constructor::lower, crate::printable::lower, crate::overloads::lower, crate::traits::lower_conformances, crate::min_max::lower,
-	crate::declarations::lower, crate::switch::lower, crate::phrase_words::lower, crate::library_words::lower,
+	crate::declarations::lower, crate::switch::lower, crate::phrase_words::lower, crate::library_words::lower, crate::number_keys::lower_key_words,
 	crate::traits::lower_dispatch, crate::memoization::lower,
 ];
 
@@ -416,7 +425,7 @@ fn lower_for_emission(node: Node) -> Result<Node, Node> {
 	crate::diagnostic::report(&crate::analyzer::source_warnings(&node))?;
 	// emits and handler blocks as written: the passes lower them to calls, the named effects are read from them
 	let as_written = node.clone();
-	let node = run_passes(node, &SOURCE_PASSES);
+	let node = run_passes(node, SOURCE_PASSES);
 	if let Some(error) = node.first_error() {
 		return Err(error.clone());
 	}
@@ -444,7 +453,7 @@ fn lower_for_emission(node: Node) -> Result<Node, Node> {
 	if let Some(answer) = crate::real::answer(&node) {
 		return Err(answer);
 	}
-	let node = run_passes(node, &MEANING_PASSES);
+	let node = run_passes(node, MEANING_PASSES);
 	if let Some(error) = node.first_error() {
 		return Err(error.clone());
 	}
@@ -598,15 +607,10 @@ pub fn eval_block(block: Node, names: &Node, values: &Node, definitions: &Node) 
 		Node::Text(names) => names.split_whitespace().map(str::to_string).collect(),
 		_ => vec![],
 	};
-	let items = |list: &Node| match list.drop_meta() {
-		Node::List(items, _, _) => items.clone(),
-		Node::Empty => vec![],
-		single => vec![single.clone()],
-	};
 	let block = spaced(block);
-	let definitions: Vec<Node> = items(definitions).into_iter().map(spaced).collect();
+	let definitions: Vec<Node> = definitions.as_items().into_iter().map(spaced).collect();
 	let mentioned = |name: &str| [&block].into_iter().chain(&definitions).any(|part| mentions(part, name));
-	let bound: Vec<(String, Node)> = names.into_iter().zip(items(values)).filter(|(name, _)| mentioned(name)).collect();
+	let bound: Vec<(String, Node)> = names.into_iter().zip(values.as_items()).filter(|(name, _)| mentioned(name)).collect();
 	let program_of = |bindings: Vec<Node>| {
 		let statements: Vec<Node> = bindings.into_iter().chain(definitions.iter().cloned()).chain([block.clone()]).collect();
 		Node::List(statements, Bracket::None, Separator::Newline)

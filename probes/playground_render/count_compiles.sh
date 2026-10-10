@@ -2,6 +2,7 @@
 # card playground-render: how many modules the playground compiles to show the tour example "fine updates" and to
 # handle three clicks (each compiled module is posted to the page as {type: "module"}). Run from a checkout whose
 # playground is built (web/playground/build.sh); prints "run: N, clicks: M".
+[ -n "${CI:-}" ] || { echo "browser tests run in CI only: skipped, Chrome is not started outside CI (user, 2026-10-09)"; exit 0; }
 cd "$(dirname "$0")/../.." || exit 1
 SESSION=count-compiles
 PORT=8791

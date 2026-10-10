@@ -1,6 +1,7 @@
 //! A node as JSON or XML, and from JSON
 
 use super::*;
+use serde_json::{Map, Value};
 
 impl Node {
 	pub fn to_json(&self) -> Result<String, serde_json::Error> {
@@ -18,217 +19,116 @@ impl Node {
 	pub fn to_xml(&self) -> String {
 		match self.drop_meta() {
 			Key(tag_name, _, body) => {
-				let mut attributes = Vec::new();
-				let mut content_parts = Vec::new();
-
-				// Separate attributes (dotted keys) from content
+				let mut attributes = String::new();
+				let mut content = Vec::new();
 				match body.as_ref() {
 					List(items, _, _) => {
 						for item in items {
-							match item.drop_meta() {
-								Key(k, _, v) => {
-									if let Symbol(key_str) | Text(key_str) = k.drop_meta() {
-										if let Some(attr_name) = key_str.strip_prefix('.') {
-											// This is an attribute
-											// Remove leading dot
-											match v.as_ref() {
-												True => {
-													// Boolean attribute (no value)
-													attributes.push(attr_name.to_string());
-												}
-												Text(s) | Symbol(s) => {
-													attributes
-														.push(format!("{}=\"{}\"", attr_name, s));
-												}
-												Number(n) => {
-													attributes
-														.push(format!("{}=\"{}\"", attr_name, n));
-												}
-												_ => {
-													let val = Node::serialize(v);
-													attributes
-														.push(format!("{}=\"{}\"", attr_name, val));
-												}
-											}
-										} else {
-											// Non-attribute key - treat as content
-											content_parts.push(item.to_xml());
-										}
-									} else {
-										// Non-string key - treat as content
-										content_parts.push(item.to_xml());
-									}
-								}
-								_ => {
-									// This is content
-									content_parts.push(item.to_xml());
-								}
+							match xml_attribute(item) {
+								Some(attribute) => attributes += &format!(" {attribute}"),
+								None => content.push(item.to_xml()),
 							}
 						}
 					}
-					Empty => {
-						// Empty body
-					}
-					other => {
-						// Single content item
-						content_parts.push(other.to_xml());
-					}
+					Empty => {}
+					single => content.push(single.to_xml()),
 				}
-
-				// Build XML tag
-				let attrs_str = if attributes.is_empty() {
-					String::new()
+				if content.is_empty() {
+					format!("<{tag_name}{attributes} />")
 				} else {
-					format!(" {}", attributes.join(" "))
-				};
-
-				if content_parts.is_empty() {
-					// Self-closing tag
-					format!("<{}{} />", tag_name, attrs_str)
-				} else {
-					// Tag with content
-					let content = content_parts.join("");
-					format!("<{}{}>{}</{}>", tag_name, attrs_str, content, tag_name)
+					format!("<{tag_name}{attributes}>{}</{tag_name}>", content.concat())
 				}
 			}
-			Text(s) => s.clone(),
-			Symbol(s) => s.clone(),
-			List(items, _, _) => {
-				// Multiple items - convert each to XML
-				items
-					.iter()
-					.map(|item| item.to_xml())
-					.collect::<Vec<_>>()
-					.join("")
-			}
+			Text(s) | Symbol(s) => s.clone(),
+			List(items, _, _) => items.iter().map(Node::to_xml).collect(),
 			Empty => String::new(),
-			_ => {
-				// For other node types, fall back to serialize
-				self.serialize()
-			}
+			_ => self.serialize(),
 		}
 	}
 
-	pub(super) fn to_json_value(&self) -> serde_json::Value {
-		use serde_json::{Map, Value};
-
+	pub(super) fn to_json_value(&self) -> Value {
 		match self {
 			True => Value::Bool(true),
 			False => Value::Bool(false),
 			Empty => Value::Null,
 			Node::Number(Number::Int(n)) => Value::Number((*n).into()),
-			Node::Number(Number::Float(f)) => serde_json::Number::from_f64(*f)
-				.map(Value::Number)
-				.unwrap_or(Value::Null),
-			Node::Number(n) => Value::String(format!("{}", n)),
+			Node::Number(Number::Float(f)) => serde_json::Number::from_f64(*f).map(Value::Number).unwrap_or(Value::Null),
+			Node::Number(n) => Value::String(n.to_string()),
 			Text(s) | Symbol(s) => Value::String(s.clone()),
 			Char(c) => Value::String(c.to_string()),
-			List(items, bracket, _) => {
-				// Curly braces -> object with items, Square/Round -> array
-				match bracket {
-					Bracket::Curly => {
-						let mut map = Map::new();
-						for item in items {
-							match item {
-								Key(k, _, v) => {
-									if let Symbol(key_str) | Text(key_str) = k.drop_meta() {
-										map.insert(key_str.clone(), v.to_json_value());
-									}
-								}
-								List(nested, Bracket::Curly, _) => {
-									// Nested curly lists become nested objects
-									for nested_item in nested {
-										if let Key(k, _, v) = nested_item {
-											if let Symbol(key_str) | Text(key_str) = k.drop_meta() {
-												map.insert(key_str.clone(), v.to_json_value());
-											}
-										}
-									}
-								}
-								other => {
-									// let key = format!("item_{}", map.len());
-									let key = format!("{}", map.len()); // just the number
-									map.insert(key, other.to_json_value());
-								}
-							}
+			// curly braces are an object, the items without a key numbered by their place; others an array
+			List(items, Bracket::Curly, _) => {
+				let mut map = Map::new();
+				for item in items {
+					match item {
+						Key(..) => insert_json_entry(&mut map, item),
+						List(nested, Bracket::Curly, _) => nested.iter().for_each(|entry| insert_json_entry(&mut map, entry)),
+						other => {
+							map.insert(map.len().to_string(), other.to_json_value());
 						}
-						Value::Object(map)
 					}
-					_ => Value::Array(items.iter().map(|n| n.to_json_value()).collect()),
-				}
-			}
-			Key(k, _, v) => {
-				let mut map = Map::new();
-				if let Symbol(key_str) | Text(key_str) = k.drop_meta() {
-					map.insert(key_str.clone(), v.to_json_value());
 				}
 				Value::Object(map)
 			}
-			Data(d) => {
+			List(items, _, _) => Value::Array(items.iter().map(Node::to_json_value).collect()),
+			Key(..) => {
 				let mut map = Map::new();
-				map.insert("_type".to_string(), Value::String(d.type_name.clone()));
+				insert_json_entry(&mut map, self);
 				Value::Object(map)
 			}
-			Meta { node, data } => {
-				// Encode metadata as dotted keys or .meta array
-				if let List(items, ..) = data.as_ref() {
-					let has_keys = items.iter().any(|n| matches!(n, Key(..)));
-
-					if has_keys {
-						// Extract dotted keys from metadata
-						let mut map = Map::new();
-						for item in items {
-							if let Key(k, _, v) = item {
-								map.insert(format!(".{}", k), v.to_json_value());
-							}
-						}
-						// Add the wrapped value
-						map.insert("_value".to_string(), node.to_json_value());
-						Value::Object(map)
-					} else {
-						// Non-Key metadata: use .meta array
-						let mut map = Map::new();
+			Data(d) => json_object([("_type", Value::String(d.type_name.clone()))]),
+			Meta { node, data } => match data.as_ref() {
+				// metadata keys as dotted keys, other metadata as .meta
+				List(items, ..) if items.iter().any(|item| matches!(item, Key(..))) => {
+					let mut map: Map<String, Value> = items.iter().filter_map(|item| match item {
+						Key(key, _, value) => Some((format!(".{key}"), value.to_json_value())),
+						_ => None,
+					}).collect();
+					map.insert("_value".to_string(), node.to_json_value());
+					Value::Object(map)
+				}
+				List(..) => json_object([(".meta", data.to_json_value()), ("_value", node.to_json_value())]),
+				_ if data.get_lineinfo().is_some() || **data == Empty => node.to_json_value(),
+				_ => match node.to_json_value() {
+					Value::Object(mut map) => {
 						map.insert(".meta".to_string(), data.to_json_value());
-						map.insert("_value".to_string(), node.to_json_value());
 						Value::Object(map)
 					}
-				} else if let Some(_info) = data.get_lineinfo() {
-					node.to_json_value() // ignore lineinfo
-				} else if **data != Empty {
-					let inner = node.to_json_value();
-					let meta_val = data.to_json_value();
-					match inner {
-						Value::Object(mut map) => {
-							map.insert(".meta".to_string(), meta_val);
-							Value::Object(map)
-						}
-						_ => {
-							let mut map = Map::new();
-							map.insert("_value".to_string(), inner);
-							map.insert(".meta".to_string(), meta_val);
-							Value::Object(map)
-						}
-					}
-				} else {
-					// No metadata, just unwrap
-					node.to_json_value()
-				}
-			}
-			Type { name, body } => {
-				let mut map = Map::new();
-				map.insert("_type".to_string(), name.to_json_value());
-				map.insert("fields".to_string(), body.to_json_value());
-				Value::Object(map)
-			}
-			Error(e) => {
-				let mut map = Map::new();
-				map.insert("_error".to_string(), e.to_json_value());
-				Value::Object(map)
-			}
+					inner => json_object([("_value", inner), (".meta", data.to_json_value())]),
+				},
+			},
+			Type { name, body } => json_object([("_type", name.to_json_value()), ("fields", body.to_json_value())]),
+			Error(e) => json_object([("_error", e.to_json_value())]),
 		}
 	}
 
 	pub fn from_json(json: &str) -> Result<Node, serde_json::Error> {
 		serde_json::from_str(json)
 	}
+}
+
+/// `.name=value` of an item `.name: value` (a flag `.name: true` is just the name); None for content
+fn xml_attribute(item: &Node) -> Option<String> {
+	let Key(key, _, value) = item.drop_meta() else { return None };
+	let (Symbol(key) | Text(key)) = key.drop_meta() else { return None };
+	let name = key.strip_prefix('.')?;
+	Some(match value.as_ref() {
+		True => name.to_string(),
+		Text(s) | Symbol(s) => format!("{name}=\"{s}\""),
+		Number(n) => format!("{name}=\"{n}\""),
+		other => format!("{name}=\"{}\"", other.serialize()),
+	})
+}
+
+/// The entry `key: value` with a text or symbol key into the object; any other node adds nothing
+fn insert_json_entry(map: &mut Map<String, Value>, entry: &Node) {
+	if let Key(key, _, value) = entry {
+		if let Symbol(key) | Text(key) = key.drop_meta() {
+			map.insert(key.clone(), value.to_json_value());
+		}
+	}
+}
+
+fn json_object<const N: usize>(entries: [(&str, Value); N]) -> Value {
+	Value::Object(entries.into_iter().map(|(key, value)| (key.to_string(), value)).collect())
 }

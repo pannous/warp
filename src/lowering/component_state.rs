@@ -11,9 +11,11 @@
 //! A component whose markup holds a style sheet names itself on its root element (`data-warp-scope: "Card"`), so the
 //! sheet styles only its own elements (html.rs, card web-scoped).
 
+use super::words::ON_WORD;
+use super::nodes::{call, if_then, key, named_assignment};
 use crate::element_events::{element_items, handler_at, has_element_handler, HANDLER_ATTRIBUTE_PREFIX};
 use crate::law::substitute;
-use crate::node::{Bracket, Node, Separator};
+use crate::node::{symbol, Bracket, Node, Separator};
 use crate::operators::Op;
 use crate::warp_parser::parse;
 use std::collections::HashMap;
@@ -40,7 +42,6 @@ const CLEANUP_LOOP: &str = "while CLEANED <= SEEN { CLEANUP(CLEANED); CLEANED +=
 const TRUNCATED: &str = "if #STATE > COUNTER { STATE = STATE[0..COUNTER] }";
 const SEEN_SET: &str = "SEEN = COUNTER";
 const SHOWN: &str = "page·shown";
-const ON_WORD: &str = "on";
 const MOUNT: &str = "mount";
 const CLEANUP: &str = "cleanup";
 const SEEN: &str = "seen";
@@ -58,7 +59,7 @@ pub fn lower(program: Node) -> Node {
 		Some((head, body, state)) => {
 			let component = Component::new(&head, state, &body);
 			declarations.extend(component.declarations());
-			let definition = Node::Key(Box::new(head), Op::Define, Box::new(component.body(body)));
+			let definition = key(head, Op::Define, component.body(body));
 			components.push(component);
 			definition
 		}
@@ -71,10 +72,10 @@ pub fn lower(program: Node) -> Node {
 	let resets = components.iter().map(|component| filled(RESET, &[("COUNTER", &component.counter)]));
 	let rendered = crate::variable_signals::assign(SHOWN, shown);
 	let after = components.iter().flat_map(Component::after_render);
-	let render_body = resets.chain([rendered]).chain(after).chain([Node::Symbol(SHOWN.into())]).collect();
-	let render = Node::Key(Box::new(Node::Symbol(RENDER.into())), Op::Define, Box::new(Node::List(render_body, Bracket::Curly, Separator::Semicolon)));
+	let render_body = resets.chain([rendered]).chain(after).chain([symbol(SHOWN)]).collect();
+	let render = key(symbol(RENDER), Op::Define, Node::List(render_body, Bracket::Curly, Separator::Semicolon));
 	let cleanups = components.iter().filter_map(Component::cleanup_function);
-	Node::List(declarations.into_iter().chain(cleanups).chain(lowered).chain([render, Node::Symbol(RENDER.into())]).collect(), bracket, separator)
+	Node::List(declarations.into_iter().chain(cleanups).chain(lowered).chain([render, symbol(RENDER)]).collect(), bracket, separator)
 }
 
 /// `on mount {…}` or `on cleanup {…}` among a component's statements: the word and the body
@@ -120,7 +121,7 @@ fn stateful_component(statement: &Node) -> Option<StatefulComponent> {
 	// what its handlers and its cleanup read is kept per instance
 	let cleanups = statements.iter().filter_map(lifecycle).filter(|(word, _)| word == CLEANUP).flat_map(|(_, body)| crate::variable_signals::symbols(&body));
 	let mentioned: Vec<String> = handler_symbols(&statements).into_iter().chain(cleanups).collect();
-	let state: Vec<(String, Node)> = statements.iter().filter_map(assignment).filter(|(name, _)| mentioned.contains(name)).collect();
+	let state: Vec<(String, Node)> = statements.iter().filter_map(named_assignment).filter(|(name, _)| mentioned.contains(name)).collect();
 	(!state.is_empty() || statements.iter().any(|statement| lifecycle(statement).is_some())).then_some((*head, statements, state))
 }
 
@@ -134,7 +135,7 @@ fn scoped_component(statement: &Node) -> Option<Node> {
 	let Node::Key(head, op @ (Op::Define | Op::Assign), body) = crate::declarations::lower_c_functions(statement.clone()).drop_meta().clone() else { return None };
 	let Node::List(parts, Bracket::Round, _) = head.drop_meta() else { return None };
 	let name = parts.first()?.name();
-	let attribute = Node::Key(Box::new(Node::Symbol(crate::markup::SCOPE_ATTRIBUTE.into())), Op::Colon, Box::new(Node::Text(name)));
+	let attribute = key(symbol(crate::markup::SCOPE_ATTRIBUTE), Op::Colon, Node::Text(name));
 	let body = match *body {
 		Node::List(mut items, Bracket::Curly, separator) => {
 			let root = with_attribute(items.pop()?, attribute)?;
@@ -159,17 +160,6 @@ fn with_attribute(element: Node, attribute: Node) -> Option<Node> {
 	Some(Node::Key(tag, op, Box::new(Node::List(std::iter::once(attribute).chain(items).collect(), Bracket::Curly, Separator::Space))))
 }
 
-/// `x = value`: the name and the value
-fn assignment(statement: &Node) -> Option<(String, Node)> {
-	match statement.drop_meta() {
-		Node::Key(name, Op::Assign, value) => match name.drop_meta() {
-			Node::Symbol(name) => Some((name.clone(), value.as_ref().clone())),
-			_ => None,
-		},
-		_ => None,
-	}
-}
-
 /// The names the element handlers in the statements mention
 fn handler_symbols(statements: &[Node]) -> Vec<String> {
 	let mut names = vec![];
@@ -183,7 +173,7 @@ fn handler_symbols(statements: &[Node]) -> Vec<String> {
 
 /// A template with its placeholders filled by names
 fn filled(template: &str, names: &[(&str, &str)]) -> Node {
-	with(template, names.iter().map(|(placeholder, name)| (*placeholder, Node::Symbol(name.to_string()))).collect())
+	with(template, names.iter().map(|(placeholder, name)| (*placeholder, symbol(name))).collect())
 }
 
 fn with(template: &str, bindings: Vec<(&str, Node)>) -> Node {
@@ -227,9 +217,9 @@ impl Component {
 		if self.cleanups.is_empty() {
 			return None;
 		}
-		let head = Node::List(vec![Node::Symbol(self.cleanup.clone()), Node::Symbol(self.key.clone())], Bracket::Round, Separator::None);
+		let head = call(&self.cleanup.clone(), vec![Node::Symbol(self.key.clone())]);
 		let body = self.cleanups.iter().cloned().map(|body| self.read(body)).collect();
-		Some(Node::Key(Box::new(head), Op::Define, Box::new(Node::List(body, Bracket::Curly, Separator::Semicolon))))
+		Some(key(head, Op::Define, Node::List(body, Bracket::Curly, Separator::Semicolon)))
 	}
 
 	/// After a render: the instances it left are cleaned up, their state dropped, its count kept for the next
@@ -250,11 +240,11 @@ impl Component {
 			if let Some((word, body)) = lifecycle(&statement) {
 				if word == MOUNT {
 					let condition = filled(FIRST_RENDER, &[("SEEN", &self.seen), ("KEY", &self.key)]);
-					lowered.push(crate::variable_signals::if_then(condition, self.read(body)));
+					lowered.push(if_then(condition, self.read(body)));
 				}
 				continue;
 			}
-			let first_set = assignment(&statement).and_then(|(name, initial)| self.state.iter().find(|(variable, _, _)| *variable == name).map(|(_, _, list)| (list.clone(), initial)));
+			let first_set = named_assignment(&statement).and_then(|(name, initial)| self.state.iter().find(|(variable, _, _)| *variable == name).map(|(_, _, list)| (list.clone(), initial)));
 			lowered.push(match first_set {
 				Some((list, initial)) => with(FIRST_SET, vec![("STATE", Node::Symbol(list)), ("KEY", Node::Symbol(self.key.clone())), ("INITIAL", self.read(initial))]),
 				None => self.read(statement),
@@ -302,7 +292,7 @@ impl Component {
 		}
 		if has_handler {
 			let attribute = Node::Symbol(format!("{HANDLER_ATTRIBUTE_PREFIX}{INSTANCE_ATTRIBUTE}"));
-			kept.insert(0, Node::Key(Box::new(attribute), Op::Colon, Box::new(Node::Symbol(self.key.clone()))));
+			kept.insert(0, key(attribute, Op::Colon, Node::Symbol(self.key.clone())));
 		}
 		Node::Key(tag, op, Box::new(Node::List(kept, bracket, separator)))
 	}

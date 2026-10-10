@@ -48,6 +48,7 @@ mod test_repeated_type_parameters;
 mod test_type_of;
 mod test_type_tests;
 mod test_type_tests_anywhere;
+mod test_type_word_scopes;
 mod test_type_upgrading;
 mod test_type_words;
 mod test_typed_arrays;

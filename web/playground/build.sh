@@ -8,7 +8,8 @@
 #               feature (wasmparser's validator, a quarter of the module: the browser validates anyway), then wasm-opt
 #   debug     → warp.debug.wasm: profile web-debug (opt-level 1, line tables, the name section kept), with `validate`, so
 #               emitter bugs are named and stack traces and the browser's debugger show Rust functions and lines
-#   components → components/<name>.js for every COMPONENTS component (`use wasm "<name>.wasm"`, components.js): jco
+#   components → components/<name>.js for every COMPONENTS component (`use <name>`, components.js), and their names in
+#               components/names.txt: jco
 #               transpiles it (npm i -g @bytecodealliance/jco), the core modules go into the script as base64, the
 #               WIT signatures of its exports as JSON (wasm-tools component wit --json; cargo install wasm-tools)
 #   served <site> → <site>/served-files.js for a collected site (pages.yml); every build writes the repository's
@@ -75,6 +76,8 @@ print(f"registerComponent({json.dumps(name)}, {json.dumps(cores)}, {json.dumps(s
 PYTHON
 		echo "built $page/components/$name.js"
 	done
+	# the compiler's list of them (src/lowering/foreign_modules.rs PAGE_COMPONENTS): `use rust_demo` names one
+	for component in "${COMPONENTS[@]}"; do basename "$component" .wasm; done > "$page/components/names.txt"
 }
 
 # served-files.js: the files the server has, so the compiler's module and header searches ask only for those that exist
@@ -88,7 +91,8 @@ print("// made by build.sh: the files the server has (host-files.js isUnserved)\
 
 # the repository's files, as the dev server and test_in_browser.py serve them from the repository root
 write_repository_served_files() {
-	git ls-files --cached --others --exclude-standard | write_served_files "$page/served-files.js"
+	# plus the built components, which git ignores (components/names.txt is what the compiler asks for)
+	{ git ls-files --cached --others --exclude-standard; find web/playground/components -type f 2>/dev/null; } | write_served_files "$page/served-files.js"
 }
 
 case "${1:-all}" in

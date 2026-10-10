@@ -286,6 +286,30 @@ pub fn beside_program(path: &str) -> String {
 	}
 }
 
+/// The WebAssembly file `use name` finds when no warp module and no standard module has that name: `use rust_demo` →
+/// ./rust_demo.wasm
+pub fn wasm_module_file(name: &str) -> Option<PathBuf> {
+	if names_a_module(name) {
+		return None;
+	}
+	program_loader().find_with(name, &crate::wasm_modules::MODULE_EXTENSIONS)
+}
+
+/// Does `use name` name anything: a module (warp, standard, WebAssembly), a scope, a package or a C library
+pub fn resolves(name: &str) -> bool {
+	names_a_module(name) || wasm_module_file(name).is_some() || scope_word(name).is_some() || package_repository(name).is_some()
+		|| is_builtin_library(name) || crate::ffi::is_ffi_library(name)
+}
+
+/// Is `name` a warp module beside the program or in the search directories, or a standard module
+pub fn names_a_module(name: &str) -> bool {
+	program_loader().find(name).is_some() || std_module(name).is_some()
+}
+
+fn program_loader() -> Loader<'static> {
+	Loader::new(&SEARCH_DIRECTORIES, program_file().as_deref().map(folder_of))
+}
+
 /// The file being compiled, None for inline code
 pub fn program_file() -> Option<PathBuf> {
 	PROGRAM_FILE.with(|current| current.borrow().clone())
@@ -791,7 +815,7 @@ impl<'a> Loader<'a> {
 }
 
 /// The standard library's modules written in warp (notes/stdlib.md), embedded so `use list` needs no files
-const STD_MODULES: [(&str, &str); 23] = [
+const STD_MODULES: [(&str, &str); 24] = [
 	(PRELUDE_MODULE, include_str!("../lib/prelude.warp")),
 	("memory", include_str!("../lib/memory.warp")),
 	("net", include_str!("../lib/net.warp")),
@@ -815,6 +839,7 @@ const STD_MODULES: [(&str, &str); 23] = [
 	("i18n", include_str!("../lib/i18n.warp")),
 	(UNITS_MODULE, include_str!("../lib/units.warp")),
 	(AGENT_MODULE, include_str!("../lib/agent.warp")),
+	(SOUND_MODULE, include_str!("../lib/sound.warp")),
 ];
 /// Other names of standard modules (word choices are aliases): `use graphics` is `use draw`
 const STD_MODULE_ALIASES: [(&str, &str); 1] = [("graphics", "draw")];
@@ -834,18 +859,22 @@ const QUANTITY: &str = "quantity";
 const ROUTE_PARTS: [&str; 3] = ["route_segment", "route_parameter", "route_matches"];
 /// lib/agent.warp: `agent "prompt"` asks Claude (card g_X_F0)
 const AGENT_MODULE: &str = "agent";
+/// lib/sound.warp: `play 440Hz for 0.5s`, `beep` (card basic-sound), loaded when a program calls one of its words
+const SOUND_MODULE: &str = "sound";
+const SOUND_WORDS: [&str; 9] = ["play", "melody", "tone", "beep", "play_file", "stop_sound", "sound_queued", "wait_sound", "render_sound"];
 /// Whether a program needs a module
 type NeededBy = fn(&Node) -> bool;
 /// The standard modules a program needs without `use`: P183 a file URL → file, a page → markup (lowering/page_html.rs),
 /// routes or a server route's path parameters → router, a route's regular expression → regex (lowering/routes.rs), a call of quantity → units (run-time units),
-/// a call of agent → agent, a WAGI build (`warp build --wagi`) → wagi
-const IMPLICIT_MODULES: [(&str, NeededBy); 7] = [
+/// a call of agent → agent, a call of play, melody, tone or beep → sound, a WAGI build (`warp build --wagi`) → wagi
+const IMPLICIT_MODULES: [(&str, NeededBy); 8] = [
 	("file", mentions_file_url),
 	("markup", |_| crate::pipeline::renders_itself()),
 	("router", |program| defined(program, crate::routes::PAGE_ROUTES).is_some() || { let called = called_names(&statements(program.clone())); ROUTE_PARTS.iter().any(|word| called.contains(*word)) }),
 	("regex", |program| defined(program, crate::routes::PAGE_ROUTE_INDEX).is_some_and(|index| called_names(&[index]).contains(crate::routes::REGEX_MATCH))),
 	(UNITS_MODULE, |program| calls_undefined(program, QUANTITY)),
 	(AGENT_MODULE, |program| calls_undefined(program, AGENT_MODULE)),
+	(SOUND_MODULE, |program| SOUND_WORDS.iter().any(|word| calls_undefined(program, word))),
 	("wagi", |_| crate::pipeline::is_for_wagi()),
 ];
 
@@ -1027,7 +1056,7 @@ pub fn fetch_package(name: &str) -> Result<PathBuf, String> {
 
 /// fetch_package with another packages directory than packages/
 pub fn fetch_package_into(packages: &Path, name: &str) -> Result<PathBuf, String> {
-	let package = registered(name).ok_or(format!("unknown package: {name}"))?;
+	let package = registered_package(name)?;
 	match &package.pinned {
 		Some(version) => fetch_tagged(packages, name, &package.url, version, name),
 		None => clone(name, &package.url, &packages.join(name), None),
@@ -1037,8 +1066,8 @@ pub fn fetch_package_into(packages: &Path, name: &str) -> Result<PathBuf, String
 /// The directory of the version of a package a requirement picks among its git tags (`v1.2.3` or `1.2.3`):
 /// that version, or the latest from the minimum on; cloned into packages/<name>@<version>
 pub fn fetch_package_version(name: &str, requirement: &Requirement) -> Result<PathBuf, String> {
-	let url = package_repository(name).ok_or(format!("unknown package: {name}"))?;
-	let tags = version_tags(&url).map_err(|failure| format!("package {name}: no versions from {url}: {failure}"))?;
+	let url = registered_package(name)?.url;
+	let tags = package_version_tags(name, &url)?;
 	let Some((_, version)) = tags.iter().filter(|(_, version)| requirement.allows(version)).max_by(|a, b| a.1.cmp(&b.1)) else {
 		let versions: Vec<String> = tags.iter().map(|(_, version)| version.to_string()).collect();
 		return Err(format!("package {name} has no {requirement} (tagged: {})", versions.join(", ")));
@@ -1069,12 +1098,12 @@ fn fetch_tagged(packages: &Path, name: &str, url: &str, version: &Version, link_
 		return Ok(link);
 	}
 	if !cached.exists() {
-		let tags = version_tags(url).map_err(|failure| format!("package {name}: no versions from {url}: {failure}"))?;
+		let tags = package_version_tags(name, url)?;
 		let tag = tags.iter().find(|(_, tagged)| tagged == version).map(|(tag, _)| tag.as_str())
 			.ok_or(format!("package {name} has no tag of version {version} at {url}"))?;
 		clone(name, url, &cached, Some(tag))?;
 	}
-	std::fs::create_dir_all(packages).map_err(|failure| format!("package {name}: {failure}"))?;
+	make_package_directory(name, packages)?;
 	#[cfg(not(unix))]
 	return Err(format!("package {name}: not linked to {}: no symbolic links on this platform", cached.display()));
 	#[cfg(unix)]
@@ -1101,7 +1130,7 @@ fn is_real_directory(path: &Path) -> bool {
 /// Moves an unpinned clone out of the pin's way into packages/.replaced, never deleting it
 fn set_aside(packages: &Path, name: &str, version: &Version, clone: &Path) -> Result<(), String> {
 	let replaced = packages.join(REPLACED_DIRECTORY);
-	std::fs::create_dir_all(&replaced).map_err(|failure| format!("package {name}: {failure}"))?;
+	make_package_directory(name, &replaced)?;
 	let seconds = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map_or(0, |elapsed| elapsed.as_secs());
 	let destination = replaced.join(format!("{}.{seconds}.{}", clone.file_name().unwrap_or_default().to_string_lossy(), std::process::id()));
 	match std::fs::rename(clone, &destination) {
@@ -1121,6 +1150,18 @@ fn warn_overridden(name: &str, version: &Version, directory: &Path) {
 		eprintln!("warning: package {name}: {key} (a local checkout or a clone with changes) overrides the pinned version {version}");
 		warned.push(key);
 	}
+}
+
+fn registered_package(name: &str) -> Result<Registered, String> {
+	registered(name).ok_or(format!("unknown package: {name}"))
+}
+
+fn package_version_tags(name: &str, url: &str) -> Result<Vec<(String, Version)>, String> {
+	version_tags(url).map_err(|failure| format!("package {name}: no versions from {url}: {failure}"))
+}
+
+fn make_package_directory(name: &str, directory: &Path) -> Result<(), String> {
+	std::fs::create_dir_all(directory).map_err(|failure| format!("package {name}: {failure}"))
 }
 
 fn package_cache() -> PathBuf {
@@ -1146,7 +1187,7 @@ fn clone(name: &str, url: &str, directory: &Path, tag: Option<&str>) -> Result<P
 		return Ok(directory.to_path_buf());
 	}
 	let parent = directory.parent().unwrap_or(Path::new("."));
-	std::fs::create_dir_all(parent).map_err(|failure| format!("package {name}: {failure}"))?;
+	make_package_directory(name, parent)?;
 	let directory_name = directory.file_name().unwrap_or_default().to_string_lossy();
 	let staging = parent.join(format!(".{directory_name}.fetching.{}", std::process::id()));
 	let mut command = Command::new("git");
@@ -1179,7 +1220,7 @@ fn package_directory(name: &str) -> Result<PathBuf, String> {
 	return fetch_package(name);
 	#[cfg(not(feature = "native"))]
 	{
-		let package = registered(name).ok_or(format!("unknown package: {name}"))?;
+		let package = registered_package(name)?;
 		let repository = package.url.trim_end_matches(".git").replace("https://github.com/", "https://raw.githubusercontent.com/");
 		let reference = package.pinned.map_or("HEAD".to_string(), |version| format!("v{version}"));
 		Ok(PathBuf::from(format!("{repository}/{reference}")))

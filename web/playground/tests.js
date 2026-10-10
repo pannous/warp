@@ -1,5 +1,5 @@
 // The browser test page: lists the tests of the binary (?wasm=, default tests.wasm; ?args= a JSON list of libtest
-// filters, `--include-ignored` / `--ignored` included), runs them on a few workers (test-worker.js) and publishes
+// filters, `--include-ignored` / `--ignored` included; ?shard=i/n every n-th of them from the i-th, for CI's matrix), runs them on a few workers (test-worker.js) and publishes
 // window.testSummary for the cargo runner (test_in_browser.py). A test that runs too long is stopped and its worker replaced.
 
 const TEST_TIMEOUT_MS = 120000;
@@ -17,6 +17,9 @@ const onlyIgnored = libtestArgs.includes("--ignored");
 const filters = libtestArgs.filter(arg => !["--include-ignored", "--ignored", "--nocapture", "--test-threads"].includes(arg) && !arg.startsWith("--test-threads="));
 const workerCount = Number(parameters.get("workers") ?? DEFAULT_WORKERS);
 const testsPerWorker = Number(parameters.get("perWorker") ?? TESTS_PER_WORKER);
+const [shardIndex, shardCount] = (parameters.get("shard") ?? "1/1").split("/").map(Number);
+// round robin, so each shard gets a share of every slow module
+const inShard = (_, position) => position % shardCount === shardIndex - 1;
 
 const $ = id => document.getElementById(id);
 const results = [];
@@ -89,6 +92,7 @@ function runner(queue, total) {
 				record({ name: current.name, passed: false, timedOut: true, output: `stopped after ${TEST_TIMEOUT_MS / 1000} s` });
 			}, TEST_TIMEOUT_MS);
 			running.add(current.name);
+			showProgress(total); // a page stuck in this test names it (card browser-suite)
 			worker.postMessage({ type: "run", name: current.name, ignored: current.ignored });
 		};
 		const thisRunner = {
@@ -120,7 +124,7 @@ function runner(queue, total) {
 
 async function main() {
 	const started = performance.now();
-	const listed = await listTests();
+	const listed = (await listTests()).filter(inShard);
 	const selected = listed.filter(test => onlyIgnored ? test.ignored : includeIgnored || !test.ignored);
 	const ignored = listed.length - selected.length;
 	const queue = [...selected];

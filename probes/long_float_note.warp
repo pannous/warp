@@ -1,0 +1,15 @@
+// card long-float: note() with the 17-digit ratio 1.0594630943592953 made `play note("C#4") for 0.1` fail with
+// "not an int": the long literal is a float (1.059463094359 stayed an exact decimal), and chord_samples took `% 1` of
+// that float element in a function, the bug of card float-modulo. Expected: 3 phases, no error
+ratio = 1.0594630943592953
+letters = "C.D.EF.G.A.B"
+tone_of(name) := {
+	accidental = if count(name) == 3 then (if name#2 == "#" then 1 else -1) else 0
+	octave = number(name#(count(name)))
+	key = 12 * (octave + 1) + letters.index_of(name#1) - 1 + accidental
+	frequency = 440.0
+	for step in 1 to abs(key - 69) { frequency = if key > 69 then frequency * ratio else frequency / ratio }
+	frequency
+}
+phases(pitches) := [sum([(f * i / 22050) % 1 for f in pitches]) for i in 0..3]
+phases([tone_of("C#4")])

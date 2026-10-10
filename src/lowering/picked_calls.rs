@@ -1,6 +1,7 @@
 //! A function value called where it is picked from a list: `fs[1](3)` (parsed as the pair `(fs#2) (3)`) becomes
 //! `(picked·1 = fs#2; picked·1(3))`, the call of a function held by a variable, which closures.rs knows.
 
+use super::nodes::key;
 use crate::node::{Bracket, Node, Separator};
 use crate::operators::Op;
 use std::cell::Cell;
@@ -33,14 +34,14 @@ impl Picking {
 		match operand.drop_meta() {
 			Node::Key(_, Op::Hash, index) if !matches!(index.drop_meta(), Node::Empty) => Some(self.picked_call(operand.clone(), arguments)),
 			Node::Key(left, op, right) => self.called(right, &Node::List(arguments.clone(), Bracket::Round, Separator::None))
-				.map(|right| Node::Key(Box::new(self.rewrite(left.as_ref().clone())), *op, Box::new(right))),
+				.map(|right| key(self.rewrite(left.as_ref().clone()), *op, right)),
 			_ => None,
 		}
 	}
 
 	fn picked_call(&self, picked: Node, arguments: &[Node]) -> Node {
 		let name = format!("{PICKED_PREFIX}{}", self.counter.replace(self.counter.get() + 1));
-		let assignment = Node::Key(Box::new(Node::Symbol(name.clone())), Op::Assign, Box::new(self.rewrite(picked)));
+		let assignment = key(Node::Symbol(name.clone()), Op::Assign, self.rewrite(picked));
 		let arguments = arguments.iter().map(|argument| self.rewrite(argument.clone()));
 		let call = Node::List(std::iter::once(Node::Symbol(name)).chain(arguments).collect(), Bracket::Round, Separator::None);
 		Node::List(vec![assignment, call], Bracket::Round, Separator::Semicolon)

@@ -38,9 +38,7 @@ impl GcString {
 
     /// Create from a Val (auto-detects struct vs array)
     pub fn from_val(store: &Store<()>, val: Val) -> Result<Self> {
-        let anyref = val
-            .unwrap_anyref()
-            .ok_or_else(|| anyhow!("not an anyref"))?;
+        let anyref = anyref_of(&val)?;
 
         // Try struct first (ptr/len pattern)
         if let Ok(structref) = anyref.clone().unwrap_struct(store) {
@@ -69,53 +67,35 @@ impl GcString {
                     "ptr/len string requires instance for memory access"
                 ))
             }
-            GcStringInner::Array(arrayref) => {
-                let len = arrayref.len(&*store)? as usize;
-                let mut bytes = Vec::with_capacity(len);
-
-                for i in 0..len {
-                    let elem = arrayref.get(&mut *store, i as u32)?;
-                    bytes.push(elem.unwrap_i32() as u8);
-                }
-
-                Ok(String::from_utf8(bytes)?)
-            }
+            GcStringInner::Array(arrayref) => array_text(arrayref, store),
         }
     }
 
     /// Convert to Rust String with instance access for ptr/len strings
     pub fn to_string_with_instance(&self, store: &mut Store<()>, instance: &Instance) -> Result<String> {
         match &self.inner {
-            GcStringInner::PtrLen(structref) => {
-                // Read ptr and len from the $String struct
-                let ptr = structref.field(&mut *store, 0)?.unwrap_i32();
-                let len = structref.field(&mut *store, 1)?.unwrap_i32();
-
-                if len == 0 {
-                    return Ok(String::new());
-                }
-
-                // Read from linear memory
-                let memory = instance.get_memory(&mut *store, "memory")
-                    .ok_or_else(|| anyhow!("no memory export"))?;
-                let mut buf = vec![0u8; len as usize];
-                memory.read(&*store, ptr as usize, &mut buf)?;
-                Ok(String::from_utf8(buf)?)
-            }
-            GcStringInner::Array(arrayref) => {
-                // Array strings don't need instance
-                let len = arrayref.len(&*store)? as usize;
-                let mut bytes = Vec::with_capacity(len);
-
-                for i in 0..len {
-                    let elem = arrayref.get(&mut *store, i as u32)?;
-                    bytes.push(elem.unwrap_i32() as u8);
-                }
-
-                Ok(String::from_utf8(bytes)?)
-            }
+            GcStringInner::PtrLen(structref) => memory_text(structref, store, instance),
+            GcStringInner::Array(arrayref) => array_text(arrayref, store),
         }
     }
+}
+
+/// The text of a `$String` (ptr, len) struct: its bytes in the instance's linear memory
+pub(super) fn memory_text(structref: &Rooted<StructRef>, store: &mut Store<()>, instance: &Instance) -> Result<String> {
+    let mut field = |index| structref.field(&mut *store, index)?.i32().ok_or_else(|| anyhow!("$String field {index} is no i32"));
+    let (ptr, len) = (field(0)?, field(1)?);
+    if len == 0 {
+        return Ok(String::new());
+    }
+    let memory = instance.get_memory(&mut *store, "memory").ok_or_else(|| anyhow!("no memory export"))?;
+    crate::host::read_string_from_memory(&memory, &*store, ptr as u32, len as u32)
+}
+
+/// The text of an `(array i8)` string: its bytes as UTF-8
+fn array_text(array: &Rooted<ArrayRef>, store: &mut Store<()>) -> Result<String> {
+    let len = array.len(&*store)?;
+    let bytes = (0..len).map(|i| Ok(array.get(&mut *store, i)?.unwrap_i32() as u8)).collect::<Result<Vec<u8>>>()?;
+    Ok(String::from_utf8(bytes)?)
 }
 
 impl FromVal for GcString {

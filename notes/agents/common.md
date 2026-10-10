@@ -41,6 +41,10 @@ when a message or comment cites a number (P71, D5) and you need its wording; nev
 - Tests: test first; only targeted runs, only through the queue: `tests/queue.sh -- <filter>`. Never the whole test
   binary: the Integrator runs the full suite. CARGO_BUILD_JOBS=2, never set CARGO_TARGET_DIR, never cargo clean,
   never pkill by pattern.
+- No Chrome or Chromium on the Mac (user, 2026-10-09): browser runs happen only in CI. The browser test suite, the
+  playground tour (test_in_browser.py), web::test_dom_pages and the agent-browser probes refuse to start a browser
+  unless CI is set and print "browser tests run in CI only". To check the playground, dispatch the Playground
+  workflow on your branch (`gh workflow run pages.yml --ref <branch>`); never call agent-browser yourself.
 - The warp CLI binary is shared too: `<target-dir>/debug/warp` is whichever worktree built last. To probe your own code,
   run `scripts/own-warp.sh` (builds offline and atomically copies into `scratch/warp`) and run that path; a copy taken
   later can be another session's build.
@@ -59,8 +63,14 @@ when a message or comment cites a number (P71, D5) and you need its wording; nev
   `#[ignore]` from a test that passes unedited needs no question; editing its assertions still needs a decision.
 - Use absolute paths and `git -C <worktree>` in scripts. Conventional commit messages; no Co-Authored-By, session
   trailers or links. Unrelated problems you meet go on the to-do board: `todo add "…"` (column Next; it falls back to todo.md on your branch when the board is unreachable).
+- GitHub's API quota (5000 requests/h) is shared by every session; on 2026-10-10 `gh run watch` polling every 3 s ran
+  it out and blocked CI watching for 10 min. Watch runs with `gh run watch --interval 60` or more, and never poll
+  `todo list` in a loop.
 - A card or issue is closed only with a commit linked in its description (user, 2026-10-06): `todo done <card>
   <commit>` (a commit URL for wiki changes), never `gh issue close`; `todo move <card> Done` refuses without a link.
+  A result the user can see or use gets `--try "how to try it"`: one concrete line with the exact command or URL to paste (user 2026-10-10: "give me
+  the command because I'm lazy"), e.g. `--try "warp run samples/sound.warp"`; the Interviewer announces it
+  (notes/roles.md "Ready to try").
 - Picking a card: `todo take <card> <your session name>` (user, 2026-10-06): assigns the user on GitHub, names you in
   the board field Agent, moves the card to Now. Prefer fresh, easy cards in column Next (user, 2026-10-06).
   Card keys (user, 2026-10-09): every card has a meaningful key, never a GitHub id like g_oncU. Cron

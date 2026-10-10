@@ -6,7 +6,33 @@ before asking the user; nobody reads it front to back, the code, tests and wiki 
 "notes/open_decisions.md" + a Decided section, P-, D- or #-numbers mean this file. Open and parked questions:
 notes/open_decisions.md.
 
+## Decided 2026-10-10 (user; via warp-supervisor or the Interviewer)
+- P238 (warp-fixer, card generators-function): a plain generator call collects the list: `count_to(3)` is [1 2 3],
+  `sum(count_to(4))` is 10. `iter(count_to(3))` or `next` on a variable holding it gives the lazy object; a `for`
+  over it runs lazily. As implemented.
+- let-comma (warp-types): `let a, b = 3, 4` (also var/const) unpacks: a = 3, b = 4, as the undeclared `a, b = 3, 4`.
+  As implemented.
+- P239 (warp-class, cards lambda-def, unbound-lambda): in a lambda naming its parameter, `it` is the surrounding
+  code's `it`: `scale := [1 2].map(x => x * it); scale 3` is [3 6]; with no outer `it`, `[1 2].map(x => it)` is
+  the error "undefined variable: it". As implemented.
+- P240 (warp-web, card gpu-auto; revises P214): GPU calculations are imprecise by design (f32), and the user is told
+  so. Heavy maps of linear float arrays switch to the GPU automatically from 10× the measured break-even
+  (GPU_AUTO_MIN_COUNT), with a one-time run-time notice; `@cpu` (a map, block, function or program) and
+  `WARP_GPU=off` (a whole run) keep results exact in f64; `@gpu @cpu` on one map is an error. GPU-vs-CPU tests compare
+  within common::gpu_tolerance, @cpu on the reference side. notes/gpu.md "Precision".
+
 ## Decided 2026-10-09 (user, as recommended unless quoted)
+- warp-ast.wit moves from the repo root to samples/wit/warp-ast.wit; test_wit_parse reads it there (user chose the
+  move over deleting it).
+- scripts/own-warp.sh stays (the user's checkout deletion is not landed): uniscript build, hosting test, probes and
+  notes/agents/common.md still use its private scratch/warp copy. Revisit once callers move elsewhere.
+- Fermyon / Akamai Functions (warp-hosting, card fermyon-hosting): the user signs up and puts a personal access token
+  in .env as akamai_functions_token for a live test of "☁ Deploy to Fermyon"; visitors paste their own token, kept
+  in their browser.
+- `if c {1} else 3+1` (user's multiple choice, via the supervisor; card else-print, batch 74): the else takes the
+  whole `3+1`, giving 1 or 4, not `(if … else 3)+1`.
+- Bee/wasp entity names go into uniscript and are regenerated into src/uniscript_entities.tsv, never added by hand
+  in warp (user, via the supervisor).
 - P235b amended (the user's own edit of samples/webgpu.warp, `let uv = at.xy / $size;`; Integrator, card
   shader-holes for warp-web): `$name` in a shader block is an explicit hole, as in sql templates: the compiler
   passes that warp value as `values.name` and builds the values map itself. Bare WGSL names still never capture
@@ -41,6 +67,10 @@ notes/open_decisions.md.
   in with their own button". First our account hosts the programs: users log in with us and get a Deploy button.
   Second, a button deploying to the person's own provider account. Worker warp-hosting researches providers
   (notes/hosting.md), builds both, and sends account, cost and DNS questions here.
+- Hosting, third option (user, 2026-10-09, multiple choice: "let's also create a third option"): both Ferron on
+  pannous.com (built: warp-lambda, `<name>.lambda.pannous.com`, notes/hosting.md) and Fermyon / Akamai Functions
+  ("Both now"). Programs on pannous.com run sandboxed: no C, shell or other runtime, files and SQLite only in their
+  own folder, web requests allowed, a locked-down systemd unit each.
 - Ranges (user, via warp-class, branch range-descriptor 51cdcb2dd): "We don't need the colon syntax if we have the
   dot-dot syntax": `r: 1..n` is the range itself, same as `r = 1..n`; `..` marks a value, so no uncharged-block
   warning.

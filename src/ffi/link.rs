@@ -130,168 +130,47 @@ fn link_libm_table(linker: &mut Linker<FfiState>, engine: &Engine) -> Result<()>
 /// The hand-linked libc functions under the import module "c"
 #[cfg(feature = "native")]
 fn link_libc_functions(linker: &mut Linker<FfiState>, engine: &Engine) -> Result<()> {
-    use wasmtime::ValType;
+    use wasmtime::ValType::{F64, I32, I64};
 
-    // libc: abs(i32) -> i32
-    let abs_type = FuncType::new(engine, [ValType::I32], [ValType::I32]);
-    linker.func_new("c", "abs", abs_type, |_caller, params, results| {
-        let x = params[0].unwrap_i32();
-        results[0] = Val::I32(unsafe { abs(x) });
+    linker.func_new("c", "abs", FuncType::new(engine, [I32], [I32]), |_caller, params, results| {
+        results[0] = Val::I32(unsafe { abs(params[0].unwrap_i32()) });
         Ok(())
     })?;
 
-    // libc: strlen(ptr) -> i64
-    // We receive ptr to null-terminated string in WASM memory
-    let strlen_type = FuncType::new(engine, [ValType::I32], [ValType::I64]);
-    linker.func_new("c", "strlen", strlen_type, |mut caller, params, results| {
+    // strlen, atoi, atol and atof get a pointer to a null-terminated string in the module's memory
+    linker.func_new("c", "strlen", FuncType::new(engine, [I32], [I64]), |mut caller, params, results| {
         let ptr = params[0].unwrap_i32() as usize;
-
-        if let Some(memory) = caller.get_export("memory").and_then(|e| e.into_memory()) {
-            let data = memory.data(&caller);
-            if ptr < data.len() {
-                // Find null terminator and calculate length
-                let mut len = 0usize;
-                while ptr + len < data.len() && data[ptr + len] != 0 {
-                    len += 1;
-                }
-                results[0] = Val::I64(len as i64);
-                return Ok(());
-            }
-        }
-        results[0] = Val::I64(0);
+        let len = memory_bytes(&mut caller).and_then(|data| data.get(ptr..)).map_or(0, |text| text.iter().take_while(|&&byte| byte != 0).count());
+        results[0] = Val::I64(len as i64);
+        Ok(())
+    })?;
+    linker.func_new("c", "atoi", FuncType::new(engine, [I32], [I32]), |mut caller, params, results| {
+        results[0] = Val::I32(parse_c_text(&mut caller, &params[0], atoi).unwrap_or(0));
+        Ok(())
+    })?;
+    linker.func_new("c", "atol", FuncType::new(engine, [I32], [I64]), |mut caller, params, results| {
+        results[0] = Val::I64(parse_c_text(&mut caller, &params[0], atol).unwrap_or(0));
+        Ok(())
+    })?;
+    linker.func_new("c", "atof", FuncType::new(engine, [I32], [F64]), |mut caller, params, results| {
+        results[0] = Val::F64(parse_c_text(&mut caller, &params[0], atof).unwrap_or(0.0).to_bits());
         Ok(())
     })?;
 
-    // libc: atoi(ptr) -> i32
-    // We receive ptr to null-terminated string in WASM memory
-    let atoi_type = FuncType::new(engine, [ValType::I32], [ValType::I32]);
-    linker.func_new("c", "atoi", atoi_type, |mut caller, params, results| {
-        let ptr = params[0].unwrap_i32() as usize;
-
-        if let Some(memory) = caller.get_export("memory").and_then(|e| e.into_memory()) {
-            let data = memory.data(&caller);
-            if ptr < data.len() {
-                // Find end of null-terminated string
-                let mut end = ptr;
-                while end < data.len() && data[end] != 0 {
-                    end += 1;
-                }
-                // String is already null-terminated in memory, call atoi directly
-                let result = unsafe { atoi(data[ptr..].as_ptr() as *const i8) };
-                results[0] = Val::I32(result);
-                return Ok(());
-            }
-        }
-        results[0] = Val::I32(0);
+    // strcmp(ptr1, len1, ptr2, len2) and strncmp(…, n) compare two texts of the module's memory
+    linker.func_new("c", "strcmp", FuncType::new(engine, [I32, I32, I32, I32], [I32]), |mut caller, params, results| {
+        let compared = text_pair(&mut caller, params).map(|(first, second)| unsafe { strcmp(first.as_ptr() as *const i8, second.as_ptr() as *const i8) });
+        results[0] = Val::I32(compared.unwrap_or(0));
         Ok(())
     })?;
-
-    // libc: atol(ptr) -> i64
-    // We receive ptr to null-terminated string in WASM memory
-    let atol_type = FuncType::new(engine, [ValType::I32], [ValType::I64]);
-    linker.func_new("c", "atol", atol_type, |mut caller, params, results| {
-        let ptr = params[0].unwrap_i32() as usize;
-
-        if let Some(memory) = caller.get_export("memory").and_then(|e| e.into_memory()) {
-            let data = memory.data(&caller);
-            if ptr < data.len() {
-                // String is already null-terminated in memory, call atol directly
-                let result = unsafe { atol(data[ptr..].as_ptr() as *const i8) };
-                results[0] = Val::I64(result);
-                return Ok(());
-            }
-        }
-        results[0] = Val::I64(0);
-        Ok(())
-    })?;
-
-    // libc: atof(ptr) -> f64
-    // We receive ptr to null-terminated string in WASM memory
-    let atof_type = FuncType::new(engine, [ValType::I32], [ValType::F64]);
-    linker.func_new("c", "atof", atof_type, |mut caller, params, results| {
-        let ptr = params[0].unwrap_i32() as usize;
-
-        if let Some(memory) = caller.get_export("memory").and_then(|e| e.into_memory()) {
-            let data = memory.data(&caller);
-            if ptr < data.len() {
-                // String is already null-terminated in memory, call atof directly
-                let result = unsafe { atof(data[ptr..].as_ptr() as *const i8) };
-                results[0] = Val::F64(result.to_bits());
-                return Ok(());
-            }
-        }
-        results[0] = Val::F64(0.0f64.to_bits());
-        Ok(())
-    })?;
-
-    // libc: strcmp(ptr1, len1, ptr2, len2) -> i32
-    let strcmp_type = FuncType::new(
-        engine,
-        [ValType::I32, ValType::I32, ValType::I32, ValType::I32],
-        [ValType::I32],
-    );
-    linker.func_new("c", "strcmp", strcmp_type, |mut caller, params, results| {
-        let ptr1 = params[0].unwrap_i32() as usize;
-        let len1 = params[1].unwrap_i32() as usize;
-        let ptr2 = params[2].unwrap_i32() as usize;
-        let len2 = params[3].unwrap_i32() as usize;
-
-        if let Some(memory) = caller.get_export("memory").and_then(|e| e.into_memory()) {
-            let data = memory.data(&caller);
-            if ptr1 + len1 <= data.len() && ptr2 + len2 <= data.len() {
-                let bytes1 = &data[ptr1..ptr1 + len1];
-                let bytes2 = &data[ptr2..ptr2 + len2];
-                if let (Ok(s1), Ok(s2)) = (std::str::from_utf8(bytes1), std::str::from_utf8(bytes2)) {
-                    let mut buf1 = s1.as_bytes().to_vec();
-                    buf1.push(0);
-                    let mut buf2 = s2.as_bytes().to_vec();
-                    buf2.push(0);
-                    let result = unsafe { strcmp(buf1.as_ptr() as *const i8, buf2.as_ptr() as *const i8) };
-                    results[0] = Val::I32(result);
-                    return Ok(());
-                }
-            }
-        }
-        results[0] = Val::I32(0);
-        Ok(())
-    })?;
-
-    // libc: strncmp(ptr1, len1, ptr2, len2, n) -> i32
-    let strncmp_type = FuncType::new(
-        engine,
-        [ValType::I32, ValType::I32, ValType::I32, ValType::I32, ValType::I64],
-        [ValType::I32],
-    );
-    linker.func_new("c", "strncmp", strncmp_type, |mut caller, params, results| {
-        let ptr1 = params[0].unwrap_i32() as usize;
-        let len1 = params[1].unwrap_i32() as usize;
-        let ptr2 = params[2].unwrap_i32() as usize;
-        let len2 = params[3].unwrap_i32() as usize;
+    linker.func_new("c", "strncmp", FuncType::new(engine, [I32, I32, I32, I32, I64], [I32]), |mut caller, params, results| {
         let n = params[4].unwrap_i64() as usize;
-
-        if let Some(memory) = caller.get_export("memory").and_then(|e| e.into_memory()) {
-            let data = memory.data(&caller);
-            if ptr1 + len1 <= data.len() && ptr2 + len2 <= data.len() {
-                let bytes1 = &data[ptr1..ptr1 + len1];
-                let bytes2 = &data[ptr2..ptr2 + len2];
-                if let (Ok(s1), Ok(s2)) = (std::str::from_utf8(bytes1), std::str::from_utf8(bytes2)) {
-                    let mut buf1 = s1.as_bytes().to_vec();
-                    buf1.push(0);
-                    let mut buf2 = s2.as_bytes().to_vec();
-                    buf2.push(0);
-                    let result = unsafe { strncmp(buf1.as_ptr() as *const i8, buf2.as_ptr() as *const i8, n) };
-                    results[0] = Val::I32(result);
-                    return Ok(());
-                }
-            }
-        }
-        results[0] = Val::I32(0);
+        let compared = text_pair(&mut caller, params).map(|(first, second)| unsafe { strncmp(first.as_ptr() as *const i8, second.as_ptr() as *const i8, n) });
+        results[0] = Val::I32(compared.unwrap_or(0));
         Ok(())
     })?;
 
-    // libc: rand() -> i32
-    let rand_type = FuncType::new(engine, [], [ValType::I32]);
-    linker.func_new("c", "rand", rand_type, |_caller, _params, results| {
+    linker.func_new("c", "rand", FuncType::new(engine, [], [I32]), |_caller, _params, results| {
         results[0] = Val::I32(unsafe { rand() });
         Ok(())
     })?;
@@ -302,6 +181,33 @@ fn link_libc_functions(linker: &mut Linker<FfiState>, engine: &Engine) -> Result
     linker.alias_module("c", "libc")?;
 
     Ok(())
+}
+
+/// The module's linear memory, if it exports one
+#[cfg(feature = "native")]
+fn memory_bytes<'caller>(caller: &'caller mut wasmtime::Caller<'_, FfiState>) -> Option<&'caller [u8]> {
+    let memory = caller.get_export("memory")?.into_memory()?;
+    Some(memory.data(caller))
+}
+
+/// `parse` (atoi, atol, atof) of the null-terminated string the pointer `ptr` names, none outside the memory
+#[cfg(feature = "native")]
+fn parse_c_text<T>(caller: &mut wasmtime::Caller<'_, FfiState>, ptr: &Val, parse: unsafe extern "C" fn(*const i8) -> T) -> Option<T> {
+    let text = memory_bytes(caller)?.get(ptr.unwrap_i32() as usize..).filter(|text| !text.is_empty())?;
+    Some(unsafe { parse(text.as_ptr() as *const i8) })
+}
+
+/// The UTF-8 texts (ptr1, len1, ptr2, len2) of the first four parameters, null-terminated for C
+#[cfg(feature = "native")]
+fn text_pair(caller: &mut wasmtime::Caller<'_, FfiState>, params: &[Val]) -> Option<(Vec<u8>, Vec<u8>)> {
+    let data = memory_bytes(caller)?;
+    let text = |index: usize| {
+        let (ptr, len) = (params[index].unwrap_i32() as usize, params[index + 1].unwrap_i32() as usize);
+        let bytes = data.get(ptr..ptr + len)?;
+        std::str::from_utf8(bytes).ok()?;
+        Some([bytes, &[0]].concat())
+    };
+    Some((text(0)?, text(2)?))
 }
 
 // Dynamic FFI - Load any library through reflection (raylib, SDL2, etc.)
@@ -396,18 +302,19 @@ enum RetType {
     Bool,
 }
 
+/// The C integer types of 64 bits
+#[cfg(feature = "native")]
+const C_INT64_TYPES: [&str; 7] = ["long", "int64_t", "long long", "size_t", "ssize_t", "unsigned long", "uint64_t"];
+
 /// Map C type string to normalized ParamType
 #[cfg(feature = "native")]
 fn c_type_to_param_type(c_type: &str) -> ParamType {
-    let t = c_type.trim();
-    let t = t.strip_prefix("const ").unwrap_or(t).trim();
+    let t = bare_c_type(c_type);
 
     match t {
         "float" => ParamType::F32,
         "double" => ParamType::F64,
-        "long" | "int64_t" | "long long" | "size_t" | "ssize_t" | "unsigned long" | "uint64_t" => {
-            ParamType::I64
-        }
+        t if C_INT64_TYPES.contains(&t) => ParamType::I64,
         s if s.contains('*') => match pointer_kind(s) {
             Some(CPointer::Handle) => ParamType::Handle,
             Some(CPointer::Out) => ParamType::Out,
@@ -420,17 +327,14 @@ fn c_type_to_param_type(c_type: &str) -> ParamType {
 /// Map C type string to normalized RetType
 #[cfg(feature = "native")]
 fn c_type_to_ret_type(c_type: &str) -> RetType {
-    let t = c_type.trim();
-    let t = t.strip_prefix("const ").unwrap_or(t).trim();
+    let t = bare_c_type(c_type);
 
     match t {
         "void" => RetType::Void,
         "float" => RetType::F32,
         "double" => RetType::F64,
         "bool" => RetType::Bool,
-        "long" | "int64_t" | "long long" | "size_t" | "ssize_t" | "unsigned long" | "uint64_t" => {
-            RetType::I64
-        }
+        t if C_INT64_TYPES.contains(&t) => RetType::I64,
         _ => RetType::I32,
     }
 }
@@ -438,16 +342,13 @@ fn c_type_to_ret_type(c_type: &str) -> RetType {
 /// Map C type string to wasmtime ValType
 #[cfg(feature = "native")]
 fn c_type_to_wasm_valtype(c_type: &str) -> Option<ValType> {
-    let t = c_type.trim();
-    let t = t.strip_prefix("const ").unwrap_or(t).trim();
+    let t = bare_c_type(c_type);
 
     match t {
         "void" => None,
         "float" => Some(ValType::F32),
         "double" => Some(ValType::F64),
-        "long" | "int64_t" | "long long" | "size_t" | "ssize_t" | "unsigned long" | "uint64_t" => {
-            Some(ValType::I64)
-        }
+        t if C_INT64_TYPES.contains(&t) => Some(ValType::I64),
         _ => Some(ValType::I32),
     }
 }
@@ -571,7 +472,104 @@ fn generate_signature_key(params: &[ParamType], ret: RetType) -> String {
     key
 }
 
-/// Create FFI wrapper with typed function pointer call
+/// A C argument from its wasm value: a pointer is an offset into the caller's memory, a double's NaN canonical
+#[cfg(feature = "native")]
+trait NativeArgument {
+    fn of(caller: &mut wasmtime::Caller<'_, FfiState>, value: &Val) -> Self;
+}
+
+#[cfg(feature = "native")]
+impl NativeArgument for i32 {
+    fn of(_: &mut wasmtime::Caller<'_, FfiState>, value: &Val) -> Self {
+        value.unwrap_i32()
+    }
+}
+
+#[cfg(feature = "native")]
+impl NativeArgument for f32 {
+    fn of(_: &mut wasmtime::Caller<'_, FfiState>, value: &Val) -> Self {
+        value.unwrap_f32()
+    }
+}
+
+#[cfg(feature = "native")]
+impl NativeArgument for f64 {
+    fn of(_: &mut wasmtime::Caller<'_, FfiState>, value: &Val) -> Self {
+        warp_runtime::floats::canonical_nan(value.unwrap_f64())
+    }
+}
+
+#[cfg(feature = "native")]
+impl NativeArgument for *const u8 {
+    fn of(caller: &mut wasmtime::Caller<'_, FfiState>, value: &Val) -> Self {
+        get_memory_ptr(caller, value.unwrap_i32() as usize)
+    }
+}
+
+/// A C result as the wasm function's result, none of void
+#[cfg(feature = "native")]
+trait NativeResult {
+    fn value(self) -> Option<Val>;
+}
+
+#[cfg(feature = "native")]
+impl NativeResult for () {
+    fn value(self) -> Option<Val> {
+        None
+    }
+}
+
+#[cfg(feature = "native")]
+impl NativeResult for i32 {
+    fn value(self) -> Option<Val> {
+        Some(Val::I32(self))
+    }
+}
+
+#[cfg(feature = "native")]
+impl NativeResult for f32 {
+    fn value(self) -> Option<Val> {
+        Some(Val::F32(self.to_bits()))
+    }
+}
+
+#[cfg(feature = "native")]
+impl NativeResult for f64 {
+    fn value(self) -> Option<Val> {
+        Some(Val::F64(self.to_bits()))
+    }
+}
+
+/// A C bool returned as an int: 1 for any non-zero
+#[cfg(feature = "native")]
+#[repr(transparent)]
+struct CBool(i32);
+
+#[cfg(feature = "native")]
+impl NativeResult for CBool {
+    fn value(self) -> Option<Val> {
+        Some(Val::I32(i32::from(self.0 != 0)))
+    }
+}
+
+/// Link the library function called through a typed C function pointer: `link_typed!(…, (i32, f32) -> i32)`
+#[cfg(feature = "native")]
+macro_rules! link_typed {
+    ($linker:expr, $lib_name:expr, $func_name:expr, $func_type:expr, $func_ptr:expr, ($($argument:ty),*) $(-> $result:ty)?) => {
+        link_native($linker, $lib_name, $func_name, $func_type, move |#[allow(unused_mut, unused_variables)] mut caller, params, results| {
+            let f: extern "C" fn($($argument),*) $(-> $result)? = unsafe { std::mem::transmute($func_ptr) };
+            #[allow(unused_mut, unused_variables)] // a function without parameters reads no values
+            let mut values = params.iter();
+            let result = f($(<$argument as NativeArgument>::of(&mut caller, values.next().expect("a value per parameter"))),*);
+            if let Some(value) = NativeResult::value(result) {
+                results[0] = value;
+            }
+            Ok(())
+        })
+    };
+}
+
+/// Create FFI wrapper with typed function pointer call: the common patterns of raylib, SDL, libm, by signature key
 #[cfg(feature = "native")]
 #[allow(clippy::too_many_arguments)]
 fn create_ffi_wrapper(
@@ -584,176 +582,27 @@ fn create_ffi_wrapper(
     param_types: &[ParamType],
     ret_type: RetType,
 ) -> Result<()> {
-    // Clone for closure
-    let param_types = param_types.to_vec();
-
-    // Dispatch based on signature - common patterns for raylib/SDL/etc.
     match sig_key {
-        // void -> void
-        "_V" => {
-            link_native(linker, lib_name, func_name, func_type, move |_, _, _| {
-                let f: extern "C" fn() = unsafe { std::mem::transmute(func_ptr) };
-                f();
-                Ok(())
-            })?;
-        }
-        // void -> int (WindowShouldClose, GetMouseX, etc.)
-        "_I" => {
-            link_native(linker, lib_name, func_name, func_type, move |_, _, results| {
-                let f: extern "C" fn() -> i32 = unsafe { std::mem::transmute(func_ptr) };
-                results[0] = Val::I32(f());
-                Ok(())
-            })?;
-        }
-        // void -> bool
-        "_B" => {
-            link_native(linker, lib_name, func_name, func_type, move |_, _, results| {
-                let f: extern "C" fn() -> i32 = unsafe { std::mem::transmute(func_ptr) };
-                results[0] = Val::I32(if f() != 0 { 1 } else { 0 });
-                Ok(())
-            })?;
-        }
-        // void -> float
-        "_F" => {
-            link_native(linker, lib_name, func_name, func_type, move |_, _, results| {
-                let f: extern "C" fn() -> f32 = unsafe { std::mem::transmute(func_ptr) };
-                results[0] = Val::F32(f().to_bits());
-                Ok(())
-            })?;
-        }
-        // void -> double
-        "_D" => {
-            link_native(linker, lib_name, func_name, func_type, move |_, _, results| {
-                let f: extern "C" fn() -> f64 = unsafe { std::mem::transmute(func_ptr) };
-                results[0] = Val::F64(f().to_bits());
-                Ok(())
-            })?;
-        }
-        // int -> void (SetTargetFPS, etc.)
-        "I_V" => {
-            link_native(linker, lib_name, func_name, func_type, move |_, params, _| {
-                let f: extern "C" fn(i32) = unsafe { std::mem::transmute(func_ptr) };
-                f(params[0].unwrap_i32());
-                Ok(())
-            })?;
-        }
-        // int -> int (IsKeyPressed, etc.)
-        "I_I" => {
-            link_native(linker, lib_name, func_name, func_type, move |_, params, results| {
-                let f: extern "C" fn(i32) -> i32 = unsafe { std::mem::transmute(func_ptr) };
-                results[0] = Val::I32(f(params[0].unwrap_i32()));
-                Ok(())
-            })?;
-        }
-        // int -> bool
-        "I_B" => {
-            link_native(linker, lib_name, func_name, func_type, move |_, params, results| {
-                let f: extern "C" fn(i32) -> i32 = unsafe { std::mem::transmute(func_ptr) };
-                results[0] = Val::I32(if f(params[0].unwrap_i32()) != 0 { 1 } else { 0 });
-                Ok(())
-            })?;
-        }
-        // int,int -> void
-        "II_V" => {
-            link_native(linker, lib_name, func_name, func_type, move |_, params, _| {
-                let f: extern "C" fn(i32, i32) = unsafe { std::mem::transmute(func_ptr) };
-                f(params[0].unwrap_i32(), params[1].unwrap_i32());
-                Ok(())
-            })?;
-        }
-        // int,int -> int
-        "II_I" => {
-            link_native(linker, lib_name, func_name, func_type, move |_, params, results| {
-                let f: extern "C" fn(i32, i32) -> i32 = unsafe { std::mem::transmute(func_ptr) };
-                results[0] = Val::I32(f(params[0].unwrap_i32(), params[1].unwrap_i32()));
-                Ok(())
-            })?;
-        }
-        // int,int,ptr -> void (InitWindow with title)
-        "IIP_V" => {
-            link_native(linker, lib_name, func_name, func_type, move |mut caller, params, _| {
-                let f: extern "C" fn(i32, i32, *const u8) = unsafe { std::mem::transmute(func_ptr) };
-                let ptr = get_memory_ptr(&mut caller, params[2].unwrap_i32() as usize);
-                f(params[0].unwrap_i32(), params[1].unwrap_i32(), ptr);
-                Ok(())
-            })?;
-        }
-        // int,int,float,int -> void (DrawCircle: x, y, radius, color)
-        "IIFI_V" => {
-            link_native(linker, lib_name, func_name, func_type, move |_, params, _| {
-                let f: extern "C" fn(i32, i32, f32, i32) = unsafe { std::mem::transmute(func_ptr) };
-                f(
-                    params[0].unwrap_i32(),
-                    params[1].unwrap_i32(),
-                    params[2].unwrap_f32(),
-                    params[3].unwrap_i32(),
-                );
-                Ok(())
-            })?;
-        }
-        // int,int,int,int,int -> void (DrawRectangle: x, y, w, h, color)
-        "IIIII_V" => {
-            link_native(linker, lib_name, func_name, func_type, move |_, params, _| {
-                let f: extern "C" fn(i32, i32, i32, i32, i32) = unsafe { std::mem::transmute(func_ptr) };
-                f(
-                    params[0].unwrap_i32(),
-                    params[1].unwrap_i32(),
-                    params[2].unwrap_i32(),
-                    params[3].unwrap_i32(),
-                    params[4].unwrap_i32(),
-                );
-                Ok(())
-            })?;
-        }
-        // ptr,int,int,int -> void (DrawText: text, x, y, fontSize, color)
-        "PIII_V" => {
-            link_native(linker, lib_name, func_name, func_type, move |mut caller, params, _| {
-                let f: extern "C" fn(*const u8, i32, i32, i32) = unsafe { std::mem::transmute(func_ptr) };
-                let ptr = get_memory_ptr(&mut caller, params[0].unwrap_i32() as usize);
-                f(ptr, params[1].unwrap_i32(), params[2].unwrap_i32(), params[3].unwrap_i32());
-                Ok(())
-            })?;
-        }
-        // ptr,int,int,int,int -> void (DrawText with color: text, x, y, fontSize, color)
-        "PIIII_V" => {
-            link_native(linker, lib_name, func_name, func_type, move |mut caller, params, _| {
-                let f: extern "C" fn(*const u8, i32, i32, i32, i32) = unsafe { std::mem::transmute(func_ptr) };
-                let ptr = get_memory_ptr(&mut caller, params[0].unwrap_i32() as usize);
-                f(ptr, params[1].unwrap_i32(), params[2].unwrap_i32(), params[3].unwrap_i32(), params[4].unwrap_i32());
-                Ok(())
-            })?;
-        }
-        // float -> float
-        "F_F" => {
-            link_native(linker, lib_name, func_name, func_type, move |_, params, results| {
-                let f: extern "C" fn(f32) -> f32 = unsafe { std::mem::transmute(func_ptr) };
-                results[0] = Val::F32(f(params[0].unwrap_f32()).to_bits());
-                Ok(())
-            })?;
-        }
-        // double -> double
-        "D_D" => {
-            link_native(linker, lib_name, func_name, func_type, move |_, params, results| {
-                let f: extern "C" fn(f64) -> f64 = unsafe { std::mem::transmute(func_ptr) };
-                results[0] = Val::F64(f(warp_runtime::floats::canonical_nan(params[0].unwrap_f64())).to_bits());
-                Ok(())
-            })?;
-        }
-        // double,double -> double
-        "DD_D" => {
-            link_native(linker, lib_name, func_name, func_type, move |_, params, results| {
-                let f: extern "C" fn(f64, f64) -> f64 = unsafe { std::mem::transmute(func_ptr) };
-                results[0] = Val::F64(f(warp_runtime::floats::canonical_nan(params[0].unwrap_f64()), warp_runtime::floats::canonical_nan(params[1].unwrap_f64())).to_bits());
-                Ok(())
-            })?;
-        }
-        // Generic fallback using dynamic dispatch
-        _ => {
-            return create_generic_ffi_wrapper(linker, lib_name, func_name, func_type, func_ptr, &param_types, ret_type);
-        }
+        "_V" => link_typed!(linker, lib_name, func_name, func_type, func_ptr, ()),
+        "_I" => link_typed!(linker, lib_name, func_name, func_type, func_ptr, () -> i32), // WindowShouldClose, GetMouseX
+        "_B" => link_typed!(linker, lib_name, func_name, func_type, func_ptr, () -> CBool),
+        "_F" => link_typed!(linker, lib_name, func_name, func_type, func_ptr, () -> f32),
+        "_D" => link_typed!(linker, lib_name, func_name, func_type, func_ptr, () -> f64),
+        "I_V" => link_typed!(linker, lib_name, func_name, func_type, func_ptr, (i32)), // SetTargetFPS
+        "I_I" => link_typed!(linker, lib_name, func_name, func_type, func_ptr, (i32) -> i32), // IsKeyPressed
+        "I_B" => link_typed!(linker, lib_name, func_name, func_type, func_ptr, (i32) -> CBool),
+        "II_V" => link_typed!(linker, lib_name, func_name, func_type, func_ptr, (i32, i32)),
+        "II_I" => link_typed!(linker, lib_name, func_name, func_type, func_ptr, (i32, i32) -> i32),
+        "IIP_V" => link_typed!(linker, lib_name, func_name, func_type, func_ptr, (i32, i32, *const u8)), // InitWindow with title
+        "IIFI_V" => link_typed!(linker, lib_name, func_name, func_type, func_ptr, (i32, i32, f32, i32)), // DrawCircle: x, y, radius, color
+        "IIIII_V" => link_typed!(linker, lib_name, func_name, func_type, func_ptr, (i32, i32, i32, i32, i32)), // DrawRectangle: x, y, w, h, color
+        "PIII_V" => link_typed!(linker, lib_name, func_name, func_type, func_ptr, (*const u8, i32, i32, i32)), // DrawText: text, x, y, fontSize
+        "PIIII_V" => link_typed!(linker, lib_name, func_name, func_type, func_ptr, (*const u8, i32, i32, i32, i32)), // DrawText with color
+        "F_F" => link_typed!(linker, lib_name, func_name, func_type, func_ptr, (f32) -> f32),
+        "D_D" => link_typed!(linker, lib_name, func_name, func_type, func_ptr, (f64) -> f64),
+        "DD_D" => link_typed!(linker, lib_name, func_name, func_type, func_ptr, (f64, f64) -> f64),
+        _ => create_generic_ffi_wrapper(linker, lib_name, func_name, func_type, func_ptr, param_types, ret_type),
     }
-
-    Ok(())
 }
 
 /// Link all dynamic libraries required by a WASM module's imports

@@ -430,8 +430,7 @@ impl WasmGcEmitter {
 			s.call(f, "exact_div");
 			f.instruction(&I::LocalSet(0));
 			s.negate_local(f, 1);
-			f.instruction(&I::End);
-			f.instruction(&I::LocalGet(0));
+			Self::emit_list(f, &[I::End, I::LocalGet(0)]);
 			s.call(f, "is_ratio");
 			f.instruction(&I::If(BlockType::Result(i64t)));
 			for part in ["exact_numerator", "exact_denominator"] {

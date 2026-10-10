@@ -48,8 +48,7 @@ impl WasmGcEmitter {
 			self.emit_string_ptr_len(func, url_node);
 		} else {
 			let (url_ptr, url_len) = self.allocate_string(&url);
-			func.instruction(&I32Const(url_ptr as i32));
-			func.instruction(&I32Const(url_len as i32));
+			Self::emit_list(func, &[I32Const(url_ptr as i32), I32Const(url_len as i32)]);
 		}
 		let import = match timeout {
 			Some(timeout) => {
@@ -66,14 +65,10 @@ impl WasmGcEmitter {
 			}
 			let reason = format!("fetch {url} failed: host imports are not available");
 			let (ptr, len) = self.allocate_string(&reason);
-			func.instruction(&I32Const(ptr as i32));
-			func.instruction(&I32Const(-(len as i32)));
+			Self::emit_list(func, &[I32Const(ptr as i32), I32Const(-(len as i32))]);
 		}
 		let (len, ptr) = (self.scratch(0), self.scratch(1));
-		func.instruction(&I::I64ExtendI32S);
-		func.instruction(&I::LocalSet(len));
-		func.instruction(&I::I64ExtendI32U);
-		func.instruction(&I::LocalSet(ptr));
+		Self::emit_list(func, &[I::I64ExtendI32S, I::LocalSet(len), I::I64ExtendI32U, I::LocalSet(ptr)]);
 		self.emit_host_text_result(func, len, ptr);
 	}
 
@@ -149,8 +144,7 @@ impl WasmGcEmitter {
 			return Some(kind);
 		}
 		self.emit_value_of_kind(func, value, kind);
-		func.instruction(&I::GlobalSet(index));
-		func.instruction(&I::GlobalGet(index));
+		Self::emit_list(func, &[I::GlobalSet(index), I::GlobalGet(index)]);
 		if kind.is_ref() {
 			func.instruction(&I::RefAsNonNull);
 		}
@@ -169,14 +163,23 @@ impl WasmGcEmitter {
 		}
 	}
 
-	/// `global x = value`: x is declared ahead of all code (`allocate_declared_globals`), so this stores the value
-	pub(super) fn emit_global_declaration(&mut self, func: &mut Function, decl: &Node) {
+	/// `global x = value`: x is declared ahead of all code (`allocate_declared_globals`), so this stores the value and
+	/// gives the name and kind of x, or None for a malformed declaration (reported)
+	fn emit_global_store_declared(&mut self, func: &mut Function, decl: &Node) -> Option<(String, Kind)> {
 		let Some((name, value)) = Self::global_declaration_parts(decl) else {
 			self.emit_malformed(func, decl, "`global name` or `global name = value`");
-			return;
+			return None;
 		};
 		let kind = self.declare_global(&name, &value);
 		self.emit_global_store(func, &name, &value);
+		Some((name, kind))
+	}
+
+	/// `global x = value` as a node
+	pub(super) fn emit_global_declaration(&mut self, func: &mut Function, decl: &Node) {
+		let Some((_, kind)) = self.emit_global_store_declared(func, decl) else {
+			return;
+		};
 		if !kind.is_ref() {
 			self.emit_primitive_as_node(func, kind);
 		}
@@ -204,7 +207,14 @@ impl WasmGcEmitter {
 		let mut names: Vec<&String> = main.globals.keys().filter(|name| !self.ctx.user_globals.contains_key(*name)).collect();
 		names.sort();
 		let typed = self.find_typed_globals(program, &main);
+		let typed_maps = self.find_typed_map_globals(program, &main.globals);
 		for name in names {
+			if typed_maps.contains(name) {
+				let global = self.declare_typed_map_global();
+				self.ctx.user_globals.insert(name.to_string(), (global, main.globals[name].kind));
+				self.typed_map_globals.insert(name.to_string(), global);
+				continue;
+			}
 			match typed.get(name) {
 				Some(&list) => {
 					let global = self.declare_typed_list_global(list.element);
@@ -289,14 +299,11 @@ impl WasmGcEmitter {
 		index
 	}
 
-	/// Emit global declaration and return numeric value (for use in emit_numeric_value)
+	/// `global x = value` as a number (for emit_numeric_value)
 	pub(super) fn emit_global_numeric(&mut self, func: &mut Function, decl: &Node) {
-		let Some((name, value)) = Self::global_declaration_parts(decl) else {
-			self.emit_malformed(func, decl, "`global name` or `global name = value`");
+		let Some((name, kind)) = self.emit_global_store_declared(func, decl) else {
 			return;
 		};
-		let kind = self.declare_global(&name, &value);
-		self.emit_global_store(func, &name, &value);
 		if kind.is_ref() {
 			self.emit_call(func, "get_int_value");
 		} else if kind.is_float() {

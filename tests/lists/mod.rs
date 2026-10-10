@@ -44,6 +44,8 @@ mod test_remove_and_index_of;
 mod test_find_any_all;
 mod test_set_past_the_end;
 mod test_number_keys;
+mod test_map_literal_number_keys; // card map-literal
+pub(crate) mod test_int_map; // card int-map
 mod test_byte_size;
 mod test_long_list_result;
 mod test_empty_items;
@@ -66,6 +68,7 @@ mod test_one_entry_map_text;
 mod test_type_word_items;
 mod test_generated_name_hints;
 mod test_global_comprehension;
+mod test_nested_comprehension; // card double-for-comprehension
 mod test_captured_call_lists;
 mod test_nested_index_assignment;
 mod test_pair_values;

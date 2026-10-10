@@ -4,11 +4,23 @@ use crate::extensions::strings::StringExtensions;
 use crate::meta::LineInfo;
 use crate::node::Node::{Empty, Symbol};
 use crate::extensions::reals::{Exact, Rational, Real};
+use crate::lowering::nodes::call;
 use crate::node::{error, key_ops, Bracket, Node, Separator};
 use crate::operators::{glyph_operator, is_function_keyword, Op};
 use crate::normalize::{hints as norm, set_hint_position, ListTypeStyle};
 use log::warn;
 use std::fs::read_to_string;
+
+/// The value of a `Result<_, String>`; an error returns from the parse function as an error node
+macro_rules! or_return_error {
+	($result:expr) => {
+		match $result {
+			Ok(value) => value,
+			Err(message) => return error(&message),
+		}
+	};
+}
+
 mod user_operators;
 mod scanning;
 mod xml;
@@ -24,8 +36,8 @@ use unicode_normalization::UnicodeNormalization;
 
 /// Largest exponent written out as an exact integer literal (1e4096 has 4097 digits)
 /// The unit words a for loop walks a text by, the item being `it` (wiki/string.md)
-/// The schemes of a URL read as one text: `https://pannous.com`
-const URL_SCHEMES: [&str; 7] = ["http", "https", "ftp", "file", "data", "ws", "wss"];
+/// What follows the scheme of a URL read as one text, whatever the scheme: `https://pannous.com`, `ssh://host` (card add-http)
+const URL_MARK: &str = "://";
 const UNIT_LOOP_WORDS: [&str; 4] = ["chars", "characters", "codepoints", "bytes"];
 const BYTES_WORD: &str = "bytes";
 pub const IT_WORD: &str = "it";
@@ -142,6 +154,9 @@ const DATA_KEYWORD: &str = "data";
 const CLASS_KEYWORD: &str = "class";
 /// `await job` waits for a task; its operand binds like the operand of a unary minus (Op::Neg)
 const AWAIT_KEYWORD: &str = "await";
+/// The words of a block of code, also glued to it: `go{…}` starts a task as `go {…}` does (lowering/go_blocks.rs,
+/// card error-beep), `loop{…}` loops, `do{…}` runs its block (card glued-loop); no tags `go:{…}`
+const GLUED_BLOCK_KEYWORDS: [&str; 3] = ["go", "loop", "do"];
 /// `await all jobs`: every task of a list (P47)
 const AWAIT_ALL_WORD: &str = "all";
 /// `await x` binds its operand like unary minus
@@ -173,7 +188,7 @@ const AMBIGUOUS_END: &str = "ambiguous `end`: it closes either the `then` or the
 const UNINDEXABLE_KEYWORDS: [&str; 6] = ["in", "return", "yield", "then", "else", "do"];
 
 fn is_print_word(node: &Node) -> bool {
-	matches!(node.drop_meta(), Symbol(word) if word == PRINT_WORD)
+	node.is_symbol(PRINT_WORD)
 }
 
 /// `print` or the call `print(…)`: a print statement starts here
@@ -222,6 +237,7 @@ fn grouped_list(items: Vec<Node>, bracket: Bracket, separator: Separator) -> Nod
 	let items = if separator == Separator::Space { with_arrow_bodies(items) } else { items };
 	let items = match (&separator, items.as_slice()) {
 		(Separator::Space, [print, value]) if is_print_word(print) => printed_when(print, value).map_or(items, |guarded| vec![guarded]),
+		(Separator::Space, [.., _]) if bracket == Bracket::None => looped_while(&items).map_or(items, |looped| vec![looped]),
 		_ => items,
 	};
 	// `{ print upper n }`: a block of the one statement prints the one expression too
@@ -261,6 +277,18 @@ fn printed_when(print: &Node, value: &Node) -> Option<Node> {
 	(**nothing == Node::Empty).then(|| Node::Key(condition.clone(), Op::Then, Box::new(printed)))
 }
 
+/// `do {i++} while c`, `print i while c`: a trailing `while` loops the whole command, not its last word (card glued-loop)
+fn looped_while(items: &[Node]) -> Option<Node> {
+	let (last, command) = items.split_last()?;
+	if !matches!(command.first()?.drop_meta(), Symbol(_)) {
+		return None;
+	}
+	let Node::Key(head, Op::Do, body) = last.drop_meta() else { return None };
+	let Node::Key(nothing, Op::While, condition) = head.drop_meta() else { return None };
+	let looped = Node::List([command, &[(**body).clone()]].concat(), Bracket::None, Separator::Space);
+	(**nothing == Node::Empty).then(|| while_do((**condition).clone(), looped))
+}
+
 /// `(x => print x)`: `=>` binds looser than the space, so the words after a lambda's arrow are its body (`print x`), not
 /// further items; a run of entries `1 => "a" 2 => "b"` stays a list of pairs
 fn with_arrow_bodies(mut items: Vec<Node>) -> Vec<Node> {
@@ -288,7 +316,6 @@ fn unit_iteration(variable: &Node, iterable: &Node, body: &Node) -> Option<(Node
 	if !UNIT_LOOP_WORDS.contains(&word.as_str()) || mentions(word) {
 		return None;
 	}
-	let call = |name: &str, arguments: Vec<Node>| Node::List([vec![Symbol(name.to_string())], arguments].concat(), Bracket::Round, Separator::None);
 	let walked = if word == BYTES_WORD {
 		let offset = Symbol("byte·offset".to_string());
 		let count = Node::Key(Box::new(iterable.clone()), Op::Dot, Box::new(Symbol(BYTES_WORD.to_string())));
@@ -350,9 +377,9 @@ fn dot_call(function: Node, arguments: Node) -> Node {
 	}
 	let list = arguments.remove(0);
 	let item = Symbol(BROADCAST_ITEM.to_string());
-	let call = Node::List([vec![function, item.clone()], arguments].concat(), Bracket::Round, Separator::None);
-	let each = Node::Key(Box::new(item), Op::FatArrow, Box::new(call));
-	Node::List(vec![Symbol(MAP_WORD.to_string()), list, each], Bracket::Round, Separator::None)
+	let applied = Node::List([vec![function, item.clone()], arguments].concat(), Bracket::Round, Separator::None);
+	let each = Node::Key(Box::new(item), Op::FatArrow, Box::new(applied));
+	call(MAP_WORD, vec![list, each])
 }
 
 /// `for int in xs` as the explicit filter `for x in xs.filter(x => x is int)`, the body unchanged; None when the body
@@ -586,7 +613,7 @@ pub(crate) fn piped(value: Node, stage: Node) -> Node {
 }
 
 fn floor_division(dividend: Node, divisor: Node) -> Node {
-	Node::List(vec![Symbol(FLOOR_QUOTIENT.to_string()), dividend, divisor], Bracket::Round, Separator::None)
+	call(FLOOR_QUOTIENT, vec![dividend, divisor])
 }
 
 /// Read and parse a WARP file
@@ -600,7 +627,7 @@ fn split_trailing_block(header: &Node, empty_is_block: bool) -> Option<(Node, No
 			_ => None,
 		},
 		// `if x in xs {…}`: the block after the collection is the body
-		Node::List(items, bracket, separator) if items.len() == 3 && matches!(items[1].drop_meta(), Node::Symbol(word) if word == IN_KEYWORD) => {
+		Node::List(items, bracket, separator) if items.len() == 3 && items[1].is_symbol(IN_KEYWORD) => {
 			split_trailing_block(&items[2], empty_is_block)
 				.map(|(collection, block)| (Node::List(vec![items[0].clone(), items[1].clone(), collection], bracket.clone(), separator.clone()), block))
 		}
@@ -686,6 +713,11 @@ fn glued_floor_division(diagnostic: Diagnostic, input: &str, line: usize, column
 }
 
 /// The error `message`, fixed by adding the missing `closer` at `at` (line, column)
+/// `for variable in iterable body`, the loop for_loop.rs lowers
+pub(super) fn for_in_loop(variable: Node, iterable: Node, body: Node) -> Node {
+	Node::List(vec![Symbol("for".to_string()), variable, Symbol("in".to_string()), iterable, body], Bracket::None, Separator::Space)
+}
+
 pub(super) fn missing_closer(message: String, closer: impl Into<String>, at: (usize, usize)) -> Node {
 	let closer = closer.into();
 	Diagnostic::default().message(message).offering(crate::fixits::inserted(format!("the closing {closer}"), closer, at)).into_error()
@@ -1239,7 +1271,7 @@ pub fn subscript(target: Node, index: Node) -> Node {
 		return Diagnostic::at(negative, message).into_error();
 	}
 	if let Some((start, end)) = slice_bounds(&index) {
-		return Node::List(vec![Symbol(SLICE_WORD.to_string()), target, start, end], Bracket::Round, Separator::None);
+		return call(SLICE_WORD, vec![target, start, end]);
 	}
 	let one = Node::Number(Number::Int(1));
 	let one_based = match index.drop_meta() {

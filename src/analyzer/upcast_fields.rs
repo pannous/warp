@@ -46,8 +46,8 @@ fn check_scope(body: &Node, mut declared: HashMap<String, String>, classes: &Cla
 fn visit_scope<'a>(node: &'a Node, action: &mut dyn FnMut(&'a Node), definitions: &mut Vec<(&'a [Node], &'a Node)>) {
 	let node = node.drop_meta();
 	match node {
-		Node::Key(head, Op::Define | Op::Assign, body) if matches!(head.drop_meta(), Node::List(items, Bracket::Round, _) if matches!(items.first().map(Node::drop_meta), Some(Node::Symbol(_)))) => {
-			let Node::List(items, _, _) = head.drop_meta() else { unreachable!("guarded") };
+		Node::Key(head, Op::Define | Op::Assign, body) if let Node::List(items, Bracket::Round, _) = head.drop_meta()
+			&& items.first().and_then(Node::symbol_name).is_some() => {
 			definitions.push((&items[1..], body));
 		}
 		Node::Type { .. } => {}
@@ -71,10 +71,7 @@ fn annotated(target: &Node, classes: &Classes) -> Option<(String, String)> {
 }
 
 fn symbol_name(node: &Node) -> Option<String> {
-	match node.drop_meta() {
-		Node::Symbol(name) => Some(name.clone()),
-		_ => None,
-	}
+	node.symbol_name().map(String::from)
 }
 
 fn is_class(node: &Node, classes: &Classes) -> bool {

@@ -84,18 +84,6 @@ fn core_scalar(wit: &str) -> Option<(ValType, bool)> {
 }
 
 impl WasmGcEmitter {
-	/// An exported function emitted after the program's functions, which took their indices without the registry
-	fn component_function(&mut self, export: &str, params: Vec<ValType>, results: Vec<ValType>, locals: Vec<ValType>, body: impl FnOnce(&mut Self, &mut Function)) {
-		let func_type = self.type_manager.function_type(params, results);
-		let mut func = Function::new(locals.into_iter().map(|local| (1, local)).collect::<Vec<_>>());
-		body(self, &mut func);
-		func.instruction(&I::End);
-		self.functions.function(func_type);
-		self.code.function(&func);
-		self.exports.export(export, ExportKind::Func, self.next_func_idx);
-		self.next_func_idx += 1;
-	}
-
 	/// The adapters of the component being compiled, after the program's functions
 	pub(super) fn emit_component_adapters(&mut self) {
 		if !crosses_the_boundary() {
@@ -114,7 +102,7 @@ impl WasmGcEmitter {
 	fn emit_component_realloc(&mut self) {
 		let int = ValType::I32;
 		let (old, old_size, align, size, address, padded) = (0, 1, 2, 3, 4, 5);
-		self.component_function(REALLOC, vec![int; 4], vec![int], vec![int; 2], |s, f| {
+		self.host_only_function(REALLOC, vec![int; 4], vec![int], vec![int; 2], |s, f| {
 			Self::emit_list(f, &[I::LocalGet(size), I::LocalGet(align), I::I32Add, I::LocalSet(padded)]);
 			s.emit_text_allocation(f, padded, address);
 			Self::emit_aligned_up(f, address, I::LocalGet(align));
@@ -159,7 +147,7 @@ impl WasmGcEmitter {
 		let (text, length, address) = (first_local, first_local + 1, first_local + 2);
 		let locals = vec![ValType::Ref(self.node_ref(true)), ValType::I32, ValType::I32];
 		let mut failure = None;
-		self.component_function(&format!("{interface}#{name}"), parameters, result, locals, |s, f| {
+		self.host_only_function(&format!("{interface}#{name}"), parameters, result, locals, |s, f| {
 			let mut core = 0;
 			for (wit, kind) in function.parameters.iter().zip(&target_kinds) {
 				match core_scalar(wit) {
@@ -247,11 +235,9 @@ impl WasmGcEmitter {
 		Self::emit_aligned_up(f, address, I::I32Const(RETURN_AREA_ALIGNMENT));
 		f.instruction(&I::LocalGet(address));
 		self.emit_text_field(f, text, 0);
-		f.instruction(&I::I32Store(WORD));
-		f.instruction(&I::LocalGet(address));
+		Self::emit_list(f, &[I::I32Store(WORD), I::LocalGet(address)]);
 		self.emit_text_field(f, text, 1);
-		f.instruction(&I::I32Store(MemArg { offset: LENGTH_OFFSET, ..WORD }));
-		f.instruction(&I::LocalGet(address));
+		Self::emit_list(f, &[I::I32Store(MemArg { offset: LENGTH_OFFSET, ..WORD }), I::LocalGet(address)]);
 	}
 
 	/// A call of the imported function `name` when it is one (`host.time()`): its value as a Node, or as the number

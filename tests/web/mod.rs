@@ -55,6 +55,7 @@ mod test_accessibility;
 mod test_i18n;
 mod test_webgpu;
 mod test_webgpu_ints;
+mod test_gpu_auto; // card gpu-auto
 mod test_tag_lists;
 mod test_safari_imports;
 #[cfg(feature = "native")] // a site build with the native compiler
@@ -85,3 +86,5 @@ mod test_missing_row_404; // card missing-row-404
 mod test_server_route_paths; // cards server-path, route-star
 #[cfg(feature = "native")] // a server on a port and its SQLite table
 mod test_route_phrase_body; // card first-first
+mod test_sandboxed_programs; // card ferron-hosting
+mod test_page_rendered_sound; // card playground-refuses

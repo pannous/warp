@@ -2,9 +2,8 @@
 //! `do block` and `do name` run the block on the spot, like `{…}!` and `f!`: the word is dropped;
 //! `add x to list` is the method call `list.add(x)`.
 
-use crate::analyzer::extract_user_functions;
-use crate::context::Context;
-use crate::node::{Bracket, Node, Separator};
+use super::nodes::key;
+use crate::node::{symbol, Bracket, Node, Separator};
 use crate::operators::Op;
 
 const DO_WORD: &str = "do";
@@ -14,8 +13,7 @@ pub fn lower(node: Node) -> Node {
 	if !node.mentions_any(&[DO_WORD, ADD_WORD]) {
 		return node;
 	}
-	let mut context = Context::new();
-	extract_user_functions(&mut context, &node);
+	let context = crate::analyzer::function_context(&node);
 	let phrases = Phrases { do_is_free: !context.user_functions.contains_key(DO_WORD), add_is_free: !context.user_functions.contains_key(ADD_WORD) };
 	phrases.expand(node)
 }
@@ -32,7 +30,7 @@ impl Phrases {
 				let items: Vec<Node> = items.into_iter().map(|item| self.expand(item)).collect();
 				self.phrase(&items).unwrap_or(Node::List(items, bracket, separator))
 			}
-			Node::Key(left, op, right) => Node::Key(Box::new(self.expand(*left)), op, Box::new(self.expand(*right))),
+			Node::Key(left, op, right) => key(self.expand(*left), op, self.expand(*right)),
 			Node::Meta { node, data } => Node::Meta { node: Box::new(self.expand(*node)), data },
 			other => other,
 		}
@@ -65,6 +63,6 @@ fn appended_to(argument: &Node) -> Option<Node> {
 	if !matches!(list.drop_meta(), Node::Symbol(_)) {
 		return None;
 	}
-	let call = Node::List(vec![Node::Symbol(ADD_WORD.to_string()), element.as_ref().clone()], Bracket::Round, Separator::Space);
+	let call = Node::List(vec![symbol(ADD_WORD), element.as_ref().clone()], Bracket::Round, Separator::Space);
 	Some(Node::Key(list.clone(), Op::Dot, Box::new(call)))
 }

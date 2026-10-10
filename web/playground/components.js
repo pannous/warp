@@ -1,4 +1,4 @@
-// `use lib.wasm; lib.f(x)` (long form `use wasm "lib.wasm" as lib`) in the page (src/components.rs natively): a WebAssembly component transpiled
+// `use lib; lib.f(x)` (also `use lib.wasm`, long form `use wasm "lib.wasm" as lib`) in the page (src/components.rs natively): a WebAssembly component transpiled
 // by jco (build.sh components → components/<name>.js, a classic script calling registerComponent with the core modules
 // and the WIT signatures of its exports), loaded on its first call with importScripts, synchronously like every host
 // call. Values cross as natively, by the WIT types: records objects with the WIT field names, variants

@@ -378,6 +378,10 @@ pub(super) fn used_whole(node: &Node, abi: &HashMap<String, Vec<Option<String>>>
 					if let Some((_, written)) = entry_update(name, value) {
 						return recurse(&written);
 					}
+					// a removal `m = map_without(m, k)` uses only k
+					if let Some(key) = super::map_backend::entry_removal(name, value) {
+						return recurse(key);
+					}
 				}
 				Node::Key(object, Op::Hash, index) if matches!(object.drop_meta(), Node::Symbol(_)) => recurse(index),
 				other => recurse(other),

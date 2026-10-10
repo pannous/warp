@@ -4,16 +4,17 @@
 //! declared with a scalar type (`x:int`, `square number`, P50) or, undeclared, is an arithmetic operand of the body; a
 //! function of a list (`count(xs)`, `xs#2`, `xs:list`) takes the list whole. Operators never broadcast (`[1 2 3]*2`).
 
+use super::words::{MAP_WORD, SUM_WORD};
+use super::nodes::{call, is_colon_pair, key};
 use crate::analyzer::{annotated_kind, list_element_type};
 use crate::function_values::{definitions, Definition};
 use crate::type_kinds::Kind;
 use crate::lambdas::IMPLICIT_PARAMETER;
-use crate::node::{Bracket, Node, Separator};
+use crate::node::{symbol, Bracket, Node, Separator};
 use crate::operators::Op;
 use std::collections::{HashMap, HashSet};
 
 const ARITHMETIC: [Op; 6] = [Op::Add, Op::Sub, Op::Mul, Op::Div, Op::Mod, Op::Pow];
-const MAP_WORD: &str = "map";
 const ALL_WORD: &str = "all";
 /// Methods that append to a list variable (analyzer APPEND_METHODS)
 pub(crate) const APPEND_METHODS: [&str; 3] = ["add", "append", "push"];
@@ -36,7 +37,6 @@ pub(crate) const PAIRED_COUNT: &str = "(if #LEFT == #RIGHT then #LEFT else raise
 /// `sum(xs .* ys)` and `sum(xs .* 3)` fused into one loop, no list of the products built (5–20× faster, notes/gpu.md)
 pub(crate) const PAIRED_SUM_TEMPLATE: &str = "(LEFT = paired_left; RIGHT = paired_right; SUM = 0; for paired_index in 1 to COUNT { SUM = SUM + paired_item }; SUM)";
 const FUSED_SUM_TEMPLATE: &str = "(ITEMS = fused_list; SUM = 0; for ITEM in ITEMS { SUM = SUM + fused_item }; SUM)";
-const SUM_WORD: &str = "sum";
 /// `dot(xs, ys)` is `sum(xs .* ys)`, unless the program defines dot; `xs * ys` of two lists is the same
 const DOT_WORD: &str = "dot";
 
@@ -95,10 +95,10 @@ fn all_calls(node: Node) -> Node {
 				let calls = elements.iter().map(|element| Node::List(vec![function.clone(), all_calls(element.clone())], Bracket::None, Separator::Space)).collect();
 				return Node::List(calls, Bracket::Square, element_separator.clone());
 			}
-			let item = Node::Symbol(ALL_ITEM.to_string());
-			let call = Node::List(vec![function.clone(), item.clone()], Bracket::Round, Separator::None);
-			let each = Node::Key(Box::new(item), Op::FatArrow, Box::new(call));
-			Node::List(vec![Node::Symbol(MAP_WORD.to_string()), all_calls(list.clone()), each], Bracket::Round, Separator::None)
+			let item = symbol(ALL_ITEM);
+			let applied = Node::List(vec![function.clone(), item.clone()], Bracket::Round, Separator::None);
+			let each = key(item, Op::FatArrow, applied);
+			call(MAP_WORD, vec![all_calls(list.clone()), each])
 		}
 		other => other.map_children(all_calls),
 	}
@@ -203,7 +203,7 @@ fn nest_prefix_calls(node: Node, arities: &HashMap<String, Arity>) -> Node {
 				return ambiguous_call(&argument, &head.drop_meta().name(), &left.serialize(), &op, &right.serialize());
 			}
 			let call = Node::List(vec![head, *left], Bracket::None, Separator::Space);
-			Node::Key(Box::new(nest_prefix_calls(call, arities)), op, Box::new(nest_prefix_calls(*right, arities)))
+			key(nest_prefix_calls(call, arities), op, nest_prefix_calls(*right, arities))
 		}
 		// the same phrase the parser grouped the other way, `(f 3) == 9`, when it did not know f takes a value: as
 		// ambiguous when the body accepts anything (`f := print it`)
@@ -285,9 +285,9 @@ pub fn lower(program: Node) -> Node {
 
 /// `map(list, broadcast_item => applied(broadcast_item))`
 fn each_item(list: Node, applied: impl Fn(Node) -> Node) -> Node {
-	let item = Node::Symbol(BROADCAST_ITEM.to_string());
-	let each = Node::Key(Box::new(item.clone()), Op::FatArrow, Box::new(applied(item)));
-	Node::List(vec![Node::Symbol(MAP_WORD.to_string()), list, each], Bracket::Round, Separator::None)
+	let item = symbol(BROADCAST_ITEM);
+	let each = key(item.clone(), Op::FatArrow, applied(item));
+	call(MAP_WORD, vec![list, each])
 }
 
 /// `square := it*it`: a function of the implicit parameter `it`
@@ -300,7 +300,7 @@ fn implicit_definitions(node: &Node, found: &mut Vec<Definition>) {
 			let params = lambda.params.iter().map(|param| Node::Symbol(param.clone())).collect();
 			found.push(Definition { name: name.clone(), params, body: lambda.body });
 		} else if *op == Op::Define {
-			let params = vec![Node::Symbol(IMPLICIT_PARAMETER.to_string())];
+			let params = vec![symbol(IMPLICIT_PARAMETER)];
 			found.push(Definition { name: name.clone(), params, body: body.as_ref().clone() });
 		}
 	});
@@ -377,7 +377,7 @@ fn collect_list_variables(node: &Node, functions: &HashSet<String>, assigned: &m
 				}
 				let declared_list = declared_type.is_some_and(|type_node| list_element_type(&type_node.serialize()).is_some());
 				let is_list = declared_list || match value.drop_meta() {
-					Node::List(items, Bracket::Square, _) => !items.iter().any(is_pair),
+					Node::List(items, Bracket::Square, _) => !items.iter().any(is_colon_pair),
 					_ if is_range(value) => true,
 					_ if element_wise_parts(value).is_some() => true,
 					_ if crate::analyzer::typed_array_value(value).is_some() => true,
@@ -420,13 +420,6 @@ fn is_broadcast_over(value: &Node, variable: &str, functions: &HashSet<String>) 
 	broadcasting_call(items, bracket, separator, functions).is_some_and(|(_, argument)| matches!(argument.drop_meta(), Node::Symbol(same) if same == variable))
 }
 
-fn is_pair(node: &Node) -> bool {
-	matches!(node.drop_meta(), Node::Key(_, Op::Colon, _))
-}
-
-fn call(name: &str, argument: Node) -> Node {
-	Node::List(vec![Node::Symbol(name.to_string()), argument], Bracket::Round, Separator::None)
-}
 
 struct Broadcast {
 	functions: HashSet<String>,
@@ -482,7 +475,7 @@ impl Broadcast {
 			}
 			Node::Key(left, op, right) => {
 				let (left, right) = (self.rewrite(*left), self.rewrite(*right));
-				let key = Node::Key(Box::new(left), op, Box::new(right));
+				let key = key(left, op, right);
 				if let Some(paired) = self.paired_lists(&key) {
 					return paired;
 				}
@@ -506,7 +499,7 @@ impl Broadcast {
 				let applied = elements.iter().map(|element| self.apply(name, element.clone())).collect();
 				Some(Node::List(applied, Bracket::Square, element_separator.clone()))
 			}
-			_ if self.is_list_value(argument) => Some(each_item(argument.clone(), |item| call(name, item))),
+			_ if self.is_list_value(argument) => Some(each_item(argument.clone(), |item| call(name, vec![item]))),
 			_ => None,
 		}
 	}
@@ -597,7 +590,7 @@ impl Broadcast {
 			return Some(self.paired(receiver, op, operand, PAIRED_SUM_TEMPLATE));
 		}
 		let named = self.namer();
-		let item = Node::Key(Box::new(Node::Symbol(named("ITEM"))), op, Box::new(operand));
+		let item = key(Node::Symbol(named("ITEM")), op, operand);
 		let bindings = HashMap::from([("fused_list".to_string(), receiver), ("fused_item".to_string(), item)]);
 		Some(crate::law::substitute(&crate::warp_parser::parse(&named(FUSED_SUM_TEMPLATE)), &bindings))
 	}
@@ -621,23 +614,23 @@ impl Broadcast {
 
 	/// `xs * ys` of two lists, as `dot(xs, ys)`: `sum(xs .* ys)` (card g_n8GI)
 	fn inner_product(&self, left: Node, right: Node) -> Node {
-		let sum = [Node::Symbol(SUM_WORD.to_string()), crate::analyzer::element_wise(left, Op::Mul, right)];
+		let sum = [symbol(SUM_WORD), crate::analyzer::element_wise(left, Op::Mul, right)];
 		self.fused_sum(&sum, &Bracket::Round).unwrap_or_else(|| Node::List(vec![sum[0].clone(), self.rewrite(sum[1].clone())], Bracket::Round, Separator::None))
 	}
 
 	/// A list literal that is no object, or a variable only ever assigned one
 	fn is_list(&self, node: &Node) -> bool {
 		match node.drop_meta() {
-			Node::List(elements, Bracket::Square, _) => !elements.is_empty() && !elements.iter().any(is_pair),
+			Node::List(elements, Bracket::Square, _) => !elements.is_empty() && !elements.iter().any(is_colon_pair),
 			_ => self.is_list_value(node),
 		}
 	}
 
 	/// `abs [-1 2]`, `sqrt xs`: a scalar prefix operator over a list literal or a list variable
 	fn broadcast_operator(&self, op: Op, argument: &Node) -> Option<Node> {
-		let applied = |element: Node| Node::Key(Box::new(Node::Empty), op, Box::new(element));
+		let applied = |element: Node| key(Node::Empty, op, element);
 		match argument.drop_meta() {
-			Node::List(elements, Bracket::Square, separator) if !elements.is_empty() && !elements.iter().any(is_pair) => {
+			Node::List(elements, Bracket::Square, separator) if !elements.is_empty() && !elements.iter().any(is_colon_pair) => {
 				Some(Node::List(elements.iter().cloned().map(applied).collect(), Bracket::Square, separator.clone()))
 			}
 			_ if self.is_list_value(argument) => Some(each_item(argument.clone(), applied)),
@@ -650,8 +643,8 @@ impl Broadcast {
 		match element.drop_meta() {
 			Node::Key(key, Op::Colon, value) => Node::Key(key.clone(), Op::Colon, Box::new(self.apply(name, value.as_ref().clone()))),
 			_ => {
-				let items = vec![Node::Symbol(name.to_string()), element];
-				self.broadcast_call(&items, &Bracket::Round, &Separator::None).unwrap_or_else(|| call(name, items[1].clone()))
+				let items = vec![symbol(name), element];
+				self.broadcast_call(&items, &Bracket::Round, &Separator::None).unwrap_or_else(|| call(name, vec![items[1].clone()]))
 			}
 		}
 	}
@@ -669,7 +662,7 @@ fn scalar_element_wise(node: Node, parameters: &[String]) -> Node {
 	if let Some((receiver, op, operand)) = element_wise_parts(&node) {
 		let is_scalar = matches!(receiver.drop_meta(), Node::Number(_)) || matches!(receiver.drop_meta(), Node::Symbol(symbol) if parameters.contains(symbol));
 		if is_scalar {
-			return Node::Key(Box::new(receiver), op, Box::new(scalar_element_wise(operand, parameters)));
+			return key(receiver, op, scalar_element_wise(operand, parameters));
 		}
 	}
 	match node {

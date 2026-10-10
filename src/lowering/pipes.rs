@@ -5,7 +5,8 @@
 //! `then` pipes the same way into a function missing its argument (`xs then sort`, P158); otherwise it is the
 //! condition, also without `if`.
 
-use crate::analyzer::{counting_function, extract_user_functions};
+use super::nodes::{if_then, key};
+use crate::analyzer::counting_function;
 use crate::context::Context;
 use crate::node::{Bracket, Node, Separator};
 use crate::operators::Op;
@@ -42,8 +43,7 @@ pub fn is_pipe_stage(node: &Node) -> bool {
 }
 
 pub fn lower(node: Node) -> Node {
-	let mut context = Context::new();
-	extract_user_functions(&mut context, &node);
+	let context = crate::analyzer::function_context(&node);
 	let mut variables = HashSet::new();
 	let mut spaced_functions = HashSet::new();
 	node.visit(&mut |part| match part {
@@ -74,7 +74,7 @@ impl Pipes {
 			Node::Key(then, Op::Else, otherwise) if is_bare_then(&then) => {
 				let Node::Key(condition, _, body) = then.drop_meta().clone() else { unreachable!("guarded") };
 				let condition = if_then(self.rewrite(*condition), self.rewrite(*body));
-				Node::Key(Box::new(condition), Op::Else, Box::new(self.rewrite(*otherwise)))
+				key(condition, Op::Else, self.rewrite(*otherwise))
 			}
 			// `3 then f then g` parses as `3 then (f then g)`: a pipeline reads left to right, `(3 then f) then g`
 			Node::Key(value, Op::Then, stage) if !is_if_head(&value) && is_bare_then(&stage) => {
@@ -117,7 +117,7 @@ impl Pipes {
 	/// the stage names a function and leaves out an argument
 	fn then_call(&self, stage: &Node, value: &Node) -> Option<Node> {
 		if let Some(op) = operator_stage(stage) {
-			return Some(Node::Key(Box::new(Node::Empty), op, Box::new(grouped(value.clone()))));
+			return Some(key(Node::Empty, op, grouped(value.clone())));
 		}
 		let pipes = match stage.drop_meta() {
 			Node::Symbol(name) => self.names_function(name, 0),
@@ -161,7 +161,7 @@ impl Pipes {
 	fn applied(&self, stage: &Node, value: Node) -> Node {
 		match self.function(stage) {
 			Some(function) => called(function, value),
-			None => Node::Key(Box::new(Node::Empty), operator_stage(stage).expect("a stage"), Box::new(grouped(value))),
+			None => key(Node::Empty, operator_stage(stage).expect("a stage"), grouped(value)),
 		}
 	}
 
@@ -215,10 +215,6 @@ fn is_truth_value(node: &Node) -> bool {
 		Node::True | Node::False => true,
 		_ => false,
 	}
-}
-
-fn if_then(condition: Node, body: Node) -> Node {
-	crate::variable_signals::if_then(condition, body)
 }
 
 /// `square 2` as the operand of a prefix operator: `√(square 2)`, not `√ square 2` (which reads as square(√2))

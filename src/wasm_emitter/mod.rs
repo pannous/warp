@@ -165,7 +165,7 @@ fn if_then_parts(node: &Node) -> Option<(&Node, &Node)> {
 }
 
 pub use equality::{IS_TRUTHY, SAME_NODE, VALUES_EQUAL};
-pub use config::{EmitterConfig, EmitterConfigBuilder};
+pub use config::EmitterConfig;
 pub use import_manager::ImportManager;
 pub use string_table::StringTable;
 pub use type_manager::TypeManager;
@@ -282,6 +282,7 @@ pub struct WasmGcEmitter {
 	typed_capture_globals: HashMap<u32, list_dispatch::TypedList>, // capture globals holding a typed list of main
 	main_typed_lists: Option<HashMap<String, list_dispatch::TypedList>>, // main's typed lists, worked out before the capture globals
 	bounded_counters: std::collections::HashSet<String>, // loop counters of the body being emitted proven to stay in 0..i32::MAX (big_int.rs)
+	typed_map_globals: HashMap<String, u32>, // globals held as hash tables (map_backend.rs find_typed_map_globals): their global
 	typed_maps: std::collections::HashSet<String>, // map variables of the body being emitted held as hash tables (map_backend.rs)
 	typed_structs: HashMap<String, String>, // instance variables of the body being emitted held as GC structs, with their class (struct_backend.rs)
 	instance_types: HashMap<String, struct_backend::InstanceType>, // the `P·instance` struct type of each class
@@ -357,6 +358,7 @@ impl WasmGcEmitter {
 			typed_capture_globals: HashMap::new(),
 			main_typed_lists: None,
 			bounded_counters: std::collections::HashSet::new(),
+			typed_map_globals: HashMap::new(),
 			typed_maps: std::collections::HashSet::new(),
 			typed_structs: HashMap::new(),
 			instance_types: HashMap::new(),
@@ -376,23 +378,9 @@ impl WasmGcEmitter {
 		self.config.emit_kind_globals = enabled;
 	}
 
-	pub fn set_tree_shaking(&mut self, enabled: bool) {
-		self.config.emit_all_functions = !enabled;
-	}
-
 	/// Enable/disable host function imports (fetch, run)
 	pub fn set_host_imports(&mut self, enabled: bool) {
 		self.config.emit_host_imports = enabled;
-	}
-
-	/// Enable/disable WASI imports (fd_write for puts, puti, etc.)
-	pub fn set_wasi_imports(&mut self, enabled: bool) {
-		self.config.emit_wasi_imports = enabled;
-	}
-
-	/// Enable/disable FFI imports (libc, libm functions)
-	pub fn set_ffi_imports(&mut self, enabled: bool) {
-		self.config.emit_ffi_imports = enabled;
 	}
 
 	// ═══════════════════════════════════════════════════════════════════════════
@@ -465,8 +453,7 @@ impl WasmGcEmitter {
 	/// Emit string lookup from table and call constructor
 	fn emit_string_call(&mut self, func: &mut Function, s: &str, constructor: &'static str) {
 		let (ptr, len) = self.allocate_string(s); // a text the pre-scan did not see is added to the table, never read from offset 0
-		func.instruction(&I32Const(ptr as i32));
-		func.instruction(&I32Const(len as i32));
+		Self::emit_list(func, &[I32Const(ptr as i32), I32Const(len as i32)]);
 		self.emit_call(func, constructor);
 	}
 
@@ -893,7 +880,10 @@ impl WasmGcEmitter {
 		self.config.emit_ffi_imports = !self.ctx.ffi_imports.is_empty();
 		self.config.emit_wasi_imports |= effects.needs(Capability::Wasi);
 		// another runtime's module is reached through the host word foreign_call
-		self.config.emit_host_imports |= effects.needs(Capability::Host) || effects.needs(Capability::Foreign);
+		// warp's own host words imported like C (sleep, the task words) are Host too, for warp --sandbox, but need no
+		// host import module
+		let host_import_word = effects.externals.iter().any(|(name, external)| external.capability == Capability::Host && !self.ctx.ffi_imports.contains_key(name));
+		self.config.emit_host_imports |= host_import_word || effects.needs(Capability::Foreign);
 		// an ordering of ± values that overlap warns through the host (P224b)
 		self.config.emit_host_imports |= crate::uncertain::may_order_intervals(node);
 	}
@@ -952,30 +942,12 @@ impl WasmGcEmitter {
 			heap_type: HeapType::Concrete(type_idx),
 		};
 
-		// Build parameter types
 		let params: Vec<ValType> = type_def.fields.iter().map(|f| field_def_to_val_type(f, self)).collect();
-
-		// Function type: (params...) -> (ref $TypeName)
-		let func_type = self.type_manager.function_type(params.clone(), vec![Ref(type_ref)]);
-		self.functions.function(func_type);
-
-		// Function body: get all params, struct.new
-		let mut func = Function::new(vec![]);
-		for i in 0..type_def.fields.len() {
-			func.instruction(&I::LocalGet(i as u32));
-		}
-		func.instruction(&I::StructNew(type_idx));
-		func.instruction(&I::End);
-
-		self.code.function(&func);
-
-		// Export as new_TypeName
-		let func_name = format!("new_{}", type_def.name);
-		// Leak the string to get a 'static str for the export
-		let func_name_static: &'static str = Box::leak(func_name.clone().into_boxed_str());
-		self.exports
-			.export(func_name_static, ExportKind::Func, self.next_func_idx);
-		self.next_func_idx += 1;
+		let field_count = params.len() as u32;
+		self.host_only_function(&format!("new_{}", type_def.name), params, vec![Ref(type_ref)], vec![], |_, func| {
+			(0..field_count).for_each(|field| { func.instruction(&I::LocalGet(field)); });
+			func.instruction(&I::StructNew(type_idx));
+		});
 	}
 
 
@@ -1059,59 +1031,28 @@ impl WasmGcEmitter {
 			self.exported_function(name, vec![Ref(node_ref)], vec![ValType::I32], vec![], |s, f| {
 				let string = HeapType::Concrete(s.type_manager.string_type);
 				s.emit_field(f, 0, 1);
-				f.instruction(&I::RefTestNonNull(string));
-				f.instruction(&I::If(BlockType::Result(ValType::I32)));
+				Self::emit_list(f, &[I::RefTestNonNull(string), I::If(BlockType::Result(ValType::I32))]);
 				s.emit_text_field(f, 0, field_index);
-				f.instruction(&I::Else);
-				f.instruction(&I::I32Const(0));
-				f.instruction(&I::End);
+				Self::emit_list(f, &[I::Else, I::I32Const(0), I::End]);
 			});
 		}
 	}
 
 	/// Emit math helper functions (i64_pow, etc.)
 	fn emit_math_helpers(&mut self) {
-		// i64_pow(base: i64, exp: i64) -> i64
-		// Computes base^exp using a loop
+		// i64_pow(base, exponent) -> i64: base multiplied exponent times
 		if self.should_emit_function("i64_pow") {
 			self.exported_function("i64_pow", vec![ValType::I64, ValType::I64], vec![ValType::I64], vec![ValType::I64], |_, func| {
-				// Locals: 0=base, 1=exp, 2=result
-				// result = 1
-				func.instruction(&I::I64Const(1));
-				func.instruction(&I::LocalSet(2));
-
-				// block $done
-				func.instruction(&I::Block(BlockType::Empty));
-				// loop $loop
-				func.instruction(&I::Loop(BlockType::Empty));
-
-				// br_if $done (i64.eqz (local.get $exp))
-				func.instruction(&I::LocalGet(1)); // exp
-				func.instruction(&I::I64Eqz);
-				func.instruction(&I::BrIf(1)); // break to $done
-
-				// result = result * base
-				func.instruction(&I::LocalGet(2)); // result
-				func.instruction(&I::LocalGet(0)); // base
-				func.instruction(&I::I64Mul);
-				func.instruction(&I::LocalSet(2));
-
-				// exp = exp - 1
-				func.instruction(&I::LocalGet(1)); // exp
-				func.instruction(&I::I64Const(1));
-				func.instruction(&I::I64Sub);
-				func.instruction(&I::LocalSet(1));
-
-				// br $loop
-				func.instruction(&I::Br(0));
-
-				// end loop
-				func.instruction(&I::End);
-				// end block
-				func.instruction(&I::End);
-
-				// return result
-				func.instruction(&I::LocalGet(2));
+				let (base, exponent, result) = (0, 1, 2);
+				Self::emit_list(func, &[
+					I::I64Const(1), I::LocalSet(result),
+					I::Block(BlockType::Empty), I::Loop(BlockType::Empty),
+					I::LocalGet(exponent), I::I64Eqz, I::BrIf(1),
+					I::LocalGet(result), I::LocalGet(base), I::I64Mul, I::LocalSet(result),
+					I::LocalGet(exponent), I::I64Const(1), I::I64Sub, I::LocalSet(exponent),
+					I::Br(0), I::End, I::End,
+					I::LocalGet(result),
+				]);
 			});
 		}
 	}
@@ -1130,18 +1071,12 @@ impl WasmGcEmitter {
 	/// rounding functions. There is no f64 → bignum path, so a NaN or a value beyond i64 fails cleanly.
 	fn emit_truncating_cast(&mut self, func: &mut Function) {
 		let value_bits = self.scratch(0);
-		func.instruction(&I::I64ReinterpretF64);
-		func.instruction(&I::LocalSet(value_bits));
-		func.instruction(&I::LocalGet(value_bits));
-		func.instruction(&I::F64ReinterpretI64);
-		func.instruction(&I::F64Abs);
-		func.instruction(&I::F64Const(I64_RANGE_LIMIT.into()));
-		func.instruction(&I::F64Lt);
-		func.instruction(&I::I32Eqz);
+		Self::emit_list(func, &[I::I64ReinterpretF64, I::LocalSet(value_bits)]);
+		Self::emit_list(func, &[
+			I::LocalGet(value_bits), I::F64ReinterpretI64, I::F64Abs, I::F64Const(I64_RANGE_LIMIT.into()), I::F64Lt, I::I32Eqz,
+		]);
 		self.emit_fail_if(func, "float_out_of_int_range");
-		func.instruction(&I::LocalGet(value_bits));
-		func.instruction(&I::F64ReinterpretI64);
-		func.instruction(&I::I64TruncF64S);
+		Self::emit_list(func, &[I::LocalGet(value_bits), I::F64ReinterpretI64, I::I64TruncF64S]);
 		self.emit_int_from_machine(func);
 	}
 
@@ -1588,16 +1523,7 @@ impl WasmGcEmitter {
 		let mut types = TypeSection::new();
 
 		// Type 0: $String = struct { ptr: i32, len: i32 }
-		types.ty().struct_(vec![
-			FieldType {
-				element_type: Val(ValType::I32),
-				mutable: false,
-			},
-			FieldType {
-				element_type: Val(ValType::I32),
-				mutable: false,
-			},
-		]);
+		types.ty().struct_(type_manager::string_fields());
 		let string_type_idx = 0u32;
 
 		// Type 1: User struct type
@@ -1684,15 +1610,12 @@ impl WasmGcEmitter {
 				}
 				RawFieldValue::String(_) => {
 					let (ptr, len) = string_offsets[string_idx];
-					func.instruction(&I32Const(ptr as i32));
-					func.instruction(&I32Const(len as i32));
-					func.instruction(&I::StructNew(string_type_idx));
+					Self::emit_list(&mut func, &[I32Const(ptr as i32), I32Const(len as i32), I::StructNew(string_type_idx)]);
 					string_idx += 1;
 				}
 			}
 		}
-		func.instruction(&I::StructNew(struct_type_idx));
-		func.instruction(&I::End);
+		Self::emit_list(&mut func, &[I::StructNew(struct_type_idx), I::End]);
 		codes.function(&func);
 		module.section(&codes);
 
@@ -1887,6 +1810,17 @@ pub fn bracket_info(bracket: &Bracket) -> i64 {
 		Bracket::Less => 3,
 		Bracket::Other(_, _) => 4,
 		Bracket::None => 5,
+	}
+}
+
+/// The bracket of a list's kind high bits, bracket_info read back (Other as None)
+pub fn bracket_of_info(info: i64) -> Bracket {
+	match info {
+		0 => Bracket::Curly,
+		1 => Bracket::Square,
+		2 => Bracket::Round,
+		3 => Bracket::Less,
+		_ => Bracket::None,
 	}
 }
 

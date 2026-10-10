@@ -101,12 +101,9 @@ impl WasmGcEmitter {
 		let star = names.iter().position(|name| unstarred(name) != name);
 		let fixed = names.len() as i64 - star.map_or(0, |_| 1);
 		self.emit_node_instructions(func, value);
-		func.instruction(&I::LocalSet(items));
-		func.instruction(&I::LocalGet(items));
-		func.instruction(&I::RefAsNonNull);
+		Self::emit_list(func, &[I::LocalSet(items), I::LocalGet(items), I::RefAsNonNull]);
 		self.emit_call(func, "node_count");
-		func.instruction(&I::LocalTee(count));
-		func.instruction(&I::I64Const(fixed));
+		Self::emit_list(func, &[I::LocalTee(count), I::I64Const(fixed)]);
 		func.instruction(if star.is_some() { &I::I64LtS } else { &I::I64Ne });
 		self.emit_fail_if(func, WRONG_NUMBER_OF_VALUES);
 		for (position, name) in names.iter().enumerate() {
@@ -117,9 +114,7 @@ impl WasmGcEmitter {
 				// node_slice(items, star, count - names after it): 0-based, end exclusive, ø = to the end
 				func.instruction(&I::I64Const(position as i64));
 				self.emit_call(func, "new_int");
-				func.instruction(&I::LocalGet(count));
-				func.instruction(&I::I64Const(from_end - 1));
-				func.instruction(&I::I64Sub);
+				Self::emit_list(func, &[I::LocalGet(count), I::I64Const(from_end - 1), I::I64Sub]);
 				self.emit_call(func, "new_int");
 				self.emit_call(func, super::library_ops::NODE_SLICE);
 				self.emit_store_destructured(func, unstarred(name), Kind::List);
@@ -127,9 +122,7 @@ impl WasmGcEmitter {
 			}
 			func.instruction(&I::RefAsNonNull);
 			if after_star {
-				func.instruction(&I::LocalGet(count));
-				func.instruction(&I::I64Const(from_end - 1));
-				func.instruction(&I::I64Sub);
+				Self::emit_list(func, &[I::LocalGet(count), I::I64Const(from_end - 1), I::I64Sub]);
 			} else {
 				func.instruction(&I::I64Const(position as i64 + 1));
 			}
@@ -180,25 +173,23 @@ impl WasmGcEmitter {
 	pub(super) fn register_tuple_packer(&mut self, function: &str, kinds: &[Kind]) {
 		let (values, node) = (self.tuple_result_types(kinds), ValType::Ref(self.node_ref(false)));
 		let packer_type = self.type_manager.function_type(values, vec![node]);
-		self.functions.function(packer_type);
-		self.tuple_packers.insert(function.to_string(), self.next_func_idx);
-		self.next_func_idx += 1;
+		let packer = self.reserve_function(packer_type);
+		self.tuple_packers.insert(function.to_string(), packer);
 	}
 
 	pub(super) fn compile_tuple_packer(&mut self, kinds: &[Kind]) {
-		let mut packer = Function::new(vec![]);
-		for (position, kind) in kinds.iter().enumerate() {
-			packer.instruction(&I::LocalGet(position as u32));
-			if !kind.is_ref() {
-				self.emit_primitive_as_node(&mut packer, *kind);
+		self.function_body(vec![], |s, packer| {
+			for (position, kind) in kinds.iter().enumerate() {
+				packer.instruction(&I::LocalGet(position as u32));
+				if !kind.is_ref() {
+					s.emit_primitive_as_node(packer, *kind);
+				}
 			}
-		}
-		self.emit_node_null(&mut packer);
-		for _ in kinds {
-			packer.instruction(&I::I64Const(LIST_BRACKET_INFO));
-			self.emit_call(&mut packer, "new_list");
-		}
-		packer.instruction(&I::End);
-		self.code.function(&packer);
+			s.emit_node_null(packer);
+			for _ in kinds {
+				packer.instruction(&I::I64Const(LIST_BRACKET_INFO));
+				s.emit_call(packer, "new_list");
+			}
+		});
 	}
 }

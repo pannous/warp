@@ -3,14 +3,25 @@
 use super::*;
 
 impl WarpParser {
+	/// The iterable of a for header and the word that opens the body: `:`, `do` or none.
+	/// In the header `xs {` is the collection and the body, as in any for loop, not a construction of xs
+	fn for_iterable_and_body_word(&mut self) -> (Node, Option<&'static str>) {
+		let outer_header = std::mem::replace(&mut self.in_for_header, true);
+		let iterable = self.with_equals_comparing(false, |parser| parser.parse_iterable());
+		self.in_for_header = outer_header;
+		self.skip_spaces();
+		let body_word = if self.current_char() == ':' { Some(":") } else { Some("do").filter(|word| self.matches_keyword(word)) };
+		(iterable, body_word)
+	}
+
 	/// `global [modifiers] name[=value]` and the same after `export`: a variable declared at module level.
 	/// `export` without a name after it, and `export f:=it*2`, a function, stay ordinary code.
 	pub(super) fn try_parse_global_declaration(&mut self, keyword: &str) -> Option<Node> {
-		let before_declaration = (self.pos, self.line_nr, self.column, self.current_line.clone());
+		let before_declaration = self.mark();
 		self.skip_whitespace();
 		self.skip_declaration_modifiers();
 		if keyword == "export" && !self.at_identifier_start() {
-			(self.pos, self.line_nr, self.column, self.current_line) = before_declaration;
+			self.rewind(before_declaration);
 			return None;
 		}
 		let declaration = self.parse_expr(0); // name, name=value or name:=value
@@ -118,18 +129,30 @@ impl WarpParser {
 	/// Modifier and type words between the keyword and the name (`global const int k=7`): the global holds the value, the words are dropped
 	pub(super) fn skip_declaration_modifiers(&mut self) {
 		loop {
-			let before_word = (self.pos, self.line_nr, self.column, self.current_line.clone());
+			let before_word = self.mark();
 			let word = self.parse_symbol().unwrap_or_default();
 			let is_modifier = DECLARATION_MODIFIERS.contains(&word.as_str()) || crate::analyzer::CONSTANT_KEYWORDS.contains(&word.as_str()) || crate::analyzer::type_word_kind(&word).is_some();
 			self.skip_spaces();
 			if !is_modifier || !self.at_identifier_start() {
-				(self.pos, self.line_nr, self.column, self.current_line) = before_word; // `global int` names the variable int
+				self.rewind(before_word); // `global int` names the variable int
 				return;
 			}
 		}
 	}
 
 	/// The name of `for x in …`, or the names each element destructures into: `for (r, c) in …`, `for k, v in …`
+	/// A loop variable and the word `in` follow the blanks here: `x in xs` after `each`; nothing consumed
+	pub(super) fn loop_variable_in_follows(&mut self) -> bool {
+		let before = self.mark();
+		self.skip_blanks();
+		let follows = self.parse_loop_variable().is_some() && {
+			self.skip_blanks();
+			self.matches_keyword("in")
+		};
+		self.rewind(before);
+		follows
+	}
+
 	pub(super) fn parse_loop_variable(&mut self) -> Option<Node> {
 		let bracket = if self.current_char() == '(' { self.advance(); Bracket::Round } else { Bracket::None };
 		let mut names = vec![];
@@ -148,7 +171,7 @@ impl WarpParser {
 			}
 			self.advance();
 		}
-		Some(if names.len() == 1 { names.remove(0) } else { Node::List(names, bracket, Separator::Colon) })
+		Some(Node::single_or_list(names, bracket, Separator::Colon))
 	}
 
 	/// `(i=0;i<n;i++)`: a group here whose top level holds a `;`
@@ -177,7 +200,7 @@ impl WarpParser {
 	/// `for x in iterable: body` and `for x in iterable {body}`, after the word `for`; the body of a colon runs to the end of
 	/// the statement. `for 1..10 : print it` names no variable (wiki/for.md): `for iterable {body}`, whose items are `it`
 	pub(super) fn try_parse_for_in(&mut self) -> Option<Node> {
-		let before_header = (self.pos, self.line_nr, self.column, self.current_line.clone());
+		let before_header = self.mark();
 		self.skip_spaces();
 		if let Some(filtered) = self.try_parse_condition_loop() {
 			return Some(filtered);
@@ -192,17 +215,13 @@ impl WarpParser {
 		if named.is_some() {
 			self.advance_by("in".len());
 		} else {
-			(self.pos, self.line_nr, self.column, self.current_line) = before_header.clone();
+			self.rewind(before_header.clone());
 			self.skip_spaces();
 			if self.at_c_style_for_head() { // `for(i=0;i<n;i++)`; `for (1…5).filter(f):` walks the list
 				return Some(self.c_style_for());
 			}
 		}
-		let outer_header = std::mem::replace(&mut self.in_for_header, true);
-		let iterable = self.with_equals_comparing(false, |parser| parser.parse_iterable());
-		self.in_for_header = outer_header;
-		self.skip_spaces();
-		let body_word = if self.current_char() == ':' { Some(":") } else { Some("do").filter(|word| self.matches_keyword(word)) };
+		let (iterable, body_word) = self.for_iterable_and_body_word();
 		let Some(variable) = named else {
 			// only the colon and do forms: `for 1..3 {…}` is read where for loops are lowered
 			let body = match body_word {
@@ -211,7 +230,7 @@ impl WarpParser {
 				None => match self.indented_lines_below() {
 					Some(block) => block, // `for 0 to 2` and the lines indented below it
 					None => {
-						(self.pos, self.line_nr, self.column, self.current_line) = before_header;
+						self.rewind(before_header);
 						return None;
 					}
 				},
@@ -232,34 +251,32 @@ impl WarpParser {
 		}
 		// `for friend in xs`: a declared type's name visits only its instances, as `it`; the name in the body is the item
 		// (P46), a call `friend(…)` still constructs
-		let (variable, body) = match variable.drop_meta() {
+		let filtered = match variable.drop_meta() {
 			Symbol(name) if self.declared_types.contains(name) => {
 				let it = Symbol(crate::lambdas::IMPLICIT_PARAMETER.to_string());
-				let test = Node::List(vec![Symbol(crate::traits::INSTANCE_OF.to_string()), it.clone(), Node::Text(name.clone())], Bracket::Round, Separator::None);
+				let test = call(crate::traits::INSTANCE_OF, vec![it.clone(), Node::Text(name.clone())]);
 				let header = type_filter_header(name, &iterable, &body);
 				let body = item_named(body, name, &it);
-				match self.filtered_body(&format!("for {name} in …"), &format!("for x in … {{ if x is {name} {{ … }} }}"), header, test, body) {
-					Ok(body) => (it, body),
-					Err(error) => return Some(error),
-				}
+				self.type_filtered_body(name, header, test, body).map(|body| (it, body))
 			}
 			// `for number in xs`: a type word visits only the items of that type, under its own name; a literal list whose items
 			// all are of the type needs no filter
 			Symbol(name) if crate::analyzer::type_word_kind(name).is_some() && !literal_items_of_type(&iterable, name) => {
 				let test = self.type_test(&variable, name).expect("a type word");
 				let header = type_filter_header(name, &iterable, &body);
-				match self.filtered_body(&format!("for {name} in …"), &format!("for x in … {{ if x is {name} {{ … }} }}"), header, test, body) {
-					Ok(body) => (variable, body),
-					Err(error) => return Some(error),
-				}
+				self.type_filtered_body(name, header, test, body).map(|body| (variable.clone(), body))
 			}
-			_ => (variable, body),
+			_ => Ok((variable, body)),
+		};
+		let (variable, body) = match filtered {
+			Ok(filtered) => filtered,
+			Err(error) => return Some(error),
 		};
 		// `for chars in text: print it`: a unit word walks the text by that unit, the item is `it`
 		if let Some((unit, iterable)) = unit_iteration(&variable, &iterable, &body) {
-			return Some(Node::List(vec![Symbol("for".to_string()), unit, Symbol("in".to_string()), iterable, body], Bracket::None, Separator::Space));
+			return Some(for_in_loop(unit, iterable, body));
 		}
-		Some(Node::List(vec![Symbol("for".to_string()), variable, Symbol("in".to_string()), iterable, body], Bracket::None, Separator::Space))
+		Some(for_in_loop(variable, iterable, body))
 	}
 
 	/// The iterable of a loop header, its words up to the body: `for todo in todos sorted by priority {…}`,
@@ -267,7 +284,7 @@ impl WarpParser {
 	/// (`[x for x in xs where x > 1]`)
 	fn parse_iterable(&mut self) -> Node {
 		let first = self.parse_expr(Op::Colon.binding_power().0 + 1);
-		let after_first = (self.pos, self.line_nr, self.column, self.current_line.clone());
+		let after_first = self.mark();
 		let mut words = vec![first];
 		loop {
 			self.skip_spaces();
@@ -282,7 +299,7 @@ impl WarpParser {
 			words.push(word);
 		}
 		if words.len() == 1 || !self.at_loop_body() {
-			(self.pos, self.line_nr, self.column, self.current_line) = after_first;
+			self.rewind(after_first);
 			return words.remove(0);
 		}
 		Node::List(words, Bracket::None, Separator::Space)
@@ -296,7 +313,7 @@ impl WarpParser {
 	/// `for (it>2) in xs: body` (wiki/for.md, P46): the items the condition holds for, as `it`; None (nothing consumed)
 	/// for any other header
 	pub(super) fn try_parse_condition_loop(&mut self) -> Option<Node> {
-		let before = (self.pos, self.line_nr, self.column, self.current_line.clone());
+		let before = self.mark();
 		if self.current_char() != '(' {
 			return None;
 		}
@@ -322,22 +339,17 @@ impl WarpParser {
 		// `(even number)`: an adjective and a type word
 		let condition = if mentions_it { Some(condition) } else { self.adjective_condition(&condition) };
 		let Some(condition) = condition.filter(|_| self.current_char() == ')') else {
-			(self.pos, self.line_nr, self.column, self.current_line) = before;
+			self.rewind(before);
 			return None;
 		};
 		self.advance();
 		self.skip_spaces();
 		if !self.matches_keyword("in") {
-			(self.pos, self.line_nr, self.column, self.current_line) = before;
+			self.rewind(before);
 			return None;
 		}
 		self.advance_by("in".len());
-		// in the header `xs {` is the collection and the body, as in any for loop, not a construction of xs
-		let outer_header = std::mem::replace(&mut self.in_for_header, true);
-		let iterable = self.with_equals_comparing(false, |parser| parser.parse_iterable());
-		self.in_for_header = outer_header;
-		self.skip_spaces();
-		let body_word = if self.current_char() == ':' { Some(":") } else { Some("do").filter(|word| self.matches_keyword(word)) };
+		let (iterable, body_word) = self.for_iterable_and_body_word();
 		let body = match body_word {
 			Some(word) => self.colon_body(word),
 			None => self.indented_lines_below().unwrap_or_else(|| self.parse_atom()),
@@ -350,7 +362,7 @@ impl WarpParser {
 			Err(error) => return Some(error),
 		};
 		let it = Symbol(crate::lambdas::IMPLICIT_PARAMETER.to_string());
-		Some(Node::List(vec![Symbol("for".to_string()), it, Symbol("in".to_string()), iterable, body], Bracket::None, Separator::Space))
+		Some(for_in_loop(it, iterable, body))
 	}
 
 	/// `(even number)` in a loop header: `even(it)` (built in: `it%2==0`, `odd` its opposite, else the user's function) and
@@ -365,10 +377,10 @@ impl WarpParser {
 		let type_test = self.type_test(&it, type_name)?;
 		let parity = |op: Op| Node::Key(Box::new(Node::Key(Box::new(it.clone()), Op::Mod, Box::new(Node::int(2)))), op, Box::new(Node::int(0)));
 		let adjective_test = match adjective.as_str() {
-			word if self.functions.contains(word) => Node::List(vec![Symbol(word.to_string()), it.clone()], Bracket::Round, Separator::None),
+			word if self.functions.contains(word) => call(word, vec![it.clone()]),
 			EVEN_WORD => parity(Op::Eq),
 			ODD_WORD => parity(Op::Ne),
-			word => Node::List(vec![Symbol(word.to_string()), it.clone()], Bracket::Round, Separator::None),
+			word => call(word, vec![it.clone()]),
 		};
 		Some(Node::Key(Box::new(type_test), Op::And, Box::new(adjective_test)))
 	}
@@ -382,7 +394,7 @@ impl WarpParser {
 		} else {
 			return None;
 		};
-		Some(Node::List(vec![Symbol(test.to_string()), value.clone(), Node::Text(type_name.to_string())], Bracket::Round, Separator::None))
+		Some(call(test, vec![value.clone(), Node::Text(type_name.to_string())]))
 	}
 
 	/// The body of a filtering loop: run only when `test` holds; the filter is announced once (got-it warning, P46).
@@ -400,6 +412,11 @@ impl WarpParser {
 		Ok(Node::List(vec![guarded], Bracket::Curly, Separator::Semicolon))
 	}
 
+	/// `filtered_body` of `for T in xs`, which visits only the items of type T
+	fn type_filtered_body(&self, name: &str, header: Option<(String, String)>, test: Node, body: Node) -> Result<Node, Node> {
+		self.filtered_body(&format!("for {name} in …"), &format!("for x in … {{ if x is {name} {{ … }} }}"), header, test, body)
+	}
+
 	/// `for (i=0;i<n;i++) {body}`, `for(…) print i`, `for(…): body`, at its head: `((for (head)) {body})` as lowering reads it
 	fn c_style_for(&mut self) -> Node {
 		let head = self.parse_atom();
@@ -410,7 +427,7 @@ impl WarpParser {
 			_ if self.matches_keyword(DO_WORD) => self.colon_body(DO_WORD),
 			_ => self.indented_lines_below().unwrap_or_else(|| self.rest_of_statement()),
 		};
-		Node::List(vec![Node::List(vec![Symbol("for".to_string()), head], Bracket::Round, Separator::None), as_block(body)], Bracket::None, Separator::None)
+		Node::List(vec![call("for", vec![head]), as_block(body)], Bracket::None, Separator::None)
 	}
 
 	/// The body after `:` or `do`: the statements up to `end` after `do`, the indented block under a `:` or `do` at the end
@@ -441,20 +458,40 @@ impl WarpParser {
 				_ => grouped_list(words, Bracket::None, Separator::Space), // `for c in s: print ord c` prints `ord c`
 			};
 		}
-		let mut arguments = vec![one_expression(&words[1..])]; // `for i in 1..3: print i, i*2` prints both
+		// `for i in 1..3: print i, i*2` prints both
+		self.print_call_from(one_expression(&words[1..]), Self::expression_of_words)
+	}
+
+	/// The words up to the end of the line, a comma or an `else` as one expression: `ord c` of `print ord c, 2`
+	pub(super) fn expression_of_words(&mut self) -> Node {
+		self.expression_binding(0)
+	}
+
+	fn expression_binding(&mut self, min_bp: u8) -> Node {
+		one_expression(&self.words_binding(min_bp))
+	}
+
+	/// The call print(first, …): the arguments after `first` follow commas, each read by `argument`
+	pub(super) fn print_call_from(&mut self, first: Node, argument: impl Fn(&mut Self) -> Node) -> Node {
+		let mut arguments = vec![first];
 		while self.current_char() == ',' {
 			self.advance();
 			self.skip_blanks();
-			arguments.push(one_expression(&self.words_of_expression()));
+			arguments.push(argument(self));
 		}
 		print_call(arguments)
 	}
 
-	/// The words up to the end of the line or a comma, `ord c` of `print ord c`
-	fn words_of_expression(&mut self) -> Vec<Node> {
-		let mut words = vec![self.with_equals_comparing(false, |parser| parser.parse_expr(0))];
-		while self.braceless_argument_follows() {
-			words.push(self.with_equals_comparing(false, |parser| parser.parse_expr(0)));
+	/// The words up to the end of the line, a comma or an `else`, `ord c` of `print ord c`
+	pub(super) fn words_of_expression(&mut self) -> Vec<Node> {
+		self.words_binding(0)
+	}
+
+	/// The words of an expression, each binding at least as tight as `min_bp`: `print 1` of `then print 1 else …`
+	fn words_binding(&mut self, min_bp: u8) -> Vec<Node> {
+		let mut words = vec![self.with_equals_comparing(false, |parser| parser.parse_expr(min_bp))];
+		while self.braceless_argument_follows() && !self.matches_keyword("else") && self.at_else_if_word().is_none() {
+			words.push(self.with_equals_comparing(false, |parser| parser.parse_expr(min_bp)));
 		}
 		words
 	}
@@ -472,7 +509,10 @@ impl WarpParser {
 	/// A branch of an if, `print x+1` of `else print x+1` printing its one expression
 	pub(super) fn parse_branch(&mut self, min_bp: u8) -> Node {
 		match self.take_braceless_print() {
-			true => print_call([self.parse_expr(min_bp)]),
+			true => {
+				let first = self.expression_binding(min_bp);
+				self.print_call_from(first, |parser| parser.expression_binding(min_bp)) // `else print x, y`, `else print ord x`
+			}
 			false => self.parse_expr(min_bp),
 		}
 	}
@@ -481,12 +521,6 @@ impl WarpParser {
 	pub(super) fn braceless_argument_follows(&mut self) -> bool {
 		self.skip_blanks();
 		self.can_start_atom()
-	}
-
-	fn skip_blanks(&mut self) {
-		while matches!(self.current_char(), ' ' | '\t') {
-			self.advance();
-		}
 	}
 
 	pub(super) fn finish_while_prefix(&mut self, rhs: Node) -> Node {
@@ -511,6 +545,7 @@ impl WarpParser {
 		}
 
 		if let Some(body) = self.indented_lines_below() {
+			self.skip_end_line(); // Ruby's `while c` … `end`
 			return while_do(rhs, body);
 		}
 		Node::Key(Box::new(Empty), Op::While, Box::new(rhs))
@@ -540,8 +575,8 @@ impl WarpParser {
 					self.advance(); // Python's `else: body`
 					self.parse_branch(0)
 				}
-				ElseParseMode::Atom => self.parse_atom(),
-				ElseParseMode::Expr => self.parse_branch(0),
+				ElseParseMode::Atom if self.current_char() == '{' => self.parse_atom(),
+				_ => self.parse_branch(0), // `if c {1} else 3+1`, `if c {…} else print x+1`: the rest of the expression
 			}
 		} else {
 			return if_then;

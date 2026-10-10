@@ -69,14 +69,12 @@ pub fn spin_manifest(name: &str, source: &str) -> String {
 
 /// The Worker of the program file written next to it: app.warp → app-worker/
 pub fn build(program: &Path) -> Result<BuiltSite, String> {
-	let code = std::fs::read_to_string(program).map_err(|failure| format!("cannot read {}: {failure}", program.display()))?;
-	let name = program.file_stem().map(|stem| stem.to_string_lossy().into_owned()).unwrap_or_default();
-	write_files(&worker_files(&code, &name)?, &worker_directory(program))
+	let code = crate::site::read_program(program)?;
+	write_files(&worker_files(&code, &crate::site::program_stem(program))?, &worker_directory(program))
 }
 
 pub fn worker_directory(program: &Path) -> PathBuf {
-	let stem = program.file_stem().map(|stem| stem.to_string_lossy().into_owned()).unwrap_or_default();
-	program.with_file_name(format!("{stem}{WORKER_SUFFIX}"))
+	program.with_file_name(format!("{}{WORKER_SUFFIX}", crate::site::program_stem(program)))
 }
 
 /// `warp deploy [--dev|--dry-run] app.warp`: the Worker built, then deployed by wrangler (or run on this machine)
@@ -112,8 +110,8 @@ fn worker_name(name: &str) -> String {
 /// `warp deploy --hosted app.warp`: the module and its host scripts' names to warp-hosting, which uploads the Worker
 /// warp-<name> into our Cloudflare account; answers its address
 pub fn deploy_hosted(program: &Path) -> Result<String, String> {
-	let code = std::fs::read_to_string(program).map_err(|failure| format!("cannot read {}: {failure}", program.display()))?;
-	let name = worker_name(&program.file_stem().map(|stem| stem.to_string_lossy().into_owned()).unwrap_or_default());
+	let code = crate::site::read_program(program)?;
+	let name = worker_name(&crate::site::program_stem(program));
 	let (module, scripts) = worker_parts(&code)?;
 	let names: Vec<&str> = scripts.iter().map(|(name, _)| *name).collect();
 	let hosting = std::env::var(HOSTING_VARIABLE).unwrap_or_else(|_| HOSTING.to_string());
@@ -131,8 +129,8 @@ pub fn deploy_hosted(program: &Path) -> Result<String, String> {
 
 fn github_token() -> Result<String, String> {
 	if let Ok(token) = std::env::var(HOSTING_TOKEN_VARIABLE) { return Ok(token) }
-	let output = std::process::Command::new("gh").args(["auth", "token"]).output()
-		.map_err(|_| format!("warp-hosting needs a GitHub login: `gh auth login`, or a token in {HOSTING_TOKEN_VARIABLE}"))?;
+	let login_needed = || format!("warp-hosting needs a GitHub login: `gh auth login`, or a token in {HOSTING_TOKEN_VARIABLE}");
+	let output = std::process::Command::new("gh").args(["auth", "token"]).output().map_err(|_| login_needed())?;
 	let token = String::from_utf8_lossy(&output.stdout).trim().to_string();
-	if token.is_empty() { Err(format!("warp-hosting needs a GitHub login: `gh auth login`, or a token in {HOSTING_TOKEN_VARIABLE}")) } else { Ok(token) }
+	if token.is_empty() { Err(login_needed()) } else { Ok(token) }
 }

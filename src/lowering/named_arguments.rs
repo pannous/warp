@@ -4,9 +4,10 @@
 //! where it is called, as the body read it before. A parameter is never taken from a same-named variable: a missing
 //! argument stays an error.
 
+use super::nodes::key;
 use crate::diagnostic::Diagnostic;
 use crate::min_max::{is_plain, with_bindings};
-use crate::node::{Bracket, Node, Separator};
+use crate::node::{symbol, Bracket, Node, Separator};
 use crate::operators::Op;
 use std::collections::{HashMap, HashSet};
 
@@ -14,7 +15,7 @@ use std::collections::{HashMap, HashSet};
 const OPTIONAL_MARK: char = '?';
 const MAYBE_WORD: &str = "maybe";
 /// the arguments computed before a call whose named arguments change their order (P216)
-const TEMPORARY_PREFIX: &str = "named_argument_";
+const TEMPORARY_BASE: [&str; 2] = ["named", "argument"];
 
 struct Function {
 	parameters: Vec<String>,
@@ -51,14 +52,14 @@ fn default_forms(node: Node) -> Node {
 	match node {
 		Node::Key(head, op @ (Op::Define | Op::Assign), body) => {
 			let head = with_parameters(*head, &|parameters| maybe_parameters(parameters).into_iter().map(literal_default).collect());
-			Node::Key(Box::new(head), op, Box::new(default_forms(*body)))
+			key(head, op, default_forms(*body))
 		}
 		other => other.map_children(default_forms),
 	}
 }
 
 fn optional(name: Node) -> Node {
-	Node::Key(Box::new(name), Op::Assign, Box::new(Node::Empty))
+	key(name, Op::Assign, Node::Empty)
 }
 
 fn is_maybe(node: &Node) -> bool {
@@ -104,7 +105,7 @@ fn literal_default(parameter: Node) -> Node {
 		Node::Key(name, Op::Colon, value) if matches!(value.drop_meta(), Node::Number(_) | Node::Text(_) | Node::Char(_) | Node::True | Node::False) => Node::Key(name, Op::Assign, value),
 		// the value may be ø or of the type: it is held boxed, as any value
 		Node::Key(name, Op::Colon, type_name) if type_name.drop_meta().name().ends_with(OPTIONAL_MARK) => optional(*name),
-		Node::Symbol(name) if name.len() > 1 && name.ends_with(OPTIONAL_MARK) => optional(Node::Symbol(name.trim_end_matches(OPTIONAL_MARK).to_string())),
+		Node::Symbol(name) if name.len() > 1 && name.ends_with(OPTIONAL_MARK) => optional(symbol(name.trim_end_matches(OPTIONAL_MARK))),
 		Node::Meta { node, data } => Node::Meta { node: Box::new(literal_default(*node)), data },
 		other => other,
 	}
@@ -149,7 +150,7 @@ fn flag_arguments(node: Node, functions: &HashMap<String, Function>, bound: &Has
 			let is_flag = |name: &String| function.parameters.iter().zip(&function.defaults)
 				.any(|(parameter, default)| parameter == name && matches!(default.as_ref().map(Node::drop_meta), Some(Node::True | Node::False)));
 			let items = items.into_iter().enumerate().map(|(index, item)| match item.drop_meta() {
-				Node::Symbol(name) if index > 0 && is_flag(name) && !bound.contains(name) => Node::Key(Box::new(item.clone()), Op::Colon, Box::new(Node::True)),
+				Node::Symbol(name) if index > 0 && is_flag(name) && !bound.contains(name) => key(item.clone(), Op::Colon, Node::True),
 				_ => flag_arguments(item, functions, bound),
 			}).collect();
 			Node::List(items, Bracket::Round, separator)
@@ -358,7 +359,7 @@ impl Rewrite {
 					None => list,
 				}
 			}
-			Node::Key(left, op, right) => Node::Key(Box::new(self.node(*left)), op, Box::new(self.node(*right))),
+			Node::Key(left, op, right) => key(self.node(*left), op, self.node(*right)),
 			Node::Meta { node, data } => Node::Meta { node: Box::new(self.node(*node)), data },
 			other => other,
 		}
@@ -378,16 +379,16 @@ impl Rewrite {
 			Node::List(items, Bracket::Round, separator) if !items.is_empty() => {
 				let extras = self.functions.get(&items[0].name()).map(|function| function.extras.clone()).unwrap_or_default();
 				let items = items.iter().cloned().chain(extras.into_iter().map(Node::Symbol)).collect();
-				Node::Key(Box::new(Node::List(items, Bracket::Round, separator.clone())), op, Box::new(body))
+				key(Node::List(items, Bracket::Round, separator.clone()), op, body)
 			}
 			Node::Symbol(name) if matches!(body.drop_meta(), Node::List(_, Bracket::Curly, _)) => match self.functions.get(name) {
 				Some(function) if !function.extras.is_empty() => {
 					let items = std::iter::once(Node::Symbol(callable_name(name))).chain(function.extras.iter().cloned().map(Node::Symbol)).collect();
-					Node::Key(Box::new(Node::List(items, Bracket::Round, Separator::None)), Op::Define, Box::new(body))
+					key(Node::List(items, Bracket::Round, Separator::None), Op::Define, body)
 				}
-				_ => Node::Key(Box::new(head), op, Box::new(body)),
+				_ => key(head, op, body),
 			},
-			_ => Node::Key(Box::new(head), op, Box::new(body)),
+			_ => key(head, op, body),
 		}
 	}
 
@@ -418,7 +419,7 @@ impl Rewrite {
 		if !written.is_sorted() {
 			for value in values.iter_mut().filter(|value| !is_effect_free(value)) {
 				let temporary = Node::Symbol(self.temporary());
-				bindings.push(Node::Key(Box::new(temporary.clone()), Op::Assign, Box::new(std::mem::replace(value, temporary))));
+				bindings.push(key(temporary.clone(), Op::Assign, std::mem::replace(value, temporary)));
 			}
 		}
 		let callee = if function.parameters.is_empty() && !function.extras.is_empty() { callable_name(name) } else { name.to_string() };
@@ -428,6 +429,6 @@ impl Rewrite {
 
 	fn temporary(&self) -> String {
 		self.temporaries.set(self.temporaries.get() + 1);
-		format!("{TEMPORARY_PREFIX}{}", self.temporaries.get())
+		crate::library_words::temporary_name(&[TEMPORARY_BASE[0], TEMPORARY_BASE[1], &self.temporaries.get().to_string()])
 	}
 }

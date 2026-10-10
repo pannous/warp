@@ -5,7 +5,8 @@
 //! A call of that function whose arguments, read as values and preposition words, follow the pattern becomes
 //! `name(values…)`. Elsewhere `to` stays a range and `of` a field lookup.
 
-use crate::node::{Bracket, Node, Separator};
+use super::nodes::{call, in_block_as_written, is_assigned_data, is_spaced_call, key, spaced_statement, with_parts_rewritten};
+use crate::node::{symbol, Bracket, Node, Separator};
 use crate::operators::Op;
 use crate::type_name_matching::prepositions_among;
 use std::collections::HashMap;
@@ -54,29 +55,19 @@ pub fn lower(program: Node) -> Node {
 	rewrite(program, &patterns)
 }
 
-fn word(node: &Node) -> Option<&str> {
-	match node.drop_meta() {
-		Node::Symbol(name) => Some(name),
-		_ => None,
-	}
-}
-
 /// Patterns with a preposition: from the parser's mark on a `to` phrase and from spaced definitions `name words… = body`
-fn collect_patterns(node: &Node, patterns: &mut HashMap<String, Vec<Part>>) {
-	node.visit(&mut |part| match part {
-		Node::Key(head, Op::Define | Op::Assign, _) => {
-			if let Some((name, pattern)) = marked_pattern(head) {
-				patterns.insert(name, pattern);
-			}
+/// Every pattern of a name: `to play f:` and `to play f for d:` are two (overloads.rs tells them apart by arity)
+fn collect_patterns(node: &Node, patterns: &mut HashMap<String, Vec<Vec<Part>>>) {
+	node.visit(&mut |part| {
+		let found = match part {
+			Node::Key(head, Op::Define | Op::Assign, _) => marked_pattern(head),
+			Node::List(items, Bracket::None, Separator::Space) => spaced_pattern(items),
+			_ => None,
+		};
+		if let Some((name, pattern)) = found.filter(|(_, pattern)| pattern.iter().any(|part| matches!(part, Part::Word(_)))) {
+			patterns.entry(name).or_default().push(pattern);
 		}
-		Node::List(items, Bracket::None, Separator::Space) => {
-			if let Some((name, pattern)) = spaced_pattern(items) {
-				patterns.insert(name, pattern);
-			}
-		}
-		_ => {}
 	});
-	patterns.retain(|_, pattern| pattern.iter().any(|part| matches!(part, Part::Word(_))));
 }
 
 fn marked_pattern(head: &Node) -> Option<(String, Vec<Part>)> {
@@ -86,16 +77,13 @@ fn marked_pattern(head: &Node) -> Option<(String, Vec<Part>)> {
 		return None;
 	}
 	let Node::List(items, _, _) = node.drop_meta() else { return None };
-	Some((word(items.first()?)?.to_string(), parts_of(&pattern.name())))
+	Some(((items.first()?).symbol_name()?.to_string(), parts_of(&pattern.name())))
 }
 
 /// `square of a number = it*it` parses as the items `square of a (number = it*it)`
 fn spaced_pattern(items: &[Node]) -> Option<(String, Vec<Part>)> {
-	let (name, rest) = items.split_first()?;
-	let (last, middle) = rest.split_last()?;
-	let Node::Key(last_word, Op::Assign | Op::Define, _) = last.drop_meta() else { return None };
-	let words: Vec<&str> = middle.iter().chain(std::iter::once(last_word.as_ref())).map(word).collect::<Option<_>>()?;
-	Some((word(name)?.to_string(), parts_of(&pattern_text(&words, &prepositions_among(&words)))))
+	let (name, words, _) = spaced_statement(items)?;
+	Some((name.symbol_name()?.to_string(), parts_of(&pattern_text(&words, &prepositions_among(&words)))))
 }
 
 /// The arguments of a call as values and preposition words: `1 to 2` parses as the range `1 to 2`, which is two values
@@ -131,42 +119,74 @@ fn matched(arguments: &[Node], pattern: &[Part]) -> Option<Vec<Node>> {
 	Some(values)
 }
 
-fn rewrite(node: Node, patterns: &HashMap<String, Vec<Part>>) -> Node {
+/// `x = f [1] by 5`: an assigned value nests its words in pairs, `[[f, [1]], [by, 5]]`, and `y = add 1 to 2` reads
+/// `(add 1) to 2`; a phrase call reads them flat
+fn assigned_words(value: Node, patterns: &HashMap<String, Vec<Vec<Part>>>) -> Node {
+	// `y = add 1 to 2 == 3` compares the phrase's value
+	if let Node::Key(left, op, right) = value.drop_meta() {
+		if op.is_comparison() {
+			return Node::Key(Box::new(assigned_words(left.as_ref().clone(), patterns)), *op, right.clone());
+		}
+	}
+	let flat = spaced_words(std::slice::from_ref(&value));
+	let Some((head, arguments)) = flat.split_first() else { return value };
+	let calls_a_phrase = head.symbol_name().and_then(|name| patterns.get(name)).is_some_and(|forms| forms.iter().any(|pattern| phrase_call("", arguments, pattern).is_some()));
+	if calls_a_phrase && flat.len() > 1 { Node::List(flat, Bracket::None, Separator::Space) } else { value }
+}
+
+fn spaced_words(items: &[Node]) -> Vec<Node> {
+	items.iter().flat_map(|item| match item.drop_meta() {
+		Node::List(words, Bracket::None, Separator::Space) => spaced_words(words),
+		Node::Key(left, op, right) if op.as_str().chars().all(char::is_alphabetic) => {
+			[spaced_words(std::slice::from_ref(left)), vec![symbol(op.as_str())], spaced_words(std::slice::from_ref(right))].concat()
+		}
+		_ => vec![item.clone()],
+	}).collect()
+}
+
+fn rewrite(node: Node, patterns: &HashMap<String, Vec<Vec<Part>>>) -> Node {
 	match node {
 		Node::List(items, bracket, separator) => {
 			let items: Vec<Node> = items.into_iter().map(|item| rewrite(item, patterns)).collect();
 			let call = match items.split_first() {
 				// a spaced definition (`foo of int = …`) has the shape of a call but defines the phrase
-				Some((head, arguments)) if bracket == Bracket::None && separator == Separator::Space && spaced_pattern(&items).is_none() => {
-					word(head).and_then(|name| patterns.get(name).map(|pattern| (name, pattern))).and_then(|(name, pattern)| {
-						// `square of x is 9`, `add 1 to 2 == 3`: the phrase's slots are nouns (`a number`), the comparison is
-						// about its value (P149)
-						let (mut values, mut compared) = match (matched(arguments, pattern), arguments.split_last().map(|(last, leading)| (last.drop_meta(), leading))) {
-							(Some(values), _) => (values, None),
-							(None, Some((Node::Key(value, op, other), leading))) if op.is_comparison() => {
-								(matched(&[leading, &[value.as_ref().clone()]].concat(), pattern)?, Some((*op, other.clone())))
-							}
-							_ => return None,
-						};
-						if compared.is_none() {
-							if let Some(Node::Key(value, op, other)) = values.last().map(|last| last.drop_meta().clone()).filter(|last| matches!(last, Node::Key(_, op, _) if op.is_comparison())) {
-								*values.last_mut().expect("not empty") = *value;
-								compared = Some((op, other));
-							}
-						}
-						let call = Node::List([vec![Node::Symbol(name.to_string())], values].concat(), Bracket::Round, Separator::None);
-						Some(match compared {
-							Some((op, other)) => Node::Key(Box::new(call), op, other),
-							None => call,
-						})
-					})
+				Some((head, arguments)) if is_spaced_call(&bracket, &separator) && spaced_pattern(&items).is_none() => {
+					let name = head.symbol_name();
+					let call = name.and_then(|name| patterns.get(name)?.iter().find_map(|pattern| phrase_call(name, arguments, pattern)));
+					call.map(|call| in_block_as_written(&bracket, call))
 				}
 				_ => None,
 			};
 			call.unwrap_or(Node::List(items, bracket, separator))
 		}
-		Node::Key(left, op, right) => Node::Key(Box::new(rewrite(*left, patterns)), op, Box::new(rewrite(*right, patterns))),
+		Node::Key(left, Op::Assign, right) if is_assigned_data(&left, &right) => key(*left, Op::Assign, with_parts_rewritten(*right, &mut |part| rewrite(part, patterns))),
+		Node::Key(left, Op::Assign, right) => key(rewrite(*left, patterns), Op::Assign, rewrite(assigned_words(*right, patterns), patterns)),
+		Node::Key(left, op, right) => key(rewrite(*left, patterns), op, rewrite(*right, patterns)),
 		Node::Meta { node, data } => Node::Meta { node: Box::new(rewrite(*node, patterns)), data },
 		other => other,
 	}
+}
+
+/// The call `name(values…)` of arguments that follow the pattern
+fn phrase_call(name: &str, arguments: &[Node], pattern: &[Part]) -> Option<Node> {
+	// `square of x is 9`, `add 1 to 2 == 3`: the phrase's slots are nouns (`a number`), the comparison is about its
+	// value (P149)
+	let (mut values, mut compared) = match (matched(arguments, pattern), arguments.split_last().map(|(last, leading)| (last.drop_meta(), leading))) {
+		(Some(values), _) => (values, None),
+		(None, Some((Node::Key(value, op, other), leading))) if op.is_comparison() => {
+			(matched(&[leading, &[value.as_ref().clone()]].concat(), pattern)?, Some((*op, other.clone())))
+		}
+		_ => return None,
+	};
+	if compared.is_none() {
+		if let Some(Node::Key(value, op, other)) = values.last().map(|last| last.drop_meta().clone()).filter(|last| matches!(last, Node::Key(_, op, _) if op.is_comparison())) {
+			*values.last_mut().expect("not empty") = *value;
+			compared = Some((op, other));
+		}
+	}
+	let call = call(name, values);
+	Some(match compared {
+		Some((op, other)) => Node::Key(Box::new(call), op, other),
+		None => call,
+	})
 }

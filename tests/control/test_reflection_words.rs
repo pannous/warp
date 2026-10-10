@@ -135,3 +135,14 @@ fn a_warp_modules_classes() {
 	is!(&format!("{SHAPES}; shapes.P.methods"), warp::texts(vec!["sq"]));
 	is!(&format!("{SHAPES}; dir(shapes.P)"), warp::texts(vec!["x", "y", "sq"]));
 }
+
+// card reflection-area: `f.dump` is the whole definition as written, to copy and paste (samples/reflection.warp)
+#[test]
+fn a_functions_dump() {
+	is!("area(width: int, height: int) := width * height\narea.dump", "area(width:int, height:int) := width*height");
+	is!("twice(x) := x * 2\ntwice.dump", "twice(x) := x*2");
+	is!("greet(name:text, greeting:text = \"hi\") := greeting + \" \" + name\ngreet.dump", "greet(name:text, greeting:text = \"hi\") := greeting+' '+name");
+	// pasted back, the dump is the same function
+	is!("fib(n) := {if n<2 then { return n }; (fib n-1)+(fib n-2)}\nfib(10)", 55);
+	is!("fib(n) := { if n < 2 { return n }; fib(n-1) + fib(n-2) }\nfib.dump", "fib(n) := {if n<2 then { return n }; (fib n-1)+(fib n-2)}");
+}

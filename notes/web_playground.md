@@ -79,10 +79,18 @@ Markup values show as warp data there (`p{class:"note" "hello"}`), not as HTML l
 - Copies of warp share target/debug/warp: a probe must copy its binary right after building it.
 
 ## The test suite in the browser: `cargo browser-test [filter]`
+In CI only (user, 2026-10-09): outside CI (no `CI` variable) the runner starts no Chrome and prints "browser tests run
+in CI only", exit 0; the tour likewise (`--firefox` and `--serve` start no Chrome). Run them on GitHub: dispatch the
+Playground workflow on a branch. Its job browser-suite runs the whole suite (~27 min: 6 for installing Chrome, ~19 in
+the browser), beside the deploy, so a batch's CI check takes ~27 min instead of ~6 (card browser-suite, 2026-10-09).
+- The job clones each pinned package of packages.warp the way the native fetch does (the browser runs no git).
+- CI's Chrome has SwiftShader's software WebGPU adapter, whose sin and exp are off by up to 5.2e-5 (within WGSL's
+  2^-11): test-worker.js names the adapter as WARP_GPU_ADAPTER, and tests/common gpu_tolerance() loosens the @gpu
+  checks for a software adapter only.
 One configuration (.cargo/config.toml): the alias builds tests/main.rs for wasm32-wasip1 with `--no-default-features`,
 and the wasm32-wasip1 runner web/playground/test_in_browser.py serves the repository root plus the binary, opens
 web/playground/tests.html in headless Chrome (agent-browser, session warp-browser-tests) and prints a libtest summary
-(exit 101 on a failure). `WARP_BROWSER_TEST_WORKERS` (default 2) and `WARP_BROWSER_TEST_PORT` (default: a free port per run; a taken one fails naming its PID) tune it.
+(exit 101 on a failure). `WARP_BROWSER_TEST_WORKERS` (default: the cores), `WARP_BROWSER_TEST_SHARD` (`i/n`: every n-th test from the i-th; pages.yml runs four shards, and on a branch only when it changes src/, tests/, web/ or the build: card browser-suite-speed) and `WARP_BROWSER_TEST_PORT` (default: a free port per run; a taken one fails naming its PID) tune it.
   `WARP_BROWSER_TEST_PER_WORKER` (tests.js TESTS_PER_WORKER, 100) is how many tests a worker runs before it is replaced.
 - Wasm memory (card browser-memory, 2026-10-06): Chrome holds ~124 live Wasm memories per page, all Workers together,
   and an isolate that runs out collects only its own dead instances (probes/wasm_memory_limit.html), so another
@@ -201,6 +209,11 @@ web/playground/tests.html in headless Chrome (agent-browser, session warp-browse
   slow download that progresses is fine) once, with a console warning naming its stage (the verdict still fails:
   loud, not hidden), and a second silent start rejects workerReady naming the stage, so the run fails instead of
   waiting for ever. Probe: trickle_server.py --stall-once + restart.sh (the example shows after ~76 s).
+- Card tour-firefox-stall (2026-10-10, runs 38029627279 and 38030659307, CI tour-firefox, both passed on rerun): the
+  restart fired with stage "downloading warp.wasm", a label that also covered streaming the body, compiling and
+  instantiating (the per-chunk "loading" messages kept no stage). The page now names each: "downloading the compiler:
+  N MB so far", "compiling warp.wasm (N bytes)", "instantiating warp.wasm" (WebAssembly.compile and instantiate apart),
+  so the next stall's console warning says which step hangs.
 
 ## Modules and packages in the browser (2026-10-04)
 The compiler reads files through the page: `warp_host.fetch(address)` / `take_fetched` (web.rs `read_bytes`, cached
@@ -238,7 +251,8 @@ the_strict_flag_turns_warnings_into_errors before).
 - `use lib.wasm` / `use wasm "lib.wasm"` (components.js): build.sh components runs `jco transpile --instantiation sync` on every
   tests/fixtures/components/*.wasm and wraps the result into components/<name>.js, a classic script with the core
   modules as base64 (`registerComponent`); the first call importScripts it, found by the file's name alone (the page has
-  one flat folder of components). WASI p2 is a small shim: output goes to the program's print, no input, no environment.
+  one flat folder of components). Their names go to components/names.txt, which the compiler reads for `use lib` and
+  for the error naming them when a used one is missing (card playground-use). WASI p2 is a small shim: output goes to the program's print, no input, no environment.
   test_in_browser.py runs build.sh components before serving; pages.yml installs jco and ships components/.
 - jco's JavaScript values are turned into the native JSON forms by the WIT types, which build.sh embeds as the
   signatures of the exports (`wasm-tools component wit --json`): camelCase ↔ the WIT's kebab-case names, `{tag, val}` →
@@ -247,6 +261,16 @@ the_strict_flag_turns_warnings_into_errors before).
   names. Still jco's own: the enum check's message ("\"triangle\" is not one of the cases of shape"), and a variant
   argument (an object) is not converted.
   tests/ffi/test_components_anywhere.rs runs in both hosts.
+- A promise (card jspi-page): where the browser has JSPI (WebAssembly.Suspending/promising: Chrome 137+; not
+  Safari) the chain of a playground run is awaited end to end: worker.js calls web_evaluate through `awaitedEntry`
+  (promising), warp_host.run (host-compiler.js warpHost `awaited`) is Suspending and runs main through promising, and
+  foreign_call goes through a 169-byte wasm trampoline (host-foreign.js awaitingCall) that calls the Suspending
+  host.await only when the call gave a promise while main runs (`holder.waiting`): V8 suspends wasm frames only, and a
+  Suspending import suspends even for a plain value, trapping outside promising (probes/jspi_semantics.mjs). The test worker does the
+  same for `_start` and tells the tests WARP_JSPI. Elsewhere the promise is refused ("gives a promise"): without JSPI,
+  in a site/cloud worker run (instantiateProgram without `awaited`), in a page event's handler (after main), and in a
+  warp function JavaScript calls back (V8 refuses to suspend over a JavaScript frame: outcomeOf maps that trap to
+  "cannot wait for"). worker.js handles messages one at a time (`inTurn`) since a waiting run holds the compiler.
 
 ## paint: a canvas in the page (2026-10-06, issue #15)
 `paint(pixels, width, height)` is a host word (src/host.rs PAINT): host.js reads the pixel list and hands it to the
@@ -254,6 +278,9 @@ worker's hooks.paint, the page draws one canvas per call under the output (playg
 is ink, 0 paper). Natively it writes a grayscale PNG to <temp>/warp-paint/paint.png (src/paint.rs, flate2 + crc32fast), prints its path. Run by `warp` itself it shows the frames in a window instead, also from an editor's build or a pipe (card g_gGsg, src/paint_window.rs; PNGs only with WARP_NO_WINDOW or CI set, as tests/common warp_command and tests/queue.sh do, or for warp used as a library): a viewer process `warp paint-window` (winit owns the main thread on macOS, the program runs there) takes them over its stdin and draws them through a wgpu surface (Metal); each paint replaces the frame, the last stays until the window is closed (the playground likewise: a painting the size of the last replaces it at once, sleep or not, card g_oldM). Pixels cross between host and module in one call each way (card g_odW4, src/wasm_emitter/int_lists.rs: ints_to_list for gpu_render, list_to_ints for paint, through scratch memory above the text heap): a 256×256 frame of samples/webgpu went from 43 to 5 ms for gpu_render natively (paint 44 → 1 ms) and from 31 to 7 ms in Chrome (probes/gpu/render_speed.warp, probes/gpu/web_speed.py),, and a viewer that cannot start falls back to the PNG. probes/paint_window.sh checks the surface with `paint-window --check` (center pixel read back). samples/circle.warp is the issue's demo as
 written (one loop moving x and y together, so it paints only a short diagonal), samples/filled_circle.warp the filled
 circle with two loops.
+Prints show as they arrive, like paintings (card print-watch, 2026-10-09): `print "Watch it turn blue."` before a
+slow paint is read while it renders. Only an animation (after its first sleep) holds a text frame back until the next
+one begins (playground.js printedChunk). probes/print_watch.sh.
 
 ### Wasm memory limit across Workers (card browser-test, 2026-10-06)
 Chrome holds ~124 live Wasm memories per page, all its Workers together (V8's sandbox: each 32-bit memory reserves

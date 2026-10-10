@@ -4,8 +4,10 @@ The rules live in notes/roles.md; this folder holds the startup prompts, one per
 way. Proven on 2026-10-03 (about 30 branches merged, suite 1345 → 1525 passed, 0 failed).
 
 ## Start
-1. Supervisor: open Claude Code in /Users/me/dev/angles/warp yourself and say:
-   `Read notes/agents/supervisor.md and act as the supervisor.`
+1. Supervisor: `notes/agents/start.sh supervisor` (tmux warp-supervisor). It must run in that tmux session:
+   ~/dev/bin/urgent-card-watch delivers new urgent cards only there. After a crash, resume the old one into the same
+   tmux name: `FORCE_SPAWN=1 CLAUDE_RESUME=<session id> ~/dev/bin/claude-remote.sh supervisor <repo> "<RESUME prompt>"`.
+   A supervisor opened by hand in a terminal misses the urgent cards.
 2. The supervisor runs `notes/agents/start.sh`. It spawns the long-running services as Remote Control sessions in
    detached tmux and prints each claude.ai/code URL:
    - warp-integrator (merge, full suite, push to main)

@@ -53,6 +53,13 @@ const WASM_MAGIC = [0, 0x61, 0x73, 0x6d];
 const COMPATIBILITY_DATE = "2026-09-01";
 const ALLOWED_ORIGINS = [/^https:\/\/warp\.pannous\.com$/, /^https:\/\/pannous\.github\.io$/, /^http:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/];
 const USER_AGENT = "warp-hosting";
+// a login popup's ticket (deploy.js): GitHub's login page cuts the popup off from the playground (window.opener is null
+// after it), so the playground fetches the login by its ticket, and the popup becomes the deployed program's tab
+const TICKET_PREFIX = "ticket:";
+const TICKET_PATTERN = /^[A-Za-z0-9_-]{22,64}$/;
+const TICKET_SECONDS = 600; // KV keeps a value at least 60 s
+const TICKET_POLL_MS = 1500;
+const PROGRAM_ADDRESS = /^https:\/\/[a-z0-9-]+(\.[a-z0-9-]+)*\.(workers\.dev|lambda\.pannous\.com)\/?$/;
 
 class Refusal extends Error {
 	constructor(status, message) { super(message); this.status = status; }
@@ -111,13 +118,48 @@ function allowedOrigin(origin) {
 	return origin && ALLOWED_ORIGINS.some(pattern => pattern.test(origin)) ? origin : null;
 }
 
-function handOver(origin, message) {
-	// opened directly (not as the playground's popup) the page stays and says who logged in
-	const script = `if (opener) { opener.postMessage(${JSON.stringify(message)}, ${JSON.stringify(origin)}); close(); }`;
+// the login's answer to the playground: by postMessage while the popup still has its opener, always under the ticket;
+// with a ticket the page then waits for the deployed program and turns into its tab
+async function handOver(env, state, message) {
+	const { origin, ticket } = state;
+	if (ticket) await storeTicket(env, ticket, { login: message });
+	const posted = `if (opener) opener.postMessage(${JSON.stringify(message)}, ${JSON.stringify(origin)});`;
+	const waiting = `const status = document.querySelector("p");
+		const wait = async () => {
+			const { program, error } = await (await fetch("/ticket?ticket=${ticket}")).json().catch(() => ({}));
+			if (program) return location.replace(program);
+			if (error) return status.textContent = "Not deployed: " + error;
+			setTimeout(wait, ${TICKET_POLL_MS});
+		};
+		wait();`;
 	const escaped = text => text.replace(/</g, "&lt;");
 	const login = message.warpHosting?.login ? ` as ${escaped(message.warpHosting.login)}` : "";
-	const page = `<!doctype html><meta charset="utf-8"><title>warp hosting</title><p>${message.error ? "Login failed: " + escaped(message.error) : `Logged in${login}, you can close this window.`}</p><script>${script}</script>`;
+	const done = ticket ? "deploying: this window opens the program when it is up." : "you can close this window.";
+	const page = `<!doctype html><meta charset="utf-8"><title>warp hosting</title><p>${message.error ? "Login failed: " + escaped(message.error) : `Logged in${login}, ${done}`}</p><script>${posted}${ticket && !message.error ? waiting : ""}</script>`;
 	return new Response(page, { headers: { "content-type": "text/html; charset=utf-8" } });
+}
+
+function checkedTicket(ticket) {
+	if (!TICKET_PATTERN.test(ticket ?? "")) throw new Refusal(400, "no ticket: ?ticket= of 22 to 64 letters, digits, - and _");
+	return ticket;
+}
+
+async function storeTicket(env, ticket, value) {
+	const stored = JSON.parse(await env.NAMES.get(TICKET_PREFIX + ticket) ?? "{}");
+	await env.NAMES.put(TICKET_PREFIX + ticket, JSON.stringify({ ...stored, ...value }), { expirationTtl: TICKET_SECONDS });
+}
+
+// GET /ticket?ticket=: what the ticket holds, {login, program, error}; POST /ticket?ticket=&program= (or &error=): the
+// playground says where the program went, and the login popup waiting on it goes there
+async function ticketRequest(request, env) {
+	const url = new URL(request.url);
+	const ticket = checkedTicket(url.searchParams.get("ticket"));
+	if (request.method === "GET") return json(JSON.parse(await env.NAMES.get(TICKET_PREFIX + ticket) ?? "{}"));
+	const [program, error] = ["program", "error"].map(field => url.searchParams.get(field));
+	if (program && !PROGRAM_ADDRESS.test(program)) throw new Refusal(400, `${program} is no deployed program's address`);
+	if (!program && !error) throw new Refusal(400, "POST /ticket?ticket=…&program=… or &error=…");
+	await storeTicket(env, ticket, program ? { program } : { error: error.slice(0, 500) });
+	return json({ stored: true });
 }
 
 // the GitHub OAuth app's callback URL is PUBLIC_ORIGIN/callback; Cloudflare's goes below it
@@ -135,15 +177,16 @@ async function startLogin(request, env, provider) {
 	const url = new URL(request.url);
 	const origin = allowedOrigin(url.searchParams.get("origin"));
 	if (!origin) throw new Refusal(400, "origin must be the playground's");
+	const ticket = url.searchParams.has("ticket") ? checkedTicket(url.searchParams.get("ticket")) : undefined;
 	const callback = callbackOf(env, url, provider);
 	if (provider === "github") {
 		if (!env.GITHUB_CLIENT_ID) throw new Refusal(501, "GitHub login is not set up yet (GITHUB_CLIENT_ID, notes/hosting.md)");
-		const state = await signed(env, { origin }, STATE_SECONDS);
+		const state = await signed(env, { origin, ticket }, STATE_SECONDS);
 		return Response.redirect(`${GITHUB_AUTHORIZE}?${new URLSearchParams({ client_id: env.GITHUB_CLIENT_ID, redirect_uri: callback, state, scope: "" })}`, 302);
 	}
 	if (!env.CLOUDFLARE_OAUTH_CLIENT_ID) throw new Refusal(501, "Cloudflare login is not set up yet: paste an API token instead (notes/hosting.md)");
 	const { verifier, challenge } = await pkcePair();
-	const state = await signed(env, { origin, verifier }, STATE_SECONDS);
+	const state = await signed(env, { origin, verifier, ticket }, STATE_SECONDS);
 	return Response.redirect(`${CLOUDFLARE_AUTHORIZE}?${new URLSearchParams({ client_id: env.CLOUDFLARE_OAUTH_CLIENT_ID, redirect_uri: callback,
 		response_type: "code", scope: CLOUDFLARE_SCOPES, state, code_challenge: challenge, code_challenge_method: "S256" })}`, 302);
 }
@@ -153,22 +196,22 @@ async function finishLogin(request, env, provider) {
 	const state = await unsigned(env, url.searchParams.get("state"));
 	if (!state) throw new Refusal(400, "the login took too long or did not start here");
 	const code = url.searchParams.get("code");
-	if (!code) return handOver(state.origin, { error: url.searchParams.get("error_description") ?? url.searchParams.get("error") ?? "no code" });
+	if (!code) return handOver(env, state, { error: url.searchParams.get("error_description") ?? url.searchParams.get("error") ?? "no code" });
 	const callback = callbackOf(env, url, provider);
 	if (provider === "github") {
 		const reply = await fetch(GITHUB_TOKEN, { method: "POST", headers: { accept: "application/json", "user-agent": USER_AGENT },
 			body: new URLSearchParams({ client_id: env.GITHUB_CLIENT_ID, client_secret: env.GITHUB_CLIENT_SECRET, code, redirect_uri: callback }) });
 		const { access_token, error_description } = await reply.json();
-		if (!access_token) return handOver(state.origin, { error: error_description ?? "GitHub gave no token" });
+		if (!access_token) return handOver(env, state, { error: error_description ?? "GitHub gave no token" });
 		const { id, login } = await githubUser(access_token);
-		return handOver(state.origin, { warpHosting: { session: SESSION_PREFIX + await signed(env, { id, login }, SESSION_SECONDS), login } });
+		return handOver(env, state, { warpHosting: { session: SESSION_PREFIX + await signed(env, { id, login }, SESSION_SECONDS), login } });
 	}
 	const form = { grant_type: "authorization_code", client_id: env.CLOUDFLARE_OAUTH_CLIENT_ID, code, redirect_uri: callback, code_verifier: state.verifier };
 	if (env.CLOUDFLARE_OAUTH_CLIENT_SECRET) form.client_secret = env.CLOUDFLARE_OAUTH_CLIENT_SECRET;
 	const reply = await fetch(CLOUDFLARE_TOKEN, { method: "POST", headers: { accept: "application/json" }, body: new URLSearchParams(form) });
 	const { access_token, error_description } = await reply.json();
-	if (!access_token) return handOver(state.origin, { error: error_description ?? "Cloudflare gave no token" });
-	return handOver(state.origin, { warpHosting: { cloudflareToken: access_token } });
+	if (!access_token) return handOver(env, state, { error: error_description ?? "Cloudflare gave no token" });
+	return handOver(env, state, { warpHosting: { cloudflareToken: access_token } });
 }
 
 // ---- Cloudflare: one script per program ------------------------------------------------------------------------
@@ -231,7 +274,7 @@ async function claim(env, name, owner) {
 	const holder = await env.NAMES.get(name);
 	if (holder && holder !== String(owner.id)) throw new Refusal(409, `${name} belongs to someone else: choose another name`);
 	if (holder) return;
-	const { keys } = await env.NAMES.list();
+	const keys = (await env.NAMES.list()).keys.filter(key => !key.name.startsWith(TICKET_PREFIX));
 	if (keys.length >= Number(env.MAX_PROGRAMS)) throw new Refusal(507, "warp-hosting is full for now: deploy to your own Cloudflare account");
 	const own = keys.filter(key => key.metadata?.owner === String(owner.id)).map(key => key.name);
 	if (own.length >= Number(env.MAX_PROGRAMS_PER_USER)) throw new Refusal(429, `you host ${own.join(", ")} already, ${env.MAX_PROGRAMS_PER_USER} at most: redeploy one of those names or remove one (DELETE /deploy?name=…)`);
@@ -276,6 +319,7 @@ async function route(request, env) {
 	const callback = url.pathname.match(/^\/callback(?:\/(cloudflare))?$/);
 	if (callback) return finishLogin(request, env, callback[1] ?? "github");
 	if (url.pathname === "/me") return json(await user(request, env));
+	if (url.pathname === "/ticket") return ticketRequest(request, env);
 	if (url.pathname === "/deploy") {
 		const name = checkedName(url.searchParams.get("name"));
 		if (request.method === "DELETE") return undeploy(request, env, name);
