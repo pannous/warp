@@ -2864,6 +2864,10 @@ PASSED:
   ✓ programs::test_kitchensink::test_kitchensink_all_node_types
   ✓ programs::test_kitchensink::test_kitchensink_complex_tree
   ✓ programs::test_kitchensink::test_kitchensink_wasmtime_execution
+  ✓ programs::test_music_values::a_frequency_reads_as_its_note
+  ✓ programs::test_music_values::chords_and_scales_are_lists_of_notes
+  ✓ programs::test_music_values::the_tuning_tunes_every_note
+  ✓ programs::test_music_values::transposing_moves_notes_by_semitones
   ✓ programs::test_paint_lists::paint_of_too_few_ints_fails
   ✓ programs::test_paint_lists::paint_reads_ints_from_a_built_list
   ✓ programs::test_paint_lists::paint_reads_other_pixels_node_by_node
@@ -4591,4 +4595,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-10 ignored, 4586 passed, 0 failed, 4586 total tested
+10 ignored, 4590 passed, 0 failed, 4590 total tested
