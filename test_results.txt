@@ -2793,6 +2793,8 @@ PASSED:
   ✓ programs::test_sound_files::a_broken_music_file_fails
   ✓ programs::test_sound_files::a_music_file_plays_in_the_background
   ✓ programs::test_sound_files::only_a_music_file_plays
+  ✓ programs::test_sound_handles::play_gives_the_sounds_handle
+  ✓ programs::test_sound_handles::stop_sound_stops_one_sound
   ✓ programs::test_sound_render::a_render_takes_the_sounds_after_the_last_one
   ✓ programs::test_sound_render::sounds_render_into_one_wav_file
   ✓ programs::test_sound_wavs::each_run_writes_wavs_of_its_own
@@ -4355,4 +4357,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-10 ignored, 4350 passed, 0 failed, 4350 total tested
+10 ignored, 4352 passed, 0 failed, 4352 total tested
