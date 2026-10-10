@@ -78,9 +78,14 @@ The words above are layer 1, the toy layer. Each layer below keeps the ones abov
    module's `tempo` (beats per minute, 120) and `beats_per_bar` (4), anywhere in a program that uses sound: the
    amount is the item before the word, of an assignment its value (src/lowering/music_words.rs → lib beat_seconds,
    bar_seconds; tests/programs/test_sound_tempo.rs). Not units of the static unit checker: a beat is no SI time.
+   Voices built (step 5, 2026-10-10, samples/voices.warp): every task (`go { }`) is a voice. It forks its starter's
+   place in time (src/sound.rs Voice, joined in src/tasks.rs spawn), so a task's notes sound along with the
+   starter's instead of after them; each queued sound plays from its own sleeping thread (overlapping players, the OS
+   mixes), and render_sound mixes the sounds at their logical places (tests/programs/test_sound_voices.rs).
+   LIMIT, browser: playground.js playSound still queues every sound after the last one, so in the Playground task
+   voices play one after another (card playground-go).
    Still to build:
-   Expected: a shared audio clock, sample-accurate scheduling (`at 2 beats play C4`), ramping a handle's gain, voices
-   overlap.
+   Expected: a shared audio clock, sample-accurate scheduling (`at 2 beats play C4`), ramping a handle's gain.
 2. Note names built (2026-10-10): parsed, not a table: a letter A–G, `#`/`♯` or `b`/`♭`, an octave 0–9 is its
    equal-tempered frequency to a hundredth of a Hz (A4 = 440), when the program uses sound and doesn't define that
    name; `F#4` parses as `F # 4` and counts as the note unless the program defines `F` (music_words.rs; the parser
