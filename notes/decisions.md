@@ -6,7 +6,15 @@ before asking the user; nobody reads it front to back, the code, tests and wiki 
 "notes/open_decisions.md" + a Decided section, P-, D- or #-numbers mean this file. Open and parked questions:
 notes/open_decisions.md.
 
-## Decided 2026-10-10 (user, via warp-supervisor)
+## Decided 2026-10-10 (user; via warp-supervisor or the Interviewer)
+- P238 (warp-fixer, card generators-function): a plain generator call collects the list: `count_to(3)` is [1 2 3],
+  `sum(count_to(4))` is 10. `iter(count_to(3))` or `next` on a variable holding it gives the lazy object; a `for`
+  over it runs lazily. As implemented.
+- let-comma (warp-types): `let a, b = 3, 4` (also var/const) unpacks: a = 3, b = 4, as the undeclared `a, b = 3, 4`.
+  As implemented.
+- P239 (warp-class, cards lambda-def, unbound-lambda): in a lambda naming its parameter, `it` is the surrounding
+  code's `it`: `scale := [1 2].map(x => x * it); scale 3` is [3 6]; with no outer `it`, `[1 2].map(x => it)` is
+  the error "undefined variable: it". As implemented.
 - P240 (warp-web, card gpu-auto; revises P214): GPU calculations are imprecise by design (f32), and the user is told
   so. Heavy maps of linear float arrays switch to the GPU automatically from 10× the measured break-even
   (GPU_AUTO_MIN_COUNT), with a one-time run-time notice; `@cpu` (a map, block, function or program) and
