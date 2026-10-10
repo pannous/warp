@@ -155,6 +155,7 @@ PASSED:
   ✓ control::test_each_colon::each_and_all_with_a_colon_walk_the_list
   ✓ control::test_emit_operands::an_emit_is_an_operand
   ✓ control::test_emit_operands::an_emitted_value_is_the_handlers_number
+  ✓ control::test_emit_operands::ask_is_an_emit_operand
   ✓ control::test_empty_block_binding::a_bound_empty_block_counts_zero
   ✓ control::test_empty_block_binding::an_empty_block_can_be_bound
   ✓ control::test_empty_block::a_program_that_is_only_an_empty_block_is_empty
@@ -170,6 +171,7 @@ PASSED:
   ✓ control::test_error_branch_kind::test_try_catches_an_error_branch
   ✓ control::test_error_value_return::test_a_returned_error_raises_where_used_as_a_number
   ✓ control::test_error_value_return::test_a_returned_error_stays_a_value
+  ✓ control::test_error_values::a_stored_error_fails_when_an_operation_runs_on_it
   ✓ control::test_error_values::an_error_has_a_message
   ✓ control::test_error_values::is_error_tests_any_value
   ✓ control::test_error_values::printing_an_error_prints_its_message
@@ -224,6 +226,7 @@ PASSED:
   ✓ control::test_for_forms::print_of_a_call_without_parentheses_in_an_if_branch
   ✓ control::test_for_forms::print_with_commas_in_a_loop_body
   ✓ control::test_for_forms::print_with_commas_in_an_if_branch
+  ✓ control::test_for_forms::the_loop_variable_name_picks_the_text_unit
   ✓ control::test_for_implicit_it::a_colon_body_is_the_rest_of_the_line
   ✓ control::test_for_implicit_it::a_for_loop_without_a_variable_walks_it
   ✓ control::test_for_it::a_symbol_prints_its_name
@@ -868,10 +871,12 @@ PASSED:
   ✓ functions::test_alias_definition::an_assigned_bare_name_stays_the_error
   ✓ functions::test_all_calls::a_function_applied_to_all_items
   ✓ functions::test_all_calls::a_list_built_by_appending_broadcasts
+  ✓ functions::test_all_calls::a_singular_name_walks_its_plural_list
   ✓ functions::test_all_calls::all_over_nested_lists_broadcasts_again
   ✓ functions::test_all_calls::an_untyped_call_next_to_a_comparison_is_ambiguous
   ✓ functions::test_all_calls::broadcasting_compares_as_a_list
   ✓ functions::test_all_calls::every_definition_form_reads_a_comparison_alike
+  ✓ functions::test_all_calls::print_each_friend
   ✓ functions::test_analysis_memo::test_a_changed_tree_is_analysed_anew
   ✓ functions::test_analysis_memo::test_an_analysis_that_says_something_runs_again
   ✓ functions::test_analysis_memo::test_the_same_tree_is_analysed_once
@@ -928,6 +933,7 @@ PASSED:
   ✓ functions::test_broadcasting::test_operators_do_not_broadcast
   ✓ functions::test_broadcasting::test_scalar_calls_and_list_functions_do_not_broadcast
   ✓ functions::test_builtin_clash::a_cast_cannot_name_a_function
+  ✓ functions::test_builtin_clash::a_function_keyword_names_an_infix_word
   ✓ functions::test_builtin_clash::an_operator_word_cannot_name_a_function
   ✓ functions::test_builtin_clash::library_words_stay_redefinable
   ✓ functions::test_c_style_definitions::a_result_type_before_the_name_defines_a_function
@@ -1266,6 +1272,8 @@ PASSED:
   ✓ functions::test_parameter_codepoint_calls::a_character_literal_argument_agrees_with_a_text_argument
   ✓ functions::test_parameter_codepoint_calls::a_character_literal_argument_and_an_int_argument_make_it_any
   ✓ functions::test_parameter_overloads::a_call_takes_the_variant_its_arguments_fit
+  ✓ functions::test_parameter_overloads::a_phrase_call_in_parentheses_takes_its_variant
+  ✓ functions::test_parameter_overloads::a_similarity_compares_the_phrase_calls_value
   ✓ functions::test_parameter_overloads::an_argument_of_unknown_type_is_an_error
   ✓ functions::test_parameter_overloads::an_int_widens_to_a_float_variant
   ✓ functions::test_parameter_retype::a_parameter_given_another_kind_in_its_body_holds_it
@@ -1517,6 +1525,9 @@ PASSED:
   ✓ lists::test_for_where::a_loop_over_the_elements_a_condition_keeps
   ✓ lists::test_fractional_count::a_fractional_count_in_a_variable_is_an_error
   ✓ lists::test_fractional_count::a_whole_count_in_a_variable_repeats
+  ✓ lists::test_function_maps::a_map_local_stays_in_its_function
+  ✓ lists::test_function_maps::a_map_of_main_is_one_in_a_function
+  ✓ lists::test_function_maps::a_parameter_is_not_main_s_map
   ✓ lists::test_generated_name_hints::comprehension_and_where_give_no_hint_about_their_list
   ✓ lists::test_global_comprehension::a_function_writes_a_float_into_a_global_list
   ✓ lists::test_global_comprehension::a_global_comprehension_list_takes_writes
@@ -2331,6 +2342,7 @@ PASSED:
   ✓ numbers::test_unbounded_int::test_comparisons_across_small_and_big
   ✓ numbers::test_unbounded_int::test_factorial_and_fib_stay_exact
   ✓ numbers::test_unbounded_int::test_i64_opt_out_wraps
+  ✓ numbers::test_unbounded_int::test_multi_limb_division_is_fast_and_exact
   ✓ numbers::test_unbounded_int::test_overflow_promotes_add_sub
   ✓ numbers::test_unbounded_int::test_overflow_promotes_mul
   ✓ numbers::test_unbounded_int::test_overflow_promotes_neg_abs
@@ -2895,12 +2907,25 @@ PASSED:
   ✓ programs::test_sound_files::only_a_music_file_plays
   ✓ programs::test_sound_handles::play_gives_the_sounds_handle
   ✓ programs::test_sound_handles::stop_sound_stops_one_sound
+  ✓ programs::test_sound_notes::a_variable_named_like_a_note_is_the_variable
+  ✓ programs::test_sound_notes::every_octave_is_a_note
+  ✓ programs::test_sound_notes::sharps_and_flats_are_notes
   ✓ programs::test_sound_render::a_render_takes_the_sounds_after_the_last_one
   ✓ programs::test_sound_render::sounds_render_into_one_wav_file
   ✓ programs::test_sound_spectrum::a_tone_fills_its_own_band
   ✓ programs::test_sound_spectrum::silence_and_the_end_are_empty
   ✓ programs::test_sound_spectrum::the_gpu_visualizer_raymarches_while_it_plays
   ✓ programs::test_sound_spectrum::the_visualizer_paints_while_it_plays
+  ✓ programs::test_sound_synth::gain_in_decibels
+  ✓ programs::test_sound_synth::noise_is_a_wave
+  ✓ programs::test_sound_synth::the_envelope_rises_decays_sustains_and_releases
+  ✓ programs::test_sound_tempo::a_beat_is_a_share_of_a_minute
+  ✓ programs::test_sound_tempo::notes_last_beats
+  ✓ programs::test_sound_tempo::the_program_sets_the_modules_settings
+  ✓ programs::test_sound_tempo::the_tempo_sets_the_beat
+  ✓ programs::test_sound_voices::a_task_is_a_voice_that_sounds_along
+  ✓ programs::test_sound_voices::a_voice_starts_where_its_starter_stands
+  ✓ programs::test_sound_voices::voices_add_up
   ✓ programs::test_sound_wavs::each_run_writes_wavs_of_its_own
   ✓ programs::test_sound::a_melody_is_its_notes_one_after_another
   ✓ programs::test_sound::notes_are_frequencies
@@ -2964,6 +2989,7 @@ PASSED:
   ✓ scope::test_prefixed_declarations::a_fitting_value_is_accepted_with_a_prefixed_type
   ✓ scope::test_prefixed_declarations::a_value_of_the_wrong_kind_is_refused_with_a_prefixed_type
   ✓ scope::test_result_word::a_program_may_name_its_own_result
+  ✓ scope::test_result_word::result_after_a_print_is_the_printed_value
   ✓ scope::test_result_word::result_is_the_value_of_the_statement_before
   ✓ scope::test_several_globals::a_block_declares_several_globals
   ✓ scope::test_several_globals::global_names_several_variables
@@ -3206,6 +3232,7 @@ PASSED:
   ✓ types::test_bool_type::a_bool_of_unknown_static_type_is_tested_at_run_time
   ✓ types::test_bool_type::a_list_starting_with_a_bool_is_a_list
   ✓ types::test_bool_type::a_literal_bool_counts_in_arithmetic
+  ✓ types::test_bool_type::a_parameter_given_bools_keeps_them
   ✓ types::test_bool_type::an_exact_comparison_prints_as_bool
   ✓ types::test_bool_type::strict_equality_compares_the_full_type
   ✓ types::test_bool_type::test_bool_acts_as_one_or_zero
@@ -3564,6 +3591,9 @@ PASSED:
   ✓ types::test_sum_types::variants_are_the_sum_type
   ✓ types::test_sum_types::variants_on_their_own_lines
   ✓ types::test_sum_types::variants_with_several_or_named_fields
+  ✓ types::test_symbolism_object::test_block_entry_runs_only_at_bang
+  ✓ types::test_symbolism_object::test_markup_content_stays_an_element
+  ✓ types::test_symbolism_object::test_tagged_object_keeps_value_entries
   ✓ types::test_tagged_objects::a_field_of_a_tagged_object_is_read_from_its_fields
   ✓ types::test_tagged_objects::a_static_counts_constructions_in_the_value_block
   ✓ types::test_text_as_number::a_literal_text_as_number_is_its_number_in_a_variable_too
@@ -3903,6 +3933,9 @@ PASSED:
   ✓ web::test_completion_terse::a_continuation_is_one_line_unless_it_opens_a_block
   ✓ web::test_completion_terse::an_explaining_answer_shows_only_its_code
   ✓ web::test_completion_terse::comments_only_inside_a_comment
+  ✓ web::test_completion_words::claude_reads_the_whole_program_unless_it_is_too_long
+  ✓ web::test_completion_words::enter_after_a_whole_word_is_a_new_line
+  ✓ web::test_completion_words::the_programs_own_words_come_first
   ✓ web::test_components::a_component_is_a_function_returning_markup
   ✓ web::test_components::a_trailing_block_fills_a_function_parameter
   ✓ web::test_components::each_instance_of_a_component_has_its_own_state
@@ -4070,6 +4103,8 @@ PASSED:
   ✓ web::test_tag_lists::a_tag_of_one_value_stays_one_tag
   ✓ web::test_tag_lists::a_tag_over_a_list_literal
   ✓ web::test_tag_lists::a_tag_over_all_items_of_a_list
+  ✓ web::test_task_voices::a_task_starts_where_its_starter_stands
+  ✓ web::test_task_voices::the_starter_does_not_queue_behind_its_task
   ✓ web::test_transitions::a_keyed_item_keeps_its_transition
   ✓ web::test_transitions::a_style_transition_is_css
   ✓ web::test_transitions::a_transition_ends_before_the_children
@@ -4138,6 +4173,8 @@ PASSED:
   ✓ welcoming::test_advice_fixes::a_block_assignment_offers_global_at_main
   ✓ welcoming::test_advice_fixes::advice_without_a_replacement_offers_no_fix
   ✓ welcoming::test_advice_fixes::then_after_a_comparison_offers_the_pipe
+  ✓ welcoming::test_and_or_got_it::a_truthy_literal_in_the_middle_needs_no_warning
+  ✓ welcoming::test_and_or_got_it::the_and_or_warning_stays_away_once_acknowledged
   ✓ welcoming::test_braceless_call_argument::a_plain_braceless_argument_does_not_warn
   ✓ welcoming::test_braceless_call_argument::an_operator_in_a_braceless_argument_warns_with_both_readings
   ✓ welcoming::test_c_style::test_c_style_definition
@@ -4524,4 +4561,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-10 ignored, 4519 passed, 0 failed, 4519 total tested
+10 ignored, 4556 passed, 0 failed, 4556 total tested
