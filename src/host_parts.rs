@@ -3,7 +3,7 @@
 //! (src/deploy.rs) ship their texts; the playground's Deploy (src/web.rs web_worker_bundle) only names them for
 //! warp-hosting, so the wasm32 compiler carries the names without the texts.
 
-use crate::host::{FETCH_REPLY, FETCH_START, FOREIGN_CALL, GPU_COMPUTE, GPU_COMPUTE_LINEAR, GPU_MAP_LINEAR, GPU_REDUCE_LINEAR, GPU_RENDER, HOST_LIBRARY, PAGE_PATH, RUN_BLOCK, SIGNAL_SEND, STD_IO, STD_PURE};
+use crate::host::{FETCH_REPLY, FETCH_START, FOREIGN_CALL, GPU_COMPUTE, GPU_COMPUTE_LINEAR, GPU_MAP_LINEAR, GPU_REDUCE_LINEAR, GPU_RENDER, HOST_LIBRARY, PAGE_PATH, PAINT, RUN_BLOCK, SIGNAL_SEND, STD_IO, STD_PURE};
 use crate::node::Node;
 use warp_runtime::host_words::{RANDOM, RANDOM_BELOW, RANDOM_SEED, SIGNAL_AT, SIGNAL_DAILY, SIGNAL_EVERY};
 
@@ -11,6 +11,8 @@ use warp_runtime::host_words::{RANDOM, RANDOM_BELOW, RANDOM_SEED, SIGNAL_AT, SIG
 pub type Script = (&'static str, &'static str);
 pub const WASI_LIBRARY: &str = "wasi_snapshot_preview1";
 pub const TASK_WORD_PREFIXES: [&str; 3] = ["task_", "channel_", "shared_"];
+/// The words of WebGPU, which answers asynchronously: their jobs run on a task Worker (host-gpu.js)
+pub const GPU_WORDS: [&str; 5] = [GPU_COMPUTE, GPU_COMPUTE_LINEAR, GPU_MAP_LINEAR, GPU_REDUCE_LINEAR, GPU_RENDER];
 
 /// The text of web/playground scripts, joined; empty without the native feature, where only the names are needed
 #[cfg(feature = "native")]
@@ -54,7 +56,8 @@ pub const HOST_PARTS: [HostPart; 9] = [
 	},
 	HostPart { script: ("host-compiler.js", script_text!("host-compiler.js")), gives: |module, name| module == HOST_LIBRARY && name == RUN_BLOCK, needs: &["host-files.js"] },
 	HostPart { script: ("host-routes.js", script_text!("imports.js", "host-routes.js")), gives: |module, name| module == HOST_LIBRARY && name == PAGE_PATH, needs: &[] },
-	HostPart { script: ("host-gpu.js", script_text!("host-gpu.js")), gives: |module, name| module == HOST_LIBRARY && [GPU_COMPUTE, GPU_COMPUTE_LINEAR, GPU_MAP_LINEAR, GPU_REDUCE_LINEAR, GPU_RENDER].contains(&name), needs: &["host-tasks.js"] },
+	// paint may be given a shader (P234), which renders on the GPU (host.js paint, holder.gpuRendered)
+	HostPart { script: ("host-gpu.js", script_text!("host-gpu.js")), gives: |module, name| module == HOST_LIBRARY && (GPU_WORDS.contains(&name) || name == PAINT), needs: &["host-tasks.js"] },
 	HostPart { script: ("host-timers.js", script_text!("host-timers.js")), gives: |module, name| module == HOST_LIBRARY && [SIGNAL_EVERY, SIGNAL_DAILY, SIGNAL_AT].contains(&name), needs: &[] },
 	HostPart { script: ("host-random.js", script_text!("host-random.js")), gives: |module, name| module == HOST_LIBRARY && [RANDOM, RANDOM_BELOW, RANDOM_SEED].contains(&name), needs: &[] },
 ];

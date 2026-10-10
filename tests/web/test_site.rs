@@ -97,3 +97,16 @@ fn a_painting_site_runs_in_a_worker_with_its_canvas() {
 	assert!(!warp::site::build(COUNTER, "counter", &directory).unwrap().files.contains(&"canvas.js".to_string()));
 	std::fs::remove_dir_all(directory).unwrap();
 }
+
+// card site-gpu: WebGPU answers asynchronously, so its jobs run on the task Workers: a site using the GPU, or painting
+// (paint may be given a shader), ships host-gpu.js with host-tasks.js and runs its program in the Worker
+#[test]
+fn a_site_using_the_gpu_runs_in_a_worker_with_the_gpu_part() {
+	let directory = scratch_directory("gpu-site");
+	let shader = "@fragment fn main(@builtin(position) at: vec4f) -> @location(0) vec4f { return vec4f(1, 0, 0, 1); }";
+	// rendered on a click, not at build time, which needs no adapter
+	let program = format!("div{{ button{{ on click {{ gpu_render(\"{shader}\", 2, 2) }} \"render\" }} }}");
+	let files = warp::site::build(&program, "gpu", &directory).expect("the site is built").files;
+	std::fs::remove_dir_all(directory).unwrap();
+	assert!(["host-gpu.js", "host-tasks.js", "site-worker.js"].iter().all(|part| files.iter().any(|file| file == part)), "{files:?}");
+}
