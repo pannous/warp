@@ -25,10 +25,10 @@ def one_load(url):
 	runner.open_page(url)
 	stages = [["(opening)", began]]
 	while time.time() - began < STALL_SECONDS:
-		current = state() or {"worker": "no playground yet", "ready": False}
+		current = state() or {"worker": "no playground yet", "ready": "no"}
 		if not stages or stages[-1][0] != current["worker"]:
 			stages.append([current["worker"], time.time()])
-		if current["ready"]:
+		if current["ready"] == "ready":  # playground.state: "starting", "ready" or "failed: …"
 			return durations(stages + [["ready", time.time()]]), True
 		time.sleep(POLL_SECONDS)
 	return durations(stages + [["(gave up)", time.time()]]), False
