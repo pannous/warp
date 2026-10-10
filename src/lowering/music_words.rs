@@ -6,6 +6,8 @@
 //! Parsed, not looked up in a table, so every octave and accidental works. `F#4` reads as `F # 4` (indexing); a
 //! single note letter that the program does not define is no list, so there it is the note. A variable or function the
 //! program names like a note (`A4 = 3`) keeps its meaning. Runs before modules::resolve, while the program is its own.
+//! Scheduling (card sample-accurate): `at 2 beats play C4`, `at 1 bar { … }` is the statement between lib/sound.warp
+//! sound_at(time) and sound_at_end(): its sounds start at that time on the voice, the voice then goes on where it stood.
 
 use super::nodes::call;
 use crate::node::{float, Node};
@@ -24,13 +26,22 @@ const FLATS: [&str; 2] = ["b", "♭"];
 const UNIT_WORDS: [(&str, &str); 5] = [("beat", "beat_seconds"), ("beats", "beat_seconds"), ("bar", "bar_seconds"), ("bars", "bar_seconds"), ("dB", "decibels")];
 /// note frequencies are kept to a hundredth of a Hz, as written in tables (C4 = 261.63)
 const HERTZ_DIGITS: f64 = 100.0;
+const AT_WORD: &str = "at";
+const AT_CALL: &str = "sound_at";
+const AT_END_CALL: &str = "sound_at_end";
 
 pub fn lower(program: Node) -> Node {
 	if !crate::modules::uses_sound(&program) {
 		return program;
 	}
 	let defined = defined_names(&program);
-	with_music_words(program, &defined)
+	match with_music_words(program, &defined) {
+		Node::List(statements, bracket, separator) if separator.separates_statements() => Node::List(with_scheduled(statements, &defined), bracket, separator),
+		statement => match scheduled(&statement, &defined) {
+			Some(statements) => Node::List(statements, crate::node::Bracket::None, crate::node::Separator::Newline),
+			None => statement,
+		},
+	}
 }
 
 fn with_music_words(node: Node, defined: &HashSet<String>) -> Node {
@@ -42,6 +53,7 @@ fn with_music_words(node: Node, defined: &HashSet<String>) -> Node {
 	}
 	match node.map_children(|child| with_music_words(child, defined)) {
 		Node::List(items, bracket, separator) if !separator.separates_statements() => Node::List(with_unit_words(items, defined), bracket, separator),
+		Node::List(statements, bracket, separator) => Node::List(with_scheduled(statements, defined), bracket, separator),
 		other => other,
 	}
 }
@@ -57,6 +69,28 @@ fn glued_unit(node: &Node, defined: &HashSet<String>) -> Option<(&'static str, N
 		}
 		_ => None,
 	}
+}
+
+fn with_scheduled(statements: Vec<Node>, defined: &HashSet<String>) -> Vec<Node> {
+	statements.into_iter().flat_map(|statement| scheduled(&statement, defined).unwrap_or_else(|| vec![statement])).collect()
+}
+
+/// `at 2 beats play C4` → `sound_at(beat_seconds(2))`, `play C4`, `sound_at_end()`; a block's statements in place
+fn scheduled(statement: &Node, defined: &HashSet<String>) -> Option<Vec<Node>> {
+	let Node::List(items, _, separator) = statement.drop_meta() else { return None };
+	let [at, time, action @ ..] = items.as_slice() else { return None };
+	if separator.separates_statements() || action.is_empty() || defined.contains(AT_WORD) || !at.is_symbol(AT_WORD) {
+		return None;
+	}
+	let actions = match action {
+		[block] => match block.drop_meta() {
+			Node::List(statements, crate::node::Bracket::Curly, inner) if inner.separates_statements() || statements.len() == 1 => statements.clone(),
+			Node::List(words, crate::node::Bracket::Curly, inner) => vec![Node::List(words.clone(), crate::node::Bracket::None, inner.clone())],
+			single => vec![single.clone()],
+		},
+		_ => vec![Node::List(action.to_vec(), crate::node::Bracket::None, separator.clone())],
+	};
+	Some([call(AT_CALL, vec![time.clone()])].into_iter().chain(actions).chain([call(AT_END_CALL, vec![])]).collect())
 }
 
 /// `[for, 1/4, beat]` → `[for, beat_seconds(1/4)]`; `[x = 2, bars]` → `[x = bar_seconds(2)]`

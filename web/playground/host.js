@@ -217,8 +217,9 @@ function programImports(holder, hooks) {
 			// render_sound writes them, played or not, into a WAV (host-files.js STD_ADAPTERS.sound.render)
 			sound_samples: (samples, count, rate) => {
 				const values = intsOfList(program(), samples, Number(count)) ?? plainOfTree(readNode(program(), samples));
-				(holder.run.unrenderedSounds ??= []).push({ samples: values, rate: Number(rate), place: self.voiceSounded?.(values.length / Number(rate)) });
-				hooks.sound?.(values, Number(rate));
+				const { place, at } = self.voiceSounded?.(values.length / Number(rate)) ?? {};
+				(holder.run.unrenderedSounds ??= []).push({ samples: values, rate: Number(rate), place });
+				hooks.sound?.(values, Number(rate), at);
 			},
 			...Object.assign({}, ...eachHostPart("words", holder, hooks, access)),
 		},
@@ -411,6 +412,7 @@ function instantiateProgram(bytes, hooks, compiled, awaited = false) {
 	try {
 		const module = compiled ?? new WebAssembly.Module(bytes);
 		holder.run = { module, bytes };
+		self.joinVoice?.(); // a program's sounds start now on a fresh voice, not behind an earlier run's (host-tasks.js)
 		eachHostPart("started", holder.run);
 		holder.exports = new WebAssembly.Instance(holder.run.module, programImports(holder, hooks)).exports;
 		hooks.instantiated?.(holder);

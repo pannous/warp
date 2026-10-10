@@ -1,5 +1,6 @@
 //! The small node forms many lowering passes build and test: a call of a word, a word
 
+use super::words::{FOR_WORD, IN_WORD};
 use crate::node::{Bracket, Node, Separator};
 use crate::operators::Op;
 use std::cell::Cell;
@@ -62,6 +63,14 @@ pub(crate) fn block(statements: Vec<Node>) -> Node {
 
 pub(crate) fn is_block(node: &Node) -> bool {
 	matches!(node.drop_meta(), Node::List(_, Bracket::Curly, _))
+}
+
+/// The words `for i in …` of a loop: i
+pub(crate) fn for_in_variable(items: &[Node]) -> Option<String> {
+	match items {
+		[keyword, variable, within, ..] if keyword.is_symbol(FOR_WORD) && within.is_symbol(IN_WORD) => variable.symbol_name().map(String::from),
+		_ => None,
+	}
 }
 
 /// `if condition then body`

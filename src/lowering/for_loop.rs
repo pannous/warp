@@ -5,7 +5,7 @@
 //! `for x in xs body`   → `items=xs; index=0; while index<#items {x=items#(index+1); body; index++}`
 //! `for(init;test;step){body}` → `init; while test {body; step}`
 
-use super::nodes::{block, call, int, key, statement_list, symbol};
+use super::nodes::{block, call, for_in_variable, int, key, statement_list, symbol};
 use crate::node::{Bracket, Node, Separator};
 use crate::operators::Op;
 use crate::wasm_emitter::{is_step, mark_step};
@@ -50,11 +50,7 @@ pub fn lower(node: Node) -> Result<Node, Node> {
 pub(crate) fn loop_variables(body: &Node) -> Vec<String> {
 	let mut variables = vec![];
 	body.visit(&mut |part| if let Node::List(items, _, _) = part {
-		if let [keyword, Node::Symbol(variable), within, ..] = items.iter().map(Node::drop_meta).collect::<Vec<_>>().as_slice() {
-			if keyword.is_symbol(FOR_KEYWORD) && within.is_symbol(IN_KEYWORD) {
-				variables.push(variable.clone());
-			}
-		}
+		variables.extend(for_in_variable(items));
 		for step in items.iter().filter(|item| is_step(item)) {
 			if let Node::Key(counter, Op::Inc, _) = step.drop_meta() {
 				let counter = counter.name();
