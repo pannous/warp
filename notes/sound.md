@@ -139,6 +139,18 @@ The words above are layer 1, the toy layer. Each layer below keeps the ones abov
 
 Order of value: 1 + 5 (handles, clock, offline render) first, they change the architecture; then 2, 3, 4; 8 last.
 
+## Patterns and live loops (card patterns-live, samples/patterns.warp, tests/programs/test_sound_patterns.rs)
+Layer 6 built on the beat clock, in plain warp (lib/sound.warp), so the playground runs it too:
+`pattern "c4 e4 [g4 b4]*2 ~"` is one cycle (a bar, or `for 2 bars`) of steps sharing the cycle's seconds: `~` rest, `[ ]` a group
+in one step, `*n` n times in its step, `c4,e4,g4` a chord, `c4(3,8)` Euclidean (step i sounds when i·3 mod 8 < 3). The pattern is
+parsed (parse_pattern), laid out to [frequencies, seconds] events (pattern_events) and made one sound whose events end at the sample
+their cumulated seconds reach (no drift), so the voice goes on after the cycle; `swing = 0..1` (module setting) delays each second
+step of a group by swing·step/3 (1: triplet feel). `live_loop 4 { … }` is `live_voice = go { for … 0..4 { … } }`
+(music_words.rs lower_live_loops, before go_blocks): a voice of its own on the beat clock, so loops and `play` overlap; `await live_voice`
+waits for the last loop (renders after live loops need it: the task adds its sounds when it runs).
+Still open: seeded randomness (`?`), `<a b>` alternation per cycle, `_` elongation, an endless loop whose block is redefined while
+it plays (needs the playground's live reload and voice stealing), a loop name for several awaits.
+
 ## Our own API or the platform's? (card our-sound)
 
 Recommendation: warp's own small vocabulary on top, Web Audio's model underneath, the platform APIs only as the

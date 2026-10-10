@@ -31,6 +31,7 @@ mod test_sound_voices; // card sound-pro
 mod test_sound_at; // card sample-accurate
 mod test_music_values; // card music-values
 mod test_sound_filters; // card synth-filters
+mod test_sound_patterns; // card patterns-live
 mod test_sound_pan; // card stereo-pan
 mod test_sound_spectrum; // card winamp-like
 mod test_task_sound; // card task-sound
