@@ -100,7 +100,7 @@ def typeOf (P : Program) (Γ : Ctx) : Expr → Option Ty
     | _, _, _ => none
   | .loop c b d =>
     match typeOf P Γ c, typeOf P Γ b, typeOf P Γ d with
-    | some _, some tb, some td => some (join tb (join td .unit))
+    | some _, some tb, some td => some (join tb (join td .any))
     | _, _, _ => none
   | .seq a b =>
     match typeOf P Γ a, typeOf P Γ b with
@@ -179,13 +179,13 @@ def typeOf (P : Program) (Γ : Ctx) : Expr → Option Ty
     | _, _, _ => none
   | .emit ev e =>
     match P.effects ev, typeOf P Γ e with
-    | some R, some _ => some (join R .unit)
+    | some R, some _ => some (join R .any)
     | _, _ => none
   | .scope _ e => typeOf P Γ e
   | .abort ev _ e => (typeOf P Γ e).bind fun te => if sub te (P.aborts ev) then some .never else none
   | .forIn y l b d => (typeOf P Γ l).bind fun tl =>
     if listy tl || tl.isText then (typeOf P (Γ.set y (elementTy tl)) b).bind fun tb =>
-      (typeOf P Γ d).map fun td => join tb (join td .unit)
+      (typeOf P Γ d).map fun td => join tb (join td .any)
     else none
   | .lam y b => (typeOf P (Γ.set y .any) b).map .fn
   | .clo y b => (typeOf P (Ctx.empty.set y .any) b).map .fn

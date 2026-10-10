@@ -8,9 +8,9 @@ open Ty Expr
 variable {P : Program}
 
 /-- a loop's type after a round whose value has a type below the body's -/
-theorem loop_bound {tb t td : Ty} (h : sub t tb = true) : sub (join tb (join t .unit)) (join tb (join td .unit)) = true :=
+theorem loop_bound {tb t td : Ty} (h : sub t tb = true) : sub (join tb (join t .any)) (join tb (join td .any)) = true :=
   join_least (join_upper_left _ _)
-    (join_least (sub_trans h (join_upper_left _ _)) (sub_trans (join_upper_right td .unit) (join_upper_right tb _)))
+    (join_least (sub_trans h (join_upper_left _ _)) (sub_trans (join_upper_right td .any) (join_upper_right tb _)))
 
 /-- the type of a plugged frame: the hole has a type, and anything of a smaller type in the hole gives a smaller type -/
 theorem frame_typing {Γ} (F : Frame) {e t} (h : HasType P Γ (F.plug e) t) :
@@ -295,7 +295,7 @@ theorem StoreOk.restore {μ μ' : Store} (hμ' : StoreOk P μ') (hμ : StoreOk P
 
 /-- a handler run on a payload gives at most what an emit of its event gives -/
 theorem handler_typed {ev h v tv R} (hh : HandlerOk P ev h) (hR : P.effects ev = some R) (hv : v.isValue = true)
-    (htv : HasType P Ctx.empty v tv) : ∃ t', HasType P Ctx.empty (h.subst eventLocal v) t' ∧ sub t' (join R .unit) = true := by
+    (htv : HasType P Ctx.empty v tv) : ∃ t', HasType P Ctx.empty (h.subst eventLocal v) t' ∧ sub t' (join R .any) = true := by
   obtain ⟨R', th, hR', hth, sth⟩ := hh
   rw [hR] at hR'; cases hR'
   obtain ⟨t', ht', st'⟩ := let_typed hth hv htv (sub_any _)
@@ -376,7 +376,7 @@ theorem preservation (hP : ProgramOk P) {s s' : Expr × Store} (hs : Step P s s'
     cases h with
     | loop hc hb hd =>
       exact ⟨⟨_, .ite hc (.loop hc hb hb) hd,
-        join_least (loop_bound (sub_refl _)) (sub_trans (join_upper_left _ .unit) (join_upper_right _ _))⟩, hμ⟩
+        join_least (loop_bound (sub_refl _)) (sub_trans (join_upper_left _ .any) (join_upper_right _ _))⟩, hμ⟩
   | seq => intro t h hμ; cases h with | seq _ hb => exact ⟨⟨_, hb, sub_refl _⟩, hμ⟩
   | @index l i μ vl _ =>
     intro t h hμ
@@ -517,7 +517,7 @@ theorem preservation (hP : ProgramOk P) {s s' : Expr × Store} (hs : Step P s s'
     | emit hR he =>
       obtain ⟨t', ht', st⟩ := handler_typed (hP.2 _ _ hp) hR hv he
       exact ⟨⟨t', .scope ht', st⟩, hμ⟩
-  | emitNone => intro t h hμ; cases h; exact ⟨⟨_, .unit, join_upper_right _ _⟩, hμ⟩
+  | emitNone => intro t h hμ; cases h; exact ⟨⟨_, .unit, sub_trans (sub_any _) (join_upper_right _ _)⟩, hμ⟩
   | scopeStep _ ih =>
     intro t h hμ
     cases h with
