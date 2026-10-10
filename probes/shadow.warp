@@ -1,0 +1,4 @@
+f(seconds) := seconds * 2
+wave_names = [f for f in [1, 2]]
+g(x) := x
+print([g(f) for f in [1, 2]])

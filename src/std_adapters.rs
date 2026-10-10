@@ -20,6 +20,11 @@ pub fn call(module: &str, member: &str, arguments: &Node) -> Result<Node, String
 	let failure = |problem: String| format!("{module}.{member}: {problem}");
 	let text_of = |node: &Node| text_value(node).ok_or_else(|| failure(format!("needs a text, got {}", node.serialize().trim())));
 	// what write puts into a file: a text as it is, any other value as warp writes it (`42`, `[1 2]`)
+	#[cfg(feature = "native")]
+	let number_of = |node: &Node| match node.drop_meta() {
+		Node::Number(number) => Ok(f64::from(*number)),
+		other => Err(failure(format!("needs a number, got {}", other.serialize().trim()))),
+	};
 	let content_of = |node: &Node| text_of(node).or_else(|_| Ok::<String, String>(node.serialize().trim().to_string()));
 	match (module, member, arguments.as_slice()) {
 		("json", "parse", [text]) => {
@@ -105,6 +110,10 @@ pub fn call(module: &str, member: &str, arguments: &Node) -> Result<Node, String
 		("sound", "last", []) => Ok(Node::int(crate::sound::last_handle() as i64)),
 		#[cfg(feature = "native")]
 		("sound", "queued", []) => Ok(Node::float(crate::sound::queued_seconds())),
+		#[cfg(feature = "native")]
+		("sound", "at", [seconds]) => { crate::sound::at(number_of(seconds)?); Ok(Node::Empty) }
+		#[cfg(feature = "native")]
+		("sound", "at_end", []) => { crate::sound::at_end(); Ok(Node::Empty) }
 		#[cfg(feature = "native")]
 		("sound", "wait", []) => { crate::sound::wait(); Ok(Node::Empty) }
 		#[cfg(feature = "native")]

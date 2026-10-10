@@ -295,8 +295,11 @@ Each step is useful on its own and is what the next ones stand on.
 - Clipboard (P188, navigator.clipboard's names; warp-03's default): `clipboard.write(text)` is the std word
   std_io("clipboard", "write", [text]) (lowering/system_values.rs): pbcopy / wl-copy / xclip natively, in a page
   markup.js copyText (navigator.clipboard.writeText, which needs a recent click; a refusal goes to the console), from a
-  Worker through its page (self.writeClipboard). `clipboard.read()` is `clipboard` (natively pbpaste; the browser's
-  read is asynchronous, so a page's read stays the loud error).
+  Worker through its page (self.writeClipboard). `clipboard.read()` is `clipboard` (natively pbpaste). In the browser
+  (card web-apis-rest, 2026-10-10, warp-web) the program's Worker asks its page (host-tasks.js askPage, the word in
+  host-tasks.js so only a program reading the clipboard ships it) and waits on shared memory while the page reads
+  navigator.clipboard.readText (task-workers.js pasteInto/answerInto); the browser may refuse it without a recent
+  click: a loud error. The tour checks it where the browser allows (CLIPBOARD_READ).
 - Undo history (lowering/undo_history.rs): a program saying `undo x` or `redo x` keeps x's history: after the first
   main-level assignment of x come the lists `undo_past_x`, `undo_future_x` and an `on change x` listener adding the
   old value (not while undo or redo itself writes x); a new change empties what was undone. `undo`, `redo` and
@@ -399,8 +402,18 @@ Each step is useful on its own and is what the next ones stand on.
 - Ints (2026-10-09, warp-web): a shader declaring its numbers as array<i32> or array<u32> at @binding(0) gets them as
   32-bit ints and gives back ints (gpu.rs element_of / compute_ints, host-gpu.js gpuElements); an int beyond 32 bits or a
   float is a loud error. tests/web/test_webgpu_ints.rs.
-- Next: more buffers (a map of named arrays) for gpu_compute, rendering straight
-  into a page canvas (GPUCanvasContext) without the pixel round trip; GPU vectors: card gpu-vectors, notes/gpu.md.
+- Named arrays (card web-apis-rest, 2026-10-10, warp-web): `gpu_compute(shader, {xs: […], ns: […]}, workgroups)` binds
+  each array where the shader declares the storage array of that name (`@binding(1) var<storage, read_write> ns:
+  array<i32>`, gpu.rs STORAGE_ARRAY / storage_arrays, host-gpu.js storageArrays), its element type as declared, and
+  gives back the map of the arrays it left, in the order given. A name the shader does not declare, a declared array
+  not given or an empty one is a loud error. tests/web/test_webgpu_named.rs, the tour's GPU_PAGE check.
+- Page canvas (card web-apis-rest, 2026-10-10, warp-web): in the playground, `paint(shader, w, h, values)` renders
+  straight into the page's canvas: the program's Worker asks the page for a canvas (worker.js gpuCanvas hook), which
+  sends the canvas's OffscreenCanvas through a MessageChannel to the GPU's task Worker (host-gpu.js gpuCanvas); each
+  frame draws into its GPUCanvasContext, and only a {canvas id} message goes to the page, no pixels. A canvas the
+  task Worker does not hold (another took the GPU) is made anew. gpu_render still gives pixels (the program reads
+  them); built sites still paint shaders through pixels (site-worker.js has no gpuCanvas hook).
+- Next: GPU vectors: card gpu-vectors, notes/gpu.md.
 
 ## web-apis: WebIDL (2026-10-08, warp-95)
 - `use js <global>` of a browser global is typed through WebIDL as `use c` is through C headers: src/web_idl.rs reads

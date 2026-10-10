@@ -197,7 +197,7 @@ fn the_page_gets_every_edit_of_a_fix() {
 #[test]
 fn ambiguous_call_comparison_fixes() {
 	assert_fix("say(x) := x\nsay 3 == 4", "the call compared", "no");
-	assert_fix("say(x) := x\nsay 3 == 4", "the comparison as the argument", "0");
+	assert_fix("say(x) := x\nsay 3 == 4", "the comparison as the argument", "no");
 	assert_fix("say(x) := x\nsay 3 == 3", "the call compared", "yes");
 	assert_eq!(fixed_by("say(x) := x\nsay 3 == 3", "the comparison as the argument"), "say(x) := x\nsay(3 == 3)");
 }

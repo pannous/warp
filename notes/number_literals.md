@@ -1,4 +1,4 @@
-# Number literals: why `[0.0, 0.0]` is a list of int
+# Number literals: decimals are floats (decision exact-default), formerly why `[0.0, 0.0]` was a list of int
 
 Cards int-list (this one), int-exact, float-calls, float-nodes, int-declaration, exact-reals.
 
@@ -14,14 +14,20 @@ Cards int-list (this one), int-exact, float-calls, float-nodes, int-declaration,
 - notes/typed_lists.md "Open": a list variable of exact ints becomes an `(array (mut i64))`; float arrays came second
   because few literal lists are float.
 
+- 2026-10-10 decision exact-default (notes/decisions.md): a decimal literal is an f64 float, reversing the exact
+  decimals and P196b; integer division stays exact. Fraction math was ~90% of finger paint's stroke time.
+
 Today:
 
 ```warp
-type(0.0)          # int
-type(1.5)          # rational
-type(1.5f)         # float
-type([0.0, 0.0])   # list of int
+type(0.0)          # float
+type(1.5)          # float
+type(3/2)          # rational
+type([0.0, 0.0])   # list of float
+0.1 + 0.2 ≈ 0.3    # yes; `==` on floats warns, fix: use ≈
 ```
+
+The rest of this note is the history of the exact decimals.
 
 ## The bug (card int-list)
 

@@ -569,6 +569,11 @@ const CORPUS: &[&str] = &[
 	"f(x: int?) := x ?? 0; f(ø) + f(4)",
 	"a: int = none",
 	"xs = []; xs ?? 3",
+	// a float joined to a text: W0 writes it as warp's float_text, 15 significant digits (card float-text-prints)
+	"\"a\" + 0.5",
+	"f(x) := \"a\" + x; f(1.5e-7)",
+	"f(x) := \"a\" + x; f(1 / 3.0)",
+	"f(x) := \"a\" + x; f(-0.00001234)",
 ];
 
 /// Programs warp compiles although the model rejects them: holes in warp's checks, each with its card

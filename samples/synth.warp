@@ -1,0 +1,17 @@
+#!/usr/bin/env warp
+// Shaping the sound: an envelope for every note (attack, decay, sustain, release), wave shapes, gain in decibels.
+
+attack = 0.02                   // seconds to rise
+decay = 0.1                     // then falls for 0.1 s
+sustain = 0.4                   // to 40 % of the peak
+release = 0.2                   // and fades out over its last 0.2 s
+wave_shape = "sawtooth"         // sine, square, triangle, sawtooth or noise
+loudness = -9 dB
+melody [A3 C4 E4 A4] each 1/2 beat
+
+wave_shape = "noise"            // a hi-hat: short noise
+attack = 0.001
+decay = 0.03
+sustain = 0
+melody [C4 C4 C4 C4] each 1/4 beat
+wait_sound()

@@ -199,6 +199,7 @@ function startWorker(restarts = 0) {
 			if (data.type === "ready") return ready();
 			if (data.type === "stored") return keepValue(data.name, data.value, data.file);
 			if (data.type === "clipboard") return copyText(data.text);
+			if (data.type === "clipboard read") return pasteInto(data.shared);
 			if (data.type === "failed") return failed(new Error(data.message));
 			if (data.type === "bundle") return bundled(data.bundle); // deploy.js
 			if (data.type === "sound") return playSound(data);
@@ -206,6 +207,7 @@ function startWorker(restarts = 0) {
 			if (data.type === "file") return offerFile(data.path, data.bytes);
 			if (data.type === "stop sound files") return silence(); // stop_sound: the queued sounds and the music files
 			if (data.type === "stop sound") return silenced(data.handle); // stop_sound(handle): that one alone
+			if (data.type === "gpu canvas") return sendPaintCanvas(data);
 			if (!pending) return showEventOutput(data);
 			if (data.type === "listening") Object.assign(pending, { listening: data.events, address: data.address });
 			if (data.type === "print") printedChunk(pending, data);
@@ -214,7 +216,7 @@ function startWorker(restarts = 0) {
 				slept(pending, data.milliseconds);
 			}
 			if (data.type === "tasks inline") pending.tasksInline = data.reason;
-			if (data.type === "paint") painted(pending, data);
+			if (data.type === "paint") painted(pending, data.canvas ? { ...data, canvas: paintCanvases.get(data.canvas) } : data);
 			if (data.type === "module") lastModule = data.bytes;
 			if (data.type === "report" && data.id === pending.id) finish(pending, { ...data.report, printed: pending.printed, paintings: pending.paintings, listening: pending.listening ?? [], address: pending.address, milliseconds: data.milliseconds });
 		};
@@ -293,24 +295,29 @@ function startsFrame(run, output) {
 // ---- sound ----------------------------------------------------------------------------------------------------
 
 let audio; // the page's AudioContext, made at the first sound after a click or key press
-let soundsEnd = 0; // when the queued sounds end, in the AudioContext's time: one plays after the other, as natively
+// the clock the page and the Workers share for sounds (host-tasks.js soundClock), in seconds
+const soundClock = () => (performance.timeOrigin + performance.now()) / 1000;
+// the AudioContext's time minus soundClock, set anew when nothing sounds and kept while sounds follow, so a voice's
+// sounds join without a gap
+let clockOffset = 0;
 let sounding = []; // the playing and queued sounds, silenced when the next run starts (typing reruns the code)
 
 // before the page's first click or key press (the run on load, the CI tour) a sound stays silent: an AudioContext made
 // then cannot start and the browser warns
 const beforeUserActivation = () => navigator.userActivation && !navigator.userActivation.hasBeenActive;
-function playSound({ samples, rate, handle }) {
+function playSound({ samples, rate, channels, at, handle }) {
 	if (beforeUserActivation()) return;
 	audio ??= new AudioContext();
 	audio.resume();
-	const buffer = audio.createBuffer(1, Math.max(samples.length, 1), rate);
-	buffer.getChannelData(0).set(Float32Array.from(samples, sample => (sample - SOUND_OFFSET) / SOUND_OFFSET));
+	const frames = Math.max(Math.ceil(samples.length / channels), 1);
+	const buffer = audio.createBuffer(channels, frames, rate);
+	for (let channel = 0; channel < channels; channel++)
+		buffer.getChannelData(channel).set(Float32Array.from({ length: frames }, (_, frame) => ((samples[frame * channels + channel] ?? SOUND_OFFSET) - SOUND_OFFSET) / SOUND_OFFSET));
 	const source = audio.createBufferSource();
 	source.buffer = buffer;
 	source.connect(audio.destination);
-	soundsEnd = Math.max(soundsEnd, audio.currentTime);
-	source.start(soundsEnd);
-	soundsEnd += buffer.duration;
+	if (sounding.length === 0) clockOffset = audio.currentTime - soundClock();
+	source.start(Math.max(audio.currentTime, at + clockOffset));
 	source.handle = handle;
 	source.onended = () => sounding = sounding.filter(other => other !== source);
 	sounding.push(source);
@@ -343,7 +350,6 @@ function silenced(handle) {
 function silence() {
 	sounding.forEach(source => source.stop());
 	sounding = [];
-	soundsEnd = 0;
 	stopSoundFiles();
 }
 
@@ -580,13 +586,27 @@ function showPaintings(paintings) {
 	$("paintings").replaceChildren(...paintings.map(paintingCanvas));
 }
 
-// the run's paintings, its last one drawn into the canvas shown for it, which keeps the pointer over it
+// the run's paintings, its last one drawn into the canvas shown for it, which keeps the pointer over it; a canvas the GPU
+// draws into (paint of a shader) is shown as it is
 function showFrame(paintings) {
 	const shown = $("paintings").querySelectorAll("canvas");
 	const canvas = shown[shown.length - 1];
 	const painting = paintings.at(-1);
-	if (shown.length === paintings.length && sameSize(canvas, painting)) drawn(canvas, painting);
+	if (painting.canvas === canvas && shown.length === paintings.length) return;
+	if (shown.length === paintings.length && sameSize(canvas, painting) && !painting.canvas && !canvas.gpu) drawn(canvas, painting);
 	else showPaintings(paintings);
+}
+
+// the canvases paint of a shader draws into, by id (host-gpu.js gpuPainted): the page makes one and sends its
+// OffscreenCanvas through the port to the task Worker holding the GPU device
+const paintCanvases = new Map();
+function sendPaintCanvas({ id, width, height, port, replaces }) {
+	const canvas = paintingElement({ width, height });
+	canvas.gpu = true;
+	paintCanvases.delete(replaces);
+	paintCanvases.set(id, canvas);
+	const offscreen = canvas.transferControlToOffscreen();
+	port.postMessage({ canvas: offscreen }, [offscreen]);
 }
 
 // ⛶ (card little-full): the last painting fills the screen at its own aspect ratio, Esc or ⛶ again leaves; a click

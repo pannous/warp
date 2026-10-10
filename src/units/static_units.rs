@@ -30,7 +30,7 @@ use std::cell::RefCell;
 use std::collections::HashMap;
 
 /// The SI base unit of each dimension, the unit amounts count in at run time
-const BASE_UNITS: [(Dimension, &str); 4] = [(Dimension::Length, "m"), (Dimension::Mass, "kg"), (Dimension::Time, "s"), (Dimension::Era, "AD")];
+const BASE_UNITS: [(Dimension, &str); 5] = [(Dimension::Length, "m"), (Dimension::Mass, "kg"), (Dimension::Time, "s"), (Dimension::Era, "AD"), (Dimension::Temperature, "K")];
 const LOOP_WORDS: [&str; 2] = ["for", "while"];
 /// `speed·u0`: a function specialised for one unit signature of its arguments
 const SPECIALISATION_SEPARATOR: &str = "·u";
@@ -119,7 +119,7 @@ fn lower_shadowed(program: &Node) -> Option<Result<Node, Node>> {
 			definitions.insert((name, definition.parameters.len()), definition);
 		}
 	});
-	let mut inference = Inference { variables: HashMap::new(), lists: HashMap::new(), objects: HashMap::new(), classes, instances: HashMap::new(), class_lists: HashMap::new(), result_fields: None, definitions, specialised: HashMap::new(), in_progress: vec![], numbered: 0, new_definitions: vec![], display: display.clone(), returns: vec![], at_top: true, in_host_call: false, started: HashMap::new() };
+	let mut inference = Inference { variables: HashMap::new(), globals: HashMap::new(), lists: HashMap::new(), objects: HashMap::new(), classes, instances: HashMap::new(), class_lists: HashMap::new(), result_fields: None, definitions, specialised: HashMap::new(), in_progress: vec![], numbered: 0, new_definitions: vec![], display: display.clone(), returns: vec![], at_top: true, in_host_call: false, started: HashMap::new() };
 	match inference.infer(program.clone()) {
 		Ok((node, result)) => {
 			// a final `q as km` shows km
@@ -240,7 +240,8 @@ fn exact_amount(value: &Node) -> Option<Rational> {
 	match value.drop_meta() {
 		Node::Number(Number::Int(n)) => Some(Rational::integer(*n)),
 		Node::Number(Number::Quotient(n, d)) => Some(Rational::new(BigInt::from(*n), BigInt::from(*d))),
-		Node::Number(Number::Float(f)) if Number::is_exact_decimal(*f) => {
+		// a written amount converts as the decimal it spells: 6.5km is 6500m, not 6499.999…m
+		Node::Number(Number::Float(f)) if f.is_finite() => {
 			let (numerator, denominator) = crate::wasm_emitter::exact::decimal_fraction(*f);
 			Some(Rational::new(numerator, denominator))
 		}
@@ -305,6 +306,23 @@ fn is_type_word(node: &Node) -> bool {
 	matches!(node.drop_meta(), Node::Symbol(name) if crate::analyzer::type_word_kind(name).is_some() || crate::type_tests::runtime_kind_mask(name).is_some())
 }
 
+/// The variable a declaration names: `x` of `x = 5m` and of a bare `x`
+fn declared_name(declaration: &Node) -> Option<String> {
+	match declaration.drop_meta() {
+		Node::Symbol(name) => Some(name.clone()),
+		Node::Key(target, Op::Assign | Op::Define, _) => declared_name(target),
+		_ => None,
+	}
+}
+
+/// `global x` and `global x = v` statements anywhere in a function body
+fn globals_declared_in(body: &Node) -> Vec<String> {
+	match body.drop_meta() {
+		Node::Key(keyword, Op::Colon, declaration) if super::is_global_keyword(keyword) => declared_name(declaration).into_iter().collect(),
+		other => other.parts().into_iter().flat_map(globals_declared_in).collect(),
+	}
+}
+
 fn dimension_error(op: Op, left: &Signature, right: &Signature) -> Stop {
 	Stop::Error(format!("DimensionError: {} {op} {}: the units do not match", shown(left), shown(right)))
 }
@@ -356,6 +374,8 @@ struct InProgress {
 
 struct Inference {
 	variables: HashMap<String, Signature>,
+	/// Main-level variables declared `global`: a function writing one keeps its signature (card quantity-global)
+	globals: HashMap<String, Signature>,
 	/// Variables holding a list of quantities: the signature of its elements
 	lists: HashMap<String, Signature>,
 	/// Variables holding an object with quantity fields: each field (in written order) and its signature, none for a plain one
@@ -443,7 +463,7 @@ impl Inference {
 	fn infer(&mut self, node: Node) -> Result<(Node, Signature), Stop> {
 		if let Some((_, definition)) = function_definition(&node) {
 			// a body with unit literals compiles only in its specialisations
-			let kept = if mentions_units(&definition.body) { Node::Empty } else { node };
+			let kept = if self.has_units(&definition.body) { Node::Empty } else { node };
 			return Ok((kept, vec![]));
 		}
 		if let Some(construction) = self.named_construction(&node) {
@@ -460,10 +480,19 @@ impl Inference {
 			Node::Type { name, body } => self.class_declaration(name, body),
 			Node::Symbol(name) => match (self.variables.get(&name), unit_named(&name)) {
 				(Some(signature), _) => Ok((Node::Symbol(name.clone()), signature.clone())),
+				// a run-time amount counts from the base unit's zero, which °C and °F do not share
+				(None, Some(unit)) if unit.zero != 0 => Err(Stop::Error(format!("a temperature in {} is computed at compile time only, not at run time yet", unit.name))),
 				(None, Some(unit)) => Ok((si_literal(unit).ok_or(Stop::Unsupported)?, vec![(unit.dimension, 1)])),
 				(None, None) => Ok((Node::Symbol(name), vec![])),
 			},
 			Node::Key(target, op @ (Op::Assign | Op::Define), value) => self.assignment(*target, op, *value),
+			Node::Key(keyword, Op::Colon, declaration) if super::is_global_keyword(&keyword) => {
+				let (declaration, signature) = self.infer(*declaration)?;
+				if let (true, Some(name)) = (self.in_progress.is_empty(), declared_name(&declaration)) {
+					self.globals.insert(name, signature.clone());
+				}
+				Ok((Node::Key(keyword, Op::Colon, Box::new(declaration)), signature))
+			}
 			Node::Key(target, op, value) if op.is_compound_assign() => {
 				let (target, held) = self.infer(*target)?;
 				let (value, given) = self.infer(*value)?;
@@ -661,7 +690,7 @@ impl Inference {
 			return Err(Stop::Error(format!("DimensionError: {name} is declared {}, is given {}", shown(&declared), shown(&signature))));
 		}
 		if let Some(earlier) = self.variables.get(&name).filter(|earlier| **earlier != signature) {
-			return Err(Stop::Error(format!("DimensionError: {name} was {}, is given {}", shown(earlier), shown(&signature))));
+			return Err(Stop::Error(super::reassigned_dimension(&name, &shown(earlier), earlier.is_empty(), &shown(&signature))));
 		}
 		self.variables.insert(name, signature.clone());
 		Ok((Node::Key(Box::new(target), op, Box::new(value)), signature))
@@ -981,7 +1010,7 @@ impl Inference {
 				Err(stop) => return Some(Err(stop)),
 			}
 		}
-		if signatures.iter().all(Vec::is_empty) && !mentions_units(&definition.body) {
+		if signatures.iter().all(Vec::is_empty) && !self.has_units(&definition.body) {
 			return None;
 		}
 		Some(self.specialise(name, &definition, signatures).map(|(specialised, result)| {
@@ -1026,9 +1055,24 @@ impl Inference {
 		Ok((specialised, result))
 	}
 
+	/// A function body with unit literals or one reading a global that holds a quantity
+	fn has_units(&self, body: &Node) -> bool {
+		let holds_quantity = |name: &String| self.globals.get(name).or_else(|| self.variables.get(name)).is_some_and(|signature| !signature.is_empty());
+		mentions_units(body) || globals_declared_in(body).iter().any(holds_quantity)
+			|| self.globals.iter().any(|(name, signature)| !signature.is_empty() && super::mentions_word(body, name))
+	}
+
 	/// The body of a function lowered for the unit signatures of its parameters, and its result signature
 	fn infer_body(&mut self, name: &str, definition: &Definition, signatures: &[Signature]) -> Result<(Node, Signature), Stop> {
-		let outer = std::mem::replace(&mut self.variables, definition.parameters.iter().cloned().zip(signatures.iter().cloned()).collect());
+		// the globals it writes keep their signatures: main's `global` ones and those it declares `global x` itself
+		let mut scope = self.globals.clone();
+		for name in globals_declared_in(&definition.body) {
+			if let Some(signature) = self.variables.get(&name) {
+				scope.insert(name, signature.clone());
+			}
+		}
+		scope.extend(definition.parameters.iter().cloned().zip(signatures.iter().cloned()));
+		let outer = std::mem::replace(&mut self.variables, scope);
 		self.returns.push(vec![]);
 		let inferred = self.infer(definition.body.clone());
 		let returns = self.returns.pop().unwrap_or_default();

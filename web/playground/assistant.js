@@ -30,6 +30,11 @@ const TURNSTILE_SITE_KEY = "0x4AAAAAAFTFLP50fgWUgeS0"; // public: the warp playg
 const CODE_FENCE = /```([a-z]*)\n?([\s\S]*?)```/g; // a split gives text, language, code, text, …
 const FAILURE_SHOWN_MS = 5000; // how long a failed completion's reason stays under its line
 const PAUSE_BEFORE_COMPLETION_MS = 1000; // typing paused this long at a line's end asks for a completion by itself
+// Claude sees the whole program, up to this many characters around the cursor (the proxy takes 24000 in all,
+// web/assistant/assistant.mjs MAX_INPUT_CHARACTERS); a longer one is cut, keeping CONTEXT_BEFORE_SHARE before the cursor
+const MOST_CONTEXT_CHARACTERS = 20000;
+const CONTEXT_BEFORE_SHARE = 0.75;
+const LINE_END = /^[\s)\]}]*$/; // the rest of a line where a continuation fits: nothing, or only closing brackets
 
 const apiKey = () => stored(API_KEY_STORAGE) ?? "";
 const saveApiKey = key => store(API_KEY_STORAGE, key);
@@ -126,7 +131,7 @@ async function suggestCompletion(editor, automatic = false) {
 	dismissSuggestion();
 	const at = editor.getCursor();
 	const asked = edits;
-	const code = editor.getRange({ line: 0, ch: 0 }, at) + CURSOR_MARK + editor.getRange(at, { line: editor.lastLine() });
+	const code = codeAround(editor.getRange({ line: 0, ch: 0 }, at), editor.getRange(at, { line: editor.lastLine() }));
 	const shown = automatic ? undefined : editor.addLineWidget(at.line, element("div", { className: "completion-pending" }, "asking Claude…"));
 	try {
 		const inComment = isInComment(editor.getRange({ line: 0, ch: 0 }, at));
@@ -149,14 +154,23 @@ async function suggestCompletion(editor, automatic = false) {
 	}
 }
 
-// typing paused at the end of a line that has something on it, nothing selected; an open word list does not hold it
+// the program with the cursor mark, cut around it when it is longer than Claude is asked to read
+function codeAround(before, after) {
+	const room = MOST_CONTEXT_CHARACTERS - CURSOR_MARK.length;
+	if (before.length + after.length <= room) return before + CURSOR_MARK + after;
+	const afterKept = Math.min(after.length, Math.max(room - before.length, Math.floor(room * (1 - CONTEXT_BEFORE_SHARE))));
+	return before.slice(before.length - (room - afterKept)) + CURSOR_MARK + after.slice(0, afterKept);
+}
+
+// typing paused at the end of a line (or before its closing brackets: `dir(m‸)`) that has something on it, nothing
+// selected; an open word list does not hold it
 // back (it was open at most pauses after a word, so no continuation came)
 function completeAfterPause(editor) {
 	clearTimeout(pauseTimer);
 	pauseTimer = setTimeout(() => {
 		const at = editor.getCursor();
 		const line = editor.getLine(at.line);
-		if (editor.hasFocus() && !editor.somethingSelected() && at.ch === line.length && line.trim()) suggestCompletion(editor, true);
+		if (editor.hasFocus() && !editor.somethingSelected() && LINE_END.test(line.slice(at.ch)) && line.trim()) suggestCompletion(editor, true);
 	}, PAUSE_BEFORE_COMPLETION_MS);
 }
 

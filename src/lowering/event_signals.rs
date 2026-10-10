@@ -38,9 +38,10 @@ const LOOP_WORDS: [&str; 4] = ["for", "while", "repeat", "loop"];
 const LOOP_SUBSCRIPTION_TOPIC: &str = "handler-in-loop";
 /// `emit alarm{level: 3}` runs the `on alarm` handlers and goes on; nobody listening, it does nothing (P163). `send`
 /// without `to` is the same; `raise` and `throw` are errors only
-const EMIT_WORDS: [&str; 2] = ["emit", "send"];
-/// Other systems' words for emit, working with a got-it note naming it (a program defining one of them keeps it)
-const EMIT_ALIASES: [&str; 3] = ["fire", "trigger", "signal"];
+pub(crate) const EMIT_WORDS: [&str; 2] = ["emit", "send"];
+/// Other systems' words for emit, working with a got-it note naming it (a program defining one of them keeps it);
+/// `ask` reads as asking a handler for a value: `net * (1 + ask tax_rate)` (card price-net)
+pub(crate) const EMIT_ALIASES: [&str; 4] = ["fire", "trigger", "signal", "ask"];
 const EMIT_TOPIC: &str = "emit-word";
 const UNHANDLED_TOPIC: &str = "unhandled-emit";
 const RAISE_WORDS: [&str; 2] = ["raise", "throw"];

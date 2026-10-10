@@ -192,31 +192,36 @@ function programImports(holder, hooks) {
 				const covered = textCoverage(String(plainOfTree(readNode(program(), words))), Number(size));
 				return listOfInts(program(), covered) ?? buildValue(program(), treeOfPlain(Array.from(covered)));
 			},
-			clipboard_text: () => { throw new Error("clipboard: the playground cannot read it (the browser's clipboard is asynchronous)"); },
 			// `exit(code)` ends the run, its value ø (P121): runProgram tells it from a failure by holder.exitCode
 			exit: code => {
 				holder.exitCode = Number(code);
 				throw new Error(`exit(${code})`);
 			},
 			// paint(pixels, width, height) (src/host.rs): the page draws them on a canvas (playground.js showPaintings);
-			// paint(shader, width, height, values) renders the WGSL fragment shader first, as gpu_render (P234)
+			// paint(shader, width, height, values) renders the WGSL fragment shader first, as gpu_render (P234), in the
+			// playground straight into the page's canvas (host-gpu.js gpuPainted), which the hook gets by its id
 			paint: (pixels, width, height, values) => {
 				if (!hooks.paint) throw new Error("paint: no canvas here; it draws in the playground page");
 				const room = Number(width) * Number(height);
 				let painted = intsOfList(program(), pixels, room) ?? plainOfTree(readNode(program(), pixels));
 				if (typeof painted === "string") {
 					if (!holder.gpuRendered) throw new Error("paint: a shader needs WebGPU (host-gpu.js), which this page has not");
-					painted = Array.from(holder.gpuRendered(painted, width, height, values));
+					const rendered = (holder.gpuPainted ?? holder.gpuRendered)(painted, width, height, values); // pixels, or the id of a canvas drawn into
+					if (typeof rendered === "number") return hooks.paint(undefined, Number(width), Number(height), rendered);
+					painted = Array.from(rendered);
 				}
 				hooks.paint(painted, Number(width), Number(height));
 			},
-			// sound_samples(samples, count, rate) (src/host.rs, lib/sound.warp): the page plays them with WebAudio
+			// sound_samples(samples, count, rate, channels) (src/host.rs, lib/sound.warp; stereo interleaved left, right):
+			// the page plays them with WebAudio
 			// (playground.js playSound); a run without a page (tests, node) has no speakers and stays silent, as natively
 			// render_sound writes them, played or not, into a WAV (host-files.js STD_ADAPTERS.sound.render)
-			sound_samples: (samples, count, rate) => {
+			sound_samples: (samples, count, rate, channels) => {
 				const values = intsOfList(program(), samples, Number(count)) ?? plainOfTree(readNode(program(), samples));
-				(holder.unrenderedSounds ??= []).push({ samples: values, rate: Number(rate) });
-				hooks.sound?.(values, Number(rate));
+				const sound = { samples: values, rate: Number(rate), channels: Number(channels) };
+				const { place, at } = self.voiceSounded?.(values.length / sound.channels / sound.rate) ?? {};
+				(holder.run.unrenderedSounds ??= []).push({ ...sound, place });
+				hooks.sound?.({ ...sound, at });
 			},
 			...Object.assign({}, ...eachHostPart("words", holder, hooks, access)),
 		},
@@ -409,6 +414,7 @@ function instantiateProgram(bytes, hooks, compiled, awaited = false) {
 	try {
 		const module = compiled ?? new WebAssembly.Module(bytes);
 		holder.run = { module, bytes };
+		self.joinVoice?.(); // a program's sounds start now on a fresh voice, not behind an earlier run's (host-tasks.js)
 		eachHostPart("started", holder.run);
 		holder.exports = new WebAssembly.Instance(holder.run.module, programImports(holder, hooks)).exports;
 		hooks.instantiated?.(holder);

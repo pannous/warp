@@ -7,7 +7,7 @@
 
 use super::memoization::{definition_parts, Rebuild};
 use super::words::OF_WORD;
-use super::nodes::{call, is_call_head, key, parameter_name};
+use super::nodes::{call, children_rewritten, is_call_head, key, parameter_name};
 use crate::analyzer::{plural_element_type, type_word_kind};
 use crate::library_words::collect_assigned_names;
 use crate::node::{text, Bracket, Node, Separator};
@@ -26,6 +26,7 @@ pub const EMPTY_TYPE: &str = "empty";
 const ARTICLES: [&str; 2] = ["a", "an"];
 const NUMBER_WORD: &str = "number";
 const FLOAT_WORD: &str = "float";
+const REAL_WORD: &str = "real";
 const TEXT_WORD: &str = "text";
 /// `String(x)`, `x as String`: the class spelling of text, a cast word only, so `String` stays free as a type value
 const TEXT_CLASS_WORD: &str = "String";
@@ -60,8 +61,8 @@ use crate::type_kinds::Kind as K;
 /// it; a ± value is a number. The fixed widths (`int8`, `uint16` …) are src/fixed_width.rs
 const BUILTIN_TYPES: [BuiltinType; 15] = [
 	builtin("int", &["integer", "long", "i64", "i32"], &[], Some(K::Int), &[K::Int as i64]),
-	builtin("rational", &["exact"], &["int"], Some(K::Int), &[K::Int as i64, K::Float as i64]),
-	builtin("real", &[], &["rational"], Some(K::Empty), &[K::Int as i64, K::Float as i64]),
+	builtin("rational", &[], &["int"], Some(K::Int), &[K::Int as i64, K::Float as i64]),
+	builtin(REAL_WORD, &["exact"], &["rational"], Some(K::Empty), &[K::Int as i64, K::Float as i64]),
 	builtin(FLOAT_WORD, &["double", "f64", "f32", "float32", "float64", "fast"], &[], Some(K::Float), &[K::Float as i64]),
 	builtin("number", &[], &["real", "float"], Some(K::Float), &[K::Int as i64, K::Float as i64, K::Uncertain as i64]),
 	builtin(TEXT_WORD, &["str", "string"], &["codepoint"], Some(K::Text), &[K::Text as i64, K::Codepoint as i64]),
@@ -106,6 +107,11 @@ pub fn is_float_type_word(word: &str) -> bool {
 	canonical_spec_word(word) == FLOAT_WORD
 }
 
+/// `real` or `exact`: a value declared so keeps an exact real (`√2`, `π`) as it is
+pub fn is_real_type_word(word: &str) -> bool {
+	canonical_spec_word(word) == REAL_WORD
+}
+
 /// Words that name the same type
 pub(crate) fn canonical_spec_word(word: &str) -> &str {
 	builtin_type(word).map_or(word, |builtin| builtin.name)
@@ -120,6 +126,12 @@ pub fn held_kind(word: &str) -> Option<K> {
 pub fn is_exact_fraction_type(word: &str) -> bool {
 	let name = canonical_spec_word(word);
 	name != "int" && type_matches("int", name) && !type_matches("float", name)
+}
+
+/// A decimal written for this type is the exact fraction it spells: the exact fractions and `real`, whose exact reals
+/// also hold floats (decision exact-default: elsewhere a decimal is a float)
+pub fn spells_decimals_exactly(word: &str) -> bool {
+	is_exact_fraction_type(word) || canonical_spec_word(word) == "real"
 }
 
 /// Does a value of the static type name `actual` (`type(x)`) have the type `spec`: actual is spec or a type spec covers,
@@ -160,6 +172,8 @@ pub fn runtime_kind_mask(spec: &str) -> Option<i64> {
 struct Names {
 	variables: HashSet<String>,
 	types: HashSet<String>,
+	/// The loop variables anywhere in the program (`for char in s`): such a name compared with == is the variable
+	loop_variables: HashSet<String>,
 }
 
 impl Names {
@@ -211,7 +225,8 @@ pub fn lower(node: Node) -> Node {
 	let mut registry = crate::type_kinds::TypeRegistry::new();
 	crate::analyzer::collect_all_types(&mut registry, &node);
 	let types = registry.types().iter().map(|definition| definition.name.clone()).collect();
-	expand(node, &Names { variables, types })
+	let loop_variables = super::for_loop::loop_variables(&node).into_iter().collect();
+	expand(node, &Names { variables, types, loop_variables })
 }
 
 /// The spec of a type phrase (`int`, `a number`, `ints`, `list of int`, `list of list of int`), `None` when the words are no type
@@ -246,15 +261,33 @@ fn symbol_words(nodes: &[Node]) -> Option<Vec<&str>> {
 /// Meta key marking a type word compared with `==` (not `is`): only `is` tests types (user decision #30)
 const EQUALITY_OPERAND: &str = "equality operand";
 
-/// The right side of `x == word` as the parser marks it when the word names a type, by its canonical name as type(x)
-/// gives it (`type(s) == string` is `type(s) == text`). The words of ø (empty, nil, none …) parse as the value ø, the one
-/// value of the empty type: compared with a type value (`type(x) == empty`) ø names that type
+/// A side of `x == word` or `word != x` as the parser marks it when the word names a type; lowering names it by its
+/// canonical name as type(x) gives it (`type(s) == string` is `type(s) == text`) unless it is a variable
+/// (canonical_operand). The words of ø (empty, nil, none …) parse as the value ø, the one value of the empty type:
+/// compared with a type value (`type(x) == empty`) ø names that type
 pub fn equality_operand(subject: &Node, word: Node) -> Node {
-	let mark = |name: &str| Node::Meta { node: Box::new(Node::Symbol(name.to_string())), data: Box::new(Node::key(EQUALITY_OPERAND, Node::True)) };
 	match word.drop_meta() {
-		Node::Symbol(name) if type_spec(&[name.as_str()], &Names::default()).is_some() => mark(canonical_spec_word(name)),
-		Node::Empty if typed_argument(subject).is_some() => mark(EMPTY_TYPE),
+		Node::Symbol(name) if type_spec(&[name.as_str()], &Names::default()).is_some() => marked_operand(name),
+		Node::Empty if typed_argument(subject).is_some() => marked_operand(EMPTY_TYPE),
 		_ => word,
+	}
+}
+
+fn marked_operand(word: &str) -> Node {
+	Node::Meta { node: Box::new(Node::Symbol(word.to_string())), data: Box::new(Node::key(EQUALITY_OPERAND, Node::True)) }
+}
+
+/// `left == right` or `left != right`, a type word on either side by its canonical name
+fn comparison(left: Node, op: Op, right: Node, shadowed: &Names) -> Node {
+	key(canonical_operand(expand(left, shadowed), shadowed), op, canonical_operand(expand(right, shadowed), shadowed))
+}
+
+/// A marked side of == or != by the canonical name of its type; a variable of that name stays the variable
+fn canonical_operand(operand: Node, shadowed: &Names) -> Node {
+	match operand.drop_meta() {
+		Node::Symbol(word) if is_equality_operand(&operand) && (shadowed.contains(word) || shadowed.loop_variables.contains(word)) => Node::Symbol(word.clone()),
+		Node::Symbol(word) if is_equality_operand(&operand) => marked_operand(&type_spec(&[word.as_str()], &Names::default()).unwrap_or_else(|| word.clone())),
+		_ => operand,
 	}
 }
 
@@ -313,11 +346,10 @@ fn expand(node: Node, shadowed: &Names) -> Node {
 		Node::Key(subject, Op::Eq, right) => match symbol_words(std::slice::from_ref(&*right)).and_then(|words| type_spec(&words, shadowed)) {
 			// `x == int` compares x with the type value int: equal only to that type (wasm_emitter emit_structural_equality)
 			Some(spec) if !is_equality_operand(&right) => is_type_call(expand(*subject, shadowed), spec),
-			_ => key(expand(*subject, shadowed), Op::Eq, expand(*right, shadowed)),
+			_ => comparison(*subject, Op::Eq, *right, shadowed),
 		},
-		Node::Key(left, op, right) => key(expand(*left, shadowed), op, expand(*right, shadowed)),
-		Node::Meta { node, data } => Node::Meta { node: Box::new(expand(*node, shadowed)), data },
-		other => other,
+		Node::Key(left, Op::Ne, right) => comparison(*left, Op::Ne, *right, shadowed),
+		other => children_rewritten(other, |child| expand(child, shadowed)),
 	}
 }
 

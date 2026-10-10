@@ -40,6 +40,11 @@ use unicode_normalization::UnicodeNormalization;
 const URL_MARK: &str = "://";
 const UNIT_LOOP_WORDS: [&str; 4] = ["chars", "characters", "codepoints", "bytes"];
 const BYTES_WORD: &str = "bytes";
+const WORD_UNIT: &str = "word";
+/// The loop variable names that walk a text by a unit other than the character, and the text between two units
+const TEXT_UNIT_NAMES: [(&str, &str); 2] = [(WORD_UNIT, " "), ("line", "\n")];
+const SPLIT_WORD: &str = "split";
+const FILTER_WORD: &str = "filter";
 pub const IT_WORD: &str = "it";
 /// The item of the map a Julia dot call `f.(xs)` lowers to
 const BROADCAST_ITEM: &str = "broadcast_item";
@@ -159,8 +164,6 @@ const GLUED_BLOCK_KEYWORDS: [&str; 3] = ["go", "loop", "do"];
 const AWAIT_ALL_WORD: &str = "all";
 /// `await x` binds its operand like unary minus
 const AWAIT_OPERAND_BP: u8 = Op::Neg.binding_power().1;
-/// `1 + emit ask`: an emit inside an expression takes the words of its event like a call (card emit-operand)
-const EMIT_KEYWORDS: [&str; 2] = ["emit", "send"];
 const PRINT_WORD: &str = "print";
 const CODEPOINT_TYPE: &str = "codepoint";
 /// `print a  print b`: statements separated by spaces only (user decision 2026-10-03: a loud error)
@@ -588,7 +591,12 @@ fn is_number_glyph(ch: char) -> bool {
 }
 
 fn is_identifier_char(c: char) -> bool {
-	c.is_alphanumeric() || c == '_'
+	c.is_alphanumeric() || c == '_' || is_music_accidental(c)
+}
+
+/// The sharp and flat signs continue a name: `C♯4`, `D♭5` are note names (lowering/music_words.rs)
+fn is_music_accidental(c: char) -> bool {
+	matches!(c, '♯' | '♭')
 }
 
 /// `floor_quotient(a, b)`: what `a // b` and `a div b` are, the Euclidean quotient that goes with `%`
@@ -802,6 +810,8 @@ pub struct WarpParser {
 	pending_comment: Option<String>,
 	/// The symbol parsed last was a function keyword (`def`, `function`): the next one is the function's name
 	after_function_keyword: bool,
+	/// The expression continue_expr goes on with heads a definition: `foo` of `def foo: hi=2*2`
+	continues_definition_head: bool,
 	/// inside Elixir's capture `&(…)`, where `&1` is its first argument
 	in_capture: bool,
 	/// `a ?: b` with a computed left side parsed so far, numbering their hidden variables
@@ -1106,6 +1116,7 @@ impl WarpParser {
 			times_loops: 0,
 			pending_comment: None,
 			after_function_keyword: false,
+			continues_definition_head: false,
 			in_capture: false,
 			elvis_operands: 0,
 			finally_blocks: 0,

@@ -5,7 +5,7 @@
 //! A function f with a companion f_as(…, type) gets its expected type that way: `x:int = agent "33/3"` is
 //! `x:int = agent_as("33/3", "int")` (card int-let, lib/agent.warp).
 
-use super::nodes::{call, children_rewritten, in_block_as_written, is_assigned_data, is_spaced_call, key, with_parts_rewritten};
+use super::nodes::{call, children_rewritten, in_block_as_written, is_assigned_data, is_words_call, key, with_parts_rewritten};
 use crate::analyzer::{call_name, collect_all_types, type_word_kind};
 use crate::diagnostic::{ask, reading, Ask, Fallback};
 use crate::node::{Bracket, Node, Separator};
@@ -78,7 +78,7 @@ fn named_call<'a>(node: &'a Node, named: &dyn Fn(&str) -> bool) -> Option<(&'a N
 
 /// `f(x)`, `f x`, `(f x)`, `{f x}`
 fn is_call(items: &[Node], bracket: &Bracket, separator: &Separator) -> bool {
-	call_name(items, bracket, separator).is_some() || *bracket == Bracket::Round && *separator == Separator::Space || is_spaced_call(bracket, separator)
+	call_name(items, bracket, separator).is_some() || is_words_call(bracket, separator)
 }
 
 fn bracket_of(node: &Node) -> Bracket {

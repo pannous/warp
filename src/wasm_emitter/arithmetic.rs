@@ -36,7 +36,7 @@ impl WasmGcEmitter {
 			return;
 		}
 		if self.emit_inc_dec(func, left, op) {
-			self.emit_call(func, "new_int");
+			self.emit_call(func, if self.is_float_variable(left) { "new_float" } else { "new_int" });
 			return;
 		}
 		if self.emit_compound_assign(func, left, op, right, use_float) {
@@ -83,10 +83,9 @@ impl WasmGcEmitter {
 		if let Node::Symbol(name) = left.drop_meta() {
 			if self.scope.lookup(name).is_none() {
 				if let Some(global_kind) = self.emit_global_store(func, name, right) {
-					match (global_kind.is_float(), use_float) {
-						(true, false) => self.emit_float_in_exact_context(func, name),
-						(false, true) => self.emit_int_to_f64(func, None),
-						_ => {}
+					match use_float {
+						true => self.emit_stored_as_f64(func, global_kind),
+						false => self.emit_as_numeric(func, name, global_kind),
 					}
 					return true;
 				}
@@ -128,6 +127,12 @@ impl WasmGcEmitter {
 			return;
 		};
 		let Some(local_pos) = self.defined_local_position(func, name) else { return };
+		if self.is_float_variable(left) {
+			Self::emit_list(func, &[I::LocalGet(local_pos), I::F64Const(1.0.into())]);
+			self.emit_float_arithmetic(func, if *op == Op::Inc { &Op::Add } else { &Op::Sub });
+			func.instruction(&I::LocalTee(local_pos));
+			return;
+		}
 		self.emit_int_step(func, local_pos, self.int_range(left), op);
 		self.emit_fits_declared(func, left);
 		func.instruction(&I::LocalTee(local_pos));
@@ -166,6 +171,13 @@ impl WasmGcEmitter {
 			let Some(local_pos) = self.defined_local_position(func, name) else { return true };
 			let base_op = op.base_op();
 			if !use_float && self.emit_compound_type_error(func, left, &base_op, right) {
+				return true;
+			}
+			// `x += 0.5` of an x that stays exact (`x: int`): refused as `x = x + 0.5` is
+			if self.scope.lookup(name).is_some_and(|local| local.kind == Kind::Int) && self.get_type(right).is_float() {
+				let declared = self.declared_type_of(left).map_or("int".to_string(), |declared| declared.name());
+				let updated = Node::Key(Box::new(left.clone()), base_op, Box::new(right.clone())).serialize();
+				self.emit_type_error(func, format!("{updated} is a float where an exact {declared} is expected: declare {name} `number` to keep the float, or truncate with `as int`"));
 				return true;
 			}
 			func.instruction(&I::LocalGet(local_pos));
@@ -302,19 +314,23 @@ impl WasmGcEmitter {
 			self.emit_call(func, "get_int_value");
 			self.emit_int_to_f64(func, None);
 		} else if let Some(local) = self.scope.lookup(name) {
+			let kind = local.kind;
 			func.instruction(&I::LocalGet(local.position));
-			if local.kind.is_ref() {
-				self.emit_held_node_as_f64(func); // a Node of run-time kind: a Float stays one
-			} else if !local.kind.is_float() {
-				self.emit_int_to_f64(func, None);
-			}
+			self.emit_stored_as_f64(func, kind);
 		} else if let Some(&(idx, kind)) = self.ctx.user_globals.get(name) {
 			func.instruction(&I::GlobalGet(idx));
-			if !kind.is_float() {
-				self.emit_int_to_f64(func, None);
-			}
+			self.emit_stored_as_f64(func, kind);
 		} else {
 			self.emit_undefined_variable(func, name);
+		}
+	}
+
+	/// The value on the stack, stored as `kind` (`storage_type`), as f64
+	pub(super) fn emit_stored_as_f64(&mut self, func: &mut Function, kind: Kind) {
+		if kind.is_ref() {
+			self.emit_held_node_as_f64(func); // a Node of run-time kind: a Float stays one
+		} else if !kind.is_float() {
+			self.emit_int_to_f64(func, None);
 		}
 	}
 
@@ -396,9 +412,7 @@ impl WasmGcEmitter {
 				self.emit_fits_declared(func, left);
 				func.instruction(&I::LocalTee(position));
 			} else if let Some(kind) = self.emit_global_store(func, name, right) {
-				if kind.is_float() {
-					self.emit_float_in_exact_context(func, name);
-				}
+				self.emit_as_numeric(func, name, kind);
 			} else {
 				self.emit_undefined_variable(func, name);
 			}
@@ -605,18 +619,29 @@ impl WasmGcEmitter {
 	}
 
 	pub(super) fn emit_float_binary(&mut self, func: &mut Function, left: &Node, op: &Op, right: &Node) -> ArithmeticWrap {
-		self.emit_float_value(func, left);
-		self.emit_float_value(func, right);
-
-		match op {
-			op if op.is_comparison() => {
-				self.emit_float_comparison(func, op);
-				return ArithmeticWrap::Int;
-			}
-			op => self.emit_float_arithmetic(func, op),
+		if op.is_comparison() {
+			self.emit_float_value(func, left);
+			self.emit_float_value(func, right);
+			self.emit_float_comparison(func, op);
+			return ArithmeticWrap::Int;
 		}
-
+		self.emit_float_operation(func, left, op, right);
 		ArithmeticWrap::Float
+	}
+
+	/// `left op right` as an f64; `x ^ 2` is x * x: one rounding of the exact square, as pow gives it, without a libm
+	/// call per use
+	pub(super) fn emit_float_operation(&mut self, func: &mut Function, left: &Node, op: &Op, right: &Node) {
+		self.emit_float_value(func, left);
+		if *op == Op::Pow && matches!(right.drop_meta(), Node::Number(Number::Int(2))) {
+			self.pop_float_scratch(func, 0);
+			self.push_float_scratch(func, 0);
+			self.push_float_scratch(func, 0);
+			func.instruction(&I::F64Mul);
+			return;
+		}
+		self.emit_float_value(func, right);
+		self.emit_float_arithmetic(func, op);
 	}
 
 	pub(super) fn emit_int_binary(&mut self, func: &mut Function, left: &Node, op: &Op, right: &Node) -> ArithmeticWrap {
@@ -660,6 +685,15 @@ impl WasmGcEmitter {
 		// comparisons keep a character's code point (`c >= '0'`); arithmetic refuses it (P65)
 		let operand = if op.is_comparison() { Self::emit_numeric_value } else { Self::emit_arithmetic_operand };
 		operand(self, func, left);
+		// `x ^ 2` is x * x: the multiplication's fixnum fast path instead of a call to exact_pow per use (Mul's own
+		// scratch locals are 0 and 1)
+		if *op == Op::Pow && matches!(right.drop_meta(), Node::Number(Number::Int(2))) {
+			let copy = self.scratch(2);
+			Self::emit_list(func, &[I::LocalTee(copy), I::LocalGet(copy)]);
+			let range = self.int_range(left);
+			self.emit_int_op(func, &Op::Mul, range, range);
+			return;
+		}
 		operand(self, func, right);
 		let (left_range, right_range) = (self.int_range(left), self.int_range(right));
 		if op.is_comparison() {

@@ -274,11 +274,7 @@ fn widen_list_type(scope: &mut Scope, name: &str, value: &Node) {
 pub(super) fn widen_to_float(scope: &mut Scope, name: &str, value: &Node) {
 	let float_value = infer_type(value, scope).is_float();
 	let is_local = scope.locals.contains_key(name);
-	let binding = match is_local {
-		true => scope.locals.get_mut(name),
-		false => scope.globals.get_mut(name),
-	};
-	if let Some(local) = binding.filter(|local| local.kind == Kind::Int && local.type_node.is_none()) {
+	if let Some(local) = scope.own_binding_mut(name).filter(|local| local.kind == Kind::Int && local.type_node.is_none()) {
 		if float_value {
 			local.kind = Kind::Float;
 			// a read before this write (`y = x * 2` earlier in the loop) is a float too, once collected again
@@ -298,7 +294,7 @@ pub(super) const CONCRETE_KINDS: [Kind; 6] = [Kind::Int, Kind::Float, Kind::Text
 pub(super) fn widen_to_node(scope: &mut Scope, name: &str, value: &Node) {
 	let assigned = binding_kind(value, scope);
 	// a parameter's representation comes from its calls (infer_parameters_from_calls), not from the body
-	let Some(local) = scope.locals.get_mut(name).filter(|local| !local.is_param && local.type_node.as_ref().is_none_or(|_| local.kind == Kind::List)) else { return };
+	let Some(local) = scope.own_binding_mut(name).filter(|local| !local.is_param && local.type_node.as_ref().is_none_or(|_| local.kind == Kind::List)) else { return };
 	let mixes = |a: Kind, b: Kind| a == b || [a, b].iter().all(|kind| matches!(kind, Kind::Int | Kind::Float)) || [a, b].iter().all(|kind| matches!(kind, Kind::Text | Kind::Codepoint));
 	// an element of unknown kind may be an object: `item = 2` earlier, then `for item in basket` (samples/natural.warp)
 	let unknown_element = assigned == Kind::Empty && matches!(value.drop_meta(), Node::Key(_, Op::Hash, _));

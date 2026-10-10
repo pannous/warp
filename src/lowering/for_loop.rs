@@ -1,10 +1,11 @@
 //! `for` loops lower to the `while` loop: a range counts its variable up, any other iterable is walked by an index.
 //!
-//! `for i in a..b body` → `i=a; while i<b {body; i++}` (`...` and `to` include b: `i<=b`), so `i` is b (b+1) afterwards
+//! `for i in a..b body` → `i=a; while i<b {body; i++}` (`...` and `to` include b: `i<=b`), so `i` is b (b+1) afterwards;
+//! b is evaluated once, before the loop, as in Python (`0..n`, `0..count(xs)`): `i=a; i·end=b; while i<i·end {…}`
 //! `for x in xs body`   → `items=xs; index=0; while index<#items {x=items#(index+1); body; index++}`
 //! `for(init;test;step){body}` → `init; while test {body; step}`
 
-use super::nodes::{block, call, int, key, statement_list, symbol};
+use super::nodes::{block, call, for_in_variable, int, key, statement_list, symbol};
 use crate::node::{Bracket, Node, Separator};
 use crate::operators::Op;
 use crate::wasm_emitter::{is_step, mark_step};
@@ -29,6 +30,8 @@ const CODEPOINT_UNIT: &str = "codepoints";
 pub const INDEX_SUFFIX: &str = "·index";
 /// The list a for loop walks, `x·items`, assigned once before the loop
 pub const ITEMS_SUFFIX: &str = "·items";
+/// The end of a counting loop, `i·end`, evaluated once before the loop as a walked list is (a literal stays inline)
+const END_SUFFIX: &str = "·end";
 
 pub fn lower(node: Node) -> Result<Node, Node> {
 	let lowered = match node.drop_meta() {
@@ -47,11 +50,7 @@ pub fn lower(node: Node) -> Result<Node, Node> {
 pub(crate) fn loop_variables(body: &Node) -> Vec<String> {
 	let mut variables = vec![];
 	body.visit(&mut |part| if let Node::List(items, _, _) = part {
-		if let [keyword, Node::Symbol(variable), within, ..] = items.iter().map(Node::drop_meta).collect::<Vec<_>>().as_slice() {
-			if keyword.is_symbol(FOR_KEYWORD) && within.is_symbol(IN_KEYWORD) {
-				variables.push(variable.clone());
-			}
-		}
+		variables.extend(for_in_variable(items));
 		for step in items.iter().filter(|item| is_step(item)) {
 			if let Node::Key(counter, Op::Inc, _) = step.drop_meta() {
 				let counter = counter.name();
@@ -216,10 +215,17 @@ fn for_it(items: &[Node]) -> Option<Node> {
 fn counting_loop(variable: &Node, start: &Node, range: Op, end: &Node, mut body: Vec<Node>) -> Node {
 	let test_op = if range == Op::To { Op::Le } else { Op::Lt };
 	body.push(mark_step(key(variable.clone(), Op::Inc, Node::Empty)));
-	statement_list(vec![
-		key(variable.clone(), Op::Assign, start.clone()),
-		while_do(key(variable.clone(), test_op, end.clone()), block(body)),
-	], Bracket::None)
+	let mut statements = vec![key(variable.clone(), Op::Assign, start.clone())];
+	let is_literal = matches!(end.drop_meta(), Node::Number(_) | Node::Char(_));
+	let end = if !is_literal {
+		let end_variable = symbol(&format!("{}{END_SUFFIX}", variable.name()));
+		statements.push(key(end_variable.clone(), Op::Assign, end.clone()));
+		end_variable
+	} else {
+		end.clone()
+	};
+	statements.push(while_do(key(variable.clone(), test_op, end), block(body)));
+	statement_list(statements, Bracket::None)
 }
 
 fn walked_units(iterable: Node) -> Node {

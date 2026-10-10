@@ -367,6 +367,11 @@ impl Op {
 		matches!(self, Op::Eq | Op::Ne | Op::Identical | Op::NotIdentical | Op::Lt | Op::Gt | Op::Le | Op::Ge)
 	}
 
+	/// A comparison or a similarity (≈, ~): `combine 1.1 with 2.2 ≈ 3.3` compares the phrase's value
+	pub fn is_relation(&self) -> bool {
+		self.is_comparison() || matches!(self, Op::Similar | Op::Rough)
+	}
+
 	/// Ordering comparisons chain (a<b<c), equality does not
 	pub fn is_ordering(&self) -> bool {
 		matches!(self, Op::Lt | Op::Gt | Op::Le | Op::Ge)

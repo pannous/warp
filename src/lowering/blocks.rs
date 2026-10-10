@@ -259,9 +259,26 @@ fn path_node(path: &str) -> Node {
 	parts.fold(first, |object, field| key(object, Op::Dot, field))
 }
 
+/// `kill{print '🕱'}`, `reset{a = 0; print a}` as an entry: braces holding a statement, the field and its block (card
+/// symbolism-object); the braces say it is code, so no warning. A value in braces is content: markup's
+/// `p{"clicked " + count}` stays an element
+fn code_entry(entry: &Node) -> Option<(String, Node)> {
+	let Node::Key(target, Op::Colon, value) = entry.drop_meta() else { return None };
+	let Node::Symbol(field) = target.drop_meta() else { return None };
+	let Node::List(items, Bracket::Curly, separator) = value.drop_meta() else { return None };
+	let is_statement = |item: &Node| crate::analyzer::is_statement(item, &Bracket::Curly);
+	let statement = Node::List(items.clone(), Bracket::None, separator.clone());
+	let block = match statement_block(value) {
+		Some(block) if items.iter().any(is_statement) => block,
+		_ if *separator == Separator::Space && is_statement(&statement) => statement,
+		_ => return None,
+	};
+	Some((field.clone(), block))
+}
+
 /// An entry the object lowering rewrites: a block, a function, a value entry, or a nested object holding one
 fn is_rewritten_entry(entry: &Node) -> bool {
-	uncharged(entry).is_some() || function_entry(entry).is_some() || value_entry(entry).is_some() || nested_object(entry).is_some()
+	code_entry(entry).is_some() || uncharged(entry).is_some() || function_entry(entry).is_some() || value_entry(entry).is_some() || nested_object(entry).is_some()
 }
 
 /// `a: {f: x => x + 1}`: an entry whose value is an object with rewritten entries; its field, the object and its entries
@@ -366,24 +383,40 @@ impl Blocks {
 					self.objects.insert(name, pairs);
 					return lowered;
 				}
-				// `o = {s1: a+b, …}`: computed entries are blocks the object holds as data, `s3 = …` entries values
-				if let Some(entries) = object_entries(value).filter(|entries| entries.iter().any(is_rewritten_entry)) {
-					let name = name.clone();
-					self.forget(&name);
-					let (mut definitions, object) = match self.object_with_entries(&name, value, entries) {
-						Ok(lowered) => lowered,
-						Err(error) => return error,
-					};
-					let object = Node::Key(target.clone(), Op::Assign, Box::new(object));
-					if definitions.is_empty() {
-						return object;
-					}
-					definitions.push(object);
-					return Node::List(definitions, Bracket::None, Separator::Semicolon);
+				if let Some(object) = self.object_statement(name, target, Op::Assign, value) {
+					return object;
+				}
+			}
+		}
+		// the tagged object `cat{x=1 kill{print '🕱'}}` as `cat = {…}` (card symbolism-object); plain `key: value` data keeps
+		// reading its siblings' paths (`circle:{color: colors.red}`); every `=` in a tag is a value entry, `p{shown = "seen"}`
+		// is p{shown:"seen"} (user, decision tag-assign)
+		if let Node::Key(target, Op::Colon, value) = node.drop_meta() {
+			let is_code = |entry: &Node| code_entry(entry).is_some() || value_entry(entry).is_some() || function_entry(entry).is_some();
+			if let (Node::Symbol(name), Some(_)) = (target.drop_meta(), object_entries(value).filter(|entries| entries.iter().any(is_code))) {
+				if let Some(object) = self.object_statement(name, target, Op::Colon, value) {
+					return object;
 				}
 			}
 		}
 		self.rewrite(node)
+	}
+
+	/// `o = {s1: a+b, …}`: computed entries are blocks the object holds as data, `s3 = …` entries values; preceded by the
+	/// definitions of its function entries
+	fn object_statement(&mut self, name: &str, target: &Node, op: Op, value: &Node) -> Option<Node> {
+		let entries = object_entries(value).filter(|entries| entries.iter().any(is_rewritten_entry))?;
+		self.forget(name);
+		let (mut definitions, object) = match self.object_with_entries(name, value, entries) {
+			Ok(lowered) => lowered,
+			Err(error) => return Some(error),
+		};
+		let object = Node::Key(Box::new(target.clone()), op, Box::new(object));
+		if definitions.is_empty() {
+			return Some(object);
+		}
+		definitions.push(object);
+		Some(Node::List(definitions, Bracket::None, Separator::Semicolon))
 	}
 
 	/// The object literal `value` at `path` (`o`, or `o.a` of a nested object) with its entries lowered: the definitions of
@@ -412,9 +445,16 @@ impl Blocks {
 				lowered.push(key(Node::Symbol(field), Op::Colon, inner));
 				continue;
 			}
-			lowered.push(match uncharged(entry) {
-				Some((field, block)) => {
+			let block_entry = match (code_entry(entry), uncharged(entry)) {
+				(Some(code), _) => Some(code),
+				(None, Some((field, block))) => {
 					self.warn_uncharged(&field, &block, entry)?;
+					Some((field, block))
+				}
+				(None, None) => None,
+			};
+			lowered.push(match block_entry {
+				Some((field, block)) => {
 					let block = self.rewrite(block);
 					self.blocks.insert(format!("{path}.{field}"), block.clone());
 					let data = Node::List(vec![symbol(DATA_WORD), block], Bracket::None, Separator::Space);

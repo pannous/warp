@@ -11,7 +11,7 @@ fn an_element_wise_operator_pairs_two_lists() {
 	is!("xs=[1 2 3]; ys=[4 5 6]; xs .* ys", parse("[4 10 18]"));
 	is!("[1 2] .- [3 5]", parse("[-2 -3]"));
 	is!("xs=[1 2 3]; ys=[4 5 6]; (xs .* 2) .+ ys", parse("[6 9 12]"));
-	is!("xs = [1.5 2.5]; ys = [0.5 0.5]; xs ./ ys", parse("[3 5]"));
+	is!("xs = [1.5 2.5]; ys = [0.5 0.5]; xs ./ ys", parse("[3.0 5.0]")); // floats (decision exact-default)
 }
 
 #[test]

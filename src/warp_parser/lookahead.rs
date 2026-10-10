@@ -458,15 +458,23 @@ impl WarpParser {
 		while matches!(self.peek_char(next), ' ' | '\t') {
 			next += 1;
 		}
-		let defined_by_keyword = || {
-			let before: String = self.chars[..self.pos].iter().rev().skip_while(|c| c.is_whitespace()).take_while(|c| c.is_alphanumeric()).collect();
-			crate::operators::is_function_keyword(&before.chars().rev().collect::<String>())
-		};
 		match (self.peek_char(next), self.peek_char(next + 1)) {
 			(':', '=') => true,
-			(':' | '{', _) => defined_by_keyword(),
+			(':' | '{', _) => self.after_function_keyword_word(),
 			_ => false,
 		}
+	}
+
+	/// `def ` right before here: what follows heads a definition
+	pub(super) fn after_function_keyword_word(&self) -> bool {
+		let before: String = self.chars[..self.pos].iter().rev().skip_while(|c| c.is_whitespace()).take_while(|c| c.is_alphanumeric()).collect();
+		crate::operators::is_function_keyword(&before.chars().rev().collect::<String>())
+	}
+
+	/// `Int` or `float` after the colon of a definition's head: its result type, not its body
+	pub(super) fn result_type_follows(&self) -> bool {
+		let word: String = self.chars[self.pos..].iter().skip_while(|c| **c == ' ' || **c == '\t').take_while(|c| c.is_alphanumeric() || **c == '_').collect();
+		word.starts_with(char::is_uppercase) || crate::analyzer::type_word_kind(&word).is_some()
 	}
 
 	/// Peek for prefix operators (unary operators that bind to right operand)

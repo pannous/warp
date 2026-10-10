@@ -48,6 +48,24 @@ impl Diagnostic {
 		self
 	}
 
+	/// A warning of the kind `topic` about the expression `written`: shown until the user says "got it" to it or to all
+	/// of the kind
+	pub fn about(self, topic: &str, written: &str) -> Self {
+		Diagnostic { topic: Some(topic.to_string()), expression_key: Some(expression_key(topic, written)), ..self }
+	}
+
+	/// The topic "got it" silences and the expression it names, for a warning that has them
+	fn acknowledgeable(&self) -> Option<(&str, &str)> {
+		let topic = self.topic.as_deref()?;
+		let written = self.expression_key.as_deref()?.strip_prefix(topic)?.strip_prefix('@')?;
+		Some((topic, written))
+	}
+
+	/// Said "got it" to before, or on a line that says `// got it`
+	fn is_silenced(&self) -> bool {
+		silenced_by_comment(self.line) || self.acknowledgeable().is_some_and(|(topic, written)| is_acknowledged(topic, written))
+	}
+
 	/// The error, remembered with its fixes for a host to offer (take_error_diagnostics)
 	pub fn into_error(self) -> Node {
 		crate::node::error(&self.remembered())
@@ -260,7 +278,8 @@ pub(crate) fn note_said() {
 	SAID.with(|said| said.set(said.get() + 1));
 }
 
-/// Compile-time warnings: printed in Warn mode, the first one is the error in Error mode
+/// Compile-time warnings: printed in Warn mode, but those said "got it" to, each followed by its "got it?"; the first
+/// one is the error in Error mode
 pub fn report(warnings: &[Diagnostic]) -> Result<(), Node> {
 	if !warnings.is_empty() {
 		note_said();
@@ -269,13 +288,17 @@ pub fn report(warnings: &[Diagnostic]) -> Result<(), Node> {
 		(WarningMode::Error, Some(first)) => Err(first.clone().into_error()),
 		(WarningMode::Quiet, _) => Ok(()),
 		_ => {
-			for warning in warnings {
+			let shown: Vec<Diagnostic> = warnings.iter().filter(|warning| !warning.is_silenced()).cloned().collect();
+			for warning in &shown {
 				eprintln!("warning: {warning}");
 				if let Some(excerpt) = shown_excerpt(warning.line, warning.column) {
 					eprintln!("{excerpt}");
 				}
+				if let Some((topic, written)) = warning.acknowledgeable() {
+					offer_acknowledgement(topic, written);
+				}
 			}
-			COMPILE_WARNINGS.with(|reported| reported.borrow_mut().extend_from_slice(warnings));
+			COMPILE_WARNINGS.with(|reported| reported.borrow_mut().extend(shown));
 			Ok(())
 		}
 	}
@@ -423,8 +446,8 @@ impl Ask {
 				(format!("{} (too ambiguous to guess)", self.question), forms.join(" or "))
 			}
 		};
-		let expression_key = Some(expression_key(&self.topic, &self.question));
-		let diagnostic = Diagnostic { message, line: self.line, column: self.column, fix: Some(fix), topic: Some(self.topic.clone()), fixes: vec![], expression_key };
+		// the expression "got it" for this one remembers: the question names it (`written` is only the replaced word, `upto`)
+		let diagnostic = Diagnostic { message, line: self.line, column: self.column, fix: Some(fix), ..Default::default() }.about(&self.topic, &self.question);
 		let fixes = self.readings.iter().map(|reading| reading.fix.clone().unwrap_or_else(|| crate::fixits::fix(&reading.meaning, &self.written, &reading.explicit_form)));
 		fixes.fold(diagnostic, Diagnostic::offering)
 	}
@@ -649,12 +672,7 @@ pub fn ask(question: &Ask) -> Result<usize, Node> {
 	if asked_before {
 		return Ok(question.default);
 	}
-	// the expression "got it" for this one remembers: the question names it (`written` is only the replaced word, `upto`)
-	let expression = &question.question;
-	if !is_quiet() && !is_acknowledged(&question.topic, expression) && !silenced_by_comment(question.line) {
-		report(&[diagnostic])?;
-		offer_acknowledgement(&question.topic, expression);
-	}
+	report(&[diagnostic])?;
 	Ok(question.default)
 }
 

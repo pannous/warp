@@ -1006,6 +1006,13 @@ impl WasmGcEmitter {
 		true
 	}
 
+	/// The $IntList itself of a typed int list variable, as a host word reads it (list_to_ints); false for any other value
+	pub(super) fn emit_typed_int_list(&mut self, func: &mut Function, value: &Node) -> bool {
+		let Some((slot, _)) = self.typed_list(value).filter(|(_, list)| list.element == ElementType::Int) else { return false };
+		func.instruction(&slot.get());
+		true
+	}
+
 	/// `list_sum(list, loop)` as `wanted`: a typed list sums its items in one runtime call (an int sum that leaves the
 	/// fixnum range runs the exact loop instead), any other list runs the loop
 	pub(super) fn emit_list_sum(&mut self, func: &mut Function, list: &Node, sum_loop: &Node, wanted: Wanted) {

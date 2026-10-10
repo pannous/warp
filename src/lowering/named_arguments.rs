@@ -4,7 +4,7 @@
 //! where it is called, as the body read it before. A parameter is never taken from a same-named variable: a missing
 //! argument stays an error.
 
-use super::nodes::{Counter, key};
+use super::nodes::{Counter, children_rewritten, key};
 use crate::diagnostic::Diagnostic;
 use crate::min_max::{is_plain, with_bindings};
 use crate::node::{symbol, Bracket, Node, Separator};
@@ -359,9 +359,7 @@ impl Rewrite {
 					None => list,
 				}
 			}
-			Node::Key(left, op, right) => key(self.node(*left), op, self.node(*right)),
-			Node::Meta { node, data } => Node::Meta { node: Box::new(self.node(*node)), data },
-			other => other,
+			other => children_rewritten(other, |child| self.node(child)),
 		}
 	}
 

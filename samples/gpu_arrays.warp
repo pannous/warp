@@ -1,0 +1,11 @@
+#!/usr/bin/env warp
+// gpu_compute over named arrays: each array of the map is bound where the shader declares the storage array of that
+// name, f32 or i32 as declared, and the map of the arrays it left comes back
+shader = "@group(0) @binding(0) var<storage, read_write> prices: array<f32>;
+@group(0) @binding(1) var<storage, read_write> counts: array<i32>;
+@group(0) @binding(2) var<storage, read_write> totals: array<f32>;
+@compute @workgroup_size(64) fn main(@builtin(global_invocation_id) id: vec3<u32>) {
+	if (id.x < arrayLength(&prices)) { totals[id.x] = prices[id.x] * f32(counts[id.x]); }
+}"
+left = gpu_compute(shader, {prices: [1.5 2 0.25], counts: [4 3 8], totals: [0 0 0]}, 1)
+left.totals
