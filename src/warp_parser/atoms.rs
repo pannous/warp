@@ -1261,10 +1261,7 @@ impl WarpParser {
 				}
 				self.in_data_literal = outer_data_literal;
 				self.in_style_sheet = outer_style_sheet;
-				let block = match blocks.len() {
-					1 => blocks.remove(0),
-					_ => Node::List(blocks, Bracket::None, Separator::None),
-				};
+				let block = Node::single_or_list(blocks, Bracket::None, Separator::None);
 				Node::Key(Box::new(Symbol(symbol)), op, Box::new(block))
 			}
 			'<' if !self.options.xml_mode && !self.options.data_mode && let Some(length) = self.type_application_length() => {
@@ -1314,11 +1311,7 @@ impl WarpParser {
 				if self.current_char() == '{' && !self.equals_compares && !self.in_for_header {
 					// Function with body: name(params) { body }
 					let body = self.parse_bracketed('{');
-					let signature = Node::List(
-						vec![Symbol(symbol), typed_parameters(args_node)],
-						Bracket::Round,
-						Separator::None,
-					);
+					let signature = call(&symbol, vec![typed_parameters(args_node)]);
 					Node::List(vec![signature, body], Bracket::Round, Separator::None)
 				} else if symbol == PRINT_WORD {
 					print_call(print_arguments(args_node))
