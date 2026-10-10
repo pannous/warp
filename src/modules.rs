@@ -41,7 +41,8 @@ const SCOPE_WORDS: [(&str, Scope); 3] = [("folder", Scope::Folder), ("package", 
 const UNSCOPED_DIRECTORIES: [&str; 3] = [PACKAGES_DIRECTORY, "target", "node_modules"];
 const PROJECT_MARKER: &str = ".git";
 /// `stored x = v` too: a used module's persisted signal is the program's (card web-stores)
-const DECLARATION_KEYWORDS: [&str; 6] = ["use", "import", "let", "var", "global", crate::stored_values::STORED_WORD];
+const GLOBAL_KEYWORD: &str = "global";
+const DECLARATION_KEYWORDS: [&str; 6] = ["use", "import", "let", "var", GLOBAL_KEYWORD, crate::stored_values::STORED_WORD];
 
 fn is_declaration_keyword(keyword: &str) -> bool {
 	DECLARATION_KEYWORDS.contains(&keyword) || crate::analyzer::CONSTANT_KEYWORDS.contains(&keyword)
@@ -234,22 +235,39 @@ fn with_library_words(names: HashSet<String>) -> HashSet<String> {
 	names.into_iter().chain(spelled).chain(qualified).collect()
 }
 
-/// The variables a program assigns at its top: `words = […]`
+/// The variables a program assigns at its top: `words = […]`, also declared global: `global hue = 0`, `global hue`
 fn program_variables(program: &Node) -> HashSet<String> {
 	statements(program.clone()).iter().filter_map(|statement| match statement.drop_meta() {
-		Node::Key(variable, Op::Assign, _) => match variable.drop_meta() {
-			Node::Symbol(name) => Some(name.clone()),
-			_ => None,
-		},
+		Node::Key(variable, Op::Assign, _) => variable.drop_meta().symbol_name().map(String::from),
+		Node::Key(keyword, Op::Colon, declared) if keyword.is_symbol(GLOBAL_KEYWORD) => leftmost_symbol(declared),
 		_ => None,
 	}).collect()
 }
 
 /// Module words a program variable shadows, renamed in the module's definitions (`words` → `lib·words`): the module's
-/// own code calls its own words (lexical scope), the program's `words` is its variable
+/// own code calls its own words (lexical scope), the program's `words` is its variable. Likewise a local of a module
+/// function named like a program variable: a program's `global hue` is not draw's `hue` in hsv (card program-global)
 fn shadowed_apart(definitions: Vec<Node>, variables: &HashSet<String>) -> Vec<Node> {
-	let shadowed: Vec<String> = definitions.iter().filter_map(declared_name).filter(|name| variables.contains(name)).collect();
-	renamed_apart(definitions, &shadowed)
+	let declared: Vec<String> = definitions.iter().filter_map(declared_name).collect();
+	let shadowed: Vec<String> = declared.iter().filter(|name| variables.contains(*name)).cloned().collect();
+	renamed_apart(definitions, &shadowed).into_iter().map(|definition| {
+		let locals: Vec<String> = assigned_names(&definition).into_iter().filter(|name| variables.contains(name) && !declared.contains(name)).collect();
+		renamed_apart(vec![definition], &locals).remove(0)
+	}).collect()
+}
+
+/// The names a function definition's body assigns: `hue = …` in `def hsv(h, s, v) {…}`; none for other declarations
+fn assigned_names(definition: &Node) -> HashSet<String> {
+	let mut names = HashSet::new();
+	if matches!(definition.drop_meta(), Node::Key(_, Op::Assign, _)) || matches!(definition.drop_meta(), Node::Key(keyword, Op::Colon, _) if keyword.is_symbol(GLOBAL_KEYWORD)) {
+		return names;
+	}
+	definition.visit(&mut |node| if let Node::Key(target, op, _) = node {
+		if *op == Op::Assign || op.is_compound_assign() {
+			names.extend(target.drop_meta().symbol_name().map(String::from));
+		}
+	});
+	names
 }
 
 /// `names` renamed `lib·name` in the definitions: the definitions still call them, the program does not see them
