@@ -1,0 +1,17 @@
+use sound
+loudest() := max(chord_samples([4000], 0.1, "sine")) - sample_offset
+plain = loudest()
+filter = "lowpass"
+cutoff = 500
+print(loudest() / plain)
+filter = "highpass"
+print(loudest() / plain)
+tremolo = 1.0
+vibrato = 1.0
+unison = 3
+print(voices_of([440]))
+print(phase(440, 1102))
+filter = "lowpass"
+cutoff = 800
+resonance = 4.0
+play [C3 G3] for 1s
