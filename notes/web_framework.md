@@ -432,8 +432,8 @@ Each step is useful on its own and is what the next ones stand on.
   the program's scope, with WindowOrWorkerGlobalScope bundled whole (fetch, atob, setTimeout…) plus Response and
   Headers. The scope is bundled in part, so a member it lacks stays unchecked (`window.innerWidth`). A `Promise<T>`
   result is T: node's loop awaits a call (src/foreign.rs), so `self.fetch(url)` is a Response, `.text()` a text,
-  `.status` an int. Natively node mirrors self/window as globalThis. In the browser host a foreign call is
-  synchronous: a promise stays a handle there (no JSPI yet). warp's own `fetch "/x"` is unaffected.
+  `.status` an int. Natively node mirrors self/window as globalThis. In the browser host main awaits it via JSPI
+  (card jspi-page, notes/web_playground.md "Foreign runtimes"); without JSPI (Safari) a promise is a clear error. warp's own `fetch "/x"` is unaffected.
 - P203 (user): `use js <global>` is the annotation (like `use c` headers), so these checks stay compile errors
   (warp-dc, 2026-10-08).
 - Constructors (slice 7): `use js URL; URL(text)` calls the constructor (JavaScript's `new`: foreign_call member "",

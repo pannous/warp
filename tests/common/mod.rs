@@ -95,6 +95,13 @@ pub fn software_gpu() -> bool {
 	std::env::var("WARP_GPU_ADAPTER").is_ok_and(|adapter| adapter.ends_with("(software)"))
 }
 
+/// Whether a program's main in the page waits for a foreign call's promise: a browser with JSPI (web/playground
+/// test-worker.js WARP_JSPI; Safari has none)
+#[cfg(not(feature = "native"))]
+pub fn jspi() -> bool {
+	std::env::var("WARP_JSPI").is_ok()
+}
+
 /// Whether a test may start Chrome (agent-browser): only in CI (user, 2026-10-09: no test launches Chrome or Chromium
 /// on the Mac); elsewhere it announces its skip
 #[cfg(feature = "native")]
