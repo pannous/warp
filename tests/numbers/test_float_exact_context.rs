@@ -60,3 +60,18 @@ fn a_variable_declared_real_keeps_the_exact_root() {
 	is!("x: exact = √3; x ^ 2", 3);
 	is!("x: real = sqrt(2); x as text", "√2");
 }
+
+// card exact-keeps: `exact` names `real` (wiki Footguns: exact, alias real, ℚ plus π, ℯ and roots), not `rational`,
+// so it keeps a root as `real` does, and the prefix declaration keeps it as the `x: real` one
+#[test]
+fn exact_is_real_and_keeps_the_root() {
+	is!("exact x = √2; x * x", 2);
+	is!("real x = sqrt(2); x * x == 2", true);
+	is!("exact x = √2; x as text", "√2");
+	is!("real == exact", true);
+	is!("1/3 is exact", true);
+	is!("π is exact", true);
+	is!("√2 is exact", true);
+	is!("type(√2) == real", true);
+	is!("√2 is rational", false);
+}
