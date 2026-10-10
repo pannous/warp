@@ -74,6 +74,10 @@ Done:
 - `Node::as_items()`: a list's items, none of ø, else the node as the one item. Copies left for the lowering areas:
   lowering/class_methods.rs (2), component_worlds.rs, type_constructor.rs; warp_parser/mod.rs:204 differs (no
   drop_meta); site.rs items_of keeps ø as an item on purpose
+- `Node::parts()`: a list's items or a key's two sides, borrowed (units.rs). Copies left for the lowering areas:
+  lowering/class_methods.rs children_of, lowering/generators.rs parts
+- wisp_parser: the typed s-expression nodes through finish_one / finish_key / finish_constant and one call_of
+
 Left (bigger, needs care):
 - Two C header parsers: ffi_parser.rs (`parse_declaration`, one line at a time, C types → Kind → ValType via
   kind_to_valtype) and ffi/header.rs (`extract_function_signature`, multi-line declarations, C types → ValType via
@@ -90,4 +94,7 @@ Left (bigger, needs care):
   ergonomic reader). One of them could wrap the other; the public API of both is pinned by tests/wasm.
 - headless.rs node_of_json and foreign.rs node_of both turn JSON into Nodes; they differ in separator (None vs Space),
   arrays (ø vs list) and a non-integer number's fallback, so one replacing the other changes output.
+- ffi/link.rs create_ffi_wrapper: ~20 hand-typed arms (`"II_I"`, `"IIP_V"`, …) of the same shape; a macro would
+  shorten them, and the generic wrapper could take most of them if it passed f32 arguments right (it passes f64s),
+  which needs FFI tests for each signature first.
 - markup.rs escapes `<pre>` text without `>`, site.rs `escaped` with it: one escaper would change the error page.

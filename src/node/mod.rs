@@ -164,6 +164,14 @@ impl Node {
 			single => vec![single.clone()],
 		}
 	}
+	/// The direct parts, borrowed: a list's items, a key's two sides; none of anything else (a Meta too)
+	pub fn parts(&self) -> Vec<&Node> {
+		match self {
+			List(items, _, _) => items.iter().collect(),
+			Key(left, _, right) => vec![left, right],
+			_ => vec![],
+		}
+	}
 	pub fn children(&self) -> Vec<Node> {
 		match self {
 			List(xs, _, _) => xs.clone(),

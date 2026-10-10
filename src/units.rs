@@ -181,7 +181,7 @@ fn mentions_word(node: &Node, word: &str) -> bool {
 	match node.drop_meta() {
 		Node::Symbol(name) => name == word,
 		Node::Type { name, body } => mentions_word(name, word) || mentions_word(body, word),
-		other => children(other).into_iter().any(|child| mentions_word(child, word)),
+		other => other.parts().into_iter().any(|child| mentions_word(child, word)),
 	}
 }
 
@@ -248,7 +248,7 @@ pub fn lower_run_time_tolerances(program: Node) -> Node {
 fn has_unit_tolerance(node: &Node) -> bool {
 	match node.drop_meta() {
 		Node::Key(value, Op::PlusMinus, spread) if unit_literal(value).is_some() || unit_literal(spread).is_some() => true,
-		other => children(other).into_iter().any(has_unit_tolerance),
+		other => other.parts().into_iter().any(has_unit_tolerance),
 	}
 }
 
@@ -695,21 +695,13 @@ pub(crate) fn milliseconds(node: &Node) -> Option<i64> {
 	whole(&quantity.amount.mul(&Rational::integer(factor.unit.factor)))
 }
 
-fn children(node: &Node) -> Vec<&Node> {
-	match node.drop_meta() {
-		Node::Key(left, _, right) => vec![left, right],
-		Node::List(items, _, _) => items.iter().collect(),
-		_ => vec![],
-	}
-}
-
 fn needs_quantities(node: &Node) -> bool {
 	match node.drop_meta() {
 		Node::Symbol(name) => unit_named(name).is_some(),
 		// `3010 meters`: a long name counts after an amount
 		Node::List(items, Bracket::None, _) if matches!(items.as_slice(), [_, unit] if target_unit(unit).is_some()) => true,
 		Node::Key(_, Op::PlusMinus, _) => true,
-		other => children(other).into_iter().any(needs_quantities),
+		other => other.parts().into_iter().any(needs_quantities),
 	}
 }
 
@@ -750,7 +742,7 @@ fn collect_defined_unit_names(node: &Node, names: &mut std::collections::HashSet
 		Node::List(words, _, _) => if let Some(variable) = loop_variable(words) { add_unit(variable) },
 		_ => {}
 	}
-	children(node).into_iter().for_each(|child| collect_defined_unit_names(child, names));
+	node.drop_meta().parts().into_iter().for_each(|child| collect_defined_unit_names(child, names));
 }
 
 /// `f(s) := s * 2; f(3 s)`: a parameter named like a unit the program also writes outside the function is a name clash
@@ -789,7 +781,7 @@ fn first_word_of<'a>(node: &'a Node, words: &HashMap<String, String>) -> Option<
 	match node.drop_meta() {
 		Node::Symbol(name) if words.contains_key(name) => Some(node),
 		Node::Key(object, Op::Dot, _) => first_word_of(object, words),
-		_ => children(node).into_iter().find_map(|child| first_word_of(child, words)),
+		_ => node.drop_meta().parts().into_iter().find_map(|child| first_word_of(child, words)),
 	}
 }
 
