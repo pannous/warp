@@ -259,17 +259,19 @@ fn path_node(path: &str) -> Node {
 	parts.fold(first, |object, field| key(object, Op::Dot, field))
 }
 
-/// `kill{print '🕱'}`, `reset{a = 0; b = 0}` as an entry: statements in braces, the field and its block (card
-/// symbolism-object); the braces say it is code, so no warning
+/// `kill{print '🕱'}`, `reset{a = 0; print a}` as an entry: braces holding a statement, the field and its block (card
+/// symbolism-object); the braces say it is code, so no warning. A value in braces is content: markup's
+/// `p{"clicked " + count}` stays an element
 fn code_entry(entry: &Node) -> Option<(String, Node)> {
 	let Node::Key(target, Op::Colon, value) = entry.drop_meta() else { return None };
 	let Node::Symbol(field) = target.drop_meta() else { return None };
 	let Node::List(items, Bracket::Curly, separator) = value.drop_meta() else { return None };
+	let is_statement = |item: &Node| crate::analyzer::is_statement(item, &Bracket::Curly);
 	let statement = Node::List(items.clone(), Bracket::None, separator.clone());
 	let block = match statement_block(value) {
-		Some(block) => block,
-		None if *separator == Separator::Space && crate::analyzer::is_statement(&statement, &Bracket::Curly) => statement,
-		None => return None,
+		Some(block) if items.iter().any(is_statement) => block,
+		_ if *separator == Separator::Space && is_statement(&statement) => statement,
+		_ => return None,
 	};
 	Some((field.clone(), block))
 }
