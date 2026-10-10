@@ -7,6 +7,10 @@ before asking the user; nobody reads it front to back, the code, tests and wiki 
 notes/open_decisions.md.
 
 ## Decided 2026-10-10 (user; via warp-supervisor or the Interviewer)
+- canvas-zero (warp-sound): `use draw` + `show()` without `canvas(…)` uses a default canvas (the playground pane or
+  the window size, else 640×480), never an error. User: "who demanded … errors? We should have defaults." The
+  branch's "a 0×0 image is empty" error is undone. General rule (welcoming.md): a missing setting takes a sensible
+  default; errors only for ambiguity too dangerous to guess.
 - arctan-allow (warp-class): `arctan := arc_tangent` names the function (as `arctan = &arc_tangent`). Partial
   application only with an explicit hole: `inc := add(1, _); inc 5` is 6. Too few arguments without a hole
   (`inc := add 1`) stays the error "add needs 2 arguments", whose fix names `add(1, _)`.
