@@ -363,6 +363,9 @@ addHostPart({
 		sound: {
 			play_file: path => { self.playSoundFile?.(contentText(path)); return null; },
 			stop: () => { self.stopSoundFiles?.(); return null; },
+			// the page's audio clock as the worker keeps it (worker.js); a worker cannot wait for the page's audio
+			queued: () => self.soundsQueued?.() ?? 0,
+			wait: () => null,
 		},
 	},
 });
