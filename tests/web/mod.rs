@@ -8,6 +8,8 @@ mod test_web_playground;
 #[cfg(feature = "native")] // runs node
 mod test_editor_shortcuts; // card keyboard-shortcuts
 #[cfg(feature = "native")] // runs node
+mod test_playground_paint; // card canvas-zero
+#[cfg(feature = "native")] // runs node
 mod test_assistant_edits; // card put-editor: the chat's code applied as edits
 #[cfg(feature = "native")] // runs node
 mod test_editor_mode; // card playground-editor
