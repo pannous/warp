@@ -7,7 +7,7 @@
 //! `go xs.map(f)`, `go for x in xs {…}` and `xs.map(f) @parallel` split their items into tasks (parallel.rs).
 
 use super::words::{FOR_WORD, RETURN_WORD};
-use super::nodes::{call, key};
+use super::nodes::{Counter, call, key};
 use crate::node::{Bracket, Node, Separator};
 use crate::operators::Op;
 
@@ -112,13 +112,13 @@ struct Phrases {
 	assigned: Vec<String>,
 	shared: Vec<String>,
 	/// how many parallel maps and loops got their names
-	parallel_maps: std::cell::Cell<usize>,
+	parallel_maps: Counter,
 }
 
 impl Phrases {
 	/// The number of the next parallel map or loop, naming its temporaries apart
 	fn next_parallel(&self) -> usize {
-		self.parallel_maps.replace(self.parallel_maps.get() + 1)
+		self.parallel_maps.next_number()
 	}
 }
 

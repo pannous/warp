@@ -50,6 +50,7 @@ mod tuple_emitter;
 pub use try_guard::{ABORT_TO, CAUGHT_ERROR, RAN_WITHOUT_ABORT, RAN_WITHOUT_ERROR};
 mod witness;
 pub(crate) mod wasi_emitter;
+const WASI_START: &str = "_start";
 
 pub use big_int::{is_fixnum, EXACT_BUILDERS, INT_RUNTIME};
 
@@ -1162,6 +1163,20 @@ impl WasmGcEmitter {
 		self.code.function(&func);
 		self.exports.export("main", ExportKind::Func, self.next_func_idx);
 		self.main_index = Some(self.next_func_idx);
+		self.next_func_idx += 1;
+		if crate::pipeline::is_for_wagi() {
+			self.emit_wagi_start();
+		}
+	}
+
+	/// `_start`: main without its value, the entry WASI commands and WAGI (`warp build --wagi`) call
+	fn emit_wagi_start(&mut self) {
+		let start_type = self.type_manager.function_type(vec![], vec![]);
+		self.functions.function(start_type);
+		let mut func = Function::new(vec![]);
+		Self::emit_list(&mut func, &[I::Call(self.main_index.expect("main before _start")), I::Drop, I::End]);
+		self.code.function(&func);
+		self.exports.export(WASI_START, ExportKind::Func, self.next_func_idx);
 		self.next_func_idx += 1;
 	}
 

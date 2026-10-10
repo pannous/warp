@@ -4,7 +4,7 @@
 //! where it is called, as the body read it before. A parameter is never taken from a same-named variable: a missing
 //! argument stays an error.
 
-use super::nodes::key;
+use super::nodes::{Counter, key};
 use crate::diagnostic::Diagnostic;
 use crate::min_max::{is_plain, with_bindings};
 use crate::node::{symbol, Bracket, Node, Separator};
@@ -42,7 +42,7 @@ pub fn lower(node: Node) -> Node {
 	if !functions.values().any(|function| !function.extras.is_empty()) && !has_named_call(&node, &functions) {
 		return node;
 	}
-	Rewrite { functions, temporaries: Default::default() }.node(node)
+	Rewrite { functions, temporaries: Counter::starting_at(1) }.node(node)
 }
 
 /// Defaults written as other languages do: Ruby's keyword parameter `def f(a, b: 2)` (a literal after the colon is no
@@ -333,7 +333,7 @@ fn is_effect_free(value: &Node) -> bool {
 
 struct Rewrite {
 	functions: HashMap<String, Function>,
-	temporaries: std::cell::Cell<usize>,
+	temporaries: Counter,
 }
 
 /// `fun = {x*y}` called by name: `fun` is also a function keyword, so the function made of the block is `fun·block`
@@ -428,7 +428,6 @@ impl Rewrite {
 	}
 
 	fn temporary(&self) -> String {
-		self.temporaries.set(self.temporaries.get() + 1);
-		crate::library_words::temporary_name(&[TEMPORARY_BASE[0], TEMPORARY_BASE[1], &self.temporaries.get().to_string()])
+		crate::library_words::temporary_name(&[TEMPORARY_BASE[0], TEMPORARY_BASE[1], &self.temporaries.next_number().to_string()])
 	}
 }

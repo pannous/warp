@@ -96,3 +96,5 @@ mod test_sandboxed_programs; // card ferron-hosting
 mod test_page_rendered_sound; // card playground-refuses
 mod test_task_files; // card task-sound-play
 mod test_page_play_file; // card browser-play
+#[cfg(feature = "native")] // runs the WAGI module with wasmtime and WASI
+mod test_wagi; // card fermyon-hosting

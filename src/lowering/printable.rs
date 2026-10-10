@@ -83,10 +83,22 @@ impl Operations {
 				let body = self.types.in_definition(&head, || self.rewrite(*body));
 				Node::Key(head, Op::Define, Box::new(body))
 			}
+			// `"hi " + bo`, `s + bo`: an instance joining a text joins as its text (card print-oldest: text + anything
+			// printable); `bo + other`, `bo + 1` of another instance or a number stay the type's own sums
+			Node::Key(left, Op::Add, right) if self.joins_printable(&left, &right) || self.joins_printable(&right, &left) => {
+				let joined = |side: Node| self.call(TEXT_OPERATION, &self.printable, &side).unwrap_or_else(|| self.rewrite(side));
+				key(joined(*left), Op::Add, joined(*right))
+			}
 			Node::Key(left, op, right) => key(self.rewrite(*left), op, self.rewrite(*right)),
 			Node::Meta { node, data } => Node::Meta { node: Box::new(self.rewrite(*node)), data },
 			other => other,
 		}
+	}
+
+	/// `instance + other` of a printable instance and a value that is no instance and no number: a text
+	fn joins_printable(&self, instance: &Node, other: &Node) -> bool {
+		let printable = matches!(self.types.shape(instance), Some(Shape::Instance(type_name)) if self.printable.contains(&type_name));
+		printable && self.types.shape(other).is_none() && !matches!(other.drop_meta(), Node::Number(_))
 	}
 
 	/// `text·person(x)`, `iterate·bag(b)` for a value known to be an instance of a type defining the operation

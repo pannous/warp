@@ -8,12 +8,11 @@
 use super::words::OF_WORD;
 use crate::generator_objects::{advanced_variables, generator_call, ITER_WORD};
 use crate::generators::{is_statement_list, yielded_value, Generator, NAME_SEPARATOR};
-use super::nodes::{assign, block, call, int, statement_list, symbol};
+use super::nodes::{Counter, assign, block, call, int, statement_list, symbol};
 use crate::library_words::substitute;
 use crate::node::{Bracket, Node, Separator};
 use crate::operators::Op;
 use crate::warp_parser::{parse, while_do};
-use std::cell::Cell;
 use std::collections::{HashMap, HashSet};
 
 const TAKE_WORD: &str = "take";
@@ -41,13 +40,13 @@ struct Consumers<'a> {
 	generators: &'a HashMap<String, Generator>,
 	/// Variables holding an object with `next()`
 	objects: HashSet<String>,
-	counter: Cell<usize>,
+	counter: Counter,
 }
 
 pub(crate) fn lower(node: Node, generators: &HashMap<String, Generator>) -> Node {
 	let mut objects = advanced_variables(&node);
 	objects.extend(lazily_read_variables(&node, generators));
-	let consumers = Consumers { generators, objects, counter: Cell::new(0) };
+	let consumers = Consumers { generators, objects, counter: Counter::starting_at(1) };
 	let mut found = false;
 	node.visit(&mut |part| found |= consumers.consumer(part).is_some());
 	if !found {
@@ -161,8 +160,8 @@ impl Consumers<'_> {
 		}
 		let node = node.map_children(|child| self.extracted(child, before));
 		let Some((word, sources, limit)) = self.consumer(&node) else { return node };
-		self.counter.set(self.counter.get() + 1);
-		let name = |parts: &[&str]| symbol(&[&[word.as_str(), &self.counter.get().to_string()], parts].concat().join(NAME_SEPARATOR));
+		let number = self.counter.next_number().to_string();
+		let name = |parts: &[&str]| symbol(&[&[word.as_str(), &number], parts].concat().join(NAME_SEPARATOR));
 		let out = name(&[]);
 		before.extend(template(EMPTY, &[("OUT", &out)]));
 		let mut condition = int(1);

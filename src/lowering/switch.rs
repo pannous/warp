@@ -5,10 +5,9 @@
 //! pair `k: v` matches a pair whose key is k. A guard `n if n < 0 => …` binds n to the subject and tests the condition; a relational pattern `> 100 => …` compares it. The shape tests are ordinary type tests (`is_type(x, "list") and count(x) == n`).
 
 use super::words::COUNT_WORD;
-use super::nodes::{call, if_then, key};
+use super::nodes::{Counter, call, if_then, key};
 use crate::node::{text, Bracket, Node, Separator};
 use crate::operators::Op;
-use std::cell::Cell;
 
 pub(crate) const SWITCH_WORDS: [&str; 2] = ["switch", "match"];
 const DEFAULT_KEYS: [&str; 2] = ["default", WILDCARD];
@@ -33,12 +32,12 @@ pub fn lower(node: Node) -> Node {
 	if words.is_empty() {
 		return node;
 	}
-	Lowering { words, switches: Cell::new(0) }.expand(node)
+	Lowering { words, switches: Counter::default() }.expand(node)
 }
 
 struct Lowering<'a> {
 	words: Vec<&'a str>,
-	switches: Cell<usize>,
+	switches: Counter,
 }
 
 struct Case {
@@ -84,8 +83,7 @@ impl Lowering<'_> {
 			return None;
 		}
 		let cases = cases_of(cases)?;
-		let number = self.switches.get();
-		self.switches.set(number + 1);
+		let number = self.switches.next_number();
 		let subject_name = format!("{SUBJECT_PREFIX}{number}");
 		let subject_value = Node::Symbol(subject_name.clone());
 		let (default, cases): (Vec<Case>, Vec<Case>) = cases.into_iter().partition(|case| is_default(&case.key));

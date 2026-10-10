@@ -89,6 +89,12 @@ impl ImportManager {
 	fn emit_wasi_imports(&mut self, type_manager: &mut TypeManager, ctx: &mut Context) {
 		let fd_write_type_idx = type_manager.function_type(vec![ValType::I32; 4], vec![ValType::I32]);
 		self.import_function(ctx, "wasi_snapshot_preview1", "fd_write", fd_write_type_idx, "wasi_fd_write");
+		if ctx.required_functions.contains(super::wasi_emitter::WASI_ENVIRONMENT) {
+			let sizes_type = type_manager.function_type(vec![ValType::I32, ValType::I32], vec![ValType::I32]);
+			for (name, registered) in super::wasi_emitter::ENVIRON_IMPORTS.into_iter().zip(["wasi_environ_sizes_get", "wasi_environ_get"]) {
+				self.import_function(ctx, "wasi_snapshot_preview1", name, sizes_type, registered);
+			}
+		}
 	}
 
 	/// Emit FFI imports for all registered FFI functions, from their library module ("m" for libm, "c" for libc)

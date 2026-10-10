@@ -31,7 +31,12 @@ const WIT_EXTENSION: &str = "wit";
 /// `warp build --component app.warp`: app.component.wasm, the component of that world (src/component_builder.rs)
 const COMPONENT_FLAG: &str = "--component";
 const COMPONENT_EXTENSION: &str = "component.wasm";
-const COMPILE_FLAGS: [&str; 6] = [EXE_FLAG, WASM_FLAG, AOT_FLAG, SITE_FLAG, WIT_FLAG, COMPONENT_FLAG];
+/// `warp build --wagi app.warp`: app.wagi.wasm, its routes answering one WAGI request (lib/wagi.warp), and app.spin.toml
+/// to run it: `spin up -f app.spin.toml` (Spin's wagi executor; Akamai Functions: `spin aka deploy`)
+const WAGI_FLAG: &str = "--wagi";
+const WAGI_EXTENSION: &str = "wagi.wasm";
+const SPIN_MANIFEST_EXTENSION: &str = "spin.toml";
+const COMPILE_FLAGS: [&str; 7] = [EXE_FLAG, WASM_FLAG, AOT_FLAG, SITE_FLAG, WIT_FLAG, COMPONENT_FLAG, WAGI_FLAG];
 const MACHINE_CODE_EXTENSION: &str = "cwasm";
 /// The name of an executable built from inline code (plus the platform's extension)
 const DEFAULT_EXECUTABLE_NAME: &str = "out";
@@ -62,10 +67,11 @@ const REGISTER_COMMAND: &str = "register";
 /// The program `warp serve` serves when it is given none: the first of these in the current folder
 const DEFAULT_PROGRAMS: [&str; 2] = ["app.warp", "main.warp"];
 const WARP_VERSION: &str = env!("CARGO_PKG_VERSION");
-/// The warnings and notes the user said "got it" to, remembered per project: one `ack:<topic> = acknowledged` per line
+/// The warnings, notes and hints the user said "got it" to, in the home folder: one `ack:<topic> = acknowledged` per
+/// line. A "got it" holds wherever warp runs next (card hints-dismissed)
 const ACKNOWLEDGEMENTS_FILE: &str = ".warp-acknowledged";
-/// What earlier versions called the acknowledgements file: its `ack:` lines are adopted
-const OLD_ANSWERS_FILE: &str = ".warp-answers";
+/// Where earlier versions remembered "got it", in the current folder: their `ack:` lines are adopted
+const LOCAL_ACKNOWLEDGEMENTS_FILES: [&str; 2] = [".warp-answers", ACKNOWLEDGEMENTS_FILE];
 /// Never prompt "got it?" after a warning or note (as in CI or a pipe)
 const NO_ASK_FLAG: &str = "--no-ask";
 /// Hints and notes (`prefer ^ over **`) are shown by default; `--no-hints` or WARP_HINTS=0 hide them (card hints-toggle)
@@ -137,8 +143,11 @@ fn apply_flags(args: &mut Vec<String>) {
     if !no_ask && env::var_os("CI").is_none() && io::stdin().is_terminal() && io::stderr().is_terminal() {
         diagnostic::set_acknowledger(Some(std::rc::Rc::new(diagnostic::TerminalAcknowledger)));
     }
-    diagnostic::adopt_acknowledgements(OLD_ANSWERS_FILE, ACKNOWLEDGEMENTS_FILE);
-    diagnostic::use_acknowledgements_file(ACKNOWLEDGEMENTS_FILE);
+    let acknowledgements = dirs_home().join(ACKNOWLEDGEMENTS_FILE);
+    for local_file in LOCAL_ACKNOWLEDGEMENTS_FILES {
+        diagnostic::adopt_acknowledgements(local_file, &acknowledgements);
+    }
+    diagnostic::use_acknowledgements_file(acknowledgements);
 }
 
 /// After the run (also one ending in process::exit), one line telling how to hide the hints it showed
@@ -306,6 +315,9 @@ fn run_command(args: &[String]) {
         if flags.contains(&COMPONENT_FLAG) {
             return write_component(&code, &target);
         }
+        if flags.contains(&WAGI_FLAG) {
+            return write_wagi(&code, &target);
+        }
         if standalone {
             match write_standalone_executable(&code, &target) {
                 Ok(report) => println!("{report}"),
@@ -409,16 +421,17 @@ fn run_command(args: &[String]) {
     }
 }
 
-/// `Warp 🌀 1.2.4`; a debug build also names, on stderr, the commit of the checkout it was built from and the time of
-/// its binary (cards g_oMw8, g_oM-0): `debug build 75d67b068 · built 2026-10-09 14:32`
+/// `🌀 Warp 1.2.4` (its last word the version, tests/common checks it), then on stderr the commit and branch the build
+/// was made from and the time of its binary (cards g_oMw8, g_oM-0, version-banner-version):
+/// `debug build 75d67b068 on main · built 2026-10-09 14:32`
 fn print_version() {
     println!("🌀 Warp {}", WARP_VERSION);
-    if cfg!(debug_assertions) {
-        let commit = option_env!("WARP_COMMIT");
-        let binary = env::current_exe().map(|path| path.display().to_string()).unwrap_or_default();
-        let built = command_line("date", &["-r", &binary, "+%Y-%m-%d %H:%M"]);
-        eprintln!("debug build {} · built {}", commit.unwrap_or("of an unknown commit"), built.as_deref().unwrap_or("?"));
-    }
+    let profile = if cfg!(debug_assertions) { "debug" } else { "release" };
+    let commit = option_env!("WARP_COMMIT").unwrap_or("of an unknown commit");
+    let branch = option_env!("WARP_BRANCH").map(|branch| format!(" on {branch}")).unwrap_or_default();
+    let binary = env::current_exe().map(|path| path.display().to_string()).unwrap_or_default();
+    let built = command_line("date", &["-r", &binary, "+%Y-%m-%d %H:%M"]);
+    eprintln!("{profile} build {commit}{branch} · built {}", built.as_deref().unwrap_or("?"));
 }
 
 /// The first line a successful command prints
@@ -609,6 +622,25 @@ fn write_component(code: &str, target: &str) {
             println!("wrote {} ({} bytes)", path.display(), component.len());
         }
         Err(failure) => fail(format!("warp build --component: {failure}")),
+    }
+}
+
+/// `warp build --wagi`: the WAGI module and its Spin manifest next to the program file
+fn write_wagi(code: &str, target: &str) {
+    let module_path = std::path::Path::new(&compiled_output_path(target)).with_extension(WAGI_EXTENSION);
+    let manifest_path = module_path.with_extension("").with_extension(SPIN_MANIFEST_EXTENSION);
+    let name = module_path.file_stem().and_then(|stem| stem.to_str()).and_then(|stem| stem.split('.').next()).unwrap_or(DEFAULT_EXECUTABLE_NAME).to_string();
+    match warp::pipeline::for_wagi(|| wasm_emitter::compile(code)) {
+        Ok(module) => {
+            fs::write(&module_path, &module.bytes).expect("could not write the WAGI module");
+            let source = module_path.file_name().unwrap_or_default().to_string_lossy();
+            fs::write(&manifest_path, warp::deploy::spin_manifest(&name, &source)).expect("could not write the Spin manifest");
+            println!("wrote {} ({} bytes) and {}", module_path.display(), module.bytes.len(), manifest_path.display());
+        }
+        Err(failure) => {
+            eprintln!("warp build --wagi: {failure}");
+            std::process::exit(1);
+        }
     }
 }
 

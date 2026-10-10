@@ -25,6 +25,9 @@ pub const ERROR_TYPE: &str = "error";
 pub const EMPTY_TYPE: &str = "empty";
 const ARTICLES: [&str; 2] = ["a", "an"];
 const LIST_WORD: &str = "list";
+const MAP_WORD: &str = "map";
+/// The collection types: `x is list`, `x is map`, and of their element type: `x is list of int`, `x is map of text`
+const COLLECTION_WORDS: [&str; 2] = [LIST_WORD, MAP_WORD];
 /// `x is pair`: a `key: value` pair
 const PAIR_WORD: &str = "pair";
 pub const TYPE_WORD: &str = "type";
@@ -50,14 +53,14 @@ use crate::type_kinds::Kind as K;
 /// (`t = int`, `type(π) == real`). `number` covers every number, `real` the exact numbers and π, `rational` the whole
 /// numbers too, `text` a one-character string (a codepoint); `list` and ø both hold the empty list, as `count` takes
 /// it; a ± value is a number. The fixed widths (`int8`, `uint16` …) are src/fixed_width.rs
-const BUILTIN_TYPES: [BuiltinType; 14] = [
+const BUILTIN_TYPES: [BuiltinType; 15] = [
 	builtin("int", &["integer", "long", "i64", "i32"], &[], Some(K::Int), &[K::Int as i64]),
 	builtin("rational", &["exact"], &["int"], Some(K::Int), &[K::Int as i64, K::Float as i64]),
 	builtin("real", &[], &["rational"], Some(K::Int), &[K::Int as i64, K::Float as i64]),
 	builtin("float", &["double", "f64", "f32", "float32", "float64", "fast"], &[], Some(K::Float), &[K::Float as i64]),
 	builtin("number", &[], &["real", "float"], Some(K::Float), &[K::Int as i64, K::Float as i64, K::Uncertain as i64]),
 	builtin("text", &["str", "string"], &["codepoint"], Some(K::Text), &[K::Text as i64, K::Codepoint as i64]),
-	builtin("codepoint", &["char"], &[], Some(K::Codepoint), &[K::Codepoint as i64]),
+	builtin("codepoint", &["char", "character"], &[], Some(K::Codepoint), &[K::Codepoint as i64]),
 	builtin(crate::analyzer::BOOL_TYPE, &["boolean"], &[], Some(K::Int), &[crate::type_kinds::BOOL_MASK_BIT]),
 	builtin("function", &["closure"], &[], Some(K::Function), &[]),
 	builtin(SYMBOL_TYPE, &[], &[], None, &[K::Symbol as i64]),
@@ -65,6 +68,7 @@ const BUILTIN_TYPES: [BuiltinType; 14] = [
 	builtin(EMPTY_TYPE, &["unit", "nil", "ø", "none", "null", "void"], &[], None, &[K::Empty as i64]),
 	builtin(ERROR_TYPE, &[], &[], None, &[K::Error as i64]),
 	builtin(LIST_WORD, &[], &[], None, &[K::List as i64, K::Block as i64, K::Empty as i64]),
+	builtin(MAP_WORD, &[], &[], None, &[]),
 ];
 
 fn builtin_type(word: &str) -> Option<&'static BuiltinType> {
@@ -104,11 +108,14 @@ pub fn type_matches(actual: &str, spec: &str) -> bool {
 	if let Some(conforms) = crate::traits::builtin_conforms(actual, spec) {
 		return conforms;
 	}
-	if let Some(element) = spec.strip_prefix("list of ") {
-		return actual.strip_prefix("list of ").is_some_and(|actual_element| type_matches(actual_element, element));
-	}
-	if spec == LIST_WORD && actual.starts_with("list of ") {
-		return true;
+	for collection in COLLECTION_WORDS {
+		let of = format!("{collection} of ");
+		if let Some(element) = spec.strip_prefix(&of) {
+			return actual.strip_prefix(&of).is_some_and(|actual_element| type_matches(actual_element, element));
+		}
+		if spec == collection {
+			return actual == collection || actual.starts_with(&of);
+		}
 	}
 	actual == spec || builtin_type(spec).is_some_and(|builtin| builtin.covers.iter().any(|covered| type_matches(actual, covered)))
 }
@@ -198,7 +205,7 @@ fn type_spec(words: &[&str], shadowed: &Names) -> Option<String> {
 	}
 	match (*first, rest) {
 		(word, []) if is_type_word(word) => Some(canonical_spec_word(word).to_string()),
-		(LIST_WORD, [of, element @ ..]) if *of == OF_WORD => Some(format!("{LIST_WORD} of {}", type_spec(element, shadowed)?)),
+		(collection, [of, element @ ..]) if COLLECTION_WORDS.contains(&collection) && *of == OF_WORD => Some(format!("{collection} of {}", type_spec(element, shadowed)?)),
 		(word, []) => match plural_element_type(word) {
 			Some(element) => Some(format!("{LIST_WORD} of {}", canonical_spec_word(element))),
 			None if crate::traits::is_builtin_trait(word) || shadowed.types.contains(word) => Some(word.to_string()),

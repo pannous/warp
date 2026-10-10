@@ -231,6 +231,13 @@ pub fn plural_element_type(word: &str) -> Option<&str> {
 	type_word_kind(singular).map(|_| singular)
 }
 
+/// The map type of a variable held as a Node: `m: map = {}`, or `m = {}` given entries (variables.rs type_map_by_first_entry)
+pub fn held_map_type(subject: &Node, scope: &Scope) -> Option<String> {
+	let local = scope.binding(subject.drop_meta().symbol_name()?)?;
+	let type_name = local.type_node.as_ref()?.name();
+	(local.kind == Kind::Empty && type_name.starts_with(MAP_TYPE)).then_some(type_name)
+}
+
 /// The type name `type(x)` reports for a list: a list whose elements are held as Nodes is a plain `list`
 pub fn shown_list_type_name(list: &Node, scope: &Scope) -> String {
 	let type_name = list_type_name(list, scope);

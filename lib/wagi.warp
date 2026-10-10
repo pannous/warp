@@ -1,0 +1,71 @@
+// The standard library module wagi (card fermyon-hosting, notes/hosting.md "Fermyon"): `warp build --wagi` makes a
+// program's routes answer one request the WAGI way (Spin's wagi executor, Akamai Functions): the request comes in the
+// environment (REQUEST_METHOD, PATH_INFO, QUERY_STRING), the answer goes CGI-style to stdout: headers, a blank line, the
+// body. A text answers as text, anything else as JSON, as `warp serve` answers (src/web_server.rs Answer::of).
+// Not yet: request bodies (stdin), percent-decoded query values.
+
+wagi_variable(name:any) := {
+	for entry in split(wasi_environment(), chr(0)) {
+		if starts_with(entry, name + "=") { return entry[count(name) + 1:] }
+	}
+	""
+}
+
+wagi_query(query:any) := {
+	var fields = {}
+	for part in split(query, "&") {
+		if part != "" {
+			let pair = split(part, "=")
+			fields[pair#1] = if count(pair) > 1 then pair#2 else ""
+		}
+	}
+	fields
+}
+
+wagi_request() := {method: wagi_variable("REQUEST_METHOD"), path: wagi_variable("PATH_INFO"), query: wagi_query(wagi_variable("QUERY_STRING")), body: ""}
+
+wagi_json_text(t:any) := {
+	var out = "\""
+	for c in chars(t) {
+		if c == "\"" { out = out + "\\\"" }
+		else if c == "\\" { out = out + "\\\\" }
+		else if c == "\n" { out = out + "\\n" }
+		else if c == "\t" { out = out + "\\t" }
+		else { out = out + c }
+	}
+	out + "\""
+}
+
+// a map (`{n: 1, k: 2}` in a route) is a list of pairs; ["a", "b"] holds none
+wagi_holds_pairs(value:any) := {
+	for item in value { if item is pair { return true } }
+	false
+}
+
+wagi_json_fields(value:any) := {
+	let names = keys(value)
+	let items = values(value)
+	var fields = []
+	for index in 1 to count(names) { fields = fields + [wagi_json_text(str(names#index)) + ":" + wagi_json(items#index)] }
+	"{" + join(fields, ",") + "}"
+}
+
+wagi_json(value:any) := {
+	if value == ø { return "null" }
+	if value is bool { return if value then "true" else "false" }
+	if value is int or value is float { return str(value) }
+	if value is text { return wagi_json_text(value) }
+	if value is pair or wagi_holds_pairs(value) { return wagi_json_fields(value) }
+	if value is list { return "[" + join([wagi_json(item) for item in value], ",") + "]" }
+	wagi_json_text(str(value))
+}
+
+wagi_reply(status:any, content_type:any, body:any) := puts "Status: " + str(status) + "\nContent-Type: " + content_type + "\n\n" + body
+
+wagi_answer(value:any) := {
+	if value is text { return wagi_reply(200, "text/plain; charset=utf-8", value) }
+	wagi_reply(200, "application/json", wagi_json(value))
+}
+
+// lowering/serve.rs page·submitted throws "no route answers …" for a request no route takes
+wagi_failed(message:any) := wagi_reply(if starts_with(message, "no route answers") then 404 else 500, "text/plain; charset=utf-8", message)
