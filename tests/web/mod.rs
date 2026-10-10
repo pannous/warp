@@ -8,6 +8,8 @@ mod test_web_playground;
 #[cfg(feature = "native")] // runs node
 mod test_editor_shortcuts; // card keyboard-shortcuts
 #[cfg(feature = "native")] // runs node
+mod test_assistant_edits; // card put-editor: the chat's code applied as edits
+#[cfg(feature = "native")] // runs node
 mod test_editor_mode; // card playground-editor
 mod test_missing_use; // card clickable-hint
 mod test_guide; // the language guide on the playground page
