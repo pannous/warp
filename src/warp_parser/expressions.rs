@@ -435,8 +435,9 @@ impl WarpParser {
 				Op::Colon | Op::Define if self.only_blanks_before_newline() => {
 					self.with_equals_comparing(false, |parser| parser.parse_indented_block()) // the block of `if c:` and `f(n):=` assigns
 				}
-				// `def foo: hi=2*2` defines foo by the rest of the line, no `(foo: hi) = 2*2`
-				Op::Colon if heads_definition && !glued_pair => {
+				// `def foo: hi=2*2` defines foo by the rest of the line, no `(foo: hi) = 2*2`; Scala's `def f(x: Int): Int = …`
+				// declares its result type
+				Op::Colon if heads_definition && !glued_pair && !self.result_type_follows() => {
 					self.skip_spaces();
 					Some(self.with_equals_comparing(false, |parser| parser.rest_of_statement()))
 				}

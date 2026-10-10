@@ -471,6 +471,12 @@ impl WarpParser {
 		crate::operators::is_function_keyword(&before.chars().rev().collect::<String>())
 	}
 
+	/// `Int` or `float` after the colon of a definition's head: its result type, not its body
+	pub(super) fn result_type_follows(&self) -> bool {
+		let word: String = self.chars[self.pos..].iter().skip_while(|c| **c == ' ' || **c == '\t').take_while(|c| c.is_alphanumeric() || **c == '_').collect();
+		word.starts_with(char::is_uppercase) || crate::analyzer::type_word_kind(&word).is_some()
+	}
+
 	/// Peek for prefix operators (unary operators that bind to right operand)
 	pub(super) fn peek_prefix_operator(&self) -> Option<(Op, usize)> {
 		if self.matches_keyword("while") { return Some((Op::While, 5)); }
