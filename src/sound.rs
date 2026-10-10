@@ -1,5 +1,6 @@
 //! sound_samples(samples, count, rate) natively (card basic-sound, lib/sound.warp): 16-bit mono samples as a WAV file in the
-//! system's temporary folder (warp-sound/sound.wav, then sound-2.wav … within one run, as paint's PNGs), played by the
+//! system's temporary folder (warp-sound/sound-<process id>.wav, then sound-<process id>-2.wav …: runs at the same time
+//! never share a file; card sound-wavs), played by the
 //! system's player when the warp binary may reach the user (paint::shows_windows: never under WARP_NO_WINDOW, CI or
 //! tests, which only get the file). The playground plays the same samples with WebAudio (host.js sound_samples).
 //! A sound is queued on the audio clock behind those before it and `play` returns at once (card sound-pro): a player
@@ -158,6 +159,7 @@ fn queued(path: PathBuf) -> Result<(), String> {
 				if stops == STOPS.load(Ordering::Relaxed) {
 					play_wav(&path, stops);
 				}
+				let _ = std::fs::remove_file(&path); // played or stopped: per-process names would pile up otherwise
 				PENDING.fetch_sub(1, Ordering::Relaxed);
 			}
 		});
@@ -291,7 +293,8 @@ fn wav_file(data: &[u8], rate: u32) -> Result<PathBuf, String> {
 	let folder = std::env::temp_dir().join(FOLDER);
 	std::fs::create_dir_all(&folder).map_err(|failure| format!("sound: cannot create {}: {failure}", folder.display()))?;
 	let call = SOUNDED.fetch_add(1, Ordering::Relaxed) + 1;
-	let path = folder.join(if call == 1 { format!("{FILE_STEM}.wav") } else { format!("{FILE_STEM}-{call}.wav") });
+	let process = std::process::id();
+	let path = folder.join(if call == 1 { format!("{FILE_STEM}-{process}.wav") } else { format!("{FILE_STEM}-{process}-{call}.wav") });
 	std::fs::write(&path, wav_of_data(data, rate)).map_err(|failure| format!("sound: cannot write {}: {failure}", path.display()))?;
 	Ok(path)
 }
