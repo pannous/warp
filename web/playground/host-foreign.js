@@ -258,7 +258,9 @@ addHostPart({
 			const called = `${runtimeName} ${typeof moduleName === "string" ? moduleName : "value"}.${memberName}`;
 			return typeof result?.then === "function" ? awaitedPromise(holder, called, result, valueOf) : valueOf(result);
 		};
-		return { foreign_call: holder.awaited ? awaitingCall(foreignCall) : foreignCall };
+		return {
+			foreign_call: holder.awaited ? awaitingCall(foreignCall) : foreignCall,
+		};
 	},
 	imports: holder => ({
 		m: new Proxy(LIBM, { get: (libm, name) => libm[name] ?? Math[name] }),
