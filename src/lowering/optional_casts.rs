@@ -2,20 +2,19 @@
 //! optional does (P179): used as a T it is one, ø there is the loud error of ø as a T. The value is computed once:
 //! `f() as text?` becomes `(optional·0 = f(); if optional·0 == ø then ø else optional·0 as text)`.
 
-use super::nodes::{if_then_else, key};
+use super::nodes::{Counter, if_then_else, key};
 use crate::node::{symbol, Bracket, Node, Separator};
 use crate::operators::Op;
-use std::cell::Cell;
 
 const OPTIONAL_PREFIX: &str = "optional·";
 const OPTIONAL_MARK: char = '?';
 
 pub fn lower(node: Node) -> Node {
-	Optionals { counter: Cell::new(0) }.rewrite(node)
+	Optionals { counter: Counter::default() }.rewrite(node)
 }
 
 struct Optionals {
-	counter: Cell<usize>,
+	counter: Counter,
 }
 
 impl Optionals {
@@ -38,7 +37,7 @@ impl Optionals {
 		if let Node::Symbol(_) = value.drop_meta() {
 			return cast(value);
 		}
-		let held = Node::Symbol(format!("{OPTIONAL_PREFIX}{}", self.counter.replace(self.counter.get() + 1)));
+		let held = Node::Symbol(format!("{OPTIONAL_PREFIX}{}", self.counter.next_number()));
 		let assignment = key(held.clone(), Op::Assign, value);
 		Node::List(vec![assignment, cast(held)], Bracket::Round, Separator::Semicolon)
 	}

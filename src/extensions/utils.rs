@@ -7,6 +7,15 @@ use std::path::Path;
 #[cfg(not(feature = "native"))]
 const NO_NETWORK: &str = "no network in this build of warp (compiled without the native feature)";
 
+/// `://host/path` (no scheme) takes the page's protocol (web/playground/host-files.js withPageProtocol); without a page
+/// it is https (card pannous-com)
+const DEFAULT_SCHEME: &str = "https";
+const SCHEME_MARK: &str = "://";
+
+pub fn with_default_scheme(url: &str) -> String {
+	if url.starts_with(SCHEME_MARK) { format!("{DEFAULT_SCHEME}{url}") } else { url.to_string() }
+}
+
 #[cfg(not(feature = "native"))]
 pub fn download(url: &str) -> String {
 	log::warn!("download {url}: {NO_NETWORK}");
@@ -23,7 +32,7 @@ pub fn download(url: &str) -> String {
 #[must_use]
 #[cfg(all(feature = "native", not(test)))]
 pub fn download(url: &str) -> String {
-	match ureq::get(url).call().map_err(anyhow::Error::from).and_then(|mut r| r.body_mut().read_to_string().map_err(anyhow::Error::from)) {
+	match ureq::get(&with_default_scheme(url)).call().map_err(anyhow::Error::from).and_then(|mut r| r.body_mut().read_to_string().map_err(anyhow::Error::from)) {
 		Ok(body) => body,
 		Err(e) => {
 			eprintln!("download failed for {url}: {e}");
@@ -46,7 +55,7 @@ pub fn download_within(url: &str, _timeout: std::time::Duration) -> Result<Strin
 #[cfg(all(feature = "native", not(test)))]
 pub fn download_within(url: &str, timeout: std::time::Duration) -> Result<String, String> {
 	let reason = |error| network_reason(error, timeout);
-	let mut response = agent_within(timeout, true).get(url).call().map_err(reason)?;
+	let mut response = agent_within(timeout, true).get(&with_default_scheme(url)).call().map_err(reason)?;
 	response.body_mut().read_to_string().map_err(reason)
 }
 
@@ -56,7 +65,7 @@ pub fn download_within(url: &str, timeout: std::time::Duration) -> Result<String
 #[cfg(feature = "native")]
 pub fn post_within(url: &str, body: &str, headers: &[(String, String)], timeout: std::time::Duration) -> Result<String, String> {
 	let reason = |error| network_reason(error, timeout);
-	let mut request = agent_within(timeout, false).post(url).header("Content-Type", "text/plain; charset=utf-8");
+	let mut request = agent_within(timeout, false).post(&with_default_scheme(url)).header("Content-Type", "text/plain; charset=utf-8");
 	for (name, value) in headers {
 		request = request.header(name, value);
 	}

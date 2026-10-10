@@ -209,3 +209,13 @@ fn test_sum_of_a_typed_list_is_one_operation() {
 	assert_eq!(eval("xs=[1.5f,2.5f]; y = sum xs; y * 2"), eval("8.0f"));
 	assert_eq!(printed("xs=[1,2,3]; [sum xs]"), "[6]");
 }
+
+/// card int-list: `[0.0, 0.0]` is a list of exact ints; a float written into it later widens its element type from the
+/// start, so a read before that write (max's temporary) is a float too
+#[test]
+fn test_float_written_into_exact_decimal_list() {
+	assert_eq!(printed("shown = [0.0, 0.0]; for i in 0..2 { shown[i] = max(sqrt(2.0), shown[i]) }; shown"), "[1.4142135623730951 1.4142135623730951]");
+	assert_eq!(eval("shown = [0.0, 0.0]; for i in 0..2 { shown[i] = max(sqrt(2.0), shown[i]) * 0.75 }; shown[0] * 0.75"), eval("sqrt(2.0) * 0.75 * 0.75"));
+	// the same for a plain variable read before its float write
+	assert_eq!(eval("x = 0.0; y = 0.0; for i in 0..3 { y = x * 2; x = sqrt(2.0) }; y"), eval("sqrt(2.0) * 2"));
+}

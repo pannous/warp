@@ -38,6 +38,9 @@ emitted by `emit_indexed_node` as `map_find`, and on a miss the runtime error `n
   codepoint and is a key only as a literal (`p["x"]`).
 - `p[k]` with a symbol `k` keeps the old meaning: the variable `k` if there is one, else the name; its miss is `key not found`.
 - The possessive is a parser rule: an identifier directly followed by `'s ` and an identifier (`p's name`).
+- On a list of instances a field read maps (card people-map, broadcasting.rs `element_fields`): `people's name`,
+  `people.name`, `name of people` are `people.map(p => p.name)`. The shapes come from InstanceTypes over the program as
+  type_constructor will construct it, since broadcasting runs before it; a list word (`people.count`) stays the list's.
 - Not done: assignment to a field (row 8).
 
 ## Map words (fix-maps, Dijkstra field test)

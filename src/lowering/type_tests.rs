@@ -231,8 +231,25 @@ fn compared_with_type(subject: Node, word: &Node, spec: String, shadowed: &Names
 	Node::False
 }
 
+/// `x is int`; `type(x) is int` tests x, as the type of x is what it names (card type-int)
 fn is_type_call(subject: Node, spec: String) -> Node {
-	call(IS_TYPE, vec![subject, Node::Text(spec)])
+	let tested = typed_argument(&subject).unwrap_or(subject);
+	call(IS_TYPE, vec![tested, Node::Text(spec)])
+}
+
+/// x of `type(x)`
+fn typed_argument(node: &Node) -> Option<Node> {
+	match node.drop_meta() {
+		Node::List(items, _, _) if items.len() == 2 && items[0].is_symbol(TYPE_WORD) => Some(items[1].clone()),
+		_ => None,
+	}
+}
+
+/// `int is number`: a type word tested against a type is known at once
+fn type_word_test(subject: &Node, spec: &str, shadowed: &Names) -> Option<Node> {
+	let Node::Symbol(word) = subject.drop_meta() else { return None };
+	let actual = type_spec(&[word.as_str()], shadowed)?;
+	Some(if type_matches(&actual, spec) { Node::True } else { Node::False })
 }
 
 fn expand(node: Node, shadowed: &Names) -> Node {
@@ -249,7 +266,7 @@ fn expand(node: Node, shadowed: &Names) -> Node {
 		}
 		Node::Key(subject, Op::Eq, right) => match symbol_words(std::slice::from_ref(&*right)).and_then(|words| type_spec(&words, shadowed)) {
 			Some(spec) if is_equality_operand(&right) => compared_with_type(*subject, &right, spec, shadowed),
-			Some(spec) => is_type_call(expand(*subject, shadowed), spec),
+			Some(spec) => type_word_test(&subject, &spec, shadowed).unwrap_or_else(|| is_type_call(expand(*subject, shadowed), spec)),
 			None => key(expand(*subject, shadowed), Op::Eq, expand(*right, shadowed)),
 		},
 		Node::Key(left, op, right) => key(expand(*left, shadowed), op, expand(*right, shadowed)),

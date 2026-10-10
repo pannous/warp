@@ -1,5 +1,6 @@
 // The standard library module json (notes/stdlib.md section 7): `use json`. Warp data is a superset of JSON; the
-// adapter std_pure parses and writes it (serde_json natively, JSON.parse / JSON.stringify in the browser)
+// adapter std_pure parses and writes it (serde_json natively, JSON.parse / JSON.stringify in the browser); parse reads
+// JSON5 too (comments, single quotes, trailing commas, bare keys), and `json(t)` is json.parse(t) without `use json`
 parse_json(text:any) := std_pure("json", "parse", [text])
 to_json(value:any) := std_pure("json", "to_json", [value])
 // to_json in a program with classes (class_methods lower_json_classes): an instance is its fields

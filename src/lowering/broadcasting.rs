@@ -3,11 +3,14 @@
 //! a list literal is mapped (`square xs` → `map xs square`). A function of one parameter broadcasts when the parameter is
 //! declared with a scalar type (`x:int`, `square number`, P50) or, undeclared, is an arithmetic operand of the body; a
 //! function of a list (`count(xs)`, `xs#2`, `xs:list`) takes the list whole. Operators never broadcast (`[1 2 3]*2`).
+//! A field read on a list of instances reads it of each: `people's name`, `people.name`, `name of people` are
+//! `people.map(p => p.name)` (card people-map).
 
-use super::words::{MAP_WORD, SUM_WORD};
-use super::nodes::{call, is_colon_pair, key};
+use super::words::{MAP_WORD, OF_WORD, SUM_WORD};
+use super::nodes::{Counter, call, is_colon_pair, key};
 use crate::analyzer::{annotated_kind, list_element_type};
 use crate::function_values::{definitions, Definition};
+use crate::traits::InstanceTypes;
 use crate::type_kinds::Kind;
 use crate::lambdas::IMPLICIT_PARAMETER;
 use crate::node::{symbol, Bracket, Node, Separator};
@@ -280,7 +283,20 @@ pub fn lower(program: Node) -> Node {
 	let list_variables = assigned.into_iter().filter(|(_, only_lists)| *only_lists).map(|(name, _)| name).collect();
 	let scalar_parameters = found.iter().map(|definition| (definition.name.clone(), definition.params.iter().map(|param| takes_a_scalar(param, &definition.body)).collect())).collect();
 	let [defines_dot, defines_sum] = [DOT_WORD, SUM_WORD].map(|word| defined.contains(&word.to_string()));
-	Broadcast { functions: broadcasting, list_variables, scalar_parameters, defines_dot, defines_sum, paired: Default::default(), shadowed: Default::default() }.rewrite(program)
+	let instances = element_shapes(&program);
+	Broadcast { functions: broadcasting, list_variables, scalar_parameters, defines_dot, defines_sum, instances, paired: Default::default(), shadowed: Default::default() }.rewrite(program)
+}
+
+/// The shapes of the program's variables as type_constructor (a later pass) will construct its instances, for a program
+/// that reads a field by name (`x.name`, `x's name`, `name of x`); None for any other
+fn element_shapes(program: &Node) -> Option<InstanceTypes> {
+	let mut reads_a_field = false;
+	program.visit(&mut |part| match part {
+		Node::Key(_, Op::Dot, field) => reads_a_field |= field.symbol_name().is_some(),
+		Node::List(items, _, _) => reads_a_field |= matches!(items.as_slice(), [_, of, _] if of.is_symbol(OF_WORD)),
+		_ => {}
+	});
+	reads_a_field.then(|| InstanceTypes::of(&crate::type_constructor::lower(program.clone())))
 }
 
 /// `map(list, broadcast_item => applied(broadcast_item))`
@@ -428,8 +444,10 @@ struct Broadcast {
 	scalar_parameters: HashMap<String, Vec<bool>>,
 	defines_dot: bool,
 	defines_sum: bool,
+	/// The shapes of the program's variables: which field reads map over a list of instances
+	instances: Option<InstanceTypes>,
 	/// element-wise operators between two lists so far: each holds its lists under names of its own
-	paired: std::cell::Cell<usize>,
+	paired: Counter,
 	/// The untyped parameters of the functions being rewritten: their own values, not the program's list variables of
 	/// the same names (card param-named-like-global)
 	shadowed: std::cell::RefCell<Vec<String>>,
@@ -462,6 +480,10 @@ impl Broadcast {
 				}).collect();
 				self.broadcast_call(&items, &bracket, &separator)
 					.or_else(|| self.broadcast_one_argument(&items, &bracket, &separator))
+					.or_else(|| match items.as_slice() {
+						[field, of, list] if of.is_symbol(OF_WORD) => self.element_fields(list, field),
+						_ => None,
+					})
 					.unwrap_or(Node::List(items, bracket, separator))
 			}
 			Node::Key(left, op, right) if matches!(left.drop_meta(), Node::Empty) && SCALAR_OPERATORS.contains(&op) => {
@@ -483,7 +505,7 @@ impl Broadcast {
 				if op == Op::Mul && self.is_list(&left) && self.is_list(&right) {
 					return self.inner_product(*left, *right);
 				}
-				let method_call = (op == Op::Dot).then(|| self.broadcast_method(&left, &right)).flatten();
+				let method_call = (op == Op::Dot).then(|| self.broadcast_method(&left, &right).or_else(|| self.element_fields(&left, &right))).flatten();
 				method_call.unwrap_or(Node::Key(left, op, right))
 			}
 			Node::Meta { node, data } => Node::Meta { node: Box::new(self.rewrite(*node)), data },
@@ -522,6 +544,15 @@ impl Broadcast {
 			return None;
 		}
 		self.broadcast_call(&[Node::Symbol(name.clone()), receiver.clone()], &Bracket::Round, &Separator::None)
+	}
+
+	/// `people.name` of a list of instances whose type declares the field name: `map(people, item => item.name)`; a list's
+	/// own words (`people.count`) and a parameter of the same name as the list stay as they are
+	fn element_fields(&self, list: &Node, field: &Node) -> Option<Node> {
+		let name = field.symbol_name()?;
+		let shadowed = list.symbol_name().is_some_and(|variable| self.shadowed.borrow().iter().any(|parameter| parameter == variable));
+		let is_list_word = crate::library_words::is_library_word(name);
+		(!shadowed && !is_list_word && self.instances.as_ref().is_some_and(|instances| instances.is_element_field(list, name))).then(|| each_item(list.clone(), |item| key(item, Op::Dot, field.clone())))
 	}
 
 	/// A list variable or a range: `sqrt xs`, `sqrt (1 to 4)` map over its items
@@ -572,7 +603,7 @@ impl Broadcast {
 
 	/// The template's names made this rewrite's own: LEFT → paired_left_3 …
 	fn namer(&self) -> impl Fn(&str) -> String {
-		named_by(self.paired.replace(self.paired.get() + 1).to_string())
+		named_by(self.paired.next_number().to_string())
 	}
 
 	/// `sum(xs .op ys)`, `sum(xs .op k)`: one loop adding the items, the element-wise list never built

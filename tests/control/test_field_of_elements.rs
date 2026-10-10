@@ -35,3 +35,11 @@ fn a_field_of_a_filtered_table_reads_only_its_rows() {
 	is!(&stored("names = name of people with age > 48\nnames#1 + names#2"), "N49N50");
 	assert_eq!(warp::database::rows_read(), before + 2, "name of a filtered table read other rows than its two");
 }
+
+// card name-people: a list literal of one class's instances is a list of that class without the declared type
+#[test]
+fn with_filters_an_untyped_list_of_instances() {
+	let untyped = "class P{name: text; age: int}\npeople = [P(\"Al\", 30), P(\"Bo\", 10), P(\"Cy\", 40)]";
+	is!(&format!("{untyped}\nstr(name of people with age > 20)"), "[\"Al\" \"Cy\"]");
+	is!(&format!("{untyped}\ncount(people where age > 20)"), 2);
+}
