@@ -6,8 +6,8 @@
 //! `return`); effects, divergence aside, are never cached.
 
 use super::nodes::{is_call_head, key};
-use crate::analyzer::{captured_variables, collect_variables, extract_user_functions, param_kind, Scope};
-use crate::context::{Context, UserFunctionDef};
+use crate::analyzer::{captured_variables, collect_variables, param_kind, Scope};
+use crate::context::UserFunctionDef;
 use crate::effects::{Effect, EffectReport, EffectSet};
 use crate::library_words::substitute;
 use crate::node::{Bracket, Node, Separator};
@@ -23,8 +23,7 @@ const ARGUMENT_PLACEHOLDER: &str = "memo_argument";
 const BODY_PLACEHOLDER: &str = "memo_body";
 
 pub fn lower(program: Node) -> Node {
-	let mut context = Context::new();
-	extract_user_functions(&mut context, &program);
+	let context = crate::analyzer::function_context(&program);
 	// the shape first: the effects and variables of the whole program only when some function has it
 	let candidates: Vec<&UserFunctionDef> = context.user_functions.values().filter(|function| has_memoizable_shape(function)).collect();
 	if candidates.is_empty() {

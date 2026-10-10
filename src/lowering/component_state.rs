@@ -11,7 +11,7 @@
 //! A component whose markup holds a style sheet names itself on its root element (`data-warp-scope: "Card"`), so the
 //! sheet styles only its own elements (html.rs, card web-scoped).
 
-use super::nodes::{call, key};
+use super::nodes::{call, key, named_assignment};
 use crate::element_events::{element_items, handler_at, has_element_handler, HANDLER_ATTRIBUTE_PREFIX};
 use crate::law::substitute;
 use crate::node::{symbol, Bracket, Node, Separator};
@@ -121,7 +121,7 @@ fn stateful_component(statement: &Node) -> Option<StatefulComponent> {
 	// what its handlers and its cleanup read is kept per instance
 	let cleanups = statements.iter().filter_map(lifecycle).filter(|(word, _)| word == CLEANUP).flat_map(|(_, body)| crate::variable_signals::symbols(&body));
 	let mentioned: Vec<String> = handler_symbols(&statements).into_iter().chain(cleanups).collect();
-	let state: Vec<(String, Node)> = statements.iter().filter_map(assignment).filter(|(name, _)| mentioned.contains(name)).collect();
+	let state: Vec<(String, Node)> = statements.iter().filter_map(named_assignment).filter(|(name, _)| mentioned.contains(name)).collect();
 	(!state.is_empty() || statements.iter().any(|statement| lifecycle(statement).is_some())).then_some((*head, statements, state))
 }
 
@@ -158,17 +158,6 @@ fn with_attribute(element: Node, attribute: Node) -> Option<Node> {
 		single => vec![single],
 	};
 	Some(Node::Key(tag, op, Box::new(Node::List(std::iter::once(attribute).chain(items).collect(), Bracket::Curly, Separator::Space))))
-}
-
-/// `x = value`: the name and the value
-fn assignment(statement: &Node) -> Option<(String, Node)> {
-	match statement.drop_meta() {
-		Node::Key(name, Op::Assign, value) => match name.drop_meta() {
-			Node::Symbol(name) => Some((name.clone(), value.as_ref().clone())),
-			_ => None,
-		},
-		_ => None,
-	}
 }
 
 /// The names the element handlers in the statements mention
@@ -255,7 +244,7 @@ impl Component {
 				}
 				continue;
 			}
-			let first_set = assignment(&statement).and_then(|(name, initial)| self.state.iter().find(|(variable, _, _)| *variable == name).map(|(_, _, list)| (list.clone(), initial)));
+			let first_set = named_assignment(&statement).and_then(|(name, initial)| self.state.iter().find(|(variable, _, _)| *variable == name).map(|(_, _, list)| (list.clone(), initial)));
 			lowered.push(match first_set {
 				Some((list, initial)) => with(FIRST_SET, vec![("STATE", Node::Symbol(list)), ("KEY", Node::Symbol(self.key.clone())), ("INITIAL", self.read(initial))]),
 				None => self.read(statement),

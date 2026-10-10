@@ -50,9 +50,14 @@ The words above are layer 1, the toy layer. Each layer below keeps the ones abov
    without speakers (tests/programs/test_sound_render.rs). The samples are kept in memory (44 KB a second at 22050 Hz),
    not read back from $TMPDIR/warp-sound: that folder is shared by all warp processes. The playground refuses it (its
    files are texts).
+   Handles built (step 3, 2026-10-10): `play`, `melody`, `tone` and `play "song.mp3"` give the sound's handle, its
+   number in the run (sounds and music files counted together, from 1; the playground counts per run in worker.js);
+   `stop_sound(h)` drops that one from the queue or stops its player, `stop_sound` (handle 0) all of them
+   (tests/programs/test_sound_handles.rs). lib/sound.warp's sound names the handle before returning it: card
+   block-data-sound.
    Still to build:
-   Expected: a shared audio clock, sample-accurate scheduling (`at 2 beats play C4`), `play` returns a handle (stop,
-   ramp its gain), voices overlap. Tempo as a unit: `bpm`, `beat`, `bar` (`play C4 for 1/4 beat`).
+   Expected: a shared audio clock, sample-accurate scheduling (`at 2 beats play C4`), ramping a handle's gain, voices
+   overlap. Tempo as a unit: `bpm`, `beat`, `bar` (`play C4 for 1/4 beat`).
 2. Music values, not frequencies. `Note` (pitch class, octave, MIDI number, cents), `Interval`, `Chord(C4, major7)`,
    `Scale(D, dorian)`, transposition, tuning (A4 = 442Hz, just intonation), velocity. Note names parsed, not a table.
 3. Synthesis. Oscillators (sine, saw, square, triangle, noise, wavetable, band-limited, detune, unison), ADSR

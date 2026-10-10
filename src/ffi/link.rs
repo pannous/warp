@@ -472,7 +472,104 @@ fn generate_signature_key(params: &[ParamType], ret: RetType) -> String {
     key
 }
 
-/// Create FFI wrapper with typed function pointer call
+/// A C argument from its wasm value: a pointer is an offset into the caller's memory, a double's NaN canonical
+#[cfg(feature = "native")]
+trait NativeArgument {
+    fn of(caller: &mut wasmtime::Caller<'_, FfiState>, value: &Val) -> Self;
+}
+
+#[cfg(feature = "native")]
+impl NativeArgument for i32 {
+    fn of(_: &mut wasmtime::Caller<'_, FfiState>, value: &Val) -> Self {
+        value.unwrap_i32()
+    }
+}
+
+#[cfg(feature = "native")]
+impl NativeArgument for f32 {
+    fn of(_: &mut wasmtime::Caller<'_, FfiState>, value: &Val) -> Self {
+        value.unwrap_f32()
+    }
+}
+
+#[cfg(feature = "native")]
+impl NativeArgument for f64 {
+    fn of(_: &mut wasmtime::Caller<'_, FfiState>, value: &Val) -> Self {
+        warp_runtime::floats::canonical_nan(value.unwrap_f64())
+    }
+}
+
+#[cfg(feature = "native")]
+impl NativeArgument for *const u8 {
+    fn of(caller: &mut wasmtime::Caller<'_, FfiState>, value: &Val) -> Self {
+        get_memory_ptr(caller, value.unwrap_i32() as usize)
+    }
+}
+
+/// A C result as the wasm function's result, none of void
+#[cfg(feature = "native")]
+trait NativeResult {
+    fn value(self) -> Option<Val>;
+}
+
+#[cfg(feature = "native")]
+impl NativeResult for () {
+    fn value(self) -> Option<Val> {
+        None
+    }
+}
+
+#[cfg(feature = "native")]
+impl NativeResult for i32 {
+    fn value(self) -> Option<Val> {
+        Some(Val::I32(self))
+    }
+}
+
+#[cfg(feature = "native")]
+impl NativeResult for f32 {
+    fn value(self) -> Option<Val> {
+        Some(Val::F32(self.to_bits()))
+    }
+}
+
+#[cfg(feature = "native")]
+impl NativeResult for f64 {
+    fn value(self) -> Option<Val> {
+        Some(Val::F64(self.to_bits()))
+    }
+}
+
+/// A C bool returned as an int: 1 for any non-zero
+#[cfg(feature = "native")]
+#[repr(transparent)]
+struct CBool(i32);
+
+#[cfg(feature = "native")]
+impl NativeResult for CBool {
+    fn value(self) -> Option<Val> {
+        Some(Val::I32(i32::from(self.0 != 0)))
+    }
+}
+
+/// Link the library function called through a typed C function pointer: `link_typed!(…, (i32, f32) -> i32)`
+#[cfg(feature = "native")]
+macro_rules! link_typed {
+    ($linker:expr, $lib_name:expr, $func_name:expr, $func_type:expr, $func_ptr:expr, ($($argument:ty),*) $(-> $result:ty)?) => {
+        link_native($linker, $lib_name, $func_name, $func_type, move |#[allow(unused_mut, unused_variables)] mut caller, params, results| {
+            let f: extern "C" fn($($argument),*) $(-> $result)? = unsafe { std::mem::transmute($func_ptr) };
+            #[allow(unused_mut, unused_variables)] // a function without parameters reads no values
+            let mut values = params.iter();
+            let result = f($(<$argument as NativeArgument>::of(&mut caller, values.next().expect("a value per parameter"))),*);
+            if let Some(value) = NativeResult::value(result) {
+                results[0] = value;
+            }
+            Ok(())
+        })
+    };
+}
+
+/// Create FFI wrapper with typed function pointer call: the common patterns of raylib, SDL, libm, by signature key
 #[cfg(feature = "native")]
 #[allow(clippy::too_many_arguments)]
 fn create_ffi_wrapper(
@@ -485,176 +582,27 @@ fn create_ffi_wrapper(
     param_types: &[ParamType],
     ret_type: RetType,
 ) -> Result<()> {
-    // Clone for closure
-    let param_types = param_types.to_vec();
-
-    // Dispatch based on signature - common patterns for raylib/SDL/etc.
     match sig_key {
-        // void -> void
-        "_V" => {
-            link_native(linker, lib_name, func_name, func_type, move |_, _, _| {
-                let f: extern "C" fn() = unsafe { std::mem::transmute(func_ptr) };
-                f();
-                Ok(())
-            })?;
-        }
-        // void -> int (WindowShouldClose, GetMouseX, etc.)
-        "_I" => {
-            link_native(linker, lib_name, func_name, func_type, move |_, _, results| {
-                let f: extern "C" fn() -> i32 = unsafe { std::mem::transmute(func_ptr) };
-                results[0] = Val::I32(f());
-                Ok(())
-            })?;
-        }
-        // void -> bool
-        "_B" => {
-            link_native(linker, lib_name, func_name, func_type, move |_, _, results| {
-                let f: extern "C" fn() -> i32 = unsafe { std::mem::transmute(func_ptr) };
-                results[0] = Val::I32(if f() != 0 { 1 } else { 0 });
-                Ok(())
-            })?;
-        }
-        // void -> float
-        "_F" => {
-            link_native(linker, lib_name, func_name, func_type, move |_, _, results| {
-                let f: extern "C" fn() -> f32 = unsafe { std::mem::transmute(func_ptr) };
-                results[0] = Val::F32(f().to_bits());
-                Ok(())
-            })?;
-        }
-        // void -> double
-        "_D" => {
-            link_native(linker, lib_name, func_name, func_type, move |_, _, results| {
-                let f: extern "C" fn() -> f64 = unsafe { std::mem::transmute(func_ptr) };
-                results[0] = Val::F64(f().to_bits());
-                Ok(())
-            })?;
-        }
-        // int -> void (SetTargetFPS, etc.)
-        "I_V" => {
-            link_native(linker, lib_name, func_name, func_type, move |_, params, _| {
-                let f: extern "C" fn(i32) = unsafe { std::mem::transmute(func_ptr) };
-                f(params[0].unwrap_i32());
-                Ok(())
-            })?;
-        }
-        // int -> int (IsKeyPressed, etc.)
-        "I_I" => {
-            link_native(linker, lib_name, func_name, func_type, move |_, params, results| {
-                let f: extern "C" fn(i32) -> i32 = unsafe { std::mem::transmute(func_ptr) };
-                results[0] = Val::I32(f(params[0].unwrap_i32()));
-                Ok(())
-            })?;
-        }
-        // int -> bool
-        "I_B" => {
-            link_native(linker, lib_name, func_name, func_type, move |_, params, results| {
-                let f: extern "C" fn(i32) -> i32 = unsafe { std::mem::transmute(func_ptr) };
-                results[0] = Val::I32(if f(params[0].unwrap_i32()) != 0 { 1 } else { 0 });
-                Ok(())
-            })?;
-        }
-        // int,int -> void
-        "II_V" => {
-            link_native(linker, lib_name, func_name, func_type, move |_, params, _| {
-                let f: extern "C" fn(i32, i32) = unsafe { std::mem::transmute(func_ptr) };
-                f(params[0].unwrap_i32(), params[1].unwrap_i32());
-                Ok(())
-            })?;
-        }
-        // int,int -> int
-        "II_I" => {
-            link_native(linker, lib_name, func_name, func_type, move |_, params, results| {
-                let f: extern "C" fn(i32, i32) -> i32 = unsafe { std::mem::transmute(func_ptr) };
-                results[0] = Val::I32(f(params[0].unwrap_i32(), params[1].unwrap_i32()));
-                Ok(())
-            })?;
-        }
-        // int,int,ptr -> void (InitWindow with title)
-        "IIP_V" => {
-            link_native(linker, lib_name, func_name, func_type, move |mut caller, params, _| {
-                let f: extern "C" fn(i32, i32, *const u8) = unsafe { std::mem::transmute(func_ptr) };
-                let ptr = get_memory_ptr(&mut caller, params[2].unwrap_i32() as usize);
-                f(params[0].unwrap_i32(), params[1].unwrap_i32(), ptr);
-                Ok(())
-            })?;
-        }
-        // int,int,float,int -> void (DrawCircle: x, y, radius, color)
-        "IIFI_V" => {
-            link_native(linker, lib_name, func_name, func_type, move |_, params, _| {
-                let f: extern "C" fn(i32, i32, f32, i32) = unsafe { std::mem::transmute(func_ptr) };
-                f(
-                    params[0].unwrap_i32(),
-                    params[1].unwrap_i32(),
-                    params[2].unwrap_f32(),
-                    params[3].unwrap_i32(),
-                );
-                Ok(())
-            })?;
-        }
-        // int,int,int,int,int -> void (DrawRectangle: x, y, w, h, color)
-        "IIIII_V" => {
-            link_native(linker, lib_name, func_name, func_type, move |_, params, _| {
-                let f: extern "C" fn(i32, i32, i32, i32, i32) = unsafe { std::mem::transmute(func_ptr) };
-                f(
-                    params[0].unwrap_i32(),
-                    params[1].unwrap_i32(),
-                    params[2].unwrap_i32(),
-                    params[3].unwrap_i32(),
-                    params[4].unwrap_i32(),
-                );
-                Ok(())
-            })?;
-        }
-        // ptr,int,int,int -> void (DrawText: text, x, y, fontSize, color)
-        "PIII_V" => {
-            link_native(linker, lib_name, func_name, func_type, move |mut caller, params, _| {
-                let f: extern "C" fn(*const u8, i32, i32, i32) = unsafe { std::mem::transmute(func_ptr) };
-                let ptr = get_memory_ptr(&mut caller, params[0].unwrap_i32() as usize);
-                f(ptr, params[1].unwrap_i32(), params[2].unwrap_i32(), params[3].unwrap_i32());
-                Ok(())
-            })?;
-        }
-        // ptr,int,int,int,int -> void (DrawText with color: text, x, y, fontSize, color)
-        "PIIII_V" => {
-            link_native(linker, lib_name, func_name, func_type, move |mut caller, params, _| {
-                let f: extern "C" fn(*const u8, i32, i32, i32, i32) = unsafe { std::mem::transmute(func_ptr) };
-                let ptr = get_memory_ptr(&mut caller, params[0].unwrap_i32() as usize);
-                f(ptr, params[1].unwrap_i32(), params[2].unwrap_i32(), params[3].unwrap_i32(), params[4].unwrap_i32());
-                Ok(())
-            })?;
-        }
-        // float -> float
-        "F_F" => {
-            link_native(linker, lib_name, func_name, func_type, move |_, params, results| {
-                let f: extern "C" fn(f32) -> f32 = unsafe { std::mem::transmute(func_ptr) };
-                results[0] = Val::F32(f(params[0].unwrap_f32()).to_bits());
-                Ok(())
-            })?;
-        }
-        // double -> double
-        "D_D" => {
-            link_native(linker, lib_name, func_name, func_type, move |_, params, results| {
-                let f: extern "C" fn(f64) -> f64 = unsafe { std::mem::transmute(func_ptr) };
-                results[0] = Val::F64(f(warp_runtime::floats::canonical_nan(params[0].unwrap_f64())).to_bits());
-                Ok(())
-            })?;
-        }
-        // double,double -> double
-        "DD_D" => {
-            link_native(linker, lib_name, func_name, func_type, move |_, params, results| {
-                let f: extern "C" fn(f64, f64) -> f64 = unsafe { std::mem::transmute(func_ptr) };
-                results[0] = Val::F64(f(warp_runtime::floats::canonical_nan(params[0].unwrap_f64()), warp_runtime::floats::canonical_nan(params[1].unwrap_f64())).to_bits());
-                Ok(())
-            })?;
-        }
-        // Generic fallback using dynamic dispatch
-        _ => {
-            return create_generic_ffi_wrapper(linker, lib_name, func_name, func_type, func_ptr, &param_types, ret_type);
-        }
+        "_V" => link_typed!(linker, lib_name, func_name, func_type, func_ptr, ()),
+        "_I" => link_typed!(linker, lib_name, func_name, func_type, func_ptr, () -> i32), // WindowShouldClose, GetMouseX
+        "_B" => link_typed!(linker, lib_name, func_name, func_type, func_ptr, () -> CBool),
+        "_F" => link_typed!(linker, lib_name, func_name, func_type, func_ptr, () -> f32),
+        "_D" => link_typed!(linker, lib_name, func_name, func_type, func_ptr, () -> f64),
+        "I_V" => link_typed!(linker, lib_name, func_name, func_type, func_ptr, (i32)), // SetTargetFPS
+        "I_I" => link_typed!(linker, lib_name, func_name, func_type, func_ptr, (i32) -> i32), // IsKeyPressed
+        "I_B" => link_typed!(linker, lib_name, func_name, func_type, func_ptr, (i32) -> CBool),
+        "II_V" => link_typed!(linker, lib_name, func_name, func_type, func_ptr, (i32, i32)),
+        "II_I" => link_typed!(linker, lib_name, func_name, func_type, func_ptr, (i32, i32) -> i32),
+        "IIP_V" => link_typed!(linker, lib_name, func_name, func_type, func_ptr, (i32, i32, *const u8)), // InitWindow with title
+        "IIFI_V" => link_typed!(linker, lib_name, func_name, func_type, func_ptr, (i32, i32, f32, i32)), // DrawCircle: x, y, radius, color
+        "IIIII_V" => link_typed!(linker, lib_name, func_name, func_type, func_ptr, (i32, i32, i32, i32, i32)), // DrawRectangle: x, y, w, h, color
+        "PIII_V" => link_typed!(linker, lib_name, func_name, func_type, func_ptr, (*const u8, i32, i32, i32)), // DrawText: text, x, y, fontSize
+        "PIIII_V" => link_typed!(linker, lib_name, func_name, func_type, func_ptr, (*const u8, i32, i32, i32, i32)), // DrawText with color
+        "F_F" => link_typed!(linker, lib_name, func_name, func_type, func_ptr, (f32) -> f32),
+        "D_D" => link_typed!(linker, lib_name, func_name, func_type, func_ptr, (f64) -> f64),
+        "DD_D" => link_typed!(linker, lib_name, func_name, func_type, func_ptr, (f64, f64) -> f64),
+        _ => create_generic_ffi_wrapper(linker, lib_name, func_name, func_type, func_ptr, param_types, ret_type),
     }
-
-    Ok(())
 }
 
 /// Link all dynamic libraries required by a WASM module's imports

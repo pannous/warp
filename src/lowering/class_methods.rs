@@ -6,7 +6,7 @@
 //! `class dog extends animal {…}` (P117) gives dog the fields and methods of animal, its own ones override them, and
 //! declares `dog like animal`, so a dog is accepted where an animal is wanted.
 
-use super::nodes::{call, key};
+use super::nodes::{call, grouped_parameters, key};
 use crate::node::{symbol, text, Bracket, Node, Separator};
 use crate::operators::Op;
 
@@ -2648,13 +2648,4 @@ fn is_field_of(target: &Node, variable: &str) -> bool {
 /// `add(x)`, `insert(x, at:1)`: a call of a method that changes the list it is called on
 fn mutating_call(call: &Node) -> bool {
 	matches!(call.drop_meta(), Node::List(items, Bracket::Round, _) if matches!(items.first().map(Node::drop_meta), Some(Node::Symbol(name)) if crate::analyzer::is_list_mutating_method(name)))
-}
-
-/// A parameter as the parameters it stands for: a group `(a, b)` its items, ø none
-fn grouped_parameters(parameter: &Node) -> Vec<Node> {
-	match parameter.drop_meta() {
-		Node::List(group, Bracket::Round, _) => group.clone(),
-		Node::Empty => vec![],
-		_ => vec![parameter.clone()],
-	}
 }

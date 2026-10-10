@@ -7,6 +7,7 @@
 
 use crate::extensions::numbers::Number;
 use crate::meta::DataValue;
+use crate::compile_time::{answer_of, fail, Stop};
 use crate::node::{error, Bracket, Node, Separator};
 use std::collections::HashMap;
 use crate::operators::Op;
@@ -489,12 +490,6 @@ enum Value {
 	Range(Range),
 }
 
-enum Stop {
-	/// not a program of integers and units: compile it normally
-	Unsupported,
-	Error(String),
-}
-
 type Evaluated = Result<Value, Stop>;
 
 /// The refusals of the compile-time evaluation that a run-time quantity answers (lower_run_time_tolerances)
@@ -502,10 +497,6 @@ const TOLERANCE_ARITHMETIC: &str = "arithmetic on a value with tolerance or a ra
 const WHOLE_TOLERANCE: &str = "a tolerance counts whole numbers";
 const PLAIN_TOLERANCE: &str = "a tolerance applies to numbers and plain quantities";
 const RUN_TIME_TOLERANCE_ERRORS: [&str; 3] = [TOLERANCE_ARITHMETIC, WHOLE_TOLERANCE, PLAIN_TOLERANCE];
-
-fn fail<T>(message: impl Into<String>) -> Result<T, Stop> {
-	Err(Stop::Error(message.into()))
-}
 
 /// The value of a program that uses units, None for any other program
 pub fn answer(program: &Node) -> Option<Node> {
@@ -516,17 +507,15 @@ fn answer_shadowed(program: &Node) -> Option<Node> {
 	if !needs_quantities(program) {
 		return None;
 	}
-	match evaluate(program) {
-		Ok(Value::Number(n)) => Some(Node::int(n)),
-		Ok(Value::Bool(truth)) => Some(Node::from(truth)),
+	answer_of(evaluate(program), |value| match value {
+		Value::Number(n) => Node::int(n),
+		Value::Bool(truth) => Node::from(truth),
 		// a ratio of two quantities of one dimension that is no whole number: `1 m / 3 m` is 1/3
-		Ok(Value::Quantity(quantity)) if quantity.factors.is_empty() => Some(quotient_node(&quantity.amount)),
-		Ok(Value::Quantity(quantity)) => Some(Node::data(quantity)),
-		Ok(Value::Tolerance(tolerance)) => Some(Node::data(tolerance)),
-		Ok(Value::Range(range)) => Some(Node::data(range)),
-		Err(Stop::Error(message)) => Some(error(&message)),
-		Err(Stop::Unsupported) => None,
-	}
+		Value::Quantity(quantity) if quantity.factors.is_empty() => quotient_node(&quantity.amount),
+		Value::Quantity(quantity) => Node::data(quantity),
+		Value::Tolerance(tolerance) => Node::data(tolerance),
+		Value::Range(range) => Node::data(range),
+	})
 }
 
 /// `sleep(1000 ms)`, `sleep 1 s`, `sleep(2 seconds)`: a constant duration is its milliseconds, what the host word takes
