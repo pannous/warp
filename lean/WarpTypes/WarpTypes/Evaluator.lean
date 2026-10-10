@@ -63,7 +63,7 @@ def step (P : Program) (μ : Store) : Expr → Option (Expr × Store)
     else stepIn (.call f) e μ (step P μ e)
   | .tryCatch e h =>
     match e with
-    | .error _ => some (h, μ)
+    | .error _ | .fail _ => some (h, μ)
     | _ =>
       if e.aborting then some (e, μ)
       else if e.isValue then some (e, μ) else (step P μ e).map fun s => (.tryCatch s.1 h, s.2)
@@ -93,6 +93,7 @@ def step (P : Program) (μ : Store) : Expr → Option (Expr × Store)
   | .get o f => if o.isValue then some (readField μ o f, μ) else stepIn (.get f) o μ (step P μ o)
   | .set o f v => stepPair (fun v => .setL f v) (fun o => .setR o f) o v μ (step P μ o) (step P μ v) (some (writeField μ o f v))
   | .isA e c => if e.isValue then some (.bool (isInstance e c), μ) else stepIn (.isA c) e μ (step P μ e)
+  | .failed e => if e.isValue then some (.bool (isFail e), μ) else stepIn .failed e μ (step P μ e)
   | .handle ev h b =>
     match b with
     | .error m => some (.error m, μ)
@@ -244,10 +245,11 @@ theorem step_sound : ∀ {e : Expr} {μ s'}, step P μ e = some s' → Step P (e
     intro μ s' hs; simp only [step] at hs
     split at hs
     · cases hs; exact .tryError
+    · cases hs; exact .tryFail
     · split at hs
       · rename_i ha; cases hs; obtain ⟨_, _, _, rfl, hv⟩ := Expr.aborting_eq ha; exact .tryAbort hv
       split at hs
-      · cases hs; exact .tryValue (by assumption)
+      · cases hs; rename_i hf _ _; exact .tryValue (by assumption) (by cases e <;> simp_all [isFail])
       · simp only [Option.map_eq_some_iff] at hs
         obtain ⟨⟨e', μ'⟩, he, rfl⟩ := hs
         exact .tryStep (ih he)
@@ -285,6 +287,11 @@ theorem step_sound : ∀ {e : Expr} {μ s'}, step P μ e = some s' → Step P (e
     split at hs
     · cases hs; exact .isA (by assumption)
     · exact stepIn_sound (F := .isA c) rfl (fun _ => ih) hs
+  | failed e ih =>
+    intro μ s' hs; simp only [step] at hs
+    split at hs
+    · cases hs; exact .failed (by assumption)
+    · exact stepIn_sound (F := .failed) rfl (fun _ => ih) hs
   | handle ev h b _ ih =>
     intro μ s' hs; simp only [step] at hs
     split at hs

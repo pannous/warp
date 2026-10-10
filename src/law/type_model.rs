@@ -24,6 +24,8 @@ const ACCEPTED_PREFIX: &str = "ok ";
 const REJECTED: &str = "rejected";
 const CONSTANT_KEYWORD: &str = "const";
 const ERROR_CALL: &str = "error";
+/// `x failed` (warp_parser suffixes): is x a stored error
+const IS_ERROR_CALL: &str = "is_error";
 const BOOL_TYPE: &str = ".bool";
 const ANY_TYPE: &str = ".any";
 const LIST_TYPE_PREFIX: &str = ".list ";
@@ -34,7 +36,6 @@ const UNIT_TYPE: &str = ".unit";
 /// the parameter of a function that takes none
 const UNIT_PARAMETER: &str = "·";
 const ARGUMENTS_SUFFIX: &str = "·args";
-const APPEND_METHODS: [&str; 2] = ["add", "push"];
 const FOR_KEYWORD: &str = "for";
 const VARIABLE_KEYWORDS: [&str; 2] = ["let", "shared"];
 /// the one field of a function local's cell (`f·n`): `·` keeps it apart from the program's own fields
@@ -1230,10 +1231,13 @@ impl Exporter {
 				},
 				[item, in_word, list] if is_word(in_word, IN_KEYWORD) => self.tally(list, Some(item), true),
 				[call, a, b] if EXTREMA.iter().any(|word| is_word(call, word)) && !self.functions.contains_key(&call.name()) => self.extremum(&call.name(), a, b),
+				// a stored error: a value until an operation that needs another value meets it (Decided #1)
 				[call, message] if is_word(call, ERROR_CALL) => match message.drop_meta() {
-					Node::Text(message) => Ok(format!(".error {}", quoted(message))),
+					Node::Text(message) => Ok(format!(".fail {}", quoted(message))),
+					Node::Char(letter) => Ok(format!(".fail {}", quoted(&letter.to_string()))),
 					_ => unsupported(node),
 				},
+				[call, value] if is_word(call, IS_ERROR_CALL) => Ok(format!(".failed ({})", self.expression(value)?)),
 				[call] if self.functions.get(&call.name()).is_some_and(|parameter| parameter == UNIT_TYPE) => Ok(format!(".call {} .unit", quoted(&call.name()))),
 				// `add 1 to 2` of `to add number a to number b: …` parses as `add (1 to 2)`: two arguments
 				[call, argument] if self.classes.contains_key(&arguments_class(&call.name())) && matches!(argument.drop_meta(), Node::Key(_, Op::To, _)) => {
@@ -1299,11 +1303,11 @@ impl Exporter {
 			},
 			// `xs.add(v)` changes the shared list xs holds; a function local's list is a value: `xs = xs ++ [v]`
 			Node::Key(list, Op::Dot, call) => match (list.drop_meta(), call.drop_meta()) {
-				(Node::Symbol(name), Node::List(items, _, _)) if items.len() == 2 && self.cell_lists.contains(name) && APPEND_METHODS.iter().any(|method| is_word(&items[0], method)) => {
+				(Node::Symbol(name), Node::List(items, _, _)) if items.len() == 2 && self.cell_lists.contains(name) && crate::analyzer::appends(&items[0].drop_meta().name(), 1) => {
 					let item = self.expression(&items[1])?;
 					Ok(format!(".set (.loc {}) {} (.append ({}) (.cons ({item}) .nil))", quoted(name), quoted(CELL_FIELD), self.cell_value(name)))
 				}
-				(Node::Symbol(name), Node::List(items, _, _)) if items.len() == 2 && APPEND_METHODS.iter().any(|method| is_word(&items[0], method)) => {
+				(Node::Symbol(name), Node::List(items, _, _)) if items.len() == 2 && crate::analyzer::appends(&items[0].drop_meta().name(), 1) => {
 					let item = self.expression(&items[1])?;
 					if !self.list_names.contains(name) {
 						return unsupported(node);

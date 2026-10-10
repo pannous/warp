@@ -366,7 +366,7 @@ fn nested_type_word(item: &Node, scope: &Scope) -> String {
 /// The type name of a map literal, `map of <value type>` when its values share one
 /// The got-it topic of a `let` variable that changes (P159)
 const LET_CHANGES_TOPIC: &str = "let changes";
-pub(super) const MAP_TYPE: &str = "map";
+pub(crate) const MAP_TYPE: &str = "map";
 /// Library words whose list result has the elements of their list argument
 pub(super) const ORDER_WORDS: [&str; 2] = ["sort", "reverse"];
 /// Library words whose result is a list of texts
@@ -1622,7 +1622,7 @@ pub(crate) fn appended_items(call: &Node) -> Option<&[Node]> {
 	let Node::Key(_, Op::Dot, method_call) = call.drop_meta() else { return None };
 	let Node::List(items, _, _) = method_call.drop_meta() else { return None };
 	let (method, arguments) = items.split_first()?;
-	let is_append = matches!(method.drop_meta(), Node::Symbol(word) if crate::broadcasting::APPEND_METHODS.contains(&word.as_str()));
+	let is_append = matches!(method.drop_meta(), Node::Symbol(word) if appends(word, arguments.len()));
 	is_append.then_some(arguments)
 }
 

@@ -198,9 +198,15 @@ fn with_method_aliases(node: Node, instances: &std::collections::HashMap<String,
 			};
 			Node::Key(receiver, Op::Dot, Box::new(member))
 		}
-		// `len(s)`: `s.size()`
+		// `len(s)`: `s.size()`; `size(s)` of a class defining size(): `s.size()` too (card size-instance)
 		Node::List(items, Bracket::Round, separator) if matches!(items.as_slice(), [word, argument] if crate::analyzer::is_counting_word(&word.drop_meta().name()) && defined_by(argument).is_some()) => {
-			match aliased_method(&items[0].drop_meta().name(), defined_by(&items[1]).expect("guarded")) {
+			let written = items[0].drop_meta().name();
+			let defined = defined_by(&items[1]).expect("guarded");
+			let method = match defined.contains(&written) {
+				true => Some(written),
+				false => aliased_method(&written, defined),
+			};
+			match method {
 				Some(method) => key(items[1].clone(), Op::Dot, call(&method, vec![])),
 				None => Node::List(items, Bracket::Round, separator),
 			}
