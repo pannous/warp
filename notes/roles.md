@@ -34,9 +34,10 @@ ask me decision questions."
 - Merges duplicates, drops questions that the code or an earlier decision already answers, and orders by impact.
 - Ready to try (user 2026-10-10: "a general mechanism when some feature is done and ready to be tested by me"; the
   question popups are the notifications that reach the user): after each batch of questions, and whenever idle,
-  `todo try --new` lists finished features not announced yet. Try lines use the user's `warp`, which is
-  /Users/me/dev/bin/warp: a debug build of main, first on PATH ahead of brew, refreshed by push_tested.sh after
-  every pushed batch (`warp --version`: "… debug build <commit>"). Homebrew releases are occasional (user,
+  `todo try --new` lists finished features not announced yet. Try lines spell out the full path
+  /Users/me/dev/bin/warp: a debug build of main refreshed by push_tested.sh after every pushed batch (`--version`:
+  "… debug build <commit>"). Plain `warp` and a sample's `#!/usr/bin/env warp` run brew's copy (/opt/homebrew/bin
+  comes first on PATH), so a sample is tried as `/Users/me/dev/bin/warp samples/x.warp`. Homebrew releases are occasional (user,
   2026-10-10), so nothing waits for brew; a feature is announced once its batch is pushed (workers run `todo done`
   only after their branch is on main). Never the shared-target debug/warp: it holds whichever worktree built last.
   Format (user: "put the command for one test into the title"): one single-select question per feature, the
