@@ -328,7 +328,7 @@ impl WarpParser {
 			}
 		};
 		let zero_to_count = Node::Key(Box::new(Node::Number(Number::Int(0))), Op::Range, Box::new(count));
-		let rounds = Node::List(vec![Symbol("for".to_string()), counter, Symbol("in".to_string()), zero_to_count, body], Bracket::None, Separator::Space);
+		let rounds = for_in_loop(counter, zero_to_count, body);
 		match count_binding {
 			Some(binding) => Node::List(vec![binding, rounds], Bracket::Round, Separator::Semicolon),
 			None => rounds,

@@ -276,9 +276,9 @@ impl WarpParser {
 		};
 		// `for chars in text: print it`: a unit word walks the text by that unit, the item is `it`
 		if let Some((unit, iterable)) = unit_iteration(&variable, &iterable, &body) {
-			return Some(Node::List(vec![Symbol("for".to_string()), unit, Symbol("in".to_string()), iterable, body], Bracket::None, Separator::Space));
+			return Some(for_in_loop(unit, iterable, body));
 		}
-		Some(Node::List(vec![Symbol("for".to_string()), variable, Symbol("in".to_string()), iterable, body], Bracket::None, Separator::Space))
+		Some(for_in_loop(variable, iterable, body))
 	}
 
 	/// The iterable of a loop header, its words up to the body: `for todo in todos sorted by priority {…}`,
@@ -364,7 +364,7 @@ impl WarpParser {
 			Err(error) => return Some(error),
 		};
 		let it = Symbol(crate::lambdas::IMPLICIT_PARAMETER.to_string());
-		Some(Node::List(vec![Symbol("for".to_string()), it, Symbol("in".to_string()), iterable, body], Bracket::None, Separator::Space))
+		Some(for_in_loop(it, iterable, body))
 	}
 
 	/// `(even number)` in a loop header: `even(it)` (built in: `it%2==0`, `odd` its opposite, else the user's function) and

@@ -697,6 +697,11 @@ fn glued_floor_division(diagnostic: Diagnostic, input: &str, line: usize, column
 }
 
 /// The error `message`, fixed by adding the missing `closer` at `at` (line, column)
+/// `for variable in iterable body`, the loop for_loop.rs lowers
+pub(super) fn for_in_loop(variable: Node, iterable: Node, body: Node) -> Node {
+	Node::List(vec![Symbol("for".to_string()), variable, Symbol("in".to_string()), iterable, body], Bracket::None, Separator::Space)
+}
+
 pub(super) fn missing_closer(message: String, closer: impl Into<String>, at: (usize, usize)) -> Node {
 	let closer = closer.into();
 	Diagnostic::default().message(message).offering(crate::fixits::inserted(format!("the closing {closer}"), closer, at)).into_error()
