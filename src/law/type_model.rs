@@ -24,6 +24,8 @@ const ACCEPTED_PREFIX: &str = "ok ";
 const REJECTED: &str = "rejected";
 const CONSTANT_KEYWORD: &str = "const";
 const ERROR_CALL: &str = "error";
+/// `x failed` (warp_parser suffixes): is x a stored error
+const IS_ERROR_CALL: &str = "is_error";
 const BOOL_TYPE: &str = ".bool";
 const ANY_TYPE: &str = ".any";
 const LIST_TYPE_PREFIX: &str = ".list ";
@@ -34,7 +36,6 @@ const UNIT_TYPE: &str = ".unit";
 /// the parameter of a function that takes none
 const UNIT_PARAMETER: &str = "·";
 const ARGUMENTS_SUFFIX: &str = "·args";
-const APPEND_METHODS: [&str; 2] = ["add", "push"];
 const FOR_KEYWORD: &str = "for";
 const VARIABLE_KEYWORDS: [&str; 2] = ["let", "shared"];
 /// the one field of a function local's cell (`f·n`): `·` keeps it apart from the program's own fields
@@ -226,7 +227,25 @@ fn map_entries(node: &Node) -> Option<Vec<(String, &Node)>> {
 	}).collect()
 }
 
-/// every key a map literal or a field write `x.key = v` names, when the program has a map literal
+/// `k` of `k+1`: the parser writes `m[k]` as `m#(k+1)`, a list's 1-based index
+fn bracket_index(index: &Node) -> Option<&Node> {
+	match index.drop_meta() {
+		Node::Key(key, Op::Add, one) if matches!(one.drop_meta(), Node::Number(Number::Int(1))) => Some(key),
+		_ => None,
+	}
+}
+
+/// the text of a text literal (a one-letter one parses as a codepoint)
+fn literal_text(node: &Node) -> Option<String> {
+	match node.drop_meta() {
+		Node::Text(text) => Some(text.clone()),
+		Node::Char(letter) => Some(letter.to_string()),
+		_ => None,
+	}
+}
+
+/// every key a map literal, a field write `x.key = v` or a write `x["key"] = v` names, when the program has a map
+/// literal
 fn map_keys(program: &Node) -> Option<Vec<String>> {
 	let mut has_map = false;
 	let mut keys: Vec<String> = Vec::new();
@@ -238,6 +257,7 @@ fn map_keys(program: &Node) -> Option<Vec<String>> {
 			}
 			(None, Node::Key(target, Op::Assign, _)) => match target.drop_meta() {
 				Node::Key(_, Op::Dot, field) => vec![field.name()],
+				Node::Key(_, Op::Hash, index) => bracket_index(index).and_then(literal_text).into_iter().collect(),
 				_ => vec![],
 			},
 			_ => vec![],
@@ -517,6 +537,8 @@ struct Exporter {
 	/// main-level names bound to a list (`xs = [1]`, `xs = []`, `xs: ints = …`): `xs.add(v)` appends to them, while
 	/// `.add` of a text concatenates, outside W0
 	list_names: Vec<String>,
+	/// main-level names bound to a map literal (`m = {a:1}`): `m[k]` reads and writes its key k
+	map_names: Vec<String>,
 	locals: Vec<String>,
 	/// the parameters of the function being exported when it takes several: each is a field of its arguments object
 	argument_fields: Vec<String>,
@@ -932,6 +954,9 @@ impl Exporter {
 		if matches!(unwrapped(value), Node::Key(_, Op::FatArrow, _)) {
 			self.lambda_names.push(name.clone());
 		}
+		if map_entries(value).is_some() {
+			self.map_names.push(name.clone());
+		}
 		let aliased_list = matches!(value.drop_meta(), Node::Symbol(other) if self.list_names.contains(other));
 		if aliased_list || is_list_literal(value) || matches!(value.drop_meta(), Node::Empty) || annotation.as_deref().is_some_and(|lean| lean.starts_with(LIST_TYPE_PREFIX)) {
 			self.list_names.push(name.clone());
@@ -1157,6 +1182,11 @@ impl Exporter {
 		}
 	}
 
+	/// `k` of `m[k]` (parsed `m#(k+1)`) of a map name m: a computed key
+	fn map_key<'a>(&self, map: &Node, index: &'a Node) -> Option<&'a Node> {
+		matches!(map.drop_meta(), Node::Symbol(name) if self.map_names.contains(name)).then(|| bracket_index(index)).flatten()
+	}
+
 	fn binary(&mut self, constructor: &str, left: &Node, right: &Node) -> Lean {
 		Ok(format!("{constructor} ({}) ({})", self.expression(left)?, self.expression(right)?))
 	}
@@ -1230,10 +1260,13 @@ impl Exporter {
 				},
 				[item, in_word, list] if is_word(in_word, IN_KEYWORD) => self.tally(list, Some(item), true),
 				[call, a, b] if EXTREMA.iter().any(|word| is_word(call, word)) && !self.functions.contains_key(&call.name()) => self.extremum(&call.name(), a, b),
+				// a stored error: a value until an operation that needs another value meets it (Decided #1)
 				[call, message] if is_word(call, ERROR_CALL) => match message.drop_meta() {
-					Node::Text(message) => Ok(format!(".error {}", quoted(message))),
+					Node::Text(message) => Ok(format!(".fail {}", quoted(message))),
+					Node::Char(letter) => Ok(format!(".fail {}", quoted(&letter.to_string()))),
 					_ => unsupported(node),
 				},
+				[call, value] if is_word(call, IS_ERROR_CALL) => Ok(format!(".failed ({})", self.expression(value)?)),
 				[call] if self.functions.get(&call.name()).is_some_and(|parameter| parameter == UNIT_TYPE) => Ok(format!(".call {} .unit", quoted(&call.name()))),
 				// `add 1 to 2` of `to add number a to number b: …` parses as `add (1 to 2)`: two arguments
 				[call, argument] if self.classes.contains_key(&arguments_class(&call.name())) && matches!(argument.drop_meta(), Node::Key(_, Op::To, _)) => {
@@ -1291,6 +1324,10 @@ impl Exporter {
 			Node::Key(target, Op::Assign, value) => match target.drop_meta() {
 				Node::Symbol(name) => self.assignment(name, value),
 				Node::Key(object, Op::Dot, field) => Ok(format!(".set ({}) {} ({})", self.expression(object)?, quoted(&field.name()), self.expression(value)?)),
+				Node::Key(map, Op::Hash, index) if self.map_key(map, index).is_some() => {
+					let key = self.map_key(map, index).expect("a map key");
+					Ok(format!(".setAt ({}) ({}) ({})", self.expression(map)?, self.expression(key)?, self.expression(value)?))
+				}
 				// `xs#i = v` writes into the shared list xs, checked against its element type when it runs
 				Node::Key(list, Op::Hash, index) if matches!(list.drop_meta(), Node::Symbol(name) if self.list_names.contains(name) && !self.cell_lists.contains(name)) => {
 					Ok(format!(".setAt ({}) ({}) ({})", self.expression(list)?, self.expression(index)?, self.expression(value)?))
@@ -1299,11 +1336,11 @@ impl Exporter {
 			},
 			// `xs.add(v)` changes the shared list xs holds; a function local's list is a value: `xs = xs ++ [v]`
 			Node::Key(list, Op::Dot, call) => match (list.drop_meta(), call.drop_meta()) {
-				(Node::Symbol(name), Node::List(items, _, _)) if items.len() == 2 && self.cell_lists.contains(name) && APPEND_METHODS.iter().any(|method| is_word(&items[0], method)) => {
+				(Node::Symbol(name), Node::List(items, _, _)) if items.len() == 2 && self.cell_lists.contains(name) && crate::analyzer::appends(&items[0].drop_meta().name(), 1) => {
 					let item = self.expression(&items[1])?;
 					Ok(format!(".set (.loc {}) {} (.append ({}) (.cons ({item}) .nil))", quoted(name), quoted(CELL_FIELD), self.cell_value(name)))
 				}
-				(Node::Symbol(name), Node::List(items, _, _)) if items.len() == 2 && APPEND_METHODS.iter().any(|method| is_word(&items[0], method)) => {
+				(Node::Symbol(name), Node::List(items, _, _)) if items.len() == 2 && crate::analyzer::appends(&items[0].drop_meta().name(), 1) => {
 					let item = self.expression(&items[1])?;
 					if !self.list_names.contains(name) {
 						return unsupported(node);
@@ -1350,6 +1387,7 @@ impl Exporter {
 				let compared = self.binary(if matches!(op, Op::Identical | Op::NotIdentical) { ".eq true" } else { ".eq false" }, left, right)?;
 				Ok(if matches!(op, Op::Ne | Op::NotIdentical) { negation(compared) } else { compared })
 			}
+			Node::Key(map, Op::Hash, index) if self.map_key(map, index).is_some() => self.binary(".index", map, self.map_key(map, index).expect("a map key")),
 			Node::Key(list, Op::Hash, index) if !list.is_nothing() => self.binary(".index", list, index),
 			Node::Key(empty, Op::Not, operand) if empty.is_nothing() => Ok(negation(self.expression(operand)?)),
 			Node::Key(parameter, Op::FatArrow, body) => self.lambda(parameter, body),

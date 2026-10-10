@@ -130,6 +130,7 @@ mod test_param_named_like_global; // card param-named-like-global
 mod test_runtime_text_ratio;
 mod test_method_result_text; // card instance-result
 mod test_typed_list_elements; // card typed-list-elements
+mod test_map_runtime_kind; // card map-runtime
 mod test_map_type_tests; // card map-answers
 mod test_filled_map_types; // card number-keyed
 mod test_instance_size; // card size-instance

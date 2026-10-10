@@ -164,6 +164,11 @@ inductive Expr where
   | call (f : String) (arg : Expr)
   | error (msg : String)
   | tryCatch (e handler : Expr)
+  /-- a stored error, `error("x")` as a value (Decided #1, errors as values): a name, a list item or an argument keeps
+  it, `if` takes it as false, `try` and `failed` test for it, any other operation given one raises -/
+  | fail (msg : String)
+  /-- `e failed`: is the value of e a stored error -/
+  | failed (e : Expr)
   /-- the run-time check warp inserts where a value of unknown type goes to a declared place (`names = f()` of a
   `names: texts`, card list-element-types; any value given to an inline union `x: int | text` or an optional
   `x: int?`): the value if it fits one of the alternatives ts, else an error -/
@@ -225,7 +230,7 @@ def eventLocal : String := "event"
 namespace Expr
 
 def isValue : Expr → Bool
-  | bool _ | int _ | num _ | flt _ | qty _ _ | text _ | unit | nil | ref _ _ | clo _ _ | lref _ _ => true
+  | bool _ | int _ | num _ | flt _ | qty _ _ | text _ | unit | nil | ref _ _ | clo _ _ | lref _ _ | fail _ => true
   | cons h t => h.isValue && t.isValue
   | _ => false
 
@@ -255,6 +260,7 @@ def subst (e : Expr) (y : String) (v : Expr) : Expr :=
   | get e f => get (e.subst y v) f
   | set e f w => set (e.subst y v) f (w.subst y v)
   | isA e c => isA (e.subst y v) c
+  | failed e => failed (e.subst y v)
   | handle ev h b => handle ev (if y = eventLocal then h else h.subst y v) (b.subst y v)
   | emit ev e => emit ev (e.subst y v)
   | scope k e => scope k (e.subst y v)
@@ -277,7 +283,7 @@ def assigned : Expr → List String
   | forIn _ e b d => e.assigned ++ b.assigned ++ d.assigned
   | letIn _ _ e b => e.assigned ++ b.assigned
   | set a _ b => a.assigned ++ b.assigned
-  | call _ e | cast e _ | conv e _ | broadcast _ e | get e _ | isA e _ | emit _ e | scope _ e | abort _ _ e | lam _ e
+  | call _ e | cast e _ | conv e _ | broadcast _ e | get e _ | isA e _ | failed e | emit _ e | scope _ e | abort _ _ e | lam _ e
   | share e _ => e.assigned
   | _ => []
 

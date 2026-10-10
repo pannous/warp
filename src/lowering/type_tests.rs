@@ -24,8 +24,9 @@ pub const ERROR_TYPE: &str = "error";
 /// The type of ø, as type(ø) names it; unit, nil … are its aliases (canonical_spec_word)
 pub const EMPTY_TYPE: &str = "empty";
 const ARTICLES: [&str; 2] = ["a", "an"];
-const LIST_WORD: &str = "list";
-const MAP_WORD: &str = "map";
+const NUMBER_WORD: &str = "number";
+pub(crate) const LIST_WORD: &str = "list";
+const MAP_WORD: &str = crate::analyzer::MAP_TYPE;
 /// The collection types: `x is list`, `x is map`, and of their element type: `x is list of int`, `x is map of text`
 const COLLECTION_WORDS: [&str; 2] = [LIST_WORD, MAP_WORD];
 /// `x is pair`: a `key: value` pair
@@ -56,7 +57,7 @@ use crate::type_kinds::Kind as K;
 const BUILTIN_TYPES: [BuiltinType; 15] = [
 	builtin("int", &["integer", "long", "i64", "i32"], &[], Some(K::Int), &[K::Int as i64]),
 	builtin("rational", &["exact"], &["int"], Some(K::Int), &[K::Int as i64, K::Float as i64]),
-	builtin("real", &[], &["rational"], Some(K::Int), &[K::Int as i64, K::Float as i64]),
+	builtin("real", &[], &["rational"], Some(K::Empty), &[K::Int as i64, K::Float as i64]),
 	builtin("float", &["double", "f64", "f32", "float32", "float64", "fast"], &[], Some(K::Float), &[K::Float as i64]),
 	builtin("number", &[], &["real", "float"], Some(K::Float), &[K::Int as i64, K::Float as i64, K::Uncertain as i64]),
 	builtin("text", &["str", "string"], &["codepoint"], Some(K::Text), &[K::Text as i64, K::Codepoint as i64]),
@@ -83,6 +84,12 @@ pub fn is_type_word(word: &str) -> bool {
 /// Every word naming a built-in type, aliases too
 pub fn builtin_type_words() -> impl Iterator<Item = &'static str> {
 	BUILTIN_TYPES.iter().flat_map(|builtin| std::iter::once(builtin.name).chain(builtin.aliases.iter().copied()))
+}
+
+/// `int`, `i64`, `exact`, `real`, `f64` …: a word naming a type of numbers (one number is covers), `number` itself not
+pub fn is_number_type_word(word: &str) -> bool {
+	let name = canonical_spec_word(word);
+	is_type_word(word) && name != NUMBER_WORD && type_matches(name, NUMBER_WORD)
 }
 
 /// Words that name the same type

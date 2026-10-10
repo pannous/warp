@@ -968,18 +968,28 @@ pub fn std_module_definitions(module: &str) -> Option<&'static [String]> {
 
 /// The number of parameters of a prelude word (`replace(t, old, new) := …` → 3); None for no prelude word
 pub fn prelude_word_arity(word: &str) -> Option<usize> {
-	static ARITIES: std::sync::OnceLock<Vec<(String, usize)>> = std::sync::OnceLock::new();
-	let arities = ARITIES.get_or_init(|| {
+	prelude_word_parameters(word).map(|(arity, _)| arity)
+}
+
+/// The number of parameters of a prelude word a call may leave out, those with a default (`limit = 1000000`)
+pub fn prelude_word_defaults(word: &str) -> usize {
+	prelude_word_parameters(word).map_or(0, |(_, defaults)| defaults)
+}
+
+fn prelude_word_parameters(word: &str) -> Option<(usize, usize)> {
+	static PARAMETERS: std::sync::OnceLock<Vec<(String, usize, usize)>> = std::sync::OnceLock::new();
+	let parameters = PARAMETERS.get_or_init(|| {
 		let source = std_module(PRELUDE_MODULE).unwrap_or_default();
+		let has_default = |parameter: &Node| matches!(parameter.drop_meta(), Node::Key(_, Op::Assign, _));
 		statements(crate::normalize::without_hints(|| WarpParser::parse(source))).iter().filter_map(|statement| match statement.drop_meta() {
 			Node::Key(head, Op::Define, _) => match head.drop_meta() {
-				Node::List(items, _, _) => Some((leftmost_symbol(head)?, items.len() - 1)),
+				Node::List(items, _, _) => Some((leftmost_symbol(head)?, items.len() - 1, items[1..].iter().filter(|item| has_default(item)).count())),
 				_ => None,
 			},
 			_ => None,
 		}).collect()
 	});
-	arities.iter().find(|(name, _)| name == word).map(|(_, arity)| *arity)
+	parameters.iter().find(|(name, _, _)| name == word).map(|(_, arity, defaults)| (*arity, *defaults))
 }
 
 /// The name a prelude word's definition has in the program (`first` → `prelude·first`): a program's own `first`, or

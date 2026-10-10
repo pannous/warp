@@ -225,6 +225,14 @@ pub fn refuses_decimals(type_name: &str) -> bool {
 	}
 }
 
+/// A declared type held as an exact Int, or a union of such (`rational`, `int or rational`): an IEEE float loses its
+/// value there
+pub fn refuses_floats(type_name: &str) -> bool {
+	let type_name = type_name.trim_end_matches('?');
+	let exact = |name: &str| builtin_type_kind(name) == Some(Kind::Int);
+	union_parts(type_name).map_or_else(|| exact(type_name), |parts| parts.iter().all(|part| exact(part)))
+}
+
 /// A plural type word denotes a list of that type: `ints`, `numbers` → `int`, `number`
 pub fn plural_element_type(word: &str) -> Option<&str> {
 	let singular = word.strip_suffix('s')?;
@@ -358,7 +366,7 @@ fn nested_type_word(item: &Node, scope: &Scope) -> String {
 /// The type name of a map literal, `map of <value type>` when its values share one
 /// The got-it topic of a `let` variable that changes (P159)
 const LET_CHANGES_TOPIC: &str = "let changes";
-pub(super) const MAP_TYPE: &str = "map";
+pub(crate) const MAP_TYPE: &str = "map";
 /// Library words whose list result has the elements of their list argument
 pub(super) const ORDER_WORDS: [&str; 2] = ["sort", "reverse"];
 /// Library words whose result is a list of texts
@@ -954,11 +962,14 @@ pub(super) fn negative_modulo_warning(left: &Node, right: &Node) -> String {
 /// is ambiguous (wiki/precedence.md): `square 3 + square 3` reads as `square(3 + square 3)` or `square(3) + square(3)`.
 /// Bad.md's recursive `fib it-1 + fib it-2` would silently mean `fib(it-1 + fib(it-2))`, so it is rejected with both readings.
 pub(super) fn check_ambiguous_calls(node: &Node) -> Option<Diagnostic> {
-	const KEYWORDS: [&str; 10] = ["return", "const", "let", "var", "def", "fun", "fn", "use", "import", "include"];
+	/// `return x`, `let x`, `def f`, `use m`: a statement word, no function applied braceless
+	fn is_statement_word(word: &str) -> bool {
+		is_declaration_word(word) || crate::operators::is_function_keyword(word) || IMPORT_WORDS.contains(&word) || RETURNING_KEYWORDS.contains(&word)
+	}
 	fn braceless_call(node: &Node) -> Option<(&String, &Node)> {
 		match node.drop_meta() {
 			Node::List(items, Bracket::None, Separator::Space) if items.len() == 2 => match items[0].drop_meta() {
-				Node::Symbol(head) if !KEYWORDS.contains(&head.as_str()) && !CONSTANT_KEYWORDS.contains(&head.as_str()) => Some((head, &items[1])),
+				Node::Symbol(head) if !is_statement_word(head) => Some((head, &items[1])),
 				_ => None,
 			},
 			_ => None,
@@ -1329,8 +1340,10 @@ pub(crate) fn union_type_name(node: &Node) -> Option<String> {
 	let optional = parts.iter().any(|part| NONE_WORDS.contains(&part.as_str()));
 	parts.retain(|part| !NONE_WORDS.contains(&part.as_str()));
 	parts.dedup();
+	let admits_part = |wide: &String, narrow: &String| !is_bool_type(wide) && builtin_type_kind(narrow).is_some_and(|kind| admits(wide, kind));
+	// two parts held alike (`rational | int`) admit each other: the subtype goes
 	let covers = |wide: &String, narrow: &String| {
-		wide != narrow && !is_bool_type(wide) && builtin_type_kind(narrow).is_some_and(|kind| admits(wide, kind))
+		wide != narrow && admits_part(wide, narrow) && (!admits_part(narrow, wide) || crate::type_tests::type_matches(narrow, wide))
 	};
 	let kept: Vec<&String> = parts.iter().filter(|part| !parts.iter().any(|other| covers(other, part))).collect();
 	let joined = kept.iter().map(|part| part.as_str()).collect::<Vec<_>>().join(UNION_JOINER);
@@ -1452,6 +1465,10 @@ pub(crate) fn admits(type_name: &str, actual: Kind) -> bool {
 		return parts.iter().any(|part| admits(part, actual));
 	}
 	let Some(expected) = builtin_type_kind(type_name) else { return true };
+	// a type held as a Node (`real`: an exact Int or a float) admits the kinds it holds at run time
+	if expected == Kind::Empty {
+		return crate::type_tests::runtime_kind_mask(type_name).is_none_or(|mask| mask & 1 << actual as i64 != 0);
+	}
 	let exact_decimal = crate::type_tests::is_exact_fraction_type(type_name) && actual == Kind::Float;
 	let one_character_text = expected == Kind::Text && actual == Kind::Codepoint;
 	expected == actual || (expected == Kind::Float && actual == Kind::Int) || exact_decimal || one_character_text
@@ -1608,7 +1625,7 @@ pub(crate) fn appended_items(call: &Node) -> Option<&[Node]> {
 	let Node::Key(_, Op::Dot, method_call) = call.drop_meta() else { return None };
 	let Node::List(items, _, _) = method_call.drop_meta() else { return None };
 	let (method, arguments) = items.split_first()?;
-	let is_append = matches!(method.drop_meta(), Node::Symbol(word) if crate::broadcasting::APPEND_METHODS.contains(&word.as_str()));
+	let is_append = matches!(method.drop_meta(), Node::Symbol(word) if appends(word, arguments.len()));
 	is_append.then_some(arguments)
 }
 

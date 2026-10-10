@@ -62,7 +62,7 @@ fn a_site_with_routes_is_one_page_for_every_path() {
 fn a_site_starting_tasks_runs_its_program_in_a_worker() {
 	let directory = scratch_directory("tasks-site");
 	let site = warp::site::build("nap(ms) := { sleep(ms); 1 }\nfirst = go nap(1)\np{ \"naps: \" + await first }", "tasks", &directory).expect("the site is built");
-	assert_eq!(site.files, ["index.html", "app.wasm", "site-thread.js", "markup.js", "site.js", "reader.js", "host.js", "host-tasks.js", "site-worker.js", "task-worker.js", "coi-serviceworker.js"]);
+	assert_eq!(site.files, ["index.html", "app.wasm", "task-workers.js", "site-thread.js", "markup.js", "site.js", "reader.js", "host.js", "host-tasks.js", "site-worker.js", "task-worker.js", "coi-serviceworker.js"]);
 	let page = std::fs::read_to_string(directory.join("index.html")).unwrap();
 	assert!(page.contains(r#"<div id="warp-root" data-warp-worker="reader.js,host.js,host-tasks.js"><p>naps: 1</p></div>"#), "{page}");
 	assert!(page.contains(r#"<script src="site-thread.js"></script>"#) && !page.contains(r#"<script src="host.js">"#), "{page}");
@@ -90,7 +90,7 @@ fn a_painting_site_runs_in_a_worker_with_its_canvas() {
 	let directory = scratch_directory("painting-site");
 	let program = "use draw\ncanvas(4, 3)\nrect(1, 1, 2, 1, red)\nshow()\np{ \"mouse at {mouse_x}\" }";
 	let site = warp::site::build(program, "painting", &directory).expect("the site is built");
-	assert_eq!(site.files[2..5], ["site-thread.js", "canvas.js", "markup.js"], "{:?}", site.files);
+	assert_eq!(site.files[2..6], ["task-workers.js", "site-thread.js", "canvas.js", "markup.js"], "{:?}", site.files);
 	assert!(site.files.iter().any(|file| file == "site-worker.js"), "{:?}", site.files);
 	let page = std::fs::read_to_string(directory.join("index.html")).unwrap();
 	assert!(page.contains("data-warp-worker=") && page.contains(r#"<script src="canvas.js"></script>"#), "{page}");

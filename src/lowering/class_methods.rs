@@ -47,8 +47,6 @@ const METHOD_ALIASES: [(&str, &[&str]); 23] = [
 	("contains", &["has"]), ("includes", &["has"]), ("delete", &["remove"]), ("discard", &["remove"]),
 	("len", &["size"]),
 ];
-/// The keywords of a field: Swift's `var count = 0`, `let`, Kotlin's `val`
-const FIELD_KEYWORDS: [&str; 3] = ["var", "let", "val"];
 /// Member modifiers that may mean something in warp, so they get no note that warp needs them not
 const SILENT_MODIFIERS: [&str; 1] = ["async"];
 /// The constructor names of other languages, aliases of `init` (P162): warp's old `value`, JavaScript, Python, Ruby,
@@ -1698,7 +1696,7 @@ fn setter_calls(node: Node, setters: &[String]) -> Node {
 /// `var count = 0` the field `count = 0`
 fn without_modifiers(item: Node) -> Node {
 	let Node::List(words, bracket, separator) = item.drop_meta().clone() else { return item };
-	let is_modifier = |word: &Node| matches!(word.drop_meta(), Node::Symbol(word) if crate::warp_parser::MEMBER_MODIFIERS.contains(&word.as_str()) || FIELD_KEYWORDS.contains(&word.as_str()));
+	let is_modifier = |word: &Node| matches!(word.drop_meta(), Node::Symbol(word) if crate::warp_parser::MEMBER_MODIFIERS.contains(&word.as_str()) || crate::warp_parser::FIELD_KEYWORDS.contains(&word.as_str()));
 	let kept: Vec<Node> = words.iter().skip_while(|word| is_modifier(word)).cloned().collect();
 	if let Some(kept_word) = kept.first().map(leading_name).filter(|_| kept.len() < words.len()) {
 		let modifiers: Vec<String> = words[..words.len() - kept.len()].iter().map(|word| word.drop_meta().name()).collect();

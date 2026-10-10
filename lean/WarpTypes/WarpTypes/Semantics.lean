@@ -1,7 +1,7 @@
 import WarpTypes.Typing
 
 /-! Small-step semantics of W0: left to right, call by value. An `error` in any evaluation position propagates,
-except under `try`. Main-level names are cells of the store; class instances live in its heap, which only grows. -/
+except under `try`; a stored error (`fail`) is a value until an operation that needs another value meets it. Main-level names are cells of the store; class instances live in its heap, which only grows. -/
 
 namespace Warp
 open Ty Expr
@@ -305,14 +305,22 @@ def looseEq (P : Program) (μ : Store) : Nat → Expr → Expr → Bool
 def eqValues (P : Program) (μ : Store) (same : Bool) (a b : Expr) : Bool :=
   if same then decide (a = b) else looseEq P μ EQ_FUEL a b
 
-/-- false, 0, "", ø and [] are falsy -/
+/-- a stored error -/
+def isFail : Expr → Bool
+  | .fail _ => true
+  | _ => false
+
+theorem isFail_eq : ∀ {e : Expr}, isFail e = true → ∃ m, e = .fail m := by
+  intro e h; cases e <;> simp_all [isFail]
+
+/-- false, 0, "", ø, [] and a stored error are falsy -/
 def truthy : Expr → Bool
   | .bool b => b
   | .int n => n != 0
   | .num q => q != 0
   | .flt f => Float.ofBits f != 0
   | .text s => !s.isEmpty
-  | .unit | .nil => false
+  | .unit | .nil | .fail _ => false
   | _ => true
 
 /-- the i-th element, 1-based; of a text its i-th codepoint -/
@@ -343,6 +351,7 @@ def valueType : Expr → Option Ty
   | .nil => some (.list .never)
   | .ref _ p => some (.cls p)
   | .lref _ t => some (.list t)
+  | .fail _ => some .any
   | .cons h t =>
     match valueType h, valueType t with
     | some a, some l =>
@@ -374,6 +383,7 @@ def display (μ : Store) : Nat → Expr → String
   | _, .num q => ratDisplay q
   | _, .flt f => floatDisplay (Float.ofBits f)
   | _, .text s => s!"\"{s}\""
+  | _, .fail _ => "error"
   | depth + 1, .lref a t => display μ depth (μ.items (.lref a t))
   | depth, .cons h t => "[" ++ " ".intercalate (showItems depth (.cons h t)) ++ "]"
   | _, _ => "?"
@@ -387,7 +397,7 @@ def DISPLAY_DEPTH : Nat := 8
 /-- `v as text`: a text as it is, the empty list ø, anything else as warp prints it -/
 def textForm (μ : Store) (v : Expr) : String :=
   match μ.items v with
-  | .text s => s
+  | .text s | .fail s => s
   | .nil => "ø"
   | v => display μ DISPLAY_DEPTH v
 
@@ -416,8 +426,16 @@ def replaceAt : Expr → Int → Expr → Option Expr
   | .cons h t, n, v => if n = 1 then some (.cons v t) else (replaceAt t (n - 1) v).map (.cons h)
   | _, _, _ => none
 
-/-- `xs#i = v` of values: v replaces an item of the shared list if it fits the list's element type -/
-def setAtValues (μ : Store) : Expr → Expr → Expr → Expr × Store
+/-- `xs#i` of values: the i-th item of a list or a text, from 1; `m[k]` of an instance its field k (a map's computed
+key) -/
+def indexValues (μ : Store) (l i : Expr) : Expr :=
+  match l, i with
+  | .ref a p, .text k => readField μ (.ref a p) k
+  | _, _ => (nth (μ.items l) ((asInt i).getD 0)).getD (.error "index out of range")
+
+/-- `xs#i = v` of values: v replaces an item of the shared list if it fits the list's element type; `m[k] = v` the
+field k of an instance if its class has one and v fits its type -/
+def setAtValues (P : Program) (μ : Store) : Expr → Expr → Expr → Expr × Store
   | .lref a t, i, v =>
     match μ.listAt a t with
     | some items =>
@@ -427,6 +445,10 @@ def setAtValues (μ : Store) : Expr → Expr → Expr → Expr × Store
         | none => (.error "index out of range", μ)
       else (.error "type mismatch", μ)
     | none => (.error "dangling list", μ)
+  | .ref a p, .text k, v =>
+    match P.fieldTy p k with
+    | some t => if (μ.obj a p).isSome && fits v t then (v, μ.write a k v) else (.error "type mismatch", μ)
+    | none => (.error "no field", μ)
   | _, _, _ => (.error "not a list", μ)
 
 /-- the k ints from m: `[m, m+1, …]` -/
@@ -461,6 +483,7 @@ inductive Frame where
   | get (f : String)
   | setL (f : String) (v : Expr) | setR (o : Expr) (f : String)
   | isA (c : String)
+  | failed
   | emit (ev : String)
   | abort (ev : String) (k : Option Nat)
   | forIn (y : String) (b last : Expr)
@@ -503,6 +526,7 @@ def plug : Frame → Expr → Expr
   | setL f v, e => .set e f v
   | setR o f, e => .set o f e
   | isA c, e => .isA e c
+  | failed, e => .failed e
   | emit ev, e => .emit ev e
   | abort ev k, e => .abort ev k e
   | forIn y b d, e => .forIn y e b d
@@ -531,7 +555,8 @@ inductive Step (P : Program) : Expr × Store → Expr × Store → Prop where
   | raise {F : Frame} {m μ} : F.ready = true → Step P (F.plug (.error m), μ) (.error m, μ)
   | tryStep {e e' h μ μ'} : Step P (e, μ) (e', μ') → Step P (.tryCatch e h, μ) (.tryCatch e' h, μ')
   | tryError {m h μ} : Step P (.tryCatch (.error m) h, μ) (h, μ)
-  | tryValue {v h μ} : v.isValue = true → Step P (.tryCatch v h, μ) (v, μ)
+  | tryValue {v h μ} : v.isValue = true → isFail v = false → Step P (.tryCatch v h, μ) (v, μ)
+  | tryFail {m h μ} : Step P (.tryCatch (.fail m) h, μ) (h, μ)
   | readValue {x v μ} : μ x = some (.val v) → Step P (.glob x, μ) (v, μ)
   | readUnset {x μ} : μ x = some .unset → Step P (.glob x, μ) (.error "unset", μ)
   | readCharged {x b μ} : μ x = some (.charged b) → Step P (.glob x, μ) (b, μ)
@@ -548,7 +573,7 @@ inductive Step (P : Program) : Expr × Store → Expr × Store → Prop where
       Step P (.app f v, μ) (.error "not a function", μ)
   | range {a b μ} : a.isValue = true → b.isValue = true → Step P (.range a b, μ) (rangeValues a b, μ)
   | index {l i μ} : l.isValue = true → i.isValue = true →
-      Step P (.index l i, μ) ((nth (μ.items l) ((asInt i).getD 0)).getD (.error "index out of range"), μ)
+      Step P (.index l i, μ) (indexValues μ l i, μ)
   | append {a b μ} : a.isValue = true → b.isValue = true →
       Step P (.append a b, μ) (appendValues (μ.items a) (μ.items b), μ)
   | assign {x v μ} : v.isValue = true → Step P (.assign x v, μ) (v, μ.set x (.val v))
@@ -566,13 +591,14 @@ inductive Step (P : Program) : Expr × Store → Expr × Store → Prop where
       Step P (.share v t, μ) (.error "type mismatch", μ)
   | push {l v μ} : l.isValue = true → v.isValue = true → Step P (.push l v, μ) (pushValues μ l v)
   | setAt {l i v μ} : l.isValue = true → i.isValue = true → v.isValue = true →
-      Step P (.setAt l i v, μ) (setAtValues μ l i v)
+      Step P (.setAt l i v, μ) (setAtValues P μ l i v)
   | cast {v ts μ} : v.isValue = true → Step P (.cast v ts, μ) (if ts.any (fits v) then v else .error "type mismatch", μ)
   | conv {v t μ} : v.isValue = true → Step P (.conv v t, μ) (convertValue μ v t, μ)
   | new {p μ} : Step P (.new p, μ) (.ref μ.heap.length p, μ.alloc p)
   | get {o f μ} : o.isValue = true → Step P (.get o f, μ) (readField μ o f, μ)
   | set {o f v μ} : o.isValue = true → v.isValue = true → Step P (.set o f v, μ) (writeField μ o f v)
   | isA {v c μ} : v.isValue = true → Step P (.isA v c, μ) (.bool (isInstance v c), μ)
+  | failed {v μ} : v.isValue = true → Step P (.failed v, μ) (.bool (isFail v), μ)
   /-- the body runs with the handler pushed; the handlers return to what they were -/
   | handleStep {ev h b b' μ μ'} : Step P (b, μ.push ev h) (b', μ') →
       Step P (.handle ev h b, μ) (.handle ev h b', μ'.withHandlers μ.handlers)

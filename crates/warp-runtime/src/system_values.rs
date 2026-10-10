@@ -11,10 +11,12 @@ use std::cell::RefCell;
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicU32, Ordering};
 use std::time::{Duration, Instant};
-use crate::host_words::{BATTERY, CHARGING, CLIPBOARD_COUNT, DARK_MODE, MOUSE_DOWN, MOUSE_X, MOUSE_Y, ONLINE, SYSTEM_VALUES, TIME_OF_DAY};
+use crate::host_words::{BATTERY, CHARGING, CLIPBOARD_COUNT, DARK_MODE, MOUSE_DOWN, MOUSE_X, MOUSE_Y, ONLINE, SYSTEM_VALUES, TIME_OF_DAY, VIEW_HEIGHT, VIEW_WIDTH};
 
 const NOTIFICATION_TITLE: &str = "warp";
 const READING_LIFETIME: Duration = Duration::from_secs(1);
+/// view_width × view_height natively: the size of a picture before any window shows it (host.js VIEW_DEFAULTS)
+const NATIVE_VIEW: (i64, i64) = (640, 480);
 /// Any public address: connecting a UDP socket only asks the routing table
 const INTERNET_ADDRESS: &str = "1.1.1.1:53";
 
@@ -61,6 +63,8 @@ fn read_now(name: &str) -> Result<i64, String> {
 		ONLINE => Ok(online() as i64),
 		DARK_MODE => dark_mode().map(|dark| dark as i64),
 		CLIPBOARD_COUNT => clipboard_count(),
+		VIEW_WIDTH => Ok(NATIVE_VIEW.0),
+		VIEW_HEIGHT => Ok(NATIVE_VIEW.1),
 		other => Err(format!("{other} is no system value; known: {}", SYSTEM_VALUES.map(|(name, _)| name).join(", "))),
 	}
 }

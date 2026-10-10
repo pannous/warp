@@ -627,7 +627,6 @@ pub(super) fn educate_block_assignment(assignment: &Node, name: &str, block: &st
 }
 
 pub(super) const LOCAL_OR_GLOBAL: &str = "local-or-global";
-pub(super) const LOCAL_KEYWORDS: [&str; 2] = ["let", "var"];
 pub(super) const MAIN_LEVEL_READING: usize = 1;
 
 /// The main-level statement that first assigns `name`: `n=0` of `n=0; def f(x){n=5;x}`
@@ -656,13 +655,13 @@ pub(super) fn ask_local_or_global(assignment: &Node, name: &str, function: &str,
 	ask(&Ask::new(LOCAL_OR_GLOBAL, question, readings, Fallback::Warning).written(&format!("{name} = …")).at_node(assignment))
 }
 
-/// `let n = …` / `var n = …` in `body`: n is explicitly the function's own
+/// `let n = …`, `var n = …`, `const n = …` in `body`: n is explicitly the function's own
 pub(super) fn declares_local(body: &Node, name: &str) -> bool {
 	let mut declared = false;
 	body.visit(&mut |node| {
 		if let Node::List(items, _, _) = node {
 			if let [keyword, declaration] = items.as_slice() {
-				declared |= matches!(keyword.drop_meta(), Node::Symbol(word) if LOCAL_KEYWORDS.contains(&word.as_str()))
+				declared |= matches!(keyword.drop_meta(), Node::Symbol(word) if is_declaration_word(word))
 					&& global_binding(declaration, &Scope::new()).is_some_and(|binding| binding.name == name);
 			}
 		}

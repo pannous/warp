@@ -48,7 +48,7 @@ const LOG_WORD: &str = "log";
 const OF_WORD: &str = "of";
 
 /// Canonical word and the spellings that mean it
-const SYNONYMS: [(&str, &[&str]); 26] = [
+const SYNONYMS: [(&str, &[&str]); 27] = [
 	(LIST_WORD, &[]),
 	(MAP_KEYS, &["keys"]),
 	(MAP_VALUES, &["values"]),
@@ -76,6 +76,7 @@ const SYNONYMS: [(&str, &[&str]); 26] = [
 	("mean", &["average"]),
 	(IS_ALPHA, &["is_letter", "isalpha"]),
 	("is_alphanumeric", &["is_alnum", "isalnum"]),
+	("nearest", &[]),
 	(crate::mutation::UNWRAP, &[]),
 ];
 /// `list_sum(list, loop)`: the sum of a list variable as one operation the emitter dispatches (wasm_emitter/list_dispatch.rs):
@@ -1143,10 +1144,13 @@ impl Lowering {
 		}
 		// a text builtin's own arity check names its values (`trim takes 1 value, got 2`)
 		let checks_itself = crate::wasm_emitter::text_builtins::is_text_builtin(word);
-		if arguments.len() != wanted && !checks_itself {
+		// a prelude parameter with a default may be left out: its definition fills it in
+		let fewest = wanted - crate::modules::prelude_word_defaults(word);
+		if !(fewest..=wanted).contains(&arguments.len()) && !checks_itself {
 			let plural = if wanted == 1 { "" } else { "s" };
+			let counts = if fewest == wanted { wanted.to_string() } else { format!("{fewest} to {wanted}") };
 			let call = Node::List([vec![head.clone()], arguments.clone()].concat(), Bracket::Round, Separator::None);
-			return Diagnostic::at(&call, format!("{word} takes {wanted} argument{plural}, got {}", arguments.len())).into_error();
+			return Diagnostic::at(&call, format!("{word} takes {counts} argument{plural}, got {}", arguments.len())).into_error();
 		}
 		match EXPANDED_WORDS.iter().find(|(name, _, _)| *name == word) {
 			Some((_, _, template)) if word == SUM_WORD => dispatched_sum(self.expanded(template, arguments)),
