@@ -23,3 +23,11 @@ fn library_words_stay_redefinable() {
 	is!("count(x) := 7; count([1,2])", 7);
 	is!("square(x) := 777; square(4)", 777);
 }
+
+// card def-div-error: the word after a function keyword is the name, also an infix word (`7 div 2`); it was the
+// division `def div (a, b)`
+#[test]
+fn a_function_keyword_names_an_infix_word() {
+	is!("def div(a,b) = (a - a mod b) / b; div(7,2)", 3);
+	is!("fun rem(a, b) = a * b; rem(2, 3)", 6);
+}

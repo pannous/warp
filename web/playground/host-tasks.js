@@ -72,6 +72,25 @@ function addTaskWorker(loaded) {
 	self.postMessage({ taskWorker: { id, url: new URL(url, self.location.href).href } });
 }
 
+// a voice (card playground-go, natively src/sound.rs Voice): when this Worker's queued sounds end, on the clock the page
+// and every Worker share. A task's voice starts where its starter's stands, so their sounds sound together
+let voiceEnd = 0;
+const soundClock = () => (performance.timeOrigin + performance.now()) / 1000;
+self.soundsQueued = () => Math.max(0, voiceEnd - soundClock()); // sound_queued()
+self.voiceStopped = () => { voiceEnd = 0; };
+self.joinVoice = end => { voiceEnd = end ?? 0; }; // a task Worker's voice: its starter's
+// the start of a sound of that many seconds: behind this voice's sounds, never before now
+self.voicePlaced = seconds => {
+	const start = Math.max(voiceEnd, soundClock());
+	voiceEnd = start + seconds;
+	return start;
+};
+// a task run inline sounds as a voice of its own too: the starter's voice stands where it stood
+function asVoice(run) {
+	const starterEnd = voiceEnd;
+	try { return run(); } finally { voiceEnd = starterEnd; }
+}
+
 // a sound a task plays, for the page, which only the program's Worker talks to (task-worker.js relay); it reaches the
 // page once that Worker is back in its event loop, not while it waits for the task
 const RELAYED = ["playSamples", "playSoundFile", "stopSound", "stopSoundFiles"];
@@ -278,13 +297,13 @@ function startTask(holder, hooks, name, ints, values) {
 	const run = holder.run;
 	const id = BigInt(run.tasks.size + 1);
 	const captured = capturedValues(holder.exports);
-	const inline = () => runTask(run.module, hooks, holder.warnings, name, ints, values, run.shared, captured, null, run.channels);
+	const inline = () => asVoice(() => runTask(run.module, hooks, holder.warnings, name, ints, values, run.shared, captured, null, run.channels));
 	if (taskPool.length > 0) {
 		const shared = new SharedArrayBuffer(TASK_HEADER + TASK_RESULT_BYTES, { maxByteLength: TASK_RESULT_LIMIT });
 		const worker = taskPool.pop();
 		const control = new Int32Array(new SharedArrayBuffer(2 * Int32Array.BYTES_PER_ELEMENT));
 		const files = self.writtenFilesForTask?.();
-		worker.postMessage({ module: run.module, name, ints, values, shared, arrays: run.shared, captured, control, channels: run.channels, files });
+		worker.postMessage({ module: run.module, name, ints, values, shared, arrays: run.shared, captured, control, channels: run.channels, files, voice: voiceEnd });
 		run.tasks.set(id, { name, worker, shared, control, started: performance.now(), inline });
 	} else {
 		if (!hasTaskWorkers()) sayTasksInline(run, holder, hooks);

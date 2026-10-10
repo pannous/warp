@@ -29,6 +29,7 @@ mod test_primer; // card language-primer: the assistant's system prompt, /llms.t
 mod test_web_server;
 #[cfg(feature = "native")] // `warp dev` serves HTTP on a port
 mod test_dev_server;
+mod test_task_voices; // card playground-go
 mod test_async_data; // the browser: a task Worker fetches into shared memory, read at the check points
 #[cfg(feature = "native")] // warp build --site writes files with the native compiler
 mod test_site;

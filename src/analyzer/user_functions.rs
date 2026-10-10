@@ -817,10 +817,20 @@ pub(super) fn is_decimal_literal(node: &Node) -> bool {
 
 /// Variables assigned a decimal literal (`y = 2.5`, `y = 3.0`)
 pub(super) fn decimal_variables(program: &Node) -> HashSet<String> {
+	variables_assigned(program, is_decimal_literal)
+}
+
+/// `ok = x > 2`
+fn bool_variables(program: &Node) -> HashSet<String> {
+	variables_assigned(program, |value| crate::analyzer::is_boolean(value, &Scope::new()))
+}
+
+/// The variables assigned a value that `holds`
+fn variables_assigned(program: &Node, holds: impl Fn(&Node) -> bool) -> HashSet<String> {
 	let mut names = HashSet::new();
 	program.visit(&mut |node| {
 		if let Node::Key(target, Op::Assign | Op::Define, value) = node {
-			if let (Node::Symbol(name), true) = (target.drop_meta(), is_decimal_literal(value)) {
+			if let (Node::Symbol(name), true) = (target.drop_meta(), holds(value)) {
 				names.insert(name.clone());
 			}
 		}
@@ -839,6 +849,11 @@ pub(super) fn infer_parameters_from_calls(ctx: &mut Context, program: &Node) {
 		_ => None,
 	});
 	let mut argument_kinds: HashMap<(String, usize), Vec<Kind>> = HashMap::new();
+	// is every argument a parameter is given a bool (`show(1<2)`, `show(ok)` of `ok = x > 2`)
+	let bool_variables = bool_variables(program);
+	let is_bool_argument = |argument: &Node| crate::analyzer::is_boolean(argument, &Scope::new())
+		|| matches!(argument.drop_meta(), Node::Symbol(name) if bool_variables.contains(name));
+	let mut given_bools: HashMap<(String, usize), bool> = HashMap::new();
 	// a float passed to a declared int parameter loses digits: a compile error (P49)
 	let mut float_for_int: Vec<String> = Vec::new();
 	// a parameter of the same name shadows the variable (as in literal_variable_kinds)
@@ -855,6 +870,10 @@ pub(super) fn infer_parameters_from_calls(ctx: &mut Context, program: &Node) {
 			}
 			let Some(function) = ctx.user_functions.get(&name) else { continue };
 			for (index, argument) in arguments.into_iter().enumerate().take(function.params.len()) {
+				// the head `show(b)` and a recursive `show(b)` pass the parameter itself: no say in its kind
+				if !matches!(argument.drop_meta(), Node::Symbol(passed) if *passed == function.params[index].name) {
+					*given_bools.entry((name.clone(), index)).or_insert(true) &= is_bool_argument(argument);
+				}
 				// `real`, `exact` are Ints that may hold a ratio: only a whole type loses a decimal's digits
 				let declared_int = function.params[index].annotation.as_ref().is_some_and(|annotation| crate::analyzer::checks::refuses_decimals(&annotation.name()));
 				if declared_int && has_digits_an_int_loses(argument) {
@@ -876,6 +895,14 @@ pub(super) fn infer_parameters_from_calls(ctx: &mut Context, program: &Node) {
 		}
 	});
 	ctx.parameter_conflicts.extend(float_for_int);
+	// given a bool at every call, an untyped parameter is one, as if written `b: bool`: it keeps printing yes/no
+	// (card bool-loses: `show(b) := "got " + b; show(1<2)` gave "got 1")
+	for ((name, index), _) in given_bools.into_iter().filter(|(_, all_bools)| *all_bools) {
+		let param = &mut ctx.user_functions.get_mut(&name).expect("call sites were collected from known functions").params[index];
+		if param.annotation.is_none() && param.default.is_none() {
+			param.annotation = Some(Node::Symbol(crate::analyzer::BOOL_TYPE.to_string()));
+		}
+	}
 	// a value its body gives the parameter is one more kind it holds; with no call of known kind it starts as an Int
 	for (name, function) in &ctx.user_functions {
 		for (index, param) in function.params.iter().enumerate() {

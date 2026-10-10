@@ -24,6 +24,8 @@ pub const MAX_SHIFT_COUNT: i64 = 1 << 16;
 /// exact_text(x): the text of any exact number, as the host prints it (`2.5`, `1/3`, `-∞`, big integers in full)
 pub const EXACT_TEXT: &str = "exact_text";
 const INT_TEXT: &str = "int_text";
+/// int_gcd(a, b): every ratio is normalized by one
+pub(crate) const INT_GCD: &str = "int_gcd";
 const DECIMAL_BASE: i64 = 10;
 /// A ratio whose denominator has no other prime factors is a terminating decimal
 const DECIMAL_PRIMES: [i64; 2] = [2, 5];
@@ -182,7 +184,7 @@ impl WasmGcEmitter {
 		}
 
 		// int_gcd(a, b) >= 0 by Euclid; locals: remainder
-		self.runtime_function("int_gcd", vec![i64t, i64t], vec![i64t], vec![i64t], |s, f| {
+		self.runtime_function(INT_GCD, vec![i64t, i64t], vec![i64t], vec![i64t], |s, f| {
 			for local in [0, 1] {
 				s.is_negative(f, local);
 				f.instruction(&I::If(BlockType::Empty));
@@ -235,7 +237,7 @@ impl WasmGcEmitter {
 			s.negate_local(f, 1);
 			f.instruction(&I::End);
 			Self::emit_list(f, &[I::LocalGet(0), I::LocalGet(1)]);
-			s.call(f, "int_gcd");
+			s.call(f, INT_GCD);
 			// gcd 0 only for 0/0 (NaN)
 			Self::emit_list(f, &[I::LocalTee(2), I::I64Const(1), I::I64GtS, I::If(BlockType::Empty)]);
 			for local in [0, 1] {
