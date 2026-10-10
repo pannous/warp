@@ -130,8 +130,8 @@ const PROSE_SHARE = 0.8; // of a line's words plain English words: a sentence, n
 const PROSE_LENGTH = 4; // words, fewer is code like `print x for x`
 const RESULT_LINE = /^\s*(?:=>|→|\/\/\s*=>)/; // `=> [2 3]`: what the code gives, not code
 const OPENERS = "([{", CLOSERS = ")]}";
-const LINE_COMMENT = "//";
-const COMMENT_MARKS = [LINE_COMMENT, "/*"];
+const LINE_COMMENT_MARK = "//"; // shortcuts.js has LINE_COMMENT, what it inserts: the page's scripts share one scope
+const COMMENT_MARKS = [LINE_COMMENT_MARK, "/*"];
 
 const QUOTED_CODE = /`[^`]*`/g; // `[2 3]` in a sentence about code; a warp text too, so a sentence is judged without them
 const PUNCTUATION = /^[,.;:!?…]+$/;
@@ -156,7 +156,7 @@ function commentStart(line, marks = COMMENT_MARKS) {
 }
 
 // the code before the cursor ends in a `//` comment or an open `/* … */`
-const isInComment = before => commentStart(before.slice(before.lastIndexOf("\n") + 1), [LINE_COMMENT]) >= 0 || before.lastIndexOf("/*") > before.lastIndexOf("*/");
+const isInComment = before => commentStart(before.slice(before.lastIndexOf("\n") + 1), [LINE_COMMENT_MARK]) >= 0 || before.lastIndexOf("/*") > before.lastIndexOf("*/");
 
 const bracketDepth = line => [...line].reduce((depth, character) => depth + OPENERS.includes(character) - CLOSERS.includes(character), 0);
 
