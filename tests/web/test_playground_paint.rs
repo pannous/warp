@@ -1,5 +1,6 @@
 //! paint in the playground's host (web/playground/host.js) under node, the same refusals as natively (src/paint.rs):
-//! card canvas-zero, a 0×0 image (show() of use draw before canvas()) fails loudly instead of an empty canvas
+//! card canvas-zero: show() of use draw before canvas() paints the default canvas, as natively (user 2026-10-10: defaults,
+//! no errors)
 use std::process::Command;
 
 /// Runs the module in reader.js + host.js with a paint hook that says each painting's size; the outcome as JSON
@@ -29,6 +30,6 @@ fn the_playground_paints_a_canvas_of_its_size() {
 }
 
 #[test]
-fn the_playground_refuses_an_empty_painting() {
-	assert_eq!(run_in_host("use draw\nshow()", "paint-empty"), "paint: a 0×0 image is empty (with use draw: canvas(width, height) before show())");
+fn the_playground_paints_the_default_canvas() {
+	assert_eq!(run_in_host("use draw\nshow()", "paint-default"), "painted 640×480\nran");
 }

@@ -197,7 +197,6 @@ function programImports(holder, hooks) {
 			paint: (pixels, width, height, values) => {
 				if (!hooks.paint) throw new Error("paint: no canvas here; it draws in the playground page");
 				const room = Number(width) * Number(height);
-				if (!room) throw new Error(`paint: a ${width}×${height} image is empty (with use draw: canvas(width, height) before show())`);
 				let painted = intsOfList(program(), pixels, room) ?? plainOfTree(readNode(program(), pixels));
 				if (typeof painted === "string") {
 					if (!holder.gpuRendered) throw new Error("paint: a shader needs WebGPU (host-gpu.js), which this page has not");
