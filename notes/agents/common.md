@@ -75,6 +75,10 @@ when a message or comment cites a number (P71, D5) and you need its wording; nev
   the command because I'm lazy"), e.g. `--try "/Users/me/dev/bin/warp samples/sound.warp"`: always that full path
   (main's debug build, refreshed per pushed batch; plain `warp` is the older brew release). Run `todo done` only
   after your branch is on main; the Interviewer announces it (notes/roles.md "Ready to try").
+  Early try (user 2026-10-10: "if it runs the test just for this one feature, we could already present it"): as soon
+  as the feature's targeted test passes on your branch, build your binary with scripts/own-warp.sh and SendMessage
+  warp-interviewer a try line with that path: `echo '…' | <worktree>/scratch/warp` plus the expected output. Don't
+  wait for the Integrator's batch; `todo done --try` with /Users/me/dev/bin/warp still follows once it is on main.
 - Picking a card: `todo take <card> <your session name>` (user, 2026-10-06): assigns the user on GitHub, names you in
   the board field Agent, moves the card to Now. Prefer fresh, easy cards in column Next (user, 2026-10-06).
   Card keys (user, 2026-10-09): every card has a meaningful key, never a GitHub id like g_oncU. Cron
