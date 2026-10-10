@@ -31,6 +31,9 @@ impl WasmGcEmitter {
 				continue;
 			}
 			match arg {
+				// paint's pixels, sound's samples: a typed list of ints crosses as its array, list_to_ints copies it
+				Some(arg) if param_idx == 0 && sig.library == crate::host::HOST_LIBRARY && crate::host::INT_LIST_WORDS.contains(&sig.name)
+					&& self.emit_typed_int_list(func, arg) => {}
 				Some(arg) => self.emit_ffi_arg(func, arg, &sig.params[param_idx]),
 				None => self.emit_ffi_default(func, &sig.params[param_idx]),
 			}
