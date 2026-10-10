@@ -8,6 +8,7 @@ fn a_beat_is_a_share_of_a_minute() {
 	is!("use sound\nx = 1/4 beat\nx", 0.125);
 	is!("use sound\n2 beats", 1.0);
 	is!("use sound\nx = 2 bars\nx", 4.0);
+	is!("use sound\nbeat_seconds(1) + bar_seconds(1)", 2.5); // the words they lower to
 }
 
 #[test]

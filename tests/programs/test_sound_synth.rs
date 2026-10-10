@@ -22,6 +22,7 @@ fn noise_is_a_wave() {
 #[test]
 fn gain_in_decibels() {
 	is!("use sound\nx = -6 dB\nround(x * 1000)", 501);
+	is!("use sound\ndecibels(20)", 10.0); // the word it lowers to
 	is!("use sound\nround(-6dB * 1000)", 501);
 	is!("loudness = -20 dB\nplay C4 for 5ms\nloudness", 0.1);
 }
