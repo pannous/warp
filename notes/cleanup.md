@@ -22,6 +22,15 @@ Done:
   headless, host, meta_section, shader_holes, web_server)
 - site.rs: read_program / program_stem shared by deploy, dev_server and host's served_site; page_html_text for the
   "gave no text" check; items_of reused
+- ffi/link.rs: the hand-linked libc functions read memory through memory_bytes / parse_c_text / text_pair
+- gc_traits: GcObject getters through with_field; numeric GcReadable impls by one macro
+- wasm_reader run_main_with_tasks; `wasm_emitter::bracket_of_info` (bracket_info read back) for wasm_reader and web.rs
+- modules.rs registered_package / package_version_tags / make_package_directory; tasks.rs zero_results;
+  wasm_modules map_children_or_failure; Local::param via Local::new; type_kinds written_name; wasm_optimizer
+  unique_temp_file
+- `Node::as_items()`: a list's items, none of ø, else the node as the one item. Copies left for the lowering areas:
+  lowering/class_methods.rs (2), component_worlds.rs, type_constructor.rs; warp_parser/mod.rs:204 differs (no
+  drop_meta); site.rs items_of keeps ø as an item on purpose
 
 Left (bigger, needs care):
 - Two C header parsers: ffi_parser.rs (`parse_declaration`, one line at a time, C types → Kind → ValType via
