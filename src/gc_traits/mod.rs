@@ -79,11 +79,14 @@ impl FromVal for String {
     }
 }
 
+/// The reference a value holds, an error for a number or null
+pub(crate) fn anyref_of(val: &Val) -> Result<Rooted<AnyRef>> {
+    val.unwrap_anyref().copied().ok_or_else(|| anyhow!("not an anyref"))
+}
+
 impl FromVal for Rooted<StructRef> {
     fn from_val(val: Val, store: &mut Store<()>) -> Result<Self> {
-        let anyref = val
-            .unwrap_anyref()
-            .ok_or_else(|| anyhow!("not an anyref"))?;
+        let anyref = anyref_of(&val)?;
         Ok(anyref.unwrap_struct(&*store)?)
     }
 }
@@ -289,9 +292,7 @@ fn format_gc_val(f: &mut std::fmt::Formatter<'_>, store: &mut Store<()>, val: &V
 impl GcObject {
     /// Create a new GcObject that owns the store
     pub fn new(val: Val, store: Store<()>, instance: Option<Instance>) -> Result<Self> {
-        let anyref = val
-            .unwrap_anyref()
-            .ok_or_else(|| anyhow!("not an anyref"))?;
+        let anyref = anyref_of(&val)?;
         let inner = anyref.unwrap_struct(&store)?;
         Ok(Self {
             inner,
