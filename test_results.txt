@@ -2167,6 +2167,7 @@ PASSED:
   ✓ numbers::test_quantity_tolerance::quantities_with_tolerance_sum
   ✓ numbers::test_range_tolerance_compare::a_range_equals_the_same_span_with_tolerance
   ✓ numbers::test_range_tolerance_compare::spans_in_different_units_do_not_compare
+  ✓ numbers::test_ratio_float_division::a_ratio_divides_by_a_float
   ✓ numbers::test_rational_quantities::test_exact_amounts_compute_on
   ✓ numbers::test_rational_quantities::test_non_whole_results_are_exact
   ✓ numbers::test_rational_type::test_floats_are_not_rational
@@ -4338,4 +4339,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-10 ignored, 4333 passed, 0 failed, 4333 total tested
+10 ignored, 4334 passed, 0 failed, 4334 total tested
