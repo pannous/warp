@@ -25,4 +25,8 @@ Parked (user: "Later"):
   forcing word `interpret(x, grant: [io])` / a pragma `use eval io`. User 2026-10-05: "Later": no grants exist,
   run-time blocks are always pure. Asked by warp-29.
 - Parked: #10 Polish notation for .wat/.wast, user "Keep parked" 2026-10-03.
+- Parked: self-landing workers. One Tester (tests/queue.sh, as a merge queue) and every worker lands its own branch,
+  versus today's Integrator. User 2026-10-10: "not sure yet, the agents are free of all the hassle of integration, maybe
+  it will spoil their context". Middle path (Supervisor's recommendation): keep the Integrator but script its routine
+  part (merge batch, queue the suite, bisect a failing batch, push); the session only handles conflicts and failures.
 
