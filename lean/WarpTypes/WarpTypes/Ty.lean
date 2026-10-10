@@ -1,6 +1,7 @@
 /-! Types of the core calculus W0 (notes/type_theory.md) and their order.
 
-`bool ≤ int ≤ number` is the chain of numbers (true/false act as 1/0), `never` is the bottom (the type of `error`
+`bool ≤ int ≤ exact ≤ number` is the chain of numbers (true/false act as 1/0; an exact number is a rational, as warp's
+`0.5` and `7/2` are; a number is a float, as `sqrt(2)` is), `never` is the bottom (the type of `error`
 and of the elements of `[]`), `any` the top (a Node), and lists are covariant: warp lists are values. A function
 value (a lambda, `x => x*2`) takes anything (its parameter is unannotated) and is covariant in its result.
 A class type is its chain of ancestors, root first (`cls ["Shape", "Circle"]`): a subclass extends the chain, so
@@ -18,6 +19,8 @@ namespace Warp
 
 inductive Ty where
   | never | bool | int | number | text | unit
+  /-- a rational: `0.5`, `7/2`, `1/3` (warp's `rational`, the exact numbers); a float is a `number` -/
+  | exact
   /-- a one-character text (`"a"` parses as one): a text wherever a text is taken -/
   | codepoint
   | list (element : Ty)
@@ -52,9 +55,10 @@ def sub : Ty → Ty → Bool
   | fn a, fn b => sub a b
   | cls p, cls q => decide (q <+: p)
   | ranged a b, ranged c d => decide (c ≤ a ∧ b ≤ d)
-  | ranged _ _, int | ranged _ _, number => true
+  | ranged _ _, int | ranged _ _, exact | ranged _ _, number => true
   | quantity d, quantity e => d == e
-  | bool, bool | bool, int | bool, number | int, int | int, number | number, number => true
+  | bool, bool | bool, int | bool, exact | bool, number | int, int | int, exact | int, number => true
+  | exact, exact | exact, number | number, number => true
   | text, text | codepoint, codepoint | codepoint, text | unit, unit => true
   | _, _ => false
 
@@ -70,6 +74,7 @@ def name : Ty → String
   | bool => "bool"
   | int => "int"
   | number => "number"
+  | exact => "rational"
   | text => "text"
   | codepoint => "codepoint"
   | unit => "empty"
@@ -126,8 +131,8 @@ def element : Ty → Option Ty
   | list a => some a
   | _ => none
 
-/-- the result of `+`: an int when both operands are, otherwise a number -/
-def arith (a b : Ty) : Ty := if sub a int && sub b int then int else number
+/-- the result of `+`: an int when both operands are, exact when both are, otherwise a number (a float) -/
+def arith (a b : Ty) : Ty := if sub a int && sub b int then int else if sub a exact && sub b exact then exact else number
 
 @[simp] theorem sub_never (t : Ty) : sub never t = true := by cases t <;> rfl
 
@@ -143,7 +148,7 @@ theorem sub_refl : ∀ t : Ty, sub t t = true
   | cls p => by simp [sub]
   | ranged a b => by simp [sub]
   | quantity d => by simp [sub]
-  | never | bool | int | number | text | codepoint | unit | any => rfl
+  | never | bool | int | exact | number | text | codepoint | unit | any => rfl
 
 theorem sub_to_never : ∀ {t : Ty}, sub t never = true → t = never := by
   intro t h; cases t <;> simp_all [sub]
@@ -323,10 +328,15 @@ theorem arith_mono {a b a' b' : Ty} (ha : sub a' a = true) (hb : sub b' b = true
   by_cases h : (sub a int && sub b int) = true
   · simp at h
     simp [sub_trans ha h.1, sub_trans hb h.2, h.1, h.2, sub_refl]
-  · simp only [h, Bool.false_eq_true, ↓reduceIte]; split <;> simp [sub]
+  simp only [h, Bool.false_eq_true, ↓reduceIte]
+  by_cases e : (sub a exact && sub b exact) = true
+  · simp at e
+    simp only [sub_trans ha e.1, sub_trans hb e.2, Bool.and_self, ↓reduceIte, e.1, e.2]
+    split <;> simp [sub]
+  · simp only [e, Bool.false_eq_true, ↓reduceIte]; (repeat' split) <;> simp [sub]
 
 theorem arith_sub_number (a b : Ty) : sub (arith a b) number = true := by
-  unfold arith; split <;> simp [sub]
+  unfold arith; (repeat' split) <;> simp [sub]
 
 /-- what `+` takes statically: numbers, texts (`"a" + 1` is "a1"), and a dynamic value (`any`, checked when it runs) -/
 def addable (t : Ty) : Bool := sub t number || sub t text || t == any

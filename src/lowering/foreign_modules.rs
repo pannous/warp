@@ -248,7 +248,6 @@ fn is_warp_method(name: &str) -> bool {
 
 /// The module of operators every runtime offers (Python's operator plus len and list, the loops' own in JS)
 const OPERATOR_MODULE: &str = "operator";
-const COUNTING_WORDS: [&str; 4] = ["count", "len", "length", "size"];
 
 /// The operator function an infix operator forwards to: `a * 2` of a handle is `operator.mul(a, 2)`
 fn operator_member(op: &Op) -> Option<&'static str> {
@@ -323,7 +322,7 @@ impl Foreign<'_> {
 				Some(operator_call(&runtime, operator_member(op).expect("guarded"), vec![left, right]))
 			}
 			// `count a`, `len(a)`
-			Node::List(items, _, _) if matches!(items.as_slice(), [word, _] if matches!(word.drop_meta(), Node::Symbol(word) if COUNTING_WORDS.contains(&word.as_str()))) => {
+			Node::List(items, _, _) if matches!(items.as_slice(), [word, _] if matches!(word.drop_meta(), Node::Symbol(word) if crate::analyzer::is_counting_word(word))) => {
 				let counted = self.rewrite(items[1].clone());
 				let runtime = self.foreign_value(&counted)?;
 				Some(operator_call(&runtime, "len", vec![counted]))

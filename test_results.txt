@@ -164,6 +164,8 @@ PASSED:
   ✓ control::test_error_branch_kind::test_else_if_chains_and_switch_defaults
   ✓ control::test_error_branch_kind::test_taking_the_error_branch_is_the_error
   ✓ control::test_error_branch_kind::test_try_catches_an_error_branch
+  ✓ control::test_error_value_return::test_a_returned_error_raises_where_used_as_a_number
+  ✓ control::test_error_value_return::test_a_returned_error_stays_a_value
   ✓ control::test_error_values::an_error_has_a_message
   ✓ control::test_error_values::is_error_tests_any_value
   ✓ control::test_error_values::printing_an_error_prints_its_message
@@ -282,6 +284,8 @@ PASSED:
   ✓ control::test_job_lists::counting_jobs_does_not_await_them
   ✓ control::test_job_lists::jobs_in_a_list_run_at_the_same_time
   ✓ control::test_job_lists::the_extremes_of_job_results_are_numbers
+  ✓ control::test_list_without::without_a_condition_keeps_the_elements_failing_it
+  ✓ control::test_list_without::without_a_field_keeps_the_elements_lacking_it
   ✓ control::test_listener_removal_in_functions::a_listener_is_removed_inside_a_block
   ✓ control::test_listener_removal_in_functions::a_listener_is_removed_inside_a_function
   ✓ control::test_listener_removal_in_functions::a_listener_removed_by_a_function_stops_listening
@@ -521,6 +525,8 @@ PASSED:
   ✓ control::test_task_dir::the_task_still_runs_after_its_dir
   ✓ control::test_task_exact::a_big_integer_crosses_to_a_task_and_back
   ✓ control::test_task_exact::a_ratio_crosses_to_a_task_and_back
+  ✓ control::test_task_globals::a_go_block_plays_notes
+  ✓ control::test_task_globals::a_task_reads_an_exact_global
   ✓ control::test_task_list_literal::a_list_of_task_values_holds_each_result
   ✓ control::test_task_name_scope::a_loop_variable_leaves_the_main_variable_alone
   ✓ control::test_task_name_scope::a_loop_variable_named_like_a_task_is_the_loop_variable
@@ -623,6 +629,7 @@ PASSED:
   ✓ control::test_type_word_filter_loops::test_a_text_appended_with_an_item_of_a_mixed_list_inside_an_if
   ✓ control::test_type_word_filter_loops::test_a_type_word_loop_visits_only_items_of_that_type
   ✓ control::test_type_word_filter_loops::test_an_adjective_with_a_type_word_is_a_condition
+  ✓ control::test_type_word_filter_loops::test_the_codepoints_of_a_text_need_no_filter
   ✓ control::test_uncharged_blocks::test_a_block_is_no_value
   ✓ control::test_uncharged_blocks::test_a_computed_colon_warns_where_it_is_written
   ✓ control::test_uncharged_blocks::test_bang_runs_a_block
@@ -1334,6 +1341,7 @@ PASSED:
   ✓ functions::test_round8_call_forms::elixir_one_line_def_and_capture
   ✓ functions::test_round8_call_forms::php_array_functions
   ✓ functions::test_round8_call_forms::ruby_symbol_blocks_methods_and_block_sums
+  ✓ functions::test_rounding_builtins::rounding_words_stay_ints_when_libm_is_used
   ✓ functions::test_runtime_kind_arithmetic::a_def_body_reads_fields_of_its_parameters
   ✓ functions::test_runtime_kind_arithmetic::a_text_in_runtime_kind_arithmetic_is_not_a_number
   ✓ functions::test_runtime_kind_arithmetic::as_float_of_a_runtime_value
@@ -1431,7 +1439,7 @@ PASSED:
   ✓ functions::test_words_in_phrases::a_suffix_word_after_a_library_word_is_its_prefix_argument
   ✓ functions::test_words_in_phrases::sorted_text_sorts_its_characters
   ✓ functions::test_words_in_phrases::where_filters_a_comprehension_like_if
-  ✓ host::tests::test_host_state
+  ✓ host::native::tests::test_host_state
   ✓ lists::test_bare_list_assignment::a_bracketed_list_never_asks
   ✓ lists::test_bare_list_assignment::an_unbracketed_list_assignment_asks_list_or_statements
   ✓ lists::test_bare_list_assignment::each_reading_has_its_explicit_form
@@ -1443,6 +1451,8 @@ PASSED:
   ✓ lists::test_count_after_function::print_a_count
   ✓ lists::test_counting_word_variables::a_counting_word_variable_in_a_list_is_an_item
   ✓ lists::test_counting_word_variables::shared_values_named_like_counting_words_reach_a_go_block
+  ✓ lists::test_counting_words::test_every_counting_word_counts_a_list_of_quantities
+  ✓ lists::test_counting_words::test_every_other_counting_word_finds_the_size_method_of_a_class
   ✓ lists::test_decimal_list_elements::a_decimal_element_can_be_assigned
   ✓ lists::test_decimal_list_elements::a_decimal_element_compares
   ✓ lists::test_decimal_list_elements::a_decimal_element_takes_part_in_arithmetic
@@ -1728,6 +1738,9 @@ PASSED:
   ✓ modules::test_agent::agent_with_a_wrong_key_fails_with_the_api_reason
   ✓ modules::test_agent::agent_without_a_key_names_the_variable
   ✓ modules::test_agent::agent_without_a_key_says_where_to_set_it
+  ✓ modules::test_checkout_std_lib::a_lib_file_edited_since_the_build_is_used_quietly
+  ✓ modules::test_checkout_std_lib::a_stale_lib_file_shadows_the_standard_module_loudly
+  ✓ modules::test_checkout_std_lib::another_checkout_lib_is_the_standard_module
   ✓ modules::test_dir::a_program_s_own_dir_wins
   ✓ modules::test_dir::dir_lists_the_names_of_a_standard_module
   ✓ modules::test_folder_scope::a_name_defined_in_two_siblings_is_ambiguous
@@ -2823,6 +2836,7 @@ PASSED:
   ✓ programs::test_shader_holes::values_not_written_out_cannot_take_the_holes
   ✓ programs::test_small_samples::error_samples
   ✓ programs::test_small_samples::text_samples
+  ✓ programs::test_sound_clock::sounds_queue_on_the_audio_clock
   ✓ programs::test_sound_clock::stop_sound_empties_the_queue
   ✓ programs::test_sound_clock::waiting_headless_takes_no_time
   ✓ programs::test_sound_files::a_broken_music_file_fails
@@ -3554,6 +3568,7 @@ PASSED:
   ✓ types::test_type_tests::test_a_variable_on_the_right_stays_equality
   ✓ types::test_type_tests::test_articles_are_optional
   ✓ types::test_type_tests::test_as_declaration
+  ✓ types::test_type_tests::test_bare_type_names_are_type_values
   ✓ types::test_type_tests::test_list_type_tests
   ✓ types::test_type_tests::test_pi_is_real_and_a_number
   ✓ types::test_type_tests::test_scalar_type_tests
@@ -3797,6 +3812,7 @@ PASSED:
   ✓ web::test_assistant_edits::a_diff_changes_only_the_lines_it_names
   ✓ web::test_assistant_edits::a_diff_that_no_longer_fits_says_so
   ✓ web::test_assistant_edits::a_whole_program_replaces_only_the_lines_that_differ
+  ✓ web::test_assistant_proxy::the_assistant_proxy_answers_only_the_playground
   ✓ web::test_async_data::a_body_that_is_no_json_is_the_text
   ✓ web::test_async_data::a_changed_url_variable_fetches_anew
   ✓ web::test_async_data::a_failed_fetch_is_the_error
@@ -3808,6 +3824,9 @@ PASSED:
   ✓ web::test_class_components::an_instance_in_markup_renders
   ✓ web::test_class_components::an_instance_outside_markup_stays_an_instance
   ✓ web::test_class_components::other_frameworks_names_of_render
+  ✓ web::test_completion_terse::a_continuation_is_one_line_unless_it_opens_a_block
+  ✓ web::test_completion_terse::an_explaining_answer_shows_only_its_code
+  ✓ web::test_completion_terse::comments_only_inside_a_comment
   ✓ web::test_components::a_component_is_a_function_returning_markup
   ✓ web::test_components::a_trailing_block_fills_a_function_parameter
   ✓ web::test_components::each_instance_of_a_component_has_its_own_state
@@ -3828,6 +3847,7 @@ PASSED:
   ✓ web::test_dom_pages::a_handler_sets_and_reads_elements_of_the_page
   ✓ web::test_dom_pages::main_sets_the_title_of_the_page
   ✓ web::test_editor_mode::the_mode_advances_without_built_keywords
+  ✓ web::test_editor_shortcuts::cmd_ctrl_arrows_move_lines
   ✓ web::test_editor_shortcuts::cmd_slash_comments_lines_out_and_back_in
   ✓ web::test_element_events::an_element_handler_marks_its_element
   ✓ web::test_element_events::each_element_handler_has_its_number
@@ -3959,6 +3979,7 @@ PASSED:
   ✓ web::test_site::a_site_with_routes_is_one_page_for_every_path
   ✓ web::test_site::a_site_with_routes_starting_tasks_runs_its_program_in_a_worker
   ✓ web::test_site::a_static_page_is_its_last_line_rendered
+  ✓ web::test_sleep_run_limit::sleeping_does_not_count_toward_the_run_limit
   ✓ web::test_style_rules::a_selector_with_a_value_is_its_color
   ✓ web::test_style_rules::descendant_selectors_and_rules_on_one_line
   ✓ web::test_style_rules::lengths_keep_their_units
@@ -4418,7 +4439,6 @@ PASSED:
   ✓ wisp_parser::tests::test_wisp_tag
 
 FAILED:
-  ✗ programs::test_sound_clock::sounds_queue_on_the_audio_clock
 
 SUMMARY:
-10 ignored, 4415 passed, 1 failed, 4416 total tested
+10 ignored, 4436 passed, 0 failed, 4436 total tested

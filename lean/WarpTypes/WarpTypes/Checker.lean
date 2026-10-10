@@ -37,7 +37,7 @@ def evidentMisfit (v : Expr) (t : Ty) : Bool := v.isValue && !fits v t
 admits (`[1] as int` is refused) -/
 def convertible (te : Ty) : Ty → Bool
   | .text | .bool => true
-  | .int | .number => consub te .number || consub te .text
+  | .int | .exact | .number => consub te .number || consub te .text
   | t => consub te t
 
 /-- a quantity meets only its own dimensions (or a dynamic value, or an error): `1 m + 1 s`, `1 m == 1`, `1 m < "a"`
@@ -56,7 +56,8 @@ def measurable (t : Ty) : Bool := numeric t || t.isQuantity
 def typeOf (P : Program) (Γ : Ctx) : Expr → Option Ty
   | .bool _ => some .bool
   | .int _ => some .int
-  | .num _ => some .number
+  | .num _ => some .exact
+  | .flt _ => some .number
   | .qty _ d => some (.quantity d)
   | .text s => some (textTy s)
   | .unit => some .unit
@@ -187,7 +188,7 @@ theorem typeOf_sound {P : Program} : ∀ {e : Expr} {Γ t}, typeOf P Γ e = some
   intro e
   induction e with
   | text s => intro Γ t h; simp [typeOf] at h; subst h; exact .ofText s
-  | bool | int | num | qty | unit | nil => intro Γ t h; simp [typeOf] at h; subst h; constructor
+  | bool | int | num | flt | qty | unit | nil => intro Γ t h; simp [typeOf] at h; subst h; constructor
   | cons h tl ih1 ih2 =>
     intro Γ t hs; simp only [typeOf] at hs; split at hs
     · rename_i a l ha hl

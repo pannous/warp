@@ -7,7 +7,8 @@ relays an explicit user decision counts as the user's decision.
 
 Read first: AGENTS.md, notes/roles.md (roles, enforcement), notes/welcoming.md (clear intent → compile it; ambiguous →
 warning with "got it" or a loud error naming the explicit forms; preferred syntax differs → educate), and the decided
-rules in wiki/Footguns.md. Decisions reach you from the Interviewer or Supervisor;
+rules in wiki/Footguns.md. A missing setting takes a sensible default; an error only for an ambiguity too dangerous to
+guess (user 2026-10-10: show() without a canvas gets a default size, not an error). Decisions reach you from the Interviewer or Supervisor;
 once built, the code, tests and wiki are the truth. notes/decisions.md is the history: look something up there only
 when a message or comment cites a number (P71, D5) and you need its wording; never read it front to back.
 

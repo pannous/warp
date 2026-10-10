@@ -32,8 +32,9 @@ build switch, silenced hints) sit in the header's ⋯ menu; the run time is a sm
 - Keyboard shortcuts (shortcuts.js SHORTCUTS, card keyboard-shortcuts, user 2026-10-09): one table of CodeMirror key
   names, the editor's extraKeys. Cmd/Ctrl-Enter runs; Cmd-/ (Ctrl-/ elsewhere) toggles `// ` on the selected lines or
   the cursor's line (after their shallowest indentation; all commented: uncommented), one undo step, the selection kept.
-  tests/web/test_editor_shortcuts.rs runs commentEdits under node; the keys checked by hand headless (agent-browser
-  press Meta+/).
+  Cmd-Ctrl-Up/Down (Alt-Up/Down elsewhere, card keyboard-shortcut) move those lines one up or down with the selection.
+  tests/web/test_editor_shortcuts.rs runs commentEdits, and moveLines in a small editor double, under node; the keys
+  themselves only by hand (agent-browser press Meta+/; no local Chrome).
 
 ## The language guide (guide.md, guide.js)
 The left pane of the page (cards "core feature", "doc-example"; P188 one page): web/playground/guide.md, chapters `## Title` from

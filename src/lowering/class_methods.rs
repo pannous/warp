@@ -47,8 +47,6 @@ const METHOD_ALIASES: [(&str, &[&str]); 23] = [
 	("contains", &["has"]), ("includes", &["has"]), ("delete", &["remove"]), ("discard", &["remove"]),
 	("len", &["size"]),
 ];
-/// `len(s)`, `count(s)`, `s.count()` of an instance whose class defines its size under another of these names
-const SIZE_WORDS: [&str; 4] = ["size", "count", "len", "length"];
 /// The keywords of a field: Swift's `var count = 0`, `let`, Kotlin's `val`
 const FIELD_KEYWORDS: [&str; 3] = ["var", "let", "val"];
 /// Member modifiers that may mean something in warp, so they get no note that warp needs them not
@@ -155,7 +153,7 @@ pub fn lower(node: Node) -> Node {
 }
 
 /// `d.append(1)` of a deque, `s.contains(2)` of a set, `len(s)`: the class's own method when it does not define that
-/// name (METHOD_ALIASES, SIZE_WORDS), with a note
+/// name (METHOD_ALIASES, analyzer::COUNTING_WORDS), with a note
 fn method_aliases(node: Node) -> Node {
 	let mut methods: std::collections::HashMap<String, Vec<String>> = std::collections::HashMap::new();
 	node.visit(&mut |part| if let Node::Type { name, body } = part {
@@ -175,8 +173,8 @@ fn aliased_method(written: &str, defined: &[String]) -> Option<String> {
 	if defined.iter().any(|method| method == written) {
 		return None;
 	}
-	let candidates: Vec<&str> = match SIZE_WORDS.contains(&written) {
-		true => SIZE_WORDS.to_vec(),
+	let candidates: Vec<&str> = match crate::analyzer::is_counting_word(written) {
+		true => crate::analyzer::COUNTING_WORDS.to_vec(),
 		false => METHOD_ALIASES.iter().find(|(alias, _)| *alias == written).map(|(_, methods)| methods.to_vec()).unwrap_or_default(),
 	};
 	let method = candidates.into_iter().find(|candidate| defined.iter().any(|method| method == candidate))?;
@@ -201,7 +199,7 @@ fn with_method_aliases(node: Node, instances: &std::collections::HashMap<String,
 			Node::Key(receiver, Op::Dot, Box::new(member))
 		}
 		// `len(s)`: `s.size()`
-		Node::List(items, Bracket::Round, separator) if matches!(items.as_slice(), [word, argument] if SIZE_WORDS.contains(&word.drop_meta().name().as_str()) && defined_by(argument).is_some()) => {
+		Node::List(items, Bracket::Round, separator) if matches!(items.as_slice(), [word, argument] if crate::analyzer::is_counting_word(&word.drop_meta().name()) && defined_by(argument).is_some()) => {
 			match aliased_method(&items[0].drop_meta().name(), defined_by(&items[1]).expect("guarded")) {
 				Some(method) => key(items[1].clone(), Op::Dot, call(&method, vec![])),
 				None => Node::List(items, Bracket::Round, separator),

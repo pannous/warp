@@ -93,6 +93,8 @@ Done:
   has a third case, Recursive)
 - ffi/link.rs create_ffi_wrapper: the 18 typed arms are one link_typed! each (NativeArgument / NativeResult convert
   the values, CBool a C bool)
+- host.rs keeps the words and the parts both builds use; its native-only half (wasmtime host functions, memory
+  helpers, the linker) is src/host/native.rs, gated once at `mod native` and re-exported (`pub use native::*`)
 
 Left (bigger, needs care):
 - Two C header parsers: ffi_parser.rs (`parse_declaration`, one line at a time, C types → Kind → ValType via
@@ -104,8 +106,6 @@ Left (bigger, needs care):
   sharing a scope/evaluator skeleton would remove more, but they differ in errors (Stop vs String).
 - src/extensions.rs is hard-linked with ~/dev/script/rust/extensions.rs (src/extensions.rs.hardlink is the
   hardlink-guard's marker): edit it only knowing it changes that file too.
-- host.rs (~170 `#[cfg(feature = "native")]`-gated items) would read better split into host/native.rs, but it is the
-  hottest file of the repo (dozens of commits a day): split it in a quiet hour, as its own branch, nothing else in it.
 - Two GcObject types: wasm_reader::GcObject (node/mod.rs, re-exported by lib.rs) and gc_traits::GcObject (tests'
   ergonomic reader). One of them could wrap the other; the public API of both is pinned by tests/wasm.
 - headless.rs node_of_json and foreign.rs node_of both turn JSON into Nodes; they differ in separator (None vs Space),
