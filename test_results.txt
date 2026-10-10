@@ -2145,6 +2145,8 @@ PASSED:
   ✓ numbers::test_float_quotient::an_int_quotient_elsewhere_stays_exact
   ✓ numbers::test_float_quotient::an_int_quotient_into_a_float_is_rounded_once
   ✓ numbers::test_float_quotient::an_int_quotient_into_a_float_still_fails_dividing_by_zero
+  ✓ numbers::test_float_text_folded::test_folded_float_joins_text_as_at_run_time
+  ✓ numbers::test_float_text_folded::test_printed_float_literal_as_float_text
   ✓ numbers::test_float_text::test_float_as_text
   ✓ numbers::test_float_text::test_float_joins_texts
   ✓ numbers::test_float_to_int_range::test_float_beyond_int_range_fails_cleanly
@@ -4578,4 +4580,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-10 ignored, 4573 passed, 0 failed, 4573 total tested
+10 ignored, 4575 passed, 0 failed, 4575 total tested
