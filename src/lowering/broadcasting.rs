@@ -7,7 +7,7 @@
 //! `people.map(p => p.name)` (card people-map).
 
 use super::words::{MAP_WORD, OF_WORD, SUM_WORD};
-use super::nodes::{call, is_colon_pair, key};
+use super::nodes::{Counter, call, is_colon_pair, key};
 use crate::analyzer::{annotated_kind, list_element_type};
 use crate::function_values::{definitions, Definition};
 use crate::traits::InstanceTypes;
@@ -447,7 +447,7 @@ struct Broadcast {
 	/// The shapes of the program's variables: which field reads map over a list of instances
 	instances: Option<InstanceTypes>,
 	/// element-wise operators between two lists so far: each holds its lists under names of its own
-	paired: std::cell::Cell<usize>,
+	paired: Counter,
 	/// The untyped parameters of the functions being rewritten: their own values, not the program's list variables of
 	/// the same names (card param-named-like-global)
 	shadowed: std::cell::RefCell<Vec<String>>,
@@ -603,7 +603,7 @@ impl Broadcast {
 
 	/// The template's names made this rewrite's own: LEFT → paired_left_3 …
 	fn namer(&self) -> impl Fn(&str) -> String {
-		named_by(self.paired.replace(self.paired.get() + 1).to_string())
+		named_by(self.paired.next_number().to_string())
 	}
 
 	/// `sum(xs .op ys)`, `sum(xs .op k)`: one loop adding the items, the element-wise list never built

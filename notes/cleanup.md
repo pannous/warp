@@ -134,6 +134,8 @@ Done:
   `is_colon_pair`, `is_binding`, `is_function_keyword` (2 copies each) → nodes.rs; two `statements`/`entries` → Node::as_items
 - `match x.drop_meta() { Node::Symbol(n) => Some(n.clone()), _ => None }` (16 sites) → `x.symbol_name().map(String::from)`;
   `matches!(x.drop_meta(), Node::Symbol(w) if w == WORD)` (43 sites) → `x.is_symbol(WORD)`
+- the `Cell<usize>` counters of 15 passes (get then set, set then get, replace) → `nodes::Counter` with
+  `next_number()`; a pass counting from 1 starts it `Counter::starting_at(1)`, so every name stays as it was
 
 Left (each changes behaviour or needs care):
 - Node::map_children also enters class bodies (Node::Type); children_rewritten does not. ~40 more passes spell out
@@ -146,8 +148,8 @@ Left (each changes behaviour or needs care):
   go_blocks / named_arguments / parameter_shapes have their own parameter_name returning String or Node.
 - class_methods.rs (~2600 lines): destructurings / positional_fields share their class_of setup (431/444), two
   class-collecting visits (1848/2003); worth its own split into files.
-- temporary-name makers (lazy_ranges, min_max, parallel, list_element_checks, named_arguments) each format their own
-  prefix; one `Temporaries` counter type could serve them, names must stay byte-identical (tests pin some).
+- temporary-name makers with a plain `&mut self` usize (lazy_ranges, min_max, list_element_checks, variable_signals)
+  still count on their own; their prefixes and separators differ, the names must stay byte-identical (tests pin some).
 
 ## src/wasm_emitter/ (card cleanup-emitter, session warp-fixer)
 
