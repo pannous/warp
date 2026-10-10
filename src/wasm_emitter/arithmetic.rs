@@ -44,17 +44,10 @@ impl WasmGcEmitter {
 			return;
 		}
 
-		let wrap = if use_float {
-			if self.emit_float_truthy_logical(func, left, op, right) {
-				return;
-			}
-			self.emit_float_binary(func, left, op, right)
-		} else {
-			if self.emit_int_truthy_logical(func, left, op, right) {
-				return;
-			}
-			self.emit_int_binary(func, left, op, right)
-		};
+		if self.emit_numeric_logical(func, left, op, right, use_float) {
+			return;
+		}
+		let wrap = if use_float { self.emit_float_binary(func, left, op, right) } else { self.emit_int_binary(func, left, op, right) };
 
 		self.wrap_arithmetic_result(func, wrap);
 	}
@@ -456,25 +449,19 @@ impl WasmGcEmitter {
 		}
 	}
 
-	pub(super) fn emit_float_truthy_logical(
-		&mut self,
-		func: &mut Function,
-		left: &Node,
-		op: &Op,
-		right: &Node,
-	) -> bool {
+	/// `a and b`, `a or b` of numbers, as a new Float or Int: and gives a falsy left, else right; or gives a truthy
+	/// left, else right. Left is evaluated once.
+	fn emit_numeric_logical(&mut self, func: &mut Function, left: &Node, op: &Op, right: &Node, is_float: bool) -> bool {
 		if *op != Op::And && *op != Op::Or {
 			return false;
 		}
-
-		// and: a falsy left is the value, else right; or: a truthy left is the value, else right. Left is evaluated once.
-		self.emit_held_left_is_falsy(func, left, true);
-		func.instruction(&I::If(BlockType::Result(ValType::F64)));
-		self.emit_logical_branch(func, op == &Op::And, right, true);
+		self.emit_held_left_is_falsy(func, left, is_float);
+		func.instruction(&I::If(BlockType::Result(if is_float { ValType::F64 } else { ValType::I64 })));
+		self.emit_logical_branch(func, op == &Op::And, right, is_float);
 		func.instruction(&I::Else);
-		self.emit_logical_branch(func, op == &Op::Or, right, true);
+		self.emit_logical_branch(func, op == &Op::Or, right, is_float);
 		func.instruction(&I::End);
-		self.emit_call(func, "new_float");
+		self.emit_call(func, if is_float { "new_float" } else { "new_int" });
 		true
 	}
 
@@ -508,42 +495,13 @@ impl WasmGcEmitter {
 		}
 	}
 
-	pub(super) fn emit_int_truthy_logical(
-		&mut self,
-		func: &mut Function,
-		left: &Node,
-		op: &Op,
-		right: &Node,
-	) -> bool {
-		if *op != Op::And && *op != Op::Or {
-			return false;
-		}
-
-		self.emit_held_left_is_falsy(func, left, false);
-		func.instruction(&I::If(BlockType::Result(ValType::I64)));
-		self.emit_logical_branch(func, op == &Op::And, right, false);
-		func.instruction(&I::Else);
-		self.emit_logical_branch(func, op == &Op::Or, right, false);
-		func.instruction(&I::End);
-		self.emit_call(func, "new_int");
-		true
-	}
-
 	/// Apply an arithmetic operator to the two f64 on the stack. Mod is euclidean like the exact Ints, Rem truncates.
 	pub(super) fn emit_float_arithmetic(&mut self, func: &mut Function, op: &Op) {
 		match op {
-			Op::Add => {
-				func.instruction(&I::F64Add);
-			}
-			Op::Sub => {
-				func.instruction(&I::F64Sub);
-			}
-			Op::Mul => {
-				func.instruction(&I::F64Mul);
-			}
-			Op::Div => {
-				func.instruction(&I::F64Div);
-			}
+			Op::Add => { func.instruction(&I::F64Add); }
+			Op::Sub => { func.instruction(&I::F64Sub); }
+			Op::Mul => { func.instruction(&I::F64Mul); }
+			Op::Div => { func.instruction(&I::F64Div); }
 			Op::Mod | Op::Rem => self.emit_float_remainder(func, *op == Op::Mod),
 			Op::Pow => self.emit_float_power(func),
 			_ => self.emit_type_error(func, format!("`{op}` is not an operator on floats")),
