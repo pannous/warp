@@ -12,7 +12,7 @@ fn rendered_samples(path: &std::path::Path) -> Vec<i16> {
 }
 
 /// The program's printed value; it renders its sounds into the file named `name`
-fn rendered(name: &str, program: &str) -> (String, Vec<i16>) {
+pub(crate) fn rendered(name: &str, program: &str) -> (String, Vec<i16>) {
 	let path = std::env::temp_dir().join(format!("warp-voices-{name}-{}.wav", std::process::id()));
 	let program = program.replace("SONG", &path.display().to_string());
 	let run = crate::common::warp_command().args(["--no-ask", "eval", &program]).output().unwrap();

@@ -17,6 +17,7 @@ use std::collections::{HashMap, HashSet};
 pub const STORED_WORD: &str = "stored";
 /// `stored visits default 0`: the value of the first run, the same as `stored visits = 0`
 const DEFAULT_WORD: &str = "default";
+const DEFAULT_REASON: &str = "a stored variable keeps the last run's value, its default is only the first run's";
 /// The store of the values a `warp dev` page keeps across reloads (in memory natively; dev.js, site.js)
 pub const DEV_STORE: &str = "warp-dev";
 /// `app.warp` keeps its stored values in `app.stored.json`
@@ -99,7 +100,12 @@ fn stored_statement(statement: &Node, file: &str) -> Option<Vec<Node>> {
 		}
 		[assignment] => {
 			let Node::Key(name, Op::Assign | Op::Define, default) = assignment.drop_meta() else { return None };
-			Some(kept(name.symbol_name()?, default, file))
+			let name = name.symbol_name()?;
+			let default_text = default.serialize();
+			let written = format!("{STORED_WORD} {name} = {default_text}");
+			crate::normalize::set_position_of(statement);
+			crate::normalize::hint(&written, &format!("{STORED_WORD} {name} {DEFAULT_WORD} {default_text}"), DEFAULT_REASON);
+			Some(kept(name, default, file))
 		}
 		_ => None,
 	}

@@ -31,7 +31,7 @@ function runTaskInto({ module, name, ints, values, shared, arrays, captured, con
 	taskFiles = new Map();
 	self.joinVoice?.(voice);
 	try {
-		const hooks = { print: text => { output += text; }, panicked: text => { output += text; }, sound: (samples, rate) => relay("playSamples", samples, rate, self.voicePlaced?.(samples.length / rate)) };
+		const hooks = { print: text => { output += text; }, panicked: text => { output += text; }, sound: (samples, rate, at) => relay("playSamples", samples, rate, at) };
 		const record = runTask(module, hooks, [], name, ints, values, arrays, captured, control, channels);
 		if (typeof record.value === "bigint") record.ints = true; // a function of Ints: its Int result as a tree
 		writeShared(shared, { ...record, value: taskTree(record.value), output, files: [...taskFiles] });

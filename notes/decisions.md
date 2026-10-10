@@ -21,6 +21,24 @@ notes/open_decisions.md.
   variable; other module words still shadow. Revisit if it surprises the user.
 - go-voice (warp-sound default, not asked): a `go { }` task is a voice that starts where its starter stands in the
   music and sounds along with it (native; the Playground still plays them one after another, card playground-go).
+- exact-decimals (user 2026-10-10, revises exact-default the same day; proposed by the Interviewer, supervisor
+  agreed): decimal literals are exact decimals stored as an inline i64 mantissa plus a power-of-ten scale (no gcd, no
+  heap; GC big decimal/rational on overflow): `0.1 + 0.2 == 0.3` is yes. Division gives exact ratios (`1/3+1/3` 2/3).
+  Floats come only from float sources and are contagious (exact ⊕ float → float): sin and other transcendental
+  functions, sqrt of a non-square, fractional powers, host values (mouse, time, audio), `as float`, float-typed
+  parameters/fields, e-notation literals (1.5e-7). `==` warns only when a float is involved. Clarified by the user: everything
+  stays exact unless it flows into a float (speed-relevant) path, so `sqrt(2.0)` is the exact √2 like `sqrt(2)`
+  (no special rule for a written point; card sqrt-float-arg obsolete); `sin(1) + 0.5`, `mouse_x + 0.5` are floats. warp-perf measures the cost (finger_paint_bench,
+  `x = 0.5` + hot loop). float-text (shortest-exact) still holds for floats.
+- float-text (warp-fixer, user 2026-10-10): floats print shortest-exact everywhere (text, print, str, results), like
+  Python/JS repr: `print 1/3.0` 0.3333333333333333, `0.1+0.2` 0.30000000000000004, tiny ones `1.5e-7`. Replaces the
+  15-digit text form. The user also asked for repeating-decimal notation 0.3̅: only for exact rationals (card
+  repeating-decimals), never for floats.
+- range-end-once (warp-perf default, Interviewer): every `for` range end is evaluated once before the loop, `0..n` too
+  (`n=3; for i in 0..n { n = 10 }` runs 3 rounds), like Python.
+- sound-at (warp-sound default): `at 2 beats play C4`, `at 1 bar { … }` place a statement's sounds at that time from
+  the voice's first sound; the voice continues where it stood. Alternatives: Sonic Pi's sleep-moves-time, trailing
+  `play C4 at 2 beats`.
 - route-access (warp-web, user 2026-10-10): access rules come later; for now a route gives out only what it displays.
   Login kind: no preference (parked with the card).
 - git-hook restore (warp-fixer, user 2026-10-10): agents may `git restore`/`checkout --` Cargo.toml and Cargo.lock

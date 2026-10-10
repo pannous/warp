@@ -11,7 +11,7 @@
 
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicUsize, Ordering};
-use std::cell::Cell;
+use std::cell::{Cell, RefCell};
 use std::sync::{Arc, Mutex, Once};
 use std::time::{Duration, Instant};
 
@@ -61,21 +61,27 @@ type Player = Arc<Mutex<std::process::Child>>;
 /// The sounds and music files playing by their handles, stopped by stop_sound
 static PLAYING: Mutex<Vec<(usize, Player)>> = Mutex::new(Vec::new());
 /// Where a voice stands on the audio clock: when its queued sounds end in real time, and how many seconds of sound
-/// it has made in all (its place for render_sound, free of the time computing them took)
+/// it has made in all (its place for render_sound, free of the time computing them took); its origin is the real time
+/// of place 0, where `at 2 beats` counts from
 #[derive(Clone, Copy, Default)]
 pub struct Voice {
 	end: Option<Instant>,
 	seconds: f64,
+	origin: Option<Instant>,
 	stops: usize,
 }
 thread_local! {
 	/// The voice of this thread: the program's, or a task's from its start (tasks.rs spawn)
 	static VOICE: Cell<Voice> = Cell::new(Voice::default());
+	/// The voices an `at` statement left, taken up again at its end
+	static BEFORE_AT: RefCell<Vec<Voice>> = const { RefCell::new(Vec::new()) };
 }
 /// Counted up by stop_sound: a queued sound of an earlier count is dropped, and its player's end is no failure
 static STOPS: AtomicUsize = AtomicUsize::new(0);
 /// The sounds queued for the player thread and not played to their end yet
 static PENDING: AtomicUsize = AtomicUsize::new(0);
+/// The place on the voices where the last render_sound ended
+static RENDERED_UNTIL: Mutex<f64> = Mutex::new(0.0);
 /// The sounds since the last render_sound: their place in their voice (seconds), sample rate and 16-bit samples (in
 /// memory, 44 KB a second at 22050 Hz: the WAV files are shared by all warp processes, another run may overwrite them)
 static UNRENDERED: Mutex<Vec<(f64, u32, Vec<u8>)>> = Mutex::new(Vec::new());
@@ -206,6 +212,22 @@ pub fn join_voice(voice: Voice) {
 	VOICE.with(|own| own.set(voice));
 }
 
+/// `at seconds …` (card sample-accurate): the statement's sounds start that many seconds after the voice's first
+/// sound, its place in renders exactly, on the speakers not before now; at_end returns to where the voice stood
+pub fn at(seconds: f64) {
+	let voice = voice();
+	BEFORE_AT.with(|before| before.borrow_mut().push(voice));
+	let origin = voice.origin.unwrap_or_else(Instant::now);
+	let stops = STOPS.load(Ordering::Relaxed);
+	join_voice(Voice { end: Some(origin + Duration::from_secs_f64(seconds.max(0.0))), seconds: seconds.max(0.0), origin: Some(origin), stops });
+}
+
+pub fn at_end() {
+	if let Some(before) = BEFORE_AT.with(|before| before.borrow_mut().pop()) {
+		join_voice(Voice { origin: voice().origin, ..before }); // the origin `at` gave a voice without sounds stays
+	}
+}
+
 /// The sound's seconds added to its voice behind the sounds queued there before it: when it starts in real time, and
 /// its place among the voice's sounds. stop_sound since the voice's last sound starts the voice anew, now
 fn scheduled(seconds: f64) -> (Instant, f64) {
@@ -214,7 +236,8 @@ fn scheduled(seconds: f64) -> (Instant, f64) {
 	let mut voice = voice();
 	let start = voice.end.filter(|end| *end > now && voice.stops == stops).unwrap_or(now);
 	let place = voice.seconds;
-	voice = Voice { end: Some(start + Duration::from_secs_f64(seconds)), seconds: place + seconds, stops };
+	let origin = voice.origin.unwrap_or_else(|| start - Duration::from_secs_f64(place));
+	voice = Voice { end: Some(start + Duration::from_secs_f64(seconds)), seconds: place + seconds, origin: Some(origin), stops };
 	join_voice(voice);
 	(start, place)
 }
@@ -369,7 +392,9 @@ pub fn render(path: &str) -> Result<f64, String> {
 	if let Some((_, other, _)) = sounds.iter().find(|(_, sound_rate, _)| *sound_rate != rate) {
 		return Err(format!("sounds of {rate} and {other} samples per second cannot share {path}"));
 	}
-	let first_place = sounds.iter().map(|(place, _, _)| *place).fold(f64::INFINITY, f64::min);
+	// from where the last render ended, so `at 1s beep()` keeps its second of silence; an `at` before it starts earlier
+	let mut rendered_until = RENDERED_UNTIL.lock().map_err(|_| "the rendered sounds are poisoned".to_string())?;
+	let first_place = sounds.iter().map(|(place, _, _)| *place).fold(*rendered_until, f64::min);
 	let mut mixed: Vec<i32> = vec![];
 	for (place, _, data) in sounds {
 		let start = ((place - first_place) * rate as f64).round() as usize;
@@ -379,6 +404,7 @@ pub fn render(path: &str) -> Result<f64, String> {
 		}
 		mixed[start..].iter_mut().zip(samples).for_each(|(sum, sample)| *sum += sample as i32);
 	}
+	*rendered_until = first_place + mixed.len() as f64 / rate as f64;
 	let data: Vec<u8> = mixed.iter().flat_map(|&sum| (sum.clamp(i16::MIN as i32, i16::MAX as i32) as i16).to_le_bytes()).collect();
 	std::fs::write(path, wav_of_data(&data, rate)).map_err(|failure| format!("cannot write {path}: {failure}"))?;
 	Ok(mixed.len() as f64 / rate as f64)

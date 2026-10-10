@@ -700,11 +700,17 @@ fn gpu_compute(mut caller: Caller<'_, HostState>, shader: HostNode, numbers: Hos
 	let failure = gpu_failure(GPU_COMPUTE);
 	let shader = given_shader(&mut caller, shader, &failure)?;
 	let numbers = given_node(&mut caller, numbers)?;
-	let numbers = numbers.iter().map(|number| match number.drop_meta() {
-		Node::Number(number) => Ok(*number),
-		other => Err(failure(format!("it computes over numbers, got {}", other.serialize()))),
-	}).collect::<wasmtime::Result<Vec<Number>>>()?;
 	let workgroups = u32::try_from(workgroups).map_err(|_| failure(format!("{workgroups} workgroups")))?;
+	if let Some(arrays) = named_arrays(&numbers) {
+		let arrays = arrays.into_iter().map(|(name, numbers)| Ok((name, numbers.iter().map(|number| number_of(&number, &failure).map(f64::from)).collect::<wasmtime::Result<Vec<f64>>>()?))).collect::<wasmtime::Result<Vec<_>>>()?;
+		let left = crate::gpu::compute_named(&shader, &arrays, workgroups).map_err(&failure)?;
+		let entries = left.into_iter().map(|(name, element, numbers)| {
+			let item = |number: f64| Node::Number(if element == crate::gpu::Element::Float { Number::Float(number) } else { Number::Int(number as i64) });
+			Node::Key(Box::new(Node::Symbol(name)), crate::operators::Op::Colon, Box::new(Node::List(numbers.into_iter().map(item).collect(), crate::node::Bracket::Square, crate::node::Separator::Space)))
+		}).collect();
+		return built_in_program(&mut caller, &Node::List(entries, crate::node::Bracket::Curly, crate::node::Separator::Space), GPU_COMPUTE);
+	}
+	let numbers = numbers.iter().map(|number| number_of(&number, &failure)).collect::<wasmtime::Result<Vec<Number>>>()?;
 	let left: Vec<Node> = match crate::gpu::element_of(&shader) {
 		crate::gpu::Element::Float => {
 			let floats: Vec<f32> = numbers.iter().map(|&number| f64::from(number) as f32).collect();
@@ -719,6 +725,25 @@ fn gpu_compute(mut caller: Caller<'_, HostState>, shader: HostNode, numbers: Hos
 		}
 	};
 	built_in_program(&mut caller, &Node::List(left, crate::node::Bracket::Square, crate::node::Separator::Space), GPU_COMPUTE)
+}
+
+fn number_of(node: &Node, failure: &impl Fn(String) -> wasmtime::Error) -> wasmtime::Result<Number> {
+	match node.drop_meta() {
+		Node::Number(number) => Ok(*number),
+		other => Err(failure(format!("it computes over numbers, got {}", other.serialize()))),
+	}
+}
+
+/// `{xs: [1 2 3], ys: [4 5 6]}`: gpu_compute's named arrays, each bound where the shader declares one of that name
+fn named_arrays(numbers: &Node) -> Option<Vec<(String, &Node)>> {
+	let Node::List(entries, _, _) = numbers.drop_meta() else { return None };
+	entries.iter().map(|entry| match entry.drop_meta() {
+		Node::Key(name, _, array) => match name.drop_meta() {
+			Node::Symbol(name) | Node::Text(name) => Some((name.clone(), array.as_ref())),
+			_ => None,
+		},
+		_ => None,
+	}).collect::<Option<Vec<_>>>().filter(|arrays| !arrays.is_empty())
 }
 
 /// `gpu_compute(shader, xs, workgroups)` of a linear float array: its block `[count: i64][count f64 cells]`

@@ -238,6 +238,8 @@ PASSED:
   ✓ control::test_for_loop::test_for_over_inclusive_range
   ✓ control::test_for_loop::test_for_over_list_literal
   ✓ control::test_for_loop::test_for_over_list_variable
+  ✓ control::test_for_loop::test_for_range_end_is_evaluated_once
+  ✓ control::test_for_loop::test_for_range_variable_end_is_read_once
   ✓ control::test_for_loop::test_for_with_colon_body
   ✓ control::test_for_loop::test_loop_body_with_a_list_statement
   ✓ control::test_for_loop::test_nested_for
@@ -469,6 +471,7 @@ PASSED:
   ✓ control::test_storage::keys_name_the_kept_values
   ✓ control::test_storage::local_is_the_store_of_storage
   ✓ control::test_storage::session_is_a_store_of_its_own
+  ✓ control::test_stored_default::a_stored_assignment_notes_the_default_form
   ✓ control::test_stored_default::a_stored_default_is_only_the_first_runs
   ✓ control::test_stored_default::a_stored_value_has_a_default
   ✓ control::test_stored_signals::a_change_of_a_stored_value_is_kept_for_the_next_run
@@ -1575,6 +1578,7 @@ PASSED:
   ✓ lists::test_lazy_range::a_range_is_read_from_its_bounds
   ✓ lists::test_lazy_range::a_range_variable_used_as_a_list_stays_one
   ✓ lists::test_lazy_range::a_small_range_variable_is_still_its_list
+  ✓ lists::test_library_word_operands::a_one_argument_library_word_takes_the_name_after_it
   ✓ lists::test_linear_append::an_appended_list_of_nodes_keeps_its_items
   ✓ lists::test_linear_append::map_and_filter_of_texts_stay_linear
   ✓ lists::test_linear_arrays::a_chain_of_numeric_maps_of_a_linear_array_is_one_loop
@@ -2142,6 +2146,8 @@ PASSED:
   ✓ numbers::test_float_quotient::an_int_quotient_elsewhere_stays_exact
   ✓ numbers::test_float_quotient::an_int_quotient_into_a_float_is_rounded_once
   ✓ numbers::test_float_quotient::an_int_quotient_into_a_float_still_fails_dividing_by_zero
+  ✓ numbers::test_float_text_folded::test_folded_float_joins_text_as_at_run_time
+  ✓ numbers::test_float_text_folded::test_printed_float_literal_as_float_text
   ✓ numbers::test_float_text::test_float_as_text
   ✓ numbers::test_float_text::test_float_joins_texts
   ✓ numbers::test_float_to_int_range::test_float_beyond_int_range_fails_cleanly
@@ -2292,6 +2298,7 @@ PASSED:
   ✓ numbers::test_round_to_digits::round_to_digits
   ✓ numbers::test_round_to_digits::round_without_digits_is_whole
   ✓ numbers::test_rounding_in_functions::test_rounding_builtins_work_inside_function_bodies
+  ✓ numbers::test_run_time_power::a_decimal_exponent_is_a_float_power
   ✓ numbers::test_run_time_power::a_run_time_kind_call_is_rounded
   ✓ numbers::test_run_time_power::a_run_time_kind_has_a_power
   ✓ numbers::test_run_time_power::a_run_time_kind_has_an_absolute_value
@@ -2906,6 +2913,10 @@ PASSED:
   ✓ programs::test_shader_holes::values_not_written_out_cannot_take_the_holes
   ✓ programs::test_small_samples::error_samples
   ✓ programs::test_small_samples::text_samples
+  ✓ programs::test_sound_at::a_statement_sounds_inside_another
+  ✓ programs::test_sound_at::beats_place_a_block
+  ✓ programs::test_sound_at::the_silence_before_stays_and_the_voice_goes_on
+  ✓ programs::test_sound_at::the_words_it_lowers_to
   ✓ programs::test_sound_clock::sounds_queue_on_the_audio_clock
   ✓ programs::test_sound_clock::stop_sound_empties_the_queue
   ✓ programs::test_sound_clock::waiting_headless_takes_no_time
@@ -3409,6 +3420,7 @@ PASSED:
   ✓ types::test_empty_named_key::a_linked_list_of_empty_marked_cells
   ✓ types::test_empty_named_key::a_spaced_ternary_still_reads_the_empty_value
   ✓ types::test_empty_type_aliases::a_type_value_compares_with_any_word_of_its_type
+  ✓ types::test_empty_type_aliases::a_type_word_compares_on_either_side
   ✓ types::test_enum_cases::a_match_on_enum_cases_tests_and_binds
   ✓ types::test_enum_cases::an_enum_case_with_values_is_a_class
   ✓ types::test_enum_cases::an_enum_without_values_stays_numbered
@@ -4156,6 +4168,9 @@ PASSED:
   ✓ web::test_web::test_inner_html
   ✓ web::test_web::test_js
   ✓ web::test_webgpu_ints::a_compute_shader_over_ints_gives_ints
+  ✓ web::test_webgpu_named::a_name_the_shader_does_not_declare_fails_loudly
+  ✓ web::test_webgpu_named::named_arrays_come_back_by_name
+  ✓ web::test_webgpu_named::the_sample_reads_an_array_by_name
   ✓ web::test_webgpu::a_chain_of_gpu_maps_is_one_kernel
   ✓ web::test_webgpu::a_compute_shader_runs_over_a_linear_array_in_place
   ✓ web::test_webgpu::a_compute_shader_runs_over_the_numbers
@@ -4572,4 +4587,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-10 ignored, 4567 passed, 0 failed, 4567 total tested
+10 ignored, 4582 passed, 0 failed, 4582 total tested

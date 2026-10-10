@@ -13,8 +13,9 @@ const MUTATED_MARK: &str = "mutated";
 /// `x!` that changes nothing unwraps x (library_words: ø is a loud error)
 pub const UNWRAP: &str = "unwrap";
 
-/// Pure words whose result is a changed copy of their argument: dropping it changes nothing
-const COPY_WORDS: [&str; 11] = ["upper", "uppercase", "lower", "lowercase", "trim", "strip", "reverse", "sort", "sorted", "replace", "capitalize"];
+/// Pure words whose result is a changed copy of their argument: dropping it changes nothing. Any spelling of them
+/// (`uppercase`, `strip`, `sorted`) is one (library_words::canonical_spelling)
+const COPY_WORDS: [&str; 7] = ["upper", "lower", "trim", "reverse", "sort", "replace", "capitalize"];
 
 /// wiki/mutable.md: a statement dropping a copy word's result (`uppercase x`), and an assignment of a mutating call
 /// (`y = x.upper!`, which changes x too), warn with the forms meant
@@ -56,7 +57,7 @@ fn copy_word_call(call: &Node) -> Option<(&str, &str, bool)> {
 		other => other,
 	};
 	match (called, variable.drop_meta()) {
-		(Node::Symbol(called), Node::Symbol(name)) if COPY_WORDS.contains(&called.as_str()) => Some((called, name, is_marked(call) || is_marked(variable))),
+		(Node::Symbol(called), Node::Symbol(name)) if COPY_WORDS.contains(&crate::library_words::canonical_spelling(called)) => Some((called, name, is_marked(call) || is_marked(variable))),
 		_ => None,
 	}
 }

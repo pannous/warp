@@ -71,8 +71,8 @@ pub fn local_offset(instant: calendar::Instant) -> i64 {
 /// `now` or an instant constant: its fields need the host's local_offset (wasm_emitter/times.rs time_field)
 pub fn makes_instant(items: &[Node]) -> bool {
 	match items {
-		[head, ..] if is_symbol(head, INSTANT_AT) => true,
-		[head, form, _] if is_symbol(head, TIME_OF) => matches!(form.drop_meta(), Node::Number(Number::Int(form)) if *form == TimeForm::Instant as i64),
+		[head, ..] if head.is_symbol(INSTANT_AT) => true,
+		[head, form, _] if head.is_symbol(TIME_OF) => matches!(form.drop_meta(), Node::Number(Number::Int(form)) if *form == TimeForm::Instant as i64),
 		_ => false,
 	}
 }
@@ -190,12 +190,8 @@ fn time_data(node: &Node) -> bool {
 	}
 }
 
-fn is_symbol(node: &Node, name: &str) -> bool {
-	matches!(node.drop_meta(), Node::Symbol(symbol) if symbol == name)
-}
-
 fn is_call_of(node: &Node, name: &str) -> bool {
-	matches!(node.drop_meta(), Node::List(items, _, _) if items.first().is_some_and(|head| is_symbol(head, name)))
+	matches!(node.drop_meta(), Node::List(items, _, _) if items.first().is_some_and(|head| head.is_symbol(name)))
 }
 
 /// What only this compile-time evaluator knows so far: literals, durations, `date(…)`, `t in "Europe/Berlin"`;
@@ -208,7 +204,7 @@ fn needs_folding(node: &Node) -> bool {
 
 fn places_in_zone(node: &Node) -> bool {
 	matches!(node, Node::List(items, _, _) if matches!(items.as_slice(), [_, keyword, zone]
-		if is_symbol(keyword, "in") && matches!(zone.drop_meta(), Node::Text(name) if calendar::zone_named(name).is_ok())))
+		if keyword.is_symbol("in") && matches!(zone.drop_meta(), Node::Text(name) if calendar::zone_named(name).is_ok())))
 }
 
 fn mentions_time(node: &Node) -> bool {
@@ -218,7 +214,7 @@ fn mentions_time(node: &Node) -> bool {
 		Node::Key(owner, Op::Dot, field) if matches!(field.drop_meta(), Node::Symbol(_)) => mentions_time(owner),
 		Node::Key(left, _, right) => mentions_time(left) || mentions_time(right),
 		Node::List(items, _, _) => {
-			items.first().is_some_and(|head| is_symbol(head, "date") || is_symbol(head, INSTANT_AT)) || items.iter().any(mentions_time)
+			items.first().is_some_and(|head| head.is_symbol("date") || head.is_symbol(INSTANT_AT)) || items.iter().any(mentions_time)
 		}
 		other => time_data(other),
 	}
@@ -285,13 +281,13 @@ fn evaluate(node: &Node, scope: &mut Scope) -> Result<Value, String> {
 
 fn list(node: &Node, items: &[Node], separator: Separator, scope: &mut Scope) -> Result<Value, String> {
 	match items {
-		[head, ..] if is_symbol(head, INSTANT_AT) => Ok(Value::Time(now())),
-		[head, ..] if is_symbol(head, TIME_OF) => Err(unsupported(node)),
+		[head, ..] if head.is_symbol(INSTANT_AT) => Ok(Value::Time(now())),
+		[head, ..] if head.is_symbol(TIME_OF) => Err(unsupported(node)),
 		[single] => evaluate(single, scope),
-		[time, keyword, zone] if is_symbol(keyword, "in") => place_in_zone(time, zone, scope),
-		[head, args @ ..] if separator == Separator::None && is_symbol(head, "date") => construct_date(args, scope),
-		[head, args @ ..] if separator == Separator::None && is_symbol(head, "add") => add(args, scope),
-		[head, args @ ..] if separator == Separator::None && is_symbol(head, "zoned") => zoned(args, scope),
+		[time, keyword, zone] if keyword.is_symbol("in") => place_in_zone(time, zone, scope),
+		[head, args @ ..] if separator == Separator::None && head.is_symbol("date") => construct_date(args, scope),
+		[head, args @ ..] if separator == Separator::None && head.is_symbol("add") => add(args, scope),
+		[head, args @ ..] if separator == Separator::None && head.is_symbol("zoned") => zoned(args, scope),
 		_ if matches!(separator, Separator::Semicolon | Separator::Newline) => {
 			let mut last = Err(unsupported(node));
 			for statement in items {

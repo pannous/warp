@@ -194,6 +194,7 @@ const LIST_RESULT_WORDS: [&str; 8] = ["chars", "sort", "split", MAP_KEYS, MAP_VA
 
 pub fn result_kind(word: &str) -> Option<crate::type_kinds::Kind> {
 	use crate::type_kinds::Kind;
+	let word = canonical_spelling(word);
 	if TEXT_RESULT_WORDS.contains(&word) {
 		Some(Kind::Text)
 	} else {
@@ -217,12 +218,16 @@ pub fn is_library_word(name: &str) -> bool {
 	is_runtime_word(name) || canonical_word(name).is_some()
 }
 
-/// Words that take the name after them as their argument inside an operand, as a defined function does:
-/// `word == reverse word` compares with `reverse(word)`
-const OPERAND_WORDS: [&str; 7] = ["reverse", "sort", "upper", "lower", "trim", "chars", SUM_WORD];
-
+/// A library word of one argument takes the name after it as that argument inside an operand, as a defined function
+/// does: `word == reverse word` compares with `reverse(word)`, `1 == first xs` with `first(xs)`. A type word stays a
+/// type: `x: list int`
 pub fn is_operand_word(name: &str) -> bool {
-	canonical_word(name).is_some_and(|word| OPERAND_WORDS.contains(&word))
+	canonical_word(name).is_some_and(|word| arity(word) == 1 && !crate::type_tests::is_type_word(word))
+}
+
+/// The spelling word lists name a library word by (`sorted` → sort); any other name as it is
+pub fn canonical_spelling(name: &str) -> &str {
+	canonical_word(name).unwrap_or(name)
 }
 
 fn canonical_word(name: &str) -> Option<&'static str> {

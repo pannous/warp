@@ -31,6 +31,7 @@ const TASK_RESULT_BYTES = 1 << 16; // the shared buffer a Worker writes its resu
 const TASK_RESULT_LIMIT = 1 << 28;
 const TASK_HEADER = 8; // [state, length] as Int32, then the result's JSON
 const TASK_STOPPED = "task stopped";
+const PAGE_ANSWER_MS = 60000; // how long a Worker waits for its page's answer: a clipboard read may wait for a permission
 // Workers a task runs on: made while the program's worker is idle (prepareTaskPool), since a Worker only starts once
 // its creator returns to its event loop and a running program never does (emscripten keeps a thread pool for this)
 const taskPool = [];
@@ -71,30 +72,36 @@ function addTaskWorker(loaded) {
 	self.postMessage({ taskWorker: { id, url: new URL(url, self.location.href).href } });
 }
 
-// a voice (card playground-go, natively src/sound.rs Voice): when this Worker's queued sounds end, on the clock the page
-// and every Worker share. A task's voice starts where its starter's stands, so their sounds sound together
-let voiceEnd = 0;
-let voiceSeconds = 0; // the seconds of sound this voice made in all: its sounds' places for render_sound
+// a voice (card playground-go, natively src/sound.rs Voice): when this Worker's queued sounds end on the clock the
+// page and every Worker share, the seconds of sound it made in all (its sounds' places for render_sound) and the
+// clock's time of place 0 (where `at 2 beats` counts from). A task's voice starts where its starter's stands
+let voice = {};
+let voicesBeforeAt = []; // the voices `at` statements left (sound_at), taken up again by sound_at_end
 const soundClock = () => (performance.timeOrigin + performance.now()) / 1000;
-self.soundsQueued = () => Math.max(0, voiceEnd - soundClock()); // sound_queued()
-self.voiceStopped = () => { voiceEnd = 0; };
-self.joinVoice = voice => { voiceEnd = voice?.end ?? 0; voiceSeconds = voice?.seconds ?? 0; }; // a task Worker's: its starter's
-// the place of a sound of that many seconds among the voice's sounds (host.js sound_samples)
+self.soundsQueued = () => Math.max(0, (voice.end ?? 0) - soundClock()); // sound_queued()
+self.voiceStopped = () => { voice = { ...voice, end: undefined }; };
+self.joinVoice = starters => { voice = { ...starters }; }; // a task Worker's: its starter's; none: a run's fresh one
+self.currentVoice = () => voice;
+// a sound of that many seconds behind the voice's sounds, never before now: its place and its start on the clock
 self.voiceSounded = seconds => {
-	const place = voiceSeconds;
-	voiceSeconds += seconds;
-	return place;
+	const at = Math.max(voice.end ?? 0, soundClock());
+	const place = voice.seconds ?? 0;
+	voice = { end: at + seconds, seconds: place + seconds, origin: voice.origin ?? at - place };
+	return { place, at };
 };
-// the start of a sound of that many seconds: behind this voice's sounds, never before now
-self.voicePlaced = seconds => {
-	const start = Math.max(voiceEnd, soundClock());
-	voiceEnd = start + seconds;
-	return start;
+// `at time …`: the voice placed that many seconds after its place 0; its end puts it back, keeping that origin
+self.voiceAt = seconds => {
+	voicesBeforeAt.push(voice);
+	const origin = voice.origin ?? soundClock();
+	voice = { end: origin + seconds, seconds, origin };
+};
+self.voiceAtEnd = () => {
+	if (voicesBeforeAt.length) voice = { ...voicesBeforeAt.pop(), origin: voice.origin };
 };
 // a task run inline sounds as a voice of its own too: the starter's voice stands where it stood
 function asVoice(run) {
-	const [starterEnd, starterSeconds] = [voiceEnd, voiceSeconds];
-	try { return run(); } finally { [voiceEnd, voiceSeconds] = [starterEnd, starterSeconds]; }
+	const starters = voice;
+	try { return run(); } finally { voice = starters; }
 }
 // the sounds a task made go to its starter's run, for its render_sound (card playground-drops)
 function withTaskSounds(run, record) {
@@ -315,7 +322,7 @@ function startTask(holder, hooks, name, ints, values) {
 		const worker = taskPool.pop();
 		const control = new Int32Array(new SharedArrayBuffer(2 * Int32Array.BYTES_PER_ELEMENT));
 		const files = self.writtenFilesForTask?.();
-		worker.postMessage({ module: run.module, name, ints, values, shared, arrays: run.shared, captured, control, channels: run.channels, files, voice: { end: voiceEnd, seconds: voiceSeconds } });
+		worker.postMessage({ module: run.module, name, ints, values, shared, arrays: run.shared, captured, control, channels: run.channels, files, voice });
 		run.tasks.set(id, { name, worker, shared, control, started: performance.now(), inline });
 	} else {
 		if (!hasTaskWorkers()) sayTasksInline(run, holder, hooks);
@@ -608,6 +615,20 @@ function writeShared(shared, record) {
 	Atomics.notify(header, 0);
 }
 
+// the page's answer to a Worker's question its asynchronous browser APIs answer (the clipboard's text, card
+// web-apis-rest): `ask(shared)` hands the page a shared buffer, the page writes its record into it (markup.js
+// answerInto) while the Worker waits; without shared memory (a page not cross-origin isolated) a loud error
+function askPage(what, ask) {
+	if (!ask) throw new Error(`${what}: this page has no way to answer its Worker`);
+	if (!self.crossOriginIsolated) throw new Error(`${what}: the page is not cross-origin isolated, so its Worker cannot wait for it`);
+	const shared = new SharedArrayBuffer(TASK_HEADER + TASK_RESULT_BYTES, { maxByteLength: TASK_RESULT_LIMIT });
+	ask(shared);
+	if (Atomics.wait(new Int32Array(shared, 0, 2), 0, 0, PAGE_ANSWER_MS) === "timed-out") throw new Error(`${what}: the page did not answer in ${PAGE_ANSWER_MS / 1000} s`);
+	const { error, ...answer } = readShared(shared);
+	if (error) throw new Error(`${what}: ${error}`);
+	return answer;
+}
+
 // the record a task Worker wrote into a shared buffer (writeShared), undefined while none is there yet
 function readShared(shared) {
 	const header = new Int32Array(shared, 0, 2);
@@ -695,6 +716,9 @@ function broadcastListener(name) {
 
 addHostPart({
 	words: (holder, hooks, { program, cString }) => ({
+		// `clipboard`: the page reads it (asynchronously) while the Worker waits (askPage; shipped with this part only,
+		// host_parts.rs, so a page that reads no clipboard carries none of it)
+		clipboard_text: () => buildValue(program(), treeOfPlain(self.askPage("clipboard", self.askPageClipboard).text)),
 		// channels between programs (src/channels.rs): a BroadcastChannel of the name, which reaches the other tabs and
 		// workers of this page's origin; the listener's timer (lowering/system_signals.rs) takes what arrived
 		channel_listen: (id, channel) => listenOnChannel(holder, hooks, Number(id), plainOfTree(readNode(program(), channel))),
