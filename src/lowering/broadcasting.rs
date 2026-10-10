@@ -5,7 +5,7 @@
 //! function of a list (`count(xs)`, `xs#2`, `xs:list`) takes the list whole. Operators never broadcast (`[1 2 3]*2`).
 
 use super::words::{MAP_WORD, SUM_WORD};
-use super::nodes::{call, key};
+use super::nodes::{call, is_colon_pair, key};
 use crate::analyzer::{annotated_kind, list_element_type};
 use crate::function_values::{definitions, Definition};
 use crate::type_kinds::Kind;
@@ -377,7 +377,7 @@ fn collect_list_variables(node: &Node, functions: &HashSet<String>, assigned: &m
 				}
 				let declared_list = declared_type.is_some_and(|type_node| list_element_type(&type_node.serialize()).is_some());
 				let is_list = declared_list || match value.drop_meta() {
-					Node::List(items, Bracket::Square, _) => !items.iter().any(is_pair),
+					Node::List(items, Bracket::Square, _) => !items.iter().any(is_colon_pair),
 					_ if is_range(value) => true,
 					_ if element_wise_parts(value).is_some() => true,
 					_ if crate::analyzer::typed_array_value(value).is_some() => true,
@@ -420,9 +420,6 @@ fn is_broadcast_over(value: &Node, variable: &str, functions: &HashSet<String>) 
 	broadcasting_call(items, bracket, separator, functions).is_some_and(|(_, argument)| matches!(argument.drop_meta(), Node::Symbol(same) if same == variable))
 }
 
-fn is_pair(node: &Node) -> bool {
-	matches!(node.drop_meta(), Node::Key(_, Op::Colon, _))
-}
 
 struct Broadcast {
 	functions: HashSet<String>,
@@ -624,7 +621,7 @@ impl Broadcast {
 	/// A list literal that is no object, or a variable only ever assigned one
 	fn is_list(&self, node: &Node) -> bool {
 		match node.drop_meta() {
-			Node::List(elements, Bracket::Square, _) => !elements.is_empty() && !elements.iter().any(is_pair),
+			Node::List(elements, Bracket::Square, _) => !elements.is_empty() && !elements.iter().any(is_colon_pair),
 			_ => self.is_list_value(node),
 		}
 	}
@@ -633,7 +630,7 @@ impl Broadcast {
 	fn broadcast_operator(&self, op: Op, argument: &Node) -> Option<Node> {
 		let applied = |element: Node| key(Node::Empty, op, element);
 		match argument.drop_meta() {
-			Node::List(elements, Bracket::Square, separator) if !elements.is_empty() && !elements.iter().any(is_pair) => {
+			Node::List(elements, Bracket::Square, separator) if !elements.is_empty() && !elements.iter().any(is_colon_pair) => {
 				Some(Node::List(elements.iter().cloned().map(applied).collect(), Bracket::Square, separator.clone()))
 			}
 			_ if self.is_list_value(argument) => Some(each_item(argument.clone(), applied)),

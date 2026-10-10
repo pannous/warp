@@ -5,8 +5,9 @@
 //! A type word on the right of `is` switches from equality to a type test; `x is y` with a variable stays equality.
 //! `x == int` is no type test (user decision #30): a value never equals a type, so it is false and hints `x is int`.
 
+use super::memoization::{definition_parts, Rebuild};
 use super::words::OF_WORD;
-use super::nodes::{call, key};
+use super::nodes::{call, is_call_head, key, parameter_name};
 use crate::analyzer::{plural_element_type, type_word_kind};
 use crate::library_words::collect_assigned_names;
 use crate::node::{text, Bracket, Node, Separator};
@@ -88,8 +89,8 @@ pub fn runtime_kind_mask(spec: &str) -> Option<i64> {
 	Some(kinds.iter().fold(0, |mask, kind| mask | 1 << (*kind as i64)))
 }
 
-/// The program's variables (a name of one is no type in a test) and its declared types (`class friend`: `x is friend`)
-#[derive(Default)]
+/// The variables in scope (a name of one is no type in a test) and the program's declared types (`class friend`: `x is friend`)
+#[derive(Default, Clone)]
 struct Names {
 	variables: HashSet<String>,
 	types: HashSet<String>,
@@ -99,13 +100,48 @@ impl Names {
 	fn contains(&self, name: &str) -> bool {
 		self.variables.contains(name)
 	}
+
+	/// In the body of a function: also its parameters and the names it assigns, which no other function sees
+	fn within(&self, head: &Node, body: &Node) -> Names {
+		let mut inner = self.clone();
+		if let Node::List(items, _, _) = head.drop_meta() {
+			inner.variables.extend(items.iter().skip(1).filter_map(parameter_name));
+		}
+		collect_assigned_names(body, &mut inner.variables);
+		inner
+	}
+}
+
+/// `f(x) := body`, not `x := value`: its head and body
+fn function_definition(node: &Node) -> Option<(Node, Node, Rebuild)> {
+	definition_parts(node).filter(|(head, _, _)| is_call_head(head))
+}
+
+/// The names assigned outside the bodies of functions, which every function sees
+fn collect_outer_assigned_names(node: &Node, names: &mut HashSet<String>) {
+	if function_definition(node).is_some() {
+		return;
+	}
+	match node.drop_meta() {
+		Node::Key(target, Op::Assign | Op::Define, value) => {
+			if let Node::Symbol(name) = target.drop_meta() {
+				names.insert(name.clone());
+			}
+			collect_outer_assigned_names(value, names);
+		}
+		Node::Key(left, _, right) => {
+			collect_outer_assigned_names(left, names);
+			collect_outer_assigned_names(right, names);
+		}
+		Node::List(items, _, _) => items.iter().for_each(|item| collect_outer_assigned_names(item, names)),
+		_ => {}
+	}
 }
 
 pub fn lower(node: Node) -> Node {
 	let context = crate::analyzer::function_context(&node);
 	let mut variables: HashSet<String> = context.user_functions.keys().cloned().collect();
-	collect_assigned_names(&node, &mut variables);
-	variables.extend(context.user_functions.values().flat_map(|function| function.params.iter().map(|param| param.name.clone())));
+	collect_outer_assigned_names(&node, &mut variables);
 	let mut registry = crate::type_kinds::TypeRegistry::new();
 	crate::analyzer::collect_all_types(&mut registry, &node);
 	let types = registry.types().iter().map(|definition| definition.name.clone()).collect();
@@ -200,6 +236,10 @@ fn is_type_call(subject: Node, spec: String) -> Node {
 }
 
 fn expand(node: Node, shadowed: &Names) -> Node {
+	if let Some((head, body, rebuild)) = function_definition(&node) {
+		let inner = shadowed.within(&head, &body);
+		return rebuild(head, expand(body, &inner));
+	}
 	match node {
 		Node::List(items, bracket, separator) => {
 			if let Some(call) = type_of_word(&items, shadowed).or_else(|| spaced_type_test(&items, shadowed)) {

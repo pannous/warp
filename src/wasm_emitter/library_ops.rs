@@ -170,12 +170,11 @@ impl WasmGcEmitter {
 			f.instruction(&I::End);
 			s.emit_empty_as_null(f, 0);
 			s.emit_require_list(f);
-			Self::emit_list(f, &[I::Block(BlockType::Empty), I::Loop(BlockType::Empty), I::LocalGet(0), I::RefIsNull, I::BrIf(1)]);
-			s.emit_field(f, 0, 0);
-			s.emit_field(f, 0, 1);
-			Self::emit_list(f, &[I::LocalGet(reversed), I::StructNew(node_type), I::LocalSet(reversed)]);
-			s.emit_field(f, 0, 2);
-			Self::emit_list(f, &[I::LocalSet(0), I::Br(0), I::End, I::End]);
+			s.emit_cell_walk(f, 0, |f| {
+				s.emit_field(f, 0, 0);
+				s.emit_field(f, 0, 1);
+				Self::emit_list(f, &[I::LocalGet(reversed), I::StructNew(node_type), I::LocalSet(reversed)]);
+			});
 			s.emit_list_result(f, reversed);
 		});
 	}
@@ -298,14 +297,13 @@ impl WasmGcEmitter {
 			s.emit_text_as_characters(f, 0, is_text);
 			s.emit_empty_as_null(f, 0);
 			s.emit_require_list(f);
-			Self::emit_list(f, &[I::Block(BlockType::Empty), I::Loop(BlockType::Empty), I::LocalGet(0), I::RefIsNull, I::BrIf(1)]);
-			s.emit_field(f, 0, 1);
-			Self::emit_list(f, &[I::RefCastNonNull(HeapType::Concrete(node_type)), I::LocalSet(element)]);
-			Self::emit_list(f, &[I::LocalGet(sorted), I::LocalGet(element), I::RefAsNonNull]);
-			s.emit_field(f, 0, 0);
-			Self::emit_list(f, &[I::Call(insert_sorted), I::LocalSet(sorted)]);
-			s.emit_field(f, 0, 2);
-			Self::emit_list(f, &[I::LocalSet(0), I::Br(0), I::End, I::End]);
+			s.emit_cell_walk(f, 0, |f| {
+				s.emit_field(f, 0, 1);
+				Self::emit_list(f, &[I::RefCastNonNull(HeapType::Concrete(node_type)), I::LocalSet(element)]);
+				Self::emit_list(f, &[I::LocalGet(sorted), I::LocalGet(element), I::RefAsNonNull]);
+				s.emit_field(f, 0, 0);
+				Self::emit_list(f, &[I::Call(insert_sorted), I::LocalSet(sorted)]);
+			});
 			s.emit_list_result(f, sorted);
 			f.instruction(&I::LocalSet(sorted));
 			s.emit_characters_as_text(f, sorted, is_text);
@@ -819,14 +817,14 @@ impl WasmGcEmitter {
 			Self::emit_list(f, &[I::LocalGet(node), I::RefIsNull, I::If(BlockType::Empty), I::RefNull(node_heap), I::Return, I::End]);
 			return_unless_structure(f, node, kind);
 			s.emit_field(f, memo, 2);
-			Self::emit_list(f, &[I::LocalSet(cell), I::Block(BlockType::Empty), I::Loop(BlockType::Empty), I::LocalGet(cell), I::RefIsNull, I::BrIf(1)]);
-			s.emit_field(f, cell, 1);
-			Self::emit_list(f, &[I::RefCastNonNull(node_heap), I::LocalTee(pair)]);
-			Self::emit_list(f, &[I::StructGet { struct_type_index: node_type, field_index: 1 }, I::RefCastNonNull(node_heap), I::LocalGet(node), I::RefEq, I::If(BlockType::Empty)]);
-			s.emit_field(f, pair, 2);
-			Self::emit_list(f, &[I::Return, I::End]);
-			s.emit_field(f, cell, 2);
-			Self::emit_list(f, &[I::LocalSet(cell), I::Br(0), I::End, I::End]);
+			f.instruction(&I::LocalSet(cell));
+			s.emit_cell_walk(f, cell, |f| {
+				s.emit_field(f, cell, 1);
+				Self::emit_list(f, &[I::RefCastNonNull(node_heap), I::LocalTee(pair)]);
+				Self::emit_list(f, &[I::StructGet { struct_type_index: node_type, field_index: 1 }, I::RefCastNonNull(node_heap), I::LocalGet(node), I::RefEq, I::If(BlockType::Empty)]);
+				s.emit_field(f, pair, 2);
+				Self::emit_list(f, &[I::Return, I::End]);
+			});
 			s.emit_field(f, node, 0);
 			Self::emit_list(f, &[I::RefNull(HeapType::Abstract { shared: false, ty: AbstractHeapType::Any }), I::RefNull(node_heap), I::StructNew(node_type), I::LocalSet(copy)]);
 			Self::emit_list(f, &[I::LocalGet(memo), I::I64Const(Kind::List as i64), I::I64Const(KEY_KIND), I::LocalGet(node), I::LocalGet(copy), I::StructNew(node_type)]);

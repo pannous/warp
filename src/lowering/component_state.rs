@@ -12,7 +12,7 @@
 //! sheet styles only its own elements (html.rs, card web-scoped).
 
 use super::words::ON_WORD;
-use super::nodes::{call, key, named_assignment};
+use super::nodes::{call, if_then, key, named_assignment};
 use crate::element_events::{element_items, handler_at, has_element_handler, HANDLER_ATTRIBUTE_PREFIX};
 use crate::law::substitute;
 use crate::node::{symbol, Bracket, Node, Separator};
@@ -240,7 +240,7 @@ impl Component {
 			if let Some((word, body)) = lifecycle(&statement) {
 				if word == MOUNT {
 					let condition = filled(FIRST_RENDER, &[("SEEN", &self.seen), ("KEY", &self.key)]);
-					lowered.push(crate::variable_signals::if_then(condition, self.read(body)));
+					lowered.push(if_then(condition, self.read(body)));
 				}
 				continue;
 			}

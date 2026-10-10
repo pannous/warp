@@ -11,7 +11,7 @@
 use crate::for_loop::block_items;
 use crate::generators::{generators, yield_statement, holds_own, holds_stop, is_return, yielded_value, Generator, BREAK_WORD, CONTINUE_WORD, NAME_SEPARATOR, NEXT_METHOD};
 use super::words::{FOR_WORD, RETURN_WORD};
-use super::nodes::{assign, call, int, key, statement_list, symbol};
+use super::nodes::{assign, block, call, if_then, int, key, statement_list, symbol};
 use crate::node::{Bracket, Node, Separator};
 use crate::operators::Op;
 use crate::ruby_blocks::arguments;
@@ -154,9 +154,9 @@ fn generator_class(name: &str, generator: &Generator) -> Option<Node> {
 	let mut members: Vec<Node> = fields(generator).iter().map(|name| field(name)).collect();
 	members.extend([field(STATE_FIELD), field(SENT_FIELD)]);
 	let head = call(NEXT_METHOD, vec![]);
-	members.push(key(head, Op::Define, statement_list(vec![body], Bracket::Curly)));
+	members.push(key(head, Op::Define, block(vec![body])));
 	members.extend(crate::generator_consumers::template(SEND, &[("VALUE", &symbol(SENT_VALUE)), ("SENT", &symbol(SENT_FIELD))]));
-	Some(Node::Type { name: Box::new(symbol(&class_name(name))), body: Box::new(statement_list(members, Bracket::Curly)) })
+	Some(Node::Type { name: Box::new(symbol(&class_name(name))), body: Box::new(block(members)) })
 }
 
 fn template_field(template: &Node) -> Option<Node> {
@@ -191,8 +191,7 @@ fn set_state(state: i64) -> Node {
 }
 
 fn condition_jump(condition: Node, state: usize) -> Node {
-	let test = key(Node::Empty, Op::If, condition);
-	key(test, Op::Then, statement_list(vec![set_state(state as i64), symbol(CONTINUE_WORD)], Bracket::Curly))
+	if_then(condition, block(vec![set_state(state as i64), symbol(CONTINUE_WORD)]))
 }
 
 fn returned(value: Node) -> Node {
@@ -318,11 +317,10 @@ impl Machine {
 	fn dispatch(self) -> Node {
 		let mut cases: Vec<Node> = self.states.into_iter().enumerate().filter(|(_, code)| !code.is_empty()).map(|(state, code)| {
 			let test = key(state_field(), Op::Eq, int(state as i64));
-			let condition = key(Node::Empty, Op::If, test);
-			key(condition, Op::Then, statement_list(code, Bracket::Curly))
+			if_then(test, block(code))
 		}).collect();
 		cases.push(returned(Node::Empty));
-		while_do(int(1), statement_list(cases, Bracket::Curly))
+		while_do(int(1), block(cases))
 	}
 }
 

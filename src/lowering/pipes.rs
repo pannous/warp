@@ -5,7 +5,7 @@
 //! `then` pipes the same way into a function missing its argument (`xs then sort`, P158); otherwise it is the
 //! condition, also without `if`.
 
-use super::nodes::key;
+use super::nodes::{if_then, key};
 use crate::analyzer::counting_function;
 use crate::context::Context;
 use crate::node::{Bracket, Node, Separator};
@@ -215,10 +215,6 @@ fn is_truth_value(node: &Node) -> bool {
 		Node::True | Node::False => true,
 		_ => false,
 	}
-}
-
-fn if_then(condition: Node, body: Node) -> Node {
-	crate::variable_signals::if_then(condition, body)
 }
 
 /// `square 2` as the operand of a prefix operator: `√(square 2)`, not `√ square 2` (which reads as square(√2))

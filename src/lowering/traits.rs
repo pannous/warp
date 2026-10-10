@@ -7,7 +7,7 @@
 //! the fix; elsewhere node_order asks the runtime witness table (wasm_emitter/witness.rs).
 
 use super::words::{FOR_WORD, IN_WORD};
-use super::nodes::{call, children_rewritten, key};
+use super::nodes::{call, children_rewritten, if_then, if_then_else, key};
 use crate::analyzer::{call_name, collect_all_types};
 use crate::diagnostic::Diagnostic;
 use crate::node::{symbol, Bracket, Node, Separator};
@@ -950,9 +950,7 @@ fn dispatcher(operation: &str, arity: usize, types: &[String]) -> Node {
 	let witness = |type_name: &str| witness_call(operation, type_name, parameters.clone());
 	let body = checked.iter().rev().fold(witness(last), |otherwise, type_name| {
 		let test = call(INSTANCE_OF, vec![parameters[0].clone(), Node::Text(type_name.clone())]);
-		let condition = key(Node::Empty, Op::If, test);
-		let then = key(condition, Op::Then, witness(type_name));
-		key(then, Op::Else, otherwise)
+		if_then_else(test, witness(type_name), otherwise)
 	});
 	// the first parameter is an instance of some type: held as a Node, like a parameter `s:square`
 	let instance = key(parameters[0].clone(), Op::Colon, Node::meta(symbol(DISPATCH), Node::data(Instance)));
@@ -1220,8 +1218,7 @@ fn position_by_equals(list: &Node, element: &Node, type_name: &str) -> Node {
 	let assign = |target: &Node, value: Node| key(target.clone(), Op::Assign, value);
 	let equal = key(witness_call(EQUALS, type_name, vec![item.clone(), element.clone()]), Op::Ne, Node::int(0));
 	let first = key(found.clone(), Op::Eq, Node::int(0));
-	let condition = key(Node::Empty, Op::If, key(first, Op::And, equal));
-	let found_it = key(condition, Op::Then, Node::List(vec![assign(&found, at.clone())], Bracket::Curly, Separator::None));
+	let found_it = if_then(key(first, Op::And, equal), Node::List(vec![assign(&found, at.clone())], Bracket::Curly, Separator::None));
 	let step = assign(&at, key(at.clone(), Op::Add, Node::int(1)));
 	let body = Node::List(vec![step, found_it], Bracket::Curly, Separator::Semicolon);
 	let search = Node::List(vec![symbol(FOR_WORD), item, symbol(IN_WORD), list.clone(), body], Bracket::None, Separator::Space);

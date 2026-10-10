@@ -5,7 +5,7 @@
 //! definition. Not getters: `name := {…}` (a block or a list), `name := x => …` and `name := …it…` (functions), and a
 //! name applied to arguments later (`sum := fold +; sum [1 2 3]`, a function value).
 
-use super::nodes::{call, key};
+use super::nodes::{call, is_binding, key};
 use crate::diagnostic::Diagnostic;
 use crate::node::{symbol, Bracket, Node, Separator};
 use crate::operators::Op;
@@ -98,9 +98,6 @@ fn is_active(active: &[Getter], name: &str) -> bool {
 	active.iter().any(|getter| getter.name == name)
 }
 
-fn is_binding(op: &Op) -> bool {
-	matches!(op, Op::Assign | Op::Define) || op.is_compound_assign()
-}
 
 fn mentions_define(node: &Node) -> bool {
 	let mut found = false;

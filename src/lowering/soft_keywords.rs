@@ -3,6 +3,7 @@
 //! name wins with a got-it note ("send is a keyword; here it is your variable"); redefining one at the top level is a
 //! loud error. Passes that give a soft keyword its meaning ask `program_names` whether the program took the word.
 
+use super::nodes::is_function_keyword;
 use crate::diagnostic::Diagnostic;
 use crate::node::{Bracket, Node};
 use crate::operators::Op;
@@ -70,9 +71,6 @@ fn defined_name(node: &Node) -> Option<String> {
 	}
 }
 
-fn is_function_keyword(node: &Node) -> bool {
-	matches!(node.drop_meta(), Node::Symbol(word) if crate::operators::is_function_keyword(word))
-}
 
 /// The got-it note for each soft keyword the program uses as a local name
 fn note_local_names(program: &Node) {

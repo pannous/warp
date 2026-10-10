@@ -7,7 +7,7 @@
 //! declares `dog like animal`, so a dog is accepted where an animal is wanted.
 
 use super::words::{GLOBAL_WORD, MAP_WORD, RETURN_WORD, SUM_WORD};
-use super::nodes::{call, grouped_parameters, key};
+use super::nodes::{call, grouped_parameters, if_then, key};
 use crate::node::{symbol, text, Bracket, Node, Separator};
 use crate::operators::Op;
 
@@ -508,7 +508,7 @@ fn taken_apart(node: Node, fields: &ClassFields, class_of: &ClassOf) -> Node {
 			}
 			// `parts·from if parts·from is Point and parts·from.x == 0` (`is` compares like ==, a class name tests the type)
 			let test = matched.class_tests.into_iter().chain(matched.tests).reduce(|all, test| key(all, Op::And, test)).expect("a class pattern tests its class");
-			let guard = key(key(Node::Empty, Op::If, test), Op::Then, subject.clone());
+			let guard = if_then(test, subject.clone());
 			key(guard, Op::FatArrow, bound_parts(subject, &matched.bindings, Some(recurse(*body))))
 		}
 		other => other.map_children(recurse),

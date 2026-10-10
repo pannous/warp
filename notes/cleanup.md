@@ -129,6 +129,9 @@ Done:
   `named_assignment` (component_state + lambdas) and list_element_checks' own assign → nodes.rs
 - word constants defined in 3+ passes (FOR / IN / ON / OF / FROM / COUNT / MAP / SUM / RETURN / GLOBAL_WORD) →
   src/lowering/words.rs; a constant with its own doc comment stayed in its pass
+- identical bodies (found by comparing fn bodies with parameters renamed): `block`, `if_then`, `if_then_else` moved
+  from variable_signals to nodes.rs and replace ~12 spelled-out `key(key(ø, If, c), Then, b)`; `is_block`,
+  `is_colon_pair`, `is_binding`, `is_function_keyword` (2 copies each) → nodes.rs; two `statements`/`entries` → Node::as_items
 
 Left (each changes behaviour or needs care):
 - Node::map_children also enters class bodies (Node::Type); children_rewritten does not. ~40 more passes spell out
@@ -158,21 +161,22 @@ card emitter-deterministic (generator classes and tables were spliced in HashMap
 test_reproducible_builds.rs), so `unstable` should no longer appear.
 
 Done (branches emitter-late-functions, emitter-two-pass, emitter-dead-code, emitter-duplicates, emitter-comments,
-emitter-builders, emitter-equality, emitter-runs, emitter-deterministic, emitter-logic):
+emitter-builders, emitter-equality, emitter-runs, emitter-deterministic, emitter-logic, emitter-loops):
 - never-called functions and stale comments out; runtime functions through runtime_function / exported_function
 - shared helpers for repeated code: emit_while, emit_text_argument_bounds, push_in_place, emit_global_store_declared,
   emit_offset_locals_test, emit_list_cell_function (list_at / list_node_at), emit_nth_cell_data, emit_try_table,
   emit_growable_list_types, string_fields, compile_time_string, emit_local_step (i++ of arithmetic.rs's two paths),
   emit_defined_user_function_call, import_function (host, WASI and FFI imports), emit_numeric_logical,
-  emit_cells_from_last (the two as_node(list))
+  emit_cells_from_last (the two as_node(list)), emit_cell_walk (nine list walks: null test, body, step to the rest)
 - runs of single `f.instruction(&I::…)` lines as one `Self::emit_list(f, &[…])` per statement group:
   `probes/cleanup/merge_instruction_runs.py <file.rs>…` (rewrites in place; a run splits after statement-ending
   instructions and after `return; end`), done in every emitter file
 - `probes/cleanup/duplicate_windows.py` lists repeated windows of normalised lines (the duplicates left to share)
 
 Left:
-- ~80 hand-written `Block, Loop, <exit test>, BrIf(1), …, Br(0), End, End` loops (26 in list_ops.rs, 13 in
-  library_ops.rs): emit_while fits only bodies without calls; a `loop_until(f, exit, |s, f| body)` taking a closure
-  would fit all of them, ~1 line saved per loop, each converted loop checked with same_wasm.sh
+- ~70 other hand-written `Block, Loop, <exit test>, BrIf(1), …, Br(0), End, End` loops: counters, byte walks and
+  cell walks whose step differs from emit_cell_walk (RefAsNonNull before the rest field, a position bump after it,
+  or the loop opened and closed by two closures as in library_ops.rs join and slice). A general
+  `loop_until(f, exit, |f| body)` would save ~1 line per loop; each conversion checked with same_wasm.sh
 - user_function_calls.rs compile_user_function_body saves and restores ~15 emitter fields by hand, interleaved with
   computing the new values: one saved-state struct would halve it, but the order of the computations matters

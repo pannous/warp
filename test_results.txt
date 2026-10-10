@@ -1500,7 +1500,6 @@ PASSED:
   ✓ lists::test_int_map::a_number_is_found_in_a_map
   ✓ lists::test_int_map::a_number_variable_keys_an_empty_map
   ✓ lists::test_int_map::an_entry_is_removed_by_its_number
-  ✓ lists::test_int_map::ten_thousand_rows_load_in_linear_time
   ✓ lists::test_key_lookup::test_key_is_evaluated
   ✓ lists::test_key_lookup::test_looked_up_value_takes_part_in_arithmetic
   ✓ lists::test_key_lookup::test_missing_key_is_an_error
@@ -3524,6 +3523,8 @@ PASSED:
   ✓ types::test_type_upgrading::test_global_with_float
   ✓ types::test_type_upgrading::test_global_with_reference
   ✓ types::test_type_upgrading::test_int_plus_pi_type_upgrading
+  ✓ types::test_type_word_scopes::test_local_of_another_function_leaves_the_type_word
+  ✓ types::test_type_word_scopes::test_own_variable_still_shadows_the_type_word
   ✓ types::test_type_word_user_function::a_clash_is_an_error_not_a_warning
   ✓ types::test_type_word_user_function::a_function_with_another_name_is_no_clash
   ✓ types::test_type_word_user_function::defining_a_function_named_like_a_type_word_is_an_error
@@ -3901,6 +3902,7 @@ PASSED:
   ✓ web::test_server_rpc_stub::a_server_function_body_stays_out_of_the_page
   ✓ web::test_server_rpc_stub::an_uncalled_server_function_stays_out_of_the_page
   ✓ web::test_site_tasks::a_site_renders_what_its_tasks_computed
+  ✓ web::test_site::a_painting_site_runs_in_a_worker_with_its_canvas
   ✓ web::test_site::a_program_failing_at_build_time_builds_no_site
   ✓ web::test_site::a_site_holds_the_rendered_page_the_module_and_its_scripts
   ✓ web::test_site::a_site_starting_tasks_runs_its_program_in_a_worker
@@ -4363,6 +4365,7 @@ PASSED:
   ✓ wisp_parser::tests::test_wisp_tag
 
 FAILED:
+  ✗ lists::test_int_map::ten_thousand_rows_load_in_linear_time
 
 SUMMARY:
-10 ignored, 4360 passed, 0 failed, 4360 total tested
+10 ignored, 4362 passed, 1 failed, 4363 total tested

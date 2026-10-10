@@ -118,7 +118,7 @@ pub fn world(program: &Node) -> Result<World, String> {
 		return Err(format!("{} component declarations: a world is declared by one", components.len()));
 	};
 	let interfaces: Vec<(String, Vec<Signature>)> = interfaces.iter().map(|(name, body)| Ok((kebab(name), signatures(body)?))).collect::<Result<_, String>>()?;
-	let items = statements(body).iter().map(|item| {
+	let items = body.as_items().iter().map(|item| {
 		let (direction, name, members) = world_item(item).ok_or_else(|| format!("a component declares `import name: {{…}}` or `export name: interface`, not {}", item.serialize()))?;
 		let functions = match members.drop_meta() {
 			Node::Symbol(interface) => signatures(&interface_body(program, interface).ok_or_else(|| format!("{direction} {name}: no interface {interface}"))?)?,
@@ -183,7 +183,7 @@ fn world_item(item: &Node) -> Option<(&'static str, String, Node)> {
 
 /// The members `name: (types) -> type` of a block
 fn signatures(block: &Node) -> Result<Vec<Signature>, String> {
-	statements(block).iter().map(|member| signature(member).ok_or_else(|| format!("an interface member is `name: (types) -> type`, not {}", member.serialize()))).collect()
+	block.as_items().iter().map(|member| signature(member).ok_or_else(|| format!("an interface member is `name: (types) -> type`, not {}", member.serialize()))).collect()
 }
 
 fn signature(member: &Node) -> Option<Signature> {
@@ -206,13 +206,6 @@ fn wit_type(node: &Node) -> Option<String> {
 	WIT_TYPES.iter().find(|(warp, _)| *warp == word).map(|(_, wit)| wit.to_string())
 }
 
-fn statements(block: &Node) -> Vec<Node> {
-	match block.drop_meta() {
-		Node::List(items, _, _) => items.clone(),
-		Node::Empty => vec![],
-		single => vec![single.clone()],
-	}
-}
 
 /// `header { name: func(p1: s32) -> s32; … }`, the members indented one level below `indent`
 fn block_text(header: &str, functions: &[Signature], indent: &str) -> String {
