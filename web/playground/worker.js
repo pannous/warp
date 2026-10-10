@@ -42,7 +42,8 @@ const post = message => warming || self.postMessage(message);
 const WARM_UP_CODE = 'p{ "" }';
 self.keepStored = (name, value, file) => post({ type: "stored", name, value, file }); // host-files.js STD_ADAPTERS.store
 self.writeClipboard = text => post({ type: "clipboard", text }); // host-files.js STD_ADAPTERS.clipboard
-self.playSoundFile = url => post({ type: "sound file", url }); // host-files.js STD_ADAPTERS.sound: a worker has no <audio>
+self.playSoundFile = (url, bytes) => post({ type: "sound file", url, bytes }); // host-files.js STD_ADAPTERS.sound: a worker has no <audio>
+self.keepFile = (path, bytes) => post({ type: "file", path, bytes }); // render_sound's WAV, for the page's download link
 self.stopSoundFiles = () => { soundsEnd = 0; post({ type: "stop sound files" }); };
 // sound_queued() (lib/sound.warp, card sound-pro): the seconds the queued sounds still sound
 let soundsEnd = 0;

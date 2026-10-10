@@ -26,6 +26,7 @@ const TERMINAL_CODE = /\x1b\[[0-9;?]*[A-Za-z]/g;
 const EXAMPLE_PARAMETERS = ["example", "sample"]; // ?example=fizzbuzz (or #fizzbuzz) picks a tour example or sample; the address shows the chosen one as #fizzbuzz
 const DEBUG_PARAMETER = "debug"; // ?debug runs warp.debug.wasm: Rust names and lines in traces and the debugger
 const DEBUG_COMPILER = "warp.debug.wasm";
+const WAV_TYPE = "audio/wav"; // render_sound's files (host-files.js wavOf)
 const SLOW_START_PARAMETER = "slow_start"; // ?slow_start=<ms>: the worker reports ready that much later (a slow machine)
 // a starting worker silent this long is stuck (card firefox-hello-hang, three of six deploys): started again once, loudly
 const STALLED_START_MS = 60_000;
@@ -207,7 +208,8 @@ function startWorker(restarts = 0) {
 			if (data.type === "failed") return failed(new Error(data.message));
 			if (data.type === "bundle") return bundled(data.bundle); // deploy.js
 			if (data.type === "sound") return playSound(data);
-			if (data.type === "sound file") return playSoundFile(data.url);
+			if (data.type === "sound file") return playSoundFile(data.url, data.bytes);
+			if (data.type === "file") return offerFile(data.path, data.bytes);
 			if (data.type === "stop sound files") return silence(); // stop_sound: the queued sounds and the music files
 			if (!pending) return showEventOutput(data);
 			if (data.type === "listening") Object.assign(pending, { listening: data.events, address: data.address });
@@ -305,9 +307,9 @@ function playSound({ samples, rate }) {
 
 // `play "song.mp3"` (card sound-library): a music file in the background, by its URL beside the page or anywhere
 let playingFiles = [];
-function playSoundFile(url) {
+function playSoundFile(url, bytes) {
 	if (beforeUserActivation()) return;
-	const player = new Audio(url);
+	const player = new Audio(bytes ? URL.createObjectURL(new Blob([bytes], { type: WAV_TYPE })) : url);
 	player.onended = () => playingFiles = playingFiles.filter(other => other !== player);
 	player.play().catch(error => console.error(`play "${url}": ${error.message}`));
 	playingFiles.push(player);
@@ -745,6 +747,18 @@ function showVersion() {
 	const when = built ? new Date(built).toLocaleString([], { dateStyle: "short", timeStyle: "short" }) : date;
 	Object.assign($("version"), { href: `${COMMIT_URL}${commit}`, textContent: `version ${commit.slice(0, SHORT_COMMIT)} · built ${when}`,
 		title: `committed ${date}`, hidden: false });
+}
+
+// a file the program rendered (render_sound's WAV): a download link beside the wasm's, one per path, the latest bytes
+const offeredFiles = new Map();
+function offerFile(path, bytes) {
+	if (offeredFiles.has(path)) URL.revokeObjectURL(offeredFiles.get(path).href);
+	const name = path.split("/").pop();
+	const link = element("a", { href: URL.createObjectURL(new Blob([bytes], { type: WAV_TYPE })), download: name, textContent: `⤓ ${name}` });
+	const offered = offeredFiles.get(path);
+	if (offered) offered.replaceWith(link); else $("written-files").append(link, " ");
+	offeredFiles.set(path, link);
+	$("written-files").hidden = false;
 }
 
 function downloadModule() {
