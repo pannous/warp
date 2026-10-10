@@ -7,12 +7,14 @@ python3 -m http.server $PORT --directory "$PLAYGROUND" >/dev/null 2>&1 &
 SERVER=$!
 trap 'kill $SERVER' EXIT
 sleep 1
-SHOWN="getComputedStyle(document.getElementById('chat-clear')).display"
+SHOWN='getComputedStyle(document.getElementById("chat-clear")).display'
+# the commands are JSON5 (firefox_driver.mjs): single quotes around JavaScript with double quotes, comments
 node "$PLAYGROUND/firefox_driver.mjs" <<COMMANDS
-["open", "http://localhost:$PORT/index.html"]
-["eval", "new Promise(loaded => setTimeout(() => loaded(document.title), 3000))"]
-["eval", "document.getElementById('ask').click(); $SHOWN"]
-["eval", "document.getElementById('chat-log').append(Object.assign(document.createElement('div'), {className: 'chat-question', textContent: 'why?'})); $SHOWN"]
-["eval", "document.getElementById('chat-clear').click(); [document.getElementById('chat-log').childElementCount, $SHOWN].join(' ')"]
-["close"]
+['open', 'http://localhost:$PORT/index.html']
+['eval', 'new Promise(loaded => setTimeout(() => loaded(document.title), 3000))'] // the page may reload once for isolation
+// hidden while the chat is empty, shown with a question, gone with it after a click
+['eval', 'document.getElementById("ask").click(); $SHOWN']
+['eval', 'document.getElementById("chat-log").append(Object.assign(document.createElement("div"), {className: "chat-question", textContent: "why?"})); $SHOWN']
+['eval', 'document.getElementById("chat-clear").click(); [document.getElementById("chat-log").childElementCount, $SHOWN].join(" ")',]
+['close']
 COMMANDS
