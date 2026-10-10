@@ -325,7 +325,9 @@ impl Screen {
 
 	/// The input as the program's side takes it (follow_input)
 	fn tell_input(&self) {
-		println!("{INPUT_LINE} {} {} {} {}", self.pointer.0, self.pointer.1, u8::from(self.button_down), self.key);
+		// the window outlives the program by design: once that exits, its end of the pipe is closed and nobody listens
+		let mut output = std::io::stdout().lock();
+		let _ = writeln!(output, "{INPUT_LINE} {} {} {} {}", self.pointer.0, self.pointer.1, u8::from(self.button_down), self.key).and_then(|_| output.flush());
 	}
 
 	/// A place in the window's physical pixels as one in the frame's pixels
