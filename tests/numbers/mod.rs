@@ -58,6 +58,7 @@ mod test_division_by_zero;
 mod test_big_ratio;
 mod test_superscript_variables;
 mod test_mixed_number_arithmetic;
+mod test_ratio_float_division;
 mod test_run_time_remainder;
 mod test_run_time_power;
 mod test_norm;

@@ -388,14 +388,8 @@ impl Div for Number {
 
 	fn div(self, other: Self) -> Self::Output {
 		match (self, other) {
-			(Number::Quotient(q1, q2), Number::Float(n2)) => {
-				Number::Float(q1 as f64 / q2 as f64 * n2)
-			}
-			(Number::Float(n1), Number::Quotient(q1, q2)) => {
-				Number::Float(n1 / q1 as f64 / q2 as f64)
-			}
-			(Number::BigQuotient(q), Number::Float(n2)) => Number::Float(q.to_f64() / n2),
-			(Number::Float(n1), Number::BigQuotient(q)) => Number::Float(n1 / q.to_f64()),
+			(ratio @ (Number::Quotient(..) | Number::BigQuotient(_)), Number::Float(n2)) => Number::Float(f64::from(ratio) / n2),
+			(Number::Float(n1), ratio @ (Number::Quotient(..) | Number::BigQuotient(_))) => Number::Float(n1 / f64::from(ratio)),
 			(a, b) if matches!(a, Number::Quotient(..) | Number::BigQuotient(_) | Number::Int(_) | Number::BigInt(_))
 				&& matches!(b, Number::Quotient(..) | Number::BigQuotient(_) | Number::Int(_) | Number::BigInt(_)) => {
 				Number::ratio(a, b)
