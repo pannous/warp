@@ -8,8 +8,12 @@
 
 use super::words::{GLOBAL_WORD, MAP_WORD, RETURN_WORD, SUM_WORD};
 use super::nodes::{Counter, call, grouped_parameters, if_then, key};
+mod inheritance;
 mod operators;
+mod other_languages;
+use inheritance::*;
 use operators::*;
+use other_languages::*;
 use crate::node::{symbol, text, Bracket, Node, Separator};
 use crate::operators::Op;
 
@@ -958,92 +962,6 @@ fn with_arguments(member: Node, change: impl Fn(Node) -> Node) -> Node {
 	}
 }
 
-/// Rust's `impl Point { fn sum(&self) -> i32 {…} }` (and `impl Trait for Point {…}`): its functions are methods of
-/// the class Point, the impl block itself goes
-fn with_impls(node: Node) -> Node {
-	let mut impls: Vec<(String, Vec<Node>)> = vec![];
-	node.visit(&mut |part| if let Some((class, items)) = impl_block(part) {
-		impls.push((class, items));
-	});
-	if impls.is_empty() {
-		return node;
-	}
-	taking_in_impls(node, &impls)
-}
-
-fn taking_in_impls(node: Node, impls: &[(String, Vec<Node>)]) -> Node {
-	match node {
-		_ if impl_block(&node).is_some() => Node::Empty,
-		Node::Type { name, body } => {
-			let class = name.drop_meta().name();
-			let added: Vec<Node> = impls.iter().filter(|(owner, _)| *owner == class).flat_map(|(_, items)| items.clone()).collect();
-			match added.is_empty() {
-				true => Node::Type { name, body },
-				false => Node::Type { name, body: Box::new(Node::List([class_items(&body), added].concat(), Bracket::Curly, Separator::Semicolon)) },
-			}
-		}
-		Node::List(items, bracket, separator) => {
-			let items: Vec<Node> = items.into_iter().map(|item| taking_in_impls(item, impls)).filter(|item| !matches!(item, Node::Empty)).collect();
-			Node::List(items, bracket, separator)
-		}
-		Node::Meta { node, data } => match taking_in_impls(*node, impls) {
-			Node::Empty => Node::Empty,
-			node => Node::Meta { node: Box::new(node), data },
-		},
-		other => other,
-	}
-}
-
-/// `impl Point {…}`, `impl Display for Point {…}`: the class and the items of the block
-fn impl_block(node: &Node) -> Option<(String, Vec<Node>)> {
-	let Node::List(words, _, _) = node.drop_meta() else { return None };
-	let (class, block) = match words.as_slice() {
-		[word, class, block] if word.drop_meta().name() == IMPL_WORD => (class, block),
-		// `impl Point {…}` of a declared Point reads like the spaced construction `Point {…}`
-		[word, construction] if word.drop_meta().name() == IMPL_WORD => match construction.drop_meta() {
-			Node::Key(class, Op::None | Op::Colon, block) => (class.as_ref(), block.as_ref()),
-			_ => return None,
-		},
-		[word, _, for_word, class, block] if word.drop_meta().name() == IMPL_WORD && for_word.drop_meta().name() == "for" => (class, block),
-		_ => return go_method(words),
-	};
-	let Node::Symbol(class) = class.drop_meta() else { return None };
-	match block.drop_meta() {
-		Node::List(_, Bracket::Curly, _) => Some((class.clone(), class_items(block))),
-		_ => None,
-	}
-}
-
-/// Go's method `func (p Point) Sum() int {…}` (or of the pointer `(p *Point)`): the class and the method `func Sum() int
-/// {…}`, its receiver p read as self
-fn go_method(words: &[Node]) -> Option<(String, Vec<Node>)> {
-	let [keyword, receiver, rest @ ..] = words else { return None };
-	if keyword.drop_meta().name() != GO_FUNCTION_WORD || rest.is_empty() {
-		return None;
-	}
-	let Node::List(receiver, Bracket::Round, _) = receiver.drop_meta() else { return None };
-	let (variable, class) = match receiver.as_slice() {
-		[variable, class] => (variable.drop_meta(), class.drop_meta()),
-		[single] => match single.drop_meta() {
-			Node::Key(variable, Op::Mul, class) => (variable.drop_meta(), class.drop_meta()),
-			_ => return None,
-		},
-		_ => return None,
-	};
-	let class = match class {
-		Node::Key(empty, Op::Mul, class) if matches!(empty.drop_meta(), Node::Empty) => class.drop_meta(),
-		class => class,
-	};
-	let (Node::Symbol(variable), Node::Symbol(class)) = (variable, class) else { return None };
-	let rest: Vec<Node> = match rest {
-		[Node::List(group, Bracket::None, _)] => group.clone(),
-		_ => rest.to_vec(),
-	};
-	let bindings = [(variable.clone(), symbol(RECEIVER))].into_iter().collect();
-	let method = crate::law::substitute(&Node::List([vec![keyword.clone()], rest].concat(), Bracket::None, Separator::Space), &bindings);
-	Some((class.clone(), class_items(&Node::List(vec![method], Bracket::Curly, Separator::Semicolon))))
-}
-
 /// Kotlin's `p.copy(y = 5)`: a new instance with p's fields, those changed: `field_with(instance_copy(p, no), "y", 5)`;
 /// `shallow = yes` among them asks for the shallow copy (P205)
 fn copies(node: Node) -> Node {
@@ -1072,89 +990,6 @@ fn copies(node: Node) -> Node {
 		}
 		other => other.map_children(copies),
 	}
-}
-
-/// Every class with the items of the mixins it takes in (`class Duck with Walker {…}`, `include Walker` in its body)
-/// after its own, but those it defines itself; the mixin declarations themselves are no classes and go
-fn with_mixins(node: Node) -> Result<Node, Node> {
-	let mut mixins: Vec<(String, Vec<Node>)> = vec![];
-	node.visit(&mut |part| if let Node::Type { name, body } = part {
-		if name.attribute(crate::warp_parser::MIXIN_WORD).is_some() {
-			mixins.push((name.drop_meta().name(), class_items(body)));
-		}
-	});
-	if mixins.is_empty() {
-		return Ok(node);
-	}
-	taking_in_mixins(node, &mixins)
-}
-
-fn taking_in_mixins(node: Node, mixins: &[(String, Vec<Node>)]) -> Result<Node, Node> {
-	match node {
-		Node::Type { name, .. } if name.attribute(crate::warp_parser::MIXIN_WORD).is_some() => Ok(Node::Empty),
-		Node::Type { name, body } => {
-			let mut taken: Vec<String> = name.attribute(crate::warp_parser::WITH_KEYWORD).map(|names| match names.drop_meta() {
-				Node::List(names, _, _) => names.iter().map(|name| name.drop_meta().name()).collect(),
-				single => vec![single.name()],
-			}).unwrap_or_default();
-			// `include m` of no declared mixin stays (P139: it loads the module m)
-			let is_mixin = |item: &Node| included_mixin(item).is_some_and(|mixin| mixins.iter().any(|(declared, _)| *declared == mixin));
-			let (included, own): (Vec<Node>, Vec<Node>) = class_items(&body).into_iter().partition(is_mixin);
-			taken.extend(included.iter().filter_map(included_mixin));
-			if taken.is_empty() {
-				return Ok(Node::Type { name, body });
-			}
-			let own_names: Vec<String> = own.iter().filter_map(item_name).collect();
-			let mut items = own;
-			for mixin in taken {
-				let Some((_, mixin_items)) = mixins.iter().find(|(declared, _)| *declared == mixin) else {
-					return Err(crate::node::error(&format!("{} takes in {mixin}, which is no mixin: declare mixin {mixin}{{…}}", name.drop_meta().name())));
-				};
-				items.extend(mixin_items.iter().filter(|item| item_name(item).is_none_or(|item| !own_names.contains(&item))).cloned());
-			}
-			let name = match name.attribute(crate::warp_parser::EXTENDS_KEYWORD) {
-				Some(parent) => Node::Symbol(name.drop_meta().name()).with_attribute(crate::warp_parser::EXTENDS_KEYWORD, parent.clone()),
-				None => Node::Symbol(name.drop_meta().name()),
-			};
-			Ok(Node::Type { name: Box::new(name), body: Box::new(Node::List(items, Bracket::Curly, Separator::Semicolon)) })
-		}
-		Node::List(items, bracket, separator) => {
-			let items = items.into_iter().map(|item| taking_in_mixins(item, mixins)).collect::<Result<Vec<_>, _>>()?;
-			Ok(Node::List(items.into_iter().filter(|item| !matches!(item, Node::Empty)).collect(), bracket, separator))
-		}
-		Node::Meta { node, data } => Ok(Node::Meta { node: Box::new(taking_in_mixins(*node, mixins)?), data }),
-		other => Ok(other),
-	}
-}
-
-/// `include Walker` in a class body: the mixin it takes in
-fn included_mixin(item: &Node) -> Option<String> {
-	let Node::List(words, _, _) = item.drop_meta() else { return None };
-	let [word, mixin] = words.as_slice() else { return None };
-	(word.drop_meta().name() == INCLUDE_WORD && matches!(mixin.drop_meta(), Node::Symbol(_))).then(|| mixin.drop_meta().name())
-}
-
-/// The classes with the fields and methods of the class they extend, and the likeness `dog like animal` of each
-fn inherit(node: Node) -> Result<(Node, Vec<Node>), Node> {
-	let mut classes: Vec<(String, Option<String>, Vec<Node>)> = vec![];
-	node.visit(&mut |part| {
-		if let Node::Type { name, body } = part {
-			let parent = name.attribute(crate::warp_parser::EXTENDS_KEYWORD).map(|parent| parent.drop_meta().name());
-			classes.push((name.drop_meta().name(), parent, class_items(body)));
-		}
-	});
-	if classes.iter().all(|(_, parent, _)| parent.is_none()) {
-		return Ok((node, vec![]));
-	}
-	let mut likenesses = vec![];
-	for (class, parent, _) in &classes {
-		if let Some(parent) = parent {
-			inherited_items(class, &classes, &mut vec![])?;
-			let words = [class.as_str(), crate::traits::LIKE_WORD, parent.as_str()].map(symbol);
-			likenesses.push(Node::List(words.to_vec(), Bracket::None, Separator::Space));
-		}
-	}
-	Ok((with_inherited(node, &classes)?, likenesses))
 }
 
 /// The fields and methods of a class body; the groups a `;` makes (`{name age:int; greet() := …}`) flattened
@@ -1407,38 +1242,6 @@ fn declared_classes(node: &Node, keep: impl Fn(&Node) -> bool) -> Vec<String> {
 	classes
 }
 
-/// Ruby's `Point.new(1, 2)` of a declared class that defines no `new`: the construction `Point(1, 2)`, with a note
-fn ruby_constructions(node: Node) -> Node {
-	let classes = declared_classes(&node, |body| !class_items(body).iter().filter_map(method_parts).any(|(method, _, _)| method == RUBY_NEW_WORD));
-	if classes.is_empty() {
-		return node;
-	}
-	constructed_by_new(node, &classes)
-}
-
-/// Ruby's `Point.new(1, 2)` and Java's `new Set(xs)` of a class the parser did not see (a standard module's): the
-/// construction, with a note
-fn constructed_by_new(node: Node, classes: &[String]) -> Node {
-	match node {
-		Node::List(items, Bracket::None, Separator::Space) if matches!(items.as_slice(), [new, call] if new.drop_meta().name() == RUBY_NEW_WORD && classes.contains(&leading_name(call))) => {
-			let call = items[1].clone();
-			crate::diagnostic::note_alias(&format!("{RUBY_NEW_WORD} {}", leading_name(&call)), &leading_name(&call));
-			constructed_by_new(call, classes)
-		}
-		Node::Key(class, Op::Dot, member) if classes.contains(&class.drop_meta().name()) && matches!(class.drop_meta(), Node::Symbol(_)) && leading_name(&member) == RUBY_NEW_WORD => {
-			let class_name = class.drop_meta().name();
-			crate::normalize::set_position_of(&class);
-			crate::diagnostic::note_alias(&format!("{class_name}.{RUBY_NEW_WORD}"), &class_name);
-			let arguments = match member.drop_meta().clone() {
-				Node::List(items, _, _) => items[1..].iter().cloned().map(|argument| constructed_by_new(argument, classes)).collect(),
-				_ => vec![],
-			};
-			Node::List([vec![*class], arguments].concat(), Bracket::Round, Separator::None)
-		}
-		other => other.map_children(|child| constructed_by_new(child, classes)),
-	}
-}
-
 /// Go's positional braces `Point{1, 2}` of a declared class: the construction `Point(1, 2)`, with a note (P167); of
 /// an unknown name they stay tagged data
 fn positional_braces(node: Node) -> Node {
@@ -1464,48 +1267,6 @@ fn constructed_from_braces(node: Node, classes: &[String]) -> Node {
 		// a match arm's `Point{x, y} =>` is a pattern (destructurings), no construction
 		Node::Key(pattern, Op::FatArrow, body) => Node::Key(pattern, Op::FatArrow, Box::new(constructed_from_braces(*body, classes))),
 		other => other.map_children(|child| constructed_from_braces(child, classes)),
-	}
-}
-
-fn is_witness_method(name: &str) -> bool {
-	WITNESS_METHODS.iter().any(|(witness, _)| *witness == name)
-}
-
-/// A class's `text()`, `equals(o)` and `compare(o)` (Java's `toString()`, `compareTo(o)`, Python's `__str__`, `__eq__`…,
-/// with a note) as the witnesses of its text, equality and order: the other instance typed by the class,
-/// `equals(o:P)`, so the method is `equals(self:P, o:P)`, which traits makes equals·P
-fn with_witness_methods(node: Node) -> Node {
-	match node {
-		Node::Type { name, body } => {
-			let class = name.drop_meta().name();
-			let items: Vec<Node> = class_items(&body);
-			if !items.iter().filter_map(method_parts).any(|(method, _, _)| WITNESS_METHODS.iter().any(|(witness, aliases)| *witness == method || aliases.contains(&method.as_str()))) {
-				return Node::Type { name, body };
-			}
-			let items = items.into_iter().map(|item| witness_method(item, &class)).collect();
-			Node::Type { name, body: Box::new(Node::List(items, Bracket::Curly, Separator::Semicolon)) }
-		}
-		other => other.map_children(with_witness_methods),
-	}
-}
-
-fn witness_method(item: Node, class: &str) -> Node {
-	let Some((method, parameters, _)) = method_parts(&item) else { return item };
-	let Some((witness, _)) = WITNESS_METHODS.iter().find(|(witness, aliases)| *witness == method || aliases.contains(&method.as_str())) else { return item };
-	if *witness != method {
-		crate::diagnostic::note_alias(&method, witness);
-	}
-	let typed = |parameter: Node| match parameter.drop_meta() {
-		Node::Symbol(_) if *witness != "text" => key(parameter, Op::Colon, symbol(class)),
-		_ => parameter,
-	};
-	let head = call(witness, parameters.into_iter().map(typed).collect());
-	match item.drop_meta().clone() {
-		Node::Key(old_head, Op::Define, body) => match old_head.drop_meta() {
-			Node::Key(_, Op::Colon, result) if result_type(&item).is_some() => Node::Key(Box::new(Node::Key(Box::new(head), Op::Colon, result.clone())), Op::Define, body),
-			_ => Node::Key(Box::new(head), Op::Define, body),
-		},
-		_ => item,
 	}
 }
 
@@ -1743,93 +1504,6 @@ fn with_result_type(definition: Node, result_type: Option<&Node>) -> Node {
 	match (definition, result_type) {
 		(Node::Key(head, Op::Define, body), Some(result_type)) => Node::Key(Box::new(Node::Key(head, Op::Colon, Box::new(result_type.clone()))), Op::Define, body),
 		(definition, _) => definition,
-	}
-}
-
-/// A class's items after those of its parents: a parent's field or method the class defines again is left out
-fn inherited_items(class: &str, classes: &[(String, Option<String>, Vec<Node>)], visiting: &mut Vec<String>) -> Result<Vec<Node>, Node> {
-	if visiting.iter().any(|seen| seen == class) {
-		return Err(crate::node::error(&format!("class {class} extends itself through {}", visiting.join(", "))));
-	}
-	let Some((_, parent, own)) = classes.iter().find(|(name, _, _)| name == class) else {
-		let child = visiting.last().cloned().unwrap_or_default();
-		return Err(crate::node::error(&format!("{child} extends {class}, which is no class: declare class {class}{{…}}")));
-	};
-	let Some(parent) = parent else { return Ok(own.clone()) };
-	visiting.push(class.to_string());
-	let inherited = inherited_items(parent, classes, visiting)?;
-	visiting.pop();
-	let mut called = vec![];
-	let own: Vec<Node> = own.iter().cloned().map(|item| super_calls(item, class, &mut called)).collect();
-	let mut parent_versions = vec![];
-	for method in called {
-		let Some(version) = inherited.iter().find(|item| method_parts(item).is_some_and(|(name, _, _)| name == method)) else {
-			return Err(crate::node::error(&format!("{class} calls {SUPER}.{method}, but {parent} has no method {method}")));
-		};
-		parent_versions.push(renamed(version, &format!("{method}{SUPER_INFIX}{class}")));
-	}
-	let own_names: Vec<String> = own.iter().filter_map(item_name).collect();
-	let kept = inherited.into_iter().filter(|item| item_name(item).is_none_or(|name| !own_names.contains(&name)));
-	Ok(kept.chain(parent_versions).chain(own).collect())
-}
-
-/// `super.speak(…)` in a method of class dog as `self.speak·super·dog(…)`; the names of the methods called go to `called`
-fn super_calls(node: Node, class: &str, called: &mut Vec<String>) -> Node {
-	let Node::Key(object, Op::Dot, member) = node else { return node.map_children(|child| super_calls(child, class, called)) };
-	if object.drop_meta().name() != SUPER || !matches!(object.drop_meta(), Node::Symbol(_)) {
-		return key(super_calls(*object, class, called), Op::Dot, super_calls(*member, class, called));
-	}
-	let member = match member.drop_meta().clone() {
-		Node::Symbol(name) => parent_version(name, class, called),
-		Node::List(items, Bracket::Round, separator) if matches!(items.first().map(Node::drop_meta), Some(Node::Symbol(_))) => {
-			let arguments: Vec<Node> = items[1..].iter().cloned().map(|argument| super_calls(argument, class, called)).collect();
-			let name = parent_version(items[0].drop_meta().name(), class, called);
-			Node::List([vec![name], arguments].concat(), Bracket::Round, separator)
-		}
-		other => other,
-	};
-	key(symbol(RECEIVER), Op::Dot, member)
-}
-
-/// `speak·super·dog`, the name of the speak dog inherits; speak goes to `called`
-fn parent_version(method: String, class: &str, called: &mut Vec<String>) -> Node {
-	let version = format!("{method}{SUPER_INFIX}{class}");
-	if !called.contains(&method) {
-		called.push(method);
-	}
-	Node::Symbol(version)
-}
-
-/// A method definition under another name
-fn renamed(method: &Node, name: &str) -> Node {
-	let Node::Key(head, Op::Define, body) = method.drop_meta() else { return method.clone() };
-	if let Node::Key(untyped, Op::Colon, result_type) = head.drop_meta() {
-		let untyped = renamed(&Node::Key(untyped.clone(), Op::Define, body.clone()), name);
-		return with_result_type(untyped, Some(result_type));
-	}
-	let head = match head.drop_meta() {
-		Node::List(parts, bracket, separator) => Node::List([vec![symbol(name)], parts[1..].to_vec()].concat(), bracket.clone(), separator.clone()),
-		_ => symbol(name),
-	};
-	Node::Key(Box::new(head), Op::Define, body.clone())
-}
-
-/// The name a class item defines: a field or a method
-fn item_name(item: &Node) -> Option<String> {
-	method_parts(item).map(|(name, _, _)| name).or_else(|| field_name(item))
-}
-
-/// Every class that extends another with all its items, its name without the parent
-fn with_inherited(node: Node, classes: &[(String, Option<String>, Vec<Node>)]) -> Result<Node, Node> {
-	match node {
-		Node::Type { name, body: _ } if name.attribute(crate::warp_parser::EXTENDS_KEYWORD).is_some() => {
-			let class = name.drop_meta().name();
-			let items = inherited_items(&class, classes, &mut vec![])?;
-			Ok(Node::Type { name: Box::new(Node::Symbol(class)), body: Box::new(Node::List(items, Bracket::Curly, Separator::Space)) })
-		}
-		Node::List(items, bracket, separator) => Ok(Node::List(items.into_iter().map(|item| with_inherited(item, classes)).collect::<Result<_, _>>()?, bracket, separator)),
-		Node::Meta { node, data } => Ok(Node::Meta { node: Box::new(with_inherited(*node, classes)?), data }),
-		other => Ok(other),
 	}
 }
 
