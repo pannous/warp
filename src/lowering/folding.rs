@@ -5,7 +5,7 @@
 //! The values come from running the definitions and the calls as one small module, so they are exactly what the
 //! program computes; a call that fails or runs out of fuel stays a call.
 
-use super::nodes::{call, key};
+use super::nodes::{call, children_rewritten, key};
 use crate::analyzer::{captured_variables, collect_variables, Scope};
 use crate::effects::EffectReport;
 use crate::extensions::numbers::Number;
@@ -132,12 +132,7 @@ fn is_read_as_value_only(node: &Node, name: &str) -> bool {
 /// Int arithmetic of constants computed (`3*4` → `12`) and a condition on constants decided: what is left of a body
 /// once its free variables are constants. A comparison is computed only as a condition (its value is a boolean)
 fn computed(node: Node) -> Node {
-	let node = match node {
-		Node::List(items, bracket, separator) => Node::List(items.into_iter().map(computed).collect(), bracket, separator),
-		Node::Key(left, op, right) => key(computed(*left), op, computed(*right)),
-		Node::Meta { node, data } => Node::Meta { node: Box::new(computed(*node)), data },
-		other => other,
-	};
+	let node = children_rewritten(node, computed);
 	match node.drop_meta() {
 		Node::Key(left, op @ (Op::Add | Op::Sub | Op::Mul), right) => match decided(Node::Key(left.clone(), *op, right.clone())) {
 			value @ Node::Number(Number::Int(_)) => value,
@@ -366,12 +361,7 @@ impl Specialiser {
 /// Arithmetic and comparisons of Int constants computed, and a condition that is a constant decided: what is left of a
 /// body once a parameter is a constant
 fn decided(node: Node) -> Node {
-	let node = match node {
-		Node::List(items, bracket, separator) => Node::List(items.into_iter().map(decided).collect(), bracket, separator),
-		Node::Key(left, op, right) => key(decided(*left), op, decided(*right)),
-		Node::Meta { node, data } => Node::Meta { node: Box::new(decided(*node)), data },
-		other => other,
-	};
+	let node = children_rewritten(node, decided);
 	let int = |node: &Node| match node.drop_meta() {
 		Node::Number(Number::Int(value)) => Some(*value),
 		_ => None,
