@@ -5,7 +5,7 @@
 //!   multi-value results, and a plain call `f()` gets them packed into the list `[a b]`
 //! - `x, y = v` / `x, y = v, w` → `$destructure (x, y) v …` (a statement binding each name, values evaluated first)
 
-use super::nodes::{is_word, key};
+use super::nodes::{is_word, key, symbol_name};
 use crate::node::{error, symbol, Bracket, Node, Separator};
 use crate::operators::Op;
 
@@ -72,7 +72,7 @@ pub fn destructuring(node: &Node) -> Option<(Vec<String>, &[Node])> {
 		return None;
 	}
 	let Node::List(names, _, _) = names.drop_meta() else { return None };
-	Some((names.iter().filter_map(symbol_name).collect(), values))
+	Some((names.iter().filter_map(symbol_name).cloned().collect(), values))
 }
 
 /// How many values a function body returns with `return a, b`; None when every return gives one value
@@ -105,13 +105,6 @@ pub fn packer_name(function: &str) -> String {
 /// Kind key of a tuple function's i-th value among the function kinds: `divmod#1`
 pub fn element_key(function: &str, index: usize) -> String {
 	format!("{function}#{index}")
-}
-
-fn symbol_name(node: &Node) -> Option<String> {
-	match node.drop_meta() {
-		Node::Symbol(name) => Some(name.clone()),
-		_ => None,
-	}
 }
 
 /// `(… return a), b, c` → `… return a b c`: the return at the end of the first item takes the other items

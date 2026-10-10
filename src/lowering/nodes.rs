@@ -38,3 +38,12 @@ pub(crate) fn statement_list(statements: Vec<Node>, bracket: Bracket) -> Node {
 pub(crate) fn is_type_word(node: &Node) -> bool {
 	symbol_name(node).is_some_and(|word| crate::analyzer::type_word_kind(word).is_some())
 }
+
+/// The name a parameter declares: `x`, `x:int`, `x=1`
+pub(crate) fn parameter_name(parameter: &Node) -> Option<String> {
+	match parameter.drop_meta() {
+		Node::Symbol(name) => Some(name.clone()),
+		Node::Key(name, _, _) => parameter_name(name),
+		_ => None,
+	}
+}

@@ -4,7 +4,7 @@
 //! capture no variable. A function that is not known at the call (chosen at run time) or a lambda that captures a variable is passed
 //! as a closure to a generic version of the function (closures.rs).
 
-use super::nodes::{call, key};
+use super::nodes::{call, key, parameter_name};
 use crate::closures::may_be_function_value;
 use crate::lambdas::lambda_definition;
 use crate::library_words::substitute;
@@ -128,14 +128,6 @@ fn called_variable<'a>(node: &'a Node, results: &HashMap<String, String>) -> Opt
 		Node::List(items, Bracket::Round, Separator::None) if matches!(items.first().map(Node::drop_meta), Some(Node::Symbol(name)) if results.contains_key(name)) => Some(node),
 		Node::Key(left, _, right) => called_variable(left, results).or_else(|| called_variable(right, results)),
 		Node::List(items, _, _) => items.iter().find_map(|item| called_variable(item, results)),
-		_ => None,
-	}
-}
-
-fn parameter_name(param: &Node) -> Option<String> {
-	match param.drop_meta() {
-		Node::Symbol(name) => Some(name.clone()),
-		Node::Key(name, _, _) => parameter_name(name),
 		_ => None,
 	}
 }

@@ -8,7 +8,7 @@
 //! - `f(**m)` spreads an object: into a `**kw` parameter it is the object, into fixed parameters the fields named like
 //!   the parameters the other arguments leave, `g(1, **m)` → `g(1, b=m.b)`.
 
-use super::nodes::key;
+use super::nodes::{key, parameter_name};
 use crate::analyzer::call_name;
 use crate::node::{symbol, Bracket, Node, Separator};
 use crate::operators::Op;
@@ -104,14 +104,6 @@ fn collect_signatures(node: &Node, signatures: &mut HashMap<String, Signature>) 
 		let fixed = parameters.iter().map(|parameter| parameter_name(parameter).unwrap_or_default()).collect();
 		signatures.insert(head[0].name(), Signature { fixed, rest, keywords });
 	});
-}
-
-fn parameter_name(parameter: &Node) -> Option<String> {
-	match parameter.drop_meta() {
-		Node::Symbol(name) => Some(name.clone()),
-		Node::Key(name, _, _) => parameter_name(name),
-		_ => None,
-	}
 }
 
 /// `a=1`, `a: 1` in a call: the name a and the value
