@@ -703,9 +703,7 @@ impl Lowering {
 				let as_float = |operand: Node| key(operand, Op::As, symbol(FLOAT_WORD));
 				key(as_float(self.expand(*left)), Op::Div, as_float(*right))
 			}
-			Node::Key(left, op, right) => key(self.expand(*left), op, self.expand(*right)),
-			Node::Meta { node, data } => Node::Meta { node: Box::new(self.expand(*node)), data },
-			other => other,
+			other => children_rewritten(other, |child| self.expand(child)),
 		}
 	}
 

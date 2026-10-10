@@ -7,7 +7,7 @@
 
 use super::memoization::{definition_parts, Rebuild};
 use super::words::OF_WORD;
-use super::nodes::{call, is_call_head, key, parameter_name};
+use super::nodes::{call, children_rewritten, is_call_head, key, parameter_name};
 use crate::analyzer::{plural_element_type, type_word_kind};
 use crate::library_words::collect_assigned_names;
 use crate::node::{text, Bracket, Node, Separator};
@@ -327,9 +327,7 @@ fn expand(node: Node, shadowed: &Names) -> Node {
 			Some(spec) if !is_equality_operand(&right) => is_type_call(expand(*subject, shadowed), spec),
 			_ => key(expand(*subject, shadowed), Op::Eq, expand(*right, shadowed)),
 		},
-		Node::Key(left, op, right) => key(expand(*left, shadowed), op, expand(*right, shadowed)),
-		Node::Meta { node, data } => Node::Meta { node: Box::new(expand(*node, shadowed)), data },
-		other => other,
+		other => children_rewritten(other, |child| expand(child, shadowed)),
 	}
 }
 

@@ -3,7 +3,7 @@
 //! every later pass like written ones; `+=`, no `push`, which a program's own `push(st, x)` would answer. `xs where it > 1` filters like `[it for it in xs if it > 1]`.
 
 use super::words::{FOR_WORD, IN_WORD};
-use super::nodes::{Counter, key};
+use super::nodes::{Counter, children_rewritten, key};
 use crate::library_words::substitute;
 use crate::node::{symbol, Bracket, Node, Separator};
 use crate::operators::Op;
@@ -351,9 +351,7 @@ impl Lowering {
 					_ => Node::List(items, bracket, separator),
 				}
 			}
-			Node::Key(left, op, right) => key(self.lower(*left), op, self.lower(*right)),
-			Node::Meta { node, data } => Node::Meta { node: Box::new(self.lower(*node)), data },
-			other => other,
+			other => children_rewritten(other, |child| self.lower(child)),
 		}
 	}
 
