@@ -390,6 +390,12 @@ impl WarpParser {
 			if ends_command || l_bp < min_bp || (op == Op::Else && self.stops_at_else) {
 				break;
 			}
+			// `xs where #it > 1`, `[i for i in xs where -i < 0]`, `where to#i == n`: after `where` a glued `#` or `-`, or an
+			// operator word (a variable `to`), starts the condition
+			let starts_operand = (matches!(op, Op::Hash | Op::Sub) && !self.peek_char(chars).is_whitespace()) || self.current_char().is_alphabetic();
+			if starts_operand && ends_with_clause_word(&lhs) {
+				break;
+			}
 			if let Err(refused) = self.left_arrow_assignment(op, &lhs) {
 				lhs = refused;
 				break;
@@ -708,5 +714,14 @@ fn combined(lhs: Node, op: Op, written: &str, rhs: Node, middle: Option<Node>) -
 		(_, Some((start, end))) if op == Op::Hash => call(SLICE_WORD, vec![lhs, start, end]),
 		_ if op == Op::To && written.starts_with(DOWN_WORD) => call(REVERSE_WORD, vec![Node::Key(Box::new(rhs), Op::To, Box::new(lhs))]),
 		_ => Node::Key(Box::new(lhs), op, Box::new(rhs)),
+	}
+}
+
+/// `where`, alone or the last word of `for i in xs where`: a word whose condition follows
+fn ends_with_clause_word(node: &Node) -> bool {
+	match node.drop_meta() {
+		Node::Symbol(word) => CLAUSE_WORDS.contains(&word.as_str()),
+		Node::List(items, Bracket::None, _) => items.last().is_some_and(ends_with_clause_word),
+		_ => false,
 	}
 }
