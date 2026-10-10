@@ -62,3 +62,5 @@ mod test_plain_hint_got_it; // card hints-dismissed
 mod test_fuel_default; // card fuel-default
 mod test_cli_error_exit; // card cli-error-exit
 mod test_advice_fixes; // card advise-fix
+#[cfg(all(feature = "native", unix))] // runs the warp binary
+mod test_closed_pipe; // cards crash-show, show-crashes, crashes-broken
