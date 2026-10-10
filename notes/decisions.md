@@ -21,6 +21,11 @@ notes/open_decisions.md.
   variable; other module words still shadow. Revisit if it surprises the user.
 - go-voice (warp-sound default, not asked): a `go { }` task is a voice that starts where its starter stands in the
   music and sounds along with it (native; the Playground still plays them one after another, card playground-go).
+- range-end-once (warp-perf default, Interviewer): every `for` range end is evaluated once before the loop, `0..n` too
+  (`n=3; for i in 0..n { n = 10 }` runs 3 rounds), like Python.
+- sound-at (warp-sound default): `at 2 beats play C4`, `at 1 bar { … }` place a statement's sounds at that time from
+  the voice's first sound; the voice continues where it stood. Alternatives: Sonic Pi's sleep-moves-time, trailing
+  `play C4 at 2 beats`.
 - route-access (warp-web, user 2026-10-10): access rules come later; for now a route gives out only what it displays.
   Login kind: no preference (parked with the card).
 - git-hook restore (warp-fixer, user 2026-10-10): agents may `git restore`/`checkout --` Cargo.toml and Cargo.lock
