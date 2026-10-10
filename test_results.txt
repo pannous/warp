@@ -2171,6 +2171,9 @@ PASSED:
   ✓ numbers::test_named_unit_fields::a_named_field_checks_its_dimension
   ✓ numbers::test_nan_observed::a_nan_leaving_the_run_is_canonical
   ✓ numbers::test_nan_observed::a_nan_prints_as_nan
+  ✓ numbers::test_nearest::nearest_fraction
+  ✓ numbers::test_nearest::nearest_of_exact_values
+  ✓ numbers::test_nearest::nearest_takes_two_or_three_arguments
   ✓ numbers::test_norm::norm_is_abs
   ✓ numbers::test_number_words::a_number_word_hints_its_digits
   ✓ numbers::test_number_words::a_variable_of_that_name_wins
@@ -3387,6 +3390,8 @@ PASSED:
   ✓ types::test_loop_item_into_annotated::a_mixed_loop_item_into_an_annotated_place_is_checked_at_run_time
   ✓ types::test_loop_text_arithmetic::list_arithmetic_in_a_loop_body_stays_a_type_error
   ✓ types::test_loop_text_arithmetic::text_arithmetic_in_a_loop_body_is_no_type_error
+  ✓ types::test_map_runtime_kind::a_map_parameter_is_a_map
+  ✓ types::test_map_runtime_kind::map_is_a_type_word
   ✓ types::test_map_type_tests::a_map_is_a_map
   ✓ types::test_match_static_variant::a_bare_variant_skips_the_class_arms
   ✓ types::test_match_static_variant::an_instance_still_takes_its_arm
@@ -4453,4 +4458,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-10 ignored, 4448 passed, 0 failed, 4448 total tested
+10 ignored, 4453 passed, 0 failed, 4453 total tested
