@@ -524,7 +524,8 @@ pub fn with_acknowledger<R>(acknowledger: impl Acknowledger + 'static, body: imp
 /// Remember "got it" across runs in `path` (one `ack:<topic> = acknowledged` per line), loading the ones already there
 /// The `ack:` lines of the answers file earlier versions wrote, appended to the acknowledgements file when it lacks
 /// them, so acknowledged notes stay quiet after the rename
-pub fn adopt_acknowledgements(old_file: &str, file: &str) {
+pub fn adopt_acknowledgements(old_file: &str, file: impl AsRef<std::path::Path>) {
+	let file = file.as_ref();
 	let Ok(old) = std::fs::read_to_string(old_file) else { return };
 	let current = std::fs::read_to_string(file).unwrap_or_default();
 	let is_acknowledgement = |line: &&str| line.split_once(" = ").is_some_and(|(key, value)| key.trim().starts_with(ACKNOWLEDGED_PREFIX) && value.trim() == ACKNOWLEDGED);
@@ -561,7 +562,7 @@ pub fn begin_program() {
 }
 
 /// Acknowledged for the whole topic, or for this written expression
-fn is_acknowledged(topic: &str, written: &str) -> bool {
+pub(crate) fn is_acknowledged(topic: &str, written: &str) -> bool {
 	let acknowledger = ACKNOWLEDGER.with(|current| current.borrow().clone());
 	[topic.to_string(), expression_key(topic, written)].iter().any(|key| {
 		ACKNOWLEDGED_TOPICS.with(|acknowledged| acknowledged.borrow().contains(key))
@@ -582,7 +583,7 @@ fn remember_acknowledged(topic: &str) {
 
 /// After a warning or note of `topic` was shown, once per run: does the user say "got it", for this expression or all of
 /// the kind? Then it is not shown again
-fn offer_acknowledgement(topic: &str, written: &str) {
+pub(crate) fn offer_acknowledgement(topic: &str, written: &str) {
 	if !NOTES_SHOWN.with(|shown| shown.borrow_mut().insert(topic.to_string())) {
 		return;
 	}
@@ -598,21 +599,22 @@ fn offer_acknowledgement(topic: &str, written: &str) {
 /// Educate with "got it": the hint (`written` → `preferred`, and why) is shown once per run until the user
 /// acknowledges it, then never again; it never blocks non-interactive runs, which just show the hint
 pub fn educate_once(topic: &str, written: &str, preferred: &str, reason: &str) {
-	noted_once(topic, written, || crate::normalize::hint(written, preferred, reason));
+	noted_once(topic, written, || crate::normalize::show_hint(written, preferred, reason, true));
 }
 
 /// `educate_once` with advice that does not replace `written` (`subscribe before the loop`)
 pub fn advise_once(topic: &str, written: &str, preferred: &str, reason: &str) {
-	noted_once(topic, written, || crate::normalize::advise(written, preferred, reason));
+	noted_once(topic, written, || crate::normalize::show_hint(written, preferred, reason, false));
 }
 
-fn noted_once(topic: &str, written: &str, show: impl FnOnce()) {
+fn noted_once(topic: &str, written: &str, show: impl FnOnce() -> bool) {
 	let hints_off = crate::normalize::hint_mode() == crate::normalize::HintMode::Off || is_quiet();
 	if hints_off || is_acknowledged(topic, written) || silenced_by_comment(crate::normalize::hint_line()) || NOTES_SHOWN.with(|shown| shown.borrow().contains(topic)) {
 		return;
 	}
-	show();
-	offer_acknowledgement(topic, written);
+	if show() {
+		offer_acknowledgement(topic, written);
+	}
 }
 
 /// Another language's word for a warp word (`__add__` for `plus`, user 2026-10-06): it works, with a got-it note

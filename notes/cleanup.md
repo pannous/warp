@@ -3,6 +3,13 @@
 Behaviour-preserving only: shared helpers instead of duplication, dead code and stale comments out, flatter control
 flow, meaningful names, no test edits. One area per session, small themed branches through the Integrator.
 
+Watch for closed lists (user, 2026-10-10: "We don't want specialists… we just want the general mechanism"): a
+hard-coded list of words standing in for a mechanism breaks on every word it misses. Example: builtin_type_kind
+(src/analyzer/checks.rs) knew int, float, number and text but not real, so `type(π) == real` failed with "undefined
+variable: real" although type(π) prints real. Derive each such list from its source of truth (the type registry,
+the library's exports, the operator table) instead of adding the missing word. Card cleanup-closed-lists; the
+type-word lists become one table under warp-numbers (bare type names are type values).
+
 ## src/analyzer/, src/warp_parser/, src/node/ (card cleanup-analyzer, session warp-types)
 
 Done (branches cleanup-dead, cleanup-arith, cleanup-names, cleanup-parser, cleanup-modes, cleanup-guards, cleanup-lookahead, cleanup-atoms, cleanup-errors,
@@ -86,6 +93,8 @@ Done:
   has a third case, Recursive)
 - ffi/link.rs create_ffi_wrapper: the 18 typed arms are one link_typed! each (NativeArgument / NativeResult convert
   the values, CBool a C bool)
+- host.rs keeps the words and the parts both builds use; its native-only half (wasmtime host functions, memory
+  helpers, the linker) is src/host/native.rs, gated once at `mod native` and re-exported (`pub use native::*`)
 
 Left (bigger, needs care):
 - Two C header parsers: ffi_parser.rs (`parse_declaration`, one line at a time, C types → Kind → ValType via
@@ -97,8 +106,6 @@ Left (bigger, needs care):
   sharing a scope/evaluator skeleton would remove more, but they differ in errors (Stop vs String).
 - src/extensions.rs is hard-linked with ~/dev/script/rust/extensions.rs (src/extensions.rs.hardlink is the
   hardlink-guard's marker): edit it only knowing it changes that file too.
-- host.rs (~170 `#[cfg(feature = "native")]`-gated items) would read better split into host/native.rs, but it is the
-  hottest file of the repo (dozens of commits a day): split it in a quiet hour, as its own branch, nothing else in it.
 - Two GcObject types: wasm_reader::GcObject (node/mod.rs, re-exported by lib.rs) and gc_traits::GcObject (tests'
   ergonomic reader). One of them could wrap the other; the public API of both is pinned by tests/wasm.
 - headless.rs node_of_json and foreign.rs node_of both turn JSON into Nodes; they differ in separator (None vs Space),

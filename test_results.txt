@@ -164,6 +164,8 @@ PASSED:
   ✓ control::test_error_branch_kind::test_else_if_chains_and_switch_defaults
   ✓ control::test_error_branch_kind::test_taking_the_error_branch_is_the_error
   ✓ control::test_error_branch_kind::test_try_catches_an_error_branch
+  ✓ control::test_error_value_return::test_a_returned_error_raises_where_used_as_a_number
+  ✓ control::test_error_value_return::test_a_returned_error_stays_a_value
   ✓ control::test_error_values::an_error_has_a_message
   ✓ control::test_error_values::is_error_tests_any_value
   ✓ control::test_error_values::printing_an_error_prints_its_message
@@ -282,6 +284,8 @@ PASSED:
   ✓ control::test_job_lists::counting_jobs_does_not_await_them
   ✓ control::test_job_lists::jobs_in_a_list_run_at_the_same_time
   ✓ control::test_job_lists::the_extremes_of_job_results_are_numbers
+  ✓ control::test_list_without::without_a_condition_keeps_the_elements_failing_it
+  ✓ control::test_list_without::without_a_field_keeps_the_elements_lacking_it
   ✓ control::test_listener_removal_in_functions::a_listener_is_removed_inside_a_block
   ✓ control::test_listener_removal_in_functions::a_listener_is_removed_inside_a_function
   ✓ control::test_listener_removal_in_functions::a_listener_removed_by_a_function_stops_listening
@@ -1334,6 +1338,7 @@ PASSED:
   ✓ functions::test_round8_call_forms::elixir_one_line_def_and_capture
   ✓ functions::test_round8_call_forms::php_array_functions
   ✓ functions::test_round8_call_forms::ruby_symbol_blocks_methods_and_block_sums
+  ✓ functions::test_rounding_builtins::rounding_words_stay_ints_when_libm_is_used
   ✓ functions::test_runtime_kind_arithmetic::a_def_body_reads_fields_of_its_parameters
   ✓ functions::test_runtime_kind_arithmetic::a_text_in_runtime_kind_arithmetic_is_not_a_number
   ✓ functions::test_runtime_kind_arithmetic::as_float_of_a_runtime_value
@@ -1431,7 +1436,7 @@ PASSED:
   ✓ functions::test_words_in_phrases::a_suffix_word_after_a_library_word_is_its_prefix_argument
   ✓ functions::test_words_in_phrases::sorted_text_sorts_its_characters
   ✓ functions::test_words_in_phrases::where_filters_a_comprehension_like_if
-  ✓ host::tests::test_host_state
+  ✓ host::native::tests::test_host_state
   ✓ lists::test_bare_list_assignment::a_bracketed_list_never_asks
   ✓ lists::test_bare_list_assignment::an_unbracketed_list_assignment_asks_list_or_statements
   ✓ lists::test_bare_list_assignment::each_reading_has_its_explicit_form
@@ -1443,6 +1448,8 @@ PASSED:
   ✓ lists::test_count_after_function::print_a_count
   ✓ lists::test_counting_word_variables::a_counting_word_variable_in_a_list_is_an_item
   ✓ lists::test_counting_word_variables::shared_values_named_like_counting_words_reach_a_go_block
+  ✓ lists::test_counting_words::test_every_counting_word_counts_a_list_of_quantities
+  ✓ lists::test_counting_words::test_every_other_counting_word_finds_the_size_method_of_a_class
   ✓ lists::test_decimal_list_elements::a_decimal_element_can_be_assigned
   ✓ lists::test_decimal_list_elements::a_decimal_element_compares
   ✓ lists::test_decimal_list_elements::a_decimal_element_takes_part_in_arithmetic
@@ -2777,6 +2784,7 @@ PASSED:
   ✓ programs::test_paint_lists::paint_reads_ints_from_a_built_list
   ✓ programs::test_paint_lists::paint_reads_other_pixels_node_by_node
   ✓ programs::test_paint_lists::paint_takes_the_first_pixels_of_a_longer_list
+  ✓ programs::test_paint_lists::painting_an_empty_canvas_fails_loudly
   ✓ programs::test_paint_shader::paint_of_a_shader_without_values_reads_none
   ✓ programs::test_paint_shader::paint_renders_a_shader_text
   ✓ programs::test_paint_shader::use_graphics_is_use_draw
@@ -2834,6 +2842,7 @@ PASSED:
   ✓ programs::test_sound_render::sounds_render_into_one_wav_file
   ✓ programs::test_sound_spectrum::a_tone_fills_its_own_band
   ✓ programs::test_sound_spectrum::silence_and_the_end_are_empty
+  ✓ programs::test_sound_spectrum::the_gpu_visualizer_raymarches_while_it_plays
   ✓ programs::test_sound_spectrum::the_visualizer_paints_while_it_plays
   ✓ programs::test_sound_wavs::each_run_writes_wavs_of_its_own
   ✓ programs::test_sound::a_melody_is_its_notes_one_after_another
@@ -3311,6 +3320,7 @@ PASSED:
   ✓ types::test_file_declarations::a_class_body_of_one_typed_method
   ✓ types::test_file_declarations::a_file_class_takes_in_the_definitions_after_it
   ✓ types::test_file_declarations::a_namespace_qualifies_the_words_of_the_file
+  ✓ types::test_filled_map_types::a_map_filled_by_key_is_a_map
   ✓ types::test_flags::test_an_unknown_flag_is_an_error
   ✓ types::test_flags::test_flags_set_their_named_members
   ✓ types::test_flags::test_the_flags_type_is_the_empty_set
@@ -3361,6 +3371,7 @@ PASSED:
   ✓ types::test_loop_item_into_annotated::a_mixed_loop_item_into_an_annotated_place_is_checked_at_run_time
   ✓ types::test_loop_text_arithmetic::list_arithmetic_in_a_loop_body_stays_a_type_error
   ✓ types::test_loop_text_arithmetic::text_arithmetic_in_a_loop_body_is_no_type_error
+  ✓ types::test_map_type_tests::a_map_is_a_map
   ✓ types::test_match_static_variant::a_bare_variant_skips_the_class_arms
   ✓ types::test_match_static_variant::an_instance_still_takes_its_arm
   ✓ types::test_method_bodies::assignments_in_a_method
@@ -3556,6 +3567,7 @@ PASSED:
   ✓ types::test_type_tests::test_scalar_type_tests
   ✓ types::test_type_tests::test_type_of_is_type
   ✓ types::test_type_tests::test_type_of_value_is_type
+  ✓ types::test_type_tests::test_types_compare_exactly_with_equals
   ✓ types::test_type_upgrading::test_float_operations
   ✓ types::test_type_upgrading::test_float_plus_int_type_upgrading
   ✓ types::test_type_upgrading::test_global_with_float
@@ -3793,6 +3805,7 @@ PASSED:
   ✓ web::test_assistant_edits::a_diff_changes_only_the_lines_it_names
   ✓ web::test_assistant_edits::a_diff_that_no_longer_fits_says_so
   ✓ web::test_assistant_edits::a_whole_program_replaces_only_the_lines_that_differ
+  ✓ web::test_assistant_proxy::the_assistant_proxy_answers_only_the_playground
   ✓ web::test_async_data::a_body_that_is_no_json_is_the_text
   ✓ web::test_async_data::a_changed_url_variable_fetches_anew
   ✓ web::test_async_data::a_failed_fetch_is_the_error
@@ -3804,6 +3817,9 @@ PASSED:
   ✓ web::test_class_components::an_instance_in_markup_renders
   ✓ web::test_class_components::an_instance_outside_markup_stays_an_instance
   ✓ web::test_class_components::other_frameworks_names_of_render
+  ✓ web::test_completion_terse::a_continuation_is_one_line_unless_it_opens_a_block
+  ✓ web::test_completion_terse::an_explaining_answer_shows_only_its_code
+  ✓ web::test_completion_terse::comments_only_inside_a_comment
   ✓ web::test_components::a_component_is_a_function_returning_markup
   ✓ web::test_components::a_trailing_block_fills_a_function_parameter
   ✓ web::test_components::each_instance_of_a_component_has_its_own_state
@@ -3815,6 +3831,7 @@ PASSED:
   ✓ web::test_css_transitions::a_site_with_transitions_carries_their_script
   ✓ web::test_css_transitions::the_starting_style_is_data_for_the_page
   ✓ web::test_deploy::a_deployed_program_answers_its_routes
+  ✓ web::test_deploy::a_program_without_routes_answers_its_value_and_functions
   ✓ web::test_deploy::a_program_without_routes_is_no_worker
   ✓ web::test_deploy::the_playground_bundles_a_program_for_warp_hosting
   ✓ web::test_dev_server::a_dev_build_keeps_the_values_the_program_changed
@@ -3954,6 +3971,7 @@ PASSED:
   ✓ web::test_site::a_site_with_routes_is_one_page_for_every_path
   ✓ web::test_site::a_site_with_routes_starting_tasks_runs_its_program_in_a_worker
   ✓ web::test_site::a_static_page_is_its_last_line_rendered
+  ✓ web::test_sleep_run_limit::sleeping_does_not_count_toward_the_run_limit
   ✓ web::test_style_rules::a_selector_with_a_value_is_its_color
   ✓ web::test_style_rules::descendant_selectors_and_rules_on_one_line
   ✓ web::test_style_rules::lengths_keep_their_units
@@ -4023,6 +4041,7 @@ PASSED:
   ✓ web::test_webgpu::a_gpu_map_runs_on_the_cpu_where_that_is_faster
   ✓ web::test_webgpu::a_gpu_map_takes_a_list_of_floats
   ✓ web::test_webgpu::a_gpu_map_the_gpu_cannot_run_says_why
+  ✓ web::test_webgpu::a_kept_shader_reads_each_frames_values
   ✓ web::test_webgpu::a_reduction_of_a_gpu_map_reads_back_partial_results
   ✓ web::test_webgpu::a_reduction_of_a_gpu_map_takes_a_list_of_floats
   ✓ web::test_webgpu::a_render_shader_that_does_not_compile_says_where
@@ -4271,6 +4290,7 @@ PASSED:
   ✓ welcoming::test_lowered_error_text::an_unknown_word_error_quotes_the_words_as_written
   ✓ welcoming::test_open_range_slices::a_slice_from_the_start
   ✓ welcoming::test_open_range_slices::a_slice_to_the_end
+  ✓ welcoming::test_plain_hint_got_it::an_acknowledged_kind_of_hint_stays_away
   ✓ welcoming::test_quiet_hints::legitimate_forms_get_no_hint
   ✓ welcoming::test_slash_comment_after_value::a_comment_after_a_text_gets_no_division_note
   ✓ welcoming::test_slash_comment_after_value::a_prose_comment_after_a_value_gets_no_division_note
@@ -4413,4 +4433,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-10 ignored, 4408 passed, 0 failed, 4408 total tested
+10 ignored, 4428 passed, 0 failed, 4428 total tested

@@ -199,8 +199,8 @@ pub fn infer_type(node: &Node, scope: &Scope) -> Kind {
 		// if c {a} else {b}; an `error(…)` branch raises its error, so the other branch decides the kind (bottom kind)
 		Node::Key(if_then, Op::Else, else_expr) if let Node::Key(_, Op::Then, then_expr) = if_then.drop_meta() => {
 			match (raises_error(then_expr), raises_error(else_expr)) {
-				(true, false) => branch_kind(else_expr, scope),
-				(false, true) => branch_kind(then_expr, scope),
+				(true, false) => error_or(branch_kind(else_expr, scope)),
+				(false, true) => error_or(branch_kind(then_expr, scope)),
 				_ => branches_kind(branch_kind(then_expr, scope), branch_kind(else_expr, scope)),
 			}
 		}
@@ -445,6 +445,12 @@ pub(crate) fn block_result(block: &Node) -> Option<Node> {
 		Node::List(statements, Bracket::Curly, _) => statements.last().cloned(),
 		_ => None,
 	}
+}
+
+/// `if c then error("…") else x`: τ or error (Decided #1, errors are values), a Node keeping the error until a use
+/// wants a number; a number is held as a Node of run-time kind
+fn error_or(kind: Kind) -> Kind {
+	if matches!(kind, Kind::Int | Kind::Float) { Kind::Data } else { kind }
 }
 
 pub(crate) fn branch_kind(branch: &Node, scope: &Scope) -> Kind {

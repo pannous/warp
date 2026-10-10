@@ -14,6 +14,9 @@ notes/open_decisions.md.
   list of int, P196b stands); a variable's type joins its literal with every write the analyzer sees, so
   `shown = [0.0, 0.0]; shown[0] = sqrt(2.0)` makes shown a list of float from the start. Runtime conversion only as
   the fallback for writes the analyzer can't see. As implemented.
+- type-equal (warp-numbers, cards type-int and type-equal; implied by #30 "Only `is` tests types", per warp-supervisor):
+  `is` is the subtype test and `==` between types is exact. `type(0.0) is int`, `type(0) is number` and
+  `int is number` are yes; `type(0) == number` is no, with a hint toward `is`; `type(2) == type(3)` is yes.
 - people-where (warp-class): no new `with`/`without` sugar after a list beyond what is already implemented (user:
   the words have too many meanings; `with` could as well mean "with something added"), and "if it's already
   implemented, keep it implemented": main's `with` filter from the orm example stays (`name of people with age > 20`,

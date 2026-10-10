@@ -20,6 +20,7 @@ mod test_loop_forms;
 mod test_loops_in_functions;
 mod test_not_condition_block;
 mod test_error_branch_kind;
+mod test_error_value_return;
 mod test_filter_loops;
 mod test_type_word_filter_loops;
 mod test_structural_patterns;
@@ -171,6 +172,7 @@ mod test_table_transactions; // card orm step 5
 mod test_table_query_loading; // orm: a filter reads only its rows
 mod test_table_comprehension; // orm: a filtered comprehension over a table is its query
 mod test_field_of_elements; // name of people with age > 20 (user 2026-10-10)
+mod test_list_without; // people without team (card people-where)
 mod test_table_linear_lookups; // card orm-linear
 mod test_table_method_reads;
 mod test_table_element_writes; // orm: people#1.age = 5 writes through

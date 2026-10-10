@@ -418,6 +418,9 @@ impl WasmGcEmitter {
 		if crate::analyzer::is_boolean(arg, &self.scope) {
 			return crate::analyzer::BOOL_TYPE.to_string();
 		}
+		if let Some(map_type) = crate::analyzer::held_map_type(arg, &self.scope) {
+			return map_type;
+		}
 		let kind = match arg.drop_meta() {
 			literal @ Node::Number(_) => literal.kind(),
 			Node::Empty => crate::type_kinds::Kind::Empty,
@@ -438,7 +441,8 @@ impl WasmGcEmitter {
 	/// `type(x)` reads the value's type at run time: for a value held as a Node, a variable that may hold a ratio (an exact
 	/// number of Int kind), a Key that may be an instance of a declared type
 	fn type_known_only_at_run_time(&self, subject: &Node) -> bool {
-		if crate::analyzer::is_boolean(subject, &self.scope) || matches!(subject.drop_meta(), Node::Number(_) | Node::Empty) {
+		if crate::analyzer::is_boolean(subject, &self.scope) || matches!(subject.drop_meta(), Node::Number(_) | Node::Empty)
+			|| crate::analyzer::held_map_type(subject, &self.scope).is_some() {
 			return false;
 		}
 		match self.get_type(subject) {

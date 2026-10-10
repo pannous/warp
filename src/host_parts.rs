@@ -97,7 +97,7 @@ pub fn exports(module: &[u8], name: &str) -> bool {
 /// cloud-worker.js in worker.js; warp-hosting (web/hosting) takes the module and the scripts' names
 pub fn worker_parts(code: &str) -> Result<(Vec<u8>, Vec<Script>), String> {
 	// the reflection getters the JavaScript host reads values with
-	let module = crate::pipeline::for_any_host(|| crate::pipeline::compile(code)).map_err(|failure| format!("nothing to compile: {}", with_excerpt(code, message_of(&failure))))?;
+	let module = crate::pipeline::for_hosting(|| crate::pipeline::for_any_host(|| crate::pipeline::compile(code))).map_err(|failure| format!("nothing to compile: {}", with_excerpt(code, message_of(&failure))))?;
 	if !exports(&module.bytes, crate::lowering::serve::PAGE_SUBMITTED) {
 		return Err("the program answers no request: give it a route, `get \"/\" { \"hello\" }`".into());
 	}

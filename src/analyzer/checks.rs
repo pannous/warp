@@ -238,6 +238,13 @@ pub fn plural_element_type(word: &str) -> Option<&str> {
 	type_word_kind(singular).map(|_| singular)
 }
 
+/// The map type of a variable held as a Node: `m: map = {}`, or `m = {}` given entries (variables.rs type_map_by_first_entry)
+pub fn held_map_type(subject: &Node, scope: &Scope) -> Option<String> {
+	let local = scope.binding(subject.drop_meta().symbol_name()?)?;
+	let type_name = local.type_node.as_ref()?.name();
+	(local.kind == Kind::Empty && type_name.starts_with(MAP_TYPE)).then_some(type_name)
+}
+
 /// The type name `type(x)` reports for a list: a list whose elements are held as Nodes is a plain `list`
 pub fn shown_list_type_name(list: &Node, scope: &Scope) -> String {
 	let type_name = list_type_name(list, scope);
@@ -358,12 +365,12 @@ fn nested_type_word(item: &Node, scope: &Scope) -> String {
 /// The type name of a map literal, `map of <value type>` when its values share one
 /// The got-it topic of a `let` variable that changes (P159)
 const LET_CHANGES_TOPIC: &str = "let changes";
-pub const MAP_TYPE: &str = "map";
+pub(crate) const MAP_TYPE: &str = "map";
 /// Library words whose list result has the elements of their list argument
 pub(super) const ORDER_WORDS: [&str; 2] = ["sort", "reverse"];
 /// Library words whose result is a list of texts
 const TEXT_LIST_WORDS: [&str; 2] = ["split", "chars"];
-pub const MAP_TYPE_PREFIX: &str = "map of ";
+pub(super) const MAP_TYPE_PREFIX: &str = "map of ";
 /// A list whose elements are known only at runtime (the result of a call): each element is held as a Node
 pub(super) const NODE_LIST_TYPE: &str = "list of node";
 pub(super) const LIST_WORD: &str = "list";
