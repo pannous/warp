@@ -7,8 +7,7 @@
 
 use super::memoization::{definition_parts, Rebuild};
 use super::nodes::{call, is_call_head, key, parameter_name};
-use crate::analyzer::{extract_user_functions, plural_element_type, type_word_kind};
-use crate::context::Context;
+use crate::analyzer::{plural_element_type, type_word_kind};
 use crate::library_words::collect_assigned_names;
 use crate::node::{text, Bracket, Node, Separator};
 use crate::operators::Op;
@@ -140,8 +139,7 @@ fn collect_outer_assigned_names(node: &Node, names: &mut HashSet<String>) {
 }
 
 pub fn lower(node: Node) -> Node {
-	let mut context = Context::new();
-	extract_user_functions(&mut context, &node);
+	let context = crate::analyzer::function_context(&node);
 	let mut variables: HashSet<String> = context.user_functions.keys().cloned().collect();
 	collect_outer_assigned_names(&node, &mut variables);
 	let mut registry = crate::type_kinds::TypeRegistry::new();

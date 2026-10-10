@@ -5,7 +5,7 @@
 //! A call of that function whose arguments, read as values and preposition words, follow the pattern becomes
 //! `name(values…)`. Elsewhere `to` stays a range and `of` a field lookup.
 
-use super::nodes::{call, key, spaced_statement};
+use super::nodes::{call, in_block_as_written, is_assigned_data, is_spaced_call, key, spaced_statement, with_parts_rewritten};
 use crate::node::{symbol, Bracket, Node, Separator};
 use crate::operators::Op;
 use crate::type_name_matching::prepositions_among;
@@ -150,14 +150,16 @@ fn rewrite(node: Node, patterns: &HashMap<String, Vec<Vec<Part>>>) -> Node {
 			let items: Vec<Node> = items.into_iter().map(|item| rewrite(item, patterns)).collect();
 			let call = match items.split_first() {
 				// a spaced definition (`foo of int = …`) has the shape of a call but defines the phrase
-				Some((head, arguments)) if bracket == Bracket::None && separator == Separator::Space && spaced_pattern(&items).is_none() => {
+				Some((head, arguments)) if is_spaced_call(&bracket, &separator) && spaced_pattern(&items).is_none() => {
 					let name = head.symbol_name();
-					name.and_then(|name| patterns.get(name)?.iter().find_map(|pattern| phrase_call(name, arguments, pattern)))
+					let call = name.and_then(|name| patterns.get(name)?.iter().find_map(|pattern| phrase_call(name, arguments, pattern)));
+					call.map(|call| in_block_as_written(&bracket, call))
 				}
 				_ => None,
 			};
 			call.unwrap_or(Node::List(items, bracket, separator))
 		}
+		Node::Key(left, Op::Assign, right) if is_assigned_data(&left, &right) => key(*left, Op::Assign, with_parts_rewritten(*right, &mut |part| rewrite(part, patterns))),
 		Node::Key(left, Op::Assign, right) => key(rewrite(*left, patterns), Op::Assign, rewrite(assigned_words(*right, patterns), patterns)),
 		Node::Key(left, op, right) => key(rewrite(*left, patterns), op, rewrite(*right, patterns)),
 		Node::Meta { node, data } => Node::Meta { node: Box::new(rewrite(*node, patterns)), data },

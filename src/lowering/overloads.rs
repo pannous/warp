@@ -3,7 +3,7 @@
 //! (`render "x" as pdf`, `docx d = render "x"`, `d:docx = …`, an argument of a parameter `d:docx`); without one the
 //! first-declared overload is taken with a got-it warning naming the explicit form.
 
-use super::nodes::{call, children_rewritten, key};
+use super::nodes::{call, children_rewritten, in_block_as_written, is_assigned_data, is_spaced_call, key, with_parts_rewritten};
 use crate::analyzer::{call_name, collect_all_types, type_word_kind};
 use crate::diagnostic::{ask, reading, Ask, Fallback};
 use crate::node::{Bracket, Node, Separator};
@@ -54,9 +54,16 @@ pub fn lower(node: Node) -> Node {
 	lowering.rewrite(node, None)
 }
 
-/// `f(x)`, `f x`, `(f x)`
+/// `f(x)`, `f x`, `(f x)`, `{f x}`
 fn is_call(items: &[Node], bracket: &Bracket, separator: &Separator) -> bool {
-	call_name(items, bracket, separator).is_some() || (*separator == Separator::Space && matches!(bracket, Bracket::None | Bracket::Round))
+	call_name(items, bracket, separator).is_some() || *bracket == Bracket::Round && *separator == Separator::Space || is_spaced_call(bracket, separator)
+}
+
+fn bracket_of(node: &Node) -> Bracket {
+	match node.drop_meta() {
+		Node::List(_, bracket, _) => bracket.clone(),
+		_ => Bracket::None,
+	}
 }
 
 fn parameter_type(parameter: &Node) -> Option<String> {
@@ -132,7 +139,7 @@ impl Lowering {
 			return rewritten;
 		}
 		if let Some((head, arguments)) = self.overloaded_call(&node) {
-			return self.resolve(&node, head, arguments, expected);
+			return in_block_as_written(&bracket_of(&node), self.resolve(&node, head, arguments, expected));
 		}
 		match node {
 			// `render "x" as pdf` reads as `render ("x" as pdf)`: the `as` names the result of an overloaded call
@@ -143,6 +150,7 @@ impl Lowering {
 			}
 			// `(render "x") as pdf`
 			Node::Key(value, Op::As, result) if self.picks(&value, &result.drop_meta().name()) => self.rewrite(*value, Some(&result.drop_meta().name())),
+			Node::Key(target, Op::Assign, value) if is_assigned_data(&target, &value) => key(*target, Op::Assign, with_parts_rewritten(*value, &mut |part| self.rewrite(part, None))),
 			// `d:docx = render "x"`
 			Node::Key(target, op @ (Op::Assign | Op::Define), value) => {
 				let declared = match target.drop_meta() {
@@ -345,9 +353,12 @@ trait VariantRenaming {
 			return renamed;
 		}
 		if let Some(call) = self.resolve_call(&node) {
-			return call;
+			return in_block_as_written(&bracket_of(&node), call);
 		}
-		children_rewritten(node, |child| self.rewrite(child))
+		match node {
+			Node::Key(left, Op::Assign, right) if is_assigned_data(&left, &right) => key(*left, Op::Assign, with_parts_rewritten(*right, &mut |part| self.rewrite(part))),
+			other => children_rewritten(other, |child| self.rewrite(child)),
+		}
 	}
 
 	fn rewrite_definition(&mut self, node: &Node) -> Option<Node> {

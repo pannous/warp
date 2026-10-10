@@ -242,6 +242,7 @@ PASSED:
   ✓ control::test_go_blocks::go_blocks_fill_a_job_list
   ✓ control::test_go_blocks::lines_printed_by_tasks_stay_whole
   ✓ control::test_go_blocks::sleep_takes_a_duration
+  ✓ control::test_go_statement::a_go_block_of_one_statement_runs_it
   ✓ control::test_handler_globals::a_handler_assigns_an_emitted_value_to_a_global
   ✓ control::test_handler_globals::a_handler_writes_an_annotated_global
   ✓ control::test_handler_globals::an_int_given_empty_fails_when_it_happens
@@ -1340,6 +1341,9 @@ PASSED:
   ✓ functions::test_spaced_assign_definition::a_recursive_spaced_definition_with_equals_defines_the_function
   ✓ functions::test_specialised_variants::a_constant_argument_unrolls_the_recursion
   ✓ functions::test_specialised_variants::an_unbounded_specialisation_keeps_the_call
+  ✓ functions::test_statement_blocks::a_block_of_one_phrase_call_runs_it
+  ✓ functions::test_statement_blocks::a_block_of_one_sound_word_plays
+  ✓ functions::test_statement_blocks::an_assigned_block_stays_data
   ✓ functions::test_suffix_word_spellings::test_english_spellings_of_the_suffix_form
   ✓ functions::test_suffix_word_spellings::test_suffix_form_calls_a_user_function
   ✓ functions::test_suffix_word_spellings::test_suffix_forms_chain_and_mix_like_before
@@ -2793,6 +2797,8 @@ PASSED:
   ✓ programs::test_sound_files::a_broken_music_file_fails
   ✓ programs::test_sound_files::a_music_file_plays_in_the_background
   ✓ programs::test_sound_files::only_a_music_file_plays
+  ✓ programs::test_sound_handles::play_gives_the_sounds_handle
+  ✓ programs::test_sound_handles::stop_sound_stops_one_sound
   ✓ programs::test_sound_render::a_render_takes_the_sounds_after_the_last_one
   ✓ programs::test_sound_render::sounds_render_into_one_wav_file
   ✓ programs::test_sound_wavs::each_run_writes_wavs_of_its_own
@@ -4355,4 +4361,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-10 ignored, 4350 passed, 0 failed, 4350 total tested
+10 ignored, 4356 passed, 0 failed, 4356 total tested
