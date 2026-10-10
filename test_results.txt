@@ -2845,6 +2845,8 @@ PASSED:
   ✓ programs::test_shader_blocks::a_shader_block_over_lines_loses_its_indentation
   ✓ programs::test_shader_blocks::paint_takes_a_shader_block
   ✓ programs::test_shader_blocks::shader_stays_a_name
+  ✓ programs::test_shader_builtins::builtin_holes_are_left_to_the_host
+  ✓ programs::test_shader_builtins::the_host_fills_the_builtin_holes
   ✓ programs::test_shader_holes::a_hole_is_read_from_the_values
   ✓ programs::test_shader_holes::a_shader_with_holes_paints_as_with_the_values_given
   ✓ programs::test_shader_holes::each_paint_passes_the_holes_given_no_value
@@ -2894,6 +2896,7 @@ PASSED:
   ✓ scope::test_data_scope::test_kebab_keys_are_read_back
   ✓ scope::test_data_scope::test_other_hyphenated_names_stay_symbols
   ✓ scope::test_data_scope::test_without_a_key_a_hyphenated_name_of_variables_subtracts
+  ✓ scope::test_declaration_words::every_declaration_word_declares_a_local
   ✓ scope::test_eval_state::a_got_it_without_a_file_lasts_one_eval_and_never_changes_the_value
   ✓ scope::test_eval_state::an_eval_does_not_see_the_assumptions_of_the_one_before
   ✓ scope::test_eval_state::every_eval_shows_its_educate_once_note
@@ -4461,4 +4464,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-10 ignored, 4456 passed, 0 failed, 4456 total tested
+10 ignored, 4459 passed, 0 failed, 4459 total tested
