@@ -452,14 +452,7 @@ impl ParsedHeapType {
 	fn from_parser(ty: &wp::HeapType, group_start: u32) -> Result<Self> {
 		Ok(match ty {
 			wp::HeapType::Abstract { ty, .. } => ParsedHeapType::Abstract(ParsedAbstractHeapType::from_parser(*ty)),
-			wp::HeapType::Concrete(idx) => {
-				let resolved = resolve_index(*idx, group_start)?;
-				ParsedHeapType::Concrete(resolved)
-			}
-			wp::HeapType::Exact(idx) => {
-				let resolved = resolve_index(*idx, group_start)?;
-				ParsedHeapType::Concrete(resolved)
-			}
+			wp::HeapType::Concrete(idx) | wp::HeapType::Exact(idx) => ParsedHeapType::Concrete(resolve_index(*idx, group_start)?),
 		})
 	}
 }
