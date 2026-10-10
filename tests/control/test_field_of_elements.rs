@@ -1,6 +1,7 @@
 // `name of people with age > 20` (user, 2026-10-10): `field of list` is the field of each element, `with` filters a
 // list of a class's instances like `where`; together [p.name for p in people if p.age > 20]
 use crate::is;
+#[cfg(feature = "native")]
 use warp::wasm_emitter::eval;
 
 const PEOPLE: &str = "class P{name: text; age: int}\npeople: [P] = [P(\"Al\", 30), P(\"Bo\", 10), P(\"Cy\", 40)]";
