@@ -143,28 +143,50 @@ def ratDisplay (q : Rat) : String :=
   let padded := String.ofList (List.replicate (digits - fraction.length) '0') ++ fraction
   (if q.num < 0 then "-" else "") ++ whole ++ (if digits = 0 then "" else "." ++ padded)
 
-/-- warp's float_text constants (src/wasm_emitter/float_text.rs): significant digits, positional exponents -/
-def significantDigits : Nat := 15
+/-- warp's float_text constants (src/wasm_emitter/float_text.rs): the most digits a float needs, positional exponents -/
+def mostDigits : Nat := 17
 def smallestPositional : Int := -5
 def largestPositional : Int := 15
 
-/-- x = mantissa · 10^exponent, the mantissa in [1, 10), scaled by ×10 and ÷10 steps as float_text does -/
-def decimalScale : (fuel : Nat) → Float → Int → Float × Int
-  | 0, x, exponent => (x, exponent)
-  | fuel + 1, x, exponent =>
-    if x >= 10 then decimalScale fuel (x / 10) (exponent + 1)
-    else if x < 1 then decimalScale fuel (x * 10) (exponent - 1)
-    else (x, exponent)
+/-- a positive finite float exactly: whole · 2^twos -/
+def binaryParts (x : Float) : Nat × Int :=
+  let (fraction, exponent) := x.frExp
+  ((fraction * 9007199254740992).toUInt64.toNat, exponent - 53)
 
-/-- a positive float rounded to the nearest whole, ties to even (wasm's f64.nearest) -/
-def roundHalfEven (y : Float) : Float :=
-  let r := y.round
-  if (r - y).abs == 0.5 && (r / 2).floor * 2 != r then r - 1 else r
+/-- whole · 2^twos · 10^tens as numerator / denominator -/
+def scaledRatio (whole : Nat) (twos tens : Int) : Nat × Nat :=
+  (whole * 2 ^ twos.toNat * 10 ^ tens.toNat, 2 ^ (-twos).toNat * 10 ^ (-tens).toNat)
 
-/-- n without its trailing zeros, keeping at least one digit, and how many digits are left -/
-def dropTrailingZeros : (fuel : Nat) → Nat → Nat → Nat × Nat
-  | 0, n, count => (n, count)
-  | fuel + 1, n, count => if count > 1 && n % 10 == 0 then dropTrailingZeros fuel (n / 10) (count - 1) else (n, count)
+/-- numerator / denominator rounded to the nearest whole, ties to even -/
+def roundRatio (numerator denominator : Nat) : Nat :=
+  let (quotient, twice) := (numerator / denominator, 2 * (numerator % denominator))
+  if twice > denominator || (twice == denominator && quotient % 2 == 1) then quotient + 1 else quotient
+
+/-- the decimal exponent of the first digit of whole · 2^twos, from a guess off by at most a few -/
+def firstDigitExponent : (fuel : Nat) → Nat → Int → Int → Int
+  | 0, _, _, guess => guess
+  | fuel + 1, whole, twos, guess =>
+    let (numerator, denominator) := scaledRatio whole twos (-guess)
+    if numerator < denominator then firstDigitExponent fuel whole twos (guess - 1)
+    else if numerator >= 10 * denominator then firstDigitExponent fuel whole twos (guess + 1)
+    else guess
+
+/-- a whole times 10^exponent as a float -/
+def decimalFloat (whole : Nat) (exponent : Int) : Float :=
+  if exponent >= 0 then Float.ofScientific whole false exponent.toNat else Float.ofScientific whole true (-exponent).toNat
+
+/-- the fewest digits, 1 up to mostDigits, that read back as x, and the exponent of the first digit -/
+def shortestDigits (x : Float) : Nat × Int :=
+  let (whole, twos) := binaryParts x
+  let first := firstDigitExponent 8 whole twos (Float.floor (Float.log10 x)).toInt64.toInt
+  let digitsAt (count : Nat) :=
+    let (numerator, denominator) := scaledRatio whole twos (count - 1 - first)
+    let rounded := roundRatio numerator denominator
+    if rounded >= 10 ^ count then (rounded / 10, first + 1) else (rounded, first)
+  let fits := (List.range mostDigits).map (· + 1) |>.find? fun count =>
+    let (digits, exponent) := digitsAt count
+    decimalFloat digits (exponent - (toString digits).length + 1) == x
+  digitsAt (fits.getD mostDigits)
 
 def zeroText (count : Int) : String := String.ofList (List.replicate count.toNat '0')
 
@@ -179,13 +201,11 @@ def placeDigits (digits : String) (exponent : Int) : String :=
   else if exponent >= 0 then before (exponent + 1) ++ "." ++ after (exponent + 1)
   else "0." ++ zeroText (-1 - exponent) ++ digits
 
-/-- a float as warp's float_text writes it: at most 15 significant digits (`0.5`, `1.5e-7`), as `%.15g` -/
+/-- a float as warp's float_text writes it (user decision float-text): its shortest digits that read back, as
+JavaScript and Python write floats (`0.1`, `0.30000000000000004`, `1.5e-7`) -/
 def floatText (f : Float) : String :=
   if f.isNaN then "NaN" else if f.isInf then (if f > 0 then "∞" else "-∞") else if f == 0 then "0" else
-  let (mantissa, exponent) := decimalScale 700 f.abs 0
-  let scaled := (roundHalfEven (mantissa * 1e14)).toUInt64.toNat
-  let (whole, exponent) := if scaled >= 10 ^ significantDigits then (scaled / 10, exponent + 1) else (scaled, exponent)
-  let (digits, _) := dropTrailingZeros significantDigits whole significantDigits
+  let (digits, exponent) := shortestDigits f.abs
   (if f < 0 then "-" else "") ++ placeDigits (toString digits) exponent
 
 /-- a value as `+` joins it to a text -/
