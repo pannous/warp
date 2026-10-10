@@ -2,6 +2,7 @@
 //! `(made = []; for x in xs { if c { made.push(x * x) } }; made)`. Lowered first, so the loop and the push go through
 //! every later pass like written ones. `xs where it > 1` filters like `[it for it in xs if it > 1]`.
 
+use super::nodes::is_word;
 use crate::library_words::substitute;
 use crate::node::{Bracket, Node, Separator};
 use crate::operators::Op;
@@ -210,10 +211,6 @@ fn where_flattened(node: Node) -> Node {
 /// The position of `where` in `[… subject, where, condition]`
 fn where_position(items: &[Node]) -> Option<usize> {
 	(items.len() >= 3).then(|| items.len() - 2).filter(|&at| matches!(items[at].drop_meta(), Node::Symbol(symbol) if symbol == WHERE_WORD))
-}
-
-fn is_word(node: &Node, word: &str) -> bool {
-	matches!(node.drop_meta(), Node::Symbol(symbol) if symbol == word)
 }
 
 /// The clause `for v in xs …`

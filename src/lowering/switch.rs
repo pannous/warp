@@ -4,6 +4,7 @@
 //! matches a list of three whose first and last items are "", binding `middle`; `_` matches any item, lists nest, and a
 //! pair `k: v` matches a pair whose key is k. A guard `n if n < 0 => …` binds n to the subject and tests the condition; a relational pattern `> 100 => …` compares it. The shape tests are ordinary type tests (`is_type(x, "list") and count(x) == n`).
 
+use super::nodes::{call, key};
 use crate::analyzer::extract_user_functions;
 use crate::context::Context;
 use crate::node::{Bracket, Node, Separator};
@@ -138,16 +139,8 @@ fn with_leftmost(node: Node, replacement: Node) -> Node {
 	}
 }
 
-fn key(left: Node, op: Op, right: Node) -> Node {
-	Node::Key(Box::new(left), op, Box::new(right))
-}
-
 fn is_default(key: &Node) -> bool {
 	matches!(key.drop_meta(), Node::Symbol(name) if DEFAULT_KEYS.contains(&name.as_str()))
-}
-
-fn call(function: &str, arguments: Vec<Node>) -> Node {
-	Node::List([vec![Node::Symbol(function.to_string())], arguments].concat(), Bracket::Round, Separator::None)
 }
 
 /// The item at 1-based `position` of the value at `path`: `subject#2`, `subject#2#1`

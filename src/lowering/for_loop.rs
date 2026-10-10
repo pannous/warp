@@ -4,6 +4,7 @@
 //! `for x in xs body`   → `items=xs; index=0; while index<#items {x=items#(index+1); body; index++}`
 //! `for(init;test;step){body}` → `init; while test {body; step}`
 
+use super::nodes::{call, int, is_word, key, statement_list, symbol};
 use crate::node::{Bracket, Node, Separator};
 use crate::operators::Op;
 use crate::wasm_emitter::{is_step, mark_step};
@@ -41,22 +42,6 @@ pub fn lower(node: Node) -> Result<Node, Node> {
 	lowered.ok_or(node)
 }
 
-fn symbol(name: &str) -> Node {
-	Node::Symbol(name.to_string())
-}
-
-fn number(value: i64) -> Node {
-	Node::Number(crate::extensions::numbers::Number::Int(value))
-}
-
-fn key(left: Node, op: Op, right: Node) -> Node {
-	Node::Key(Box::new(left), op, Box::new(right))
-}
-
-fn block(statements: Vec<Node>, bracket: Bracket) -> Node {
-	Node::List(statements, bracket, Separator::Semicolon)
-}
-
 /// The loop variables of every `for … in` in `body`, written or already lowered (its marked step `x++`, `x·index++`, of a
 /// destructuring `k·v·index++`): the loop's own names, never an outer variable
 pub(crate) fn loop_variables(body: &Node) -> Vec<String> {
@@ -75,10 +60,6 @@ pub(crate) fn loop_variables(body: &Node) -> Vec<String> {
 		}
 	});
 	variables
-}
-
-fn is_word(node: &Node, word: &str) -> bool {
-	matches!(node.drop_meta(), Node::Symbol(name) if name == word)
 }
 
 /// The statements of a body: `{a;b}` and `{a⏎b}` hold several, `{x}` and `{for i in xs {…}}` one
@@ -103,7 +84,7 @@ fn classic_for(items: &[Node]) -> Option<Node> {
 	}
 	let mut statements = block_items(body);
 	statements.push(mark_step(step.clone()));
-	Some(block(vec![init.clone(), while_do(test.clone(), block(statements, Bracket::Curly))], Bracket::None))
+	Some(statement_list(vec![init.clone(), while_do(test.clone(), statement_list(statements, Bracket::Curly))], Bracket::None))
 }
 
 /// `for x in iterable {body}` and `for x in iterable: body`
@@ -177,20 +158,16 @@ fn is_letter(bound: &Node) -> bool {
 /// `c to 'e'` of a letter held in a variable: counting the codepoints, the loop variable the letter of each
 fn letter_loop(variable: &Node, start: &Node, op: Op, end: &Node, body: Vec<Node>) -> Node {
 	let code = symbol(&format!("{}{CODE_SUFFIX}", variable.name()));
-	let codepoint = |letter: &Node| call(ORD_WORD, letter.clone());
-	let letter = key(variable.clone(), Op::Assign, call(CHR_WORD, code.clone()));
+	let codepoint = |letter: &Node| call(ORD_WORD, vec![letter.clone()]);
+	let letter = key(variable.clone(), Op::Assign, call(CHR_WORD, vec![code.clone()]));
 	counting_loop(&code, &codepoint(start), op, &codepoint(end), [vec![letter], body].concat())
-}
-
-fn call(function: &str, argument: Node) -> Node {
-	Node::List(vec![symbol(function), argument], Bracket::Round, Separator::None)
 }
 
 /// A variable start counts as a number: `x to 3` of an undefined x is the error "undefined variable: x" (and a
 /// character in it the error of a character in arithmetic), not a counter of the wrong type
 fn counted_start(start: &Node) -> Node {
 	match start.drop_meta() {
-		Node::Symbol(_) => key(start.clone(), Op::Add, number(0)),
+		Node::Symbol(_) => key(start.clone(), Op::Add, int(0)),
 		_ => start.clone(),
 	}
 }
@@ -199,7 +176,7 @@ fn counting_range(iterable: &Node) -> Node {
 	match iterable.drop_meta() {
 		Node::List(items, Bracket::Round, _) if items.len() == 1 => counting_range(&items[0]),
 		Node::List(items, _, _) if is_word(&items[0], RANGE_CALL) => match &items[1..] {
-			[end] => key(number(FIRST_INDEX), Op::Range, end.clone()),
+			[end] => key(int(FIRST_INDEX), Op::Range, end.clone()),
 			[start, end] => key(start.clone(), Op::Range, end.clone()),
 			_ => iterable.clone(),
 		},
@@ -223,7 +200,7 @@ fn loop_names(variable: &Node) -> Option<Vec<Node>> {
 fn destructuring_loop(names: &[Node], iterable: Node, body: Vec<Node>) -> Node {
 	let element = symbol(&names.iter().map(Node::name).collect::<Vec<_>>().join("·"));
 	let entries = Node::List(vec![symbol(crate::library_words::MAP_ENTRIES), iterable], Bracket::Round, Separator::None);
-	let parts = names.iter().enumerate().map(|(position, name)| key(name.clone(), Op::Assign, key(element.clone(), Op::Hash, number(position as i64 + 1))));
+	let parts = names.iter().enumerate().map(|(position, name)| key(name.clone(), Op::Assign, key(element.clone(), Op::Hash, int(position as i64 + 1))));
 	walking_loop(&element, entries, parts.chain(body).collect())
 }
 
@@ -239,15 +216,15 @@ fn for_it(items: &[Node]) -> Option<Node> {
 fn counting_loop(variable: &Node, start: &Node, range: Op, end: &Node, mut body: Vec<Node>) -> Node {
 	let test_op = if range == Op::To { Op::Le } else { Op::Lt };
 	body.push(mark_step(key(variable.clone(), Op::Inc, Node::Empty)));
-	block(vec![
+	statement_list(vec![
 		key(variable.clone(), Op::Assign, start.clone()),
-		while_do(key(variable.clone(), test_op, end.clone()), block(body, Bracket::Curly)),
+		while_do(key(variable.clone(), test_op, end.clone()), statement_list(body, Bracket::Curly)),
 	], Bracket::None)
 }
 
 fn walked_units(iterable: Node) -> Node {
 	match iterable.drop_meta() {
-		Node::Key(text, Op::Dot, unit) if crate::analyzer::text_unit(&unit.drop_meta().name()) == Some(CODEPOINT_UNIT) => call(CHARS_CALL, (**text).clone()),
+		Node::Key(text, Op::Dot, unit) if crate::analyzer::text_unit(&unit.drop_meta().name()) == Some(CODEPOINT_UNIT) => call(CHARS_CALL, vec![(**text).clone()]),
 		_ => iterable,
 	}
 }
@@ -255,14 +232,14 @@ fn walked_units(iterable: Node) -> Node {
 fn walking_loop(variable: &Node, iterable: Node, mut body: Vec<Node>) -> Node {
 	let name = variable.name();
 	let (items, index) = (symbol(&format!("{name}{ITEMS_SUFFIX}")), symbol(&format!("{name}{INDEX_SUFFIX}")));
-	let element = key(items.clone(), Op::Hash, key(index.clone(), Op::Add, number(1)));
+	let element = key(items.clone(), Op::Hash, key(index.clone(), Op::Add, int(1)));
 	let mut statements = vec![key(variable.clone(), Op::Assign, element)];
 	statements.append(&mut body);
 	statements.push(mark_step(key(index.clone(), Op::Inc, Node::Empty)));
 	let test = key(index.clone(), Op::Lt, key(Node::Empty, Op::Hash, items.clone()));
-	block(vec![
+	statement_list(vec![
 		key(items, Op::Assign, walked_units(iterable)),
-		key(index, Op::Assign, number(FIRST_INDEX)),
-		while_do(test, block(statements, Bracket::Curly)),
+		key(index, Op::Assign, int(FIRST_INDEX)),
+		while_do(test, statement_list(statements, Bracket::Curly)),
 	], Bracket::None)
 }

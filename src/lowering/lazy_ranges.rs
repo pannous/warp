@@ -7,6 +7,7 @@
 //! variable a list, collected once (declaration_lowering.rs). A function whose value is a range of its parameters
 //! (`f(n) := 1..n`) returns that range: a call with plain arguments is the range itself, read as above.
 
+use super::nodes::is_word;
 use crate::analyzer::{call_name, extract_user_functions, TEMPORARY_SEPARATOR};
 use crate::context::Context;
 use crate::effects::call_arguments;
@@ -93,10 +94,6 @@ fn add_one(bound: &Node) -> Node {
 		Node::Number(crate::extensions::numbers::Number::Int(n)) => Node::int(n + 1),
 		other => Node::Key(Box::new(other.clone()), Op::Add, Box::new(Node::int(1))),
 	}
-}
-
-fn is_word(node: &Node, word: &str) -> bool {
-	matches!(node.drop_meta(), Node::Symbol(name) if name == word)
 }
 
 struct Lowering {

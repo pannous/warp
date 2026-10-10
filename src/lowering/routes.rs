@@ -13,8 +13,8 @@
 //! is a route of the page with the whole pattern, and the route itself follows them with an empty outlet.
 
 use crate::event_signals::{function_with_globals, main_level_variables};
-use crate::node::{Bracket, Node, Separator};
-use crate::system_signals::call;
+use crate::node::{text, Bracket, Node, Separator};
+use super::nodes::call;
 use std::collections::HashMap;
 
 const ROUTE_WORD: &str = "route";
@@ -253,6 +253,3 @@ fn template<const N: usize>(code: &str, bindings: [(&str, Node); N]) -> Node {
 	crate::law::substitute(&crate::warp_parser::parse(code), &bindings.into_iter().map(|(name, value)| (name.to_string(), value)).collect())
 }
 
-fn text(value: &str) -> Node {
-	Node::Text(value.to_string())
-}

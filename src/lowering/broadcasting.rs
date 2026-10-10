@@ -4,6 +4,7 @@
 //! declared with a scalar type (`x:int`, `square number`, P50) or, undeclared, is an arithmetic operand of the body; a
 //! function of a list (`count(xs)`, `xs#2`, `xs:list`) takes the list whole. Operators never broadcast (`[1 2 3]*2`).
 
+use super::nodes::call;
 use crate::analyzer::{annotated_kind, list_element_type};
 use crate::function_values::{definitions, Definition};
 use crate::type_kinds::Kind;
@@ -424,10 +425,6 @@ fn is_pair(node: &Node) -> bool {
 	matches!(node.drop_meta(), Node::Key(_, Op::Colon, _))
 }
 
-fn call(name: &str, argument: Node) -> Node {
-	Node::List(vec![Node::Symbol(name.to_string()), argument], Bracket::Round, Separator::None)
-}
-
 struct Broadcast {
 	functions: HashSet<String>,
 	list_variables: HashSet<String>,
@@ -506,7 +503,7 @@ impl Broadcast {
 				let applied = elements.iter().map(|element| self.apply(name, element.clone())).collect();
 				Some(Node::List(applied, Bracket::Square, element_separator.clone()))
 			}
-			_ if self.is_list_value(argument) => Some(each_item(argument.clone(), |item| call(name, item))),
+			_ if self.is_list_value(argument) => Some(each_item(argument.clone(), |item| call(name, vec![item]))),
 			_ => None,
 		}
 	}
@@ -651,7 +648,7 @@ impl Broadcast {
 			Node::Key(key, Op::Colon, value) => Node::Key(key.clone(), Op::Colon, Box::new(self.apply(name, value.as_ref().clone()))),
 			_ => {
 				let items = vec![Node::Symbol(name.to_string()), element];
-				self.broadcast_call(&items, &Bracket::Round, &Separator::None).unwrap_or_else(|| call(name, items[1].clone()))
+				self.broadcast_call(&items, &Bracket::Round, &Separator::None).unwrap_or_else(|| call(name, vec![items[1].clone()]))
 			}
 		}
 	}

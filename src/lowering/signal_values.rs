@@ -12,6 +12,7 @@
 //! which the runtime calls at the program's check points (signal_poll at main's start and end and each loop start,
 //! sleep, the end of the run): the watched values are compared with those seen last, and the listener runs on a change.
 
+use super::nodes::call;
 use crate::declarations::word;
 use crate::node::{Bracket, Node, Separator};
 use crate::operators::Op;
@@ -688,10 +689,6 @@ fn from_template(code: &str, nodes: &[(&str, Node)]) -> Node {
 	let bindings = names.iter().map(|(placeholder, name)| (placeholder.to_string(), Node::Symbol(name.to_string())))
 		.chain(nodes.iter().map(|(placeholder, node)| (placeholder.to_string(), node.clone()))).collect();
 	crate::law::substitute(&crate::warp_parser::parse(code), &bindings).drop_meta().clone()
-}
-
-fn call(function: &str, arguments: Vec<Node>) -> Node {
-	Node::List([vec![Node::Symbol(function.to_string())], arguments].concat(), Bracket::Round, Separator::None)
 }
 
 fn is_write(op: Op) -> bool {

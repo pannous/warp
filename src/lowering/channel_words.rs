@@ -7,6 +7,7 @@
 //! `chat = channel "chat"` is the machine-wide channel (src/channels.rs) with the same words: it listens from its
 //! assignment on, `chat.send(v)` and `send v to chat` are `channel_send(chat, v)`, `chat.receive()` waits for a message.
 
+use super::nodes::call;
 use crate::declarations::word;
 use crate::node::{Bracket, Node, Separator};
 use crate::operators::Op;
@@ -166,6 +167,3 @@ fn lowered(node: Node, local: &HashSet<String>, machine: &HashMap<String, i64>) 
 	}
 }
 
-fn call(function: &str, arguments: Vec<Node>) -> Node {
-	Node::List([vec![Node::Symbol(function.to_string())], arguments].concat(), Bracket::Round, Separator::None)
-}
