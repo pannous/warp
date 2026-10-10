@@ -409,16 +409,17 @@ fn run_command(args: &[String]) {
     }
 }
 
-/// `Warp 🌀 1.2.4`; a debug build also names, on stderr, the commit of the checkout it was built from and the time of
-/// its binary (cards g_oMw8, g_oM-0): `debug build 75d67b068 · built 2026-10-09 14:32`
+/// `🌀 Warp 1.2.4` (its last word the version, tests/common checks it), then on stderr the commit and branch the build
+/// was made from and the time of its binary (cards g_oMw8, g_oM-0, version-banner-version):
+/// `debug build 75d67b068 on main · built 2026-10-09 14:32`
 fn print_version() {
     println!("🌀 Warp {}", WARP_VERSION);
-    if cfg!(debug_assertions) {
-        let commit = option_env!("WARP_COMMIT");
-        let binary = env::current_exe().map(|path| path.display().to_string()).unwrap_or_default();
-        let built = command_line("date", &["-r", &binary, "+%Y-%m-%d %H:%M"]);
-        eprintln!("debug build {} · built {}", commit.unwrap_or("of an unknown commit"), built.as_deref().unwrap_or("?"));
-    }
+    let profile = if cfg!(debug_assertions) { "debug" } else { "release" };
+    let commit = option_env!("WARP_COMMIT").unwrap_or("of an unknown commit");
+    let branch = option_env!("WARP_BRANCH").map(|branch| format!(" on {branch}")).unwrap_or_default();
+    let binary = env::current_exe().map(|path| path.display().to_string()).unwrap_or_default();
+    let built = command_line("date", &["-r", &binary, "+%Y-%m-%d %H:%M"]);
+    eprintln!("{profile} build {commit}{branch} · built {}", built.as_deref().unwrap_or("?"));
 }
 
 /// The first line a successful command prints
