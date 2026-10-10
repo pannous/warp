@@ -474,8 +474,8 @@ fn computes_value(node: &Node) -> bool {
 	node.visit(&mut |part| found |= match part {
 		Node::Key(_, Op::Hash, _) => true,
 		Node::Key(_, op, _) if op.is_arithmetic() => !names_anything(part),
-		// `str(now)`: the instant the clock reads when the program runs
-		Node::List(items, ..) => matches!(items.first().map(Node::drop_meta), Some(Node::Symbol(head)) if head == crate::time::INSTANT_AT),
+		// `str(now)`: the instant the clock reads when the program runs; `str(2024-02-29)` a time node
+		Node::List(items, ..) => matches!(items.first().map(Node::drop_meta), Some(Node::Symbol(head)) if [crate::time::INSTANT_AT, crate::time::TIME_OF].contains(&head.as_str())),
 		_ => false,
 	});
 	found
