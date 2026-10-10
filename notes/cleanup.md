@@ -3,6 +3,13 @@
 Behaviour-preserving only: shared helpers instead of duplication, dead code and stale comments out, flatter control
 flow, meaningful names, no test edits. One area per session, small themed branches through the Integrator.
 
+Watch for closed lists (user, 2026-10-10: "We don't want specialists… we just want the general mechanism"): a
+hard-coded list of words standing in for a mechanism breaks on every word it misses. Example: builtin_type_kind
+(src/analyzer/checks.rs) knew int, float, number and text but not real, so `type(π) == real` failed with "undefined
+variable: real" although type(π) prints real. Derive each such list from its source of truth (the type registry,
+the library's exports, the operator table) instead of adding the missing word. Card cleanup-closed-lists; the
+type-word lists become one table under warp-numbers (bare type names are type values).
+
 ## src/analyzer/, src/warp_parser/, src/node/ (card cleanup-analyzer, session warp-types)
 
 Done (branches cleanup-dead, cleanup-arith, cleanup-names, cleanup-parser, cleanup-modes, cleanup-guards, cleanup-lookahead, cleanup-atoms, cleanup-errors,
