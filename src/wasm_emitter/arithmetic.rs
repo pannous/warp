@@ -83,10 +83,9 @@ impl WasmGcEmitter {
 		if let Node::Symbol(name) = left.drop_meta() {
 			if self.scope.lookup(name).is_none() {
 				if let Some(global_kind) = self.emit_global_store(func, name, right) {
-					match (global_kind.is_float(), use_float) {
-						(true, false) => self.emit_float_in_exact_context(func, name),
-						(false, true) => self.emit_int_to_f64(func, None),
-						_ => {}
+					match use_float {
+						true => self.emit_stored_as_f64(func, global_kind),
+						false => self.emit_as_numeric(func, name, global_kind),
 					}
 					return true;
 				}
@@ -315,19 +314,23 @@ impl WasmGcEmitter {
 			self.emit_call(func, "get_int_value");
 			self.emit_int_to_f64(func, None);
 		} else if let Some(local) = self.scope.lookup(name) {
+			let kind = local.kind;
 			func.instruction(&I::LocalGet(local.position));
-			if local.kind.is_ref() {
-				self.emit_held_node_as_f64(func); // a Node of run-time kind: a Float stays one
-			} else if !local.kind.is_float() {
-				self.emit_int_to_f64(func, None);
-			}
+			self.emit_stored_as_f64(func, kind);
 		} else if let Some(&(idx, kind)) = self.ctx.user_globals.get(name) {
 			func.instruction(&I::GlobalGet(idx));
-			if !kind.is_float() {
-				self.emit_int_to_f64(func, None);
-			}
+			self.emit_stored_as_f64(func, kind);
 		} else {
 			self.emit_undefined_variable(func, name);
+		}
+	}
+
+	/// The value on the stack, stored as `kind` (`storage_type`), as f64
+	pub(super) fn emit_stored_as_f64(&mut self, func: &mut Function, kind: Kind) {
+		if kind.is_ref() {
+			self.emit_held_node_as_f64(func); // a Node of run-time kind: a Float stays one
+		} else if !kind.is_float() {
+			self.emit_int_to_f64(func, None);
 		}
 	}
 
@@ -409,9 +412,7 @@ impl WasmGcEmitter {
 				self.emit_fits_declared(func, left);
 				func.instruction(&I::LocalTee(position));
 			} else if let Some(kind) = self.emit_global_store(func, name, right) {
-				if kind.is_float() {
-					self.emit_float_in_exact_context(func, name);
-				}
+				self.emit_as_numeric(func, name, kind);
 			} else {
 				self.emit_undefined_variable(func, name);
 			}
