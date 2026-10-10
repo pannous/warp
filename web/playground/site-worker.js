@@ -18,6 +18,7 @@ let pagePath = "/";
 const post = message => self.postMessage(message);
 self.keepStored = (name, value, file) => post({ stored: { name, value, file } }); // host-files.js STD_ADAPTERS.store
 self.writeClipboard = text => post({ clipboard: text }); // host-files.js STD_ADAPTERS.clipboard: the page has the clipboard
+self.askPageClipboard = shared => post({ clipboardRead: shared }); // host.js clipboard_text
 const hooks = {
 	pagePath: () => pagePath,
 	instantiated: holder => { site = holder; },
