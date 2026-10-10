@@ -202,14 +202,19 @@ fn without_use_of(program: Node, module: &str) -> Node {
 /// calling one as a method uses that module; `unique(xs)` still needs `use list`. A library word stays the builtin, a
 /// word the program defines is its own, a word of two such modules needs its `use`, `list.zip(a, b)` names the module
 /// (test_std_qualified)
+/// The standard modules named after a type with their words, the methods of that type: list, map, text
+pub fn type_modules() -> Vec<(&'static str, &'static [String])> {
+	std_module_names()
+		.filter(|module| crate::type_tests::is_type_word(module))
+		.filter_map(|module| Some((module, std_module_definitions(module)?)))
+		.collect()
+}
+
 fn with_type_module_uses(program: Node) -> Node {
 	let mut defined = HashSet::new();
 	program.visit(&mut |node| defined.extend(declared_name(node)));
 	let used: HashSet<String> = statements(program.clone()).iter().filter_map(used_module).map(|used| used.name).collect();
-	let type_modules: Vec<(&str, &[String])> = std_module_names()
-		.filter(|module| crate::type_tests::is_type_word(module))
-		.filter_map(|module| Some((module, std_module_definitions(module)?)))
-		.collect();
+	let type_modules = type_modules();
 	let is_module_name = |receiver: &Node| receiver.symbol_name().is_some_and(|name| std_module(name).is_some() && !defined.contains(name));
 	let only_provider = |method: &String| match type_modules.iter().filter(|(_, words)| words.contains(method)).collect::<Vec<_>>().as_slice() {
 		[(module, _)] => Some(*module),
