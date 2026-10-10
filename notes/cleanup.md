@@ -50,9 +50,10 @@ Left (longest functions, candidates for splitting):
 - lookahead.rs peek_operator (123): a flat operator table, left as is (keywords interleave with the glyph lengths)
 - node/comparison.rs eq: left alone, it carries the user's comments
 
-Outside this area (for whoever takes src/lowering/): private `is_word` / `symbol_name` / `is_symbol` copies in
-lowering/comprehensions, for_loop, generators, lazy_ranges, stored_values, welcome_forms, inlining, soft_keywords,
-tuples, and law/type_model.rs, modules.rs, time.rs can use `Node::is_symbol` / `Node::symbol_name`.
+Outside this area: the private `is_word` / `symbol_name` / `is_symbol` copies are gone (lowering's in
+cleanup-lowering; law/type_model.rs, modules.rs and time.rs in cleanup-word-copies, warp-functions); word_slices'
+`is_word(node, words)` takes a list of words and stays. The parameter_name copies (soft_keywords, named_arguments,
+go_blocks, parameter_shapes, law/type_model) stay: each has its own rules (which keys, recursion, String or Node).
 # Code cleanup (user card `cleanup`: "major code cleanup and simplification")
 Behaviour-preserving only: shared helpers for duplication, dead code and stale comments out, flatter code, no test edits.
 ## cleanup-host (warp-hosting): top-level src/*.rs, src/ffi/, src/gc_traits/
