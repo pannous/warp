@@ -4181,6 +4181,7 @@ PASSED:
   ✓ welcoming::test_c_style::test_if_assigning_a_float
   ✓ welcoming::test_c_style::test_if_parenthesized_condition_then_statement
   ✓ welcoming::test_cli_error_exit::a_caught_error_and_a_value_keep_their_status
+  ✓ welcoming::test_cli_error_exit::a_program_ending_in_a_float_exits_with_status_0
   ✓ welcoming::test_cli_error_exit::an_uncaught_error_exits_with_status_1
   ✓ welcoming::test_closed_pipe::a_value_into_a_closed_pipe_ends_warp_quietly
   ✓ welcoming::test_closed_pipe::the_version_into_a_closed_stderr_ends_warp_quietly
@@ -4563,4 +4564,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-10 ignored, 4558 passed, 0 failed, 4558 total tested
+10 ignored, 4559 passed, 0 failed, 4559 total tested
