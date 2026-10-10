@@ -668,7 +668,10 @@ impl WasmGcEmitter {
 			s.emit_field(f, 0, 0);
 			Self::emit_list(f, &[I::I64Const(KIND_MASK), I::I64And, I::I64Const(Kind::Float as i64), I::I64Eq, I::If(BlockType::Empty), I::LocalGet(0)]);
 			Self::emit_list(f, &[I::StructGet { struct_type_index: node_type, field_index: 1 }, I::RefCastNonNull(HeapType::Concrete(float_box))]);
-			Self::emit_list(f, &[I::StructGet { struct_type_index: float_box, field_index: 0 }, I::I64TruncSatF64S, I::Return, I::End]);
+			f.instruction(&I::StructGet { struct_type_index: float_box, field_index: 0 });
+			// a checked truncation: wasm-split and wasm-opt reject the saturating one without nontrapping-float-to-int
+			s.emit_truncating_cast_via(f, value);
+			Self::emit_list(f, &[I::Return, I::End]);
 			s.emit_field(f, 0, 0);
 			Self::emit_list(f, &[I::I64Const(KIND_MASK), I::I64And, I::I64Const(Kind::Text as i64), I::I64Ne, I::If(BlockType::Empty), I::LocalGet(0)]);
 			s.call(f, "get_int_value");
