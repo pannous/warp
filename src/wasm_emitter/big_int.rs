@@ -221,6 +221,22 @@ impl WasmGcEmitter {
 		}
 	}
 
+	/// Stack [a, b] (Ints) → [a // b], the Euclidean quotient: (a - a % b) / b is exact on fixnums, else exact_euclid_div
+	pub(super) fn emit_euclidean_quotient(&mut self, func: &mut Function, left: IntRange, right: IntRange) {
+		if !self.int_runtime() {
+			return self.emit_call(func, "exact_euclid_div");
+		}
+		let (a, b, r) = (self.scratch(0), self.scratch(1), self.scratch(2));
+		Self::emit_list(func, &[I::LocalSet(b), I::LocalSet(a)]);
+		self.emit_nonzero_divisor(func, b, right);
+		let unproven = self.unproven(&[(a, left), (b, right)]);
+		self.emit_fixnum_test(func, &unproven);
+		let mut quotient = vec![I::LocalGet(a)];
+		quotient.extend(euclidean_remainder(a, b, r));
+		quotient.extend([I::I64Sub, I::LocalGet(b), I::I64DivS]);
+		self.emit_fast_or_slow(func, &quotient, "exact_euclid_div");
+	}
+
 	/// `a % 0` fails with the named error divide_by_zero (try catches it), never the engine's divide trap; skipped when the
 	/// divisor's range excludes 0
 	fn emit_nonzero_divisor(&mut self, func: &mut Function, divisor: u32, range: IntRange) {

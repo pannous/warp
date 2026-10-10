@@ -675,7 +675,7 @@ impl WasmGcEmitter {
 		if !floats {
 			self.emit_numeric_value(func, dividend);
 			self.emit_numeric_value(func, divisor);
-			self.emit_call(func, "exact_euclid_div");
+			self.emit_euclidean_quotient(func, self.int_range(dividend), self.int_range(divisor));
 			return;
 		}
 		let (quotient, divisor_bits) = (self.scratch(0), self.scratch(1));
