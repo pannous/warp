@@ -58,3 +58,38 @@ fn test_times_compare_at_run_time() {
 	is!("a = 2024-01-01T10:00; b = 2024-01-01T09:00; print a; a > b", true);
 	fails_with("a = 2024-01-01; b = 2024-01-01T10:00; print a; a < b", "no implicit conversion between kinds of time");
 }
+
+/// Stage B1b: durations and zoned times are run-time values too, their days, months, zone and offset in the info bits
+#[test]
+#[cfg(feature = "native")] // printed runs the warp binary
+fn test_durations_and_zoned_times_print() {
+	use crate::common::printed;
+	assert_eq!(printed("d = 1 day; print d"), "1 day\n");
+	assert_eq!(printed("d = 1 month + 2 days + 3 hours + 4 minutes + 5 seconds; print d"), "1 month 2 days 3 hours 4 minutes 5 seconds\n");
+	assert_eq!(printed("d = 2024-01-01T00:00:01.5Z - 2024-01-01T00:00:03Z; print d"), "-1.5 seconds\n");
+	assert_eq!(printed("z = 2024-01-31T10:00[Europe/Berlin]; print z"), "2024-01-31T10:00+01:00[Europe/Berlin]\n");
+	assert_eq!(printed("z = 2030-07-01T09:30:15[America/New_York]; print z"), "2030-07-01T09:30:15-04:00[America/New_York][_tzdata=warp-2026a]\n");
+}
+
+#[test]
+fn test_durations_and_zoned_times_read_back() {
+	use warp::time::Duration;
+	assert_eq!(eval("print 1; 90 minutes"), Node::data(Duration { nanos: 5_400_000_000_000, ..Duration::default() }));
+	assert_eq!(eval("print 1; 2 months + 3 days"), Node::data(Duration { months: 2, days: 3, nanos: 0 }));
+	is!("d = 1 day; print d; \"in \" + d", "in 1 day");
+	is!("z = 2024-01-31T10:00[Europe/Berlin]; print z; str(z)", "2024-01-31T10:00+01:00[Europe/Berlin]");
+}
+
+#[test]
+fn test_zoned_fields_at_run_time() {
+	is!("z = 2024-07-01T10:30[Europe/Berlin]; print z; z.hour * 60 + z.minute", 630);
+	is!("z = 2024-07-01T10:30[Europe/Berlin]; print z; z.offset", 7200);
+	is!("z = 2024-01-31T23:30[America/New_York]; print z; z.day", 31);
+	fails_with("d = 2 days; print d; d.year", "duration has no field year");
+}
+
+#[test]
+fn test_zoned_times_and_durations_compare_at_run_time() {
+	is!("a = 2024-01-31T10:00[Europe/Berlin]; b = 2024-01-31T10:00[Europe/London]; print a; a < b", true);
+	fails_with("a = 1 day; b = 2 days; print a; a < b", "cannot order durations");
+}

@@ -393,6 +393,9 @@ pub fn extract_host_words(ctx: &mut Context, node: &Node) {
 				if crate::time::makes_instant(items) {
 					add_ffi_import(ctx, crate::host::LOCAL_OFFSET, crate::host::HOST_LIBRARY);
 				}
+				if crate::time::constant_form(items) == Some(crate::time::TimeForm::Zoned) {
+					ctx.required_functions.insert(crate::wasm_emitter::times::ZONE_NAMES);
+				}
 				if crate::host::HOST_WORDS.contains(&name.as_str()) && !ctx.user_functions.contains_key(name) {
 					add_ffi_import(ctx, name, crate::host::HOST_LIBRARY);
 					// the host builds a caught stack overflow's or a failed adapter's Error with the module's own error_of

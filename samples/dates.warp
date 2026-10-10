@@ -16,3 +16,9 @@ meeting = 2024-01-31T10:30
 print leap_day + " is day " + leap_day.day_of_year + ", weekday " + leap_day.weekday
 print "meeting at " + meeting.hour + ":" + meeting.minute
 if leap_day > 2024-01-01 then print "the leap day comes later"
+
+// durations and zoned times are values too
+break_length = 1 hour + 30 minutes
+print "break: " + break_length
+launch = 2030-07-01T09:30[America/New_York]
+print "launch " + launch + " at offset " + launch.offset
