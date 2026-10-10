@@ -50,7 +50,7 @@ JSON, warp text). A state signal is a **variable**: nothing new to write, `x = 3
    Inside: `value` (alias `signal`, `event`) is the new value.
 4. **Events**: `emit name{data}` (or `send name{data}` without `to`) sends the event, `on name {…}` receives it
    (`event` is the payload node); an emit nobody handles does nothing. `raise` and `throw` are errors only (P163,
-   replacing P110); fire, trigger and signal are aliases of emit with a note. A write of x is the event
+   replacing P110); fire, trigger, signal and ask are aliases of emit with a note, also as an operand: `net * (1 + ask tax_rate)` (card price-net). A write of x is the event
    `set x`, so `on set x` is one case of the general rule. `once name {…}` runs at the first raise only (Node's
    `emitter.once`; a flag `once_fired_N`, event_signals.rs). `on set p.age` watches one field: a write of it or of p.
    `old` in `on change x {…}` and `on set x {…}` is x before the write (Vue's watch, P148); `previous`, `was` and
