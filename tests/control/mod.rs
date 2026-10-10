@@ -171,3 +171,4 @@ mod test_table_query_loading; // orm: a filter reads only its rows
 mod test_table_linear_lookups; // card orm-linear
 mod test_table_method_reads;
 mod test_table_element_writes; // orm: people#1.age = 5 writes through
+mod test_unit_tasks; // card units-tasks

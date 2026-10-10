@@ -1152,6 +1152,11 @@ pub(crate) fn handler_parts(handler: &Node) -> Option<(Node, Node)> {
 	}
 }
 
+/// A task marker before resolve_tasks: `task·go(f, args)` and the reads and controls naming the started functions
+pub(crate) fn is_task_marker(head: &str) -> bool {
+	[TASK_GO, TASK_VALUE, TASK_LIST, TASK_ELEMENT, TASK_CONTROL_MARK, TASK_ON].contains(&read_marker(head).0)
+}
+
 pub(crate) fn word(node: &Node) -> String {
 	match node.drop_meta() {
 		Node::Symbol(name) => name.clone(),
