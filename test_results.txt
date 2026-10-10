@@ -2069,6 +2069,7 @@ PASSED:
   ✓ numbers::test_float_bit_operations::test_logical_and_bit_operators_on_a_float_are_refused_loudly
   ✓ numbers::test_float_bit_operations::test_logical_and_bit_operators_on_ints_still_work
   ✓ numbers::test_float_exact_context::a_rational_constant_of_exact_reals_in_a_runtime_program
+  ✓ numbers::test_float_exact_context::test_a_declared_exact_variable_refuses_a_float_as_a_parameter_does
   ✓ numbers::test_float_exact_context::test_explicit_cast_truncates_a_float
   ✓ numbers::test_float_exact_context::test_ffi_float_result_in_exact_context_is_refused_loudly
   ✓ numbers::test_float_exact_context::test_float_read_in_exact_context_is_refused_loudly
@@ -4443,4 +4444,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-10 ignored, 4438 passed, 0 failed, 4438 total tested
+10 ignored, 4439 passed, 0 failed, 4439 total tested
