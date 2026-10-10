@@ -1,7 +1,7 @@
 //! `for` loops lower to the `while` loop: a range counts its variable up, any other iterable is walked by an index.
 //!
 //! `for i in a..b body` → `i=a; while i<b {body; i++}` (`...` and `to` include b: `i<=b`), so `i` is b (b+1) afterwards;
-//! a computed b (`cell(x)+1`, `count(xs)`) is evaluated once, before the loop: `i=a; i·end=b; while i<i·end {…}`
+//! b is evaluated once, before the loop, as in Python (`0..n`, `0..count(xs)`): `i=a; i·end=b; while i<i·end {…}`
 //! `for x in xs body`   → `items=xs; index=0; while index<#items {x=items#(index+1); body; index++}`
 //! `for(init;test;step){body}` → `init; while test {body; step}`
 
@@ -30,7 +30,7 @@ const CODEPOINT_UNIT: &str = "codepoints";
 pub const INDEX_SUFFIX: &str = "·index";
 /// The list a for loop walks, `x·items`, assigned once before the loop
 pub const ITEMS_SUFFIX: &str = "·items";
-/// The computed end of a counting loop, `i·end`, evaluated once before the loop as a walked list is
+/// The end of a counting loop, `i·end`, evaluated once before the loop as a walked list is (a literal stays inline)
 const END_SUFFIX: &str = "·end";
 
 pub fn lower(node: Node) -> Result<Node, Node> {
@@ -220,8 +220,8 @@ fn counting_loop(variable: &Node, start: &Node, range: Op, end: &Node, mut body:
 	let test_op = if range == Op::To { Op::Le } else { Op::Lt };
 	body.push(mark_step(key(variable.clone(), Op::Inc, Node::Empty)));
 	let mut statements = vec![key(variable.clone(), Op::Assign, start.clone())];
-	let is_computed = !matches!(end.drop_meta(), Node::Number(_) | Node::Symbol(_) | Node::Char(_));
-	let end = if is_computed {
+	let is_literal = matches!(end.drop_meta(), Node::Number(_) | Node::Char(_));
+	let end = if !is_literal {
 		let end_variable = symbol(&format!("{}{END_SUFFIX}", variable.name()));
 		statements.push(key(end_variable.clone(), Op::Assign, end.clone()));
 		end_variable
