@@ -4,7 +4,8 @@
 //! the numbers it left. gpu_render runs a WGSL fragment shader `main` over every pixel of a width×height image, as
 //! host-gpu.js does, and gives the pixels as paint takes them.
 
-use std::sync::{Mutex, OnceLock};
+use std::collections::HashMap;
+use std::sync::{LazyLock, Mutex, OnceLock};
 use wgpu::util::DeviceExt;
 
 const ENTRY_POINT: &str = "main";
@@ -20,6 +21,9 @@ const VERTEX_ENTRY_POINT: &str = "warp_full_image";
 const TRIANGLE_CORNERS: u32 = 3;
 const PIXEL_BYTES: u32 = 4;
 const OPAQUE: u32 = 0xFF00_0000;
+const IMAGE_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Rgba8Unorm;
+/// Compiled shaders kept at once, as host-gpu.js MOST_COMPILED: a program painting more distinct ones compiles some anew
+const PAINTERS_KEPT: usize = 16;
 /// gpu_render's values as the shader names them: `values.<name>`
 const VALUES_NAME: &str = "values";
 const VALUES_BINDING: u32 = 0;
@@ -194,33 +198,21 @@ pub fn render(shader: &str, width: u32, height: u32, values: &[ShaderValue]) -> 
 	let Gpu { device, queue } = gpu()?;
 	let validation = device.push_error_scope(wgpu::ErrorFilter::Validation);
 	let (declarations, bytes) = uniform_layout(values)?;
-	let module = compiled(device, &format!("{shader}{FULL_IMAGE_VERTICES}{declarations}"))?;
-	let uniform = (!bytes.is_empty()).then(|| uniform_binding(device, &bytes));
-	let format = wgpu::TextureFormat::Rgba8Unorm;
+	let Painter { pipeline, values_layout } = painter(device, format!("{shader}{FULL_IMAGE_VERTICES}{declarations}"), !bytes.is_empty())?;
+	let value_bindings = values_layout.map(|layout| value_bindings(device, &layout, &bytes));
 	let size = wgpu::Extent3d { width, height, depth_or_array_layers: 1 };
 	let usage = wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::COPY_SRC;
-	let image = device.create_texture(&wgpu::TextureDescriptor { label: Some("gpu_render image"), size, mip_level_count: 1, sample_count: 1, dimension: wgpu::TextureDimension::D2, format, usage, view_formats: &[] });
+	let image = device.create_texture(&wgpu::TextureDescriptor { label: Some("gpu_render image"), size, mip_level_count: 1, sample_count: 1, dimension: wgpu::TextureDimension::D2, format: IMAGE_FORMAT, usage, view_formats: &[] });
 	// a copied row is padded to 256 bytes
 	let row_bytes = (width * PIXEL_BYTES).next_multiple_of(wgpu::COPY_BYTES_PER_ROW_ALIGNMENT);
 	let readback = device.create_buffer(&wgpu::BufferDescriptor { label: Some("gpu_render readback"), size: u64::from(row_bytes * height), usage: wgpu::BufferUsages::MAP_READ | wgpu::BufferUsages::COPY_DST, mapped_at_creation: false });
-	let pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
-		label: Some("gpu_render"),
-		layout: uniform.as_ref().map(|(layout, _)| layout),
-		vertex: wgpu::VertexState { module: &module, entry_point: Some(VERTEX_ENTRY_POINT), compilation_options: Default::default(), buffers: &[] },
-		primitive: wgpu::PrimitiveState::default(),
-		depth_stencil: None,
-		multisample: wgpu::MultisampleState::default(),
-		fragment: Some(wgpu::FragmentState { module: &module, entry_point: Some(ENTRY_POINT), compilation_options: Default::default(), targets: &[Some(format.into())] }),
-		multiview_mask: None,
-		cache: None,
-	});
 	let view = image.create_view(&wgpu::TextureViewDescriptor::default());
 	let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor::default());
 	{
 		let target = wgpu::RenderPassColorAttachment { view: &view, depth_slice: None, resolve_target: None, ops: wgpu::Operations::default() };
 		let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor { label: Some("gpu_render"), color_attachments: &[Some(target)], ..Default::default() });
 		pass.set_pipeline(&pipeline);
-		if let Some((_, bindings)) = &uniform {
+		if let Some(bindings) = &value_bindings {
 			pass.set_bind_group(0, bindings, &[]);
 		}
 		pass.draw(0..TRIANGLE_CORNERS, 0..1);
@@ -262,24 +254,60 @@ pub fn uniform_layout(values: &[ShaderValue]) -> Result<(String, Vec<u8>), Strin
 	Ok((declarations, bytes))
 }
 
-/// The pipeline layout holding the uniform and its bind group: explicit, so a shader that leaves `values` unread
-/// still binds them
-fn uniform_binding(device: &wgpu::Device, bytes: &[u8]) -> (wgpu::PipelineLayout, wgpu::BindGroup) {
-	let buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor { label: Some("gpu_render values"), contents: bytes, usage: wgpu::BufferUsages::UNIFORM });
-	let entry = wgpu::BindGroupLayoutEntry {
-		binding: VALUES_BINDING,
-		visibility: wgpu::ShaderStages::FRAGMENT,
-		ty: wgpu::BindingType::Buffer { ty: wgpu::BufferBindingType::Uniform, has_dynamic_offset: false, min_binding_size: None },
-		count: None,
-	};
-	let group_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor { label: Some("gpu_render values"), entries: &[entry] });
-	let layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor { label: Some("gpu_render"), bind_group_layouts: &[Some(&group_layout)], immediate_size: 0 });
-	let bindings = device.create_bind_group(&wgpu::BindGroupDescriptor {
-		label: Some("gpu_render values"),
-		layout: &group_layout,
-		entries: &[wgpu::BindGroupEntry { binding: VALUES_BINDING, resource: buffer.as_entire_binding() }],
+/// A fragment shader compiled into its pipeline, with the layout of its values (none: the shader takes no values)
+#[derive(Clone)]
+struct Painter {
+	pipeline: wgpu::RenderPipeline,
+	values_layout: Option<wgpu::BindGroupLayout>,
+}
+
+/// The painter of a shader text, compiled once: compiling a pipeline anew for every frame costs more than drawing it
+/// (over 100 ms for a raymarching shader on Metal, samples/gpu_visualizer.warp)
+fn painter(device: &wgpu::Device, source: String, takes_values: bool) -> Result<Painter, String> {
+	static PAINTERS: LazyLock<Mutex<HashMap<String, Painter>>> = LazyLock::new(Default::default);
+	let mut painters = PAINTERS.lock().unwrap();
+	if let Some(painter) = painters.get(&source) {
+		return Ok(painter.clone());
+	}
+	let module = compiled(device, &source)?;
+	// explicit, so a shader that leaves `values` unread still binds them
+	let values_layout = takes_values.then(|| {
+		let entry = wgpu::BindGroupLayoutEntry {
+			binding: VALUES_BINDING,
+			visibility: wgpu::ShaderStages::FRAGMENT,
+			ty: wgpu::BindingType::Buffer { ty: wgpu::BufferBindingType::Uniform, has_dynamic_offset: false, min_binding_size: None },
+			count: None,
+		};
+		device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor { label: Some("gpu_render values"), entries: &[entry] })
 	});
-	(layout, bindings)
+	let layout = values_layout.as_ref().map(|values| device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor { label: Some("gpu_render"), bind_group_layouts: &[Some(values)], immediate_size: 0 }));
+	let pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+		label: Some("gpu_render"),
+		layout: layout.as_ref(),
+		vertex: wgpu::VertexState { module: &module, entry_point: Some(VERTEX_ENTRY_POINT), compilation_options: Default::default(), buffers: &[] },
+		primitive: wgpu::PrimitiveState::default(),
+		depth_stencil: None,
+		multisample: wgpu::MultisampleState::default(),
+		fragment: Some(wgpu::FragmentState { module: &module, entry_point: Some(ENTRY_POINT), compilation_options: Default::default(), targets: &[Some(IMAGE_FORMAT.into())] }),
+		multiview_mask: None,
+		cache: None,
+	});
+	if painters.len() >= PAINTERS_KEPT {
+		painters.clear();
+	}
+	let painter = Painter { pipeline, values_layout };
+	painters.insert(source, painter.clone());
+	Ok(painter)
+}
+
+/// This frame's values bound to the painter's layout
+fn value_bindings(device: &wgpu::Device, layout: &wgpu::BindGroupLayout, bytes: &[u8]) -> wgpu::BindGroup {
+	let buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor { label: Some("gpu_render values"), contents: bytes, usage: wgpu::BufferUsages::UNIFORM });
+	device.create_bind_group(&wgpu::BindGroupDescriptor {
+		label: Some("gpu_render values"),
+		layout,
+		entries: &[wgpu::BindGroupEntry { binding: VALUES_BINDING, resource: buffer.as_entire_binding() }],
+	})
 }
 
 /// The shader's module, or where and why it does not compile
