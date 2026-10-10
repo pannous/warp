@@ -1,0 +1,7 @@
+class Person { name: text; age: int }
+people = [Person{name: "Ann", age: 30}, Person{name: "Bob", age: 20}]
+print(people.map(p => p.name))
+print(people's name)
+first = people#1
+print(first's name)
+print(people's age)

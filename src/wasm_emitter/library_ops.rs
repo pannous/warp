@@ -29,7 +29,8 @@ const COPY_BYTES: I<'static> = I::MemoryCopy { src_mem: 0, dst_mem: 0 };
 const EMPTY_TEXT: &str = "ø";
 
 /// Names of the runtime functions, keyed by the library word
-pub const LIBRARY_FUNCTIONS: [(&str, &str); 18] = [
+pub const LIBRARY_FUNCTIONS: [(&str, &str); 19] = [
+	(super::wasi_emitter::WASI_ENVIRONMENT, super::wasi_emitter::WASI_ENVIRONMENT),
 	(crate::library_words::MAP_KEYS, crate::library_words::MAP_KEYS),
 	(crate::library_words::MAP_VALUES, crate::library_words::MAP_VALUES),
 	(crate::library_words::MAP_ENTRIES, crate::library_words::MAP_ENTRIES),
@@ -81,6 +82,7 @@ impl WasmGcEmitter {
 		self.emit_list_join();
 		self.emit_list_sort(); // after text_chars and list_join: a text sorts its characters
 		self.emit_print_value(); // after list_join, which gives the text
+		self.emit_wasi_environment();
 		self.emit_node_slice(); // after list_reverse, text_chars and list_join, which it calls
 		self.emit_codepoint_of();
 	}

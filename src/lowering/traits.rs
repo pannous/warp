@@ -819,6 +819,12 @@ impl InstanceTypes {
 		self.registry.types().iter().any(|type_def| type_def.fields.iter().any(|field| field.name == name))
 	}
 
+	/// Does `list` hold instances of a declared type with the field `name`: `people.name` then reads it of each
+	pub fn is_element_field(&self, list: &Node, name: &str) -> bool {
+		let Some(Shape::ListOf(type_name)) = self.shape(list) else { return false };
+		self.registry.get_by_name(&type_name).is_some_and(|type_def| type_def.fields.iter().any(|field| field.name == name))
+	}
+
 	/// The shape of an expression, when it is known to hold instances of one declared type
 	pub fn shape(&self, node: &Node) -> Option<Shape> {
 		if let Some((name, _)) = instance_parts(node) {

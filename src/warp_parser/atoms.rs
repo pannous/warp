@@ -77,6 +77,8 @@ impl WarpParser {
 				})
 			}
 			'"' | '\'' | '«' | '`' => self.parse_string(),
+			// `://warp.pannous.com/lib/libc.h`: a URL taking the page's protocol (card pannous-com, with_default_scheme)
+			':' if self.url_follows() => self.parse_url(String::new()),
 			'.' if self.starts_path_literal() => self.parse_path_literal(),
 			// `a, *rest = xs`: the starred name takes the items the other names leave (src/lowering/tuples.rs); `...rest`
 			// (JS) is the starred `*rest` too: a rest parameter or a spread argument (src/lowering/variadic.rs)

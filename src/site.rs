@@ -151,10 +151,12 @@ impl Renderer {
 	}
 }
 
-/// The page·html export's value, the page's HTML
+/// The page·html export's value, the page's HTML; ø when the prerender ended at an animation's first frame
+/// (until_first_frame): the page starts empty and shows the frames
 fn page_html_text(rendered: &Node) -> Result<&str, String> {
 	match rendered.drop_meta() {
 		Node::Text(html) => Ok(html),
+		Node::Empty => Ok(""),
 		_ => Err(format!("{} gave no text: {}", crate::page_html::PAGE_HTML, rendered.serialize())),
 	}
 }
@@ -196,7 +198,7 @@ fn site_files(code: &str, title: &str, dev: bool) -> Result<Option<ServedSite>, 
 	}
 	let imports = crate::wasm_reader::Imports { host: rendering.needs_host, wasi: rendering.needs_wasi, ffi: rendering.needs_ffi };
 	let read_after_main = |name: &str| {
-		crate::wasm_reader::read_export_after_main(&rendering.bytes, imports, name).map_err(|failure| format!("the program failed at build time: {}", with_excerpt(code, failure.to_string())))
+		warp_runtime::system_signals::until_first_frame(|| crate::wasm_reader::read_export_after_main(&rendering.bytes, imports, name)).map_err(|failure| format!("the program failed at build time: {}", with_excerpt(code, failure.to_string())))
 	};
 	// card page-dom: a main calling into the page (`use js document`) fails here, natively, where there is no page; the
 	// page then starts empty and shows what main renders in the browser
