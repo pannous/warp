@@ -1,9 +1,10 @@
 // The standard library module draw (notes/stdlib.md, card drawing-words): `use draw`, a canvas of colored pixels shown by
 // paint (the playground's canvas, natively a PNG). A color is a number 0xAARRGGBB: rgb, hsv, the named colors, with_alpha
 use math
-global canvas_width = 0
-global canvas_height = 0
-global canvas_pixels = [0]
+// the canvas until canvas(width, height) sizes it: show() alone paints this one (user 2026-10-10: defaults, no errors)
+global canvas_width = 640
+global canvas_height = 480
+global canvas_pixels = int[640 * 480]
 // paper: the canvas before anything is drawn, as paint shows 0 (src/paint.rs PAPER)
 paper = 0xFFFAFAFA
 black = 0xFF000000
