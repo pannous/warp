@@ -7,8 +7,9 @@
 
 /// What `program` prints, and how long its run took
 fn printed(program: &str) -> (String, std::time::Duration) {
+	let mut command = crate::common::warp_command();
 	let started = std::time::Instant::now();
-	let run = crate::common::warp_command().args(["--no-ask", "eval", program]).output().unwrap();
+	let run = command.args(["--no-ask", "eval", program]).output().unwrap();
 	let printed = String::from_utf8_lossy(&run.stdout).into_owned();
 	assert!(run.status.success(), "{printed} {}", String::from_utf8_lossy(&run.stderr));
 	(printed, started.elapsed())
