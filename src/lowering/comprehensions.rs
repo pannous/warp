@@ -2,7 +2,7 @@
 //! `(made = []; for x in xs { if c { made.push(x * x) } }; made)`. Lowered first, so the loop and the push go through
 //! every later pass like written ones. `xs where it > 1` filters like `[it for it in xs if it > 1]`.
 
-use super::nodes::{is_word, key};
+use super::nodes::key;
 use crate::library_words::substitute;
 use crate::node::{symbol, Bracket, Node, Separator};
 use crate::operators::Op;
@@ -59,7 +59,7 @@ impl Lists {
 				}
 			}
 			Node::Key(target, Op::Assign | Op::Define, _) => variables.extend(bound_names(target)),
-			Node::List(words, _, _) if words.first().is_some_and(|word| is_word(word, FOR_WORD)) => variables.extend(words.get(1).map(Node::name)),
+			Node::List(words, _, _) if words.first().is_some_and(|word| word.is_symbol(FOR_WORD)) => variables.extend(words.get(1).map(Node::name)),
 			_ => {}
 		});
 		Lists { fields, variables, tables: crate::database_tables::registered(program) }
@@ -138,7 +138,7 @@ fn loop_over_filtered(items: &[Node], lists: &mut Lists) -> Option<Vec<Node>> {
 	// `for x in (xs where c) {…}` as the parser groups the filter
 	let items = crate::list_phrases::words(items);
 	let [for_word, variable, in_word, sequence, where_word, condition, body] = items.as_slice() else { return None };
-	if !is_word(for_word, FOR_WORD) || !is_word(in_word, IN_WORD) || !is_word(where_word, WHERE_WORD) || !matches!(body.drop_meta(), Node::List(_, Bracket::Curly, _)) {
+	if !for_word.is_symbol(FOR_WORD) || !in_word.is_symbol(IN_WORD) || !where_word.is_symbol(WHERE_WORD) || !matches!(body.drop_meta(), Node::List(_, Bracket::Curly, _)) {
 		return None;
 	}
 	let Node::Symbol(name) = variable.drop_meta() else { return None };
@@ -201,8 +201,8 @@ fn where_flattened(node: Node) -> Node {
 		_ => None,
 	};
 	let flat = match (words_of(items.first()), words_of(items.last())) {
-		(Some(inner), _) if inner.last().is_some_and(|word| is_word(word, WHERE_WORD)) => inner.into_iter().chain(items[1..].iter().cloned()).collect(),
-		(_, Some(inner)) if items.len() > 1 && inner.len() == 2 && is_word(&inner[0], WHERE_WORD) => items[..items.len() - 1].iter().cloned().chain(inner).collect(),
+		(Some(inner), _) if inner.last().is_some_and(|word| word.is_symbol(WHERE_WORD)) => inner.into_iter().chain(items[1..].iter().cloned()).collect(),
+		(_, Some(inner)) if items.len() > 1 && inner.len() == 2 && inner[0].is_symbol(WHERE_WORD) => items[..items.len() - 1].iter().cloned().chain(inner).collect(),
 		_ => items,
 	};
 	Node::List(flat, bracket, separator)
@@ -215,7 +215,7 @@ fn where_position(items: &[Node]) -> Option<usize> {
 
 /// The clause `for v in xs …`
 fn starts_with_for(node: &Node) -> bool {
-	matches!(node.drop_meta(), Node::List(words, _, _) if words.first().is_some_and(|word| is_word(word, FOR_WORD)))
+	matches!(node.drop_meta(), Node::List(words, _, _) if words.first().is_some_and(|word| word.is_symbol(FOR_WORD)))
 }
 
 /// One node of several juxtaposed words: `upper w`
@@ -331,7 +331,7 @@ enum Qualifier {
 fn qualifiers(clause: &Node, rest: &[Node]) -> Option<Vec<Qualifier>> {
 	let Node::List(words, _, _) = clause.drop_meta() else { return None };
 	let [_, variable, in_word, sequence, tail @ ..] = words.as_slice() else { return None };
-	if !is_word(in_word, IN_WORD) || !matches!(variable.drop_meta(), Node::Symbol(_)) {
+	if !in_word.is_symbol(IN_WORD) || !matches!(variable.drop_meta(), Node::Symbol(_)) {
 		return None;
 	}
 	let mut found = vec![Qualifier::Each(variable.clone(), sequence.clone())];
@@ -339,7 +339,7 @@ fn qualifiers(clause: &Node, rest: &[Node]) -> Option<Vec<Qualifier>> {
 		([], []) => {}
 		([nothing], []) if matches!(nothing.drop_meta(), Node::Empty) => {}
 		([nested], _) if starts_with_for(nested) => found.extend(qualifiers(nested, rest)?),
-		([filter_word], [_, ..]) if is_word(filter_word, IF_WORD) || is_word(filter_word, WHERE_WORD) => {
+		([filter_word], [_, ..]) if filter_word.is_symbol(IF_WORD) || filter_word.is_symbol(WHERE_WORD) => {
 			let end = rest.iter().position(starts_with_for).unwrap_or(rest.len());
 			if end == 0 {
 				return None;

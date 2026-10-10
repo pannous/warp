@@ -2,7 +2,7 @@
 //! `fib int i = …` → `fib(i:int) := …`, `fibonacci number = …` → `fibonacci(number:number) := …`,
 //! `foo of int = it+it` → `foo(it:int) := …`; the `to` phrase `to square a number:` shares `parameter_slots`.
 
-use super::nodes::{call, is_call_head, key, spaced_statement, word_of};
+use super::nodes::{call, is_call_head, key, spaced_statement};
 use crate::analyzer::type_word_kind;
 use crate::node::{symbol, Bracket, Node, Separator};
 use crate::operators::Op;
@@ -159,7 +159,7 @@ pub fn spaced_parameters(words: &[&str], body: &Node) -> Option<Result<(Vec<Node
 /// The statement `name words… last = body` (parsed as the items `name`, `words…`, `last=body`) as `name(params) := body`
 fn spaced_definition(items: &[Node]) -> Option<Node> {
 	let (name, words, body) = spaced_statement(items)?;
-	let name = word_of(name).filter(|name| names_a_function(name))?;
+	let name = name.symbol_name().filter(|name| names_a_function(name))?;
 	let (parameters, body) = match spaced_parameters(&words, body)? {
 		Ok(slots) => slots,
 		Err(message) => return Some(crate::node::error(&message)),
@@ -174,7 +174,7 @@ fn spaced_definition(items: &[Node]) -> Option<Node> {
 /// `def`) → `square(x) := (x*x) as int`
 fn typed_return(type_name: &Node, definition: &Node) -> Option<Node> {
 	// `function square(n){…}` names no return type: a definition keyword is no type word here
-	word_of(type_name).filter(|word| is_type_word(word) && !crate::operators::FUNCTION_KEYWORDS.contains(word))?;
+	type_name.symbol_name().filter(|word| is_type_word(word) && !crate::operators::FUNCTION_KEYWORDS.contains(word))?;
 	let type_name = type_name.drop_meta();
 	match definition.drop_meta() {
 		Node::Key(head, op @ (Op::Assign | Op::Define), body) if is_call_head(head) => {
@@ -217,7 +217,7 @@ fn as_type(value: Node, type_name: &Node) -> Node {
 const RETURN: &str = "return";
 
 fn is_return(node: &Node) -> bool {
-	matches!(node.drop_meta(), Node::List(items, _, _) if items.len() == 2 && word_of(&items[0]) == Some(RETURN))
+	matches!(node.drop_meta(), Node::List(items, _, _) if items.len() == 2 && items[0].symbol_name() == Some(RETURN))
 }
 
 /// The body with every value it gives back converted: each `return e` and the last statement of a block
@@ -236,7 +236,7 @@ fn converted(body: &Node, type_name: &Node) -> Node {
 
 fn converted_returns(node: Node, type_name: &Node) -> Node {
 	match node {
-		Node::List(mut items, bracket, separator) if items.len() == 2 && word_of(&items[0]) == Some(RETURN) => {
+		Node::List(mut items, bracket, separator) if items.len() == 2 && items[0].symbol_name() == Some(RETURN) => {
 			let value = items.pop().expect("two items");
 			items.push(as_type(value, type_name));
 			Node::List(items, bracket, separator)

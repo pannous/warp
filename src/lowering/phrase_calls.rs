@@ -5,7 +5,7 @@
 //! A call of that function whose arguments, read as values and preposition words, follow the pattern becomes
 //! `name(values…)`. Elsewhere `to` stays a range and `of` a field lookup.
 
-use super::nodes::{call, key, spaced_statement, word_of};
+use super::nodes::{call, key, spaced_statement};
 use crate::node::{symbol, Bracket, Node, Separator};
 use crate::operators::Op;
 use crate::type_name_matching::prepositions_among;
@@ -77,13 +77,13 @@ fn marked_pattern(head: &Node) -> Option<(String, Vec<Part>)> {
 		return None;
 	}
 	let Node::List(items, _, _) = node.drop_meta() else { return None };
-	Some((word_of(items.first()?)?.to_string(), parts_of(&pattern.name())))
+	Some(((items.first()?).symbol_name()?.to_string(), parts_of(&pattern.name())))
 }
 
 /// `square of a number = it*it` parses as the items `square of a (number = it*it)`
 fn spaced_pattern(items: &[Node]) -> Option<(String, Vec<Part>)> {
 	let (name, words, _) = spaced_statement(items)?;
-	Some((word_of(name)?.to_string(), parts_of(&pattern_text(&words, &prepositions_among(&words)))))
+	Some((name.symbol_name()?.to_string(), parts_of(&pattern_text(&words, &prepositions_among(&words)))))
 }
 
 /// The arguments of a call as values and preposition words: `1 to 2` parses as the range `1 to 2`, which is two values
@@ -130,7 +130,7 @@ fn assigned_words(value: Node, patterns: &HashMap<String, Vec<Vec<Part>>>) -> No
 	}
 	let flat = spaced_words(std::slice::from_ref(&value));
 	let Some((head, arguments)) = flat.split_first() else { return value };
-	let calls_a_phrase = word_of(head).and_then(|name| patterns.get(name)).is_some_and(|forms| forms.iter().any(|pattern| phrase_call("", arguments, pattern).is_some()));
+	let calls_a_phrase = head.symbol_name().and_then(|name| patterns.get(name)).is_some_and(|forms| forms.iter().any(|pattern| phrase_call("", arguments, pattern).is_some()));
 	if calls_a_phrase && flat.len() > 1 { Node::List(flat, Bracket::None, Separator::Space) } else { value }
 }
 
@@ -151,7 +151,7 @@ fn rewrite(node: Node, patterns: &HashMap<String, Vec<Vec<Part>>>) -> Node {
 			let call = match items.split_first() {
 				// a spaced definition (`foo of int = …`) has the shape of a call but defines the phrase
 				Some((head, arguments)) if bracket == Bracket::None && separator == Separator::Space && spaced_pattern(&items).is_none() => {
-					let name = word_of(head);
+					let name = head.symbol_name();
 					name.and_then(|name| patterns.get(name)?.iter().find_map(|pattern| phrase_call(name, arguments, pattern)))
 				}
 				_ => None,

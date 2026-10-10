@@ -263,7 +263,7 @@ impl TaskControl {
 			state = self.changed.wait(state).expect("task control");
 		}
 		match *state {
-			Control::Stop => Err(wasmtime::Error::new(TaskFailure(STOPPED.to_string()))),
+			Control::Stop => Err(task_failure(STOPPED.to_string())),
 			_ => Ok(UpdateDeadline::Continue(1)),
 		}
 	}
@@ -285,6 +285,11 @@ impl std::fmt::Display for TaskFailure {
 }
 
 impl std::error::Error for TaskFailure {}
+
+/// A failure the program sees as the error of its call
+pub(crate) fn task_failure(message: String) -> wasmtime::Error {
+	wasmtime::Error::new(TaskFailure(message))
+}
 
 /// One local channel (P155): the values offered and not yet taken, in order; a send waits until the receives counted
 /// past its own number
@@ -466,8 +471,8 @@ impl TaskTable {
 		linker.func_wrap(HOST_LIBRARY, TASK_SPAWN_VALUES, move |mut caller: Caller<'_, HostState>, name: i32, arguments: Option<Rooted<AnyRef>>| -> wasmtime::Result<i64> {
 			let name = c_string(&mut caller, name).map_err(host_error)?;
 			let builders = Builders::of(&mut |export| caller.get_export(export)).map_err(host_error)?;
-			let task_failure = |failure: anyhow::Error| wasmtime::Error::new(TaskFailure(format!("task {}: {failure}", task_name(&name))));
-			let arguments = match builders.read_value(&Val::AnyRef(arguments), &mut caller.as_context_mut()).map_err(task_failure)? {
+			let unreadable = |failure: anyhow::Error| task_failure(format!("task {}: {failure}", task_name(&name)));
+			let arguments = match builders.read_value(&Val::AnyRef(arguments), &mut caller.as_context_mut()).map_err(unreadable)? {
 				TaskValue::List(items, _) => items,
 				TaskValue::Empty => vec![],
 				single => vec![single],
@@ -477,7 +482,7 @@ impl TaskTable {
 		})?;
 		let value_awaiter = self.clone();
 		linker.func_wrap(HOST_LIBRARY, TASK_AWAIT_VALUE, move |mut caller: Caller<'_, HostState>, id: i64| -> wasmtime::Result<Option<Rooted<AnyRef>>> {
-			let value = value_awaiter.take(id).map_err(|message| wasmtime::Error::new(TaskFailure(message)))?;
+			let value = value_awaiter.take(id).map_err(task_failure)?;
 			let builders = Builders::of(&mut |export| caller.get_export(export)).map_err(host_error)?;
 			let built = builders.build(&value, &mut caller.as_context_mut()).map_err(host_error)?;
 			Ok(built.unwrap_anyref().copied())
@@ -521,7 +526,7 @@ impl TaskTable {
 		self.link_channels(linker)?;
 		let awaiter = self.clone();
 		linker.func_wrap(HOST_LIBRARY, TASK_AWAIT, move |mut caller: Caller<'_, HostState>, id: i64| -> wasmtime::Result<i64> {
-			let value = awaiter.take(id).map_err(|message| wasmtime::Error::new(TaskFailure(message)))?;
+			let value = awaiter.take(id).map_err(task_failure)?;
 			let builders = Builders::of(&mut |export| caller.get_export(export)).map_err(host_error)?;
 			builders.int_of(&value, &mut caller.as_context_mut()).map_err(host_error)
 		})?;
@@ -531,7 +536,6 @@ impl TaskTable {
 	/// The local channel words (Channels); the program waiting on a channel while no task runs any more waits forever:
 	/// an error, as Go's "all goroutines are asleep"
 	fn link_channels(self: &Arc<Self>, linker: &mut Linker<HostState>) -> Result<()> {
-		let failure = |message: String| wasmtime::Error::new(TaskFailure(message));
 		let opener = self.clone();
 		linker.func_wrap(HOST_LIBRARY, CHANNEL_NEW, move || -> i64 { opener.channels.open() })?;
 		let sender = self.clone();
@@ -539,22 +543,22 @@ impl TaskTable {
 			let builders = Builders::of(&mut |export| caller.get_export(export)).map_err(host_error)?;
 			let value = builders.read_value(&Val::AnyRef(value), &mut caller.as_context_mut()).map_err(host_error)?;
 			let alone = sender.alone_in(&caller);
-			sender.channels.put(id, value, &alone).map_err(failure)
+			sender.channels.put(id, value, &alone).map_err(task_failure)
 		})?;
 		let receiver = self.clone();
 		linker.func_wrap(HOST_LIBRARY, CHANNEL_TAKE, move |mut caller: Caller<'_, HostState>, id: i64| -> wasmtime::Result<Option<Rooted<AnyRef>>> {
 			let alone = receiver.alone_in(&caller);
-			let value = receiver.channels.take(id, &alone).map_err(failure)?.unwrap_or(TaskValue::Empty);
+			let value = receiver.channels.take(id, &alone).map_err(task_failure)?.unwrap_or(TaskValue::Empty);
 			let builders = Builders::of(&mut |export| caller.get_export(export)).map_err(host_error)?;
 			Ok(builders.build(&value, &mut caller.as_context_mut()).map_err(host_error)?.unwrap_anyref().copied())
 		})?;
 		let looper = self.clone();
 		linker.func_wrap(HOST_LIBRARY, CHANNEL_MORE, move |caller: Caller<'_, HostState>, id: i64| -> wasmtime::Result<i64> {
 			let alone = looper.alone_in(&caller);
-			looper.channels.more(id, &alone).map(i64::from).map_err(failure)
+			looper.channels.more(id, &alone).map(i64::from).map_err(task_failure)
 		})?;
 		let closer = self.clone();
-		linker.func_wrap(HOST_LIBRARY, CHANNEL_CLOSE, move |id: i64| -> wasmtime::Result<()> { closer.channels.close(id).map_err(failure) })?;
+		linker.func_wrap(HOST_LIBRARY, CHANNEL_CLOSE, move |id: i64| -> wasmtime::Result<()> { closer.channels.close(id).map_err(task_failure) })?;
 		Ok(())
 	}
 
