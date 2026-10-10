@@ -215,8 +215,9 @@ function programImports(holder, hooks) {
 			// render_sound writes them, played or not, into a WAV (host-files.js STD_ADAPTERS.sound.render)
 			sound_samples: (samples, count, rate) => {
 				const values = intsOfList(program(), samples, Number(count)) ?? plainOfTree(readNode(program(), samples));
-				(holder.run.unrenderedSounds ??= []).push({ samples: values, rate: Number(rate), place: self.voiceSounded?.(values.length / Number(rate)) });
-				hooks.sound?.(values, Number(rate));
+				const { place, at } = self.voiceSounded?.(values.length / Number(rate)) ?? {};
+				(holder.run.unrenderedSounds ??= []).push({ samples: values, rate: Number(rate), place });
+				hooks.sound?.(values, Number(rate), at);
 			},
 			...Object.assign({}, ...eachHostPart("words", holder, hooks, access)),
 		},

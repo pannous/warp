@@ -50,15 +50,15 @@ self.playSoundFile = (url, bytes) => post({ type: "sound file", url, bytes, hand
 self.keepFile = (path, bytes) => post({ type: "file", path, bytes }); // render_sound's WAV, for the page's download link
 self.stopSoundFiles = () => { self.voiceStopped(); post({ type: "stop sound files" }); };
 self.stopSound = handle => post({ type: "stop sound", handle }); // stop_sound(handle)
-// a worker has no AudioContext: the page plays it at its start on the shared clock, behind the voice's sounds before
-// it (host-tasks.js voicePlaced); a task's sound comes relayed with its own voice's start
-self.playSamples = (samples, rate, at = self.voicePlaced(samples.length / rate)) => post({ type: "sound", samples, rate, at, handle: nextSoundHandle() });
+// a worker has no AudioContext: the page plays it at its start on the shared clock (host-tasks.js voiceSounded); a
+// task's sound comes relayed with its own voice's start
+self.playSamples = (samples, rate, at) => post({ type: "sound", samples, rate, at, handle: nextSoundHandle() });
 const hooks = {
 	renders: true, // each outcome carries its HTML by the program's own renderer (host.js renderedHtml)
 	print: (text, stream) => post({ type: "print", text, stream }),
 	module: bytes => post({ type: "module", bytes }),
 	paint: (pixels, width, height) => post({ type: "paint", pixels, width, height }),
-	sound: (samples, rate) => self.playSamples(samples, rate),
+	sound: (samples, rate, at) => self.playSamples(samples, rate, at),
 	sleeping: milliseconds => post({ type: "sleep", milliseconds }),
 	tasksInline: reason => post({ type: "tasks inline", reason }),
 	notify: text => post({ type: "notify", text }),
@@ -292,7 +292,7 @@ async function handleMessage(data) {
 	await taskPoolReady(); // host.js: tasks run on loaded Workers, not inline
 	stage(`evaluating run ${data.id}`);
 	soundHandles = 0;
-	self.voiceStopped(); // a run's sounds start now, not behind the last run's
+	self.joinVoice(); // a run's sounds start now, not behind the last run's
 	const started = performance.now();
 	const report = await evaluate(data.code, data.acknowledged ?? {});
 	post({ type: "report", id: data.id, report, milliseconds: performance.now() - started });

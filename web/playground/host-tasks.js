@@ -71,30 +71,36 @@ function addTaskWorker(loaded) {
 	self.postMessage({ taskWorker: { id, url: new URL(url, self.location.href).href } });
 }
 
-// a voice (card playground-go, natively src/sound.rs Voice): when this Worker's queued sounds end, on the clock the page
-// and every Worker share. A task's voice starts where its starter's stands, so their sounds sound together
-let voiceEnd = 0;
-let voiceSeconds = 0; // the seconds of sound this voice made in all: its sounds' places for render_sound
+// a voice (card playground-go, natively src/sound.rs Voice): when this Worker's queued sounds end on the clock the
+// page and every Worker share, the seconds of sound it made in all (its sounds' places for render_sound) and the
+// clock's time of place 0 (where `at 2 beats` counts from). A task's voice starts where its starter's stands
+let voice = {};
+let voicesBeforeAt = []; // the voices `at` statements left (sound_at), taken up again by sound_at_end
 const soundClock = () => (performance.timeOrigin + performance.now()) / 1000;
-self.soundsQueued = () => Math.max(0, voiceEnd - soundClock()); // sound_queued()
-self.voiceStopped = () => { voiceEnd = 0; };
-self.joinVoice = voice => { voiceEnd = voice?.end ?? 0; voiceSeconds = voice?.seconds ?? 0; }; // a task Worker's: its starter's
-// the place of a sound of that many seconds among the voice's sounds (host.js sound_samples)
+self.soundsQueued = () => Math.max(0, (voice.end ?? 0) - soundClock()); // sound_queued()
+self.voiceStopped = () => { voice = { ...voice, end: undefined }; };
+self.joinVoice = starters => { voice = { ...starters }; }; // a task Worker's: its starter's; none: a run's fresh one
+self.currentVoice = () => voice;
+// a sound of that many seconds behind the voice's sounds, never before now: its place and its start on the clock
 self.voiceSounded = seconds => {
-	const place = voiceSeconds;
-	voiceSeconds += seconds;
-	return place;
+	const at = Math.max(voice.end ?? 0, soundClock());
+	const place = voice.seconds ?? 0;
+	voice = { end: at + seconds, seconds: place + seconds, origin: voice.origin ?? at - place };
+	return { place, at };
 };
-// the start of a sound of that many seconds: behind this voice's sounds, never before now
-self.voicePlaced = seconds => {
-	const start = Math.max(voiceEnd, soundClock());
-	voiceEnd = start + seconds;
-	return start;
+// `at time …`: the voice placed that many seconds after its place 0; its end puts it back, keeping that origin
+self.voiceAt = seconds => {
+	voicesBeforeAt.push(voice);
+	const origin = voice.origin ?? soundClock();
+	voice = { end: origin + seconds, seconds, origin };
+};
+self.voiceAtEnd = () => {
+	if (voicesBeforeAt.length) voice = { ...voicesBeforeAt.pop(), origin: voice.origin };
 };
 // a task run inline sounds as a voice of its own too: the starter's voice stands where it stood
 function asVoice(run) {
-	const [starterEnd, starterSeconds] = [voiceEnd, voiceSeconds];
-	try { return run(); } finally { [voiceEnd, voiceSeconds] = [starterEnd, starterSeconds]; }
+	const starters = voice;
+	try { return run(); } finally { voice = starters; }
 }
 // the sounds a task made go to its starter's run, for its render_sound (card playground-drops)
 function withTaskSounds(run, record) {
@@ -315,7 +321,7 @@ function startTask(holder, hooks, name, ints, values) {
 		const worker = taskPool.pop();
 		const control = new Int32Array(new SharedArrayBuffer(2 * Int32Array.BYTES_PER_ELEMENT));
 		const files = self.writtenFilesForTask?.();
-		worker.postMessage({ module: run.module, name, ints, values, shared, arrays: run.shared, captured, control, channels: run.channels, files, voice: { end: voiceEnd, seconds: voiceSeconds } });
+		worker.postMessage({ module: run.module, name, ints, values, shared, arrays: run.shared, captured, control, channels: run.channels, files, voice });
 		run.tasks.set(id, { name, worker, shared, control, started: performance.now(), inline });
 	} else {
 		if (!hasTaskWorkers()) sayTasksInline(run, holder, hooks);
