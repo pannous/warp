@@ -87,8 +87,6 @@ const LAZY_PARTS: [(&str, &str); 15] = [(FOUND, "found"), (OF, "of"), (LOAD, "lo
 	(KEPT, "kept"), (LOADED, "loaded"), (MET, "met"), (PAGE, "page"), (START, "start")];
 /// The rows a loop over an unloaded table reads at once (notes/orm.md Loading)
 const PAGE_SIZE: usize = 100;
-/// `count(people)`, `people.count`: counted without loading
-const COUNT_WORDS: [&str; 4] = ["count", "size", "length", "len"];
 /// a paged loop's count and position, `p·end` and `p·position` of `for p in people`
 const LOOP_END: &str = "table_loop_end";
 const LOOP_POSITION: &str = "table_loop_position";
@@ -927,7 +925,7 @@ fn with_lazy_reads(node: Node, tables: &BTreeMap<String, Table>, own: Option<&st
 		},
 		Node::Key(_, Op::Assign, source) if database_table(&source).is_some() => node,
 		Node::Key(word, Op::Colon, _) if word.drop_meta().name() == GLOBAL_WORD => node,
-		Node::List(parts, _, _) if parts.len() == 2 && COUNT_WORDS.contains(&parts[0].drop_meta().name().as_str()) && table_of(&parts[1]).is_some() => {
+		Node::List(parts, _, _) if parts.len() == 2 && crate::analyzer::is_counting_word(&parts[0].drop_meta().name()) && table_of(&parts[1]).is_some() => {
 			called(lazy_name(&table_of(&parts[1]).unwrap_or_default(), "count"), None)
 		}
 		Node::List(parts, _, _) if parts.len() == 5 && parts[0].drop_meta().name() == FOR_WORD && parts[2].drop_meta().name() == IN_WORD
@@ -942,7 +940,7 @@ fn with_lazy_reads(node: Node, tables: &BTreeMap<String, Table>, own: Option<&st
 			Node::meta(row, Node::data(crate::lowering::traits::TypedAs(tables[&variable].class.clone())))
 		}
 		Node::Key(left, Op::Dot, right) => match (table_of(&left), right.drop_meta()) {
-			(Some(variable), Node::Symbol(word)) if COUNT_WORDS.contains(&word.as_str()) => called(lazy_name(&variable, "count"), None),
+			(Some(variable), Node::Symbol(word)) if crate::analyzer::is_counting_word(word) => called(lazy_name(&variable, "count"), None),
 			(Some(variable), Node::List(parts, _, _)) if parts.len() == 3 && parts[0].drop_meta().name() == FOUND_WORD => {
 				let code = format!("{FUNCTION_PLACEHOLDER}({CONDITION_PLACEHOLDER}, {PARAMETERS_PLACEHOLDER})");
 				generated(&code, [(FUNCTION_PLACEHOLDER, Node::Symbol(lazy_name(&variable, "found"))), (CONDITION_PLACEHOLDER, parts[1].clone()), (PARAMETERS_PLACEHOLDER, rewrite(parts[2].clone()))])

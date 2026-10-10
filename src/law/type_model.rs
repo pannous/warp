@@ -68,8 +68,6 @@ const MAP_CLASS: &str = "map";
 /// `count xs`, `count x in xs` (how often x is in xs) and `x in xs` (x's first position from 1, else 0) walk the list
 /// with a `·tally` instance: its int fields hold the count or position and the current index
 const COUNT_WORD: &str = "count";
-/// `xs.size`, `xs.count`, `"abc".length`: `count xs`
-const SIZE_METHODS: [&str; 3] = ["size", "count", "length"];
 /// `min(a, b)` and `max(a, b)` of two values (lowering/min_max.rs): a comparison, each argument computed once
 const EXTREMA: [&str; 2] = ["min", "max"];
 const TALLY_CLASS: &str = "·tally";
@@ -791,7 +789,7 @@ impl Exporter {
 		}
 		argument_classes.extend(event_classes);
 		let mut words_used = false;
-		program_node.visit(&mut |part| words_used |= [COUNT_WORD, IN_KEYWORD].iter().chain(&SIZE_METHODS).any(|word| is_word(part, word)));
+		program_node.visit(&mut |part| words_used |= [COUNT_WORD, IN_KEYWORD].iter().chain(&crate::analyzer::COUNTING_WORDS).any(|word| is_word(part, word)));
 		if words_used {
 			let fields = [CELL_FIELD, TALLY_INDEX].map(|field| (field.to_string(), Some("int".to_string())));
 			self.classes.insert(TALLY_CLASS.to_string(), (vec![TALLY_CLASS.to_string()], fields.to_vec()));
@@ -1304,7 +1302,7 @@ impl Exporter {
 					Ok(format!(".push (.glob {}) ({item})", quoted(name)))
 				}
 				(_, Node::Symbol(field)) if self.is_field(field) => Ok(format!(".get ({}) {}", self.expression(list)?, quoted(field))),
-				(_, Node::Symbol(method)) if SIZE_METHODS.contains(&method.as_str()) => self.tally(list, None, false),
+				(_, Node::Symbol(method)) if crate::analyzer::is_counting_word(method) => self.tally(list, None, false),
 				_ => unsupported(node),
 			},
 			Node::Key(if_then, Op::Else, otherwise) => match if_then.drop_meta() {
