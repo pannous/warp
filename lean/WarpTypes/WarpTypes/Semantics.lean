@@ -143,13 +143,58 @@ def ratDisplay (q : Rat) : String :=
   let padded := String.ofList (List.replicate (digits - fraction.length) '0') ++ fraction
   (if q.num < 0 then "-" else "") ++ whole ++ (if digits = 0 then "" else "." ++ padded)
 
+/-- warp's float_text constants (src/wasm_emitter/float_text.rs): significant digits, positional exponents -/
+def significantDigits : Nat := 15
+def smallestPositional : Int := -5
+def largestPositional : Int := 15
+
+/-- x = mantissa · 10^exponent, the mantissa in [1, 10), scaled by ×10 and ÷10 steps as float_text does -/
+def decimalScale : (fuel : Nat) → Float → Int → Float × Int
+  | 0, x, exponent => (x, exponent)
+  | fuel + 1, x, exponent =>
+    if x >= 10 then decimalScale fuel (x / 10) (exponent + 1)
+    else if x < 1 then decimalScale fuel (x * 10) (exponent - 1)
+    else (x, exponent)
+
+/-- a positive float rounded to the nearest whole, ties to even (wasm's f64.nearest) -/
+def roundHalfEven (y : Float) : Float :=
+  let r := y.round
+  if (r - y).abs == 0.5 && (r / 2).floor * 2 != r then r - 1 else r
+
+/-- n without its trailing zeros, keeping at least one digit, and how many digits are left -/
+def dropTrailingZeros : (fuel : Nat) → Nat → Nat → Nat × Nat
+  | 0, n, count => (n, count)
+  | fuel + 1, n, count => if count > 1 && n % 10 == 0 then dropTrailingZeros fuel (n / 10) (count - 1) else (n, count)
+
+def zeroText (count : Int) : String := String.ofList (List.replicate count.toNat '0')
+
+/-- the digits of a positive float laid out at its decimal exponent: positional from 1e-5 up to 1e15, else `1.5e20` -/
+def placeDigits (digits : String) (exponent : Int) : String :=
+  let count : Int := digits.length
+  let before (k : Int) := String.ofList (digits.toList.take k.toNat)
+  let after (k : Int) := String.ofList (digits.toList.drop k.toNat)
+  if exponent < smallestPositional || exponent >= largestPositional then
+    before 1 ++ (if count > 1 then "." ++ after 1 else "") ++ "e" ++ toString exponent
+  else if exponent >= count - 1 then digits ++ zeroText (exponent - count + 1)
+  else if exponent >= 0 then before (exponent + 1) ++ "." ++ after (exponent + 1)
+  else "0." ++ zeroText (-1 - exponent) ++ digits
+
+/-- a float as warp's float_text writes it: at most 15 significant digits (`0.5`, `1.5e-7`), as `%.15g` -/
+def floatText (f : Float) : String :=
+  if f.isNaN then "NaN" else if f.isInf then (if f > 0 then "∞" else "-∞") else if f == 0 then "0" else
+  let (mantissa, exponent) := decimalScale 700 f.abs 0
+  let scaled := (roundHalfEven (mantissa * 1e14)).toUInt64.toNat
+  let (whole, exponent) := if scaled >= 10 ^ significantDigits then (scaled / 10, exponent + 1) else (scaled, exponent)
+  let (digits, _) := dropTrailingZeros significantDigits whole significantDigits
+  (if f < 0 then "-" else "") ++ placeDigits (toString digits) exponent
+
 /-- a value as `+` joins it to a text -/
 def render : Expr → String
   | .text s => s
   | .bool b => if b then "true" else "false"
   | .int n => toString n
   | .num q => ratDisplay q
-  | .flt f => toString (Float.ofBits f)
+  | .flt f => floatText (Float.ofBits f)
   | _ => ""
 
 def isText : Expr → Bool
