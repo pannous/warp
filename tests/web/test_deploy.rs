@@ -71,3 +71,40 @@ fn the_playground_bundles_a_program_for_warp_hosting() {
 	assert!(refused["error"].as_str().is_some_and(|message| message.contains("answers no request")), "{refused}");
 	assert!(nothing.is_empty());
 }
+
+/// The Worker of `program` run by `wrangler dev` on a free port, and its address
+fn running_worker(program: &str, name: &str) -> (WranglerDev, String, std::path::PathBuf) {
+	let directory = scratch_directory(name);
+	let files = warp::deploy::worker_files(program, name).expect("the Worker is built");
+	warp::site::write_files(&files, &directory).expect("written");
+	let free_port = || std::net::TcpListener::bind("127.0.0.1:0").and_then(|listener| listener.local_addr()).expect("a free port").port().to_string();
+	let port = free_port();
+	// its own inspector port too: two wrangler dev at once (the test above) clash on the default 9229
+	let wrangler = std::process::Command::new("wrangler").args(["dev", "--ip", "127.0.0.1", "--port", &port, "--inspector-port", &free_port()])
+		.current_dir(&directory).stdout(std::process::Stdio::null()).stderr(std::process::Stdio::null()).spawn()
+		.expect("wrangler runs (npm install -g wrangler)");
+	let base = format!("http://127.0.0.1:{port}");
+	let started = Instant::now();
+	while ureq::get(&base).call().is_err() {
+		assert!(started.elapsed() < START_LIMIT, "wrangler dev did not answer on {base}");
+		std::thread::sleep(Duration::from_millis(200));
+	}
+	(WranglerDev(wrangler), base, directory)
+}
+
+/// A program without routes deploys anyway (card make-deploy): its value is the page at /, each function a route
+/// calling it with the path's parts; a program of functions only lists their routes at /
+#[test]
+fn a_program_without_routes_answers_its_value_and_functions() {
+	let (_running, base, directory) = running_worker("square(n) := n*n\nadd(a, b) := a + b\ntwice := it * 2\n\"squares and sums\"", "lambda");
+	assert_eq!(answer(&base, "/"), (200, "text/plain; charset=utf-8".into(), "squares and sums".into()));
+	assert_eq!(answer(&base, "/square/3").2, "9");
+	assert_eq!(answer(&base, "/add/2/40").2, "42");
+	assert_eq!(answer(&base, "/twice/21").2, "42");
+	assert_eq!(answer(&base, "/nope").0, 404);
+	std::fs::remove_dir_all(directory).ok();
+	let (_running, base, directory) = running_worker("square(n) := n*n", "functions-only");
+	assert_eq!(answer(&base, "/").2, r#"["/square/:n"]"#);
+	assert_eq!(answer(&base, "/square/12").2, "144");
+	std::fs::remove_dir_all(directory).ok();
+}

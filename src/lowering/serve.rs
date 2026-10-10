@@ -50,6 +50,12 @@ const DATABASE_WORDS: [&str; 2] = ["database", "indexedDB"];
 /// `·` of a generated name as written in code (it would parse as a product)
 const NAME_DOT: &str = "_dot_";
 
+/// with_default_routes: the page of a hosted program's value, and what a function's `it` is called in its route
+const PAGE_ROUTE: &str = "/";
+const IMPLICIT_PARAMETER: &str = "it";
+const ROUTE_ARGUMENT: &str = "value";
+const USE_WORD: &str = "use";
+
 /// A route as written: its method (upper case), path and body
 type Route = (String, Node, Node);
 
@@ -101,7 +107,67 @@ pub fn lower(program: Node) -> Node {
 /// function, a page route (`route "/" {…}`) or a top-level `get`/`post` route. Plain `warp app.warp` serves such a
 /// program as `warp serve` does (P222)
 pub fn serves(code: &str) -> bool {
-	top_level_statements(code).iter().any(|statement| served(statement).is_some() || server_definition(statement).is_some() || crate::routes::is_route(statement) || !top_level_routes(statement).is_empty())
+	top_level_statements(code).iter().any(is_serving_statement)
+}
+
+fn is_serving_statement(statement: &Node) -> bool {
+	served(statement).is_some() || server_definition(statement).is_some() || crate::routes::is_route(statement) || !top_level_routes(statement).is_empty()
+}
+
+/// A hosted program without routes (`warp deploy`, card make-deploy) answers anyway: its value is the page at /, and
+/// each function the route calling it, `square(n) := n*n` answering /square/3 with 9 (an untyped path parameter is a
+/// number when it is digits, lib/router.warp). A program of functions only lists their routes at /
+pub fn with_default_routes(program: Node) -> Node {
+	if !crate::pipeline::is_for_hosting() {
+		return program;
+	}
+	let (mut statements, separator) = match program.drop_meta() {
+		Node::List(statements, Bracket::None, separator @ (Separator::Newline | Separator::Semicolon)) => (statements.clone(), separator.clone()),
+		_ => (vec![program.clone()], Separator::Newline),
+	};
+	if statements.iter().any(is_serving_statement) {
+		return program;
+	}
+	let functions: Vec<(String, String)> = statements.iter().filter_map(function_route).collect();
+	let value = statements.last().filter(|last| !crate::modules::is_declaration(last) && !is_use(last)).cloned();
+	if value.is_none() && functions.is_empty() {
+		return program;
+	}
+	let index = value.is_none().then(|| functions.iter().map(|(path, _)| format!("{path:?}")).collect::<Vec<_>>().join(", "));
+	if value.is_some() {
+		statements.pop();
+	}
+	statements.extend(functions.iter().map(|(path, answer)| crate::warp_parser::parse(&format!("get {path:?} {{ {answer} }}"))));
+	statements.push(match value {
+		Some(value) => with_route_body(crate::warp_parser::parse(&format!("get {:?} {{ ø }}", PAGE_ROUTE)), value),
+		None => crate::warp_parser::parse(&format!("get {PAGE_ROUTE:?} {{ [{}] }}", index.unwrap_or_default())),
+	});
+	Node::List(statements, Bracket::None, separator)
+}
+
+/// `square(n) := n*n` → ("/square/:n", "square(n)"); `twice := it * 2` → ("/twice/:value", "twice(value)")
+fn function_route(statement: &Node) -> Option<(String, String)> {
+	let (head, body, _) = super::memoization::definition_parts(statement)?;
+	let (name, parameters) = match head.drop_meta() {
+		Node::List(items, Bracket::Round, _) if super::nodes::is_call_head(&head) => (items[0].symbol_name()?.to_string(), items[1..].iter().filter_map(super::nodes::parameter_name).collect()),
+		Node::Symbol(name) if body.mentions_any(&[IMPLICIT_PARAMETER]) => (name.clone(), vec![ROUTE_ARGUMENT.to_string()]),
+		_ => return None,
+	};
+	let path: String = std::iter::once(format!("/{name}")).chain(parameters.iter().map(|parameter| format!("/:{parameter}"))).collect();
+	Some((path, format!("{name}({})", parameters.join(", "))))
+}
+
+fn is_use(statement: &Node) -> bool {
+	matches!(statement.drop_meta(), Node::List(items, _, _) if items.first().is_some_and(|word| word.drop_meta().name() == USE_WORD))
+}
+
+/// The route with `body` in place of its block's ø
+fn with_route_body(route: Node, body: Node) -> Node {
+	let Node::List(mut items, bracket, separator) = route.drop_meta().clone() else { return route };
+	if let Some(Node::List(_, block_bracket, block_separator)) = items.pop().map(|block| block.drop_meta().clone()) {
+		items.push(Node::List(vec![body], block_bracket, block_separator));
+	}
+	Node::List(items, bracket, separator)
 }
 
 /// Whether the program has its own `serve PORT {…}`
