@@ -72,8 +72,9 @@ when a message or comment cites a number (P71, D5) and you need its wording; nev
 - A card or issue is closed only with a commit linked in its description (user, 2026-10-06): `todo done <card>
   <commit>` (a commit URL for wiki changes), never `gh issue close`; `todo move <card> Done` refuses without a link.
   A result the user can see or use gets `--try "how to try it"`: one concrete line with the exact command or URL to paste (user 2026-10-10: "give me
-  the command because I'm lazy"), e.g. `--try "warp run samples/sound.warp"`; the Interviewer announces it
-  (notes/roles.md "Ready to try").
+  the command because I'm lazy"), e.g. `--try "/Users/me/dev/bin/warp samples/sound.warp"`: always that full path
+  (main's debug build, refreshed per pushed batch; plain `warp` is the older brew release). Run `todo done` only
+  after your branch is on main; the Interviewer announces it (notes/roles.md "Ready to try").
 - Picking a card: `todo take <card> <your session name>` (user, 2026-10-06): assigns the user on GitHub, names you in
   the board field Agent, moves the card to Now. Prefer fresh, easy cards in column Next (user, 2026-10-06).
   Card keys (user, 2026-10-09): every card has a meaningful key, never a GitHub id like g_oncU. Cron
