@@ -22,37 +22,58 @@ pub const TIME_OF: &str = "time_of";
 pub const EPOCH_SECONDS: &str = "epoch_seconds";
 
 /// The form of a run-time time node, in the info bits above Kind::Time; its $i64box holds the position: days since
-/// 1970 for a date, nanoseconds since 1970 for the others (a local time as if it were UTC)
+/// 1970 for a date, nanoseconds since 1970 for the others (a local time as if it were UTC), the exact nanoseconds of a
+/// duration. Above the form, a duration keeps its days and months, a zoned time its zone and offset (`time_info`)
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum TimeForm {
 	Instant = 0,
 	Date = 1,
 	Local = 2,
+	Duration = 3,
+	Zoned = 4,
 }
-pub const TIME_FORMS: [TimeForm; 3] = [TimeForm::Instant, TimeForm::Date, TimeForm::Local];
+pub const TIME_FORMS: [TimeForm; 5] = [TimeForm::Instant, TimeForm::Date, TimeForm::Local, TimeForm::Duration, TimeForm::Zoned];
 /// The info bits of the form
-pub const TIME_FORM_MASK: i64 = 3;
+pub const TIME_FORM_MASK: i64 = 7;
+pub const TIME_FORM_BITS: i64 = 3;
+/// A duration's months above its days, which take 32 bits
+pub const MONTHS_SHIFT: i64 = TIME_FORM_BITS + 32;
+/// A zoned time's index in calendar::ZONES, then its offset in minutes east of UTC
+pub const ZONE_INDEX_MASK: i64 = 0xff;
+pub const OFFSET_SHIFT: i64 = TIME_FORM_BITS + 8;
 
 impl TimeForm {
-	/// A time of this form, for the messages its refusals give
-	pub fn example(self) -> Time {
-		match self {
+	/// Why a time of this form has no field `name`, as the compile-time evaluator says it
+	pub fn refusal(self, name: &str) -> Option<String> {
+		let example = match self {
 			TimeForm::Instant => Time::Instant(0),
 			TimeForm::Date => Time::Date(calendar::civil_from_days(0)),
 			TimeForm::Local => {
 				let (date, clock) = calendar::from_wall_nanos(0);
 				Time::Local(date, clock)
 			}
-		}
+			TimeForm::Duration => return Duration::default().field(name).err(),
+			TimeForm::Zoned => Time::Zoned(Zoned::at(0, &calendar::ZONES[0])),
+		};
+		example.field(name).err()
 	}
+}
 
-	fn of(time: &Time) -> Option<TimeForm> {
-		match time {
-			Time::Instant(_) => Some(TimeForm::Instant),
-			Time::Date(_) => Some(TimeForm::Date),
-			Time::Local(..) => Some(TimeForm::Local),
-			Time::Zoned(_) => None,
+/// The info bits and the position of a time or duration at run time (TimeForm)
+fn time_info(value: &Value) -> Option<(i64, i64)> {
+	match value {
+		Value::Time(Time::Instant(instant)) => Some((TimeForm::Instant as i64, *instant as i64)),
+		Value::Time(time @ Time::Date(_)) => Some((TimeForm::Date as i64, time.position() as i64)),
+		Value::Time(time @ Time::Local(..)) => Some((TimeForm::Local as i64, time.position() as i64)),
+		Value::Time(Time::Zoned(zoned)) => {
+			let index = calendar::ZONES.iter().position(|zone| zone.name == zoned.zone.name)? as i64;
+			Some((TimeForm::Zoned as i64 | index << TIME_FORM_BITS | (zoned.offset / calendar::MINUTE) << OFFSET_SHIFT, zoned.instant() as i64))
 		}
+		Value::Duration(duration) => {
+			let days = (duration.days as u32 as i64) << TIME_FORM_BITS;
+			Some((TimeForm::Duration as i64 | days | duration.months << MONTHS_SHIFT, duration.nanos as i64))
+		}
+		_ => None,
 	}
 }
 
@@ -70,10 +91,17 @@ pub fn local_offset(instant: calendar::Instant) -> i64 {
 
 /// `now` or an instant constant: its fields need the host's local_offset (wasm_emitter/times.rs time_field)
 pub fn makes_instant(items: &[Node]) -> bool {
+	matches!(items.first(), Some(head) if is_symbol(head, INSTANT_AT)) || constant_form(items) == Some(TimeForm::Instant)
+}
+
+/// The form of a constant `time_of(info, position)`
+pub fn constant_form(items: &[Node]) -> Option<TimeForm> {
 	match items {
-		[head, ..] if is_symbol(head, INSTANT_AT) => true,
-		[head, form, _] if is_symbol(head, TIME_OF) => matches!(form.drop_meta(), Node::Number(Number::Int(form)) if *form == TimeForm::Instant as i64),
-		_ => false,
+		[head, info, _] if is_symbol(head, TIME_OF) => match info.drop_meta() {
+			Node::Number(Number::Int(info)) => form_of(*info),
+			_ => None,
+		},
+		_ => None,
 	}
 }
 
@@ -104,17 +132,33 @@ enum Value {
 
 type Scope = HashMap<String, Value>;
 
-/// A time read back from the run-time node (Kind::Time): its form (the info bits) and position
+fn form_of(info: i64) -> Option<TimeForm> {
+	TIME_FORMS.into_iter().find(|form| *form as i64 == info & TIME_FORM_MASK)
+}
+
+/// A time read back from the run-time node (Kind::Time): its info bits (TimeForm) and position
 pub fn time_node(info: i64, position: Option<Number>) -> Node {
 	let Some(Number::Int(position)) = position else { return error("unreadable time") };
 	let position = position as i128;
-	match TIME_FORMS.into_iter().find(|form| *form as i64 == info & TIME_FORM_MASK) {
+	match form_of(info) {
 		Some(TimeForm::Instant) => Node::data(Time::Instant(position)),
 		Some(TimeForm::Date) => Node::data(Time::Date(calendar::civil_from_days(position as i64))),
 		Some(TimeForm::Local) => {
 			let (date, clock) = calendar::from_wall_nanos(position);
 			Node::data(Time::Local(date, clock))
 		}
+		Some(TimeForm::Duration) => {
+			let days = (info >> TIME_FORM_BITS) as i32 as i64;
+			Node::data(Duration { months: info >> MONTHS_SHIFT, days, nanos: position })
+		}
+		Some(TimeForm::Zoned) => match calendar::ZONES.get(((info >> TIME_FORM_BITS) & ZONE_INDEX_MASK) as usize) {
+			Some(zone) => {
+				let offset = (info >> OFFSET_SHIFT) * calendar::MINUTE;
+				let (date, clock) = calendar::local_at(position, offset);
+				Node::data(Time::Zoned(Zoned { date, clock, offset, zone, rules: calendar::rules() }))
+			}
+			None => error("unreadable time zone"),
+		},
 		None => error("unreadable time"),
 	}
 }
@@ -136,32 +180,31 @@ pub fn lower(program: Node) -> Result<Node, Node> {
 fn fold_constants(node: Node) -> Node {
 	if mentions_time(&node) && only_time_words(&node) {
 		match evaluate(&node, &mut Scope::new()) {
-			Ok(Value::Time(time)) => return run_time_constant(&time),
-			Ok(Value::Duration(duration)) => return not_at_run_time_yet(&duration.to_string(), "durations"),
-			Ok(value) => return value.into_node(),
+			Ok(value) => return run_time_constant(value),
 			Err(message) if !message.starts_with(UNSUPPORTED) => return error(&message),
 			Err(_) => {}
 		}
 	}
 	match node {
-		Node::Data(_) if time_data(&node) => not_at_run_time_yet(&node.serialize(), "this time"),
+		Node::Data(_) if time_data(&node) => not_at_run_time_yet(&node.serialize()),
 		Node::Meta { node, data } => Node::Meta { node: Box::new(fold_constants(*node)), data },
 		other => other.map_children(fold_constants),
 	}
 }
 
-fn run_time_constant(time: &Time) -> Node {
-	match TimeForm::of(time) {
-		Some(form) => {
+fn run_time_constant(value: Value) -> Node {
+	match time_info(&value) {
+		Some((info, position)) => {
 			let number = |n: i64| Node::Number(Number::Int(n));
-			crate::lowering::nodes::call(TIME_OF, vec![number(form as i64), number(time.position() as i64)])
+			crate::lowering::nodes::call(TIME_OF, vec![number(info), number(position)])
 		}
-		None => not_at_run_time_yet(&time.to_string(), "zoned times"),
+		None if matches!(value, Value::Time(_) | Value::Duration(_)) => not_at_run_time_yet(&value.into_node().serialize()),
+		None => value.into_node(),
 	}
 }
 
-fn not_at_run_time_yet(written: &str, what: &str) -> Node {
-	error(&format!("{written}: {what} in a program that runs are not supported yet (card run-time-dates)"))
+fn not_at_run_time_yet(written: &str) -> Node {
+	error(&format!("{written}: this time in a program that runs is not supported yet (card run-time-dates)"))
 }
 
 /// Words a constant time expression may hold: no variable, which only the run knows
