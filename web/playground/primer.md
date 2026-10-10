@@ -60,9 +60,10 @@ xs = [3 1 2]; xs.add(4); [#xs, xs#1, sort xs, sum xs, xs#(2…3)]
 ```warp => [[1 4 9] [2 4 6] [3] [1 2 3]]
 [[1 2 3].map(x => x * x), (1…3).map(it * 2), [1 2 3].filter(it > 2), 1..4]
 ```
-Comprehensions filter with `where` (or `if`); a function of a number broadcasts over a list.
-```warp => [[9 16] [1 4 9]]
-square := it * it; [[x² for x in 1…4 where x > 2], square [1 2 3]]
+`xs where …` keeps the items a condition holds for (`it` is the item), in comprehensions too (or `if`); a function of a
+number broadcasts over a list.
+```warp => [[3 4] [9 16] [1 4 9]]
+square := it * it; [[1 2 3 4] where it > 2, [x² for x in 1…4 where x > 2], square [1 2 3]]
 ```
 ```warp => [42 ["ann" "bob"]]
 ages = {"ann": 31, "bob": 42}; [ages["bob"], keys ages]
