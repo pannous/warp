@@ -90,6 +90,7 @@ mod test_phrase_slot_words;
 mod test_picked_calls;
 mod test_tuple_function_values;
 mod test_libm_pure;
+mod test_rounding_builtins;
 mod test_float_to_int_parameter;
 mod test_whole_float_to_int_parameter;
 mod test_late_binding;

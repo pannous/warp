@@ -60,9 +60,10 @@ xs = [3 1 2]; xs.add(4); [#xs, xs#1, sort xs, sum xs, xs#(2…3)]
 ```warp => [[1 4 9] [2 4 6] [3] [1 2 3]]
 [[1 2 3].map(x => x * x), (1…3).map(it * 2), [1 2 3].filter(it > 2), 1..4]
 ```
-Comprehensions filter with `where` (or `if`); a function of a number broadcasts over a list.
-```warp => [[9 16] [1 4 9]]
-square := it * it; [[x² for x in 1…4 where x > 2], square [1 2 3]]
+`xs where …` keeps the items a condition holds for (`it` is the item), in comprehensions too (or `if`); a function of a
+number broadcasts over a list.
+```warp => [[3 4] [9 16] [1 4 9]]
+square := it * it; [[1 2 3 4] where it > 2, [x² for x in 1…4 where x > 2], square [1 2 3]]
 ```
 ```warp => [42 ["ann" "bob"]]
 ages = {"ann": 31, "bob": 42}; [ages["bob"], keys ages]
@@ -92,6 +93,11 @@ b
 ```warp => 14
 total = 0; for (a, b) in [(1, 2), (3, 4)] { total += a * b }; total
 ```
+A type or class name as the loop variable matches by type: `for int in xs` visits only the ints, named `int` in the
+body (with a notice when some items may be skipped); `for character in chars(s)` visits every codepoint.
+```warp => 4
+sum = 0; for int in [1, "a", 3] { sum += int }; sum
+```
 
 ## Functions
 `f(x) := …` or `def f(x) = …` or `def f(x) { … }`; `return`; a one-parameter definition may use `it`; calls need no
@@ -109,7 +115,8 @@ infix operator divides(d: int, n: int) := n % d == 0; 3 divides 12
 ```
 
 ## Types and classes
-`type(x)`, `x is T` tests, `x as T` converts; classes declare typed fields or defaults, methods with `:=`, `extends`.
+`type(x)`, `x is T` tests (`3 is number`), `x as T` converts; a bare type name is a type value and `==` between
+types is exact (`type(3) == int`, `type(3) == number` is `no`); classes declare typed fields or defaults, methods with `:=`, `extends`.
 Instances are shared references: `==` compares values, `===` identity, `copy(x)` duplicates.
 ```warp => [int yes 3 "Rex barks"]
 class Animal { name: "?"; speak := "..." }
@@ -170,8 +177,8 @@ received = 0; for v in ch { received += v }
 use math; [factorial 3, is_prime 7, gcd(12, 18)]
 ```
 ```warp compiles
-import sqrt from "m"
-sqrt(16.0)
+import cbrt from "m"
+cbrt(27.0)
 ```
 
 ## Pages, servers, databases

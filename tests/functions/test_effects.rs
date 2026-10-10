@@ -103,7 +103,7 @@ fn test_imports_follow_effects() {
 	assert!(imports_of("x='puts ';x").is_empty(), "text mentioning puts is no IO call");
 	assert!(imports_of("use m;3").is_empty(), "declared but uncalled FFI is not imported");
 	assert_eq!(imports_of("puts('ok')"), [("wasi_snapshot_preview1".into(), "fd_write".into())]);
-	assert_eq!(imports_of("use m;floor(4.5)"), [("m".into(), "floor".into())]);
+	assert_eq!(imports_of("use m;fmod(4.5, 2.0)"), [("m".into(), "fmod".into())]);
 	assert!(imports_of("x=fetch https://a.com/t;x").contains(&("host".into(), "fetch".into())));
 }
 

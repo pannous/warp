@@ -47,15 +47,10 @@ sin_x * sin_x + cos_x * cos_x  // Expected: 1.0
 // Additional Math Functions
 // ==============================================================================
 
-import ceil from "m"
 import fabs from "m"
 import fmax from "m"
 import fmin from "m"
 import fmod from "m"
-
-// Ceiling function
-ceil(3.2)   // Expected: 4.0
-ceil(-2.8)  // Expected: -2.0
 
 // Absolute value for floats
 fabs(-3.14)  // Expected: 3.14
@@ -120,8 +115,6 @@ else
 
 
 // Example 2: Trig calculations
-import sqrt from "m"
-import floor from "m"
 
 // Calculate distance using Pythagorean theorem with trig
 angle = 0.785398  // π/4 radians (45 degrees)
@@ -139,7 +132,7 @@ quantity_str = "3"
 price = atof(price_str)
 quantity = atoi(quantity_str)
 total = price * quantity
-ceil(total)  // Expected: 60.0 (rounds up from 59.97)
+ceil(total)  // Expected: 60 (rounds up from 59.97)
 
 
 // Example 4: Mathematical pipeline
@@ -149,7 +142,7 @@ import abs from "c"
 value = "-3.7"
 num = atof(value)       // -3.7
 abs_num = fabs(num)     // 3.7
-ceiled = ceil(abs_num)  // 4.0
+ceiled = ceil(abs_num)  // 4
 ceiled
 
 
@@ -172,7 +165,7 @@ else
 // The dynamic wrapper automatically handles these signatures:
 
 // Pattern: float64 -> float64
-// Examples: sqrt, floor, ceil, sin, cos, tan, fabs, etc.
+// Examples: cbrt, sin, cos, tan, fabs, etc. (sqrt, floor, ceil and round are wasm instructions, never linked)
 
 // Pattern: float64, float64 -> float64
 // Examples: pow, fmin, fmax, fmod, etc.

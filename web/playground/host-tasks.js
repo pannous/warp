@@ -291,7 +291,8 @@ function runTask(module, hooks, warnings, name, ints, values, arrays, captured =
 		instance = new WebAssembly.Instance(module, programImports(taskHolder, hooks));
 		taskHolder.exports = instance.exports;
 		// what the spawning instance's closures captured, as it had it
-		for (const [global, value] of captured) instance.exports[global].value = value.tree ? buildValue(instance.exports, value.tree) : value.raw;
+		for (const [global, value] of captured) instance.exports[global].value = value.tree ? buildValue(instance.exports, value.tree)
+			: value.exact ? exactHandle(instance.exports, ...value.exact) : value.raw;
 		const callee = instance.exports[name];
 		const result = values ? callee(buildValue(instance.exports, values)) : callee(...ints.slice(0, callee.length));
 		const unread = joinTasks(taskHolder.run, hooks);
@@ -460,8 +461,18 @@ function capturedValues(exports) {
 	const names = Object.keys(exports).filter(name => name.startsWith(CAPTURE_PREFIX));
 	return names.map(name => {
 		const value = exports[name].value;
-		return [name, typeof value === "object" && value !== null ? { tree: readTaskValue(exports, value) } : { raw: value }];
+		if (typeof value === "object" && value !== null) return [name, { tree: readTaskValue(exports, value) }];
+		return [name, typeof value === "bigint" && (value < FIXNUM_MIN || value > FIXNUM_MAX) ? { exact: exactParts(exports, value) } : { raw: value }];
 	});
+}
+
+// an Int handle beyond the fixnums as [numerator, denominator]: the handle means nothing in another instance (card
+// error-undefined, src/tasks.rs Captured::Int)
+function exactParts(exports, handle) {
+	const integer = payload => payload.int !== undefined ? BigInt(payload.int)
+		: (payload.big.negative ? -1n : 1n) * payload.big.limbs.reduceRight((value, limb) => (value << 32n) + BigInt(limb), 0n);
+	const payload = readNode(exports, exports.new_int(handle)).data;
+	return payload.ratio ? payload.ratio.map(integer) : [integer(payload), 1n];
 }
 
 // a task's result as a tree: a number of a function of numbers, else the tree already read

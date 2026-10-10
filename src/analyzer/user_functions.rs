@@ -387,7 +387,7 @@ fn joined_to(node: &Node, is_joined: fn(&Node) -> bool) -> Option<&str> {
 
 /// The sequence a node uses: indexed `xs#2`, counted `#xs`, `count xs`, `xs.length`
 pub(super) fn used_sequence(node: &Node) -> Option<&Node> {
-	let is_counting_word = |word: &Node| matches!(word.drop_meta(), Node::Symbol(name) if is_counting_property(name) && !TYPE_WORDS_AMONG_COUNTING.contains(&name.as_str()));
+	let is_counting_word = |word: &Node| matches!(word.drop_meta(), Node::Symbol(name) if is_counting_word(name));
 	match node {
 		Node::Key(list, Op::Hash, counted) => Some(if list.is_nothing() { counted } else { list }),
 		Node::Key(list, Op::Dot, property) if is_counting_word(property) => Some(list),

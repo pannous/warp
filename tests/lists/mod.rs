@@ -87,3 +87,4 @@ mod test_count_after_function; // card print-people
 mod test_range_in_structure;
 mod test_word_slices;
 mod test_number_list_elements; // card winamp-like
+mod test_counting_words;

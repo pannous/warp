@@ -56,5 +56,7 @@ data/
 # the compiled module samples/import_compiled.warp imports by its bare name: a link to tests/fixtures/compiled/shapes.wasm
 !/samples/shapes.wasm
 /samples/*.wast
+# the Spin manifest warp build --wagi writes beside app.wagi.wasm (src/main.rs SPIN_MANIFEST_EXTENSION, card wagi-manifest)
+*.spin.toml
 # the database tables of samples/orm.warp (a run keeps them beside it), after the exception above
 samples/*.database.sqlite

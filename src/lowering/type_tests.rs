@@ -25,68 +25,113 @@ pub const ERROR_TYPE: &str = "error";
 pub const EMPTY_TYPE: &str = "empty";
 const ARTICLES: [&str; 2] = ["a", "an"];
 const LIST_WORD: &str = "list";
+const MAP_WORD: &str = "map";
+/// The collection types: `x is list`, `x is map`, and of their element type: `x is list of int`, `x is map of text`
+const COLLECTION_WORDS: [&str; 2] = [LIST_WORD, MAP_WORD];
 /// `x is pair`: a `key: value` pair
 const PAIR_WORD: &str = "pair";
 pub const TYPE_WORD: &str = "type";
+pub const SYMBOL_TYPE: &str = "symbol";
+/// A built-in type: its name, the other words naming it, the types it covers (`is` tests the subtype, `==` the type
+/// itself), the kind a declared value of it is held as (`x: real = 1.5` an exact Int, `x: number` a Float; none for a
+/// type no declaration converts to) and the bits of its run-time kinds (node_kind_in, none for a type only the static
+/// type answers); a bool is an Int marked bool and has a bit of its own
+struct BuiltinType {
+	name: &'static str,
+	aliases: &'static [&'static str],
+	covers: &'static [&'static str],
+	held_as: Option<K>,
+	kind_bits: &'static [i64],
+}
+
+const fn builtin(name: &'static str, aliases: &'static [&'static str], covers: &'static [&'static str], held_as: Option<K>, kind_bits: &'static [i64]) -> BuiltinType {
+	BuiltinType { name, aliases, covers, held_as, kind_bits }
+}
+
+use crate::type_kinds::Kind as K;
+/// The built-in type words, the one list of them (card cleanup-closed-lists): each is a type value where it stands bare
+/// (`t = int`, `type(π) == real`). `number` covers every number, `real` the exact numbers and π, `rational` the whole
+/// numbers too, `text` a one-character string (a codepoint); `list` and ø both hold the empty list, as `count` takes
+/// it; a ± value is a number. The fixed widths (`int8`, `uint16` …) are src/fixed_width.rs
+const BUILTIN_TYPES: [BuiltinType; 15] = [
+	builtin("int", &["integer", "long", "i64", "i32"], &[], Some(K::Int), &[K::Int as i64]),
+	builtin("rational", &["exact"], &["int"], Some(K::Int), &[K::Int as i64, K::Float as i64]),
+	builtin("real", &[], &["rational"], Some(K::Int), &[K::Int as i64, K::Float as i64]),
+	builtin("float", &["double", "f64", "f32", "float32", "float64", "fast"], &[], Some(K::Float), &[K::Float as i64]),
+	builtin("number", &[], &["real", "float"], Some(K::Float), &[K::Int as i64, K::Float as i64, K::Uncertain as i64]),
+	builtin("text", &["str", "string"], &["codepoint"], Some(K::Text), &[K::Text as i64, K::Codepoint as i64]),
+	builtin("codepoint", &["char", "character"], &[], Some(K::Codepoint), &[K::Codepoint as i64]),
+	builtin(crate::analyzer::BOOL_TYPE, &["boolean"], &[], Some(K::Int), &[crate::type_kinds::BOOL_MASK_BIT]),
+	builtin("function", &["closure"], &[], Some(K::Function), &[]),
+	builtin(SYMBOL_TYPE, &[], &[], None, &[K::Symbol as i64]),
+	builtin("key", &[PAIR_WORD], &[], None, &[K::Key as i64]),
+	builtin(EMPTY_TYPE, &["unit", "nil", "ø", "none", "null", "void"], &[], None, &[K::Empty as i64]),
+	builtin(ERROR_TYPE, &[], &[], None, &[K::Error as i64]),
+	builtin(LIST_WORD, &[], &[], None, &[K::List as i64, K::Block as i64, K::Empty as i64]),
+	builtin(MAP_WORD, &[], &[], None, &[]),
+];
+
+fn builtin_type(word: &str) -> Option<&'static BuiltinType> {
+	BUILTIN_TYPES.iter().find(|builtin| builtin.name == word || builtin.aliases.contains(&word))
+}
+
+/// A word naming a built-in type: where it stands bare, it is that type as a value, never an undefined variable
+pub fn is_type_word(word: &str) -> bool {
+	builtin_type(word).is_some()
+}
+
+/// Every word naming a built-in type, aliases too
+pub fn builtin_type_words() -> impl Iterator<Item = &'static str> {
+	BUILTIN_TYPES.iter().flat_map(|builtin| std::iter::once(builtin.name).chain(builtin.aliases.iter().copied()))
+}
 
 /// Words that name the same type
 pub(crate) fn canonical_spec_word(word: &str) -> &str {
-	match word {
-		"integer" | "long" | "i64" | "i32" => "int",
-		"str" | "string" => "text",
-		"char" => "codepoint",
-		"double" | "f64" | "f32" | "fast" => "float",
-		"exact" => "rational",
-		"pair" => "key",
-		"boolean" => "bool",
-		"unit" | "nil" | "ø" | "none" | "null" | "void" => EMPTY_TYPE,
-		other => other,
-	}
+	builtin_type(word).map_or(word, |builtin| builtin.name)
 }
 
-/// Does a value of the static type name `actual` (`type(x)`) have the type `spec`: `number` covers every number, `real` the
-/// exact numbers and π, `rational` the whole numbers too (int is a special case of rational), `list of number` every list of numbers
+/// The kind a value declared of the built-in type `word` is held as (analyzer builtin_type_kind)
+pub fn held_kind(word: &str) -> Option<K> {
+	builtin_type(word)?.held_as
+}
+
+/// `rational`, `real`, `exact`: the exact numbers beyond the whole ones, the types covering int that cover no float
+pub fn is_exact_fraction_type(word: &str) -> bool {
+	let name = canonical_spec_word(word);
+	name != "int" && type_matches("int", name) && !type_matches("float", name)
+}
+
+/// Does a value of the static type name `actual` (`type(x)`) have the type `spec`: actual is spec or a type spec covers,
+/// `list of number` every list of numbers
 pub fn type_matches(actual: &str, spec: &str) -> bool {
 	let spec = canonical_spec_word(spec);
 	if let Some(conforms) = crate::traits::builtin_conforms(actual, spec) {
 		return conforms;
 	}
-	if let Some(element) = spec.strip_prefix("list of ") {
-		return actual.strip_prefix("list of ").is_some_and(|actual_element| type_matches(actual_element, element));
+	for collection in COLLECTION_WORDS {
+		let of = format!("{collection} of ");
+		if let Some(element) = spec.strip_prefix(&of) {
+			return actual.strip_prefix(&of).is_some_and(|actual_element| type_matches(actual_element, element));
+		}
+		if spec == collection {
+			return actual == collection || actual.starts_with(&of);
+		}
 	}
-	match spec {
-		LIST_WORD => actual == LIST_WORD || actual.starts_with("list of "),
-		"number" => ["int", "rational", "real", "float"].contains(&actual),
-		"real" => ["int", "rational", "real"].contains(&actual),
-		"rational" => ["int", "rational"].contains(&actual),
-		"text" => ["text", "codepoint"].contains(&actual), // a one-character string is a codepoint
-		other => actual == other,
-	}
+	actual == spec || builtin_type(spec).is_some_and(|builtin| builtin.covers.iter().any(|covered| type_matches(actual, covered)))
+}
+
+/// The built-in types a value of type `spec` may have: `t is number` of a type value t is t == one of them
+pub fn builtin_types_matching(spec: &str) -> Vec<&'static str> {
+	BUILTIN_TYPES.iter().map(|builtin| builtin.name).filter(|name| type_matches(name, spec)).collect()
 }
 
 /// The run-time kinds of a value of type `spec` as a mask of their bits (node_kind_in), for a value whose static type is
-/// unknown (an item of a mixed list, a Node); None for a spec only the static type answers. The empty list ø is a list,
-/// as `count` takes it; a bool is an Int marked bool and has a bit of its own (BOOL_MASK_BIT): no int, no number
+/// unknown (an item of a mixed list, a Node); None for a spec only the static type answers
 pub fn runtime_kind_mask(spec: &str) -> Option<i64> {
-	use crate::type_kinds::Kind;
 	let spec = canonical_spec_word(spec);
-	let kinds = match spec {
-		_ if spec == LIST_WORD || spec.starts_with("list of ") => vec![Kind::List, Kind::Block, Kind::Empty],
-		crate::analyzer::BOOL_TYPE => return Some(1 << crate::type_kinds::BOOL_MASK_BIT),
-		"int" => vec![Kind::Int],
-		"float" => vec![Kind::Float],
-		// a ± value is a number with an uncertainty (card plus-minus-units: Quantity's amount:number holds one)
-		"number" => vec![Kind::Int, Kind::Float, Kind::Uncertain],
-		"real" | "rational" => vec![Kind::Int, Kind::Float],
-		"text" => vec![Kind::Text, Kind::Codepoint],
-		"codepoint" => vec![Kind::Codepoint],
-		"symbol" => vec![Kind::Symbol],
-		"key" => vec![Kind::Key],
-		ERROR_TYPE => vec![Kind::Error],
-		EMPTY_TYPE => vec![Kind::Empty],
-		_ => return None,
-	};
-	Some(kinds.iter().fold(0, |mask, kind| mask | 1 << (*kind as i64)))
+	let spec = if spec.starts_with("list of ") { LIST_WORD } else { spec };
+	let kind_bits = builtin_type(spec)?.kind_bits;
+	(!kind_bits.is_empty()).then(|| kind_bits.iter().fold(0, |mask, bit| mask | 1 << bit))
 }
 
 /// The variables in scope (a name of one is no type in a test) and the program's declared types (`class friend`: `x is friend`)
@@ -159,11 +204,8 @@ fn type_spec(words: &[&str], shadowed: &Names) -> Option<String> {
 		return None;
 	}
 	match (*first, rest) {
-		(LIST_WORD, []) => Some(LIST_WORD.to_string()),
-		(PAIR_WORD, []) => Some(canonical_spec_word(PAIR_WORD).to_string()),
-		(ERROR_TYPE, []) => Some(ERROR_TYPE.to_string()),
-		(word, []) if canonical_spec_word(word) == EMPTY_TYPE => Some(EMPTY_TYPE.to_string()),
-		(LIST_WORD, [of, element @ ..]) if *of == OF_WORD => Some(format!("{LIST_WORD} of {}", type_spec(element, shadowed)?)),
+		(word, []) if is_type_word(word) => Some(canonical_spec_word(word).to_string()),
+		(collection, [of, element @ ..]) if COLLECTION_WORDS.contains(&collection) && *of == OF_WORD => Some(format!("{collection} of {}", type_spec(element, shadowed)?)),
 		(word, []) => match plural_element_type(word) {
 			Some(element) => Some(format!("{LIST_WORD} of {}", canonical_spec_word(element))),
 			None if crate::traits::is_builtin_trait(word) || shadowed.types.contains(word) => Some(word.to_string()),
@@ -219,18 +261,6 @@ pub fn is_equality_operand(node: &Node) -> bool {
 	matches!(node, Node::Meta { data, .. } if matches!(data.as_ref(), Node::Key(key, _, _) if key.name() == EQUALITY_OPERAND))
 }
 
-/// `type(x) == int` compares two types; `x == int` compares a value with a type, never equal: educate toward `x is int`
-fn compared_with_type(subject: Node, word: &Node, spec: String, shadowed: &Names) -> Node {
-	let compares_types = matches!(subject.drop_meta(), Node::List(items, _, _) if matches!(items.first().map(Node::drop_meta), Some(Node::Symbol(head)) if head == TYPE_WORD));
-	if compares_types {
-		return is_type_call(expand(subject, shadowed), spec);
-	}
-	let (written, preferred) = (crate::normalize::operand_text(&subject), word.drop_meta().name());
-	crate::normalize::set_position_of(&subject);
-	crate::normalize::hint(&format!("{written} == {preferred}"), &format!("{written} is {preferred}"), "only `is` tests a type; a value never equals a type");
-	Node::False
-}
-
 /// `x is int`; `type(x) is int` tests x, as the type of x is what it names (card type-int)
 fn is_type_call(subject: Node, spec: String) -> Node {
 	let tested = typed_argument(&subject).unwrap_or(subject);
@@ -243,13 +273,6 @@ fn typed_argument(node: &Node) -> Option<Node> {
 		Node::List(items, _, _) if items.len() == 2 && items[0].is_symbol(TYPE_WORD) => Some(items[1].clone()),
 		_ => None,
 	}
-}
-
-/// `int is number`: a type word tested against a type is known at once
-fn type_word_test(subject: &Node, spec: &str, shadowed: &Names) -> Option<Node> {
-	let Node::Symbol(word) = subject.drop_meta() else { return None };
-	let actual = type_spec(&[word.as_str()], shadowed)?;
-	Some(if type_matches(&actual, spec) { Node::True } else { Node::False })
 }
 
 fn expand(node: Node, shadowed: &Names) -> Node {
@@ -265,9 +288,9 @@ fn expand(node: Node, shadowed: &Names) -> Node {
 			Node::List(items.into_iter().map(|item| expand(item, shadowed)).collect(), bracket, separator)
 		}
 		Node::Key(subject, Op::Eq, right) => match symbol_words(std::slice::from_ref(&*right)).and_then(|words| type_spec(&words, shadowed)) {
-			Some(spec) if is_equality_operand(&right) => compared_with_type(*subject, &right, spec, shadowed),
-			Some(spec) => type_word_test(&subject, &spec, shadowed).unwrap_or_else(|| is_type_call(expand(*subject, shadowed), spec)),
-			None => key(expand(*subject, shadowed), Op::Eq, expand(*right, shadowed)),
+			// `x == int` compares x with the type value int: equal only to that type (wasm_emitter emit_structural_equality)
+			Some(spec) if !is_equality_operand(&right) => is_type_call(expand(*subject, shadowed), spec),
+			_ => key(expand(*subject, shadowed), Op::Eq, expand(*right, shadowed)),
 		},
 		Node::Key(left, op, right) => key(expand(*left, shadowed), op, expand(*right, shadowed)),
 		Node::Meta { node, data } => Node::Meta { node: Box::new(expand(*node, shadowed)), data },

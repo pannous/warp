@@ -68,10 +68,11 @@ impl WasmGcEmitter {
 		}
 	}
 
-	/// `==`/`!=` by value: structured values, any text (`peek() == " "` of a function returning text), and a value held
-	/// as a Node whose kind shows only at run time (a cell's, `cell_get(c) == 5`; a call giving a Node that holds a float)
+	/// `==`/`!=` by value: structured values, any text (`peek() == " "` of a function returning text) or symbol
+	/// (`type(2) == type(3)`, card type-equal), and a value held as a Node whose kind shows only at run time (a cell's,
+	/// `cell_get(c) == 5`; a call giving a Node that holds a float)
 	pub(crate) fn compares_structurally(&self, op: &Op, left: &Node, right: &Node) -> bool {
-		let by_value = |node: &Node| matches!(self.get_type(node), Kind::Text | Kind::Empty) || self.is_held_cell_value(node);
+		let by_value = |node: &Node| matches!(self.get_type(node), Kind::Text | Kind::Symbol | Kind::Empty) || self.is_held_cell_value(node);
 		matches!(op, Op::Eq | Op::Ne) && (self.is_structural_operand(left) || self.is_structural_operand(right) || by_value(left) || by_value(right))
 	}
 
@@ -114,6 +115,17 @@ impl WasmGcEmitter {
 		Some(Node::Key(left.clone(), equality, right.clone()))
 	}
 
+	/// `3 == int`: a value never equals a type, only `is` tests one (user decision #30); `type(x) == int` and a type held
+	/// in a variable compare as types
+	fn hint_value_compared_with_type(&self, left: &Node, right: &Node) {
+		let holds_no_type = !matches!(self.get_type(left), Kind::Symbol | Kind::Data | Kind::Empty);
+		if holds_no_type && crate::type_tests::is_equality_operand(right) {
+			let (written, type_word) = (crate::normalize::operand_text(left), right.drop_meta().name());
+			crate::normalize::set_position_of(left);
+			crate::normalize::hint(&format!("{written} == {type_word}"), &format!("{written} is {type_word}"), "only `is` tests a type; a value never equals a type");
+		}
+	}
+
 	/// `cell_get(c)`: a cell's value, a Node of any kind
 	fn is_held_cell_value(&self, node: &Node) -> bool {
 		matches!(node.drop_meta(), Node::List(items, _, _) if items.first().is_some_and(|word| word.drop_meta().name() == super::cells::CELL_GET))
@@ -121,6 +133,7 @@ impl WasmGcEmitter {
 
 	/// Push i64 1/0 for `left == right` or `left != right` compared by value
 	pub(crate) fn emit_structural_equality(&mut self, func: &mut Function, left: &Node, op: &Op, right: &Node) {
+		self.hint_value_compared_with_type(left, right);
 		self.emit_node_instructions(func, left);
 		self.emit_node_instructions(func, right);
 		self.emit_call(func, VALUES_EQUAL);

@@ -1,0 +1,6 @@
+go{
+tone(220Hz, 100ms, "square")
+play note("F#4") for 100ms
+print "tone done"
+}
+sleep(2s)

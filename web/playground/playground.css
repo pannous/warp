@@ -180,6 +180,7 @@ output.located { cursor: pointer; }
 .completion { color: var(--muted); opacity: 0.8; white-space: pre-wrap; }
 .completion-pending, .completion-failed { font-size: 0.85em; color: var(--muted); padding-left: 4px; }
 .completion-failed { color: var(--error); }
+.turnstile { position: fixed; right: 16px; bottom: 16px; z-index: 10; } /* the proxy's bot check, seen only when it asks for a click */
 .assistant-pane { position: relative; background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 10px 14px; }
 .chat-log { max-height: 40vh; overflow: auto; }
 /* ✕ (assistant.js clearChat): in the pane's corner while the chat has anything */
