@@ -24,6 +24,7 @@ mod test_generic_classes;
 mod test_class_properties;
 mod test_class_mixins;
 mod test_tagged_objects;
+mod test_symbolism_object; // card symbolism-object
 mod test_class_forms_ported;
 mod test_class_operators;
 mod test_returned_instances; // card units-dynamic
