@@ -35,3 +35,15 @@ fn test_try_catches_an_error_branch() {
 fn test_an_error_value_stays_a_value() {
 	is!("x=error(\"bad\"); is_error(x)", 1);
 }
+
+// card braced-body: a declared result converts each branch, an `error(…)` stays the error: `-> text` gave the text
+// "(error 'e')", `int g` with an error branch "not an int"; a ternary's error branch is the bottom kind as an if's
+#[test]
+fn test_a_declared_result_passes_an_error_on() {
+	fails_with("def f(x) -> text { error(\"e\") }; f(1)", "e");
+	fails_with("def f(x) -> text { if x > 0 then \"pos\" else error(\"neg\") }; f(-1)", "neg");
+	is!("def f(x) -> text { if x > 0 then \"pos\" else error(\"neg\") }; f(1)", "pos");
+	fails_with("int g(x) = x > 0 ? x : error(\"neg\"); g(-1)", "neg");
+	is!("int g(x) = x > 0 ? x : error(\"neg\"); g(3) + 1", 4);
+	is!("def g(x) := x > 0 ? x : error(\"neg\"); g(3) + 1", 4); // was wasm trap: cast failure
+}
