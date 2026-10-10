@@ -98,9 +98,15 @@ The words above are layer 1, the toy layer. Each layer below keeps the ones abov
 2. Note names built (2026-10-10): parsed, not a table: a letter A–G, `#`/`♯` or `b`/`♭`, an octave 0–9 is its
    equal-tempered frequency to a hundredth of a Hz (A4 = 440), when the program uses sound and doesn't define that
    name; `F#4` parses as `F # 4` and counts as the note unless the program defines `F` (music_words.rs; the parser
-   lets ♯ ♭ continue a name). tests/programs/test_sound_notes.rs. Still to build:
-   Music values, not frequencies. `Note` (pitch class, octave, MIDI number, cents), `Interval`, `Chord(C4, major7)`,
-   `Scale(D, dorian)`, transposition, tuning (A4 = 442Hz, just intonation), velocity. Note names parsed, not a table.
+   lets ♯ ♭ continue a name). tests/programs/test_sound_notes.rs.
+   Music values built (card music-values, samples/harmony.warp, tests/programs/test_music_values.rs): a note name
+   lowers to `midi_hertz(midi)`, so `tuning = 442` (A4, default 440) tunes every note; `midi(pitch)`,
+   `note_name(pitch)` (sharps: "D#4"); `transpose(pitch or list, semitones)` keeps a note a note (transpose(C4, 12)
+   == C5 to the hundredth) and multiplies any other frequency; `chord(root, kind)`, `scale(root, kind)` are lists of
+   notes, kinds in lib chord_intervals / scale_intervals, written as a word the program doesn't define (only directly
+   in the call: `f(major)` passes an undefined symbol) or as a text. Notes stay frequencies at run time; sound's
+   transpose/2 and matrix's transpose/1 coexist. Still to build: a `Note` value (pitch class, octave, cents) that
+   prints as its name, intervals as values, just intonation, velocity.
 3. Built (2026-10-10, samples/synth.warp, tests/programs/test_sound_synth.rs): the ADSR envelope of every note,
    module settings `attack`, `decay` (seconds), `sustain` (a share), `release` (seconds), defaults 5 ms / 0 / 1 / 5 ms
    = the old click-free fade; `wave_shape = "noise"`; gain in decibels, `loudness = -6 dB` (`-6dB`, `x = -6 dB`;
