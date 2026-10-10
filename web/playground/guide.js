@@ -116,9 +116,7 @@ const renderedGuides = {}; // level → its rendered intro and chapters
 
 function chosenLevel() {
 	const named = new URLSearchParams(location.search).get(LEVEL_PARAMETER);
-	let remembered = null;
-	try { remembered = localStorage.getItem(LEVEL_KEY); } catch { /* private window: the default */ }
-	return [named, remembered].find(level => level in renderedGuides) ?? "beginner";
+	return [named, stored(LEVEL_KEY)].find(level => level in renderedGuides) ?? "beginner";
 }
 
 // shows the guide of that level, with the chapter open in the other one
@@ -126,7 +124,7 @@ function showLevel(level) {
 	const open = document.querySelector(".guide-chapter[open]")?.id;
 	$("guide-chapters").replaceChildren(...renderedGuides[level]);
 	for (const button of document.querySelectorAll(".guide-level button")) button.setAttribute("aria-pressed", button.value === level);
-	try { localStorage.setItem(LEVEL_KEY, level); } catch { /* private window: lasts for this page */ }
+	store(LEVEL_KEY, level);
 	if (open) document.getElementById(open).open = true;
 }
 
