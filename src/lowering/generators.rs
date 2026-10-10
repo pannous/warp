@@ -9,7 +9,7 @@
 //! loop `for yield·item·1 in xs { yield yield·item·1 }`, lazy like any loop over a generator.
 //! Runs after ruby_blocks, which takes the yielding functions some call passes a block to.
 
-use super::nodes::{assign, int, key, statement_list, symbol};
+use super::nodes::{assign, call, int, key, statement_list, symbol};
 use crate::for_loop::{block_items, loop_variables};
 use crate::inlining::renamed_names;
 use crate::node::{Bracket, Node, Separator};
@@ -378,7 +378,7 @@ fn iterator_loops(node: Node, classes: &HashSet<String>, objects: &HashSet<Strin
 	let is_object = iterable.symbol_name().is_some_and(|name| objects.contains(name)) || constructed_iterator(iterable, classes);
 	let Some(name) = variable.symbol_name().filter(|_| is_object && matches!(body.drop_meta(), Node::List(_, Bracket::Curly, _))) else { return node };
 	let iterator = symbol(&[name, ITERATOR_SUFFIX].join(NAME_SEPARATOR));
-	let next = || assign(variable.clone(), key(iterator.clone(), Op::Dot, Node::List(vec![symbol(NEXT_METHOD)], Bracket::Round, Separator::None)));
+	let next = || assign(variable.clone(), key(iterator.clone(), Op::Dot, call(NEXT_METHOD, vec![])));
 	let mut statements_of_body = block_items(body);
 	statements_of_body.push(crate::wasm_emitter::mark_step(next()));
 	let more = key(variable.clone(), Op::Ne, Node::Empty);

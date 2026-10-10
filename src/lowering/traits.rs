@@ -6,7 +6,7 @@
 //! instance is known, `<`, `==` and operation calls call the witness and a missing conformance is a compile error naming
 //! the fix; elsewhere node_order asks the runtime witness table (wasm_emitter/witness.rs).
 
-use super::nodes::{call, key};
+use super::nodes::{call, children_rewritten, key};
 use crate::analyzer::{call_name, collect_all_types};
 use crate::diagnostic::Diagnostic;
 use crate::node::{symbol, Bracket, Node, Separator};
@@ -363,12 +363,7 @@ fn declare(node: Node, errors: &mut Vec<Node>) -> Node {
 			}
 		};
 	}
-	match node {
-		Node::Key(left, op, right) => key(declare(*left, errors), op, declare(*right, errors)),
-		Node::List(items, bracket, separator) => Node::List(items.into_iter().map(|item| declare(item, errors)).collect(), bracket, separator),
-		Node::Meta { node, data } => Node::Meta { node: Box::new(declare(*node, errors)), data },
-		other => other,
-	}
+	children_rewritten(node, |child| declare(child, errors))
 }
 
 /// `trait shape{area perimeter}`, `interface shape{area(s)}`: the trait, or the error of an operation it cannot take yet
@@ -486,10 +481,7 @@ fn with_conformance_tests(node: Node, names: &[String]) -> Node {
 			let subject = with_conformance_tests(*subject, names);
 			call(crate::type_tests::IS_TYPE, vec![subject, Node::Text(right.drop_meta().name())])
 		}
-		Node::Key(left, op, right) => key(with_conformance_tests(*left, names), op, with_conformance_tests(*right, names)),
-		Node::List(items, bracket, separator) => Node::List(items.into_iter().map(|item| with_conformance_tests(item, names)).collect(), bracket, separator),
-		Node::Meta { node, data } => Node::Meta { node: Box::new(with_conformance_tests(*node, names)), data },
-		other => other,
+		other => children_rewritten(other, |child| with_conformance_tests(child, names)),
 	}
 }
 
@@ -542,10 +534,7 @@ fn conform(node: Node, registry: &TypeRegistry, traits: &Traits) -> Node {
 			};
 			key(head, op, conform(body, registry, traits))
 		}
-		Node::Key(left, op, right) => key(conform(*left, registry, traits), op, conform(*right, registry, traits)),
-		Node::List(items, bracket, separator) => Node::List(items.into_iter().map(|item| conform(item, registry, traits)).collect(), bracket, separator),
-		Node::Meta { node, data } => Node::Meta { node: Box::new(conform(*node, registry, traits)), data },
-		other => other,
+		other => children_rewritten(other, |child| conform(child, registry, traits)),
 	}
 }
 
@@ -596,10 +585,7 @@ pub struct TypedAs(pub String);
 fn typed_uses(node: Node, parameter: &str, type_name: &str) -> Node {
 	match node {
 		Node::Symbol(name) if name == parameter => Node::meta(Node::Symbol(name), Node::data(TypedAs(type_name.to_string()))),
-		Node::Key(left, op, right) => key(typed_uses(*left, parameter, type_name), op, typed_uses(*right, parameter, type_name)),
-		Node::List(items, bracket, separator) => Node::List(items.into_iter().map(|item| typed_uses(item, parameter, type_name)).collect(), bracket, separator),
-		Node::Meta { node, data } => Node::Meta { node: Box::new(typed_uses(*node, parameter, type_name)), data },
-		other => other,
+		other => children_rewritten(other, |child| typed_uses(child, parameter, type_name)),
 	}
 }
 
@@ -695,12 +681,7 @@ fn without_claims(node: Node, traits: &Traits) -> Node {
 	if let Some((declaration, _)) = claim(&node, traits) {
 		return declaration.clone();
 	}
-	match node {
-		Node::Key(left, op, right) => key(without_claims(*left, traits), op, without_claims(*right, traits)),
-		Node::List(items, bracket, separator) => Node::List(items.into_iter().map(|item| without_claims(item, traits)).collect(), bracket, separator),
-		Node::Meta { node, data } => Node::Meta { node: Box::new(without_claims(*node, traits)), data },
-		other => other,
-	}
+	children_rewritten(node, |child| without_claims(child, traits))
 }
 
 // ═══════════════════════════════════════════════════════════════════════════

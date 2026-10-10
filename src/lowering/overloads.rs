@@ -3,7 +3,7 @@
 //! (`render "x" as pdf`, `docx d = render "x"`, `d:docx = …`, an argument of a parameter `d:docx`); without one the
 //! first-declared overload is taken with a got-it warning naming the explicit form.
 
-use super::nodes::{call, in_block_as_written, is_assigned_data, is_spaced_call, key, with_parts_rewritten};
+use super::nodes::{call, children_rewritten, in_block_as_written, is_assigned_data, is_spaced_call, key, with_parts_rewritten};
 use crate::analyzer::{call_name, collect_all_types, type_word_kind};
 use crate::diagnostic::{ask, reading, Ask, Fallback};
 use crate::node::{Bracket, Node, Separator};
@@ -357,10 +357,7 @@ trait VariantRenaming {
 		}
 		match node {
 			Node::Key(left, Op::Assign, right) if is_assigned_data(&left, &right) => key(*left, Op::Assign, with_parts_rewritten(*right, &mut |part| self.rewrite(part))),
-			Node::Key(left, op, right) => key(self.rewrite(*left), op, self.rewrite(*right)),
-			Node::List(items, bracket, separator) => Node::List(items.into_iter().map(|item| self.rewrite(item)).collect(), bracket, separator),
-			Node::Meta { node, data } => Node::Meta { node: Box::new(self.rewrite(*node)), data },
-			other => other,
+			other => children_rewritten(other, |child| self.rewrite(child)),
 		}
 	}
 

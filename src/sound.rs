@@ -1,14 +1,15 @@
 //! sound_samples(samples, count, rate) natively (card basic-sound, lib/sound.warp): 16-bit mono samples as a WAV file in the
-//! system's temporary folder (warp-sound/sound.wav, then sound-2.wav … within one run, as paint's PNGs), played by the
+//! system's temporary folder (warp-sound/sound-<process id>.wav, then sound-<process id>-2.wav …: runs at the same time
+//! never share a file; card sound-wavs), played by the
 //! system's player when the warp binary may reach the user (paint::shows_windows: never under WARP_NO_WINDOW, CI or
 //! tests, which only get the file). The playground plays the same samples with WebAudio (host.js sound_samples).
 //! A sound is queued on the audio clock behind those before it and `play` returns at once (card sound-pro): a player
-//! thread plays the queue in order, stop_sound drops it, the process's end waits for it. render_sound writes the
+//! thread plays the queue in order, stop_sound drops it, the process's end waits for it and for the music files playing. render_sound writes the
 //! sounds since the last render one after another into one WAV, offline: headless too.
 
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicUsize, Ordering};
-use std::sync::{Arc, Mutex, OnceLock};
+use std::sync::{Arc, Mutex, Once, OnceLock};
 use std::time::{Duration, Instant};
 
 /// The samples cross as whole numbers ≥ 0: amplitude + 32768 (lib/sound.warp sample_offset)
@@ -84,16 +85,22 @@ pub fn play_file(path: &str) -> Result<(), String> {
 		}
 		std::thread::sleep(PLAYER_POLL);
 	}
+	listed(&child);
 	let (path, stops) = (path.to_string(), STOPS.load(Ordering::Relaxed));
 	std::thread::spawn(move || watched(child, player, &path, stops, "sound file"));
 	Ok(())
 }
 
-/// The player played to its end, its failure printed unless stop_sound ended it
-fn watched(child: Player, player: &str, path: &str, stops: usize, label: &str) {
+/// The player among those playing: stop_sound stops it, the process's end waits for it (a ctrl-c then stops both)
+fn listed(child: &Player) {
 	if let Ok(mut playing) = PLAYING.lock() {
 		playing.push(child.clone());
 	}
+	wait_at_exit();
+}
+
+/// The player played to its end, its failure printed unless stop_sound ended it
+fn watched(child: Player, player: &str, path: &str, stops: usize, label: &str) {
 	let ended = loop {
 		match failure_of(&child, player, path) {
 			Some(ended) => break ended,
@@ -152,6 +159,7 @@ fn queued(path: PathBuf) -> Result<(), String> {
 				if stops == STOPS.load(Ordering::Relaxed) {
 					play_wav(&path, stops);
 				}
+				let _ = std::fs::remove_file(&path); // played or stopped: per-process names would pile up otherwise
 				PENDING.fetch_sub(1, Ordering::Relaxed);
 			}
 		});
@@ -167,20 +175,29 @@ fn queued(path: PathBuf) -> Result<(), String> {
 fn play_wav(path: &Path, stops: usize) {
 	let shown = path.display().to_string();
 	match spawned(&FILE_PLAYERS, "wav", &shown, false) {
-		Some((player, child)) => watched(Arc::new(Mutex::new(child)), player, &shown, stops, "sound"),
+		Some((player, child)) => {
+			let child: Player = Arc::new(Mutex::new(child));
+			listed(&child);
+			watched(child, player, &shown, stops, "sound")
+		}
 		None => eprintln!("sound: no player found ({}) for {shown}", names_for(&FILE_PLAYERS, "wav")),
 	}
 }
 
+/// The process's end waits for the queued sounds and the playing music files (once registered for both)
 fn wait_at_exit() {
-	extern "C" fn wait_for_queue() {
+	static REGISTERED: Once = Once::new();
+	extern "C" fn wait_for_sounds() {
 		wait();
+		while PLAYING.lock().is_ok_and(|playing| !playing.is_empty()) {
+			std::thread::sleep(PLAYER_POLL);
+		}
 	}
 	extern "C" {
 		fn atexit(callback: extern "C" fn()) -> i32;
 	}
-	// SAFETY: atexit only stores the function pointer; wait reads atomics and sleeps
-	unsafe { atexit(wait_for_queue) };
+	// SAFETY: atexit only stores the function pointer; wait_for_sounds reads atomics and a lock and sleeps
+	REGISTERED.call_once(|| unsafe { atexit(wait_for_sounds); });
 }
 
 /// Whether the system has a decoder that checks a file of this format without playing it
@@ -276,7 +293,8 @@ fn wav_file(data: &[u8], rate: u32) -> Result<PathBuf, String> {
 	let folder = std::env::temp_dir().join(FOLDER);
 	std::fs::create_dir_all(&folder).map_err(|failure| format!("sound: cannot create {}: {failure}", folder.display()))?;
 	let call = SOUNDED.fetch_add(1, Ordering::Relaxed) + 1;
-	let path = folder.join(if call == 1 { format!("{FILE_STEM}.wav") } else { format!("{FILE_STEM}-{call}.wav") });
+	let process = std::process::id();
+	let path = folder.join(if call == 1 { format!("{FILE_STEM}-{process}.wav") } else { format!("{FILE_STEM}-{process}-{call}.wav") });
 	std::fs::write(&path, wav_of_data(data, rate)).map_err(|failure| format!("sound: cannot write {}: {failure}", path.display()))?;
 	Ok(path)
 }

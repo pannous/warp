@@ -12,7 +12,7 @@
 //! its other parameters bound to fresh names, `body!` the argument's code, so names resolve where the call is written.
 //! Any `!` left (known only at run time) is mutation.rs's: a name unwraps, any other expression is a loud error.
 
-use super::nodes::{call, key};
+use super::nodes::{call, children_rewritten, key};
 use crate::diagnostic::{ask, reading, Ask, Fallback};
 use crate::mutation::bang_target;
 use crate::node::{symbol, Bracket, Node, Separator};
@@ -109,10 +109,7 @@ fn substitute_block(node: Node, parameter: &str, argument: &Node) -> Node {
 	}
 	match node {
 		Node::Symbol(name) if name == parameter => Node::List(vec![symbol(DATA_WORD), argument.clone()], Bracket::None, Separator::Space),
-		Node::Key(left, op, right) => key(substitute_block(*left, parameter, argument), op, substitute_block(*right, parameter, argument)),
-		Node::List(items, bracket, separator) => Node::List(items.into_iter().map(|item| substitute_block(item, parameter, argument)).collect(), bracket, separator),
-		Node::Meta { node, data } => Node::Meta { node: Box::new(substitute_block(*node, parameter, argument)), data },
-		other => other,
+		other => children_rewritten(other, |child| substitute_block(child, parameter, argument)),
 	}
 }
 

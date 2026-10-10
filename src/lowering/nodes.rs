@@ -40,7 +40,7 @@ pub(crate) fn is_assigned_data(target: &Node, value: &Node) -> bool {
 pub(crate) fn with_parts_rewritten(node: Node, rewrite: &mut dyn FnMut(Node) -> Node) -> Node {
 	match node {
 		Node::Meta { node, data } => Node::Meta { node: Box::new(with_parts_rewritten(*node, rewrite)), data },
-		other => other.map_children(rewrite),
+		other => children_rewritten(other, rewrite),
 	}
 }
 
@@ -76,4 +76,18 @@ pub(crate) fn spaced_statement(items: &[Node]) -> Option<(&Node, Vec<&str>, &Nod
 	let Node::Key(last_word, Op::Assign | Op::Define, body) = last.drop_meta() else { return None };
 	let words = middle.iter().chain(std::iter::once(last_word.as_ref())).map(Node::symbol_name).collect::<Option<_>>()?;
 	Some((name, words, body))
+}
+
+/// The node with `rewrite` applied to its direct children: a list's items, a key's left then right, the node under its
+/// metadata; any other node as it is. Unlike Node::map_children it leaves a class body (Node::Type) alone
+pub(crate) fn children_rewritten(node: Node, mut rewrite: impl FnMut(Node) -> Node) -> Node {
+	match node {
+		Node::Key(left, op, right) => {
+			let left = rewrite(*left);
+			key(left, op, rewrite(*right))
+		}
+		Node::List(items, bracket, separator) => Node::List(items.into_iter().map(rewrite).collect(), bracket, separator),
+		Node::Meta { node, data } => Node::Meta { node: Box::new(rewrite(*node)), data },
+		other => other,
+	}
 }
