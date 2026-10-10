@@ -37,12 +37,6 @@ const NOTIFICATION_TITLE = "warp";
 // a page event, or one element's (`on click·1`, src/lowering/element_events.rs)
 const PAGE_EVENT = /^on ((?:click|key|input)(?:·\d+)?)$/;
 const DARK_MODE_QUERY = "(prefers-color-scheme: dark)";
-// the gray levels of paint: a nonzero pixel, a zero pixel; from PAINT_COLOR_FROM on a value is a color 0xAARRGGBB
-// (src/paint.rs shade, lib/draw.warp)
-const PAINT_INK = 29;
-const PAINT_PAPER = 250;
-const PAINT_COLOR_FROM = 2 ** 24;
-const PAINT_SHOWN_SIDE = 288; // a small painting is shown this wide (or high), scaled by a whole factor so pixels stay square
 const SOUND_OFFSET = 32768; // a sound's samples cross as amplitude + 32768 (lib/sound.warp, src/sound.rs SAMPLE_OFFSET)
 
 const $ = id => document.getElementById(id);
@@ -515,15 +509,6 @@ function markWord(kind, line, column, message) {
 	return editor.markText({ line, ch }, { line, ch: ch + marked.length }, { className: `marked-${kind}`, title: message ?? "" });
 }
 
-// paint(pixels, width, height): one canvas per call, a pixel dark where its value is nonzero (true), light where 0
-// what a pixel value shows, as src/paint.rs shade: paper for 0, its color for a value with an alpha byte, else ink
-function paintShade(value) {
-	const number = Number(value);
-	if (!value) return [PAINT_PAPER, PAINT_PAPER, PAINT_PAPER];
-	if (number >= PAINT_COLOR_FROM) return [Math.floor(number / 65536) % 256, Math.floor(number / 256) % 256, number % 256];
-	return [PAINT_INK, PAINT_INK, PAINT_INK];
-}
-
 // a markup value as DOM (lib/markup.warp, card web-dom), in a shadow root so its own style cannot restyle the page.
 // Markup shown anew after a handler changes only the text nodes and attributes that differ (card web-fine): the
 // elements stay, with their focus, input and scroll state.
@@ -561,15 +546,8 @@ function submitForm(submitted) {
 
 function showPaintings(paintings) {
 	$("full-screen").hidden = paintings.length === 0;
-	$("paintings").replaceChildren(...paintings.map(painting => {
-		const canvas = element("canvas", { width: painting.width, height: painting.height, className: "painting" });
-		canvas.style.width = `${painting.width * Math.max(1, Math.floor(PAINT_SHOWN_SIDE / Math.max(painting.width, painting.height, 1)))}px`;
-		canvas.style.setProperty("--aspect", painting.width / Math.max(painting.height, 1));
-		return drawn(canvas, painting);
-	}));
+	$("paintings").replaceChildren(...paintings.map(paintingCanvas));
 }
-
-const sameSize = (one, other) => one.width === other.width && one.height === other.height;
 
 // the run's paintings, its last one drawn into the canvas shown for it, which keeps the pointer over it
 function showFrame(paintings) {
@@ -586,15 +564,6 @@ function toggleFullScreen(click) {
 	click.stopPropagation();
 	if (document.fullscreenElement) document.exitFullscreen();
 	else $("painted").requestFullscreen();
-}
-
-function drawn(canvas, { pixels, width, height }) {
-	const image = canvas.getContext("2d").createImageData(width, height);
-	for (let index = 0; index < width * height; index++) {
-		image.data.set([...paintShade(pixels[index]), 255], index * 4);
-	}
-	canvas.getContext("2d").putImageData(image, 0, 0);
-	return canvas;
 }
 
 // ---- page events (notes/signals.md phase 7): `on click {…}`, `on key {…}` of the program shown --------------------
@@ -644,24 +613,9 @@ function goToAddress(key) {
 	worker.postMessage({ navigate: new URL($("address").value, PROGRAM_ORIGIN).pathname });
 }
 
-// mouse_x, mouse_y, mouse_down (host.js system_value): the pointer over a canvas in shared memory, which a running
-// animation reads at once (its worker takes no message while it runs); the worker gets the buffer and these names
-const POINTER_NAMES = ["mouse_x", "mouse_y", "mouse_down"];
-const pointer = globalThis.SharedArrayBuffer ? new Int32Array(new SharedArrayBuffer(POINTER_NAMES.length * Int32Array.BYTES_PER_ELEMENT)) : undefined;
-const sharePointer = () => pointer && worker.postMessage({ pointer: { buffer: pointer.buffer, names: POINTER_NAMES } });
-
-function trackPointer(event) {
-	if (!pointer || !event.target.closest?.("canvas")) return;
-	const { x, y } = clickDetail(event);
-	[x, y, event.buttons & 1].forEach((value, index) => Atomics.store(pointer, index, value));
-}
-
-function clickDetail(click) {
-	const target = click.target.closest("canvas") ?? $("output");
-	const bounds = target.getBoundingClientRect();
-	const scale = target.width ? target.width / bounds.width : 1;
-	return { x: Math.floor((click.clientX - bounds.left) * scale), y: Math.floor((click.clientY - bounds.top) * scale) };
-}
+// the pointer over a canvas (canvas.js) for the running program's worker
+const sharePointer = () => pointer && worker.postMessage(pointerMessage());
+const clickDetail = click => pointOn(click.target.closest("canvas") ?? $("output"), click);
 
 function terminalText(text) {
 	const restarts = [...text.matchAll(TERMINAL_RESTART)];
@@ -850,8 +804,7 @@ function initialize() {
 	$("rendered").oninput = input => sendElementEvent("input", input, inputDetail(input.composedPath()[0]));
 	$("output").onclick = click => sendPageEvent("click", clickDetail(click));
 	$("output").onkeydown = key => sendPageEvent("key", { key: key.key });
-	for (const event of ["pointermove", "pointerdown", "pointerup"]) $("output").addEventListener(event, trackPointer);
-	document.addEventListener("pointerup", () => pointer && Atomics.store(pointer, POINTER_NAMES.indexOf("mouse_down"), 0));
+	followPointer($("output"));
 	$("download").onclick = downloadModule;
 	startResizers();
 	showBuildSwitch();
