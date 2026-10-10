@@ -169,14 +169,23 @@ impl WasmGcEmitter {
 		}
 	}
 
-	/// `global x = value`: x is declared ahead of all code (`allocate_declared_globals`), so this stores the value
-	pub(super) fn emit_global_declaration(&mut self, func: &mut Function, decl: &Node) {
+	/// `global x = value`: x is declared ahead of all code (`allocate_declared_globals`), so this stores the value and
+	/// gives the name and kind of x, or None for a malformed declaration (reported)
+	fn emit_global_store_declared(&mut self, func: &mut Function, decl: &Node) -> Option<(String, Kind)> {
 		let Some((name, value)) = Self::global_declaration_parts(decl) else {
 			self.emit_malformed(func, decl, "`global name` or `global name = value`");
-			return;
+			return None;
 		};
 		let kind = self.declare_global(&name, &value);
 		self.emit_global_store(func, &name, &value);
+		Some((name, kind))
+	}
+
+	/// `global x = value` as a node
+	pub(super) fn emit_global_declaration(&mut self, func: &mut Function, decl: &Node) {
+		let Some((_, kind)) = self.emit_global_store_declared(func, decl) else {
+			return;
+		};
 		if !kind.is_ref() {
 			self.emit_primitive_as_node(func, kind);
 		}
@@ -296,14 +305,11 @@ impl WasmGcEmitter {
 		index
 	}
 
-	/// Emit global declaration and return numeric value (for use in emit_numeric_value)
+	/// `global x = value` as a number (for emit_numeric_value)
 	pub(super) fn emit_global_numeric(&mut self, func: &mut Function, decl: &Node) {
-		let Some((name, value)) = Self::global_declaration_parts(decl) else {
-			self.emit_malformed(func, decl, "`global name` or `global name = value`");
+		let Some((name, kind)) = self.emit_global_store_declared(func, decl) else {
 			return;
 		};
-		let kind = self.declare_global(&name, &value);
-		self.emit_global_store(func, &name, &value);
 		if kind.is_ref() {
 			self.emit_call(func, "get_int_value");
 		} else if kind.is_float() {

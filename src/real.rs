@@ -654,14 +654,7 @@ fn compare(left: Value, op: Op, right: Value) -> Evaluated {
 			None => return Ok(Value::Bool(op == Op::Ne)),
 		},
 	};
-	Ok(Value::Bool(match op {
-		Op::Eq => ordering == Ordering::Equal,
-		Op::Ne => ordering != Ordering::Equal,
-		Op::Lt => ordering == Ordering::Less,
-		Op::Le => ordering != Ordering::Greater,
-		Op::Gt => ordering == Ordering::Greater,
-		_ => ordering != Ordering::Less, // Ge
-	}))
+	Ok(Value::Bool(op.holds(ordering)))
 }
 
 impl Value {

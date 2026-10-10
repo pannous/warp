@@ -142,20 +142,7 @@ impl WasmGcEmitter {
 
 	/// Push i32 1 when every listed local holds a fixnum: `((x + OFFSET) | ...) >= 0`
 	pub(super) fn emit_fixnum_test(&self, func: &mut Function, locals: &[u32]) {
-		if locals.is_empty() {
-			func.instruction(&I::I32Const(1));
-			return;
-		}
-		for (i, local) in locals.iter().enumerate() {
-			func.instruction(&I::LocalGet(*local));
-			func.instruction(&I::I64Const(FIXNUM_OFFSET));
-			func.instruction(&I::I64Add);
-			if i > 0 {
-				func.instruction(&I::I64Or);
-			}
-		}
-		func.instruction(&I::I64Const(0));
-		func.instruction(&I::I64GeS);
+		Self::emit_offset_locals_test(func, locals, FIXNUM_OFFSET, &[I::I64Const(0), I::I64GeS]);
 	}
 
 	fn unproven(&self, candidates: &[(u32, IntRange)]) -> Vec<u32> {
@@ -263,21 +250,22 @@ impl WasmGcEmitter {
 
 	/// Push i32 1 when all locals fit in `bits` signed bits: `((x + 2^(bits-1)) | ...) >>u bits == 0`
 	fn emit_signed_bits_test(func: &mut Function, locals: &[u32], bits: u32) {
+		Self::emit_offset_locals_test(func, locals, 1 << (bits - 1), &[I::I64Const(bits as i64), I::I64ShrU, I::I64Eqz]);
+	}
+
+	/// Push i32 1 for no locals, else `(x + offset) | (y + offset) | ...` followed by `test`
+	fn emit_offset_locals_test(func: &mut Function, locals: &[u32], offset: i64, test: &[Instruction]) {
 		if locals.is_empty() {
 			func.instruction(&I::I32Const(1));
 			return;
 		}
 		for (i, local) in locals.iter().enumerate() {
-			func.instruction(&I::LocalGet(*local));
-			func.instruction(&I::I64Const(1 << (bits - 1)));
-			func.instruction(&I::I64Add);
+			Self::emit_list(func, &[I::LocalGet(*local), I::I64Const(offset), I::I64Add]);
 			if i > 0 {
 				func.instruction(&I::I64Or);
 			}
 		}
-		func.instruction(&I::I64Const(bits as i64));
-		func.instruction(&I::I64ShrU);
-		func.instruction(&I::I64Eqz);
+		Self::emit_list(func, test);
 	}
 
 	/// Stack [a, b] (Ints) → [f64]: a/b rounded once. Where both are exact f64s and b is not 0, IEEE division rounds

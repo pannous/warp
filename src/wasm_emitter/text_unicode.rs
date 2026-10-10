@@ -170,11 +170,7 @@ impl WasmGcEmitter {
 			let (pointer, end, capacity, destination, index, out) = (1, 2, 3, 4, 5, 6);
 			let (first_byte, code_point, step, slot, mapped, entry) = (7, 8, 9, 10, 11, 12);
 			let (low, high, middle) = (13, 14, 15);
-			s.emit_codepoint_as_text(f, 0);
-			s.emit_is_text(f);
-			f.instruction(&I::I32Eqz);
-			s.emit_fail_if(f, "not_a_text");
-			s.emit_text_bounds(f, pointer, end);
+			s.emit_text_argument_bounds(f, pointer, end);
 			Self::emit_list(f, &[I::LocalGet(end), I::LocalGet(pointer), I::I32Sub, I32Const(OUTPUT_FACTOR), I::I32Mul, I::LocalSet(capacity)]);
 			s.emit_text_allocation(f, capacity, destination);
 			Self::emit_list(f, &[I::LocalGet(pointer), I::LocalSet(index), I::LocalGet(destination), I::LocalSet(out)]);
@@ -218,6 +214,15 @@ impl WasmGcEmitter {
 		});
 	}
 
+	/// A character argument (local 0) becomes a text, anything else but a text fails; `pointer` and `end` span its bytes
+	fn emit_text_argument_bounds(&self, func: &mut Function, pointer: u32, end: u32) {
+		self.emit_codepoint_as_text(func, 0);
+		self.emit_is_text(func);
+		func.instruction(&I::I32Eqz);
+		self.emit_fail_if(func, "not_a_text");
+		self.emit_text_bounds(func, pointer, end);
+	}
+
 	/// text_reverse(text): a fresh text with the code points in the opposite order
 	pub(super) fn emit_text_reverse(&mut self) {
 		// list_reverse, which text_split also uses, hands a text on to it
@@ -228,11 +233,7 @@ impl WasmGcEmitter {
 		let node_ref = Ref(self.node_ref(false));
 		self.runtime_function("text_reverse", vec![node_ref], vec![node_ref], vec![ValType::I32; 6], |s, f| {
 			let (pointer, end, destination, out, scan, start) = (1, 2, 3, 4, 5, 6);
-			s.emit_codepoint_as_text(f, 0);
-			s.emit_is_text(f);
-			f.instruction(&I::I32Eqz);
-			s.emit_fail_if(f, "not_a_text");
-			s.emit_text_bounds(f, pointer, end);
+			s.emit_text_argument_bounds(f, pointer, end);
 			Self::emit_list(f, &[I::LocalGet(end), I::LocalGet(pointer), I::I32Sub, I::LocalSet(scan)]);
 			s.emit_text_allocation(f, scan, destination);
 			Self::emit_list(f, &[I::LocalGet(destination), I::LocalSet(out), I::LocalGet(end), I::LocalSet(scan)]);
@@ -259,11 +260,7 @@ impl WasmGcEmitter {
 		locals.extend([ValType::I32; 6]);
 		self.runtime_function("text_chars", vec![node_ref], vec![node_ref], locals, |s, f| {
 			let (characters, pointer, end, index, first_byte, code_point, step) = (1, 2, 3, 4, 5, 6, 7);
-			s.emit_codepoint_as_text(f, 0);
-			s.emit_is_text(f);
-			f.instruction(&I::I32Eqz);
-			s.emit_fail_if(f, "not_a_text");
-			s.emit_text_bounds(f, pointer, end);
+			s.emit_text_argument_bounds(f, pointer, end);
 			Self::emit_list(f, &[I::LocalGet(pointer), I::LocalSet(index)]);
 			Self::emit_list(f, &[I::Block(BlockType::Empty), I::Loop(BlockType::Empty), I::LocalGet(index), I::LocalGet(end), I::I32GeU, I::BrIf(1)]);
 			s.emit_decode_at(f, index, first_byte, code_point, step);
