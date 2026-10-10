@@ -2834,6 +2834,7 @@ PASSED:
   ✓ programs::test_sound_render::sounds_render_into_one_wav_file
   ✓ programs::test_sound_spectrum::a_tone_fills_its_own_band
   ✓ programs::test_sound_spectrum::silence_and_the_end_are_empty
+  ✓ programs::test_sound_spectrum::the_gpu_visualizer_raymarches_while_it_plays
   ✓ programs::test_sound_spectrum::the_visualizer_paints_while_it_plays
   ✓ programs::test_sound_wavs::each_run_writes_wavs_of_its_own
   ✓ programs::test_sound::a_melody_is_its_notes_one_after_another
@@ -3815,6 +3816,7 @@ PASSED:
   ✓ web::test_css_transitions::a_site_with_transitions_carries_their_script
   ✓ web::test_css_transitions::the_starting_style_is_data_for_the_page
   ✓ web::test_deploy::a_deployed_program_answers_its_routes
+  ✓ web::test_deploy::a_program_without_routes_answers_its_value_and_functions
   ✓ web::test_deploy::a_program_without_routes_is_no_worker
   ✓ web::test_deploy::the_playground_bundles_a_program_for_warp_hosting
   ✓ web::test_dev_server::a_dev_build_keeps_the_values_the_program_changed
@@ -4023,6 +4025,7 @@ PASSED:
   ✓ web::test_webgpu::a_gpu_map_runs_on_the_cpu_where_that_is_faster
   ✓ web::test_webgpu::a_gpu_map_takes_a_list_of_floats
   ✓ web::test_webgpu::a_gpu_map_the_gpu_cannot_run_says_why
+  ✓ web::test_webgpu::a_kept_shader_reads_each_frames_values
   ✓ web::test_webgpu::a_reduction_of_a_gpu_map_reads_back_partial_results
   ✓ web::test_webgpu::a_reduction_of_a_gpu_map_takes_a_list_of_floats
   ✓ web::test_webgpu::a_render_shader_that_does_not_compile_says_where
@@ -4413,4 +4416,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-10 ignored, 4408 passed, 0 failed, 4408 total tested
+10 ignored, 4411 passed, 0 failed, 4411 total tested
