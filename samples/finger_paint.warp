@@ -11,5 +11,5 @@ while true {
 		hue += 2
 	}
 	show()
-	sleep 16 ms
+	sleep 16ms
 }
