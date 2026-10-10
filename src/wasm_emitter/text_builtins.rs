@@ -390,14 +390,27 @@ impl WasmGcEmitter {
 
 	/// `left + right` of texts or characters: a fresh text holding both
 	pub(super) fn emit_text_concat(&mut self, func: &mut Function, left: &Node, right: &Node) {
+		// a value held as a Node may be a stored error: node_add raises it, where its text form would be its message
+		// (`r = error("b"); "a" + r`, card error-value-kind), and joins any other value as emit_concatenated does
+		if [left, right].into_iter().any(|operand| self.holds_run_time_kind(operand)) {
+			self.emit_node_instructions(func, left);
+			self.emit_node_instructions(func, right);
+			self.emit_call(func, super::list_ops::NODE_ADD);
+			return;
+		}
 		self.emit_concatenated(func, left);
 		self.emit_concatenated(func, right);
 		self.emit_call(func, TEXT_CONCAT);
 	}
 
+	/// A value whose kind is known only at run time (a map value, arithmetic of an any value, a stored error), not ø itself
+	pub(crate) fn holds_run_time_kind(&self, operand: &Node) -> bool {
+		matches!(self.get_type(operand), Kind::Empty | Kind::Data) && !matches!(operand.drop_meta(), Node::Empty)
+	}
+
 	/// A text operand as is, anything else in its text form; the implicit conversion is hinted
 	fn emit_concatenated(&mut self, func: &mut Function, operand: &Node) {
-		if matches!(self.get_type(operand), Kind::Empty | Kind::Data) && !matches!(operand.drop_meta(), Node::Empty) {
+		if self.holds_run_time_kind(operand) {
 			// a value held as a Node (a map value, arithmetic of an any value) may be a number at runtime: joined, a number takes its text form
 			self.emit_node_instructions(func, &super::joined_text(std::slice::from_ref(operand), ""));
 			return;

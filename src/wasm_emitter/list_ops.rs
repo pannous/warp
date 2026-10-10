@@ -750,6 +750,12 @@ impl WasmGcEmitter {
 				let (kind, power) = (2, 3);
 				// node_add of two lists (ø is the empty list): their concatenation, `out = out + row`
 				if name == NODE_ADD {
+					// an Error operand is the sum, as text_concat gives it: errors propagate, and are never joined into a
+					// text as their message (`out += tag(x)` of an error, card error-value-kind)
+					for side in 0..2 {
+						s.emit_field(f, side, 0);
+						Self::emit_list(f, &[I::I64Const(KIND_MASK), I::I64And, I::I64Const(Kind::Error as i64), I::I64Eq, I::If(BlockType::Empty), I::LocalGet(side), I::Return, I::End]);
+					}
 					let is_list = |f: &mut Function, operand: u32| {
 						s.emit_field(f, operand, 0);
 						Self::emit_list(f, &[
