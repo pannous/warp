@@ -429,8 +429,10 @@ addHostPart({
 				return 0n;
 			}
 		};
-		const renderJob = (shader, width, height, values) => ({ shader, width: Number(width), height: Number(height),
-			values: { ...builtinValues(shader, Number(width), Number(height)), ...(values == null ? {} : plain(values)) } });
+		const renderValues = (shader, width, height, values) =>
+			({ ...builtinValues(shader, width, height), ...(values == null ? {} : plain(values)) });
+		const renderJob = (shader, width, height, values) =>
+			({ shader, width: Number(width), height: Number(height), values: renderValues(shader, Number(width), Number(height), values) });
 		// the pixels as a Uint32Array, for gpu_render and for paint given a shader (host.js, P234)
 		holder.gpuRendered = (shader, width, height, values) => gpuJob("gpu_render", renderJob(shader, width, height, values), [], Uint32Array);
 		// paint of a shader in the playground: drawn into the page canvas the GPU's task Worker holds, a new one when it
