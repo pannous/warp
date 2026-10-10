@@ -570,6 +570,10 @@ const KNOWN_VALUE_DIFFERENCES: &[(&str, &str)] = &[
 	// a covariant alias's write: W0 checks it against the list's own element type when it runs, warp adds 2.5 to ints
 	("xs: ints = [1]; ys: numbers = xs; ys.add(2.5); xs", "p215-user"),
 	("xs: ints = [1, 2]; ys: numbers = xs; ys#1 = 2.5; xs", "p215-user"),
+	// decimals are floats since decision exact-default: W0 truncates a float result for a declared int, warp refuses it
+	("int square(x) = x*x; square(4) + square 3.1", "float-result"),
+	// a float joined to a text: W0 prints Lean's Float.toString
+	("\"a\" + 0.5", "float-text-prints"),
 ];
 /// What the model gives for a program it rejects, and for a value it does not keep
 const REJECTED: &str = "rejected";

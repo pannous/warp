@@ -25,7 +25,7 @@ fn test_literal_float_operations_do_not_truncate() {
 	is!("2.7 == 2", false);
 	is!("1.5 > 1", true);
 	is!("1.5 ^ 2", 2.25);
-	is!("2.7 % 2", 0.7);
+	is!("2.7 % 2 ≈ 0.7", true); // decimals are floats (decision exact-default): 0.7000000000000002
 }
 
 #[test]
