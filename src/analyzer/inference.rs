@@ -214,8 +214,7 @@ pub fn infer_type(node: &Node, scope: &Scope) -> Kind {
 			_ => Kind::Int,
 		},
 		// if c {a} else {b}; an `error(…)` branch raises its error, so the other branch decides the kind (bottom kind)
-		Node::Key(if_then, Op::Else, else_expr) if matches!(if_then.drop_meta(), Node::Key(_, Op::Then, _)) => {
-			let Node::Key(_, _, then_expr) = if_then.drop_meta() else { unreachable!("guarded") };
+		Node::Key(if_then, Op::Else, else_expr) if let Node::Key(_, Op::Then, then_expr) = if_then.drop_meta() => {
 			match (raises_error(then_expr), raises_error(else_expr)) {
 				(true, false) => branch_kind(else_expr, scope),
 				(false, true) => branch_kind(then_expr, scope),
@@ -229,12 +228,9 @@ pub fn infer_type(node: &Node, scope: &Scope) -> Kind {
 		// a value looked up by a name in a map of unknown values (`graph[node]` of a parameter) is held as a Node
 		// a field read by name with a declared kind: `v.x` of `type V {x: float}`; a field of a value known only at run time
 		// (`request.body.priority` of an any) holds what it holds, whatever a class's field of that name declares
-		Node::Key(indexed, Op::Hash, index) if crate::warp_parser::subscript_key(index)
-			.and_then(|key| match key.drop_meta() { Node::Text(name) => scope.function_kind(&field_kind_key(name)), _ => None })
-			.is_some() && !matches!(indexed.drop_meta(), Node::Empty) && !declared_any(indexed, scope) => {
-			let Some(Node::Text(name)) = crate::warp_parser::subscript_key(index).map(Node::drop_meta) else { unreachable!("guarded") };
-			scope.function_kind(&field_kind_key(name)).expect("guarded")
-		}
+		Node::Key(indexed, Op::Hash, index) if let Some(Node::Text(name)) = crate::warp_parser::subscript_key(index).map(Node::drop_meta)
+			&& let Some(kind) = scope.function_kind(&field_kind_key(name))
+			&& !matches!(indexed.drop_meta(), Node::Empty) && !declared_any(indexed, scope) => kind,
 		Node::Key(indexed, Op::Hash, index) if !matches!(indexed.drop_meta(), Node::Empty) => element_kind(indexed, scope).unwrap_or_else(|| {
 			let by_name = crate::warp_parser::subscript_key(index).is_some_and(|key| matches!(key.drop_meta(), Node::Text(_) | Node::Char(_))
 				|| matches!(infer_type(key, scope), Kind::Text | Kind::Codepoint));

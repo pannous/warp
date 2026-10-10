@@ -67,8 +67,7 @@ pub(super) fn collect_variables_inner(node: &Node, scope: &mut Scope, skip_first
 	}
 	match node {
 		// `c ? a : b`: both branches are code, never a tag `a:b` whose body holds attributes
-		Node::Key(condition, Op::Question, then_else) if matches!(then_else.drop_meta(), Node::Key(_, Op::Colon, _)) => {
-			let Node::Key(then, _, otherwise) = then_else.drop_meta() else { unreachable!("guarded") };
+		Node::Key(condition, Op::Question, then_else) if let Node::Key(then, Op::Colon, otherwise) = then_else.drop_meta() => {
 			visit(condition, scope) + visit(then, scope) + visit(otherwise, scope)
 		}
 		// `global:xs = …` defines no local, but counts the variables in the value expression first: the kind of a

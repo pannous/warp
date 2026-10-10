@@ -1321,8 +1321,7 @@ impl WarpParser {
 				};
 				Node::Key(Box::new(Symbol(symbol)), op, Box::new(block))
 			}
-			'<' if !self.options.xml_mode && !self.options.data_mode && self.type_application_length().is_some() => {
-				let length = self.type_application_length().expect("guarded");
+			'<' if !self.options.xml_mode && !self.options.data_mode && let Some(length) = self.type_application_length() => {
 				let arguments: String = (1..length - 1).map(|offset| self.peek_char(offset)).collect();
 				if symbol == "list" && !arguments.contains(',') {
 					let element_words: Vec<&str> = arguments.split(|c: char| c == '<' || c == '>' || c.is_whitespace()).filter(|word| !word.is_empty()).collect();
