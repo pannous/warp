@@ -111,7 +111,12 @@ The words above are layer 1, the toy layer. Each layer below keeps the ones abov
    module settings `attack`, `decay` (seconds), `sustain` (a share), `release` (seconds), defaults 5 ms / 0 / 1 / 5 ms
    = the old click-free fade; `wave_shape = "noise"`; gain in decibels, `loudness = -6 dB` (`-6dB`, `x = -6 dB`;
    music_words.rs → lib decibels). The float settings are declared `= 0.3 as float` (card float-global: a float
-   assigned to a global declared with a decimal fails "not an int" in the functions that read it). Still to build:
+   assigned to a global declared with a decimal fails "not an int" in the functions that read it).
+   Built (card synth-filters, samples/filters.warp, tests/programs/test_sound_filters.rs): settings `filter`
+   ("lowpass", "highpass", "bandpass": an RBJ-cookbook biquad over each note's amplitudes), `cutoff` (Hz),
+   `resonance` (Q, 0.707 flat), `vibrato` (semitones) at `vibrato_rate`, `tremolo` (a share) at `tremolo_rate`,
+   `unison` voices spread over `detune` semitones. Plain numbers: `cutoff = 1.2kHz` fails (card quantity-global).
+   The filter runs per note, so its state starts fresh at every note. Still to build:
    Synthesis. Oscillators (sine, saw, square, triangle, noise, wavetable, band-limited, detune, unison), ADSR
    envelopes, filters (lowpass/highpass/bandpass with resonance), LFOs and parameter automation (ramps), gain in dB,
    stereo pan, polyphony with voice stealing.
