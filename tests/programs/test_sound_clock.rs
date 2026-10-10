@@ -37,6 +37,6 @@ fn stop_sound_empties_the_queue() {
 
 #[test]
 fn waiting_headless_takes_no_time() {
-	let (output, took) = printed("play C4 for 3s\nwait_sound\n7");
-	assert!(output.contains('7') && took < std::time::Duration::from_secs(3), "{took:?}");
+	let (output, took) = printed("play C4 for 30s\nwait_sound\n7");
+	assert!(output.contains('7') && took < std::time::Duration::from_secs(10), "{took:?}");
 }
