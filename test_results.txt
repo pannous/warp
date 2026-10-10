@@ -203,6 +203,7 @@ PASSED:
   ✓ control::test_field_of_elements::a_field_of_a_filtered_table_reads_only_its_rows
   ✓ control::test_field_of_elements::a_field_of_a_list_is_the_field_of_each_element
   ✓ control::test_field_of_elements::with_filters_a_list_of_instances
+  ✓ control::test_field_of_elements::with_filters_an_untyped_list_of_instances
   ✓ control::test_filter_loop_over_variable::a_filter_loop_over_a_variable
   ✓ control::test_filter_loops::test_a_class_name_loop_visits_only_its_instances
   ✓ control::test_filter_loops::test_a_condition_loop_visits_only_matching_items
@@ -1756,10 +1757,14 @@ PASSED:
   ✓ modules::test_include::use_imports_only_the_declarations
   ✓ modules::test_json_parse_form::json_parse_reads_json
   ✓ modules::test_json_parse_form::parse_json_is_an_alias_of_json_parse
+  ✓ modules::test_json5::json_of_a_text_parses_it
+  ✓ modules::test_json5::json_of_warp_data_is_that_data
+  ✓ modules::test_json5::json_parse_reads_json5
   ✓ modules::test_module_cache::test_different_modules_not_cached
   ✓ modules::test_module_cache::test_module_cache_reuse
   ✓ modules::test_module_classes::a_used_modules_class_has_its_methods
   ✓ modules::test_module_classes::the_programs_own_class_wins
+  ✓ modules::test_module_function_dir::a_used_module_function_reflects_like_the_program_own
   ✓ modules::test_module_meta::an_imported_warp_module_reflects_its_functions
   ✓ modules::test_module_meta::the_meta_section_names_functions_and_classes
   ✓ modules::test_module_signals::a_listener_sees_the_writes_of_a_used_module
@@ -2840,6 +2845,7 @@ PASSED:
   ✓ programs::test_task_sound::a_sound_in_a_task_plays_its_length
   ✓ programs::test_task_sound::a_task_reads_the_programs_globals
   ✓ programs::test_warp_command::debug_build_names_its_commit
+  ✓ programs::test_warp_command::version_names_the_branch
   ✓ programs::test_warp_command::warp_command_runs_this_checkouts_binary
   ✓ scope::test_colon_body_assignment::test_for_colon_body_with_assignments
   ✓ scope::test_colon_body_assignment::test_if_colon_body_assignment_stops_at_else
@@ -3081,6 +3087,7 @@ PASSED:
   ✓ text::test_text_plus_anything::a_text_joins_anything_in_its_text_form
   ✓ text::test_text_plus_anything::a_text_spelling_a_number_plus_a_number_warns
   ✓ text::test_text_plus_float_call::a_float_call_joins_a_text_by_its_value
+  ✓ text::test_text_plus_printable::a_printable_instance_joins_a_text_as_its_own_text
   ✓ text::test_text_repeat::n_times_text_is_the_explicit_repeat
   ✓ text::test_text_repeat::text_repeat_names_the_explicit_form
   ✓ text::test_text_repeat::text_times_float_or_text_stays_a_type_error
@@ -3548,6 +3555,7 @@ PASSED:
   ✓ types::test_type_tests::test_pi_is_real_and_a_number
   ✓ types::test_type_tests::test_scalar_type_tests
   ✓ types::test_type_tests::test_type_of_is_type
+  ✓ types::test_type_tests::test_type_of_value_is_type
   ✓ types::test_type_upgrading::test_float_operations
   ✓ types::test_type_upgrading::test_float_plus_int_type_upgrading
   ✓ types::test_type_upgrading::test_global_with_float
@@ -4405,4 +4413,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-10 ignored, 4400 passed, 0 failed, 4400 total tested
+10 ignored, 4408 passed, 0 failed, 4408 total tested
