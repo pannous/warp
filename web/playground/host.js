@@ -212,14 +212,16 @@ function programImports(holder, hooks) {
 				}
 				hooks.paint(painted, Number(width), Number(height));
 			},
-			// sound_samples(samples, count, rate) (src/host.rs, lib/sound.warp): the page plays them with WebAudio
+			// sound_samples(samples, count, rate, channels) (src/host.rs, lib/sound.warp; stereo interleaved left, right):
+			// the page plays them with WebAudio
 			// (playground.js playSound); a run without a page (tests, node) has no speakers and stays silent, as natively
 			// render_sound writes them, played or not, into a WAV (host-files.js STD_ADAPTERS.sound.render)
-			sound_samples: (samples, count, rate) => {
+			sound_samples: (samples, count, rate, channels) => {
 				const values = intsOfList(program(), samples, Number(count)) ?? plainOfTree(readNode(program(), samples));
-				const { place, at } = self.voiceSounded?.(values.length / Number(rate)) ?? {};
-				(holder.run.unrenderedSounds ??= []).push({ samples: values, rate: Number(rate), place });
-				hooks.sound?.(values, Number(rate), at);
+				const sound = { samples: values, rate: Number(rate), channels: Number(channels) };
+				const { place, at } = self.voiceSounded?.(values.length / sound.channels / sound.rate) ?? {};
+				(holder.run.unrenderedSounds ??= []).push({ ...sound, place });
+				hooks.sound?.({ ...sound, at });
 			},
 			...Object.assign({}, ...eachHostPart("words", holder, hooks, access)),
 		},
