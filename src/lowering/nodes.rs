@@ -91,3 +91,20 @@ pub(crate) fn children_rewritten(node: Node, mut rewrite: impl FnMut(Node) -> No
 		other => other,
 	}
 }
+
+/// A parameter as the parameters it stands for: a group `(a, b)` its items, ø none
+pub(crate) fn grouped_parameters(parameter: &Node) -> Vec<Node> {
+	match parameter.drop_meta() {
+		Node::List(group, Bracket::Round, _) => group.clone(),
+		Node::Empty => vec![],
+		_ => vec![parameter.clone()],
+	}
+}
+
+/// `x = value`: the name and the value
+pub(crate) fn named_assignment(statement: &Node) -> Option<(String, Node)> {
+	match statement.drop_meta() {
+		Node::Key(name, Op::Assign, value) => Some((name.symbol_name()?.to_string(), value.as_ref().clone())),
+		_ => None,
+	}
+}

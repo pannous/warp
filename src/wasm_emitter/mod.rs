@@ -452,8 +452,7 @@ impl WasmGcEmitter {
 	/// Emit string lookup from table and call constructor
 	fn emit_string_call(&mut self, func: &mut Function, s: &str, constructor: &'static str) {
 		let (ptr, len) = self.allocate_string(s); // a text the pre-scan did not see is added to the table, never read from offset 0
-		func.instruction(&I32Const(ptr as i32));
-		func.instruction(&I32Const(len as i32));
+		Self::emit_list(func, &[I32Const(ptr as i32), I32Const(len as i32)]);
 		self.emit_call(func, constructor);
 	}
 
@@ -1031,12 +1030,9 @@ impl WasmGcEmitter {
 			self.exported_function(name, vec![Ref(node_ref)], vec![ValType::I32], vec![], |s, f| {
 				let string = HeapType::Concrete(s.type_manager.string_type);
 				s.emit_field(f, 0, 1);
-				f.instruction(&I::RefTestNonNull(string));
-				f.instruction(&I::If(BlockType::Result(ValType::I32)));
+				Self::emit_list(f, &[I::RefTestNonNull(string), I::If(BlockType::Result(ValType::I32))]);
 				s.emit_text_field(f, 0, field_index);
-				f.instruction(&I::Else);
-				f.instruction(&I::I32Const(0));
-				f.instruction(&I::End);
+				Self::emit_list(f, &[I::Else, I::I32Const(0), I::End]);
 			});
 		}
 	}
@@ -1074,18 +1070,12 @@ impl WasmGcEmitter {
 	/// rounding functions. There is no f64 → bignum path, so a NaN or a value beyond i64 fails cleanly.
 	fn emit_truncating_cast(&mut self, func: &mut Function) {
 		let value_bits = self.scratch(0);
-		func.instruction(&I::I64ReinterpretF64);
-		func.instruction(&I::LocalSet(value_bits));
-		func.instruction(&I::LocalGet(value_bits));
-		func.instruction(&I::F64ReinterpretI64);
-		func.instruction(&I::F64Abs);
-		func.instruction(&I::F64Const(I64_RANGE_LIMIT.into()));
-		func.instruction(&I::F64Lt);
-		func.instruction(&I::I32Eqz);
+		Self::emit_list(func, &[I::I64ReinterpretF64, I::LocalSet(value_bits)]);
+		Self::emit_list(func, &[
+			I::LocalGet(value_bits), I::F64ReinterpretI64, I::F64Abs, I::F64Const(I64_RANGE_LIMIT.into()), I::F64Lt, I::I32Eqz,
+		]);
 		self.emit_fail_if(func, "float_out_of_int_range");
-		func.instruction(&I::LocalGet(value_bits));
-		func.instruction(&I::F64ReinterpretI64);
-		func.instruction(&I::I64TruncF64S);
+		Self::emit_list(func, &[I::LocalGet(value_bits), I::F64ReinterpretI64, I::I64TruncF64S]);
 		self.emit_int_from_machine(func);
 	}
 
@@ -1605,15 +1595,12 @@ impl WasmGcEmitter {
 				}
 				RawFieldValue::String(_) => {
 					let (ptr, len) = string_offsets[string_idx];
-					func.instruction(&I32Const(ptr as i32));
-					func.instruction(&I32Const(len as i32));
-					func.instruction(&I::StructNew(string_type_idx));
+					Self::emit_list(&mut func, &[I32Const(ptr as i32), I32Const(len as i32), I::StructNew(string_type_idx)]);
 					string_idx += 1;
 				}
 			}
 		}
-		func.instruction(&I::StructNew(struct_type_idx));
-		func.instruction(&I::End);
+		Self::emit_list(&mut func, &[I::StructNew(struct_type_idx), I::End]);
 		codes.function(&func);
 		module.section(&codes);
 

@@ -100,6 +100,7 @@ pub mod page_tests;
 pub mod accessibility;
 pub mod fixits;
 pub mod time;
+mod compile_time;
 pub mod real;
 pub mod units;
 pub mod uncertain;

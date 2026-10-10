@@ -6,8 +6,7 @@
 //! `x == int` is no type test (user decision #30): a value never equals a type, so it is false and hints `x is int`.
 
 use super::nodes::{call, key};
-use crate::analyzer::{extract_user_functions, plural_element_type, type_word_kind};
-use crate::context::Context;
+use crate::analyzer::{plural_element_type, type_word_kind};
 use crate::library_words::collect_assigned_names;
 use crate::node::{text, Bracket, Node, Separator};
 use crate::operators::Op;
@@ -103,8 +102,7 @@ impl Names {
 }
 
 pub fn lower(node: Node) -> Node {
-	let mut context = Context::new();
-	extract_user_functions(&mut context, &node);
+	let context = crate::analyzer::function_context(&node);
 	let mut variables: HashSet<String> = context.user_functions.keys().cloned().collect();
 	collect_assigned_names(&node, &mut variables);
 	variables.extend(context.user_functions.values().flat_map(|function| function.params.iter().map(|param| param.name.clone())));

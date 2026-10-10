@@ -6,7 +6,7 @@
 //! An unknown `.word` after a name, a text or a list is a loud error (`undefined function: word`), never silent data.
 
 use super::nodes::{call, children_rewritten, key};
-use crate::analyzer::{call_name, counting_method, extract_user_functions, is_list_mutating_method};
+use crate::analyzer::{call_name, counting_method, is_list_mutating_method};
 use crate::context::Context;
 use crate::diagnostic::Diagnostic;
 use crate::node::{symbol, text, Bracket, Node, Separator};
@@ -246,8 +246,7 @@ pub fn words_spelled_by(name: &str) -> Vec<&'static str> {
 
 pub fn lower(node: Node) -> Node {
 	let node = bind_read_data_objects(node);
-	let mut context = Context::new();
-	extract_user_functions(&mut context, &node);
+	let context = crate::analyzer::function_context(&node);
 	let mut shadowed: HashSet<String> = context.user_functions.keys().cloned().collect();
 	// `sum·point`, a class's own `sum` (traits.rs witness, an overload): the program defines `sum`, no library word
 	let variants: Vec<String> = shadowed.iter().filter_map(|name| name.split_once(crate::traits::WITNESS_SEPARATOR)).map(|(operation, _)| operation.to_string()).collect();
@@ -362,8 +361,7 @@ fn count_in(items: &[Node]) -> Option<Node> {
 /// function the program does not define. Runs first, so the passes that know these calls see their plain form; user
 /// functions are called so later, in `method_call`
 pub fn lower_function_methods(node: Node) -> Node {
-	let mut context = Context::new();
-	extract_user_functions(&mut context, &node);
+	let context = crate::analyzer::function_context(&node);
 	let arities: HashMap<String, usize> = context.user_functions.iter().map(|(name, function)| (name.clone(), function.params.len())).collect();
 	let mut defined: HashSet<String> = arities.keys().cloned().collect();
 	collect_assigned_names(&node, &mut defined);
