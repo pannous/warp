@@ -272,10 +272,10 @@ pub(super) fn infer_list_type(node: &Node, items: &[Node], bracket: &Bracket, se
 		return Kind::Text; // or an Error value, see check_unchecked_use
 	}
 	let head = items.first().and_then(Node::symbol_name);
-	if head.is_some_and(|name| [ZERO_FILL_CALL, INSERT_AT_CALL, INSERT_EITHER_CALL].contains(&name)) {
-		return Kind::List;
-	}
 	if let Some(name) = head {
+		if [ZERO_FILL_CALL, INSERT_AT_CALL, INSERT_EITHER_CALL].contains(&name) {
+			return Kind::List;
+		}
 		if name == crate::library_words::LIST_SUM && items.len() == 3 {
 			return infer_type(&items[2], scope); // the loop it dispatches around
 		}
@@ -334,21 +334,19 @@ pub(super) fn infer_list_type(node: &Node, items: &[Node], bracket: &Bracket, se
 		if name == PRINT_CALL && (items.len() >= 2 || *bracket == Bracket::Round) {
 			return Kind::Empty; // `print x` writes x and gives nothing (user, issue #18)
 		}
-	}
-	if let Some(callee) = head {
 		// a call of a function the component being compiled imports (`host.time()`)
-		if let Some(kind) = crate::wasm_emitter::component_adapters::imported_kind(callee) {
+		if let Some(kind) = crate::wasm_emitter::component_adapters::imported_kind(name) {
 			return kind;
 		}
 		if items.len() >= 2 {
-			if callee == "fetch" {
+			if name == "fetch" {
 				return Kind::Text;
 			}
 			// FFI/builtin function calls (strcmp, strlen, abs, …) return Int by default
-			if crate::ffi::is_ffi_function(callee) {
+			if crate::ffi::is_ffi_function(name) {
 				return match items {
-					[_, argument] if crate::uncertain::maps_intervals(callee) => interval_or(ffi_call_kind(callee), argument, scope),
-					_ => ffi_call_kind(callee),
+					[_, argument] if crate::uncertain::maps_intervals(name) => interval_or(ffi_call_kind(name), argument, scope),
+					_ => ffi_call_kind(name),
 				};
 			}
 		}
