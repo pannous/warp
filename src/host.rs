@@ -528,26 +528,6 @@ pub fn link_host_functions(linker: &mut Linker<HostState>, _engine: &Engine) -> 
 		},
 	)?;
 
-	// host.get_result_ptr() -> i32
-	// Get pointer to last run result (serialized as text)
-	linker.func_wrap(
-		"host",
-		"get_result_ptr",
-		|_caller: Caller<'_, HostState>| -> i32 {
-			// Return 0 for now - full implementation requires memory allocation
-			0
-		},
-	)?;
-
-	// host.get_result_len() -> i32
-	linker.func_wrap(
-		"host",
-		"get_result_len",
-		|_caller: Caller<'_, HostState>| -> i32 {
-			0
-		},
-	)?;
-
 	Ok(())
 }
 
