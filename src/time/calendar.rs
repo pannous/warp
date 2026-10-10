@@ -15,11 +15,6 @@ pub(crate) const YEARS_PER_ERA: i64 = 400;
 pub(crate) const EPOCH_SHIFT: i64 = 719_468;
 const DAY: i128 = DAY_SECONDS as i128 * SECOND;
 
-/// `t.hour` of an instant: it has a calendar only in a zone
-pub fn no_wall_clock(name: &str) -> String {
-	format!("instant has no {name}: place it in a zone first, e.g. `now in \"Europe/Berlin\"`")
-}
-
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub struct Date {
 	pub year: i64,
@@ -44,7 +39,7 @@ pub enum Time {
 	Date(Date),
 	/// `2024-01-31T10:00`: wall clock without a zone
 	Local(Date, Clock),
-	/// `2024-01-31T09:00Z`: a point on the UTC line, no calendar fields until placed in a zone
+	/// `2024-01-31T09:00Z`: a point on the UTC line; its calendar fields are the wall clock of the environment's time zone
 	Instant(Instant),
 	/// `2024-01-31T10:00+01:00[Europe/Berlin]`: a wall time in a zone, the instant is derived
 	Zoned(Zoned),
@@ -322,7 +317,7 @@ fn wall_nanos(date: Date, clock: Clock) -> i128 {
 	date.days() as i128 * DAY + clock.nanos_of_day()
 }
 
-fn from_wall_nanos(nanos: i128) -> (Date, Clock) {
+pub(crate) fn from_wall_nanos(nanos: i128) -> (Date, Clock) {
 	let days = nanos.div_euclid(DAY) as i64;
 	(civil_from_days(days), Clock::from_nanos_of_day(nanos.rem_euclid(DAY)))
 }
@@ -636,24 +631,26 @@ impl Time {
 		}
 	}
 
-	fn calendar(self) -> Option<(Date, Option<Clock>)> {
+	/// The calendar day and wall clock; an instant's in the environment's time zone
+	fn calendar(self) -> (Date, Option<Clock>) {
 		match self {
-			Time::Date(date) => Some((date, None)),
-			Time::Local(date, clock) => Some((date, Some(clock))),
-			Time::Zoned(zoned) => Some((zoned.date, Some(zoned.clock))),
-			Time::Instant(_) => None,
+			Time::Date(date) => (date, None),
+			Time::Local(date, clock) => (date, Some(clock)),
+			Time::Zoned(zoned) => (zoned.date, Some(zoned.clock)),
+			Time::Instant(instant) => {
+				let (date, clock) = local_at(instant, crate::time::local_offset(instant));
+				(date, Some(clock))
+			}
 		}
 	}
 
 	/// Months are 1-based: `2024-02-29.month` → 2
 	pub fn field(self, name: &str) -> Result<i64, String> {
 		let kind = self.kind();
-		let Some((date, clock)) = self.calendar() else {
-			return match (self, name) {
-				(Time::Instant(instant), "epoch_seconds") => Ok(instant.div_euclid(SECOND) as i64),
-				_ => Err(no_wall_clock(name)),
-			};
-		};
+		if let (Time::Instant(instant), crate::time::EPOCH_SECONDS) = (self, name) {
+			return Ok(instant.div_euclid(SECOND) as i64);
+		}
+		let (date, clock) = self.calendar();
 		let clock_field = |pick: fn(Clock) -> i64| clock.map(pick).ok_or_else(|| format!("{kind} has no {name}"));
 		match name {
 			"year" => Ok(date.year),
@@ -699,7 +696,7 @@ impl Time {
 		}
 	}
 
-	fn position(self) -> i128 {
+	pub(crate) fn position(self) -> i128 {
 		match self {
 			Time::Date(date) => date.days() as i128,
 			Time::Local(date, clock) => wall_nanos(date, clock),

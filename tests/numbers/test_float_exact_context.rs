@@ -51,3 +51,12 @@ fn test_real_holds_roots_and_exact_unions_refuse_floats() {
 	common::fails_with("x: int|text = sqrt(2)", "not an int or text");
 	common::fails_with("f(x: int or text) := x; f(sqrt(2))", "f needs an int or text for parameter x");
 }
+
+// card typed-real: a variable declared real keeps the exact root, as an undeclared one does; it was stored as a float
+#[test]
+fn a_variable_declared_real_keeps_the_exact_root() {
+	is!("x: real = sqrt(2); x * x", 2);
+	is!("x: real = sqrt(2); x * x == 2", true);
+	is!("x: exact = √3; x ^ 2", 3);
+	is!("x: real = sqrt(2); x as text", "√2");
+}

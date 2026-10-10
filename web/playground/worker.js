@@ -269,7 +269,7 @@ self.onmessage = async ({ data }) => {
 	stage("waiting for the compiler");
 	await ready;
 	stage("loading the database");
-	await globalThis.loadDatabase?.(); // host-files.js: `database[k]`'s values, once
+	await globalThis.loadKept?.(); // host-files.js: `database[k]`'s values and the written files, once
 	return inTurn(() => handleMessage(data));
 };
 

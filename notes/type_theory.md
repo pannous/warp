@@ -62,6 +62,19 @@ decimals and rationals (`0.5`, `7/2`: a ratio, wasm_emitter/exact.rs; warp's wor
 | cls p ≤ cls q if q is a prefix of p | a subclass or variant extends its parent's chain | class_methods.rs inherit, traits.rs IS_TYPE |
 | quantity D ≤ quantity D only | a quantity is no number: `1 m + 1` is a DimensionError | static_units.rs |
 | codepoint ≤ text | `"a"` parses as a codepoint, taken where a text is (`x: text = "a"`) | analyzer admits |
+| ø ≤ τ? ≤ any, τ ≤ τ? | an optional `int?` (`Ty.opt`) takes ø and its inner type's values; `σ? ≤ τ` when τ admits ø and σ ≤ τ | checks.rs (`a: int = none` is refused) |
+
+**Optionals (Ty.lean).** `admitsUnit τ` (ø, an optional, any) says where ø goes; `base` strips the optional marks,
+`strip` the ø part (`strip ø = never`). `sub` stays structural on its first argument and compares a plain type with
+the base of the second, so it is a preorder, not antisymmetric (`any? ≤ any ≤ any?`). `join` lifts ø into an
+optional (`int ⊔ ø = int?`, `int? ⊔ text = any?`), proved least. An operand that admits ø makes `+`, `-`, `*`, `/`
+dynamic (`Ty.dynamic`), as `any` does, and the checker refuses it (`addable`/`numeric` want a type below number or
+text): `a: int? = ø; a + 1` is "a may be ø" in warp. `a ?? b` (`Expr.orElse`, Op::Coalesce) has type
+`strip ta ⊔ tb`; it falls back for ø and for the empty list, which is warp's ø (`[] ?? 3` is 3, `0 ?? 9` is 0).
+An optional given to a plain place is cast when it runs (`castDynamicValues`; `consub` lets an optional's values
+through): `a: int? = ø; b: int = a` is an error when it runs, in both. W0 has no flow narrowing: warp accepts
+`a: int? = 3; a + 1` (it knows a is 3), W0 rejects it, so it is not in the corpus. The exporter writes `int?` as
+`.opt .int` and ø as `.unit` where an optional place takes it (elsewhere ø is `.nil`, the empty list).
 
 Lists are shared (P200b): `ys = xs` makes an alias and `xs.add(v)` changes the one list both see, so covariant
 lists alone are TypeScript's hole (`xs: [Circle] = [c]; ys: [Shape] = xs; ys.add(square); xs#2`). P215 closes it:
@@ -339,8 +352,9 @@ error there while `c = "a"; c + 1` is "a1" (card loop-text).
 A loop's value is its last body value, ø when the body never ran. `loop c b last` and `forIn y l b last` carry that
 value (ø in a program, the exporter writes `.unit`); a round runs the body in the `last` position, then
 `loop c b v` steps to `ite c (loop c b b) v`, `forIn y (h :: t) b v` to `forIn y t b (b[y := h])`, and the end of the
-list or text gives v. The type is `join tb (join td ø)`, syntax-directed and monotone, so `for i in [1, 2] { i }` is
-`any` (an int or ø). forIn's loop variable takes any type above the element type (`sub (elementTy tl) T`): a round
+list or text gives v. The type is `join tb (join td any)`, syntax-directed and monotone, so `for i in [1, 2] { i }` is
+`any`: warp does not track the ø of a loop that never ran (`(for x in [1, 2] { x }) + 1` compiles), so that ø is
+dynamic, not an optional (an emit nobody answers likewise: `join R any`). forIn's loop variable takes any type above the element type (`sub (elementTy tl) T`): a round
 keeps the body's typing, no narrowing. warp: a loop over a list parameter gives the wrong value (card loop-param,
 KNOWN_VALUE_DIFFERENCES), a loop that never ran gives 0 (card loop-empty; W0 keeps no ø value to compare), text and
 list bodies are card loop-value.
@@ -394,7 +408,8 @@ both). The exporter maps `!=` and `!==` to the negation; `same`, `same as` and `
 
 ## Inline unions and optionals
 
-`x: int | text`, `int or text`, `(int|text)` and the optional `int | ø` stay out of `Ty`: a union in the order would
+`x: int | text`, `int or text` and `(int|text)` stay out of `Ty` (the optional `int?` and `int | ø` is `Ty.opt`,
+above): a union in the order would
 make `join` a true least upper bound (`int ⊔ text = int | text`), else `join_mono` and with it narrowing break (with
 `join int text = any`, `int ≤ int|text` but `any ≰ int|text`), and every type operator (`plus`, `element`,
 `readTy`, `writeTy`) would need a union case. Warp runs operations on a union like on `any`, so W0 models a union
@@ -403,10 +418,9 @@ value given to it as `cast v [alternatives]`, the run-time check, which keeps a 
 checker admits a cast when the value's static type is consistent with an alternative (`consub`, gradual consistent
 subtyping: `any` stands for anything, `list any` fits `list int`), so `x: int | text = 3; x = 2.5` and
 `f(x: int | text) := x; f(2.5)` are rejected as warp rejects them. The exporter (src/law/type_model.rs) reads the
-union with the analyzer's `union_type_name` (a covered part dropped, ø made optional) and wraps main-level bindings,
+union with the analyzer's `union_type_name` (a covered part dropped, ø made optional: `.opt` of the rest) and wraps main-level bindings,
 assignments and single-parameter call arguments. Not yet: unions as fields or as one of several parameters, unions
 of classes (warp refuses them for now), `x as T?` (a conversion in warp: `"4" as int?` is 4; W0's cast only checks).
-`x: int? = 3` does not parse in warp (card int-spaces); the corpus spells it `x: int | ø = 3`.
 
 ## Implicit casts from `any`
 
