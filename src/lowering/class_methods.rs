@@ -600,10 +600,7 @@ fn bound_parts(value: Node, bindings: &[(Node, String)], body: Option<Node>) -> 
 fn positional_names(target: &Node) -> Option<Vec<String>> {
 	let Node::List(items, Bracket::Round, _) = target.drop_meta() else { return None };
 	(items.len() > 1).then_some(())?;
-	items.iter().map(|item| match item.drop_meta() {
-		Node::Symbol(name) => Some(name.clone()),
-		_ => None,
-	}).collect()
+	items.iter().map(|item| item.symbol_name().map(String::from)).collect()
 }
 
 /// `a, (b = p)` with p an instance
@@ -2543,7 +2540,7 @@ fn function(members: &Members, method: &str, parameters: Vec<Node>, body: Node) 
 
 /// Each `return v` of the body (not of a function or lambda inside it) as `return given(v)`
 fn with_returns(node: Node, given: &dyn Fn(Node) -> Node) -> Node {
-	let is_return = |word: &Node| matches!(word.drop_meta(), Node::Symbol(name) if name == RETURN_WORD);
+	let is_return = |word: &Node| word.is_symbol(RETURN_WORD);
 	match node {
 		Node::Symbol(_) if is_return(&node) => Node::List(vec![node, given(Node::Empty)], Bracket::None, Separator::Space),
 		Node::List(items, bracket, separator) if items.len() <= 2 && items.first().is_some_and(is_return) => {

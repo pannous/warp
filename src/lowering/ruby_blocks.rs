@@ -36,7 +36,7 @@ pub fn lower(node: Node) -> Node {
 }
 
 pub(crate) fn is_yield(node: &Node) -> bool {
-	matches!(node.drop_meta(), Node::Symbol(word) if word == YIELD_WORD)
+	node.is_symbol(YIELD_WORD)
 }
 
 /// `yield`, `yield v` or `yield a, b`: the values yielded
@@ -63,10 +63,7 @@ pub(crate) fn contains_yield(body: &Node) -> bool {
 fn definition_name(node: &Node) -> Option<String> {
 	match node.drop_meta() {
 		Node::Key(head, Op::Define, body) if contains_yield(body) => match head.drop_meta() {
-			Node::List(items, Bracket::Round, _) => match items.first()?.drop_meta() {
-				Node::Symbol(name) => Some(name.clone()),
-				_ => None,
-			},
+			Node::List(items, Bracket::Round, _) => items.first()?.symbol_name().map(String::from),
 			_ => None,
 		},
 		_ => None,

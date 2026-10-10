@@ -29,10 +29,7 @@ pub fn function_reference(name: String) -> Node {
 pub fn referenced_function(node: &Node) -> Option<String> {
 	let Node::Meta { node: inner, data } = node else { return None };
 	match data.as_ref() {
-		Node::Key(key, _, _) if key.name() == FUNCTION_REFERENCE_MARK => match inner.drop_meta() {
-			Node::Symbol(name) => Some(name.clone()),
-			_ => None,
-		},
+		Node::Key(key, _, _) if key.name() == FUNCTION_REFERENCE_MARK => inner.symbol_name().map(String::from),
 		_ => referenced_function(inner),
 	}
 }
@@ -270,7 +267,7 @@ fn gives_reference(node: &Node) -> bool {
 
 /// `return value`
 fn is_return(items: &[Node]) -> bool {
-	matches!(items, [word, _] if matches!(word.drop_meta(), Node::Symbol(name) if name == "return"))
+	matches!(items, [word, _] if word.is_symbol("return"))
 }
 
 /// The variable or field a node names: `s`, `s.fs` (a field lookup `s#("fs"+1)` after mutation.rs), `s.a.fs`
@@ -676,7 +673,7 @@ fn assigned_variables(body: &Node) -> HashSet<String> {
 fn declared_globals(body: &Node) -> HashSet<String> {
 	let mut globals = HashSet::new();
 	body.visit(&mut |node| if let Node::Key(keyword, Op::Colon, name) = node {
-		if matches!(keyword.drop_meta(), Node::Symbol(word) if word == GLOBAL_WORD) {
+		if keyword.is_symbol(GLOBAL_WORD) {
 			globals.insert(name.drop_meta().name());
 		}
 	});

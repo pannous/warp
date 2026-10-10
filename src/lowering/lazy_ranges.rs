@@ -421,10 +421,7 @@ fn range_producers(program: &Node) -> RangeProducers {
 	program.visit(&mut |part| {
 		let Some((head, body, _)) = definition_parts(part) else { return };
 		let Some((name, parameters)) = signature(&head) else { return };
-		let parameters: Option<Vec<String>> = parameters.iter().map(|parameter| match parameter.drop_meta() {
-			Node::Symbol(parameter) => Some(parameter.clone()),
-			_ => None,
-		}).collect();
+		let parameters: Option<Vec<String>> = parameters.iter().map(|parameter| parameter.symbol_name().map(String::from)).collect();
 		let produced = parameters.and_then(|parameters| {
 			let range = produced_range(&body)?;
 			symbols(&range).iter().all(|symbol| parameters.contains(symbol)).then_some((parameters, range))

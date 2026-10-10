@@ -143,10 +143,7 @@ struct Site {
 /// `x = …` as a statement: x
 fn assigned_name(statement: &Node) -> Option<String> {
 	match statement.drop_meta() {
-		Node::Key(target, Op::Assign, _) => match target.drop_meta() {
-			Node::Symbol(name) => Some(name.clone()),
-			_ => None,
-		},
+		Node::Key(target, Op::Assign, _) => target.symbol_name().map(String::from),
 		_ => None,
 	}
 }
@@ -246,7 +243,7 @@ fn mentions_interpret(node: &Node) -> bool {
 /// `interpret e` / `interpret(e)`: e; `interpret(data n+k)`: the phrase `data n+k`
 fn interpret_argument(node: &Node) -> Option<Node> {
 	match node.drop_meta() {
-		Node::List(items, _, _) if items.len() >= 2 && matches!(items[0].drop_meta(), Node::Symbol(word) if word == INTERPRET) => Some(match items.len() {
+		Node::List(items, _, _) if items.len() >= 2 && items[0].is_symbol(INTERPRET) => Some(match items.len() {
 			2 => items[1].clone(),
 			_ => Node::List(items[1..].to_vec(), Bracket::None, Separator::Space),
 		}),

@@ -138,7 +138,7 @@ fn operand_phrase(node: Node) -> Node {
 }
 
 fn is_on(node: &Node) -> bool {
-	matches!(node.drop_meta(), Node::Symbol(word) if word == ON_WORD)
+	node.is_symbol(ON_WORD)
 }
 
 fn ends_with_on(node: &Node) -> bool {
@@ -246,7 +246,7 @@ fn aborts(body: &Node) -> bool {
 
 /// `break value` (ø for a bare `break`): the value its block ends with
 fn broken_value(statement: &Node) -> Option<Node> {
-	let is_break = |node: &Node| matches!(node.drop_meta(), Node::Symbol(word) if word == BREAK_WORD);
+	let is_break = |node: &Node| node.is_symbol(BREAK_WORD);
 	match statement.drop_meta() {
 		word if is_break(word) => Some(Node::Empty),
 		// `break -1` parses as the subtraction `break - 1`

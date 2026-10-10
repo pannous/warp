@@ -115,7 +115,7 @@ fn enum_paths(node: Node, enums: &[(String, Vec<String>)]) -> Node {
 /// The name and cases of an enum declaration `enum Color {red, green}` (Swift's `{ case north, south }`)
 fn enum_cases(items: &[Node]) -> Option<(String, Vec<String>)> {
 	let [word, name, cases] = items else { return None };
-	let is_enum = matches!(word.drop_meta(), Node::Symbol(word) if word == ENUM_WORD);
+	let is_enum = word.is_symbol(ENUM_WORD);
 	let Node::Symbol(name) = name.drop_meta() else { return None };
 	let Node::List(cases, Bracket::Curly, _) = cases.drop_meta() else { return None };
 	let names: Option<Vec<String>> = cases.iter().map(case_name).collect();
@@ -157,15 +157,12 @@ fn flags_declaration(items: &[Node]) -> Option<(String, Vec<String>)> {
 		_ => return None,
 	};
 	let (Node::Symbol(name), Node::List(members, Bracket::Curly, _)) = (name.drop_meta(), members.drop_meta()) else { return None };
-	let members: Option<Vec<String>> = members.iter().map(|member| match member.drop_meta() {
-		Node::Symbol(member) => Some(member.clone()),
-		_ => None,
-	}).collect();
+	let members: Option<Vec<String>> = members.iter().map(|member| member.symbol_name().map(String::from)).collect();
 	Some((name.clone(), members?))
 }
 
 fn is_flags_word(word: &Node) -> bool {
-	matches!(word.drop_meta(), Node::Symbol(word) if word == FLAGS_WORD)
+	word.is_symbol(FLAGS_WORD)
 }
 
 fn rewrite_flags(node: Node, types: &[(String, Vec<String>)]) -> Node {
@@ -1564,7 +1561,7 @@ fn partial_application(items: &[Node]) -> Option<Node> {
 	if crate::soft_keywords::HARD_KEYWORDS.contains(&head.as_str()) {
 		return None;
 	}
-	let is_placeholder = |argument: &Node| matches!(argument.drop_meta(), Node::Symbol(name) if name == PLACEHOLDER);
+	let is_placeholder = |argument: &Node| argument.is_symbol(PLACEHOLDER);
 	if !arguments.iter().any(is_placeholder) {
 		return None;
 	}
@@ -1641,7 +1638,7 @@ pub(crate) fn keyword_definition(items: &[Node]) -> Option<Node> {
 	let Node::Symbol(_) = name.drop_meta() else { return None };
 	// Swift's one labeled parameter `greet(person name: String)` arrives as the two words; a call's arguments come flat,
 	// so only Swift's keyword reads them so: `def add(a, b: int) -> int` has two parameters
-	let is_swift = matches!(keyword.drop_meta(), Node::Symbol(word) if word == SWIFT_FUNCTION_KEYWORD);
+	let is_swift = keyword.is_symbol(SWIFT_FUNCTION_KEYWORD);
 	let arguments = match arguments {
 		[label, typed] if is_swift && argument_label(label, typed).is_some() => vec![Node::List(arguments.to_vec(), Bracket::None, Separator::Space)],
 		_ => arguments.to_vec(),
@@ -1732,7 +1729,7 @@ fn renamed_it(node: Node, receiver: &Node) -> Node {
 /// `fun Int.twice()` defines it
 fn extension_block(items: &[Node]) -> Option<Node> {
 	let [word, receiver_type, block] = items else { return None };
-	let is_extension = matches!(word.drop_meta(), Node::Symbol(word) if word == EXTENSION_WORD) && matches!(receiver_type.drop_meta(), Node::Symbol(_));
+	let is_extension = word.is_symbol(EXTENSION_WORD) && matches!(receiver_type.drop_meta(), Node::Symbol(_));
 	// a block of one function arrives as that definition
 	let definitions = match block.drop_meta() {
 		Node::List(definitions, Bracket::Curly, _) => definitions.clone(),
@@ -1839,7 +1836,7 @@ fn typed_returns(body: Node, result_types: &Node) -> Node {
 			key(grouped, Op::As, kind.clone())
 		}).collect())
 	};
-	let is_return = |node: &Node| matches!(node.drop_meta(), Node::List(words, Bracket::None, Separator::Space) if words.len() == 2 && matches!(words[0].drop_meta(), Node::Symbol(word) if word == RETURN_WORD));
+	let is_return = |node: &Node| matches!(node.drop_meta(), Node::List(words, Bracket::None, Separator::Space) if words.len() == 2 && words[0].is_symbol(RETURN_WORD));
 	match body {
 		// `return a, b` parses as `(return a), b`
 		Node::List(items, bracket, Separator::Colon) if items.first().is_some_and(is_return) => {
@@ -1967,7 +1964,7 @@ fn end_definitions(node: Node) -> Node {
 }
 
 fn is_end(node: &Node) -> bool {
-	matches!(node.drop_meta(), Node::Symbol(word) if word == END_WORD)
+	node.is_symbol(END_WORD)
 }
 
 /// `def f(a)` or `def h` without a body, also with Crystal's result type `def f(a) : Int`
@@ -2062,7 +2059,7 @@ fn c_parameter(parameter: &Node) -> Option<Node> {
 		Node::Key(declared, Op::Assign, default) => Some(Node::Key(Box::new(c_parameter(declared)?), Op::Assign, default.clone())),
 		Node::List(words, _, Separator::Space) => match words.as_slice() {
 			// Dart's `required int a`: every parameter needs its value anyway
-			[required, rest @ ..] if matches!(required.drop_meta(), Node::Symbol(word) if word == DART_REQUIRED) => c_parameter(&Node::List(rest.to_vec(), Bracket::None, Separator::Space)),
+			[required, rest @ ..] if required.is_symbol(DART_REQUIRED) => c_parameter(&Node::List(rest.to_vec(), Bracket::None, Separator::Space)),
 			[kind, name] if matches!((kind.drop_meta(), name.drop_meta()), (Node::Symbol(_), Node::Symbol(_))) => {
 				Some(key(name.clone(), Op::Colon, kind.clone()))
 			}

@@ -632,10 +632,7 @@ fn escaping(program: &Node, definitions: &[Definition]) -> Escaping {
 /// The variables a list literal names as its items: `[a, b]` → a, b
 fn named_items(list: &Node) -> Vec<String> {
 	match list.drop_meta() {
-		Node::List(items, Bracket::Square, _) => items.iter().filter_map(|item| match item.drop_meta() {
-			Node::Symbol(name) => Some(name.clone()),
-			_ => None,
-		}).collect(),
+		Node::List(items, Bracket::Square, _) => items.iter().filter_map(|item| item.symbol_name().map(String::from)).collect(),
 		_ => vec![],
 	}
 }
@@ -654,10 +651,7 @@ fn main_list_literals(program: &Node) -> Vec<(String, Node)> {
 /// `for s in xs {…}`: the loop variable s
 fn loop_variable(items: &[Node]) -> Option<String> {
 	match items {
-		[keyword, variable, in_word, _, _] if word(keyword) == FOR_WORD && word(in_word) == IN_WORD => match variable.drop_meta() {
-			Node::Symbol(name) => Some(name.clone()),
-			_ => None,
-		},
+		[keyword, variable, in_word, _, _] if word(keyword) == FOR_WORD && word(in_word) == IN_WORD => variable.symbol_name().map(String::from),
 		_ => None,
 	}
 }
