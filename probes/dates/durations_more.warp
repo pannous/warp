@@ -1,0 +1,9 @@
+x = 2024-01-01T00:00:01.5Z - 2024-01-01T00:00:03Z
+print x
+n = 0 seconds
+print n
+y = 2024-01-01T00:00:00.000000001Z - 2024-01-01T00:00:00Z
+print y
+a = 2024-01-31T10:00[Europe/Berlin]
+b = 2024-01-31T10:00[Europe/London]
+print a < b

@@ -305,12 +305,14 @@ let sounding = []; // the playing and queued sounds, silenced when the next run 
 // before the page's first click or key press (the run on load, the CI tour) a sound stays silent: an AudioContext made
 // then cannot start and the browser warns
 const beforeUserActivation = () => navigator.userActivation && !navigator.userActivation.hasBeenActive;
-function playSound({ samples, rate, at, handle }) {
+function playSound({ samples, rate, channels, at, handle }) {
 	if (beforeUserActivation()) return;
 	audio ??= new AudioContext();
 	audio.resume();
-	const buffer = audio.createBuffer(1, Math.max(samples.length, 1), rate);
-	buffer.getChannelData(0).set(Float32Array.from(samples, sample => (sample - SOUND_OFFSET) / SOUND_OFFSET));
+	const frames = Math.max(Math.ceil(samples.length / channels), 1);
+	const buffer = audio.createBuffer(channels, frames, rate);
+	for (let channel = 0; channel < channels; channel++)
+		buffer.getChannelData(channel).set(Float32Array.from({ length: frames }, (_, frame) => ((samples[frame * channels + channel] ?? SOUND_OFFSET) - SOUND_OFFSET) / SOUND_OFFSET));
 	const source = audio.createBufferSource();
 	source.buffer = buffer;
 	source.connect(audio.destination);

@@ -341,7 +341,7 @@ fn paint(mut caller: Caller<'_, HostState>, pixels: HostNode, width: i64, height
 }
 
 /// sound_samples(samples, count, rate) natively: a WAV file, played unless headless (src/sound.rs)
-fn sound(mut caller: Caller<'_, HostState>, samples: HostNode, count: i64, rate: i64) -> wasmtime::Result<()> {
+fn sound(mut caller: Caller<'_, HostState>, samples: HostNode, count: i64, rate: i64, channels: i64) -> wasmtime::Result<()> {
 	let memory = module_memory(&mut caller, "sound")?;
 	let values = match ints_of_list(&mut caller, memory, samples, count.max(0) as usize)? {
 		Some(values) => values,
@@ -350,7 +350,7 @@ fn sound(mut caller: Caller<'_, HostState>, samples: HostNode, count: i64, rate:
 			other => return Err(task_failure(format!("sound needs a list of samples, got {}", other.serialize()))),
 		},
 	};
-	crate::sound::sound(&values, rate.clamp(1, u32::MAX as i64) as u32).map(|_| ()).map_err(task_failure)
+	crate::sound::sound(&values, rate.clamp(1, u32::MAX as i64) as u32, channels.clamp(1, 2) as u16).map(|_| ()).map_err(task_failure)
 }
 
 /// The first `room` items of a list of fixnum Ints read in one call of the module's list_to_ints (wasm_emitter/int_lists.rs), their magnitudes;

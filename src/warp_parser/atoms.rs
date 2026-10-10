@@ -1,6 +1,7 @@
 //! Atoms: symbols with suffixes, definitions and their bodies, indented and end blocks, URLs, type declarations
 
 use super::*;
+use crate::lowering::nodes::children_rewritten;
 
 const VOID_WORD: &str = "void";
 /// `none` is the null ø; called, `none(xs, f)` (Kotlin's "no element matches") is an error naming it (P185)
@@ -98,8 +99,9 @@ impl WarpParser {
 			';' | '>' | '}' | ')' | ']' => Empty, // Closing brackets/terminators handled by caller
 			'ø' => { self.advance(); return Empty }
 			'∞' => { self.advance(); return Node::Number(Number::Inf) } // the float infinity (P56)
-			// `°C`, `°F`: a temperature unit (units.rs)
+			// `°C`, `°F`: a temperature unit; `30°`: an angle in degrees (units.rs)
 			crate::units::DEGREE if self.peek_char(1).is_alphabetic() => self.symbol_after(1, |name| Node::Symbol(format!("{}{name}", crate::units::DEGREE))),
+			crate::units::DEGREE => { self.advance(); Node::Symbol(crate::units::DEGREE.to_string()) }
 			_ if let Some((truth, length)) = self.truth_glyph_at() => {
 				self.advance_by(length);
 				return truth;
@@ -620,6 +622,11 @@ impl WarpParser {
 
 		if let Some(version) = self.version_operand(&symbol) {
 			return version;
+		}
+		// `x°`: a variable in degrees, as `30°` (card angles-degrees)
+		if self.current_char() == crate::units::DEGREE && !self.peek_char(1).is_alphabetic() {
+			self.advance();
+			return Node::Key(Box::new(Node::Symbol(symbol)), Op::Mul, Box::new(Node::Symbol(crate::units::DEGREE.to_string())));
 		}
 
 		// `def square (n) {…}` names its function like `def square(n) {…}`
@@ -1418,9 +1425,7 @@ fn without_end_lines(body: Node) -> Node {
 	let is_end = |item: &Node| item.is_symbol(END_KEYWORD);
 	match body {
 		Node::List(items, bracket, separator) => Node::List(items.into_iter().filter(|item| !is_end(item)).map(without_end_lines).collect(), bracket, separator),
-		Node::Key(left, op, right) => Node::Key(Box::new(without_end_lines(*left)), op, Box::new(without_end_lines(*right))),
-		Node::Meta { node, data } => Node::Meta { node: Box::new(without_end_lines(*node)), data },
-		other => other,
+		other => children_rewritten(other, without_end_lines),
 	}
 }
 

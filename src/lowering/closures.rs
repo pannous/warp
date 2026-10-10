@@ -6,7 +6,7 @@
 //! notes/closures.md describes the representation.
 
 use super::words::{FOR_WORD, GLOBAL_WORD, IN_WORD};
-use super::nodes::{call, key, parameter_name};
+use super::nodes::{call, children_rewritten, key, parameter_name};
 use crate::context::{Context, Param, UserFunctionDef};
 use crate::diagnostic::Diagnostic;
 use crate::lambdas::arrow_lambda;
@@ -495,13 +495,11 @@ impl Lifting {
 				let arguments = arguments.into_iter().map(|argument| self.walk(argument, bound)).collect();
 				closure_call(Node::Key(list, Op::Hash, Box::new(position)), arguments)
 			}
-			Node::Key(left, op, right) => key(self.walk(*left, bound), op, self.walk(*right, bound)),
 			Node::List(items, bracket, separator) => {
 				let items: Vec<Node> = items.into_iter().map(|item| self.walk(item, bound)).collect();
 				self.called_value(items, bracket, separator, bound)
 			}
-			Node::Meta { node, data } => Node::Meta { node: Box::new(self.walk(*node, bound)), data },
-			other => other,
+			other => children_rewritten(other, |child| self.walk(child, bound)),
 		}
 	}
 

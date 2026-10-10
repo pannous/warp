@@ -1,6 +1,7 @@
 //! User functions: extraction, parameter and return kinds from bodies and calls, closures, negated calls
 
 use super::*;
+use crate::lowering::nodes::children_rewritten;
 
 /// The type word of a value that is an int or a float
 const NUMBER_TYPE: &str = "number";
@@ -701,10 +702,7 @@ pub(super) fn negate_calls(node: Node, functions: &std::collections::BTreeMap<St
 			let argument = Node::Key(Box::new(Node::Empty), prefix, Box::new(negate_calls(*argument, functions, bound)));
 			Node::List(vec![*function, argument], Bracket::Round, Separator::None)
 		}
-		Node::Key(left, op, right) => Node::Key(Box::new(negate_calls(*left, functions, bound)), op, Box::new(negate_calls(*right, functions, bound))),
-		Node::List(items, bracket, separator) => Node::List(items.into_iter().map(|item| negate_calls(item, functions, bound)).collect(), bracket, separator),
-		Node::Meta { node, data } => Node::Meta { node: Box::new(negate_calls(*node, functions, bound)), data },
-		other => other,
+		other => children_rewritten(other, |child| negate_calls(child, functions, bound)),
 	}
 }
 

@@ -49,6 +49,10 @@ otherwise constant evaluation may hide the loop. Profile the generated module ap
   (`(a - a % b) / b` beside the inline `%`), an Int assignment whose value is dropped (`i = start` of a range loop)
   stores the i64 without new_int, and a computed range end (`for col in cell(x-r)..cell(x+r)+1`) is evaluated
   once into `col·end` instead of every round (lowering/for_loop.rs), as a walked list already was.
+- **Finger paint frames** (same card): `show()` passed draw's typed `canvas_pixels` to paint as a value, so each frame
+  built a million Int Nodes (int_list_as_node) only for list_to_ints to read them back. Now a typed int list crosses
+  to the host words in host.rs INT_LIST_WORDS (paint, sound) as its `$IntList`, and list_to_ints copies its array.
+  Release bench: show 96–120 ms → 40 ms (headless; what's left is mostly the PNG write).
 
 ## Measured as fine
 Closure calls cost what definition calls cost: 50 million calls of `add=(a,b)=>a+b`, of a capturing `x=>x*k` and of a
@@ -62,6 +66,8 @@ converts it (O(n)); a loop that prints or passes the map each round pays that ev
 Finger paint after runtime-speed: `dot(col, row)` passes Ints to `cell(v)`, whose v is a float: int → f64 → floor →
 int per pixel (a per-argument-kind specialization of functions would drop it); a function whose loop is its last
 value (`circle`) boxes that value per row although every caller drops it; int list get/set go through the Node layer.
+A shown frame in a window still goes through frame_bytes → a 4 MB pipe write → a texture upload in the paint-window
+child process (not measured; WebGPU directly would drop it).
 Exact decimals (card decimals-exact, 2026-10-10, release): `x = 0.5` is an exact ratio again. exact_add/sub/mul/cmp
 take operands that are inline ratios or Ints within ±2^31 in i64 with an i64 gcd (exact.rs small_shortcut); the
 generic int_gcd/ratio_new path (36 %/41 % of a stroke's profile) stays for bigger ones. 1M adds of 0.5

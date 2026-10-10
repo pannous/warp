@@ -31,7 +31,9 @@ const KEYS_WORD: &str = "keys";
 const EXPORTS_WORD: &str = "exports";
 /// The run-time choice of a class's names (Objects::dispatched)
 const DISPATCH_TEMPLATE: &str = "if RECEIVER is CLASS then NAMES else OTHERWISE";
-const DIR_OTHERWISE_TEMPLATE: &str = "if RECEIVER is map then RECEIVER.keys else []";
+const DIR_OTHERWISE_TEMPLATE: &str = "if RECEIVER is map then RECEIVER.keys else OTHERWISE";
+/// A map's `dir` lists its keys, not the map module's words
+const MAP_WORD: &str = "map";
 pub(crate) const PARAMS_WORDS: [&str; 2] = ["params", "parameters"];
 const SIGNATURE_WORD: &str = "signature";
 /// `f.body`: the body as written, as data (card g_X_3s)
@@ -475,9 +477,7 @@ impl Objects {
 				true => written.clone(),
 				false => text_list(&self.listed(class, word).unwrap_or_default()),
 			};
-			let bindings = [("RECEIVER", subject.clone()), ("CLASS", Node::Symbol(class.clone())), ("NAMES", names), ("OTHERWISE", otherwise)];
-			let bindings = bindings.into_iter().map(|(placeholder, node)| (placeholder.to_string(), node)).collect();
-			crate::law::substitute(&crate::warp_parser::parse(DISPATCH_TEMPLATE), &bindings).drop_meta().clone()
+			type_dispatch(subject, class, names, otherwise)
 		}))
 	}
 
@@ -502,10 +502,22 @@ fn answered_dir(node: Node) -> Node {
 	}
 }
 
-/// What `dir` lists of a value that is no instance of the program's classes
+/// `if subject is class then names else otherwise`
+fn type_dispatch(subject: &Node, class: &str, names: Node, otherwise: Node) -> Node {
+	substituted(DISPATCH_TEMPLATE, [("RECEIVER", subject.clone()), ("CLASS", Node::Symbol(class.to_string())), ("NAMES", names), ("OTHERWISE", otherwise)])
+}
+
+fn substituted<const N: usize>(template: &str, bindings: [(&str, Node); N]) -> Node {
+	let bindings = bindings.into_iter().map(|(placeholder, node)| (placeholder.to_string(), node)).collect();
+	crate::law::substitute(&crate::warp_parser::parse(template), &bindings).drop_meta().clone()
+}
+
+/// What `dir` lists of a value that is no instance of the program's classes: a map's keys, else its type's methods
+/// as Python's dir([1, 2]) does, the words of the module named after the type (`dir([1 2])` == `dir(list)`), else none
 fn dir_otherwise(subject: &Node) -> Node {
-	let bindings = [("RECEIVER".to_string(), subject.clone())].into_iter().collect();
-	crate::law::substitute(&crate::warp_parser::parse(DIR_OTHERWISE_TEMPLATE), &bindings).drop_meta().clone()
+	let methods = crate::modules::type_modules().into_iter().rev().filter(|(module, _)| *module != MAP_WORD)
+		.fold(text_list(&[]), |otherwise, (module, words)| type_dispatch(subject, module, text_list(words), otherwise));
+	substituted(DIR_OTHERWISE_TEMPLATE, [("RECEIVER", subject.clone()), ("OTHERWISE", methods)])
 }
 
 fn with_object_words(node: Node, objects: &Objects) -> Node {
