@@ -259,7 +259,8 @@ fn aliases(node: &Node, functions: &HashSet<String>, assigned: &mut HashMap<Stri
 					(Some(function), _) => Some(function),
 					(None, Some(alias)) if found.contains_key(alias) => Some(alias.to_string()),
 					// `arctan := arc_tangent` defines a name for the function (card arctan-allow)
-					(None, Some(function)) if *op == Op::Define && functions.contains(function) => Some(function.to_string()),
+					// a plain name only: `compute() := emit ask` reads `(on·ask)`, a call (card arctan-allow)
+					(None, Some(function)) if *op == Op::Define && functions.contains(function) && matches!(value.drop_meta(), Node::Symbol(_)) => Some(function.to_string()),
 					_ => None,
 				};
 				if let Some(function) = function {

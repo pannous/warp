@@ -9,6 +9,8 @@ const ARC_TANGENT: &str = "arc_tangent(x) := atan(x); arctan := arc_tangent; ";
 #[test]
 fn a_defined_name_of_a_function_calls_it() {
 	is!(&format!("{ARC_TANGENT}arctan(1) == arc_tangent(1)"), true);
+	is!("arc_sine(x) := asin(x); arcsin := arc_sine; arcsin(1) == asin(1)", true);
+	is!("arc_cosine(x) := acos(x); arccos := arc_cosine; arccos(1)", 0.0);
 	is!("doubled(x) := x*2; twice := doubled; twice(3) + twice 4", 14);
 	is!("doubled(x) := x*2; twice := doubled; [1 2].map(twice)", warp::parse("[2 4]"));
 }
