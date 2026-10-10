@@ -172,6 +172,8 @@ pub fn runtime_kind_mask(spec: &str) -> Option<i64> {
 struct Names {
 	variables: HashSet<String>,
 	types: HashSet<String>,
+	/// The loop variables anywhere in the program (`for char in s`): such a name compared with == is the variable
+	loop_variables: HashSet<String>,
 }
 
 impl Names {
@@ -223,7 +225,8 @@ pub fn lower(node: Node) -> Node {
 	let mut registry = crate::type_kinds::TypeRegistry::new();
 	crate::analyzer::collect_all_types(&mut registry, &node);
 	let types = registry.types().iter().map(|definition| definition.name.clone()).collect();
-	expand(node, &Names { variables, types })
+	let loop_variables = super::for_loop::loop_variables(&node).into_iter().collect();
+	expand(node, &Names { variables, types, loop_variables })
 }
 
 /// The spec of a type phrase (`int`, `a number`, `ints`, `list of int`, `list of list of int`), `None` when the words are no type
@@ -258,15 +261,33 @@ fn symbol_words(nodes: &[Node]) -> Option<Vec<&str>> {
 /// Meta key marking a type word compared with `==` (not `is`): only `is` tests types (user decision #30)
 const EQUALITY_OPERAND: &str = "equality operand";
 
-/// The right side of `x == word` as the parser marks it when the word names a type, by its canonical name as type(x)
-/// gives it (`type(s) == string` is `type(s) == text`). The words of ø (empty, nil, none …) parse as the value ø, the one
-/// value of the empty type: compared with a type value (`type(x) == empty`) ø names that type
+/// A side of `x == word` or `word != x` as the parser marks it when the word names a type; lowering names it by its
+/// canonical name as type(x) gives it (`type(s) == string` is `type(s) == text`) unless it is a variable
+/// (canonical_operand). The words of ø (empty, nil, none …) parse as the value ø, the one value of the empty type:
+/// compared with a type value (`type(x) == empty`) ø names that type
 pub fn equality_operand(subject: &Node, word: Node) -> Node {
-	let mark = |name: &str| Node::Meta { node: Box::new(Node::Symbol(name.to_string())), data: Box::new(Node::key(EQUALITY_OPERAND, Node::True)) };
 	match word.drop_meta() {
-		Node::Symbol(name) if type_spec(&[name.as_str()], &Names::default()).is_some() => mark(canonical_spec_word(name)),
-		Node::Empty if typed_argument(subject).is_some() => mark(EMPTY_TYPE),
+		Node::Symbol(name) if type_spec(&[name.as_str()], &Names::default()).is_some() => marked_operand(name),
+		Node::Empty if typed_argument(subject).is_some() => marked_operand(EMPTY_TYPE),
 		_ => word,
+	}
+}
+
+fn marked_operand(word: &str) -> Node {
+	Node::Meta { node: Box::new(Node::Symbol(word.to_string())), data: Box::new(Node::key(EQUALITY_OPERAND, Node::True)) }
+}
+
+/// `left == right` or `left != right`, a type word on either side by its canonical name
+fn comparison(left: Node, op: Op, right: Node, shadowed: &Names) -> Node {
+	key(canonical_operand(expand(left, shadowed), shadowed), op, canonical_operand(expand(right, shadowed), shadowed))
+}
+
+/// A marked side of == or != by the canonical name of its type; a variable of that name stays the variable
+fn canonical_operand(operand: Node, shadowed: &Names) -> Node {
+	match operand.drop_meta() {
+		Node::Symbol(word) if is_equality_operand(&operand) && (shadowed.contains(word) || shadowed.loop_variables.contains(word)) => Node::Symbol(word.clone()),
+		Node::Symbol(word) if is_equality_operand(&operand) => marked_operand(&type_spec(&[word.as_str()], &Names::default()).unwrap_or_else(|| word.clone())),
+		_ => operand,
 	}
 }
 
@@ -325,8 +346,9 @@ fn expand(node: Node, shadowed: &Names) -> Node {
 		Node::Key(subject, Op::Eq, right) => match symbol_words(std::slice::from_ref(&*right)).and_then(|words| type_spec(&words, shadowed)) {
 			// `x == int` compares x with the type value int: equal only to that type (wasm_emitter emit_structural_equality)
 			Some(spec) if !is_equality_operand(&right) => is_type_call(expand(*subject, shadowed), spec),
-			_ => key(expand(*subject, shadowed), Op::Eq, expand(*right, shadowed)),
+			_ => comparison(*subject, Op::Eq, *right, shadowed),
 		},
+		Node::Key(left, Op::Ne, right) => comparison(*left, Op::Ne, *right, shadowed),
 		Node::Key(left, op, right) => key(expand(*left, shadowed), op, expand(*right, shadowed)),
 		Node::Meta { node, data } => Node::Meta { node: Box::new(expand(*node, shadowed)), data },
 		other => other,
