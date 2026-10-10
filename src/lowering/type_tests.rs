@@ -66,7 +66,7 @@ const BUILTIN_TYPES: [BuiltinType; 15] = [
 	builtin("function", &["closure"], &[], Some(K::Function), &[]),
 	builtin(SYMBOL_TYPE, &[], &[], None, &[K::Symbol as i64]),
 	builtin("key", &[PAIR_WORD], &[], None, &[K::Key as i64]),
-	builtin(EMPTY_TYPE, &["unit", "nil", "ø", "none", "null", "void"], &[], None, &[K::Empty as i64]),
+	builtin(EMPTY_TYPE, &["unit", "nil", "ø", "none", "null", "void"], &[], Some(K::Empty), &[K::Empty as i64]),
 	builtin(ERROR_TYPE, &[], &[], None, &[K::Error as i64]),
 	builtin(LIST_WORD, &[], &[], None, &[K::List as i64, K::Block as i64, K::Empty as i64]),
 	builtin(MAP_WORD, &[], &[], None, &[]),
@@ -232,12 +232,14 @@ fn symbol_words(nodes: &[Node]) -> Option<Vec<&str>> {
 /// Meta key marking a type word compared with `==` (not `is`): only `is` tests types (user decision #30)
 const EQUALITY_OPERAND: &str = "equality operand";
 
-/// The right side of `x == word` as the parser marks it when the word names a type
-pub fn equality_operand(word: Node) -> Node {
+/// The right side of `x == word` as the parser marks it when the word names a type, by its canonical name as type(x)
+/// gives it (`type(s) == string` is `type(s) == text`). The words of ø (empty, nil, none …) parse as the value ø, the one
+/// value of the empty type: compared with a type value (`type(x) == empty`) ø names that type
+pub fn equality_operand(subject: &Node, word: Node) -> Node {
+	let mark = |name: &str| Node::Meta { node: Box::new(Node::Symbol(name.to_string())), data: Box::new(Node::key(EQUALITY_OPERAND, Node::True)) };
 	match word.drop_meta() {
-		Node::Symbol(name) if type_spec(&[name.as_str()], &Names::default()).is_some() => {
-			Node::Meta { node: Box::new(word), data: Box::new(Node::key(EQUALITY_OPERAND, Node::True)) }
-		}
+		Node::Symbol(name) if type_spec(&[name.as_str()], &Names::default()).is_some() => mark(canonical_spec_word(name)),
+		Node::Empty if typed_argument(subject).is_some() => mark(EMPTY_TYPE),
 		_ => word,
 	}
 }
