@@ -1,0 +1,15 @@
+#!/usr/bin/env warp
+// finger painting: hold the mouse button over the window (in the playground, the canvas) and draw; the color turns as
+// you go. mouse_x, mouse_y and mouse_down are the pointer over the painted picture, in its pixels
+use draw
+canvas(400, 300)
+clear(white)
+hue = 0
+while true {
+	if mouse_down {
+		circle(mouse_x, mouse_y, 6, hsv(hue, 0.8, 0.9))
+		hue += 2
+	}
+	show()
+	sleep 16 ms
+}
