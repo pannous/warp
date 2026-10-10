@@ -232,6 +232,10 @@ impl WarpParser {
 
 	/// The operator after `lhs` that the infix table does not hold, its width in characters and its binding power
 	pub(super) fn special_infix(&self, lhs: &Node) -> Option<(SpecialInfix, usize, (u8, u8))> {
+		// `def div(a,b) = …`: the word after a function keyword is the name, never an operator
+		if matches!(lhs.drop_meta(), Node::Symbol(keyword) if crate::operators::is_function_keyword(keyword)) {
+			return None;
+		}
 		// `a mod b` (`a modulo b`) is `a % b` (Euclidean, 0 ≤ r < |b|), `a rem b` the truncated remainder (sign of the
 		// dividend, as C)
 		for (word, op) in [("mod", Op::Mod), ("modulo", Op::Mod), ("rem", Op::Rem)] {
