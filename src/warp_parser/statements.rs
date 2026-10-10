@@ -171,7 +171,7 @@ impl WarpParser {
 			}
 			self.advance();
 		}
-		Some(if names.len() == 1 { names.remove(0) } else { Node::List(names, bracket, Separator::Colon) })
+		Some(Node::single_or_list(names, bracket, Separator::Colon))
 	}
 
 	/// `(i=0;i<n;i++)`: a group here whose top level holds a `;`

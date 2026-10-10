@@ -257,6 +257,11 @@ impl Node {
 		}
 	}
 
+	/// The one item itself, or a list of all of them
+	pub fn single_or_list(mut items: Vec<Node>, bracket: Bracket, separator: Separator) -> Node {
+		if items.len() == 1 { items.remove(0) } else { List(items, bracket, separator) }
+	}
+
 	/// The name of a symbol, through its metadata
 	pub fn symbol_name(&self) -> Option<&str> {
 		match self.drop_meta() {

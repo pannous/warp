@@ -352,11 +352,7 @@ pub(super) fn lower_declarations_among(node: Node, names: &Names) -> Node {
 					None => lowered.push(lower(item)),
 				}
 			}
-			if lowered.len() == 1 {
-				lowered.remove(0)
-			} else {
-				Node::List(lowered, bracket, separator)
-			}
+			Node::single_or_list(lowered, bracket, separator)
 		}
 		Node::Key(target, op @ (Op::Assign | Op::Define), value) => {
 			let value = Box::new(lower(*value));
@@ -397,12 +393,8 @@ pub(super) fn lower_declarations_among(node: Node, names: &Names) -> Node {
 		Node::Key(left, op, right) => Node::Key(Box::new(lower(*left)), op, Box::new(lower(*right))),
 		// `const x=v` → `x=v`; check_constants already enforced the single assignment; `let x=v` and `var x=v` → `x=v`
 		Node::List(items, bracket, separator) if items.len() >= 2 && is_declaration_keyword(&items[0]) => {
-			let mut declaration = items.into_iter().skip(1).map(lower).collect::<Vec<_>>();
-			if declaration.len() == 1 {
-				declaration.remove(0)
-			} else {
-				Node::List(declaration, bracket, separator)
-			}
+			let declaration = items.into_iter().skip(1).map(lower).collect::<Vec<_>>();
+			Node::single_or_list(declaration, bracket, separator)
 		}
 		Node::List(items, Bracket::None, _) if applied_object(&items).is_some() => {
 			let (object, key) = applied_object(&items).expect("guarded");

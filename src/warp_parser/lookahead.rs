@@ -417,7 +417,7 @@ impl WarpParser {
 			}
 			items.push(item);
 		}
-		if items.len() == 1 { items.remove(0) } else { Node::List(items, Bracket::None, Separator::Space) }
+		Node::single_or_list(items, Bracket::None, Separator::Space)
 	}
 
 	/// `norm() := …`, `def abs(): …`, `fun sqrt() { … }`: the word `length` characters ahead names what is defined, not
