@@ -6,7 +6,6 @@
 //! notes/closures.md describes the representation.
 
 use super::nodes::{call, key, parameter_name};
-use crate::analyzer::extract_user_functions;
 use crate::context::{Context, Param, UserFunctionDef};
 use crate::diagnostic::Diagnostic;
 use crate::lambdas::arrow_lambda;
@@ -159,8 +158,7 @@ fn for_loop_parts(node: &Node) -> Option<(&str, &Node)> {
 }
 
 fn lift_closures(program: Node) -> Node {
-	let mut context = Context::new();
-	extract_user_functions(&mut context, &program);
+	let context = crate::analyzer::function_context(&program);
 	let variables = captured_variables_of(&program);
 	let functions: HashSet<String> = context.user_functions.keys().cloned().collect();
 	// `g = x => x`: the parameter a function hands back, so `g(y => y*2)(4)` calls what it was given

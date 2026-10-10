@@ -5,8 +5,6 @@
 //! pair `k: v` matches a pair whose key is k. A guard `n if n < 0 => …` binds n to the subject and tests the condition; a relational pattern `> 100 => …` compares it. The shape tests are ordinary type tests (`is_type(x, "list") and count(x) == n`).
 
 use super::nodes::{call, key};
-use crate::analyzer::extract_user_functions;
-use crate::context::Context;
 use crate::node::{text, Bracket, Node, Separator};
 use crate::operators::Op;
 use std::cell::Cell;
@@ -30,8 +28,7 @@ pub fn lower(node: Node) -> Node {
 	if !node.mentions_any(&SWITCH_WORDS) {
 		return node;
 	}
-	let mut context = Context::new();
-	extract_user_functions(&mut context, &node);
+	let context = crate::analyzer::function_context(&node);
 	let words: Vec<&str> = SWITCH_WORDS.into_iter().filter(|word| !context.user_functions.contains_key(*word)).collect();
 	if words.is_empty() {
 		return node;
