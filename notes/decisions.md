@@ -13,7 +13,9 @@ notes/open_decisions.md.
   the fallback for writes the analyzer can't see. As implemented.
 - type-equal (warp-numbers, cards type-int and type-equal; implied by #30 "Only `is` tests types", per warp-supervisor):
   `is` is the subtype test and `==` between types is exact. `type(0.0) is int`, `type(0) is number` and
-  `int is number` are yes; `type(0) == number` is no, with a hint toward `is`; `type(2) == type(3)` is yes.
+  `int is number` are yes; `type(0) == number` is no; `type(2) == type(3)` is yes. Built on the user's rule (cards
+  type-value-type, real-equality): a bare type name is the type as a value, not a constructor, so `type(π) == real`,
+  `t = type(0); t is int` and `int == int` work like any value; `3 == int` is no with the hint toward `is`.
 - people-where (warp-class): no new `with`/`without` sugar after a list beyond what is already implemented (user:
   the words have too many meanings; `with` could as well mean "with something added"), and "if it's already
   implemented, keep it implemented": main's `with` filter from the orm example stays (`name of people with age > 20`,
