@@ -89,3 +89,4 @@ mod test_word_slices;
 mod test_number_list_elements; // card winamp-like
 mod test_counting_words;
 mod test_append_words;
+mod test_comprehension_beside_own_push; // card prefix-count-field
