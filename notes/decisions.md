@@ -14,6 +14,9 @@ notes/open_decisions.md.
   list of int, P196b stands); a variable's type joins its literal with every write the analyzer sees, so
   `shown = [0.0, 0.0]; shown[0] = sqrt(2.0)` makes shown a list of float from the start. Runtime conversion only as
   the fallback for writes the analyzer can't see. As implemented.
+- type-equal (warp-numbers, cards type-int and type-equal; implied by #30 "Only `is` tests types", per warp-supervisor):
+  `is` is the subtype test and `==` between types is exact. `type(0.0) is int`, `type(0) is number` and
+  `int is number` are yes; `type(0) == number` is no, with a hint toward `is`; `type(2) == type(3)` is yes.
 - people-where (warp-class): no new `with`/`without` sugar after a list beyond what is already implemented (user:
   the words have too many meanings; `with` could as well mean "with something added"), and "if it's already
   implemented, keep it implemented": main's `with` filter from the orm example stays (`name of people with age > 20`,
@@ -1084,7 +1087,9 @@ notes/open_decisions.md.
 - Extended 2026-10-10 (user via warp-supervisor, card print-oldest): text + anything concatenates in its str() form
   (`"oldest first: " + list`, an instance, a map, ø); a function stays an error. The one exception: a text spelling a
   number plus a number (`"3"+3`) warns, offering `int("3") + 3` or `"3" + str(3)`, and keeps `"33"` (an error under
-  `use strict`); `"a"+3` is silent. Test: tests/text/test_text_plus_anything.rs.
+  `use strict`); `"a"+3` is silent. Test: tests/text/test_text_plus_anything.rs. User, same day: "text + Formatable
+  should work in general": an instance of a Printable type (`text(p:P) := …`, a text() method) joins as its own text
+  (`"hi " + bo`, `s + bo`; tests/text/test_text_plus_printable.rs); numbers keep joining, `"3"+3` keeps its warning.
 - `//` not followed by a space is Python floor division (`7//2`, `a //b`, `x//=3`, `x //= 3`), the Euclidean
   quotient that goes with `%` (`floor_quotient(a, b)`: floor for a positive divisor, `-7//-2` gives 4 where Python
   gives 3). `a div b` is the same floor division. An index that divides (`xs[n/2]`) traps `index must be an

@@ -6,7 +6,7 @@
 //! An unknown `.word` after a name, a text or a list is a loud error (`undefined function: word`), never silent data.
 
 use super::words::SUM_WORD;
-use super::nodes::{call, children_rewritten, key};
+use super::nodes::{Counter, call, children_rewritten, key};
 use crate::analyzer::{call_name, counting_method, is_list_mutating_method};
 use crate::context::Context;
 use crate::diagnostic::Diagnostic;
@@ -14,7 +14,7 @@ use crate::node::{symbol, text, Bracket, Node, Separator};
 use crate::operators::Op;
 use crate::warp_parser::{parse, ASSERT_MARKER, TRY_MARKER};
 use crate::wasm_emitter::{CAUGHT_ERROR, RAN_WITHOUT_ERROR};
-use std::cell::{Cell, RefCell};
+use std::cell::RefCell;
 use std::collections::{HashMap, HashSet};
 
 /// The map words, named after their runtime functions: `m.keys()`, `m.values()`, `x in xs` (`xs.has(x)`, Python's and
@@ -260,7 +260,7 @@ pub fn lower(node: Node) -> Node {
 	let objects = assigned.objects.into_iter().filter_map(|(name, literal)| Some((name, literal?))).collect();
 	let instances = crate::traits::InstanceTypes::of(&node);
 	let call_results = call_results(&node, &context);
-	Lowering { context, shadowed, objects, plain, instances, parameters: RefCell::new(vec![]), defining: RefCell::new(vec![]), call_results, temporaries: Cell::new(0) }.expand(node)
+	Lowering { context, shadowed, objects, plain, instances, parameters: RefCell::new(vec![]), defining: RefCell::new(vec![]), call_results, temporaries: Counter::default() }.expand(node)
 }
 
 /// The variables assigned what a user function returns (`result = parse_json(text)`): any may hold an object
@@ -630,7 +630,7 @@ struct Lowering {
 	defining: RefCell<Vec<(String, Vec<String>)>>,
 	/// Variables assigned the result of a user function call (call_results)
 	call_results: HashSet<String>,
-	temporaries: Cell<usize>,
+	temporaries: Counter,
 }
 
 impl Lowering {
@@ -1079,9 +1079,7 @@ impl Lowering {
 	}
 
 	fn next_temporary(&self) -> usize {
-		let number = self.temporaries.get();
-		self.temporaries.set(number + 1);
-		number
+		self.temporaries.next_number()
 	}
 
 	/// `receiver?.name`: ø when the receiver is ø, else the field

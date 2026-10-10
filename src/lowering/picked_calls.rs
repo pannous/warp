@@ -1,19 +1,18 @@
 //! A function value called where it is picked from a list: `fs[1](3)` (parsed as the pair `(fs#2) (3)`) becomes
 //! `(picked·1 = fs#2; picked·1(3))`, the call of a function held by a variable, which closures.rs knows.
 
-use super::nodes::key;
+use super::nodes::{Counter, key};
 use crate::node::{Bracket, Node, Separator};
 use crate::operators::Op;
-use std::cell::Cell;
 
 const PICKED_PREFIX: &str = "picked·";
 
 pub fn lower(node: Node) -> Node {
-	Picking { counter: Cell::new(0) }.rewrite(node)
+	Picking { counter: Counter::default() }.rewrite(node)
 }
 
 struct Picking {
-	counter: Cell<usize>,
+	counter: Counter,
 }
 
 impl Picking {
@@ -40,7 +39,7 @@ impl Picking {
 	}
 
 	fn picked_call(&self, picked: Node, arguments: &[Node]) -> Node {
-		let name = format!("{PICKED_PREFIX}{}", self.counter.replace(self.counter.get() + 1));
+		let name = format!("{PICKED_PREFIX}{}", self.counter.next_number());
 		let assignment = key(Node::Symbol(name.clone()), Op::Assign, self.rewrite(picked));
 		let arguments = arguments.iter().map(|argument| self.rewrite(argument.clone()));
 		let call = Node::List(std::iter::once(Node::Symbol(name)).chain(arguments).collect(), Bracket::Round, Separator::None);

@@ -131,6 +131,8 @@ thread_local! {
 	static SERVING_PORT: std::cell::Cell<Option<u16>> = const { std::cell::Cell::new(None) };
 	/// whether it is a module for any host (`warp compile --wasm`): a browser's host reads its values too
 	static FOR_ANY_HOST: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+	/// whether it is hosted (`warp deploy`): a program without routes gets them (lowering/serve.rs with_default_routes)
+	static FOR_HOSTING: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
 	/// whether it runs under `warp test`: its tests run and give its value (lowering/test_blocks.rs)
 	static FOR_TESTS: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
 }
@@ -195,6 +197,16 @@ pub fn for_any_host<T>(run: impl FnOnce() -> T) -> T {
 
 pub fn is_for_any_host() -> bool {
 	FOR_ANY_HOST.with(|any| any.get())
+}
+
+/// `run` compiling a hosted program (`warp deploy`): without routes of its own, its value is the page at / and each of
+/// its functions a route
+pub fn for_hosting<T>(run: impl FnOnce() -> T) -> T {
+	with_flag(&FOR_HOSTING, run)
+}
+
+pub fn is_for_hosting() -> bool {
+	FOR_HOSTING.with(|hosting| hosting.get())
 }
 
 /// `run` compiling a page that calls its server functions directly, as the server does (lowering/serve.rs): for its
@@ -303,6 +315,8 @@ const SOURCE_PASSES: &[fn(Node) -> Node] = &[
 	crate::word_slices::lower,
 	// `xs.keep only positive` is `xs where it > 0`, before lower_where reads it (list_phrases.rs)
 	crate::list_phrases::lower,
+	// a hosted program without routes: its value the page at /, each function a route (card make-deploy)
+	crate::serve::with_default_routes,
 	// `post "/todos/:id" { todos where it.id == id }`: the path's parameters bound before lower_where reads the variables
 	crate::serve::bind_path_parameters,
 	// `xs where it > 1` before welcome_forms reads its words and a function's `it` is read as its parameter
@@ -371,6 +385,8 @@ const SOURCE_PASSES: &[fn(Node) -> Node] = &[
 	crate::phrase_calls::lower,
 	// `fourty_two.exports`, `dir(fourty_two)` of an imported core module, once resolve found its file (reflection.rs)
 	crate::reflection::lower_module_words,
+	// again: `dir(is_square)`, `is_square.params` of a used module's function, which joined the program in resolve
+	crate::reflection::lower,
 	crate::units::lower_sleep_durations, crate::units::lower_quantity_comparisons, crate::stored_values::lower, crate::undo_history::lower, crate::declarations::lower_tasks, crate::system_values::name, crate::signal_values::poll_shared, crate::system_values::read, crate::shared_arrays::lower, crate::fetch_signals::lower, crate::system_signals::lower, crate::component_state::lower, crate::element_events::lower, crate::event_signals::lower, crate::page_html::lower, crate::signal_values::subscribe, crate::variable_signals::lower, crate::signal_values::lower, crate::declarations::lower_c_functions, crate::declarations::lower_bare_declarations, crate::declarations::lower_spaced_definitions, crate::lowering::number_words::lower, crate::parameter_shapes::lower, crate::ruby_blocks::lower, crate::generators::lower, crate::declarations::lower_sized_arrays, crate::result_word::lower, crate::picked_calls::lower, crate::variadic::lower, crate::nonlocal_cells::lower_lambdas, crate::named_arguments::lower, crate::comprehensions::lower, crate::library_words::lower_function_methods, crate::tuples::lower, crate::run_time_blocks::warn_unresolved, crate::run_time_blocks::lower_interpret, crate::blocks::lower, crate::getters::lower, crate::run_time_blocks::lower_run_time_bangs, crate::mutation::warn_discarded, crate::mutation::lower, crate::nested_index::lower, crate::field_elements::lower, crate::host::lower_aliases,
 	// again: the getters of the modules used, which lower_module_source leaves for here, and the program's reads of them
 	crate::getters::lower,
@@ -395,12 +411,13 @@ const MEANING_PASSES: &[fn(Node) -> Node] = &[
 
 /// A module's source after the passes the program ran before its `use` was resolved (those before modules::resolve):
 /// its definitions join the program in the same forms (`[w for w in ws if …]` is lowered, not read as a list).
-/// Not getters::lower: a getter `answer := 42` is lowered with the program, whose reads of it become calls.
+/// Not the program's own passes: getters::lower (a getter `answer := 42` is lowered with the program, whose reads of it
+/// become calls) and serve::with_default_routes (a module's functions are no routes of a hosted program).
 pub(crate) fn lower_module_source(module: Node) -> Node {
 	type Pass = fn(Node) -> Node;
-	let (resolve, getters): (Pass, Pass) = (crate::modules::resolve, crate::getters::lower);
-	let resolved_at = SOURCE_PASSES.iter().position(|pass| std::ptr::fn_addr_eq(*pass, resolve)).expect("modules::resolve is a source pass");
-	SOURCE_PASSES[..resolved_at].iter().filter(|pass| !std::ptr::fn_addr_eq(**pass, getters)).fold(module, |module, pass| pass(module))
+	let program_only: [Pass; 2] = [crate::getters::lower, crate::serve::with_default_routes];
+	let resolved_at = SOURCE_PASSES.iter().position(|pass| std::ptr::fn_addr_eq(*pass, crate::modules::resolve as Pass)).expect("modules::resolve is a source pass");
+	SOURCE_PASSES[..resolved_at].iter().filter(|pass| !program_only.iter().any(|own| std::ptr::fn_addr_eq(**pass, *own))).fold(module, |module, pass| pass(module))
 }
 
 fn run_passes(node: Node, passes: &[fn(Node) -> Node]) -> Node {

@@ -67,10 +67,11 @@ const REGISTER_COMMAND: &str = "register";
 /// The program `warp serve` serves when it is given none: the first of these in the current folder
 const DEFAULT_PROGRAMS: [&str; 2] = ["app.warp", "main.warp"];
 const WARP_VERSION: &str = env!("CARGO_PKG_VERSION");
-/// The warnings and notes the user said "got it" to, remembered per project: one `ack:<topic> = acknowledged` per line
+/// The warnings, notes and hints the user said "got it" to, in the home folder: one `ack:<topic> = acknowledged` per
+/// line. A "got it" holds wherever warp runs next (card hints-dismissed)
 const ACKNOWLEDGEMENTS_FILE: &str = ".warp-acknowledged";
-/// What earlier versions called the acknowledgements file: its `ack:` lines are adopted
-const OLD_ANSWERS_FILE: &str = ".warp-answers";
+/// Where earlier versions remembered "got it", in the current folder: their `ack:` lines are adopted
+const LOCAL_ACKNOWLEDGEMENTS_FILES: [&str; 2] = [".warp-answers", ACKNOWLEDGEMENTS_FILE];
 /// Never prompt "got it?" after a warning or note (as in CI or a pipe)
 const NO_ASK_FLAG: &str = "--no-ask";
 /// Hints and notes (`prefer ^ over **`) are shown by default; `--no-hints` or WARP_HINTS=0 hide them (card hints-toggle)
@@ -142,8 +143,11 @@ fn apply_flags(args: &mut Vec<String>) {
     if !no_ask && env::var_os("CI").is_none() && io::stdin().is_terminal() && io::stderr().is_terminal() {
         diagnostic::set_acknowledger(Some(std::rc::Rc::new(diagnostic::TerminalAcknowledger)));
     }
-    diagnostic::adopt_acknowledgements(OLD_ANSWERS_FILE, ACKNOWLEDGEMENTS_FILE);
-    diagnostic::use_acknowledgements_file(ACKNOWLEDGEMENTS_FILE);
+    let acknowledgements = dirs_home().join(ACKNOWLEDGEMENTS_FILE);
+    for local_file in LOCAL_ACKNOWLEDGEMENTS_FILES {
+        diagnostic::adopt_acknowledgements(local_file, &acknowledgements);
+    }
+    diagnostic::use_acknowledgements_file(acknowledgements);
 }
 
 /// After the run (also one ending in process::exit), one line telling how to hide the hints it showed
@@ -417,16 +421,17 @@ fn run_command(args: &[String]) {
     }
 }
 
-/// `Warp 🌀 1.2.4`; a debug build also names, on stderr, the commit of the checkout it was built from and the time of
-/// its binary (cards g_oMw8, g_oM-0): `debug build 75d67b068 · built 2026-10-09 14:32`
+/// `🌀 Warp 1.2.4` (its last word the version, tests/common checks it), then on stderr the commit and branch the build
+/// was made from and the time of its binary (cards g_oMw8, g_oM-0, version-banner-version):
+/// `debug build 75d67b068 on main · built 2026-10-09 14:32`
 fn print_version() {
     println!("🌀 Warp {}", WARP_VERSION);
-    if cfg!(debug_assertions) {
-        let commit = option_env!("WARP_COMMIT");
-        let binary = env::current_exe().map(|path| path.display().to_string()).unwrap_or_default();
-        let built = command_line("date", &["-r", &binary, "+%Y-%m-%d %H:%M"]);
-        eprintln!("debug build {} · built {}", commit.unwrap_or("of an unknown commit"), built.as_deref().unwrap_or("?"));
-    }
+    let profile = if cfg!(debug_assertions) { "debug" } else { "release" };
+    let commit = option_env!("WARP_COMMIT").unwrap_or("of an unknown commit");
+    let branch = option_env!("WARP_BRANCH").map(|branch| format!(" on {branch}")).unwrap_or_default();
+    let binary = env::current_exe().map(|path| path.display().to_string()).unwrap_or_default();
+    let built = command_line("date", &["-r", &binary, "+%Y-%m-%d %H:%M"]);
+    eprintln!("{profile} build {commit}{branch} · built {}", built.as_deref().unwrap_or("?"));
 }
 
 /// The first line a successful command prints
