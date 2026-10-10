@@ -36,12 +36,33 @@ impl WasmGcEmitter {
 	}
 
 	pub(crate) fn emit_exact_literal(&mut self, func: &mut Function, numerator: &BigInt, denominator: &BigInt) {
-		self.emit_int_literal(func, numerator);
-		if denominator.is_one() {
-			return;
+		match denominator.is_one() {
+			true => self.emit_int_literal(func, numerator),
+			false => self.emit_number_constant(func, numerator, denominator),
 		}
-		self.emit_int_literal(func, denominator);
-		self.emit_call(func, "exact_div");
+	}
+
+	/// A literal beyond the fixnums (a big Int, a ratio) from a global set on its first evaluation: built at every
+	/// evaluation, each one added a $BigInt or $Ratio to the handle heap, which keeps them until the run ends
+	pub(super) fn emit_number_constant(&mut self, func: &mut Function, numerator: &BigInt, denominator: &BigInt) {
+		let key = (numerator.clone(), denominator.clone());
+		let global = match self.number_constants.get(&key) {
+			Some(global) => *global,
+			None => {
+				let global = self.declare_global_of(ValType::I64, ConstExpr::i64_const(0)); // 0 is never a handle
+				let name = if denominator.is_one() { format!("number {numerator}") } else { format!("number {numerator}/{denominator}") };
+				self.extra_global_names.push((global, name));
+				self.number_constants.insert(key, global);
+				global
+			}
+		};
+		Self::emit_list(func, &[I::GlobalGet(global), I::I64Eqz, I::If(BlockType::Empty)]);
+		self.emit_built_int_literal(func, numerator);
+		if !denominator.is_one() {
+			self.emit_built_int_literal(func, denominator);
+			self.emit_call(func, "exact_div");
+		}
+		Self::emit_list(func, &[I::GlobalSet(global), I::End, I::GlobalGet(global)]);
 	}
 
 	fn ratio_ref(&self) -> HeapType {
@@ -84,10 +105,27 @@ impl WasmGcEmitter {
 		f.instruction(&I::LocalSet(local));
 	}
 
+	/// Return `fixnum_result` at once when a and b (params 0, 1) are fixnums and b is not 0: a division or remainder of
+	/// two machine-sized Ints needs neither a $BigInt nor a $Ratio, which int_store keeps for the whole run
+	fn fixnum_division_shortcut(&self, f: &mut Function, fixnum_result: &[Instruction]) {
+		self.emit_fixnum_test(f, &[0, 1]);
+		Self::emit_list(f, &[I::LocalGet(1), I::I64Const(0), I::I64Ne, I::I32And, I::If(BlockType::Empty)]);
+		Self::emit_list(f, fixnum_result);
+		Self::emit_list(f, &[I::Return, I::End]);
+	}
+
 	/// `name(a, b)`: ratio_op when an operand is a ratio, else the integer slow path
 	fn exact_dispatch(&mut self, name: &'static str, result: ValType, ratio_op: impl FnOnce(&Self, &mut Function), integer_op: &str) {
+		self.exact_dispatch_with(name, result, &[], ratio_op, integer_op);
+	}
+
+	/// exact_dispatch, after the fixnum_division_shortcut when `fixnum_result` is given
+	fn exact_dispatch_with(&mut self, name: &'static str, result: ValType, fixnum_result: &[Instruction], ratio_op: impl FnOnce(&Self, &mut Function), integer_op: &str) {
 		let i64t = ValType::I64;
 		self.runtime_function(name, vec![i64t, i64t], vec![result], vec![], |s, f| {
+			if !fixnum_result.is_empty() {
+				s.fixnum_division_shortcut(f, fixnum_result);
+			}
 			s.any_ratio(f, 0, 1);
 			f.instruction(&I::If(BlockType::Result(result)));
 			ratio_op(s, f);
@@ -355,7 +393,7 @@ impl WasmGcEmitter {
 		});
 
 		// exact_rem(a, b) = a - b*trunc(a/b), the sign of a like i64.rem_s
-		self.exact_dispatch("exact_rem", i64t, |s, f| {
+		self.exact_dispatch_with("exact_rem", i64t, &[I::LocalGet(0), I::LocalGet(1), I::I64RemS], |s, f| {
 			Self::emit_list(f, &[I::LocalGet(0), I::LocalGet(1), I::LocalGet(0), I::LocalGet(1)]);
 			s.call(f, "exact_div");
 			s.call(f, "exact_trunc");
@@ -364,7 +402,9 @@ impl WasmGcEmitter {
 		}, "int_rem_slow");
 
 		// exact_mod(a, b): Euclidean remainder, 0 ≤ r < |b|: the truncated remainder plus |b| when negative; locals: r
+		let euclidean_remainder = super::big_int::euclidean_remainder(0, 1, 2);
 		self.runtime_function("exact_mod", vec![i64t, i64t], vec![i64t], vec![i64t], |s, f| {
+			s.fixnum_division_shortcut(f, &euclidean_remainder);
 			Self::emit_list(f, &[I::LocalGet(0), I::LocalGet(1)]);
 			s.call(f, "exact_rem");
 			Self::emit_list(f, &[I::LocalTee(2), I::I64Const(0)]);
@@ -391,7 +431,10 @@ impl WasmGcEmitter {
 
 		// exact_euclid_div(a, b): the quotient of a // b that goes with a % b: floor(a/b) for b > 0, ceil(a/b) =
 		// -floor(-a/b) for b < 0
-		self.runtime_function("exact_euclid_div", vec![i64t, i64t], vec![i64t], vec![], |s, f| {
+		// for fixnums (a - a % b) / b, which divides exactly
+		let euclidean_quotient = [&[I::LocalGet(0)][..], &euclidean_remainder, &[I::I64Sub, I::LocalGet(1), I::I64DivS]].concat();
+		self.runtime_function("exact_euclid_div", vec![i64t, i64t], vec![i64t], vec![i64t], |s, f| {
+			s.fixnum_division_shortcut(f, &euclidean_quotient);
 			Self::emit_list(f, &[I::LocalGet(1), I::I64Const(0)]);
 			s.call(f, "exact_cmp");
 			Self::emit_list(f, &[I::I32Const(0), I::I32LtS, I::If(BlockType::Result(i64t)), I::I64Const(0), I::I64Const(0), I::LocalGet(0), I::LocalGet(1)]);

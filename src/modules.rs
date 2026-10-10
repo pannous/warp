@@ -47,10 +47,10 @@ const UNSCOPED_DIRECTORIES: [&str; 3] = [PACKAGES_DIRECTORY, "target", "node_mod
 const PROJECT_MARKER: &str = ".git";
 /// `stored x = v` too: a used module's persisted signal is the program's (card web-stores)
 const GLOBAL_KEYWORD: &str = "global";
-const DECLARATION_KEYWORDS: [&str; 6] = ["use", "import", "let", "var", GLOBAL_KEYWORD, crate::stored_values::STORED_WORD];
+const DECLARATION_KEYWORDS: [&str; 4] = ["let", "var", GLOBAL_KEYWORD, crate::stored_values::STORED_WORD];
 
 fn is_declaration_keyword(keyword: &str) -> bool {
-	DECLARATION_KEYWORDS.contains(&keyword) || crate::analyzer::CONSTANT_KEYWORDS.contains(&keyword)
+	DECLARATION_KEYWORDS.contains(&keyword) || is_import_keyword(keyword) || crate::analyzer::CONSTANT_KEYWORDS.contains(&keyword)
 }
 
 /// Replace every `use <module>` of the program by the definitions of that module, each module once.
@@ -581,8 +581,12 @@ impl<'a> Loader<'a> {
 			return Ok(vec![as_use(statement)]);
 		}
 		let Some(path) = self.find(name) else {
-			if let Some(source) = std_module(name).filter(|_| import == Import::Use) {
-				return self.use_std_module(name, source);
+			if let Some(source) = std_module(name) {
+				return match import {
+					Import::Use => self.use_std_module(name, source),
+					// `include math`: the whole module spliced in place, as an included file is
+					Import::Include => crate::normalize::without_hints(|| self.load_source(import, std_path(std_module_name(name)), source)),
+				};
 			}
 			if let Some(module) = self.find_with(name, &crate::wasm_modules::MODULE_EXTENSIONS) {
 				return Ok(self.use_wasm_module(&module, statement, import));
@@ -1358,15 +1362,32 @@ fn used_modules(node: &Node) -> Option<Vec<(Used, Node)>> {
 /// `from list import zip, unique`: the module, the statement that uses it, and the only words it brings (card std-import)
 fn imported_words(node: &Node) -> Option<(Used, Node, Vec<String>)> {
 	let words = statement_words(node)?;
-	let [from, module, import, names @ ..] = words.as_slice() else { return None };
-	let is_word = |node: &Node, word: &str| matches!(node.drop_meta(), Node::Symbol(name) if name == word);
-	if !is_word(from, MINIMUM_KEYWORD) || !is_word(import, IMPORT_KEYWORD) || names.is_empty() {
-		return None;
+	match words.as_slice() {
+		[from, module, import, names @ ..] if is_word(from, MINIMUM_KEYWORD) && is_word(import, IMPORT_KEYWORD) => words_from(module, names),
+		[import, names @ .., from, module] if is_word(import, IMPORT_KEYWORD) && is_word(from, MINIMUM_KEYWORD) => std_words_from(module, names),
+		_ => None,
 	}
+}
+
+/// `import square from math`, `import (zip, unique) from list`: the from-import of a standard module defining every
+/// named word; any other `import f from lib` stays the foreign import (analyzer/imports.rs: `import sqrt from math` is libm's)
+fn std_words_from(module: &Node, names: &[&Node]) -> Option<(Used, Node, Vec<String>)> {
+	let Node::Symbol(module_name) = module.drop_meta() else { return None };
+	let defined = std_module_definitions(std_module_name(module_name))?;
+	let imported = words_from(module, names)?;
+	imported.2.iter().all(|name| defined.contains(name)).then_some(imported)
+}
+
+/// The module `use`d and the words named, alone or in one group: `zip, unique`, `(zip, unique)`
+fn words_from(module: &Node, names: &[&Node]) -> Option<(Used, Node, Vec<String>)> {
+	let names = match names {
+		[group] if matches!(group.drop_meta(), Node::List(_, Bracket::Round, _)) => group.drop_meta().iter().collect(),
+		_ => names.iter().map(|name| (*name).clone()).collect::<Vec<Node>>(),
+	};
 	let names = names.iter().map(|name| match name.drop_meta() {
 		Node::Symbol(name) => Some(name.clone()),
 		_ => None,
-	}).collect::<Option<Vec<String>>>()?;
+	}).collect::<Option<Vec<String>>>().filter(|names| !names.is_empty())?;
 	let statement = Node::List(vec![Node::Symbol(USE_KEYWORD.into()), (*module).clone()], Bracket::None, Separator::Space);
 	used_module(&statement).map(|used| (used, statement, names))
 }
@@ -1481,7 +1502,7 @@ fn leftmost_symbol(node: &Node) -> Option<String> {
 
 /// Words that bind the names after them: `fun f(x)`, `for i in`, `import f from`, `global x`
 fn binds_names(keyword: &str) -> bool {
-	is_function_keyword(keyword) || is_declaration_keyword(keyword) || is_import_keyword(keyword) || keyword == crate::lowering::words::FOR_WORD
+	is_function_keyword(keyword) || is_declaration_keyword(keyword) || keyword == crate::lowering::words::FOR_WORD
 }
 
 /// The signature part of a definition: `f(x)` of `f(x): body` and of `fun f(x) {body}`

@@ -88,6 +88,7 @@ PASSED:
   ✓ control::test_daily_timer::a_daily_timer_starts_and_main_runs_on
   ✓ control::test_daily_timer::the_delay_until_a_time_of_day_wraps_to_tomorrow
   ✓ control::test_data_quoting::a_tag_in_a_variable_reads_as_written
+  ✓ control::test_data_quoting::a_variable_named_data_is_no_prefix
   ✓ control::test_data_quoting::data_in_a_list_reads_as_written
   ✓ control::test_data_quoting::data_of_a_tag_reads_as_written
   ✓ control::test_data_quoting::data_takes_the_whole_expression_after_it
@@ -218,6 +219,7 @@ PASSED:
   ✓ control::test_for_forms::each_starts_a_loop
   ✓ control::test_for_forms::else_after_a_block_takes_the_whole_expression
   ✓ control::test_for_forms::else_print_after_a_block
+  ✓ control::test_for_forms::loops_bind_it_to_values_of_other_kinds
   ✓ control::test_for_forms::print_of_a_call_without_parentheses_in_an_if_branch
   ✓ control::test_for_forms::print_with_commas_in_a_loop_body
   ✓ control::test_for_forms::print_with_commas_in_an_if_branch
@@ -497,6 +499,8 @@ PASSED:
   ✓ control::test_system_values::not_dark_mode_is_the_opposite_reading
   ✓ control::test_system_values::the_battery_is_a_percent_or_a_loud_error
   ✓ control::test_system_values::the_mouse_is_a_system_value_of_the_page
+  ✓ control::test_system_values::the_mouse_is_the_pointer_over_the_paint_window
+  ✓ control::test_system_values::window_open_is_no_without_a_window
   ✓ control::test_system_values::yes_no_values_read_the_machine
   ✓ control::test_table_comprehension::a_filtered_comprehension_over_a_table_reads_only_its_rows
   ✓ control::test_table_element_writes::a_filtered_row_field_change_is_written_to_its_row
@@ -1842,6 +1846,10 @@ PASSED:
   ✓ modules::test_std_implicit_use::a_page_brings_markup_implicitly
   ✓ modules::test_std_implicit_use::routes_and_pages_lower_without_use_statements
   ✓ modules::test_std_implicit_use::routes_bring_router_and_regex_implicitly
+  ✓ modules::test_std_import_forms::import_from_a_foreign_library_stays_the_foreign_import
+  ✓ modules::test_std_import_forms::import_from_brings_the_named_words_of_a_standard_module
+  ✓ modules::test_std_import_forms::import_from_leaves_the_other_words_of_the_module_out
+  ✓ modules::test_std_import_forms::include_splices_a_standard_module
   ✓ modules::test_std_json::a_json_word_without_its_use_names_the_module
   ✓ modules::test_std_json::malformed_json_is_an_error_naming_it
   ✓ modules::test_std_json::use_json_parses_and_writes_json
@@ -3357,6 +3365,7 @@ PASSED:
   ✓ types::test_empty_named_key::a_key_named_empty_is_a_field
   ✓ types::test_empty_named_key::a_linked_list_of_empty_marked_cells
   ✓ types::test_empty_named_key::a_spaced_ternary_still_reads_the_empty_value
+  ✓ types::test_empty_type_aliases::a_type_value_compares_with_any_word_of_its_type
   ✓ types::test_enum_cases::a_match_on_enum_cases_tests_and_binds
   ✓ types::test_enum_cases::an_enum_case_with_values_is_a_class
   ✓ types::test_enum_cases::an_enum_without_values_stays_numbered
@@ -4112,6 +4121,9 @@ PASSED:
   ✓ web::test_webgpu::a_shader_that_does_not_compile_says_where
   ✓ web::test_webgpu::a_value_that_is_no_number_says_so
   ✓ welcoming::test_adopted_acknowledgements::acknowledgements_of_the_old_answers_file_are_adopted_once
+  ✓ welcoming::test_advice_fixes::a_block_assignment_offers_global_at_main
+  ✓ welcoming::test_advice_fixes::advice_without_a_replacement_offers_no_fix
+  ✓ welcoming::test_advice_fixes::then_after_a_comparison_offers_the_pipe
   ✓ welcoming::test_braceless_call_argument::a_plain_braceless_argument_does_not_warn
   ✓ welcoming::test_braceless_call_argument::an_operator_in_a_braceless_argument_warns_with_both_readings
   ✓ welcoming::test_c_style::test_c_style_definition
@@ -4498,4 +4510,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-10 ignored, 4493 passed, 0 failed, 4493 total tested
+10 ignored, 4505 passed, 0 failed, 4505 total tested

@@ -82,13 +82,33 @@ fn method_arguments_read_system_values() {
 }
 
 // the pointer over the page's canvas (card drawing-frames): mouse_x / mouse_y in canvas pixels, mouse_down yes/no;
-// a native run has no canvas, a loud error naming where it works
+// natively the pointer over the paint window, 0 before one (card native-system)
 #[test]
 fn the_mouse_is_a_system_value_of_the_page() {
 	assert!(lowered("print mouse_x").contains("(system_value \"mouse_x\")"));
 	let pressed = lowered("if mouse_down { print 1 }");
 	assert!(pressed.contains("(system_value mouse_down)!=0"), "{pressed}");
 	is!("mouse_y = 3; mouse_y + 1", 4);
+	// its own process: no window there, and no other test's pointer
 	#[cfg(feature = "native")]
-	crate::common::fails_with("print mouse_x", "mouse_x: the pointer over the playground's canvas");
+	assert_eq!(String::from_utf8_lossy(&crate::common::warp_command().args(["--no-ask", "eval", "mouse_x"]).output().unwrap().stdout).trim(), "» 0");
+}
+
+// card native-system: natively the pointer over the paint window (src/paint_window.rs follow_input) in the painted
+// frame's pixels, as the page's canvas
+#[test]
+#[cfg(feature = "native")]
+fn the_mouse_is_the_pointer_over_the_paint_window() {
+	warp_runtime::system_values::tell_window_input([12.0, 7.0, 1.0, 0.0]);
+	is!("mouse_x * 100 + mouse_y", 1207);
+	is!("if mouse_down { 1 } else { 0 }", 1);
+}
+
+// window_open: whether a paint window shows the program's pictures, so `while window_open { … }` ends when the window
+// closes and never starts headless (tests, CI, WARP_NO_WINDOW); the page's canvas is always open
+#[test]
+fn window_open_is_no_without_a_window() {
+	assert!(lowered("while window_open { sleep 16ms }").contains("(system_value window_open)!=0"));
+	#[cfg(feature = "native")]
+	assert_eq!(String::from_utf8_lossy(&crate::common::warp_command().args(["--no-ask", "eval", "while window_open { sleep 16ms }; 7"]).output().unwrap().stdout).trim(), "» 7");
 }

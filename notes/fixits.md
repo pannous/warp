@@ -20,7 +20,10 @@ in case the user did indeed intend something different". Builds the "Later: chan
 - Errors lose their Diagnostic when they become `Node::Error`, so `Diagnostic::into_error` keeps the ones with fixes
   (`diagnostic::take_error_diagnostics`).
 - Hints (`normalize::hint`) are rewrites: `CapturedHint::fix()`; `normalize::advise` is a hint whose preferred form
-  is said elsewhere (`global x` for a block's assignment) and offers no fix.
+  is no plain rewrite of the text: said elsewhere (`global x` for a block's assignment) or meaning something else
+  (`(a<b) |> f` for `a<b then f`). It and `diagnostic::advise_once` take the "I meant" fix as an argument: the edit the
+  advice stands for (`global x=1` at main's assignment, `normalize::rewrite` for a replacement of the text itself),
+  `None` when the advice names no text to write (`on … before the loop`).
 - Web report (src/web.rs `evaluate`): warnings, `errors` (only when the program failed) and hints carry `fixes`:
   `{label: "I meant: …", meaning, written, replacement, start, end, edits: [{start, end, replacement}]}` with UTF-16
   offsets of the editor text; `start: null` (and no edits) when a text was not found (the page shows a disabled
