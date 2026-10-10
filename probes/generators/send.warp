@@ -1,0 +1,9 @@
+averager() := { total = 0; n = 0; average = 0; while yes { value = yield average; total += value; n += 1; average = total / n } }
+a = averager()
+next(a)
+print [a.send(10), a.send(20), a.send(60)]
+echo() := { while yes { got = yield 1; if got == ø { return }; yield got } }
+e = echo()
+print [next(e), e.send(7), next(e), next(e)]
+pairs() := { x = yield 1; yield [x] }
+print pairs()

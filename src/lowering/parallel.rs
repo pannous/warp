@@ -5,7 +5,7 @@
 //! loop ends when every chunk is done. A loop body updating an outer variable (`t += x`) updates its task's copy: a
 //! warning names `shared` (P106). notes/go_blocks.md
 
-use crate::node::{Bracket, Node, Separator};
+use crate::node::{symbol, Bracket, Node, Separator};
 use crate::operators::Op;
 
 /// How many slices a parallel map or loop splits its items into: tasks are threads with an instance each, so never one
@@ -18,6 +18,7 @@ const MAP_WORD: &str = "map";
 const PARALLEL_ATTRIBUTE: &str = "parallel";
 /// The temporaries of a template: `parallel_part` becomes `parallel·part·3` for the third parallel map or loop
 const TEMPORARY_PREFIX: &str = "parallel_";
+const TEMPORARY_BASE: &str = "parallel";
 const LIST_PLACEHOLDER: &str = "go_map_list";
 const FUNCTION_PLACEHOLDER: &str = "go_map_function";
 const LOOP_PLACEHOLDER: &str = "go_map_loop";
@@ -121,7 +122,7 @@ pub(crate) fn loop_in_tasks(variable: Node, list: Node, body: Node, number: usiz
 	if let Some(error) = copied_updates(&body, shared) {
 		return error;
 	}
-	let walk = Node::List(vec![Node::Symbol(FOR_WORD.into()), variable, Node::Symbol(IN_WORD.into()), temporary("part", number), body], Bracket::None, Separator::Space);
+	let walk = Node::List(vec![symbol(FOR_WORD), variable, symbol(IN_WORD), temporary("part", number), body], Bracket::None, Separator::Space);
 	let program = format!("({}; ø)", chunked(&format!("{LOOP_PLACEHOLDER}; 0")));
 	filled(&program, number, &[(LIST_PLACEHOLDER, list), (LOOP_PLACEHOLDER, walk)])
 }
@@ -129,20 +130,14 @@ pub(crate) fn loop_in_tasks(variable: Node, list: Node, body: Node, number: usiz
 /// The template with its temporaries named apart, then the placeholders filled (the program's own `parallel_…` names
 /// stay as they are)
 fn filled(program: &str, number: usize, fills: &[(&str, Node)]) -> Node {
-	let template = named_apart(crate::warp_parser::parse(program), number);
+	let template = crate::library_words::named_apart(crate::warp_parser::parse(program), TEMPORARY_PREFIX, TEMPORARY_BASE, number);
 	fills.iter().fold(template, |node, (placeholder, value)| crate::library_words::substitute(node, placeholder, value))
 }
 
-fn named_apart(node: Node, number: usize) -> Node {
-	match node {
-		Node::Symbol(name) if name.starts_with(TEMPORARY_PREFIX) => temporary(&name[TEMPORARY_PREFIX.len()..], number),
-		other => other.map_children(|child| named_apart(child, number)),
-	}
-}
 
 /// `part` of the third parallel map or loop: `parallel·part·3`
 fn temporary(name: &str, number: usize) -> Node {
-	Node::Symbol(format!("parallel·{name}·{number}"))
+	Node::Symbol(crate::library_words::temporary_name(&[TEMPORARY_BASE, name, &number.to_string()]))
 }
 
 /// `t += x`, `t++`, `t = t + x` in a parallel loop body of a variable that is not shared: each task would update its own

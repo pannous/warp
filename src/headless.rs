@@ -185,7 +185,6 @@ mod native {
 	use crate::event_signals::{HANDLER_PREFIX, PAGE_VALUE};
 	use crate::host::HostState;
 	use crate::node::{Bracket, Node, Separator};
-	use crate::operators::Op;
 	use crate::pipeline::CompiledModule;
 	use crate::wasm_emitter::failed_run;
 	use crate::wasm_reader::{run_main_kept, val_to_node, with_trap_detail, Imports};
@@ -242,7 +241,7 @@ mod native {
 	/// An event's detail as the page's treeOfPlain gives it: an object of texts and numbers, a boolean as 1 or 0
 	fn node_of_json(value: &Value) -> Node {
 		match value {
-			Value::Object(fields) => Node::List(fields.iter().map(|(name, value)| Node::Key(Box::new(Node::Symbol(name.clone())), Op::Colon, Box::new(node_of_json(value)))).collect(), Bracket::Curly, Separator::None),
+			Value::Object(fields) => Node::List(fields.iter().map(|(name, value)| Node::key(name, node_of_json(value))).collect(), Bracket::Curly, Separator::None),
 			Value::String(text) => Node::Text(text.clone()),
 			Value::Bool(truth) => Node::int(*truth as i64),
 			Value::Number(number) => number.as_i64().map(Node::int).unwrap_or_else(|| Node::from(number.as_f64().unwrap_or_default())),

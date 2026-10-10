@@ -17,3 +17,23 @@ fn a_let_variable_changes() {
 	is!("let x = 1; x++; x", 2);
 	is!("let xs = [1 2]; xs#1 = 5; xs", ints(vec![5, 2]));
 }
+
+// card let-tuple: let and const take a tuple pattern; each name is bound like a single declaration
+#[test]
+fn let_and_const_unpack_a_tuple() {
+	is!("let (a, b) = (1, 2); a + b", 3);
+	is!("let [a, b] = [3, 4]; a * b", 12);
+	is!("v = {x: 1, y: 2}; let (names, numbers) = (keys(v), values(v)); count(names) + numbers#2", 4);
+	is!("const (a, b) = (5, 6); b - a", 1);
+	fails_with("const (a, b) = (5, 6); a = 7", "a is const, cannot assign it again");
+}
+
+// card let-comma: `let a, b = 3, 4` unpacks like `a, b = 3, 4` (Python's reading, assumed; JS would declare a
+// without a value and b = 3: notes/open_decisions.md)
+#[test]
+fn a_declaration_unpacks_comma_values() {
+	is!("let a, b = 3, 4; a * b", 12);
+	is!("var a, b = 3, 4; a = 5; a * b", 20);
+	is!("const a, b = 3, 4; a + b", 7);
+	fails_with("const a, b = 3, 4; b = 1", "b is const, cannot assign it again");
+}

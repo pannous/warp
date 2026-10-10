@@ -4,14 +4,17 @@
 //! `k in d`, `d has k`, `d.remove(k)` and `d.get(k)` (lower_key_words, after library_words names them), so a map keyed
 //! by ids stays a hash table.
 
+use super::nodes::call;
 use crate::library_words::{COLLECTION_CONTAINS, COLLECTION_POSITION, MAP_GET_OR, MAP_WITHOUT};
-use crate::node::{Bracket, Node, Separator};
+use crate::node::{Bracket, Node};
 use crate::operators::Op;
 use crate::warp_parser::WrittenIndex;
 use std::collections::HashSet;
 
 /// The word that makes a key of a number known only at run time
 const KEY_TEXT: &str = "string";
+/// The declared types that make a variable a map (declarations.rs: dict is another language's word for map)
+const MAP_TYPE_WORDS: [&str; 2] = ["map", "dict"];
 /// The words `word(map, key, …)` that find an entry by its key
 const KEY_WORDS: [&str; 5] = [COLLECTION_CONTAINS, COLLECTION_POSITION, MAP_GET_OR, MAP_WITHOUT, crate::analyzer::REMOVED_VALUE_CALL];
 
@@ -32,17 +35,25 @@ pub fn lower_key_words(node: Node) -> Node {
 	found_by_key(node, &maps)
 }
 
-/// The variables assigned the empty map `{}`
+/// The variables assigned the empty map `{}`, also when declared a map (`m: map<int, int> = {}`, card typed-map)
 fn empty_map_variables(node: &Node) -> HashSet<String> {
 	let mut maps = HashSet::new();
 	node.visit(&mut |part| if let Node::Key(target, Op::Assign, value) = part {
-		if let (Node::Symbol(name), Node::List(items, Bracket::Curly, _)) = (target.drop_meta(), value.drop_meta()) {
-			if items.is_empty() {
-				maps.insert(name.clone());
-			}
+		let Node::List(items, Bracket::Curly, _) = value.drop_meta() else { return };
+		let name = match target.drop_meta() {
+			Node::Key(name, Op::Colon, declared) if is_map_type(declared) => name.drop_meta(),
+			name => name,
+		};
+		if let (Node::Symbol(name), true) = (name, items.is_empty()) {
+			maps.insert(name.clone());
 		}
 	});
 	maps
+}
+
+/// `map`, `dict`, `map<int, int>` (one symbol, `map of int, int`)
+fn is_map_type(declared: &Node) -> bool {
+	declared.name().split_whitespace().next().is_some_and(|word| MAP_TYPE_WORDS.contains(&word))
 }
 
 fn is_map(node: &Node, maps: &HashSet<String>) -> bool {
@@ -90,7 +101,7 @@ fn key_text(key: Node) -> Node {
 	match key.drop_meta() {
 		Node::Text(_) | Node::Char(_) => key,
 		Node::Number(number) => Node::Text(number.to_string()),
-		_ => Node::List(vec![Node::Symbol(KEY_TEXT.to_string()), key], Bracket::Round, Separator::None),
+		_ => call(KEY_TEXT, vec![key]),
 	}
 }
 

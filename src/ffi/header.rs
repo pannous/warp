@@ -15,8 +15,7 @@ pub struct FfiHeaderSignature {
 
 /// Map C type string to wasm_encoder ValType
 pub fn map_c_type_to_valtype(c_type: &str) -> Option<wasm_encoder::ValType> {
-    let t = c_type.trim();
-    let t = t.strip_prefix("const ").unwrap_or(t).trim();
+    let t = bare_c_type(c_type);
 
     match t {
         "double" => Some(wasm_encoder::ValType::F64),
@@ -101,13 +100,8 @@ pub fn extract_function_signature(declaration: &str, library: &str) -> Option<Ff
     }
 
     // Function name is the last part, may have pointer marker
-    let mut name = parts.last()?.to_string();
-    // Handle "*func" case: the stars belong to the return type (`char *getenv(…)` returns char *)
-    let mut pointer_marks = String::new();
-    while name.starts_with('*') {
-        name = name[1..].to_string();
-        pointer_marks.push('*');
-    }
+    // `char *getenv(…)` returns char *
+    let (name, pointer_marks) = split_pointer_marks(parts.last()?);
     if name.is_empty() || C_TYPE_WORDS.contains(&name.as_str()) {
         return None;
     }
@@ -357,6 +351,18 @@ pub(super) fn is_struct_type(name: &str) -> bool {
 }
 
 /// The position of the `)` closing the `(` at `open`
+/// A C type without its surrounding spaces and leading `const`
+pub(crate) fn bare_c_type(c_type: &str) -> &str {
+    let t = c_type.trim();
+    t.strip_prefix("const ").unwrap_or(t).trim()
+}
+
+/// `*fopen` → ("fopen", "*"): a declared name and the stars before it, which belong to the return type
+pub(crate) fn split_pointer_marks(word: &str) -> (String, String) {
+    let name = word.trim_start_matches('*');
+    (name.to_string(), "*".repeat(word.len() - name.len()))
+}
+
 pub(crate) fn matching_paren(text: &str, open: usize) -> Option<usize> {
     let mut depth = 0;
     for (position, c) in text[open..].char_indices() {

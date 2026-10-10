@@ -13,8 +13,8 @@
 //! is a route of the page with the whole pattern, and the route itself follows them with an empty outlet.
 
 use crate::event_signals::{function_with_globals, main_level_variables};
-use crate::node::{Bracket, Node, Separator};
-use crate::system_signals::call;
+use crate::node::{symbol, text, Bracket, Node, Separator};
+use super::nodes::call;
 use std::collections::HashMap;
 
 const ROUTE_WORD: &str = "route";
@@ -244,7 +244,7 @@ fn groups_fit(pattern: &str) -> Node {
 
 /// The value of the route page·route_index picks, else the not-found text
 fn choice(routes: &[Route]) -> Vec<Node> {
-	let index = template(INDEX_TEMPLATE, [("index_of_route", Node::Symbol(PAGE_ROUTE_INDEX.to_string()))]);
+	let index = template(INDEX_TEMPLATE, [("index_of_route", symbol(PAGE_ROUTE_INDEX))]);
 	let choices = (0..routes.len()).map(|index| template(CHOICE_TEMPLATE, [("index", Node::int(index as i64)), ("chosen", Node::Symbol(format!("{ROUTE_PREFIX}{index}")))]));
 	std::iter::once(index).chain(choices).chain([crate::warp_parser::parse(NOT_FOUND_TEMPLATE)]).collect()
 }
@@ -253,6 +253,3 @@ fn template<const N: usize>(code: &str, bindings: [(&str, Node); N]) -> Node {
 	crate::law::substitute(&crate::warp_parser::parse(code), &bindings.into_iter().map(|(name, value)| (name.to_string(), value)).collect())
 }
 
-fn text(value: &str) -> Node {
-	Node::Text(value.to_string())
-}

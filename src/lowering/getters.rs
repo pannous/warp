@@ -5,8 +5,9 @@
 //! definition. Not getters: `name := {…}` (a block or a list), `name := x => …` and `name := …it…` (functions), and a
 //! name applied to arguments later (`sum := fold +; sum [1 2 3]`, a function value).
 
+use super::nodes::{call, key};
 use crate::diagnostic::Diagnostic;
-use crate::node::{Bracket, Node, Separator};
+use crate::node::{symbol, Bracket, Node, Separator};
 use crate::operators::Op;
 
 /// marks the `name()` that `name := e` became: written without parentheses, read as a value (late_binding warns of effects)
@@ -43,7 +44,7 @@ fn lower_in(node: Node, active: &[Getter]) -> Node {
 	};
 	match node {
 		Node::Meta { node, data } => Node::Meta { node: Box::new(lower_in(*node, active)), data },
-		Node::Symbol(name) if is_active(active, &name) => call(&name),
+		Node::Symbol(name) if is_active(active, &name) => call(&name, vec![]),
 		Node::List(items, bracket @ (Bracket::None | Bracket::Curly), separator @ (Separator::Semicolon | Separator::Newline)) => {
 			Node::List(lower_statements(items, active), bracket, separator)
 		}
@@ -62,9 +63,9 @@ fn lower_in(node: Node, active: &[Getter]) -> Node {
 				}
 				_ => *right,
 			};
-			Node::Key(Box::new(lower_in(*left, active)), Op::Dot, Box::new(right))
+			key(lower_in(*left, active), Op::Dot, right)
 		}
-		Node::Key(left, op, right) => Node::Key(Box::new(lower_in(*left, active)), op, Box::new(lower_in(*right, active))),
+		Node::Key(left, op, right) => key(lower_in(*left, active), op, lower_in(*right, active)),
 		Node::List(items, Bracket::Round, separator) if matches!(items.first().map(Node::drop_meta), Some(Node::Symbol(head)) if is_active(active, head)) => {
 			let mut items = items.into_iter();
 			let head = items.next().expect("a head");
@@ -142,16 +143,12 @@ fn applied_in(statements: &[Node], name: &str) -> bool {
 	found
 }
 
-fn call(name: &str) -> Node {
-	Node::List(vec![Node::Symbol(name.to_string())], Bracket::Round, Separator::None)
-}
-
 /// `z := e` → `z() := e`, the `z()` marked as written bare
 fn getter_definition(statement: Node) -> Node {
 	match statement {
 		Node::Meta { node, data } => Node::Meta { node: Box::new(getter_definition(*node)), data },
 		Node::Key(left, Op::Define, body) => match left.drop_meta() {
-			Node::Symbol(name) => Node::Key(Box::new(Node::meta(call(name), Node::Symbol(BARE_GETTER_MARK.to_string()))), Op::Define, body),
+			Node::Symbol(name) => Node::Key(Box::new(Node::meta(call(name, vec![]), symbol(BARE_GETTER_MARK))), Op::Define, body),
 			_ => Node::Key(left, Op::Define, body),
 		},
 		other => other,

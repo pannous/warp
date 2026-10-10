@@ -17,6 +17,7 @@ custom section, `warp.meta`, kept unstripped.
 | `x.keys` | map, object | keys | works (library word) |
 | `x.meta`, `x.@key` | any binding | meta entries (meta_entries.rs) | works, `x.meta` under `use comments` |
 | `f.params` (`parameters`), `f.signature` | function | parameter names / `(a:int, b:int) -> int` | step 3: user functions |
+| `f.dump` | function | the whole definition, to copy and paste: `area(width:int, height:int) := width*height` (Node::serialize spacing) | card reflection-area |
 | `f.effects` (= `effects of f`) | function | effect set as texts (`"IO"`, `["IO" "ask"]`) | a value anywhere (card effects-value); a program whose top level does nothing answers at compile time |
 | `event.listeners` (= `listeners of e`) | event | handler count/list | `listeners of tick` broken (signal_listeners undefined) |
 | `module.exports` | `use wasm`, foreign module | export names | step 4: imported core modules; components natively |

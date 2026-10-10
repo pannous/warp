@@ -8,16 +8,14 @@ use Instruction as I;
 use super::WasmGcEmitter;
 
 impl WasmGcEmitter {
-	/// Emit instructions for Key(left, op, right) nodes
-	/// Dispatches to appropriate handlers based on the operator and operands
+	/// Key(left, op, right) by its operator and operands
 	pub(super) fn emit_key_node(&mut self, func: &mut Function, left: &Node, op: &Op, right: &Node) {
-		// Handle global keyword: global:Key(name, =, value)
+		// `global x = value`, `fetch URL`
 		if let Node::Symbol(kw) = left.drop_meta() {
 			if kw == "global" {
 				self.emit_global_declaration(func, right);
 				return;
 			}
-			// Handle fetch URL - call host.fetch and return Text node
 			if kw == "fetch" && self.config.emit_host_imports {
 				self.emit_fetch_call(func, right, None);
 				return;
@@ -31,18 +29,20 @@ impl WasmGcEmitter {
 			}
 		}
 
-		// Handle x = fetch URL pattern: Key(Assign, x, List[fetch, URL]), optionally `… timeout SECONDS`
-		if (*op == Op::Assign || *op == Op::Define) && self.config.emit_host_imports {
-			if let Node::Symbol(var_name) = left.drop_meta() {
-				if let Some((url, timeout)) = crate::host::fetch_call(right) {
-					// Emit fetch call - result is a Text or Error node (ref $Node)
-					self.emit_fetch_call(func, &url, timeout);
-					// Store in ref-type local variable
-					if let Some(local) = self.scope.lookup(var_name) {
-						func.instruction(&I::LocalTee(local.position));
-					}
-					return;
+		// the variable of `x = value` or `x := value`
+		let assigned = match left.drop_meta() {
+			Node::Symbol(name) if matches!(op, Op::Assign | Op::Define) => Some(name.as_str()),
+			_ => None,
+		};
+
+		// `x = fetch URL`, optionally `… timeout SECONDS`: x holds the Text or Error node
+		if let Some(var_name) = assigned.filter(|_| self.config.emit_host_imports) {
+			if let Some((url, timeout)) = crate::host::fetch_call(right) {
+				self.emit_fetch_call(func, &url, timeout);
+				if let Some(local) = self.scope.lookup(var_name) {
+					func.instruction(&I::LocalTee(local.position));
 				}
+				return;
 			}
 		}
 
@@ -72,45 +72,31 @@ impl WasmGcEmitter {
 			return;
 		}
 
-		// Route to emit_arithmetic for numeric operations
-		let assigns_numeric_variable = matches!(left.drop_meta(), Node::Symbol(s) if self.is_numeric_variable(s));
-		let is_numeric_assign = *op == Op::Assign && assigns_numeric_variable;
-		let is_numeric_define = *op == Op::Define && assigns_numeric_variable;
-
-		// Handle ref-type variable assignment (lists, etc.)
-		let is_ref_assign = (*op == Op::Assign || *op == Op::Define)
-			&& matches!(left.drop_meta(), Node::Symbol(s) if {
-				self.scope.lookup(s).is_some_and(|l| l.kind.is_ref())
-			});
-		let is_ref_global_assign = (*op == Op::Assign || *op == Op::Define)
-			&& matches!(left.drop_meta(), Node::Symbol(s) if self.scope.lookup(s).is_none()
-				&& self.ctx.user_globals.get(s).is_some_and(|(_, kind)| kind.is_ref()));
-
-		if is_ref_global_assign {
-			if let Node::Symbol(name) = left.drop_meta() {
+		let assigns_numeric_variable = assigned.is_some_and(|name| self.is_numeric_variable(name));
+		// a variable held as a reference (lists, …), a local or else a global
+		let assigned_reference = assigned.filter(|name| match self.scope.lookup(name) {
+			Some(local) => local.kind.is_ref(),
+			None => self.ctx.user_globals.get(*name).is_some_and(|(_, kind)| kind.is_ref()),
+		});
+		if let Some(name) = assigned_reference {
+			if self.scope.lookup(name).is_none() {
 				self.emit_global_store(func, name, right);
+				return;
 			}
-			return;
-		}
-		if is_ref_assign {
-			if let Node::Symbol(name) = left.drop_meta() {
-				if self.emit_typed_list_store(func, name, right) {
-					func.instruction(&I::Drop);
-					self.emit_typed_list_as_node(func, name);
-					return;
-				}
-				// Emit the right side as a Node reference
-				let declared = self.declared_type_of(left);
-				self.emit_declared_value(func, declared.as_ref(), right, crate::Kind::Empty);
-				let written = self.scope.lookup(name).is_some_and(|local| local.declared);
-				if let Some(mark) = declared.as_ref().filter(|_| written).and_then(|declared| self.element_mark_of(declared)) {
-					func.instruction(&I::I64Const(mark));
-					self.emit_call(func, super::declared_values::LIST_MARK);
-				}
-				// Store in ref-type local
-				if let Some(local) = self.scope.lookup(name) {
-					func.instruction(&I::LocalTee(local.position));
-				}
+			if self.emit_typed_list_store(func, name, right) {
+				func.instruction(&I::Drop);
+				self.emit_typed_list_as_node(func, name);
+				return;
+			}
+			let declared = self.declared_type_of(left);
+			self.emit_declared_value(func, declared.as_ref(), right, crate::Kind::Empty);
+			let written = self.scope.lookup(name).is_some_and(|local| local.declared);
+			if let Some(mark) = declared.as_ref().filter(|_| written).and_then(|declared| self.element_mark_of(declared)) {
+				func.instruction(&I::I64Const(mark));
+				self.emit_call(func, super::declared_values::LIST_MARK);
+			}
+			if let Some(local) = self.scope.lookup(name) {
+				func.instruction(&I::LocalTee(local.position));
 			}
 			return;
 		}
@@ -140,8 +126,7 @@ impl WasmGcEmitter {
 			|| op.is_shift()
 			|| op.is_comparison()
 			|| op.is_logical()
-			|| is_numeric_define
-			|| is_numeric_assign
+			|| assigns_numeric_variable
 			|| op.is_compound_assign()
 			|| matches!(op, Op::Inc | Op::Dec)
 		{
@@ -262,8 +247,10 @@ impl WasmGcEmitter {
 
 	/// Emit absolute value: ‖x‖
 	fn emit_abs_op(&mut self, func: &mut Function, right: &Node) {
-		let use_float = self.get_type(right).is_float();
-		if use_float {
+		let kind = self.get_type(right);
+		if crate::analyzer::is_run_time_kind(&kind) {
+			self.emit_node_abs(func, right);
+		} else if kind.is_float() {
 			self.emit_float_value(func, right);
 			func.instruction(&I::F64Abs);
 			self.emit_call(func, "new_float");
@@ -389,14 +376,18 @@ impl WasmGcEmitter {
 			}
 		}
 		let is_list = matches!(self.get_type(left), crate::Kind::List | crate::Kind::Empty) && self.get_type(right) == crate::Kind::List;
-		let Some(position) = self.scope.lookup(name).filter(|local| local.kind.is_ref()).map(|local| local.position) else { return false };
+		// a declared global grows in place too (`global out; out += [i]` in a function): its concat copy was quadratic
+		let Some(slot) = self.node_variable_slot(name) else { return false };
 		if !is_list || !self.should_emit_function(super::list_ops::LIST_EXTEND) {
 			return false;
 		}
 		self.emit_node_instructions(func, left);
 		self.emit_node_instructions(func, right);
 		self.emit_call(func, super::list_ops::LIST_EXTEND);
-		func.instruction(&I::LocalTee(position));
+		slot.tee(func);
+		if matches!(slot, super::list_dispatch::Slot::Global(_)) {
+			func.instruction(&I::RefAsNonNull); // a global is nullable, list_extend's list is not
+		}
 		true
 	}
 

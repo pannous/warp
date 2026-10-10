@@ -328,7 +328,7 @@ pub(crate) fn node_of(value: &Value) -> Node {
 		}
 		Value::Object(entries) if let Some(character) = codepoint_of(entries) => Node::Char(character),
 		Value::Object(entries) => Node::List(
-			entries.iter().map(|(key, value)| Node::Key(Box::new(Node::Symbol(key.clone())), Op::Colon, Box::new(node_of(value)))).collect(),
+			entries.iter().map(|(key, value)| Node::key(key, node_of(value))).collect(),
 			Bracket::Curly,
 			Separator::Space,
 		),

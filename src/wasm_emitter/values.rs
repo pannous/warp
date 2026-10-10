@@ -426,53 +426,21 @@ impl WasmGcEmitter {
 	pub(super) fn emit_list_structure_with(&mut self, func: &mut Function, items: &[Node], bracket: &Bracket, emit: fn(&mut Self, &mut Function, &Node)) {
 		let bracket_info = bracket_info(bracket);
 
-		// Emit first item
+		// cons cells: data = first item, value = the list of the rest (null after the last), never an item itself
 		emit(self, func, &items[0]);
-
-		// Emit rest as a proper linked list
-		// The value field must always be a list node (or null), never an element directly
 		if items.len() > 1 {
-			// Recursively build the rest of the list
-			// This ensures proper cons-cell structure: (data=first, value=list_node_for_rest)
 			self.emit_list_structure_with(func, &items[1..], bracket, emit);
 		} else {
-			// Single element list: rest is null
 			self.emit_node_null(func);
 		}
 
-		// bracket_info
 		func.instruction(&I::I64Const(bracket_info));
-
-		// Call new_list if available, otherwise inline struct.new
 		if self.ctx.func_registry.contains("new_list") {
 			self.emit_call(func, "new_list");
 		} else {
-			// Inline: kind = (bracket_info << 8) | List
-			// We need to reconstruct since stack has: first, rest, bracket_info
-			// Actually we need to reorder. Let's use locals.
-			// For simplicity, always emit new_list function when needed
-			self.emit_inline_list(func, bracket_info);
+			// new_list is always emitted; reaching this is a compiler bug, reported as an error value
+			self.emit_type_error(func, "internal error: new_list is not available".to_string());
 		}
-	}
-
-	pub(super) fn emit_inline_list(&mut self, func: &mut Function, _bracket_info: i64) {
-		// Stack: first, rest, bracket_info
-		// Need: kind, data(first), value(rest)
-		// Use struct.new directly with proper ordering
-
-		// This is complex due to stack order. For now, require new_list function.
-		// Pop bracket_info (already on stack as i64)
-		// Compute kind
-		func.instruction(&I::I64Const(8));
-		func.instruction(&I::I64Shl);
-		self.emit_kind(func, Kind::List);
-		func.instruction(&I::I64Or);
-		// But now we have: first, rest, kind - wrong order!
-		// We need: kind, first, rest
-		// This requires locals or restructuring.
-
-		// new_list is always emitted; reaching this is a compiler bug, reported as an error value
-		self.emit_type_error(func, "internal error: new_list is not available".to_string());
 	}
 }
 

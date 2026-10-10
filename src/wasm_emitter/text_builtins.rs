@@ -159,6 +159,10 @@ pub fn add_dependencies(required: &mut HashSet<&'static str>) {
 	}
 	if super::list_ops::NODE_ARITHMETIC.iter().any(|(name, _, _)| required.contains(name)) {
 		required.extend([super::list_ops::TEXT_AS_FLOAT, super::INT_RUNTIME, "exact_add", "exact_sub", "exact_mul", "exact_div", "new_float"]);
+		required.extend(super::list_ops::NODE_ARITHMETIC.iter().filter(|(name, _, _)| required.contains(name)).map(|(_, _, exact)| *exact).collect::<Vec<_>>());
+		if required.contains(super::list_ops::NODE_POW) {
+			required.extend(["is_ratio", "invalid_number"]);
+		}
 	}
 	if required.contains(super::list_ops::TEXT_AS_INT) || required.contains(super::list_ops::TEXT_AS_FLOAT) {
 		required.insert("get_int_value");

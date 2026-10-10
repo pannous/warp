@@ -38,9 +38,7 @@ impl GcString {
 
     /// Create from a Val (auto-detects struct vs array)
     pub fn from_val(store: &Store<()>, val: Val) -> Result<Self> {
-        let anyref = val
-            .unwrap_anyref()
-            .ok_or_else(|| anyhow!("not an anyref"))?;
+        let anyref = anyref_of(&val)?;
 
         // Try struct first (ptr/len pattern)
         if let Ok(structref) = anyref.clone().unwrap_struct(store) {
@@ -69,17 +67,7 @@ impl GcString {
                     "ptr/len string requires instance for memory access"
                 ))
             }
-            GcStringInner::Array(arrayref) => {
-                let len = arrayref.len(&*store)? as usize;
-                let mut bytes = Vec::with_capacity(len);
-
-                for i in 0..len {
-                    let elem = arrayref.get(&mut *store, i as u32)?;
-                    bytes.push(elem.unwrap_i32() as u8);
-                }
-
-                Ok(String::from_utf8(bytes)?)
-            }
+            GcStringInner::Array(arrayref) => array_text(arrayref, store),
         }
     }
 
@@ -102,20 +90,16 @@ impl GcString {
                 memory.read(&*store, ptr as usize, &mut buf)?;
                 Ok(String::from_utf8(buf)?)
             }
-            GcStringInner::Array(arrayref) => {
-                // Array strings don't need instance
-                let len = arrayref.len(&*store)? as usize;
-                let mut bytes = Vec::with_capacity(len);
-
-                for i in 0..len {
-                    let elem = arrayref.get(&mut *store, i as u32)?;
-                    bytes.push(elem.unwrap_i32() as u8);
-                }
-
-                Ok(String::from_utf8(bytes)?)
-            }
+            GcStringInner::Array(arrayref) => array_text(arrayref, store),
         }
     }
+}
+
+/// The text of an `(array i8)` string: its bytes as UTF-8
+fn array_text(array: &Rooted<ArrayRef>, store: &mut Store<()>) -> Result<String> {
+    let len = array.len(&*store)?;
+    let bytes = (0..len).map(|i| Ok(array.get(&mut *store, i)?.unwrap_i32() as u8)).collect::<Result<Vec<u8>>>()?;
+    Ok(String::from_utf8(bytes)?)
 }
 
 impl FromVal for GcString {

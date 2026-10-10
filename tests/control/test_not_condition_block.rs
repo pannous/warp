@@ -13,3 +13,10 @@ fn a_negated_condition_takes_its_block() {
 fn a_negated_condition_in_a_loop() {
 	is!("x=0; n=0; while not x {n=n+1; x=1}; n", 1);
 }
+
+#[test]
+fn a_comparison_with_empty_in_a_group() {
+	is!("x=1; (x != ø)", true);
+	is!("x=1; if not (x != ø) {1} else {2}", 2);
+	is!("x=ø; if not (x != ø) {1} else {2}", 1);
+}

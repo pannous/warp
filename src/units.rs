@@ -55,8 +55,8 @@ const UNITS: [Unit; 17] = [
 	Unit { name: "AD", dimension: Dimension::Era, factor: 1 },
 ];
 
-/// Unit words standing for a unit expression: `60 mph` is `60 mi/h`
-const UNIT_ALIASES: [(&str, &str); 1] = [("mph", "mi/h")];
+/// Unit words standing for a unit expression: `60 mph` is `60 mi/h`, `440Hz` is `440/s` (lib/sound.warp)
+const UNIT_ALIASES: [(&str, &str); 3] = [("mph", "mi/h"), ("Hz", "1/s"), ("kHz", "1/ms")];
 
 /// The long names a conversion target may use, singular or plural: `2 h in minutes` (P36). Quantities keep the short
 /// names, `2 minutes` stays a duration of the time module.
@@ -523,7 +523,7 @@ fn answer_shadowed(program: &Node) -> Option<Node> {
 	}
 	match evaluate(program) {
 		Ok(Value::Number(n)) => Some(Node::int(n)),
-		Ok(Value::Bool(truth)) => Some(truth_node(truth)),
+		Ok(Value::Bool(truth)) => Some(Node::from(truth)),
 		// a ratio of two quantities of one dimension that is no whole number: `1 m / 3 m` is 1/3
 		Ok(Value::Quantity(quantity)) if quantity.factors.is_empty() => Some(quotient_node(&quantity.amount)),
 		Ok(Value::Quantity(quantity)) => Some(Node::data(quantity)),
@@ -635,7 +635,7 @@ fn fold_comparisons(node: Node, constants: &Variables, clock: bool) -> Node {
 	let reads_quantities = needs_quantities(&node) || constants.keys().any(|name| crate::warp_parser::mentions(&node, name));
 	match evaluate_in(&node, &mut constants.clone()).ok().filter(|_| reads_quantities) {
 		Some(Value::Number(answer)) => Node::int(answer),
-		Some(Value::Bool(truth)) => truth_node(truth),
+		Some(Value::Bool(truth)) => Node::from(truth),
 		_ => match evaluate_in(&node, &mut constants.clone()) {
 			Err(Stop::Error(message)) if reads_quantities => error(&message),
 			_ => node.map_children(|child| fold_comparisons(child, constants, clock)),
@@ -828,8 +828,7 @@ fn evaluate_in(node: &Node, variables: &mut Variables) -> Evaluated {
 			convert(evaluate_in(quantity, variables)?, target)
 		}
 		Node::Key(base, op @ (Op::Square | Op::Cube), nothing) if matches!(nothing.drop_meta(), Node::Empty) => {
-			let exponent = if *op == Op::Square { 2 } else { 3 };
-			arithmetic(evaluate_in(base, variables)?, Op::Pow, Value::Number(exponent))
+			arithmetic(evaluate_in(base, variables)?, Op::Pow, Value::Number(exponent_of(*op).into()))
 		}
 		Node::Key(quantity, Op::As, unit) if unit_expression(unit).is_some() => convert(evaluate_in(quantity, variables)?, unit_expression(unit).expect("guarded")),
 		Node::Key(amount, Op::Mul, unit) if is_unit_word(unit) => amount_times(amount, evaluate_in(unit, variables)?, variables),
@@ -888,17 +887,23 @@ fn written_fraction(amount: &Node) -> Option<Rational> {
 /// `q as cm` under a power: the quantity and the powered target units
 fn powered_conversion(conversion: &Node, op: Op) -> Option<(&Node, Vec<Factor>)> {
 	let Node::Key(quantity, Op::As, unit) = conversion.drop_meta() else { return None };
-	let exponent = if op == Op::Square { 2 } else { 3 };
-	let target = unit_expression(unit)?.into_iter().map(|factor| Factor { power: factor.power * exponent, ..factor }).collect();
-	Some((quantity, target))
+	Some((quantity, powered(unit_expression(unit)?, exponent_of(op))))
+}
+
+/// The exponent of `²` and `³`
+fn exponent_of(op: Op) -> i32 {
+	if op == Op::Square { 2 } else { 3 }
+}
+
+fn powered(factors: Vec<Factor>, exponent: i32) -> Vec<Factor> {
+	factors.into_iter().map(|factor| Factor { power: factor.power * exponent, ..factor }).collect()
 }
 
 /// A conversion target written as units: `m`, `minutes`, `cm²`, `km/h`, `kg*m/s²`
 fn unit_expression(node: &Node) -> Option<Vec<Factor>> {
 	match node.drop_meta() {
 		Node::Key(base, op @ (Op::Square | Op::Cube), nothing) if matches!(nothing.drop_meta(), Node::Empty) => {
-			let exponent = if *op == Op::Square { 2 } else { 3 };
-			Some(unit_expression(base)?.into_iter().map(|factor| Factor { power: factor.power * exponent, ..factor }).collect())
+			Some(powered(unit_expression(base)?, exponent_of(*op)))
 		}
 		Node::Key(left, Op::Mul, right) => Some([unit_expression(left)?, unit_expression(right)?].concat()),
 		Node::Key(left, Op::Div, right) => Some([unit_expression(left)?, inverse(&unit_expression(right)?)].concat()),
@@ -1138,10 +1143,6 @@ fn same_dimension_kept(name: &str, earlier: &Value, given: &Value) -> Result<(),
 		true => Ok(()),
 		false => fail(format!("DimensionError: {name} was {was_shown}, is given {is_shown}")),
 	}
-}
-
-fn truth_node(truth: bool) -> Node {
-	if truth { Node::True } else { Node::False }
 }
 
 fn unitless_number(value: &Value) -> bool {

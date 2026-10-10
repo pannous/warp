@@ -14,6 +14,11 @@ QUEUE="$LOCK.queue"
 POLL_SECONDS=2
 TARGETED_NICENESS=10
 TARGETED_TEST_THREADS=4
+# A run with a process using more memory than this is killed: on 2026-10-09 one test grew to 154 GB, swap ran out and
+# macOS took down the Claude app with every agent session. Per process, because parallel rustc jobs add up legitimately;
+# top's MEM counts compressed memory, ps's RSS doesn't.
+MEMORY_CAP_GB="${WARP_TEST_MEMORY_CAP_GB:-4}"
+MEMORY_POLL_SECONDS=1
 
 if [ "$1" = "cargo" ] || [ -x "$1" ]; then run=("$@"); else run=(cargo --offline test "$@"); fi
 [ -n "$WARP_TEST_LOCKED" ] && exec "${run[@]}"
@@ -50,6 +55,36 @@ if [ "$(first_ticket)" != "${ticket##*/}" ] || ! "${lock_is_free[@]}"; then
 		"$(($(ls "$QUEUE" | sort | grep -n "^${ticket##*/}$" | cut -d: -f1) - 1)) ahead of us)" >&2
 fi
 while drop_stale_tickets; [ "$(first_ticket)" != "${ticket##*/}" ]; do sleep $POLL_SECONDS; done
+
+descendants() {
+	local child
+	for child in $(pgrep -P "$1"); do echo "$child"; descendants "$child"; done
+}
+# memory in MB of the largest of the given PIDs, from top's MEM column (e.g. 1872K, 26M, 3G); top -pid refuses a PID
+# that has exited meanwhile, so it lists all processes and awk picks ours
+largest_memory_mb() {
+	top -l 1 -s 0 -stats pid,mem | awk -v pids=" $* " '
+		$1 ~ /^[0-9]+$/ && index(pids, " " $1 " ") { value = $2; sub(/[+-]$/, "", value); unit = substr(value, length(value)); amount = value + 0
+			mb = unit == "G" ? amount * 1024 : unit == "M" ? amount : unit == "K" ? amount / 1024 : amount / 1048576; if (mb > largest) largest = mb }
+		END { printf "%d", largest }'
+}
+# runs beside the test run (our PID survives the exec below) and kills its whole process tree above the cap
+watch_memory() {
+	local run_pid=$1 cap_mb=$((MEMORY_CAP_GB * 1024)) pids used_mb
+	while kill -0 "$run_pid" 2>/dev/null; do
+		sleep $MEMORY_POLL_SECONDS
+		pids=($(descendants "$run_pid"))
+		[ ${#pids[@]} -eq 0 ] && continue
+		used_mb=$(largest_memory_mb "${pids[@]}")
+		if [ "$used_mb" -gt "$cap_mb" ]; then
+			echo "test queue: KILLED the run, a process used ${used_mb} MB, over the memory cap of ${MEMORY_CAP_GB} GB" \
+				"(WARP_TEST_MEMORY_CAP_GB): ${run[*]}" >&2
+			kill -9 "${pids[@]}" 2>/dev/null
+			return
+		fi
+	done
+}
+[ "$(uname)" = Darwin ] && watch_memory $$ &
 
 # exec keeps our PID, so the ticket stays valid while we wait for the lock and run; it is removed when the run ends
 export WARP_TEST_LOCKED=1

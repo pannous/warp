@@ -6,8 +6,9 @@
 //! milliseconds; a text is taken as written; the words end where the element's children begin (`p{ transition: opacity
 //! 1s "text" }`). The kinds before CSS, `transition: fade 200ms` (also scale, slide), are that CSS, with a hint to it.
 
+use super::nodes::{is_word, key};
 use crate::element_events::with_element_items;
-use crate::node::{Bracket, Node, Separator};
+use crate::node::{symbol, text, Bracket, Node, Separator};
 use crate::operators::Op;
 
 const TRANSITION: &str = "transition";
@@ -80,9 +81,9 @@ fn with_line_words(items: Vec<Node>) -> Vec<Node> {
 /// The words of `transition: …` (alone, or leading a line of words that ends with the children)
 fn transition_of(item: &Node) -> Option<Vec<Node>> {
 	match item.drop_meta() {
-		Node::Key(name, Op::Colon, value) if is_named(name, TRANSITION) => Some(words_of(value.as_ref().clone())),
+		Node::Key(name, Op::Colon, value) if is_word(name, TRANSITION) => Some(words_of(value.as_ref().clone())),
 		Node::List(items, Bracket::None, _) => match items.split_first().map(|(first, rest)| (first.drop_meta(), rest)) {
-			Some((Node::Key(name, Op::Colon, value), rest)) if is_named(name, TRANSITION) => Some(words_of(value.as_ref().clone()).into_iter().chain(rest.iter().cloned()).collect()),
+			Some((Node::Key(name, Op::Colon, value), rest)) if is_word(name, TRANSITION) => Some(words_of(value.as_ref().clone()).into_iter().chain(rest.iter().cloned()).collect()),
 			_ => None,
 		},
 		_ => None,
@@ -107,22 +108,18 @@ fn words_of(value: Node) -> Vec<Node> {
 	}
 }
 
-fn is_named(name: &Node, wanted: &str) -> bool {
-	matches!(name.drop_meta(), Node::Symbol(name) if name == wanted)
-}
-
 fn is_timing_word(item: &Node) -> bool {
 	matches!(item.drop_meta(), Node::Symbol(word) if TIMING_WORDS.contains(&word.as_str())) || crate::units::milliseconds(item.drop_meta()).is_some()
 }
 
 fn css_pair(name: &str, value: Node) -> Node {
-	Node::Key(Box::new(Node::Symbol(name.to_string())), Op::Colon, Box::new(value))
+	key(symbol(name), Op::Colon, value)
 }
 
 /// `starting-style: { opacity: 0 }` is the attribute the page applies
 fn starting_style_attribute(item: Node) -> Node {
 	match item.drop_meta() {
-		Node::Key(name, Op::Colon, value) if is_named(name, STARTING_STYLE) => css_pair(STARTING_STYLE_ATTRIBUTE, value.as_ref().clone()),
+		Node::Key(name, Op::Colon, value) if is_word(name, STARTING_STYLE) => css_pair(STARTING_STYLE_ATTRIBUTE, value.as_ref().clone()),
 		_ => item,
 	}
 }
@@ -150,7 +147,7 @@ fn css_of_kind(spec: &str) -> String {
 
 /// `{ opacity: "0" }`: CSS declarations as an element's block holds them
 fn declarations(pairs: &[(&str, &str)]) -> Node {
-	Node::List(pairs.iter().map(|(name, value)| css_pair(name, Node::Text(value.to_string()))).collect(), Bracket::Curly, Separator::Space)
+	Node::List(pairs.iter().map(|(name, value)| css_pair(name, text(value))).collect(), Bracket::Curly, Separator::Space)
 }
 
 /// `transition: fade 200ms` → `transition: "opacity 200ms, transform 200ms" starting-style: { opacity: 0 }`
@@ -162,7 +159,7 @@ fn advise_css(spec: &str, css: &str, starting: &[(&str, &str)], kind: &str) {
 
 /// The CSS transition, the style at `at`, joins the element's own inline style when it has one: its declarations or text
 fn with_style_transition(mut items: Vec<Node>, at: usize, spec: String) -> Vec<Node> {
-	let is_style = |item: &Node| matches!(item.drop_meta(), Node::Key(name, Op::Colon, _) if is_named(name, STYLE));
+	let is_style = |item: &Node| matches!(item.drop_meta(), Node::Key(name, Op::Colon, _) if is_word(name, STYLE));
 	let Some(own) = items.iter().enumerate().position(|(index, item)| index != at && is_style(item)) else { return items };
 	let declaration = css_pair(TRANSITION, Node::Text(spec.clone()));
 	let Node::Key(_, _, value) = items[own].drop_meta() else { unreachable!("a style") };

@@ -5,10 +5,11 @@
 //! A type word on the right of `is` switches from equality to a type test; `x is y` with a variable stays equality.
 //! `x == int` is no type test (user decision #30): a value never equals a type, so it is false and hints `x is int`.
 
+use super::nodes::{call, key};
 use crate::analyzer::{extract_user_functions, plural_element_type, type_word_kind};
 use crate::context::Context;
 use crate::library_words::collect_assigned_names;
-use crate::node::{Bracket, Node, Separator};
+use crate::node::{text, Bracket, Node, Separator};
 use crate::operators::Op;
 use std::collections::HashSet;
 
@@ -164,7 +165,7 @@ pub const COMPARED_WITH: &str = "compared with";
 
 pub fn with_compared_text(subject: Node, written: &str) -> Node {
 	match subject.drop_meta() {
-		Node::Symbol(_) => Node::Meta { node: Box::new(subject), data: Box::new(Node::key(COMPARED_WITH, Node::Text(written.to_string()))) },
+		Node::Symbol(_) => Node::Meta { node: Box::new(subject), data: Box::new(Node::key(COMPARED_WITH, text(written))) },
 		_ => subject,
 	}
 }
@@ -197,7 +198,7 @@ fn compared_with_type(subject: Node, word: &Node, spec: String, shadowed: &Names
 }
 
 fn is_type_call(subject: Node, spec: String) -> Node {
-	Node::List(vec![Node::Symbol(IS_TYPE.to_string()), subject, Node::Text(spec)], Bracket::Round, Separator::None)
+	call(IS_TYPE, vec![subject, Node::Text(spec)])
 }
 
 fn expand(node: Node, shadowed: &Names) -> Node {
@@ -211,9 +212,9 @@ fn expand(node: Node, shadowed: &Names) -> Node {
 		Node::Key(subject, Op::Eq, right) => match symbol_words(std::slice::from_ref(&*right)).and_then(|words| type_spec(&words, shadowed)) {
 			Some(spec) if is_equality_operand(&right) => compared_with_type(*subject, &right, spec, shadowed),
 			Some(spec) => is_type_call(expand(*subject, shadowed), spec),
-			None => Node::Key(Box::new(expand(*subject, shadowed)), Op::Eq, Box::new(expand(*right, shadowed))),
+			None => key(expand(*subject, shadowed), Op::Eq, expand(*right, shadowed)),
 		},
-		Node::Key(left, op, right) => Node::Key(Box::new(expand(*left, shadowed)), op, Box::new(expand(*right, shadowed))),
+		Node::Key(left, op, right) => key(expand(*left, shadowed), op, expand(*right, shadowed)),
 		Node::Meta { node, data } => Node::Meta { node: Box::new(expand(*node, shadowed)), data },
 		other => other,
 	}
@@ -243,5 +244,5 @@ fn type_of_word(items: &[Node], shadowed: &Names) -> Option<Node> {
 		[single] => single.clone(),
 		many => Node::List(many.to_vec(), Bracket::None, Separator::Space),
 	};
-	Some(Node::List(vec![Node::Symbol(TYPE_WORD.to_string()), argument], Bracket::Round, Separator::None))
+	Some(call(TYPE_WORD, vec![argument]))
 }

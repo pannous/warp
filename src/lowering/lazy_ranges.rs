@@ -7,6 +7,7 @@
 //! variable a list, collected once (declaration_lowering.rs). A function whose value is a range of its parameters
 //! (`f(n) := 1..n`) returns that range: a call with plain arguments is the range itself, read as above.
 
+use super::nodes::{call, is_word, key};
 use crate::analyzer::{call_name, extract_user_functions, TEMPORARY_SEPARATOR};
 use crate::context::Context;
 use crate::effects::call_arguments;
@@ -91,12 +92,8 @@ fn range_of(node: &Node) -> Option<Range> {
 fn add_one(bound: &Node) -> Node {
 	match bound.drop_meta() {
 		Node::Number(crate::extensions::numbers::Number::Int(n)) => Node::int(n + 1),
-		other => Node::Key(Box::new(other.clone()), Op::Add, Box::new(Node::int(1))),
+		other => key(other.clone(), Op::Add, Node::int(1)),
 	}
-}
-
-fn is_word(node: &Node, word: &str) -> bool {
-	matches!(node.drop_meta(), Node::Symbol(name) if name == word)
 }
 
 struct Lowering {
@@ -147,7 +144,7 @@ impl Lowering {
 			return body(&value);
 		}
 		let temporary = self.temporary(what);
-		let binding = Node::Key(Box::new(temporary.clone()), Op::Assign, Box::new(value));
+		let binding = key(temporary.clone(), Op::Assign, value);
 		Node::List(vec![binding, body(&temporary)], Bracket::Round, Separator::Semicolon)
 	}
 
@@ -381,7 +378,7 @@ fn call_bounds_copies(node: Node, readers: &RangeReaders, copies: &mut Copies) -
 		None => vec![argument.clone()],
 	}).collect();
 	copies.entry(function).or_default().insert(positions);
-	Node::List([vec![Node::Symbol(name)], arguments].concat(), Bracket::Round, Separator::None)
+	call(&name, arguments)
 }
 
 /// After each definition of a function whose copies are called: those copies
@@ -408,7 +405,7 @@ fn bounds_copies(statement: &Node, readers: &RangeReaders, copies: &mut Copies) 
 				continue;
 			}
 			let [start, end] = bound_names(&parameter.name()).map(Node::Symbol);
-			let range = Node::List(vec![Node::Key(Box::new(start.clone()), Op::Range, Box::new(end.clone()))], Bracket::Round, Separator::None);
+			let range = Node::List(vec![key(start.clone(), Op::Range, end.clone())], Bracket::Round, Separator::None);
 			new_body = substitute(new_body, &parameter.name(), &range);
 			new_parameters.extend([start, end]);
 		}

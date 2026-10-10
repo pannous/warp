@@ -1,0 +1,78 @@
+# Generators (card generators-function, user 2026-10-09: high priority)
+
+## What works (src/lowering/generators.rs, after ruby_blocks)
+- A function whose body yields is a generator: `count_to(n) := { k = 1; while k <= n { yield k; k += 1 } }`,
+  Python `def squares(n):\n    for i in range(n):\n        yield i * i`. A function some call passes a block to
+  stays a Ruby block function (ruby_blocks.rs runs first and takes it).
+- `for x in g(args) { body }`, `for g(args) { … it … }`, `for f in fib` (no parameters): lazy. The generator's body
+  is inlined (parameters and locals renamed `g·k·1`), each `yield v` becomes `x = v; body`. Endless generators work:
+  `break` sets the stop flag `g·stop·1` and leaves the loop, every generator loop that may stop is followed by
+  `if g·stop·1 { break }`, the whole body runs inside a loop run once (`while 1 { …; break }`). `continue` leaves a
+  run-once loop around the body, so the generator goes on after its yield. `return` in the generator ends the loop.
+- Any other use of the call collects: `g·yielded = []; … g·yielded += [v] …; g·yielded`, `return` returns the list so
+  far. `count_to(3)` is [1 2 3], `sum(count_to(4))` is 10. `yield a, b` yields the list [a b].
+- Not inlined (collected instead): a recursive generator, one with `global`.
+- Fixed on the way: a loop whose body ends in `break`/`continue` (`while 1 { break }`) trapped "null reference": its
+  value was taken as a reference the body never set (control_flow.rs ends_in_reference, loop_control.rs ends_in_jump).
+
+- Iterator objects (generators.rs `lower_iterators`, before class_methods): `for x in c` of `c = Countdown(3)` or
+  `for x in Countdown(3)`, a class with a method `next()` that gives ø at the end, is `x·iterator = c; x =
+  x·iterator.next(); while x != ø { body; x = x·iterator.next() }` (the last a marked step: `continue` runs it).
+  Only a variable assigned a constructor call of such a class, or the call itself, is known as one so far.
+- Fixed on the way: a method that changes its object and returns early (`if n <= 0 { return 0 }; n -= 1; n`) gave
+  "index out of range": its early `return v` now gives the pair `[v, self]` (`return self` for a method giving
+  its object), class_methods.rs `with_returns`.
+
+## Generator objects (src/lowering/generator_objects.rs, first step of generators::lower)
+- `counter = count_to(3)` of a variable some `next(counter)` or `counter.next()` advances, and `iter(count_to(3))`:
+  a resumable object, `next` gives the next yielded value, ø once the generator ended (Python's generator object,
+  without StopIteration). Two objects of one generator advance apart (`f = fib(); g = fib()`).
+- The generator becomes the class `count_to·generator`: parameters and locals are `any` fields, plus
+  `generator·state`; `next()` is a state machine `while 1 { if generator·state == 0 {…}; …; return ø }`, cut at the
+  yields. A while, if/else or for (lowered to its while, its step a state of its own so `continue` runs it) that
+  yields, returns, breaks or continues inside becomes states and jumps; any other statement stays as it is. The
+  class goes first in the program, then lower_iterators and class_methods::lower run once more for it.
+- Chosen without asking (undoable): a plain call still collects, the object is made only for a variable advanced
+  with next or by `iter(…)`; Python makes every call an object.
+- Not yet: a yield inside an expression (`x = yield v`, Python's send) leaves the call collecting; each field
+  update copies the object (`field_with`), fine for a few fields.
+
+## take, zip, list, sum (src/lowering/generator_consumers.rs, first step of generator_objects::lower)
+- `take(naturals(), 3)`, `take 3 of naturals()`, `first 2 of g()`, `first(g(), 2)` and `zip(naturals(), xs)` pull only
+  the values they need; `n = naturals(); take(n, 2)` takes from the object and leaves it advanced (a later take goes
+  on); `list(c)`, `sum(c)` (count max min mean sort) of a variable advanced with next take the rest of its values.
+- Each call becomes statements before its statement: `take·1 = []; while count(take·1) < limit { v = source.next();
+  if v == ø { break }; take·1 += [v] }`, the call replaced by `take·1`. A source is a generator call (made an object
+  with `iter(…)`), a variable holding one, or any list (pulled by index). Calls with no generator source stay as they
+  are (lib/list.warp, `use list`). A call in a `while` condition is not rewritten (it would be computed once).
+- An argument `naturals()` arrives as the bare symbol `naturals`: generator_call takes it as the call.
+
+## Generator expressions (src/lowering/generator_expressions.rs, first step of generators::lower)
+- `(x * x for x in xs)`, `(x for x in xs if c)` standing alone (before: ø) become the generator
+  `generator·expression·1(free…) := { for x in xs { if c { yield x * x } } }` and its call: collected as a value,
+  lazy in a loop or take, an object for next. The variables it reads are its parameters. A call's argument
+  `sum(x * x for x in xs)` stays the eager comprehension (comprehensions.rs): `(upper w for w in words)` and
+  `upper(w for w in words)` parse alike, so only an element of one word starts a generator expression.
+- lazy_loops now runs before the generator objects and inlines the loops it made in turn: a generator looping over
+  another (`(x * x for x in naturals())`) has it inlined first, so its object never collects the endless one.
+
+## yield from (generators.rs `delegations`, before the generators are found)
+- `yield from xs` (Python), `yield each xs`, `yield* xs` (JavaScript) become `for yield·item·1 in xs { yield yield·item·1 }`:
+  lazy over a generator (`yield from (2 * x for x in naturals())`), recursive ones collect (`yield from countdown(n - 1)`).
+- Python's `def chained():` without parameters stayed a def form for late_binding (P71, a getter); with a yield it is
+  the definition `chained() := …` now (declarations.rs), so a parameterless Python generator works.
+
+## Next
+- wasm stack switching (wasmtime 49 has `wasm_stack_switching`, x86-64 Linux only; no browser) would resume any
+  generator without the state machine; not needed now.
+- a recursive generator lazily (each level an object of its own).
+- Done (card ruby-loop): Ruby `loop do … end` and `while c … end` inside a `def … end` parse (parser skip_end_line, welcome_forms endless_loop).
+
+## send (card generators-send)
+`x = yield v` receives what `g.send(w)` gives: the object has the field `generator·sent` and the method
+`send(generator·value) := { generator·sent = generator·value; self.next() }`; the state after the yield starts with
+`x = generator·sent; generator·sent = ø`, so `next(g)` gives x ø. A collected or inlined generator receives ø
+(`generators::yield_statement`, `receiving_nothing`). Prime with `next(g)` first, as in Python.
+Side fix: class_methods' temp pair of a changing method call is numbered per call site (`next·result·3`): send's
+`self.next()` and main's `a.next()` shared `next·result` and the scope analyzer asked whose it was.
+Probe: probes/generators/send.warp.

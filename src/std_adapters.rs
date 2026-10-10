@@ -16,7 +16,7 @@ pub(crate) fn text_value(node: &Node) -> Option<String> {
 
 /// module.member applied to the arguments (a list node)
 pub fn call(module: &str, member: &str, arguments: &Node) -> Result<Node, String> {
-	let arguments = arguments_of(arguments);
+	let arguments = arguments.as_items();
 	let failure = |problem: String| format!("{module}.{member}: {problem}");
 	let text_of = |node: &Node| text_value(node).ok_or_else(|| failure(format!("needs a text, got {}", node.serialize().trim())));
 	// what write puts into a file: a text as it is, any other value as warp writes it (`42`, `[1 2]`)
@@ -91,6 +91,15 @@ pub fn call(module: &str, member: &str, arguments: &Node) -> Result<Node, String
 			values.remove(&text_of(name)?);
 			save_stored_values(&file, values).map(|_| Node::Empty).map_err(failure)
 		}
+		// `play "song.mp3"`, `stop_sound` (lib/sound.warp, card sound-library)
+		#[cfg(feature = "native")]
+		("sound", "play_file", [path]) => crate::sound::play_file(&text_of(path)?).map(|_| Node::Empty).map_err(failure),
+		#[cfg(feature = "native")]
+		("sound", "stop", []) => { crate::sound::stop(); Ok(Node::Empty) }
+		#[cfg(feature = "native")]
+		("sound", "queued", []) => Ok(Node::float(crate::sound::queued_seconds())),
+		#[cfg(feature = "native")]
+		("sound", "wait", []) => { crate::sound::wait(); Ok(Node::Empty) }
 		// the tables of registered classes (lowering/database_tables.rs)
 		#[cfg(feature = "native")]
 		("table", member, arguments) => crate::database::call(member, arguments).map_err(failure),
@@ -183,14 +192,6 @@ fn header_pairs(headers: &Node) -> Result<Vec<(String, String)>, String> {
 		serde_json::Value::String(text) => Ok((name, text)),
 		other => Err(format!("header {name} needs a text, got {other}")),
 	}).collect()
-}
-
-fn arguments_of(arguments: &Node) -> Vec<Node> {
-	match arguments.drop_meta() {
-		Node::List(items, _, _) => items.clone(),
-		Node::Empty => vec![],
-		single => vec![single.clone()],
-	}
 }
 
 /// The json with each object `{"Point": {…}}` of a class named in `classes` as its fields `{…}`

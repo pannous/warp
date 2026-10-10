@@ -2,7 +2,31 @@
 
 use super::*;
 
+/// Where the cursor stands, to go back to after a look ahead
+#[derive(Clone)]
+pub(super) struct Mark {
+	pub(super) pos: usize,
+	line_nr: usize,
+	column: usize,
+	current_line: String,
+}
+
 impl WarpParser {
+	pub(super) fn mark(&self) -> Mark {
+		Mark { pos: self.pos, line_nr: self.line_nr, column: self.column, current_line: self.current_line.clone() }
+	}
+
+	pub(super) fn rewind(&mut self, mark: Mark) {
+		Mark { pos: self.pos, line_nr: self.line_nr, column: self.column, current_line: self.current_line } = mark;
+	}
+
+	/// The next `length` characters, consumed
+	pub(super) fn take_chars(&mut self, length: usize) -> String {
+		let taken = self.chars[self.pos..self.pos + length].iter().collect();
+		self.advance_by(length);
+		taken
+	}
+
 	pub(super) fn end_of_input(&self) -> bool {
 		self.pos >= self.chars.len()
 	}
@@ -220,6 +244,18 @@ impl WarpParser {
 	}
 
 	/// Blanks and line continuations: a `\` at the end of a line joins the next line to the statement
+	/// Neither a data literal file nor a WIT file: warp code with its keywords
+	pub(super) fn in_code(&self) -> bool {
+		!self.options.wit_mode && !self.options.data_mode
+	}
+
+	/// Skips spaces and tabs, not line continuations
+	pub(super) fn skip_blanks(&mut self) {
+		while matches!(self.current_char(), ' ' | '\t') {
+			self.advance();
+		}
+	}
+
 	pub(super) fn skip_spaces(&mut self) {
 		loop {
 			if self.current_char() == ' ' || self.current_char() == '\t' {

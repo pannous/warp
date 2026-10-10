@@ -4,9 +4,11 @@
 //! (an empty argument list is ø on the way, so whether it is a call is said apart).
 //! Values cross as JSON; the result is any Node.
 
-use crate::node::{Bracket, Node, Separator};
+use super::nodes::{call, key};
+use crate::node::{symbol, text, Bracket, Node, Separator};
 use crate::operators::Op;
 use std::collections::HashMap;
+use std::path::Path;
 
 const USE_WORD: &str = "use";
 /// The runtimes a `use <runtime> <module>` names: Python, and JavaScript (node natively, the page in the browser)
@@ -23,6 +25,9 @@ pub const COMPONENT_RUNTIME: &str = "wasm";
 const COMPONENT_EXTENSION: &str = ".wasm";
 /// The version after `\0asm` in a core module's header; a component's names another layer
 const CORE_MODULE_VERSION: [u8; 4] = [1, 0, 0, 0];
+/// The page's components by name, one per line: build.sh components writes it beside components/<name>.js
+#[cfg(all(target_arch = "wasm32", not(feature = "native")))]
+const PAGE_COMPONENTS: &str = "page:components/names.txt";
 
 pub fn lower(program: Node) -> Node {
 	let program = component_uses(program);
@@ -50,31 +55,118 @@ pub fn component_modules(program: &Node) -> HashMap<String, String> {
 	modules
 }
 
-/// `use rust_demo.wasm`: the component's long form `use wasm "rust_demo.wasm"` (card g-_Xm4); a core module file stays
-/// the import of its functions (modules.rs)
+/// `use rust_demo.wasm`: the component's long form `use wasm "rust_demo.wasm"` (card g-_Xm4), `use rust_demo.wasm as
+/// demo` that of `use wasm "rust_demo.wasm" as demo`; a core module file stays the import of its functions (modules.rs)
 fn component_uses(node: Node) -> Node {
-	let path = match &node {
-		Node::List(items, _, _) => component_path(items),
+	let module = match &node {
+		Node::List(items, _, _) => component_module(items),
 		_ => None,
 	};
-	match (path, node) {
-		(Some(path), Node::List(_, bracket, separator)) => Node::List(vec![Node::Symbol(USE_WORD.to_string()), Node::Symbol(COMPONENT_RUNTIME.to_string()), Node::Text(path)], bracket, separator),
+	match (module, node) {
+		(Some(Err(problem)), _) => crate::node::error(&problem),
+		(Some(Ok(module)), Node::List(_, bracket, separator)) => Node::List(vec![symbol(USE_WORD), symbol(COMPONENT_RUNTIME), module], bracket, separator),
 		(_, node) => node.map_children(component_uses),
 	}
 }
 
-fn component_path(items: &[Node]) -> Option<String> {
-	let [word, file] = items else { return None };
+/// The component of `use rust_demo.wasm`, as the text of its path, or its path `as` an alias; a `.wasm` file that is
+/// not there, or an aliased name nothing resolves, the error naming the components that are
+fn component_module(items: &[Node]) -> Option<Result<Node, String>> {
+	let [word, used] = items else { return None };
 	if !matches!(word.drop_meta(), Node::Symbol(word) if crate::modules::USE_KEYWORDS.contains(&word.as_str())) {
 		return None;
 	}
-	let path = crate::modules::path_of(file).filter(|path| path.ends_with(COMPONENT_EXTENSION))?;
-	(!is_core_module(&crate::modules::beside_program(&path))).then_some(path)
+	let (file, alias) = match used.drop_meta() {
+		Node::Key(file, Op::As, alias) => (file.as_ref(), Some(alias)),
+		_ => (used, None),
+	};
+	let written = crate::modules::path_of(file)?;
+	let path = match (component_path(&written), alias) {
+		(Some(path), _) => path,
+		// `use nothere as x`: no C library without functions
+		(None, Some(_)) if !crate::modules::resolves(&written) => Err(format!("no module, component or library {written}; {}", listing(&known_components(&crate::modules::beside_program(&format!("{written}{COMPONENT_EXTENSION}")))))),
+		(None, _) => return None,
+	};
+	Some(path.map(|path| match alias {
+		Some(alias) => Node::Key(Box::new(Node::Text(path)), Op::As, alias.clone()),
+		None => Node::Text(path),
+	}))
 }
 
-/// A file that is no component, else none or unreadable here (the page finds its components by name, components.js)
+/// `rust_demo.wasm` as written, `rust_demo` where there is a component of that name: natively the file the loader finds,
+/// in the page one build.sh made
+fn component_path(written: &str) -> Option<Result<String, String>> {
+	let path = match written.ends_with(COMPONENT_EXTENSION) {
+		true => written.to_string(),
+		false => bare_component(written)?,
+	};
+	let found = crate::modules::beside_program(&path);
+	if !found.ends_with(COMPONENT_EXTENSION) || is_core_module(&found) {
+		return None;
+	}
+	let known = known_components(&found);
+	match has_component(&found, &known) {
+		true => Some(Ok(path)),
+		false => Some(Err(format!("no component {written}; {}", listing(&known)))),
+	}
+}
+
+fn listing(components: &[String]) -> String {
+	match components.is_empty() {
+		true => "there are no components here".to_string(),
+		false => format!("the components here: {}", components.join(", ")),
+	}
+}
+
+fn component_name(path: &str) -> String {
+	Path::new(path).file_stem().map_or_else(String::new, |stem| stem.to_string_lossy().into_owned())
+}
+
+/// A file that is no component, else none or unreadable here
 fn is_core_module(path: &str) -> bool {
-	std::fs::read(path).is_ok_and(|bytes| bytes.get(4..8) == Some(CORE_MODULE_VERSION.as_slice()))
+	crate::web::read_bytes(path).is_some_and(|bytes| bytes.get(4..8) == Some(CORE_MODULE_VERSION.as_slice()))
+}
+
+/// The absolute path of the component file `use rust_demo` finds (the loader's find is no path beside the program to be
+/// joined again)
+#[cfg(not(all(target_arch = "wasm32", not(feature = "native"))))]
+fn bare_component(name: &str) -> Option<String> {
+	let found = crate::modules::wasm_module_file(name)?;
+	Some(found.canonicalize().unwrap_or(found).to_string_lossy().into_owned())
+}
+
+/// The components in the folder of `path`
+#[cfg(not(all(target_arch = "wasm32", not(feature = "native"))))]
+fn known_components(path: &str) -> Vec<String> {
+	let folder = Path::new(path).parent().filter(|folder| !folder.as_os_str().is_empty()).unwrap_or(Path::new("."));
+	let files = std::fs::read_dir(folder).into_iter().flatten().flatten().map(|entry| entry.path().to_string_lossy().into_owned());
+	let mut names: Vec<String> = files.filter(|file| file.ends_with(COMPONENT_EXTENSION) && !is_core_module(file)).map(|file| component_name(&file)).collect();
+	names.sort();
+	names
+}
+
+#[cfg(not(all(target_arch = "wasm32", not(feature = "native"))))]
+fn has_component(path: &str, _known: &[String]) -> bool {
+	crate::web::file_exists(path)
+}
+
+/// `use rust_demo` in the page: a component build.sh made, unless a warp or standard module has that name
+#[cfg(all(target_arch = "wasm32", not(feature = "native")))]
+fn bare_component(name: &str) -> Option<String> {
+	let path = format!("{name}{COMPONENT_EXTENSION}");
+	let made = known_components(&path).contains(&name.to_string());
+	(made && !crate::modules::names_a_module(name)).then_some(path)
+}
+
+/// The page's components, by name (components.js loads one by the name of its file)
+#[cfg(all(target_arch = "wasm32", not(feature = "native")))]
+fn known_components(_path: &str) -> Vec<String> {
+	crate::web::read_text(PAGE_COMPONENTS).map_or_else(Vec::new, |names| names.lines().map(str::trim).filter(|name| !name.is_empty()).map(String::from).collect())
+}
+
+#[cfg(all(target_arch = "wasm32", not(feature = "native")))]
+fn has_component(path: &str, known: &[String]) -> bool {
+	known.contains(&component_name(path))
 }
 
 /// `use python "math"` → (alias math, (python, math)); `use python "os.path" as path` → (path, (python, os.path))
@@ -178,8 +270,7 @@ fn operator_member(op: &Op) -> Option<&'static str> {
 }
 
 fn foreign_call(runtime: &str, module: Node, member: &str, is_call: bool, arguments: Node) -> Node {
-	let text = |text: &str| Node::Text(text.to_string());
-	Node::List(vec![Node::Symbol(crate::host::FOREIGN_CALL.to_string()), text(runtime), module, text(member), Node::int(i64::from(is_call)), arguments], Bracket::Round, Separator::None)
+	call(crate::host::FOREIGN_CALL, vec![text(runtime), module, text(member), Node::int(i64::from(is_call)), arguments])
 }
 
 /// `foreign_call("js", receiver, member, call, arguments)`, a JavaScript attribute read or method call: its receiver,
@@ -198,7 +289,7 @@ fn javascript_member(node: &Node) -> Option<(&Node, &str, bool, &Node)> {
 
 /// `operator.member(arguments…)` in `runtime`
 fn operator_call(runtime: &str, member: &str, arguments: Vec<Node>) -> Node {
-	foreign_call(runtime, Node::Text(OPERATOR_MODULE.to_string()), member, true, Node::List(arguments, Bracket::Square, Separator::Space))
+	foreign_call(runtime, text(OPERATOR_MODULE), member, true, Node::List(arguments, Bracket::Square, Separator::Space))
 }
 
 impl Foreign<'_> {
@@ -223,7 +314,7 @@ impl Foreign<'_> {
 			Node::Key(indexed, Op::Hash, index) => {
 				let indexed = self.rewrite(indexed.as_ref().clone());
 				let runtime = self.foreign_value(&indexed)?;
-				let zero_based = Node::Key(Box::new(self.rewrite(index.as_ref().clone())), Op::Sub, Box::new(Node::int(1)));
+				let zero_based = key(self.rewrite(index.as_ref().clone()), Op::Sub, Node::int(1));
 				Some(operator_call(&runtime, "getitem", vec![indexed, zero_based]))
 			}
 			Node::Key(left, op, right) if operator_member(op).is_some() => {
@@ -396,7 +487,7 @@ impl Foreign<'_> {
 				// a declared text, bool, int or float is a warp value: `crypto.randomUUID().upper()` is warp's upper; `text?` keeps ø
 				return match result_type {
 					Err(problem) => crate::diagnostic::Diagnostic::at(&node, problem).into_error(),
-					Ok(Some(warp_type)) => Node::Key(Box::new(call), Op::As, Box::new(Node::Symbol(warp_type))),
+					Ok(Some(warp_type)) => key(call, Op::As, Node::Symbol(warp_type)),
 					Ok(None) => call,
 				};
 			}
@@ -429,7 +520,7 @@ impl Foreign<'_> {
 				}
 				Node::Key(target, op, Box::new(value))
 			}
-			Node::Key(left, op, right) => Node::Key(Box::new(self.rewrite(*left)), op, Box::new(self.rewrite(*right))),
+			Node::Key(left, op, right) => key(self.rewrite(*left), op, self.rewrite(*right)),
 			Node::List(items, bracket, separator) => Node::List(items.into_iter().map(|item| self.rewrite(item)).collect(), bracket, separator),
 			Node::Meta { node, data } => Node::Meta { node: Box::new(self.rewrite(*node)), data },
 			other => other,

@@ -1,0 +1,16 @@
+evens(n) := { for i in 1 to n { if i % 2 == 0 { yield i } else { k = i } } }
+e = evens(6)
+print [next(e), next(e), next(e), next(e)]
+fib() := { a = 0; b = 1; while yes { yield a; t = a; a = b; b = t + b } }
+f = fib()
+g = fib()
+next(g)
+print [next(f), next(f), next(f), next(f), next(f), next(f), next(g)]
+naturals() := { k = 0; while yes { k += 1; if k % 3 == 0 { continue }; if k > 8 { break }; yield k }; yield 100 }
+n = naturals()
+print [next(n), next(n), next(n), next(n), next(n), next(n), next(n), next(n)]
+s = 0
+for x in iter(evens(10)) { s += x }
+print s
+w = evens(4)
+for x in w { print x }

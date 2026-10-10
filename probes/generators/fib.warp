@@ -1,0 +1,3 @@
+fib() := { a = 0; b = 1; while yes { yield a; t = a; a = b; b = t + b } }
+for f in fib() { if f > 50 { break }; print f }
+for f in fib { if f > 3 { break }; print f }

@@ -1,0 +1,9 @@
+class Countdown {
+  n: int
+  next() := { if n <= 0 { return ø }; n -= 1; n + 1 }
+}
+c = Countdown(3)
+print c.next()
+print c.next()
+print c.next()
+print c.next()

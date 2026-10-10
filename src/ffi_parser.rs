@@ -132,13 +132,8 @@ pub fn parse_declaration(decl: &str, library: &str) -> Option<FfiFunction> {
         return None;
     }
 
-    let mut name = parts.last()?.to_string();
     // the stars of `FILE *fopen(…)` belong to the return type
-    let mut pointer_marks = String::new();
-    while name.starts_with('*') {
-        name = name[1..].to_string();
-        pointer_marks.push('*');
-    }
+    let (name, pointer_marks) = crate::ffi::split_pointer_marks(parts.last()?);
 
     if name.is_empty() || !name.chars().next()?.is_alphabetic() || crate::ffi::C_TYPE_WORDS.contains(&name.as_str()) {
         return None;
@@ -224,27 +219,6 @@ pub fn get_all_signatures() -> HashMap<String, FfiFunction> {
         }
     }
 
-    sigs
-}
-
-/// Get signature for a specific function by name
-pub fn get_signature(name: &str, library: &str) -> Option<FfiFunction> {
-    for path in find_library_headers(library) {
-        for func in parse_header_file(&path, library) {
-            if func.name == name {
-                return Some(func);
-            }
-        }
-    }
-    None
-}
-
-/// Get all signatures from a specific library
-pub fn get_library_signatures(library: &str) -> Vec<FfiFunction> {
-    let mut sigs = Vec::new();
-    for path in find_library_headers(library) {
-        sigs.extend(parse_header_file(&path, library));
-    }
     sigs
 }
 

@@ -1,6 +1,7 @@
 //! List and string operation functions for WASM
 
 use crate::wasm_emitter::{WasmGcEmitter, VALUES_EQUAL};
+use crate::wasm_emitter::list_dispatch::Slot;
 use wasm_encoder::*;
 use Instruction::I32Const;
 use Instruction as I;
@@ -8,6 +9,7 @@ use ValType::Ref;
 use crate::type_kinds::{Kind, CURLY_LIST_KIND, KIND_MASK, SQUARE_LIST_KIND, UNMARKED_KIND};
 use crate::wasm_emitter::layout::{utf8, BYTE};
 use crate::node::Node;
+use crate::operators::Op;
 use crate::extensions::strings::{GRAPHEME_EXTEND, GRAPHEME_PICTOGRAPHIC, REGIONAL_INDICATORS, ZERO_WIDTH_JOINER};
 
 /// The code points from which UTF-8 needs 2, 3 and 4 bytes
@@ -26,10 +28,14 @@ const TEXT_UNIT_USERS: [&str; 7] =
 	["node_count", "node_bytes", "string_char_at", "node_with_at", "text_byte_count", "text_codepoint_count", "text_grapheme_count"];
 
 /// The globals of the list cursor (emit_list_cursor_globals): the list indexed last, the cell and index found there, the
-/// list counted last and its count
+/// list counted last and its count, the list extended last and its last cell
 #[derive(Clone, Copy)]
-enum CursorPart { List, Cell, Index, Counted, Count }
-const LIST_CURSOR_PARTS: [CursorPart; 5] = [CursorPart::List, CursorPart::Cell, CursorPart::Index, CursorPart::Counted, CursorPart::Count];
+enum CursorPart { List, Cell, Index, Counted, Count, Extended, Last }
+const LIST_CURSOR_PARTS: [CursorPart; 7] =
+	[CursorPart::List, CursorPart::Cell, CursorPart::Index, CursorPart::Counted, CursorPart::Count, CursorPart::Extended, CursorPart::Last];
+/// An index or count up to this leaves the cursor where it is: a short list read inside a loop (a row's `row#4`, its
+/// `#row`) takes few links from its head anyway, and the loop's long list keeps its cursor, or each step walks it again
+const SHORT_WALK: i64 = 8;
 
 /// The locals of a copy of a list's first cells (emit_collect_cells, emit_rebuild_cells), consecutive from `cell`
 pub(super) struct CopyCells {
@@ -73,9 +79,10 @@ impl WasmGcEmitter {
 	/// The cursor of list_at, list_node_at and node_count: the list, cell and index found last, so a walk on from it (a
 	/// loop's `items#(i+1)` after `items#i`) takes the links between, not all from the head; and the list counted last
 	/// with its count (a loop's `index < #items`). A function changing a list's links in place forgets both
-	/// (forget_list_cursor). Globals in the order of LIST_CURSOR_PARTS.
+	/// (forget_list_cursor). The list extended last and its last cell, so a loop's `out += [x]` appends there instead of
+	/// walking the list. Globals in the order of LIST_CURSOR_PARTS.
 	pub(super) fn emit_list_cursor_globals(&mut self) {
-		if !["list_at", "list_node_at", "node_count"].iter().any(|function| self.should_emit_function(function)) {
+		if !["list_at", "list_node_at", "node_count", LIST_EXTEND].iter().any(|function| self.should_emit_function(function)) {
 			return;
 		}
 		let node_type = self.type_manager.node_type;
@@ -97,61 +104,43 @@ impl WasmGcEmitter {
 
 	/// The instructions forgetting the list cursor, before a list's links change in place
 	pub(super) fn forget_list_cursor(&self) -> Vec<Instruction<'static>> {
+		self.forget_cursor_parts(&[CursorPart::List, CursorPart::Counted, CursorPart::Extended])
+	}
+
+	fn forget_cursor_parts(&self, parts: &[CursorPart]) -> Vec<Instruction<'static>> {
 		let forget = |global: u32| [I::RefNull(HeapType::Concrete(self.type_manager.node_type)), I::GlobalSet(global)];
-		[CursorPart::List, CursorPart::Counted].into_iter().filter_map(|part| self.list_cursor(part)).flat_map(forget).collect()
+		parts.iter().filter_map(|part| self.list_cursor(*part)).flat_map(forget).collect()
 	}
 
 	/// list_at and list_node_at: the element of a cons list at a 1-based index
 	fn emit_list_cell_access(&mut self) {
-		let node_ref_nullable = self.node_ref(true);
 		let node_ref = self.node_ref(false);
 		if self.should_emit_function("list_at") || self.should_emit_function("list_node_at") {
 			self.emit_index_out_of_range_in();
 		}
-		// list_at(list: ref $Node, index: i64) -> i64
-		// Get the numeric value of the element at index (1-based)
-		// Traverses linked list: for index N, follow value pointer N-1 times, return data
-		if self.should_emit_function("list_at") {
-			self.exported_function("list_at", vec![Ref(node_ref), ValType::I64], vec![ValType::I64], vec![Ref(node_ref_nullable), ValType::I64], |s, func| {
-				// Locals: 0=list, 1=index, 2=current (loop variable), 3=the index asked for
-				s.emit_require_integral(func, 1);
-
-				s.emit_list_walk(func, 2);
-
-				// Get current.data (which is a ref to the element Node, cast from anyref)
-				func.instruction(&I::LocalGet(2));
-				func.instruction(&I::StructGet {
-					struct_type_index: s.type_manager.node_type,
-					field_index: 1, // data field (anyref holding ref $Node)
-				});
-				// a character element is its code point, any other non-Int element not_an_int (no cast trap)
-				func.instruction(&I::RefCastNonNull(HeapType::Concrete(s.type_manager.node_type)));
-				s.emit_call(func, "get_int_value");
-			});
-		}
-
-		// list_node_at(list: ref $Node, index: i64) -> ref $Node
-		// Get the element node at index (1-based), returns the node itself (for symbol/text lists)
-		if self.should_emit_function("list_node_at") {
-			self.exported_function("list_node_at", vec![Ref(node_ref), ValType::I64], vec![Ref(node_ref)], vec![Ref(node_ref_nullable), ValType::I64], |s, func| {
-				// Locals: 0=list, 1=index, 2=current (loop variable), 3=the index asked for
-				s.emit_require_integral(func, 1);
-
-				s.emit_list_walk(func, 2);
-
-				// Get current.data (which is a ref to the element Node, cast from anyref)
-				func.instruction(&I::LocalGet(2));
-				func.instruction(&I::StructGet {
-					struct_type_index: s.type_manager.node_type,
-					field_index: 1, // data field (anyref holding ref $Node)
-				});
-				// Cast anyref to ref $Node and return it directly
-				func.instruction(&I::RefCastNonNull(HeapType::Concrete(s.type_manager.node_type)));
-			});
-		}
+		// list_at(list, index) -> i64: the number at a 1-based index; a character is its code point, any other non-Int not_an_int
+		self.emit_list_cell_function("list_at", ValType::I64, |s, func| s.emit_call(func, "get_int_value"));
+		// list_node_at(list, index) -> node: the element itself
+		self.emit_list_cell_function("list_node_at", Ref(node_ref), |_, _| {});
 	}
 
-	/// node_count and node_bytes
+	/// `name(list, index)`: the data of the cell at a 1-based index, as a node, then `finish`
+	fn emit_list_cell_function(&mut self, name: &'static str, result: ValType, finish: impl FnOnce(&mut Self, &mut Function)) {
+		if !self.should_emit_function(name) {
+			return;
+		}
+		let (node_ref, node_ref_nullable, node_type) = (self.node_ref(false), self.node_ref(true), self.type_manager.node_type);
+		self.exported_function(name, vec![Ref(node_ref), ValType::I64], vec![result], vec![Ref(node_ref_nullable), ValType::I64], |s, func| {
+			let cell = 2;
+			s.emit_require_integral(func, 1);
+			s.emit_list_walk(func, cell);
+			s.emit_field(func, cell, 1);
+			func.instruction(&I::RefCastNonNull(HeapType::Concrete(node_type)));
+			finish(s, func);
+		});
+	}
+
+	/// node_kind_in
 	fn emit_node_kind_test(&mut self) {
 		let node_ref = self.node_ref(false);
 		// node_kind_in(node, mask) -> i64: 1 when bit `kind` of the mask is set (type tests of values of unknown static type);
@@ -217,12 +206,9 @@ impl WasmGcEmitter {
 	fn emit_node_counting(&mut self) {
 		let node_ref_nullable = self.node_ref(true);
 		let node_ref = self.node_ref(false);
-		// node_count(node: ref $Node) -> i64
-		// Count the number of elements in a list/block by traversing the value chain
+		// node_count(node) -> i64: the items of a list or block, the characters of a text
 		if self.should_emit_function("node_count") {
 			self.exported_function("node_count", vec![Ref(node_ref)], vec![ValType::I64], vec![ValType::I64, Ref(node_ref_nullable)], |s, func| {
-				// Locals: 0=node, 1=count, 2=current
-
 				// a text counts its user-perceived characters (grapheme clusters)
 				s.emit_is_text(func);
 				func.instruction(&I::If(BlockType::Empty));
@@ -257,49 +243,19 @@ impl WasmGcEmitter {
 					Self::emit_list(func, &[I::GlobalGet(counted), I::LocalGet(0), I::RefEq, I::If(BlockType::Empty), I::GlobalGet(count), I::Return, I::End]);
 				}
 
-				// count = 0
-				func.instruction(&I::I64Const(0));
-				func.instruction(&I::LocalSet(1));
-
-				// current = node
-				func.instruction(&I::LocalGet(0));
-				func.instruction(&I::LocalSet(2));
-
-				// Loop: while current is not null, count++ and current = current.value
-				func.instruction(&I::Block(BlockType::Empty));
-				func.instruction(&I::Loop(BlockType::Empty));
-
-				// if current is null, break
-				func.instruction(&I::LocalGet(2));
-				func.instruction(&I::RefIsNull);
-				func.instruction(&I::BrIf(1)); // break to outer block
-
-				// count = count + 1, unless the entry is a meta entry `@name:value`
-				func.instruction(&I::LocalGet(1));
-				s.emit_field(func, 2, 1);
+				// the cells along the value chain, a meta entry `@name:value` counting none
+				let (count, current, node_type) = (1, 2, s.type_manager.node_type);
+				Self::emit_list(func, &[I::I64Const(0), I::LocalSet(count), I::LocalGet(0), I::LocalSet(current),
+					I::Block(BlockType::Empty), I::Loop(BlockType::Empty), I::LocalGet(current), I::RefIsNull, I::BrIf(1), I::LocalGet(count)]);
+				s.emit_field(func, current, 1);
 				s.call(func, super::equality::IS_META_ENTRY);
-				func.instruction(&I::I32Eqz);
-				func.instruction(&I::I64ExtendI32U);
-				func.instruction(&I::I64Add);
-				func.instruction(&I::LocalSet(1));
-
-				// current = current.value (field 2)
-				func.instruction(&I::LocalGet(2));
-				func.instruction(&I::StructGet {
-					struct_type_index: s.type_manager.node_type,
-					field_index: 2,
-				});
-				func.instruction(&I::LocalSet(2));
-
-				// continue loop
-				func.instruction(&I::Br(0));
-				func.instruction(&I::End); // end loop
-				func.instruction(&I::End); // end block
+				Self::emit_list(func, &[I::I32Eqz, I::I64ExtendI32U, I::I64Add, I::LocalSet(count),
+					I::LocalGet(current), I::StructGet { struct_type_index: node_type, field_index: 2 }, I::LocalSet(current), I::Br(0), I::End, I::End]);
 
 				if let (Some(counted), Some(count)) = (s.list_cursor(CursorPart::Counted), s.list_cursor(CursorPart::Count)) {
-					Self::emit_list(func, &[I::LocalGet(0), I::GlobalSet(counted), I::LocalGet(1), I::GlobalSet(count)]);
+					Self::emit_list(func, &[I::LocalGet(1), I::I64Const(SHORT_WALK), I::I64GtS, I::If(BlockType::Empty),
+						I::LocalGet(0), I::GlobalSet(counted), I::LocalGet(1), I::GlobalSet(count), I::End]);
 				}
-				// return count
 				func.instruction(&I::LocalGet(1));
 			});
 		}
@@ -357,43 +313,16 @@ impl WasmGcEmitter {
 				func.instruction(&I::End);
 				s.emit_pair_part(func);
 
-				// Get node.kind
-				func.instruction(&I::LocalGet(0));
-				func.instruction(&I::StructGet {
-					struct_type_index: s.type_manager.node_type,
-					field_index: 0, // kind field
-				});
-
-				// Check if kind is Text (3) or Symbol (5)
-				// kind == 3 || kind == 5 means it's a string
-				func.instruction(&I::I64Const(3)); // Kind::Text
-				func.instruction(&I::I64Eq);
-				func.instruction(&I::If(BlockType::Result(Ref(node_ref))));
-				// It's a Text - call string_char_at
-				func.instruction(&I::LocalGet(0));
-				func.instruction(&I::LocalGet(1));
+				// a Text or Symbol indexes its characters, anything else its items
+				for kind in [Kind::Text, Kind::Symbol] {
+					s.emit_field(func, 0, 0);
+					Self::emit_list(func, &[I::I64Const(kind as i64), I::I64Eq]);
+				}
+				Self::emit_list(func, &[I::I32Or, I::If(BlockType::Result(Ref(node_ref))), I::LocalGet(0), I::LocalGet(1)]);
 				s.emit_call(func, "string_char_at");
-				func.instruction(&I::Else);
-				// Check for Symbol
-				func.instruction(&I::LocalGet(0));
-				func.instruction(&I::StructGet {
-					struct_type_index: s.type_manager.node_type,
-					field_index: 0,
-				});
-				func.instruction(&I::I64Const(5)); // Kind::Symbol
-				func.instruction(&I::I64Eq);
-				func.instruction(&I::If(BlockType::Result(Ref(node_ref))));
-				// It's a Symbol - call string_char_at
-				func.instruction(&I::LocalGet(0));
-				func.instruction(&I::LocalGet(1));
-				s.emit_call(func, "string_char_at");
-				func.instruction(&I::Else);
-				// Otherwise it's a list - call list_node_at
-				func.instruction(&I::LocalGet(0));
-				func.instruction(&I::LocalGet(1));
+				Self::emit_list(func, &[I::Else, I::LocalGet(0), I::LocalGet(1)]);
 				s.emit_call(func, "list_node_at");
-				func.instruction(&I::End); // end inner if
-				func.instruction(&I::End); // end outer if
+				func.instruction(&I::End);
 			});
 		}
 	}
@@ -715,13 +644,18 @@ pub const RUNTIME_ERRORS: [&str; 29] = [
 
 /// text_as_int(node) -> i64: a Text's optional sign and decimal digits, any other node's Int (get_int_value)
 pub const TEXT_AS_INT: &str = "text_as_int";
-/// Arithmetic on two Nodes of run-time kind: (function, its f64 instruction, the exact Int function)
+/// Arithmetic on two Nodes of run-time kind: (function, its operator, the exact Int function); the first four in
+/// uncertain.rs UNCERTAIN_ARITHMETIC's order
 pub const NODE_ADD: &str = "node_add";
-pub const NODE_ARITHMETIC: [(&str, Instruction<'static>, &str); 4] = [
-	(NODE_ADD, I::F64Add, "exact_add"),
-	("node_sub", I::F64Sub, "exact_sub"),
-	("node_mul", I::F64Mul, "exact_mul"),
-	("node_div", I::F64Div, "exact_div"),
+pub const NODE_POW: &str = "node_pow";
+pub const NODE_ARITHMETIC: [(&str, Op, &str); 7] = [
+	(NODE_ADD, Op::Add, "exact_add"),
+	("node_sub", Op::Sub, "exact_sub"),
+	("node_mul", Op::Mul, "exact_mul"),
+	("node_div", Op::Div, "exact_div"),
+	("node_mod", Op::Mod, "exact_mod"),
+	("node_rem", Op::Rem, "exact_rem"),
+	(NODE_POW, Op::Pow, "exact_pow"),
 ];
 
 /// text_as_float(node): the f64 of a text like "-12.5e3" (a number node converts as it is); anything else is invalid_number
@@ -782,17 +716,56 @@ impl WasmGcEmitter {
 		});
 	}
 
-	/// node_add(a, b) … node_div(a, b): arithmetic on two values whose kinds are known only at run time (fields of a parsed
-	/// JSON map): Floats when either is a Float, else exact Ints; anything else is the runtime error not_an_int
+	/// The f64 of `a op b` of the Nodes in params 0 and 1; a remainder reads them again instead of holding them in the
+	/// emitter's scratch locals, which a runtime function has not (arithmetic.rs emit_float_remainder)
+	fn emit_node_float_arithmetic(&mut self, f: &mut Function, op: Op, power: u32) {
+		let operand = |s: &mut Self, f: &mut Function, param: u32, absolute: bool| {
+			f.instruction(&I::LocalGet(param));
+			s.call(f, TEXT_AS_FLOAT);
+			if absolute {
+				f.instruction(&I::F64Abs);
+			}
+		};
+		let (dividend, divisor) = (0, 1);
+		// libm's pow; a NaN (a negative base with a fractional exponent) is invalid_number, as emit_float_power makes it
+		if op == Op::Pow {
+			operand(self, f, dividend, false);
+			operand(self, f, divisor, false);
+			if self.emit_libm_call(f, super::LIBM_POW) {
+				Self::emit_list(f, &[I::LocalTee(power), I::LocalGet(power), I::F64Ne]);
+				self.emit_fail_if(f, "invalid_number");
+				f.instruction(&I::LocalGet(power));
+			}
+			return;
+		}
+		if !matches!(op, Op::Mod | Op::Rem) {
+			operand(self, f, dividend, false);
+			operand(self, f, divisor, false);
+			return self.emit_float_arithmetic(f, &op);
+		}
+		// `a - |b| * floor(a / |b|)` (euclidean) or `a - b * trunc(a / b)`
+		let euclidean = op == Op::Mod;
+		operand(self, f, dividend, false);
+		operand(self, f, dividend, false);
+		operand(self, f, divisor, euclidean);
+		f.instruction(&I::F64Div);
+		f.instruction(if euclidean { &I::F64Floor } else { &I::F64Trunc });
+		operand(self, f, divisor, euclidean);
+		Self::emit_list(f, &[I::F64Mul, I::F64Sub]);
+	}
+
+	/// node_add(a, b) … node_rem(a, b): arithmetic on two values whose kinds are known only at run time (fields of a parsed
+	/// JSON map, elements of a list parameter): Floats when either is a Float, else exact Ints; anything else is the
+	/// runtime error not_an_int
 	pub(super) fn emit_node_arithmetic(&mut self) {
 		let node_ref = Ref(self.node_ref(false));
 		let (int_kind, float_kind) = (crate::type_kinds::Kind::Int as i64, crate::type_kinds::Kind::Float as i64);
-		for (name, float_op, exact_op) in NODE_ARITHMETIC {
+		for (index, (name, op, exact_op)) in NODE_ARITHMETIC.into_iter().enumerate() {
 			if !self.should_emit_function(name) {
 				continue;
 			}
-			self.runtime_function(name, vec![node_ref, node_ref], vec![node_ref], vec![ValType::I64], |s, f| {
-				let kind = 2;
+			self.runtime_function(name, vec![node_ref, node_ref], vec![node_ref], vec![ValType::I64, ValType::F64], |s, f| {
+				let (kind, power) = (2, 3);
 				// node_add of two lists (ø is the empty list): their concatenation, `out = out + row`
 				if name == NODE_ADD {
 					let is_list = |f: &mut Function, operand: u32| {
@@ -846,7 +819,8 @@ impl WasmGcEmitter {
 				for operand in [0, 1] {
 					s.emit_fail_if_error(f, operand);
 				}
-				let uncertain = s.should_emit_function(super::uncertain::UNCERTAIN_NEW);
+				// a remainder of a value with uncertainty is not a number here
+				let uncertain = s.should_emit_function(super::uncertain::UNCERTAIN_NEW) && index < super::uncertain::UNCERTAIN_ARITHMETIC.len();
 				// a text, a character or a list is no number here: "x" * 2 is no 240
 				for operand in [0, 1] {
 					s.emit_field(f, operand, 0);
@@ -864,7 +838,6 @@ impl WasmGcEmitter {
 					s.is_uncertain(f, 0);
 					s.is_uncertain(f, 1);
 					Self::emit_list(f, &[I::I32Or, I::If(BlockType::Empty), I::LocalGet(0), I::LocalGet(1)]);
-					let index = NODE_ARITHMETIC.iter().position(|(known, ..)| *known == name).expect("a node arithmetic");
 					s.call(f, super::uncertain::UNCERTAIN_ARITHMETIC[index]);
 					Self::emit_list(f, &[I::Return, I::End]);
 				}
@@ -872,16 +845,27 @@ impl WasmGcEmitter {
 					s.emit_field(f, operand, 0);
 					Self::emit_list(f, &[I::I64Const(KIND_MASK), I::I64And, I::I64Const(float_kind), I::I64Eq]);
 				}
-				Self::emit_list(f, &[I::I32Or, I::If(BlockType::Result(node_ref)), I::LocalGet(0)]);
-				s.call(f, TEXT_AS_FLOAT);
-				f.instruction(&I::LocalGet(1));
-				s.call(f, TEXT_AS_FLOAT);
-				f.instruction(&float_op);
+				f.instruction(&I::I32Or);
+				// an exact power of a ratio exponent is no exact number: 2^(7/12) is computed as f64
+				if op == Op::Pow {
+					Self::emit_list(f, &[I::If(BlockType::Result(ValType::I32)), I::I32Const(1), I::Else, I::LocalGet(1)]);
+					s.call(f, "get_int_value");
+					s.call(f, "is_ratio");
+					f.instruction(&I::End);
+				}
+				f.instruction(&I::If(BlockType::Result(node_ref)));
+				s.emit_node_float_arithmetic(f, op, power);
 				s.call(f, "new_float");
 				Self::emit_list(f, &[I::Else, I::LocalGet(0)]);
 				s.call(f, "get_int_value");
 				f.instruction(&I::LocalGet(1));
 				s.call(f, "get_int_value");
+				// P66: `a % 0` is the catchable error divide_by_zero, as exact_div makes it for `/`
+				if matches!(op, Op::Mod | Op::Rem) {
+					Self::emit_list(f, &[I::LocalTee(kind), I::I64Eqz]);
+					s.emit_fail_if(f, DIVIDE_BY_ZERO);
+					f.instruction(&I::LocalGet(kind));
+				}
 				s.call(f, exact_op);
 				s.call(f, "new_int");
 				f.instruction(&I::End);
@@ -919,12 +903,16 @@ impl WasmGcEmitter {
 			if s.int_runtime() { s.call(f, "exact_to_f64") } else { f.instruction(&I::F64ConvertI64S); }
 			Self::emit_list(f, &[I::Return, I::End]);
 			s.emit_text_bounds(f, pointer, end);
-			// a sign
+			// a sign: `negative` set for -, the pointer past a - or +
+			let sign = |f: &mut Function, negative: u32| {
+				Self::emit_list(f, &byte);
+				Self::emit_list(f, &[I::LocalTee(digit), I32Const('-' as i32), I::I32Eq, I::LocalSet(negative), I::LocalGet(negative), I::LocalGet(digit), I32Const('+' as i32), I::I32Eq, I::I32Or]);
+				Self::emit_list(f, &[I::LocalGet(pointer), I::I32Add, I::LocalSet(pointer)]);
+			};
 			Self::emit_list(f, &at_end);
 			Self::emit_list(f, &[I::I32Eqz, I::If(BlockType::Empty)]);
-			Self::emit_list(f, &byte);
-			Self::emit_list(f, &[I::LocalTee(digit), I32Const('-' as i32), I::I32Eq, I::LocalSet(negative), I::LocalGet(negative), I::LocalGet(digit), I32Const('+' as i32), I::I32Eq, I::I32Or]);
-			Self::emit_list(f, &[I::LocalGet(pointer), I::I32Add, I::LocalSet(pointer), I::End]);
+			sign(f, negative);
+			f.instruction(&I::End);
 			// digits, with a point among them: value collects them all, scale_digits counts those after the point
 			let digits_loop = |f: &mut Function, after_point: bool| {
 				Self::emit_list(f, &[I::Block(BlockType::Empty), I::Loop(BlockType::Empty)]);
@@ -958,9 +946,8 @@ impl WasmGcEmitter {
 			Self::emit_list(f, &advance);
 			Self::emit_list(f, &at_end);
 			s.emit_fail_if(f, "invalid_number");
-			Self::emit_list(f, &byte);
-			Self::emit_list(f, &[I::LocalTee(digit), I32Const('-' as i32), I::I32Eq, I::LocalSet(exponent_negative), I::LocalGet(exponent_negative), I::LocalGet(digit), I32Const('+' as i32), I::I32Eq, I::I32Or]);
-			Self::emit_list(f, &[I::LocalGet(pointer), I::I32Add, I::LocalSet(pointer), I32Const(0), I::LocalSet(digits)]);
+			sign(f, exponent_negative);
+			Self::emit_list(f, &[I32Const(0), I::LocalSet(digits)]);
 			Self::emit_list(f, &[I::Block(BlockType::Empty), I::Loop(BlockType::Empty)]);
 			Self::emit_list(f, &at_end);
 			f.instruction(&I::BrIf(1));
@@ -1187,7 +1174,8 @@ impl WasmGcEmitter {
 		self.call(func, super::equality::IS_META_ENTRY);
 		self.emit_fail_out_of_range_if(func, asked);
 		if let (Some(list), Some(cell), Some(index)) = (self.list_cursor(CursorPart::List), self.list_cursor(CursorPart::Cell), self.list_cursor(CursorPart::Index)) {
-			Self::emit_list(func, &[I::LocalGet(0), I::GlobalSet(list), I::LocalGet(current), I::GlobalSet(cell), I::LocalGet(asked), I::GlobalSet(index)]);
+			Self::emit_list(func, &[I::LocalGet(asked), I::I64Const(SHORT_WALK), I::I64GtS, I::If(BlockType::Empty),
+				I::LocalGet(0), I::GlobalSet(list), I::LocalGet(current), I::GlobalSet(cell), I::LocalGet(asked), I::GlobalSet(index), I::End]);
 		}
 	}
 
@@ -1335,16 +1323,23 @@ impl WasmGcEmitter {
 
 	/// A variable target (local or declared global) gets the updated copy on the stack, any other target drops it
 	fn emit_store_updated(&mut self, func: &mut Function, target: &Node) {
-		let Node::Symbol(name) = target.drop_meta() else {
-			func.instruction(&I::Drop);
-			return;
+		let slot = match target.drop_meta() {
+			Node::Symbol(name) => self.node_variable_slot(name),
+			_ => None,
 		};
-		let global = self.ctx.user_globals.get(name).filter(|(_, kind)| kind.is_ref());
-		match (self.scope.lookup(name), global) {
-			(Some(local), _) if local.kind.is_ref() => func.instruction(&I::LocalSet(local.position)),
-			(None, Some(&(index, _))) => func.instruction(&I::GlobalSet(index)),
-			_ => func.instruction(&I::Drop),
-		};
+		func.instruction(&match slot {
+			Some(Slot::Local(index)) => I::LocalSet(index),
+			Some(Slot::Global(index)) => I::GlobalSet(index),
+			None => I::Drop,
+		});
+	}
+
+	/// The local or declared global a variable holding a Node (reference) lives in
+	pub(super) fn node_variable_slot(&self, name: &str) -> Option<Slot> {
+		match self.scope.lookup(name) {
+			Some(local) => local.kind.is_ref().then_some(Slot::Local(local.position)),
+			None => self.ctx.user_globals.get(name).filter(|(_, kind)| kind.is_ref()).map(|&(index, _)| Slot::Global(index)),
+		}
 	}
 
 	/// `d[k] = v` with a key read at runtime (`for k in ks {d[k] = 0}`): the copy that `setter` makes with the entry set;
@@ -1564,12 +1559,26 @@ impl WasmGcEmitter {
 		let node_ref = Ref(self.node_ref(false));
 		let node_type = self.type_manager.node_type;
 		let set = |field_index: u32| I::StructSet { struct_type_index: node_type, field_index };
-		let locals = [self.copy_cells_locals(), vec![ValType::I64]].concat();
+		let locals = [self.copy_cells_locals(), vec![ValType::I64, node_ref_nullable]].concat();
 		self.runtime_function(LIST_EXTEND, vec![node_ref_nullable, node_ref_nullable], vec![node_ref], locals, |s, f| {
-			Self::emit_list(f, &s.forget_list_cursor());
 			let (list, items) = (0, 1);
 			let copy = CopyCells::at(2);
 			let kind = copy.result + 1;
+			let walk_start = kind + 1;
+			let extended_last = s.list_cursor(CursorPart::Extended).zip(s.list_cursor(CursorPart::Last));
+			// the list extended last starts its walk to the end at its last cell then
+			Self::emit_list(f, &[I::LocalGet(list), I::LocalSet(walk_start)]);
+			if let Some((extended, last)) = extended_last {
+				Self::emit_list(f, &[I::GlobalGet(extended), I::LocalGet(list), I::RefEq, I::If(BlockType::Empty), I::GlobalGet(last), I::LocalSet(walk_start), I::End]);
+			}
+			// items added at the end leave each cell at its index: the index cursor stays, and the count of another
+			// list, so a loop over a list appending to this one walks on (a comprehension over a table's rows)
+			Self::emit_list(f, &s.forget_cursor_parts(&[CursorPart::Extended]));
+			if let Some(counted) = s.list_cursor(CursorPart::Counted) {
+				Self::emit_list(f, &[I::GlobalGet(counted), I::LocalGet(list), I::RefEq, I::If(BlockType::Empty)]);
+				Self::emit_list(f, &s.forget_cursor_parts(&[CursorPart::Counted]));
+				f.instruction(&I::End);
+			}
 			s.emit_item_check(f, super::declared_values::LIST_ITEMS_CHECK, list, items);
 			s.emit_empty_as_null(f, items);
 			s.emit_collect_cells(f, items, None, &copy);
@@ -1594,13 +1603,23 @@ impl WasmGcEmitter {
 			Self::emit_list(f, &[I::LocalGet(kind), I::I64Const(Kind::List as i64), I::I64Ne, I::If(BlockType::Empty), I::LocalGet(list), I::LocalGet(items)]);
 			s.call(f, "list_concat");
 			Self::emit_list(f, &[I::RefAsNonNull, I::Return, I::End]);
-			// the last cell takes the copies as its rest
-			Self::emit_list(f, &[I::LocalGet(list), I::LocalSet(copy.cell), I::Block(BlockType::Empty), I::Loop(BlockType::Empty)]);
-			s.emit_field(f, copy.cell, 2);
-			Self::emit_list(f, &[I::RefIsNull, I::BrIf(1)]);
-			s.emit_field(f, copy.cell, 2);
-			Self::emit_list(f, &[I::LocalSet(copy.cell), I::Br(0), I::End, I::End]);
-			Self::emit_list(f, &[I::LocalGet(copy.cell), I::LocalGet(copy.result), set(2), I::LocalGet(list), I::RefAsNonNull]);
+			// the last cell takes the copies as its rest, whose last cell is the list's last then
+			let walk_to_last = |s: &Self, f: &mut Function| {
+				Self::emit_list(f, &[I::LocalSet(copy.cell), I::Block(BlockType::Empty), I::Loop(BlockType::Empty)]);
+				s.emit_field(f, copy.cell, 2);
+				Self::emit_list(f, &[I::RefIsNull, I::BrIf(1)]);
+				s.emit_field(f, copy.cell, 2);
+				Self::emit_list(f, &[I::LocalSet(copy.cell), I::Br(0), I::End, I::End]);
+			};
+			f.instruction(&I::LocalGet(walk_start));
+			walk_to_last(s, f);
+			Self::emit_list(f, &[I::LocalGet(copy.cell), I::LocalGet(copy.result), set(2)]);
+			if let Some((extended, last)) = extended_last {
+				f.instruction(&I::LocalGet(copy.result));
+				walk_to_last(s, f);
+				Self::emit_list(f, &[I::LocalGet(list), I::GlobalSet(extended), I::LocalGet(copy.cell), I::GlobalSet(last)]);
+			}
+			Self::emit_list(f, &[I::LocalGet(list), I::RefAsNonNull]);
 		});
 	}
 
@@ -2292,7 +2311,6 @@ impl WasmGcEmitter {
 		}
 		let node = self.type_manager.node_type;
 		let (node_ref, nullable) = (Ref(self.node_ref(false)), Ref(self.node_ref(true)));
-		let next_index = |s: &Self| s.ctx.func_registry.import_count() + s.ctx.func_registry.code_count();
 		let is_entry = |s: &Self, f: &mut Function, local: u32| {
 			s.emit_field(f, local, 0);
 			Self::emit_list(f, &[I::I64Const(KIND_MASK), I::I64And, I::I64Const(KEY_KIND), I::I64Eq]);
@@ -2325,24 +2343,25 @@ impl WasmGcEmitter {
 			s.emit_field(f, key, 2);
 			Self::emit_list(f, &[I::StructNew(node), I::Else, I::LocalGet(key), I::RefAsNonNull, I::End]);
 		});
-		// map_column_cells(cells, part): a `[…]` list of that part of every entry
-		let column_cells = next_index(self);
-		self.runtime_function(MAP_COLUMN_CELLS, vec![nullable, ValType::I32], vec![nullable], vec![], |s, f| {
-			Self::emit_list(f, &[I::LocalGet(0), I::RefIsNull, I::If(BlockType::Empty), I::RefNull(HeapType::Concrete(node)), I::Return, I::End]);
+		// map_column_cells(cells, part): a `[…]` list of that part of every entry, appended at its last cell in a loop
+		// (a call per entry exhausted the call stack near ten thousand entries)
+		self.runtime_function(MAP_COLUMN_CELLS, vec![nullable, ValType::I32], vec![nullable], vec![nullable, nullable, nullable], |s, f| {
+			let (cell, part, head, last, made) = (0, 1, 2, 3, 4);
+			Self::emit_list(f, &[I::Block(BlockType::Empty), I::Loop(BlockType::Empty), I::LocalGet(cell), I::RefIsNull, I::BrIf(1)]);
 			// a meta entry `@name:value` is no key, value or entry of the map
-			s.emit_field(f, 0, 1);
+			s.emit_field(f, cell, 1);
 			s.call(f, super::equality::IS_META_ENTRY);
-			f.instruction(&I::If(BlockType::Empty));
-			s.emit_field(f, 0, 2);
-			Self::emit_list(f, &[I::LocalGet(1), I::Call(column_cells), I::Return, I::End]);
-			f.instruction(&I::I64Const(SQUARE_LIST_KIND));
-			s.emit_field(f, 0, 1);
-			Self::emit_list(f, &[I::RefCastNonNull(HeapType::Concrete(node)), I::LocalGet(1)]);
+			Self::emit_list(f, &[I::I32Eqz, I::If(BlockType::Empty), I::I64Const(SQUARE_LIST_KIND)]);
+			s.emit_field(f, cell, 1);
+			Self::emit_list(f, &[I::RefCastNonNull(HeapType::Concrete(node)), I::LocalGet(part)]);
 			s.call(f, MAP_PART);
-			s.emit_field(f, 0, 2);
-			Self::emit_list(f, &[I::LocalGet(1), I::Call(column_cells), I::StructNew(node)]);
+			Self::emit_list(f, &[I::RefNull(HeapType::Concrete(node)), I::StructNew(node), I::LocalSet(made)]);
+			Self::emit_list(f, &[I::LocalGet(last), I::RefIsNull, I::If(BlockType::Empty), I::LocalGet(made), I::LocalSet(head), I::Else]);
+			Self::emit_list(f, &[I::LocalGet(last), I::LocalGet(made), I::StructSet { struct_type_index: node, field_index: 2 }, I::End]);
+			Self::emit_list(f, &[I::LocalGet(made), I::LocalSet(last), I::End]);
+			s.emit_field(f, cell, 2);
+			Self::emit_list(f, &[I::LocalSet(cell), I::Br(0), I::End, I::End, I::LocalGet(head)]);
 		});
-		assert_eq!(self.func_index(MAP_COLUMN_CELLS), column_cells, "recursive call index");
 		// map_column(xs, part): that part of every entry of a map, as a list; anything else unchanged
 		self.runtime_function(MAP_COLUMN, vec![node_ref, ValType::I32], vec![node_ref], vec![], |s, f| {
 			is_entry(s, f, 0);

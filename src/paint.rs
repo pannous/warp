@@ -41,6 +41,11 @@ pub fn allow_windows() {
 	WINDOWS.store(!headless, Ordering::Relaxed);
 }
 
+/// Whether the warp binary may reach the user's screen and speakers: paint's windows, sound's player (src/sound.rs)
+pub fn shows_windows() -> bool {
+	WINDOWS.load(Ordering::Relaxed)
+}
+
 /// Show the image in a window (paint_window.rs) when windows are allowed, else (or without a window) write it, say where
 pub fn paint(pixels: &[u64], width: usize, height: usize) -> Result<Option<PathBuf>, String> {
 	if pixels.len() < width * height {

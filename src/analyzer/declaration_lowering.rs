@@ -89,13 +89,10 @@ pub(super) const LIST_COPY_SUFFIX: &str = "·list";
 
 pub(super) fn parameter_symbol(parameter: &Node) -> Option<String> {
 	match parameter.drop_meta() {
-		Node::Symbol(name) => Some(name.clone()),
-		Node::Key(name, Op::Colon, _) => match name.drop_meta() {
-			Node::Symbol(name) => Some(name.clone()),
-			_ => None,
-		},
-		_ => None,
+		Node::Key(name, Op::Colon, _) => name.symbol_name(),
+		other => other.symbol_name(),
 	}
+	.map(String::from)
 }
 
 /// Does the body index (`xs#i`) or count (`#xs`) the variable in a loop, not by a text key: once is cheaper as a walk
@@ -108,7 +105,7 @@ pub(super) fn indexes(body: &Node, name: &str) -> bool {
 	loops.into_iter().for_each(|body| body.visit(&mut |part| {
 		let Node::Key(list, Op::Hash, index) = part else { return };
 		let counted = if matches!(list.drop_meta(), Node::Empty) { index } else { list };
-		found |= !looks_up_a_key(index, &key_variables) && matches!(counted.drop_meta(), Node::Symbol(symbol) if symbol == name);
+		found |= !looks_up_a_key(index, &key_variables) && counted.is_symbol(name);
 	}));
 	found
 }
@@ -145,7 +142,7 @@ pub(super) fn assigned_from_call_in_loop(body: &Node, name: &str) -> bool {
 	body.visit(&mut |part| if let Node::Key(_, Op::While | Op::Do, _) = part {
 		part.visit(&mut |inner| if let Node::Key(target, Op::Assign, value) = inner {
 			let is_call = matches!(value.drop_meta(), Node::List(items, Bracket::Round, Separator::None) if matches!(items.first().map(Node::drop_meta), Some(Node::Symbol(_))));
-			found |= is_call && matches!(target.drop_meta(), Node::Symbol(target) if target == name);
+			found |= is_call && target.is_symbol(name);
 		});
 	});
 	found
@@ -154,7 +151,7 @@ pub(super) fn assigned_from_call_in_loop(body: &Node, name: &str) -> bool {
 /// Does the body set an entry of the map parameter (`m[k] = v`) or look one up in a loop, by a text key. A map is a
 /// reference (P200b): a set entry must reach the caller's map, so a table copy only when every call passes a new one
 pub(super) fn keys(body: &Node, name: &str, fresh: bool) -> bool {
-	let is_name = |part: &Node| matches!(part.drop_meta(), Node::Symbol(symbol) if symbol == name);
+	let is_name = |part: &Node| part.is_symbol(name);
 	let key_variables = key_variables(body);
 	let by_key = |index: &Node| looks_up_a_key(index, &key_variables);
 	let (mut looked_up, mut set) = (false, false);
@@ -173,7 +170,7 @@ pub(super) fn keys(body: &Node, name: &str, fresh: bool) -> bool {
 /// `field_with(m, "k", v)` of the variable m with a text key: the lowered `m["k"] = v`
 pub(super) fn field_update(value: &Node, name: &str) -> bool {
 	matches!(value.drop_meta(), Node::List(items, _, _) if matches!(items.as_slice(), [word, map, key, _]
-		if word.name() == crate::library_words::FIELD_WITH && matches!(map.drop_meta(), Node::Symbol(map) if map == name) && is_text(key)))
+		if word.name() == crate::library_words::FIELD_WITH && map.is_symbol(name) && is_text(key)))
 }
 
 /// An index by a text key: `m["k"]`, `m["k\(i)"]` (arriving as `"k" + text_form(i)`), not a position
@@ -193,7 +190,7 @@ pub(super) fn is_text(node: &Node) -> bool {
 pub(super) fn assigns(body: &Node, name: &str) -> bool {
 	let mut found = false;
 	body.visit(&mut |part| if let Node::Key(target, op, value) = part {
-		let is_variable = matches!(target.drop_meta(), Node::Symbol(symbol) if symbol == name);
+		let is_variable = target.is_symbol(name);
 		found |= is_variable && (op.is_compound_assign() || (*op == Op::Assign && !field_update(value, name)));
 	});
 	found
@@ -240,7 +237,7 @@ pub(super) fn text_variables(program: &Node) -> HashSet<String> {
 		let Node::Symbol(name) = target.drop_meta() else { return };
 		let is_text = match value.drop_meta() {
 			Node::Text(_) | Node::Char(_) => true,
-			Node::Key(left, _, _) => matches!(left.drop_meta(), Node::Symbol(updated) if updated == name),
+			Node::Key(left, _, _) => left.is_symbol(name),
 			_ => false,
 		};
 		*texts.entry(name.clone()).or_insert(true) &= is_text;
@@ -282,31 +279,16 @@ pub(super) fn lower_declarations_among(node: Node, names: &Names) -> Node {
 		Err(node) => node,
 	};
 	match node {
-		Node::List(items, _, _) if print_walk(&items, variables).is_some() => lower(print_walk(&items, variables).expect("guarded")),
-		Node::List(items, bracket, separator) if counting_phrase(&items, &bracket, &separator, variables).is_some() => {
-			lower(counting_phrase(&items, &bracket, &separator, variables).expect("guarded"))
-		}
-		Node::List(items, bracket, separator) if of_type_declaration(&items, &bracket, &separator).is_some() => {
-			lower(of_type_declaration(&items, &bracket, &separator).expect("guarded"))
-		}
-		Node::List(items, bracket, separator) if postfix_list_declaration(&items, &bracket, &separator).is_some() => {
-			lower(postfix_list_declaration(&items, &bracket, &separator).expect("guarded"))
-		}
-		Node::List(items, _, _) if hashed_unit_count(&items).is_some() => {
-			lower(hashed_unit_count(&items).expect("guarded"))
-		}
-		Node::Key(empty, Op::Hash, counted) if matches!(empty.drop_meta(), Node::Empty) && unit_count(&counted).is_some() => {
-			lower(unit_count(&counted).expect("guarded"))
-		}
+		Node::List(items, _, _) if let Some(walk) = print_walk(&items, variables) => lower(walk),
+		Node::List(items, bracket, separator) if let Some(counting) = counting_phrase(&items, &bracket, &separator, variables) => lower(counting),
+		Node::List(items, bracket, separator) if let Some(declaration) = of_type_declaration(&items, &bracket, &separator) => lower(declaration),
+		Node::List(items, bracket, separator) if let Some(declaration) = postfix_list_declaration(&items, &bracket, &separator) => lower(declaration),
+		Node::List(items, _, _) if let Some(count) = hashed_unit_count(&items) => lower(count),
+		Node::Key(empty, Op::Hash, counted) if matches!(empty.drop_meta(), Node::Empty) && let Some(count) = unit_count(&counted) => lower(count),
 		// `x : 100 int` and `x:int[100]` declare x as a zero-filled list of 100 ints
-		declaration if typed_array_declaration(&declaration).is_some() => {
-			let (name, zeros) = typed_array_declaration(&declaration).expect("guarded");
-			Node::Key(Box::new(name), Op::Assign, Box::new(zeros))
-		}
+		declaration if let Some((name, zeros)) = typed_array_declaration(&declaration) => Node::Key(Box::new(name), Op::Assign, Box::new(zeros)),
 		// `letters = char[3]` and `upcases = 26 * char` are zero-filled typed arrays like `x : 100 int`
-		Node::Key(target, Op::Assign, value) if typed_array_value(&value).is_some() => {
-			Node::Key(target, Op::Assign, Box::new(typed_array_value(&value).expect("guarded")))
-		}
+		Node::Key(target, Op::Assign, value) if let Some(zeros) = typed_array_value(&value) => Node::Key(target, Op::Assign, Box::new(zeros)),
 		// `x as number = 9` declares `x:number=9`
 		Node::Key(target, Op::Assign, value) if matches!(target.drop_meta(), Node::Key(name, Op::As, type_node)
 			if matches!(name.drop_meta(), Node::Symbol(_)) && is_declaration_type(type_node)) => {
@@ -314,33 +296,27 @@ pub(super) fn lower_declarations_among(node: Node, names: &Names) -> Node {
 			lower(Node::Key(Box::new(Node::Key(name, Op::Colon, type_node)), Op::Assign, value))
 		}
 		// `x:[number]=v` is `x:list of number=v`
-		Node::Key(target, Op::Assign, value) if matches!(target.drop_meta(), Node::Key(_, Op::Colon, type_node) if declared_bracketed_list_type(type_node).is_some()) => {
-			let Node::Key(name, Op::Colon, type_node) = target.drop_meta().clone() else { unreachable!("guarded") };
-			let typed = Node::Key(name, Op::Colon, Box::new(declared_bracketed_list_type(&type_node).expect("guarded")));
+		Node::Key(target, Op::Assign, value) if let Node::Key(_, Op::Colon, type_node) = target.drop_meta()
+			&& let Some(list_type) = declared_bracketed_list_type(type_node) => {
+			let Node::Key(name, _, _) = target.drop_meta().clone() else { unreachable!("guarded") };
+			let typed = Node::Key(name, Op::Colon, Box::new(list_type));
 			lower(Node::Key(Box::new(typed), Op::Assign, value))
 		}
 		// `x:[number]` is `x:list of number`
-		Node::Key(name, Op::Colon, type_node) if bracketed_list_type(&type_node).is_some() => {
-			Node::Key(name, Op::Colon, Box::new(bracketed_list_type(&type_node).expect("guarded")))
-		}
+		Node::Key(name, Op::Colon, type_node) if let Some(list_type) = bracketed_list_type(&type_node) => Node::Key(name, Op::Colon, Box::new(list_type)),
 		// `r=1…3` stores the list [1 2 3]; the range itself only lives in a `for` header
-		Node::Key(target, Op::Assign, value) if range_elements(&value).is_some() => {
-			Node::Key(target, Op::Assign, Box::new(range_elements(&value).expect("guarded")))
-		}
+		Node::Key(target, Op::Assign, value) if let Some(elements) = range_elements(&value) => Node::Key(target, Op::Assign, Box::new(elements)),
 		// `xs = a..b` of computed bounds: the list a loop over the range collects
-		Node::Key(target, Op::Assign, value) if computed_range(&target, &value).is_some() => {
-			lower(Node::Key(target.clone(), Op::Assign, Box::new(computed_range(&target, &value).expect("guarded"))))
+		Node::Key(target, Op::Assign, value) if let Some(collected) = computed_range(&target, &value) => {
+			lower(Node::Key(target, Op::Assign, Box::new(collected)))
 		}
 		// a range anywhere else a value is wanted (`print 1..5`, `str(a..b)`, `(1..5)`) is the same list: the ranges of
 		// `for` headers are loops by now (for_loop above)
-		range if range_elements(&range).is_some() => range_elements(&range).expect("guarded"),
-		range if computed_range(&Node::Symbol(RANGE_VALUE.to_string()), &range).is_some() => {
-			lower(computed_range(&Node::Symbol(RANGE_VALUE.to_string()), &range).expect("guarded"))
-		}
+		range if let Some(elements) = range_elements(&range) => elements,
+		range if let Some(collected) = computed_range(&Node::Symbol(RANGE_VALUE.to_string()), &range) => lower(collected),
 		// `fast x=v` → `x:fast=v`, parsed either as `(fast x)=v` or as the statement pair `fast (x=v)`;
 		// `double(x) := x+x` and `double x := x+x` stay function definitions
-		Node::Key(target, Op::Assign, value) if number_type_prefix(&target).is_some() => {
-			let (type_name, name) = number_type_prefix(&target).expect("guarded");
+		Node::Key(target, Op::Assign, value) if let Some((type_name, name)) = number_type_prefix(&target) => {
 			lower(Node::Key(Box::new(Node::Key(Box::new(name), Op::Colon, Box::new(type_name))), Op::Assign, value))
 		}
 		Node::List(items, bracket, separator) if items.windows(2).any(|pair| paired_declaration(&pair[0], &pair[1]).is_some()) => {
@@ -355,11 +331,7 @@ pub(super) fn lower_declarations_among(node: Node, names: &Names) -> Node {
 					None => lowered.push(lower(item)),
 				}
 			}
-			if lowered.len() == 1 {
-				lowered.remove(0)
-			} else {
-				Node::List(lowered, bracket, separator)
-			}
+			Node::single_or_list(lowered, bracket, separator)
 		}
 		Node::Key(target, op @ (Op::Assign | Op::Define), value) => {
 			let value = Box::new(lower(*value));
@@ -376,8 +348,8 @@ pub(super) fn lower_declarations_among(node: Node, names: &Names) -> Node {
 			}
 		}
 		Node::Key(list, Op::Dot, call) if inserted_element(&list, &call).is_some() => lowered_insert(list, &call),
-		Node::Key(list, Op::Dot, call) if appended_element(&list, &call).is_some() => {
-			let element = lower(appended_element(&list, &call).expect("guarded").clone());
+		Node::Key(list, Op::Dot, call) if let Some(element) = appended_element(&list, &call).cloned() => {
+			let element = lower(element);
 			// `add "c" to x` of a text: the text grows (wiki row 29); a list gets the element in place, `xs += [v]` like
 			// Python's extend, so every holder of the list sees it (P200b)
 			if names.texts.contains(&list.name()) {
@@ -386,31 +358,19 @@ pub(super) fn lower_declarations_among(node: Node, names: &Names) -> Node {
 			}
 			Node::Key(list, Op::AddAssign, Box::new(Node::List(vec![element], Bracket::Square, Separator::Space)))
 		}
-		Node::Key(list, Op::Dot, call) if popped_list(&list, &call).is_some() => popped_list(&list, &call).expect("guarded"),
-		Node::Key(map, Op::Dot, call) if removed_key(&map, &call).is_some() => lower(removed_key(&map, &call).expect("guarded")),
+		Node::Key(list, Op::Dot, call) if let Some(popped) = popped_list(&list, &call) => popped,
+		Node::Key(map, Op::Dot, call) if let Some(removal) = removed_key(&map, &call) => lower(removal),
 		// `int[n]`, `#(int[n])`: n zeros of the type, wherever it stands, unless the word is a variable (`chars[i]`)
-		Node::Key(element, Op::Hash, one_based) if zero_filled_subscript(&element, &one_based, &names.values).is_some() => {
-			zero_filled_subscript(&element, &one_based, &names.values).expect("guarded")
-		}
+		Node::Key(element, Op::Hash, one_based) if let Some(zeros) = zero_filled_subscript(&element, &one_based, &names.values) => zeros,
 		// x² and x³ are x^2 and x^3 for emission; the parse keeps the suffix operators
-		Node::Key(base, op, _) if op.suffix_exponent().is_some() => {
-			let exponent = op.suffix_exponent().expect("guarded");
-			Node::Key(Box::new(lower(*base)), Op::Pow, Box::new(Node::int(exponent)))
-		}
+		Node::Key(base, op, _) if let Some(exponent) = op.suffix_exponent() => Node::Key(Box::new(lower(*base)), Op::Pow, Box::new(Node::int(exponent))),
 		Node::Key(left, op, right) => Node::Key(Box::new(lower(*left)), op, Box::new(lower(*right))),
 		// `const x=v` → `x=v`; check_constants already enforced the single assignment; `let x=v` and `var x=v` → `x=v`
 		Node::List(items, bracket, separator) if items.len() >= 2 && is_declaration_keyword(&items[0]) => {
-			let mut declaration = items.into_iter().skip(1).map(lower).collect::<Vec<_>>();
-			if declaration.len() == 1 {
-				declaration.remove(0)
-			} else {
-				Node::List(declaration, bracket, separator)
-			}
+			let declaration = items.into_iter().skip(1).map(lower).collect::<Vec<_>>();
+			Node::single_or_list(declaration, bracket, separator)
 		}
-		Node::List(items, Bracket::None, _) if applied_object(&items).is_some() => {
-			let (object, key) = applied_object(&items).expect("guarded");
-			lower(crate::warp_parser::subscript(object, key))
-		}
+		Node::List(items, Bracket::None, _) if let Some((object, key)) = applied_object(&items) => lower(crate::warp_parser::subscript(object, key)),
 		Node::List(items, bracket, separator) => Node::List(items.into_iter().map(lower).collect(), bracket, separator),
 		Node::Meta { node, data } => Node::Meta { node: Box::new(lower(*node)), data },
 		other => other,
@@ -425,7 +385,7 @@ fn postfix_list_declaration(items: &[Node], bracket: &Bracket, separator: &Separ
 	let typed_name = |name: &Node| Node::Key(Box::new(name.clone()), Op::Colon, Box::new(Node::Symbol(format!("{LIST_OF_PREFIX}{element}"))));
 	let declared = match list.drop_meta() {
 		Node::Symbol(word) if word == LIST_WORD => typed_name(name),
-		Node::Key(word, op @ (Op::Assign | Op::Define), value) if is_word(word, LIST_WORD) => Node::Key(Box::new(typed_name(name)), *op, value.clone()),
+		Node::Key(word, op @ (Op::Assign | Op::Define), value) if word.is_symbol(LIST_WORD) => Node::Key(Box::new(typed_name(name)), *op, value.clone()),
 		_ => return None,
 	};
 	Some(match rest {
@@ -440,7 +400,7 @@ pub(crate) fn of_type_declaration(items: &[Node], bracket: &Bracket, separator: 
 	let [declaration, of, ..] = items else { return None };
 	let Node::Key(name, Op::Colon, head) = declaration.drop_meta() else { return None };
 	let Node::Symbol(mut type_name) = head.drop_meta().clone() else { return None };
-	if !is_word(of, "of") {
+	if !of.is_symbol("of") {
 		return None;
 	}
 	let mut next = 2;
@@ -458,7 +418,7 @@ pub(crate) fn of_type_declaration(items: &[Node], bracket: &Bracket, separator: 
 			_ => return None,
 		}
 		match items.get(next) {
-			Some(of) if is_word(of, "of") => next += 1,
+			Some(of) if of.is_symbol("of") => next += 1,
 			_ => break,
 		}
 	}
@@ -550,7 +510,7 @@ pub(super) fn popped_list(list: &Node, call: &Node) -> Option<Node> {
 		return None;
 	}
 	match call.drop_meta() {
-		Node::List(items, _, _) if matches!(items.as_slice(), [method] if is_word(method, POP_METHOD)) => {
+		Node::List(items, _, _) if matches!(items.as_slice(), [method] if method.is_symbol(POP_METHOD)) => {
 			let template = crate::warp_parser::parse(&format!(
 				"({POP_TEMPORARY} = {POP_PLACE}#count({POP_PLACE}); {POP_PLACE} = {LIST_DROP_LAST}({POP_PLACE}); {POP_TEMPORARY})"));
 			Some(crate::law::substitute(&template, &std::collections::HashMap::from([(POP_PLACE.to_string(), list.clone())])))
@@ -565,7 +525,7 @@ pub(super) fn removed_key(map: &Node, call: &Node) -> Option<Node> {
 	let Node::Symbol(name) = map.drop_meta() else { return None };
 	let Node::List(items, _, _) = call.drop_meta() else { return None };
 	let [method, key] = items.as_slice() else { return None };
-	if !is_word(method, REMOVE_METHOD) {
+	if !method.is_symbol(REMOVE_METHOD) {
 		return None;
 	}
 	let call = |word: &str, arguments: Vec<Node>| Node::List([vec![Node::Symbol(word.to_string())], arguments].concat(), Bracket::Round, Separator::None);
@@ -587,11 +547,11 @@ pub(super) fn inserted_element(list: &Node, call: &Node) -> Option<Inserted> {
 	}
 	let Node::List(items, _, _) = call.drop_meta() else { return None };
 	let [method, first, second] = items.as_slice() else { return None };
-	if !is_word(method, INSERT_METHOD) {
+	if !method.is_symbol(INSERT_METHOD) {
 		return None;
 	}
 	let position_of = |node: &Node| match node.drop_meta() {
-		Node::Key(word, Op::Colon, position) if is_word(word, AT_WORD) => Some(position.as_ref().clone()),
+		Node::Key(word, Op::Colon, position) if word.is_symbol(AT_WORD) => Some(position.as_ref().clone()),
 		_ => None,
 	};
 	Some(match (position_of(first), position_of(second)) {
@@ -670,7 +630,7 @@ pub(super) const LIST_TIMES_TOPIC: &str = "list-times";
 pub(super) fn list_times(key: &Node, positioned: &Node) -> Option<Node> {
 	let Node::Key(left, Op::Mul, right) = key.drop_meta() else { return None };
 	// `[2 2] .* [2 4]`: the dotted operator said element-wise, broadcasting pairs the two lists
-	let is_each_element = |side: &Node| matches!(side.drop_meta(), Node::Symbol(name) if name == EACH_ELEMENT);
+	let is_each_element = |side: &Node| side.is_symbol(EACH_ELEMENT);
 	if is_each_element(left) || is_each_element(right) {
 		return None;
 	}
@@ -799,10 +759,7 @@ pub(super) fn bracketed_list_type(type_node: &Node) -> Option<Node> {
 fn bracketed_element(type_node: &Node) -> Option<&str> {
 	let Node::List(items, Bracket::Square, _) = type_node.drop_meta() else { return None };
 	match items.as_slice() {
-		[element] => match element.drop_meta() {
-			Node::Symbol(word) => Some(word),
-			_ => None,
-		},
+		[element] => element.symbol_name(),
 		_ => None,
 	}
 }
@@ -872,8 +829,8 @@ pub(super) fn prefixed_declaration(type_name: &Node, next: &Node) -> Option<Node
 /// `x: int | text` is `x:"int or text"` (card inline-union), before any pass reads `int | text` as a value
 pub fn lower_inline_unions(node: Node) -> Node {
 	match node {
-		Node::Key(name, Op::Colon, type_node) if crate::analyzer::union_type_name(&type_node).is_some() => {
-			Node::Key(name, Op::Colon, Box::new(Node::Symbol(crate::analyzer::union_type_name(&type_node).expect("guarded"))))
+		Node::Key(name, Op::Colon, type_node) if let Some(union) = crate::analyzer::union_type_name(&type_node) => {
+			Node::Key(name, Op::Colon, Box::new(Node::Symbol(union)))
 		}
 		other => other.map_children(lower_inline_unions),
 	}

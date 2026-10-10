@@ -1,0 +1,5 @@
+// card module-text: a module's plain text constant read by its functions, called from a program with units
+letters = "C.D.EF.G.A.B"
+place(name) := letters.index_of(name#1)
+pitch(x) := if x is text then place(x) else x
+pitches(xs) := [pitch(x) for x in xs]

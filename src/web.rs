@@ -301,7 +301,7 @@ fn cell_node(cell: &Value, value: Option<Node>) -> Node {
 		}
 		tag if tag == Kind::Key as i64 => Node::Key(Box::new(data_node()), crate::operators::code_to_op(info), Box::new(value_node())),
 		tag if tag == Kind::Block as i64 => list_node(data.get("node").map(node_from_tree), value, Bracket::Curly),
-		tag if tag == Kind::List as i64 => list_node(data.get("node").map(node_from_tree), value, bracket_of(info)),
+		tag if tag == Kind::List as i64 => list_node(data.get("node").map(node_from_tree), value, crate::wasm_emitter::bracket_of_info(info)),
 		tag if tag == Kind::Data as i64 => {
 			let type_name = text();
 			Node::Data(DataValue { data: Box::new(format!("<wasm data: {type_name}>")), type_name, data_type: DataType::Other })
@@ -313,16 +313,6 @@ fn cell_node(cell: &Value, value: Option<Node>) -> Node {
 			crate::uncertain::Uncertain::read_node(floats.map(|parts| parts.iter().filter_map(float_value).collect()))
 		}
 		tag => Node::Text(format!("Unknown Kind: {tag}")),
-	}
-}
-
-fn bracket_of(info: i64) -> Bracket {
-	match info {
-		0 => Bracket::Curly,
-		1 => Bracket::Square,
-		2 => Bracket::Round,
-		3 => Bracket::Less,
-		_ => Bracket::None,
 	}
 }
 
@@ -448,23 +438,24 @@ pub const PAGE_PREFIX: &str = "page:";
 /// Run a compiled module in the embedding host and read its outcome
 #[cfg(all(target_arch = "wasm32", not(feature = "native")))]
 pub fn run_in_host(wasm: &[u8]) -> Node {
-	let mut outcome = vec![0u8; unsafe { page::run(wasm.as_ptr(), wasm.len()) }];
-	unsafe { page::take(outcome.as_mut_ptr()) };
-	match serde_json::from_slice::<Value>(&outcome) {
-		Ok(outcome) => run_outcome(&outcome),
-		Err(problem) => crate::node::error(&format!("could not read the outcome of the run: {problem}")),
-	}
+	taken_outcome(unsafe { page::run(wasm.as_ptr(), wasm.len()) }, "the run")
 }
 
 /// A page event in the embedding host's last listening run: what the page shows after its handler (headless.rs)
 #[cfg(all(target_arch = "wasm32", not(feature = "native")))]
 pub fn page_event_in_host(event: &str, detail: &Value) -> Node {
 	let detail = detail.to_string();
-	let mut outcome = vec![0u8; unsafe { page::page_event(event.as_ptr(), event.len(), detail.as_ptr(), detail.len()) }];
+	taken_outcome(unsafe { page::page_event(event.as_ptr(), event.len(), detail.as_ptr(), detail.len()) }, "the page event")
+}
+
+/// The host's JSON outcome of `length` bytes, taken from it, as a Node
+#[cfg(all(target_arch = "wasm32", not(feature = "native")))]
+fn taken_outcome(length: usize, of_what: &str) -> Node {
+	let mut outcome = vec![0u8; length];
 	unsafe { page::take(outcome.as_mut_ptr()) };
 	match serde_json::from_slice::<Value>(&outcome) {
 		Ok(outcome) => run_outcome(&outcome),
-		Err(problem) => crate::node::error(&format!("could not read the outcome of the page event: {problem}")),
+		Err(problem) => crate::node::error(&format!("could not read the outcome of {of_what}: {problem}")),
 	}
 }
 

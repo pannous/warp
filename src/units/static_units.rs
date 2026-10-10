@@ -14,7 +14,7 @@
 //! text; `xs.add(q)` checks the element signature.
 //! Unit fields: `class Run{distance: km}` (unit_fields.rs), an instance's fields have signatures like an object's.
 
-use super::{finest_units, signature, unit_named, units_text, Dimension, Factor, Quantity, Unit, UNITS};
+use super::{exponent_of, finest_units, signature, unit_named, units_text, Dimension, Factor, Quantity, Unit, UNITS};
 
 mod unit_fields;
 pub(crate) use unit_fields::{lower_field_tolerances, si_quantity};
@@ -43,6 +43,8 @@ const PRINT_WORD: &str = "print";
 /// `std_io("table", "insert", [r.distance, …])`: a host call takes SI amounts as they are (stored rows hold SI amounts)
 const HOST_CALL: &str = "std_io";
 const RETURN_WORD: &str = "return";
+/// `si_amount(q)`: the plain SI number of a quantity, so a library takes `0.5s` and `0.5` alike (lib/sound.warp)
+const SI_AMOUNT_WORD: &str = "si_amount";
 /// The text of a value: `str(q)`, and `text_form(q)` of `${q}` interpolation (interpolation.rs)
 const TEXT_WORDS: [&str; 3] = [TEXT_WORD, "text_form", "serialize"];
 /// `xs.add(q)`: list methods that take an element
@@ -77,10 +79,27 @@ enum Stop {
 	Recursive,
 }
 
+fn mentions_si_amount(program: &Node) -> bool {
+	let mut found = false;
+	program.visit(&mut |node| found |= matches!(node.drop_meta(), Node::Symbol(name) if name == SI_AMOUNT_WORD));
+	found
+}
+
+/// `si_amount(x)` is x once the units are checked: the calls output_form did not meet, or all of a program without units
+fn without_si_amounts(node: Node) -> Node {
+	match node.drop_meta() {
+		Node::List(items, _, _) if items.len() == 2 && matches!(items[0].drop_meta(), Node::Symbol(name) if name == SI_AMOUNT_WORD) => without_si_amounts(items[1].clone()),
+		_ => node.map_children(without_si_amounts),
+	}
+}
+
 /// The program with unit literals as SI amounts and the units of its final value; None when it uses no units or uses
 /// quantities beyond stage 1; Err for a dimension error
 pub fn lower(program: &Node) -> Option<Result<Node, Node>> {
-	super::shadowing(program, || lower_shadowed(program))
+	match super::shadowing(program, || lower_shadowed(program)) {
+		Some(lowered) => Some(lowered.map(without_si_amounts)),
+		None => mentions_si_amount(program).then(|| Ok(without_si_amounts(program.clone()))),
+	}
 }
 
 fn lower_shadowed(program: &Node) -> Option<Result<Node, Node>> {
@@ -100,7 +119,7 @@ fn lower_shadowed(program: &Node) -> Option<Result<Node, Node>> {
 	let mut definitions = HashMap::new();
 	program.visit(&mut |node| {
 		if let Some((name, definition)) = function_definition(node) {
-			definitions.insert(name, definition);
+			definitions.insert((name, definition.parameters.len()), definition);
 		}
 	});
 	let mut inference = Inference { variables: HashMap::new(), lists: HashMap::new(), objects: HashMap::new(), classes, instances: HashMap::new(), class_lists: HashMap::new(), result_fields: None, definitions, specialised: HashMap::new(), in_progress: vec![], numbered: 0, new_definitions: vec![], display: display.clone(), returns: vec![], at_top: true, in_host_call: false };
@@ -285,6 +304,10 @@ fn is_nothing(node: &Node) -> bool {
 	matches!(node.drop_meta(), Node::Empty)
 }
 
+fn is_type_word(node: &Node) -> bool {
+	matches!(node.drop_meta(), Node::Symbol(name) if crate::analyzer::type_word_kind(name).is_some() || crate::type_tests::runtime_kind_mask(name).is_some())
+}
+
 fn dimension_error(op: Op, left: &Signature, right: &Signature) -> Stop {
 	Stop::Error(format!("DimensionError: {} {op} {}: the units do not match", shown(left), shown(right)))
 }
@@ -346,7 +369,8 @@ struct Inference {
 	class_lists: HashMap<String, String>,
 	/// The quantity fields of the program's final value, when it is such an object
 	result_fields: Option<Fields>,
-	definitions: HashMap<String, Definition>,
+	/// by name and parameter count: `tone(p, d) := tone(p, d, "sine")` overloads by arity (overloads.rs)
+	definitions: HashMap<(String, usize), Definition>,
 	/// Specialised functions: their name and result signature
 	specialised: HashMap<Specialisation, (String, Signature)>,
 	/// The specialisations being inferred: their name, whether they call themselves, and their result signature once a
@@ -468,8 +492,8 @@ impl Inference {
 				let right = self.as_text(right, &right_signature, right_units, AMOUNT_TEXT)?;
 				Ok((Node::Key(Box::new(left), Op::Add, Box::new(right)), vec![]))
 			}
-			// `r.distance == ø` of an optional unit field: ø has no dimension, any value may be it
-			Node::Key(left, op @ (Op::Eq | Op::Ne), right) if is_nothing(&left) || is_nothing(&right) => {
+			// `r.distance == ø` of an optional unit field: ø has no dimension, any value may be it; `x is list` asks its type
+			Node::Key(left, op @ (Op::Eq | Op::Ne), right) if is_nothing(&left) || is_nothing(&right) || is_type_word(&right) => {
 				let (left, _) = self.infer(*left)?;
 				let (right, _) = self.infer(*right)?;
 				Ok((Node::Key(Box::new(left), op, Box::new(right)), vec![]))
@@ -492,8 +516,7 @@ impl Inference {
 			}
 			Node::Key(base, op @ (Op::Square | Op::Cube), nothing) if matches!(nothing.drop_meta(), Node::Empty) => {
 				let (base, signature) = self.infer(*base)?;
-				let exponent = if op == Op::Square { 2 } else { 3 };
-				let signature = signature.iter().map(|(dimension, power)| (*dimension, power * exponent)).collect();
+				let signature = signature.iter().map(|(dimension, power)| (*dimension, power * exponent_of(op))).collect();
 				Ok((Node::Key(Box::new(base), op, nothing), signature))
 			}
 			// `if c then a else b`: both branches have one signature
@@ -897,6 +920,7 @@ impl Inference {
 				let text = self.as_text(value, &signature, shown_units, PRINTED_AMOUNT_TEXT)?;
 				Ok((Node::List(vec![head.clone(), text], bracket.clone(), separator.clone()), vec![]))
 			})()),
+			[head, value] if call_or_words && word(head, SI_AMOUNT_WORD) => Some(self.infer(value.clone()).map(|(value, _)| (value, vec![]))),
 			[head, value] if *bracket == Bracket::None && word(head, RETURN_WORD) => Some((|| {
 				let (value, signature) = self.infer(value.clone())?;
 				if let Some(returns) = self.returns.last_mut() {
@@ -920,10 +944,7 @@ impl Inference {
 	fn specialised_call(&mut self, items: &[Node]) -> Option<Result<(Node, Signature), Stop>> {
 		let (head, arguments) = items.split_first()?;
 		let Node::Symbol(name) = head.drop_meta() else { return None };
-		let definition = self.definitions.get(name)?.clone();
-		if definition.parameters.len() != arguments.len() {
-			return None;
-		}
+		let definition = self.definitions.get(&(name.clone(), arguments.len()))?.clone();
 		let mut lowered = vec![];
 		let mut signatures = vec![];
 		for argument in arguments {
@@ -953,7 +974,7 @@ impl Inference {
 			progressing.recursive = true;
 			return progressing.result.clone().map(|result| (progressing.name.clone(), result)).ok_or(Stop::Recursive);
 		}
-		if self.in_progress.iter().any(|progressing| progressing.key.0 == name) {
+		if self.in_progress.iter().any(|progressing| progressing.key.0 == name && progressing.key.1.len() == signatures.len()) {
 			return Err(Stop::Unsupported); // recursion that changes the arguments' units
 		}
 		let specialised = format!("{name}{SPECIALISATION_SEPARATOR}{}", self.numbered);

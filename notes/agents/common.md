@@ -41,6 +41,10 @@ when a message or comment cites a number (P71, D5) and you need its wording; nev
 - Tests: test first; only targeted runs, only through the queue: `tests/queue.sh -- <filter>`. Never the whole test
   binary: the Integrator runs the full suite. CARGO_BUILD_JOBS=2, never set CARGO_TARGET_DIR, never cargo clean,
   never pkill by pattern.
+- No Chrome or Chromium on the Mac (user, 2026-10-09): browser runs happen only in CI. The browser test suite, the
+  playground tour (test_in_browser.py), web::test_dom_pages and the agent-browser probes refuse to start a browser
+  unless CI is set and print "browser tests run in CI only". To check the playground, dispatch the Playground
+  workflow on your branch (`gh workflow run pages.yml --ref <branch>`); never call agent-browser yourself.
 - The warp CLI binary is shared too: `<target-dir>/debug/warp` is whichever worktree built last. To probe your own code,
   run `scripts/own-warp.sh` (builds offline and atomically copies into `scratch/warp`) and run that path; a copy taken
   later can be another session's build.

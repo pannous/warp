@@ -88,22 +88,6 @@ fn network_reason(error: ureq::Error, timeout: std::time::Duration) -> String {
 	}
 }
 
-pub trait FileExtensions {
-	// std::fs::File does not directly expose the file name.
-	fn name(&self) -> String;
-	fn path(&self) -> String;
-}
-
-impl FileExtensions for File {
-	fn name(&self) -> String {
-		"std::fs::File does not expose the file name. ".to_string()
-	}
-
-	fn path(&self) -> String {
-		"std::fs::File does not expose the file name or path.".to_string()
-	}
-}
-
 /// Write bytes to a WASM file, creating parent directories if needed
 /// Returns true on success, false on error (no panics)
 pub fn write_wasm(filename: &str, bytes: &[u8]) -> bool {

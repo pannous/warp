@@ -1,3 +1,4 @@
+#!/usr/bin/env warp
 // Conway's Game of Life
 // Cellular automaton simulation on a torus (the edges wrap), animated in the terminal
 // the grid is a flat list of cells, row by row; the grid is global, shared by the functions

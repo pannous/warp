@@ -109,46 +109,6 @@ impl GcObject {
 		))
 	}
 
-	/// Check if value field is null
-	pub fn value_is_null(&self) -> bool {
-		match self.get_field(FIELD_VALUE) {
-			Ok(val) => val.unwrap_anyref().is_none(),
-			Err(_) => true,
-		}
-	}
-
-	/// Read the integer payload of an Int node: `$i64box` or `$BigInt` (see wasm_emitter/big_int.rs)
-	pub fn read_int(&self) -> Result<Number> {
-		let data_val = self.data()?;
-		let mut store = self.store.borrow_mut();
-		read_int_payload(&mut *store, &data_val)
-	}
-
-	/// Read f64 from boxed f64 in data field (for Float nodes)
-	pub fn read_boxed_f64(&self) -> Result<f64> {
-		let data_val = self.data()?;
-		let mut store = self.store.borrow_mut();
-		if let Some(anyref) = data_val.unwrap_anyref() {
-			if let Ok(structref) = anyref.unwrap_struct(&*store) {
-				let field_val = structref.field(&mut *store, 0)?;
-				return Ok(warp_runtime::floats::canonical_nan(field_val.unwrap_f64()));
-			}
-		}
-		Err(anyhow!("Cannot read boxed f64"))
-	}
-
-	/// Read i31ref value from data field (for Codepoint)
-	pub fn read_i31(&self) -> Result<i32> {
-		let data_val = self.data()?;
-		let store = self.store.borrow();
-		if let Some(anyref) = data_val.unwrap_anyref() {
-			if let Ok(i31) = anyref.unwrap_i31(&*store) {
-				return Ok(i31.get_i32());
-			}
-		}
-		Err(anyhow!("Cannot read i31ref"))
-	}
-
 	/// Read string ptr+len from $String struct in data field
 	pub fn read_string_ptr_len(&self) -> Result<(i32, i32)> {
 		let data_val = self.data()?;
@@ -188,70 +148,6 @@ impl GcObject {
 	pub fn to_node(&self) -> Node {
 		let mut store = self.store.borrow_mut();
 		node_of(&self.inner, &mut store.as_context_mut(), &self.instance)
-	}
-
-	/// Get the data field as a child GcObject (for Key nodes where data is a node ref)
-	pub fn data_as_node(&self) -> Result<GcObject> {
-		let val = self.data()?;
-		Ok(GcObject::new(
-			val,
-			self.store.clone(),
-			self.instance,
-		))
-	}
-}
-
-/// Trait for converting Val to Rust types
-pub trait FromVal: Sized {
-	fn from_val(
-		val: Val,
-		store: &mut Store<()>,
-		instance: &Instance,
-		store_rc: &Rc<RefCell<Store<()>>>,
-	) -> Result<Self>;
-}
-
-impl FromVal for i32 {
-	fn from_val(
-		val: Val,
-		_store: &mut Store<()>,
-		_instance: &Instance,
-		_store_rc: &Rc<RefCell<Store<()>>>,
-	) -> Result<Self> {
-		Ok(val.unwrap_i32())
-	}
-}
-
-impl FromVal for i64 {
-	fn from_val(
-		val: Val,
-		_store: &mut Store<()>,
-		_instance: &Instance,
-		_store_rc: &Rc<RefCell<Store<()>>>,
-	) -> Result<Self> {
-		Ok(val.unwrap_i64())
-	}
-}
-
-impl FromVal for f64 {
-	fn from_val(
-		val: Val,
-		_store: &mut Store<()>,
-		_instance: &Instance,
-		_store_rc: &Rc<RefCell<Store<()>>>,
-	) -> Result<Self> {
-		Ok(warp_runtime::floats::canonical_nan(val.unwrap_f64()))
-	}
-}
-
-impl FromVal for GcObject {
-	fn from_val(
-		val: Val,
-		_store: &mut Store<()>,
-		instance: &Instance,
-		store_rc: &Rc<RefCell<Store<()>>>,
-	) -> Result<Self> {
-		Ok(GcObject::new(val, store_rc.clone(), *instance))
 	}
 }
 
@@ -427,10 +323,15 @@ fn family_linker(engine: &wasmtime::Engine, imports: Imports) -> Result<Linker<c
 /// Load WASM bytes with every import family it needs in one linker: a program may print, fetch and call C at once.
 /// A program that starts tasks (`go f(x)`) gets the task words; the tasks nobody awaited finish before the result.
 pub fn read_bytes_with_imports(bytes: &[u8], imports: Imports) -> Result<Node> {
+	let (result, mut store, instance) = run_main_with_tasks(bytes, imports)?;
+	val_to_node(&result, &mut store, &instance).map(|result| crate::units::static_units::with_module_units(bytes, result))
+}
+
+/// Run main with every import it needs, its tasks finished after it (finish_tasks)
+fn run_main_with_tasks(bytes: &[u8], imports: Imports) -> Result<(Val, Store<crate::host::HostState>, Instance)> {
 	let mut tasks = None;
 	let outcome = run_main(bytes, crate::host::HostState::new(), |linker, engine, module| link_run(linker, engine, module, imports, &mut tasks));
-	let (result, mut store, instance) = finish_tasks(outcome, tasks.as_deref())?;
-	val_to_node(&result, &mut store, &instance).map(|result| crate::units::static_units::with_module_units(bytes, result))
+	finish_tasks(outcome, tasks.as_deref())
 }
 
 /// Link a run's imports, with the shared arrays and the task words when the module uses them (`tasks` gets the run's)
@@ -467,9 +368,7 @@ pub fn read_export_after_main(bytes: &[u8], imports: Imports, name: &str) -> Res
 
 /// The values of the exported functions `names` after one run of main
 pub fn read_exports_after_main(bytes: &[u8], imports: Imports, names: &[&str]) -> Result<Vec<Node>> {
-	let mut tasks = None;
-	let outcome = run_main(bytes, crate::host::HostState::new(), |linker, engine, module| link_run(linker, engine, module, imports, &mut tasks));
-	let (_, mut store, instance) = finish_tasks(outcome, tasks.as_deref())?;
+	let (_, mut store, instance) = run_main_with_tasks(bytes, imports)?;
 	names.iter().map(|name| {
 		let export = instance.get_func(&mut store, name).ok_or_else(|| anyhow!("the module exports no {name}"))?;
 		let mut results = vec![Val::AnyRef(None); export.ty(&store).results().len()];
@@ -564,14 +463,7 @@ fn struct_node<T>(structref: &wasmtime::Rooted<wasmtime::StructRef>, store: &mut
 		t if t == Kind::Key as u8 => Node::Key(Box::new(node(&data)), crate::operators::code_to_op(high_byte), Box::new(node(&child))),
 		t if t == Kind::Block as u8 => list_in(data, child, Bracket::Curly, store, memory, path),
 		t if t == Kind::List as u8 => {
-			let bracket = match high_byte {
-				0 => Bracket::Curly,
-				1 => Bracket::Square,
-				2 => Bracket::Round,
-				3 => Bracket::Less,
-				_ => Bracket::None,
-			};
-			list_in(data, child, bracket, store, memory, path)
+			list_in(data, child, crate::wasm_emitter::bracket_of_info(high_byte as i64), store, memory, path)
 		}
 		t if t == Kind::Data as u8 => {
 			let type_name = text_of(store, &data, memory);
@@ -633,34 +525,6 @@ fn text_of<T>(store: &mut StoreContextMut<'_, T>, data: &Val, memory: wasmtime::
 		String::from_utf8(bytes.to_vec()).ok()
 	};
 	read(store).unwrap_or_default()
-}
-
-/// Create a node by calling a constructor function
-pub fn call_constructor(
-	func_name: &str,
-	args: &[Val],
-	store: Rc<RefCell<Store<()>>>,
-	instance: &Instance,
-) -> Result<GcObject> {
-	let func = {
-		let mut s = store.borrow_mut();
-		instance
-			.get_func(&mut *s, func_name)
-			.ok_or_else(|| anyhow!("Function {} not found", func_name))?
-	};
-
-	let mut results = vec![Val::I32(0)];
-	{
-		let mut s = store.borrow_mut();
-		func.call(&mut *s, args, &mut results)?;
-	}
-
-	Ok(GcObject::new(results[0], store, *instance))
-}
-
-/// Load WASM bytes with WASI support (for fd_write, puts, etc.)
-pub fn read_bytes_with_wasi(bytes: &[u8]) -> Result<Node> {
-	read_bytes_with_imports(bytes, Imports { wasi: true, ..Imports::default() })
 }
 
 /// Load WASM bytes with FFI support (for native function imports)

@@ -1,0 +1,20 @@
+s = 0
+g_n_1 = 100
+g_stop_1 = 0
+while 1 {
+  g_i_1 = 1
+  while g_i_1 <= g_n_1 {
+    x = g_i_1
+    while 1 {
+      if x == 2 { break }
+      if x > 5 { g_stop_1 = 1; break }
+      s += x
+      break
+    }
+    if g_stop_1 { break }
+    g_i_1 += 1
+  }
+  if g_stop_1 { break }
+  break
+}
+print s

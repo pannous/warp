@@ -6,6 +6,7 @@
 //! from shared values (P106); `await job or y` is `try await job else y`.
 //! `go xs.map(f)`, `go for x in xs {…}` and `xs.map(f) @parallel` split their items into tasks (parallel.rs).
 
+use super::nodes::{call, key};
 use crate::node::{Bracket, Node, Separator};
 use crate::operators::Op;
 
@@ -102,7 +103,7 @@ impl GoBlocks {
 		let parameter = |input: &String| Node::Symbol(format!("{input}{INPUT_SUFFIX}"));
 		let block = inputs.iter().fold(block, |block, input| crate::library_words::substitute(block, input, &parameter(input)));
 		let head = Node::List([vec![name.clone()], inputs.iter().map(parameter).collect()].concat(), Bracket::Round, Separator::None);
-		definitions.push(Node::Key(Box::new(head), Op::Define, Box::new(block)));
+		definitions.push(key(head, Op::Define, block));
 		Node::List([vec![name], inputs.into_iter().map(Node::Symbol).collect()].concat(), Bracket::Round, Separator::None)
 	}
 }
@@ -146,7 +147,7 @@ fn task_phrases(node: Node, phrases: &Phrases) -> Node {
 			}
 		}
 		Node::Key(awaited, Op::Or, fallback) if matches!(awaited.drop_meta(), Node::List(items, _, _) if items.first().is_some_and(|word| word.drop_meta().name() == AWAIT_WORD)) => {
-			let guarded = Node::List(vec![Node::Symbol(crate::warp_parser::TRY_MARKER.to_string()), *awaited, task_phrases(*fallback, phrases)], Bracket::Round, Separator::None);
+			let guarded = call(crate::warp_parser::TRY_MARKER, vec![*awaited, task_phrases(*fallback, phrases)]);
 			task_phrases_inside(guarded, phrases)
 		}
 		other => other.map_children(|child| task_phrases(child, phrases)),

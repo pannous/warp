@@ -1,2 +1,3 @@
 #!/usr/bin/env warp
+#!/usr/bin/env warp
 "Hello " + "🌍" + (2000+26)

@@ -12,6 +12,10 @@ use crate::site::ServedSite;
 use std::cell::Cell;
 
 const JSON_TYPE: &str = "application/json";
+/// The address a server listens on: every interface, or WARP_SERVE_ADDRESS (warp-lambda: 127.0.0.2, reachable only
+/// through its proxy, web/hosting/server)
+const SERVE_ADDRESS_VARIABLE: &str = "WARP_SERVE_ADDRESS";
+const EVERY_INTERFACE: &str = "0.0.0.0";
 const TEXT_TYPE: &str = "text/plain; charset=utf-8";
 /// A reply of this type is a text (host-tasks.js TEXT_REPLY_TYPE)
 pub const TEXT_REPLY_TYPE: &str = "text/plain";
@@ -190,7 +194,8 @@ fn text_of(node: &Node) -> String {
 /// Serve on `port` until the request limit (if any): `answer(route, request)` runs the route's function; a GET no route
 /// takes is a file of the program's `site` (src/site.rs), its page at /
 pub fn serve(port: u16, routes: &[Route], site: &ServedSite, mut answer: impl FnMut(&Route, Node) -> Result<Answer, RouteFailure>) -> Result<(), String> {
-	let server = tiny_http::Server::http(("0.0.0.0", port)).map_err(|problem| format!("serve {port}: {problem}"))?;
+	let address = std::env::var(SERVE_ADDRESS_VARIABLE).unwrap_or_else(|_| EVERY_INTERFACE.to_string());
+	let server = tiny_http::Server::http((address.as_str(), port)).map_err(|problem| format!("serve {address}:{port}: {problem}"))?;
 	let limit = take_request_limit();
 	let mut served = 0;
 	for mut request in server.incoming_requests() {
@@ -288,19 +293,19 @@ fn page_of(referer: &str) -> String {
 fn form_fields(encoded: &str) -> Node {
 	let fields = encoded.split('&').filter(|pair| !pair.is_empty()).map(|pair| {
 		let (key, value) = pair.split_once('=').unwrap_or((pair, ""));
-		entry(&percent_decoded(&key.replace('+', " ")), Node::Text(percent_decoded(&value.replace('+', " "))))
+		Node::key(&percent_decoded(&key.replace('+', " ")), Node::Text(percent_decoded(&value.replace('+', " "))))
 	}).collect();
-	Node::List(fields, crate::node::Bracket::Curly, crate::node::Separator::Space)
+	Node::List(fields, Bracket::Curly, crate::node::Separator::Space)
 }
 
 /// The request as the route's `request`: {method, path, query, body}, the body a JSON value or a form's fields
 fn request_node(method: &str, path: &str, query: &str, body: Node) -> Node {
 	Node::List(vec![
-		entry("method", Node::Text(method.to_string())),
-		entry("path", Node::Text(path.to_string())),
-		entry("query", form_fields(query)),
-		entry("body", body),
-	], crate::node::Bracket::Curly, crate::node::Separator::Space)
+		Node::key("method", Node::Text(method.to_string())),
+		Node::key("path", Node::Text(path.to_string())),
+		Node::key("query", form_fields(query)),
+		Node::key("body", body),
+	], Bracket::Curly, crate::node::Separator::Space)
 }
 
 /// Whether the request's body or query holds the field
@@ -315,8 +320,4 @@ fn entry_value<'map>(map: &'map Node, key: &str) -> Option<&'map Node> {
 		Node::Key(name, _, value) if name.name() == key => Some(value.as_ref()),
 		_ => None,
 	})
-}
-
-fn entry(key: &str, value: Node) -> Node {
-	Node::Key(Box::new(Node::Symbol(key.to_string())), crate::operators::Op::Colon, Box::new(value))
 }

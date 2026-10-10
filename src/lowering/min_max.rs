@@ -2,6 +2,7 @@
 //! share the arithmetic emitters. Arguments beyond plain values and arithmetic are computed once into temporaries.
 //! One list argument is the list of candidates: `max([1 5 2])`; a list variable `max(xs)` is folded at runtime.
 
+use super::nodes::key;
 use crate::analyzer::{call_name, extract_user_functions};
 use crate::context::Context;
 use crate::diagnostic::Diagnostic;
@@ -11,7 +12,10 @@ use crate::operators::Op;
 
 const EXTREMA: [(&str, Op); 2] = [("min", Op::Lt), ("max", Op::Gt)];
 const MIN_ARGUMENTS: usize = 2;
-const TEMPORARY_PREFIX: &str = "extremum_argument_";
+const TEMPORARY_BASE: &str = "extremum";
+/// `extremum_best` of the runtime fold becomes the temporary `extremum·best·3`
+const FOLD_PREFIX: &str = "extremum_";
+const FOLD_LIST: &str = "fold_list_placeholder";
 
 /// Pseudo-call the emitter turns into the runtime error `<extremum> of an empty list`
 pub const EMPTY_EXTREMUM_CALL: &str = "empty_extremum";
@@ -48,7 +52,7 @@ impl Lowering<'_> {
 				let (name, arguments) = self.extremum_method(&method).expect("guarded");
 				self.expand(Node::List([vec![name, *receiver], arguments].concat(), Bracket::Round, Separator::None))
 			}
-			Node::Key(left, op, right) => Node::Key(Box::new(self.expand(*left)), op, Box::new(self.expand(*right))),
+			Node::Key(left, op, right) => key(self.expand(*left), op, self.expand(*right)),
 			Node::Meta { node, data } => Node::Meta { node: Box::new(self.expand(*node)), data },
 			other => other,
 		}
@@ -73,25 +77,37 @@ impl Lowering<'_> {
 		let arguments = listed.unwrap_or(&items[1..]);
 		if let ([list], None) = (arguments, listed) {
 			return Some(match list.drop_meta() {
-				Node::Symbol(list) => fold_list_at_runtime(name, list, &better),
+				Node::Symbol(_) => self.fold_list_at_runtime(name, list, &better),
 				value if is_plain(value) => Diagnostic::at(&items[0], format!("{name} takes at least {MIN_ARGUMENTS} arguments or one list, got 1")).into_error(),
 				_ => {
-					let temporary = self.temporary();
-					let binding = Node::Key(Box::new(Node::Symbol(temporary.clone())), Op::Assign, Box::new(list.clone()));
-					with_bindings(vec![binding], fold_list_at_runtime(name, &temporary, &better))
+					let temporary = Node::Symbol(self.temporary());
+					let binding = key(temporary.clone(), Op::Assign, list.clone());
+					with_bindings(vec![binding], self.fold_list_at_runtime(name, &temporary, &better))
 				}
 			});
 		}
 		if arguments.is_empty() {
 			return Some(Diagnostic::at(&items[0], format!("{name} of an empty list")).into_error());
 		}
-		let (bindings, arguments) = self.bind_once(arguments);
-		let chosen = arguments[1..].iter().fold(arguments[0].clone(), |best, next| {
-			let comparison = Node::Key(Box::new(best.clone()), better, Box::new(next.clone()));
-			let branches = Node::Key(Box::new(best), Op::Colon, Box::new(next.clone()));
-			Node::Key(Box::new(comparison), Op::Question, Box::new(branches))
-		});
-		Some(with_bindings(bindings, chosen))
+		let (mut bindings, arguments) = self.bind_once(arguments);
+		let mut best = arguments[0].clone();
+		for next in &arguments[1..] {
+			// each comparison names the best so far twice: unbound, n arguments would make 2ⁿ nodes
+			if matches!(best.drop_meta(), Node::Key(_, Op::Question, _)) {
+				best = self.bind(&mut bindings, best);
+			}
+			let comparison = key(best.clone(), better, next.clone());
+			let branches = key(best, Op::Colon, next.clone());
+			best = key(comparison, Op::Question, branches);
+		}
+		Some(with_bindings(bindings, best))
+	}
+
+	/// `temporary = value` appended to the bindings; the temporary stands for the value
+	fn bind(&mut self, bindings: &mut Vec<Node>, value: Node) -> Node {
+		let temporary = Node::Symbol(self.temporary());
+		bindings.push(key(temporary.clone(), Op::Assign, value));
+		temporary
 	}
 
 	/// The comparisons repeat their operands: an argument that is more than a plain value or arithmetic
@@ -102,16 +118,23 @@ impl Lowering<'_> {
 			if is_plain(argument) {
 				return argument.clone();
 			}
-			let temporary = Node::Symbol(self.temporary());
-			bindings.push(Node::Key(Box::new(temporary.clone()), Op::Assign, Box::new(argument.clone())));
-			temporary
+			self.bind(&mut bindings, argument.clone())
 		}).collect();
 		(bindings, operands)
 	}
 
+	/// `max(xs)` for a list variable: the first item, improved by every later one; an empty list is an error
+	fn fold_list_at_runtime(&mut self, name: &str, list: &Node, better: &Op) -> Node {
+		self.temporaries += 1;
+		let template = parse(&format!(
+			"(if count({FOLD_LIST}) == 0 then {EMPTY_EXTREMUM_CALL}({name}) else ({FOLD_PREFIX}best={FOLD_LIST}#1; for {FOLD_PREFIX}item in {FOLD_LIST} {{ {FOLD_PREFIX}best = if {FOLD_PREFIX}item {better} {FOLD_PREFIX}best then {FOLD_PREFIX}item else {FOLD_PREFIX}best }}; {FOLD_PREFIX}best))"
+		));
+		crate::library_words::substitute(crate::library_words::named_apart(template, FOLD_PREFIX, TEMPORARY_BASE, self.temporaries), FOLD_LIST, list)
+	}
+
 	fn temporary(&mut self) -> String {
 		self.temporaries += 1;
-		format!("{TEMPORARY_PREFIX}{}", self.temporaries)
+		crate::library_words::temporary_name(&[TEMPORARY_BASE, "argument", &self.temporaries.to_string()])
 	}
 }
 
@@ -136,12 +159,6 @@ fn list_literal_items(arguments: &[Node]) -> Option<&[Node]> {
 	}
 }
 
-/// `max(xs)` for a list variable: the first item, improved by every later one; an empty list is an error
-fn fold_list_at_runtime(name: &str, list: &str, better: &Op) -> Node {
-	parse(&format!(
-		"(if count({list}) == 0 then {EMPTY_EXTREMUM_CALL}({name}) else (extremum_best={list}#1; for extremum_item in {list} {{ extremum_best = if extremum_item {better} extremum_best then extremum_item else extremum_best }}; extremum_best))"
-	))
-}
 
 /// A value or arithmetic on values: cheap and side-effect free to repeat in the comparisons
 pub(crate) fn is_plain(node: &Node) -> bool {

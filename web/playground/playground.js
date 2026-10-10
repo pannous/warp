@@ -43,8 +43,22 @@ const PAINT_INK = 29;
 const PAINT_PAPER = 250;
 const PAINT_COLOR_FROM = 2 ** 24;
 const PAINT_SHOWN_SIDE = 288; // a small painting is shown this wide (or high), scaled by a whole factor so pixels stay square
+const SOUND_OFFSET = 32768; // a sound's samples cross as amplitude + 32768 (lib/sound.warp, src/sound.rs SAMPLE_OFFSET)
 
 const $ = id => document.getElementById(id);
+
+// this browser's localStorage (the other page scripts use it too), which a private window may refuse: then nothing is
+// remembered beyond the page
+function stored(key) {
+	try { return localStorage.getItem(key); } catch { return null; }
+}
+function store(key, value) {
+	try { value ? localStorage.setItem(key, value) : localStorage.removeItem(key); } catch { /* not remembered */ }
+}
+// a stored JSON value, null when there is none or it is no JSON
+function storedJson(key) {
+	try { return JSON.parse(stored(key)); } catch { return null; }
+}
 function element(tag, properties = {}, ...children) {
 	const node = Object.assign(document.createElement(tag), properties);
 	node.append(...children);
@@ -68,24 +82,22 @@ let lastModule; // the bytes of the last module the compiler emitted, for the do
 // ---- acknowledged topics, remembered in this browser ---------------------------------------------------------
 
 function loadAcknowledged() {
-	try {
-		const saved = JSON.parse(localStorage.getItem(ACKNOWLEDGED_KEY));
-		if (Array.isArray(saved)) return saved;
-		const old = JSON.parse(localStorage.getItem(OLD_ANSWERS_KEY)) ?? {};
-		return Object.keys(old).filter(key => key.startsWith(ACKNOWLEDGED_PREFIX)).map(key => key.slice(ACKNOWLEDGED_PREFIX.length));
-	} catch { return []; }
+	const saved = storedJson(ACKNOWLEDGED_KEY);
+	if (Array.isArray(saved)) return saved;
+	const old = storedJson(OLD_ANSWERS_KEY) ?? {};
+	return Object.keys(old).filter(key => key.startsWith(ACKNOWLEDGED_PREFIX)).map(key => key.slice(ACKNOWLEDGED_PREFIX.length));
 }
 
 function saveAcknowledged(topics) {
 	acknowledged = [...new Set(topics)].sort();
-	try { localStorage.setItem(ACKNOWLEDGED_KEY, JSON.stringify(acknowledged)); } catch { /* private window: lasts for this page */ }
+	store(ACKNOWLEDGED_KEY, JSON.stringify(acknowledged));
 }
 
 let acknowledged = loadAcknowledged();
 
 // ---- the resizers: the guide's width and the editor's height, remembered in this browser -------------------
 
-let sizes = (() => { try { return JSON.parse(localStorage.getItem(SIZES_KEY)) ?? {}; } catch { return {}; } })();
+let sizes = storedJson(SIZES_KEY) ?? {};
 const clamp = (value, [least, share], whole) => Math.round(Math.min(Math.max(value, least), whole * share));
 
 function applySizes() {
@@ -100,7 +112,7 @@ function setSize(name, value) {
 	if (value === undefined) delete sizes[name];
 	else sizes[name] = Math.round(value);
 	applySizes();
-	try { localStorage.setItem(SIZES_KEY, JSON.stringify(sizes)); } catch { /* private window: lasts for this page */ }
+	store(SIZES_KEY, JSON.stringify(sizes));
 }
 
 // drag the handle (or press its arrow keys) to set a size; sizeAt(pointer event) is the size there, current() the size now
@@ -191,6 +203,9 @@ function startWorker(restarts = 0) {
 			if (data.type === "clipboard") return copyText(data.text);
 			if (data.type === "failed") return failed(new Error(data.message));
 			if (data.type === "bundle") return bundled(data.bundle); // deploy.js
+			if (data.type === "sound") return playSound(data);
+			if (data.type === "sound file") return playSoundFile(data.url);
+			if (data.type === "stop sound files") return silence(); // stop_sound: the queued sounds and the music files
 			if (!pending) return showEventOutput(data);
 			if (data.type === "listening") Object.assign(pending, { listening: data.events, address: data.address });
 			if (data.type === "print") printedChunk(pending, data);
@@ -260,6 +275,53 @@ function startsFrame(run, output) {
 	return starts;
 }
 
+// ---- sound ----------------------------------------------------------------------------------------------------
+
+let audio; // the page's AudioContext, made at the first sound after a click or key press
+let soundsEnd = 0; // when the queued sounds end, in the AudioContext's time: one plays after the other, as natively
+let sounding = []; // the playing and queued sounds, silenced when the next run starts (typing reruns the code)
+
+// before the page's first click or key press (the run on load, the CI tour) a sound stays silent: an AudioContext made
+// then cannot start and the browser warns
+const beforeUserActivation = () => navigator.userActivation && !navigator.userActivation.hasBeenActive;
+function playSound({ samples, rate }) {
+	if (beforeUserActivation()) return;
+	audio ??= new AudioContext();
+	audio.resume();
+	const buffer = audio.createBuffer(1, Math.max(samples.length, 1), rate);
+	buffer.getChannelData(0).set(Float32Array.from(samples, sample => (sample - SOUND_OFFSET) / SOUND_OFFSET));
+	const source = audio.createBufferSource();
+	source.buffer = buffer;
+	source.connect(audio.destination);
+	soundsEnd = Math.max(soundsEnd, audio.currentTime);
+	source.start(soundsEnd);
+	soundsEnd += buffer.duration;
+	source.onended = () => sounding = sounding.filter(other => other !== source);
+	sounding.push(source);
+}
+
+// `play "song.mp3"` (card sound-library): a music file in the background, by its URL beside the page or anywhere
+let playingFiles = [];
+function playSoundFile(url) {
+	if (beforeUserActivation()) return;
+	const player = new Audio(url);
+	player.onended = () => playingFiles = playingFiles.filter(other => other !== player);
+	player.play().catch(error => console.error(`play "${url}": ${error.message}`));
+	playingFiles.push(player);
+}
+
+function stopSoundFiles() {
+	playingFiles.forEach(player => player.pause());
+	playingFiles = [];
+}
+
+function silence() {
+	sounding.forEach(source => source.stop());
+	sounding = [];
+	soundsEnd = 0;
+	stopSoundFiles();
+}
+
 // each painting shows at once, while the program still runs: one the size of the last replaces it, as a frame (card
 // g_oldM: `if frame % 6 == 0 { render() }` animates without a sleep, as the native window does)
 function painted(run, painting) {
@@ -314,6 +376,7 @@ async function runInWorker(code) {
 		const run = { id: ++nextRunId, resolve, printed: [], paintings: [], frame: 0, framesShown: {} };
 		stopAfterTimeout(run);
 		pending = run;
+		silence();
 		worker.postMessage({ id: run.id, code, acknowledged: acknowledgements() });
 	});
 }
@@ -353,8 +416,7 @@ const code = text => element("code", {}, text);
 function applyFix(fix) {
 	// every edit of the fix, the last in the text first, so the earlier offsets stay valid
 	for (const edit of fix.edits) editor.replaceRange(edit.replacement, editor.posFromIndex(edit.start), editor.posFromIndex(edit.end));
-	clearTimeout(typingTimer);
-	runNow();
+	runChanged();
 }
 
 // the "I meant: …" buttons of a warning, error or hint; a fix whose text the code does not show cannot be applied
@@ -371,8 +433,7 @@ const GOT_IT_COMMENT = " // got it";
 function commentGotIt(line) {
 	const index = line - 1;
 	editor.replaceRange(GOT_IT_COMMENT, { line: index, ch: editor.getLine(index).length });
-	clearTimeout(typingTimer);
-	runNow();
+	runChanged();
 }
 
 // "got it" (user, 2026-10-05): for this expression (its `topic@expression` key), for all of the kind (the topic), or
@@ -466,9 +527,14 @@ function paintShade(value) {
 function showRendered(html) {
 	const host = $("rendered");
 	host.hidden = !html;
+	morphChildren(host.shadowRoot ?? renderedRoot(host), parsedHtml(html ?? ""));
+}
+
+// the HTML as a fragment of DOM, not in the page
+function parsedHtml(html) {
 	const template = document.createElement("template");
-	template.innerHTML = html ?? "";
-	morphChildren(host.shadowRoot ?? renderedRoot(host), template.content);
+	template.innerHTML = html;
+	return template.content;
 }
 
 // a form's submit stays inside the shadow root (it is not composed): listened to there
@@ -624,9 +690,7 @@ function showEventOutput(data) {
 function showPatch({ path, html }) {
 	const root = $("rendered").shadowRoot;
 	const shown = path.reduce((element, index) => element?.children[index], root?.children[0]);
-	const template = document.createElement("template");
-	template.innerHTML = html;
-	const wanted = template.content.children[0];
+	const wanted = parsedHtml(html).children[0];
 	if (shown && wanted && shown.nodeName === wanted.nodeName) morphElement(shown, wanted);
 	else console.error(`markup hole ${path.join("·")}: no ${wanted?.nodeName} there to update`, shown);
 }
@@ -695,6 +759,12 @@ function runNow() {
 	return show(editor.getValue());
 }
 
+// the code changed by the page, not typed: it runs at once, and only once (the change event's run would run it again)
+function runChanged() {
+	clearTimeout(typingTimer);
+	return runNow();
+}
+
 // Run pressed (the button, Ctrl/Cmd-Enter): the old value gives way to "…" at once, and the old errors, warnings,
 // underlines and printed text go, so none is taken for the new run's (card g_oc54)
 function runPressed() {
@@ -712,8 +782,7 @@ const exampleSource = name => EXAMPLES[name]?.code ?? SAMPLES[name];
 // puts the code in the editor and runs it once; resolves once its report is shown
 function runCode(source) {
 	editor.setValue(source);
-	clearTimeout(typingTimer); // the change event's run would run it twice
-	return runNow();
+	return runChanged();
 }
 
 // shows the example or sample; resolves once its report is shown
@@ -768,9 +837,9 @@ function initialize() {
 	});
 	$("run").onclick = runPressed;
 	$("full-screen").onclick = toggleFullScreen;
-	try { $("hints").checked = localStorage.getItem(HINTS_KEY) !== "off"; } catch { /* private window: on */ }
+	$("hints").checked = stored(HINTS_KEY) !== "off";
 	$("hints").onchange = () => {
-		try { localStorage.setItem(HINTS_KEY, $("hints").checked ? "on" : "off"); } catch { /* private window: lasts for this page */ }
+		store(HINTS_KEY, $("hints").checked ? "on" : "off");
 		runNow();
 	};
 	$("address").onkeydown = goToAddress;

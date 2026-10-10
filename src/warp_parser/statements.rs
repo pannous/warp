@@ -3,14 +3,25 @@
 use super::*;
 
 impl WarpParser {
+	/// The iterable of a for header and the word that opens the body: `:`, `do` or none.
+	/// In the header `xs {` is the collection and the body, as in any for loop, not a construction of xs
+	fn for_iterable_and_body_word(&mut self) -> (Node, Option<&'static str>) {
+		let outer_header = std::mem::replace(&mut self.in_for_header, true);
+		let iterable = self.with_equals_comparing(false, |parser| parser.parse_iterable());
+		self.in_for_header = outer_header;
+		self.skip_spaces();
+		let body_word = if self.current_char() == ':' { Some(":") } else { Some("do").filter(|word| self.matches_keyword(word)) };
+		(iterable, body_word)
+	}
+
 	/// `global [modifiers] name[=value]` and the same after `export`: a variable declared at module level.
 	/// `export` without a name after it, and `export f:=it*2`, a function, stay ordinary code.
 	pub(super) fn try_parse_global_declaration(&mut self, keyword: &str) -> Option<Node> {
-		let before_declaration = (self.pos, self.line_nr, self.column, self.current_line.clone());
+		let before_declaration = self.mark();
 		self.skip_whitespace();
 		self.skip_declaration_modifiers();
 		if keyword == "export" && !self.at_identifier_start() {
-			(self.pos, self.line_nr, self.column, self.current_line) = before_declaration;
+			self.rewind(before_declaration);
 			return None;
 		}
 		let declaration = self.parse_expr(0); // name, name=value or name:=value
@@ -118,18 +129,30 @@ impl WarpParser {
 	/// Modifier and type words between the keyword and the name (`global const int k=7`): the global holds the value, the words are dropped
 	pub(super) fn skip_declaration_modifiers(&mut self) {
 		loop {
-			let before_word = (self.pos, self.line_nr, self.column, self.current_line.clone());
+			let before_word = self.mark();
 			let word = self.parse_symbol().unwrap_or_default();
 			let is_modifier = DECLARATION_MODIFIERS.contains(&word.as_str()) || crate::analyzer::CONSTANT_KEYWORDS.contains(&word.as_str()) || crate::analyzer::type_word_kind(&word).is_some();
 			self.skip_spaces();
 			if !is_modifier || !self.at_identifier_start() {
-				(self.pos, self.line_nr, self.column, self.current_line) = before_word; // `global int` names the variable int
+				self.rewind(before_word); // `global int` names the variable int
 				return;
 			}
 		}
 	}
 
 	/// The name of `for x in …`, or the names each element destructures into: `for (r, c) in …`, `for k, v in …`
+	/// A loop variable and the word `in` follow the blanks here: `x in xs` after `each`; nothing consumed
+	pub(super) fn loop_variable_in_follows(&mut self) -> bool {
+		let before = self.mark();
+		self.skip_blanks();
+		let follows = self.parse_loop_variable().is_some() && {
+			self.skip_blanks();
+			self.matches_keyword("in")
+		};
+		self.rewind(before);
+		follows
+	}
+
 	pub(super) fn parse_loop_variable(&mut self) -> Option<Node> {
 		let bracket = if self.current_char() == '(' { self.advance(); Bracket::Round } else { Bracket::None };
 		let mut names = vec![];
@@ -148,7 +171,7 @@ impl WarpParser {
 			}
 			self.advance();
 		}
-		Some(if names.len() == 1 { names.remove(0) } else { Node::List(names, bracket, Separator::Colon) })
+		Some(Node::single_or_list(names, bracket, Separator::Colon))
 	}
 
 	/// `(i=0;i<n;i++)`: a group here whose top level holds a `;`
@@ -177,7 +200,7 @@ impl WarpParser {
 	/// `for x in iterable: body` and `for x in iterable {body}`, after the word `for`; the body of a colon runs to the end of
 	/// the statement. `for 1..10 : print it` names no variable (wiki/for.md): `for iterable {body}`, whose items are `it`
 	pub(super) fn try_parse_for_in(&mut self) -> Option<Node> {
-		let before_header = (self.pos, self.line_nr, self.column, self.current_line.clone());
+		let before_header = self.mark();
 		self.skip_spaces();
 		if let Some(filtered) = self.try_parse_condition_loop() {
 			return Some(filtered);
@@ -192,17 +215,13 @@ impl WarpParser {
 		if named.is_some() {
 			self.advance_by("in".len());
 		} else {
-			(self.pos, self.line_nr, self.column, self.current_line) = before_header.clone();
+			self.rewind(before_header.clone());
 			self.skip_spaces();
 			if self.at_c_style_for_head() { // `for(i=0;i<n;i++)`; `for (1…5).filter(f):` walks the list
 				return Some(self.c_style_for());
 			}
 		}
-		let outer_header = std::mem::replace(&mut self.in_for_header, true);
-		let iterable = self.with_equals_comparing(false, |parser| parser.parse_iterable());
-		self.in_for_header = outer_header;
-		self.skip_spaces();
-		let body_word = if self.current_char() == ':' { Some(":") } else { Some("do").filter(|word| self.matches_keyword(word)) };
+		let (iterable, body_word) = self.for_iterable_and_body_word();
 		let Some(variable) = named else {
 			// only the colon and do forms: `for 1..3 {…}` is read where for loops are lowered
 			let body = match body_word {
@@ -211,7 +230,7 @@ impl WarpParser {
 				None => match self.indented_lines_below() {
 					Some(block) => block, // `for 0 to 2` and the lines indented below it
 					None => {
-						(self.pos, self.line_nr, self.column, self.current_line) = before_header;
+						self.rewind(before_header);
 						return None;
 					}
 				},
@@ -267,7 +286,7 @@ impl WarpParser {
 	/// (`[x for x in xs where x > 1]`)
 	fn parse_iterable(&mut self) -> Node {
 		let first = self.parse_expr(Op::Colon.binding_power().0 + 1);
-		let after_first = (self.pos, self.line_nr, self.column, self.current_line.clone());
+		let after_first = self.mark();
 		let mut words = vec![first];
 		loop {
 			self.skip_spaces();
@@ -282,7 +301,7 @@ impl WarpParser {
 			words.push(word);
 		}
 		if words.len() == 1 || !self.at_loop_body() {
-			(self.pos, self.line_nr, self.column, self.current_line) = after_first;
+			self.rewind(after_first);
 			return words.remove(0);
 		}
 		Node::List(words, Bracket::None, Separator::Space)
@@ -296,7 +315,7 @@ impl WarpParser {
 	/// `for (it>2) in xs: body` (wiki/for.md, P46): the items the condition holds for, as `it`; None (nothing consumed)
 	/// for any other header
 	pub(super) fn try_parse_condition_loop(&mut self) -> Option<Node> {
-		let before = (self.pos, self.line_nr, self.column, self.current_line.clone());
+		let before = self.mark();
 		if self.current_char() != '(' {
 			return None;
 		}
@@ -322,22 +341,17 @@ impl WarpParser {
 		// `(even number)`: an adjective and a type word
 		let condition = if mentions_it { Some(condition) } else { self.adjective_condition(&condition) };
 		let Some(condition) = condition.filter(|_| self.current_char() == ')') else {
-			(self.pos, self.line_nr, self.column, self.current_line) = before;
+			self.rewind(before);
 			return None;
 		};
 		self.advance();
 		self.skip_spaces();
 		if !self.matches_keyword("in") {
-			(self.pos, self.line_nr, self.column, self.current_line) = before;
+			self.rewind(before);
 			return None;
 		}
 		self.advance_by("in".len());
-		// in the header `xs {` is the collection and the body, as in any for loop, not a construction of xs
-		let outer_header = std::mem::replace(&mut self.in_for_header, true);
-		let iterable = self.with_equals_comparing(false, |parser| parser.parse_iterable());
-		self.in_for_header = outer_header;
-		self.skip_spaces();
-		let body_word = if self.current_char() == ':' { Some(":") } else { Some("do").filter(|word| self.matches_keyword(word)) };
+		let (iterable, body_word) = self.for_iterable_and_body_word();
 		let body = match body_word {
 			Some(word) => self.colon_body(word),
 			None => self.indented_lines_below().unwrap_or_else(|| self.parse_atom()),
@@ -506,12 +520,6 @@ impl WarpParser {
 		self.can_start_atom()
 	}
 
-	fn skip_blanks(&mut self) {
-		while matches!(self.current_char(), ' ' | '\t') {
-			self.advance();
-		}
-	}
-
 	pub(super) fn finish_while_prefix(&mut self, rhs: Node) -> Node {
 		self.skip_spaces();
 		if self.current_char() == '{' {
@@ -534,6 +542,7 @@ impl WarpParser {
 		}
 
 		if let Some(body) = self.indented_lines_below() {
+			self.skip_end_line(); // Ruby's `while c` … `end`
 			return while_do(rhs, body);
 		}
 		Node::Key(Box::new(Empty), Op::While, Box::new(rhs))
@@ -563,8 +572,8 @@ impl WarpParser {
 					self.advance(); // Python's `else: body`
 					self.parse_branch(0)
 				}
-				ElseParseMode::Atom => self.parse_atom(),
-				ElseParseMode::Expr => self.parse_branch(0),
+				ElseParseMode::Atom if self.current_char() == '{' => self.parse_atom(),
+				_ => self.parse_branch(0), // `if c {1} else 3+1`, `if c {…} else print x+1`: the rest of the expression
 			}
 		} else {
 			return if_then;

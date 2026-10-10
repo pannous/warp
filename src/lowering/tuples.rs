@@ -5,7 +5,8 @@
 //!   multi-value results, and a plain call `f()` gets them packed into the list `[a b]`
 //! - `x, y = v` / `x, y = v, w` → `$destructure (x, y) v …` (a statement binding each name, values evaluated first)
 
-use crate::node::{error, Bracket, Node, Separator};
+use super::nodes::{is_word, key};
+use crate::node::{error, symbol, Bracket, Node, Separator};
 use crate::operators::Op;
 
 pub const RETURN: &str = "return";
@@ -26,7 +27,7 @@ pub fn lower(node: Node) -> Node {
 		Node::Key(left, Op::Assign, right) if bracketed_targets(&left).is_some() => {
 			regroup_bracketed_destructuring(&left, &lower(*right)).expect("guarded")
 		}
-		Node::Key(left, op, right) => Node::Key(Box::new(lower(*left)), op, Box::new(lower(*right))),
+		Node::Key(left, op, right) => key(lower(*left), op, lower(*right)),
 		Node::List(items, bracket, separator) => {
 			// `(a, b) = 1, 2` arrives as `((a, b) = 1), 2`: the first item stays an assignment for regroup_destructuring
 			let takes_more_values = bracket == Bracket::None && separator == Separator::Colon;
@@ -43,7 +44,7 @@ pub fn lower(node: Node) -> Node {
 			};
 			let items: Vec<Node> = items.into_iter().enumerate().map(lower_item).collect();
 			let regrouped = match (&bracket, &separator) {
-				(Bracket::None, Separator::Colon) => regroup_return(&items).or_else(|| regroup_destructuring(&items)),
+				(Bracket::None, Separator::Colon) => regroup_return(&items).or_else(|| regroup_destructuring(&items)).or_else(|| regroup_declared_destructuring(&items)),
 				// `{ return a, b }` keeps its one statement; `{a, b=2}` stays data
 				(Bracket::Curly, Separator::Colon) => regroup_return(&items).map(|statement| Node::List(vec![statement], Bracket::Curly, Separator::Semicolon)),
 				_ => None,
@@ -58,7 +59,7 @@ pub fn lower(node: Node) -> Node {
 /// The values of `return a, b, …` (lowered), or None for any other node
 pub fn returned_values(node: &Node) -> Option<&[Node]> {
 	match node.drop_meta() {
-		Node::List(items, _, Separator::Space) if items.len() >= 3 && is_symbol(&items[0], RETURN) => Some(&items[1..]),
+		Node::List(items, _, Separator::Space) if items.len() >= 3 && is_word(&items[0], RETURN) => Some(&items[1..]),
 		_ => None,
 	}
 }
@@ -67,7 +68,7 @@ pub fn returned_values(node: &Node) -> Option<&[Node]> {
 pub fn destructuring(node: &Node) -> Option<(Vec<String>, &[Node])> {
 	let Node::List(items, _, _) = node.drop_meta() else { return None };
 	let [head, names, values @ ..] = items.as_slice() else { return None };
-	if !is_symbol(head, DESTRUCTURE) {
+	if !is_word(head, DESTRUCTURE) {
 		return None;
 	}
 	let Node::List(names, _, _) = names.drop_meta() else { return None };
@@ -113,10 +114,6 @@ fn symbol_name(node: &Node) -> Option<String> {
 	}
 }
 
-fn is_symbol(node: &Node, word: &str) -> bool {
-	matches!(node.drop_meta(), Node::Symbol(symbol) if symbol == word)
-}
-
 /// `(… return a), b, c` → `… return a b c`: the return at the end of the first item takes the other items
 fn regroup_return(items: &[Node]) -> Option<Node> {
 	let (first, rest) = items.split_first()?;
@@ -130,7 +127,7 @@ fn with_trailing_return(node: &Node, more: &[Node]) -> Option<Node> {
 	match node {
 		Node::Meta { node, data } => Some(Node::Meta { node: Box::new(with_trailing_return(node, more)?), data: data.clone() }),
 		Node::Key(left, op, right) => Some(Node::Key(left.clone(), *op, Box::new(with_trailing_return(right, more)?))),
-		Node::List(items, Bracket::None, Separator::Space) if items.len() == 2 && is_symbol(&items[0], RETURN) => {
+		Node::List(items, Bracket::None, Separator::Space) if items.len() == 2 && is_word(&items[0], RETURN) => {
 			Some(Node::List(items.iter().chain(more).cloned().collect(), Bracket::None, Separator::Space))
 		}
 		_ => None,
@@ -174,6 +171,20 @@ fn regroup_destructuring(items: &[Node]) -> Option<Node> {
 	Some(destructure(names, values, written.trim(), ""))
 }
 
+/// `let a, b = 3, 4` → `let ($destructure (a, b) 3 4)`, like `let (a, b) = 3, 4`: Python's unpacking, assumed (card
+/// let-comma; JS would declare a without a value and b = 3: notes/open_decisions.md)
+fn regroup_declared_destructuring(items: &[Node]) -> Option<Node> {
+	let (first, rest) = items.split_first()?;
+	let Node::List(declared, Bracket::None, Separator::Space) = first.drop_meta() else { return None };
+	let [keyword, target] = declared.as_slice() else { return None };
+	if !crate::analyzer::is_declaration_keyword(keyword) {
+		return None;
+	}
+	let targets: Vec<Node> = std::iter::once(target.clone()).chain(rest.iter().cloned()).collect();
+	let destructuring = regroup_destructuring(&targets)?;
+	Some(Node::List(vec![keyword.clone(), destructuring], Bracket::None, Separator::Space))
+}
+
 /// `[a, b] = v` and `(a, b) = v`: the bracketed targets assigned one value
 fn regroup_bracketed_destructuring(left: &Node, value: &Node) -> Option<Node> {
 	let targets = bracketed_targets(left)?;
@@ -213,7 +224,7 @@ fn destructure(names: Vec<Node>, values: Vec<Node>, written: &str, path: &str) -
 		}
 		None => name,
 	}).collect();
-	let head = Node::Symbol(DESTRUCTURE.to_string());
+	let head = symbol(DESTRUCTURE);
 	let names = Node::List(names, Bracket::Round, Separator::Colon);
 	let statement = Node::List([head, names].into_iter().chain(values).collect(), Bracket::None, Separator::Space);
 	if nested.is_empty() {
@@ -233,7 +244,7 @@ fn check_definition(node: &Node) -> Option<Node> {
 	let mut single = None;
 	body.visit(&mut |node| {
 		if let Node::List(items, _, _) = node.drop_meta() {
-			if items.len() == 2 && is_symbol(&items[0], RETURN) {
+			if items.len() == 2 && is_word(&items[0], RETURN) {
 				single.get_or_insert_with(|| node.serialize());
 			}
 		}

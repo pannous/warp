@@ -23,11 +23,8 @@ const FAILURE_SHOWN_MS = 5000; // how long a failed completion's reason stays un
 const NO_KEY = "Paste an Anthropic API key into the ⋯ menu first.";
 const PAUSE_BEFORE_COMPLETION_MS = 1000; // typing paused this long at a line's end asks for a completion by itself
 
-const apiKey = () => { try { return localStorage.getItem(API_KEY_STORAGE) ?? ""; } catch { return ""; } };
-
-function saveApiKey(key) {
-	try { key ? localStorage.setItem(API_KEY_STORAGE, key) : localStorage.removeItem(API_KEY_STORAGE); } catch { /* private window: lasts for this page */ }
-}
+const apiKey = () => stored(API_KEY_STORAGE) ?? "";
+const saveApiKey = key => store(API_KEY_STORAGE, key);
 
 // what the worker gets: the stand-in as the program's environment, the key itself only to put into a request to the API
 function programEnvironment() {

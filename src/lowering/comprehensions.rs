@@ -2,8 +2,9 @@
 //! `(made = []; for x in xs { if c { made.push(x * x) } }; made)`. Lowered first, so the loop and the push go through
 //! every later pass like written ones. `xs where it > 1` filters like `[it for it in xs if it > 1]`.
 
+use super::nodes::{is_word, key};
 use crate::library_words::substitute;
-use crate::node::{Bracket, Node, Separator};
+use crate::node::{symbol, Bracket, Node, Separator};
 use crate::operators::Op;
 use crate::warp_parser::parse;
 use std::cell::Cell;
@@ -20,6 +21,8 @@ const VARIABLE: &str = "comprehension_variable";
 const SEQUENCE: &str = "comprehension_sequence";
 const CONDITION: &str = "comprehension_condition";
 const ELEMENT: &str = "comprehension_element";
+/// Where the nested loops go in a template
+const LOOPS: &str = "comprehension_loops";
 
 pub fn lower(node: Node) -> Node {
 	Lowering { count: Cell::new(0) }.lower(node)
@@ -70,7 +73,7 @@ impl Lists {
 }
 
 /// The names a definition or assignment binds: `x`, `x: int`, the parameters of `f(a, b: int)`
-fn bound_names(target: &Node) -> Vec<String> {
+pub(crate) fn bound_names(target: &Node) -> Vec<String> {
 	match target.drop_meta() {
 		Node::Symbol(name) => vec![name.clone()],
 		Node::Key(name, Op::Colon, _) => bound_names(name),
@@ -82,7 +85,7 @@ fn bound_names(target: &Node) -> Vec<String> {
 fn fields_of_it(condition: Node, fields: &[String], variables: &HashSet<String>) -> Node {
 	match condition {
 		Node::Symbol(name) if fields.contains(&name) => {
-			let field_of_it = Node::Key(Box::new(Node::Symbol(crate::lambdas::IMPLICIT_PARAMETER.to_string())), Op::Dot, Box::new(Node::Symbol(name.clone())));
+			let field_of_it = key(symbol(crate::lambdas::IMPLICIT_PARAMETER), Op::Dot, Node::Symbol(name.clone()));
 			if !variables.contains(&name) {
 				return field_of_it;
 			}
@@ -139,7 +142,7 @@ fn loop_over_filtered(items: &[Node], lists: &mut Lists) -> Option<Vec<Node>> {
 		return None;
 	}
 	let Node::Symbol(name) = variable.drop_meta() else { return None };
-	let condition = substitute(condition.clone(), name, &Node::Symbol(crate::lambdas::IMPLICIT_PARAMETER.to_string()));
+	let condition = substitute(condition.clone(), name, &symbol(crate::lambdas::IMPLICIT_PARAMETER));
 	let filter = Node::List(vec![sequence.clone(), where_word.clone(), condition], Bracket::None, Separator::Space);
 	Some(vec![for_word.clone(), variable.clone(), in_word.clone(), where_filters(filter, lists), where_filters(body.clone(), lists)])
 }
@@ -152,9 +155,9 @@ fn where_comprehension(subject: &Node, condition: &Node) -> Node {
 		return crate::node::error(&format!("`{subject} where {}` filters by each element `it`: write {subject} where it > 1{field_hint}", condition.serialize()));
 	}
 	// a name of its own: in a function of one parameter `it` is that parameter
-	let element = Node::Symbol(WHERE_ELEMENT.to_string());
+	let element = symbol(WHERE_ELEMENT);
 	let condition = substitute(condition.clone(), crate::lambdas::IMPLICIT_PARAMETER, &element);
-	let word = |word: &str| Node::Symbol(word.to_string());
+	let word = |word: &str| symbol(word);
 	let clause = Node::List(vec![word(FOR_WORD), element.clone(), word(IN_WORD), subject.clone(), word(IF_WORD)], Bracket::None, Separator::Space);
 	Node::List(vec![element, clause, condition], Bracket::Square, Separator::Space)
 }
@@ -164,7 +167,7 @@ fn where_comprehension(subject: &Node, condition: &Node) -> Node {
 fn field_condition(condition: &Node) -> Option<(String, String)> {
 	let Node::Key(field, op, value) = condition.drop_meta() else { return None };
 	let Node::Symbol(name) = field.drop_meta() else { return None };
-	let it = Node::Symbol(crate::lambdas::IMPLICIT_PARAMETER.to_string());
+	let it = symbol(crate::lambdas::IMPLICIT_PARAMETER);
 	let field_of_it = Node::Key(Box::new(it), Op::Dot, field.clone());
 	Some((name.clone(), Node::Key(Box::new(field_of_it), *op, value.clone()).serialize()))
 }
@@ -180,10 +183,10 @@ fn where_reassociated(node: Node) -> Node {
 				Node::List(items, bracket, separator) if *bracket != Bracket::Round && where_position(items).is_some() => {
 					let mut items = items.clone();
 					let condition = items.pop().expect("where has a condition");
-					items.push(Node::Key(Box::new(condition), op, Box::new(right)));
+					items.push(key(condition, op, right));
 					Node::List(items, bracket.clone(), separator.clone())
 				}
-				_ => Node::Key(Box::new(left), op, Box::new(right)),
+				_ => key(left, op, right),
 			}
 		}
 		other => other.map_children(where_reassociated),
@@ -208,10 +211,6 @@ fn where_flattened(node: Node) -> Node {
 /// The position of `where` in `[… subject, where, condition]`
 fn where_position(items: &[Node]) -> Option<usize> {
 	(items.len() >= 3).then(|| items.len() - 2).filter(|&at| matches!(items[at].drop_meta(), Node::Symbol(symbol) if symbol == WHERE_WORD))
-}
-
-fn is_word(node: &Node, word: &str) -> bool {
-	matches!(node.drop_meta(), Node::Symbol(symbol) if symbol == word)
 }
 
 /// The clause `for v in xs …`
@@ -246,46 +245,111 @@ impl Lowering {
 					_ => Node::List(items, bracket, separator),
 				}
 			}
-			Node::Key(left, op, right) => Node::Key(Box::new(self.lower(*left)), op, Box::new(self.lower(*right))),
+			Node::Key(left, op, right) => key(self.lower(*left), op, self.lower(*right)),
 			Node::Meta { node, data } => Node::Meta { node: Box::new(self.lower(*node)), data },
 			other => other,
 		}
 	}
 
-	/// The items `[element, (for v in xs), …]` as the parser groups them; with a filter `(for v in xs if) condition`.
-	/// An element or condition of several words is their phrase: `[upper w for w in words]`
 	fn comprehension(&self, items: &[Node]) -> Option<Node> {
-		let at = items.iter().position(starts_with_for).filter(|&at| at > 0)?;
-		let (element, clause, rest) = (phrase(&items[..at]), &items[at], &items[at + 1..]);
-		let Node::List(words, _, _) = clause.drop_meta() else { return None };
-		let [_, variable, in_word, sequence, tail @ ..] = words.as_slice() else { return None };
-		if !is_word(in_word, IN_WORD) || !matches!(variable.drop_meta(), Node::Symbol(_)) {
-			return None;
-		}
-		let condition = match (tail, rest) {
-			([], []) => None,
-			([nothing], []) if matches!(nothing.drop_meta(), Node::Empty) => None,
-			([filter_word], [_, ..]) if is_word(filter_word, IF_WORD) || is_word(filter_word, WHERE_WORD) => Some(phrase(rest)),
-			_ => return None,
-		};
-		Some(self.built(variable, sequence, &element, condition.as_ref()))
-	}
-
-	/// `(made = []; for variable in sequence { if condition { made.push(element) } }; made)`
-	fn built(&self, variable: &Node, sequence: &Node, element: &Node, condition: Option<&Node>) -> Node {
+		let comprehension = Comprehension::of(items)?;
 		let number = self.count.get();
 		self.count.set(number + 1);
 		let made = format!("{MADE}_{number}");
-		let push = format!("{made}.push({ELEMENT})");
-		let body = if condition.is_some() { format!("if {CONDITION} {{ {push} }}") } else { push };
-		let template = format!("(var {made} = []; for {VARIABLE} in {SEQUENCE} {{ {body} }}; {made})");
-		let mut program = parse(&template);
-		for (placeholder, replacement) in [(VARIABLE, variable), (SEQUENCE, sequence), (ELEMENT, element)] {
-			program = substitute(program, placeholder, replacement);
-		}
-		if let Some(condition) = condition {
-			program = substitute(program, CONDITION, condition);
+		Some(comprehension.looped(&format!("(var {made} = []; {LOOPS}; {made})"), &format!("{made}.push({ELEMENT})")))
+	}
+}
+
+/// `[element for v in xs if c for w in ys]`, `(element for v in xs)`
+pub(crate) struct Comprehension {
+	/// Where the first `for` clause starts: 1 after an element of one word
+	pub(crate) at: usize,
+	element: Node,
+	qualifiers: Vec<Qualifier>,
+}
+
+impl Comprehension {
+	/// The items `[element, (for v in xs), …]` as the parser groups them; with a filter `(for v in xs if) condition`.
+	/// An element or condition of several words is their phrase: `[upper w for w in words]`
+	pub(crate) fn of(items: &[Node]) -> Option<Self> {
+		let at = items.iter().position(starts_with_for).filter(|&at| at > 0)?;
+		let qualifiers = qualifiers(&items[at], &items[at + 1..])?;
+		Some(Comprehension { at, element: phrase(&items[..at]), qualifiers })
+	}
+
+	/// `for v in xs { if c { for w in ys { yield element } } }`
+	pub(crate) fn yielding_loop(&self) -> Node {
+		self.looped(LOOPS, &format!("yield {ELEMENT}"))
+	}
+
+	/// The element, sequences and conditions: what the comprehension reads
+	pub(crate) fn parts(&self) -> Vec<&Node> {
+		let clauses = self.qualifiers.iter().map(|qualifier| match qualifier {
+			Qualifier::Each(_, sequence) => sequence,
+			Qualifier::If(condition) => condition,
+		});
+		std::iter::once(&self.element).chain(clauses).collect()
+	}
+
+	pub(crate) fn loop_variables(&self) -> Vec<String> {
+		self.qualifiers.iter().filter_map(|qualifier| match qualifier {
+			Qualifier::Each(variable, _) => Some(variable.name()),
+			Qualifier::If(_) => None,
+		}).collect()
+	}
+
+	/// `template` with LOOPS replaced by the clauses nested in order around `inner`, which reads ELEMENT
+	fn looped(&self, template: &str, inner: &str) -> Node {
+		let placeholder = |name: &str, index: usize| format!("{name}_{index}");
+		let body = self.qualifiers.iter().enumerate().rev().fold(inner.to_string(), |inner, (index, qualifier)| match qualifier {
+			Qualifier::Each(..) => format!("for {} in {} {{ {inner} }}", placeholder(VARIABLE, index), placeholder(SEQUENCE, index)),
+			Qualifier::If(_) => format!("if {} {{ {inner} }}", placeholder(CONDITION, index)),
+		});
+		let mut program = substitute(parse(&template.replace(LOOPS, &body)), ELEMENT, &self.element);
+		for (index, qualifier) in self.qualifiers.iter().enumerate() {
+			program = match qualifier {
+				Qualifier::Each(variable, sequence) => {
+					let program = substitute(program, &placeholder(VARIABLE, index), variable);
+					substitute(program, &placeholder(SEQUENCE, index), sequence)
+				}
+				Qualifier::If(condition) => substitute(program, &placeholder(CONDITION, index), condition),
+			};
 		}
 		program
 	}
+}
+
+/// A clause of a comprehension: `for v in xs` or the filter `if c` after it
+enum Qualifier {
+	Each(Node, Node),
+	If(Node),
+}
+
+/// The clauses from `(for v in xs …)` and the items after it, as the parser groups them: a second `for` nests in the
+/// first clause (`for f in xs (for i in ys ø)`); a filter's condition follows the clause ending in `if`, up to the next
+/// `for` clause (`(for f in xs if) (f > 1) (for i in ys ø)`)
+fn qualifiers(clause: &Node, rest: &[Node]) -> Option<Vec<Qualifier>> {
+	let Node::List(words, _, _) = clause.drop_meta() else { return None };
+	let [_, variable, in_word, sequence, tail @ ..] = words.as_slice() else { return None };
+	if !is_word(in_word, IN_WORD) || !matches!(variable.drop_meta(), Node::Symbol(_)) {
+		return None;
+	}
+	let mut found = vec![Qualifier::Each(variable.clone(), sequence.clone())];
+	match (tail, rest) {
+		([], []) => {}
+		([nothing], []) if matches!(nothing.drop_meta(), Node::Empty) => {}
+		([nested], _) if starts_with_for(nested) => found.extend(qualifiers(nested, rest)?),
+		([filter_word], [_, ..]) if is_word(filter_word, IF_WORD) || is_word(filter_word, WHERE_WORD) => {
+			let end = rest.iter().position(starts_with_for).unwrap_or(rest.len());
+			if end == 0 {
+				return None;
+			}
+			found.push(Qualifier::If(phrase(&rest[..end])));
+			if end < rest.len() {
+				found.extend(qualifiers(&rest[end], &rest[end + 1..])?);
+			}
+		}
+		_ => return None,
+	}
+	Some(found)
 }

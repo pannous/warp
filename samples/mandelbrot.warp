@@ -1,3 +1,4 @@
+#!/usr/bin/env warp
 // Mandelbrot set visualization
 // Classic fractal computation
 

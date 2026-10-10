@@ -206,8 +206,8 @@ impl WarpParser {
 	/// The body is the rest of the statement, a `{…}` block or an indented block. Parameters are plain names or, with a
 	/// known type word, typed slots (`to square a number:`, type_name_matching::parameter_slots). Anything else is no definition.
 	pub(super) fn try_parse_to_definition(&mut self) -> Option<Node> {
-		let before_header = (self.pos, self.line_nr, self.column, self.current_line.clone());
-		let restore = |parser: &mut Self| (parser.pos, parser.line_nr, parser.column, parser.current_line) = before_header.clone();
+		let before_header = self.mark();
+		let restore = |parser: &mut Self| parser.rewind(before_header.clone());
 		self.skip_spaces();
 		let Some(name) = self.at_identifier_start().then(|| self.parse_symbol().ok()).flatten() else {
 			restore(self);
@@ -318,12 +318,13 @@ impl WarpParser {
 		self.chars[self.pos..].iter().skip_while(|ch| **ch != '\n').nth(1) == Some(&'\t')
 	}
 
-	/// The `end` on the line after a block read by indentation, the newline before the next statement kept
+	/// The `end` on the line after a block read by indentation, the newline before the next statement kept; an `end`
+	/// indented less than the block's head closes an outer block
 	pub(super) fn skip_end_line(&mut self) {
-		let before = (self.pos, self.line_nr, self.column, self.current_line.clone());
-		self.skip_whitespace();
-		if !self.matches_keyword(END_KEYWORD) {
-			(self.pos, self.line_nr, self.column, self.current_line) = before;
+		let before = self.mark();
+		let (_, indent) = self.skip_whitespace();
+		if indent != self.base_indent || !self.matches_keyword(END_KEYWORD) {
+			self.rewind(before);
 			return;
 		}
 		self.advance_by(END_KEYWORD.len());
@@ -334,13 +335,13 @@ impl WarpParser {
 	pub(super) fn parse_indented_block(&mut self) -> Option<Node> {
 		let next_line = self.chars[self.pos..].iter().skip_while(|ch| **ch != '\n').skip(1);
 		let indented_by_spaces = next_line.take_while(|ch| matches!(ch, ' ' | '\t')).any(|ch| *ch == ' ');
-		let before_block = (self.pos, self.line_nr, self.column, self.current_line.clone());
+		let before_block = self.mark();
 		let outer_counts_spaces = self.indent_counts_spaces;
 		self.indent_counts_spaces |= indented_by_spaces;
 		let (_, indent) = self.skip_whitespace();
 		if indent <= self.base_indent {
 			self.indent_counts_spaces = outer_counts_spaces;
-			(self.pos, self.line_nr, self.column, self.current_line) = before_block;
+			self.rewind(before_block);
 			return None;
 		}
 		let outer_indent = std::mem::replace(&mut self.base_indent, indent);
@@ -362,26 +363,11 @@ impl WarpParser {
 			return false;
 		}
 		let mut open = 1;
-		let mut position = start;
-		while position < self.chars.len() {
-			let ch = self.chars[position];
-			// an `end` in a text or a comment is no word of the code: `// … would end it`
-			if let Some(after) = text_or_comment_end(&self.chars, position) {
-				position = after;
-				continue;
-			}
-			if !is_identifier_char(ch) {
-				position += 1;
-				continue;
-			}
-			let word_start = position;
-			while position < self.chars.len() && is_identifier_char(self.chars[position]) {
-				position += 1;
-			}
+		for (word_start, word_end) in code_words(&self.chars, start) {
 			if word_start > 0 && self.chars[word_start - 1] == '.' {
 				continue; // `range.end` is a property
 			}
-			let word: String = self.chars[word_start..position].iter().collect();
+			let word: String = self.chars[word_start..word_end].iter().collect();
 			match word.as_str() {
 				END_KEYWORD => open -= 1,
 				opener if openers.contains(&opener) => open += 1,
@@ -399,34 +385,16 @@ impl WarpParser {
 	fn names_end(&self) -> bool {
 		let next_visible = |from: usize| self.chars[from..].iter().position(|ch| !ch.is_whitespace()).map(|offset| from + offset);
 		let previous_visible = |before: usize| self.chars[..before].iter().rposition(|ch| !ch.is_whitespace());
-		let mut position = 0;
-		while position < self.chars.len() {
-			let ch = self.chars[position];
-			// an `end` in a text or a comment is no word of the code: `// … would end it`
-			if let Some(after) = text_or_comment_end(&self.chars, position) {
-				position = after;
-				continue;
-			}
-			if !is_identifier_char(ch) {
-				position += 1;
-				continue;
-			}
-			let word_start = position;
-			while position < self.chars.len() && is_identifier_char(self.chars[position]) {
-				position += 1;
-			}
-			if self.chars[word_start..position].iter().copied().ne(END_KEYWORD.chars()) {
-				continue;
+		code_words(&self.chars, 0).any(|(word_start, word_end)| {
+			if self.chars[word_start..word_end].iter().copied().ne(END_KEYWORD.chars()) {
+				return false;
 			}
 			let before = previous_visible(word_start).map(|index| self.chars[index]);
-			let after = next_visible(position);
+			let after = next_visible(word_end);
 			let assigned = after.is_some_and(|index| self.chars[index] == '=' && self.chars.get(index + 1) != Some(&'='));
 			// `(…, end)` both sides: `foo(if c then 1 else 2 end)` closes a block
-			if matches!(before, Some('(' | ',')) && after.is_some_and(|index| matches!(self.chars[index], ',' | ')')) || assigned {
-				return true;
-			}
-		}
-		false
+			matches!(before, Some('(' | ',')) && after.is_some_and(|index| matches!(self.chars[index], ',' | ')')) || assigned
+		})
 	}
 
 	/// The statements up to the closing `end` (consumed) as a `{…}` block; a `then` block also ends at its `else`
@@ -434,9 +402,9 @@ impl WarpParser {
 		let outer_else = std::mem::replace(&mut self.stops_at_else, stops_at_else);
 		let outer_end = std::mem::replace(&mut self.stops_at_end, true);
 		let outer_indent = self.base_indent;
-		let before_first_line = (self.pos, self.line_nr, self.column, self.current_line.clone());
+		let before_first_line = self.mark();
 		let (_, indent) = self.skip_whitespace();
-		(self.pos, self.line_nr, self.column, self.current_line) = before_first_line;
+		self.rewind(before_first_line);
 		self.base_indent = self.base_indent.max(indent); // its lines may be indented, the `end` line not
 		let block = self.parse_list_with_separators(None, Bracket::None);
 		self.base_indent = outer_indent;
@@ -665,8 +633,7 @@ impl WarpParser {
 	pub(super) fn parse_symbol_with_suffix(&mut self) -> Node {
 		let version_len = crate::versions::tagged_literal_len(&self.chars[self.pos..]);
 		if version_len > 0 {
-			let literal: String = self.chars[self.pos..self.pos + version_len].iter().collect();
-			self.advance_by(version_len);
+			let literal = self.take_chars(version_len);
 			return Node::Symbol(literal);
 		}
 		let symbol = match self.parse_symbol() {
@@ -679,9 +646,10 @@ impl WarpParser {
 		}
 
 		// `def square (n) {…}` names its function like `def square(n) {…}`
-		let names_function = std::mem::replace(&mut self.after_function_keyword, is_function_keyword(&symbol) && !self.options.wit_mode && !self.options.data_mode);
+		let in_code = self.in_code();
+		let names_function = std::mem::replace(&mut self.after_function_keyword, is_function_keyword(&symbol) && in_code);
 		// C's `int boom () { -1 }` (wiki/type.md): a name, `()` and a block are a definition like `boom() {…}`
-		let spaced_definition = !self.options.wit_mode && !self.options.data_mode && self.empty_parameters_and_block_follow();
+		let spaced_definition = in_code && self.empty_parameters_and_block_follow();
 		if (names_function && self.parameters_follow_after_blanks()) || spaced_definition {
 			self.skip_spaces();
 		}
@@ -742,14 +710,15 @@ impl WarpParser {
 		}
 
 		// `To square a number: …` starts an English sentence with a capital
-		if (symbol == TO_WORD || symbol == TO_SENTENCE_WORD) && !self.options.data_mode && !self.options.wit_mode && self.word_starts_statement(symbol.len()) {
+		if (symbol == TO_WORD || symbol == TO_SENTENCE_WORD) && self.in_code() && self.word_starts_statement(symbol.len()) {
 			if let Some(definition) = self.try_parse_to_definition() {
 				return definition;
 			}
 		}
 
 		// Handle "global" keyword: global name = value
-		if symbol == "for" {
+		// `each x in xs: body` is `for each x in xs: body`
+		if symbol == "for" || (symbol == EACH_WORD && self.loop_variable_in_follows()) {
 			if let Some(loop_node) = self.try_parse_for_in() {
 				return loop_node;
 			}
@@ -779,68 +748,12 @@ impl WarpParser {
 		if !self.options.wit_mode && self.declares_type(&symbol) {
 			return self.parse_type_declaration();
 		}
-		// `new Point(1, 2)` (Java, JavaScript, C#) of a declared class: the construction `Point(1, 2)`
-		if symbol == NEW_WORD && !self.options.data_mode && self.declared_type_after_blanks() {
-			while matches!(self.current_char(), ' ' | '\t') {
-				self.advance();
-			}
-			let construction = self.parse_atom();
-			let class = crate::lowering::class_methods::leading_name(&construction);
-			crate::diagnostic::note_alias(&format!("{NEW_WORD} {class}"), &class);
-			return construction;
-		}
-		if symbol == CONSTANT_ALIAS && !self.options.data_mode && self.identifier_after_blanks() {
-			crate::diagnostic::note_alias(CONSTANT_ALIAS, CONST_WORD);
-			return Symbol(CONST_WORD.to_string());
-		}
-		// Ruby's `attr_accessor :x, :y` in a class body: the fields x and y
-		if RUBY_FIELD_WORDS.contains(&symbol.as_str()) && self.type_fields.is_some() {
-			let line: String = (0..).map(|offset| self.peek_char(offset)).take_while(|ch| !matches!(ch, '\n' | '\0' | ';' | '}')).collect();
-			let names: Vec<String> = line.split(',').map(|name| name.trim().trim_start_matches(':').to_string()).collect();
-			if names.iter().all(|name| !name.is_empty() && name.chars().all(is_identifier_char)) {
-				self.advance_by(line.chars().count());
-				crate::diagnostic::note_alias(&format!("{symbol}{line}"), &names.join("; "));
-				return Node::List(names.into_iter().map(Symbol).collect(), Bracket::None, Separator::Semicolon);
-			}
-		}
-		if symbol == OPERATOR_WORD && !self.options.data_mode && matches!(self.current_char(), ' ' | '\t') {
-			while matches!(self.current_char(), ' ' | '\t') {
-				self.advance();
-			}
-			if let Some(head) = self.try_parse_operator_method_head() {
-				crate::diagnostic::note_alias(&format!("{OPERATOR_WORD} {}", head.first().name()), &head.first().name());
-				return head;
-			}
-		}
 		// P178: `enum Shape { Circle(r), Rect(w, h), Dot }`, cases with values: the sum type `Circle(r) | Rect(w, h) | Dot`
-		if symbol == ENUM_WORD && !self.options.wit_mode && !self.options.data_mode && self.enum_with_values_ahead() {
+		if symbol == ENUM_WORD && self.in_code() && self.enum_with_values_ahead() {
 			return self.parse_enum_with_values();
 		}
-		// Kotlin's `enum class Color {…}`: the enum
-		if symbol == ENUM_WORD && !self.options.wit_mode && self.class_keyword_after_blanks() == Some("class") {
-			while matches!(self.current_char(), ' ' | '\t') {
-				self.advance();
-			}
-			self.advance_by("class".len());
-			crate::diagnostic::note_alias(&format!("{ENUM_WORD} class"), ENUM_WORD);
-			return Symbol(symbol);
-		}
-		// `data class P(…)` (Kotlin), `open class`, `abstract class`: a modifier of a class declaration, the class itself
-		if !self.options.wit_mode && CLASS_MODIFIERS.contains(&symbol.as_str()) {
-			if let Some(keyword) = self.class_keyword_after_blanks() {
-				crate::diagnostic::note_alias(&format!("{symbol} {keyword}"), keyword);
-				while matches!(self.current_char(), ' ' | '\t') {
-					self.advance();
-				}
-				self.advance_by(keyword.len());
-				return self.parse_type_declaration();
-			}
-		}
-		if !self.options.wit_mode && symbol == MIXIN_WORD && self.name_and_block_follow() {
-			return match self.parse_type_declaration() {
-				Node::Type { name, body } => Node::Type { name: Box::new(name.with_attribute(MIXIN_WORD, Node::True)), body },
-				other => other,
-			};
+		if let Some(form) = self.foreign_form(&symbol) {
+			return form;
 		}
 
 		// `point {x:1}` with blanks constructs a declared type like the glued `point{x:1}` (open decision 41)
@@ -852,13 +765,66 @@ impl WarpParser {
 		// `for t in todos { … }` it is the collection and the body (card markup-ul)
 		let spaced_child = self.in_data_literal && !self.in_for_header && !declared && self.blanks_then('{');
 		if spaced_child || ((declared || tagged) && self.block_after_blanks(declared)) {
-			while matches!(self.current_char(), ' ' | '\t') {
-				self.advance();
-			}
-			return self.parse_glued_suffix(symbol);
+			self.skip_blanks();
 		}
-
 		self.parse_glued_suffix(symbol)
+	}
+
+	/// Another language's way of writing a warp form: `new Point(1, 2)`, `constant`, Ruby's `attr_accessor :x`,
+	/// `operator +`, Kotlin's `enum class` and `data class`, `mixin Name {…}`
+	fn foreign_form(&mut self, symbol: &str) -> Option<Node> {
+		// `new Point(1, 2)` (Java, JavaScript, C#) of a declared class: the construction `Point(1, 2)`
+		if symbol == NEW_WORD && !self.options.data_mode && self.declared_type_after_blanks() {
+			self.skip_blanks();
+			let construction = self.parse_atom();
+			let class = crate::lowering::class_methods::leading_name(&construction);
+			crate::diagnostic::note_alias(&format!("{NEW_WORD} {class}"), &class);
+			return Some(construction);
+		}
+		if symbol == CONSTANT_ALIAS && !self.options.data_mode && self.identifier_after_blanks() {
+			crate::diagnostic::note_alias(CONSTANT_ALIAS, CONST_WORD);
+			return Some(Symbol(CONST_WORD.to_string()));
+		}
+		// Ruby's `attr_accessor :x, :y` in a class body: the fields x and y
+		if RUBY_FIELD_WORDS.contains(&symbol) && self.type_fields.is_some() {
+			let line: String = (0..).map(|offset| self.peek_char(offset)).take_while(|ch| !matches!(ch, '\n' | '\0' | ';' | '}')).collect();
+			let names: Vec<String> = line.split(',').map(|name| name.trim().trim_start_matches(':').to_string()).collect();
+			if names.iter().all(|name| !name.is_empty() && name.chars().all(is_identifier_char)) {
+				self.advance_by(line.chars().count());
+				crate::diagnostic::note_alias(&format!("{symbol}{line}"), &names.join("; "));
+				return Some(Node::List(names.into_iter().map(Symbol).collect(), Bracket::None, Separator::Semicolon));
+			}
+		}
+		if symbol == OPERATOR_WORD && !self.options.data_mode && matches!(self.current_char(), ' ' | '\t') {
+			self.skip_blanks();
+			if let Some(head) = self.try_parse_operator_method_head() {
+				crate::diagnostic::note_alias(&format!("{OPERATOR_WORD} {}", head.first().name()), &head.first().name());
+				return Some(head);
+			}
+		}
+		// Kotlin's `enum class Color {…}`: the enum
+		if symbol == ENUM_WORD && !self.options.wit_mode && self.class_keyword_after_blanks() == Some("class") {
+			self.skip_blanks();
+			self.advance_by("class".len());
+			crate::diagnostic::note_alias(&format!("{ENUM_WORD} class"), ENUM_WORD);
+			return Some(Symbol(symbol.to_string()));
+		}
+		// `data class P(…)` (Kotlin), `open class`, `abstract class`: a modifier of a class declaration, the class itself
+		if !self.options.wit_mode && CLASS_MODIFIERS.contains(&symbol) {
+			if let Some(keyword) = self.class_keyword_after_blanks() {
+				crate::diagnostic::note_alias(&format!("{symbol} {keyword}"), keyword);
+				self.skip_blanks();
+				self.advance_by(keyword.len());
+				return Some(self.parse_type_declaration());
+			}
+		}
+		if !self.options.wit_mode && symbol == MIXIN_WORD && self.name_and_block_follow() {
+			return Some(match self.parse_type_declaration() {
+				Node::Type { name, body } => Node::Type { name: Box::new(name.with_attribute(MIXIN_WORD, Node::True)), body },
+				other => other,
+			});
+		}
+		None
 	}
 
 	/// `class circle{pi = 3}`, `class C{pi:int}`: a named number declared in a type body names the type's own field, which
@@ -981,15 +947,13 @@ impl WarpParser {
 			false => None,
 		};
 		let ends_statement = matches!(self.peek_char((0..).take_while(|&offset| matches!(self.peek_char(offset), ' ' | '\t')).count()), '\n' | ';' | '}' | '\0');
-		let before_body = (self.pos, self.line_nr, self.column, self.current_line.clone());
+		let before_body = self.mark();
 		// `class P(val x: Int)` ends at its line when no body follows on it
 		match constructor_fields.is_empty() {
 			true => {
 				self.skip_whitespace();
 			}
-			false => while matches!(self.current_char(), ' ' | '\t') {
-				self.advance();
-			},
+			false => self.skip_blanks(),
 		}
 		// `class dog extends animal {…}` (P117): the parent rides on the name, class_methods copies its fields and methods
 		let mut name = Symbol(type_name);
@@ -1051,8 +1015,8 @@ impl WarpParser {
 				}
 			}
 			// Ruby's `class Point` and the lines indented below it, up to its `end`
-			(false, Empty) if self.pos > before_body.0 && self.closing_end_follows(&RUBY_END_OPENERS) => {
-				(self.pos, self.line_nr, self.column, self.current_line) = before_body;
+			(false, Empty) if self.pos > before_body.pos && self.closing_end_follows(&RUBY_END_OPENERS) => {
+				self.rewind(before_body);
 				let body = self.parse_indented_block().map(without_end_lines).map(Self::transform_fields_to_types).unwrap_or(Empty);
 				self.skip_whitespace();
 				if self.matches_keyword(END_KEYWORD) {
@@ -1357,8 +1321,7 @@ impl WarpParser {
 				};
 				Node::Key(Box::new(Symbol(symbol)), op, Box::new(block))
 			}
-			'<' if !self.options.xml_mode && !self.options.data_mode && self.type_application_length().is_some() => {
-				let length = self.type_application_length().expect("guarded");
+			'<' if !self.options.xml_mode && !self.options.data_mode && let Some(length) = self.type_application_length() => {
 				let arguments: String = (1..length - 1).map(|offset| self.peek_char(offset)).collect();
 				if symbol == "list" && !arguments.contains(',') {
 					let element_words: Vec<&str> = arguments.split(|c: char| c == '<' || c == '>' || c.is_whitespace()).filter(|word| !word.is_empty()).collect();
@@ -1506,11 +1469,33 @@ fn statements(block: Node) -> Vec<Node> {
 
 /// A Ruby class body without the `end` lines of its methods (their bodies are read by indentation)
 fn without_end_lines(body: Node) -> Node {
-	let is_end = |item: &Node| matches!(item.drop_meta(), Node::Symbol(word) if word == END_KEYWORD);
+	let is_end = |item: &Node| item.is_symbol(END_KEYWORD);
 	match body {
 		Node::List(items, bracket, separator) => Node::List(items.into_iter().filter(|item| !is_end(item)).map(without_end_lines).collect(), bracket, separator),
 		Node::Key(left, op, right) => Node::Key(Box::new(without_end_lines(*left)), op, Box::new(without_end_lines(*right))),
 		Node::Meta { node, data } => Node::Meta { node: Box::new(without_end_lines(*node)), data },
 		other => other,
 	}
+}
+
+/// The spans of the words of the code from `start` on: an `end` in a text or a comment is no word of the code
+/// (`// … would end it`)
+fn code_words(chars: &[char], start: usize) -> impl Iterator<Item = (usize, usize)> + '_ {
+	let mut position = start;
+	std::iter::from_fn(move || {
+		while position < chars.len() {
+			if let Some(after) = text_or_comment_end(chars, position) {
+				position = after;
+			} else if is_identifier_char(chars[position]) {
+				let word_start = position;
+				while position < chars.len() && is_identifier_char(chars[position]) {
+					position += 1;
+				}
+				return Some((word_start, position));
+			} else {
+				position += 1;
+			}
+		}
+		None
+	})
 }

@@ -22,7 +22,8 @@ impl WasmGcEmitter {
 		if op.is_arithmetic() && self.emit_typed_arithmetic(func, left, op, right) {
 			return;
 		}
-		if let Some(function) = crate::analyzer::node_arithmetic(self.get_type(left), op, self.get_type(right)) {
+		let run_time_power = *op == Op::Pow && self.arithmetic_type(left, op, right) == Kind::Data;
+		if let Some(function) = crate::analyzer::node_arithmetic(self.get_type(left), op, self.get_type(right)).or(run_time_power.then_some(super::list_ops::NODE_POW)) {
 			self.emit_node_instructions(func, left);
 			self.emit_node_instructions(func, right);
 			self.emit_call(func, function);
@@ -31,11 +32,7 @@ impl WasmGcEmitter {
 		let use_float = self.should_use_float(left, right, op);
 
 		if self.emit_assign_or_define(func, left, op, right, use_float) {
-			if use_float {
-				self.emit_call(func, "new_float");
-			} else {
-				self.emit_call(func, "new_int");
-			}
+			self.emit_call(func, if use_float { "new_float" } else { "new_int" });
 			return;
 		}
 		if self.emit_inc_dec(func, left, op) {
@@ -43,11 +40,7 @@ impl WasmGcEmitter {
 			return;
 		}
 		if self.emit_compound_assign(func, left, op, right, use_float) {
-			if use_float {
-				self.emit_call(func, "new_float");
-			} else {
-				self.emit_call(func, "new_int");
-			}
+			self.emit_call(func, if use_float { "new_float" } else { "new_int" });
 			return;
 		}
 
@@ -830,14 +823,37 @@ impl WasmGcEmitter {
 
 	/// The Node on the stack as f64: a Float's value, an Int's converted
 	pub(super) fn emit_held_node_as_f64(&mut self, func: &mut Function) {
-		let (held, node_type, float_box) = (self.node_scratch(), self.type_manager.node_type, self.type_manager.f64_box_type);
-		Self::emit_list(func, &[I::LocalTee(held), I::StructGet { struct_type_index: node_type, field_index: 0 }]);
-		Self::emit_list(func, &[I::I64Const(KIND_MASK), I::I64And, I::I64Const(Kind::Float as i64), I::I64Eq]);
+		let (node_type, float_box) = (self.type_manager.node_type, self.type_manager.f64_box_type);
+		let held = self.emit_held_node_is_float(func);
 		Self::emit_list(func, &[I::If(BlockType::Result(ValType::F64)), I::LocalGet(held), I::RefAsNonNull]);
 		Self::emit_list(func, &[I::StructGet { struct_type_index: node_type, field_index: 1 }, I::RefCastNonNull(HeapType::Concrete(float_box))]);
 		Self::emit_list(func, &[I::StructGet { struct_type_index: float_box, field_index: 0 }, I::Else, I::LocalGet(held), I::RefAsNonNull]);
 		self.emit_call(func, "get_int_value");
 		self.emit_int_to_f64(func, None);
+		func.instruction(&I::End);
+	}
+
+	/// The Node on the stack kept in the node scratch local, and whether it is a Float (an i32) on the stack
+	fn emit_held_node_is_float(&mut self, func: &mut Function) -> u32 {
+		let (held, node_type) = (self.node_scratch(), self.type_manager.node_type);
+		Self::emit_list(func, &[I::LocalTee(held), I::StructGet { struct_type_index: node_type, field_index: 0 }]);
+		Self::emit_list(func, &[I::I64Const(KIND_MASK), I::I64And, I::I64Const(Kind::Float as i64), I::I64Eq]);
+		held
+	}
+
+	/// ‖x‖ of a number Node computed at run time: a Float's is a Float, an Int's stays exact
+	pub(super) fn emit_node_abs(&mut self, func: &mut Function, node: &Node) {
+		let node_ref = RefType { nullable: false, heap_type: HeapType::Concrete(self.type_manager.node_type) };
+		self.emit_node_instructions(func, node);
+		let held = self.emit_held_node_is_float(func);
+		Self::emit_list(func, &[I::If(BlockType::Result(Ref(node_ref))), I::LocalGet(held)]);
+		self.emit_held_node_as_f64(func);
+		func.instruction(&I::F64Abs);
+		self.emit_call(func, "new_float");
+		Self::emit_list(func, &[I::Else, I::LocalGet(held), I::RefAsNonNull]);
+		self.emit_call(func, "get_int_value");
+		self.emit_int_abs(func, None);
+		self.emit_call(func, "new_int");
 		func.instruction(&I::End);
 	}
 

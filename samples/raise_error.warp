@@ -1,3 +1,4 @@
+#!/usr/bin/env warp
 // raise your own error, handle it where you call
 def divide(a, b) = if b == 0 then raise "b is zero" else a / b
 try divide(1, 0) else "no result"

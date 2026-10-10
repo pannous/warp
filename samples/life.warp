@@ -1,3 +1,4 @@
+#!/usr/bin/env warp
 // Conway's Game of Life: a glider on an 8x8 grid, 4 generations
 size = 8
 
