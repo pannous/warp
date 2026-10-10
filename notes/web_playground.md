@@ -25,10 +25,15 @@ build switch, silenced hints) sit in the header's ⋯ menu; the run time is a sm
 
 - The assistant (assistant.js, notes/agent.md): the API key field in the ⋯ menu, completion (Ctrl-Space), Ask ✦ chat.
 - Completion as you type (completion.js, card g_oQgw, like the Sublime packages Warp and Uniscript): words from the
-  second letter (keywords first, then the words of the code, examples and samples by use), the standard modules after
+  second letter (the words of the whole code first, then keywords, then examples and samples, by use), the standard modules after
   `use` (keywords.js `modules`, from src/modules.rs), uniscript entities after `\:` and `<:` (entities.tsv, a copy of
   src/uniscript_entities.tsv fetched on first use) which become their character; a typed `<:name>` becomes it at `>`.
-  Tab takes the first, Enter only one chosen with Up/Down (else a new line). probes/web/completion.py checks it.
+  Tab and Enter take the chosen one (the first unless Up/Down chose another); Enter after a word that is whole
+  already (a keyword, a name of the code) is a new line. Tab after a word with no list open lists its completions from
+  the first letter, or takes the only one; Claude's gray continuation goes before both (cards code-completion-must,
+  completion-must, code-completion-should). Claude reads the whole program (up to 20000 characters around the cursor)
+  and also continues before closing brackets (`dir(m‸)`). probes/web/completion.py checks the keys; the tour's
+  "(completion with Tab and Enter)" check runs them in CI.
 - Keyboard shortcuts (shortcuts.js SHORTCUTS, card keyboard-shortcuts, user 2026-10-09): one table of CodeMirror key
   names, the editor's extraKeys. Cmd/Ctrl-Enter runs; Cmd-/ (Ctrl-/ elsewhere) toggles `// ` on the selected lines or
   the cursor's line (after their shallowest indentation; all commented: uncommented), one undo step, the selection kept.

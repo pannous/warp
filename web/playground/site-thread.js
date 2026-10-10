@@ -34,6 +34,7 @@ async function startSiteWorker() {
 		}
 		if (data.stored) keepValue(data.stored.name, data.stored.value, data.stored.file);
 		if (data.clipboard !== undefined) copyText(data.clipboard);
+		if (data.clipboardRead) pasteInto(data.clipboardRead);
 		if (data.paint) showPainting(root, data.paint);
 		if (data.print) (data.print.stream === 2 ? console.error : console.log)(data.print.text.replace(/\n$/, ""));
 		if (data.failure) console.error("warp:", data.failure);

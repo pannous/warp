@@ -57,6 +57,16 @@ FILE_KEPT = "(a written file after a reload)"  # card files-written: host-files.
 FILE_KEPT_TEXT = "kept across a reload"
 WRITE_FILE = f'use file\nwrite("kept.txt", "{FILE_KEPT_TEXT}")'
 READ_FILE = 'use file\nread("kept.txt")'
+COMPLETION_KEYS = "(completion with Tab and Enter)"  # cards code-completion-must, completion-must (completion.js)
+# code at the cursor, the keys pressed, the code after them
+COMPLETIONS = [
+	("use math\ndir(ma", ["Tab", "Tab"], "use math\ndir(math"),
+	("xs_long = 1\nxs_short = 2\nxs_", ["Tab", "Enter"], "xs_long = 1\nxs_short = 2\nxs_long"),
+	("xs = 1\nxs_a = 2\nxs_b = 3\nxs", ["Tab", "Enter"], "xs = 1\nxs_a = 2\nxs_b = 3\nxs\n"),
+]
+KEY_CODES = {"Tab": 9, "Enter": 13}
+CLIPBOARD_READ = "(a program reads the clipboard)"  # card web-apis-rest: host.js clipboard_text asks the page
+CLIPBOARD_TEXT = "copied by the page"
 # each GET the server began and finished, (seconds since it started, path, finished): shown after a failed tour, which
 # then says whether the browser asked for a stalled worker's scripts at all (card tour-firefox)
 served = []
@@ -294,6 +304,39 @@ def file_kept_wrong(page_url):
 	return [] if FILE_KEPT_TEXT in read else [f"read after a reload: {read!r}, expected {FILE_KEPT_TEXT!r}"]
 
 
+def clipboard_read_wrong():
+	"""a program reads what the page copied; skipped loudly when the browser refuses the page its own clipboard"""
+	refused = browser("eval", f"""(async () => {{
+		try {{ await navigator.clipboard.writeText({json.dumps(CLIPBOARD_TEXT)}); await navigator.clipboard.readText(); return ""; }}
+		catch (failure) {{ return failure.message; }}
+	}})()""")
+	if refused not in ('""', ""):
+		print(f"skip {CLIPBOARD_READ}: this browser refuses the page its clipboard: {refused}")
+		return []
+	read = run_code("clipboard")
+	return [] if CLIPBOARD_TEXT in read else [f"clipboard read: {read!r}, expected {CLIPBOARD_TEXT!r}"]
+
+
+def completion_keys_wrong():
+	"""the editor's code after each of COMPLETIONS' keys, pressed through CodeMirror's own key handling: what differs"""
+	script = f"""(() => {{
+		const editor = document.querySelector(".CodeMirror").CodeMirror;
+		const press = code => editor.triggerOnKeyDown({{ type: "keydown", keyCode: code, preventDefault() {{}}, stopPropagation() {{}} }});
+		editor.focus();
+		return JSON.stringify({json.dumps(COMPLETIONS)}.map(([code, keys]) => {{
+			editor.setValue(code);
+			editor.setCursor(editor.lastLine(), editor.getLine(editor.lastLine()).length);
+			keys.forEach(key => press({json.dumps(KEY_CODES)}[key]));
+			return editor.getValue();
+		}}));
+	}})()"""
+	shown = browser("eval", script)
+	if not shown.startswith('"'):
+		return [f"(page gave no answer: {shown or browser_complaint})"]
+	results = json.loads(json.loads(shown))
+	return [f"{code!r} then {' '.join(keys)}: {result!r}, expected {expected!r}" for (code, keys, expected), result in zip(COMPLETIONS, results) if result != expected]
+
+
 def show_example(name):
 	"""the playground's value and printed text once it showed the example, and its timers ran `wait` milliseconds; with
 	`typed` (into the first input) and `clicks` also the value after typing and clicking those buttons or links, whether every element shown stayed (`kept`), kept its key (`keyed`) and whether anything animated (`animated`) and the address bar's path (`address`)"""
@@ -381,16 +424,16 @@ def check_examples(names, page_url=None, site=None):
 				print(f"skip {name}: this browser {NO_GPU}")
 				shown = {**shown, "value": expected.get("value"), "canvases": expected.get("canvases")}
 			verdict(name, [f"{part}: {shown.get(part)!r}, expected {expected[part]!r}" for part in ("value", "printed", "canvases", "clicked", "clickedPrinted", "kept", "keyed", "animated", "address") if part in expected and shown.get(part) != expected[part]] + [f"status: {shown.get('failed')}"] * bool(shown.get("failed")))
-	check_file_kept = not names or FILE_KEPT in names
-	if check_file_kept:
-		verdict(FILE_KEPT, file_kept_wrong(page_url))
+	extra_checks = [(check, wrong) for check, wrong in ((COMPLETION_KEYS, completion_keys_wrong), (CLIPBOARD_READ, clipboard_read_wrong), (FILE_KEPT, lambda: file_kept_wrong(page_url))) if not names or check in names]
+	for check, wrong in extra_checks:
+		verdict(check, wrong())
 	console.stop()
 	browser("close")
 	if server:
 		server.shutdown()
 		if failures:
 			show_served()
-	checked = len(chosen) + 1 + check_file_kept
+	checked = len(chosen) + 1 + len(extra_checks)
 	print(f"\nexamples and samples: {checked - len(failures)} of {checked} show what they promise, without console errors" + (f"; failed: {', '.join(failures)}" if failures else ""))
 	sys.exit(101 if failures else 0)
 
