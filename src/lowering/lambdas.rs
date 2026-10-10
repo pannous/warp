@@ -5,6 +5,7 @@
 //! - `map [1 2 3] {it*it}`, `map(xs, x=>x+1)`, `xs.map(f)` over a literal block, a lambda or a defined function is a loop
 //! - a lambda anywhere else is a closure (closures.rs); `map` over a value that is no function is the error `map needs a function, got …`
 
+use super::nodes::{call, is_type_word};
 use crate::analyzer::{call_name, extract_user_functions};
 use crate::context::Context;
 use crate::diagnostic::Diagnostic;
@@ -353,10 +354,6 @@ fn flatten_phrase(node: &Node, words: &mut Vec<Node>) {
 	}
 }
 
-fn is_type_word(node: &Node) -> bool {
-	matches!(node.drop_meta(), Node::Symbol(word) if crate::analyzer::type_word_kind(word).is_some())
-}
-
 /// `{it*it}`: a block that is no object; its parameter is `it` when the body uses it
 fn block_lambda(node: &Node) -> Option<Lambda> {
 	let Node::List(items, Bracket::Curly, separator) = node.drop_meta() else { return None };
@@ -528,10 +525,6 @@ fn named_function_arguments(items: Vec<Node>, bracket: &Bracket) -> Vec<Node> {
 			_ => item,
 		})
 		.collect()
-}
-
-fn call(name: &str, arguments: Vec<Node>) -> Node {
-	Node::List([vec![Node::Symbol(name.to_string())], arguments].concat(), Bracket::Round, Separator::None)
 }
 
 struct Lowering {

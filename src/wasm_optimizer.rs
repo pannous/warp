@@ -214,14 +214,6 @@ impl WasmOptimizer {
 		Ok(())
 	}
 
-	/// Optimize and write to file
-	pub fn optimize_to_file(&self, wasm_bytes: &[u8], output_path: &Path) -> Result<(), String> {
-		let optimized = self.optimize(wasm_bytes)?;
-		std::fs::write(output_path, optimized)
-			.map_err(|e| format!("Failed to write output: {}", e))?;
-		Ok(())
-	}
-
 	/// Check if optimization tools are available
 	pub fn tools_available() -> bool {
 		Command::new("wasm-opt")

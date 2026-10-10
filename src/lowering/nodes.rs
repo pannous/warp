@@ -1,0 +1,40 @@
+//! The small node forms many lowering passes build and test: a call of a word, a word
+
+use crate::node::{Bracket, Node, Separator};
+use crate::operators::Op;
+
+pub(crate) use crate::node::{int, symbol};
+
+/// `function(arguments…)`
+pub(crate) fn call(function: &str, arguments: Vec<Node>) -> Node {
+	Node::List([vec![symbol(function)], arguments].concat(), Bracket::Round, Separator::None)
+}
+
+pub(crate) fn symbol_name(node: &Node) -> Option<&String> {
+	match node.drop_meta() {
+		Node::Symbol(name) => Some(name),
+		_ => None,
+	}
+}
+
+pub(crate) fn is_word(node: &Node, word: &str) -> bool {
+	symbol_name(node).is_some_and(|name| name == word)
+}
+
+pub(crate) fn key(left: Node, op: Op, right: Node) -> Node {
+	Node::Key(Box::new(left), op, Box::new(right))
+}
+
+pub(crate) fn assign(target: Node, value: Node) -> Node {
+	key(target, Op::Assign, value)
+}
+
+/// Statements run in order: `a; b`, `{a; b}`
+pub(crate) fn statement_list(statements: Vec<Node>, bracket: Bracket) -> Node {
+	Node::List(statements, bracket, Separator::Semicolon)
+}
+
+/// `int`, `float`, `text`, …: a word naming a type
+pub(crate) fn is_type_word(node: &Node) -> bool {
+	symbol_name(node).is_some_and(|word| crate::analyzer::type_word_kind(word).is_some())
+}

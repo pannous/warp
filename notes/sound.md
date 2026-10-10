@@ -38,7 +38,10 @@ reach the module.
 
 The words above are layer 1, the toy layer. Each layer below keeps the ones above working and lowers to them.
 
-1. Non-blocking, clocked playback. Today `play` renders the whole sound and blocks (natively afplay runs to its end).
+1. Non-blocking, clocked playback. Built (step 1, 2026-10-10): `play` returns at once, its sound queued on the audio
+   clock behind the sounds before it (natively a player thread, src/sound.rs queued; the playground's WebAudio queue);
+   `sound_queued()` the seconds still to sound, `wait_sound`, `stop_sound` drops the queue, the process's end waits.
+   Still to build:
    Expected: a shared audio clock, sample-accurate scheduling (`at 2 beats play C4`), `play` returns a handle (stop,
    ramp its gain), voices overlap. Tempo as a unit: `bpm`, `beat`, `bar` (`play C4 for 1/4 beat`).
 2. Music values, not frequencies. `Note` (pitch class, octave, MIDI number, cents), `Interval`, `Chord(C4, major7)`,

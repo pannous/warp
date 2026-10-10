@@ -76,9 +76,6 @@ impl Kind {
 	/// Check if this is a reference type (stored as WASM ref $Node)
 	pub fn is_ref(&self) -> bool { !self.is_primitive() }
 
-	/// Check if this is a pointer type (FFI)
-	pub fn is_pointer(&self) -> bool { matches!(self, Kind::Pointer | Kind::Text) }
-
 	/// Parse a C type string to Kind with smart defaults
 	pub fn from_c_type(s: &str) -> Kind {
 		let s = s.trim();
@@ -181,55 +178,6 @@ impl FieldDef {
 	/// A field declared `email?` or `x:int?` may be left out of the constructor call (it is then ø)
 	pub fn is_optional(&self) -> bool {
 		self.type_name.ends_with(OPTIONAL_SUFFIX)
-	}
-}
-
-impl TypeDef {
-	/// Extract TypeDef from a parsed class definition Node
-	/// Expected structure: Type { name: Symbol("Person"), body: List([Key(name, :, Type), ...]) }
-	pub fn from_node(node: &crate::node::Node) -> Option<Self> {
-		use crate::node::Node;
-		match node.drop_meta() {
-			Node::Type { name, body } => {
-				let type_name = name.drop_meta().to_string();
-				let fields = Self::extract_fields(body);
-				Some(TypeDef {
-					name: type_name,
-					tag: USER_TYPE_TAG_START, // will be assigned by registry
-					fields,
-					wasm_type_idx: None,
-				})
-			}
-			_ => None,
-		}
-	}
-
-	fn extract_fields(body: &crate::node::Node) -> Vec<FieldDef> {
-		use crate::node::Node;
-		let mut fields = Vec::new();
-
-		// body is List([Key(field_name, op, Type), ...], bracket, separator)
-		let items = match body.drop_meta() {
-			Node::List(items, _, _) => items,
-			_ => return fields,
-		};
-
-		for item in items.iter() {
-			// Key(key_node, op, value_node) tuple struct
-			if let Node::Key(key, _op, value) = item.drop_meta() {
-				let field_name = key.drop_meta().to_string();
-				// value is Type { name: Symbol("String"), body: Empty }
-				let type_name = match value.drop_meta() {
-					Node::Type { name, .. } => name.drop_meta().to_string(),
-					Node::Symbol(s) => s.to_string(),
-					other => other.to_string(),
-				};
-				fields.push(FieldDef { name: field_name, type_name });
-			} else if let Node::Symbol(word) = item.drop_meta() {
-				fields.push(FieldDef::untyped(word));
-			}
-		}
-		fields
 	}
 }
 
@@ -369,13 +317,6 @@ impl TypeRegistry {
 				Some((name.drop_meta().to_string(), value.drop_meta().clone()))
 			}
 			_ => None,
-		}
-	}
-
-	/// Set WASM type index for a registered type
-	pub fn set_wasm_type_idx(&mut self, name: &str, wasm_idx: u32) {
-		if let Some(&idx) = self.name_to_idx.get(name) {
-			self.types[idx].wasm_type_idx = Some(wasm_idx);
 		}
 	}
 

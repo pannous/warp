@@ -95,7 +95,11 @@ pub fn call(module: &str, member: &str, arguments: &Node) -> Result<Node, String
 		#[cfg(feature = "native")]
 		("sound", "play_file", [path]) => crate::sound::play_file(&text_of(path)?).map(|_| Node::Empty).map_err(failure),
 		#[cfg(feature = "native")]
-		("sound", "stop", []) => { crate::sound::stop_files(); Ok(Node::Empty) }
+		("sound", "stop", []) => { crate::sound::stop(); Ok(Node::Empty) }
+		#[cfg(feature = "native")]
+		("sound", "queued", []) => Ok(Node::float(crate::sound::queued_seconds())),
+		#[cfg(feature = "native")]
+		("sound", "wait", []) => { crate::sound::wait(); Ok(Node::Empty) }
 		// the tables of registered classes (lowering/database_tables.rs)
 		#[cfg(feature = "native")]
 		("table", member, arguments) => crate::database::call(member, arguments).map_err(failure),

@@ -4,6 +4,7 @@
 //! `xs.take first 10` is `xs.slice(0, 10)`. The parser reads a chain `xs.keep only positive.sort by size` as one list
 //! `[xs.keep, only, positive.sort, by, size]`: each `.method` binds to the word before it.
 
+use super::nodes::{call, symbol};
 use crate::analyzer::extract_user_functions;
 use crate::context::Context;
 use crate::node::{Bracket, Node, Separator};
@@ -88,7 +89,7 @@ fn chain(items: &[Node], context: &Context) -> Option<Node> {
 	if let [callee, argument @ ..] = items {
 		if let (Node::Symbol(function), true) = (callee.drop_meta(), argument.len() > 1) {
 			if let Some(chained) = chain(argument, context) {
-				return Some(call(function, chained));
+				return Some(call(function, vec![chained]));
 			}
 		}
 	}
@@ -161,7 +162,7 @@ fn condition(argument: &Node, context: &Context) -> Option<Node> {
 	if let Some((_, condition)) = PROPERTIES.iter().find(|(property, _)| property == name) {
 		return Some(crate::warp_parser::parse(condition));
 	}
-	context.user_functions.contains_key(name).then(|| call(name, symbol(crate::lambdas::IMPLICIT_PARAMETER)))
+	context.user_functions.contains_key(name).then(|| call(name, vec![symbol(crate::lambdas::IMPLICIT_PARAMETER)]))
 }
 
 /// The key `sort by <argument>` names: `element => f(element)` of a function, else `element => element.field`
@@ -175,7 +176,7 @@ fn key(argument: &Node, context: &Context) -> Option<Node> {
 	let Node::Symbol(name) = argument.drop_meta() else { return None };
 	let is_function = context.user_functions.contains_key(name) || crate::analyzer::is_counting_word(name);
 	let value = match is_function {
-		true => call(name, element.clone()),
+		true => call(name, vec![element.clone()]),
 		false => Node::Key(Box::new(element.clone()), Op::Dot, Box::new(argument.clone())),
 	};
 	Some(Node::Key(Box::new(element), Op::Arrow, Box::new(value)))
@@ -186,10 +187,3 @@ fn method_call(receiver: Node, method: &str, arguments: Vec<Node>) -> Node {
 	Node::Key(Box::new(receiver), Op::Dot, Box::new(call))
 }
 
-fn call(name: &str, argument: Node) -> Node {
-	Node::List(vec![symbol(name), argument], Bracket::Round, Separator::None)
-}
-
-fn symbol(name: &str) -> Node {
-	Node::Symbol(name.to_string())
-}

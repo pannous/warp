@@ -19,11 +19,23 @@ impl WasmGcEmitter {
 	) -> u32 {
 		let func_type = self.type_manager.function_type(params, results);
 		self.functions.function(func_type);
-		let mut func = Function::new(locals.into_iter().map(|t| (1, t)).collect::<Vec<_>>());
+		self.function_body(locals, body);
+		self.register_func(name)
+	}
+
+	/// Pass 1 of a function whose body comes later: its type declared, its index taken
+	pub(super) fn reserve_function(&mut self, func_type: u32) -> u32 {
+		self.functions.function(func_type);
+		self.next_func_idx += 1;
+		self.next_func_idx - 1
+	}
+
+	/// The code of the next declared function: `body` writes the instructions, the closing `end` is added here
+	pub(super) fn function_body(&mut self, locals: Vec<ValType>, body: impl FnOnce(&mut Self, &mut Function)) {
+		let mut func = Function::new(locals.into_iter().map(|local| (1, local)).collect::<Vec<_>>());
 		body(self, &mut func);
 		func.instruction(&I::End);
 		self.code.function(&func);
-		self.register_func(name)
 	}
 
 	/// A runtime function the host can call too
@@ -37,6 +49,16 @@ impl WasmGcEmitter {
 	) {
 		self.runtime_function(name, params, results, locals, body);
 		self.export_runtime_function(name);
+	}
+
+	/// A function only the host calls, exported as `export` without a name in the registry (a component adapter, a
+	/// type's constructor, the compare dispatcher): its index, taken after `body` ran
+	pub(super) fn host_only_function(&mut self, export: &str, params: Vec<ValType>, results: Vec<ValType>, locals: Vec<ValType>, body: impl FnOnce(&mut Self, &mut Function)) -> u32 {
+		let func_type = self.type_manager.function_type(params, results);
+		self.function_body(locals, body);
+		let index = self.reserve_function(func_type);
+		self.exports.export(export, ExportKind::Func, index);
+		index
 	}
 
 	/// Exports the emitted runtime function `name` for the host; a page's host (web/playground) calls only some, and

@@ -199,10 +199,7 @@ impl WasmGcEmitter {
 		};
 		let func_type_idx = self.type_manager.function_type(param_types, result_types);
 
-		// Register function in function section
-		self.functions.function(func_type_idx);
-		let func_idx = self.next_func_idx;
-		self.next_func_idx += 1;
+		let func_idx = self.reserve_function(func_type_idx);
 		if !user_fn.tuple_kinds.is_empty() {
 			self.register_tuple_packer(name, &user_fn.tuple_kinds);
 		}

@@ -6,6 +6,7 @@
 //! Only a variable of the program or a list literal is sliced, so `count from 1 to 10` and a phrase call
 //! `move x from a to b` keep their meaning.
 
+use super::nodes::symbol;
 use crate::diagnostic::Diagnostic;
 use crate::extensions::numbers::Number;
 use crate::node::{Bracket, Node, Separator};
@@ -186,6 +187,3 @@ fn is_word(node: &Node, words: &[&str]) -> bool {
 	matches!(node.drop_meta(), Node::Symbol(word) if words.contains(&word.as_str()))
 }
 
-fn symbol(name: &str) -> Node {
-	Node::Symbol(name.to_string())
-}

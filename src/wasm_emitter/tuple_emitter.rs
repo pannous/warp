@@ -180,25 +180,23 @@ impl WasmGcEmitter {
 	pub(super) fn register_tuple_packer(&mut self, function: &str, kinds: &[Kind]) {
 		let (values, node) = (self.tuple_result_types(kinds), ValType::Ref(self.node_ref(false)));
 		let packer_type = self.type_manager.function_type(values, vec![node]);
-		self.functions.function(packer_type);
-		self.tuple_packers.insert(function.to_string(), self.next_func_idx);
-		self.next_func_idx += 1;
+		let packer = self.reserve_function(packer_type);
+		self.tuple_packers.insert(function.to_string(), packer);
 	}
 
 	pub(super) fn compile_tuple_packer(&mut self, kinds: &[Kind]) {
-		let mut packer = Function::new(vec![]);
-		for (position, kind) in kinds.iter().enumerate() {
-			packer.instruction(&I::LocalGet(position as u32));
-			if !kind.is_ref() {
-				self.emit_primitive_as_node(&mut packer, *kind);
+		self.function_body(vec![], |s, packer| {
+			for (position, kind) in kinds.iter().enumerate() {
+				packer.instruction(&I::LocalGet(position as u32));
+				if !kind.is_ref() {
+					s.emit_primitive_as_node(packer, *kind);
+				}
 			}
-		}
-		self.emit_node_null(&mut packer);
-		for _ in kinds {
-			packer.instruction(&I::I64Const(LIST_BRACKET_INFO));
-			self.emit_call(&mut packer, "new_list");
-		}
-		packer.instruction(&I::End);
-		self.code.function(&packer);
+			s.emit_node_null(packer);
+			for _ in kinds {
+				packer.instruction(&I::I64Const(LIST_BRACKET_INFO));
+				s.emit_call(packer, "new_list");
+			}
+		});
 	}
 }

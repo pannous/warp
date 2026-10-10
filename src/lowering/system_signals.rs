@@ -13,6 +13,7 @@
 //! listener of that sub-channel; `send "file system full"` alone is that named event on "warp" without data, heard by
 //! `on "file system full" {…}`. `raise` stays inside the program (event_signals.rs).
 
+use super::nodes::call;
 use crate::declarations::word;
 use crate::diagnostic::Diagnostic;
 use crate::extensions::numbers::Number;
@@ -209,11 +210,6 @@ fn broadcasts(node: Node, verbs: &[&str]) -> Node {
 		Node::List(items, _, _) if sent(&items).is_some() => sent(&items).expect("checked"),
 		other => other.map_children(|child| broadcasts(child, verbs)),
 	}
-}
-
-/// `function(arguments…)`
-pub(crate) fn call(function: &str, arguments: Vec<Node>) -> Node {
-	Node::List([vec![Node::Symbol(function.to_string())], arguments].concat(), Bracket::Round, Separator::None)
 }
 
 /// `on file "notes.txt" change {body}`: the path (a text) and the body

@@ -4,6 +4,7 @@
 //! `y += e` → `cell_set(y·cell, cell_get(y·cell) + e)`, a read of y → `cell_get(y·cell)`. Variables only read keep the
 //! captures of wasm_emitter `refresh_enclosing_captures`.
 
+use super::nodes::call;
 use crate::late_binding::{changes_in, declared_nonlocals, NONLOCAL};
 use crate::node::{Bracket, Node, Separator};
 use crate::operators::Op;
@@ -103,10 +104,6 @@ fn through_cell(node: Node, variable: &str, cell: &Node) -> Node {
 		Node::Meta { node, data } => Node::Meta { node: Box::new(through_cell(*node, variable, cell)), data },
 		other => other,
 	}
-}
-
-fn call(word: &str, arguments: Vec<Node>) -> Node {
-	Node::List([vec![Node::Symbol(word.to_string())], arguments].concat(), Bracket::Round, Separator::None)
 }
 
 /// The name of a lambda that declares `nonlocal`, made a nested function

@@ -9,6 +9,7 @@
 //! loop `for yield·item·1 in xs { yield yield·item·1 }`, lazy like any loop over a generator.
 //! Runs after ruby_blocks, which takes the yielding functions some call passes a block to.
 
+use super::nodes::{assign, int, is_word, statement_list, symbol, symbol_name};
 use crate::for_loop::{block_items, loop_variables};
 use crate::inlining::renamed_names;
 use crate::node::{Bracket, Node, Separator};
@@ -86,43 +87,16 @@ fn delegated_source(node: &Node) -> Option<Node> {
 	}
 }
 
-pub(crate) fn symbol(name: &str) -> Node {
-	Node::Symbol(name.to_string())
-}
-
-pub(crate) fn symbol_name(node: &Node) -> Option<&String> {
-	match node.drop_meta() {
-		Node::Symbol(name) => Some(name),
-		_ => None,
-	}
-}
-
-pub(crate) fn is_word(node: &Node, word: &str) -> bool {
-	symbol_name(node).is_some_and(|name| name == word)
-}
-
-pub(crate) fn assign(target: Node, value: Node) -> Node {
-	Node::Key(Box::new(target), Op::Assign, Box::new(value))
-}
-
-pub(crate) fn statements(items: Vec<Node>, bracket: Bracket) -> Node {
-	Node::List(items, bracket, Separator::Semicolon)
-}
-
-pub(crate) fn number(value: i64) -> Node {
-	Node::Number(crate::extensions::numbers::Number::Int(value))
-}
-
 /// `if flag { break }`
 fn break_if(flag: &Node) -> Node {
 	let condition = Node::Key(Box::new(Node::Empty), Op::If, Box::new(flag.clone()));
-	Node::Key(Box::new(condition), Op::Then, Box::new(statements(vec![symbol(BREAK_WORD)], Bracket::Curly)))
+	Node::Key(Box::new(condition), Op::Then, Box::new(statement_list(vec![symbol(BREAK_WORD)], Bracket::Curly)))
 }
 
 /// `while 1 { statements; break }`: a loop run once, which `break` leaves early
 fn run_once(mut body: Vec<Node>) -> Node {
 	body.push(symbol(BREAK_WORD));
-	while_do(number(1), statements(body, Bracket::Curly))
+	while_do(int(1), statement_list(body, Bracket::Curly))
 }
 
 /// `name(params) := body` of a body that yields: its name, parameters and body
@@ -217,7 +191,7 @@ fn rewritten(node: Node, step: &dyn Fn(&Node) -> Step) -> Node {
 		other => match step(&other) {
 			Step::Keep => other,
 			Step::Descend => other.map_children(|child| rewritten(child, step)),
-			Step::Replace(replacement) => statements(replacement, Bracket::Curly),
+			Step::Replace(replacement) => statement_list(replacement, Bracket::Curly),
 		},
 	}
 }
@@ -313,12 +287,12 @@ fn inlined_loop(variable: Node, name: &str, generator: &Generator, arguments: Ve
 	let mut all: Vec<Node> = bindings.collect();
 	match stops {
 		true => {
-			all.push(assign(stop.clone(), number(0)));
+			all.push(assign(stop.clone(), int(0)));
 			all.push(run_once(generator_statements));
 		}
 		false => all.extend(generator_statements),
 	}
-	statements(all, Bracket::None)
+	statement_list(all, Bracket::None)
 }
 
 /// In the generator's body: `yield v` runs the loop's body, `return` stops, a loop that may stop is followed by
@@ -328,7 +302,7 @@ fn generator_step(node: &Node, loop_body: &dyn Fn(Vec<Node>) -> Vec<Node>, stop:
 		return Step::Replace(loop_body(values).into_iter().chain(receiving_nothing(target)).collect());
 	}
 	match node {
-		_ if is_return(node) => Step::Replace(vec![assign(stop.clone(), number(1)), symbol(BREAK_WORD)]),
+		_ if is_return(node) => Step::Replace(vec![assign(stop.clone(), int(1)), symbol(BREAK_WORD)]),
 		_ if is_own_scope(node) => Step::Keep,
 		_ if stops && is_loop(node) && holds_stop(node) => Step::Replace(vec![node.drop_meta().clone().map_children(|child| rewritten(child, &|inner| generator_step(inner, loop_body, stop, stops))), break_if(stop)]),
 		_ => Step::Descend,
@@ -346,7 +320,7 @@ fn holds_own_return(node: &Node) -> bool {
 /// In the loop's body: `break` stops the generator, `continue` leaves the run-once loop around the body
 fn loop_body_step(node: &Node, stop: &Node, continues: bool) -> Step {
 	match node.drop_meta() {
-		inner if is_word(inner, BREAK_WORD) => Step::Replace(vec![assign(stop.clone(), number(1)), symbol(BREAK_WORD)]),
+		inner if is_word(inner, BREAK_WORD) => Step::Replace(vec![assign(stop.clone(), int(1)), symbol(BREAK_WORD)]),
 		inner if continues && is_word(inner, CONTINUE_WORD) => Step::Replace(vec![symbol(BREAK_WORD)]),
 		inner if is_loop(inner) || is_own_scope(inner) => Step::Keep,
 		_ => Step::Descend,
@@ -408,7 +382,7 @@ fn iterator_loops(node: Node, classes: &HashSet<String>, objects: &HashSet<Strin
 	let mut statements_of_body = block_items(body);
 	statements_of_body.push(crate::wasm_emitter::mark_step(next()));
 	let more = Node::Key(Box::new(variable.clone()), Op::Ne, Box::new(Node::Empty));
-	statements(vec![assign(iterator.clone(), iterable.clone()), next(), while_do(more, statements(statements_of_body, Bracket::Curly))], Bracket::None).with_meta_of(&node)
+	statement_list(vec![assign(iterator.clone(), iterable.clone()), next(), while_do(more, statement_list(statements_of_body, Bracket::Curly))], Bracket::None).with_meta_of(&node)
 }
 
 /// Each generator's definition collects what it yields: `{ g·yielded = []; …; g·yielded += [v]; …; g·yielded }`
@@ -432,7 +406,7 @@ fn collected_definitions(node: Node, generators: &HashMap<String, Generator>) ->
 			let mut collected = vec![assign(list.clone(), crate::warp_parser::parse("[]"))];
 			collected.extend(block_items(&rewritten(*body, &step)));
 			collected.push(list);
-			Node::Key(head, Op::Define, Box::new(statements(collected, Bracket::Curly)))
+			Node::Key(head, Op::Define, Box::new(statement_list(collected, Bracket::Curly)))
 		}
 		other => other.map_children(|child| collected_definitions(child, generators)),
 	}

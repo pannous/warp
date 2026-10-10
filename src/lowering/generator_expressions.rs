@@ -5,7 +5,8 @@
 //! expression: `(upper w for w in words)` reads as the call `upper(w for w in words)` (comprehensions.rs).
 
 use crate::comprehensions::{bound_names, Comprehension};
-use crate::generators::{statements, symbol, symbol_name, FOR_WORD, NAME_SEPARATOR};
+use crate::generators::{FOR_WORD, NAME_SEPARATOR};
+use super::nodes::{statement_list, symbol, symbol_name};
 use crate::node::{Bracket, Node, Separator};
 use crate::operators::Op;
 use std::collections::BTreeSet;
@@ -26,7 +27,7 @@ pub fn lower(node: Node) -> Node {
 		Node::List(items, Bracket::None | Bracket::Curly, Separator::Semicolon | Separator::Newline) => items,
 		other => vec![other],
 	};
-	statements(definitions.into_iter().chain(items).collect(), Bracket::None)
+	statement_list(definitions.into_iter().chain(items).collect(), Bracket::None)
 }
 
 /// The names the program assigns, takes as parameters or loops over
@@ -49,7 +50,7 @@ fn expressions(node: Node, variables: &BTreeSet<String>, definitions: &mut Vec<N
 	let name = symbol(&[NAME, &(definitions.len() + 1).to_string()].join(NAME_SEPARATOR));
 	let free = free_variables(&comprehension, variables);
 	let head = Node::List([name.clone()].into_iter().chain(free.iter().cloned()).collect(), Bracket::Round, Separator::None);
-	definitions.push(Node::Key(Box::new(head.clone()), Op::Define, Box::new(statements(vec![comprehension.yielding_loop()], Bracket::Curly))));
+	definitions.push(Node::Key(Box::new(head.clone()), Op::Define, Box::new(statement_list(vec![comprehension.yielding_loop()], Bracket::Curly))));
 	head.with_meta_of(&node)
 }
 

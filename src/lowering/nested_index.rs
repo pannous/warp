@@ -6,6 +6,7 @@
 //! `bags#1.items#2 = v` take the instance out, change it and put it back. A store into a call's result
 //! (`make().n = 5`) would change a copy nobody keeps, so it is an error.
 
+use super::nodes::assign;
 use crate::diagnostic::Diagnostic;
 use crate::node::{Bracket, Node, Separator};
 use crate::operators::Op;
@@ -108,6 +109,3 @@ fn replaced_below(place: Node, inner: &Node) -> Node {
 	}
 }
 
-fn assign(target: Node, value: Node) -> Node {
-	Node::Key(Box::new(target), Op::Assign, Box::new(value))
-}

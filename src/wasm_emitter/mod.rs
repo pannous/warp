@@ -164,7 +164,7 @@ fn if_then_parts(node: &Node) -> Option<(&Node, &Node)> {
 }
 
 pub use equality::{IS_TRUTHY, SAME_NODE, VALUES_EQUAL};
-pub use config::{EmitterConfig, EmitterConfigBuilder};
+pub use config::EmitterConfig;
 pub use import_manager::ImportManager;
 pub use string_table::StringTable;
 pub use type_manager::TypeManager;
@@ -377,23 +377,9 @@ impl WasmGcEmitter {
 		self.config.emit_kind_globals = enabled;
 	}
 
-	pub fn set_tree_shaking(&mut self, enabled: bool) {
-		self.config.emit_all_functions = !enabled;
-	}
-
 	/// Enable/disable host function imports (fetch, run)
 	pub fn set_host_imports(&mut self, enabled: bool) {
 		self.config.emit_host_imports = enabled;
-	}
-
-	/// Enable/disable WASI imports (fd_write for puts, puti, etc.)
-	pub fn set_wasi_imports(&mut self, enabled: bool) {
-		self.config.emit_wasi_imports = enabled;
-	}
-
-	/// Enable/disable FFI imports (libc, libm functions)
-	pub fn set_ffi_imports(&mut self, enabled: bool) {
-		self.config.emit_ffi_imports = enabled;
 	}
 
 	// ═══════════════════════════════════════════════════════════════════════════
@@ -956,30 +942,12 @@ impl WasmGcEmitter {
 			heap_type: HeapType::Concrete(type_idx),
 		};
 
-		// Build parameter types
 		let params: Vec<ValType> = type_def.fields.iter().map(|f| field_def_to_val_type(f, self)).collect();
-
-		// Function type: (params...) -> (ref $TypeName)
-		let func_type = self.type_manager.function_type(params.clone(), vec![Ref(type_ref)]);
-		self.functions.function(func_type);
-
-		// Function body: get all params, struct.new
-		let mut func = Function::new(vec![]);
-		for i in 0..type_def.fields.len() {
-			func.instruction(&I::LocalGet(i as u32));
-		}
-		func.instruction(&I::StructNew(type_idx));
-		func.instruction(&I::End);
-
-		self.code.function(&func);
-
-		// Export as new_TypeName
-		let func_name = format!("new_{}", type_def.name);
-		// Leak the string to get a 'static str for the export
-		let func_name_static: &'static str = Box::leak(func_name.clone().into_boxed_str());
-		self.exports
-			.export(func_name_static, ExportKind::Func, self.next_func_idx);
-		self.next_func_idx += 1;
+		let field_count = params.len() as u32;
+		self.host_only_function(&format!("new_{}", type_def.name), params, vec![Ref(type_ref)], vec![], |_, func| {
+			(0..field_count).for_each(|field| { func.instruction(&I::LocalGet(field)); });
+			func.instruction(&I::StructNew(type_idx));
+		});
 	}
 
 

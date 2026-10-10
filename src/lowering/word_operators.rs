@@ -3,7 +3,8 @@
 //! root wins (P142). The other way round, the log glyphs are the log words (P226): `b⌞x` is `log(x, b)`, `x⌟` is
 //! `ln(x)` and `x⌟b` is `log(x, b)`
 
-use crate::node::{Bracket, Node, Separator};
+use super::nodes::call;
+use crate::node::Node;
 use crate::operators::Op;
 
 const OPERATOR_ALIASES: [(&str, &str, Op); 1] = [("root", "sqrt", Op::Sqrt)];
@@ -64,6 +65,3 @@ fn log_calls(node: Node) -> Node {
 	}
 }
 
-fn call(name: &str, arguments: Vec<Node>) -> Node {
-	Node::List([vec![Node::Symbol(name.to_string())], arguments].concat(), Bracket::Round, Separator::None)
-}

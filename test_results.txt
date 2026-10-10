@@ -2779,6 +2779,9 @@ PASSED:
   ✓ programs::test_shader_holes::values_not_written_out_cannot_take_the_holes
   ✓ programs::test_small_samples::error_samples
   ✓ programs::test_small_samples::text_samples
+  ✓ programs::test_sound_clock::sounds_queue_on_the_audio_clock
+  ✓ programs::test_sound_clock::stop_sound_empties_the_queue
+  ✓ programs::test_sound_clock::waiting_headless_takes_no_time
   ✓ programs::test_sound_files::a_broken_music_file_fails
   ✓ programs::test_sound_files::a_music_file_plays_in_the_background
   ✓ programs::test_sound_files::only_a_music_file_plays
@@ -4335,4 +4338,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-10 ignored, 4330 passed, 0 failed, 4330 total tested
+10 ignored, 4333 passed, 0 failed, 4333 total tested

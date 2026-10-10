@@ -7,6 +7,7 @@
 //! - OCaml / F# `let f x = body in rest`: the definition `f(x) := body`, then rest
 //! - JS destructured parameters `({a, b}) => a + b`: the object taken apart into its fields
 
+use super::nodes::{is_type_word, is_word};
 use crate::node::{Bracket, Node, Separator};
 use crate::operators::Op;
 use std::collections::HashSet;
@@ -230,10 +231,6 @@ fn split_at_in(value: &Node) -> (Node, Option<Node>) {
 		several => Node::List(several.to_vec(), Bracket::None, separator.clone()),
 	};
 	(phrase(&words[..position]), Some(phrase(&words[position + 1..])))
-}
-
-fn is_word(node: &Node, word: &str) -> bool {
-	matches!(node.drop_meta(), Node::Symbol(symbol) if symbol == word)
 }
 
 /// `[match, subject, {k => v …}]`, or `[match, (subject {k => v …})]` as an assigned match parses: the cases as `k: v`,
@@ -681,10 +678,6 @@ fn without_result_type(rest: &[Node]) -> &[Node] {
 		[result_type, body] if is_type_word(result_type) && matches!(body.drop_meta(), Node::List(_, Bracket::Curly, _)) => &rest[1..],
 		_ => rest,
 	}
-}
-
-fn is_type_word(node: &Node) -> bool {
-	matches!(node.drop_meta(), Node::Symbol(word) if crate::analyzer::type_word_kind(word).is_some())
 }
 
 /// R's `f <- function(x) x * 2`, JS-ish `f = function(x) x * 2`: the assignment takes the phrase after the head as

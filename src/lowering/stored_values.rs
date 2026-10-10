@@ -9,6 +9,7 @@
 //! (sessionStorage: while the page's tab lasts; natively while the process runs) (P188, warp-03's default).
 //! A program that defines its own `storage`, `local` or `session` keeps it.
 
+use super::nodes::is_word;
 use crate::node::{Bracket, Node, Separator};
 use crate::operators::Op;
 use crate::warp_parser::parse;
@@ -182,10 +183,6 @@ fn entry_key<'a>(target: &Node, stores: &'a [(&str, String)]) -> Option<(Node, &
 /// The file of the store a word names
 fn file_of<'a>(word: &Node, stores: &'a [(&str, String)]) -> Option<&'a str> {
 	stores.iter().find(|(name, _)| is_word(word, name)).map(|(_, file)| file.as_str())
-}
-
-fn is_word(node: &Node, word: &str) -> bool {
-	matches!(node.drop_meta(), Node::Symbol(name) if name == word)
 }
 
 /// `std_io("store", member, [key, value, file])`, the key and the value given
