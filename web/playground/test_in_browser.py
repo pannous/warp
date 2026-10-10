@@ -53,6 +53,10 @@ BROWSER_OWN_WARNINGS = {"No available adapters."}
 # an example on the GPU (paint of a shader) in a browser without WebGPU (the runner's Firefox): skipped, loudly
 NO_GPU = "offers no WebGPU adapter"
 PAGE_LOAD = "(loading the page)"
+FILE_KEPT = "(a written file after a reload)"  # card files-written: host-files.js keeps written files in IndexedDB
+FILE_KEPT_TEXT = "kept across a reload"
+WRITE_FILE = f'use file\nwrite("kept.txt", "{FILE_KEPT_TEXT}")'
+READ_FILE = 'use file\nread("kept.txt")'
 # each GET the server began and finished, (seconds since it started, path, finished): shown after a failed tour, which
 # then says whether the browser asked for a stalled worker's scripts at all (card tour-firefox)
 served = []
@@ -270,6 +274,26 @@ class ConsoleWatch:
 		self.process.terminate()
 
 
+def run_code(code):
+	"""the playground's value once it ran `code`"""
+	script = f"""(async () => {{
+		await playground.runCode({json.dumps(code)});
+		while (document.getElementById("status").textContent === "running…") await new Promise(done => setTimeout(done, 50));
+		return document.getElementById("value").textContent;
+	}})()"""
+	shown = browser("eval", script)
+	return json.loads(shown) if shown.startswith('"') else f"(page gave no answer: {shown or browser_complaint})"
+
+
+def file_kept_wrong(page_url):
+	"""a file one run wrote is read by a run after the page reloaded: what differs"""
+	run_code(WRITE_FILE)
+	open_page(page_url)
+	wait_for_isolation()
+	read = run_code(READ_FILE)
+	return [] if FILE_KEPT_TEXT in read else [f"read after a reload: {read!r}, expected {FILE_KEPT_TEXT!r}"]
+
+
 def show_example(name):
 	"""the playground's value and printed text once it showed the example, and its timers ran `wait` milliseconds; with
 	`typed` (into the first input) and `clicks` also the value after typing and clicking those buttons or links, whether every element shown stayed (`kept`), kept its key (`keyed`) and whether anything animated (`animated`) and the address bar's path (`address`)"""
@@ -333,7 +357,8 @@ def check_examples(names, page_url=None, site=None):
 		page_url = f"http://127.0.0.1:{PORT}/web/playground/"
 	open_page("about:blank")
 	console = FirefoxConsole() if firefox else ConsoleWatch()  # before the page, so its loading is watched too
-	open_page(f"{page_url}{'&' if '?' in page_url else '?'}slow_start={SLOW_START_MS}")
+	page_url = f"{page_url}{'&' if '?' in page_url else '?'}slow_start={SLOW_START_MS}"
+	open_page(page_url)
 	wait_for_isolation()
 	examples = json.loads(json.loads(browser("eval", "JSON.stringify(EXAMPLES)")))
 	samples = json.loads(json.loads(browser("eval", "JSON.stringify(Object.keys(SAMPLES).sort())")))
@@ -356,13 +381,17 @@ def check_examples(names, page_url=None, site=None):
 				print(f"skip {name}: this browser {NO_GPU}")
 				shown = {**shown, "value": expected.get("value"), "canvases": expected.get("canvases")}
 			verdict(name, [f"{part}: {shown.get(part)!r}, expected {expected[part]!r}" for part in ("value", "printed", "canvases", "clicked", "clickedPrinted", "kept", "keyed", "animated", "address") if part in expected and shown.get(part) != expected[part]] + [f"status: {shown.get('failed')}"] * bool(shown.get("failed")))
+	check_file_kept = not names or FILE_KEPT in names
+	if check_file_kept:
+		verdict(FILE_KEPT, file_kept_wrong(page_url))
 	console.stop()
 	browser("close")
 	if server:
 		server.shutdown()
 		if failures:
 			show_served()
-	print(f"\nexamples and samples: {len(chosen) + 1 - len(failures)} of {len(chosen) + 1} show what they promise, without console errors" + (f"; failed: {', '.join(failures)}" if failures else ""))
+	checked = len(chosen) + 1 + check_file_kept
+	print(f"\nexamples and samples: {checked - len(failures)} of {checked} show what they promise, without console errors" + (f"; failed: {', '.join(failures)}" if failures else ""))
 	sys.exit(101 if failures else 0)
 
 

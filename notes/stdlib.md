@@ -196,7 +196,8 @@ run natively and in the browser.
 1. Done: json (A): `use json` brings parse_json and to_json, native and browser (tests/modules/test_std_json.rs).
 1b. Done: file and os (A, std_io): `use file` brings write, append_file, exists, list_files, lines (read stays a
    prelude word); `use os` brings env. Natively the file system (paths as read resolves them) and the environment; in
-   the browser host.js keeps written files in memory while the page is open (read sees them first, then the served
+   the browser host.js keeps written files in memory and, on a page, in IndexedDB (store `files` of database `warp`,
+   read back before the first run, so they survive a reload: card files-written; read sees them first, then the served
    repository) and env is ø (tests/modules/test_std_file.rs). Names: `append_file`, since `append` is the list
    method `xs.append(v)` a program using `use file` still needs (question Q6). `use os; args` (card std-args): the words
    after the program file, `warp run prog.warp a b` gives ["a" "b"] (main.rs program_file → std_adapters

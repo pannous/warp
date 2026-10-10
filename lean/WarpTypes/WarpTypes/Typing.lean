@@ -47,9 +47,10 @@ inductive HasType (P : Program) : Ctx → Expr → Ty → Prop where
   /-- any condition (truthiness); inference.rs branches_kind -/
   | ite {Γ c a b tc ta tb} : HasType P Γ c tc → HasType P Γ a ta → HasType P Γ b tb →
       HasType P Γ (.ite c a b) (join ta tb)
-  /-- P55: the last body value, or ø when the body never ran (a program's `last` is ø) -/
+  /-- P55: the last body value, or ø when the body never ran (a program's `last` is ø); warp does not track that ø,
+  so it is dynamic (`(for x in xs { x }) + 1` compiles) -/
   | loop {Γ c b d tc tb td} : HasType P Γ c tc → HasType P Γ b tb → HasType P Γ d td →
-      HasType P Γ (.loop c b d) (join tb (join td .unit))
+      HasType P Γ (.loop c b d) (join tb (join td .any))
   | seq {Γ a b ta tb} : HasType P Γ a ta → HasType P Γ b tb → HasType P Γ (.seq a b) tb
   /-- inference.rs element_kind -/
   | index {Γ l i tl ti} : HasType P Γ l tl → HasType P Γ i ti → HasType P Γ (.index l i) (elementTy tl)
@@ -77,6 +78,8 @@ inductive HasType (P : Program) : Ctx → Expr → Ty → Prop where
   | fail {Γ m} : HasType P Γ (.fail m) .any
   | failed {Γ e te} : HasType P Γ e te → HasType P Γ (.failed e) .bool
   | tryCatch {Γ e h te th} : HasType P Γ e te → HasType P Γ h th → HasType P Γ (.tryCatch e h) (join te th)
+  /-- `a ?? b`: a's values other than ø, or b's -/
+  | orElse {Γ a b ta tb} : HasType P Γ a ta → HasType P Γ b tb → HasType P Γ (.orElse a b) (join (strip ta) tb)
   /-- a run-time checked cast: statically any source type, the alternatives' join -/
   | cast {Γ e ts te} : HasType P Γ e te → HasType P Γ (.cast e ts) (joinAll ts)
   /-- a conversion `e as t`: statically any source type, t (a value that does not convert is an error when it runs) -/
@@ -104,15 +107,15 @@ inductive HasType (P : Program) : Ctx → Expr → Ty → Prop where
   its body's value or what a handler's `break` gives -/
   | handle {Γ ev h b th tb R} : P.effects ev = some R → HasType P (Γ.set eventLocal .any) h th → sub th R = true →
       HasType P Γ b tb → HasType P Γ (.handle ev h b) (join tb (P.aborts ev))
-  /-- an emit gives its event's result type, or ø when nothing handles it -/
-  | emit {Γ ev e te R} : P.effects ev = some R → HasType P Γ e te → HasType P Γ (.emit ev e) (join R .unit)
+  /-- an emit gives its event's result type, or ø when nothing handles it (dynamic, as a loop's ø) -/
+  | emit {Γ ev e te R} : P.effects ev = some R → HasType P Γ e te → HasType P Γ (.emit ev e) (join R .any)
   | scope {Γ k e te} : HasType P Γ e te → HasType P Γ (.scope k e) te
   /-- `break v` does not return: the bottom type; v goes to a block of ev -/
   | abort {Γ ev k e te} : HasType P Γ e te → sub te (P.aborts ev) = true → HasType P Γ (.abort ev k e) .never
   /-- the loop variable holds the list's items or the text's one-character texts (anything when the type is not
   known: a value of another type fails when it runs) -/
   | forIn {Γ y l b d tl T tb td} : HasType P Γ l tl → sub (elementTy tl) T = true → HasType P (Γ.set y T) b tb →
-      HasType P Γ d td → HasType P Γ (.forIn y l b d) (join tb (join td .unit))
+      HasType P Γ d td → HasType P Γ (.forIn y l b d) (join tb (join td .any))
 
 /-- a handler of ev, closed but for the payload, gives at most ev's result type -/
 def HandlerOk (P : Program) (ev : String) (h : Expr) : Prop :=

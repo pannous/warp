@@ -491,7 +491,7 @@ people.add(Person("Bo", 30))
 
 A row is an ordinary object: change a field (`bo.age += 1`) and the table changes with it, no save needed.
 
-Files are written and read by name. In the browser they last while the page is open.
+Files are written and read by name. In the browser they are kept in the browser's storage, so they are still there after a reload.
 
 ```warp => "milk"
 write("shopping.txt", "milk")

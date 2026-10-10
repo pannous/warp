@@ -154,8 +154,10 @@ Left (each changes behaviour or needs care):
   different bracket/separator rules each, so one shared version changes which forms match.
 - soft_keywords::parameter_name accepts only `:` / `=` keys and does not recurse, unlike nodes::parameter_name;
   go_blocks / named_arguments / parameter_shapes have their own parameter_name returning String or Node.
-- class_methods.rs (~2600 lines): destructurings / positional_fields share their class_of setup (431/444), two
-  class-collecting visits (1848/2003); worth its own split into files.
+- class_methods.rs (~2240 lines): operators on instances and specialized calls moved to class_methods/operators.rs
+  (a child module, `use super::*`, its items pub(super)); the next cohesive parts to move the same way: inheritance
+  and mixins (inherit … with_inherited), other languages' class forms (go/impl/ruby/python methods, witness methods).
+  destructurings / positional_fields already share with_value_classes.
 
 ## src/wasm_emitter/ (card cleanup-emitter, session warp-fixer)
 

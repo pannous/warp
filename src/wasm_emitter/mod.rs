@@ -33,7 +33,7 @@ mod library_ops;
 mod text_unicode;
 mod similarity;
 mod uncertain;
-mod times;
+pub(crate) mod times;
 pub use similarity::NUMBERS_SIMILAR;
 pub(crate) mod list_ops;
 mod list_abi;
@@ -880,7 +880,9 @@ impl WasmGcEmitter {
 		let polls = effects.calls_external(crate::host::TASK_CONTROL);
 		// signal_poll likewise, by a program with `on interrupt {…}` or `on every … {…}`
 		let polls_signals = crate::analyzer::handles_system_signals(&self.ctx);
-		self.ctx.ffi_imports.retain(|name, _| effects.calls_external(name) || (polls && name == crate::host::TASK_POLL) || (polls_signals && name == crate::host::SIGNAL_POLL));
+		// local_offset by time_field, imported only by a program that makes an instant (analyzer extract_host_words)
+		let emitter_calls = |name: &str| (polls && name == crate::host::TASK_POLL) || (polls_signals && name == crate::host::SIGNAL_POLL) || name == crate::host::LOCAL_OFFSET;
+		self.ctx.ffi_imports.retain(|name, _| effects.calls_external(name) || emitter_calls(name));
 		for need in &self.discovered_needs {
 			if let Need::MathImport(key) = need {
 				let function = key.trim_start_matches("m.");

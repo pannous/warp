@@ -1957,7 +1957,7 @@ impl WasmGcEmitter {
 						func.instruction(&I::BrOnNonNull(0));
 					}
 					self.emit_uncertain_field_lookup(func, held, &name);
-					self.emit_instant_field_lookup(func, held, &name);
+					self.emit_time_field_lookup(func, held, &name);
 					if name == MESSAGE_FIELD {
 						Self::emit_list(func, &[I::LocalGet(held)]);
 						self.emit_call(func, ERROR_MESSAGE);
