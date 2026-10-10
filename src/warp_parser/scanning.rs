@@ -145,14 +145,14 @@ impl WarpParser {
 			&& !is_identifier_char(self.peek_char(keyword.len()))
 	}
 
-	/// `#` followed by a space (`# note`), a shebang `#!`, a doc comment `##` or a directive (`#use lib`) starts a comment;
+	/// `#` followed by a space (`# note`), a shebang `#!`, a doc comment `##` or a directive (`#use lib`, `#include x`, `#import f from "m"`, every import keyword) starts a comment;
 	/// `#` directly followed by anything else counts (`#s`, `#a-1`, `#f(x)`)
 	pub(super) fn at_hash_comment(&self) -> bool {
 		if matches!(self.peek_char(1), ' ' | '\t' | '\n' | '\r' | '\0' | '!' | '#') {
 			return true;
 		}
 		let word: String = (1..).map(|offset| self.peek_char(offset)).take_while(|&c| is_identifier_char(c)).collect();
-		HASH_DIRECTIVES.contains(&word.as_str())
+		crate::modules::is_import_keyword(&word)
 	}
 
 	/// `//` after an operand with no space behind it (`7//2`, `x //= 2`, `f(x) //2`) divides; followed by a space or the end

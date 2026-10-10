@@ -493,9 +493,6 @@ const TIMES_WORD: &str = "times";
 pub const TEXT_TIMES: &str = "times·text";
 /// The acknowledge-once note that a spaced `//` after code is a comment, not Python's floor division
 const SLASH_COMMENT_TOPIC: &str = "slash-comment";
-/// Directive words after `#` that keep the line a comment (`#use lib`, `#include x`, `#import f from "m"`);
-/// besides them only `# ` with a space, `#!` (shebang) and `##` (doc comment) start a comment, any other `#x` counts
-const HASH_DIRECTIVES: [&str; 3] = ["use", "include", "import"];
 const ELVIS_WORD: &str = "elvis";
 /// `x is int` tests the type; `x == int` stays equality (user decision #30)
 const IS_WORD: &str = "is";

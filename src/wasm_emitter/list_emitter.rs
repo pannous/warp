@@ -246,7 +246,7 @@ impl WasmGcEmitter {
 		}
 
 		// a lone import or use statement (the whole program) is worth ø
-		if matches!(items.first().map(Node::drop_meta), Some(Node::Symbol(word)) if word == "import" || word == "use") && items.len() >= 2 {
+		if matches!(items.first().map(Node::drop_meta), Some(Node::Symbol(word)) if crate::modules::is_import_keyword(word)) && items.len() >= 2 {
 			self.emit_call(func, "new_empty");
 			return;
 		}
@@ -1015,7 +1015,7 @@ impl WasmGcEmitter {
 	pub(super) fn is_definition(&self, item: &Node) -> bool {
 		self.defined_function_name(item).is_some() || match item.drop_meta() {
 			Node::List(list_items, _, _) if list_items.len() >= 2 => {
-				matches!(list_items[0].drop_meta(), Node::Symbol(s) if is_function_keyword(s) || s == "use" || s == "import")
+				matches!(list_items[0].drop_meta(), Node::Symbol(s) if is_function_keyword(s) || crate::modules::is_import_keyword(s))
 			}
 			_ => false,
 		}
