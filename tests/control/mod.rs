@@ -180,3 +180,4 @@ mod test_table_method_reads;
 mod test_table_element_writes; // orm: people#1.age = 5 writes through
 mod test_unit_tasks; // card units-tasks
 mod test_task_char; // card task-char
+mod test_bare_try; // card failed-raised
