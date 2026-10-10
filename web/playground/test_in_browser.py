@@ -65,6 +65,8 @@ COMPLETIONS = [
 	("xs = 1\nxs_a = 2\nxs_b = 3\nxs", ["Tab", "Enter"], "xs = 1\nxs_a = 2\nxs_b = 3\nxs\n"),
 ]
 KEY_CODES = {"Tab": 9, "Enter": 13}
+CLIPBOARD_READ = "(a program reads the clipboard)"  # card web-apis-rest: host.js clipboard_text asks the page
+CLIPBOARD_TEXT = "copied by the page"
 # each GET the server began and finished, (seconds since it started, path, finished): shown after a failed tour, which
 # then says whether the browser asked for a stalled worker's scripts at all (card tour-firefox)
 served = []
@@ -302,6 +304,19 @@ def file_kept_wrong(page_url):
 	return [] if FILE_KEPT_TEXT in read else [f"read after a reload: {read!r}, expected {FILE_KEPT_TEXT!r}"]
 
 
+def clipboard_read_wrong():
+	"""a program reads what the page copied; skipped loudly when the browser refuses the page its own clipboard"""
+	refused = browser("eval", f"""(async () => {{
+		try {{ await navigator.clipboard.writeText({json.dumps(CLIPBOARD_TEXT)}); await navigator.clipboard.readText(); return ""; }}
+		catch (failure) {{ return failure.message; }}
+	}})()""")
+	if refused not in ('""', ""):
+		print(f"skip {CLIPBOARD_READ}: this browser refuses the page its clipboard: {refused}")
+		return []
+	read = run_code("clipboard")
+	return [] if CLIPBOARD_TEXT in read else [f"clipboard read: {read!r}, expected {CLIPBOARD_TEXT!r}"]
+
+
 def completion_keys_wrong():
 	"""the editor's code after each of COMPLETIONS' keys, pressed through CodeMirror's own key handling: what differs"""
 	script = f"""(() => {{
@@ -409,7 +424,7 @@ def check_examples(names, page_url=None, site=None):
 				print(f"skip {name}: this browser {NO_GPU}")
 				shown = {**shown, "value": expected.get("value"), "canvases": expected.get("canvases")}
 			verdict(name, [f"{part}: {shown.get(part)!r}, expected {expected[part]!r}" for part in ("value", "printed", "canvases", "clicked", "clickedPrinted", "kept", "keyed", "animated", "address") if part in expected and shown.get(part) != expected[part]] + [f"status: {shown.get('failed')}"] * bool(shown.get("failed")))
-	extra_checks = [(check, wrong) for check, wrong in ((COMPLETION_KEYS, completion_keys_wrong), (FILE_KEPT, lambda: file_kept_wrong(page_url))) if not names or check in names]
+	extra_checks = [(check, wrong) for check, wrong in ((COMPLETION_KEYS, completion_keys_wrong), (CLIPBOARD_READ, clipboard_read_wrong), (FILE_KEPT, lambda: file_kept_wrong(page_url))) if not names or check in names]
 	for check, wrong in extra_checks:
 		verdict(check, wrong())
 	console.stop()

@@ -192,7 +192,11 @@ function programImports(holder, hooks) {
 				const covered = textCoverage(String(plainOfTree(readNode(program(), words))), Number(size));
 				return listOfInts(program(), covered) ?? buildValue(program(), treeOfPlain(Array.from(covered)));
 			},
-			clipboard_text: () => { throw new Error("clipboard: the playground cannot read it (the browser's clipboard is asynchronous)"); },
+			// `clipboard`: the page reads it (asynchronously) while the Worker waits (host-tasks.js askPage)
+			clipboard_text: () => {
+				if (!self.askPage) throw new Error("clipboard: this page cannot read it (the browser's clipboard is asynchronous, and the page has no task Workers)");
+				return buildValue(program(), treeOfPlain(self.askPage("clipboard", self.askPageClipboard).text));
+			},
 			// `exit(code)` ends the run, its value ø (P121): runProgram tells it from a failure by holder.exitCode
 			exit: code => {
 				holder.exitCode = Number(code);

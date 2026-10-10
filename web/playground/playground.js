@@ -199,6 +199,7 @@ function startWorker(restarts = 0) {
 			if (data.type === "ready") return ready();
 			if (data.type === "stored") return keepValue(data.name, data.value, data.file);
 			if (data.type === "clipboard") return copyText(data.text);
+			if (data.type === "clipboard read") return pasteInto(data.shared);
 			if (data.type === "failed") return failed(new Error(data.message));
 			if (data.type === "bundle") return bundled(data.bundle); // deploy.js
 			if (data.type === "sound") return playSound(data);
