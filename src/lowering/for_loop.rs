@@ -4,7 +4,7 @@
 //! `for x in xs body`   → `items=xs; index=0; while index<#items {x=items#(index+1); body; index++}`
 //! `for(init;test;step){body}` → `init; while test {body; step}`
 
-use super::nodes::{call, int, key, statement_list, symbol};
+use super::nodes::{block, call, int, key, statement_list, symbol};
 use crate::node::{Bracket, Node, Separator};
 use crate::operators::Op;
 use crate::wasm_emitter::{is_step, mark_step};
@@ -84,7 +84,7 @@ fn classic_for(items: &[Node]) -> Option<Node> {
 	}
 	let mut statements = block_items(body);
 	statements.push(mark_step(step.clone()));
-	Some(statement_list(vec![init.clone(), while_do(test.clone(), statement_list(statements, Bracket::Curly))], Bracket::None))
+	Some(statement_list(vec![init.clone(), while_do(test.clone(), block(statements))], Bracket::None))
 }
 
 /// `for x in iterable {body}` and `for x in iterable: body`
@@ -218,7 +218,7 @@ fn counting_loop(variable: &Node, start: &Node, range: Op, end: &Node, mut body:
 	body.push(mark_step(key(variable.clone(), Op::Inc, Node::Empty)));
 	statement_list(vec![
 		key(variable.clone(), Op::Assign, start.clone()),
-		while_do(key(variable.clone(), test_op, end.clone()), statement_list(body, Bracket::Curly)),
+		while_do(key(variable.clone(), test_op, end.clone()), block(body)),
 	], Bracket::None)
 }
 
@@ -240,6 +240,6 @@ fn walking_loop(variable: &Node, iterable: Node, mut body: Vec<Node>) -> Node {
 	statement_list(vec![
 		key(items, Op::Assign, walked_units(iterable)),
 		key(index, Op::Assign, int(FIRST_INDEX)),
-		while_do(test, statement_list(statements, Bracket::Curly)),
+		while_do(test, block(statements)),
 	], Bracket::None)
 }

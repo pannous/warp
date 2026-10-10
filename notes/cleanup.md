@@ -129,6 +129,9 @@ Done:
   `named_assignment` (component_state + lambdas) and list_element_checks' own assign → nodes.rs
 - word constants defined in 3+ passes (FOR / IN / ON / OF / FROM / COUNT / MAP / SUM / RETURN / GLOBAL_WORD) →
   src/lowering/words.rs; a constant with its own doc comment stayed in its pass
+- identical bodies (found by comparing fn bodies with parameters renamed): `block`, `if_then`, `if_then_else` moved
+  from variable_signals to nodes.rs and replace ~12 spelled-out `key(key(ø, If, c), Then, b)`; `is_block`,
+  `is_colon_pair`, `is_binding`, `is_function_keyword` (2 copies each) → nodes.rs; two `statements`/`entries` → Node::as_items
 
 Left (each changes behaviour or needs care):
 - Node::map_children also enters class bodies (Node::Type); children_rewritten does not. ~40 more passes spell out

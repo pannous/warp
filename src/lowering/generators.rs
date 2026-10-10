@@ -10,7 +10,7 @@
 //! Runs after ruby_blocks, which takes the yielding functions some call passes a block to.
 
 use super::words::{FOR_WORD, GLOBAL_WORD, IN_WORD, RETURN_WORD};
-use super::nodes::{assign, call, int, key, statement_list, symbol};
+use super::nodes::{assign, block, call, if_then, int, key, statement_list, symbol};
 use crate::for_loop::{block_items, loop_variables};
 use crate::inlining::renamed_names;
 use crate::node::{Bracket, Node, Separator};
@@ -86,14 +86,13 @@ fn delegated_source(node: &Node) -> Option<Node> {
 
 /// `if flag { break }`
 fn break_if(flag: &Node) -> Node {
-	let condition = key(Node::Empty, Op::If, flag.clone());
-	key(condition, Op::Then, statement_list(vec![symbol(BREAK_WORD)], Bracket::Curly))
+	if_then(flag.clone(), block(vec![symbol(BREAK_WORD)]))
 }
 
 /// `while 1 { statements; break }`: a loop run once, which `break` leaves early
 fn run_once(mut body: Vec<Node>) -> Node {
 	body.push(symbol(BREAK_WORD));
-	while_do(int(1), statement_list(body, Bracket::Curly))
+	while_do(int(1), block(body))
 }
 
 /// `name(params) := body` of a body that yields: its name, parameters and body
@@ -188,7 +187,7 @@ fn rewritten(node: Node, step: &dyn Fn(&Node) -> Step) -> Node {
 		other => match step(&other) {
 			Step::Keep => other,
 			Step::Descend => other.map_children(|child| rewritten(child, step)),
-			Step::Replace(replacement) => statement_list(replacement, Bracket::Curly),
+			Step::Replace(replacement) => block(replacement),
 		},
 	}
 }
@@ -379,7 +378,7 @@ fn iterator_loops(node: Node, classes: &HashSet<String>, objects: &HashSet<Strin
 	let mut statements_of_body = block_items(body);
 	statements_of_body.push(crate::wasm_emitter::mark_step(next()));
 	let more = key(variable.clone(), Op::Ne, Node::Empty);
-	statement_list(vec![assign(iterator.clone(), iterable.clone()), next(), while_do(more, statement_list(statements_of_body, Bracket::Curly))], Bracket::None).with_meta_of(&node)
+	statement_list(vec![assign(iterator.clone(), iterable.clone()), next(), while_do(more, block(statements_of_body))], Bracket::None).with_meta_of(&node)
 }
 
 /// Each generator's definition collects what it yields: `{ g·yielded = []; …; g·yielded += [v]; …; g·yielded }`
@@ -403,7 +402,7 @@ fn collected_definitions(node: Node, generators: &HashMap<String, Generator>) ->
 			let mut collected = vec![assign(list.clone(), crate::warp_parser::parse("[]"))];
 			collected.extend(block_items(&rewritten(*body, &step)));
 			collected.push(list);
-			Node::Key(head, Op::Define, Box::new(statement_list(collected, Bracket::Curly)))
+			Node::Key(head, Op::Define, Box::new(block(collected)))
 		}
 		other => other.map_children(|child| collected_definitions(child, generators)),
 	}

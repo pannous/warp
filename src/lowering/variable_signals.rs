@@ -12,7 +12,7 @@
 //! `before test {…}` before it.
 
 use super::words::{GLOBAL_WORD, ON_WORD};
-use super::nodes::{call, children_rewritten, key};
+use super::nodes::{block, call, children_rewritten, if_then, key};
 use crate::declarations::{handler_parts, word};
 use crate::node::{symbol, Bracket, Node, Separator};
 use crate::operators::Op;
@@ -781,19 +781,6 @@ fn value_after_write(write: &Node) -> Node {
 		_ => return target.as_ref().clone(),
 	};
 	Node::Key(target.clone(), undo, Box::new(crate::node::int(1)))
-}
-
-pub(crate) fn if_then(condition: Node, body: Node) -> Node {
-	let head = key(Node::Empty, Op::If, condition);
-	key(head, Op::Then, body)
-}
-
-pub(crate) fn if_then_else(condition: Node, body: Node, otherwise: Node) -> Node {
-	key(if_then(condition, body), Op::Else, otherwise)
-}
-
-pub(crate) fn block(statements: Vec<Node>) -> Node {
-	Node::List(statements, Bracket::Curly, Separator::Semicolon)
 }
 
 pub(crate) fn assign(name: &str, value: Node) -> Node {

@@ -9,12 +9,12 @@
 //! kept the same way: the runtime calls their handlers (notes/system_signals.md).
 
 use super::words::{COUNT_WORD, FROM_WORD, OF_WORD, ON_WORD};
-use super::nodes::{call, children_rewritten, key};
+use super::nodes::{block, call, children_rewritten, if_then, key};
 use crate::declarations::{handler_parts, word};
 use crate::node::{symbol, Bracket, Node, Separator};
 use crate::operators::Op;
 use crate::signal_values::ungrouped_reflection;
-use crate::variable_signals::{assign, block, if_then, symbols};
+use crate::variable_signals::{assign, symbols};
 use crate::warp_parser::parse;
 use std::collections::{HashMap, HashSet};
 

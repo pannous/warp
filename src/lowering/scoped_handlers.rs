@@ -9,11 +9,11 @@
 //! throws to its block, which runs under `ran_without_abort(i, {…})` and then has that value.
 
 use super::words::{IN_WORD, ON_WORD};
-use super::nodes::{call, key};
+use super::nodes::{call, if_then_else, key};
 use crate::event_signals::{emit_verbs, emitted, function_with_globals, main_level_variables, reads_event, statements_of};
 use crate::node::{symbol, Bracket, Node, Separator};
 use crate::operators::Op;
-use crate::variable_signals::{assign, if_then_else};
+use crate::variable_signals::assign;
 use std::collections::BTreeMap;
 
 /// Generated function names join their parts with it

@@ -7,7 +7,7 @@
 use crate::comprehensions::{bound_names, Comprehension};
 use crate::generators::NAME_SEPARATOR;
 use super::words::FOR_WORD;
-use super::nodes::{key, statement_list, symbol};
+use super::nodes::{block, key, statement_list, symbol};
 use crate::node::{Bracket, Node, Separator};
 use crate::operators::Op;
 use std::collections::BTreeSet;
@@ -51,7 +51,7 @@ fn expressions(node: Node, variables: &BTreeSet<String>, definitions: &mut Vec<N
 	let name = symbol(&[NAME, &(definitions.len() + 1).to_string()].join(NAME_SEPARATOR));
 	let free = free_variables(&comprehension, variables);
 	let head = Node::List([name.clone()].into_iter().chain(free.iter().cloned()).collect(), Bracket::Round, Separator::None);
-	definitions.push(key(head.clone(), Op::Define, statement_list(vec![comprehension.yielding_loop()], Bracket::Curly)));
+	definitions.push(key(head.clone(), Op::Define, block(vec![comprehension.yielding_loop()])));
 	head.with_meta_of(&node)
 }
 
