@@ -14,11 +14,19 @@ fn printed(program: &str) -> (String, std::time::Duration) {
 	(printed, started.elapsed())
 }
 
+/// The seconds still queued after `program`, at most `seconds` queued and at least that minus the run's time: the clock
+/// runs while the program does, so a loaded machine reads less (card flaky-sound)
+fn assert_queued(program: &str, seconds: f64) {
+	let (output, took) = printed(&format!("{program}\nsound_queued()"));
+	let queued: f64 = output.split_whitespace().last().and_then(|number| number.parse().ok()).unwrap_or_else(|| panic!("no number: {output}"));
+	assert!(queued <= seconds && queued >= seconds - took.as_secs_f64(), "{queued} queued of {seconds} after {took:?}");
+}
+
 #[test]
 fn sounds_queue_on_the_audio_clock() {
-	assert!(printed("play C4 for 2s\nround(sound_queued())").0.contains('2'));
-	assert!(printed("play C4 for 2s\nplay [E4 G4] for 1s\nround(sound_queued())").0.contains('3'));
-	assert!(printed("melody [C4 E4] each 1s\nround(sound_queued())").0.contains('2'));
+	assert_queued("play C4 for 2s", 2.0);
+	assert_queued("play C4 for 2s\nplay [E4 G4] for 1s", 3.0);
+	assert_queued("melody [C4 E4] each 1s", 2.0);
 }
 
 #[test]
