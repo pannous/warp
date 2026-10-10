@@ -62,3 +62,16 @@ fn test_as_declaration() {
 	is!("x as number = 9; x is a number", 1);
 	is!("y as int = 4; y + 1", 5);
 }
+
+#[test]
+fn test_type_of_value_is_type() {
+	// card type-int: `type(x) is T` tests x, so it agrees with what type(x) prints
+	is!("type(0.0) is int", 1);
+	is!("type(0) is int", 1);
+	is!("x = 0.0; type(x) is int", 1);
+	is!("type(1.5) is int", 0);
+	is!("type(1.5) is rational", 1);
+	is!("type(\"a\") is text", 1);
+	is!("int is number", 1);
+	is!("number is int", 0);
+}
