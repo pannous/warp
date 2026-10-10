@@ -132,13 +132,8 @@ pub fn parse_declaration(decl: &str, library: &str) -> Option<FfiFunction> {
         return None;
     }
 
-    let mut name = parts.last()?.to_string();
     // the stars of `FILE *fopen(…)` belong to the return type
-    let mut pointer_marks = String::new();
-    while name.starts_with('*') {
-        name = name[1..].to_string();
-        pointer_marks.push('*');
-    }
+    let (name, pointer_marks) = crate::ffi::split_pointer_marks(parts.last()?);
 
     if name.is_empty() || !name.chars().next()?.is_alphabetic() || crate::ffi::C_TYPE_WORDS.contains(&name.as_str()) {
         return None;

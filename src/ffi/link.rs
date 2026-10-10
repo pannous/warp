@@ -302,18 +302,19 @@ enum RetType {
     Bool,
 }
 
+/// The C integer types of 64 bits
+#[cfg(feature = "native")]
+const C_INT64_TYPES: [&str; 7] = ["long", "int64_t", "long long", "size_t", "ssize_t", "unsigned long", "uint64_t"];
+
 /// Map C type string to normalized ParamType
 #[cfg(feature = "native")]
 fn c_type_to_param_type(c_type: &str) -> ParamType {
-    let t = c_type.trim();
-    let t = t.strip_prefix("const ").unwrap_or(t).trim();
+    let t = bare_c_type(c_type);
 
     match t {
         "float" => ParamType::F32,
         "double" => ParamType::F64,
-        "long" | "int64_t" | "long long" | "size_t" | "ssize_t" | "unsigned long" | "uint64_t" => {
-            ParamType::I64
-        }
+        t if C_INT64_TYPES.contains(&t) => ParamType::I64,
         s if s.contains('*') => match pointer_kind(s) {
             Some(CPointer::Handle) => ParamType::Handle,
             Some(CPointer::Out) => ParamType::Out,
@@ -326,17 +327,14 @@ fn c_type_to_param_type(c_type: &str) -> ParamType {
 /// Map C type string to normalized RetType
 #[cfg(feature = "native")]
 fn c_type_to_ret_type(c_type: &str) -> RetType {
-    let t = c_type.trim();
-    let t = t.strip_prefix("const ").unwrap_or(t).trim();
+    let t = bare_c_type(c_type);
 
     match t {
         "void" => RetType::Void,
         "float" => RetType::F32,
         "double" => RetType::F64,
         "bool" => RetType::Bool,
-        "long" | "int64_t" | "long long" | "size_t" | "ssize_t" | "unsigned long" | "uint64_t" => {
-            RetType::I64
-        }
+        t if C_INT64_TYPES.contains(&t) => RetType::I64,
         _ => RetType::I32,
     }
 }
@@ -344,16 +342,13 @@ fn c_type_to_ret_type(c_type: &str) -> RetType {
 /// Map C type string to wasmtime ValType
 #[cfg(feature = "native")]
 fn c_type_to_wasm_valtype(c_type: &str) -> Option<ValType> {
-    let t = c_type.trim();
-    let t = t.strip_prefix("const ").unwrap_or(t).trim();
+    let t = bare_c_type(c_type);
 
     match t {
         "void" => None,
         "float" => Some(ValType::F32),
         "double" => Some(ValType::F64),
-        "long" | "int64_t" | "long long" | "size_t" | "ssize_t" | "unsigned long" | "uint64_t" => {
-            Some(ValType::I64)
-        }
+        t if C_INT64_TYPES.contains(&t) => Some(ValType::I64),
         _ => Some(ValType::I32),
     }
 }
