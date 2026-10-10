@@ -22,6 +22,10 @@ Spawned sessions get generated names (warp-6c …). Find them with ListAgents: t
 - common.md: rules every spawned session follows (standing instruction, worktrees, test queue, never blocked).
 - supervisor.md, integrator.md, interviewer.md, fixer.md, worker.md: one prompt per role.
 - start.sh: spawns roles via ~/dev/bin/claude-remote.sh (refuses at high load; FORCE_SPAWN=1 overrides).
+- api_worker.sh: a worker headless on the Anthropic API key (ANTHROPIC_KEY_WARP) instead of the subscription:
+  `notes/agents/api_worker.sh <name> "<task>"`. User 2026-10-10: when the plan's weekly limit runs low, only the
+  Supervisor, the Integrator and the Interviewer stay on Claude Code; every worker runs on the key, one task per run.
+  Sonnet 5.5 by default, ≤ $15 per run, refuses past $150 total; costs in data/llm/api_workers/ledger.tsv.
 
 ## After an interruption
 Sessions in tmux survive the supervisor; check `tmux ls | grep warp-` and ListAgents before spawning duplicates.
