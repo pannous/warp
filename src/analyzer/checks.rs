@@ -401,14 +401,13 @@ pub(super) const NUMBER_WORD: &str = "number";
 pub(super) const REAL_WORD: &str = "real";
 pub(super) const REAL_CONSTANTS: [&str; 2] = ["π", "pi"];
 
-/// The type word of a number literal: whole numbers are `int` (also `2.0`), exact fractions and decimals `rational`,
-/// approximations (`1.5f`, √2, complex) `float`
+/// The type word of a number literal: whole numbers are `int`, exact fractions `rational`, decimals (`2.0`, `0.1`), √2
+/// and complex `float` (decision exact-default)
 pub fn number_type_word(number: &Number) -> &'static str {
 	match number {
 		Number::Int(_) | Number::BigInt(_) => INT_WORD,
 		Number::Quotient(..) | Number::BigQuotient(_) => RATIONAL_WORD,
 		Number::Real(_) => REAL_WORD,
-		Number::Float(value) if Number::is_exact_decimal(*value) => if value.fract() == 0.0 { INT_WORD } else { RATIONAL_WORD },
 		_ => FLOAT_WORD,
 	}
 }
@@ -711,6 +710,9 @@ pub(super) fn lint_into(node: &Node, warnings: &mut Vec<Diagnostic>) {
 				warnings.push(Diagnostic::at(node, negative_modulo_warning(left, right))
 					.offer("the truncated remainder of C/Java/JS", &written, format!("{} rem {}", a.trim(), b.trim())).about(NEGATIVE_MODULO_TOPIC, &written));
 			}
+			if matches!(op, Op::Eq | Op::Ne) && (is_float_literal_value(left) || is_float_literal_value(right)) {
+				warnings.push(float_equality_warning(node, left, *op, right));
+			}
 			if let (Op::Add, Some(spelled)) = (op, number_text_plus_number(left, right)) {
 				warnings.push(number_text_plus_number_warning(node, left, right, &spelled));
 			}
@@ -743,6 +745,23 @@ pub(super) fn assigned_names(program: &Node) -> HashSet<&str> {
 		}
 	});
 	names
+}
+
+/// Arithmetic on literals that gives a float: a decimal (`0.1 + 0.2`), √2, π (decision exact-default)
+fn is_float_literal_value(node: &Node) -> bool {
+	!matches!(node.drop_meta(), Node::Symbol(_)) && infer_type(node, &Scope::new()) == Kind::Float
+}
+
+/// `0.1 + 0.2 == 0.3` is no: decimals are floats, which `==` compares bit for bit (decision exact-default)
+fn float_equality_warning(node: &Node, left: &Node, op: Op, right: &Node) -> Diagnostic {
+	let (a, b) = (left.serialize(), right.serialize());
+	let (a, b) = (a.trim(), b.trim());
+	let (written, similar) = match op {
+		Op::Ne => (format!("{a} != {b}"), format!("not {a} ≈ {b}")),
+		_ => (format!("{a} == {b}"), format!("{a} ≈ {b}")),
+	};
+	Diagnostic::at(node, format!("`{written}` compares floats exactly: rounding makes 0.1 + 0.2 == 0.3 no"))
+		.fix("use ≈").offer("equal within rounding", written, similar)
 }
 
 /// A data key `a-b:2` also reads as the subtraction `a - b` when `a` and `b` are variables

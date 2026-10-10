@@ -27,11 +27,12 @@ const ERROR_CALL: &str = "error";
 /// `x failed` (warp_parser suffixes): is x a stored error
 const IS_ERROR_CALL: &str = "is_error";
 const BOOL_TYPE: &str = ".bool";
+const EXACT_TYPE: &str = ".exact";
 const ANY_TYPE: &str = ".any";
 const LIST_TYPE_PREFIX: &str = ".list ";
 /// A value of each W0 scalar type and the kind warp's analyzer sees it as (a bool is an Int; a Float is a decimal
 /// written in the program, an exact number: admits cannot tell it from a float, which only a run makes)
-const VALUE_KINDS: [(&str, Kind); 5] = [(BOOL_TYPE, Kind::Int), (".int", Kind::Int), (".exact", Kind::Float), (".text", Kind::Text), (".codepoint", Kind::Codepoint)];
+const VALUE_KINDS: [(&str, Kind); 5] = [(BOOL_TYPE, Kind::Int), (".int", Kind::Int), (EXACT_TYPE, Kind::Float), (".text", Kind::Text), (".codepoint", Kind::Codepoint)];
 const UNIT_TYPE: &str = ".unit";
 /// the parameter of a function that takes none
 const UNIT_PARAMETER: &str = "·";
@@ -113,7 +114,7 @@ fn type_of_word(word: &str) -> Option<String> {
 			"codepoint" => ".codepoint",
 			crate::analyzer::BOOL_TYPE => BOOL_TYPE,
 			"any" => ANY_TYPE,
-			exact if crate::type_tests::is_exact_fraction_type(exact) => ".exact",
+			exact if crate::type_tests::is_exact_fraction_type(exact) => EXACT_TYPE,
 			number if crate::type_tests::type_matches(number, "number") => ".number",
 			_ => return None,
 		}.to_string())
@@ -507,10 +508,15 @@ fn arguments_class(function: &str) -> String {
 	format!("{function}{ARGUMENTS_SUFFIX}")
 }
 
-/// A bool place (a declared variable or parameter) takes the literals 1 and 0 as yes and no (P199)
-fn bool_literal(declared: Option<&str>, value: &Node) -> Option<String> {
+/// A bool place (a declared variable or parameter) takes the literals 1 and 0 as yes and no (P199); an exact place
+/// takes a decimal as the fraction it spells (`x: rational = 0.5`, as warp's emit_declared_value)
+fn place_literal(declared: Option<&str>, value: &Node) -> Option<String> {
 	match value.drop_meta() {
 		Node::Number(Number::Int(n @ (0 | 1))) if declared == Some(BOOL_TYPE) => Some(format!(".bool {}", *n == 1)),
+		Node::Number(Number::Float(decimal)) if declared == Some(EXACT_TYPE) && decimal.is_finite() => {
+			let (numerator, denominator) = crate::wasm_emitter::exact::decimal_fraction(*decimal);
+			Some(exact_number(numerator, denominator))
+		}
 		_ => None,
 	}
 }
@@ -987,8 +993,8 @@ impl Exporter {
 
 	/// A call's result stored in a declared list is checked item by item at run time (list-element-types): a cast
 	fn stored_value(&mut self, declared: Option<&str>, value: &Node) -> Lean {
-		if let Some(yes_or_no) = bool_literal(declared, value) {
-			return Ok(yes_or_no);
+		if let Some(literal) = place_literal(declared, value) {
+			return Ok(literal);
 		}
 		let lean = self.expression(value)?;
 		Ok(match declared {
@@ -1088,7 +1094,7 @@ impl Exporter {
 			return Ok(format!(".set (.loc {}) {} ({})", quoted(name), quoted(CELL_FIELD), self.expression(value)?));
 		}
 		let declared = self.names.get(name).cloned().flatten();
-		let value = match bool_literal(self.bool_names.contains(&name.to_string()).then_some(BOOL_TYPE), value) {
+		let value = match place_literal(self.bool_names.contains(&name.to_string()).then_some(BOOL_TYPE), value) {
 			Some(yes_or_no) => yes_or_no,
 			None => self.shared_list(name, declared.as_deref(), value)?,
 		};
@@ -1221,10 +1227,6 @@ impl Exporter {
 		}
 		match node.drop_meta() {
 			Node::Number(Number::Int(n)) => Ok(format!(".int ({n})")),
-			Node::Number(Number::Float(x)) if Number::is_exact_decimal(*x) => {
-				let (numerator, denominator) = crate::wasm_emitter::exact::decimal_fraction(*x);
-				Ok(exact_number(numerator, denominator))
-			}
 			Node::Number(Number::Float(x)) => Ok(format!(".flt (Float.toBits ({x:?} : Float))")),
 			Node::Number(Number::Quotient(numerator, denominator)) => Ok(exact_number(numerator, denominator)),
 			Node::True => Ok(".bool true".to_string()),
@@ -1306,7 +1308,7 @@ impl Exporter {
 					};
 					let declared = self.functions[&call.name()].clone();
 					let cell = self.cell_classes.iter().find(|cell| declared == format!(".cls {}", lean_strings(&[cell.to_string()]))).cloned();
-					let argument = match bool_literal(Some(&declared), argument) {
+					let argument = match place_literal(Some(&declared), argument) {
 						Some(yes_or_no) => yes_or_no,
 						None if cell.is_some() => self.argument(cell.as_deref(), argument)?,
 						None => admitted(&declared, self.expression(argument)?),
