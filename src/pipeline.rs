@@ -16,6 +16,7 @@ const RANGE_END_HINT: &str = "hint: `..` excludes the end; `...` or `to` include
 use crate::wasm_emitter::{failed_run, run_raw_struct};
 #[cfg(feature = "native")]
 use crate::wasm_reader::read_bytes;
+use crate::lowering::nodes::children_rewritten;
 
 /// The program written in `code`, or in the file `code` names: a file sees the definitions of its folder (D15)
 pub fn eval(code: &str) -> Node {
@@ -744,10 +745,7 @@ fn run_cached_block(program: Node) -> Node {
 fn spaced(node: Node) -> Node {
 	match node {
 		Node::List(items, Bracket::None, Separator::None) => Node::List(items.into_iter().map(spaced).collect(), Bracket::None, Separator::Space),
-		Node::List(items, bracket, separator) => Node::List(items.into_iter().map(spaced).collect(), bracket, separator),
-		Node::Key(left, op, right) => Node::Key(Box::new(spaced(*left)), op, Box::new(spaced(*right))),
-		Node::Meta { node, data } => Node::Meta { node: Box::new(spaced(*node)), data },
-		other => other,
+		other => children_rewritten(other, spaced),
 	}
 }
 

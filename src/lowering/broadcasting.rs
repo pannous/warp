@@ -7,7 +7,7 @@
 //! `people.map(p => p.name)` (card people-map).
 
 use super::words::{MAP_WORD, OF_WORD, SUM_WORD};
-use super::nodes::{Counter, call, is_colon_pair, key};
+use super::nodes::{Counter, call, children_rewritten, is_colon_pair, key};
 use crate::analyzer::{annotated_kind, list_element_type};
 use crate::function_values::{definitions, Definition};
 use crate::traits::InstanceTypes;
@@ -563,8 +563,7 @@ impl Broadcast {
 				let method_call = (op == Op::Dot).then(|| self.broadcast_method(&left, &right).or_else(|| self.element_fields(&left, &right))).flatten();
 				method_call.unwrap_or(Node::Key(left, op, right))
 			}
-			Node::Meta { node, data } => Node::Meta { node: Box::new(self.rewrite(*node)), data },
-			other => other,
+			other => children_rewritten(other, |child| self.rewrite(child)),
 		}
 	}
 

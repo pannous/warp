@@ -138,6 +138,7 @@ use crate::extensions::utils::download_within;
 use crate::extensions::numbers::Number;
 use crate::node::{Bracket, Node, Separator};
 use anyhow::Result;
+use crate::lowering::nodes::children_rewritten;
 #[cfg(feature = "native")]
 mod native;
 #[cfg(feature = "native")]
@@ -214,8 +215,6 @@ fn renamed_heads(node: Node, aliases: &[(&str, Option<usize>, &str)]) -> Node {
 			}
 			Node::List(items, bracket, separator)
 		}
-		Node::Key(left, op, right) => Node::Key(Box::new(renamed_heads(*left, aliases)), op, Box::new(renamed_heads(*right, aliases))),
-		Node::Meta { node, data } => Node::Meta { node: Box::new(renamed_heads(*node, aliases)), data },
-		other => other,
+		other => children_rewritten(other, |child| renamed_heads(child, aliases)),
 	}
 }

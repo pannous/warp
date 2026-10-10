@@ -553,7 +553,6 @@ impl Lowering {
 					None => key(receiver, Op::Dot, call(iteration.word, [extras, vec![function]].concat())),
 				}
 			}
-			Node::Key(left, op, right) => key(self.expand(*left), op, self.expand(*right)),
 			Node::List(items, bracket, separator) => {
 				let items = named_function_arguments(items, &bracket);
 				let items = flatten_prefix_application(items, &bracket, &separator);
@@ -574,8 +573,7 @@ impl Lowering {
 				let immediate = if bracket == Bracket::Square { None } else { self.immediate_call(&items) };
 				immediate.or_else(|| self.iteration_call(&items, &bracket, &separator)).unwrap_or(Node::List(items, bracket, separator))
 			}
-			Node::Meta { node, data } => Node::Meta { node: Box::new(self.expand(*node)), data },
-			other => other,
+			other => children_rewritten(other, |child| self.expand(child)),
 		}
 	}
 

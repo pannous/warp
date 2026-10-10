@@ -2,6 +2,7 @@
 
 use super::*;
 use std::collections::HashSet;
+use crate::lowering::nodes::children_rewritten;
 
 /// Collect variables defined in node and populate scope
 /// Returns count of temp locals needed (e.g., for while loops)
@@ -610,10 +611,7 @@ pub(super) fn block_function_names(program: &Node) -> HashSet<String> {
 pub(super) fn without_block_bodies(node: Node, blocks: &HashSet<String>) -> Node {
 	match node {
 		Node::Key(name, Op::Define, _) if matches!(name.drop_meta(), Node::Symbol(name) if blocks.contains(name)) => Node::Empty,
-		Node::Key(left, op, right) => Node::Key(Box::new(without_block_bodies(*left, blocks)), op, Box::new(without_block_bodies(*right, blocks))),
-		Node::List(items, bracket, separator) => Node::List(items.into_iter().map(|item| without_block_bodies(item, blocks)).collect(), bracket, separator),
-		Node::Meta { node, data } => Node::Meta { node: Box::new(without_block_bodies(*node, blocks)), data },
-		other => other,
+		other => children_rewritten(other, |child| without_block_bodies(child, blocks)),
 	}
 }
 
