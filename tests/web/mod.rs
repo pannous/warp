@@ -88,3 +88,5 @@ mod test_server_route_paths; // cards server-path, route-star
 mod test_route_phrase_body; // card first-first
 mod test_sandboxed_programs; // card ferron-hosting
 mod test_page_rendered_sound; // card playground-refuses
+#[cfg(feature = "native")] // runs the WAGI module with wasmtime and WASI
+mod test_wagi; // card fermyon-hosting
