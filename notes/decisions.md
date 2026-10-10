@@ -7,6 +7,12 @@ before asking the user; nobody reads it front to back, the code, tests and wiki 
 notes/open_decisions.md.
 
 ## Decided 2026-10-10 (user; via warp-supervisor or the Interviewer)
+- failed-raised (warp-fixer, card failed-raised): a raised error (1/0, raise, [1]#5) keeps stopping the program; a
+  bare `try X` (no else) turns it into the value: `r = try 10/0; if r failed then 1 else 2` is 1, `r = 10/0` stops
+  with divide by zero. `try` without `else` is allowed from now on.
+- rational-float (warp-numbers): `x: rational = sqrt(2)` is a compile error naming rational ("√(2) is a float where an
+  exact rational is expected: declare it `number` to keep the float, or truncate with `as int`"), like a rational
+  parameter. `x: real = sqrt(2)` works (card real-holds).
 - canvas-zero (warp-sound): `use draw` + `show()` without `canvas(…)` uses a default canvas (the playground pane or
   the window size, else 640×480), never an error. User: "who demanded … errors? We should have defaults." The
   branch's "a 0×0 image is empty" error is undone. General rule (welcoming.md): a missing setting takes a sensible
