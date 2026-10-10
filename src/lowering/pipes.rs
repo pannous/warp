@@ -75,6 +75,11 @@ impl Pipes {
 				let it = Node::Symbol(IMPLICIT_PARAMETER.to_string());
 				key(it.clone(), Op::FatArrow, self.applied(&stage, self.chain_applied(*value, it)))
 			}
+			// `sum|print 1 2 3` parses as `sum | (print 1 2 3)`: the composition applied, `print(sum([1 2 3]))` (card pipe-applied)
+			Node::Key(value, Op::Or, applied) if self.is_function_chain(&value) && self.applied_stage(&applied).is_some() => {
+				let (stage, argument) = self.applied_stage(&applied).expect("guarded");
+				self.applied(&stage, self.chain_applied(*value, self.rewrite(argument)))
+			}
 			Node::Key(value, Op::Or, stage) if self.is_stage(&stage) => self.applied(&stage, self.rewrite(*value)),
 			// `cond then a else b`: the condition, also without `if` (P158)
 			Node::Key(then, Op::Else, otherwise) if is_bare_then(&then) => {
@@ -175,6 +180,24 @@ impl Pipes {
 		}
 	}
 
+	/// `print 1 2 3` (parsed as the call `print((1 2 3))`), `sq 1 2` (parsed as `((sq 1) 2)`), `√3` after a function
+	/// chain's `|`: the stage (marked as the parser marks a bare one) and the argument of the whole chain, several
+	/// arguments as one list (`sum 1 2 3` sums them)
+	fn applied_stage(&self, applied: &Node) -> Option<(Node, Node)> {
+		let (stage, mut arguments) = match applied.drop_meta() {
+			Node::List(items, Bracket::None, Separator::Space) | Node::List(items, Bracket::Round, Separator::None) if items.len() >= 2 => {
+				let mut words: Vec<Node> = items.iter().flat_map(spread).collect();
+				(pipe_stage(words.remove(0)), words)
+			}
+			Node::Key(left, op, operand) if OPERATOR_STAGES.contains(op) && matches!(left.drop_meta(), Node::Empty) && !matches!(operand.drop_meta(), Node::Empty) => {
+				(pipe_stage(key(Node::Empty, *op, Node::Empty)), vec![operand.as_ref().clone()])
+			}
+			_ => return None,
+		};
+		let argument = if arguments.len() == 1 { arguments.remove(0) } else { Node::List(arguments, Bracket::Square, Separator::Space) };
+		self.is_stage(&stage).then_some((stage, argument))
+	}
+
 	/// The function chain called with `argument`: `square|sqrt` → `√(square(argument))`
 	fn chain_applied(&self, chain: Node, argument: Node) -> Node {
 		match chain.drop_meta().clone() {
@@ -248,6 +271,14 @@ fn grouped(value: Node) -> Node {
 	match value {
 		Node::List(items, Bracket::None, separator) => Node::List(items, Bracket::Round, separator),
 		other => other,
+	}
+}
+
+/// The words of an unbracketed list, nested ones too (`(sq 1) 2`), any other node alone
+fn spread(node: &Node) -> Vec<Node> {
+	match node.drop_meta() {
+		Node::List(items, Bracket::None, Separator::Space) => items.iter().flat_map(spread).collect(),
+		_ => vec![node.clone()],
 	}
 }
 

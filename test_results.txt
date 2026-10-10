@@ -297,6 +297,7 @@ PASSED:
   ✓ control::test_listener_removal::a_named_listener_is_removed
   ✓ control::test_listener_removal::removing_one_listener_keeps_the_others
   ✓ control::test_loop_forms::a_range_is_a_list_in_a_variable
+  ✓ control::test_loop_forms::a_while_body_prints_each_pass
   ✓ control::test_loop_forms::for_without_variable_binds_it
   ✓ control::test_loop_forms::ranges_in_for_headers_stay_ranges
   ✓ control::test_loop_forms::upto_excludes_the_end_unlike_to
@@ -1591,6 +1592,7 @@ PASSED:
   ✓ lists::test_list_plus_number::the_explicit_forms_never_ask
   ✓ lists::test_list_retype::a_list_variable_given_another_element_type_holds_both
   ✓ lists::test_list_times_list::list_times_list_is_the_dot_product
+  ✓ lists::test_list_times_list::round_and_curly_lists_take_the_dot_product
   ✓ lists::test_list_truthiness::a_list_of_nothing_is_truthy
   ✓ lists::test_lists::test_array_creation
   ✓ lists::test_lists::test_array_indices
@@ -1638,6 +1640,7 @@ PASSED:
   ✓ lists::test_min_max::test_min_max_of_variables_and_expressions
   ✓ lists::test_min_max::test_min_needs_two_arguments
   ✓ lists::test_min_max::test_user_definition_wins_over_the_builtin
+  ✓ lists::test_nested_comprehension::a_where_condition_starts_with_a_count
   ✓ lists::test_nested_comprehension::filters_sit_between_and_after_the_clauses
   ✓ lists::test_nested_comprehension::two_for_clauses_nest
   ✓ lists::test_nested_index_assignment::a_nested_index_assignment_sets_the_inner_item
@@ -2524,6 +2527,7 @@ PASSED:
   ✓ operators::test_operators::test_for_each
   ✓ operators::test_operators::test_key
   ✓ operators::test_operators::test_while_true_forever
+  ✓ operators::test_pipe_stages::a_composition_takes_the_argument_after_it
   ✓ operators::test_pipe_stages::a_pipe_between_functions_composes_them
   ✓ operators::test_pipe_stages::a_pipe_into_a_spaced_definition
   ✓ operators::test_pipe_stages::a_pipe_into_a_word_operator
@@ -4510,4 +4514,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-10 ignored, 4505 passed, 0 failed, 4505 total tested
+10 ignored, 4509 passed, 0 failed, 4509 total tested
