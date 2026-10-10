@@ -188,7 +188,7 @@ pub fn infer_type(node: &Node, scope: &Scope) -> Kind {
 		Node::Key(_, Op::As, target) if target.name().to_lowercase() == "list" => Kind::List,
 		Node::Key(_, Op::As, target) if matches!(target.name().to_lowercase().as_str(), "string" | "str" | "text") => Kind::Text,
 		// `"1/3" as number` is the number the text spells, of its kind (an exact ratio is an Int)
-		Node::Key(..) if spelled_number(node).is_some() => infer_type(&spelled_number(node).expect("spelled"), scope),
+		Node::Key(..) if let Some(number) = spelled_number(node) => infer_type(&number, scope),
 		// `t as number` of a text known only at run time: an Int, a ratio or a Float, as the text says (card runtime-text-ratio)
 		Node::Key(value, Op::As, target) if matches!(target.name().to_lowercase().as_str(), "number" | "num")
 			&& matches!(infer_type(value, scope), Kind::Text | Kind::Codepoint) => Kind::Data,

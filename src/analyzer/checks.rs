@@ -638,7 +638,7 @@ pub(super) fn uses_it_outside_loops(node: &Node) -> bool {
 	match node.drop_meta() {
 		Node::Symbol(word) => word == "it",
 		Node::Key(left, _, right) => uses_it_outside_loops(left) || uses_it_outside_loops(right),
-		Node::List(items, _, _) if it_loop(items).is_some() => it_loop(items).is_some_and(|(iterable, _)| uses_it_outside_loops(iterable)),
+		Node::List(items, _, _) if let Some((iterable, _)) = it_loop(items) => uses_it_outside_loops(iterable),
 		Node::List(items, _, _) => items.iter().any(uses_it_outside_loops),
 		_ => false,
 	}
