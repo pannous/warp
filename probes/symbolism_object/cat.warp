@@ -1,0 +1,10 @@
+cat{
+    length:7cm
+    hair-color:{r=1 g=0 b=0}
+    form{
+        dimensions=(3, length*2)
+    }
+    kill{print '🕱'}
+}
+cat.kill!
+cat
