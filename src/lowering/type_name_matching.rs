@@ -2,7 +2,7 @@
 //! `fib int i = …` → `fib(i:int) := …`, `fibonacci number = …` → `fibonacci(number:number) := …`,
 //! `foo of int = it+it` → `foo(it:int) := …`; the `to` phrase `to square a number:` shares `parameter_slots`.
 
-use super::nodes::{call, key};
+use super::nodes::{call, is_call_head, key, spaced_statement, word_of};
 use crate::analyzer::type_word_kind;
 use crate::node::{symbol, Bracket, Node, Separator};
 use crate::operators::Op;
@@ -20,13 +20,6 @@ const STATEMENT_WORDS: [&str; 20] = [
 pub(crate) fn names_a_function(name: &str) -> bool {
 	!is_type_word(name) && !ARTICLES.contains(&name) && !PREPOSITIONS.contains(&name) && !STATEMENT_WORDS.contains(&name)
 		&& !crate::analyzer::CONSTANT_KEYWORDS.contains(&name) && !crate::operators::FUNCTION_KEYWORDS.contains(&name)
-}
-
-fn word(node: &Node) -> Option<&str> {
-	match node.drop_meta() {
-		Node::Symbol(name) => Some(name),
-		_ => None,
-	}
 }
 
 fn is_type_word(word: &str) -> bool {
@@ -165,11 +158,8 @@ pub fn spaced_parameters(words: &[&str], body: &Node) -> Option<Result<(Vec<Node
 
 /// The statement `name words… last = body` (parsed as the items `name`, `words…`, `last=body`) as `name(params) := body`
 fn spaced_definition(items: &[Node]) -> Option<Node> {
-	let (name, rest) = items.split_first()?;
-	let (last, middle) = rest.split_last()?;
-	let name = word(name).filter(|name| names_a_function(name))?;
-	let Node::Key(last_word, Op::Assign | Op::Define, body) = last.drop_meta() else { return None };
-	let words: Vec<&str> = middle.iter().chain(std::iter::once(last_word.as_ref())).map(word).collect::<Option<_>>()?;
+	let (name, words, body) = spaced_statement(items)?;
+	let name = word_of(name).filter(|name| names_a_function(name))?;
 	let (parameters, body) = match spaced_parameters(&words, body)? {
 		Ok(slots) => slots,
 		Err(message) => return Some(crate::node::error(&message)),
@@ -179,16 +169,12 @@ fn spaced_definition(items: &[Node]) -> Option<Node> {
 }
 
 /// A function head `name(params)`, as a call
-fn is_call_head(head: &Node) -> bool {
-	matches!(head.drop_meta(), Node::List(items, Bracket::Round, _) if matches!(items.first().map(Node::drop_meta), Some(Node::Symbol(_))))
-}
-
 /// A definition with a declared return type, as the definition whose body converts its result to that type:
 /// `int square(x) = x*x` (items `int`, `square(x) = …`), `square(x) as int := …` and `square(x) : int = …` (also after
 /// `def`) → `square(x) := (x*x) as int`
 fn typed_return(type_name: &Node, definition: &Node) -> Option<Node> {
 	// `function square(n){…}` names no return type: a definition keyword is no type word here
-	word(type_name).filter(|word| is_type_word(word) && !crate::operators::FUNCTION_KEYWORDS.contains(word))?;
+	word_of(type_name).filter(|word| is_type_word(word) && !crate::operators::FUNCTION_KEYWORDS.contains(word))?;
 	let type_name = type_name.drop_meta();
 	match definition.drop_meta() {
 		Node::Key(head, op @ (Op::Assign | Op::Define), body) if is_call_head(head) => {
@@ -231,7 +217,7 @@ fn as_type(value: Node, type_name: &Node) -> Node {
 const RETURN: &str = "return";
 
 fn is_return(node: &Node) -> bool {
-	matches!(node.drop_meta(), Node::List(items, _, _) if items.len() == 2 && word(&items[0]) == Some(RETURN))
+	matches!(node.drop_meta(), Node::List(items, _, _) if items.len() == 2 && word_of(&items[0]) == Some(RETURN))
 }
 
 /// The body with every value it gives back converted: each `return e` and the last statement of a block
@@ -250,7 +236,7 @@ fn converted(body: &Node, type_name: &Node) -> Node {
 
 fn converted_returns(node: Node, type_name: &Node) -> Node {
 	match node {
-		Node::List(mut items, bracket, separator) if items.len() == 2 && word(&items[0]) == Some(RETURN) => {
+		Node::List(mut items, bracket, separator) if items.len() == 2 && word_of(&items[0]) == Some(RETURN) => {
 			let value = items.pop().expect("two items");
 			items.push(as_type(value, type_name));
 			Node::List(items, bracket, separator)
