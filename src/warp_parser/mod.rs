@@ -759,6 +759,8 @@ pub struct WarpParser {
 	key_variables: Vec<String>,
 	/// Names assigned a text or typed text (`l = "en"`, `k:text`): `m[l]` looks a key up too (card text-key)
 	text_variables: std::collections::HashSet<String>,
+	/// Names assigned so far (`data = […]`): such a name is read as the variable, not as a prefix word
+	variables: std::collections::HashSet<String>,
 	/// The binding power of a glued pair's value (`for:email`): that value is one atom, no call of what follows
 	glued_pair_bp: Option<u8>,
 	/// Where the innermost bracketed group opened (line, column): an unclosed one names it
@@ -1085,6 +1087,7 @@ impl WarpParser {
 			in_for_header: false,
 			key_variables: vec![],
 			text_variables: Default::default(),
+			variables: Default::default(),
 			glued_pair_bp: None,
 			group_start: (0, 0),
 			stops_at_else: false,

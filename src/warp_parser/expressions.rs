@@ -209,7 +209,9 @@ impl WarpParser {
 	/// `data a and b` is the data `a and b`, also as an operand (`x = data a and b`, `string(data a and b)`); parentheses
 	/// around all of it only group it (`data (a and b)`). `data = …`, `data.x`, glued `data(x)` and `data class` stay
 	pub(super) fn try_parse_data(&mut self) -> Option<Node> {
-		if self.options.data_mode || !self.matches_keyword(DATA_KEYWORD) || self.peek_char(DATA_KEYWORD.len()) != ' ' {
+		// `data = [4 2]; for x in data {…}`: a variable named data is read, not a prefix
+		let is_variable = self.variables.contains(DATA_KEYWORD);
+		if is_variable || self.options.data_mode || !self.matches_keyword(DATA_KEYWORD) || self.peek_char(DATA_KEYWORD.len()) != ' ' {
 			return None;
 		}
 		let before_keyword = self.mark();
@@ -495,7 +497,7 @@ impl WarpParser {
 			} else {
 				op
 			};
-			self.note_text_variable(&lhs, op, &rhs);
+			self.note_variable(&lhs, op, &rhs);
 			if let Some(warning) = hash_range_warning(&lhs, op, &written, &rhs) {
 				if let Err(strict) = crate::diagnostic::report(&[warning]) {
 					lhs = strict;
@@ -683,9 +685,12 @@ impl WarpParser {
 		matches!(index.drop_meta(), Node::Symbol(name) if self.key_variables.contains(name) || self.text_variables.contains(name))
 	}
 
-	/// `l = "en"` or `k:text` (a typed parameter or declaration) makes l, k text variables
-	fn note_text_variable(&mut self, lhs: &Node, op: Op, rhs: &Node) {
+	/// `l = "en"` or `k:text` (a typed parameter or declaration) makes l, k text variables; any `x = …` a variable
+	fn note_variable(&mut self, lhs: &Node, op: Op, rhs: &Node) {
 		let Node::Symbol(name) = lhs.drop_meta() else { return };
+		if matches!(op, Op::Assign | Op::Define) {
+			self.variables.insert(name.clone());
+		}
 		let holds_text = match (op, rhs.drop_meta()) {
 			(Op::Assign | Op::Define, Node::Text(_)) => true,
 			(Op::Colon, Node::Symbol(type_word)) => TEXT_TYPE_WORDS.contains(&type_word.as_str()),
