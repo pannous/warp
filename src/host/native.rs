@@ -330,7 +330,10 @@ fn paint(mut caller: Caller<'_, HostState>, pixels: HostNode, width: i64, height
 		Some(values) => values,
 		None => match crate::wasm_reader::node_in(&Val::AnyRef(pixels), &mut caller.as_context_mut(), memory).drop_meta() {
 			crate::node::Node::List(items, _, _) => items.iter().map(pixel_value).collect(),
-			crate::node::Node::Text(shader) => rendered(&mut caller, shader, width, height, shader_values, &gpu_failure(PAINT))?.into_iter().map(u64::from).collect(),
+			crate::node::Node::Text(shader) => {
+				let rgba = rendered(&mut caller, shader, width, height, shader_values, &gpu_failure(PAINT))?;
+				return crate::paint::paint_rgba(&rgba, size.0, size.1).map(|_| ()).map_err(task_failure);
+			}
 			other => return Err(task_failure(format!("paint needs a list of pixels or a shader text, got {}", other.serialize()))),
 		},
 	};
@@ -818,7 +821,7 @@ fn write_linear_floats(caller: &mut Caller<'_, HostState>, block: i64, floats: &
 fn gpu_render(mut caller: Caller<'_, HostState>, shader: HostNode, width: i64, height: i64, values: HostNode) -> wasmtime::Result<HostNode> {
 	let failure = gpu_failure(GPU_RENDER);
 	let shader = given_shader(&mut caller, shader, &failure)?;
-	let pixels = rendered(&mut caller, &shader, width, height, values, &failure)?;
+	let pixels: Vec<u32> = rendered(&mut caller, &shader, width, height, values, &failure)?.chunks_exact(4).map(crate::gpu::opaque_color).collect();
 	if let Some(list) = list_of_ints(&mut caller, &pixels)? {
 		return Ok(list);
 	}
@@ -841,10 +844,10 @@ fn text_coverage(mut caller: Caller<'_, HostState>, words: HostNode, size: i64) 
 }
 
 /// The pixels the fragment shader colors through wgpu (src/gpu.rs), 0xFFRRGGBB row by row
-fn rendered(caller: &mut Caller<'_, HostState>, shader: &str, width: i64, height: i64, values: HostNode, failure: &impl Fn(String) -> wasmtime::Error) -> wasmtime::Result<Vec<u32>> {
+fn rendered(caller: &mut Caller<'_, HostState>, shader: &str, width: i64, height: i64, values: HostNode, failure: &impl Fn(String) -> wasmtime::Error) -> wasmtime::Result<Vec<u8>> {
 	let values = shader_values(&given_node(caller, values)?).map_err(failure)?;
 	let side = |pixels: i64| u32::try_from(pixels).ok().filter(|&pixels| pixels > 0).ok_or_else(|| failure(format!("an image {width}×{height} pixels")));
-	crate::gpu::render(shader, side(width)?, side(height)?, &values).map_err(failure)
+	crate::gpu::render_rgba(shader, side(width)?, side(height)?, &values).map_err(failure)
 }
 
 /// The ints as a list built in one call of the module's ints_to_list (wasm_emitter/int_lists.rs); None when it has none

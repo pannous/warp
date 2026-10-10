@@ -218,3 +218,18 @@ Superseded (P214): floats on the GPU only with @gpu or float32[n]; (b) automatic
   That host side, not the GPU, bounds the frame rate.
 - WGSL raymarching tip: a distance field over angular sectors (bars whose height differs per band) must take the
   neighbor sectors into account (min over beside = -1, 0, 1), or rays step into a taller neighbor: stair artifacts.
+- RGBA fast path (gpu-polish): a shader's paint goes gpu::render_rgba → paint::paint_rgba → the window as tight RGBA
+  bytes, no Node list: 1280×720 went from ~84 ms to ~5 ms per frame (debug). Headless, PNG deflate is fast mode.
+- The viewer shows a frame of 1024+ pixels across pixel for pixel (PhysicalSize, crisp on Retina), smaller ones scaled
+  up by a whole factor (paint_window.rs shown_size).
+- Beat reaction in the sample: each band against its own fading peak (auto-gain), kick = the summed rise of all bands,
+  fading 0.85 per frame; tone = the loudest band, eased. Spectrum of a note is clean (one or two bands), so per-band
+  gain doesn't amplify leakage.
+
+## Shader built-ins (card shader-builtins, user 2026-10-10)
+$width $height $size $time $frame $mouse $mouse_down $key need no variable: shader_holes.rs BUILTIN_HOLES leaves them
+out of the values map unless the program assigns that name; the host fills those the shader reads (`values.<name>`):
+natively gpu::with_builtin_values (input from the paint window's stdout lines `input x y down key`,
+paint_window::input), in the browser host-gpu.js builtinValues (pointer and key from canvas.js's shared buffer).
+time = seconds since the first render, frame = renders before, key = code point, arrows 0xF700–0xF703, 0 = none.
+Costs nothing for a shader that doesn't mention them.
