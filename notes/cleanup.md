@@ -50,9 +50,10 @@ Left (longest functions, candidates for splitting):
 - lookahead.rs peek_operator (123): a flat operator table, left as is (keywords interleave with the glyph lengths)
 - node/comparison.rs eq: left alone, it carries the user's comments
 
-Outside this area (for whoever takes src/lowering/): private `is_word` / `symbol_name` / `is_symbol` copies in
-lowering/comprehensions, for_loop, generators, lazy_ranges, stored_values, welcome_forms, inlining, soft_keywords,
-tuples, and law/type_model.rs, modules.rs, time.rs can use `Node::is_symbol` / `Node::symbol_name`.
+Outside this area: the private `is_word` / `symbol_name` / `is_symbol` copies are gone (lowering's in
+cleanup-lowering; law/type_model.rs, modules.rs and time.rs in cleanup-word-copies, warp-functions); word_slices'
+`is_word(node, words)` takes a list of words and stays. The parameter_name copies (soft_keywords, named_arguments,
+go_blocks, parameter_shapes, law/type_model) stay: each has its own rules (which keys, recursion, String or Node).
 # Code cleanup (user card `cleanup`: "major code cleanup and simplification")
 Behaviour-preserving only: shared helpers for duplication, dead code and stale comments out, flatter code, no test edits.
 ## cleanup-host (warp-hosting): top-level src/*.rs, src/ffi/, src/gc_traits/
@@ -80,11 +81,10 @@ Done:
 - modules.rs registered_package / package_version_tags / make_package_directory; tasks.rs zero_results;
   wasm_modules map_children_or_failure; Local::param via Local::new; type_kinds written_name; wasm_optimizer
   unique_temp_file
-- `Node::as_items()`: a list's items, none of ø, else the node as the one item. Copies left for the lowering areas:
-  lowering/class_methods.rs (2), component_worlds.rs, type_constructor.rs; warp_parser/mod.rs:204 differs (no
-  drop_meta); site.rs items_of keeps ø as an item on purpose
-- `Node::parts()`: a list's items or a key's two sides, borrowed (units.rs). Copies left for the lowering areas:
-  lowering/class_methods.rs children_of, lowering/generators.rs parts
+- `Node::as_items()`: a list's items, none of ø, else the node as the one item, also in class_methods and
+  component_worlds (branch cleanup-items); warp_parser/mod.rs:204 differs (no drop_meta); site.rs items_of keeps ø
+  as an item on purpose
+- `Node::parts()`: a list's items or a key's two sides, borrowed (units.rs, generators.rs)
 - wisp_parser: the typed s-expression nodes through finish_one / finish_key / finish_constant and one call_of
 - wisp emitter: one emit_form for its `(word part …)` forms; gc_traits memory_text reads a $String for GcString and
   the debug formatter; gc_struct!/wasm_struct! field arms take an optional rest
@@ -154,9 +154,9 @@ Left (each changes behaviour or needs care):
   different bracket/separator rules each, so one shared version changes which forms match.
 - soft_keywords::parameter_name accepts only `:` / `=` keys and does not recurse, unlike nodes::parameter_name;
   go_blocks / named_arguments / parameter_shapes have their own parameter_name returning String or Node.
-- class_methods.rs (~2240 lines): operators on instances and specialized calls moved to class_methods/operators.rs
-  (a child module, `use super::*`, its items pub(super)); the next cohesive parts to move the same way: inheritance
-  and mixins (inherit … with_inherited), other languages' class forms (go/impl/ruby/python methods, witness methods).
+- class_methods.rs (~1920 lines): child modules (`use super::*`, items pub(super)) class_methods/operators.rs
+  (operators on instances, specialized calls), inheritance.rs (extends, mixins, super), other_languages.rs (impl, Go
+  methods, Ruby .new, witness methods); further parts only if a cohesive group shows up (generic classes?).
   destructurings / positional_fields already share with_value_classes.
 
 ## src/wasm_emitter/ (card cleanup-emitter, session warp-fixer)

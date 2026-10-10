@@ -205,7 +205,7 @@ impl WasmGcEmitter {
 			return true;
 		}
 		// floor of an exact number as its i64, without the Int node list_emitter builds for it as a value
-		if fn_name == "floor" && !self.ctx.ffi_imports.contains_key(fn_name) && self.get_type(argument) == Kind::Int {
+		if fn_name == "floor" && !self.ctx.ffi_imports.contains_key(fn_name) && !self.ctx.user_functions.contains_key(fn_name) && self.get_type(argument) == Kind::Int {
 			self.emit_numeric_value(func, argument);
 			if self.int_runtime() {
 				self.emit_call(func, "exact_floor");
@@ -297,9 +297,7 @@ impl WasmGcEmitter {
 						self.emit_declared_value(func, declared.as_ref(), right, Kind::Float);
 						func.instruction(&I::LocalTee(position));
 					} else if let Some(kind) = self.emit_global_store(func, name, right) {
-						if !kind.is_float() {
-							self.emit_int_to_f64(func, None);
-						}
+						self.emit_stored_as_f64(func, kind);
 					} else {
 						self.emit_float_value(func, right);
 						self.emit_undefined_variable(func, name);

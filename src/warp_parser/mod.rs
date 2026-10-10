@@ -810,6 +810,8 @@ pub struct WarpParser {
 	pending_comment: Option<String>,
 	/// The symbol parsed last was a function keyword (`def`, `function`): the next one is the function's name
 	after_function_keyword: bool,
+	/// The expression continue_expr goes on with heads a definition: `foo` of `def foo: hi=2*2`
+	continues_definition_head: bool,
 	/// inside Elixir's capture `&(…)`, where `&1` is its first argument
 	in_capture: bool,
 	/// `a ?: b` with a computed left side parsed so far, numbering their hidden variables
@@ -1114,6 +1116,7 @@ impl WarpParser {
 			times_loops: 0,
 			pending_comment: None,
 			after_function_keyword: false,
+			continues_definition_head: false,
 			in_capture: false,
 			elvis_operands: 0,
 			finally_blocks: 0,

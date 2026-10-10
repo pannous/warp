@@ -7,6 +7,7 @@ mod test_global_constant_words;
 mod test_global_declaration;
 mod test_global_modifiers;
 mod test_global_float_widening;
+mod test_global_node_widening;
 mod test_globals;
 mod test_several_globals;
 mod test_prefixed_declarations;

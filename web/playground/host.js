@@ -192,21 +192,23 @@ function programImports(holder, hooks) {
 				const covered = textCoverage(String(plainOfTree(readNode(program(), words))), Number(size));
 				return listOfInts(program(), covered) ?? buildValue(program(), treeOfPlain(Array.from(covered)));
 			},
-			clipboard_text: () => { throw new Error("clipboard: the playground cannot read it (the browser's clipboard is asynchronous)"); },
 			// `exit(code)` ends the run, its value ø (P121): runProgram tells it from a failure by holder.exitCode
 			exit: code => {
 				holder.exitCode = Number(code);
 				throw new Error(`exit(${code})`);
 			},
 			// paint(pixels, width, height) (src/host.rs): the page draws them on a canvas (playground.js showPaintings);
-			// paint(shader, width, height, values) renders the WGSL fragment shader first, as gpu_render (P234)
+			// paint(shader, width, height, values) renders the WGSL fragment shader first, as gpu_render (P234), in the
+			// playground straight into the page's canvas (host-gpu.js gpuPainted), which the hook gets by its id
 			paint: (pixels, width, height, values) => {
 				if (!hooks.paint) throw new Error("paint: no canvas here; it draws in the playground page");
 				const room = Number(width) * Number(height);
 				let painted = intsOfList(program(), pixels, room) ?? plainOfTree(readNode(program(), pixels));
 				if (typeof painted === "string") {
 					if (!holder.gpuRendered) throw new Error("paint: a shader needs WebGPU (host-gpu.js), which this page has not");
-					painted = Array.from(holder.gpuRendered(painted, width, height, values));
+					const rendered = (holder.gpuPainted ?? holder.gpuRendered)(painted, width, height, values); // pixels, or the id of a canvas drawn into
+					if (typeof rendered === "number") return hooks.paint(undefined, Number(width), Number(height), rendered);
+					painted = Array.from(rendered);
 				}
 				hooks.paint(painted, Number(width), Number(height));
 			},
@@ -215,7 +217,7 @@ function programImports(holder, hooks) {
 			// render_sound writes them, played or not, into a WAV (host-files.js STD_ADAPTERS.sound.render)
 			sound_samples: (samples, count, rate) => {
 				const values = intsOfList(program(), samples, Number(count)) ?? plainOfTree(readNode(program(), samples));
-				(holder.unrenderedSounds ??= []).push({ samples: values, rate: Number(rate) });
+				(holder.run.unrenderedSounds ??= []).push({ samples: values, rate: Number(rate), place: self.voiceSounded?.(values.length / Number(rate)) });
 				hooks.sound?.(values, Number(rate));
 			},
 			...Object.assign({}, ...eachHostPart("words", holder, hooks, access)),

@@ -1375,8 +1375,8 @@ fn used_modules(node: &Node) -> Option<Vec<(Used, Node)>> {
 fn imported_words(node: &Node) -> Option<(Used, Node, Vec<String>)> {
 	let words = statement_words(node)?;
 	match words.as_slice() {
-		[from, module, import, names @ ..] if is_word(from, MINIMUM_KEYWORD) && is_word(import, IMPORT_KEYWORD) => words_from(module, names),
-		[import, names @ .., from, module] if is_word(import, IMPORT_KEYWORD) && is_word(from, MINIMUM_KEYWORD) => std_words_from(module, names),
+		[from, module, import, names @ ..] if from.is_symbol(MINIMUM_KEYWORD) && import.is_symbol(IMPORT_KEYWORD) => words_from(module, names),
+		[import, names @ .., from, module] if import.is_symbol(IMPORT_KEYWORD) && from.is_symbol(MINIMUM_KEYWORD) => std_words_from(module, names),
 		_ => None,
 	}
 }
@@ -1421,7 +1421,7 @@ fn used_module(node: &Node) -> Option<Used> {
 		(Node::Key(name, Op::Ge, minimum), []) => (path_of(name)?, Some(Requirement::Minimum(version_of(minimum)?))),
 		(name, []) => (path_of(name)?, None),
 		(name, [version]) if version_of(version).is_some() && is_version_list(version) => (path_of(name)?, Some(Requirement::Exact(version_of(version)?))),
-		(name, [word, version]) if is_word(word, MINIMUM_KEYWORD) => (path_of(name)?, Some(Requirement::Minimum(version_of(version)?))),
+		(name, [word, version]) if word.is_symbol(MINIMUM_KEYWORD) => (path_of(name)?, Some(Requirement::Minimum(version_of(version)?))),
 		(name, [word, version]) if is_version_keyword(word) => (path_of(name)?, Some(Requirement::Exact(version_of(version)?))),
 		_ => return None,
 	};
@@ -1431,10 +1431,6 @@ fn used_module(node: &Node) -> Option<Used> {
 /// `version 1.2.3`, as the parser binds it
 fn is_version_list(node: &Node) -> bool {
 	matches!(node.drop_meta(), Node::List(items, _, _) if items.first().is_some_and(is_version_keyword))
-}
-
-fn is_word(node: &Node, word: &str) -> bool {
-	matches!(node.drop_meta(), Node::Symbol(symbol) if symbol == word)
 }
 
 pub(crate) fn path_of(node: &Node) -> Option<String> {
