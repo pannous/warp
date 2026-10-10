@@ -639,7 +639,7 @@ impl WarpParser {
 			return reference;
 		}
 
-		if self.url_follows(&symbol) {
+		if self.url_follows() {
 			return self.parse_url(symbol);
 		}
 
@@ -831,9 +831,9 @@ impl WarpParser {
 		defines || assigns
 	}
 
-	/// `http://…`, `file://…`: the scheme of a URL, the rest of which reads as one text
-	pub(super) fn url_follows(&self, symbol: &str) -> bool {
-		URL_SCHEMES.contains(&symbol) && self.current_char() == ':' && self.peek_char(1) == '/' && self.peek_char(2) == '/'
+	/// `http://…`, `file://…`, `ssh://…`: the scheme of a URL, the rest of which reads as one text
+	pub(super) fn url_follows(&self) -> bool {
+		URL_MARK.chars().enumerate().all(|(offset, mark)| self.peek_char(offset) == mark)
 	}
 
 	pub(super) fn parse_url(&mut self, scheme: String) -> Node {
