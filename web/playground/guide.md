@@ -283,6 +283,13 @@ With a function, `square [1 2 3 4]` does the same: see "Whole lists at once" bel
 [1 2 3 4] where it > 2
 ```
 
+`it` works in a block too: `{it.length}` is a function of one item. Given one, `sort` orders the items by its value,
+here the shortest word first.
+
+```warp => ["fig" "kiwi" "apple" "banana"]
+sort(["banana" "fig" "apple" "kiwi"], {it.length})
+```
+
 ### Whole lists at once
 
 A function for one number also works on a whole list.
