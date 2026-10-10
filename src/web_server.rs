@@ -293,19 +293,19 @@ fn page_of(referer: &str) -> String {
 fn form_fields(encoded: &str) -> Node {
 	let fields = encoded.split('&').filter(|pair| !pair.is_empty()).map(|pair| {
 		let (key, value) = pair.split_once('=').unwrap_or((pair, ""));
-		entry(&percent_decoded(&key.replace('+', " ")), Node::Text(percent_decoded(&value.replace('+', " "))))
+		Node::key(&percent_decoded(&key.replace('+', " ")), Node::Text(percent_decoded(&value.replace('+', " "))))
 	}).collect();
-	Node::List(fields, crate::node::Bracket::Curly, crate::node::Separator::Space)
+	Node::List(fields, Bracket::Curly, crate::node::Separator::Space)
 }
 
 /// The request as the route's `request`: {method, path, query, body}, the body a JSON value or a form's fields
 fn request_node(method: &str, path: &str, query: &str, body: Node) -> Node {
 	Node::List(vec![
-		entry("method", Node::Text(method.to_string())),
-		entry("path", Node::Text(path.to_string())),
-		entry("query", form_fields(query)),
-		entry("body", body),
-	], crate::node::Bracket::Curly, crate::node::Separator::Space)
+		Node::key("method", Node::Text(method.to_string())),
+		Node::key("path", Node::Text(path.to_string())),
+		Node::key("query", form_fields(query)),
+		Node::key("body", body),
+	], Bracket::Curly, crate::node::Separator::Space)
 }
 
 /// Whether the request's body or query holds the field
@@ -320,8 +320,4 @@ fn entry_value<'map>(map: &'map Node, key: &str) -> Option<&'map Node> {
 		Node::Key(name, _, value) if name.name() == key => Some(value.as_ref()),
 		_ => None,
 	})
-}
-
-fn entry(key: &str, value: Node) -> Node {
-	Node::Key(Box::new(Node::Symbol(key.to_string())), crate::operators::Op::Colon, Box::new(value))
 }

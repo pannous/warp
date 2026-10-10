@@ -160,17 +160,13 @@ fn tip_hiding_hints_at_exit() {
 fn register_file_type() {
     match warp::file_type::register() {
         Ok(app) => println!("registered .warp files: {} runs them in Terminal (Open With offers editors)", app.display()),
-        Err(failure) => {
-            eprintln!("warp register: {failure}");
-            std::process::exit(1);
-        }
+        Err(failure) => fail(format!("warp register: {failure}")),
     }
 }
 
 #[cfg(all(not(test), not(target_os = "macos")))]
 fn register_file_type() {
-    eprintln!("warp register: only macOS so far");
-    std::process::exit(1);
+    fail("warp register: only macOS so far");
 }
 
 /// `warp [run] prog.warp a b`: whether only to run, the program file and the arguments it gets (`use os; args`)
@@ -257,15 +253,11 @@ fn run_command(args: &[String]) {
                 eprint!("{}", run.stderr);
                 std::process::exit(run.status);
             }
-            Err(failure) => {
-                eprintln!("{failure}");
-                std::process::exit(1);
-            }
+            Err(failure) => fail(failure),
         }
     } else if args[1] == warp::paint_window::COMMAND {
         if let Err(failure) = warp::paint_window::run(args.get(2).is_some_and(|flag| flag == warp::paint_window::CHECK)) {
-            eprintln!("{failure}");
-            std::process::exit(1);
+            fail(failure);
         }
 
     } else if args[1] == REGISTER_COMMAND {
@@ -273,10 +265,7 @@ fn run_command(args: &[String]) {
     } else if args[1] == SERVE_COMMAND {
         match served_program(&args[2..]) {
             Ok((path, port)) => serve_file(path, port, ""),
-            Err(failure) => {
-                eprintln!("warp serve: {failure}");
-                std::process::exit(1);
-            }
+            Err(failure) => fail(format!("warp serve: {failure}")),
         }
     } else if args[1] == DEPLOY_COMMAND && args.len() >= 3 {
         use warp::deploy::{Deployment, DEV_FLAG, DRY_RUN_FLAG, HOSTED_FLAG};
@@ -287,20 +276,17 @@ fn run_command(args: &[String]) {
             _ => Deployment::Cloud,
         };
         let Some(program) = args.get(if deployment == Deployment::Cloud { 2 } else { 3 }) else {
-            eprintln!("warp deploy: which program? warp deploy [{DEV_FLAG}|{DRY_RUN_FLAG}|{HOSTED_FLAG}] app.warp");
-            std::process::exit(1);
+            fail(format!("warp deploy: which program? warp deploy [{DEV_FLAG}|{DRY_RUN_FLAG}|{HOSTED_FLAG}] app.warp"));
         };
         if let Err(failure) = warp::deploy::deploy(std::path::Path::new(program), deployment) {
-            eprintln!("warp deploy: {failure}");
-            std::process::exit(1);
+            fail(format!("warp deploy: {failure}"));
         }
     } else if args[1] == DEV_COMMAND && args.len() >= 3 {
         let port = args.get(3).map_or(Ok(warp::dev_server::DEV_PORT), |port| port.parse::<u16>());
         let served = port.map_err(|_| format!("warp dev: the port is a number, not {}", args[3]))
             .and_then(|port| warp::dev_server::serve(std::path::Path::new(&args[2]), port));
         if let Err(failure) = served {
-            eprintln!("{failure}");
-            std::process::exit(1);
+            fail(failure);
         }
     } else if let Some(target) = arg_string.strip_prefix("data ") {
         let text = source_of(target);
@@ -323,10 +309,7 @@ fn run_command(args: &[String]) {
         if standalone {
             match write_standalone_executable(&code, &target) {
                 Ok(report) => println!("{report}"),
-                Err(failure) => {
-                    eprintln!("warp build: {failure}");
-                    std::process::exit(1);
-                }
+                Err(failure) => fail(format!("warp build: {failure}")),
             }
             return;
         }
@@ -339,10 +322,7 @@ fn run_command(args: &[String]) {
                     write_machine_code(&module.bytes, &output_path);
                 }
             }
-            Err(final_value) => {
-                eprintln!("nothing to compile: {}", final_value.serialize());
-                std::process::exit(1);
-            }
+            Err(final_value) => fail(format!("nothing to compile: {}", final_value.serialize())),
         }
     } else if let Some(path) = test_file(args) {
         // P209, P210: the file's `test` lines and blocks run, failures print ✗ lines, "m of n failed" exits nonzero
@@ -381,22 +361,15 @@ fn run_command(args: &[String]) {
         print_and_exit(run::wasmtime_runner::run_wat(&wat_code));
     } else if arg_string.ends_with(".wasm") || arg_string.ends_with(&format!(".{MACHINE_CODE_EXTENSION}")) {
         if args.len() >= 3 {
-            eprintln!("Error: running several wasm files together (linking {}) is not supported yet; run one file", args[1..].join(" "));
-            std::process::exit(1);
+            fail(format!("Error: running several wasm files together (linking {}) is not supported yet; run one file", args[1..].join(" ")));
         } else {
             print_and_exit(run::wasmtime_runner::run(&arg_string));
         }
     } else if arg_string == "test" || arg_string == "tests" {
-        {
-            println!("warp test <file.warp> runs the tests of a program; warp's own tests run with: cargo test");
-        }
+        println!("warp test <file.warp> runs the tests of a program; warp's own tests run with: cargo test");
     } else if matches!(arg_string.as_str(), "home" | "wiki" | "docs" | "documentation") {
         println!("Warp documentation can be found at https://github.com/pannous/warp/wiki");
-        {
-            let _ = std::process::Command::new("open")
-                .arg("https://github.com/pannous/warp/")
-                .spawn();
-        }
+        let _ = std::process::Command::new("open").arg("https://github.com/pannous/warp/").spawn();
     } else if arg_string.starts_with("eval ") {
         let code = arg_string.strip_prefix("eval ").unwrap_or("");
         diagnostic::show_lines_of(code);
@@ -413,15 +386,10 @@ fn run_command(args: &[String]) {
     } else if matches!(arg_string.as_str(), "2D" | "2d" | "SDL" | "sdl") {
         println!("warp compiled without sdl/webview");
     } else if matches!(arg_string.as_str(), "app" | "webview" | "browser") {
-        {
-            println!("must compile with WEBAPP support");
-            std::process::exit(-1);
-        }
+        println!("must compile with WEBAPP support");
+        std::process::exit(-1);
     } else if arg_string == "lsp" {
-        {
-            // lsp_main();
-            println!("LSP not yet implemented");
-        }
+        println!("LSP not yet implemented");
     } else if matches!(arg_string.as_str(), "help" | "--help" | "-h") {
         usage();
         println!("{}", warp::std_docs::modules_overview());
@@ -431,10 +399,7 @@ fn run_command(args: &[String]) {
     } else if let Some(module) = arg_string.strip_prefix(HELP_PREFIX) {
         match warp::std_docs::module_help(module) {
             Some(help) => println!("{help}"),
-            None => {
-                eprintln!("no standard module {module}; {}", warp::std_docs::modules_overview());
-                std::process::exit(1);
-            }
+            None => fail(format!("no standard module {module}; {}", warp::std_docs::modules_overview())),
         }
     } else if arg_string == "version" || arg_string == "--version" || arg_string == "-v" {
         print_version();
@@ -460,6 +425,12 @@ fn print_version() {
 fn command_line(program: &str, arguments: &[&str]) -> Option<String> {
     let output = std::process::Command::new(program).args(arguments).output().ok().filter(|output| output.status.success())?;
     String::from_utf8_lossy(&output.stdout).lines().next().map(str::to_string)
+}
+
+/// The message on stderr and exit status 1
+fn fail(message: impl std::fmt::Display) -> ! {
+    eprintln!("{message}");
+    std::process::exit(1)
 }
 
 /// The program's value printed, its Int the exit status, an uncaught error status 1
@@ -514,10 +485,7 @@ fn write_machine_code(bytes: &[u8], wasm_path: &str) {
             fs::write(&path, &machine_code).expect("could not write the machine code");
             println!("compiled {} bytes of machine code to {}", machine_code.len(), path.display());
         }
-        Err(failure) => {
-            eprintln!("could not compile to machine code: {failure}");
-            std::process::exit(1);
-        }
+        Err(failure) => fail(format!("could not compile to machine code: {failure}")),
     }
 }
 
@@ -628,10 +596,7 @@ fn write_wit(code: &str, target: &str) {
             fs::write(&path, wit).expect("could not write the WIT world");
             println!("wrote {}", path.display());
         }
-        Err(failure) => {
-            eprintln!("warp build --wit: {failure}");
-            std::process::exit(1);
-        }
+        Err(failure) => fail(format!("warp build --wit: {failure}")),
     }
 }
 
@@ -643,10 +608,7 @@ fn write_component(code: &str, target: &str) {
             fs::write(&path, &component).expect("could not write the component");
             println!("wrote {} ({} bytes)", path.display(), component.len());
         }
-        Err(failure) => {
-            eprintln!("warp build --component: {failure}");
-            std::process::exit(1);
-        }
+        Err(failure) => fail(format!("warp build --component: {failure}")),
     }
 }
 
@@ -659,10 +621,7 @@ fn write_site(code: &str, target: &str) {
     };
     match warp::site::build(code, &name, &directory) {
         Ok(site) => println!("built the site {} ({})", site.directory.display(), site.files.join(", ")),
-        Err(failure) => {
-            eprintln!("warp build --site: {failure}");
-            std::process::exit(1);
-        }
+        Err(failure) => fail(format!("warp build --site: {failure}")),
     }
 }
 

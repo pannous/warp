@@ -323,10 +323,15 @@ fn family_linker(engine: &wasmtime::Engine, imports: Imports) -> Result<Linker<c
 /// Load WASM bytes with every import family it needs in one linker: a program may print, fetch and call C at once.
 /// A program that starts tasks (`go f(x)`) gets the task words; the tasks nobody awaited finish before the result.
 pub fn read_bytes_with_imports(bytes: &[u8], imports: Imports) -> Result<Node> {
+	let (result, mut store, instance) = run_main_with_tasks(bytes, imports)?;
+	val_to_node(&result, &mut store, &instance).map(|result| crate::units::static_units::with_module_units(bytes, result))
+}
+
+/// Run main with every import it needs, its tasks finished after it (finish_tasks)
+fn run_main_with_tasks(bytes: &[u8], imports: Imports) -> Result<(Val, Store<crate::host::HostState>, Instance)> {
 	let mut tasks = None;
 	let outcome = run_main(bytes, crate::host::HostState::new(), |linker, engine, module| link_run(linker, engine, module, imports, &mut tasks));
-	let (result, mut store, instance) = finish_tasks(outcome, tasks.as_deref())?;
-	val_to_node(&result, &mut store, &instance).map(|result| crate::units::static_units::with_module_units(bytes, result))
+	finish_tasks(outcome, tasks.as_deref())
 }
 
 /// Link a run's imports, with the shared arrays and the task words when the module uses them (`tasks` gets the run's)
@@ -363,9 +368,7 @@ pub fn read_export_after_main(bytes: &[u8], imports: Imports, name: &str) -> Res
 
 /// The values of the exported functions `names` after one run of main
 pub fn read_exports_after_main(bytes: &[u8], imports: Imports, names: &[&str]) -> Result<Vec<Node>> {
-	let mut tasks = None;
-	let outcome = run_main(bytes, crate::host::HostState::new(), |linker, engine, module| link_run(linker, engine, module, imports, &mut tasks));
-	let (_, mut store, instance) = finish_tasks(outcome, tasks.as_deref())?;
+	let (_, mut store, instance) = run_main_with_tasks(bytes, imports)?;
 	names.iter().map(|name| {
 		let export = instance.get_func(&mut store, name).ok_or_else(|| anyhow!("the module exports no {name}"))?;
 		let mut results = vec![Val::AnyRef(None); export.ty(&store).results().len()];
@@ -460,14 +463,7 @@ fn struct_node<T>(structref: &wasmtime::Rooted<wasmtime::StructRef>, store: &mut
 		t if t == Kind::Key as u8 => Node::Key(Box::new(node(&data)), crate::operators::code_to_op(high_byte), Box::new(node(&child))),
 		t if t == Kind::Block as u8 => list_in(data, child, Bracket::Curly, store, memory, path),
 		t if t == Kind::List as u8 => {
-			let bracket = match high_byte {
-				0 => Bracket::Curly,
-				1 => Bracket::Square,
-				2 => Bracket::Round,
-				3 => Bracket::Less,
-				_ => Bracket::None,
-			};
-			list_in(data, child, bracket, store, memory, path)
+			list_in(data, child, crate::wasm_emitter::bracket_of_info(high_byte as i64), store, memory, path)
 		}
 		t if t == Kind::Data as u8 => {
 			let type_name = text_of(store, &data, memory);
