@@ -54,6 +54,10 @@ def admitsUnit : Ty → Bool
   | unit | opt _ | any => true
   | _ => false
 
+def isOptional : Ty → Bool
+  | opt _ => true
+  | _ => false
+
 /-- the type under its optional marks: `int?` gives `int` -/
 @[simp] def base : Ty → Ty
   | opt t => base t
@@ -339,6 +343,19 @@ theorem sub_of_strip : ∀ {b t : Ty}, sub (strip b) t = true → admitsUnit t =
   | opt b ih => intro t h hu; simp only [sub, Bool.and_eq_true]; exact ⟨hu, ih h hu⟩
   | _ => intro t h _; exact h
 
+/-- a type other than ø and an optional fits t when it fits t's values other than ø -/
+theorem sub_strip_right {a : Ty} (hu : a ≠ unit) (ho : ∀ x, a ≠ opt x) : ∀ {t : Ty}, sub a t = true → sub a (strip t) = true := by
+  intro t; induction t with
+  | unit => intro h; cases a <;> simp_all [sub, scalarSub]
+  | opt t ih => intro h; rw [sub_base_right hu ho, base_opt, ← sub_base_right hu ho] at h; exact ih h
+  | _ => intro h; exact h
+
+theorem strip_mono : ∀ {a b : Ty}, sub a b = true → sub (strip a) (strip b) = true := by
+  intro a; induction a with
+  | never | unit => intros; rfl
+  | opt a ih => intro b h; simp only [sub, Bool.and_eq_true] at h; exact ih h.2
+  | _ => intro b h; exact sub_strip_right (by simp) (by simp) h
+
 theorem sub_liftUnit_left {x b t : Ty} (h : sub x t = true) : sub x (liftUnit b t) = true := by
   unfold liftUnit; split
   · exact sub_optional h
@@ -489,9 +506,10 @@ theorem sub_joinAll : ∀ {t : Ty} {ts : List Ty}, t ∈ ts → sub t (joinAll t
     · exact sub_trans (sub_joinAll h) (join_upper_right _ _)
 
 /-- consistent subtyping (gradual typing): `any` stands for whatever type the value turns out to have, so a dynamic
-value may go where a cast checks it, as an int may go to a fixed width whose range a cast checks -/
+value may go where a cast checks it, as an int may go to a fixed width whose range a cast checks, and an optional where its values other than ø go -/
 def consub : Ty → Ty → Bool
   | any, _ => true
+  | opt a, b => consub a b
   | int, ranged _ _ | ranged _ _, ranged _ _ => true
   | list a, list b => consub a b
   | a, b => sub a b

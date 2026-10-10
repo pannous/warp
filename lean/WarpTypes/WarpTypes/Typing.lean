@@ -77,6 +77,8 @@ inductive HasType (P : Program) : Ctx → Expr → Ty → Prop where
   | fail {Γ m} : HasType P Γ (.fail m) .any
   | failed {Γ e te} : HasType P Γ e te → HasType P Γ (.failed e) .bool
   | tryCatch {Γ e h te th} : HasType P Γ e te → HasType P Γ h th → HasType P Γ (.tryCatch e h) (join te th)
+  /-- `a ?? b`: a's values other than ø, or b's -/
+  | orElse {Γ a b ta tb} : HasType P Γ a ta → HasType P Γ b tb → HasType P Γ (.orElse a b) (join (strip ta) tb)
   /-- a run-time checked cast: statically any source type, the alternatives' join -/
   | cast {Γ e ts te} : HasType P Γ e te → HasType P Γ (.cast e ts) (joinAll ts)
   /-- a conversion `e as t`: statically any source type, t (a value that does not convert is an error when it runs) -/

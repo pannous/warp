@@ -73,6 +73,7 @@ theorem frame_typing {Γ} (F : Frame) {e t} (h : HasType P Γ (F.plug e) t) :
     exact ⟨_, hv, fun h' s => ⟨_, .set he hw h' (sub_trans s st), s⟩⟩
   case isA => cases h with | isA he => exact ⟨_, he, fun h' _ => ⟨_, .isA h', sub_refl _⟩⟩
   case failed => cases h with | failed he => exact ⟨_, he, fun h' _ => ⟨_, .failed h', sub_refl _⟩⟩
+  case orElse => cases h with | orElse ha hb => exact ⟨_, ha, fun h' s => ⟨_, .orElse h' hb, join_mono (strip_mono s) (sub_refl _)⟩⟩
   case emit => cases h with | emit hR he => exact ⟨_, he, fun h' _ => ⟨_, .emit hR h', sub_refl _⟩⟩
   case abort => cases h with | abort he st => exact ⟨_, he, fun h' s => ⟨_, .abort h' (sub_trans s st), sub_refl _⟩⟩
   case share => cases h with | share he => exact ⟨_, he, fun h' _ => ⟨_, .share h', sub_refl _⟩⟩
@@ -486,6 +487,16 @@ theorem preservation (hP : ProgramOk P) {s s' : Expr × Store} (hs : Step P s s'
       · exact ⟨⟨_, .error, sub_never _⟩, hμ⟩
   | isA => intro t h hμ; cases h; exact ⟨⟨_, .bool, sub_refl _⟩, hμ⟩
   | failed => intro t h hμ; cases h; exact ⟨⟨_, .bool, sub_refl _⟩, hμ⟩
+  | @orElse v b μ hv =>
+    intro t h hμ
+    cases h with
+    | orElse ha hb =>
+      refine ⟨?_, hμ⟩
+      split
+      · exact ⟨_, hb, join_upper_right _ _⟩
+      · rename_i full
+        have hu : v ≠ Expr.unit := fun hu => by subst hu; simp [Store.items, isEmpty] at full
+        exact ⟨_, ha, sub_trans (value_sub_strip ha hv hu) (join_upper_left _ _)⟩
   | handleStep _ ih =>
     intro t h hμ
     cases h with
@@ -689,6 +700,7 @@ theorem progress {Γ e t} (h : HasType P Γ e t) (hΓ : Γ = Ctx.empty) {μ : St
     exact in_frame (.setL f v) rfl (ih1 hΓ hμ) fun vo => in_frame (.setR e f) vo (ih2 hΓ hμ) fun vv => steps (.set vo vv)
   | @isA _ e c _ _ ih => exact in_frame (.isA c) rfl (ih hΓ hμ) fun v => steps (.isA v)
   | @failed _ e _ _ ih => exact in_frame .failed rfl (ih hΓ hμ) fun v => steps (.failed v)
+  | @orElse _ a b _ _ _ _ ih _ => exact in_frame (.orElse b) rfl (ih hΓ hμ) fun v => steps (.orElse v)
   | @handle _ ev h b _ _ _ hR hh sh _ _ ih =>
     subst hΓ
     rcases ih rfl (hμ.push ⟨_, _, hR, hh, sh⟩) with hv | ⟨m, rfl⟩ | ⟨_, _, _, rfl, hv⟩ | ⟨⟨e', μ'⟩, hs⟩

@@ -32,6 +32,13 @@ theorem value_list {Γ v t e} (h : HasType P Γ v t) (hv : v.isValue = true) (he
     t = .list e := by
   cases h <;> simp_all [isValue, element]
 
+/-- no value is typed optional, and only ø is typed ø: a value other than ø has no ø to strip -/
+theorem value_sub_strip {Γ v t} (h : HasType P Γ v t) (hv : v.isValue = true) (hu : v ≠ .unit) :
+    sub t (strip t) = true := by
+  have plain : t ≠ .unit ∧ ∀ x, t ≠ .opt x := by
+    cases h <;> simp_all [isValue, Ty.textTy] <;> split <;> simp
+  exact sub_strip_right plain.1 plain.2 (sub_refl _)
+
 theorem list_value {Γ v a} (h : HasType P Γ v (.list a)) (hv : v.isValue = true) :
     v = .nil ∨ (∃ hd tl, v = .cons hd tl ∧ hd.isValue = true ∧ tl.isValue = true) ∨ ∃ b t, v = .lref b t := by
   cases v <;> simp [isValue] at hv ⊢ <;> first | exact hv | exact ⟨_, _, ⟨rfl, rfl⟩, hv⟩ | cases h
@@ -517,6 +524,11 @@ theorem narrow {Γ e t} (h : HasType P Γ e t) : ∀ {Γ'}, CtxSub Γ' Γ → �
     obtain ⟨a', h1, s1⟩ := ih1 hs
     obtain ⟨b', h2, s2⟩ := ih2 hs
     exact ⟨_, .tryCatch h1 h2, join_mono s1 s2⟩
+  | orElse _ _ ih1 ih2 =>
+    intro Γ' hs
+    obtain ⟨a', h1, s1⟩ := ih1 hs
+    obtain ⟨b', h2, s2⟩ := ih2 hs
+    exact ⟨_, .orElse h1 h2, join_mono (strip_mono s1) s2⟩
   | cast _ ih =>
     intro Γ' hs
     obtain ⟨_, h1, _⟩ := ih hs
@@ -661,6 +673,7 @@ theorem subst_typed {Γ0 e t} (h : HasType P Γ0 e t) :
   | call hf _ st ih => intro Γ y tv v hΓ hv htv; simp only [Expr.subst]; exact .call hf (ih hΓ hv htv) st
   | error => intros; simp only [Expr.subst]; exact .error
   | tryCatch _ _ ih1 ih2 => intro Γ y tv v hΓ hv htv; simp only [Expr.subst]; exact .tryCatch (ih1 hΓ hv htv) (ih2 hΓ hv htv)
+  | orElse _ _ ih1 ih2 => intro Γ y tv v hΓ hv htv; simp only [Expr.subst]; exact .orElse (ih1 hΓ hv htv) (ih2 hΓ hv htv)
   | cast _ ih => intro Γ y tv v hΓ hv htv; simp only [Expr.subst]; exact .cast (ih hΓ hv htv)
   | conv _ ih => intro Γ y tv v hΓ hv htv; simp only [Expr.subst]; exact .conv (ih hΓ hv htv)
   | broadcast hf _ he ha ih => intro Γ y tv v hΓ hv htv; simp only [Expr.subst]; exact .broadcast hf (ih hΓ hv htv) he ha

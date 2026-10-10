@@ -163,6 +163,8 @@ inductive Expr where
   | fail (msg : String)
   /-- `e failed`: is the value of e a stored error -/
   | failed (e : Expr)
+  /-- `a ?? b`: a unless it is ø, else b (only ø falls back: `0 ?? 9` is 0) -/
+  | orElse (a b : Expr)
   /-- the run-time check warp inserts where a value of unknown type goes to a declared place (`names = f()` of a
   `names: texts`, card list-element-types; any value given to an inline union `x: int | text` or an optional
   `x: int?`): the value if it fits one of the alternatives ts, else an error -/
@@ -248,6 +250,7 @@ def subst (e : Expr) (y : String) (v : Expr) : Expr :=
   | letIn z t e b => letIn z t (e.subst y v) (if z = y then b else b.subst y v)
   | call f e => call f (e.subst y v)
   | tryCatch e h => tryCatch (e.subst y v) (h.subst y v)
+  | orElse a b => orElse (a.subst y v) (b.subst y v)
   | cast e ts => cast (e.subst y v) ts
   | conv e t => conv (e.subst y v) t
   | broadcast f e => broadcast f (e.subst y v)
@@ -271,7 +274,7 @@ def subst (e : Expr) (y : String) (v : Expr) : Expr :=
 def assigned : Expr → List String
   | assign x e | init x e => x :: e.assigned
   | cons a b | add a b | arith _ a b | lt a b | eq _ a b | seq a b | index a b | range a b | append a b
-  | tryCatch a b | app a b | push a b
+  | tryCatch a b | orElse a b | app a b | push a b
   | handle _ a b => a.assigned ++ b.assigned
   | ite c a b | loop c a b | setAt c a b => c.assigned ++ a.assigned ++ b.assigned
   | forIn _ e b d => e.assigned ++ b.assigned ++ d.assigned
