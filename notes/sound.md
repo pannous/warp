@@ -86,7 +86,7 @@ The words above are layer 1, the toy layer. Each layer below keeps the ones abov
    share (host-tasks.js voicePlaced, performance.timeOrigin + now), a task Worker starts from its starter's, and the
    page plays each sound at its `at` (playground.js playSound). A task's sounds reach the page only once the program's
    Worker is back in its event loop (after `await`), so a start already past plays at once. LIMIT: a task's sounds
-   in the browser stay out of the program's render_sound (they go to the task Worker's own holder).
+   in the browser stay out of the program's render_sound (they go to the task Worker's own holder; card playground-drops).
    Still to build:
    Expected: a shared audio clock, sample-accurate scheduling (`at 2 beats play C4`), ramping a handle's gain.
 2. Note names built (2026-10-10): parsed, not a table: a letter A–G, `#`/`♯` or `b`/`♭`, an octave 0–9 is its
