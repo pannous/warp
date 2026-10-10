@@ -4120,6 +4120,9 @@ PASSED:
   ✓ web::test_webgpu::a_shader_that_does_not_compile_says_where
   ✓ web::test_webgpu::a_value_that_is_no_number_says_so
   ✓ welcoming::test_adopted_acknowledgements::acknowledgements_of_the_old_answers_file_are_adopted_once
+  ✓ welcoming::test_advice_fixes::a_block_assignment_offers_global_at_main
+  ✓ welcoming::test_advice_fixes::advice_without_a_replacement_offers_no_fix
+  ✓ welcoming::test_advice_fixes::then_after_a_comparison_offers_the_pipe
   ✓ welcoming::test_braceless_call_argument::a_plain_braceless_argument_does_not_warn
   ✓ welcoming::test_braceless_call_argument::an_operator_in_a_braceless_argument_warns_with_both_readings
   ✓ welcoming::test_c_style::test_c_style_definition
@@ -4506,4 +4509,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-10 ignored, 4501 passed, 0 failed, 4501 total tested
+10 ignored, 4504 passed, 0 failed, 4504 total tested
