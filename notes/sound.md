@@ -41,6 +41,9 @@ The words above are layer 1, the toy layer. Each layer below keeps the ones abov
 1. Non-blocking, clocked playback. Built (step 1, 2026-10-10): `play` returns at once, its sound queued on the audio
    clock behind the sounds before it (natively a player thread, src/sound.rs queued; the playground's WebAudio queue);
    `sound_queued()` the seconds still to sound, `wait_sound`, `stop_sound` drops the queue, the process's end waits.
+   It also waits for music files playing (`play "song.mp3"`, card make-background, 2026-10-10): before, warp ended and
+   left the player (afplay) playing in the background, out of reach of ctrl-c and of Sublime's cancel (SIGTERM to the
+   build's process group); now both stop warp and the player together (probes/music_outlives_file.py, silent).
    Offline render built (step 2, 2026-10-10, from layer 5): `render_sound("song.wav")` writes the sounds since the
    last render (or the start) one after another into one WAV and gives its seconds; headless too, so tests check audio
    without speakers (tests/programs/test_sound_render.rs). The samples are kept in memory (44 KB a second at 22050 Hz),
