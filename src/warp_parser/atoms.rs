@@ -1,6 +1,7 @@
 //! Atoms: symbols with suffixes, definitions and their bodies, indented and end blocks, URLs, type declarations
 
 use super::*;
+use crate::lowering::nodes::children_rewritten;
 
 const VOID_WORD: &str = "void";
 /// `none` is the null ø; called, `none(xs, f)` (Kotlin's "no element matches") is an error naming it (P185)
@@ -1418,9 +1419,7 @@ fn without_end_lines(body: Node) -> Node {
 	let is_end = |item: &Node| item.is_symbol(END_KEYWORD);
 	match body {
 		Node::List(items, bracket, separator) => Node::List(items.into_iter().filter(|item| !is_end(item)).map(without_end_lines).collect(), bracket, separator),
-		Node::Key(left, op, right) => Node::Key(Box::new(without_end_lines(*left)), op, Box::new(without_end_lines(*right))),
-		Node::Meta { node, data } => Node::Meta { node: Box::new(without_end_lines(*node)), data },
-		other => other,
+		other => children_rewritten(other, without_end_lines),
 	}
 }
 

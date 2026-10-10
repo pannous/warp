@@ -652,13 +652,10 @@ impl Blocks {
 				}
 				key(self.rewrite(*left), op, self.rewrite(*right))
 			}
-			Node::Key(left, op, right) => key(self.rewrite(*left), op, self.rewrite(*right)),
 			Node::List(items, bracket, separator @ (Separator::Semicolon | Separator::Newline)) => {
 				Node::List(items.into_iter().map(|item| self.statement(item)).collect(), bracket, separator)
 			}
-			Node::List(items, bracket, separator) => Node::List(items.into_iter().map(|item| self.rewrite(item)).collect(), bracket, separator),
-			Node::Meta { node, data } => Node::Meta { node: Box::new(self.rewrite(*node)), data },
-			other => other,
+			other => children_rewritten(other, |child| self.rewrite(child)),
 		}
 	}
 }

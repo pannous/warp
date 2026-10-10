@@ -1336,14 +1336,11 @@ pub fn lower_spaced_definitions(node: Node) -> Node {
 			let body = bind_it(lower_spaced_definitions(*body), &parameter, false);
 			Node::Key(head, op, Box::new(body))
 		}
-		Node::Key(left, op, right) => key(lower_spaced_definitions(*left), op, lower_spaced_definitions(*right)),
 		Node::List(items, bracket, separator @ (Separator::Semicolon | Separator::Newline)) => {
 			let items = haskell_definitions(items);
 			Node::List(items.into_iter().map(lower_spaced_definitions).collect(), bracket, separator)
 		}
-		Node::List(items, bracket, separator) => Node::List(items.into_iter().map(lower_spaced_definitions).collect(), bracket, separator),
-		Node::Meta { node, data } => Node::Meta { node: Box::new(lower_spaced_definitions(*node)), data },
-		other => other,
+		other => children_rewritten(other, lower_spaced_definitions),
 	}
 }
 
@@ -1477,8 +1474,7 @@ fn bind_it(node: Node, parameter: &str, is_value: bool) -> Node {
 			Node::List(items.into_iter().enumerate().map(|(index, item)| bind_it(item, parameter, is_body && index == last && !is_value)).collect(), bracket, separator)
 		}
 		Node::Key(left, op, right) => key(bind_it(*left, parameter, false), op, bind_it(*right, parameter, false)),
-		Node::Meta { node, data } => Node::Meta { node: Box::new(bind_it(*node, parameter, is_value)), data },
-		other => other,
+		other => children_rewritten(other, |child| bind_it(child, parameter, is_value)),
 	}
 }
 

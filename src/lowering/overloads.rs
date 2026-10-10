@@ -224,8 +224,7 @@ impl Lowering {
 				});
 				Node::List(items.collect(), bracket, separator)
 			}
-			Node::Meta { node, data } => Node::Meta { node: Box::new(self.rewrite(*node, expected)), data },
-			other => other,
+			other => children_rewritten(other, |child| self.rewrite(child, expected)),
 		}
 	}
 

@@ -15,6 +15,7 @@ use num_bigint::BigInt;
 use num_traits::ToPrimitive;
 use std::cmp::Ordering;
 use std::collections::HashMap;
+use crate::lowering::nodes::children_rewritten;
 
 pub const FUNCTIONS: [&str; 6] = ["sin", "cos", "tan", "ln", "exp", STANDARD_PART];
 /// st(x): the standard part of a finite hyperreal (wiki/hyperreals.md)
@@ -91,12 +92,7 @@ fn folded_exact(node: Node) -> Node {
 			_ => {}
 		}
 	}
-	match node {
-		Node::Key(left, op, right) => Node::Key(Box::new(folded_exact(*left)), op, Box::new(folded_exact(*right))),
-		Node::List(items, bracket, separator) => Node::List(items.into_iter().map(folded_exact).collect(), bracket, separator),
-		Node::Meta { node, data } => Node::Meta { node: Box::new(folded_exact(*node)), data },
-		other => other,
-	}
+	children_rewritten(node, folded_exact)
 }
 
 /// Variables assigned once, to a value that mentions an exact real (`x=π`): their type is the type of that value
@@ -144,16 +140,13 @@ fn lower_reals(node: Node) -> Node {
 			Real::Exact(exact) if exact.has_epsilon() => error(&format!("{exact} is a hyperreal: ε and ω are only supported in constant expressions")),
 			_ => Node::Number(Number::Float(real.to_f64())),
 		},
-		Node::Key(left, op, right) => Node::Key(Box::new(lower_reals(*left)), op, Box::new(lower_reals(*right))),
 		Node::List(items, _, _) if is_type_of_real(&items) => Node::Symbol(type_name_before_lowering(&items[1])),
 		// `π is real`: answered before π becomes a float
 		Node::List(items, _, _) if is_type_test_of_real(&items) => {
 			let Node::Text(spec) = items[2].drop_meta() else { unreachable!("guarded") };
 			if crate::type_tests::type_matches(&type_name_before_lowering(&items[1]), spec) { Node::True } else { Node::False }
 		}
-		Node::List(items, bracket, separator) => Node::List(items.into_iter().map(lower_reals).collect(), bracket, separator),
-		Node::Meta { node, data } => Node::Meta { node: Box::new(lower_reals(*node)), data },
-		other => other,
+		other => children_rewritten(other, lower_reals),
 	}
 }
 
