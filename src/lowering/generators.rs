@@ -9,7 +9,7 @@
 //! loop `for yield·item·1 in xs { yield yield·item·1 }`, lazy like any loop over a generator.
 //! Runs after ruby_blocks, which takes the yielding functions some call passes a block to.
 
-use super::nodes::{assign, int, is_word, statement_list, symbol, symbol_name};
+use super::nodes::{assign, int, is_word, key, statement_list, symbol, symbol_name};
 use crate::for_loop::{block_items, loop_variables};
 use crate::inlining::renamed_names;
 use crate::node::{Bracket, Node, Separator};
@@ -89,8 +89,8 @@ fn delegated_source(node: &Node) -> Option<Node> {
 
 /// `if flag { break }`
 fn break_if(flag: &Node) -> Node {
-	let condition = Node::Key(Box::new(Node::Empty), Op::If, Box::new(flag.clone()));
-	Node::Key(Box::new(condition), Op::Then, Box::new(statement_list(vec![symbol(BREAK_WORD)], Bracket::Curly)))
+	let condition = key(Node::Empty, Op::If, flag.clone());
+	key(condition, Op::Then, statement_list(vec![symbol(BREAK_WORD)], Bracket::Curly))
 }
 
 /// `while 1 { statements; break }`: a loop run once, which `break` leaves early
@@ -378,10 +378,10 @@ fn iterator_loops(node: Node, classes: &HashSet<String>, objects: &HashSet<Strin
 	let is_object = symbol_name(iterable).is_some_and(|name| objects.contains(name)) || constructed_iterator(iterable, classes);
 	let Some(name) = symbol_name(variable).filter(|_| is_object && matches!(body.drop_meta(), Node::List(_, Bracket::Curly, _))) else { return node };
 	let iterator = symbol(&[name.as_str(), ITERATOR_SUFFIX].join(NAME_SEPARATOR));
-	let next = || assign(variable.clone(), Node::Key(Box::new(iterator.clone()), Op::Dot, Box::new(Node::List(vec![symbol(NEXT_METHOD)], Bracket::Round, Separator::None))));
+	let next = || assign(variable.clone(), key(iterator.clone(), Op::Dot, Node::List(vec![symbol(NEXT_METHOD)], Bracket::Round, Separator::None)));
 	let mut statements_of_body = block_items(body);
 	statements_of_body.push(crate::wasm_emitter::mark_step(next()));
-	let more = Node::Key(Box::new(variable.clone()), Op::Ne, Box::new(Node::Empty));
+	let more = key(variable.clone(), Op::Ne, Node::Empty);
 	statement_list(vec![assign(iterator.clone(), iterable.clone()), next(), while_do(more, statement_list(statements_of_body, Bracket::Curly))], Bracket::None).with_meta_of(&node)
 }
 
@@ -394,7 +394,7 @@ fn collected_definitions(node: Node, generators: &HashMap<String, Generator>) ->
 			let step = |node: &Node| -> Step {
 				if let Some((values, target)) = yield_statement(node) {
 					let item = Node::List(vec![yielded_value(values)], Bracket::Square, Separator::None);
-					let collect = Node::Key(Box::new(list.clone()), Op::AddAssign, Box::new(item));
+					let collect = key(list.clone(), Op::AddAssign, item);
 					return Step::Replace(std::iter::once(collect).chain(receiving_nothing(target)).collect());
 				}
 				match node {

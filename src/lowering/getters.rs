@@ -5,7 +5,7 @@
 //! definition. Not getters: `name := {…}` (a block or a list), `name := x => …` and `name := …it…` (functions), and a
 //! name applied to arguments later (`sum := fold +; sum [1 2 3]`, a function value).
 
-use super::nodes::call;
+use super::nodes::{call, key};
 use crate::diagnostic::Diagnostic;
 use crate::node::{Bracket, Node, Separator};
 use crate::operators::Op;
@@ -63,9 +63,9 @@ fn lower_in(node: Node, active: &[Getter]) -> Node {
 				}
 				_ => *right,
 			};
-			Node::Key(Box::new(lower_in(*left, active)), Op::Dot, Box::new(right))
+			key(lower_in(*left, active), Op::Dot, right)
 		}
-		Node::Key(left, op, right) => Node::Key(Box::new(lower_in(*left, active)), op, Box::new(lower_in(*right, active))),
+		Node::Key(left, op, right) => key(lower_in(*left, active), op, lower_in(*right, active)),
 		Node::List(items, Bracket::Round, separator) if matches!(items.first().map(Node::drop_meta), Some(Node::Symbol(head)) if is_active(active, head)) => {
 			let mut items = items.into_iter();
 			let head = items.next().expect("a head");

@@ -5,6 +5,7 @@
 //! A call of that function whose arguments, read as values and preposition words, follow the pattern becomes
 //! `name(values…)`. Elsewhere `to` stays a range and `of` a field lookup.
 
+use super::nodes::{call, key};
 use crate::node::{Bracket, Node, Separator};
 use crate::operators::Op;
 use crate::type_name_matching::prepositions_among;
@@ -167,8 +168,8 @@ fn rewrite(node: Node, patterns: &HashMap<String, Vec<Vec<Part>>>) -> Node {
 			};
 			call.unwrap_or(Node::List(items, bracket, separator))
 		}
-		Node::Key(left, Op::Assign, right) => Node::Key(Box::new(rewrite(*left, patterns)), Op::Assign, Box::new(rewrite(assigned_words(*right, patterns), patterns))),
-		Node::Key(left, op, right) => Node::Key(Box::new(rewrite(*left, patterns)), op, Box::new(rewrite(*right, patterns))),
+		Node::Key(left, Op::Assign, right) => key(rewrite(*left, patterns), Op::Assign, rewrite(assigned_words(*right, patterns), patterns)),
+		Node::Key(left, op, right) => key(rewrite(*left, patterns), op, rewrite(*right, patterns)),
 		Node::Meta { node, data } => Node::Meta { node: Box::new(rewrite(*node, patterns)), data },
 		other => other,
 	}
@@ -191,7 +192,7 @@ fn phrase_call(name: &str, arguments: &[Node], pattern: &[Part]) -> Option<Node>
 			compared = Some((op, other));
 		}
 	}
-	let call = Node::List([vec![Node::Symbol(name.to_string())], values].concat(), Bracket::Round, Separator::None);
+	let call = call(name, values);
 	Some(match compared {
 		Some((op, other)) => Node::Key(Box::new(call), op, other),
 		None => call,

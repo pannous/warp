@@ -5,7 +5,7 @@
 //! becomes `closure_call_1(f, x)`, a helper per arity that call_refs the closure's entry (wasm_emitter/closures.rs).
 //! notes/closures.md describes the representation.
 
-use super::nodes::call;
+use super::nodes::{call, key};
 use crate::analyzer::extract_user_functions;
 use crate::context::{Context, Param, UserFunctionDef};
 use crate::diagnostic::Diagnostic;
@@ -236,7 +236,7 @@ fn with_capture_readers(node: Node, hoisted: &HashMap<String, (String, usize)>) 
 				}
 				for position in 0..*captured {
 					let reader = call(&format!("{closure_target}{CAPTURE_READER_MARK}{position}"), vec![Node::Symbol(variable.clone())]);
-					statements.push(Node::Key(Box::new(Node::Symbol(capture_local(variable, position))), Op::Assign, Box::new(reader)));
+					statements.push(key(Node::Symbol(capture_local(variable, position)), Op::Assign, reader));
 				}
 			}
 			Node::List(statements, bracket, separator)
@@ -512,7 +512,7 @@ impl Lifting {
 				let arguments = arguments.into_iter().map(|argument| self.walk(argument, bound)).collect();
 				closure_call(Node::Key(list, Op::Hash, Box::new(position)), arguments)
 			}
-			Node::Key(left, op, right) => Node::Key(Box::new(self.walk(*left, bound)), op, Box::new(self.walk(*right, bound))),
+			Node::Key(left, op, right) => key(self.walk(*left, bound), op, self.walk(*right, bound)),
 			Node::List(items, bracket, separator) => {
 				let items: Vec<Node> = items.into_iter().map(|item| self.walk(item, bound)).collect();
 				self.called_value(items, bracket, separator, bound)
@@ -620,7 +620,7 @@ impl Lifting {
 			Node::Symbol(ref name) if !bound.contains(name) && !self.is_local_value(name) && self.function_named(name).is_some() => closure_new(&self.function_named(name).expect("guarded"), vec![]),
 			Node::Key(choice, op @ (Op::Then | Op::Else), chosen) => {
 				let choice = if op == Op::Else { self.function_value(*choice, bound) } else { *choice };
-				Node::Key(Box::new(choice), op, Box::new(self.function_value(*chosen, bound)))
+				key(choice, op, self.function_value(*chosen, bound))
 			}
 			Node::Meta { node, data } => Node::Meta { node: Box::new(self.function_value(*node, bound)), data },
 			// `return function add`
@@ -651,8 +651,8 @@ impl Lifting {
 		}
 		let name = format!("{LIFTED_PREFIX}{}", self.lifted.len() + 1);
 		let all_params = captured.iter().chain(&params).map(|param| Node::Symbol(param.clone()));
-		let head = Node::List([vec![Node::Symbol(name.clone())], all_params.collect()].concat(), Bracket::Round, Separator::None);
-		self.lifted.push(Node::Key(Box::new(head), Op::Define, Box::new(body)));
+		let head = call(&name.clone(), all_params.collect());
+		self.lifted.push(key(head, Op::Define, body));
 		self.functions.insert(name.clone());
 		closure_new(&name, captured.into_iter().map(Node::Symbol).collect())
 	}

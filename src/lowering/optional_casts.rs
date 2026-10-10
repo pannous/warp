@@ -2,6 +2,7 @@
 //! optional does (P179): used as a T it is one, ø there is the loud error of ø as a T. The value is computed once:
 //! `f() as text?` becomes `(optional·0 = f(); if optional·0 == ø then ø else optional·0 as text)`.
 
+use super::nodes::key;
 use crate::lowering::variable_signals::if_then_else;
 use crate::node::{Bracket, Node, Separator};
 use crate::operators::Op;
@@ -32,14 +33,14 @@ impl Optionals {
 
 	fn keeping_empty(&self, value: Node, warp_type: &str) -> Node {
 		let cast = |held: Node| {
-			let is_empty = Node::Key(Box::new(held.clone()), Op::Eq, Box::new(Node::Empty));
-			if_then_else(is_empty, Node::Empty, Node::Key(Box::new(held), Op::As, Box::new(Node::Symbol(warp_type.to_string()))))
+			let is_empty = key(held.clone(), Op::Eq, Node::Empty);
+			if_then_else(is_empty, Node::Empty, key(held, Op::As, Node::Symbol(warp_type.to_string())))
 		};
 		if let Node::Symbol(_) = value.drop_meta() {
 			return cast(value);
 		}
 		let held = Node::Symbol(format!("{OPTIONAL_PREFIX}{}", self.counter.replace(self.counter.get() + 1)));
-		let assignment = Node::Key(Box::new(held.clone()), Op::Assign, Box::new(value));
+		let assignment = key(held.clone(), Op::Assign, value);
 		Node::List(vec![assignment, cast(held)], Bracket::Round, Separator::Semicolon)
 	}
 }

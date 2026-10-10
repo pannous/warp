@@ -6,6 +6,7 @@
 //! `x.@comment` is the comment, `x.meta` the map `{comment: "…"}`, unless x is an object with a field `meta`. Without
 //! the pragma such a read is an error naming it.
 
+use super::nodes::key;
 use crate::node::{meta_entry, Bracket, Node, Separator, ATTRIBUTE_MARK};
 use crate::operators::Op;
 
@@ -95,7 +96,7 @@ fn comment_reads(node: Node, bindings: &[Commented]) -> Node {
 						_ if field.strip_prefix(ATTRIBUTE_MARK) == Some(COMMENT_KEY) => comment,
 						_ if binding.fields.iter().any(|own| own == field) => return None,
 						DOC_WORD => comment,
-						META_WORD =>Node::List(vec![Node::Key(Box::new(Node::Symbol(COMMENT_KEY.to_string())), Op::Colon, Box::new(comment))], Bracket::Curly, Separator::Space),
+						META_WORD =>Node::List(vec![key(Node::Symbol(COMMENT_KEY.to_string()), Op::Colon, comment)], Bracket::Curly, Separator::Space),
 						_ => return None,
 					};
 					Some(match crate::diagnostic::comments_as_meta() {
@@ -105,11 +106,11 @@ fn comment_reads(node: Node, bindings: &[Commented]) -> Node {
 				}),
 				_ => None,
 			};
-			read.unwrap_or_else(|| Node::Key(Box::new(comment_reads(*left, bindings)), Op::Dot, Box::new(comment_reads(*right, bindings))))
+			read.unwrap_or_else(|| key(comment_reads(*left, bindings), Op::Dot, comment_reads(*right, bindings)))
 		}
 		Node::Meta { node, data } => Node::Meta { node: Box::new(comment_reads(*node, bindings)), data },
 		Node::List(items, bracket, separator) => Node::List(items.into_iter().map(|item| comment_reads(item, bindings)).collect(), bracket, separator),
-		Node::Key(left, op, right) => Node::Key(Box::new(comment_reads(*left, bindings)), op, Box::new(comment_reads(*right, bindings))),
+		Node::Key(left, op, right) => key(comment_reads(*left, bindings), op, comment_reads(*right, bindings)),
 		other => other,
 	}
 }
@@ -122,7 +123,7 @@ fn as_entries(node: Node) -> Node {
 		},
 		Node::List(items, Bracket::Curly, separator) => Node::List(meta_last(items.into_iter().map(as_entries).collect()), Bracket::Curly, separator),
 		Node::List(items, bracket, separator) => Node::List(items.into_iter().map(as_entries).collect(), bracket, separator),
-		Node::Key(left, op, right) => Node::Key(Box::new(as_entries(*left)), op, Box::new(as_entries(*right))),
+		Node::Key(left, op, right) => key(as_entries(*left), op, as_entries(*right)),
 		other => other,
 	}
 }

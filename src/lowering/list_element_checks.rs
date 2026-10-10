@@ -6,6 +6,7 @@
 //! b's class (`b = bag(…)`), else guarded by each class with a list field of that name, `if (b is bag) and not (v is text)`.
 //! The check is a statement before the store, so the store keeps its form (a typed int list stays an array).
 
+use super::nodes::key;
 use crate::analyzer::{added_items, appended_items, builtin_type_kind, computed_literal_kind, declaring_name_and_type, indexed_list, list_element_type, of_type_declaration};
 use crate::library_words::substitute;
 use crate::node::{Bracket, Node, Separator};
@@ -148,7 +149,7 @@ impl ElementChecks {
 				list
 			}
 		};
-		self.with_checks(checks, Node::Key(Box::new(target), op, Box::new(value)))
+		self.with_checks(checks, key(target, op, value))
 	}
 
 	/// `names.add(v)`
@@ -257,7 +258,7 @@ fn each_item_check(list: &Node, test: &ElementTest) -> Node {
 }
 
 fn assignment(target: Node, value: Node) -> Node {
-	Node::Key(Box::new(target), Op::Assign, Box::new(value))
+	key(target, Op::Assign, value)
 }
 
 

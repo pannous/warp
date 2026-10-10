@@ -6,6 +6,7 @@
 //! instance is known, `<`, `==` and operation calls call the witness and a missing conformance is a compile error naming
 //! the fix; elsewhere node_order asks the runtime witness table (wasm_emitter/witness.rs).
 
+use super::nodes::{call, key};
 use crate::analyzer::{call_name, collect_all_types};
 use crate::diagnostic::Diagnostic;
 use crate::node::{Bracket, Node, Separator};
@@ -207,7 +208,7 @@ fn without_trait_parameter_types(node: Node, names: &[String]) -> Node {
 				Node::Key(call, Op::Colon, result) => Node::Key(Box::new(untyped_call(*call, names)), Op::Colon, result),
 				call => untyped_call(call, names),
 			};
-			Node::Key(Box::new(head), Op::Define, Box::new(without_trait_parameter_types(*body, names)))
+			key(head, Op::Define, without_trait_parameter_types(*body, names))
 		}
 		other => other.map_children(|child| without_trait_parameter_types(child, names)),
 	}
@@ -244,11 +245,11 @@ fn with_default_methods(node: Node, traits: &[Trait]) -> Node {
 			for operation in declared.operations.iter().filter(|operation| conforms && !defines(operation)) {
 				let Some(body) = &operation.default else { continue };
 				let parameters = operation.parameters.iter().enumerate().map(|(index, parameter)| match index {
-					0 => Node::Key(Box::new(Node::Symbol(parameter.clone())), Op::Colon, Box::new(Node::Symbol(type_name.clone()))),
+					0 => key(Node::Symbol(parameter.clone()), Op::Colon, Node::Symbol(type_name.clone())),
 					_ => Node::Symbol(parameter.clone()),
 				});
 				let head = Node::List(std::iter::once(Node::Symbol(operation.name.clone())).chain(parameters).collect(), Bracket::Round, Separator::None);
-				definitions.push(Node::Key(Box::new(head), Op::Define, Box::new(body.clone())));
+				definitions.push(key(head, Op::Define, body.clone()));
 			}
 		}
 	}
@@ -363,7 +364,7 @@ fn declare(node: Node, errors: &mut Vec<Node>) -> Node {
 		};
 	}
 	match node {
-		Node::Key(left, op, right) => Node::Key(Box::new(declare(*left, errors)), op, Box::new(declare(*right, errors))),
+		Node::Key(left, op, right) => key(declare(*left, errors), op, declare(*right, errors)),
 		Node::List(items, bracket, separator) => Node::List(items.into_iter().map(|item| declare(item, errors)).collect(), bracket, separator),
 		Node::Meta { node, data } => Node::Meta { node: Box::new(declare(*node, errors)), data },
 		other => other,
@@ -483,9 +484,9 @@ fn with_conformance_tests(node: Node, names: &[String]) -> Node {
 	match node {
 		Node::Key(subject, Op::Eq, right) if matches!(right.drop_meta(), Node::Symbol(name) if names.contains(name)) => {
 			let subject = with_conformance_tests(*subject, names);
-			Node::List(vec![Node::Symbol(crate::type_tests::IS_TYPE.to_string()), subject, Node::Text(right.drop_meta().name())], Bracket::Round, Separator::None)
+			call(crate::type_tests::IS_TYPE, vec![subject, Node::Text(right.drop_meta().name())])
 		}
-		Node::Key(left, op, right) => Node::Key(Box::new(with_conformance_tests(*left, names)), op, Box::new(with_conformance_tests(*right, names))),
+		Node::Key(left, op, right) => key(with_conformance_tests(*left, names), op, with_conformance_tests(*right, names)),
 		Node::List(items, bracket, separator) => Node::List(items.into_iter().map(|item| with_conformance_tests(item, names)).collect(), bracket, separator),
 		Node::Meta { node, data } => Node::Meta { node: Box::new(with_conformance_tests(*node, names)), data },
 		other => other,
@@ -539,9 +540,9 @@ fn conform(node: Node, registry: &TypeRegistry, traits: &Traits) -> Node {
 				Some(witness) => renamed_head(head, witness),
 				None => head,
 			};
-			Node::Key(Box::new(head), op, Box::new(conform(body, registry, traits)))
+			key(head, op, conform(body, registry, traits))
 		}
-		Node::Key(left, op, right) => Node::Key(Box::new(conform(*left, registry, traits)), op, Box::new(conform(*right, registry, traits))),
+		Node::Key(left, op, right) => key(conform(*left, registry, traits), op, conform(*right, registry, traits)),
 		Node::List(items, bracket, separator) => Node::List(items.into_iter().map(|item| conform(item, registry, traits)).collect(), bracket, separator),
 		Node::Meta { node, data } => Node::Meta { node: Box::new(conform(*node, registry, traits)), data },
 		other => other,
@@ -595,7 +596,7 @@ pub struct TypedAs(pub String);
 fn typed_uses(node: Node, parameter: &str, type_name: &str) -> Node {
 	match node {
 		Node::Symbol(name) if name == parameter => Node::meta(Node::Symbol(name), Node::data(TypedAs(type_name.to_string()))),
-		Node::Key(left, op, right) => Node::Key(Box::new(typed_uses(*left, parameter, type_name)), op, Box::new(typed_uses(*right, parameter, type_name))),
+		Node::Key(left, op, right) => key(typed_uses(*left, parameter, type_name), op, typed_uses(*right, parameter, type_name)),
 		Node::List(items, bracket, separator) => Node::List(items.into_iter().map(|item| typed_uses(item, parameter, type_name)).collect(), bracket, separator),
 		Node::Meta { node, data } => Node::Meta { node: Box::new(typed_uses(*node, parameter, type_name)), data },
 		other => other,
@@ -695,7 +696,7 @@ fn without_claims(node: Node, traits: &Traits) -> Node {
 		return declaration.clone();
 	}
 	match node {
-		Node::Key(left, op, right) => Node::Key(Box::new(without_claims(*left, traits)), op, Box::new(without_claims(*right, traits))),
+		Node::Key(left, op, right) => key(without_claims(*left, traits), op, without_claims(*right, traits)),
 		Node::List(items, bracket, separator) => Node::List(items.into_iter().map(|item| without_claims(item, traits)).collect(), bracket, separator),
 		Node::Meta { node, data } => Node::Meta { node: Box::new(without_claims(*node, traits)), data },
 		other => other,
@@ -904,7 +905,7 @@ impl InstanceTypes {
 	pub fn fields_template(&self, node: &Node) -> Option<Node> {
 		let Some(Shape::Instance(type_name)) = self.shape(node) else { return None };
 		let type_def = self.registry.get_by_name(&type_name)?;
-		let entries = type_def.fields.iter().map(|field| Node::Key(Box::new(Node::Symbol(field.name.clone())), Op::Colon, Box::new(Node::Empty)));
+		let entries = type_def.fields.iter().map(|field| key(Node::Symbol(field.name.clone()), Op::Colon, Node::Empty));
 		Some(Node::List(entries.collect(), Bracket::Curly, Separator::Space))
 	}
 }
@@ -966,17 +967,17 @@ fn with_dispatchers(node: Node, dispatched: &std::collections::BTreeMap<(String,
 fn dispatcher(operation: &str, arity: usize, types: &[String]) -> Node {
 	let parameters: Vec<Node> = (0..arity).map(|index| Node::Symbol(format!("dispatched_{index}"))).collect();
 	let (last, checked) = types.split_last().expect("two or more types define the operation");
-	let call = |type_name: &str| witness_call(operation, type_name, parameters.clone());
-	let body = checked.iter().rev().fold(call(last), |otherwise, type_name| {
-		let test = Node::List(vec![Node::Symbol(INSTANCE_OF.to_string()), parameters[0].clone(), Node::Text(type_name.clone())], Bracket::Round, Separator::None);
-		let condition = Node::Key(Box::new(Node::Empty), Op::If, Box::new(test));
-		let then = Node::Key(Box::new(condition), Op::Then, Box::new(call(type_name)));
-		Node::Key(Box::new(then), Op::Else, Box::new(otherwise))
+	let witness = |type_name: &str| witness_call(operation, type_name, parameters.clone());
+	let body = checked.iter().rev().fold(witness(last), |otherwise, type_name| {
+		let test = call(INSTANCE_OF, vec![parameters[0].clone(), Node::Text(type_name.clone())]);
+		let condition = key(Node::Empty, Op::If, test);
+		let then = key(condition, Op::Then, witness(type_name));
+		key(then, Op::Else, otherwise)
 	});
 	// the first parameter is an instance of some type: held as a Node, like a parameter `s:square`
-	let instance = Node::Key(Box::new(parameters[0].clone()), Op::Colon, Box::new(Node::meta(Node::Symbol(DISPATCH.to_string()), Node::data(Instance))));
+	let instance = key(parameters[0].clone(), Op::Colon, Node::meta(Node::Symbol(DISPATCH.to_string()), Node::data(Instance)));
 	let head = Node::List([vec![Node::Symbol(witness_name(operation, DISPATCH)), instance], parameters[1..].to_vec()].concat(), Bracket::Round, Separator::None);
-	Node::Key(Box::new(head), Op::Define, Box::new(body))
+	key(head, Op::Define, body)
 }
 
 struct Dispatch {
@@ -1049,11 +1050,11 @@ impl Dispatch {
 				let (left, right) = (self.expand(*left), self.expand(*right));
 				if let (Op::Assign, Some((name, declared))) = (&op, typed_target(&left, &self.types.registry)) {
 					return match self.admit(&right, &declared, &format!("{name}:{declared} needs {}", crate::analyzer::with_article(&declared))) {
-						Ok(right) => Node::Key(Box::new(left), op, Box::new(right)),
+						Ok(right) => key(left, op, right),
 						Err(error) => self.fail(error).expect("fail gives the error"),
 					};
 				}
-				self.operator(&left, &op, &right).unwrap_or(Node::Key(Box::new(left), op, Box::new(right)))
+				self.operator(&left, &op, &right).unwrap_or(key(left, op, right))
 			}
 			Node::List(items, bracket, separator) => {
 				let items: Vec<Node> = items.into_iter().map(|item| self.expand(item)).collect();
@@ -1071,12 +1072,12 @@ impl Dispatch {
 				return Some(error);
 			}
 			let comparison = witness_call(COMPARE, &type_name, vec![left.clone(), right.clone()]);
-			return Some(Node::Key(Box::new(comparison), *op, Box::new(Node::int(0))));
+			return Some(key(comparison, *op, Node::int(0)));
 		}
 		if matches!(op, Op::Eq | Op::Ne) && self.has_witness(EQUALS, &type_name) {
 			let equal = witness_call(EQUALS, &type_name, vec![left.clone(), right.clone()]);
 			let wanted = if *op == Op::Eq { Op::Ne } else { Op::Eq };
-			return Some(Node::Key(Box::new(equal), wanted, Box::new(Node::int(0))));
+			return Some(key(equal, wanted, Node::int(0)));
 		}
 		None
 	}
@@ -1099,7 +1100,7 @@ impl Dispatch {
 				(crate::library_words::COLLECTION_CONTAINS, [list, element]) => {
 					let type_name = self.instance_type(element)?;
 					let found = self.has_witness(EQUALS, &type_name).then(|| position_by_equals(list, element, &type_name))?;
-					return Some(Node::Key(Box::new(found), Op::Ne, Box::new(Node::int(0))));
+					return Some(key(found, Op::Ne, Node::int(0)));
 				}
 				// `x is Comparable` of a trait, `dog(…) is animal` of a type dog is like (class dog extends animal)
 				(crate::type_tests::IS_TYPE, [subject, spec]) => {
@@ -1236,12 +1237,12 @@ fn trait_constraints(node: &Node, traits: &Traits) -> HashMap<String, Vec<(usize
 fn position_by_equals(list: &Node, element: &Node, type_name: &str) -> Node {
 	let symbol = |name: &str| Node::Symbol(name.to_string());
 	let (found, at, item) = (symbol(FOUND_VARIABLE), symbol(POSITION_VARIABLE), symbol(ITEM_VARIABLE));
-	let assign = |target: &Node, value: Node| Node::Key(Box::new(target.clone()), Op::Assign, Box::new(value));
-	let equal = Node::Key(Box::new(witness_call(EQUALS, type_name, vec![item.clone(), element.clone()])), Op::Ne, Box::new(Node::int(0)));
-	let first = Node::Key(Box::new(found.clone()), Op::Eq, Box::new(Node::int(0)));
-	let condition = Node::Key(Box::new(Node::Empty), Op::If, Box::new(Node::Key(Box::new(first), Op::And, Box::new(equal))));
-	let found_it = Node::Key(Box::new(condition), Op::Then, Box::new(Node::List(vec![assign(&found, at.clone())], Bracket::Curly, Separator::None)));
-	let step = assign(&at, Node::Key(Box::new(at.clone()), Op::Add, Box::new(Node::int(1))));
+	let assign = |target: &Node, value: Node| key(target.clone(), Op::Assign, value);
+	let equal = key(witness_call(EQUALS, type_name, vec![item.clone(), element.clone()]), Op::Ne, Node::int(0));
+	let first = key(found.clone(), Op::Eq, Node::int(0));
+	let condition = key(Node::Empty, Op::If, key(first, Op::And, equal));
+	let found_it = key(condition, Op::Then, Node::List(vec![assign(&found, at.clone())], Bracket::Curly, Separator::None));
+	let step = assign(&at, key(at.clone(), Op::Add, Node::int(1)));
 	let body = Node::List(vec![step, found_it], Bracket::Curly, Separator::Semicolon);
 	let search = Node::List(vec![symbol(FOR_WORD), item, symbol(IN_WORD), list.clone(), body], Bracket::None, Separator::Space);
 	Node::List(vec![assign(&found, Node::int(0)), assign(&at, Node::int(0)), search, found], Bracket::Round, Separator::Semicolon)
@@ -1251,5 +1252,5 @@ const ITEM_VARIABLE: &str = "equals_item";
 const POSITION_VARIABLE: &str = "equals_position";
 
 fn witness_call(operation: &str, type_name: &str, arguments: Vec<Node>) -> Node {
-	Node::List([vec![Node::Symbol(witness_name(operation, type_name))], arguments].concat(), Bracket::Round, Separator::None)
+	call(&witness_name(operation, type_name), arguments)
 }

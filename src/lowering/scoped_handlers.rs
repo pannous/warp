@@ -8,7 +8,7 @@
 //! `break value` in a handler body aborts (step 3): the handler stores value in `effect_handler_aborted_ask_i` and
 //! throws to its block, which runs under `ran_without_abort(i, {…})` and then has that value.
 
-use super::nodes::call;
+use super::nodes::{call, key};
 use crate::event_signals::{emit_verbs, emitted, function_with_globals, main_level_variables, reads_event, statements_of};
 use crate::node::{Bracket, Node, Separator};
 use crate::operators::Op;
@@ -171,7 +171,7 @@ fn dispatched_emits(node: Node, by_event: &BTreeMap<String, Vec<usize>>, verbs: 
 		if let Some(numbers) = by_event.get(&event) {
 			let active = call(&active_function(&event), vec![]);
 			return numbers.iter().rev().fold(node, |otherwise, number| {
-				let condition = Node::Key(Box::new(active.clone()), Op::Eq, Box::new(Node::int(*number as i64)));
+				let condition = key(active.clone(), Op::Eq, Node::int(*number as i64));
 				let arguments = if matches!(data, Node::Empty) { vec![] } else { vec![data.clone()] };
 				sequence(vec![if_then_else(condition, call(&handler_name(&event, *number), arguments), otherwise)])
 			});

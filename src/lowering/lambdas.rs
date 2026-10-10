@@ -5,7 +5,7 @@
 //! - `map [1 2 3] {it*it}`, `map(xs, x=>x+1)`, `xs.map(f)` over a literal block, a lambda or a defined function is a loop
 //! - a lambda anywhere else is a closure (closures.rs); `map` over a value that is no function is the error `map needs a function, got …`
 
-use super::nodes::{call, is_type_word};
+use super::nodes::{call, is_type_word, key};
 use crate::analyzer::{call_name, extract_user_functions};
 use crate::context::Context;
 use crate::diagnostic::Diagnostic;
@@ -160,7 +160,7 @@ fn operator_lambda(node: &Node) -> Option<Lambda> {
 		_ => return None,
 	};
 	let [left, right] = OPERATOR_PARAMETERS.map(|name| Node::Symbol(name.to_string()));
-	Some(Lambda::new(OPERATOR_PARAMETERS.map(String::from).to_vec(), Node::Key(Box::new(left), op, Box::new(right))))
+	Some(Lambda::new(OPERATOR_PARAMETERS.map(String::from).to_vec(), key(left, op, right)))
 }
 
 /// A function written as a value: a lambda, a block or an operator
@@ -236,12 +236,12 @@ fn subtract_kebab_parameters(node: Node, params: &[String]) -> Node {
 			if parts.len() > 1 && parts.iter().all(|part| params.iter().any(|param| param == part)) {
 				let mut terms = parts.into_iter().map(|part| Node::Symbol(part.to_string()));
 				let first = terms.next().expect("split gives a part");
-				terms.fold(first, |difference, term| Node::Key(Box::new(difference), Op::Sub, Box::new(term)))
+				terms.fold(first, |difference, term| key(difference, Op::Sub, term))
 			} else {
 				Node::Symbol(name)
 			}
 		}
-		Node::Key(left, op, right) => Node::Key(Box::new(subtract_kebab_parameters(*left, params)), op, Box::new(subtract_kebab_parameters(*right, params))),
+		Node::Key(left, op, right) => key(subtract_kebab_parameters(*left, params), op, subtract_kebab_parameters(*right, params)),
 		Node::List(items, bracket, separator) => Node::List(items.into_iter().map(|item| subtract_kebab_parameters(item, params)).collect(), bracket, separator),
 		Node::Meta { node, data } => Node::Meta { node: Box::new(subtract_kebab_parameters(*node, params)), data },
 		other => other,
@@ -319,10 +319,10 @@ fn c_style_parameters(head: &Node) -> Node {
 	// C#'s `int x`, Go's `x int`
 	let typed = |parameter: &Node| match parameter.drop_meta() {
 		Node::List(words, _, Separator::Space) if matches!(words.as_slice(), [kind, name] if is_type_word(kind) && matches!(name.drop_meta(), Node::Symbol(_))) => {
-			Node::Key(Box::new(words[1].clone()), Op::Colon, Box::new(words[0].clone()))
+			key(words[1].clone(), Op::Colon, words[0].clone())
 		}
 		Node::List(words, _, Separator::Space) if matches!(words.as_slice(), [name, kind] if is_type_word(kind) && matches!(name.drop_meta(), Node::Symbol(_)) && !is_type_word(name)) => {
-			Node::Key(Box::new(words[0].clone()), Op::Colon, Box::new(words[1].clone()))
+			key(words[0].clone(), Op::Colon, words[1].clone())
 		}
 		_ => parameter.clone(),
 	};
@@ -430,7 +430,7 @@ fn bind_parameter(node: Node, name: &str, argument: &Node) -> Node {
 		Node::List(items, bracket, separator) if items.len() > 1 && crate::declarations::is_callee(&items[0]) => {
 			Node::List(items.into_iter().map(|item| if binds_name(&item) { item } else { bind_parameter(item, name, argument) }).collect(), bracket, separator)
 		}
-		Node::Key(left, op, right) => Node::Key(Box::new(bind_parameter(*left, name, argument)), op, Box::new(bind_parameter(*right, name, argument))),
+		Node::Key(left, op, right) => key(bind_parameter(*left, name, argument), op, bind_parameter(*right, name, argument)),
 		Node::List(items, bracket, separator) => Node::List(items.into_iter().map(|item| bind_parameter(item, name, argument)).collect(), bracket, separator),
 		Node::Meta { node, data } => Node::Meta { node: Box::new(bind_parameter(*node, name, argument)), data },
 		other => other,
@@ -486,7 +486,7 @@ pub(crate) fn block_as_arrow(node: &Node) -> Option<Node> {
 		[single] => Node::Symbol(single.clone()),
 		several => Node::List(several.iter().cloned().map(Node::Symbol).collect(), Bracket::Round, Separator::Colon),
 	};
-	Some(Node::Key(Box::new(parameters), Op::FatArrow, Box::new(lambda.body)))
+	Some(key(parameters, Op::FatArrow, lambda.body))
 }
 
 /// The definition `name(params) := body` of a lambda, a block with `it` or an operator given as a value
@@ -497,16 +497,16 @@ pub fn lambda_definition(name: &str, function: &Node) -> Option<Node> {
 
 fn definition(name: &str, lambda: Lambda) -> Node {
 	let parameters = if lambda.written.is_empty() { lambda.params.into_iter().map(Node::Symbol).collect() } else { lambda.written };
-	let head = Node::List([vec![Node::Symbol(name.to_string())], parameters].concat(), Bracket::Round, Separator::None);
+	let head = call(name, parameters);
 	// a result type converts the body, as `f(a:number):number := …` is lowered before this pass runs
 	let body = match lambda.result_type {
 		Some(result_type) => {
 			let grouped = Node::List(vec![lambda.body], Bracket::Round, Separator::None);
-			Node::Key(Box::new(grouped), Op::As, Box::new(result_type))
+			key(grouped, Op::As, result_type)
 		}
 		None => lambda.body,
 	};
-	Node::Key(Box::new(head), Op::Define, Box::new(body))
+	key(head, Op::Define, body)
 }
 
 /// Python's `sorted(xs, key=x => -x)`: in a call a function given as `name = …` is the named argument `key: x => -x`
@@ -561,10 +561,10 @@ impl Lowering {
 				let (receiver, function) = (self.expand(*receiver), self.expand(function));
 				match self.iterate(iteration, receiver.clone(), extras.clone(), function.clone()) {
 					Some(loop_node) => loop_node,
-					None => Node::Key(Box::new(receiver), Op::Dot, Box::new(call(iteration.word, [extras, vec![function]].concat()))),
+					None => key(receiver, Op::Dot, call(iteration.word, [extras, vec![function]].concat())),
 				}
 			}
-			Node::Key(left, op, right) => Node::Key(Box::new(self.expand(*left)), op, Box::new(self.expand(*right))),
+			Node::Key(left, op, right) => key(self.expand(*left), op, self.expand(*right)),
 			Node::List(items, bracket, separator) => {
 				let items = named_function_arguments(items, &bracket);
 				let items = flatten_prefix_application(items, &bracket, &separator);
@@ -671,7 +671,7 @@ impl Lowering {
 			// Python's `any(xs)`, `all(xs)`: the items themselves are the conditions
 			if let ([list], true) = (rest.as_slice(), is_call && TRUTH_WORDS.contains(&iteration.word)) {
 				let item = Node::Symbol(TRUTH_ITEM.to_string());
-				return self.iterate(iteration, list.clone(), vec![], Node::Key(Box::new(item.clone()), Op::FatArrow, Box::new(item)));
+				return self.iterate(iteration, list.clone(), vec![], key(item.clone(), Op::FatArrow, item));
 			}
 			let [list, extras @ .., function] = rest.as_slice() else { return None };
 			let iteration = with_start(iteration, extras.len());
@@ -759,7 +759,7 @@ impl Lowering {
 	/// Whether the first of `pair` sorts before the second: a key of one item is smaller (Python `key=len`), a comparison
 	/// holds (Swift `by: >`), any other comparator is negative (JS `(a,b) => a-b`)
 	fn sort_order(&self, iteration: &Iteration, list: &Node, function: &Node, pair: [Node; 2]) -> Result<Node, Option<Node>> {
-		let less = |left: Node, right: Node| Node::Key(Box::new(left), Op::Lt, Box::new(right));
+		let less = |left: Node, right: Node| key(left, Op::Lt, right);
 		if self.parameter_count(function) == Some(1) {
 			let [first, second] = pair;
 			return Ok(less(self.applied(iteration, list, function, &[first])?, self.applied(iteration, list, function, &[second])?));

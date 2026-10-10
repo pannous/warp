@@ -1,6 +1,7 @@
 //! Asks about written forms the analyzer sees whole (notes/welcoming.md): unbracketed list assignments (D12)
 //! and suffix words mixed with infix arithmetic (D9); a trailing percent `10%` is read as `10/100` here too
 
+use super::nodes::{call, key};
 use crate::diagnostic::{ask, reading, Ask, Fallback};
 use crate::node::{Bracket, Node, Separator};
 use crate::operators::Op;
@@ -109,8 +110,8 @@ fn lower_node(node: Node, functions: &SuffixWords) -> Node {
 	match node {
 		Node::Meta { node, data } => Node::Meta { node: Box::new(lower_node(*node, functions)), data },
 		// `10%`: a percent is a hundredth, `10/100`
-		Node::Key(left, Op::Mod, right) if matches!(right.drop_meta(), Node::Empty) => Node::Key(Box::new(lower_node(*left, functions)), Op::Div, Box::new(Node::int(PERCENT))),
-		Node::Key(left, op, right) => Node::Key(Box::new(lower_node(*left, functions)), op, Box::new(lower_node(*right, functions))),
+		Node::Key(left, Op::Mod, right) if matches!(right.drop_meta(), Node::Empty) => key(lower_node(*left, functions), Op::Div, Node::int(PERCENT)),
+		Node::Key(left, op, right) => key(lower_node(*left, functions), op, lower_node(*right, functions)),
 		Node::List(items, bracket, separator) => {
 			if let Some(asked) = bare_list_assignment(&items, &bracket, &separator) {
 				return asked.map_or_else(|error| error, |chosen| lower_node(chosen, functions));
@@ -179,17 +180,17 @@ fn operator_reference(node: &Node) -> Option<Op> {
 	}
 }
 
-fn call(suffix: &Suffix, argument: Node) -> Node {
+fn suffix_call(suffix: &Suffix, argument: Node) -> Node {
 	let function = match suffix {
-		Suffix::Operator(op) => return Node::Key(Box::new(Node::Empty), *op, Box::new(argument)),
+		Suffix::Operator(op) => return key(Node::Empty, *op, argument),
 		Suffix::Function(function) => function,
 	};
 	match function.strip_prefix(POWER_MARK) {
 		Some(power) => {
 			let exponent = if power == "square" { 2 } else { 3 };
-			Node::Key(Box::new(argument), Op::Pow, Box::new(Node::int(exponent)))
+			key(argument, Op::Pow, Node::int(exponent))
 		}
-		None => Node::List(vec![Node::Symbol(function.to_string()), argument], Bracket::Round, Separator::None),
+		None => call(function, vec![argument]),
 	}
 }
 
@@ -263,11 +264,11 @@ fn suffix_applied(operand: Node, item: Node, word: &Node, function: &Suffix) -> 
 		operand => {
 			let argument = match is_infix_arithmetic(&operand) {
 				true => match suffix_precedence(&operand, &written_word(word)) {
-					Ok(true) => with_rightmost(operand, |leaf| call(function, leaf)),
-					Ok(false) => call(function, operand),
+					Ok(true) => with_rightmost(operand, |leaf| suffix_call(function, leaf)),
+					Ok(false) => suffix_call(function, operand),
 					Err(error) => error,
 				},
-				false => call(function, operand),
+				false => suffix_call(function, operand),
 			};
 			with_leftmost(item, |_| argument)
 		}

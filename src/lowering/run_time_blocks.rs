@@ -4,6 +4,7 @@
 //! the block is a typo, or symbolic data that wants `data a+b`.
 //! A block known only at run time runs through the host (run_block, notes/runtime_eval.md step 2).
 
+use super::nodes::call;
 use crate::diagnostic::{ask, reading, Ask, Fallback};
 use crate::node::{Bracket, Node, Separator};
 use crate::operators::Op;
@@ -281,7 +282,7 @@ impl Site {
 		let names = Node::Text(self.variables.join(" "));
 		let values = Node::List(self.variables.iter().map(|name| Node::Symbol(name.clone())).collect(), Bracket::Square, Separator::Colon);
 		let definitions = as_data(Node::List(self.definitions.clone(), Bracket::Square, Separator::Colon));
-		Node::List(vec![Node::Symbol(crate::host::RUN_BLOCK.to_string()), block, names, values, definitions], Bracket::Round, Separator::None)
+		call(crate::host::RUN_BLOCK, vec![block, names, values, definitions])
 	}
 
 	fn interpreted(&self, node: Node) -> Node {

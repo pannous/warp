@@ -5,7 +5,7 @@
 //!   multi-value results, and a plain call `f()` gets them packed into the list `[a b]`
 //! - `x, y = v` / `x, y = v, w` → `$destructure (x, y) v …` (a statement binding each name, values evaluated first)
 
-use super::nodes::is_word;
+use super::nodes::{is_word, key};
 use crate::node::{error, Bracket, Node, Separator};
 use crate::operators::Op;
 
@@ -27,7 +27,7 @@ pub fn lower(node: Node) -> Node {
 		Node::Key(left, Op::Assign, right) if bracketed_targets(&left).is_some() => {
 			regroup_bracketed_destructuring(&left, &lower(*right)).expect("guarded")
 		}
-		Node::Key(left, op, right) => Node::Key(Box::new(lower(*left)), op, Box::new(lower(*right))),
+		Node::Key(left, op, right) => key(lower(*left), op, lower(*right)),
 		Node::List(items, bracket, separator) => {
 			// `(a, b) = 1, 2` arrives as `((a, b) = 1), 2`: the first item stays an assignment for regroup_destructuring
 			let takes_more_values = bracket == Bracket::None && separator == Separator::Colon;

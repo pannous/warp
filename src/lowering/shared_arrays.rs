@@ -12,7 +12,7 @@
 //! Shared values (P106): `shared done = false`, `shared n = 0`, `shared x = 0.5` are one-cell arrays: a read of `n` is
 //! `shared_get(n, 1)`, `n = v` is `shared_set(n, 1, v)`, `n += v` is `shared_add(n, 1, v)`; a boolean is the Int 1 or 0.
 
-use super::nodes::is_word;
+use super::nodes::{call, is_word, key};
 use crate::node::{Bracket, Node, Separator};
 use crate::operators::Op;
 use std::collections::{HashMap, HashSet};
@@ -248,7 +248,7 @@ fn written_count(index: &Node) -> Node {
 	match (crate::warp_parser::subscript_key(index), index.drop_meta()) {
 		(Some(count), _) => count.clone(),
 		(None, Node::Number(number)) => Node::Number(*number - crate::extensions::numbers::Number::Int(1)),
-		(None, other) => Node::Key(Box::new(other.clone()), Op::Sub, Box::new(crate::node::int(1))),
+		(None, other) => key(other.clone(), Op::Sub, crate::node::int(1)),
 	}
 }
 
@@ -275,7 +275,7 @@ fn shared_parameters(node: &Node, functions: &HashMap<String, Vec<String>>, decl
 	loop {
 		let mut changed = false;
 		node.visit(&mut |part| {
-			let Some((callee, arguments)) = call(part) else { return };
+			let Some((callee, arguments)) = called_function(part) else { return };
 			if !functions.contains_key(&callee) {
 				return;
 			}
@@ -298,7 +298,7 @@ fn shared_parameters(node: &Node, functions: &HashMap<String, Vec<String>>, decl
 }
 
 /// A call of a user function: `f(a, b)` or the task start `task·go(f, a, b)`
-fn call(node: &Node) -> Option<(String, Vec<Node>)> {
+fn called_function(node: &Node) -> Option<(String, Vec<Node>)> {
 	let Node::List(items, _, _) = node.drop_meta() else { return None };
 	let Node::Symbol(head) = items.first()?.drop_meta() else { return None };
 	if head == crate::declarations::TASK_GO {
@@ -308,7 +308,7 @@ fn call(node: &Node) -> Option<(String, Vec<Node>)> {
 }
 
 fn builtin(word: &str, arguments: Vec<Node>) -> Node {
-	Node::List([vec![Node::Symbol(word.to_string())], arguments].concat(), Bracket::Round, Separator::None)
+	call(word, arguments)
 }
 
 struct Rewrite<'a> {
@@ -339,7 +339,7 @@ impl Rewrite<'_> {
 		}
 		if let Some((name, first, kind)) = declaration(&node) {
 			let count = if kind.value { crate::node::int(VALUE_CELL) } else { self.node(first.clone(), function) };
-			let created = Node::Key(Box::new(Node::Symbol(name.clone())), Op::Assign, Box::new(builtin(kind.storage.new_and_count().0, vec![count])));
+			let created = key(Node::Symbol(name.clone()), Op::Assign, builtin(kind.storage.new_and_count().0, vec![count]));
 			if !kind.value {
 				return created;
 			}
@@ -413,7 +413,7 @@ impl Rewrite<'_> {
 					// `#xs`, `xs.count`
 					(Node::Empty, Op::Hash) if let Some(kind) = shared(&value, &names) => builtin(kind.storage.new_and_count().1, vec![*value]),
 					(array, Op::Dot) if let Some(kind) = shared(array, &names) && COUNTING_WORDS.contains(&value.name().as_str()) => builtin(kind.storage.new_and_count().1, vec![array.clone()]),
-					_ => Node::Key(Box::new(self.node(*target, function)), op, Box::new(self.node(*value, function))),
+					_ => key(self.node(*target, function), op, self.node(*value, function)),
 				}
 			}
 			// `shared_writes(n)` (signal_values::poll_shared) takes the array, not its value
@@ -421,7 +421,7 @@ impl Rewrite<'_> {
 			Node::List(items, bracket, separator) => {
 				let names = self.names(function);
 				// a shared value given to a function that shares it goes as its cell, not as its value
-				let passed = call(&Node::List(items.clone(), bracket.clone(), separator.clone())).and_then(|(callee, _)| self.shared_parameters.get(&callee).cloned()).unwrap_or_default();
+				let passed = called_function(&Node::List(items.clone(), bracket.clone(), separator.clone())).and_then(|(callee, _)| self.shared_parameters.get(&callee).cloned()).unwrap_or_default();
 				let starts_task = items.first().is_some_and(|head| head.name() == crate::declarations::TASK_GO);
 				let offset = if starts_task { 2 } else { 1 };
 				let linear_argument = items.iter().skip(offset).find(|item| shared(item, &names).is_some_and(|kind| kind.storage == Storage::Linear));
@@ -437,13 +437,13 @@ impl Rewrite<'_> {
 					// `for x in xs {…}` over an array: over its indexes, x read from each cell
 					[word, item, in_word, array, body] if word.name() == "for" && in_word.name() == "in" && let Some(kind) = shared(array, &names) => {
 						let index = Node::Symbol(format!("{}{}index", array.name(), crate::analyzer::TEMPORARY_SEPARATOR));
-						let read = Node::Key(Box::new(item.clone()), Op::Assign, Box::new(builtin(element_words(kind)[0], vec![array.clone(), index.clone()])));
+						let read = key(item.clone(), Op::Assign, builtin(element_words(kind)[0], vec![array.clone(), index.clone()]));
 						let statements = match self.node(body.clone(), function).drop_meta().clone() {
 							Node::List(statements, Bracket::Curly, Separator::Semicolon | Separator::Newline) => statements,
 							Node::List(statement, Bracket::Curly, separator) => vec![Node::List(statement, Bracket::None, separator)],
 							other => vec![other],
 						};
-						let indexes = Node::Key(Box::new(crate::node::int(1)), Op::To, Box::new(builtin(kind.storage.new_and_count().1, vec![array.clone()])));
+						let indexes = key(crate::node::int(1), Op::To, builtin(kind.storage.new_and_count().1, vec![array.clone()]));
 						let body = Node::List([vec![read], statements].concat(), Bracket::Curly, Separator::Semicolon);
 						Node::List(vec![word.clone(), index, in_word.clone(), indexes, body], bracket, separator)
 					}
@@ -461,7 +461,7 @@ impl Rewrite<'_> {
 				let [get, _, _] = element_words(kind);
 				let read = builtin(get, vec![node, crate::node::int(VALUE_CELL)]);
 				match kind.element {
-					Element::Bool => Node::Key(Box::new(read), Op::Ne, Box::new(crate::node::int(0))),
+					Element::Bool => key(read, Op::Ne, crate::node::int(0)),
 					_ => read,
 				}
 			}
@@ -524,7 +524,7 @@ fn paired_with_linear(node: Node, names: &HashMap<String, Shared>, defines_dot: 
 	let node = match node.drop_meta() {
 		Node::List(items, Bracket::Round, _) if !defines_dot && items.len() == 3 && items[0].name() == DOT_WORD && items[1..].iter().any(|list| is_linear_list(list, names)) => {
 			let product = crate::analyzer::element_wise(items[1].clone(), Op::Mul, items[2].clone());
-			Node::List(vec![Node::Symbol(SUM_WORD.into()), product], Bracket::Round, Separator::None)
+			call(SUM_WORD, vec![product])
 		}
 		_ => node,
 	};
@@ -716,7 +716,7 @@ fn self_update(name: &Node, value: &Node) -> Option<(Op, Node)> {
 /// What `+= v` or `-= v` adds
 fn signed(value: Node, op: Op) -> Node {
 	match op {
-		Op::SubAssign => Node::Key(Box::new(Node::Empty), Op::Neg, Box::new(value)),
+		Op::SubAssign => key(Node::Empty, Op::Neg, value),
 		_ => value,
 	}
 }

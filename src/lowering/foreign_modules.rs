@@ -4,6 +4,7 @@
 //! (an empty argument list is ø on the way, so whether it is a call is said apart).
 //! Values cross as JSON; the result is any Node.
 
+use super::nodes::{call, key};
 use crate::node::{Bracket, Node, Separator};
 use crate::operators::Op;
 use std::collections::HashMap;
@@ -270,7 +271,7 @@ fn operator_member(op: &Op) -> Option<&'static str> {
 
 fn foreign_call(runtime: &str, module: Node, member: &str, is_call: bool, arguments: Node) -> Node {
 	let text = |text: &str| Node::Text(text.to_string());
-	Node::List(vec![Node::Symbol(crate::host::FOREIGN_CALL.to_string()), text(runtime), module, text(member), Node::int(i64::from(is_call)), arguments], Bracket::Round, Separator::None)
+	call(crate::host::FOREIGN_CALL, vec![text(runtime), module, text(member), Node::int(i64::from(is_call)), arguments])
 }
 
 /// `foreign_call("js", receiver, member, call, arguments)`, a JavaScript attribute read or method call: its receiver,
@@ -314,7 +315,7 @@ impl Foreign<'_> {
 			Node::Key(indexed, Op::Hash, index) => {
 				let indexed = self.rewrite(indexed.as_ref().clone());
 				let runtime = self.foreign_value(&indexed)?;
-				let zero_based = Node::Key(Box::new(self.rewrite(index.as_ref().clone())), Op::Sub, Box::new(Node::int(1)));
+				let zero_based = key(self.rewrite(index.as_ref().clone()), Op::Sub, Node::int(1));
 				Some(operator_call(&runtime, "getitem", vec![indexed, zero_based]))
 			}
 			Node::Key(left, op, right) if operator_member(op).is_some() => {
@@ -487,7 +488,7 @@ impl Foreign<'_> {
 				// a declared text, bool, int or float is a warp value: `crypto.randomUUID().upper()` is warp's upper; `text?` keeps ø
 				return match result_type {
 					Err(problem) => crate::diagnostic::Diagnostic::at(&node, problem).into_error(),
-					Ok(Some(warp_type)) => Node::Key(Box::new(call), Op::As, Box::new(Node::Symbol(warp_type))),
+					Ok(Some(warp_type)) => key(call, Op::As, Node::Symbol(warp_type)),
 					Ok(None) => call,
 				};
 			}
@@ -520,7 +521,7 @@ impl Foreign<'_> {
 				}
 				Node::Key(target, op, Box::new(value))
 			}
-			Node::Key(left, op, right) => Node::Key(Box::new(self.rewrite(*left)), op, Box::new(self.rewrite(*right))),
+			Node::Key(left, op, right) => key(self.rewrite(*left), op, self.rewrite(*right)),
 			Node::List(items, bracket, separator) => Node::List(items.into_iter().map(|item| self.rewrite(item)).collect(), bracket, separator),
 			Node::Meta { node, data } => Node::Meta { node: Box::new(self.rewrite(*node)), data },
 			other => other,

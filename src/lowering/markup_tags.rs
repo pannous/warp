@@ -3,6 +3,7 @@
 //! this reading: a name the program defines stays its call, and outside a tag block a call of an unbound name stays
 //! the loud error (P92). A comprehension or method call among an element's children gives children (card web-keyed).
 
+use super::nodes::key;
 use crate::node::{Bracket, Node, Separator};
 use crate::operators::Op;
 use std::collections::HashSet;
@@ -48,7 +49,7 @@ fn spaced_element(node: Node, defined: &HashSet<String>) -> Node {
 		if let [head, body] = items.as_slice() {
 			if let (Some((tag, mut content)), Node::List(children, Bracket::Curly, separator)) = (element_head(head, defined), body.drop_meta()) {
 				content.extend(children.iter().cloned());
-				return Node::Key(Box::new(Node::Symbol(tag)), Op::Colon, Box::new(Node::List(content, Bracket::Curly, separator.clone())));
+				return key(Node::Symbol(tag), Op::Colon, Node::List(content, Bracket::Curly, separator.clone()));
 			}
 		}
 	}
@@ -152,9 +153,9 @@ fn with_form_routes(node: Node) -> Node {
 				let (action, body, body_separator) = (action.clone(), body.clone(), body_separator.clone());
 				written.pop();
 				written.truncate(written.len() - 3);
-				let attribute = |name: &str, value: Node| Node::Key(Box::new(Node::Symbol(name.into())), Op::Colon, Box::new(value));
+				let attribute = |name: &str, value: Node| key(Node::Symbol(name.into()), Op::Colon, value);
 				let fields = [attribute(METHOD_ATTRIBUTE, Node::Text(method)), attribute(ACTION_ATTRIBUTE, action)].into_iter().chain(body);
-				written.push(Node::Key(Box::new(Node::Symbol(FORM_TAG.into())), Op::Colon, Box::new(Node::List(fields.collect(), Bracket::Curly, body_separator))));
+				written.push(key(Node::Symbol(FORM_TAG.into()), Op::Colon, Node::List(fields.collect(), Bracket::Curly, body_separator)));
 				rewritten = true;
 			}
 		}
@@ -276,5 +277,5 @@ fn tag_per_item(tag: String, values: Node) -> Node {
 }
 
 fn tag_node(name: String, items: Vec<Node>) -> Node {
-	Node::Key(Box::new(Node::Symbol(name)), Op::Colon, Box::new(Node::List(items, Bracket::Curly, Separator::Space)))
+	key(Node::Symbol(name), Op::Colon, Node::List(items, Bracket::Curly, Separator::Space))
 }

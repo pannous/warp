@@ -11,8 +11,9 @@
 //! Browser names (P188): `clipboard.read()` is `clipboard`, `clipboard.write(text)` the std word
 //! `std_io("clipboard", "write", [text])` (std_adapters.rs; host-files.js in a page).
 
+use super::nodes::{call, key};
 use crate::declarations::word;
-use crate::node::{Bracket, Node, Separator};
+use crate::node::{Bracket, Node};
 use crate::operators::Op;
 use std::collections::HashSet;
 use warp_runtime::host_words::{BATTERY, CLIPBOARD, CLIPBOARD_COUNT, CLIPBOARD_TEXT, SYSTEM_VALUE, SYSTEM_VALUES};
@@ -87,7 +88,7 @@ pub(crate) fn bound_names(program: &Node) -> HashSet<String> {
 fn mark(node: Node, names: &[(&str, bool)]) -> Node {
 	let marked = |name: &str| match names.iter().any(|(system, _)| *system == name) {
 		false => None,
-		true if name == CLIPBOARD => Some(Node::List(vec![Node::Symbol(CLIPBOARD_TEXT.to_string())], Bracket::Round, Separator::None)),
+		true if name == CLIPBOARD => Some(call(CLIPBOARD_TEXT, vec![])),
 		true => Some(Node::Symbol(format!("{SYSTEM_PREFIX}{name}"))),
 	};
 	match node {
@@ -197,8 +198,8 @@ fn reading(node: Node) -> Node {
 		Node::Symbol(name) if name.starts_with(SYSTEM_PREFIX) => {
 			let name = name[SYSTEM_PREFIX.len()..].to_string();
 			let yes_no = SYSTEM_VALUES.iter().any(|(system, yes_no)| *system == name && *yes_no);
-			let call = Node::List(vec![Node::Symbol(SYSTEM_VALUE.to_string()), Node::Text(name)], Bracket::Round, Separator::None);
-			if yes_no { Node::Key(Box::new(call), Op::Ne, Box::new(Node::int(0))) } else { call }
+			let call = call(SYSTEM_VALUE, vec![Node::Text(name)]);
+			if yes_no { key(call, Op::Ne, Node::int(0)) } else { call }
 		}
 		other => other.map_children(reading),
 	}

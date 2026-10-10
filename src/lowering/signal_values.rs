@@ -12,7 +12,7 @@
 //! which the runtime calls at the program's check points (signal_poll at main's start and end and each loop start,
 //! sleep, the end of the run): the watched values are compared with those seen last, and the listener runs on a change.
 
-use super::nodes::call;
+use super::nodes::{call, key};
 use crate::declarations::word;
 use crate::node::{Bracket, Node, Separator};
 use crate::operators::Op;
@@ -106,8 +106,8 @@ pub fn poll_shared(program: Node) -> Node {
 		}
 		let watched = unique(symbols(&subject).into_iter().filter(|name| shared.contains(name) || main_variables.contains(name)).collect());
 		let seen: Vec<(String, String)> = watched.into_iter().map(|name| { seen_count += 1; (name, format!("{SEEN_PREFIX}{}", seen_count - 1)) }).collect();
-		let changed = seen.iter().map(|(name, last)| Node::Key(Box::new(Node::Symbol(name.clone())), Op::Ne, Box::new(Node::Symbol(last.clone()))))
-			.reduce(|either, next| Node::Key(Box::new(either), Op::Or, Box::new(next))).expect("a watched shared value");
+		let changed = seen.iter().map(|(name, last)| key(Node::Symbol(name.clone()), Op::Ne, Node::Symbol(last.clone())))
+			.reduce(|either, next| key(either, Op::Or, next)).expect("a watched shared value");
 		let value = seen.first().map(|(name, _)| Node::Symbol(name.clone())).expect("a watched value");
 		let check = match listener_word {
 			ListenerWord::Set | ListenerWord::Change => with_value(&body, &value),
@@ -119,12 +119,12 @@ pub fn poll_shared(program: Node) -> Node {
 			ListenerWord::Once => {
 				let fired = format!("{POLLING_PREFIX}{}_fired", flags.len());
 				flags.push(fired.clone());
-				let condition = Node::Key(Box::new(Node::Key(Box::new(Node::Empty), Op::Not, Box::new(Node::Symbol(fired.clone())))), Op::And, Box::new(subject));
+				let condition = key(key(Node::Empty, Op::Not, Node::Symbol(fired.clone())), Op::And, subject);
 				if_then(condition, block(vec![assign(&fired, Node::True), body]))
 			}
 		};
 		let remember = seen.iter().map(|(name, last)| assign(last, Node::Symbol(name.clone())));
-		checks.push(if_then(Node::Key(Box::new(Node::Symbol(polling.clone())), Op::And, Box::new(changed)), block(remember.clone().chain([check]).collect())));
+		checks.push(if_then(key(Node::Symbol(polling.clone()), Op::And, changed), block(remember.clone().chain([check]).collect())));
 		lowered.extend(remember);
 		lowered.push(assign(&polling, Node::True));
 		flags.push(polling);
@@ -380,7 +380,7 @@ impl Subscriptions {
 		let check = match listener_word {
 			ListenerWord::Set => with_value(&body, &value),
 			ListenerWord::Change => {
-				if_then(Node::Key(Box::new(value.clone()), Op::Ne, Box::new(Node::Symbol(OLD_WORD.to_string()))), block(vec![with_value(&body, &value)]))
+				if_then(key(value.clone(), Op::Ne, Node::Symbol(OLD_WORD.to_string())), block(vec![with_value(&body, &value)]))
 			}
 			// P156: when the condition becomes true; the cell holds whether it held at the last write
 			ListenerWord::Whenever => {
@@ -389,9 +389,9 @@ impl Subscriptions {
 				statements.push(assign(&held, call(CELL_NEW, vec![Node::False])));
 				let held_cell = Node::Symbol(held);
 				// cells hold nodes: compared, not read as conditions
-				let not_before = Node::Key(Box::new(Node::Symbol(WAS_WORD.to_string())), Op::Eq, Box::new(Node::False));
-				let holds = Node::Key(Box::new(call(CELL_GET, vec![held_cell.clone()])), Op::Eq, Box::new(Node::True));
-				let became_true = Node::Key(Box::new(holds), Op::And, Box::new(not_before));
+				let not_before = key(Node::Symbol(WAS_WORD.to_string()), Op::Eq, Node::False);
+				let holds = key(call(CELL_GET, vec![held_cell.clone()]), Op::Eq, Node::True);
+				let became_true = key(holds, Op::And, not_before);
 				let parts = vec![assign(WAS_WORD, call(CELL_GET, vec![held_cell.clone()])), call(CELL_SET, vec![held_cell, subject]), if_then(became_true, block(vec![body]))];
 				Node::List(parts, Bracket::Round, Separator::Semicolon)
 			}
@@ -399,8 +399,8 @@ impl Subscriptions {
 				let fired = format!("{FIRED_PREFIX}{}", self.fired);
 				self.fired += 1;
 				statements.push(assign(&fired, call(CELL_NEW, vec![Node::False])));
-				let not_fired = Node::Key(Box::new(call(CELL_GET, vec![Node::Symbol(fired.clone())])), Op::Eq, Box::new(Node::False));
-				let condition = Node::Key(Box::new(not_fired), Op::And, Box::new(subject));
+				let not_fired = key(call(CELL_GET, vec![Node::Symbol(fired.clone())]), Op::Eq, Node::False);
+				let condition = key(not_fired, Op::And, subject);
 				if_then(condition, block(vec![call(CELL_SET, vec![Node::Symbol(fired), Node::True]), body]))
 			}
 		};
@@ -412,9 +412,9 @@ impl Subscriptions {
 		// a named listener (P128) is a function of that name, and remembers where it sits in each list
 		let listener = match name {
 			Some(name) => {
-				let head = Node::List(vec![Node::Symbol(name.to_string()), Node::Symbol(VALUE_WORD.to_string()), Node::Symbol(OLD_WORD.to_string())], Bracket::Round, Separator::None);
+				let head = call(name, vec![Node::Symbol(VALUE_WORD.to_string()), Node::Symbol(OLD_WORD.to_string())]);
 				let body = globals.into_iter().chain([check, crate::node::int(0)]).collect();
-				statements.push(Node::Key(Box::new(head), Op::Define, Box::new(block(body))));
+				statements.push(key(head, Op::Define, block(body)));
 				for variable in &watched {
 					let place = call(COUNT_WORD, vec![call(SIGNAL_LISTENERS, vec![Node::Symbol(variable.clone())])]);
 					statements.push(assign(&index_name(name, variable), place));
@@ -425,7 +425,7 @@ impl Subscriptions {
 		};
 		for name in watched {
 			let signal = Node::Symbol(name);
-			let listeners = Node::Key(Box::new(call(SIGNAL_LISTENERS, vec![signal.clone()])), Op::Add, Box::new(Node::List(vec![listener.clone()], Bracket::Square, Separator::None)));
+			let listeners = key(call(SIGNAL_LISTENERS, vec![signal.clone()]), Op::Add, Node::List(vec![listener.clone()], Bracket::Square, Separator::None));
 			statements.push(call(SIGNAL_LISTENERS_SET, vec![signal, listeners]));
 		}
 		Some(if statements.len() == 1 { statements.remove(0) } else { block(statements) })
@@ -486,8 +486,8 @@ impl Signals {
 				let name = target.drop_meta().name();
 				let value = match op {
 					Op::Assign => self.rewrite(*value, signals, main),
-					Op::Inc | Op::Dec => Node::Key(Box::new(call(CELL_GET, vec![*target.clone()])), if op == Op::Inc { Op::Add } else { Op::Sub }, Box::new(crate::node::int(1))),
-					_ => Node::Key(Box::new(call(CELL_GET, vec![*target.clone()])), op.base_op(), Box::new(self.rewrite(*value, signals, main))),
+					Op::Inc | Op::Dec => key(call(CELL_GET, vec![*target.clone()]), if op == Op::Inc { Op::Add } else { Op::Sub }, crate::node::int(1)),
+					_ => key(call(CELL_GET, vec![*target.clone()]), op.base_op(), self.rewrite(*value, signals, main)),
 				};
 				if main && self.escaping.contains(&name) && self.made.insert(name) {
 					return Node::Key(target, Op::Assign, Box::new(call(SIGNAL_NEW, vec![value])));
@@ -778,7 +778,7 @@ fn without_definitions(node: &Node) -> Node {
 
 fn map_children(node: Node, rewrite: &mut impl FnMut(Node) -> Node) -> Node {
 	match node {
-		Node::Key(left, op, right) => Node::Key(Box::new(rewrite(*left)), op, Box::new(rewrite(*right))),
+		Node::Key(left, op, right) => key(rewrite(*left), op, rewrite(*right)),
 		Node::List(items, bracket, separator) => Node::List(items.into_iter().map(&mut *rewrite).collect(), bracket, separator),
 		Node::Meta { node, data } => Node::Meta { node: Box::new(rewrite(*node)), data },
 		other => other,

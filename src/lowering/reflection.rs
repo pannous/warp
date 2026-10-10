@@ -6,6 +6,7 @@
 //! `attributes`, `members`), `p.methods` and `dir(p)` of an instance or a class are the names of its class layout,
 //! inherited fields first; of a map literal's variable they are its keys, read at run time (`m.keys`).
 
+use super::nodes::{call, key};
 use std::collections::{HashMap, HashSet};
 
 use crate::class_methods::ClassLayout;
@@ -200,7 +201,7 @@ fn user_functions(program: &Node) -> Functions {
 
 /// `{key: value …}`
 fn meta_map(entries: Vec<(&str, Node)>) -> Node {
-	Node::List(entries.into_iter().map(|(key, value)| Node::Key(Box::new(Node::Symbol(key.into())), Op::Colon, Box::new(value))).collect(), Bracket::Curly, Separator::Space)
+	Node::List(entries.into_iter().map(|(name, value)| key(Node::Symbol(name.into()), Op::Colon, value)).collect(), Bracket::Curly, Separator::Space)
 }
 
 /// `effects of f`
@@ -397,7 +398,7 @@ impl Objects {
 		if self.defined.contains(word) {
 			return None;
 		}
-		let written = || Node::Key(Box::new(subject.clone()), Op::Dot, Box::new(Node::Symbol(word.into())));
+		let written = || key(subject.clone(), Op::Dot, Node::Symbol(word.into()));
 		if let Some(reflected) = self.module_member_word(subject, word) {
 			return Some(reflected);
 		}
@@ -409,7 +410,7 @@ impl Objects {
 			let is_instance = self.instances.contains_key(name);
 			return match word {
 				_ if self.has_member(class, word) => None,
-				_ if CLASS_WORDS.contains(&word) && is_instance => Some(Node::List(vec![Node::Symbol(crate::type_tests::TYPE_WORD.into()), subject.clone()], Bracket::Round, Separator::None)),
+				_ if CLASS_WORDS.contains(&word) && is_instance => Some(call(crate::type_tests::TYPE_WORD, vec![subject.clone()])),
 				_ => self.listed(class, word).map(|names| text_list(&names)),
 			};
 		}
@@ -487,7 +488,7 @@ impl Objects {
 	}
 
 	fn map_keys(&self, subject: &Node) -> Node {
-		Node::Key(Box::new(subject.clone()), Op::Dot, Box::new(Node::Symbol(KEYS_WORD.into())))
+		key(subject.clone(), Op::Dot, Node::Symbol(KEYS_WORD.into()))
 	}
 }
 
@@ -497,7 +498,7 @@ fn with_object_words(node: Node, objects: &Objects) -> Node {
 		if is_field_place(place, op, rest) {
 			let Node::Key(subject, Op::Dot, word) = place.drop_meta() else { unreachable!("guarded") };
 			let place = Node::Key(Box::new(with_object_words(subject.as_ref().clone(), objects)), Op::Dot, word.clone());
-			return Node::Key(Box::new(place), *op, Box::new(with_object_words(rest.as_ref().clone(), objects)));
+			return key(place, *op, with_object_words(rest.as_ref().clone(), objects));
 		}
 	}
 	let reflected = match node.drop_meta() {

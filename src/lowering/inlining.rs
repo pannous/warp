@@ -5,7 +5,7 @@
 //! Only functions whose meaning cannot change by moving their body: not recursive, no free variables (every name is a
 //! parameter or a local), no nested definitions, lambdas, globals or early returns, and a few statements at most.
 
-use super::nodes::symbol_name;
+use super::nodes::{key, symbol_name};
 use crate::node::{Bracket, Node, Separator};
 use crate::operators::Op;
 use std::cell::Cell;
@@ -138,7 +138,7 @@ fn inline(node: Node, functions: &HashMap<String, Inlinable>, counter: &Cell<usi
 				None => Node::List(items, bracket, separator),
 			}
 		}
-		Node::Key(left, op, right) => Node::Key(Box::new(inline(*left, functions, counter)), op, Box::new(inline(*right, functions, counter))),
+		Node::Key(left, op, right) => key(inline(*left, functions, counter), op, inline(*right, functions, counter)),
 		Node::Meta { node, data } => Node::Meta { node: Box::new(inline(*node, functions, counter)), data },
 		other => other,
 	}
@@ -158,7 +158,7 @@ fn inlined_call(items: &[Node], bracket: &Bracket, separator: &Separator, functi
 	let rename = |word: &str| format!("{name}{NAME_SEPARATOR}{word}{NAME_SEPARATOR}{}", counter.get());
 	let renamed = |node: &Node| renamed_names(node.clone(), &function.names, &rename);
 	let bindings = function.parameters.iter().zip(arguments).map(|(parameter, argument)| {
-		Node::Key(Box::new(Node::Symbol(rename(parameter))), Op::Assign, Box::new(argument.clone()))
+		key(Node::Symbol(rename(parameter)), Op::Assign, argument.clone())
 	});
 	let body = bindings.chain(function.statements.iter().map(renamed)).chain(std::iter::once(renamed(&function.result)));
 	Some(Node::List(body.collect(), Bracket::Round, Separator::Semicolon))
@@ -170,7 +170,7 @@ pub(crate) fn renamed_names(node: Node, names: &HashSet<String>, rename: &dyn Fn
 		// a key `{x: x}` and a field `p.x` keep their names
 		Node::Key(left, op @ (Op::Colon | Op::Dot), right) if op == Op::Colon => Node::Key(left, op, Box::new(renamed_names(*right, names, rename))),
 		Node::Key(left, Op::Dot, right) => Node::Key(Box::new(renamed_names(*left, names, rename)), Op::Dot, right),
-		Node::Key(left, op, right) => Node::Key(Box::new(renamed_names(*left, names, rename)), op, Box::new(renamed_names(*right, names, rename))),
+		Node::Key(left, op, right) => key(renamed_names(*left, names, rename), op, renamed_names(*right, names, rename)),
 		Node::List(items, bracket, separator) => Node::List(items.into_iter().map(|item| renamed_names(item, names, rename)).collect(), bracket, separator),
 		Node::Meta { node, data } => Node::Meta { node: Box::new(renamed_names(*node, names, rename)), data },
 		other => other,

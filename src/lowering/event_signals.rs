@@ -8,6 +8,7 @@
 //! event (web/playground/worker.js); natively nothing does, which a warning says. System events (`on interrupt`) are
 //! kept the same way: the runtime calls their handlers (notes/system_signals.md).
 
+use super::nodes::{call, key};
 use crate::declarations::{handler_parts, word};
 use crate::node::{Bracket, Node, Separator};
 use crate::operators::Op;
@@ -251,7 +252,7 @@ fn defines_timer(statement: &Node) -> bool {
 fn run_once(body: Node, flags: &mut Vec<(String, Node)>) -> Node {
 	let flag = format!("{FIRED_PREFIX}{}", flags.len());
 	flags.push((flag.clone(), Node::False));
-	let not_fired = Node::Key(Box::new(Node::Symbol(flag.clone())), Op::Eq, Box::new(Node::False));
+	let not_fired = key(Node::Symbol(flag.clone()), Op::Eq, Node::False);
 	if_then(not_fired, block(vec![assign(&flag, Node::True), body]))
 }
 
@@ -282,12 +283,12 @@ fn subscriptions(node: Node, raised: &HashSet<String>, subscribed: &mut Vec<Stri
 			crate::diagnostic::advise_once(LOOP_SUBSCRIPTION_TOPIC, &format!("on {event} {{…}}"), "on … before the loop", &reason);
 		}
 		let list = Node::Symbol(subscribers_name(&event));
-		let listener = Node::Key(Box::new(Node::Symbol(EVENT_WORD.to_string())), Op::FatArrow, Box::new(body));
-		let added = Node::Key(Box::new(list.clone()), Op::Add, Box::new(Node::List(vec![listener], Bracket::Square, Separator::None)));
+		let listener = key(Node::Symbol(EVENT_WORD.to_string()), Op::FatArrow, body);
+		let added = key(list.clone(), Op::Add, Node::List(vec![listener], Bracket::Square, Separator::None));
 		if !subscribed.contains(&event) {
 			subscribed.push(event);
 		}
-		return Node::Key(Box::new(list), Op::Assign, Box::new(added));
+		return key(list, Op::Assign, added);
 	}
 	let in_loop = in_loop || is_loop(&node);
 	match node.drop_meta() {
@@ -380,7 +381,7 @@ impl Listeners {
 		// evaluated once: `(listeners of alarm)#1` names another handler after the first removal
 		let place = Node::Symbol(REMOVED_PLACE.to_string());
 		let at_place = |(index, flag): (usize, String)| {
-			let condition = Node::Key(Box::new(place.clone()), Op::Eq, Box::new(Node::int(index as i64 + 1)));
+			let condition = key(place.clone(), Op::Eq, Node::int(index as i64 + 1));
 			if_then(condition, block(vec![assign(&flag, Node::False)]))
 		};
 		let removal = std::iter::once(assign(REMOVED_PLACE, reflected(removed.clone(), self)));
@@ -625,7 +626,7 @@ pub(crate) fn function_with_globals(name: &str, takes_event: bool, bodies: &[Nod
 	let Node::Key(head, op, _) = parse(template).drop_meta().clone() else { unreachable!("the template is a definition") };
 	let name = Node::Symbol(name.to_string());
 	let head = crate::law::substitute(&head, &HashMap::from([(TEMPLATE_NAME.to_string(), name)]));
-	Node::Key(Box::new(head), op, Box::new(Node::List(statements, Bracket::Curly, Separator::Semicolon)))
+	key(head, op, Node::List(statements, Bracket::Curly, Separator::Semicolon))
 }
 
 /// A program serving (serve_routes, lowering/serve.rs) serves its page too: the page raises its events
@@ -742,7 +743,7 @@ fn emits_as_calls(node: Node, handled: &HashMap<String, Vec<Node>>, verbs: &[Str
 		let call = match handled.get(&name) {
 			Some(bodies) => {
 				let arguments = if reads_event(bodies) { vec![data] } else { vec![] };
-				Node::List([vec![Node::Symbol(handler_function_name(&name))], arguments].concat(), Bracket::Round, Separator::None)
+				call(&handler_function_name(&name), arguments)
 			}
 			None => {
 				// P202: an emit no handler anywhere receives does nothing, with a got-it note
@@ -759,7 +760,7 @@ fn emits_as_calls(node: Node, handled: &HashMap<String, Vec<Node>>, verbs: &[Str
 	}
 	match node {
 		Node::List(items, bracket, separator) => Node::List(items.into_iter().map(|item| emits_as_calls(item, handled, verbs, block_handled)).collect(), bracket, separator),
-		Node::Key(left, op, right) => Node::Key(Box::new(emits_as_calls(*left, handled, verbs, block_handled)), op, Box::new(emits_as_calls(*right, handled, verbs, block_handled))),
+		Node::Key(left, op, right) => key(emits_as_calls(*left, handled, verbs, block_handled), op, emits_as_calls(*right, handled, verbs, block_handled)),
 		Node::Meta { node, data } => Node::Meta { node: Box::new(emits_as_calls(*node, handled, verbs, block_handled)), data },
 		other => other,
 	}

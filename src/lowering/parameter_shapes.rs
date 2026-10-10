@@ -4,6 +4,7 @@
 //! untyped; an object written at a call (`f({name:"Dick"})`) that lacks a required field, or holds a literal of
 //! another type than its field's, is a compile error.
 
+use super::nodes::key;
 use crate::diagnostic::Diagnostic;
 use crate::node::{Bracket, Node, Separator};
 use crate::operators::Op;
@@ -43,7 +44,7 @@ fn unshaped(node: Node, shapes: &mut Shapes) -> Node {
 				None => parameter,
 			});
 			let head = Node::List(std::iter::once(Node::Symbol(name)).chain(plain).collect(), Bracket::Round, Separator::None);
-			Node::Key(Box::new(head), op, Box::new(unshaped(*body, shapes)))
+			key(head, op, unshaped(*body, shapes))
 		}
 		other => other.map_children(|child| unshaped(child, shapes)),
 	}

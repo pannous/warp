@@ -3,7 +3,7 @@
 //! root wins (P142). The other way round, the log glyphs are the log words (P226): `b⌞x` is `log(x, b)`, `x⌟` is
 //! `ln(x)` and `x⌟b` is `log(x, b)`
 
-use super::nodes::call;
+use super::nodes::{call, key};
 use crate::node::Node;
 use crate::operators::Op;
 
@@ -40,17 +40,17 @@ fn operators(node: Node, aliases: &[(&str, &str, Op)]) -> Node {
 			let op = alias_of(&items[0]).expect("guarded");
 			let [_, argument] = <[Node; 2]>::try_from(items).expect("two items");
 			let _ = (bracket, separator);
-			Node::Key(Box::new(Node::Empty), op, Box::new(operators(argument, aliases)))
+			key(Node::Empty, op, operators(argument, aliases))
 		}
 		// the pipe stage `| root` (pipes.rs reads the operator alone)
 		Node::Meta { node, data } if crate::pipes::is_pipe_stage(&Node::Meta { node: node.clone(), data: data.clone() }) && alias_of(&node).is_some() => {
 			let op = alias_of(&node).expect("guarded");
-			Node::Meta { node: Box::new(Node::Key(Box::new(Node::Empty), op, Box::new(Node::Empty))), data }
+			Node::Meta { node: Box::new(key(Node::Empty, op, Node::Empty)), data }
 		}
 		// the stage `then root` (P158, pipes.rs reads the operator alone)
 		Node::Key(value, Op::Then, stage) if alias_of(&stage).is_some() => {
 			let op = alias_of(&stage).expect("guarded");
-			Node::Key(Box::new(operators(*value, aliases)), Op::Then, Box::new(Node::Key(Box::new(Node::Empty), op, Box::new(Node::Empty))))
+			key(operators(*value, aliases), Op::Then, key(Node::Empty, op, Node::Empty))
 		}
 		other => other.map_children(|child| operators(child, aliases)),
 	}

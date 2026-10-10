@@ -6,6 +6,7 @@
 //! Swift's trailing closure, card web-components): `Card("Hi") { p:"text" }` passes the children, `apply(3) { it*2 }`
 //! the function.
 
+use super::nodes::key;
 use crate::node::{Bracket, Node, Separator};
 use crate::operators::Op;
 use std::collections::{HashMap, HashSet};
@@ -117,7 +118,7 @@ pub(crate) fn arguments(node: &Node) -> Vec<Node> {
 fn as_lambda(block: Node) -> Node {
 	match crate::lambdas::arrow_lambda(&block).is_some() || crate::lambdas::block_as_arrow(&block).is_some() {
 		true => block,
-		false => Node::Key(Box::new(Node::Empty), Op::FatArrow, Box::new(block)),
+		false => key(Node::Empty, Op::FatArrow, block),
 	}
 }
 
@@ -167,7 +168,7 @@ fn with_block_parameters(node: Node, called: &HashSet<String>) -> Node {
 		Node::Key(head, Op::Define, body) if definition_name(&Node::Key(head.clone(), Op::Define, body.clone())).is_some_and(|name| called.contains(&name)) => {
 			let Node::List(mut items, bracket, separator) = head.drop_meta().clone() else { unreachable!("a function head") };
 			items.push(Node::Symbol(BLOCK_PARAMETER.to_string()));
-			Node::Key(Box::new(Node::List(items, bracket, separator)), Op::Define, Box::new(block_calls(*body)))
+			key(Node::List(items, bracket, separator), Op::Define, block_calls(*body))
 		}
 		other => other.map_children(|child| with_block_parameters(child, called)),
 	}

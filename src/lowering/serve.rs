@@ -6,6 +6,7 @@
 //! shows a page serves that page too, at / (src/site.rs); its page build leaves the serving out and asks the server
 //! for a server function's value (without_serving).
 
+use super::nodes::{call, key};
 use crate::node::{Bracket, Node, Separator};
 use crate::operators::Op;
 use std::collections::HashSet;
@@ -219,7 +220,7 @@ fn table_variable(statement: &Node) -> Option<(String, Node)> {
 			Some((name, source.drop_meta().clone()))
 		}
 		Node::List(..) => {
-			let table = Node::Key(Box::new(Node::Symbol(DATABASE_WORDS[0].to_string())), Op::Dot, Box::new(Node::Symbol(name.clone())));
+			let table = key(Node::Symbol(DATABASE_WORDS[0].to_string()), Op::Dot, Node::Symbol(name.clone()));
 			Some((name, table))
 		}
 		_ => None,
@@ -334,7 +335,7 @@ fn reading_tables(body: Node, tables: &[(String, Node)]) -> Node {
 	if tables.is_empty() {
 		return body;
 	}
-	let reads = tables.iter().flat_map(|(name, table)| [global(name), Node::Key(Box::new(Node::Symbol(name.clone())), Op::Assign, Box::new(table.clone()))]);
+	let reads = tables.iter().flat_map(|(name, table)| [global(name), key(Node::Symbol(name.clone()), Op::Assign, table.clone())]);
 	prepended(reads.collect(), body)
 }
 
@@ -362,10 +363,10 @@ fn data_read(node: Node, pattern: &str, reads_server_data: &dyn Fn(&Node) -> boo
 	let page_path = crate::warp_parser::parse(PAGE_PATH_CALL);
 	let body: Vec<Node> = crate::routes::route_body(pattern, &[node]).into_iter().map(|item| replaced(item, &page_path, &path)).collect();
 	let guard = crate::warp_parser::parse(&format!("if not route_matches({pattern:?}, {PATH_PARAMETER}) {{ return ø }}"));
-	let head = Node::List(vec![Node::Symbol(name.clone()), Node::Key(Box::new(path), Op::Colon, Box::new(Node::Symbol("text".to_string())))], Bracket::Round, Separator::None);
-	let definition = Node::Key(Box::new(head), Op::Define, Box::new(Node::List([vec![guard], body].concat(), Bracket::Curly, Separator::Newline)));
+	let head = call(&name.clone(), vec![key(path, Op::Colon, Node::Symbol("text".to_string()))]);
+	let definition = key(head, Op::Define, Node::List([vec![guard], body].concat(), Bracket::Curly, Separator::Newline));
 	functions.push(Node::List(vec![Node::Symbol(SERVER_WORD.to_string()), definition], Bracket::None, Separator::Space));
-	Node::List(vec![Node::Symbol(name), Node::Symbol(PAGE_PATH.to_string())], Bracket::Round, Separator::None)
+	call(&name, vec![Node::Symbol(PAGE_PATH.to_string())])
 }
 
 /// `h1{…}`, `{…}`: markup or a block, whose items are looked into
@@ -426,9 +427,9 @@ fn with_local_routes(program: Node) -> Node {
 
 /// `route·N(request:any) := body`
 fn route_function(name: &str, body: Node) -> Node {
-	let request = Node::Key(Box::new(Node::Symbol(REQUEST_WORD.to_string())), Op::Colon, Box::new(Node::Symbol(ANY_TYPE.to_string())));
-	let head = Node::List(vec![Node::Symbol(name.to_string()), request], Bracket::Round, Separator::None);
-	Node::Key(Box::new(head), Op::Define, Box::new(body))
+	let request = key(Node::Symbol(REQUEST_WORD.to_string()), Op::Colon, Node::Symbol(ANY_TYPE.to_string()));
+	let head = call(name, vec![request]);
+	key(head, Op::Define, body)
 }
 
 /// A program compiled for its page (pipeline::for_a_page) does not serve: the server runs it natively, the page in the
@@ -471,10 +472,10 @@ fn asking_the_server(statements: Vec<Node>, servers: &[String]) -> Result<Vec<No
 			call.clone()
 		} else {
 			let fetch = Node::List(vec![Node::Symbol(crate::host::FETCH_WORD.to_string()), rpc_request(&call)], Bracket::None, Separator::Space);
-			Node::Key(Box::new(fetch), Op::Coalesce, Box::new(crate::pipeline::server_value(index)))
+			key(fetch, Op::Coalesce, crate::pipeline::server_value(index))
 		};
 		let op = if prerendering { Op::Assign } else { Op::Define };
-		(call, Node::Key(Box::new(Node::Symbol(names[index].clone())), op, Box::new(value)))
+		(call, key(Node::Symbol(names[index].clone()), op, value))
 	};
 	let mut kept = vec![];
 	let mut asked_in_place = HashSet::new();
@@ -634,7 +635,7 @@ fn with_any_parameters(definition: Node) -> Node {
 	let Node::Key(head, Op::Define, body) = definition.drop_meta().clone() else { return definition };
 	let Node::List(items, bracket, separator) = head.drop_meta().clone() else { return definition };
 	let any = |parameter: Node| match parameter.drop_meta() {
-		Node::Symbol(_) => Node::Key(Box::new(parameter), Op::Colon, Box::new(Node::Symbol(ANY_TYPE.to_string()))),
+		Node::Symbol(_) => key(parameter, Op::Colon, Node::Symbol(ANY_TYPE.to_string())),
 		_ => parameter,
 	};
 	let mut items = items.into_iter();
@@ -685,6 +686,6 @@ fn serving(port: Node, routes: Vec<Route>, server_data: &ServerData, count: &mut
 		table.push(Node::List(entry, Bracket::Square, Separator::Colon));
 	}
 	let routes = Node::List(table, Bracket::Square, Separator::Colon);
-	statements.push(Node::List(vec![Node::Symbol(crate::host::SERVE_ROUTES.to_string()), port, routes], Bracket::Round, Separator::None));
+	statements.push(call(crate::host::SERVE_ROUTES, vec![port, routes]));
 	statements
 }

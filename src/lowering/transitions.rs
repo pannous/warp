@@ -6,7 +6,7 @@
 //! milliseconds; a text is taken as written; the words end where the element's children begin (`p{ transition: opacity
 //! 1s "text" }`). The kinds before CSS, `transition: fade 200ms` (also scale, slide), are that CSS, with a hint to it.
 
-use super::nodes::is_word;
+use super::nodes::{is_word, key};
 use crate::element_events::with_element_items;
 use crate::node::{Bracket, Node, Separator};
 use crate::operators::Op;
@@ -113,7 +113,7 @@ fn is_timing_word(item: &Node) -> bool {
 }
 
 fn css_pair(name: &str, value: Node) -> Node {
-	Node::Key(Box::new(Node::Symbol(name.to_string())), Op::Colon, Box::new(value))
+	key(Node::Symbol(name.to_string()), Op::Colon, value)
 }
 
 /// `starting-style: { opacity: 0 }` is the attribute the page applies

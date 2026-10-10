@@ -128,7 +128,7 @@ fn it_as(node: Node, variable: &Node) -> Node {
 	match node {
 		Node::Symbol(name) if name == IMPLICIT_VARIABLE => variable.clone(),
 		// an if's branches are the loop's own statements: `if x > 2 { s += it }`
-		Node::Key(left, op @ (Op::Then | Op::Else), right) => Node::Key(Box::new(it_as(*left, variable)), op, Box::new(branch_it_as(*right, variable))),
+		Node::Key(left, op @ (Op::Then | Op::Else), right) => key(it_as(*left, variable), op, branch_it_as(*right, variable)),
 		Node::List(_, Bracket::Curly, _) | Node::Key(_, Op::Arrow | Op::FatArrow, _) => node,
 		other => other.map_children(|child| it_as(child, variable)),
 	}

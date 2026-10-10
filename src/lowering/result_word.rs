@@ -2,6 +2,7 @@
 //! occurs"): that statement becomes `result = statement`, an assignment `x = v` is followed by `result = x`. A program
 //! that assigns `result` itself keeps its own variable.
 
+use super::nodes::key;
 use crate::node::{Bracket, Node, Separator};
 use crate::operators::Op;
 
@@ -31,7 +32,7 @@ fn is_statement_list(bracket: &Bracket, separator: &Separator) -> bool {
 }
 
 fn result_of(value: Node) -> Node {
-	Node::Key(Box::new(Node::Symbol(RESULT_WORD.to_string())), Op::Assign, Box::new(value))
+	key(Node::Symbol(RESULT_WORD.to_string()), Op::Assign, value)
 }
 
 fn with_results(node: Node) -> Node {
@@ -50,7 +51,7 @@ fn with_results(node: Node) -> Node {
 			Node::List(out, bracket, separator)
 		}
 		Node::List(items, bracket, separator) => Node::List(items.into_iter().map(with_results).collect(), bracket, separator),
-		Node::Key(left, op, right) => Node::Key(Box::new(with_results(*left)), op, Box::new(with_results(*right))),
+		Node::Key(left, op, right) => key(with_results(*left), op, with_results(*right)),
 		Node::Meta { node, data } => Node::Meta { node: Box::new(with_results(*node)), data },
 		other => other,
 	}
