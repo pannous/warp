@@ -8,7 +8,7 @@
 //!
 //! Decimal literals are exact (`.1 + .2 == .3`, decision exact-decimals); floats come only from float sources (sin,
 //! host values, `as float`, e-notation) and mixing one into an expression makes the result an f64.
-//! Small operands (inline ratios, Ints within ±2^31) add, multiply and compare in i64 (exact_dispatch's shortcut).
+//! Small operands (inline ratios, Ints within ±2^31) add, subtract and multiply in i64 (exact_dispatch's shortcut).
 //! Division by zero yields the extended rationals' ±∞ = ±1/0 and NaN = 0/0 (never a quiet f64 NaN):
 //! ∞ + 1 = ∞, 1/∞ = 0, ∞ - ∞ = NaN, NaN equals only NaN. Truncating ∞ or NaN to an integer traps.
 
@@ -392,12 +392,8 @@ impl WasmGcEmitter {
 		});
 		// -1/0/1, and 2 (unequal) when exactly one side is NaN.
 		// Finite denominators are positive, so a/b <=> c/d is a*d <=> c*b
-		// small: the sign of a.n·b.d - b.n·a.d
-		let small_sign = [
-			I::LocalGet(a_numerator), I::LocalGet(b_denominator), I::I64Mul, I::LocalGet(b_numerator), I::LocalGet(a_denominator), I::I64Mul,
-			I::I64Sub, I::LocalTee(SMALL_NUMERATOR), I::I64Const(0), I::I64GtS, I::LocalGet(SMALL_NUMERATOR), I::I64Const(0), I::I64LtS, I::I32Sub,
-		];
-		self.exact_dispatch("exact_cmp", i32t, |s, f| s.small_shortcut(f, |_, f| Self::emit_list(f, &small_sign)), |s, f| {
+		// no small shortcut: exact_cmp ships in every module (equality), and a hello-world site has a size budget
+		self.exact_dispatch("exact_cmp", i32t, |_, _| {}, |s, f| {
 			let is_nan = |f: &mut Function, local: u32| {
 				f.instruction(&I::LocalGet(local));
 				s.call(f, "exact_is_nan");
