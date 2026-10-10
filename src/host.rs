@@ -77,6 +77,8 @@ pub const PAINT: &str = "paint";
 /// sound_samples(samples, count, rate): 16-bit mono samples offset by 32768 (lib/sound.warp) played by the browser playground
 /// (host.js, WebAudio); natively a WAV file the system's player plays (src/sound.rs)
 pub const SOUND: &str = "sound_samples";
+/// The host words whose first argument is a list of ints, read in one call of the module's list_to_ints
+pub const INT_LIST_WORDS: [&str; 2] = [PAINT, SOUND];
 /// Channels between programs (src/channels.rs): channel_listen(id, channel), channel_pending(id) → count,
 /// channel_next(id) → the oldest message, channel_send(channel, value)
 pub const CHANNEL_LISTEN: &str = "channel_listen";
