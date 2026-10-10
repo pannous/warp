@@ -51,3 +51,5 @@ Lowering (src/lowering/scoped_handlers.rs, before event_signals):
 - The effect row is unchanged: an aborting handler still handles (removes) its event.
 - on error of f (Error.md) is the same shape (a handler that gives the call's value instead of resuming); it keeps
   its own lowering for now.
+
+Scenarios, comparison with try/catch, unification plan: notes/scoped_handlers.md
