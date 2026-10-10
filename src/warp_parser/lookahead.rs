@@ -12,12 +12,17 @@ const SUFFIX_FOLLOWERS: [char; 6] = ['+', '-', '*', '/', '<', '>'];
 /// Operator words that stay operators before a colon: `if c then: a else: b`, `defp f(x), do: x`
 const BLOCK_COLON_WORDS: [&str; 3] = ["then", "else", "do"];
 
+/// What ends a path literal: whitespace, a closing bracket or a separator
+pub(super) fn ends_path(c: char) -> bool {
+	c.is_whitespace() || matches!(c, '\0' | ']' | ')' | '}' | ',' | ';')
+}
+
 impl WarpParser {
 	/// Check if current character can start an atom (for implicit application)
 	pub(super) fn can_start_atom(&self) -> bool {
 		let ch = self.current_char();
 		ch.is_alphanumeric() || ch == '_' || ch == '"' || ch == '\'' || ch == '(' || ch == '[' || ch == '{'
-			|| self.number_starts_at(0) || self.starts_function_reference()
+			|| self.number_starts_at(0) || self.starts_function_reference() || self.starts_path_literal()
 	}
 
 	/// `function add` (P82): the function itself where a name and then the end of the expression follow the keyword;
@@ -44,6 +49,14 @@ impl WarpParser {
 	}
 
 	/// `&name`: a reference to the function `name`, an `&` glued to the word after it and not to a word before it (`a &b`, `f(&g)`)
+	/// `./mozart.mp3`, `../songs/a.wav`: `./` or `../` glued to what follows and not to an operand before it starts a
+	/// file path without quotes; `xs ./ 2` and `xs./2` divide each element
+	pub(super) fn starts_path_literal(&self) -> bool {
+		let dots = if self.peek_char(1) == '.' { 2 } else { 1 };
+		let glued_to_operand = is_identifier_char(self.prev_char()) || matches!(self.prev_char(), ')' | ']' | '}' | '"' | '\'');
+		self.current_char() == '.' && self.peek_char(dots) == '/' && !ends_path(self.peek_char(dots + 1)) && !glued_to_operand
+	}
+
 	pub(super) fn starts_function_reference(&self) -> bool {
 		self.current_char() == '&' && self.peek_char(1).is_alphabetic() && !is_identifier_char(self.prev_char())
 	}
@@ -104,7 +117,7 @@ impl WarpParser {
 		if (c1, c2) == ('?', ':') {
 			return None; // the elvis `?:` is no ternary, `try_parse_elvis` takes it
 		}
-		if self.word_names_key() {
+		if self.word_names_key() || self.starts_path_literal() {
 			return None;
 		}
 
