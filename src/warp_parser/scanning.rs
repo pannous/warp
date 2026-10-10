@@ -244,6 +244,11 @@ impl WarpParser {
 	}
 
 	/// Blanks and line continuations: a `\` at the end of a line joins the next line to the statement
+	/// Neither a data literal file nor a WIT file: warp code with its keywords
+	pub(super) fn in_code(&self) -> bool {
+		!self.options.wit_mode && !self.options.data_mode
+	}
+
 	/// Skips spaces and tabs, not line continuations
 	pub(super) fn skip_blanks(&mut self) {
 		while matches!(self.current_char(), ' ' | '\t') {
