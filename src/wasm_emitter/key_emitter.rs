@@ -229,8 +229,7 @@ impl WasmGcEmitter {
 			Op::Not => {
 				// not x = x is falsy: 0, ø and errors
 				self.emit_condition(func, right, Self::emit_numeric_value);
-				func.instruction(&I::I32Eqz);
-				func.instruction(&I::I64ExtendI32U);
+				Self::emit_list(func, &[I::I32Eqz, I::I64ExtendI32U]);
 				self.emit_call(func, "new_int");
 			}
 			Op::Abs => {

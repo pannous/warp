@@ -21,12 +21,10 @@ impl WasmGcEmitter {
 					Some(arg) if self.is_string_arg(arg) => self.emit_string_ptr_len(func, arg),
 					Some(arg) => {
 						self.emit_numeric_value(func, arg);
-						func.instruction(&I::I32WrapI64);
-						func.instruction(&I::I32Const(0));
+						Self::emit_list(func, &[I::I32WrapI64, I::I32Const(0)]);
 					}
 					None => {
-						func.instruction(&I::I32Const(0));
-						func.instruction(&I::I32Const(0));
+						Self::emit_list(func, &[I::I32Const(0), I::I32Const(0)]);
 					}
 				}
 				param_idx += 2;
@@ -118,8 +116,7 @@ impl WasmGcEmitter {
 				Some(ValType::F32) => { func.instruction(&I::F64PromoteF32); }
 				Some(ValType::I64) => { func.instruction(&I::F64ConvertI64S); }
 				Some(ValType::I32) => {
-					func.instruction(&I::I64ExtendI32S);
-					func.instruction(&I::F64ConvertI64S);
+					Self::emit_list(func, &[I::I64ExtendI32S, I::F64ConvertI64S]);
 				}
 				_ => {} // F64 already correct
 			},
@@ -222,8 +219,7 @@ impl WasmGcEmitter {
 			return false;
 		}
 		self.emit_numeric_value(func, joined);
-		func.instruction(&I::I32WrapI64);
-		func.instruction(&I::If(BlockType::Empty));
+		Self::emit_list(func, &[I::I32WrapI64, I::If(BlockType::Empty)]);
 		self.emit_trap_detail(func, failure);
 		self.emit_runtime_error(func, super::list_ops::RETURNED_ERROR);
 		func.instruction(&I::End);
