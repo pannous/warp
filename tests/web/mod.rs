@@ -11,6 +11,8 @@ mod test_editor_shortcuts; // card keyboard-shortcuts
 mod test_assistant_edits; // card put-editor: the chat's code applied as edits
 #[cfg(feature = "native")] // runs node
 mod test_editor_mode; // card playground-editor
+#[cfg(feature = "native")] // runs node
+mod test_sleep_run_limit; // card sleep-run-limit
 #[cfg(feature = "native")] // runs python3
 mod test_keyword_registry; // card where-infix
 mod test_missing_use; // card clickable-hint
