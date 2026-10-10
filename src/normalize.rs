@@ -479,7 +479,7 @@ pub mod hints {
     /// String type name variations (str, String -> string)
     pub fn string_type(used: &str) {
         let s = style();
-        if s.prefer_string_over_str && (used == "str" || used == "String") {
+        if s.prefer_string_over_str && STRING_TYPE_NAMES.contains(&used) {
             hint(used, "string", "use lowercase 'string' for the string type");
         }
     }
