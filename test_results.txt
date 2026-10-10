@@ -2297,6 +2297,7 @@ PASSED:
   ✓ numbers::test_round_to_digits::round_to_digits
   ✓ numbers::test_round_to_digits::round_without_digits_is_whole
   ✓ numbers::test_rounding_in_functions::test_rounding_builtins_work_inside_function_bodies
+  ✓ numbers::test_run_time_power::a_decimal_exponent_is_a_float_power
   ✓ numbers::test_run_time_power::a_run_time_kind_call_is_rounded
   ✓ numbers::test_run_time_power::a_run_time_kind_has_a_power
   ✓ numbers::test_run_time_power::a_run_time_kind_has_an_absolute_value
@@ -2911,6 +2912,10 @@ PASSED:
   ✓ programs::test_shader_holes::values_not_written_out_cannot_take_the_holes
   ✓ programs::test_small_samples::error_samples
   ✓ programs::test_small_samples::text_samples
+  ✓ programs::test_sound_at::a_statement_sounds_inside_another
+  ✓ programs::test_sound_at::beats_place_a_block
+  ✓ programs::test_sound_at::the_silence_before_stays_and_the_voice_goes_on
+  ✓ programs::test_sound_at::the_words_it_lowers_to
   ✓ programs::test_sound_clock::sounds_queue_on_the_audio_clock
   ✓ programs::test_sound_clock::stop_sound_empties_the_queue
   ✓ programs::test_sound_clock::waiting_headless_takes_no_time
@@ -3414,6 +3419,7 @@ PASSED:
   ✓ types::test_empty_named_key::a_linked_list_of_empty_marked_cells
   ✓ types::test_empty_named_key::a_spaced_ternary_still_reads_the_empty_value
   ✓ types::test_empty_type_aliases::a_type_value_compares_with_any_word_of_its_type
+  ✓ types::test_empty_type_aliases::a_type_word_compares_on_either_side
   ✓ types::test_enum_cases::a_match_on_enum_cases_tests_and_binds
   ✓ types::test_enum_cases::an_enum_case_with_values_is_a_class
   ✓ types::test_enum_cases::an_enum_without_values_stays_numbered
@@ -4580,4 +4586,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-10 ignored, 4575 passed, 0 failed, 4575 total tested
+10 ignored, 4581 passed, 0 failed, 4581 total tested
