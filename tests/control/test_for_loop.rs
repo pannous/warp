@@ -50,3 +50,10 @@ fn a_loop_walks_a_filter_or_a_sorted_list() {
 	is!("xs = [{p: 3}, {p: 1}]; s = \"\"; for x in xs sorted by p { s += x.p }; s", "13");
 	is!("xs = [3, 1, 2]; s = 0; for x in xs where it > 1 and it < 3 { s += x }; s", 2);
 }
+
+// a computed range end is evaluated once, before the loop, as a walked list is: growing xs in the body adds no rounds
+#[test]
+fn test_for_range_end_is_evaluated_once() {
+	is!("xs=[1,2,3]; for i in 0..count(xs) { xs += [i] }; string(xs)", "[1 2 3 0 1 2]");
+	is!("global calls=0; def end(){ calls += 1; 3 }; for i in 0..end() { }; calls", 1);
+}
