@@ -5,7 +5,7 @@
 //! - `map [1 2 3] {it*it}`, `map(xs, x=>x+1)`, `xs.map(f)` over a literal block, a lambda or a defined function is a loop
 //! - a lambda anywhere else is a closure (closures.rs); `map` over a value that is no function is the error `map needs a function, got …`
 
-use super::nodes::{call, is_type_word, key};
+use super::nodes::{call, children_rewritten, is_type_word, key};
 use crate::analyzer::{call_name, extract_user_functions};
 use crate::context::Context;
 use crate::diagnostic::Diagnostic;
@@ -241,10 +241,7 @@ fn subtract_kebab_parameters(node: Node, params: &[String]) -> Node {
 				Node::Symbol(name)
 			}
 		}
-		Node::Key(left, op, right) => key(subtract_kebab_parameters(*left, params), op, subtract_kebab_parameters(*right, params)),
-		Node::List(items, bracket, separator) => Node::List(items.into_iter().map(|item| subtract_kebab_parameters(item, params)).collect(), bracket, separator),
-		Node::Meta { node, data } => Node::Meta { node: Box::new(subtract_kebab_parameters(*node, params)), data },
-		other => other,
+		other => children_rewritten(other, |child| subtract_kebab_parameters(child, params)),
 	}
 }
 
@@ -430,10 +427,7 @@ fn bind_parameter(node: Node, name: &str, argument: &Node) -> Node {
 		Node::List(items, bracket, separator) if items.len() > 1 && crate::declarations::is_callee(&items[0]) => {
 			Node::List(items.into_iter().map(|item| if binds_name(&item) { item } else { bind_parameter(item, name, argument) }).collect(), bracket, separator)
 		}
-		Node::Key(left, op, right) => key(bind_parameter(*left, name, argument), op, bind_parameter(*right, name, argument)),
-		Node::List(items, bracket, separator) => Node::List(items.into_iter().map(|item| bind_parameter(item, name, argument)).collect(), bracket, separator),
-		Node::Meta { node, data } => Node::Meta { node: Box::new(bind_parameter(*node, name, argument)), data },
-		other => other,
+		other => children_rewritten(other, |child| bind_parameter(child, name, argument)),
 	}
 }
 

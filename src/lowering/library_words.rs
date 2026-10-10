@@ -5,7 +5,7 @@
 //!
 //! An unknown `.word` after a name, a text or a list is a loud error (`undefined function: word`), never silent data.
 
-use super::nodes::{call, key};
+use super::nodes::{call, children_rewritten, key};
 use crate::analyzer::{call_name, counting_method, extract_user_functions, is_list_mutating_method};
 use crate::context::Context;
 use crate::diagnostic::Diagnostic;
@@ -311,12 +311,7 @@ fn lower_counts(node: Node, library_count: bool) -> Node {
 	if let Some(occurrences) = counted(&node) {
 		return lower_counts(occurrences, library_count);
 	}
-	match node {
-		Node::List(items, bracket, separator) => Node::List(items.into_iter().map(|item| lower_counts(item, library_count)).collect(), bracket, separator),
-		Node::Key(left, op, right) => key(lower_counts(*left, library_count), op, lower_counts(*right, library_count)),
-		Node::Meta { node, data } => Node::Meta { node: Box::new(lower_counts(*node, library_count)), data },
-		other => other,
-	}
+	children_rewritten(node, |child| lower_counts(child, library_count))
 }
 
 /// `count(y, x)` is `count x in y`
@@ -414,10 +409,7 @@ fn function_methods_as_calls(node: Node, is_function: &dyn Fn(&str, usize) -> bo
 				_ => key(receiver, Op::Dot, method),
 			}
 		}
-		Node::Key(left, op, right) => key(lowered(*left), op, lowered(*right)),
-		Node::List(items, bracket, separator) => Node::List(items.into_iter().map(lowered).collect(), bracket, separator),
-		Node::Meta { node, data } => Node::Meta { node: Box::new(lowered(*node)), data },
-		other => other,
+		other => children_rewritten(other, lowered),
 	}
 }
 
@@ -1305,10 +1297,7 @@ pub(crate) fn named_apart(node: Node, prefix: &str, base: &str, number: usize) -
 pub(crate) fn substitute(node: Node, placeholder: &str, replacement: &Node) -> Node {
 	match node {
 		Node::Symbol(name) if name == placeholder => replacement.clone(),
-		Node::Key(left, op, right) => key(substitute(*left, placeholder, replacement), op, substitute(*right, placeholder, replacement)),
-		Node::List(items, bracket, separator) => Node::List(items.into_iter().map(|item| substitute(item, placeholder, replacement)).collect(), bracket, separator),
-		Node::Meta { node, data } => Node::Meta { node: Box::new(substitute(*node, placeholder, replacement)), data },
-		other => other,
+		other => children_rewritten(other, |child| substitute(child, placeholder, replacement)),
 	}
 }
 

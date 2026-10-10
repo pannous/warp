@@ -4,7 +4,7 @@
 //! capture no variable. A function that is not known at the call (chosen at run time) or a lambda that captures a variable is passed
 //! as a closure to a generic version of the function (closures.rs).
 
-use super::nodes::{call, key, parameter_name};
+use super::nodes::{call, children_rewritten, key, parameter_name};
 use crate::closures::may_be_function_value;
 use crate::lambdas::lambda_definition;
 use crate::library_words::substitute;
@@ -255,10 +255,7 @@ fn replace_aliases(node: Node, found: &HashMap<String, String>) -> Node {
 		Node::Key(target, Op::Assign | Op::Define, value) if matches!(target.drop_meta(), Node::Symbol(name) if found.contains_key(name)) && matches!(value.drop_meta(), Node::Symbol(_)) => {
 			Node::Empty
 		}
-		Node::Key(left, op, right) => key(replace_aliases(*left, found), op, replace_aliases(*right, found)),
-		Node::List(items, bracket, separator) => Node::List(items.into_iter().map(|item| replace_aliases(item, found)).collect(), bracket, separator),
-		Node::Meta { node, data } => Node::Meta { node: Box::new(replace_aliases(*node, found)), data },
-		other => other,
+		other => children_rewritten(other, |child| replace_aliases(child, found)),
 	}
 }
 

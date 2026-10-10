@@ -5,7 +5,7 @@
 //! Only functions whose meaning cannot change by moving their body: not recursive, no free variables (every name is a
 //! parameter or a local), no nested definitions, lambdas, globals or early returns, and a few statements at most.
 
-use super::nodes::key;
+use super::nodes::{children_rewritten, key};
 use crate::node::{Bracket, Node, Separator};
 use crate::operators::Op;
 use std::cell::Cell;
@@ -170,10 +170,7 @@ pub(crate) fn renamed_names(node: Node, names: &HashSet<String>, rename: &dyn Fn
 		// a key `{x: x}` and a field `p.x` keep their names
 		Node::Key(left, op @ (Op::Colon | Op::Dot), right) if op == Op::Colon => Node::Key(left, op, Box::new(renamed_names(*right, names, rename))),
 		Node::Key(left, Op::Dot, right) => Node::Key(Box::new(renamed_names(*left, names, rename)), Op::Dot, right),
-		Node::Key(left, op, right) => key(renamed_names(*left, names, rename), op, renamed_names(*right, names, rename)),
-		Node::List(items, bracket, separator) => Node::List(items.into_iter().map(|item| renamed_names(item, names, rename)).collect(), bracket, separator),
-		Node::Meta { node, data } => Node::Meta { node: Box::new(renamed_names(*node, names, rename)), data },
-		other => other,
+		other => children_rewritten(other, |child| renamed_names(child, names, rename)),
 	}
 }
 

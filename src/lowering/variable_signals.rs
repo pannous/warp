@@ -11,7 +11,7 @@
 //! `after tested: print "ok"` (or `after test`) runs after every later statement that calls the function test,
 //! `before test {…}` before it.
 
-use super::nodes::{call, key};
+use super::nodes::{call, children_rewritten, key};
 use crate::declarations::{handler_parts, word};
 use crate::node::{symbol, Bracket, Node, Separator};
 use crate::operators::Op;
@@ -319,10 +319,7 @@ impl Signals {
 				let proxies = self.proxies(&Node::List(items.clone(), bracket.clone(), separator.clone()));
 				Node::List(items.into_iter().map(|item| self.lower(item, &proxies)).collect(), bracket, separator)
 			}
-			Node::List(items, bracket, separator) => Node::List(items.into_iter().map(|item| self.function_bodies(item)).collect(), bracket, separator),
-			Node::Key(left, op, right) => key(self.function_bodies(*left), op, self.function_bodies(*right)),
-			Node::Meta { node, data } => Node::Meta { node: Box::new(self.function_bodies(*node)), data },
-			other => other,
+			other => children_rewritten(other, |child| self.function_bodies(child)),
 		}
 	}
 

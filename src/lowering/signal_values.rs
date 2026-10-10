@@ -12,7 +12,7 @@
 //! which the runtime calls at the program's check points (signal_poll at main's start and end and each loop start,
 //! sleep, the end of the run): the watched values are compared with those seen last, and the listener runs on a change.
 
-use super::nodes::{call, key};
+use super::nodes::{call, children_rewritten, key};
 use crate::declarations::word;
 use crate::node::{symbol, Bracket, Node, Separator};
 use crate::operators::Op;
@@ -255,7 +255,7 @@ fn nested_removals(node: Node, named: &[(String, String)]) -> Node {
 		let globals = named.iter().filter(|(_, watched)| *watched == variable).map(|(other, _)| from_template(&format!("{GLOBAL_WORD} {}", index_name(other, &variable)), &[]));
 		return block(globals.chain([removing(&name, &variable, named)]).collect());
 	}
-	map_children(node, &mut |child| nested_removals(child, named))
+	children_rewritten(node, |child| nested_removals(child, named))
 }
 
 /// `alarm_index_t`: where the named listener alarm sits in t's listeners, -1 once removed
@@ -297,7 +297,7 @@ pub(crate) fn ungrouped_reflection(items: Vec<Node>) -> Vec<Node> {
 }
 
 fn reflected_lists(node: Node, reflected: &mut HashSet<String>) -> Node {
-	let Node::List(items, bracket, separator) = node else { return map_children(node, &mut |child| reflected_lists(child, reflected)) };
+	let Node::List(items, bracket, separator) = node else { return children_rewritten(node, |child| reflected_lists(child, reflected)) };
 	let mut out: Vec<Node> = vec![];
 	let items: Vec<Node> = ungrouped_reflection(items).into_iter().map(|item| reflected_lists(item, reflected)).collect();
 	let mut rest = items.into_iter().peekable();
@@ -348,7 +348,7 @@ impl Subscriptions {
 			let body = self.subscriptions(definition.body.clone(), &subscribable);
 			return with_body(node, body);
 		}
-		map_children(node, &mut |child| self.rewrite(child))
+		children_rewritten(node, |child| self.rewrite(child))
 	}
 
 	/// The listeners in a function body that watch a subscribable variable, as subscriptions
@@ -359,7 +359,7 @@ impl Subscriptions {
 		if let Some(subscription) = self.subscription(&node, subscribable, None) {
 			return subscription;
 		}
-		map_children(node, &mut |child| self.subscriptions(child, subscribable))
+		children_rewritten(node, |child| self.subscriptions(child, subscribable))
 	}
 
 	/// `on change s {body}` → `signal_listeners_set(s, signal_listeners(s) + [(value, signal·old) => {if value != signal·old {body}; 0}])`,
@@ -522,7 +522,7 @@ impl Signals {
 				}).collect();
 				Node::List(arguments, bracket, separator)
 			}
-			other => map_children(other, &mut |child| self.rewrite(child, signals, main)),
+			other => children_rewritten(other, |child| self.rewrite(child, signals, main)),
 		}
 	}
 
@@ -773,16 +773,7 @@ fn without_definitions(node: &Node) -> Node {
 	if definition(node).is_some() {
 		return Node::Empty;
 	}
-	map_children(node.clone(), &mut |child| without_definitions(&child))
-}
-
-fn map_children(node: Node, rewrite: &mut impl FnMut(Node) -> Node) -> Node {
-	match node {
-		Node::Key(left, op, right) => key(rewrite(*left), op, rewrite(*right)),
-		Node::List(items, bracket, separator) => Node::List(items.into_iter().map(&mut *rewrite).collect(), bracket, separator),
-		Node::Meta { node, data } => Node::Meta { node: Box::new(rewrite(*node)), data },
-		other => other,
-	}
+	children_rewritten(node.clone(), |child| without_definitions(&child))
 }
 
 /// The names the main level assigns
