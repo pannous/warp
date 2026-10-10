@@ -87,7 +87,12 @@ The words above are layer 1, the toy layer. Each layer below keeps the ones abov
    lets ♯ ♭ continue a name). tests/programs/test_sound_notes.rs. Still to build:
    Music values, not frequencies. `Note` (pitch class, octave, MIDI number, cents), `Interval`, `Chord(C4, major7)`,
    `Scale(D, dorian)`, transposition, tuning (A4 = 442Hz, just intonation), velocity. Note names parsed, not a table.
-3. Synthesis. Oscillators (sine, saw, square, triangle, noise, wavetable, band-limited, detune, unison), ADSR
+3. Built (2026-10-10, samples/synth.warp, tests/programs/test_sound_synth.rs): the ADSR envelope of every note,
+   module settings `attack`, `decay` (seconds), `sustain` (a share), `release` (seconds), defaults 5 ms / 0 / 1 / 5 ms
+   = the old click-free fade; `wave_shape = "noise"`; gain in decibels, `loudness = -6 dB` (`-6dB`, `x = -6 dB`;
+   music_words.rs → lib decibels). The float settings are declared `= 0.3 as float` (card float-global: a float
+   assigned to a global declared with a decimal fails "not an int" in the functions that read it). Still to build:
+   Synthesis. Oscillators (sine, saw, square, triangle, noise, wavetable, band-limited, detune, unison), ADSR
    envelopes, filters (lowpass/highpass/bandpass with resonance), LFOs and parameter automation (ramps), gain in dB,
    stereo pan, polyphony with voice stealing.
 4. A signal graph. `osc(220Hz, saw) |> lowpass(1.2kHz, q: 4) |> delay(3/8 beat) |> reverb(0.3) |> gain(-6dB) |> out`:

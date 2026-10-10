@@ -19,8 +19,9 @@ const A4_MIDI: i64 = 69;
 const SCALE_LETTERS: &str = "C.D.EF.G.A.B";
 const SHARPS: [&str; 2] = ["#", "♯"];
 const FLATS: [&str; 2] = ["b", "♭"];
-/// a tempo word and the word of lib/sound.warp that makes seconds of that many
-const TEMPO_WORDS: [(&str, &str); 4] = [("beat", "beat_seconds"), ("beats", "beat_seconds"), ("bar", "bar_seconds"), ("bars", "bar_seconds")];
+/// a unit word of music and the word of lib/sound.warp that makes a plain number of that many: seconds of beats and
+/// bars at the tempo, the gain factor of decibels
+const UNIT_WORDS: [(&str, &str); 5] = [("beat", "beat_seconds"), ("beats", "beat_seconds"), ("bar", "bar_seconds"), ("bars", "bar_seconds"), ("dB", "decibels")];
 /// note frequencies are kept to a hundredth of a Hz, as written in tables (C4 = 261.63)
 const HERTZ_DIGITS: f64 = 100.0;
 
@@ -36,17 +37,33 @@ fn with_music_words(node: Node, defined: &HashSet<String>) -> Node {
 	if let Some(hertz) = note_frequency(&node, defined) {
 		return float(hertz).with_meta_of(&node);
 	}
+	if let Some((word, amount)) = glued_unit(&node, defined) {
+		return call(word, vec![with_music_words(amount, defined)]);
+	}
 	match node.map_children(|child| with_music_words(child, defined)) {
-		Node::List(items, bracket, separator) if !separator.separates_statements() => Node::List(with_tempo(items, defined), bracket, separator),
+		Node::List(items, bracket, separator) if !separator.separates_statements() => Node::List(with_unit_words(items, defined), bracket, separator),
 		other => other,
 	}
 }
 
+/// A unit word glued to its number: `2beats` (read as `2 * beats`) and `-6dB` (read as `-(6 * dB)`, whose minus
+/// belongs to the amount: -6 dB, not the negated gain of 6 dB)
+fn glued_unit(node: &Node, defined: &HashSet<String>) -> Option<(&'static str, Node)> {
+	match node.drop_meta() {
+		Node::Key(amount, Op::Mul, unit) => unit_amount_word(unit, defined).map(|word| (word, *amount.clone())),
+		Node::Key(nothing, op @ (Op::Sub | Op::Neg), product) if matches!(nothing.drop_meta(), Node::Empty) => {
+			let (word, amount) = glued_unit(product, defined)?;
+			Some((word, Node::Key(nothing.clone(), op.clone(), Box::new(amount))))
+		}
+		_ => None,
+	}
+}
+
 /// `[for, 1/4, beat]` → `[for, beat_seconds(1/4)]`; `[x = 2, bars]` → `[x = bar_seconds(2)]`
-fn with_tempo(items: Vec<Node>, defined: &HashSet<String>) -> Vec<Node> {
+fn with_unit_words(items: Vec<Node>, defined: &HashSet<String>) -> Vec<Node> {
 	let mut written: Vec<Node> = vec![];
 	for item in items {
-		match (tempo_seconds_word(&item, defined), written.pop()) {
+		match (unit_amount_word(&item, defined), written.pop()) {
 			(Some(word), Some(amount)) => written.push(match amount.drop_meta() {
 				Node::Key(target, Op::Assign, value) => Node::Key(target.clone(), Op::Assign, Box::new(call(word, vec![*value.clone()]))).with_meta_of(&amount),
 				_ => call(word, vec![amount]),
@@ -57,9 +74,9 @@ fn with_tempo(items: Vec<Node>, defined: &HashSet<String>) -> Vec<Node> {
 	written
 }
 
-fn tempo_seconds_word(node: &Node, defined: &HashSet<String>) -> Option<&'static str> {
+fn unit_amount_word(node: &Node, defined: &HashSet<String>) -> Option<&'static str> {
 	match node.drop_meta() {
-		Node::Symbol(name) if !defined.contains(name) => TEMPO_WORDS.iter().find(|(word, _)| word == name).map(|(_, seconds)| *seconds),
+		Node::Symbol(name) if !defined.contains(name) => UNIT_WORDS.iter().find(|(word, _)| word == name).map(|(_, seconds)| *seconds),
 		_ => None,
 	}
 }

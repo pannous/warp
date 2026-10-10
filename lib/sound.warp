@@ -5,10 +5,11 @@
 // in the browser WebAudio. Loaded when a program calls one of its words (src/modules.rs SOUND_WORDS)
 global sample_rate = 22050
 // the share of the loudest sample: chords and melodies stay below it
-global loudness = 0.3
-// sine, square, triangle or sawtooth
+global loudness = 0.3 as float
+// sine, square, triangle, sawtooth or noise
 global wave_shape = "sine"
-global note_seconds = 0.5
+// `as float`: a float assigned later (loudness = -6 dB) stays readable in the functions (card float-global)
+global note_seconds = 0.5 as float
 // beats per minute: `play C4 for 1/4 beat`, `melody [C4 E4] each 1/8 beat`, `sleep 1 bar` (src/lowering/music_words.rs)
 global tempo = 120
 global beats_per_bar = 4
@@ -17,8 +18,12 @@ bar_seconds(bars) := beat_seconds(bars * beats_per_bar)
 // the samples cross to the host as whole numbers ≥ 0: amplitude + 32768 (src/sound.rs SAMPLE_OFFSET)
 sample_offset = 32768
 loudest_sample = 32767
-// a short fade at both ends keeps the speaker from clicking
-fade_seconds = 0.005
+// the envelope of every note (ADSR): it rises for attack seconds, falls for decay seconds to the sustain share and
+// fades out in its last release seconds; the short default fades keep the speaker from clicking
+global attack = 0.005 as float
+global decay = 0.0 as float
+global sustain = 1.0 as float
+global release = 0.005 as float
 // a note letter's semitone above C is its place here, from 0
 scale_letters = "C.D.EF.G.A.B"
 
@@ -29,6 +34,8 @@ note(name) := {
 	key = 12 * (octave + 1) + scale_letters.index_of(name#1) - 1 + accidental
 	440.0 * 2^((key - 69) / 12)
 }
+// the gain factor of decibels: loudness = -6 dB is about half (src/lowering/music_words.rs reads `-6 dB`)
+decibels(level) := 10^(level / 20.0)
 // note names (C4, F#4, Bb3, any octave 0–9) are their frequencies in a program that uses sound: the compiler parses them
 // (src/lowering/music_words.rs), as note(name) does at run time
 
@@ -36,9 +43,16 @@ note(name) := {
 wave(shape, p) := if shape == "square" then (if p < 0.5 then 1.0 else -1.0)
 	else if shape == "triangle" then 1 - 4 * abs(p - 0.5)
 	else if shape == "sawtooth" then 2 * p - 1
+	else if shape == "noise" then 2 * random() - 1
 	else sin(2 * pi * p)
-// the fade of sample i of n: 0 at both ends, 1 in between
-envelope(i, n) := min(1.0, min(i, n - 1 - i) / (fade_seconds * sample_rate))
+// how far a ramp of seconds has come after steps samples: 0 to 1
+ramp(steps, seconds) := if seconds <= 0 then 1.0 else min(1.0, steps / (seconds * sample_rate))
+// the level of sample i of n (ADSR): 0 at both ends
+envelope(i, n) := {
+	t = i / sample_rate
+	held = if t < attack then 1.0 else 1 - (1 - sustain) * ramp(i - attack * sample_rate, decay)
+	ramp(i, attack) * held * ramp(n - 1 - i, release)
+}
 // the samples of frequencies sounding together
 chord_samples(pitches, duration, shape) := {
 	n = round(duration * sample_rate) as int
