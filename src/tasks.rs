@@ -394,7 +394,8 @@ impl Channels {
 /// The value of a capture global (`capture·f·x`), carried from the spawning instance to the task's
 #[derive(Clone, Debug)]
 enum Captured {
-	Int(i64),
+	/// an Int as a value of its own: an exact number's handle means nothing in another instance (card error-undefined)
+	Int(TaskValue),
 	Float(u64),
 	Value(TaskValue),
 }
@@ -608,7 +609,7 @@ impl TaskTable {
 		for name in names {
 			let Some(global) = caller.get_export(&name).and_then(|export| export.into_global()) else { continue };
 			let value = match global.get(&mut *caller) {
-				Val::I64(n) => Captured::Int(n),
+				Val::I64(n) => Captured::Int(builders.integer(n, &mut caller.as_context_mut())?),
 				Val::F64(bits) => Captured::Float(warp_runtime::floats::canonical_nan(f64::from_bits(bits)).to_bits()),
 				reference => Captured::Value(builders.read_value(&reference, &mut caller.as_context_mut())?),
 			};
@@ -647,7 +648,7 @@ impl TaskTable {
 		for (name, value) in captured {
 			let Some(global) = instance.get_global(&mut store, name) else { continue };
 			let value = match value {
-				Captured::Int(n) => Val::I64(*n),
+				Captured::Int(value) => Val::I64(builders.int_of(value, &mut store.as_context_mut())?),
 				Captured::Float(bits) => Val::F64(*bits),
 				Captured::Value(value) => builders.build(value, &mut store.as_context_mut())?,
 			};

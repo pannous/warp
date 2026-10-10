@@ -6,6 +6,8 @@ use crate::wasm_emitter::layout::BYTE;
 /// text_as_number(node): a text's number at run time, as the literal cast gives it: "1/3" the exact ratio, a whole
 /// number an Int, else a Float; no number is invalid_number
 pub const TEXT_AS_NUMBER: &str = "text_as_number";
+/// `x as i64`: the whole number wrapped to 64 bits, not the unbounded int the other int words convert to
+pub(super) const WRAPPING_INT_WORDS: [&str; 2] = ["i64", "int64"];
 const RATIO_SLASH: i32 = '/' as i32;
 
 impl WasmGcEmitter {
@@ -58,24 +60,24 @@ impl WasmGcEmitter {
 			return;
 		}
 		let exact_value = !matches!(value.drop_meta(), Node::Text(_) | Node::Char(_)) && !self.get_type(value).is_float();
-		match crate::type_kinds::canonical_type_name(&target.name().to_lowercase()) {
+		match crate::type_tests::canonical_spec_word(&target.name().to_lowercase()) {
 			"float" => {
 				let message = format!("{} is a float where an exact Int is expected: `as float` promotes, `as int` truncates", located.serialize());
 				self.emit_type_error(func, message);
 			}
-			"exact" if exact_value => self.emit_numeric_value(func, value),
+			exact if exact_value && crate::type_tests::is_exact_fraction_type(exact) => self.emit_numeric_value(func, value),
 			// a character held unboxed is its code point
-			"char" | "character" => match value.drop_meta() {
+			"codepoint" => match value.drop_meta() {
 				Node::Char(character) => {
 					func.instruction(&I::I64Const(*character as i64));
 				}
 				_ => self.emit_numeric_value(func, value),
 			},
 			// `n = "4" as number`, `"4.5" as number`: held as an exact Int (card number-variable)
-			"number" | "num" if crate::analyzer::literal_number(value).is_some() => {
+			"number" if crate::analyzer::literal_number(value).is_some() => {
 				self.emit_numeric_value(func, &crate::analyzer::literal_number(value).expect("guarded"));
 			}
-			"number" | "num" => {
+			"number" => {
 				self.emit_cast(func, value, target);
 				self.emit_call(func, "get_int_value");
 			}
@@ -194,19 +196,20 @@ impl WasmGcEmitter {
 			return;
 		}
 
-		match crate::type_kinds::canonical_type_name(&type_name) {
+		let wraps = WRAPPING_INT_WORDS.contains(&type_name.as_str()) && !self.get_type(value).is_float() && !matches!(value, Node::Text(_) | Node::Char(_));
+		match crate::type_tests::canonical_spec_word(&type_name) {
 			"list" => self.emit_list_cast(func, value),
-			"i64" | "int64" if !self.get_type(value).is_float() && !matches!(value, Node::Text(_) | Node::Char(_)) => {
+			"int" if wraps => {
 				self.emit_wrapping_int(func, value);
 				self.emit_call(func, "new_int");
 			}
-			"int" | "integer" | "i32" | "i64" | "long" => self.emit_cast_to_int(func, value, target_type),
-			"exact" => self.emit_cast_to_exact(func, value, target_type),
-			"float" | "f32" => self.emit_cast_to_float(func, value, target_type),
-			"string" | "str" | "text" => self.emit_cast_to_text(func, value),
-			"char" | "character" => self.emit_cast_to_char(func, value),
-			"bool" | "boolean" => self.emit_cast_to_bool(func, value),
-			"number" | "num" => self.emit_cast_to_number(func, value),
+			"int" => self.emit_cast_to_int(func, value, target_type),
+			exact if crate::type_tests::is_exact_fraction_type(exact) => self.emit_cast_to_exact(func, value, target_type),
+			"float" => self.emit_cast_to_float(func, value, target_type),
+			"text" => self.emit_cast_to_text(func, value),
+			"codepoint" => self.emit_cast_to_char(func, value),
+			crate::analyzer::BOOL_TYPE => self.emit_cast_to_bool(func, value),
+			"number" => self.emit_cast_to_number(func, value),
 			_ => {
 				// Unknown type, emit as key node for dynamic dispatch
 				self.emit_node_instructions(func, value);
