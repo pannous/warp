@@ -158,8 +158,7 @@ impl WasmGcEmitter {
 		Self::emit_list(func, &kind_is(Kind::Codepoint));
 		Self::emit_list(func, &[I::I32Or, I::If(BlockType::Result(Ref(self.node_ref(false)))), I::LocalGet(held), I::RefAsNonNull]);
 		self.emit_call(func, text_builtins::TEXT_OF);
-		func.instruction(&I::Else);
-		func.instruction(&I::I64Const(crate::type_kinds::SQUARE_LIST_KIND));
+		Self::emit_list(func, &[I::Else, I::I64Const(crate::type_kinds::SQUARE_LIST_KIND)]);
 		self.emit_entry_in_braces(func, held);
 		Self::emit_list(func, &[I::RefNull(HeapType::Concrete(node_type)), I::StructNew(node_type)]);
 		let (pointer, length) = self.allocate_string("");
