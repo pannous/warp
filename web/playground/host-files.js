@@ -33,10 +33,15 @@ const textOfFile = path => {
 	const written = writtenFiles.get(filePath(path));
 	return written !== undefined ? textOf(written) : servedFileExists(path) ? readFile(filePath(path)) : "";
 };
+// whether a file of the served repository, of the page or at a URL is there, asked without its body (a song may be large)
 function servedFileExists(path) {
+	const url = fileUrl(path);
+	if (isUnserved(url)) return false;
 	try {
-		readBytes(path);
-		return true;
+		const request = new XMLHttpRequest();
+		request.open("HEAD", url, false);
+		request.send();
+		return request.status > 0 && request.status < 400;
 	} catch {
 		return false;
 	}
@@ -396,10 +401,13 @@ addHostPart({
 		// `play "song.mp3"`, `stop_sound` (lib/sound.warp, card sound-library): the page plays it with an <audio>
 		// (worker.js self.playSoundFile, playground.js); a run without a page (tests, node) stays silent, as natively
 		sound: {
-			// a rendered WAV goes to the page as its bytes, a served or remote file by its URL
+			// a written file (a rendered WAV) goes to the page as its bytes, a served or remote one by its URL; a local file
+			// that is not there fails as natively (card browser-play)
 			play_file: path => {
-				const written = writtenFiles.get(filePath(contentText(path)));
-				self.playSoundFile?.(contentText(path), typeof written === "string" ? undefined : written);
+				const name = contentText(path);
+				const written = writtenFiles.has(filePath(name));
+				if (!written && !/^https?:/.test(name) && !servedFileExists(name)) throw new Error(`cannot open ${name}: ${FILE_NOT_FOUND}`);
+				self.playSoundFile?.(fileUrl(name), written ? readBytes(name) : undefined);
 				return self.lastSoundHandle?.() ?? 0;
 			},
 			// stop_sound(handle) the sound play gave that handle (card sound-pro), handle 0 all of them

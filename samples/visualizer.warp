@@ -1,0 +1,41 @@
+#!/usr/bin/env warp
+// a Winamp-style visualizer (card winamp-like): a tune plays while bars show how loud each frequency band sounds at
+// that moment, painted frame after frame with falling peaks (natively a window, in the playground the canvas)
+use sound
+use draw
+width = 320
+height = 160
+bands = 16
+bar_width = width / bands
+gap = 2
+// a note's band shows about 0.15 (loudness 0.3, chords share it): this many times taller fills the window
+gain = 5
+// how much of last frame's bar and peak height stays when the sound gets quieter
+bar_fall = 0.75
+peak_fall = 2
+frame_milliseconds = 40
+
+tune = [C4 E4 G4 [C4 E4 G4] A4 G4 E4 [C3 G3 C4] D4 F4 A4 [D4 F4 A4] G4 B4 D5 [G3 B3 D4 G4]]
+song = melody_samples(tune, 0.25)
+seconds = count(song) / sample_rate
+sound(song)
+
+canvas(width, height)
+shown = [0.0 as float for band in 0..bands]
+peaks = [0.0 as float for band in 0..bands]
+started = clock()
+elapsed = 0.0
+while elapsed < seconds {
+	levels = spectrum(song, elapsed, bands)
+	clear(black)
+	for band in 0..bands {
+		shown[band] = max(min(1.0, levels[band] * gain) * height, shown[band] * bar_fall)
+		peaks[band] = max(shown[band], peaks[band] - peak_fall)
+		x = band * bar_width + gap / 2
+		rect(x, height - shown[band], bar_width - gap, shown[band], hsv(band * 280 / bands, 1, 1))
+		rect(x, height - peaks[band] - 2, bar_width - gap, 2, white)
+	}
+	show()
+	sleep(frame_milliseconds)
+	elapsed = (clock() - started) / 1000.0
+}

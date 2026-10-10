@@ -3,6 +3,7 @@
 use crate::analyzer::{call_name, is_statement, is_unbracketed_block, type_word_kind};
 use crate::node::{Bracket, Node, Separator};
 use crate::operators::{is_function_keyword, Op};
+use crate::type_kinds::Kind;
 use wasm_encoder::*;
 use Instruction as I;
 
@@ -842,7 +843,7 @@ impl WasmGcEmitter {
 			self.emit_typed_list_extend(func, &name, &items); // the array itself is dropped, it needs no Node
 		} else if let Some((name, value)) = self.typed_list_store(item) {
 			self.emit_typed_list_store(func, &name, &value); // the array itself is dropped, it needs no Node
-		} else if self.is_float_assignment(item) || self.is_float_call(item) || destructured.is_some_and(|kind| kind.is_float()) {
+		} else if self.is_float_assignment(item) || self.is_float_read(item) || destructured.is_some_and(|kind| kind.is_float()) {
 			self.emit_float_value(func, item); // a float update or a call giving a float (shared_addf), dropped as an f64
 		} else if self.is_ref_update(item) || self.is_output_call(item) || self.is_ref_value(item) || matches!(item.drop_meta(), Node::Empty) || destructured.is_some_and(|kind| kind.is_ref()) {
 			self.emit_node_instructions(func, item);
@@ -856,10 +857,14 @@ impl WasmGcEmitter {
 		self.emit_discarded_statement(func, item, Self::emit_node_instructions);
 	}
 
-	/// A call giving a float (`shared_addf(xs, i, v)`)
-	fn is_float_call(&self, node: &Node) -> bool {
-		matches!(node.drop_meta(), Node::List(items, Bracket::Round, _) if matches!(items.first().map(Node::drop_meta), Some(Node::Symbol(_))))
-			&& self.get_type(node).is_float()
+	/// A call or an element read giving a float (`shared_addf(xs, i, v)`, `levels[i]` of a list of floats)
+	fn is_float_read(&self, node: &Node) -> bool {
+		let read = match node.drop_meta() {
+			Node::List(items, Bracket::Round, _) => matches!(items.first().map(Node::drop_meta), Some(Node::Symbol(_))),
+			Node::Key(list, Op::Hash, _) => !matches!(list.drop_meta(), Node::Empty),
+			_ => false,
+		};
+		read && self.get_type(node).is_float()
 	}
 
 	/// Statements whose last value is an exact number (`{i*10}`, `{puti(i)}`): none that `emit_discarded_statement`
@@ -867,7 +872,7 @@ impl WasmGcEmitter {
 	pub(super) fn ends_in_number(&self, statements: &[Node]) -> bool {
 		statements.last().is_some_and(|last| {
 			!self.is_float_assignment(last) && !self.is_ref_update(last) && !self.is_ref_value(last)
-				&& self.typed_list_store(last).is_none() && !self.get_type(last).is_ref() && !self.is_float_call(last)
+				&& self.typed_list_store(last).is_none() && !self.get_type(last).is_ref() && !self.is_float_read(last)
 		})
 	}
 
@@ -932,6 +937,8 @@ impl WasmGcEmitter {
 			// `c + 1` of a text c in a loop body is a text, "a1" (card loop-text)
 			Node::Symbol(_) | Node::List(_, Bracket::Round, _) => self.get_type(item).is_ref(),
 			Node::Key(_, op, _) if op.is_arithmetic() => self.get_type(item).is_ref(),
+			// `levels[i]` of a list a function gave: an element held as a Node, whatever number it is
+			Node::Key(list, Op::Hash, _) if !matches!(list.drop_meta(), Node::Empty) => matches!(self.get_type(item), Kind::Empty) || self.get_type(item).is_ref(),
 			_ => false,
 		}
 	}

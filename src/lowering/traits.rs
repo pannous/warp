@@ -106,6 +106,11 @@ pub fn witness_name(operation: &str, type_name: &str) -> String {
 	format!("{operation}{WITNESS_SEPARATOR}{type_name}")
 }
 
+/// The operation of a witness name, `agent` for `agent·1`; a name that is none is its own
+pub fn witness_operation(name: &str) -> &str {
+	name.split_once(WITNESS_SEPARATOR).map_or(name, |(operation, _)| operation)
+}
+
 /// The declared type of a witness name, `person` for `compare·person`
 pub fn witness_type<'a>(name: &'a str, operation: &str) -> Option<&'a str> {
 	name.strip_prefix(operation)?.strip_prefix(WITNESS_SEPARATOR)

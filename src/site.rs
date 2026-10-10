@@ -7,7 +7,7 @@
 
 use crate::node::Node;
 pub use crate::host_parts::{HostPart, Script, HOST_PARTS};
-pub(crate) use crate::host_parts::{exports, host_scripts_of, imports_of, message_of, with_excerpt, TASK_WORD_PREFIXES};
+pub(crate) use crate::host_parts::{exports, host_scripts_of, imports_of, message_of, with_excerpt, GPU_WORDS, TASK_WORD_PREFIXES};
 use crate::host::{FOREIGN_CALL, HOST_LIBRARY, PAINT};
 use std::path::{Path, PathBuf};
 
@@ -285,15 +285,20 @@ fn page_scripts_of(module: &[u8]) -> Result<Vec<Script>, String> {
 }
 
 fn paints(imports: &[(String, String)]) -> bool {
-	imports.iter().any(|(module, name)| module == HOST_LIBRARY && name == PAINT)
+	imports_any(imports, &[PAINT])
+}
+
+fn imports_any(imports: &[(String, String)], words: &[&str]) -> bool {
+	imports.iter().any(|(module, name)| module == HOST_LIBRARY && words.contains(&name.as_str()))
 }
 
 /// A module that starts tasks, uses channels or shared memory runs in a Worker, where a blocking `await` may wait and
 /// its tasks run together (card site-worker); a plain page stays on the page's thread. Routes go along: the page sends
 /// the Worker the path of each link followed (site-thread.js). A module that paints runs there too (card site-frames):
-/// an animation sleeps between its frames, which the page shows meanwhile, and reads the pointer at once
+/// an animation sleeps between its frames, which the page shows meanwhile, and reads the pointer at once; so does one
+/// using the GPU, whose jobs run on the task Workers (card site-gpu)
 fn runs_in_a_worker(imports: &[(String, String)]) -> bool {
-	paints(imports) || imports.iter().any(|(module, name)| module == HOST_LIBRARY && TASK_WORD_PREFIXES.iter().any(|prefix| name.starts_with(prefix)))
+	paints(imports) || imports_any(imports, &GPU_WORDS) || imports.iter().any(|(module, name)| module == HOST_LIBRARY && TASK_WORD_PREFIXES.iter().any(|prefix| name.starts_with(prefix)))
 }
 
 fn calls_foreign_code(module: &[u8]) -> Result<bool, String> {
