@@ -190,6 +190,7 @@ fn bind_assigned_kind(left: &Node, right: &Node, scope: &mut Scope) {
 				Some(type_name) => (declared_kind(type_name).unwrap_or_else(|| binding_kind(right, scope)), Some(Box::new(type_name.clone()))),
 				None => match (value_binding(right, scope), scope.widened_bindings.get(name)) {
 					((Kind::List, _), Some(widened @ (Kind::List, _))) | ((Kind::Int, None), Some(widened @ (Kind::Float, None))) => widened.clone(),
+					((kind, _), Some(widened @ (Kind::Empty, None))) if CONCRETE_KINDS.contains(&kind) => widened.clone(),
 					(binding, _) => binding,
 				},
 			};
@@ -322,6 +323,10 @@ pub(super) fn widen_to_node(scope: &mut Scope, name: &str, value: &Node) {
 	if CONCRETE_KINDS.contains(&local.kind) && other_kind {
 		local.kind = Kind::Empty;
 		local.type_node = None;
+		// a read before this write (`x2 = x1` earlier in the loop) holds the Node too, once collected again
+		if scope.locals.contains_key(name) {
+			scope.widened_bindings.insert(name.to_string(), (Kind::Empty, None));
+		}
 	}
 }
 
