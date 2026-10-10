@@ -619,13 +619,23 @@ fn with_id(body: Node) -> Node {
 			items.push(id);
 			Node::List(items, Bracket::Curly, separator)
 		}
-		Node::List(mut items, Bracket::Curly, _) if items.len() == 1 => {
+		// `{name: text age: int = 0}`: fields side by side
+		Node::List(mut items, Bracket::Curly, _) if items.len() == 1 || items.iter().all(is_typed_field) => {
 			items.push(id);
 			Node::List(items, Bracket::Curly, Separator::Semicolon)
 		}
 		// `{int x}`: one field of words
 		Node::List(words, Bracket::Curly, separator) => Node::List(vec![Node::List(words, Bracket::None, separator), id], Bracket::Curly, Separator::Semicolon),
 		body => Node::List(vec![body, id], Bracket::Curly, Separator::Semicolon),
+	}
+}
+
+/// `age: int`, `age: int = 0`
+fn is_typed_field(item: &Node) -> bool {
+	match item.drop_meta() {
+		Node::Key(_, Op::Colon, _) => true,
+		Node::Key(field, Op::Assign | Op::Define, _) => matches!(field.drop_meta(), Node::Key(_, Op::Colon, _)),
+		_ => false,
 	}
 }
 

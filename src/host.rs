@@ -218,7 +218,8 @@ impl HostState {
 	pub fn new() -> Self {
 		HostState {
 			next_alloc: 65536, // Start allocation after initial memory region
-			wasi: wasmtime_wasi::WasiCtxBuilder::new().inherit_stdout().inherit_stderr().build_p1(),
+			// the environment as `use os; env(name)` reads it natively, for wasi_environment()
+			wasi: wasmtime_wasi::WasiCtxBuilder::new().inherit_stdout().inherit_stderr().inherit_env().build_p1(),
 			c_handles: Default::default(),
 			wasm_modules: Default::default(),
 			in_task: false,

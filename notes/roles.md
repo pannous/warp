@@ -34,14 +34,17 @@ ask me decision questions."
 - Merges duplicates, drops questions that the code or an earlier decision already answers, and orders by impact.
 - Ready to try (user 2026-10-10: "a general mechanism when some feature is done and ready to be tested by me"; the
   question popups are the notifications that reach the user): after each batch of questions, and whenever idle,
-  `todo try --new` lists finished features not announced yet. Only features already in the user's installed `warp`
-  (the brew release; `warp --version`) are announced: v1.2.5 was 211 commits behind main and every tried feature
-  failed, so a finished feature waits for the next release (releases need no approval; ask the Integrator to cut
-  one). Format (user: "put the command for one test into the title"): one single-select question per feature, the
-  exact command in the question text, options Yes / No, e.g. "Try `~/dev/angles/warp/samples/visualizer.warp` to see
-  the new visualizer. Did it work?". Up to 4 per popup, sharing it with decision questions. Yes → `todo tried <card>`;
-  No or a pasted error → `todo add "…" Now` for the worker who built it; unanswered ones stay in `todo try`. Samples
-  are run directly by path (shebang + executable). A popup blocks only the Interviewer.
+  `todo try --new` lists finished features not announced yet. Try lines spell out the full path
+  /Users/me/dev/bin/warp: a debug build of main refreshed by push_tested.sh after every pushed batch (`--version`:
+  "… debug build <commit>"). Plain `warp` and a sample's `#!/usr/bin/env warp` run brew's copy (/opt/homebrew/bin
+  comes first on PATH), so a sample is tried as `/Users/me/dev/bin/warp samples/x.warp`. Homebrew releases are occasional (user,
+  2026-10-10), so nothing waits for brew; a feature is announced once its batch is pushed (workers run `todo done`
+  only after their branch is on main). Never the shared-target debug/warp: it holds whichever worktree built last.
+  Format (user: "put the command for one test into the title"): one single-select question per feature, the
+  exact command in the question text, options Yes / No, e.g. "Try `/Users/me/dev/bin/warp
+  ~/dev/angles/warp/samples/visualizer.warp` to see the new visualizer. Did it work?". Up to 4 per popup, sharing it
+  with decision questions. Yes → `todo tried <card>`; No or a pasted error → `todo add "…" Now` for the worker who
+  built it; unanswered ones stay in `todo try`. A popup blocks only the Interviewer.
 
 ## Never blocked by a decision
 A session that needs a decision: take the recommended option (the one most in line with notes/welcoming.md and the

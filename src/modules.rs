@@ -819,7 +819,7 @@ impl<'a> Loader<'a> {
 }
 
 /// The standard library's modules written in warp (notes/stdlib.md), embedded so `use list` needs no files
-const STD_MODULES: [(&str, &str); 23] = [
+const STD_MODULES: [(&str, &str); 24] = [
 	(PRELUDE_MODULE, include_str!("../lib/prelude.warp")),
 	("memory", include_str!("../lib/memory.warp")),
 	("net", include_str!("../lib/net.warp")),
@@ -839,6 +839,7 @@ const STD_MODULES: [(&str, &str); 23] = [
 	("draw", include_str!("../lib/draw.warp")),
 	("markup", include_str!("../lib/markup.warp")),
 	("router", include_str!("../lib/router.warp")),
+	("wagi", include_str!("../lib/wagi.warp")),
 	("i18n", include_str!("../lib/i18n.warp")),
 	(UNITS_MODULE, include_str!("../lib/units.warp")),
 	(AGENT_MODULE, include_str!("../lib/agent.warp")),
@@ -869,8 +870,8 @@ const SOUND_WORDS: [&str; 9] = ["play", "melody", "tone", "beep", "play_file", "
 type NeededBy = fn(&Node) -> bool;
 /// The standard modules a program needs without `use`: P183 a file URL → file, a page → markup (lowering/page_html.rs),
 /// routes or a server route's path parameters → router, a route's regular expression → regex (lowering/routes.rs), a call of quantity → units (run-time units),
-/// a call of agent → agent, a call of play, melody, tone or beep → sound
-const IMPLICIT_MODULES: [(&str, NeededBy); 7] = [
+/// a call of agent → agent, a call of play, melody, tone or beep → sound, a WAGI build (`warp build --wagi`) → wagi
+const IMPLICIT_MODULES: [(&str, NeededBy); 8] = [
 	("file", mentions_file_url),
 	("markup", |_| crate::pipeline::renders_itself()),
 	("router", |program| defined(program, crate::routes::PAGE_ROUTES).is_some() || { let called = called_names(&statements(program.clone())); ROUTE_PARTS.iter().any(|word| called.contains(*word)) }),
@@ -878,6 +879,7 @@ const IMPLICIT_MODULES: [(&str, NeededBy); 7] = [
 	(UNITS_MODULE, |program| calls_undefined(program, QUANTITY)),
 	(AGENT_MODULE, |program| calls_undefined(program, AGENT_MODULE)),
 	(SOUND_MODULE, |program| SOUND_WORDS.iter().any(|word| calls_undefined(program, word))),
+	("wagi", |_| crate::pipeline::is_for_wagi()),
 ];
 
 /// Whether the program calls `word` without defining it
