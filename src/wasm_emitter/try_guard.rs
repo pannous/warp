@@ -123,19 +123,9 @@ impl WasmGcEmitter {
 		if let Some(depth) = depth {
 			Self::emit_list(func, &[I::GlobalGet(depth), I::I64ExtendI32U, I::LocalSet(saved_depth)]);
 		}
-		let statement = match statement.drop_meta() {
-			Node::List(items, crate::node::Bracket::Curly, _) if items.len() == 1 => &items[0],
-			other => other,
-		};
+		let statement = braces_removed(statement);
 		self.initialize_assigned_node(func, statement);
-		Self::emit_list(func, &[
-			I::Block(BlockType::Result(ValType::I64)), // finished
-			I::Block(BlockType::Result(ValType::I32)), // caught, with the aborting handler
-			I::TryTable(BlockType::Empty, vec![Catch::One { tag: catching.tag, label: 0 }].into()),
-		]);
-		self.emit_discarded_statement(func, statement, Self::emit_node_instructions);
-		func.instruction(&I::Drop);
-		func.instruction(&I::End); // try_table
+		self.emit_try_table(func, catching.tag, statement); // caught: the aborting handler
 		Self::emit_list(func, &[I::I64Const(1), I::Br(1), I::End]); // caught
 		func.instruction(&I::GlobalSet(catching.payload_global));
 		Self::emit_list(func, &[I::GlobalGet(catching.payload_global), I::I64ExtendI32U]);
@@ -145,6 +135,18 @@ impl WasmGcEmitter {
 			Self::emit_list(func, &[I::LocalGet(saved_depth), I::I32WrapI64, I::GlobalSet(depth)]);
 		}
 		Self::emit_list(func, &[I::I64Const(0), I::End]);
+	}
+
+	/// Opens the blocks `finished` (i64) and `caught` (i32, the thrown payload) and runs the statement in a try_table
+	/// catching `tag` into `caught`
+	fn emit_try_table(&mut self, func: &mut Function, tag: u32, statement: &Node) {
+		Self::emit_list(func, &[
+			I::Block(BlockType::Result(ValType::I64)),
+			I::Block(BlockType::Result(ValType::I32)),
+			I::TryTable(BlockType::Empty, vec![Catch::One { tag, label: 0 }].into()),
+		]);
+		self.emit_discarded_statement(func, statement, Self::emit_node_instructions);
+		Self::emit_list(func, &[I::Drop, I::End]);
 	}
 
 	/// The body of a runtime error function: throw its id while a `try` runs, else trap (the runner names the error by
@@ -173,23 +175,13 @@ impl WasmGcEmitter {
 	/// The depth goes up for the statement and back down on both paths.
 	pub(super) fn emit_ran_without_error(&mut self, func: &mut Function, statement: &Node) {
 		let catching = self.declare_error_catching();
-		let statement = match statement.drop_meta() {
-			Node::List(items, crate::node::Bracket::Curly, _) if items.len() == 1 => &items[0],
-			other => other,
-		};
+		let statement = braces_removed(statement);
 		self.initialize_assigned_node(func, statement);
 		let step_depth = |func: &mut Function, step: I<'static>| {
 			Self::emit_list(func, &[I::GlobalGet(catching.depth_global), I::I32Const(1), step, I::GlobalSet(catching.depth_global)]);
 		};
 		step_depth(func, I::I32Add);
-		Self::emit_list(func, &[
-			I::Block(BlockType::Result(ValType::I64)), // finished
-			I::Block(BlockType::Result(ValType::I32)), // caught, with the error id
-			I::TryTable(BlockType::Empty, vec![Catch::One { tag: catching.tag, label: 0 }].into()),
-		]);
-		self.emit_discarded_statement(func, statement, Self::emit_node_instructions);
-		func.instruction(&I::Drop);
-		func.instruction(&I::End); // try_table
+		self.emit_try_table(func, catching.tag, statement); // caught: the error id
 		step_depth(func, I::I32Sub);
 		Self::emit_list(func, &[I::I64Const(1), I::Br(1), I::End]); // caught
 		func.instruction(&I::GlobalSet(catching.caught_global)); // the error id, for `catch e`
@@ -232,5 +224,13 @@ impl WasmGcEmitter {
 		let Some(local) = self.scope.lookup(name).filter(|local| local.kind.is_ref()).map(|local| local.position) else { return };
 		self.emit_call(func, "new_empty");
 		func.instruction(&I::LocalSet(local));
+	}
+}
+
+/// `{statement}` → statement
+fn braces_removed(statement: &Node) -> &Node {
+	match statement.drop_meta() {
+		Node::List(items, crate::node::Bracket::Curly, _) if items.len() == 1 => &items[0],
+		other => other,
 	}
 }
