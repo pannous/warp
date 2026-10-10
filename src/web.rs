@@ -312,6 +312,7 @@ fn cell_node(cell: &Value, value: Option<Node>) -> Node {
 			let floats = data.get("floats").and_then(Value::as_array);
 			crate::uncertain::Uncertain::read_node(floats.map(|parts| parts.iter().filter_map(float_value).collect()))
 		}
+		tag if tag == Kind::Time as i64 => crate::time::instant_node(payload_number(data)),
 		tag => Node::Text(format!("Unknown Kind: {tag}")),
 	}
 }
