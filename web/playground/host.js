@@ -13,7 +13,8 @@ const STDERR = 2;
 const DARK_MODE_QUERY = "(prefers-color-scheme: dark)";
 // view_width, view_height on a page that tells no output pane (playground.js tellSystemValues), as natively
 // (crates/warp-runtime/src/system_values.rs NATIVE_VIEW)
-const VIEW_DEFAULTS = { view_width: 640, view_height: 480 };
+// window_open: no page told it shows the pictures (playground.js tellSystemValues), so `while window_open` never starts
+const VIEW_DEFAULTS = { view_width: 640, view_height: 480, window_open: 0 };
 // the standard library's adapters (src/std_adapters.rs, notes/stdlib.md section 7): module → member → function of
 // plain values (plainOfTree / treeOfPlain, as for foreign_call); the parts add them (host-hashes.js, host-files.js)
 const STD_ADAPTERS = {};

@@ -103,3 +103,12 @@ fn the_mouse_is_the_pointer_over_the_paint_window() {
 	is!("mouse_x * 100 + mouse_y", 1207);
 	is!("if mouse_down { 1 } else { 0 }", 1);
 }
+
+// window_open: whether a paint window shows the program's pictures, so `while window_open { … }` ends when the window
+// closes and never starts headless (tests, CI, WARP_NO_WINDOW); the page's canvas is always open
+#[test]
+fn window_open_is_no_without_a_window() {
+	assert!(lowered("while window_open { sleep 16ms }").contains("(system_value window_open)!=0"));
+	#[cfg(feature = "native")]
+	assert_eq!(String::from_utf8_lossy(&crate::common::warp_command().args(["--no-ask", "eval", "while window_open { sleep 16ms }; 7"]).output().unwrap().stdout).trim(), "» 7");
+}

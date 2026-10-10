@@ -128,14 +128,19 @@ pub fn show(frame: &[u8]) -> Result<(), String> {
 		std::os::unix::process::CommandExt::process_group(&mut command, 0);
 		let mut child = command.spawn().map_err(|failure| format!("paint: cannot start the viewer: {failure}"))?;
 		if let Some(output) = child.stdout.take() {
-			std::thread::spawn(move || follow_input(std::io::BufReader::new(output)));
+			std::thread::spawn(move || {
+				follow_input(std::io::BufReader::new(output));
+				warp_runtime::system_values::tell_window_open(false); // its output ends as it closes
+			});
 		}
+		warp_runtime::system_values::tell_window_open(true);
 		*viewer = Some(child);
 	}
 	let input = viewer.as_mut().and_then(|child| child.stdin.as_mut()).expect("the viewer's stdin is piped");
 	let written = input.write_all(frame).and_then(|_| input.flush());
 	written.map_err(|failure| {
 		*viewer = None;
+		warp_runtime::system_values::tell_window_open(false);
 		format!("paint: the viewer is gone ({failure})")
 	})
 }

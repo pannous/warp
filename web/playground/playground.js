@@ -260,10 +260,13 @@ function notification(text) {
 	return { type: "print", text: `notification: ${text}\n`, stream: STDOUT };
 }
 
-// the system values a Worker cannot read itself (host.js system_value), sent again when they change
+// the system values a Worker cannot read itself (host.js system_value), sent again when they change. window_open: the
+// canvas shows the pictures to someone once the page was clicked or typed in; before (the CI tour, as for sounds) a
+// `while window_open` drawing loop ends at once instead of waiting for input forever
 const darkMode = matchMedia(DARK_MODE_QUERY);
-const tellSystemValues = () => worker.postMessage({ system: { "dark mode": darkMode.matches, ...viewSize() } });
+const tellSystemValues = () => worker.postMessage({ system: { "dark mode": darkMode.matches, window_open: Number(!beforeUserActivation()), ...viewSize() } });
 darkMode.addEventListener("change", tellSystemValues);
+["pointerdown", "keydown"].forEach(type => addEventListener(type, () => worker && tellSystemValues(), { once: true, capture: true }));
 new ResizeObserver(() => worker && tellSystemValues()).observe($("output"));
 
 // view_width, view_height (use draw's default canvas): the room below the output pane's text, in CSS pixels; none while

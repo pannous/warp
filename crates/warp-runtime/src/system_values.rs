@@ -4,14 +4,15 @@
 //! READING_LIFETIME: a sleeping program polls often, the platform is asked at most once a second per value.
 //! macOS asks `pmset` and `defaults`, Linux /sys and `gsettings`; `online` is whether a route to the internet exists
 //! (a UDP connect sends nothing). A value the platform cannot give is a loud error, never a made-up reading.
-//! `mouse_x`, `mouse_y`, `mouse_down`: natively the pointer over the paint window (window_input), read each time.
+//! `mouse_x`, `mouse_y`, `mouse_down`: natively the pointer over the paint window (window_input), read each time;
+//! `window_open` whether that window shows.
 //! The clipboard is watched by its change count, which reads no content: macOS asks the user before a program reads
 //! what another one copied, so the text is read only when the program asks for it (`clipboard`, clipboard_text).
 use std::cell::RefCell;
 use std::collections::HashMap;
-use std::sync::atomic::{AtomicU32, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
 use std::time::{Duration, Instant};
-use crate::host_words::{BATTERY, CHARGING, CLIPBOARD_COUNT, DARK_MODE, MOUSE_DOWN, MOUSE_X, MOUSE_Y, ONLINE, SYSTEM_VALUES, TIME_OF_DAY, VIEW_HEIGHT, VIEW_WIDTH};
+use crate::host_words::{BATTERY, CHARGING, CLIPBOARD_COUNT, DARK_MODE, MOUSE_DOWN, MOUSE_X, MOUSE_Y, ONLINE, SYSTEM_VALUES, TIME_OF_DAY, VIEW_HEIGHT, VIEW_WIDTH, WINDOW_OPEN};
 
 const NOTIFICATION_TITLE: &str = "warp";
 const READING_LIFETIME: Duration = Duration::from_secs(1);
@@ -23,6 +24,13 @@ const INTERNET_ADDRESS: &str = "1.1.1.1:53";
 /// The last input over the paint window (src/paint_window.rs follow_input), each an f32's bits: pointer x, y in the
 /// painted frame's pixels, a button down (1), the key held; all 0 before a window
 static WINDOW_INPUT: [AtomicU32; 4] = [const { AtomicU32::new(0) }; 4];
+
+/// Whether the paint window shows: set as it gets its first frame, cleared when it closes (src/paint_window.rs)
+static WINDOW_SHOWN: AtomicBool = AtomicBool::new(false);
+
+pub fn tell_window_open(open: bool) {
+	WINDOW_SHOWN.store(open, Ordering::Relaxed);
+}
 
 pub fn window_input() -> [f32; 4] {
 	WINDOW_INPUT.each_ref().map(|value| f32::from_bits(value.load(Ordering::Relaxed)))
@@ -43,6 +51,9 @@ pub fn read(name: &str) -> Result<i64, String> {
 	// the clock and the pointer move on: never a kept reading
 	if name == TIME_OF_DAY {
 		return Ok(crate::system_signals::millisecond_of_day());
+	}
+	if name == WINDOW_OPEN {
+		return Ok(WINDOW_SHOWN.load(Ordering::Relaxed) as i64);
 	}
 	if let Some(at) = [MOUSE_X, MOUSE_Y, MOUSE_DOWN].iter().position(|pointer| *pointer == name) {
 		return Ok(window_input()[at] as i64);

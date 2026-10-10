@@ -27,7 +27,8 @@ def stroke(x1, y1, x2, y2) {
 	}
 }
 
-while true {
+// until the window closes; headless (no window) the loop never starts
+while window_open {
 	if mouse_down {
 		// a new stroke starts where the button went down, not where the last one ended
 		if not was_down { last_x = mouse_x; last_y = mouse_y }
