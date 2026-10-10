@@ -1,0 +1,4 @@
+use sound
+for kind in [major7, minor7] {
+ print(chord(C4, kind))
+}
