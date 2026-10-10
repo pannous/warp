@@ -13,6 +13,8 @@ use crate::operators::Op;
 use std::collections::{HashMap, HashSet};
 
 const SPECIALISATION_SEPARATOR: &str = "__";
+/// The argument left out of a partial application: `add(1, _)`
+const PARTIAL_HOLE: &str = "_";
 /// `lambda_value_1`: the function a lambda argument becomes; no text the user wrote
 pub(crate) const LAMBDA_PREFIX: &str = "lambda_value_";
 /// Words whose last argument is a function
@@ -62,6 +64,33 @@ fn refuse_called_bare_results(program: &Node, found: &[Definition]) -> Result<()
 	let nested = &returning[function];
 	let message = format!("{variable} holds no function: {function} ends with `{nested}`, which calls {nested} (a bare name is a call); fix: return the function with `function {nested}`");
 	Err(crate::diagnostic::Diagnostic::at(call, message).into_error())
+}
+
+/// `inc := add 1` of `add(a, b)`: a definition leaving out an argument is no partial application, which needs the hole
+/// `inc := add(1, _)` (card arctan-allow, user 2026-10-10)
+fn refused_partial_definition(program: &Node, found: &[Definition]) -> Option<Node> {
+	let mut refused = None;
+	program.visit(&mut |node| {
+		let Node::Key(name, Op::Define, value) = node.drop_meta() else { return };
+		let (Some(name), Node::List(items, Bracket::None | Bracket::Round, _)) = (name.symbol_name(), value.drop_meta()) else { return };
+		let Some((function, arguments)) = items.split_first() else { return };
+		let Some(definition) = found.iter().find(|definition| function.symbol_name() == Some(definition.name.as_str())) else { return };
+		let has_hole = arguments.iter().any(|argument| argument.is_symbol(PARTIAL_HOLE));
+		if refused.is_some() || has_hole || arguments.is_empty() || arguments.len() >= required_parameters(definition) {
+			return;
+		}
+		let written: Vec<String> = arguments.iter().map(|argument| argument.serialize()).collect();
+		let holes = vec![PARTIAL_HOLE.to_string(); definition.params.len() - arguments.len()];
+		let partial = format!("{}({})", definition.name, [written.clone(), holes].concat().join(", "));
+		let message = format!("{} needs {} arguments, {name} := {} {} leaves some out", definition.name, definition.params.len(), definition.name, written.join(" "));
+		refused = Some(crate::diagnostic::Diagnostic::at(value, message).fix(format!("{name} := {partial}")).into_error());
+	});
+	refused
+}
+
+/// The parameters without a default: `add(a, b = 1)` needs only a
+fn required_parameters(definition: &Definition) -> usize {
+	definition.params.iter().filter(|parameter| !matches!(parameter.drop_meta(), Node::Key(_, Op::Assign, _))).count()
 }
 
 fn call_head(call: &Node) -> String {
@@ -218,22 +247,26 @@ fn collect_function_uses(node: &Node, names: &[String], higher_order: &HashMap<S
 	}
 }
 
-/// `f = double` and `f = &double` name a function again: the aliases and what they name
+/// `f = &double`, `f = function double` and the definition `f := double` name a function again: the aliases and what
+/// they name
 fn aliases(node: &Node, functions: &HashSet<String>, assigned: &mut HashMap<String, usize>, found: &mut HashMap<String, String>) {
 	match node.drop_meta() {
-		Node::Key(target, Op::Assign | Op::Define, value) => {
-			if let Node::Symbol(name) = target.drop_meta() {
-				*assigned.entry(name.clone()).or_default() += 1;
+		Node::Key(target, op @ (Op::Assign | Op::Define), value) => {
+			if let Some(name) = aliased_name(target, op) {
+				*assigned.entry(name.to_string()).or_default() += 1;
 				// `g = function add` / `g = &add` (P83: a bare `g = add` needs add's arguments), `h = g` of an alias
-				let function = match (crate::closures::referenced_function(value), value.drop_meta()) {
+				let function = match (crate::closures::referenced_function(value), bare_name(value, op)) {
 					(Some(function), _) => Some(function),
-					(None, Node::Symbol(alias)) if found.contains_key(alias) => Some(alias.clone()),
+					(None, Some(alias)) if found.contains_key(alias) => Some(alias.to_string()),
+					// `arctan := arc_tangent` defines a name for the function (card arctan-allow)
+					// a plain name only: `compute() := emit ask` reads `(on·ask)`, a call (card arctan-allow)
+					(None, Some(function)) if *op == Op::Define && functions.contains(function) && matches!(value.drop_meta(), Node::Symbol(_)) => Some(function.to_string()),
 					_ => None,
 				};
 				if let Some(function) = function {
 					let named = found.get(&function).cloned().unwrap_or(function);
-					if functions.contains(&named) {
-						found.insert(name.clone(), named);
+					if functions.contains(&named) && named != name {
+						found.insert(name.to_string(), named);
 					}
 				}
 			}
@@ -248,12 +281,41 @@ fn aliases(node: &Node, functions: &HashSet<String>, assigned: &mut HashMap<Stri
 	}
 }
 
+/// The name an assignment or definition binds: `g = …`, `g := …`, and `(g) := …`, as an earlier pass writes the
+/// definition `g := f` of a name used later
+fn aliased_name<'a>(target: &'a Node, op: &Op) -> Option<&'a str> {
+	match target.drop_meta() {
+		Node::Symbol(name) => Some(name),
+		Node::List(items, Bracket::Round, _) if *op == Op::Define && items.len() == 1 => items[0].symbol_name(),
+		_ => None,
+	}
+}
+
+/// The function a definition names bare: `f`, or `(f)` as an earlier pass writes it in `h := g` (card alias-chain)
+fn bare_name<'a>(value: &'a Node, op: &Op) -> Option<&'a str> {
+	match value.drop_meta() {
+		Node::Symbol(name) => Some(name),
+		Node::List(items, Bracket::Round, _) if *op == Op::Define && items.len() == 1 => items[0].symbol_name(),
+		_ => None,
+	}
+}
+
 /// The alias assignments become ø and every use of the alias is the function
 fn replace_aliases(node: Node, found: &HashMap<String, String>) -> Node {
 	match node {
 		Node::Symbol(name) => Node::Symbol(found.get(&name).cloned().unwrap_or(name)),
-		Node::Key(target, Op::Assign | Op::Define, value) if matches!(target.drop_meta(), Node::Symbol(name) if found.contains_key(name)) && matches!(value.drop_meta(), Node::Symbol(_)) => {
+		Node::Key(target, op @ (Op::Assign | Op::Define), value) if aliased_name(&target, &op).is_some_and(|name| found.contains_key(name)) && bare_name(&value, &op).is_some() => {
 			Node::Empty
+		}
+		// `(h)`, as an earlier pass calls the defined name h: the function's name, a call of it only without parameters
+		Node::List(items, Bracket::Round, _) if items.len() == 1 && items[0].symbol_name().is_some_and(|name| found.contains_key(name)) => {
+			items.into_iter().next().map_or(Node::Empty, |item| replace_aliases(item, found))
+		}
+		// `h 4` of the alias h: the call of its function, which the earlier passes didn't know h for (card alias-chain)
+		Node::List(items, Bracket::None, Separator::Space) if items.len() > 1 && items[0].symbol_name().is_some_and(|name| found.contains_key(name)) => {
+			let mut items = items.into_iter().map(|item| replace_aliases(item, found));
+			let function = items.next().and_then(|function| function.symbol_name().map(String::from)).unwrap_or_default();
+			call(&function, items.collect())
 		}
 		other => children_rewritten(other, |child| replace_aliases(child, found)),
 	}
@@ -429,6 +491,9 @@ pub fn lower(program: Node) -> Node {
 	let mut found = Vec::new();
 	definitions(&program, &mut found);
 	if let Err(error) = refuse_called_bare_results(&program, &found) {
+		return error;
+	}
+	if let Some(error) = refused_partial_definition(&program, &found) {
 		return error;
 	}
 	let functions: HashSet<String> = found.iter().map(|definition| definition.name.clone()).collect();
