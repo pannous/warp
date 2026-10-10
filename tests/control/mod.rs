@@ -105,6 +105,7 @@ mod test_catch_binding;
 mod test_filter_loop_over_variable;
 mod test_all_with_condition;
 mod test_go_blocks;
+mod test_task_globals; // card error-undefined
 mod test_shared_values;
 mod test_after;
 mod test_parallel_map;

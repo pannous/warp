@@ -1,0 +1,5 @@
+go{
+melody [C4 D4] each 100ms
+print "melody done"
+}
+sleep(2s)
