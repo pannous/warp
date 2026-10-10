@@ -90,23 +90,6 @@ function copyText(text) {
 	navigator.clipboard.writeText(text).catch(failure => console.error("clipboard:", failure));
 }
 
-// `clipboard` in a Worker (host-tasks.js askPage): the page's text into the Worker's shared buffer
-const pasteInto = shared => answerInto(shared, async () => ({ text: await navigator.clipboard.readText() }));
-
-// the page's answer to a waiting Worker, or {error}, as JSON in its shared buffer: host-tasks.js writeShared's layout
-// ([state, length] as Int32, then the JSON), the state set last for the Worker waiting on it
-async function answerInto(shared, answer) {
-	const record = await answer().catch(failure => ({ error: failure.message ?? String(failure) }));
-	const json = new TextEncoder().encode(JSON.stringify(record));
-	const header = Int32Array.BYTES_PER_ELEMENT * 2;
-	if (header + json.length > shared.byteLength) shared.grow(header + json.length);
-	new Uint8Array(shared, header, json.length).set(json);
-	const state = new Int32Array(shared, 0, 2);
-	state[1] = json.length;
-	Atomics.store(state, 0, 1);
-	Atomics.notify(state, 0);
-}
-
 // where a value of a store is kept: the dev store and the session's in sessionStorage, any other in localStorage, as JSON
 function keptStorage(file) {
 	return file === DEV_STORE ? [sessionStorage, DEV_PREFIX] : file === SESSION_STORE ? [sessionStorage, SESSION_PREFIX] : [localStorage, STORED_PREFIX];

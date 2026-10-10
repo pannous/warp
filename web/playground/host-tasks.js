@@ -677,6 +677,9 @@ function broadcastListener(name) {
 
 addHostPart({
 	words: (holder, hooks, { program, cString }) => ({
+		// `clipboard`: the page reads it (asynchronously) while the Worker waits (askPage; shipped with this part only,
+		// host_parts.rs, so a page that reads no clipboard carries none of it)
+		clipboard_text: () => buildValue(program(), treeOfPlain(self.askPage("clipboard", self.askPageClipboard).text)),
 		// channels between programs (src/channels.rs): a BroadcastChannel of the name, which reaches the other tabs and
 		// workers of this page's origin; the listener's timer (lowering/system_signals.rs) takes what arrived
 		channel_listen: (id, channel) => listenOnChannel(holder, hooks, Number(id), plainOfTree(readNode(program(), channel))),
