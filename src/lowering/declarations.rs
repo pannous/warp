@@ -4,7 +4,7 @@
 //! `real f(real x, int n) { … }`, the C way, defines `f(x:real, n:int) := { … }`.
 
 use super::words::{ON_WORD, RETURN_WORD};
-use super::nodes::{block, call, children_rewritten, grouped_parameters, if_then, if_then_else, is_type_word, key};
+use super::nodes::{Counter, block, call, children_rewritten, grouped_parameters, if_then, if_then_else, is_type_word, key};
 use crate::node::{symbol, Bracket, Node, Separator};
 use crate::operators::{is_function_keyword, Op};
 
@@ -71,7 +71,7 @@ const RAISE_WORD: &str = "raise";
 const TIMEOUT_EVENT: &str = "timeout";
 thread_local! {
 	/// `await any` races so far, each with its own winner variable
-	static RACES: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+	static RACES: Counter = const { Counter::starting_at(0) };
 }
 const ADD_WORD: &str = "add";
 /// The words that count a list: counting a job list waits for no job
@@ -214,7 +214,7 @@ fn named_flags(value: &Node) -> Vec<String> {
 /// finishes:` for `go download(url)`) runs at once, as the task is done; a handler of a pause or stop never runs and
 /// `stop job` has nothing left to stop: both warn. A program defining its own `go` or `await` keeps them.
 pub fn lower_tasks(node: Node) -> Node {
-	let node = awaited_starts(node, &std::cell::Cell::new(0));
+	let node = awaited_starts(node, &Counter::default());
 	let mut defined = std::collections::HashSet::new();
 	let mut functions = std::collections::HashSet::new();
 	let mut tasks = std::collections::HashSet::new();
@@ -285,12 +285,12 @@ fn spoken_words(items: &[Node]) -> Vec<Node> {
 }
 
 /// `await go f(x)`: the task gets a name, `(go·job·1 = go f(x); await go·job·1)`, so it is awaited like any other
-fn awaited_starts(node: Node, counter: &std::cell::Cell<usize>) -> Node {
+fn awaited_starts(node: Node, counter: &Counter) -> Node {
 	match node {
 		Node::List(items, bracket, separator) => {
 			match spoken_words(&items).as_slice() {
 				[await_word, go_word, started @ ..] if !started.is_empty() && await_word.name() == TASK_WORDS[1] && go_word.name() == TASK_WORDS[0] => {
-					let job = Node::Symbol(format!("go·job·{}", counter.replace(counter.get() + 1)));
+					let job = Node::Symbol(format!("go·job·{}", counter.next_number()));
 					let start = Node::List([vec![go_word.clone()], started.to_vec()].concat(), Bracket::None, Separator::Space);
 					let assignment = key(job.clone(), Op::Assign, start);
 					let awaited = Node::List(vec![await_word.clone(), job], Bracket::None, Separator::Space);
@@ -310,7 +310,7 @@ fn awaited_starts(node: Node, counter: &std::cell::Cell<usize>) -> Node {
 					let mut starts = vec![];
 					let results: Vec<Node> = listed.into_iter().map(|item| match is_start(&item) {
 						true => {
-							let job = Node::Symbol(format!("go·job·{}", counter.replace(counter.get() + 1)));
+							let job = Node::Symbol(format!("go·job·{}", counter.next_number()));
 							starts.push(key(job.clone(), Op::Assign, item));
 							if racing { job } else { Node::List(vec![await_word.clone(), job], Bracket::None, Separator::Space) }
 						}
@@ -618,7 +618,7 @@ impl Tasks<'_> {
 			Node::List(parts, _, _) if word(&parts[0]) == TASK_VALUE => parts[1].clone(),
 			other => other.clone(),
 		};
-		let started = format!("{STARTED_PREFIX}{}", RACES.with(|races| races.replace(races.get() + 1)));
+		let started = format!("{STARTED_PREFIX}{}", RACES.with(Counter::next_number));
 		let status = marker(crate::host::TASK_STATUS, vec![job_name.clone()]);
 		let runs = key(status, Op::Eq, crate::node::int(TASK_RUNNING));
 		let elapsed = key(marker(crate::host::CLOCK, vec![]), Op::Sub, Node::Symbol(started.clone()));
@@ -690,7 +690,7 @@ impl Tasks<'_> {
 			Node::List(items, _, _) if word(&items[0]) == TASK_VALUE => items[1].clone(),
 			other => other.clone(),
 		};
-		let winner = format!("{RACE_PREFIX}{}", RACES.with(|races| races.replace(races.get() + 1)));
+		let winner = format!("{RACE_PREFIX}{}", RACES.with(Counter::next_number));
 		let winner_is = |index: usize| key(Node::Symbol(winner.clone()), Op::Eq, crate::node::int(index as i64));
 		// `go 1+1` is computed right away, no task is started: it has ended (card await-hang)
 		let ended = |job: &Node| {
@@ -791,7 +791,7 @@ pub fn resolve_tasks(node: Node) -> Node {
 			&& int_starts.get(function).copied().unwrap_or(false);
 		if ints { TaskPath::Ints } else { TaskPath::Values(parameters, definition.return_kind) }
 	};
-	let node = TaskHandlers { path: &path, count: std::cell::Cell::new(0) }.lower(node, &[]);
+	let node = TaskHandlers { path: &path, count: Counter::default() }.lower(node, &[]);
 	let wrapped = std::cell::RefCell::new(std::collections::BTreeMap::new());
 	// the guardable functions, with the type word their Node result converts back to (it comes back from the host as a Node)
 	let guardable = |function: &str| context.user_functions.get(function).filter(|definition| definition.tuple_kinds.is_empty())
@@ -858,7 +858,7 @@ impl TaskHandler {
 
 struct TaskHandlers<'a> {
 	path: &'a dyn Fn(&str) -> TaskPath,
-	count: std::cell::Cell<usize>,
+	count: Counter,
 }
 
 impl TaskHandlers<'_> {
@@ -906,8 +906,7 @@ impl TaskHandlers<'_> {
 				"pause" | "pauses" | "paused" => crate::host::TASK_PAUSED,
 				_ => crate::host::TASK_STOPPED, // stop, cancel
 			};
-			let flag = format!("{HANDLED_PREFIX}{}", self.count.get());
-			self.count.set(self.count.get() + 1);
+			let flag = format!("{HANDLED_PREFIX}{}", self.count.next_number());
 			out.push(crate::variable_signals::assign(&flag, Node::False));
 			let handler = TaskHandler { job, status, body, flag };
 			active.push(handler.clone());

@@ -127,6 +127,7 @@ mod test_dollar_body;
 mod test_csharp_functions;
 mod test_user_add_and_map;
 mod test_list_conversion;
+mod test_list_fields; // card people-map
 mod test_each_spellings;
 mod test_arrow_defaults_and_types;
 mod test_python_higher_order;

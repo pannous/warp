@@ -6,7 +6,7 @@
 //! - a lambda anywhere else is a closure (closures.rs); `map` over a value that is no function is the error `map needs a function, got …`
 
 use super::words::ON_WORD;
-use super::nodes::{call, children_rewritten, is_type_word, key, named_assignment};
+use super::nodes::{Counter, call, children_rewritten, is_type_word, key, named_assignment};
 use crate::analyzer::call_name;
 use crate::context::Context;
 use crate::diagnostic::Diagnostic;
@@ -14,7 +14,6 @@ use crate::library_words::substitute;
 use crate::node::{symbol, Bracket, Node, Separator};
 use crate::operators::Op;
 use crate::warp_parser::parse;
-use std::cell::Cell;
 
 pub const IMPLICIT_PARAMETER: &str = "it";
 const PARTIAL_LIST: &str = "partial_list";
@@ -114,7 +113,7 @@ fn lowering(node: Node, strict: bool) -> Node {
 	}
 	let context = crate::analyzer::function_context(&node);
 	let first_fresh = first_fresh_number(&node);
-	Lowering { context, counter: Cell::new(first_fresh), strict }.expand(node)
+	Lowering { context, counter: Counter::starting_at(first_fresh), strict }.expand(node)
 }
 
 /// `loop_item_1`, the variable of a loop inlined from a function: an `it` in its body is no loop item but the `it` of
@@ -519,14 +518,13 @@ fn named_function_arguments(items: Vec<Node>, bracket: &Bracket) -> Vec<Node> {
 
 struct Lowering {
 	context: Context,
-	counter: Cell<usize>,
+	counter: Counter,
 	strict: bool,
 }
 
 impl Lowering {
 	fn fresh(&self, prefix: &str) -> String {
-		let number = self.counter.get();
-		self.counter.set(number + 1);
+		let number = self.counter.next_number();
 		format!("{prefix}_{number}")
 	}
 

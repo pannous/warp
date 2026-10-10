@@ -2,6 +2,9 @@
 
 use super::*;
 
+/// The export label of a program global copied into a task's instance (after CAPTURE_EXPORT_PREFIX)
+const GLOBAL_EXPORT_LABEL: &str = "global·";
+
 impl WasmGcEmitter {
 	/// `error("…")` where a number is wanted (the branch of an Int if, analyzer::raises_error): it cannot be an Error value,
 	/// so it fails the run with its message through `returned_error`, which `try` catches; true when it was one
@@ -196,6 +199,8 @@ impl WasmGcEmitter {
 	pub(super) fn allocate_global(&mut self, name: &str, kind: Kind) -> Kind {
 		let global_idx = self.declare_mutable_global(kind);
 		self.ctx.user_globals.insert(name.to_string(), (global_idx, kind));
+		// a function a task runs reads the global as the program has it (`sample_rate` of lib/sound.warp in `go { beep }`)
+		self.export_to_tasks(&format!("{GLOBAL_EXPORT_LABEL}{name}"), global_idx);
 		kind
 	}
 
@@ -206,8 +211,8 @@ impl WasmGcEmitter {
 		_ = crate::analyzer::widen_globals_by_functions(&mut main.globals, self.ctx.user_functions.values(), &self.user_function_kinds(), &self.ctx.closure_variable_targets);
 		let mut names: Vec<&String> = main.globals.keys().filter(|name| !self.ctx.user_globals.contains_key(*name)).collect();
 		names.sort();
-		let typed = self.find_typed_globals(program, &main);
-		let typed_maps = self.find_typed_map_globals(program, &main.globals);
+		// a task's instance copies globals as Nodes, so a program with tasks keeps none in an array or map of its own type
+		let (typed, typed_maps) = if self.spawns_tasks() { Default::default() } else { (self.find_typed_globals(program, &main), self.find_typed_map_globals(program, &main.globals)) };
 		for name in names {
 			if typed_maps.contains(name) {
 				let global = self.declare_typed_map_global();

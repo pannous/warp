@@ -208,3 +208,13 @@ Superseded (P214): floats on the GPU only with @gpu or float32[n]; (b) automatic
    Browser (card gpu-kept): GPU jobs go to the task Worker of the last GPU job (host-gpu.js gpuTaskWorker), which keeps
    the buffers (keptBuffers, by block and count); busy or missing → another worker / an upload (KEPT_MISSING, retried).
    Headless Chrome, samples/gpu_map.warp: the kept-buffer map 18 ms at 10^6, same result as native.
+
+## Painting a shader every frame (samples/gpu_visualizer.warp, 2026-10-10)
+- src/gpu.rs `painter` keeps the compiled module and render pipeline per shader text (16, as host-gpu.js
+  MOST_COMPILED): before, every paint compiled the pipeline anew, 10–20 ms for the raymarching sample on Metal plus
+  driver work, now only the uniform's bind group is made per frame. Test: test_webgpu a_kept_shader_reads_each_frames_values.
+- Measured (debug build, M-series, WARP_NO_WINDOW): the raymarcher's draw + readback 9 ms at 640×360; a paint is
+  ~66 ms even for a one-line shader (probes/gpu/paint_cost.warp): pixels → Node list → PNG in a debug build.
+  That host side, not the GPU, bounds the frame rate.
+- WGSL raymarching tip: a distance field over angular sectors (bars whose height differs per band) must take the
+  neighbor sectors into account (min over beside = -1, 0, 1), or rays step into a taller neighbor: stair artifacts.
