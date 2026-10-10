@@ -72,3 +72,13 @@ fn a_list_starting_with_a_bool_is_a_list() {
 	assert_eq!(text_of("[true, 2]"), "[yes 2]");
 	assert_eq!(text_of("[yes 2]"), "[yes 2]");
 }
+
+// card bool-loses: an untyped parameter given a bool at every call is one, as if written `b: bool`
+#[test]
+fn a_parameter_given_bools_keeps_them() {
+	is!("show(b) := \"got \" + b; show(1<2)", "got yes"); // was "got 1"
+	is!("show(b) := \"got \" + b; ok = 3 > 2; show(ok)", "got yes");
+	assert_eq!(text_of("f(b) := b; f(1 == 1)"), "yes");
+	is!("show(b) := \"got \" + b; show(1<2); show(5)", "got 5"); // given a number too: no bool
+	is!("f(b) := b + 1; f(1 == 1)", 2);
+}
