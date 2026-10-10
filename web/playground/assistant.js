@@ -6,6 +6,8 @@
 //   gray (card g_oQnE), also while the word list (completion.js) is open, which it then closes; Ctrl-Space (or
 //   Alt-Space) asks for it anywhere, Tab takes it; an answer without text says why (card code-completion)
 // - a small chat about the program in the editor (Ask ✦)
+// Without a key, completion and chat ask the playground's proxy (web/assistant/, card assistant-proxy): it holds a key
+// of its own, answers only this page after a Turnstile check, and builds the same prompt itself from assistant.json
 
 const API_KEY_STORAGE = "warp-playground-anthropic-key";
 const API_KEY_VARIABLE = "ANTHROPIC_API_KEY";
@@ -15,18 +17,18 @@ const MESSAGES_URL = `${API_ORIGIN}/v1/messages`;
 const API_VERSION = "2023-06-01";
 const CHAT_MODEL = "claude-sonnet-5-5";
 const COMPLETION_MODEL = "claude-haiku-5-5";
-const CHAT_TOKENS = 2048;
-const COMPLETION_TOKENS = 256;
 // a continuation needs no thinking first: thinking took the 256 tokens, and the answer came without text (card code-completion)
 const NO_THINKING = { type: "disabled" };
 const NOTHING_SUGGESTED = "Claude suggests nothing here.";
-const CURSOR_MARK = "‸";
-// what Claude is told about warp: the guide beside the editor (guide.js) and the keywords build.sh makes, so it stays as
-// current as they are (card completion-terse: the older primer.md said `where` filters comprehensions only)
-const LANGUAGE_GUIDES = ["guide.md", "guide-expert.md"];
+const CURSOR_MARK = "‸"; // where the cursor is, as assistant.json's completion prompts name it
+// what Claude is told: assistant.json's intro, guides and task prompts; the guides are the one beside the editor
+// (guide.js) and the keywords build.sh makes, so the prompt stays as current as they are (card completion-terse)
+const ASSISTANT_SETTINGS = "assistant.json";
+const PROXY_ORIGIN = "https://warp-assistant.pannous.workers.dev";
+const TURNSTILE_SCRIPT = "https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit";
+const TURNSTILE_SITE_KEY = "1x00000000000000000000AA"; // placeholder: Cloudflare's always-passing test key until the real one exists
 const CODE_FENCE = /```([a-z]*)\n?([\s\S]*?)```/g; // a split gives text, language, code, text, …
 const FAILURE_SHOWN_MS = 5000; // how long a failed completion's reason stays under its line
-const NO_KEY = "Paste an Anthropic API key into the ⋯ menu first.";
 const PAUSE_BEFORE_COMPLETION_MS = 1000; // typing paused this long at a line's end asks for a completion by itself
 
 const apiKey = () => stored(API_KEY_STORAGE) ?? "";
@@ -39,29 +41,71 @@ function programEnvironment() {
 	return { environment: { [API_KEY_VARIABLE]: API_KEY_STAND_IN }, secrets: { [API_KEY_STAND_IN]: { value: key, origin: API_ORIGIN } } };
 }
 
-let languageGuide;
+let settings, languageGuide;
+const assistantSettings = () => settings ??= fetch(ASSISTANT_SETTINGS).then(answer => answer.json());
 const guideText = file => fetch(file).then(answer => answer.ok ? answer.text() : "", () => "");
-const keywordsText = () => typeof KEYWORDS === "undefined" ? "" : `Keywords: ${KEYWORDS.hard.join(" ")}\nSoft keywords (a local may take the name): ${KEYWORDS.soft.join(" ")}`;
-const warpGuide = () => languageGuide ??= Promise.all(LANGUAGE_GUIDES.map(guideText)).then(guides => [...guides, keywordsText()].filter(Boolean).join("\n\n"));
+const warpGuide = () => languageGuide ??= assistantSettings().then(({ guides }) => Promise.all(guides.map(guideText))).then(texts => texts.filter(Boolean).join("\n\n"));
 
-// Claude's answer to the messages, as text; a failed request is the API's own reason
-async function askClaude({ model, system, messages, maxTokens, thinking }) {
-	const key = apiKey().trim();
-	if (!key) throw new Error(NO_KEY);
-	const answer = await fetch(MESSAGES_URL, {
-		method: "POST",
-		headers: { "x-api-key": key, "anthropic-version": API_VERSION, "content-type": "application/json", "anthropic-dangerous-direct-browser-access": "true" },
-		body: JSON.stringify({ model, system, messages, max_tokens: maxTokens, thinking }),
-	});
+// the same as web/assistant/assistant.mjs systemPrompt, which builds it for the proxy
+async function systemPrompt(task, program) {
+	const { intro, tasks } = await assistantSettings();
+	return [intro, await warpGuide(), tasks[task].prompt, tasks[task].program ? program : ""].filter(Boolean).join("\n\n");
+}
+
+// the answer's JSON; a failed request is the API's (or the proxy's) own reason
+async function replyOf(answer) {
 	const reply = await answer.json().catch(() => ({}));
 	if (!answer.ok) throw new Error(reply.error?.message ?? `HTTP status ${answer.status}`);
+	return reply;
+}
+
+const postJson = (url, body, headers = {}) => fetch(url, { method: "POST", headers: { "content-type": "application/json", ...headers }, body: JSON.stringify(body) });
+
+// Claude's answer for one of assistant.json's tasks, as text: with a pasted key straight from the API, else from the proxy
+async function askClaude({ task, messages, program }) {
+	const { tokens, thinking } = (await assistantSettings()).tasks[task];
+	const key = apiKey().trim();
+	const reply = await replyOf(key ? await postJson(MESSAGES_URL, {
+		model: task === "chat" ? CHAT_MODEL : COMPLETION_MODEL,
+		system: await systemPrompt(task, program),
+		messages, max_tokens: tokens, thinking: thinking === false ? NO_THINKING : undefined,
+	}, { "x-api-key": key, "anthropic-version": API_VERSION, "anthropic-dangerous-direct-browser-access": "true" }) : await askProxy({ task, messages, program }));
 	const text = reply.content?.filter(part => part.type === "text").map(part => part.text).join("") ?? "";
-	if (!text && reply.stop_reason === "max_tokens") throw new Error(`Claude's answer ran out of its ${maxTokens} tokens before any text.`);
+	if (!text && reply.stop_reason === "max_tokens") throw new Error(`Claude's answer ran out of its ${tokens} tokens before any text.`);
 	return text;
 }
 
-async function systemPrompt(task) {
-	return `You help with warp, a data format and wasm-first programming language. Its guide:\n\n${await warpGuide()}\n\n${task}`;
+// ---- the proxy: a session token for an hour after one Turnstile check, renewed when the proxy refuses it -------------
+
+let proxySession; // the promise of the proxy's session token
+
+async function askProxy(request, renewed = false) {
+	proxySession ??= openProxySession().catch(failure => { proxySession = undefined; throw failure; });
+	const answer = await postJson(`${PROXY_ORIGIN}/messages`, request, { authorization: `Bearer ${await proxySession}` });
+	if (answer.status !== 401 || renewed) return answer;
+	proxySession = undefined;
+	return askProxy(request, true);
+}
+
+async function openProxySession() {
+	return (await replyOf(await postJson(`${PROXY_ORIGIN}/session`, { turnstile: await turnstileToken() }))).session;
+}
+
+let turnstileLoaded;
+const loadTurnstile = () => turnstileLoaded ??= new Promise((resolve, reject) => document.head.append(element("script", {
+	src: TURNSTILE_SCRIPT, onload: resolve, onerror: () => { turnstileLoaded = undefined; reject(new Error("The bot check (Cloudflare Turnstile) did not load.")); },
+})));
+
+// Turnstile's token, invisible unless Cloudflare wants the visitor to click
+async function turnstileToken() {
+	await loadTurnstile();
+	const box = element("div", { className: "turnstile" });
+	document.body.append(box);
+	return new Promise((resolve, reject) => turnstile.render(box, {
+		sitekey: TURNSTILE_SITE_KEY, appearance: "interaction-only",
+		callback: token => { box.remove(); resolve(token); },
+		"error-callback": code => { box.remove(); reject(new Error(`The bot check (Cloudflare Turnstile) failed: ${code}.`)); },
+	}));
 }
 
 // ---- completion: Claude's continuation at the cursor, shown in gray until Tab takes it ----------------------------
@@ -86,8 +130,7 @@ async function suggestCompletion(editor, automatic = false) {
 	const shown = automatic ? undefined : editor.addLineWidget(at.line, element("div", { className: "completion-pending" }, "asking Claude…"));
 	try {
 		const inComment = isInComment(editor.getRange({ line: 0, ch: 0 }, at));
-		const system = await systemPrompt(inComment ? COMMENT_TASK : COMPLETION_TASK);
-		const text = terseContinuation(await askClaude({ model: COMPLETION_MODEL, system, messages: [{ role: "user", content: code }], maxTokens: COMPLETION_TOKENS, thinking: NO_THINKING }), inComment);
+		const text = terseContinuation(await askClaude({ task: inComment ? "comment" : "completion", messages: [{ role: "user", content: code }] }), inComment);
 		if (asked !== edits || !sameSpot(editor.getCursor(), at)) return;
 		if (!text) {
 			if (!automatic) throw new Error(NOTHING_SUGGESTED);
@@ -106,11 +149,10 @@ async function suggestCompletion(editor, automatic = false) {
 	}
 }
 
-// typing paused at the end of a line that has something on it, with a key and nothing selected; an open word list
-// does not hold it back (it was open at most pauses after a word, so no continuation came)
+// typing paused at the end of a line that has something on it, nothing selected; an open word list does not hold it
+// back (it was open at most pauses after a word, so no continuation came)
 function completeAfterPause(editor) {
 	clearTimeout(pauseTimer);
-	if (!apiKey().trim()) return;
 	pauseTimer = setTimeout(() => {
 		const at = editor.getCursor();
 		const line = editor.getLine(at.line);
@@ -121,8 +163,6 @@ function completeAfterPause(editor) {
 // ---- the continuation as shown: code only, usually one line (card completion-terse) ----------------------------------
 // the prompt asks for that, and an answer that still explains, shows a result or comments loses those lines here
 
-const COMPLETION_TASK = `Complete the warp program at ${CURSOR_MARK}. Answer with only the code to insert there, usually a single line, more only to close what it opens: no explanation, no comment, no result, no code fence; nothing at all when nothing fits.`;
-const COMMENT_TASK = `The cursor ${CURSOR_MARK} is inside a comment of the warp program: continue the comment, briefly. Answer with only the text to insert there.`;
 const PROSE_START = /^(?:hmm|wait|note|actually|alternatively|here's|here is|let me|i think|explanation|output|result)\b/i;
 const PROSE_WORD = /^[A-Za-z][a-z']*[,.;:!?…]*$/;
 const SENTENCE_MARK = /[.!?…:]$|, /;
@@ -304,8 +344,7 @@ async function sendChat(editor, question) {
 	const waiting = element("div", { className: "chat-pending" }, "…");
 	log.append(waiting);
 	try {
-		const system = await systemPrompt(`Answer questions about this program, briefly. Give warp code in fenced blocks. To change the program in the editor, give the change as a unified diff of it in a \`\`\`diff block (@@ headers with its line numbers, a few lines of context); a new program as a whole \`\`\`warp block.\n\n${currentProgram(editor)}`);
-		const answer = await askClaude({ model: CHAT_MODEL, system, messages: conversation, maxTokens: CHAT_TOKENS });
+		const answer = await askClaude({ task: "chat", messages: conversation, program: currentProgram(editor) });
 		if (!waiting.isConnected) return; // the chat was cleared meanwhile
 		conversation.push({ role: "assistant", content: answer });
 		waiting.replaceWith(answerElement(editor, answer));
