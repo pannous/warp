@@ -15,9 +15,9 @@ person = {name: "Ada", address: {city: "London"}}; person.address.city
 ```
 
 ## Numbers
-Integers are unbounded, decimals and fractions exact, `/` never truncates (`//` floors); `√ ∛ ² π` are operators.
+Integers are unbounded, fractions exact, decimals floats (compare with `≈`), `/` never truncates (`//` floors); `√ ∛ ² π` are operators.
 ```warp => [1267650600228229401496703205376 yes yes 3.5 3 2]
-[2^100, 0.1 + 0.2 == 0.3, 1/3 + 1/6 == 1/2, 7/2, 7//2, √4]
+[2^100, 0.1 + 0.2 ≈ 0.3, 1/3 + 1/6 == 1/2, 7/2, 7//2, √4]
 ```
 Numbers carry units, converted on arithmetic; `±` is an uncertain value.
 ```warp => 150min
@@ -231,7 +231,7 @@ square(x) := x * x; law square(-x) == square(x); test square(3) == 9; square(3)
 ```
 
 ## Decided differences from other languages
-- `7/2` is `3.5` (exact); `0.1+0.2 == 0.3`; `010` is 10; integers never overflow.
+- `7/2` is `3.5` (exact); `0.1+0.2` is a float, `0.1+0.2 ≈ 0.3`, `==` on floats warns; `010` is 10; integers never overflow.
 - `xs#1` is the first item, `xs[0]` too; `last(xs)` the last (negative indexes don't wrap).
 - `1 == "1"` is `no`: no loose equality; `"0"` is truthy.
 - `=` inside an `if`/`while` condition compares; `3 > 2 > 1` chains like math; `-2^2` is `-4`, `2^3^2` is 512.

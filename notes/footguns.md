@@ -122,7 +122,8 @@
 - Fixed: `1/4+1/4` → 0 (analyzer::arithmetic_kind). Exact rationals by default (src/wasm_emitter/exact.rs): an Int handle
   may point at a `$Ratio{num,den}` of Int payloads in the same heap as `$BigInt`; integer fast paths unchanged, only the
   slow paths dispatch on `is_ratio`. `0.1+0.2==0.3`, `1/3*3==1`, `2^-2` → 0.25 (used to trap), `1/0` → ∞, `0/0` → NaN (den 0).
-- Decimal literals with ≤ 15 significant digits are exact (`Number::is_exact_decimal`); π, sqrt, FFI floats stay f64.
+- Decimal literals are f64 floats since decision exact-default (2026-10-10): `0.1+0.2 ≈ 0.3`, `==` on floats warns
+  (fix: use ≈); integer division stays exact (`1/3 + 1/3` is 2/3), a ratio meeting a float gives a float.
 - Left open (Decision needed in Footguns.md): negative modulo (existing tests pin C semantics), rounding-mode naming,
   bool kind, and `test_float_plus_int_type_upgrading` which requires a Float where the exact result is now a Quotient.
 - Fixed: ratios with parts beyond i64 read back as `Number::BigQuotient` (exact), not f64; Quotient stays (i64,i64).

@@ -32,6 +32,6 @@ fn same_is_the_word() {
 #[test]
 fn scalars_stay_type_and_value() {
 	is!("0 === no", false);
-	is!("1 === 1.0", true);
+	is!("1 === 1.0", false); // an int and a float differ in type (decision exact-default)
 	is!("\"ab\" === \"ab\"", true);
 }

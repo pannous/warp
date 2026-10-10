@@ -122,6 +122,12 @@ pub fn is_exact_fraction_type(word: &str) -> bool {
 	name != "int" && type_matches("int", name) && !type_matches("float", name)
 }
 
+/// A decimal written for this type is the exact fraction it spells: the exact fractions and `real`, whose exact reals
+/// also hold floats (decision exact-default: elsewhere a decimal is a float)
+pub fn spells_decimals_exactly(word: &str) -> bool {
+	is_exact_fraction_type(word) || canonical_spec_word(word) == "real"
+}
+
 /// Does a value of the static type name `actual` (`type(x)`) have the type `spec`: actual is spec or a type spec covers,
 /// `list of number` every list of numbers
 pub fn type_matches(actual: &str, spec: &str) -> bool {

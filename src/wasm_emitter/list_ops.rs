@@ -663,6 +663,12 @@ impl WasmGcEmitter {
 			Self::emit_list(f, &[I::I64Const('0' as i64), I::I64Sub, I::LocalTee(value), I::I64Const(9), I::I64GtU]);
 			s.emit_fail_if(f, "invalid_number");
 			Self::emit_list(f, &[I::LocalGet(value), I::Return, I::End]);
+			// a float truncates toward zero (`(x*x) as int` of a float parameter held as a Node)
+			let (node_type, float_box) = (s.type_manager.node_type, s.type_manager.f64_box_type);
+			s.emit_field(f, 0, 0);
+			Self::emit_list(f, &[I::I64Const(KIND_MASK), I::I64And, I::I64Const(Kind::Float as i64), I::I64Eq, I::If(BlockType::Empty), I::LocalGet(0)]);
+			Self::emit_list(f, &[I::StructGet { struct_type_index: node_type, field_index: 1 }, I::RefCastNonNull(HeapType::Concrete(float_box))]);
+			Self::emit_list(f, &[I::StructGet { struct_type_index: float_box, field_index: 0 }, I::I64TruncSatF64S, I::Return, I::End]);
 			s.emit_field(f, 0, 0);
 			Self::emit_list(f, &[I::I64Const(KIND_MASK), I::I64And, I::I64Const(Kind::Text as i64), I::I64Ne, I::If(BlockType::Empty), I::LocalGet(0)]);
 			s.call(f, "get_int_value");
@@ -1030,8 +1036,8 @@ impl WasmGcEmitter {
 		}
 		let fixnum_offset = super::big_int::FIXNUM_OFFSET;
 		Self::emit_list(func, &[I::LocalGet(local), I::I64Const(fixnum_offset), I::I64Add, I::I64Const(0), I::I64LtS, I::If(BlockType::Empty)]);
-		self.emit_heap_get(func, local);
-		func.instruction(&I::RefTestNullable(HeapType::Concrete(self.type_manager.ratio_type)));
+		func.instruction(&I::LocalGet(local));
+		self.call(func, "is_ratio");
 		self.emit_fail_if(func, error);
 		func.instruction(&I::End);
 	}
@@ -1423,6 +1429,15 @@ impl WasmGcEmitter {
 
 	pub(super) fn arithmetic_type(&self, left: &Node, op: &crate::operators::Op, right: &Node) -> Kind {
 		crate::analyzer::arithmetic_kind_of_operands(self.get_type(left), op, self.get_type(right), right)
+	}
+
+	/// Arithmetic on a value whose kind only the run time knows (`x*x` of a parameter held as a Node): maybe a float
+	pub(super) fn computes_at_run_time_kind(&self, value: &Node) -> bool {
+		match value.drop_meta() {
+			Node::Key(left, op, right) if op.is_arithmetic() => crate::analyzer::node_arithmetic(self.get_type(left), op, self.get_type(right)).is_some(),
+			Node::List(items, crate::node::Bracket::Round, _) if items.len() == 1 => self.computes_at_run_time_kind(&items[0]),
+			_ => false,
+		}
 	}
 
 	/// ø (an Empty node) in local `list` becomes null, the end of a cons list
