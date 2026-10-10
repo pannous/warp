@@ -3,7 +3,8 @@
 // - programs `agent "…"` (lib/agent.warp): env("ANTHROPIC_API_KEY") is a stand-in the worker swaps for the key only
 //   in a request to the API (host-files.js withPageSecret), so no program can send the key elsewhere
 // - completion in the editor: with a key, a pause in typing at the end of a line shows Claude's continuation there in
-//   gray (card g_oQnE), Ctrl-Space (or Alt-Space) asks for it anywhere, Tab takes it
+//   gray (card g_oQnE), also while the word list (completion.js) is open, which it then closes; Ctrl-Space (or
+//   Alt-Space) asks for it anywhere, Tab takes it; an answer without text says why (card code-completion)
 // - a small chat about the program in the editor (Ask ✦)
 
 const API_KEY_STORAGE = "warp-playground-anthropic-key";
@@ -16,6 +17,9 @@ const CHAT_MODEL = "claude-sonnet-5-5";
 const COMPLETION_MODEL = "claude-haiku-5-5";
 const CHAT_TOKENS = 2048;
 const COMPLETION_TOKENS = 256;
+// a continuation needs no thinking first: thinking took the 256 tokens, and the answer came without text (card code-completion)
+const NO_THINKING = { type: "disabled" };
+const NOTHING_SUGGESTED = "Claude suggests nothing here.";
 const CURSOR_MARK = "‸";
 const LANGUAGE_GUIDE = "primer.md"; // the language in short, what Claude is told about warp; the site serves it as /llms.txt too
 const CODE_FENCE = /```[a-z]*\n?([\s\S]*?)```/g;
@@ -37,17 +41,19 @@ let languageGuide;
 const warpGuide = () => languageGuide ??= fetch(LANGUAGE_GUIDE).then(answer => answer.ok ? answer.text() : "", () => "");
 
 // Claude's answer to the messages, as text; a failed request is the API's own reason
-async function askClaude({ model, system, messages, maxTokens }) {
+async function askClaude({ model, system, messages, maxTokens, thinking }) {
 	const key = apiKey().trim();
 	if (!key) throw new Error(NO_KEY);
 	const answer = await fetch(MESSAGES_URL, {
 		method: "POST",
 		headers: { "x-api-key": key, "anthropic-version": API_VERSION, "content-type": "application/json", "anthropic-dangerous-direct-browser-access": "true" },
-		body: JSON.stringify({ model, system, messages, max_tokens: maxTokens }),
+		body: JSON.stringify({ model, system, messages, max_tokens: maxTokens, thinking }),
 	});
 	const reply = await answer.json().catch(() => ({}));
 	if (!answer.ok) throw new Error(reply.error?.message ?? `HTTP status ${answer.status}`);
-	return reply.content?.filter(part => part.type === "text").map(part => part.text).join("") ?? "";
+	const text = reply.content?.filter(part => part.type === "text").map(part => part.text).join("") ?? "";
+	if (!text && reply.stop_reason === "max_tokens") throw new Error(`Claude's answer ran out of its ${maxTokens} tokens before any text.`);
+	return text;
 }
 
 async function systemPrompt(task) {
@@ -60,6 +66,7 @@ let suggestion; // { bookmark, text, at }
 let edits = 0; // changes so far: an answer to older code is not shown
 let pauseTimer;
 let failureShown; // an automatic completion's failure is shown once, not at every pause
+let closeWordList = () => {}; // completion.js's list, closed when Claude's continuation shows, so Tab takes that
 
 function dismissSuggestion() {
 	suggestion?.bookmark.clear();
@@ -75,8 +82,13 @@ async function suggestCompletion(editor, automatic = false) {
 	const shown = automatic ? undefined : editor.addLineWidget(at.line, element("div", { className: "completion-pending" }, "asking Claude…"));
 	try {
 		const system = await systemPrompt(`Complete the warp program at ${CURSOR_MARK}. Answer with only the text to insert there: no explanation, no code fence.`);
-		const text = (await askClaude({ model: COMPLETION_MODEL, system, messages: [{ role: "user", content: code }], maxTokens: COMPLETION_TOKENS })).replace(CODE_FENCE, "$1");
-		if (!text || asked !== edits || !sameSpot(editor.getCursor(), at)) return;
+		const text = (await askClaude({ model: COMPLETION_MODEL, system, messages: [{ role: "user", content: code }], maxTokens: COMPLETION_TOKENS, thinking: NO_THINKING })).replace(CODE_FENCE, "$1");
+		if (asked !== edits || !sameSpot(editor.getCursor(), at)) return;
+		if (!text) {
+			if (!automatic) throw new Error(NOTHING_SUGGESTED);
+			return;
+		}
+		closeWordList();
 		const bookmark = editor.setBookmark(at, { widget: element("span", { className: "completion" }, text), insertLeft: true });
 		suggestion = { bookmark, text, at };
 	} catch (failure) {
@@ -89,15 +101,15 @@ async function suggestCompletion(editor, automatic = false) {
 	}
 }
 
-// typing paused at the end of a line that has something on it, with a key and nothing selected or listed
+// typing paused at the end of a line that has something on it, with a key and nothing selected; an open word list
+// does not hold it back (it was open at most pauses after a word, so no continuation came)
 function completeAfterPause(editor) {
 	clearTimeout(pauseTimer);
 	if (!apiKey().trim()) return;
 	pauseTimer = setTimeout(() => {
 		const at = editor.getCursor();
 		const line = editor.getLine(at.line);
-		const listed = document.querySelector(".completions:not([hidden])");
-		if (editor.hasFocus() && !editor.somethingSelected() && !listed && at.ch === line.length && line.trim()) suggestCompletion(editor, true);
+		if (editor.hasFocus() && !editor.somethingSelected() && at.ch === line.length && line.trim()) suggestCompletion(editor, true);
 	}, PAUSE_BEFORE_COMPLETION_MS);
 }
 
@@ -126,6 +138,13 @@ function answerElement(editor, text) {
 		: element("div", { className: "chat-code" }, element("pre", {}, part), element("button", { type: "button", onclick: () => editor.setValue(part) }, "put into the editor"))));
 }
 
+// the chat starts anew: nothing shown, nothing sent along with the next question
+function clearChat() {
+	conversation.length = 0;
+	$("chat-log").replaceChildren();
+	$("chat-input").focus();
+}
+
 async function sendChat(editor, question) {
 	const log = $("chat-log");
 	log.append(element("div", { className: "chat-question" }, question));
@@ -135,17 +154,20 @@ async function sendChat(editor, question) {
 	try {
 		const system = await systemPrompt(`Answer questions about this program, briefly. Give warp code in fenced blocks.\n\n${currentProgram(editor)}`);
 		const answer = await askClaude({ model: CHAT_MODEL, system, messages: conversation, maxTokens: CHAT_TOKENS });
+		if (!waiting.isConnected) return; // the chat was cleared meanwhile
 		conversation.push({ role: "assistant", content: answer });
 		waiting.replaceWith(answerElement(editor, answer));
 	} catch (failure) {
-		conversation.pop();
+		if (waiting.isConnected) conversation.pop();
 		waiting.replaceWith(element("div", { className: "chat-failed" }, failure.message));
 	}
 	log.scrollTop = log.scrollHeight;
 }
 
-// the key field, the editor's completion keys, the chat; `keyChanged` tells the worker the new environment
-function startAssistant(editor, keyChanged) {
+// the key field, the editor's completion keys, the chat; `keyChanged` tells the worker the new environment,
+// `wordList` is the editor's word completion (completion.js startCompletion)
+function startAssistant(editor, keyChanged, wordList) {
+	closeWordList = wordList.close;
 	$("api-key").value = apiKey();
 	$("api-key").onchange = event => { saveApiKey(event.target.value.trim()); failureShown = undefined; keyChanged(); };
 	editor.addKeyMap({ "Ctrl-Space": suggestCompletion, "Alt-Space": suggestCompletion, Tab: takeSuggestion, Esc: dismissSuggestion });
@@ -156,6 +178,7 @@ function startAssistant(editor, keyChanged) {
 	});
 	editor.on("cursorActivity", () => suggestion && !sameSpot(editor.getCursor(), suggestion.at) && dismissSuggestion());
 	$("ask").onclick = () => { $("assistant").hidden = !$("assistant").hidden; $("chat-input").focus(); };
+	$("chat-clear").onclick = clearChat;
 	$("chat-form").onsubmit = event => {
 		event.preventDefault();
 		const question = $("chat-input").value.trim();

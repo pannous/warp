@@ -82,7 +82,7 @@ fn program_file_with(extension: &str) -> Option<String> {
 fn stored_statement(statement: &Node, file: &str) -> Option<Vec<Node>> {
 	let Node::List(items, _, _) = statement.drop_meta() else { return None };
 	let [word, assignment] = items.as_slice() else { return None };
-	if !matches!(word.drop_meta(), Node::Symbol(word) if word == STORED_WORD) {
+	if !word.is_symbol(STORED_WORD) {
 		return None;
 	}
 	let Node::Key(name, Op::Assign | Op::Define, default) = assignment.drop_meta() else { return None };

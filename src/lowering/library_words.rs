@@ -384,7 +384,7 @@ fn list_constructor_calls(node: Node, defined: &HashSet<String>) -> Node {
 				[Node::List(arguments, Bracket::Round, _)] => arguments.clone(),
 				arguments => arguments.to_vec(),
 			};
-			let is_list_word = matches!(items[0].drop_meta(), Node::Symbol(name) if name == LIST_WORD);
+			let is_list_word = items[0].is_symbol(LIST_WORD);
 			match elements.is_empty() {
 				true => Node::Empty,
 				false if is_list_word => Node::List(items.into_iter().map(|item| list_constructor_calls(item, defined)).collect(), Bracket::Round, Separator::None), // `list(x)` is `x as list`
@@ -1354,5 +1354,5 @@ fn keyword_definition_parameters(items: &[Node]) -> Option<Vec<String>> {
 
 /// The word `of` (`first of xs`, `name of person`)
 fn is_of(node: &Node) -> bool {
-	matches!(node.drop_meta(), Node::Symbol(word) if word == OF_WORD)
+	node.is_symbol(OF_WORD)
 }

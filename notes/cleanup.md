@@ -132,6 +132,8 @@ Done:
 - identical bodies (found by comparing fn bodies with parameters renamed): `block`, `if_then`, `if_then_else` moved
   from variable_signals to nodes.rs and replace ~12 spelled-out `key(key(ø, If, c), Then, b)`; `is_block`,
   `is_colon_pair`, `is_binding`, `is_function_keyword` (2 copies each) → nodes.rs; two `statements`/`entries` → Node::as_items
+- `match x.drop_meta() { Node::Symbol(n) => Some(n.clone()), _ => None }` (16 sites) → `x.symbol_name().map(String::from)`;
+  `matches!(x.drop_meta(), Node::Symbol(w) if w == WORD)` (43 sites) → `x.is_symbol(WORD)`
 
 Left (each changes behaviour or needs care):
 - Node::map_children also enters class bodies (Node::Type); children_rewritten does not. ~40 more passes spell out

@@ -295,7 +295,7 @@ fn arrow_parts(head: &Node, body: &Node) -> Option<Lambda> {
 	};
 	let (body, result_type) = match body.drop_meta() {
 		Node::List(parts, Bracket::None, separator @ Separator::Space) if matches!(left.drop_meta(), Node::List(_, Bracket::Round, _)) => match parts.as_slice() {
-			[result, word, rest @ ..] if !rest.is_empty() && matches!(word.drop_meta(), Node::Symbol(word) if word == SWIFT_IN) => {
+			[result, word, rest @ ..] if !rest.is_empty() && word.is_symbol(SWIFT_IN) => {
 				let body = match rest { [single] => single.clone(), many => Node::List(many.to_vec(), Bracket::None, separator.clone()) };
 				(body, Some(result.clone()))
 			}
@@ -410,7 +410,7 @@ fn unbound_it(node: &Node) -> Option<Node> {
 /// `it = 3` anywhere: the program's own variable it
 fn assigns_it(program: &Node) -> bool {
 	let mut found = false;
-	program.visit(&mut |node| found |= matches!(node, Node::Key(target, Op::Assign, _) if matches!(target.drop_meta(), Node::Symbol(name) if name == IMPLICIT_PARAMETER)));
+	program.visit(&mut |node| found |= matches!(node, Node::Key(target, Op::Assign, _) if target.is_symbol(IMPLICIT_PARAMETER)));
 	found
 }
 
@@ -435,13 +435,10 @@ fn swift_closure(items: &[Node]) -> Option<Lambda> {
 	let (last, leading) = items.split_last()?;
 	let Node::List(parts, Bracket::None, Separator::Space) = last.drop_meta() else { return None };
 	let [name, word, body @ ..] = parts.as_slice() else { return None };
-	if !matches!(word.drop_meta(), Node::Symbol(word) if word == SWIFT_IN) || body.is_empty() {
+	if !word.is_symbol(SWIFT_IN) || body.is_empty() {
 		return None;
 	}
-	let params: Vec<String> = leading.iter().chain([name]).map(|param| match param.drop_meta() {
-		Node::Symbol(param) => Some(param.clone()),
-		_ => None,
-	}).collect::<Option<_>>()?;
+	let params: Vec<String> = leading.iter().chain([name]).map(|param| param.symbol_name().map(String::from)).collect::<Option<_>>()?;
 	let body = match body {
 		[single] => single.clone(),
 		many => Node::List(many.to_vec(), Bracket::None, Separator::Space),
@@ -650,7 +647,7 @@ impl Lowering {
 			// `map square on xs` of a known `square`: the parser applied it, `map (square (on xs))`
 			let rest = spliced_applications(rest.to_vec());
 			// `map square on xs`, `map &square xs`: the function may come first
-			let rest: Vec<Node> = rest.iter().filter(|item| !matches!(item.drop_meta(), Node::Symbol(word) if word == ON_WORD)).cloned().collect();
+			let rest: Vec<Node> = rest.iter().filter(|item| !item.is_symbol(ON_WORD)).cloned().collect();
 			let rest = match rest.as_slice() {
 				[first, second] if iteration.extra_arguments == 0 && self.is_function_value(first) && !self.is_function_value(second) => vec![second.clone(), first.clone()],
 				_ => rest,

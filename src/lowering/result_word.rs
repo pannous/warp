@@ -23,7 +23,7 @@ fn mentions(node: &Node) -> bool {
 
 fn assigns_result(node: &Node) -> bool {
 	let mut found = false;
-	node.visit(&mut |part| found |= matches!(part, Node::Key(target, Op::Assign | Op::Define, _) if matches!(target.drop_meta(), Node::Symbol(name) if name == RESULT_WORD)));
+	node.visit(&mut |part| found |= matches!(part, Node::Key(target, Op::Assign | Op::Define, _) if target.is_symbol(RESULT_WORD)));
 	found
 }
 

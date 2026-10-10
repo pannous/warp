@@ -17,15 +17,31 @@ const WAV_HEADER_BYTES = 44;
 const writtenFiles = new Map();
 const filePath = path => path.replace(/^\.\//, "");
 const textOf = written => typeof written === "string" ? written : utf8Decoder.decode(written);
+// a task's Worker starts with the files written so far (host-tasks.js startTask) and hands the program's Worker each
+// one it wrote with its result (task-worker.js self.taskWrote), as natively the tasks of a run share the file system
+self.writtenFilesForTask = () => writtenFiles;
+self.takeWrittenFiles = files => files?.forEach((content, path) => writtenFiles.set(path, content));
+
+// a file written (a text) or rendered (bytes, which the page offers for download: worker.js self.keepFile)
+function keepWritten(path, content) {
+	writtenFiles.set(filePath(path), content);
+	if (typeof content !== "string") self.keepFile?.(filePath(path), content);
+	self.taskWrote?.(path, content);
+}
 
 const textOfFile = path => {
 	const written = writtenFiles.get(filePath(path));
 	return written !== undefined ? textOf(written) : servedFileExists(path) ? readFile(filePath(path)) : "";
 };
+// whether a file of the served repository, of the page or at a URL is there, asked without its body (a song may be large)
 function servedFileExists(path) {
+	const url = fileUrl(path);
+	if (isUnserved(url)) return false;
 	try {
-		readBytes(path);
-		return true;
+		const request = new XMLHttpRequest();
+		request.open("HEAD", url, false);
+		request.send();
+		return request.status > 0 && request.status < 400;
 	} catch {
 		return false;
 	}
@@ -368,8 +384,8 @@ addHostPart({
 			names: file => Object.keys(valuesOf(file)),
 		},
 		file: {
-			write: (path, content) => { writtenFiles.set(filePath(path), contentText(content)); return null; },
-			append: (path, content) => { writtenFiles.set(filePath(path), textOfFile(path) + contentText(content)); return null; },
+			write: (path, content) => { keepWritten(path, contentText(content)); return null; },
+			append: (path, content) => { keepWritten(path, textOfFile(path) + contentText(content)); return null; },
 			exists: path => writtenFiles.has(filePath(path)) || servedFileExists(path),
 			list: folder => {
 				const prefix = filePath(folder).replace(/\/?$/, "/");
@@ -385,10 +401,13 @@ addHostPart({
 		// `play "song.mp3"`, `stop_sound` (lib/sound.warp, card sound-library): the page plays it with an <audio>
 		// (worker.js self.playSoundFile, playground.js); a run without a page (tests, node) stays silent, as natively
 		sound: {
-			// a rendered WAV goes to the page as its bytes, a served or remote file by its URL
+			// a written file (a rendered WAV) goes to the page as its bytes, a served or remote one by its URL; a local file
+			// that is not there fails as natively (card browser-play)
 			play_file: path => {
-				const written = writtenFiles.get(filePath(contentText(path)));
-				self.playSoundFile?.(contentText(path), typeof written === "string" ? undefined : written);
+				const name = contentText(path);
+				const written = writtenFiles.has(filePath(name));
+				if (!written && !/^https?:/.test(name) && !servedFileExists(name)) throw new Error(`cannot open ${name}: ${FILE_NOT_FOUND}`);
+				self.playSoundFile?.(fileUrl(name), written ? readBytes(name) : undefined);
 				return self.lastSoundHandle?.() ?? 0;
 			},
 			// stop_sound(handle) the sound play gave that handle (card sound-pro), handle 0 all of them
@@ -398,7 +417,7 @@ addHostPart({
 			queued: () => self.soundsQueued?.() ?? 0,
 			wait: () => null,
 			// the run's sounds since its start or the last render, one WAV (src/sound.rs render): its seconds; the page
-			// offers it for download (worker.js self.keepFile)
+			// offers it for download
 			render(path) {
 				const sounds = this.holder.unrenderedSounds ?? [];
 				this.holder.unrenderedSounds = [];
@@ -407,8 +426,7 @@ addHostPart({
 				if (other) throw new Error(`sounds of ${rate} and ${other.rate} samples per second cannot share ${contentText(path)}`);
 				const samples = sounds.flatMap(sound => sound.samples);
 				const bytes = wavOf(samples, rate);
-				writtenFiles.set(filePath(contentText(path)), bytes);
-				self.keepFile?.(filePath(contentText(path)), bytes);
+				keepWritten(contentText(path), bytes);
 				return samples.length / rate;
 			},
 		},

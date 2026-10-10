@@ -68,10 +68,7 @@ fn with_undo_statements(node: Node) -> Node {
 /// `x = …` at the main level
 fn assigned_name(statement: &Node) -> Option<String> {
 	let Node::Key(name, Op::Assign | Op::Define, _) = statement.drop_meta() else { return None };
-	match name.drop_meta() {
-		Node::Symbol(name) => Some(name.clone()),
-		_ => None,
-	}
+	name.symbol_name().map(String::from)
 }
 
 fn from_template(template: &str, name: &str) -> Node {

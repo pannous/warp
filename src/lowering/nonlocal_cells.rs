@@ -86,7 +86,7 @@ fn through_cell(node: Node, variable: &str, cell: &Node) -> Node {
 	}
 	match node {
 		Node::Symbol(ref name) if name == variable => get(),
-		Node::Key(keyword, Op::Colon, names) if matches!(keyword.drop_meta(), Node::Symbol(word) if word == NONLOCAL) => Node::Key(keyword, Op::Colon, names),
+		Node::Key(keyword, Op::Colon, names) if keyword.is_symbol(NONLOCAL) => Node::Key(keyword, Op::Colon, names),
 		Node::Key(target, Op::Assign | Op::Define, value) if is_variable(&target) => set(through_cell(*value, variable, cell)),
 		Node::Key(target, op, value) if is_variable(&target) && op.is_compound_assign() => {
 			set(key(get(), op.base_op(), through_cell(*value, variable, cell)))

@@ -106,6 +106,11 @@ pub fn witness_name(operation: &str, type_name: &str) -> String {
 	format!("{operation}{WITNESS_SEPARATOR}{type_name}")
 }
 
+/// The operation of a witness name, `agent` for `agent·1`; a name that is none is its own
+pub fn witness_operation(name: &str) -> &str {
+	name.split_once(WITNESS_SEPARATOR).map_or(name, |(operation, _)| operation)
+}
+
 /// The declared type of a witness name, `person` for `compare·person`
 pub fn witness_type<'a>(name: &'a str, operation: &str) -> Option<&'a str> {
 	name.strip_prefix(operation)?.strip_prefix(WITNESS_SEPARATOR)
@@ -408,10 +413,7 @@ fn operation(requirement: &Node) -> Option<Operation> {
 		Node::Symbol(name) => (name.clone(), vec![DEFAULT_PARAMETER.to_string()]),
 		Node::List(items, Bracket::Round, _) => {
 			let Node::Symbol(name) = items.first()?.drop_meta() else { return None };
-			let parameters: Option<Vec<String>> = items[1..].iter().map(|parameter| match parameter.drop_meta() {
-				Node::Symbol(parameter) => Some(parameter.clone()),
-				_ => None,
-			}).collect();
+			let parameters: Option<Vec<String>> = items[1..].iter().map(|parameter| parameter.symbol_name().map(String::from)).collect();
 			(name.clone(), parameters.filter(|parameters| !parameters.is_empty())?)
 		}
 		_ => return None,
@@ -424,7 +426,7 @@ fn operation(requirement: &Node) -> Option<Operation> {
 /// Rust's `fn area(&self) -> f64`: the operation `area(x)` (the result type and parameter types dropped)
 fn foreign_signature(requirement: &Node) -> Option<Operation> {
 	let (name, parameters) = signature_call(requirement)?;
-	let is_receiver = |parameter: &Node| matches!(parameter.drop_meta(), Node::Symbol(word) if word == SELF_WORD) || matches!(parameter.drop_meta(), Node::Key(_, _, word) if word.drop_meta().name() == SELF_WORD);
+	let is_receiver = |parameter: &Node| parameter.is_symbol(SELF_WORD) || matches!(parameter.drop_meta(), Node::Key(_, _, word) if word.drop_meta().name() == SELF_WORD);
 	let names = parameters.iter().filter(|parameter| !is_receiver(parameter)).map(|parameter| match parameter.drop_meta() {
 		Node::Key(name, Op::Colon, _) => Some(name.drop_meta().name()),
 		Node::Symbol(name) => Some(name.clone()),

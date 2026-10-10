@@ -110,14 +110,14 @@ fn all_calls(node: Node) -> Node {
 /// `all xs` as an argument: xs
 fn all_marked(argument: &Node) -> Option<&Node> {
 	match argument.drop_meta() {
-		Node::List(words, Bracket::None, Separator::Space) if words.len() == 2 && matches!(words[0].drop_meta(), Node::Symbol(word) if word == ALL_WORD) => Some(&words[1]),
+		Node::List(words, Bracket::None, Separator::Space) if words.len() == 2 && words[0].is_symbol(ALL_WORD) => Some(&words[1]),
 		_ => None,
 	}
 }
 
 /// The function and the list of `f all xs`, also as the parser nests a known function's argument, `f (all xs)`
 pub(crate) fn all_call_parts(items: &[Node]) -> Option<(&Node, &Node)> {
-	let is_all = |node: &Node| matches!(node.drop_meta(), Node::Symbol(word) if word == ALL_WORD);
+	let is_all = |node: &Node| node.is_symbol(ALL_WORD);
 	match items {
 		[function, all, list] if is_all(all) => Some((function, list)),
 		// `square (all xs)` as the parser nests a known function's argument, `(square all) xs` as a value
@@ -637,7 +637,7 @@ impl Broadcast {
 	/// `dot(xs, ys)`: `sum(xs .* ys)`
 	fn dot(&self, items: &[Node], bracket: &Bracket) -> Option<Node> {
 		let [head, left, right] = items else { return None };
-		if self.defines_dot || *bracket != Bracket::Round || !matches!(head.drop_meta(), Node::Symbol(word) if word == DOT_WORD) {
+		if self.defines_dot || *bracket != Bracket::Round || !head.is_symbol(DOT_WORD) {
 			return None;
 		}
 		Some(self.inner_product(left.clone(), right.clone()))
@@ -759,10 +759,7 @@ fn untyped_parameters(head: &Node, op: Op) -> Vec<String> {
 		(Node::List(items, _, _), _) => flattened(items),
 		(single, _) => vec![single.clone()],
 	};
-	parameters.iter().filter_map(|parameter| match parameter.drop_meta() {
-		Node::Symbol(name) => Some(name.clone()),
-		_ => None,
-	}).collect()
+	parameters.iter().filter_map(|parameter| parameter.symbol_name().map(String::from)).collect()
 }
 
 /// Whether `name` appears in body only as an operand of arithmetic or as an element-wise receiver

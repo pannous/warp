@@ -1,5 +1,6 @@
-// Headless Firefox for test_in_browser.py --firefox, over WebDriver BiDi: `node firefox_driver.mjs`, then one JSON
-// command per line on stdin, one JSON answer per line on stdout:
+// Headless Firefox for test_in_browser.py --firefox, over WebDriver BiDi: `node firefox_driver.mjs`, then one JSON5
+// command per line on stdin (single quotes, comments, trailing commas; a line of only a comment is skipped), one JSON
+// answer per line on stdout:
 //   ["open", url] → true once loaded · ["eval", js] → the value as agent-browser prints it (JSON text)
 //   ["messages"] → the console errors and warnings and failed requests since the last ask, workers included
 //   ["close"] → quits
@@ -126,9 +127,15 @@ const answeredInTime = (answer, line) => Promise.race([answer, sleep(COMMAND_SEC
 	return { timeout: `no answer to ${line.slice(0, 200)} in ${COMMAND_SECONDS} s; the page: ${state}; its console: ${JSON.stringify(logged)}` };
 })]);
 
+// a JSON5 value (user: no more JSON's quoting and missing comments for what people write): JSON5 is a subset of
+// JavaScript's literals, so the line is read as one; stdin is the driver's own caller, trusted like its scripts
+const json5Value = text => new Function(`"use strict"; return (${text}\n);`)();
+const isBlank = line => /^\s*(\/\/.*)?$/.test(line);
+
 console.log(JSON.stringify("ready"));
 for await (const line of createInterface({ input: process.stdin })) {
-	const [command, ...arguments_] = JSON.parse(line);
+	if (isBlank(line)) continue;
+	const [command, ...arguments_] = json5Value(line);
 	console.log(JSON.stringify(await answeredInTime(commands[command](...arguments_), line)));
 }
 await commands.close();

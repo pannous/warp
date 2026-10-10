@@ -107,6 +107,7 @@ PASSED:
   ✓ control::test_database_filters::a_warp_function_in_a_table_filter_is_called_by_the_query
   ✓ control::test_database_members_add::adding_a_new_instance_to_a_list_field_inserts_it
   ✓ control::test_database_members_add::adding_a_row_to_a_list_field_moves_it
+  ✓ control::test_database_members_query::a_list_field_reads_only_the_rows_pointing_back
   ✓ control::test_database_nested_add::add_on_a_list_field_of_a_field
   ✓ control::test_database_optional_units::an_optional_unit_field_holds_a_distance_or_nothing
   ✓ control::test_database_optional::a_field_made_optional_keeps_its_values
@@ -198,6 +199,9 @@ PASSED:
   ✓ control::test_exit_signal::on_exit_runs_at_exit_and_keeps_its_code
   ✓ control::test_exit_signal::on_exit_runs_once
   ✓ control::test_exit_signal::on_exit_runs_when_main_returns
+  ✓ control::test_field_of_elements::a_field_of_a_filtered_table_reads_only_its_rows
+  ✓ control::test_field_of_elements::a_field_of_a_list_is_the_field_of_each_element
+  ✓ control::test_field_of_elements::with_filters_a_list_of_instances
   ✓ control::test_filter_loop_over_variable::a_filter_loop_over_a_variable
   ✓ control::test_filter_loops::test_a_class_name_loop_visits_only_its_instances
   ✓ control::test_filter_loops::test_a_condition_loop_visits_only_matching_items
@@ -486,6 +490,7 @@ PASSED:
   ✓ control::test_system_values::the_battery_is_a_percent_or_a_loud_error
   ✓ control::test_system_values::the_mouse_is_a_system_value_of_the_page
   ✓ control::test_system_values::yes_no_values_read_the_machine
+  ✓ control::test_table_comprehension::a_filtered_comprehension_over_a_table_reads_only_its_rows
   ✓ control::test_table_element_writes::a_filtered_row_field_change_is_written_to_its_row
   ✓ control::test_table_element_writes::an_element_field_change_is_written_to_its_row
   ✓ control::test_table_key_filter::rows_whose_foreign_key_is_a_given_row
@@ -507,6 +512,7 @@ PASSED:
   ✓ control::test_task_bools::a_bool_given_through_a_value_task_is_a_bool
   ✓ control::test_task_bools::an_awaited_bool_is_a_bool
   ✓ control::test_task_bools::bools_of_a_job_list_are_bools
+  ✓ control::test_task_char::a_task_gives_back_its_character
   ✓ control::test_task_closures::a_capturing_text_lambda_runs_in_a_task
   ✓ control::test_task_closures::a_parameter_named_like_a_unit_is_the_parameter
   ✓ control::test_task_dir::dir_of_a_task_lists_its_words
@@ -626,6 +632,8 @@ PASSED:
   ✓ control::test_undo_history::undo_steps_back_through_the_changes
   ✓ control::test_unhandled_emits::a_handled_emit_does_not_warn
   ✓ control::test_unhandled_emits::an_emit_nobody_handles_warns
+  ✓ control::test_unit_tasks::a_go_block_with_units_runs
+  ✓ control::test_unit_tasks::a_started_function_with_units_runs
   ✓ control::test_unwrap_message::test_an_error_value_in_node_arithmetic_keeps_its_message
   ✓ control::test_unwrap_message::test_unwrapping_an_empty_optional_in_arithmetic_names_it
   ✓ control::test_unwrap::test_mutating_and_evaluating_bangs_keep_their_meaning
@@ -1325,6 +1333,8 @@ PASSED:
   ✓ functions::test_runtime_kind_arithmetic::a_text_in_runtime_kind_arithmetic_is_not_a_number
   ✓ functions::test_runtime_kind_arithmetic::as_float_of_a_runtime_value
   ✓ functions::test_runtime_kind_arithmetic::fields_of_a_map_parameter_compute_by_their_values
+  ✓ functions::test_sequence_values::a_body_of_fields_stays_an_object
+  ✓ functions::test_sequence_values::a_body_of_statements_gives_its_last_value
   ✓ functions::test_several_arguments::test_a_scalar_function_broadcasts_over_them
   ✓ functions::test_several_arguments::test_parenthesized_arguments_keep_their_count
   ✓ functions::test_several_arguments::test_several_arguments_are_one_list
@@ -1500,6 +1510,7 @@ PASSED:
   ✓ lists::test_int_map::a_number_is_found_in_a_map
   ✓ lists::test_int_map::a_number_variable_keys_an_empty_map
   ✓ lists::test_int_map::an_entry_is_removed_by_its_number
+  ✓ lists::test_int_map::ten_thousand_rows_load_in_linear_time
   ✓ lists::test_key_lookup::test_key_is_evaluated
   ✓ lists::test_key_lookup::test_looked_up_value_takes_part_in_arithmetic
   ✓ lists::test_key_lookup::test_missing_key_is_an_error
@@ -1609,6 +1620,8 @@ PASSED:
   ✓ lists::test_number_keys::a_declared_map_keys_its_number_subscripts
   ✓ lists::test_number_keys::a_list_keeps_its_positions
   ✓ lists::test_number_keys::a_number_subscript_keys_an_empty_map
+  ✓ lists::test_number_list_elements::a_mixed_number_list_keeps_each_elements_kind
+  ✓ lists::test_number_list_elements::float_elements_stay_floats_in_loops_and_calls
   ✓ lists::test_numbered_fields::numbered_fields_of_a_tuple
   ✓ lists::test_object_list_walk::indexing_after_an_in_place_change_reads_the_changed_list
   ✓ lists::test_object_list_walk::walking_a_list_of_objects_takes_linear_steps
@@ -1702,6 +1715,9 @@ PASSED:
   ✓ lists::test_word_slices::hash_positions_slice
   ✓ lists::test_word_slices::ordinal_positions_slice
   ✓ lists::test_word_slices::other_from_and_to_stay
+  ✓ modules::test_agent_types::a_companion_takes_the_expected_type_of_any_function
+  ✓ modules::test_agent_types::a_typed_declaration_asks_the_agent_for_its_type
+  ✓ modules::test_agent_types::without_an_expected_type_the_agent_answers_text
   ✓ modules::test_agent::agent_answers_a_prompt_when_a_key_is_set
   ✓ modules::test_agent::agent_with_a_wrong_key_fails_with_the_api_reason
   ✓ modules::test_agent::agent_without_a_key_names_the_variable
@@ -2804,6 +2820,9 @@ PASSED:
   ✓ programs::test_sound_handles::stop_sound_stops_one_sound
   ✓ programs::test_sound_render::a_render_takes_the_sounds_after_the_last_one
   ✓ programs::test_sound_render::sounds_render_into_one_wav_file
+  ✓ programs::test_sound_spectrum::a_tone_fills_its_own_band
+  ✓ programs::test_sound_spectrum::silence_and_the_end_are_empty
+  ✓ programs::test_sound_spectrum::the_visualizer_paints_while_it_plays
   ✓ programs::test_sound_wavs::each_run_writes_wavs_of_its_own
   ✓ programs::test_sound::a_melody_is_its_notes_one_after_another
   ✓ programs::test_sound::notes_are_frequencies
@@ -3906,6 +3925,7 @@ PASSED:
   ✓ web::test_site::a_program_failing_at_build_time_builds_no_site
   ✓ web::test_site::a_site_holds_the_rendered_page_the_module_and_its_scripts
   ✓ web::test_site::a_site_starting_tasks_runs_its_program_in_a_worker
+  ✓ web::test_site::a_site_using_the_gpu_runs_in_a_worker_with_the_gpu_part
   ✓ web::test_site::a_site_with_routes_is_one_page_for_every_path
   ✓ web::test_site::a_site_with_routes_starting_tasks_runs_its_program_in_a_worker
   ✓ web::test_site::a_static_page_is_its_last_line_rendered
@@ -4365,7 +4385,6 @@ PASSED:
   ✓ wisp_parser::tests::test_wisp_tag
 
 FAILED:
-  ✗ lists::test_int_map::ten_thousand_rows_load_in_linear_time
 
 SUMMARY:
-10 ignored, 4362 passed, 1 failed, 4363 total tested
+10 ignored, 4382 passed, 0 failed, 4382 total tested

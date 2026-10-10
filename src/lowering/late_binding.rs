@@ -150,21 +150,18 @@ pub(crate) fn declared_nonlocals(body: &Node) -> Vec<String> {
 /// `nonlocal y` → [y]; `nonlocal a, b` → [a, b]; any other node → []
 fn nonlocal_names(node: &Node) -> Vec<String> {
 	let Node::Key(keyword, Op::Colon, names) = node.drop_meta() else { return vec![] };
-	if !matches!(keyword.drop_meta(), Node::Symbol(word) if word == NONLOCAL) {
+	if !keyword.is_symbol(NONLOCAL) {
 		return vec![];
 	}
 	match names.drop_meta() {
 		Node::Symbol(name) => vec![name.clone()],
-		Node::List(items, _, _) => items.iter().filter_map(|item| match item.drop_meta() {
-			Node::Symbol(name) => Some(name.clone()),
-			_ => None,
-		}).collect(),
+		Node::List(items, _, _) => items.iter().filter_map(|item| item.symbol_name().map(String::from)).collect(),
 		_ => vec![],
 	}
 }
 
 fn is_nonlocal_declaration(node: &Node) -> bool {
-	matches!(node.drop_meta(), Node::Key(keyword, Op::Colon, _) if matches!(keyword.drop_meta(), Node::Symbol(word) if word == NONLOCAL))
+	matches!(node.drop_meta(), Node::Key(keyword, Op::Colon, _) if keyword.is_symbol(NONLOCAL))
 }
 
 /// The program without its `nonlocal y` declarations: once checked they have no code
@@ -300,7 +297,7 @@ pub fn split_global_assignments(node: Node) -> Node {
 	let node = node.map_children(split_global_assignments);
 	let Node::List(items, Bracket::Curly, separator) = node else { return node };
 	let split = |item: Node| match item.drop_meta() {
-		Node::Key(keyword, Op::Colon, assignment) if matches!(keyword.drop_meta(), Node::Symbol(word) if word == GLOBAL) => match assignment.drop_meta() {
+		Node::Key(keyword, Op::Colon, assignment) if keyword.is_symbol(GLOBAL) => match assignment.drop_meta() {
 			Node::Key(name, Op::Assign, _) if matches!(name.drop_meta(), Node::Symbol(_)) => {
 				vec![Node::Key(keyword.clone(), Op::Colon, name.clone()), assignment.as_ref().clone()]
 			}
@@ -317,7 +314,7 @@ pub fn split_global_assignments(node: Node) -> Node {
 /// `global y` (no value) as a statement of a function body: the function reads main's current y
 fn global_read(node: &Node) -> Option<&String> {
 	match node.drop_meta() {
-		Node::Key(keyword, Op::Colon, name) if matches!(keyword.drop_meta(), Node::Symbol(word) if word == GLOBAL) => match name.drop_meta() {
+		Node::Key(keyword, Op::Colon, name) if keyword.is_symbol(GLOBAL) => match name.drop_meta() {
 			Node::Symbol(name) => Some(name),
 			_ => None,
 		},

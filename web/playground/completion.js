@@ -30,7 +30,9 @@ function countWords(texts, counts = new Map()) {
 }
 
 function corpus() {
-	corpusCounts ??= countWords([...Object.values(window.EXAMPLES ?? {}).map(example => example.code ?? ""), ...Object.values(window.SAMPLES ?? {})]);
+	// EXAMPLES and SAMPLES are top-level consts of their scripts (index.html defines SAMPLES when samples.js is missing),
+	// which are no properties of window
+	corpusCounts ??= countWords([...Object.values(EXAMPLES).map(example => example.code ?? ""), ...Object.values(SAMPLES)]);
 	return corpusCounts;
 }
 
