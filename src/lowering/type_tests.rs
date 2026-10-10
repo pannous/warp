@@ -70,7 +70,7 @@ const BUILTIN_TYPES: [BuiltinType; 15] = [
 	builtin("function", &["closure"], &[], Some(K::Function), &[]),
 	builtin(SYMBOL_TYPE, &[], &[], None, &[K::Symbol as i64]),
 	builtin("key", &[PAIR_WORD], &[], None, &[K::Key as i64]),
-	builtin(EMPTY_TYPE, &["unit", "nil", "ø", "none", "null", "void"], &[], Some(K::Empty), &[K::Empty as i64]),
+	builtin(EMPTY_TYPE, &["unit", "nil", "ø", "none", "null", "void"], &[], None, &[K::Empty as i64]),
 	builtin(ERROR_TYPE, &[], &[], None, &[K::Error as i64]),
 	builtin(LIST_WORD, &[], &[], None, &[K::List as i64, K::Block as i64, K::Empty as i64]),
 	builtin(MAP_WORD, &[], &[], None, &[]),

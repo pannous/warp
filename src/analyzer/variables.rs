@@ -170,7 +170,7 @@ fn bind_assigned(left: &Node, right: &Node, scope: &mut Scope) {
 		Node::Symbol(name) if scope.lookup(name).is_none() && !scope.is_global(name) => {
 			let declared = declared_type(left);
 			let (kind, type_node) = match declared {
-				Some(type_name) => (declared_kind(&type_name.name()).unwrap_or_else(|| binding_kind(right, scope)), Some(Box::new(type_name.clone()))),
+				Some(type_name) => (declared_kind(type_name).unwrap_or_else(|| binding_kind(right, scope)), Some(Box::new(type_name.clone()))),
 				None => match (value_binding(right, scope), scope.widened_bindings.get(name)) {
 					((Kind::List, _), Some(widened @ (Kind::List, _))) | ((Kind::Int, None), Some(widened @ (Kind::Float, None))) => widened.clone(),
 					(binding, _) => binding,
@@ -192,7 +192,7 @@ fn bind_assigned(left: &Node, right: &Node, scope: &mut Scope) {
 		// Typed variable: x:int = 1 parses as Key(Key(x, Colon, int), Assign, 1)
 		Node::Key(var_name, Op::Colon, type_node) => {
 			if let Some(name) = var_name.symbol_name().filter(|name| scope.lookup(name).is_none()) {
-				let kind = declared_kind(&type_node.drop_meta().to_string()).unwrap_or(Kind::Int);
+				let kind = declared_kind(type_node).unwrap_or(Kind::Int);
 				scope.define(name.to_string(), Some(type_node.clone()), kind);
 			}
 		}
@@ -516,10 +516,13 @@ pub(crate) fn held_kind(value: &Node, inferred: impl FnOnce() -> Kind) -> Kind {
 	}
 }
 
-/// Kind of a variable declared `x:T`; an optional `T?` may hold ø, so it is held as a Node
-pub(super) fn declared_kind(type_name: &str) -> Option<Kind> {
+/// Kind of a variable declared `x:T`; an optional `T?` and the empty type may hold ø, so they are held as a Node
+pub(super) fn declared_kind(type_node: &Node) -> Option<Kind> {
+	let type_name = type_node.drop_meta().to_string();
+	let type_name = type_name.as_str();
 	match type_name.strip_suffix('?') {
 		Some(_) => Some(Kind::Empty),
+		None if super::user_functions::names_empty_type(type_node) => Some(Kind::Empty),
 		// an inline union `int or text` holds a value of either kind as a Node
 		None if super::checks::union_parts(type_name).is_some() => Some(Kind::Empty),
 		None => builtin_type_kind(type_name),
