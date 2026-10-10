@@ -36,7 +36,7 @@ impl WasmGcEmitter {
 			return;
 		}
 		if self.emit_inc_dec(func, left, op) {
-			self.emit_call(func, "new_int");
+			self.emit_call(func, if self.is_float_variable(left) { "new_float" } else { "new_int" });
 			return;
 		}
 		if self.emit_compound_assign(func, left, op, right, use_float) {
@@ -128,6 +128,12 @@ impl WasmGcEmitter {
 			return;
 		};
 		let Some(local_pos) = self.defined_local_position(func, name) else { return };
+		if self.is_float_variable(left) {
+			Self::emit_list(func, &[I::LocalGet(local_pos), I::F64Const(1.0.into())]);
+			self.emit_float_arithmetic(func, if *op == Op::Inc { &Op::Add } else { &Op::Sub });
+			func.instruction(&I::LocalTee(local_pos));
+			return;
+		}
 		self.emit_int_step(func, local_pos, self.int_range(left), op);
 		self.emit_fits_declared(func, left);
 		func.instruction(&I::LocalTee(local_pos));
@@ -166,6 +172,13 @@ impl WasmGcEmitter {
 			let Some(local_pos) = self.defined_local_position(func, name) else { return true };
 			let base_op = op.base_op();
 			if !use_float && self.emit_compound_type_error(func, left, &base_op, right) {
+				return true;
+			}
+			// `x += 0.5` of an x that stays exact (`x: int`): refused as `x = x + 0.5` is
+			if self.scope.lookup(name).is_some_and(|local| local.kind == Kind::Int) && self.get_type(right).is_float() {
+				let declared = self.declared_type_of(left).map_or("int".to_string(), |declared| declared.name());
+				let updated = Node::Key(Box::new(left.clone()), base_op, Box::new(right.clone())).serialize();
+				self.emit_type_error(func, format!("{updated} is a float where an exact {declared} is expected: declare {name} `number` to keep the float, or truncate with `as int`"));
 				return true;
 			}
 			func.instruction(&I::LocalGet(local_pos));
@@ -606,6 +619,14 @@ impl WasmGcEmitter {
 
 	pub(super) fn emit_float_binary(&mut self, func: &mut Function, left: &Node, op: &Op, right: &Node) -> ArithmeticWrap {
 		self.emit_float_value(func, left);
+		// `x ^ 2` is x * x: one rounding of the exact square, as pow gives it, without a libm call per use
+		if *op == Op::Pow && matches!(right.drop_meta(), Node::Number(Number::Int(2))) {
+			self.pop_float_scratch(func, 0);
+			self.push_float_scratch(func, 0);
+			self.push_float_scratch(func, 0);
+			func.instruction(&I::F64Mul);
+			return ArithmeticWrap::Float;
+		}
 		self.emit_float_value(func, right);
 
 		match op {

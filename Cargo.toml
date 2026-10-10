@@ -61,7 +61,7 @@ anyhow = "1.0"
 #regex = "1.10.3" # removed: unused
 unicode-normalization = "0.1"
 serde = { version = "1.0", features = ["derive"] }
-serde_json = { version = "1.0", features = ["preserve_order"] } # objects keep the order of warp maps (and of JS JSON.stringify)
+serde_json = { version = "1.0", features = ["preserve_order", "float_roundtrip"] } # objects keep the order of warp maps (and of JS JSON.stringify); a float read from JSON is the float written (the browser hands results over as JSON)
 #wast = "*"
 wasmparser = "0.259"
 wat = { version = "1.259", optional = true } # native: an imported module may be WAT text (wasm_modules.rs)

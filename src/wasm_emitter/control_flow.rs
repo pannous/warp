@@ -256,11 +256,21 @@ impl WasmGcEmitter {
 			Node::List(items, Bracket::Curly, _) => items.clone(),
 			other => vec![other.clone()],
 		};
-		if statements.last().is_some_and(|last| self.is_float_assignment(last)) {
-			// `while … { …; x = x * 0.5 }` of a float x: run the statements, the loop's value stays 0
-			for statement in &statements {
+		if let Some((last, before)) = statements.split_last().filter(|(last, _)| self.is_float_assignment(last)) {
+			// `while … { …; x = x * 0.5 }` of a float x: the statements run, the float is the loop's value when held
+			for statement in before {
 				self.emit_discarded_statement(func, statement, Self::emit_numeric_value);
 				func.instruction(&I::Drop);
+			}
+			match value_local {
+				Some(local) => {
+					self.emit_node_instructions(func, last);
+					func.instruction(&I::LocalSet(local));
+				}
+				None => {
+					self.emit_discarded_statement(func, last, Self::emit_numeric_value);
+					func.instruction(&I::Drop);
+				}
 			}
 			return;
 		}
@@ -274,15 +284,16 @@ impl WasmGcEmitter {
 		}
 	}
 
-	/// A loop body whose value is a text, character, list or other Node, not a number (a character held as a number
-	/// would show its code point)
+	/// A loop body whose value is a text, character, list, float or other Node, not an exact number (a character held as
+	/// a number would show its code point, a float its truncation; card loop-float)
 	fn ends_in_reference(&self, body: &Node) -> bool {
 		let statements = match body.drop_meta() {
 			Node::List(items, Bracket::Curly, _) => items.clone(),
 			other => vec![other.clone()],
 		};
 		let kind = self.get_type(body);
-		!body.is_nothing() && !loop_control::ends_in_jump(body) && (kind.is_ref() && !self.ends_in_number(&statements) || kind == Kind::Codepoint)
+		let ends_in_float = kind == Kind::Float || statements.last().is_some_and(|last| self.get_type(last) == Kind::Float);
+		!body.is_nothing() && !loop_control::ends_in_jump(body) && ((kind.is_ref() || ends_in_float) && !self.ends_in_number(&statements) || kind == Kind::Codepoint)
 	}
 
 	/// Declares the Node locals the loops of `body` hold their values in, after node_scratch; gives the enclosing

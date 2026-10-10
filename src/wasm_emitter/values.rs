@@ -71,7 +71,9 @@ impl WasmGcEmitter {
 			// Variable definition/assignment: x:=42 or x=42 → store and return value
 			Node::Key(left, Op::Define | Op::Assign, right) => self.emit_numeric_assignment(func, located, left, right),
 			// `x as int` of an Int, what a declared result type `-> int` lowers to: x, a ratio truncated, without a box
-			Node::Key(value, Op::As, target) if self.get_type(value) == Kind::Int && is_int_type_word(target) => self.emit_int_value_truncated(func, value),
+			Node::Key(value, Op::As, target) if self.get_type(value) == Kind::Int && is_int_type_word(target) && !self.computes_at_run_time_kind(value) => {
+				self.emit_int_value_truncated(func, value)
+			}
 			// Increment/decrement: i++ or i--
 			Node::Key(left, op, right) if *op == Op::Inc || *op == Op::Dec => self.emit_numeric_step(func, left, op, right),
 			// Compound assignment: x += y → x = x + y
@@ -305,6 +307,9 @@ impl WasmGcEmitter {
 			// `s += x` on a float variable, also as a statement of a loop body
 			Node::Key(left, op, right) if op.is_compound_assign() && self.is_float_variable(left) => {
 				self.emit_compound_assign(func, left, op, right, true);
+			}
+			Node::Key(left, op @ (Op::Inc | Op::Dec), _) if self.is_float_variable(left) => {
+				self.emit_inc_dec(func, left, op);
 			}
 			Node::Key(left, op, right) if op.is_arithmetic() => {
 				let kind = self.arithmetic_type(left, op, right);
