@@ -2790,7 +2790,7 @@ PASSED:
   ✓ programs::test_paint_lists::paint_reads_ints_from_a_built_list
   ✓ programs::test_paint_lists::paint_reads_other_pixels_node_by_node
   ✓ programs::test_paint_lists::paint_takes_the_first_pixels_of_a_longer_list
-  ✓ programs::test_paint_lists::painting_an_empty_canvas_fails_loudly
+  ✓ programs::test_paint_lists::show_before_canvas_paints_the_default_canvas
   ✓ programs::test_paint_shader::paint_of_a_shader_without_values_reads_none
   ✓ programs::test_paint_shader::paint_renders_a_shader_text
   ✓ programs::test_paint_shader::use_graphics_is_use_draw
@@ -3917,6 +3917,8 @@ PASSED:
   ✓ web::test_page_tests::a_missing_button_fails_the_test
   ✓ web::test_page_tests::a_plain_run_skips_page_tests
   ✓ web::test_page_tests::passing_page_tests_are_counted
+  ✓ web::test_playground_paint::the_playground_paints_a_canvas_of_its_size
+  ✓ web::test_playground_paint::the_playground_paints_the_default_canvas
   ✓ web::test_primer::every_primer_compile_snippet_compiles
   ✓ web::test_primer::every_primer_snippet_prints_what_the_primer_shows
   ✓ web::test_primer::every_primer_snippet_runs_to_its_value
@@ -4441,4 +4443,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-10 ignored, 4436 passed, 0 failed, 4436 total tested
+10 ignored, 4438 passed, 0 failed, 4438 total tested
