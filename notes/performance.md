@@ -45,7 +45,10 @@ otherwise constant evaluation may hide the loop. Profile the generated module ap
   (new_int), read it back and called exact_trunc; `radius^2` called exact_pow. Now `floor`/`ceil`/`round` of a float
   are F64Floor/F64Ceil/F64Nearest + a truncating cast to the i64, an `as int` of a builtin rounding call skips
   exact_trunc (a user or FFI function of that name keeps it), `x^2` is one multiplication (floats: F64Mul; ints:
-  the overflow-checked `*`), and a float `as int` truncates natively.
+  the overflow-checked `*`), and a float `as int` truncates natively. Then `a // b` on fixnums is inline
+  (`(a - a % b) / b` beside the inline `%`), an Int assignment whose value is dropped (`i = start` of a range loop)
+  stores the i64 without new_int, and a computed range end (`for col in cell(x-r)..cell(x+r)+1`) is evaluated
+  once into `col·end` instead of every round (lowering/for_loop.rs), as a walked list already was.
 
 ## Measured as fine
 Closure calls cost what definition calls cost: 50 million calls of `add=(a,b)=>a+b`, of a capturing `x=>x*k` and of a
@@ -56,6 +59,6 @@ closure typing has nothing to win here yet. Loops over typed lists, map, append:
 A map that is not a hash table variable (a literal start `{a:1}`, a parameter, a global, one updated by `+=` or with
 dynamic keys) is still the immutable cons list: n keys cost n². Each use of a hash-table map as a whole value
 converts it (O(n)); a loop that prints or passes the map each round pays that every round.
-Finger paint after runtime-speed: `mixed` (per pixel `//` and `%` via exact_euclid_div/exact_mod, no inline fixnum
-path) and int list get/set through the Node layer are the next costs; loop ends like `cell(x+r)+1` are re-evaluated
-each round.
+Finger paint after runtime-speed: `dot(col, row)` passes Ints to `cell(v)`, whose v is a float: int → f64 → floor →
+int per pixel (a per-argument-kind specialization of functions would drop it); a function whose loop is its last
+value (`circle`) boxes that value per row although every caller drops it; int list get/set go through the Node layer.

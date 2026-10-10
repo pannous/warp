@@ -912,6 +912,8 @@ impl WasmGcEmitter {
 			self.emit_typed_list_store(func, &name, &value); // the array itself is dropped, it needs no Node
 		} else if self.is_float_assignment(item) || self.is_float_read(item) || destructured.is_some_and(|kind| kind.is_float()) {
 			self.emit_float_value(func, item); // a float update or a call giving a float (shared_addf), dropped as an f64
+		} else if self.is_int_local_assignment(item) {
+			self.emit_numeric_value(func, item); // `i = start` of a range loop: the i64 stored, never an Int node
 		} else if self.is_ref_update(item) || self.is_output_call(item) || self.is_ref_value(item) || matches!(item.drop_meta(), Node::Empty) || destructured.is_some_and(|kind| kind.is_ref()) {
 			self.emit_node_instructions(func, item);
 		} else {
@@ -922,6 +924,13 @@ impl WasmGcEmitter {
 	/// A statement whose value is dropped: leaves one value of any type for the caller to drop
 	fn emit_dropped_statement(&mut self, func: &mut Function, item: &Node) {
 		self.emit_discarded_statement(func, item, Self::emit_node_instructions);
+	}
+
+	/// `x = value` of an Int into an Int local
+	fn is_int_local_assignment(&self, item: &Node) -> bool {
+		matches!(item.drop_meta(), Node::Key(left, Op::Define | Op::Assign, right)
+			if matches!(left.drop_meta(), Node::Symbol(name) if self.scope.lookup(name).is_some_and(|local| local.kind == Kind::Int))
+				&& self.get_type(right) == Kind::Int)
 	}
 
 	/// A call or an element read giving a float (`shared_addf(xs, i, v)`, `levels[i]` of a list of floats)
