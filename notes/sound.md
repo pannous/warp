@@ -41,6 +41,11 @@ The words above are layer 1, the toy layer. Each layer below keeps the ones abov
 1. Non-blocking, clocked playback. Built (step 1, 2026-10-10): `play` returns at once, its sound queued on the audio
    clock behind the sounds before it (natively a player thread, src/sound.rs queued; the playground's WebAudio queue);
    `sound_queued()` the seconds still to sound, `wait_sound`, `stop_sound` drops the queue, the process's end waits.
+   Offline render built (step 2, 2026-10-10, from layer 5): `render_sound("song.wav")` writes the sounds since the
+   last render (or the start) one after another into one WAV and gives its seconds; headless too, so tests check audio
+   without speakers (tests/programs/test_sound_render.rs). The samples are kept in memory (44 KB a second at 22050 Hz),
+   not read back from $TMPDIR/warp-sound: that folder is shared by all warp processes. The playground refuses it (its
+   files are texts).
    Still to build:
    Expected: a shared audio clock, sample-accurate scheduling (`at 2 beats play C4`), `play` returns a handle (stop,
    ramp its gain), voices overlap. Tempo as a unit: `bpm`, `beat`, `bar` (`play C4 for 1/4 beat`).
