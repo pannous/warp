@@ -232,8 +232,12 @@ impl WarpParser {
 	fn comment_reads_like_divisor(&self) -> bool {
 		let rest: String = self.chars[self.pos + 2..].iter().take_while(|&&c| c != '\n').collect();
 		let rest = rest.trim();
-		let single_word = !rest.contains(char::is_whitespace);
-		(single_word && is_number_or_short_name(rest)) || (!single_word && rest.contains(['+', '-', '*', '/', '%', '(', '^']) && !has_adjacent_words(rest))
+		let has_operator = rest.contains(DIVISOR_OPERATORS);
+		if rest.contains(char::is_whitespace) {
+			has_operator && !has_adjacent_words(rest)
+		} else {
+			has_operator || is_number_or_short_name(rest)
+		}
 	}
 
 	pub(super) fn is_at_line_start(&self) -> bool {
@@ -464,6 +468,7 @@ impl WarpParser {
 	}
 }
 
+const DIVISOR_OPERATORS: [char; 7] = ['+', '-', '*', '/', '%', '(', '^'];
 const MAX_DIVISOR_NAME_LENGTH: usize = 2;
 
 fn is_number_or_short_name(word: &str) -> bool {
