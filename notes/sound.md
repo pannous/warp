@@ -83,13 +83,18 @@ The words above are layer 1, the toy layer. Each layer below keeps the ones abov
    starter's instead of after them; each queued sound plays from its own sleeping thread (overlapping players, the OS
    mixes), and render_sound mixes the sounds at their logical places (tests/programs/test_sound_voices.rs).
    In the Playground too (card playground-go): each Worker keeps its voice's end on a clock the page and the Workers
-   share (host-tasks.js voicePlaced, performance.timeOrigin + now), a task Worker starts from its starter's, and the
+   share (host-tasks.js voiceSounded, performance.timeOrigin + now), a task Worker starts from its starter's, and the
    page plays each sound at its `at` (playground.js playSound). A task's sounds reach the page only once the program's
    Worker is back in its event loop (after `await`), so a start already past plays at once. A task's sounds go back
    with its result to the starter's run (host-tasks.js withTaskSounds), each at its place on its voice
    (voiceSounded), and render_sound mixes them as natively (host-files.js mixed; card playground-drops).
-   Still to build:
-   Expected: a shared audio clock, sample-accurate scheduling (`at 2 beats play C4`), ramping a handle's gain.
+   Scheduling built (card sample-accurate, samples/arrangement.warp): `at 2 beats play C4`, `at 1 bar { … }` is the
+   statement between sound_at(time) and sound_at_end() (music_words.rs): its sounds start at that time counted from
+   the voice's first sound (Voice origin), then the voice goes on where it stood. Exact to the sample in render_sound,
+   which now counts from where the last render ended (so the silence before an `at` stays) and in the browser's
+   WebAudio start(at); native live playback only to the millisecond (a sleeping thread per sound, then afplay).
+   Still to build: ramping a handle's gain, and native live sample accuracy: both need our own output engine (cpal,
+   "Our own API" below) instead of one player process per sound (card native-engine).
 2. Note names built (2026-10-10): parsed, not a table: a letter A–G, `#`/`♯` or `b`/`♭`, an octave 0–9 is its
    equal-tempered frequency to a hundredth of a Hz (A4 = 440), when the program uses sound and doesn't define that
    name; `F#4` parses as `F # 4` and counts as the note unless the program defines `F` (music_words.rs; the parser

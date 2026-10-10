@@ -28,6 +28,7 @@ mod test_sound_notes; // card sound-pro
 mod test_sound_tempo; // card sound-pro
 mod test_sound_synth; // card sound-pro
 mod test_sound_voices; // card sound-pro
+mod test_sound_at; // card sample-accurate
 mod test_sound_spectrum; // card winamp-like
 mod test_task_sound; // card task-sound
 mod test_shader_blocks; // card g_oFJc

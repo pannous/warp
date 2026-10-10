@@ -28,7 +28,7 @@ self.BLOCK_COMPILER = hooks => instantiate([], hooks).exports;
 async function runBinary(args) {
 	let output = "";
 	const print = text => { output += text; };
-	const hooks = { print, panicked: print, sound: (samples, rate) => self.voicePlaced(samples.length / rate) }; // no page plays it: sound_queued() counts
+	const hooks = { print, panicked: print };
 	forgetBlockCompiler(); // a compiler instance of this test's own, printing into its output
 	const instance = instantiate(args, hooks, true);
 	try {

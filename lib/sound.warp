@@ -83,6 +83,10 @@ wait_sound() := std_io("sound", "wait", [])
 // the sounds since the last render (or the start) one after another in one WAV file, offline (also without speakers):
 // render_sound("song.wav") gives its seconds
 render_sound(path) := std_io("sound", "render", [path])
+// `at 2 beats play C4`, `at 1 bar { … }` (card sample-accurate): the statement's sounds start that many seconds after
+// the voice's first sound, exactly so in render_sound; the voice goes on where it stood (src/lowering/music_words.rs)
+sound_at(seconds) := std_io("sound", "at", [si_amount(seconds)])
+sound_at_end() := std_io("sound", "at_end", [])
 to play x: if x is text then play_file(x) else sound(chord_samples(pitches_of(x), note_seconds, wave_shape))
 // one note (or chord) after another: melody [C4 E4 G4], melody [C4 E4 G4] each 250ms (or melody([C4 E4 G4], 0.25s))
 // plain seconds: the unit check reads a quantity parameter in a loop as unsupported (notes/units_runtime.md)
