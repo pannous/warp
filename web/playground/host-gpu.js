@@ -25,7 +25,7 @@ const UNIFORM_ALIGNMENT = 16; // a uniform struct is a whole number of 16-byte r
 // the WGSL type of a value of 1…4 floats and its alignment in bytes
 const VALUE_TYPES = [, ["f32", 4], ["vec2f", 8], ["vec3f", 16], ["vec4f", 16]];
 const VECTOR_FLOATS = 4; // the floats of one vector in an array value, `values.<name>[i]` (src/gpu.rs)
-let gpuDevice; // the task Worker's device, asked for once
+let gpuDevice;
 // a shader painted every frame compiles once, not each frame (card playground-tour: the tour's page crashed in a
 // shader animation on a Mac): the task Worker's last MOST_COMPILED modules and pipelines, by their WGSL
 const MOST_COMPILED = 16;
@@ -44,7 +44,7 @@ let gpuWorker; // the program's side: the task Worker that ran the last GPU job,
 // the task Worker's side: the floats the shader left from index `first` on (only those are read back)
 // before `numbers`, the `count` items of the buffer kept for block `source`; the buffer kept for block `keep` after
 async function gpuComputedFloats({ shader, numbers, workgroups, first = 0, source, count, keep }) {
-	const device = gpuDevice ??= await gpuDeviceOrFailure();
+	const device = await theGpuDevice();
 	const Elements = gpuElements(shader);
 	const input = numbers instanceof Elements ? numbers : new Elements(numbers);
 	const kept = source === undefined ? undefined : keptBuffers.get(source);
@@ -88,7 +88,7 @@ function keepBuffer(block, buffer) {
 
 // the pixels the fragment shader colored, row by row
 async function gpuRendered({ shader, width, height, values }) {
-	const device = gpuDevice ??= await gpuDeviceOrFailure();
+	const device = await theGpuDevice();
 	const { declarations, bytes: valueBytes } = uniformLayout(values);
 	const code = shader + FULL_IMAGE_VERTICES + declarations;
 	const module = await gpuModule(device, code);
@@ -168,6 +168,9 @@ function compiledOnce(cache, key, make) {
 	if (cache.size > MOST_COMPILED) cache.delete(cache.keys().next().value);
 	return cache.get(key);
 }
+
+// the task Worker's device, asked for once
+const theGpuDevice = async () => gpuDevice ??= await gpuDeviceOrFailure();
 
 async function gpuDeviceOrFailure() {
 	const adapter = await self.navigator.gpu?.requestAdapter();
