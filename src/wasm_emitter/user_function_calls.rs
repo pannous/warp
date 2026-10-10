@@ -284,9 +284,9 @@ impl WasmGcEmitter {
 			self.emit_node_instructions(&mut func, &user_fn.body);
 			Self::emit_list(&mut func, &[I::Drop, I::Unreachable]);
 		} else if returns_node {
-			self.emit_node_instructions(&mut func, &user_fn.body);
+			self.emit_node_instructions(&mut func, &statements_run(&user_fn.body));
 		} else {
-			self.emit_value_of_kind(&mut func, &user_fn.body, user_fn.return_kind);
+			self.emit_value_of_kind(&mut func, &statements_run(&user_fn.body), user_fn.return_kind);
 		}
 		func.instruction(&I::End);
 
@@ -480,5 +480,17 @@ impl WasmGcEmitter {
 		}
 
 		func.instruction(&I::Call(func_index));
+	}
+}
+
+/// A body `{a⏎ b}` runs its statements and gives the last one's value, whatever its type, as the program `a⏎ b` does
+/// (cards sequence-value, block-data-sound); an object `{a: 1⏎ b: 2}` stays data
+fn statements_run(body: &Node) -> Node {
+	match body.drop_meta() {
+		Node::List(items, Bracket::Curly, separator @ (Separator::Semicolon | Separator::Newline))
+			if items.len() > 1 && !items.iter().any(|item| matches!(item.drop_meta(), Node::Key(_, Op::Colon, _))) => {
+			Node::List(items.clone(), Bracket::None, separator.clone())
+		}
+		_ => body.clone(),
 	}
 }
