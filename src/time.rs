@@ -1,6 +1,7 @@
 //! Dates and times (Footguns.md → Dates and time zones).
 //! The parser lexes RFC 3339 / RFC 9557 literals and `1 month` style durations into data nodes;
-//! programs that use them are evaluated here at compile time. A WASM GC representation is future work.
+//! programs that use them are evaluated here at compile time. `now` alone runs: system_values reads it as
+//! `instant_at(clock())`, an instant node (Kind::Time) built when the program runs (wasm_emitter/times.rs).
 
 pub mod calendar;
 
@@ -9,6 +10,15 @@ use crate::extensions::numbers::Number;
 use crate::node::{error, Node, Separator};
 use crate::operators::Op;
 use std::collections::HashMap;
+
+pub const NOW_WORD: &str = "now";
+/// instant_at(milliseconds since 1970): the instant node `now` is at run time
+pub const INSTANT_AT: &str = "instant_at";
+
+/// `now` as the program reads it: the host's clock when it runs
+pub fn now_call() -> Node {
+	crate::lowering::nodes::call(INSTANT_AT, vec![crate::lowering::nodes::call(crate::host::CLOCK, vec![])])
+}
 
 /// A date or time literal as written; validated when evaluated, like `date(2024,2,30)`
 #[derive(Clone, Debug, PartialEq)]
@@ -32,9 +42,17 @@ enum Value {
 
 type Scope = HashMap<String, Value>;
 
+/// An instant read back from the run-time node (Kind::Time): its nanoseconds since 1970 UTC
+pub fn instant_node(nanoseconds: Option<Number>) -> Node {
+	match nanoseconds {
+		Some(Number::Int(nanoseconds)) => Node::data(Time::Instant(nanoseconds as i128)),
+		_ => error("unreadable instant"),
+	}
+}
+
 /// The value of a program that uses dates or times, None for any other program
 pub fn answer(program: &Node) -> Option<Node> {
-	if !mentions_time(program) {
+	if !mentions_time(program) || !needs_folding(program) {
 		return None;
 	}
 	Some(match evaluate(program, &mut Scope::new()) {
@@ -54,15 +72,31 @@ fn is_symbol(node: &Node, name: &str) -> bool {
 	matches!(node.drop_meta(), Node::Symbol(symbol) if symbol == name)
 }
 
+fn is_call_of(node: &Node, name: &str) -> bool {
+	matches!(node.drop_meta(), Node::List(items, _, _) if items.first().is_some_and(|head| is_symbol(head, name)))
+}
+
+/// What only this compile-time evaluator knows so far: literals, durations, `date(…)`, `t in "Europe/Berlin"`;
+/// a program with none of them reads `now` at run time
+fn needs_folding(node: &Node) -> bool {
+	let mut found = false;
+	node.visit(&mut |part| found |= time_data(part) || is_call_of(part, "date") || places_in_zone(part));
+	found
+}
+
+fn places_in_zone(node: &Node) -> bool {
+	matches!(node, Node::List(items, _, _) if matches!(items.as_slice(), [_, keyword, zone]
+		if is_symbol(keyword, "in") && matches!(zone.drop_meta(), Node::Text(name) if calendar::zone_named(name).is_ok())))
+}
+
 fn mentions_time(node: &Node) -> bool {
 	match node.drop_meta() {
-		Node::Symbol(name) => name == "now",
-		// a key or member named now (`{now: 5}`, `interface c { now: () -> i64 }`, `x.now`) is no read of the time
+		// a key or member name (`{date: 5}`, `x.date`) is no use of the time
 		Node::Key(key, Op::Colon, value) if matches!(key.drop_meta(), Node::Symbol(_)) => mentions_time(value),
 		Node::Key(owner, Op::Dot, field) if matches!(field.drop_meta(), Node::Symbol(_)) => mentions_time(owner),
 		Node::Key(left, _, right) => mentions_time(left) || mentions_time(right),
 		Node::List(items, _, _) => {
-			items.first().is_some_and(|head| is_symbol(head, "date")) || items.iter().any(mentions_time)
+			items.first().is_some_and(|head| is_symbol(head, "date") || is_symbol(head, INSTANT_AT)) || items.iter().any(mentions_time)
 		}
 		other => time_data(other),
 	}
@@ -113,7 +147,6 @@ fn evaluate(node: &Node, scope: &mut Scope) -> Result<Value, String> {
 		Node::Symbol(name) => Ok(match scope.get(name) {
 			Some(Value::Getter(body)) => return evaluate(&body.clone(), scope),
 			Some(value) => value.clone(),
-			None if name == "now" => Value::Time(now()),
 			None => Value::Symbol(name.clone()),
 		}),
 		Node::Key(left, op, right) => binary(left, *op, right, scope),
@@ -125,6 +158,7 @@ fn evaluate(node: &Node, scope: &mut Scope) -> Result<Value, String> {
 
 fn list(node: &Node, items: &[Node], separator: Separator, scope: &mut Scope) -> Result<Value, String> {
 	match items {
+		[head, ..] if is_symbol(head, INSTANT_AT) => Ok(Value::Time(now())),
 		[single] => evaluate(single, scope),
 		[time, keyword, zone] if is_symbol(keyword, "in") => place_in_zone(time, zone, scope),
 		[head, args @ ..] if separator == Separator::None && is_symbol(head, "date") => construct_date(args, scope),

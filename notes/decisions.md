@@ -16,6 +16,9 @@ notes/open_decisions.md.
 - let-reassign (warp-types; user, asked 2026-10-10): `let` is fully immutable, `var` is the variable. `let x = 1; x = 2`,
   `x += …`, `x++` and `xs#1 = 5` on a let are all errors with the fix "use var x". Supersedes P159's "changing a let
   works with a note" and the wiki/mutable.md:23 split (value may change, binding fixed); the wiki follows this.
+- module-global-assign (warp-sound default, not asked): a program's top-level `tempo = 90` / `note_seconds = 0.25` /
+  `canvas_width = 800` sets the standard module's `global` of that name instead of making a shadowing program
+  variable; other module words still shadow. Revisit if it surprises the user.
 - exact-default (user 2026-10-10, asked after warp-perf measured fraction math as ~90% of finger paint's time plus a
   never-freed number heap): integer division stays exact, `1/3 + 1/3` is `2/3`; decimal literals are floats,
   `.1 + .2 ≈ .3`; `==` on floats gives a warning with the fix "use ≈". Supersedes the 2026-09-28 "decimals exact"

@@ -59,6 +59,7 @@ pub enum Kind {
 	Float32 = 15,  // explicit f32 (for FFI)
 	Function = 16, // closure: data = $Closure struct (typed function reference + captured values), value = name symbol
 	Uncertain = 17, // x ± σ: data = $f64 array [value, source id, contribution, …] (wasm_emitter/uncertain.rs)
+	Time = 18,     // an instant: data = $i64box(nanoseconds since 1970 UTC) (wasm_emitter/times.rs)
 }
 
 impl Kind {
@@ -129,6 +130,7 @@ impl std::fmt::Display for Kind {
 			Kind::Pointer => write!(f, "pointer"),
 			Kind::Function => write!(f, "function"),
 			Kind::Uncertain => write!(f, "uncertain"),
+			Kind::Time => write!(f, "instant"),
 		}
 	}
 }

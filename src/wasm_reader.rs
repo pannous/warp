@@ -474,6 +474,7 @@ fn struct_node<T>(structref: &wasmtime::Rooted<wasmtime::StructRef>, store: &mut
 		},
 		t if t == Kind::TypeDef as u8 => Node::Type { name: Box::new(node(&data)), body: Box::new(node(&child)) },
 		t if t == Kind::Uncertain as u8 => crate::uncertain::Uncertain::read_node(float_array(store, &data)),
+		t if t == Kind::Time as u8 => crate::time::instant_node(read_payload(store, &data).ok()),
 		_ => Node::Text(format!("Unknown Kind: {tag}")),
 	}
 }

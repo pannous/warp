@@ -8,6 +8,7 @@
 //! `whenever battery < 20% {…}` arrives as `battery < (20 % {…})`: a percent compared with the battery is that number.
 //! The clipboard: `on clipboard change {…}` is `on change` of its change count (`clipboard count`), which reads no
 //! content; `clipboard` is its text, the host call `clipboard_text()` made where the program reads it, never polled.
+//! `now` is the clock's instant where the program reads it, `instant_at(clock())` (time.rs), never polled.
 //! Browser names (P188): `clipboard.read()` is `clipboard`, `clipboard.write(text)` the std word
 //! `std_io("clipboard", "write", [text])` (std_adapters.rs; host-files.js in a page).
 
@@ -16,6 +17,7 @@ use super::nodes::{call, key};
 use crate::declarations::word;
 use crate::node::{symbol, Bracket, Node};
 use crate::operators::Op;
+use crate::time::NOW_WORD;
 use std::collections::HashSet;
 use warp_runtime::host_words::{BATTERY, CLIPBOARD, CLIPBOARD_COUNT, CLIPBOARD_TEXT, SYSTEM_VALUE, SYSTEM_VALUES};
 
@@ -32,7 +34,7 @@ const TEXT_PLACEHOLDER: &str = "clipboard_text_written";
 
 pub fn name(program: Node) -> Node {
 	let bound = bound_names(&program);
-	let names: Vec<(&str, bool)> = SYSTEM_VALUES.into_iter().chain([(CLIPBOARD, false)]).filter(|(name, _)| !bound.contains(*name)).collect();
+	let names: Vec<(&str, bool)> = SYSTEM_VALUES.into_iter().chain([(CLIPBOARD, false), (NOW_WORD, false)]).filter(|(name, _)| !bound.contains(*name)).collect();
 	if names.is_empty() {
 		return program;
 	}
@@ -89,6 +91,7 @@ fn mark(node: Node, names: &[(&str, bool)]) -> Node {
 	let marked = |name: &str| match names.iter().any(|(system, _)| *system == name) {
 		false => None,
 		true if name == CLIPBOARD => Some(call(CLIPBOARD_TEXT, vec![])),
+		true if name == NOW_WORD => Some(crate::time::now_call()),
 		true => Some(Node::Symbol(format!("{SYSTEM_PREFIX}{name}"))),
 	};
 	match node {
@@ -102,6 +105,8 @@ fn mark(node: Node, names: &[(&str, bool)]) -> Node {
 		}
 		Node::Key(left, op @ (Op::Colon | Op::Dot), right) => {
 			let right = if op == Op::Dot { method_arguments_marked(*right, names) } else { mark(*right, names) };
+			// the target of a dot is read (`now.hour`), a key's name is not
+			let left = if op == Op::Dot { Box::new(mark(*left, names)) } else { left };
 			Node::Key(left, op, Box::new(right))
 		}
 		Node::List(items, bracket, separator) => {

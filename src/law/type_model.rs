@@ -37,7 +37,9 @@ const UNIT_TYPE: &str = ".unit";
 const UNIT_PARAMETER: &str = "·";
 const ARGUMENTS_SUFFIX: &str = "·args";
 const FOR_KEYWORD: &str = "for";
-const VARIABLE_KEYWORDS: [&str; 2] = ["let", "shared"];
+const SHARED_KEYWORD: &str = "shared";
+/// `let x = 1` binds x once, as const does (user, card let-reassign)
+const LET_KEYWORD: &str = "let";
 /// the one field of a function local's cell (`f·n`): `·` keeps it apart from the program's own fields
 const CELL_FIELD: &str = "·value";
 /// An inline union `int | text` or an optional `int?` is the join of its alternatives, every value given to it a cast
@@ -869,11 +871,12 @@ impl Exporter {
 					_ => self.assign_tuple(&names, &values),
 				}
 			}
-			// `let x = 1`, `shared n = 5` (one thread in W0): a variable; `int i = 2`: `i: int = 2`
+			// `let x = 1`: a constant; `shared n = 5` (one thread in W0): a variable; `int i = 2`: `i: int = 2`
 			Node::List(items, _, _) if items.len() == 2 && matches!(items[1].drop_meta(), Node::Key(target, Op::Assign, _) if matches!(target.drop_meta(), Node::Symbol(_))) => {
 				let Node::Key(target, _, value) = items[1].drop_meta() else { unreachable!("an assignment") };
 				match items[0].drop_meta() {
-					Node::Symbol(word) if VARIABLE_KEYWORDS.contains(&word.as_str()) => self.binding(target, ".var", value),
+					Node::Symbol(word) if word == LET_KEYWORD => self.binding(target, ".const", value),
+					Node::Symbol(word) if word == SHARED_KEYWORD => self.binding(target, ".var", value),
 					Node::Symbol(word) if self.type_of(word).is_ok() => self.binding(&Node::Key(target.clone(), Op::Colon, Box::new(items[0].clone())), ".var", value),
 					_ => Ok(format!(".statement ({})", self.expression(statement)?)),
 				}

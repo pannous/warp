@@ -497,6 +497,8 @@ PASSED:
   ✓ control::test_system_values::not_dark_mode_is_the_opposite_reading
   ✓ control::test_system_values::the_battery_is_a_percent_or_a_loud_error
   ✓ control::test_system_values::the_mouse_is_a_system_value_of_the_page
+  ✓ control::test_system_values::the_mouse_is_the_pointer_over_the_paint_window
+  ✓ control::test_system_values::window_open_is_no_without_a_window
   ✓ control::test_system_values::yes_no_values_read_the_machine
   ✓ control::test_table_comprehension::a_filtered_comprehension_over_a_table_reads_only_its_rows
   ✓ control::test_table_element_writes::a_filtered_row_field_change_is_written_to_its_row
@@ -950,6 +952,7 @@ PASSED:
   ✓ functions::test_closure_value_arguments::test_a_returned_closure_takes_a_text
   ✓ functions::test_closure_value_arguments::test_a_returned_closure_takes_numbers_and_lists
   ✓ functions::test_closures::a_curried_call_as_a_value_and_an_argument
+  ✓ functions::test_closures::a_fixed_point_combinator
   ✓ functions::test_closures::a_float_reassigned_from_its_closure_stays_a_float
   ✓ functions::test_closures::a_function_value_out_of_try_or_a_block_is_called
   ✓ functions::test_closures::a_loop_variable_over_function_values_is_called
@@ -1920,6 +1923,7 @@ PASSED:
   ✓ modules::test_std_words::router_words_match_a_pattern_and_read_its_parameters
   ✓ modules::test_use_modules::a_module_is_used_as_an_alias
   ✓ modules::test_use_modules::a_program_variable_leaves_a_file_module_its_words
+  ✓ modules::test_use_modules::a_programs_global_is_not_a_module_functions_local
   ✓ modules::test_use_modules::a_quoted_path_uses_that_file
   ✓ modules::test_use_modules::module_function_locals_are_not_the_programs_variables
   ✓ modules::test_use_modules::test_module_statements_are_not_imported
@@ -2857,6 +2861,7 @@ PASSED:
   ✓ programs::test_samples::test_snake
   ✓ programs::test_samples::test_sudoku
   ✓ programs::test_samples::test_sum
+  ✓ programs::test_samples::test_y_combinator
   ✓ programs::test_shader_blocks::a_shader_block_is_its_wgsl_text
   ✓ programs::test_shader_blocks::a_shader_block_over_lines_loses_its_indentation
   ✓ programs::test_shader_blocks::paint_takes_a_shader_block
@@ -3328,6 +3333,12 @@ PASSED:
   ✓ types::test_data::test_node_data_metadata
   ✓ types::test_data::test_node_data_type_mismatch
   ✓ types::test_data::test_node_data_various_types
+  ✓ types::test_dates_at_run_time::test_an_instant_has_no_wall_clock
+  ✓ types::test_dates_at_run_time::test_an_instant_shows_as_rfc_3339
+  ✓ types::test_dates_at_run_time::test_instants_compare_at_run_time
+  ✓ types::test_dates_at_run_time::test_now_reads_back_as_an_instant
+  ✓ types::test_dates_at_run_time::test_now_reads_the_clock_when_the_program_runs
+  ✓ types::test_dates_at_run_time::test_print_now_prints_the_time
   ✓ types::test_declaration_without_value::a_declaration_assigned_before_reading_works
   ✓ types::test_declaration_without_value::reading_a_declaration_without_value_is_an_error
   ✓ types::test_declaration_zero_value::a_declaration_reads_as_the_zero_value_of_its_type
@@ -4332,6 +4343,7 @@ PASSED:
   ✓ welcoming::test_let_const_changes::a_declaration_unpacks_comma_values
   ✓ welcoming::test_let_const_changes::a_let_variable_changes
   ✓ welcoming::test_let_const_changes::let_and_const_unpack_a_tuple
+  ✓ welcoming::test_let_const_changes::let_mut_is_var
   ✓ welcoming::test_list_phrases::a_chain_of_phrases
   ✓ welcoming::test_list_phrases::a_method_of_a_parenthesized_filter
   ✓ welcoming::test_list_phrases::keep_only_a_property
@@ -4488,4 +4500,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-10 ignored, 4483 passed, 0 failed, 4483 total tested
+10 ignored, 4495 passed, 0 failed, 4495 total tested
