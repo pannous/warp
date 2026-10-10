@@ -36,8 +36,11 @@ wagi_json_text(t:any) := {
 	out + "\""
 }
 
-// by its keys: a map (`{n: 1}` in a route) iterates as its keys, a list of pairs as its pairs
-wagi_holds_pairs(value:any) := count(value) > 0 and count(keys(value)) == count(value)
+// a map (`{n: 1, k: 2}` in a route) is a list of pairs; ["a", "b"] holds none
+wagi_holds_pairs(value:any) := {
+	for item in value { if item is pair { return true } }
+	false
+}
 
 wagi_json_fields(value:any) := {
 	let names = keys(value)
