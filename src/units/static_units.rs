@@ -54,8 +54,6 @@ const ELEMENT_METHODS: [&str; 2] = ["add", "push"];
 const MAP_WORD: &str = "map";
 /// List words that give an element: its signature (`mean` also spelled `average`, library_words.rs)
 const ELEMENT_WORDS: [&str; 7] = ["sum", "max", "min", "first", "last", "mean", "average"];
-/// List words that give a plain number
-const COUNT_WORDS: [&str; 3] = ["count", "size", "length"];
 
 type Signature = Vec<(Dimension, i32)>;
 type Fields = Vec<(String, Signature)>;
@@ -817,7 +815,7 @@ impl Inference {
 
 	/// The element signature of a list of quantities a word applies to: `sum(xs)` of a list variable, `max(a, b)` of quantities
 	fn list_word(&mut self, word: &str, arguments: &[Node]) -> Option<Result<(Vec<Node>, Signature), Stop>> {
-		if !ELEMENT_WORDS.contains(&word) && !COUNT_WORDS.contains(&word) {
+		if !ELEMENT_WORDS.contains(&word) && !crate::analyzer::is_counting_word(word) {
 			return None;
 		}
 		let (arguments, element) = match arguments {
@@ -839,7 +837,7 @@ impl Inference {
 			},
 			_ => return None,
 		};
-		let signature = if COUNT_WORDS.contains(&word) { vec![] } else { element };
+		let signature = if crate::analyzer::is_counting_word(word) { vec![] } else { element };
 		Some(Ok((arguments, signature)))
 	}
 

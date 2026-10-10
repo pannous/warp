@@ -418,6 +418,9 @@ impl WasmGcEmitter {
 		if crate::analyzer::is_boolean(arg, &self.scope) {
 			return crate::analyzer::BOOL_TYPE.to_string();
 		}
+		if let Some(map_type) = crate::analyzer::held_map_type(arg, &self.scope) {
+			return map_type;
+		}
 		let kind = match arg.drop_meta() {
 			literal @ Node::Number(_) => literal.kind(),
 			Node::Empty => crate::type_kinds::Kind::Empty,
@@ -438,7 +441,8 @@ impl WasmGcEmitter {
 	/// `type(x)` reads the value's type at run time: for a value held as a Node, a variable that may hold a ratio (an exact
 	/// number of Int kind), a Key that may be an instance of a declared type
 	fn type_known_only_at_run_time(&self, subject: &Node) -> bool {
-		if crate::analyzer::is_boolean(subject, &self.scope) || matches!(subject.drop_meta(), Node::Number(_) | Node::Empty) {
+		if crate::analyzer::is_boolean(subject, &self.scope) || matches!(subject.drop_meta(), Node::Number(_) | Node::Empty)
+			|| crate::analyzer::held_map_type(subject, &self.scope).is_some() {
 			return false;
 		}
 		match self.get_type(subject) {
@@ -447,6 +451,17 @@ impl WasmGcEmitter {
 			crate::Kind::Key => !self.ctx.type_registry.types().is_empty(),
 			_ => false,
 		}
+	}
+
+	/// `t is number` of a type value t (`t = type(x)`, `int is number`): t names one of the types number covers, `t == int or
+	/// t == rational or …`; None for a value that is no symbol, or a test for a symbol
+	fn type_value_test(&self, subject: &Node, spec: &str) -> Option<Node> {
+		if self.get_type(subject) != crate::Kind::Symbol || crate::type_tests::type_matches(crate::type_tests::SYMBOL_TYPE, spec) {
+			return None;
+		}
+		let names_type = |name: &str| Node::Key(Box::new(subject.clone()), Op::Eq, Box::new(Node::Symbol(name.to_string())));
+		let tests = crate::type_tests::builtin_types_matching(spec).into_iter().map(names_type);
+		Some(tests.reduce(|either, test| Node::Key(Box::new(either), Op::Or, Box::new(test))).unwrap_or(Node::False))
 	}
 
 	/// `is_type(x, "spec")` as a Node: its 1 or 0
@@ -468,6 +483,10 @@ impl WasmGcEmitter {
 		}
 		let [_, subject, spec] = items.as_slice() else { return false };
 		let Node::Text(spec) = spec.drop_meta() else { return false };
+		if let Some(names_a_covered_type) = self.type_value_test(subject, spec) {
+			self.emit_numeric_value(func, &names_a_covered_type);
+			return true;
+		}
 		// `for char in s`, `s#1 is char`: an item of a text is typed text but is a code point at run time
 		let item_of_text = self.static_type_name(subject) == TEXT_TYPE && crate::type_tests::canonical_spec_word(spec) == CODEPOINT_TYPE;
 		let unknown = spec == crate::type_tests::ERROR_TYPE || item_of_text || self.has_unknown_static_type(subject);

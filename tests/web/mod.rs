@@ -12,7 +12,11 @@ mod test_playground_paint; // card canvas-zero
 #[cfg(feature = "native")] // runs node
 mod test_assistant_edits; // card put-editor: the chat's code applied as edits
 #[cfg(feature = "native")] // runs node
+mod test_completion_terse; // card completion-terse: the gray continuation is code only
+#[cfg(feature = "native")] // runs node
 mod test_editor_mode; // card playground-editor
+#[cfg(feature = "native")] // runs node
+mod test_sleep_run_limit; // card sleep-run-limit
 #[cfg(feature = "native")] // runs python3
 mod test_keyword_registry; // card where-infix
 mod test_missing_use; // card clickable-hint
@@ -100,3 +104,5 @@ mod test_task_files; // card task-sound-play
 mod test_page_play_file; // card browser-play
 #[cfg(feature = "native")] // runs the WAGI module with wasmtime and WASI
 mod test_wagi; // card fermyon-hosting
+#[cfg(feature = "native")] // runs wrangler dev and node
+mod test_assistant_proxy; // card assistant-proxy

@@ -7,6 +7,10 @@ before asking the user; nobody reads it front to back, the code, tests and wiki 
 notes/open_decisions.md.
 
 ## Decided 2026-10-10 (user; via warp-supervisor or the Interviewer)
+- canvas-zero (warp-sound): `use draw` + `show()` without `canvas(…)` uses a default canvas (the playground pane or
+  the window size, else 640×480), never an error. User: "who demanded … errors? We should have defaults." The
+  branch's "a 0×0 image is empty" error is undone. General rule (welcoming.md): a missing setting takes a sensible
+  default; errors only for ambiguity too dangerous to guess.
 - arctan-allow (warp-class): `arctan := arc_tangent` names the function (as `arctan = &arc_tangent`). Partial
   application only with an explicit hole: `inc := add(1, _); inc 5` is 6. Too few arguments without a hole
   (`inc := add 1`) stays the error "add needs 2 arguments", whose fix names `add(1, _)`.
@@ -14,6 +18,11 @@ notes/open_decisions.md.
   list of int, P196b stands); a variable's type joins its literal with every write the analyzer sees, so
   `shown = [0.0, 0.0]; shown[0] = sqrt(2.0)` makes shown a list of float from the start. Runtime conversion only as
   the fallback for writes the analyzer can't see. As implemented.
+- type-equal (warp-numbers, cards type-int and type-equal; implied by #30 "Only `is` tests types", per warp-supervisor):
+  `is` is the subtype test and `==` between types is exact. `type(0.0) is int`, `type(0) is number` and
+  `int is number` are yes; `type(0) == number` is no; `type(2) == type(3)` is yes. Built on the user's rule (cards
+  type-value-type, real-equality): a bare type name is the type as a value, not a constructor, so `type(π) == real`,
+  `t = type(0); t is int` and `int == int` work like any value; `3 == int` is no with the hint toward `is`.
 - people-where (warp-class): no new `with`/`without` sugar after a list beyond what is already implemented (user:
   the words have too many meanings; `with` could as well mean "with something added"), and "if it's already
   implemented, keep it implemented": main's `with` filter from the orm example stays (`name of people with age > 20`,

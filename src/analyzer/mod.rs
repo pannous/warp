@@ -5,7 +5,7 @@ use crate::function::{Function, FunctionRegistry};
 use crate::local::Local;
 use crate::node::{Bracket, Node, Separator};
 use crate::operators::{is_function_keyword, Op};
-use crate::type_kinds::{canonical_type_name, Kind};
+use crate::type_kinds::Kind;
 use std::collections::{HashMap, HashSet};
 
 /// Property words that count the elements of a value: `size of x`, `x size`, `x.size`; `size` is a synonym of `count`
@@ -31,14 +31,16 @@ pub(crate) fn is_declaration_keyword(node: &Node) -> bool {
 	is_constant_keyword(node) || node.is_symbol(VAR_KEYWORD) || node.is_symbol(IMMUTABLE_LET)
 }
 
-const COUNTING_PROPERTIES: [&str; 5] = ["number", "count", "length", "size", "len"];
+/// The words counting a value's elements, as `count x`, `x.size`, `len(x)`: the one table every pass asks, through
+/// is_counting_word (a class's own size method is looked up in this order)
+pub(crate) const COUNTING_WORDS: [&str; 4] = ["size", "count", "len", "length"];
 /// `byte_size(x)`, `x.byte_size`: the bytes of x, as `x.bytes` (size is the element count, user decision P40)
 const BYTE_SIZE: &str = "byte_size";
-/// The counting properties that are also functions: `number x` is the type conversion, not a count
-const TYPE_WORDS_AMONG_COUNTING: [&str; 1] = ["number"];
+/// `x.number` counts too, but `number x` is the type conversion, not a count
+const NUMBER_PROPERTY: &str = "number";
 
 pub(crate) fn is_counting_property(word: &str) -> bool {
-	COUNTING_PROPERTIES.contains(&word)
+	word == NUMBER_PROPERTY || is_counting_word(word)
 }
 
 /// Check if a node is pure data (not a statement/function call)

@@ -148,7 +148,7 @@ function programImports(holder, hooks) {
 			serve_routes: port => { throw new Error(`serve ${port}: a server runs only in the native host (the warp CLI)`); },
 			// the host words (src/host.rs): a page cannot block, so sleep busy-waits
 			sleep: milliseconds => {
-				hooks.sleeping?.(); // a paint after a sleep is the next frame of an animation (playground.js)
+				hooks.sleeping?.(Number(milliseconds)); // the next frame of an animation, and no runaway time (playground.js)
 				const until = Date.now() + Number(milliseconds);
 				let check = Date.now() + SHARED_CHECK_MILLISECONDS;
 				while (Date.now() < until) {

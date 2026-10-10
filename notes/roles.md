@@ -40,11 +40,15 @@ ask me decision questions."
   comes first on PATH), so a sample is tried as `/Users/me/dev/bin/warp samples/x.warp`. Homebrew releases are occasional (user,
   2026-10-10), so nothing waits for brew; a feature is announced once its batch is pushed (workers run `todo done`
   only after their branch is on main). Never the shared-target debug/warp: it holds whichever worktree built last.
-  Format (user: "put the command for one test into the title"): one single-select question per feature, the
-  exact command in the question text, options Yes / No, e.g. "Try `/Users/me/dev/bin/warp
-  ~/dev/angles/warp/samples/visualizer.warp` to see the new visualizer. Did it work?". Up to 4 per popup, sharing it
-  with decision questions. Yes → `todo tried <card>`; No or a pasted error → `todo add "…" Now` for the worker who
-  built it; unanswered ones stay in `todo try`. A popup blocks only the Interviewer.
+  Format (user 2026-10-10): the Interviewer's FINAL reply of a turn (the user's app summarizes earlier text and
+  shows only the final message in full) lists each feature as a ```sh code block the user runs with its ▶ button,
+  the expected result after it; no popup follows. The user answers in their next message: works → `todo tried
+  <card>`; a failure → `todo add "…" Now` for the worker who built it; untouched ones stay in `todo try`. Fallback:
+  the command in a popup question's text or preview. The Interviewer runs every snippet itself first and announces
+  only the ones that pass. Speed (user: "if it runs the test just for this one feature, we could
+  already present it"): a worker may hand over a try line as soon as its targeted test passes on its branch, with
+  its own binary (scripts/own-warp.sh → <worktree>/scratch/warp), not waiting for the Integrator's batch.
+  A popup blocks only the Interviewer.
 
 ## Never blocked by a decision
 A session that needs a decision: take the recommended option (the one most in line with notes/welcoming.md and the

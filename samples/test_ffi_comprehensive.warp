@@ -17,16 +17,15 @@ abs(-42)  // Expected: 42
 
 
 // ==============================================================================
-// Test 2: Float64 -> Float64 (floor from libm)
+// Test 2: Float64 -> Float64 (cbrt from libm)
 // ==============================================================================
-// Signature: float64 floor(float64)
+// Signature: float64 cbrt(float64)
 // Library: libm (math.h)
 // Wrapper: ffi_f64_f64
 
-import floor from "m"
-floor(3.7)  // Expected: 3.0
-// floor(-2.3)  // Expected: -3.0
-// floor(5.0)   // Expected: 5.0
+import cbrt from "m"
+cbrt(27.0)  // Expected: 3.0
+// cbrt(-8.0)  // Expected: -2.0
 
 
 // ==============================================================================
@@ -72,11 +71,10 @@ fmin(3.5, 2.1)  // Expected: 2.1
 // Combined Tests: Using multiple FFI functions together
 // ==============================================================================
 
-import sqrt from "m"
 sqrt(abs(-16))  // Expected: 4.0 (sqrt of abs(-16) = sqrt(16) = 4)
 
 // Floor the result of fmin
-floor(fmin(3.7, 2.9))  // Expected: 2.0 (fmin(3.7, 2.9) = 2.9, floor(2.9) = 2.0)
+floor(fmin(3.7, 2.9))  // Expected: 2 (fmin(3.7, 2.9) = 2.9, floor(2.9) = 2)
 
 // Get length of a number converted to string, then use that in sqrt
 // strlen("test") => 4, sqrt(4) => 2.0

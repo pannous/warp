@@ -209,7 +209,10 @@ function startWorker(restarts = 0) {
 			if (!pending) return showEventOutput(data);
 			if (data.type === "listening") Object.assign(pending, { listening: data.events, address: data.address });
 			if (data.type === "print") printedChunk(pending, data);
-			if (data.type === "sleep") pending.frame++;
+			if (data.type === "sleep") {
+				pending.frame++;
+				slept(pending, data.milliseconds);
+			}
 			if (data.type === "tasks inline") pending.tasksInline = data.reason;
 			if (data.type === "paint") painted(pending, data);
 			if (data.type === "module") lastModule = data.bytes;
@@ -353,10 +356,13 @@ function printedChunk(run, chunk) {
 	if (!run.animating) showPrinted(run.printed);
 }
 
-function stopAfterTimeout(run) {
+// the runaway limit counts running time only: a sleep moves the deadline on by its milliseconds (card sleep-run-limit)
+function stopAfterTimeout(run, milliseconds = RUN_TIMEOUT_MS) {
 	clearTimeout(run.timer);
-	run.timer = setTimeout(() => stopRun(run, `stopped after ${RUN_TIMEOUT_MS / 1000} s: ${run.tasksInline ?? "the program may not terminate"}`), RUN_TIMEOUT_MS);
+	run.deadline = Date.now() + milliseconds;
+	run.timer = setTimeout(() => stopRun(run, `stopped after ${RUN_TIMEOUT_MS / 1000} s: ${run.tasksInline ?? "the program may not terminate"}`), milliseconds);
 }
+const slept = (run, milliseconds) => stopAfterTimeout(run, run.deadline - Date.now() + milliseconds);
 
 // a program that does not stop blocks the worker: replace it
 function stopRun(run, message) {

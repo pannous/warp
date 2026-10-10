@@ -16,6 +16,9 @@ use std::collections::HashSet;
 use crate::node::{Bracket, Node};
 use crate::operators::{glyph_operator, Op};
 
+/// The "got it" topic of a plain hint is its reason: `a` (all of this kind) silences every hint giving that reason
+const HINT_TOPIC_PREFIX: &str = "hint:";
+
 // ============================================================================
 // Position Tracking for Hints
 // ============================================================================
@@ -383,25 +386,37 @@ pub fn clear_shown_hints() {
 
 /// Emit a normalization hint to stderr: `canonical` is what to write instead of `original`
 pub fn hint(original: &str, canonical: &str, reason: &str) {
-    emit_hint(original, canonical, reason, true);
+    acknowledgeable_hint(original, canonical, reason, true);
 }
 
 /// A hint whose preferred form does not replace the original text (it is said elsewhere: `global x`)
 pub fn advise(original: &str, preferred: &str, reason: &str) {
-    emit_hint(original, preferred, reason, false);
+    acknowledgeable_hint(original, preferred, reason, false);
 }
 
-fn emit_hint(original: &str, canonical: &str, reason: &str, rewrites: bool) {
+/// A hint the user can say "got it" to, for this expression or all hints of its reason (card hints-dismissed)
+fn acknowledgeable_hint(original: &str, canonical: &str, reason: &str, rewrites: bool) {
+    let topic = format!("{HINT_TOPIC_PREFIX}{reason}");
+    if crate::diagnostic::is_acknowledged(&topic, original) {
+        return;
+    }
+    if show_hint(original, canonical, reason, rewrites) {
+        crate::diagnostic::offer_acknowledgement(&topic, original);
+    }
+}
+
+/// Shows the hint, unless hints are off or it was shown before under HintMode::Once: whether it was shown
+pub(crate) fn show_hint(original: &str, canonical: &str, reason: &str, rewrites: bool) -> bool {
     let mode = hint_mode();
     if mode == HintMode::Off || HINTS_MUTED.with(|muted| muted.get()) {
-        return;
+        return false;
     }
 
     let key = format!("{}|{}", original, canonical);
 
     if mode == HintMode::Once
         && !SHOWN_HINTS.with(|shown| shown.borrow_mut().insert(key)) {
-            return;
+            return false;
         }
 
     crate::diagnostic::note_said();
@@ -412,7 +427,7 @@ fn emit_hint(original: &str, canonical: &str, reason: &str, rewrites: bool) {
         }
     });
     if !hints_printed() {
-        return;
+        return true;
     }
     ANY_HINT_PRINTED.store(true, std::sync::atomic::Ordering::Relaxed);
     use crate::diagnostic::{paint, Color};
@@ -423,6 +438,7 @@ fn emit_hint(original: &str, canonical: &str, reason: &str, rewrites: bool) {
         false => eprintln!("{}{position}: prefer {} over {}", paint(Color::Cyan, "hint"), paint(Color::Green, canonical), paint(Color::Yellow, original)),
     }
     eprintln!("      {}", reason);
+    true
 }
 
 // ============================================================================
