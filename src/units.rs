@@ -330,20 +330,15 @@ pub struct Quantity {
 	factors: Vec<Factor>,
 }
 
-const SUPERSCRIPT_DIGITS: [char; 10] = ['⁰', '¹', '²', '³', '⁴', '⁵', '⁶', '⁷', '⁸', '⁹'];
 /// Between the units of a product: `m·kg`
 const UNIT_PRODUCT: &str = "·";
-
-fn superscript(n: u32) -> String {
-	n.to_string().chars().filter_map(|digit| digit.to_digit(10)).map(|digit| SUPERSCRIPT_DIGITS[digit as usize]).collect()
-}
 
 /// `m·kg/s²`: the units with a positive power, then those with a negative one after a slash
 fn units_text(factors: &[Factor]) -> String {
 	let side = |positive: bool| {
 		let units = factors.iter().filter(|factor| (factor.power > 0) == positive).map(|factor| match factor.power.unsigned_abs() {
 			1 => factor.unit.name.to_string(),
-			power => format!("{}{}", factor.unit.name, superscript(power)),
+			power => format!("{}{}", factor.unit.name, crate::extensions::reals::superscript(power.into())),
 		});
 		units.collect::<Vec<String>>().join(UNIT_PRODUCT)
 	};
