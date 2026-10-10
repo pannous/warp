@@ -233,6 +233,8 @@ PASSED:
   ✓ control::test_function_dir::a_later_dir_leaves_an_earlier_line_alone
   ✓ control::test_function_dir::dir_of_a_function_lists_what_reflection_knows
   ✓ control::test_function_dir::the_type_of_a_function_is_function
+  ✓ control::test_glued_block_words::a_glued_do_runs_its_block
+  ✓ control::test_glued_block_words::a_glued_loop_runs_its_block
   ✓ control::test_go_blocks::a_failure_nobody_awaits_ends_the_run
   ✓ control::test_go_blocks::a_function_starting_a_task_is_no_getter
   ✓ control::test_go_blocks::a_go_block_does_not_hold_up_the_program
@@ -2667,6 +2669,8 @@ PASSED:
   ✓ parser::test_uniscript_entities::an_unknown_entity_stays_as_written_and_warns
   ✓ parser::test_uniscript_entities::entities_are_their_characters
   ✓ parser::test_uniscript_entities::entities_expand_inside_double_quoted_texts
+  ✓ parser::test_url_literal::a_colon_without_slashes_stays_a_pair
+  ✓ parser::test_url_literal::any_scheme_before_colon_slash_slash_starts_a_url
   ✓ parser::test_warp_format::html_attributes_and_repeated_tags_in_data
   ✓ parser::test_warp_format::test_empty_structures
   ✓ parser::test_warp_format::test_function_syntax
@@ -4361,4 +4365,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-10 ignored, 4356 passed, 0 failed, 4356 total tested
+10 ignored, 4360 passed, 0 failed, 4360 total tested
