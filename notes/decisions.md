@@ -7,6 +7,9 @@ before asking the user; nobody reads it front to back, the code, tests and wiki 
 notes/open_decisions.md.
 
 ## Decided 2026-10-10 (user; via warp-supervisor or the Interviewer)
+- arctan-allow (warp-class): `arctan := arc_tangent` names the function (as `arctan = &arc_tangent`). Partial
+  application only with an explicit hole: `inc := add(1, _); inc 5` is 6. Too few arguments without a hole
+  (`inc := add 1`) stays the error "add needs 2 arguments", whose fix names `add(1, _)`.
 - int-list (warp-numbers, card int-list): a decimal literal stays exact and is int when whole (`type([0.0, 0.0])` is
   list of int, P196b stands); a variable's type joins its literal with every write the analyzer sees, so
   `shown = [0.0, 0.0]; shown[0] = sqrt(2.0)` makes shown a list of float from the start. Runtime conversion only as
