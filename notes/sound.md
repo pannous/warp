@@ -32,8 +32,9 @@ play note("F#4") for 250ms      // note(name) needs `use sound` when called alon
   decoder on the machine only the format is checked. In the browser a failure reaches the console.
 - Units: `Hz` is `1/s`, `kHz` `1/ms` (src/units.rs UNIT_ALIASES); `si_amount(x)` takes a quantity or a plain number.
 
-Limits found on the way: assignments to the module's globals (`note_seconds = 0.25`) from the program do not
-reach the module.
+A module's `global` is a setting: the program's top-level `note_seconds = 0.25` or `tempo = 90` sets it (modules.rs
+shadowed_apart leaves globals alone; other program variables named like a module word still shadow it). Before
+2026-10-10 such an assignment made a program variable of its own and the module silently kept its value.
 
 ## Spectrum and the visualizer (card winamp-like)
 `spectrum(samples, seconds, bands)` (lib/sound.warp) gives how loud each of `bands` frequency bands sounds in the
@@ -46,6 +47,12 @@ Bugs it found, fixed on the way: float elements of a comprehension or a function
 arguments of a parameter that also gets ints, and in `==` ("not an int", tests/lists/test_number_list_elements.rs).
 `shown = [0.0, 0.0]` is still a list of ints (0.0 is exact), so the sample writes `[0.0 as float for …]` until the
 exact-decimal list decision (warp-numbers) lands.
+
+## Probes and quirks (from the warp-sound handover, 2026-10-10)
+- probes/sound/sound_words.warp exercises the sound words; probes/music_go/ the `play`/`melody` phrases;
+  probes/music_outlives_file.py that the player stops with warp.
+- Run sound probes under WARP_NO_WINDOW=1: otherwise sound plays on the user's Mac. Headless, sound only prints
+  `sound N s: <wav path>` on stderr.
 
 ## What professionals expect (user question 2026-10-09; roadmap, nothing of it built yet)
 
@@ -67,12 +74,33 @@ The words above are layer 1, the toy layer. Each layer below keeps the ones abov
    `stop_sound(h)` drops that one from the queue or stops its player, `stop_sound` (handle 0) all of them
    (tests/programs/test_sound_handles.rs). lib/sound.warp's sound names the handle before returning it: card
    block-data-sound.
+   Tempo built (step 4, 2026-10-10, samples/rhythm.warp): `1/4 beat`, `2 beats`, `1 bar` are seconds at the
+   module's `tempo` (beats per minute, 120) and `beats_per_bar` (4), anywhere in a program that uses sound: the
+   amount is the item before the word, of an assignment its value (src/lowering/music_words.rs → lib beat_seconds,
+   bar_seconds; tests/programs/test_sound_tempo.rs). Not units of the static unit checker: a beat is no SI time.
+   Voices built (step 5, 2026-10-10, samples/voices.warp): every task (`go { }`) is a voice. It forks its starter's
+   place in time (src/sound.rs Voice, joined in src/tasks.rs spawn), so a task's notes sound along with the
+   starter's instead of after them; each queued sound plays from its own sleeping thread (overlapping players, the OS
+   mixes), and render_sound mixes the sounds at their logical places (tests/programs/test_sound_voices.rs).
+   In the Playground too (card playground-go): each Worker keeps its voice's end on a clock the page and the Workers
+   share (host-tasks.js voicePlaced, performance.timeOrigin + now), a task Worker starts from its starter's, and the
+   page plays each sound at its `at` (playground.js playSound). A task's sounds reach the page only once the program's
+   Worker is back in its event loop (after `await`), so a start already past plays at once. LIMIT: a task's sounds
+   in the browser stay out of the program's render_sound (they go to the task Worker's own holder; card playground-drops).
    Still to build:
-   Expected: a shared audio clock, sample-accurate scheduling (`at 2 beats play C4`), ramping a handle's gain, voices
-   overlap. Tempo as a unit: `bpm`, `beat`, `bar` (`play C4 for 1/4 beat`).
-2. Music values, not frequencies. `Note` (pitch class, octave, MIDI number, cents), `Interval`, `Chord(C4, major7)`,
+   Expected: a shared audio clock, sample-accurate scheduling (`at 2 beats play C4`), ramping a handle's gain.
+2. Note names built (2026-10-10): parsed, not a table: a letter A–G, `#`/`♯` or `b`/`♭`, an octave 0–9 is its
+   equal-tempered frequency to a hundredth of a Hz (A4 = 440), when the program uses sound and doesn't define that
+   name; `F#4` parses as `F # 4` and counts as the note unless the program defines `F` (music_words.rs; the parser
+   lets ♯ ♭ continue a name). tests/programs/test_sound_notes.rs. Still to build:
+   Music values, not frequencies. `Note` (pitch class, octave, MIDI number, cents), `Interval`, `Chord(C4, major7)`,
    `Scale(D, dorian)`, transposition, tuning (A4 = 442Hz, just intonation), velocity. Note names parsed, not a table.
-3. Synthesis. Oscillators (sine, saw, square, triangle, noise, wavetable, band-limited, detune, unison), ADSR
+3. Built (2026-10-10, samples/synth.warp, tests/programs/test_sound_synth.rs): the ADSR envelope of every note,
+   module settings `attack`, `decay` (seconds), `sustain` (a share), `release` (seconds), defaults 5 ms / 0 / 1 / 5 ms
+   = the old click-free fade; `wave_shape = "noise"`; gain in decibels, `loudness = -6 dB` (`-6dB`, `x = -6 dB`;
+   music_words.rs → lib decibels). The float settings are declared `= 0.3 as float` (card float-global: a float
+   assigned to a global declared with a decimal fails "not an int" in the functions that read it). Still to build:
+   Synthesis. Oscillators (sine, saw, square, triangle, noise, wavetable, band-limited, detune, unison), ADSR
    envelopes, filters (lowpass/highpass/bandpass with resonance), LFOs and parameter automation (ramps), gain in dB,
    stereo pan, polyphony with voice stealing.
 4. A signal graph. `osc(220Hz, saw) |> lowpass(1.2kHz, q: 4) |> delay(3/8 beat) |> reverb(0.3) |> gain(-6dB) |> out`:
