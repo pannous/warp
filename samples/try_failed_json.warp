@@ -1,3 +1,4 @@
+#!/usr/bin/env warp
 // try also catches what the host fails at: json.parse of a text that is no json, a file or a request that fails
 use json
 settings = try json.parse("{ not json") else { theme: "light" }

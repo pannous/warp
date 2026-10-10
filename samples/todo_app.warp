@@ -1,3 +1,4 @@
+#!/usr/bin/env warp
 // A full-stack todo list from one source: `warp serve samples/todo_app.warp`, then open http://localhost:8080/
 // (notes/server_routes.md). The server keeps the table in todo_app.database.sqlite; the playground runs it as one page,
 // the table in its memory

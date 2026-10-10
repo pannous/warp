@@ -1,3 +1,4 @@
+#!/usr/bin/env warp
 // JavaScript from warp: `use js` names a browser global; WebIDL types it, so a misspelled member is a compile-time error
 
 use js Math

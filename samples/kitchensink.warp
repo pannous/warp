@@ -1,4 +1,5 @@
 #!/usr/bin/env warp
+#!/usr/bin/env warp
 // Kitchen sink: every feature of the language in one program that compiles and runs, natively and in the playground
 // (tests/programs/test_samples.rs test_kitchensink, tour example "kitchen sink"). Each part tests its own results:
 // `warp test samples/kitchensink.warp` (and the playground) runs them and says whether all of them pass

@@ -1,3 +1,4 @@
+#!/usr/bin/env warp
 // Snake Game
 // Classic arcade game, playing itself: the snake steers toward the food (there is no keyboard input yet)
 // positions are (x, y) pairs, read with #1 and #2; the game state is global

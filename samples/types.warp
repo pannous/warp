@@ -1,3 +1,4 @@
+#!/usr/bin/env warp
 // Type definitions in warp
 // Structural typing with optional annotations
 

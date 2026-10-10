@@ -1,4 +1,5 @@
 #!/usr/bin/env warp
+#!/usr/bin/env warp
 // @gpu: a map of a heavy lambda (math words) runs as a WGSL kernel over every item at once; sum, min and max of it
 // read back only one partial result per workgroup. Without a GPU adapter the same lines run on the CPU.
 // The GPU computes in f32: its sum differs from the CPU's in the 7th digit

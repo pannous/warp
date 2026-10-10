@@ -1,3 +1,4 @@
+#!/usr/bin/env warp
 // Expression Calculator
 // Parsing and evaluating arithmetic expressions
 // the parser state is global: functions change it (closures would capture copies)

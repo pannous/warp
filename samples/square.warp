@@ -1,3 +1,4 @@
+#!/usr/bin/env warp
 // module fixture for `use square`, see tests/modules/test_use_modules.rs
 answer := 42
 square(x) := x*x

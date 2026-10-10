@@ -1,4 +1,5 @@
 #!/usr/bin/env warp
+#!/usr/bin/env warp
 real x = 3 // a declaration needs a value: `real x;` alone leaves x undefined
 int, string, array, json
 x*x

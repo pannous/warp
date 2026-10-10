@@ -1,4 +1,5 @@
 #!/usr/bin/env warp
+#!/usr/bin/env warp
 // A 3D model from a Wavefront .obj text, spun and shaded on the GPU. warp reads the model (`v x y z` corners, `f a b c …`
 // faces, a face of more corners split into triangles), the shader casts a ray through every pixel against the
 // triangles, the nearest one hit is lit by its normal. `$mesh` is the list of triangle corners, one vec4f each

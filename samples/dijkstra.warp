@@ -1,3 +1,4 @@
+#!/usr/bin/env warp
 // Dijkstra shortest path on a small weighted graph
 graph = {
     "A": [["B", 4], ["C", 2]],
