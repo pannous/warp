@@ -27,10 +27,15 @@ def instruction_of(line):
 	return match.group(1), match.group(2), match.group(3)
 
 
-def merged(indent, function, items):
-	one_line = f"{indent}Self::emit_list({function}, &[{', '.join(items)}]);"
-	if len(one_line.expandtabs(4)) <= MAX_WIDTH:
-		return [one_line]
+# instructions that end a statement: a long run splits after them, into one emit_list per group of statements
+STATEMENT_END = re.compile(r'^I::(\w*Store\w*|LocalSet|GlobalSet|Drop|End|Br|BrIf|Return|StructSet|ArraySet|Else)\b')
+
+
+def emit_list_call(indent, function, items):
+	return f"{indent}Self::emit_list({function}, &[{', '.join(items)}]);"
+
+
+def wrapped(indent, function, items):
 	lines, current = [f"{indent}Self::emit_list({function}, &["], []
 	for item in items:
 		candidate = ', '.join(current + [item]) + ','
@@ -40,6 +45,34 @@ def merged(indent, function, items):
 		current.append(item)
 	lines.append(indent + '\t' + ', '.join(current) + ',')
 	lines.append(f"{indent}]);")
+	return lines
+
+
+def statements(items):
+	groups, current = [], []
+	for item in items:
+		current.append(item)
+		if STATEMENT_END.match(item):
+			groups.append(current)
+			current = []
+	return groups + [current] if current else groups
+
+
+def merged(indent, function, items):
+	fits = lambda group: len(emit_list_call(indent, function, group).expandtabs(4)) <= MAX_WIDTH
+	if fits(items):
+		return [emit_list_call(indent, function, items)]
+	lines, current = [], []
+	for group in statements(items):
+		if current and not fits(current + group):
+			lines.append(emit_list_call(indent, function, current))
+			current = []
+		current += group
+		if not fits(current):
+			lines.extend(wrapped(indent, function, current))
+			current = []
+	if current:
+		lines.append(emit_list_call(indent, function, current))
 	return lines
 
 
