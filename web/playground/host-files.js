@@ -368,29 +368,38 @@ function rollBack(file) {
 // the sounds mixed at their places on their voices (src/sound.rs render): a task's sound along with the program's; a
 // sound without a place (no voices where it ran) follows the one before. From where the run's last render ended, so
 // `at 1s beep()` keeps its second of silence
+// the sounds mixed at their places, in stereo when one of them is (a mono sound on both speakers alike, as src/sound.rs
+// render): the samples interleaved and the channels
 function mixed(sounds, rate, run) {
+	const channels = Math.max(1, ...sounds.map(sound => sound.channels ?? 1));
+	const framesOf = sound => sound.samples.length / (sound.channels ?? 1);
 	let end = run.renderedUntil ?? 0;
 	const starts = sounds.map(sound => {
 		const place = sound.place ?? end;
-		end = Math.max(end, place + sound.samples.length / rate);
+		end = Math.max(end, place + framesOf(sound) / rate);
 		return place;
 	});
 	const first = Math.min(run.renderedUntil ?? 0, ...starts);
 	const offsets = starts.map(place => Math.round((place - first) * rate));
-	const amplitudes = new Float64Array(Math.max(0, ...sounds.map((sound, i) => offsets[i] + sound.samples.length)));
-	sounds.forEach((sound, i) => sound.samples.forEach((sample, at) => amplitudes[offsets[i] + at] += Number(sample) - SAMPLE_OFFSET));
-	run.renderedUntil = first + amplitudes.length / rate;
-	return Array.from(amplitudes, amplitude => amplitude + SAMPLE_OFFSET);
+	const amplitudes = new Float64Array(channels * Math.max(0, ...sounds.map((sound, i) => offsets[i] + framesOf(sound))));
+	sounds.forEach((sound, i) => {
+		const own = sound.channels ?? 1;
+		for (let frame = 0; frame < framesOf(sound); frame++)
+			for (let channel = 0; channel < channels; channel++)
+				amplitudes[(offsets[i] + frame) * channels + channel] += Number(sound.samples[frame * own + Math.min(channel, own - 1)]) - SAMPLE_OFFSET;
+	});
+	run.renderedUntil = first + amplitudes.length / channels / rate;
+	return { samples: Array.from(amplitudes, amplitude => amplitude + SAMPLE_OFFSET), channels };
 }
 
-function wavOf(samples, rate) {
+function wavOf(samples, rate, channels = 1) {
 	const bytes = new Uint8Array(WAV_HEADER_BYTES + 2 * samples.length);
 	const view = new DataView(bytes.buffer);
 	const ascii = (at, word) => [...word].forEach((letter, i) => view.setUint8(at + i, letter.charCodeAt(0)));
 	ascii(0, "RIFF");
 	view.setUint32(4, bytes.length - 8, true);
 	ascii(8, "WAVEfmt ");
-	[[16, 16, 4], [20, 1, 2], [22, 1, 2], [24, rate, 4], [28, 2 * rate, 4], [32, 2, 2], [34, 16, 2]]
+	[[16, 16, 4], [20, 1, 2], [22, channels, 2], [24, rate, 4], [28, 2 * channels * rate, 4], [32, 2 * channels, 2], [34, 16, 2]]
 		.forEach(([at, value, size]) => size === 4 ? view.setUint32(at, value, true) : view.setUint16(at, value, true));
 	ascii(36, "data");
 	view.setUint32(40, 2 * samples.length, true);
@@ -470,10 +479,9 @@ addHostPart({
 				const rate = sounds[0]?.rate ?? DEFAULT_SAMPLE_RATE;
 				const other = sounds.find(sound => sound.rate !== rate);
 				if (other) throw new Error(`sounds of ${rate} and ${other.rate} samples per second cannot share ${contentText(path)}`);
-				const samples = mixed(sounds, rate, this.holder.run);
-				const bytes = wavOf(samples, rate);
-				keepWritten(contentText(path), bytes);
-				return samples.length / rate;
+				const { samples, channels } = mixed(sounds, rate, this.holder.run);
+				keepWritten(contentText(path), wavOf(samples, rate, channels));
+				return samples.length / channels / rate;
 			},
 		},
 	},

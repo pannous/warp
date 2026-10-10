@@ -116,7 +116,12 @@ The words above are layer 1, the toy layer. Each layer below keeps the ones abov
    ("lowpass", "highpass", "bandpass": an RBJ-cookbook biquad over each note's amplitudes), `cutoff` (Hz),
    `resonance` (Q, 0.707 flat), `vibrato` (semitones) at `vibrato_rate`, `tremolo` (a share) at `tremolo_rate`,
    `unison` voices spread over `detune` semitones. Plain numbers: `cutoff = 1.2kHz` fails (card quantity-global).
-   The filter runs per note, so its state starts fresh at every note. Still to build:
+   The filter runs per note, so its state starts fresh at every note.
+   Stereo built (card stereo-pan, tests/programs/test_sound_pan.rs, tests/web/test_rendered_pan.rs): `pan` (-1 left,
+   1 right, 0 mono) makes lib panned interleave left, right, the far side scaled by 1 - |pan|; sound_samples carries
+   the channels (src/host.rs, 4th parameter), the WAV/AudioBuffer has them, render_sound mixes in stereo when any
+   sound is (mono on both sides alike), natively and in host-files.js mixed. Still open: voice stealing (a cap on
+   voices sounding at once), which only matters for live playing (cards real-time / patterns-live). Still to build:
    Synthesis. Oscillators (sine, saw, square, triangle, noise, wavetable, band-limited, detune, unison), ADSR
    envelopes, filters (lowpass/highpass/bandpass with resonance), LFOs and parameter automation (ramps), gain in dB,
    stereo pan, polyphony with voice stealing.

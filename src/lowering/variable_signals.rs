@@ -204,8 +204,7 @@ impl Signals {
 					},
 				}
 			}
-			Node::Meta { node, data } => Node::Meta { node: Box::new(self.lower(*node, listeners)), data },
-			other => other,
+			other => children_rewritten(other, |child| self.lower(child, listeners)),
 		}
 	}
 

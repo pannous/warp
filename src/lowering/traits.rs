@@ -1046,8 +1046,7 @@ impl Dispatch {
 				let items: Vec<Node> = items.into_iter().map(|item| self.expand(item)).collect();
 				self.call(&items, &bracket, &separator).unwrap_or(Node::List(items, bracket, separator))
 			}
-			Node::Meta { node, data } => Node::Meta { node: Box::new(self.expand(*node)), data },
-			other => other,
+			other => children_rewritten(other, |child| self.expand(child)),
 		}
 	}
 

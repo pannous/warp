@@ -151,10 +151,10 @@ Done:
   `usize` makers of lazy_ranges, min_max, list_element_checks and variable_signals (`+= 1` then use) the same way
 
 Left (each changes behaviour or needs care):
-- Node::map_children also enters class bodies (Node::Type); children_rewritten does not. 22 tails folded by
-  probes/cleanup/fold_rewrite_tails.py (generic Key + Meta arms after an arm taking every list); the ~20 left differ:
-  no List arm at all (folding would make lists recurse), a list arm only for some separators, `Node::Key(Box::new…)`
-  spelled out, or a Meta arm passing other arguments (bind_it's is_value) — each a case-by-case look.
+- Node::map_children also enters class bodies (Node::Type); children_rewritten does not. 45 tails folded by
+  probes/cleanup/fold_rewrite_tails.py: the generic Meta arm and `other => other`, with Key and List each either
+  generic (folded) or taken by an unguarded arm of their own. The ~20 left differ: no List or Key arm at all (folding
+  would make them recurse), `?` inside (folding.rs), a Meta arm doing more than recursing — each a case-by-case look.
 - statements_of (class_methods, event_signals, late_binding), statements (component_worlds, test_blocks),
   is_statement_list (generators, result_word, variable_signals), is_return (closures, generators,
   type_name_matching): same name, different bracket/separator rules each, so one shared version changes which forms

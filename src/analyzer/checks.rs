@@ -1,6 +1,7 @@
 //! Analysis and its diagnostics: analyze, type errors, function collection, lints and the checks of calls, nulls and declarations
 
 use super::*;
+use crate::lowering::nodes::children_rewritten;
 
 pub fn analyze(raw: Node) -> Node {
 	let mut scope = Scope::new();
@@ -888,10 +889,7 @@ pub(super) fn subtract_kebab_variables(node: Node, variables: &HashSet<String>) 
 		Node::Key(left, op @ (Op::Colon | Op::Assign | Op::Define), right) => {
 			Node::Key(left, op, Box::new(subtract_kebab_variables(*right, variables)))
 		}
-		Node::Key(left, op, right) => Node::Key(Box::new(subtract_kebab_variables(*left, variables)), op, Box::new(subtract_kebab_variables(*right, variables))),
-		Node::List(items, bracket, separator) => Node::List(items.into_iter().map(|item| subtract_kebab_variables(item, variables)).collect(), bracket, separator),
-		Node::Meta { node, data } => Node::Meta { node: Box::new(subtract_kebab_variables(*node, variables)), data },
-		other => other,
+		other => children_rewritten(other, |child| subtract_kebab_variables(child, variables)),
 	}
 }
 
@@ -922,9 +920,7 @@ pub(super) fn resolve_blocks(node: Node, variables: &HashSet<String>) -> Node {
 				None => Node::List(resolved, bracket, separator),
 			}
 		}
-		Node::Key(left, op, right) => Node::Key(Box::new(resolve_blocks(*left, variables)), op, Box::new(resolve_blocks(*right, variables))),
-		Node::Meta { node, data } => Node::Meta { node: Box::new(resolve_blocks(*node, variables)), data },
-		other => other,
+		other => children_rewritten(other, |child| resolve_blocks(child, variables)),
 	}
 }
 
@@ -935,10 +931,7 @@ pub(super) fn substitute_keys(node: Node, keys: &HashMap<String, Node>) -> Node 
 	match node {
 		Node::Symbol(name) => keys.get(&name).cloned().unwrap_or(Node::Symbol(name)),
 		Node::Key(left, op @ (Op::Colon | Op::Assign | Op::Define), right) => Node::Key(left, op, Box::new(substitute_keys(*right, keys))),
-		Node::Key(left, op, right) => Node::Key(Box::new(substitute_keys(*left, keys)), op, Box::new(substitute_keys(*right, keys))),
-		Node::List(items, bracket, separator) => Node::List(items.into_iter().map(|item| substitute_keys(item, keys)).collect(), bracket, separator),
-		Node::Meta { node, data } => Node::Meta { node: Box::new(substitute_keys(*node, keys)), data },
-		other => other,
+		other => children_rewritten(other, |child| substitute_keys(child, keys)),
 	}
 }
 

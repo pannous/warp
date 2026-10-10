@@ -119,7 +119,7 @@ pub fn host_word_signatures() -> [(&'static str, Vec<wasm_encoder::ValType>, Vec
 	use wasm_encoder::ValType::{F64, I32, I64};
 	let node = wasm_encoder::ValType::Ref(wasm_encoder::RefType::ANYREF);
 	[(GPU_COMPUTE, vec![node, node, I64], vec![node]), (GPU_RENDER, vec![node, I64, I64, node], vec![node]), (TEXT_COVERAGE, vec![node, I64], vec![node]), (GPU_COMPUTE_LINEAR, vec![node, I64, I64], vec![I64]), (GPU_MAP_LINEAR, vec![node, I64, node, I64, I64, I64], vec![I64]), (GPU_REDUCE_LINEAR, vec![node, I64, node, I64, I64, I64], vec![I64]), (FETCH_START, vec![I64, node], vec![]), (FETCH_REPLY, vec![I64], vec![node]), (SERVE_ROUTES, vec![I64, node], vec![node]), (STD_PURE, vec![node, node, node], vec![node]), (STD_IO, vec![node, node, node], vec![node]), (CHANNEL_LISTEN, vec![I64, node], vec![]), (CHANNEL_PENDING, vec![I64], vec![I64]), (CHANNEL_NEXT, vec![I64], vec![node]), (CLIPBOARD_TEXT, vec![], vec![node]), (PAGE_PATH, vec![], vec![node]), (NOTIFY, vec![node], vec![]), (CHANNEL_SEND, vec![node, node], vec![]),
-		(GUARDED_CALL, vec![I32, node], vec![node]), (PAINT, vec![node, I64, I64, node], vec![]), (SOUND, vec![node, I64, I64], vec![]), (RUN_BLOCK, vec![node, node, node, node], vec![node]), (BLOCK_VALUE, vec![I64], vec![node]), (FOREIGN_CALL, vec![node, node, node, node, node], vec![node]), (SLEEP, vec![I64], vec![]), (RANDOM, vec![], vec![F64]), (RANDOM_BELOW, vec![I64], vec![I64]), (RANDOM_SEED, vec![I64], vec![]), (CLOCK, vec![], vec![I64]), (LOCAL_OFFSET, vec![I64], vec![I64]), (SIGNAL_POLL, vec![], vec![]), (SIGNAL_EVERY, vec![I64, I64], vec![]), (SIGNAL_DAILY, vec![I64, I64, I64], vec![]), (SIGNAL_AT, vec![I64, I64], vec![]), (SIGNAL_WATCH, vec![I64, I32], vec![]), (SYSTEM_VALUE, vec![I32], vec![I64]), (EXIT, vec![I64], vec![]),
+		(GUARDED_CALL, vec![I32, node], vec![node]), (PAINT, vec![node, I64, I64, node], vec![]), (SOUND, vec![node, I64, I64, I64], vec![]), (RUN_BLOCK, vec![node, node, node, node], vec![node]), (BLOCK_VALUE, vec![I64], vec![node]), (FOREIGN_CALL, vec![node, node, node, node, node], vec![node]), (SLEEP, vec![I64], vec![]), (RANDOM, vec![], vec![F64]), (RANDOM_BELOW, vec![I64], vec![I64]), (RANDOM_SEED, vec![I64], vec![]), (CLOCK, vec![], vec![I64]), (LOCAL_OFFSET, vec![I64], vec![I64]), (SIGNAL_POLL, vec![], vec![]), (SIGNAL_EVERY, vec![I64, I64], vec![]), (SIGNAL_DAILY, vec![I64, I64, I64], vec![]), (SIGNAL_AT, vec![I64, I64], vec![]), (SIGNAL_WATCH, vec![I64, I32], vec![]), (SYSTEM_VALUE, vec![I32], vec![I64]), (EXIT, vec![I64], vec![]),
 		(TASK_SPAWN, vec![I32, I64, I64, I64, I64], vec![I64]), (TASK_AWAIT, vec![I64], vec![I64]), (TASK_CONTROL, vec![I64, I64], vec![I64]),
 		(TASK_SPAWN_VALUES, vec![I32, node], vec![I64]), (TASK_AWAIT_VALUE, vec![I64], vec![node]),
 		(TASK_JOIN, vec![I64], vec![I64]), (TASK_FAILURE, vec![I64], vec![node]), (TASK_STATUS, vec![I64], vec![I64]), (TASK_POLL, vec![], vec![]),
@@ -138,6 +138,7 @@ use crate::extensions::utils::download_within;
 use crate::extensions::numbers::Number;
 use crate::node::{Bracket, Node, Separator};
 use anyhow::Result;
+use crate::lowering::nodes::children_rewritten;
 #[cfg(feature = "native")]
 mod native;
 #[cfg(feature = "native")]
@@ -214,8 +215,6 @@ fn renamed_heads(node: Node, aliases: &[(&str, Option<usize>, &str)]) -> Node {
 			}
 			Node::List(items, bracket, separator)
 		}
-		Node::Key(left, op, right) => Node::Key(Box::new(renamed_heads(*left, aliases)), op, Box::new(renamed_heads(*right, aliases))),
-		Node::Meta { node, data } => Node::Meta { node: Box::new(renamed_heads(*node, aliases)), data },
-		other => other,
+		other => children_rewritten(other, |child| renamed_heads(child, aliases)),
 	}
 }
