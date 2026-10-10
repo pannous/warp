@@ -293,13 +293,17 @@ function startsFrame(run, output) {
 // ---- sound ----------------------------------------------------------------------------------------------------
 
 let audio; // the page's AudioContext, made at the first sound after a click or key press
-let soundsEnd = 0; // when the queued sounds end, in the AudioContext's time: one plays after the other, as natively
+// the clock the page and the Workers share for sounds (host-tasks.js soundClock), in seconds
+const soundClock = () => (performance.timeOrigin + performance.now()) / 1000;
+// the AudioContext's time minus soundClock, set anew when nothing sounds and kept while sounds follow, so a voice's
+// sounds join without a gap
+let clockOffset = 0;
 let sounding = []; // the playing and queued sounds, silenced when the next run starts (typing reruns the code)
 
 // before the page's first click or key press (the run on load, the CI tour) a sound stays silent: an AudioContext made
 // then cannot start and the browser warns
 const beforeUserActivation = () => navigator.userActivation && !navigator.userActivation.hasBeenActive;
-function playSound({ samples, rate, handle }) {
+function playSound({ samples, rate, at, handle }) {
 	if (beforeUserActivation()) return;
 	audio ??= new AudioContext();
 	audio.resume();
@@ -308,9 +312,8 @@ function playSound({ samples, rate, handle }) {
 	const source = audio.createBufferSource();
 	source.buffer = buffer;
 	source.connect(audio.destination);
-	soundsEnd = Math.max(soundsEnd, audio.currentTime);
-	source.start(soundsEnd);
-	soundsEnd += buffer.duration;
+	if (sounding.length === 0) clockOffset = audio.currentTime - soundClock();
+	source.start(Math.max(audio.currentTime, at + clockOffset));
 	source.handle = handle;
 	source.onended = () => sounding = sounding.filter(other => other !== source);
 	sounding.push(source);
@@ -343,7 +346,6 @@ function silenced(handle) {
 function silence() {
 	sounding.forEach(source => source.stop());
 	sounding = [];
-	soundsEnd = 0;
 	stopSoundFiles();
 }
 
