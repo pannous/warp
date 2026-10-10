@@ -472,10 +472,11 @@ Examples: classes, properties; samples: types, polymorphism
 
 ## Data and storage
 
-A program forgets its variables when it ends. `stored` keeps one: run this twice and it counts on.
+A program forgets its variables when it ends. `stored` keeps one: run this twice and it counts on. The `default` is
+only the first run's value.
 
 ```warp
-stored visits = 0
+stored visits default 0
 visits += 1
 ```
 
