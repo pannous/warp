@@ -7,6 +7,7 @@
 
 use crate::extensions::numbers::Number;
 use crate::extensions::reals::{Exact, Generator, Monomial, Rational, Real};
+use crate::compile_time::{answer_of, fail, Stop};
 use crate::node::{error, Node, Separator};
 use crate::operators::Op;
 use num_bigint::BigInt;
@@ -33,29 +34,15 @@ enum Value {
 	Text(String),
 }
 
-enum Stop {
-	/// not a constant exact-real program: compile it normally
-	Unsupported,
-	Error(String),
-}
-
 type Evaluated = Result<Value, Stop>;
 type Scope = HashMap<String, Value>;
-
-fn fail<T>(message: impl Into<String>) -> Result<T, Stop> {
-	Err(Stop::Error(message.into()))
-}
 
 /// The value of a constant program that uses exact reals, None for any other program
 pub fn answer(program: &Node) -> Option<Node> {
 	if !mentions_generator(program) {
 		return None;
 	}
-	match evaluate(program, &mut Scope::new()) {
-		Ok(value) => Some(value.into_node()),
-		Err(Stop::Error(message)) => Some(error(&message)),
-		Err(Stop::Unsupported) => None,
-	}
+	answer_of(evaluate(program, &mut Scope::new()), Value::into_node)
 }
 
 fn mentions_generator(node: &Node) -> bool {
