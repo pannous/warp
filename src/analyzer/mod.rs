@@ -24,7 +24,7 @@ fn is_constant_keyword(node: &Node) -> bool {
 
 /// `var x = 1` announces a reassignable variable, plain `x = 1`
 const VAR_KEYWORD: &str = "var";
-/// `let x = 1` may change, with a note teaching `var` (P159; check_constants)
+/// `let x = 1` binds x once: any change of it is an error naming `var` (user, card let-reassign; check_constants)
 const IMMUTABLE_LET: &str = "let";
 
 pub(crate) fn is_declaration_keyword(node: &Node) -> bool {

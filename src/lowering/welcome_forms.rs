@@ -21,6 +21,9 @@ const LOOP_KEYWORD: &str = "loop";
 const END_WORD: &str = "end";
 const LAMBDA_WORD: &str = "lambda";
 const LET_WORD: &str = "let";
+/// `let mut x = 1` / `let mutable x = 1` (Rust) declare a variable: warp writes `var x = 1` (user, card let-reassign)
+const MUTABLE_MODIFIERS: [&str; 2] = ["mut", "mutable"];
+const VAR_WORD: &str = "var";
 const DESTRUCTURED_OBJECT: &str = "object·";
 /// The Meta key the parser puts on the name of a function written with type parameters `fn id<T>(…)`: their names
 pub const GENERIC_MARK: &str = "generic";
@@ -174,6 +177,15 @@ fn forms(node: Node) -> Node {
 	}
 }
 
+/// Rust's `let mut x = 1`: `var x = 1`, with a note naming var
+fn let_mut(keyword: &Node, modifier: &Node, declaration: &Node, name: &Node) -> Option<Node> {
+	let modifier = modifier.symbol_name().filter(|word| MUTABLE_MODIFIERS.contains(word))?;
+	let name = name.serialize();
+	crate::normalize::set_position_of(keyword);
+	crate::diagnostic::educate_once(&format!("alias-let {modifier}"), &format!("let {modifier} {name}"), &format!("var {name}"), &format!("write var {name}, not let {modifier} {name}"));
+	Some(Node::List(vec![Node::Symbol(VAR_WORD.to_string()), forms(declaration.clone())], Bracket::None, Separator::None))
+}
+
 /// OCaml / F# `let f x = body in rest`, `let f x = body`, `let x = v in rest`: the definition `f(x) := body` (or the
 /// assignment) and then rest
 fn let_binding(items: &[Node]) -> Option<Node> {
@@ -181,6 +193,9 @@ fn let_binding(items: &[Node]) -> Option<Node> {
 	let Node::Key(last_name, Op::Assign, value) = last.drop_meta() else { return None };
 	if !keyword.is_symbol(LET_WORD) {
 		return None;
+	}
+	if let [modifier] = names {
+		return let_mut(keyword, modifier, last, last_name);
 	}
 	let names: Vec<&Node> = names.iter().chain([last_name.as_ref()]).collect();
 	if !names.iter().all(|name| matches!(name.drop_meta(), Node::Symbol(_))) {
