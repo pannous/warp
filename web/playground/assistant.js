@@ -21,7 +21,9 @@ const COMPLETION_TOKENS = 256;
 const NO_THINKING = { type: "disabled" };
 const NOTHING_SUGGESTED = "Claude suggests nothing here.";
 const CURSOR_MARK = "‸";
-const LANGUAGE_GUIDE = "primer.md"; // the language in short, what Claude is told about warp; the site serves it as /llms.txt too
+// what Claude is told about warp: the guide beside the editor (guide.js) and the keywords build.sh makes, so it stays as
+// current as they are (card completion-terse: the older primer.md said `where` filters comprehensions only)
+const LANGUAGE_GUIDES = ["guide.md", "guide-expert.md"];
 const CODE_FENCE = /```([a-z]*)\n?([\s\S]*?)```/g; // a split gives text, language, code, text, …
 const FAILURE_SHOWN_MS = 5000; // how long a failed completion's reason stays under its line
 const NO_KEY = "Paste an Anthropic API key into the ⋯ menu first.";
@@ -38,7 +40,9 @@ function programEnvironment() {
 }
 
 let languageGuide;
-const warpGuide = () => languageGuide ??= fetch(LANGUAGE_GUIDE).then(answer => answer.ok ? answer.text() : "", () => "");
+const guideText = file => fetch(file).then(answer => answer.ok ? answer.text() : "", () => "");
+const keywordsText = () => typeof KEYWORDS === "undefined" ? "" : `Keywords: ${KEYWORDS.hard.join(" ")}\nSoft keywords (a local may take the name): ${KEYWORDS.soft.join(" ")}`;
+const warpGuide = () => languageGuide ??= Promise.all(LANGUAGE_GUIDES.map(guideText)).then(guides => [...guides, keywordsText()].filter(Boolean).join("\n\n"));
 
 // Claude's answer to the messages, as text; a failed request is the API's own reason
 async function askClaude({ model, system, messages, maxTokens, thinking }) {
@@ -57,7 +61,7 @@ async function askClaude({ model, system, messages, maxTokens, thinking }) {
 }
 
 async function systemPrompt(task) {
-	return `You help with warp, a data format and wasm-first programming language. Its guide in short:\n\n${await warpGuide()}\n\n${task}`;
+	return `You help with warp, a data format and wasm-first programming language. Its guide:\n\n${await warpGuide()}\n\n${task}`;
 }
 
 // ---- completion: Claude's continuation at the cursor, shown in gray until Tab takes it ----------------------------
@@ -81,8 +85,9 @@ async function suggestCompletion(editor, automatic = false) {
 	const code = editor.getRange({ line: 0, ch: 0 }, at) + CURSOR_MARK + editor.getRange(at, { line: editor.lastLine() });
 	const shown = automatic ? undefined : editor.addLineWidget(at.line, element("div", { className: "completion-pending" }, "asking Claude…"));
 	try {
-		const system = await systemPrompt(`Complete the warp program at ${CURSOR_MARK}. Answer with only the text to insert there: no explanation, no code fence.`);
-		const text = (await askClaude({ model: COMPLETION_MODEL, system, messages: [{ role: "user", content: code }], maxTokens: COMPLETION_TOKENS, thinking: NO_THINKING })).replace(CODE_FENCE, "$2");
+		const inComment = isInComment(editor.getRange({ line: 0, ch: 0 }, at));
+		const system = await systemPrompt(inComment ? COMMENT_TASK : COMPLETION_TASK);
+		const text = terseContinuation(await askClaude({ model: COMPLETION_MODEL, system, messages: [{ role: "user", content: code }], maxTokens: COMPLETION_TOKENS, thinking: NO_THINKING }), inComment);
 		if (asked !== edits || !sameSpot(editor.getCursor(), at)) return;
 		if (!text) {
 			if (!automatic) throw new Error(NOTHING_SUGGESTED);
@@ -111,6 +116,71 @@ function completeAfterPause(editor) {
 		const line = editor.getLine(at.line);
 		if (editor.hasFocus() && !editor.somethingSelected() && at.ch === line.length && line.trim()) suggestCompletion(editor, true);
 	}, PAUSE_BEFORE_COMPLETION_MS);
+}
+
+// ---- the continuation as shown: code only, usually one line (card completion-terse) ----------------------------------
+// the prompt asks for that, and an answer that still explains, shows a result or comments loses those lines here
+
+const COMPLETION_TASK = `Complete the warp program at ${CURSOR_MARK}. Answer with only the code to insert there, usually a single line, more only to close what it opens: no explanation, no comment, no result, no code fence; nothing at all when nothing fits.`;
+const COMMENT_TASK = `The cursor ${CURSOR_MARK} is inside a comment of the warp program: continue the comment, briefly. Answer with only the text to insert there.`;
+const PROSE_START = /^(?:hmm|wait|note|actually|alternatively|here's|here is|let me|i think|explanation|output|result)\b/i;
+const PROSE_WORD = /^[A-Za-z][a-z']*[,.;:!?…]*$/;
+const SENTENCE_MARK = /[.!?…:]$|, /;
+const PROSE_SHARE = 0.8; // of a line's words plain English words: a sentence, not code
+const PROSE_LENGTH = 4; // words, fewer is code like `print x for x`
+const RESULT_LINE = /^\s*(?:=>|→|\/\/\s*=>)/; // `=> [2 3]`: what the code gives, not code
+const OPENERS = "([{", CLOSERS = ")]}";
+const LINE_COMMENT_MARK = "//"; // shortcuts.js has LINE_COMMENT, what it inserts: the page's scripts share one scope
+const COMMENT_MARKS = [LINE_COMMENT_MARK, "/*"];
+
+const QUOTED_CODE = /`[^`]*`/g; // `[2 3]` in a sentence about code; a warp text too, so a sentence is judged without them
+const PUNCTUATION = /^[,.;:!?…]+$/;
+
+const isProse = line => {
+	const sentence = line.trim().replace(QUOTED_CODE, "");
+	const words = sentence.split(/\s+/).filter(word => word && !PUNCTUATION.test(word));
+	if (PROSE_START.test(sentence)) return true;
+	return words.length >= PROSE_LENGTH && SENTENCE_MARK.test(sentence) && words.filter(word => PROSE_WORD.test(word)).length >= PROSE_SHARE * words.length;
+};
+
+// where the line's comment (`//`, `/*`) starts outside a text, -1 without one (`"https://…"` is no comment)
+function commentStart(line, marks = COMMENT_MARKS) {
+	let quote;
+	for (let index = 0; index < line.length; index++) {
+		const character = line[index];
+		if (quote) quote = character === "\\" ? (index++, quote) : character === quote ? undefined : quote;
+		else if (character === '"' || character === "'") quote = character;
+		else if (marks.some(mark => line.startsWith(mark, index))) return index;
+	}
+	return -1;
+}
+
+// the code before the cursor ends in a `//` comment or an open `/* … */`
+const isInComment = before => commentStart(before.slice(before.lastIndexOf("\n") + 1), [LINE_COMMENT_MARK]) >= 0 || before.lastIndexOf("/*") > before.lastIndexOf("*/");
+
+const bracketDepth = line => [...line].reduce((depth, character) => depth + OPENERS.includes(character) - CLOSERS.includes(character), 0);
+
+// the answer's code: a fenced block's if it has one, without prose and result lines, without comments unless the cursor
+// is in one, and only its first line unless that opens brackets the next lines close
+function terseContinuation(answer, inComment = false) {
+	const fenced = [...answer.matchAll(CODE_FENCE)];
+	let lines = (fenced.length ? fenced[0][2] : answer).replace(/\n$/, "").split("\n");
+	if (inComment) return lines[0];
+	lines = lines.filter((line, index) => !isProse(line) && !(index > 0 && RESULT_LINE.test(line)));
+	lines = lines.flatMap(line => {
+		const start = commentStart(line);
+		if (start < 0) return [line];
+		const code = line.slice(0, start).trimEnd();
+		return code.trim() ? [code] : [];
+	});
+	const kept = [];
+	let depth = 0;
+	for (const line of lines) {
+		kept.push(line);
+		depth += bracketDepth(line);
+		if (depth <= 0 && line.trim()) break;
+	}
+	return kept.join("\n");
 }
 
 function takeSuggestion(editor) {
