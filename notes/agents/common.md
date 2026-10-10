@@ -63,6 +63,9 @@ when a message or comment cites a number (P71, D5) and you need its wording; nev
   `#[ignore]` from a test that passes unedited needs no question; editing its assertions still needs a decision.
 - Use absolute paths and `git -C <worktree>` in scripts. Conventional commit messages; no Co-Authored-By, session
   trailers or links. Unrelated problems you meet go on the to-do board: `todo add "…"` (column Next; it falls back to todo.md on your branch when the board is unreachable).
+- GitHub's API quota (5000 requests/h) is shared by every session; on 2026-10-10 `gh run watch` polling every 3 s ran
+  it out and blocked CI watching for 10 min. Watch runs with `gh run watch --interval 60` or more, and never poll
+  `todo list` in a loop.
 - A card or issue is closed only with a commit linked in its description (user, 2026-10-06): `todo done <card>
   <commit>` (a commit URL for wiki changes), never `gh issue close`; `todo move <card> Done` refuses without a link.
   A result the user can see or use gets `--try "how to try it"` (one concrete line); the Interviewer announces it
