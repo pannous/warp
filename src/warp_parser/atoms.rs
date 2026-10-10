@@ -98,8 +98,9 @@ impl WarpParser {
 			';' | '>' | '}' | ')' | ']' => Empty, // Closing brackets/terminators handled by caller
 			'ø' => { self.advance(); return Empty }
 			'∞' => { self.advance(); return Node::Number(Number::Inf) } // the float infinity (P56)
-			// `°C`, `°F`: a temperature unit (units.rs)
+			// `°C`, `°F`: a temperature unit; `30°`: an angle in degrees (units.rs)
 			crate::units::DEGREE if self.peek_char(1).is_alphabetic() => self.symbol_after(1, |name| Node::Symbol(format!("{}{name}", crate::units::DEGREE))),
+			crate::units::DEGREE => { self.advance(); Node::Symbol(crate::units::DEGREE.to_string()) }
 			_ if let Some((truth, length)) = self.truth_glyph_at() => {
 				self.advance_by(length);
 				return truth;
@@ -620,6 +621,11 @@ impl WarpParser {
 
 		if let Some(version) = self.version_operand(&symbol) {
 			return version;
+		}
+		// `x°`: a variable in degrees, as `30°` (card angles-degrees)
+		if self.current_char() == crate::units::DEGREE && !self.peek_char(1).is_alphabetic() {
+			self.advance();
+			return Node::Key(Box::new(Node::Symbol(symbol)), Op::Mul, Box::new(Node::Symbol(crate::units::DEGREE.to_string())));
 		}
 
 		// `def square (n) {…}` names its function like `def square(n) {…}`
