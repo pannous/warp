@@ -20,6 +20,13 @@ pub const FUNCTIONS: [&str; 6] = ["sin", "cos", "tan", "ln", "exp", STANDARD_PAR
 /// st(x): the standard part of a finite hyperreal (wiki/hyperreals.md)
 const STANDARD_PART: &str = "st";
 
+/// `nearest(x, rational, limit, within: ε)` of an exact x is computed here, exactly (Exact::nearest_fraction); of a
+/// float at run time by lib/prelude.warp
+const NEAREST: &str = "nearest";
+const NEAREST_KIND: &str = "rational";
+const NEAREST_WITHIN: &str = "within";
+const NEAREST_LIMIT: &str = "limit";
+
 /// Largest integer exponent computed exactly; beyond it the power is approximated
 const MAX_EXACT_EXPONENT: i64 = 10_000;
 
@@ -79,6 +86,8 @@ fn folded_exact(node: Node) -> Node {
 			Ok(Value::Bool(truth)) => return if truth { Node::True } else { Node::False },
 			// beyond i64 the run-time path stays as it was (√1e40 is a float there, floor of it out of int range)
 			Ok(Value::Real(real)) if rational(&real).is_some_and(|q| q.numerator.to_i64().is_some() && q.denominator.to_i64().is_some()) => return Value::Real(real).into_node(),
+			// a fraction nearest asked for is exact whatever its size
+			Ok(value @ Value::Real(_)) if is_nearest_call(&node) => return value.into_node(),
 			_ => {}
 		}
 	}
@@ -221,6 +230,10 @@ fn list(items: &[Node], separator: &Separator, scope: &mut Scope) -> Evaluated {
 			let argument = evaluate(argument, scope)?;
 			call(function_name(head).unwrap_or_default(), argument)
 		}
+		[head, value, kind, options @ ..] if head.name() == NEAREST && kind.name() == NEAREST_KIND && !scope.contains_key(NEAREST) => {
+			let value = evaluate(value, scope)?;
+			nearest(value, options, scope)
+		}
 		[head, argument] if is_text_type_word(&head.name()) && !scope.contains_key(&head.name()) => {
 			convert(evaluate(argument, scope)?, &head.name())
 		}
@@ -267,6 +280,34 @@ fn key(left: &Node, op: Op, right: &Node, scope: &mut Scope) -> Evaluated {
 			(left, right) => arithmetic(left, op, right),
 		},
 		Op::Sub | Op::Mul | Op::Div | Op::Pow => arithmetic(evaluate(left, scope)?, op, evaluate(right, scope)?),
+		_ => Err(Stop::Unsupported),
+	}
+}
+
+fn is_nearest_call(node: &Node) -> bool {
+	matches!(node.drop_meta(), Node::List(items, _, _) if items.first().is_some_and(|head| head.name() == NEAREST))
+}
+
+/// The fraction `nearest(x, rational, limit, within: ε)` names; a float x is left to lib/prelude.warp
+fn nearest(value: Value, options: &[Node], scope: &mut Scope) -> Evaluated {
+	let Value::Real(Real::Exact(exact)) = value else { return Err(Stop::Unsupported) };
+	let (mut limit, mut within) = (None, None);
+	for option in options {
+		match option.drop_meta() {
+			Node::Key(name, Op::Colon | Op::Assign, amount) if name.name() == NEAREST_WITHIN => within = Some(exact_rational(evaluate(amount, scope)?)?),
+			Node::Key(name, Op::Colon | Op::Assign, amount) if name.name() == NEAREST_LIMIT => limit = Some(exact_rational(evaluate(amount, scope)?)?.numerator),
+			positional => limit = Some(exact_rational(evaluate(positional, scope)?)?.numerator),
+		}
+	}
+	let fraction = exact.nearest_fraction(limit.as_ref(), within.as_ref()).map_err(Stop::Error)?;
+	Ok(Value::Real(Real::Exact(Exact::rational(fraction))))
+}
+
+/// The exact value of a number argument: a float as the decimal it was written as (1e-40 is 1/10^40)
+fn exact_rational(value: Value) -> Result<Rational, Stop> {
+	match value {
+		Value::Real(Real::Exact(exact)) => exact.as_rational().ok_or(Stop::Unsupported),
+		Value::Real(Real::Approx(f)) | Value::Float(f) => Rational::of_decimal(f).ok_or(Stop::Unsupported),
 		_ => Err(Stop::Unsupported),
 	}
 }

@@ -2177,9 +2177,11 @@ PASSED:
   ✓ numbers::test_nan_observed::a_nan_leaving_the_run_is_canonical
   ✓ numbers::test_nan_observed::a_nan_prints_as_nan
   ✓ numbers::test_nearest::float_to_exact_refusals_name_nearest
+  ✓ numbers::test_nearest::nearest_expands_exact_values_beyond_floats
   ✓ numbers::test_nearest::nearest_fraction
   ✓ numbers::test_nearest::nearest_of_exact_values
-  ✓ numbers::test_nearest::nearest_takes_two_or_three_arguments
+  ✓ numbers::test_nearest::nearest_takes_two_to_four_arguments
+  ✓ numbers::test_nearest::nearest_within_a_precision
   ✓ numbers::test_norm::norm_is_abs
   ✓ numbers::test_number_words::a_number_word_hints_its_digits
   ✓ numbers::test_number_words::a_variable_of_that_name_wins
@@ -4468,4 +4470,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-10 ignored, 4463 passed, 0 failed, 4463 total tested
+10 ignored, 4465 passed, 0 failed, 4465 total tested
