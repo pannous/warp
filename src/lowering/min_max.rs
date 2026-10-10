@@ -3,8 +3,7 @@
 //! One list argument is the list of candidates: `max([1 5 2])`; a list variable `max(xs)` is folded at runtime.
 
 use super::nodes::key;
-use crate::analyzer::{call_name, extract_user_functions};
-use crate::context::Context;
+use crate::analyzer::call_name;
 use crate::diagnostic::Diagnostic;
 use crate::node::{Bracket, Node, Separator};
 use crate::warp_parser::parse;
@@ -26,8 +25,7 @@ pub fn lower(node: Node) -> Node {
 	if !node.mentions_any(&EXTREMA.map(|(name, _)| name)) {
 		return node;
 	}
-	let mut context = Context::new();
-	extract_user_functions(&mut context, &node);
+	let context = crate::analyzer::function_context(&node);
 	let builtins: Vec<(&str, Op)> = EXTREMA.into_iter().filter(|(name, _)| !context.user_functions.contains_key(*name)).collect();
 	if builtins.is_empty() {
 		return node;

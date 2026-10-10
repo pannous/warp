@@ -46,7 +46,8 @@ self.writeClipboard = text => post({ type: "clipboard", text }); // host-files.j
 let soundHandles = 0;
 const nextSoundHandle = () => ++soundHandles;
 self.lastSoundHandle = () => soundHandles;
-self.playSoundFile = url => post({ type: "sound file", url, handle: nextSoundHandle() }); // host-files.js STD_ADAPTERS.sound: a worker has no <audio>
+self.playSoundFile = (url, bytes) => post({ type: "sound file", url, bytes, handle: nextSoundHandle() }); // host-files.js STD_ADAPTERS.sound: a worker has no <audio>
+self.keepFile = (path, bytes) => post({ type: "file", path, bytes }); // render_sound's WAV, for the page's download link
 self.stopSoundFiles = () => { soundsEnd = 0; post({ type: "stop sound files" }); };
 self.stopSound = handle => post({ type: "stop sound", handle }); // stop_sound(handle)
 // sound_queued() (lib/sound.warp, card sound-pro): the seconds the queued sounds still sound
@@ -266,7 +267,7 @@ function runHandler(holder, handler) {
 
 // the run's timers (host.js addTimer), each running its handler until the next run
 self.onmessage = async ({ data }) => {
-	if (data.pointer) return self.pagePointer = { values: new Int32Array(data.pointer.buffer), names: data.pointer.names }; // host.js system_value
+	if (data.pointer) return self.pagePointer = sharedPointer(data.pointer); // host.js system_value
 	if (data.system) return Object.assign(self.pageSystemValues ??= {}, data.system); // host.js system_value
 	if (data.environment) return Object.assign(self, { pageEnvironment: data.environment, pageSecrets: data.secrets }); // host-files.js os.env, withPageSecret
 	if (data.stored) return Object.assign(storedValues, data.stored) && Object.assign(sessionValues, data.session); // host-files.js STD_ADAPTERS.store

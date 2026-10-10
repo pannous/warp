@@ -1,7 +1,7 @@
 //! Asks about written forms the analyzer sees whole (notes/welcoming.md): unbracketed list assignments (D12)
 //! and suffix words mixed with infix arithmetic (D9); a trailing percent `10%` is read as `10/100` here too
 
-use super::nodes::{call, key};
+use super::nodes::{call, is_binding, key};
 use crate::diagnostic::{ask, reading, Ask, Fallback};
 use crate::node::{symbol, Bracket, Node, Separator};
 use crate::operators::Op;
@@ -260,7 +260,7 @@ fn apply_suffix_words(items: Vec<Node>, functions: &SuffixWords, bracket: Bracke
 fn suffix_applied(operand: Node, item: Node, word: &Node, function: &Suffix) -> Node {
 	match operand {
 		Node::Meta { node, data } if is_assignment(&node) => Node::Meta { node: Box::new(suffix_applied(*node, item, word, function)), data },
-		Node::Key(target, op, value) if is_assignment_op(&op) => Node::Key(target, op, Box::new(suffix_applied(*value, item, word, function))),
+		Node::Key(target, op, value) if is_binding(&op) => Node::Key(target, op, Box::new(suffix_applied(*value, item, word, function))),
 		operand => {
 			let argument = match is_infix_arithmetic(&operand) {
 				true => match suffix_precedence(&operand, &written_word(word)) {
@@ -275,12 +275,9 @@ fn suffix_applied(operand: Node, item: Node, word: &Node, function: &Suffix) -> 
 	}
 }
 
-fn is_assignment_op(op: &Op) -> bool {
-	matches!(op, Op::Assign | Op::Define) || op.is_compound_assign()
-}
 
 fn is_assignment(node: &Node) -> bool {
-	matches!(node.drop_meta(), Node::Key(_, op, _) if is_assignment_op(op))
+	matches!(node.drop_meta(), Node::Key(_, op, _) if is_binding(op))
 }
 
 /// `1+2 squared`: does the word bind to the nearest operand (`1+(2 squared)`, true) or apply to the whole (`(1+2) squared`)?

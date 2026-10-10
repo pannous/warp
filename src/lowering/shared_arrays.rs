@@ -12,6 +12,7 @@
 //! Shared values (P106): `shared done = false`, `shared n = 0`, `shared x = 0.5` are one-cell arrays: a read of `n` is
 //! `shared_get(n, 1)`, `n = v` is `shared_set(n, 1, v)`, `n += v` is `shared_add(n, 1, v)`; a boolean is the Int 1 or 0.
 
+use super::words::{MAP_WORD, SUM_WORD};
 use super::nodes::{call, key};
 use crate::node::{symbol, Bracket, Node, Separator};
 use crate::operators::Op;
@@ -24,9 +25,7 @@ const SHARED_NEW: &str = crate::host::SHARED_WORDS[0];
 const SHARED_COUNT: &str = crate::host::SHARED_WORDS[4];
 const COUNTING_WORDS: [&str; 3] = ["count", "length", "size"];
 const FLOAT_WORDS: [&str; 3] = ["float", "real", "double"];
-const MAP_WORD: &str = "map";
 const DOT_WORD: &str = "dot";
-const SUM_WORD: &str = "sum";
 
 /// `linear xs = int[n]`: an array in linear memory
 const LINEAR_WORD: &str = "linear";

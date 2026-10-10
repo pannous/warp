@@ -5,12 +5,12 @@
 //! `input{ bind: name }` (card web-bind) is `input{ value: name on input { name = event.value } }`; a checkbox or radio
 //! binds `checked` to `event.checked`.
 
+use super::words::ON_WORD;
 use super::nodes::key;
 use crate::event_signals::{ELEMENT_EVENT_JOINER, PAGE_EVENTS};
 use crate::node::{symbol, Bracket, Node, Separator};
 use crate::operators::Op;
 
-const ON_WORD: &str = "on";
 const BIND_WORD: &str = "bind";
 const INPUT_EVENT: &str = "input";
 const TYPE_ATTRIBUTE: &str = "type";

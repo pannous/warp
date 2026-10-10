@@ -5,7 +5,6 @@
 //! `[xs.keep, only, positive.sort, by, size]`: each `.method` binds to the word before it.
 
 use super::nodes::{call, key, symbol};
-use crate::analyzer::extract_user_functions;
 use crate::context::Context;
 use crate::node::{Bracket, Node, Separator};
 use crate::operators::Op;
@@ -28,8 +27,7 @@ pub fn lower(node: Node) -> Node {
 	if !node.mentions_any(&[KEEP.1, SORT.1, TAKE.1]) {
 		return node;
 	}
-	let mut context = Context::new();
-	extract_user_functions(&mut context, &node);
+	let context = crate::analyzer::function_context(&node);
 	expand(node, &context)
 }
 

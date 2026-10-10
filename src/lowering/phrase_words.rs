@@ -3,8 +3,6 @@
 //! `add x to list` is the method call `list.add(x)`.
 
 use super::nodes::key;
-use crate::analyzer::extract_user_functions;
-use crate::context::Context;
 use crate::node::{symbol, Bracket, Node, Separator};
 use crate::operators::Op;
 
@@ -15,8 +13,7 @@ pub fn lower(node: Node) -> Node {
 	if !node.mentions_any(&[DO_WORD, ADD_WORD]) {
 		return node;
 	}
-	let mut context = Context::new();
-	extract_user_functions(&mut context, &node);
+	let context = crate::analyzer::function_context(&node);
 	let phrases = Phrases { do_is_free: !context.user_functions.contains_key(DO_WORD), add_is_free: !context.user_functions.contains_key(ADD_WORD) };
 	phrases.expand(node)
 }

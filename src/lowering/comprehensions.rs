@@ -2,6 +2,7 @@
 //! `(made = []; for x in xs { if c { made.push(x * x) } }; made)`. Lowered first, so the loop and the push go through
 //! every later pass like written ones. `xs where it > 1` filters like `[it for it in xs if it > 1]`.
 
+use super::words::{FOR_WORD, IN_WORD};
 use super::nodes::key;
 use crate::library_words::substitute;
 use crate::node::{symbol, Bracket, Node, Separator};
@@ -10,8 +11,6 @@ use crate::warp_parser::parse;
 use std::cell::Cell;
 use std::collections::{HashMap, HashSet};
 
-const FOR_WORD: &str = "for";
-const IN_WORD: &str = "in";
 const IF_WORD: &str = "if";
 const WHERE_WORD: &str = "where";
 /// The element a `where` condition reads as `it`

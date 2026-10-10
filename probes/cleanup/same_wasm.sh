@@ -12,6 +12,8 @@ set -u
 RUNS_WHEN_UNSTABLE=6
 before=$1 after=$2
 shift 2
+# the worktree and commit each binary was built from: another session's build can replace a copied-too-late binary
+for binary in "$before" "$after"; do echo "binary     $binary: $("$binary" --version 2>&1 | tr '\n' ' ')"; done
 work=$(mktemp -d "${PWD}/scratch/same_wasm.XXXX")
 differing=0
 

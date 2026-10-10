@@ -5,8 +5,8 @@
 //! becomes `closure_call_1(f, x)`, a helper per arity that call_refs the closure's entry (wasm_emitter/closures.rs).
 //! notes/closures.md describes the representation.
 
+use super::words::{FOR_WORD, GLOBAL_WORD, IN_WORD};
 use super::nodes::{call, key, parameter_name};
-use crate::analyzer::extract_user_functions;
 use crate::context::{Context, Param, UserFunctionDef};
 use crate::diagnostic::Diagnostic;
 use crate::lambdas::arrow_lambda;
@@ -42,8 +42,6 @@ const CAPTURE_LOCAL_MARK: &str = "·capture·";
 const CAPTURE_READER_MARK: &str = "·captured·";
 const LIFTED_PREFIX: &str = "closure_lambda_";
 const IMPLICIT_PARAMETER: &str = "it";
-const FOR_WORD: &str = "for";
-const IN_WORD: &str = "in";
 
 pub fn closure_call_name(arity: usize) -> String {
 	format!("{CLOSURE_CALL_PREFIX}{arity}")
@@ -159,8 +157,7 @@ fn for_loop_parts(node: &Node) -> Option<(&str, &Node)> {
 }
 
 fn lift_closures(program: Node) -> Node {
-	let mut context = Context::new();
-	extract_user_functions(&mut context, &program);
+	let context = crate::analyzer::function_context(&program);
 	let variables = captured_variables_of(&program);
 	let functions: HashSet<String> = context.user_functions.keys().cloned().collect();
 	// `g = x => x`: the parameter a function hands back, so `g(y => y*2)(4)` calls what it was given
@@ -407,7 +404,6 @@ fn is_field(node: &Node) -> bool {
 	holder_path(node).is_some_and(|path| path.contains('.'))
 }
 
-const GLOBAL_WORD: &str = "global";
 /// Methods that append one value to a list variable (analyzer APPEND_METHODS)
 const APPEND_METHODS: [&str; 3] = ["add", "append", "push"];
 

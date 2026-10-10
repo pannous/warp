@@ -2,7 +2,7 @@
 //! `fib int i = …` → `fib(i:int) := …`, `fibonacci number = …` → `fibonacci(number:number) := …`,
 //! `foo of int = it+it` → `foo(it:int) := …`; the `to` phrase `to square a number:` shares `parameter_slots`.
 
-use super::nodes::{call, is_call_head, key, spaced_statement};
+use super::nodes::{call, is_block, is_call_head, key, spaced_statement};
 use crate::analyzer::type_word_kind;
 use crate::node::{symbol, Bracket, Node, Separator};
 use crate::operators::Op;
@@ -200,9 +200,6 @@ fn flat_head(head: &Node) -> Node {
 	}
 }
 
-fn is_block(node: &Node) -> bool {
-	matches!(node.drop_meta(), Node::List(_, Bracket::Curly, _))
-}
 
 /// The value converted to the declared result type; an arithmetic value is grouped, `(x*2) as int`, as written it
 /// would be the ambiguous `x*2 as int`

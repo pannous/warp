@@ -36,8 +36,8 @@ use unicode_normalization::UnicodeNormalization;
 
 /// Largest exponent written out as an exact integer literal (1e4096 has 4097 digits)
 /// The unit words a for loop walks a text by, the item being `it` (wiki/string.md)
-/// The schemes of a URL read as one text: `https://pannous.com`
-const URL_SCHEMES: [&str; 7] = ["http", "https", "ftp", "file", "data", "ws", "wss"];
+/// What follows the scheme of a URL read as one text, whatever the scheme: `https://pannous.com`, `ssh://host` (card add-http)
+const URL_MARK: &str = "://";
 const UNIT_LOOP_WORDS: [&str; 4] = ["chars", "characters", "codepoints", "bytes"];
 const BYTES_WORD: &str = "bytes";
 pub const IT_WORD: &str = "it";
@@ -154,8 +154,9 @@ const DATA_KEYWORD: &str = "data";
 const CLASS_KEYWORD: &str = "class";
 /// `await job` waits for a task; its operand binds like the operand of a unary minus (Op::Neg)
 const AWAIT_KEYWORD: &str = "await";
-/// `go {…}` starts a task (lowering/go_blocks.rs), glued `go{…}` too: no tag `go:{…}` (card error-beep)
-const GO_KEYWORD: &str = "go";
+/// The words of a block of code, also glued to it: `go{…}` starts a task as `go {…}` does (lowering/go_blocks.rs,
+/// card error-beep), `loop{…}` loops, `do{…}` runs its block (card glued-loop); no tags `go:{…}`
+const GLUED_BLOCK_KEYWORDS: [&str; 3] = ["go", "loop", "do"];
 /// `await all jobs`: every task of a list (P47)
 const AWAIT_ALL_WORD: &str = "all";
 /// `await x` binds its operand like unary minus
@@ -236,6 +237,7 @@ fn grouped_list(items: Vec<Node>, bracket: Bracket, separator: Separator) -> Nod
 	let items = if separator == Separator::Space { with_arrow_bodies(items) } else { items };
 	let items = match (&separator, items.as_slice()) {
 		(Separator::Space, [print, value]) if is_print_word(print) => printed_when(print, value).map_or(items, |guarded| vec![guarded]),
+		(Separator::Space, [.., _]) if bracket == Bracket::None => looped_while(&items).map_or(items, |looped| vec![looped]),
 		_ => items,
 	};
 	// `{ print upper n }`: a block of the one statement prints the one expression too
@@ -273,6 +275,18 @@ fn printed_when(print: &Node, value: &Node) -> Option<Node> {
 	let Node::Key(nothing, Op::If, _) = condition.drop_meta() else { return None };
 	let printed = Node::List(vec![print.clone(), (**guarded).clone()], Bracket::None, Separator::Space);
 	(**nothing == Node::Empty).then(|| Node::Key(condition.clone(), Op::Then, Box::new(printed)))
+}
+
+/// `do {i++} while c`, `print i while c`: a trailing `while` loops the whole command, not its last word (card glued-loop)
+fn looped_while(items: &[Node]) -> Option<Node> {
+	let (last, command) = items.split_last()?;
+	if !matches!(command.first()?.drop_meta(), Symbol(_)) {
+		return None;
+	}
+	let Node::Key(head, Op::Do, body) = last.drop_meta() else { return None };
+	let Node::Key(nothing, Op::While, condition) = head.drop_meta() else { return None };
+	let looped = Node::List([command, &[(**body).clone()]].concat(), Bracket::None, Separator::Space);
+	(**nothing == Node::Empty).then(|| while_do((**condition).clone(), looped))
 }
 
 /// `(x => print x)`: `=>` binds looser than the space, so the words after a lambda's arrow are its body (`print x`), not

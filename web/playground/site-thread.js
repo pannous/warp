@@ -34,10 +34,26 @@ async function startSiteWorker() {
 		}
 		if (data.stored) keepValue(data.stored.name, data.stored.value, data.stored.file);
 		if (data.clipboard !== undefined) copyText(data.clipboard);
+		if (data.paint) showPainting(root, data.paint);
 		if (data.print) (data.print.stream === 2 ? console.error : console.log)(data.print.text.replace(/\n$/, ""));
 		if (data.failure) console.error("warp:", data.failure);
 	};
+	if (globalThis.pointerMessage) { // canvas.js, shipped when the program paints
+		const shared = pointerMessage();
+		if (shared) worker.postMessage(shared);
+		followPointer(document.body);
+	}
 	worker.postMessage({ start: { module: new URL(SITE_MODULE, document.baseURI).href, stored: keptValues(), session: keptValues([SESSION_STORE]), path: location.pathname, replies: document.getElementById(REPLIES_ELEMENT)?.textContent } });
 	listenToElements(found => found && worker.postMessage(found));
 	globalThis.followSiteLinks?.(path => worker.postMessage({ navigate: path }));
+}
+
+// a painting of the program (card site-frames, canvas.js) in the one canvas after the root, which the root's markup
+// morphing leaves alone: an animation's frames are drawn into it, a painting of another size replaces it
+function showPainting(root, painting) {
+	const shown = root.nextElementSibling?.matches("canvas.painting") ? root.nextElementSibling : undefined;
+	if (shown && sameSize(shown, painting)) return drawn(shown, painting);
+	const canvas = paintingCanvas(painting);
+	if (shown) shown.replaceWith(canvas);
+	else root.after(canvas);
 }

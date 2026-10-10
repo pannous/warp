@@ -5,9 +5,10 @@
 //! (`iter(g(args))`, generator_objects.rs), from an object by `.next()` until ø, from any other list by its index.
 //! A call inside a `while` condition stays as it is: computed once before the loop it would not change per test.
 
+use super::words::OF_WORD;
 use crate::generator_objects::{advanced_variables, generator_call, ITER_WORD};
 use crate::generators::{is_statement_list, yielded_value, Generator, NAME_SEPARATOR};
-use super::nodes::{assign, int, statement_list, symbol};
+use super::nodes::{assign, block, call, int, statement_list, symbol};
 use crate::library_words::substitute;
 use crate::node::{Bracket, Node, Separator};
 use crate::operators::Op;
@@ -18,7 +19,6 @@ use std::collections::{HashMap, HashSet};
 const TAKE_WORD: &str = "take";
 /// `first(xs, 3)` and the phrases `take 3 of xs`, `first 3 of xs` are take too
 const TAKE_WORDS: [&str; 2] = [TAKE_WORD, "first"];
-const OF_WORD: &str = "of";
 const ZIP_WORD: &str = "zip";
 const LIST_WORD: &str = "list";
 /// Calls that read the rest of an object's values as a list
@@ -70,7 +70,7 @@ fn lazily_read_variables(node: &Node, generators: &HashMap<String, Generator>) -
 				assigned.extend(target.symbol_name().map(String::from));
 			}
 		}
-		if let Some((word, arguments)) = call(part) {
+		if let Some((word, arguments)) = consumer_call(part) {
 			if word == TAKE_WORD || word == ZIP_WORD {
 				read.extend(arguments.iter().filter_map(Node::symbol_name).map(String::from));
 			}
@@ -80,7 +80,7 @@ fn lazily_read_variables(node: &Node, generators: &HashMap<String, Generator>) -
 }
 
 /// `word(arguments)`, `take 3 of xs` as `take(xs, 3)`
-fn call(node: &Node) -> Option<(&str, Vec<Node>)> {
+fn consumer_call(node: &Node) -> Option<(&str, Vec<Node>)> {
 	let Node::List(items, Bracket::Round | Bracket::None, _) = node.drop_meta() else { return None };
 	let is_take = |word: &Node| word.symbol_name().is_some_and(|name| TAKE_WORDS.contains(&name));
 	if let [word, count, of, source] = items.as_slice() {
@@ -110,7 +110,7 @@ pub(crate) fn template(text: &str, bindings: &[(&str, &Node)]) -> Vec<Node> {
 impl Consumers<'_> {
 	/// A consumer call: its word, its sources and, for take, the count
 	fn consumer(&self, node: &Node) -> Option<(String, Vec<Source>, Option<Node>)> {
-		let (word, mut arguments) = call(node)?;
+		let (word, mut arguments) = consumer_call(node)?;
 		let limit = match word {
 			TAKE_WORD if arguments.len() == 2 => arguments.pop(),
 			ZIP_WORD if arguments.len() >= 2 => None,
@@ -191,10 +191,10 @@ impl Consumers<'_> {
 			values.push(value);
 		}
 		body.extend(template(COLLECTED, &[("OUT", &out), ("VALUE", &yielded_value(values))]));
-		before.push(while_do(condition, statement_list(body, Bracket::Curly)));
+		before.push(while_do(condition, block(body)));
 		match word.as_str() {
 			TAKE_WORD | ZIP_WORD | LIST_WORD => out,
-			_ => Node::List(vec![symbol(&word), out], Bracket::Round, Separator::None),
+			_ => call(&word, vec![out]),
 		}
 	}
 }

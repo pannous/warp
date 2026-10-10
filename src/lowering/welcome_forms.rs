@@ -7,7 +7,8 @@
 //! - OCaml / F# `let f x = body in rest`: the definition `f(x) := body`, then rest
 //! - JS destructured parameters `({a, b}) => a + b`: the object taken apart into its fields
 
-use super::nodes::{call, is_type_word, key};
+use super::words::IN_WORD;
+use super::nodes::{call, is_function_keyword, is_type_word, key};
 use crate::node::{symbol, Bracket, Node, Separator};
 use crate::operators::Op;
 use std::collections::HashSet;
@@ -20,7 +21,6 @@ const LOOP_WORD: &str = "loop";
 const END_WORD: &str = "end";
 const LAMBDA_WORD: &str = "lambda";
 const LET_WORD: &str = "let";
-const IN_WORD: &str = "in";
 const DESTRUCTURED_OBJECT: &str = "object·";
 /// The Meta key the parser puts on the name of a function written with type parameters `fn id<T>(…)`: their names
 pub const GENERIC_MARK: &str = "generic";
@@ -125,8 +125,7 @@ fn forms(node: Node) -> Node {
 			if items.len() > 1 && items[0].is_symbol(CPP_AUTO_WORD) && matches!(items[1].drop_meta(), Node::Key(_, Op::Assign, _)) {
 				crate::normalize::set_position_of(&items[0]);
 				crate::normalize::hint(&format!("{CPP_AUTO_WORD} "), "", "warp infers types: write the assignment without auto");
-				let rest = items[1..].to_vec();
-				return forms(if rest.len() == 1 { rest[0].clone() } else { Node::List(rest, bracket, separator) });
+				return forms(Node::single_or_list(items[1..].to_vec(), bracket, separator));
 			}
 			if let Some(assignment) = cpp_lambda(&items) {
 				return assignment;
@@ -554,9 +553,6 @@ fn is_vector_call(node: &Node) -> bool {
 	matches!(node.drop_meta(), Node::List(items, Bracket::Round, _) if items.first().is_some_and(|first| first.is_symbol(R_VECTOR_WORD)))
 }
 
-fn is_function_keyword(node: &Node) -> bool {
-	matches!(node.drop_meta(), Node::Symbol(word) if crate::operators::is_function_keyword(word))
-}
 
 /// `list.zip(a, b)`, `math.gcd(4, 6)`, JS's `Math.sqrt(16)`: a module's word called through the module's name is the
 /// word itself, with a note (a program's own variable `text` keeps its methods)

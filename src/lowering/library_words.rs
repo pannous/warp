@@ -5,8 +5,9 @@
 //!
 //! An unknown `.word` after a name, a text or a list is a loud error (`undefined function: word`), never silent data.
 
+use super::words::SUM_WORD;
 use super::nodes::{call, children_rewritten, key};
-use crate::analyzer::{call_name, counting_method, extract_user_functions, is_list_mutating_method};
+use crate::analyzer::{call_name, counting_method, is_list_mutating_method};
 use crate::context::Context;
 use crate::diagnostic::Diagnostic;
 use crate::node::{symbol, text, Bracket, Node, Separator};
@@ -77,7 +78,6 @@ const SYNONYMS: [(&str, &[&str]); 26] = [
 	("is_alphanumeric", &["is_alnum", "isalnum"]),
 	(crate::mutation::UNWRAP, &[]),
 ];
-const SUM: &str = "sum";
 /// `list_sum(list, loop)`: the sum of a list variable as one operation the emitter dispatches (wasm_emitter/list_dispatch.rs):
 /// a typed list sums its array, any other list runs the loop `sum` always lowered to
 pub const LIST_SUM: &str = "list_sum";
@@ -136,7 +136,7 @@ pub fn shallow_flag(argument: &Node) -> Node {
 const EXPANDED_WORDS: [(&str, usize, &str); 3] = [
 	// Python's `list(x)`: the list itself, a text's characters
 	(LIST_WORD, 1, "hidden_value as list"),
-	(SUM, 1, "(hidden_sum=0; for hidden_item in hidden_value {hidden_sum = hidden_sum + hidden_item}; hidden_sum)"),
+	(SUM_WORD, 1, "(hidden_sum=0; for hidden_item in hidden_value {hidden_sum = hidden_sum + hidden_item}; hidden_sum)"),
 	// `x!` (mutation.rs): the value, a loud error when it is ø; an Error value stays that Error
 	(crate::mutation::UNWRAP, 1, "if hidden_value == ø then error(\"unwrapped ø\") else hidden_value"),
 ];
@@ -217,7 +217,7 @@ pub fn is_library_word(name: &str) -> bool {
 
 /// Words that take the name after them as their argument inside an operand, as a defined function does:
 /// `word == reverse word` compares with `reverse(word)`
-const OPERAND_WORDS: [&str; 7] = ["reverse", "sort", "upper", "lower", "trim", "chars", SUM];
+const OPERAND_WORDS: [&str; 7] = ["reverse", "sort", "upper", "lower", "trim", "chars", SUM_WORD];
 
 pub fn is_operand_word(name: &str) -> bool {
 	canonical_word(name).is_some_and(|word| OPERAND_WORDS.contains(&word))
@@ -228,7 +228,7 @@ fn canonical_word(name: &str) -> Option<&'static str> {
 		.iter()
 		.find(|(word, synonyms)| *word == name || synonyms.contains(&name))
 		.map(|(word, _)| *word)
-		.or((name == SUM).then_some(SUM))
+		.or((name == SUM_WORD).then_some(SUM_WORD))
 }
 
 fn arity(word: &str) -> usize {
@@ -246,8 +246,7 @@ pub fn words_spelled_by(name: &str) -> Vec<&'static str> {
 
 pub fn lower(node: Node) -> Node {
 	let node = bind_read_data_objects(node);
-	let mut context = Context::new();
-	extract_user_functions(&mut context, &node);
+	let context = crate::analyzer::function_context(&node);
 	let mut shadowed: HashSet<String> = context.user_functions.keys().cloned().collect();
 	// `sum·point`, a class's own `sum` (traits.rs witness, an overload): the program defines `sum`, no library word
 	let variants: Vec<String> = shadowed.iter().filter_map(|name| name.split_once(crate::traits::WITNESS_SEPARATOR)).map(|(operation, _)| operation.to_string()).collect();
@@ -362,8 +361,7 @@ fn count_in(items: &[Node]) -> Option<Node> {
 /// function the program does not define. Runs first, so the passes that know these calls see their plain form; user
 /// functions are called so later, in `method_call`
 pub fn lower_function_methods(node: Node) -> Node {
-	let mut context = Context::new();
-	extract_user_functions(&mut context, &node);
+	let context = crate::analyzer::function_context(&node);
 	let arities: HashMap<String, usize> = context.user_functions.iter().map(|(name, function)| (name.clone(), function.params.len())).collect();
 	let mut defined: HashSet<String> = arities.keys().cloned().collect();
 	collect_assigned_names(&node, &mut defined);
@@ -1152,7 +1150,7 @@ impl Lowering {
 			return Diagnostic::at(&call, format!("{word} takes {wanted} argument{plural}, got {}", arguments.len())).into_error();
 		}
 		match EXPANDED_WORDS.iter().find(|(name, _, _)| *name == word) {
-			Some((_, _, template)) if word == SUM => dispatched_sum(self.expanded(template, arguments)),
+			Some((_, _, template)) if word == SUM_WORD => dispatched_sum(self.expanded(template, arguments)),
 			Some((_, _, template)) => self.expanded(template, arguments),
 			// a prelude word calls its definition from lib/prelude.warp (modules::prelude_name)
 			None if let Some(qualified) = crate::modules::prelude_name(word) => call(&qualified, arguments),

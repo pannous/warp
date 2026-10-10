@@ -129,7 +129,7 @@ fn construct(node: Node, classes: &Classes) -> Node {
 			}).unwrap_or(Node::List(items, bracket, separator))
 		}
 		Node::Key(name, Op::None, fields) if matches!(name.drop_meta(), Node::Symbol(_)) => {
-			let entries = entries(&construct(*fields, classes));
+			let entries = construct(*fields, classes).as_items();
 			match registry.get_by_name(&name.name()) {
 				Some(type_def) => match field_error(type_def, registry, &name, &entries) {
 					Some(error) => error,
@@ -206,13 +206,6 @@ pub fn instance_node(name: &str, entries: Vec<Node>) -> Node {
 	Node::meta(key(symbol(name), Op::Colon, body), Node::data(Instance))
 }
 
-fn entries(fields: &Node) -> Vec<Node> {
-	match fields.drop_meta() {
-		Node::List(items, _, _) => items.clone(),
-		Node::Empty => vec![],
-		single => vec![single.clone()],
-	}
-}
 
 pub(crate) fn entry_name(entry: &Node) -> Option<String> {
 	match entry.drop_meta() {

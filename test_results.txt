@@ -233,6 +233,8 @@ PASSED:
   ✓ control::test_function_dir::a_later_dir_leaves_an_earlier_line_alone
   ✓ control::test_function_dir::dir_of_a_function_lists_what_reflection_knows
   ✓ control::test_function_dir::the_type_of_a_function_is_function
+  ✓ control::test_glued_block_words::a_glued_do_runs_its_block
+  ✓ control::test_glued_block_words::a_glued_loop_runs_its_block
   ✓ control::test_go_blocks::a_failure_nobody_awaits_ends_the_run
   ✓ control::test_go_blocks::a_function_starting_a_task_is_no_getter
   ✓ control::test_go_blocks::a_go_block_does_not_hold_up_the_program
@@ -242,6 +244,7 @@ PASSED:
   ✓ control::test_go_blocks::go_blocks_fill_a_job_list
   ✓ control::test_go_blocks::lines_printed_by_tasks_stay_whole
   ✓ control::test_go_blocks::sleep_takes_a_duration
+  ✓ control::test_go_statement::a_go_block_of_one_statement_runs_it
   ✓ control::test_handler_globals::a_handler_assigns_an_emitted_value_to_a_global
   ✓ control::test_handler_globals::a_handler_writes_an_annotated_global
   ✓ control::test_handler_globals::an_int_given_empty_fails_when_it_happens
@@ -1340,6 +1343,9 @@ PASSED:
   ✓ functions::test_spaced_assign_definition::a_recursive_spaced_definition_with_equals_defines_the_function
   ✓ functions::test_specialised_variants::a_constant_argument_unrolls_the_recursion
   ✓ functions::test_specialised_variants::an_unbounded_specialisation_keeps_the_call
+  ✓ functions::test_statement_blocks::a_block_of_one_phrase_call_runs_it
+  ✓ functions::test_statement_blocks::a_block_of_one_sound_word_plays
+  ✓ functions::test_statement_blocks::an_assigned_block_stays_data
   ✓ functions::test_suffix_word_spellings::test_english_spellings_of_the_suffix_form
   ✓ functions::test_suffix_word_spellings::test_suffix_form_calls_a_user_function
   ✓ functions::test_suffix_word_spellings::test_suffix_forms_chain_and_mix_like_before
@@ -1494,7 +1500,6 @@ PASSED:
   ✓ lists::test_int_map::a_number_is_found_in_a_map
   ✓ lists::test_int_map::a_number_variable_keys_an_empty_map
   ✓ lists::test_int_map::an_entry_is_removed_by_its_number
-  ✓ lists::test_int_map::ten_thousand_rows_load_in_linear_time
   ✓ lists::test_key_lookup::test_key_is_evaluated
   ✓ lists::test_key_lookup::test_looked_up_value_takes_part_in_arithmetic
   ✓ lists::test_key_lookup::test_missing_key_is_an_error
@@ -2663,6 +2668,8 @@ PASSED:
   ✓ parser::test_uniscript_entities::an_unknown_entity_stays_as_written_and_warns
   ✓ parser::test_uniscript_entities::entities_are_their_characters
   ✓ parser::test_uniscript_entities::entities_expand_inside_double_quoted_texts
+  ✓ parser::test_url_literal::a_colon_without_slashes_stays_a_pair
+  ✓ parser::test_url_literal::any_scheme_before_colon_slash_slash_starts_a_url
   ✓ parser::test_warp_format::html_attributes_and_repeated_tags_in_data
   ✓ parser::test_warp_format::test_empty_structures
   ✓ parser::test_warp_format::test_function_syntax
@@ -2793,6 +2800,8 @@ PASSED:
   ✓ programs::test_sound_files::a_broken_music_file_fails
   ✓ programs::test_sound_files::a_music_file_plays_in_the_background
   ✓ programs::test_sound_files::only_a_music_file_plays
+  ✓ programs::test_sound_handles::play_gives_the_sounds_handle
+  ✓ programs::test_sound_handles::stop_sound_stops_one_sound
   ✓ programs::test_sound_render::a_render_takes_the_sounds_after_the_last_one
   ✓ programs::test_sound_render::sounds_render_into_one_wav_file
   ✓ programs::test_sound_wavs::each_run_writes_wavs_of_its_own
@@ -3514,6 +3523,8 @@ PASSED:
   ✓ types::test_type_upgrading::test_global_with_float
   ✓ types::test_type_upgrading::test_global_with_reference
   ✓ types::test_type_upgrading::test_int_plus_pi_type_upgrading
+  ✓ types::test_type_word_scopes::test_local_of_another_function_leaves_the_type_word
+  ✓ types::test_type_word_scopes::test_own_variable_still_shadows_the_type_word
   ✓ types::test_type_word_user_function::a_clash_is_an_error_not_a_warning
   ✓ types::test_type_word_user_function::a_function_with_another_name_is_no_clash
   ✓ types::test_type_word_user_function::defining_a_function_named_like_a_type_word_is_an_error
@@ -3891,6 +3902,7 @@ PASSED:
   ✓ web::test_server_rpc_stub::a_server_function_body_stays_out_of_the_page
   ✓ web::test_server_rpc_stub::an_uncalled_server_function_stays_out_of_the_page
   ✓ web::test_site_tasks::a_site_renders_what_its_tasks_computed
+  ✓ web::test_site::a_painting_site_runs_in_a_worker_with_its_canvas
   ✓ web::test_site::a_program_failing_at_build_time_builds_no_site
   ✓ web::test_site::a_site_holds_the_rendered_page_the_module_and_its_scripts
   ✓ web::test_site::a_site_starting_tasks_runs_its_program_in_a_worker
@@ -4353,6 +4365,7 @@ PASSED:
   ✓ wisp_parser::tests::test_wisp_tag
 
 FAILED:
+  ✗ lists::test_int_map::ten_thousand_rows_load_in_linear_time
 
 SUMMARY:
-10 ignored, 4350 passed, 0 failed, 4350 total tested
+10 ignored, 4362 passed, 1 failed, 4363 total tested

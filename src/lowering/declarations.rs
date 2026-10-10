@@ -3,7 +3,8 @@
 //! `virtues goal = fast+safe` the record `goal={fast:true safe:true}`: the flags named are true, the others false.
 //! `real f(real x, int n) { … }`, the C way, defines `f(x:real, n:int) := { … }`.
 
-use super::nodes::{call, children_rewritten, is_type_word, key};
+use super::words::{ON_WORD, RETURN_WORD};
+use super::nodes::{block, call, children_rewritten, grouped_parameters, if_then, if_then_else, is_type_word, key};
 use crate::node::{symbol, Bracket, Node, Separator};
 use crate::operators::{is_function_keyword, Op};
 
@@ -20,7 +21,6 @@ const EXTENSION_WORD: &str = "extension";
 /// `each xs: body`, `all xs: body`: a for loop over xs, the item is `it` (wiki/iteration.md)
 const COLON_ITERATION_WORDS: [&str; 2] = ["each", "all"];
 const IT_PARAMETER: &str = "it";
-const RETURN_WORD: &str = "return";
 const ENUM_WORD: &str = "enum";
 /// Swift's `enum Direction { case north, south }`
 const CASE_WORD: &str = "case";
@@ -33,7 +33,6 @@ const PLACEHOLDER: &str = "_";
 /// `go f(x)` starts a task, `await job` waits for it
 const TASK_WORDS: [&str; 2] = ["go", "await"];
 const ONCE_WORD: &str = "once";
-const ON_WORD: &str = "on";
 /// What a task signals when it is done, and the controls that would interrupt one
 const FINISH_EVENTS: [&str; 5] = ["finishes", "finished", "completes", "ends", "done"];
 const TASK_CONTROLS: [&str; 4] = ["stop", "pause", "cancel", "resume"];
@@ -595,7 +594,7 @@ impl Tasks<'_> {
 	/// where it is written: `(started·0 = clock(); while job runs and clock() - started·0 < 100 {sleep(1)}; if job
 	/// runs then {stop job; 0} else await job)`
 	fn within(&self, items: &[Node], fallback: Option<Node>) -> Option<Node> {
-		use crate::variable_signals::{assign, block, if_then_else};
+		use crate::variable_signals::assign;
 		// `(await job) within …`: the await arrives grouped
 		let items: Vec<Node> = match items.split_first() {
 			Some((first, rest)) => match first.drop_meta() {
@@ -685,7 +684,7 @@ impl Tasks<'_> {
 	/// `(race·0 = 0; while race·0 == 0 { if task_status(a) is finished or failed {race·0 = 1}; …; if race·0 == 0
 	/// {sleep(1)} }; if race·0 == 1 then await a else …)`: the tasks keep running, the first one's result (or failure)
 	fn race(&self, list: &Node) -> Option<Node> {
-		use crate::variable_signals::{assign, block, if_then};
+		use crate::variable_signals::assign;
 		let Node::List(listed, Bracket::Square, _) = list.drop_meta() else { return None };
 		if listed.is_empty() || !listed.iter().all(|item| self.is_task(item)) {
 			return None;
@@ -713,7 +712,7 @@ impl Tasks<'_> {
 		let awaited_job = |job: &Node| self.value_of(&word(&job_of(job))).unwrap_or_else(|| job.clone());
 		let (last, first) = listed.split_last().expect("not empty");
 		let result = first.iter().enumerate().rev().fold(awaited_job(last), |otherwise, (index, job)| {
-			crate::variable_signals::if_then_else(winner_is(index + 1), awaited_job(job), otherwise)
+			if_then_else(winner_is(index + 1), awaited_job(job), otherwise)
 		});
 		Some(Node::List(vec![assign(&winner, crate::node::int(0)), waiting, result], Bracket::Round, Separator::Semicolon))
 	}
@@ -845,7 +844,7 @@ struct TaskHandler {
 
 impl TaskHandler {
 	fn check(&self) -> Node {
-		use crate::variable_signals::{assign, block, if_then};
+		use crate::variable_signals::assign;
 		let not_handled = key(Node::Empty, Op::Not, Node::Symbol(self.flag.clone()));
 		let status = key(marker(crate::host::TASK_STATUS, vec![self.job.clone()]), Op::Eq, Node::Number(crate::extensions::numbers::Number::Int(self.status)));
 		let condition = key(not_handled, Op::And, status);
@@ -855,7 +854,7 @@ impl TaskHandler {
 	/// At the end of the block: a finish or stop handler waits for the task, a pause handler does not
 	fn final_check(&self) -> Option<Node> {
 		(self.status != crate::host::TASK_PAUSED).then(|| {
-			crate::variable_signals::block(vec![marker(crate::host::TASK_JOIN, vec![self.job.clone()]), self.check()])
+			block(vec![marker(crate::host::TASK_JOIN, vec![self.job.clone()]), self.check()])
 		})
 	}
 }
@@ -1381,7 +1380,7 @@ fn colon_iteration(items: &[Node]) -> Option<Node> {
 			if let Err(error) = crate::diagnostic::ask(&question) {
 				return Some(error);
 			}
-			let guarded = key(key(Node::Empty, Op::If, condition), Op::Then, body);
+			let guarded = if_then(condition, body);
 			(collection.as_ref().clone(), guarded)
 		}
 		_ => (list, body),
@@ -1694,11 +1693,7 @@ fn extension_definition(definition: Node) -> Node {
 fn with_receiver(call: &[Node], separator: &Separator, receiver_type: &Node, body: &Node) -> Node {
 	let receiver = if body.mentions_any(&[SELF_WORD]) { SELF_WORD } else { THIS_WORD };
 	let receiver = key(symbol(receiver), Op::Colon, receiver_type.clone());
-	let parameters = call[1..].iter().flat_map(|parameter| match parameter.drop_meta() {
-		Node::List(group, Bracket::Round, _) => group.clone(),
-		Node::Empty => vec![],
-		_ => vec![parameter.clone()],
-	});
+	let parameters = call[1..].iter().flat_map(grouped_parameters);
 	Node::List(std::iter::once(call[0].clone()).chain(std::iter::once(receiver)).chain(parameters).collect(), Bracket::Round, separator.clone())
 }
 
@@ -1943,7 +1938,7 @@ fn end_definitions(node: Node) -> Node {
 	// one line: `def head body… end`
 	if let ([keyword, head, body @ .., end], Separator::Space) = (items.as_slice(), &separator) {
 		if is_function_keyword(&keyword.drop_meta().name()) && is_end(end) && !body.is_empty() {
-			return Node::List(vec![keyword.clone(), function_head(head), body_block(body.to_vec())], bracket, separator);
+			return Node::List(vec![keyword.clone(), function_head(head), block(body.to_vec())], bracket, separator);
 		}
 	}
 	if !matches!(separator, Separator::Newline | Separator::Semicolon) || !items.iter().any(is_end) {
@@ -1957,7 +1952,7 @@ fn end_definitions(node: Node) -> Node {
 			statements.push(statement);
 			continue;
 		};
-		let body = body_block(rest.by_ref().take_while(|statement| !is_end(statement)).collect());
+		let body = block(rest.by_ref().take_while(|statement| !is_end(statement)).collect());
 		let definition = match head.drop_meta() {
 			// Crystal's `def f(a) : Int`: the head as Kotlin's `fun f(a): Int { … }` has it
 			Node::Key(inner, Op::Colon, result) => {
@@ -1995,10 +1990,6 @@ fn function_head(head: &Node) -> Node {
 		}
 		_ => head.clone(),
 	}
-}
-
-fn body_block(statements: Vec<Node>) -> Node {
-	Node::List(statements, Bracket::Curly, Separator::Semicolon)
 }
 
 fn lower_lists(node: Node, lowering: impl Fn(&[Node]) -> Option<Node> + Copy) -> Node {

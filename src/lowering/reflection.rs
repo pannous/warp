@@ -6,6 +6,7 @@
 //! `attributes`, `members`), `p.methods` and `dir(p)` of an instance or a class are the names of its class layout,
 //! inherited fields first; of a map literal's variable they are its keys, read at run time (`m.keys`).
 
+use super::words::OF_WORD;
 use super::nodes::{call, key};
 use std::collections::{HashMap, HashSet};
 
@@ -13,7 +14,6 @@ use crate::class_methods::ClassLayout;
 use crate::node::{symbol, text, Bracket, Node, Separator};
 use crate::operators::Op;
 
-const OF_WORD: &str = "of";
 const EFFECTS_WORD: &str = "effects";
 const LISTENERS_WORD: &str = "listeners";
 /// `on alarm {…}`, `once tick {…}`, `on set x {…}`: the words before a listened name

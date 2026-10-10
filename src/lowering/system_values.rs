@@ -11,6 +11,7 @@
 //! Browser names (P188): `clipboard.read()` is `clipboard`, `clipboard.write(text)` the std word
 //! `std_io("clipboard", "write", [text])` (std_adapters.rs; host-files.js in a page).
 
+use super::words::ON_WORD;
 use super::nodes::{call, key};
 use crate::declarations::word;
 use crate::node::{symbol, Bracket, Node};
@@ -21,7 +22,6 @@ use warp_runtime::host_words::{BATTERY, CLIPBOARD, CLIPBOARD_COUNT, CLIPBOARD_TE
 /// The mark of a system value read between the two passes
 pub const SYSTEM_PREFIX: &str = "system·";
 const LISTENER_WORDS: [&str; 3] = ["whenever", "once", "on"];
-const ON_WORD: &str = "on";
 const CHANGE_WORDS: [&str; 2] = ["change", "changes"];
 /// The timer that keeps a listening program and wakes it for the checks
 const KEEP_LISTENING: &str = "on every 1000 ms {}";

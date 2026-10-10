@@ -6,7 +6,8 @@
 //! `class dog extends animal {…}` (P117) gives dog the fields and methods of animal, its own ones override them, and
 //! declares `dog like animal`, so a dog is accepted where an animal is wanted.
 
-use super::nodes::{call, key};
+use super::words::{GLOBAL_WORD, MAP_WORD, RETURN_WORD, SUM_WORD};
+use super::nodes::{call, grouped_parameters, if_then, key};
 use crate::node::{symbol, text, Bracket, Node, Separator};
 use crate::operators::Op;
 
@@ -22,7 +23,6 @@ const IMPLICIT_TRAIT_PREFIX: &str = "has·";
 /// `super.speak()` in a method of dog calls the speak dog would inherit, kept for dog as the method `speak·super·dog`
 const SUPER: &str = "super";
 const SUPER_INFIX: &str = "·super·";
-const GLOBAL_KEYWORD: &str = "global";
 use crate::warp_parser::CONSTRUCTOR_WORD;
 /// A property's setter `set age(v) {…}` is the method `age·set(self, v)`, run by `p.age = v`
 const SETTER_SUFFIX: &str = "·set";
@@ -34,7 +34,6 @@ const RESULT_SUFFIX: &str = "·result";
 const CAST_VALUE: &str = "cast·value";
 const CAST_PLACEHOLDER: &str = "cast_placeholder";
 const GIVING_MUTATIONS: [&str; 2] = ["pop", "remove"];
-const RETURN_WORD: &str = "return";
 /// Other languages' method names (Python's deque, Java's Deque and Queue, JS's Array and Set) and the warp methods they
 /// mean, the first one the class defines taken, with a note; only on a class that does not define the name itself
 const METHOD_ALIASES: [(&str, &[&str]); 23] = [
@@ -77,7 +76,6 @@ const CONVERSION_METHOD: &str = "to";
 /// lib/units.warp's check that two quantities measure the same, and a quantity's amount in base units
 const SAME_DIMENSION: &str = "same_dimension";
 const QUANTITY_AMOUNT: &str = "amount";
-const SUM_WORD: &str = "sum";
 /// The sum of a list of run-time quantities folds their `plus` (quantities_reduced)
 const REDUCE_WORD: &str = "reduce";
 const REDUCED_NAMES: [&str; 2] = ["quantity·sum", "quantity·item"];
@@ -336,7 +334,6 @@ const PARSE_JSON_WORD: &str = "parse_json";
 const FROM_SUFFIX: &str = "·from";
 /// The element of a list of instances built from objects: `Point·element`
 const ELEMENT_SUFFIX: &str = "·element";
-const MAP_WORD: &str = "map";
 /// The variable of a list of instances built before its construction: `elements·1`
 const ELEMENTS_WORD: &str = "elements";
 
@@ -511,7 +508,7 @@ fn taken_apart(node: Node, fields: &ClassFields, class_of: &ClassOf) -> Node {
 			}
 			// `parts·from if parts·from is Point and parts·from.x == 0` (`is` compares like ==, a class name tests the type)
 			let test = matched.class_tests.into_iter().chain(matched.tests).reduce(|all, test| key(all, Op::And, test)).expect("a class pattern tests its class");
-			let guard = key(key(Node::Empty, Op::If, test), Op::Then, subject.clone());
+			let guard = if_then(test, subject.clone());
 			key(guard, Op::FatArrow, bound_parts(subject, &matched.bindings, Some(recurse(*body))))
 		}
 		other => other.map_children(recurse),
@@ -2462,7 +2459,7 @@ fn static_definitions(members: &Members, member: &Node) -> Vec<Node> {
 	let getter_head = call(&name, vec![receiver]);
 	let declaration = Node::Key(Box::new(global.clone()), Op::Assign, value.clone());
 	// `global c·n = 0`: methods may change it (`n += 1`)
-	let declaration = key(symbol(GLOBAL_KEYWORD), Op::Colon, declaration);
+	let declaration = key(symbol(GLOBAL_WORD), Op::Colon, declaration);
 	vec![declaration, key(getter_head, Op::Define, global)]
 }
 
@@ -2648,13 +2645,4 @@ fn is_field_of(target: &Node, variable: &str) -> bool {
 /// `add(x)`, `insert(x, at:1)`: a call of a method that changes the list it is called on
 fn mutating_call(call: &Node) -> bool {
 	matches!(call.drop_meta(), Node::List(items, Bracket::Round, _) if matches!(items.first().map(Node::drop_meta), Some(Node::Symbol(name)) if crate::analyzer::is_list_mutating_method(name)))
-}
-
-/// A parameter as the parameters it stands for: a group `(a, b)` its items, ø none
-fn grouped_parameters(parameter: &Node) -> Vec<Node> {
-	match parameter.drop_meta() {
-		Node::List(group, Bracket::Round, _) => group.clone(),
-		Node::Empty => vec![],
-		_ => vec![parameter.clone()],
-	}
 }
