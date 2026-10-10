@@ -1,0 +1,5 @@
+f() := {
+beep
+play 440Hz for 0.1s
+}
+f()

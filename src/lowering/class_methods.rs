@@ -352,7 +352,7 @@ fn from_objects(node: Node) -> Node {
 }
 
 /// Each class's fields in order, with their type names
-pub(crate) fn class_fields(node: &Node) -> std::collections::HashMap<String, Vec<(String, String)>> {
+pub(crate) fn class_fields(node: &Node) -> ClassFields {
 	let mut fields = std::collections::HashMap::new();
 	node.visit(&mut |part| if let Node::Type { name, body } = part {
 		let typed = class_items(body).iter().filter(|item| method_parts(item).is_none()).filter_map(|item| Some((field_name(item)?, field_type_name(item)))).collect();
@@ -428,19 +428,18 @@ const PARTS_WORD: &str = "parts·from";
 /// `a, b = p` of an instance in field order; match arms `Point{x, y} => …` and `Point(x, y) => …` a type test binding
 /// the fields
 fn destructurings(node: Node) -> Node {
-	let fields = class_fields(&node);
-	let classes: Vec<String> = fields.keys().cloned().collect();
-	let instances = instance_classes(&node, &classes);
-	let class_of = |value: &Node| match value.drop_meta() {
-		Node::Symbol(variable) => instances.get(variable).cloned(),
-		other => constructed_class(other).filter(|class| fields.contains_key(class)),
-	};
-	taken_apart(node, &fields, &class_of)
+	with_value_classes(node, taken_apart)
 }
 
 /// P179: a field by its position, `c#1` 1-based and Rust's `c.0` 0-based, of an instance whose class is known
 /// (`c = rgb(1, 2, 3)`, `Some(4)#1`): the field by name, `c.value1`
 fn positional_fields(node: Node) -> Node {
+	with_value_classes(node, by_position)
+}
+
+/// `lower` of the program with each class's fields and the class of a value: a variable's instance class or the class
+/// a construction makes
+fn with_value_classes(node: Node, lower: fn(Node, &ClassFields, &ClassOf) -> Node) -> Node {
 	let fields = class_fields(&node);
 	let classes: Vec<String> = fields.keys().cloned().collect();
 	let instances = instance_classes(&node, &classes);
@@ -448,10 +447,10 @@ fn positional_fields(node: Node) -> Node {
 		Node::Symbol(variable) => instances.get(variable).cloned(),
 		other => constructed_class(other).filter(|class| fields.contains_key(class)),
 	};
-	by_position(node, &fields, &class_of)
+	lower(node, &fields, &class_of)
 }
 
-fn by_position(node: Node, fields: &std::collections::HashMap<String, Vec<(String, String)>>, class_of: &dyn Fn(&Node) -> Option<String>) -> Node {
+fn by_position(node: Node, fields: &ClassFields, class_of: &ClassOf) -> Node {
 	let position = |op: Op, index: &Node| match (op, index.drop_meta()) {
 		(Op::Hash, Node::Number(crate::Number::Int(number))) => Some(number - 1),
 		(Op::Dot, Node::Number(crate::Number::Int(number))) => Some(*number),
@@ -480,7 +479,7 @@ fn by_position(node: Node, fields: &std::collections::HashMap<String, Vec<(Strin
 	}
 }
 
-fn taken_apart(node: Node, fields: &std::collections::HashMap<String, Vec<(String, String)>>, class_of: &dyn Fn(&Node) -> Option<String>) -> Node {
+fn taken_apart(node: Node, fields: &ClassFields, class_of: &ClassOf) -> Node {
 	let recurse = |child: Node| taken_apart(child, fields, class_of);
 	let subject = symbol(PARTS_WORD);
 	match node {
@@ -533,7 +532,7 @@ fn field_of(path: &Node, field: &str) -> Node {
 }
 
 /// `Point{…}` or `Point(…)` of a declared class
-fn is_class_pattern(pattern: &Node, fields: &std::collections::HashMap<String, Vec<(String, String)>>) -> bool {
+fn is_class_pattern(pattern: &Node, fields: &ClassFields) -> bool {
 	match pattern.drop_meta() {
 		Node::Key(class, Op::Colon | Op::None, parts) => fields.contains_key(&class.drop_meta().name()) && matches!(parts.drop_meta(), Node::List(_, Bracket::Curly, _)),
 		Node::List(items, Bracket::Round, _) => items.len() > 1 && fields.contains_key(&items[0].drop_meta().name()),
@@ -543,7 +542,7 @@ fn is_class_pattern(pattern: &Node, fields: &std::collections::HashMap<String, V
 
 /// A pattern at `path`: `_` matches anything, a name binds, a number or text is compared, `Point{x, y: b}` and
 /// `Point(a, 0)` test the class and match each field; None for anything else (the arm stays as written)
-fn matched_pattern(pattern: &Node, path: &Node, fields: &std::collections::HashMap<String, Vec<(String, String)>>, matched: &mut Matched) -> Option<()> {
+fn matched_pattern(pattern: &Node, path: &Node, fields: &ClassFields, matched: &mut Matched) -> Option<()> {
 	let class_test = |class: &str| key(path.clone(), Op::Eq, symbol(class));
 	match pattern.drop_meta() {
 		Node::Symbol(name) if name == "_" => {}
@@ -572,7 +571,7 @@ fn matched_pattern(pattern: &Node, path: &Node, fields: &std::collections::HashM
 }
 
 /// `{x, y: b, from: Point{…}}` at `path`: each field by name, a field with a pattern after its colon matched by it
-fn matched_fields(parts: &Node, path: &Node, fields: &std::collections::HashMap<String, Vec<(String, String)>>) -> Option<Matched> {
+fn matched_fields(parts: &Node, path: &Node, fields: &ClassFields) -> Option<Matched> {
 	let Node::List(items, Bracket::Curly, _) = parts.drop_meta() else { return None };
 	if items.is_empty() {
 		return None;
@@ -611,7 +610,7 @@ fn positional_names(target: &Node) -> Option<Vec<String>> {
 }
 
 /// `a, (b = p)` with p an instance
-fn last_assigns_instance(items: &[Node], class_of: &dyn Fn(&Node) -> Option<String>) -> bool {
+fn last_assigns_instance(items: &[Node], class_of: &ClassOf) -> bool {
 	let leading_names = items[..items.len().saturating_sub(1)].iter().all(|item| matches!(item.drop_meta(), Node::Symbol(_)));
 	leading_names && items.len() > 1 && matches!(items.last().map(Node::drop_meta), Some(Node::Key(name, Op::Assign, value)) if matches!(name.drop_meta(), Node::Symbol(_)) && class_of(value).is_some())
 }
@@ -641,7 +640,7 @@ fn field_type_name(item: &Node) -> String {
 	}
 }
 
-fn with_objects_as_instances(node: Node, fields: &std::collections::HashMap<String, Vec<(String, String)>>) -> Node {
+fn with_objects_as_instances(node: Node, fields: &ClassFields) -> Node {
 	let class_of = |node: &Node| Some(node.drop_meta().name()).filter(|name| fields.contains_key(name));
 	match node {
 		// `parse_json(t) as [Point]`: each element an instance
@@ -689,7 +688,7 @@ fn checked_cast(object: Node, class: &str) -> Node {
 	Node::List(statements, Bracket::Round, Separator::Semicolon)
 }
 
-fn instance_from(object: Node, class: &str, fields: &std::collections::HashMap<String, Vec<(String, String)>>) -> Node {
+fn instance_from(object: Node, class: &str, fields: &ClassFields) -> Node {
 	let source = Node::Symbol(format!("{class}{FROM_SUFFIX}"));
 	let mut statements = vec![key(source.clone(), Op::Assign, object)];
 	statements.extend(statements_of(built_instance(&source, class, fields)));
@@ -698,7 +697,7 @@ fn instance_from(object: Node, class: &str, fields: &std::collections::HashMap<S
 
 /// The construction of `instance_of`, after the lists of instances it takes (a construction's arguments are data:
 /// the `map` building a list runs before, into `elements·1`, …)
-fn built_instance(path: &Node, class: &str, fields: &std::collections::HashMap<String, Vec<(String, String)>>) -> Node {
+fn built_instance(path: &Node, class: &str, fields: &ClassFields) -> Node {
 	let mut lists = vec![];
 	let construction = instance_of(path, class, fields, &mut lists);
 	match lists.is_empty() {
@@ -708,7 +707,7 @@ fn built_instance(path: &Node, class: &str, fields: &std::collections::HashMap<S
 }
 
 /// `Point(path.x, path.y)`, a field of a class type by its own path, a list of instances by its variable in `lists`
-fn instance_of(path: &Node, class: &str, fields: &std::collections::HashMap<String, Vec<(String, String)>>, lists: &mut Vec<Node>) -> Node {
+fn instance_of(path: &Node, class: &str, fields: &ClassFields, lists: &mut Vec<Node>) -> Node {
 	let mut values = vec![];
 	for (field, field_type) in &fields[class] {
 		let value = key(path.clone(), Op::Dot, Node::Symbol(field.clone()));
@@ -727,7 +726,7 @@ fn instance_of(path: &Node, class: &str, fields: &std::collections::HashMap<Stri
 }
 
 /// `list.map(Point·element => Point(Point·element.x, …))`
-fn instances_of(list: Node, class: &str, fields: &std::collections::HashMap<String, Vec<(String, String)>>) -> Node {
+fn instances_of(list: Node, class: &str, fields: &ClassFields) -> Node {
 	let element = Node::Symbol(format!("{class}{ELEMENT_SUFFIX}"));
 	let lambda = key(element.clone(), Op::FatArrow, built_instance(&element, class, fields));
 	key(list, Op::Dot, call(MAP_WORD, vec![lambda]))
@@ -903,6 +902,10 @@ fn operator_calls(node: Node) -> Node {
 	with_operator_calls(node, &Operands { parameters: &parameters, ..operands }).0
 }
 
+/// Each class's fields: (name, type) in declaration order
+pub(crate) type ClassFields = std::collections::HashMap<String, Vec<(String, String)>>;
+/// The class of a value, when known
+type ClassOf<'a> = dyn Fn(&Node) -> Option<String> + 'a;
 /// Per defined function, the operator class each argument of each of its calls gives (None: a plain value or unknown)
 type CallClasses = std::collections::HashMap<String, Vec<Vec<Option<String>>>>;
 
@@ -1643,11 +1646,7 @@ fn accessors(words: &[Node]) -> Option<Vec<Node>> {
 			let [call, body] = parts.as_slice() else { return None };
 			let Node::List(call, Bracket::Round, _) = call.drop_meta() else { return None };
 			let name = call.first()?.drop_meta().name();
-			let parameters: Vec<Node> = call[1..].iter().flat_map(|parameter| match parameter.drop_meta() {
-				Node::List(group, Bracket::Round, _) => group.clone(),
-				Node::Empty => vec![],
-				_ => vec![parameter.clone()],
-			}).collect();
+			let parameters: Vec<Node> = call[1..].iter().flat_map(grouped_parameters).collect();
 			match word == "get" {
 				true => Some(vec![method(&name, vec![], body)]),
 				false => Some(vec![method(&format!("{name}{SETTER_SUFFIX}"), parameters, body)]),
@@ -1805,14 +1804,20 @@ fn class_attributes(node: Node, qualified: &[(String, String)]) -> Node {
 	}
 }
 
-/// Ruby's `Point.new(1, 2)` of a declared class that defines no `new`: the construction `Point(1, 2)`, with a note
-fn ruby_constructions(node: Node) -> Node {
+/// The names of the classes the program declares whose body `keep` accepts
+fn declared_classes(node: &Node, keep: impl Fn(&Node) -> bool) -> Vec<String> {
 	let mut classes = vec![];
 	node.visit(&mut |part| if let Node::Type { name, body } = part {
-		if !class_items(body).iter().filter_map(method_parts).any(|(method, _, _)| method == RUBY_NEW_WORD) {
+		if keep(body) {
 			classes.push(name.drop_meta().name());
 		}
 	});
+	classes
+}
+
+/// Ruby's `Point.new(1, 2)` of a declared class that defines no `new`: the construction `Point(1, 2)`, with a note
+fn ruby_constructions(node: Node) -> Node {
+	let classes = declared_classes(&node, |body| !class_items(body).iter().filter_map(method_parts).any(|(method, _, _)| method == RUBY_NEW_WORD));
 	if classes.is_empty() {
 		return node;
 	}
@@ -1845,10 +1850,7 @@ fn constructed_by_new(node: Node, classes: &[String]) -> Node {
 /// Go's positional braces `Point{1, 2}` of a declared class: the construction `Point(1, 2)`, with a note (P167); of
 /// an unknown name they stay tagged data
 fn positional_braces(node: Node) -> Node {
-	let mut classes = vec![];
-	node.visit(&mut |part| if let Node::Type { name, .. } = part {
-		classes.push(name.drop_meta().name());
-	});
+	let classes = declared_classes(&node, |_| true);
 	if classes.is_empty() {
 		return node;
 	}
@@ -2000,10 +2002,7 @@ fn class_items_as_written(body: &Node) -> Vec<Node> {
 /// Java's and C#'s `Point p = new Point(3, 4);`, a variable declared with a class as its type: `p:Point = Point(3, 4)`
 /// (the type stays: a call may pick its overload by it, D10)
 fn class_typed_declarations(node: Node) -> Node {
-	let mut classes = vec![];
-	node.visit(&mut |part| if let Node::Type { name, .. } = part {
-		classes.push(name.drop_meta().name());
-	});
+	let classes = declared_classes(&node, |_| true);
 	if classes.is_empty() {
 		return node;
 	}
@@ -2045,11 +2044,7 @@ fn as_member(definition: Node) -> Node {
 	}
 	let Node::List(call, Bracket::Round, separator) = head.drop_meta().clone() else { return definition };
 	let Some((name, parameters)) = call.split_first() else { return definition };
-	let parameters: Vec<Node> = parameters.iter().flat_map(|parameter| match parameter.drop_meta() {
-		Node::List(group, Bracket::Round, _) => group.clone(),
-		Node::Empty => vec![],
-		_ => vec![parameter.clone()],
-	}).collect();
+	let parameters: Vec<Node> = parameters.iter().flat_map(grouped_parameters).collect();
 	// `self`, `self: Self`, Rust's `&self`
 	let is_self = |parameter: &Node| match parameter.drop_meta() {
 		Node::Symbol(word) => word == RECEIVER,
@@ -2653,4 +2648,13 @@ fn is_field_of(target: &Node, variable: &str) -> bool {
 /// `add(x)`, `insert(x, at:1)`: a call of a method that changes the list it is called on
 fn mutating_call(call: &Node) -> bool {
 	matches!(call.drop_meta(), Node::List(items, Bracket::Round, _) if matches!(items.first().map(Node::drop_meta), Some(Node::Symbol(name)) if crate::analyzer::is_list_mutating_method(name)))
+}
+
+/// A parameter as the parameters it stands for: a group `(a, b)` its items, ø none
+fn grouped_parameters(parameter: &Node) -> Vec<Node> {
+	match parameter.drop_meta() {
+		Node::List(group, Bracket::Round, _) => group.clone(),
+		Node::Empty => vec![],
+		_ => vec![parameter.clone()],
+	}
 }

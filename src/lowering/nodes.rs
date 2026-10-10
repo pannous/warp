@@ -51,3 +51,17 @@ pub(crate) fn spaced_statement(items: &[Node]) -> Option<(&Node, Vec<&str>, &Nod
 	let words = middle.iter().chain(std::iter::once(last_word.as_ref())).map(Node::symbol_name).collect::<Option<_>>()?;
 	Some((name, words, body))
 }
+
+/// The node with `rewrite` applied to its direct children: a list's items, a key's left then right, the node under its
+/// metadata; any other node as it is. Unlike Node::map_children it leaves a class body (Node::Type) alone
+pub(crate) fn children_rewritten(node: Node, mut rewrite: impl FnMut(Node) -> Node) -> Node {
+	match node {
+		Node::Key(left, op, right) => {
+			let left = rewrite(*left);
+			key(left, op, rewrite(*right))
+		}
+		Node::List(items, bracket, separator) => Node::List(items.into_iter().map(rewrite).collect(), bracket, separator),
+		Node::Meta { node, data } => Node::Meta { node: Box::new(rewrite(*node)), data },
+		other => other,
+	}
+}

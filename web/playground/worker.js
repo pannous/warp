@@ -42,9 +42,14 @@ const post = message => warming || self.postMessage(message);
 const WARM_UP_CODE = 'p{ "" }';
 self.keepStored = (name, value, file) => post({ type: "stored", name, value, file }); // host-files.js STD_ADAPTERS.store
 self.writeClipboard = text => post({ type: "clipboard", text }); // host-files.js STD_ADAPTERS.clipboard
-self.playSoundFile = (url, bytes) => post({ type: "sound file", url, bytes }); // host-files.js STD_ADAPTERS.sound: a worker has no <audio>
+// play's handles (lib/sound.warp, card sound-pro): the sounds and music files of a run counted from 1, as natively
+let soundHandles = 0;
+const nextSoundHandle = () => ++soundHandles;
+self.lastSoundHandle = () => soundHandles;
+self.playSoundFile = (url, bytes) => post({ type: "sound file", url, bytes, handle: nextSoundHandle() }); // host-files.js STD_ADAPTERS.sound: a worker has no <audio>
 self.keepFile = (path, bytes) => post({ type: "file", path, bytes }); // render_sound's WAV, for the page's download link
 self.stopSoundFiles = () => { soundsEnd = 0; post({ type: "stop sound files" }); };
+self.stopSound = handle => post({ type: "stop sound", handle }); // stop_sound(handle)
 // sound_queued() (lib/sound.warp, card sound-pro): the seconds the queued sounds still sound
 let soundsEnd = 0;
 const clockSeconds = () => performance.now() / 1000;
@@ -57,7 +62,7 @@ const hooks = {
 	// a worker has no AudioContext: the page plays it, queued behind the sounds before it as the clock here counts
 	sound: (samples, rate) => {
 		soundsEnd = Math.max(soundsEnd, clockSeconds()) + samples.length / rate;
-		post({ type: "sound", samples, rate });
+		post({ type: "sound", samples, rate, handle: nextSoundHandle() });
 	},
 	sleeping: () => post({ type: "sleep" }),
 	tasksInline: reason => post({ type: "tasks inline", reason }),
@@ -291,6 +296,7 @@ async function handleMessage(data) {
 	stage("waiting for the task workers");
 	await taskPoolReady(); // host.js: tasks run on loaded Workers, not inline
 	stage(`evaluating run ${data.id}`);
+	soundHandles = 0;
 	const started = performance.now();
 	const report = await evaluate(data.code, data.acknowledged ?? {});
 	post({ type: "report", id: data.id, report, milliseconds: performance.now() - started });

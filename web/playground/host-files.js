@@ -389,9 +389,11 @@ addHostPart({
 			play_file: path => {
 				const written = writtenFiles.get(filePath(contentText(path)));
 				self.playSoundFile?.(contentText(path), typeof written === "string" ? undefined : written);
-				return null;
+				return self.lastSoundHandle?.() ?? 0;
 			},
-			stop: () => { self.stopSoundFiles?.(); return null; },
+			// stop_sound(handle) the sound play gave that handle (card sound-pro), handle 0 all of them
+			stop: handle => { Number(handle) ? self.stopSound?.(Number(handle)) : self.stopSoundFiles?.(); return null; },
+			last: () => self.lastSoundHandle?.() ?? 0,
 			// the page's audio clock as the worker keeps it (worker.js); a worker cannot wait for the page's audio
 			queued: () => self.soundsQueued?.() ?? 0,
 			wait: () => null,

@@ -4,7 +4,7 @@
 //! `y += e` → `cell_set(y·cell, cell_get(y·cell) + e)`, a read of y → `cell_get(y·cell)`. Variables only read keep the
 //! captures of wasm_emitter `refresh_enclosing_captures`.
 
-use super::nodes::{call, key};
+use super::nodes::{call, children_rewritten, key};
 use crate::late_binding::{changes_in, declared_nonlocals, NONLOCAL};
 use crate::node::{symbol, Bracket, Node, Separator};
 use crate::operators::Op;
@@ -21,12 +21,7 @@ pub fn lower(node: Node) -> Node {
 		}
 		return key(head.clone(), op, lower(body));
 	}
-	match node {
-		Node::Key(left, op, right) => key(lower(*left), op, lower(*right)),
-		Node::List(items, bracket, separator) => Node::List(items.into_iter().map(lower).collect(), bracket, separator),
-		Node::Meta { node, data } => Node::Meta { node: Box::new(lower(*node)), data },
-		other => other,
-	}
+	children_rewritten(node, lower)
 }
 
 /// `f(a, b) := body`: its head, operator, parameter names and body
@@ -99,10 +94,7 @@ fn through_cell(node: Node, variable: &str, cell: &Node) -> Node {
 		Node::Key(target, op @ (Op::Inc | Op::Dec), _) if is_variable(&target) => {
 			set(key(get(), if op == Op::Inc { Op::Add } else { Op::Sub }, Node::from(1)))
 		}
-		Node::Key(left, op, right) => key(through_cell(*left, variable, cell), op, through_cell(*right, variable, cell)),
-		Node::List(items, bracket, separator) => Node::List(items.into_iter().map(|item| through_cell(item, variable, cell)).collect(), bracket, separator),
-		Node::Meta { node, data } => Node::Meta { node: Box::new(through_cell(*node, variable, cell)), data },
-		other => other,
+		other => children_rewritten(other, |child| through_cell(child, variable, cell)),
 	}
 }
 

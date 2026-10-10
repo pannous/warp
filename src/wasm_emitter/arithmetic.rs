@@ -283,17 +283,15 @@ impl WasmGcEmitter {
 			return;
 		}
 		// a call of a user or FFI function: `(f)` without arguments, `f(a, b…)`
-		if items.len() >= 2 || *bracket == Bracket::Round {
-			if let Node::Symbol(fn_name) = items[0].drop_meta() {
-				if self.ctx.user_functions.contains_key(fn_name) {
-					self.emit_user_function_call_numeric(func, fn_name, &items[1..]);
-					return;
-				}
-				// Check for FFI function call
-				if self.ctx.ffi_imports.contains_key(fn_name) {
-					self.emit_ffi_call(func, fn_name, &items[1..], Some(Kind::Int));
-					return;
-				}
+		if let Some(fn_name) = super::list_emitter::called_word(items, bracket, separator) {
+			if self.ctx.user_functions.contains_key(fn_name) {
+				self.emit_user_function_call_numeric(func, fn_name, &items[1..]);
+				return;
+			}
+			// Check for FFI function call
+			if self.ctx.ffi_imports.contains_key(fn_name) {
+				self.emit_ffi_call(func, fn_name, &items[1..], Some(Kind::Int));
+				return;
 			}
 		}
 		// Rounding and counting builtins build a node: its Int is the number
@@ -343,21 +341,19 @@ impl WasmGcEmitter {
 		if self.is_library_word_call(items, bracket, separator) {
 			return self.emit_node_as_f64(func, &Node::List(items.to_vec(), bracket.clone(), separator.clone()));
 		}
-		if items.len() >= 2 || *bracket == Bracket::Round {
-			if let Node::Symbol(fn_name) = items[0].drop_meta() {
-				if self.ctx.ffi_imports.contains_key(fn_name) {
-					self.emit_ffi_call(func, fn_name, &items[1..], Some(Kind::Float));
-					return;
-				}
-				if self.ctx.user_functions.contains_key(fn_name) {
-					self.emit_user_function_call_float(func, fn_name, &items[1..]);
-					return;
-				}
-				// `float(x)` is `x as float` (a text parses its digits)
-				if let [type_word, value] = items {
-					if crate::type_kinds::canonical_type_name(fn_name) == "float" {
-						return self.emit_float_value(func, &Node::Key(Box::new(value.clone()), Op::As, Box::new(type_word.clone())));
-					}
+		if let Some(fn_name) = super::list_emitter::called_word(items, bracket, separator) {
+			if self.ctx.ffi_imports.contains_key(fn_name) {
+				self.emit_ffi_call(func, fn_name, &items[1..], Some(Kind::Float));
+				return;
+			}
+			if self.ctx.user_functions.contains_key(fn_name) {
+				self.emit_user_function_call_float(func, fn_name, &items[1..]);
+				return;
+			}
+			// `float(x)` is `x as float` (a text parses its digits)
+			if let [type_word, value] = items {
+				if crate::type_kinds::canonical_type_name(fn_name) == "float" {
+					return self.emit_float_value(func, &Node::Key(Box::new(value.clone()), Op::As, Box::new(type_word.clone())));
 				}
 			}
 		}

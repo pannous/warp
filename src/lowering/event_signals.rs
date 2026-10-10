@@ -8,7 +8,7 @@
 //! event (web/playground/worker.js); natively nothing does, which a warning says. System events (`on interrupt`) are
 //! kept the same way: the runtime calls their handlers (notes/system_signals.md).
 
-use super::nodes::{call, key};
+use super::nodes::{call, children_rewritten, key};
 use crate::declarations::{handler_parts, word};
 use crate::node::{symbol, Bracket, Node, Separator};
 use crate::operators::Op;
@@ -758,12 +758,7 @@ fn emits_as_calls(node: Node, handled: &HashMap<String, Vec<Node>>, verbs: &[Str
 		let braced = matches!(node.drop_meta(), Node::List(_, Bracket::Curly, _));
 		return if braced { Node::List(vec![call], Bracket::Curly, Separator::Semicolon) } else { call };
 	}
-	match node {
-		Node::List(items, bracket, separator) => Node::List(items.into_iter().map(|item| emits_as_calls(item, handled, verbs, block_handled)).collect(), bracket, separator),
-		Node::Key(left, op, right) => key(emits_as_calls(*left, handled, verbs, block_handled), op, emits_as_calls(*right, handled, verbs, block_handled)),
-		Node::Meta { node, data } => Node::Meta { node: Box::new(emits_as_calls(*node, handled, verbs, block_handled)), data },
-		other => other,
-	}
+	children_rewritten(node, |child| emits_as_calls(child, handled, verbs, block_handled))
 }
 
 /// The variables the main level assigns (`n = 0`, `n += 1`, `n: int = 0`)

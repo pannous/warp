@@ -208,9 +208,10 @@ function startWorker(restarts = 0) {
 			if (data.type === "failed") return failed(new Error(data.message));
 			if (data.type === "bundle") return bundled(data.bundle); // deploy.js
 			if (data.type === "sound") return playSound(data);
-			if (data.type === "sound file") return playSoundFile(data.url, data.bytes);
+			if (data.type === "sound file") return playSoundFile(data.url, data.handle, data.bytes);
 			if (data.type === "file") return offerFile(data.path, data.bytes);
 			if (data.type === "stop sound files") return silence(); // stop_sound: the queued sounds and the music files
+			if (data.type === "stop sound") return silenced(data.handle); // stop_sound(handle): that one alone
 			if (!pending) return showEventOutput(data);
 			if (data.type === "listening") Object.assign(pending, { listening: data.events, address: data.address });
 			if (data.type === "print") printedChunk(pending, data);
@@ -289,7 +290,7 @@ let sounding = []; // the playing and queued sounds, silenced when the next run 
 // before the page's first click or key press (the run on load, the CI tour) a sound stays silent: an AudioContext made
 // then cannot start and the browser warns
 const beforeUserActivation = () => navigator.userActivation && !navigator.userActivation.hasBeenActive;
-function playSound({ samples, rate }) {
+function playSound({ samples, rate, handle }) {
 	if (beforeUserActivation()) return;
 	audio ??= new AudioContext();
 	audio.resume();
@@ -301,15 +302,17 @@ function playSound({ samples, rate }) {
 	soundsEnd = Math.max(soundsEnd, audio.currentTime);
 	source.start(soundsEnd);
 	soundsEnd += buffer.duration;
+	source.handle = handle;
 	source.onended = () => sounding = sounding.filter(other => other !== source);
 	sounding.push(source);
 }
 
 // `play "song.mp3"` (card sound-library): a music file in the background, by its URL beside the page or anywhere
 let playingFiles = [];
-function playSoundFile(url, bytes) {
+function playSoundFile(url, handle, bytes) {
 	if (beforeUserActivation()) return;
 	const player = new Audio(bytes ? URL.createObjectURL(new Blob([bytes], { type: WAV_TYPE })) : url);
+	player.handle = handle;
 	player.onended = () => playingFiles = playingFiles.filter(other => other !== player);
 	player.play().catch(error => console.error(`play "${url}": ${error.message}`));
 	playingFiles.push(player);
@@ -318,6 +321,14 @@ function playSoundFile(url, bytes) {
 function stopSoundFiles() {
 	playingFiles.forEach(player => player.pause());
 	playingFiles = [];
+}
+
+// the sound or music file of that handle stopped; a queued one never starts
+function silenced(handle) {
+	sounding.filter(source => source.handle === handle).forEach(source => source.stop());
+	playingFiles.filter(player => player.handle === handle).forEach(player => player.pause());
+	sounding = sounding.filter(source => source.handle !== handle);
+	playingFiles = playingFiles.filter(player => player.handle !== handle);
 }
 
 function silence() {
