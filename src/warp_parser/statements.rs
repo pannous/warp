@@ -538,7 +538,7 @@ impl WarpParser {
 		}
 
 		if let Node::Key(condition, Op::Colon, body) = &rhs {
-			let body = self.continue_expr(body.as_ref().clone(), 0); // `while c: i+=2`
+			let body = self.continue_colon_body(body); // `while c: i+=2`, `while x-->0 : print x`
 			return while_do(condition.as_ref().clone(), body);
 		}
 

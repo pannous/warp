@@ -608,17 +608,7 @@ impl WarpParser {
 			let if_cond = Node::Key(Box::new(Empty), Op::If, cond.clone());
 			// the body runs to the end of the statement, `if c: x+=1`, but not into the `else`
 			let outer = std::mem::replace(&mut self.stops_at_else, true);
-			let then_expr = match then_expr.drop_meta() {
-				_ if is_print_word(then_expr) && self.braceless_argument_follows() => { // `if it%2: print it`, `if c: print ord x`
-					let first = self.expression_of_words();
-					self.print_call_from(first, Self::expression_of_words)
-				}
-				// `if c: print a, b`: the colon took `print a`, the comma continues its arguments
-				Node::List(words, Bracket::None, Separator::Space) if words.len() > 1 && is_print_word(&words[0]) && self.current_char() == ',' => {
-					self.print_call_from(one_expression(&words[1..]), |parser| parser.parse_expr(0))
-				}
-				_ => self.continue_expr(then_expr.as_ref().clone(), 0),
-			};
+			let then_expr = self.continue_colon_body(then_expr);
 			self.stops_at_else = outer;
 			let if_then = Node::Key(Box::new(if_cond), Op::Then, Box::new(then_expr));
 			return self.parse_optional_else(if_then, ElseParseMode::Expr);
@@ -642,6 +632,21 @@ impl WarpParser {
 		}
 
 		Node::Key(Box::new(Empty), Op::If, Box::new(rhs))
+	}
+
+	/// The rest of the body after `if c:` or `while c:`, of which the colon took only the first word or words
+	pub(super) fn continue_colon_body(&mut self, body: &Node) -> Node {
+		match body.drop_meta() {
+			_ if is_print_word(body) && self.braceless_argument_follows() => { // `if it%2: print it`, `if c: print ord x`
+				let first = self.expression_of_words();
+				self.print_call_from(first, Self::expression_of_words)
+			}
+			// `if c: print a, b`: the colon took `print a`, the comma continues its arguments
+			Node::List(words, Bracket::None, Separator::Space) if words.len() > 1 && is_print_word(&words[0]) && self.current_char() == ',' => {
+				self.print_call_from(one_expression(&words[1..]), |parser| parser.parse_expr(0))
+			}
+			_ => self.continue_expr(body.clone(), 0),
+		}
 	}
 
 	/// `|x| x*x`, `|a, b| a+b` (Rust, and Ruby's `{ |x| x*x }`): the parameters of a lambda between bars, which the
