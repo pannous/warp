@@ -108,3 +108,34 @@ melody_samples(notes, seconds) := {
 }
 to melody notes each duration: sound(melody_samples(notes, si_amount(duration)))
 to melody notes: melody(notes, note_seconds)
+
+// how loud each frequency band sounds at a moment of the samples (card winamp-like, samples/visualizer.warp): the bands
+// spaced evenly in pitch from band_low to band_high Hz, each level from 0 to 1 (a full-scale sine is 1)
+global band_low = 60
+global band_high = 5000
+// the samples a spectrum looks at: 512 at 22050 Hz are 23 ms, bands 43 Hz apart are still told apart
+spectrum_window = 512
+// the middle frequency of band i of count
+band_frequency(i, count) := band_low * (band_high / band_low)^(i / (count - 1))
+// the band whose middle frequency is nearest in pitch
+nearest_band(frequency, count) := round(log(frequency / band_low) / log(band_high / band_low) * (count - 1)) as int
+// how loud frequency f sounds in the window: one term of the discrete Fourier transform, Hann-weighted so a tone between
+// two bands does not leak into the far ones
+def band_level(window, f) {
+	n = count(window)
+	step = 2 * pi * f / sample_rate
+	re = 0.0
+	im = 0.0
+	for i in 0..n {
+		weighted = (window[i] - sample_offset) * (0.5 - 0.5 * cos(2 * pi * i / (n - 1)))
+		re = re + weighted * cos(step * i)
+		im = im + weighted * sin(step * i)
+	}
+	4 * sqrt(re * re + im * im) / n / loudest_sample
+}
+def spectrum(samples, seconds, bands) {
+	start = min(round(seconds * sample_rate) as int, count(samples))
+	window = samples[start..min(start + spectrum_window, count(samples))]
+	if count(window) < 2 { return [0 for i in 0..bands] }
+	[band_level(window, band_frequency(i, bands)) for i in 0..bands]
+}
