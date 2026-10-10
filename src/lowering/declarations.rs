@@ -1282,7 +1282,9 @@ fn zero_declaration(statement: &Node, assigned: &std::collections::HashSet<Strin
 	if assigned.contains(variable) || crate::analyzer::type_word_kind(variable).is_some() {
 		return None;
 	}
-	let zero = zero_value(crate::analyzer::type_word_kind(type_name)?)?;
+	// a number type held as a Node (`real`) starts at the exact 0 of the int it covers
+	let exact_zero = || crate::type_tests::type_matches("int", type_name).then(|| Node::int(0));
+	let zero = zero_value(crate::analyzer::type_word_kind(type_name)?).or_else(exact_zero)?;
 	let typed = key(name.clone(), Op::Colon, type_word.clone());
 	Some(key(typed, Op::Assign, zero))
 }

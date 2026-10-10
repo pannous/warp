@@ -56,7 +56,7 @@ use crate::type_kinds::Kind as K;
 const BUILTIN_TYPES: [BuiltinType; 15] = [
 	builtin("int", &["integer", "long", "i64", "i32"], &[], Some(K::Int), &[K::Int as i64]),
 	builtin("rational", &["exact"], &["int"], Some(K::Int), &[K::Int as i64, K::Float as i64]),
-	builtin("real", &[], &["rational"], Some(K::Int), &[K::Int as i64, K::Float as i64]),
+	builtin("real", &[], &["rational"], Some(K::Empty), &[K::Int as i64, K::Float as i64]),
 	builtin("float", &["double", "f64", "f32", "float32", "float64", "fast"], &[], Some(K::Float), &[K::Float as i64]),
 	builtin("number", &[], &["real", "float"], Some(K::Float), &[K::Int as i64, K::Float as i64, K::Uncertain as i64]),
 	builtin("text", &["str", "string"], &["codepoint"], Some(K::Text), &[K::Text as i64, K::Codepoint as i64]),

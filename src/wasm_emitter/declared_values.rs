@@ -36,7 +36,13 @@ impl WasmGcEmitter {
 		let object_mask = OBJECT_KINDS.iter().fold(0, |mask, kind| mask | 1 << *kind as i64);
 		let spec = match crate::analyzer::annotated_kind(declared) {
 			Some(Kind::Empty) if crate::uncertain::is_interval_number(declared) => "number",
-			Some(Kind::Empty) => return None, // any, an inline union
+			// an inline union admits what its parts admit; any admits everything
+			Some(Kind::Empty) => return crate::analyzer::union_parts(type_name.trim_end_matches('?')).and_then(|parts| {
+				parts.iter().map(|part| self.admitted(&Node::Symbol(part.to_string()))).try_fold(0, |mask, admitted| match admitted? {
+					Admitted::Kinds(kinds) => Some(mask | kinds),
+					Admitted::Bool => Some(mask | 1 << Kind::Int as i64),
+				})
+			}).map(Admitted::Kinds),
 			Some(Kind::Key) => return Some(Admitted::Kinds(object_mask)),
 			Some(Kind::List) => "list", // `xs: [int]`, `xs: ints`
 			_ if crate::analyzer::is_bool_type(&type_name) => return Some(Admitted::Bool),
@@ -89,10 +95,10 @@ impl WasmGcEmitter {
 	/// `value` stored into a place declared `declared` that holds a `kind`: checked at run time when its static kind leaves
 	/// open whether it fits (P204)
 	pub(super) fn emit_declared_value(&mut self, func: &mut Function, declared: Option<&Node>, value: &Node, kind: Kind) {
-		// a float stored in a place declared exact (`x: rational = √2`, `f(x: int)`) is refused while compiling
-		if let Some(declared) = declared.filter(|_| kind == Kind::Int && self.get_type(value) == Kind::Float) {
+		// a float stored in a place declared exact (`x: rational = √2`, `f(x: int)`, `x: rational|int`) is refused while compiling
+		if let Some(declared) = declared.filter(|declared| crate::analyzer::refuses_floats(&declared.name())).filter(|_| self.get_type(value) == Kind::Float) {
 			let message = format!("{} is a float where an exact {} is expected: declare it `number` to keep the float, or truncate with `as int`",
-				value.serialize(), declared.serialize());
+				value.serialize(), declared.name());
 			return self.emit_type_error(func, message);
 		}
 		let check = declared.and_then(|declared| self.admitted(declared)).filter(|admitted| self.needs_run_time_check(admitted, value));
