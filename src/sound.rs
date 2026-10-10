@@ -26,10 +26,12 @@ static SOUNDED: AtomicUsize = AtomicUsize::new(0);
 const FILE_FORMATS: [(&str, &[u8], usize); 7] = [
 	("wav", b"WAVE", 8), ("mp3", b"ID3", 0), ("mp3", b"\xFF\xFB", 0), ("ogg", b"OggS", 0), ("flac", b"fLaC", 0), ("aiff", b"AIFF", 8), ("m4a", b"ftyp", 4),
 ];
+/// A command, its options before the file, and the formats it knows
+type Command = (&'static str, &'static [&'static str], &'static [&'static str]);
 /// The players a music file plays by in the background, the first the system has that knows its format: macOS's
 /// CoreAudio player, PulseAudio/PipeWire's (libsndfile: no mp3 before 1.1), FFmpeg's, mpv and ALSA's; each says why
 /// it fails
-const FILE_PLAYERS: [(&str, &[&str], &[&str]); 5] = [
+const FILE_PLAYERS: [Command; 5] = [
 	("afplay", &[], &["wav", "mp3", "flac", "aiff", "m4a"]),
 	("paplay", &[], &["wav", "ogg", "flac", "aiff"]),
 	("ffplay", &["-nodisp", "-autoexit", "-loglevel", "error"], &["wav", "mp3", "ogg", "flac", "aiff", "m4a"]),
@@ -37,7 +39,7 @@ const FILE_PLAYERS: [(&str, &[&str], &[&str]); 5] = [
 	("aplay", &["-q"], &["wav"]),
 ];
 /// The decoders that read a music file without playing it, the first the system has that knows its format
-const FILE_PROBES: [(&str, &[&str], &[&str]); 2] = [
+const FILE_PROBES: [Command; 2] = [
 	("ffprobe", &["-v", "error"], &["wav", "mp3", "ogg", "flac", "aiff", "m4a"]),
 	("afinfo", &[], &["wav", "mp3", "flac", "aiff", "m4a"]),
 ];
@@ -177,7 +179,7 @@ fn wait_at_exit() {
 
 /// Whether the system has a decoder that checks a file of this format without playing it
 pub fn can_probe(format: &str) -> bool {
-	FILE_PROBES.iter().any(|(probe, _, formats)| formats.contains(&format) && which(probe))
+	knowing(&FILE_PROBES, format).any(|(probe, _)| which(probe))
 }
 
 /// The file decoded by the first probe the system has for its format (none: nothing to check it with)
@@ -192,17 +194,22 @@ fn probe(path: &str, format: &'static str) -> Result<(), String> {
 
 /// The first command of the list the system has for the format, started on the file, its error output kept (its output
 /// too when `keep_output`: afinfo says its failure there; a player's would fill the pipe)
-fn spawned(commands: &[(&'static str, &[&str], &[&str])], format: &str, path: &str, keep_output: bool) -> Option<(&'static str, std::process::Child)> {
+fn spawned(commands: &[Command], format: &str, path: &str, keep_output: bool) -> Option<(&'static str, std::process::Child)> {
 	let output = || if keep_output { std::process::Stdio::piped() } else { std::process::Stdio::null() };
-	commands.iter().filter(|(_, _, formats)| formats.contains(&format)).find_map(|(command, options, _)| {
-		let child = std::process::Command::new(command).args(*options).arg(path).stdin(std::process::Stdio::null())
+	knowing(commands, format).find_map(|(command, options)| {
+		let child = std::process::Command::new(command).args(options).arg(path).stdin(std::process::Stdio::null())
 			.stdout(output()).stderr(std::process::Stdio::piped()).spawn().ok()?;
-		Some((*command, child))
+		Some((command, child))
 	})
 }
 
-fn names_for(commands: &[(&str, &[&str], &[&str])], format: &str) -> String {
-	commands.iter().filter(|(_, _, formats)| formats.contains(&format)).map(|(command, _, _)| *command).collect::<Vec<_>>().join(", ")
+/// The commands of the list that know the format, with their options
+fn knowing<'a>(commands: &'a [Command], format: &'a str) -> impl Iterator<Item = (&'static str, &'static [&'static str])> + 'a {
+	commands.iter().filter(move |(_, _, formats)| formats.contains(&format)).map(|(command, options, _)| (*command, *options))
+}
+
+fn names_for(commands: &[Command], format: &str) -> String {
+	knowing(commands, format).map(|(command, _)| command).collect::<Vec<_>>().join(", ")
 }
 
 fn which(command: &str) -> bool {
