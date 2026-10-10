@@ -29,4 +29,7 @@ Parked (user: "Later"):
   versus today's Integrator. User 2026-10-10: "not sure yet, the agents are free of all the hassle of integration, maybe
   it will spoil their context". Middle path (Supervisor's recommendation): keep the Integrator but script its routine
   part (merge batch, queue the suite, bisect a failing batch, push); the session only handles conflicts and failures.
+  User's worry: the script hangs and nobody notices (batch 137: a sample looped 294 s until killed). Answer: hard
+  timeouts per stage and per test binary (fail loudly, name the culprit) + heartbeat file + cron watchdog like
+  urgent-card-watch that messages warp-supervisor while it is stale; safer than today's unwatched Integrator session.
 
