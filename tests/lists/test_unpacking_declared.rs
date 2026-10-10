@@ -10,7 +10,8 @@ fn unpacking_checks_declared_types() {
 	fails_with("a: int = 0; a, b = \"x\", 6; a", "a is declared int");
 	fails_with("a: int = 0; a, b = [2.5, 6]; a", "a is declared int, cannot assign float 2.5");
 	fails_with("a: int = 0; t = \"x\"; a, b = t, 6; a", "not an int");
-	fails_with("a: int = 0; xs = [2.5, 6]; a, b = xs; a", "whole number");
+	fails_with("a: int = 0; xs = [5/2, 6]; a, b = xs; a", "whole number");
+	fails_with("a: int = 0; xs = [2.5, 6]; a, b = xs; a", "not an int"); // a decimal is a float (decision exact-default)
 	is!("a: int = 0; a, b = 5, 6; a + b", 11);
 	is!("a: float = 0; a, b = 5, 6; a + b", 11.0);
 	is!("a: int = 0; xs = [5, 6]; a, b = xs; a + b", 11);

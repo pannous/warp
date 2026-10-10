@@ -1,4 +1,4 @@
-//! Exact numbers by default: `1/3*3 == 1`, `0.1+0.2 == 0.3` (DESIGN.md "Exact numbers by default").
+//! Exact numbers by default: `1/3*3 == 1`, `1/3 + 1/3` is 2/3 (DESIGN.md "Exact numbers by default").
 //!
 //! An exact number is an Int (see big_int.rs) whose handle may also point at a `$Ratio` in the
 //! same heap: numerator and denominator are Int payloads, the denominator is > 1 and coprime to
@@ -6,9 +6,9 @@
 //! i64 fast path and only the slow paths ask `is_ratio`. The `$Ratio` doubles as the payload of
 //! an Int node, read back as `Number::Quotient`.
 //!
-//! Decimal literals are exact (`0.1` is 1/10, see `Number::is_exact_decimal`); f64 only comes from
-//! float functions (`sqrt`, FFI), irrational constants (`π`) or `as float`, and mixing an f64 into an
-//! expression makes the result an f64.
+//! Decimal literals are f64 floats (`.1 + .2 ≈ .3`, decision exact-default); integer division stays exact, and
+//! mixing an f64 into an expression makes the result an f64. A decimal only becomes exact where an exact number is
+//! declared (`x: rational = 0.5`, emit_decimal_literal).
 //! Division by zero yields the extended rationals' ±∞ = ±1/0 and NaN = 0/0 (never a quiet f64 NaN):
 //! ∞ + 1 = ∞, 1/∞ = 0, ∞ - ∞ = NaN, NaN equals only NaN. Truncating ∞ or NaN to an integer traps.
 
@@ -206,8 +206,10 @@ impl WasmGcEmitter {
 		self.runtime_function("is_ratio", vec![i64t], vec![i32t], vec![], |s, f| {
 			s.emit_fixnum_test(f, &[0]);
 			Self::emit_list(f, &[I::If(BlockType::Result(i32t)), I::I32Const(0), I::Else]);
+			s.emit_inline_ratio_test(f, 0);
+			Self::emit_list(f, &[I::If(BlockType::Result(i32t)), I::I32Const(1), I::Else]);
 			s.emit_heap_get(f, 0);
-			Self::emit_list(f, &[I::RefTestNonNull(ratio_ref), I::End]);
+			Self::emit_list(f, &[I::RefTestNonNull(ratio_ref), I::End, I::End]);
 		});
 
 		for (name, field, integer_value) in [("exact_numerator", 0, None), ("exact_denominator", 1, Some(1))] {
@@ -215,10 +217,17 @@ impl WasmGcEmitter {
 				f.instruction(&I::LocalGet(0));
 				s.call(f, "is_ratio");
 				f.instruction(&I::If(BlockType::Result(i64t)));
+				s.emit_inline_ratio_test(f, 0);
+				f.instruction(&I::If(BlockType::Result(i64t)));
+				match integer_value {
+					Some(_) => s.emit_inline_denominator(f, 0),
+					None => s.emit_inline_numerator(f, 0),
+				}
+				f.instruction(&I::Else);
 				s.emit_heap_get(f, 0);
 				Self::emit_list(f, &[I::RefCastNonNull(ratio_ref), I::StructGet { struct_type_index: ratio, field_index: field }]);
 				s.call(f, "int_from_payload");
-				f.instruction(&I::Else);
+				Self::emit_list(f, &[I::End, I::Else]);
 				f.instruction(&match integer_value {
 					Some(one) => I::I64Const(one),
 					None => I::LocalGet(0),
@@ -245,11 +254,15 @@ impl WasmGcEmitter {
 			}
 			f.instruction(&I::End);
 			Self::emit_list(f, &[I::LocalGet(1), I::I64Const(1), I::I64Eq, I::If(BlockType::Result(i64t)), I::LocalGet(0), I::Else]);
+			s.emit_inline_ratio_fits(f, 0, 1);
+			f.instruction(&I::If(BlockType::Result(i64t)));
+			s.emit_inline_ratio(f, 0, 1);
+			f.instruction(&I::Else);
 			s.emit_int_payload(f, 0);
 			s.emit_int_payload(f, 1);
 			f.instruction(&I::StructNew(ratio));
 			s.call(f, "int_store");
-			f.instruction(&I::End);
+			Self::emit_list(f, &[I::End, I::End]);
 		});
 
 		// exact_div(a, b): a/b, an integer whenever b divides a; locals: quotient, remainder

@@ -5,8 +5,9 @@ use crate::is;
 
 #[test]
 fn a_fractional_count_in_a_variable_is_an_error() {
-	fails_with("y=2.5; y times \"ab\"", "count must be an integer");
-	fails_with("y=2.5; y times [1]", "count must be an integer");
+	fails_with("y=5/2; y times \"ab\"", "count must be an integer");
+	fails_with("y=5/2; y times [1]", "count must be an integer");
+	fails_with("y=2.5; y times [1]", "y is a float where an exact Int is expected"); // a decimal is a float (decision exact-default)
 }
 
 #[test]

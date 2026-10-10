@@ -34,10 +34,10 @@ fn test_type_as_a_method() {
 #[test] // card type-parentheses: `type 3.5` was read as a type declaration ("index out of range")
 fn test_type_without_parentheses() {
 	let symbol = |name: &str| Node::Symbol(name.to_string());
-	is!("type 3.5", symbol("rational"));
+	is!("type 3.5", symbol("float")); // decision exact-default
 	is!("type 3", symbol("int"));
 	is!("type \"ab\"", symbol("text"));
-	is!("y = type 3.5; y", symbol("rational"));
+	is!("y = type 3.5; y", symbol("float"));
 	is!("type Point { x: int }; p = Point(1); p.x", 1);
 }
 

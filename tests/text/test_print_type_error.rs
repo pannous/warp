@@ -3,7 +3,7 @@ use crate::common::fails_with;
 
 #[test]
 fn print_of_a_type_error_reports_that_error() {
-	fails_with("greeting = \"Hello \" + \"🌍\"\nprint greeting*2.5", "text * int");
+	fails_with("greeting = \"Hello \" + \"🌍\"\nprint greeting*2.5", "text * float"); // 2.5 is a float (decision exact-default)
 }
 
 #[test]

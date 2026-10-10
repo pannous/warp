@@ -1083,14 +1083,18 @@ impl WasmGcEmitter {
 	/// f64 on the stack → exact Int, truncated toward zero: the explicit casts `as int` and `int(x)`, and the
 	/// rounding functions. There is no f64 → bignum path, so a NaN or a value beyond i64 fails cleanly.
 	fn emit_truncating_cast(&mut self, func: &mut Function) {
-		let value_bits = self.scratch(0);
+		self.emit_truncating_cast_via(func, self.scratch(0));
+	}
+
+	/// emit_truncating_cast through the i64 local `value_bits` (a runtime function has no scratch locals)
+	pub(super) fn emit_truncating_cast_via(&mut self, func: &mut Function, value_bits: u32) {
 		Self::emit_list(func, &[I::I64ReinterpretF64, I::LocalSet(value_bits)]);
 		Self::emit_list(func, &[
 			I::LocalGet(value_bits), I::F64ReinterpretI64, I::F64Abs, I::F64Const(I64_RANGE_LIMIT.into()), I::F64Lt, I::I32Eqz,
 		]);
 		self.emit_fail_if(func, "float_out_of_int_range");
 		Self::emit_list(func, &[I::LocalGet(value_bits), I::F64ReinterpretI64, I::I64TruncF64S]);
-		self.emit_int_from_machine(func);
+		self.emit_int_from_machine_in(func, value_bits);
 	}
 
 	/// A float has no implicit exact value: reading it as an Int is refused instead of truncated
@@ -1268,11 +1272,11 @@ impl WasmGcEmitter {
 					self.emit_int_literal(func, &num.to_bigint());
 					self.emit_call(func, "new_int");
 				}
-				Number::Float(f) if !Number::is_exact_decimal(*f) => {
+				Number::Float(f) => {
 					func.instruction(&I::F64Const(Ieee64::new(f.to_bits())));
 					self.emit_call(func, "new_float");
 				}
-				Number::Float(_) | Number::Quotient(..) | Number::BigQuotient(_) => {
+				Number::Quotient(..) | Number::BigQuotient(_) => {
 					self.emit_numeric_value(func, node);
 					self.emit_call(func, "new_int");
 				}
