@@ -148,11 +148,15 @@ fn place_in_zone(time: &Node, zone: &Node, scope: &mut Scope) -> Result<Value, S
 		Value::Duration(duration) => return converted(&duration, zone),
 		other => return Err(format!("`in` places a time in a zone, got {}", other.kind())),
 	};
-	let zone = match evaluate(zone, scope)? {
-		Value::Text(name) | Value::Symbol(name) => calendar::zone_named(&name)?,
-		other => return Err(format!("`in` needs a zone name like \"Europe/Berlin\", got {}", other.kind())),
-	};
-	time.in_zone(zone).map(Value::Time)
+	time.in_zone(zone_argument("`in`", zone, scope)?).map(Value::Time)
+}
+
+/// The zone a word's argument names: "Europe/Berlin"
+fn zone_argument(word: &str, zone: &Node, scope: &mut Scope) -> Result<&'static calendar::Zone, String> {
+	match evaluate(zone, scope)? {
+		Value::Text(name) | Value::Symbol(name) => calendar::zone_named(&name),
+		other => Err(format!("{word} needs a zone name like \"Europe/Berlin\", got {}", other.kind())),
+	}
 }
 
 fn int_argument(node: &Node, scope: &mut Scope) -> Result<i64, String> {
@@ -217,10 +221,7 @@ fn zoned(args: &[Node], scope: &mut Scope) -> Result<Value, String> {
 	let [time, zone, rest @ ..] = args else {
 		return Err("zoned(local time, \"Zone/Name\", disambiguation: earlier) takes a local time and a zone".to_string());
 	};
-	let zone = match evaluate(zone, scope)? {
-		Value::Text(name) | Value::Symbol(name) => calendar::zone_named(&name)?,
-		other => return Err(format!("zoned needs a zone name like \"Europe/Berlin\", got {}", other.kind())),
-	};
+	let zone = zone_argument("zoned", zone, scope)?;
 	let (_, choice) = options("zoned", rest, scope)?;
 	match evaluate(time, scope)? {
 		Value::Time(Time::Local(date, clock)) => zone.resolve(date, clock, choice).map(|zoned| Value::Time(Time::Zoned(zoned))),
