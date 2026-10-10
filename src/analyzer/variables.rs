@@ -578,7 +578,7 @@ pub fn resolve_main_variable_assignments(program: Node) -> Result<Node, Node> {
 			}
 			if blocks.contains(&function.name) {
 				if outside_blocks.lookup(name).is_some() {
-					educate_block_assignment(node, name, &function.name);
+					educate_block_assignment(node, name, &function.name, main_assignment(&program, name));
 				}
 				continue;
 			}
@@ -620,12 +620,12 @@ pub(super) fn without_block_bodies(node: Node, blocks: &HashSet<String>) -> Node
 
 /// A block captures the outer variables by value (user decision D7): its assignment changes the block's own copy,
 /// so `x=1; inc:={x=x+1}; do inc; x` stays 1. Educate toward the forms that change x: `global x`, or returning the value.
-pub(super) fn educate_block_assignment(assignment: &Node, name: &str, block: &str) {
+pub(super) fn educate_block_assignment(assignment: &Node, name: &str, block: &str, main_assignment: Option<&Node>) {
 	crate::normalize::set_position_of(assignment);
 	let written = crate::normalize::operand_text(assignment);
 	let reason = format!("the block {block} captures {name} by value: its change stays inside the block");
-	crate::normalize::advise(&written, &format!("global {name}"), &reason);
-	crate::normalize::advise(&written, &format!("{name} = {block}()"), "or return the value from the block and assign it");
+	crate::normalize::advise(&written, &format!("global {name}"), &reason, global_at_main(&reason, name, main_assignment));
+	crate::normalize::advise(&written, &format!("{name} = {block}()"), "or return the value from the block and assign it", None);
 }
 
 pub(super) const LOCAL_OR_GLOBAL: &str = "local-or-global";
@@ -646,15 +646,18 @@ pub(super) fn ask_local_or_global(assignment: &Node, name: &str, function: &str,
 	use crate::diagnostic::{ask, reading, Ask, Fallback};
 	let question = format!("does `{name} = …` inside {function} make a new local of {function}, or change the main-level {name}?");
 	let main_level = reading(&format!("the main-level {name}"), &format!("global {name}"));
-	let main_level = match main_assignment.and_then(crate::diagnostic::position) {
-		Some((line, column)) => {
-			let fix = crate::fixits::fix(&main_level.meaning, format!("{name} ="), format!("global {name} ="));
-			main_level.fixed_by(fix.at(line, column))
-		}
+	let main_level = match global_at_main(&main_level.meaning, name, main_assignment) {
+		Some(fix) => main_level.fixed_by(fix),
 		None => main_level.replacing("", ""), // no main-level assignment to declare: no edit
 	};
 	let readings = vec![reading(&format!("a new local of {function}"), &format!("let {name} = …")).replacing(format!("{name} ="), format!("let {name} =")), main_level];
 	ask(&Ask::new(LOCAL_OR_GLOBAL, question, readings, Fallback::Warning).written(&format!("{name} = …")).at_node(assignment))
+}
+
+/// `global n=0` where main assigns n: the fix that makes every `n = …` change main's n; none without such an assignment
+fn global_at_main(meaning: &str, name: &str, main_assignment: Option<&Node>) -> Option<crate::fixits::Fix> {
+	let (line, column) = main_assignment.and_then(crate::diagnostic::position)?;
+	Some(crate::fixits::fix(meaning, format!("{name} ="), format!("global {name} =")).at(line, column))
 }
 
 /// `let n = …`, `var n = …`, `const n = …` in `body`: n is explicitly the function's own
