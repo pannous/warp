@@ -240,7 +240,8 @@ pub struct WasmGcEmitter {
 	error_catching: Option<try_guard::ErrorCatching>, // the tag and globals of that `try`
 	abort_catching: Option<try_guard::AbortCatching>, // the tag of aborting effect handlers
 	memo_caches: HashMap<i64, (u32, u32)>, // per memoized function id: the globals of its values and known flags (memoization.rs)
-	extra_global_names: Vec<(u32, &'static str)>,
+	extra_global_names: Vec<(u32, String)>,
+	number_constants: HashMap<(num_bigint::BigInt, num_bigint::BigInt), u32>, // a big or fractional literal's global, made on first use (exact.rs)
 
 	// Configuration
 	config: EmitterConfig,
@@ -334,6 +335,7 @@ impl WasmGcEmitter {
 			abort_catching: None,
 			memo_caches: HashMap::new(),
 			extra_global_names: Vec::new(),
+			number_constants: HashMap::new(),
 			config: EmitterConfig::default(),
 			type_manager: TypeManager::new(),
 			import_manager: ImportManager::new(),
@@ -1461,7 +1463,7 @@ impl WasmGcEmitter {
 				"kind_key", "kind_block", "kind_list", "kind_data", "kind_meta", "kind_error"];
 			let mut globals: Vec<(u32, &str)> = KIND_GLOBALS.iter().enumerate()
 				.filter(|(idx, _)| (*idx as u32) < self.ctx.kind_global_indices.len() as u32).map(|(idx, name)| (idx as u32, *name)).collect();
-			globals.extend(self.extra_global_names.iter().copied());
+			globals.extend(self.extra_global_names.iter().map(|(index, name)| (*index, name.as_str())));
 			self.names.globals(&name_map(&mut globals));
 		}
 

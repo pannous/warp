@@ -202,6 +202,14 @@ impl WasmGcEmitter {
 		if self.emit_shadowed_counting(func, fn_name, argument) {
 			return true;
 		}
+		// floor of an exact number as its i64, without the Int node list_emitter builds for it as a value
+		if fn_name == "floor" && !self.ctx.ffi_imports.contains_key(fn_name) && self.get_type(argument) == Kind::Int {
+			self.emit_numeric_value(func, argument);
+			if self.int_runtime() {
+				self.emit_call(func, "exact_floor");
+			}
+			return true;
+		}
 		let integer_builtin = ROUNDING_FUNCTIONS.contains(&fn_name.as_str())
 			|| fn_name == crate::min_max::EMPTY_EXTREMUM_CALL
 			|| fn_name == crate::switch::NO_CASE_CALL
@@ -441,7 +449,7 @@ impl WasmGcEmitter {
 }
 
 /// `int`, `Int`, `integer`: the type `x as int` converts to; `as i64` wraps (casts.rs WRAPPING_INT_WORDS)
-fn is_int_type_word(target: &Node) -> bool {
+pub(super) fn is_int_type_word(target: &Node) -> bool {
 	let word = target.drop_meta().name().to_lowercase();
 	crate::type_tests::canonical_spec_word(&word) == "int" && !super::casts::WRAPPING_INT_WORDS.contains(&word.as_str())
 }
