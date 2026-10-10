@@ -16,7 +16,7 @@ play note("F#4") for 250ms      // note(name) needs `use sound` when called alon
 
 - The samples are made in warp (22050 Hz, 16-bit mono, 5 ms fade at both ends) and cross to the host word
   `sound_samples(samples, count, rate)` as whole numbers ≥ 0 (amplitude + 32768), read in one call by list_to_ints.
-- Natively (src/sound.rs) a WAV in `$TMPDIR/warp-sound/` played by afplay/paplay/aplay to its end; under tests, CI and
+- Natively (src/sound.rs) a WAV in `$TMPDIR/warp-sound/` (sound-<pid>.wav, sound-<pid>-2.wav …: one name per process, deleted once played; card sound-wavs) played by afplay/paplay/aplay to its end; under tests, CI and
   WARP_NO_WINDOW only the file and a `sound 0.50 s: <path>` line on stderr: tests stay silent.
 - Browser: the worker posts `{type: "sound"}`, the page (playground.js playSound) plays it with WebAudio, queued one
   after another; a new run silences what still plays (typing reruns the code). A browser starts audio only after a
