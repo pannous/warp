@@ -89,13 +89,10 @@ pub(super) const LIST_COPY_SUFFIX: &str = "·list";
 
 pub(super) fn parameter_symbol(parameter: &Node) -> Option<String> {
 	match parameter.drop_meta() {
-		Node::Symbol(name) => Some(name.clone()),
-		Node::Key(name, Op::Colon, _) => match name.drop_meta() {
-			Node::Symbol(name) => Some(name.clone()),
-			_ => None,
-		},
-		_ => None,
+		Node::Key(name, Op::Colon, _) => name.symbol_name(),
+		other => other.symbol_name(),
 	}
+	.map(String::from)
 }
 
 /// Does the body index (`xs#i`) or count (`#xs`) the variable in a loop, not by a text key: once is cheaper as a walk
@@ -108,7 +105,7 @@ pub(super) fn indexes(body: &Node, name: &str) -> bool {
 	loops.into_iter().for_each(|body| body.visit(&mut |part| {
 		let Node::Key(list, Op::Hash, index) = part else { return };
 		let counted = if matches!(list.drop_meta(), Node::Empty) { index } else { list };
-		found |= !looks_up_a_key(index, &key_variables) && matches!(counted.drop_meta(), Node::Symbol(symbol) if symbol == name);
+		found |= !looks_up_a_key(index, &key_variables) && counted.is_symbol(name);
 	}));
 	found
 }
@@ -145,7 +142,7 @@ pub(super) fn assigned_from_call_in_loop(body: &Node, name: &str) -> bool {
 	body.visit(&mut |part| if let Node::Key(_, Op::While | Op::Do, _) = part {
 		part.visit(&mut |inner| if let Node::Key(target, Op::Assign, value) = inner {
 			let is_call = matches!(value.drop_meta(), Node::List(items, Bracket::Round, Separator::None) if matches!(items.first().map(Node::drop_meta), Some(Node::Symbol(_))));
-			found |= is_call && matches!(target.drop_meta(), Node::Symbol(target) if target == name);
+			found |= is_call && target.is_symbol(name);
 		});
 	});
 	found
@@ -154,7 +151,7 @@ pub(super) fn assigned_from_call_in_loop(body: &Node, name: &str) -> bool {
 /// Does the body set an entry of the map parameter (`m[k] = v`) or look one up in a loop, by a text key. A map is a
 /// reference (P200b): a set entry must reach the caller's map, so a table copy only when every call passes a new one
 pub(super) fn keys(body: &Node, name: &str, fresh: bool) -> bool {
-	let is_name = |part: &Node| matches!(part.drop_meta(), Node::Symbol(symbol) if symbol == name);
+	let is_name = |part: &Node| part.is_symbol(name);
 	let key_variables = key_variables(body);
 	let by_key = |index: &Node| looks_up_a_key(index, &key_variables);
 	let (mut looked_up, mut set) = (false, false);
@@ -173,7 +170,7 @@ pub(super) fn keys(body: &Node, name: &str, fresh: bool) -> bool {
 /// `field_with(m, "k", v)` of the variable m with a text key: the lowered `m["k"] = v`
 pub(super) fn field_update(value: &Node, name: &str) -> bool {
 	matches!(value.drop_meta(), Node::List(items, _, _) if matches!(items.as_slice(), [word, map, key, _]
-		if word.name() == crate::library_words::FIELD_WITH && matches!(map.drop_meta(), Node::Symbol(map) if map == name) && is_text(key)))
+		if word.name() == crate::library_words::FIELD_WITH && map.is_symbol(name) && is_text(key)))
 }
 
 /// An index by a text key: `m["k"]`, `m["k\(i)"]` (arriving as `"k" + text_form(i)`), not a position
@@ -193,7 +190,7 @@ pub(super) fn is_text(node: &Node) -> bool {
 pub(super) fn assigns(body: &Node, name: &str) -> bool {
 	let mut found = false;
 	body.visit(&mut |part| if let Node::Key(target, op, value) = part {
-		let is_variable = matches!(target.drop_meta(), Node::Symbol(symbol) if symbol == name);
+		let is_variable = target.is_symbol(name);
 		found |= is_variable && (op.is_compound_assign() || (*op == Op::Assign && !field_update(value, name)));
 	});
 	found
@@ -240,7 +237,7 @@ pub(super) fn text_variables(program: &Node) -> HashSet<String> {
 		let Node::Symbol(name) = target.drop_meta() else { return };
 		let is_text = match value.drop_meta() {
 			Node::Text(_) | Node::Char(_) => true,
-			Node::Key(left, _, _) => matches!(left.drop_meta(), Node::Symbol(updated) if updated == name),
+			Node::Key(left, _, _) => left.is_symbol(name),
 			_ => false,
 		};
 		*texts.entry(name.clone()).or_insert(true) &= is_text;
@@ -425,7 +422,7 @@ fn postfix_list_declaration(items: &[Node], bracket: &Bracket, separator: &Separ
 	let typed_name = |name: &Node| Node::Key(Box::new(name.clone()), Op::Colon, Box::new(Node::Symbol(format!("{LIST_OF_PREFIX}{element}"))));
 	let declared = match list.drop_meta() {
 		Node::Symbol(word) if word == LIST_WORD => typed_name(name),
-		Node::Key(word, op @ (Op::Assign | Op::Define), value) if is_word(word, LIST_WORD) => Node::Key(Box::new(typed_name(name)), *op, value.clone()),
+		Node::Key(word, op @ (Op::Assign | Op::Define), value) if word.is_symbol(LIST_WORD) => Node::Key(Box::new(typed_name(name)), *op, value.clone()),
 		_ => return None,
 	};
 	Some(match rest {
@@ -440,7 +437,7 @@ pub(crate) fn of_type_declaration(items: &[Node], bracket: &Bracket, separator: 
 	let [declaration, of, ..] = items else { return None };
 	let Node::Key(name, Op::Colon, head) = declaration.drop_meta() else { return None };
 	let Node::Symbol(mut type_name) = head.drop_meta().clone() else { return None };
-	if !is_word(of, "of") {
+	if !of.is_symbol("of") {
 		return None;
 	}
 	let mut next = 2;
@@ -458,7 +455,7 @@ pub(crate) fn of_type_declaration(items: &[Node], bracket: &Bracket, separator: 
 			_ => return None,
 		}
 		match items.get(next) {
-			Some(of) if is_word(of, "of") => next += 1,
+			Some(of) if of.is_symbol("of") => next += 1,
 			_ => break,
 		}
 	}
@@ -550,7 +547,7 @@ pub(super) fn popped_list(list: &Node, call: &Node) -> Option<Node> {
 		return None;
 	}
 	match call.drop_meta() {
-		Node::List(items, _, _) if matches!(items.as_slice(), [method] if is_word(method, POP_METHOD)) => {
+		Node::List(items, _, _) if matches!(items.as_slice(), [method] if method.is_symbol(POP_METHOD)) => {
 			let template = crate::warp_parser::parse(&format!(
 				"({POP_TEMPORARY} = {POP_PLACE}#count({POP_PLACE}); {POP_PLACE} = {LIST_DROP_LAST}({POP_PLACE}); {POP_TEMPORARY})"));
 			Some(crate::law::substitute(&template, &std::collections::HashMap::from([(POP_PLACE.to_string(), list.clone())])))
@@ -565,7 +562,7 @@ pub(super) fn removed_key(map: &Node, call: &Node) -> Option<Node> {
 	let Node::Symbol(name) = map.drop_meta() else { return None };
 	let Node::List(items, _, _) = call.drop_meta() else { return None };
 	let [method, key] = items.as_slice() else { return None };
-	if !is_word(method, REMOVE_METHOD) {
+	if !method.is_symbol(REMOVE_METHOD) {
 		return None;
 	}
 	let call = |word: &str, arguments: Vec<Node>| Node::List([vec![Node::Symbol(word.to_string())], arguments].concat(), Bracket::Round, Separator::None);
@@ -587,11 +584,11 @@ pub(super) fn inserted_element(list: &Node, call: &Node) -> Option<Inserted> {
 	}
 	let Node::List(items, _, _) = call.drop_meta() else { return None };
 	let [method, first, second] = items.as_slice() else { return None };
-	if !is_word(method, INSERT_METHOD) {
+	if !method.is_symbol(INSERT_METHOD) {
 		return None;
 	}
 	let position_of = |node: &Node| match node.drop_meta() {
-		Node::Key(word, Op::Colon, position) if is_word(word, AT_WORD) => Some(position.as_ref().clone()),
+		Node::Key(word, Op::Colon, position) if word.is_symbol(AT_WORD) => Some(position.as_ref().clone()),
 		_ => None,
 	};
 	Some(match (position_of(first), position_of(second)) {
@@ -670,7 +667,7 @@ pub(super) const LIST_TIMES_TOPIC: &str = "list-times";
 pub(super) fn list_times(key: &Node, positioned: &Node) -> Option<Node> {
 	let Node::Key(left, Op::Mul, right) = key.drop_meta() else { return None };
 	// `[2 2] .* [2 4]`: the dotted operator said element-wise, broadcasting pairs the two lists
-	let is_each_element = |side: &Node| matches!(side.drop_meta(), Node::Symbol(name) if name == EACH_ELEMENT);
+	let is_each_element = |side: &Node| side.is_symbol(EACH_ELEMENT);
 	if is_each_element(left) || is_each_element(right) {
 		return None;
 	}
@@ -799,10 +796,7 @@ pub(super) fn bracketed_list_type(type_node: &Node) -> Option<Node> {
 fn bracketed_element(type_node: &Node) -> Option<&str> {
 	let Node::List(items, Bracket::Square, _) = type_node.drop_meta() else { return None };
 	match items.as_slice() {
-		[element] => match element.drop_meta() {
-			Node::Symbol(word) => Some(word),
-			_ => None,
-		},
+		[element] => element.symbol_name(),
 		_ => None,
 	}
 }

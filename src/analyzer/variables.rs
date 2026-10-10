@@ -193,7 +193,7 @@ pub(super) fn collect_variables_inner(node: &Node, scope: &mut Scope, skip_first
 			items.iter().map(|item| collect_variables_inner(item, scope, false, false)).sum()
 		}
 		// `ran_without_abort(i, {…})` keeps the try depth of its start in a temp local (try_guard.rs)
-		Node::List(items, Bracket::Round, Separator::None) if items.first().is_some_and(|head| matches!(head.drop_meta(), Node::Symbol(name) if name == crate::wasm_emitter::RAN_WITHOUT_ABORT)) => {
+		Node::List(items, Bracket::Round, Separator::None) if items.first().is_some_and(|head| head.is_symbol(crate::wasm_emitter::RAN_WITHOUT_ABORT)) => {
 			1 + items.iter().map(|item| collect_variables_inner(item, scope, false, in_structure)).sum::<u32>()
 		}
 		Node::List(items, _, _) => {
@@ -206,7 +206,7 @@ pub(super) fn collect_variables_inner(node: &Node, scope: &mut Scope, skip_first
 /// `xs = []; xs.push(5)`, lowered to `xs = xs + [5]`: the empty list takes the type of its first appended elements
 pub(super) fn type_list_by_first_append(name: &str, value: &Node, scope: &mut Scope) {
 	let Node::Key(list, Op::Add, appended) = value.drop_meta() else { return };
-	let appends_to_itself = matches!(list.drop_meta(), Node::Symbol(target) if target == name);
+	let appends_to_itself = list.is_symbol(name);
 	if !appends_to_itself || !matches!(appended.drop_meta(), Node::List(_, Bracket::Square, _)) {
 		return;
 	}
@@ -617,7 +617,7 @@ pub(super) fn main_assignment<'a>(program: &'a Node, name: &str) -> Option<&'a N
 		Node::List(items, _, _) => items.as_slice(),
 		_ => std::slice::from_ref(program),
 	};
-	statements.iter().find(|statement| matches!(statement.drop_meta(), Node::Key(target, Op::Assign, _) if matches!(target.drop_meta(), Node::Symbol(assigned) if assigned == name)))
+	statements.iter().find(|statement| matches!(statement.drop_meta(), Node::Key(target, Op::Assign, _) if target.is_symbol(name)))
 }
 
 /// `n = …` inside f where main has an n: a new local of f (the default, as in Python) or main's n? The fix of main's n
@@ -701,7 +701,7 @@ pub(crate) fn starts_with_fresh_binding(body: &Node, name: &str) -> bool {
 			return;
 		}
 		match node {
-			Node::Key(target, Op::Assign, value) if matches!(target.drop_meta(), Node::Symbol(target) if target == name) => {
+			Node::Key(target, Op::Assign, value) if target.is_symbol(name) => {
 				let mut reads = false;
 				value.visit(&mut |part| reads |= matches!(part, Node::Symbol(symbol) if symbol == name));
 				first_mention = Some(!reads);

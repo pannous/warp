@@ -173,7 +173,7 @@ const AMBIGUOUS_END: &str = "ambiguous `end`: it closes either the `then` or the
 const UNINDEXABLE_KEYWORDS: [&str; 6] = ["in", "return", "yield", "then", "else", "do"];
 
 fn is_print_word(node: &Node) -> bool {
-	matches!(node.drop_meta(), Symbol(word) if word == PRINT_WORD)
+	node.is_symbol(PRINT_WORD)
 }
 
 /// `print` or the call `print(…)`: a print statement starts here
@@ -600,7 +600,7 @@ fn split_trailing_block(header: &Node, empty_is_block: bool) -> Option<(Node, No
 			_ => None,
 		},
 		// `if x in xs {…}`: the block after the collection is the body
-		Node::List(items, bracket, separator) if items.len() == 3 && matches!(items[1].drop_meta(), Node::Symbol(word) if word == IN_KEYWORD) => {
+		Node::List(items, bracket, separator) if items.len() == 3 && items[1].is_symbol(IN_KEYWORD) => {
 			split_trailing_block(&items[2], empty_is_block)
 				.map(|(collection, block)| (Node::List(vec![items[0].clone(), items[1].clone(), collection], bracket.clone(), separator.clone()), block))
 		}

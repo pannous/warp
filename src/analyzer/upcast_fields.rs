@@ -71,10 +71,7 @@ fn annotated(target: &Node, classes: &Classes) -> Option<(String, String)> {
 }
 
 fn symbol_name(node: &Node) -> Option<String> {
-	match node.drop_meta() {
-		Node::Symbol(name) => Some(name.clone()),
-		_ => None,
-	}
+	node.symbol_name().map(String::from)
 }
 
 fn is_class(node: &Node, classes: &Classes) -> bool {

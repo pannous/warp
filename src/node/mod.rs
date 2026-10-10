@@ -257,6 +257,19 @@ impl Node {
 		}
 	}
 
+	/// The name of a symbol, through its metadata
+	pub fn symbol_name(&self) -> Option<&str> {
+		match self.drop_meta() {
+			Symbol(name) => Some(name),
+			_ => None,
+		}
+	}
+
+	/// Whether this is the symbol `word`, through its metadata
+	pub fn is_symbol(&self, word: &str) -> bool {
+		self.symbol_name() == Some(word)
+	}
+
 	pub fn name(&self) -> String {
 		match self {
 			Symbol(name) | Text(name) => name.clone(),

@@ -1508,7 +1508,7 @@ fn statements(block: Node) -> Vec<Node> {
 
 /// A Ruby class body without the `end` lines of its methods (their bodies are read by indentation)
 fn without_end_lines(body: Node) -> Node {
-	let is_end = |item: &Node| matches!(item.drop_meta(), Node::Symbol(word) if word == END_KEYWORD);
+	let is_end = |item: &Node| item.is_symbol(END_KEYWORD);
 	match body {
 		Node::List(items, bracket, separator) => Node::List(items.into_iter().filter(|item| !is_end(item)).map(without_end_lines).collect(), bracket, separator),
 		Node::Key(left, op, right) => Node::Key(Box::new(without_end_lines(*left)), op, Box::new(without_end_lines(*right))),
