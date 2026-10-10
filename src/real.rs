@@ -702,7 +702,7 @@ fn compare(left: Value, op: Op, right: Value) -> Evaluated {
 impl Value {
 	fn into_node(self) -> Node {
 		match self {
-			Value::Bool(truth) => Node::Number(Number::Int(truth as i64)), // eval encodes booleans as Int 1/0
+			Value::Bool(truth) => if truth { Node::True } else { Node::False },
 			Value::Float(f) => Node::Number(Number::Float(f)),
 			Value::Real(Real::Exact(exact)) => match exact.as_rational() {
 				Some(q) if q.is_integer() => Node::Number(Number::from_bigint(q.numerator)),
