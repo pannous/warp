@@ -97,7 +97,14 @@ keeping its fields with id 0; the lazy `people·remove` drops bo from the loaded
   empty (serve.rs answers_a_list, database_tables::is_filter_query).
 - A class method reads and filters tables as a function does: with_lazy_reads and lower_where enter class bodies (a
   `Node::Type` is no child of map_children), only method bodies, and a field named like a table stays the field.
-- Not yet: comprehensions over a table (they load it), the IN (…) batching. An empty list must be `parse("[]")` (ø): a built `[]` List node with Space
+- A filtered comprehension over a table, `[p.name for p in people if p.age > 20]`, is the table's query
+  (comprehensions.rs comprehension_over_table: `[p.name for p in people where it.age > 20]`; test
+  a_filtered_comprehension_over_a_table_reads_only_its_rows). Without `if` it walks the loaded table.
+- `name of people with age > 20` (user, 2026-10-10) says the same in words: `field of list` is the field of each element
+  of a list of a class's instances (comprehensions.rs field_of_elements, `[of·element.name for of·element in …]`), and
+  `with` after such a list is `where` (with_as_where); on a table the filter stays its query
+  (tests/control/test_field_of_elements.rs). `name of people#1` stays the field of one instance.
+- Not yet: the IN (…) batching. An empty list must be `parse("[]")` (ø): a built `[]` List node with Space
   separator types `xs += [x]` as int + list.
 
 ## Writes and transactions
