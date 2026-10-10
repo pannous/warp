@@ -6,7 +6,7 @@
 //! condition, also without `if`.
 
 use super::nodes::key;
-use crate::analyzer::{counting_function, extract_user_functions};
+use crate::analyzer::counting_function;
 use crate::context::Context;
 use crate::node::{Bracket, Node, Separator};
 use crate::operators::Op;
@@ -43,8 +43,7 @@ pub fn is_pipe_stage(node: &Node) -> bool {
 }
 
 pub fn lower(node: Node) -> Node {
-	let mut context = Context::new();
-	extract_user_functions(&mut context, &node);
+	let context = crate::analyzer::function_context(&node);
 	let mut variables = HashSet::new();
 	let mut spaced_functions = HashSet::new();
 	node.visit(&mut |part| match part {
