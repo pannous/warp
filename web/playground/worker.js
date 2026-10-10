@@ -18,6 +18,15 @@ const SLOW_START_MS = Number(new URL(self.location.href).searchParams.get("slow_
 self.BLOCK_COMPILER_URL = COMPILER_URL; // run_block compiles with the same compiler (host.js blockCompiler)
 
 let compiler; // the compiler instance's exports
+let webEvaluate; // its web_evaluate, an async function where JSPI is (host-compiler.js awaitedEntry)
+// the messages use the compiler one after another: an evaluation whose program waits for a promise (host.js JSPI) holds
+// the compiler's memory until it ends
+let compilerTurn = Promise.resolve();
+function inTurn(work) {
+	const done = compilerTurn.then(work);
+	compilerTurn = done.catch(() => {});
+	return done;
+}
 let live; // the run whose page events are handled (host.js runProgram), until the next run
 const PAGE_VALUE = "page·value";
 const PAGE_HOLE = "page·hole";
@@ -82,8 +91,9 @@ async function loadCompiler() {
 	if (!response.ok) throw new Error(`${COMPILER_URL}: HTTP ${response.status}; build it with web/playground/build.sh`);
 	const bytes = await downloaded(response);
 	post({ type: "compiling" });
-	const { instance } = await WebAssembly.instantiate(bytes, { warp_host: warpHost(() => compiler.memory, hooks) });
+	const { instance } = await WebAssembly.instantiate(bytes, { warp_host: warpHost(() => compiler.memory, hooks, true) });
 	compiler = instance.exports;
+	webEvaluate = awaitedEntry(compiler.web_evaluate);
 }
 
 function passText(text) {
@@ -93,12 +103,13 @@ function passText(text) {
 	return [pointer, bytes.length];
 }
 
-function evaluate(code, acknowledged) {
+// a program's main may wait for a promise (host.js JSPI): the compiler waits with it
+async function evaluate(code, acknowledged) {
 	panicMessage = undefined;
 	const codeText = passText(code);
 	const acknowledgedText = passText(JSON.stringify(acknowledged));
 	try {
-		const length = compiler.web_evaluate(...codeText, ...acknowledgedText);
+		const length = await webEvaluate(...codeText, ...acknowledgedText);
 		const report = JSON.parse(compilerText(compiler.web_report(), length));
 		compiler.web_free(...codeText);
 		compiler.web_free(...acknowledgedText);
@@ -110,11 +121,11 @@ function evaluate(code, acknowledged) {
 }
 
 // not over a live run (its listeners and timers stay), nor without a compiler (after a crash: the next run loads it)
-function warmUp() {
+async function warmUp() {
 	if (live || !compiler) return;
 	warming = true;
 	try {
-		evaluate(WARM_UP_CODE, {});
+		await evaluate(WARM_UP_CODE, {});
 	} finally {
 		warming = false;
 	}
@@ -246,6 +257,10 @@ self.onmessage = async ({ data }) => {
 	await ready;
 	stage("loading the database");
 	await globalThis.loadDatabase?.(); // host-files.js: `database[k]`'s values, once
+	return inTurn(() => handleMessage(data));
+};
+
+async function handleMessage(data) {
 	if (data.warm) return warmUp();
 	if (data.event) return handleEvent(data);
 	if (data.navigate) return handleNavigation(data.navigate);
@@ -264,6 +279,6 @@ self.onmessage = async ({ data }) => {
 	await taskPoolReady(); // host.js: tasks run on loaded Workers, not inline
 	stage(`evaluating run ${data.id}`);
 	const started = performance.now();
-	const report = evaluate(data.code, data.acknowledged ?? {});
+	const report = await evaluate(data.code, data.acknowledged ?? {});
 	post({ type: "report", id: data.id, report, milliseconds: performance.now() - started });
-};
+}

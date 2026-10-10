@@ -38,6 +38,9 @@ function compilerFromUrl(hooks) {
 	return exports;
 }
 
+// a compiler entry point whose runs may wait for promises (warpHost `awaited`), as an async function where JSPI is
+const awaitedEntry = entry => JSPI ? WebAssembly.promising(entry) : entry;
+
 // the report of src/web.rs eval_block_report: {result: tree} or {error: message}
 function evalBlock(hooks, request) {
 	const compiler = blockCompiler(hooks);
@@ -56,17 +59,22 @@ function evalBlock(hooks, request) {
 	return report;
 }
 
-// the `warp_host` imports of a compiler instance; `memory()` is its memory (known only after instantiation)
-function warpHost(memory, hooks) {
+// the `warp_host` imports of a compiler instance; `memory()` is its memory (known only after instantiation).
+// `awaited`: the instance's entry points are called through WebAssembly.promising (host.js JSPI, awaitedEntry), so a run
+// may wait for its program's promises, the compiler suspended meanwhile
+function warpHost(memory, hooks, awaited = false) {
 	let pendingOutcome; // the JSON a run left for warp_host.take
 	let pendingFetched; // the text a fetch left for warp_host.take_fetched
-	return {
-		run: (pointer, length) => {
-			const bytes = new Uint8Array(memory().buffer, pointer, length).slice();
-			hooks.module?.(bytes);
-			pendingOutcome = utf8.encode(JSON.stringify(runProgram(bytes, hooks)));
+	const run = (pointer, length) => {
+		const bytes = new Uint8Array(memory().buffer, pointer, length).slice();
+		hooks.module?.(bytes);
+		return whenSettled(runProgram(bytes, hooks, awaited), outcome => {
+			pendingOutcome = utf8.encode(JSON.stringify(outcome));
 			return pendingOutcome.length;
-		},
+		});
+	};
+	return {
+		run: awaited && JSPI ? new WebAssembly.Suspending(run) : run,
 		take: into => new Uint8Array(memory().buffer, into, pendingOutcome.length).set(pendingOutcome),
 		page_event: (eventPointer, eventLength, detailPointer, detailLength) => {
 			const text = (pointer, length) => utf8Decoder.decode(new Uint8Array(memory().buffer, pointer, length));

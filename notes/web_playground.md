@@ -256,6 +256,16 @@ the_strict_flag_turns_warnings_into_errors before).
   names. Still jco's own: the enum check's message ("\"triangle\" is not one of the cases of shape"), and a variant
   argument (an object) is not converted.
   tests/ffi/test_components_anywhere.rs runs in both hosts.
+- A promise (card jspi-page): where the browser has JSPI (WebAssembly.Suspending/promising: Chrome 137+; not
+  Safari) the chain of a playground run is awaited end to end: worker.js calls web_evaluate through `awaitedEntry`
+  (promising), warp_host.run (host-compiler.js warpHost `awaited`) is Suspending and runs main through promising, and
+  foreign_call goes through a 169-byte wasm trampoline (host-foreign.js awaitingCall) that calls the Suspending
+  host.await only when the call gave a promise while main runs (`holder.waiting`): V8 suspends wasm frames only, and a
+  Suspending import suspends even for a plain value, trapping outside promising (probes/jspi_semantics.mjs). The test worker does the
+  same for `_start` and tells the tests WARP_JSPI. Elsewhere the promise is refused ("gives a promise"): without JSPI,
+  in a site/cloud worker run (instantiateProgram without `awaited`), in a page event's handler (after main), and in a
+  warp function JavaScript calls back (V8 refuses to suspend over a JavaScript frame: outcomeOf maps that trap to
+  "cannot wait for"). worker.js handles messages one at a time (`inTurn`) since a waiting run holds the compiler.
 
 ## paint: a canvas in the page (2026-10-06, issue #15)
 `paint(pixels, width, height)` is a host word (src/host.rs PAINT): host.js reads the pixel list and hands it to the
