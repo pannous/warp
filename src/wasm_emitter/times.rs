@@ -249,7 +249,9 @@ impl WasmGcEmitter {
 
 	/// Two times in node_order, whose locals `kinds` hold their kinds: the earlier one first; only the same form compares
 	pub(super) fn emit_time_order(&mut self, func: &mut Function, kinds: [u32; 2], first: u32, second: u32) {
-		if !self.should_emit_function(TIME_FIELD) {
+		// required, not merely emitted: emit_all_functions builds node_order without times, its refusal would mark the
+		// text constructors used (test_function_usage_tracking)
+		if !self.ctx.required_functions.contains(TIME_FIELD) {
 			return;
 		}
 		for kind in kinds {
