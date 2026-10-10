@@ -197,7 +197,7 @@ fn with_needed_definitions(program: Node, definitions: Vec<Node>) -> Node {
 	let mut needed: Vec<Node> = vec![];
 	let mut mentioned = called_names(std::slice::from_ref(&program));
 	loop {
-		let now_needed: Vec<Node> = definitions.iter().filter(|definition| declared_name(definition).is_some_and(|name| mentioned.contains(&name))).cloned().collect();
+		let now_needed: Vec<Node> = definitions.iter().filter(|definition| declared_name(definition).is_some_and(|name| is_needed(&name, &mentioned))).cloned().collect();
 		if now_needed.len() == needed.len() {
 			break;
 		}
@@ -214,6 +214,10 @@ fn with_needed_definitions(program: Node, definitions: Vec<Node>) -> Node {
 	Node::List([needed, statements].concat(), Bracket::None, separator)
 }
 
+/// A mentioned name, or the companion f_as of a mentioned f: overloads lowering calls it where f gives an expected type
+fn is_needed(name: &str, mentioned: &HashSet<String>) -> bool {
+	mentioned.contains(name) || crate::lowering::overloads::companion_of(name).is_some_and(|function| mentioned.contains(function))
+}
 
 /// The names the statements mention or call, as methods too (`"hé".to_utf8()`), in interpolations too, with the library
 /// words they spell
