@@ -98,6 +98,7 @@ fn node_to_i32(node: &Node) -> i32 {
 #[cfg(not(test))]
 fn main() {
     let mut args: Vec<String> = env::args().collect();
+    end_quietly_on_closed_pipe();
     warp::crash_card::install();
     warp::paint::allow_windows();
     apply_flags(&mut args);
@@ -109,6 +110,21 @@ fn main() {
         None => run_command(&args),
     }
 }
+
+/// A reader that closed the pipe (`warp run x.warp | head -1`) ends warp by SIGPIPE, as it ends cat: Rust ignores the
+/// signal, so println! panicked on the broken pipe and filed a crash card (cards crash-show, crashes-broken)
+#[cfg(all(unix, not(test)))]
+fn end_quietly_on_closed_pipe() {
+    const SIGPIPE: i32 = 13; // the same on macOS and Linux
+    const DEFAULT_ACTION: usize = 0; // SIG_DFL
+    unsafe extern "C" {
+        fn signal(signal: i32, handler: usize) -> usize;
+    }
+    unsafe { signal(SIGPIPE, DEFAULT_ACTION) };
+}
+
+#[cfg(all(not(unix), not(test)))]
+fn end_quietly_on_closed_pipe() {}
 
 /// `--fuel <steps>`, `--strict`, `--no-ask`, `--no-hints` take effect and leave the arguments; the answers file is read
 #[cfg(not(test))]

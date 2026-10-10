@@ -60,3 +60,5 @@ mod test_plain_hint_got_it; // card hints-dismissed
 #[cfg(feature = "native")] // wasmtime's fuel: the browser runs without it, stopped by a timer (playground.js RUN_TIMEOUT_MS)
 mod test_fuel_default; // card fuel-default
 mod test_cli_error_exit; // card cli-error-exit
+#[cfg(all(feature = "native", unix))] // runs the warp binary
+mod test_closed_pipe; // cards crash-show, show-crashes, crashes-broken
