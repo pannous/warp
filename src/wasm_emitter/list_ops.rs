@@ -663,6 +663,15 @@ impl WasmGcEmitter {
 			Self::emit_list(f, &[I::I64Const('0' as i64), I::I64Sub, I::LocalTee(value), I::I64Const(9), I::I64GtU]);
 			s.emit_fail_if(f, "invalid_number");
 			Self::emit_list(f, &[I::LocalGet(value), I::Return, I::End]);
+			// a float truncates toward zero (`(x*x) as int` of a float parameter held as a Node)
+			let (node_type, float_box) = (s.type_manager.node_type, s.type_manager.f64_box_type);
+			s.emit_field(f, 0, 0);
+			Self::emit_list(f, &[I::I64Const(KIND_MASK), I::I64And, I::I64Const(Kind::Float as i64), I::I64Eq, I::If(BlockType::Empty), I::LocalGet(0)]);
+			Self::emit_list(f, &[I::StructGet { struct_type_index: node_type, field_index: 1 }, I::RefCastNonNull(HeapType::Concrete(float_box))]);
+			f.instruction(&I::StructGet { struct_type_index: float_box, field_index: 0 });
+			// a checked truncation: wasm-split and wasm-opt reject the saturating one without nontrapping-float-to-int
+			s.emit_truncating_cast_via(f, value);
+			Self::emit_list(f, &[I::Return, I::End]);
 			s.emit_field(f, 0, 0);
 			Self::emit_list(f, &[I::I64Const(KIND_MASK), I::I64And, I::I64Const(Kind::Text as i64), I::I64Ne, I::If(BlockType::Empty), I::LocalGet(0)]);
 			s.call(f, "get_int_value");
@@ -750,6 +759,12 @@ impl WasmGcEmitter {
 				let (kind, power) = (2, 3);
 				// node_add of two lists (ø is the empty list): their concatenation, `out = out + row`
 				if name == NODE_ADD {
+					// an Error operand is the sum, as text_concat gives it: errors propagate, and are never joined into a
+					// text as their message (`out += tag(x)` of an error, card error-value-kind)
+					for side in 0..2 {
+						s.emit_field(f, side, 0);
+						Self::emit_list(f, &[I::I64Const(KIND_MASK), I::I64And, I::I64Const(Kind::Error as i64), I::I64Eq, I::If(BlockType::Empty), I::LocalGet(side), I::Return, I::End]);
+					}
 					let is_list = |f: &mut Function, operand: u32| {
 						s.emit_field(f, operand, 0);
 						Self::emit_list(f, &[
@@ -1030,8 +1045,8 @@ impl WasmGcEmitter {
 		}
 		let fixnum_offset = super::big_int::FIXNUM_OFFSET;
 		Self::emit_list(func, &[I::LocalGet(local), I::I64Const(fixnum_offset), I::I64Add, I::I64Const(0), I::I64LtS, I::If(BlockType::Empty)]);
-		self.emit_heap_get(func, local);
-		func.instruction(&I::RefTestNullable(HeapType::Concrete(self.type_manager.ratio_type)));
+		func.instruction(&I::LocalGet(local));
+		self.call(func, "is_ratio");
 		self.emit_fail_if(func, error);
 		func.instruction(&I::End);
 	}
@@ -1117,9 +1132,11 @@ impl WasmGcEmitter {
 
 	/// Walk list local 0 to the element at 1-based index local 1 into `current`; trap when out of range, naming the index
 	/// asked for (local `current + 1`) and the list's range
-	fn emit_list_walk(&self, func: &mut Function, current: u32) {
+	fn emit_list_walk(&mut self, func: &mut Function, current: u32) {
 		let asked = current + 1;
 		Self::emit_list(func, &[I::LocalGet(1), I::LocalSet(asked)]);
+		// a stored error indexed (`r = error("x"); r#1`) raises itself, as any operation on it does
+		self.emit_fail_if_error(func, 0);
 		// a number, a character or a text held where a list is indexed (`x=3; x#1`, a parameter): not_a_list, not a cast trap
 		for scalar in [Kind::Int, Kind::Float, Kind::Codepoint, Kind::Text, Kind::Symbol] {
 			self.emit_field(func, 0, 0);
@@ -1423,6 +1440,15 @@ impl WasmGcEmitter {
 
 	pub(super) fn arithmetic_type(&self, left: &Node, op: &crate::operators::Op, right: &Node) -> Kind {
 		crate::analyzer::arithmetic_kind_of_operands(self.get_type(left), op, self.get_type(right), right)
+	}
+
+	/// Arithmetic on a value whose kind only the run time knows (`x*x` of a parameter held as a Node): maybe a float
+	pub(super) fn computes_at_run_time_kind(&self, value: &Node) -> bool {
+		match value.drop_meta() {
+			Node::Key(left, op, right) if op.is_arithmetic() => crate::analyzer::node_arithmetic(self.get_type(left), op, self.get_type(right)).is_some(),
+			Node::List(items, crate::node::Bracket::Round, _) if items.len() == 1 => self.computes_at_run_time_kind(&items[0]),
+			_ => false,
+		}
 	}
 
 	/// ø (an Empty node) in local `list` becomes null, the end of a cons list

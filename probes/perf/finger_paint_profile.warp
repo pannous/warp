@@ -1,0 +1,17 @@
+// runtime-speed profile: finger_paint's strokes without a host (no clock, no show), so the wasmtime CLI can run it:
+// warp compile --wasm finger_paint_profile.warp; wasmtime run -W gc=y,function-references=y,exceptions=y,tail-call=y
+//   --profile=guest,data/perf/paint.json --invoke main finger_paint_profile.wasm
+use draw
+brush = 8
+spacing = 3
+global turn = 0.0
+canvas(1280, 800)
+def stroke(x1, y1, x2, y2) {
+	dabs = max(cell(max(abs(x2 - x1), abs(y2 - y1)) / spacing), 1)
+	for i in 1 to dabs {
+		circle(x1 + (x2 - x1) * i / dabs, y1 + (y2 - y1) * i / dabs, brush, hsv(turn, 0.8, 0.9))
+		turn += 0.5
+	}
+}
+for k in 1 to 3000 { stroke(100.0 + k, 100.0, 200.0 + k, 150.0) }
+turn

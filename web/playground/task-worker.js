@@ -23,14 +23,15 @@ self.taskWrote = (path, content) => taskFiles.set(path, typeof content === "stri
 
 
 // the starting program waits for the shared buffer, so every task writes it, a failure of this Worker's own too
-function runTaskInto({ module, name, ints, values, shared, arrays, captured, control, channels, files }) {
+function runTaskInto({ module, name, ints, values, shared, arrays, captured, control, channels, files, voice }) {
 	Atomics.store(control, TASK_TAKEN_SLOT, 1);
 	Atomics.notify(control, TASK_TAKEN_SLOT);
 	let output = "";
 	self.takeWrittenFiles?.(files);
 	taskFiles = new Map();
+	self.joinVoice?.(voice);
 	try {
-		const hooks = { print: text => { output += text; }, panicked: text => { output += text; }, sound: (samples, rate) => relay("playSamples", samples, rate) };
+		const hooks = { print: text => { output += text; }, panicked: text => { output += text; }, sound: (samples, rate) => relay("playSamples", samples, rate, self.voicePlaced?.(samples.length / rate)) };
 		const record = runTask(module, hooks, [], name, ints, values, arrays, captured, control, channels);
 		if (typeof record.value === "bigint") record.ints = true; // a function of Ints: its Int result as a tree
 		writeShared(shared, { ...record, value: taskTree(record.value), output, files: [...taskFiles] });

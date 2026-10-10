@@ -67,6 +67,9 @@ impl WasmGcEmitter {
 				self.emit_type_error(func, message);
 			}
 			exact if exact_value && crate::type_tests::is_exact_fraction_type(exact) => self.emit_numeric_value(func, value),
+			exact if crate::type_tests::spells_decimals_exactly(exact) && decimal_literal(value).is_some() => {
+				self.emit_decimal_literal(func, decimal_literal(value).expect("guarded"))
+			}
 			// a character held unboxed is its code point
 			"codepoint" => match value.drop_meta() {
 				Node::Char(character) => {
@@ -84,8 +87,13 @@ impl WasmGcEmitter {
 			}
 			// an exact number as its truncated i64, without the Int node emit_cast_to_int builds
 			_ if exact_value && super::values::is_int_type_word(target) && !matches!(self.get_type(value), Kind::Text | Kind::Codepoint | Kind::Empty)
-				&& !self.names_unknown_word(value) => {
+				&& !self.names_unknown_word(value) && !self.computes_at_run_time_kind(value) => {
 				self.emit_int_value_truncated(func, value);
+			}
+			// a float truncated straight to the i64, without the Int node emit_cast_to_int builds
+			_ if self.get_type(value).is_float() && super::values::is_int_type_word(target) && !self.computes_at_run_time_kind(value) => {
+				self.emit_float_value(func, value);
+				self.emit_truncating_cast(func);
 			}
 			_ if crate::analyzer::builtin_type_kind(&target.name()) == Some(Kind::Int) => {
 				self.emit_cast(func, value, target);
@@ -218,6 +226,9 @@ impl WasmGcEmitter {
 			}
 			"int" => self.emit_cast_to_int(func, value, target_type),
 			exact if crate::type_tests::is_exact_fraction_type(exact) => self.emit_cast_to_exact(func, value, target_type),
+			exact if crate::type_tests::spells_decimals_exactly(exact) && decimal_literal(value).is_some() => {
+				self.emit_cast_to_exact(func, value, target_type)
+			}
 			"float" => self.emit_cast_to_float(func, value, target_type),
 			"text" => self.emit_cast_to_text(func, value),
 			"codepoint" => self.emit_cast_to_char(func, value),
@@ -256,7 +267,7 @@ impl WasmGcEmitter {
 				self.emit_call(func, "new_int");
 			}
 			// a text, or a value known only at run time (a list element), parses its digits
-			_ if matches!(self.get_type(value), Kind::Text | Kind::Codepoint | Kind::Empty) => {
+			_ if matches!(self.get_type(value), Kind::Text | Kind::Codepoint | Kind::Empty) || self.computes_at_run_time_kind(value) => {
 				self.emit_node_instructions(func, value);
 				self.emit_call(func, list_ops::TEXT_AS_INT);
 				self.emit_call(func, "new_int");
@@ -272,14 +283,18 @@ impl WasmGcEmitter {
 	/// The i64 of an Int value; a ratio (`x/2` is exact) is truncated
 	pub(super) fn emit_int_value_truncated(&mut self, func: &mut Function, value: &Node) {
 		self.emit_numeric_value(func, value);
-		if self.int_runtime() && !big_int::is_fixnum_range(self.int_range(value)) {
+		if self.int_runtime() && !big_int::is_fixnum_range(self.int_range(value)) && !self.is_builtin_rounding_call(value) {
 			self.emit_call(func, "exact_trunc");
 		}
 	}
 
-	/// `x as exact`: decimal literals are ratios already (exact.rs), a float becomes the ratio it is
+	/// `x as exact`: a decimal literal is the fraction it spells (`2.1 as exact` is 21/10), a runtime float is refused
 	pub(super) fn emit_cast_to_exact(&mut self, func: &mut Function, value: &Node, target_type: &Node) {
-		match value {
+		match value.drop_meta() {
+			Node::Number(Number::Float(decimal)) => {
+				self.emit_decimal_literal(func, *decimal);
+				self.emit_call(func, "new_int");
+			}
 			Node::Text(s) => self.emit_text_cast(func, s, target_type),
 			Node::Char(_) => self.emit_cast(func, value, &Node::Symbol("int".into())),
 			_ if self.get_type(value).is_float() => self.emit_inexact_to_exact(func, value),
@@ -510,4 +525,22 @@ fn quoted_source(value: &Node) -> Option<String> {
 /// The way from a float to an exact value the float→exact refusals name: the prelude word nearest (lib/prelude.warp)
 pub(super) fn nearest_hint(value: &str) -> String {
 	format!("or use nearest({value}, rational) for the closest fraction")
+}
+
+/// A number written with a decimal point: `3.3`
+fn decimal_literal(value: &Node) -> Option<f64> {
+	match value.drop_meta() {
+		Node::Number(Number::Float(decimal)) => Some(*decimal),
+		_ => None,
+	}
+}
+
+impl WasmGcEmitter {
+	/// A call of a builtin rounding function (`floor(v)`, `round x`), not a user or FFI one of that name:
+	/// a whole number, never a ratio to truncate
+	fn is_builtin_rounding_call(&self, value: &Node) -> bool {
+		matches!(value.drop_meta(), Node::List(items, _, _) if matches!(items.as_slice(), [word, _]
+			if matches!(word.drop_meta(), Node::Symbol(name) if super::ROUNDING_FUNCTIONS.contains(&name.as_str())
+				&& !self.ctx.user_functions.contains_key(name) && !self.ctx.ffi_imports.contains_key(name))))
+	}
 }

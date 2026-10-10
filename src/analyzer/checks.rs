@@ -401,14 +401,13 @@ pub(super) const NUMBER_WORD: &str = "number";
 pub(super) const REAL_WORD: &str = "real";
 pub(super) const REAL_CONSTANTS: [&str; 2] = ["π", "pi"];
 
-/// The type word of a number literal: whole numbers are `int` (also `2.0`), exact fractions and decimals `rational`,
-/// approximations (`1.5f`, √2, complex) `float`
+/// The type word of a number literal: whole numbers are `int`, exact fractions `rational`, decimals (`2.0`, `0.1`), √2
+/// and complex `float` (decision exact-default)
 pub fn number_type_word(number: &Number) -> &'static str {
 	match number {
 		Number::Int(_) | Number::BigInt(_) => INT_WORD,
 		Number::Quotient(..) | Number::BigQuotient(_) => RATIONAL_WORD,
 		Number::Real(_) => REAL_WORD,
-		Number::Float(value) if Number::is_exact_decimal(*value) => if value.fract() == 0.0 { INT_WORD } else { RATIONAL_WORD },
 		_ => FLOAT_WORD,
 	}
 }
@@ -667,14 +666,34 @@ pub(super) fn hidden_function_it(body: &Node, warnings: &mut Vec<Diagnostic>) {
 	});
 }
 
+/// The kinds of lint warnings "got it" silences
+pub const AND_OR_TOPIC: &str = "and-or";
+const ARITHMETIC_CONVERSION_TOPIC: &str = "arithmetic-conversion";
+const NEGATIVE_MODULO_TOPIC: &str = "negative-modulo";
+
+/// `"done"`, `7`: a value written out that is never falsy
+fn is_truthy_literal(node: &Node) -> bool {
+	matches!(node.drop_meta(), Node::Number(_) | Node::Text(_) | Node::Char(_) | Node::True) && !node.is_falsy()
+}
+
+/// `x and y or z` yields z when y is falsy; none when y is written out and never falsy: `done and "done" or "open"`
+/// can't go wrong (card done-done)
+fn and_or_warning(node: &Node, condition: &Node, then: &Node, otherwise: &Node) -> Option<Diagnostic> {
+	if is_truthy_literal(then) {
+		return None;
+	}
+	let (condition, then, otherwise) = (condition.serialize(), then.serialize(), otherwise.serialize());
+	let written = format!("{condition} and {then} or {otherwise}");
+	let explicit = format!("if {condition} then {then} else {otherwise}");
+	Some(Diagnostic::at(node, format!("`{written}` yields {otherwise} whenever {then} is falsy"))
+		.fix(&explicit).offer(format!("{then} whenever {condition} holds"), &written, explicit).about(AND_OR_TOPIC, &written))
+}
+
 pub(super) fn lint_into(node: &Node, warnings: &mut Vec<Diagnostic>) {
 	match node.drop_meta() {
 		Node::Key(left, op, right) => {
 			if let (Op::Or, Node::Key(condition, Op::And, then)) = (op, left.drop_meta()) {
-				let (condition, then, otherwise) = (condition.serialize(), then.serialize(), right.serialize());
-				let explicit = format!("if {condition} then {then} else {otherwise}");
-				warnings.push(Diagnostic::at(node, format!("`{condition} and {then} or {otherwise}` yields {otherwise} whenever {then} is falsy"))
-					.fix(&explicit).offer(format!("{then} whenever {condition} holds"), format!("{condition} and {then} or {otherwise}"), explicit));
+				warnings.extend(and_or_warning(node, condition, then, right));
 			}
 			if *op == Op::As && is_arithmetic(left) {
 				let diagnostic = Diagnostic::at(node, conversion_of_arithmetic_warning(left, right));
@@ -682,12 +701,17 @@ pub(super) fn lint_into(node: &Node, warnings: &mut Vec<Diagnostic>) {
 				let readings = conversion_readings(left, right);
 				let forms: Vec<&str> = readings.iter().map(|(_, form)| form.as_str()).collect();
 				let diagnostic = diagnostic.fix(forms.join(" or "));
-				warnings.push(readings.iter().fold(diagnostic, |diagnostic, (meaning, form)| diagnostic.offer(meaning, &written, form)));
+				let diagnostic = readings.iter().fold(diagnostic, |diagnostic, (meaning, form)| diagnostic.offer(meaning, &written, form));
+				warnings.push(diagnostic.about(ARITHMETIC_CONVERSION_TOPIC, &written));
 			}
 			if *op == Op::Mod && (is_negative(left) || is_negative(right)) {
 				let (a, b) = (left.serialize(), right.serialize());
+				let written = format!("{} % {}", a.trim(), b.trim());
 				warnings.push(Diagnostic::at(node, negative_modulo_warning(left, right))
-					.offer("the truncated remainder of C/Java/JS", format!("{} % {}", a.trim(), b.trim()), format!("{} rem {}", a.trim(), b.trim())));
+					.offer("the truncated remainder of C/Java/JS", &written, format!("{} rem {}", a.trim(), b.trim())).about(NEGATIVE_MODULO_TOPIC, &written));
+			}
+			if matches!(op, Op::Eq | Op::Ne) && (is_float_literal_value(left) || is_float_literal_value(right)) {
+				warnings.push(float_equality_warning(node, left, *op, right));
 			}
 			if let (Op::Add, Some(spelled)) = (op, number_text_plus_number(left, right)) {
 				warnings.push(number_text_plus_number_warning(node, left, right, &spelled));
@@ -721,6 +745,23 @@ pub(super) fn assigned_names(program: &Node) -> HashSet<&str> {
 		}
 	});
 	names
+}
+
+/// Arithmetic on literals that gives a float: a decimal (`0.1 + 0.2`), √2, π (decision exact-default)
+fn is_float_literal_value(node: &Node) -> bool {
+	!matches!(node.drop_meta(), Node::Symbol(_)) && infer_type(node, &Scope::new()) == Kind::Float
+}
+
+/// `0.1 + 0.2 == 0.3` is no: decimals are floats, which `==` compares bit for bit (decision exact-default)
+fn float_equality_warning(node: &Node, left: &Node, op: Op, right: &Node) -> Diagnostic {
+	let (a, b) = (left.serialize(), right.serialize());
+	let (a, b) = (a.trim(), b.trim());
+	let (written, similar) = match op {
+		Op::Ne => (format!("{a} != {b}"), format!("not {a} ≈ {b}")),
+		_ => (format!("{a} == {b}"), format!("{a} ≈ {b}")),
+	};
+	Diagnostic::at(node, format!("`{written}` compares floats exactly: rounding makes 0.1 + 0.2 == 0.3 no"))
+		.fix("use ≈").offer("equal within rounding", written, similar)
 }
 
 /// A data key `a-b:2` also reads as the subtraction `a - b` when `a` and `b` are variables
@@ -872,7 +913,8 @@ pub(super) fn resolve_blocks(node: Node, variables: &HashSet<String>) -> Node {
 				resolved.push(item);
 			}
 			match resolved.pop() {
-				Some(value) if ends_in_lookup => value,
+				// only data collapses to the key it reads: `cat{…}; cat.kill!; cat` keeps running cat.kill!
+				Some(value) if ends_in_lookup && resolved.iter().all(|item| data_binding(item).is_some()) => value,
 				Some(last) => {
 					resolved.push(last);
 					Node::List(resolved, bracket, separator)

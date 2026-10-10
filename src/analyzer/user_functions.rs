@@ -23,12 +23,12 @@ pub(crate) fn literal_kind(value: &Node) -> Option<Kind> {
 pub(crate) fn computed_literal_kind(value: &Node) -> Option<Kind> {
 	match value.drop_meta() {
 		Node::Key(left, op, right) if op.is_arithmetic() && !matches!(left.drop_meta(), Node::Empty) => {
+			// exact: whole or not by its value, `7/2*2` is 7, `33/10*2` is 33/5
+			if let Some(exact) = exact_literal_value(value) {
+				return Some(if exact.is_integer() { Kind::Int } else { Kind::Float });
+			}
 			match (operand_kind(left)?, operand_kind(right)?) {
-				// exact: whole or not by its value, `3.5*2` is 7, `3.3*2` is 6.6
-				(Kind::Int, Kind::Int) => match exact_literal_value(value) {
-					Some(exact) if !exact.is_integer() => Some(Kind::Float),
-					_ => Some(Kind::Int),
-				},
+				(Kind::Int, Kind::Int) => Some(Kind::Int),
 				(Kind::Float | Kind::Int, Kind::Float | Kind::Int) => Some(Kind::Float),
 				// `"5"*3` repeats the text (card repeat-int)
 				(left_kind, right_kind) if super::inference::repeats_text(left_kind, op, right_kind) => Some(Kind::Text),
@@ -39,13 +39,9 @@ pub(crate) fn computed_literal_kind(value: &Node) -> Option<Kind> {
 	}
 }
 
-/// The exact value of arithmetic on exact literals (`3.3*2` is 33/5), None for anything else or a division by zero
+/// The exact value of arithmetic on exact literals (`33/10*2` is 33/5), None for anything else or a division by zero
 pub(super) fn exact_literal_value(node: &Node) -> Option<crate::extensions::reals::Rational> {
 	match node.drop_meta() {
-		Node::Number(Number::Float(f)) if Number::is_exact_decimal(*f) => {
-			let (numerator, denominator) = crate::wasm_emitter::exact::decimal_fraction(*f);
-			Some(crate::extensions::reals::Rational::new(numerator, denominator))
-		}
 		Node::Number(number @ (Number::Int(_) | Number::BigInt(_) | Number::Quotient(..) | Number::BigQuotient(_))) => Some(number.to_rational()),
 		Node::Key(nothing, Op::Neg | Op::Sub, operand) if matches!(nothing.drop_meta(), Node::Empty) => Some(exact_literal_value(operand)?.neg()),
 		Node::Key(left, op, right) => {
@@ -62,11 +58,10 @@ pub(super) fn exact_literal_value(node: &Node) -> Option<crate::extensions::real
 	}
 }
 
-/// An operand of arithmetic on literals: an exact decimal stays exact (`2.0*3` is 6), a real constant is a float
+/// An operand of arithmetic on literals: a real constant is a float
 pub(super) fn operand_kind(operand: &Node) -> Option<Kind> {
 	match operand.drop_meta() {
 		Node::Symbol(name) if REAL_CONSTANTS.contains(&name.as_str()) => Some(Kind::Float),
-		Node::Number(Number::Float(f)) if Number::is_exact_decimal(*f) => Some(Kind::Int),
 		Node::Key(..) => computed_literal_kind(operand),
 		_ => literal_kind(operand),
 	}
@@ -817,10 +812,20 @@ pub(super) fn is_decimal_literal(node: &Node) -> bool {
 
 /// Variables assigned a decimal literal (`y = 2.5`, `y = 3.0`)
 pub(super) fn decimal_variables(program: &Node) -> HashSet<String> {
+	variables_assigned(program, is_decimal_literal)
+}
+
+/// `ok = x > 2`
+fn bool_variables(program: &Node) -> HashSet<String> {
+	variables_assigned(program, |value| crate::analyzer::is_boolean(value, &Scope::new()))
+}
+
+/// The variables assigned a value that `holds`
+fn variables_assigned(program: &Node, holds: impl Fn(&Node) -> bool) -> HashSet<String> {
 	let mut names = HashSet::new();
 	program.visit(&mut |node| {
 		if let Node::Key(target, Op::Assign | Op::Define, value) = node {
-			if let (Node::Symbol(name), true) = (target.drop_meta(), is_decimal_literal(value)) {
+			if let (Node::Symbol(name), true) = (target.drop_meta(), holds(value)) {
 				names.insert(name.clone());
 			}
 		}
@@ -839,6 +844,11 @@ pub(super) fn infer_parameters_from_calls(ctx: &mut Context, program: &Node) {
 		_ => None,
 	});
 	let mut argument_kinds: HashMap<(String, usize), Vec<Kind>> = HashMap::new();
+	// is every argument a parameter is given a bool (`show(1<2)`, `show(ok)` of `ok = x > 2`)
+	let bool_variables = bool_variables(program);
+	let is_bool_argument = |argument: &Node| crate::analyzer::is_boolean(argument, &Scope::new())
+		|| matches!(argument.drop_meta(), Node::Symbol(name) if bool_variables.contains(name));
+	let mut given_bools: HashMap<(String, usize), bool> = HashMap::new();
 	// a float passed to a declared int parameter loses digits: a compile error (P49)
 	let mut float_for_int: Vec<String> = Vec::new();
 	// a parameter of the same name shadows the variable (as in literal_variable_kinds)
@@ -855,6 +865,10 @@ pub(super) fn infer_parameters_from_calls(ctx: &mut Context, program: &Node) {
 			}
 			let Some(function) = ctx.user_functions.get(&name) else { continue };
 			for (index, argument) in arguments.into_iter().enumerate().take(function.params.len()) {
+				// the head `show(b)` and a recursive `show(b)` pass the parameter itself: no say in its kind
+				if !matches!(argument.drop_meta(), Node::Symbol(passed) if *passed == function.params[index].name) {
+					*given_bools.entry((name.clone(), index)).or_insert(true) &= is_bool_argument(argument);
+				}
 				// `real`, `exact` are Ints that may hold a ratio: only a whole type loses a decimal's digits
 				let declared_int = function.params[index].annotation.as_ref().is_some_and(|annotation| crate::analyzer::checks::refuses_decimals(&annotation.name()));
 				if declared_int && has_digits_an_int_loses(argument) {
@@ -876,6 +890,14 @@ pub(super) fn infer_parameters_from_calls(ctx: &mut Context, program: &Node) {
 		}
 	});
 	ctx.parameter_conflicts.extend(float_for_int);
+	// given a bool at every call, an untyped parameter is one, as if written `b: bool`: it keeps printing yes/no
+	// (card bool-loses: `show(b) := "got " + b; show(1<2)` gave "got 1")
+	for ((name, index), _) in given_bools.into_iter().filter(|(_, all_bools)| *all_bools) {
+		let param = &mut ctx.user_functions.get_mut(&name).expect("call sites were collected from known functions").params[index];
+		if param.annotation.is_none() && param.default.is_none() {
+			param.annotation = Some(Node::Symbol(crate::analyzer::BOOL_TYPE.to_string()));
+		}
+	}
 	// a value its body gives the parameter is one more kind it holds; with no call of known kind it starts as an Int
 	for (name, function) in &ctx.user_functions {
 		for (index, param) in function.params.iter().enumerate() {

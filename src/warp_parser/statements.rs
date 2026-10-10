@@ -276,7 +276,27 @@ impl WarpParser {
 		if let Some((unit, iterable)) = unit_iteration(&variable, &iterable, &body) {
 			return Some(for_in_loop(unit, iterable, body));
 		}
+		let iterable = self.walked_text_units(&variable, iterable);
 		Some(for_in_loop(variable, iterable, body))
+	}
+
+	/// `for word in text`, `for line in text` (wiki/plural.md): over a text the loop variable's name picks the unit, words
+	/// between runs of spaces or lines (as lib/text.warp's words and lines); any other name walks the characters
+	fn walked_text_units(&self, variable: &Node, iterable: Node) -> Node {
+		let is_text = match iterable.drop_meta() {
+			Node::Text(_) => true,
+			Symbol(name) => self.text_variables.contains(name),
+			_ => false,
+		};
+		let unit = variable.drop_meta().symbol_name().and_then(|name| TEXT_UNIT_NAMES.iter().find(|(unit, _)| *unit == name));
+		let (Some((unit, separator)), true) = (unit, is_text) else { return iterable };
+		let parts = call(SPLIT_WORD, vec![iterable, Node::Text(separator.to_string())]);
+		if *unit != WORD_UNIT {
+			return parts;
+		}
+		let part = Symbol(format!("{unit}·part"));
+		let non_empty = Node::Key(Box::new(part.clone()), Op::FatArrow, Box::new(Node::Key(Box::new(part), Op::Ne, Box::new(Node::Text(String::new())))));
+		Node::Key(Box::new(parts), Op::Dot, Box::new(call(FILTER_WORD, vec![non_empty])))
 	}
 
 	/// The iterable of a loop header, its words up to the body: `for todo in todos sorted by priority {…}`,
