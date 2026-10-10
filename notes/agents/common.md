@@ -82,6 +82,8 @@ when a message or comment cites a number (P71, D5) and you need its wording; nev
   wait for the Integrator's batch; `todo done --try` with /Users/me/dev/bin/warp still follows once it is on main.
 - Picking a card: `todo take <card> <your session name>` (user, 2026-10-06): assigns the user on GitHub, names you in
   the board field Agent, moves the card to Now. Prefer fresh, easy cards in column Next (user, 2026-10-06).
+  A long title is shortened on take, with the old one kept at the top of the description (user, 2026-10-10): pass
+  `--title "short title naming the problem"` yourself; otherwise todo picks one.
   Card keys (user, 2026-10-09): every card has a meaningful key, never a GitHub id like g_oncU. Cron
   (urgent-card-watch) runs `todo keys` every 2 minutes, which gives each new card a key from its title. Whoever takes
   a card renames a poor key at once (`todo key <card> <short-meaningful-name>`) and uses the key in branch names and
