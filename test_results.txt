@@ -122,6 +122,7 @@ PASSED:
   ✓ control::test_database_relations::a_table_is_registered_after_the_tables_it_points_to
   ✓ control::test_database_short_names::a_one_letter_column_takes_rows
   ✓ control::test_database_short_names::a_one_letter_table_takes_rows
+  ✓ control::test_database_tables::a_class_of_fields_side_by_side_is_a_table
   ✓ control::test_database_tables::a_field_added_to_the_class_adds_a_column
   ✓ control::test_database_tables::a_field_changed_with_loss_is_an_error_naming_both_types
   ✓ control::test_database_tables::a_field_changed_without_loss_converts_its_column
@@ -3977,6 +3978,7 @@ PASSED:
   ✓ web::test_uniscript::unicode_spells_back_as_uniscript
   ✓ web::test_uniscript::unsupported_characters_and_combinations_warn
   ✓ web::test_uniscript::use_strict_makes_uniscript_warnings_errors
+  ✓ web::test_wagi::each_route_answers_as_wagi
   ✓ web::test_warp_serve::a_program_without_serve_is_served_with_its_server_functions_and_routes
   ✓ web::test_warp_serve::a_server_is_known_without_running_it
   ✓ web::test_web_apis::notify_is_a_host_word
@@ -4403,4 +4405,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-10 ignored, 4398 passed, 0 failed, 4398 total tested
+10 ignored, 4400 passed, 0 failed, 4400 total tested
