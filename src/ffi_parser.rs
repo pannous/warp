@@ -227,27 +227,6 @@ pub fn get_all_signatures() -> HashMap<String, FfiFunction> {
     sigs
 }
 
-/// Get signature for a specific function by name
-pub fn get_signature(name: &str, library: &str) -> Option<FfiFunction> {
-    for path in find_library_headers(library) {
-        for func in parse_header_file(&path, library) {
-            if func.name == name {
-                return Some(func);
-            }
-        }
-    }
-    None
-}
-
-/// Get all signatures from a specific library
-pub fn get_library_signatures(library: &str) -> Vec<FfiFunction> {
-    let mut sigs = Vec::new();
-    for path in find_library_headers(library) {
-        sigs.extend(parse_header_file(&path, library));
-    }
-    sigs
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
