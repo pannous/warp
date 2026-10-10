@@ -876,7 +876,8 @@ pub(super) fn resolve_blocks(node: Node, variables: &HashSet<String>) -> Node {
 				resolved.push(item);
 			}
 			match resolved.pop() {
-				Some(value) if ends_in_lookup => value,
+				// only data collapses to the key it reads: `cat{…}; cat.kill!; cat` keeps running cat.kill!
+				Some(value) if ends_in_lookup && resolved.iter().all(|item| data_binding(item).is_some()) => value,
 				Some(last) => {
 					resolved.push(last);
 					Node::List(resolved, bracket, separator)
