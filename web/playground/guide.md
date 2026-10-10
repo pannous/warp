@@ -69,6 +69,12 @@ Fractions stay exact.
 1/3 + 1/6
 ```
 
+A number with a decimal point is a float: fast, but rounded. `≈` compares floats; `==` on them warns.
+
+```warp => yes
+0.1 + 0.2 ≈ 0.3
+```
+
 `mod` gives the remainder.
 
 ```warp => 1
