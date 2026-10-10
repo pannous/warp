@@ -55,3 +55,4 @@ mod test_module_function_dir; // card use-math
 mod test_checkout_std_lib; // card local-lib
 mod test_import_words; // card cleanup-closed-lists
 mod test_std_import_forms; // cards import-square include-math
+mod test_dir_value_methods; // card list-methods: dir([1 2]) lists its methods
