@@ -3,12 +3,11 @@
 //! every later pass like written ones. `xs where it > 1` filters like `[it for it in xs if it > 1]`.
 
 use super::words::{FOR_WORD, IN_WORD};
-use super::nodes::key;
+use super::nodes::{Counter, key};
 use crate::library_words::substitute;
 use crate::node::{symbol, Bracket, Node, Separator};
 use crate::operators::Op;
 use crate::warp_parser::parse;
-use std::cell::Cell;
 use std::collections::{HashMap, HashSet};
 
 const IF_WORD: &str = "if";
@@ -29,7 +28,7 @@ const ELEMENT: &str = "comprehension_element";
 const LOOPS: &str = "comprehension_loops";
 
 pub fn lower(node: Node) -> Node {
-	Lowering { count: Cell::new(0) }.lower(node)
+	Lowering { count: Counter::default() }.lower(node)
 }
 
 /// `xs where it > 1` as the comprehension `[it for it in xs if it > 1]`; before welcome_forms reads `xs where …` as
@@ -303,7 +302,7 @@ fn phrase(words: &[Node]) -> Node {
 }
 
 struct Lowering {
-	count: Cell<usize>,
+	count: Counter,
 }
 
 impl Lowering {
@@ -329,8 +328,7 @@ impl Lowering {
 
 	fn comprehension(&self, items: &[Node]) -> Option<Node> {
 		let comprehension = Comprehension::of(items)?;
-		let number = self.count.get();
-		self.count.set(number + 1);
+		let number = self.count.next_number();
 		let made = format!("{MADE}_{number}");
 		Some(comprehension.looped(&format!("(var {made} = []; {LOOPS}; {made})"), &format!("{made}.push({ELEMENT})")))
 	}
