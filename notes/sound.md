@@ -32,8 +32,9 @@ play note("F#4") for 250ms      // note(name) needs `use sound` when called alon
   decoder on the machine only the format is checked. In the browser a failure reaches the console.
 - Units: `Hz` is `1/s`, `kHz` `1/ms` (src/units.rs UNIT_ALIASES); `si_amount(x)` takes a quantity or a plain number.
 
-Limits found on the way: assignments to the module's globals (`note_seconds = 0.25`) from the program do not
-reach the module.
+A module's `global` is a setting: the program's top-level `note_seconds = 0.25` or `tempo = 90` sets it (modules.rs
+shadowed_apart leaves globals alone; other program variables named like a module word still shadow it). Before
+2026-10-10 such an assignment made a program variable of its own and the module silently kept its value.
 
 ## Spectrum and the visualizer (card winamp-like)
 `spectrum(samples, seconds, bands)` (lib/sound.warp) gives how loud each of `bands` frequency bands sounds in the
@@ -73,10 +74,18 @@ The words above are layer 1, the toy layer. Each layer below keeps the ones abov
    `stop_sound(h)` drops that one from the queue or stops its player, `stop_sound` (handle 0) all of them
    (tests/programs/test_sound_handles.rs). lib/sound.warp's sound names the handle before returning it: card
    block-data-sound.
+   Tempo built (step 4, 2026-10-10, samples/rhythm.warp): `1/4 beat`, `2 beats`, `1 bar` are seconds at the
+   module's `tempo` (beats per minute, 120) and `beats_per_bar` (4), anywhere in a program that uses sound: the
+   amount is the item before the word, of an assignment its value (src/lowering/music_words.rs → lib beat_seconds,
+   bar_seconds; tests/programs/test_sound_tempo.rs). Not units of the static unit checker: a beat is no SI time.
    Still to build:
    Expected: a shared audio clock, sample-accurate scheduling (`at 2 beats play C4`), ramping a handle's gain, voices
-   overlap. Tempo as a unit: `bpm`, `beat`, `bar` (`play C4 for 1/4 beat`).
-2. Music values, not frequencies. `Note` (pitch class, octave, MIDI number, cents), `Interval`, `Chord(C4, major7)`,
+   overlap.
+2. Note names built (2026-10-10): parsed, not a table: a letter A–G, `#`/`♯` or `b`/`♭`, an octave 0–9 is its
+   equal-tempered frequency to a hundredth of a Hz (A4 = 440), when the program uses sound and doesn't define that
+   name; `F#4` parses as `F # 4` and counts as the note unless the program defines `F` (music_words.rs; the parser
+   lets ♯ ♭ continue a name). tests/programs/test_sound_notes.rs. Still to build:
+   Music values, not frequencies. `Note` (pitch class, octave, MIDI number, cents), `Interval`, `Chord(C4, major7)`,
    `Scale(D, dorian)`, transposition, tuning (A4 = 442Hz, just intonation), velocity. Note names parsed, not a table.
 3. Synthesis. Oscillators (sine, saw, square, triangle, noise, wavetable, band-limited, detune, unison), ADSR
    envelopes, filters (lowpass/highpass/bandpass with resonance), LFOs and parameter automation (ramps), gain in dB,

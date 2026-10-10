@@ -380,6 +380,8 @@ const SOURCE_PASSES: &[fn(Node) -> Node] = &[
 	// `{ a: 1, b: 2\n c: 3 }`: one row of fields (object_groups.rs)
 	crate::object_groups::lower,
 	// the used modules join the program before the signal passes: a listener of the program sees the writes of their functions
+	// note names (`play F#4`) while the program is its own, before the sound module joins it
+	crate::music_words::lower,
 	crate::routes::lower, crate::page_html::use_markup, crate::modules::resolve,
 	// again: a used module's phrases, `play 440Hz for 0.5s` of lib/sound.warp's `to play x for d:`
 	crate::phrase_calls::lower,

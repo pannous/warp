@@ -913,6 +913,11 @@ const IMPLICIT_MODULES: [(&str, NeededBy); 8] = [
 	("wagi", |_| crate::pipeline::is_for_wagi()),
 ];
 
+/// Whether the program plays sound: it calls a sound word or says `use sound` (lowering/music_words.rs reads its note names)
+pub fn uses_sound(program: &Node) -> bool {
+	SOUND_WORDS.iter().any(|word| calls_undefined(program, word)) || statements(program.clone()).iter().filter_map(used_module).any(|used| used.name == SOUND_MODULE)
+}
+
 /// Whether the program calls `word` without defining it
 fn calls_undefined(program: &Node, word: &str) -> bool {
 	defined(program, word).is_none() && called_names(&statements(program.clone())).contains(word)
