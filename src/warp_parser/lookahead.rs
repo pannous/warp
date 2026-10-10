@@ -22,7 +22,7 @@ impl WarpParser {
 	pub(super) fn can_start_atom(&self) -> bool {
 		let ch = self.current_char();
 		ch.is_alphanumeric() || ch == '_' || ch == '"' || ch == '\'' || ch == '(' || ch == '[' || ch == '{'
-			|| self.number_starts_at(0) || self.starts_function_reference() || self.starts_path_literal()
+			|| self.number_starts_at(0) || self.starts_function_reference() || self.starts_path_literal() || self.url_follows()
 	}
 
 	/// `function add` (P82): the function itself where a name and then the end of the expression follow the keyword;
@@ -117,7 +117,8 @@ impl WarpParser {
 		if (c1, c2) == ('?', ':') {
 			return None; // the elvis `?:` is no ternary, `try_parse_elvis` takes it
 		}
-		if self.word_names_key() || self.starts_path_literal() {
+		// `fetch ://host/path`: the colon starts a URL (card pannous-com), no key
+		if self.word_names_key() || self.starts_path_literal() || self.url_follows() {
 			return None;
 		}
 

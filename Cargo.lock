@@ -2969,7 +2969,7 @@ dependencies = [
 
 [[package]]
 name = "warp-lang"
-version = "1.2.5"
+version = "1.2.6"
 dependencies = [
  "ab_glyph",
  "anyhow",
@@ -3005,7 +3005,7 @@ dependencies = [
 
 [[package]]
 name = "warp-runtime"
-version = "1.2.5"
+version = "1.2.6"
 dependencies = [
  "libc",
  "miniz_oxide",
