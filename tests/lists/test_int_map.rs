@@ -49,18 +49,16 @@ fn a_global_map_takes_constant_time_per_entry() {
 	is!(&timed(&found, "s"), ENTRIES * (ENTRIES + 1));
 }
 
-/// Four times the rows may take up to this many times as long: linear is ~4, quadratic ~16. A ratio of two runs in one
-/// program holds on a loaded machine, where a bound in milliseconds does not (card flaky-linear)
-const LINEAR_RATIO: i64 = 8;
-/// The milliseconds the small load counts as at least: a fast engine (the browser's) loads it in a few, where a clock tick
-/// and a warm-up weigh more than the rows
-const SMALL_LOAD_FLOOR: i64 = 100;
+/// Four times the rows may take up to this many times as long, 4^1.75: a growth below n^1.75, where quadratic is 4^2 = 16.
+/// Measured: native ~5 (n^1.2), the browser 8.1 (n^1.5, its GC). A ratio of two runs in one program holds on a loaded
+/// machine, where a bound in milliseconds does not (card flaky-linear)
+const LINEAR_RATIO: i64 = 11;
 
 /// The identity map of a table (notes/orm.md) finds a loaded row's instance by its id: loading is linear
 #[test]
 fn ten_thousand_rows_load_in_linear_time() {
 	let loaded = |table: &str, rows: i64| format!("{table}: [Person] = database.int_map_{table}\nfor i in 1 to {rows} {{ {table}.add(Person(\"p\", i)) }}\n{table}_sum = 0; for p in {table} {{ {table}_sum += p.age }}");
 	let (small, large) = (loaded("small", ENTRIES / 4), loaded("large", ENTRIES));
-	let program = format!("class Person{{name: text; age: int}}\nt0 = clock()\n{small}\nt1 = clock()\n{large}\nt2 = clock()\nif t2 - t1 <= {LINEAR_RATIO} * max(t1 - t0, {SMALL_LOAD_FLOOR}) then large_sum else [t1 - t0, t2 - t1]");
+	let program = format!("class Person{{name: text; age: int}}\nt0 = clock()\n{small}\nt1 = clock()\n{large}\nt2 = clock()\nif t2 - t1 <= {LINEAR_RATIO} * max(t1 - t0, 1) then large_sum else [t1 - t0, t2 - t1]");
 	is!(&program, ENTRIES * (ENTRIES + 1) / 2);
 }
