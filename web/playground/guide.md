@@ -446,6 +446,56 @@ Point{x: 1 y: 2}.x
 
 Examples: classes, properties; samples: types, polymorphism
 
+## Data and storage
+
+A program forgets its variables when it ends. `stored` keeps one: run this twice and it counts on.
+
+```warp
+stored visits = 0
+visits += 1
+```
+
+`local` is a small store of named values, kept in the browser.
+
+```warp => "Ada"
+local["name"] = "Ada"
+local["name"]
+```
+
+`database` holds more: in the browser in IndexedDB, on your computer in a SQLite file beside the program.
+
+```warp => 42
+database.score = 42
+database.score
+```
+
+A stored list of a class is a table. `add` saves a row, `where` finds rows.
+
+```warp => "Bo"
+class Person{name: text; age: int}
+stored people: [Person]
+people.add(Person("Bo", 30))
+(people where age > 18)#1.name
+```
+
+A row is an ordinary object: change a field (`bo.age += 1`) and the table changes with it, no save needed.
+
+Files are written and read by name. In the browser they last while the page is open.
+
+```warp => "milk"
+write("shopping.txt", "milk")
+read("shopping.txt")
+```
+
+JSON from elsewhere becomes warp data.
+
+```warp => 36
+use json
+json.parse('{"age": 36}').age
+```
+
+Examples: data; samples: orm, orm_transaction, orm_units, todo_app, json_parser
+
 ## Errors
 
 Things go wrong sometimes. In warp an error is a value that says what happened.

@@ -16,7 +16,7 @@ use std::collections::HashSet;
 use crate::switch::SWITCH_WORDS;
 const WILDCARD: &str = "_";
 const DEFAULT_CASE: &str = "default";
-const LOOP_WORD: &str = "loop";
+const LOOP_KEYWORD: &str = "loop";
 /// Lua's, Ruby's and Julia's word closing a function body
 const END_WORD: &str = "end";
 const LAMBDA_WORD: &str = "lambda";
@@ -29,7 +29,7 @@ const CALL_METHOD: &str = "call";
 /// Swift's and C's case label `case .north:` in a switch
 const CASE_WORD: &str = "case";
 /// Kotlin's `when (x) { a -> 1; is T -> 2; else -> 3 }`, an if chain
-const WHEN_WORD: &str = "when";
+const WHEN_KEYWORD: &str = "when";
 const ELSE_WORD: &str = "else";
 /// The listeners a `when` without arms is: of an event, of a condition
 const ON_WORD: &str = "on";
@@ -274,17 +274,17 @@ fn when_chain(items: &[Node]) -> Option<Node> {
 	// `= when (s) {…}` after a definition arrives as the group `when (s)` and the arms
 	if let [head, arms] = items {
 		if let Node::List(words, _, Separator::Space) = head.drop_meta() {
-			if words.len() == 2 && words[0].is_symbol(WHEN_WORD) {
+			if words.len() == 2 && words[0].is_symbol(WHEN_KEYWORD) {
 				return when_chain(&[words[0].clone(), words[1].clone(), arms.clone()]);
 			}
 		}
 	}
 	let (subject, arms) = match items {
-		[word, subject, arms] if word.is_symbol(WHEN_WORD) => (Some(match subject.drop_meta() {
+		[word, subject, arms] if word.is_symbol(WHEN_KEYWORD) => (Some(match subject.drop_meta() {
 			Node::List(inner, Bracket::Round, _) if inner.len() == 1 => inner[0].clone(),
 			_ => subject.clone(),
 		}), arms),
-		[word, arms] if word.is_symbol(WHEN_WORD) => (None, arms),
+		[word, arms] if word.is_symbol(WHEN_KEYWORD) => (None, arms),
 		_ => return None,
 	};
 	let Node::List(arms, Bracket::Curly, _) = arms.drop_meta() else { return None };
@@ -310,13 +310,13 @@ fn when_listener(items: &[Node]) -> Option<Vec<Node>> {
 	let [word, subject, body] = items else { return None };
 	let Node::List(statements, Bracket::Curly, _) = body.drop_meta() else { return None };
 	let has_arms = statements.iter().any(|statement| matches!(statement.drop_meta(), Node::Key(_, Op::Arrow, _)));
-	if !word.is_symbol(WHEN_WORD) || has_arms {
+	if !word.is_symbol(WHEN_KEYWORD) || has_arms {
 		return None;
 	}
 	let listener = if matches!(subject.drop_meta(), Node::Symbol(_)) { ON_WORD } else { WHENEVER_WORD };
 	if listener == WHENEVER_WORD {
 		crate::normalize::set_position_of(word);
-		crate::diagnostic::educate_once(WHEN_CONDITION_TOPIC, WHEN_WORD, WHENEVER_WORD, "it reacts to every later write that makes the condition true; write if for a one-time check now");
+		crate::diagnostic::educate_once(WHEN_CONDITION_TOPIC, WHEN_KEYWORD, WHENEVER_WORD, "it reacts to every later write that makes the condition true; write if for a one-time check now");
 	}
 	Some(vec![symbol(listener), subject.clone(), body.clone()])
 }
@@ -339,7 +339,7 @@ fn when_arm(arm: &Node) -> Option<(Vec<Node>, Node)> {
 
 /// `loop { body }`, Ruby's `loop do body end`
 fn endless_loop(word: &Node, body: &Node) -> Option<Node> {
-	if !word.is_symbol(LOOP_WORD) || !matches!(body.drop_meta(), Node::List(_, Bracket::Curly, _)) {
+	if !word.is_symbol(LOOP_KEYWORD) || !matches!(body.drop_meta(), Node::List(_, Bracket::Curly, _)) {
 		return None;
 	}
 	let condition = key(Node::Empty, Op::While, Node::True);

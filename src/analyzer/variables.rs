@@ -7,16 +7,24 @@ use std::collections::HashSet;
 /// Returns count of temp locals needed (e.g., for while loops)
 pub fn collect_variables(node: &Node, scope: &mut Scope) -> u32 {
 	let before = scope.clone();
-	let temporaries = collect_variables_inner(node, scope, false, false);
-	// `b = 0; global b = 1`: a variable written before its `global` declaration is that global throughout, never a
-	// local of the same name besides it; collected again with it global from the start
-	let split: Vec<Local> = scope.globals.values().filter(|global| scope.locals.contains_key(&global.name) && !before.locals.contains_key(&global.name)).cloned().collect();
-	if split.is_empty() {
-		return temporaries;
+	let mut split_globals: Vec<Local> = vec![];
+	loop {
+		let seeded = scope.widened_bindings.clone();
+		let temporaries = collect_variables_inner(node, scope, false, false);
+		// `b = 0; global b = 1`: a variable written before its `global` declaration is that global throughout, never a
+		// local of the same name besides it; collected again with it global from the start
+		let split: Vec<Local> = scope.globals.values().filter(|global| scope.locals.contains_key(&global.name) && !before.locals.contains_key(&global.name)).cloned().collect();
+		// `xs = [0.0, 0.0]; … xs#i = √2`: a list's element type joins its literal and every write to it, so a read before
+		// the widening write (`m = xs#i`) has the widened type too; collected again with that type from the start
+		if split.is_empty() && scope.widened_bindings == seeded {
+			return temporaries;
+		}
+		let widened = std::mem::take(&mut scope.widened_bindings);
+		split_globals.extend(split);
+		*scope = before.clone();
+		scope.globals.extend(split_globals.iter().map(|global| (global.name.clone(), global.clone())));
+		scope.widened_bindings = widened;
 	}
-	*scope = before;
-	scope.globals.extend(split.into_iter().map(|global| (global.name.clone(), global)));
-	collect_variables_inner(node, scope, false, false)
 }
 
 /// The binding a `global` declaration introduces: `global x` (an Int) and `global x=7`; it has no local slot
@@ -161,7 +169,10 @@ fn bind_assigned(left: &Node, right: &Node, scope: &mut Scope) {
 			let declared = declared_type(left);
 			let (kind, type_node) = match declared {
 				Some(type_name) => (declared_kind(&type_name.name()).unwrap_or_else(|| binding_kind(right, scope)), Some(Box::new(type_name.clone()))),
-				None => value_binding(right, scope),
+				None => match (value_binding(right, scope), scope.widened_bindings.get(name)) {
+					((Kind::List, _), Some(widened @ (Kind::List, _))) | ((Kind::Int, None), Some(widened @ (Kind::Float, None))) => widened.clone(),
+					(binding, _) => binding,
+				},
 			};
 			scope.define(name.clone(), type_node, kind);
 			if let Some(local) = scope.own_binding_mut(name) {
@@ -225,7 +236,16 @@ pub(super) fn widen_element_type(scope: &mut Scope, list: &Node, value: &Node) {
 		(FLOAT_WORD, RATIONAL_WORD) => return, // `xs#1 = 0.5` (an exact decimal) of a float list is stored as its f64
 		_ => NODE_LIST_TYPE.to_string(),
 	};
-	local.type_node = Some(Box::new(Node::Symbol(widened)));
+	set_widened_list_type(scope, name, widened);
+}
+
+/// The list `name` holds elements of the `widened` type, from its definition on once collected again (collect_variables)
+fn set_widened_list_type(scope: &mut Scope, name: &str, widened: String) {
+	let type_node = Box::new(Node::Symbol(widened));
+	if let Some(local) = scope.own_binding_mut(name) {
+		local.type_node = Some(type_node.clone());
+	}
+	scope.widened_bindings.insert(name.to_string(), (Kind::List, Some(type_node)));
 }
 
 /// `ys = ["a"]; ys = [3]`: a variable given lists of two element types holds the items of both, of their common type
@@ -243,7 +263,7 @@ fn widen_list_type(scope: &mut Scope, name: &str, value: &Node) {
 	}
 	let common = super::checks::common_type_word(&[held_element.to_string(), assigned_element.to_string()]);
 	let widened = common.map_or(NODE_LIST_TYPE.to_string(), |element| format!("{LIST_OF_PREFIX}{element}"));
-	local.type_node = Some(Box::new(Node::Symbol(widened)));
+	set_widened_list_type(scope, name, widened);
 }
 
 /// An exact variable that is later assigned an f64 (`x=10; x=floor(2.5)` with libm's floor) holds an f64 throughout,
@@ -251,13 +271,18 @@ fn widen_list_type(scope: &mut Scope, name: &str, value: &Node) {
 /// changed by a function's `global b; b = b + random()`
 pub(super) fn widen_to_float(scope: &mut Scope, name: &str, value: &Node) {
 	let float_value = infer_type(value, scope).is_float();
-	let binding = match scope.locals.contains_key(name) {
+	let is_local = scope.locals.contains_key(name);
+	let binding = match is_local {
 		true => scope.locals.get_mut(name),
 		false => scope.globals.get_mut(name),
 	};
 	if let Some(local) = binding.filter(|local| local.kind == Kind::Int && local.type_node.is_none()) {
 		if float_value {
 			local.kind = Kind::Float;
+			// a read before this write (`y = x * 2` earlier in the loop) is a float too, once collected again
+			if is_local {
+				scope.widened_bindings.insert(name.to_string(), (Kind::Float, None));
+			}
 		}
 	}
 }
@@ -764,6 +789,9 @@ pub struct Scope {
 	/// Variables that hold a closure → `closure_new` targets they may contain (per-site closure_call kinds)
 	pub closure_variable_targets: HashMap<String, HashSet<String>>,
 	pub globals: HashMap<String, Local>,  // Declared `global` (kind and type, no slot): assigning them later must not create a shadowing local
+	/// Locals a later write widened (an int to a float, a list's element type): their kind and type from the start
+	/// (collect_variables)
+	pub widened_bindings: HashMap<String, (Kind, Option<Box<Node>>)>,
 	pub parent: Option<Box<Scope>>,
 }
 
@@ -778,6 +806,7 @@ impl Scope {
 			function_kinds: HashMap::new(),
 			closure_variable_targets: HashMap::new(),
 			globals: HashMap::new(),
+			widened_bindings: HashMap::new(),
 			parent: Some(Box::new(self.clone())),
 		}
 	}

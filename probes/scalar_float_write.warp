@@ -1,0 +1,4 @@
+x = 0.0
+y = 0.0
+for i in 0..3 { y = x * 2; x = sqrt(2.0) }
+print y

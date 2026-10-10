@@ -367,6 +367,10 @@ pub fn read_exports_after_main(bytes: &[u8], imports: Imports, names: &[&str]) -
 		let export = instance.get_func(&mut store, name).ok_or_else(|| anyhow!("the module exports no {name}"))?;
 		let mut results = vec![Val::AnyRef(None); export.ty(&store).results().len()];
 		let outcome = export.call(&mut store, &[], &mut results);
+		// a value that ends by `exit`, or at a prerender's first frame (until_first_frame), is ø, as a run's is
+		if warp_runtime::system_signals::ended_by_exit(&outcome) {
+			return Ok(Node::Empty);
+		}
 		with_trap_detail(outcome, &mut store, &instance)?;
 		val_to_node(&results.first().copied().unwrap_or(Val::AnyRef(None)), &mut store, &instance)
 	}).collect()
