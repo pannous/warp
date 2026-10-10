@@ -57,6 +57,30 @@ pub enum Wanted {
 /// handle (big_int.rs), never a fixnum the fast path could have produced.
 const SUM_NOT_FIXNUM: i64 = i64::MIN;
 
+/// push(list, value) body for a list struct (length, items, …): value appended in place, the items doubled when full;
+/// for ø a new list from (0, items) and `new_list_tail`
+fn push_in_place(list: u32, array: u32, new_list_tail: &[I<'static>]) -> Vec<I<'static>> {
+	let grown = 2;
+	let length = || I::StructGet { struct_type_index: list, field_index: 0 };
+	let items = || I::StructGet { struct_type_index: list, field_index: 1 };
+	let mut body = vec![I::LocalGet(0), I::RefIsNull, I::If(BlockType::Empty), I::I32Const(0), I::I32Const(FIRST_CAPACITY), I::ArrayNewDefault(array)];
+	body.extend_from_slice(new_list_tail);
+	body.extend([
+		I::LocalSet(0),
+		I::End,
+		I::LocalGet(0), length(), I::LocalGet(0), items(), I::ArrayLen, I::I32Eq, I::If(BlockType::Empty),
+		I::LocalGet(0), length(), I::I32Const(1), I::I32Shl, I::I32Const(FIRST_CAPACITY), I::I32Add, I::ArrayNewDefault(array), I::LocalSet(grown),
+		I::LocalGet(grown), I::I32Const(0), I::LocalGet(0), items(), I::I32Const(0), I::LocalGet(0), length(),
+		I::ArrayCopy { array_type_index_dst: array, array_type_index_src: array },
+		I::LocalGet(0), I::LocalGet(grown), I::RefAsNonNull, I::StructSet { struct_type_index: list, field_index: 1 },
+		I::End,
+		I::LocalGet(0), items(), I::LocalGet(0), length(), I::LocalGet(1), I::ArraySet(array),
+		I::LocalGet(0), I::LocalGet(0), length(), I::I32Const(1), I::I32Add, I::StructSet { struct_type_index: list, field_index: 0 },
+		I::LocalGet(0),
+	]);
+	body
+}
+
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum ElementType {
 	Int,
@@ -1068,21 +1092,7 @@ impl WasmGcEmitter {
 		}
 		if self.should_emit_function(NODE_RUNTIME.push) {
 			self.runtime_function(NODE_RUNTIME.push, vec![list_ref, node_ref], vec![list_ref], vec![array_ref], |_, f| {
-				let grown = 2;
-				Self::emit_list(f, &[
-					I::LocalGet(0), I::RefIsNull, I::If(BlockType::Empty),
-					I::I32Const(0), I::I32Const(FIRST_CAPACITY), I::ArrayNewDefault(array), I::I64Const(crate::type_kinds::SQUARE_LIST_KIND), new_list.clone(), I::LocalSet(0),
-					I::End,
-					I::LocalGet(0), length.clone(), I::LocalGet(0), items.clone(), I::ArrayLen, I::I32Eq, I::If(BlockType::Empty),
-					I::LocalGet(0), length.clone(), I::I32Const(1), I::I32Shl, I::I32Const(FIRST_CAPACITY), I::I32Add, I::ArrayNewDefault(array), I::LocalSet(grown),
-					I::LocalGet(grown), I::I32Const(0), I::LocalGet(0), items.clone(), I::I32Const(0), I::LocalGet(0), length.clone(),
-					I::ArrayCopy { array_type_index_dst: array, array_type_index_src: array },
-					I::LocalGet(0), I::LocalGet(grown), I::RefAsNonNull, I::StructSet { struct_type_index: list, field_index: 1 },
-					I::End,
-					I::LocalGet(0), items.clone(), I::LocalGet(0), length.clone(), I::LocalGet(1), I::ArraySet(array),
-					I::LocalGet(0), I::LocalGet(0), length.clone(), I::I32Const(1), I::I32Add, I::StructSet { struct_type_index: list, field_index: 0 },
-					I::LocalGet(0),
-				]);
+				Self::emit_list(f, &push_in_place(list, array, &[I::I64Const(crate::type_kinds::SQUARE_LIST_KIND), I::StructNew(list)]));
 			});
 		}
 		// as_node(list): the cons cells of the items under the list's own kind (brackets); ø when empty or unassigned
@@ -1200,21 +1210,7 @@ impl WasmGcEmitter {
 		// push(list, value) -> list: value appended in place, the items doubled when full; a new list for ø
 		if self.should_emit_function(runtime.push) {
 			self.runtime_function(runtime.push, vec![list_ref, value], vec![list_ref], vec![array_ref], |_, f| {
-				let grown = 2;
-				Self::emit_list(f, &[
-					I::LocalGet(0), I::RefIsNull, I::If(BlockType::Empty),
-					I::I32Const(0), I::I32Const(FIRST_CAPACITY), I::ArrayNewDefault(array), I::StructNew(list), I::LocalSet(0),
-					I::End,
-					I::LocalGet(0), length.clone(), I::LocalGet(0), items.clone(), I::ArrayLen, I::I32Eq, I::If(BlockType::Empty),
-					I::LocalGet(0), length.clone(), I::I32Const(1), I::I32Shl, I::I32Const(FIRST_CAPACITY), I::I32Add, I::ArrayNewDefault(array), I::LocalSet(grown),
-					I::LocalGet(grown), I::I32Const(0), I::LocalGet(0), items.clone(), I::I32Const(0), I::LocalGet(0), length.clone(),
-					I::ArrayCopy { array_type_index_dst: array, array_type_index_src: array },
-					I::LocalGet(0), I::LocalGet(grown), I::RefAsNonNull, I::StructSet { struct_type_index: list, field_index: 1 },
-					I::End,
-					I::LocalGet(0), items.clone(), I::LocalGet(0), length.clone(), I::LocalGet(1), I::ArraySet(array),
-					I::LocalGet(0), I::LocalGet(0), length.clone(), I::I32Const(1), I::I32Add, I::StructSet { struct_type_index: list, field_index: 0 },
-					I::LocalGet(0),
-				]);
+				Self::emit_list(f, &push_in_place(list, array, &[I::StructNew(list)]));
 			});
 		}
 		// sum(list) -> element: left to right like the loop; an int sum gives SUM_NOT_FIXNUM when it leaves the fixnum range
