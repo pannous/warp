@@ -127,8 +127,6 @@ fn interval_or(kind: Kind, argument: &Node, scope: &Scope) -> Kind {
 pub fn infer_type(node: &Node, scope: &Scope) -> Kind {
 	let node = node.drop_meta();
 	match node {
-		// Decimal literals are exact numbers, see wasm_emitter/exact.rs
-		Node::Number(Number::Float(f)) if Number::is_exact_decimal(*f) => Kind::Int,
 		Node::Number(Number::Float(_)) => Kind::Float,
 		Node::Number(Number::Complex(_, _) | Number::Real(_) | Number::Nan | Number::Inf | Number::NegInf) => Kind::Float,
 		// Integer and rational literals

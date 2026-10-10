@@ -67,6 +67,9 @@ impl WasmGcEmitter {
 				self.emit_type_error(func, message);
 			}
 			exact if exact_value && crate::type_tests::is_exact_fraction_type(exact) => self.emit_numeric_value(func, value),
+			exact if crate::type_tests::spells_decimals_exactly(exact) && decimal_literal(value).is_some() => {
+				self.emit_decimal_literal(func, decimal_literal(value).expect("guarded"))
+			}
 			// a character held unboxed is its code point
 			"codepoint" => match value.drop_meta() {
 				Node::Char(character) => {
@@ -218,6 +221,9 @@ impl WasmGcEmitter {
 			}
 			"int" => self.emit_cast_to_int(func, value, target_type),
 			exact if crate::type_tests::is_exact_fraction_type(exact) => self.emit_cast_to_exact(func, value, target_type),
+			exact if crate::type_tests::spells_decimals_exactly(exact) && decimal_literal(value).is_some() => {
+				self.emit_cast_to_exact(func, value, target_type)
+			}
 			"float" => self.emit_cast_to_float(func, value, target_type),
 			"text" => self.emit_cast_to_text(func, value),
 			"codepoint" => self.emit_cast_to_char(func, value),
@@ -277,9 +283,13 @@ impl WasmGcEmitter {
 		}
 	}
 
-	/// `x as exact`: decimal literals are ratios already (exact.rs), a float becomes the ratio it is
+	/// `x as exact`: a decimal literal is the fraction it spells (`2.1 as exact` is 21/10), a runtime float is refused
 	pub(super) fn emit_cast_to_exact(&mut self, func: &mut Function, value: &Node, target_type: &Node) {
-		match value {
+		match value.drop_meta() {
+			Node::Number(Number::Float(decimal)) => {
+				self.emit_decimal_literal(func, *decimal);
+				self.emit_call(func, "new_int");
+			}
 			Node::Text(s) => self.emit_text_cast(func, s, target_type),
 			Node::Char(_) => self.emit_cast(func, value, &Node::Symbol("int".into())),
 			_ if self.get_type(value).is_float() => self.emit_inexact_to_exact(func, value),
@@ -510,4 +520,12 @@ fn quoted_source(value: &Node) -> Option<String> {
 /// The way from a float to an exact value the float→exact refusals name: the prelude word nearest (lib/prelude.warp)
 pub(super) fn nearest_hint(value: &str) -> String {
 	format!("or use nearest({value}, rational) for the closest fraction")
+}
+
+/// A number written with a decimal point: `3.3`
+fn decimal_literal(value: &Node) -> Option<f64> {
+	match value.drop_meta() {
+		Node::Number(Number::Float(decimal)) => Some(*decimal),
+		_ => None,
+	}
 }

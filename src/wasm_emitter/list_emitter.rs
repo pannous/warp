@@ -894,6 +894,11 @@ impl WasmGcEmitter {
 				self.emit_statement_sequence(func, items, Self::emit_dropped_statement);
 				return;
 			}
+			// `S1 = -0.16, S2 = 0.0083`: assignments separated by commas are statements too, each of its own kind
+			Node::List(items, bracket, Separator::Colon) if *bracket != Bracket::Square && items.iter().all(|item| matches!(item.drop_meta(), Node::Key(_, Op::Assign, _))) => {
+				self.emit_statement_sequence(func, items, Self::emit_dropped_statement);
+				return;
+			}
 			_ => {}
 		}
 		let destructured = self.destructured_kind(item);

@@ -212,11 +212,8 @@ fn number_value(number: &Number) -> Evaluated {
 		Number::BigInt(n) => exact(Rational::integer((*n).clone())),
 		Number::Quotient(n, d) => exact(Rational::new(BigInt::from(*n), BigInt::from(*d))),
 		Number::BigQuotient(q) => exact((*q).clone()),
-		Number::Float(f) if Number::is_exact_decimal(*f) => {
-			let (n, d) = crate::wasm_emitter::exact::decimal_fraction(*f);
-			exact(Rational::new(n, d))
-		}
-		Number::Float(f) => Ok(Value::Real(Real::Approx(*f))),
+		// a decimal is a float (decision exact-default): `sqrt(2.0)` is 1.4142135623730951, not √2
+		Number::Float(f) => Ok(Value::Float(*f)),
 		Number::Real(real) => Ok(Value::Real((*real).clone())),
 		Number::Complex(..) | Number::Nan | Number::Inf | Number::NegInf => Err(Stop::Unsupported),
 	}
@@ -394,12 +391,22 @@ fn root(real: Real, index: u32) -> Result<Real, Stop> {
 }
 
 fn arithmetic(left: Value, op: Op, right: Value) -> Evaluated {
-	match (left, right) {
+	match beside_hyperreal(left, right) {
 		(Value::Float(a), b) => float_arithmetic(a, op, float_of(b)?),
 		(a, Value::Float(b)) => float_arithmetic(float_of(a)?, op, b),
 		(Value::Real(a), Value::Real(b)) => Ok(Value::Real(real_arithmetic(a, op, b)?)),
 		_ => Err(Stop::Unsupported), // booleans are not numbers
 	}
+}
+
+/// A float next to a hyperreal is the decimal it was written as: a hyperreal has no float to meet it (`ε < 0.0001`)
+fn beside_hyperreal(left: Value, right: Value) -> (Value, Value) {
+	let is_hyperreal = |value: &Value| matches!(value, Value::Real(Real::Exact(exact)) if exact.has_epsilon());
+	let exact = |value: Value| match value {
+		Value::Float(f) => Rational::of_decimal(f).map_or(Value::Float(f), |q| Value::Real(Real::Exact(Exact::rational(q)))),
+		other => other,
+	};
+	if is_hyperreal(&left) || is_hyperreal(&right) { (exact(left), exact(right)) } else { (left, right) }
 }
 
 /// The f64 of a real; a hyperreal has none (an infinitesimal is no float), which is an error, never 0
@@ -669,6 +676,7 @@ fn exp(real: Real) -> Result<Real, Stop> {
 }
 
 fn compare(left: Value, op: Op, right: Value) -> Evaluated {
+	let (left, right) = beside_hyperreal(left, right);
 	let ordering = match (left, right) {
 		(Value::Bool(a), Value::Bool(b)) if op.is_equality() => return Ok(Value::Bool((a == b) == (op == Op::Eq))),
 		(Value::Real(a), Value::Real(b)) if op.is_equality() => {
