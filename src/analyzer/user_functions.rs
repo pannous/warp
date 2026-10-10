@@ -673,6 +673,8 @@ pub(super) fn infer_closure_parameters(ctx: &mut Context, program: &Node) {
 	let variable_kinds = variable_kinds(program, ctx, true);
 	loop {
 		let mut inferred: Vec<(String, usize, Kind)> = vec![];
+		// a closure call may call any lifted lambda of its arity: the kinds its arguments pass to each one
+		let mut passed: HashMap<(String, usize), HashSet<Kind>> = HashMap::new();
 		// the kinds of each scope's parameters and variables: `m = float(2.5)` captured by a closure is a float
 		let function_kinds: HashMap<String, Kind> = ctx.user_functions.iter().map(|(name, function)| (name.clone(), function.return_kind)).collect();
 		let scope_kinds = |params: &[Param], body: &Node| -> HashMap<String, Kind> {
@@ -697,10 +699,15 @@ pub(super) fn infer_closure_parameters(ctx: &mut Context, program: &Node) {
 				let Some(Node::Symbol(name)) = items.first().map(Node::drop_meta) else { return };
 				let Some(arity) = crate::closures::closure_call_arity(name) else { return };
 				for (target, captured) in ctx.closure_targets.iter().filter(|(target, captured)| ctx.user_functions.get(target).is_some_and(|function| function.params.len() == captured + arity)) {
-					inferred.extend(items[2..].iter().enumerate().filter_map(|(index, argument)| Some((target.clone(), captured + index, value_kind(argument)?))));
+					for (index, argument) in items[2..].iter().enumerate() {
+						// an Int is certain only as a literal: an unknown variable reads as one too
+						let kind = value_kind(argument).filter(|kind| *kind != Kind::Int || argument_literal_kind(argument) == Some(Kind::Int));
+						passed.entry((target.clone(), captured + index)).or_default().extend(kind);
+					}
 				}
 			});
 		}
+		inferred.extend(passed.into_iter().filter_map(|((target, index), kinds)| Some((target, index, passed_kind(&kinds)?))));
 		let mut changed = false;
 		for (target, index, kind) in inferred {
 			let Some(param) = ctx.user_functions.get_mut(&target).and_then(|function| function.params.get_mut(index)) else { continue };
@@ -712,6 +719,19 @@ pub(super) fn infer_closure_parameters(ctx: &mut Context, program: &Node) {
 		if !changed {
 			return;
 		}
+	}
+}
+
+/// The kind of a lambda parameter passed `kinds` by closure calls: one kind, a Float for Ints and Floats, any value (a
+/// Node) for others mixed (Z combinator: `x(x)` passes a function, `fact(10)` an Int to lambdas of one arity, card
+/// y-combinator)
+fn passed_kind(kinds: &HashSet<Kind>) -> Option<Kind> {
+	let mut others = kinds.iter().filter(|kind| **kind != Kind::Int);
+	match (others.next(), others.next()) {
+		(None, _) => None,
+		(Some(&Kind::Float), None) => Some(Kind::Float),
+		(Some(&kind), None) if !kinds.contains(&Kind::Int) => Some(kind),
+		_ => Some(Kind::Empty),
 	}
 }
 
