@@ -2095,6 +2095,9 @@ PASSED:
   ✓ numbers::test_declared_float_exact_reals::test_declared_float_reassignment_accepts_exact_reals
   ✓ numbers::test_declared_float_exact_reals::test_declared_float_rounds_an_exact_expression_once
   ✓ numbers::test_declared_float_exact_reals::test_undeclared_and_int_targets_keep_their_rules
+  ✓ numbers::test_degrees::a_degree_is_pi_over_180
+  ✓ numbers::test_degrees::a_temperature_keeps_its_degree_sign
+  ✓ numbers::test_degrees::trigonometry_takes_degrees
   ✓ numbers::test_div_assign::declared_int_keeps_dividing_whole
   ✓ numbers::test_div_assign::divide_assign_divides_exactly
   ✓ numbers::test_div_assign::floor_divide_assign_floors
@@ -4603,4 +4606,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-10 ignored, 4598 passed, 0 failed, 4598 total tested
+10 ignored, 4601 passed, 0 failed, 4601 total tested
