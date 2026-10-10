@@ -164,7 +164,7 @@ fn if_then_parts(node: &Node) -> Option<(&Node, &Node)> {
 }
 
 pub use equality::{IS_TRUTHY, SAME_NODE, VALUES_EQUAL};
-pub use config::{EmitterConfig, EmitterConfigBuilder};
+pub use config::EmitterConfig;
 pub use import_manager::ImportManager;
 pub use string_table::StringTable;
 pub use type_manager::TypeManager;
@@ -377,23 +377,9 @@ impl WasmGcEmitter {
 		self.config.emit_kind_globals = enabled;
 	}
 
-	pub fn set_tree_shaking(&mut self, enabled: bool) {
-		self.config.emit_all_functions = !enabled;
-	}
-
 	/// Enable/disable host function imports (fetch, run)
 	pub fn set_host_imports(&mut self, enabled: bool) {
 		self.config.emit_host_imports = enabled;
-	}
-
-	/// Enable/disable WASI imports (fd_write for puts, puti, etc.)
-	pub fn set_wasi_imports(&mut self, enabled: bool) {
-		self.config.emit_wasi_imports = enabled;
-	}
-
-	/// Enable/disable FFI imports (libc, libm functions)
-	pub fn set_ffi_imports(&mut self, enabled: bool) {
-		self.config.emit_ffi_imports = enabled;
 	}
 
 	// ═══════════════════════════════════════════════════════════════════════════
