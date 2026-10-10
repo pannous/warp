@@ -26,7 +26,7 @@ const CURSOR_MARK = "‸"; // where the cursor is, as assistant.json's completio
 const ASSISTANT_SETTINGS = "assistant.json";
 const PROXY_ORIGIN = "https://warp-assistant.pannous.workers.dev";
 const TURNSTILE_SCRIPT = "https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit";
-const TURNSTILE_SITE_KEY = "1x00000000000000000000AA"; // placeholder: Cloudflare's always-passing test key until the real one exists
+const TURNSTILE_SITE_KEY = "0x4AAAAAAFTFLP50fgWUgeS0"; // public: the warp playground widget (hostnames warp.pannous.com, pannous.com, localhost, 127.0.0.1)
 const CODE_FENCE = /```([a-z]*)\n?([\s\S]*?)```/g; // a split gives text, language, code, text, …
 const FAILURE_SHOWN_MS = 5000; // how long a failed completion's reason stays under its line
 const PAUSE_BEFORE_COMPLETION_MS = 1000; // typing paused this long at a line's end asks for a completion by itself
