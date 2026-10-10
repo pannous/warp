@@ -192,6 +192,9 @@ pub fn add_dependencies(required: &mut HashSet<&'static str>) {
 		if required.contains(super::uncertain::UNCERTAIN_NEW) {
 			required.insert(super::uncertain::UNCERTAIN_TEXT); // `7.0 ± 2.0`
 		}
+		if required.contains(crate::time::INSTANT_AT) {
+			required.insert(super::times::INSTANT_TEXT); // `2026-10-10T14:43:33.682Z`
+		}
 	}
 	// numbers that are no fixnum (big integers, ratios) join as their exact text, built by text_concat
 	if required.contains("list_join") && required.contains(super::INT_RUNTIME) {

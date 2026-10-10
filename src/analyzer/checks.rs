@@ -364,8 +364,6 @@ fn nested_type_word(item: &Node, scope: &Scope) -> String {
 }
 
 /// The type name of a map literal, `map of <value type>` when its values share one
-/// The got-it topic of a `let` variable that changes (P159)
-const LET_CHANGES_TOPIC: &str = "let changes";
 pub(crate) const MAP_TYPE: &str = "map";
 /// Library words whose list result has the elements of their list argument
 pub(super) const ORDER_WORDS: [&str; 2] = ["sort", "reverse"];
@@ -383,8 +381,6 @@ pub const TEMPORARY_SEPARATOR: &str = "·";
 pub fn is_compiler_temporary(name: &str) -> bool {
 	name.contains(TEMPORARY_SEPARATOR)
 }
-/// Statements that name functions or modules instead of calling them
-pub(super) const IMPORT_WORDS: [&str; 3] = ["import", "use", "include"];
 pub(super) const LIST_OF_PREFIX: &str = "list of ";
 /// The type words of a bool, held as an Int (builtin_type_kind)
 const BOOL_TYPES: [&str; 2] = ["bool", "boolean"];
@@ -491,7 +487,7 @@ pub(super) fn call_arity_error(node: &Node, context: &Context) -> Option<Diagnos
 	match node {
 		Node::Meta { node, .. } => call_arity_error(node, context),
 		// `import (sin, floor) from 'm'` names functions, it calls none
-		Node::List(items, _, _) if matches!(items.first().map(Node::drop_meta), Some(Node::Symbol(word)) if IMPORT_WORDS.contains(&word.as_str())) => None,
+		Node::List(items, _, _) if matches!(items.first().map(Node::drop_meta), Some(Node::Symbol(word)) if crate::modules::is_import_keyword(word)) => None,
 		Node::List(items, bracket, _) => {
 			if let (Bracket::Round, Some(Node::Symbol(name))) = (bracket, items.first().map(Node::drop_meta)) {
 				let libm = crate::ffi::LIBM_F64_FUNCTIONS.iter().filter(|(function, _)| function == name).map(|(_, arity)| *arity);
@@ -963,7 +959,7 @@ pub(super) fn negative_modulo_warning(left: &Node, right: &Node) -> String {
 pub(super) fn check_ambiguous_calls(node: &Node) -> Option<Diagnostic> {
 	/// `return x`, `let x`, `def f`, `use m`: a statement word, no function applied braceless
 	fn is_statement_word(word: &str) -> bool {
-		is_declaration_word(word) || crate::operators::is_function_keyword(word) || IMPORT_WORDS.contains(&word) || RETURNING_KEYWORDS.contains(&word)
+		is_declaration_word(word) || crate::operators::is_function_keyword(word) || crate::modules::is_import_keyword(word) || RETURNING_KEYWORDS.contains(&word)
 	}
 	fn braceless_call(node: &Node) -> Option<(&String, &Node)> {
 		match node.drop_meta() {
@@ -1157,12 +1153,10 @@ pub(super) fn check_null_use(node: &Node, nullable: &mut HashMap<String, Uncheck
 }
 
 /// `const x=…` binds x once: a later assignment of another value, a compound assignment, an increment or an element
-/// assignment is rejected (P130); the same value again only warns (P159). `let x=…` may change, with a note that
-/// teaches `var` for a variable that changes (P159)
-/// A `let` variable may change, with a got-it note teaching `var`
-fn educate_let_change(node: &Node, place: &str, change: &str) {
-	crate::normalize::set_position_of(node);
-	crate::diagnostic::educate_once(LET_CHANGES_TOPIC, &format!("let {place}"), &format!("var {place}"), &format!("{place} changes ({change}): var says so where it is declared"));
+/// assignment is rejected (P130); the same value again only warns (P159). `let x=…` is fully immutable: any change
+/// of it is an error naming `var` (user, card let-reassign)
+fn let_change(node: &Node, place: &str, change: &str) -> Diagnostic {
+	Diagnostic::at(node, format!("{place} is let (immutable), cannot change it: {change}")).fix(format!("use var {place}"))
 }
 
 /// The method call `add(4)`, `pop()`, `remove(x)` of `names.add(4)`: one that changes the list it is called on
@@ -1221,7 +1215,7 @@ pub(super) fn check_constants(node: &Node, constants: &mut HashMap<String, (Stri
 			};
 			let assignment = node.drop_meta().serialize();
 			match constants.get(&place) {
-				Some((keyword, _)) if keyword == IMMUTABLE_LET => educate_let_change(node, &place, &assignment),
+				Some((keyword, _)) if keyword == IMMUTABLE_LET => return Some(let_change(node, &place, &assignment)),
 				Some((_, bound)) if *op == Op::Assign && matches!(target.drop_meta(), Node::Symbol(_)) && value.serialize() == *bound => {
 					let redundant = Diagnostic::at(node, format!("{place} is const and already {bound}: {assignment} changes nothing")).fix("remove the redundant assignment".to_string());
 					if crate::diagnostic::report(std::slice::from_ref(&redundant)).is_err() {
@@ -1241,7 +1235,7 @@ pub(super) fn check_constants(node: &Node, constants: &mut HashMap<String, (Stri
 			let place = list.name();
 			let change = node.drop_meta().serialize();
 			match constants.get(&place) {
-				Some((keyword, _)) if keyword == IMMUTABLE_LET => educate_let_change(node, &place, &change),
+				Some((keyword, _)) if keyword == IMMUTABLE_LET => return Some(let_change(node, &place, &change)),
 				Some(_) => {
 					return Some(Diagnostic::at(node, format!("{place} is const, cannot change it: {change}"))
 						.fix(format!("change a copy (copy = {place}), or declare {place} without const")));

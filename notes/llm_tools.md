@@ -8,7 +8,8 @@ workspace key) pays for a docs checker, a program corpus and, maybe, extra API w
   of web/playground/guide.md, guide-expert.md, primer.md and the wiki (read from the main checkout's wiki/) runs
   through `/Users/me/dev/bin/warp --sandbox --no-ask run` (WARP_NO_WINDOW=1, 20 s timeout). An explicit value equal
   to the last output line passes without a model; the rest go to Haiku 5.5 (triage), the non-ok ones to Sonnet 5.5.
-  Wiki lines with "Warp before" / "before this change" record old behaviour on purpose and are skipped.
+  Wiki lines with "Warp before" / "before this change" record old behaviour on purpose and are skipped, so are
+  fences marked ```warp compiles (servers, windows) and ```warp planned (unbuilt features with their own card).
 - `scripts/llm/corpus.py [--dry-run] [--limit N] [--new-tasks]`: Sonnet writes a program per task of
   scripts/llm/corpus_tasks.json5 (304 Rosetta-style tasks, written by Sonnet once; keep the list so weekly runs
   compare) knowing only guide.md + guide-expert.md; each runs, then the same judging. Programs land in

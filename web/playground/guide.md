@@ -389,6 +389,17 @@ twice := it * 2
 twice 21
 ```
 
+Pick a fresh name: type names like `double` and keywords like `fun` are taken.
+
+A function reads the variables around it, but changing one needs `global`.
+
+```warp => 2
+score = 1
+def bump() { global score; score += 1 }
+bump()
+score
+```
+
 A function can call itself.
 
 ```warp => 55

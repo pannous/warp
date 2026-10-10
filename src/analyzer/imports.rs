@@ -156,6 +156,7 @@ fn functions_of_call(word: &str) -> &'static [&'static str] {
 	use crate::library_words::{FIELD_WITH, INSTANCE_COPY, MAP_GET_OR, MAP_WITHOUT};
 	match word {
 		ZERO_FILL_CALL => &[ZERO_FILL_CALL],
+		crate::time::INSTANT_AT => &[crate::time::INSTANT_AT, crate::wasm_emitter::list_ops::RETURNED_ERROR],
 		LIST_DROP_LAST => &[LIST_DROP_LAST],
 		REMOVED_VALUE_CALL => &[MAP_GET_OR, MAP_WITHOUT],
 		INSERT_AT_CALL | INSERT_EITHER_CALL => &[INSERT_AT_CALL],

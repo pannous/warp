@@ -273,6 +273,7 @@ pub(super) fn with_usage_kinds(params: Vec<Param>, body: &Node) -> Vec<Param> {
 	let mut celled: HashSet<String> = HashSet::new();
 	let mut texted: HashSet<String> = HashSet::new();
 	let mut foreign: HashSet<String> = HashSet::new();
+	let mut tested: HashSet<String> = HashSet::new();
 	let mut aliases: Vec<(String, String)> = vec![];
 	body.visit(&mut |node| {
 		if let Some(name) = crate::closures::called_closure(node) {
@@ -297,6 +298,7 @@ pub(super) fn with_usage_kinds(params: Vec<Param>, body: &Node) -> Vec<Param> {
 			texted.insert(name.to_string());
 		}
 		foreign.extend(given_to_foreign_code(node).map(str::to_string));
+		tested.extend(kind_tested(node).map(str::to_string));
 		// `xs = xs + [420]`, `xs += [420]` (what `xs.add(420)` lowers to): xs is a list, called or not
 		if let Some(name) = joined_to_list(node) {
 			indexed.insert(name.to_string());
@@ -327,8 +329,23 @@ pub(super) fn with_usage_kinds(params: Vec<Param>, body: &Node) -> Vec<Param> {
 		} else {
 			None
 		};
-		Param { used_as, ..param }
+		// `if x is list then … else x`: a parameter tested for its kind takes any value, as if written `x:any` (card recursive-sum)
+		let takes_any = tested.contains(&param.name) && param.annotation.is_none() && param.default.is_none();
+		let annotation = if takes_any { Some(Node::Symbol(crate::type_kinds::UNTYPED_FIELD.to_string())) } else { param.annotation };
+		Param { used_as, annotation, ..param }
 	}).collect()
+}
+
+/// `is_type(x, "list")`, what `x is list` lowers to: the name whose kind is tested
+fn kind_tested(node: &Node) -> Option<&str> {
+	let Node::List(items, _, _) = node else { return None };
+	match items.as_slice() {
+		[word, tested, _] if word.is_symbol(crate::type_tests::IS_TYPE) => match tested.drop_meta() {
+			Node::Symbol(name) => Some(name),
+			_ => None,
+		},
+		_ => None,
+	}
 }
 
 /// The names a foreign call takes as its receiver or arguments (lowering/foreign_modules.rs): values of any kind, as
@@ -673,6 +690,8 @@ pub(super) fn infer_closure_parameters(ctx: &mut Context, program: &Node) {
 	let variable_kinds = variable_kinds(program, ctx, true);
 	loop {
 		let mut inferred: Vec<(String, usize, Kind)> = vec![];
+		// a closure call may call any lifted lambda of its arity: the kinds its arguments pass to each one
+		let mut passed: HashMap<(String, usize), HashSet<Kind>> = HashMap::new();
 		// the kinds of each scope's parameters and variables: `m = float(2.5)` captured by a closure is a float
 		let function_kinds: HashMap<String, Kind> = ctx.user_functions.iter().map(|(name, function)| (name.clone(), function.return_kind)).collect();
 		let scope_kinds = |params: &[Param], body: &Node| -> HashMap<String, Kind> {
@@ -697,10 +716,15 @@ pub(super) fn infer_closure_parameters(ctx: &mut Context, program: &Node) {
 				let Some(Node::Symbol(name)) = items.first().map(Node::drop_meta) else { return };
 				let Some(arity) = crate::closures::closure_call_arity(name) else { return };
 				for (target, captured) in ctx.closure_targets.iter().filter(|(target, captured)| ctx.user_functions.get(target).is_some_and(|function| function.params.len() == captured + arity)) {
-					inferred.extend(items[2..].iter().enumerate().filter_map(|(index, argument)| Some((target.clone(), captured + index, value_kind(argument)?))));
+					for (index, argument) in items[2..].iter().enumerate() {
+						// an Int is certain only as a literal: an unknown variable reads as one too
+						let kind = value_kind(argument).filter(|kind| *kind != Kind::Int || argument_literal_kind(argument) == Some(Kind::Int));
+						passed.entry((target.clone(), captured + index)).or_default().extend(kind);
+					}
 				}
 			});
 		}
+		inferred.extend(passed.into_iter().filter_map(|((target, index), kinds)| Some((target, index, passed_kind(&kinds)?))));
 		let mut changed = false;
 		for (target, index, kind) in inferred {
 			let Some(param) = ctx.user_functions.get_mut(&target).and_then(|function| function.params.get_mut(index)) else { continue };
@@ -712,6 +736,19 @@ pub(super) fn infer_closure_parameters(ctx: &mut Context, program: &Node) {
 		if !changed {
 			return;
 		}
+	}
+}
+
+/// The kind of a lambda parameter passed `kinds` by closure calls: one kind, a Float for Ints and Floats, any value (a
+/// Node) for others mixed (Z combinator: `x(x)` passes a function, `fact(10)` an Int to lambdas of one arity, card
+/// y-combinator)
+fn passed_kind(kinds: &HashSet<Kind>) -> Option<Kind> {
+	let mut others = kinds.iter().filter(|kind| **kind != Kind::Int);
+	match (others.next(), others.next()) {
+		(None, _) => None,
+		(Some(&Kind::Float), None) => Some(Kind::Float),
+		(Some(&kind), None) if !kinds.contains(&Kind::Int) => Some(kind),
+		_ => Some(Kind::Empty),
 	}
 }
 

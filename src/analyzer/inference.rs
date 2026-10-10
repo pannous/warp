@@ -281,6 +281,10 @@ pub(super) fn infer_list_type(node: &Node, items: &[Node], bracket: &Bracket, se
 		if [ZERO_FILL_CALL, INSERT_AT_CALL, INSERT_EITHER_CALL].contains(&name) {
 			return Kind::List;
 		}
+		// `now`: an instant, a kind the node operations meet at run time (wasm_emitter/times.rs)
+		if name == crate::time::INSTANT_AT {
+			return Kind::Data;
+		}
 		if name == crate::library_words::LIST_SUM && items.len() == 3 {
 			return infer_type(&items[2], scope); // the loop it dispatches around
 		}

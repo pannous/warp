@@ -1,6 +1,6 @@
 //! `[x * x for x in 1..10]` and `[x for x in xs if x % 2 == 0]`: a list built by a loop,
-//! `(made = []; for x in xs { if c { made.push(x * x) } }; made)`. Lowered first, so the loop and the push go through
-//! every later pass like written ones. `xs where it > 1` filters like `[it for it in xs if it > 1]`.
+//! `(made = []; for x in xs { if c { made += [x * x] } }; made)`. Lowered first, so the loop and the append go through
+//! every later pass like written ones; `+=`, no `push`, which a program's own `push(st, x)` would answer. `xs where it > 1` filters like `[it for it in xs if it > 1]`.
 
 use super::words::{FOR_WORD, IN_WORD};
 use super::nodes::{Counter, key};
@@ -361,7 +361,7 @@ impl Lowering {
 		let comprehension = Comprehension::of(items)?;
 		let number = self.count.next_number();
 		let made = format!("{MADE}_{number}");
-		Some(comprehension.looped(&format!("(var {made} = []; {LOOPS}; {made})"), &format!("{made}.push({ELEMENT})")))
+		Some(comprehension.looped(&format!("(var {made} = []; {LOOPS}; {made})"), &format!("{made} += [{ELEMENT}]")))
 	}
 }
 

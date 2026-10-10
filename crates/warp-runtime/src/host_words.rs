@@ -31,13 +31,16 @@ pub const CLIPBOARD_COUNT: &str = "clipboard count";
 pub const MOUSE_X: &str = "mouse_x";
 pub const MOUSE_Y: &str = "mouse_y";
 pub const MOUSE_DOWN: &str = "mouse_down";
+/// Whether a window shows the pictures: natively the paint window until it closes (no before the first paint and
+/// headless), on a page its canvas, always; `while window_open { … }` is a drawing loop that ends with its window
+pub const WINDOW_OPEN: &str = "window_open";
 /// The local time of day in milliseconds since midnight, what the word `time` is compared with a duration (src/units.rs)
 pub const TIME_OF_DAY: &str = "time of day";
 /// the size a picture gets: the playground's output pane, natively the paint window's first size (system_values.rs)
 pub const VIEW_WIDTH: &str = "view_width";
 pub const VIEW_HEIGHT: &str = "view_height";
-pub const SYSTEM_VALUES: [(&str, bool); 10] = [(BATTERY, false), (CHARGING, true), (ONLINE, true), (DARK_MODE, true), (CLIPBOARD_COUNT, false),
-	(MOUSE_X, false), (MOUSE_Y, false), (MOUSE_DOWN, true), (VIEW_WIDTH, false), (VIEW_HEIGHT, false)];
+pub const SYSTEM_VALUES: [(&str, bool); 11] = [(BATTERY, false), (CHARGING, true), (ONLINE, true), (DARK_MODE, true), (CLIPBOARD_COUNT, false),
+	(MOUSE_X, false), (MOUSE_Y, false), (MOUSE_DOWN, true), (WINDOW_OPEN, true), (VIEW_WIDTH, false), (VIEW_HEIGHT, false)];
 /// `clipboard`: the clipboard's text, read only when the program reads it (host.rs clipboard_text)
 pub const CLIPBOARD: &str = "clipboard";
 pub const CLIPBOARD_TEXT: &str = "clipboard_text";

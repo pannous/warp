@@ -1,5 +1,5 @@
 // P159 (wiki/mutable.md): `const x=7; x=7` works with a warning (remove the redundant assignment), another value stays
-// P130's error; a `let` variable may change, with a got-it note teaching `var`
+// P130's error; a `let` is fully immutable, every change of it names `var` (user, card let-reassign)
 use crate::common::fails_with;
 use crate::is;
 use warp::ints;
@@ -13,9 +13,9 @@ fn a_constant_assigned_its_own_value_again() {
 
 #[test]
 fn a_let_variable_changes() {
-	is!("let x=\"hello\"; x+=\" world\"; x", "hello world");
-	is!("let x = 1; x++; x", 2);
-	is!("let xs = [1 2]; xs#1 = 5; xs", ints(vec![5, 2]));
+	fails_with("let x=\"hello\"; x+=\" world\"; x", "x is let (immutable), cannot change it");
+	fails_with("let x = 1; x++; x", "fix: use var x");
+	fails_with("let xs = [1 2]; xs#1 = 5; xs", "xs is let (immutable)");
 }
 
 // card let-tuple: let and const take a tuple pattern; each name is bound like a single declaration
@@ -36,4 +36,11 @@ fn a_declaration_unpacks_comma_values() {
 	is!("var a, b = 3, 4; a = 5; a * b", 20);
 	is!("const a, b = 3, 4; a + b", 7);
 	fails_with("const a, b = 3, 4; b = 1", "b is const, cannot assign it again");
+}
+
+// card let-reassign (user): `let mut x` is `var x`, with a note naming var
+#[test]
+fn let_mut_is_var() {
+	is!("let mut x = 1; x = 2; x", 2);
+	is!("let mutable xs = [1]; xs.add(2); #xs", 2);
 }

@@ -24,7 +24,7 @@ fn is_constant_keyword(node: &Node) -> bool {
 
 /// `var x = 1` announces a reassignable variable, plain `x = 1`
 const VAR_KEYWORD: &str = "var";
-/// `let x = 1` may change, with a note teaching `var` (P159; check_constants)
+/// `let x = 1` binds x once: any change of it is an error naming `var` (user, card let-reassign; check_constants)
 const IMMUTABLE_LET: &str = "let";
 
 pub(crate) fn is_declaration_keyword(node: &Node) -> bool {
@@ -89,7 +89,7 @@ pub fn is_statement(item: &Node, bracket: &Bracket) -> bool {
 		Node::List(list_items, _, _) if list_items.len() >= 2 => {
 			// `cell_set(c, v)` is the assignment of a nonlocal variable (lowering/nonlocal_cells.rs)
 			// `$destructure (h, o) value` is `h, o = value` lowered (tuples.rs)
-			matches!(list_items[0].drop_meta(), Node::Symbol(s) if is_function_keyword(s) || ["use", "import", "return", crate::tuples::DESTRUCTURE, crate::host::TASK_CHECK, crate::wasm_emitter::cells::CELL_SET, crate::wasm_emitter::cells::SIGNAL_LISTENERS_SET].contains(&s.as_str()))
+			matches!(list_items[0].drop_meta(), Node::Symbol(s) if is_function_keyword(s) || crate::modules::is_import_keyword(s) || ["return", crate::tuples::DESTRUCTURE, crate::host::TASK_CHECK, crate::wasm_emitter::cells::CELL_SET, crate::wasm_emitter::cells::SIGNAL_LISTENERS_SET].contains(&s.as_str()))
 		}
 		_ => false,
 	}

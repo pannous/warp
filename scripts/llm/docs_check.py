@@ -21,7 +21,9 @@ INLINE_EXAMPLE = re.compile(r"`([^`]+)`\s*→\s*`([^`]+)`")
 NEWLINE_MARK = "⏎"  # the wiki writes a line break inside inline code as ⏎
 VALUE_MARK = "=>"  # ```warp => value: the value the guide shows
 PRINTED_FENCE = "printed"  # a ```printed block right after a snippet: what it prints
-SKIP_MARK = "compiles"  # ```warp compiles: servers and windows, compiled only (tests/web/test_primer.rs)
+# ```warp compiles: servers and windows, compiled only (tests/web/test_primer.rs); ```warp planned: an unbuilt
+# feature with its own card (warp-docs, 2026-10-10)
+SKIP_MARKS = ("compiles", "planned")
 HISTORY_MARKS = ("Warp before", "before this change")  # wiki lines that record old behaviour on purpose
 CONTEXT_BEFORE, CONTEXT_AFTER = 900, 400  # characters of the doc around an example shown to the model
 SYSTEM = """You check the documentation of warp, a data format and wasm-first programming language, against the
@@ -86,7 +88,7 @@ def examples(page):
         if following < len(lines) and lines[following].strip() == "```" + PRINTED_FENCE:
             printed_end = next(index for index in range(following + 1, len(lines)) if lines[index].strip() == "```")
             claim = (claim or "") + " printed: " + "".join(lines[following + 1:printed_end]).strip()
-        if language in WARP_LANGUAGES and code.strip() and SKIP_MARK not in info:
+        if language in WARP_LANGUAGES and code.strip() and not any(mark in info for mark in SKIP_MARKS):
             found.append({"id": f"{name}:{number + 1}", "code": code, "claim": claim,
                           "context": context(offsets[number], offsets[min(end + 1, len(lines))])})
         number = end + 1

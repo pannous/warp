@@ -247,7 +247,7 @@ fn with_builtin_values(shader: &str, width: u32, height: u32, values: &[ShaderVa
 	static RENDERS: std::sync::atomic::AtomicU32 = std::sync::atomic::AtomicU32::new(0);
 	let frame = RENDERS.fetch_add(1, std::sync::atomic::Ordering::Relaxed) as f32;
 	let size = [width as f32, height as f32];
-	let [mouse_x, mouse_y, mouse_down, key] = crate::paint_window::input();
+	let [mouse_x, mouse_y, mouse_down, key] = warp_runtime::system_values::window_input();
 	let filled = crate::shader_holes::BUILTIN_HOLES.into_iter().filter(|name| reads_value(shader, name) && !values.iter().any(|value| value.name == *name));
 	let builtins = filled.map(|name| ShaderValue {
 		name: name.to_string(),

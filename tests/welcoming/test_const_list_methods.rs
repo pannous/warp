@@ -17,6 +17,6 @@ fn a_const_list_refuses_its_changing_methods() {
 #[test]
 fn a_const_list_reads_and_a_let_list_changes() {
 	is!("const names = [\"b\" \"a\"]; #names", 2);
-	is!("let names = [\"hi\"]; names.add(\"yo\"); #names", 2);
+	fails_with("let names = [\"hi\"]; names.add(\"yo\"); #names", "names is let (immutable), cannot change it"); // user, card let-reassign
 	is!("names = [\"hi\"]; names.add(\"yo\"); #names", 2);
 }

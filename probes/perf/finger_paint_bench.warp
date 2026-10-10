@@ -1,0 +1,25 @@
+// runtime-speed benchmark: the costs of samples/finger_paint.warp without a mouse (WARP_NO_WINDOW=1)
+// clear: a 1280×800 canvas filled; stroke: one 100-pixel drag of brush dabs; show: the frame handed to paint
+use draw
+width = 1280
+height = 800
+brush = 8
+spacing = 3
+global turn = 0.0
+def stroke(x1, y1, x2, y2) {
+	dabs = max(cell(max(abs(x2 - x1), abs(y2 - y1)) / spacing), 1)
+	for i in 1 to dabs {
+		circle(x1 + (x2 - x1) * i / dabs, y1 + (y2 - y1) * i / dabs, brush, hsv(turn, 0.8, 0.9))
+		turn += 0.5
+	}
+}
+t0 = clock()
+canvas(width, height)
+t1 = clock()
+clear(white)
+t2 = clock()
+for k in 1 to 10 { stroke(100.0 + k, 100.0, 200.0 + k, 150.0) }
+t3 = clock()
+for k in 1 to 5 { show() }
+t4 = clock()
+print("canvas " + (t1 - t0) + "ms, clear " + (t2 - t1) + "ms, stroke " + ((t3 - t2) / 10) + "ms, show " + ((t4 - t3) / 5) + "ms")

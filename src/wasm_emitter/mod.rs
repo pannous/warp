@@ -33,6 +33,7 @@ mod library_ops;
 mod text_unicode;
 mod similarity;
 mod uncertain;
+mod times;
 pub use similarity::NUMBERS_SIMILAR;
 pub(crate) mod list_ops;
 mod list_abi;
@@ -87,6 +88,13 @@ const FIX_SEPARATOR: &str = "; fix: ";
 pub const CAPTURE_EXPORT_PREFIX: &str = "capture·";
 /// The WASI output words besides print: each gives an Int (analyzer)
 pub const OUTPUT_WORDS: [&str; 4] = ["puts", "puti", "putl", "putf"];
+/// Words that read a list or map without holding on to it, besides the counting words: `print m`, `type(xs)`, `m has k`
+const COLLECTION_READING_WORDS: [&str; 7] = ["print", "put", "string", "text", "type", "has", "contains"];
+
+/// `count(xs)`, `print m`, `xs has v`: a word given a collection variable reads it, the variable is not shared
+pub(super) fn reads_collection(word: &str) -> bool {
+	crate::analyzer::is_counting_word(word) || COLLECTION_READING_WORDS.contains(&word)
+}
 pub(crate) const OUTPUT_CALLS: [&str; 5] = ["print", OUTPUT_WORDS[0], OUTPUT_WORDS[1], OUTPUT_WORDS[2], OUTPUT_WORDS[3]];
 
 /// Builtins that round a float to an exact Int
@@ -232,7 +240,8 @@ pub struct WasmGcEmitter {
 	error_catching: Option<try_guard::ErrorCatching>, // the tag and globals of that `try`
 	abort_catching: Option<try_guard::AbortCatching>, // the tag of aborting effect handlers
 	memo_caches: HashMap<i64, (u32, u32)>, // per memoized function id: the globals of its values and known flags (memoization.rs)
-	extra_global_names: Vec<(u32, &'static str)>,
+	extra_global_names: Vec<(u32, String)>,
+	number_constants: HashMap<(num_bigint::BigInt, num_bigint::BigInt), u32>, // a big or fractional literal's global, made on first use (exact.rs)
 
 	// Configuration
 	config: EmitterConfig,
@@ -326,6 +335,7 @@ impl WasmGcEmitter {
 			abort_catching: None,
 			memo_caches: HashMap::new(),
 			extra_global_names: Vec::new(),
+			number_constants: HashMap::new(),
 			config: EmitterConfig::default(),
 			type_manager: TypeManager::new(),
 			import_manager: ImportManager::new(),
@@ -976,6 +986,7 @@ impl WasmGcEmitter {
 		self.emit_text_as_float();
 		self.emit_text_as_number(); // after text_as_float and text_as_int, which it calls
 		self.emit_uncertain_runtime(); // after text_as_float, which it calls
+		self.emit_times_runtime();
 		if self.config.emit_reflection {
 			self.emit_reflection();
 		}
@@ -1452,7 +1463,7 @@ impl WasmGcEmitter {
 				"kind_key", "kind_block", "kind_list", "kind_data", "kind_meta", "kind_error"];
 			let mut globals: Vec<(u32, &str)> = KIND_GLOBALS.iter().enumerate()
 				.filter(|(idx, _)| (*idx as u32) < self.ctx.kind_global_indices.len() as u32).map(|(idx, name)| (idx as u32, *name)).collect();
-			globals.extend(self.extra_global_names.iter().copied());
+			globals.extend(self.extra_global_names.iter().map(|(index, name)| (*index, name.as_str())));
 			self.names.globals(&name_map(&mut globals));
 		}
 
