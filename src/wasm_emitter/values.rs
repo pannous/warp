@@ -297,9 +297,7 @@ impl WasmGcEmitter {
 						self.emit_declared_value(func, declared.as_ref(), right, Kind::Float);
 						func.instruction(&I::LocalTee(position));
 					} else if let Some(kind) = self.emit_global_store(func, name, right) {
-						if !kind.is_float() {
-							self.emit_int_to_f64(func, None);
-						}
+						self.emit_stored_as_f64(func, kind);
 					} else {
 						self.emit_float_value(func, right);
 						self.emit_undefined_variable(func, name);
