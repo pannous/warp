@@ -638,7 +638,7 @@ pub(super) fn uses_it_outside_loops(node: &Node) -> bool {
 	match node.drop_meta() {
 		Node::Symbol(word) => word == "it",
 		Node::Key(left, _, right) => uses_it_outside_loops(left) || uses_it_outside_loops(right),
-		Node::List(items, _, _) if it_loop(items).is_some() => it_loop(items).is_some_and(|(iterable, _)| uses_it_outside_loops(iterable)),
+		Node::List(items, _, _) if let Some((iterable, _)) = it_loop(items) => uses_it_outside_loops(iterable),
 		Node::List(items, _, _) => items.iter().any(uses_it_outside_loops),
 		_ => false,
 	}
@@ -805,8 +805,7 @@ fn literal_object_fields(program: &Node) -> HashMap<String, HashSet<String>> {
 
 fn subtract_kebab_members(node: Node, variables: &HashSet<String>, objects: &HashMap<String, HashSet<String>>) -> Node {
 	match node {
-		Node::Key(receiver, Op::Dot, member) if kebab_member(&receiver, &member, variables, objects).is_some() => {
-			let (field, rest) = kebab_member(&receiver, &member, variables, objects).expect("guarded");
+		Node::Key(receiver, Op::Dot, member) if let Some((field, rest)) = kebab_member(&receiver, &member, variables, objects) => {
 			let read = Node::Key(receiver, Op::Dot, Box::new(Node::Symbol(field)));
 			rest.into_iter().fold(read, |difference, term| Node::Key(Box::new(difference), Op::Sub, Box::new(Node::Symbol(term))))
 		}
@@ -1084,13 +1083,11 @@ pub(super) fn check_null_use(node: &Node, nullable: &mut HashMap<String, Uncheck
 	match node.drop_meta() {
 		Node::Key(target, Op::Assign | Op::Define, value) => {
 			// `out = out + xs` building a list from ø, the empty list: a concatenation, no use of a null
-			let builds_list = matches!(value.drop_meta(), Node::Key(left, Op::Add, _) if left.drop_meta() == target.drop_meta()
-				&& nullable.get(&target.name()) == Some(&Unchecked::Null));
-			let found = if builds_list {
-				let Node::Key(_, _, right) = value.drop_meta() else { unreachable!("guarded") };
-				check_null_use(right, nullable)
-			} else {
-				check_null_use(value, nullable)
+			let found = match value.drop_meta() {
+				Node::Key(left, Op::Add, right) if left.drop_meta() == target.drop_meta() && nullable.get(&target.name()) == Some(&Unchecked::Null) => {
+					check_null_use(right, nullable)
+				}
+				_ => check_null_use(value, nullable),
 			};
 			let target = match target.drop_meta() {
 				Node::Key(name, Op::Colon, _) => &**name, // x:int?=ø

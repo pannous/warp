@@ -171,7 +171,7 @@ impl WarpParser {
 			}
 			self.advance();
 		}
-		Some(if names.len() == 1 { names.remove(0) } else { Node::List(names, bracket, Separator::Colon) })
+		Some(Node::single_or_list(names, bracket, Separator::Colon))
 	}
 
 	/// `(i=0;i<n;i++)`: a group here whose top level holds a `;`
@@ -518,12 +518,6 @@ impl WarpParser {
 	pub(super) fn braceless_argument_follows(&mut self) -> bool {
 		self.skip_blanks();
 		self.can_start_atom()
-	}
-
-	fn skip_blanks(&mut self) {
-		while matches!(self.current_char(), ' ' | '\t') {
-			self.advance();
-		}
 	}
 
 	pub(super) fn finish_while_prefix(&mut self, rhs: Node) -> Node {

@@ -646,9 +646,10 @@ impl WarpParser {
 		}
 
 		// `def square (n) {…}` names its function like `def square(n) {…}`
-		let names_function = std::mem::replace(&mut self.after_function_keyword, is_function_keyword(&symbol) && !self.options.wit_mode && !self.options.data_mode);
+		let in_code = self.in_code();
+		let names_function = std::mem::replace(&mut self.after_function_keyword, is_function_keyword(&symbol) && in_code);
 		// C's `int boom () { -1 }` (wiki/type.md): a name, `()` and a block are a definition like `boom() {…}`
-		let spaced_definition = !self.options.wit_mode && !self.options.data_mode && self.empty_parameters_and_block_follow();
+		let spaced_definition = in_code && self.empty_parameters_and_block_follow();
 		if (names_function && self.parameters_follow_after_blanks()) || spaced_definition {
 			self.skip_spaces();
 		}
@@ -709,7 +710,7 @@ impl WarpParser {
 		}
 
 		// `To square a number: …` starts an English sentence with a capital
-		if (symbol == TO_WORD || symbol == TO_SENTENCE_WORD) && !self.options.data_mode && !self.options.wit_mode && self.word_starts_statement(symbol.len()) {
+		if (symbol == TO_WORD || symbol == TO_SENTENCE_WORD) && self.in_code() && self.word_starts_statement(symbol.len()) {
 			if let Some(definition) = self.try_parse_to_definition() {
 				return definition;
 			}
@@ -747,68 +748,12 @@ impl WarpParser {
 		if !self.options.wit_mode && self.declares_type(&symbol) {
 			return self.parse_type_declaration();
 		}
-		// `new Point(1, 2)` (Java, JavaScript, C#) of a declared class: the construction `Point(1, 2)`
-		if symbol == NEW_WORD && !self.options.data_mode && self.declared_type_after_blanks() {
-			while matches!(self.current_char(), ' ' | '\t') {
-				self.advance();
-			}
-			let construction = self.parse_atom();
-			let class = crate::lowering::class_methods::leading_name(&construction);
-			crate::diagnostic::note_alias(&format!("{NEW_WORD} {class}"), &class);
-			return construction;
-		}
-		if symbol == CONSTANT_ALIAS && !self.options.data_mode && self.identifier_after_blanks() {
-			crate::diagnostic::note_alias(CONSTANT_ALIAS, CONST_WORD);
-			return Symbol(CONST_WORD.to_string());
-		}
-		// Ruby's `attr_accessor :x, :y` in a class body: the fields x and y
-		if RUBY_FIELD_WORDS.contains(&symbol.as_str()) && self.type_fields.is_some() {
-			let line: String = (0..).map(|offset| self.peek_char(offset)).take_while(|ch| !matches!(ch, '\n' | '\0' | ';' | '}')).collect();
-			let names: Vec<String> = line.split(',').map(|name| name.trim().trim_start_matches(':').to_string()).collect();
-			if names.iter().all(|name| !name.is_empty() && name.chars().all(is_identifier_char)) {
-				self.advance_by(line.chars().count());
-				crate::diagnostic::note_alias(&format!("{symbol}{line}"), &names.join("; "));
-				return Node::List(names.into_iter().map(Symbol).collect(), Bracket::None, Separator::Semicolon);
-			}
-		}
-		if symbol == OPERATOR_WORD && !self.options.data_mode && matches!(self.current_char(), ' ' | '\t') {
-			while matches!(self.current_char(), ' ' | '\t') {
-				self.advance();
-			}
-			if let Some(head) = self.try_parse_operator_method_head() {
-				crate::diagnostic::note_alias(&format!("{OPERATOR_WORD} {}", head.first().name()), &head.first().name());
-				return head;
-			}
-		}
 		// P178: `enum Shape { Circle(r), Rect(w, h), Dot }`, cases with values: the sum type `Circle(r) | Rect(w, h) | Dot`
-		if symbol == ENUM_WORD && !self.options.wit_mode && !self.options.data_mode && self.enum_with_values_ahead() {
+		if symbol == ENUM_WORD && self.in_code() && self.enum_with_values_ahead() {
 			return self.parse_enum_with_values();
 		}
-		// Kotlin's `enum class Color {…}`: the enum
-		if symbol == ENUM_WORD && !self.options.wit_mode && self.class_keyword_after_blanks() == Some("class") {
-			while matches!(self.current_char(), ' ' | '\t') {
-				self.advance();
-			}
-			self.advance_by("class".len());
-			crate::diagnostic::note_alias(&format!("{ENUM_WORD} class"), ENUM_WORD);
-			return Symbol(symbol);
-		}
-		// `data class P(…)` (Kotlin), `open class`, `abstract class`: a modifier of a class declaration, the class itself
-		if !self.options.wit_mode && CLASS_MODIFIERS.contains(&symbol.as_str()) {
-			if let Some(keyword) = self.class_keyword_after_blanks() {
-				crate::diagnostic::note_alias(&format!("{symbol} {keyword}"), keyword);
-				while matches!(self.current_char(), ' ' | '\t') {
-					self.advance();
-				}
-				self.advance_by(keyword.len());
-				return self.parse_type_declaration();
-			}
-		}
-		if !self.options.wit_mode && symbol == MIXIN_WORD && self.name_and_block_follow() {
-			return match self.parse_type_declaration() {
-				Node::Type { name, body } => Node::Type { name: Box::new(name.with_attribute(MIXIN_WORD, Node::True)), body },
-				other => other,
-			};
+		if let Some(form) = self.foreign_form(&symbol) {
+			return form;
 		}
 
 		// `point {x:1}` with blanks constructs a declared type like the glued `point{x:1}` (open decision 41)
@@ -820,13 +765,66 @@ impl WarpParser {
 		// `for t in todos { … }` it is the collection and the body (card markup-ul)
 		let spaced_child = self.in_data_literal && !self.in_for_header && !declared && self.blanks_then('{');
 		if spaced_child || ((declared || tagged) && self.block_after_blanks(declared)) {
-			while matches!(self.current_char(), ' ' | '\t') {
-				self.advance();
-			}
-			return self.parse_glued_suffix(symbol);
+			self.skip_blanks();
 		}
-
 		self.parse_glued_suffix(symbol)
+	}
+
+	/// Another language's way of writing a warp form: `new Point(1, 2)`, `constant`, Ruby's `attr_accessor :x`,
+	/// `operator +`, Kotlin's `enum class` and `data class`, `mixin Name {…}`
+	fn foreign_form(&mut self, symbol: &str) -> Option<Node> {
+		// `new Point(1, 2)` (Java, JavaScript, C#) of a declared class: the construction `Point(1, 2)`
+		if symbol == NEW_WORD && !self.options.data_mode && self.declared_type_after_blanks() {
+			self.skip_blanks();
+			let construction = self.parse_atom();
+			let class = crate::lowering::class_methods::leading_name(&construction);
+			crate::diagnostic::note_alias(&format!("{NEW_WORD} {class}"), &class);
+			return Some(construction);
+		}
+		if symbol == CONSTANT_ALIAS && !self.options.data_mode && self.identifier_after_blanks() {
+			crate::diagnostic::note_alias(CONSTANT_ALIAS, CONST_WORD);
+			return Some(Symbol(CONST_WORD.to_string()));
+		}
+		// Ruby's `attr_accessor :x, :y` in a class body: the fields x and y
+		if RUBY_FIELD_WORDS.contains(&symbol) && self.type_fields.is_some() {
+			let line: String = (0..).map(|offset| self.peek_char(offset)).take_while(|ch| !matches!(ch, '\n' | '\0' | ';' | '}')).collect();
+			let names: Vec<String> = line.split(',').map(|name| name.trim().trim_start_matches(':').to_string()).collect();
+			if names.iter().all(|name| !name.is_empty() && name.chars().all(is_identifier_char)) {
+				self.advance_by(line.chars().count());
+				crate::diagnostic::note_alias(&format!("{symbol}{line}"), &names.join("; "));
+				return Some(Node::List(names.into_iter().map(Symbol).collect(), Bracket::None, Separator::Semicolon));
+			}
+		}
+		if symbol == OPERATOR_WORD && !self.options.data_mode && matches!(self.current_char(), ' ' | '\t') {
+			self.skip_blanks();
+			if let Some(head) = self.try_parse_operator_method_head() {
+				crate::diagnostic::note_alias(&format!("{OPERATOR_WORD} {}", head.first().name()), &head.first().name());
+				return Some(head);
+			}
+		}
+		// Kotlin's `enum class Color {…}`: the enum
+		if symbol == ENUM_WORD && !self.options.wit_mode && self.class_keyword_after_blanks() == Some("class") {
+			self.skip_blanks();
+			self.advance_by("class".len());
+			crate::diagnostic::note_alias(&format!("{ENUM_WORD} class"), ENUM_WORD);
+			return Some(Symbol(symbol.to_string()));
+		}
+		// `data class P(…)` (Kotlin), `open class`, `abstract class`: a modifier of a class declaration, the class itself
+		if !self.options.wit_mode && CLASS_MODIFIERS.contains(&symbol) {
+			if let Some(keyword) = self.class_keyword_after_blanks() {
+				crate::diagnostic::note_alias(&format!("{symbol} {keyword}"), keyword);
+				self.skip_blanks();
+				self.advance_by(keyword.len());
+				return Some(self.parse_type_declaration());
+			}
+		}
+		if !self.options.wit_mode && symbol == MIXIN_WORD && self.name_and_block_follow() {
+			return Some(match self.parse_type_declaration() {
+				Node::Type { name, body } => Node::Type { name: Box::new(name.with_attribute(MIXIN_WORD, Node::True)), body },
+				other => other,
+			});
+		}
+		None
 	}
 
 	/// `class circle{pi = 3}`, `class C{pi:int}`: a named number declared in a type body names the type's own field, which
@@ -955,9 +953,7 @@ impl WarpParser {
 			true => {
 				self.skip_whitespace();
 			}
-			false => while matches!(self.current_char(), ' ' | '\t') {
-				self.advance();
-			},
+			false => self.skip_blanks(),
 		}
 		// `class dog extends animal {…}` (P117): the parent rides on the name, class_methods copies its fields and methods
 		let mut name = Symbol(type_name);
@@ -1325,8 +1321,7 @@ impl WarpParser {
 				};
 				Node::Key(Box::new(Symbol(symbol)), op, Box::new(block))
 			}
-			'<' if !self.options.xml_mode && !self.options.data_mode && self.type_application_length().is_some() => {
-				let length = self.type_application_length().expect("guarded");
+			'<' if !self.options.xml_mode && !self.options.data_mode && let Some(length) = self.type_application_length() => {
 				let arguments: String = (1..length - 1).map(|offset| self.peek_char(offset)).collect();
 				if symbol == "list" && !arguments.contains(',') {
 					let element_words: Vec<&str> = arguments.split(|c: char| c == '<' || c == '>' || c.is_whitespace()).filter(|word| !word.is_empty()).collect();
