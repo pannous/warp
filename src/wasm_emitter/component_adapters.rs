@@ -235,11 +235,9 @@ impl WasmGcEmitter {
 		Self::emit_aligned_up(f, address, I::I32Const(RETURN_AREA_ALIGNMENT));
 		f.instruction(&I::LocalGet(address));
 		self.emit_text_field(f, text, 0);
-		f.instruction(&I::I32Store(WORD));
-		f.instruction(&I::LocalGet(address));
+		Self::emit_list(f, &[I::I32Store(WORD), I::LocalGet(address)]);
 		self.emit_text_field(f, text, 1);
-		f.instruction(&I::I32Store(MemArg { offset: LENGTH_OFFSET, ..WORD }));
-		f.instruction(&I::LocalGet(address));
+		Self::emit_list(f, &[I::I32Store(MemArg { offset: LENGTH_OFFSET, ..WORD }), I::LocalGet(address)]);
 	}
 
 	/// A call of the imported function `name` when it is one (`host.time()`): its value as a Node, or as the number

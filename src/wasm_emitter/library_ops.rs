@@ -111,8 +111,10 @@ impl WasmGcEmitter {
 		if self.int_runtime() {
 			self.call(func, "int_from_payload");
 		} else {
-			func.instruction(&I::RefCastNonNull(HeapType::Concrete(self.type_manager.i64_box_type)));
-			func.instruction(&I::StructGet { struct_type_index: self.type_manager.i64_box_type, field_index: 0 });
+			Self::emit_list(func, &[
+				I::RefCastNonNull(HeapType::Concrete(self.type_manager.i64_box_type)),
+				I::StructGet { struct_type_index: self.type_manager.i64_box_type, field_index: 0 },
+			]);
 		}
 	}
 
@@ -562,8 +564,7 @@ impl WasmGcEmitter {
 					new_text(f, open_map);
 					f.instruction(&I::Else);
 					new_text(f, open);
-					f.instruction(&I::End);
-					f.instruction(&I::LocalGet(element));
+					Self::emit_list(f, &[I::End, I::LocalGet(element)]);
 					new_text(f, space);
 					f.instruction(&I::Call(own_index));
 					s.call(f, super::text_builtins::TEXT_CONCAT);
