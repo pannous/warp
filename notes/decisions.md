@@ -1078,6 +1078,10 @@ notes/open_decisions.md.
   stays a type error. Flipped tests: test_text_concat::text_plus_number_stays_an_error,
   test_footguns::test_text_plus_number_is_a_type_error, test_text_bytes::text_plus_number_stays_a_type_error.
   Not yet: a runtime ratio (`y=2.5; "x"+y`, also `y as string`) prints garbage: list_join has no text form for ratios.
+- Extended 2026-10-10 (user via warp-supervisor, card print-oldest): text + anything concatenates in its str() form
+  (`"oldest first: " + list`, an instance, a map, ø); a function stays an error. The one exception: a text spelling a
+  number plus a number (`"3"+3`) warns, offering `int("3") + 3` or `"3" + str(3)`, and keeps `"33"` (an error under
+  `use strict`); `"a"+3` is silent. Test: tests/text/test_text_plus_anything.rs.
 - `//` not followed by a space is Python floor division (`7//2`, `a //b`, `x//=3`, `x //= 3`), the Euclidean
   quotient that goes with `%` (`floor_quotient(a, b)`: floor for a positive divisor, `-7//-2` gives 4 where Python
   gives 3). `a div b` is the same floor division. An index that divides (`xs[n/2]`) traps `index must be an
