@@ -189,11 +189,7 @@ fn signatures(block: &Node) -> Result<Vec<Signature>, String> {
 fn signature(member: &Node) -> Option<Signature> {
 	let Node::Key(head, Op::Arrow, result) = member.drop_meta() else { return None };
 	let Node::Key(name, Op::Colon, parameters) = head.drop_meta() else { return None };
-	let parameters = match parameters.drop_meta() {
-		Node::Empty => vec![],
-		Node::List(types, _, _) => types.iter().map(wit_type).collect::<Option<_>>()?,
-		single => vec![wit_type(single)?],
-	};
+	let parameters = parameters.as_items().iter().map(wit_type).collect::<Option<Vec<_>>>()?;
 	let result = match result.drop_meta() {
 		Node::Empty => None,
 		other => Some(wit_type(other)?),

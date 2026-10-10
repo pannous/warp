@@ -190,21 +190,12 @@ fn rewritten(node: Node, step: &dyn Fn(&Node) -> Step) -> Node {
 	}
 }
 
-/// The direct parts of a node: a list's items, a key's two sides
-fn parts(node: &Node) -> Vec<&Node> {
-	match node {
-		Node::List(items, _, _) => items.iter().collect(),
-		Node::Key(left, _, right) => vec![left, right],
-		_ => vec![],
-	}
-}
-
 /// Whether `node` holds `word` outside its loops and own scopes: a `break` or `continue` of the loop body itself
 pub(crate) fn holds_own(node: &Node, word: &str) -> bool {
 	match node.drop_meta() {
 		inner if inner.is_symbol(word) => true,
 		inner if is_loop(inner) || is_own_scope(inner) => false,
-		inner => parts(inner).into_iter().any(|child| holds_own(child, word)),
+		inner => inner.parts().into_iter().any(|child| holds_own(child, word)),
 	}
 }
 
@@ -213,7 +204,7 @@ pub(crate) fn holds_stop(node: &Node) -> bool {
 	match node.drop_meta() {
 		inner if yielded(inner).is_some() || is_return(inner) => true,
 		inner if is_own_scope(inner) => false,
-		inner => parts(inner).into_iter().any(holds_stop),
+		inner => inner.parts().into_iter().any(holds_stop),
 	}
 }
 
@@ -306,7 +297,7 @@ fn holds_own_return(node: &Node) -> bool {
 	match node.drop_meta() {
 		inner if is_return(inner) => true,
 		inner if is_own_scope(inner) => false,
-		inner => parts(inner).into_iter().any(holds_own_return),
+		inner => inner.parts().into_iter().any(holds_own_return),
 	}
 }
 

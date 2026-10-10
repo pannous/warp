@@ -80,11 +80,10 @@ Done:
 - modules.rs registered_package / package_version_tags / make_package_directory; tasks.rs zero_results;
   wasm_modules map_children_or_failure; Local::param via Local::new; type_kinds written_name; wasm_optimizer
   unique_temp_file
-- `Node::as_items()`: a list's items, none of ø, else the node as the one item. Copies left for the lowering areas:
-  lowering/class_methods.rs (2), component_worlds.rs, type_constructor.rs; warp_parser/mod.rs:204 differs (no
-  drop_meta); site.rs items_of keeps ø as an item on purpose
-- `Node::parts()`: a list's items or a key's two sides, borrowed (units.rs). Copies left for the lowering areas:
-  lowering/class_methods.rs children_of, lowering/generators.rs parts
+- `Node::as_items()`: a list's items, none of ø, else the node as the one item, also in class_methods and
+  component_worlds (branch cleanup-items); warp_parser/mod.rs:204 differs (no drop_meta); site.rs items_of keeps ø
+  as an item on purpose
+- `Node::parts()`: a list's items or a key's two sides, borrowed (units.rs, generators.rs)
 - wisp_parser: the typed s-expression nodes through finish_one / finish_key / finish_constant and one call_of
 - wisp emitter: one emit_form for its `(word part …)` forms; gc_traits memory_text reads a $String for GcString and
   the debug formatter; gc_struct!/wasm_struct! field arms take an optional rest
