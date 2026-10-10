@@ -127,6 +127,15 @@ def adder(k) = x => x + k; adder(3)(4)
 class Point { x: int y: int }; [type(3), "3" is text, "3" as int, Point{x: 1 y: 2}.x]
 ```
 
+## Data and storage
+
+`stored x = v` survives runs; `local[k]` (localStorage), `database.k` (IndexedDB / SQLite) are key-value stores;
+`stored xs: [C]` is a table: `add` inserts, `where` queries (SQL natively), field writes go through.
+
+```warp => "Bo"
+class Person{name: text; age: int}; stored people: [Person]; people.add(Person("Bo", 30)); (people where age > 18)#1.name
+```
+
 ## Errors
 
 Errors are values; `raise` makes one; ambiguous lines are questions, not guesses.
