@@ -883,22 +883,19 @@ impl WarpParser {
 			Err(message) => return error(&message),
 		};
 		// `class Box<T>{item:T}`: a field or parameter of a type parameter holds any value
+		// `type Option[T] = Some(T) | None` (samples/types.warp) is warp's own spelling; P157: warp has no generic syntax, a
+		// ported `class Box<T>` compiles untyped, with a note
+		let angled = self.current_char() == '<';
 		let type_parameters = match self.current_char() {
-			// P157: warp has no generic syntax, a ported `class Box<T>` compiles untyped, with a note
-			'<' => match self.parse_type_parameters() {
-				Ok(parameters) => {
-					crate::normalize::hint(&format!("{type_name}<{}>", parameters.join(", ")), &type_name, "warp infers types: write the class without type parameters");
-					parameters
-				}
-				Err(message) => return error(&message),
-			},
-			// `type Option[T] = Some(T) | None` (samples/types.warp): warp's own spelling, no note
-			'[' => match self.parse_type_parameters() {
+			'<' | '[' => match self.parse_type_parameters() {
 				Ok(parameters) => parameters,
 				Err(message) => return error(&message),
 			},
 			_ => vec![],
 		};
+		if angled {
+			crate::normalize::hint(&format!("{type_name}<{}>", type_parameters.join(", ")), &type_name, "warp infers types: write the class without type parameters");
+		}
 		if let Some(variants_start) = self.variants_ahead() {
 			return self.parse_sum_type(type_name, &type_parameters, variants_start);
 		}
@@ -906,18 +903,14 @@ impl WarpParser {
 		let (kotlin_parent, claims) = self.skip_conformances().unwrap_or_default();
 		// Python's `class Dog(Animal):` names its parents in the parentheses, `object` the root of all
 		let python_body = self.current_char() == ':' && self.peek_char(1) != '=';
-		let python_parent = match python_body {
-			true => std::mem::take(&mut constructor_fields).into_iter().map(|parent| parent.drop_meta().name()).find(|parent| parent != PYTHON_ROOT_CLASS),
-			false => None,
-		};
+		let python_parent = python_body.then(|| std::mem::take(&mut constructor_fields).into_iter().map(|parent| parent.drop_meta().name()).find(|parent| parent != PYTHON_ROOT_CLASS)).flatten();
 		let ends_statement = matches!(self.peek_char((0..).take_while(|&offset| matches!(self.peek_char(offset), ' ' | '\t')).count()), '\n' | ';' | '}' | '\0');
 		let before_body = self.mark();
 		// `class P(val x: Int)` ends at its line when no body follows on it
-		match constructor_fields.is_empty() {
-			true => {
-				self.skip_whitespace();
-			}
-			false => self.skip_blanks(),
+		if constructor_fields.is_empty() {
+			self.skip_whitespace();
+		} else {
+			self.skip_blanks();
 		}
 		// `class dog extends animal {…}` (P117): the parent rides on the name, class_methods copies its fields and methods
 		let mut name = Symbol(type_name);
@@ -940,19 +933,10 @@ impl WarpParser {
 		// `class Duck with Walker, Swimmer {…}`: the mixins ride on the name, class_methods takes in their items
 		if self.matches_keyword(WITH_KEYWORD) {
 			self.advance_by(WITH_KEYWORD.len());
-			let mut mixins = vec![];
-			loop {
-				self.skip_whitespace();
-				match self.parse_symbol() {
-					Ok(mixin) => mixins.push(Symbol(mixin)),
-					Err(message) => return error(&message),
-				}
-				self.skip_whitespace();
-				if self.current_char() != ',' {
-					break;
-				}
-				self.advance();
-			}
+			let mixins = match self.parse_comma_names() {
+				Ok(mixins) => mixins,
+				Err(message) => return error(&message),
+			};
 			name = name.with_attribute(WITH_KEYWORD, Node::List(mixins, Bracket::None, Separator::Space));
 		}
 		// Go's `type Shape interface {…}`: the trait Shape, as `interface Shape {…}` declares it (traits.rs)
@@ -973,9 +957,10 @@ impl WarpParser {
 				self.skip_spaces();
 				self.skip_struct_words();
 				// `type Point: {` and its fields on the lines below: the braces are the body, as in `type Point {`
-				match self.current_char() == '{' {
-					true => Self::class_body(self.parse_bracketed('{')),
-					false => self.parse_indented_block().map(Self::transform_fields_to_types).unwrap_or(Empty),
+				if self.current_char() == '{' {
+					Self::class_body(self.parse_bracketed('{'))
+				} else {
+					self.parse_indented_block().map(Self::transform_fields_to_types).unwrap_or(Empty)
 				}
 			}
 			// Ruby's `class Point` and the lines indented below it, up to its `end`
@@ -990,13 +975,11 @@ impl WarpParser {
 			}
 			(_, body) => body,
 		};
-		let body = match constructor_fields.is_empty() {
-			true => body,
-			false => {
-				let items = statements(body);
-				let fields = constructor_fields.into_iter().map(Self::transform_fields_to_types);
-				Node::List(fields.chain(items).collect(), Bracket::Curly, Separator::Semicolon)
-			}
+		let body = if constructor_fields.is_empty() {
+			body
+		} else {
+			let fields = constructor_fields.into_iter().map(Self::transform_fields_to_types);
+			Node::List(fields.chain(statements(body)).collect(), Bracket::Curly, Separator::Semicolon)
 		};
 		let body = if type_parameters.is_empty() { body } else { any_for_type_parameters(body, &type_parameters) };
 		// Kotlin's `sealed class Shape`, Swift's `class Marker`: a class without fields, when its line ends after the name
@@ -1008,6 +991,20 @@ impl WarpParser {
 			name = name.with_attribute(crate::lowering::file_declarations::FILE_CLASS_MARK, Node::True);
 		}
 		Node::Type { name: Box::new(name), body: Box::new(body) }
+	}
+
+	/// `Walker, Swimmer`: names separated by commas
+	fn parse_comma_names(&mut self) -> Result<Vec<Node>, String> {
+		let mut names = vec![];
+		loop {
+			self.skip_whitespace();
+			names.push(Symbol(self.parse_symbol()?));
+			self.skip_whitespace();
+			if self.current_char() != ',' {
+				return Ok(names);
+			}
+			self.advance();
+		}
 	}
 
 	/// Go's `type Point struct {…}`, WebAssembly's `type Node: gc struct {…}`: the words before the fields
