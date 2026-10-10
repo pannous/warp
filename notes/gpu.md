@@ -25,7 +25,7 @@ gpu_compute / gpu_render plumbing (src/gpu.rs, web/playground/host-gpu.js, notes
    operator is a round trip and a single cheap op never beats the CPU (it is memory bound: the copy costs more than
    the arithmetic).
 
-## Precision (P237, user 2026-10-10, revises P214: GPU results are imprecise by design)
+## Precision (P240, user 2026-10-10, revises P214: GPU results are imprecise by design)
 WGSL has no f64 and no i64 (the shader-f64 feature is native-only and missing on Metal); warp floats are f64, Ints i64.
 - GPU calculations are f32 and approximate by design, and the user is told: a one-time run-time notice when a map
   moves to the GPU by itself (gpu_maps.rs AUTOMATIC_NOTICE, native diagnostic::report_runtime_warning_once, browser
