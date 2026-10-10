@@ -131,13 +131,15 @@ a = Account("Ada", 100); b = a; b.balance = 150; c = copy(a)
 
 ## Errors
 Errors are values: `error("…")` returns one and `if r failed then …` handles it, no catch needed; a raised error
-(`raise`, an index out of range) propagates to `try … else` or `catch e`, never a crash.
-```warp => ["caught" "bad input" "neg"]
+(`raise`, `1/0`, an index out of range) stops the program unless `try … else` or `catch e` handles it; a bare `try`
+keeps it as the value, for `failed`.
+```warp => ["caught" "bad input" "neg" "divide by zero"]
 r = try { [1]#5 } else { "caught" }
 check(x) := if x < 0 then raise "bad input" else x
 f(x) := if x < 0 then error("neg") else x
 s = f(-1)
-[r, try check(-1) catch e: e.message, if s failed then s.message else s]
+t = try 10/0
+[r, try check(-1) catch e: e.message, if s failed then s.message else s, if t failed then t.message else t]
 ```
 
 ## Effects
