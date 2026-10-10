@@ -5,7 +5,7 @@
 //!
 //! An unknown `.word` after a name, a text or a list is a loud error (`undefined function: word`), never silent data.
 
-use super::nodes::{call, is_word, key};
+use super::nodes::{call, children_rewritten, key};
 use crate::analyzer::{call_name, counting_method, extract_user_functions, is_list_mutating_method};
 use crate::context::Context;
 use crate::diagnostic::Diagnostic;
@@ -281,7 +281,7 @@ fn call_results(node: &Node, context: &Context) -> HashSet<String> {
 /// `raise X`, `throw X`, `raise(X)`: the call `raise(X)`; `raise error("m")` raises the message m
 fn raise_call(items: &[Node]) -> Option<Node> {
 	let [word, raised] = items else { return None };
-	if !crate::pipeline::RAISE_WORDS.iter().any(|raise| is_word(word, raise)) {
+	if !crate::pipeline::RAISE_WORDS.iter().any(|raise| word.is_symbol(raise)) {
 		return None;
 	}
 	let message = crate::pipeline::returned_error_message(raised).unwrap_or(raised).clone();
@@ -311,25 +311,20 @@ fn lower_counts(node: Node, library_count: bool) -> Node {
 	if let Some(occurrences) = counted(&node) {
 		return lower_counts(occurrences, library_count);
 	}
-	match node {
-		Node::List(items, bracket, separator) => Node::List(items.into_iter().map(|item| lower_counts(item, library_count)).collect(), bracket, separator),
-		Node::Key(left, op, right) => key(lower_counts(*left, library_count), op, lower_counts(*right, library_count)),
-		Node::Meta { node, data } => Node::Meta { node: Box::new(lower_counts(*node, library_count)), data },
-		other => other,
-	}
+	children_rewritten(node, |child| lower_counts(child, library_count))
 }
 
 /// `count(y, x)` is `count x in y`
 fn count_call(items: &[Node], bracket: &Bracket) -> Option<Node> {
 	let [count, haystack, needle] = items else { return None };
-	(*bracket == Bracket::Round && is_word(count, COUNT_WORD)).then(|| counted_in(count, needle, haystack)).flatten()
+	(*bracket == Bracket::Round && count.is_symbol(COUNT_WORD)).then(|| counted_in(count, needle, haystack)).flatten()
 }
 
 /// `y.count(x)` is `count x in y`
 fn count_method(receiver: &Node, call: &Node) -> Option<Node> {
 	let Node::List(items, _, _) = call.drop_meta() else { return None };
 	let [count, needle] = items.as_slice() else { return None };
-	is_word(count, COUNT_WORD).then(|| counted_in(count, needle, receiver)).flatten()
+	count.is_symbol(COUNT_WORD).then(|| counted_in(count, needle, receiver)).flatten()
 }
 
 fn counted_in(count: &Node, needle: &Node, haystack: &Node) -> Option<Node> {
@@ -348,7 +343,7 @@ fn count_in(items: &[Node]) -> Option<Node> {
 		_ => items.to_vec(),
 	};
 	let [count, needle, in_word, haystack @ ..] = phrase.as_slice() else { return None };
-	if !is_word(count, COUNT_WORD) || !is_word(in_word, IN_WORD) || haystack.is_empty() {
+	if !count.is_symbol(COUNT_WORD) || !in_word.is_symbol(IN_WORD) || haystack.is_empty() {
 		return None;
 	}
 	let haystack = match haystack {
@@ -414,10 +409,7 @@ fn function_methods_as_calls(node: Node, is_function: &dyn Fn(&str, usize) -> bo
 				_ => key(receiver, Op::Dot, method),
 			}
 		}
-		Node::Key(left, op, right) => key(lowered(*left), op, lowered(*right)),
-		Node::List(items, bracket, separator) => Node::List(items.into_iter().map(lowered).collect(), bracket, separator),
-		Node::Meta { node, data } => Node::Meta { node: Box::new(lowered(*node)), data },
-		other => other,
+		other => children_rewritten(other, lowered),
 	}
 }
 
@@ -645,14 +637,14 @@ struct Lowering {
 impl Lowering {
 	fn expand(&self, node: Node) -> Node {
 		match node {
-			Node::List(items, Bracket::Round, _) if items.len() == 3 && is_word(&items[0], TRY_MARKER) => {
+			Node::List(items, Bracket::Round, _) if items.len() == 3 && items[0].is_symbol(TRY_MARKER) => {
 				self.lower_try(self.expand(items[1].clone()), self.expand(items[2].clone()))
 			}
 			// `catch e { … }`: the fallback reads the caught Error as e (P67)
-			Node::List(items, Bracket::Round, _) if items.len() == 4 && is_word(&items[0], TRY_MARKER) => {
+			Node::List(items, Bracket::Round, _) if items.len() == 4 && items[0].is_symbol(TRY_MARKER) => {
 				self.lower_try_binding(self.expand(items[1].clone()), self.expand(items[2].clone()), &items[3])
 			}
-			Node::List(items, Bracket::Round, _) if items.len() == 3 && is_word(&items[0], ASSERT_MARKER) => {
+			Node::List(items, Bracket::Round, _) if items.len() == 3 && items[0].is_symbol(ASSERT_MARKER) => {
 				self.lower_assert(self.expand(items[1].clone()), self.expand(items[2].clone()))
 			}
 			// `def f(m) { m.a }`: the body sees the parameters, as `f(m) := m.a` does
@@ -899,7 +891,7 @@ impl Lowering {
 	/// `for k in map_keys(m) {v = m[k]; …}`
 	fn for_over_map(&self, items: &[Node]) -> Option<Node> {
 		let [keyword, names, in_word, rest @ ..] = items else { return None };
-		if !is_word(keyword, FOR_WORD) || !is_word(in_word, IN_WORD) {
+		if !keyword.is_symbol(FOR_WORD) || !in_word.is_symbol(IN_WORD) {
 			return None;
 		}
 		let (map, body) = match rest {
@@ -956,7 +948,7 @@ impl Lowering {
 			Node::Key(_, Op::Hash, unit) => crate::analyzer::text_unit(&unit.name()).is_some(),
 			other => crate::analyzer::text_unit(&other.name()).is_some(),
 		};
-		if !is_word(in_word, IN_WORD) || names_unit(element) || names_unit(collection) {
+		if !in_word.is_symbol(IN_WORD) || names_unit(element) || names_unit(collection) {
 			return None;
 		}
 		Some(self.call(COLLECTION_POSITION, in_word, vec![collection.clone(), element.clone()], false))
@@ -1305,10 +1297,7 @@ pub(crate) fn named_apart(node: Node, prefix: &str, base: &str, number: usize) -
 pub(crate) fn substitute(node: Node, placeholder: &str, replacement: &Node) -> Node {
 	match node {
 		Node::Symbol(name) if name == placeholder => replacement.clone(),
-		Node::Key(left, op, right) => key(substitute(*left, placeholder, replacement), op, substitute(*right, placeholder, replacement)),
-		Node::List(items, bracket, separator) => Node::List(items.into_iter().map(|item| substitute(item, placeholder, replacement)).collect(), bracket, separator),
-		Node::Meta { node, data } => Node::Meta { node: Box::new(substitute(*node, placeholder, replacement)), data },
-		other => other,
+		other => children_rewritten(other, |child| substitute(child, placeholder, replacement)),
 	}
 }
 

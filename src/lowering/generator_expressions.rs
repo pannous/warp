@@ -6,7 +6,7 @@
 
 use crate::comprehensions::{bound_names, Comprehension};
 use crate::generators::{FOR_WORD, NAME_SEPARATOR};
-use super::nodes::{key, statement_list, symbol, symbol_name};
+use super::nodes::{key, statement_list, symbol};
 use crate::node::{Bracket, Node, Separator};
 use crate::operators::Op;
 use std::collections::BTreeSet;
@@ -35,8 +35,8 @@ fn bound_variables(node: &Node) -> BTreeSet<String> {
 	let mut variables = BTreeSet::new();
 	node.visit(&mut |part| match part {
 		Node::Key(target, Op::Assign | Op::Define, _) => variables.extend(bound_names(target)),
-		Node::List(words, _, _) if words.first().is_some_and(|word| symbol_name(word).is_some_and(|name| name == FOR_WORD)) => {
-			variables.extend(words.get(1).and_then(symbol_name).cloned());
+		Node::List(words, _, _) if words.first().is_some_and(|word| word.symbol_name().is_some_and(|name| name == FOR_WORD)) => {
+			variables.extend(words.get(1).and_then(Node::symbol_name).map(String::from));
 		}
 		_ => {}
 	});
@@ -58,7 +58,7 @@ fn expressions(node: Node, variables: &BTreeSet<String>, definitions: &mut Vec<N
 fn free_variables(comprehension: &Comprehension, variables: &BTreeSet<String>) -> Vec<Node> {
 	let mut read = BTreeSet::new();
 	for part in comprehension.parts() {
-		part.visit(&mut |inner| read.extend(symbol_name(inner).filter(|name| variables.contains(*name)).cloned()));
+		part.visit(&mut |inner| read.extend(inner.symbol_name().filter(|name| variables.contains(*name)).map(String::from)));
 	}
 	for own in comprehension.loop_variables() {
 		read.remove(&own);

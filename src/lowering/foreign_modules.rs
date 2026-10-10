@@ -4,7 +4,7 @@
 //! (an empty argument list is ø on the way, so whether it is a call is said apart).
 //! Values cross as JSON; the result is any Node.
 
-use super::nodes::{call, key};
+use super::nodes::{call, children_rewritten, key};
 use crate::node::{symbol, text, Bracket, Node, Separator};
 use crate::operators::Op;
 use std::collections::HashMap;
@@ -520,10 +520,7 @@ impl Foreign<'_> {
 				}
 				Node::Key(target, op, Box::new(value))
 			}
-			Node::Key(left, op, right) => key(self.rewrite(*left), op, self.rewrite(*right)),
-			Node::List(items, bracket, separator) => Node::List(items.into_iter().map(|item| self.rewrite(item)).collect(), bracket, separator),
-			Node::Meta { node, data } => Node::Meta { node: Box::new(self.rewrite(*node)), data },
-			other => other,
+			other => children_rewritten(other, |child| self.rewrite(child)),
 		}
 	}
 }

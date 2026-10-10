@@ -251,28 +251,26 @@ impl WarpParser {
 		}
 		// `for friend in xs`: a declared type's name visits only its instances, as `it`; the name in the body is the item
 		// (P46), a call `friend(…)` still constructs
-		let (variable, body) = match variable.drop_meta() {
+		let filtered = match variable.drop_meta() {
 			Symbol(name) if self.declared_types.contains(name) => {
 				let it = Symbol(crate::lambdas::IMPLICIT_PARAMETER.to_string());
 				let test = call(crate::traits::INSTANCE_OF, vec![it.clone(), Node::Text(name.clone())]);
 				let header = type_filter_header(name, &iterable, &body);
 				let body = item_named(body, name, &it);
-				match self.filtered_body(&format!("for {name} in …"), &format!("for x in … {{ if x is {name} {{ … }} }}"), header, test, body) {
-					Ok(body) => (it, body),
-					Err(error) => return Some(error),
-				}
+				self.type_filtered_body(name, header, test, body).map(|body| (it, body))
 			}
 			// `for number in xs`: a type word visits only the items of that type, under its own name; a literal list whose items
 			// all are of the type needs no filter
 			Symbol(name) if crate::analyzer::type_word_kind(name).is_some() && !literal_items_of_type(&iterable, name) => {
 				let test = self.type_test(&variable, name).expect("a type word");
 				let header = type_filter_header(name, &iterable, &body);
-				match self.filtered_body(&format!("for {name} in …"), &format!("for x in … {{ if x is {name} {{ … }} }}"), header, test, body) {
-					Ok(body) => (variable, body),
-					Err(error) => return Some(error),
-				}
+				self.type_filtered_body(name, header, test, body).map(|body| (variable.clone(), body))
 			}
-			_ => (variable, body),
+			_ => Ok((variable, body)),
+		};
+		let (variable, body) = match filtered {
+			Ok(filtered) => filtered,
+			Err(error) => return Some(error),
 		};
 		// `for chars in text: print it`: a unit word walks the text by that unit, the item is `it`
 		if let Some((unit, iterable)) = unit_iteration(&variable, &iterable, &body) {
@@ -412,6 +410,11 @@ impl WarpParser {
 		ask(&Ask::new(FILTER_LOOP_TOPIC, question, readings, Fallback::Warning).written(written).at(self.line_nr, self.column))?;
 		let guarded = Node::Key(Box::new(Node::Key(Box::new(Empty), Op::If, Box::new(test))), Op::Then, Box::new(body));
 		Ok(Node::List(vec![guarded], Bracket::Curly, Separator::Semicolon))
+	}
+
+	/// `filtered_body` of `for T in xs`, which visits only the items of type T
+	fn type_filtered_body(&self, name: &str, header: Option<(String, String)>, test: Node, body: Node) -> Result<Node, Node> {
+		self.filtered_body(&format!("for {name} in …"), &format!("for x in … {{ if x is {name} {{ … }} }}"), header, test, body)
 	}
 
 	/// `for (i=0;i<n;i++) {body}`, `for(…) print i`, `for(…): body`, at its head: `((for (head)) {body})` as lowering reads it

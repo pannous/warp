@@ -3,7 +3,7 @@
 //! `virtues goal = fast+safe` the record `goal={fast:true safe:true}`: the flags named are true, the others false.
 //! `real f(real x, int n) { … }`, the C way, defines `f(x:real, n:int) := { … }`.
 
-use super::nodes::{call, is_type_word, key};
+use super::nodes::{call, children_rewritten, is_type_word, key};
 use crate::node::{symbol, Bracket, Node, Separator};
 use crate::operators::{is_function_keyword, Op};
 
@@ -1284,10 +1284,7 @@ pub(crate) fn zero_value(kind: crate::type_kinds::Kind) -> Option<Node> {
 pub fn lower_sized_arrays(node: Node) -> Node {
 	match node {
 		Node::List(items, Bracket::None, Separator::Space) if sized_array(&items).is_some() => sized_array(&items).expect("guarded"),
-		Node::List(items, bracket, separator) => Node::List(items.into_iter().map(lower_sized_arrays).collect(), bracket, separator),
-		Node::Key(left, op, right) => key(lower_sized_arrays(*left), op, lower_sized_arrays(*right)),
-		Node::Meta { node, data } => Node::Meta { node: Box::new(lower_sized_arrays(*node)), data },
-		other => other,
+		other => children_rewritten(other, lower_sized_arrays),
 	}
 }
 
@@ -1941,12 +1938,7 @@ fn name_then_type(parameter: Node) -> Node {
 
 /// Ruby's `def f(a, b: 2) a * b end` and `def f(a)` ⏎ statements ⏎ `end`: the definition `def f(a, b: 2) {…}`
 fn end_definitions(node: Node) -> Node {
-	let node = match node {
-		Node::List(items, bracket, separator) => Node::List(items.into_iter().map(end_definitions).collect(), bracket, separator),
-		Node::Key(left, op, right) => key(end_definitions(*left), op, end_definitions(*right)),
-		Node::Meta { node, data } => Node::Meta { node: Box::new(end_definitions(*node)), data },
-		other => other,
-	};
+	let node = children_rewritten(node, end_definitions);
 	let Node::List(items, bracket, separator) = node else { return node };
 	// one line: `def head body… end`
 	if let ([keyword, head, body @ .., end], Separator::Space) = (items.as_slice(), &separator) {

@@ -6,7 +6,7 @@
 //! `x.@comment` is the comment, `x.meta` the map `{comment: "…"}`, unless x is an object with a field `meta`. Without
 //! the pragma such a read is an error naming it.
 
-use super::nodes::key;
+use super::nodes::{children_rewritten, key};
 use crate::node::{meta_entry, symbol, ATTRIBUTE_MARK, Bracket, Node, Separator};
 use crate::operators::Op;
 
@@ -108,10 +108,7 @@ fn comment_reads(node: Node, bindings: &[Commented]) -> Node {
 			};
 			read.unwrap_or_else(|| key(comment_reads(*left, bindings), Op::Dot, comment_reads(*right, bindings)))
 		}
-		Node::Meta { node, data } => Node::Meta { node: Box::new(comment_reads(*node, bindings)), data },
-		Node::List(items, bracket, separator) => Node::List(items.into_iter().map(|item| comment_reads(item, bindings)).collect(), bracket, separator),
-		Node::Key(left, op, right) => key(comment_reads(*left, bindings), op, comment_reads(*right, bindings)),
-		other => other,
+		other => children_rewritten(other, |child| comment_reads(child, bindings)),
 	}
 }
 

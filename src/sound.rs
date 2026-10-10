@@ -4,12 +4,12 @@
 //! system's player when the warp binary may reach the user (paint::shows_windows: never under WARP_NO_WINDOW, CI or
 //! tests, which only get the file). The playground plays the same samples with WebAudio (host.js sound_samples).
 //! A sound is queued on the audio clock behind those before it and `play` returns at once (card sound-pro): a player
-//! thread plays the queue in order, stop_sound drops it, the process's end waits for it. render_sound writes the
+//! thread plays the queue in order, stop_sound drops it, the process's end waits for it and for the music files playing. render_sound writes the
 //! sounds since the last render one after another into one WAV, offline: headless too.
 
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicUsize, Ordering};
-use std::sync::{Arc, Mutex, OnceLock};
+use std::sync::{Arc, Mutex, Once, OnceLock};
 use std::time::{Duration, Instant};
 
 /// The samples cross as whole numbers ≥ 0: amplitude + 32768 (lib/sound.warp sample_offset)
@@ -94,6 +94,7 @@ pub fn play_file(path: &str) -> Result<usize, String> {
 		}
 		std::thread::sleep(PLAYER_POLL);
 	}
+	listed(handle, &child);
 	let queued = Queued { path: path.into(), stops: STOPS.load(Ordering::Relaxed), handle };
 	std::thread::spawn(move || watched(child, player, &queued, "sound file"));
 	Ok(handle)
@@ -115,11 +116,17 @@ impl Queued {
 	}
 }
 
+/// The player among those playing by its handle: stop_sound stops it, the process's end waits for it (a ctrl-c then
+/// stops both)
+fn listed(handle: usize, child: &Player) {
+	if let Ok(mut playing) = PLAYING.lock() {
+		playing.push((handle, child.clone()));
+	}
+	wait_at_exit();
+}
+
 /// The player played to its end, its failure printed unless stop_sound ended it
 fn watched(child: Player, player: &str, queued: &Queued, label: &str) {
-	if let Ok(mut playing) = PLAYING.lock() {
-		playing.push((queued.handle, child.clone()));
-	}
 	let path = queued.path.display().to_string();
 	let ended = loop {
 		match failure_of(&child, player, &path) {
@@ -212,20 +219,29 @@ fn queued(sound: Queued) -> Result<(), String> {
 fn play_wav(queued: &Queued) {
 	let shown = queued.path.display().to_string();
 	match spawned(&FILE_PLAYERS, "wav", &shown, false) {
-		Some((player, child)) => watched(Arc::new(Mutex::new(child)), player, queued, "sound"),
+		Some((player, child)) => {
+			let child: Player = Arc::new(Mutex::new(child));
+			listed(queued.handle, &child);
+			watched(child, player, queued, "sound")
+		}
 		None => eprintln!("sound: no player found ({}) for {shown}", names_for(&FILE_PLAYERS, "wav")),
 	}
 }
 
+/// The process's end waits for the queued sounds and the playing music files (once registered for both)
 fn wait_at_exit() {
-	extern "C" fn wait_for_queue() {
+	static REGISTERED: Once = Once::new();
+	extern "C" fn wait_for_sounds() {
 		wait();
+		while PLAYING.lock().is_ok_and(|playing| !playing.is_empty()) {
+			std::thread::sleep(PLAYER_POLL);
+		}
 	}
 	extern "C" {
 		fn atexit(callback: extern "C" fn()) -> i32;
 	}
-	// SAFETY: atexit only stores the function pointer; wait reads atomics and sleeps
-	unsafe { atexit(wait_for_queue) };
+	// SAFETY: atexit only stores the function pointer; wait_for_sounds reads atomics and a lock and sleeps
+	REGISTERED.call_once(|| unsafe { atexit(wait_for_sounds); });
 }
 
 /// Whether the system has a decoder that checks a file of this format without playing it

@@ -6,7 +6,7 @@ flow, meaningful names, no test edits. One area per session, small themed branch
 ## src/analyzer/, src/warp_parser/, src/node/ (card cleanup-analyzer, session warp-types)
 
 Done (branches cleanup-dead, cleanup-arith, cleanup-names, cleanup-parser, cleanup-modes, cleanup-guards, cleanup-lookahead, cleanup-atoms, cleanup-errors,
-cleanup-groups):
+cleanup-groups, cleanup-filter):
 - dead code: Scope types, Separator::from_char, Node::key_with_op, get_meta_data, type_definition, commented-out code
 - `Node::symbol_name` / `Node::is_symbol` replace analyzer's is_word and ~40 hand-written Symbol matches
 - node/arithmetic.rs: `keeping_left_meta` + `scalar_operands!` macro (317 → 106 lines)
@@ -31,6 +31,8 @@ cleanup-groups):
 - `or_return_error!` (warp_parser/mod.rs) for `match r { Ok(x) => x, Err(message) => return error(&message) }`
 - `lowering::nodes::call(word, args)` for the parser's ~16 hand-built `Node::List([Symbol(word), …], Round, None)`;
   `for_in_loop` for the four desugared for loops; group_by_separators: loosest separator via max()
+- `type_filtered_body` for the two `for T in xs` filters; parse_number_value: `float_node`, hex via
+  `take_while_char`; infer_list_type: one head-word block (edition 2021: no let-chains, only if-let guards)
 
 Left (longest functions, candidates for splitting):
 - atoms.rs parse_symbol_with_suffix (~140 lines): still a keyword dispatch
@@ -98,3 +100,33 @@ Left (bigger, needs care):
   shorten them, and the generic wrapper could take most of them if it passed f32 arguments right (it passes f64s),
   which needs FFI tests for each signature first.
 - markup.rs escapes `<pre>` text without `>`, site.rs `escaped` with it: one escaper would change the error page.
+
+## src/lowering/ (card cleanup-lowering, session warp-class)
+Shared node forms live in src/lowering/nodes.rs: `call(f, args)`, `key(a, op, b)`, `assign`, `statement_list`,
+`is_type_word`, `parameter_name`, `is_call_head`, `spaced_statement`, `children_rewritten`. Words are asked with
+Node::symbol_name / Node::is_symbol. Bulk rewrites were done by small Python scripts (balanced-bracket parser +
+`cargo check --message-format short` for the leftovers); a local fn or variable named `call` / `key` shadows the
+import (E0255 / E0618), so those got telling names (suffix_call, applied, called_function, key_function, word_of).
+Duplicates are found with probes/cleanup/duplicate_windows.py and by counting `fn` names defined in several files.
+
+Done:
+- ~30 local copies of call / is_word / symbol / symbol_name / key / assign / statements / is_type_word → nodes.rs
+- spelled-out `Node::List(vec![Node::Symbol(f), …], Round, None)` and `Node::Key(Box::new…)` → call / key (75 files)
+- `Node::Symbol(x.to_string())` / `Node::Text(x.to_string())` → symbol(x) / text(x) (51 files)
+- parameter_name (3 identical copies), word lookups (phrase_calls, type_name_matching, reflection), is_call_head
+  (memoization, type_name_matching), spaced_statement (phrase_calls + type_name_matching shared 4 lines)
+- the Key / List / Meta recursion tail spelled out in 27 passes → `children_rewritten(node, rewrite)`
+
+Left (each changes behaviour or needs care):
+- Node::map_children also enters class bodies (Node::Type); children_rewritten does not. ~40 more passes spell out
+  the tail with a custom List or Key arm in between or a guard; folding those in needs a case-by-case look.
+- statements_of (class_methods, event_signals, late_binding), statements (component_worlds, test_blocks),
+  is_statement_list (generators, result_word, variable_signals), is_return (closures, generators,
+  type_name_matching), loop_variable(s) (library_words, run_time_blocks, signal_values, for_loop): same name,
+  different bracket/separator rules each, so one shared version changes which forms match.
+- soft_keywords::parameter_name accepts only `:` / `=` keys and does not recurse, unlike nodes::parameter_name;
+  go_blocks / named_arguments / parameter_shapes have their own parameter_name returning String or Node.
+- class_methods.rs (~2600 lines): destructurings / positional_fields share their class_of setup (431/444), two
+  class-collecting visits (1848/2003); worth its own split into files.
+- temporary-name makers (lazy_ranges, min_max, parallel, list_element_checks, named_arguments) each format their own
+  prefix; one `Temporaries` counter type could serve them, names must stay byte-identical (tests pin some).

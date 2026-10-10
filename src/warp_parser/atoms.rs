@@ -33,6 +33,13 @@ fn type_parameter_names(written: &str) -> Vec<String> {
 }
 
 impl WarpParser {
+	/// The path literal at the cursor, up to whitespace, a closing bracket or a separator
+	pub(super) fn parse_path_literal(&mut self) -> Node {
+		let path: String = (0..).map(|offset| self.peek_char(offset)).take_while(|&c| !super::lookahead::ends_path(c)).collect();
+		self.advance_by(path.chars().count());
+		Node::Text(path)
+	}
+
 	/// Parse an atomic expression (no infix operators)
 	/// Handles: numbers, strings, brackets, symbols with named blocks
 	pub(super) fn parse_atom(&mut self) -> Node {
@@ -70,6 +77,7 @@ impl WarpParser {
 				})
 			}
 			'"' | '\'' | '«' | '`' => self.parse_string(),
+			'.' if self.starts_path_literal() => self.parse_path_literal(),
 			// `a, *rest = xs`: the starred name takes the items the other names leave (src/lowering/tuples.rs); `...rest`
 			// (JS) is the starred `*rest` too: a rest parameter or a spread argument (src/lowering/variadic.rs)
 			'.' if self.peek_char(1) == '.' && self.peek_char(2) == '.' && self.is_identifier_start(3) => self.parse_starred(3),
@@ -1248,6 +1256,7 @@ impl WarpParser {
 	pub(super) fn parse_glued_suffix(&mut self, symbol: String) -> Node {
 		let ch = self.current_char();
 		match ch {
+			'{' if symbol == GO_KEYWORD && self.in_code() => Node::symbol(&symbol),
 			'{' => {
 				// `point{x:1}` of a declared type constructs a point, `point:{x:1}` and any other `name{…}` stay data (D4)
 				let op = if self.declared_types.contains(&symbol) { Op::None } else { Op::Colon };
@@ -1261,10 +1270,7 @@ impl WarpParser {
 				}
 				self.in_data_literal = outer_data_literal;
 				self.in_style_sheet = outer_style_sheet;
-				let block = match blocks.len() {
-					1 => blocks.remove(0),
-					_ => Node::List(blocks, Bracket::None, Separator::None),
-				};
+				let block = Node::single_or_list(blocks, Bracket::None, Separator::None);
 				Node::Key(Box::new(Symbol(symbol)), op, Box::new(block))
 			}
 			'<' if !self.options.xml_mode && !self.options.data_mode && let Some(length) = self.type_application_length() => {
@@ -1314,11 +1320,7 @@ impl WarpParser {
 				if self.current_char() == '{' && !self.equals_compares && !self.in_for_header {
 					// Function with body: name(params) { body }
 					let body = self.parse_bracketed('{');
-					let signature = Node::List(
-						vec![Symbol(symbol), typed_parameters(args_node)],
-						Bracket::Round,
-						Separator::None,
-					);
+					let signature = call(&symbol, vec![typed_parameters(args_node)]);
 					Node::List(vec![signature, body], Bracket::Round, Separator::None)
 				} else if symbol == PRINT_WORD {
 					print_call(print_arguments(args_node))

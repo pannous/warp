@@ -347,7 +347,7 @@ impl WasmGcEmitter {
 		// node_map_lookup(map, key): the value of the entry of that name; null when there is none or the key is no name
 		self.runtime_function(NODE_MAP_LOOKUP, vec![map_ref, node_ref], vec![nullable], vec![nullable, int], |s, f| {
 			let (name, entry) = (2, 3);
-			find_entry(s, f, name, entry, &[null_node.clone()]);
+			find_entry(s, f, name, entry, std::slice::from_ref(&null_node));
 			field(f, 0, VALUES);
 			Self::emit_list(f, &[I::LocalGet(entry), I::ArrayGet(array)]);
 		});

@@ -21,8 +21,9 @@ play note("F#4") for 250ms      // note(name) needs `use sound` when called alon
 - Browser: the worker posts `{type: "sound"}`, the page (playground.js playSound) plays it with WebAudio, queued one
   after another; a new run silences what still plays (typing reruns the code). A browser starts audio only after a
   gesture: the run on page load stays silent, ▶ plays. A run without page hooks (tests) is silent.
-- Music files (card sound-library): `play "song.mp3"` / `play_file(path)` play a wav, mp3, ogg, flac, aiff or m4a in
-  the background (format by its first bytes), `stop_sound` stops them. Natively (src/sound.rs play_file) the first
+- Music files (card sound-library): `play "song.mp3"` / `play ./mozart.mp3` / `play_file(path)` play a wav, mp3, ogg, flac, aiff or m4a in
+  the background (format by its first bytes; card play-mozart: `./` or `../` glued to the rest of an operand is a path
+  literal, the text `"./mozart.mp3"`, src/warp_parser lookahead.rs starts_path_literal; `xs ./ 2` still divides), `stop_sound` stops them. Natively (src/sound.rs play_file) the first
   player the system has for the format: afplay (no ogg), paplay (no mp3), ffplay, mpv; headless only the check and a
   `sound file <format>: <path>` line (tests/programs/test_sound_files.rs). In the playground an `<audio>` by its URL
   (host-files.js STD_ADAPTERS.sound → worker → playground.js playSoundFile); a new run stops it. Card sound-file-failure: the
@@ -41,6 +42,9 @@ The words above are layer 1, the toy layer. Each layer below keeps the ones abov
 1. Non-blocking, clocked playback. Built (step 1, 2026-10-10): `play` returns at once, its sound queued on the audio
    clock behind the sounds before it (natively a player thread, src/sound.rs queued; the playground's WebAudio queue);
    `sound_queued()` the seconds still to sound, `wait_sound`, `stop_sound` drops the queue, the process's end waits.
+   It also waits for music files playing (`play "song.mp3"`, card make-background, 2026-10-10): before, warp ended and
+   left the player (afplay) playing in the background, out of reach of ctrl-c and of Sublime's cancel (SIGTERM to the
+   build's process group); now both stop warp and the player together (probes/music_outlives_file.py, silent).
    Offline render built (step 2, 2026-10-10, from layer 5): `render_sound("song.wav")` writes the sounds since the
    last render (or the start) one after another into one WAV and gives its seconds; headless too, so tests check audio
    without speakers (tests/programs/test_sound_render.rs). The samples are kept in memory (44 KB a second at 22050 Hz),

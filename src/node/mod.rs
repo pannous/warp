@@ -803,6 +803,11 @@ pub enum Separator {
 }
 
 impl Separator {
+	/// `;` and newline separate statements that run in order, never the arguments of a call
+	pub fn separates_statements(&self) -> bool {
+		matches!(self, Separator::Semicolon | Separator::Newline)
+	}
+
 	pub fn to_char(&self) -> Option<char> {
 		match self {
 			Separator::Space => Some(' '),

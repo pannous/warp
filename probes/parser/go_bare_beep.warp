@@ -1,0 +1,5 @@
+go{
+beep
+play 440Hz for 0.1s
+play C4 for 0.1s
+}
