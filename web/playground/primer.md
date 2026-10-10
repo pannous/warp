@@ -171,8 +171,8 @@ received = 0; for v in ch { received += v }
 use math; [factorial 3, is_prime 7, gcd(12, 18)]
 ```
 ```warp compiles
-import sqrt from "m"
-sqrt(16.0)
+import cbrt from "m"
+cbrt(27.0)
 ```
 
 ## Pages, servers, databases
