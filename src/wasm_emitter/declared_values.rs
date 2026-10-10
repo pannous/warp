@@ -225,15 +225,14 @@ impl WasmGcEmitter {
 		});
 		self.runtime_function(LIST_ITEMS_CHECK, vec![nullable, nullable], vec![], vec![], |s, f| {
 			let (list, cell) = (0, 1);
-			Self::emit_list(f, &[I::Block(BlockType::Empty), I::Loop(BlockType::Empty), I::LocalGet(cell), I::RefIsNull, I::BrIf(1)]);
-			s.emit_field(f, cell, 0);
-			Self::emit_list(f, &is_list);
-			Self::emit_list(f, &[I::I32Eqz, I::BrIf(1), I::LocalGet(list)]);
-			s.emit_field(f, cell, 1);
-			f.instruction(&I::RefCastNonNull(HeapType::Concrete(node_type)));
-			s.call(f, LIST_ITEM_CHECK);
-			s.emit_field(f, cell, 2);
-			Self::emit_list(f, &[I::LocalSet(cell), I::Br(0), I::End, I::End]);
+			s.emit_cell_walk(f, cell, |f| {
+				s.emit_field(f, cell, 0);
+				Self::emit_list(f, &is_list);
+				Self::emit_list(f, &[I::I32Eqz, I::BrIf(1), I::LocalGet(list)]);
+				s.emit_field(f, cell, 1);
+				f.instruction(&I::RefCastNonNull(HeapType::Concrete(node_type)));
+				s.call(f, LIST_ITEM_CHECK);
+			});
 		});
 	}
 }

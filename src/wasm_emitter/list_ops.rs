@@ -234,13 +234,14 @@ impl WasmGcEmitter {
 				}
 
 				// the cells along the value chain, a meta entry `@name:value` counting none
-				let (count, current, node_type) = (1, 2, s.type_manager.node_type);
-				Self::emit_list(func, &[I::I64Const(0), I::LocalSet(count), I::LocalGet(0), I::LocalSet(current),
-					I::Block(BlockType::Empty), I::Loop(BlockType::Empty), I::LocalGet(current), I::RefIsNull, I::BrIf(1), I::LocalGet(count)]);
-				s.emit_field(func, current, 1);
-				s.call(func, super::equality::IS_META_ENTRY);
-				Self::emit_list(func, &[I::I32Eqz, I::I64ExtendI32U, I::I64Add, I::LocalSet(count),
-					I::LocalGet(current), I::StructGet { struct_type_index: node_type, field_index: 2 }, I::LocalSet(current), I::Br(0), I::End, I::End]);
+				let (count, current) = (1, 2);
+				Self::emit_list(func, &[I::I64Const(0), I::LocalSet(count), I::LocalGet(0), I::LocalSet(current)]);
+				s.emit_cell_walk(func, current, |func| {
+					func.instruction(&I::LocalGet(count));
+					s.emit_field(func, current, 1);
+					s.call(func, super::equality::IS_META_ENTRY);
+					Self::emit_list(func, &[I::I32Eqz, I::I64ExtendI32U, I::I64Add, I::LocalSet(count)]);
+				});
 
 				if let (Some(counted), Some(count)) = (s.list_cursor(CursorPart::Counted), s.list_cursor(CursorPart::Count)) {
 					Self::emit_list(func, &[I::LocalGet(1), I::I64Const(SHORT_WALK), I::I64GtS, I::If(BlockType::Empty),
@@ -1042,6 +1043,14 @@ impl WasmGcEmitter {
 		Self::emit_list(func, &[I::LocalGet(local), I::StructGet { struct_type_index: self.type_manager.node_type, field_index }]);
 	}
 
+	/// `body` for each cell of the list in local `cell`, which steps to the rest after it; `BrIf(1)` in the body ends the walk
+	pub(super) fn emit_cell_walk(&self, func: &mut Function, cell: u32, body: impl FnOnce(&mut Function)) {
+		Self::emit_list(func, &[I::Block(BlockType::Empty), I::Loop(BlockType::Empty), I::LocalGet(cell), I::RefIsNull, I::BrIf(1)]);
+		body(func);
+		self.emit_field(func, cell, 2);
+		Self::emit_list(func, &[I::LocalSet(cell), I::Br(0), I::End, I::End]);
+	}
+
 	/// Push field `field_index` (0 ptr, 1 len) of the $String inside text node `local`
 	pub(super) fn emit_text_field(&self, func: &mut Function, local: u32, field_index: u32) {
 		self.emit_field(func, local, 1);
@@ -1078,11 +1087,9 @@ impl WasmGcEmitter {
 			let (count, current) = (2, 3);
 			s.emit_field(f, 0, 0);
 			Self::emit_list(f, &[I::I64Const(KIND_MASK), I::I64And, I::I64Const(Kind::Empty as i64), I::I64Ne, I::If(BlockType::Empty)]);
-			Self::emit_list(f, &[I::LocalGet(0), I::LocalSet(current), I::Block(BlockType::Empty), I::Loop(BlockType::Empty)]);
-			Self::emit_list(f, &[I::LocalGet(current), I::RefIsNull, I::BrIf(1)]);
-			Self::emit_list(f, &[I::LocalGet(count), I::I64Const(1), I::I64Add, I::LocalSet(count)]);
-			s.emit_field(f, current, 2);
-			Self::emit_list(f, &[I::LocalSet(current), I::Br(0), I::End, I::End, I::End, I::LocalGet(1), I::LocalGet(count)]);
+			Self::emit_list(f, &[I::LocalGet(0), I::LocalSet(current)]);
+			s.emit_cell_walk(f, current, |f| Self::emit_list(f, &[I::LocalGet(count), I::I64Const(1), I::I64Add, I::LocalSet(count)]));
+			Self::emit_list(f, &[I::End, I::LocalGet(1), I::LocalGet(count)]);
 			s.call(f, INDEX_OUT_OF_RANGE_OF);
 		});
 	}
@@ -2013,20 +2020,17 @@ impl WasmGcEmitter {
 		let locals = vec![nullable_node_ref, nullable_node_ref, nullable_node_ref, ValType::I64];
 		self.runtime_function("map_find", vec![node_ref, node_ref], vec![nullable_node_ref], locals, |s, f| {
 			let (cell, entry, tmp, kind) = (2, 3, 4, 5);
-			let field = |f: &mut Function, local: u32, index: u32| {
-				Self::emit_list(f, &[I::LocalGet(local), I::StructGet { struct_type_index: node, field_index: index }]);
-			};
 			// return the value when the entry in local `entry` is a `key:value` whose key is the wanted one
 			let check_entry = |f: &mut Function| {
 				Self::emit_list(f, &[I::LocalGet(entry), I::RefAsNonNull, I::LocalGet(1)]);
 				s.call(f, "map_entry_has_key");
 				f.instruction(&I::If(BlockType::Empty));
-				field(f, entry, 2);
+				s.emit_field(f, entry, 2);
 				Self::emit_list(f, &[I::LocalTee(tmp), I::RefIsNull, I::If(BlockType::Result(nullable_node_ref))]);
 				s.call(f, "new_empty");
 				Self::emit_list(f, &[I::Else, I::LocalGet(tmp), I::End, I::Return, I::End]);
 			};
-			field(f, 0, 0);
+			s.emit_field(f, 0, 0);
 			Self::emit_list(f, &[I::I64Const(KIND_MASK), I::I64And, I::LocalSet(kind)]);
 			// a single entry `{a:1}` is the `a:1` node itself
 			Self::emit_list(f, &[I::LocalGet(kind), I::I64Const(KEY_KIND), I::I64Eq, I::If(BlockType::Empty), I::LocalGet(0), I::LocalSet(entry)]);
@@ -2034,13 +2038,12 @@ impl WasmGcEmitter {
 			Self::emit_list(f, &[I::RefNull(HeapType::Concrete(node)), I::Return, I::End]);
 			Self::emit_list(f, &[I::LocalGet(kind), I::I64Const(Kind::List as i64), I::I64Ne, I::LocalGet(kind), I::I64Const(Kind::Block as i64), I::I64Ne, I::I32And]);
 			Self::emit_list(f, &[I::If(BlockType::Empty), I::RefNull(HeapType::Concrete(node)), I::Return, I::End]);
-			Self::emit_list(f, &[I::LocalGet(0), I::LocalSet(cell), I::Block(BlockType::Empty), I::Loop(BlockType::Empty)]);
-			Self::emit_list(f, &[I::LocalGet(cell), I::RefIsNull, I::BrIf(1)]);
-			field(f, cell, 1);
-			Self::emit_list(f, &[I::RefCastNonNull(HeapType::Concrete(node)), I::LocalSet(entry)]);
-			check_entry(f);
-			field(f, cell, 2);
-			Self::emit_list(f, &[I::LocalSet(cell), I::Br(0), I::End, I::End]);
+			Self::emit_list(f, &[I::LocalGet(0), I::LocalSet(cell)]);
+			s.emit_cell_walk(f, cell, |f| {
+				s.emit_field(f, cell, 1);
+				Self::emit_list(f, &[I::RefCastNonNull(HeapType::Concrete(node)), I::LocalSet(entry)]);
+				check_entry(f);
+			});
 			f.instruction(&I::RefNull(HeapType::Concrete(node)));
 		});
 		if self.should_emit_function(ERROR_MESSAGE) {
@@ -2269,20 +2272,20 @@ impl WasmGcEmitter {
 		// (a call per entry exhausted the call stack near ten thousand entries)
 		self.runtime_function(MAP_COLUMN_CELLS, vec![nullable, ValType::I32], vec![nullable], vec![nullable, nullable, nullable], |s, f| {
 			let (cell, part, head, last, made) = (0, 1, 2, 3, 4);
-			Self::emit_list(f, &[I::Block(BlockType::Empty), I::Loop(BlockType::Empty), I::LocalGet(cell), I::RefIsNull, I::BrIf(1)]);
-			// a meta entry `@name:value` is no key, value or entry of the map
-			s.emit_field(f, cell, 1);
-			s.call(f, super::equality::IS_META_ENTRY);
-			Self::emit_list(f, &[I::I32Eqz, I::If(BlockType::Empty), I::I64Const(SQUARE_LIST_KIND)]);
-			s.emit_field(f, cell, 1);
-			Self::emit_list(f, &[I::RefCastNonNull(HeapType::Concrete(node)), I::LocalGet(part)]);
-			s.call(f, MAP_PART);
-			Self::emit_list(f, &[I::RefNull(HeapType::Concrete(node)), I::StructNew(node), I::LocalSet(made)]);
-			Self::emit_list(f, &[I::LocalGet(last), I::RefIsNull, I::If(BlockType::Empty), I::LocalGet(made), I::LocalSet(head), I::Else]);
-			Self::emit_list(f, &[I::LocalGet(last), I::LocalGet(made), I::StructSet { struct_type_index: node, field_index: 2 }, I::End]);
-			Self::emit_list(f, &[I::LocalGet(made), I::LocalSet(last), I::End]);
-			s.emit_field(f, cell, 2);
-			Self::emit_list(f, &[I::LocalSet(cell), I::Br(0), I::End, I::End, I::LocalGet(head)]);
+			s.emit_cell_walk(f, cell, |f| {
+				// a meta entry `@name:value` is no key, value or entry of the map
+				s.emit_field(f, cell, 1);
+				s.call(f, super::equality::IS_META_ENTRY);
+				Self::emit_list(f, &[I::I32Eqz, I::If(BlockType::Empty), I::I64Const(SQUARE_LIST_KIND)]);
+				s.emit_field(f, cell, 1);
+				Self::emit_list(f, &[I::RefCastNonNull(HeapType::Concrete(node)), I::LocalGet(part)]);
+				s.call(f, MAP_PART);
+				Self::emit_list(f, &[I::RefNull(HeapType::Concrete(node)), I::StructNew(node), I::LocalSet(made)]);
+				Self::emit_list(f, &[I::LocalGet(last), I::RefIsNull, I::If(BlockType::Empty), I::LocalGet(made), I::LocalSet(head), I::Else]);
+				Self::emit_list(f, &[I::LocalGet(last), I::LocalGet(made), I::StructSet { struct_type_index: node, field_index: 2 }, I::End]);
+				Self::emit_list(f, &[I::LocalGet(made), I::LocalSet(last), I::End]);
+			});
+			f.instruction(&I::LocalGet(head));
 		});
 		// map_column(xs, part): that part of every entry of a map, as a list; anything else unchanged
 		self.runtime_function(MAP_COLUMN, vec![node_ref, ValType::I32], vec![node_ref], vec![], |s, f| {
@@ -2334,17 +2337,16 @@ impl WasmGcEmitter {
 				Self::emit_list(f, &[I::Return, I::End]);
 				Self::emit_list(f, &[I::LocalGet(kind), I::I64Const(Kind::List as i64), I::I64Ne, I::LocalGet(kind), I::I64Const(Kind::Block as i64), I::I64Ne, I::I32And]);
 				s.emit_fail_if(f, "not_a_list");
-				Self::emit_list(f, &[I::LocalGet(0), I::LocalSet(cell), I::Block(BlockType::Empty), I::Loop(BlockType::Empty)]);
-				Self::emit_list(f, &[I::LocalGet(cell), I::RefIsNull, I::BrIf(1)]);
-				Self::emit_list(f, &[I::LocalGet(position), I::I64Const(1), I::I64Add, I::LocalSet(position)]);
-				s.emit_field(f, cell, 1);
-				f.instruction(&I::LocalGet(wanted));
-				s.call(f, VALUES_EQUAL);
-				f.instruction(&I::If(BlockType::Empty));
-				answer(f, s, 1);
-				f.instruction(&I::End);
-				s.emit_field(f, cell, 2);
-				Self::emit_list(f, &[I::LocalSet(cell), I::Br(0), I::End, I::End]);
+				Self::emit_list(f, &[I::LocalGet(0), I::LocalSet(cell)]);
+				s.emit_cell_walk(f, cell, |f| {
+					Self::emit_list(f, &[I::LocalGet(position), I::I64Const(1), I::I64Add, I::LocalSet(position)]);
+					s.emit_field(f, cell, 1);
+					f.instruction(&I::LocalGet(wanted));
+					s.call(f, VALUES_EQUAL);
+					f.instruction(&I::If(BlockType::Empty));
+					answer(f, s, 1);
+					f.instruction(&I::End);
+				});
 				answer(f, s, 0);
 			});
 		}
