@@ -526,6 +526,7 @@ pub fn link_host_functions(linker: &mut Linker<HostState>, _engine: &Engine) -> 
 /// renders the WGSL fragment shader first, as gpu_render does (P234)
 #[cfg(feature = "native")]
 fn paint(mut caller: Caller<'_, HostState>, pixels: HostNode, width: i64, height: i64, shader_values: HostNode) -> wasmtime::Result<()> {
+	warp_runtime::system_signals::end_at_first_frame()?;
 	let memory = module_memory(&mut caller, "paint")?;
 	let size = (width.max(0) as usize, height.max(0) as usize);
 	let values = match ints_of_list(&mut caller, memory, pixels, size.0 * size.1)? {

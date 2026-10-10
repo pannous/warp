@@ -8,7 +8,11 @@ mod test_web_playground;
 #[cfg(feature = "native")] // runs node
 mod test_editor_shortcuts; // card keyboard-shortcuts
 #[cfg(feature = "native")] // runs node
+mod test_assistant_edits; // card put-editor: the chat's code applied as edits
+#[cfg(feature = "native")] // runs node
 mod test_editor_mode; // card playground-editor
+#[cfg(feature = "native")] // runs python3
+mod test_keyword_registry; // card where-infix
 mod test_missing_use; // card clickable-hint
 mod test_guide; // the language guide on the playground page
 mod test_expert_guide;
@@ -28,6 +32,8 @@ mod test_bundle_budget;
 mod test_host_parts; // the parts of host.js a site ships
 #[cfg(feature = "native")] // builds a site natively
 mod test_site_tasks; // card site-tasks
+#[cfg(feature = "native")] // builds a site natively
+mod test_site_animation; // card site-build
 mod test_rendering_itself; // card playground-render
 #[cfg(feature = "native")] // lib/markup.warp against src/html.rs, natively
 mod test_html_render;
