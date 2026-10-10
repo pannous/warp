@@ -137,9 +137,7 @@ fn inline(node: Node, functions: &HashMap<String, Inlinable>, counter: &Counter)
 				None => Node::List(items, bracket, separator),
 			}
 		}
-		Node::Key(left, op, right) => key(inline(*left, functions, counter), op, inline(*right, functions, counter)),
-		Node::Meta { node, data } => Node::Meta { node: Box::new(inline(*node, functions, counter)), data },
-		other => other,
+		other => children_rewritten(other, |child| inline(child, functions, counter)),
 	}
 }
 

@@ -5,7 +5,7 @@
 //! Each definition becomes its witness (`text·person`, `iterate·bag`); every other value keeps its own text and items.
 
 use super::words::{FOR_WORD, IN_WORD};
-use super::nodes::{call, key};
+use super::nodes::{call, children_rewritten, key};
 use crate::node::{Bracket, Node, Separator};
 use crate::operators::Op;
 use crate::traits::{witness_name, InstanceTypes, Shape};
@@ -87,9 +87,7 @@ impl Operations {
 				let joined = |side: Node| self.call(TEXT_OPERATION, &self.printable, &side).unwrap_or_else(|| self.rewrite(side));
 				key(joined(*left), Op::Add, joined(*right))
 			}
-			Node::Key(left, op, right) => key(self.rewrite(*left), op, self.rewrite(*right)),
-			Node::Meta { node, data } => Node::Meta { node: Box::new(self.rewrite(*node)), data },
-			other => other,
+			other => children_rewritten(other, |child| self.rewrite(child)),
 		}
 	}
 
