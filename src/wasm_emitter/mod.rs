@@ -1043,47 +1043,19 @@ impl WasmGcEmitter {
 
 	/// Emit math helper functions (i64_pow, etc.)
 	fn emit_math_helpers(&mut self) {
-		// i64_pow(base: i64, exp: i64) -> i64
-		// Computes base^exp using a loop
+		// i64_pow(base, exponent) -> i64: base multiplied exponent times
 		if self.should_emit_function("i64_pow") {
 			self.exported_function("i64_pow", vec![ValType::I64, ValType::I64], vec![ValType::I64], vec![ValType::I64], |_, func| {
-				// Locals: 0=base, 1=exp, 2=result
-				// result = 1
-				func.instruction(&I::I64Const(1));
-				func.instruction(&I::LocalSet(2));
-
-				// block $done
-				func.instruction(&I::Block(BlockType::Empty));
-				// loop $loop
-				func.instruction(&I::Loop(BlockType::Empty));
-
-				// br_if $done (i64.eqz (local.get $exp))
-				func.instruction(&I::LocalGet(1)); // exp
-				func.instruction(&I::I64Eqz);
-				func.instruction(&I::BrIf(1)); // break to $done
-
-				// result = result * base
-				func.instruction(&I::LocalGet(2)); // result
-				func.instruction(&I::LocalGet(0)); // base
-				func.instruction(&I::I64Mul);
-				func.instruction(&I::LocalSet(2));
-
-				// exp = exp - 1
-				func.instruction(&I::LocalGet(1)); // exp
-				func.instruction(&I::I64Const(1));
-				func.instruction(&I::I64Sub);
-				func.instruction(&I::LocalSet(1));
-
-				// br $loop
-				func.instruction(&I::Br(0));
-
-				// end loop
-				func.instruction(&I::End);
-				// end block
-				func.instruction(&I::End);
-
-				// return result
-				func.instruction(&I::LocalGet(2));
+				let (base, exponent, result) = (0, 1, 2);
+				Self::emit_list(func, &[
+					I::I64Const(1), I::LocalSet(result),
+					I::Block(BlockType::Empty), I::Loop(BlockType::Empty),
+					I::LocalGet(exponent), I::I64Eqz, I::BrIf(1),
+					I::LocalGet(result), I::LocalGet(base), I::I64Mul, I::LocalSet(result),
+					I::LocalGet(exponent), I::I64Const(1), I::I64Sub, I::LocalSet(exponent),
+					I::Br(0), I::End, I::End,
+					I::LocalGet(result),
+				]);
 			});
 		}
 	}
@@ -1546,16 +1518,7 @@ impl WasmGcEmitter {
 		let mut types = TypeSection::new();
 
 		// Type 0: $String = struct { ptr: i32, len: i32 }
-		types.ty().struct_(vec![
-			FieldType {
-				element_type: Val(ValType::I32),
-				mutable: false,
-			},
-			FieldType {
-				element_type: Val(ValType::I32),
-				mutable: false,
-			},
-		]);
+		types.ty().struct_(type_manager::string_fields());
 		let string_type_idx = 0u32;
 
 		// Type 1: User struct type
@@ -1845,6 +1808,17 @@ pub fn bracket_info(bracket: &Bracket) -> i64 {
 		Bracket::Less => 3,
 		Bracket::Other(_, _) => 4,
 		Bracket::None => 5,
+	}
+}
+
+/// The bracket of a list's kind high bits, bracket_info read back (Other as None)
+pub fn bracket_of_info(info: i64) -> Bracket {
+	match info {
+		0 => Bracket::Curly,
+		1 => Bracket::Square,
+		2 => Bracket::Round,
+		3 => Bracket::Less,
+		_ => Bracket::None,
 	}
 }
 

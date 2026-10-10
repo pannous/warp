@@ -18,7 +18,7 @@ use crate::declarations::word;
 use crate::diagnostic::Diagnostic;
 use crate::extensions::numbers::Number;
 use crate::event_signals::{function_with_globals, main_level_variables};
-use crate::node::{Bracket, Node, Separator};
+use crate::node::{symbol, Bracket, Node, Separator};
 use crate::operators::Op;
 
 const ON_WORD: &str = "on";
@@ -73,7 +73,7 @@ fn lower_timers(program: Node) -> Node {
 		if let Some((path, body)) = file_watch(&statement) {
 			let handler = format!("{}{watches}", crate::host::FILE_HANDLER_PREFIX);
 			lowered.push(function_with_globals(&handler, false, &[body], &main_variables));
-			let start = [Node::Symbol(crate::host::SIGNAL_WATCH.to_string()), Node::int(watches as i64), path];
+			let start = [symbol(crate::host::SIGNAL_WATCH), Node::int(watches as i64), path];
 			lowered.push(Node::List(start.to_vec(), Bracket::Round, Separator::None));
 			watches += 1;
 			continue;
@@ -109,7 +109,7 @@ fn lower_timers(program: Node) -> Node {
 		};
 		let handler = format!("{}{count}", crate::host::TIMER_HANDLER_PREFIX);
 		lowered.push(function_with_globals(&handler, false, &[body], &main_variables));
-		let start = [Node::Symbol(crate::host::SIGNAL_EVERY.to_string()), Node::int(count as i64), Node::int(milliseconds)];
+		let start = [symbol(crate::host::SIGNAL_EVERY), Node::int(count as i64), Node::int(milliseconds)];
 		lowered.push(Node::List(start.to_vec(), Bracket::Round, Separator::None));
 		count += 1;
 	}
@@ -344,7 +344,7 @@ fn bare_exits(node: Node) -> Node {
 		Node::List(items, Bracket::Round, _) => items.len() == 1 && word(&items[0]) == crate::host::EXIT,
 		_ => false,
 	};
-	let exit_zero = || Node::List(vec![Node::Symbol(crate::host::EXIT.to_string()), Node::int(0)], Bracket::Round, Separator::None);
+	let exit_zero = || call(crate::host::EXIT, vec![Node::int(0)]);
 	match node {
 		Node::List(items, bracket, separator) if crate::variable_signals::is_statement_list(&bracket, &separator) || bracket == Bracket::Curly => {
 			Node::List(items.into_iter().map(|item| if is_exit(&item) { exit_zero() } else { bare_exits(item) }).collect(), bracket, separator)

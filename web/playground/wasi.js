@@ -42,6 +42,9 @@ function normalPath(path) {
 	return parts.join("/");
 }
 
+const parentOf = path => path.includes("/") ? path.slice(0, path.lastIndexOf("/")) : "";
+const nameOf = path => path.slice(path.lastIndexOf("/") + 1);
+
 const listings = new Map(); // directory → Map(name → is a directory) on the server, null: none; for every test of this worker
 
 function requestSync(method, url) {
@@ -62,8 +65,7 @@ const bytesOf = request => Uint8Array.from(request.responseText, character => ch
 // known without asking the server
 function listing(directory) {
 	if (listings.has(directory)) return listings.get(directory);
-	const parent = directory.includes("/") ? directory.slice(0, directory.lastIndexOf("/")) : "";
-	const exists = directory === "" || listing(parent)?.get(directory.slice(directory.lastIndexOf("/") + 1));
+	const exists = directory === "" || listing(parentOf(directory))?.get(nameOf(directory));
 	const request = exists ? requestSync("GET", `${FILE_ROOT}${directory}${directory ? "/" : ""}?listing`) : null;
 	const entries = request && new Map([...request.responseText.matchAll(LISTING_LINK)].map(match => {
 		const name = decodeURIComponent(match[1]);
@@ -95,8 +97,7 @@ function served(path) {
 	if (path === TEMPORARY_DIRECTORY) return { entries: new Set() };
 	if (path.startsWith("/")) return null; // the machine has nothing else; the overlay may
 	if (path === "") return { entries: new Set(listing("").keys()) };
-	const directory = path.includes("/") ? path.slice(0, path.lastIndexOf("/")) : "";
-	const isDirectory = listing(directory)?.get(path.slice(path.lastIndexOf("/") + 1));
+	const isDirectory = listing(parentOf(path))?.get(nameOf(path));
 	if (isDirectory === undefined) return null;
 	return isDirectory ? { entries: new Set(listing(path).keys()) } : lazyFile(FILE_ROOT + path);
 }
@@ -111,8 +112,6 @@ function wasiImports(memory, args, output) {
 	const view = () => new DataView(memory().buffer);
 	const bytesAt = (pointer, length) => new Uint8Array(memory().buffer, pointer, length);
 	const textAt = (pointer, length) => utf8Decoder.decode(bytesAt(pointer, length).slice());
-	const parentOf = path => path.includes("/") ? path.slice(0, path.lastIndexOf("/")) : "";
-	const nameOf = path => path.slice(path.lastIndexOf("/") + 1);
 
 	// what is at a path, the overlay first
 	function lookup(path) {
@@ -131,9 +130,11 @@ function wasiImports(memory, args, output) {
 		const path = normalPath(`${base}/${textAt(pointer, length)}`);
 		return base.startsWith("/") ? `/${path}` : path;
 	};
-	const open = entry => {
+	// a new descriptor of the entry, written at `opened`
+	const open = (entry, opened) => {
 		descriptors.set(nextFd, entry);
-		return nextFd++;
+		view().setUint32(opened, nextFd++, true);
+		return ERRNO.SUCCESS;
 	};
 
 	// write a list of texts as C strings: pointers into `pointers`, the bytes into `buffer`
@@ -283,21 +284,16 @@ function wasiImports(memory, args, output) {
 			const existing = lookup(path);
 			if (openFlags & OPEN.DIRECTORY) {
 				if (!existing?.entries) return existing ? ERRNO.NOTDIR : ERRNO.NOENT;
-				view().setUint32(opened, open({ path, entries: existing.entries }), true);
-				return ERRNO.SUCCESS;
+				return open({ path, entries: existing.entries }, opened);
 			}
 			if (!existing && !(openFlags & OPEN.CREATE)) return ERRNO.NOENT;
-			if (existing?.entries) {
-				view().setUint32(opened, open({ path, entries: existing.entries }), true);
-				return ERRNO.SUCCESS;
-			}
+			if (existing?.entries) return open({ path, entries: existing.entries }, opened);
 			const bytes = openFlags & OPEN.TRUNCATE || !existing ? new Uint8Array() : existing.bytes;
 			if (openFlags & (OPEN.CREATE | OPEN.TRUNCATE)) {
 				written.set(path, bytes);
 				removed.delete(path);
 			}
-			view().setUint32(opened, open({ path, bytes, position: 0, append: !!(fdFlags & FD_FLAG_APPEND) }), true);
-			return ERRNO.SUCCESS;
+			return open({ path, bytes, position: 0, append: !!(fdFlags & FD_FLAG_APPEND) }, opened);
 		},
 		path_filestat_get: (dirFd, _flags, pointer, length, stat) => {
 			const path = resolve(dirFd, pointer, length);

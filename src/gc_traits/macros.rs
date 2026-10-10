@@ -14,35 +14,17 @@ impl GcReadable for String {
     }
 }
 
-impl GcReadable for i32 {
-    fn read_from_gc(gc_obj: &GcObject, idx: usize) -> anyhow::Result<Self> {
-        gc_obj.get(idx)
-    }
+/// Numbers and bools read through `get`
+macro_rules! gc_readable_by_get {
+    ($($readable:ty),*) => {$(
+        impl GcReadable for $readable {
+            fn read_from_gc(gc_obj: &GcObject, idx: usize) -> anyhow::Result<Self> {
+                gc_obj.get(idx)
+            }
+        }
+    )*};
 }
-
-impl GcReadable for i64 {
-    fn read_from_gc(gc_obj: &GcObject, idx: usize) -> anyhow::Result<Self> {
-        gc_obj.get(idx)
-    }
-}
-
-impl GcReadable for f32 {
-    fn read_from_gc(gc_obj: &GcObject, idx: usize) -> anyhow::Result<Self> {
-        gc_obj.get(idx)
-    }
-}
-
-impl GcReadable for f64 {
-    fn read_from_gc(gc_obj: &GcObject, idx: usize) -> anyhow::Result<Self> {
-        gc_obj.get(idx)
-    }
-}
-
-impl GcReadable for bool {
-    fn read_from_gc(gc_obj: &GcObject, idx: usize) -> anyhow::Result<Self> {
-        gc_obj.get(idx)
-    }
-}
+gc_readable_by_get!(i32, i64, f32, f64, bool);
 
 /// Unified macro for defining structs that work both as Rust types and WASM GC wrappers
 ///

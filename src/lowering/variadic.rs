@@ -8,8 +8,9 @@
 //! - `f(**m)` spreads an object: into a `**kw` parameter it is the object, into fixed parameters the fields named like
 //!   the parameters the other arguments leave, `g(1, **m)` → `g(1, b=m.b)`.
 
+use super::nodes::key;
 use crate::analyzer::call_name;
-use crate::node::{Bracket, Node, Separator};
+use crate::node::{symbol, Bracket, Node, Separator};
 use crate::operators::Op;
 use crate::tuples::STARRED;
 use std::collections::{HashMap, HashSet};
@@ -145,7 +146,7 @@ impl Variadic {
 			let starred_parameter = head[1..].iter().any(|parameter| starred(parameter).is_some() || double_starred(parameter).is_some());
 			let definition = |target: &Node, op: Op, body: &Node| {
 				let target = if starred_parameter { self.unstarred_head(target) } else { target.clone() };
-				Node::Key(Box::new(target), op, Box::new(self.rewrite(body.clone())))
+				key(target, op, self.rewrite(body.clone()))
 			};
 			return match node.drop_meta() {
 				Node::Key(target, op, body) => definition(target, *op, body),
@@ -158,7 +159,7 @@ impl Variadic {
 		}
 		match node {
 			Node::List(items, bracket, separator) if self.is_call(&items, &bracket, &separator) => self.call(items),
-			Node::Key(left, op, right) => Node::Key(Box::new(self.rewrite(*left)), op, Box::new(self.rewrite(*right))),
+			Node::Key(left, op, right) => key(self.rewrite(*left), op, self.rewrite(*right)),
 			Node::List(items, bracket, separator) => Node::List(items.into_iter().map(|item| self.rewrite(item)).collect(), bracket, separator),
 			Node::Meta { node, data } => Node::Meta { node: Box::new(self.rewrite(*node)), data },
 			other => other,
@@ -231,16 +232,16 @@ impl Variadic {
 fn arguments_in_order(arguments: &[Node], fixed: &[String], object: &str) -> Vec<Node> {
 	let (named, positional): (Vec<&Node>, Vec<&Node>) = arguments.iter().partition(|argument| named_argument(argument).is_some());
 	let named: Vec<(String, Node)> = named.into_iter().filter_map(named_argument).collect();
-	let field = |parameter: &String| Node::Key(Box::new(Node::Symbol(object.to_string())), Op::Dot, Box::new(Node::Symbol(parameter.clone())));
+	let field = |parameter: &String| key(symbol(object), Op::Dot, Node::Symbol(parameter.clone()));
 	let filled = fixed.iter().skip(positional.len()).map(|parameter| named.iter().find(|(name, _)| name == parameter).map_or_else(|| field(parameter), |(_, value)| value.clone()));
-	let others = named.iter().filter(|(name, _)| !fixed.contains(name)).map(|(name, value)| Node::Key(Box::new(Node::Symbol(name.clone())), Op::Assign, Box::new(value.clone())));
+	let others = named.iter().filter(|(name, _)| !fixed.contains(name)).map(|(name, value)| key(Node::Symbol(name.clone()), Op::Assign, value.clone()));
 	positional.into_iter().cloned().chain(filled).chain(others).collect()
 }
 
 /// The named arguments no fixed parameter takes, as the object of a `**kw` parameter, and the other arguments
 fn keyword_object(arguments: Vec<Node>, fixed: &[String]) -> (Vec<Node>, Option<Node>) {
 	let (named, others): (Vec<Node>, Vec<Node>) = arguments.into_iter().partition(|argument| named_argument(argument).is_some_and(|(name, _)| !fixed.contains(&name)));
-	let entries: Vec<Node> = named.iter().filter_map(named_argument).map(|(name, value)| Node::Key(Box::new(Node::Symbol(name)), Op::Colon, Box::new(value))).collect();
+	let entries: Vec<Node> = named.iter().filter_map(named_argument).map(|(name, value)| key(Node::Symbol(name), Op::Colon, value)).collect();
 	let separator = if entries.len() > 1 { Separator::Colon } else { Separator::None };
 	(others, Some(Node::List(entries, Bracket::Curly, separator)))
 }
@@ -253,7 +254,7 @@ fn spread_items(arguments: &[Node], count: Option<usize>) -> Vec<Node> {
 		match (starred(argument), argument.drop_meta()) {
 			(Some(name), _) => {
 				let left_for_it = count.unwrap_or(0).saturating_sub(items.len() + arguments.len() - index - 1);
-				items.extend((1..=left_for_it).map(|position| Node::Key(Box::new(Node::Symbol(name.clone())), Op::Hash, Box::new(crate::node::int(position as i64)))));
+				items.extend((1..=left_for_it).map(|position| key(Node::Symbol(name.clone()), Op::Hash, crate::node::int(position as i64))));
 			}
 			_ => items.push(argument.clone()),
 		}
@@ -266,7 +267,7 @@ fn rest_list(leftover: &[Node]) -> Node {
 	let mut list: Option<Node> = None;
 	let mut pending: Vec<Node> = vec![];
 	let append = |list: Option<Node>, part: Node| match list {
-		Some(list) => Some(Node::Key(Box::new(list), Op::Add, Box::new(part))),
+		Some(list) => Some(key(list, Op::Add, part)),
 		None => Some(part),
 	};
 	for argument in leftover {

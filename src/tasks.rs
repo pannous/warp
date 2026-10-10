@@ -585,11 +585,7 @@ impl TaskTable {
 				let function = lookup(context, &handler).and_then(wasmtime::Extern::into_func).ok_or_else(|| anyhow!("no exported handler {handler}"))?;
 				let mut store = context.as_context_mut();
 				let argument = builders.build(&arguments, &mut store)?;
-				let mut results: Vec<Val> = function.ty(&store).results().map(|result| match result {
-					ValType::I64 => Val::I64(0),
-					ValType::F64 => Val::F64(0),
-					_ => Val::AnyRef(None),
-				}).collect();
+				let mut results = zero_results(&function.ty(&store));
 				function.call(&mut store, &[argument], &mut results)?;
 			}
 		}
@@ -663,11 +659,7 @@ impl TaskTable {
 				(parameter, argument) => Err(anyhow!("{function} takes {parameter}, got {argument:?}")),
 			}).collect::<Result<_>>()?,
 		};
-		let mut results: Vec<Val> = signature.results().map(|result| match result {
-			ValType::I64 => Val::I64(0),
-			ValType::F64 => Val::F64(0),
-			_ => Val::AnyRef(None),
-		}).collect();
+		let mut results = zero_results(&signature);
 		// a raised error leaves its message in trap_detail, as in the program
 		crate::wasm_reader::with_trap_detail(callee.call(&mut store, &values, &mut results), &mut store, &instance)?;
 		match results.first() {
@@ -762,4 +754,13 @@ pub(crate) fn c_string(caller: &mut Caller<'_, HostState>, pointer: i32) -> Resu
 	let start = pointer as usize;
 	let end = bytes[start..].iter().position(|byte| *byte == 0).map_or(bytes.len(), |length| start + length);
 	Ok(String::from_utf8_lossy(&bytes[start..end]).into_owned())
+}
+
+/// The result slots of a call, zero or null by type
+fn zero_results(signature: &wasmtime::FuncType) -> Vec<Val> {
+	signature.results().map(|result| match result {
+		ValType::I64 => Val::I64(0),
+		ValType::F64 => Val::F64(0),
+		_ => Val::AnyRef(None),
+	}).collect()
 }

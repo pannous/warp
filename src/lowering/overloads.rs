@@ -3,6 +3,7 @@
 //! (`render "x" as pdf`, `docx d = render "x"`, `d:docx = …`, an argument of a parameter `d:docx`); without one the
 //! first-declared overload is taken with a got-it warning naming the explicit form.
 
+use super::nodes::{call, key};
 use crate::analyzer::{call_name, collect_all_types, type_word_kind};
 use crate::diagnostic::{ask, reading, Ask, Fallback};
 use crate::node::{Bracket, Node, Separator};
@@ -150,7 +151,7 @@ impl Lowering {
 				};
 				Node::Key(target, op, Box::new(self.rewrite(*value, declared.as_deref())))
 			}
-			Node::Key(left, op, right) => Node::Key(Box::new(self.rewrite(*left, None)), op, Box::new(self.rewrite(*right, None))),
+			Node::Key(left, op, right) => key(self.rewrite(*left, None), op, self.rewrite(*right, None)),
 			// `docx d = render "x"`; of a declared type it is the assignment, the value has the type
 			Node::List(items, Bracket::None, Separator::Space) if self.typed_declaration(&items).is_some() => {
 				let declared = self.typed_declaration(&items).expect("checked");
@@ -347,7 +348,7 @@ trait VariantRenaming {
 			return call;
 		}
 		match node {
-			Node::Key(left, op, right) => Node::Key(Box::new(self.rewrite(*left)), op, Box::new(self.rewrite(*right))),
+			Node::Key(left, op, right) => key(self.rewrite(*left), op, self.rewrite(*right)),
 			Node::List(items, bracket, separator) => Node::List(items.into_iter().map(|item| self.rewrite(item)).collect(), bracket, separator),
 			Node::Meta { node, data } => Node::Meta { node: Box::new(self.rewrite(*node)), data },
 			other => other,
@@ -400,7 +401,7 @@ impl VariantRenaming for ArityOverloads {
 			_ => return Some(crate::diagnostic::Diagnostic::at(head, format!("`{written}` fits two definitions of {name}: pass every argument of the one you mean")).into_error()),
 		};
 		let arguments: Vec<Node> = arguments.iter().map(|argument| self.rewrite(argument.clone())).collect();
-		Some(Node::List([vec![Node::Symbol(arity_variant(&name, chosen))], arguments].concat(), Bracket::Round, Separator::None))
+		Some(call(&arity_variant(&name, chosen), arguments))
 	}
 }
 
@@ -503,7 +504,7 @@ impl ParameterOverloads {
 		let listed = variants.iter().map(|types| format!("{name}({})", types.join(", "))).collect::<Vec<_>>().join(", ");
 		let arguments: Vec<Node> = arguments.iter().map(|argument| self.rewrite(argument.clone())).collect();
 		match chosen.as_slice() {
-			[types] => Some(Node::List([vec![Node::Symbol(Self::variant_name(&name, types))], arguments].concat(), Bracket::Round, Separator::None)),
+			[types] => Some(call(&Self::variant_name(&name, types), arguments)),
 			_ => Some(crate::diagnostic::Diagnostic::at(head, format!("`{written}` fits no single variant of {listed}: give the arguments a type, e.g. `x as float`")).into_error()),
 		}
 	}

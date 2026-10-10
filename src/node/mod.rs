@@ -156,6 +156,14 @@ impl Node {
 	pub fn print(&self) {
 		println!("{:?}", self);
 	}
+	/// The items of a list, none of ø, else the node as the one item
+	pub fn as_items(&self) -> Vec<Node> {
+		match self.drop_meta() {
+			List(items, _, _) => items.clone(),
+			Empty => vec![],
+			single => vec![single.clone()],
+		}
+	}
 	pub fn children(&self) -> Vec<Node> {
 		match self {
 			List(xs, _, _) => xs.clone(),

@@ -5,6 +5,7 @@
 //! the emitter's (wasm_emitter/text_builtins.rs), one cache per function id. Only an expression body (no statements, no
 //! `return`); effects, divergence aside, are never cached.
 
+use super::nodes::key;
 use crate::analyzer::{captured_variables, collect_variables, extract_user_functions, param_kind, Scope};
 use crate::context::{Context, UserFunctionDef};
 use crate::effects::{Effect, EffectReport, EffectSet};
@@ -71,14 +72,14 @@ pub(crate) fn definition_parts(node: &Node) -> Option<(Node, Node, Rebuild)> {
 	match node.drop_meta() {
 		Node::Key(head, op @ (Op::Define | Op::Assign), body) if *op == Op::Define || is_call_head(head) => {
 			let op = *op;
-			Some((head.as_ref().clone(), body.as_ref().clone(), Box::new(move |head: Node, body: Node| Node::Key(Box::new(head), op, Box::new(body)))))
+			Some((head.as_ref().clone(), body.as_ref().clone(), Box::new(move |head: Node, body: Node| key(head, op, body))))
 		}
 		Node::List(items, bracket, separator) => match items.as_slice() {
 			[keyword, definition] if crate::operators::is_function_keyword(&keyword.drop_meta().name()) => match definition.drop_meta() {
 				Node::Key(head, Op::Colon | Op::Define, body) => {
 					let (keyword, bracket, separator, op) = (keyword.clone(), bracket.clone(), separator.clone(), if matches!(definition.drop_meta(), Node::Key(_, Op::Define, _)) { Op::Define } else { Op::Colon });
 					Some((head.as_ref().clone(), body.as_ref().clone(), Box::new(move |head: Node, body: Node| {
-						Node::List(vec![keyword.clone(), Node::Key(Box::new(head), op, Box::new(body))], bracket.clone(), separator.clone())
+						Node::List(vec![keyword.clone(), key(head, op, body)], bracket.clone(), separator.clone())
 					})))
 				}
 				_ => None,

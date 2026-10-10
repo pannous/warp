@@ -307,18 +307,26 @@ impl WasmGcEmitter {
 			f.instruction(&I::End);
 		});
 
-		// node_map_remove(map, key): the entry of that name gone, the later ones moved up a place; the slots placed again
-		self.runtime_function(NODE_MAP_REMOVE, vec![map_ref, node_ref], vec![], vec![nullable, int, int], |s, f| {
-			let (name, entry, count) = (2, 3, 4);
+		// the entry of the name of key local 1 into `entry`, the name into `name`; else `missing`, returned
+		let find_entry = |s: &mut Self, f: &mut Function, name: u32, entry: u32, missing: &[I<'static>]| {
+			let return_missing = [&[I::If(BlockType::Empty)], missing, &[I::Return, I::End]].concat();
 			f.instruction(&I::LocalGet(1));
 			s.call(f, super::list_ops::MAP_KEY_NAME);
 			f.instruction(&I::LocalSet(name));
 			s.emit_field(f, name, 0);
-			Self::emit_list(f, &[I::I64Const(KIND_MASK), I::I64And, I::I64Const(Kind::Symbol as i64), I::I64Ne, I::If(BlockType::Empty), I::Return, I::End]);
+			Self::emit_list(f, &[I::I64Const(KIND_MASK), I::I64And, I::I64Const(Kind::Symbol as i64), I::I64Ne]);
+			Self::emit_list(f, &return_missing);
 			field(f, 0, SLOTS);
 			Self::emit_list(f, &[I::LocalGet(0), I::LocalGet(name), I::RefAsNonNull]);
 			s.call(f, NODE_MAP_SLOT);
-			Self::emit_list(f, &[I::ArrayGet(slots), I::LocalTee(entry), I::I32Const(EMPTY_SLOT), I::I32Eq, I::If(BlockType::Empty), I::Return, I::End]);
+			Self::emit_list(f, &[I::ArrayGet(slots), I::LocalTee(entry), I::I32Const(EMPTY_SLOT), I::I32Eq]);
+			Self::emit_list(f, &return_missing);
+		};
+
+		// node_map_remove(map, key): the entry of that name gone, the later ones moved up a place; the slots placed again
+		self.runtime_function(NODE_MAP_REMOVE, vec![map_ref, node_ref], vec![], vec![nullable, int, int], |s, f| {
+			let (name, entry, count) = (2, 3, 4);
+			find_entry(s, f, name, entry, &[]);
 			field(f, 0, COUNT);
 			Self::emit_list(f, &[I::I32Const(1), I::I32Sub, I::LocalSet(count)]);
 			for part in [KEYS, VALUES] {
@@ -339,15 +347,7 @@ impl WasmGcEmitter {
 		// node_map_lookup(map, key): the value of the entry of that name; null when there is none or the key is no name
 		self.runtime_function(NODE_MAP_LOOKUP, vec![map_ref, node_ref], vec![nullable], vec![nullable, int], |s, f| {
 			let (name, entry) = (2, 3);
-			f.instruction(&I::LocalGet(1));
-			s.call(f, super::list_ops::MAP_KEY_NAME);
-			f.instruction(&I::LocalSet(name));
-			s.emit_field(f, name, 0);
-			Self::emit_list(f, &[I::I64Const(KIND_MASK), I::I64And, I::I64Const(Kind::Symbol as i64), I::I64Ne, I::If(BlockType::Empty), null_node.clone(), I::Return, I::End]);
-			field(f, 0, SLOTS);
-			Self::emit_list(f, &[I::LocalGet(0), I::LocalGet(name), I::RefAsNonNull]);
-			s.call(f, NODE_MAP_SLOT);
-			Self::emit_list(f, &[I::ArrayGet(slots), I::LocalTee(entry), I::I32Const(EMPTY_SLOT), I::I32Eq, I::If(BlockType::Empty), null_node.clone(), I::Return, I::End]);
+			find_entry(s, f, name, entry, &[null_node.clone()]);
 			field(f, 0, VALUES);
 			Self::emit_list(f, &[I::LocalGet(entry), I::ArrayGet(array)]);
 		});

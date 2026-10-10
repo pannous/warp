@@ -8,9 +8,9 @@
 //! `break value` in a handler body aborts (step 3): the handler stores value in `effect_handler_aborted_ask_i` and
 //! throws to its block, which runs under `ran_without_abort(i, {…})` and then has that value.
 
-use super::nodes::call;
+use super::nodes::{call, key};
 use crate::event_signals::{emit_verbs, emitted, function_with_globals, main_level_variables, reads_event, statements_of};
-use crate::node::{Bracket, Node, Separator};
+use crate::node::{symbol, Bracket, Node, Separator};
 use crate::operators::Op;
 use crate::variable_signals::{assign, if_then_else};
 use std::collections::BTreeMap;
@@ -58,7 +58,7 @@ pub fn lower(program: Node) -> Node {
 	let main_variables = main_level_variables(&[main.clone(), statements.clone()].concat());
 	for event in by_event.keys() {
 		main.push(function_with_globals(&active_function(event), false, &[Node::Symbol(active_variable(event))], &main_variables));
-		let restore = assign(&active_variable(event), Node::Symbol(crate::event_signals::EVENT_WORD.to_string()));
+		let restore = assign(&active_variable(event), symbol(crate::event_signals::EVENT_WORD));
 		main.push(function_with_globals(&leave_function(event), true, &[restore], &main_variables));
 	}
 	for handler in &handlers {
@@ -125,11 +125,11 @@ fn operand_phrase(node: Node) -> Node {
 	let Node::List(items, _, Separator::Space) = node.drop_meta() else { return node };
 	let items = phrase_words(items);
 	let starts_handler = |index: &usize| {
-		let rest = [&[Node::Symbol(ON_WORD.into())], &items[index + 1..]].concat();
+		let rest = [&[symbol(ON_WORD)], &items[index + 1..]].concat();
 		scoped_handler(&Node::List(rest, Bracket::None, Separator::Space)).is_some()
 	};
 	let Some(start) = (0..items.len()).filter(|index| ends_with_on(&items[*index])).find(|index| *index > 0 || !is_on(&items[0])).filter(starts_handler) else { return node };
-	let phrase = Node::List([&[Node::Symbol(ON_WORD.into())], &items[start + 1..]].concat(), Bracket::None, Separator::Space);
+	let phrase = Node::List([&[symbol(ON_WORD)], &items[start + 1..]].concat(), Bracket::None, Separator::Space);
 	let head = &items[..start];
 	let placed = with_last_operand(items[start].clone(), phrase);
 	match head.is_empty() {
@@ -171,7 +171,7 @@ fn dispatched_emits(node: Node, by_event: &BTreeMap<String, Vec<usize>>, verbs: 
 		if let Some(numbers) = by_event.get(&event) {
 			let active = call(&active_function(&event), vec![]);
 			return numbers.iter().rev().fold(node, |otherwise, number| {
-				let condition = Node::Key(Box::new(active.clone()), Op::Eq, Box::new(Node::int(*number as i64)));
+				let condition = key(active.clone(), Op::Eq, Node::int(*number as i64));
 				let arguments = if matches!(data, Node::Empty) { vec![] } else { vec![data.clone()] };
 				sequence(vec![if_then_else(condition, call(&handler_name(&event, *number), arguments), otherwise)])
 			});

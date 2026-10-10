@@ -5,7 +5,8 @@
 //! A class or id selector with a lone value is its color: `#done = "red"`, `.done: "red"` (card style-selectors).
 //! In a style sheet the parser keeps a blank before `.x` or `#x` (`#main .x`, the descendant combinator) as the next item.
 
-use crate::node::{Bracket, Node, Separator};
+use super::nodes::key;
+use crate::node::{symbol, Bracket, Node, Separator};
 use crate::operators::Op;
 
 const STYLE: &str = "style";
@@ -40,10 +41,10 @@ fn styled(items: Vec<Node>, separator: &Separator) -> Vec<Node> {
 			// `.card { … }`: a leading-dot name stays apart from its block
 			output.push(rule(joined_selector(&mut pending, None, joiner), &item));
 		} else if let Some((selector, value)) = selector_value(&item) {
-			output.push(rule(selector, &Node::Key(Box::new(Node::Symbol(SELECTOR_VALUE_PROPERTY.into())), Op::Colon, Box::new(value.clone()))));
+			output.push(rule(selector, &key(symbol(SELECTOR_VALUE_PROPERTY), Op::Colon, value.clone())));
 		} else if let Some((name, value)) = declaration_value(&item) {
 			let value = css_length(value).map(Node::Text).unwrap_or_else(|| value.clone());
-			output.push(Node::Key(Box::new(name.clone()), Op::Colon, Box::new(value)));
+			output.push(key(name.clone(), Op::Colon, value));
 		} else if let Some(Node::Key(_, Op::Colon, value)) = output.last_mut().filter(|last| declaration_value(last).is_some()) {
 			match continued_value(value, &item) {
 				Some(joined) => **value = Node::Text(joined),
@@ -81,7 +82,7 @@ fn joined_selector(pending: &mut Vec<(String, Node)>, last: Option<String>, join
 }
 
 fn rule(selector: String, body: &Node) -> Node {
-	Node::Key(Box::new(Node::Text(selector)), Op::Colon, Box::new(styled_body(body)))
+	key(Node::Text(selector), Op::Colon, styled_body(body))
 }
 
 fn styled_body(body: &Node) -> Node {

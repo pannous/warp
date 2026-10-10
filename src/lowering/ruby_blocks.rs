@@ -6,7 +6,8 @@
 //! Swift's trailing closure, card web-components): `Card("Hi") { p:"text" }` passes the children, `apply(3) { it*2 }`
 //! the function.
 
-use crate::node::{Bracket, Node, Separator};
+use super::nodes::key;
+use crate::node::{symbol, Bracket, Node, Separator};
 use crate::operators::Op;
 use std::collections::{HashMap, HashSet};
 
@@ -117,7 +118,7 @@ pub(crate) fn arguments(node: &Node) -> Vec<Node> {
 fn as_lambda(block: Node) -> Node {
 	match crate::lambdas::arrow_lambda(&block).is_some() || crate::lambdas::block_as_arrow(&block).is_some() {
 		true => block,
-		false => Node::Key(Box::new(Node::Empty), Op::FatArrow, Box::new(block)),
+		false => key(Node::Empty, Op::FatArrow, block),
 	}
 }
 
@@ -128,7 +129,7 @@ fn call_with_block(name: &str, mut arguments: Vec<Node>, block: Node, takers: &H
 		BlockTaker::Parameters(count) if arguments.len() < *count => block,
 		BlockTaker::Parameters(_) => return None,
 	};
-	arguments.insert(0, Node::Symbol(name.to_string()));
+	arguments.insert(0, symbol(name));
 	arguments.push(block);
 	Some(Node::List(arguments, Bracket::Round, Separator::None))
 }
@@ -166,8 +167,8 @@ fn with_block_parameters(node: Node, called: &HashSet<String>) -> Node {
 	match node {
 		Node::Key(head, Op::Define, body) if definition_name(&Node::Key(head.clone(), Op::Define, body.clone())).is_some_and(|name| called.contains(&name)) => {
 			let Node::List(mut items, bracket, separator) = head.drop_meta().clone() else { unreachable!("a function head") };
-			items.push(Node::Symbol(BLOCK_PARAMETER.to_string()));
-			Node::Key(Box::new(Node::List(items, bracket, separator)), Op::Define, Box::new(block_calls(*body)))
+			items.push(symbol(BLOCK_PARAMETER));
+			key(Node::List(items, bracket, separator), Op::Define, block_calls(*body))
 		}
 		other => other.map_children(|child| with_block_parameters(child, called)),
 	}
@@ -176,7 +177,7 @@ fn with_block_parameters(node: Node, called: &HashSet<String>) -> Node {
 fn block_calls(node: Node) -> Node {
 	match yielded(&node) {
 		Some(values) => {
-			let callee = std::iter::once(Node::Symbol(BLOCK_PARAMETER.to_string()));
+			let callee = std::iter::once(symbol(BLOCK_PARAMETER));
 			Node::List(callee.chain(values.into_iter().map(block_calls)).collect(), Bracket::Round, Separator::None)
 		}
 		None => node.map_children(block_calls),

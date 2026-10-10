@@ -2,9 +2,9 @@
 //! `(made = []; for x in xs { if c { made.push(x * x) } }; made)`. Lowered first, so the loop and the push go through
 //! every later pass like written ones. `xs where it > 1` filters like `[it for it in xs if it > 1]`.
 
-use super::nodes::is_word;
+use super::nodes::{is_word, key};
 use crate::library_words::substitute;
-use crate::node::{Bracket, Node, Separator};
+use crate::node::{symbol, Bracket, Node, Separator};
 use crate::operators::Op;
 use crate::warp_parser::parse;
 use std::cell::Cell;
@@ -85,7 +85,7 @@ pub(crate) fn bound_names(target: &Node) -> Vec<String> {
 fn fields_of_it(condition: Node, fields: &[String], variables: &HashSet<String>) -> Node {
 	match condition {
 		Node::Symbol(name) if fields.contains(&name) => {
-			let field_of_it = Node::Key(Box::new(Node::Symbol(crate::lambdas::IMPLICIT_PARAMETER.to_string())), Op::Dot, Box::new(Node::Symbol(name.clone())));
+			let field_of_it = key(symbol(crate::lambdas::IMPLICIT_PARAMETER), Op::Dot, Node::Symbol(name.clone()));
 			if !variables.contains(&name) {
 				return field_of_it;
 			}
@@ -142,7 +142,7 @@ fn loop_over_filtered(items: &[Node], lists: &mut Lists) -> Option<Vec<Node>> {
 		return None;
 	}
 	let Node::Symbol(name) = variable.drop_meta() else { return None };
-	let condition = substitute(condition.clone(), name, &Node::Symbol(crate::lambdas::IMPLICIT_PARAMETER.to_string()));
+	let condition = substitute(condition.clone(), name, &symbol(crate::lambdas::IMPLICIT_PARAMETER));
 	let filter = Node::List(vec![sequence.clone(), where_word.clone(), condition], Bracket::None, Separator::Space);
 	Some(vec![for_word.clone(), variable.clone(), in_word.clone(), where_filters(filter, lists), where_filters(body.clone(), lists)])
 }
@@ -155,9 +155,9 @@ fn where_comprehension(subject: &Node, condition: &Node) -> Node {
 		return crate::node::error(&format!("`{subject} where {}` filters by each element `it`: write {subject} where it > 1{field_hint}", condition.serialize()));
 	}
 	// a name of its own: in a function of one parameter `it` is that parameter
-	let element = Node::Symbol(WHERE_ELEMENT.to_string());
+	let element = symbol(WHERE_ELEMENT);
 	let condition = substitute(condition.clone(), crate::lambdas::IMPLICIT_PARAMETER, &element);
-	let word = |word: &str| Node::Symbol(word.to_string());
+	let word = |word: &str| symbol(word);
 	let clause = Node::List(vec![word(FOR_WORD), element.clone(), word(IN_WORD), subject.clone(), word(IF_WORD)], Bracket::None, Separator::Space);
 	Node::List(vec![element, clause, condition], Bracket::Square, Separator::Space)
 }
@@ -167,7 +167,7 @@ fn where_comprehension(subject: &Node, condition: &Node) -> Node {
 fn field_condition(condition: &Node) -> Option<(String, String)> {
 	let Node::Key(field, op, value) = condition.drop_meta() else { return None };
 	let Node::Symbol(name) = field.drop_meta() else { return None };
-	let it = Node::Symbol(crate::lambdas::IMPLICIT_PARAMETER.to_string());
+	let it = symbol(crate::lambdas::IMPLICIT_PARAMETER);
 	let field_of_it = Node::Key(Box::new(it), Op::Dot, field.clone());
 	Some((name.clone(), Node::Key(Box::new(field_of_it), *op, value.clone()).serialize()))
 }
@@ -183,10 +183,10 @@ fn where_reassociated(node: Node) -> Node {
 				Node::List(items, bracket, separator) if *bracket != Bracket::Round && where_position(items).is_some() => {
 					let mut items = items.clone();
 					let condition = items.pop().expect("where has a condition");
-					items.push(Node::Key(Box::new(condition), op, Box::new(right)));
+					items.push(key(condition, op, right));
 					Node::List(items, bracket.clone(), separator.clone())
 				}
-				_ => Node::Key(Box::new(left), op, Box::new(right)),
+				_ => key(left, op, right),
 			}
 		}
 		other => other.map_children(where_reassociated),
@@ -245,7 +245,7 @@ impl Lowering {
 					_ => Node::List(items, bracket, separator),
 				}
 			}
-			Node::Key(left, op, right) => Node::Key(Box::new(self.lower(*left)), op, Box::new(self.lower(*right))),
+			Node::Key(left, op, right) => key(self.lower(*left), op, self.lower(*right)),
 			Node::Meta { node, data } => Node::Meta { node: Box::new(self.lower(*node)), data },
 			other => other,
 		}

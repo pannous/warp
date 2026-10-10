@@ -2,7 +2,6 @@
 //! notation text, read back with the data parser. Entries: `units`, the units of main's result (static_units.rs);
 //! `functions` and `classes` of a compiled program (reflection.rs meta_entries).
 use crate::node::{Bracket, Node, Separator};
-use crate::operators::Op;
 
 pub const META_SECTION: &str = "warp.meta";
 
@@ -11,7 +10,7 @@ pub fn with_entries(mut bytes: Vec<u8>, entries: Vec<(&str, Node)>) -> Vec<u8> {
 	if entries.is_empty() {
 		return bytes;
 	}
-	let map = Node::List(entries.into_iter().map(|(key, value)| Node::Key(Box::new(Node::Symbol(key.into())), Op::Colon, Box::new(value))).collect(), Bracket::Curly, Separator::Space);
+	let map = Node::List(entries.into_iter().map(|(key, value)| Node::key(key, value)).collect(), Bracket::Curly, Separator::Space);
 	let section = wasm_encoder::CustomSection { name: META_SECTION.into(), data: map.serialize().into_bytes().into() };
 	wasm_encoder::Section::append_to(&section, &mut bytes);
 	bytes

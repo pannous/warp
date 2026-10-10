@@ -30,16 +30,7 @@ impl Local {
 	}
 
 	pub fn param(position: u32, name: impl Into<String>, kind: crate::type_kinds::Kind) -> Self {
-		Local {
-			position,
-			name: name.into(),
-			type_node: None,
-			declared: false,
-			kind,
-			is_param: true,
-			data_pointer: 0,
-			data_length: 0,
-		}
+		Local { is_param: true, ..Local::new(position, name, kind) }
 	}
 }
 

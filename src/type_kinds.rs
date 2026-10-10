@@ -331,10 +331,7 @@ impl TypeRegistry {
 			if matches!(body.drop_meta(), Node::Empty) {
 				return None;
 			}
-			let type_name = match name.drop_meta() {
-				Node::Symbol(s) | Node::Text(s) => s.clone(),
-				_ => return None,
-			};
+			let type_name = Self::written_name(name)?;
 			let fields = Self::extract_fields(body);
 			for (field, value) in Self::field_items(body).filter_map(Self::field_default) {
 				self.defaults.insert((type_name.clone(), field), value);
@@ -347,25 +344,16 @@ impl TypeRegistry {
 
 	/// Extract FieldDefs from a type body (typically a List of Key nodes)
 	fn extract_fields(body: &crate::node::Node) -> Vec<FieldDef> {
+		Self::field_items(body).filter_map(Self::extract_field).collect()
+	}
+
+	/// The word or text a name is written as
+	fn written_name(node: &crate::node::Node) -> Option<String> {
 		use crate::node::Node;
-		let mut fields = Vec::new();
-		let body = body.drop_meta();
-		match body {
-			Node::List(items, _, _) => {
-				for item in items {
-					if let Some(field) = Self::extract_field(item) {
-						fields.push(field);
-					}
-				}
-			}
-			// Single field without list wrapper
-			other => {
-				if let Some(field) = Self::extract_field(other) {
-					fields.push(field);
-				}
-			}
+		match node.drop_meta() {
+			Node::Symbol(s) | Node::Text(s) => Some(s.clone()),
+			_ => None,
 		}
-		fields
 	}
 
 	/// Extract a single FieldDef from a Key node (name:Type)
@@ -383,20 +371,12 @@ impl TypeRegistry {
 				Some(FieldDef { type_name: format!("{}{OPTIONAL_SUFFIX}", field.type_name), ..field })
 			}
 			Node::Key(name_node, _, type_node) => {
-				let name = match name_node.drop_meta() {
-					Node::Symbol(s) | Node::Text(s) => s.clone(),
-					_ => return None,
-				};
+				let name = Self::written_name(name_node)?;
 				let type_name = match type_node.drop_meta() {
-					Node::Symbol(s) | Node::Text(s) => s.clone(),
-					Node::Type { name: type_name_node, .. } => {
-						match type_name_node.drop_meta() {
-							Node::Symbol(s) | Node::Text(s) => s.clone(),
-							_ => UNTYPED_FIELD.to_string(),
-						}
-					}
-					_ => UNTYPED_FIELD.to_string(), // a default value `x=0` or `x:0`, no type
+					Node::Type { name: type_name_node, .. } => Self::written_name(type_name_node),
+					written => Self::written_name(written), // none for a default value `x=0` or `x:0`
 				};
+				let type_name = type_name.unwrap_or_else(|| UNTYPED_FIELD.to_string());
 				Some(FieldDef { name, type_name })
 			}
 			Node::Symbol(word) => Some(FieldDef::untyped(word)),

@@ -26,7 +26,7 @@ use wasm_encoder::*;
 use Instruction as I;
 use ValType::Ref;
 
-/// The field of a typed list struct holding its array (type_manager emit_typed_list_types: length, items)
+/// The field of a typed list struct holding its array (type_manager emit_growable_list_types: length, items)
 const TYPED_LIST_ITEMS: u32 = 1;
 
 /// Capacity of the first items array a push into an empty list allocates; it doubles when full

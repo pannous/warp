@@ -243,12 +243,41 @@ impl Operation {
 		}
 	}
 
+	/// None on overflow
+	fn of_i64(self, a: i64, b: i64) -> Option<i64> {
+		match self {
+			Operation::Add => a.checked_add(b),
+			Operation::Sub => a.checked_sub(b),
+			Operation::Mul => a.checked_mul(b),
+			Operation::Div => unreachable!("an integer quotient is a ratio: Number::ratio"),
+		}
+	}
+
+	fn of_bigint(self, a: BigInt, b: BigInt) -> BigInt {
+		match self {
+			Operation::Add => a + b,
+			Operation::Sub => a - b,
+			Operation::Mul => a * b,
+			Operation::Div => unreachable!("an integer quotient is a ratio: Number::ratio"),
+		}
+	}
+
+	fn of_rational(self, a: &Rational, b: &Rational) -> Rational {
+		match self {
+			Operation::Add => a.add(b),
+			Operation::Sub => a.add(&b.neg()),
+			Operation::Mul => a.mul(b),
+			Operation::Div => unreachable!("a quotient of ratios is Number::ratio"),
+		}
+	}
+
 	fn of_complex(self, (r1, i1): (f64, f64), (r2, i2): (f64, f64)) -> Number {
 		let (real, imaginary) = match self {
 			Operation::Add => (r1 + r2, i1 + i2),
 			Operation::Sub => (r1 - r2, i1 - i2),
 			Operation::Mul => (r1 * r2 - i1 * i2, r1 * i2 + i1 * r2),
 			Operation::Div => {
+				// (a + bi) / (c + di) = (a + bi)(c - di) / (c² + d²)
 				let divisor = r2 * r2 + i2 * i2;
 				((r1 * r2 + i1 * i2) / divisor, (i1 * r2 - r1 * i2) / divisor)
 			}
@@ -293,29 +322,6 @@ fn mixed(a: Number, b: Number, operation: Operation) -> Number {
 	Number::of_f64(operation.of_f64(f64::from(a), f64::from(b)))
 }
 
-impl Add for Number {
-	type Output = Self;
-
-	fn add(self, other: Self) -> Self::Output {
-		match (self, other) {
-			(Number::Quotient(n1, d1), Number::Quotient(n2, d2)) => {
-				Number::from_rational(Rational::new(BigInt::from(n1), BigInt::from(d1)).add(&Rational::new(BigInt::from(n2), BigInt::from(d2))))
-			}
-			(Number::Int(n1), Number::Int(n2)) => n1.checked_add(n2).map(Number::Int).unwrap_or_else(|| Number::from_bigint(BigInt::from(n1) + BigInt::from(n2))),
-			(a, b) if a.is_integer() && b.is_integer() => Number::from_bigint(a.to_bigint() + b.to_bigint()),
-			(a, b) if (a.is_ratio() || b.is_ratio()) && a.is_rational() && b.is_rational() => {
-				Number::from_rational(a.to_rational().add(&b.to_rational()))
-			}
-			(Number::Float(n1), Number::Float(n2)) => Number::Float(n1 + n2),
-			(Number::Complex(r1, i1), Number::Complex(r2, i2)) => Number::Complex(r1 + r2, i1 + i2),
-			// Mixed type conversions - convert to Float
-			(Number::Int(n1), Number::Float(n2)) => Number::Float(n1 as f64 + n2),
-			(Number::Float(n1), Number::Int(n2)) => Number::Float(n1 + n2 as f64),
-			(a, b) => mixed(a, b, Operation::Add),
-		}
-	}
-}
-
 impl Neg for Number {
 	type Output = Self;
 
@@ -335,26 +341,37 @@ impl Neg for Number {
 	}
 }
 
+/// + - * of two numbers: exact for integers and ratios (an integer overflowing i64 becomes a BigInt), f64 for floats
+/// (an infinite or NaN result stays a Float), else mixed
+fn arithmetic(a: Number, b: Number, operation: Operation) -> Number {
+	match (a, b) {
+		(Number::Int(n1), Number::Int(n2)) => {
+			operation.of_i64(n1, n2).map(Number::Int).unwrap_or_else(|| Number::from_bigint(operation.of_bigint(BigInt::from(n1), BigInt::from(n2))))
+		}
+		(a, b) if a.is_integer() && b.is_integer() => Number::from_bigint(operation.of_bigint(a.to_bigint(), b.to_bigint())),
+		(a, b) if (a.is_ratio() || b.is_ratio()) && a.is_rational() && b.is_rational() => {
+			Number::from_rational(operation.of_rational(&a.to_rational(), &b.to_rational()))
+		}
+		(Number::Float(n1), Number::Float(n2)) => Number::Float(operation.of_f64(n1, n2)),
+		(Number::Int(n1), Number::Float(n2)) => Number::Float(operation.of_f64(n1 as f64, n2)),
+		(Number::Float(n1), Number::Int(n2)) => Number::Float(operation.of_f64(n1, n2 as f64)),
+		(a, b) => mixed(a, b, operation),
+	}
+}
+
+impl Add for Number {
+	type Output = Self;
+
+	fn add(self, other: Self) -> Self::Output {
+		arithmetic(self, other, Operation::Add)
+	}
+}
+
 impl Sub for Number {
 	type Output = Self;
 
 	fn sub(self, other: Self) -> Self::Output {
-		match (self, other) {
-			(Number::Quotient(n1, d1), Number::Quotient(n2, d2)) => {
-				Number::from_rational(Rational::new(BigInt::from(n1), BigInt::from(d1)).add(&Rational::new(BigInt::from(n2), BigInt::from(d2)).neg()))
-			}
-			(Number::Int(n1), Number::Int(n2)) => n1.checked_sub(n2).map(Number::Int).unwrap_or_else(|| Number::from_bigint(BigInt::from(n1) - BigInt::from(n2))),
-			(a, b) if a.is_integer() && b.is_integer() => Number::from_bigint(a.to_bigint() - b.to_bigint()),
-			(a, b) if (a.is_ratio() || b.is_ratio()) && a.is_rational() && b.is_rational() => {
-				Number::from_rational(a.to_rational().add(&b.to_rational().neg()))
-			}
-			(Number::Float(n1), Number::Float(n2)) => Number::Float(n1 - n2),
-			(Number::Complex(r1, i1), Number::Complex(r2, i2)) => Number::Complex(r1 - r2, i1 - i2),
-			// Mixed type conversions - convert to Float
-			(Number::Int(n1), Number::Float(n2)) => Number::Float(n1 as f64 - n2),
-			(Number::Float(n1), Number::Int(n2)) => Number::Float(n1 - n2 as f64),
-			(a, b) => mixed(a, b, Operation::Sub),
-		}
+		arithmetic(self, other, Operation::Sub)
 	}
 }
 
@@ -362,24 +379,7 @@ impl Mul for Number {
 	type Output = Self;
 
 	fn mul(self, other: Self) -> Self::Output {
-		match (self, other) {
-			(Number::Quotient(n1, d1), Number::Quotient(n2, d2)) => {
-				Number::from_rational(Rational::new(BigInt::from(n1), BigInt::from(d1)).mul(&Rational::new(BigInt::from(n2), BigInt::from(d2))))
-			}
-			(Number::Int(n1), Number::Int(n2)) => n1.checked_mul(n2).map(Number::Int).unwrap_or_else(|| Number::from_bigint(BigInt::from(n1) * BigInt::from(n2))),
-			(a, b) if a.is_integer() && b.is_integer() => Number::from_bigint(a.to_bigint() * b.to_bigint()),
-			(a, b) if (a.is_ratio() || b.is_ratio()) && a.is_rational() && b.is_rational() => {
-				Number::from_rational(a.to_rational().mul(&b.to_rational()))
-			}
-			(Number::Float(n1), Number::Float(n2)) => Number::Float(n1 * n2),
-			(Number::Int(n1), Number::Float(n2)) => Number::Float(n1 as f64 * n2),
-			(Number::Float(n1), Number::Int(n2)) => Number::Float(n1 * n2 as f64),
-			(Number::Complex(r1, i1), Number::Complex(r2, i2)) => {
-				// (a + bi)(c + di) = (ac - bd) + (ad + bc)i
-				Number::Complex(r1 * r2 - i1 * i2, r1 * i2 + i1 * r2)
-			}
-			(a, b) => mixed(a, b, Operation::Mul),
-		}
+		arithmetic(self, other, Operation::Mul)
 	}
 }
 
@@ -388,14 +388,8 @@ impl Div for Number {
 
 	fn div(self, other: Self) -> Self::Output {
 		match (self, other) {
-			(Number::Quotient(q1, q2), Number::Float(n2)) => {
-				Number::Float(q1 as f64 / q2 as f64 * n2)
-			}
-			(Number::Float(n1), Number::Quotient(q1, q2)) => {
-				Number::Float(n1 / q1 as f64 / q2 as f64)
-			}
-			(Number::BigQuotient(q), Number::Float(n2)) => Number::Float(q.to_f64() / n2),
-			(Number::Float(n1), Number::BigQuotient(q)) => Number::Float(n1 / q.to_f64()),
+			(ratio @ (Number::Quotient(..) | Number::BigQuotient(_)), Number::Float(n2)) => Number::Float(f64::from(ratio) / n2),
+			(Number::Float(n1), ratio @ (Number::Quotient(..) | Number::BigQuotient(_))) => Number::Float(n1 / f64::from(ratio)),
 			(a, b) if matches!(a, Number::Quotient(..) | Number::BigQuotient(_) | Number::Int(_) | Number::BigInt(_))
 				&& matches!(b, Number::Quotient(..) | Number::BigQuotient(_) | Number::Int(_) | Number::BigInt(_)) => {
 				Number::ratio(a, b)
@@ -403,13 +397,6 @@ impl Div for Number {
 			(Number::Float(n1), Number::Float(n2)) => Number::Float(n1 / n2),
 			(Number::Int(n1), Number::Float(n2)) => Number::Float(n1 as f64 / n2),
 			(Number::Float(n1), Number::Int(n2)) => Number::Float(n1 / n2 as f64),
-			(Number::Complex(r1, i1), Number::Complex(r2, i2)) => {
-				// (a + bi) / (c + di) = (a + bi)(c - di) / (c^2 + d^2)
-				Number::Complex(
-					(r1 * r2 + i1 * i2) / (r2 * r2 + i2 * i2),
-					(i1 * r2 - r1 * i2) / (r2 * r2 + i2 * i2),
-				)
-			}
 			(a, b) => mixed(a, b, Operation::Div),
 		}
 	}
@@ -493,14 +480,7 @@ impl PartialEq for Number {
 
 impl PartialEq<i32> for Number {
 	fn eq(&self, other: &i32) -> bool {
-		match self {
-			Number::Int(i) => *i == *other as i64,
-			Number::Float(f) => *f == *other as f64,
-			Number::Quotient(n, d) => *n / d == *other as i64,
-			Number::BigQuotient(q) => q.is_integer() && q.numerator == BigInt::from(*other),
-			Number::Complex(r, i) => *r == *other as f64 && *i == 0.0,
-			_ => false,
-		}
+		*self == *other as i64
 	}
 }
 

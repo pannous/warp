@@ -4,6 +4,7 @@
 //! capture no variable. A function that is not known at the call (chosen at run time) or a lambda that captures a variable is passed
 //! as a closure to a generic version of the function (closures.rs).
 
+use super::nodes::{call, key};
 use crate::closures::may_be_function_value;
 use crate::lambdas::lambda_definition;
 use crate::library_words::substitute;
@@ -41,8 +42,8 @@ impl Definition {
 	}
 
 	fn node(&self) -> Node {
-		let head = Node::List([vec![Node::Symbol(self.name.clone())], self.params.clone()].concat(), Bracket::Round, Separator::None);
-		Node::Key(Box::new(head), Op::Define, Box::new(self.body.clone()))
+		let head = call(&self.name.clone(), self.params.clone());
+		key(head, Op::Define, self.body.clone())
 	}
 }
 
@@ -262,7 +263,7 @@ fn replace_aliases(node: Node, found: &HashMap<String, String>) -> Node {
 		Node::Key(target, Op::Assign | Op::Define, value) if matches!(target.drop_meta(), Node::Symbol(name) if found.contains_key(name)) && matches!(value.drop_meta(), Node::Symbol(_)) => {
 			Node::Empty
 		}
-		Node::Key(left, op, right) => Node::Key(Box::new(replace_aliases(*left, found)), op, Box::new(replace_aliases(*right, found))),
+		Node::Key(left, op, right) => key(replace_aliases(*left, found), op, replace_aliases(*right, found)),
 		Node::List(items, bracket, separator) => Node::List(items.into_iter().map(|item| replace_aliases(item, found)).collect(), bracket, separator),
 		Node::Meta { node, data } => Node::Meta { node: Box::new(replace_aliases(*node, found)), data },
 		other => other,
@@ -310,7 +311,7 @@ impl Specialising {
 				let items: Vec<Node> = items.into_iter().map(|item| self.rewrite(item)).collect();
 				self.specialised_call(&items, &bracket, &separator).unwrap_or(Node::List(items, bracket, separator))
 			}
-			Node::Key(left, op, right) => Node::Key(Box::new(self.rewrite(*left)), op, Box::new(self.rewrite(*right))),
+			Node::Key(left, op, right) => key(self.rewrite(*left), op, self.rewrite(*right)),
 			Node::Meta { node, data } => Node::Meta { node: Box::new(self.rewrite(*node)), data },
 			other => other,
 		}
@@ -342,7 +343,7 @@ impl Specialising {
 		}
 		let specialised = self.specialise(name, &targets);
 		let remaining: Vec<Node> = arguments.iter().enumerate().filter(|(index, _)| !indexes.contains(index)).map(|(_, argument)| argument.clone()).collect();
-		Some(Node::List([vec![Node::Symbol(specialised)], remaining].concat(), Bracket::Round, Separator::None))
+		Some(call(&specialised, remaining))
 	}
 
 	/// The version of `name` that takes its functions as closures, made once: `f x` with a function parameter `f` is the call `f(x)`,
@@ -429,7 +430,7 @@ fn assemble(node: Node, specialising: &Specialising) -> Node {
 				.collect();
 			Node::List(items, bracket, separator)
 		}
-		Node::Key(left, op, right) => Node::Key(Box::new(assemble(*left, specialising)), op, Box::new(assemble(*right, specialising))),
+		Node::Key(left, op, right) => key(assemble(*left, specialising), op, assemble(*right, specialising)),
 		Node::Meta { node, data } => Node::Meta { node: Box::new(assemble(*node, specialising)), data },
 		other => other,
 	}
@@ -512,7 +513,7 @@ fn rewrite_outside(node: Node, specialising: &mut Specialising) -> Node {
 				None => Node::List(items, bracket, separator),
 			}
 		}
-		Node::Key(left, op, right) => Node::Key(Box::new(rewrite_outside(*left, specialising)), op, Box::new(rewrite_outside(*right, specialising))),
+		Node::Key(left, op, right) => key(rewrite_outside(*left, specialising), op, rewrite_outside(*right, specialising)),
 		Node::Meta { node, data } => Node::Meta { node: Box::new(rewrite_outside(*node, specialising)), data },
 		other => other,
 	}
