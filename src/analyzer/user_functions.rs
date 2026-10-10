@@ -273,6 +273,7 @@ pub(super) fn with_usage_kinds(params: Vec<Param>, body: &Node) -> Vec<Param> {
 	let mut celled: HashSet<String> = HashSet::new();
 	let mut texted: HashSet<String> = HashSet::new();
 	let mut foreign: HashSet<String> = HashSet::new();
+	let mut tested: HashSet<String> = HashSet::new();
 	let mut aliases: Vec<(String, String)> = vec![];
 	body.visit(&mut |node| {
 		if let Some(name) = crate::closures::called_closure(node) {
@@ -297,6 +298,7 @@ pub(super) fn with_usage_kinds(params: Vec<Param>, body: &Node) -> Vec<Param> {
 			texted.insert(name.to_string());
 		}
 		foreign.extend(given_to_foreign_code(node).map(str::to_string));
+		tested.extend(kind_tested(node).map(str::to_string));
 		// `xs = xs + [420]`, `xs += [420]` (what `xs.add(420)` lowers to): xs is a list, called or not
 		if let Some(name) = joined_to_list(node) {
 			indexed.insert(name.to_string());
@@ -327,8 +329,23 @@ pub(super) fn with_usage_kinds(params: Vec<Param>, body: &Node) -> Vec<Param> {
 		} else {
 			None
 		};
-		Param { used_as, ..param }
+		// `if x is list then … else x`: a parameter tested for its kind takes any value, as if written `x:any` (card recursive-sum)
+		let takes_any = tested.contains(&param.name) && param.annotation.is_none() && param.default.is_none();
+		let annotation = if takes_any { Some(Node::Symbol(crate::type_kinds::UNTYPED_FIELD.to_string())) } else { param.annotation };
+		Param { used_as, annotation, ..param }
 	}).collect()
+}
+
+/// `is_type(x, "list")`, what `x is list` lowers to: the name whose kind is tested
+fn kind_tested(node: &Node) -> Option<&str> {
+	let Node::List(items, _, _) = node else { return None };
+	match items.as_slice() {
+		[word, tested, _] if word.is_symbol(crate::type_tests::IS_TYPE) => match tested.drop_meta() {
+			Node::Symbol(name) => Some(name),
+			_ => None,
+		},
+		_ => None,
+	}
 }
 
 /// The names a foreign call takes as its receiver or arguments (lowering/foreign_modules.rs): values of any kind, as

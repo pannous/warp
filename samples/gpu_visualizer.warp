@@ -144,7 +144,7 @@ while time < seconds {
 	for band in 0..bands {
 		peaks[band] = max(quietest, max(heard[band], peaks[band] * peak_fade))
 		level = heard[band] / peaks[band]
-		if level > levels[band] { rise += level - levels[band] }
+		rise += max(0.0, level - levels[band])
 		levels[band] = max(level, levels[band] * fall)
 		if levels[band] > levels[loudest] { loudest = band }
 	}

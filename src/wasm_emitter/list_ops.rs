@@ -588,7 +588,7 @@ fn divided_index(index: &Node) -> Option<(&Node, &Node)> {
 
 /// How to fix a runtime error, appended to its message: the trap knows no source position, so the fix is generic
 const WHOLE_NUMBER_FIX: &str = "fix: compute it with // (floor division) or `… as int`";
-const RUNTIME_ERROR_FIXES: [(&str, &str); 4] = [(INDEX_NOT_INTEGRAL, WHOLE_NUMBER_FIX), (COUNT_NOT_INTEGRAL, WHOLE_NUMBER_FIX), (INT_NOT_WHOLE, WHOLE_NUMBER_FIX),
+const RUNTIME_ERROR_FIXES: [(&str, &str); 5] = [(NOT_A_MAP, "keys, values and entries are a map's; a list's positions are 1..count(xs)"), (INDEX_NOT_INTEGRAL, WHOLE_NUMBER_FIX), (COUNT_NOT_INTEGRAL, WHOLE_NUMBER_FIX), (INT_NOT_WHOLE, WHOLE_NUMBER_FIX),
 	(super::declared_values::LIST_CANNOT_HOLD, "its declared element type does not admit it (P215)")];
 
 /// The message of the runtime error trapped in the function `name`: its words, then its fix if it has one
@@ -612,13 +612,16 @@ pub const RETURNED_ERROR: &str = "returned_error";
 /// `a % 0`, `a rem 0`: an integer divide by zero (big_int::emit_nonzero_divisor)
 pub const DIVIDE_BY_ZERO: &str = "divide_by_zero";
 
-pub const RUNTIME_ERRORS: [&str; 29] = [
+/// `x.keys`, `x.values`, `x.entries` of a value that is no map (card keys-value)
+const NOT_A_MAP: &str = "not_a_map";
+
+pub const RUNTIME_ERRORS: [&str; 30] = [
 	"index_out_of_range", INDEX_NOT_INTEGRAL, "invalid_number", "out_of_memory", "key_not_found", "float_out_of_int_range",
 	"min_of_an_empty_list", "max_of_an_empty_list", "reduce_of_an_empty_list",
 	"not_a_list", "not_a_text", "not_an_int", "non_ascii_text", "not_a_joinable_item", "empty_separator", "not_an_object",
 	"not_comparable", super::closures::NOT_A_FUNCTION, super::closures::WRONG_ARGUMENT_COUNT, super::tuple_emitter::WRONG_NUMBER_OF_VALUES,
 	RETURNED_ERROR, "not_a_character", COUNT_NOT_INTEGRAL, NOT_A_NUMBER, DIVIDE_BY_ZERO, INT_NOT_WHOLE, super::declared_values::LIST_CANNOT_HOLD,
-	super::uncertain::NEGATIVE_UNCERTAINTY, super::uncertain::INTERVAL_AND_GAUSSIAN,
+	super::uncertain::NEGATIVE_UNCERTAINTY, super::uncertain::INTERVAL_AND_GAUSSIAN, NOT_A_MAP,
 ];
 
 /// text_as_int(node) -> i64: a Text's optional sign and decimal digits, any other node's Int (get_int_value)
@@ -2310,7 +2313,16 @@ impl WasmGcEmitter {
 			f.instruction(&I::RefAsNonNull);
 		});
 		for (name, part) in [(MAP_ENTRIES, ENTRY_PART), (MAP_KEYS, KEY_PART), (MAP_VALUES, VALUE_PART)] {
+			// keys or values of a number, a text or a list: not_a_map, no silent echo of it (card keys-value); ø and [] have
+			// none. map_entries passes a list through: `for a, b in [[1, 2], [3, 4]]` unpacks with it
 			self.runtime_function(name, vec![node_ref], vec![node_ref], vec![], |s, f| {
+				if name != MAP_ENTRIES {
+					f.instruction(&I::LocalGet(0));
+					s.call(f, IS_MAP);
+					s.emit_field(f, 0, 1);
+					Self::emit_list(f, &[I::RefIsNull, I::I32Or, I::I32Eqz]);
+					s.emit_fail_if(f, NOT_A_MAP);
+				}
 				Self::emit_list(f, &[I::LocalGet(0), I32Const(part)]);
 				s.call(f, MAP_COLUMN);
 			});

@@ -17,6 +17,11 @@ pub const MODULE_EXTENSIONS: [&str; 2] = ["wasp", "warp"];
 pub(crate) const USE_KEYWORDS: [&str; 3] = ["use", "require", "import"];
 /// `include x`: the whole file, spliced in place
 const INCLUDE_KEYWORD: &str = "include";
+
+/// `use x`, `require x`, `import x`, `include x`: a statement that brings in a module, the one list every pass asks
+pub(crate) fn is_import_keyword(word: &str) -> bool {
+	USE_KEYWORDS.contains(&word) || word == INCLUDE_KEYWORD
+}
 const USE_KEYWORD: &str = "use";
 /// `from list import zip, unique`: only those words of the module
 const IMPORT_KEYWORD: &str = "import";
@@ -976,6 +981,37 @@ pub fn prelude_word_defaults(word: &str) -> usize {
 	prelude_word_parameters(word).map_or(0, |(_, defaults)| defaults)
 }
 
+/// The arguments of a call of a prelude word in parameter order: one may be named (`nearest(x, rational, within:
+/// 1e-6)`), one left out is its default (`limit = 0`); unchanged for no prelude word
+pub fn prelude_arguments(word: &str, arguments: Vec<Node>) -> Vec<Node> {
+	let source = std_module(PRELUDE_MODULE).unwrap_or_default();
+	let parameters = statements(crate::normalize::without_hints(|| WarpParser::parse(source))).into_iter().find_map(|statement| match statement.drop_meta() {
+		Node::Key(head, Op::Define, _) if leftmost_symbol(head).as_deref() == Some(word) => match head.drop_meta() {
+			Node::List(items, _, _) => Some(items[1..].iter().map(|item| match item.drop_meta() {
+				Node::Key(name, Op::Assign, default) => (name.drop_meta().name(), Some(default.as_ref().clone())),
+				other => (other.name(), None),
+			}).collect::<Vec<_>>()),
+			_ => None,
+		},
+		_ => None,
+	});
+	let Some(parameters) = parameters else { return arguments };
+	let mut slots: Vec<Option<Node>> = vec![None; parameters.len()];
+	let named_slot = |argument: &Node| match argument.drop_meta() {
+		Node::Key(name, Op::Colon | Op::Assign, value) => parameters.iter().position(|(parameter, _)| *parameter == name.drop_meta().name()).map(|slot| (slot, value.as_ref().clone())),
+		_ => None,
+	};
+	for argument in arguments.iter() {
+		let (slot, value) = named_slot(argument).unwrap_or_else(|| (slots.iter().position(Option::is_none).unwrap_or(slots.len()), argument.clone()));
+		match slots.get_mut(slot) {
+			Some(empty @ None) => *empty = Some(value),
+			_ => return arguments, // too many, or one twice: the arity check names it
+		}
+	}
+	let filled: Option<Vec<Node>> = slots.into_iter().zip(&parameters).map(|(slot, (_, default))| slot.or_else(|| default.clone())).collect();
+	filled.unwrap_or(arguments)
+}
+
 fn prelude_word_parameters(word: &str) -> Option<(usize, usize)> {
 	static PARAMETERS: std::sync::OnceLock<Vec<(String, usize, usize)>> = std::sync::OnceLock::new();
 	let parameters = PARAMETERS.get_or_init(|| {
@@ -1427,7 +1463,7 @@ fn leftmost_symbol(node: &Node) -> Option<String> {
 
 /// Words that bind the names after them: `fun f(x)`, `for i in`, `import f from`, `global x`
 fn binds_names(keyword: &str) -> bool {
-	is_function_keyword(keyword) || is_declaration_keyword(keyword) || matches!(keyword, "for" | "require" | "include")
+	is_function_keyword(keyword) || is_declaration_keyword(keyword) || is_import_keyword(keyword) || keyword == crate::lowering::words::FOR_WORD
 }
 
 /// The signature part of a definition: `f(x)` of `f(x): body` and of `fun f(x) {body}`

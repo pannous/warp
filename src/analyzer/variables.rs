@@ -110,7 +110,9 @@ pub(super) fn collect_variables_inner(node: &Node, scope: &mut Scope, skip_first
 			inner_temporaries
 		}
 		// Compound assignments don't create new variables
+		// the value's variables come first, as for `=`: `r += (t = l[b]; t)` (a lowered max) widens r by t's kind
 		Node::Key(left, op, right) if op.is_compound_assign() => {
+			let inner_temporaries = visit(right, scope);
 			if let Some(name) = left.symbol_name() {
 				widen_to_float(scope, name, right);
 				// `out += x` of a number of run-time kind may add a float, as `out = out + x` does; an evident other kind
@@ -123,7 +125,7 @@ pub(super) fn collect_variables_inner(node: &Node, scope: &mut Scope, skip_first
 					type_list_by_first_append(name, &Node::Key(left.clone(), Op::Add, right.clone()), scope);
 				}
 			}
-			visit(left, scope) + visit(right, scope)
+			visit(left, scope) + inner_temporaries
 		}
 		// While loop needs temp locals for the result and for "the body ran"
 		Node::Key(left, Op::Do, right) => 2 + visit(left, scope) + visit(right, scope),

@@ -383,8 +383,6 @@ pub const TEMPORARY_SEPARATOR: &str = "·";
 pub fn is_compiler_temporary(name: &str) -> bool {
 	name.contains(TEMPORARY_SEPARATOR)
 }
-/// Statements that name functions or modules instead of calling them
-pub(super) const IMPORT_WORDS: [&str; 3] = ["import", "use", "include"];
 pub(super) const LIST_OF_PREFIX: &str = "list of ";
 /// The type words of a bool, held as an Int (builtin_type_kind)
 const BOOL_TYPES: [&str; 2] = ["bool", "boolean"];
@@ -455,12 +453,11 @@ pub(super) fn common_type_word(words: &[String]) -> Option<String> {
 	if words.iter().all(|word| word == first) {
 		return Some(first.clone());
 	}
-	let is_number = |word: &String| [INT_WORD, RATIONAL_WORD, REAL_WORD, FLOAT_WORD, NUMBER_WORD].contains(&word.as_str());
-	let is_exact = |word: &String| word == INT_WORD || word == RATIONAL_WORD;
+	let is_number = |word: &String| is_type_within(word, NUMBER_WORD);
 	if !words.iter().all(is_number) {
 		return None;
 	}
-	Some(if words.iter().all(is_exact) { RATIONAL_WORD } else { NUMBER_WORD }.to_string())
+	Some(if words.iter().all(|word| is_type_within(word, RATIONAL_WORD)) { RATIONAL_WORD } else { NUMBER_WORD }.to_string())
 }
 
 /// Semantic checks run before emission; the first violation comes back as an error value
@@ -492,7 +489,7 @@ pub(super) fn call_arity_error(node: &Node, context: &Context) -> Option<Diagnos
 	match node {
 		Node::Meta { node, .. } => call_arity_error(node, context),
 		// `import (sin, floor) from 'm'` names functions, it calls none
-		Node::List(items, _, _) if matches!(items.first().map(Node::drop_meta), Some(Node::Symbol(word)) if IMPORT_WORDS.contains(&word.as_str())) => None,
+		Node::List(items, _, _) if matches!(items.first().map(Node::drop_meta), Some(Node::Symbol(word)) if crate::modules::is_import_keyword(word)) => None,
 		Node::List(items, bracket, _) => {
 			if let (Bracket::Round, Some(Node::Symbol(name))) = (bracket, items.first().map(Node::drop_meta)) {
 				let libm = crate::ffi::LIBM_F64_FUNCTIONS.iter().filter(|(function, _)| function == name).map(|(_, arity)| *arity);
@@ -964,7 +961,7 @@ pub(super) fn negative_modulo_warning(left: &Node, right: &Node) -> String {
 pub(super) fn check_ambiguous_calls(node: &Node) -> Option<Diagnostic> {
 	/// `return x`, `let x`, `def f`, `use m`: a statement word, no function applied braceless
 	fn is_statement_word(word: &str) -> bool {
-		is_declaration_word(word) || crate::operators::is_function_keyword(word) || IMPORT_WORDS.contains(&word) || RETURNING_KEYWORDS.contains(&word)
+		is_declaration_word(word) || crate::operators::is_function_keyword(word) || crate::modules::is_import_keyword(word) || RETURNING_KEYWORDS.contains(&word)
 	}
 	fn braceless_call(node: &Node) -> Option<(&String, &Node)> {
 		match node.drop_meta() {
@@ -1497,14 +1494,20 @@ pub(crate) fn declared_element_type(annotation: &Node) -> Option<&str> {
 
 /// Do the elements of a list of type `list_type` (list_type_name: `list of int`) fit the declared element type? A list
 /// whose elements are known only at run time (`list of node`, a plain `list`) is checked there
+/// Is the type `word` (an alias too: `double`, `exact`) the type `within` or one it covers (BUILTIN_TYPES)
+fn is_type_within(word: &str, within: &str) -> bool {
+	crate::type_tests::type_matches(crate::type_tests::canonical_spec_word(word), within)
+}
+
 pub(crate) fn elements_fit(declared_element: &str, list_type: &str) -> bool {
 	let Some(element) = list_type.strip_prefix(LIST_OF_PREFIX) else { return true };
 	// `list of int or text` (`[1] + ["a"]`): every part must fit
 	if let Some(parts) = union_parts(element) {
 		return parts.iter().all(|part| elements_fit(declared_element, &format!("{LIST_OF_PREFIX}{part}")));
 	}
-	// a rational or real element is a fraction an int list loses (`rational` names the exact Int representation)
-	let fraction = [RATIONAL_WORD, REAL_WORD, FLOAT_WORD, NUMBER_WORD].contains(&element).then_some(Kind::Float);
+	// a number int does not cover (rational, real, float …) may be a fraction an int list loses (`rational` names the
+	// exact Int representation)
+	let fraction = (is_type_within(element, NUMBER_WORD) && !is_type_within(element, INT_WORD)).then_some(Kind::Float);
 	match fraction.or_else(|| builtin_type_kind(element)) {
 		Some(kind) => admits(declared_element, kind),
 		None => true,

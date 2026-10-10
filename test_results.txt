@@ -631,7 +631,7 @@ PASSED:
   ✓ control::test_type_word_filter_loops::test_a_text_appended_with_an_item_of_a_mixed_list_inside_an_if
   ✓ control::test_type_word_filter_loops::test_a_type_word_loop_visits_only_items_of_that_type
   ✓ control::test_type_word_filter_loops::test_an_adjective_with_a_type_word_is_a_condition
-  ✓ control::test_type_word_filter_loops::test_the_codepoints_of_a_text_need_no_filter
+  ✓ control::test_type_word_filter_loops::test_the_characters_of_a_text_need_no_filter
   ✓ control::test_uncharged_blocks::test_a_block_is_no_value
   ✓ control::test_uncharged_blocks::test_a_computed_colon_warns_where_it_is_written
   ✓ control::test_uncharged_blocks::test_bang_runs_a_block
@@ -1246,6 +1246,7 @@ PASSED:
   ✓ functions::test_optional_words::test_words_read_as_not
   ✓ functions::test_optional_words::test_words_work_in_other_conditions
   ✓ functions::test_parameter_any::a_parameter_called_with_two_kinds_takes_any
+  ✓ functions::test_parameter_any::a_parameter_tested_for_its_kind_takes_any
   ✓ functions::test_parameter_any::an_any_parameter_takes_every_kind
   ✓ functions::test_parameter_any::an_any_result_joins_a_text
   ✓ functions::test_parameter_any::an_any_value_and_a_number_join_as_text
@@ -1365,6 +1366,7 @@ PASSED:
   ✓ functions::test_sort_functions::reduce_with_a_start_is_fold
   ✓ functions::test_sort_functions::sort_is_stable
   ✓ functions::test_sort_functions::sort_texts_with_comparator
+  ✓ functions::test_sort_functions::sort_with_boolean_comparator
   ✓ functions::test_sort_functions::sort_with_comparator
   ✓ functions::test_sort_functions::sort_with_defined_function
   ✓ functions::test_sort_functions::sort_with_key
@@ -1453,6 +1455,7 @@ PASSED:
   ✓ lists::test_bare_list_assignment::each_reading_has_its_explicit_form
   ✓ lists::test_byte_size::byte_size_counts_bytes_and_size_counts_elements
   ✓ lists::test_captured_call_lists::a_captured_list_of_float_calls_holds_floats
+  ✓ lists::test_comprehension_beside_own_push::a_comprehension_beside_an_own_push_function
   ✓ lists::test_concat_declared::concatenation_checks_declared_element_type
   ✓ lists::test_concat_declared::evident_other_items_are_a_compile_error
   ✓ lists::test_count_after_function::a_count_after_a_function
@@ -1542,6 +1545,8 @@ PASSED:
   ✓ lists::test_key_subscript_hint::a_chained_index_hint_keeps_its_parentheses
   ✓ lists::test_key_subscript_hint::a_text_key_subscript_gets_no_index_hint
   ✓ lists::test_key_subscript_hint::a_text_variable_subscript_gets_no_index_hint
+  ✓ lists::test_keys_of_a_value::the_keys_of_a_map_stay_its_keys
+  ✓ lists::test_keys_of_a_value::the_keys_of_a_value_that_is_no_map_fail
   ✓ lists::test_lazy_range::a_big_range_variable_compiles
   ✓ lists::test_lazy_range::a_range_bound_of_arithmetic_stays_a_descriptor
   ✓ lists::test_lazy_range::a_range_is_read_from_its_bounds
@@ -1620,6 +1625,7 @@ PASSED:
   ✓ lists::test_min_max_lists::test_extremum_of_a_list_variable_in_float_arithmetic
   ✓ lists::test_min_max_lists::test_extremum_of_an_empty_list_is_an_error
   ✓ lists::test_min_max_lists::test_several_arguments_still_work
+  ✓ lists::test_min_max::test_a_float_max_accumulates_in_a_loop
   ✓ lists::test_min_max::test_many_extremum_arguments_compile_linearly
   ✓ lists::test_min_max::test_min_max_arguments_must_be_side_effect_free
   ✓ lists::test_min_max::test_min_max_of_floats_and_mixed
@@ -1772,6 +1778,9 @@ PASSED:
   ✓ modules::test_import_compiled::a_compiled_modules_functions_take_and_give_values
   ✓ modules::test_import_compiled::a_module_for_any_host_can_be_read_by_the_browser
   ✓ modules::test_import_compiled::an_instance_passed_to_a_compiled_module_is_shared
+  ✓ modules::test_import_words::a_hashed_import_keyword_keeps_the_line_a_comment
+  ✓ modules::test_import_words::an_import_statement_has_no_effect_of_its_own
+  ✓ modules::test_import_words::every_use_keyword_brings_a_module
   ✓ modules::test_include::a_missing_include_lists_the_searched_paths
   ✓ modules::test_include::a_nested_include_is_found_next_to_the_including_file
   ✓ modules::test_include::include_splices_the_whole_file_and_runs_it
@@ -2177,9 +2186,11 @@ PASSED:
   ✓ numbers::test_nan_observed::a_nan_leaving_the_run_is_canonical
   ✓ numbers::test_nan_observed::a_nan_prints_as_nan
   ✓ numbers::test_nearest::float_to_exact_refusals_name_nearest
+  ✓ numbers::test_nearest::nearest_expands_exact_values_beyond_floats
   ✓ numbers::test_nearest::nearest_fraction
   ✓ numbers::test_nearest::nearest_of_exact_values
-  ✓ numbers::test_nearest::nearest_takes_two_or_three_arguments
+  ✓ numbers::test_nearest::nearest_takes_two_to_four_arguments
+  ✓ numbers::test_nearest::nearest_within_a_precision
   ✓ numbers::test_norm::norm_is_abs
   ✓ numbers::test_number_words::a_number_word_hints_its_digits
   ✓ numbers::test_number_words::a_variable_of_that_name_wins
@@ -2503,6 +2514,7 @@ PASSED:
   ✓ operators::test_operators::test_for_each
   ✓ operators::test_operators::test_key
   ✓ operators::test_operators::test_while_true_forever
+  ✓ operators::test_pipe_stages::a_pipe_between_functions_composes_them
   ✓ operators::test_pipe_stages::a_pipe_into_a_spaced_definition
   ✓ operators::test_pipe_stages::a_pipe_into_a_word_operator
   ✓ operators::test_pipeline::a_braceless_call_is_the_piped_value
@@ -2697,6 +2709,7 @@ PASSED:
   ✓ parser::test_statement_phrases::after_without_parentheses_waits_for_its_condition
   ✓ parser::test_statement_phrases::after_without_return_stays_a_call_listener
   ✓ parser::test_statement_phrases::and_after_a_value_stays_logical
+  ✓ parser::test_statement_phrases::and_before_an_infix_word_continues_the_condition
   ✓ parser::test_statement_phrases::and_between_statements_sequences_them
   ✓ parser::test_statement_phrases::and_not_continues_the_condition_after_let
   ✓ parser::test_statement_sequence::test_statement_sequence_with_grouped_list_in_the_middle
@@ -3134,6 +3147,9 @@ PASSED:
   ✓ text::test_text_runtime::upper_and_lower_map_latin_greek_and_cyrillic
   ✓ text::test_text_search::a_text_contains_a_text
   ✓ text::test_text_search::a_text_starts_and_ends_with_a_text
+  ✓ text::test_text_type_words::every_float_type_word_rounds_an_exact_real
+  ✓ text::test_text_type_words::every_text_type_word_calls_the_printable_operation
+  ✓ text::test_text_type_words::every_text_type_word_gives_the_text_of_an_exact_real
   ✓ text::test_text_variable_assignment::a_one_letter_text_can_be_reassigned
   ✓ text::test_text_variable_assignment::a_one_letter_text_variable_reads_back_as_a_letter
   ✓ text::test_trim::strip_and_trim_without_parentheses
@@ -3329,6 +3345,9 @@ PASSED:
   ✓ types::test_element_field_writes::a_store_into_a_call_result_is_an_error
   ✓ types::test_empty_literal_kind::a_branch_giving_empty_gives_empty
   ✓ types::test_empty_literal_kind::an_unset_number_field_starts_at_zero
+  ✓ types::test_empty_named_key::a_key_named_empty_is_a_field
+  ✓ types::test_empty_named_key::a_linked_list_of_empty_marked_cells
+  ✓ types::test_empty_named_key::a_spaced_ternary_still_reads_the_empty_value
   ✓ types::test_enum_cases::a_match_on_enum_cases_tests_and_binds
   ✓ types::test_enum_cases::an_enum_case_with_values_is_a_class
   ✓ types::test_enum_cases::an_enum_without_values_stays_numbered
@@ -3486,6 +3505,7 @@ PASSED:
   ✓ types::test_shared_lists::each_literal_is_a_new_list
   ✓ types::test_shared_lists::plus_makes_a_new_list
   ✓ types::test_sized_array_values::a_computed_count_before_a_type_word_is_a_typed_array
+  ✓ types::test_sized_array_values::a_variable_named_like_a_type_word_is_indexed
   ✓ types::test_spaced_construction::test_entry_named_like_a_variable_keeps_its_name
   ✓ types::test_spaced_construction::test_field_of_a_declared_type_reads_at_run_time
   ✓ types::test_spaced_construction::test_spaced_construction_of_a_declared_type
@@ -4468,4 +4488,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-10 ignored, 4463 passed, 0 failed, 4463 total tested
+10 ignored, 4483 passed, 0 failed, 4483 total tested

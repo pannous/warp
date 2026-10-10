@@ -87,6 +87,13 @@ const FIX_SEPARATOR: &str = "; fix: ";
 pub const CAPTURE_EXPORT_PREFIX: &str = "capture·";
 /// The WASI output words besides print: each gives an Int (analyzer)
 pub const OUTPUT_WORDS: [&str; 4] = ["puts", "puti", "putl", "putf"];
+/// Words that read a list or map without holding on to it, besides the counting words: `print m`, `type(xs)`, `m has k`
+const COLLECTION_READING_WORDS: [&str; 7] = ["print", "put", "string", "text", "type", "has", "contains"];
+
+/// `count(xs)`, `print m`, `xs has v`: a word given a collection variable reads it, the variable is not shared
+pub(super) fn reads_collection(word: &str) -> bool {
+	crate::analyzer::is_counting_word(word) || COLLECTION_READING_WORDS.contains(&word)
+}
 pub(crate) const OUTPUT_CALLS: [&str; 5] = ["print", OUTPUT_WORDS[0], OUTPUT_WORDS[1], OUTPUT_WORDS[2], OUTPUT_WORDS[3]];
 
 /// Builtins that round a float to an exact Int
