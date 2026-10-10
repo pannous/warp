@@ -1546,16 +1546,7 @@ impl WasmGcEmitter {
 		let mut types = TypeSection::new();
 
 		// Type 0: $String = struct { ptr: i32, len: i32 }
-		types.ty().struct_(vec![
-			FieldType {
-				element_type: Val(ValType::I32),
-				mutable: false,
-			},
-			FieldType {
-				element_type: Val(ValType::I32),
-				mutable: false,
-			},
-		]);
+		types.ty().struct_(type_manager::string_fields());
 		let string_type_idx = 0u32;
 
 		// Type 1: User struct type

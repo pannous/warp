@@ -103,16 +103,7 @@ impl TypeManager {
 	/// Emit core GC types: String, Node, i64box, f64box
 	pub fn emit_gc_types(&mut self) {
 		// Type 0: $String = (struct (field $ptr i32) (field $len i32))
-		self.types.ty().struct_(vec![
-			FieldType {
-				element_type: Val(ValType::I32),
-				mutable: false,
-			}, // ptr
-			FieldType {
-				element_type: Val(ValType::I32),
-				mutable: false,
-			}, // len
-		]);
+		self.types.ty().struct_(string_fields());
 		self.string_type = self.next_type_idx;
 		self.next_type_idx += 1;
 
@@ -162,8 +153,8 @@ impl TypeManager {
 		self.next_type_idx += 1;
 
 		self.emit_big_int_types();
-		(self.int_array_type, self.int_list_type) = self.emit_typed_list_types(ValType::I64);
-		(self.float_array_type, self.float_list_type) = self.emit_typed_list_types(ValType::F64);
+		(self.int_array_type, self.int_list_type) = self.emit_growable_list_types(ValType::I64, None);
+		(self.float_array_type, self.float_list_type) = self.emit_growable_list_types(ValType::F64, None);
 		self.emit_node_list_types();
 		self.emit_node_map_type();
 	}
@@ -182,28 +173,22 @@ impl TypeManager {
 
 	/// $NodeArray and $NodeList = (struct (field $length (mut i32)) (field $items (mut (ref $NodeArray))) (field $kind (mut i64)))
 	fn emit_node_list_types(&mut self) {
-		let element = Ref(self.node_ref(true));
-		self.types.ty().array(&Val(element), true);
-		let array = self.next_type_idx;
-		let items = RefType { nullable: false, heap_type: HeapType::Concrete(array) };
-		self.types.ty().struct_(vec![
-			FieldType { element_type: Val(ValType::I32), mutable: true }, // length
-			FieldType { element_type: Val(Ref(items)), mutable: true }, // items, capacity = their length
-			FieldType { element_type: Val(ValType::I64), mutable: true }, // kind of the list node, with its brackets
-		]);
-		self.next_type_idx += 2;
-		(self.node_array_type, self.node_list_type) = (array, array + 1);
+		let kind = FieldType { element_type: Val(ValType::I64), mutable: true }; // of the list node, with its brackets
+		(self.node_array_type, self.node_list_type) = self.emit_growable_list_types(Ref(self.node_ref(true)), Some(kind));
 	}
 
-	/// The array of `element`s and the growable list holding it: (struct (field $length (mut i32)) (field $items (mut (ref $array))))
-	fn emit_typed_list_types(&mut self, element: ValType) -> (u32, u32) {
+	/// The array of `element`s and the growable list holding it: (struct (field $length (mut i32)) (field $items (mut (ref $array)))
+	/// `extra`)
+	fn emit_growable_list_types(&mut self, element: ValType, extra: Option<FieldType>) -> (u32, u32) {
 		self.types.ty().array(&Val(element), true);
 		let array = self.next_type_idx;
 		let items = RefType { nullable: false, heap_type: HeapType::Concrete(array) };
-		self.types.ty().struct_(vec![
+		let mut fields = vec![
 			FieldType { element_type: Val(ValType::I32), mutable: true }, // length
 			FieldType { element_type: Val(Ref(items)), mutable: true }, // items, capacity = their length
-		]);
+		];
+		fields.extend(extra);
+		self.types.ty().struct_(fields);
 		self.next_type_idx += 2;
 		(array, array + 1)
 	}
@@ -238,15 +223,7 @@ impl TypeManager {
 	/// Emit user-defined struct types from TypeRegistry
 	pub fn emit_user_types(&mut self, registry: &TypeRegistry) {
 		for type_def in registry.types() {
-			let fields: Vec<FieldType> = type_def
-				.fields
-				.iter()
-				.map(|f| self.field_def_to_wasm_field(f, &type_def.name))
-				.collect();
-
-			self.types.ty().struct_(fields);
-			self.user_type_indices.insert(type_def.name.clone(), self.next_type_idx);
-			self.next_type_idx += 1;
+			self.emit_single_user_type(type_def);
 		}
 	}
 
@@ -355,3 +332,7 @@ impl TypeManager {
 	}
 }
 
+/// The fields of $String: ptr and len of its bytes in linear memory
+pub(super) fn string_fields() -> Vec<FieldType> {
+	vec![FieldType { element_type: Val(ValType::I32), mutable: false }; 2]
+}
