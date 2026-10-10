@@ -631,7 +631,7 @@ PASSED:
   ✓ control::test_type_word_filter_loops::test_a_text_appended_with_an_item_of_a_mixed_list_inside_an_if
   ✓ control::test_type_word_filter_loops::test_a_type_word_loop_visits_only_items_of_that_type
   ✓ control::test_type_word_filter_loops::test_an_adjective_with_a_type_word_is_a_condition
-  ✓ control::test_type_word_filter_loops::test_the_codepoints_of_a_text_need_no_filter
+  ✓ control::test_type_word_filter_loops::test_the_characters_of_a_text_need_no_filter
   ✓ control::test_uncharged_blocks::test_a_block_is_no_value
   ✓ control::test_uncharged_blocks::test_a_computed_colon_warns_where_it_is_written
   ✓ control::test_uncharged_blocks::test_bang_runs_a_block
