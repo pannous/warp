@@ -80,8 +80,8 @@ pub(crate) const TYPE_DECLARATION_WORDS: [&str; 2] = ["class", "struct"];
 /// Words before a class declaration that change nothing in warp: `data class` (a warp class compares by value already),
 /// `open`, `abstract`, `sealed`, `final`, visibility
 const CLASS_MODIFIERS: [&str; 8] = ["data", "open", "abstract", "sealed", "final", "public", "private", "internal"];
-/// The keywords of a field in a primary constructor `class Point(val x: Int, var y: Int)`
-const FIELD_KEYWORDS: [&str; 3] = ["val", "var", "let"];
+/// The keywords of a field: Kotlin's primary constructor `class Point(val x: Int, var y: Int)`, Swift's `var count = 0`
+pub(crate) const FIELD_KEYWORDS: [&str; 3] = ["val", "var", "let"];
 /// `new Point(1, 2)`: the construction `Point(1, 2)`
 const NEW_WORD: &str = "new";
 /// `constant x = 3` is `const x = 3`, with a note naming const (card constant-alias)
