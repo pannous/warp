@@ -36,7 +36,8 @@ when a message or comment cites a number (P71, D5) and you need its wording; nev
   Never edit /Users/me/dev/angles/warp itself (the user's checkout).
 - Word choices need no question (user 2026-10-06, the alias mechanism): when alternatives are only different words
   for the same thing, make the recommended word canonical and the others aliases that work with a got-it note and an
-  "I meant: <word>" fix (normalize::advise, notes/fixits.md). Ask the Interviewer only about differences in meaning.
+  "I meant: <word>" fix (diagnostic::note_alias; which hint call to use: notes/fixits.md "Hints, notes and
+  advice"). Ask the Interviewer only about differences in meaning.
 - Test upgrades need no question (AGENTS.md "Standing permission"): an error/"not yet"/ignored test that now works is
   upgraded to the working value in its own commit; a change of meaning still goes to the Interviewer.
 - Tests: test first; only targeted runs, only through the queue: `tests/queue.sh -- <filter>`. Never the whole test
