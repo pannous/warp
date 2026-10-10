@@ -35,6 +35,18 @@ play note("F#4") for 250ms      // note(name) needs `use sound` when called alon
 Limits found on the way: assignments to the module's globals (`note_seconds = 0.25`) from the program do not
 reach the module.
 
+## Spectrum and the visualizer (card winamp-like)
+`spectrum(samples, seconds, bands)` (lib/sound.warp) gives how loud each of `bands` frequency bands sounds in the
+`spectrum_window` (512) samples from `seconds` on, 0 to 1: one Hann-weighted DFT term per band (`band_level`), bands
+spaced evenly in pitch from `band_low` 60 Hz to `band_high` 5 kHz (`band_frequency`, `nearest_band`). Plain warp, so the
+playground computes the same; 16 bands take about 11 ms natively. A single tone at loudness 0.3 reads about 0.16 in its
+band. samples/visualizer.warp plays a tune and paints the bars with falling peaks each 40 ms of real time (clock),
+natively a window, headless PNG frames (tests/programs/test_sound_spectrum.rs).
+Bugs it found, fixed on the way: float elements of a comprehension or a function's list read as ints in loop bodies, as
+arguments of a parameter that also gets ints, and in `==` ("not an int", tests/lists/test_number_list_elements.rs).
+`shown = [0.0, 0.0]` is still a list of ints (0.0 is exact), so the sample writes `[0.0 as float for …]` until the
+exact-decimal list decision (warp-numbers) lands.
+
 ## What professionals expect (user question 2026-10-09; roadmap, nothing of it built yet)
 
 The words above are layer 1, the toy layer. Each layer below keeps the ones above working and lowers to them.

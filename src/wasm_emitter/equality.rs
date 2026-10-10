@@ -69,9 +69,9 @@ impl WasmGcEmitter {
 	}
 
 	/// `==`/`!=` by value: structured values, any text (`peek() == " "` of a function returning text), and a value held
-	/// as a Node whose kind shows only at run time (a cell's, `cell_get(c) == 5`)
+	/// as a Node whose kind shows only at run time (a cell's, `cell_get(c) == 5`; a call giving a Node that holds a float)
 	pub(crate) fn compares_structurally(&self, op: &Op, left: &Node, right: &Node) -> bool {
-		let by_value = |node: &Node| self.get_type(node) == Kind::Text || self.is_held_cell_value(node);
+		let by_value = |node: &Node| matches!(self.get_type(node), Kind::Text | Kind::Empty) || self.is_held_cell_value(node);
 		matches!(op, Op::Eq | Op::Ne) && (self.is_structural_operand(left) || self.is_structural_operand(right) || by_value(left) || by_value(right))
 	}
 

@@ -138,6 +138,13 @@ function answerElement(editor, text) {
 		: element("div", { className: "chat-code" }, element("pre", {}, part), element("button", { type: "button", onclick: () => editor.setValue(part) }, "put into the editor"))));
 }
 
+// the chat starts anew: nothing shown, nothing sent along with the next question
+function clearChat() {
+	conversation.length = 0;
+	$("chat-log").replaceChildren();
+	$("chat-input").focus();
+}
+
 async function sendChat(editor, question) {
 	const log = $("chat-log");
 	log.append(element("div", { className: "chat-question" }, question));
@@ -147,10 +154,11 @@ async function sendChat(editor, question) {
 	try {
 		const system = await systemPrompt(`Answer questions about this program, briefly. Give warp code in fenced blocks.\n\n${currentProgram(editor)}`);
 		const answer = await askClaude({ model: CHAT_MODEL, system, messages: conversation, maxTokens: CHAT_TOKENS });
+		if (!waiting.isConnected) return; // the chat was cleared meanwhile
 		conversation.push({ role: "assistant", content: answer });
 		waiting.replaceWith(answerElement(editor, answer));
 	} catch (failure) {
-		conversation.pop();
+		if (waiting.isConnected) conversation.pop();
 		waiting.replaceWith(element("div", { className: "chat-failed" }, failure.message));
 	}
 	log.scrollTop = log.scrollHeight;
@@ -170,6 +178,7 @@ function startAssistant(editor, keyChanged, wordList) {
 	});
 	editor.on("cursorActivity", () => suggestion && !sameSpot(editor.getCursor(), suggestion.at) && dismissSuggestion());
 	$("ask").onclick = () => { $("assistant").hidden = !$("assistant").hidden; $("chat-input").focus(); };
+	$("chat-clear").onclick = clearChat;
 	$("chat-form").onsubmit = event => {
 		event.preventDefault();
 		const question = $("chat-input").value.trim();
