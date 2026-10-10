@@ -59,111 +59,52 @@ pub(super) fn collect_variables_inner(node: &Node, scope: &mut Scope, skip_first
 	if function_definition_body(node).is_some() {
 		return 0;
 	}
+	let visit = |child: &Node, scope: &mut Scope| collect_variables_inner(child, scope, false, in_structure);
 	if let Some((names, values)) = crate::tuples::destructuring(node) {
-		let temporaries = values.iter().map(|value| collect_variables_inner(value, scope, false, in_structure)).sum();
-		// with a starred name the values are unpacked from one list: each name holds a Node, the star a list
-		let starred = names.iter().any(|name| crate::tuples::unstarred(name) != name);
-		for (index, name) in names.iter().enumerate() {
-			let rest = crate::tuples::unstarred(name);
-			if scope.lookup(rest).is_none() && !scope.is_global(rest) {
-				let kind = match (starred, rest != name) {
-					(_, true) => Kind::List,
-					(true, false) => Kind::Data,
-					(false, false) => destructured_kind(values, index, scope),
-				};
-				scope.define(rest.to_string(), None, kind);
-			}
-		}
+		let temporaries = values.iter().map(|value| visit(value, scope)).sum();
+		bind_destructured(&names, values, scope);
 		return temporaries;
 	}
 	match node {
 		// `c ? a : b`: both branches are code, never a tag `a:b` whose body holds attributes
 		Node::Key(condition, Op::Question, then_else) if matches!(then_else.drop_meta(), Node::Key(_, Op::Colon, _)) => {
 			let Node::Key(then, _, otherwise) = then_else.drop_meta() else { unreachable!("guarded") };
-			collect_variables_inner(condition, scope, false, in_structure)
-				+ collect_variables_inner(then, scope, false, in_structure)
-				+ collect_variables_inner(otherwise, scope, false, in_structure)
+			visit(condition, scope) + visit(then, scope) + visit(otherwise, scope)
 		}
-		// Global declarations: global:Key(name, =, value) - don't create local
-		// Tag structures: html:body - body is structure context (attributes, not variables)
-		Node::Key(left, Op::Colon, right) => {
-			if let Node::Symbol(kw) = left.drop_meta() {
-				if kw == "global" {
-					// Don't define local for global variable
-					// But still count any variables in the value expression, first: the kind of a hoisted block
-					// `global:xs = (made = ø; …; made)` is the kind of its temporaries
-					let count = collect_variables_inner(right, scope, true, false);
-					if let Some(global) = global_binding(right, scope).filter(|global| !scope.is_global(&global.name)) {
-						scope.globals.insert(global.name.clone(), global);
-					}
-					return count;
-				}
-				// Symbol:body is a tag/structure - right side is structure context
-				// Inside structures, Op::Assign is attribute, not variable
-				return collect_variables_inner(left, scope, false, in_structure)
-					+ collect_variables_inner(right, scope, false, true);
+		// `global:xs = …` defines no local, but counts the variables in the value expression first: the kind of a
+		// hoisted block `global:xs = (made = ø; …; made)` is the kind of its temporaries
+		Node::Key(left, Op::Colon, right) if left.is_symbol("global") => {
+			let count = collect_variables_inner(right, scope, true, false);
+			if let Some(global) = global_binding(right, scope).filter(|global| !scope.is_global(&global.name)) {
+				scope.globals.insert(global.name.clone(), global);
 			}
-			collect_variables_inner(left, scope, false, in_structure) + collect_variables_inner(right, scope, false, in_structure)
+			count
+		}
+		// a tag `html:body`: the body is structure context, where `=` sets an attribute, not a variable
+		Node::Key(left, Op::Colon, right) if left.symbol_name().is_some() => {
+			visit(left, scope) + collect_variables_inner(right, scope, false, true)
 		}
 		// Define (:=) always creates a variable, Assign (=) only outside structure context
 		Node::Key(left, Op::Define, right) => {
-			if !skip_first_assign {
-				if let Node::Symbol(name) = left.drop_meta() {
-					if scope.lookup(name).is_none() && !scope.is_global(name) {
-						let kind = binding_kind(right, scope);
-						scope.define(name.clone(), None, kind);
-					}
+			if let Some(name) = left.symbol_name().filter(|_| !skip_first_assign) {
+				if scope.lookup(name).is_none() && !scope.is_global(name) {
+					let kind = binding_kind(right, scope);
+					scope.define(name.to_string(), None, kind);
 				}
 			}
-			collect_variables_inner(right, scope, false, in_structure)
+			visit(right, scope)
 		}
-		// Assign creates variables only at top level (not inside structures)
 		Node::Key(left, Op::Assign, right) => {
 			// the variables the value binds come first, so its kind is known: `a = (t = 1 + 2; t)` makes a an Int
-			let inner_temporaries = collect_variables_inner(right, scope, false, in_structure);
+			let inner_temporaries = visit(right, scope);
 			if !skip_first_assign && !in_structure {
-				// Check for typed declaration: Key(Key(name, Colon, type), Assign, value)
-				match left.drop_meta() {
-					// `k.x = 3` updates k: it binds no k, so an undefined k stays undefined (as in `k#1 = 3`)
-					Node::Symbol(name) if crate::library_words::is_field_update_of(name, right) && scope.lookup(name).is_none() => {}
-					Node::Symbol(name) if scope.lookup(name).is_none() && !scope.is_global(name) => {
-						let declared = declared_type(left);
-						let (kind, type_node) = match declared {
-							Some(type_name) => (declared_kind(&type_name.name()).unwrap_or_else(|| binding_kind(right, scope)), Some(Box::new(type_name.clone()))),
-							None => value_binding(right, scope),
-						};
-						let is_declared = declared.is_some();
-						scope.define(name.clone(), type_node, kind);
-						if let Some(local) = scope.own_binding_mut(name) {
-							local.declared = is_declared;
-						}
-					}
-					Node::Symbol(name) => {
-						type_list_by_first_append(name, right, scope);
-						widen_list_type(scope, name, right);
-						widen_to_float(scope, name, right);
-						widen_to_node(scope, name, right);
-					}
-					Node::Key(list, Op::Hash, _) => widen_element_type(scope, list, right),
-					// Typed variable: x:int = 1 parses as Key(Key(x, Colon, int), Assign, 1)
-					Node::Key(var_name, Op::Colon, type_node) => {
-						if let Node::Symbol(name) = var_name.drop_meta() {
-							if scope.lookup(name).is_none() {
-								// Get kind from type annotation
-								let type_str = type_node.drop_meta().to_string();
-								let kind = declared_kind(&type_str).unwrap_or(Kind::Int);
-								scope.define(name.clone(), Some(type_node.clone()), kind);
-							}
-						}
-					}
-					_ => {}
-				}
+				bind_assigned(left, right, scope);
 			}
 			inner_temporaries
 		}
 		// Compound assignments don't create new variables
 		Node::Key(left, op, right) if op.is_compound_assign() => {
-			if let Node::Symbol(name) = left.drop_meta() {
+			if let Some(name) = left.symbol_name() {
 				widen_to_float(scope, name, right);
 				// `out += x` of a number of run-time kind may add a float, as `out = out + x` does; an evident other kind
 				// (`s += "ab"` of an Int) stays the type error of emit_compound_type_error
@@ -175,31 +116,74 @@ pub(super) fn collect_variables_inner(node: &Node, scope: &mut Scope, skip_first
 					type_list_by_first_append(name, &Node::Key(left.clone(), Op::Add, right.clone()), scope);
 				}
 			}
-			collect_variables_inner(left, scope, false, in_structure) + collect_variables_inner(right, scope, false, in_structure)
+			visit(left, scope) + visit(right, scope)
 		}
-		Node::Key(left, Op::Do, right) => {
-			// While loop needs temp locals for the result and for "the body ran"
-			2 + collect_variables_inner(left, scope, false, in_structure) + collect_variables_inner(right, scope, false, in_structure)
-		}
-		Node::Key(left, Op::Abs, right) if matches!(left.drop_meta(), Node::Empty) => {
-			// Integer abs needs a temp local for the if-then-else pattern
-			1 + collect_variables_inner(right, scope, false, in_structure)
-		}
-		Node::Key(left, _, right) => {
-			collect_variables_inner(left, scope, false, in_structure) + collect_variables_inner(right, scope, false, in_structure)
-		}
+		// While loop needs temp locals for the result and for "the body ran"
+		Node::Key(left, Op::Do, right) => 2 + visit(left, scope) + visit(right, scope),
+		// Integer abs needs a temp local for the if-then-else pattern
+		Node::Key(left, Op::Abs, right) if matches!(left.drop_meta(), Node::Empty) => 1 + visit(right, scope),
+		Node::Key(left, _, right) => visit(left, scope) + visit(right, scope),
 		// a group of statements in a structure is code: `ul{ (made = ø; for … ; made) }`, a lowered `[li{t} for t in ts]`
 		Node::List(items, Bracket::Round, Separator::Semicolon | Separator::Newline) => {
 			items.iter().map(|item| collect_variables_inner(item, scope, false, false)).sum()
 		}
 		// `ran_without_abort(i, {…})` keeps the try depth of its start in a temp local (try_guard.rs)
 		Node::List(items, Bracket::Round, Separator::None) if items.first().is_some_and(|head| head.is_symbol(crate::wasm_emitter::RAN_WITHOUT_ABORT)) => {
-			1 + items.iter().map(|item| collect_variables_inner(item, scope, false, in_structure)).sum::<u32>()
+			1 + items.iter().map(|item| visit(item, scope)).sum::<u32>()
 		}
-		Node::List(items, _, _) => {
-			items.iter().map(|item| collect_variables_inner(item, scope, false, in_structure)).sum()
-		}
+		Node::List(items, _, _) => items.iter().map(|item| visit(item, scope)).sum(),
 		_ => 0,
+	}
+}
+
+/// `a, b = values`: each new name a local; with a starred name the values are unpacked from one list, each name
+/// holding a Node and the star a list
+fn bind_destructured(names: &[String], values: &[Node], scope: &mut Scope) {
+	let starred = names.iter().any(|name| crate::tuples::unstarred(name) != name);
+	for (index, name) in names.iter().enumerate() {
+		let rest = crate::tuples::unstarred(name);
+		if scope.lookup(rest).is_none() && !scope.is_global(rest) {
+			let kind = match (starred, rest != name) {
+				(_, true) => Kind::List,
+				(true, false) => Kind::Data,
+				(false, false) => destructured_kind(values, index, scope),
+			};
+			scope.define(rest.to_string(), None, kind);
+		}
+	}
+}
+
+/// `left = right` outside a structure: a new name becomes a local, a known one may widen its type
+fn bind_assigned(left: &Node, right: &Node, scope: &mut Scope) {
+	match left.drop_meta() {
+		// `k.x = 3` updates k: it binds no k, so an undefined k stays undefined (as in `k#1 = 3`)
+		Node::Symbol(name) if crate::library_words::is_field_update_of(name, right) && scope.lookup(name).is_none() => {}
+		Node::Symbol(name) if scope.lookup(name).is_none() && !scope.is_global(name) => {
+			let declared = declared_type(left);
+			let (kind, type_node) = match declared {
+				Some(type_name) => (declared_kind(&type_name.name()).unwrap_or_else(|| binding_kind(right, scope)), Some(Box::new(type_name.clone()))),
+				None => value_binding(right, scope),
+			};
+			scope.define(name.clone(), type_node, kind);
+			if let Some(local) = scope.own_binding_mut(name) {
+				local.declared = declared.is_some();
+			}
+		}
+		Node::Symbol(name) => {
+			type_list_by_first_append(name, right, scope);
+			widen_list_type(scope, name, right);
+			widen_to_float(scope, name, right);
+			widen_to_node(scope, name, right);
+		}
+		Node::Key(list, Op::Hash, _) => widen_element_type(scope, list, right),
+		// Typed variable: x:int = 1 parses as Key(Key(x, Colon, int), Assign, 1)
+		Node::Key(var_name, Op::Colon, type_node) => {
+			if let Some(name) = var_name.symbol_name().filter(|name| scope.lookup(name).is_none()) {
+				let kind = declared_kind(&type_node.drop_meta().to_string()).unwrap_or(Kind::Int);
+				scope.define(name.to_string(), Some(type_node.clone()), kind);
+			}
+		}
+		_ => {}
 	}
 }
 
