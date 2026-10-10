@@ -752,18 +752,23 @@ fn console() {
     let history_path = dirs_home().join(".warp_history");
     let _ = rl.load_history(&history_path);
 
+    let mut interrupted = false; // a ctrl-c on an empty line twice in a row ends the console
     loop {
-        match rl.readline("🌀") { // warp language symbol for prompt
+        let read = rl.readline("🌀"); // warp language symbol for prompt
+        let interrupted_before = interrupted;
+        interrupted = matches!(read, Err(ReadlineError::Interrupted));
+        match read {
+            Err(ReadlineError::Interrupted) if interrupted_before => break,
+            Err(ReadlineError::Interrupted) => {
+                println!("^C (again to exit)");
+                continue;
+            }
             Ok(line) => {
                 let input = line.trim();
                 if input.is_empty() { continue; }
                 if input == "exit" || input == "quit" { break; }
                 let _ = rl.add_history_entry(input);
                 show(&eval(input), RESULT_MARK);
-            }
-            Err(ReadlineError::Interrupted) => {
-                println!("^C");
-                continue;
             }
             Err(ReadlineError::Eof) => break,
             Err(e) => {
