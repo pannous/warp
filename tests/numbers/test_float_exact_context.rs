@@ -75,3 +75,12 @@ fn exact_is_real_and_keeps_the_root() {
 	is!("type(√2) == real", true);
 	is!("√2 is rational", false);
 }
+
+// cards implicit-float and sqrt-float, under decision exact-default (a decimal is a float): `1.` makes the sum a float,
+// sqrt of a float is the float root, not the exact √2
+#[test]
+fn a_decimal_makes_float_arithmetic() {
+	is!("s = 0; for x in 1..100 { s += 1./x^2 }; s", 1.6348839001848923); // summed in order, as C does
+	is!("sqrt(2.0)", std::f64::consts::SQRT_2);
+	is!("type(sqrt(2.0))", "float");
+}
