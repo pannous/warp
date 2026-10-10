@@ -15,6 +15,7 @@ const MOST_CHARACTERS: usize = 16_000; // about 4k tokens
 struct Snippet {
 	code: &'static str,
 	head: &'static str,
+	#[cfg_attr(not(feature = "native"), allow(dead_code))] // read by the native-only test that runs the binary
 	printed: Option<&'static str>,
 }
 

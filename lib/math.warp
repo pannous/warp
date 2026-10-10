@@ -51,6 +51,13 @@ tangent(x) := tan(x)
 arc_sine(x) := asin(x)
 arc_cosine(x) := acos(x)
 arc_tangent(x) := atan(x)
+# arcsine(x) := asin(x)
+# arccosine(x) := acos(x)
+# arctangent(x) := atan(x)
+arcsin=&arc_sine
+arccos=&arc_cosine
+arctan=&arc_tangent
+# arctan:=arc_tangent
 // the angle of the point (x, y) from the x axis, in radians: C's atan2(y, x)
 angle(x, y) := atan2(y, x)
 hyperbolic_sine(x) := sinh(x)

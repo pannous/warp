@@ -8,7 +8,7 @@
 //! (`f(n) := 1..n`) returns that range: a call with plain arguments is the range itself, read as above.
 
 use super::words::{COUNT_WORD, SUM_WORD};
-use super::nodes::{call, key};
+use super::nodes::{Counter, call, key};
 use crate::analyzer::{call_name, TEMPORARY_SEPARATOR};
 use crate::effects::call_arguments;
 use crate::memoization::definition_parts;
@@ -36,7 +36,7 @@ pub fn lower(node: Node) -> Node {
 	}
 	let context = crate::analyzer::function_context(&node);
 	let own = |word: &str| context.user_functions.contains_key(word);
-	let mut lowering = Lowering { counts: !own(COUNT_WORD), sums: !own(SUM_WORD), temporaries: 0 };
+	let mut lowering = Lowering { counts: !own(COUNT_WORD), sums: !own(SUM_WORD), temporaries: Counter::starting_at(1) };
 	let producers = range_producers(&node);
 	let node = inline_produced_ranges(node, &producers);
 	let readers = range_readers(&node);
@@ -96,7 +96,7 @@ fn add_one(bound: &Node) -> Node {
 struct Lowering {
 	counts: bool,
 	sums: bool,
-	temporaries: usize,
+	temporaries: Counter,
 }
 
 impl Lowering {
@@ -131,8 +131,7 @@ impl Lowering {
 	}
 
 	fn temporary(&mut self, what: &str) -> Node {
-		self.temporaries += 1;
-		Node::Symbol(format!("range{TEMPORARY_SEPARATOR}{}{TEMPORARY_SEPARATOR}{what}", self.temporaries))
+		Node::Symbol(format!("range{TEMPORARY_SEPARATOR}{}{TEMPORARY_SEPARATOR}{what}", self.temporaries.next_number()))
 	}
 
 	/// `(t = value; body)` where body reads t

@@ -1,0 +1,5 @@
+go{
+play C4
+print "note done"
+}
+sleep(3s)

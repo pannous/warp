@@ -1,0 +1,3 @@
+use sound
+go{ print C4 + 1 }
+sleep(1s)

@@ -40,10 +40,10 @@ enum Domain {
 
 fn domain(type_name: Option<&String>) -> Domain {
 	let Some(name) = type_name else { return Domain::Exact };
-	match crate::type_kinds::canonical_type_name(name) {
-		"bool" | "boolean" => Domain::Bool,
-		"exact" | "int" | "integer" | "i64" | "i32" | "long" | "number" => Domain::Exact,
-		"float" | "f32" => Domain::Float,
+	match crate::type_tests::canonical_spec_word(name) {
+		crate::analyzer::BOOL_TYPE => Domain::Bool,
+		"float" => Domain::Float,
+		exact if crate::type_tests::type_matches("int", exact) => Domain::Exact,
 		other => Domain::Other(other.to_string()),
 	}
 }
