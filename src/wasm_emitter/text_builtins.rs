@@ -390,14 +390,6 @@ impl WasmGcEmitter {
 
 	/// `left + right` of texts or characters: a fresh text holding both
 	pub(super) fn emit_text_concat(&mut self, func: &mut Function, left: &Node, right: &Node) {
-		// a value held as a Node may be a stored error: node_add raises it, where its text form would be its message
-		// (`r = error("b"); "a" + r`, card error-value-kind), and joins any other value as emit_concatenated does
-		if [left, right].into_iter().any(|operand| self.holds_run_time_kind(operand)) {
-			self.emit_node_instructions(func, left);
-			self.emit_node_instructions(func, right);
-			self.emit_call(func, super::list_ops::NODE_ADD);
-			return;
-		}
 		self.emit_concatenated(func, left);
 		self.emit_concatenated(func, right);
 		self.emit_call(func, TEXT_CONCAT);
@@ -411,8 +403,7 @@ impl WasmGcEmitter {
 	/// A text operand as is, anything else in its text form; the implicit conversion is hinted
 	fn emit_concatenated(&mut self, func: &mut Function, operand: &Node) {
 		if self.holds_run_time_kind(operand) {
-			// a value held as a Node (a map value, arithmetic of an any value) may be a number at runtime: joined, a number takes its text form
-			self.emit_node_instructions(func, &super::joined_text(std::slice::from_ref(operand), ""));
+			self.emit_run_time_text_form(func, operand);
 			return;
 		}
 		if self.get_type(operand) == Kind::Error {
@@ -424,6 +415,24 @@ impl WasmGcEmitter {
 			return;
 		}
 		self.emit_cast(func, operand, &Node::Symbol("str".to_string()));
+	}
+
+	/// A value held as a Node (a map value, arithmetic of an any value) may be a number at run time: joined, a number
+	/// takes its text form; a stored error stays itself, for text_concat to give it on, never joined as its message
+	/// (`r = error("b"); "a" + r`, card error-value-kind)
+	fn emit_run_time_text_form(&mut self, func: &mut Function, operand: &Node) {
+		let (held, node_ref) = (self.node_scratch(), Ref(self.node_ref(false)));
+		let node_type = self.type_manager.node_type;
+		let (pointer, length) = self.allocate_string("");
+		self.emit_node_instructions(func, operand);
+		func.instruction(&I::LocalSet(held));
+		self.emit_field(func, held, 0);
+		Self::emit_list(func, &[I::I64Const(KIND_MASK), I::I64And, I::I64Const(Kind::Error as i64), I::I64Eq, I::If(BlockType::Result(node_ref))]);
+		Self::emit_list(func, &[I::LocalGet(held), I::RefAsNonNull, I::Else, I::I64Const(crate::type_kinds::SQUARE_LIST_KIND), I::LocalGet(held)]);
+		Self::emit_list(func, &[I::RefNull(HeapType::Concrete(node_type)), I::StructNew(node_type), I::I32Const(pointer as i32), I::I32Const(length as i32)]);
+		self.emit_call(func, "new_text");
+		self.emit_call(func, super::library_ops::LIST_JOIN);
+		func.instruction(&I::End);
 	}
 
 	/// An Error node carrying `reason`, the way a failed fetch reports
