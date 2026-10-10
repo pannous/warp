@@ -25,6 +25,8 @@ pub const ERROR_TYPE: &str = "error";
 pub const EMPTY_TYPE: &str = "empty";
 const ARTICLES: [&str; 2] = ["a", "an"];
 const LIST_WORD: &str = "list";
+/// The collection types: `x is list`, `x is map`, and of their element type: `x is list of int`, `x is map of text`
+const COLLECTION_WORDS: [&str; 2] = [LIST_WORD, "map"];
 /// `x is pair`: a `key: value` pair
 const PAIR_WORD: &str = "pair";
 pub const TYPE_WORD: &str = "type";
@@ -51,11 +53,16 @@ pub fn type_matches(actual: &str, spec: &str) -> bool {
 	if let Some(conforms) = crate::traits::builtin_conforms(actual, spec) {
 		return conforms;
 	}
-	if let Some(element) = spec.strip_prefix("list of ") {
-		return actual.strip_prefix("list of ").is_some_and(|actual_element| type_matches(actual_element, element));
+	for collection in COLLECTION_WORDS {
+		let of = format!("{collection} of ");
+		if let Some(element) = spec.strip_prefix(&of) {
+			return actual.strip_prefix(&of).is_some_and(|actual_element| type_matches(actual_element, element));
+		}
+		if spec == collection {
+			return actual == collection || actual.starts_with(&of);
+		}
 	}
 	match spec {
-		LIST_WORD => actual == LIST_WORD || actual.starts_with("list of "),
 		"number" => ["int", "rational", "real", "float"].contains(&actual),
 		"real" => ["int", "rational", "real"].contains(&actual),
 		"rational" => ["int", "rational"].contains(&actual),
@@ -159,11 +166,11 @@ fn type_spec(words: &[&str], shadowed: &Names) -> Option<String> {
 		return None;
 	}
 	match (*first, rest) {
-		(LIST_WORD, []) => Some(LIST_WORD.to_string()),
+		(collection, []) if COLLECTION_WORDS.contains(&collection) => Some(collection.to_string()),
 		(PAIR_WORD, []) => Some(canonical_spec_word(PAIR_WORD).to_string()),
 		(ERROR_TYPE, []) => Some(ERROR_TYPE.to_string()),
 		(word, []) if canonical_spec_word(word) == EMPTY_TYPE => Some(EMPTY_TYPE.to_string()),
-		(LIST_WORD, [of, element @ ..]) if *of == OF_WORD => Some(format!("{LIST_WORD} of {}", type_spec(element, shadowed)?)),
+		(collection, [of, element @ ..]) if COLLECTION_WORDS.contains(&collection) && *of == OF_WORD => Some(format!("{collection} of {}", type_spec(element, shadowed)?)),
 		(word, []) => match plural_element_type(word) {
 			Some(element) => Some(format!("{LIST_WORD} of {}", canonical_spec_word(element))),
 			None if crate::traits::is_builtin_trait(word) || shadowed.types.contains(word) => Some(word.to_string()),

@@ -49,9 +49,15 @@ fn a_global_map_takes_constant_time_per_entry() {
 	is!(&timed(&found, "s"), ENTRIES * (ENTRIES + 1));
 }
 
+/// Four times the rows may take up to this many times as long: linear is ~4, quadratic ~16. A ratio of two runs in one
+/// program holds on a loaded machine, where a bound in milliseconds does not (card flaky-linear)
+const LINEAR_RATIO: i64 = 8;
+
 /// The identity map of a table (notes/orm.md) finds a loaded row's instance by its id: loading is linear
 #[test]
 fn ten_thousand_rows_load_in_linear_time() {
-	let added = format!("class Person{{name: text; age: int}}\npeople: [Person] = database.int_map_rows\nfor i in 1 to {ENTRIES} {{ people.add(Person(\"p\", i)) }}");
-	is!(&timed(&format!("{added}\ns = 0; for p in people {{ s += p.age }}"), "s"), ENTRIES * (ENTRIES + 1) / 2);
+	let loaded = |table: &str, rows: i64| format!("{table}: [Person] = database.int_map_{table}\nfor i in 1 to {rows} {{ {table}.add(Person(\"p\", i)) }}\n{table}_sum = 0; for p in {table} {{ {table}_sum += p.age }}");
+	let (small, large) = (loaded("small", ENTRIES / 4), loaded("large", ENTRIES));
+	let program = format!("class Person{{name: text; age: int}}\nt0 = clock()\n{small}\nt1 = clock()\n{large}\nt2 = clock()\nif t2 - t1 <= {LINEAR_RATIO} * max(t1 - t0, 1) then large_sum else -1");
+	is!(&program, ENTRIES * (ENTRIES + 1) / 2);
 }
