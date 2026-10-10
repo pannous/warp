@@ -410,6 +410,7 @@ function instantiateProgram(bytes, hooks, compiled, awaited = false) {
 	try {
 		const module = compiled ?? new WebAssembly.Module(bytes);
 		holder.run = { module, bytes };
+		self.joinVoice?.(); // a program's sounds start now on a fresh voice, not behind an earlier run's (host-tasks.js)
 		eachHostPart("started", holder.run);
 		holder.exports = new WebAssembly.Instance(holder.run.module, programImports(holder, hooks)).exports;
 		hooks.instantiated?.(holder);

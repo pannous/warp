@@ -292,7 +292,6 @@ async function handleMessage(data) {
 	await taskPoolReady(); // host.js: tasks run on loaded Workers, not inline
 	stage(`evaluating run ${data.id}`);
 	soundHandles = 0;
-	self.joinVoice(); // a run's sounds start now, not behind the last run's
 	const started = performance.now();
 	const report = await evaluate(data.code, data.acknowledged ?? {});
 	post({ type: "report", id: data.id, report, milliseconds: performance.now() - started });
