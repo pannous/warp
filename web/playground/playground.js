@@ -869,8 +869,7 @@ function initialize() {
 	showVersion();
 	fillExamples();
 	startWorker();
-	startAssistant(editor, tellEnvironment);
-	startCompletion(editor);
+	startAssistant(editor, tellEnvironment, startCompletion(editor));
 	chooseExample(requestedExample() ?? DEFAULT_EXAMPLE);
 	addEventListener("hashchange", chooseExampleOfHash);
 }
