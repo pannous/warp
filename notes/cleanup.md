@@ -130,3 +130,36 @@ Left (each changes behaviour or needs care):
   class-collecting visits (1848/2003); worth its own split into files.
 - temporary-name makers (lazy_ranges, min_max, parallel, list_element_checks, named_arguments) each format their own
   prefix; one `Temporaries` counter type could serve them, names must stay byte-identical (tests pin some).
+
+## src/wasm_emitter/ (card cleanup-emitter, session warp-fixer)
+
+How a change is checked: behaviour-preserving emitter changes emit the same bytes. Build warp before and after in the
+SAME worktree (`cargo build --offline --features native --bin warp` and the copy out of the shared target dir in one
+command; `warp --version` names the worktree and commit it was built from, check it: another session's build can
+replace the binary between two commands), then run
+`probes/cleanup/same_wasm.sh <before> <after> $(find probes samples -name '*.warp')`: `same`, `unstable`,
+`DIFFERENT`, `no module`. A binary finds lib/ (`use os`) through its worktree's CARGO_MANIFEST_DIR, so binaries of two
+worktrees can differ on module programs for reasons outside the change. macOS kills a binary that `cp` overwrote in
+place (exit 137, every program "no module"): `rm -f` the destination before copying. Builds are reproducible since
+card emitter-deterministic (generator classes and tables were spliced in HashMap order; tests/wasm/
+test_reproducible_builds.rs), so `unstable` should no longer appear.
+
+Done (branches emitter-late-functions, emitter-two-pass, emitter-dead-code, emitter-duplicates, emitter-comments,
+emitter-builders, emitter-equality, emitter-runs, emitter-deterministic):
+- never-called functions and stale comments out; runtime functions through runtime_function / exported_function
+- shared helpers for repeated code: emit_while, emit_text_argument_bounds, push_in_place, emit_global_store_declared,
+  emit_offset_locals_test, emit_list_cell_function (list_at / list_node_at), emit_nth_cell_data, emit_try_table,
+  emit_growable_list_types, string_fields, compile_time_string, emit_local_step (i++ of arithmetic.rs's two paths),
+  emit_defined_user_function_call, import_function (host, WASI and FFI imports)
+- runs of single `f.instruction(&I::…)` lines as one `Self::emit_list(f, &[…])` per statement group:
+  `probes/cleanup/merge_instruction_runs.py <file.rs>…` (rewrites in place; a run splits after statement-ending
+  instructions and after `return; end`), done in equality.rs and 14 other files
+- `probes/cleanup/duplicate_windows.py` lists repeated windows of normalised lines (the duplicates left to share)
+
+Left:
+- merge_instruction_runs.py over list_ops.rs, mod.rs, closures.rs, key_emitter.rs, values.rs, map_backend.rs,
+  ffi_emitter.rs, try_guard.rs, type_manager.rs, list_dispatch.rs
+- list_ops.rs (~290 single instructions, the longest file): text count loops repeat; candidates for emit_while
+- equality.rs: the return tails of the per-kind comparisons repeat
+- user_function_calls.rs compile_user_function_body saves and restores ~15 emitter fields by hand, interleaved with
+  computing the new values: one saved-state struct would halve it, but the order of the computations matters
