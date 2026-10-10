@@ -413,6 +413,12 @@ impl WasmGcEmitter {
 			self.emit_numeric_value(func, &assignment);
 			return;
 		}
+		// a variable held as a Node, as one a later loop gives other values (`for 1..3 {…}; for "ab" {…}` both bind it)
+		if !matches!(self.get_type(left), Kind::Int | Kind::Float) {
+			self.emit_node_instructions(func, &crate::library_words::stepped(left.clone(), *op));
+			self.emit_call(func, "get_int_value");
+			return;
+		}
 		self.emit_local_step(func, left, op);
 	}
 

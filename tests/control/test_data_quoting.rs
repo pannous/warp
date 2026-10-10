@@ -31,3 +31,10 @@ fn data_of_a_tag_reads_as_written() {
 	is!("string [data a or b, 3]", "[a or b 3]");
 	is!("xs = [data a or b, 3]; string xs", "[a or b 3]");
 }
+
+#[test] // a variable named data is read: no prefix quotes what follows it (card counting-sort)
+fn a_variable_named_data_is_no_prefix() {
+	is!("data=[4 2 2]; data where it == 2", warp::ints(vec![2, 2]));
+	is!("data=[4 2 2]; n=0; for x in data { n += x }; n", 8);
+	is!("data = [4 2 2 8 3 3 1]\nresult = []\nfor v in 1 to 8 {\n\tmatches = [x for x in data where x == v]\n\tc = #matches\n\tj = 0\n\twhile j < c {\n\t\tresult += [v]\n\t\tj += 1\n\t}\n}\nresult", warp::ints(vec![1, 2, 2, 3, 3, 4, 8]));
+}

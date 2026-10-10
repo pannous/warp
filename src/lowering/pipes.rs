@@ -111,7 +111,10 @@ impl Pipes {
 			Some(_) if is_truth_value(&value) => {
 				let written = format!("{} then {}", value.serialize(), stage.serialize());
 				crate::normalize::set_position_of(&value);
-				crate::normalize::advise(&written, &format!("{} |> {}", value.serialize(), stage.serialize()), "then after a comparison is the condition; to pipe the truth value write |>");
+				// parenthesized: `a<b |> f` would pipe b alone
+				let piped = format!("({}) |> {}", value.serialize(), stage.serialize());
+				let reason = "then after a comparison is the condition; to pipe the truth value write |>";
+				crate::normalize::advise(&written, &piped, reason, Some(crate::normalize::rewrite(&written, &piped, reason)));
 				if_then(value, stage)
 			}
 			Some(call) => call,

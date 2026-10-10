@@ -599,12 +599,12 @@ pub(crate) fn offer_acknowledgement(topic: &str, written: &str) {
 /// Educate with "got it": the hint (`written` → `preferred`, and why) is shown once per run until the user
 /// acknowledges it, then never again; it never blocks non-interactive runs, which just show the hint
 pub fn educate_once(topic: &str, written: &str, preferred: &str, reason: &str) {
-	noted_once(topic, written, || crate::normalize::show_hint(written, preferred, reason, true));
+	noted_once(topic, written, || crate::normalize::show_hint(written, preferred, reason, Some(crate::normalize::rewrite(written, preferred, reason))));
 }
 
-/// `educate_once` with advice that does not replace `written` (`subscribe before the loop`)
-pub fn advise_once(topic: &str, written: &str, preferred: &str, reason: &str) {
-	noted_once(topic, written, || crate::normalize::show_hint(written, preferred, reason, false));
+/// `educate_once` with advice (normalize::advise): `fix` is its "I meant" edit, none for `subscribe before the loop`
+pub fn advise_once(topic: &str, written: &str, preferred: &str, reason: &str, fix: Option<crate::fixits::Fix>) {
+	noted_once(topic, written, || crate::normalize::show_hint(written, preferred, reason, fix));
 }
 
 fn noted_once(topic: &str, written: &str, show: impl FnOnce() -> bool) {

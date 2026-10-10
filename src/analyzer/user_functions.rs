@@ -198,14 +198,18 @@ pub(crate) fn annotated_kind(type_node: &Node) -> Option<Kind> {
 	}
 	// `v:any`, as an untyped field: any value, held as a Node (lib/json.warp's to_json takes what parse_json gives)
 	// `x: int or text` (an inline union of builtin types, card inline-union) likewise
-	// `x:ø` / `x:nil` / `x:unit`: the empty type, ø is held as a Node
-	if matches!(type_node.drop_meta(), Node::Empty) || crate::type_tests::canonical_spec_word(&type_name) == crate::type_tests::EMPTY_TYPE {
+	if names_empty_type(type_node) {
 		return Some(Kind::Empty);
 	}
 	if type_name == crate::type_kinds::UNTYPED_FIELD || annotated_builtin_type(type_node).is_some_and(|name| union_parts(name).is_some()) {
 		return Some(Kind::Empty);
 	}
 	type_word_kind(&type_name)
+}
+
+/// `x:ø` / `x:nil` / `x:unit`: the empty type, ø is held as a Node
+pub(super) fn names_empty_type(type_node: &Node) -> bool {
+	matches!(type_node.drop_meta(), Node::Empty) || crate::type_tests::canonical_spec_word(&type_node.name()) == crate::type_tests::EMPTY_TYPE
 }
 
 pub(super) fn names_list_type(type_name: &str) -> bool {

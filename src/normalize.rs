@@ -53,14 +53,15 @@ pub struct CapturedHint {
     /// `line:column`, empty when the emitting stage knows no position
     pub position: String,
     pub reason: String,
-    /// Whether `canonical` replaces `original` in the source (a rewrite), or is advice about it (`global x`)
-    pub rewrites: bool,
+    /// The "I meant" edit: `canonical` in place of `original` for a rewrite; for advice the edit its caller names
+    /// (`global x=1` at main's assignment), none when the advice replaces no text (`on … before the loop`)
+    pub fix: Option<crate::fixits::Fix>,
 }
 
 impl CapturedHint {
-    /// The preferred form as an applicable fix of the original; advice is no fix
+    /// The preferred form as an applicable fix
     pub fn fix(&self) -> Option<crate::fixits::Fix> {
-        self.rewrites.then(|| crate::fixits::fix(&self.reason, &self.original, &self.canonical))
+        self.fix.clone()
     }
 
     /// The line and column of `position` (`file:line:column` or `line:column`), 0:0 for none
@@ -386,27 +387,33 @@ pub fn clear_shown_hints() {
 
 /// Emit a normalization hint to stderr: `canonical` is what to write instead of `original`
 pub fn hint(original: &str, canonical: &str, reason: &str) {
-    acknowledgeable_hint(original, canonical, reason, true);
+    acknowledgeable_hint(original, canonical, reason, Some(rewrite(original, canonical, reason)));
 }
 
-/// A hint whose preferred form does not replace the original text (it is said elsewhere: `global x`)
-pub fn advise(original: &str, preferred: &str, reason: &str) {
-    acknowledgeable_hint(original, preferred, reason, false);
+/// The fix of a hint: its preferred form in place of the original
+pub(crate) fn rewrite(original: &str, canonical: &str, reason: &str) -> crate::fixits::Fix {
+    crate::fixits::fix(reason, original, canonical)
+}
+
+/// A hint whose preferred form is no plain rewrite of the original text: said elsewhere (`global x` at main's
+/// assignment) or meaning something else (`(a<b) |> f`); `fix` is its "I meant" edit, when the advice names one
+pub fn advise(original: &str, preferred: &str, reason: &str, fix: Option<crate::fixits::Fix>) {
+    acknowledgeable_hint(original, preferred, reason, fix);
 }
 
 /// A hint the user can say "got it" to, for this expression or all hints of its reason (card hints-dismissed)
-fn acknowledgeable_hint(original: &str, canonical: &str, reason: &str, rewrites: bool) {
+fn acknowledgeable_hint(original: &str, canonical: &str, reason: &str, fix: Option<crate::fixits::Fix>) {
     let topic = format!("{HINT_TOPIC_PREFIX}{reason}");
     if crate::diagnostic::is_acknowledged(&topic, original) {
         return;
     }
-    if show_hint(original, canonical, reason, rewrites) {
+    if show_hint(original, canonical, reason, fix) {
         crate::diagnostic::offer_acknowledgement(&topic, original);
     }
 }
 
 /// Shows the hint, unless hints are off or it was shown before under HintMode::Once: whether it was shown
-pub(crate) fn show_hint(original: &str, canonical: &str, reason: &str, rewrites: bool) -> bool {
+pub(crate) fn show_hint(original: &str, canonical: &str, reason: &str, fix: Option<crate::fixits::Fix>) -> bool {
     let mode = hint_mode();
     if mode == HintMode::Off || HINTS_MUTED.with(|muted| muted.get()) {
         return false;
@@ -423,7 +430,7 @@ pub(crate) fn show_hint(original: &str, canonical: &str, reason: &str, rewrites:
     let pos = position_string();
     CAPTURED_HINTS.with(|captured| {
         if let Some(hints) = captured.borrow_mut().as_mut() {
-            hints.push(CapturedHint { original: original.to_string(), canonical: canonical.to_string(), position: pos.clone(), reason: reason.to_string(), rewrites });
+            hints.push(CapturedHint { original: original.to_string(), canonical: canonical.to_string(), position: pos.clone(), reason: reason.to_string(), fix });
         }
     });
     if !hints_printed() {
