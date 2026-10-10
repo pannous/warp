@@ -13,12 +13,12 @@ fn let_var_and_const_declare_inside_any_block() {
 	is!("s=0; for i in 1…3 { let t = i; s += t }; s", 6);
 	is!("if 1 { let y = 2; y } else { 0 }", 2);
 	is!("let x = 3; x", 3);
-	// P159: a `let` variable may change, with a got-it note teaching `var`; `var` and plain `=` change
+	// a `let` is fully immutable (user, card let-reassign); `var` and plain `=` change
 	is!("var x = 0; x += 1; x", 1);
-	is!("let x = 0; x += 1; x", 1);
-	is!("let x = 1; x = 2; x", 2);
-	is!("let x = 1; x++; x", 2);
-	is!("let xs = [1 2]; xs#1 = 5; xs", warp::ints(vec![5, 2]));
+	fails_with("let x = 0; x += 1; x", "x is let (immutable), cannot change it");
+	fails_with("let x = 1; x = 2; x", "fix: use var x");
+	fails_with("let x = 1; x++; x", "x is let (immutable)");
+	fails_with("let xs = [1 2]; xs#1 = 5; xs", "xs is let (immutable)");
 }
 
 #[test]
