@@ -206,8 +206,9 @@ function programImports(holder, hooks) {
 				let painted = intsOfList(program(), pixels, room) ?? plainOfTree(readNode(program(), pixels));
 				if (typeof painted === "string") {
 					if (!holder.gpuRendered) throw new Error("paint: a shader needs WebGPU (host-gpu.js), which this page has not");
-					if (holder.gpuPainted) return hooks.paint(undefined, Number(width), Number(height), holder.gpuPainted(painted, width, height, values));
-					painted = Array.from(holder.gpuRendered(painted, width, height, values));
+					const rendered = (holder.gpuPainted ?? holder.gpuRendered)(painted, width, height, values); // pixels, or the id of a canvas drawn into
+					if (typeof rendered === "number") return hooks.paint(undefined, Number(width), Number(height), rendered);
+					painted = Array.from(rendered);
 				}
 				hooks.paint(painted, Number(width), Number(height));
 			},

@@ -77,6 +77,7 @@ NAMED_ARRAYS = """shader = "@group(0) @binding(0) var<storage, read_write> xs: a
 gpu_compute(shader, {xs: [1.5 2 3], ns: [7 8 9]}, 1)"""
 NAMED_ARRAYS_SHOWN = ["11.5", "6 7 8"]
 RED_SHADER = 'paint("@fragment fn main(@builtin(position) at: vec4f) -> @location(0) vec4f { return vec4f(1.0, 0.0, 0.0, 1.0); }", 8, 8)'
+CANVAS_FAILED = "the page's canvas failed"  # host-gpu.js CANVAS_FAILED: the shader painted through pixels instead
 CANVAS_SETTLE_MS = 300  # the task Worker's frame reaches the page's canvas after its task
 # each GET the server began and finished, (seconds since it started, path, finished): shown after a failed tour, which
 # then says whether the browser asked for a stalled worker's scripts at all (card tour-firefox)
@@ -343,9 +344,12 @@ def gpu_page_wrong():
 		if (!canvas) return "no canvas";
 		const copy = new OffscreenCanvas(canvas.width, canvas.height).getContext("2d");
 		copy.drawImage(canvas, 0, 0);
-		return `gpu ${{canvas.gpu === true}} red ${{copy.getImageData(4, 4, 1, 1).data[0]}}`;
+		const failed = [...document.querySelectorAll("#diagnostics li")].map(item => item.textContent).find(text => text.includes({json.dumps(CANVAS_FAILED)}));
+		return `gpu ${{canvas.gpu === true}} red ${{copy.getImageData(4, 4, 1, 1).data[0]}} ${{failed ?? ""}}`;
 	}})()""")
-	expected = "gpu true red 255"
+	if CANVAS_FAILED in shown:
+		print(f"skip {GPU_PAGE} (its page canvas): {shown}")
+	expected = "red 255" if CANVAS_FAILED in shown else "gpu true red 255"
 	return wrong + ([] if expected in shown else [f"painted shader ({painted!r}): {shown!r}, expected {expected!r}"])
 
 

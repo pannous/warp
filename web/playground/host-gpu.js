@@ -49,6 +49,9 @@ const MOST_KEPT = 4;
 const KEPT_MISSING = "no kept buffer";
 const keptBuffers = new Map(); // the task Worker's: block → {storage, count}
 const CANVAS_MISSING = "no canvas of this paint";
+const CANVAS_FAILED = "paint: the page's canvas failed, so shaders paint through pixels"; // said once a run, with why
+let canvasFailure;
+const LOSS_WAIT_MS = 100; // the program's side: why painting into the page's canvas failed, after which pixels are painted
 const paintCanvases = new Map(); // the task Worker's: canvas id → {context, format}
 let paintCanvasCount = 0; // the program's side: the canvases asked of the page, which names them by this count
 let gpuWorker; // the program's side: the task Worker that ran the last GPU job, and keeps its buffers
@@ -219,7 +222,24 @@ const theGpuDevice = async () => gpuDevice ??= await gpuDeviceOrFailure();
 async function gpuDeviceOrFailure() {
 	const adapter = await self.navigator.gpu?.requestAdapter();
 	if (!adapter) throw new Error("this browser offers no WebGPU adapter");
-	return adapter.requestDevice();
+	const device = await adapter.requestDevice();
+	// a lost device (the GPU process restarted) is asked for anew by the next job, with all made on it
+	device.lost.then(() => forgetDevice(device));
+	return device;
+}
+
+function forgetDevice(device) {
+	if (gpuDevice !== device) return;
+	gpuDevice = undefined;
+	[compiledModules, compiledPipelines, keptBuffers, paintCanvases].forEach(made => made.clear());
+}
+
+// after a failed job: a device lost by it is forgotten before the program asks again (its loss is said a moment later)
+async function forgetDeviceIfLost() {
+	const device = gpuDevice;
+	if (!device) return;
+	const lost = await Promise.race([device.lost.then(() => true), new Promise(done => setTimeout(done, LOSS_WAIT_MS, false))]);
+	if (lost) forgetDevice(device);
 }
 
 // the shader's module, checked once: asking a module for its compilation info a second time crashed Chrome's page (Mac)
@@ -313,6 +333,7 @@ async function gpuJobInto({ gpu: { word, job }, shared }) {
 		answer = await GPU_JOBS[word](job);
 	} catch (failure) {
 		answer = { error: String(failure.message ?? failure) };
+		await forgetDeviceIfLost();
 	}
 	if (answer.words) writeSharedWords(shared, answer.words);
 	else writeShared(shared, answer);
@@ -413,20 +434,35 @@ addHostPart({
 		// the pixels as a Uint32Array, for gpu_render and for paint given a shader (host.js, P234)
 		holder.gpuRendered = (shader, width, height, values) => gpuJob("gpu_render", renderJob(shader, width, height, values), [], Uint32Array);
 		// paint of a shader in the playground: drawn into the page canvas the GPU's task Worker holds, a new one when it
-		// holds none of this size (the first frame, or another task Worker took the GPU); the canvas's id
+		// holds none of this size (the first frame, or another task Worker took the GPU); the canvas's id. Where that
+		// fails but the pixels render (the CI's SwiftShader drops its instance), the pixels, from then on, said once a run
 		let paintCanvas;
 		holder.gpuPainted = hooks.gpuCanvas && ((shader, width, height, values) => {
 			const job = renderJob(shader, width, height, values);
+			if (canvasFailure) {
+				warnOnce(CANVAS_FAILED, canvasFailure);
+				return holder.gpuRendered(shader, width, height, values);
+			}
+			try {
+				return paintedInCanvas(job);
+			} catch (failure) {
+				const pixels = holder.gpuRendered(shader, width, height, values); // the shader's own error throws here
+				canvasFailure = failure.message;
+				warnOnce(CANVAS_FAILED, canvasFailure);
+				return pixels;
+			}
+		});
+		const paintedInCanvas = job => {
 			for (const retry of [false, true]) {
 				if (paintCanvas?.width !== job.width || paintCanvas?.height !== job.height) paintCanvas = newPaintCanvas(job.width, job.height, paintCanvas?.id);
 				try {
 					return gpuJob("gpu_paint", { ...job, canvas: paintCanvas.id });
 				} catch (failure) {
-					if (retry || !failure.message.endsWith(CANVAS_MISSING)) throw failure;
 					paintCanvas = undefined;
+					if (retry || !failure.message.endsWith(CANVAS_MISSING)) throw failure;
 				}
 			}
-		});
+		};
 		// the page makes the canvas and sends it through a channel to the task Worker, which configures it
 		const newPaintCanvas = (width, height, replaces) => {
 			const id = ++paintCanvasCount, { port1, port2 } = new MessageChannel();
