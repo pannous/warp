@@ -149,61 +149,6 @@ impl GcObject {
 		let mut store = self.store.borrow_mut();
 		node_of(&self.inner, &mut store.as_context_mut(), &self.instance)
 	}
-
-}
-
-/// Trait for converting Val to Rust types
-pub trait FromVal: Sized {
-	fn from_val(
-		val: Val,
-		store: &mut Store<()>,
-		instance: &Instance,
-		store_rc: &Rc<RefCell<Store<()>>>,
-	) -> Result<Self>;
-}
-
-impl FromVal for i32 {
-	fn from_val(
-		val: Val,
-		_store: &mut Store<()>,
-		_instance: &Instance,
-		_store_rc: &Rc<RefCell<Store<()>>>,
-	) -> Result<Self> {
-		Ok(val.unwrap_i32())
-	}
-}
-
-impl FromVal for i64 {
-	fn from_val(
-		val: Val,
-		_store: &mut Store<()>,
-		_instance: &Instance,
-		_store_rc: &Rc<RefCell<Store<()>>>,
-	) -> Result<Self> {
-		Ok(val.unwrap_i64())
-	}
-}
-
-impl FromVal for f64 {
-	fn from_val(
-		val: Val,
-		_store: &mut Store<()>,
-		_instance: &Instance,
-		_store_rc: &Rc<RefCell<Store<()>>>,
-	) -> Result<Self> {
-		Ok(warp_runtime::floats::canonical_nan(val.unwrap_f64()))
-	}
-}
-
-impl FromVal for GcObject {
-	fn from_val(
-		val: Val,
-		_store: &mut Store<()>,
-		instance: &Instance,
-		store_rc: &Rc<RefCell<Store<()>>>,
-	) -> Result<Self> {
-		Ok(GcObject::new(val, store_rc.clone(), *instance))
-	}
 }
 
 /// Load a WASM module with GC support and return root GcObject
