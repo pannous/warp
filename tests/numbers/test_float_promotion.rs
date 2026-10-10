@@ -39,7 +39,7 @@ fn test_fractional_exponent_uses_libm_pow() {
 #[test]
 fn test_undefined_float_power_is_refused_loudly() {
 	common::fails_with("f(x:float) := (0 - 2.0) ^ x; f(0.5)", "invalid number");
-	is!("y = 0.5; 2 ^ y", 1.4142135623730951); // a float exponent: the decimal 0.5 is a float now
+	is!("y = 0.5; 2 ^ y", std::f64::consts::SQRT_2); // a float exponent: the decimal 0.5 is a float now
 }
 
 #[test]
