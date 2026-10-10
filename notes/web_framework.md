@@ -226,6 +226,11 @@ Each step is useful on its own and is what the next ones stand on.
   budget). Routes (step 2, card site-worker-step): the page keeps host-routes.js (links, back button, focus) and sends
   the Worker {navigate: path}; the Worker loads that route's module and answers its markup with `navigated`, after
   which the page focuses the route. Probe: probes/site_worker.py (also probes/site/routed_tasks.warp).
+- Paintings (card site-frames): a module importing paint runs in the Worker too (an animation sleeps between frames
+  and reads the pointer while it runs). The site ships canvas.js (the playground's paint and pointer code, moved out
+  of playground.js): the Worker posts {paint}, site-thread.js draws it into one canvas after the root (outside the
+  morphed markup; a new size replaces it) and shares the SharedArrayBuffer pointer for mouse_x/mouse_y/mouse_down.
+  Checked natively by test_site a_painting_site_runs_in_a_worker_with_its_canvas; the page side has no browser test.
 
 ## Routes (card web-router, 2026-10-07; split agreed with warp-cf (web-bundle) and warp-34 (playground, fetch-cancel))
 - `route "/users/:id" { UserPage(id) }` (lowering/routes.rs, lib/router.warp): each route is the function page·route·N,

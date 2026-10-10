@@ -22,6 +22,9 @@ const sessionValues = {};
 const contentText = content => typeof content === "string" ? content : JSON.stringify(content);
 const utf8 = new TextEncoder();
 
+// the pointer the page shares (canvas.js pointerMessage) as the worker keeps it: self.pagePointer, read by system_value
+const sharedPointer = ({ buffer, names }) => ({ values: new Int32Array(buffer), names });
+
 // copy bytes into the program's memory from its text heap, the rule of src/host.rs write_bytes_to_caller
 function writeBytes(program, bytes) {
 	const heap = program[TEXT_HEAP_EXPORT];
@@ -165,7 +168,7 @@ function programImports(holder, hooks) {
 				const value = decode(cString(name));
 				if (value === "online") return BigInt(navigator.onLine);
 				if (value === "time of day") { const now = new Date(); return BigInt(now - new Date(now).setHours(0, 0, 0, 0)); }
-				const pointerIndex = self.pagePointer?.names.indexOf(value) ?? -1; // playground.js trackPointer
+				const pointerIndex = self.pagePointer?.names.indexOf(value) ?? -1; // canvas.js trackPointer
 				if (pointerIndex >= 0) return BigInt(Atomics.load(self.pagePointer.values, pointerIndex));
 				// a Worker has no matchMedia: the page tells it (playground.js tellSystemValues)
 				const known = value === "dark mode" && globalThis.matchMedia ? matchMedia(DARK_MODE_QUERY).matches : self.pageSystemValues?.[value];

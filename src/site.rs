@@ -8,7 +8,7 @@
 use crate::node::Node;
 pub use crate::host_parts::{HostPart, Script, HOST_PARTS};
 pub(crate) use crate::host_parts::{exports, host_scripts_of, imports_of, message_of, with_excerpt, TASK_WORD_PREFIXES};
-use crate::host::{FOREIGN_CALL, HOST_LIBRARY};
+use crate::host::{FOREIGN_CALL, HOST_LIBRARY, PAINT};
 use std::path::{Path, PathBuf};
 
 const PAGE_FILE: &str = "index.html";
@@ -18,6 +18,8 @@ const PAGE_SCRIPTS: [Script; 2] = [("markup.js", include_str!("../web/playground
 /// The part of markup.js for elements with a CSS transition, after it: only a module that names a transition has them
 const TRANSITIONS_SCRIPT: Script = ("markup-transitions.js", include_str!("../web/playground/markup-transitions.js"));
 const TRANSITION_WORD: &[u8] = b"transition";
+/// The canvas a module that paints shows its paintings and animation frames in, and the pointer over it (mouse_x, …)
+const PAINT_SCRIPT: Script = ("canvas.js", include_str!("../web/playground/canvas.js"));
 /// A page whose program runs in a Worker (card site-worker) loads this before them, and site.js hands over to it
 const THREAD_SCRIPT: Script = ("site-thread.js", include_str!("../web/playground/site-thread.js"));
 /// What such a site ships besides: the program's Worker, the task Workers it starts, and the service worker that gives a
@@ -221,7 +223,7 @@ fn site_files(code: &str, title: &str, dev: bool) -> Result<Option<ServedSite>, 
 	};
 	let html = page_html_text(&rendered)?;
 	let host_scripts = host_scripts_of(&module.bytes)?;
-	let page_scripts = page_scripts_of(&module.bytes).into_iter().chain(dev.then_some(DEV_SCRIPT));
+	let page_scripts = page_scripts_of(&module.bytes)?.into_iter().chain(dev.then_some(DEV_SCRIPT));
 	let (scripts, worker_scripts): (Vec<Script>, Vec<Script>) = if runs_in_a_worker(&imports_of(&module.bytes)?) {
 		let page_parts = host_scripts.iter().filter(|(name, _)| PAGE_SIDE_PARTS.contains(name)).copied();
 		([THREAD_SCRIPT].into_iter().chain(page_parts).chain(page_scripts).collect(), host_scripts)
@@ -271,21 +273,27 @@ pub fn dev_shell(title: &str) -> Vec<SiteFile> {
 /// The scripts of the page of a module, in load order: the parts of the host it imports words of, with the parts they
 /// need, and markup-transitions.js when it names a transition; `dev` adds dev.js
 pub fn scripts_of(module: &[u8], dev: bool) -> Result<Vec<Script>, String> {
-	Ok(host_scripts_of(module)?.into_iter().chain(page_scripts_of(module)).chain(dev.then_some(DEV_SCRIPT)).collect())
+	Ok(host_scripts_of(module)?.into_iter().chain(page_scripts_of(module)?).chain(dev.then_some(DEV_SCRIPT)).collect())
 }
 
-/// markup.js, its transitions part when the module names a transition, and site.js
-fn page_scripts_of(module: &[u8]) -> Vec<Script> {
+/// canvas.js when the module paints, markup.js, its transitions part when the module names a transition, and site.js
+fn page_scripts_of(module: &[u8]) -> Result<Vec<Script>, String> {
 	let [markup, site] = PAGE_SCRIPTS;
+	let canvas = paints(&imports_of(module)?).then_some(PAINT_SCRIPT);
 	let transitions = module.windows(TRANSITION_WORD.len()).any(|window| window == TRANSITION_WORD).then_some(TRANSITIONS_SCRIPT);
-	[markup].into_iter().chain(transitions).chain([site]).collect()
+	Ok(canvas.into_iter().chain([markup]).chain(transitions).chain([site]).collect())
+}
+
+fn paints(imports: &[(String, String)]) -> bool {
+	imports.iter().any(|(module, name)| module == HOST_LIBRARY && name == PAINT)
 }
 
 /// A module that starts tasks, uses channels or shared memory runs in a Worker, where a blocking `await` may wait and
 /// its tasks run together (card site-worker); a plain page stays on the page's thread. Routes go along: the page sends
-/// the Worker the path of each link followed (site-thread.js)
+/// the Worker the path of each link followed (site-thread.js). A module that paints runs there too (card site-frames):
+/// an animation sleeps between its frames, which the page shows meanwhile, and reads the pointer at once
 fn runs_in_a_worker(imports: &[(String, String)]) -> bool {
-	imports.iter().any(|(module, name)| module == HOST_LIBRARY && TASK_WORD_PREFIXES.iter().any(|prefix| name.starts_with(prefix)))
+	paints(imports) || imports.iter().any(|(module, name)| module == HOST_LIBRARY && TASK_WORD_PREFIXES.iter().any(|prefix| name.starts_with(prefix)))
 }
 
 fn calls_foreign_code(module: &[u8]) -> Result<bool, String> {

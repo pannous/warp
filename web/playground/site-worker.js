@@ -22,6 +22,7 @@ const hooks = {
 	pagePath: () => pagePath,
 	instantiated: holder => { site = holder; },
 	print: (text, stream) => post({ print: { text, stream } }),
+	paint: (pixels, width, height) => post({ paint: { pixels, width, height } }), // shown by the page (site-thread.js)
 	listen: holder => holder.timers && startTimers(holder, handler => showAfter(runTimer(holder, hooks, handler))), // host-timers.js
 	arrived: (holder, handler) => holder === site && showAfter(runTimer(holder, hooks, handler)),
 };
@@ -64,6 +65,7 @@ async function goTo(path) {
 }
 
 self.onmessage = ({ data }) => {
+	if (data.pointer) return self.pagePointer = sharedPointer(data.pointer); // host.js system_value
 	if (data.start) return start(data.start);
 	if (data.navigate !== undefined) return goTo(data.navigate).catch(failure => post({ failure: String(failure.message ?? failure) }));
 	if (data.event && site?.exports[`on·${data.event}·node`]) showAfter(runPageEvent(site, hooks, data.event, data.detail));
