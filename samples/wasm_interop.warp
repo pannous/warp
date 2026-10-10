@@ -1,3 +1,4 @@
+#!/usr/bin/env warp
 // WebAssembly interop
 // warp compiles to wasm and interoperates seamlessly
 

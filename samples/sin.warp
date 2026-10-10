@@ -1,3 +1,4 @@
+#!/usr/bin/env warp
 // sin(x) with the polynomial of fdlibm's __kernel_sin: x reduced into [-π, π), then folded into [-π/2, π/2]
 float sine(float x){
   turn = 6.283185307179586 as float // 2π

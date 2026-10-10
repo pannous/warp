@@ -1,3 +1,4 @@
+#!/usr/bin/env warp
 square(x) := x*x
 law square(-x) == square(x)
 add(a,b) := a+b
