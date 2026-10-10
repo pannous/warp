@@ -129,9 +129,7 @@ impl GcObject {
 			.instance
 			.get_memory(&mut *store, "memory")
 			.ok_or_else(|| anyhow!("No memory export"))?;
-		let mut buf = vec![0u8; len as usize];
-		memory.read(&*store, ptr as usize, &mut buf)?;
-		String::from_utf8(buf).map_err(|e| anyhow!("Invalid UTF-8: {}", e))
+		crate::host::read_string_from_memory(&memory, &*store, ptr as u32, len as u32)
 	}
 
 	/// Get text content for Text/Symbol nodes

@@ -491,11 +491,7 @@ impl WispEmitter {
 				out.push_str("')");
 			}
 			Symbol(s) => out.push_str(s),
-			Error(e) => {
-				out.push_str("(error ");
-				Self::emit_node(e, out);
-				out.push(')');
-			}
+			Error(e) => Self::emit_form("error", [e.as_ref()], out),
 			Key(l, op, r) => {
 				let kind = match op {
 					Op::Colon => "key",
@@ -509,25 +505,12 @@ impl WispEmitter {
 					// Arithmetic/comparison/logical ops use op symbol
 					_ => op.as_str(),
 				};
-				out.push('(');
-				out.push_str(kind);
-				out.push(' ');
-				Self::emit_node(l, out);
-				out.push(' ');
-				Self::emit_node(r, out);
-				out.push(')');
+				Self::emit_form(kind, [l.as_ref(), r.as_ref()], out)
 			}
 			List(items, bracket, _sep) => {
 				let (open, close) = match bracket {
-					Bracket::None | Bracket::Round => {
-						out.push_str(&format!("({}", if *bracket == Bracket::None { GROUP } else { ROUND }));
-						items.iter().for_each(|item| {
-							out.push(' ');
-							Self::emit_node(item, out);
-						});
-						out.push(')');
-						return;
-					}
+					Bracket::None => return Self::emit_form(GROUP, items, out),
+					Bracket::Round => return Self::emit_form(ROUND, items, out),
 					Bracket::Square => ('[', ']'),
 					Bracket::Curly => ('{', '}'),
 					Bracket::Less => ('<', '>'),
@@ -544,24 +527,23 @@ impl WispEmitter {
 			}
 			// a Rust value (the line positions) has no text form: the node alone
 			Meta { node, data } if matches!(data.as_ref(), Data(_)) => Self::emit_node(node, out),
-			Meta { node, data } => {
-				out.push_str("(meta ");
-				Self::emit_node(node, out);
-				out.push(' ');
-				Self::emit_node(data, out);
-				out.push(')');
-			}
-			Type { name, body } => {
-				out.push_str("(type ");
-				Self::emit_node(name, out);
-				out.push(' ');
-				Self::emit_node(body, out);
-				out.push(')');
-			}
+			Meta { node, data } => Self::emit_form("meta", [node.as_ref(), data.as_ref()], out),
+			Type { name, body } => Self::emit_form("type", [name.as_ref(), body.as_ref()], out),
 			Data(d) => {
 				out.push_str(&format!("(data {})", d.type_name));
 			}
 		}
+	}
+
+	/// `(word part part …)`
+	fn emit_form<'a>(word: &str, parts: impl IntoIterator<Item = &'a Node>, out: &mut String) {
+		out.push('(');
+		out.push_str(word);
+		for part in parts {
+			out.push(' ');
+			Self::emit_node(part, out);
+		}
+		out.push(')');
 	}
 
 	fn emit_escaped(s: &str, out: &mut String) {
