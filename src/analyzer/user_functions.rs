@@ -505,8 +505,11 @@ pub(super) fn widen_parameters(ctx: &mut Context, program: &Node, globals: &Hash
 		let param = &mut ctx.user_functions.get_mut(&name).expect("collected from known functions").params[index];
 		// passed only values held as Nodes (a loop variable over a list parameter): a Node, no int, and no list guessed
 		// from indexing (capitalize(w) for the elements of a function's list result)
-		let unknown = matches!(param.used_as, None | Some(Kind::List));
-		if kinds.len() == 1 && kinds.contains(&Kind::Empty) && unknown && param.annotation.is_none() && param.default.is_none() {
+		// passed a Node and else only ints (`rect(x, levels[i], …)` and `rect(x, 2, …)`): the Node may hold a float, which an
+		// int parameter refused at run time ("not an int"), so it takes the Node
+		let unknown = matches!(param.used_as, None | Some(Kind::List | Kind::Int));
+		let only_nodes_and_ints = kinds.iter().all(|kind| matches!(kind, Kind::Empty | Kind::Int));
+		if kinds.contains(&Kind::Empty) && only_nodes_and_ints && unknown && param.annotation.is_none() && param.default.is_none() {
 			param.used_as = Some(Kind::Empty);
 			changed = true;
 			continue;

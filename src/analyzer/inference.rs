@@ -418,6 +418,8 @@ pub(super) fn element_kind(indexed: &Node, scope: &Scope) -> Option<Kind> {
 		word if word.starts_with("list") => Some(Kind::List),
 		RATIONAL_WORD => Some(Kind::Int),
 		REAL_WORD => Some(Kind::Float),
+		// a mix of floats and exact numbers (`[sqrt(2.0), 0.2]`, `[π 1]`): each element held as its Node, of its own kind
+		NUMBER_WORD => Some(Kind::Empty),
 		word => match type_word_kind(word) {
 			Some(Kind::Codepoint) => Some(Kind::Text),
 			Some(kind) => Some(kind),
