@@ -1,0 +1,22 @@
+// Implement a Stack class with push, pop, and peek; push 1 2 3, pop once and print the peek and size separated by a space.
+class Stack { items: [int] }
+s = Stack{items: []}
+def push(st, x) {
+	st.items += [x]
+}
+def pop(st) {
+	n = #st.items
+	top = st.items#n
+	st.items = [st.items#i for i in 1 to n - 1]
+	top
+}
+def peek(st) {
+	n = #st.items
+	st.items#n
+}
+push(s, 1)
+push(s, 2)
+push(s, 3)
+pop(s)
+size = #s.items
+print "$(peek(s)) $(size)"
