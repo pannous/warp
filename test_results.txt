@@ -908,6 +908,7 @@ PASSED:
   ✓ functions::test_arity_overloads::calls_without_parentheses_pick_by_count_too
   ✓ functions::test_arity_overloads::defaults_count_for_the_arguments_a_definition_accepts
   ✓ functions::test_arrow_defaults_and_types::an_arrow_function_takes_defaults_and_types
+  ✓ functions::test_bare_function_name::a_loop_variable_named_like_a_function_is_the_variable
   ✓ functions::test_bare_function_name::test_bare_name_counts_only_required_parameters
   ✓ functions::test_bare_function_name::test_bare_name_of_function_with_only_defaults_calls_it
   ✓ functions::test_bare_function_name::test_bare_name_of_function_with_parameter_is_an_error
@@ -4587,6 +4588,7 @@ PASSED:
   ✓ welcoming::test_welcoming_sugar::a_hash_glued_to_an_expression_counts_at_line_start
   ✓ welcoming::test_welcoming_sugar::a_number_joins_a_text_in_its_text_form
   ✓ welcoming::test_welcoming_sugar::a_spaced_double_slash_is_always_a_comment_and_says_so_once
+  ✓ welcoming::test_welcoming_sugar::a_word_comment_after_a_value_needs_no_note
   ✓ welcoming::test_welcoming_sugar::an_answered_ask_compiles_the_chosen_reading
   ✓ welcoming::test_welcoming_sugar::an_unknown_word_as_statement_is_loud
   ✓ welcoming::test_welcoming_sugar::glued_double_slash_is_floor_division
@@ -4618,4 +4620,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-10 ignored, 4613 passed, 0 failed, 4613 total tested
+10 ignored, 4615 passed, 0 failed, 4615 total tested
