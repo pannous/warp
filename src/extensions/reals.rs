@@ -550,6 +550,70 @@ impl Exact {
 		Err(format!("undecidable: the sign of {self} is not known within {PRECISION_BUDGET} bits"))
 	}
 
+	/// `nearest(x, rational)` of an exact value, by its continued fraction: with `within`, the first convergent that
+	/// close; with `limit`, the closest fraction whose denominator is at most that (semiconvergents too, as Python's
+	/// limit_denominator); with neither, the first convergent that is the same float. The partial quotients come from
+	/// intervals of increasing precision, so √2 or π expand exactly as far as asked, never from a float
+	pub fn nearest_fraction(&self, limit: Option<&BigInt>, within: Option<&Rational>) -> Result<Rational, String> {
+		if let Some(value) = self.as_rational() {
+			return Ok(self.convergent_search(&value, &value, limit, within)?.unwrap_or(value));
+		}
+		let mut precision = 64;
+		while precision <= PRECISION_BUDGET {
+			let interval = self.interval(precision);
+			let scale = BigInt::one() << precision;
+			let (low, high) = (Rational::new(interval.lo, scale.clone()), Rational::new(interval.hi, scale));
+			if let Some(found) = self.convergent_search(&low, &high, limit, within)? {
+				return Ok(found);
+			}
+			precision *= 2;
+		}
+		Err(format!("nearest({self}, rational) needs more than {PRECISION_BUDGET} bits: ask for a larger `within`"))
+	}
+
+	/// The convergents of a value in [low, high]; None once the interval no longer decides the next partial quotient
+	fn convergent_search(&self, low: &Rational, high: &Rational, limit: Option<&BigInt>, within: Option<&Rational>) -> Result<Option<Rational>, String> {
+		let floor = |q: &Rational| q.numerator.div_floor(&q.denominator);
+		let (mut low, mut high) = (low.clone(), high.clone());
+		let (mut p0, mut q0, mut p1, mut q1) = (BigInt::zero(), BigInt::one(), BigInt::one(), BigInt::zero());
+		loop {
+			let term = floor(&low);
+			if floor(&high) != term {
+				return Ok(None);
+			}
+			let q2 = &term * &q1 + &q0;
+			if let Some(limit) = limit.filter(|limit| q2 > **limit) {
+				let k = (limit - &q0).div_floor(&q1);
+				let below = Rational::new(&p0 + &k * &p1, &q0 + &k * &q1);
+				let above = Rational::new(p1, q1);
+				let above_is_closer = self.distance(&above).sub(&self.distance(&below)).sign()? != Ordering::Greater;
+				return Ok(Some(if above_is_closer { above } else { below }));
+			}
+			let p2 = &term * &p1 + &p0;
+			(p0, q0, p1, q1) = (p1, q1, p2, q2);
+			let fraction = Rational::new(p1.clone(), q1.clone());
+			let close_enough = match within {
+				Some(within) => self.distance(&fraction).sub(&Exact::rational(within.clone())).sign()? != Ordering::Greater,
+				None => limit.is_none() && fraction.to_f64() == self.to_f64(),
+			};
+			let (low_rest, high_rest) = (low.add(&Rational::integer(-term.clone())), high.add(&Rational::integer(-term)));
+			if close_enough || low_rest.is_zero() && high_rest.is_zero() {
+				return Ok(Some(fraction));
+			}
+			let (Some(next_low), Some(next_high)) = (high_rest.inverse(), low_rest.inverse()) else { return Ok(None) };
+			(low, high) = (next_low, next_high);
+		}
+	}
+
+	/// |fraction - self|
+	fn distance(&self, fraction: &Rational) -> Exact {
+		let difference = Exact::rational(fraction.clone()).sub(self);
+		match difference.sign() {
+			Ok(Ordering::Less) => difference.neg(),
+			_ => difference,
+		}
+	}
+
 	fn interval(&self, precision: usize) -> Interval {
 		let mut sum = Interval { lo: BigInt::zero(), hi: BigInt::zero() };
 		for (monomial, coefficient) in &self.0 {
