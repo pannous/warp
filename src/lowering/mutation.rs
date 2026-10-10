@@ -3,6 +3,7 @@
 //! `x = x.upper` in the parser; in `upper x!` the parser only sees `x!`, so it marks x and `lower` turns the call into
 //! `x = upper x`. A lone `x!`, `f!` or `{…}!` keeps evaluating.
 
+use super::nodes::{call, key};
 use crate::node::{Bracket, Node, Separator};
 use crate::operators::Op;
 use crate::diagnostic::Diagnostic;
@@ -117,7 +118,7 @@ pub fn lower(node: Node) -> Node {
 				Node::List(items, _, separator) if items.len() == 2 && is_name(&items[0]) && is_marked(&items[1]) && is_name(&unmarked(items[1].clone()))
 					&& !matches!(separator, Separator::Semicolon | Separator::Newline) => {
 					let variable = unmarked(items[1].clone());
-					Node::Key(Box::new(variable), Op::Assign, Box::new(strip_marks(call, false)))
+					key(variable, Op::Assign, strip_marks(call, false))
 				}
 				_ => strip_marks(call, true),
 			}
@@ -127,7 +128,7 @@ pub fn lower(node: Node) -> Node {
 			let call = Node::Key(receiver.clone(), Op::Dot, Box::new(unmarked(*method)));
 			Node::Key(receiver, Op::Assign, Box::new(call))
 		}
-		Node::Key(left, op, right) => Node::Key(Box::new(lower(*left)), op, Box::new(lower(*right))),
+		Node::Key(left, op, right) => key(lower(*left), op, lower(*right)),
 		Node::Meta { .. } if is_marked(&node) => unwrapped(unmarked(node)),
 		Node::Meta { node, data } => Node::Meta { node: Box::new(lower(*node)), data },
 		other => other,
@@ -159,13 +160,13 @@ fn unwrapped(name: Node) -> Node {
 	}
 	// `ø!`: P73 force — Empty unwraps like a name holding ø
 	if matches!(name.drop_meta(), Node::Empty) {
-		return Node::List(vec![Node::Symbol(UNWRAP.to_string()), name], Bracket::Round, Separator::None);
+		return call(UNWRAP, vec![name]);
 	}
 	if !is_name(&name) {
 		let written = crate::normalize::operand_text(&name);
 		return crate::node::error(&format!("{written} is only known at run time: `!` needs a constant block"));
 	}
-	Node::List(vec![Node::Symbol(UNWRAP.to_string()), name], Bracket::Round, Separator::None)
+	call(UNWRAP, vec![name])
 }
 
 /// The mark may sit under other meta information, such as the position the parser records

@@ -100,9 +100,7 @@ impl WasmGcEmitter {
 			match word {
 				LINEAR_NEW => self.runtime_function(name, params, results, vec![I32, I32], |s, f| s.emit_linear_new(f)),
 				LINEAR_COUNT => self.runtime_function(name, params, results, vec![], |_, f| {
-					f.instruction(&I::LocalGet(0));
-					f.instruction(&I::I32WrapI64);
-					f.instruction(&I::I64Load(CELL));
+					Self::emit_list(f, &[I::LocalGet(0), I::I32WrapI64, I::I64Load(CELL)]);
 				}),
 				LINEAR_DOT => self.runtime_function(name, params, results, vec![I32, I32, I32, V128, F64], |_, f| Self::emit_float_dot(f)),
 				_ if word == LINEAR_INT_WORDS[0] || word == LINEAR_FLOAT_WORDS[0] => self.runtime_function(name, params, results, vec![], |s, f| {
@@ -182,55 +180,33 @@ impl WasmGcEmitter {
 	/// linear_new(count) -> address: a zeroed block (fresh pages, never reused) with its count in the header
 	fn emit_linear_new(&self, func: &mut Function) {
 		let (length, address) = (1, 2);
-		func.instruction(&I::LocalGet(0));
-		func.instruction(&I::I64Const(0));
-		func.instruction(&I::I64LtS);
+		Self::emit_list(func, &[I::LocalGet(0), I::I64Const(0), I::I64LtS]);
 		self.emit_fail_if(func, "index_out_of_range");
 		// header + cells + room to align the start to 8
-		func.instruction(&I::LocalGet(0));
-		func.instruction(&I::I64Const(CELL_BYTES));
-		func.instruction(&I::I64Mul);
-		func.instruction(&I::I64Const(2 * CELL_BYTES - 1));
-		func.instruction(&I::I64Add);
-		func.instruction(&I::I32WrapI64);
-		func.instruction(&I::LocalSet(length));
+		Self::emit_list(func, &[
+			I::LocalGet(0), I::I64Const(CELL_BYTES), I::I64Mul, I::I64Const(2 * CELL_BYTES - 1), I::I64Add, I::I32WrapI64,
+			I::LocalSet(length),
+		]);
 		self.emit_text_allocation(func, length, address);
-		func.instruction(&I::LocalGet(address));
-		func.instruction(&I::I32Const(CELL_BYTES as i32 - 1));
-		func.instruction(&I::I32Add);
-		func.instruction(&I::I32Const(-(CELL_BYTES as i32)));
-		func.instruction(&I::I32And);
-		func.instruction(&I::LocalTee(address));
-		func.instruction(&I::LocalGet(0));
-		func.instruction(&I::I64Store(CELL));
-		func.instruction(&I::LocalGet(address));
-		func.instruction(&I::I64ExtendI32U);
+		Self::emit_list(func, &[
+			I::LocalGet(address), I::I32Const(CELL_BYTES as i32 - 1), I::I32Add, I::I32Const(-(CELL_BYTES as i32)), I::I32And,
+			I::LocalTee(address), I::LocalGet(0), I::I64Store(CELL),
+		]);
+		Self::emit_list(func, &[I::LocalGet(address), I::I64ExtendI32U]);
 	}
 
 	/// The i32 address of cell `index` (param 1, from 1) of the block at param 0; index_out_of_range outside 1..count
 	fn emit_linear_cell(&self, func: &mut Function) {
-		func.instruction(&I::LocalGet(1));
-		func.instruction(&I::I64Const(1));
-		func.instruction(&I::I64Sub);
-		func.instruction(&I::LocalGet(0));
-		func.instruction(&I::I32WrapI64);
-		func.instruction(&I::I64Load(CELL));
-		func.instruction(&I::I64GeU);
+		Self::emit_list(func, &[I::LocalGet(1), I::I64Const(1), I::I64Sub, I::LocalGet(0), I::I32WrapI64, I::I64Load(CELL), I::I64GeU]);
 		self.emit_fail_if(func, "index_out_of_range");
-		func.instruction(&I::LocalGet(0));
-		func.instruction(&I::LocalGet(1));
-		func.instruction(&I::I64Const(CELL_BYTES));
-		func.instruction(&I::I64Mul);
-		func.instruction(&I::I64Add);
-		func.instruction(&I::I32WrapI64);
+		Self::emit_list(func, &[I::LocalGet(0), I::LocalGet(1), I::I64Const(CELL_BYTES), I::I64Mul, I::I64Add, I::I32WrapI64]);
 	}
 
 	/// linear_set(address, index, value) -> value; linear_add(address, index, value) -> the cell's new value
 	fn emit_linear_store(&self, func: &mut Function, float: bool, adds: bool) {
 		let cell = 3;
 		self.emit_linear_cell(func);
-		func.instruction(&I::LocalSet(cell));
-		func.instruction(&I::LocalGet(cell));
+		Self::emit_list(func, &[I::LocalSet(cell), I::LocalGet(cell)]);
 		if adds {
 			func.instruction(&I::LocalGet(cell));
 			func.instruction(&if float { I::F64Load(CELL) } else { I::I64Load(CELL) });

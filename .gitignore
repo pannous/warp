@@ -28,6 +28,7 @@ probes/**
 !probes/**/*.sh
 !probes/**/*.lean
 !probes/**/*.html
+!probes/**/*.mjs
 probes/**/target/
 probes/**/scratch/
 probes/*-export/

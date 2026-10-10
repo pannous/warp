@@ -6,7 +6,8 @@
 //! in `<program>.database.sqlite` (in memory for code without a file, database.rs); the browser keeps them in IndexedDB
 //! (web/playground/host-files.js), where a filter stays the list comprehension over the rows.
 
-use crate::node::{Bracket, Node, Separator};
+use super::nodes::key;
+use crate::node::{symbol, Bracket, Node, Separator};
 use crate::operators::Op;
 use crate::warp_parser::parse;
 use crate::units::static_units::si_quantity;
@@ -259,8 +260,8 @@ pub fn queried(subject: &Node, condition: &Node, variables: &HashSet<String>, ta
 	}
 	tables.functions.extend(functions);
 	let parameters = if parameters.is_empty() { parse("[]") } else { Node::List(parameters, Bracket::Square, Separator::Space) };
-	let query = Node::List(vec![Node::Symbol(FOUND_WORD.to_string()), Node::Text(sql), parameters], Bracket::None, Separator::Space);
-	Some(Ok(Node::Key(Box::new(subject.drop_meta().clone()), Op::Dot, Box::new(query))))
+	let query = Node::List(vec![symbol(FOUND_WORD), Node::Text(sql), parameters], Bracket::None, Separator::Space);
+	Some(Ok(key(subject.drop_meta().clone(), Op::Dot, query)))
 }
 
 /// `people.table·found(…)`: a table's filter, a list
@@ -529,8 +530,8 @@ fn with_stored_tables(node: Node, classes: &HashMap<String, Node>) -> Node {
 					_ => String::new(),
 				};
 				if word.drop_meta().name() == crate::stored_values::STORED_WORD && classes.contains_key(&class) {
-					let table = Node::Key(Box::new(Node::Symbol(DATABASE_WORDS[0].to_string())), Op::Dot, Box::new(variable.drop_meta().clone()));
-					return Node::Key(Box::new(declaration.drop_meta().clone()), Op::Assign, Box::new(table));
+					let table = key(symbol(DATABASE_WORDS[0]), Op::Dot, variable.drop_meta().clone());
+					return key(declaration.drop_meta().clone(), Op::Assign, table);
 				}
 			}
 		}
@@ -721,7 +722,7 @@ fn opened(statement: &Node, tables: &HashMap<String, Table>, file: &str, open: &
 		// `people = database.people` again (a served route at each request): the next read loads the rows anew; an
 		// assignment still, so a block of it and a value stays a block (`{ p = …; p#1 }`), no list
 		let reset = called(lazy_name(&variable, "reset"), None);
-		return Some(vec![Node::Key(Box::new(target.drop_meta().clone()), Op::Assign, Box::new(reset))]);
+		return Some(vec![key(target.drop_meta().clone(), Op::Assign, reset)]);
 	}
 	let table_call_with = |member: &str, extra: &str| generated(&format!("std_io(\"table\", {member:?}, [{:?}, {SCHEMA_PLACEHOLDER}, {file:?}{extra}])", table.name), [(SCHEMA_PLACEHOLDER, schema.clone())]);
 	let table_call = |member: &str| table_call_with(member, "");
@@ -868,13 +869,13 @@ for {MADE} in {variable} {{ if {MADE}.{ID_FIELD} != 0 {{ {MET}[{MADE}.{ID_FIELD}
 		(ROW_PLACEHOLDER, table_call_with("page", &format!(", {POSITION}, 1"))), (PAGE_PLACEHOLDER, table_call_with("page", &format!(", {POSITION}, {PAGE_SIZE}"))),
 		(SELECT_PLACEHOLDER, table_call_with("select", &format!(", {CONDITION}, {CONDITION_VALUES}")))].into_iter().chain(lazy_names(&variable));
 	let empty = parse("[]");
-	Some([vec![Node::Key(Box::new(target.drop_meta().clone()), Op::Assign, Box::new(empty))], generated(&code, placeholders).children()].concat())
+	Some([vec![key(target.drop_meta().clone(), Op::Assign, empty)], generated(&code, placeholders).children()].concat())
 }
 
 
 /// The code with each placeholder as its node and the generated variables named
 fn generated<'a>(code: &str, placeholders: impl IntoIterator<Item = (&'a str, Node)>) -> Node {
-	let names = GENERATED_NAMES.iter().map(|(written, name)| (written.to_string(), Node::Symbol(name.to_string())));
+	let names = GENERATED_NAMES.iter().map(|(written, name)| (written.to_string(), symbol(name)));
 	crate::law::substitute(&parse(code), &names.chain(placeholders.into_iter().map(|(placeholder, node)| (placeholder.to_string(), node))).collect())
 }
 
@@ -939,7 +940,7 @@ fn with_lazy_reads(node: Node, tables: &HashMap<String, Table>, own: Option<&str
 				called(lazy_name(&variable, "of"), Some(rewrite(parts[1].clone())))
 			}
 			(_, Node::Symbol(_)) => Node::Key(Box::new(rewrite(*left)), Op::Dot, right),
-			_ => Node::Key(Box::new(rewrite(*left)), Op::Dot, Box::new(rewrite(*right))),
+			_ => key(rewrite(*left), Op::Dot, rewrite(*right)),
 		},
 		Node::Key(target, op, value) if (op == Op::Assign || op.is_compound_assign()) && table_of(declared(&target)).is_some() => Node::Key(target, op, Box::new(rewrite(*value))),
 		// a class's own field named like a table is the field

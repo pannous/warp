@@ -7,7 +7,7 @@
 //! variable a list, collected once (declaration_lowering.rs). A function whose value is a range of its parameters
 //! (`f(n) := 1..n`) returns that range: a call with plain arguments is the range itself, read as above.
 
-use super::nodes::is_word;
+use super::nodes::{call, key};
 use crate::analyzer::{call_name, extract_user_functions, TEMPORARY_SEPARATOR};
 use crate::context::Context;
 use crate::effects::call_arguments;
@@ -92,7 +92,7 @@ fn range_of(node: &Node) -> Option<Range> {
 fn add_one(bound: &Node) -> Node {
 	match bound.drop_meta() {
 		Node::Number(crate::extensions::numbers::Number::Int(n)) => Node::int(n + 1),
-		other => Node::Key(Box::new(other.clone()), Op::Add, Box::new(Node::int(1))),
+		other => key(other.clone(), Op::Add, Node::int(1)),
 	}
 }
 
@@ -111,11 +111,11 @@ impl Lowering {
 	/// `count r`, `#r`, `r.count`, `sum r`, `r.sum`, `r#i` from the bounds of r
 	fn read(&mut self, node: &Node) -> Option<Node> {
 		match node.drop_meta() {
-			Node::List(items, _, separator) if is_call(items, separator) && self.counts && is_word(&items[0], COUNT) => Some(self.length(&range_of(&items[1])?)),
-			Node::List(items, _, separator) if is_call(items, separator) && self.sums && is_word(&items[0], SUM) => Some(self.sum(&range_of(&items[1])?)),
+			Node::List(items, _, separator) if is_call(items, separator) && self.counts && items[0].is_symbol(COUNT) => Some(self.length(&range_of(&items[1])?)),
+			Node::List(items, _, separator) if is_call(items, separator) && self.sums && items[0].is_symbol(SUM) => Some(self.sum(&range_of(&items[1])?)),
 			Node::Key(empty, Op::Hash, counted) if matches!(empty.drop_meta(), Node::Empty) => Some(self.length(&range_of(counted)?)),
-			Node::Key(range, Op::Dot, word) if self.counts && is_word(word, COUNT) => Some(self.length(&range_of(range)?)),
-			Node::Key(range, Op::Dot, word) if self.sums && is_word(word, SUM) => Some(self.sum(&range_of(range)?)),
+			Node::Key(range, Op::Dot, word) if self.counts && word.is_symbol(COUNT) => Some(self.length(&range_of(range)?)),
+			Node::Key(range, Op::Dot, word) if self.sums && word.is_symbol(SUM) => Some(self.sum(&range_of(range)?)),
 			Node::Key(range, Op::Hash, index) if is_position(index) => Some(self.element(&range_of(range)?, index)),
 			_ => None,
 		}
@@ -144,7 +144,7 @@ impl Lowering {
 			return body(&value);
 		}
 		let temporary = self.temporary(what);
-		let binding = Node::Key(Box::new(temporary.clone()), Op::Assign, Box::new(value));
+		let binding = key(temporary.clone(), Op::Assign, value);
 		Node::List(vec![binding, body(&temporary)], Bracket::Round, Separator::Semicolon)
 	}
 
@@ -231,7 +231,7 @@ fn changes(node: &Node, name: &str) -> bool {
 			Node::Key(owner, Op::Hash | Op::Dot, _) => owner.drop_meta(),
 			other => other,
 		};
-		found |= changing && is_word(target, name);
+		found |= changing && target.is_symbol(name);
 	});
 	found
 }
@@ -247,16 +247,16 @@ fn is_parameter(node: &Node, name: &str) -> bool {
 /// word, an argument a range reader takes as its bounds; never inside a function definition, which would read it as a
 /// global
 fn only_read(node: &Node, name: &str, readers: &RangeReaders) -> bool {
-	let is_name = |node: &Node| is_word(node, name);
+	let is_name = |node: &Node| node.is_symbol(name);
 	let reads = |node: &Node| only_read(node, name, readers);
 	match node.drop_meta() {
 		_ if has_parameter(node, name) => true,
 		Node::Symbol(symbol) => symbol != name,
-		Node::List(items, _, separator) if is_call(items, separator) && is_name(&items[1]) && (is_word(&items[0], COUNT) || is_word(&items[0], SUM)) => true,
+		Node::List(items, _, separator) if is_call(items, separator) && is_name(&items[1]) && (items[0].is_symbol(COUNT) || items[0].is_symbol(SUM)) => true,
 		Node::List(items, bracket, separator) if let Some(reading) = reading_parameters(items, bracket, separator, readers) => {
 			call_arguments(&items[1..]).into_iter().zip(reading).all(|(argument, reads_range)| if is_name(argument) { *reads_range } else { reads(argument) })
 		}
-		Node::List(items, _, _) => items.iter().enumerate().all(|(at, item)| (is_name(item) && at > 0 && is_word(&items[at - 1], "in")) || reads(item)),
+		Node::List(items, _, _) => items.iter().enumerate().all(|(at, item)| (is_name(item) && at > 0 && items[at - 1].is_symbol("in")) || reads(item)),
 		Node::Key(empty, Op::Hash, counted) if matches!(empty.drop_meta(), Node::Empty) && is_name(counted) => true,
 		Node::Key(list, Op::Hash, index) if is_name(list) => is_position(index) && reads(index),
 		Node::Key(list, Op::Dot, method) if is_name(list) => reading_method(method) && reads(method),
@@ -287,7 +287,7 @@ fn signature(head: &Node) -> Option<(String, Vec<&Node>)> {
 
 /// A definition with a parameter `name`: its body reads that parameter, not the variable
 fn has_parameter(node: &Node, name: &str) -> bool {
-	definition_parts(node).and_then(|(head, _, _)| signature(&head).map(|(_, parameters)| parameters.iter().any(|parameter| is_word(parameter, name)))).unwrap_or(false)
+	definition_parts(node).and_then(|(head, _, _)| signature(&head).map(|(_, parameters)| parameters.iter().any(|parameter| parameter.is_symbol(name)))).unwrap_or(false)
 }
 
 /// `name` replaced by `range`, except in a definition with a parameter `name`
@@ -378,7 +378,7 @@ fn call_bounds_copies(node: Node, readers: &RangeReaders, copies: &mut Copies) -
 		None => vec![argument.clone()],
 	}).collect();
 	copies.entry(function).or_default().insert(positions);
-	Node::List([vec![Node::Symbol(name)], arguments].concat(), Bracket::Round, Separator::None)
+	call(&name, arguments)
 }
 
 /// After each definition of a function whose copies are called: those copies
@@ -405,7 +405,7 @@ fn bounds_copies(statement: &Node, readers: &RangeReaders, copies: &mut Copies) 
 				continue;
 			}
 			let [start, end] = bound_names(&parameter.name()).map(Node::Symbol);
-			let range = Node::List(vec![Node::Key(Box::new(start.clone()), Op::Range, Box::new(end.clone()))], Bracket::Round, Separator::None);
+			let range = Node::List(vec![key(start.clone(), Op::Range, end.clone())], Bracket::Round, Separator::None);
 			new_body = substitute(new_body, &parameter.name(), &range);
 			new_parameters.extend([start, end]);
 		}

@@ -1,3 +1,4 @@
+#!/usr/bin/env warp
 // Levenshtein edit distance via dynamic programming (two-row variant)
 fun levenshtein(a, b) {
     let m = a.length

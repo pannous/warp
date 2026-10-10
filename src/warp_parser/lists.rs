@@ -160,22 +160,7 @@ impl WarpParser {
 			// `def f(n)` and the lines indented below it by spaces, as `def f(n):` (by tabs the rule below takes them); Ruby's
 			// `def f(n) … end` is read by its end
 			let defines = items_with_seps.get(statement_start).is_some_and(|(first, _)| matches!(first.drop_meta(), Symbol(word) if is_function_keyword(word)));
-			let ruby_definition = defines && self.closing_end_follows(&RUBY_END_OPENERS);
-			// a top-level Ruby `def f(n)` with its lines indented by tabs: the indented block, then its `end` (the tab rule
-			// below would make each line the block of the one before)
-			let tab_indented_ruby = ruby_definition && self.base_indent == 0 && self.next_line_starts_with_tab();
-			let item = match defines && (!ruby_definition || tab_indented_ruby) && self.only_blanks_before_newline() {
-				true => match self.parse_indented_block() {
-					Some(body) => {
-						if tab_indented_ruby {
-							self.skip_end_line();
-						}
-						Node::Key(Box::new(item), Op::Colon, Box::new(body))
-					}
-					None => item,
-				},
-				false => item,
-			};
+			let item = if defines { self.with_definition_block(item) } else { item };
 			let (had_newline, line_indent, comment) = self.skip_whitespace_and_comments();
 			self.pending_comment = comment;
 
@@ -204,24 +189,7 @@ impl WarpParser {
 			};
 
 			// Determine separator after this item
-			let ch = self.current_char();
-			let at_end = self.at_group_end(close);
-			let sep = if at_end {
-				Separator::None
-			} else if ch == ',' {
-				self.advance();
-				Separator::Colon
-			} else if ch == ';' {
-				self.advance();
-				if self.only_blanks_before_newline() { Separator::Newline } else { Separator::Semicolon }
-			} else if had_newline {
-				Separator::Newline
-			} else if (in_command || is_command(&item)) && self.and_starts_statement() {
-				self.advance_by(AND_KEYWORD.len());
-				Separator::Semicolon
-			} else {
-				Separator::Space
-			};
+			let sep = self.parse_separator(close, had_newline, in_command || is_command(&item));
 
 			let item = match items_with_seps.last() {
 				Some((previous, Separator::Space)) if assigned_method_call(previous) && is_block(&item) => {
@@ -248,6 +216,44 @@ impl WarpParser {
 			None => list,
 		}
 	}
+	/// The lines of a definition `def f(n)` indented below it by spaces, as `def f(n):` (by tabs the indentation rule of
+	/// parse_list_with_separators takes them); Ruby's `def f(n) … end` is read by its end
+	fn with_definition_block(&mut self, definition: Node) -> Node {
+		let ruby_definition = self.closing_end_follows(&RUBY_END_OPENERS);
+		// a top-level Ruby `def f(n)` with its lines indented by tabs: the indented block, then its `end` (the tab rule
+		// would make each line the block of the one before)
+		let tab_indented_ruby = ruby_definition && self.base_indent == 0 && self.next_line_starts_with_tab();
+		if (ruby_definition && !tab_indented_ruby) || !self.only_blanks_before_newline() {
+			return definition;
+		}
+		let Some(body) = self.parse_indented_block() else { return definition };
+		if tab_indented_ruby {
+			self.skip_end_line();
+		}
+		Node::Key(Box::new(definition), Op::Colon, Box::new(body))
+	}
+
+	/// The separator after a list item, consumed: `,` `;` a newline, a blank, or an `and` starting the next command
+	fn parse_separator(&mut self, close: Option<char>, had_newline: bool, in_command: bool) -> Separator {
+		match self.current_char() {
+			_ if self.at_group_end(close) => Separator::None,
+			',' => {
+				self.advance();
+				Separator::Colon
+			}
+			';' => {
+				self.advance();
+				if self.only_blanks_before_newline() { Separator::Newline } else { Separator::Semicolon }
+			}
+			_ if had_newline => Separator::Newline,
+			_ if in_command && self.and_starts_statement() => {
+				self.advance_by(AND_KEYWORD.len());
+				Separator::Semicolon
+			}
+			_ => Separator::Space,
+		}
+	}
+
 	pub(super) fn group_by_separators(
 		&self,
 		items_with_seps: Vec<(Node, Separator)>,
@@ -257,85 +263,34 @@ impl WarpParser {
 			return if bracket == Bracket::Curly { Node::List(Vec::new(), bracket, Separator::None) } else { Empty }; // an empty block is a value
 		}
 
+		// only implicit groupings unwrap a single item: explicit brackets like {x} or [x] keep the wrapper
 		if items_with_seps.len() == 1 && bracket == Bracket::None {
-			// Only unwrap single items for implicit groupings
 			return only(items_with_seps).0;
 		}
-
-		// Collect all unique separator precedences (excluding None)
-		let mut precedences: Vec<u8> = items_with_seps
-			.iter()
-			.map(|(_, sep)| sep.precedence())
-			.filter(|&p| p < 255)
-			.collect();
-		precedences.sort();
-		precedences.dedup();
-
-		if precedences.is_empty() {
-			// All items have None separator - return as space-separated list
-			let items: Vec<Node> = items_with_seps.into_iter().map(|(node, _)| node).collect();
-			if items.len() == 1 && bracket == Bracket::None {
-				// Only unwrap single items for implicit groupings
-				return only(items);
-			}
-			return grouped_list(items, bracket, Separator::Space);
-		}
-
-		// Start with the loosest (highest precedence value) separator
-		let max_prec = *precedences.last().unwrap();
-		let split_sep = items_with_seps
-			.iter()
-			.find(|(_, sep)| sep.precedence() == max_prec)
-			.map(|(_, sep)| sep.clone())
-			.unwrap_or(Separator::Space);
-
-		// Split items into groups by this separator
+		// the loosest separator splits first, the groups between split by the tighter ones (None ends the list)
+		let Some(loosest) = items_with_seps.iter().map(|(_, sep)| sep.precedence()).filter(|&precedence| precedence < 255).max() else {
+			return grouped_list(items_with_seps.into_iter().map(|(node, _)| node).collect(), bracket, Separator::Space);
+		};
+		let split_sep = items_with_seps.iter().map(|(_, sep)| sep).find(|sep| sep.precedence() == loosest).cloned().expect("the loosest is among them");
 		let mut groups: Vec<Vec<(Node, Separator)>> = Vec::new();
 		let mut current_group = Vec::new();
-
 		for (item, sep) in items_with_seps {
-			if sep.precedence() == max_prec {
-				// Found a split point - add item and close group
+			if sep.precedence() == loosest {
 				current_group.push((item, Separator::None));
-				if !current_group.is_empty() {
-					groups.push(current_group);
-					current_group = Vec::new();
-				}
+				groups.push(std::mem::take(&mut current_group));
 			} else {
-				// Keep this separator for processing in sub-groups
 				current_group.push((item, sep));
 			}
 		}
-
 		if !current_group.is_empty() {
 			groups.push(current_group);
 		}
-
-		// Filter empty groups
-		groups.retain(|g| !g.is_empty());
-
-		if groups.is_empty() {
-			return Empty;
-		}
-
-		// Recursively process each group for tighter separators
-		let grouped_nodes: Vec<Node> = groups
-			.into_iter()
-			.map(|group| {
-				if group.len() == 1 && group[0].1 == Separator::None {
-					// Single item with no further separators
-					only(group).0
-				} else {
-					// Has multiple items or tighter separators - recurse
-					// Inner groups use Bracket::None to avoid extra braces in serialization
-					self.group_by_separators(group, Bracket::None)
-				}
-			})
-			.collect();
-
+		// inner groups take no brackets, which would add braces in serialization
+		let grouped_nodes: Vec<Node> = groups.into_iter().map(|group| match group.as_slice() {
+			[(_, Separator::None)] => only(group).0,
+			_ => self.group_by_separators(group, Bracket::None),
+		}).collect();
 		if grouped_nodes.len() == 1 && bracket == Bracket::None {
-			// Only unwrap single items for implicit groupings (Bracket::None)
-			// Explicit brackets like {x} or [x] should preserve the wrapper
 			only(grouped_nodes)
 		} else {
 			grouped_list(grouped_nodes, bracket, split_sep)

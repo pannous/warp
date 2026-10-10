@@ -1,3 +1,4 @@
+#!/usr/bin/env warp
 // Binary Search Tree
 // Classic data structure with insert, search, traverse
 

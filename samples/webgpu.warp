@@ -1,4 +1,5 @@
 #!/usr/bin/env warp
+#!/usr/bin/env warp
 // WebGPU: a WGSL fragment shader colors every pixel on the GPU; paint renders it and shows each frame.
 // `$frame` in the shader is warp's frame, read at each paint: it changes without compiling the shader anew.
 // The map given last fills holes itself: `$size` is the vec2 [size, size] here, not the number

@@ -1,4 +1,5 @@
 #!/usr/bin/env warp
+#!/usr/bin/env warp
 // Extended FFI Examples - Demonstrating Dynamic Wrapper System
 // All these functions work automatically with the generic dynamic wrapper
 

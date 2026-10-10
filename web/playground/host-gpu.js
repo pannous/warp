@@ -25,7 +25,7 @@ const UNIFORM_ALIGNMENT = 16; // a uniform struct is a whole number of 16-byte r
 // the WGSL type of a value of 1…4 floats and its alignment in bytes
 const VALUE_TYPES = [, ["f32", 4], ["vec2f", 8], ["vec3f", 16], ["vec4f", 16]];
 const VECTOR_FLOATS = 4; // the floats of one vector in an array value, `values.<name>[i]` (src/gpu.rs)
-let gpuDevice; // the task Worker's device, asked for once
+let gpuDevice;
 // a shader painted every frame compiles once, not each frame (card playground-tour: the tour's page crashed in a
 // shader animation on a Mac): the task Worker's last MOST_COMPILED modules and pipelines, by their WGSL
 const MOST_COMPILED = 16;
@@ -36,6 +36,9 @@ const WORDS_STATE = 2; // the shared buffer's state when it holds raw 32-bit wor
 // it, by block, the last MOST_KEPT of them (src/gpu.rs KEPT); flags as gpu_map_linear's last argument
 const KEEP_RESULT = 1n;
 const SOURCE_KEPT = 2n;
+// a map the compiler switched to the GPU (gpu_maps.rs AUTOMATIC, card gpu-auto): silent without an adapter, else said once
+const AUTOMATIC = 4n;
+const AUTOMATIC_NOTICE = "ran on the GPU by itself (f32, imprecise by design; write @cpu for exact f64)"; // gpu_maps.rs
 const MOST_KEPT = 4;
 const KEPT_MISSING = "no kept buffer";
 const keptBuffers = new Map(); // the task Worker's: block → {storage, count}
@@ -44,7 +47,7 @@ let gpuWorker; // the program's side: the task Worker that ran the last GPU job,
 // the task Worker's side: the floats the shader left from index `first` on (only those are read back)
 // before `numbers`, the `count` items of the buffer kept for block `source`; the buffer kept for block `keep` after
 async function gpuComputedFloats({ shader, numbers, workgroups, first = 0, source, count, keep }) {
-	const device = gpuDevice ??= await gpuDeviceOrFailure();
+	const device = await theGpuDevice();
 	const Elements = gpuElements(shader);
 	const input = numbers instanceof Elements ? numbers : new Elements(numbers);
 	const kept = source === undefined ? undefined : keptBuffers.get(source);
@@ -88,7 +91,7 @@ function keepBuffer(block, buffer) {
 
 // the pixels the fragment shader colored, row by row
 async function gpuRendered({ shader, width, height, values }) {
-	const device = gpuDevice ??= await gpuDeviceOrFailure();
+	const device = await theGpuDevice();
 	const { declarations, bytes: valueBytes } = uniformLayout(values);
 	const code = shader + FULL_IMAGE_VERTICES + declarations;
 	const module = await gpuModule(device, code);
@@ -168,6 +171,9 @@ function compiledOnce(cache, key, make) {
 	if (cache.size > MOST_COMPILED) cache.delete(cache.keys().next().value);
 	return cache.get(key);
 }
+
+// the task Worker's device, asked for once
+const theGpuDevice = async () => gpuDevice ??= await gpuDeviceOrFailure();
 
 async function gpuDeviceOrFailure() {
 	const adapter = await self.navigator.gpu?.requestAdapter();
@@ -291,6 +297,10 @@ addHostPart({
 			}
 			return kernel(shader, kernelNumbers(items, outer, reductions), workgroups, first, { keep });
 		};
+		// as src/diagnostic.rs report_runtime_warning_once: the notice once a run, its detail after a colon
+		const warnOnce = (notice, detail) => {
+			if (!holder.warnings.some(warning => warning.startsWith(notice))) holder.warnings.push(`${notice}: ${detail}`);
+		};
 		const gpuKernelLinear = (shader, source, values, target, workgroups, reduces, keeping = 0n) => {
 			const items = linearCells(program().memory, source);
 			const outer = [plain(values) ?? []].flat().map(Number);
@@ -299,9 +309,11 @@ addHostPart({
 				const left = keptOrUploaded(shader, items, outer, workgroups, reduces, source, keep, keeping);
 				const cells = linearCells(program().memory, target);
 				cells.set(left.subarray(0, cells.length));
+				if (keeping & AUTOMATIC) warnOnce(AUTOMATIC_NOTICE, `${reduces ? "a reduction" : "a map"} of ${items.length} items`);
 				return 1n;
 			} catch (failure) {
 				if (!/adapter|task Workers/.test(failure.message)) throw failure;
+				if (keeping & AUTOMATIC) return 0n; // the program did not ask for the GPU
 				// once a run, as the program's runtime warning (natively report_runtime_warning), not on the console
 				const warning = `@gpu: ${failure.message}, so the map runs on the CPU`;
 				if (!holder.warnings.includes(warning)) holder.warnings.push(warning);

@@ -4,8 +4,9 @@
 //! `k in d`, `d has k`, `d.remove(k)` and `d.get(k)` (lower_key_words, after library_words names them), so a map keyed
 //! by ids stays a hash table.
 
+use super::nodes::call;
 use crate::library_words::{COLLECTION_CONTAINS, COLLECTION_POSITION, MAP_GET_OR, MAP_WITHOUT};
-use crate::node::{Bracket, Node, Separator};
+use crate::node::{Bracket, Node};
 use crate::operators::Op;
 use crate::warp_parser::WrittenIndex;
 use std::collections::HashSet;
@@ -100,7 +101,7 @@ fn key_text(key: Node) -> Node {
 	match key.drop_meta() {
 		Node::Text(_) | Node::Char(_) => key,
 		Node::Number(number) => Node::Text(number.to_string()),
-		_ => Node::List(vec![Node::Symbol(KEY_TEXT.to_string()), key], Bracket::Round, Separator::None),
+		_ => call(KEY_TEXT, vec![key]),
 	}
 }
 

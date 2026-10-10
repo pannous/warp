@@ -95,6 +95,24 @@ impl WarpParser {
 		self.pos += 1;
 	}
 
+	pub(super) fn advance_by(&mut self, count: usize) {
+		for _ in 0..count {
+			self.advance();
+		}
+	}
+
+	/// The characters from here on that `keep`, consumed
+	pub(super) fn take_while_char(&mut self, keep: impl Fn(char) -> bool) -> String {
+		let length = self.chars[self.pos..].iter().take_while(|&&ch| keep(ch)).count();
+		self.take_chars(length)
+	}
+
+	/// `skip` characters, then a name given to `build`; a missing name is the error
+	pub(super) fn symbol_after(&mut self, skip: usize, build: impl FnOnce(String) -> Node) -> Node {
+		self.advance_by(skip);
+		self.parse_symbol().map_or_else(|message| error(&message), build)
+	}
+
 	/// The operand after a single `|`: a bare word or word operator is marked as a possible pipe stage, any other operand gets the hint
 	/// toward `or`
 	pub(super) fn pipe_operand(&self, operand: Node, line: usize, column: usize) -> Node {
@@ -244,6 +262,18 @@ impl WarpParser {
 	}
 
 	/// Blanks and line continuations: a `\` at the end of a line joins the next line to the statement
+	/// Neither a data literal file nor a WIT file: warp code with its keywords
+	pub(super) fn in_code(&self) -> bool {
+		!self.options.wit_mode && !self.options.data_mode
+	}
+
+	/// Skips spaces and tabs, not line continuations
+	pub(super) fn skip_blanks(&mut self) {
+		while matches!(self.current_char(), ' ' | '\t') {
+			self.advance();
+		}
+	}
+
 	pub(super) fn skip_spaces(&mut self) {
 		loop {
 			if self.current_char() == ' ' || self.current_char() == '\t' {

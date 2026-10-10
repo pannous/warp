@@ -5,8 +5,8 @@
 //!   multi-value results, and a plain call `f()` gets them packed into the list `[a b]`
 //! - `x, y = v` / `x, y = v, w` → `$destructure (x, y) v …` (a statement binding each name, values evaluated first)
 
-use super::nodes::is_word;
-use crate::node::{error, Bracket, Node, Separator};
+use super::nodes::key;
+use crate::node::{error, symbol, Bracket, Node, Separator};
 use crate::operators::Op;
 
 pub const RETURN: &str = "return";
@@ -27,7 +27,7 @@ pub fn lower(node: Node) -> Node {
 		Node::Key(left, Op::Assign, right) if bracketed_targets(&left).is_some() => {
 			regroup_bracketed_destructuring(&left, &lower(*right)).expect("guarded")
 		}
-		Node::Key(left, op, right) => Node::Key(Box::new(lower(*left)), op, Box::new(lower(*right))),
+		Node::Key(left, op, right) => key(lower(*left), op, lower(*right)),
 		Node::List(items, bracket, separator) => {
 			// `(a, b) = 1, 2` arrives as `((a, b) = 1), 2`: the first item stays an assignment for regroup_destructuring
 			let takes_more_values = bracket == Bracket::None && separator == Separator::Colon;
@@ -59,7 +59,7 @@ pub fn lower(node: Node) -> Node {
 /// The values of `return a, b, …` (lowered), or None for any other node
 pub fn returned_values(node: &Node) -> Option<&[Node]> {
 	match node.drop_meta() {
-		Node::List(items, _, Separator::Space) if items.len() >= 3 && is_word(&items[0], RETURN) => Some(&items[1..]),
+		Node::List(items, _, Separator::Space) if items.len() >= 3 && items[0].is_symbol(RETURN) => Some(&items[1..]),
 		_ => None,
 	}
 }
@@ -68,11 +68,11 @@ pub fn returned_values(node: &Node) -> Option<&[Node]> {
 pub fn destructuring(node: &Node) -> Option<(Vec<String>, &[Node])> {
 	let Node::List(items, _, _) = node.drop_meta() else { return None };
 	let [head, names, values @ ..] = items.as_slice() else { return None };
-	if !is_word(head, DESTRUCTURE) {
+	if !head.is_symbol(DESTRUCTURE) {
 		return None;
 	}
 	let Node::List(names, _, _) = names.drop_meta() else { return None };
-	Some((names.iter().filter_map(symbol_name).collect(), values))
+	Some((names.iter().filter_map(Node::symbol_name).map(String::from).collect(), values))
 }
 
 /// How many values a function body returns with `return a, b`; None when every return gives one value
@@ -107,13 +107,6 @@ pub fn element_key(function: &str, index: usize) -> String {
 	format!("{function}#{index}")
 }
 
-fn symbol_name(node: &Node) -> Option<String> {
-	match node.drop_meta() {
-		Node::Symbol(name) => Some(name.clone()),
-		_ => None,
-	}
-}
-
 /// `(… return a), b, c` → `… return a b c`: the return at the end of the first item takes the other items
 fn regroup_return(items: &[Node]) -> Option<Node> {
 	let (first, rest) = items.split_first()?;
@@ -127,7 +120,7 @@ fn with_trailing_return(node: &Node, more: &[Node]) -> Option<Node> {
 	match node {
 		Node::Meta { node, data } => Some(Node::Meta { node: Box::new(with_trailing_return(node, more)?), data: data.clone() }),
 		Node::Key(left, op, right) => Some(Node::Key(left.clone(), *op, Box::new(with_trailing_return(right, more)?))),
-		Node::List(items, Bracket::None, Separator::Space) if items.len() == 2 && is_word(&items[0], RETURN) => {
+		Node::List(items, Bracket::None, Separator::Space) if items.len() == 2 && items[0].is_symbol(RETURN) => {
 			Some(Node::List(items.iter().chain(more).cloned().collect(), Bracket::None, Separator::Space))
 		}
 		_ => None,
@@ -149,7 +142,7 @@ pub(crate) fn destructured_names(statement: &Node) -> Vec<String> {
 	};
 	let mut names = vec![];
 	if targets.iter().all(is_target) {
-		targets.iter().for_each(|target| target.visit(&mut |part| names.extend(symbol_name(part).map(|name| name.trim_start_matches(STARRED).to_string()))));
+		targets.iter().for_each(|target| target.visit(&mut |part| names.extend(part.symbol_name().map(|name| name.trim_start_matches(STARRED).to_string()))));
 	}
 	names
 }
@@ -201,12 +194,12 @@ fn bracketed_targets(node: &Node) -> Option<&[Node]> {
 }
 
 fn is_target(node: &Node) -> bool {
-	symbol_name(node).is_some() || bracketed_targets(node).is_some()
+	node.symbol_name().is_some() || bracketed_targets(node).is_some()
 }
 
 /// `$destructure (names) values…`; a nested target `(a, b)` takes a hidden name, unpacked by a following statement
 fn destructure(names: Vec<Node>, values: Vec<Node>, written: &str, path: &str) -> Node {
-	let starred = names.iter().filter(|name| symbol_name(name).is_some_and(|name| name.starts_with(STARRED))).count();
+	let starred = names.iter().filter(|name| name.symbol_name().is_some_and(|name| name.starts_with(STARRED))).count();
 	if starred > 1 {
 		return error("only one name may take the rest (`*rest`) in an unpacking");
 	}
@@ -224,7 +217,7 @@ fn destructure(names: Vec<Node>, values: Vec<Node>, written: &str, path: &str) -
 		}
 		None => name,
 	}).collect();
-	let head = Node::Symbol(DESTRUCTURE.to_string());
+	let head = symbol(DESTRUCTURE);
 	let names = Node::List(names, Bracket::Round, Separator::Colon);
 	let statement = Node::List([head, names].into_iter().chain(values).collect(), Bracket::None, Separator::Space);
 	if nested.is_empty() {
@@ -237,14 +230,14 @@ fn destructure(names: Vec<Node>, values: Vec<Node>, written: &str, path: &str) -
 fn check_definition(node: &Node) -> Option<Node> {
 	let Node::Key(left, Op::Define | Op::Assign, body) = node.drop_meta() else { return None };
 	let name = match left.drop_meta() {
-		Node::List(items, _, _) => symbol_name(items.first()?)?,
-		_ => symbol_name(left)?,
+		Node::List(items, _, _) => (items.first()?).symbol_name()?,
+		_ => left.symbol_name()?,
 	};
 	let arity = tuple_arity(body)?;
 	let mut single = None;
 	body.visit(&mut |node| {
 		if let Node::List(items, _, _) = node.drop_meta() {
-			if items.len() == 2 && is_word(&items[0], RETURN) {
+			if items.len() == 2 && items[0].is_symbol(RETURN) {
 				single.get_or_insert_with(|| node.serialize());
 			}
 		}

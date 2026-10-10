@@ -181,12 +181,10 @@ impl WasmGcEmitter {
 			_ => {}
 		}
 		let (a, b, r) = (self.scratch(0), self.scratch(1), self.scratch(2));
-		func.instruction(&I::LocalSet(b));
-		func.instruction(&I::LocalSet(a));
+		Self::emit_list(func, &[I::LocalSet(b), I::LocalSet(a)]);
 		match op {
 			Op::Add | Op::Sub => {
-				func.instruction(&I::LocalGet(a));
-				func.instruction(&I::LocalGet(b));
+				Self::emit_list(func, &[I::LocalGet(a), I::LocalGet(b)]);
 				func.instruction(&if *op == Op::Add { I::I64Add } else { I::I64Sub });
 				func.instruction(&I::LocalSet(r));
 				let unproven = self.unproven(&[(r, result), (a, left), (b, right)]);
@@ -221,14 +219,12 @@ impl WasmGcEmitter {
 		if range.is_some_and(|(low, high)| low > 0 || high < 0) {
 			return;
 		}
-		func.instruction(&I::LocalGet(divisor));
-		func.instruction(&I::I64Eqz);
+		Self::emit_list(func, &[I::LocalGet(divisor), I::I64Eqz]);
 		self.emit_fail_if(func, super::list_ops::DIVIDE_BY_ZERO);
 	}
 
 	fn emit_scratch_call(&mut self, func: &mut Function, name: &'static str) {
-		func.instruction(&I::LocalGet(self.scratch(0)));
-		func.instruction(&I::LocalGet(self.scratch(1)));
+		Self::emit_list(func, &[I::LocalGet(self.scratch(0)), I::LocalGet(self.scratch(1))]);
 		self.emit_call(func, name);
 	}
 
@@ -273,8 +269,7 @@ impl WasmGcEmitter {
 	/// for b = 0 as before, then exact_to_f64
 	pub(crate) fn emit_float_quotient(&mut self, func: &mut Function) {
 		let (a, b) = (self.scratch(0), self.scratch(1));
-		func.instruction(&I::LocalSet(b));
-		func.instruction(&I::LocalSet(a));
+		Self::emit_list(func, &[I::LocalSet(b), I::LocalSet(a)]);
 		Self::emit_signed_bits_test(func, &[a, b], FLOAT_EXACT_BITS);
 		for instruction in [I::LocalGet(b), I::I64Const(0), I::I64Ne, I::I32And, I::If(BlockType::Result(ValType::F64)),
 			I::LocalGet(a), I::F64ConvertI64S, I::LocalGet(b), I::F64ConvertI64S, I::F64Div, I::Else, I::LocalGet(a), I::LocalGet(b)] {
@@ -365,8 +360,7 @@ impl WasmGcEmitter {
 		for instruction in fast {
 			func.instruction(instruction);
 		}
-		func.instruction(&I::Else);
-		func.instruction(&I::LocalGet(local));
+		Self::emit_list(func, &[I::Else, I::LocalGet(local)]);
 		self.emit_call(func, slow);
 		func.instruction(&I::End);
 	}
@@ -375,21 +369,16 @@ impl WasmGcEmitter {
 	pub(crate) fn emit_int_neg(&mut self, func: &mut Function, range: IntRange) {
 		let negated = range.map(|(low, high)| (-high, -low));
 		if !self.int_runtime() || (is_fixnum_range(range) && is_fixnum_range(negated)) {
-			func.instruction(&I::I64Const(-1));
-			func.instruction(&I::I64Mul);
+			Self::emit_list(func, &[I::I64Const(-1), I::I64Mul]);
 			return;
 		}
 		if self.wrapping_ints {
 			self.emit_int_to_machine(func);
-			func.instruction(&I::I64Const(-1));
-			func.instruction(&I::I64Mul);
+			Self::emit_list(func, &[I::I64Const(-1), I::I64Mul]);
 			return self.emit_int_from_machine(func);
 		}
 		let (a, r) = (self.scratch(0), self.scratch(2));
-		func.instruction(&I::LocalTee(a));
-		func.instruction(&I::I64Const(-1));
-		func.instruction(&I::I64Mul);
-		func.instruction(&I::LocalSet(r));
+		Self::emit_list(func, &[I::LocalTee(a), I::I64Const(-1), I::I64Mul, I::LocalSet(r)]);
 		let unproven = self.unproven(&[(r, None), (a, range)]);
 		self.emit_fixnum_test(func, &unproven);
 		self.emit_fast_or_unary_slow(func, a, &[I::LocalGet(r)], "exact_neg", ValType::I64);
@@ -422,13 +411,10 @@ impl WasmGcEmitter {
 			return;
 		}
 		let (a, b) = (self.scratch(0), self.scratch(1));
-		func.instruction(&I::LocalSet(b));
-		func.instruction(&I::LocalSet(a));
+		Self::emit_list(func, &[I::LocalSet(b), I::LocalSet(a)]);
 		let unproven = self.unproven(&[(a, left), (b, right)]);
 		self.emit_fixnum_test(func, &unproven);
-		func.instruction(&I::If(BlockType::Result(ValType::I32)));
-		func.instruction(&I::LocalGet(a));
-		func.instruction(&I::LocalGet(b));
+		Self::emit_list(func, &[I::If(BlockType::Result(ValType::I32)), I::LocalGet(a), I::LocalGet(b)]);
 		func.instruction(&machine);
 		func.instruction(&I::Else);
 		self.emit_scratch_call(func, "exact_cmp");
@@ -548,8 +534,10 @@ impl WasmGcEmitter {
 		for limb in &limbs {
 			func.instruction(&I::I32Const(*limb as i32));
 		}
-		func.instruction(&I::ArrayNewFixed { array_type_index: self.type_manager.limbs_type, array_size: limbs.len() as u32 });
-		func.instruction(&I::StructNew(self.type_manager.big_int_type));
+		Self::emit_list(func, &[
+			I::ArrayNewFixed { array_type_index: self.type_manager.limbs_type, array_size: limbs.len() as u32 },
+			I::StructNew(self.type_manager.big_int_type),
+		]);
 		self.emit_call(func, "int_box");
 	}
 
@@ -576,15 +564,14 @@ impl WasmGcEmitter {
 	/// Push the anyref payload for the Int in `local`
 	pub(crate) fn emit_int_payload(&self, func: &mut Function, local: u32) {
 		if !self.int_runtime() {
-			func.instruction(&I::LocalGet(local));
-			func.instruction(&I::StructNew(self.type_manager.i64_box_type));
+			Self::emit_list(func, &[I::LocalGet(local), I::StructNew(self.type_manager.i64_box_type)]);
 			return;
 		}
 		self.emit_fixnum_test(func, &[local]);
-		func.instruction(&I::If(BlockType::Result(Ref(RefType { nullable: true, heap_type: crate::type_kinds::any_heap_type() }))));
-		func.instruction(&I::LocalGet(local));
-		func.instruction(&I::StructNew(self.type_manager.i64_box_type));
-		func.instruction(&I::Else);
+		Self::emit_list(func, &[
+			I::If(BlockType::Result(Ref(RefType { nullable: true, heap_type: crate::type_kinds::any_heap_type() }))), I::LocalGet(local),
+			I::StructNew(self.type_manager.i64_box_type), I::Else,
+		]);
 		self.emit_heap_get(func, local);
 		func.instruction(&I::End);
 	}
@@ -599,19 +586,16 @@ impl WasmGcEmitter {
 		self.runtime_function("new_int", vec![ValType::I64], vec![node_ref], vec![], |s, f| {
 			s.emit_kind(f, crate::type_kinds::Kind::Int);
 			s.emit_int_payload(f, 0);
-			f.instruction(&I::RefNull(HeapType::Concrete(node_type)));
-			f.instruction(&I::StructNew(node_type));
+			Self::emit_list(f, &[I::RefNull(HeapType::Concrete(node_type)), I::StructNew(node_type)]);
 		});
 		self.export_runtime_function("new_int");
 	}
 
 	pub(super) fn emit_heap_get(&self, func: &mut Function, handle_local: u32) {
-		func.instruction(&I::GlobalGet(self.int_heap_global));
-		func.instruction(&I::LocalGet(handle_local));
-		func.instruction(&I::I64Const(HANDLE_BASE));
-		func.instruction(&I::I64Sub);
-		func.instruction(&I::I32WrapI64);
-		func.instruction(&I::ArrayGet(self.type_manager.big_heap_type));
+		Self::emit_list(func, &[
+			I::GlobalGet(self.int_heap_global), I::LocalGet(handle_local), I::I64Const(HANDLE_BASE), I::I64Sub, I::I32WrapI64,
+			I::ArrayGet(self.type_manager.big_heap_type),
+		]);
 	}
 
 	fn emit_heap_get_big(&self, func: &mut Function, handle_local: u32) {
@@ -625,8 +609,10 @@ impl WasmGcEmitter {
 			self.emit_call(func, "int_from_payload");
 			return;
 		}
-		func.instruction(&I::RefCastNonNull(HeapType::Concrete(self.type_manager.i64_box_type)));
-		func.instruction(&I::StructGet { struct_type_index: self.type_manager.i64_box_type, field_index: 0 });
+		Self::emit_list(func, &[
+			I::RefCastNonNull(HeapType::Concrete(self.type_manager.i64_box_type)),
+			I::StructGet { struct_type_index: self.type_manager.i64_box_type, field_index: 0 },
+		]);
 	}
 
 	// ═══════════════════════════════════════════════════════════════════════
@@ -638,8 +624,7 @@ impl WasmGcEmitter {
 	}
 
 	fn limbs_get(&self, func: &mut Function) {
-		func.instruction(&I::ArrayGet(self.type_manager.limbs_type));
-		func.instruction(&I::I64ExtendI32U);
+		Self::emit_list(func, &[I::ArrayGet(self.type_manager.limbs_type), I::I64ExtendI32U]);
 	}
 
 	fn limbs_set(&self, func: &mut Function) {
@@ -649,21 +634,16 @@ impl WasmGcEmitter {
 	/// Push limb `index_local` of `limbs_local` as u64, 0 past the end
 	fn limb_or_zero(&self, func: &mut Function, limbs_local: u32, index: Instruction) {
 		func.instruction(&index);
-		func.instruction(&I::LocalGet(limbs_local));
-		func.instruction(&I::ArrayLen);
-		func.instruction(&I::I32LtU);
-		func.instruction(&I::If(BlockType::Result(ValType::I64)));
-		func.instruction(&I::LocalGet(limbs_local));
+		Self::emit_list(func, &[
+			I::LocalGet(limbs_local), I::ArrayLen, I::I32LtU, I::If(BlockType::Result(ValType::I64)), I::LocalGet(limbs_local),
+		]);
 		func.instruction(&index);
 		self.limbs_get(func);
-		func.instruction(&I::Else);
-		func.instruction(&I::I64Const(0));
-		func.instruction(&I::End);
+		Self::emit_list(func, &[I::Else, I::I64Const(0), I::End]);
 	}
 
 	fn big_field(&self, func: &mut Function, local: u32, field_index: u32) {
-		func.instruction(&I::LocalGet(local));
-		func.instruction(&I::StructGet { struct_type_index: self.type_manager.big_int_type, field_index });
+		Self::emit_list(func, &[I::LocalGet(local), I::StructGet { struct_type_index: self.type_manager.big_int_type, field_index }]);
 	}
 
 	fn negative(&self, func: &mut Function, local: u32) {
@@ -676,39 +656,25 @@ impl WasmGcEmitter {
 
 	/// `local += delta` for an i32 local
 	fn increment(func: &mut Function, local: u32, delta: i32) {
-		func.instruction(&I::LocalGet(local));
-		func.instruction(&I::I32Const(delta));
-		func.instruction(&I::I32Add);
-		func.instruction(&I::LocalSet(local));
+		Self::emit_list(func, &[I::LocalGet(local), I::I32Const(delta), I::I32Add, I::LocalSet(local)]);
 	}
 
 	/// `loop { if counter >= bound break; body; counter++ }` with i32 locals
 	fn count_up(func: &mut Function, counter: u32, bound: u32, body: impl FnOnce(&mut Function)) {
-		func.instruction(&I::Block(BlockType::Empty));
-		func.instruction(&I::Loop(BlockType::Empty));
-		func.instruction(&I::LocalGet(counter));
-		func.instruction(&I::LocalGet(bound));
-		func.instruction(&I::I32GeU);
-		func.instruction(&I::BrIf(1));
+		Self::emit_list(func, &[
+			I::Block(BlockType::Empty), I::Loop(BlockType::Empty), I::LocalGet(counter), I::LocalGet(bound), I::I32GeU, I::BrIf(1),
+		]);
 		body(func);
 		Self::increment(func, counter, 1);
-		func.instruction(&I::Br(0));
-		func.instruction(&I::End);
-		func.instruction(&I::End);
+		Self::emit_list(func, &[I::Br(0), I::End, I::End]);
 	}
 
 	/// `loop { if counter == 0 break; counter--; body }` with an i32 local
 	fn count_down(func: &mut Function, counter: u32, body: impl FnOnce(&mut Function)) {
-		func.instruction(&I::Block(BlockType::Empty));
-		func.instruction(&I::Loop(BlockType::Empty));
-		func.instruction(&I::LocalGet(counter));
-		func.instruction(&I::I32Eqz);
-		func.instruction(&I::BrIf(1));
+		Self::emit_list(func, &[I::Block(BlockType::Empty), I::Loop(BlockType::Empty), I::LocalGet(counter), I::I32Eqz, I::BrIf(1)]);
 		Self::increment(func, counter, -1);
 		body(func);
-		func.instruction(&I::Br(0));
-		func.instruction(&I::End);
-		func.instruction(&I::End);
+		Self::emit_list(func, &[I::Br(0), I::End, I::End]);
 	}
 
 	pub(crate) fn emit_int_runtime(&mut self) {
@@ -1144,8 +1110,7 @@ impl WasmGcEmitter {
 		self.runtime_function("int_abs_slow", vec![i64t], vec![i64t], vec![big], |s, f| {
 			f.instruction(&I::LocalGet(0));
 			s.call(f, "int_unbox");
-			f.instruction(&I::LocalSet(1));
-			f.instruction(&I::I32Const(0));
+			Self::emit_list(f, &[I::LocalSet(1), I::I32Const(0)]);
 			s.magnitude(f, 1);
 			f.instruction(&I::StructNew(big_type));
 			s.call(f, "int_box");

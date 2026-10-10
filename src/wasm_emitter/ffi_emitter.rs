@@ -179,43 +179,11 @@ impl WasmGcEmitter {
 			self.emit_text_field(func, text, 1);
 			return;
 		}
-		match node.drop_meta() {
-			Node::Char(c) => {
-				let (ptr, len) = self.allocate_string(&c.to_string());
-				func.instruction(&I::I32Const(ptr as i32));
-				func.instruction(&I::I32Const(len as i32));
-			}
-			Node::Text(s) => {
-				let (ptr, len) = self.allocate_string(s);
-				func.instruction(&I::I32Const(ptr as i32));
-				func.instruction(&I::I32Const(len as i32));
-			}
-			Node::Symbol(name) => {
-				if let Some(local) = self.scope.lookup(name) {
-					if local.data_pointer > 0 {
-						func.instruction(&I::I32Const(local.data_pointer as i32));
-						func.instruction(&I::I32Const(local.data_length as i32));
-					} else {
-						// Fallback: use symbol name
-						let (ptr, len) = self.allocate_string(name);
-						func.instruction(&I::I32Const(ptr as i32));
-						func.instruction(&I::I32Const(len as i32));
-					}
-				} else {
-					// Unknown symbol - use name as string
-					let (ptr, len) = self.allocate_string(name);
-					func.instruction(&I::I32Const(ptr as i32));
-					func.instruction(&I::I32Const(len as i32));
-				}
-			}
-			_ => {
-				// For other nodes, try to get a string representation
-				let s = node.to_string();
-				let (ptr, len) = self.allocate_string(&s);
-				func.instruction(&I::I32Const(ptr as i32));
-				func.instruction(&I::I32Const(len as i32));
-			}
-		}
+		let (pointer, length) = match self.compile_time_string(node) {
+			CompileTimeString::Stored(pointer, length) => (pointer, length),
+			CompileTimeString::Spelled(text) => self.allocate_string(&text),
+		};
+		Self::emit_list(func, &[I::I32Const(pointer as i32), I::I32Const(length as i32)]);
 	}
 
 	/// Emit only string pointer for C-style FFI calls (null-terminated strings)
@@ -225,41 +193,23 @@ impl WasmGcEmitter {
 			self.emit_call(func, super::text_builtins::C_STRING);
 			return;
 		}
+		let pointer = match self.compile_time_string(node) {
+			CompileTimeString::Stored(pointer, _) => pointer,
+			CompileTimeString::Spelled(text) => self.allocate_string(&format!("{text}\0")).0,
+		};
+		func.instruction(&I::I32Const(pointer as i32));
+	}
+
+	/// The bytes of a string local, else the text a character, text, symbol or other node spells
+	fn compile_time_string(&self, node: &Node) -> CompileTimeString {
 		match node.drop_meta() {
-			Node::Char(c) => {
-				let (ptr, _) = self.allocate_string(&format!("{c}\0"));
-				func.instruction(&I::I32Const(ptr as i32));
-			}
-			Node::Text(s) => {
-				// Add null terminator for C string
-				let c_str = format!("{}\0", s);
-				let (ptr, _) = self.allocate_string(&c_str);
-				func.instruction(&I::I32Const(ptr as i32));
-			}
-			Node::Symbol(name) => {
-				if let Some(local) = self.scope.lookup(name) {
-					if local.data_pointer > 0 {
-						func.instruction(&I::I32Const(local.data_pointer as i32));
-					} else {
-						// Fallback: use symbol name with null terminator
-						let c_str = format!("{}\0", name);
-						let (ptr, _) = self.allocate_string(&c_str);
-						func.instruction(&I::I32Const(ptr as i32));
-					}
-				} else {
-					// Unknown symbol - use name as string
-					let c_str = format!("{}\0", name);
-					let (ptr, _) = self.allocate_string(&c_str);
-					func.instruction(&I::I32Const(ptr as i32));
-				}
-			}
-			_ => {
-				// For other nodes, try to get a string representation
-				let s = node.to_string();
-				let c_str = format!("{}\0", s);
-				let (ptr, _) = self.allocate_string(&c_str);
-				func.instruction(&I::I32Const(ptr as i32));
-			}
+			Node::Char(c) => CompileTimeString::Spelled(c.to_string()),
+			Node::Text(text) => CompileTimeString::Spelled(text.clone()),
+			Node::Symbol(name) => match self.scope.lookup(name) {
+				Some(local) if local.data_pointer > 0 => CompileTimeString::Stored(local.data_pointer, local.data_length),
+				_ => CompileTimeString::Spelled(name.clone()),
+			},
+			_ => CompileTimeString::Spelled(node.to_string()),
 		}
 	}
 
@@ -279,4 +229,12 @@ impl WasmGcEmitter {
 		func.instruction(&I::End);
 		true
 	}
+}
+
+/// A string argument known at compile time
+enum CompileTimeString {
+	/// pointer and length of bytes already in linear memory
+	Stored(u32, u32),
+	/// a text still to be allocated
+	Spelled(String),
 }

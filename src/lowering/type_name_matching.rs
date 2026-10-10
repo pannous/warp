@@ -2,8 +2,9 @@
 //! `fib int i = …` → `fib(i:int) := …`, `fibonacci number = …` → `fibonacci(number:number) := …`,
 //! `foo of int = it+it` → `foo(it:int) := …`; the `to` phrase `to square a number:` shares `parameter_slots`.
 
+use super::nodes::{call, is_call_head, key, spaced_statement};
 use crate::analyzer::type_word_kind;
-use crate::node::{Bracket, Node, Separator};
+use crate::node::{symbol, Bracket, Node, Separator};
 use crate::operators::Op;
 
 const ARTICLES: [&str; 3] = ["a", "an", "the"];
@@ -21,19 +22,12 @@ pub(crate) fn names_a_function(name: &str) -> bool {
 		&& !crate::analyzer::CONSTANT_KEYWORDS.contains(&name) && !crate::operators::FUNCTION_KEYWORDS.contains(&name)
 }
 
-fn word(node: &Node) -> Option<&str> {
-	match node.drop_meta() {
-		Node::Symbol(name) => Some(name),
-		_ => None,
-	}
-}
-
 fn is_type_word(word: &str) -> bool {
 	type_word_kind(word).is_some()
 }
 
 fn typed(name: &str, type_name: &str) -> Node {
-	Node::Key(Box::new(Node::Symbol(name.to_string())), Op::Colon, Box::new(Node::Symbol(type_name.to_string())))
+	key(symbol(name), Op::Colon, symbol(type_name))
 }
 
 /// Which head words are prepositions
@@ -81,13 +75,13 @@ pub fn parameter_slots(words: &[&str], body: &Node, is_known_type: &dyn Fn(&str)
 		} else if ARTICLES.contains(&word) && next.is_some_and(|next| is_known_type(next) || !uses_name(body, word)) {
 			let noun: Vec<&str> = (index + 1..words.len()).take_while(|later| !ends_slot(*later) && !ARTICLES.contains(&words[*later])).map(|later| words[later]).collect();
 			let head = noun[noun.len() - 1];
-			parameters.push(if is_known_type(head) { typed(head, head) } else { Node::Symbol(head.to_string()) });
+			parameters.push(if is_known_type(head) { typed(head, head) } else { symbol(head) });
 			index += 1 + noun.len();
 		} else if is_known_type(word) && next.is_some_and(|next| is_name(next) && (!ARTICLES.contains(&next) || ends_slot(index + 2))) {
 			parameters.push(typed(next.unwrap_or_default(), word));
 			index += 2;
 		} else {
-			parameters.push(if is_known_type(word) { typed(word, word) } else { Node::Symbol(word.to_string()) });
+			parameters.push(if is_known_type(word) { typed(word, word) } else { symbol(word) });
 			index += 1;
 		}
 	}
@@ -164,30 +158,23 @@ pub fn spaced_parameters(words: &[&str], body: &Node) -> Option<Result<(Vec<Node
 
 /// The statement `name words… last = body` (parsed as the items `name`, `words…`, `last=body`) as `name(params) := body`
 fn spaced_definition(items: &[Node]) -> Option<Node> {
-	let (name, rest) = items.split_first()?;
-	let (last, middle) = rest.split_last()?;
-	let name = word(name).filter(|name| names_a_function(name))?;
-	let Node::Key(last_word, Op::Assign | Op::Define, body) = last.drop_meta() else { return None };
-	let words: Vec<&str> = middle.iter().chain(std::iter::once(last_word.as_ref())).map(word).collect::<Option<_>>()?;
+	let (name, words, body) = spaced_statement(items)?;
+	let name = name.symbol_name().filter(|name| names_a_function(name))?;
 	let (parameters, body) = match spaced_parameters(&words, body)? {
 		Ok(slots) => slots,
 		Err(message) => return Some(crate::node::error(&message)),
 	};
-	let head = Node::List([vec![Node::Symbol(name.to_string())], parameters].concat(), Bracket::Round, Separator::None);
-	Some(Node::Key(Box::new(head), Op::Define, Box::new(body)))
+	let head = call(name, parameters);
+	Some(key(head, Op::Define, body))
 }
 
 /// A function head `name(params)`, as a call
-fn is_call_head(head: &Node) -> bool {
-	matches!(head.drop_meta(), Node::List(items, Bracket::Round, _) if matches!(items.first().map(Node::drop_meta), Some(Node::Symbol(_))))
-}
-
 /// A definition with a declared return type, as the definition whose body converts its result to that type:
 /// `int square(x) = x*x` (items `int`, `square(x) = …`), `square(x) as int := …` and `square(x) : int = …` (also after
 /// `def`) → `square(x) := (x*x) as int`
 fn typed_return(type_name: &Node, definition: &Node) -> Option<Node> {
 	// `function square(n){…}` names no return type: a definition keyword is no type word here
-	word(type_name).filter(|word| is_type_word(word) && !crate::operators::FUNCTION_KEYWORDS.contains(word))?;
+	type_name.symbol_name().filter(|word| is_type_word(word) && !crate::operators::FUNCTION_KEYWORDS.contains(word))?;
 	let type_name = type_name.drop_meta();
 	match definition.drop_meta() {
 		Node::Key(head, op @ (Op::Assign | Op::Define), body) if is_call_head(head) => {
@@ -196,7 +183,7 @@ fn typed_return(type_name: &Node, definition: &Node) -> Option<Node> {
 		// `int half(x){ … }`: the signature glued to its block. Without the type word `half(x){…}` stays no definition
 		// (`if(c){…}` has the same shape); with it the definition is unambiguous: `half(x) := {…}`
 		Node::List(items, Bracket::Round, _) if matches!(items.as_slice(), [head, body] if is_call_head(head) && is_block(body)) => {
-			Some(Node::Key(Box::new(flat_head(&items[0])), Op::Define, Box::new(converted(&items[1], type_name))))
+			Some(key(flat_head(&items[0]), Op::Define, converted(&items[1], type_name)))
 		}
 		_ => None,
 	}
@@ -224,13 +211,13 @@ fn as_type(value: Node, type_name: &Node) -> Node {
 		Node::Key(_, op, _) if op.is_arithmetic() => Node::List(vec![value], Bracket::Round, Separator::None),
 		_ => value,
 	};
-	Node::Key(Box::new(value), Op::As, Box::new(type_name.clone()))
+	key(value, Op::As, type_name.clone())
 }
 
 const RETURN: &str = "return";
 
 fn is_return(node: &Node) -> bool {
-	matches!(node.drop_meta(), Node::List(items, _, _) if items.len() == 2 && word(&items[0]) == Some(RETURN))
+	matches!(node.drop_meta(), Node::List(items, _, _) if items.len() == 2 && items[0].symbol_name() == Some(RETURN))
 }
 
 /// The body with every value it gives back converted: each `return e` and the last statement of a block
@@ -249,7 +236,7 @@ fn converted(body: &Node, type_name: &Node) -> Node {
 
 fn converted_returns(node: Node, type_name: &Node) -> Node {
 	match node {
-		Node::List(mut items, bracket, separator) if items.len() == 2 && word(&items[0]) == Some(RETURN) => {
+		Node::List(mut items, bracket, separator) if items.len() == 2 && items[0].symbol_name() == Some(RETURN) => {
 			let value = items.pop().expect("two items");
 			items.push(as_type(value, type_name));
 			Node::List(items, bracket, separator)

@@ -1,3 +1,4 @@
+#!/usr/bin/env warp
 // Sieve of Eratosthenes, then binary search over the primes found
 
 fun sieve(limit) {

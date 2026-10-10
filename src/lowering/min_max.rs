@@ -2,6 +2,7 @@
 //! share the arithmetic emitters. Arguments beyond plain values and arithmetic are computed once into temporaries.
 //! One list argument is the list of candidates: `max([1 5 2])`; a list variable `max(xs)` is folded at runtime.
 
+use super::nodes::key;
 use crate::analyzer::{call_name, extract_user_functions};
 use crate::context::Context;
 use crate::diagnostic::Diagnostic;
@@ -51,7 +52,7 @@ impl Lowering<'_> {
 				let (name, arguments) = self.extremum_method(&method).expect("guarded");
 				self.expand(Node::List([vec![name, *receiver], arguments].concat(), Bracket::Round, Separator::None))
 			}
-			Node::Key(left, op, right) => Node::Key(Box::new(self.expand(*left)), op, Box::new(self.expand(*right))),
+			Node::Key(left, op, right) => key(self.expand(*left), op, self.expand(*right)),
 			Node::Meta { node, data } => Node::Meta { node: Box::new(self.expand(*node)), data },
 			other => other,
 		}
@@ -80,7 +81,7 @@ impl Lowering<'_> {
 				value if is_plain(value) => Diagnostic::at(&items[0], format!("{name} takes at least {MIN_ARGUMENTS} arguments or one list, got 1")).into_error(),
 				_ => {
 					let temporary = Node::Symbol(self.temporary());
-					let binding = Node::Key(Box::new(temporary.clone()), Op::Assign, Box::new(list.clone()));
+					let binding = key(temporary.clone(), Op::Assign, list.clone());
 					with_bindings(vec![binding], self.fold_list_at_runtime(name, &temporary, &better))
 				}
 			});
@@ -95,9 +96,9 @@ impl Lowering<'_> {
 			if matches!(best.drop_meta(), Node::Key(_, Op::Question, _)) {
 				best = self.bind(&mut bindings, best);
 			}
-			let comparison = Node::Key(Box::new(best.clone()), better, Box::new(next.clone()));
-			let branches = Node::Key(Box::new(best), Op::Colon, Box::new(next.clone()));
-			best = Node::Key(Box::new(comparison), Op::Question, Box::new(branches));
+			let comparison = key(best.clone(), better, next.clone());
+			let branches = key(best, Op::Colon, next.clone());
+			best = key(comparison, Op::Question, branches);
 		}
 		Some(with_bindings(bindings, best))
 	}
@@ -105,7 +106,7 @@ impl Lowering<'_> {
 	/// `temporary = value` appended to the bindings; the temporary stands for the value
 	fn bind(&mut self, bindings: &mut Vec<Node>, value: Node) -> Node {
 		let temporary = Node::Symbol(self.temporary());
-		bindings.push(Node::Key(Box::new(temporary.clone()), Op::Assign, Box::new(value)));
+		bindings.push(key(temporary.clone(), Op::Assign, value));
 		temporary
 	}
 

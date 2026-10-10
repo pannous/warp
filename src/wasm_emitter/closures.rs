@@ -236,13 +236,8 @@ impl WasmGcEmitter {
 				s.emit_nested_captures_restored(func, &target);
 				for (index, param) in function.params.iter().enumerate() {
 					if index < captured {
-						// the index-th value of the captured list: data of the index-th cons cell
 						func.instruction(&I::LocalGet(0));
-						for _ in 0..index {
-							func.instruction(&I::StructGet { struct_type_index: s.type_manager.node_type, field_index: NODE_VALUE_FIELD });
-						}
-						func.instruction(&I::StructGet { struct_type_index: s.type_manager.node_type, field_index: NODE_DATA_FIELD });
-						func.instruction(&I::RefCastNonNull(HeapType::Concrete(s.type_manager.node_type)));
+						s.emit_nth_cell_data(func, index);
 					} else if typed {
 						func.instruction(&I::LocalGet((1 + index - captured) as u32)); // an i64 or f64 already
 						continue;
@@ -278,6 +273,16 @@ impl WasmGcEmitter {
 		}).collect()
 	}
 
+	/// The cons list on the stack → its `index`-th (0-based) item: the data of that cell
+	fn emit_nth_cell_data(&self, func: &mut Function, index: usize) {
+		let node_type = self.type_manager.node_type;
+		for _ in 0..index {
+			func.instruction(&I::StructGet { struct_type_index: node_type, field_index: NODE_VALUE_FIELD });
+		}
+		func.instruction(&I::StructGet { struct_type_index: node_type, field_index: NODE_DATA_FIELD });
+		func.instruction(&I::RefCastNonNull(HeapType::Concrete(node_type)));
+	}
+
 	/// The entry of a nested function's closure: its capture globals set from the closure's captured values first
 	fn emit_nested_captures_restored(&mut self, func: &mut Function, target: &str) {
 		if !self.ctx.enclosing_functions.contains_key(target) {
@@ -286,11 +291,7 @@ impl WasmGcEmitter {
 		let captures = self.ctx.captures.get(target).cloned().unwrap_or_default();
 		for (index, (_, (global, kind))) in captures.into_iter().enumerate() {
 			func.instruction(&I::LocalGet(0));
-			for _ in 0..index {
-				func.instruction(&I::StructGet { struct_type_index: self.type_manager.node_type, field_index: NODE_VALUE_FIELD });
-			}
-			func.instruction(&I::StructGet { struct_type_index: self.type_manager.node_type, field_index: NODE_DATA_FIELD });
-			func.instruction(&I::RefCastNonNull(HeapType::Concrete(self.type_manager.node_type)));
+			self.emit_nth_cell_data(func, index);
 			self.emit_node_as_kind(func, kind);
 			func.instruction(&I::GlobalSet(global));
 		}
@@ -430,11 +431,7 @@ impl WasmGcEmitter {
 			func.instruction(&I::StructGet { struct_type_index: node_type, field_index: NODE_DATA_FIELD });
 			func.instruction(&I::RefCastNonNull(HeapType::Concrete(closure)));
 			func.instruction(&I::StructGet { struct_type_index: closure, field_index: CAPTURED_FIELD });
-			for _ in 0..position {
-				func.instruction(&I::StructGet { struct_type_index: node_type, field_index: NODE_VALUE_FIELD });
-			}
-			func.instruction(&I::StructGet { struct_type_index: node_type, field_index: NODE_DATA_FIELD });
-			func.instruction(&I::RefCastNonNull(HeapType::Concrete(node_type)));
+			s.emit_nth_cell_data(func, position);
 			s.emit_node_as_kind(func, reader.return_kind);
 		});
 		self.exports.export(name, ExportKind::Func, reader.func_index.expect("registered in pass 1"));

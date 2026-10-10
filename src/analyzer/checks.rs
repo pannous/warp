@@ -252,7 +252,7 @@ pub fn list_type_name(list: &Node, scope: &Scope) -> String {
 			let type_name = scope.binding(name).and_then(|local| local.type_node.as_ref()).map(|type_node| type_node.name());
 			match type_name {
 				Some(word) => match plural_element_type(&word) {
-					Some(element) => format!("{PLAIN} of {element}"),
+					Some(element) => format!("{LIST_OF_PREFIX}{element}"),
 					None if word.starts_with(PLAIN) || word.starts_with(MAP_TYPE) => word,
 					None => PLAIN.to_string(),
 				},
@@ -268,37 +268,35 @@ pub fn list_type_name(list: &Node, scope: &Scope) -> String {
 		// a block `(out = ø; for …; out)` is worth its last value
 		Node::List(items, Bracket::Round | Bracket::Curly, Separator::Semicolon | Separator::Newline) if !items.is_empty() => list_type_name(&items[items.len() - 1], scope),
 		// `zero_fill(count, zero)`: a list of the zero's type
-		Node::List(items, _, _) if matches!(items.as_slice(), [call, _, _] if call.is_symbol(ZERO_FILL_CALL)) => {
-			format!("{PLAIN} of {}", element_type_word(&items[2], scope))
+		Node::List(items, _, _) if let [call, _, zero] = items.as_slice() && call.is_symbol(ZERO_FILL_CALL) => {
+			format!("{LIST_OF_PREFIX}{}", element_type_word(zero, scope))
 		}
-		Node::List(items, Bracket::Round, _) if items.len() == 2 && map_word(&items[0]).is_some() => {
+		Node::List(items, Bracket::Round, _) if let [call, _] = items.as_slice() && let Some(word) = map_word(call) => {
 			use crate::library_words::{MAP_ENTRIES, MAP_KEYS};
-			match map_word(&items[0]) {
-				Some(MAP_KEYS) => format!("{PLAIN} of text"), // the keys of a map are read as texts
-				Some(MAP_ENTRIES) => list_type_name(&items[1], scope),
+			match word {
+				MAP_KEYS => format!("{LIST_OF_PREFIX}text"), // the keys of a map are read as texts
+				MAP_ENTRIES => list_type_name(&items[1], scope),
 				// the values of a map of known values; of anything else (a pair `a: {b: 8}`) Nodes of any type
 				_ => match list_type_name(&items[1], scope) {
-					map if map.starts_with(MAP_TYPE) => map.replacen(MAP_TYPE_PREFIX, &format!("{PLAIN} of "), 1),
+					map if map.starts_with(MAP_TYPE) => map.replacen(MAP_TYPE_PREFIX, LIST_OF_PREFIX, 1),
 					_ => NODE_LIST_TYPE.to_string(),
 				},
 			}
 		}
 		// `sort(xs)`, `reverse(xs)`: the same elements
-		Node::List(items, Bracket::Round, Separator::None) if items.len() == 2 && matches!(items[0].drop_meta(), Node::Symbol(word) if ORDER_WORDS.contains(&word.as_str())) => {
-			list_type_name(&items[1], scope)
+		Node::List(items, Bracket::Round, Separator::None) if let [order, listed] = items.as_slice()
+			&& order.symbol_name().is_some_and(|word| ORDER_WORDS.contains(&word)) => list_type_name(listed, scope),
+		Node::List(items, Bracket::Round, Separator::None) if let Some(word) = items.first().and_then(Node::symbol_name) => {
+			// `split(t, sep)`, `chars(t)`: texts
+			if TEXT_LIST_WORDS.contains(&word) {
+				format!("{LIST_OF_PREFIX}text")
+			} else {
+				// the result of a call `f(x)` (no list literal of `f` and `x`): its elements are held as Nodes, of any type
+				NODE_LIST_TYPE.to_string()
+			}
 		}
-		// `split(t, sep)`, `chars(t)`: texts
-		Node::List(items, Bracket::Round, Separator::None) if matches!(items.first().map(Node::drop_meta), Some(Node::Symbol(word)) if TEXT_LIST_WORDS.contains(&word.as_str())) => {
-			format!("{PLAIN} of text")
-		}
-		// the result of a call `f(x)` (no list literal of `f` and `x`): its elements are held as Nodes, of any type
-		Node::List(items, Bracket::Round, Separator::None) if matches!(items.first().map(Node::drop_meta), Some(Node::Symbol(_))) => NODE_LIST_TYPE.to_string(),
 		// a `{key:value …}` map, `map of int` when all its values are ints
 		Node::List(entries, Bracket::Curly, _) if !entries.is_empty() && entries.iter().all(|entry| matches!(entry.drop_meta(), Node::Key(_, Op::Colon, _))) => {
-			let value_word = |value: &Node| match infer_type(value, scope) {
-				Kind::List => list_type_name(value, scope),
-				_ => element_type_word(value, scope),
-			};
 			let values: Vec<&Node> = entries.iter().filter_map(|entry| match entry.drop_meta() {
 				Node::Key(_, _, value) => Some(value.as_ref()),
 				_ => None,
@@ -306,7 +304,7 @@ pub fn list_type_name(list: &Node, scope: &Scope) -> String {
 			// an empty `[]` fits any type of list: `{A:[["B", 4]], B:[]}` is a `map of list of list`
 			let is_empty_list = |value: &&Node| matches!(value.drop_meta(), Node::Empty) || matches!(value.drop_meta(), Node::List(items, Bracket::Square, _) if items.is_empty());
 			let typed: Vec<&Node> = values.iter().copied().filter(|value| !is_empty_list(value)).collect();
-			let words: Vec<String> = if typed.is_empty() { &values } else { &typed }.iter().map(|value| value_word(value)).collect();
+			let words: Vec<String> = if typed.is_empty() { &values } else { &typed }.iter().map(|value| nested_type_word(value, scope)).collect();
 			let is_list_map = typed.len() < values.len() && words.iter().all(|word| word.starts_with(PLAIN));
 			match common_type_word(&words) {
 				Some(word) if is_list_map || typed.len() == values.len() => format!("{MAP_TYPE_PREFIX}{word}"),
@@ -335,21 +333,25 @@ pub fn list_type_name(list: &Node, scope: &Scope) -> String {
 			}
 		}
 		Node::List(items, _, separator) => {
-			// an item that is a list keeps its own element type: `[(0, 1), (1, 2)]` is a `list of list of int`
-			let item_word = |item: &Node| match infer_type(item, scope) {
-				Kind::List => list_type_name(item, scope),
-				_ => element_type_word(item, scope),
-			};
-			let words: Vec<String> = items.iter().map(item_word).collect();
+			let words: Vec<String> = items.iter().map(|item| nested_type_word(item, scope)).collect();
 			let is_block = matches!(separator, Separator::Semicolon | Separator::Newline);
 			match common_type_word(&words) {
-				Some(word) => format!("{PLAIN} of {word}"),
+				Some(word) => format!("{LIST_OF_PREFIX}{word}"),
 				// `[1 "a"]`: elements of different kinds, each held as its Node
 				None if !words.is_empty() && !is_block => NODE_LIST_TYPE.to_string(),
 				None => PLAIN.to_string(),
 			}
 		}
 		_ => PLAIN.to_string(),
+	}
+}
+
+/// The type word of an element: an item that is a list keeps its own element type, `[(0, 1), (1, 2)]` is a
+/// `list of list of int`
+fn nested_type_word(item: &Node, scope: &Scope) -> String {
+	match infer_type(item, scope) {
+		Kind::List => list_type_name(item, scope),
+		_ => element_type_word(item, scope),
 	}
 }
 
@@ -638,7 +640,7 @@ pub(super) fn uses_it_outside_loops(node: &Node) -> bool {
 	match node.drop_meta() {
 		Node::Symbol(word) => word == "it",
 		Node::Key(left, _, right) => uses_it_outside_loops(left) || uses_it_outside_loops(right),
-		Node::List(items, _, _) if it_loop(items).is_some() => it_loop(items).is_some_and(|(iterable, _)| uses_it_outside_loops(iterable)),
+		Node::List(items, _, _) if let Some((iterable, _)) = it_loop(items) => uses_it_outside_loops(iterable),
 		Node::List(items, _, _) => items.iter().any(uses_it_outside_loops),
 		_ => false,
 	}
@@ -805,8 +807,7 @@ fn literal_object_fields(program: &Node) -> HashMap<String, HashSet<String>> {
 
 fn subtract_kebab_members(node: Node, variables: &HashSet<String>, objects: &HashMap<String, HashSet<String>>) -> Node {
 	match node {
-		Node::Key(receiver, Op::Dot, member) if kebab_member(&receiver, &member, variables, objects).is_some() => {
-			let (field, rest) = kebab_member(&receiver, &member, variables, objects).expect("guarded");
+		Node::Key(receiver, Op::Dot, member) if let Some((field, rest)) = kebab_member(&receiver, &member, variables, objects) => {
 			let read = Node::Key(receiver, Op::Dot, Box::new(Node::Symbol(field)));
 			rest.into_iter().fold(read, |difference, term| Node::Key(Box::new(difference), Op::Sub, Box::new(Node::Symbol(term))))
 		}
@@ -1084,13 +1085,11 @@ pub(super) fn check_null_use(node: &Node, nullable: &mut HashMap<String, Uncheck
 	match node.drop_meta() {
 		Node::Key(target, Op::Assign | Op::Define, value) => {
 			// `out = out + xs` building a list from ø, the empty list: a concatenation, no use of a null
-			let builds_list = matches!(value.drop_meta(), Node::Key(left, Op::Add, _) if left.drop_meta() == target.drop_meta()
-				&& nullable.get(&target.name()) == Some(&Unchecked::Null));
-			let found = if builds_list {
-				let Node::Key(_, _, right) = value.drop_meta() else { unreachable!("guarded") };
-				check_null_use(right, nullable)
-			} else {
-				check_null_use(value, nullable)
+			let found = match value.drop_meta() {
+				Node::Key(left, Op::Add, right) if left.drop_meta() == target.drop_meta() && nullable.get(&target.name()) == Some(&Unchecked::Null) => {
+					check_null_use(right, nullable)
+				}
+				_ => check_null_use(value, nullable),
 			};
 			let target = match target.drop_meta() {
 				Node::Key(name, Op::Colon, _) => &**name, // x:int?=ø

@@ -84,7 +84,7 @@ impl WarpParser {
 		self.advance_by(":=".len());
 		let body = self.parse_expr(0);
 		let parameters = match kind {
-			UserOperatorKind::Infix if declared_parameters.is_some() => match declared_parameters.expect("guarded").drop_meta() {
+			UserOperatorKind::Infix if let Some(declared) = declared_parameters => match declared.drop_meta() {
 				Node::List(items, Bracket::Round, _) => items.clone(),
 				one => vec![one.clone()],
 			},

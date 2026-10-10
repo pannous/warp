@@ -1031,14 +1031,20 @@ impl Exporter {
 		match body.drop_meta() {
 			// `{emit too big{value: x}}`: the words of one statement
 			Node::List(items, Bracket::Curly, Separator::Space) if items.len() > 1 => self.expression(&Node::List(items.clone(), Bracket::None, Separator::Space)),
-			Node::List(items, Bracket::Curly, _) if !items.is_empty() => {
-				let statements: Result<Vec<String>, String> = items.iter().map(|item| self.expression(item)).collect();
-				let mut statements = statements?;
-				let last = statements.pop().expect("a statement");
-				Ok(statements.iter().rev().fold(last, |rest, statement| format!(".seq ({statement}) ({rest})")))
-			}
+			Node::List(items, Bracket::Curly, _) if !items.is_empty() => self.sequence(items),
 			_ => self.expression(body),
 		}
+	}
+
+	/// Statements, at least one, in order: `.seq (a) (.seq (b) (c))`
+	fn sequence(&mut self, statements: &[Node]) -> Lean {
+		let mut statements = self.expressions(statements)?;
+		let last = statements.pop().expect("a statement");
+		Ok(statements.iter().rev().fold(last, |rest, statement| format!(".seq ({statement}) ({rest})")))
+	}
+
+	fn expressions(&mut self, items: &[Node]) -> Result<Vec<String>, String> {
+		items.iter().map(|item| self.expression(item)).collect()
 	}
 
 	fn assignment(&mut self, name: &str, value: &Node) -> Lean {
@@ -1196,17 +1202,11 @@ impl Exporter {
 			Node::Symbol(name) if crate::units::is_unit(name) => Ok(quantity_literal(name)),
 			_ if map_entries(node).is_some() && self.classes.contains_key(MAP_CLASS) => self.instance(MAP_CLASS, map_entries(node).expect("a map")),
 			Node::List(items, Bracket::Square, _) => {
-				let elements: Result<Vec<String>, String> = items.iter().map(|item| self.expression(item)).collect();
-				Ok(elements?.iter().rev().fold(".nil".to_string(), |tail, head| format!(".cons ({head}) ({tail})")))
+				Ok(self.expressions(items)?.iter().rev().fold(".nil".to_string(), |tail, head| format!(".cons ({head}) ({tail})")))
 			}
 			Node::List(items, Bracket::Round, _) if items.len() == 1 => self.expression(&items[0]),
 			Node::List(items, Bracket::Curly, _) if !items.is_empty() => self.block(node),
-			Node::List(items, Bracket::None, Separator::Semicolon | Separator::Newline) if items.len() > 1 => {
-				let statements: Result<Vec<String>, String> = items.iter().map(|item| self.expression(item)).collect();
-				let mut statements = statements?;
-				let last = statements.pop().expect("more than one statement");
-				Ok(statements.iter().rev().fold(last, |rest, statement| format!(".seq ({statement}) ({rest})")))
-			}
+			Node::List(items, Bracket::None, Separator::Semicolon | Separator::Newline) if items.len() > 1 => self.sequence(items),
 			_ if effect(node).is_some() => self.effect(effect(node).expect("an effect")),
 			Node::Symbol(word) if word == BREAK_KEYWORD => self.abort(None),
 			// `global y` in a function only declares: the name is main-level and assignable there
@@ -1383,28 +1383,30 @@ fn ask_model(name: &str, requests: &str) -> Result<String, String> {
 
 /// Builds the model (`lake build` fails on any proof error) and returns its verdict for each exported program
 pub fn verdicts(exported: &[String]) -> Result<Vec<ModelVerdict>, String> {
-	let requests: String = exported.iter().map(|items| format!("#eval IO.println (verdict {items})\n")).collect();
-	let output = ask_model("verdicts", &requests)?;
-	let lines: Vec<&str> = output.lines().filter(|line| line.starts_with(ACCEPTED_PREFIX) || *line == REJECTED).collect();
-	if lines.len() != exported.len() {
-		return Err(format!("the model answered {} of {} programs:\n{output}", lines.len(), exported.len()));
+	let requests = exported.iter().map(|items| format!("verdict {items}")).collect();
+	ask_each("verdicts", requests, "programs", |line| match line.strip_prefix(ACCEPTED_PREFIX) {
+		Some(type_name) => Some(ModelVerdict::Accepted(type_name.to_string())),
+		None => (line == REJECTED).then_some(ModelVerdict::Rejected),
+	})
+}
+
+/// One `#eval IO.println (<request>)` per request; the answers are the output lines `answer` reads, one per request
+fn ask_each<T>(name: &str, requests: Vec<String>, what: &str, answer: impl Fn(&str) -> Option<T>) -> Result<Vec<T>, String> {
+	let evaluations: String = requests.iter().map(|request| format!("#eval IO.println ({request})\n")).collect();
+	let output = ask_model(name, &evaluations)?;
+	let answers: Vec<T> = output.lines().filter_map(answer).collect();
+	if answers.len() != requests.len() {
+		return Err(format!("the model answered {} of {} {what}:\n{output}", answers.len(), requests.len()));
 	}
-	Ok(lines.iter().map(|line| match line.strip_prefix(ACCEPTED_PREFIX) {
-		Some(type_name) => ModelVerdict::Accepted(type_name.to_string()),
-		None => ModelVerdict::Rejected,
-	}).collect())
+	Ok(answers)
 }
 
 /// Where warp's run-time admission of a value to a builtin type (analyzer admits) differs from W0's `Ty.sub`, for
 /// every type word and W0 scalar value type: "word ← value type: warp admits / W0 sub"
 pub fn admits_disagreements() -> Result<Vec<String>, String> {
 	let pairs: Vec<(&str, &str, Kind)> = BUILTIN_TYPE_WORDS.iter().flat_map(|word| VALUE_KINDS.iter().map(move |(value, kind)| (*word, *value, *kind))).collect();
-	let requests: String = pairs.iter().map(|(word, value, _)| format!("#eval IO.println (Ty.sub ({value}) ({}))\n", type_of_word(word).expect("a W0 type word"))).collect();
-	let output = ask_model("admits", &requests)?;
-	let answers: Vec<bool> = output.lines().filter_map(|line| line.parse().ok()).collect();
-	if answers.len() != pairs.len() {
-		return Err(format!("the model answered {} of {} pairs:\n{output}", answers.len(), pairs.len()));
-	}
+	let requests = pairs.iter().map(|(word, value, _)| format!("Ty.sub ({value}) ({})", type_of_word(word).expect("a W0 type word"))).collect();
+	let answers: Vec<bool> = ask_each("admits", requests, "pairs", |line| line.parse().ok())?;
 	Ok(pairs.iter().zip(answers).filter_map(|((word, value, kind), sub)| {
 		let admits = crate::analyzer::admits(word, *kind);
 		(admits != sub).then(|| format!("{word} ← {value}: warp admits {admits} / W0 sub {sub}"))
@@ -1414,13 +1416,8 @@ pub fn admits_disagreements() -> Result<Vec<String>, String> {
 /// What each exported program gives when the model runs it: `rejected`, `error`, a value as warp prints it, or `?`
 /// where the model does not keep the value (numbers other than ints, instances)
 pub fn outcomes(exported: &[String]) -> Result<Vec<String>, String> {
-	let requests: String = exported.iter().map(|items| format!("#eval IO.println (outcome {items})\n")).collect();
-	let output = ask_model("outcomes", &requests)?;
-	let lines: Vec<String> = output.lines().map(str::to_string).collect();
-	if lines.len() != exported.len() {
-		return Err(format!("the model answered {} of {} programs:\n{output}", lines.len(), exported.len()));
-	}
-	Ok(lines)
+	let requests = exported.iter().map(|items| format!("outcome {items}")).collect();
+	ask_each("outcomes", requests, "programs", |line| Some(line.to_string()))
 }
 
 /// Warp's value of a program, printed as the model's `outcome` prints it (`?` for what the model does not keep)

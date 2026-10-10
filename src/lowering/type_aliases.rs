@@ -2,6 +2,7 @@
 //! written, `name: Name` in a class, `age: Age?`, `[Name]`, `f(n: Name)`, `a: Age = 3`; an alias of an alias is resolved
 //! to the end. Aliases of other shapes (`type Predicate = int -> bool`) stay declarations only.
 
+use super::nodes::key;
 use crate::node::Node;
 use crate::operators::Op;
 use std::collections::HashMap;
@@ -50,7 +51,7 @@ fn resolved(node: Node, aliases: &HashMap<String, String>) -> Node {
 			None => Node::Type { name, body },
 		},
 		Node::Type { name, body } => Node::Type { name, body: Box::new(resolved(*body, aliases)) },
-		Node::Key(name, Op::Colon, annotation) => Node::Key(Box::new(resolved(*name, aliases)), Op::Colon, Box::new(annotated(*annotation, aliases))),
+		Node::Key(name, Op::Colon, annotation) => key(resolved(*name, aliases), Op::Colon, annotated(*annotation, aliases)),
 		other => other.map_children(|child| resolved(child, aliases)),
 	}
 }

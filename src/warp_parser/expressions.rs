@@ -442,24 +442,7 @@ impl WarpParser {
 			let rhs_start = self.pos;
 			let rhs = match block_body {
 				Some(block) => block,
-				None if matches!(op, Op::Then | Op::Else) => {
-					let outer = self.branch_bp.replace(r_bp);
-					let branch = self.parse_branch(r_bp);
-					let branch = self.branch_assignment(branch, r_bp);
-					self.branch_bp = outer;
-					branch
-				}
-				None if glued_pair => {
-					let outer = self.glued_pair_bp.replace(r_bp);
-					let value = self.parse_expr(r_bp);
-					self.glued_pair_bp = outer;
-					value
-				}
-				// `it%2 and print it`, `x || print "none"`: print takes the rest of the statement, as at its start
-				None if matches!(op, Op::And | Op::Or) && self.take_braceless_print() => {
-					print_call([self.rest_of_statement()])
-				}
-				None => self.parse_expr(r_bp),
+				None => self.parse_right_operand(op, glued_pair, r_bp),
 			};
 			let rhs_end = self.pos.min(self.chars.len());
 			let rhs_written: String = self.chars[rhs_start.min(rhs_end)..rhs_end].iter().collect();
@@ -514,27 +497,34 @@ impl WarpParser {
 					continue;
 				}
 			}
-			lhs = match previous_comparand.take() {
-				Some(middle) if op.is_ordering() => {
-					let next_comparison = Node::Key(Box::new(middle), op, Box::new(rhs.clone()));
-					Node::Key(Box::new(lhs), Op::And, Box::new(next_comparison))
-				}
-				_ if op == Op::Hash && hash_slice_bounds(&rhs).is_some() => {
-					let (start, end) = hash_slice_bounds(&rhs).expect("guarded");
-					Node::List(vec![Symbol(SLICE_WORD.to_string()), lhs, start, end], Bracket::Round, Separator::None)
-				}
-				_ if op == Op::To && written.starts_with(DOWN_WORD) => {
-					let ascending = Node::Key(Box::new(rhs.clone()), Op::To, Box::new(lhs));
-					Node::List(vec![Symbol(REVERSE_WORD.to_string()), ascending], Bracket::Round, Separator::None)
-				}
-				_ => Node::Key(Box::new(lhs), op, Box::new(rhs.clone())),
-			};
+			lhs = combined(lhs, op, &written, rhs.clone(), previous_comparand.take());
 			if op.is_ordering() {
 				previous_comparand = Some(rhs);
 			}
 		}
 
 		lhs
+	}
+
+	/// The right operand of `op` without a block: a branch, a glued pair's value or an expression
+	fn parse_right_operand(&mut self, op: Op, glued_pair: bool, r_bp: u8) -> Node {
+		if matches!(op, Op::Then | Op::Else) {
+			let outer = self.branch_bp.replace(r_bp);
+			let branch = self.parse_branch(r_bp);
+			let branch = self.branch_assignment(branch, r_bp);
+			self.branch_bp = outer;
+			branch
+		} else if glued_pair {
+			let outer = self.glued_pair_bp.replace(r_bp);
+			let value = self.parse_expr(r_bp);
+			self.glued_pair_bp = outer;
+			value
+		} else if matches!(op, Op::And | Op::Or) && self.take_braceless_print() {
+			// `it%2 and print it`, `x || print "none"`: print takes the rest of the statement, as at its start
+			print_call([self.rest_of_statement()])
+		} else {
+			self.parse_expr(r_bp)
+		}
 	}
 
 	/// A branch without braces takes the whole statement: `if c then s += 5 else s = 0` assigns in the branch, where
@@ -699,5 +689,19 @@ impl WarpParser {
 		if holds_text {
 			self.text_variables.insert(name.clone());
 		}
+	}
+}
+
+/// `lhs op rhs`; a chained comparison `a<b<c` as `a<b and b<c` (`middle` is b), a range subscript `xs#(a..b)` as a slice,
+/// `a down to b` as the reversed `b to a`
+fn combined(lhs: Node, op: Op, written: &str, rhs: Node, middle: Option<Node>) -> Node {
+	match (middle, hash_slice_bounds(&rhs)) {
+		(Some(middle), _) if op.is_ordering() => {
+			let next_comparison = Node::Key(Box::new(middle), op, Box::new(rhs));
+			Node::Key(Box::new(lhs), Op::And, Box::new(next_comparison))
+		}
+		(_, Some((start, end))) if op == Op::Hash => call(SLICE_WORD, vec![lhs, start, end]),
+		_ if op == Op::To && written.starts_with(DOWN_WORD) => call(REVERSE_WORD, vec![Node::Key(Box::new(rhs), Op::To, Box::new(lhs))]),
+		_ => Node::Key(Box::new(lhs), op, Box::new(rhs)),
 	}
 }

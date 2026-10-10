@@ -1,3 +1,4 @@
+#!/usr/bin/env warp
 // insertion sort and merge sort over a list of integers
 
 fun insertion_sort(items) {

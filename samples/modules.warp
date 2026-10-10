@@ -1,3 +1,4 @@
+#!/usr/bin/env warp
 // Modules in warp: `use` brings in the definitions of a module, each module once
 // (a fuller module system is sketched in notes/module_manager.md, card module-manager)
 

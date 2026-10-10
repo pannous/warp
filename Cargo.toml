@@ -11,7 +11,7 @@ resolver = "2"
 
 [package]
 name = "warp-lang" # crates.io: `warp` is the web framework (user 2026-10-06: "lang is perfect"); the library stays `warp`
-version = "1.2.4"
+version = "1.2.5"
 edition = "2021"  # Cargo edition! NOT package edition!
 description = "Warp: the Warp language, a data notation that is also a programming language, compiled to WebAssembly GC"
 repository = "https://github.com/pannous/warp"
@@ -103,7 +103,7 @@ wasmtime-wasi = { version = "49.0.1", optional = true }
 # wasmtime itself builds with (its own wasm-encoder copy)
 wit-component = { version = "0.258", optional = true }
 wit-parser = { version = "0.258", optional = true }
-warp-runtime = { path = "crates/warp-runtime", version = "1.2.4", default-features = false } # without features: the names of the host words only
+warp-runtime = { path = "crates/warp-runtime", version = "1.2.5", default-features = false } # without features: the names of the host words only
 flate2 = { version = "1.1", optional = true } # paint() writes a PNG natively (src/paint.rs); in the tree through wasmtime already
 crc32fast = { version = "1.5", optional = true } # the PNG chunk checksums
 sha2 = { version = "0.10", optional = true } # keys the compiled-module cache (src/run/module_cache.rs); wasmtime uses it already

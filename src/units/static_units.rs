@@ -14,7 +14,7 @@
 //! text; `xs.add(q)` checks the element signature.
 //! Unit fields: `class Run{distance: km}` (unit_fields.rs), an instance's fields have signatures like an object's.
 
-use super::{finest_units, signature, unit_named, units_text, Dimension, Factor, Quantity, Unit, UNITS};
+use super::{exponent_of, finest_units, signature, unit_named, units_text, Dimension, Factor, Quantity, Unit, UNITS};
 
 mod unit_fields;
 pub(crate) use unit_fields::{lower_field_tolerances, si_quantity};
@@ -516,8 +516,7 @@ impl Inference {
 			}
 			Node::Key(base, op @ (Op::Square | Op::Cube), nothing) if matches!(nothing.drop_meta(), Node::Empty) => {
 				let (base, signature) = self.infer(*base)?;
-				let exponent = if op == Op::Square { 2 } else { 3 };
-				let signature = signature.iter().map(|(dimension, power)| (*dimension, power * exponent)).collect();
+				let signature = signature.iter().map(|(dimension, power)| (*dimension, power * exponent_of(op))).collect();
 				Ok((Node::Key(Box::new(base), op, nothing), signature))
 			}
 			// `if c then a else b`: both branches have one signature

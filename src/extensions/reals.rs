@@ -277,12 +277,15 @@ impl fmt::Display for Monomial {
 	}
 }
 
-fn superscript(n: i64) -> String {
+const SUPERSCRIPT_DIGITS: [char; 10] = ['⁰', '¹', '²', '³', '⁴', '⁵', '⁶', '⁷', '⁸', '⁹'];
+
+/// An exponent as it prints: ², ⁻¹, ¹⁰
+pub(crate) fn superscript(n: i64) -> String {
 	n.to_string()
 		.chars()
 		.map(|c| match c {
 			'-' => '⁻',
-			digit => ['⁰', '¹', '²', '³', '⁴', '⁵', '⁶', '⁷', '⁸', '⁹'][digit.to_digit(10).unwrap_or(0) as usize],
+			digit => SUPERSCRIPT_DIGITS[digit.to_digit(10).unwrap_or(0) as usize],
 		})
 		.collect()
 }

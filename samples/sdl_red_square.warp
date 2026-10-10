@@ -1,4 +1,5 @@
 #!/usr/bin/env warp
+#!/usr/bin/env warp
 // SDL2 Red Square Demo - Pure FFI, no compile-time dependencies
 // Run with: ./warp samples/sdl_red_square.warp
 

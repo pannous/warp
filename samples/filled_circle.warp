@@ -1,3 +1,4 @@
+#!/usr/bin/env warp
 // a filled circle, painted on the playground's canvas: paint(pixels, width, height), row after row, nonzero is ink
 radius = 50
 width = height = 200

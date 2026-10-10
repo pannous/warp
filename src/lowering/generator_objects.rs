@@ -10,7 +10,7 @@
 
 use crate::for_loop::block_items;
 use crate::generators::{generators, yield_statement, holds_own, holds_stop, is_return, yielded_value, Generator, BREAK_WORD, CONTINUE_WORD, FOR_WORD, NAME_SEPARATOR, NEXT_METHOD, RETURN_WORD};
-use super::nodes::{assign, int, is_word, statement_list, symbol, symbol_name};
+use super::nodes::{assign, int, key, statement_list, symbol};
 use crate::node::{Bracket, Node, Separator};
 use crate::operators::Op;
 use crate::ruby_blocks::arguments;
@@ -56,17 +56,17 @@ pub fn lower(node: Node) -> Node {
 pub(crate) fn advanced_variables(node: &Node) -> HashSet<String> {
 	let mut advanced = HashSet::new();
 	node.visit(&mut |part| match part {
-		Node::List(items, Bracket::Round | Bracket::None, _) if items.len() == 2 && is_word(&items[0], NEXT_METHOD) => {
-			advanced.extend(arguments(&items[1]).first().and_then(symbol_name).cloned());
+		Node::List(items, Bracket::Round | Bracket::None, _) if items.len() == 2 && items[0].is_symbol(NEXT_METHOD) => {
+			advanced.extend(arguments(&items[1]).first().and_then(Node::symbol_name).map(String::from));
 		}
-		Node::Key(object, Op::Dot, call) if is_next_call(call) => advanced.extend(symbol_name(object).cloned()),
+		Node::Key(object, Op::Dot, call) if is_next_call(call) => advanced.extend(object.symbol_name().map(String::from)),
 		_ => {}
 	});
 	advanced
 }
 
 fn is_next_call(call: &Node) -> bool {
-	matches!(call.drop_meta(), Node::List(items, Bracket::Round, _) if items.len() == 1 && is_word(&items[0], NEXT_METHOD)) || is_word(call, NEXT_METHOD)
+	matches!(call.drop_meta(), Node::List(items, Bracket::Round, _) if items.len() == 1 && items[0].is_symbol(NEXT_METHOD)) || call.is_symbol(NEXT_METHOD)
 }
 
 /// `g(args)` of a generator: its name and arguments; an argument `naturals()` is parsed as the bare name
@@ -76,7 +76,7 @@ pub(crate) fn generator_call<'a>(node: &Node, generators: &'a HashMap<String, Ge
 		Node::Symbol(_) => (node, &[][..]),
 		_ => return None,
 	};
-	let (name, generator) = generators.get_key_value(symbol_name(name)?)?;
+	let (name, generator) = generators.get_key_value(name.symbol_name()?)?;
 	let arguments: Vec<Node> = arguments.iter().flat_map(crate::ruby_blocks::arguments).collect();
 	(arguments.len() == generator.parameters.len()).then_some((name, generator, arguments))
 }
@@ -92,15 +92,15 @@ fn with_objects(node: Node, generators: &HashMap<String, Generator>, advanced: &
 		Some(construction(name, generator, arguments))
 	};
 	let rebuilt = match node.drop_meta() {
-		Node::Key(target, Op::Assign, value) if symbol_name(target).is_some_and(|name| advanced.contains(name)) => {
+		Node::Key(target, Op::Assign, value) if target.symbol_name().is_some_and(|name| advanced.contains(name)) => {
 			constructed(value, classes).map(|object| assign(target.as_ref().clone(), object))
 		}
-		Node::List(items, Bracket::Round | Bracket::None, _) if items.len() == 2 && is_word(&items[0], ITER_WORD) => {
+		Node::List(items, Bracket::Round | Bracket::None, _) if items.len() == 2 && items[0].is_symbol(ITER_WORD) => {
 			arguments(&items[1]).first().and_then(|call| constructed(call, classes))
 		}
-		Node::List(items, Bracket::Round | Bracket::None, _) if items.len() == 2 && is_word(&items[0], NEXT_METHOD) => {
+		Node::List(items, Bracket::Round | Bracket::None, _) if items.len() == 2 && items[0].is_symbol(NEXT_METHOD) => {
 			let call = Node::List(vec![symbol(NEXT_METHOD)], Bracket::Round, Separator::None);
-			arguments(&items[1]).first().map(|object| Node::Key(Box::new(object.clone()), Op::Dot, Box::new(call)))
+			arguments(&items[1]).first().map(|object| key(object.clone(), Op::Dot, call))
 		}
 		_ => None,
 	};
@@ -136,7 +136,7 @@ fn assigned_names(body: &Node) -> BTreeSet<String> {
 	let mut names = BTreeSet::new();
 	body.visit(&mut |part| if let Node::Key(target, op, _) = part {
 		if *op == Op::Assign || op.is_compound_assign() || matches!(op, Op::Inc | Op::Dec) {
-			names.extend(symbol_name(target).cloned());
+			names.extend(target.symbol_name().map(String::from));
 		}
 	});
 	names
@@ -154,7 +154,7 @@ fn generator_class(name: &str, generator: &Generator) -> Option<Node> {
 	let mut members: Vec<Node> = fields(generator).iter().map(|name| field(name)).collect();
 	members.extend([field(STATE_FIELD), field(SENT_FIELD)]);
 	let head = Node::List(vec![symbol(NEXT_METHOD)], Bracket::Round, Separator::None);
-	members.push(Node::Key(Box::new(head), Op::Define, Box::new(statement_list(vec![body], Bracket::Curly))));
+	members.push(key(head, Op::Define, statement_list(vec![body], Bracket::Curly)));
 	members.extend(crate::generator_consumers::template(SEND, &[("VALUE", &symbol(SENT_VALUE)), ("SENT", &symbol(SENT_FIELD))]));
 	Some(Node::Type { name: Box::new(symbol(&class_name(name))), body: Box::new(statement_list(members, Bracket::Curly)) })
 }
@@ -191,8 +191,8 @@ fn set_state(state: i64) -> Node {
 }
 
 fn condition_jump(condition: Node, state: usize) -> Node {
-	let test = Node::Key(Box::new(Node::Empty), Op::If, Box::new(condition));
-	Node::Key(Box::new(test), Op::Then, Box::new(statement_list(vec![set_state(state as i64), symbol(CONTINUE_WORD)], Bracket::Curly)))
+	let test = key(Node::Empty, Op::If, condition);
+	key(test, Op::Then, statement_list(vec![set_state(state as i64), symbol(CONTINUE_WORD)], Bracket::Curly))
 }
 
 fn returned(value: Node) -> Node {
@@ -240,7 +240,7 @@ impl Machine {
 		}
 		if let Some(exits) = exits {
 			for (word, target) in [(BREAK_WORD, exits.after), (CONTINUE_WORD, exits.again)] {
-				if is_word(&statement, word) {
+				if statement.is_symbol(word) {
 					self.jump(at, target);
 					return Some(self.state());
 				}
@@ -265,7 +265,7 @@ impl Machine {
 				let Node::Key(_, Op::If, condition) = test.drop_meta() else { return None };
 				self.branches(condition.as_ref().clone(), then, Some(otherwise), at, exits)
 			}
-			Node::List(items, _, _) if items.first().is_some_and(|word| is_word(word, FOR_WORD)) => {
+			Node::List(items, _, _) if items.first().is_some_and(|word| word.is_symbol(FOR_WORD)) => {
 				let lowered = crate::for_loop::lower(statement.clone()).ok()?;
 				self.compile(sequence_items(&lowered), at, exits)
 			}
@@ -317,9 +317,9 @@ impl Machine {
 	/// `while 1 { if generator·state == 0 {…}; …; return ø }`
 	fn dispatch(self) -> Node {
 		let mut cases: Vec<Node> = self.states.into_iter().enumerate().filter(|(_, code)| !code.is_empty()).map(|(state, code)| {
-			let test = Node::Key(Box::new(state_field()), Op::Eq, Box::new(int(state as i64)));
-			let condition = Node::Key(Box::new(Node::Empty), Op::If, Box::new(test));
-			Node::Key(Box::new(condition), Op::Then, Box::new(statement_list(code, Bracket::Curly)))
+			let test = key(state_field(), Op::Eq, int(state as i64));
+			let condition = key(Node::Empty, Op::If, test);
+			key(condition, Op::Then, statement_list(code, Bracket::Curly))
 		}).collect();
 		cases.push(returned(Node::Empty));
 		while_do(int(1), statement_list(cases, Bracket::Curly))

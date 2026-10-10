@@ -151,7 +151,7 @@ function unlockChannels(table, changed) {
 // its starting program, which could never answer either
 function waitsAlone(holder) {
 	if (holder.inTask) return !holder.control;
-	return ![...holder.run.tasks.values()].some(task => task.worker && Atomics.load(new Int32Array(task.shared, 0, 1), 0) === 0);
+	return ![...holder.run.tasks.values()].some(task => isRunningOnWorker(task) && !isDone(task));
 }
 
 // wait on channel id until `ready` answers ({value} or {error}), under the lock; it may change the channel. The run's
@@ -250,15 +250,16 @@ function startTask(holder, hooks, name, ints, values) {
 	const run = holder.run;
 	const id = BigInt(run.tasks.size + 1);
 	const captured = capturedValues(holder.exports);
+	const inline = () => runTask(run.module, hooks, holder.warnings, name, ints, values, run.shared, captured, null, run.channels);
 	if (taskPool.length > 0) {
 		const shared = new SharedArrayBuffer(TASK_HEADER + TASK_RESULT_BYTES, { maxByteLength: TASK_RESULT_LIMIT });
 		const worker = taskPool.pop();
 		const control = new Int32Array(new SharedArrayBuffer(2 * Int32Array.BYTES_PER_ELEMENT));
 		worker.postMessage({ module: run.module, name, ints, values, shared, arrays: run.shared, captured, control, channels: run.channels });
-		run.tasks.set(id, { name, worker, shared, control, started: performance.now(), inline: () => runTask(run.module, hooks, holder.warnings, name, ints, values, run.shared, captured, null, run.channels) });
+		run.tasks.set(id, { name, worker, shared, control, started: performance.now(), inline });
 	} else {
 		if (!hasTaskWorkers()) sayTasksInline(run, holder, hooks);
-		run.tasks.set(id, runTask(run.module, hooks, holder.warnings, name, ints, values, run.shared, captured, null, run.channels));
+		run.tasks.set(id, inline());
 	}
 	return id;
 }
@@ -309,6 +310,7 @@ function finishedTask(run, hooks, id) {
 }
 
 const isRunningOnWorker = task => Boolean(task.worker);
+const isDone = task => Atomics.load(new Int32Array(task.shared, 0, 1), 0) !== 0; // its Worker wrote the record
 const isWritten = (task, milliseconds = 0) => Atomics.wait(new Int32Array(task.shared, 0, 1), 0, 0, milliseconds) !== "timed-out";
 const isTaken = task => Atomics.load(task.control, TASK_TAKEN_SLOT) !== 0;
 
@@ -378,8 +380,8 @@ function joinTasks(run, hooks) {
 // running, finished or failed, without waiting (src/host.rs task status codes)
 function taskStatus(run, id) {
 	const task = run.tasks.get(id);
-	if (task.worker && Atomics.load(new Int32Array(task.shared, 0, 1), 0) === 0) return Atomics.load(task.control, 0) === CONTROL_PAUSED ? TASK_PAUSED : 0n;
-	const record = task.worker ? JSON.parse(decode(new Uint8Array(task.shared, TASK_HEADER, new Int32Array(task.shared, 0, 2)[1]).slice())) : task;
+	if (isRunningOnWorker(task) && !isDone(task)) return Atomics.load(task.control, 0) === CONTROL_PAUSED ? TASK_PAUSED : 0n;
+	const record = isRunningOnWorker(task) ? readShared(task.shared) : task;
 	if (!record.failure) return TASK_FINISHED;
 	return record.failure.endsWith(TASK_STOPPED) ? TASK_STOPPED_CODE : TASK_FAILED;
 }
@@ -387,7 +389,7 @@ function taskStatus(run, id) {
 // `stop job` ends a Worker; `pause job` / `resume job` set its control word, which the task reads where a loop starts
 function controlTask(run, id, operation) {
 	const task = run.tasks.get(id);
-	if (!task.worker || Atomics.load(new Int32Array(task.shared, 0, 1), 0) !== 0) return 0n;
+	if (!isRunningOnWorker(task) || isDone(task)) return 0n;
 	if (operation === TASK_PAUSE || operation === TASK_RESUME) {
 		Atomics.store(task.control, 0, operation === TASK_PAUSE ? CONTROL_PAUSED : CONTROL_RUNNING);
 		Atomics.notify(task.control, 0);
@@ -604,14 +606,18 @@ function sendOnSocket(holder, hooks, address, value) {
 // `on message from "chat" {…}`: what arrives waits in the listener's queue until its timer asks
 function listenOnChannel(holder, hooks, id, name) {
 	if (!hooks.listen) return holder.warnings.push(`on message from "${name}": channels are not received here`);
-	if (SOCKET_ADDRESS.test(name)) {
-		const { socket, messages } = webSocket(holder, hooks, name);
-		return void (holder.channels ??= new Map()).set(id, { name, channel: socket, messages });
-	}
-	const channel = new BroadcastChannel(name);
-	const listener = { name, channel, messages: [] };
-	channel.onmessage = ({ data }) => listener.messages.push(data);
-	(holder.channels ??= new Map()).set(id, listener);
+	(holder.channels ??= new Map()).set(id, SOCKET_ADDRESS.test(name) ? socketListener(holder, hooks, name) : broadcastListener(name));
+}
+
+function socketListener(holder, hooks, name) {
+	const { socket, messages } = webSocket(holder, hooks, name);
+	return { name, channel: socket, messages };
+}
+
+function broadcastListener(name) {
+	const listener = { name, channel: new BroadcastChannel(name), messages: [] };
+	listener.channel.onmessage = ({ data }) => listener.messages.push(data);
+	return listener;
 }
 
 addHostPart({

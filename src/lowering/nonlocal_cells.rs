@@ -4,9 +4,9 @@
 //! `y += e` → `cell_set(y·cell, cell_get(y·cell) + e)`, a read of y → `cell_get(y·cell)`. Variables only read keep the
 //! captures of wasm_emitter `refresh_enclosing_captures`.
 
-use super::nodes::call;
+use super::nodes::{call, key};
 use crate::late_binding::{changes_in, declared_nonlocals, NONLOCAL};
-use crate::node::{Bracket, Node, Separator};
+use crate::node::{symbol, Bracket, Node, Separator};
 use crate::operators::Op;
 use crate::wasm_emitter::cells::{CELL_GET, CELL_NEW, CELL_SET};
 
@@ -19,10 +19,10 @@ pub fn lower(node: Node) -> Node {
 		for variable in written_nonlocals(&body) {
 			body = celled(body, &variable, params.contains(&variable));
 		}
-		return Node::Key(Box::new(head.clone()), op, Box::new(lower(body)));
+		return key(head.clone(), op, lower(body));
 	}
 	match node {
-		Node::Key(left, op, right) => Node::Key(Box::new(lower(*left)), op, Box::new(lower(*right))),
+		Node::Key(left, op, right) => key(lower(*left), op, lower(*right)),
 		Node::List(items, bracket, separator) => Node::List(items.into_iter().map(lower).collect(), bracket, separator),
 		Node::Meta { node, data } => Node::Meta { node: Box::new(lower(*node)), data },
 		other => other,
@@ -66,8 +66,8 @@ fn written_nonlocals(body: &Node) -> Vec<String> {
 /// The body with `variable` in a cell, made first (holding the parameter's value for a parameter, else ø)
 fn celled(body: Node, variable: &str, is_param: bool) -> Node {
 	let cell = Node::Symbol(format!("{variable}{CELL_SUFFIX}"));
-	let initial = if is_param { Node::Symbol(variable.to_string()) } else { Node::Empty };
-	let made = Node::Key(Box::new(cell.clone()), Op::Assign, Box::new(call(CELL_NEW, vec![initial])));
+	let initial = if is_param { symbol(variable) } else { Node::Empty };
+	let made = key(cell.clone(), Op::Assign, call(CELL_NEW, vec![initial]));
 	match through_cell(body, variable, &cell) {
 		Node::List(items, bracket @ (Bracket::Curly | Bracket::None), separator @ (Separator::Semicolon | Separator::Newline)) => {
 			Node::List([vec![made], items].concat(), bracket, separator)
@@ -94,12 +94,12 @@ fn through_cell(node: Node, variable: &str, cell: &Node) -> Node {
 		Node::Key(keyword, Op::Colon, names) if matches!(keyword.drop_meta(), Node::Symbol(word) if word == NONLOCAL) => Node::Key(keyword, Op::Colon, names),
 		Node::Key(target, Op::Assign | Op::Define, value) if is_variable(&target) => set(through_cell(*value, variable, cell)),
 		Node::Key(target, op, value) if is_variable(&target) && op.is_compound_assign() => {
-			set(Node::Key(Box::new(get()), op.base_op(), Box::new(through_cell(*value, variable, cell))))
+			set(key(get(), op.base_op(), through_cell(*value, variable, cell)))
 		}
 		Node::Key(target, op @ (Op::Inc | Op::Dec), _) if is_variable(&target) => {
-			set(Node::Key(Box::new(get()), if op == Op::Inc { Op::Add } else { Op::Sub }, Box::new(Node::from(1))))
+			set(key(get(), if op == Op::Inc { Op::Add } else { Op::Sub }, Node::from(1)))
 		}
-		Node::Key(left, op, right) => Node::Key(Box::new(through_cell(*left, variable, cell)), op, Box::new(through_cell(*right, variable, cell))),
+		Node::Key(left, op, right) => key(through_cell(*left, variable, cell), op, through_cell(*right, variable, cell)),
 		Node::List(items, bracket, separator) => Node::List(items.into_iter().map(|item| through_cell(item, variable, cell)).collect(), bracket, separator),
 		Node::Meta { node, data } => Node::Meta { node: Box::new(through_cell(*node, variable, cell)), data },
 		other => other,
@@ -158,7 +158,7 @@ fn nonlocal_lambdas(node: Node, count: &mut usize) -> Node {
 		collect_locals(body, &mut locals);
 		let mut hoisted = vec![];
 		let body = in_enclosing(body.clone(), &locals, count, &mut hoisted);
-		return Node::Key(Box::new(head.clone()), op, Box::new(with_first(hoisted, body))).with_meta_of(&node);
+		return key(head.clone(), op, with_first(hoisted, body)).with_meta_of(&node);
 	}
 	node.map_children(|child| nonlocal_lambdas(child, count))
 }
@@ -188,15 +188,15 @@ fn in_enclosing(node: Node, locals: &[String], count: &mut usize, hoisted: &mut 
 			let params = lambda_parameters(&lambda_params);
 			// a lambda changing an enclosing local shares it, as in JS, Kotlin, Swift, C#, Ruby and Julia
 			let shared: Vec<Node> = undeclared_changes(&body, &params, locals).into_iter()
-				.map(|(_, name)| Node::Key(Box::new(Node::Symbol(NONLOCAL.to_string())), Op::Colon, Box::new(Node::Symbol(name)))).collect();
+				.map(|(_, name)| key(symbol(NONLOCAL), Op::Colon, Node::Symbol(name))).collect();
 			let body = nonlocal_lambdas(with_first(shared, *body), count);
 			if declared_nonlocals(&body).is_empty() {
 				return Node::Key(lambda_params, Op::FatArrow, Box::new(body));
 			}
 			*count += 1;
 			let name = format!("{LAMBDA_PREFIX}{count}");
-			let head = Node::List([vec![Node::Symbol(name.clone())], params.into_iter().map(Node::Symbol).collect()].concat(), Bracket::Round, Separator::None);
-			hoisted.push(Node::Key(Box::new(head), Op::Define, Box::new(body)));
+			let head = call(&name.clone(), params.into_iter().map(Node::Symbol).collect());
+			hoisted.push(key(head, Op::Define, body));
 			crate::closures::function_reference(name)
 		}
 		other => other.map_children(|child| in_enclosing(child, locals, count, hoisted)),

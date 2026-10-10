@@ -1,3 +1,4 @@
+#!/usr/bin/env warp
 // Particle System
 // Physics simulation with gravity and collision, drawn with `use draw`: three bursts, simulated for a second, every
 // sixth step shown with the trails so far (each show() replaces the picture; mouse input: card drawing-frames)

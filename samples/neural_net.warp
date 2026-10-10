@@ -1,3 +1,4 @@
+#!/usr/bin/env warp
 // Simple Neural Network
 // XOR problem solver
 use matrix
