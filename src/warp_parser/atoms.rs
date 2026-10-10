@@ -604,10 +604,7 @@ impl WarpParser {
 			let literal = self.take_chars(version_len);
 			return Node::Symbol(literal);
 		}
-		let symbol = match self.parse_symbol() {
-			Ok(s) => s,
-			Err(e) => return error(&e),
-		};
+		let symbol = or_return_error!(self.parse_symbol());
 
 		if let Some(version) = self.version_operand(&symbol) {
 			return version;
@@ -878,19 +875,13 @@ impl WarpParser {
 
 	fn parse_type_declaration_body(&mut self) -> Node {
 		self.skip_whitespace();
-		let type_name = match self.parse_symbol() {
-			Ok(name) => name,
-			Err(message) => return error(&message),
-		};
+		let type_name = or_return_error!(self.parse_symbol());
 		// `class Box<T>{item:T}`: a field or parameter of a type parameter holds any value
 		// `type Option[T] = Some(T) | None` (samples/types.warp) is warp's own spelling; P157: warp has no generic syntax, a
 		// ported `class Box<T>` compiles untyped, with a note
 		let angled = self.current_char() == '<';
 		let type_parameters = match self.current_char() {
-			'<' | '[' => match self.parse_type_parameters() {
-				Ok(parameters) => parameters,
-				Err(message) => return error(&message),
-			},
+			'<' | '[' => or_return_error!(self.parse_type_parameters()),
 			_ => vec![],
 		};
 		if angled {
@@ -933,10 +924,7 @@ impl WarpParser {
 		// `class Duck with Walker, Swimmer {…}`: the mixins ride on the name, class_methods takes in their items
 		if self.matches_keyword(WITH_KEYWORD) {
 			self.advance_by(WITH_KEYWORD.len());
-			let mixins = match self.parse_comma_names() {
-				Ok(mixins) => mixins,
-				Err(message) => return error(&message),
-			};
+			let mixins = or_return_error!(self.parse_comma_names());
 			name = name.with_attribute(WITH_KEYWORD, Node::List(mixins, Bracket::None, Separator::Space));
 		}
 		// Go's `type Shape interface {…}`: the trait Shape, as `interface Shape {…}` declares it (traits.rs)
@@ -1193,10 +1181,7 @@ impl WarpParser {
 	/// class extending Shape, the others its variants by name, as the sum type `Circle(r) | Rect(w, h) | Dot`
 	fn parse_enum_with_values(&mut self) -> Node {
 		self.skip_spaces();
-		let type_name = match self.parse_symbol() {
-			Ok(name) => name,
-			Err(message) => return error(&message),
-		};
+		let type_name = or_return_error!(self.parse_symbol());
 		self.skip_whitespace();
 		let Node::List(cases, _, _) = self.parse_bracketed('{').drop_meta().clone() else { return error(&format!("enum {type_name} needs its cases in braces")) };
 		let mut bare_variants = vec![];

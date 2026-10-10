@@ -9,6 +9,17 @@ use crate::operators::{glyph_operator, is_function_keyword, Op};
 use crate::normalize::{hints as norm, set_hint_position, ListTypeStyle};
 use log::warn;
 use std::fs::read_to_string;
+
+/// The value of a `Result<_, String>`; an error returns from the parse function as an error node
+macro_rules! or_return_error {
+	($result:expr) => {
+		match $result {
+			Ok(value) => value,
+			Err(message) => return error(&message),
+		}
+	};
+}
+
 mod user_operators;
 mod scanning;
 mod xml;

@@ -536,10 +536,7 @@ impl WarpParser {
 	pub(super) fn parse_attribute(&mut self) -> Node {
 		let after_dot = self.pos > 0 && self.chars[self.pos - 1] == '.';
 		self.advance(); // skip '@'
-		let name = match self.parse_symbol() {
-			Ok(name) => name,
-			Err(message) => return error(&message),
-		};
+		let name = or_return_error!(self.parse_symbol());
 		if after_dot {
 			return Symbol(format!("{ATTRIBUTE_MARK}{name}"));
 		}

@@ -139,10 +139,7 @@ impl WarpParser {
 					'r' => '\r',
 					'e' => ESCAPE_CHARACTER,
 					'x' if self.peek_char(1).is_ascii_hexdigit() && self.peek_char(2).is_ascii_hexdigit() => self.hex_byte_escape(),
-					'u' if self.peek_char(1) == '{' => match self.unicode_escape() {
-						Ok(c) => c,
-						Err(message) => return error(&message),
-					},
+					'u' if self.peek_char(1) == '{' => or_return_error!(self.unicode_escape()),
 					c => c,
 				}
 			} else {
@@ -473,10 +470,7 @@ impl WarpParser {
 			self.advance();
 			self.push_digits(&mut num_str);
 		}
-		let exponent = match self.parse_exponent() {
-			Ok(exponent) => exponent,
-			Err(e) => return error(&e),
-		};
+		let exponent = or_return_error!(self.parse_exponent());
 
 		match exponent {
 			// 1e3 is the exact integer 1000, like the literal it abbreviates
