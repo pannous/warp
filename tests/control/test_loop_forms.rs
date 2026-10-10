@@ -33,4 +33,5 @@ fn ranges_in_for_headers_stay_ranges() {
 fn a_while_body_prints_each_pass() {
 	assert_eq!(crate::common::printed("x=3\nwhile x-->0 : print x"), "2\n1\n");
 	assert_eq!(crate::common::printed("x=3\nwhile x-->0 { print x }"), "2\n1\n");
+	assert_eq!(crate::common::printed("x=6\nonce x==3 {print \"half\"}\nwhile x-->0 : print x"), "5\n4\nhalf\n3\n2\n1\n");
 }
