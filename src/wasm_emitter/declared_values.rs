@@ -91,8 +91,9 @@ impl WasmGcEmitter {
 	pub(super) fn emit_declared_value(&mut self, func: &mut Function, declared: Option<&Node>, value: &Node, kind: Kind) {
 		// a float stored in a place declared exact (`x: rational = √2`, `f(x: int)`) is refused while compiling
 		if let Some(declared) = declared.filter(|_| kind == Kind::Int && self.get_type(value) == Kind::Float) {
-			let message = format!("{} is a float where an exact {} is expected: declare it `number` to keep the float, or truncate with `as int`",
-				value.serialize(), declared.serialize());
+			let value = value.serialize();
+			let message = format!("{value} is a float where an exact {} is expected: declare it `number` to keep the float, truncate with `as int`, {}",
+				declared.serialize(), super::casts::nearest_hint(&value));
 			return self.emit_type_error(func, message);
 		}
 		let check = declared.and_then(|declared| self.admitted(declared)).filter(|admitted| self.needs_run_time_check(admitted, value));

@@ -23,3 +23,9 @@ fn nearest_of_exact_values() {
 fn nearest_takes_two_or_three_arguments() {
 	fails_with("nearest(1.5, rational, 1, 2)", "nearest takes 2 to 3 arguments, got 4");
 }
+
+#[test]
+fn float_to_exact_refusals_name_nearest() {
+	fails_with("x: rational = sqrt(2)", "truncate with `as int`, or use nearest(√(2), rational) for the closest fraction");
+	fails_with("sqrt(2) as rational", "or use nearest(√(2), rational) for the closest fraction");
+}
