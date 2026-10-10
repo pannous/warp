@@ -1706,6 +1706,9 @@ PASSED:
   ✓ lists::test_word_slices::hash_positions_slice
   ✓ lists::test_word_slices::ordinal_positions_slice
   ✓ lists::test_word_slices::other_from_and_to_stay
+  ✓ modules::test_agent_types::a_companion_takes_the_expected_type_of_any_function
+  ✓ modules::test_agent_types::a_typed_declaration_asks_the_agent_for_its_type
+  ✓ modules::test_agent_types::without_an_expected_type_the_agent_answers_text
   ✓ modules::test_agent::agent_answers_a_prompt_when_a_key_is_set
   ✓ modules::test_agent::agent_with_a_wrong_key_fails_with_the_api_reason
   ✓ modules::test_agent::agent_without_a_key_names_the_variable
@@ -3910,6 +3913,7 @@ PASSED:
   ✓ web::test_site::a_program_failing_at_build_time_builds_no_site
   ✓ web::test_site::a_site_holds_the_rendered_page_the_module_and_its_scripts
   ✓ web::test_site::a_site_starting_tasks_runs_its_program_in_a_worker
+  ✓ web::test_site::a_site_using_the_gpu_runs_in_a_worker_with_the_gpu_part
   ✓ web::test_site::a_site_with_routes_is_one_page_for_every_path
   ✓ web::test_site::a_site_with_routes_starting_tasks_runs_its_program_in_a_worker
   ✓ web::test_site::a_static_page_is_its_last_line_rendered
@@ -4371,4 +4375,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-10 ignored, 4366 passed, 0 failed, 4366 total tested
+10 ignored, 4370 passed, 0 failed, 4370 total tested
