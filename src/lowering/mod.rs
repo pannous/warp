@@ -26,6 +26,7 @@ pub mod lazy_ranges;
 pub mod late_binding;
 pub mod foreign_modules;
 pub mod nonlocal_cells;
+pub(crate) mod nodes;
 pub mod library_words;
 pub mod markup_tags;
 pub mod style_rules;

@@ -5,6 +5,7 @@
 //!
 //! An unknown `.word` after a name, a text or a list is a loud error (`undefined function: word`), never silent data.
 
+use super::nodes::is_word;
 use crate::analyzer::{call_name, counting_method, extract_user_functions, is_list_mutating_method};
 use crate::context::Context;
 use crate::diagnostic::Diagnostic;
@@ -280,7 +281,7 @@ fn call_results(node: &Node, context: &Context) -> HashSet<String> {
 /// `raise X`, `throw X`, `raise(X)`: the call `raise(X)`; `raise error("m")` raises the message m
 fn raise_call(items: &[Node]) -> Option<Node> {
 	let [word, raised] = items else { return None };
-	if !crate::pipeline::RAISE_WORDS.iter().any(|raise| is_marker(word, raise)) {
+	if !crate::pipeline::RAISE_WORDS.iter().any(|raise| is_word(word, raise)) {
 		return None;
 	}
 	let message = crate::pipeline::returned_error_message(raised).unwrap_or(raised).clone();
@@ -321,14 +322,14 @@ fn lower_counts(node: Node, library_count: bool) -> Node {
 /// `count(y, x)` is `count x in y`
 fn count_call(items: &[Node], bracket: &Bracket) -> Option<Node> {
 	let [count, haystack, needle] = items else { return None };
-	(*bracket == Bracket::Round && is_marker(count, COUNT_WORD)).then(|| counted_in(count, needle, haystack)).flatten()
+	(*bracket == Bracket::Round && is_word(count, COUNT_WORD)).then(|| counted_in(count, needle, haystack)).flatten()
 }
 
 /// `y.count(x)` is `count x in y`
 fn count_method(receiver: &Node, call: &Node) -> Option<Node> {
 	let Node::List(items, _, _) = call.drop_meta() else { return None };
 	let [count, needle] = items.as_slice() else { return None };
-	is_marker(count, COUNT_WORD).then(|| counted_in(count, needle, receiver)).flatten()
+	is_word(count, COUNT_WORD).then(|| counted_in(count, needle, receiver)).flatten()
 }
 
 fn counted_in(count: &Node, needle: &Node, haystack: &Node) -> Option<Node> {
@@ -347,7 +348,7 @@ fn count_in(items: &[Node]) -> Option<Node> {
 		_ => items.to_vec(),
 	};
 	let [count, needle, in_word, haystack @ ..] = phrase.as_slice() else { return None };
-	if !is_marker(count, COUNT_WORD) || !is_marker(in_word, IN_WORD) || haystack.is_empty() {
+	if !is_word(count, COUNT_WORD) || !is_word(in_word, IN_WORD) || haystack.is_empty() {
 		return None;
 	}
 	let haystack = match haystack {
@@ -644,14 +645,14 @@ struct Lowering {
 impl Lowering {
 	fn expand(&self, node: Node) -> Node {
 		match node {
-			Node::List(items, Bracket::Round, _) if items.len() == 3 && is_marker(&items[0], TRY_MARKER) => {
+			Node::List(items, Bracket::Round, _) if items.len() == 3 && is_word(&items[0], TRY_MARKER) => {
 				self.lower_try(self.expand(items[1].clone()), self.expand(items[2].clone()))
 			}
 			// `catch e { … }`: the fallback reads the caught Error as e (P67)
-			Node::List(items, Bracket::Round, _) if items.len() == 4 && is_marker(&items[0], TRY_MARKER) => {
+			Node::List(items, Bracket::Round, _) if items.len() == 4 && is_word(&items[0], TRY_MARKER) => {
 				self.lower_try_binding(self.expand(items[1].clone()), self.expand(items[2].clone()), &items[3])
 			}
-			Node::List(items, Bracket::Round, _) if items.len() == 3 && is_marker(&items[0], ASSERT_MARKER) => {
+			Node::List(items, Bracket::Round, _) if items.len() == 3 && is_word(&items[0], ASSERT_MARKER) => {
 				self.lower_assert(self.expand(items[1].clone()), self.expand(items[2].clone()))
 			}
 			// `def f(m) { m.a }`: the body sees the parameters, as `f(m) := m.a` does
@@ -898,7 +899,7 @@ impl Lowering {
 	/// `for k in map_keys(m) {v = m[k]; …}`
 	fn for_over_map(&self, items: &[Node]) -> Option<Node> {
 		let [keyword, names, in_word, rest @ ..] = items else { return None };
-		if !is_marker(keyword, FOR_WORD) || !is_marker(in_word, IN_WORD) {
+		if !is_word(keyword, FOR_WORD) || !is_word(in_word, IN_WORD) {
 			return None;
 		}
 		let (map, body) = match rest {
@@ -955,7 +956,7 @@ impl Lowering {
 			Node::Key(_, Op::Hash, unit) => crate::analyzer::text_unit(&unit.name()).is_some(),
 			other => crate::analyzer::text_unit(&other.name()).is_some(),
 		};
-		if !is_marker(in_word, IN_WORD) || names_unit(element) || names_unit(collection) {
+		if !is_word(in_word, IN_WORD) || names_unit(element) || names_unit(collection) {
 			return None;
 		}
 		Some(self.call(COLLECTION_POSITION, in_word, vec![collection.clone(), element.clone()], false))
@@ -1324,10 +1325,6 @@ fn call_text(node: &Node) -> String {
 		}
 		_ => crate::normalize::operand_text(node),
 	}
-}
-
-fn is_marker(node: &Node, marker: &str) -> bool {
-	matches!(node.drop_meta(), Node::Symbol(name) if name == marker)
 }
 
 /// The untyped parameters of `def f(a, b) {…}` (any function keyword): the head `f (a, b)` holds them in a group

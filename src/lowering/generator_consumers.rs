@@ -6,7 +6,8 @@
 //! A call inside a `while` condition stays as it is: computed once before the loop it would not change per test.
 
 use crate::generator_objects::{advanced_variables, generator_call, ITER_WORD};
-use crate::generators::{assign, is_statement_list, is_word, number, statements, symbol, symbol_name, yielded_value, Generator, NAME_SEPARATOR};
+use crate::generators::{is_statement_list, yielded_value, Generator, NAME_SEPARATOR};
+use super::nodes::{assign, int, is_word, statement_list, symbol, symbol_name};
 use crate::library_words::substitute;
 use crate::node::{Bracket, Node, Separator};
 use crate::operators::Op;
@@ -54,7 +55,7 @@ pub(crate) fn lower(node: Node, generators: &HashMap<String, Generator>) -> Node
 	}
 	let node = match node.drop_meta() {
 		Node::List(_, Bracket::None | Bracket::Curly, Separator::Semicolon | Separator::Newline) => node,
-		_ => statements(vec![node], Bracket::None),
+		_ => statement_list(vec![node], Bracket::None),
 	};
 	consumers.hoisted(node)
 }
@@ -164,7 +165,7 @@ impl Consumers<'_> {
 		let name = |parts: &[&str]| symbol(&[&[word.as_str(), &self.counter.get().to_string()], parts].concat().join(NAME_SEPARATOR));
 		let out = name(&[]);
 		before.extend(template(EMPTY, &[("OUT", &out)]));
-		let mut condition = number(1);
+		let mut condition = int(1);
 		if let Some(limit) = limit {
 			let limit_name = name(&["limit"]);
 			before.push(assign(limit_name.clone(), limit));
@@ -178,7 +179,7 @@ impl Consumers<'_> {
 			let (expression, pull) = match source {
 				Source::Pulled(expression) => (expression, PULLED),
 				Source::Indexed(expression) => {
-					before.push(assign(name(&["index", &index.to_string()]), number(0)));
+					before.push(assign(name(&["index", &index.to_string()]), int(0)));
 					(expression, INDEXED)
 				}
 			};
@@ -190,7 +191,7 @@ impl Consumers<'_> {
 			values.push(value);
 		}
 		body.extend(template(COLLECTED, &[("OUT", &out), ("VALUE", &yielded_value(values))]));
-		before.push(while_do(condition, statements(body, Bracket::Curly)));
+		before.push(while_do(condition, statement_list(body, Bracket::Curly)));
 		match word.as_str() {
 			TAKE_WORD | ZIP_WORD | LIST_WORD => out,
 			_ => Node::List(vec![symbol(&word), out], Bracket::Round, Separator::None),

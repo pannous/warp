@@ -3,6 +3,7 @@
 //! `virtues goal = fast+safe` the record `goal={fast:true safe:true}`: the flags named are true, the others false.
 //! `real f(real x, int n) { … }`, the C way, defines `f(x:real, n:int) := { … }`.
 
+use super::nodes::is_type_word;
 use crate::node::{Bracket, Node, Separator};
 use crate::operators::{is_function_keyword, Op};
 
@@ -1924,10 +1925,6 @@ fn with_label_names(body: Node, labeled_names: Vec<Node>) -> Node {
 		})
 		.collect();
 	if bindings.is_empty() { body } else { crate::law::substitute(&body, &bindings) }
-}
-
-fn is_type_word(node: &Node) -> bool {
-	matches!(node.drop_meta(), Node::Symbol(word) if crate::analyzer::type_word_kind(word).is_some())
 }
 
 /// Go's parameter `x int` (the name, then its type) is `x:int`

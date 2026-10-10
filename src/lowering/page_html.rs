@@ -6,7 +6,7 @@
 
 use crate::event_signals::{function_with_globals, main_level_variables, PAGE_VALUE};
 use crate::node::Node;
-use crate::system_signals::call;
+use super::nodes::call;
 use crate::operators::Op;
 use std::collections::HashSet;
 

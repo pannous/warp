@@ -5,6 +5,7 @@
 //! Only functions whose meaning cannot change by moving their body: not recursive, no free variables (every name is a
 //! parameter or a local), no nested definitions, lambdas, globals or early returns, and a few statements at most.
 
+use super::nodes::symbol_name;
 use crate::node::{Bracket, Node, Separator};
 use crate::operators::Op;
 use std::cell::Cell;
@@ -43,13 +44,6 @@ fn collect(node: &Node, functions: &mut HashMap<String, Inlinable>) {
 			}
 		}
 	});
-}
-
-fn symbol_name(node: &Node) -> Option<&String> {
-	match node.drop_meta() {
-		Node::Symbol(name) => Some(name),
-		_ => None,
-	}
 }
 
 fn inlinable(node: &Node) -> Option<(String, Inlinable)> {

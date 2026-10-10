@@ -8,6 +8,7 @@
 //! `break value` in a handler body aborts (step 3): the handler stores value in `effect_handler_aborted_ask_i` and
 //! throws to its block, which runs under `ran_without_abort(i, {…})` and then has that value.
 
+use super::nodes::call;
 use crate::event_signals::{emit_verbs, emitted, function_with_globals, main_level_variables, reads_event, statements_of};
 use crate::node::{Bracket, Node, Separator};
 use crate::operators::Op;
@@ -212,10 +213,6 @@ fn handler_function(handler: &Handler, by_event: &BTreeMap<String, Vec<usize>>, 
 /// `(a; b; c)`: the statements run in order, the last one's value is the value
 fn sequence(statements: Vec<Node>) -> Node {
 	Node::List(statements, Bracket::Round, Separator::Semicolon)
-}
-
-fn call(function: &str, arguments: Vec<Node>) -> Node {
-	Node::List([vec![Node::Symbol(function.to_string())], arguments].concat(), Bracket::Round, Separator::None)
 }
 
 fn generated(parts: &[&str]) -> String {

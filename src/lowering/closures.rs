@@ -5,6 +5,7 @@
 //! becomes `closure_call_1(f, x)`, a helper per arity that call_refs the closure's entry (wasm_emitter/closures.rs).
 //! notes/closures.md describes the representation.
 
+use super::nodes::call;
 use crate::analyzer::extract_user_functions;
 use crate::context::{Context, Param, UserFunctionDef};
 use crate::diagnostic::Diagnostic;
@@ -51,10 +52,6 @@ pub fn closure_call_name(arity: usize) -> String {
 /// `closure_call_2` → 2
 pub fn closure_call_arity(name: &str) -> Option<usize> {
 	name.strip_prefix(CLOSURE_CALL_PREFIX)?.parse().ok()
-}
-
-fn call(name: &str, arguments: Vec<Node>) -> Node {
-	Node::List([vec![Node::Symbol(name.to_string())], arguments].concat(), Bracket::Round, Separator::None)
 }
 
 /// The call of the function value `function` with `arguments`
