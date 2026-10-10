@@ -13,8 +13,8 @@ const SAMPLE_OFFSET = 32768;
 const DEFAULT_SAMPLE_RATE = 22050;
 const WAV_HEADER_BYTES = 44;
 
-// the files std's file module wrote (texts) and render_sound rendered (bytes, a Uint8Array), kept while the page is
-// open: read and the file words see them before the served ones
+// the files std's file module wrote (texts) and render_sound rendered (bytes, a Uint8Array): read and the file words see
+// them before the served ones. A page keeps them in IndexedDB (keepWrittenFile), so they are still there after a reload
 const writtenFiles = new Map();
 const filePath = path => path.replace(/^\.\//, "");
 const textOf = written => typeof written === "string" ? written : utf8Decoder.decode(written);
@@ -26,6 +26,7 @@ self.takeWrittenFiles = files => files?.forEach((content, path) => writtenFiles.
 // a file written (a text) or rendered (bytes, which the page offers for download: worker.js self.keepFile)
 function keepWritten(path, content) {
 	writtenFiles.set(filePath(path), content);
+	keepWrittenFile(filePath(path), content);
 	if (typeof content !== "string") self.keepFile?.(filePath(path), content);
 	self.taskWrote?.(path, content);
 }
@@ -135,10 +136,11 @@ function hostBytes(program, action, what) {
 }
 
 // `database[k]`: the store of any file ending so (src/lowering/stored_values.rs DATABASE_STORE), kept in IndexedDB, which
-// Workers have too; its values are read before the program runs (loadDatabase: worker.js, site-worker.js, site.js) and
+// Workers have too; its values are read before the program runs (loadKept: worker.js, site-worker.js, site.js) and
 // each change written back where the host keeps values (self.keepStored; the browser test suite keeps them in memory)
 const DATABASE_STORE = "database.json";
-const DATABASE = { name: "warp", version: 1, objects: "values" }; // the IndexedDB database and its object store
+// the IndexedDB database, its object store of values and that of the files a program wrote (card files-written)
+const DATABASE = { name: "warp", version: 2, objects: "values", files: "files" };
 const databaseValues = {};
 const isDatabase = file => file.endsWith(DATABASE_STORE);
 let databaseLoaded;
@@ -146,12 +148,13 @@ let databaseLoaded;
 // the values of a store: the session's (markup.js SESSION_STORE), the database's, else the program's
 const valuesOf = file => file === "warp-session" ? sessionValues : isDatabase(file) ? databaseValues : storedValues;
 
-// the IndexedDB object store of `database[k]` in a transaction of `mode`
-function databaseObjects(mode) {
+// an IndexedDB object store (that of `database[k]`, else of the written files) in a transaction of `mode`
+function databaseObjects(mode, store = DATABASE.objects) {
 	return new Promise((resolve, reject) => {
 		const opening = indexedDB.open(DATABASE.name, DATABASE.version);
-		opening.onupgradeneeded = () => opening.result.createObjectStore(DATABASE.objects);
-		opening.onsuccess = () => resolve(opening.result.transaction(DATABASE.objects, mode).objectStore(DATABASE.objects));
+		opening.onupgradeneeded = () => [DATABASE.objects, DATABASE.files].filter(name => !opening.result.objectStoreNames.contains(name))
+			.forEach(name => opening.result.createObjectStore(name));
+		opening.onsuccess = () => resolve(opening.result.transaction(store, mode).objectStore(store));
 		opening.onerror = () => reject(opening.error);
 	});
 }
@@ -161,12 +164,29 @@ const requested = request => new Promise((resolve, reject) => {
 	request.onerror = () => reject(request.error);
 });
 
-// databaseValues from IndexedDB, once; none when it fails (loudly on the console)
-function loadDatabase() {
-	return databaseLoaded ??= databaseObjects("readonly")
-		.then(objects => Promise.all([requested(objects.getAllKeys()), requested(objects.getAll())]))
-		.then(([names, values]) => names.forEach((name, index) => takeDatabaseValue(name, values[index])))
-		.catch(failure => console.error("database values could not be read:", failure));
+// every entry of an IndexedDB object store, as [key, value]
+const keptEntries = store => databaseObjects("readonly", store)
+	.then(objects => Promise.all([requested(objects.getAllKeys()), requested(objects.getAll())]))
+	.then(([keys, values]) => keys.map((key, index) => [key, values[index]]));
+
+// databaseValues and the written files from IndexedDB, once, before a page's first run; none when it fails (loudly on
+// the console). A file written since (by a task) stays as written
+function loadKept() {
+	return databaseLoaded ??= Promise.all([
+		keptEntries(DATABASE.objects).then(entries => entries.forEach(([name, value]) => takeDatabaseValue(name, value)))
+			.catch(failure => console.error("database values could not be read:", failure)),
+		keptEntries(DATABASE.files).then(entries => entries.forEach(([path, content]) => writtenFiles.has(path) || writtenFiles.set(path, content)))
+			.catch(failure => console.error("the files written before could not be read:", failure)),
+	]);
+}
+
+// a written file kept in IndexedDB where the host keeps values (a page; a task's Worker hands its files to the
+// program's, which keeps them)
+function keepWrittenFile(path, content) {
+	if (!self.keepStored) return;
+	databaseObjects("readwrite", DATABASE.files)
+		.then(objects => requested(objects.put(content, path)))
+		.catch(failure => console.error(`the file ${path} could not be kept:`, failure));
 }
 
 // the other tabs' workers keep the same database: each change is told to them, so their tables stay current (a row
