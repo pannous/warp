@@ -28,3 +28,13 @@ fn a_pipe_between_functions_composes_them() {
 	is!("square x := x*x; f := square|square|sqrt; f(3)", 9);
 	is!("def twice(x) = 2*x; f = twice|abs; f(-4)", 8);
 }
+
+// card pipe-applied: wiki/pipe.md `f|g x := g(f(x))`: the composition applied to the argument after it
+#[test]
+fn a_composition_takes_the_argument_after_it() {
+	is!("square x := x*x; sum|square 1 2", 9); // sum|print 1 2 3 prints 6
+	is!("square x := x*x; sum|square [1 2]", 9);
+	is!("square x := x*x; square|sqrt 3", 3);
+	is!("square x := x*x; square|square|sqrt 3", 9);
+	is!("def twice(x) = 2*x; twice|abs -4", 8);
+}

@@ -188,10 +188,11 @@ impl Signals {
 			Node::Key(target, Op::Define, body) if is_call_head(&target) => Node::Key(target, Op::Define, Box::new(self.lower(*body, &[]))),
 			Node::Key(target, op, value) => {
 				let written = written_variable(&target, op).filter(|name| watches(listeners, name));
-				let node = Node::Key(target, op, Box::new(self.lower(*value, listeners)));
+				let node = Node::Key(target.clone(), op, Box::new(self.lower(*value, listeners)));
 				match written {
 					Some(name) => {
-						let value_after = value_after_write(&node);
+						// what the write gave: the new value, also of `x--` (an increment is immediate, P55)
+						let value_after = target.as_ref().clone();
 						let mut parts = vec![node];
 						parts.extend(checks(listeners, &[name]));
 						parts.push(value_after);
@@ -768,17 +769,6 @@ fn statement_write(statement: &Node) -> Option<String> {
 		Node::Key(target, op, _) => written_variable(target, *op),
 		_ => None,
 	}
-}
-
-/// What the write gave: `x--` the value before it, `x+1`; any other write the new value
-fn value_after_write(write: &Node) -> Node {
-	let Node::Key(target, op, _) = write else { unreachable!("a write is a key") };
-	let undo = match op {
-		Op::Dec => Op::Add,
-		Op::Inc => Op::Sub,
-		_ => return target.as_ref().clone(),
-	};
-	Node::Key(target.clone(), undo, Box::new(crate::node::int(1)))
 }
 
 pub(crate) fn assign(name: &str, value: Node) -> Node {

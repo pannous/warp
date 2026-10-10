@@ -1,6 +1,7 @@
 //! List node emission - handles all List(items, bracket, separator) patterns
 
 use crate::analyzer::{call_name, is_statement, is_unbracketed_block, type_word_kind};
+use crate::extensions::numbers::Number;
 use crate::node::{Bracket, Node, Separator};
 use crate::operators::{is_function_keyword, Op};
 use crate::type_kinds::Kind;
@@ -10,12 +11,12 @@ use Instruction as I;
 use super::{WasmGcEmitter, ROUNDING_FUNCTIONS};
 
 /// Names the emitter resolves itself, besides user functions, imports, type words and counting functions
-const BUILTIN_CALLS: [&str; 23] = [
+const BUILTIN_CALLS: [&str; 24] = [
 	"return", "fetch", "puts", "puti", "putl", "putf", "fd_write", "range", "type", "use",
 	crate::min_max::EMPTY_EXTREMUM_CALL, crate::switch::NO_CASE_CALL, crate::analyzer::ZERO_FILL_CALL, crate::analyzer::INSERT_AT_CALL,
 	crate::analyzer::INSERT_EITHER_CALL, crate::library_words::LIST_SUM, crate::traits::INSTANCE_OF, crate::analyzer::REMOVED_VALUE_CALL,
 	crate::analyzer::LIST_DROP_LAST, crate::library_words::VALUES_SIMILAR, super::list_ops::LIST_EXTEND, crate::library_words::VALUES_ROUGH,
-	crate::time::INSTANT_AT,
+	crate::time::INSTANT_AT, crate::time::TIME_OF,
 ];
 
 const PRINT: &str = "print";
@@ -341,6 +342,12 @@ impl WasmGcEmitter {
 			if call == crate::time::INSTANT_AT {
 				self.emit_numeric_value(func, milliseconds);
 				self.emit_call(func, crate::time::INSTANT_AT);
+				return;
+			}
+		}
+		if let [Node::Symbol(call), Node::Number(Number::Int(form)), Node::Number(Number::Int(position))] = items {
+			if call == crate::time::TIME_OF {
+				self.emit_time_constant(func, *form, *position);
 				return;
 			}
 		}
