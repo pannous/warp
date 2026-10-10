@@ -209,6 +209,11 @@ web/playground/tests.html in headless Chrome (agent-browser, session warp-browse
   slow download that progresses is fine) once, with a console warning naming its stage (the verdict still fails:
   loud, not hidden), and a second silent start rejects workerReady naming the stage, so the run fails instead of
   waiting for ever. Probe: trickle_server.py --stall-once + restart.sh (the example shows after ~76 s).
+- Card tour-firefox-stall (2026-10-10, runs 38029627279 and 38030659307, CI tour-firefox, both passed on rerun): the
+  restart fired with stage "downloading warp.wasm", a label that also covered streaming the body, compiling and
+  instantiating (the per-chunk "loading" messages kept no stage). The page now names each: "downloading the compiler:
+  N MB so far", "compiling warp.wasm (N bytes)", "instantiating warp.wasm" (WebAssembly.compile and instantiate apart),
+  so the next stall's console warning says which step hangs.
 
 ## Modules and packages in the browser (2026-10-04)
 The compiler reads files through the page: `warp_host.fetch(address)` / `take_fetched` (web.rs `read_bytes`, cached
