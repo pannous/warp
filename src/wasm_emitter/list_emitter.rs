@@ -483,7 +483,8 @@ impl WasmGcEmitter {
 		let unknown = spec == crate::type_tests::ERROR_TYPE || item_of_text || self.has_unknown_static_type(subject);
 		let declared_type = self.ctx.type_registry.get_by_name(spec).is_some();
 		let map_spec = crate::type_tests::canonical_spec_word(spec) == crate::analyzer::MAP_TYPE;
-		if (unknown || self.may_be_map(subject)) && map_spec && !declared_type {
+		let known_map = crate::analyzer::held_map_type(subject, &self.scope).is_some();
+		if (unknown || self.may_be_map(subject)) && map_spec && !declared_type && !known_map {
 			self.emit_node_instructions(func, subject);
 			self.emit_is_map(func);
 			func.instruction(&I::I64ExtendI32U);
