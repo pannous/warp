@@ -304,10 +304,17 @@ fn each_singular(node: Node, lists: &HashSet<String>, names: &HashSet<String>) -
 	};
 	match node {
 		Node::List(items, bracket, separator) => {
+			// `each xs {it*10}`: a leading each with a body is the loop over xs (wiki/Iteration.md), no `all` argument
+			let is_loop = items.len() > 2 && items[0].is_symbol(EACH_WORD);
 			let mut walked = Vec::with_capacity(items.len());
 			let mut items = items.into_iter().map(|item| each_singular(item, lists, names)).peekable();
 			while let Some(item) = items.next() {
 				let list = items.peek().filter(|_| item.is_symbol(EACH_WORD)).and_then(walked_list);
+				if let (true, Some(plural)) = (is_loop, &list) {
+					items.next();
+					walked.extend([item, symbol(plural)]); // `each friend {…}` loops over friends
+					continue;
+				}
 				match list {
 					Some(plural) => {
 						items.next();

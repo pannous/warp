@@ -59,6 +59,7 @@ fn a_singular_name_walks_its_plural_list() {
 	assert_eq!(printed("def sq(x){x*x}; xs=[1 2]; sq each xs"), "[1 4]");
 	assert_eq!(printed("def sq(x){x*x}; sq of 3"), "9");
 	assert_eq!(printed("use text; text=\"hi you\"; words of text"), "[\"hi\" \"you\"]");
+	assert_eq!(printed("xs=[1,2,3]; each x {it*10}"), "30"); // the loop form walks the plural too
 }
 
 #[test]
