@@ -98,6 +98,8 @@ impl WarpParser {
 			';' | '>' | '}' | ')' | ']' => Empty, // Closing brackets/terminators handled by caller
 			'ø' => { self.advance(); return Empty }
 			'∞' => { self.advance(); return Node::Number(Number::Inf) } // the float infinity (P56)
+			// `°C`, `°F`: a temperature unit (units.rs)
+			crate::units::DEGREE if self.peek_char(1).is_alphabetic() => self.symbol_after(1, |name| Node::Symbol(format!("{}{name}", crate::units::DEGREE))),
 			_ if let Some((truth, length)) = self.truth_glyph_at() => {
 				self.advance_by(length);
 				return truth;
