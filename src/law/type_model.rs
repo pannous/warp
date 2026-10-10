@@ -27,8 +27,6 @@ const ERROR_CALL: &str = "error";
 const BOOL_TYPE: &str = ".bool";
 const ANY_TYPE: &str = ".any";
 const LIST_TYPE_PREFIX: &str = ".list ";
-/// The builtin scalar type words warp checks a value against (analyzer admits) that W0 has a type for
-pub(crate) const BUILTIN_TYPE_WORDS: [&str; 13] = ["int", "integer", "long", "exact", "float", "number", "text", "string", "str", "codepoint", "char", "bool", "boolean"];
 /// A value of each W0 scalar type and the run-time kind warp sees it as (a bool is an Int)
 const VALUE_KINDS: [(&str, Kind); 5] = [(BOOL_TYPE, Kind::Int), (".int", Kind::Int), (".number", Kind::Float), (".text", Kind::Text), (".codepoint", Kind::Codepoint)];
 const UNIT_TYPE: &str = ".unit";
@@ -96,13 +94,14 @@ fn type_of_word(word: &str) -> Option<String> {
 		if let Some(width) = crate::fixed_width::fixed_width(word) {
 			return Some(format!("{RANGED_TYPE_PREFIX}({}) ({})", width.low, width.high));
 		}
-		Some(match crate::type_kinds::canonical_type_name(&word.to_lowercase()) {
-			"int" | "integer" | "long" => ".int",
-			"float" | "number" | "exact" => ".number",
-			"text" | "string" | "str" => ".text",
-			"codepoint" | "char" => ".codepoint",
-			"bool" | "boolean" => BOOL_TYPE,
+		let word = word.to_lowercase();
+		Some(match crate::type_tests::canonical_spec_word(&word) {
+			"int" => ".int",
+			"text" => ".text",
+			"codepoint" => ".codepoint",
+			crate::analyzer::BOOL_TYPE => BOOL_TYPE,
 			"any" => ANY_TYPE,
+			number if crate::type_tests::type_matches(number, "number") => ".number",
 			_ => return None,
 		}.to_string())
 	};
@@ -1400,9 +1399,10 @@ fn ask_each<T>(name: &str, requests: Vec<String>, what: &str, answer: impl Fn(&s
 }
 
 /// Where warp's run-time admission of a value to a builtin type (analyzer admits) differs from W0's `Ty.sub`, for
-/// every type word and W0 scalar value type: "word ← value type: warp admits / W0 sub"
+/// every builtin type word W0 has a type for and every W0 scalar value type: "word ← value type: warp admits / W0 sub"
 pub fn admits_disagreements() -> Result<Vec<String>, String> {
-	let pairs: Vec<(&str, &str, Kind)> = BUILTIN_TYPE_WORDS.iter().flat_map(|word| VALUE_KINDS.iter().map(move |(value, kind)| (*word, *value, *kind))).collect();
+	let words = crate::type_tests::builtin_type_words().filter(|word| crate::type_tests::held_kind(word).is_some() && type_of_word(word).is_some());
+	let pairs: Vec<(&str, &str, Kind)> = words.flat_map(|word| VALUE_KINDS.iter().map(move |(value, kind)| (word, *value, *kind))).collect();
 	let requests = pairs.iter().map(|(word, value, _)| format!("Ty.sub ({value}) ({})", type_of_word(word).expect("a W0 type word"))).collect();
 	let answers: Vec<bool> = ask_each("admits", requests, "pairs", |line| line.parse().ok())?;
 	Ok(pairs.iter().zip(answers).filter_map(|((word, value, kind), sub)| {

@@ -329,7 +329,7 @@ impl WasmGcEmitter {
 			}
 			// `float(x)` is `x as float` (a text parses its digits)
 			if let [type_word, value] = items {
-				if crate::type_kinds::canonical_type_name(fn_name) == "float" {
+				if crate::type_tests::canonical_spec_word(fn_name) == "float" {
 					return self.emit_float_value(func, &Node::Key(Box::new(value.clone()), Op::As, Box::new(type_word.clone())));
 				}
 			}

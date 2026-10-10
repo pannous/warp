@@ -5,7 +5,7 @@ use crate::function::{Function, FunctionRegistry};
 use crate::local::Local;
 use crate::node::{Bracket, Node, Separator};
 use crate::operators::{is_function_keyword, Op};
-use crate::type_kinds::{canonical_type_name, Kind};
+use crate::type_kinds::Kind;
 use std::collections::{HashMap, HashSet};
 
 /// Property words that count the elements of a value: `size of x`, `x size`, `x.size`; `size` is a synonym of `count`
