@@ -87,16 +87,13 @@ pub fn is_text_builtin(name: &str) -> bool {
 	TEXT_BUILTINS.iter().any(|(builtin, _, _)| *builtin == name)
 }
 
-/// `+` of two texts or characters is a text; a number joins a text in its text form (`"F:" + 13` → `"F:13"`, as JS/Kotlin)
+/// `+` of two texts or characters is a text; anything else joins a text in its text form, as str() writes it
+/// (`"F:" + 13` → `"F:13"`, as JS/Kotlin; `"oldest: " + [1 2]` → `"oldest: [1 2]"`, card print-oldest), but a function
 pub fn concatenates(left: Kind, right: Kind) -> bool {
 	let is_text = |kind: &Kind| matches!(kind, Kind::Text | Kind::Codepoint);
 	// an Error joins as its message (card try-raise: `"caught: " + e` of `catch e`), a symbol value as its name (P230:
 	// `"square is " + effects of square`)
-	[left, right].iter().any(is_text) && [left, right].iter().all(|kind| is_text(kind) || is_number(*kind) || matches!(kind, Kind::Error | Kind::Symbol))
-}
-
-fn is_number(kind: Kind) -> bool {
-	matches!(kind, Kind::Int | Kind::Float)
+	[left, right].iter().any(is_text) && !matches!(left, Kind::Function) && !matches!(right, Kind::Function)
 }
 
 /// Runtime functions the text builtins call
@@ -395,9 +392,9 @@ impl WasmGcEmitter {
 		self.emit_call(func, TEXT_CONCAT);
 	}
 
-	/// A text operand as is, a number in its text form; the implicit conversion is hinted
+	/// A text operand as is, anything else in its text form; the implicit conversion is hinted
 	fn emit_concatenated(&mut self, func: &mut Function, operand: &Node) {
-		if matches!(self.get_type(operand), Kind::Empty | Kind::Data) {
+		if matches!(self.get_type(operand), Kind::Empty | Kind::Data) && !matches!(operand.drop_meta(), Node::Empty) {
 			// a value held as a Node (a map value, arithmetic of an any value) may be a number at runtime: joined, a number takes its text form
 			self.emit_node_instructions(func, &super::joined_text(std::slice::from_ref(operand), ""));
 			return;
@@ -406,7 +403,7 @@ impl WasmGcEmitter {
 			self.emit_runtime_text_cast(func, operand);
 			return;
 		}
-		if !is_number(self.get_type(operand)) {
+		if matches!(self.get_type(operand), Kind::Text | Kind::Codepoint | Kind::Symbol) {
 			self.emit_node_instructions(func, operand);
 			return;
 		}
