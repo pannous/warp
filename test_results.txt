@@ -471,6 +471,7 @@ PASSED:
   ✓ control::test_storage::keys_name_the_kept_values
   ✓ control::test_storage::local_is_the_store_of_storage
   ✓ control::test_storage::session_is_a_store_of_its_own
+  ✓ control::test_stored_default::a_stored_assignment_notes_the_default_form
   ✓ control::test_stored_default::a_stored_default_is_only_the_first_runs
   ✓ control::test_stored_default::a_stored_value_has_a_default
   ✓ control::test_stored_signals::a_change_of_a_stored_value_is_kept_for_the_next_run
@@ -4158,6 +4159,9 @@ PASSED:
   ✓ web::test_web::test_inner_html
   ✓ web::test_web::test_js
   ✓ web::test_webgpu_ints::a_compute_shader_over_ints_gives_ints
+  ✓ web::test_webgpu_named::a_name_the_shader_does_not_declare_fails_loudly
+  ✓ web::test_webgpu_named::named_arrays_come_back_by_name
+  ✓ web::test_webgpu_named::the_sample_reads_an_array_by_name
   ✓ web::test_webgpu::a_chain_of_gpu_maps_is_one_kernel
   ✓ web::test_webgpu::a_compute_shader_runs_over_a_linear_array_in_place
   ✓ web::test_webgpu::a_compute_shader_runs_over_the_numbers
@@ -4574,4 +4578,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-10 ignored, 4569 passed, 0 failed, 4569 total tested
+10 ignored, 4573 passed, 0 failed, 4573 total tested
