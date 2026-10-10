@@ -818,43 +818,158 @@ impl WasmGcEmitter {
 			s.call(f, "big_trim");
 		});
 
-		// mag_divmod(a, b) -> (quotient, remainder) as two results; binary long division, b nonzero
-		// locals: quotient, remainder, bit, n, k, carry, v
-		self.runtime_function("mag_divmod", vec![limbs, limbs], vec![limbs, limbs], vec![limbs, limbs, i32s, i32s, i32s, i32s, i32s], |s, f| {
-			let (a, b, quotient, remainder, bit, n, k, carry, v) = (0, 1, 2, 3, 4, 5, 6, 7, 8);
-			Self::emit_list(f, &[I::LocalGet(a), I::ArrayLen, I::ArrayNewDefault(limbs_type), I::LocalSet(quotient)]);
-			Self::emit_list(f, &[I::LocalGet(b), I::ArrayLen, I::I32Const(1), I::I32Add, I::LocalTee(n), I::ArrayNewDefault(limbs_type), I::LocalSet(remainder)]);
-			Self::emit_list(f, &[I::LocalGet(a), I::ArrayLen, I::I32Const(5), I::I32Shl, I::LocalSet(bit)]);
-			Self::count_down(f, bit, |f| {
-				// carry = bit `bit` of a
-				Self::emit_list(f, &[
-					I::LocalGet(a), I::LocalGet(bit), I::I32Const(5), I::I32ShrU, I::ArrayGet(limbs_type),
-					I::LocalGet(bit), I::I32Const(31), I::I32And, I::I32ShrU, I::I32Const(1), I::I32And, I::LocalSet(carry),
-				]);
-				// remainder = remainder << 1 | carry
-				Self::emit_list(f, &[I::I32Const(0), I::LocalSet(k)]);
-				Self::count_up(f, k, n, |f| {
-					Self::emit_list(f, &[I::LocalGet(remainder), I::LocalGet(k), I::ArrayGet(limbs_type), I::LocalSet(v)]);
-					Self::emit_list(f, &[
-						I::LocalGet(remainder), I::LocalGet(k), I::LocalGet(v), I::I32Const(1), I::I32Shl, I::LocalGet(carry), I::I32Or,
-						I::ArraySet(limbs_type),
-					]);
-					Self::emit_list(f, &[I::LocalGet(v), I::I32Const(31), I::I32ShrU, I::LocalSet(carry)]);
+		// mag_divmod(a, b) -> (quotient, remainder) as two results, b nonzero: long division limb by limb (Knuth, TAOCP 4.3.1
+		// algorithm D), O(len a · len b); bit by bit it was O(bits a · len b), and Euclid's gcd of 1400-bit numbers ran out
+		// of fuel (card exact-harmonic)
+		let i64s = ValType::I64;
+		let locals = vec![limbs, limbs, limbs, i32s, i32s, i32s, i32s, i32s, i32s, i64s, i64s, i64s, i64s, i64s, i64s, i64s, i32s];
+		self.runtime_function("mag_divmod", vec![limbs, limbs], vec![limbs, limbs], locals, |s, f| {
+			let (a, b, quotient, un, vn, la, lb, shift, j, i, bound) = (0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10);
+			let (qhat, rhat, product, t, k, v_top, v_second, previous) = (11, 12, 13, 14, 15, 16, 17, 18);
+			let get = |f: &mut Function, array: u32, index: &[Instruction]| {
+				f.instruction(&I::LocalGet(array));
+				Self::emit_list(f, index);
+				s.limbs_get(f);
+			};
+			let set = |f: &mut Function, array: u32, index: &[Instruction], value: &[Instruction]| {
+				f.instruction(&I::LocalGet(array));
+				Self::emit_list(f, index);
+				Self::emit_list(f, value);
+				f.instruction(&I::I32WrapI64);
+				s.limbs_set(f);
+			};
+			let new_limbs = |f: &mut Function, length: &[Instruction], local: u32| {
+				Self::emit_list(f, length);
+				Self::emit_list(f, &[I::ArrayNewDefault(limbs_type), I::LocalSet(local)]);
+			};
+			// limb i of `array` shifted by `shift` with the bits the neighbour limb moves in: up for i = 0 ..= len (normalizing),
+			// down for the remainder
+			let shifted_up = |f: &mut Function, array: u32| {
+				s.limb_or_zero(f, array, I::LocalGet(i));
+				Self::emit_list(f, &[I::I64Const(32), I::I64Shl, I::LocalGet(i), I::I32Const(1), I::I32Sub, I::LocalSet(previous)]);
+				s.limb_or_zero(f, array, I::LocalGet(previous));
+				Self::emit_list(f, &[I::I64Or, I::LocalGet(shift), I::I64ExtendI32U, I::I64Shl, I::I64Const(32), I::I64ShrU]);
+			};
+			let range = |f: &mut Function, length: &[Instruction], body: &dyn Fn(&mut Function)| {
+				Self::emit_list(f, &[I::I32Const(0), I::LocalSet(i)]);
+				Self::emit_list(f, length);
+				f.instruction(&I::LocalSet(bound));
+				Self::count_up(f, i, bound, body);
+			};
+			for local in [a, b] {
+				f.instruction(&I::LocalGet(local));
+				s.call(f, "big_trim");
+				f.instruction(&I::LocalSet(local));
+			}
+			Self::emit_list(f, &[I::LocalGet(a), I::ArrayLen, I::LocalSet(la), I::LocalGet(b), I::ArrayLen, I::LocalSet(lb)]);
+			// a < b: quotient 0, remainder a
+			Self::emit_list(f, &[I::LocalGet(la), I::LocalGet(lb), I::I32LtU, I::If(BlockType::Empty), I::I32Const(0), I::ArrayNewDefault(limbs_type), I::LocalGet(a), I::Return, I::End]);
+			new_limbs(f, &[I::LocalGet(la), I::LocalGet(lb), I::I32Sub, I::I32Const(1), I::I32Add], quotient);
+			// one limb: short division
+			Self::emit_list(f, &[I::LocalGet(lb), I::I32Const(1), I::I32Eq, I::If(BlockType::Empty)]);
+			get(f, b, &[I::I32Const(0)]);
+			Self::emit_list(f, &[I::LocalSet(v_top), I::LocalGet(la), I::LocalSet(j)]);
+			Self::count_down(f, j, |f| {
+				f.instruction(&I::LocalGet(k));
+				Self::emit_list(f, &[I::I64Const(32), I::I64Shl]);
+				get(f, a, &[I::LocalGet(j)]);
+				Self::emit_list(f, &[I::I64Or, I::LocalSet(t)]);
+				set(f, quotient, &[I::LocalGet(j)], &[I::LocalGet(t), I::LocalGet(v_top), I::I64DivU]);
+				Self::emit_list(f, &[I::LocalGet(t), I::LocalGet(v_top), I::I64RemU, I::LocalSet(k)]);
+			});
+			new_limbs(f, &[I::I32Const(1)], un);
+			set(f, un, &[I::I32Const(0)], &[I::LocalGet(k)]);
+			Self::emit_list(f, &[I::LocalGet(quotient)]);
+			s.call(f, "big_trim");
+			f.instruction(&I::LocalGet(un));
+			s.call(f, "big_trim");
+			Self::emit_list(f, &[I::Return, I::End]);
+			// normalize: shift both left until the divisor's top bit is set
+			Self::emit_list(f, &[I::LocalGet(b), I::LocalGet(lb), I::I32Const(1), I::I32Sub, I::ArrayGet(limbs_type), I::I32Clz, I::LocalSet(shift)]);
+			new_limbs(f, &[I::LocalGet(lb)], vn);
+			range(f, &[I::LocalGet(lb)], &|f| {
+				f.instruction(&I::LocalGet(vn));
+				f.instruction(&I::LocalGet(i));
+				shifted_up(f, b);
+				Self::emit_list(f, &[I::I32WrapI64]);
+				s.limbs_set(f);
+			});
+			new_limbs(f, &[I::LocalGet(la), I::I32Const(1), I::I32Add], un);
+			range(f, &[I::LocalGet(la), I::I32Const(1), I::I32Add], &|f| {
+				f.instruction(&I::LocalGet(un));
+				f.instruction(&I::LocalGet(i));
+				shifted_up(f, a);
+				Self::emit_list(f, &[I::I32WrapI64]);
+				s.limbs_set(f);
+			});
+			get(f, vn, &[I::LocalGet(lb), I::I32Const(1), I::I32Sub]);
+			f.instruction(&I::LocalSet(v_top));
+			get(f, vn, &[I::LocalGet(lb), I::I32Const(2), I::I32Sub]);
+			f.instruction(&I::LocalSet(v_second));
+			Self::emit_list(f, &[I::LocalGet(la), I::LocalGet(lb), I::I32Sub, I::I32Const(1), I::I32Add, I::LocalSet(j)]);
+			Self::count_down(f, j, |f| {
+				// estimate the quotient limb from the top two limbs, at most 2 too big
+				get(f, un, &[I::LocalGet(j), I::LocalGet(lb), I::I32Add]);
+				f.instruction(&I::I64Const(32));
+				f.instruction(&I::I64Shl);
+				get(f, un, &[I::LocalGet(j), I::LocalGet(lb), I::I32Add, I::I32Const(1), I::I32Sub]);
+				Self::emit_list(f, &[I::I64Or, I::LocalTee(t), I::LocalGet(v_top), I::I64DivU, I::LocalSet(qhat)]);
+				Self::emit_list(f, &[I::LocalGet(t), I::LocalGet(v_top), I::I64RemU, I::LocalSet(rhat)]);
+				Self::emit_list(f, &[I::Block(BlockType::Empty), I::Loop(BlockType::Empty)]);
+				Self::emit_list(f, &[I::LocalGet(qhat), I::I64Const(1 << 32), I::I64GeU, I::If(BlockType::Result(ValType::I32)), I::I32Const(1), I::Else]);
+				Self::emit_list(f, &[I::LocalGet(qhat), I::LocalGet(v_second), I::I64Mul, I::LocalGet(rhat), I::I64Const(32), I::I64Shl]);
+				get(f, un, &[I::LocalGet(j), I::LocalGet(lb), I::I32Add, I::I32Const(2), I::I32Sub]);
+				Self::emit_list(f, &[I::I64Or, I::I64GtU, I::End, I::I32Eqz, I::BrIf(1)]);
+				Self::emit_list(f, &[I::LocalGet(qhat), I::I64Const(1), I::I64Sub, I::LocalSet(qhat)]);
+				Self::emit_list(f, &[I::LocalGet(rhat), I::LocalGet(v_top), I::I64Add, I::LocalTee(rhat), I::I64Const(1 << 32), I::I64LtU, I::BrIf(0), I::End, I::End]);
+				// un[j ..= j+lb] -= qhat · vn
+				Self::emit_list(f, &[I::I64Const(0), I::LocalSet(k)]);
+				range(f, &[I::LocalGet(lb)], &|f| {
+					f.instruction(&I::LocalGet(qhat));
+					get(f, vn, &[I::LocalGet(i)]);
+					Self::emit_list(f, &[I::I64Mul, I::LocalSet(product)]);
+					get(f, un, &[I::LocalGet(i), I::LocalGet(j), I::I32Add]);
+					Self::emit_list(f, &[I::LocalGet(k), I::I64Sub, I::LocalGet(product), I::I64Const(0xFFFF_FFFF), I::I64And, I::I64Sub, I::LocalSet(t)]);
+					set(f, un, &[I::LocalGet(i), I::LocalGet(j), I::I32Add], &[I::LocalGet(t)]);
+					Self::emit_list(f, &[I::LocalGet(product), I::I64Const(32), I::I64ShrU, I::LocalGet(t), I::I64Const(32), I::I64ShrS, I::I64Sub, I::LocalSet(k)]);
 				});
-				Self::emit_list(f, &[I::LocalGet(remainder), I::LocalGet(b)]);
-				s.call(f, "mag_cmp");
-				Self::emit_list(f, &[I::I32Const(0), I::I32GeS, I::If(BlockType::Empty), I::LocalGet(remainder), I::LocalGet(b)]);
-				s.call(f, "mag_sub_into");
-				Self::emit_list(f, &[
-					I::LocalGet(quotient), I::LocalGet(bit), I::I32Const(5), I::I32ShrU,
-					I::LocalGet(quotient), I::LocalGet(bit), I::I32Const(5), I::I32ShrU, I::ArrayGet(limbs_type),
-					I::I32Const(1), I::LocalGet(bit), I::I32Const(31), I::I32And, I::I32Shl, I::I32Or,
-					I::ArraySet(limbs_type), I::End,
-				]);
+				get(f, un, &[I::LocalGet(j), I::LocalGet(lb), I::I32Add]);
+				Self::emit_list(f, &[I::LocalGet(k), I::I64Sub, I::LocalSet(t)]);
+				set(f, un, &[I::LocalGet(j), I::LocalGet(lb), I::I32Add], &[I::LocalGet(t)]);
+				set(f, quotient, &[I::LocalGet(j)], &[I::LocalGet(qhat)]);
+				// subtracted once too often: add the divisor back
+				Self::emit_list(f, &[I::LocalGet(t), I::I64Const(0), I::I64LtS, I::If(BlockType::Empty)]);
+				set(f, quotient, &[I::LocalGet(j)], &[I::LocalGet(qhat), I::I64Const(1), I::I64Sub]);
+				Self::emit_list(f, &[I::I64Const(0), I::LocalSet(k)]);
+				range(f, &[I::LocalGet(lb)], &|f| {
+					get(f, un, &[I::LocalGet(i), I::LocalGet(j), I::I32Add]);
+					get(f, vn, &[I::LocalGet(i)]);
+					Self::emit_list(f, &[I::I64Add, I::LocalGet(k), I::I64Add, I::LocalSet(t)]);
+					set(f, un, &[I::LocalGet(i), I::LocalGet(j), I::I32Add], &[I::LocalGet(t)]);
+					Self::emit_list(f, &[I::LocalGet(t), I::I64Const(32), I::I64ShrU, I::LocalSet(k)]);
+				});
+				get(f, un, &[I::LocalGet(j), I::LocalGet(lb), I::I32Add]);
+				f.instruction(&I::LocalGet(k));
+				f.instruction(&I::I64Add);
+				f.instruction(&I::LocalSet(t));
+				set(f, un, &[I::LocalGet(j), I::LocalGet(lb), I::I32Add], &[I::LocalGet(t)]);
+				f.instruction(&I::End);
+			});
+			// the remainder: the low limbs of un shifted back down
+			new_limbs(f, &[I::LocalGet(lb)], vn);
+			range(f, &[I::LocalGet(lb)], &|f| {
+				f.instruction(&I::LocalGet(vn));
+				f.instruction(&I::LocalGet(i));
+				get(f, un, &[I::LocalGet(i), I::I32Const(1), I::I32Add]);
+				f.instruction(&I::I64Const(32));
+				f.instruction(&I::I64Shl);
+				get(f, un, &[I::LocalGet(i)]);
+				Self::emit_list(f, &[I::I64Or, I::LocalGet(shift), I::I64ExtendI32U, I::I64ShrU, I::I32WrapI64]);
+				s.limbs_set(f);
 			});
 			f.instruction(&I::LocalGet(quotient));
 			s.call(f, "big_trim");
-			f.instruction(&I::LocalGet(remainder));
+			f.instruction(&I::LocalGet(vn));
 			s.call(f, "big_trim");
 		});
 	}

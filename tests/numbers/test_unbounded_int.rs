@@ -98,3 +98,14 @@ fn test_small_arithmetic_unchanged() {
 	let result = eval("i=0; s=0; while i<1000 { s+=i; i++ }; s");
 	assert_eq!(result, 499500);
 }
+
+// card exact-harmonic: division by a multi-limb divisor is long division limb by limb (Knuth D), not bit by bit; the
+// exact harmonic sum H(1000), whose gcds divide 1400-bit numbers, ran out of fuel
+#[test]
+fn test_multi_limb_division_is_fast_and_exact() {
+	is!("3^500 //(7^200 + 1)", int("3475516518550762914662807823601793779906187633587117288128683009218530"));
+	is!("3^500 % (7^200 + 1)", int("9004617848146602677195321937096121656623352715405743972593125226610503995575476735350313565020675906494055929493291669130129629250984184812595840560906472494063455572941"));
+	is!("(2^640 - 1) //(2^320 + 12345)", int("2135987035920910082395021706169552114602704522356652769947041607822219725780640550022962086924231"));
+	is!("(2^640 - 1) % (2^320 + 12345)", 152399024);
+	is!("s = 0; for k in 1..1000 { s += 1/k }; floor(s * 1000)", 7484); // H(999): 1..1000 stops before 1000
+}
