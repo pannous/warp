@@ -21,6 +21,8 @@ const COPY_ROW_BYTES: u32 = 256;
 const TITLE: &str = "warp paint";
 /// A small image is scaled up by a whole factor until its longer side reaches this many points
 const SHOWN_SIDE: u32 = 512;
+/// A frame this many pixels across or more shows pixel for pixel (crisp on a Retina screen, half as many points)
+const PIXEL_FOR_PIXEL_SIDE: u32 = 1024;
 const RGBA_BYTES: usize = 4;
 /// One triangle covering the window, sampling the frame as a texture, nearest pixel (no blur when scaled up)
 const SHADER: &str = "
@@ -245,10 +247,19 @@ impl ApplicationHandler<Frame> for Viewer {
 	}
 }
 
+/// The window's inner size for a frame: a small one scaled up by a whole factor, a large one pixel for pixel
+fn shown_size(width: u32, height: u32) -> winit::dpi::Size {
+	let side = width.max(height).max(1);
+	if side >= PIXEL_FOR_PIXEL_SIDE {
+		return winit::dpi::PhysicalSize::new(width, height).into();
+	}
+	let scale = (SHOWN_SIDE / side).max(1);
+	winit::dpi::LogicalSize::new(width * scale, height * scale).into()
+}
+
 impl Screen {
 	fn open(event_loop: &ActiveEventLoop, width: u32, height: u32, check: bool) -> Result<Screen, String> {
-		let scale = (SHOWN_SIDE / width.max(height).max(1)).max(1);
-		let attributes = Window::default_attributes().with_title(TITLE).with_inner_size(winit::dpi::LogicalSize::new(width * scale, height * scale));
+		let attributes = Window::default_attributes().with_title(TITLE).with_inner_size(shown_size(width, height));
 		let window = Arc::new(event_loop.create_window(attributes).map_err(|failure| format!("paint-window: no window: {failure}"))?);
 		let instance = wgpu::Instance::new(wgpu::InstanceDescriptor::new_without_display_handle());
 		let surface = instance.create_surface(window.clone()).map_err(|failure| format!("paint-window: no surface: {failure}"))?;
@@ -306,8 +317,7 @@ impl Screen {
 			],
 		}));
 		if self.frame_size != (frame.width, frame.height) && self.frame_size != (0, 0) {
-			let scale = (SHOWN_SIDE / frame.width.max(frame.height).max(1)).max(1);
-			let _ = self.window.request_inner_size(winit::dpi::LogicalSize::new(frame.width * scale, frame.height * scale));
+			let _ = self.window.request_inner_size(shown_size(frame.width, frame.height));
 		}
 		self.frame_size = (frame.width, frame.height);
 		self.window.request_redraw();
