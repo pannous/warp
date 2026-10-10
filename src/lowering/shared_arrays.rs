@@ -12,7 +12,7 @@
 //! Shared values (P106): `shared done = false`, `shared n = 0`, `shared x = 0.5` are one-cell arrays: a read of `n` is
 //! `shared_get(n, 1)`, `n = v` is `shared_set(n, 1, v)`, `n += v` is `shared_add(n, 1, v)`; a boolean is the Int 1 or 0.
 
-use super::nodes::{call, is_word, key};
+use super::nodes::{call, key};
 use crate::node::{symbol, Bracket, Node, Separator};
 use crate::operators::Op;
 use std::collections::{HashMap, HashSet};
@@ -150,7 +150,7 @@ fn float_array_assignment(node: &Node) -> Option<String> {
 fn only_linear_uses(node: &Node, name: &str, picked: &HashSet<String>) -> bool {
 	let (mut mentions, mut supported, mut pairings) = (0, 0, 0);
 	node.visit(&mut |part| {
-		mentions += usize::from(is_word(part, name));
+		mentions += usize::from(part.is_symbol(name));
 		let (uses, paired) = linear_uses(part, name, picked);
 		supported += uses;
 		pairings += paired;
@@ -161,7 +161,7 @@ fn only_linear_uses(node: &Node, name: &str, picked: &HashSet<String>) -> bool {
 /// The mentions of name that part makes as a linear array supports them, and how many of those pair it with another
 /// array of `picked`
 fn linear_uses(part: &Node, name: &str, picked: &HashSet<String>) -> (usize, usize) {
-	let is_name = |node: &Node| is_word(node, name);
+	let is_name = |node: &Node| node.is_symbol(name);
 	let is_picked = |node: &Node| matches!(node.drop_meta(), Node::Symbol(symbol) if picked.contains(symbol));
 	let paired = |left: &Node, right: &Node| {
 		let uses = usize::from(is_name(left)) + usize::from(is_name(right));
