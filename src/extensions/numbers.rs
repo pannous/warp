@@ -186,15 +186,6 @@ impl Number {
 		Some(format!("{sign}{whole}.{fraction}"))
 	}
 
-	/// A decimal literal is exact when its shortest round-trip form has at most f64's 15 guaranteed
-	/// significant digits: `0.1` is 1/10, while `π` (3.141592653589793) stays an f64 approximation
-	pub fn is_exact_decimal(value: f64) -> bool {
-		const F64_DECIMAL_DIGITS: usize = f64::DIGITS as usize;
-		let scientific = format!("{:e}", value);
-		let mantissa = scientific.split('e').next().unwrap_or_default();
-		value.is_finite() && mantissa.chars().filter(char::is_ascii_digit).count() <= F64_DECIMAL_DIGITS
-	}
-
 	/// Integer literal of any size: 123456789012345678901234567890
 	pub fn parse_integer(digits: &str) -> Option<Number> {
 		digits.parse::<BigInt>().ok().map(Number::from_bigint)

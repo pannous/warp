@@ -240,7 +240,8 @@ fn exact_amount(value: &Node) -> Option<Rational> {
 	match value.drop_meta() {
 		Node::Number(Number::Int(n)) => Some(Rational::integer(*n)),
 		Node::Number(Number::Quotient(n, d)) => Some(Rational::new(BigInt::from(*n), BigInt::from(*d))),
-		Node::Number(Number::Float(f)) if Number::is_exact_decimal(*f) => {
+		// a written amount converts as the decimal it spells: 6.5km is 6500m, not 6499.999…m
+		Node::Number(Number::Float(f)) if f.is_finite() => {
 			let (numerator, denominator) = crate::wasm_emitter::exact::decimal_fraction(*f);
 			Some(Rational::new(numerator, denominator))
 		}

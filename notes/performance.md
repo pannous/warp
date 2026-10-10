@@ -39,6 +39,13 @@ otherwise constant evaluation may hide the loop. Profile the generated module ap
 - **Texts grow in place** (text_concat): a left text ending where the heap starts gets right's bytes after it; a
   right text made just now (a character's bytes) already follows left, so nothing is copied. The left text's own
   bytes never change, so other values sharing them stay right.
+- **Finger paint strokes** (card runtime-speed, 2026-10-10; probes/perf/finger_paint_bench.warp, release):
+  2.6 ms → 0.4 ms a stroke. The guest profile (probes/perf/finger_paint_profile.warp, wasmtime `--profile=guest`,
+  summed by probes/perf/profile_self_time.py) blamed boxing, not pixels: `floor(v) as int` built an Int node
+  (new_int), read it back and called exact_trunc; `radius^2` called exact_pow. Now `floor`/`ceil`/`round` of a float
+  are F64Floor/F64Ceil/F64Nearest + a truncating cast to the i64, an `as int` of a builtin rounding call skips
+  exact_trunc (a user or FFI function of that name keeps it), `x^2` is one multiplication (floats: F64Mul; ints:
+  the overflow-checked `*`), and a float `as int` truncates natively.
 
 ## Measured as fine
 Closure calls cost what definition calls cost: 50 million calls of `add=(a,b)=>a+b`, of a capturing `x=>x*k` and of a
@@ -49,3 +56,6 @@ closure typing has nothing to win here yet. Loops over typed lists, map, append:
 A map that is not a hash table variable (a literal start `{a:1}`, a parameter, a global, one updated by `+=` or with
 dynamic keys) is still the immutable cons list: n keys cost n². Each use of a hash-table map as a whole value
 converts it (O(n)); a loop that prints or passes the map each round pays that every round.
+Finger paint after runtime-speed: `mixed` (per pixel `//` and `%` via exact_euclid_div/exact_mod, no inline fixnum
+path) and int list get/set through the Node layer are the next costs; loop ends like `cell(x+r)+1` are re-evaluated
+each round.

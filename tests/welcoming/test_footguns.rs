@@ -105,7 +105,9 @@ fn test_data_does_not_execute() {
 
 #[test]
 fn test_exact_decimal_arithmetic() {
-	is!("0.1+0.2==0.3", true);
+	is!("0.1+0.2==0.3", false); // decimals are floats (decision exact-default), with a warning: use ≈
+	is!("0.1+0.2 ≈ 0.3", true);
+	is!("1/10+2/10==3/10", true);
 	is!("1/3*3==1", true);
 }
 
@@ -660,7 +662,7 @@ fn test_compiler_failures_are_error_values() {
 #[test]
 fn test_exact_rationals_stay_exact() {
 	is!("1/3", Node::Number(warp::Number::Quotient(1, 3))); // Python/JS: 0.3333333333333333
-	is!("x=0.1;x*3", 0.3);
+	is!("x=1/10;x*3", 0.3);
 	is!("2^-2", 0.25); // was a wasm trap: negative exponents need rationals
 	is!("1/3 < 0.34", true);
 }
@@ -785,9 +787,10 @@ fn test_booleans_count_as_numbers() {
 	assert!(accepted("x = 1 < 2; if x {1} else {2}"));
 }
 
-#[test] // IEEE 754: (0.1+0.2)+0.3 != 0.1+(0.2+0.3); number literals are exact by default
+#[test] // IEEE 754: (0.1+0.2)+0.3 != 0.1+(0.2+0.3); decimals are floats (decision exact-default), fractions are exact
 fn test_addition_is_associative_by_default() {
-	is!("(0.1+0.2)+0.3 == 0.1+(0.2+0.3)", true);
+	is!("(0.1+0.2)+0.3 == 0.1+(0.2+0.3)", false);
+	is!("(1/10+2/10)+3/10 == 1/10+(2/10+3/10)", true);
 }
 
 #[test] // IEEE floats are the explicit opt-in, and then the law is weaker
@@ -812,7 +815,7 @@ fn test_as_converts_the_whole_expression() {
 
 #[test] // user decision 2026-09-28: a tight conversion is written on the literal itself, `0.1:float` or C's `0.1f`
 fn test_typed_literals_bind_tightly() {
-	is!("0.1 + 0.2 == 0.3", true); // exact by default
+	is!("0.1 + 0.2 == 0.3", false); // decimals are floats (decision exact-default)
 	is!("0.1:float + 0.2:float == 0.3", false);
 	is!("0.1f + 0.2f == 0.3", false);
 	is!(".1f + .2f == .3", false);
@@ -828,12 +831,12 @@ fn test_typed_literals_bind_tightly() {
 
 #[test] // real/exact and float/fast/f64 are aliases, prefix and suffix declarations mean the same
 fn test_number_declaration_spellings_agree() {
-	let exact = ["x=3.3;x", "real x=3.3;x", "exact x=3.3;x", "x:real=3.3;x", "x:exact=3.3;x", "x=3.3 as real;x", "x=3.3 as exact;x"];
+	let exact = ["real x=3.3;x", "exact x=3.3;x", "x:real=3.3;x", "x:exact=3.3;x", "x=3.3 as real;x", "x=3.3 as exact;x"];
 	for code in exact {
 		let result = eval(code);
 		assert!(matches!(result.drop_meta(), Node::Number(warp::Number::Quotient(33, 10))), "{code} → {result:?}");
 	}
-	let fast = ["fast x=3.3;x", "float x=3.3;x", "x:float=3.3;x", "x:fast=3.3;x", "x=3.3 as float;x", "x=3.3 as fast;x", "x:f64=3.3;x"];
+	let fast = ["x=3.3;x", "fast x=3.3;x", "float x=3.3;x", "x:float=3.3;x", "x:fast=3.3;x", "x=3.3 as float;x", "x=3.3 as fast;x", "x:f64=3.3;x"];
 	for code in fast {
 		let result = eval(code);
 		assert!(matches!(result.drop_meta(), Node::Number(warp::Number::Float(f)) if *f == 3.3), "{code} → {result:?}");

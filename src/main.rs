@@ -86,10 +86,10 @@ const RESULT_MARK: &str = "» ";
 /// The exit status of a run that ends in an uncaught error (card cli-error-exit)
 const ERROR_STATUS: i32 = 1;
 
+/// A program file's exit status: its Int result; a float (a measurement such as elapsed seconds) is no status
 fn node_to_i32(node: &Node) -> i32 {
     match node.drop_meta() {
         Node::Number(Number::Int(n)) => *n as i32,
-        Node::Number(Number::Float(f)) => *f as i32,
         Node::Error(_) => ERROR_STATUS,
         _ => 0,
     }

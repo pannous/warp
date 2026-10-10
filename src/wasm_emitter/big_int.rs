@@ -35,6 +35,14 @@ pub const FIXNUM_OFFSET: i64 = (1 << 62) - 1;
 pub const FIXNUM_MIN: i128 = -((1 << 62) - 1);
 pub const FIXNUM_MAX: i128 = 1 << 62;
 const HANDLE_BASE: i64 = i64::MIN;
+/// A small ratio lives in its handle and never on the heap, which int_store never frees: handles from INLINE_RATIO_BASE
+/// on hold `((numerator + INLINE_NUMERATOR_BIAS) << INLINE_DENOMINATOR_BITS) | denominator`, a numerator of 31 bits and
+/// a denominator of 30; the heap's handles stay below (2^61 of them)
+const INLINE_RATIO_SPAN: i64 = 1 << 61;
+const INLINE_RATIO_BASE: i64 = HANDLE_BASE + INLINE_RATIO_SPAN;
+const INLINE_DENOMINATOR_BITS: i64 = 30;
+const INLINE_NUMERATOR_BIAS: i64 = 1 << INLINE_DENOMINATOR_BITS;
+const INLINE_NUMERATOR_LIMIT: i64 = 1 << (INLINE_DENOMINATOR_BITS + 1);
 /// Operands in [-2^31, 2^31) multiply without leaving the fixnum range
 const MUL_FAST_BIAS: i64 = 1 << 31;
 const MUL_FAST_BITS: u32 = 32;
@@ -211,6 +219,22 @@ impl WasmGcEmitter {
 			}
 			_ => unreachable!("not an Int operator: {:?}", op),
 		}
+	}
+
+	/// Stack [a, b] (Ints) → [a // b], the Euclidean quotient: (a - a % b) / b is exact on fixnums, else exact_euclid_div
+	pub(super) fn emit_euclidean_quotient(&mut self, func: &mut Function, left: IntRange, right: IntRange) {
+		if !self.int_runtime() {
+			return self.emit_call(func, "exact_euclid_div");
+		}
+		let (a, b, r) = (self.scratch(0), self.scratch(1), self.scratch(2));
+		Self::emit_list(func, &[I::LocalSet(b), I::LocalSet(a)]);
+		self.emit_nonzero_divisor(func, b, right);
+		let unproven = self.unproven(&[(a, left), (b, right)]);
+		self.emit_fixnum_test(func, &unproven);
+		let mut quotient = vec![I::LocalGet(a)];
+		quotient.extend(euclidean_remainder(a, b, r));
+		quotient.extend([I::I64Sub, I::LocalGet(b), I::I64DivS]);
+		self.emit_fast_or_slow(func, &quotient, "exact_euclid_div");
 	}
 
 	/// `a % 0` fails with the named error divide_by_zero (try catches it), never the engine's divide trap; skipped when the
@@ -576,13 +600,50 @@ impl WasmGcEmitter {
 			Self::emit_list(func, &[I::LocalGet(local), I::StructNew(self.type_manager.i64_box_type)]);
 			return;
 		}
+		let any = BlockType::Result(Ref(RefType { nullable: true, heap_type: crate::type_kinds::any_heap_type() }));
+		let i64_box = self.type_manager.i64_box_type;
 		self.emit_fixnum_test(func, &[local]);
-		Self::emit_list(func, &[
-			I::If(BlockType::Result(Ref(RefType { nullable: true, heap_type: crate::type_kinds::any_heap_type() }))), I::LocalGet(local),
-			I::StructNew(self.type_manager.i64_box_type), I::Else,
-		]);
+		Self::emit_list(func, &[I::If(any), I::LocalGet(local), I::StructNew(i64_box), I::Else]);
+		self.emit_inline_ratio_test(func, local);
+		func.instruction(&I::If(any));
+		self.emit_inline_numerator(func, local);
+		func.instruction(&I::StructNew(i64_box));
+		self.emit_inline_denominator(func, local);
+		Self::emit_list(func, &[I::StructNew(i64_box), I::StructNew(self.type_manager.ratio_type), I::Else]);
 		self.emit_heap_get(func, local);
-		func.instruction(&I::End);
+		Self::emit_list(func, &[I::End, I::End]);
+	}
+
+	/// Push i32 1 when the Int in `local` is a ratio inside its handle (INLINE_RATIO_BASE)
+	pub(super) fn emit_inline_ratio_test(&self, func: &mut Function, local: u32) {
+		Self::emit_list(func, &[I::LocalGet(local), I::I64Const(INLINE_RATIO_BASE), I::I64Sub, I::I64Const(INLINE_RATIO_SPAN), I::I64LtU]);
+	}
+
+	pub(super) fn emit_inline_numerator(&self, func: &mut Function, local: u32) {
+		Self::emit_list(func, &[
+			I::LocalGet(local), I::I64Const(INLINE_RATIO_BASE), I::I64Sub, I::I64Const(INLINE_DENOMINATOR_BITS), I::I64ShrU,
+			I::I64Const(INLINE_NUMERATOR_BIAS), I::I64Sub,
+		]);
+	}
+
+	pub(super) fn emit_inline_denominator(&self, func: &mut Function, local: u32) {
+		Self::emit_list(func, &[I::LocalGet(local), I::I64Const(INLINE_NUMERATOR_BIAS - 1), I::I64And]);
+	}
+
+	/// Push i32 1 when numerator and denominator (Int locals of a normalized ratio) fit inside a handle
+	pub(super) fn emit_inline_ratio_fits(&self, func: &mut Function, numerator: u32, denominator: u32) {
+		Self::emit_list(func, &[
+			I::LocalGet(numerator), I::I64Const(INLINE_NUMERATOR_BIAS), I::I64Add, I::I64Const(INLINE_NUMERATOR_LIMIT), I::I64LtU,
+			I::LocalGet(denominator), I::I64Const(INLINE_NUMERATOR_BIAS), I::I64LtU, I::I32And,
+		]);
+	}
+
+	/// Push the handle of the ratio numerator/denominator that emit_inline_ratio_fits accepted
+	pub(super) fn emit_inline_ratio(&self, func: &mut Function, numerator: u32, denominator: u32) {
+		Self::emit_list(func, &[
+			I::LocalGet(numerator), I::I64Const(INLINE_NUMERATOR_BIAS), I::I64Add, I::I64Const(INLINE_DENOMINATOR_BITS), I::I64Shl,
+			I::LocalGet(denominator), I::I64Or, I::I64Const(INLINE_RATIO_BASE), I::I64Add,
+		]);
 	}
 
 	/// new_int(Int) -> Int node whose payload is $i64box or the $BigInt behind a handle
