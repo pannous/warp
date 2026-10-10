@@ -3,6 +3,7 @@
 
 /// where host.read and the test runner's file system find files: the repository root the static server serves
 const FILE_ROOT = new URL("../../", self.location.href).href;
+const SCHEME_MARK = "://"; // a URL without its scheme: withPageProtocol
 const PAGE_PREFIX = "page:"; // src/web.rs PAGE_PREFIX: a file of the page itself (lib/libc.h), not of the served repository
 const HTTP_NOT_FOUND = "HTTP status 404";
 const FILE_NOT_FOUND = "No such file or directory (os error 2)";
@@ -47,8 +48,12 @@ function servedFileExists(path) {
 const isUnserved = url => typeof SERVED_FILES !== "undefined" && url.startsWith(FILE_ROOT)
 	&& !SERVED_FILES.has(decodeURIComponent(new URL(url).pathname.slice(new URL(FILE_ROOT).pathname.length)));
 
+// `://host/path` takes the page's protocol, as `//host/path` does in HTML (src/extensions/utils.rs with_default_scheme)
+const withPageProtocol = url => url.startsWith(SCHEME_MARK) ? self.location.protocol + url.slice(1) : url;
+
 // a synchronous GET (host calls are synchronous, so this runs in a worker); `timeout` in ms
 function getSync(url, timeout, binary = false) {
+	url = withPageProtocol(url);
 	if (isUnserved(url)) throw new Error(HTTP_NOT_FOUND);
 	const request = new XMLHttpRequest();
 	request.open("GET", url, false);
@@ -62,6 +67,7 @@ function getSync(url, timeout, binary = false) {
 // a synchronous POST of a text with its headers (stdlib net's post, src/extensions/utils.rs post_within), its answer's
 // text; an answer of status >= 400 is the error, with its text (an API's own reason)
 function postSync(url, body, headers = {}) {
+	url = withPageProtocol(url);
 	const request = new XMLHttpRequest();
 	request.open("POST", url, false);
 	request.setRequestHeader("Content-Type", "text/plain; charset=utf-8");
@@ -94,7 +100,7 @@ const readFile = path => asFileRead(() => getSync(FILE_ROOT + path));
 
 // the URL of a file of the served repository, of the page itself (PAGE_PREFIX) or a URL
 function fileUrl(path) {
-	if (/^https?:/.test(path)) return path;
+	if (/^https?:/.test(path) || path.startsWith(SCHEME_MARK)) return path;
 	if (path.startsWith(PAGE_PREFIX)) return new URL(path.slice(PAGE_PREFIX.length), self.location.href).href;
 	return FILE_ROOT + filePath(path);
 }
