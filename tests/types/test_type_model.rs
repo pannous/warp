@@ -569,6 +569,11 @@ const CORPUS: &[&str] = &[
 	"f(x: int?) := x ?? 0; f(ø) + f(4)",
 	"a: int = none",
 	"xs = []; xs ?? 3",
+	// a float joined to a text: W0 writes it as warp's float_text, 15 significant digits (card float-text-prints)
+	"\"a\" + 0.5",
+	"f(x) := \"a\" + x; f(1.5e-7)",
+	"f(x) := \"a\" + x; f(1 / 3.0)",
+	"f(x) := \"a\" + x; f(-0.00001234)",
 ];
 
 /// Programs warp compiles although the model rejects them: holes in warp's checks, each with its card
@@ -586,8 +591,6 @@ const KNOWN_VALUE_DIFFERENCES: &[(&str, &str)] = &[
 	// a covariant alias's write: W0 checks it against the list's own element type when it runs, warp adds 2.5 to ints
 	("xs: ints = [1]; ys: numbers = xs; ys.add(2.5); xs", "p215-user"),
 	("xs: ints = [1, 2]; ys: numbers = xs; ys#1 = 2.5; xs", "p215-user"),
-	// a float joined to a text: W0 prints Lean's Float.toString
-	("\"a\" + 0.5", "float-text-prints"),
 ];
 /// What the model gives for a program it rejects, and for a value it does not keep
 const REJECTED: &str = "rejected";
