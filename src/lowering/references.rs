@@ -3,6 +3,7 @@
 //! describes a cyclic graph; the reference stays a name, so printing never loops. A path read of a variable that holds
 //! such a literal follows the references at compile time: with `x = a{ b:2 c{ parent=$a } }`, `x.c.parent.b` is `x.b`.
 
+use super::nodes::key;
 use crate::node::{Bracket, Node, ATTRIBUTE_MARK};
 use crate::operators::Op;
 use std::collections::HashMap;
@@ -116,7 +117,7 @@ fn refers_back(node: &Node, enclosing: &mut Vec<String>) -> bool {
 fn followed_paths(node: Node, literals: &HashMap<String, Node>) -> Node {
 	if let Some((variable, fields)) = dot_chain(&node) {
 		if let Some(path) = literals.get(&variable).and_then(|literal| followed(literal, &fields)) {
-			return path.into_iter().fold(Node::Symbol(variable), |reader, field| Node::Key(Box::new(reader), Op::Dot, Box::new(Node::Symbol(field))));
+			return path.into_iter().fold(Node::Symbol(variable), |reader, field| key(reader, Op::Dot, Node::Symbol(field)));
 		}
 	}
 	node.map_children(|child| followed_paths(child, literals))

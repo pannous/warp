@@ -5,7 +5,8 @@
 //! A call of that function whose arguments, read as values and preposition words, follow the pattern becomes
 //! `name(values…)`. Elsewhere `to` stays a range and `of` a field lookup.
 
-use crate::node::{Bracket, Node, Separator};
+use super::nodes::{call, key};
+use crate::node::{symbol, Bracket, Node, Separator};
 use crate::operators::Op;
 use crate::type_name_matching::prepositions_among;
 use std::collections::HashMap;
@@ -147,7 +148,7 @@ fn spaced_words(items: &[Node]) -> Vec<Node> {
 	items.iter().flat_map(|item| match item.drop_meta() {
 		Node::List(words, Bracket::None, Separator::Space) => spaced_words(words),
 		Node::Key(left, op, right) if op.as_str().chars().all(char::is_alphabetic) => {
-			[spaced_words(std::slice::from_ref(left)), vec![Node::Symbol(op.as_str().to_string())], spaced_words(std::slice::from_ref(right))].concat()
+			[spaced_words(std::slice::from_ref(left)), vec![symbol(op.as_str())], spaced_words(std::slice::from_ref(right))].concat()
 		}
 		_ => vec![item.clone()],
 	}).collect()
@@ -167,8 +168,8 @@ fn rewrite(node: Node, patterns: &HashMap<String, Vec<Vec<Part>>>) -> Node {
 			};
 			call.unwrap_or(Node::List(items, bracket, separator))
 		}
-		Node::Key(left, Op::Assign, right) => Node::Key(Box::new(rewrite(*left, patterns)), Op::Assign, Box::new(rewrite(assigned_words(*right, patterns), patterns))),
-		Node::Key(left, op, right) => Node::Key(Box::new(rewrite(*left, patterns)), op, Box::new(rewrite(*right, patterns))),
+		Node::Key(left, Op::Assign, right) => key(rewrite(*left, patterns), Op::Assign, rewrite(assigned_words(*right, patterns), patterns)),
+		Node::Key(left, op, right) => key(rewrite(*left, patterns), op, rewrite(*right, patterns)),
 		Node::Meta { node, data } => Node::Meta { node: Box::new(rewrite(*node, patterns)), data },
 		other => other,
 	}
@@ -191,7 +192,7 @@ fn phrase_call(name: &str, arguments: &[Node], pattern: &[Part]) -> Option<Node>
 			compared = Some((op, other));
 		}
 	}
-	let call = Node::List([vec![Node::Symbol(name.to_string())], values].concat(), Bracket::Round, Separator::None);
+	let call = call(name, values);
 	Some(match compared {
 		Some((op, other)) => Node::Key(Box::new(call), op, other),
 		None => call,

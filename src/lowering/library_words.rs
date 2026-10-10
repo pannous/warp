@@ -5,11 +5,11 @@
 //!
 //! An unknown `.word` after a name, a text or a list is a loud error (`undefined function: word`), never silent data.
 
-use super::nodes::is_word;
+use super::nodes::{call, is_word, key};
 use crate::analyzer::{call_name, counting_method, extract_user_functions, is_list_mutating_method};
 use crate::context::Context;
 use crate::diagnostic::Diagnostic;
-use crate::node::{Bracket, Node, Separator};
+use crate::node::{symbol, text, Bracket, Node, Separator};
 use crate::operators::Op;
 use crate::warp_parser::{parse, ASSERT_MARKER, TRY_MARKER};
 use crate::wasm_emitter::{CAUGHT_ERROR, RAN_WITHOUT_ERROR};
@@ -103,7 +103,7 @@ const SPLIT_SEPARATOR: &str = " ";
 /// What an optional argument left out is: the space `s.split` splits at, else ø
 fn left_out_argument(word: &str) -> Node {
 	match word {
-		SPLIT => Node::Text(SPLIT_SEPARATOR.to_string()),
+		SPLIT => text(SPLIT_SEPARATOR),
 		_ => Node::Empty,
 	}
 }
@@ -119,7 +119,7 @@ pub const SHALLOW: &str = "shallow";
 
 /// `instance_copy(object, shallow)`
 pub fn copy_call(object: Node, shallow: Node) -> Node {
-	Node::List(vec![Node::Symbol(INSTANCE_COPY.to_string()), object, shallow], Bracket::Round, Separator::None)
+	call(INSTANCE_COPY, vec![object, shallow])
 }
 
 /// The value of `shallow: v` / `shallow = v`, or a positional `v`
@@ -288,9 +288,9 @@ fn raise_call(items: &[Node]) -> Option<Node> {
 	// the message is a text, so `catch e` reads it whatever was raised (`raise 42`: "42"); a word (`raise oops`) is its name
 	let message = match message.drop_meta() {
 		Node::Text(_) | Node::Symbol(_) => message,
-		_ => Node::List(vec![Node::Symbol(crate::wasm_emitter::text_builtins::TEXT_FORM.to_string()), message], Bracket::Round, Separator::None),
+		_ => call(crate::wasm_emitter::text_builtins::TEXT_FORM, vec![message]),
 	};
-	Some(Node::List(vec![Node::Symbol(crate::wasm_emitter::text_builtins::RAISE.to_string()), message], Bracket::Round, Separator::None))
+	Some(call(crate::wasm_emitter::text_builtins::RAISE, vec![message]))
 }
 
 /// The pass of `count x in y` (count_in), before the lambdas its rewrite uses are lowered and before `x in y` is membership;
@@ -313,7 +313,7 @@ fn lower_counts(node: Node, library_count: bool) -> Node {
 	}
 	match node {
 		Node::List(items, bracket, separator) => Node::List(items.into_iter().map(|item| lower_counts(item, library_count)).collect(), bracket, separator),
-		Node::Key(left, op, right) => Node::Key(Box::new(lower_counts(*left, library_count)), op, Box::new(lower_counts(*right, library_count))),
+		Node::Key(left, op, right) => key(lower_counts(*left, library_count), op, lower_counts(*right, library_count)),
 		Node::Meta { node, data } => Node::Meta { node: Box::new(lower_counts(*node, library_count)), data },
 		other => other,
 	}
@@ -333,7 +333,7 @@ fn count_method(receiver: &Node, call: &Node) -> Option<Node> {
 }
 
 fn counted_in(count: &Node, needle: &Node, haystack: &Node) -> Option<Node> {
-	count_in(&[count.clone(), needle.clone(), Node::Symbol(IN_WORD.to_string()), haystack.clone()])
+	count_in(&[count.clone(), needle.clone(), symbol(IN_WORD), haystack.clone()])
 }
 
 /// `count x in y`: how often x occurs in y. A text of several characters counts as a substring of a text (`count "an"
@@ -356,7 +356,7 @@ fn count_in(items: &[Node]) -> Option<Node> {
 		several => Node::List(several.to_vec(), Bracket::None, Separator::Space),
 	};
 	if let Some(unit) = matches!(needle.drop_meta(), Node::Symbol(_)).then(|| crate::analyzer::text_unit(&needle.name())).flatten() {
-		return Some(Node::Key(Box::new(haystack), Op::Dot, Box::new(Node::Symbol(unit.to_string()))));
+		return Some(key(haystack, Op::Dot, symbol(unit)));
 	}
 	let substring = matches!(needle.drop_meta(), Node::Text(text) if text.chars().count() > 1) && !matches!(haystack.drop_meta(), Node::List(_, Bracket::Square, _));
 	let template = if substring { COUNT_SUBSTRING_TEMPLATE } else { COUNT_ITEM_TEMPLATE };
@@ -411,10 +411,10 @@ fn function_methods_as_calls(node: Node, is_function: &dyn Fn(&str, usize) -> bo
 				Node::List(items, Bracket::Round, _) if matches!(items.first().map(Node::drop_meta), Some(Node::Symbol(name)) if is_function(name, items.len() - 1)) => {
 					Node::List([vec![items[0].clone(), receiver], items[1..].to_vec()].concat(), Bracket::Round, Separator::None)
 				}
-				_ => Node::Key(Box::new(receiver), Op::Dot, Box::new(method)),
+				_ => key(receiver, Op::Dot, method),
 			}
 		}
-		Node::Key(left, op, right) => Node::Key(Box::new(lowered(*left)), op, Box::new(lowered(*right))),
+		Node::Key(left, op, right) => key(lowered(*left), op, lowered(*right)),
 		Node::List(items, bracket, separator) => Node::List(items.into_iter().map(lowered).collect(), bracket, separator),
 		Node::Meta { node, data } => Node::Meta { node: Box::new(lowered(*node)), data },
 		other => other,
@@ -441,14 +441,14 @@ fn is_nested_place(place: &Node) -> bool {
 /// `place += 1` for `place++`, `place -= 1` for `place--`
 pub(crate) fn stepped(place: Node, step: Op) -> Node {
 	let update = if step == Op::Inc { Op::AddAssign } else { Op::SubAssign };
-	Node::Key(Box::new(place), update, Box::new(Node::int(1)))
+	key(place, update, Node::int(1))
 }
 
 /// `object.name`, `name of object`, `object["name"]`: the entry named `name`, a subscript by a text key
 fn field_lookup(object: &Node, name: &str, position: &Node) -> Node {
 	let key = match position {
-		Node::Meta { data, .. } => Node::Meta { node: Box::new(Node::Text(name.to_string())), data: data.clone() },
-		_ => Node::Text(name.to_string()),
+		Node::Meta { data, .. } => Node::Meta { node: Box::new(text(name)), data: data.clone() },
+		_ => text(name),
 	};
 	crate::warp_parser::subscript(object.clone(), key)
 }
@@ -681,11 +681,11 @@ impl Lowering {
 				let combined = Node::Key(left.clone(), op.base_op(), right);
 				let left = self.expand(*left);
 				let combined = self.expand(combined);
-				self.stored(&left, combined.clone()).unwrap_or(Node::Key(Box::new(left), Op::Assign, Box::new(combined)))
+				self.stored(&left, combined.clone()).unwrap_or(key(left, Op::Assign, combined))
 			}
 			Node::Key(left, Op::Dot, right) => {
 				let (left, right) = (self.expand(*left), self.expand_method(*right));
-				self.method_call(&left, &right).unwrap_or(Node::Key(Box::new(left), Op::Dot, Box::new(right)))
+				self.method_call(&left, &right).unwrap_or(key(left, Op::Dot, right))
 			}
 			Node::Key(left, Op::Assign, right) => {
 				if let Some(chained) = self.chained_field_assignment(&left, &right) {
@@ -693,7 +693,7 @@ impl Lowering {
 				}
 				let left = self.expand(*left);
 				let right = self.in_definition(&left, *right);
-				self.field_assignment(&left, &right).unwrap_or(Node::Key(Box::new(left), Op::Assign, Box::new(right)))
+				self.field_assignment(&left, &right).unwrap_or(key(left, Op::Assign, right))
 			}
 			Node::Key(left, Op::SafeDot, right) => {
 				let (receiver, word) = (self.expand(*left), *right);
@@ -704,14 +704,14 @@ impl Lowering {
 			Node::Key(left, Op::Define, right) => {
 				let left = self.expand(*left);
 				let right = self.in_definition(&left, *right);
-				Node::Key(Box::new(left), Op::Define, Box::new(right))
+				key(left, Op::Define, right)
 			}
 			// P66: `x / 0.0`, a float division by a written zero, is IEEE's ∞ (an exact division by zero is divide_by_zero)
 			Node::Key(left, Op::Div, right) if is_float_zero(&right) => {
-				let as_float = |operand: Node| Node::Key(Box::new(operand), Op::As, Box::new(Node::Symbol(FLOAT_WORD.to_string())));
-				Node::Key(Box::new(as_float(self.expand(*left))), Op::Div, Box::new(as_float(*right)))
+				let as_float = |operand: Node| key(operand, Op::As, symbol(FLOAT_WORD));
+				key(as_float(self.expand(*left)), Op::Div, as_float(*right))
 			}
-			Node::Key(left, op, right) => Node::Key(Box::new(self.expand(*left)), op, Box::new(self.expand(*right))),
+			Node::Key(left, op, right) => key(self.expand(*left), op, self.expand(*right)),
 			Node::Meta { node, data } => Node::Meta { node: Box::new(self.expand(*node)), data },
 			other => other,
 		}
@@ -768,7 +768,7 @@ impl Lowering {
 	fn lower_similar(&self, op: Op, left: Node, right: Node) -> Node {
 		let (_, function, variable, default) = SIMILARITY_LEVELS.iter().find(|(level, ..)| *level == op).expect("a similarity operator");
 		let tolerance = if self.shadowed.contains(*variable) { variable } else { default };
-		let call = vec![Node::Symbol(function.to_string()), left, right, crate::warp_parser::parse(tolerance)];
+		let call = vec![symbol(function), left, right, crate::warp_parser::parse(tolerance)];
 		Node::List(call, Bracket::Round, Separator::None)
 	}
 
@@ -786,7 +786,7 @@ impl Lowering {
 			return operand;
 		}
 		let temporary = Node::Symbol(temporary_name(&[OPERAND_TEMPORARY, &self.next_temporary().to_string()]));
-		bindings.push(Node::Key(Box::new(temporary.clone()), Op::Assign, Box::new(operand)));
+		bindings.push(key(temporary.clone(), Op::Assign, operand));
 		temporary
 	}
 
@@ -849,7 +849,7 @@ impl Lowering {
 			}
 			if call_name(items, bracket, separator).is_some() {
 				let log_of = |argument: &Node| Node::List(vec![items[0].clone(), argument.clone()], Bracket::Round, Separator::None);
-				return Some(Node::Key(Box::new(log_of(value)), Op::Div, Box::new(log_of(base))));
+				return Some(key(log_of(value), Op::Div, log_of(base)));
 			}
 		}
 		// `first 3 of xs` is `first_items(xs, 3)`
@@ -1043,7 +1043,7 @@ impl Lowering {
 			return Some(Node::List(vec![word_node.clone(), receiver.clone()], Bracket::Round, Separator::None));
 		}
 		let is_value = matches!(receiver.drop_meta(), Node::Symbol(_) | Node::Text(_) | Node::Char(_) | Node::Number(_) | Node::List(_, Bracket::Square, _));
-		let call = Node::Key(Box::new(receiver.clone()), Op::Dot, Box::new(method.clone()));
+		let call = key(receiver.clone(), Op::Dot, method.clone());
 		(!is_known && is_value).then(|| self.context.undefined_function_diagnostic(&call, name).into_error())
 	}
 
@@ -1070,12 +1070,12 @@ impl Lowering {
 	/// object, stored back), an element of anything else through a temporary (`p.items#1 = v` is
 	/// `place·0 = p.items; place·0#1 = v; p.items = place·0`)
 	fn stored(&self, place: &Node, value: Node) -> Option<Node> {
-		let assigned = |place: &Node, value: Node| Node::Key(Box::new(place.clone()), Op::Assign, Box::new(value));
+		let assigned = |place: &Node, value: Node| key(place.clone(), Op::Assign, value);
 		let Node::Key(base, Op::Hash, index) = place.drop_meta() else {
 			return matches!(place.drop_meta(), Node::Symbol(_)).then(|| assigned(place, value));
 		};
 		if let Some(name) = subscript_field(index) {
-			let updated = Node::List(vec![Node::Symbol(FIELD_WITH.to_string()), base.as_ref().clone(), Node::Text(name), value], Bracket::Round, Separator::None);
+			let updated = call(FIELD_WITH, vec![base.as_ref().clone(), Node::Text(name), value]);
 			return self.stored(base, updated);
 		}
 		if matches!(base.drop_meta(), Node::Symbol(_)) {
@@ -1163,9 +1163,9 @@ impl Lowering {
 			Some((_, _, template)) if word == SUM => dispatched_sum(self.expanded(template, arguments)),
 			Some((_, _, template)) => self.expanded(template, arguments),
 			// a prelude word calls its definition from lib/prelude.warp (modules::prelude_name)
-			None if let Some(qualified) = crate::modules::prelude_name(word) => Node::List([vec![Node::Symbol(qualified)], arguments].concat(), Bracket::Round, Separator::None),
+			None if let Some(qualified) = crate::modules::prelude_name(word) => call(&qualified, arguments),
 			None => {
-				let name = if matches!(head.drop_meta(), Node::Symbol(written) if written == word) { head.clone() } else { Node::Symbol(word.to_string()) };
+				let name = if matches!(head.drop_meta(), Node::Symbol(written) if written == word) { head.clone() } else { symbol(word) };
 				Node::List([vec![name], arguments].concat(), Bracket::Round, Separator::None)
 			}
 		}
@@ -1270,7 +1270,7 @@ fn dispatched_sum(expanded: Node) -> Node {
 	let [assignment, sum_loop] = items.as_mut_slice() else { return Node::List(items, bracket, separator) };
 	let Node::Key(temporary, Op::Assign, _) = assignment.drop_meta() else { return Node::List(items, bracket, separator) };
 	let list = temporary.as_ref().clone();
-	*sum_loop = Node::List(vec![Node::Symbol(LIST_SUM.to_string()), list, sum_loop.clone()], Bracket::Round, Separator::None);
+	*sum_loop = call(LIST_SUM, vec![list, sum_loop.clone()]);
 	Node::List(items, bracket, separator)
 }
 
@@ -1305,7 +1305,7 @@ pub(crate) fn named_apart(node: Node, prefix: &str, base: &str, number: usize) -
 pub(crate) fn substitute(node: Node, placeholder: &str, replacement: &Node) -> Node {
 	match node {
 		Node::Symbol(name) if name == placeholder => replacement.clone(),
-		Node::Key(left, op, right) => Node::Key(Box::new(substitute(*left, placeholder, replacement)), op, Box::new(substitute(*right, placeholder, replacement))),
+		Node::Key(left, op, right) => key(substitute(*left, placeholder, replacement), op, substitute(*right, placeholder, replacement)),
 		Node::List(items, bracket, separator) => Node::List(items.into_iter().map(|item| substitute(item, placeholder, replacement)).collect(), bracket, separator),
 		Node::Meta { node, data } => Node::Meta { node: Box::new(substitute(*node, placeholder, replacement)), data },
 		other => other,

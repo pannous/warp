@@ -2,6 +2,7 @@
 //! `red is Color` is true, `x is Color` tests the classes of the type and then the variant names.
 //! P178: Rust's path `Shape::Circle(r)` of a variant is the variant `Circle(r)`, in a match its type test and binding.
 
+use super::nodes::key;
 use crate::node::Node;
 use crate::operators::Op;
 use std::collections::HashMap;
@@ -56,7 +57,7 @@ fn with_variant_tests(node: Node, sum_types: &HashMap<String, Variants>) -> Node
 			let class_test = Node::Key(subject.clone(), Op::Eq, right);
 			names.iter().fold(class_test, |test, name| {
 				let equals = Node::Key(subject.clone(), Op::Eq, Box::new(name.clone()));
-				Node::Key(Box::new(test), Op::Or, Box::new(equals))
+				key(test, Op::Or, equals)
 			})
 		}
 		other => other.map_children(|child| with_variant_tests(child, sum_types)),

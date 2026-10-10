@@ -7,7 +7,7 @@
 use super::nodes::{call, key};
 use crate::analyzer::extract_user_functions;
 use crate::context::Context;
-use crate::node::{Bracket, Node, Separator};
+use crate::node::{text, Bracket, Node, Separator};
 use crate::operators::Op;
 use std::cell::Cell;
 
@@ -59,7 +59,7 @@ impl Lowering<'_> {
 					None => Node::List(self.with_switch_arguments(items), bracket, separator),
 				}
 			}
-			Node::Key(left, op, right) => Node::Key(Box::new(self.expand(*left)), op, Box::new(self.expand(*right))),
+			Node::Key(left, op, right) => key(self.expand(*left), op, self.expand(*right)),
 			Node::Meta { node, data } => Node::Meta { node: Box::new(self.expand(*node)), data },
 			other => other,
 		}
@@ -152,7 +152,7 @@ fn item(path: &Node, position: usize) -> Node {
 fn pattern_tests(pattern: &Node, path: Node, tests: &mut Vec<Node>, bindings: &mut Vec<Node>) {
 	match pattern.drop_meta() {
 		Node::List(items, Bracket::Square, _) => {
-			tests.push(call(crate::type_tests::IS_TYPE, vec![path.clone(), Node::Text(LIST_SPEC.to_string())]));
+			tests.push(call(crate::type_tests::IS_TYPE, vec![path.clone(), text(LIST_SPEC)]));
 			tests.push(key(call(COUNT_WORD, vec![path.clone()]), Op::Eq, Node::int(items.len() as i64)));
 			for (index, part) in items.iter().enumerate() {
 				pattern_tests(part, item(&path, index + 1), tests, bindings);
@@ -160,7 +160,7 @@ fn pattern_tests(pattern: &Node, path: Node, tests: &mut Vec<Node>, bindings: &m
 		}
 		// `a: x` matches the pair whose key is a (a name, never bound) and matches its value against x
 		Node::Key(name, Op::Colon, value) => {
-			tests.push(call(crate::type_tests::IS_TYPE, vec![path.clone(), Node::Text(PAIR_SPEC.to_string())]));
+			tests.push(call(crate::type_tests::IS_TYPE, vec![path.clone(), text(PAIR_SPEC)]));
 			tests.push(key(call(TEXT_WORD, vec![item(&path, 1)]), Op::Eq, Node::Text(name.name())));
 			pattern_tests(value, item(&path, 2), tests, bindings);
 		}
@@ -225,7 +225,7 @@ fn subject_label(subject: &Node) -> String {
 /// `switch_no_case("label": value)`: the error names the subject as written and its runtime value
 fn no_case(subject: &Node, value: &Node) -> Node {
 	let label_and_value = key(Node::Text(subject_label(subject)), Op::Colon, value.clone());
-	Node::List(vec![Node::Symbol(NO_CASE_CALL.to_string()), label_and_value], Bracket::Round, Separator::None)
+	call(NO_CASE_CALL, vec![label_and_value])
 }
 
 /// The `key: body` entries of a block

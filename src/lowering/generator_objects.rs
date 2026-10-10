@@ -10,7 +10,7 @@
 
 use crate::for_loop::block_items;
 use crate::generators::{generators, yield_statement, holds_own, holds_stop, is_return, yielded_value, Generator, BREAK_WORD, CONTINUE_WORD, FOR_WORD, NAME_SEPARATOR, NEXT_METHOD, RETURN_WORD};
-use super::nodes::{assign, int, is_word, statement_list, symbol, symbol_name};
+use super::nodes::{assign, int, is_word, key, statement_list, symbol, symbol_name};
 use crate::node::{Bracket, Node, Separator};
 use crate::operators::Op;
 use crate::ruby_blocks::arguments;
@@ -100,7 +100,7 @@ fn with_objects(node: Node, generators: &HashMap<String, Generator>, advanced: &
 		}
 		Node::List(items, Bracket::Round | Bracket::None, _) if items.len() == 2 && is_word(&items[0], NEXT_METHOD) => {
 			let call = Node::List(vec![symbol(NEXT_METHOD)], Bracket::Round, Separator::None);
-			arguments(&items[1]).first().map(|object| Node::Key(Box::new(object.clone()), Op::Dot, Box::new(call)))
+			arguments(&items[1]).first().map(|object| key(object.clone(), Op::Dot, call))
 		}
 		_ => None,
 	};
@@ -154,7 +154,7 @@ fn generator_class(name: &str, generator: &Generator) -> Option<Node> {
 	let mut members: Vec<Node> = fields(generator).iter().map(|name| field(name)).collect();
 	members.extend([field(STATE_FIELD), field(SENT_FIELD)]);
 	let head = Node::List(vec![symbol(NEXT_METHOD)], Bracket::Round, Separator::None);
-	members.push(Node::Key(Box::new(head), Op::Define, Box::new(statement_list(vec![body], Bracket::Curly))));
+	members.push(key(head, Op::Define, statement_list(vec![body], Bracket::Curly)));
 	members.extend(crate::generator_consumers::template(SEND, &[("VALUE", &symbol(SENT_VALUE)), ("SENT", &symbol(SENT_FIELD))]));
 	Some(Node::Type { name: Box::new(symbol(&class_name(name))), body: Box::new(statement_list(members, Bracket::Curly)) })
 }
@@ -191,8 +191,8 @@ fn set_state(state: i64) -> Node {
 }
 
 fn condition_jump(condition: Node, state: usize) -> Node {
-	let test = Node::Key(Box::new(Node::Empty), Op::If, Box::new(condition));
-	Node::Key(Box::new(test), Op::Then, Box::new(statement_list(vec![set_state(state as i64), symbol(CONTINUE_WORD)], Bracket::Curly)))
+	let test = key(Node::Empty, Op::If, condition);
+	key(test, Op::Then, statement_list(vec![set_state(state as i64), symbol(CONTINUE_WORD)], Bracket::Curly))
 }
 
 fn returned(value: Node) -> Node {
@@ -317,9 +317,9 @@ impl Machine {
 	/// `while 1 { if generator·state == 0 {…}; …; return ø }`
 	fn dispatch(self) -> Node {
 		let mut cases: Vec<Node> = self.states.into_iter().enumerate().filter(|(_, code)| !code.is_empty()).map(|(state, code)| {
-			let test = Node::Key(Box::new(state_field()), Op::Eq, Box::new(int(state as i64)));
-			let condition = Node::Key(Box::new(Node::Empty), Op::If, Box::new(test));
-			Node::Key(Box::new(condition), Op::Then, Box::new(statement_list(code, Bracket::Curly)))
+			let test = key(state_field(), Op::Eq, int(state as i64));
+			let condition = key(Node::Empty, Op::If, test);
+			key(condition, Op::Then, statement_list(code, Bracket::Curly))
 		}).collect();
 		cases.push(returned(Node::Empty));
 		while_do(int(1), statement_list(cases, Bracket::Curly))
