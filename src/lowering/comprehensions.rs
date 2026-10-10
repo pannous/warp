@@ -14,6 +14,10 @@ const IF_WORD: &str = "if";
 const WHERE_KEYWORD: &str = "where";
 /// `people with age > 20`: `where` of a list of a class's instances
 const WITH_WORD: &str = "with";
+/// `people without team`: `where not` of such a list (card people-where)
+const WITHOUT_WORD: &str = "without";
+/// `without` of a list of a class's instances, read as `where` with its condition negated
+const WHERE_NOT: &str = "where·not";
 const OF_WORD: &str = "of";
 /// The element `name of people` reads the field of
 const OF_ELEMENT: &str = "of·element";
@@ -118,14 +122,20 @@ fn fields_of_it(condition: Node, fields: &[String], variables: &HashSet<String>)
 	}
 }
 
-/// `people with age > 20` as `people where age > 20` when people is a list of a class's instances
+/// `people with age > 20` as `people where age > 20`, `people without team` as `people where not team`, when people is
+/// a list of a class's instances
 fn with_as_where(node: Node, lists: &Lists) -> Node {
 	let node = node.map_children(|child| with_as_where(child, lists));
 	let Node::List(mut items, bracket, separator) = node else { return node };
 	for at in 1..items.len() {
 		let subject = crate::list_phrases::words(&items[at - 1..at]).pop().map(|word| word.drop_meta().name()).unwrap_or_default();
-		if items[at].is_symbol(WITH_WORD) && lists.fields.contains_key(&subject) {
+		if !lists.fields.contains_key(&subject) {
+			continue;
+		}
+		if items[at].is_symbol(WITH_WORD) {
 			items[at] = symbol(WHERE_KEYWORD);
+		} else if items[at].is_symbol(WITHOUT_WORD) {
+			items[at] = symbol(WHERE_NOT);
 		}
 	}
 	Node::List(items, bracket, separator)
@@ -182,7 +192,11 @@ fn where_filters(node: Node, lists: &mut Lists) -> Node {
 		// Haskell's binding `x * 2 where x = 3`: the assignment, then the expression
 		Node::Key(_, Op::Assign, _) => Node::List(vec![items[at + 1].clone(), items[at - 1].clone()], Bracket::Round, Separator::Semicolon),
 		_ => {
-			let condition = lists.with_fields_of_it(&items[at - 1], items[at + 1].clone());
+			let condition = match items[at].is_symbol(WHERE_NOT) {
+				true => key(Node::Empty, Op::Not, items[at + 1].clone()),
+				false => items[at + 1].clone(),
+			};
+			let condition = lists.with_fields_of_it(&items[at - 1], condition);
 			match crate::database_tables::queried(&items[at - 1], &condition, &lists.variables, &mut lists.tables) {
 				Some(Ok(found) | Err(found)) => found,
 				None => where_comprehension(&items[at - 1], &condition),
@@ -289,8 +303,8 @@ fn where_flattened(node: Node) -> Node {
 		_ => None,
 	};
 	let flat = match (words_of(items.first()), words_of(items.last())) {
-		(Some(inner), _) if inner.last().is_some_and(|word| word.is_symbol(WHERE_KEYWORD)) => inner.into_iter().chain(items[1..].iter().cloned()).collect(),
-		(_, Some(inner)) if items.len() > 1 && inner.len() == 2 && inner[0].is_symbol(WHERE_KEYWORD) => items[..items.len() - 1].iter().cloned().chain(inner).collect(),
+		(Some(inner), _) if inner.last().is_some_and(is_where) => inner.into_iter().chain(items[1..].iter().cloned()).collect(),
+		(_, Some(inner)) if items.len() > 1 && inner.len() == 2 && is_where(&inner[0]) => items[..items.len() - 1].iter().cloned().chain(inner).collect(),
 		_ => items,
 	};
 	Node::List(flat, bracket, separator)
@@ -298,7 +312,11 @@ fn where_flattened(node: Node) -> Node {
 
 /// The position of `where` in `[… subject, where, condition]`
 fn where_position(items: &[Node]) -> Option<usize> {
-	(items.len() >= 3).then(|| items.len() - 2).filter(|&at| items[at].is_symbol(WHERE_KEYWORD))
+	(items.len() >= 3).then(|| items.len() - 2).filter(|&at| is_where(&items[at]))
+}
+
+fn is_where(word: &Node) -> bool {
+	word.is_symbol(WHERE_KEYWORD) || word.is_symbol(WHERE_NOT)
 }
 
 /// The clause `for v in xs …`

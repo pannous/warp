@@ -74,8 +74,6 @@ thread_local! {
 	static RACES: Counter = const { Counter::starting_at(0) };
 }
 const ADD_WORD: &str = "add";
-/// The words that count a list: counting a job list waits for no job
-const JOB_COUNTERS: [&str; 4] = ["count", "size", "length", "len"];
 /// The parameter of the await map over a job list (resolve_tasks)
 const AWAITED_JOB: &str = "awaited_job";
 /// `stop job`, `job.pause()`: until resolve_tasks knows whether the task runs on a thread
@@ -478,9 +476,9 @@ impl Tasks<'_> {
 	fn counted_job_list(&self, node: &Node) -> bool {
 		let is_job_list = |list: &Node| matches!(list.drop_meta(), Node::Symbol(name) if self.job_lists.contains_key(name));
 		match node.drop_meta() {
-			Node::List(items, _, _) => matches!(items.as_slice(), [counter, list] if JOB_COUNTERS.contains(&word(counter).as_str()) && is_job_list(list)),
+			Node::List(items, _, _) => matches!(items.as_slice(), [counter, list] if crate::analyzer::is_counting_word(&word(counter)) && is_job_list(list)),
 			Node::Key(empty, Op::Hash, list) => matches!(empty.drop_meta(), Node::Empty) && is_job_list(list),
-			Node::Key(list, Op::Dot, counter) => is_job_list(list) && JOB_COUNTERS.contains(&word(counter).as_str()),
+			Node::Key(list, Op::Dot, counter) => is_job_list(list) && crate::analyzer::is_counting_word(&word(counter)),
 			_ => false,
 		}
 	}

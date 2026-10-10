@@ -27,8 +27,6 @@ const ERROR_CALL: &str = "error";
 const BOOL_TYPE: &str = ".bool";
 const ANY_TYPE: &str = ".any";
 const LIST_TYPE_PREFIX: &str = ".list ";
-/// The builtin scalar type words warp checks a value against (analyzer admits) that W0 has a type for
-pub(crate) const BUILTIN_TYPE_WORDS: [&str; 13] = ["int", "integer", "long", "exact", "float", "number", "text", "string", "str", "codepoint", "char", "bool", "boolean"];
 /// A value of each W0 scalar type and the run-time kind warp sees it as (a bool is an Int)
 const VALUE_KINDS: [(&str, Kind); 5] = [(BOOL_TYPE, Kind::Int), (".int", Kind::Int), (".number", Kind::Float), (".text", Kind::Text), (".codepoint", Kind::Codepoint)];
 const UNIT_TYPE: &str = ".unit";
@@ -68,8 +66,6 @@ const MAP_CLASS: &str = "map";
 /// `count xs`, `count x in xs` (how often x is in xs) and `x in xs` (x's first position from 1, else 0) walk the list
 /// with a `·tally` instance: its int fields hold the count or position and the current index
 const COUNT_WORD: &str = "count";
-/// `xs.size`, `xs.count`, `"abc".length`: `count xs`
-const SIZE_METHODS: [&str; 3] = ["size", "count", "length"];
 /// `min(a, b)` and `max(a, b)` of two values (lowering/min_max.rs): a comparison, each argument computed once
 const EXTREMA: [&str; 2] = ["min", "max"];
 const TALLY_CLASS: &str = "·tally";
@@ -98,13 +94,14 @@ fn type_of_word(word: &str) -> Option<String> {
 		if let Some(width) = crate::fixed_width::fixed_width(word) {
 			return Some(format!("{RANGED_TYPE_PREFIX}({}) ({})", width.low, width.high));
 		}
-		Some(match crate::type_kinds::canonical_type_name(&word.to_lowercase()) {
-			"int" | "integer" | "long" => ".int",
-			"float" | "number" | "exact" => ".number",
-			"text" | "string" | "str" => ".text",
-			"codepoint" | "char" => ".codepoint",
-			"bool" | "boolean" => BOOL_TYPE,
+		let word = word.to_lowercase();
+		Some(match crate::type_tests::canonical_spec_word(&word) {
+			"int" => ".int",
+			"text" => ".text",
+			"codepoint" => ".codepoint",
+			crate::analyzer::BOOL_TYPE => BOOL_TYPE,
 			"any" => ANY_TYPE,
+			number if crate::type_tests::type_matches(number, "number") => ".number",
 			_ => return None,
 		}.to_string())
 	};
@@ -791,7 +788,7 @@ impl Exporter {
 		}
 		argument_classes.extend(event_classes);
 		let mut words_used = false;
-		program_node.visit(&mut |part| words_used |= [COUNT_WORD, IN_KEYWORD].iter().chain(&SIZE_METHODS).any(|word| is_word(part, word)));
+		program_node.visit(&mut |part| words_used |= [COUNT_WORD, IN_KEYWORD].iter().chain(&crate::analyzer::COUNTING_WORDS).any(|word| is_word(part, word)));
 		if words_used {
 			let fields = [CELL_FIELD, TALLY_INDEX].map(|field| (field.to_string(), Some("int".to_string())));
 			self.classes.insert(TALLY_CLASS.to_string(), (vec![TALLY_CLASS.to_string()], fields.to_vec()));
@@ -1304,7 +1301,7 @@ impl Exporter {
 					Ok(format!(".push (.glob {}) ({item})", quoted(name)))
 				}
 				(_, Node::Symbol(field)) if self.is_field(field) => Ok(format!(".get ({}) {}", self.expression(list)?, quoted(field))),
-				(_, Node::Symbol(method)) if SIZE_METHODS.contains(&method.as_str()) => self.tally(list, None, false),
+				(_, Node::Symbol(method)) if crate::analyzer::is_counting_word(method) => self.tally(list, None, false),
 				_ => unsupported(node),
 			},
 			Node::Key(if_then, Op::Else, otherwise) => match if_then.drop_meta() {
@@ -1402,9 +1399,10 @@ fn ask_each<T>(name: &str, requests: Vec<String>, what: &str, answer: impl Fn(&s
 }
 
 /// Where warp's run-time admission of a value to a builtin type (analyzer admits) differs from W0's `Ty.sub`, for
-/// every type word and W0 scalar value type: "word ← value type: warp admits / W0 sub"
+/// every builtin type word W0 has a type for and every W0 scalar value type: "word ← value type: warp admits / W0 sub"
 pub fn admits_disagreements() -> Result<Vec<String>, String> {
-	let pairs: Vec<(&str, &str, Kind)> = BUILTIN_TYPE_WORDS.iter().flat_map(|word| VALUE_KINDS.iter().map(move |(value, kind)| (*word, *value, *kind))).collect();
+	let words = crate::type_tests::builtin_type_words().filter(|word| crate::type_tests::held_kind(word).is_some() && type_of_word(word).is_some());
+	let pairs: Vec<(&str, &str, Kind)> = words.flat_map(|word| VALUE_KINDS.iter().map(move |(value, kind)| (word, *value, *kind))).collect();
 	let requests = pairs.iter().map(|(word, value, _)| format!("Ty.sub ({value}) ({})", type_of_word(word).expect("a W0 type word"))).collect();
 	let answers: Vec<bool> = ask_each("admits", requests, "pairs", |line| line.parse().ok())?;
 	Ok(pairs.iter().zip(answers).filter_map(|((word, value, kind), sub)| {

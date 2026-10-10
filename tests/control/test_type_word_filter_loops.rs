@@ -32,3 +32,10 @@ fn test_an_adjective_with_a_type_word_is_a_condition() {
 fn test_a_text_appended_with_an_item_of_a_mixed_list_inside_an_if() {
 	is!("xs=[1, \"a\"]; s=\"\"; y=xs#2; if 1 { s += y }; s", "a"); // was a WASM validation failure
 }
+
+#[test]
+fn test_the_codepoints_of_a_text_need_no_filter() {
+	take_warnings();
+	is!("s=\"\"; for character in chars(\"abc\")[1:] { s += character }; s", "bc");
+	assert!(take_warnings().iter().all(|warning| !warning.message.contains("visits only")));
+}

@@ -246,10 +246,20 @@ pub(super) fn uses_library(node: &Node, library: &str) -> bool {
 /// libm functions the emitter does not implement itself (rounding and √ are builtins): a call of one the program neither
 /// imports nor defines links it from libm, as `import f from 'm'` would; without that it compiled to its argument
 pub(super) fn add_implicit_libm_imports(ctx: &mut Context, node: &Node) {
-	let is_builtin = |name: &str| crate::wasm_emitter::ROUNDING_FUNCTIONS.contains(&name) || name == "sqrt";
-	let mut implicit: Vec<&str> = crate::ffi::LIBM_F64_FUNCTIONS.iter().map(|(name, _)| *name).filter(|name| !is_builtin(name)).collect();
+	let mut implicit: Vec<&str> = crate::ffi::LIBM_F64_FUNCTIONS.iter().map(|(name, _)| *name).filter(|name| !is_wasm_builtin(name)).collect();
 	implicit.push(LIBM_LN); // ffi.rs signs it as libm's log
-	add_called_library_imports(ctx, node, "m", &|name| implicit.contains(&name) || (!is_builtin(name) && is_f64_header_function(name)));
+	add_called_library_imports(ctx, node, "m", &|name| implicit.contains(&name) || (!is_wasm_builtin(name) && is_f64_header_function(name)));
+}
+
+/// floor, ceil, round and √ are wasm instructions (f64.floor, f64.ceil, f64.nearest, f64.sqrt) and the rounding words give
+/// exact Ints (user 2026-10-10: "floor(v) should be int, upgradable to float"): never linked from libm, also not by
+/// `use m` or `import floor from 'm'`, whose f64 results the analyzer did not expect (lib/draw.warp's cell failed)
+fn is_wasm_builtin(name: &str) -> bool {
+	crate::wasm_emitter::ROUNDING_FUNCTIONS.contains(&name) || name == "sqrt"
+}
+
+fn skips_libm_builtin(name: &str, library: &str) -> bool {
+	crate::ffi::resolve_library_alias(library) == "m" && is_wasm_builtin(name)
 }
 
 /// A function math.h declares with f64 parameters and an f64 result (exp2, cbrt, erf): it links from libm like the
@@ -446,6 +456,9 @@ fn add_named_import(ctx: &mut Context, name: &str, library: &str) {
 pub(super) fn add_ffi_import(ctx: &mut Context, name: &str, library: &str) {
 	use crate::ffi::{get_ffi_signature, get_ffi_signature_from_lib};
 
+	if skips_libm_builtin(name, library) {
+		return;
+	}
 	let sig = get_ffi_signature_from_lib(name, library)
 		.or_else(|| get_ffi_signature(name));
 
@@ -499,7 +512,7 @@ pub(super) fn add_ffi_lib_dynamic(ctx: &mut Context, lib: &str) {
 		return;
 	}
 
-	for (name, sig) in signatures {
+	for (name, sig) in signatures.iter().filter(|(name, _)| !skips_libm_builtin(name, lib)) {
 		ctx.ffi_imports.insert(name.clone(), sig.clone());
 	}
 }

@@ -449,6 +449,8 @@ fn literal_items_of_type(iterable: &Node, type_name: &str) -> bool {
 		Node::List(items, Bracket::Square, _) => items,
 		// `for char in "abc"`: every item of a text is a char
 		Node::Text(_) => return crate::type_tests::canonical_spec_word(type_name) == CODEPOINT_TYPE,
+		// `for character in chars(s)`, `chars(s)[1:]`: every item is a codepoint
+		_ if yields_codepoints(iterable) => return crate::type_tests::type_matches(CODEPOINT_TYPE, type_name),
 		_ => return false,
 	};
 	let spec = crate::analyzer::type_word_kind(type_name).map(|_| type_name).unwrap_or(type_name);
@@ -456,6 +458,16 @@ fn literal_items_of_type(iterable: &Node, type_name: &str) -> bool {
 		Node::Number(_) | Node::Text(_) | Node::Char(_) => crate::type_tests::type_matches(&item.drop_meta().kind().to_string(), spec),
 		_ => false,
 	})
+}
+
+/// `chars(s)`, `codepoints(s)` or a slice of one: an iterable whose items are codepoints
+fn yields_codepoints(iterable: &Node) -> bool {
+	let Node::List(items, _, _) = iterable.drop_meta() else { return false };
+	match items.as_slice() {
+		[head, sliced, ..] if matches!(head.drop_meta(), Node::Symbol(word) if word == SLICE_WORD) => yields_codepoints(sliced),
+		[head, _] => matches!(head.drop_meta(), Node::Symbol(word) if word != BYTES_WORD && UNIT_LOOP_WORDS.contains(&word.as_str())),
+		_ => false,
+	}
 }
 
 /// `keys(m)`, `m.keys`, `m.keys()`: an iterable whose items are a map's keys
