@@ -102,7 +102,7 @@ fn png(pixels: &[u64], width: usize, height: usize) -> Vec<u8> {
 			}
 		}
 	}
-	let mut deflated = flate2::write::ZlibEncoder::new(Vec::new(), flate2::Compression::default());
+	let mut deflated = flate2::write::ZlibEncoder::new(Vec::new(), flate2::Compression::fast()); // fast: an animation writes a frame each paint
 	deflated.write_all(&rows).expect("writing to memory");
 	let header = [(width as u32).to_be_bytes().as_slice(), &(height as u32).to_be_bytes(), if colored { &RGB_8_BIT } else { &GRAYSCALE_8_BIT }].concat();
 	let mut file = PNG_SIGNATURE.to_vec();
