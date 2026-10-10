@@ -7,6 +7,12 @@ print "started at " + start
 later = now
 if later >= start then print "time did not run backwards"
 
-// an instant has no wall clock until it is placed in a zone
-hour = try start.hour catch "none"
-print "hour of an instant: " + hour
+// an instant's wall clock is the one of the time zone the program runs in (TZ)
+print "hour here: " + start.hour
+
+// date and local time literals are values the program keeps, prints and asks
+leap_day = 2024-02-29
+meeting = 2024-01-31T10:30
+print leap_day + " is day " + leap_day.day_of_year + ", weekday " + leap_day.weekday
+print "meeting at " + meeting.hour + ":" + meeting.minute
+if leap_day > 2024-01-01 then print "the leap day comes later"

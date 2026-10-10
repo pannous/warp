@@ -82,3 +82,10 @@ fn a_parameter_given_bools_keeps_them() {
 	is!("show(b) := \"got \" + b; show(1<2); show(5)", "got 5"); // given a number too: no bool
 	is!("f(b) := b + 1; f(1 == 1)", 2);
 }
+
+// an exact comparison, evaluated at compile time, is a truth like any other; it printed as the Int 1
+#[test]
+fn an_exact_comparison_prints_as_bool() {
+	assert_eq!(text_of("√2 > 1.4"), "yes");
+	assert_eq!(text_of("π < 3"), "no");
+}
