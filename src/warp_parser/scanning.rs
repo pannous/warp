@@ -227,12 +227,17 @@ impl WarpParser {
 		last.is_some_and(|&c| c.is_alphanumeric() || matches!(c, '_' | ')' | ']'))
 	}
 
-	/// The `//` at the cursor is followed by what a divisor could be: one word (`// 2`, `// n`) or an expression
-	/// (`// n + 1`), not prose (`// property with value list`)
+	/// The `//` at the cursor is followed by what a divisor could be: a number or short name (`// 2`, `// n`) or an
+	/// expression (`// n + 1`), not prose (`// property with value list`) nor a word (`// Hz`, `// peaks`)
 	fn comment_reads_like_divisor(&self) -> bool {
 		let rest: String = self.chars[self.pos + 2..].iter().take_while(|&&c| c != '\n').collect();
 		let rest = rest.trim();
-		!rest.contains(char::is_whitespace) || (rest.contains(['+', '-', '*', '/', '%', '(', '^']) && !has_adjacent_words(rest))
+		let has_operator = rest.contains(DIVISOR_OPERATORS);
+		if rest.contains(char::is_whitespace) {
+			has_operator && !has_adjacent_words(rest)
+		} else {
+			has_operator || is_number_or_short_name(rest)
+		}
 	}
 
 	pub(super) fn is_at_line_start(&self) -> bool {
@@ -461,6 +466,14 @@ impl WarpParser {
 			self.advance();
 		}
 	}
+}
+
+const DIVISOR_OPERATORS: [char; 7] = ['+', '-', '*', '/', '%', '(', '^'];
+const MAX_DIVISOR_NAME_LENGTH: usize = 2;
+
+fn is_number_or_short_name(word: &str) -> bool {
+	let is_name = word.len() <= MAX_DIVISOR_NAME_LENGTH && word.chars().all(|c| c.is_ascii_lowercase() || c == '_');
+	is_name || word.parse::<f64>().is_ok()
 }
 
 /// Prose, not an expression: two words side by side with no operator between them (`data for`, `GET /api` stays one)
