@@ -37,15 +37,32 @@ fn every_playground_sample_runs_without_an_error() {
 		.filter(|name| !excluded.contains(name) && runs_here(name))
 		.collect();
 	menu.sort();
-	let failures: Vec<String> = menu.iter().filter_map(|name| match eval(&sample_path(name)) {
-		Node::Error(message) if message.to_string().contains(NO_GPU) => {
+	let failures: Vec<String> = menu.iter().filter_map(|name| sample_failure(name)).collect();
+	assert!(failures.is_empty(), "playground samples with an error (fix them or list them in {EXCLUDED_LIST}):\n{}", failures.join("\n"));
+}
+
+// a sample that waits for input it never gets (a window, the mouse) hangs the whole test binary: each one gets this long
+const SAMPLE_TIME_LIMIT: std::time::Duration = std::time::Duration::from_secs(60);
+
+fn sample_failure(name: &str) -> Option<String> {
+	let (finished, outcome) = std::sync::mpsc::channel();
+	let path = sample_path(name);
+	std::thread::spawn(move || {
+		let failure = match eval(&path) {
+			Node::Error(message) if message.to_string().contains(NO_GPU) => Err(()),
+			failed @ Node::Error(_) => Ok(Some(failed.serialize())),
+			_ => Ok(None),
+		};
+		let _ = finished.send(failure);
+	});
+	match outcome.recv_timeout(SAMPLE_TIME_LIMIT) {
+		Ok(Ok(failure)) => failure.map(|message| format!("{name}: {message}")),
+		Ok(Err(())) => {
 			crate::common::announce_skip("a WebGPU adapter", name);
 			None
 		}
-		failed @ Node::Error(_) => Some(format!("{name}: {}", failed.serialize())),
-		_ => None,
-	}).collect();
-	assert!(failures.is_empty(), "playground samples with an error (fix them or list them in {EXCLUDED_LIST}):\n{}", failures.join("\n"));
+		Err(_) => Some(format!("{name}: still running after {SAMPLE_TIME_LIMIT:?}, a loop that never ends headless (loop `while window_open`)")),
+	}
 }
 
 #[test]
