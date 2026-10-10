@@ -319,3 +319,9 @@ ends on about:blank), a declared memory maximum (still ~8 GB reserved).
   inputs as shader holes (src/shader_holes.rs): `$mouse` (a list [mouse_x, mouse_y] → vec2f), `$mouse_down` (0/1)
   and `$seconds` (from clock()), read at each paint. The ⛶ box (.painted) is as wide as its paintings, so ⛶ sits on
   the painting's corner.
+
+## The default canvas is the output pane (card draw-default, user 2026-10-10: defaults, no errors)
+System values `view_width`, `view_height`: playground.js viewSize tells the room below the output pane's text (CSS
+pixels, retold on resize) with the other system values; host.js falls back to 640×480 (VIEW_DEFAULTS) on a page
+without a pane, as natively (warp-runtime system_values.rs NATIVE_VIEW). lib/draw.warp sizes its default canvas from
+them, so `use draw; show()` fills the pane. Test: tests/web/test_playground_paint.rs.
