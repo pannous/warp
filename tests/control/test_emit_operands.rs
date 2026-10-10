@@ -15,3 +15,11 @@ fn an_emit_is_an_operand() {
 	is!("on ask { 2 }; 3 * emit ask + 1", 7);
 	is!("on ask { 1 } in { 10 + emit ask }", 11);
 }
+
+// Card price-net: `ask` asks a handler for a value, as emit; the other emit words work in an operand too
+#[test]
+fn ask_is_an_emit_operand() {
+	is!("price(net) := net * (1 + ask tax_rate); on tax_rate { 0.2 } in { price(100) }", 120);
+	is!("on rate { 2 } in { 3 * fire rate }", 6);
+	is!("ask(x) := x * 2; 1 + ask 3", 7);
+}

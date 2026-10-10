@@ -159,8 +159,6 @@ const GLUED_BLOCK_KEYWORDS: [&str; 3] = ["go", "loop", "do"];
 const AWAIT_ALL_WORD: &str = "all";
 /// `await x` binds its operand like unary minus
 const AWAIT_OPERAND_BP: u8 = Op::Neg.binding_power().1;
-/// `1 + emit ask`: an emit inside an expression takes the words of its event like a call (card emit-operand)
-const EMIT_KEYWORDS: [&str; 2] = ["emit", "send"];
 const PRINT_WORD: &str = "print";
 const CODEPOINT_TYPE: &str = "codepoint";
 /// `print a  print b`: statements separated by spaces only (user decision 2026-10-03: a loud error)
