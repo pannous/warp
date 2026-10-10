@@ -10,6 +10,8 @@ mod test_editor_shortcuts; // card keyboard-shortcuts
 #[cfg(feature = "native")] // runs node
 mod test_assistant_edits; // card put-editor: the chat's code applied as edits
 #[cfg(feature = "native")] // runs node
+mod test_completion_terse; // card completion-terse: the gray continuation is code only
+#[cfg(feature = "native")] // runs node
 mod test_editor_mode; // card playground-editor
 #[cfg(feature = "native")] // runs python3
 mod test_keyword_registry; // card where-infix
