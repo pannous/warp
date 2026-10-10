@@ -17,7 +17,8 @@ import functools, http.server, json, os, re, subprocess, sys, threading, time, u
 
 # a free port per run (0: the system picks one), so runs of several sessions never meet; WARP_BROWSER_TEST_PORT fixes it
 PORT = int(os.environ.get("WARP_BROWSER_TEST_PORT", "0"))
-WORKERS = os.environ.get("WARP_BROWSER_TEST_WORKERS", "2")
+WORKERS = os.environ.get("WARP_BROWSER_TEST_WORKERS", str(os.cpu_count() or 2))  # tests in flight: one per core
+SHARD = os.environ.get("WARP_BROWSER_TEST_SHARD")  # i/n: every n-th test from the i-th (pages.yml's matrix)
 # the tour's page starts its worker this late (playground.js ?slow_start): a fast machine then meets the races a slow
 # CI runner meets, e.g. "ready" hiding the first example's "running…" (empty value, the failed deploys of 2026-10-08)
 SLOW_START_MS = 2000
@@ -400,7 +401,7 @@ def main():
 	binary, arguments = sys.argv[1], [argument for argument in sys.argv[2:] if not argument.startswith(IGNORED_ARGUMENTS)]
 	build_components()
 	server = serve(binary)
-	query = urllib.parse.urlencode({"wasm": BINARY_PATH, "args": json.dumps(arguments), "workers": WORKERS, **({"perWorker": PER_WORKER} if PER_WORKER else {})})
+	query = urllib.parse.urlencode({"wasm": BINARY_PATH, "args": json.dumps(arguments), "workers": WORKERS, **({"perWorker": PER_WORKER} if PER_WORKER else {}), **({"shard": SHARD} if SHARD else {})})
 	open_page(f"http://127.0.0.1:{PORT}/web/playground/tests.html?{query}")
 	summary, shown, changed = None, "", time.time()
 	while summary is None:
