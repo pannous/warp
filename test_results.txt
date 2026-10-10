@@ -1446,6 +1446,8 @@ PASSED:
   ✓ functions::test_words_in_phrases::sorted_text_sorts_its_characters
   ✓ functions::test_words_in_phrases::where_filters_a_comprehension_like_if
   ✓ host::native::tests::test_host_state
+  ✓ lists::test_append_words::test_every_append_word_appends_a_closure
+  ✓ lists::test_append_words::test_every_append_word_appends_a_quantity
   ✓ lists::test_bare_list_assignment::a_bracketed_list_never_asks
   ✓ lists::test_bare_list_assignment::an_unbracketed_list_assignment_asks_list_or_statements
   ✓ lists::test_bare_list_assignment::each_reading_has_its_explicit_form
@@ -2171,6 +2173,7 @@ PASSED:
   ✓ numbers::test_named_unit_fields::a_named_field_checks_its_dimension
   ✓ numbers::test_nan_observed::a_nan_leaving_the_run_is_canonical
   ✓ numbers::test_nan_observed::a_nan_prints_as_nan
+  ✓ numbers::test_nearest::float_to_exact_refusals_name_nearest
   ✓ numbers::test_nearest::nearest_fraction
   ✓ numbers::test_nearest::nearest_of_exact_values
   ✓ numbers::test_nearest::nearest_takes_two_or_three_arguments
@@ -4458,4 +4461,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-10 ignored, 4453 passed, 0 failed, 4453 total tested
+10 ignored, 4456 passed, 0 failed, 4456 total tested
