@@ -88,6 +88,7 @@ PASSED:
   ✓ control::test_daily_timer::a_daily_timer_starts_and_main_runs_on
   ✓ control::test_daily_timer::the_delay_until_a_time_of_day_wraps_to_tomorrow
   ✓ control::test_data_quoting::a_tag_in_a_variable_reads_as_written
+  ✓ control::test_data_quoting::a_variable_named_data_is_no_prefix
   ✓ control::test_data_quoting::data_in_a_list_reads_as_written
   ✓ control::test_data_quoting::data_of_a_tag_reads_as_written
   ✓ control::test_data_quoting::data_takes_the_whole_expression_after_it
@@ -4509,4 +4510,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-10 ignored, 4504 passed, 0 failed, 4504 total tested
+10 ignored, 4505 passed, 0 failed, 4505 total tested
