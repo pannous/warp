@@ -943,6 +943,7 @@ impl WasmGcEmitter {
 		statements.last().is_some_and(|last| {
 			!self.is_float_assignment(last) && !self.is_ref_update(last) && !self.is_ref_value(last)
 				&& self.typed_list_store(last).is_none() && !self.get_type(last).is_ref() && !self.is_float_read(last)
+				&& self.get_type(last) != Kind::Float
 		})
 	}
 
