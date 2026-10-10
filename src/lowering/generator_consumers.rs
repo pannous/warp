@@ -20,7 +20,7 @@ const TAKE_WORD: &str = "take";
 const TAKE_WORDS: [&str; 2] = [TAKE_WORD, "first"];
 const ZIP_WORD: &str = "zip";
 const LIST_WORD: &str = "list";
-/// Calls that read the rest of an object's values as a list
+/// Calls that read the rest of an object's values as a list, under any of their spellings (`average`, `sorted`)
 const DRAINING_WORDS: [&str; 7] = [LIST_WORD, "sum", "count", "max", "min", "mean", "sort"];
 const PULLED: &str = "VALUE = SOURCE.next(); if VALUE == ø { break }";
 const INDEXED: &str = "INDEX += 1; if INDEX > count(SOURCE) { break }; VALUE = SOURCE#INDEX";
@@ -113,7 +113,7 @@ impl Consumers<'_> {
 		let limit = match word {
 			TAKE_WORD if arguments.len() == 2 => arguments.pop(),
 			ZIP_WORD if arguments.len() >= 2 => None,
-			_ if DRAINING_WORDS.contains(&word) && arguments.len() == 1 && arguments[0].symbol_name().is_some_and(|name| self.objects.contains(name)) => None,
+			_ if DRAINING_WORDS.contains(&crate::library_words::canonical_spelling(word)) && arguments.len() == 1 && arguments[0].symbol_name().is_some_and(|name| self.objects.contains(name)) => None,
 			_ => return None,
 		};
 		let sources: Vec<Source> = arguments.into_iter().map(|argument| self.source(argument)).collect();
