@@ -223,6 +223,7 @@ web/playground/tests.html in headless Chrome (agent-browser, session warp-browse
   Workers (task-workers.js serveTaskWorkers, used by playground.js, tests.js, site-thread.js): the program's Worker
   asks {taskWorker: {id, url}}, gets a MessagePort to the new Worker, and asks {endTaskWorker: id} to stop one; the
   pool holds the ports. Both listeners are registered before the Worker's own onmessage and stop the message there.
+  Measured (runs 38055959458 vs 38055971317, 150 fresh starts each): 0 stalls with the fix, 6 without.
 
 ## Modules and packages in the browser (2026-10-04)
 The compiler reads files through the page: `warp_host.fetch(address)` / `take_fetched` (web.rs `read_bytes`, cached
