@@ -657,6 +657,8 @@ PASSED:
   ✓ control::test_while_paren_condition::test_while_parenthesized_condition_takes_a_bare_body_with_space
   ✓ control::test_while_value::test_while_value_is_last_body_value
   ✓ control::test_while_value::test_while_value_of_untouched_loop_is_empty
+  ✓ control::test_word_statements::a_glued_go_block_is_a_task
+  ✓ control::test_word_statements::a_word_statement_in_a_block_is_no_call_of_the_next_lines
   ✓ extensions::strings::tests::test_char_str_eq
   ✓ extensions::strings::tests::test_str_plus
   ✓ ffi_parser::tests::test_parse_int32_return
@@ -1561,6 +1563,8 @@ PASSED:
   ✓ lists::test_long_list_copies::copies_keep_the_order_and_share_nothing_they_change
   ✓ lists::test_long_list_result::a_long_list_result_reads_back
   ✓ lists::test_map_get_kind::get_gives_the_value_kind_of_the_map
+  ✓ lists::test_map_literal_number_keys::a_number_subscript_keys_a_map_literal
+  ✓ lists::test_map_literal_number_keys::number_and_text_keys_of_a_map_literal_agree
   ✓ lists::test_map_parameter_keys::keys_of_a_one_entry_map_parameter
   ✓ lists::test_map_starts::a_list_given_for_map_entries_keeps_the_generic_way
   ✓ lists::test_map_starts::a_map_literal_and_a_map_parameter_are_hash_tables
@@ -2613,6 +2617,9 @@ PASSED:
   ✓ parser::test_parser::test_semicolon_groups
   ✓ parser::test_parser::test_simple_separators
   ✓ parser::test_parser::test_use
+  ✓ parser::test_path_literal::a_dot_slash_starts_a_path
+  ✓ parser::test_path_literal::a_path_plays
+  ✓ parser::test_path_literal::a_spaced_dot_slash_divides_each
   ✓ parser::test_references::a_dollar_digit_stays_a_parameter
   ✓ parser::test_references::a_path_follows_a_reference
   ✓ parser::test_references::bracketed_attributes_before_a_body_are_meta_entries
@@ -2788,6 +2795,7 @@ PASSED:
   ✓ programs::test_sound_files::only_a_music_file_plays
   ✓ programs::test_sound_render::a_render_takes_the_sounds_after_the_last_one
   ✓ programs::test_sound_render::sounds_render_into_one_wav_file
+  ✓ programs::test_sound_wavs::each_run_writes_wavs_of_its_own
   ✓ programs::test_sound::a_melody_is_its_notes_one_after_another
   ✓ programs::test_sound::notes_are_frequencies
   ✓ programs::test_sound::notes_are_named_in_a_program_with_units
@@ -3621,6 +3629,8 @@ PASSED:
   ✓ wasm::test_read_bytes_plain_result::a_plain_i32_result_is_an_int
   ✓ wasm::test_read_bytes_plain_result::a_plain_i64_result_is_an_int
   ✓ wasm::test_read_bytes_plain_result::an_unreadable_result_is_an_error_not_a_panic
+  ✓ wasm::test_reproducible_builds::test_generator_classes_compile_in_one_order
+  ✓ wasm::test_reproducible_builds::test_table_saves_compile_in_one_order
   ✓ wasm::test_runtime_stub_found::build_finds_or_builds_the_runtime_stub_by_itself
   ✓ wasm::test_runtime_stub_note::the_note_comes_only_before_the_first_build
   ✓ wasm::test_standalone_executable::test_an_executable_the_runtime_cannot_carry_is_noted_once
@@ -4345,4 +4355,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-10 ignored, 4340 passed, 0 failed, 4340 total tested
+10 ignored, 4350 passed, 0 failed, 4350 total tested
