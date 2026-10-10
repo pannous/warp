@@ -168,3 +168,11 @@ last stage that moves samples to the speaker.
 So: Web Audio semantics, warp words, one engine for rendering, cpal (CoreAudio/ALSA/PipeWire/WASAPI) or Web Audio's
 destination for output. Not a wrapper over each platform's own high-level API (AVAudioEngine, GStreamer): those
 differ in model and would make the browser and native sound differ.
+
+## Signal graph built (card signal-graph, 2026-10-10, samples/signal_graph.warp, tests/programs/test_sound_effects.rs)
+The simple form of layer 4: every sound passes a fixed effect chain distortion → delay → reverb between the voices and the
+output (lib/sound.warp `through_effects`, run in `sound()` over the whole phrase, so a melody has one tail). Module settings
+`distortion` (soft-clipper drive), `delay_time` / `delay_feedback` / `delay_mix`, `reverb_mix` (four Schroeder combs, 0.6 s
+tail); all off by default (no cost). The settings at the time of `play` are that sound's sends, so each voice (task) sets its
+own. Pure warp, so the playground runs the same. Still to build: the `osc |> lowpass |> delay |> out` pipe form with nodes
+and buses as values, shared buses between voices, compressor, EQ, effects on a running handle.

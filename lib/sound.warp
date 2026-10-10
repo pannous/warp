@@ -136,9 +136,66 @@ chord_samples(pitches, duration, shape) := {
 	amplitudes = [share * envelope(i, n) * tremolo_gain(i) * sum([wave(shape, phase(frequency, i) % 1) for frequency in voices]) for i in 0..n]
 	[sample_offset + (round(a) as int) for a in filtered(amplitudes)]
 }
+// the signal graph (card signal-graph): every sound passes the effect chain between the voices and the output,
+// in this order: distortion → delay → reverb. Settings at the time of `play`, so each voice sends its own way.
+// distortion: the drive of a soft clipper (0: off); delay_time seconds (0: off) echoes repeating at delay_feedback
+// (0 to 0.9) of the level before, delay_mix their share; reverb_mix the share of a small room's tail (0: off)
+global distortion = 0.0 as float
+global delay_time = 0.0 as float
+global delay_feedback = 0.4 as float
+global delay_mix = 0.5 as float
+global reverb_mix = 0.0 as float
+// below this share of the level the echoes and the room's tail are cut off
+echo_floor = 0.01
+max_echoes = 8
+reverb_seconds = 0.6
+// the delays (seconds) and the feedback of the four parallel combs of the reverb (Schroeder)
+reverb_delays = [0.0297, 0.0371, 0.0411, 0.0437]
+reverb_feedback = 0.75
+effects_on() := distortion > 0 or delay_time > 0 or reverb_mix > 0
+
+// a soft clipper: tanh bends the peaks the harder the drive, the loudest sample stays at the sound's loudness
+def distorted(amplitudes) {
+	if distortion <= 0 { return amplitudes }
+	peak = loudness * loudest_sample
+	[peak * tanh(x * (1 + 10 * distortion) / peak) for x in amplitudes]
+}
+// the signal plus `echoes` feedback combs: y[i] = x[i] + feedback · y[i - gap], after the signal's end for the tail
+def comb(amplitudes, gap, feedback, tail) {
+	out = []
+	for i in 0..(count(amplitudes) + tail) {
+		x = if i < count(amplitudes) then amplitudes[i] else 0.0
+		out.push(x + (if i >= gap then feedback * out[i - gap] else 0.0))
+	}
+	out
+}
+// the number of repeats until a feedback has died below echo_floor
+echoes_of(feedback) := if feedback <= 0 then 0 else min(max_echoes, ceil(log(echo_floor) / log(feedback)) as int)
+// the dry signal and its echoes, delay_mix of them, to the length of the tail
+def delayed(amplitudes) {
+	if delay_time <= 0 { return amplitudes }
+	gap = round(delay_time * sample_rate) as int
+	wet = comb(amplitudes, gap, delay_feedback, gap * echoes_of(delay_feedback))
+	[dry_at(amplitudes, i) + delay_mix * (wet[i] - dry_at(amplitudes, i)) for i in 0..count(wet)]
+}
+dry_at(amplitudes, i) := if i < count(amplitudes) then amplitudes[i] else 0.0
+// the dry signal and the average of four combs, reverb_mix of it, to reverb_seconds after its end
+def reverbed(amplitudes) {
+	if reverb_mix <= 0 { return amplitudes }
+	tail = round(reverb_seconds * sample_rate) as int
+	rooms = [comb(amplitudes, round(d * sample_rate) as int, reverb_feedback, tail) for d in reverb_delays]
+	[dry_at(amplitudes, i) + reverb_mix * (sum([room[i] for room in rooms]) / count(rooms)) for i in 0..(count(amplitudes) + tail)]
+}
+// the samples through the effect chain, kept inside the 16 bits
+def through_effects(samples) {
+	if not effects_on() { return samples }
+	amplitudes = [x - sample_offset for x in samples]
+	[sample_offset + (max(-loudest_sample, min(loudest_sample, round(a))) as int) for a in reverbed(delayed(distorted(amplitudes)))]
+}
 // the sound's handle: its number in the run, for stop_sound(handle)
 sound(samples) := {
-	sound_samples(samples, count(samples), sample_rate)
+	played = through_effects(samples)
+	sound_samples(played, count(played), sample_rate)
 	std_io("sound", "last", [])
 }
 
