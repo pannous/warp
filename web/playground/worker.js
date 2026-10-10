@@ -42,6 +42,7 @@ const post = message => warming || self.postMessage(message);
 const WARM_UP_CODE = 'p{ "" }';
 self.keepStored = (name, value, file) => post({ type: "stored", name, value, file }); // host-files.js STD_ADAPTERS.store
 self.writeClipboard = text => post({ type: "clipboard", text }); // host-files.js STD_ADAPTERS.clipboard
+self.askPageClipboard = shared => self.postMessage({ type: "clipboard read", shared }); // host.js clipboard_text
 // play's handles (lib/sound.warp, card sound-pro): the sounds and music files of a run counted from 1, as natively
 let soundHandles = 0;
 const nextSoundHandle = () => ++soundHandles;
@@ -57,7 +58,8 @@ const hooks = {
 	renders: true, // each outcome carries its HTML by the program's own renderer (host.js renderedHtml)
 	print: (text, stream) => post({ type: "print", text, stream }),
 	module: bytes => post({ type: "module", bytes }),
-	paint: (pixels, width, height) => post({ type: "paint", pixels, width, height }),
+	paint: (pixels, width, height, canvas) => post({ type: "paint", pixels, width, height, canvas }),
+	gpuCanvas: ({ port, ...canvas }) => self.postMessage({ type: "gpu canvas", port, ...canvas }, [port]), // host-gpu.js gpuPainted
 	sound: (samples, rate, at) => self.playSamples(samples, rate, at),
 	sleeping: milliseconds => post({ type: "sleep", milliseconds }),
 	tasksInline: reason => post({ type: "tasks inline", reason }),

@@ -31,6 +31,7 @@ const TASK_RESULT_BYTES = 1 << 16; // the shared buffer a Worker writes its resu
 const TASK_RESULT_LIMIT = 1 << 28;
 const TASK_HEADER = 8; // [state, length] as Int32, then the result's JSON
 const TASK_STOPPED = "task stopped";
+const PAGE_ANSWER_MS = 60000; // how long a Worker waits for its page's answer: a clipboard read may wait for a permission
 // Workers a task runs on: made while the program's worker is idle (prepareTaskPool), since a Worker only starts once
 // its creator returns to its event loop and a running program never does (emscripten keeps a thread pool for this)
 const taskPool = [];
@@ -614,6 +615,20 @@ function writeShared(shared, record) {
 	Atomics.notify(header, 0);
 }
 
+// the page's answer to a Worker's question its asynchronous browser APIs answer (the clipboard's text, card
+// web-apis-rest): `ask(shared)` hands the page a shared buffer, the page writes its record into it (markup.js
+// answerInto) while the Worker waits; without shared memory (a page not cross-origin isolated) a loud error
+function askPage(what, ask) {
+	if (!ask) throw new Error(`${what}: this page has no way to answer its Worker`);
+	if (!self.crossOriginIsolated) throw new Error(`${what}: the page is not cross-origin isolated, so its Worker cannot wait for it`);
+	const shared = new SharedArrayBuffer(TASK_HEADER + TASK_RESULT_BYTES, { maxByteLength: TASK_RESULT_LIMIT });
+	ask(shared);
+	if (Atomics.wait(new Int32Array(shared, 0, 2), 0, 0, PAGE_ANSWER_MS) === "timed-out") throw new Error(`${what}: the page did not answer in ${PAGE_ANSWER_MS / 1000} s`);
+	const { error, ...answer } = readShared(shared);
+	if (error) throw new Error(`${what}: ${error}`);
+	return answer;
+}
+
 // the record a task Worker wrote into a shared buffer (writeShared), undefined while none is there yet
 function readShared(shared) {
 	const header = new Int32Array(shared, 0, 2);
@@ -701,6 +716,9 @@ function broadcastListener(name) {
 
 addHostPart({
 	words: (holder, hooks, { program, cString }) => ({
+		// `clipboard`: the page reads it (asynchronously) while the Worker waits (askPage; shipped with this part only,
+		// host_parts.rs, so a page that reads no clipboard carries none of it)
+		clipboard_text: () => buildValue(program(), treeOfPlain(self.askPage("clipboard", self.askPageClipboard).text)),
 		// channels between programs (src/channels.rs): a BroadcastChannel of the name, which reaches the other tabs and
 		// workers of this page's origin; the listener's timer (lowering/system_signals.rs) takes what arrived
 		channel_listen: (id, channel) => listenOnChannel(holder, hooks, Number(id), plainOfTree(readNode(program(), channel))),

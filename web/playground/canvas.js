@@ -24,14 +24,16 @@ function paintShade(value) {
 	return [PAINT_INK, PAINT_INK, PAINT_INK];
 }
 
-// a canvas of the painting's size, shown scaled up by a whole factor
-function paintingCanvas(painting) {
+// a canvas of the painting's size, shown scaled up by a whole factor; the GPU's own canvas of a painted shader as it is
+const paintingCanvas = painting => painting.canvas ?? drawn(paintingElement(painting), painting);
+
+function paintingElement(painting) {
 	const canvas = document.createElement("canvas");
 	Object.assign(canvas, { width: painting.width, height: painting.height, className: "painting" });
 	canvas.style.width = `${painting.width * Math.max(1, Math.floor(PAINT_SHOWN_SIDE / Math.max(painting.width, painting.height, 1)))}px`;
 	canvas.style.imageRendering = "pixelated";
 	canvas.style.setProperty("--aspect", painting.width / Math.max(painting.height, 1));
-	return drawn(canvas, painting);
+	return canvas;
 }
 
 const sameSize = (one, other) => one.width === other.width && one.height === other.height;
