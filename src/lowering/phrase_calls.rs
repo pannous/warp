@@ -5,7 +5,7 @@
 //! A call of that function whose arguments, read as values and preposition words, follow the pattern becomes
 //! `name(values…)`. Elsewhere `to` stays a range and `of` a field lookup.
 
-use super::nodes::{call, in_block_as_written, is_assigned_data, is_spaced_call, key, spaced_statement, with_parts_rewritten};
+use super::nodes::{call, in_block_as_written, is_assigned_data, is_words_call, key, spaced_statement, with_parts_rewritten};
 use crate::node::{symbol, Bracket, Node, Separator};
 use crate::operators::Op;
 use crate::type_name_matching::prepositions_among;
@@ -124,7 +124,7 @@ fn matched(arguments: &[Node], pattern: &[Part]) -> Option<Vec<Node>> {
 fn assigned_words(value: Node, patterns: &HashMap<String, Vec<Vec<Part>>>) -> Node {
 	// `y = add 1 to 2 == 3` compares the phrase's value
 	if let Node::Key(left, op, right) = value.drop_meta() {
-		if op.is_comparison() {
+		if op.is_relation() {
 			return Node::Key(Box::new(assigned_words(left.as_ref().clone(), patterns)), *op, right.clone());
 		}
 	}
@@ -150,7 +150,7 @@ fn rewrite(node: Node, patterns: &HashMap<String, Vec<Vec<Part>>>) -> Node {
 			let items: Vec<Node> = items.into_iter().map(|item| rewrite(item, patterns)).collect();
 			let call = match items.split_first() {
 				// a spaced definition (`foo of int = …`) has the shape of a call but defines the phrase
-				Some((head, arguments)) if is_spaced_call(&bracket, &separator) && spaced_pattern(&items).is_none() => {
+				Some((head, arguments)) if is_words_call(&bracket, &separator) && spaced_pattern(&items).is_none() => {
 					let name = head.symbol_name();
 					let call = name.and_then(|name| patterns.get(name)?.iter().find_map(|pattern| phrase_call(name, arguments, pattern)));
 					call.map(|call| in_block_as_written(&bracket, call))
@@ -173,13 +173,13 @@ fn phrase_call(name: &str, arguments: &[Node], pattern: &[Part]) -> Option<Node>
 	// value (P149)
 	let (mut values, mut compared) = match (matched(arguments, pattern), arguments.split_last().map(|(last, leading)| (last.drop_meta(), leading))) {
 		(Some(values), _) => (values, None),
-		(None, Some((Node::Key(value, op, other), leading))) if op.is_comparison() => {
+		(None, Some((Node::Key(value, op, other), leading))) if op.is_relation() => {
 			(matched(&[leading, &[value.as_ref().clone()]].concat(), pattern)?, Some((*op, other.clone())))
 		}
 		_ => return None,
 	};
 	if compared.is_none() {
-		if let Some(Node::Key(value, op, other)) = values.last().map(|last| last.drop_meta().clone()).filter(|last| matches!(last, Node::Key(_, op, _) if op.is_comparison())) {
+		if let Some(Node::Key(value, op, other)) = values.last().map(|last| last.drop_meta().clone()).filter(|last| matches!(last, Node::Key(_, op, _) if op.is_relation())) {
 			*values.last_mut().expect("not empty") = *value;
 			compared = Some((op, other));
 		}
