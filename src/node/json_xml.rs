@@ -134,7 +134,7 @@ pub fn json_of_json5(text: &str) -> String {
 			'/' if chars.peek() == Some(&'*') => {
 				chars.next();
 				let mut previous = ' ';
-				while let Some(next) = chars.next() {
+				for next in chars.by_ref() {
 					if previous == '*' && next == '/' {
 						break;
 					}
