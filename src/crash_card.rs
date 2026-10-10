@@ -1,7 +1,7 @@
 //! A crash of a warp built from a source checkout files a card on the project's to-do board (`todo add`, column Now),
 //! so crashes met by whoever runs warp reach the board, not only those of tests. Each panic location and message files
 //! one card ever (listed in data/crash_cards.txt of that checkout). Builds without the checkout (brew, releases)
-//! file nothing; WARP_CRASH_CARDS=0 turns it off.
+//! and CI runs file nothing; WARP_CRASH_CARDS=0 (set by tests/queue.sh) turns it off.
 
 use std::io::Write;
 use std::panic::PanicHookInfo;
@@ -32,7 +32,8 @@ pub fn install() {
 
 fn file_card(info: &PanicHookInfo) {
 	let checkout = Path::new(SOURCE_CHECKOUT);
-	if std::env::var(OFF_SWITCH).is_ok_and(|switch| switch == "0") || !checkout.join(".git").exists() || FILED.swap(true, Ordering::SeqCst) {
+	let switched_off = std::env::var(OFF_SWITCH).is_ok_and(|switch| switch == "0") || std::env::var_os("CI").is_some();
+	if switched_off || !checkout.join(".git").exists() || FILED.swap(true, Ordering::SeqCst) {
 		return;
 	}
 	let message = panic_message(info);

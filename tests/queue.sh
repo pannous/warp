@@ -19,6 +19,8 @@ TARGETED_TEST_THREADS=4
 # top's MEM counts compressed memory, ps's RSS doesn't.
 MEMORY_CAP_GB="${WARP_TEST_MEMORY_CAP_GB:-4}"
 MEMORY_POLL_SECONDS=1
+# panics provoked by tests file no to-do board cards (src/crash_card.rs); test.sh runs through here too
+export WARP_CRASH_CARDS=0
 
 if [ "$1" = "cargo" ] || [ -x "$1" ]; then run=("$@"); else run=(cargo --offline test "$@"); fi
 [ -n "$WARP_TEST_LOCKED" ] && exec "${run[@]}"
