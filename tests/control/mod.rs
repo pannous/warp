@@ -20,6 +20,7 @@ mod test_loop_forms;
 mod test_loops_in_functions;
 mod test_not_condition_block;
 mod test_error_branch_kind;
+mod test_error_value_return;
 mod test_filter_loops;
 mod test_type_word_filter_loops;
 mod test_structural_patterns;
