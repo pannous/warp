@@ -23,7 +23,7 @@ pub fn float_text(x: f64) -> String {
 	if x == 0.0 {
 		return "0".into();
 	}
-	let (whole, exponent) = warp_runtime::floats::shortest_digits(x);
+	let (whole, exponent) = shortest_digits(x);
 	let digits = whole.to_string();
 	let count = digits.len() as i32;
 	let sign = if x < 0.0 { "-" } else { "" };
@@ -40,6 +40,14 @@ pub fn float_text(x: f64) -> String {
 		format!("0.{}{digits}", zeros(-1 - exponent))
 	};
 	format!("{sign}{placed}")
+}
+
+/// The shortest decimal digits that read back as x (finite, not 0) and the decimal exponent of the first digit:
+/// 1.5e-7 is (15, -7), 0.1 + 0.2 is (30000000000000004, -1)
+fn shortest_digits(x: f64) -> (i64, i32) {
+	let written = format!("{:e}", x.abs()); // Rust writes the shortest digits that read back
+	let (mantissa, exponent) = written.split_once('e').unwrap_or((&written, "0"));
+	(mantissa.replace('.', "").parse().unwrap_or(0), exponent.parse().unwrap_or(0))
 }
 
 fn deserialize_leaked_real<'de, D: serde::Deserializer<'de>>(deserializer: D) -> Result<&'static Real, D::Error> {

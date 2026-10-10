@@ -12,6 +12,12 @@ fn test_run_time_float_prints_shortest() {
 	}
 }
 
+/// A float scaled for its digits may round across a half: x · 10^17 is …333.5 for 0.1 / 3, whose digits are …333
+#[test]
+fn test_run_time_float_rounded_across_a_half() {
+	is!("x = random() * 0 + 0.1; str(x / 3)", "0.03333333333333333");
+}
+
 #[test]
 fn test_folded_float_prints_shortest() {
 	for (value, text) in SHORTEST_TEXTS {
