@@ -26,8 +26,9 @@ notes/open_decisions.md.
   heap; GC big decimal/rational on overflow): `0.1 + 0.2 == 0.3` is yes. Division gives exact ratios (`1/3+1/3` 2/3).
   Floats come only from float sources and are contagious (exact ⊕ float → float): sin and other transcendental
   functions, sqrt of a non-square, fractional powers, host values (mouse, time, audio), `as float`, float-typed
-  parameters/fields, e-notation literals (1.5e-7). `==` warns only when a float is involved. Shown to the user:
-  `sqrt(2.0)` float, `sin(1) + 0.5` float, `mouse_x + 0.5` float. warp-perf measures the cost (finger_paint_bench,
+  parameters/fields, e-notation literals (1.5e-7). `==` warns only when a float is involved. Clarified by the user: everything
+  stays exact unless it flows into a float (speed-relevant) path, so `sqrt(2.0)` is the exact √2 like `sqrt(2)`
+  (no special rule for a written point; card sqrt-float-arg obsolete); `sin(1) + 0.5`, `mouse_x + 0.5` are floats. warp-perf measures the cost (finger_paint_bench,
   `x = 0.5` + hot loop). float-text (shortest-exact) still holds for floats.
 - float-text (warp-fixer, user 2026-10-10): floats print shortest-exact everywhere (text, print, str, results), like
   Python/JS repr: `print 1/3.0` 0.3333333333333333, `0.1+0.2` 0.30000000000000004, tiny ones `1.5e-7`. Replaces the
