@@ -55,6 +55,7 @@ mod test_accessibility;
 mod test_i18n;
 mod test_webgpu;
 mod test_webgpu_ints;
+mod test_gpu_auto; // card gpu-auto
 mod test_tag_lists;
 mod test_safari_imports;
 #[cfg(feature = "native")] // a site build with the native compiler

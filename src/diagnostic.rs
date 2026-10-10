@@ -298,6 +298,13 @@ pub fn report_runtime_warning(message: &str) {
 	RUNTIME_WARNINGS.with(|warnings| warnings.borrow_mut().push(message.to_string()));
 }
 
+/// A runtime warning `notice` (its detail after a colon) only once per run, however often it happens
+pub fn report_runtime_warning_once(notice: &str, detail: &str) {
+	if !RUNTIME_WARNINGS.with(|warnings| warnings.borrow().iter().any(|warning| warning.starts_with(notice))) {
+		report_runtime_warning(&format!("{notice}: {detail}"));
+	}
+}
+
 /// The runtime warnings reported on this thread since the last call
 pub fn take_runtime_warnings() -> Vec<String> {
 	RUNTIME_WARNINGS.with(|warnings| std::mem::take(&mut *warnings.borrow_mut()))
