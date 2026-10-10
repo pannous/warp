@@ -89,7 +89,9 @@ impl WasmGcEmitter {
 	/// `value` stored into a place declared `declared` that holds a `kind`: checked at run time when its static kind leaves
 	/// open whether it fits (P204)
 	pub(super) fn emit_declared_value(&mut self, func: &mut Function, declared: Option<&Node>, value: &Node, kind: Kind) {
-		let check = declared.and_then(|declared| self.admitted(declared)).filter(|admitted| self.needs_run_time_check(admitted, value));
+		// a float stored as an exact Int is refused while compiling, by emit_value_of_kind
+		let float_as_exact = kind == Kind::Int && self.get_type(value) == Kind::Float;
+		let check = declared.and_then(|declared| self.admitted(declared)).filter(|admitted| !float_as_exact && self.needs_run_time_check(admitted, value));
 		let (Some(admitted), Some(declared)) = (check, declared) else { return self.emit_value_of_kind(func, value, kind) };
 		self.emit_node_instructions(func, value);
 		self.emit_admitted_node(func, &admitted, declared, kind);
