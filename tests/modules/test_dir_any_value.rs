@@ -7,8 +7,8 @@ fn dir_of_a_plain_value_lists_nothing() {
 	is!("names = dir pi; #names", 0);
 	is!("#dir(pi)", 0);
 	is!("x = 3.14; names = dir x; #names", 0);
-	is!("#dir(\"hi\")", 0);
-	is!("#dir([1 2])", 0);
+	is!("dir(\"hi\") == dir(text)", true); // its type's methods (card list-methods)
+	is!("dir([1 2]) == dir(list)", true);
 	is!("class P{a:int}; x = 3; #dir(x)", 0);
 }
 
