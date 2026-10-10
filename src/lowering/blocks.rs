@@ -389,10 +389,12 @@ impl Blocks {
 			}
 		}
 		// the tagged object `cat{x=1 kill{print '🕱'}}` as `cat = {…}` (card symbolism-object); plain `key: value` data keeps
-		// reading its siblings' paths (`circle:{color: colors.red}`)
+		// reading its siblings' paths (`circle:{color: colors.red}`), and a tag of one assignment stays it (`p{ shown = "seen" }`,
+		// `html{test=1}`)
 		if let Node::Key(target, Op::Colon, value) = node.drop_meta() {
-			let is_code = |entry: &Node| code_entry(entry).is_some() || value_entry(entry).is_some() || function_entry(entry).is_some();
-			if let (Node::Symbol(name), Some(_)) = (target.drop_meta(), object_entries(value).filter(|entries| entries.iter().any(is_code))) {
+			let is_code = |entry: &Node| code_entry(entry).is_some() || function_entry(entry).is_some();
+			let is_object = |entries: &&Vec<Node>| entries.iter().any(is_code) || (entries.len() > 1 && entries.iter().any(|entry| value_entry(entry).is_some()));
+			if let (Node::Symbol(name), Some(_)) = (target.drop_meta(), object_entries(value).filter(is_object)) {
 				if let Some(object) = self.object_statement(name, target, Op::Colon, value) {
 					return object;
 				}
