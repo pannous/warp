@@ -105,6 +105,7 @@ mod test_catch_binding;
 mod test_filter_loop_over_variable;
 mod test_all_with_condition;
 mod test_go_blocks;
+mod test_task_globals; // card error-undefined
 mod test_shared_values;
 mod test_after;
 mod test_parallel_map;
@@ -156,6 +157,7 @@ mod test_database_relations; // card orm, step 4
 mod test_database_nested_add; // card orm-nested
 mod test_database_dangling_key; // card orm-dangling
 mod test_database_members_add; // cards orm-nested, orm-list-add
+#[cfg(feature = "native")] // its one test counts native database queries: not in the browser build
 mod test_database_members_query; // card orm, one-to-many as a query
 mod test_database_optional; // card orm-optional
 mod test_database_optional_units; // card unit-field

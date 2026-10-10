@@ -93,6 +93,11 @@ b
 ```warp => 14
 total = 0; for (a, b) in [(1, 2), (3, 4)] { total += a * b }; total
 ```
+A type or class name as the loop variable matches by type: `for int in xs` visits only the ints, named `int` in the
+body (with a notice when some items may be skipped); `for character in chars(s)` visits every codepoint.
+```warp => 4
+sum = 0; for int in [1, "a", 3] { sum += int }; sum
+```
 
 ## Functions
 `f(x) := …` or `def f(x) = …` or `def f(x) { … }`; `return`; a one-parameter definition may use `it`; calls need no
@@ -110,7 +115,8 @@ infix operator divides(d: int, n: int) := n % d == 0; 3 divides 12
 ```
 
 ## Types and classes
-`type(x)`, `x is T` tests, `x as T` converts; classes declare typed fields or defaults, methods with `:=`, `extends`.
+`type(x)`, `x is T` tests (`3 is number`), `x as T` converts; a bare type name is a type value and `==` between
+types is exact (`type(3) == int`, `type(3) == number` is `no`); classes declare typed fields or defaults, methods with `:=`, `extends`.
 Instances are shared references: `==` compares values, `===` identity, `copy(x)` duplicates.
 ```warp => [int yes 3 "Rex barks"]
 class Animal { name: "?"; speak := "..." }
@@ -124,11 +130,14 @@ a = Account("Ada", 100); b = a; b.balance = 150; c = copy(a)
 ```
 
 ## Errors
-Errors are values: `raise`, `try … else`, `catch e`; an index out of range is an error, not a crash.
-```warp => ["caught" "bad input"]
+Errors are values: `error("…")` returns one and `if r failed then …` handles it, no catch needed; a raised error
+(`raise`, an index out of range) propagates to `try … else` or `catch e`, never a crash.
+```warp => ["caught" "bad input" "neg"]
 r = try { [1]#5 } else { "caught" }
 check(x) := if x < 0 then raise "bad input" else x
-[r, try check(-1) catch e: e.message]
+f(x) := if x < 0 then error("neg") else x
+s = f(-1)
+[r, try check(-1) catch e: e.message, if s failed then s.message else s]
 ```
 
 ## Effects

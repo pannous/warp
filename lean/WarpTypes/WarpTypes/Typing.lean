@@ -24,7 +24,8 @@ inductive HasType (P : Program) : Ctx → Expr → Ty → Prop where
   | int {Γ n} : HasType P Γ (.int n) .int
   /-- an int in the range of a fixed width (`int16`), what a checked declaration holds -/
   | intIn {Γ n lo hi} : lo ≤ n → n ≤ hi → HasType P Γ (.int n) (.ranged lo hi)
-  | num {Γ n} : HasType P Γ (.num n) .number
+  | num {Γ q} : HasType P Γ (.num q) .exact
+  | flt {Γ f} : HasType P Γ (.flt f) .number
   | qty {Γ n d} : HasType P Γ (.qty n d) (.quantity d)
   | text {Γ s} : s.length ≠ 1 → HasType P Γ (.text s) .text
   /-- a one-character text: the parser reads `"a"` as a codepoint -/
@@ -56,7 +57,7 @@ inductive HasType (P : Program) : Ctx → Expr → Ty → Prop where
   | lam {Γ y b tb} : HasType P (Γ.set y .any) b tb → HasType P Γ (.lam y b) (.fn tb)
   | clo {Γ y b tb} : HasType P (Ctx.empty.set y .any) b tb → HasType P Γ (.clo y b) (.fn tb)
   | app {Γ f a tf ta} : HasType P Γ f tf → HasType P Γ a ta → HasType P Γ (.app f a) (resultTy tf)
-  /-- the items are ints (number bounds fail when it runs: W0 keeps no float values) -/
+  /-- the items are ints (bounds that are no ints fail when it runs: W0 ranges only ints) -/
   | range {Γ a b ta tb} : HasType P Γ a ta → HasType P Γ b tb → HasType P Γ (.range a b) (.list (arithTy ta tb))
   | append {Γ a b ta tb} : HasType P Γ a ta → HasType P Γ b tb →
       HasType P Γ (.append a b) (.list (join (listElem ta) (listElem tb)))

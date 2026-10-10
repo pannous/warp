@@ -584,7 +584,7 @@ theorem steps {μ : Store} {e : Expr} {s'} (hs : Step P (e, μ) s') : Progresses
 theorem progress {Γ e t} (h : HasType P Γ e t) (hΓ : Γ = Ctx.empty) {μ : Store} (hμ : StoreOk P μ) :
     Progresses P μ e := by
   induction h generalizing μ with
-  | bool | int | intIn | num | qty | text | codepoint | unit | nil => exact .inl rfl
+  | bool | int | intIn | num | flt | qty | text | codepoint | unit | nil => exact .inl rfl
   | @cons _ a b _ _ _ _ _ _ ih1 ih2 =>
     exact in_frame (.consL b) rfl (ih1 hΓ hμ) fun va =>
       in_frame (.consR a) va (ih2 hΓ hμ) fun vb => .inl (by simp [Frame.plug, isValue, va, vb])

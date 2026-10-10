@@ -21,9 +21,9 @@ ambiguous forms per notes/welcoming.md), never less, except at a listed hole.
 ## W0: syntax
 
 ```
-types      τ ::= never | bool | int | number | text | unit | list τ | cls [C₀ … Cₙ] | ranged lo hi | quantity D | any
+types      τ ::= never | bool | int | exact | number | text | unit | list τ | cls [C₀ … Cₙ] | ranged lo hi | quantity D | any
 modes      m ::= var | const | charged
-values     v ::= b | n | q | n D | "s" | ø | [] | v :: v | ref a [C…]      (lists are cons cells, as the GC $Node)
+values     v ::= b | n | q | f | n D | "s" | ø | [] | v :: v | ref a [C…]      (lists are cons cells, as the GC $Node)
 expr       e ::= v | x                          main-level name (store)
                | y                              local (parameter or let), bound by substitution
                | e + e | e - e | e * e | e < e | e == e     (`-` takes numbers only; `+` also texts; `*` a text and a whole number)
@@ -44,9 +44,9 @@ program    P ::= Σ (declared names: x ↦ (m, τ, charged body?)), Φ (function
 ```
 
 Code: `Node` (src/node/mod.rs) carries all of this untyped; `Kind` (src/type_kinds.rs) is the run-time tag. W0 types
-are the static view: `bool` is BOOL_KIND (an Int marked above the kind bits, notes/bool_type.md), `number` covers
-exact decimals/rationals (Kind::Int holding a ratio, wasm_emitter/exact.rs) and floats (Kind::Float); the split into
-`exact` and `float` is a refinement for a later phase. `never` is the type of `error(…)` (inference.rs
+are the static view: `bool` is BOOL_KIND (an Int marked above the kind bits, notes/bool_type.md), `exact` the
+decimals and rationals (`0.5`, `7/2`: a ratio, wasm_emitter/exact.rs; warp's word `rational`), `number` the floats
+(Kind::Float: `sqrt(2)`, `x as float`; warp's words `float` and `number`), see Exact numbers and floats below. `never` is the type of `error(…)` (inference.rs
 `raises_error`: "an `error(…)` branch is the bottom kind", notes/error_branch_kind.md) and of the elements of `[]`.
 
 ## Subtyping (≤)
@@ -55,7 +55,7 @@ exact decimals/rationals (Kind::Int holding a ratio, wasm_emitter/exact.rs) and 
 | --- | --- | --- |
 | τ ≤ τ, never ≤ τ, τ ≤ any | reflexive, bottom, top (`any` = a Node, `value:any`) | — |
 | bool ≤ int | true/false act as 1/0 (P195: `true + 1` is 2) | BOOL_KIND masks to Int |
-| int ≤ number | `x: float = 1` is accepted | checks.rs `assignment_mismatch` (Float ← Int) |
+| int ≤ exact ≤ number | `x: rational = 2`, `x: float = 0.5` are accepted; `x: rational = sqrt(2)` is not | checks.rs `assignment_mismatch` (Float ← Int), user_functions.rs (a float where an exact is expected) |
 | list σ ≤ list τ if σ ≤ τ | **covariant lists** | probes/variance/ |
 | ranged a b ≤ ranged c d if c ≤ a, b ≤ d; ranged ≤ int | a fixed width (`int16`) is the range of ints it holds | fixed_width.rs |
 | cls p ≤ cls q if q is a prefix of p | a subclass or variant extends its parent's chain | class_methods.rs inherit, traits.rs IS_TYPE |
@@ -213,8 +213,8 @@ typed by a sum or by a variant.
 
 Evaluator.lean: `step` computes the next state, `step_sound` proves each of its steps is a `Step`, and `run` iterates
 it with fuel (`run_sound`: the end state is reachable by `Steps`). `outcome` elaborates, checks and runs a program,
-printing the value as warp prints it (`yes`, `[1 2]`, `"a"`) or `?` where the model keeps no value (floats are
-exported as their whole part, `num 3` of 3.7; instances). test_warp_computes_what_the_type_model_computes compares that with warp's
+printing the value as warp prints it (`yes`, `[1 2]`, `"a"`, `3.5`, `1/3`) or `?` where the model keeps no value
+(floats other than whole ones, whose digits Lean prints differently; instances). test_warp_computes_what_the_type_model_computes compares that with warp's
 `pipeline::eval` on the corpus. The known differences are listed in KNOWN_VALUE_DIFFERENCES, each with its card:
 - instance-field (P200): `f(q: Point) := q.x = 7; p = Point(1); f(p); p.x` gives 1 in warp, 7 in the model.
 - bool-literal-value (P199): `f(b: bool) := b; f(1)` gives 1 (the parameter keeps the int), and the assignment
@@ -345,7 +345,7 @@ No new forms: `not e` is `if e then no else yes`; `a and b` is `if a then b else
 
 `a..b` (`Expr.range`, `intList`) is the list of ints from a up to b, b excluded; `a to b` / `a...b` export as
 `a..(b+1)`; a reversed range is empty. Typing: `list (arithTy ta tb)`, the checker demands number bounds. Number
-bounds fail when the range runs (W0 keeps no float values; warp gives `[1.5 2.5]` for `1.5..3`), letter ranges
+bounds fail when the range runs (W0 ranges only ints; warp gives `[1.5 2.5]` for `1.5..3`), letter ranges
 (`'a'..'e'`) are refused by the exporter; `"a"..3` compiles in warp and fails at run time (card range-mixed).
 `add 1 to 2` of a function `to add number a to number b: …` parses as `add (1 to 2)`: the exporter splits the pair
 into the two arguments, as warp does.
@@ -378,8 +378,8 @@ item-unchecked).
 (`looseEq`, walking the heap with fuel for cycles; `Program.fieldNames` enumerates a class chain's fields for it),
 lists item by item, anything else by value. `a === b` / `a same b` (same = true) is identity on instances (an
 instance is its address); on other values it compares by value, so `0 === false` is no. Not modelled: list identity
-(literal lists are values in W0, `[1] === [1]` is yes in W0, no in warp under P208; stored lists are cells) and `1 === 1.0` (W0 keeps no float
-values). The exporter maps `!=` and `!==` to the negation; `same`, `same as` and `is the same as` are `===`
+(literal lists are values in W0, `[1] === [1]` is yes in W0, no in warp under P208; stored lists are cells) and `1 === 1.0` (`1.0` is the int 1 in
+both). The exporter maps `!=` and `!==` to the negation; `same`, `same as` and `is the same as` are `===`
 (`identical` is no alias, user decision).
 
 ## Inline unions and optionals
@@ -440,8 +440,8 @@ inside a handler body loses the outer handler).
 ## Later phases
 
 Optional and auto-unwrap (P179: `a: int = Some(3)`), payload-free variants (`red`: one shared instance per variant),
-the value comparison above, errors as stored values (`r = f(-1); if r failed …`: a `τ or error` sum),
-exact vs float, maps, then tasks.
+the value comparison above, errors as stored values (`r = f(-1); if r failed …`: a `τ or error` sum; card
+error-value: warp raises it at the call when f returns numbers), maps, then tasks.
 
 ## Named arguments, defaults, nested functions (exporter only)
 
@@ -484,8 +484,8 @@ Card sum-empty: `sum []` prints the word sum.
 `e as T` is `Expr.conv e T`, typed T from any source type (like `cast`, so the proofs only gained one case each and
 `convertValue_typed`: a conversion gives a value of type T or an error). It steps to `convertValue`: to text, a text as
 it is, ø as "ø", anything else as warp prints it (`[1, "a"] as text` is `[1 "a"]`, `display`, moved to
-Semantics.lean); to bool, its truthiness; to int or number, a number keeps its whole part (`3.7 as int` is 3; float
-literals export as `num` of their whole part, the only part W0 keeps) and a text is parsed ("4" is 4, "a" the error
+Semantics.lean); to bool, its truthiness; to int, a number keeps its whole part, toward zero (`3.7 as int` is 3); to
+number, it becomes a float (`(1/3) as float`); a text is parsed ("4" is 4, "a" the error
 "invalid number", as in warp); to any other type, the cast's check. The checker (`convertible`) refuses what can never
 convert to a number type (`[1] as int`, a compile error in warp too). The exporter takes scalar targets (int, number,
 text, bool and their spellings); `x as Point`, `x as texts` and `x as int?` are other operations in warp and stay out.
@@ -538,3 +538,22 @@ codepoints, which the walk (`peel_codepoint`) and `#` give. A name given no anno
 `x: codepoint = "ab"`, `f(c: codepoint) := c; f("ab")` and `x: codepoint = 97`. The exporter maps the words
 `codepoint` and `char`. `c + 1` of a codepoint is a text in both (`"a1"`). Not yet: `97 as codepoint` (W0 converts
 only by `fits`).
+
+## Exact numbers and floats
+Warp computes exactly until a float comes in: `0.1 + 0.2` is 0.3, `7/2` is 3.5, `1/3` stays 1/3, a whole result is an
+int again (`0.5 * 2` is 1, `6/2` is 3). W0 has the same values: `num q` a rational that is no int (Lean core `Rat`,
+typed `exact`), `flt bits` a float (Lean `Float` by its bits, typed `number`), and `exactValue` turns a whole rational
+into an `int`. `bool ≤ int ≤ exact ≤ number`, a fixed width below int. `arith` gives int for ints, exact for exact
+numbers, number when a float takes part; `/` widens its left side to exact (`7/2`), `^` to exact for a whole exponent
+(`2^-1` is 0.5) and to number for a fractional one (`2^0.5`, the only rational operation that leaves the rationals).
+`%` is Euclidean on rationals too (`7.5 % 2` is 1.5). `as float` (Ty `number`) makes a float, `as int` cuts toward
+zero. Printing follows warp's `Number` display: a terminating decimal (`3.5`, `0.0009765625`), else `n/d`; floats print
+`?` unless whole. The exporter reads a decimal literal warp keeps exact (`Number::is_exact_decimal`, through
+`decimal_fraction`) and a quotient as `exactValue (n / d)`, any other float literal as a float, and the type words
+`exact`, `rational`, `real` as `exact`, `float`, `number` as `number`. Soundness re-proved (one lemma,
+`exactNumber_typed`: an operation on exact numbers gives an exact number, or a float only where the type says number).
+warp's analyzer sees a decimal and a float as one Kind (Float), so admits is compared on the decimal (`.exact`).
+Found: card rational-float (`x: rational = sqrt(2)`, `x: rational = 0.5 as float` fail with an internal WASM
+validation error rather than the compile error a parameter gets: `f(r: rational) := r; f(0.5 as float)`).
+Not yet: `as rational` (a cast, not a conversion, in W0), float display, `x: float = 1/3` converting (W0 keeps 1/3, of
+type number; warp converts to 0.333…, which the comparison skips as a float).

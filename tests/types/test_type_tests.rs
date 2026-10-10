@@ -88,3 +88,16 @@ fn test_types_compare_exactly_with_equals() {
 	is!("type(0) == number", 0);
 	is!("type(0) is number", 1);
 }
+
+#[test]
+fn test_bare_type_names_are_type_values() {
+	// cards type-value-type, real-equality: a type word standing bare is that type as a value (one table, cleanup-closed-lists)
+	is!("type(π) == real", 1);
+	is!("t = type(0); t is int", 1);
+	is!("t = type(0); t is number", 1);
+	is!("t = type(0); t is text", 0);
+	is!("t = type(0); t == int", 1);
+	is!("int == int", 1);
+	is!("int == number", 0);
+	is!("3 == int", 0);
+}

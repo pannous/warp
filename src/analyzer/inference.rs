@@ -173,7 +173,7 @@ pub fn infer_type(node: &Node, scope: &Scope) -> Kind {
 		// `"1/3" as number` is the number the text spells, of its kind (an exact ratio is an Int)
 		Node::Key(..) if let Some(number) = spelled_number(node) => infer_type(&number, scope),
 		// `t as number` of a text known only at run time: an Int, a ratio or a Float, as the text says (card runtime-text-ratio)
-		Node::Key(value, Op::As, target) if matches!(target.name().to_lowercase().as_str(), "number" | "num")
+		Node::Key(value, Op::As, target) if is_number_word(target)
 			&& matches!(infer_type(value, scope), Kind::Text | Kind::Codepoint) => Kind::Data,
 		// `v as float` is an f64; `as int`, `as exact` stay exact Ints
 		Node::Key(_, Op::As, target) if builtin_type_kind(&target.name()).is_some_and(|kind| kind.is_float()) => Kind::Float,
@@ -227,12 +227,17 @@ pub fn infer_type(node: &Node, scope: &Scope) -> Kind {
 
 /// `x as char`, `x as list`, `x as text`
 fn conversion_kind(target: &str) -> Option<Kind> {
-	match target {
-		"char" | "character" => Some(Kind::Codepoint),
+	match crate::type_tests::canonical_spec_word(target) {
+		"codepoint" => Some(Kind::Codepoint),
 		"list" => Some(Kind::List),
-		"string" | "str" | "text" => Some(Kind::Text),
+		"text" => Some(Kind::Text),
 		_ => None,
 	}
+}
+
+/// `as number`, `as Number`
+fn is_number_word(target: &Node) -> bool {
+	crate::type_tests::canonical_spec_word(&target.name().to_lowercase()) == "number"
 }
 
 /// A loop is its last body value (P55): a text, character or list one held as such (card loop-value-kind), ø after a
@@ -490,8 +495,7 @@ pub(super) fn branches_kind(then_kind: Kind, else_kind: Kind) -> Kind {
 /// `"1/3" as number`: the number a constant text spells, which the cast is (card fraction-number)
 pub fn spelled_number(node: &Node) -> Option<Node> {
 	let Node::Key(value, Op::As, target) = node.drop_meta() else { return None };
-	let is_number_word = matches!(target.name().to_lowercase().as_str(), "number" | "num");
-	is_number_word.then(|| literal_number(value)).flatten()
+	is_number_word(target).then(|| literal_number(value)).flatten()
 }
 
 /// A value declared `any` (`r: any`, a route's `request`) or a field of one (`request.body`): known only at run time

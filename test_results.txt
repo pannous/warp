@@ -525,6 +525,8 @@ PASSED:
   ✓ control::test_task_dir::the_task_still_runs_after_its_dir
   ✓ control::test_task_exact::a_big_integer_crosses_to_a_task_and_back
   ✓ control::test_task_exact::a_ratio_crosses_to_a_task_and_back
+  ✓ control::test_task_globals::a_go_block_plays_notes
+  ✓ control::test_task_globals::a_task_reads_an_exact_global
   ✓ control::test_task_list_literal::a_list_of_task_values_holds_each_result
   ✓ control::test_task_name_scope::a_loop_variable_leaves_the_main_variable_alone
   ✓ control::test_task_name_scope::a_loop_variable_named_like_a_task_is_the_loop_variable
@@ -627,6 +629,7 @@ PASSED:
   ✓ control::test_type_word_filter_loops::test_a_text_appended_with_an_item_of_a_mixed_list_inside_an_if
   ✓ control::test_type_word_filter_loops::test_a_type_word_loop_visits_only_items_of_that_type
   ✓ control::test_type_word_filter_loops::test_an_adjective_with_a_type_word_is_a_condition
+  ✓ control::test_type_word_filter_loops::test_the_codepoints_of_a_text_need_no_filter
   ✓ control::test_uncharged_blocks::test_a_block_is_no_value
   ✓ control::test_uncharged_blocks::test_a_computed_colon_warns_where_it_is_written
   ✓ control::test_uncharged_blocks::test_bang_runs_a_block
@@ -1735,6 +1738,9 @@ PASSED:
   ✓ modules::test_agent::agent_with_a_wrong_key_fails_with_the_api_reason
   ✓ modules::test_agent::agent_without_a_key_names_the_variable
   ✓ modules::test_agent::agent_without_a_key_says_where_to_set_it
+  ✓ modules::test_checkout_std_lib::a_lib_file_edited_since_the_build_is_used_quietly
+  ✓ modules::test_checkout_std_lib::a_stale_lib_file_shadows_the_standard_module_loudly
+  ✓ modules::test_checkout_std_lib::another_checkout_lib_is_the_standard_module
   ✓ modules::test_dir::a_program_s_own_dir_wins
   ✓ modules::test_dir::dir_lists_the_names_of_a_standard_module
   ✓ modules::test_folder_scope::a_name_defined_in_two_siblings_is_ambiguous
@@ -2784,7 +2790,7 @@ PASSED:
   ✓ programs::test_paint_lists::paint_reads_ints_from_a_built_list
   ✓ programs::test_paint_lists::paint_reads_other_pixels_node_by_node
   ✓ programs::test_paint_lists::paint_takes_the_first_pixels_of_a_longer_list
-  ✓ programs::test_paint_lists::painting_an_empty_canvas_fails_loudly
+  ✓ programs::test_paint_lists::show_before_canvas_paints_the_default_canvas
   ✓ programs::test_paint_shader::paint_of_a_shader_without_values_reads_none
   ✓ programs::test_paint_shader::paint_renders_a_shader_text
   ✓ programs::test_paint_shader::use_graphics_is_use_draw
@@ -3562,6 +3568,7 @@ PASSED:
   ✓ types::test_type_tests::test_a_variable_on_the_right_stays_equality
   ✓ types::test_type_tests::test_articles_are_optional
   ✓ types::test_type_tests::test_as_declaration
+  ✓ types::test_type_tests::test_bare_type_names_are_type_values
   ✓ types::test_type_tests::test_list_type_tests
   ✓ types::test_type_tests::test_pi_is_real_and_a_number
   ✓ types::test_type_tests::test_scalar_type_tests
@@ -3840,6 +3847,7 @@ PASSED:
   ✓ web::test_dom_pages::a_handler_sets_and_reads_elements_of_the_page
   ✓ web::test_dom_pages::main_sets_the_title_of_the_page
   ✓ web::test_editor_mode::the_mode_advances_without_built_keywords
+  ✓ web::test_editor_shortcuts::cmd_ctrl_arrows_move_lines
   ✓ web::test_editor_shortcuts::cmd_slash_comments_lines_out_and_back_in
   ✓ web::test_element_events::an_element_handler_marks_its_element
   ✓ web::test_element_events::each_element_handler_has_its_number
@@ -3909,6 +3917,8 @@ PASSED:
   ✓ web::test_page_tests::a_missing_button_fails_the_test
   ✓ web::test_page_tests::a_plain_run_skips_page_tests
   ✓ web::test_page_tests::passing_page_tests_are_counted
+  ✓ web::test_playground_paint::the_playground_paints_a_canvas_of_its_size
+  ✓ web::test_playground_paint::the_playground_paints_the_default_canvas
   ✓ web::test_primer::every_primer_compile_snippet_compiles
   ✓ web::test_primer::every_primer_snippet_prints_what_the_primer_shows
   ✓ web::test_primer::every_primer_snippet_runs_to_its_value
@@ -4433,4 +4443,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-10 ignored, 4428 passed, 0 failed, 4428 total tested
+10 ignored, 4438 passed, 0 failed, 4438 total tested
