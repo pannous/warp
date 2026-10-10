@@ -75,4 +75,13 @@ impl WasmGcEmitter {
 			func.instruction(instruction);
 		}
 	}
+
+	/// `while condition { body }`: `condition` leaves an i32, `body` leaves nothing
+	pub(super) fn emit_while(func: &mut Function, condition: &[Instruction], body: &[Instruction]) {
+		Self::emit_list(func, &[I::Block(BlockType::Empty), I::Loop(BlockType::Empty)]);
+		Self::emit_list(func, condition);
+		Self::emit_list(func, &[I::I32Eqz, I::BrIf(1)]);
+		Self::emit_list(func, body);
+		Self::emit_list(func, &[I::Br(0), I::End, I::End]);
+	}
 }
