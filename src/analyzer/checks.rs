@@ -1608,7 +1608,7 @@ pub(crate) fn appended_items(call: &Node) -> Option<&[Node]> {
 	let Node::Key(_, Op::Dot, method_call) = call.drop_meta() else { return None };
 	let Node::List(items, _, _) = method_call.drop_meta() else { return None };
 	let (method, arguments) = items.split_first()?;
-	let is_append = matches!(method.drop_meta(), Node::Symbol(word) if crate::broadcasting::APPEND_METHODS.contains(&word.as_str()));
+	let is_append = matches!(method.drop_meta(), Node::Symbol(word) if appends(word, arguments.len()));
 	is_append.then_some(arguments)
 }
 

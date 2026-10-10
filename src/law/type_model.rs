@@ -34,7 +34,6 @@ const UNIT_TYPE: &str = ".unit";
 /// the parameter of a function that takes none
 const UNIT_PARAMETER: &str = "·";
 const ARGUMENTS_SUFFIX: &str = "·args";
-const APPEND_METHODS: [&str; 2] = ["add", "push"];
 const FOR_KEYWORD: &str = "for";
 const VARIABLE_KEYWORDS: [&str; 2] = ["let", "shared"];
 /// the one field of a function local's cell (`f·n`): `·` keeps it apart from the program's own fields
@@ -1299,11 +1298,11 @@ impl Exporter {
 			},
 			// `xs.add(v)` changes the shared list xs holds; a function local's list is a value: `xs = xs ++ [v]`
 			Node::Key(list, Op::Dot, call) => match (list.drop_meta(), call.drop_meta()) {
-				(Node::Symbol(name), Node::List(items, _, _)) if items.len() == 2 && self.cell_lists.contains(name) && APPEND_METHODS.iter().any(|method| is_word(&items[0], method)) => {
+				(Node::Symbol(name), Node::List(items, _, _)) if items.len() == 2 && self.cell_lists.contains(name) && crate::analyzer::appends(&items[0].drop_meta().name(), 1) => {
 					let item = self.expression(&items[1])?;
 					Ok(format!(".set (.loc {}) {} (.append ({}) (.cons ({item}) .nil))", quoted(name), quoted(CELL_FIELD), self.cell_value(name)))
 				}
-				(Node::Symbol(name), Node::List(items, _, _)) if items.len() == 2 && APPEND_METHODS.iter().any(|method| is_word(&items[0], method)) => {
+				(Node::Symbol(name), Node::List(items, _, _)) if items.len() == 2 && crate::analyzer::appends(&items[0].drop_meta().name(), 1) => {
 					let item = self.expression(&items[1])?;
 					if !self.list_names.contains(name) {
 						return unsupported(node);
