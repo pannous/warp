@@ -153,12 +153,10 @@ emitter-builders, emitter-equality, emitter-runs, emitter-deterministic):
   emit_defined_user_function_call, import_function (host, WASI and FFI imports)
 - runs of single `f.instruction(&I::…)` lines as one `Self::emit_list(f, &[…])` per statement group:
   `probes/cleanup/merge_instruction_runs.py <file.rs>…` (rewrites in place; a run splits after statement-ending
-  instructions and after `return; end`), done in equality.rs and 14 other files
+  instructions and after `return; end`), done in every emitter file
 - `probes/cleanup/duplicate_windows.py` lists repeated windows of normalised lines (the duplicates left to share)
 
 Left:
-- merge_instruction_runs.py over list_ops.rs, mod.rs, closures.rs, key_emitter.rs, values.rs, map_backend.rs,
-  ffi_emitter.rs, try_guard.rs, type_manager.rs, list_dispatch.rs
 - list_ops.rs (~290 single instructions, the longest file): text count loops repeat; candidates for emit_while
 - equality.rs: the return tails of the per-kind comparisons repeat
 - user_function_calls.rs compile_user_function_body saves and restores ~15 emitter fields by hand, interleaved with
