@@ -9,6 +9,8 @@ mod test_web_playground;
 mod test_editor_shortcuts; // card keyboard-shortcuts
 #[cfg(feature = "native")] // runs node
 mod test_editor_mode; // card playground-editor
+#[cfg(feature = "native")] // runs python3
+mod test_keyword_registry; // card where-infix
 mod test_missing_use; // card clickable-hint
 mod test_guide; // the language guide on the playground page
 mod test_expert_guide;

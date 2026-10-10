@@ -12,7 +12,7 @@ use std::cell::Cell;
 use std::collections::{HashMap, HashSet};
 
 const IF_WORD: &str = "if";
-const WHERE_WORD: &str = "where";
+const WHERE_KEYWORD: &str = "where";
 /// The element a `where` condition reads as `it`
 const WHERE_ELEMENT: &str = "where·element";
 pub(crate) const MADE: &str = "comprehension_list";
@@ -137,7 +137,7 @@ fn loop_over_filtered(items: &[Node], lists: &mut Lists) -> Option<Vec<Node>> {
 	// `for x in (xs where c) {…}` as the parser groups the filter
 	let items = crate::list_phrases::words(items);
 	let [for_word, variable, in_word, sequence, where_word, condition, body] = items.as_slice() else { return None };
-	if !for_word.is_symbol(FOR_WORD) || !in_word.is_symbol(IN_WORD) || !where_word.is_symbol(WHERE_WORD) || !matches!(body.drop_meta(), Node::List(_, Bracket::Curly, _)) {
+	if !for_word.is_symbol(FOR_WORD) || !in_word.is_symbol(IN_WORD) || !where_word.is_symbol(WHERE_KEYWORD) || !matches!(body.drop_meta(), Node::List(_, Bracket::Curly, _)) {
 		return None;
 	}
 	let Node::Symbol(name) = variable.drop_meta() else { return None };
@@ -200,8 +200,8 @@ fn where_flattened(node: Node) -> Node {
 		_ => None,
 	};
 	let flat = match (words_of(items.first()), words_of(items.last())) {
-		(Some(inner), _) if inner.last().is_some_and(|word| word.is_symbol(WHERE_WORD)) => inner.into_iter().chain(items[1..].iter().cloned()).collect(),
-		(_, Some(inner)) if items.len() > 1 && inner.len() == 2 && inner[0].is_symbol(WHERE_WORD) => items[..items.len() - 1].iter().cloned().chain(inner).collect(),
+		(Some(inner), _) if inner.last().is_some_and(|word| word.is_symbol(WHERE_KEYWORD)) => inner.into_iter().chain(items[1..].iter().cloned()).collect(),
+		(_, Some(inner)) if items.len() > 1 && inner.len() == 2 && inner[0].is_symbol(WHERE_KEYWORD) => items[..items.len() - 1].iter().cloned().chain(inner).collect(),
 		_ => items,
 	};
 	Node::List(flat, bracket, separator)
@@ -209,7 +209,7 @@ fn where_flattened(node: Node) -> Node {
 
 /// The position of `where` in `[… subject, where, condition]`
 fn where_position(items: &[Node]) -> Option<usize> {
-	(items.len() >= 3).then(|| items.len() - 2).filter(|&at| items[at].is_symbol(WHERE_WORD))
+	(items.len() >= 3).then(|| items.len() - 2).filter(|&at| items[at].is_symbol(WHERE_KEYWORD))
 }
 
 /// The clause `for v in xs …`
@@ -338,7 +338,7 @@ fn qualifiers(clause: &Node, rest: &[Node]) -> Option<Vec<Qualifier>> {
 		([], []) => {}
 		([nothing], []) if matches!(nothing.drop_meta(), Node::Empty) => {}
 		([nested], _) if starts_with_for(nested) => found.extend(qualifiers(nested, rest)?),
-		([filter_word], [_, ..]) if filter_word.is_symbol(IF_WORD) || filter_word.is_symbol(WHERE_WORD) => {
+		([filter_word], [_, ..]) if filter_word.is_symbol(IF_WORD) || filter_word.is_symbol(WHERE_KEYWORD) => {
 			let end = rest.iter().position(starts_with_for).unwrap_or(rest.len());
 			if end == 0 {
 				return None;
