@@ -1256,7 +1256,7 @@ impl WarpParser {
 	pub(super) fn parse_glued_suffix(&mut self, symbol: String) -> Node {
 		let ch = self.current_char();
 		match ch {
-			'{' if symbol == GO_KEYWORD && self.in_code() => Node::symbol(&symbol),
+			'{' if GLUED_BLOCK_KEYWORDS.contains(&symbol.as_str()) && self.in_code() => Node::symbol(&symbol),
 			'{' => {
 				// `point{x:1}` of a declared type constructs a point, `point:{x:1}` and any other `name{…}` stay data (D4)
 				let op = if self.declared_types.contains(&symbol) { Op::None } else { Op::Colon };
