@@ -132,7 +132,16 @@ impl WasmGcEmitter {
 		func.instruction(&I::RefAsNonNull);
 		let held = self.node_scratch();
 		func.instruction(&I::LocalSet(held));
+		// a stored error is of every type: a Node place holds it on (`return out + kept(…)` of a text function), a number
+		// place fails with its own message, never as "not a <declared>"
+		if !kind.is_ref() {
+			self.emit_fail_if_error(func, held);
+		}
 		self.emit_admits(func, held, admitted);
+		if kind.is_ref() {
+			self.emit_kind_in(func, held, 1 << Kind::Error as i64);
+			func.instruction(&I::I64Or);
+		}
 		Self::emit_list(func, &[I::I64Eqz, I::If(BlockType::Empty)]);
 		self.emit_trap_detail(func, &Node::Text(format!("not {}", crate::analyzer::with_article(&declared.name()))));
 		self.emit_runtime_error(func, super::list_ops::RETURNED_ERROR);

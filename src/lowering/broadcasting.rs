@@ -19,6 +19,7 @@ use std::collections::{HashMap, HashSet};
 
 const ARITHMETIC: [Op; 6] = [Op::Add, Op::Sub, Op::Mul, Op::Div, Op::Mod, Op::Pow];
 const ALL_WORD: &str = "all";
+const EACH_WORD: &str = "each";
 const EXTREMUM_WORDS: [&str; 2] = ["max", "min"];
 /// Parameter types a comparison's result fits
 const TRUTH_TYPES: [&str; 3] = ["bool", "boolean", "any"];
@@ -257,6 +258,11 @@ fn with_comma_arguments(node: Node, rest: &[Node], arities: &HashMap<String, Ari
 /// `f 1 2 3` → `f [1 2 3]` of the functions `single`
 fn gather_arguments(node: Node, single: &HashSet<String>, gathered: &mut bool) -> Node {
 	match node {
+		// `words of text`, `sq of 3`: the function called with what follows `of` (the library words: library_words.rs)
+		Node::List(items, Bracket::None, Separator::Space) if items.len() == 3 && items[1].is_symbol(OF_WORD) && items[0].symbol_name().is_some_and(|name| single.contains(name)) => {
+			let [function, _, object] = <[Node; 3]>::try_from(items).expect("three items");
+			Node::List(vec![function, gather_arguments(object, single, gathered)], Bracket::Round, Separator::None)
+		}
 		Node::List(items, Bracket::None, Separator::Space) if items.len() > 2 && matches!(items[0].drop_meta(), Node::Symbol(name) if single.contains(name)) => {
 			*gathered = true;
 			let mut items: Vec<Node> = items.into_iter().map(|item| gather_arguments(item, single, gathered)).collect();
@@ -278,11 +284,54 @@ pub fn lower(program: Node) -> Node {
 	broadcasting.extend(SCALAR_LIBRARY_WORDS.iter().map(|word| word.to_string()).filter(|word| !defined.contains(word)));
 	let mut assigned = HashMap::new();
 	collect_list_variables(&program, &broadcasting, &mut assigned);
-	let list_variables = assigned.into_iter().filter(|(_, only_lists)| *only_lists).map(|(name, _)| name).collect();
+	let names: HashSet<String> = assigned.keys().cloned().collect();
+	let list_variables: HashSet<String> = assigned.into_iter().filter(|(_, only_lists)| *only_lists).map(|(name, _)| name).collect();
+	let program = each_singular(program, &list_variables, &names);
 	let scalar_parameters = found.iter().map(|definition| (definition.name.clone(), definition.params.iter().map(|param| takes_a_scalar(param, &definition.body)).collect())).collect();
 	let [defines_dot, defines_sum] = [DOT_WORD, SUM_WORD].map(|word| defined.contains(&word.to_string()));
 	let instances = element_shapes(&program);
 	Broadcast { functions: broadcasting, list_variables, scalar_parameters, defines_dot, defines_sum, instances, paired: Default::default(), shadowed: Default::default() }.rewrite(program)
+}
+
+/// `print each friend`: `each` and a name the program never assigns walk the list of its plural, `print all friends`
+/// (wiki/plural.md); `each friends` is `all friends`
+fn each_singular(node: Node, lists: &HashSet<String>, names: &HashSet<String>) -> Node {
+	let walked_list = |word: &Node| {
+		let name = word.symbol_name()?;
+		let plurals = [name.to_string(), format!("{name}s"), format!("{name}es"), format!("{}ies", name.strip_suffix('y').unwrap_or(name))];
+		let is_plural_of = |plural: &String| *plural == name || !names.contains(name);
+		plurals.into_iter().find(|plural| lists.contains(plural) && is_plural_of(plural))
+	};
+	match node {
+		Node::List(items, bracket, separator) => {
+			// `each xs {it*10}`: a leading each with a body is the loop over xs (wiki/Iteration.md), no `all` argument
+			let is_loop = items.len() > 2 && items[0].is_symbol(EACH_WORD);
+			let mut walked = Vec::with_capacity(items.len());
+			let mut items = items.into_iter().map(|item| each_singular(item, lists, names)).peekable();
+			while let Some(item) = items.next() {
+				let list = items.peek().filter(|_| item.is_symbol(EACH_WORD)).and_then(walked_list);
+				if let (true, Some(plural)) = (is_loop, &list) {
+					items.next();
+					walked.extend([item, symbol(plural)]); // `each friend {…}` loops over friends
+					continue;
+				}
+				match list {
+					Some(plural) => {
+						items.next();
+						let all = vec![symbol(ALL_WORD), symbol(&plural)];
+						// `each friend` alone is the whole list node, `sq each x` nests it as `sq all xs` parses
+						if items.peek().is_none() && walked.is_empty() {
+							return Node::List(all, bracket, separator);
+						}
+						walked.push(Node::List(all, Bracket::None, Separator::Space));
+					}
+					None => walked.push(item),
+				}
+			}
+			Node::List(walked, bracket, separator)
+		}
+		other => other.map_children(|child| each_singular(child, lists, names)),
+	}
 }
 
 /// The shapes of the program's variables as type_constructor (a later pass) will construct its instances, for a program

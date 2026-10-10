@@ -24,6 +24,11 @@ pub(crate) fn is_spaced_call(bracket: &Bracket, separator: &Separator) -> bool {
 	matches!(bracket, Bracket::None | Bracket::Curly) && *separator == Separator::Space
 }
 
+/// `f x`, `(f x)`, `{f x}`: words that call their head
+pub(crate) fn is_words_call(bracket: &Bracket, separator: &Separator) -> bool {
+	is_spaced_call(bracket, separator) || *bracket == Bracket::Round && *separator == Separator::Space
+}
+
 /// The call resolved from the words of `{play 440}` stays the block of its one statement, `{play(440)}`
 pub(crate) fn in_block_as_written(bracket: &Bracket, call: Node) -> Node {
 	match bracket {

@@ -759,6 +759,12 @@ impl WasmGcEmitter {
 				let (kind, power) = (2, 3);
 				// node_add of two lists (ø is the empty list): their concatenation, `out = out + row`
 				if name == NODE_ADD {
+					// an Error operand is the sum, as text_concat gives it: errors propagate, and are never joined into a
+					// text as their message (`out += tag(x)` of an error, card error-value-kind)
+					for side in 0..2 {
+						s.emit_field(f, side, 0);
+						Self::emit_list(f, &[I::I64Const(KIND_MASK), I::I64And, I::I64Const(Kind::Error as i64), I::I64Eq, I::If(BlockType::Empty), I::LocalGet(side), I::Return, I::End]);
+					}
 					let is_list = |f: &mut Function, operand: u32| {
 						s.emit_field(f, operand, 0);
 						Self::emit_list(f, &[
@@ -1126,9 +1132,11 @@ impl WasmGcEmitter {
 
 	/// Walk list local 0 to the element at 1-based index local 1 into `current`; trap when out of range, naming the index
 	/// asked for (local `current + 1`) and the list's range
-	fn emit_list_walk(&self, func: &mut Function, current: u32) {
+	fn emit_list_walk(&mut self, func: &mut Function, current: u32) {
 		let asked = current + 1;
 		Self::emit_list(func, &[I::LocalGet(1), I::LocalSet(asked)]);
+		// a stored error indexed (`r = error("x"); r#1`) raises itself, as any operation on it does
+		self.emit_fail_if_error(func, 0);
 		// a number, a character or a text held where a list is indexed (`x=3; x#1`, a parameter): not_a_list, not a cast trap
 		for scalar in [Kind::Int, Kind::Float, Kind::Codepoint, Kind::Text, Kind::Symbol] {
 			self.emit_field(func, 0, 0);

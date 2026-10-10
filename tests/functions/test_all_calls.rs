@@ -51,3 +51,19 @@ fn every_definition_form_reads_a_comparison_alike() {
 		crate::common::fails_with(code, "write (same 3) == 9 or same(3 == 9)");
 	}
 }
+
+#[test] // wiki/plural.md: `each friend` walks the list friends, as `all friends` does; `f of x` calls a defined function (card plural-names)
+fn a_singular_name_walks_its_plural_list() {
+	assert_eq!(printed("def sq(x){x*x}; xs=[1 2 3]; sq each x"), "[1 4 9]");
+	assert_eq!(printed("def sq(x){x*x}; cities=[1 2]; sq each city"), "[1 4]");
+	assert_eq!(printed("def sq(x){x*x}; xs=[1 2]; sq each xs"), "[1 4]");
+	assert_eq!(printed("def sq(x){x*x}; sq of 3"), "9");
+	assert_eq!(printed("use text; text=\"hi you\"; words of text"), "[\"hi\" \"you\"]");
+	assert_eq!(printed("xs=[1,2,3]; each x {it*10}"), "30"); // the loop form walks the plural too
+}
+
+#[test]
+#[cfg(feature = "native")]
+fn print_each_friend() {
+	assert!(crate::common::printed("friends=[james, peter]; print each friend").starts_with("james\npeter\n"));
+}

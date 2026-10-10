@@ -251,10 +251,12 @@ fn program_variables(program: &Node) -> HashSet<String> {
 
 /// Module words a program variable shadows, renamed in the module's definitions (`words` → `lib·words`): the module's
 /// own code calls its own words (lexical scope), the program's `words` is its variable. Likewise a local of a module
-/// function named like a program variable: a program's `global hue` is not draw's `hue` in hsv (card program-global)
+/// function named like a program variable: a program's `global hue` is not draw's `hue` in hsv (card program-global).
+/// A module's `global` is a setting, which the program's `tempo = 90` sets (lib/sound.warp's tempo, note_seconds)
 fn shadowed_apart(definitions: Vec<Node>, variables: &HashSet<String>) -> Vec<Node> {
 	let declared: Vec<String> = definitions.iter().filter_map(declared_name).collect();
-	let shadowed: Vec<String> = declared.iter().filter(|name| variables.contains(*name)).cloned().collect();
+	let settings: Vec<String> = definitions.iter().filter(|definition| is_global_declaration(definition)).filter_map(declared_name).collect();
+	let shadowed: Vec<String> = declared.iter().filter(|name| variables.contains(*name) && !settings.contains(name)).cloned().collect();
 	renamed_apart(definitions, &shadowed).into_iter().map(|definition| {
 		let locals: Vec<String> = assigned_names(&definition).into_iter().filter(|name| variables.contains(name) && !declared.contains(name)).collect();
 		renamed_apart(vec![definition], &locals).remove(0)
@@ -264,7 +266,7 @@ fn shadowed_apart(definitions: Vec<Node>, variables: &HashSet<String>) -> Vec<No
 /// The names a function definition's body assigns: `hue = …` in `def hsv(h, s, v) {…}`; none for other declarations
 fn assigned_names(definition: &Node) -> HashSet<String> {
 	let mut names = HashSet::new();
-	if matches!(definition.drop_meta(), Node::Key(_, Op::Assign, _)) || matches!(definition.drop_meta(), Node::Key(keyword, Op::Colon, _) if keyword.is_symbol(GLOBAL_KEYWORD)) {
+	if matches!(definition.drop_meta(), Node::Key(_, Op::Assign, _)) || is_global_declaration(definition) {
 		return names;
 	}
 	definition.visit(&mut |node| if let Node::Key(target, op, _) = node {
@@ -273,6 +275,11 @@ fn assigned_names(definition: &Node) -> HashSet<String> {
 		}
 	});
 	names
+}
+
+/// `global x = …`
+fn is_global_declaration(statement: &Node) -> bool {
+	matches!(statement.drop_meta(), Node::Key(keyword, Op::Colon, _) if keyword.is_symbol(GLOBAL_KEYWORD))
 }
 
 /// `names` renamed `lib·name` in the definitions: the definitions still call them, the program does not see them
@@ -912,6 +919,11 @@ const IMPLICIT_MODULES: [(&str, NeededBy); 8] = [
 	(SOUND_MODULE, |program| SOUND_WORDS.iter().any(|word| calls_undefined(program, word))),
 	("wagi", |_| crate::pipeline::is_for_wagi()),
 ];
+
+/// Whether the program plays sound: it calls a sound word or says `use sound` (lowering/music_words.rs reads its note names)
+pub fn uses_sound(program: &Node) -> bool {
+	SOUND_WORDS.iter().any(|word| calls_undefined(program, word)) || statements(program.clone()).iter().filter_map(used_module).any(|used| used.name == SOUND_MODULE)
+}
 
 /// Whether the program calls `word` without defining it
 fn calls_undefined(program: &Node, word: &str) -> bool {
