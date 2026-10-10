@@ -98,8 +98,8 @@ fn node_to_i32(node: &Node) -> i32 {
 #[cfg(not(test))]
 fn main() {
     let mut args: Vec<String> = env::args().collect();
-    end_quietly_on_closed_pipe();
     warp::crash_card::install();
+    end_quietly_on_closed_pipe(); // after the crash card hook, so a closed pipe files none
     warp::paint::allow_windows();
     apply_flags(&mut args);
     match args.iter().position(|arg| arg == SANDBOX_FLAG) {
@@ -112,15 +112,30 @@ fn main() {
 }
 
 /// A reader that closed the pipe (`warp run x.warp | head -1`) ends warp by SIGPIPE, as it ends cat: Rust ignores the
-/// signal, so println! panicked on the broken pipe and filed a crash card (cards crash-show, crashes-broken)
+/// signal, so println! panicked on the broken pipe and filed a crash card (cards crash-show, crashes-broken). That panic
+/// raises the signal now. It stays ignored for every other pipe: a closed viewer or interpreter stdin is an error warp
+/// handles (paint_window.rs falls back to PNGs), not its end.
 #[cfg(all(unix, not(test)))]
 fn end_quietly_on_closed_pipe() {
     const SIGPIPE: i32 = 13; // the same on macOS and Linux
     const DEFAULT_ACTION: usize = 0; // SIG_DFL
+    const PRINT_FAILED: &str = "failed printing to std"; // print!'s panic on stdout or stderr
+    const CLOSED_PIPE: &str = "(os error 32)"; // EPIPE, the same on macOS and Linux
     unsafe extern "C" {
         fn signal(signal: i32, handler: usize) -> usize;
+        fn raise(signal: i32) -> i32;
     }
-    unsafe { signal(SIGPIPE, DEFAULT_ACTION) };
+    let next_hook = std::panic::take_hook();
+    std::panic::set_hook(Box::new(move |info| {
+        let message = info.payload_as_str().unwrap_or_default();
+        if message.starts_with(PRINT_FAILED) && message.contains(CLOSED_PIPE) {
+            unsafe {
+                signal(SIGPIPE, DEFAULT_ACTION);
+                raise(SIGPIPE);
+            }
+        }
+        next_hook(info);
+    }));
 }
 
 #[cfg(all(not(unix), not(test)))]
