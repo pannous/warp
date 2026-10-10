@@ -715,7 +715,7 @@ fn with_function_markers(arguments: Node, functions: &[Option<wasmtime::Rooted<w
 	if functions.iter().all(Option::is_none) {
 		return arguments;
 	}
-	let marker = |index: usize| Node::List(vec![Node::Key(Box::new(Node::Symbol(crate::foreign::WARP_FUNCTION_KEY.into())), crate::operators::Op::Colon, Box::new(Node::int(index as i64)))], crate::node::Bracket::Curly, crate::node::Separator::Space);
+	let marker = |index: usize| Node::List(vec![Node::key(crate::foreign::WARP_FUNCTION_KEY, Node::int(index as i64))], crate::node::Bracket::Curly, crate::node::Separator::Space);
 	let mut index = 0;
 	let mut marked = |item: Node, function: &Option<_>| match function {
 		Some(_) => (marker(index), index += 1).0,
@@ -773,7 +773,7 @@ fn route_failure(caller: &mut Caller<'_, HostState>, path: &str, failure: wasmti
 #[cfg(feature = "native")]
 fn served_site(port: u16) -> crate::site::ServedSite {
 	let Some(file) = crate::modules::program_file() else { return Default::default() };
-	let title = file.file_stem().map_or(String::new(), |stem| stem.to_string_lossy().to_string());
+	let title = crate::site::program_stem(&file);
 	let rendered = std::fs::read_to_string(&file).map_err(|failure| failure.to_string()).and_then(|code| crate::site::served_files(&code, &title));
 	rendered.unwrap_or_else(|failure| {
 		eprintln!("warning: serve {port} serves no page: {failure}");

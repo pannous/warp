@@ -27,7 +27,7 @@ struct DevSite {
 
 impl DevSite {
 	fn new(program: &Path) -> DevSite {
-		let title = program.file_stem().map_or_else(String::new, |stem| stem.to_string_lossy().into_owned());
+		let title = crate::site::program_stem(program);
 		DevSite { program: program.to_path_buf(), files: crate::site::dev_shell(&title), title, modified: None, version: 0, failure: None }
 	}
 
@@ -39,8 +39,7 @@ impl DevSite {
 		}
 		self.modified = modified;
 		self.version += 1;
-		let built = std::fs::read_to_string(&self.program).map_err(|failure| format!("cannot read {}: {failure}", self.program.display()))
-			.and_then(|code| crate::modules::with_program_file(&self.program, || crate::site::files(&code, &self.title, true)));
+		let built = crate::site::read_program(&self.program).and_then(|code| crate::modules::with_program_file(&self.program, || crate::site::files(&code, &self.title, true)));
 		match built {
 			Ok(files) => (self.files, self.failure) = (files, None),
 			Err(failure) => self.failure = Some(failure),
