@@ -82,6 +82,11 @@ impl WasmGcEmitter {
 				self.emit_cast(func, value, target);
 				self.emit_call(func, "get_int_value");
 			}
+			// an exact number as its truncated i64, without the Int node emit_cast_to_int builds
+			_ if exact_value && super::values::is_int_type_word(target) && !matches!(self.get_type(value), Kind::Text | Kind::Codepoint | Kind::Empty)
+				&& !self.names_unknown_word(value) => {
+				self.emit_int_value_truncated(func, value);
+			}
 			_ if crate::analyzer::builtin_type_kind(&target.name()) == Some(Kind::Int) => {
 				self.emit_cast(func, value, target);
 				self.emit_call(func, "get_int_value");
@@ -172,6 +177,18 @@ impl WasmGcEmitter {
 		held
 	}
 
+	/// `cube 3 as int`, the body of `def g() -> int { cube 3 }`: an unknown word is an error as without the cast
+	fn unknown_word_refusal(&self, value: &Node) -> Option<String> {
+		match value.drop_meta() {
+			Node::List(items, bracket, separator) => self.unknown_word_error(items, bracket, separator),
+			_ => None,
+		}
+	}
+
+	fn names_unknown_word(&self, value: &Node) -> bool {
+		self.unknown_word_refusal(value).is_some()
+	}
+
 	/// Emit type cast: value as type
 	/// Handles conversions between int, float, string
 	/// Optimizes literal conversions at compile time
@@ -187,12 +204,7 @@ impl WasmGcEmitter {
 		};
 
 		let value = value.drop_meta();
-		// `cube 3 as int`, the body of `def g() -> int { cube 3 }`: an unknown word is an error as without the cast
-		let unknown_word = match value {
-			Node::List(items, bracket, separator) => self.unknown_word_error(items, bracket, separator),
-			_ => None,
-		};
-		if let Some(refusal) = unknown_word.or_else(|| self.cast_refusal(value, target_type)) {
+		if let Some(refusal) = self.unknown_word_refusal(value).or_else(|| self.cast_refusal(value, target_type)) {
 			self.emit_type_error(func, refusal);
 			return;
 		}

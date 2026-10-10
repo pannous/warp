@@ -66,7 +66,7 @@ fn combine(left: IntRange, right: IntRange, op: impl Fn(i128, i128) -> Option<i1
 
 /// Euclidean `a % b` on machine i64s in locals a, b (r is scratch): `r = a rem_s b; r + ((r >> 63) & |b|)`,
 /// so 0 ≤ r < |b| as in mathematics (-7 % 3 → 2, 7 % -3 → 1); `rem` keeps the truncated i64.rem_s
-fn euclidean_remainder(a: u32, b: u32, r: u32) -> Vec<Instruction<'static>> {
+pub(super) fn euclidean_remainder(a: u32, b: u32, r: u32) -> Vec<Instruction<'static>> {
 	let sign_mask = |local| [I::LocalGet(local), I::I64Const(63), I::I64ShrS];
 	let mut code = vec![I::LocalGet(a), I::LocalGet(b), I::I64RemS, I::LocalTee(r)];
 	code.extend(sign_mask(r));
@@ -527,6 +527,15 @@ impl WasmGcEmitter {
 		if !self.int_runtime() {
 			// Only reachable for i64 literals in programs without arithmetic: no handles exist
 			func.instruction(&I::I64Const(i64::try_from(number).expect("big literal needs the Int runtime")));
+			return;
+		}
+		self.emit_number_constant(func, number, &BigInt::from(1));
+	}
+
+	/// An Int literal built anew: a fixnum, else a $BigInt boxed into a new handle
+	pub(super) fn emit_built_int_literal(&mut self, func: &mut Function, number: &BigInt) {
+		if let Some(n) = i64::try_from(number).ok().filter(|n| is_fixnum(*n)) {
+			func.instruction(&I::I64Const(n));
 			return;
 		}
 		let (sign, limbs) = number.to_u32_digits();
@@ -1147,10 +1156,13 @@ impl WasmGcEmitter {
 			});
 		}
 
+		// a fixnum converts as it is, rounded once like big_to_f64; only a handle's $BigInt is read limb by limb
 		self.runtime_function("int_to_f64", vec![i64t], vec![f64t], vec![], |s, f| {
-			f.instruction(&I::LocalGet(0));
-			s.call(f, "int_unbox");
+			s.emit_fixnum_test(f, &[0]);
+			Self::emit_list(f, &[I::If(BlockType::Result(f64t)), I::LocalGet(0), I::F64ConvertI64S, I::Else]);
+			s.emit_heap_get_big(f, 0);
 			s.call(f, "big_to_f64");
+			f.instruction(&I::End);
 		});
 
 		// int_from_i64(x): any machine i64 as Int
