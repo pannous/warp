@@ -24,7 +24,7 @@ pub const ERROR_TYPE: &str = "error";
 /// The type of ø, as type(ø) names it; unit, nil … are its aliases (canonical_spec_word)
 pub const EMPTY_TYPE: &str = "empty";
 const ARTICLES: [&str; 2] = ["a", "an"];
-const LIST_WORD: &str = "list";
+pub(crate) const LIST_WORD: &str = "list";
 /// `x is pair`: a `key: value` pair
 const PAIR_WORD: &str = "pair";
 pub const TYPE_WORD: &str = "type";
@@ -56,6 +56,7 @@ pub fn type_matches(actual: &str, spec: &str) -> bool {
 	}
 	match spec {
 		LIST_WORD => actual == LIST_WORD || actual.starts_with("list of "),
+		crate::analyzer::MAP_TYPE => actual == spec || actual.starts_with(crate::analyzer::MAP_TYPE_PREFIX),
 		"number" => ["int", "rational", "real", "float"].contains(&actual),
 		"real" => ["int", "rational", "real"].contains(&actual),
 		"rational" => ["int", "rational"].contains(&actual),
@@ -162,6 +163,7 @@ fn type_spec(words: &[&str], shadowed: &Names) -> Option<String> {
 		(LIST_WORD, []) => Some(LIST_WORD.to_string()),
 		(PAIR_WORD, []) => Some(canonical_spec_word(PAIR_WORD).to_string()),
 		(ERROR_TYPE, []) => Some(ERROR_TYPE.to_string()),
+		(crate::analyzer::MAP_TYPE, []) => Some(crate::analyzer::MAP_TYPE.to_string()),
 		(word, []) if canonical_spec_word(word) == EMPTY_TYPE => Some(EMPTY_TYPE.to_string()),
 		(LIST_WORD, [of, element @ ..]) if *of == OF_WORD => Some(format!("{LIST_WORD} of {}", type_spec(element, shadowed)?)),
 		(word, []) => match plural_element_type(word) {

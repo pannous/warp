@@ -358,12 +358,12 @@ fn nested_type_word(item: &Node, scope: &Scope) -> String {
 /// The type name of a map literal, `map of <value type>` when its values share one
 /// The got-it topic of a `let` variable that changes (P159)
 const LET_CHANGES_TOPIC: &str = "let changes";
-pub(super) const MAP_TYPE: &str = "map";
+pub const MAP_TYPE: &str = "map";
 /// Library words whose list result has the elements of their list argument
 pub(super) const ORDER_WORDS: [&str; 2] = ["sort", "reverse"];
 /// Library words whose result is a list of texts
 const TEXT_LIST_WORDS: [&str; 2] = ["split", "chars"];
-pub(super) const MAP_TYPE_PREFIX: &str = "map of ";
+pub const MAP_TYPE_PREFIX: &str = "map of ";
 /// A list whose elements are known only at runtime (the result of a call): each element is held as a Node
 pub(super) const NODE_LIST_TYPE: &str = "list of node";
 pub(super) const LIST_WORD: &str = "list";
