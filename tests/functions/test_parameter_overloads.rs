@@ -21,3 +21,13 @@ fn an_int_widens_to_a_float_variant() {
 fn an_argument_of_unknown_type_is_an_error() {
 	fails_with(&format!("{COMBINE}def g(p){{ combine(p, p) }}; g(2)"), "fits no single variant");
 }
+
+const COMBINE_WITH: &str = "combine number with number = number#1 + number#2; combine int with int = $0 * $1; ";
+
+// Card paren-overload: a phrase call in parentheses dispatches as the bare call
+#[test]
+fn a_phrase_call_in_parentheses_takes_its_variant() {
+	is!(&format!("{COMBINE_WITH}(combine 1.1 with 2.2)"), 3.3);
+	is!(&format!("{COMBINE_WITH}x = (combine 2 with 3); x"), 6);
+	is!(&format!("{COMBINE_WITH}(combine 2 with 3) + 1"), 7);
+}
