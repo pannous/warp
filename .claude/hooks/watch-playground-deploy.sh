@@ -9,6 +9,9 @@ WORKFLOW=pages.yml
 PUSH_TO_MAIN='push_tested\.sh|git[^|;&]*[[:space:]]push[[:space:]][^|;&]*(main|HEAD:main)'
 APPEAR_SECONDS=180    # GitHub lists a run a few seconds to a minute after the push
 POLL_SECONDS=10
+# gh run watch polls every 3 s by default (two REST requests each): one watch per push to main used up the shared
+# 5000 requests/h on 2026-10-10. A deploy takes minutes, so a minute's delay in noticing a failure costs nothing.
+WATCH_INTERVAL_SECONDS=60
 FAILED_LINES=25
 WOKEN=2               # asyncRewake: this exit code wakes the session and shows it stderr
 
@@ -32,7 +35,7 @@ if [[ -z $run_id ]]; then
   [[ -n $by_hand ]] && echo "no playground deploy for ${commit:0:9} (the push touched no path pages.yml watches?)"
   exit 0
 fi
-if gh run watch $run_id -R $REPO --exit-status >/dev/null 2>&1; then
+if gh run watch $run_id -R $REPO --interval $WATCH_INTERVAL_SECONDS --exit-status >/dev/null 2>&1; then
   [[ -n $by_hand ]] && echo "playground deployed: ${commit:0:9} (run $run_id)"
   exit 0
 fi

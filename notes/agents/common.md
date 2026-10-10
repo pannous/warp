@@ -66,6 +66,9 @@ when a message or comment cites a number (P71, D5) and you need its wording; nev
 - GitHub's API quota (5000 requests/h) is shared by every session; on 2026-10-10 `gh run watch` polling every 3 s ran
   it out and blocked CI watching for 10 min. Watch runs with `gh run watch --interval 60` or more, and never poll
   `todo list` in a loop.
+- JSON5, not strict JSON, for anything people or agents write (user, 2026-10-10): new hand-written configs, probe
+  commands and data files use JSON5 (or warp notation). Strict JSON stays only where a tool or protocol requires it
+  (package.json, .claude settings, Lake manifest, WebDriver BiDi, machine-to-machine buffers).
 - A card or issue is closed only with a commit linked in its description (user, 2026-10-06): `todo done <card>
   <commit>` (a commit URL for wiki changes), never `gh issue close`; `todo move <card> Done` refuses without a link.
   A result the user can see or use gets `--try "how to try it"`: one concrete line with the exact command or URL to paste (user 2026-10-10: "give me
