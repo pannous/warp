@@ -31,10 +31,10 @@ fn a_rational_constant_of_exact_reals_in_a_runtime_program() {
 
 #[test]
 fn test_a_declared_exact_variable_refuses_a_float_as_a_parameter_does() {
-	const REFUSED: &str = "√(2) is a float where an exact Int is expected";
+	const REFUSED: &str = "√(2) is a float where an exact rational is expected: declare it `number` to keep the float";
 	common::fails_with("f(x: rational) := x; f(sqrt(2))", REFUSED);
 	common::fails_with("x: rational = sqrt(2); x", REFUSED);
-	common::fails_with("x: int = sqrt(2); x", REFUSED);
 	common::fails_with("x: rational = 1; x = sqrt(2); x", REFUSED);
 	common::fails_with("x as rational = sqrt(2)", REFUSED);
+	common::fails_with("x: int = sqrt(2); x", "√(2) is a float where an exact int is expected");
 }
