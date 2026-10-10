@@ -4,6 +4,8 @@
 //! continuation reads the whole program, cut around the cursor only past what the proxy takes (assistant.js codeAround)
 use std::process::Command;
 
+/// assistant.js MOST_CONTEXT_CHARACTERS
+const MOST_CONTEXT_CHARACTERS: usize = 20000;
 const COMPLETION: &str = include_str!("../../web/playground/completion.js");
 const ASSISTANT: &str = include_str!("../../web/playground/assistant.js");
 /// the page's globals completion.js reads: keywords.js (build.sh), examples.js and samples.js, here small ones
@@ -37,7 +39,5 @@ fn enter_after_a_whole_word_is_a_new_line() {
 fn claude_reads_the_whole_program_unless_it_is_too_long() {
 	assert_eq!(evaluated(r#"codeAround("use math\ndir(m", ")")"#), "use math\ndir(m‸)");
 	let cut = evaluated(r#"(code => [code.length, code.indexOf("‸")])(codeAround("a".repeat(30000), "b".repeat(30000)))"#);
-	assert_eq!(cut, serde_json::json!([MOST_CONTEXT_CHARACTERS, 15000]) // three quarters before the cursor);
+	assert_eq!(cut, serde_json::json!([MOST_CONTEXT_CHARACTERS, 15000])); // three quarters before the cursor
 }
-
-const MOST_CONTEXT_CHARACTERS: usize = 20000;
