@@ -31,3 +31,11 @@ fn a_phrase_call_in_parentheses_takes_its_variant() {
 	is!(&format!("{COMBINE_WITH}x = (combine 2 with 3); x"), 6);
 	is!(&format!("{COMBINE_WITH}(combine 2 with 3) + 1"), 7);
 }
+
+// Card similar-vs: ≈ and ~ end a phrase call's arguments as == does
+#[test]
+fn a_similarity_compares_the_phrase_calls_value() {
+	is!(&format!("{COMBINE_WITH}combine 1.1 with 2.2 ≈ 3.3"), true);
+	is!(&format!("{COMBINE_WITH}check combine 1.1 with 2.2 ≈ 3.3; 7"), 7);
+	is!(&format!("{COMBINE_WITH}combine 2 with 3 ~ 6"), true);
+}
