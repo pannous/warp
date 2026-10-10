@@ -1,2 +1,3 @@
+#!/usr/bin/env warp
 // try runs code that may fail, catch handles the error
 try { 1 / 0 } catch { "cannot divide by zero" }

@@ -1,3 +1,4 @@
+#!/usr/bin/env warp
 // Instances and maps are shared, not copied: two names can hold the same object
 
 class Account {

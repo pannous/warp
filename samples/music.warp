@@ -1,4 +1,5 @@
 #!/usr/bin/env warp
+#!/usr/bin/env warp
 // Sound without setup: frequencies in Hz, durations in s or ms, notes by name (lib/sound.warp).
 // The playground plays it with WebAudio, the warp command with the system's player.
 

@@ -1,3 +1,4 @@
+#!/usr/bin/env warp
 // N-Queens: count placements of n mutually non-attacking queens (backtracking)
 // queens[r] is the column of the queen in row r; `queens + [col]` is a new list, so each call extends its own copy
 is_safe(queens, row, col) := {

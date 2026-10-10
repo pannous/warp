@@ -1,3 +1,4 @@
+#!/usr/bin/env warp
 // Effect handlers: a function asks with `emit`, whoever calls it answers with `on … in {…}` (notes/effect_handlers.md)
 
 // price asks for the tax rate instead of knowing it

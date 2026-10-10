@@ -1,3 +1,4 @@
+#!/usr/bin/env warp
 // HTML as a domain-specific language
 // warp's tagged blocks make markup natural; the page is the program's value, the playground renders it
 

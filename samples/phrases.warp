@@ -1,3 +1,4 @@
+#!/usr/bin/env warp
 // Functions defined as English phrases are called with their own words
 to add number a to number b: a+b
 to move x from a to b: print b

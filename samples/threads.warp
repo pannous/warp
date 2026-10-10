@@ -1,3 +1,4 @@
+#!/usr/bin/env warp
 // Tasks on real threads: `go f(x)` runs f in a fresh instance of this program, natively on its own thread, in the
 // playground on a Worker. Values are copied in and out; `await` waits for a task, `try` catches its failure.
 

@@ -1,4 +1,5 @@
 #!/usr/bin/env warp
+#!/usr/bin/env warp
 use raylib
 InitWindow(800, 600, "Warp Raylib  Circle Demo")
 SetTargetFPS(60)

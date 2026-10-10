@@ -1,3 +1,4 @@
+#!/usr/bin/env warp
 // Control flow in warp
 // Expressions over statements
 a = 3

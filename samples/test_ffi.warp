@@ -1,4 +1,5 @@
 #!/usr/bin/env warp
+#!/usr/bin/env warp
 // Test FFI imports
 import sqrt from "m"
 sqrt(4.0)

@@ -1,3 +1,4 @@
+#!/usr/bin/env warp
 // Concurrency in warp: no async keyword, no colored functions (wiki/async.md).
 // A function never says how it is called: the caller decides with `go`. A task stands in for its value,
 // `await` says where the program waits for it.

@@ -1,3 +1,4 @@
+#!/usr/bin/env warp
 // the length of each word
 length "the quick brown fox".split(" ") 
 # Very good example to show when broadcasting does not apply and we need the special extra keyword :

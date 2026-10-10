@@ -1,4 +1,5 @@
 #!/usr/bin/env warp
+#!/usr/bin/env warp
 // Raylib FFI Example - Simple static circle
 // Demonstrates basic raylib graphics without animation
 
