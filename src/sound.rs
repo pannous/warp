@@ -3,7 +3,8 @@
 //! system's player when the warp binary may reach the user (paint::shows_windows: never under WARP_NO_WINDOW, CI or
 //! tests, which only get the file). The playground plays the same samples with WebAudio (host.js sound_samples).
 //! A sound is queued on the audio clock behind those before it and `play` returns at once (card sound-pro): a player
-//! thread plays the queue in order, stop_sound drops it, the process's end waits for it.
+//! thread plays the queue in order, stop_sound drops it, the process's end waits for it. render_sound writes the
+//! sounds since the last render one after another into one WAV, offline: headless too.
 
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicUsize, Ordering};
@@ -20,6 +21,8 @@ const BITS_PER_SAMPLE: u16 = 16;
 const BYTES_PER_SAMPLE: u32 = (BITS_PER_SAMPLE / 8) as u32;
 const FORMAT_CHUNK_SIZE: u32 = 16;
 const HEADER_SIZE_AFTER_RIFF: u32 = 36;
+/// The rate of a render without sounds (lib/sound.warp sample_rate)
+const DEFAULT_RATE: u32 = 22_050;
 /// The sound calls of this run so far
 static SOUNDED: AtomicUsize = AtomicUsize::new(0);
 /// The music files' formats by their first bytes: (format, magic bytes, offset of the magic)
@@ -55,6 +58,9 @@ static SOUNDS_END: Mutex<Option<Instant>> = Mutex::new(None);
 static STOPS: AtomicUsize = AtomicUsize::new(0);
 /// The sounds queued for the player thread and not played to their end yet
 static PENDING: AtomicUsize = AtomicUsize::new(0);
+/// The sounds since the last render_sound, in order: their sample rate and 16-bit samples (in memory, 44 KB a second
+/// at 22050 Hz: the WAV files are shared by all warp processes, another run may overwrite them)
+static UNRENDERED: Mutex<Vec<(u32, Vec<u8>)>> = Mutex::new(Vec::new());
 /// The player thread's queue: a sound's WAV and the stop count it was queued at
 static QUEUE: OnceLock<Mutex<std::sync::mpsc::Sender<(PathBuf, usize)>>> = OnceLock::new();
 
@@ -244,7 +250,11 @@ fn file_format(path: &str) -> Result<&'static str, String> {
 
 /// Write the samples as a WAV and queue it on the audio clock: played when the user may hear it, else say where it is
 pub fn sound(samples: &[u64], rate: u32) -> Result<PathBuf, String> {
-	let path = wav_file(samples, rate)?;
+	let data = pcm(samples);
+	let path = wav_file(&data, rate)?;
+	if let Ok(mut unrendered) = UNRENDERED.lock() {
+		unrendered.push((rate, data));
+	}
 	let seconds = samples.len() as f64 / rate.max(1) as f64;
 	scheduled(seconds);
 	if crate::paint::shows_windows() {
@@ -255,18 +265,38 @@ pub fn sound(samples: &[u64], rate: u32) -> Result<PathBuf, String> {
 	Ok(path)
 }
 
-fn wav_file(samples: &[u64], rate: u32) -> Result<PathBuf, String> {
+fn wav_file(data: &[u8], rate: u32) -> Result<PathBuf, String> {
 	let folder = std::env::temp_dir().join(FOLDER);
 	std::fs::create_dir_all(&folder).map_err(|failure| format!("sound: cannot create {}: {failure}", folder.display()))?;
 	let call = SOUNDED.fetch_add(1, Ordering::Relaxed) + 1;
 	let path = folder.join(if call == 1 { format!("{FILE_STEM}.wav") } else { format!("{FILE_STEM}-{call}.wav") });
-	std::fs::write(&path, wav(samples, rate)).map_err(|failure| format!("sound: cannot write {}: {failure}", path.display()))?;
+	std::fs::write(&path, wav_of_data(data, rate)).map_err(|failure| format!("sound: cannot write {}: {failure}", path.display()))?;
 	Ok(path)
+}
+
+/// render_sound(path): the sounds since the last render (or the start) one after another in one WAV file, its seconds
+pub fn render(path: &str) -> Result<f64, String> {
+	let sounds = std::mem::take(&mut *UNRENDERED.lock().map_err(|_| "the rendered sounds are poisoned".to_string())?);
+	let rate = sounds.first().map_or(DEFAULT_RATE, |(rate, _)| *rate);
+	if let Some((other, _)) = sounds.iter().find(|(sound_rate, _)| *sound_rate != rate) {
+		return Err(format!("sounds of {rate} and {other} samples per second cannot share {path}"));
+	}
+	let data: Vec<u8> = sounds.into_iter().flat_map(|(_, data)| data).collect();
+	std::fs::write(path, wav_of_data(&data, rate)).map_err(|failure| format!("cannot write {path}: {failure}"))?;
+	Ok(data.len() as f64 / BYTES_PER_SAMPLE as f64 / rate as f64)
 }
 
 /// A 16-bit mono PCM WAV of the offset samples
 pub fn wav(samples: &[u64], rate: u32) -> Vec<u8> {
-	let data: Vec<u8> = samples.iter().flat_map(|&sample| ((sample as i64 - SAMPLE_OFFSET).clamp(i16::MIN as i64, i16::MAX as i64) as i16).to_le_bytes()).collect();
+	wav_of_data(&pcm(samples), rate)
+}
+
+/// The offset samples as 16-bit little-endian PCM
+fn pcm(samples: &[u64]) -> Vec<u8> {
+	samples.iter().flat_map(|&sample| ((sample as i64 - SAMPLE_OFFSET).clamp(i16::MIN as i64, i16::MAX as i64) as i16).to_le_bytes()).collect()
+}
+
+fn wav_of_data(data: &[u8], rate: u32) -> Vec<u8> {
 	let format = [
 		PCM_FORMAT.to_le_bytes().as_slice(), &CHANNELS.to_le_bytes(), &rate.to_le_bytes(), &(rate * BYTES_PER_SAMPLE * CHANNELS as u32).to_le_bytes(),
 		&(BYTES_PER_SAMPLE as u16 * CHANNELS).to_le_bytes(), &BITS_PER_SAMPLE.to_le_bytes(),
@@ -274,6 +304,6 @@ pub fn wav(samples: &[u64], rate: u32) -> Vec<u8> {
 	[
 		b"RIFF".as_slice(), &(HEADER_SIZE_AFTER_RIFF + data.len() as u32).to_le_bytes(), b"WAVE",
 		b"fmt ", &FORMAT_CHUNK_SIZE.to_le_bytes(), &format,
-		b"data", &(data.len() as u32).to_le_bytes(), &data,
+		b"data", &(data.len() as u32).to_le_bytes(), data,
 	].concat()
 }
