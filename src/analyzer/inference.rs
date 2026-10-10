@@ -133,19 +133,11 @@ pub fn infer_type(node: &Node, scope: &Scope) -> Kind {
 		Node::Number(Number::Complex(_, _) | Number::Real(_) | Number::Nan | Number::Inf | Number::NegInf) => Kind::Float,
 		// Integer and rational literals
 		Node::Number(_) => Kind::Int,
-		// Text and char
 		Node::Text(_) => Kind::Text,
 		Node::Char(_) => Kind::Codepoint,
 		// ø, the empty value (card infer-type: it was the catch-all's Int)
 		Node::Empty => Kind::Empty,
-		// Symbol (identifier)
-		Node::Symbol(name) => {
-			if let Some(local) = scope.binding(name) {
-				local.kind
-			} else {
-				Kind::Symbol  // Unknown symbol defaults to Symbol
-			}
-		}
+		Node::Symbol(name) => scope.binding(name).map_or(Kind::Symbol, |local| local.kind),
 		// List handling: distinguish data lists from statement sequences and function calls
 		Node::List(items, bracket, separator) if !items.is_empty() => infer_list_type(node, items, bracket, separator, scope),
 		// a range as a value is the list of its numbers (wasm_emitter emit_range), as `x = 1..5` is
@@ -174,19 +166,10 @@ pub fn infer_type(node: &Node, scope: &Scope) -> Kind {
 				Kind::Int
 			}
 		}
-		// global:value -> type comes from value
-		Node::Key(left, Op::Colon, right) => {
-			if let Node::Symbol(kw) = left.drop_meta() {
-				if kw == "global" {
-					return infer_type(right, scope);
-				}
-			}
-			// Tag structures like html:body are Key
-			Kind::Key
-		}
-		Node::Key(_, Op::As, target) if matches!(target.name().to_lowercase().as_str(), "char" | "character") => Kind::Codepoint,
-		Node::Key(_, Op::As, target) if target.name().to_lowercase() == "list" => Kind::List,
-		Node::Key(_, Op::As, target) if matches!(target.name().to_lowercase().as_str(), "string" | "str" | "text") => Kind::Text,
+		// `global:value` is its value; a tag structure like `html:body` a Key
+		Node::Key(left, Op::Colon, right) if left.is_symbol("global") => infer_type(right, scope),
+		Node::Key(_, Op::Colon, _) => Kind::Key,
+		Node::Key(_, Op::As, target) if let Some(kind) = conversion_kind(&target.name().to_lowercase()) => kind,
 		// `"1/3" as number` is the number the text spells, of its kind (an exact ratio is an Int)
 		Node::Key(..) if let Some(number) = spelled_number(node) => infer_type(&number, scope),
 		// `t as number` of a text known only at run time: an Int, a ratio or a Float, as the text says (card runtime-text-ratio)
@@ -239,6 +222,16 @@ pub fn infer_type(node: &Node, scope: &Scope) -> Kind {
 		Node::Key(condition, Op::Do, body) if matches!(condition.drop_meta(), Node::Key(_, Op::While, _)) => loop_kind(body, scope),
 		// Default to Int for other cases
 		_ => Kind::Int,
+	}
+}
+
+/// `x as char`, `x as list`, `x as text`
+fn conversion_kind(target: &str) -> Option<Kind> {
+	match target {
+		"char" | "character" => Some(Kind::Codepoint),
+		"list" => Some(Kind::List),
+		"string" | "str" | "text" => Some(Kind::Text),
+		_ => None,
 	}
 }
 
