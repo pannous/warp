@@ -1,0 +1,9 @@
+d = 2024-02-29
+t = 2024-01-31T10:30:15.5
+i = 2024-01-31T10:30Z
+print d, t, i
+for k in 1..2 { print d }
+print d.year*10000 + d.month*100 + d.day, d.weekday, d.day_of_year
+print t.hour + t.minute + t.second, i.epoch_seconds
+print d < 2024-03-01, "on " + d
+print 2024-02-29 + 1 day

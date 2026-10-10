@@ -1,6 +1,5 @@
 //! Dates at run time (card runtime-dates, notes/dates_at_run_time.md): `now` reads the host's clock when the program
 //! runs, not when it compiles; an instant is a $Node of Kind::Time holding nanoseconds since 1970 UTC
-use crate::common::fails_with;
 use crate::is;
 use warp::node::Node;
 use warp::time::Time;
@@ -69,7 +68,8 @@ fn test_instants_compare_at_run_time() {
 	is!("t = now; u = t; t == u", true);
 }
 
+/// An instant's wall clock is the environment's time zone (user, 2026-10-10, replacing "instant has no hour")
 #[test]
-fn test_an_instant_has_no_wall_clock() {
-	fails_with("t = now; t.hour", "instant has no hour");
+fn test_an_instant_has_the_local_wall_clock() {
+	is!("t = now; t.hour >= 0 and t.hour < 24 and t.year >= 2026", true);
 }
