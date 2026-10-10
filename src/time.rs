@@ -10,6 +10,7 @@ pub use calendar::{with_rules, Disambiguation, Duration, Overflow, Time, TzRules
 use crate::extensions::numbers::Number;
 use crate::node::{error, Node, Separator};
 use crate::operators::Op;
+use crate::wasm_emitter::time_zones::{EARLIER, LATER, REJECT};
 use std::collections::HashMap;
 
 pub const NOW_WORD: &str = "now";
@@ -18,6 +19,8 @@ pub const INSTANT_AT: &str = "instant_at";
 
 /// time_of(form, position): a time constant at run time, the TimeForm and the calendar::Time position
 pub const TIME_OF: &str = "time_of";
+/// time_in_zone(time, zone index, choice): `t in "Europe/Berlin"` of a time only the run knows
+pub use crate::wasm_emitter::time_zones::TIME_IN_ZONE;
 /// The one field of an instant that needs no time zone
 pub const EPOCH_SECONDS: &str = "epoch_seconds";
 
@@ -187,6 +190,11 @@ fn fold_constants(node: Node) -> Node {
 	}
 	match node {
 		Node::Data(_) if time_data(&node) => not_at_run_time_yet(&node.serialize()),
+		Node::List(..) if zone_placement(&node).is_some() => {
+			let (time, zone, choice) = zone_placement(&node).expect("guarded");
+			let number = |n: i64| Node::Number(Number::Int(n));
+			crate::lowering::nodes::call(TIME_IN_ZONE, vec![fold_constants(time), number(zone), number(choice)])
+		}
 		Node::Meta { node, data } => Node::Meta { node: Box::new(fold_constants(*node)), data },
 		other => other.map_children(fold_constants),
 	}
@@ -246,8 +254,34 @@ fn needs_folding(node: &Node) -> bool {
 }
 
 fn places_in_zone(node: &Node) -> bool {
-	matches!(node, Node::List(items, _, _) if matches!(items.as_slice(), [_, keyword, zone]
-		if keyword.is_symbol("in") && matches!(zone.drop_meta(), Node::Text(name) if calendar::zone_named(name).is_ok())))
+	zone_placement(node).is_some()
+}
+
+/// `t in "Europe/Berlin"` or `zoned(t, "Europe/Berlin", disambiguation: later)` of a named zone: the time, the zone's
+/// index in calendar::ZONES and the choice (wasm_emitter/time_zones.rs REJECT, EARLIER, LATER)
+fn zone_placement(node: &Node) -> Option<(Node, i64, i64)> {
+	let Node::List(items, _, separator) = node.drop_meta() else { return None };
+	let (time, zone, choices) = match items.as_slice() {
+		[time, keyword, zone] if keyword.is_symbol("in") => (time, zone, &[][..]),
+		[head, time, zone, choices @ ..] if *separator == Separator::None && head.is_symbol("zoned") => (time, zone, choices),
+		_ => return None,
+	};
+	let Node::Text(name) = zone.drop_meta() else { return None };
+	let index = calendar::ZONES.iter().position(|known| known.name == *name)?;
+	let choice = match choices {
+		[] => REJECT,
+		[option] => match option.drop_meta() {
+			Node::Key(key, Op::Colon, mode) if key.drop_meta().is_symbol("disambiguation") => match mode.drop_meta() {
+				Node::Symbol(mode) if mode == "earlier" => EARLIER,
+				Node::Symbol(mode) if mode == "later" => LATER,
+				Node::Symbol(mode) if mode == "reject" => REJECT,
+				_ => return None,
+			},
+			_ => return None,
+		},
+		_ => return None,
+	};
+	Some((time.clone(), index as i64, choice))
 }
 
 fn mentions_time(node: &Node) -> bool {
