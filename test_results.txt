@@ -4182,6 +4182,8 @@ PASSED:
   ✓ welcoming::test_c_style::test_if_parenthesized_condition_then_statement
   ✓ welcoming::test_cli_error_exit::a_caught_error_and_a_value_keep_their_status
   ✓ welcoming::test_cli_error_exit::an_uncaught_error_exits_with_status_1
+  ✓ welcoming::test_closed_pipe::a_value_into_a_closed_pipe_ends_warp_quietly
+  ✓ welcoming::test_closed_pipe::the_version_into_a_closed_stderr_ends_warp_quietly
   ✓ welcoming::test_const_list_methods::a_const_list_reads_and_a_let_list_changes
   ✓ welcoming::test_const_list_methods::a_const_list_refuses_its_changing_methods
   ✓ welcoming::test_constant_shadowing::a_constant_word_still_reads_and_names_fields
@@ -4561,4 +4563,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-10 ignored, 4556 passed, 0 failed, 4556 total tested
+10 ignored, 4558 passed, 0 failed, 4558 total tested
