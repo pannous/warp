@@ -954,11 +954,14 @@ pub(super) fn negative_modulo_warning(left: &Node, right: &Node) -> String {
 /// is ambiguous (wiki/precedence.md): `square 3 + square 3` reads as `square(3 + square 3)` or `square(3) + square(3)`.
 /// Bad.md's recursive `fib it-1 + fib it-2` would silently mean `fib(it-1 + fib(it-2))`, so it is rejected with both readings.
 pub(super) fn check_ambiguous_calls(node: &Node) -> Option<Diagnostic> {
-	const KEYWORDS: [&str; 10] = ["return", "const", "let", "var", "def", "fun", "fn", "use", "import", "include"];
+	/// `return x`, `let x`, `def f`, `use m`: a statement word, no function applied braceless
+	fn is_statement_word(word: &str) -> bool {
+		is_declaration_word(word) || crate::operators::is_function_keyword(word) || IMPORT_WORDS.contains(&word) || RETURNING_KEYWORDS.contains(&word)
+	}
 	fn braceless_call(node: &Node) -> Option<(&String, &Node)> {
 		match node.drop_meta() {
 			Node::List(items, Bracket::None, Separator::Space) if items.len() == 2 => match items[0].drop_meta() {
-				Node::Symbol(head) if !KEYWORDS.contains(&head.as_str()) && !CONSTANT_KEYWORDS.contains(&head.as_str()) => Some((head, &items[1])),
+				Node::Symbol(head) if !is_statement_word(head) => Some((head, &items[1])),
 				_ => None,
 			},
 			_ => None,

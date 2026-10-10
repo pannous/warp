@@ -21,3 +21,4 @@ mod test_global_assignment_in_function;
 mod test_constant_alias;
 mod test_global_typed_list; // found writing samples/server.warp
 mod test_compiler_temporaries;
+mod test_declaration_words; // card cleanup-closed-lists

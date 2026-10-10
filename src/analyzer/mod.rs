@@ -28,7 +28,12 @@ const VAR_KEYWORD: &str = "var";
 const IMMUTABLE_LET: &str = "let";
 
 pub(crate) fn is_declaration_keyword(node: &Node) -> bool {
-	is_constant_keyword(node) || node.is_symbol(VAR_KEYWORD) || node.is_symbol(IMMUTABLE_LET)
+	matches!(node.drop_meta(), Node::Symbol(word) if is_declaration_word(word))
+}
+
+/// `var`, `let`, `const`, `val` …: a word declaring the name after it
+pub(crate) fn is_declaration_word(word: &str) -> bool {
+	CONSTANT_KEYWORDS.contains(&word) || word == VAR_KEYWORD || word == IMMUTABLE_LET
 }
 
 /// The words counting a value's elements, as `count x`, `x.size`, `len(x)`: the one table every pass asks, through
