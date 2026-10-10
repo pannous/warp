@@ -157,6 +157,7 @@ mod test_database_relations; // card orm, step 4
 mod test_database_nested_add; // card orm-nested
 mod test_database_dangling_key; // card orm-dangling
 mod test_database_members_add; // cards orm-nested, orm-list-add
+#[cfg(feature = "native")] // its one test counts native database queries: not in the browser build
 mod test_database_members_query; // card orm, one-to-many as a query
 mod test_database_optional; // card orm-optional
 mod test_database_optional_units; // card unit-field
@@ -171,6 +172,7 @@ mod test_table_remove; // card table-remove
 mod test_table_key_filter; // card table-key-filter
 mod test_table_transactions; // card orm step 5
 mod test_table_query_loading; // orm: a filter reads only its rows
+#[cfg(feature = "native")] // its one test counts the table rows read natively: not in the browser build
 mod test_table_comprehension; // orm: a filtered comprehension over a table is its query
 mod test_field_of_elements; // name of people with age > 20 (user 2026-10-10)
 mod test_list_without; // people without team (card people-where)

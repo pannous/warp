@@ -53,7 +53,13 @@ impl WasmGcEmitter {
 	}
 
 	pub(super) fn should_use_float(&self, left: &Node, right: &Node, op: &Op) -> bool {
-		self.arithmetic_type(left, op, right).is_float()
+		// an assignment stores in its variable's kind: an exact variable (`x: rational = √2`) refuses a float value
+		// the way an exact parameter does
+		let stored_kind = left.symbol_name().and_then(|name| self.scope.lookup(name)).map(|local| local.kind).filter(|kind| matches!(kind, Kind::Int | Kind::Float));
+		match stored_kind {
+			Some(kind) if matches!(op, Op::Assign | Op::Define) => kind.is_float(),
+			_ => self.arithmetic_type(left, op, right).is_float(),
+		}
 	}
 
 	pub(super) fn emit_assign_or_define(

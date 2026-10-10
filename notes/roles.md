@@ -42,7 +42,10 @@ ask me decision questions."
   only after their branch is on main). Never the shared-target debug/warp: it holds whichever worktree built last.
   Format (user 2026-10-10): the Interviewer's FINAL reply of a turn (the user's app summarizes earlier text and
   shows only the final message in full) lists each feature as a ```sh code block the user runs with its ▶ button,
-  the expected result after it; no popup follows. The user answers in their next message: works → `todo tried
+  the expected result after it; no popup follows. Shape (user): `warp 'a = 1; b = 2; a + b'`, the program right
+  after `warp`, statements joined by semicolons, no echo/printf pipes or newlines. The user's interactive shell finds
+  /Users/me/dev/bin/warp first, so plain `warp` means main's build; a branch-only feature names its worktree binary
+  in the same shape. The user answers in their next message: works → `todo tried
   <card>`; a failure → `todo add "…" Now` for the worker who built it; untouched ones stay in `todo try`. Fallback:
   the command in a popup question's text or preview. The Interviewer runs every snippet itself first and announces
   only the ones that pass. Speed (user: "if it runs the test just for this one feature, we could
