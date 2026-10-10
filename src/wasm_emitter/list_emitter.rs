@@ -571,6 +571,9 @@ impl WasmGcEmitter {
 	}
 
 	pub(super) fn emit_introspection_fn(&mut self, func: &mut Function, fn_name: &str, arg: &Node) -> bool {
+		if self.ctx.user_functions.contains_key(fn_name) {
+			return false; // `def floor(x) := x+10` is the program's floor, no builtin's (card user-defined)
+		}
 		if let Some(counter) = crate::analyzer::counting_function(fn_name, &self.ctx) {
 			// count, length, size: elements, or graphemes of a text
 			self.emit_list_count(func, arg, counter);

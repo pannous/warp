@@ -31,3 +31,12 @@ fn a_function_keyword_names_an_infix_word() {
 	is!("def div(a,b) = (a - a mod b) / b; div(7,2)", 3);
 	is!("fun rem(a, b) = a * b; rem(2, 3)", 6);
 }
+
+// card user-defined: a rounding word a program defines is its own, as count or map
+#[test]
+fn a_defined_rounding_word_is_the_programs() {
+	is!("def floor(x) := x+10; floor(2.5)", 12.5);
+	is!("def ceil(x) := x+10; ceil 2.5", 12.5);
+	is!("round(x) := x+10; round(2.5) * 2", 25.0);
+	is!("def floor(x) := x+10; floor(2)", 12);
+}
