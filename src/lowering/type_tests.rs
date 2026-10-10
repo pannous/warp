@@ -25,9 +25,13 @@ pub const ERROR_TYPE: &str = "error";
 pub const EMPTY_TYPE: &str = "empty";
 const ARTICLES: [&str; 2] = ["a", "an"];
 const LIST_WORD: &str = "list";
+/// The collection types: `x is list`, `x is map`, and of their element type: `x is list of int`, `x is map of text`
+const COLLECTION_WORDS: [&str; 2] = [LIST_WORD, "map"];
 /// `x is pair`: a `key: value` pair
 const PAIR_WORD: &str = "pair";
 pub const TYPE_WORD: &str = "type";
+/// Types that cover other types but are the type of no value: `type(x)` never names them (type(π) is real)
+const NAMED_BY_NO_VALUE: [&str; 1] = ["number"];
 
 /// Words that name the same type
 pub(crate) fn canonical_spec_word(word: &str) -> &str {
@@ -51,11 +55,16 @@ pub fn type_matches(actual: &str, spec: &str) -> bool {
 	if let Some(conforms) = crate::traits::builtin_conforms(actual, spec) {
 		return conforms;
 	}
-	if let Some(element) = spec.strip_prefix("list of ") {
-		return actual.strip_prefix("list of ").is_some_and(|actual_element| type_matches(actual_element, element));
+	for collection in COLLECTION_WORDS {
+		let of = format!("{collection} of ");
+		if let Some(element) = spec.strip_prefix(&of) {
+			return actual.strip_prefix(&of).is_some_and(|actual_element| type_matches(actual_element, element));
+		}
+		if spec == collection {
+			return actual == collection || actual.starts_with(&of);
+		}
 	}
 	match spec {
-		LIST_WORD => actual == LIST_WORD || actual.starts_with("list of "),
 		"number" => ["int", "rational", "real", "float"].contains(&actual),
 		"real" => ["int", "rational", "real"].contains(&actual),
 		"rational" => ["int", "rational"].contains(&actual),
@@ -159,11 +168,11 @@ fn type_spec(words: &[&str], shadowed: &Names) -> Option<String> {
 		return None;
 	}
 	match (*first, rest) {
-		(LIST_WORD, []) => Some(LIST_WORD.to_string()),
+		(collection, []) if COLLECTION_WORDS.contains(&collection) => Some(collection.to_string()),
 		(PAIR_WORD, []) => Some(canonical_spec_word(PAIR_WORD).to_string()),
 		(ERROR_TYPE, []) => Some(ERROR_TYPE.to_string()),
 		(word, []) if canonical_spec_word(word) == EMPTY_TYPE => Some(EMPTY_TYPE.to_string()),
-		(LIST_WORD, [of, element @ ..]) if *of == OF_WORD => Some(format!("{LIST_WORD} of {}", type_spec(element, shadowed)?)),
+		(collection, [of, element @ ..]) if COLLECTION_WORDS.contains(&collection) && *of == OF_WORD => Some(format!("{collection} of {}", type_spec(element, shadowed)?)),
 		(word, []) => match plural_element_type(word) {
 			Some(element) => Some(format!("{LIST_WORD} of {}", canonical_spec_word(element))),
 			None if crate::traits::is_builtin_trait(word) || shadowed.types.contains(word) => Some(word.to_string()),
@@ -223,7 +232,7 @@ pub fn is_equality_operand(node: &Node) -> bool {
 fn compared_with_type(subject: Node, word: &Node, spec: String, shadowed: &Names) -> Node {
 	let compares_types = matches!(subject.drop_meta(), Node::List(items, _, _) if matches!(items.first().map(Node::drop_meta), Some(Node::Symbol(head)) if head == TYPE_WORD));
 	if compares_types {
-		return is_type_call(expand(subject, shadowed), spec);
+		return same_type_name(expand(subject, shadowed), spec);
 	}
 	let (written, preferred) = (crate::normalize::operand_text(&subject), word.drop_meta().name());
 	crate::normalize::set_position_of(&subject);
@@ -235,6 +244,18 @@ fn compared_with_type(subject: Node, word: &Node, spec: String, shadowed: &Names
 fn is_type_call(subject: Node, spec: String) -> Node {
 	let tested = typed_argument(&subject).unwrap_or(subject);
 	call(IS_TYPE, vec![tested, Node::Text(spec)])
+}
+
+/// `type(x) == number`: two types are equal only when they are the same, as `type(x)` names it; `is` tests the subtype
+/// (user decision #30, card type-equal). No value's type is `number`: that comparison educates toward `is`
+fn same_type_name(type_of_subject: Node, spec: String) -> Node {
+	if NAMED_BY_NO_VALUE.contains(&spec.as_str()) {
+		let written = crate::normalize::operand_text(&type_of_subject);
+		crate::normalize::set_position_of(&type_of_subject);
+		crate::normalize::hint(&format!("{written} == {spec}"), &format!("{written} is {spec}"), "`==` asks for the same type, `is` for any of its kinds");
+	}
+	let quoted_type = Node::List(vec![Node::Symbol(crate::blocks::DATA_WORD.to_string()), Node::Symbol(spec)], Bracket::None, Separator::Space);
+	key(type_of_subject, Op::Eq, quoted_type)
 }
 
 /// x of `type(x)`

@@ -40,3 +40,11 @@ fn paint_of_too_few_ints_fails() {
 	let said = format!("{}{}", String::from_utf8_lossy(&run.stdout), String::from_utf8_lossy(&run.stderr));
 	assert!(said.contains("paint: 3×1 needs 3 pixels, got 2"), "{said}");
 }
+
+// card show-use: show() before canvas(width, height) used to panic in the PNG writer (chunks of width 0)
+#[test]
+fn painting_an_empty_canvas_fails_loudly() {
+	let run = crate::common::warp_command().args(["--no-ask", "eval", "use draw; show()"]).output().unwrap();
+	let said = format!("{}{}", String::from_utf8_lossy(&run.stdout), String::from_utf8_lossy(&run.stderr));
+	assert!(said.contains("paint: a 0×0 image is empty") && !said.contains("panicked"), "{said}");
+}
