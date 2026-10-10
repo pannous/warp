@@ -1788,6 +1788,7 @@ PASSED:
   ✓ modules::test_checkout_std_lib::another_checkout_lib_is_the_standard_module
   ✓ modules::test_dir_any_value::dir_of_a_map_lists_its_keys
   ✓ modules::test_dir_any_value::dir_of_a_plain_value_lists_nothing
+  ✓ modules::test_dir_value_methods::dir_of_a_value_lists_its_types_methods
   ✓ modules::test_dir::a_program_s_own_dir_wins
   ✓ modules::test_dir::dir_lists_the_names_of_a_standard_module
   ✓ modules::test_folder_scope::a_name_defined_in_two_siblings_is_ambiguous
@@ -3647,9 +3648,13 @@ PASSED:
   ✓ types::test_time_values_at_run_time::test_a_time_joins_a_text
   ✓ types::test_time_values_at_run_time::test_a_time_reads_back
   ✓ types::test_time_values_at_run_time::test_an_instant_reads_the_local_wall_clock
+  ✓ types::test_time_values_at_run_time::test_durations_and_zoned_times_print
+  ✓ types::test_time_values_at_run_time::test_durations_and_zoned_times_read_back
   ✓ types::test_time_values_at_run_time::test_fields_at_run_time
   ✓ types::test_time_values_at_run_time::test_time_literals_print
   ✓ types::test_time_values_at_run_time::test_times_compare_at_run_time
+  ✓ types::test_time_values_at_run_time::test_zoned_fields_at_run_time
+  ✓ types::test_time_values_at_run_time::test_zoned_times_and_durations_compare_at_run_time
   ✓ types::test_trait_constraints::a_constrained_list_parameter_takes_conforming_elements
   ✓ types::test_trait_constraints::a_list_annotation_reads_both_ways
   ✓ types::test_trait_constraints::elements_that_do_not_conform_are_a_compile_error
@@ -4613,4 +4618,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-10 ignored, 4608 passed, 0 failed, 4608 total tested
+10 ignored, 4613 passed, 0 failed, 4613 total tested
