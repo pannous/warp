@@ -38,3 +38,16 @@ fn test_a_declared_exact_variable_refuses_a_float_as_a_parameter_does() {
 	common::fails_with("x as rational = sqrt(2)", REFUSED);
 	common::fails_with("x: int = sqrt(2); x", "√(2) is a float where an exact int is expected");
 }
+
+#[test]
+fn test_real_holds_roots_and_exact_unions_refuse_floats() {
+	is!("x: real = sqrt(2); x * x > 1.99", true);
+	is!("x: real = 1/3; x * 3", 1);
+	is!("x: real = 1; x = sqrt(2); x > 1.4", true);
+	is!("f(x: real) := x * 3; f(1/3)", 1);
+	is!("f(x: real) := x > 1.4; f(sqrt(2))", true);
+	common::fails_with("x: rational|int = sqrt(2)", "√(2) is a float where an exact rational is expected");
+	is!("x: int|rational = 1/3; x * 3", 1);
+	common::fails_with("x: int|text = sqrt(2)", "not an int or text");
+	common::fails_with("f(x: int or text) := x; f(sqrt(2))", "f needs an int or text for parameter x");
+}

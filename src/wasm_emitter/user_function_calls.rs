@@ -473,8 +473,8 @@ impl WasmGcEmitter {
 			// `[]` is ø here: the empty list fits every declared list
 			let is_empty_list = matches!(argument.drop_meta(), Node::Empty);
 			if declared_misfit || ((!expected.is_ref() || declared_list) && refused.contains(&given) && given != expected && !is_empty_list) {
-				// a number parameter held as a Node (`a:number` of a program with ± values) names its type, not its kind
-				let wanted = match param.annotation.as_ref().filter(|annotation| crate::uncertain::is_interval_number(annotation)) {
+				// a parameter held as a Node (`a:number` of a program with ± values, `x: int or text`) names its type, not its kind
+				let wanted = match param.annotation.as_ref().filter(|_| expected == Kind::Empty) {
 					Some(annotation) => crate::analyzer::with_article(&annotation.drop_meta().name()),
 					None => kind_with_article(expected),
 				};

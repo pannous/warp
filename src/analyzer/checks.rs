@@ -225,6 +225,14 @@ pub fn refuses_decimals(type_name: &str) -> bool {
 	}
 }
 
+/// A declared type held as an exact Int, or a union of such (`rational`, `int or rational`): an IEEE float loses its
+/// value there
+pub fn refuses_floats(type_name: &str) -> bool {
+	let type_name = type_name.trim_end_matches('?');
+	let exact = |name: &str| builtin_type_kind(name) == Some(Kind::Int);
+	union_parts(type_name).map_or_else(|| exact(type_name), |parts| parts.iter().all(|part| exact(part)))
+}
+
 /// A plural type word denotes a list of that type: `ints`, `numbers` → `int`, `number`
 pub fn plural_element_type(word: &str) -> Option<&str> {
 	let singular = word.strip_suffix('s')?;
@@ -1332,8 +1340,10 @@ pub(crate) fn union_type_name(node: &Node) -> Option<String> {
 	let optional = parts.iter().any(|part| NONE_WORDS.contains(&part.as_str()));
 	parts.retain(|part| !NONE_WORDS.contains(&part.as_str()));
 	parts.dedup();
+	let admits_part = |wide: &String, narrow: &String| !is_bool_type(wide) && builtin_type_kind(narrow).is_some_and(|kind| admits(wide, kind));
+	// two parts held alike (`rational | int`) admit each other: the subtype goes
 	let covers = |wide: &String, narrow: &String| {
-		wide != narrow && !is_bool_type(wide) && builtin_type_kind(narrow).is_some_and(|kind| admits(wide, kind))
+		wide != narrow && admits_part(wide, narrow) && (!admits_part(narrow, wide) || crate::type_tests::type_matches(narrow, wide))
 	};
 	let kept: Vec<&String> = parts.iter().filter(|part| !parts.iter().any(|other| covers(other, part))).collect();
 	let joined = kept.iter().map(|part| part.as_str()).collect::<Vec<_>>().join(UNION_JOINER);
@@ -1455,6 +1465,10 @@ pub(crate) fn admits(type_name: &str, actual: Kind) -> bool {
 		return parts.iter().any(|part| admits(part, actual));
 	}
 	let Some(expected) = builtin_type_kind(type_name) else { return true };
+	// a type held as a Node (`real`: an exact Int or a float) admits the kinds it holds at run time
+	if expected == Kind::Empty {
+		return crate::type_tests::runtime_kind_mask(type_name).is_none_or(|mask| mask & 1 << actual as i64 != 0);
+	}
 	let exact_decimal = crate::type_tests::is_exact_fraction_type(type_name) && actual == Kind::Float;
 	let one_character_text = expected == Kind::Text && actual == Kind::Codepoint;
 	expected == actual || (expected == Kind::Float && actual == Kind::Int) || exact_decimal || one_character_text
