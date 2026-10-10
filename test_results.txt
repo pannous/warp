@@ -1599,6 +1599,8 @@ PASSED:
   ✓ lists::test_list_compound_add::a_function_is_no_number
   ✓ lists::test_list_compound_add::a_list_plus_equals_a_list_concatenates
   ✓ lists::test_list_compound_add::a_list_plus_equals_an_item_is_the_type_error_of_plus
+  ✓ lists::test_list_methods::a_list_module_word_is_a_method_without_use
+  ✓ lists::test_list_methods::text_and_map_module_words_are_methods_too
   ✓ lists::test_list_number_comparison::a_list_is_not_equal_to_a_number
   ✓ lists::test_list_number_comparison::ordering_a_list_with_a_number_is_a_loud_error
   ✓ lists::test_list_of_objects::an_element_of_a_computed_list_of_objects_has_fields
@@ -2869,8 +2871,10 @@ PASSED:
   ✓ programs::test_music_values::the_tuning_tunes_every_note
   ✓ programs::test_music_values::transposing_moves_notes_by_semitones
   ✓ programs::test_paint_lists::paint_of_too_few_ints_fails
+  ✓ programs::test_paint_lists::paint_reads_a_typed_int_list_from_its_array
   ✓ programs::test_paint_lists::paint_reads_ints_from_a_built_list
   ✓ programs::test_paint_lists::paint_reads_other_pixels_node_by_node
+  ✓ programs::test_paint_lists::paint_saturates_a_big_int_in_a_typed_list
   ✓ programs::test_paint_lists::paint_takes_the_first_pixels_of_a_longer_list
   ✓ programs::test_paint_lists::show_before_canvas_paints_the_default_canvas
   ✓ programs::test_paint_shader::paint_of_a_shader_without_values_reads_none
@@ -2931,6 +2935,10 @@ PASSED:
   ✓ programs::test_sound_files::a_broken_music_file_fails
   ✓ programs::test_sound_files::a_music_file_plays_in_the_background
   ✓ programs::test_sound_files::only_a_music_file_plays
+  ✓ programs::test_sound_filters::a_lowpass_filter_quiets_high_notes
+  ✓ programs::test_sound_filters::tremolo_swells_the_gain
+  ✓ programs::test_sound_filters::unison_voices_are_detuned
+  ✓ programs::test_sound_filters::vibrato_bends_the_pitch
   ✓ programs::test_sound_handles::play_gives_the_sounds_handle
   ✓ programs::test_sound_handles::stop_sound_stops_one_sound
   ✓ programs::test_sound_notes::a_variable_named_like_a_note_is_the_variable
@@ -4401,7 +4409,7 @@ PASSED:
   ✓ welcoming::test_function_bindings::a_let_in_one_function_leaves_another_alone
   ✓ welcoming::test_golf_words::a_bare_for_walks_a_method_chain
   ✓ welcoming::test_golf_words::a_char_loop_over_a_text_visits_every_char
-  ✓ welcoming::test_golf_words::a_text_word_without_its_module_names_the_module
+  ✓ welcoming::test_golf_words::a_text_word_without_its_module_is_a_text_method
   ✓ welcoming::test_golf_words::bits_of_whole_numbers
   ✓ welcoming::test_golf_words::chr_of_an_expression_is_a_function_result
   ✓ welcoming::test_golf_words::print_without_parentheses_in_an_operand_or_branch
@@ -4595,4 +4603,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-10 ignored, 4590 passed, 0 failed, 4590 total tested
+10 ignored, 4598 passed, 0 failed, 4598 total tested
