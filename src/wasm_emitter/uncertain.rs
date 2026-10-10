@@ -572,13 +572,6 @@ impl WasmGcEmitter {
 				put(f, b'.');
 				Self::emit_list(f, &[I::LocalGet(position), I::LocalGet(decimals), I::I32Add, I::LocalSet(position), I::End]);
 			};
-			let while_true = |f: &mut Function, condition: &[I<'static>], body: &[I<'static>]| {
-				Self::emit_list(f, &[I::Block(BlockType::Empty), I::Loop(BlockType::Empty)]);
-				Self::emit_list(f, condition);
-				Self::emit_list(f, &[I::I32Eqz, I::BrIf(1)]);
-				Self::emit_list(f, body);
-				Self::emit_list(f, &[I::Br(0), I::End, I::End]);
-			};
 
 			f.instruction(&I::LocalGet(0));
 			s.call(f, UNCERTAIN_PARTS);
@@ -595,13 +588,13 @@ impl WasmGcEmitter {
 			Self::emit_list(f, &[I::F64Const(1.0.into()), I::LocalSet(scale)]);
 			let mut too_small = scaled_radius.to_vec();
 			too_small.extend([I::F64Const(ROUNDS_TO_TEN.into()), I::F64Lt, I::LocalGet(decimals), I::I32Const(MAX_DECIMALS), I::I32LeS, I::I32And]);
-			while_true(f, &too_small, &[
+			Self::emit_while(f, &too_small, &[
 				I::LocalGet(scale), I::F64Const(10.0.into()), I::F64Mul, I::LocalSet(scale),
 				I::LocalGet(decimals), I::I32Const(1), I::I32Add, I::LocalSet(decimals),
 			]);
 			let mut too_large = scaled_radius.to_vec();
 			too_large.extend([I::F64Const(ROUNDS_TO_HUNDRED.into()), I::F64Ge]);
-			while_true(f, &too_large, &[I::LocalGet(scale), I::F64Const(10.0.into()), I::F64Div, I::LocalSet(scale)]);
+			Self::emit_while(f, &too_large, &[I::LocalGet(scale), I::F64Const(10.0.into()), I::F64Div, I::LocalSet(scale)]);
 			Self::emit_list(f, &[
 				I::LocalGet(decimals), I::I32Const(MAX_DECIMALS), I::I32GtS,
 				I::LocalGet(value), I::F64Abs, I::LocalGet(scale), I::F64Mul, I::F64Const(MAX_SCALED.into()), I::F64Lt, I::I32Eqz,
