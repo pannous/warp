@@ -520,12 +520,6 @@ impl WarpParser {
 		self.can_start_atom()
 	}
 
-	fn skip_blanks(&mut self) {
-		while matches!(self.current_char(), ' ' | '\t') {
-			self.advance();
-		}
-	}
-
 	pub(super) fn finish_while_prefix(&mut self, rhs: Node) -> Node {
 		self.skip_spaces();
 		if self.current_char() == '{' {

@@ -244,6 +244,13 @@ impl WarpParser {
 	}
 
 	/// Blanks and line continuations: a `\` at the end of a line joins the next line to the statement
+	/// Skips spaces and tabs, not line continuations
+	pub(super) fn skip_blanks(&mut self) {
+		while matches!(self.current_char(), ' ' | '\t') {
+			self.advance();
+		}
+	}
+
 	pub(super) fn skip_spaces(&mut self) {
 		loop {
 			if self.current_char() == ' ' || self.current_char() == '\t' {

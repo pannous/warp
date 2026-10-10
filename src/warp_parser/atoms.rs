@@ -749,9 +749,7 @@ impl WarpParser {
 		}
 		// `new Point(1, 2)` (Java, JavaScript, C#) of a declared class: the construction `Point(1, 2)`
 		if symbol == NEW_WORD && !self.options.data_mode && self.declared_type_after_blanks() {
-			while matches!(self.current_char(), ' ' | '\t') {
-				self.advance();
-			}
+			self.skip_blanks();
 			let construction = self.parse_atom();
 			let class = crate::lowering::class_methods::leading_name(&construction);
 			crate::diagnostic::note_alias(&format!("{NEW_WORD} {class}"), &class);
@@ -772,9 +770,7 @@ impl WarpParser {
 			}
 		}
 		if symbol == OPERATOR_WORD && !self.options.data_mode && matches!(self.current_char(), ' ' | '\t') {
-			while matches!(self.current_char(), ' ' | '\t') {
-				self.advance();
-			}
+			self.skip_blanks();
 			if let Some(head) = self.try_parse_operator_method_head() {
 				crate::diagnostic::note_alias(&format!("{OPERATOR_WORD} {}", head.first().name()), &head.first().name());
 				return head;
@@ -786,9 +782,7 @@ impl WarpParser {
 		}
 		// Kotlin's `enum class Color {…}`: the enum
 		if symbol == ENUM_WORD && !self.options.wit_mode && self.class_keyword_after_blanks() == Some("class") {
-			while matches!(self.current_char(), ' ' | '\t') {
-				self.advance();
-			}
+			self.skip_blanks();
 			self.advance_by("class".len());
 			crate::diagnostic::note_alias(&format!("{ENUM_WORD} class"), ENUM_WORD);
 			return Symbol(symbol);
@@ -797,9 +791,7 @@ impl WarpParser {
 		if !self.options.wit_mode && CLASS_MODIFIERS.contains(&symbol.as_str()) {
 			if let Some(keyword) = self.class_keyword_after_blanks() {
 				crate::diagnostic::note_alias(&format!("{symbol} {keyword}"), keyword);
-				while matches!(self.current_char(), ' ' | '\t') {
-					self.advance();
-				}
+				self.skip_blanks();
 				self.advance_by(keyword.len());
 				return self.parse_type_declaration();
 			}
@@ -820,12 +812,8 @@ impl WarpParser {
 		// `for t in todos { … }` it is the collection and the body (card markup-ul)
 		let spaced_child = self.in_data_literal && !self.in_for_header && !declared && self.blanks_then('{');
 		if spaced_child || ((declared || tagged) && self.block_after_blanks(declared)) {
-			while matches!(self.current_char(), ' ' | '\t') {
-				self.advance();
-			}
-			return self.parse_glued_suffix(symbol);
+			self.skip_blanks();
 		}
-
 		self.parse_glued_suffix(symbol)
 	}
 
@@ -955,9 +943,7 @@ impl WarpParser {
 			true => {
 				self.skip_whitespace();
 			}
-			false => while matches!(self.current_char(), ' ' | '\t') {
-				self.advance();
-			},
+			false => self.skip_blanks(),
 		}
 		// `class dog extends animal {…}` (P117): the parent rides on the name, class_methods copies its fields and methods
 		let mut name = Symbol(type_name);
