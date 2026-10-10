@@ -34,3 +34,11 @@ fn unison_voices_are_detuned() {
 	is!("use sound\nunison = 3\ndetune = 0.2\nv = voices_of([440])\ncount(v) == 3 and v[1] == 440 and v[0] < 440 and v[2] > 440", true);
 	is!("unison = 2\nplay C4 for 5ms\n1", 1);
 }
+
+// card out-variable: a program's own `out` and the filter's local `out` stay apart, whatever type the program's holds
+#[test]
+fn a_program_variable_named_out_survives_the_filter() {
+	is!("use sound\nout = [1]\nfiltered([0.1, 0.2])\nout.push(2)\ncount(out)", 2);
+	is!("use sound\nout = 7\nchord_samples([440], 0.01, \"sine\")\nout + 1", 8);
+	is!("use sound\nout = {}\nout.x = 3\nchord_samples([440], 0.01, \"sine\")\nout.x", 3);
+}
