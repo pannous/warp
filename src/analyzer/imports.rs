@@ -23,22 +23,7 @@ pub fn analyze_required_functions(ctx: &mut Context, node: &Node) {
 		Node::Symbol(name) if crate::host::VALUE_GIVING_WORDS.contains(&name.as_str()) => ctx.required_functions.extend([crate::wasm_emitter::INT_RUNTIME, "new_int"]),
 		Node::Empty | Node::Symbol(_) | Node::Char(_) | Node::True | Node::False => {}
 		Node::Key(key, op, value) => {
-			if op.is_arithmetic()
-				|| op.is_shift()
-				|| op.is_compound_assign()
-				|| matches!(op, Op::Inc | Op::Dec | Op::Neg | Op::Abs | Op::Square | Op::Cube | Op::Xor)
-			{
-				ctx.required_functions.insert(crate::wasm_emitter::INT_RUNTIME);
-			}
-			if matches!(op, Op::Eq | Op::Ne) {
-				ctx.required_functions.insert(crate::wasm_emitter::VALUES_EQUAL);
-			}
-			if matches!(op, Op::Identical | Op::NotIdentical) {
-				ctx.required_functions.extend([crate::wasm_emitter::VALUES_EQUAL, crate::wasm_emitter::SAME_NODE]);
-			}
-			if matches!(op, Op::If | Op::While | Op::Question | Op::Not | Op::And | Op::Or) {
-				ctx.required_functions.insert(crate::wasm_emitter::IS_TRUTHY);
-			}
+			ctx.required_functions.extend(functions_of_operator(op));
 			// `xs += [v]`, what `xs.add(v)` lowers to: the list grows in place
 			if *op == Op::AddAssign && matches!(value.drop_meta(), Node::List(_, Bracket::Square, _)) {
 				ctx.required_functions.insert(crate::wasm_emitter::list_ops::LIST_EXTEND);
@@ -69,18 +54,13 @@ pub fn analyze_required_functions(ctx: &mut Context, node: &Node) {
 				if matches!(key.drop_meta(), Node::Empty) {
 					ctx.required_functions.insert("node_count");
 				} else {
-					ctx.required_functions.insert("node_index_at");
-					ctx.required_functions.insert("map_get");
+					ctx.required_functions.extend(["node_index_at", "map_get", crate::wasm_emitter::VALUES_EQUAL, "string_char_at", "list_node_at", "list_at"]);
 					if let Some(name) = crate::warp_parser::subscript_key(value).and_then(constant_field_name) {
 						if name == crate::wasm_emitter::list_ops::MESSAGE_FIELD {
 							ctx.required_functions.insert(crate::wasm_emitter::list_ops::ERROR_MESSAGE);
 						}
 						ctx.missing_field_names.insert(name);
 					}
-					ctx.required_functions.insert(crate::wasm_emitter::VALUES_EQUAL);
-					ctx.required_functions.insert("string_char_at");
-					ctx.required_functions.insert("list_node_at");
-					ctx.required_functions.insert("list_at");
 				}
 			} else if *op == Op::Dot {
 				let method_name = match value.drop_meta() {
@@ -101,27 +81,13 @@ pub fn analyze_required_functions(ctx: &mut Context, node: &Node) {
 				return;
 			}
 			if let Node::Symbol(fn_name) = items[0].drop_meta() {
-				if fn_name == ZERO_FILL_CALL {
-					ctx.required_functions.insert(ZERO_FILL_CALL);
-				}
+				ctx.required_functions.extend(functions_of_call(fn_name));
 				// a host word that gives a value builds exact numbers from fixnums (tasks.rs Builders)
 				if crate::host::VALUE_GIVING_WORDS.contains(&fn_name.as_str()) {
 					ctx.required_functions.extend([crate::wasm_emitter::INT_RUNTIME, "new_int"]);
 				}
 				if let Some(word) = crate::wasm_emitter::cells::CELL_WORDS.iter().find(|word| **word == fn_name) {
 					ctx.required_functions.insert(word);
-				}
-				if fn_name == LIST_DROP_LAST {
-					ctx.required_functions.insert(LIST_DROP_LAST);
-				}
-				if fn_name == REMOVED_VALUE_CALL {
-					ctx.required_functions.extend([crate::library_words::MAP_GET_OR, crate::library_words::MAP_WITHOUT]);
-				}
-				if fn_name == INSERT_AT_CALL || fn_name == INSERT_EITHER_CALL {
-					ctx.required_functions.insert(INSERT_AT_CALL);
-				}
-				if fn_name == crate::type_tests::IS_TYPE {
-					ctx.required_functions.insert(crate::type_tests::NODE_KIND_IN);
 				}
 				if fn_name == crate::type_tests::TYPE_WORD {
 					ctx.required_functions.insert(crate::type_tests::NODE_TYPE_NAME);
@@ -133,17 +99,8 @@ pub fn analyze_required_functions(ctx: &mut Context, node: &Node) {
 				if fn_name == crate::switch::NO_CASE_CALL {
 					ctx.missing_case_labels.extend(items.get(1).map(|label| label.name()));
 				}
-				if fn_name == crate::wasm_emitter::text_builtins::TEXT_FORM {
-					ctx.required_functions.insert("list_join");
-				}
-				if fn_name == crate::library_words::FIELD_WITH {
-					ctx.required_functions.extend([crate::library_words::FIELD_WITH, crate::wasm_emitter::VALUES_EQUAL]);
-				}
 				if crate::library_words::is_similarity_call(fn_name) {
 					ctx.required_functions.insert(crate::wasm_emitter::NUMBERS_SIMILAR); // values_similar when needed
-				}
-				if fn_name == crate::library_words::INSTANCE_COPY {
-					ctx.required_functions.insert(crate::library_words::INSTANCE_COPY);
 				}
 				if ctx.ffi_imports.contains_key(fn_name.as_str()) {
 					for item in items.iter().skip(1) {
@@ -178,6 +135,35 @@ pub fn analyze_required_functions(ctx: &mut Context, node: &Node) {
 		Node::Error(inner) => {
 			analyze_required_functions(ctx, inner);
 		}
+	}
+}
+
+/// The runtime functions an operator needs wherever it appears
+fn functions_of_operator(op: &Op) -> &'static [&'static str] {
+	use crate::wasm_emitter::{INT_RUNTIME, IS_TRUTHY, SAME_NODE, VALUES_EQUAL};
+	match op {
+		Op::Eq | Op::Ne => &[VALUES_EQUAL],
+		Op::Identical | Op::NotIdentical => &[VALUES_EQUAL, SAME_NODE],
+		Op::If | Op::While | Op::Question | Op::Not | Op::And | Op::Or => &[IS_TRUTHY],
+		Op::Inc | Op::Dec | Op::Neg | Op::Abs | Op::Square | Op::Cube | Op::Xor => &[INT_RUNTIME],
+		op if op.is_arithmetic() || op.is_shift() || op.is_compound_assign() => &[INT_RUNTIME],
+		_ => &[],
+	}
+}
+
+/// The runtime functions a call of the word needs, besides what its arguments need
+fn functions_of_call(word: &str) -> &'static [&'static str] {
+	use crate::library_words::{FIELD_WITH, INSTANCE_COPY, MAP_GET_OR, MAP_WITHOUT};
+	match word {
+		ZERO_FILL_CALL => &[ZERO_FILL_CALL],
+		LIST_DROP_LAST => &[LIST_DROP_LAST],
+		REMOVED_VALUE_CALL => &[MAP_GET_OR, MAP_WITHOUT],
+		INSERT_AT_CALL | INSERT_EITHER_CALL => &[INSERT_AT_CALL],
+		crate::type_tests::IS_TYPE => &[crate::type_tests::NODE_KIND_IN],
+		crate::wasm_emitter::text_builtins::TEXT_FORM => &["list_join"],
+		FIELD_WITH => &[FIELD_WITH, crate::wasm_emitter::VALUES_EQUAL],
+		INSTANCE_COPY => &[INSTANCE_COPY],
+		_ => &[],
 	}
 }
 
