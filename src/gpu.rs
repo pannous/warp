@@ -35,6 +35,7 @@ pub const VECTOR_FLOATS: usize = 4;
 
 /// A value the shader reads as `values.<name>`: one to four floats (f32, vec2f, vec3f, vec4f), or an array of vec4f
 /// (`values.<name>[i]`), its floats four by four
+#[derive(Clone)]
 pub struct ShaderValue {
 	pub name: String,
 	pub floats: Vec<f32>,
@@ -206,6 +207,7 @@ pub fn opaque_color(rgba: &[u8]) -> u32 {
 /// The image of `render` as RGBA bytes, row by row: what paint's window takes without a per-pixel pass (a frame of the
 /// debug build costs 55 ms less at 1280×720)
 pub fn render_rgba(shader: &str, width: u32, height: u32, values: &[ShaderValue]) -> Result<Vec<u8>, String> {
+	let values = &with_builtin_values(shader, width, height, values);
 	let Gpu { device, queue } = gpu()?;
 	let validation = device.push_error_scope(wgpu::ErrorFilter::Validation);
 	let (declarations, bytes) = uniform_layout(values)?;
@@ -237,6 +239,38 @@ pub fn render_rgba(shader: &str, width: u32, height: u32, values: &[ShaderValue]
 		rgba.extend_from_slice(&row[..(width * PIXEL_BYTES) as usize]);
 	}
 	Ok(rgba)
+}
+
+/// The values with the built-in holes the shader reads and the program gave no value (shader_holes.rs BUILTIN_HOLES)
+fn with_builtin_values(shader: &str, width: u32, height: u32, values: &[ShaderValue]) -> Vec<ShaderValue> {
+	static FIRST_RENDER: LazyLock<std::time::Instant> = LazyLock::new(std::time::Instant::now);
+	static RENDERS: std::sync::atomic::AtomicU32 = std::sync::atomic::AtomicU32::new(0);
+	let frame = RENDERS.fetch_add(1, std::sync::atomic::Ordering::Relaxed) as f32;
+	let size = [width as f32, height as f32];
+	let [mouse_x, mouse_y, mouse_down, key] = crate::paint_window::input();
+	let filled = crate::shader_holes::BUILTIN_HOLES.into_iter().filter(|name| reads_value(shader, name) && !values.iter().any(|value| value.name == *name));
+	let builtins = filled.map(|name| ShaderValue {
+		name: name.to_string(),
+		floats: match name {
+			"width" => vec![size[0]],
+			"height" => vec![size[1]],
+			"size" => size.to_vec(),
+			"time" => vec![FIRST_RENDER.elapsed().as_secs_f32()],
+			"frame" => vec![frame],
+			"mouse" => vec![mouse_x, mouse_y],
+			"mouse_down" => vec![mouse_down],
+			"key" => vec![key],
+			other => unreachable!("{other} is no built-in hole"),
+		},
+		array: false,
+	});
+	values.iter().cloned().chain(builtins).collect()
+}
+
+/// Whether the shader reads `values.name`
+fn reads_value(shader: &str, name: &str) -> bool {
+	let read = format!("{}.{name}", crate::shader_holes::VALUES);
+	shader.match_indices(&read).any(|(at, _)| !shader[at + read.len()..].starts_with(|ch: char| ch.is_alphanumeric() || ch == '_'))
 }
 
 /// The WGSL declaring `values` (appended to the shader, so its line numbers stay the user's) and the bytes of the

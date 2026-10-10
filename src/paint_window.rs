@@ -3,8 +3,9 @@
 //! binary as `warp paint-window`, reading frames from its stdin, [width u32][height u32][width×height RGBA bytes]. Each
 //! paint call replaces the frame (samples/webgpu.warp animates); the last one stays until the window is closed.
 
-use std::io::{Read, Write};
+use std::io::{BufRead, Read, Write};
 use std::process::{Child, Command, Stdio};
+use std::sync::atomic::{AtomicU32, Ordering};
 use std::sync::{Arc, Mutex};
 use winit::application::ApplicationHandler;
 use winit::event::WindowEvent;
@@ -34,6 +35,47 @@ struct Corner { @builtin(position) at: vec4f, @location(0) uv: vec2f }
 	return vec4f(textureSample(frame, nearest, corner.uv).rgb, 1.0); // a shader's alpha: paint shows opaque colors
 }";
 const TRIANGLE_CORNERS: u32 = 3;
+/// The line the viewer writes to its stdout on the pointer and the keys: `input x y down key`, the pointer in the
+/// frame's pixels, down 1 while a button is, key as shader_holes.rs BUILTIN_HOLES says
+const INPUT_LINE: &str = "input";
+/// The arrows' codes, as a Mac's function keys: up, down, left, right
+const ARROW_CODES: [u32; 4] = [0xF700, 0xF701, 0xF702, 0xF703];
+/// The last input over the window, each an f32's bits: pointer x, y, button down, key (the shaders' $mouse, src/gpu.rs)
+static INPUT: [AtomicU32; 4] = [const { AtomicU32::new(0) }; 4];
+
+/// The last input over the paint window: pointer x, y in the painted image's pixels, a button down (1), the key held
+pub fn input() -> [f32; 4] {
+	INPUT.each_ref().map(|value| f32::from_bits(value.load(Ordering::Relaxed)))
+}
+
+/// The viewer's input lines, read until it ends
+fn follow_input(lines: impl BufRead) {
+	for line in lines.lines().map_while(Result::ok) {
+		let mut words = line.split_whitespace();
+		if words.next() != Some(INPUT_LINE) {
+			continue;
+		}
+		for (value, word) in INPUT.iter().zip(words) {
+			if let Ok(number) = word.parse::<f32>() {
+				value.store(number.to_bits(), Ordering::Relaxed);
+			}
+		}
+	}
+}
+
+/// The code of a pressed key: its character's, an arrow's ARROW_CODES; None for the others
+fn key_code(key: &winit::keyboard::Key) -> Option<u32> {
+	use winit::keyboard::{Key, NamedKey};
+	match key {
+		Key::Character(text) => text.chars().next().map(u32::from),
+		Key::Named(NamedKey::ArrowUp) => Some(ARROW_CODES[0]),
+		Key::Named(NamedKey::ArrowDown) => Some(ARROW_CODES[1]),
+		Key::Named(NamedKey::ArrowLeft) => Some(ARROW_CODES[2]),
+		Key::Named(NamedKey::ArrowRight) => Some(ARROW_CODES[3]),
+		Key::Named(NamedKey::Space) => Some(u32::from(' ')),
+		_ => None,
+	}
+}
 
 /// A painted image as the viewer takes it
 #[derive(Debug, PartialEq)]
@@ -87,12 +129,15 @@ pub fn show(frame: &[u8]) -> Result<(), String> {
 	if viewer.is_none() {
 		let binary = std::env::current_exe().map_err(|failure| format!("paint: no viewer, the warp binary is unknown: {failure}"))?;
 		let mut command = Command::new(binary);
-		command.arg(COMMAND).stdin(Stdio::piped()).stdout(Stdio::null());
+		command.arg(COMMAND).stdin(Stdio::piped()).stdout(Stdio::piped());
 		// its own process group: the window outlives the program and the terminal's hangup when that closes
 		#[cfg(unix)]
 		std::os::unix::process::CommandExt::process_group(&mut command, 0);
-		let child = command.spawn();
-		*viewer = Some(child.map_err(|failure| format!("paint: cannot start the viewer: {failure}"))?);
+		let mut child = command.spawn().map_err(|failure| format!("paint: cannot start the viewer: {failure}"))?;
+		if let Some(output) = child.stdout.take() {
+			std::thread::spawn(move || follow_input(std::io::BufReader::new(output)));
+		}
+		*viewer = Some(child);
 	}
 	let input = viewer.as_mut().and_then(|child| child.stdin.as_mut()).expect("the viewer's stdin is piped");
 	let written = input.write_all(frame).and_then(|_| input.flush());
@@ -140,6 +185,9 @@ struct Screen {
 	texture_format: wgpu::TextureFormat,
 	bindings: Option<wgpu::BindGroup>,
 	frame_size: (u32, u32),
+	pointer: (f64, f64),
+	button_down: bool,
+	key: u32,
 }
 
 impl ApplicationHandler<Frame> for Viewer {
@@ -172,6 +220,20 @@ impl ApplicationHandler<Frame> for Viewer {
 		match event {
 			WindowEvent::CloseRequested => event_loop.exit(),
 			WindowEvent::Resized(size) => screen.resize(size.width, size.height),
+			WindowEvent::CursorMoved { position, .. } => {
+				screen.pointer = screen.in_frame(position.x, position.y);
+				screen.tell_input();
+			}
+			WindowEvent::MouseInput { state, .. } => {
+				screen.button_down = state.is_pressed();
+				screen.tell_input();
+			}
+			WindowEvent::KeyboardInput { event, .. } => {
+				if let Some(code) = key_code(&event.logical_key) {
+					screen.key = if event.state.is_pressed() { code } else { 0 };
+					screen.tell_input();
+				}
+			}
 			WindowEvent::RedrawRequested => {
 				if let Some(center) = screen.draw(self.check) {
 					println!("center {center}");
@@ -214,7 +276,7 @@ impl Screen {
 			cache: None,
 		});
 		let sampler = device.create_sampler(&wgpu::SamplerDescriptor::default());
-		Ok(Screen { window, surface, config, device, queue, pipeline, sampler, texture_format, bindings: None, frame_size: (0, 0) })
+		Ok(Screen { window, surface, config, device, queue, pipeline, sampler, texture_format, bindings: None, frame_size: (0, 0), pointer: (0.0, 0.0), button_down: false, key: 0 })
 	}
 
 	/// The frame as the texture the next draw samples
@@ -249,6 +311,17 @@ impl Screen {
 		}
 		self.frame_size = (frame.width, frame.height);
 		self.window.request_redraw();
+	}
+
+	/// The input as the program's side takes it (follow_input)
+	fn tell_input(&self) {
+		println!("{INPUT_LINE} {} {} {} {}", self.pointer.0, self.pointer.1, u8::from(self.button_down), self.key);
+	}
+
+	/// A place in the window's physical pixels as one in the frame's pixels
+	fn in_frame(&self, x: f64, y: f64) -> (f64, f64) {
+		let (frame_width, frame_height) = self.frame_size;
+		(x * f64::from(frame_width) / f64::from(self.config.width.max(1)), y * f64::from(frame_height) / f64::from(self.config.height.max(1)))
 	}
 
 	fn resize(&mut self, width: u32, height: u32) {
