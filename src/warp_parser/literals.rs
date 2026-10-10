@@ -396,7 +396,8 @@ impl WarpParser {
 			return None;
 		}
 		let name: String = self.chars[self.pos + 1..].iter().take_while(|c| is_identifier_char(**c)).collect();
-		if !LITERAL_NUMBER_TYPES.contains(&name.as_str()) {
+		// `0.1:float`, `1.5:int`, `x:exact`: a number type binds tightly, unlike the loose `as`
+		if !crate::type_tests::is_number_type_word(&name) {
 			return None;
 		}
 		self.advance_by(1 + name.chars().count());

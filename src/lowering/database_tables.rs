@@ -10,11 +10,11 @@ use super::words::{FOR_WORD, GLOBAL_WORD, IN_WORD};
 use super::nodes::key;
 use crate::node::{symbol, Bracket, Node, Separator};
 use crate::operators::Op;
+use crate::stored_values::DATABASE_WORDS;
 use crate::warp_parser::parse;
 use crate::units::static_units::si_quantity;
 use std::collections::{BTreeMap, HashMap, HashSet};
 
-const DATABASE_WORDS: [&str; 2] = ["database", "indexedDB"];
 /// `app.warp` keeps its tables in `app.database.sqlite`; inline code's tables are this name alone (in memory)
 pub const TABLES_FILE: &str = "database.sqlite";
 /// The row id every registered class gets, unless it declares one

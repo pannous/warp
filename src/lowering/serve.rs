@@ -9,6 +9,7 @@
 use super::nodes::{call, key};
 use crate::node::{symbol, text, Bracket, Node, Separator};
 use crate::operators::Op;
+use crate::stored_values::DATABASE_WORDS;
 use std::collections::HashSet;
 
 const SERVE_WORD: &str = "serve";
@@ -46,7 +47,6 @@ const PAGE_PATH: &str = "page·path";
 const PAGE_NAVIGATED: &str = "page·navigated";
 /// Without a server, a form of the page asks the program's own routes: page·submitted(request) (worker.js handleSubmit)
 pub const PAGE_SUBMITTED: &str = "page·submitted";
-const DATABASE_WORDS: [&str; 2] = ["database", "indexedDB"];
 /// `·` of a generated name as written in code (it would parse as a product)
 const NAME_DOT: &str = "_dot_";
 /// What a WAGI build (`warp build --wagi`, lib/wagi.warp, which the build uses) ends in: the routes' answer to the request

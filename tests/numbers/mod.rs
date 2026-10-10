@@ -94,3 +94,4 @@ mod test_unit_glue_hint; // card unit-glue
 mod test_nearest; // card nearest-helper
 mod test_units_type_holes; // cards units-compare units-reassign units-annotation units-text-repeat
 mod test_method_on_operator_call; // card sqrt-round
+mod test_literal_type_words; // card cleanup-closed-lists

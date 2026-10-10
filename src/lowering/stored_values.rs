@@ -30,7 +30,8 @@ pub const SESSION_STORE: &str = "warp-session";
 /// is `app.database.json`, inline code's this name alone (in memory natively, std_adapters.rs); in the browser any
 /// store whose file ends so is IndexedDB (host-files.js DATABASE_STORE)
 pub const DATABASE_STORE: &str = "database.json";
-const DATABASE_WORDS: [&str; 2] = ["database", "indexedDB"];
+/// `database.people`, `indexedDB.people`: the stores of tables (database_tables, serve)
+pub(crate) const DATABASE_WORDS: [&str; 2] = ["database", "indexedDB"];
 const DELETE_WORD: &str = "delete";
 const KEYS_WORD: &str = "keys";
 /// stand for the key and the value in the templates of a storage access
