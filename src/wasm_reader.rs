@@ -463,14 +463,7 @@ fn struct_node<T>(structref: &wasmtime::Rooted<wasmtime::StructRef>, store: &mut
 		t if t == Kind::Key as u8 => Node::Key(Box::new(node(&data)), crate::operators::code_to_op(high_byte), Box::new(node(&child))),
 		t if t == Kind::Block as u8 => list_in(data, child, Bracket::Curly, store, memory, path),
 		t if t == Kind::List as u8 => {
-			let bracket = match high_byte {
-				0 => Bracket::Curly,
-				1 => Bracket::Square,
-				2 => Bracket::Round,
-				3 => Bracket::Less,
-				_ => Bracket::None,
-			};
-			list_in(data, child, bracket, store, memory, path)
+			list_in(data, child, crate::wasm_emitter::bracket_of_info(high_byte as i64), store, memory, path)
 		}
 		t if t == Kind::Data as u8 => {
 			let type_name = text_of(store, &data, memory);

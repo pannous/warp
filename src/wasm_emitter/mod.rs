@@ -1848,6 +1848,17 @@ pub fn bracket_info(bracket: &Bracket) -> i64 {
 	}
 }
 
+/// The bracket of a list's kind high bits, bracket_info read back (Other as None)
+pub fn bracket_of_info(info: i64) -> Bracket {
+	match info {
+		0 => Bracket::Curly,
+		1 => Bracket::Square,
+		2 => Bracket::Round,
+		3 => Bracket::Less,
+		_ => Bracket::None,
+	}
+}
+
 /// Where the last compiled module is kept for inspection: one fixed path under the home directory, never the current
 /// directory, which would leave build debris beside the sources (card cwd-artifacts); None without a home (the browser)
 pub fn debug_module_path() -> Option<std::path::PathBuf> {
