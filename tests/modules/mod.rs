@@ -49,3 +49,4 @@ mod test_std_names_offline; // card playground-module
 mod test_std_module_docs; // card std-module-docs
 mod test_json_parse_form; // card g_ogQg
 mod test_json5; // card json5-parse
+mod test_module_function_dir; // card use-math

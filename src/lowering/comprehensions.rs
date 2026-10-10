@@ -61,7 +61,12 @@ impl Lists {
 					}
 				}
 			}
-			Node::Key(target, Op::Assign | Op::Define, _) => variables.extend(bound_names(target)),
+			Node::Key(target, Op::Assign | Op::Define, value) => {
+				variables.extend(bound_names(target));
+				if let (Node::Symbol(list), Some(class_fields)) = (target.drop_meta(), instances_class(value).and_then(|class| classes.get(class))) {
+					fields.insert(list.clone(), class_fields.clone());
+				}
+			}
 			Node::List(words, _, _) if words.first().is_some_and(|word| word.is_symbol(FOR_WORD)) => variables.extend(words.get(1).map(Node::name)),
 			_ => {}
 		});
@@ -73,6 +78,14 @@ impl Lists {
 		let Some(fields) = self.fields.get(&subject.drop_meta().name()) else { return condition };
 		fields_of_it(condition, fields, &self.variables)
 	}
+}
+
+/// `[P("Al", 30), P("Bo", 10)]`: the class whose constructor makes every element (a class is checked by the caller)
+fn instances_class(value: &Node) -> Option<&str> {
+	let Node::List(elements, Bracket::Square, _) = value.drop_meta() else { return None };
+	let mut classes = elements.iter().map(|element| crate::tuples::call_parts(element).map(|(class, _)| class));
+	let first = classes.next()??;
+	classes.all(|class| class == Some(first)).then_some(first)
 }
 
 /// The names a definition or assignment binds: `x`, `x: int`, the parameters of `f(a, b: int)`
