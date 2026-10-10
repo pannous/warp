@@ -2083,6 +2083,7 @@ PASSED:
   ✓ numbers::test_float_exact_context::test_explicit_cast_truncates_a_float
   ✓ numbers::test_float_exact_context::test_ffi_float_result_in_exact_context_is_refused_loudly
   ✓ numbers::test_float_exact_context::test_float_read_in_exact_context_is_refused_loudly
+  ✓ numbers::test_float_exact_context::test_real_holds_roots_and_exact_unions_refuse_floats
   ✓ numbers::test_float_parameters::test_float_local_inside_float_function
   ✓ numbers::test_float_parameters::test_float_parameter_keeps_all_digits
   ✓ numbers::test_float_parameters::test_float_parameter_keeps_fraction
@@ -2130,6 +2131,7 @@ PASSED:
   ✓ numbers::test_law::test_law_violation_reported_by_verify
   ✓ numbers::test_libm_functions::test_cube_root_of_a_runtime_value
   ✓ numbers::test_libm_functions::trigonometry_and_logarithms_from_libm
+  ✓ numbers::test_literal_type_words::every_number_type_word_types_a_literal
   ✓ numbers::test_log_base::log_takes_a_base
   ✓ numbers::test_log_glyphs::the_lower_corner_after_a_number_is_its_log
   ✓ numbers::test_log_glyphs::the_lower_corner_before_a_number_is_its_log_to_that_base
@@ -2160,6 +2162,7 @@ PASSED:
   ✓ numbers::test_math::test_units
   ✓ numbers::test_math::test_variable_minus
   ✓ numbers::test_math::test_while_loop
+  ✓ numbers::test_method_on_operator_call::a_method_on_an_operator_words_call_applies_to_its_result
   ✓ numbers::test_mixed_number_arithmetic::an_exact_real_stays_exact_with_a_ratio
   ✓ numbers::test_mixed_number_arithmetic::complex_mixes_with_any_number
   ✓ numbers::test_mixed_number_arithmetic::infinity_and_nan_follow_ieee
@@ -3938,6 +3941,7 @@ PASSED:
   ✓ web::test_page_tests::a_missing_button_fails_the_test
   ✓ web::test_page_tests::a_plain_run_skips_page_tests
   ✓ web::test_page_tests::passing_page_tests_are_counted
+  ✓ web::test_playground_paint::the_default_canvas_fills_the_output_pane
   ✓ web::test_playground_paint::the_playground_paints_a_canvas_of_its_size
   ✓ web::test_playground_paint::the_playground_paints_the_default_canvas
   ✓ web::test_primer::every_primer_compile_snippet_compiles
@@ -4464,4 +4468,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-10 ignored, 4459 passed, 0 failed, 4459 total tested
+10 ignored, 4463 passed, 0 failed, 4463 total tested
