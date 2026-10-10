@@ -6,7 +6,7 @@
 //! Only a variable of the program or a list literal is sliced, so `count from 1 to 10` and a phrase call
 //! `move x from a to b` keep their meaning.
 
-use super::nodes::{key, symbol};
+use super::nodes::{call, key, symbol};
 use crate::diagnostic::Diagnostic;
 use crate::extensions::numbers::Number;
 use crate::node::{Bracket, Node, Separator};
@@ -115,7 +115,7 @@ fn word_slice(words: &[Node], program: &Node) -> Option<Node> {
 		Bound::Position(position) => position,
 		_ => Node::Empty,
 	};
-	Some(Node::List(vec![symbol(SLICE), receiver.clone(), start, end], Bracket::Round, Separator::None))
+	Some(call(SLICE, vec![receiver.clone(), start, end]))
 }
 
 /// A variable the program names or a list literal; a word of the language (`count from 1 to 10`) is no list

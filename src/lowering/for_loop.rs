@@ -199,7 +199,7 @@ fn loop_names(variable: &Node) -> Option<Vec<Node>> {
 /// each name is bound to its part of the element; the elements of a map are its `key:value` entries
 fn destructuring_loop(names: &[Node], iterable: Node, body: Vec<Node>) -> Node {
 	let element = symbol(&names.iter().map(Node::name).collect::<Vec<_>>().join("·"));
-	let entries = Node::List(vec![symbol(crate::library_words::MAP_ENTRIES), iterable], Bracket::Round, Separator::None);
+	let entries = call(crate::library_words::MAP_ENTRIES, vec![iterable]);
 	let parts = names.iter().enumerate().map(|(position, name)| key(name.clone(), Op::Assign, key(element.clone(), Op::Hash, int(position as i64 + 1))));
 	walking_loop(&element, entries, parts.chain(body).collect())
 }
