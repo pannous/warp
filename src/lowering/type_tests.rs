@@ -25,6 +25,10 @@ pub const ERROR_TYPE: &str = "error";
 pub const EMPTY_TYPE: &str = "empty";
 const ARTICLES: [&str; 2] = ["a", "an"];
 const NUMBER_WORD: &str = "number";
+const FLOAT_WORD: &str = "float";
+const TEXT_WORD: &str = "text";
+/// `String(x)`, `x as String`: the class spelling of text, a cast word only, so `String` stays free as a type value
+const TEXT_CLASS_WORD: &str = "String";
 pub(crate) const LIST_WORD: &str = "list";
 const MAP_WORD: &str = crate::analyzer::MAP_TYPE;
 /// The collection types: `x is list`, `x is map`, and of their element type: `x is list of int`, `x is map of text`
@@ -58,9 +62,9 @@ const BUILTIN_TYPES: [BuiltinType; 15] = [
 	builtin("int", &["integer", "long", "i64", "i32"], &[], Some(K::Int), &[K::Int as i64]),
 	builtin("rational", &["exact"], &["int"], Some(K::Int), &[K::Int as i64, K::Float as i64]),
 	builtin("real", &[], &["rational"], Some(K::Empty), &[K::Int as i64, K::Float as i64]),
-	builtin("float", &["double", "f64", "f32", "float32", "float64", "fast"], &[], Some(K::Float), &[K::Float as i64]),
+	builtin(FLOAT_WORD, &["double", "f64", "f32", "float32", "float64", "fast"], &[], Some(K::Float), &[K::Float as i64]),
 	builtin("number", &[], &["real", "float"], Some(K::Float), &[K::Int as i64, K::Float as i64, K::Uncertain as i64]),
-	builtin("text", &["str", "string"], &["codepoint"], Some(K::Text), &[K::Text as i64, K::Codepoint as i64]),
+	builtin(TEXT_WORD, &["str", "string"], &["codepoint"], Some(K::Text), &[K::Text as i64, K::Codepoint as i64]),
 	builtin("codepoint", &["char", "character"], &[], Some(K::Codepoint), &[K::Codepoint as i64]),
 	builtin(crate::analyzer::BOOL_TYPE, &["boolean"], &[], Some(K::Int), &[crate::type_kinds::BOOL_MASK_BIT]),
 	builtin("function", &["closure"], &[], Some(K::Function), &[]),
@@ -90,6 +94,16 @@ pub fn builtin_type_words() -> impl Iterator<Item = &'static str> {
 pub fn is_number_type_word(word: &str) -> bool {
 	let name = canonical_spec_word(word);
 	is_type_word(word) && name != NUMBER_WORD && type_matches(name, NUMBER_WORD)
+}
+
+/// `x as str`, `String(x)`: a word whose cast or call gives a value's text
+pub fn is_text_type_word(word: &str) -> bool {
+	word == TEXT_CLASS_WORD || canonical_spec_word(word) == TEXT_WORD
+}
+
+/// `x as double`, `x as f32`: a word naming the IEEE float type
+pub fn is_float_type_word(word: &str) -> bool {
+	canonical_spec_word(word) == FLOAT_WORD
 }
 
 /// Words that name the same type
@@ -232,12 +246,14 @@ fn symbol_words(nodes: &[Node]) -> Option<Vec<&str>> {
 /// Meta key marking a type word compared with `==` (not `is`): only `is` tests types (user decision #30)
 const EQUALITY_OPERAND: &str = "equality operand";
 
-/// The right side of `x == word` as the parser marks it when the word names a type
-pub fn equality_operand(word: Node) -> Node {
+/// The right side of `x == word` as the parser marks it when the word names a type, by its canonical name as type(x)
+/// gives it (`type(s) == string` is `type(s) == text`). The words of ø (empty, nil, none …) parse as the value ø, the one
+/// value of the empty type: compared with a type value (`type(x) == empty`) ø names that type
+pub fn equality_operand(subject: &Node, word: Node) -> Node {
+	let mark = |name: &str| Node::Meta { node: Box::new(Node::Symbol(name.to_string())), data: Box::new(Node::key(EQUALITY_OPERAND, Node::True)) };
 	match word.drop_meta() {
-		Node::Symbol(name) if type_spec(&[name.as_str()], &Names::default()).is_some() => {
-			Node::Meta { node: Box::new(word), data: Box::new(Node::key(EQUALITY_OPERAND, Node::True)) }
-		}
+		Node::Symbol(name) if type_spec(&[name.as_str()], &Names::default()).is_some() => mark(canonical_spec_word(name)),
+		Node::Empty if typed_argument(subject).is_some() => mark(EMPTY_TYPE),
 		_ => word,
 	}
 }

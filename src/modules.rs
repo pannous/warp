@@ -17,6 +17,11 @@ pub const MODULE_EXTENSIONS: [&str; 2] = ["wasp", "warp"];
 pub(crate) const USE_KEYWORDS: [&str; 3] = ["use", "require", "import"];
 /// `include x`: the whole file, spliced in place
 const INCLUDE_KEYWORD: &str = "include";
+
+/// `use x`, `require x`, `import x`, `include x`: a statement that brings in a module, the one list every pass asks
+pub(crate) fn is_import_keyword(word: &str) -> bool {
+	USE_KEYWORDS.contains(&word) || word == INCLUDE_KEYWORD
+}
 const USE_KEYWORD: &str = "use";
 /// `from list import zip, unique`: only those words of the module
 const IMPORT_KEYWORD: &str = "import";
@@ -41,10 +46,11 @@ const SCOPE_WORDS: [(&str, Scope); 3] = [("folder", Scope::Folder), ("package", 
 const UNSCOPED_DIRECTORIES: [&str; 3] = [PACKAGES_DIRECTORY, "target", "node_modules"];
 const PROJECT_MARKER: &str = ".git";
 /// `stored x = v` too: a used module's persisted signal is the program's (card web-stores)
-const DECLARATION_KEYWORDS: [&str; 6] = ["use", "import", "let", "var", "global", crate::stored_values::STORED_WORD];
+const GLOBAL_KEYWORD: &str = "global";
+const DECLARATION_KEYWORDS: [&str; 4] = ["let", "var", GLOBAL_KEYWORD, crate::stored_values::STORED_WORD];
 
 fn is_declaration_keyword(keyword: &str) -> bool {
-	DECLARATION_KEYWORDS.contains(&keyword) || crate::analyzer::CONSTANT_KEYWORDS.contains(&keyword)
+	DECLARATION_KEYWORDS.contains(&keyword) || is_import_keyword(keyword) || crate::analyzer::CONSTANT_KEYWORDS.contains(&keyword)
 }
 
 /// Replace every `use <module>` of the program by the definitions of that module, each module once.
@@ -234,22 +240,39 @@ fn with_library_words(names: HashSet<String>) -> HashSet<String> {
 	names.into_iter().chain(spelled).chain(qualified).collect()
 }
 
-/// The variables a program assigns at its top: `words = […]`
+/// The variables a program assigns at its top: `words = […]`, also declared global: `global hue = 0`, `global hue`
 fn program_variables(program: &Node) -> HashSet<String> {
 	statements(program.clone()).iter().filter_map(|statement| match statement.drop_meta() {
-		Node::Key(variable, Op::Assign, _) => match variable.drop_meta() {
-			Node::Symbol(name) => Some(name.clone()),
-			_ => None,
-		},
+		Node::Key(variable, Op::Assign, _) => variable.drop_meta().symbol_name().map(String::from),
+		Node::Key(keyword, Op::Colon, declared) if keyword.is_symbol(GLOBAL_KEYWORD) => leftmost_symbol(declared),
 		_ => None,
 	}).collect()
 }
 
 /// Module words a program variable shadows, renamed in the module's definitions (`words` → `lib·words`): the module's
-/// own code calls its own words (lexical scope), the program's `words` is its variable
+/// own code calls its own words (lexical scope), the program's `words` is its variable. Likewise a local of a module
+/// function named like a program variable: a program's `global hue` is not draw's `hue` in hsv (card program-global)
 fn shadowed_apart(definitions: Vec<Node>, variables: &HashSet<String>) -> Vec<Node> {
-	let shadowed: Vec<String> = definitions.iter().filter_map(declared_name).filter(|name| variables.contains(name)).collect();
-	renamed_apart(definitions, &shadowed)
+	let declared: Vec<String> = definitions.iter().filter_map(declared_name).collect();
+	let shadowed: Vec<String> = declared.iter().filter(|name| variables.contains(*name)).cloned().collect();
+	renamed_apart(definitions, &shadowed).into_iter().map(|definition| {
+		let locals: Vec<String> = assigned_names(&definition).into_iter().filter(|name| variables.contains(name) && !declared.contains(name)).collect();
+		renamed_apart(vec![definition], &locals).remove(0)
+	}).collect()
+}
+
+/// The names a function definition's body assigns: `hue = …` in `def hsv(h, s, v) {…}`; none for other declarations
+fn assigned_names(definition: &Node) -> HashSet<String> {
+	let mut names = HashSet::new();
+	if matches!(definition.drop_meta(), Node::Key(_, Op::Assign, _)) || matches!(definition.drop_meta(), Node::Key(keyword, Op::Colon, _) if keyword.is_symbol(GLOBAL_KEYWORD)) {
+		return names;
+	}
+	definition.visit(&mut |node| if let Node::Key(target, op, _) = node {
+		if *op == Op::Assign || op.is_compound_assign() {
+			names.extend(target.drop_meta().symbol_name().map(String::from));
+		}
+	});
+	names
 }
 
 /// `names` renamed `lib·name` in the definitions: the definitions still call them, the program does not see them
@@ -558,8 +581,12 @@ impl<'a> Loader<'a> {
 			return Ok(vec![as_use(statement)]);
 		}
 		let Some(path) = self.find(name) else {
-			if let Some(source) = std_module(name).filter(|_| import == Import::Use) {
-				return self.use_std_module(name, source);
+			if let Some(source) = std_module(name) {
+				return match import {
+					Import::Use => self.use_std_module(name, source),
+					// `include math`: the whole module spliced in place, as an included file is
+					Import::Include => crate::normalize::without_hints(|| self.load_source(import, std_path(std_module_name(name)), source)),
+				};
 			}
 			if let Some(module) = self.find_with(name, &crate::wasm_modules::MODULE_EXTENSIONS) {
 				return Ok(self.use_wasm_module(&module, statement, import));
@@ -1335,15 +1362,32 @@ fn used_modules(node: &Node) -> Option<Vec<(Used, Node)>> {
 /// `from list import zip, unique`: the module, the statement that uses it, and the only words it brings (card std-import)
 fn imported_words(node: &Node) -> Option<(Used, Node, Vec<String>)> {
 	let words = statement_words(node)?;
-	let [from, module, import, names @ ..] = words.as_slice() else { return None };
-	let is_word = |node: &Node, word: &str| matches!(node.drop_meta(), Node::Symbol(name) if name == word);
-	if !is_word(from, MINIMUM_KEYWORD) || !is_word(import, IMPORT_KEYWORD) || names.is_empty() {
-		return None;
+	match words.as_slice() {
+		[from, module, import, names @ ..] if is_word(from, MINIMUM_KEYWORD) && is_word(import, IMPORT_KEYWORD) => words_from(module, names),
+		[import, names @ .., from, module] if is_word(import, IMPORT_KEYWORD) && is_word(from, MINIMUM_KEYWORD) => std_words_from(module, names),
+		_ => None,
 	}
+}
+
+/// `import square from math`, `import (zip, unique) from list`: the from-import of a standard module defining every
+/// named word; any other `import f from lib` stays the foreign import (analyzer/imports.rs: `import sqrt from math` is libm's)
+fn std_words_from(module: &Node, names: &[&Node]) -> Option<(Used, Node, Vec<String>)> {
+	let Node::Symbol(module_name) = module.drop_meta() else { return None };
+	let defined = std_module_definitions(std_module_name(module_name))?;
+	let imported = words_from(module, names)?;
+	imported.2.iter().all(|name| defined.contains(name)).then_some(imported)
+}
+
+/// The module `use`d and the words named, alone or in one group: `zip, unique`, `(zip, unique)`
+fn words_from(module: &Node, names: &[&Node]) -> Option<(Used, Node, Vec<String>)> {
+	let names = match names {
+		[group] if matches!(group.drop_meta(), Node::List(_, Bracket::Round, _)) => group.drop_meta().iter().collect(),
+		_ => names.iter().map(|name| (*name).clone()).collect::<Vec<Node>>(),
+	};
 	let names = names.iter().map(|name| match name.drop_meta() {
 		Node::Symbol(name) => Some(name.clone()),
 		_ => None,
-	}).collect::<Option<Vec<String>>>()?;
+	}).collect::<Option<Vec<String>>>().filter(|names| !names.is_empty())?;
 	let statement = Node::List(vec![Node::Symbol(USE_KEYWORD.into()), (*module).clone()], Bracket::None, Separator::Space);
 	used_module(&statement).map(|used| (used, statement, names))
 }
@@ -1458,7 +1502,7 @@ fn leftmost_symbol(node: &Node) -> Option<String> {
 
 /// Words that bind the names after them: `fun f(x)`, `for i in`, `import f from`, `global x`
 fn binds_names(keyword: &str) -> bool {
-	is_function_keyword(keyword) || is_declaration_keyword(keyword) || matches!(keyword, "for" | "require" | "include")
+	is_function_keyword(keyword) || is_declaration_keyword(keyword) || keyword == crate::lowering::words::FOR_WORD
 }
 
 /// The signature part of a definition: `f(x)` of `f(x): body` and of `fun f(x) {body}`

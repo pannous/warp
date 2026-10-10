@@ -20,7 +20,10 @@ in case the user did indeed intend something different". Builds the "Later: chan
 - Errors lose their Diagnostic when they become `Node::Error`, so `Diagnostic::into_error` keeps the ones with fixes
   (`diagnostic::take_error_diagnostics`).
 - Hints (`normalize::hint`) are rewrites: `CapturedHint::fix()`; `normalize::advise` is a hint whose preferred form
-  is said elsewhere (`global x` for a block's assignment) and offers no fix.
+  is no plain rewrite of the text: said elsewhere (`global x` for a block's assignment) or meaning something else
+  (`(a<b) |> f` for `a<b then f`). It and `diagnostic::advise_once` take the "I meant" fix as an argument: the edit the
+  advice stands for (`global x=1` at main's assignment, `normalize::rewrite` for a replacement of the text itself),
+  `None` when the advice names no text to write (`on … before the loop`).
 - Web report (src/web.rs `evaluate`): warnings, `errors` (only when the program failed) and hints carry `fixes`:
   `{label: "I meant: …", meaning, written, replacement, start, end, edits: [{start, end, replacement}]}` with UTF-16
   offsets of the editor text; `start: null` (and no edits) when a text was not found (the page shows a disabled
@@ -31,6 +34,24 @@ in case the user did indeed intend something different". Builds the "Later: chan
   "got it" (this expression: the warning's `expression_key` `topic@expression` joins the page's acknowledged list),
   "got it: all <topic>" (the topic), "// got it" (appends the comment to the warning's line). Notes without a
   warning use the report's `got_it` [{topic, expression}].
+
+## Hints, notes and advice: which call (card let-reassign, 2026-10-10)
+All print `hint … prefer <preferred> over <written>` (or `note …` when both are equal) with the reason below, at the
+position `normalize::set_position_of(node)` set last (call it first, else the position is stale or empty). Whether
+the playground gets an "I meant: <preferred>" button is the `rewrites` flag of `normalize::show_hint`:
+
+| call | fix button | shown | use for |
+|---|---|---|---|
+| `normalize::hint(written, preferred, reason)` | yes | every time (HintMode::Once: once per text) | a style rewrite (`str(x)` → `x as text`) |
+| `normalize::advise(written, preferred, reason)` | **no** | as hint | advice said elsewhere, not a replacement of `written` (`global n` for a block's `n = …`) |
+| `diagnostic::educate_once(topic, written, preferred, reason)` | yes | until "got it" (remembered as `ack:<topic>`) | teaching a warp form (`let mut x` → `var x`) |
+| `diagnostic::advise_once(topic, …)` | no | until "got it" | teaching advice that replaces nothing |
+| `diagnostic::note_alias(written, warp_word)` | yes | until "got it" (topic `alias-<word>`) | another language's word for a warp word (`__add__` → `plus`); educate_once with the reason "warp says …" |
+
+`hint` and `advise` also take a "got it" (topic `hint:<reason>`). All are silent with hints off (WARP_HINTS=0); the
+`diagnostic::*` ones also when quiet or silenced by a comment on the line. A hint never stops the program; for
+something wrong use a `Diagnostic` (error) or a warning (`diagnostic::ask`). Tests capture hints with
+`normalize::capture_hints(|| …)` (tests/node/test_normalization.rs `expect_hint`).
 
 ## Inventory: every warning, its default reading and its fixes
 | warning / error (topic) | where | default (taken) | fixes offered |

@@ -186,12 +186,13 @@ pub(crate) fn it_function(node: &Node) -> Option<Node> {
 	(!is_bare && mentions_outside_blocks(node, IMPLICIT_PARAMETER)).then(|| Node::Key(it(), Op::FatArrow, Box::new(node.clone())))
 }
 
-/// `a > b`, also as the one statement of a block
+/// `a > b`, also as the one statement of a block, and any other bool: `a < b or a == b and c`, `if … then a < b else …`
+/// (card sort-comparator)
 fn is_comparison(body: &Node) -> bool {
 	match body.drop_meta() {
-		Node::Key(_, op, _) => COMPARISONS.contains(op),
+		Node::Key(_, op, _) if COMPARISONS.contains(op) => true,
 		Node::List(items, _, _) if items.len() == 1 => is_comparison(&items[0]),
-		_ => false,
+		_ => crate::analyzer::is_boolean(body, &crate::analyzer::Scope::new()),
 	}
 }
 

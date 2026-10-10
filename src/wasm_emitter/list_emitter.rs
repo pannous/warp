@@ -10,11 +10,12 @@ use Instruction as I;
 use super::{WasmGcEmitter, ROUNDING_FUNCTIONS};
 
 /// Names the emitter resolves itself, besides user functions, imports, type words and counting functions
-const BUILTIN_CALLS: [&str; 22] = [
+const BUILTIN_CALLS: [&str; 23] = [
 	"return", "fetch", "puts", "puti", "putl", "putf", "fd_write", "range", "type", "use",
 	crate::min_max::EMPTY_EXTREMUM_CALL, crate::switch::NO_CASE_CALL, crate::analyzer::ZERO_FILL_CALL, crate::analyzer::INSERT_AT_CALL,
 	crate::analyzer::INSERT_EITHER_CALL, crate::library_words::LIST_SUM, crate::traits::INSTANCE_OF, crate::analyzer::REMOVED_VALUE_CALL,
 	crate::analyzer::LIST_DROP_LAST, crate::library_words::VALUES_SIMILAR, super::list_ops::LIST_EXTEND, crate::library_words::VALUES_ROUGH,
+	crate::time::INSTANT_AT,
 ];
 
 const PRINT: &str = "print";
@@ -246,7 +247,7 @@ impl WasmGcEmitter {
 		}
 
 		// a lone import or use statement (the whole program) is worth ø
-		if matches!(items.first().map(Node::drop_meta), Some(Node::Symbol(word)) if word == "import" || word == "use") && items.len() >= 2 {
+		if matches!(items.first().map(Node::drop_meta), Some(Node::Symbol(word)) if crate::modules::is_import_keyword(word)) && items.len() >= 2 {
 			self.emit_call(func, "new_empty");
 			return;
 		}
@@ -333,6 +334,13 @@ impl WasmGcEmitter {
 				self.emit_numeric_value(func, count);
 				self.emit_node_instructions(func, zero);
 				self.emit_call(func, crate::analyzer::ZERO_FILL_CALL);
+				return;
+			}
+		}
+		if let [Node::Symbol(call), milliseconds] = items {
+			if call == crate::time::INSTANT_AT {
+				self.emit_numeric_value(func, milliseconds);
+				self.emit_call(func, crate::time::INSTANT_AT);
 				return;
 			}
 		}
@@ -493,19 +501,36 @@ impl WasmGcEmitter {
 			self.emit_numeric_value(func, &names_a_covered_type);
 			return true;
 		}
-		// `for char in s`, `s#1 is char`: an item of a text is typed text but is a code point at run time
+		let filter_loop = filter_loop_of(node);
+		// `for char in s` of a text s: every item is a code point
+		if filter_loop.as_ref().is_some_and(|filter| self.get_type(&filter.iterable) == Kind::Text && crate::type_tests::type_matches(CODEPOINT_TYPE, spec)) {
+			func.instruction(&I::I64Const(1));
+			return true;
+		}
+		// `s#1 is char`: an item of a text is typed text but is a code point at run time
 		let item_of_text = self.static_type_name(subject) == TEXT_TYPE && crate::type_tests::canonical_spec_word(spec) == CODEPOINT_TYPE;
 		let unknown = spec == crate::type_tests::ERROR_TYPE || item_of_text || self.has_unknown_static_type(subject);
 		let declared_type = self.ctx.type_registry.get_by_name(spec).is_some();
 		let map_spec = crate::type_tests::canonical_spec_word(spec) == crate::analyzer::MAP_TYPE;
 		let known_map = crate::analyzer::held_map_type(subject, &self.scope).is_some();
-		if (unknown || self.may_be_map(subject)) && map_spec && !declared_type && !known_map {
+		let map_test = (unknown || self.may_be_map(subject)) && map_spec && !declared_type && !known_map;
+		let kind_mask = crate::type_tests::runtime_kind_mask(spec).filter(|_| unknown && !declared_type);
+		// a loop `for T in xs` filters only when its test is left to run time
+		if map_test || kind_mask.is_some() || declared_type {
+			let announced = filter_loop.map_or(Ok(0), |filter| crate::diagnostic::ask(&filter.question));
+			if let Err(error) = announced {
+				let message = match error { Node::Error(reason) => reason.drop_meta().name(), other => other.serialize() };
+				self.emit_type_error(func, message);
+				return true;
+			}
+		}
+		if map_test {
 			self.emit_node_instructions(func, subject);
 			self.emit_is_map(func);
 			func.instruction(&I::I64ExtendI32U);
 			return true;
 		}
-		match crate::type_tests::runtime_kind_mask(spec).filter(|_| unknown && !declared_type) {
+		match kind_mask {
 			Some(mask) => {
 				self.emit_node_instructions(func, subject);
 				Self::emit_list(func, &[I::RefAsNonNull, I::I64Const(mask)]);
@@ -998,7 +1023,7 @@ impl WasmGcEmitter {
 	pub(super) fn is_definition(&self, item: &Node) -> bool {
 		self.defined_function_name(item).is_some() || match item.drop_meta() {
 			Node::List(list_items, _, _) if list_items.len() >= 2 => {
-				matches!(list_items[0].drop_meta(), Node::Symbol(s) if is_function_keyword(s) || s == "use" || s == "import")
+				matches!(list_items[0].drop_meta(), Node::Symbol(s) if is_function_keyword(s) || crate::modules::is_import_keyword(s))
 			}
 			_ => false,
 		}
@@ -1027,3 +1052,8 @@ impl WasmGcEmitter {
 	}
 }
 
+/// The loop `for T in xs` a type test filters, carried from the parser (warp_parser FilterLoop)
+fn filter_loop_of(test: &Node) -> Option<crate::warp_parser::FilterLoop> {
+	let Node::Meta { data, node } = test else { return None };
+	data.data_value().downcast_ref::<crate::warp_parser::FilterLoop>().cloned().or_else(|| filter_loop_of(node))
+}

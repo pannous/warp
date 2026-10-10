@@ -36,7 +36,8 @@ when a message or comment cites a number (P71, D5) and you need its wording; nev
   Never edit /Users/me/dev/angles/warp itself (the user's checkout).
 - Word choices need no question (user 2026-10-06, the alias mechanism): when alternatives are only different words
   for the same thing, make the recommended word canonical and the others aliases that work with a got-it note and an
-  "I meant: <word>" fix (normalize::advise, notes/fixits.md). Ask the Interviewer only about differences in meaning.
+  "I meant: <word>" fix (diagnostic::note_alias; which hint call to use: notes/fixits.md "Hints, notes and
+  advice"). Ask the Interviewer only about differences in meaning.
 - Test upgrades need no question (AGENTS.md "Standing permission"): an error/"not yet"/ignored test that now works is
   upgraded to the working value in its own commit; a change of meaning still goes to the Interviewer.
 - Tests: test first; only targeted runs, only through the queue: `tests/queue.sh -- <filter>`. Never the whole test
@@ -54,7 +55,8 @@ when a message or comment cites a number (P71, D5) and you need its wording; nev
   write it, in the same branch. tests/programs/test_all_samples.rs and the playground menu pick it up; a sample that
   cannot run in the browser goes in web/playground/excluded_samples.txt. Name the sample in the Integrator message.
 - Done = push the branch, SendMessage the Integrator "branch, tip, new tests, filters", fix what it reports, clean up,
-  report one line to the Supervisor.
+  report one line to the Supervisor. Write "express" in that message when the user or the Supervisor asked for your
+  result to land fast: the Integrator then runs your branch alone and next (notes/roles.md).
 - Clean up after the merge: you are allowed and expected to remove your own worktree and branch, nobody else will.
   `git -C /Users/me/dev/angles/warp worktree remove --force <worktree> && git -C /Users/me/dev/angles/warp branch -D <branch>`.
   The git hook lets both through once nothing is lost: a worktree whose only uncommitted change is the Cargo.toml /
@@ -82,6 +84,8 @@ when a message or comment cites a number (P71, D5) and you need its wording; nev
   wait for the Integrator's batch; `todo done --try` with /Users/me/dev/bin/warp still follows once it is on main.
 - Picking a card: `todo take <card> <your session name>` (user, 2026-10-06): assigns the user on GitHub, names you in
   the board field Agent, moves the card to Now. Prefer fresh, easy cards in column Next (user, 2026-10-06).
+  A long title is shortened on take, with the old one kept at the top of the description (user, 2026-10-10): pass
+  `--title "short title naming the problem"` yourself; otherwise todo picks one.
   Card keys (user, 2026-10-09): every card has a meaningful key, never a GitHub id like g_oncU. Cron
   (urgent-card-watch) runs `todo keys` every 2 minutes, which gives each new card a key from its title. Whoever takes
   a card renames a poor key at once (`todo key <card> <short-meaningful-name>`) and uses the key in branch names and

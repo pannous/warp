@@ -417,6 +417,8 @@ const AND_KEYWORD: &str = "and";
 const CONTINUING_WORDS: [&str; 7] = ["and", "or", "xor", "then", "else", "is", "in"];
 /// A prefix operator word after `and` starts its operand, not a statement: `a and not c` (card let-if)
 const OPERAND_PREFIX_WORDS: [&str; 1] = ["not"];
+/// Words between two operands, as an operator: `and n mod 100 <= 13` continues the condition (card if-then-chain)
+const INFIX_WORDS: [&str; 6] = ["mod", "modulo", "rem", "div", "contains", "as"];
 pub const ASSERT_MARKER: &str = "assert·else";
 /// The words that start the fallback of `try X else Y`: `else`, classical `catch`, Python's `except` (P60)
 const FALLBACK_WORDS: [&str; 3] = [ELSE_KEYWORD, "catch", "except"];
@@ -447,8 +449,6 @@ fn literal_items_of_type(iterable: &Node, type_name: &str) -> bool {
 		Node::List(items, Bracket::Square, _) => items,
 		// `for char in "abc"`: every item of a text is a char
 		Node::Text(_) => return crate::type_tests::canonical_spec_word(type_name) == CODEPOINT_TYPE,
-		// `for character in chars(s)`, `chars(s)[1:]`: every item is a codepoint
-		_ if yields_codepoints(iterable) => return crate::type_tests::type_matches(CODEPOINT_TYPE, type_name),
 		_ => return false,
 	};
 	let spec = crate::analyzer::type_word_kind(type_name).map(|_| type_name).unwrap_or(type_name);
@@ -456,16 +456,6 @@ fn literal_items_of_type(iterable: &Node, type_name: &str) -> bool {
 		Node::Number(_) | Node::Text(_) | Node::Char(_) => crate::type_tests::type_matches(&item.drop_meta().kind().to_string(), spec),
 		_ => false,
 	})
-}
-
-/// `chars(s)`, `codepoints(s)` or a slice of one: an iterable whose items are codepoints
-fn yields_codepoints(iterable: &Node) -> bool {
-	let Node::List(items, _, _) = iterable.drop_meta() else { return false };
-	match items.as_slice() {
-		[head, sliced, ..] if matches!(head.drop_meta(), Node::Symbol(word) if word == SLICE_WORD) => yields_codepoints(sliced),
-		[head, _] => matches!(head.drop_meta(), Node::Symbol(word) if word != BYTES_WORD && UNIT_LOOP_WORDS.contains(&word.as_str())),
-		_ => false,
-	}
 }
 
 /// `keys(m)`, `m.keys`, `m.keys()`: an iterable whose items are a map's keys
@@ -480,6 +470,13 @@ fn iterates_keys(iterable: &Node) -> bool {
 
 /// The got-it topic of a filtering loop (`for friend in xs`, `for (it>2) in xs`)
 pub(crate) const FILTER_LOOP_TOPIC: &str = "for-filter";
+
+/// The type test of a loop `for T in xs` carries its loop: the iterable and the got-it question announcing the filter
+#[derive(Clone, Debug, PartialEq)]
+pub(crate) struct FilterLoop {
+	pub question: crate::diagnostic::Ask,
+	pub iterable: Node,
+}
 /// Built-in adjectives of a loop filter `(even number)`, when no function of that name is defined
 const EVEN_WORD: &str = "even";
 const ODD_WORD: &str = "odd";
@@ -498,9 +495,6 @@ const TIMES_WORD: &str = "times";
 pub const TEXT_TIMES: &str = "times·text";
 /// The acknowledge-once note that a spaced `//` after code is a comment, not Python's floor division
 const SLASH_COMMENT_TOPIC: &str = "slash-comment";
-/// Directive words after `#` that keep the line a comment (`#use lib`, `#include x`, `#import f from "m"`);
-/// besides them only `# ` with a space, `#!` (shebang) and `##` (doc comment) start a comment, any other `#x` counts
-const HASH_DIRECTIVES: [&str; 3] = ["use", "include", "import"];
 const ELVIS_WORD: &str = "elvis";
 /// `x is int` tests the type; `x == int` stays equality (user decision #30)
 const IS_WORD: &str = "is";
@@ -764,6 +758,8 @@ pub struct WarpParser {
 	key_variables: Vec<String>,
 	/// Names assigned a text or typed text (`l = "en"`, `k:text`): `m[l]` looks a key up too (card text-key)
 	text_variables: std::collections::HashSet<String>,
+	/// Names assigned so far (`data = […]`): such a name is read as the variable, not as a prefix word
+	variables: std::collections::HashSet<String>,
 	/// The binding power of a glued pair's value (`for:email`): that value is one atom, no call of what follows
 	glued_pair_bp: Option<u8>,
 	/// Where the innermost bracketed group opened (line, column): an unclosed one names it
@@ -1090,6 +1086,7 @@ impl WarpParser {
 			in_for_header: false,
 			key_variables: vec![],
 			text_variables: Default::default(),
+			variables: Default::default(),
 			glued_pair_bp: None,
 			group_start: (0, 0),
 			stops_at_else: false,

@@ -1,0 +1,20 @@
+use draw
+def circle2(x, y, radius, color) {
+	cx = x as float
+	cy = y as float
+	r2 = (radius as float) * radius
+	for row in cell(cy - radius)..cell(cy + radius) + 1 {
+		dy = row + 0.5 - cy
+		for col in cell(cx - radius)..cell(cx + radius) + 1 {
+			dx = col + 0.5 - cx
+			if dx * dx + dy * dy <= r2 { dot(col, row, color) }
+		}
+	}
+}
+canvas(1280, 800)
+t0 = clock()
+for k in 1 to 300 { circle2(100.0 + k / 3, 100.0 + k / 7, 8, 0xFF00FF00) }
+t1 = clock()
+for k in 1 to 300 { circle(100.0 + k / 3, 100.0 + k / 7, 8, 0xFF00FF00) }
+t2 = clock()
+print("float circle " + ((t1 - t0) / 300.0) + "ms, exact circle " + ((t2 - t1) / 300.0) + "ms")

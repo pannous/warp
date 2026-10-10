@@ -287,9 +287,9 @@ pub(super) fn lower_declarations_among(node: Node, names: &Names) -> Node {
 		Node::List(items, _, _) if let Some(count) = hashed_unit_count(&items) => lower(count),
 		Node::Key(empty, Op::Hash, counted) if matches!(empty.drop_meta(), Node::Empty) && let Some(count) = unit_count(&counted) => lower(count),
 		// `x : 100 int` and `x:int[100]` declare x as a zero-filled list of 100 ints
-		declaration if let Some((name, zeros)) = typed_array_declaration(&declaration) => Node::Key(Box::new(name), Op::Assign, Box::new(zeros)),
+		declaration if let Some((name, zeros)) = typed_array_declaration(&declaration, &names.values) => Node::Key(Box::new(name), Op::Assign, Box::new(zeros)),
 		// `letters = char[3]` and `upcases = 26 * char` are zero-filled typed arrays like `x : 100 int`
-		Node::Key(target, Op::Assign, value) if let Some(zeros) = typed_array_value(&value) => Node::Key(target, Op::Assign, Box::new(zeros)),
+		Node::Key(target, Op::Assign, value) if let Some(zeros) = typed_array_value(&value, &names.values) => Node::Key(target, Op::Assign, Box::new(zeros)),
 		// `x as number = 9` declares `x:number=9`
 		Node::Key(target, Op::Assign, value) if matches!(target.drop_meta(), Node::Key(name, Op::As, type_node)
 			if matches!(name.drop_meta(), Node::Symbol(_)) && is_declaration_type(type_node)) => {
@@ -718,17 +718,6 @@ pub fn filled_list(count: Node, list: &Node) -> Option<Node> {
 	Some(call(ZERO_FILL_CALL, vec![count, element.clone()]))
 }
 
-/// The zero-filled list of the array type written `int[100]` (a 1-based subscript, see `subscript`)
-pub(super) fn subscripted_array_type(type_node: &Node) -> Option<Node> {
-	match type_node.drop_meta() {
-		Node::Key(element, Op::Hash, one_based) => match (element.drop_meta(), one_based.drop_meta()) {
-			(Node::Symbol(word), Node::Number(Number::Int(one_based))) => zero_list(Node::int(one_based - 1), word),
-			_ => None,
-		},
-		_ => None,
-	}
-}
-
 /// `int[n]` parsed as the subscript `int#(n+1)`: the list of n zeros when the type word is no variable
 pub(crate) fn zero_filled_subscript(element: &Node, one_based: &Node, variables: &HashSet<String>) -> Option<Node> {
 	let Node::Symbol(word) = element.drop_meta() else { return None };
@@ -742,15 +731,17 @@ pub(crate) fn zero_filled_subscript(element: &Node, one_based: &Node, variables:
 	zero_list(count, word)
 }
 
-/// `int[100]` or `100 * int`: the zero-filled list of that many elements (the parser reads `int[n]` as one already)
-pub(crate) fn typed_array_value(value: &Node) -> Option<Node> {
+/// `int[100]` or `100 * int`: the zero-filled list of that many elements (the parser reads `int[n]` as one already),
+/// unless the subscripted word is one of the variables (`chars=["a" "b"]; x=chars[1]` indexes)
+pub(crate) fn typed_array_value(value: &Node, variables: &HashSet<String>) -> Option<Node> {
 	match value.drop_meta() {
 		Node::List(items, _, _) if matches!(items.first().map(Node::drop_meta), Some(Node::Symbol(call)) if call == ZERO_FILL_CALL) => Some(value.clone()),
 		Node::Key(count, Op::Mul, element) => match element.drop_meta() {
 			Node::Symbol(word) => zero_list(count.as_ref().clone(), word),
 			_ => None,
 		},
-		other => subscripted_array_type(other),
+		Node::Key(element, Op::Hash, one_based) => zero_filled_subscript(element, one_based, variables),
+		_ => None,
 	}
 }
 
@@ -776,10 +767,10 @@ fn declared_bracketed_list_type(type_node: &Node) -> Option<Node> {
 }
 
 /// `x:int[100]` as the variable and its zero-filled list
-pub(super) fn typed_array_declaration(node: &Node) -> Option<(Node, Node)> {
+pub(super) fn typed_array_declaration(node: &Node, variables: &HashSet<String>) -> Option<(Node, Node)> {
 	let Node::Key(name, Op::Colon, type_node) = node.drop_meta() else { return None };
 	let Node::Symbol(_) = name.drop_meta() else { return None };
-	Some((name.drop_meta().clone(), typed_array_value(type_node)?))
+	Some((name.drop_meta().clone(), typed_array_value(type_node, variables)?))
 }
 
 /// `x : 100` followed by the element type `int`: the declaration `x = [0 … 0]`

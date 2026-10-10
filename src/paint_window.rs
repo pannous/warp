@@ -5,7 +5,6 @@
 
 use std::io::{BufRead, Read, Write};
 use std::process::{Child, Command, Stdio};
-use std::sync::atomic::{AtomicU32, Ordering};
 use std::sync::{Arc, Mutex};
 use winit::application::ApplicationHandler;
 use winit::event::WindowEvent;
@@ -42,13 +41,6 @@ const TRIANGLE_CORNERS: u32 = 3;
 const INPUT_LINE: &str = "input";
 /// The arrows' codes, as a Mac's function keys: up, down, left, right
 const ARROW_CODES: [u32; 4] = [0xF700, 0xF701, 0xF702, 0xF703];
-/// The last input over the window, each an f32's bits: pointer x, y, button down, key (the shaders' $mouse, src/gpu.rs)
-static INPUT: [AtomicU32; 4] = [const { AtomicU32::new(0) }; 4];
-
-/// The last input over the paint window: pointer x, y in the painted image's pixels, a button down (1), the key held
-pub fn input() -> [f32; 4] {
-	INPUT.each_ref().map(|value| f32::from_bits(value.load(Ordering::Relaxed)))
-}
 
 /// The viewer's input lines, read until it ends
 fn follow_input(lines: impl BufRead) {
@@ -57,10 +49,9 @@ fn follow_input(lines: impl BufRead) {
 		if words.next() != Some(INPUT_LINE) {
 			continue;
 		}
-		for (value, word) in INPUT.iter().zip(words) {
-			if let Ok(number) = word.parse::<f32>() {
-				value.store(number.to_bits(), Ordering::Relaxed);
-			}
+		let numbers: Vec<f32> = words.map_while(|word| word.parse().ok()).collect();
+		if let Ok(input) = numbers.try_into() {
+			warp_runtime::system_values::tell_window_input(input);
 		}
 	}
 }
@@ -137,14 +128,19 @@ pub fn show(frame: &[u8]) -> Result<(), String> {
 		std::os::unix::process::CommandExt::process_group(&mut command, 0);
 		let mut child = command.spawn().map_err(|failure| format!("paint: cannot start the viewer: {failure}"))?;
 		if let Some(output) = child.stdout.take() {
-			std::thread::spawn(move || follow_input(std::io::BufReader::new(output)));
+			std::thread::spawn(move || {
+				follow_input(std::io::BufReader::new(output));
+				warp_runtime::system_values::tell_window_open(false); // its output ends as it closes
+			});
 		}
+		warp_runtime::system_values::tell_window_open(true);
 		*viewer = Some(child);
 	}
 	let input = viewer.as_mut().and_then(|child| child.stdin.as_mut()).expect("the viewer's stdin is piped");
 	let written = input.write_all(frame).and_then(|_| input.flush());
 	written.map_err(|failure| {
 		*viewer = None;
+		warp_runtime::system_values::tell_window_open(false);
 		format!("paint: the viewer is gone ({failure})")
 	})
 }
@@ -325,7 +321,9 @@ impl Screen {
 
 	/// The input as the program's side takes it (follow_input)
 	fn tell_input(&self) {
-		println!("{INPUT_LINE} {} {} {} {}", self.pointer.0, self.pointer.1, u8::from(self.button_down), self.key);
+		// the window outlives the program by design: once that exits, its end of the pipe is closed and nobody listens
+		let mut output = std::io::stdout().lock();
+		let _ = writeln!(output, "{INPUT_LINE} {} {} {} {}", self.pointer.0, self.pointer.1, u8::from(self.button_down), self.key).and_then(|_| output.flush());
 	}
 
 	/// A place in the window's physical pixels as one in the frame's pixels

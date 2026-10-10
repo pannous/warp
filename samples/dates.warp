@@ -1,0 +1,12 @@
+#!/usr/bin/env warp
+// now is the instant the clock reads when the program runs: UTC, printed in RFC 3339
+start = now
+print "started at " + start
+
+// instants compare in time order
+later = now
+if later >= start then print "time did not run backwards"
+
+// an instant has no wall clock until it is placed in a zone
+hour = try start.hour catch "none"
+print "hour of an instant: " + hour

@@ -32,7 +32,7 @@ to_base(n, base) := { symbols = "0123456789abcdefghijklmnopqrstuvwxyz"; if n == 
 bit_count(n) := { out = 0; rest = n; while rest > 0 { out = out + rest % 2; rest = rest//2 }; out }
 bit_and(a, b) := { out = 0; bit = 1; x = a; y = b; while x > 0 and y > 0 { if x % 2 == 1 and y % 2 == 1 { out = out + bit }; bit = bit * 2; x = x//2; y = y//2 }; out }
 bit_or(a, b) := a + b - bit_and(a, b)
-from_base(t, base) := { symbols = "0123456789abcdefghijklmnopqrstuvwxyz"; out = 0; for c in chars(lower(t)) { out = out * base + index_of(symbols, c) - 1 }; out }
+from_base(t, base) := { symbols = "0123456789abcdefghijklmnopqrstuvwxyz"; out = 0; for c in lower(t) { out = out * base + index_of(symbols, c) - 1 }; out }
 // P169/P191: descriptive names; they forward to the C library (use cmath) until warp has its own implementations.
 // The C names still work after `use math`, each with a note naming the word here (modules STD_ALIASES)
 square(x) := x * x

@@ -4,16 +4,21 @@
 use std::cmp::Ordering;
 use std::fmt;
 
-const SECOND: i128 = 1_000_000_000;
-const DAY_SECONDS: i64 = 86_400;
-const HOUR: i64 = 3600;
-const MINUTE: i64 = 60;
+pub(crate) const SECOND: i128 = 1_000_000_000;
+pub(crate) const DAY_SECONDS: i64 = 86_400;
+pub(crate) const HOUR: i64 = 3600;
+pub(crate) const MINUTE: i64 = 60;
 /// Howard Hinnant's civil calendar arithmetic: a 400-year era has 146 097 days; day 0 of the shifted calendar (which
 /// starts in March of year 0) is 719 468 days before 1970-01-01
-const DAYS_PER_ERA: i64 = 146_097;
-const YEARS_PER_ERA: i64 = 400;
-const EPOCH_SHIFT: i64 = 719_468;
+pub(crate) const DAYS_PER_ERA: i64 = 146_097;
+pub(crate) const YEARS_PER_ERA: i64 = 400;
+pub(crate) const EPOCH_SHIFT: i64 = 719_468;
 const DAY: i128 = DAY_SECONDS as i128 * SECOND;
+
+/// `t.hour` of an instant: it has a calendar only in a zone
+pub fn no_wall_clock(name: &str) -> String {
+	format!("instant has no {name}: place it in a zone first, e.g. `now in \"Europe/Berlin\"`")
+}
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub struct Date {
@@ -646,7 +651,7 @@ impl Time {
 		let Some((date, clock)) = self.calendar() else {
 			return match (self, name) {
 				(Time::Instant(instant), "epoch_seconds") => Ok(instant.div_euclid(SECOND) as i64),
-				_ => Err(format!("instant has no {name}: place it in a zone first, e.g. `now in \"Europe/Berlin\"`")),
+				_ => Err(no_wall_clock(name)),
 			};
 		};
 		let clock_field = |pick: fn(Clock) -> i64| clock.map(pick).ok_or_else(|| format!("{kind} has no {name}"));

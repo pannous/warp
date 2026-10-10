@@ -164,3 +164,14 @@ fn a_curried_call_as_a_value_and_an_argument() {
 	is!("add(a) := b => a + b; xs = []; xs.push(add(2)(5)); xs#1", 7);
 	is!("twice = f => x => f(f(x)); checks = []; checks.push(twice(x => x + 3)(1) == 7); checks#1", true);
 }
+
+// card y-combinator: closure calls pass a function (`x(x)`) and an Int (`fact(10)`) to lambdas of one arity; the
+// parameter took the first kind found (n a function: "function * data") and now takes any value
+#[test]
+fn a_fixed_point_combinator() {
+	is!("def half(f) = x => f(v => x(x)(v))
+def Z(f) = half(f)(half(f))
+fact = Z(self => n => if n < 2 then 1 else n * self(n - 1))
+fact(10)", 3628800);
+	is!("g = s => n => n + 0; A = x => g(v => x(x)(v)); fact = A(A); fact(5)", 5);
+}
