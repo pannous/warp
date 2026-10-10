@@ -60,39 +60,42 @@ function withPageSecret(url, value) {
 	return secret.value;
 }
 
-// a file of the served repository, failing in the words of the native read (src/host.rs)
-function readFile(path) {
+// a request of a served file, failing in the words of the native read (src/host.rs)
+function asFileRead(request) {
 	try {
-		return getSync(FILE_ROOT + path);
+		return request();
 	} catch (failure) {
 		throw failure.message === HTTP_NOT_FOUND ? new Error(FILE_NOT_FOUND) : failure;
 	}
 }
 
+const readFile = path => asFileRead(() => getSync(FILE_ROOT + path));
+
 // the URL of a file of the served repository, of the page itself (PAGE_PREFIX) or a URL
 function fileUrl(path) {
 	if (/^https?:/.test(path)) return path;
 	if (path.startsWith(PAGE_PREFIX)) return new URL(path.slice(PAGE_PREFIX.length), self.location.href).href;
-	return FILE_ROOT + path.replace(/^\.\//, "");
+	return FILE_ROOT + filePath(path);
 }
 
 // the bytes of a file of the served repository, of the page or of a URL, failing in the words of the native read
 function readBytes(path) {
 	const written = writtenFiles.get(filePath(path));
 	if (written !== undefined) return utf8.encode(written);
-	try {
-		return getSync(fileUrl(path), 0, true);
-	} catch (failure) {
-		throw failure.message === HTTP_NOT_FOUND ? new Error(FILE_NOT_FOUND) : failure;
-	}
+	return asFileRead(() => getSync(fileUrl(path), 0, true));
 }
 
 // the body of a host call as (pointer, length), or (pointer, -length) of the failure reason, like src/host.rs
 function hostResult(program, action, what) {
+	return hostBytes(program, () => {
+		const text = action();
+		return utf8.encode(text.endsWith("\n") ? text : text + "\n"); // warp convention (src/host.rs fetch)
+	}, what);
+}
+
+function hostBytes(program, action, what) {
 	try {
-		let text = action();
-		if (!text.endsWith("\n")) text += "\n"; // warp convention (src/host.rs fetch)
-		return writeBytes(program, utf8.encode(text));
+		return writeBytes(program, action());
 	} catch (reason) {
 		const [pointer, length] = writeBytes(program, utf8.encode(`${what} failed: ${reason.message ?? reason}`));
 		return [pointer, -length];
@@ -321,12 +324,7 @@ addHostPart({
 			// the file's bytes as they are, like src/host.rs read; a URL (a package's own files) is fetched
 			read: (pointer, length) => {
 				const path = text(pointer, length);
-				try {
-					return writeBytes(program(), readBytes(path));
-				} catch (reason) {
-					const [failed, failedLength] = writeBytes(program(), utf8.encode(`read ${path} failed: ${reason.message ?? reason}`));
-					return [failed, -failedLength];
-				}
+				return hostBytes(program(), () => readBytes(path), `read ${path}`);
 			},
 		};
 	},

@@ -17,14 +17,6 @@ const TICKET_BYTES = 24;
 const DEPLOYING_TEXT = "deploying …";
 const REFUSED_LOGIN = [401, 403];
 
-// localStorage may be unavailable (a private window): then nothing is remembered
-function stored(key) {
-	try { return localStorage.getItem(key); } catch { return null; }
-}
-function store(key, value) {
-	try { value ? localStorage.setItem(key, value) : localStorage.removeItem(key); } catch { /* not remembered */ }
-}
-
 const pastedToken = () => $("cloudflare-token").value.trim();
 const needsLogin = provider => !(provider === "cloudflare" && pastedToken()) && !stored(SESSION_KEYS[provider]);
 const newTicket = () => btoa(String.fromCharCode(...crypto.getRandomValues(new Uint8Array(TICKET_BYTES)))).replace(/\+/g, "-").replace(/\//g, "_");
