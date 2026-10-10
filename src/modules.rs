@@ -1048,16 +1048,25 @@ pub fn prelude_arguments(word: &str, arguments: Vec<Node>) -> Vec<Node> {
 
 fn prelude_word_parameters(word: &str) -> Option<(usize, usize)> {
 	static PARAMETERS: std::sync::OnceLock<Vec<(String, usize, usize)>> = std::sync::OnceLock::new();
+	thread_local!(static READING_PRELUDE: std::cell::Cell<bool> = const { std::cell::Cell::new(false) });
+	// parsing the prelude asks for its own words (the parser's operand words, library_words::is_operand_word): none
+	// known yet; waiting for them would wait for itself
+	if PARAMETERS.get().is_none() && READING_PRELUDE.get() {
+		return None;
+	}
 	let parameters = PARAMETERS.get_or_init(|| {
+		READING_PRELUDE.set(true);
 		let source = std_module(PRELUDE_MODULE).unwrap_or_default();
 		let has_default = |parameter: &Node| matches!(parameter.drop_meta(), Node::Key(_, Op::Assign, _));
-		statements(crate::normalize::without_hints(|| WarpParser::parse(source))).iter().filter_map(|statement| match statement.drop_meta() {
+		let parameters = statements(crate::normalize::without_hints(|| WarpParser::parse(source))).iter().filter_map(|statement| match statement.drop_meta() {
 			Node::Key(head, Op::Define, _) => match head.drop_meta() {
 				Node::List(items, _, _) => Some((leftmost_symbol(head)?, items.len() - 1, items[1..].iter().filter(|item| has_default(item)).count())),
 				_ => None,
 			},
 			_ => None,
-		}).collect()
+		}).collect();
+		READING_PRELUDE.set(false);
+		parameters
 	});
 	parameters.iter().find(|(name, _, _)| name == word).map(|(_, arity, defaults)| (*arity, *defaults))
 }

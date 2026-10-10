@@ -30,7 +30,7 @@ use std::cell::RefCell;
 use std::collections::HashMap;
 
 /// The SI base unit of each dimension, the unit amounts count in at run time
-const BASE_UNITS: [(Dimension, &str); 4] = [(Dimension::Length, "m"), (Dimension::Mass, "kg"), (Dimension::Time, "s"), (Dimension::Era, "AD")];
+const BASE_UNITS: [(Dimension, &str); 5] = [(Dimension::Length, "m"), (Dimension::Mass, "kg"), (Dimension::Time, "s"), (Dimension::Era, "AD"), (Dimension::Temperature, "K")];
 const LOOP_WORDS: [&str; 2] = ["for", "while"];
 /// `speed·u0`: a function specialised for one unit signature of its arguments
 const SPECIALISATION_SEPARATOR: &str = "·u";
@@ -461,6 +461,8 @@ impl Inference {
 			Node::Type { name, body } => self.class_declaration(name, body),
 			Node::Symbol(name) => match (self.variables.get(&name), unit_named(&name)) {
 				(Some(signature), _) => Ok((Node::Symbol(name.clone()), signature.clone())),
+				// a run-time amount counts from the base unit's zero, which °C and °F do not share
+				(None, Some(unit)) if unit.zero != 0 => Err(Stop::Error(format!("a temperature in {} is computed at compile time only, not at run time yet", unit.name))),
 				(None, Some(unit)) => Ok((si_literal(unit).ok_or(Stop::Unsupported)?, vec![(unit.dimension, 1)])),
 				(None, None) => Ok((Node::Symbol(name), vec![])),
 			},

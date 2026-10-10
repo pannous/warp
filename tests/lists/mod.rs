@@ -92,3 +92,4 @@ mod test_counting_words;
 mod test_append_words;
 mod test_keys_of_a_value; // card keys-value
 mod test_comprehension_beside_own_push; // card prefix-count-field
+mod test_library_word_operands; // card derive-hard

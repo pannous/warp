@@ -9,6 +9,11 @@ hard-coded list of words standing in for a mechanism breaks on every word it mis
 variable: real" although type(π) prints real. Derive each such list from its source of truth (the type registry,
 the library's exports, the operator table) instead of adding the missing word. Card cleanup-closed-lists; the
 type-word lists become one table under warp-numbers (bare type names are type values).
+List words (card derive-hard): the operand words (`1 == first xs` applies first) are every library word of one
+argument by `arity` (runtime words, expanded words, lib/prelude.warp) that is no type word (type_tests registry), not
+seven listed ones; the copy, draining and result-kind lists name one spelling each and match through
+library_words::canonical_spelling. Still listed by hand: their members (properties no other table records),
+broadcasting SCALAR_LIBRARY_WORDS, checks ORDER_WORDS.
 
 ## src/analyzer/, src/warp_parser/, src/node/ (card cleanup-analyzer, session warp-types)
 
@@ -146,8 +151,10 @@ Done:
   `usize` makers of lazy_ranges, min_max, list_element_checks and variable_signals (`+= 1` then use) the same way
 
 Left (each changes behaviour or needs care):
-- Node::map_children also enters class bodies (Node::Type); children_rewritten does not. ~40 more passes spell out
-  the tail with a custom List or Key arm in between or a guard; folding those in needs a case-by-case look.
+- Node::map_children also enters class bodies (Node::Type); children_rewritten does not. 22 tails folded by
+  probes/cleanup/fold_rewrite_tails.py (generic Key + Meta arms after an arm taking every list); the ~20 left differ:
+  no List arm at all (folding would make lists recurse), a list arm only for some separators, `Node::Key(Box::new…)`
+  spelled out, or a Meta arm passing other arguments (bind_it's is_value) — each a case-by-case look.
 - statements_of (class_methods, event_signals, late_binding), statements (component_worlds, test_blocks),
   is_statement_list (generators, result_word, variable_signals), is_return (closures, generators,
   type_name_matching): same name, different bracket/separator rules each, so one shared version changes which forms

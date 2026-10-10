@@ -362,9 +362,7 @@ impl Specialising {
 				let items: Vec<Node> = items.into_iter().map(|item| self.rewrite(item)).collect();
 				self.specialised_call(&items, &bracket, &separator).unwrap_or(Node::List(items, bracket, separator))
 			}
-			Node::Key(left, op, right) => key(self.rewrite(*left), op, self.rewrite(*right)),
-			Node::Meta { node, data } => Node::Meta { node: Box::new(self.rewrite(*node)), data },
-			other => other,
+			other => children_rewritten(other, |child| self.rewrite(child)),
 		}
 	}
 
@@ -481,9 +479,7 @@ fn assemble(node: Node, specialising: &Specialising) -> Node {
 				.collect();
 			Node::List(items, bracket, separator)
 		}
-		Node::Key(left, op, right) => key(assemble(*left, specialising), op, assemble(*right, specialising)),
-		Node::Meta { node, data } => Node::Meta { node: Box::new(assemble(*node, specialising)), data },
-		other => other,
+		other => children_rewritten(other, |child| assemble(child, specialising)),
 	}
 }
 
@@ -567,8 +563,6 @@ fn rewrite_outside(node: Node, specialising: &mut Specialising) -> Node {
 				None => Node::List(items, bracket, separator),
 			}
 		}
-		Node::Key(left, op, right) => key(rewrite_outside(*left, specialising), op, rewrite_outside(*right, specialising)),
-		Node::Meta { node, data } => Node::Meta { node: Box::new(rewrite_outside(*node, specialising)), data },
-		other => other,
+		other => children_rewritten(other, |child| rewrite_outside(child, specialising)),
 	}
 }

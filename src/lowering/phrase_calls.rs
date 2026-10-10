@@ -5,7 +5,7 @@
 //! A call of that function whose arguments, read as values and preposition words, follow the pattern becomes
 //! `name(values…)`. Elsewhere `to` stays a range and `of` a field lookup.
 
-use super::nodes::{call, in_block_as_written, is_assigned_data, is_words_call, key, spaced_statement, with_parts_rewritten};
+use super::nodes::{call, children_rewritten, in_block_as_written, is_assigned_data, is_words_call, key, spaced_statement, with_parts_rewritten};
 use crate::node::{symbol, Bracket, Node, Separator};
 use crate::operators::Op;
 use crate::type_name_matching::prepositions_among;
@@ -161,9 +161,7 @@ fn rewrite(node: Node, patterns: &HashMap<String, Vec<Vec<Part>>>) -> Node {
 		}
 		Node::Key(left, Op::Assign, right) if is_assigned_data(&left, &right) => key(*left, Op::Assign, with_parts_rewritten(*right, &mut |part| rewrite(part, patterns))),
 		Node::Key(left, Op::Assign, right) => key(rewrite(*left, patterns), Op::Assign, rewrite(assigned_words(*right, patterns), patterns)),
-		Node::Key(left, op, right) => key(rewrite(*left, patterns), op, rewrite(*right, patterns)),
-		Node::Meta { node, data } => Node::Meta { node: Box::new(rewrite(*node, patterns)), data },
-		other => other,
+		other => children_rewritten(other, |child| rewrite(child, patterns)),
 	}
 }
 

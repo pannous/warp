@@ -2,7 +2,7 @@
 //! `P{x:1 y:2}` (glued, parsed as the key `P` Op::None `{…}`) constructs and validates one too, while `P:{…}` is plain
 //! data (D4): an instance is the data key marked `Instance`, emitted with its own op code, so it never equals the data.
 
-use super::nodes::key;
+use super::nodes::{children_rewritten, key};
 use crate::analyzer::{builtin_type_kind, call_name, collect_all_types, list_element_type, literal_misfit, misfit_item};
 use crate::diagnostic::Diagnostic;
 use crate::node::{symbol, Bracket, Node, Separator};
@@ -143,9 +143,7 @@ fn construct(node: Node, classes: &Classes) -> Node {
 				None => Node::Key(name, Op::Colon, Box::new(Node::List(entries, Bracket::Curly, Separator::Space))),
 			}
 		}
-		Node::Key(left, op, right) => key(construct(*left, classes), op, construct(*right, classes)),
-		Node::Meta { node, data } => Node::Meta { node: Box::new(construct(*node, classes)), data },
-		other => other,
+		other => children_rewritten(other, |child| construct(child, classes)),
 	}
 }
 

@@ -1578,6 +1578,7 @@ PASSED:
   ✓ lists::test_lazy_range::a_range_is_read_from_its_bounds
   ✓ lists::test_lazy_range::a_range_variable_used_as_a_list_stays_one
   ✓ lists::test_lazy_range::a_small_range_variable_is_still_its_list
+  ✓ lists::test_library_word_operands::a_one_argument_library_word_takes_the_name_after_it
   ✓ lists::test_linear_append::an_appended_list_of_nodes_keeps_its_items
   ✓ lists::test_linear_append::map_and_filter_of_texts_stay_linear
   ✓ lists::test_linear_arrays::a_chain_of_numeric_maps_of_a_linear_array_is_one_loop
@@ -2341,6 +2342,10 @@ PASSED:
   ✓ numbers::test_sum_of_decimals::the_sum_of_decimal_elements
   ✓ numbers::test_superscript_variables::test_a_negative_superscript_variable_exponent
   ✓ numbers::test_superscript_variables::test_a_superscript_variable_exponent
+  ✓ numbers::test_temperature::a_temperature_is_a_quantity
+  ✓ numbers::test_temperature::temperatures_compare_at_their_zero
+  ✓ numbers::test_temperature::temperatures_convert_with_their_zero
+  ✓ numbers::test_temperature::temperatures_in_one_unit_add
   ✓ numbers::test_text_then_conversion::a_conversion_after_a_text_join_converts_the_last_operand
   ✓ numbers::test_text_then_conversion::a_grouped_conversion_still_works
   ✓ numbers::test_time_of_day::a_program_naming_time_keeps_its_own
@@ -4586,4 +4591,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-10 ignored, 4581 passed, 0 failed, 4581 total tested
+10 ignored, 4586 passed, 0 failed, 4586 total tested
