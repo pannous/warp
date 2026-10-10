@@ -50,3 +50,4 @@ mod test_std_module_docs; // card std-module-docs
 mod test_json_parse_form; // card g_ogQg
 mod test_json5; // card json5-parse
 mod test_module_function_dir; // card use-math
+mod test_checkout_std_lib; // card local-lib
