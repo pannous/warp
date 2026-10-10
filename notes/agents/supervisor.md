@@ -11,7 +11,11 @@ notes/agents/common.md.
 - Fresh session for a new topic (user, 2026-10-09, after a 3D loader went to warp-hosting): a worker that has already
   used significant tokens gets only follow-up work in its own area. An unrelated task gets a new worker named for it
   (`start.sh worker <area-name> …`, e.g. warp-3d, warp-sound). When a worker finishes its area, let it hand over
-  and retire rather than giving it another topic.
+  and retire rather than giving it another topic. Check before every `todo take <card> <session>`: does the card fit
+  the session's name? If not, it goes to the area worker, to warp-fixer (the generic name for off-area quick cards)
+  or to a new topic session. "Keep every worker busy" and "easy cards first" never justify an off-area card (user,
+  2026-10-10: "some agents are working on something completely unrelated to what they've been named for", after
+  nearest() went to warp-hosting and a playground shortcut to warp-sound).
 - Role names follow the work (user, 2026-10-07): a worker taking a task in its role's scope keeps its name (functions
   on functions, class-extends on classes); one moving to another area is renamed for it (`tmux rename-session -t
   warp-<old> warp-<new>`: the swap hook reads the role from the tmux name; plus the claude.ai title, which the tmux

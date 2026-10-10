@@ -24,8 +24,8 @@ pub const ERROR_TYPE: &str = "error";
 /// The type of ø, as type(ø) names it; unit, nil … are its aliases (canonical_spec_word)
 pub const EMPTY_TYPE: &str = "empty";
 const ARTICLES: [&str; 2] = ["a", "an"];
-const LIST_WORD: &str = "list";
-const MAP_WORD: &str = "map";
+pub(crate) const LIST_WORD: &str = "list";
+const MAP_WORD: &str = crate::analyzer::MAP_TYPE;
 /// The collection types: `x is list`, `x is map`, and of their element type: `x is list of int`, `x is map of text`
 const COLLECTION_WORDS: [&str; 2] = [LIST_WORD, MAP_WORD];
 /// `x is pair`: a `key: value` pair

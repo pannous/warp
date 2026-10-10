@@ -1,0 +1,2 @@
+// prelude nearest(x, rational, limit): expected [665857/470832 1393/985 311/99 0.75 -2.5 3] (Python limit_denominator)
+[nearest(sqrt(2), rational), nearest(sqrt(2), rational, 1000), nearest(pi, rational, 100), nearest(0.75, rational), nearest(-2.5, rational), nearest(3.0, rational)]
