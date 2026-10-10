@@ -510,6 +510,14 @@ Things go wrong sometimes. In warp an error is a value that says what happened.
 raise "boom"
 ```
 
+A function can also hand an error back as its value. The caller asks `failed`: no try, no catch.
+
+```warp => 1
+f(x) := if x < 0 then error("neg") else x
+r = f(-1)
+if r failed then 1 else 2
+```
+
 When a line could mean two things, warp asks which one you meant.
 
 Examples: "welcoming errors", ambiguity; samples: try_catch, try_else, parse_number, raise_error, assertions
