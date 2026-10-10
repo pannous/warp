@@ -107,7 +107,7 @@ impl Node {
 	}
 }
 
-/// JSON5 as JSON (card json5-parse, user: no more JSON nonsense): 'single quoted' texts, // and /* */ comments, trailing
+/// JSON5 as JSON (card json5-parse, user: no more JSON nonsense), for a text the strict parser refused: 'single quoted' texts, // and /* */ comments, trailing
 /// commas and bare keys; the browser's twin is jsonOfJson5 in web/playground/host-hashes.js
 pub fn json_of_json5(text: &str) -> String {
 	let mut json = String::with_capacity(text.len());
