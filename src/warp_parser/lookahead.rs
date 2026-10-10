@@ -329,7 +329,7 @@ impl WarpParser {
 		}
 		self.advance_by(RETURN_KEYWORD.len());
 		let value = self.parse_expr(0);
-		Some(Node::List(vec![Symbol(AFTER_MARKER.to_string()), condition, value], Bracket::Round, Separator::None))
+		Some(call(AFTER_MARKER, vec![condition, value]))
 	}
 
 	/// Is there a `return` word later on this statement, outside brackets
