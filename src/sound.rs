@@ -60,8 +60,6 @@ const FAILURE_TAIL: usize = 300;
 type Player = Arc<Mutex<std::process::Child>>;
 /// The sounds and music files playing by their handles, stopped by stop_sound
 static PLAYING: Mutex<Vec<(usize, Player)>> = Mutex::new(Vec::new());
-/// When the queued sounds of all voices end on the audio clock; none before the first
-static SOUNDS_END: Mutex<Option<Instant>> = Mutex::new(None);
 /// Where a voice stands on the audio clock: when its queued sounds end in real time, and how many seconds of sound
 /// it has made in all (its place for render_sound, free of the time computing them took)
 #[derive(Clone, Copy, Default)]
@@ -159,9 +157,6 @@ fn watched(child: Player, player: &str, queued: &Queued, label: &str) {
 /// stop_sound: the queued sounds dropped, the playing sounds and music files stopped
 pub fn stop() {
 	STOPS.fetch_add(1, Ordering::Relaxed);
-	if let Ok(mut end) = SOUNDS_END.lock() {
-		*end = None;
-	}
 	killed(|_| true);
 }
 
@@ -187,9 +182,10 @@ fn killed(chosen: impl Fn(usize) -> bool) {
 	}
 }
 
-/// sound_queued(): the seconds the queued sounds still sound on the audio clock
+/// sound_queued(): the seconds this voice's queued sounds still sound on the audio clock (a task asks its own voice)
 pub fn queued_seconds() -> f64 {
-	let end = SOUNDS_END.lock().ok().and_then(|end| *end);
+	let voice = voice();
+	let end = voice.end.filter(|_| voice.stops == STOPS.load(Ordering::Relaxed));
 	end.map_or(0.0, |end| end.saturating_duration_since(Instant::now()).as_secs_f64())
 }
 
@@ -220,9 +216,6 @@ fn scheduled(seconds: f64) -> (Instant, f64) {
 	let place = voice.seconds;
 	voice = Voice { end: Some(start + Duration::from_secs_f64(seconds)), seconds: place + seconds, stops };
 	join_voice(voice);
-	if let Ok(mut end) = SOUNDS_END.lock() {
-		*end = (*end).filter(|end| *end > now).max(voice.end);
-	}
 	(start, place)
 }
 

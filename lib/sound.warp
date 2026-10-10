@@ -76,7 +76,7 @@ to play x for duration: sound(chord_samples(pitches_of(x), si_amount(duration), 
 play_file(path) := std_io("sound", "play_file", [path])
 // play gives the sound's handle: h = play C4 for 2s; stop_sound(h) stops that one alone, stop_sound (handle 0) all
 stop_sound(handle = 0) := std_io("sound", "stop", [handle])
-// play returns at once, its sound queued behind those before it: sound_queued() is how many seconds still sound,
+// play returns at once, its sound queued behind those before it: sound_queued() is how many seconds its voice still sounds,
 // wait_sound waits for them (a program's end does too)
 sound_queued() := std_io("sound", "queued", [])
 wait_sound() := std_io("sound", "wait", [])
