@@ -339,12 +339,6 @@ impl Op {
 		}
 	}
 
-	/// Check if this operator is right-associative
-	pub fn is_right_assoc(&self) -> bool {
-		let (l, r) = self.binding_power();
-		l > 0 && r > 0 && r < l
-	}
-
 	/// Check if this is a binary arithmetic operator
 	pub fn is_arithmetic(&self) -> bool {
 		matches!(self, Op::Add | Op::Sub | Op::Mul | Op::Div | Op::Mod | Op::Rem | Op::Pow)

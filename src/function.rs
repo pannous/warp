@@ -61,11 +61,6 @@ impl Arg {
 		}
 	}
 
-	pub fn with_modifier(mut self, modifier: impl Into<String>) -> Self {
-		self.modifiers.push(modifier.into());
-		self
-	}
-
 	/// Get WASM ValType for this argument
 	pub fn valtype(&self) -> ValType {
 		kind_to_valtype(self.kind)
@@ -113,14 +108,6 @@ impl Signature {
 		self
 	}
 
-	/// Add return type (mutable)
-	pub fn add_return(&mut self, kind: Kind) -> &mut Self {
-		if kind != Kind::Empty {
-			self.return_types.push(kind);
-		}
-		self
-	}
-
 	/// Number of parameters
 	pub fn len(&self) -> usize {
 		self.parameters.len()
@@ -143,16 +130,6 @@ impl Signature {
 	/// Get parameter index by name
 	pub fn index_of(&self, name: &str) -> Option<usize> {
 		self.parameters.iter().position(|p| p.name == name)
-	}
-
-	/// Get WASM parameter types
-	pub fn param_valtypes(&self) -> Vec<ValType> {
-		self.parameters.iter().map(|p| p.valtype()).collect()
-	}
-
-	/// Get WASM return types
-	pub fn return_valtypes(&self) -> Vec<ValType> {
-		self.return_types.iter().map(|k| kind_to_valtype(*k)).collect()
 	}
 
 	/// Merge another signature into this one (fill empty fields)
@@ -332,25 +309,6 @@ impl Function {
 		self.signature.add(&n, kind);
 		self.locals.insert(n.clone(), Local::param(position, n, kind));
 	}
-
-	/// Find best matching variant for given argument types
-	pub fn find_variant(&self, arg_kinds: &[Kind]) -> Option<usize> {
-		if self.variants.is_empty() {
-			return None;
-		}
-		for (i, variant) in self.variants.iter().enumerate() {
-			let sig = &variant.signature;
-			if sig.len() == arg_kinds.len() {
-				let matches = sig.parameters.iter()
-					.zip(arg_kinds.iter())
-					.all(|(p, k)| p.kind == *k || p.kind == Kind::Data); // Data as "Any"
-				if matches {
-					return Some(i);
-				}
-			}
-		}
-		None
-	}
 }
 
 impl std::fmt::Display for Function {
@@ -403,19 +361,9 @@ impl FunctionRegistry {
 		self.name_to_idx.get(name).copied().map(|idx| &mut self.functions[idx])
 	}
 
-	/// Get function by call index
-	pub fn get_by_index(&self, call_index: u32) -> Option<&Function> {
-		self.functions.iter().find(|f| f.call_index == call_index as i32)
-	}
-
 	/// Get all imports
 	pub fn imports(&self) -> impl Iterator<Item = &Function> {
 		self.functions.iter().filter(|f| f.is_import)
-	}
-
-	/// Get all code functions (non-imports)
-	pub fn code_functions(&self) -> impl Iterator<Item = &Function> {
-		self.functions.iter().filter(|f| !f.is_import)
 	}
 
 	/// Get all functions
