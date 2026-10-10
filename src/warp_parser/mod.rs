@@ -142,6 +142,8 @@ const DATA_KEYWORD: &str = "data";
 const CLASS_KEYWORD: &str = "class";
 /// `await job` waits for a task; its operand binds like the operand of a unary minus (Op::Neg)
 const AWAIT_KEYWORD: &str = "await";
+/// `go {…}` starts a task (lowering/go_blocks.rs), glued `go{…}` too: no tag `go:{…}` (card error-beep)
+const GO_KEYWORD: &str = "go";
 /// `await all jobs`: every task of a list (P47)
 const AWAIT_ALL_WORD: &str = "all";
 /// `await x` binds its operand like unary minus
