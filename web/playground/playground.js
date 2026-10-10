@@ -167,7 +167,7 @@ function startWorker(restarts = 0) {
 	// test_in_browser.py --examples: a worker that starts as late as on a slow CI runner
 	const slowStart = new URLSearchParams(location.search).get(SLOW_START_PARAMETER);
 	if (slowStart) options.set(SLOW_START_PARAMETER, slowStart);
-	worker = new Worker(options.size ? `worker.js?${options}` : "worker.js");
+	worker = serveTaskWorkers(new Worker(options.size ? `worker.js?${options}` : "worker.js")); // task-workers.js
 	showLoading("starting the compiler's worker", false);
 	workerReady = new Promise((resolve, reject) => {
 		const starting = worker;

@@ -215,6 +215,15 @@ web/playground/tests.html in headless Chrome (agent-browser, session warp-browse
   instantiating (the per-chunk "loading" messages kept no stage). The page now names each: "downloading the compiler:
   N MB so far", "compiling warp.wasm (N bytes)", "instantiating warp.wasm" (WebAssembly.compile and instantiate apart),
   so the next stall's console warning says which step hangs.
+  The next stalls named "compiling warp.wasm" (1) and "starting the task workers" (2), always on the tour's first
+  page. probes/firefox_start/starts.py (CI only: a fresh Firefox per load, playground.state() followed to ready)
+  reproduced them: 4 of 80 fresh starts stalled (3 compiling, 1 starting the task workers); with the pool started
+  after the compiler only the pool stall remained (1 of 80). So the hang is Firefox's nested `new Worker` (it waits for
+  the page's thread), which also starves the compile's completion when it runs meanwhile. Fix: the page makes the task
+  Workers (task-workers.js serveTaskWorkers, used by playground.js, tests.js, site-thread.js): the program's Worker
+  asks {taskWorker: {id, url}}, gets a MessagePort to the new Worker, and asks {endTaskWorker: id} to stop one; the
+  pool holds the ports. Both listeners are registered before the Worker's own onmessage and stop the message there.
+  Measured (runs 38055959458 vs 38055971317, 150 fresh starts each): 0 stalls with the fix, 6 without.
 
 ## Modules and packages in the browser (2026-10-04)
 The compiler reads files through the page: `warp_host.fetch(address)` / `take_fetched` (web.rs `read_bytes`, cached
