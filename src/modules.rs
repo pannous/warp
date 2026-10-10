@@ -1054,7 +1054,7 @@ pub fn fetch_package(name: &str) -> Result<PathBuf, String> {
 
 /// fetch_package with another packages directory than packages/
 pub fn fetch_package_into(packages: &Path, name: &str) -> Result<PathBuf, String> {
-	let package = registered(name).ok_or(format!("unknown package: {name}"))?;
+	let package = registered_package(name)?;
 	match &package.pinned {
 		Some(version) => fetch_tagged(packages, name, &package.url, version, name),
 		None => clone(name, &package.url, &packages.join(name), None),
@@ -1064,8 +1064,8 @@ pub fn fetch_package_into(packages: &Path, name: &str) -> Result<PathBuf, String
 /// The directory of the version of a package a requirement picks among its git tags (`v1.2.3` or `1.2.3`):
 /// that version, or the latest from the minimum on; cloned into packages/<name>@<version>
 pub fn fetch_package_version(name: &str, requirement: &Requirement) -> Result<PathBuf, String> {
-	let url = package_repository(name).ok_or(format!("unknown package: {name}"))?;
-	let tags = version_tags(&url).map_err(|failure| format!("package {name}: no versions from {url}: {failure}"))?;
+	let url = registered_package(name)?.url;
+	let tags = package_version_tags(name, &url)?;
 	let Some((_, version)) = tags.iter().filter(|(_, version)| requirement.allows(version)).max_by(|a, b| a.1.cmp(&b.1)) else {
 		let versions: Vec<String> = tags.iter().map(|(_, version)| version.to_string()).collect();
 		return Err(format!("package {name} has no {requirement} (tagged: {})", versions.join(", ")));
@@ -1096,12 +1096,12 @@ fn fetch_tagged(packages: &Path, name: &str, url: &str, version: &Version, link_
 		return Ok(link);
 	}
 	if !cached.exists() {
-		let tags = version_tags(url).map_err(|failure| format!("package {name}: no versions from {url}: {failure}"))?;
+		let tags = package_version_tags(name, url)?;
 		let tag = tags.iter().find(|(_, tagged)| tagged == version).map(|(tag, _)| tag.as_str())
 			.ok_or(format!("package {name} has no tag of version {version} at {url}"))?;
 		clone(name, url, &cached, Some(tag))?;
 	}
-	std::fs::create_dir_all(packages).map_err(|failure| format!("package {name}: {failure}"))?;
+	make_package_directory(name, packages)?;
 	#[cfg(not(unix))]
 	return Err(format!("package {name}: not linked to {}: no symbolic links on this platform", cached.display()));
 	#[cfg(unix)]
@@ -1128,7 +1128,7 @@ fn is_real_directory(path: &Path) -> bool {
 /// Moves an unpinned clone out of the pin's way into packages/.replaced, never deleting it
 fn set_aside(packages: &Path, name: &str, version: &Version, clone: &Path) -> Result<(), String> {
 	let replaced = packages.join(REPLACED_DIRECTORY);
-	std::fs::create_dir_all(&replaced).map_err(|failure| format!("package {name}: {failure}"))?;
+	make_package_directory(name, &replaced)?;
 	let seconds = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map_or(0, |elapsed| elapsed.as_secs());
 	let destination = replaced.join(format!("{}.{seconds}.{}", clone.file_name().unwrap_or_default().to_string_lossy(), std::process::id()));
 	match std::fs::rename(clone, &destination) {
@@ -1148,6 +1148,18 @@ fn warn_overridden(name: &str, version: &Version, directory: &Path) {
 		eprintln!("warning: package {name}: {key} (a local checkout or a clone with changes) overrides the pinned version {version}");
 		warned.push(key);
 	}
+}
+
+fn registered_package(name: &str) -> Result<Registered, String> {
+	registered(name).ok_or(format!("unknown package: {name}"))
+}
+
+fn package_version_tags(name: &str, url: &str) -> Result<Vec<(String, Version)>, String> {
+	version_tags(url).map_err(|failure| format!("package {name}: no versions from {url}: {failure}"))
+}
+
+fn make_package_directory(name: &str, directory: &Path) -> Result<(), String> {
+	std::fs::create_dir_all(directory).map_err(|failure| format!("package {name}: {failure}"))
 }
 
 fn package_cache() -> PathBuf {
@@ -1173,7 +1185,7 @@ fn clone(name: &str, url: &str, directory: &Path, tag: Option<&str>) -> Result<P
 		return Ok(directory.to_path_buf());
 	}
 	let parent = directory.parent().unwrap_or(Path::new("."));
-	std::fs::create_dir_all(parent).map_err(|failure| format!("package {name}: {failure}"))?;
+	make_package_directory(name, parent)?;
 	let directory_name = directory.file_name().unwrap_or_default().to_string_lossy();
 	let staging = parent.join(format!(".{directory_name}.fetching.{}", std::process::id()));
 	let mut command = Command::new("git");
@@ -1206,7 +1218,7 @@ fn package_directory(name: &str) -> Result<PathBuf, String> {
 	return fetch_package(name);
 	#[cfg(not(feature = "native"))]
 	{
-		let package = registered(name).ok_or(format!("unknown package: {name}"))?;
+		let package = registered_package(name)?;
 		let repository = package.url.trim_end_matches(".git").replace("https://github.com/", "https://raw.githubusercontent.com/");
 		let reference = package.pinned.map_or("HEAD".to_string(), |version| format!("v{version}"));
 		Ok(PathBuf::from(format!("{repository}/{reference}")))

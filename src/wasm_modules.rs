@@ -475,8 +475,13 @@ fn set_globals(node: Node, globals: &HashMap<&String, bool>, modules: &[String])
 			_ => {}
 		}
 	}
+	map_children_or_failure(node, |child| set_globals(child, globals, modules))
+}
+
+/// The node with `map` of each child, or the first failure of a child
+fn map_children_or_failure(node: Node, mut map: impl FnMut(Node) -> Result<Node, Node>) -> Result<Node, Node> {
 	let mut failure = None;
-	let node = node.map_children(|child| set_globals(child, globals, modules).unwrap_or_else(|error| {
+	let node = node.map_children(|child| map(child).unwrap_or_else(|error| {
 		failure.get_or_insert(error);
 		Node::Empty
 	}));
@@ -534,12 +539,7 @@ fn qualify(node: Node, modules: &[String]) -> Result<Node, Node> {
 		}
 		_ => {}
 	}
-	let mut failure = None;
-	let node = node.map_children(|child| qualify(child, modules).unwrap_or_else(|error| {
-		failure.get_or_insert(error);
-		Node::Empty
-	}));
-	failure.map_or(Ok(node), Err)
+	map_children_or_failure(node, |child| qualify(child, modules))
 }
 
 /// The arguments of a call of the function `export` in its parameter order, a named one (`amount: 2`, `amount=2`) at its

@@ -188,7 +188,7 @@ pub fn infer_type(node: &Node, scope: &Scope) -> Kind {
 		Node::Key(_, Op::As, target) if target.name().to_lowercase() == "list" => Kind::List,
 		Node::Key(_, Op::As, target) if matches!(target.name().to_lowercase().as_str(), "string" | "str" | "text") => Kind::Text,
 		// `"1/3" as number` is the number the text spells, of its kind (an exact ratio is an Int)
-		Node::Key(..) if spelled_number(node).is_some() => infer_type(&spelled_number(node).expect("spelled"), scope),
+		Node::Key(..) if let Some(number) = spelled_number(node) => infer_type(&number, scope),
 		// `t as number` of a text known only at run time: an Int, a ratio or a Float, as the text says (card runtime-text-ratio)
 		Node::Key(value, Op::As, target) if matches!(target.name().to_lowercase().as_str(), "number" | "num")
 			&& matches!(infer_type(value, scope), Kind::Text | Kind::Codepoint) => Kind::Data,
@@ -214,8 +214,7 @@ pub fn infer_type(node: &Node, scope: &Scope) -> Kind {
 			_ => Kind::Int,
 		},
 		// if c {a} else {b}; an `error(…)` branch raises its error, so the other branch decides the kind (bottom kind)
-		Node::Key(if_then, Op::Else, else_expr) if matches!(if_then.drop_meta(), Node::Key(_, Op::Then, _)) => {
-			let Node::Key(_, _, then_expr) = if_then.drop_meta() else { unreachable!("guarded") };
+		Node::Key(if_then, Op::Else, else_expr) if let Node::Key(_, Op::Then, then_expr) = if_then.drop_meta() => {
 			match (raises_error(then_expr), raises_error(else_expr)) {
 				(true, false) => branch_kind(else_expr, scope),
 				(false, true) => branch_kind(then_expr, scope),
@@ -229,12 +228,9 @@ pub fn infer_type(node: &Node, scope: &Scope) -> Kind {
 		// a value looked up by a name in a map of unknown values (`graph[node]` of a parameter) is held as a Node
 		// a field read by name with a declared kind: `v.x` of `type V {x: float}`; a field of a value known only at run time
 		// (`request.body.priority` of an any) holds what it holds, whatever a class's field of that name declares
-		Node::Key(indexed, Op::Hash, index) if crate::warp_parser::subscript_key(index)
-			.and_then(|key| match key.drop_meta() { Node::Text(name) => scope.function_kind(&field_kind_key(name)), _ => None })
-			.is_some() && !matches!(indexed.drop_meta(), Node::Empty) && !declared_any(indexed, scope) => {
-			let Some(Node::Text(name)) = crate::warp_parser::subscript_key(index).map(Node::drop_meta) else { unreachable!("guarded") };
-			scope.function_kind(&field_kind_key(name)).expect("guarded")
-		}
+		Node::Key(indexed, Op::Hash, index) if let Some(Node::Text(name)) = crate::warp_parser::subscript_key(index).map(Node::drop_meta)
+			&& let Some(kind) = scope.function_kind(&field_kind_key(name))
+			&& !matches!(indexed.drop_meta(), Node::Empty) && !declared_any(indexed, scope) => kind,
 		Node::Key(indexed, Op::Hash, index) if !matches!(indexed.drop_meta(), Node::Empty) => element_kind(indexed, scope).unwrap_or_else(|| {
 			let by_name = crate::warp_parser::subscript_key(index).is_some_and(|key| matches!(key.drop_meta(), Node::Text(_) | Node::Char(_))
 				|| matches!(infer_type(key, scope), Kind::Text | Kind::Codepoint));
@@ -282,10 +278,11 @@ pub(super) fn infer_list_type(node: &Node, items: &[Node], bracket: &Bracket, se
 	if crate::host::fetch_call(node).is_some() {
 		return Kind::Text; // or an Error value, see check_unchecked_use
 	}
-	if matches!(items.first().map(Node::drop_meta), Some(Node::Symbol(name)) if [ZERO_FILL_CALL, INSERT_AT_CALL, INSERT_EITHER_CALL].contains(&name.as_str())) {
+	let head = items.first().and_then(Node::symbol_name);
+	if head.is_some_and(|name| [ZERO_FILL_CALL, INSERT_AT_CALL, INSERT_EITHER_CALL].contains(&name)) {
 		return Kind::List;
 	}
-	if let Node::Symbol(name) = items[0].drop_meta() {
+	if let Some(name) = head {
 		if name == crate::library_words::LIST_SUM && items.len() == 3 {
 			return infer_type(&items[2], scope); // the loop it dispatches around
 		}
@@ -293,37 +290,31 @@ pub(super) fn infer_list_type(node: &Node, items: &[Node], bracket: &Bracket, se
 		if name == crate::blocks::DATA_WORD && items.len() == 2 && *bracket == Bracket::None {
 			return match items[1].kind() { Kind::Block => Kind::List, kind => kind };
 		}
-		if RETURNING_KEYWORDS.contains(&name.as_str()) && items.len() == 2 {
+		if RETURNING_KEYWORDS.contains(&name) && items.len() == 2 {
 			return infer_type(&items[1], scope); // `return x` is worth x
 		}
-		if let Some(arity) = crate::closures::closure_call_arity(name) {
-			let callee = items.get(1).and_then(Node::symbol_name);
-			if let Some(variable) = callee {
-				if let Some(targets) = scope.closure_targets_of(variable) {
-					if !targets.is_empty() {
-						let mut kinds = targets.iter().map(|target| scope.function_kind(target).unwrap_or(Kind::Data));
-						let first = kinds.next().unwrap_or(Kind::Data);
-						return if kinds.all(|kind| kind == first) { first } else { Kind::Data };
-					}
-				}
+		// a closure call is worth what all the closures its variable may hold give
+		if crate::closures::closure_call_arity(name).is_some() {
+			let targets = items.get(1).and_then(Node::symbol_name).and_then(|variable| scope.closure_targets_of(variable));
+			if let Some(targets) = targets.filter(|targets| !targets.is_empty()) {
+				let mut kinds = targets.iter().map(|target| scope.function_kind(target).unwrap_or(Kind::Data));
+				let first = kinds.next().unwrap_or(Kind::Data);
+				return if kinds.all(|kind| kind == first) { first } else { Kind::Data };
 			}
-			if let Some(kind) = scope.function_kind(name) {
-				return kind;
-			}
-			let _ = arity;
-		} else if let Some(kind) = scope.function_kind(name) {
+		}
+		if let Some(kind) = scope.function_kind(name) {
 			return kind;
 		}
 		if name == crate::closures::CLOSURE_NEW {
 			return Kind::Function;
 		}
 		// another runtime's value or a std adapter's: any Node, held like a map value (its kind decided at run time)
-		if crate::host::ANY_VALUE_WORDS.contains(&name.as_str()) {
+		if crate::host::ANY_VALUE_WORDS.contains(&name) {
 			return Kind::Empty;
 		}
 		// a cell's value is held as a Node, like a map value (Empty), and joins a text or adds at run time
-		if crate::wasm_emitter::cells::CELL_WORDS.contains(&name.as_str()) {
-			return if crate::wasm_emitter::cells::MAKING_WORDS.contains(&name.as_str()) { Kind::Data } else { Kind::Empty };
+		if crate::wasm_emitter::cells::CELL_WORDS.contains(&name) {
+			return if crate::wasm_emitter::cells::MAKING_WORDS.contains(&name) { Kind::Data } else { Kind::Empty };
 		}
 		if let Some(kind) = crate::wasm_emitter::text_builtins::text_builtin_kind(name, items.len() - 1) {
 			return kind;
@@ -340,7 +331,7 @@ pub(super) fn infer_list_type(node: &Node, items: &[Node], bracket: &Bracket, se
 		}
 		// `puti x`, `puts t`: the output words give an Int (the number written, or the write's status), with or without
 		// parentheses
-		if crate::wasm_emitter::OUTPUT_WORDS.contains(&name.as_str()) && items.len() == 2 {
+		if crate::wasm_emitter::OUTPUT_WORDS.contains(&name) && items.len() == 2 {
 			return Kind::Int;
 		}
 		// `count ys`, `size t`: a number, the user's own function of that name already answered above
@@ -351,22 +342,20 @@ pub(super) fn infer_list_type(node: &Node, items: &[Node], bracket: &Bracket, se
 			return Kind::Empty; // `print x` writes x and gives nothing (user, issue #18)
 		}
 	}
-	// a call of a function the component being compiled imports (`host.time()`)
-	if let Some(Node::Symbol(callee)) = items.first().map(Node::drop_meta) {
+	if let Some(callee) = head {
+		// a call of a function the component being compiled imports (`host.time()`)
 		if let Some(kind) = crate::wasm_emitter::component_adapters::imported_kind(callee) {
 			return kind;
 		}
-	}
-	// Check for function calls: (funcname args...) where first item is a symbol
-	if items.len() >= 2 {
-		if let Node::Symbol(s) = items[0].drop_meta() {
-			if s == "fetch" { return Kind::Text; }
-			// FFI/builtin function calls return Int by default
-			// This handles strcmp, strlen, abs, etc.
-			if crate::ffi::is_ffi_function(s) {
+		if items.len() >= 2 {
+			if callee == "fetch" {
+				return Kind::Text;
+			}
+			// FFI/builtin function calls (strcmp, strlen, abs, …) return Int by default
+			if crate::ffi::is_ffi_function(callee) {
 				return match items {
-					[_, argument] if crate::uncertain::maps_intervals(s) => interval_or(ffi_call_kind(s), argument, scope),
-					_ => ffi_call_kind(s),
+					[_, argument] if crate::uncertain::maps_intervals(callee) => interval_or(ffi_call_kind(callee), argument, scope),
+					_ => ffi_call_kind(callee),
 				};
 			}
 		}
@@ -378,7 +367,7 @@ pub(super) fn infer_list_type(node: &Node, items: &[Node], bracket: &Bracket, se
 	// Function call with parentheses: a library word has its own result, any other call is assumed Int. A comma list
 	// `(y, 4)` is a tuple, never the call y(4) (`f(a, b)` parses as `(f a b)`)
 	if *bracket == Bracket::Round && items.len() >= 2 && *separator != Separator::Colon {
-		if let Node::Symbol(name) = items[0].drop_meta() {
+		if let Some(name) = head {
 			if name == crate::library_words::SLICE || name == "reverse" || name == "sort" {
 				// a slice, reversal or sort of a text is a text, of a Node (known at runtime only) a Node, of anything else a list
 				return match infer_type(&items[1], scope) {
@@ -407,21 +396,13 @@ pub(super) fn infer_list_type(node: &Node, items: &[Node], bracket: &Bracket, se
 	}
 	// Zero-arg function call: (funcname) with no args
 	if *bracket == Bracket::Round && items.len() == 1 {
-		if let Node::Symbol(s) = items[0].drop_meta() {
-			if crate::ffi::is_ffi_function(s) {
-				return ffi_call_kind(s);
-			}
+		return match head {
+			Some(name) if crate::ffi::is_ffi_function(name) => ffi_call_kind(name),
 			// `abs(c)`: a variable in parentheses is the variable
-			if let Some(local) = scope.binding(s) {
-				return local.kind;
-			}
-			// Assume zero-arg user function returns Int
-			return Kind::Int;
-		}
-	}
-	// Grouping: (x) has the type of x
-	if *bracket == Bracket::Round && items.len() == 1 {
-		return infer_type(&items[0], scope);
+			Some(name) => scope.binding(name).map_or(Kind::Int, |local| local.kind), // a user function without arguments: Int
+			// Grouping: (x) has the type of x
+			None => infer_type(&items[0], scope),
+		};
 	}
 	// Data list: all items are pure data, or `[…]` computing its elements → Kind::List
 	let computed_elements = *bracket == Bracket::Square && !items.iter().any(|item| is_statement(item, bracket));
@@ -429,11 +410,7 @@ pub(super) fn infer_list_type(node: &Node, items: &[Node], bracket: &Bracket, se
 		return Kind::List;
 	}
 	// Statement sequence: return type of last item
-	if let Some(last) = items.last() {
-		infer_type(last, scope)
-	} else {
-		Kind::Empty
-	}
+	items.last().map_or(Kind::Empty, |last| infer_type(last, scope))
 }
 
 /// Kind of an element of `indexed`: a list's common element type (`list of text` → Text), the character of a text;

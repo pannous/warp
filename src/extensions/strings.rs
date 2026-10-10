@@ -1,7 +1,3 @@
-use std::fmt::Debug; // for println!("{:?}", item)
-use std::fmt::Display; // for println!("{}", item)
-					   // use crate::put;
-
 #[allow(dead_code)]
 #[allow(non_snake_case)]
 pub fn String(s: &str) -> String {
@@ -31,8 +27,8 @@ impl CharExtensions for char {
 }
 
 pub trait StringExtensions {
+	/// negative indices count from the end: -2 = next to last
 	fn at(&self, nr: i32) -> char;
-	fn codepoint_at(&self, nr: i32) -> char;
 	fn char(&self, nr: usize) -> char;
 	fn upper(&self) -> String;
 	fn reverse(&self) -> String;
@@ -45,80 +41,10 @@ pub trait StringExtensions {
 	fn head(&self) -> char;
 	fn byte_at(&self, nr: usize) -> u8;
 	fn str(&self) -> String;
-	// allow negative index into chars : -2 = next to last
 	fn s(&self) -> String;
-	// from is reserved for String.from("…") constructor
-	// fn from(&self, start: usize) -> &str;
-	fn start_from(&self, start: usize) -> &str;
 	fn set(&self, index: usize, c: char) -> String;
 	// return the slice after the first occurrence of `pat`, or empty slice if not found
 	fn after(&self, pat: &str) -> &str;
-}
-
-impl StringExtensions for String {
-	fn at(&self, nr: i32) -> char {
-		let wrapped_index = (nr + self.chars().count() as i32) as usize % self.chars().count();
-		self.chars().nth(wrapped_index).unwrap()
-	}
-	fn codepoint_at(&self, nr: i32) -> char {
-		self.at(nr)
-	}
-	fn char(&self, nr: usize) -> char {
-		self.chars().nth(nr).unwrap()
-	}
-	fn upper(&self) -> String {
-		self.to_uppercase()
-	}
-	fn reverse(&self) -> String {
-		self.chars().rev().collect()
-	}
-	fn map(&self, f: fn(char) -> char) -> String {
-		self.chars().map(f).collect()
-	}
-	fn substring(&self, start: usize, end: usize) -> &str {
-		// just use the range operator directly
-		&self[start..end]
-	}
-	fn first_char(&self) -> char {
-		self.chars().next().unwrap()
-	}
-	fn last_char(&self) -> char {
-		self.chars().last().unwrap()
-	}
-	fn first(&self) -> char {
-		self.chars().next().unwrap()
-	}
-	fn start(&self) -> char {
-		self.chars().next().unwrap()
-	}
-	fn head(&self) -> char {
-		self.chars().next().unwrap()
-	}
-	fn byte_at(&self, nr: usize) -> u8 {
-		self.as_bytes()[nr]
-	}
-	fn str(&self) -> String {
-		self.to_owned()
-	}
-	// Function implementations
-	fn s(&self) -> String {
-		self.to_owned()
-	}
-	// fn from(&self, start: usize) -> &str { &self[start..] }
-	fn start_from(&self, start: usize) -> &str {
-		&self[start..]
-	}
-	fn set(&self, at: usize, value: char) -> String {
-		self.clone().replace_range(at..at + 1, &value.to_string());
-		self.to_string()
-	}
-	fn after(&self, pat: &str) -> &str {
-		match self.find(pat) {
-			Some(idx) => &self[idx + pat.len()..],
-			None => &self[self.len()..],
-		}
-	}
-	// fn start_from(&self, start: usize) -> &str { panic!("just use &s[start..] ") }
 }
 
 impl StringExtensions for str {
@@ -126,9 +52,6 @@ impl StringExtensions for str {
 		let wrapped_index = (nr + self.chars().count() as i32) as usize % self.chars().count();
 		self.chars().nth(wrapped_index).unwrap()
 	}
-	fn codepoint_at(&self, nr: i32) -> char {
-		self.at(nr)
-	}
 	fn char(&self, nr: usize) -> char {
 		self.chars().nth(nr).unwrap()
 	}
@@ -152,13 +75,13 @@ impl StringExtensions for str {
 		self.chars().last().unwrap()
 	}
 	fn first(&self) -> char {
-		self.chars().next().unwrap()
+		self.first_char()
 	}
 	fn start(&self) -> char {
-		self.chars().next().unwrap()
+		self.first_char()
 	}
 	fn head(&self) -> char {
-		self.chars().next().unwrap()
+		self.first_char()
 	}
 	fn byte_at(&self, nr: usize) -> u8 {
 		self.as_bytes()[nr]
@@ -166,15 +89,9 @@ impl StringExtensions for str {
 	fn str(&self) -> String {
 		self.to_string()
 	}
-	// allow negative index into chars : -2 = next to last
 	fn s(&self) -> String {
-		self.to_string()
+		self.str()
 	}
-	fn start_from(&self, start: usize) -> &str {
-		&self[start..]
-	}
-	// fn start_from(&self, start: usize) -> &str { panic!("just use &s[start..] ") }
-
 	fn set(&self, at: usize, value: char) -> String {
 		let mut changed = self.to_string();
 		changed.replace_range(at..at + 1, &value.to_string());
@@ -182,22 +99,9 @@ impl StringExtensions for str {
 	}
 
 	fn after(&self, pat: &str) -> &str {
-		match self.find(pat) {
-			Some(idx) => &self[idx + pat.len()..],
-			None => &self[self.len()..],
-		}
+		self.find(pat).map_or("", |idx| &self[idx + pat.len()..])
 	}
 }
-
-// by value
-// call with &arg if you encounter "Borrow of moved value" error (later)
-pub fn print_list<T: Display + Debug>(list: impl IntoIterator<Item = T>) {
-	for item in list {
-		println!("{}", item);
-	}
-}
-
-
 
 // use std::cmp::PartialEq;
 

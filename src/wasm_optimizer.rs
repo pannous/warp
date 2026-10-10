@@ -30,6 +30,12 @@ pub enum ExportMode {
 	Executable { entry_points: Vec<String> },
 }
 
+/// A file in the temp directory no other run uses: `<stem>_<process>_<nanoseconds>.<extension>`
+fn unique_temp_file(stem: &str, extension: &str) -> std::path::PathBuf {
+	let nanoseconds = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map_or(0, |elapsed| elapsed.as_nanos());
+	std::env::temp_dir().join(format!("{stem}_{}_{nanoseconds}.{extension}", std::process::id()))
+}
+
 impl Default for ExportMode {
 	// fn default() -> Self { ExportMode::Library }
 	fn default() -> Self {
@@ -82,13 +88,8 @@ impl WasmOptimizer {
 		}
 
 		// Write input to temp file (use unique names to avoid race conditions)
-		let id = std::process::id();
-		let ts = std::time::SystemTime::now()
-			.duration_since(std::time::UNIX_EPOCH)
-			.map(|d| d.as_nanos())
-			.unwrap_or(0);
-		let input_path = std::env::temp_dir().join(format!("warp_opt_input_{}_{}.wasm", id, ts));
-		let output_path = std::env::temp_dir().join(format!("warp_opt_output_{}_{}.wasm", id, ts));
+		let input_path = unique_temp_file("warp_opt_input", "wasm");
+		let output_path = unique_temp_file("warp_opt_output", "wasm");
 
 		std::fs::write(&input_path, wasm_bytes)
 			.map_err(|e| format!("Failed to write temp input: {}", e))?;
@@ -124,13 +125,8 @@ impl WasmOptimizer {
 
 	/// Run wasm-metadce for tree-shaking, returns path to output
 	fn run_tree_shaking(&self, input: &Path, entry_points: &[String]) -> Result<std::path::PathBuf, String> {
-		let id = std::process::id();
-		let ts = std::time::SystemTime::now()
-			.duration_since(std::time::UNIX_EPOCH)
-			.map(|d| d.as_nanos())
-			.unwrap_or(0);
-		let output = std::env::temp_dir().join(format!("warp_metadce_output_{}_{}.wasm", id, ts));
-		let graph_path = std::env::temp_dir().join(format!("warp_roots_{}_{}.json", id, ts));
+		let output = unique_temp_file("warp_metadce_output", "wasm");
+		let graph_path = unique_temp_file("warp_roots", "json");
 
 		// Build graph JSON for wasm-metadce
 		let graph = self.build_roots_graph(entry_points);

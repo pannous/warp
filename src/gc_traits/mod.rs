@@ -79,11 +79,14 @@ impl FromVal for String {
     }
 }
 
+/// The reference a value holds, an error for a number or null
+pub(crate) fn anyref_of(val: &Val) -> Result<Rooted<AnyRef>> {
+    val.unwrap_anyref().copied().ok_or_else(|| anyhow!("not an anyref"))
+}
+
 impl FromVal for Rooted<StructRef> {
     fn from_val(val: Val, store: &mut Store<()>) -> Result<Self> {
-        let anyref = val
-            .unwrap_anyref()
-            .ok_or_else(|| anyhow!("not an anyref"))?;
+        let anyref = anyref_of(&val)?;
         Ok(anyref.unwrap_struct(&*store)?)
     }
 }
@@ -289,9 +292,7 @@ fn format_gc_val(f: &mut std::fmt::Formatter<'_>, store: &mut Store<()>, val: &V
 impl GcObject {
     /// Create a new GcObject that owns the store
     pub fn new(val: Val, store: Store<()>, instance: Option<Instance>) -> Result<Self> {
-        let anyref = val
-            .unwrap_anyref()
-            .ok_or_else(|| anyhow!("not an anyref"))?;
+        let anyref = anyref_of(&val)?;
         let inner = anyref.unwrap_struct(&store)?;
         Ok(Self {
             inner,
@@ -329,20 +330,23 @@ impl GcObject {
         f(&mut self.store.borrow_mut())
     }
 
-    /// Get a field with automatic type conversion (supports both index and field name)
-    pub fn get<T: FromVal, I: FieldIndex>(&self, field: I) -> Result<T> {
+    /// `read` of the field's value and index (a field index or name)
+    fn with_field<I: FieldIndex, R>(&self, field: I, read: impl FnOnce(Val, usize, &mut Store<()>) -> Result<R>) -> Result<R> {
         self.with_store(|store| {
             let idx = field.to_field_index(&self.inner, &*store)?;
             let val = self.inner.field(&mut *store, idx)?;
-            T::from_val(val, &mut *store)
+            read(val, idx, store)
         })
+    }
+
+    /// Get a field with automatic type conversion (supports both index and field name)
+    pub fn get<T: FromVal, I: FieldIndex>(&self, field: I) -> Result<T> {
+        self.with_field(field, |val, _, store| T::from_val(val, store))
     }
 
     /// Get a string field with instance access for ptr/len strings
     pub fn get_string<I: FieldIndex>(&self, field: I) -> Result<String> {
-        self.with_store(|store| {
-            let idx = field.to_field_index(&self.inner, &*store)?;
-            let val = self.inner.field(&mut *store, idx)?;
+        self.with_field(field, |val, _, store| {
             if let Some(instance) = &self.instance {
                 let gc_string = GcString::from_val(store, val)?;
                 gc_string.to_string_with_instance(store, instance)
@@ -354,9 +358,7 @@ impl GcObject {
 
     /// Get a nested struct
     pub fn get_struct<I: FieldIndex>(&self, index: I) -> Result<Rooted<StructRef>> {
-        self.with_store(|store| {
-            let idx = index.to_field_index(&self.inner, &*store)?;
-            let val = self.inner.field(&mut *store, idx)?;
+        self.with_field(index, |val, idx, store| {
             let anyref = val
                 .unwrap_anyref()
                 .ok_or_else(|| anyhow!("field {} is not an anyref", idx))?;
@@ -383,20 +385,12 @@ impl GcObject {
 
     /// Check if a field is null
     pub fn is_null<I: FieldIndex>(&self, index: I) -> Result<bool> {
-        self.with_store(|store| {
-            let idx = index.to_field_index(&self.inner, &*store)?;
-            let val = self.inner.field(&mut *store, idx)?;
-            Ok(val.unwrap_anyref().is_none())
-        })
+        self.with_field(index, |val, _, _| Ok(val.unwrap_anyref().is_none()))
     }
 
     /// Check if a field is not null
     pub fn has<I: FieldIndex>(&self, index: I) -> Result<bool> {
-        self.with_store(|store| {
-            let idx = index.to_field_index(&self.inner, &*store)?;
-            let val = self.inner.field(&mut *store, idx)?;
-            Ok(val.unwrap_anyref().is_some())
-        })
+        Ok(!self.is_null(index)?)
     }
 
     /// Set a field value (for mutable fields)

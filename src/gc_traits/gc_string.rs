@@ -38,9 +38,7 @@ impl GcString {
 
     /// Create from a Val (auto-detects struct vs array)
     pub fn from_val(store: &Store<()>, val: Val) -> Result<Self> {
-        let anyref = val
-            .unwrap_anyref()
-            .ok_or_else(|| anyhow!("not an anyref"))?;
+        let anyref = anyref_of(&val)?;
 
         // Try struct first (ptr/len pattern)
         if let Ok(structref) = anyref.clone().unwrap_struct(store) {

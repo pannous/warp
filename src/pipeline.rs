@@ -595,15 +595,10 @@ pub fn eval_block(block: Node, names: &Node, values: &Node, definitions: &Node) 
 		Node::Text(names) => names.split_whitespace().map(str::to_string).collect(),
 		_ => vec![],
 	};
-	let items = |list: &Node| match list.drop_meta() {
-		Node::List(items, _, _) => items.clone(),
-		Node::Empty => vec![],
-		single => vec![single.clone()],
-	};
 	let block = spaced(block);
-	let definitions: Vec<Node> = items(definitions).into_iter().map(spaced).collect();
+	let definitions: Vec<Node> = definitions.as_items().into_iter().map(spaced).collect();
 	let mentioned = |name: &str| [&block].into_iter().chain(&definitions).any(|part| mentions(part, name));
-	let bound: Vec<(String, Node)> = names.into_iter().zip(items(values)).filter(|(name, _)| mentioned(name)).collect();
+	let bound: Vec<(String, Node)> = names.into_iter().zip(values.as_items()).filter(|(name, _)| mentioned(name)).collect();
 	let program_of = |bindings: Vec<Node>| {
 		let statements: Vec<Node> = bindings.into_iter().chain(definitions.iter().cloned()).chain([block.clone()]).collect();
 		Node::List(statements, Bracket::None, Separator::Newline)

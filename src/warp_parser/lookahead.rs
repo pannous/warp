@@ -216,7 +216,7 @@ impl WarpParser {
 			'&' if self.starts_function_reference() && self.prev_char().is_whitespace() => None, // `map &square xs`
 			'&' => Some((Op::And, 1)),
 			'|' => Some((Op::Or, 1)),
-			glyph if glyph_operator(glyph).is_some() => glyph_operator(glyph).map(|(op, _)| (op, 1)),
+			glyph if let Some((op, _)) = glyph_operator(glyph) => Some((op, 1)),
 			'#' => Some((Op::Hash, 1)),
 			'?' => Some((Op::Question, 1)),
 			'…' => Some((Op::To, 1)),
@@ -417,7 +417,7 @@ impl WarpParser {
 			}
 			items.push(item);
 		}
-		if items.len() == 1 { items.remove(0) } else { Node::List(items, Bracket::None, Separator::Space) }
+		Node::single_or_list(items, Bracket::None, Separator::Space)
 	}
 
 	/// `norm() := …`, `def abs(): …`, `fun sqrt() { … }`: the word `length` characters ahead names what is defined, not

@@ -156,6 +156,14 @@ impl Node {
 	pub fn print(&self) {
 		println!("{:?}", self);
 	}
+	/// The items of a list, none of ø, else the node as the one item
+	pub fn as_items(&self) -> Vec<Node> {
+		match self.drop_meta() {
+			List(items, _, _) => items.clone(),
+			Empty => vec![],
+			single => vec![single.clone()],
+		}
+	}
 	pub fn children(&self) -> Vec<Node> {
 		match self {
 			List(xs, _, _) => xs.clone(),
@@ -255,6 +263,11 @@ impl Node {
 			Key(_, _, v) => v.value(),
 			_ => &Empty,
 		}
+	}
+
+	/// The one item itself, or a list of all of them
+	pub fn single_or_list(mut items: Vec<Node>, bracket: Bracket, separator: Separator) -> Node {
+		if items.len() == 1 { items.remove(0) } else { List(items, bracket, separator) }
 	}
 
 	/// The name of a symbol, through its metadata
