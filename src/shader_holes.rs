@@ -109,5 +109,5 @@ fn entry_name(entry: &Node) -> Option<String> {
 }
 
 fn entry(name: &str) -> Node {
-	Node::Key(Box::new(Node::Symbol(name.to_string())), Op::Colon, Box::new(Node::Symbol(name.to_string())))
+	Node::key(name, Node::Symbol(name.to_string()))
 }
