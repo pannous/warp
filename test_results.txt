@@ -469,6 +469,8 @@ PASSED:
   ✓ control::test_storage::keys_name_the_kept_values
   ✓ control::test_storage::local_is_the_store_of_storage
   ✓ control::test_storage::session_is_a_store_of_its_own
+  ✓ control::test_stored_default::a_stored_default_is_only_the_first_runs
+  ✓ control::test_stored_default::a_stored_value_has_a_default
   ✓ control::test_stored_signals::a_change_of_a_stored_value_is_kept_for_the_next_run
   ✓ control::test_stored_signals::a_local_named_stored_keeps_the_word
   ✓ control::test_stored_signals::a_program_keeps_its_stored_values_in_a_file_beside_it
@@ -933,6 +935,7 @@ PASSED:
   ✓ functions::test_broadcasting::test_operators_do_not_broadcast
   ✓ functions::test_broadcasting::test_scalar_calls_and_list_functions_do_not_broadcast
   ✓ functions::test_builtin_clash::a_cast_cannot_name_a_function
+  ✓ functions::test_builtin_clash::a_defined_rounding_word_is_the_programs
   ✓ functions::test_builtin_clash::a_function_keyword_names_an_infix_word
   ✓ functions::test_builtin_clash::an_operator_word_cannot_name_a_function
   ✓ functions::test_builtin_clash::library_words_stay_redefinable
@@ -1019,6 +1022,7 @@ PASSED:
   ✓ functions::test_default_parameters::a_typed_parameter_may_have_a_default
   ✓ functions::test_default_parameters::calls_without_parentheses_take_defaults_too
   ✓ functions::test_default_parameters::named_arguments_skip_defaults_and_mix_with_positional_ones
+  ✓ functions::test_definition_bodies::a_colon_body_may_assign
   ✓ functions::test_definition_bodies::a_method_body_keeps_its_suffix_word
   ✓ functions::test_definition_bodies::of_phrase_as_a_value
   ✓ functions::test_definition_bodies::ruby_def_indented_by_tabs
@@ -2113,8 +2117,10 @@ PASSED:
   ✓ numbers::test_float_assignment::test_float_local_assignment_keeps_its_float_value
   ✓ numbers::test_float_bit_operations::test_logical_and_bit_operators_on_a_float_are_refused_loudly
   ✓ numbers::test_float_bit_operations::test_logical_and_bit_operators_on_ints_still_work
+  ✓ numbers::test_float_exact_context::a_decimal_makes_float_arithmetic
   ✓ numbers::test_float_exact_context::a_rational_constant_of_exact_reals_in_a_runtime_program
   ✓ numbers::test_float_exact_context::a_variable_declared_real_keeps_the_exact_root
+  ✓ numbers::test_float_exact_context::exact_is_real_and_keeps_the_root
   ✓ numbers::test_float_exact_context::test_a_declared_exact_variable_refuses_a_float_as_a_parameter_does
   ✓ numbers::test_float_exact_context::test_explicit_cast_truncates_a_float
   ✓ numbers::test_float_exact_context::test_ffi_float_result_in_exact_context_is_refused_loudly
@@ -2213,6 +2219,7 @@ PASSED:
   ✓ numbers::test_nan_observed::a_nan_leaving_the_run_is_canonical
   ✓ numbers::test_nan_observed::a_nan_prints_as_nan
   ✓ numbers::test_nearest::float_to_exact_refusals_name_nearest
+  ✓ numbers::test_nearest::nearest_as_a_method
   ✓ numbers::test_nearest::nearest_expands_exact_values_beyond_floats
   ✓ numbers::test_nearest::nearest_fraction
   ✓ numbers::test_nearest::nearest_of_exact_values
@@ -2979,6 +2986,7 @@ PASSED:
   ✓ scope::test_global_modifiers::test_global_without_initializer_keeps_the_type_word_out_of_the_name
   ✓ scope::test_global_modifiers::test_type_word_alone_is_still_a_name
   ✓ scope::test_global_modifiers::test_typed_global_without_initializer_is_zero
+  ✓ scope::test_global_node_widening::a_value_of_run_time_kind_widens_an_exact_global
   ✓ scope::test_global_typed_list::a_function_changes_a_typed_global_list
   ✓ scope::test_global_typed_list::a_function_reads_a_typed_global_list_of_instances
   ✓ scope::test_globals::test_global_float_with_pi
@@ -4564,4 +4572,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-10 ignored, 4559 passed, 0 failed, 4559 total tested
+10 ignored, 4567 passed, 0 failed, 4567 total tested

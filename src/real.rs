@@ -10,7 +10,7 @@ use crate::extensions::reals::{Exact, Generator, Monomial, Rational, Real};
 use crate::compile_time::{answer_of, fail, Stop};
 use crate::node::{error, Node, Separator};
 use crate::operators::Op;
-use crate::type_tests::{is_float_type_word, is_text_type_word};
+use crate::type_tests::{is_float_type_word, is_real_type_word, is_text_type_word};
 use num_bigint::BigInt;
 use num_traits::ToPrimitive;
 use std::cmp::Ordering;
@@ -26,9 +26,6 @@ const NEAREST: &str = "nearest";
 const NEAREST_KIND: &str = "rational";
 const NEAREST_WITHIN: &str = "within";
 const NEAREST_LIMIT: &str = "limit";
-/// The declared types that hold an exact real as it is
-const REAL_TYPE: &str = "real";
-const EXACT_TYPE: &str = "exact";
 
 /// Largest integer exponent computed exactly; beyond it the power is approximated
 const MAX_EXACT_EXPONENT: i64 = 10_000;
@@ -162,12 +159,17 @@ fn lower_reals(node: Node) -> Node {
 
 /// `type(π)` asks for the type before lowering makes π a float: the type name is `real`, whatever the representation
 fn is_type_of_real(items: &[Node]) -> bool {
-	matches!(items, [head, argument] if matches!(head.drop_meta(), Node::Symbol(name) if name == "type") && mentions_real(argument))
+	matches!(items, [head, argument] if matches!(head.drop_meta(), Node::Symbol(name) if name == "type") && known_before_lowering(argument))
 }
 
 fn is_type_test_of_real(items: &[Node]) -> bool {
 	matches!(items, [head, argument, spec] if matches!(head.drop_meta(), Node::Symbol(name) if name == crate::type_tests::IS_TYPE)
-		&& matches!(spec.drop_meta(), Node::Text(_)) && mentions_real(argument))
+		&& matches!(spec.drop_meta(), Node::Text(_)) && known_before_lowering(argument))
+}
+
+/// An argument whose type lowering would change: a written exact real, or a constant expression of roots (`√2` is real)
+fn known_before_lowering(argument: &Node) -> bool {
+	mentions_real(argument) || mentions_generator(argument) && evaluate(argument, &mut Scope::new()).is_ok()
 }
 
 /// The type of the written number, else of the exact value of a constant expression (`2 * π` is real, `π / π` int)
@@ -234,6 +236,11 @@ fn list(items: &[Node], separator: &Separator, scope: &mut Scope) -> Evaluated {
 			let value = evaluate(value, scope)?;
 			nearest(value, options, scope)
 		}
+		// `real x = sqrt(2)` declares as `x: real = sqrt(2)` does
+		[head, declaration] if matches!(head.drop_meta(), Node::Symbol(word) if is_real_type_word(word) && !scope.contains_key(word)) => match declaration.drop_meta() {
+			Node::Key(target, Op::Assign | Op::Define, value) => declare_real(target, value, scope),
+			_ => Err(Stop::Unsupported),
+		},
 		[head, argument] if is_text_type_word(&head.name()) && !scope.contains_key(&head.name()) => {
 			convert(evaluate(argument, scope)?, &head.name())
 		}
@@ -251,17 +258,16 @@ fn list(items: &[Node], separator: &Separator, scope: &mut Scope) -> Evaluated {
 fn key(left: &Node, op: Op, right: &Node, scope: &mut Scope) -> Evaluated {
 	match op {
 		Op::Assign | Op::Define => {
-			let (name, value) = match left.drop_meta() {
-				Node::Symbol(name) => (name, evaluate(right, scope)?),
+			match left.drop_meta() {
+				Node::Symbol(name) => {
+					let value = evaluate(right, scope)?;
+					scope.insert(name.clone(), value.clone());
+					Ok(value)
+				}
 				// `x: real = sqrt(2)` keeps the exact root (card typed-real); other declared types take the run-time path
-				Node::Key(target, Op::Colon, declared) => match (target.drop_meta(), declared.name().as_str()) {
-					(Node::Symbol(name), EXACT_TYPE | REAL_TYPE) => (name, exact_value(evaluate(right, scope)?)?),
-					_ => return Err(Stop::Unsupported),
-				},
-				_ => return Err(Stop::Unsupported),
-			};
-			scope.insert(name.clone(), value.clone());
-			Ok(value)
+				Node::Key(target, Op::Colon, declared) if is_real_type_word(&declared.name()) => declare_real(target, right, scope),
+				_ => Err(Stop::Unsupported),
+			}
 		}
 		Op::Sqrt | Op::Cbrt | Op::Neg | Op::Abs if is_empty(left) => unary(op, evaluate(right, scope)?),
 		Op::Square | Op::Cube if is_empty(right) => {
@@ -322,17 +328,21 @@ fn convert(value: Value, target: &str) -> Evaluated {
 	match (value, target) {
 		(value, text) if is_text_type_word(text) => Ok(Value::Text(text_of(value)?)),
 		(Value::Real(real), float) if is_float_type_word(float) => Ok(Value::Float(finite_f64(&real)?)),
-		(value @ Value::Real(_), REAL_TYPE | EXACT_TYPE) => Ok(value),
+		(value @ Value::Real(_), real) if is_real_type_word(real) => Ok(value),
 		(value @ Value::Float(_), float) if is_float_type_word(float) => Ok(value),
 		_ => Err(Stop::Unsupported),
 	}
 }
 
-fn exact_value(value: Value) -> Evaluated {
-	match value {
-		Value::Real(_) => Ok(value),
-		_ => Err(Stop::Unsupported),
+/// A variable declared `real` (or `exact`) holds the exact real as it is
+fn declare_real(target: &Node, value: &Node, scope: &mut Scope) -> Evaluated {
+	let Node::Symbol(name) = target.drop_meta() else { return Err(Stop::Unsupported) };
+	let value = evaluate(value, scope)?;
+	if !matches!(value, Value::Real(_)) {
+		return Err(Stop::Unsupported);
 	}
+	scope.insert(name.clone(), value.clone());
+	Ok(value)
 }
 
 /// The text form of a value: an exact real symbolically (`√2`, `π/2`), as it prints

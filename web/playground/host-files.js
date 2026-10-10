@@ -365,6 +365,22 @@ function rollBack(file) {
 }
 
 // a 16-bit mono PCM WAV of the offset samples (src/sound.rs wav)
+// the sounds mixed at their places on their voices (src/sound.rs render): a task's sound along with the program's; a
+// sound without a place (no voices where it ran) follows the one before
+function mixed(sounds, rate) {
+	let end = 0;
+	const starts = sounds.map(sound => {
+		const place = sound.place ?? end;
+		end = Math.max(end, place + sound.samples.length / rate);
+		return place;
+	});
+	const first = Math.min(...starts);
+	const offsets = starts.map(place => Math.round((place - first) * rate));
+	const amplitudes = new Float64Array(Math.max(0, ...sounds.map((sound, i) => offsets[i] + sound.samples.length)));
+	sounds.forEach((sound, i) => sound.samples.forEach((sample, at) => amplitudes[offsets[i] + at] += Number(sample) - SAMPLE_OFFSET));
+	return Array.from(amplitudes, amplitude => amplitude + SAMPLE_OFFSET);
+}
+
 function wavOf(samples, rate) {
 	const bytes = new Uint8Array(WAV_HEADER_BYTES + 2 * samples.length);
 	const view = new DataView(bytes.buffer);
@@ -445,12 +461,12 @@ addHostPart({
 			// the run's sounds since its start or the last render, one WAV (src/sound.rs render): its seconds; the page
 			// offers it for download
 			render(path) {
-				const sounds = this.holder.unrenderedSounds ?? [];
-				this.holder.unrenderedSounds = [];
+				const sounds = this.holder.run.unrenderedSounds ?? [];
+				this.holder.run.unrenderedSounds = [];
 				const rate = sounds[0]?.rate ?? DEFAULT_SAMPLE_RATE;
 				const other = sounds.find(sound => sound.rate !== rate);
 				if (other) throw new Error(`sounds of ${rate} and ${other.rate} samples per second cannot share ${contentText(path)}`);
-				const samples = sounds.flatMap(sound => sound.samples);
+				const samples = mixed(sounds, rate);
 				const bytes = wavOf(samples, rate);
 				keepWritten(contentText(path), bytes);
 				return samples.length / rate;

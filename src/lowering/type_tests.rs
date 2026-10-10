@@ -26,6 +26,7 @@ pub const EMPTY_TYPE: &str = "empty";
 const ARTICLES: [&str; 2] = ["a", "an"];
 const NUMBER_WORD: &str = "number";
 const FLOAT_WORD: &str = "float";
+const REAL_WORD: &str = "real";
 const TEXT_WORD: &str = "text";
 /// `String(x)`, `x as String`: the class spelling of text, a cast word only, so `String` stays free as a type value
 const TEXT_CLASS_WORD: &str = "String";
@@ -60,8 +61,8 @@ use crate::type_kinds::Kind as K;
 /// it; a ± value is a number. The fixed widths (`int8`, `uint16` …) are src/fixed_width.rs
 const BUILTIN_TYPES: [BuiltinType; 15] = [
 	builtin("int", &["integer", "long", "i64", "i32"], &[], Some(K::Int), &[K::Int as i64]),
-	builtin("rational", &["exact"], &["int"], Some(K::Int), &[K::Int as i64, K::Float as i64]),
-	builtin("real", &[], &["rational"], Some(K::Empty), &[K::Int as i64, K::Float as i64]),
+	builtin("rational", &[], &["int"], Some(K::Int), &[K::Int as i64, K::Float as i64]),
+	builtin(REAL_WORD, &["exact"], &["rational"], Some(K::Empty), &[K::Int as i64, K::Float as i64]),
 	builtin(FLOAT_WORD, &["double", "f64", "f32", "float32", "float64", "fast"], &[], Some(K::Float), &[K::Float as i64]),
 	builtin("number", &[], &["real", "float"], Some(K::Float), &[K::Int as i64, K::Float as i64, K::Uncertain as i64]),
 	builtin(TEXT_WORD, &["str", "string"], &["codepoint"], Some(K::Text), &[K::Text as i64, K::Codepoint as i64]),
@@ -104,6 +105,11 @@ pub fn is_text_type_word(word: &str) -> bool {
 /// `x as double`, `x as f32`: a word naming the IEEE float type
 pub fn is_float_type_word(word: &str) -> bool {
 	canonical_spec_word(word) == FLOAT_WORD
+}
+
+/// `real` or `exact`: a value declared so keeps an exact real (`√2`, `π`) as it is
+pub fn is_real_type_word(word: &str) -> bool {
+	canonical_spec_word(word) == REAL_WORD
 }
 
 /// Words that name the same type

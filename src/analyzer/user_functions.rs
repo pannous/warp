@@ -81,16 +81,26 @@ pub fn function_body_scope(params: &[Param], body: &Node, function_kinds: &HashM
 }
 
 /// A global started exact (`b = 0.5`) holds an f64 throughout once a function gives it one (`global b; b = b + random()`),
-/// as a main-level assignment widens it (widen_to_float). True when one was widened.
+/// as a main-level assignment widens it (widen_to_float), and a Node once a function gives it a value of run-time kind
+/// (`global g = 0.3; set() := { g = f(-9) }`, widen_to_node). True when one was widened.
 pub fn widen_globals_by_functions<'a>(globals: &mut HashMap<String, Local>, functions: impl Iterator<Item = &'a UserFunctionDef>, function_kinds: &HashMap<String, Kind>, closure_variable_targets: &HashMap<String, HashSet<String>>) -> bool {
 	let mut widened_any = false;
 	for function in functions {
 		let scope = function_body_scope(&function.params, &function.body, function_kinds, globals, closure_variable_targets);
-		for (name, global) in scope.globals.iter().filter(|(_, global)| global.kind == Kind::Float) {
-			if let Some(widened) = globals.get_mut(name).filter(|known| known.kind != Kind::Float) {
-				widened.kind = global.kind;
-				widened_any = true;
-			}
+		widened_any |= widen_globals(globals, &scope.globals);
+	}
+	widened_any
+}
+
+/// The known globals that `seen` holds wider: as a Node, or as an f64 where they were exact. True when one was widened.
+fn widen_globals(globals: &mut HashMap<String, Local>, seen: &HashMap<String, Local>) -> bool {
+	let wider = |kind: Kind, than: Kind| kind != than && (kind == Kind::Empty || kind == Kind::Float && than != Kind::Empty);
+	let mut widened_any = false;
+	for (name, global) in seen {
+		if let Some(widened) = globals.get_mut(name).filter(|known| wider(global.kind, known.kind)) {
+			widened.kind = global.kind;
+			widened.type_node = global.type_node.clone();
+			widened_any = true;
 		}
 	}
 	widened_any
@@ -484,8 +494,10 @@ pub(super) fn analyse_user_functions(ctx: &mut Context, node: &Node) {
 	ctx.field_kinds = program_field_kinds(node);
 	let mut globals = with_closure_captures(ctx, node, globals);
 	refine_return_kinds(ctx, &globals);
-	let return_kinds = ctx.user_functions.iter().map(|(name, function)| (name.clone(), function.return_kind)).collect();
-	if widen_globals_by_functions(&mut globals, ctx.user_functions.values(), &return_kinds, &ctx.closure_variable_targets) {
+	let return_kinds: HashMap<String, Kind> = ctx.user_functions.iter().map(|(name, function)| (name.clone(), function.return_kind)).collect();
+	// `global g = 0.3; g = f(-9)` with an f that returns a Node: only the return kinds tell that main's g holds one
+	let widened_by_main = widen_globals(&mut globals, &declared_globals_in(Scope::with_function_kinds(return_kinds.clone()), node));
+	if widen_globals_by_functions(&mut globals, ctx.user_functions.values(), &return_kinds, &ctx.closure_variable_targets) | widened_by_main {
 		refine_return_kinds(ctx, &globals);
 	}
 	// a widened parameter can make the arguments it passes on floats too: until nothing changes (each round widens one)
@@ -639,7 +651,10 @@ pub(super) fn with_closure_captures(ctx: &Context, program: &Node, mut globals: 
 
 /// The program's `global` declarations with their kinds
 pub(crate) fn declared_globals(program: &Node) -> HashMap<String, Local> {
-	let mut scope = Scope::new();
+	declared_globals_in(Scope::new(), program)
+}
+
+fn declared_globals_in(mut scope: Scope, program: &Node) -> HashMap<String, Local> {
 	collect_variables(program, &mut scope);
 	scope.globals
 }

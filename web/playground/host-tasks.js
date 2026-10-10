@@ -74,10 +74,17 @@ function addTaskWorker(loaded) {
 // a voice (card playground-go, natively src/sound.rs Voice): when this Worker's queued sounds end, on the clock the page
 // and every Worker share. A task's voice starts where its starter's stands, so their sounds sound together
 let voiceEnd = 0;
+let voiceSeconds = 0; // the seconds of sound this voice made in all: its sounds' places for render_sound
 const soundClock = () => (performance.timeOrigin + performance.now()) / 1000;
 self.soundsQueued = () => Math.max(0, voiceEnd - soundClock()); // sound_queued()
 self.voiceStopped = () => { voiceEnd = 0; };
-self.joinVoice = end => { voiceEnd = end ?? 0; }; // a task Worker's voice: its starter's
+self.joinVoice = voice => { voiceEnd = voice?.end ?? 0; voiceSeconds = voice?.seconds ?? 0; }; // a task Worker's: its starter's
+// the place of a sound of that many seconds among the voice's sounds (host.js sound_samples)
+self.voiceSounded = seconds => {
+	const place = voiceSeconds;
+	voiceSeconds += seconds;
+	return place;
+};
 // the start of a sound of that many seconds: behind this voice's sounds, never before now
 self.voicePlaced = seconds => {
 	const start = Math.max(voiceEnd, soundClock());
@@ -86,8 +93,14 @@ self.voicePlaced = seconds => {
 };
 // a task run inline sounds as a voice of its own too: the starter's voice stands where it stood
 function asVoice(run) {
-	const starterEnd = voiceEnd;
-	try { return run(); } finally { voiceEnd = starterEnd; }
+	const [starterEnd, starterSeconds] = [voiceEnd, voiceSeconds];
+	try { return run(); } finally { [voiceEnd, voiceSeconds] = [starterEnd, starterSeconds]; }
+}
+// the sounds a task made go to its starter's run, for its render_sound (card playground-drops)
+function withTaskSounds(run, record) {
+	(run.unrenderedSounds ??= []).push(...(record.sounds ?? []));
+	delete record.sounds;
+	return record;
 }
 
 // a sound a task plays, for the page, which only the program's Worker talks to (task-worker.js relay); it reaches the
@@ -296,13 +309,13 @@ function startTask(holder, hooks, name, ints, values) {
 	const run = holder.run;
 	const id = BigInt(run.tasks.size + 1);
 	const captured = capturedValues(holder.exports);
-	const inline = () => asVoice(() => runTask(run.module, hooks, holder.warnings, name, ints, values, run.shared, captured, null, run.channels));
+	const inline = () => withTaskSounds(run, asVoice(() => runTask(run.module, hooks, holder.warnings, name, ints, values, run.shared, captured, null, run.channels)));
 	if (taskPool.length > 0) {
 		const shared = new SharedArrayBuffer(TASK_HEADER + TASK_RESULT_BYTES, { maxByteLength: TASK_RESULT_LIMIT });
 		const worker = taskPool.pop();
 		const control = new Int32Array(new SharedArrayBuffer(2 * Int32Array.BYTES_PER_ELEMENT));
 		const files = self.writtenFilesForTask?.();
-		worker.postMessage({ module: run.module, name, ints, values, shared, arrays: run.shared, captured, control, channels: run.channels, files, voice: voiceEnd });
+		worker.postMessage({ module: run.module, name, ints, values, shared, arrays: run.shared, captured, control, channels: run.channels, files, voice: { end: voiceEnd, seconds: voiceSeconds } });
 		run.tasks.set(id, { name, worker, shared, control, started: performance.now(), inline });
 	} else {
 		if (!hasTaskWorkers()) sayTasksInline(run, holder, hooks);
@@ -329,8 +342,9 @@ function runTask(module, hooks, warnings, name, ints, values, arrays, captured =
 		const callee = instance.exports[name];
 		const result = values ? callee(buildValue(instance.exports, values)) : callee(...ints.slice(0, callee.length));
 		const unread = joinTasks(taskHolder.run, hooks);
-		if (unread) return { failure: `task ${taskName(name)}: ${unread}`, signals: taskHolder.run.signals };
-		return { value: typeof result === "object" && result !== null ? readNode(instance.exports, result) : result, signals: taskHolder.run.signals };
+		const { signals, unrenderedSounds: sounds } = taskHolder.run;
+		if (unread) return { failure: `task ${taskName(name)}: ${unread}`, signals, sounds };
+		return { value: typeof result === "object" && result !== null ? readNode(instance.exports, result) : result, signals, sounds };
 	} catch (trap) {
 		// no instance: the task never ran (`Out of memory: Cannot allocate Wasm memory`, see finishedTask)
 		return { failure: `task ${taskName(name)}: ${raisedText(instance?.exports) ?? trapMessage(trap, name)}`, unstarted: !instance, signals: taskHolder.run.signals };
@@ -344,7 +358,7 @@ function finishedTask(run, hooks, id) {
 	while (isRunningOnWorker(run.tasks.get(id)) && !isWritten(run.tasks.get(id), TASK_CHECK_MS)) runStalledTasks(run, hooks);
 	const task = run.tasks.get(id);
 	if (!task.worker) return queuedSignals(run, task);
-	let record = readShared(task.shared);
+	let record = withTaskSounds(run, readShared(task.shared));
 	if (record.output) hooks.print(record.output, 1);
 	record.files?.forEach(([path, content]) => self.keepWritten?.(path, content.bytes ? Uint8Array.from(content.bytes) : content));
 	taskPool.push(task.worker); // free for the next task
