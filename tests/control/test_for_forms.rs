@@ -58,3 +58,10 @@ fn each_starts_a_loop() {
 	is!("s=0; each x in [1, 2]: s+=x; s", 3);
 	is!("s=0; each x in [1, 2] { s+=x }; s", 3);
 }
+
+#[test] // wiki/iteration.md: loops binding `it` to numbers, then characters, then symbols; it is held as a Node (card loop-symbols)
+fn loops_bind_it_to_values_of_other_kinds() {
+	is!("n=0; for 1..3 {n+=it}; s=\"\"; for \"ab\" {s+=it}; s", "ab");
+	is!("for 1..3 {it}; s=\"\"; for friend in [foe1, friend1] {s+=\"$(it)\"}; s", "foe1friend1");
+	is!("x=1; while x<3 {x++}; xs=[a,b]; x = xs#2; x", warp::Node::Symbol("b".into()));
+}
