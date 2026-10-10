@@ -5,7 +5,7 @@ flow, meaningful names, no test edits. One area per session, small themed branch
 
 ## src/analyzer/, src/warp_parser/, src/node/ (card cleanup-analyzer, session warp-types)
 
-Done (branches cleanup-dead, cleanup-arith, cleanup-names, cleanup-parser, cleanup-modes, cleanup-guards):
+Done (branches cleanup-dead, cleanup-arith, cleanup-names, cleanup-parser, cleanup-modes, cleanup-guards, cleanup-lookahead):
 - dead code: Scope types, Separator::from_char, Node::key_with_op, get_meta_data, type_definition, commented-out code
 - `Node::symbol_name` / `Node::is_symbol` replace analyzer's is_word and ~40 hand-written Symbol matches
 - node/arithmetic.rs: `keeping_left_meta` + `scalar_operands!` macro (317 → 106 lines)
@@ -23,6 +23,8 @@ Done (branches cleanup-dead, cleanup-arith, cleanup-names, cleanup-parser, clean
 - `Node::single_or_list` for the one-item-or-list choice
 - if-let guards (stable on our toolchain, already used in src/lowering/) replace ~30 arms that computed their match
   twice: `x if f(x).is_some() => f(x).expect("guarded")` and `matches!(…)` + `let … else { unreachable!() }`
+- inference.rs infer_type: `conversion_kind`; checks.rs list_type_name: `nested_type_word`, `LIST_OF_PREFIX`;
+  literals.rs parse_string: `quoted_text`
 
 Left (longest functions, candidates for splitting):
 - atoms.rs parse_symbol_with_suffix (~140 lines): still a keyword dispatch
@@ -30,8 +32,7 @@ Left (longest functions, candidates for splitting):
 - declaration_lowering.rs lower_declarations_among (~110): a long but now flat rewrite dispatch
 - two `matches!` + `unreachable!("guarded")` arms stay where the arm moves the scrutinee the guard borrows
   (parameter_copies, `x as number = 9`)
-- lookahead.rs peek_operator (123), inference.rs infer_type (120), literals.rs parse_string (114),
-  checks.rs list_type_name (106)
+- lookahead.rs peek_operator (123): a flat operator table, left as is (keywords interleave with the glyph lengths)
 - node/comparison.rs eq: left alone, it carries the user's comments
 
 Outside this area (for whoever takes src/lowering/): private `is_word` / `symbol_name` / `is_symbol` copies in
