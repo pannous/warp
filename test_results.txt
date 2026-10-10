@@ -218,6 +218,7 @@ PASSED:
   ✓ control::test_for_forms::each_starts_a_loop
   ✓ control::test_for_forms::else_after_a_block_takes_the_whole_expression
   ✓ control::test_for_forms::else_print_after_a_block
+  ✓ control::test_for_forms::loops_bind_it_to_values_of_other_kinds
   ✓ control::test_for_forms::print_of_a_call_without_parentheses_in_an_if_branch
   ✓ control::test_for_forms::print_with_commas_in_a_loop_body
   ✓ control::test_for_forms::print_with_commas_in_an_if_branch
@@ -1844,6 +1845,10 @@ PASSED:
   ✓ modules::test_std_implicit_use::a_page_brings_markup_implicitly
   ✓ modules::test_std_implicit_use::routes_and_pages_lower_without_use_statements
   ✓ modules::test_std_implicit_use::routes_bring_router_and_regex_implicitly
+  ✓ modules::test_std_import_forms::import_from_a_foreign_library_stays_the_foreign_import
+  ✓ modules::test_std_import_forms::import_from_brings_the_named_words_of_a_standard_module
+  ✓ modules::test_std_import_forms::import_from_leaves_the_other_words_of_the_module_out
+  ✓ modules::test_std_import_forms::include_splices_a_standard_module
   ✓ modules::test_std_json::a_json_word_without_its_use_names_the_module
   ✓ modules::test_std_json::malformed_json_is_an_error_naming_it
   ✓ modules::test_std_json::use_json_parses_and_writes_json
@@ -3359,6 +3364,7 @@ PASSED:
   ✓ types::test_empty_named_key::a_key_named_empty_is_a_field
   ✓ types::test_empty_named_key::a_linked_list_of_empty_marked_cells
   ✓ types::test_empty_named_key::a_spaced_ternary_still_reads_the_empty_value
+  ✓ types::test_empty_type_aliases::a_type_value_compares_with_any_word_of_its_type
   ✓ types::test_enum_cases::a_match_on_enum_cases_tests_and_binds
   ✓ types::test_enum_cases::an_enum_case_with_values_is_a_class
   ✓ types::test_enum_cases::an_enum_without_values_stays_numbered
@@ -4500,4 +4506,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-10 ignored, 4495 passed, 0 failed, 4495 total tested
+10 ignored, 4501 passed, 0 failed, 4501 total tested
