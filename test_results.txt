@@ -497,6 +497,8 @@ PASSED:
   ✓ control::test_system_values::not_dark_mode_is_the_opposite_reading
   ✓ control::test_system_values::the_battery_is_a_percent_or_a_loud_error
   ✓ control::test_system_values::the_mouse_is_a_system_value_of_the_page
+  ✓ control::test_system_values::the_mouse_is_the_pointer_over_the_paint_window
+  ✓ control::test_system_values::window_open_is_no_without_a_window
   ✓ control::test_system_values::yes_no_values_read_the_machine
   ✓ control::test_table_comprehension::a_filtered_comprehension_over_a_table_reads_only_its_rows
   ✓ control::test_table_element_writes::a_filtered_row_field_change_is_written_to_its_row
@@ -4498,4 +4500,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-10 ignored, 4493 passed, 0 failed, 4493 total tested
+10 ignored, 4495 passed, 0 failed, 4495 total tested
