@@ -302,19 +302,23 @@ impl WasmGcEmitter {
 			self.emit_call(func, "get_int_value");
 			self.emit_int_to_f64(func, None);
 		} else if let Some(local) = self.scope.lookup(name) {
+			let kind = local.kind;
 			func.instruction(&I::LocalGet(local.position));
-			if local.kind.is_ref() {
-				self.emit_held_node_as_f64(func); // a Node of run-time kind: a Float stays one
-			} else if !local.kind.is_float() {
-				self.emit_int_to_f64(func, None);
-			}
+			self.emit_stored_as_f64(func, kind);
 		} else if let Some(&(idx, kind)) = self.ctx.user_globals.get(name) {
 			func.instruction(&I::GlobalGet(idx));
-			if !kind.is_float() {
-				self.emit_int_to_f64(func, None);
-			}
+			self.emit_stored_as_f64(func, kind);
 		} else {
 			self.emit_undefined_variable(func, name);
+		}
+	}
+
+	/// The value on the stack, stored as `kind` (`storage_type`), as f64
+	pub(super) fn emit_stored_as_f64(&mut self, func: &mut Function, kind: Kind) {
+		if kind.is_ref() {
+			self.emit_held_node_as_f64(func); // a Node of run-time kind: a Float stays one
+		} else if !kind.is_float() {
+			self.emit_int_to_f64(func, None);
 		}
 	}
 
