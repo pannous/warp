@@ -17,6 +17,17 @@ const WAV_HEADER_BYTES = 44;
 const writtenFiles = new Map();
 const filePath = path => path.replace(/^\.\//, "");
 const textOf = written => typeof written === "string" ? written : utf8Decoder.decode(written);
+// a task's Worker starts with the files written so far (host-tasks.js startTask) and hands the program's Worker each
+// one it wrote with its result (task-worker.js self.taskWrote), as natively the tasks of a run share the file system
+self.writtenFilesForTask = () => writtenFiles;
+self.takeWrittenFiles = files => files?.forEach((content, path) => writtenFiles.set(path, content));
+
+// a file written (a text) or rendered (bytes, which the page offers for download: worker.js self.keepFile)
+function keepWritten(path, content) {
+	writtenFiles.set(filePath(path), content);
+	if (typeof content !== "string") self.keepFile?.(filePath(path), content);
+	self.taskWrote?.(path, content);
+}
 
 const textOfFile = path => {
 	const written = writtenFiles.get(filePath(path));
@@ -368,8 +379,8 @@ addHostPart({
 			names: file => Object.keys(valuesOf(file)),
 		},
 		file: {
-			write: (path, content) => { writtenFiles.set(filePath(path), contentText(content)); return null; },
-			append: (path, content) => { writtenFiles.set(filePath(path), textOfFile(path) + contentText(content)); return null; },
+			write: (path, content) => { keepWritten(path, contentText(content)); return null; },
+			append: (path, content) => { keepWritten(path, textOfFile(path) + contentText(content)); return null; },
 			exists: path => writtenFiles.has(filePath(path)) || servedFileExists(path),
 			list: folder => {
 				const prefix = filePath(folder).replace(/\/?$/, "/");
@@ -398,7 +409,7 @@ addHostPart({
 			queued: () => self.soundsQueued?.() ?? 0,
 			wait: () => null,
 			// the run's sounds since its start or the last render, one WAV (src/sound.rs render): its seconds; the page
-			// offers it for download (worker.js self.keepFile)
+			// offers it for download
 			render(path) {
 				const sounds = this.holder.unrenderedSounds ?? [];
 				this.holder.unrenderedSounds = [];
@@ -407,8 +418,7 @@ addHostPart({
 				if (other) throw new Error(`sounds of ${rate} and ${other.rate} samples per second cannot share ${contentText(path)}`);
 				const samples = sounds.flatMap(sound => sound.samples);
 				const bytes = wavOf(samples, rate);
-				writtenFiles.set(filePath(contentText(path)), bytes);
-				self.keepFile?.(filePath(contentText(path)), bytes);
+				keepWritten(contentText(path), bytes);
 				return samples.length / rate;
 			},
 		},

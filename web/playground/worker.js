@@ -54,16 +54,17 @@ self.stopSound = handle => post({ type: "stop sound", handle }); // stop_sound(h
 let soundsEnd = 0;
 const clockSeconds = () => performance.now() / 1000;
 self.soundsQueued = () => Math.max(0, soundsEnd - clockSeconds());
+// a worker has no AudioContext: the page plays it, queued behind the sounds before it as the clock here counts
+self.playSamples = (samples, rate) => {
+	soundsEnd = Math.max(soundsEnd, clockSeconds()) + samples.length / rate;
+	post({ type: "sound", samples, rate, handle: nextSoundHandle() });
+};
 const hooks = {
 	renders: true, // each outcome carries its HTML by the program's own renderer (host.js renderedHtml)
 	print: (text, stream) => post({ type: "print", text, stream }),
 	module: bytes => post({ type: "module", bytes }),
 	paint: (pixels, width, height) => post({ type: "paint", pixels, width, height }),
-	// a worker has no AudioContext: the page plays it, queued behind the sounds before it as the clock here counts
-	sound: (samples, rate) => {
-		soundsEnd = Math.max(soundsEnd, clockSeconds()) + samples.length / rate;
-		post({ type: "sound", samples, rate, handle: nextSoundHandle() });
-	},
+	sound: (samples, rate) => self.playSamples(samples, rate),
 	sleeping: () => post({ type: "sleep" }),
 	tasksInline: reason => post({ type: "tasks inline", reason }),
 	notify: text => post({ type: "notify", text }),
