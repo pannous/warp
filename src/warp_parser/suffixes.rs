@@ -430,7 +430,7 @@ impl WarpParser {
 			_ => false,
 		};
 		let lhs_is_defined_function = matches!(lhs.drop_meta(), Node::Symbol(name) if self.functions.contains(name));
-		let lhs_is_operand_word = matches!(lhs.drop_meta(), Node::Symbol(name) if crate::library_words::is_operand_word(name));
+		let lhs_is_operand_word = || matches!(lhs.drop_meta(), Node::Symbol(name) if crate::library_words::is_operand_word(name));
 		let ch = self.current_char();
 		let in_assignment_context = min_bp <= 60 || self.branch_bp == Some(min_bp); // Assignment r_bp is 59
 		let arg_is_non_identifier = ch.is_numeric()
@@ -442,7 +442,7 @@ impl WarpParser {
 			|| ch == '{'
 			|| ch == '-'
 			|| self.starts_function_reference();
-		let should_apply = in_assignment_context || arg_is_non_identifier || lhs_is_defined_function || lhs_is_operand_word;
+		let should_apply = in_assignment_context || arg_is_non_identifier || lhs_is_defined_function || lhs_is_operand_word();
 
 		// At statement level a list `f a b` is a call with all its items; a function of the implicit `it` takes one argument,
 		// so `f 3-1 > 15` compares `f(3-1)` just like the operand `1 + f 3-1 > 15` does

@@ -9,6 +9,11 @@ hard-coded list of words standing in for a mechanism breaks on every word it mis
 variable: real" although type(π) prints real. Derive each such list from its source of truth (the type registry,
 the library's exports, the operator table) instead of adding the missing word. Card cleanup-closed-lists; the
 type-word lists become one table under warp-numbers (bare type names are type values).
+List words (card derive-hard): the operand words (`1 == first xs` applies first) are every library word of one
+argument by `arity` (runtime words, expanded words, lib/prelude.warp) that is no type word (type_tests registry), not
+seven listed ones; the copy, draining and result-kind lists name one spelling each and match through
+library_words::canonical_spelling. Still listed by hand: their members (properties no other table records),
+broadcasting SCALAR_LIBRARY_WORDS, checks ORDER_WORDS.
 
 ## src/analyzer/, src/warp_parser/, src/node/ (card cleanup-analyzer, session warp-types)
 
