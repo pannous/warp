@@ -146,6 +146,7 @@ fn functions_of_operator(op: &Op) -> &'static [&'static str] {
 		Op::Identical | Op::NotIdentical => &[VALUES_EQUAL, SAME_NODE],
 		Op::If | Op::While | Op::Question | Op::Not | Op::And | Op::Or => &[IS_TRUTHY],
 		Op::Inc | Op::Dec | Op::Neg | Op::Abs | Op::Square | Op::Cube | Op::Xor => &[INT_RUNTIME],
+		Op::Div | Op::DivAssign => &[INT_RUNTIME, crate::wasm_emitter::exact::INT_GCD], // ratios: fast multi-limb division for their gcds
 		op if op.is_arithmetic() || op.is_shift() || op.is_compound_assign() => &[INT_RUNTIME],
 		_ => &[],
 	}

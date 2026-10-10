@@ -818,9 +818,62 @@ impl WasmGcEmitter {
 			s.call(f, "big_trim");
 		});
 
-		// mag_divmod(a, b) -> (quotient, remainder) as two results, b nonzero: long division limb by limb (Knuth, TAOCP 4.3.1
-		// algorithm D), O(len a · len b); bit by bit it was O(bits a · len b), and Euclid's gcd of 1400-bit numbers ran out
-		// of fuel (card exact-harmonic)
+		// mag_divmod(a, b) -> (quotient, remainder) as two results, b nonzero: limb by limb where ratios need gcds, else the
+		// compact bit by bit division (web::test_bundle_budget)
+		if self.should_emit_function(super::exact::INT_GCD) {
+			self.emit_limbwise_divmod();
+		} else {
+			self.emit_bitwise_divmod();
+		}
+	}
+
+	/// mag_divmod by binary long division: O(bits a · len b), compact
+	fn emit_bitwise_divmod(&mut self) {
+		let (limbs, limbs_type, i32s) = (self.limbs_ref(), self.type_manager.limbs_type, ValType::I32);
+		// locals: quotient, remainder, bit, n, k, carry, v
+		self.runtime_function("mag_divmod", vec![limbs, limbs], vec![limbs, limbs], vec![limbs, limbs, i32s, i32s, i32s, i32s, i32s], |s, f| {
+			let (a, b, quotient, remainder, bit, n, k, carry, v) = (0, 1, 2, 3, 4, 5, 6, 7, 8);
+			Self::emit_list(f, &[I::LocalGet(a), I::ArrayLen, I::ArrayNewDefault(limbs_type), I::LocalSet(quotient)]);
+			Self::emit_list(f, &[I::LocalGet(b), I::ArrayLen, I::I32Const(1), I::I32Add, I::LocalTee(n), I::ArrayNewDefault(limbs_type), I::LocalSet(remainder)]);
+			Self::emit_list(f, &[I::LocalGet(a), I::ArrayLen, I::I32Const(5), I::I32Shl, I::LocalSet(bit)]);
+			Self::count_down(f, bit, |f| {
+				// carry = bit `bit` of a
+				Self::emit_list(f, &[
+					I::LocalGet(a), I::LocalGet(bit), I::I32Const(5), I::I32ShrU, I::ArrayGet(limbs_type),
+					I::LocalGet(bit), I::I32Const(31), I::I32And, I::I32ShrU, I::I32Const(1), I::I32And, I::LocalSet(carry),
+				]);
+				// remainder = remainder << 1 | carry
+				Self::emit_list(f, &[I::I32Const(0), I::LocalSet(k)]);
+				Self::count_up(f, k, n, |f| {
+					Self::emit_list(f, &[I::LocalGet(remainder), I::LocalGet(k), I::ArrayGet(limbs_type), I::LocalSet(v)]);
+					Self::emit_list(f, &[
+						I::LocalGet(remainder), I::LocalGet(k), I::LocalGet(v), I::I32Const(1), I::I32Shl, I::LocalGet(carry), I::I32Or,
+						I::ArraySet(limbs_type),
+					]);
+					Self::emit_list(f, &[I::LocalGet(v), I::I32Const(31), I::I32ShrU, I::LocalSet(carry)]);
+				});
+				Self::emit_list(f, &[I::LocalGet(remainder), I::LocalGet(b)]);
+				s.call(f, "mag_cmp");
+				Self::emit_list(f, &[I::I32Const(0), I::I32GeS, I::If(BlockType::Empty), I::LocalGet(remainder), I::LocalGet(b)]);
+				s.call(f, "mag_sub_into");
+				Self::emit_list(f, &[
+					I::LocalGet(quotient), I::LocalGet(bit), I::I32Const(5), I::I32ShrU,
+					I::LocalGet(quotient), I::LocalGet(bit), I::I32Const(5), I::I32ShrU, I::ArrayGet(limbs_type),
+					I::I32Const(1), I::LocalGet(bit), I::I32Const(31), I::I32And, I::I32Shl, I::I32Or,
+					I::ArraySet(limbs_type), I::End,
+				]);
+			});
+			f.instruction(&I::LocalGet(quotient));
+			s.call(f, "big_trim");
+			f.instruction(&I::LocalGet(remainder));
+			s.call(f, "big_trim");
+		});
+	}
+
+	/// mag_divmod by long division limb by limb (Knuth, TAOCP 4.3.1 algorithm D): O(len a · len b); bit by bit, Euclid's
+	/// gcd of 1400-bit numbers ran out of fuel (card exact-harmonic)
+	fn emit_limbwise_divmod(&mut self) {
+		let (limbs, limbs_type, i32s) = (self.limbs_ref(), self.type_manager.limbs_type, ValType::I32);
 		let i64s = ValType::I64;
 		let locals = vec![limbs, limbs, limbs, i32s, i32s, i32s, i32s, i32s, i32s, i64s, i64s, i64s, i64s, i64s, i64s, i64s, i32s, i32s];
 		self.runtime_function("mag_divmod", vec![limbs, limbs], vec![limbs, limbs], locals, |s, f| {
