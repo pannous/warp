@@ -352,7 +352,7 @@ impl FunctionValues {
 				if let Node::Key(list, Op::Dot, call) = node {
 					if let (Node::Symbol(name), Node::List(items, _, _)) = (list.drop_meta(), call.drop_meta()) {
 						if let [method, value] = items.as_slice() {
-							if APPEND_METHODS.contains(&method.drop_meta().name().as_str()) && self.is_function_value(value) {
+							if crate::analyzer::appends(&method.drop_meta().name(), 1) && self.is_function_value(value) {
 								lists.insert(name.clone());
 							}
 						}
@@ -401,8 +401,6 @@ fn is_field(node: &Node) -> bool {
 	holder_path(node).is_some_and(|path| path.contains('.'))
 }
 
-/// Methods that append one value to a list variable (analyzer APPEND_METHODS)
-const APPEND_METHODS: [&str; 3] = ["add", "append", "push"];
 
 /// The parameter names of a definition `name(params) := body`, or `it` for `name := body` with `it`
 fn definition_parameters(node: &Node, functions: &HashSet<String>) -> Option<Vec<String>> {

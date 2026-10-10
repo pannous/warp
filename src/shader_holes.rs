@@ -3,10 +3,12 @@
 //! marks the shader's text with the names; this pass gives every paint or gpu_render of that shader the entries
 //! `name: name` in its values map, so the warp variable is read at each call. A map written out keeps its own entry
 //! of a name. Bare WGSL names still never capture warp variables.
+//! The built-in holes (card shader-builtins) $width, $height, $size, $time, $frame, $mouse, $mouse_down and $key get no entry unless the program
+//! has a variable of that name: the host fills them at each render (src/gpu.rs builtin_values, host-gpu.js).
 
 use crate::node::{Bracket, Node, Separator};
 use crate::operators::Op;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 /// The attribute of a shader text listing its holes' names
 pub const HOLES_ATTRIBUTE: &str = "shader_holes";
@@ -15,6 +17,10 @@ pub const VALUES: &str = "values";
 /// The words rendering a shader with a values map last: `paint(shader, width, height, values)`
 const RENDERING_WORDS: [&str; 2] = [crate::host::PAINT, warp_runtime::host_words::GPU_RENDER];
 const VALUES_INDEX: usize = 4;
+/// Holes every shader has, filled by the host: the image's size in pixels, seconds since the first render, the renders
+/// before this one, the pointer over the image (in its pixels), whether a button is down, the key held down (its
+/// character's code point, the arrows 0xF700 up, 0xF701 down, 0xF702 left, 0xF703 right as on a Mac; 0: none)
+pub const BUILTIN_HOLES: [&str; 8] = ["width", "height", "size", "time", "frame", "mouse", "mouse_down", "key"];
 
 /// The WGSL of a shader block with each `$name` as `values.name`, and the names in order (none: no hole)
 pub fn written(wgsl: &str) -> (String, Vec<String>) {
@@ -52,17 +58,23 @@ pub fn shader_text(wgsl: &str) -> Node {
 
 pub fn lower(program: Node) -> Node {
 	let mut shaders = HashMap::new();
+	let mut variables = HashSet::new();
 	program.visit(&mut |node| {
 		if let Node::Key(variable, Op::Assign | Op::Define, value) = node {
-			if let (Node::Symbol(name), Some(holes)) = (variable.drop_meta(), holes_of(value)) {
-				shaders.insert(name.clone(), holes);
+			if let Node::Symbol(name) = variable.drop_meta() {
+				variables.insert(name.clone());
+				if let Some(holes) = holes_of(value) {
+					shaders.insert(name.clone(), holes);
+				}
 			}
 		}
 	});
 	if shaders.is_empty() && !mentions_holes(&program) {
 		return program;
 	}
-	with_values(program, &shaders)
+	let passed = |holes: Vec<String>| holes.into_iter().filter(|name| !BUILTIN_HOLES.contains(&name.as_str()) || variables.contains(name)).collect::<Vec<_>>();
+	let shaders = shaders.into_iter().map(|(shader, holes)| (shader, passed(holes))).collect();
+	with_values(program, &shaders, &passed)
 }
 
 fn holes_of(node: &Node) -> Option<Vec<String>> {
@@ -78,12 +90,12 @@ fn mentions_holes(program: &Node) -> bool {
 	found
 }
 
-fn with_values(node: Node, shaders: &HashMap<String, Vec<String>>) -> Node {
-	let node = node.map_children(|child| with_values(child, shaders));
+fn with_values(node: Node, shaders: &HashMap<String, Vec<String>>, passed: &impl Fn(Vec<String>) -> Vec<String>) -> Node {
+	let node = node.map_children(|child| with_values(child, shaders, passed));
 	let Node::List(items, bracket, separator) = node.drop_meta() else { return node };
 	let rendering = items.first().is_some_and(|word| RENDERING_WORDS.contains(&word.name().as_str()));
-	let holes = items.get(1).filter(|_| rendering).and_then(|shader| holes_of(shader).or_else(|| shaders.get(&shader.drop_meta().name()).cloned()));
-	let Some(holes) = holes.filter(|_| items.len() >= VALUES_INDEX - 1 && items.len() <= VALUES_INDEX + 1) else { return node };
+	let holes = items.get(1).filter(|_| rendering).and_then(|shader| holes_of(shader).map(passed).or_else(|| shaders.get(&shader.drop_meta().name()).cloned()));
+	let Some(holes) = holes.filter(|holes| !holes.is_empty() && items.len() >= VALUES_INDEX - 1 && items.len() <= VALUES_INDEX + 1) else { return node };
 	let mut items = items.clone();
 	let entries = |given: &[Node]| holes.iter().filter(|name| !given.iter().any(|entry| entry_name(entry).as_deref() == Some(name.as_str()))).map(|name| entry(name)).collect::<Vec<_>>();
 	match items.get(VALUES_INDEX).map(|values| values.drop_meta().clone()) {

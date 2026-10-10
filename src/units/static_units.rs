@@ -48,8 +48,6 @@ const RETURN_WORD: &str = "return";
 const SI_AMOUNT_WORD: &str = "si_amount";
 /// The text of a value: `str(q)`, and `text_form(q)` of `${q}` interpolation (interpolation.rs)
 const TEXT_WORDS: [&str; 3] = [TEXT_WORD, "text_form", "serialize"];
-/// `xs.add(q)`: list methods that take an element
-const ELEMENT_METHODS: [&str; 2] = ["add", "push"];
 /// `xs.map(f)`: a list of what f gives each element
 const MAP_WORD: &str = "map";
 /// List words that give an element: its signature (`mean` also spelled `average`, library_words.rs)
@@ -429,7 +427,7 @@ fn method_of(call: &Node) -> Option<(&str, &[Node])> {
 	let Node::List(items, Bracket::Round, _) = call.drop_meta() else { return None };
 	let (head, arguments) = items.split_first()?;
 	let Node::Symbol(method) = head.drop_meta() else { return None };
-	(TEXT_WORDS.contains(&method.as_str()) || ELEMENT_METHODS.contains(&method.as_str())).then_some((method.as_str(), arguments))
+	(TEXT_WORDS.contains(&method.as_str()) || crate::analyzer::appends(method, arguments.len())).then_some((method.as_str(), arguments))
 }
 
 /// The entries of an object literal `{dist: 5 m, name: "run"}`: field and value each
@@ -705,7 +703,7 @@ impl Inference {
 	fn method_call(&mut self, object: Node, call: Node) -> Result<(Node, Signature), Stop> {
 		let (method, arguments) = method_of(&call).expect("a method call");
 		if let ([argument], Node::Symbol(list)) = (arguments, object.drop_meta()) {
-			if let Some(element) = self.lists.get(list).cloned().filter(|_| ELEMENT_METHODS.contains(&method)) {
+			if let Some(element) = self.lists.get(list).cloned().filter(|_| crate::analyzer::appends(method, 1)) {
 				let (argument, given) = self.infer(argument.clone())?;
 				if given != element {
 					return Err(Stop::Error(format!("DimensionError: {list} holds {}, is given {}", shown(&element), shown(&given))));

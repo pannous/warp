@@ -47,8 +47,6 @@ const METHOD_ALIASES: [(&str, &[&str]); 23] = [
 	("contains", &["has"]), ("includes", &["has"]), ("delete", &["remove"]), ("discard", &["remove"]),
 	("len", &["size"]),
 ];
-/// The keywords of a field: Swift's `var count = 0`, `let`, Kotlin's `val`
-const FIELD_KEYWORDS: [&str; 3] = ["var", "let", "val"];
 /// Member modifiers that may mean something in warp, so they get no note that warp needs them not
 const SILENT_MODIFIERS: [&str; 1] = ["async"];
 /// The constructor names of other languages, aliases of `init` (P162): warp's old `value`, JavaScript, Python, Ruby,
@@ -198,9 +196,15 @@ fn with_method_aliases(node: Node, instances: &std::collections::HashMap<String,
 			};
 			Node::Key(receiver, Op::Dot, Box::new(member))
 		}
-		// `len(s)`: `s.size()`
+		// `len(s)`: `s.size()`; `size(s)` of a class defining size(): `s.size()` too (card size-instance)
 		Node::List(items, Bracket::Round, separator) if matches!(items.as_slice(), [word, argument] if crate::analyzer::is_counting_word(&word.drop_meta().name()) && defined_by(argument).is_some()) => {
-			match aliased_method(&items[0].drop_meta().name(), defined_by(&items[1]).expect("guarded")) {
+			let written = items[0].drop_meta().name();
+			let defined = defined_by(&items[1]).expect("guarded");
+			let method = match defined.contains(&written) {
+				true => Some(written),
+				false => aliased_method(&written, defined),
+			};
+			match method {
 				Some(method) => key(items[1].clone(), Op::Dot, call(&method, vec![])),
 				None => Node::List(items, Bracket::Round, separator),
 			}
@@ -1692,7 +1696,7 @@ fn setter_calls(node: Node, setters: &[String]) -> Node {
 /// `var count = 0` the field `count = 0`
 fn without_modifiers(item: Node) -> Node {
 	let Node::List(words, bracket, separator) = item.drop_meta().clone() else { return item };
-	let is_modifier = |word: &Node| matches!(word.drop_meta(), Node::Symbol(word) if crate::warp_parser::MEMBER_MODIFIERS.contains(&word.as_str()) || FIELD_KEYWORDS.contains(&word.as_str()));
+	let is_modifier = |word: &Node| matches!(word.drop_meta(), Node::Symbol(word) if crate::warp_parser::MEMBER_MODIFIERS.contains(&word.as_str()) || crate::warp_parser::FIELD_KEYWORDS.contains(&word.as_str()));
 	let kept: Vec<Node> = words.iter().skip_while(|word| is_modifier(word)).cloned().collect();
 	if let Some(kept_word) = kept.first().map(leading_name).filter(|_| kept.len() < words.len()) {
 		let modifiers: Vec<String> = words[..words.len() - kept.len()].iter().map(|word| word.drop_meta().name()).collect();

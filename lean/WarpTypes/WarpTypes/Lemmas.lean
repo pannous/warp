@@ -19,6 +19,7 @@ theorem value_ctx {Γ v t} (h : HasType P Γ v t) (hv : v.isValue = true) (Γ' :
   | codepoint h => exact .codepoint h
   | unit => exact .unit
   | nil => exact .nil
+  | fail => exact .fail
   | ref => exact .ref
   | lref => exact .lref
   | intIn h1 h2 => exact .intIn h1 h2
@@ -93,10 +94,16 @@ theorem plainArith_typed {Γ op a b ta tb} (ha : HasType P Γ a ta) (hb : HasTyp
       | exact exactNumber_typed _ _ _ (.inl (by simp_all [sub]))
       | exact exactNumber_typed _ _ _ (.inr ⟨by simp [ArithOp.applyExact], by simp_all [sub]⟩)
 
-/-- a value's type is neither `never` nor `any`, and tells whether the value is a quantity and of which dimensions -/
-theorem value_shape {Γ v t} (h : HasType P Γ v t) (hv : v.isValue = true) :
+/-- a value's type, but for a stored error's, is neither `never` nor `any`, and tells whether the value is a quantity
+and of which dimensions -/
+theorem value_shape {Γ v t} (h : HasType P Γ v t) (hv : v.isValue = true) (hf : isFail v = false) :
     t ≠ .never ∧ t ≠ .any ∧ isQuantityValue v = t.isQuantity ∧ valueDims v = t.dimsOf := by
-  cases h <;> simp_all [isValue, isQuantityValue, Ty.isQuantity, valueDims, Ty.dimsOf, isNumber, sub]
+  cases h <;> simp_all [isValue, isQuantityValue, Ty.isQuantity, valueDims, Ty.dimsOf, isNumber, sub, isFail]
+
+/-- arithmetic given a stored error raises -/
+theorem arith_fail {op a b} (h : isFail a = true ∨ isFail b = true) : ∃ m, arithValues op a b = .error m := by
+  unfold arithValues quantityValues plainArithValues plainArithValues.numberValues repeatValues
+  rcases h with h | h <;> obtain ⟨m, rfl⟩ := isFail_eq h <;> (repeat' split) <;> simp_all [isNumber, valueDims, asInt]
 
 theorem quantityValue_typed {Γ} (n : Int) (d : Dims) :
     ∃ t', HasType P Γ (quantityValue n d) t' ∧ sub t' (Ty.ofDims d) = true := by
@@ -130,8 +137,11 @@ theorem quantity_typed {Γ op a b ta tb} (ha : HasType P Γ a ta) (hb : HasType 
 /-- `-`, `*`, `%`, `/` and `^` on values: a value of a type below `op.ty`, or an error -/
 theorem arith_typed {Γ op a b ta tb} (ha : HasType P Γ a ta) (hb : HasType P Γ b tb) (va : a.isValue = true)
     (vb : b.isValue = true) : ∃ t', HasType P Γ (arithValues op a b) t' ∧ sub t' (op.ty ta tb) = true := by
-  obtain ⟨na, ya, qa, da⟩ := value_shape ha va
-  obtain ⟨nb, yb, qb, db⟩ := value_shape hb vb
+  by_cases hf : isFail a = true ∨ isFail b = true
+  · obtain ⟨m, hm⟩ := arith_fail (op := op) hf; rw [hm]; exact ⟨_, .error, sub_never _⟩
+  simp only [not_or, Bool.not_eq_true] at hf
+  obtain ⟨na, ya, qa, da⟩ := value_shape ha va hf.1
+  obtain ⟨nb, yb, qb, db⟩ := value_shape hb vb hf.2
   have n : ¬(ta = .never ∨ tb = .never) := by rintro (h | h) <;> contradiction
   have y : ¬(ta = .any ∨ tb = .any) := by rintro (h | h) <;> contradiction
   unfold arithValues ArithOp.ty
@@ -415,6 +425,7 @@ theorem narrow {Γ e t} (h : HasType P Γ e t) : ∀ {Γ'}, CtxSub Γ' Γ → �
   | codepoint h => intros; exact ⟨_, .codepoint h, sub_refl _⟩
   | unit => intros; exact ⟨_, .unit, sub_refl _⟩
   | nil => intros; exact ⟨_, .nil, sub_refl _⟩
+  | fail => intros; exact ⟨_, .fail, sub_refl _⟩
   | cons _ _ he ih1 ih2 =>
     intro Γ' hs
     obtain ⟨a', h1, s1⟩ := ih1 hs
@@ -546,6 +557,10 @@ theorem narrow {Γ e t} (h : HasType P Γ e t) : ∀ {Γ'}, CtxSub Γ' Γ → �
     intro Γ' hs
     obtain ⟨_, h1, _⟩ := ih hs
     exact ⟨_, .isA h1, sub_refl _⟩
+  | failed _ ih =>
+    intro Γ' hs
+    obtain ⟨_, h1, _⟩ := ih hs
+    exact ⟨_, .failed h1, sub_refl _⟩
   | handle hR _ sh _ ih1 ih2 =>
     intro Γ' hs
     obtain ⟨_, h1, s1⟩ := ih1 (hs.set _ _)
@@ -602,6 +617,7 @@ theorem subst_typed {Γ0 e t} (h : HasType P Γ0 e t) :
   | codepoint h => intros; simp only [Expr.subst]; exact .codepoint h
   | unit => intros; simp only [Expr.subst]; exact .unit
   | nil => intros; simp only [Expr.subst]; exact .nil
+  | fail => intros; simp only [Expr.subst]; exact .fail
   | cons _ _ he ih1 ih2 => intro Γ y tv v hΓ hv htv; simp only [Expr.subst]; exact .cons (ih1 hΓ hv htv) (ih2 hΓ hv htv) he
   | glob hx => intros; simp only [Expr.subst]; exact .glob hx
   | loc hz =>
@@ -653,6 +669,7 @@ theorem subst_typed {Γ0 e t} (h : HasType P Γ0 e t) :
   | get _ ih => intro Γ y tv v hΓ hv htv; simp only [Expr.subst]; exact .get (ih hΓ hv htv)
   | set _ hw _ st ih1 ih2 => intro Γ y tv v hΓ hv htv; simp only [Expr.subst]; exact .set (ih1 hΓ hv htv) hw (ih2 hΓ hv htv) st
   | isA _ ih => intro Γ y tv v hΓ hv htv; simp only [Expr.subst]; exact .isA (ih hΓ hv htv)
+  | failed _ ih => intro Γ y tv v hΓ hv htv; simp only [Expr.subst]; exact .failed (ih hΓ hv htv)
   | @handle Γ0 ev h b th tb R hR hh sh hb ih1 ih2 =>
     intro Γ y tv v hΓ hv htv
     simp only [Expr.subst]

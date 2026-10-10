@@ -72,6 +72,7 @@ theorem frame_typing {Γ} (F : Frame) {e t} (h : HasType P Γ (F.plug e) t) :
     cases h with | set he hw hv st =>
     exact ⟨_, hv, fun h' s => ⟨_, .set he hw h' (sub_trans s st), s⟩⟩
   case isA => cases h with | isA he => exact ⟨_, he, fun h' _ => ⟨_, .isA h', sub_refl _⟩⟩
+  case failed => cases h with | failed he => exact ⟨_, he, fun h' _ => ⟨_, .failed h', sub_refl _⟩⟩
   case emit => cases h with | emit hR he => exact ⟨_, he, fun h' _ => ⟨_, .emit hR h', sub_refl _⟩⟩
   case abort => cases h with | abort he st => exact ⟨_, he, fun h' s => ⟨_, .abort h' (sub_trans s st), sub_refl _⟩⟩
   case share => cases h with | share he => exact ⟨_, he, fun h' _ => ⟨_, .share h', sub_refl _⟩⟩
@@ -231,7 +232,7 @@ theorem push_typed {μ : Store} (hμ : StoreOk P μ) {l v tl tv} (hl : HasType P
 
 /-- `xs#i = v`: v, written into the shared list if it fits its element type, or an error -/
 theorem setAt_typed {μ : Store} (hμ : StoreOk P μ) {l i v tv} (hv : HasType P Ctx.empty v tv) (vv : v.isValue = true) :
-    (∃ t', HasType P Ctx.empty (setAtValues μ l i v).1 t' ∧ sub t' tv = true) ∧ StoreOk P (setAtValues μ l i v).2 := by
+    (∃ t', HasType P Ctx.empty (setAtValues P μ l i v).1 t' ∧ sub t' tv = true) ∧ StoreOk P (setAtValues P μ l i v).2 := by
   cases l with
   | lref a t =>
     simp only [setAtValues]
@@ -251,6 +252,21 @@ theorem setAt_typed {μ : Store} (hμ : StoreOk P μ) {l i v tv} (hv : HasType P
         · exact ⟨⟨_, .error, sub_never _⟩, hμ⟩
       · exact ⟨⟨_, .error, sub_never _⟩, hμ⟩
     · exact ⟨⟨_, .error, sub_never _⟩, hμ⟩
+  | ref a p =>
+    cases i with
+    | text k =>
+      simp only [setAtValues]
+      split
+      · rename_i t hf
+        split
+        · rename_i hc
+          simp only [Bool.and_eq_true] at hc
+          obtain ⟨o, ho⟩ := Option.isSome_iff_exists.1 hc.1
+          obtain ⟨tv', hv', stv⟩ := fits_typed (P := P) (Γ := Ctx.empty) hc.2
+          exact ⟨⟨_, hv, sub_refl _⟩, hμ.1, hμ.2.1.write ho hf vv hv' stv, hμ.2.2⟩
+        · exact ⟨⟨_, .error, sub_never _⟩, hμ⟩
+      · exact ⟨⟨_, .error, sub_never _⟩, hμ⟩
+    | _ => exact ⟨⟨_, .error, sub_never _⟩, hμ⟩
   | _ => exact ⟨⟨_, .error, sub_never _⟩, hμ⟩
 
 theorem StoreOk.set {μ : Store} (hμ : StoreOk P μ) {x m t v tv} (hx : P.names x = some (m, t)) (hm : m ≠ .charged)
@@ -309,6 +325,10 @@ theorem preservation (hP : ProgramOk P) {s s' : Expr × Store} (hs : Step P s s'
     intro t h hμ
     cases h with
     | tryCatch he _ => exact ⟨⟨_, he, join_upper_left _ _⟩, hμ⟩
+  | tryFail =>
+    intro t h hμ
+    cases h with
+    | tryCatch _ hh => exact ⟨⟨_, hh, join_upper_right _ _⟩, hμ⟩
   | @readValue x v μ hx =>
     intro t h hμ
     cases h with
@@ -362,6 +382,11 @@ theorem preservation (hP : ProgramOk P) {s s' : Expr × Store} (hs : Step P s s'
     cases h with
     | index hl _ =>
       refine ⟨?_, hμ⟩
+      unfold indexValues
+      split
+      · cases hl
+        obtain ⟨t', h'⟩ := readField_any hμ.2.1 (.ref _ _) _
+        exact ⟨t', h', by simp [elementTy, element, Ty.isText]⟩
       obtain ⟨il, _, hl', sl⟩ := items_typed hμ.2.2.2 hl vl
       cases hn : nth (μ.items l) ((asInt i).getD 0) with
       | none => exact ⟨_, .error, sub_never _⟩
@@ -460,6 +485,7 @@ theorem preservation (hP : ProgramOk P) {s s' : Expr × Store} (hs : Step P s s'
         exact ⟨⟨_, hv, sub_refl _⟩, hμ.1, hμ.2.1.write hobj hw vv hv st, hμ.2.2⟩
       · exact ⟨⟨_, .error, sub_never _⟩, hμ⟩
   | isA => intro t h hμ; cases h; exact ⟨⟨_, .bool, sub_refl _⟩, hμ⟩
+  | failed => intro t h hμ; cases h; exact ⟨⟨_, .bool, sub_refl _⟩, hμ⟩
   | handleStep _ ih =>
     intro t h hμ
     cases h with
@@ -584,7 +610,7 @@ theorem steps {μ : Store} {e : Expr} {s'} (hs : Step P (e, μ) s') : Progresses
 theorem progress {Γ e t} (h : HasType P Γ e t) (hΓ : Γ = Ctx.empty) {μ : Store} (hμ : StoreOk P μ) :
     Progresses P μ e := by
   induction h generalizing μ with
-  | bool | int | intIn | num | flt | qty | text | codepoint | unit | nil => exact .inl rfl
+  | bool | int | intIn | num | flt | qty | text | codepoint | unit | nil | fail => exact .inl rfl
   | @cons _ a b _ _ _ _ _ _ ih1 ih2 =>
     exact in_frame (.consL b) rfl (ih1 hΓ hμ) fun va =>
       in_frame (.consR a) va (ih2 hΓ hμ) fun vb => .inl (by simp [Frame.plug, isValue, va, vb])
@@ -629,7 +655,9 @@ theorem progress {Γ e t} (h : HasType P Γ e t) (hΓ : Γ = Ctx.empty) {μ : St
   | error => exact .inr (.inl ⟨_, rfl⟩)
   | tryCatch _ _ ih _ =>
     rcases ih hΓ hμ with hv | ⟨m, rfl⟩ | ⟨_, _, _, rfl, hv⟩ | ⟨⟨e', μ'⟩, hs⟩
-    · exact steps (.tryValue hv)
+    · cases hf : isFail _
+      · exact steps (.tryValue hv hf)
+      · obtain ⟨m, rfl⟩ := isFail_eq hf; exact steps .tryFail
     · exact steps .tryError
     · exact steps (.tryAbort hv)
     · exact steps (.tryStep hs)
@@ -660,6 +688,7 @@ theorem progress {Γ e t} (h : HasType P Γ e t) (hΓ : Γ = Ctx.empty) {μ : St
   | @set _ e f v _ _ _ _ _ _ _ ih1 ih2 =>
     exact in_frame (.setL f v) rfl (ih1 hΓ hμ) fun vo => in_frame (.setR e f) vo (ih2 hΓ hμ) fun vv => steps (.set vo vv)
   | @isA _ e c _ _ ih => exact in_frame (.isA c) rfl (ih hΓ hμ) fun v => steps (.isA v)
+  | @failed _ e _ _ ih => exact in_frame .failed rfl (ih hΓ hμ) fun v => steps (.failed v)
   | @handle _ ev h b _ _ _ hR hh sh _ _ ih =>
     subst hΓ
     rcases ih rfl (hμ.push ⟨_, _, hR, hh, sh⟩) with hv | ⟨m, rfl⟩ | ⟨_, _, _, rfl, hv⟩ | ⟨⟨e', μ'⟩, hs⟩

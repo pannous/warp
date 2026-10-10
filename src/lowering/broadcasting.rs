@@ -19,8 +19,6 @@ use std::collections::{HashMap, HashSet};
 
 const ARITHMETIC: [Op; 6] = [Op::Add, Op::Sub, Op::Mul, Op::Div, Op::Mod, Op::Pow];
 const ALL_WORD: &str = "all";
-/// Methods that append to a list variable (analyzer APPEND_METHODS)
-pub(crate) const APPEND_METHODS: [&str; 3] = ["add", "append", "push"];
 const EXTREMUM_WORDS: [&str; 2] = ["max", "min"];
 /// Parameter types a comparison's result fits
 const TRUTH_TYPES: [&str; 3] = ["bool", "boolean", "any"];
@@ -371,7 +369,7 @@ fn collect_list_variables(node: &Node, functions: &HashSet<String>, assigned: &m
 	node.visit(&mut |part| match part {
 		Node::Key(list, Op::Dot, call) => {
 			if let (Node::Symbol(name), Node::List(items, _, _)) = (list.drop_meta(), call.drop_meta()) {
-				if matches!(items.first().map(Node::drop_meta), Some(Node::Symbol(method)) if APPEND_METHODS.contains(&method.as_str())) {
+				if matches!(items.first().map(Node::drop_meta), Some(Node::Symbol(method)) if crate::analyzer::appends(method, items.len() - 1)) {
 					appended.insert(name.clone());
 				}
 			}

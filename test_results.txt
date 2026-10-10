@@ -23,6 +23,8 @@ PASSED:
   ✓ control::test_await_any_values::await_any_of_computed_values_answers
   ✓ control::test_await_any_variables::await_any_of_task_variables_gives_the_first_to_finish
   ✓ control::test_await_go::await_of_a_start_is_the_result
+  ✓ control::test_bare_try::a_bare_try_keeps_the_raised_error_as_its_value
+  ✓ control::test_bare_try::a_raise_without_try_still_stops_the_program
   ✓ control::test_block_assigns_outer::a_block_that_assigns_an_outer_variable_hints_global_or_return
   ✓ control::test_block_assigns_outer::a_block_that_assigns_an_outer_variable_leaves_it_unchanged
   ✓ control::test_block_assigns_outer::the_declared_and_returned_forms_change_it
@@ -853,6 +855,10 @@ PASSED:
   ✓ function::tests::test_kind_to_valtype
   ✓ function::tests::test_signature_builder
   ✓ function::tests::test_signature_format
+  ✓ functions::test_alias_definition::a_defined_name_of_a_function_calls_it
+  ✓ functions::test_alias_definition::a_partial_definition_names_its_hole
+  ✓ functions::test_alias_definition::an_alias_of_an_alias_calls_the_function
+  ✓ functions::test_alias_definition::an_assigned_bare_name_stays_the_error
   ✓ functions::test_all_calls::a_function_applied_to_all_items
   ✓ functions::test_all_calls::a_list_built_by_appending_broadcasts
   ✓ functions::test_all_calls::all_over_nested_lists_broadcasts_again
@@ -1440,6 +1446,8 @@ PASSED:
   ✓ functions::test_words_in_phrases::sorted_text_sorts_its_characters
   ✓ functions::test_words_in_phrases::where_filters_a_comprehension_like_if
   ✓ host::native::tests::test_host_state
+  ✓ lists::test_append_words::test_every_append_word_appends_a_closure
+  ✓ lists::test_append_words::test_every_append_word_appends_a_quantity
   ✓ lists::test_bare_list_assignment::a_bracketed_list_never_asks
   ✓ lists::test_bare_list_assignment::an_unbracketed_list_assignment_asks_list_or_statements
   ✓ lists::test_bare_list_assignment::each_reading_has_its_explicit_form
@@ -1741,6 +1749,8 @@ PASSED:
   ✓ modules::test_checkout_std_lib::a_lib_file_edited_since_the_build_is_used_quietly
   ✓ modules::test_checkout_std_lib::a_stale_lib_file_shadows_the_standard_module_loudly
   ✓ modules::test_checkout_std_lib::another_checkout_lib_is_the_standard_module
+  ✓ modules::test_dir_any_value::dir_of_a_map_lists_its_keys
+  ✓ modules::test_dir_any_value::dir_of_a_plain_value_lists_nothing
   ✓ modules::test_dir::a_program_s_own_dir_wins
   ✓ modules::test_dir::dir_lists_the_names_of_a_standard_module
   ✓ modules::test_folder_scope::a_name_defined_in_two_siblings_is_ambiguous
@@ -2069,9 +2079,11 @@ PASSED:
   ✓ numbers::test_float_bit_operations::test_logical_and_bit_operators_on_a_float_are_refused_loudly
   ✓ numbers::test_float_bit_operations::test_logical_and_bit_operators_on_ints_still_work
   ✓ numbers::test_float_exact_context::a_rational_constant_of_exact_reals_in_a_runtime_program
+  ✓ numbers::test_float_exact_context::test_a_declared_exact_variable_refuses_a_float_as_a_parameter_does
   ✓ numbers::test_float_exact_context::test_explicit_cast_truncates_a_float
   ✓ numbers::test_float_exact_context::test_ffi_float_result_in_exact_context_is_refused_loudly
   ✓ numbers::test_float_exact_context::test_float_read_in_exact_context_is_refused_loudly
+  ✓ numbers::test_float_exact_context::test_real_holds_roots_and_exact_unions_refuse_floats
   ✓ numbers::test_float_parameters::test_float_local_inside_float_function
   ✓ numbers::test_float_parameters::test_float_parameter_keeps_all_digits
   ✓ numbers::test_float_parameters::test_float_parameter_keeps_fraction
@@ -2119,6 +2131,7 @@ PASSED:
   ✓ numbers::test_law::test_law_violation_reported_by_verify
   ✓ numbers::test_libm_functions::test_cube_root_of_a_runtime_value
   ✓ numbers::test_libm_functions::trigonometry_and_logarithms_from_libm
+  ✓ numbers::test_literal_type_words::every_number_type_word_types_a_literal
   ✓ numbers::test_log_base::log_takes_a_base
   ✓ numbers::test_log_glyphs::the_lower_corner_after_a_number_is_its_log
   ✓ numbers::test_log_glyphs::the_lower_corner_before_a_number_is_its_log_to_that_base
@@ -2149,6 +2162,7 @@ PASSED:
   ✓ numbers::test_math::test_units
   ✓ numbers::test_math::test_variable_minus
   ✓ numbers::test_math::test_while_loop
+  ✓ numbers::test_method_on_operator_call::a_method_on_an_operator_words_call_applies_to_its_result
   ✓ numbers::test_mixed_number_arithmetic::an_exact_real_stays_exact_with_a_ratio
   ✓ numbers::test_mixed_number_arithmetic::complex_mixes_with_any_number
   ✓ numbers::test_mixed_number_arithmetic::infinity_and_nan_follow_ieee
@@ -2162,6 +2176,10 @@ PASSED:
   ✓ numbers::test_named_unit_fields::a_named_field_checks_its_dimension
   ✓ numbers::test_nan_observed::a_nan_leaving_the_run_is_canonical
   ✓ numbers::test_nan_observed::a_nan_prints_as_nan
+  ✓ numbers::test_nearest::float_to_exact_refusals_name_nearest
+  ✓ numbers::test_nearest::nearest_fraction
+  ✓ numbers::test_nearest::nearest_of_exact_values
+  ✓ numbers::test_nearest::nearest_takes_two_or_three_arguments
   ✓ numbers::test_norm::norm_is_abs
   ✓ numbers::test_number_words::a_number_word_hints_its_digits
   ✓ numbers::test_number_words::a_variable_of_that_name_wins
@@ -2830,6 +2848,8 @@ PASSED:
   ✓ programs::test_shader_blocks::a_shader_block_over_lines_loses_its_indentation
   ✓ programs::test_shader_blocks::paint_takes_a_shader_block
   ✓ programs::test_shader_blocks::shader_stays_a_name
+  ✓ programs::test_shader_builtins::builtin_holes_are_left_to_the_host
+  ✓ programs::test_shader_builtins::the_host_fills_the_builtin_holes
   ✓ programs::test_shader_holes::a_hole_is_read_from_the_values
   ✓ programs::test_shader_holes::a_shader_with_holes_paints_as_with_the_values_given
   ✓ programs::test_shader_holes::each_paint_passes_the_holes_given_no_value
@@ -2879,6 +2899,7 @@ PASSED:
   ✓ scope::test_data_scope::test_kebab_keys_are_read_back
   ✓ scope::test_data_scope::test_other_hyphenated_names_stay_symbols
   ✓ scope::test_data_scope::test_without_a_key_a_hyphenated_name_of_variables_subtracts
+  ✓ scope::test_declaration_words::every_declaration_word_declares_a_local
   ✓ scope::test_eval_state::a_got_it_without_a_file_lasts_one_eval_and_never_changes_the_value
   ✓ scope::test_eval_state::an_eval_does_not_see_the_assumptions_of_the_one_before
   ✓ scope::test_eval_state::every_eval_shows_its_educate_once_note
@@ -3353,6 +3374,7 @@ PASSED:
   ✓ types::test_instance_arguments::a_call_with_an_instance_argument_gives_the_call_result
   ✓ types::test_instance_final_text::a_final_instance_shows_its_text
   ✓ types::test_instance_final_text::a_final_instance_without_text_stays_a_record
+  ✓ types::test_instance_size::the_free_size_of_an_instance_calls_its_size_method
   ✓ types::test_int_declaration_stays_whole::a_declared_int_refuses_a_fraction_at_run_time
   ✓ types::test_int_declaration_stays_whole::a_declared_int_takes_whole_results
   ✓ types::test_int_declaration_stays_whole::an_int_field_refuses_a_fraction
@@ -3377,6 +3399,8 @@ PASSED:
   ✓ types::test_loop_item_into_annotated::a_mixed_loop_item_into_an_annotated_place_is_checked_at_run_time
   ✓ types::test_loop_text_arithmetic::list_arithmetic_in_a_loop_body_stays_a_type_error
   ✓ types::test_loop_text_arithmetic::text_arithmetic_in_a_loop_body_is_no_type_error
+  ✓ types::test_map_runtime_kind::a_map_parameter_is_a_map
+  ✓ types::test_map_runtime_kind::map_is_a_type_word
   ✓ types::test_map_type_tests::a_map_is_a_map
   ✓ types::test_match_static_variant::a_bare_variant_skips_the_class_arms
   ✓ types::test_match_static_variant::an_instance_still_takes_its_arm
@@ -3917,6 +3941,7 @@ PASSED:
   ✓ web::test_page_tests::a_missing_button_fails_the_test
   ✓ web::test_page_tests::a_plain_run_skips_page_tests
   ✓ web::test_page_tests::passing_page_tests_are_counted
+  ✓ web::test_playground_paint::the_default_canvas_fills_the_output_pane
   ✓ web::test_playground_paint::the_playground_paints_a_canvas_of_its_size
   ✓ web::test_playground_paint::the_playground_paints_the_default_canvas
   ✓ web::test_primer::every_primer_compile_snippet_compiles
@@ -4443,4 +4468,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-10 ignored, 4438 passed, 0 failed, 4438 total tested
+10 ignored, 4463 passed, 0 failed, 4463 total tested

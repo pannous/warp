@@ -172,6 +172,7 @@ mod test_table_remove; // card table-remove
 mod test_table_key_filter; // card table-key-filter
 mod test_table_transactions; // card orm step 5
 mod test_table_query_loading; // orm: a filter reads only its rows
+#[cfg(feature = "native")] // its one test counts the table rows read natively: not in the browser build
 mod test_table_comprehension; // orm: a filtered comprehension over a table is its query
 mod test_field_of_elements; // name of people with age > 20 (user 2026-10-10)
 mod test_list_without; // people without team (card people-where)
@@ -180,3 +181,4 @@ mod test_table_method_reads;
 mod test_table_element_writes; // orm: people#1.age = 5 writes through
 mod test_unit_tasks; // card units-tasks
 mod test_task_char; // card task-char
+mod test_bare_try; // card failed-raised

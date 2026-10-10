@@ -9,7 +9,10 @@ const PAINT_COLOR_FROM = 2 ** 24;
 const PAINT_SHOWN_SIDE = 288; // a small painting is shown this wide (or high), scaled by a whole factor so pixels stay square
 // mouse_x, mouse_y, mouse_down (host.js system_value): the pointer over a canvas in shared memory, which a running
 // animation reads at once (its worker takes no message while it runs); the worker gets the buffer and these names
-const POINTER_NAMES = ["mouse_x", "mouse_y", "mouse_down"];
+const POINTER_NAMES = ["mouse_x", "mouse_y", "mouse_down", "key"];
+// a shader's $key (host-gpu.js builtinValues): the held key's code point, the arrows as a Mac's function keys
+const ARROW_CODES = { ArrowUp: 0xF700, ArrowDown: 0xF701, ArrowLeft: 0xF702, ArrowRight: 0xF703 };
+const TYPING_TARGETS = ".CodeMirror, input, textarea, [contenteditable]";
 const pointer = globalThis.SharedArrayBuffer ? new Int32Array(new SharedArrayBuffer(POINTER_NAMES.length * Int32Array.BYTES_PER_ELEMENT)) : undefined;
 
 // paint(pixels, width, height): one canvas per call, a pixel dark where its value is nonzero (true), light where 0
@@ -55,6 +58,13 @@ function trackPointer(event) {
 
 const releasePointer = () => pointer && Atomics.store(pointer, POINTER_NAMES.indexOf("mouse_down"), 0);
 
+// a key held outside the editor and the fields, its code while down
+function trackKey(event) {
+	const code = ARROW_CODES[event.key] ?? ([...event.key].length === 1 ? event.key.codePointAt(0) : undefined);
+	if (!pointer || code === undefined || event.target.closest?.(TYPING_TARGETS)) return;
+	Atomics.store(pointer, POINTER_NAMES.indexOf("key"), event.type === "keydown" ? code : 0);
+}
+
 // where the event is on the element, in a canvas's own pixels
 function pointOn(target, event) {
 	const bounds = target.getBoundingClientRect();
@@ -66,4 +76,5 @@ function pointOn(target, event) {
 function followPointer(element) {
 	for (const event of ["pointermove", "pointerdown", "pointerup"]) element.addEventListener(event, trackPointer);
 	document.addEventListener("pointerup", releasePointer);
+	for (const event of ["keydown", "keyup"]) document.addEventListener(event, trackKey);
 }

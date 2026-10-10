@@ -2,7 +2,7 @@
 //! share the arithmetic emitters. Arguments beyond plain values and arithmetic are computed once into temporaries.
 //! One list argument is the list of candidates: `max([1 5 2])`; a list variable `max(xs)` is folded at runtime.
 
-use super::nodes::key;
+use super::nodes::{Counter, key};
 use crate::analyzer::call_name;
 use crate::diagnostic::Diagnostic;
 use crate::node::{Bracket, Node, Separator};
@@ -30,12 +30,12 @@ pub fn lower(node: Node) -> Node {
 	if builtins.is_empty() {
 		return node;
 	}
-	Lowering { builtins, temporaries: 0 }.expand(node)
+	Lowering { builtins, temporaries: Counter::starting_at(1) }.expand(node)
 }
 
 struct Lowering<'a> {
 	builtins: Vec<(&'a str, Op)>,
-	temporaries: usize,
+	temporaries: Counter,
 }
 
 impl Lowering<'_> {
@@ -123,16 +123,14 @@ impl Lowering<'_> {
 
 	/// `max(xs)` for a list variable: the first item, improved by every later one; an empty list is an error
 	fn fold_list_at_runtime(&mut self, name: &str, list: &Node, better: &Op) -> Node {
-		self.temporaries += 1;
 		let template = parse(&format!(
 			"(if count({FOLD_LIST}) == 0 then {EMPTY_EXTREMUM_CALL}({name}) else ({FOLD_PREFIX}best={FOLD_LIST}#1; for {FOLD_PREFIX}item in {FOLD_LIST} {{ {FOLD_PREFIX}best = if {FOLD_PREFIX}item {better} {FOLD_PREFIX}best then {FOLD_PREFIX}item else {FOLD_PREFIX}best }}; {FOLD_PREFIX}best))"
 		));
-		crate::library_words::substitute(crate::library_words::named_apart(template, FOLD_PREFIX, TEMPORARY_BASE, self.temporaries), FOLD_LIST, list)
+		crate::library_words::substitute(crate::library_words::named_apart(template, FOLD_PREFIX, TEMPORARY_BASE, self.temporaries.next_number()), FOLD_LIST, list)
 	}
 
 	fn temporary(&mut self) -> String {
-		self.temporaries += 1;
-		crate::library_words::temporary_name(&[TEMPORARY_BASE, "argument", &self.temporaries.to_string()])
+		crate::library_words::temporary_name(&[TEMPORARY_BASE, "argument", &self.temporaries.next_number().to_string()])
 	}
 }
 

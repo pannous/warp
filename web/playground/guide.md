@@ -518,6 +518,14 @@ r = f(-1)
 if r failed then 1 else 2
 ```
 
+A raised error stops the program, even inside `r = 10/0`. A bare `try` keeps it as the value instead, so `failed` works
+the same way.
+
+```warp => 1
+r = try 10/0
+if r failed then 1 else 2
+```
+
 When a line could mean two things, warp asks which one you meant.
 
 Examples: "welcoming errors", ambiguity; samples: try_catch, try_else, parse_number, raise_error, assertions

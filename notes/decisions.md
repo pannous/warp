@@ -7,6 +7,8 @@ before asking the user; nobody reads it front to back, the code, tests and wiki 
 notes/open_decisions.md.
 
 ## Decided 2026-10-10 (user; via warp-supervisor or the Interviewer)
+- tour-firefox-stall (warp-web): a site whose program runs in a Worker ships task-workers.js (the page creates the
+  task Workers; Firefox stalls on new Worker inside a Worker); tests/web/test_site.rs expected lists gain it.
 - failed-raised (warp-fixer, card failed-raised): a raised error (1/0, raise, [1]#5) keeps stopping the program; a
   bare `try X` (no else) turns it into the value: `r = try 10/0; if r failed then 1 else 2` is 1, `r = 10/0` stops
   with divide by zero. `try` without `else` is allowed from now on.

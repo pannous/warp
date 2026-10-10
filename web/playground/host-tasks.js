@@ -43,16 +43,32 @@ const hasTaskWorkers = () => self.crossOriginIsolated && self.Worker;
 // timeout then names it instead of "the program may not terminate" (card coi-headless)
 const TASKS_INLINE = "tasks take turns here, one runs to its end before the program goes on: the page is not cross-origin isolated (its service worker cannot run, as in a private window), so it has no shared memory for task Workers. A task that waits for another, or runs until stopped, never ends";
 
+// the page makes a task Worker for this Worker and gives it a MessagePort to it (task-workers.js serveTaskWorkers): in
+// the pool the port stands for the Worker, `terminate` asks the page to stop it
+const madeTaskWorkers = new Map(); // id → what to do with the port of the task Worker the page made
+let taskWorkersAsked = 0;
+self.addEventListener("message", event => {
+	if (event.data?.taskWorker === undefined || !event.data.port) return;
+	event.stopImmediatePropagation(); // registered before the Worker's own onmessage, which never sees it
+	madeTaskWorkers.get(event.data.taskWorker)(event.data.port);
+	madeTaskWorkers.delete(event.data.taskWorker);
+});
+
 // a built site's task Worker loads the site's scripts (site-worker.js siteScripts), the playground's all of them
 function addTaskWorker(loaded) {
-	const worker = new Worker(self.siteScripts ? `${TASK_WORKER}?scripts=${self.siteScripts.join(",")}` : TASK_WORKER);
-	// loaded: it can take tasks; later a fetch it made is done (startFetch)
-	worker.onmessage = ({ data }) => {
-		if (data === FETCH_DONE) return worker.fetched?.();
-		if (data.relay) return relayed(data.relay);
-		taskPool.push(worker);
-		loaded?.();
-	};
+	const id = taskWorkersAsked++;
+	madeTaskWorkers.set(id, worker => {
+		worker.terminate = () => self.postMessage({ endTaskWorker: id });
+		// loaded: it can take tasks; later a fetch it made is done (startFetch)
+		worker.onmessage = ({ data }) => {
+			if (data === FETCH_DONE) return worker.fetched?.();
+			if (data.relay) return relayed(data.relay);
+			taskPool.push(worker);
+			loaded?.();
+		};
+	});
+	const url = self.siteScripts ? `${TASK_WORKER}?scripts=${self.siteScripts.join(",")}` : TASK_WORKER;
+	self.postMessage({ taskWorker: { id, url: new URL(url, self.location.href).href } });
 }
 
 // a sound a task plays, for the page, which only the program's Worker talks to (task-worker.js relay); it reaches the
@@ -63,10 +79,8 @@ function relayed([method, ...values]) {
 	self[method]?.(...values);
 }
 
-// the pool of task Workers, made by the workers that run programs (worker.js, test-worker.js) when they start, one
-// after the other: in Firefox a worker's `new Worker` waits for the page's thread, and while siblings it just made are
-// still starting, that wait sometimes never ends (the tour's first example stalled 1 run in 8 at "creating task worker
-// 3 of 4", card tour-firefox)
+// the pool of task Workers of the workers that run programs (worker.js, test-worker.js), asked for when they start, one
+// after the other
 function prepareTaskPool(size = TASK_POOL_SIZE) {
 	if (!hasTaskWorkers()) return;
 	const addFrom = index => index < size && addTaskWorker(() => addFrom(index + 1));

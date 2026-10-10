@@ -37,7 +37,8 @@ expr       e ::= v | x                          main-level name (store)
                | f(e)                           call of a top-level function
                | broadcast f e                  f applied to each item of a list (warp decides it statically)
                | cast e τ                       run-time checked: the value if it fits τ, else an error
-               | error "s" | try e catch e
+               | error "s" | try e catch e      error: a trap (`1/0`, index out of range), it unwinds
+               | fail "s" | e failed           a stored error, warp's `error("s")`, and the test for one
                | new [C…] | e.f | e.f = e | e is C          instances (phase 4)
 program    P ::= Σ (declared names: x ↦ (m, τ, charged body?)), Φ (functions f(y:τ):τ := e),
                Θ (classes: C ↦ its own fields f:τ), main e
@@ -104,6 +105,8 @@ Join (least upper bound) `σ ⊔ τ`: the type of `if … then σ else τ`, of a
 | `f(xs)` broadcast | Φ(f) = (y:σ):τ, xs : list α, α ≤ σ ⇒ list τ (`f(x: int) := x+1; f([1])` is [2]); decided at compile time, so its own form | broadcasting |
 | `cast e τ` | any e ⇒ τ; at run time the value if it fits τ, else an error | list-element-types run-time item checks |
 | `error "s"` | `never` | `raises_error` |
+| `fail "s"` | `any` (dynamic data: a run-time check takes it where a type is declared) | Decided #1, errors as values |
+| `e failed` | any e ⇒ bool | `is_error` (warp_parser suffixes) |
 | `try e catch h` | e ⊔ h | try lowering, P60, decision #34 |
 | program | each charged body : τ under Σ; each function body ≤ its declared result with y : σ and assigns only `global` names; main typed | analyzer passes, functions2 (`global names`) |
 
@@ -117,7 +120,7 @@ Left-to-right call-by-value. `x` steps to μ(x) (a charged name to its body, an 
 `x = v` / `init x v` store v and give v; `f(v)` steps to the body with y := v (substitution, so a callee works on a
 copy); `v :: vs # i` gives the i-th element or `error "index out of range"`; `while` unfolds to `if`; `error` in any
 evaluation position propagates to the whole expression, except under `try`: `try error s catch h → h`,
-`try v catch h → v`.
+`try v catch h → v`, `try fail s catch h → h`.
 
 Main-level names are the store; function parameters and lets are substituted values. A function may assign a
 main-level name only when it is declared `global` (decisions: "mutating a main-level list in a function needs
@@ -299,8 +302,15 @@ program writes, in a map literal or with `m.key = v`, all unannotated. That give
 maps share (P200b, the heap), `==` compares their keys and values (unset keys equal unset keys, so key order and
 `{a:1} == {a:1, b:2}` come out as in warp), `===` / `same` is identity, a new key `p.z = 5` is a field write, and a
 key the map was never given is W0's run-time "unset field" (warp: "no field"). A key the program never writes
-(`p={x:1}; p.y`) is not a field of `map`, so the exporter refuses it. Not modelled: computed keys `m[k]`, `m.keys`,
-methods (`get`, `remove`), `{}` subscripted by numbers (P34), typed maps (`map of int`).
+(`p={x:1}; p.y`) is not a field of `map`, so the exporter refuses it.
+
+Computed keys: `m[k]` with a text k reads field k (W0 `index (ref a p) (text k)`, typed any), `m[k] = v` writes it
+when the class has field k and v fits its type (`setAt`; checker `keyed`: a class indexed by a text). warp parses
+`m[k]` as `m#(k+1)`; the exporter takes the +1 off for names bound to a map literal, and a literal key written with
+`m["c"] = v` becomes a field of `map`. Difference: a key whose field type W0 guesses from its first value (int) and
+the program then writes with another type (`m = {a:1}; k = "a"; m[k] = "t"`) is a run-time type mismatch in W0, warp
+stores "t". Not modelled: `m.keys`, methods (`get`, `remove`), `{}` subscripted by numbers (P34), typed maps
+(`map of int`).
 
 ## Increments
 
@@ -440,8 +450,7 @@ inside a handler body loses the outer handler).
 ## Later phases
 
 Optional and auto-unwrap (P179: `a: int = Some(3)`), payload-free variants (`red`: one shared instance per variant),
-the value comparison above, errors as stored values (`r = f(-1); if r failed …`: a `τ or error` sum; card
-error-value: warp raises it at the call when f returns numbers), maps, then tasks.
+the value comparison above, maps, then tasks.
 
 ## Named arguments, defaults, nested functions (exporter only)
 
@@ -557,3 +566,24 @@ Found: card rational-float (`x: rational = sqrt(2)`, `x: rational = 0.5 as float
 validation error rather than the compile error a parameter gets: `f(r: rational) := r; f(0.5 as float)`).
 Not yet: `as rational` (a cast, not a conversion, in W0), float display, `x: float = 1/3` converting (W0 keeps 1/3, of
 type number; warp converts to 0.333…, which the comparison skips as a float).
+
+## Stored errors (errors as values)
+
+warp's `error("s")` is a value (Decided #1), W0's `fail "s"`: `r = error("x"); 5` is 5, a list item or an argument
+keeps one, `if` takes it as false, `r failed` (`failed r`) tests for it, `try r catch h` gives h, `==` compares it,
+`r as text` is its message. Any other operation given one raises an error (`r + 1`, `r < 1`, `xs#r`): the operations
+on values fall to their "not a number" branches, so preservation needs nothing new but `value_shape` excluding it
+(Lemmas.lean `arith_fail`). The traps (`1/0`, an index out of range, a failed cast) stay `error`: they unwind, as in
+warp, where `r = 1/0; 5` is the error.
+
+Its type is `any`, not `never` and not a new `error` type: a value of type `never` would break preservation
+(`x: int = error("x")` would store it in an int), and as dynamic data it needs no rule of its own: given to a
+declared place it is cast when it runs (`x: int = error("x")` fails there, "not an int" in warp), and
+`f(x) := if x < 0 then error("neg") else x` gives `any`, so `r = f(-1); if r failed then 1 else 2` is 1.
+
+Known differences, not in the corpus (warp types a stored error as a text, card error-value-kind): `r - 1` and
+`[r] ++ [1]` are compile errors in warp, `r * 2` is "xx", `type(r)` is text, `r#1` and `for x in r` trap; W0 raises
+an error for each when it runs. warp's `r + 1` gives the stored error itself (`s = r + 1; 5` is 5), W0 raises it
+(`s = r + 1; 5` is an error): an operation keeping the stored error would need its result type to admit `any`.
+Card failed-raised wants a trap stored too (`r = 10/0; r failed` is yes): then a binding would turn an `error` into
+a `fail`.

@@ -6,16 +6,21 @@
 const SITE_SCRIPTS = new URL(self.location.href).searchParams.get("scripts")?.split(",");
 importScripts(...(SITE_SCRIPTS ?? ["reader.js", "imports.js", "host.js"]));
 if (!SITE_SCRIPTS) importScripts(...HOST_PART_FILES, "components.js", "served-files.js");
-self.postMessage(TASK_WORKER_READY); // the pool takes this Worker only once it has loaded (host.js prepareTaskPool)
+// the program's Worker, through the port the page gives with the first message (task-workers.js serveTaskWorkers)
+let program;
+self.onmessage = ({ data }) => {
+	program = data.port;
+	program.onmessage = ({ data }) => data.fetch ? fetchInto(data) : data.gpu ? gpuJobInto(data) : runTaskInto(data);
+	program.postMessage(TASK_WORKER_READY); // the pool takes this Worker only once it has loaded (host-tasks.js prepareTaskPool)
+};
 
 // what a task does for the page goes through the program's Worker (host-tasks.js relayed)
-const relay = (method, ...values) => self.postMessage({ relay: [method, ...values] });
+const relay = (method, ...values) => program.postMessage({ relay: [method, ...values] });
 for (const method of ["playSoundFile", "stopSound", "stopSoundFiles"]) self[method] = (...values) => relay(method, ...values);
 // the files a task writes go back with its result (host-tasks.js finishedTask), bytes as their numbers in its JSON
 let taskFiles = new Map();
 self.taskWrote = (path, content) => taskFiles.set(path, typeof content === "string" ? content : { bytes: Array.from(content) });
 
-self.onmessage = ({ data }) => data.fetch ? fetchInto(data) : data.gpu ? gpuJobInto(data) : runTaskInto(data);
 
 // the starting program waits for the shared buffer, so every task writes it, a failure of this Worker's own too
 function runTaskInto({ module, name, ints, values, shared, arrays, captured, control, channels, files }) {
@@ -39,5 +44,5 @@ function runTaskInto({ module, name, ints, values, shared, arrays, captured, con
 // reads at its check points, and a message tells the program's Worker once it is back in its event loop
 async function fetchInto({ fetch: url, body, shared }) {
 	writeShared(shared, await fetchReplyOf(url, body));
-	self.postMessage(FETCH_DONE);
+	program.postMessage(FETCH_DONE);
 }

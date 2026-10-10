@@ -89,6 +89,22 @@ function keepBuffer(block, buffer) {
 	}
 }
 
+// the holes every shader has (src/shader_holes.rs BUILTIN_HOLES), filled here when the shader reads them and the
+// program gave none: the image's size, seconds since the first render, the renders before, the pointer and key over
+// the canvas (canvas.js, self.pagePointer)
+const BUILTIN_HOLES = ["width", "height", "size", "time", "frame", "mouse", "mouse_down", "key"];
+let firstRender, renders = 0;
+function builtinValues(shader, width, height) {
+	const shared = name => {
+		const at = self.pagePointer?.names.indexOf(name) ?? -1;
+		return at >= 0 ? Atomics.load(self.pagePointer.values, at) : 0;
+	};
+	firstRender ??= performance.now();
+	const value = { width, height, size: [width, height], time: (performance.now() - firstRender) / 1000, frame: renders++,
+		mouse: [shared("mouse_x"), shared("mouse_y")], mouse_down: shared("mouse_down"), key: shared("key") };
+	return Object.fromEntries(BUILTIN_HOLES.filter(name => new RegExp(`\\b${VALUES_NAME}\\.${name}\\b`).test(shader)).map(name => [name, value[name]]));
+}
+
 // the pixels the fragment shader colored, row by row
 async function gpuRendered({ shader, width, height, values }) {
 	const device = await theGpuDevice();
@@ -322,7 +338,7 @@ addHostPart({
 		};
 		// the pixels as a Uint32Array, for gpu_render and for paint given a shader (host.js, P234)
 		holder.gpuRendered = (shader, width, height, values) => {
-			const given = values == null ? {} : plain(values);
+			const given = { ...builtinValues(shader, Number(width), Number(height)), ...(values == null ? {} : plain(values)) };
 			return gpuJob("gpu_render", { shader, width: Number(width), height: Number(height), values: given }, [], Uint32Array);
 		};
 		return {

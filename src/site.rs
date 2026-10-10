@@ -22,6 +22,10 @@ const TRANSITION_WORD: &[u8] = b"transition";
 const PAINT_SCRIPT: Script = ("canvas.js", include_str!("../web/playground/canvas.js"));
 /// A page whose program runs in a Worker (card site-worker) loads this before them, and site.js hands over to it
 const THREAD_SCRIPT: Script = ("site-thread.js", include_str!("../web/playground/site-thread.js"));
+/// The page makes the task Workers of the program's Worker, which asks for them (Firefox, card tour-firefox-stall), when
+/// the Worker has the task pool (TASK_PART: not a site that only paints)
+const TASK_WORKERS_SCRIPT: Script = ("task-workers.js", include_str!("../web/playground/task-workers.js"));
+const TASK_PART: &str = "host-tasks.js";
 /// What such a site ships besides: the program's Worker, the task Workers it starts, and the service worker that gives a
 /// static host's page the cross-origin isolation shared memory needs
 const WORKER_FILES: [Script; 3] = [
@@ -228,7 +232,8 @@ fn site_files(code: &str, title: &str, dev: bool) -> Result<Option<ServedSite>, 
 	let page_scripts = page_scripts_of(&module.bytes)?.into_iter().chain(dev.then_some(DEV_SCRIPT));
 	let (scripts, worker_scripts): (Vec<Script>, Vec<Script>) = if runs_in_a_worker(&imports_of(&module.bytes)?) {
 		let page_parts = host_scripts.iter().filter(|(name, _)| PAGE_SIDE_PARTS.contains(name)).copied();
-		([THREAD_SCRIPT].into_iter().chain(page_parts).chain(page_scripts).collect(), host_scripts)
+		let task_workers = host_scripts.iter().any(|(name, _)| *name == TASK_PART).then_some(TASK_WORKERS_SCRIPT);
+		(task_workers.into_iter().chain([THREAD_SCRIPT]).chain(page_parts).chain(page_scripts).collect(), host_scripts)
 	} else {
 		(host_scripts.into_iter().chain(page_scripts).collect(), vec![])
 	};

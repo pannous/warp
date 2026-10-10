@@ -28,3 +28,26 @@ fn a_rational_constant_of_exact_reals_in_a_runtime_program() {
 	is!("xs = []; r = √2 * √2; r == 2", true);
 	is!("xs = []; r = √2 * √2; ok = r == 2; xs.add(ok); xs#1", true);
 }
+
+#[test]
+fn test_a_declared_exact_variable_refuses_a_float_as_a_parameter_does() {
+	const REFUSED: &str = "√(2) is a float where an exact rational is expected: declare it `number` to keep the float";
+	common::fails_with("f(x: rational) := x; f(sqrt(2))", REFUSED);
+	common::fails_with("x: rational = sqrt(2); x", REFUSED);
+	common::fails_with("x: rational = 1; x = sqrt(2); x", REFUSED);
+	common::fails_with("x as rational = sqrt(2)", REFUSED);
+	common::fails_with("x: int = sqrt(2); x", "√(2) is a float where an exact int is expected");
+}
+
+#[test]
+fn test_real_holds_roots_and_exact_unions_refuse_floats() {
+	is!("x: real = sqrt(2); x * x > 1.99", true);
+	is!("x: real = 1/3; x * 3", 1);
+	is!("x: real = 1; x = sqrt(2); x > 1.4", true);
+	is!("f(x: real) := x * 3; f(1/3)", 1);
+	is!("f(x: real) := x > 1.4; f(sqrt(2))", true);
+	common::fails_with("x: rational|int = sqrt(2)", "√(2) is a float where an exact rational is expected");
+	is!("x: int|rational = 1/3; x * 3", 1);
+	common::fails_with("x: int|text = sqrt(2)", "not an int or text");
+	common::fails_with("f(x: int or text) := x; f(sqrt(2))", "f needs an int or text for parameter x");
+}

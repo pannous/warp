@@ -24,7 +24,7 @@ const siteStarts = new Promise(start => {
 async function startSiteWorker() {
 	await siteStarts;
 	const root = document.getElementById(SITE_ROOT);
-	const worker = new Worker(`site-worker.js?scripts=${root.getAttribute(WORKER_ATTRIBUTE)}`);
+	const worker = serveTaskWorkers(new Worker(`site-worker.js?scripts=${root.getAttribute(WORKER_ATTRIBUTE)}`)); // task-workers.js
 	worker.onmessage = ({ data }) => {
 		if (data.html !== undefined) {
 			const template = document.createElement("template");

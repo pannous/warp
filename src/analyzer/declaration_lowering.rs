@@ -446,7 +446,7 @@ pub(super) fn applied_object(items: &[Node]) -> Option<(Node, Node)> {
 }
 
 /// Methods that append one element: `x.add(v)` is `x += [v]`, in place
-pub(super) const APPEND_METHODS: [&str; 4] = ["add", "append", "push", "insert"];
+const APPEND_METHODS: [&str; 4] = ["add", "append", "push", "insert"];
 pub(super) const POP_METHOD: &str = "pop";
 /// Pseudo-call `list_drop_last(xs)`: xs without its last item, in place (wasm_emitter list_ops emit_list_drop_last)
 pub const LIST_DROP_LAST: &str = "list_drop_last";
@@ -475,6 +475,12 @@ pub fn constant_field_name(key: &Node) -> Option<String> {
 		_ => return None,
 	};
 	(!name.is_empty() && name.chars().all(|c| c.is_alphanumeric() || c == '_' || c == '-')).then_some(name)
+}
+
+/// `xs.add(v)`, `xs.append(v)`, `xs.push(a, b)`, `xs.insert(v)`: a call appending its arguments (`xs.insert(i, v)` inserts
+/// at a position); the one table every pass asks
+pub(crate) fn appends(method: &str, argument_count: usize) -> bool {
+	APPEND_METHODS.contains(&method) && (method != INSERT_METHOD || argument_count == 1)
 }
 
 /// Methods that change the list variable they are called on: `xs.add(v)`, `xs.insert(v, at:1)`, `xs.pop()`

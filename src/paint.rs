@@ -54,13 +54,24 @@ pub fn paint(pixels: &[u64], width: usize, height: usize) -> Result<Option<PathB
 	if pixels.len() < width * height {
 		return Err(format!("paint: {width}×{height} needs {} pixels, got {}", width * height, pixels.len()));
 	}
+	shown_or_written(|| crate::paint_window::frame_bytes(pixels, width, height), || png_file(pixels, width, height))
+}
+
+/// paint of a rendered shader (gpu::render_rgba): its RGBA bytes go to the window as they are
+pub fn paint_rgba(rgba: &[u8], width: usize, height: usize) -> Result<Option<PathBuf>, String> {
+	let pixels = || rgba.chunks_exact(4).map(|pixel| u64::from(crate::gpu::opaque_color(pixel))).collect::<Vec<_>>();
+	shown_or_written(|| crate::paint_window::rgba_frame(rgba, width, height), || png_file(&pixels(), width, height))
+}
+
+/// The frame in a window when windows are allowed, else (or without a window) the PNG written
+fn shown_or_written(frame: impl FnOnce() -> Vec<u8>, write: impl FnOnce() -> Result<PathBuf, String>) -> Result<Option<PathBuf>, String> {
 	if WINDOWS.load(Ordering::Relaxed) {
-		match crate::paint_window::show(pixels, width, height) {
+		match crate::paint_window::show(&frame()) {
 			Ok(()) => return Ok(None),
 			Err(failure) => eprintln!("{failure}, so it goes to a PNG"),
 		}
 	}
-	png_file(pixels, width, height).map(Some)
+	write().map(Some)
 }
 
 /// The image as a PNG in the temporary folder
@@ -91,7 +102,7 @@ fn png(pixels: &[u64], width: usize, height: usize) -> Vec<u8> {
 			}
 		}
 	}
-	let mut deflated = flate2::write::ZlibEncoder::new(Vec::new(), flate2::Compression::default());
+	let mut deflated = flate2::write::ZlibEncoder::new(Vec::new(), flate2::Compression::fast()); // fast: an animation writes a frame each paint
 	deflated.write_all(&rows).expect("writing to memory");
 	let header = [(width as u32).to_be_bytes().as_slice(), &(height as u32).to_be_bytes(), if colored { &RGB_8_BIT } else { &GRAYSCALE_8_BIT }].concat();
 	let mut file = PNG_SIGNATURE.to_vec();
