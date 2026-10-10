@@ -47,6 +47,12 @@ arguments of a parameter that also gets ints, and in `==` ("not an int", tests/l
 `shown = [0.0, 0.0]` is still a list of ints (0.0 is exact), so the sample writes `[0.0 as float for …]` until the
 exact-decimal list decision (warp-numbers) lands.
 
+## Probes and quirks (from the warp-sound handover, 2026-10-10)
+- probes/sound/sound_words.warp exercises the sound words; probes/music_go/ the `play`/`melody` phrases;
+  probes/music_outlives_file.py that the player stops with warp.
+- Run sound probes under WARP_NO_WINDOW=1: otherwise sound plays on the user's Mac. Headless, sound only prints
+  `sound N s: <wav path>` on stderr.
+
 ## What professionals expect (user question 2026-10-09; roadmap, nothing of it built yet)
 
 The words above are layer 1, the toy layer. Each layer below keeps the ones above working and lowers to them.
