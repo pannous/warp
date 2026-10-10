@@ -1,7 +1,7 @@
 import WarpTypes.Typing
 
 /-! Small-step semantics of W0: left to right, call by value. An `error` in any evaluation position propagates,
-except under `try`. Main-level names are cells of the store; class instances live in its heap, which only grows. -/
+except under `try`; a stored error (`fail`) is a value until an operation that needs another value meets it. Main-level names are cells of the store; class instances live in its heap, which only grows. -/
 
 namespace Warp
 open Ty Expr
@@ -305,14 +305,22 @@ def looseEq (P : Program) (μ : Store) : Nat → Expr → Expr → Bool
 def eqValues (P : Program) (μ : Store) (same : Bool) (a b : Expr) : Bool :=
   if same then decide (a = b) else looseEq P μ EQ_FUEL a b
 
-/-- false, 0, "", ø and [] are falsy -/
+/-- a stored error -/
+def isFail : Expr → Bool
+  | .fail _ => true
+  | _ => false
+
+theorem isFail_eq : ∀ {e : Expr}, isFail e = true → ∃ m, e = .fail m := by
+  intro e h; cases e <;> simp_all [isFail]
+
+/-- false, 0, "", ø, [] and a stored error are falsy -/
 def truthy : Expr → Bool
   | .bool b => b
   | .int n => n != 0
   | .num q => q != 0
   | .flt f => Float.ofBits f != 0
   | .text s => !s.isEmpty
-  | .unit | .nil => false
+  | .unit | .nil | .fail _ => false
   | _ => true
 
 /-- the i-th element, 1-based; of a text its i-th codepoint -/
@@ -343,6 +351,7 @@ def valueType : Expr → Option Ty
   | .nil => some (.list .never)
   | .ref _ p => some (.cls p)
   | .lref _ t => some (.list t)
+  | .fail _ => some .any
   | .cons h t =>
     match valueType h, valueType t with
     | some a, some l =>
@@ -374,6 +383,7 @@ def display (μ : Store) : Nat → Expr → String
   | _, .num q => ratDisplay q
   | _, .flt f => floatDisplay (Float.ofBits f)
   | _, .text s => s!"\"{s}\""
+  | _, .fail _ => "error"
   | depth + 1, .lref a t => display μ depth (μ.items (.lref a t))
   | depth, .cons h t => "[" ++ " ".intercalate (showItems depth (.cons h t)) ++ "]"
   | _, _ => "?"
@@ -387,7 +397,7 @@ def DISPLAY_DEPTH : Nat := 8
 /-- `v as text`: a text as it is, the empty list ø, anything else as warp prints it -/
 def textForm (μ : Store) (v : Expr) : String :=
   match μ.items v with
-  | .text s => s
+  | .text s | .fail s => s
   | .nil => "ø"
   | v => display μ DISPLAY_DEPTH v
 
@@ -461,6 +471,7 @@ inductive Frame where
   | get (f : String)
   | setL (f : String) (v : Expr) | setR (o : Expr) (f : String)
   | isA (c : String)
+  | failed
   | emit (ev : String)
   | abort (ev : String) (k : Option Nat)
   | forIn (y : String) (b last : Expr)
@@ -503,6 +514,7 @@ def plug : Frame → Expr → Expr
   | setL f v, e => .set e f v
   | setR o f, e => .set o f e
   | isA c, e => .isA e c
+  | failed, e => .failed e
   | emit ev, e => .emit ev e
   | abort ev k, e => .abort ev k e
   | forIn y b d, e => .forIn y e b d
@@ -531,7 +543,8 @@ inductive Step (P : Program) : Expr × Store → Expr × Store → Prop where
   | raise {F : Frame} {m μ} : F.ready = true → Step P (F.plug (.error m), μ) (.error m, μ)
   | tryStep {e e' h μ μ'} : Step P (e, μ) (e', μ') → Step P (.tryCatch e h, μ) (.tryCatch e' h, μ')
   | tryError {m h μ} : Step P (.tryCatch (.error m) h, μ) (h, μ)
-  | tryValue {v h μ} : v.isValue = true → Step P (.tryCatch v h, μ) (v, μ)
+  | tryValue {v h μ} : v.isValue = true → isFail v = false → Step P (.tryCatch v h, μ) (v, μ)
+  | tryFail {m h μ} : Step P (.tryCatch (.fail m) h, μ) (h, μ)
   | readValue {x v μ} : μ x = some (.val v) → Step P (.glob x, μ) (v, μ)
   | readUnset {x μ} : μ x = some .unset → Step P (.glob x, μ) (.error "unset", μ)
   | readCharged {x b μ} : μ x = some (.charged b) → Step P (.glob x, μ) (b, μ)
@@ -573,6 +586,7 @@ inductive Step (P : Program) : Expr × Store → Expr × Store → Prop where
   | get {o f μ} : o.isValue = true → Step P (.get o f, μ) (readField μ o f, μ)
   | set {o f v μ} : o.isValue = true → v.isValue = true → Step P (.set o f v, μ) (writeField μ o f v)
   | isA {v c μ} : v.isValue = true → Step P (.isA v c, μ) (.bool (isInstance v c), μ)
+  | failed {v μ} : v.isValue = true → Step P (.failed v, μ) (.bool (isFail v), μ)
   /-- the body runs with the handler pushed; the handlers return to what they were -/
   | handleStep {ev h b b' μ μ'} : Step P (b, μ.push ev h) (b', μ') →
       Step P (.handle ev h b, μ) (.handle ev h b', μ'.withHandlers μ.handlers)

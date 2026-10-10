@@ -449,8 +449,14 @@ impl WasmGcEmitter {
 			crate::Kind::Empty | crate::Kind::Data => true,
 			crate::Kind::Int => self.int_runtime(),
 			crate::Kind::Key => !self.ctx.type_registry.types().is_empty(),
+			crate::Kind::List => self.may_be_map(subject),
 			_ => false,
 		}
+	}
+
+	/// A list of no known shape (a parameter given `{a: 1}`) may be a map, which is a list carrying the curly bracket
+	fn may_be_map(&self, subject: &Node) -> bool {
+		self.get_type(subject) == crate::Kind::List && self.static_type_name(subject) == crate::type_tests::LIST_WORD
 	}
 
 	/// `t is number` of a type value t (`t = type(x)`, `int is number`): t names one of the types number covers, `t == int or
@@ -491,6 +497,14 @@ impl WasmGcEmitter {
 		let item_of_text = self.static_type_name(subject) == TEXT_TYPE && crate::type_tests::canonical_spec_word(spec) == CODEPOINT_TYPE;
 		let unknown = spec == crate::type_tests::ERROR_TYPE || item_of_text || self.has_unknown_static_type(subject);
 		let declared_type = self.ctx.type_registry.get_by_name(spec).is_some();
+		let map_spec = crate::type_tests::canonical_spec_word(spec) == crate::analyzer::MAP_TYPE;
+		let known_map = crate::analyzer::held_map_type(subject, &self.scope).is_some();
+		if (unknown || self.may_be_map(subject)) && map_spec && !declared_type && !known_map {
+			self.emit_node_instructions(func, subject);
+			self.emit_is_map(func);
+			func.instruction(&I::I64ExtendI32U);
+			return true;
+		}
 		match crate::type_tests::runtime_kind_mask(spec).filter(|_| unknown && !declared_type) {
 			Some(mask) => {
 				self.emit_node_instructions(func, subject);

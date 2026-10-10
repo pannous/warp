@@ -291,12 +291,11 @@ impl WarpParser {
 			self.skip_python_colon();
 			// `try X else print "msg"`: a braceless call as on the guarded side (card try-print)
 			self.parse_guarded_phrase()
-		} else if marker == TRY_MARKER && self.finally_ahead().is_some() {
-			// `try X finally Z` is `try X catch e { e } finally Z`: a failure of X, trap included, stays the value after Z
+		} else if marker == TRY_MARKER {
+			// `r = try X` (user, card failed-raised) and `try X finally Z` are `try X catch e { e }`: a failure of X,
+			// trap included, stays the value, which `r failed` tests
 			caught = Some(UNCAUGHT_ERROR.to_string());
 			Symbol(UNCAUGHT_ERROR.to_string())
-		} else if marker == TRY_MARKER {
-			return error("`try` needs an `else`: `try X else Y`");
 		} else if marker == ASSERT_MARKER {
 			// the error names the condition as written, before lowering rewrote it
 			Node::Text(format!("{ASSERTION_FAILED}: {}", written.trim()))

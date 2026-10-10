@@ -157,6 +157,12 @@ impl WasmGcEmitter {
 		}
 	}
 
+	/// node on the stack → i32 1 when it is a map: a list whose kind carries the curly bracket (`{a: 1}`)
+	pub(super) fn emit_is_map(&self, func: &mut Function) {
+		Self::emit_list(func, &[I::RefAsNonNull, I::StructGet { struct_type_index: self.type_manager.node_type, field_index: 0 },
+			I::I64Const(crate::type_kinds::UNMARKED_KIND), I::I64And, I::I64Const(crate::type_kinds::CURLY_LIST_KIND), I::I64Eq]);
+	}
+
 	/// node_type_name(node) -> ref $Node: `type(x)` of a value whose static type is unknown (held as a Node), the symbol
 	/// naming its run-time kind as the static names do: bool, rational, int, text, …
 	pub(crate) fn emit_node_type_name(&mut self) {
@@ -194,6 +200,11 @@ impl WasmGcEmitter {
 				}
 				f.instruction(&I::End);
 			}
+			Self::emit_list(f, &[I::LocalGet(0)]);
+			s.emit_is_map(f);
+			f.instruction(&I::If(BlockType::Empty));
+			s.emit_string_call(f, crate::analyzer::MAP_TYPE, "new_symbol");
+			Self::emit_list(f, &[I::Return, I::End]);
 			for named in RUN_TIME_TYPE_KINDS {
 				Self::emit_list(f, &[I::LocalGet(kind), I::I64Const(KIND_MASK), I::I64And, I::I64Const(named as i64), I::I64Eq, I::If(BlockType::Empty)]);
 				s.emit_string_call(f, &named.to_string(), "new_symbol");

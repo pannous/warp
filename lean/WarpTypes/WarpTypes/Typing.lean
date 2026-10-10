@@ -73,6 +73,9 @@ inductive HasType (P : Program) : Ctx → Expr → Ty → Prop where
       HasType P Γ (.call f e) fn.result
   /-- inference.rs raises_error: the bottom kind -/
   | error {Γ m} : HasType P Γ (.error m) .never
+  /-- a stored error is dynamic data: it goes wherever a run-time check takes it -/
+  | fail {Γ m} : HasType P Γ (.fail m) .any
+  | failed {Γ e te} : HasType P Γ e te → HasType P Γ (.failed e) .bool
   | tryCatch {Γ e h te th} : HasType P Γ e te → HasType P Γ h th → HasType P Γ (.tryCatch e h) (join te th)
   /-- a run-time checked cast: statically any source type, the alternatives' join -/
   | cast {Γ e ts te} : HasType P Γ e te → HasType P Γ (.cast e ts) (joinAll ts)

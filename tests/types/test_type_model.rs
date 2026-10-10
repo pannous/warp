@@ -523,6 +523,29 @@ const CORPUS: &[&str] = &[
 	"xs = [0.5, 1]; xs#1",
 	"1/3 - 1/3",
 	"x: rational = 1/3; x = 0.5 as float",
+	// stored errors (Decided #1, errors as values): a name, a list item or an argument keeps one, `if` takes it as
+	// false, `try` and `failed` test for it, any other operation given one raises (card type-theory)
+	"error(\"x\"); 5",
+	"r = error(\"x\"); 5",
+	"r = error(\"x\"); r",
+	"r = error(\"x\"); if r failed then 1 else 2",
+	"r = 1; if r failed then 1 else 2",
+	"r = error(\"x\"); s = r; if s failed then 1 else 2",
+	"x: any = error(\"x\"); x failed",
+	"r = error(\"x\"); r + 1",
+	"r = error(\"x\"); r < 1",
+	"r = error(\"x\"); r == r",
+	"r = error(\"x\"); r == 1",
+	"r = error(\"x\"); r as text",
+	"if error(\"x\") then 1 else 2",
+	"xs = [error(\"x\"), 2]; 3",
+	"f(e) := 3; f(error(\"x\"))",
+	"f(x) := error(\"neg\"); r = f(1); if r failed then 1 else 2",
+	"f(x) := if x < 0 then error(\"neg\") else x; r = f(-1); if r failed then 1 else 2",
+	"f(x) := if x < 0 then error(\"neg\") else x; f(3) + 1",
+	"x: int = error(\"x\"); 3",
+	"r = error(\"x\"); try r + 1 catch 7",
+	"r = try error(\"x\") catch 7; r",
 ];
 
 /// Programs warp compiles although the model rejects them: holes in warp's checks, each with its card
