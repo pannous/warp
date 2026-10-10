@@ -3,16 +3,15 @@
 //! every later pass like written ones. `xs where it > 1` filters like `[it for it in xs if it > 1]`.
 
 use super::words::{FOR_WORD, IN_WORD};
-use super::nodes::key;
+use super::nodes::{Counter, key};
 use crate::library_words::substitute;
 use crate::node::{symbol, Bracket, Node, Separator};
 use crate::operators::Op;
 use crate::warp_parser::parse;
-use std::cell::Cell;
 use std::collections::{HashMap, HashSet};
 
 const IF_WORD: &str = "if";
-const WHERE_WORD: &str = "where";
+const WHERE_KEYWORD: &str = "where";
 /// `people with age > 20`: `where` of a list of a class's instances
 const WITH_WORD: &str = "with";
 /// `people without team`: `where not` of such a list (card people-where)
@@ -33,15 +32,14 @@ const ELEMENT: &str = "comprehension_element";
 const LOOPS: &str = "comprehension_loops";
 
 pub fn lower(node: Node) -> Node {
-	Lowering { count: Cell::new(0) }.lower(node)
+	Lowering { count: Counter::default() }.lower(node)
 }
 
 /// `xs where it > 1` as the comprehension `[it for it in xs if it > 1]`; before welcome_forms reads `xs where …` as
 /// juxtaposed words. A condition not reading `it` is an error: it would filter nothing it can name.
 pub fn lower_where(node: Node) -> Node {
 	let mut lists = Lists::of(&node);
-	let node = with_as_where(node, &lists);
-	let node = where_reassociated(node);
+	let node = where_reassociated(with_as_where(node, &lists));
 	let filtered = where_filters(node, &mut lists);
 	crate::database_tables::with_filter_functions(filtered, lists.tables)
 }
@@ -67,7 +65,12 @@ impl Lists {
 					}
 				}
 			}
-			Node::Key(target, Op::Assign | Op::Define, _) => variables.extend(bound_names(target)),
+			Node::Key(target, Op::Assign | Op::Define, value) => {
+				variables.extend(bound_names(target));
+				if let (Node::Symbol(list), Some(class_fields)) = (target.drop_meta(), instances_class(value).and_then(|class| classes.get(class))) {
+					fields.insert(list.clone(), class_fields.clone());
+				}
+			}
 			Node::List(words, _, _) if words.first().is_some_and(|word| word.is_symbol(FOR_WORD)) => variables.extend(words.get(1).map(Node::name)),
 			_ => {}
 		});
@@ -79,6 +82,14 @@ impl Lists {
 		let Some(fields) = self.fields.get(&subject.drop_meta().name()) else { return condition };
 		fields_of_it(condition, fields, &self.variables)
 	}
+}
+
+/// `[P("Al", 30), P("Bo", 10)]`: the class whose constructor makes every element (a class is checked by the caller)
+fn instances_class(value: &Node) -> Option<&str> {
+	let Node::List(elements, Bracket::Square, _) = value.drop_meta() else { return None };
+	let mut classes = elements.iter().map(|element| crate::tuples::call_parts(element).map(|(class, _)| class));
+	let first = classes.next()??;
+	classes.all(|class| class == Some(first)).then_some(first)
 }
 
 /// The names a definition or assignment binds: `x`, `x: int`, the parameters of `f(a, b: int)`
@@ -112,7 +123,6 @@ fn fields_of_it(condition: Node, fields: &[String], variables: &HashSet<String>)
 }
 
 /// `people with age > 20` as `people where age > 20`, `people without team` as `people where not team`, when people is
-/// `people with age > 20` as `people where age > 20`, `people without team` as `people where not team`, when people is
 /// a list of a class's instances
 fn with_as_where(node: Node, lists: &Lists) -> Node {
 	let node = node.map_children(|child| with_as_where(child, lists));
@@ -123,7 +133,7 @@ fn with_as_where(node: Node, lists: &Lists) -> Node {
 			continue;
 		}
 		if items[at].is_symbol(WITH_WORD) {
-			items[at] = symbol(WHERE_WORD);
+			items[at] = symbol(WHERE_KEYWORD);
 		} else if items[at].is_symbol(WITHOUT_WORD) {
 			items[at] = symbol(WHERE_NOT);
 		}
@@ -209,7 +219,7 @@ fn loop_over_filtered(items: &[Node], lists: &mut Lists) -> Option<Vec<Node>> {
 	// `for x in (xs where c) {…}` as the parser groups the filter
 	let items = crate::list_phrases::words(items);
 	let [for_word, variable, in_word, sequence, where_word, condition, body] = items.as_slice() else { return None };
-	if !for_word.is_symbol(FOR_WORD) || !in_word.is_symbol(IN_WORD) || !where_word.is_symbol(WHERE_WORD) || !matches!(body.drop_meta(), Node::List(_, Bracket::Curly, _)) {
+	if !for_word.is_symbol(FOR_WORD) || !in_word.is_symbol(IN_WORD) || !where_word.is_symbol(WHERE_KEYWORD) || !matches!(body.drop_meta(), Node::List(_, Bracket::Curly, _)) {
 		return None;
 	}
 	let Node::Symbol(name) = variable.drop_meta() else { return None };
@@ -306,7 +316,7 @@ fn where_position(items: &[Node]) -> Option<usize> {
 }
 
 fn is_where(word: &Node) -> bool {
-	word.is_symbol(WHERE_WORD) || word.is_symbol(WHERE_NOT)
+	word.is_symbol(WHERE_KEYWORD) || word.is_symbol(WHERE_NOT)
 }
 
 /// The clause `for v in xs …`
@@ -323,7 +333,7 @@ fn phrase(words: &[Node]) -> Node {
 }
 
 struct Lowering {
-	count: Cell<usize>,
+	count: Counter,
 }
 
 impl Lowering {
@@ -349,8 +359,7 @@ impl Lowering {
 
 	fn comprehension(&self, items: &[Node]) -> Option<Node> {
 		let comprehension = Comprehension::of(items)?;
-		let number = self.count.get();
-		self.count.set(number + 1);
+		let number = self.count.next_number();
 		let made = format!("{MADE}_{number}");
 		Some(comprehension.looped(&format!("(var {made} = []; {LOOPS}; {made})"), &format!("{made}.push({ELEMENT})")))
 	}
@@ -435,7 +444,7 @@ fn qualifiers(clause: &Node, rest: &[Node]) -> Option<Vec<Qualifier>> {
 		([], []) => {}
 		([nothing], []) if matches!(nothing.drop_meta(), Node::Empty) => {}
 		([nested], _) if starts_with_for(nested) => found.extend(qualifiers(nested, rest)?),
-		([filter_word], [_, ..]) if filter_word.is_symbol(IF_WORD) || filter_word.is_symbol(WHERE_WORD) => {
+		([filter_word], [_, ..]) if filter_word.is_symbol(IF_WORD) || filter_word.is_symbol(WHERE_KEYWORD) => {
 			let end = rest.iter().position(starts_with_for).unwrap_or(rest.len());
 			if end == 0 {
 				return None;

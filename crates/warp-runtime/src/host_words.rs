@@ -95,6 +95,7 @@ mod linking {
 		system_signals::forget_timers(); // each run links anew, on its own thread
 		RANDOM_STATE.set(0); // and starts unseeded
 		linker.func_wrap(HOST_LIBRARY, SLEEP, |mut caller: Caller<'_, T>, milliseconds: i64| {
+			system_signals::end_at_first_frame()?;
 			system_signals::sleep_with_handlers(&mut caller, Duration::from_millis(milliseconds.max(0) as u64), exported)
 		})?;
 		// the top 53 bits make a uniform f64 in [0, 1)

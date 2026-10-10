@@ -1,0 +1,3 @@
+use json
+x = parse_json("{'a':1, // note\n 'b':[2,3,],}")
+x.b

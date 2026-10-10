@@ -2,6 +2,7 @@
 
 use crate::node::{Bracket, Node, Separator};
 use crate::operators::Op;
+use std::cell::Cell;
 
 pub(crate) use crate::node::{int, symbol};
 
@@ -131,6 +132,20 @@ pub(crate) fn grouped_parameters(parameter: &Node) -> Vec<Node> {
 		Node::List(group, Bracket::Round, _) => group.clone(),
 		Node::Empty => vec![],
 		_ => vec![parameter.clone()],
+	}
+}
+
+/// Numbers a pass's temporaries apart: each `next_number` the next one, from 0 or from where it starts
+#[derive(Default)]
+pub(crate) struct Counter(Cell<usize>);
+
+impl Counter {
+	pub(crate) const fn starting_at(first: usize) -> Self {
+		Counter(Cell::new(first))
+	}
+
+	pub(crate) fn next_number(&self) -> usize {
+		self.0.replace(self.0.get() + 1)
 	}
 }
 

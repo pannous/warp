@@ -122,6 +122,7 @@ PASSED:
   ✓ control::test_database_relations::a_table_is_registered_after_the_tables_it_points_to
   ✓ control::test_database_short_names::a_one_letter_column_takes_rows
   ✓ control::test_database_short_names::a_one_letter_table_takes_rows
+  ✓ control::test_database_tables::a_class_of_fields_side_by_side_is_a_table
   ✓ control::test_database_tables::a_field_added_to_the_class_adds_a_column
   ✓ control::test_database_tables::a_field_changed_with_loss_is_an_error_naming_both_types
   ✓ control::test_database_tables::a_field_changed_without_loss_converts_its_column
@@ -202,6 +203,7 @@ PASSED:
   ✓ control::test_field_of_elements::a_field_of_a_filtered_table_reads_only_its_rows
   ✓ control::test_field_of_elements::a_field_of_a_list_is_the_field_of_each_element
   ✓ control::test_field_of_elements::with_filters_a_list_of_instances
+  ✓ control::test_field_of_elements::with_filters_an_untyped_list_of_instances
   ✓ control::test_filter_loop_over_variable::a_filter_loop_over_a_variable
   ✓ control::test_filter_loops::test_a_class_name_loop_visits_only_its_instances
   ✓ control::test_filter_loops::test_a_condition_loop_visits_only_matching_items
@@ -1148,6 +1150,9 @@ PASSED:
   ✓ functions::test_library_word_values::print_in_a_block_prints_the_one_expression
   ✓ functions::test_list_conversion::an_empty_list
   ✓ functions::test_list_conversion::list_of_a_value
+  ✓ functions::test_list_fields::test_dot_on_a_list_maps_the_field
+  ✓ functions::test_list_fields::test_one_instance_and_list_words_stay
+  ✓ functions::test_list_fields::test_possessive_on_a_list_maps_the_field
   ✓ functions::test_map_phrase::test_map_a_function_first_without_on
   ✓ functions::test_map_phrase::test_map_a_function_on_a_list
   ✓ functions::test_map_phrase::test_map_a_function_reference_on_a_list
@@ -1672,6 +1677,7 @@ PASSED:
   ✓ lists::test_typed_lists::test_appended_int_list_is_an_array
   ✓ lists::test_typed_lists::test_float_array_elements_are_numbers
   ✓ lists::test_typed_lists::test_float_list_is_a_float_array
+  ✓ lists::test_typed_lists::test_float_written_into_exact_decimal_list
   ✓ lists::test_typed_lists::test_int_array_assignment_keeps_value_semantics
   ✓ lists::test_typed_lists::test_int_array_errors_like_cons_list
   ✓ lists::test_typed_lists::test_int_array_index_count_sum_for
@@ -1751,10 +1757,14 @@ PASSED:
   ✓ modules::test_include::use_imports_only_the_declarations
   ✓ modules::test_json_parse_form::json_parse_reads_json
   ✓ modules::test_json_parse_form::parse_json_is_an_alias_of_json_parse
+  ✓ modules::test_json5::json_of_a_text_parses_it
+  ✓ modules::test_json5::json_of_warp_data_is_that_data
+  ✓ modules::test_json5::json_parse_reads_json5
   ✓ modules::test_module_cache::test_different_modules_not_cached
   ✓ modules::test_module_cache::test_module_cache_reuse
   ✓ modules::test_module_classes::a_used_modules_class_has_its_methods
   ✓ modules::test_module_classes::the_programs_own_class_wins
+  ✓ modules::test_module_function_dir::a_used_module_function_reflects_like_the_program_own
   ✓ modules::test_module_meta::an_imported_warp_module_reflects_its_functions
   ✓ modules::test_module_meta::the_meta_section_names_functions_and_classes
   ✓ modules::test_module_signals::a_listener_sees_the_writes_of_a_used_module
@@ -2645,6 +2655,8 @@ PASSED:
   ✓ parser::test_references::a_path_follows_a_reference
   ✓ parser::test_references::bracketed_attributes_before_a_body_are_meta_entries
   ✓ parser::test_references::references_survive_a_round_trip
+  ✓ parser::test_scheme_relative_url::a_url_may_start_at_its_colon_slash_slash
+  ✓ parser::test_scheme_relative_url::natively_it_is_fetched_over_https
   ✓ parser::test_semicolon_square::test_square_brackets_keep_all_newline_items
   ✓ parser::test_semicolon_square::test_square_brackets_keep_all_semicolon_items
   ✓ parser::test_spaced_children::a_spaced_child_in_a_data_literal_is_a_child_node
@@ -2822,6 +2834,7 @@ PASSED:
   ✓ programs::test_sound_render::sounds_render_into_one_wav_file
   ✓ programs::test_sound_spectrum::a_tone_fills_its_own_band
   ✓ programs::test_sound_spectrum::silence_and_the_end_are_empty
+  ✓ programs::test_sound_spectrum::the_gpu_visualizer_raymarches_while_it_plays
   ✓ programs::test_sound_spectrum::the_visualizer_paints_while_it_plays
   ✓ programs::test_sound_wavs::each_run_writes_wavs_of_its_own
   ✓ programs::test_sound::a_melody_is_its_notes_one_after_another
@@ -2830,7 +2843,10 @@ PASSED:
   ✓ programs::test_sound::play_writes_the_tone_as_a_wav
   ✓ programs::test_sound::sound_words_run_without_use
   ✓ programs::test_sound::the_note_table_matches_note
+  ✓ programs::test_task_sound::a_sound_in_a_task_plays_its_length
+  ✓ programs::test_task_sound::a_task_reads_the_programs_globals
   ✓ programs::test_warp_command::debug_build_names_its_commit
+  ✓ programs::test_warp_command::version_names_the_branch
   ✓ programs::test_warp_command::warp_command_runs_this_checkouts_binary
   ✓ scope::test_colon_body_assignment::test_for_colon_body_with_assignments
   ✓ scope::test_colon_body_assignment::test_if_colon_body_assignment_stops_at_else
@@ -3069,7 +3085,10 @@ PASSED:
   ✓ text::test_text_functions::return_from_a_statement_gives_back_the_node
   ✓ text::test_text_getters::compiled_uniscript_converts_like_the_browser_page
   ✓ text::test_text_getters::text_getters_read_texts_and_errors
+  ✓ text::test_text_plus_anything::a_text_joins_anything_in_its_text_form
+  ✓ text::test_text_plus_anything::a_text_spelling_a_number_plus_a_number_warns
   ✓ text::test_text_plus_float_call::a_float_call_joins_a_text_by_its_value
+  ✓ text::test_text_plus_printable::a_printable_instance_joins_a_text_as_its_own_text
   ✓ text::test_text_repeat::n_times_text_is_the_explicit_repeat
   ✓ text::test_text_repeat::text_repeat_names_the_explicit_form
   ✓ text::test_text_repeat::text_times_float_or_text_stays_a_type_error
@@ -3537,6 +3556,7 @@ PASSED:
   ✓ types::test_type_tests::test_pi_is_real_and_a_number
   ✓ types::test_type_tests::test_scalar_type_tests
   ✓ types::test_type_tests::test_type_of_is_type
+  ✓ types::test_type_tests::test_type_of_value_is_type
   ✓ types::test_type_upgrading::test_float_operations
   ✓ types::test_type_upgrading::test_float_plus_int_type_upgrading
   ✓ types::test_type_upgrading::test_global_with_float
@@ -3771,6 +3791,9 @@ PASSED:
   ✓ web::test_accessibility::ternaries_and_number_fields_are_no_elements
   ✓ web::test_accessibility::typed_names_are_no_elements
   ✓ web::test_accessibility::unusable_markup_is_warned_about
+  ✓ web::test_assistant_edits::a_diff_changes_only_the_lines_it_names
+  ✓ web::test_assistant_edits::a_diff_that_no_longer_fits_says_so
+  ✓ web::test_assistant_edits::a_whole_program_replaces_only_the_lines_that_differ
   ✓ web::test_async_data::a_body_that_is_no_json_is_the_text
   ✓ web::test_async_data::a_changed_url_variable_fetches_anew
   ✓ web::test_async_data::a_failed_fetch_is_the_error
@@ -3793,6 +3816,7 @@ PASSED:
   ✓ web::test_css_transitions::a_site_with_transitions_carries_their_script
   ✓ web::test_css_transitions::the_starting_style_is_data_for_the_page
   ✓ web::test_deploy::a_deployed_program_answers_its_routes
+  ✓ web::test_deploy::a_program_without_routes_answers_its_value_and_functions
   ✓ web::test_deploy::a_program_without_routes_is_no_worker
   ✓ web::test_deploy::the_playground_bundles_a_program_for_warp_hosting
   ✓ web::test_dev_server::a_dev_build_keeps_the_values_the_program_changed
@@ -3845,6 +3869,7 @@ PASSED:
   ✓ web::test_keyed_lists::a_key_names_the_element_of_an_item
   ✓ web::test_keyed_lists::a_key_on_its_own_line_names_the_element
   ✓ web::test_keyed_lists::a_list_inside_an_element_gives_its_children
+  ✓ web::test_keyword_registry::keywords_of_passes_are_highlighted
   ✓ web::test_markup_holes::a_page_binds_each_hole
   ✓ web::test_markup_holes::fixed_markup_or_a_computed_root_has_no_holes
   ✓ web::test_markup_holes::the_elements_holding_computed_parts_are_the_holes
@@ -3920,6 +3945,8 @@ PASSED:
   ✓ web::test_server_rpc_everywhere::a_fetch_starts_from_its_default
   ✓ web::test_server_rpc_stub::a_server_function_body_stays_out_of_the_page
   ✓ web::test_server_rpc_stub::an_uncalled_server_function_stays_out_of_the_page
+  ✓ web::test_site_animation::an_endless_animation_builds
+  ✓ web::test_site_animation::an_endless_sleeping_loop_builds
   ✓ web::test_site_tasks::a_site_renders_what_its_tasks_computed
   ✓ web::test_site::a_painting_site_runs_in_a_worker_with_its_canvas
   ✓ web::test_site::a_program_failing_at_build_time_builds_no_site
@@ -3961,6 +3988,7 @@ PASSED:
   ✓ web::test_uniscript::unicode_spells_back_as_uniscript
   ✓ web::test_uniscript::unsupported_characters_and_combinations_warn
   ✓ web::test_uniscript::use_strict_makes_uniscript_warnings_errors
+  ✓ web::test_wagi::each_route_answers_as_wagi
   ✓ web::test_warp_serve::a_program_without_serve_is_served_with_its_server_functions_and_routes
   ✓ web::test_warp_serve::a_server_is_known_without_running_it
   ✓ web::test_web_apis::notify_is_a_host_word
@@ -3997,6 +4025,7 @@ PASSED:
   ✓ web::test_webgpu::a_gpu_map_runs_on_the_cpu_where_that_is_faster
   ✓ web::test_webgpu::a_gpu_map_takes_a_list_of_floats
   ✓ web::test_webgpu::a_gpu_map_the_gpu_cannot_run_says_why
+  ✓ web::test_webgpu::a_kept_shader_reads_each_frames_values
   ✓ web::test_webgpu::a_reduction_of_a_gpu_map_reads_back_partial_results
   ✓ web::test_webgpu::a_reduction_of_a_gpu_map_takes_a_list_of_floats
   ✓ web::test_webgpu::a_render_shader_that_does_not_compile_says_where
@@ -4387,4 +4416,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-10 ignored, 4382 passed, 0 failed, 4382 total tested
+10 ignored, 4411 passed, 0 failed, 4411 total tested

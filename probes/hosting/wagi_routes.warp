@@ -1,0 +1,6 @@
+// probes/hosting/wagi_routes.sh builds these routes with warp build --wagi and asks each
+fib(n) := if n < 2 then n else fib(n-1) + fib(n-2)
+get "/" { "hello from the edge" }
+get "/fib/:n:int" { {n: n, fib: fib(n)} }
+get "/list" { [1, 2.5, "a", yes, [3]] }
+get "/nested" { {name: "x", tags: ["a", "b"], inner: {k: no}} }

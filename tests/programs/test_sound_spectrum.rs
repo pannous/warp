@@ -28,3 +28,18 @@ fn the_visualizer_paints_while_it_plays() {
 	assert!(errors.contains("sound "), "{errors}");
 	assert!(errors.matches("paint").count() >= 3 || String::from_utf8_lossy(&run.stdout).matches("paint").count() >= 3, "{errors}");
 }
+
+// the WebGPU visualizer: a raymarching fragment shader reads the spectrum through $levels each frame
+#[cfg(feature = "native")]
+#[test]
+fn the_gpu_visualizer_raymarches_while_it_plays() {
+	let sample = concat!(env!("CARGO_MANIFEST_DIR"), "/samples/gpu_visualizer.warp");
+	let run = crate::common::warp_command().args(["--no-ask", "run", sample]).output().unwrap();
+	let errors = String::from_utf8_lossy(&run.stderr);
+	if errors.contains("no WebGPU adapter") {
+		return crate::common::announce_skip("a WebGPU adapter", module_path!());
+	}
+	assert!(run.status.success(), "{errors}");
+	assert!(errors.contains("sound "), "{errors}");
+	assert!(errors.matches("painted").count() >= 3, "{errors}");
+}

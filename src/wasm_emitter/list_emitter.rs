@@ -239,7 +239,7 @@ impl WasmGcEmitter {
 
 		if items.len() == 1 && *bracket != Bracket::Square {
 			// `f()` of a name bound to nothing is an undefined function (P92); the group `(f)` is its item
-			if !self.emit_function_call(func, items, bracket, separator) && !self.emit_empty_print(func, items) && !self.reject_unresolved_call(func, items, bracket, separator) {
+			if !self.emit_function_call(func, items, bracket, separator) && !self.emit_empty_print(func, items) && !self.emit_library_word_call(func, items, bracket, separator) && !self.reject_unresolved_call(func, items, bracket, separator) {
 				self.emit_node_instructions(func, &items[0]);
 			}
 			return;

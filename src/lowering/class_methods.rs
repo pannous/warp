@@ -7,7 +7,7 @@
 //! declares `dog like animal`, so a dog is accepted where an animal is wanted.
 
 use super::words::{GLOBAL_WORD, MAP_WORD, RETURN_WORD, SUM_WORD};
-use super::nodes::{call, grouped_parameters, if_then, key};
+use super::nodes::{Counter, call, grouped_parameters, if_then, key};
 use crate::node::{symbol, text, Bracket, Node, Separator};
 use crate::operators::Op;
 
@@ -146,7 +146,7 @@ pub fn lower(node: Node) -> Node {
 	let node = if statics.is_empty() { node } else { static_reads(node, &statics) };
 	// `s.area`, `s.scaled(3)` of a shared method: the call `area(s)` before traits rename each class's method;
 	// `c.inc()` of a method changing its object: `c = inc(c)` (P116)
-	let node = if shared.is_empty() && changing.is_empty() { node } else { method_calls(node, &shared, &changing, &std::cell::Cell::new(0)) };
+	let node = if shared.is_empty() && changing.is_empty() { node } else { method_calls(node, &shared, &changing, &Counter::starting_at(1)) };
 	match (traits.is_empty(), node) {
 		(true, node) => node,
 		(false, Node::List(items, bracket, separator)) if separator != Separator::Space => Node::List([traits, items].concat(), bracket, separator),
@@ -2326,7 +2326,7 @@ fn trait_operation(declaration: &Node) -> Option<String> {
 /// `x.m` and `x.m(args)` of the methods `m` as calls `m(x)`, `m(x, args)`; of a method changing its object, on a variable,
 /// the update `x = m(x, args)`; each call's pair is a temp of its own, `pop·result·1`, so a call inside a method shares
 /// no name with one in main
-fn method_calls(node: Node, called: &[String], changing: &Changing, calls: &std::cell::Cell<usize>) -> Node {
+fn method_calls(node: Node, called: &[String], changing: &Changing, calls: &Counter) -> Node {
 	let recurse = |child: Node| method_calls(child, called, changing, calls);
 	let Node::Key(receiver, Op::Dot, member) = node else { return node.map_children(recurse) };
 	let receiver = recurse(*receiver);
@@ -2343,8 +2343,7 @@ fn method_calls(node: Node, called: &[String], changing: &Changing, calls: &std:
 	match receiver.drop_meta() {
 		// `s.pop()`: the pair (value, changed object) of the call, the object stored back, the value given
 		Node::Symbol(_) if changing.giving_value.contains(&name) => {
-			calls.set(calls.get() + 1);
-			let pair = Node::Symbol(format!("{name}{RESULT_SUFFIX}·{}", calls.get()));
+			let pair = Node::Symbol(format!("{name}{RESULT_SUFFIX}·{}", calls.next_number()));
 			Node::List(vec![
 				key(pair.clone(), Op::Assign, call),
 				key(receiver, Op::Assign, item(pair.clone(), 2)),

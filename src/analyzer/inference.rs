@@ -390,7 +390,7 @@ pub(super) fn infer_list_type(node: &Node, items: &[Node], bracket: &Bracket, se
 		return match head {
 			Some(name) if crate::ffi::is_ffi_function(name) => ffi_call_kind(name),
 			// `abs(c)`: a variable in parentheses is the variable
-			Some(name) => scope.binding(name).map_or(Kind::Int, |local| local.kind), // a user function without arguments: Int
+			Some(name) => scope.binding(name).map(|local| local.kind).or_else(|| crate::library_words::result_kind(name)).unwrap_or(Kind::Int), // a user function without arguments: Int
 			// Grouping: (x) has the type of x
 			None => infer_type(&items[0], scope),
 		};

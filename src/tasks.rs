@@ -1,9 +1,11 @@
 //! Real threads for `go` (user decision P33, notes/threads.md): `go f(x)` runs f in a new instance of the same module on
 //! its own thread; `await job` joins it. Values are copied: the arguments go in, the result comes out (a TaskValue
-//! between the threads, rebuilt in each instance through its exported constructors); the task's instance sees the
-//! module's initial variables, never the caller's. The program calls the host words (declarations::resolve_tasks):
+//! between the threads, rebuilt in each instance through its exported constructors); the task never changes the
+//! caller's variables. The program calls the host words (declarations::resolve_tasks):
 //! `task_spawn(name, a0, a1, a2, a3)` / `task_await(id)` for functions of Ints, `task_spawn_values(name, [args])` /
 //! `task_await_value(id)` for numbers, texts and characters, and `task_control(id, op)` for stop, pause and resume.
+//! The task's instance starts with the spawning instance's capture globals: what its closures captured and the
+//! program's globals (`capture·global·<name>`, card task-sound), as they are at the spawn.
 
 use crate::host::{HostState, HOST_LIBRARY, MAX_TASK_ARGUMENTS, TASK_AWAIT, TASK_AWAIT_VALUE, TASK_CONTROL, TASK_FAILURE, TASK_JOIN, TASK_PAUSE, TASK_SPAWN, TASK_SPAWN_VALUES, TASK_STATUS, TASK_STOP, TEXT_HEAP_EXPORT};
 use crate::node::{Bracket, Node};

@@ -17,7 +17,7 @@ const PHRASES: [(&str, &str); 3] = [KEEP, SORT, TAKE];
 const METHOD_ALIASES: [(&str, &str); 1] = [("sorted", "sort")];
 /// The conditions `keep only` knows by name, on each element `it`
 const PROPERTIES: [(&str, &str); 4] = [("positive", "it > 0"), ("negative", "it < 0"), ("even", "it % 2 == 0"), ("odd", "it % 2 != 0")];
-const WHERE_WORD: &str = "where";
+const WHERE_KEYWORD: &str = "where";
 const SORT_BY: &str = "sort_by";
 const SLICE: &str = "slice";
 /// The parameter of a `sort by` key
@@ -145,7 +145,7 @@ fn phrase(method: &str, word: &str, receiver: Node, argument: &Node, context: &C
 	match (method, word) {
 		// parenthesized, so a method after it applies to the filtered list (comprehensions::where_reassociated)
 		KEEP => {
-			let filter = Node::List(vec![receiver, symbol(WHERE_WORD), condition(argument, context)?], Bracket::None, Separator::Space);
+			let filter = Node::List(vec![receiver, symbol(WHERE_KEYWORD), condition(argument, context)?], Bracket::None, Separator::Space);
 			Some(Node::List(vec![filter], Bracket::Round, Separator::None))
 		}
 		SORT => Some(method_call(receiver, SORT_BY, vec![sort_key(argument, context)?])),

@@ -6,10 +6,9 @@
 //! parameter or a local), no nested definitions, lambdas, globals or early returns, and a few statements at most.
 
 use super::words::{GLOBAL_WORD, RETURN_WORD};
-use super::nodes::{children_rewritten, key};
+use super::nodes::{Counter, children_rewritten, key};
 use crate::node::{Bracket, Node, Separator};
 use crate::operators::Op;
-use std::cell::Cell;
 use std::collections::{HashMap, HashSet};
 
 /// The most statements a body may have to be inlined
@@ -30,7 +29,7 @@ pub fn lower(node: Node) -> Node {
 	if functions.is_empty() {
 		return node;
 	}
-	let counter = Cell::new(0);
+	let counter = Counter::starting_at(1);
 	inline(node, &functions, &counter)
 }
 
@@ -125,7 +124,7 @@ fn names_outside(node: &Node, except: &Node) -> HashSet<String> {
 	}
 }
 
-fn inline(node: Node, functions: &HashMap<String, Inlinable>, counter: &Cell<usize>) -> Node {
+fn inline(node: Node, functions: &HashMap<String, Inlinable>, counter: &Counter) -> Node {
 	match node {
 		// a definition keeps its own body
 		Node::Key(head, op @ (Op::Define | Op::Assign), body) if matches!(head.drop_meta(), Node::List(_, Bracket::Round, _)) => {
@@ -144,7 +143,7 @@ fn inline(node: Node, functions: &HashMap<String, Inlinable>, counter: &Cell<usi
 	}
 }
 
-fn inlined_call(items: &[Node], bracket: &Bracket, separator: &Separator, functions: &HashMap<String, Inlinable>, counter: &Cell<usize>) -> Option<Node> {
+fn inlined_call(items: &[Node], bracket: &Bracket, separator: &Separator, functions: &HashMap<String, Inlinable>, counter: &Counter) -> Option<Node> {
 	if *bracket != Bracket::Round || *separator != Separator::None {
 		return None;
 	}
@@ -154,8 +153,8 @@ fn inlined_call(items: &[Node], bracket: &Bracket, separator: &Separator, functi
 	if arguments.len() != function.parameters.len() {
 		return None;
 	}
-	counter.set(counter.get() + 1);
-	let rename = |word: &str| format!("{name}{NAME_SEPARATOR}{word}{NAME_SEPARATOR}{}", counter.get());
+	let number = counter.next_number();
+	let rename = |word: &str| format!("{name}{NAME_SEPARATOR}{word}{NAME_SEPARATOR}{number}");
 	let renamed = |node: &Node| renamed_names(node.clone(), &function.names, &rename);
 	let bindings = function.parameters.iter().zip(arguments).map(|(parameter, argument)| {
 		key(Node::Symbol(rename(parameter)), Op::Assign, argument.clone())

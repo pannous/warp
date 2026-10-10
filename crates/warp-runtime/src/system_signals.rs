@@ -131,6 +131,25 @@ static STAYING_ALLOWED: AtomicBool = AtomicBool::new(false);
 thread_local! {
 	/// the code of the `exit` that ended the last run on this thread
 	static EXIT_CODE: Cell<Option<i32>> = const { Cell::new(None) };
+	/// a prerender's run (until_first_frame): its first frame or sleep ends it
+	static FIRST_FRAME_ENDS_RUN: Cell<bool> = const { Cell::new(false) };
+}
+
+/// The run of `warp build --site`'s prerender (src/site.rs, card site-build): an animation's first frame or sleep ends
+/// main as `exit` does, so the page is read as it stands then, and an endless loop builds too
+pub fn until_first_frame<T>(run: impl FnOnce() -> T) -> T {
+	FIRST_FRAME_ENDS_RUN.set(true);
+	let value = run();
+	FIRST_FRAME_ENDS_RUN.set(false);
+	value
+}
+
+/// Before a frame (paint) or a sleep: the end of a prerender's run (until_first_frame)
+pub fn end_at_first_frame() -> Result<()> {
+	match FIRST_FRAME_ENDS_RUN.get() {
+		true => Err(wasmtime::Error::new(ExitRequest(0))),
+		false => Ok(()),
+	}
 }
 
 /// `exit(code)` (P121): the error that unwinds the run; the runner ends the run with ø and keeps the code

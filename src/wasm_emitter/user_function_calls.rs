@@ -21,13 +21,25 @@ impl WasmGcEmitter {
 		}
 	}
 
+	/// A program that starts tasks (`go`): each runs in a fresh instance of the module (src/tasks.rs)
+	pub(super) fn spawns_tasks(&self) -> bool {
+		self.ctx.ffi_imports.contains_key(crate::host::TASK_SPAWN_VALUES) || self.ctx.ffi_imports.contains_key(crate::host::TASK_SPAWN)
+	}
+
+	/// A global whose value a task's instance gets from the spawning instance (src/tasks.rs copies these at the start)
+	pub(super) fn export_to_tasks(&mut self, label: &str, global: u32) {
+		if self.spawns_tasks() {
+			self.exports.export(&format!("{CAPTURE_EXPORT_PREFIX}{label}"), ExportKind::Global, global);
+		}
+	}
+
 	/// Give every outer variable a function reads a global, set from the variable where the function is defined
 	pub(super) fn allocate_closure_captures(&mut self, program: &Node) {
 		let mut outer = Scope::with_function_kinds(self.user_function_kinds()).with_closure_targets(self.ctx.closure_variable_targets.clone()); // `x = g()` holds what g returns
 		collect_variables(program, &mut outer);
 		// a typed list of main captured by a function is passed in a global of its array type (a task's instance copies
 		// capture globals as Nodes, so not with tasks)
-		let tasks = self.ctx.ffi_imports.contains_key(crate::host::TASK_SPAWN_VALUES) || self.ctx.ffi_imports.contains_key(crate::host::TASK_SPAWN);
+		let tasks = self.spawns_tasks();
 		let saved_scope = std::mem::replace(&mut self.scope, outer.clone());
 		let main_typed = self.find_typed_lists(program);
 		self.scope = saved_scope;
@@ -61,11 +73,8 @@ impl WasmGcEmitter {
 					None => (name, (self.declare_mutable_global(kind), kind)),
 				})
 				.collect();
-			// a task's instance gets the values the spawning instance captured (src/tasks.rs copies these globals)
-			if self.ctx.ffi_imports.contains_key(crate::host::TASK_SPAWN_VALUES) || self.ctx.ffi_imports.contains_key(crate::host::TASK_SPAWN) {
-				for (name, (global, _)) in &captures {
-					self.exports.export(&format!("{CAPTURE_EXPORT_PREFIX}{}·{name}", function.name), ExportKind::Global, *global);
-				}
+			for (name, (global, _)) in &captures {
+				self.export_to_tasks(&format!("{}·{name}", function.name), *global);
 			}
 			self.ctx.captures.insert(function.name, captures);
 		}
