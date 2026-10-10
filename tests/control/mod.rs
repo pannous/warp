@@ -94,6 +94,7 @@ mod test_atomic_arrays;
 mod test_task_list_literal;
 mod test_job_lists;
 mod test_word_statements; // card error-beep
+mod test_go_statement; // card go-play
 mod test_try_stack_overflow;
 mod test_try_host_failure; // card try-catch
 mod test_run_time_blocks;

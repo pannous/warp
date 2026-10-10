@@ -95,6 +95,7 @@ impl GoBlocks {
 
 	/// The block as a function of the known variables it reads: the call that starts it
 	fn function_of(&self, block: Node, known: &[String]) -> Node {
+		let block = one_statement_run(block);
 		let mut definitions = self.definitions.borrow_mut();
 		let name = Node::Symbol(format!("{BLOCK_FUNCTION_PREFIX}{}", definitions.len() + 1));
 		let inputs: Vec<String> = read_symbols(&block).into_iter().filter(|symbol| known.contains(symbol)).collect();
@@ -244,5 +245,17 @@ fn parameter_name(parameter: &Node) -> String {
 	match parameter.drop_meta() {
 		Node::Key(name, _, _) => name.drop_meta().name(),
 		other => other.name(),
+	}
+}
+
+/// A go block is code, never data: its one statement `{play "x.wav"}` is the call `{(play "x.wav")}`, as a block of
+/// several statements runs each (card go-play)
+fn one_statement_run(block: Node) -> Node {
+	match block {
+		Node::List(items, Bracket::Curly, separator) if items.len() >= 2 && !separator.separates_statements() && items[0].symbol_name().is_some() => {
+			Node::List(vec![Node::List(items, Bracket::Round, separator)], Bracket::Curly, Separator::None)
+		}
+		Node::Meta { data, node } => Node::Meta { data, node: Box::new(one_statement_run(*node)) },
+		other => other,
 	}
 }
