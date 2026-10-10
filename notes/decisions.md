@@ -13,8 +13,11 @@ notes/open_decisions.md.
   extended-rational ±1/0 idea stays open for later; wiki Footguns "NaN and infinity" is corrected to this.
 - wiki-full-evaluation (warp-docs): no conflict: `created: now` stays a block until `!` (the spec); "dates are folded
   at compile time" is today's implementation limit (Footguns "Not yet"), not a rule. Implied, not asked.
-- let-reassign (warp-types): `let` follows wiki mutable.md: the binding is fixed, the value may change (`let x =
-  "hello"; x += " world"` ok, `x = "bye"` an error with the fix "use var x or a plain assignment"). Implied, not asked.
+- let-reassign (warp-types; user, asked 2026-10-10): `let` is fully immutable, `var` is the variable. `let x = 1; x = 2`,
+  `x += …`, `x++` and `xs#1 = 5` on a let are all errors with the fix "use var x". Supersedes P159's "changing a let
+  works with a note" and the wiki/mutable.md:23 split (value may change, binding fixed); the wiki follows this.
+- runtime-dates (user 2026-10-10): "dates are evaluated at compile time" must not stand in the wiki; dates get a run-time
+  representation, `now` reads the clock at run time (card runtime-dates, Now).
 - tour-firefox-stall (warp-web): a site whose program runs in a Worker ships task-workers.js (the page creates the
   task Workers; Firefox stalls on new Worker inside a Worker); tests/web/test_site.rs expected lists gain it.
 - failed-raised (warp-fixer, card failed-raised): a raised error (1/0, raise, [1]#5) keeps stopping the program; a
