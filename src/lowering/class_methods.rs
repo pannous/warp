@@ -1164,9 +1164,7 @@ fn class_items(body: &Node) -> Vec<Node> {
 		Node::List(words, Bracket::Curly, Separator::Space) if words.first().is_some_and(|first| matches!(first.drop_meta(), Node::Symbol(word) if crate::operators::is_function_keyword(word))) || auto_property(words).is_some() || typed_field(words).is_some() => {
 			vec![Node::List(words.clone(), Bracket::None, Separator::Space)]
 		}
-		Node::List(items, _, _) => items.clone(),
-		Node::Empty => vec![],
-		single => vec![single.clone()],
+		_ => body.as_items(),
 	};
 	items.into_iter().map(without_modifiers).map(with_body_words).flat_map(|item| match item.drop_meta() {
 		Node::List(words, _, _) if keyword_method(words).is_some() => keyword_method(words).into_iter().collect(),
@@ -1582,12 +1580,7 @@ fn with_members(node: Node) -> Node {
 
 /// The items of a class body as written, its `;` groups flattened, nothing read into them
 fn class_items_as_written(body: &Node) -> Vec<Node> {
-	let items = match body.drop_meta() {
-		Node::List(items, _, _) => items.clone(),
-		Node::Empty => vec![],
-		single => vec![single.clone()],
-	};
-	items.into_iter().flat_map(|item| match item.drop_meta() {
+	body.as_items().into_iter().flat_map(|item| match item.drop_meta() {
 		Node::List(group, Bracket::None, _) => group.clone(),
 		_ => vec![item],
 	}).collect()
