@@ -1,0 +1,16 @@
+// samples/manual_3d_object_viewer.warp's loader as written, on the model in OBJ_FILE: prints its triangle count
+use os
+def triangles(obj) {
+	points = []
+	corners = []
+	for line in obj.split("\n") {
+		words = line.split(" ").filter(word => word != "")
+		if #words > 0 and words#1 == "v" { points = points + [[float(words#2), float(words#3), float(words#4)]] }
+		if #words > 3 and words#1 == "f" {
+			face = words.filter(word => word != "f").map(word => points#int(word.split("/")#1))
+			for i in 2 to #face - 1 { corners = corners + [face#1, face#i, face#(i + 1)] }
+		}
+	}
+	corners
+}
+print(#triangles(read(env("OBJ_FILE"))) / 3)
