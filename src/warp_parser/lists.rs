@@ -412,7 +412,7 @@ impl WarpParser {
 fn without_ref_words(items: Vec<Node>) -> Vec<Node> {
 	let mut fields: Vec<Node> = Vec::with_capacity(items.len());
 	for item in items {
-		let after_ref = matches!(fields.last().map(Node::drop_meta), Some(Node::Key(_, Op::Colon, value)) if matches!(value.drop_meta(), Node::Symbol(word) if word == REF_TYPE_WORD));
+		let after_ref = matches!(fields.last().map(Node::drop_meta), Some(Node::Key(_, Op::Colon, value)) if value.is_symbol(REF_TYPE_WORD));
 		match (after_ref, item.drop_meta()) {
 			(true, Node::Symbol(_)) => {
 				let Some(Node::Key(name, op, _)) = fields.pop().map(|field| field.drop_meta().clone()) else { unreachable!("checked") };
@@ -430,7 +430,7 @@ fn with_type_phrases(items: Vec<Node>) -> Vec<Node> {
 	let mut fields: Vec<Node> = Vec::with_capacity(items.len());
 	let mut items = items.into_iter().peekable();
 	while let Some(item) = items.next() {
-		let is_of = matches!(item.drop_meta(), Node::Symbol(word) if word == OF_WORD);
+		let is_of = item.is_symbol(OF_WORD);
 		let field_type = match fields.last().map(Node::drop_meta) {
 			Some(Node::Key(_, Op::Colon, value)) => match value.drop_meta() {
 				Node::Symbol(type_name) => Some(type_name.clone()),
@@ -524,6 +524,6 @@ fn with_trailing_block(assignment: Node, block: Node) -> Node {
 /// `global a, b` as parsed: the declarations `global: a`, `global: b`
 fn declarations_of_several_globals(item: &Node) -> Option<Vec<Node>> {
 	let Node::List(declarations, Bracket::None, Separator::Semicolon) = item.drop_meta() else { return None };
-	let is_global = |declaration: &Node| matches!(declaration.drop_meta(), Node::Key(keyword, Op::Colon, _) if matches!(keyword.drop_meta(), Node::Symbol(word) if word == crate::node::GLOBAL_DECLARATION));
+	let is_global = |declaration: &Node| matches!(declaration.drop_meta(), Node::Key(keyword, Op::Colon, _) if keyword.is_symbol(crate::node::GLOBAL_DECLARATION));
 	declarations.iter().all(is_global).then(|| declarations.clone())
 }

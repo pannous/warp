@@ -10,7 +10,6 @@ use std::cmp::PartialEq;
 use std::fmt;
 use std::ops::{Add, Div, Index, IndexMut, Mul, Not, Sub};
 use crate::operators::{is_function_keyword, Op};
-// use warp::type_kinds::{AstKind, NodeKind};
 use crate::node::Node::*;
 use crate::type_kinds::Kind;
 
@@ -45,8 +44,6 @@ pub const GLOBAL_DECLARATION: &str = "global";
 
 
 
-// use warp::Node;
-// use warp::*; !
 #[derive(Clone, Serialize, Deserialize)]
 pub enum Node {
 	// closed cannot be extended so anticipate all cases here
@@ -260,6 +257,19 @@ impl Node {
 		}
 	}
 
+	/// The name of a symbol, through its metadata
+	pub fn symbol_name(&self) -> Option<&str> {
+		match self.drop_meta() {
+			Symbol(name) => Some(name),
+			_ => None,
+		}
+	}
+
+	/// Whether this is the symbol `word`, through its metadata
+	pub fn is_symbol(&self, word: &str) -> bool {
+		self.symbol_name() == Some(word)
+	}
+
 	pub fn name(&self) -> String {
 		match self {
 			Symbol(name) | Text(name) => name.clone(),
@@ -328,9 +338,6 @@ impl Node {
 	pub fn key(s: &str, v: Node) -> Self {
 		Key(Box::new(Symbol(s.to_string())), Op::Colon, Box::new(v))
 	}
-	pub fn key_with_op(k: Node, op: Op, v: Node) -> Self {
-		Key(Box::new(k), op, Box::new(v))
-	}
 	pub fn keys(s: &str, v: &str) -> Self {
 		Key(
 			Box::new(Symbol(s.to_string())),
@@ -362,7 +369,6 @@ impl Node {
 	pub fn list(xs: Vec<Node>) -> Self {
 		List(xs, Bracket::Square, Separator::None)
 	}
-	// pub fn ints(xs:Vec<i32>) -> Self { Node::List(xs.into_iter().map(Node::Number).collect()) }
 	pub fn ints(xs: Vec<i32>) -> Self {
 		List(
 			map(xs, |x| Node::Number(Number::Int(x as i64))),
@@ -546,17 +552,8 @@ impl Node {
 	// get_meta data directly or Empty
 	pub fn get_meta(&self) -> &Node {
 		match self {
-			// Meta { node: _ , data} =>
 			Meta { data, .. } => data.as_ref(),
 			_ => &Empty,
-		}
-	}
-
-	pub fn get_meta_data(&self) -> Option<&Node> {
-		match self {
-			// Meta { node: _ , data} => Some(data.as_ref()),
-			Meta { data, .. } => Some(data.as_ref()),
-			_ => None,
 		}
 	}
 
@@ -674,7 +671,6 @@ impl Node {
 			Key(a, _, b) => a.is_falsy() && b.is_falsy(),
 			Meta { node, .. } => node.is_falsy(), // metadata doesn't affect truthiness
 			Error(_) => true, // a failed result: `if x {…}` checks it (wiki/null.md, DESIGN.md "Effects")
-			// Data(d) if d.data_type == DataType::None => true,
 			_ => false,
 		}
 	}
@@ -683,7 +679,6 @@ impl Node {
 }
 
 impl fmt::Debug for Node {
-	// impl fmt::Debug for Node {
 	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
 		write!(f, "{}", self.serialize())
 	}
@@ -787,17 +782,6 @@ pub enum Separator {
 }
 
 impl Separator {
-	pub fn from_char(ch: char) -> Self {
-		match ch {
-			' ' => Separator::Space,
-			',' => Separator::Colon,
-			';' => Separator::Semicolon,
-			'\n' => Separator::Newline,
-			'\t' => Separator::Tab,
-			_ => Separator::None,
-		}
-	}
-
 	pub fn to_char(&self) -> Option<char> {
 		match self {
 			Separator::Space => Some(' '),
@@ -919,19 +903,11 @@ pub fn types(name: &str) -> Node {
 	Symbol(name.to_string())
 }
 
-pub fn type_definition(name: &str, body: Node) -> Node {
-	Type {
-		name: Box::new(Symbol(name.to_string())),
-		body: Box::new(body),
-	}
-}
-
 
 pub fn key_op(k: Node, op: Op, v: Node) -> Node {
 	Key(Box::new(k), op, Box::new(v))
 }
 
-// pub fn key_ops(k: &str, op: Op, v: Node) -> Node {
 pub fn key_ops(k: String, op: Op, v: Node) -> Node {
 	Key(Box::new(Symbol(format!(".{}", k))), op, Box::new(v))
 }

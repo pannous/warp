@@ -41,10 +41,6 @@ pub(crate) fn text_unit(word: &str) -> Option<&'static str> {
 	}
 }
 
-pub(super) fn is_word(node: &Node, word: &str) -> bool {
-	matches!(node.drop_meta(), Node::Symbol(s) if s == word)
-}
-
 /// The items after the first `skip` as one node: the item itself, or the list of them
 pub(super) fn rest_of(items: &[Node], skip: usize, bracket: &Bracket, separator: &Separator) -> Node {
 	match &items[skip..] {
@@ -61,12 +57,12 @@ pub(super) fn unit_count(node: &Node) -> Option<Node> {
 	};
 	match node.drop_meta() {
 		Node::List(items, _, _) if items.len() == 1 => unit_count(&items[0]),
-		Node::List(items, bracket, separator) if items.len() >= 3 && is_word(&items[1], "in") && text_unit(&items[0].name()).is_some() => {
+		Node::List(items, bracket, separator) if items.len() >= 3 && items[1].is_symbol("in") && text_unit(&items[0].name()).is_some() => {
 			count_of(rest_of(items, 2, bracket, separator), &items[0])
 		}
 		Node::Key(text, Op::As, unit) => count_of(text.as_ref().clone(), unit),
 		// `"äb" in bytes`: the unit last
-		Node::List(items, bracket, separator) if items.len() >= 3 && is_word(&items[items.len() - 2], "in") => {
+		Node::List(items, bracket, separator) if items.len() >= 3 && items[items.len() - 2].is_symbol("in") => {
 			let (unit, text) = (&items[items.len() - 1], &items[..items.len() - 2]);
 			count_of(rest_of(text, 0, bracket, separator), unit)
 		}
@@ -78,7 +74,7 @@ pub(super) fn unit_count(node: &Node) -> Option<Node> {
 pub(super) fn hashed_unit_count(items: &[Node]) -> Option<Node> {
 	let [hashed, keyword, _, ..] = items else { return None };
 	let Node::Key(empty, Op::Hash, unit) = hashed.drop_meta() else { return None };
-	if !matches!(empty.drop_meta(), Node::Empty) || !is_word(keyword, "in") {
+	if !matches!(empty.drop_meta(), Node::Empty) || !keyword.is_symbol("in") {
 		return None;
 	}
 	let Node::Symbol(word) = unit.drop_meta() else { return None };
@@ -106,7 +102,7 @@ pub(super) fn print_walk(items: &[Node], variables: &HashSet<String>) -> Option<
 	let Node::List(phrase, Bracket::None | Bracket::Round, _) = phrase.drop_meta() else { return None };
 	// `chars in "hello"` arrives as the words or as `chars (in "hello")`, optionally after `all`
 	let phrase = match phrase.as_slice() {
-		[all, rest @ ..] if is_word(all, "all") => rest,
+		[all, rest @ ..] if all.is_symbol("all") => rest,
 		words => words,
 	};
 	let (name, in_word, collection) = match phrase {
@@ -118,7 +114,7 @@ pub(super) fn print_walk(items: &[Node], variables: &HashSet<String>) -> Option<
 		_ => return None,
 	};
 	let Node::Symbol(name) = name.drop_meta() else { return None };
-	if !is_word(print, "print") || !is_word(in_word, "in") || variables.contains(name) {
+	if !print.is_symbol("print") || !in_word.is_symbol("in") || variables.contains(name) {
 		return None;
 	}
 	let body = Node::List(vec![print.clone(), Node::Symbol(name.clone())], Bracket::Curly, Separator::Space);
@@ -127,13 +123,13 @@ pub(super) fn print_walk(items: &[Node], variables: &HashSet<String>) -> Option<
 
 pub(super) fn counting_phrase(items: &[Node], bracket: &Bracket, separator: &Separator, variables: &HashSet<String>) -> Option<Node> {
 	if let [unit, count, of, _, ..] = items {
-		if is_word(unit, "byte") && is_word(count, "count") && is_word(of, "of") {
+		if unit.is_symbol("byte") && count.is_symbol("count") && of.is_symbol("of") {
 			let counted = rest_of(items, 3, bracket, separator);
 			return Some(Node::Key(Box::new(counted), Op::Dot, Box::new(Node::Symbol("bytes".to_string()))));
 		}
 	}
 	if let [count, unit, of, _, ..] = items {
-		if is_word(count, "count") && is_word(of, "of") {
+		if count.is_symbol("count") && of.is_symbol("of") {
 			if let Some(unit_property) = matches!(unit.drop_meta(), Node::Symbol(_)).then(|| text_unit(&unit.name())).flatten() {
 				return Some(Node::Key(Box::new(rest_of(items, 3, bracket, separator)), Op::Dot, Box::new(Node::Symbol(unit_property.to_string()))));
 			}
@@ -148,7 +144,7 @@ pub(super) fn counting_phrase(items: &[Node], bracket: &Bracket, separator: &Sep
 		return None;
 	}
 	let counter = "count";
-	if !is_word(of, "of") {
+	if !of.is_symbol("of") {
 		return None;
 	}
 	let counted = rest_of(items, 2, bracket, separator);

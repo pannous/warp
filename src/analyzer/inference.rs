@@ -297,10 +297,7 @@ pub(super) fn infer_list_type(node: &Node, items: &[Node], bracket: &Bracket, se
 			return infer_type(&items[1], scope); // `return x` is worth x
 		}
 		if let Some(arity) = crate::closures::closure_call_arity(name) {
-			let callee = items.get(1).and_then(|argument| match argument.drop_meta() {
-				Node::Symbol(variable) => Some(variable.as_str()),
-				_ => None,
-			});
+			let callee = items.get(1).and_then(Node::symbol_name);
 			if let Some(variable) = callee {
 				if let Some(targets) = scope.closure_targets_of(variable) {
 					if !targets.is_empty() {
@@ -525,7 +522,7 @@ pub fn spelled_number(node: &Node) -> Option<Node> {
 fn declared_any(node: &Node, scope: &Scope) -> bool {
 	match node.drop_meta() {
 		Node::Symbol(name) => scope.lookup(name).and_then(|local| local.type_node.as_deref())
-			.is_some_and(|type_node| matches!(type_node.drop_meta(), Node::Symbol(type_name) if type_name == crate::type_kinds::UNTYPED_FIELD)),
+			.is_some_and(|type_node| type_node.is_symbol(crate::type_kinds::UNTYPED_FIELD)),
 		Node::Key(indexed, Op::Hash, _) => declared_any(indexed, scope),
 		_ => false,
 	}

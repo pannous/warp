@@ -84,17 +84,10 @@ pub fn analyze_required_functions(ctx: &mut Context, node: &Node) {
 				}
 			} else if *op == Op::Dot {
 				let method_name = match value.drop_meta() {
-					Node::Symbol(s) => Some(s.clone()),
-					Node::List(items, _, _) if items.len() == 1 => {
-						if let Node::Symbol(s) = items[0].drop_meta() {
-							Some(s.clone())
-						} else {
-							None
-						}
-					}
-					_ => None,
+					Node::List(items, _, _) if items.len() == 1 => items[0].symbol_name(),
+					other => other.symbol_name(),
 				};
-				if let Some(counter) = method_name.and_then(|method| counting_method(&method, ctx)) {
+				if let Some(counter) = method_name.and_then(|method| counting_method(method, ctx)) {
 					require_counter(ctx, counter);
 					analyze_required_functions(ctx, key); // the counted value: `s.fs.count` reads the field fs
 					return;
@@ -193,10 +186,7 @@ pub fn analyze_required_functions(ctx: &mut Context, node: &Node) {
 pub fn call_name<'a>(items: &'a [Node], bracket: &Bracket, separator: &Separator) -> Option<&'a str> {
 	match (items, bracket, separator) {
 		// `f()` is a call too (user, P92): the empty parentheses are glued to the name, unlike the group `(f)`
-		([head, ..], Bracket::Round, Separator::None) => match head.drop_meta() {
-			Node::Symbol(name) => Some(name),
-			_ => None,
-		},
+		([head, ..], Bracket::Round, Separator::None) => head.symbol_name(),
 		_ => None,
 	}
 }
@@ -260,7 +250,7 @@ pub(super) fn uses_library(node: &Node, library: &str) -> bool {
 	node.visit(&mut |part| {
 		if let Node::List(items, _, _) = part {
 			if let [word, named] = items.as_slice() {
-				found |= is_word(word, "use") && crate::ffi::resolve_library_alias(&library_name(named)) == library;
+				found |= word.is_symbol("use") && crate::ffi::resolve_library_alias(&library_name(named)) == library;
 			}
 		}
 	});

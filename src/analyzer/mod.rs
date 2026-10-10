@@ -28,7 +28,7 @@ const VAR_KEYWORD: &str = "var";
 const IMMUTABLE_LET: &str = "let";
 
 pub(crate) fn is_declaration_keyword(node: &Node) -> bool {
-	is_constant_keyword(node) || is_word(node, VAR_KEYWORD) || is_word(node, IMMUTABLE_LET)
+	is_constant_keyword(node) || node.is_symbol(VAR_KEYWORD) || node.is_symbol(IMMUTABLE_LET)
 }
 
 const COUNTING_PROPERTIES: [&str; 5] = ["number", "count", "length", "size", "len"];
@@ -69,7 +69,7 @@ pub fn is_statement(item: &Node, bracket: &Bracket) -> bool {
 		Node::Key(_, Op::Assign | Op::Define | Op::Inc | Op::Dec, _) => true,
 		Node::Key(_, op, _) if op.is_compound_assign() => true,
 		Node::Key(_, Op::Then | Op::Else | Op::Do, _) => *bracket != Bracket::Square,
-		Node::Key(left, Op::Colon, _) => matches!(left.drop_meta(), Node::Symbol(s) if s == "global"),
+		Node::Key(left, Op::Colon, _) => left.is_symbol("global"),
 		// a lowered `for` loop: `i=a; while …`; inside `[…]` a sequence ending in a value is a computed element (an awaited
 		// task, `[a, b]` of task variables)
 		Node::List(list_items, Bracket::None, separator) if is_unbracketed_block(list_items, &Bracket::None, separator) => {
@@ -78,7 +78,7 @@ pub fn is_statement(item: &Node, bracket: &Bracket) -> bool {
 		// a group that runs statements, `(y=1; y)`, or prints: in a block it runs, it is not an item
 		Node::List(list_items, Bracket::Round, _) if *bracket != Bracket::Square && list_items.iter().any(|inner| is_statement(inner, &Bracket::Round)) => true,
 		// as `sleep(10)`, which gives nothing
-		Node::List(list_items, _, _) if *bracket != Bracket::Square && matches!(list_items.as_slice(), [word, _] if is_word(word, PRINT_CALL) || is_word(word, crate::host::SLEEP)) => true,
+		Node::List(list_items, _, _) if *bracket != Bracket::Square && matches!(list_items.as_slice(), [word, _] if word.is_symbol(PRINT_CALL) || word.is_symbol(crate::host::SLEEP)) => true,
 		Node::List(list_items, _, _) if list_items.len() >= 2 => {
 			// `cell_set(c, v)` is the assignment of a nonlocal variable (lowering/nonlocal_cells.rs)
 			// `$destructure (h, o) value` is `h, o = value` lowered (tuples.rs)
