@@ -75,9 +75,8 @@ impl WasmGcEmitter {
 			return false;
 		}
 
-		// Check for string assignment in WASI mode - skip emit (tracked in Local)
+		// a text assigned in WASI mode lives in its Local's data_pointer/data_length (string_table.rs): the value is 0
 		if self.config.emit_wasi_imports && matches!(right.drop_meta(), Node::Text(_)) {
-			// String data stored in Local's data_pointer/data_length, just emit 0
 			func.instruction(&I::I64Const(0));
 			return true;
 		}
@@ -119,20 +118,20 @@ impl WasmGcEmitter {
 		if *op != Op::Inc && *op != Op::Dec {
 			return false;
 		}
+		self.emit_local_step(func, left, op);
+		true
+	}
 
-		// i++ → i = i + 1 (returns new value)
-		// i-- → i = i - 1 (returns new value)
-		if let Node::Symbol(name) = left.drop_meta() {
-			let Some(local_pos) = self.defined_local_position(func, name) else { return true };
-			self.emit_int_step(func, local_pos, self.int_range(left), op);
-			self.emit_fits_declared(func, left);
-			// Store and return new value
-			func.instruction(&I::LocalTee(local_pos));
-			true
-		} else {
+	/// `i++` → `i = i + 1`, `i--` → `i = i - 1` of a local: the new value stored and left on the stack
+	fn emit_local_step(&mut self, func: &mut Function, left: &Node, op: &Op) {
+		let Some(name) = left.symbol_name() else {
 			self.emit_malformed(func, left, "a variable to increment or decrement");
-			true
-		}
+			return;
+		};
+		let Some(local_pos) = self.defined_local_position(func, name) else { return };
+		self.emit_int_step(func, local_pos, self.int_range(left), op);
+		self.emit_fits_declared(func, left);
+		func.instruction(&I::LocalTee(local_pos));
 	}
 
 	/// A local holding a float, or a global (`global b` in a function) that no local of the same name shadows
@@ -170,22 +169,15 @@ impl WasmGcEmitter {
 			if !use_float && self.emit_compound_type_error(func, left, &base_op, right) {
 				return true;
 			}
-			// Get current value of x
 			func.instruction(&I::LocalGet(local_pos));
-			// Emit y
 			if use_float {
 				self.emit_float_value(func, right);
-			} else {
-				self.emit_numeric_value(func, right);
-			}
-			// Apply base operation
-			if use_float {
 				self.emit_float_arithmetic(func, &base_op);
 			} else {
+				self.emit_numeric_value(func, right);
 				self.emit_int_compound_op(func, &base_op, right);
 				self.emit_fits_declared(func, left);
 			}
-			// Store result and leave on stack
 			func.instruction(&I::LocalTee(local_pos));
 			true
 		} else {
@@ -263,18 +255,11 @@ impl WasmGcEmitter {
 			func.instruction(&I::I64Const(0));
 			return;
 		}
-		// Check for return statement: [Symbol("return"), value]
-		if items.len() == 2 {
-			if let Node::Symbol(keyword) = items[0].drop_meta() {
-				if keyword == "return" {
-					// Emit the return value, as the Node a Node-returning function gives back
-					self.emit_returned_value(func, &items[1]);
-					func.instruction(&I::Return);
-					// After return, emit unreachable to satisfy block types
-					func.instruction(&I::I64Const(0));
-					return;
-				}
-			}
+		// `return value`: the value as the Node a Node-returning function gives back; the 0 after it types the block
+		if items.len() == 2 && items[0].is_symbol("return") {
+			self.emit_returned_value(func, &items[1]);
+			Self::emit_list(func, &[I::Return, I::I64Const(0)]);
+			return;
 		}
 		// Integer conversion: int("5") + 3
 		if items.len() == 2 && self.get_type(node) == Kind::Int && matches!(items[0].drop_meta(), Node::Symbol(s) if type_word_kind(s) == Some(Kind::Int)) {
@@ -288,7 +273,6 @@ impl WasmGcEmitter {
 				self.emit_user_function_call_numeric(func, fn_name, &items[1..]);
 				return;
 			}
-			// Check for FFI function call
 			if self.ctx.ffi_imports.contains_key(fn_name) {
 				self.emit_ffi_call(func, fn_name, &items[1..], Some(Kind::Int));
 				return;
@@ -430,15 +414,7 @@ impl WasmGcEmitter {
 			self.emit_numeric_value(func, &assignment);
 			return;
 		}
-		if let Node::Symbol(name) = left.drop_meta() {
-			let Some(local_pos) = self.defined_local_position(func, name) else { return };
-			self.emit_int_step(func, local_pos, self.int_range(left), op);
-			self.emit_fits_declared(func, left);
-			// Store and return new value
-			func.instruction(&I::LocalTee(local_pos));
-		} else {
-			self.emit_malformed(func, left, "a variable to increment or decrement");
-		}
+		self.emit_local_step(func, left, op);
 	}
 
 	/// An update the plain assignment does: of a global, and `x /= y`, which is exactly `x = x / y`
