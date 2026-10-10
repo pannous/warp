@@ -164,6 +164,8 @@ pub fn infer_type(node: &Node, scope: &Scope) -> Kind {
 				Kind::Int
 			}
 		}
+		// `x++` of a float steps the float
+		Node::Key(target, Op::Inc | Op::Dec, _) if infer_type(target, scope) == Kind::Float => Kind::Float,
 		// `global:value` is its value; a tag structure like `html:body` a Key
 		Node::Key(left, Op::Colon, right) if left.is_symbol("global") => infer_type(right, scope),
 		Node::Key(_, Op::Colon, _) => Kind::Key,

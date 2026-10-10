@@ -23,12 +23,12 @@ pub(crate) fn literal_kind(value: &Node) -> Option<Kind> {
 pub(crate) fn computed_literal_kind(value: &Node) -> Option<Kind> {
 	match value.drop_meta() {
 		Node::Key(left, op, right) if op.is_arithmetic() && !matches!(left.drop_meta(), Node::Empty) => {
+			// exact: whole or not by its value, `7/2*2` is 7, `33/10*2` is 33/5
+			if let Some(exact) = exact_literal_value(value) {
+				return Some(if exact.is_integer() { Kind::Int } else { Kind::Float });
+			}
 			match (operand_kind(left)?, operand_kind(right)?) {
-				// exact: whole or not by its value, `3.5*2` is 7, `3.3*2` is 6.6
-				(Kind::Int, Kind::Int) => match exact_literal_value(value) {
-					Some(exact) if !exact.is_integer() => Some(Kind::Float),
-					_ => Some(Kind::Int),
-				},
+				(Kind::Int, Kind::Int) => Some(Kind::Int),
 				(Kind::Float | Kind::Int, Kind::Float | Kind::Int) => Some(Kind::Float),
 				// `"5"*3` repeats the text (card repeat-int)
 				(left_kind, right_kind) if super::inference::repeats_text(left_kind, op, right_kind) => Some(Kind::Text),

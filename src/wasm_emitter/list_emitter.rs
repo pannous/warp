@@ -1015,7 +1015,7 @@ impl WasmGcEmitter {
 			other => self.is_float_assignment(other),
 		};
 		match item.drop_meta() {
-			Node::Key(left, op, _) if matches!(op, Op::Define | Op::Assign) || op.is_compound_assign() => self.is_float_variable(left),
+			Node::Key(left, op, _) if matches!(op, Op::Define | Op::Assign | Op::Inc | Op::Dec) || op.is_compound_assign() => self.is_float_variable(left),
 			Node::Key(_, Op::Then, then) => branch_assigns_float(then),
 			Node::Key(if_then, Op::Else, otherwise) => {
 				matches!(if_then.drop_meta(), Node::Key(_, Op::Then, then) if branch_assigns_float(then)) || branch_assigns_float(otherwise)

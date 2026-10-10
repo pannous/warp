@@ -87,7 +87,7 @@ impl WasmGcEmitter {
 			}
 			// an exact number as its truncated i64, without the Int node emit_cast_to_int builds
 			_ if exact_value && super::values::is_int_type_word(target) && !matches!(self.get_type(value), Kind::Text | Kind::Codepoint | Kind::Empty)
-				&& !self.names_unknown_word(value) => {
+				&& !self.names_unknown_word(value) && !self.computes_at_run_time_kind(value) => {
 				self.emit_int_value_truncated(func, value);
 			}
 			_ if crate::analyzer::builtin_type_kind(&target.name()) == Some(Kind::Int) => {
@@ -262,7 +262,7 @@ impl WasmGcEmitter {
 				self.emit_call(func, "new_int");
 			}
 			// a text, or a value known only at run time (a list element), parses its digits
-			_ if matches!(self.get_type(value), Kind::Text | Kind::Codepoint | Kind::Empty) => {
+			_ if matches!(self.get_type(value), Kind::Text | Kind::Codepoint | Kind::Empty) || self.computes_at_run_time_kind(value) => {
 				self.emit_node_instructions(func, value);
 				self.emit_call(func, list_ops::TEXT_AS_INT);
 				self.emit_call(func, "new_int");
