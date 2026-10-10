@@ -1,5 +1,6 @@
 // card local-lib: lib/<std>.warp of another warp checkout (the text the binary embeds, found in a folder other than the
-// build's) is the standard module, its nested `use math` too; a file of different text shadows it, with a warning
+// build's) is the standard module, its nested `use math` too; a file of different text shadows it, with a warning when it
+// is older than the running warp (a stale checkout), quietly when changed since (std being edited in a checkout)
 use warp::diagnostic::take_warnings;
 use warp::wasm_emitter::eval;
 
@@ -25,11 +26,26 @@ fn another_checkout_lib_is_the_standard_module() {
 	assert!(take_warnings().iter().all(|warning| !warning.message.contains("shadows")));
 }
 
+fn made_long_ago(file: &std::path::Path) {
+	let opened = std::fs::File::options().write(true).open(file).expect("the lib file");
+	opened.set_modified(std::time::SystemTime::UNIX_EPOCH).expect("an old modification time");
+}
+
 #[test]
-fn a_changed_lib_file_shadows_the_standard_module_loudly() {
+fn a_stale_lib_file_shadows_the_standard_module_loudly() {
 	let folder = checkout_with("checkout_std_lib_changed", &[("draw", "answer := 42")]);
+	made_long_ago(&folder.join("lib").join("draw.warp"));
 	take_warnings();
 	let result = warp::modules::with_program_file(&folder.join("lib").join("app.warp"), || eval("use draw\nanswer"));
 	assert_eq!(result.serialize().trim(), "42");
 	assert!(take_warnings().iter().any(|warning| warning.message.contains("shadows the standard module draw")));
+}
+
+#[test]
+fn a_lib_file_edited_since_the_build_is_used_quietly() {
+	let folder = checkout_with("checkout_std_lib_edited", &[("draw", "answer := 43")]);
+	take_warnings();
+	let result = warp::modules::with_program_file(&folder.join("lib").join("app.warp"), || eval("use draw\nanswer"));
+	assert_eq!(result.serialize().trim(), "43");
+	assert!(take_warnings().iter().all(|warning| !warning.message.contains("shadows")));
 }

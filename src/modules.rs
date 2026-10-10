@@ -575,7 +575,7 @@ impl<'a> Loader<'a> {
 		if let Some(requirement) = &used.requirement {
 			check_version(name, &path, requirement)?;
 		}
-		if std_module(name).is_some() {
+		if std_module(name).is_some() && !edited_since_build(&path) {
 			let shadowing = format!("{} shadows the standard module {name}: its text differs from the one warp embeds", path.display());
 			crate::diagnostic::report(&[crate::diagnostic::Diagnostic::at(statement, shadowing)])?;
 		}
@@ -916,6 +916,13 @@ fn is_embedded_std_file(path: &Path) -> bool {
 	}
 	let standard_folder = Path::new(env!("CARGO_MANIFEST_DIR")).join(STD_FOLDER).canonicalize().ok();
 	standard_folder.is_some() && folder.canonicalize().ok() == standard_folder || std::fs::read_to_string(path).is_ok_and(|text| text == source)
+}
+
+/// A file changed after the running warp was built: a standard module being edited in a checkout, not a stale copy
+fn edited_since_build(path: &Path) -> bool {
+	let modified = |file: &Path| std::fs::metadata(file).and_then(|metadata| metadata.modified()).ok();
+	let built = std::env::current_exe().ok().and_then(|binary| modified(&binary));
+	matches!((modified(path), built), (Some(edited), Some(built)) if edited > built)
 }
 
 /// The name an embedded module is loaded under, once per program
