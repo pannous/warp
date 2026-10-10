@@ -232,7 +232,7 @@ theorem push_typed {μ : Store} (hμ : StoreOk P μ) {l v tl tv} (hl : HasType P
 
 /-- `xs#i = v`: v, written into the shared list if it fits its element type, or an error -/
 theorem setAt_typed {μ : Store} (hμ : StoreOk P μ) {l i v tv} (hv : HasType P Ctx.empty v tv) (vv : v.isValue = true) :
-    (∃ t', HasType P Ctx.empty (setAtValues μ l i v).1 t' ∧ sub t' tv = true) ∧ StoreOk P (setAtValues μ l i v).2 := by
+    (∃ t', HasType P Ctx.empty (setAtValues P μ l i v).1 t' ∧ sub t' tv = true) ∧ StoreOk P (setAtValues P μ l i v).2 := by
   cases l with
   | lref a t =>
     simp only [setAtValues]
@@ -252,6 +252,21 @@ theorem setAt_typed {μ : Store} (hμ : StoreOk P μ) {l i v tv} (hv : HasType P
         · exact ⟨⟨_, .error, sub_never _⟩, hμ⟩
       · exact ⟨⟨_, .error, sub_never _⟩, hμ⟩
     · exact ⟨⟨_, .error, sub_never _⟩, hμ⟩
+  | ref a p =>
+    cases i with
+    | text k =>
+      simp only [setAtValues]
+      split
+      · rename_i t hf
+        split
+        · rename_i hc
+          simp only [Bool.and_eq_true] at hc
+          obtain ⟨o, ho⟩ := Option.isSome_iff_exists.1 hc.1
+          obtain ⟨tv', hv', stv⟩ := fits_typed (P := P) (Γ := Ctx.empty) hc.2
+          exact ⟨⟨_, hv, sub_refl _⟩, hμ.1, hμ.2.1.write ho hf vv hv' stv, hμ.2.2⟩
+        · exact ⟨⟨_, .error, sub_never _⟩, hμ⟩
+      · exact ⟨⟨_, .error, sub_never _⟩, hμ⟩
+    | _ => exact ⟨⟨_, .error, sub_never _⟩, hμ⟩
   | _ => exact ⟨⟨_, .error, sub_never _⟩, hμ⟩
 
 theorem StoreOk.set {μ : Store} (hμ : StoreOk P μ) {x m t v tv} (hx : P.names x = some (m, t)) (hm : m ≠ .charged)
@@ -367,6 +382,11 @@ theorem preservation (hP : ProgramOk P) {s s' : Expr × Store} (hs : Step P s s'
     cases h with
     | index hl _ =>
       refine ⟨?_, hμ⟩
+      unfold indexValues
+      split
+      · cases hl
+        obtain ⟨t', h'⟩ := readField_any hμ.2.1 (.ref _ _) _
+        exact ⟨t', h', by simp [elementTy, element, Ty.isText]⟩
       obtain ⟨il, _, hl', sl⟩ := items_typed hμ.2.2.2 hl vl
       cases hn : nth (μ.items l) ((asInt i).getD 0) with
       | none => exact ⟨_, .error, sub_never _⟩

@@ -546,6 +546,13 @@ const CORPUS: &[&str] = &[
 	"x: int = error(\"x\"); 3",
 	"r = error(\"x\"); try r + 1 catch 7",
 	"r = try error(\"x\") catch 7; r",
+	// computed map keys: `m[k]` reads key k, `m[k] = v` writes it (card type-theory)
+	"m = {a:1 b:2}; m[\"a\"]",
+	"m = {a:1 b:2}; k = \"b\"; m[k]",
+	"m = {a:1}; m[\"c\"] = 3; m[\"c\"]",
+	"m = {a:1}; m[\"c\"] = 3; m.c",
+	"m = {a:1}; m[\"z\"]",
+	"m = {a:1}; x: int = m[\"a\"]; x",
 ];
 
 /// Programs warp compiles although the model rejects them: holes in warp's checks, each with its card

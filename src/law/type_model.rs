@@ -227,7 +227,25 @@ fn map_entries(node: &Node) -> Option<Vec<(String, &Node)>> {
 	}).collect()
 }
 
-/// every key a map literal or a field write `x.key = v` names, when the program has a map literal
+/// `k` of `k+1`: the parser writes `m[k]` as `m#(k+1)`, a list's 1-based index
+fn bracket_index(index: &Node) -> Option<&Node> {
+	match index.drop_meta() {
+		Node::Key(key, Op::Add, one) if matches!(one.drop_meta(), Node::Number(Number::Int(1))) => Some(key),
+		_ => None,
+	}
+}
+
+/// the text of a text literal (a one-letter one parses as a codepoint)
+fn literal_text(node: &Node) -> Option<String> {
+	match node.drop_meta() {
+		Node::Text(text) => Some(text.clone()),
+		Node::Char(letter) => Some(letter.to_string()),
+		_ => None,
+	}
+}
+
+/// every key a map literal, a field write `x.key = v` or a write `x["key"] = v` names, when the program has a map
+/// literal
 fn map_keys(program: &Node) -> Option<Vec<String>> {
 	let mut has_map = false;
 	let mut keys: Vec<String> = Vec::new();
@@ -239,6 +257,7 @@ fn map_keys(program: &Node) -> Option<Vec<String>> {
 			}
 			(None, Node::Key(target, Op::Assign, _)) => match target.drop_meta() {
 				Node::Key(_, Op::Dot, field) => vec![field.name()],
+				Node::Key(_, Op::Hash, index) => bracket_index(index).and_then(literal_text).into_iter().collect(),
 				_ => vec![],
 			},
 			_ => vec![],
@@ -518,6 +537,8 @@ struct Exporter {
 	/// main-level names bound to a list (`xs = [1]`, `xs = []`, `xs: ints = …`): `xs.add(v)` appends to them, while
 	/// `.add` of a text concatenates, outside W0
 	list_names: Vec<String>,
+	/// main-level names bound to a map literal (`m = {a:1}`): `m[k]` reads and writes its key k
+	map_names: Vec<String>,
 	locals: Vec<String>,
 	/// the parameters of the function being exported when it takes several: each is a field of its arguments object
 	argument_fields: Vec<String>,
@@ -933,6 +954,9 @@ impl Exporter {
 		if matches!(unwrapped(value), Node::Key(_, Op::FatArrow, _)) {
 			self.lambda_names.push(name.clone());
 		}
+		if map_entries(value).is_some() {
+			self.map_names.push(name.clone());
+		}
 		let aliased_list = matches!(value.drop_meta(), Node::Symbol(other) if self.list_names.contains(other));
 		if aliased_list || is_list_literal(value) || matches!(value.drop_meta(), Node::Empty) || annotation.as_deref().is_some_and(|lean| lean.starts_with(LIST_TYPE_PREFIX)) {
 			self.list_names.push(name.clone());
@@ -1158,6 +1182,11 @@ impl Exporter {
 		}
 	}
 
+	/// `k` of `m[k]` (parsed `m#(k+1)`) of a map name m: a computed key
+	fn map_key<'a>(&self, map: &Node, index: &'a Node) -> Option<&'a Node> {
+		matches!(map.drop_meta(), Node::Symbol(name) if self.map_names.contains(name)).then(|| bracket_index(index)).flatten()
+	}
+
 	fn binary(&mut self, constructor: &str, left: &Node, right: &Node) -> Lean {
 		Ok(format!("{constructor} ({}) ({})", self.expression(left)?, self.expression(right)?))
 	}
@@ -1295,6 +1324,10 @@ impl Exporter {
 			Node::Key(target, Op::Assign, value) => match target.drop_meta() {
 				Node::Symbol(name) => self.assignment(name, value),
 				Node::Key(object, Op::Dot, field) => Ok(format!(".set ({}) {} ({})", self.expression(object)?, quoted(&field.name()), self.expression(value)?)),
+				Node::Key(map, Op::Hash, index) if self.map_key(map, index).is_some() => {
+					let key = self.map_key(map, index).expect("a map key");
+					Ok(format!(".setAt ({}) ({}) ({})", self.expression(map)?, self.expression(key)?, self.expression(value)?))
+				}
 				// `xs#i = v` writes into the shared list xs, checked against its element type when it runs
 				Node::Key(list, Op::Hash, index) if matches!(list.drop_meta(), Node::Symbol(name) if self.list_names.contains(name) && !self.cell_lists.contains(name)) => {
 					Ok(format!(".setAt ({}) ({}) ({})", self.expression(list)?, self.expression(index)?, self.expression(value)?))
@@ -1354,6 +1387,7 @@ impl Exporter {
 				let compared = self.binary(if matches!(op, Op::Identical | Op::NotIdentical) { ".eq true" } else { ".eq false" }, left, right)?;
 				Ok(if matches!(op, Op::Ne | Op::NotIdentical) { negation(compared) } else { compared })
 			}
+			Node::Key(map, Op::Hash, index) if self.map_key(map, index).is_some() => self.binary(".index", map, self.map_key(map, index).expect("a map key")),
 			Node::Key(list, Op::Hash, index) if !list.is_nothing() => self.binary(".index", list, index),
 			Node::Key(empty, Op::Not, operand) if empty.is_nothing() => Ok(negation(self.expression(operand)?)),
 			Node::Key(parameter, Op::FatArrow, body) => self.lambda(parameter, body),

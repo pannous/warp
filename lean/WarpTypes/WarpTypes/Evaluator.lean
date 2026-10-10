@@ -52,7 +52,7 @@ def step (P : Program) (μ : Store) : Expr → Option (Expr × Store)
   | .loop c b d => if d.isValue then some (.ite c (.loop c b b) d, μ) else stepIn (.loopLast c b) d μ (step P μ d)
   | .seq a b => if a.isValue then some (b, μ) else stepIn (.seq b) a μ (step P μ a)
   | .index l i => stepPair .indexL .indexR l i μ (step P μ l) (step P μ i)
-      (some ((nth (μ.items l) ((asInt i).getD 0)).getD (.error "index out of range"), μ))
+      (some (indexValues μ l i, μ))
   | .range a b => stepPair .rangeL .rangeR a b μ (step P μ a) (step P μ b) (some (rangeValues a b, μ))
   | .append a b => stepPair .appendL .appendR a b μ (step P μ a) (step P μ b) (some (appendValues (μ.items a) (μ.items b), μ))
   | .assign x e => if e.isValue then some (e, μ.set x (.val e)) else stepIn (.assign x) e μ (step P μ e)
@@ -86,7 +86,7 @@ def step (P : Program) (μ : Store) : Expr → Option (Expr × Store)
   | .setAt l i v =>
     if l.isValue then
       if i.isValue then
-        if v.isValue then some (setAtValues μ l i v) else stepIn (.setAtR l i) v μ (step P μ v)
+        if v.isValue then some (setAtValues P μ l i v) else stepIn (.setAtR l i) v μ (step P μ v)
       else stepIn (.setAtI l v) i μ (step P μ i)
     else stepIn (.setAtL i v) l μ (step P μ l)
   | .new p => some (.ref μ.heap.length p, μ.alloc p)

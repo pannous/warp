@@ -17,6 +17,9 @@ def strictRead (P : Program) : Ty → String → Bool
 /-- the checker takes `#` and `++` of a list or of a dynamic value (checked when it runs) -/
 def listy (t : Ty) : Bool := t == .any || (element t).isSome
 
+/-- `m[k]`: an instance read or written by a text key, a map's computed key (checked when it runs) -/
+def keyed (tl ti : Ty) : Bool := (match tl with | .cls _ => true | _ => false) && textual ti
+
 /-- what a call takes statically: a function, an error, or a dynamic value (checked when it runs) -/
 def callable : Ty → Bool
   | .fn _ | .never | .any => true
@@ -106,7 +109,7 @@ def typeOf (P : Program) (Γ : Ctx) : Expr → Option Ty
   -- a number index is checked when it runs: `xs[n/2]`
   | .index l i =>
     match typeOf P Γ l, typeOf P Γ i with
-    | some tl, some ti => if listy tl || tl.isText then (if consub ti .number then some (elementTy tl) else none) else none
+    | some tl, some ti => if (listy tl || tl.isText) && consub ti .number || keyed tl ti then some (elementTy tl) else none
     | _, _ => none
   | .range a b =>
     match typeOf P Γ a, typeOf P Γ b with
@@ -157,7 +160,8 @@ def typeOf (P : Program) (Γ : Ctx) : Expr → Option Ty
   | .setAt l i v =>
     match typeOf P Γ l, typeOf P Γ i, typeOf P Γ v with
     | some tl, some ti, some tv =>
-      if listy tl && consub ti .number && consub tv (listElem tl) && !evidentMisfit v (listElem tl) then some tv else none
+      if listy tl && consub ti .number && consub tv (listElem tl) && !evidentMisfit v (listElem tl) || keyed tl ti then some tv
+      else none
     | _, _, _ => none
   | .get e f => (typeOf P Γ e).bind fun te => if strictRead P te f then some (P.readTy te f) else none
   | .set e f v =>
@@ -245,9 +249,7 @@ theorem typeOf_sound {P : Program} : ∀ {e : Expr} {Γ t}, typeOf P Γ e = some
     intro Γ t h
     cases hl : typeOf P Γ l <;> cases hi : typeOf P Γ i <;> simp only [typeOf, hl, hi] at h <;> try cases h
     split at h
-    · split at h
-      · cases h; exact .index (ih1 hl) (ih2 hi)
-      · cases h
+    · cases h; exact .index (ih1 hl) (ih2 hi)
     · cases h
   | range a b ih1 ih2 =>
     intro Γ t h

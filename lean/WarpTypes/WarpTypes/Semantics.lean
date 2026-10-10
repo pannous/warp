@@ -426,8 +426,16 @@ def replaceAt : Expr → Int → Expr → Option Expr
   | .cons h t, n, v => if n = 1 then some (.cons v t) else (replaceAt t (n - 1) v).map (.cons h)
   | _, _, _ => none
 
-/-- `xs#i = v` of values: v replaces an item of the shared list if it fits the list's element type -/
-def setAtValues (μ : Store) : Expr → Expr → Expr → Expr × Store
+/-- `xs#i` of values: the i-th item of a list or a text, from 1; `m[k]` of an instance its field k (a map's computed
+key) -/
+def indexValues (μ : Store) (l i : Expr) : Expr :=
+  match l, i with
+  | .ref a p, .text k => readField μ (.ref a p) k
+  | _, _ => (nth (μ.items l) ((asInt i).getD 0)).getD (.error "index out of range")
+
+/-- `xs#i = v` of values: v replaces an item of the shared list if it fits the list's element type; `m[k] = v` the
+field k of an instance if its class has one and v fits its type -/
+def setAtValues (P : Program) (μ : Store) : Expr → Expr → Expr → Expr × Store
   | .lref a t, i, v =>
     match μ.listAt a t with
     | some items =>
@@ -437,6 +445,10 @@ def setAtValues (μ : Store) : Expr → Expr → Expr → Expr × Store
         | none => (.error "index out of range", μ)
       else (.error "type mismatch", μ)
     | none => (.error "dangling list", μ)
+  | .ref a p, .text k, v =>
+    match P.fieldTy p k with
+    | some t => if (μ.obj a p).isSome && fits v t then (v, μ.write a k v) else (.error "type mismatch", μ)
+    | none => (.error "no field", μ)
   | _, _, _ => (.error "not a list", μ)
 
 /-- the k ints from m: `[m, m+1, …]` -/
@@ -561,7 +573,7 @@ inductive Step (P : Program) : Expr × Store → Expr × Store → Prop where
       Step P (.app f v, μ) (.error "not a function", μ)
   | range {a b μ} : a.isValue = true → b.isValue = true → Step P (.range a b, μ) (rangeValues a b, μ)
   | index {l i μ} : l.isValue = true → i.isValue = true →
-      Step P (.index l i, μ) ((nth (μ.items l) ((asInt i).getD 0)).getD (.error "index out of range"), μ)
+      Step P (.index l i, μ) (indexValues μ l i, μ)
   | append {a b μ} : a.isValue = true → b.isValue = true →
       Step P (.append a b, μ) (appendValues (μ.items a) (μ.items b), μ)
   | assign {x v μ} : v.isValue = true → Step P (.assign x v, μ) (v, μ.set x (.val v))
@@ -579,7 +591,7 @@ inductive Step (P : Program) : Expr × Store → Expr × Store → Prop where
       Step P (.share v t, μ) (.error "type mismatch", μ)
   | push {l v μ} : l.isValue = true → v.isValue = true → Step P (.push l v, μ) (pushValues μ l v)
   | setAt {l i v μ} : l.isValue = true → i.isValue = true → v.isValue = true →
-      Step P (.setAt l i v, μ) (setAtValues μ l i v)
+      Step P (.setAt l i v, μ) (setAtValues P μ l i v)
   | cast {v ts μ} : v.isValue = true → Step P (.cast v ts, μ) (if ts.any (fits v) then v else .error "type mismatch", μ)
   | conv {v t μ} : v.isValue = true → Step P (.conv v t, μ) (convertValue μ v t, μ)
   | new {p μ} : Step P (.new p, μ) (.ref μ.heap.length p, μ.alloc p)

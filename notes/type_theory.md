@@ -302,8 +302,15 @@ program writes, in a map literal or with `m.key = v`, all unannotated. That give
 maps share (P200b, the heap), `==` compares their keys and values (unset keys equal unset keys, so key order and
 `{a:1} == {a:1, b:2}` come out as in warp), `===` / `same` is identity, a new key `p.z = 5` is a field write, and a
 key the map was never given is W0's run-time "unset field" (warp: "no field"). A key the program never writes
-(`p={x:1}; p.y`) is not a field of `map`, so the exporter refuses it. Not modelled: computed keys `m[k]`, `m.keys`,
-methods (`get`, `remove`), `{}` subscripted by numbers (P34), typed maps (`map of int`).
+(`p={x:1}; p.y`) is not a field of `map`, so the exporter refuses it.
+
+Computed keys: `m[k]` with a text k reads field k (W0 `index (ref a p) (text k)`, typed any), `m[k] = v` writes it
+when the class has field k and v fits its type (`setAt`; checker `keyed`: a class indexed by a text). warp parses
+`m[k]` as `m#(k+1)`; the exporter takes the +1 off for names bound to a map literal, and a literal key written with
+`m["c"] = v` becomes a field of `map`. Difference: a key whose field type W0 guesses from its first value (int) and
+the program then writes with another type (`m = {a:1}; k = "a"; m[k] = "t"`) is a run-time type mismatch in W0, warp
+stores "t". Not modelled: `m.keys`, methods (`get`, `remove`), `{}` subscripted by numbers (P34), typed maps
+(`map of int`).
 
 ## Increments
 
