@@ -34,9 +34,10 @@ impl WasmGcEmitter {
 		}
 	}
 
-	/// An f64 has no exact value yet: `x as exact` of a runtime float is refused instead of rounded silently
+	/// An f64 has no exact value yet (nearest_hint): `x as exact` of a runtime float is refused instead of rounded silently
 	pub(super) fn emit_inexact_to_exact(&mut self, func: &mut Function, value: &Node) {
-		let message = format!("{} is an IEEE float, `as exact` of a float is not supported yet: keep it exact from the start", value.serialize());
+		let value = value.serialize();
+		let message = format!("{value} is an IEEE float, `as exact` of a float is not supported yet: keep it exact from the start, {}", nearest_hint(&value));
 		self.emit_type_error(func, message);
 	}
 
@@ -490,4 +491,9 @@ fn quoted_source(value: &Node) -> Option<String> {
 		Node::List(items, Bracket::None, _) if items.len() == 2 && crate::lowering::run_time_blocks::is_data(value) => Some(items[1].serialize()),
 		_ => None,
 	}
+}
+
+/// The way from a float to an exact value the float→exact refusals name: the prelude word nearest (lib/prelude.warp)
+pub(super) fn nearest_hint(value: &str) -> String {
+	format!("or use nearest({value}, rational) for the closest fraction")
 }
