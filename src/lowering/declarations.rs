@@ -3,7 +3,8 @@
 //! `virtues goal = fast+safe` the record `goal={fast:true safe:true}`: the flags named are true, the others false.
 //! `real f(real x, int n) { … }`, the C way, defines `f(x:real, n:int) := { … }`.
 
-use super::nodes::{call, is_type_word, key};
+use super::words::{ON_WORD, RETURN_WORD};
+use super::nodes::{block, call, children_rewritten, grouped_parameters, if_then, if_then_else, is_type_word, key};
 use crate::node::{symbol, Bracket, Node, Separator};
 use crate::operators::{is_function_keyword, Op};
 
@@ -20,7 +21,6 @@ const EXTENSION_WORD: &str = "extension";
 /// `each xs: body`, `all xs: body`: a for loop over xs, the item is `it` (wiki/iteration.md)
 const COLON_ITERATION_WORDS: [&str; 2] = ["each", "all"];
 const IT_PARAMETER: &str = "it";
-const RETURN_WORD: &str = "return";
 const ENUM_WORD: &str = "enum";
 /// Swift's `enum Direction { case north, south }`
 const CASE_WORD: &str = "case";
@@ -33,7 +33,6 @@ const PLACEHOLDER: &str = "_";
 /// `go f(x)` starts a task, `await job` waits for it
 const TASK_WORDS: [&str; 2] = ["go", "await"];
 const ONCE_WORD: &str = "once";
-const ON_WORD: &str = "on";
 /// What a task signals when it is done, and the controls that would interrupt one
 const FINISH_EVENTS: [&str; 5] = ["finishes", "finished", "completes", "ends", "done"];
 const TASK_CONTROLS: [&str; 4] = ["stop", "pause", "cancel", "resume"];
@@ -116,7 +115,7 @@ fn enum_paths(node: Node, enums: &[(String, Vec<String>)]) -> Node {
 /// The name and cases of an enum declaration `enum Color {red, green}` (Swift's `{ case north, south }`)
 fn enum_cases(items: &[Node]) -> Option<(String, Vec<String>)> {
 	let [word, name, cases] = items else { return None };
-	let is_enum = matches!(word.drop_meta(), Node::Symbol(word) if word == ENUM_WORD);
+	let is_enum = word.is_symbol(ENUM_WORD);
 	let Node::Symbol(name) = name.drop_meta() else { return None };
 	let Node::List(cases, Bracket::Curly, _) = cases.drop_meta() else { return None };
 	let names: Option<Vec<String>> = cases.iter().map(case_name).collect();
@@ -158,15 +157,12 @@ fn flags_declaration(items: &[Node]) -> Option<(String, Vec<String>)> {
 		_ => return None,
 	};
 	let (Node::Symbol(name), Node::List(members, Bracket::Curly, _)) = (name.drop_meta(), members.drop_meta()) else { return None };
-	let members: Option<Vec<String>> = members.iter().map(|member| match member.drop_meta() {
-		Node::Symbol(member) => Some(member.clone()),
-		_ => None,
-	}).collect();
+	let members: Option<Vec<String>> = members.iter().map(|member| member.symbol_name().map(String::from)).collect();
 	Some((name.clone(), members?))
 }
 
 fn is_flags_word(word: &Node) -> bool {
-	matches!(word.drop_meta(), Node::Symbol(word) if word == FLAGS_WORD)
+	word.is_symbol(FLAGS_WORD)
 }
 
 fn rewrite_flags(node: Node, types: &[(String, Vec<String>)]) -> Node {
@@ -595,7 +591,7 @@ impl Tasks<'_> {
 	/// where it is written: `(started·0 = clock(); while job runs and clock() - started·0 < 100 {sleep(1)}; if job
 	/// runs then {stop job; 0} else await job)`
 	fn within(&self, items: &[Node], fallback: Option<Node>) -> Option<Node> {
-		use crate::variable_signals::{assign, block, if_then_else};
+		use crate::variable_signals::assign;
 		// `(await job) within …`: the await arrives grouped
 		let items: Vec<Node> = match items.split_first() {
 			Some((first, rest)) => match first.drop_meta() {
@@ -685,7 +681,7 @@ impl Tasks<'_> {
 	/// `(race·0 = 0; while race·0 == 0 { if task_status(a) is finished or failed {race·0 = 1}; …; if race·0 == 0
 	/// {sleep(1)} }; if race·0 == 1 then await a else …)`: the tasks keep running, the first one's result (or failure)
 	fn race(&self, list: &Node) -> Option<Node> {
-		use crate::variable_signals::{assign, block, if_then};
+		use crate::variable_signals::assign;
 		let Node::List(listed, Bracket::Square, _) = list.drop_meta() else { return None };
 		if listed.is_empty() || !listed.iter().all(|item| self.is_task(item)) {
 			return None;
@@ -713,7 +709,7 @@ impl Tasks<'_> {
 		let awaited_job = |job: &Node| self.value_of(&word(&job_of(job))).unwrap_or_else(|| job.clone());
 		let (last, first) = listed.split_last().expect("not empty");
 		let result = first.iter().enumerate().rev().fold(awaited_job(last), |otherwise, (index, job)| {
-			crate::variable_signals::if_then_else(winner_is(index + 1), awaited_job(job), otherwise)
+			if_then_else(winner_is(index + 1), awaited_job(job), otherwise)
 		});
 		Some(Node::List(vec![assign(&winner, crate::node::int(0)), waiting, result], Bracket::Round, Separator::Semicolon))
 	}
@@ -757,8 +753,8 @@ impl Tasks<'_> {
 #[derive(Clone, PartialEq)]
 enum TaskPath {
 	Ints,
-	/// with the kinds of the parameters: a Float parameter gets its argument converted, as a call does
-	Values(Vec<crate::type_kinds::Kind>),
+	/// with the kinds of the parameters (a Float parameter gets its argument converted, as a call does) and of the result
+	Values(Vec<crate::type_kinds::Kind>, crate::type_kinds::Kind),
 	Inline,
 }
 
@@ -793,7 +789,7 @@ pub fn resolve_tasks(node: Node) -> Node {
 		}
 		let ints = definition.return_kind == Kind::Int && parameters.len() <= crate::host::MAX_TASK_ARGUMENTS && parameters.iter().all(|kind| *kind == Kind::Int)
 			&& int_starts.get(function).copied().unwrap_or(false);
-		if ints { TaskPath::Ints } else { TaskPath::Values(parameters) }
+		if ints { TaskPath::Ints } else { TaskPath::Values(parameters, definition.return_kind) }
 	};
 	let node = TaskHandlers { path: &path, count: std::cell::Cell::new(0) }.lower(node, &[]);
 	let wrapped = std::cell::RefCell::new(std::collections::BTreeMap::new());
@@ -845,7 +841,7 @@ struct TaskHandler {
 
 impl TaskHandler {
 	fn check(&self) -> Node {
-		use crate::variable_signals::{assign, block, if_then};
+		use crate::variable_signals::assign;
 		let not_handled = key(Node::Empty, Op::Not, Node::Symbol(self.flag.clone()));
 		let status = key(marker(crate::host::TASK_STATUS, vec![self.job.clone()]), Op::Eq, Node::Number(crate::extensions::numbers::Number::Int(self.status)));
 		let condition = key(not_handled, Op::And, status);
@@ -855,7 +851,7 @@ impl TaskHandler {
 	/// At the end of the block: a finish or stop handler waits for the task, a pause handler does not
 	fn final_check(&self) -> Option<Node> {
 		(self.status != crate::host::TASK_PAUSED).then(|| {
-			crate::variable_signals::block(vec![marker(crate::host::TASK_JOIN, vec![self.job.clone()]), self.check()])
+			block(vec![marker(crate::host::TASK_JOIN, vec![self.job.clone()]), self.check()])
 		})
 	}
 }
@@ -1006,18 +1002,39 @@ const BODY_PLACEHOLDER: &str = "handler_body_placeholder";
 
 /// `task·check(task_join(job), task_failure(job)); task_await(job)`: a failed task raises its error from wasm, which
 /// `try` catches, before the result is read
-fn checked_await(await_word: &str, job: &Node, bools: bool) -> Node {
+fn checked_await(await_word: &str, job: &Node, crossing: Crossing) -> Node {
 	use crate::host::{TASK_CHECK, TASK_FAILURE, TASK_JOIN};
 	let check = marker(TASK_CHECK, vec![marker(TASK_JOIN, vec![job.clone()]), marker(TASK_FAILURE, vec![job.clone()])]);
 	let result = marker(await_word, vec![job.clone()]);
-	// a bool crosses as 1/0: comparing it makes it a bool again (card bool-crossing)
-	let result = if bools { key(result, Op::Ne, Node::Number(crate::extensions::numbers::Number::Int(0))) } else { result };
+	let result = match crossing {
+		Crossing::AsIs => result,
+		Crossing::Bool => key(result, Op::Ne, Node::Number(crate::extensions::numbers::Number::Int(0))),
+		Crossing::Char => key(result, Op::As, symbol("char")),
+	};
 	Node::List(vec![check, result], Bracket::None, Separator::Semicolon)
 }
 
-/// Whether every started function gives a bool (analyzer::note_bool_functions)
-fn gives_bools(functions: &[Node]) -> bool {
-	!functions.is_empty() && functions.iter().all(|function| crate::analyzer::is_bool_function(&word(function)))
+/// How the result of a task comes back: as it is, or as the Int a bool or a character crosses as
+#[derive(Clone, Copy)]
+enum Crossing {
+	AsIs,
+	/// 1/0: comparing it makes it a bool again (card bool-crossing)
+	Bool,
+	/// its code point: `as char` makes it the character again (card task-char)
+	Char,
+}
+
+/// How the results of the started functions cross: a bool or a character when every one gives it
+/// (analyzer::note_bool_functions)
+fn crossing(functions: &[Node], path: &dyn Fn(&str) -> TaskPath) -> Crossing {
+	let every = |gives: &dyn Fn(&str) -> bool| !functions.is_empty() && functions.iter().all(|function| gives(&word(function)));
+	if every(&crate::analyzer::is_bool_function) {
+		Crossing::Bool
+	} else if every(&|function| matches!(path(function), TaskPath::Values(_, crate::type_kinds::Kind::Codepoint))) {
+		Crossing::Char
+	} else {
+		Crossing::AsIs
+	}
 }
 
 /// `try f(a, b) else Y` of a user function f: the guarded call goes through the host, `guarded_call("f·node", [a, b])`,
@@ -1048,10 +1065,10 @@ fn guarded_calls(node: Node, guardable: &dyn Fn(&str) -> Option<Option<&'static 
 }
 
 /// Every result of a job list: `jobs.map(awaited_job => <checked await of awaited_job>)`
-fn awaited_jobs(list: &Node, bools: bool) -> Node {
+fn awaited_jobs(list: &Node, crossing: Crossing) -> Node {
 	use crate::host::TASK_AWAIT_VALUE;
 	let template = crate::warp_parser::parse(&format!("{TASK_LIST_PLACEHOLDER}.map({AWAITED_JOB} => {AWAITED_PLACEHOLDER})"));
-	let awaited = checked_await(TASK_AWAIT_VALUE, &symbol(AWAITED_JOB), bools);
+	let awaited = checked_await(TASK_AWAIT_VALUE, &symbol(AWAITED_JOB), crossing);
 	let template = crate::library_words::substitute(template, TASK_LIST_PLACEHOLDER, list);
 	crate::library_words::substitute(template, AWAITED_PLACEHOLDER, &awaited)
 }
@@ -1075,7 +1092,7 @@ fn resolved(node: Node, path: &dyn Fn(&str) -> TaskPath, wrapped: &std::cell::Re
 					let arguments = items[2..].to_vec();
 					match path(&function) {
 						TaskPath::Ints => marker(TASK_SPAWN, [vec![Node::Text(function)], arguments].concat()),
-						TaskPath::Values(parameters) => {
+						TaskPath::Values(parameters, _) => {
 							let float = |argument: Node| key(argument, Op::As, symbol("float"));
 							// a character crosses as a one-character text, as a variable holds it
 							let arguments = arguments.into_iter().zip(parameters.iter().chain(std::iter::repeat(&crate::type_kinds::Kind::Empty)))
@@ -1093,20 +1110,20 @@ fn resolved(node: Node, path: &dyn Fn(&str) -> TaskPath, wrapped: &std::cell::Re
 					}
 				}
 				TASK_VALUE => {
-					let bools = gives_bools(&items[2..3]);
+					let crossing = crossing(&items[2..3], path);
 					match path(&word(&items[2])) {
-						TaskPath::Ints => checked_await(TASK_AWAIT, &items[1], bools),
-						TaskPath::Values(_) => checked_await(TASK_AWAIT_VALUE, &items[1], bools),
+						TaskPath::Ints => checked_await(TASK_AWAIT, &items[1], crossing),
+						TaskPath::Values(..) => checked_await(TASK_AWAIT_VALUE, &items[1], crossing),
 						TaskPath::Inline => items[1].clone(),
 					}
 				}
 				TASK_LIST | TASK_ELEMENT => {
 					let threaded = items[2..].iter().all(|function| path(&word(function)) != TaskPath::Inline);
-					let bools = gives_bools(&items[2..]);
+					let crossing = crossing(&items[2..], path);
 					match (threaded, read == TASK_LIST) {
 						(false, _) => items[1].clone(),
-						(true, false) => checked_await(TASK_AWAIT_VALUE, &items[1], bools),
-						(true, true) => awaited_jobs(&items[1], bools),
+						(true, false) => checked_await(TASK_AWAIT_VALUE, &items[1], crossing),
+						(true, true) => awaited_jobs(&items[1], crossing),
 					}
 				}
 				TASK_CONTROL_MARK => match path(&word(&items[2])) {
@@ -1151,6 +1168,11 @@ pub(crate) fn handler_parts(handler: &Node) -> Option<(Node, Node)> {
 		},
 		_ => None,
 	}
+}
+
+/// A task marker before resolve_tasks: `task·go(f, args)` and the reads and controls naming the started functions
+pub(crate) fn is_task_marker(head: &str) -> bool {
+	[TASK_GO, TASK_VALUE, TASK_LIST, TASK_ELEMENT, TASK_CONTROL_MARK, TASK_ON].contains(&read_marker(head).0)
 }
 
 pub(crate) fn word(node: &Node) -> String {
@@ -1284,10 +1306,7 @@ pub(crate) fn zero_value(kind: crate::type_kinds::Kind) -> Option<Node> {
 pub fn lower_sized_arrays(node: Node) -> Node {
 	match node {
 		Node::List(items, Bracket::None, Separator::Space) if sized_array(&items).is_some() => sized_array(&items).expect("guarded"),
-		Node::List(items, bracket, separator) => Node::List(items.into_iter().map(lower_sized_arrays).collect(), bracket, separator),
-		Node::Key(left, op, right) => key(lower_sized_arrays(*left), op, lower_sized_arrays(*right)),
-		Node::Meta { node, data } => Node::Meta { node: Box::new(lower_sized_arrays(*node)), data },
-		other => other,
+		other => children_rewritten(other, lower_sized_arrays),
 	}
 }
 
@@ -1384,7 +1403,7 @@ fn colon_iteration(items: &[Node]) -> Option<Node> {
 			if let Err(error) = crate::diagnostic::ask(&question) {
 				return Some(error);
 			}
-			let guarded = key(key(Node::Empty, Op::If, condition), Op::Then, body);
+			let guarded = if_then(condition, body);
 			(collection.as_ref().clone(), guarded)
 		}
 		_ => (list, body),
@@ -1568,7 +1587,7 @@ fn partial_application(items: &[Node]) -> Option<Node> {
 	if crate::soft_keywords::HARD_KEYWORDS.contains(&head.as_str()) {
 		return None;
 	}
-	let is_placeholder = |argument: &Node| matches!(argument.drop_meta(), Node::Symbol(name) if name == PLACEHOLDER);
+	let is_placeholder = |argument: &Node| argument.is_symbol(PLACEHOLDER);
 	if !arguments.iter().any(is_placeholder) {
 		return None;
 	}
@@ -1645,7 +1664,7 @@ pub(crate) fn keyword_definition(items: &[Node]) -> Option<Node> {
 	let Node::Symbol(_) = name.drop_meta() else { return None };
 	// Swift's one labeled parameter `greet(person name: String)` arrives as the two words; a call's arguments come flat,
 	// so only Swift's keyword reads them so: `def add(a, b: int) -> int` has two parameters
-	let is_swift = matches!(keyword.drop_meta(), Node::Symbol(word) if word == SWIFT_FUNCTION_KEYWORD);
+	let is_swift = keyword.is_symbol(SWIFT_FUNCTION_KEYWORD);
 	let arguments = match arguments {
 		[label, typed] if is_swift && argument_label(label, typed).is_some() => vec![Node::List(arguments.to_vec(), Bracket::None, Separator::Space)],
 		_ => arguments.to_vec(),
@@ -1697,11 +1716,7 @@ fn extension_definition(definition: Node) -> Node {
 fn with_receiver(call: &[Node], separator: &Separator, receiver_type: &Node, body: &Node) -> Node {
 	let receiver = if body.mentions_any(&[SELF_WORD]) { SELF_WORD } else { THIS_WORD };
 	let receiver = key(symbol(receiver), Op::Colon, receiver_type.clone());
-	let parameters = call[1..].iter().flat_map(|parameter| match parameter.drop_meta() {
-		Node::List(group, Bracket::Round, _) => group.clone(),
-		Node::Empty => vec![],
-		_ => vec![parameter.clone()],
-	});
+	let parameters = call[1..].iter().flat_map(grouped_parameters);
 	Node::List(std::iter::once(call[0].clone()).chain(std::iter::once(receiver)).chain(parameters).collect(), Bracket::Round, separator.clone())
 }
 
@@ -1740,7 +1755,7 @@ fn renamed_it(node: Node, receiver: &Node) -> Node {
 /// `fun Int.twice()` defines it
 fn extension_block(items: &[Node]) -> Option<Node> {
 	let [word, receiver_type, block] = items else { return None };
-	let is_extension = matches!(word.drop_meta(), Node::Symbol(word) if word == EXTENSION_WORD) && matches!(receiver_type.drop_meta(), Node::Symbol(_));
+	let is_extension = word.is_symbol(EXTENSION_WORD) && matches!(receiver_type.drop_meta(), Node::Symbol(_));
 	// a block of one function arrives as that definition
 	let definitions = match block.drop_meta() {
 		Node::List(definitions, Bracket::Curly, _) => definitions.clone(),
@@ -1847,7 +1862,7 @@ fn typed_returns(body: Node, result_types: &Node) -> Node {
 			key(grouped, Op::As, kind.clone())
 		}).collect())
 	};
-	let is_return = |node: &Node| matches!(node.drop_meta(), Node::List(words, Bracket::None, Separator::Space) if words.len() == 2 && matches!(words[0].drop_meta(), Node::Symbol(word) if word == RETURN_WORD));
+	let is_return = |node: &Node| matches!(node.drop_meta(), Node::List(words, Bracket::None, Separator::Space) if words.len() == 2 && words[0].is_symbol(RETURN_WORD));
 	match body {
 		// `return a, b` parses as `(return a), b`
 		Node::List(items, bracket, Separator::Colon) if items.first().is_some_and(is_return) => {
@@ -1941,17 +1956,12 @@ fn name_then_type(parameter: Node) -> Node {
 
 /// Ruby's `def f(a, b: 2) a * b end` and `def f(a)` ⏎ statements ⏎ `end`: the definition `def f(a, b: 2) {…}`
 fn end_definitions(node: Node) -> Node {
-	let node = match node {
-		Node::List(items, bracket, separator) => Node::List(items.into_iter().map(end_definitions).collect(), bracket, separator),
-		Node::Key(left, op, right) => key(end_definitions(*left), op, end_definitions(*right)),
-		Node::Meta { node, data } => Node::Meta { node: Box::new(end_definitions(*node)), data },
-		other => other,
-	};
+	let node = children_rewritten(node, end_definitions);
 	let Node::List(items, bracket, separator) = node else { return node };
 	// one line: `def head body… end`
 	if let ([keyword, head, body @ .., end], Separator::Space) = (items.as_slice(), &separator) {
 		if is_function_keyword(&keyword.drop_meta().name()) && is_end(end) && !body.is_empty() {
-			return Node::List(vec![keyword.clone(), function_head(head), body_block(body.to_vec())], bracket, separator);
+			return Node::List(vec![keyword.clone(), function_head(head), block(body.to_vec())], bracket, separator);
 		}
 	}
 	if !matches!(separator, Separator::Newline | Separator::Semicolon) || !items.iter().any(is_end) {
@@ -1965,7 +1975,7 @@ fn end_definitions(node: Node) -> Node {
 			statements.push(statement);
 			continue;
 		};
-		let body = body_block(rest.by_ref().take_while(|statement| !is_end(statement)).collect());
+		let body = block(rest.by_ref().take_while(|statement| !is_end(statement)).collect());
 		let definition = match head.drop_meta() {
 			// Crystal's `def f(a) : Int`: the head as Kotlin's `fun f(a): Int { … }` has it
 			Node::Key(inner, Op::Colon, result) => {
@@ -1980,7 +1990,7 @@ fn end_definitions(node: Node) -> Node {
 }
 
 fn is_end(node: &Node) -> bool {
-	matches!(node.drop_meta(), Node::Symbol(word) if word == END_WORD)
+	node.is_symbol(END_WORD)
 }
 
 /// `def f(a)` or `def h` without a body, also with Crystal's result type `def f(a) : Int`
@@ -2003,10 +2013,6 @@ fn function_head(head: &Node) -> Node {
 		}
 		_ => head.clone(),
 	}
-}
-
-fn body_block(statements: Vec<Node>) -> Node {
-	Node::List(statements, Bracket::Curly, Separator::Semicolon)
 }
 
 fn lower_lists(node: Node, lowering: impl Fn(&[Node]) -> Option<Node> + Copy) -> Node {
@@ -2079,7 +2085,7 @@ fn c_parameter(parameter: &Node) -> Option<Node> {
 		Node::Key(declared, Op::Assign, default) => Some(Node::Key(Box::new(c_parameter(declared)?), Op::Assign, default.clone())),
 		Node::List(words, _, Separator::Space) => match words.as_slice() {
 			// Dart's `required int a`: every parameter needs its value anyway
-			[required, rest @ ..] if matches!(required.drop_meta(), Node::Symbol(word) if word == DART_REQUIRED) => c_parameter(&Node::List(rest.to_vec(), Bracket::None, Separator::Space)),
+			[required, rest @ ..] if required.is_symbol(DART_REQUIRED) => c_parameter(&Node::List(rest.to_vec(), Bracket::None, Separator::Space)),
 			[kind, name] if matches!((kind.drop_meta(), name.drop_meta()), (Node::Symbol(_), Node::Symbol(_))) => {
 				Some(key(name.clone(), Op::Colon, kind.clone()))
 			}

@@ -5,8 +5,8 @@
 //! `then` pipes the same way into a function missing its argument (`xs then sort`, P158); otherwise it is the
 //! condition, also without `if`.
 
-use super::nodes::key;
-use crate::analyzer::{counting_function, extract_user_functions};
+use super::nodes::{if_then, key};
+use crate::analyzer::counting_function;
 use crate::context::Context;
 use crate::node::{Bracket, Node, Separator};
 use crate::operators::Op;
@@ -43,8 +43,7 @@ pub fn is_pipe_stage(node: &Node) -> bool {
 }
 
 pub fn lower(node: Node) -> Node {
-	let mut context = Context::new();
-	extract_user_functions(&mut context, &node);
+	let context = crate::analyzer::function_context(&node);
 	let mut variables = HashSet::new();
 	let mut spaced_functions = HashSet::new();
 	node.visit(&mut |part| match part {
@@ -216,10 +215,6 @@ fn is_truth_value(node: &Node) -> bool {
 		Node::True | Node::False => true,
 		_ => false,
 	}
-}
-
-fn if_then(condition: Node, body: Node) -> Node {
-	crate::variable_signals::if_then(condition, body)
 }
 
 /// `square 2` as the operand of a prefix operator: `√(square 2)`, not `√ square 2` (which reads as square(√2))

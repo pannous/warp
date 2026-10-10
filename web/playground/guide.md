@@ -292,6 +292,11 @@ square [1 2 3]
 [1 2 3].map(x => x * 2)
 ```
 
+A heavy `map` over a very long list of floats (sin, exp and the like, from about 300 000 items) runs on the graphics
+card by itself, and says so once. The graphics card computes in single precision, so results are approximate by
+design: a sum of 40 000 cosines may be off by about 40 000 × 2⁻¹¹. Write `@cpu` after the map, before it, or on a
+block or function when every digit counts; `@gpu` asks for the graphics card from about 30 000 items.
+
 Examples: lists, broadcasting, "lazy ranges", "linear arrays"; samples: sorting, quicksort, primes, sieve, sorting_idiomatic, sieve_idiomatic
 
 ## Objects
@@ -396,8 +401,8 @@ Examples: functions, arguments, "polyglot calls"; samples: functions, fibonacci,
 ## Closures
 
 Closures are anonymous functions, tiny ad-hoc pieces of code without a name, very useful in the comparisons:
-```warp
-sort([8 3 1 5 2], {$0 < $1})
+```warp => [8 5 3 2 1]
+sort([8 3 1 5 2], {$0 > $1})
 ```
 
 (Much shorter than `def compare_elements(a,b){return a<b}`)
@@ -440,6 +445,56 @@ Point{x: 1 y: 2}.x
 ```
 
 Examples: classes, properties; samples: types, polymorphism
+
+## Data and storage
+
+A program forgets its variables when it ends. `stored` keeps one: run this twice and it counts on.
+
+```warp
+stored visits = 0
+visits += 1
+```
+
+`local` is a small store of named values, kept in the browser.
+
+```warp => "Ada"
+local["name"] = "Ada"
+local["name"]
+```
+
+`database` holds more: in the browser in IndexedDB, on your computer in a SQLite file beside the program.
+
+```warp => 42
+database.score = 42
+database.score
+```
+
+A stored list of a class is a table. `add` saves a row, `where` finds rows.
+
+```warp => "Bo"
+class Person{name: text; age: int}
+stored people: [Person]
+people.add(Person("Bo", 30))
+(people where age > 18)#1.name
+```
+
+A row is an ordinary object: change a field (`bo.age += 1`) and the table changes with it, no save needed.
+
+Files are written and read by name. In the browser they last while the page is open.
+
+```warp => "milk"
+write("shopping.txt", "milk")
+read("shopping.txt")
+```
+
+JSON from elsewhere becomes warp data.
+
+```warp => 36
+use json
+json.parse('{"age": 36}').age
+```
+
+Examples: data; samples: orm, orm_transaction, orm_units, todo_app, json_parser
 
 ## Errors
 

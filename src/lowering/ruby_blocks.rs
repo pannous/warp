@@ -6,7 +6,7 @@
 //! Swift's trailing closure, card web-components): `Card("Hi") { p:"text" }` passes the children, `apply(3) { it*2 }`
 //! the function.
 
-use super::nodes::key;
+use super::nodes::{is_block, key};
 use crate::node::{symbol, Bracket, Node, Separator};
 use crate::operators::Op;
 use std::collections::{HashMap, HashSet};
@@ -36,7 +36,7 @@ pub fn lower(node: Node) -> Node {
 }
 
 pub(crate) fn is_yield(node: &Node) -> bool {
-	matches!(node.drop_meta(), Node::Symbol(word) if word == YIELD_WORD)
+	node.is_symbol(YIELD_WORD)
 }
 
 /// `yield`, `yield v` or `yield a, b`: the values yielded
@@ -63,10 +63,7 @@ pub(crate) fn contains_yield(body: &Node) -> bool {
 fn definition_name(node: &Node) -> Option<String> {
 	match node.drop_meta() {
 		Node::Key(head, Op::Define, body) if contains_yield(body) => match head.drop_meta() {
-			Node::List(items, Bracket::Round, _) => match items.first()?.drop_meta() {
-				Node::Symbol(name) => Some(name.clone()),
-				_ => None,
-			},
+			Node::List(items, Bracket::Round, _) => items.first()?.symbol_name().map(String::from),
 			_ => None,
 		},
 		_ => None,
@@ -89,9 +86,6 @@ fn parameter_count(node: &Node) -> Option<(String, usize)> {
 	(items.len() > 1).then(|| (name.clone(), items.len() - 1))
 }
 
-fn is_block(node: &Node) -> bool {
-	matches!(node.drop_meta(), Node::List(_, Bracket::Curly, _))
-}
 
 /// `f`, `f(a)` or `f a`: the function and its arguments
 fn call_parts(node: &Node, takers: &HashMap<String, BlockTaker>) -> Option<(String, Vec<Node>)> {

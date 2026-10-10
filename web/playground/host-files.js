@@ -3,19 +3,46 @@
 
 /// where host.read and the test runner's file system find files: the repository root the static server serves
 const FILE_ROOT = new URL("../../", self.location.href).href;
+const SCHEME_MARK = "://"; // a URL without its scheme: withPageProtocol
 const PAGE_PREFIX = "page:"; // src/web.rs PAGE_PREFIX: a file of the page itself (lib/libc.h), not of the served repository
 const HTTP_NOT_FOUND = "HTTP status 404";
 const FILE_NOT_FOUND = "No such file or directory (os error 2)";
 
-// the files std's file module wrote, kept while the page is open: read and the file words see them before the served ones
+// src/sound.rs: 16-bit mono PCM, samples offset by SAMPLE_OFFSET; a render without sounds has the default rate
+const SAMPLE_OFFSET = 32768;
+const DEFAULT_SAMPLE_RATE = 22050;
+const WAV_HEADER_BYTES = 44;
+
+// the files std's file module wrote (texts) and render_sound rendered (bytes, a Uint8Array), kept while the page is
+// open: read and the file words see them before the served ones
 const writtenFiles = new Map();
 const filePath = path => path.replace(/^\.\//, "");
+const textOf = written => typeof written === "string" ? written : utf8Decoder.decode(written);
+// a task's Worker starts with the files written so far (host-tasks.js startTask) and hands the program's Worker each
+// one it wrote with its result (task-worker.js self.taskWrote), as natively the tasks of a run share the file system
+self.writtenFilesForTask = () => writtenFiles;
+self.takeWrittenFiles = files => files?.forEach((content, path) => writtenFiles.set(path, content));
 
-const textOfFile = path => writtenFiles.get(filePath(path)) ?? (servedFileExists(path) ? readFile(filePath(path)) : "");
+// a file written (a text) or rendered (bytes, which the page offers for download: worker.js self.keepFile)
+function keepWritten(path, content) {
+	writtenFiles.set(filePath(path), content);
+	if (typeof content !== "string") self.keepFile?.(filePath(path), content);
+	self.taskWrote?.(path, content);
+}
+
+const textOfFile = path => {
+	const written = writtenFiles.get(filePath(path));
+	return written !== undefined ? textOf(written) : servedFileExists(path) ? readFile(filePath(path)) : "";
+};
+// whether a file of the served repository, of the page or at a URL is there, asked without its body (a song may be large)
 function servedFileExists(path) {
+	const url = fileUrl(path);
+	if (isUnserved(url)) return false;
 	try {
-		readBytes(path);
-		return true;
+		const request = new XMLHttpRequest();
+		request.open("HEAD", url, false);
+		request.send();
+		return request.status > 0 && request.status < 400;
 	} catch {
 		return false;
 	}
@@ -26,8 +53,12 @@ function servedFileExists(path) {
 const isUnserved = url => typeof SERVED_FILES !== "undefined" && url.startsWith(FILE_ROOT)
 	&& !SERVED_FILES.has(decodeURIComponent(new URL(url).pathname.slice(new URL(FILE_ROOT).pathname.length)));
 
+// `://host/path` takes the page's protocol, as `//host/path` does in HTML (src/extensions/utils.rs with_default_scheme)
+const withPageProtocol = url => url.startsWith(SCHEME_MARK) ? self.location.protocol + url.slice(1) : url;
+
 // a synchronous GET (host calls are synchronous, so this runs in a worker); `timeout` in ms
 function getSync(url, timeout, binary = false) {
+	url = withPageProtocol(url);
 	if (isUnserved(url)) throw new Error(HTTP_NOT_FOUND);
 	const request = new XMLHttpRequest();
 	request.open("GET", url, false);
@@ -41,6 +72,7 @@ function getSync(url, timeout, binary = false) {
 // a synchronous POST of a text with its headers (stdlib net's post, src/extensions/utils.rs post_within), its answer's
 // text; an answer of status >= 400 is the error, with its text (an API's own reason)
 function postSync(url, body, headers = {}) {
+	url = withPageProtocol(url);
 	const request = new XMLHttpRequest();
 	request.open("POST", url, false);
 	request.setRequestHeader("Content-Type", "text/plain; charset=utf-8");
@@ -73,7 +105,7 @@ const readFile = path => asFileRead(() => getSync(FILE_ROOT + path));
 
 // the URL of a file of the served repository, of the page itself (PAGE_PREFIX) or a URL
 function fileUrl(path) {
-	if (/^https?:/.test(path)) return path;
+	if (/^https?:/.test(path) || path.startsWith(SCHEME_MARK)) return path;
 	if (path.startsWith(PAGE_PREFIX)) return new URL(path.slice(PAGE_PREFIX.length), self.location.href).href;
 	return FILE_ROOT + filePath(path);
 }
@@ -81,7 +113,7 @@ function fileUrl(path) {
 // the bytes of a file of the served repository, of the page or of a URL, failing in the words of the native read
 function readBytes(path) {
 	const written = writtenFiles.get(filePath(path));
-	if (written !== undefined) return utf8.encode(written);
+	if (written !== undefined) return typeof written === "string" ? utf8.encode(written) : written;
 	return asFileRead(() => getSync(fileUrl(path), 0, true));
 }
 
@@ -312,6 +344,22 @@ function rollBack(file) {
 	return null;
 }
 
+// a 16-bit mono PCM WAV of the offset samples (src/sound.rs wav)
+function wavOf(samples, rate) {
+	const bytes = new Uint8Array(WAV_HEADER_BYTES + 2 * samples.length);
+	const view = new DataView(bytes.buffer);
+	const ascii = (at, word) => [...word].forEach((letter, i) => view.setUint8(at + i, letter.charCodeAt(0)));
+	ascii(0, "RIFF");
+	view.setUint32(4, bytes.length - 8, true);
+	ascii(8, "WAVEfmt ");
+	[[16, 16, 4], [20, 1, 2], [22, 1, 2], [24, rate, 4], [28, 2 * rate, 4], [32, 2, 2], [34, 16, 2]]
+		.forEach(([at, value, size]) => size === 4 ? view.setUint32(at, value, true) : view.setUint16(at, value, true));
+	ascii(36, "data");
+	view.setUint32(40, 2 * samples.length, true);
+	samples.forEach((sample, i) => view.setInt16(WAV_HEADER_BYTES + 2 * i, Math.max(-32768, Math.min(32767, Number(sample) - SAMPLE_OFFSET)), true));
+	return bytes;
+}
+
 addHostPart({
 	words: (holder, hooks, { program, text }) => {
 		const fetchUrl = (pointer, length, timeout) => {
@@ -342,8 +390,8 @@ addHostPart({
 			names: file => Object.keys(valuesOf(file)),
 		},
 		file: {
-			write: (path, content) => { writtenFiles.set(filePath(path), contentText(content)); return null; },
-			append: (path, content) => { writtenFiles.set(filePath(path), textOfFile(path) + contentText(content)); return null; },
+			write: (path, content) => { keepWritten(path, contentText(content)); return null; },
+			append: (path, content) => { keepWritten(path, textOfFile(path) + contentText(content)); return null; },
 			exists: path => writtenFiles.has(filePath(path)) || servedFileExists(path),
 			list: folder => {
 				const prefix = filePath(folder).replace(/\/?$/, "/");
@@ -359,11 +407,34 @@ addHostPart({
 		// `play "song.mp3"`, `stop_sound` (lib/sound.warp, card sound-library): the page plays it with an <audio>
 		// (worker.js self.playSoundFile, playground.js); a run without a page (tests, node) stays silent, as natively
 		sound: {
-			play_file: path => { self.playSoundFile?.(contentText(path)); return null; },
-			stop: () => { self.stopSoundFiles?.(); return null; },
+			// a written file (a rendered WAV) goes to the page as its bytes, a served or remote one by its URL; a local file
+			// that is not there fails as natively (card browser-play)
+			play_file: path => {
+				const name = contentText(path);
+				const written = writtenFiles.has(filePath(name));
+				if (!written && !/^https?:/.test(name) && !servedFileExists(name)) throw new Error(`cannot open ${name}: ${FILE_NOT_FOUND}`);
+				self.playSoundFile?.(fileUrl(name), written ? readBytes(name) : undefined);
+				return self.lastSoundHandle?.() ?? 0;
+			},
+			// stop_sound(handle) the sound play gave that handle (card sound-pro), handle 0 all of them
+			stop: handle => { Number(handle) ? self.stopSound?.(Number(handle)) : self.stopSoundFiles?.(); return null; },
+			last: () => self.lastSoundHandle?.() ?? 0,
 			// the page's audio clock as the worker keeps it (worker.js); a worker cannot wait for the page's audio
 			queued: () => self.soundsQueued?.() ?? 0,
 			wait: () => null,
+			// the run's sounds since its start or the last render, one WAV (src/sound.rs render): its seconds; the page
+			// offers it for download
+			render(path) {
+				const sounds = this.holder.unrenderedSounds ?? [];
+				this.holder.unrenderedSounds = [];
+				const rate = sounds[0]?.rate ?? DEFAULT_SAMPLE_RATE;
+				const other = sounds.find(sound => sound.rate !== rate);
+				if (other) throw new Error(`sounds of ${rate} and ${other.rate} samples per second cannot share ${contentText(path)}`);
+				const samples = sounds.flatMap(sound => sound.samples);
+				const bytes = wavOf(samples, rate);
+				keepWritten(contentText(path), bytes);
+				return samples.length / rate;
+			},
 		},
 	},
 });

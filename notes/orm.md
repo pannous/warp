@@ -73,7 +73,7 @@ keeping its fields with id 0; the lazy `people·remove` drops bo from the loaded
   `people.count` into `people·count()`, `people.add(p)` into `people·add(p)`, `people#i` into `people·at(i)`, `for p in people {…}` into
   `p·end = people·count(); for p·position in 1 to p·end { p: Person = people·streamed(p·position); … }` (break and
   continue as in any range loop; rows the body adds are not walked); registrations, `global people`, assigned
-  lists and field names stay, and a table's own lazy functions keep its list. One-to-many getters read `people·load()`.
+  lists and field names stay, and a table's own lazy functions keep its list. One-to-many getters select natively (`people·found`), in the browser they read `people·load()`.
 - Identity: the load builds each row's instance unless `people·met` holds one with its id, so an instance added before
   the load is the loaded row (test an_instance_added_before_loading_is_the_loaded_row).
 - A route reopening the table (`users = database.users`, serve.rs) is `users = users·reset()`: the next read loads anew.
@@ -97,7 +97,14 @@ keeping its fields with id 0; the lazy `people·remove` drops bo from the loaded
   empty (serve.rs answers_a_list, database_tables::is_filter_query).
 - A class method reads and filters tables as a function does: with_lazy_reads and lower_where enter class bodies (a
   `Node::Type` is no child of map_children), only method bodies, and a field named like a table stays the field.
-- Not yet: comprehensions over a table (they load it), the IN (…) batching. An empty list must be `parse("[]")` (ø): a built `[]` List node with Space
+- A filtered comprehension over a table, `[p.name for p in people if p.age > 20]`, is the table's query
+  (comprehensions.rs comprehension_over_table: `[p.name for p in people where it.age > 20]`; test
+  a_filtered_comprehension_over_a_table_reads_only_its_rows). Without `if` it walks the loaded table.
+- `name of people with age > 20` (user, 2026-10-10) says the same in words: `field of list` is the field of each element
+  of a list of a class's instances (comprehensions.rs field_of_elements, `[of·element.name for of·element in …]`), and
+  `with` after such a list is `where` (with_as_where); on a table the filter stays its query
+  (tests/control/test_field_of_elements.rs). `name of people#1` stays the field of one instance.
+- Not yet: the IN (…) batching. An empty list must be `parse("[]")` (ø): a built `[]` List node with Space
   separator types `xs += [x]` as int + list.
 
 ## Writes and transactions
@@ -158,7 +165,9 @@ keeping its fields with id 0; the lazy `people·remove` drops bo from the loaded
 - Opening people builds `team` as the row of teams with that id (`[r for r in teams if r.id == row#3]#1`), so a related
   row is the same instance as in its table. teams must be registered before people (a compile error otherwise).
   A one-to-many field is lazy: database_tables.rs with_member_getters makes `players: [Person]` the getter
-  `players := { global people; [m for m in people if m.team.id == id] }`, a query at each read, so it is no
+  `players := { people·found("\"team\" IS ?", [id]) }` natively, the SELECT of the rows pointing back (the people
+  table is not loaded; test a_list_field_reads_only_the_rows_pointing_back), and in the browser the scan
+  `[m for m in people·load() if m.team.id == id]`: a query at each read, so it is no
   constructor argument (`Team("Red")`) and a moved row (`bo.team = blue`) shows in both teams at once (card orm-moved).
 - `people.add(p)` stores `p.team.id` (an instance without a row raises "… add it to its table first"); `bo.team = blue`
   writes blue's id through.
@@ -174,7 +183,8 @@ keeping its fields with id 0; the lazy `people·remove` drops bo from the loaded
   key (`team: Team`) leaves its row out of the opened list with a runtime warning naming the row and suggesting
   `team: Team?`; the row stays in the database. An optional key (`team: Team?`) reads ø and is stored as 0
   (database_tables.rs opened, referenced, key_id).
-- Gaps: the getter scans the loaded list; natively it could be a SELECT once tables are queries.
+- Gaps: a loop reading `t.players` of every team runs a SELECT per team (no IN (…) batching yet); a required back key
+  (`team: Team`) makes `people·found` load the table, as any filter of such a table does.
 - Sample: samples/orm.warp (native and playground) has `team: Team?` and `players: [Person]`: optional, so databases
   the sample wrote before the column read ø (card orm-dangling); `climbers.players.add(bo)` writes bo.team through.
 - An add or field write in a one-statement block (`if … { teams.add(t) }`) is lowered like a statement of its own.

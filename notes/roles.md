@@ -32,6 +32,16 @@ ask me decision questions."
   verbatim in the Decided section with the date, then tells the asking session (and the Supervisor) the answer, so the
   assumption is kept or reverted.
 - Merges duplicates, drops questions that the code or an earlier decision already answers, and orders by impact.
+- Ready to try (user 2026-10-10: "a general mechanism when some feature is done and ready to be tested by me"; the
+  question popups are the notifications that reach the user): after each batch of questions, and whenever idle,
+  `todo try --new` lists finished features not announced yet. Only features already in the user's installed `warp`
+  (the brew release; `warp --version`) are announced: v1.2.5 was 211 commits behind main and every tried feature
+  failed, so a finished feature waits for the next release (releases need no approval; ask the Integrator to cut
+  one). Format (user: "put the command for one test into the title"): one single-select question per feature, the
+  exact command in the question text, options Yes / No, e.g. "Try `~/dev/angles/warp/samples/visualizer.warp` to see
+  the new visualizer. Did it work?". Up to 4 per popup, sharing it with decision questions. Yes → `todo tried <card>`;
+  No or a pasted error → `todo add "…" Now` for the worker who built it; unanswered ones stay in `todo try`. Samples
+  are run directly by path (shebang + executable). A popup blocks only the Interviewer.
 
 ## Never blocked by a decision
 A session that needs a decision: take the recommended option (the one most in line with notes/welcoming.md and the
@@ -64,6 +74,9 @@ The only session that runs the full suite and the only one that pushes code to m
   `tests/queue.sh -- <filter>`. Never the whole tests binary, never an extra export copy for verification.
 - Done = commit on the branch, push the branch, SendMessage the Integrator "branch, tip, new tests, filters". The
   Integrator's full-suite result is the check; the worker fixes what it reports.
+- Closing a card whose result the user can see or use (a feature, a visible fix, a sample, a playground change):
+  `todo done <card> <commit> --try "how to try it"`: one concrete line (a command, a playground snippet, a sample
+  file), only once it is on main and, for web changes, deployed. Internal work (cleanup, tests, notes) has no --try.
 - After the merge, remove your worktree and branch: `git -C /Users/me/dev/angles/warp worktree remove --force <worktree> && git -C /Users/me/dev/angles/warp branch -D <branch>` (the hook allows both when only the build tweak is uncommitted and main or a remote holds the commits; notes/agents/common.md). Write the paths literally: the hook cannot check a shell variable.
 
 ## Branches, copies and worktrees

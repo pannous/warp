@@ -9,7 +9,6 @@
 //! (sessionStorage: while the page's tab lasts; natively while the process runs) (P188, warp-03's default).
 //! A program that defines its own `storage`, `local` or `session` keeps it.
 
-use super::nodes::is_word;
 use crate::node::{Bracket, Node, Separator};
 use crate::operators::Op;
 use crate::warp_parser::parse;
@@ -83,7 +82,7 @@ fn program_file_with(extension: &str) -> Option<String> {
 fn stored_statement(statement: &Node, file: &str) -> Option<Vec<Node>> {
 	let Node::List(items, _, _) = statement.drop_meta() else { return None };
 	let [word, assignment] = items.as_slice() else { return None };
-	if !matches!(word.drop_meta(), Node::Symbol(word) if word == STORED_WORD) {
+	if !word.is_symbol(STORED_WORD) {
 		return None;
 	}
 	let Node::Key(name, Op::Assign | Op::Define, default) = assignment.drop_meta() else { return None };
@@ -152,11 +151,11 @@ fn storage_access(node: &Node, stores: &[(&str, String)]) -> Option<Node> {
 			Some(store_call("save", Some(key), Some(storage_accesses(value.as_ref().clone(), stores)), file))
 		}
 		Node::List(items, _, _) => match items.as_slice() {
-			[word, target] if is_word(word, DELETE_WORD) => {
+			[word, target] if word.is_symbol(DELETE_WORD) => {
 				let (key, file) = entry_key(target, stores)?;
 				Some(store_call("remove", Some(key), None, file))
 			}
-			[word, store] if is_word(word, KEYS_WORD) => Some(store_call("names", None, None, file_of(store, stores)?)),
+			[word, store] if word.is_symbol(KEYS_WORD) => Some(store_call("names", None, None, file_of(store, stores)?)),
 			_ => None,
 		},
 		// ø: the value of an absent key
@@ -182,7 +181,7 @@ fn entry_key<'a>(target: &Node, stores: &'a [(&str, String)]) -> Option<(Node, &
 
 /// The file of the store a word names
 fn file_of<'a>(word: &Node, stores: &'a [(&str, String)]) -> Option<&'a str> {
-	stores.iter().find(|(name, _)| is_word(word, name)).map(|(_, file)| file.as_str())
+	stores.iter().find(|(name, _)| word.is_symbol(name)).map(|(_, file)| file.as_str())
 }
 
 /// `std_io("store", member, [key, value, file])`, the key and the value given

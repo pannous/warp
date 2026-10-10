@@ -197,7 +197,7 @@ fn with_needed_definitions(program: Node, definitions: Vec<Node>) -> Node {
 	let mut needed: Vec<Node> = vec![];
 	let mut mentioned = called_names(std::slice::from_ref(&program));
 	loop {
-		let now_needed: Vec<Node> = definitions.iter().filter(|definition| declared_name(definition).is_some_and(|name| mentioned.contains(&name))).cloned().collect();
+		let now_needed: Vec<Node> = definitions.iter().filter(|definition| declared_name(definition).is_some_and(|name| is_needed(&name, &mentioned))).cloned().collect();
 		if now_needed.len() == needed.len() {
 			break;
 		}
@@ -214,6 +214,10 @@ fn with_needed_definitions(program: Node, definitions: Vec<Node>) -> Node {
 	Node::List([needed, statements].concat(), Bracket::None, separator)
 }
 
+/// A mentioned name, or the companion f_as of a mentioned f: overloads lowering calls it where f gives an expected type
+fn is_needed(name: &str, mentioned: &HashSet<String>) -> bool {
+	mentioned.contains(name) || crate::lowering::overloads::companion_of(name).is_some_and(|function| mentioned.contains(function))
+}
 
 /// The names the statements mention or call, as methods too (`"hé".to_utf8()`), in interpolations too, with the library
 /// words they spell
@@ -860,7 +864,7 @@ const ROUTE_PARTS: [&str; 3] = ["route_segment", "route_parameter", "route_match
 const AGENT_MODULE: &str = "agent";
 /// lib/sound.warp: `play 440Hz for 0.5s`, `beep` (card basic-sound), loaded when a program calls one of its words
 const SOUND_MODULE: &str = "sound";
-const SOUND_WORDS: [&str; 8] = ["play", "melody", "tone", "beep", "play_file", "stop_sound", "sound_queued", "wait_sound"];
+const SOUND_WORDS: [&str; 9] = ["play", "melody", "tone", "beep", "play_file", "stop_sound", "sound_queued", "wait_sound", "render_sound"];
 /// Whether a program needs a module
 type NeededBy = fn(&Node) -> bool;
 /// The standard modules a program needs without `use`: P183 a file URL → file, a page → markup (lowering/page_html.rs),

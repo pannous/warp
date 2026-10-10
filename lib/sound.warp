@@ -2,7 +2,7 @@
 // in Sonic Pi), `play note("C#4")`, `melody [C4 E4 G4]` (one note after another), `beep`, `tone(frequency, seconds, "square")`. Frequencies
 // and durations are numbers or quantities (440Hz, 0.5s, 250ms), read by si_amount as plain numbers (src/units/static_units.rs). The samples are made here and played by the host word
 // sound_samples: natively a WAV file and the system's player (src/sound.rs; silent under tests and WARP_NO_WINDOW),
-// in the browser WebAudio. Loaded when a program calls play, melody, tone, beep, play_file or stop_sound
+// in the browser WebAudio. Loaded when a program calls one of its words (src/modules.rs SOUND_WORDS)
 global sample_rate = 22050
 // the share of the loudest sample: chords and melodies stay below it
 global loudness = 0.3
@@ -73,7 +73,11 @@ chord_samples(pitches, duration, shape) := {
 	share = loudness * loudest_sample / count(pitches)
 	[sample_offset + (round(share * envelope(i, n) * sum([wave(shape, (f * i / sample_rate) % 1) for f in pitches])) as int) for i in 0..n]
 }
-sound(samples) := sound_samples(samples, count(samples), sample_rate)
+// the sound's handle: its number in the run, for stop_sound(handle)
+sound(samples) := {
+	sound_samples(samples, count(samples), sample_rate)
+	std_io("sound", "last", [])
+}
 
 // one wave shape: tone 440Hz for 0.5s (a sine), tone(220Hz, 100ms, "square")
 tone(pitch, duration, shape) := sound(chord_samples([si_amount(pitch)], si_amount(duration), shape))
@@ -84,11 +88,15 @@ pitches_of(x) := if x is list then [si_amount(f) for f in x] else [si_amount(x)]
 to play x for duration: sound(chord_samples(pitches_of(x), si_amount(duration), wave_shape))
 // a music file in the background (wav, mp3, ogg, flac, aiff, m4a): play "song.mp3"; stop_sound stops it
 play_file(path) := std_io("sound", "play_file", [path])
-stop_sound() := std_io("sound", "stop", [])
+// play gives the sound's handle: h = play C4 for 2s; stop_sound(h) stops that one alone, stop_sound (handle 0) all
+stop_sound(handle = 0) := std_io("sound", "stop", [handle])
 // play returns at once, its sound queued behind those before it: sound_queued() is how many seconds still sound,
 // wait_sound waits for them (a program's end does too)
 sound_queued() := std_io("sound", "queued", [])
 wait_sound() := std_io("sound", "wait", [])
+// the sounds since the last render (or the start) one after another in one WAV file, offline (also without speakers):
+// render_sound("song.wav") gives its seconds
+render_sound(path) := std_io("sound", "render", [path])
 to play x: if x is text then play_file(x) else sound(chord_samples(pitches_of(x), note_seconds, wave_shape))
 // one note (or chord) after another: melody [C4 E4 G4], melody [C4 E4 G4] each 250ms (or melody([C4 E4 G4], 0.25s))
 // plain seconds: the unit check reads a quantity parameter in a loop as unsupported (notes/units_runtime.md)
@@ -99,3 +107,34 @@ melody_samples(notes, seconds) := {
 }
 to melody notes each duration: sound(melody_samples(notes, si_amount(duration)))
 to melody notes: melody(notes, note_seconds)
+
+// how loud each frequency band sounds at a moment of the samples (card winamp-like, samples/visualizer.warp): the bands
+// spaced evenly in pitch from band_low to band_high Hz, each level from 0 to 1 (a full-scale sine is 1)
+global band_low = 60
+global band_high = 5000
+// the samples a spectrum looks at: 512 at 22050 Hz are 23 ms, bands 43 Hz apart are still told apart
+spectrum_window = 512
+// the middle frequency of band i of count
+band_frequency(i, count) := band_low * (band_high / band_low)^(i / (count - 1))
+// the band whose middle frequency is nearest in pitch
+nearest_band(frequency, count) := round(log(frequency / band_low) / log(band_high / band_low) * (count - 1)) as int
+// how loud frequency f sounds in the window: one term of the discrete Fourier transform, Hann-weighted so a tone between
+// two bands does not leak into the far ones
+def band_level(window, f) {
+	n = count(window)
+	step = 2 * pi * f / sample_rate
+	re = 0.0
+	im = 0.0
+	for i in 0..n {
+		weighted = (window[i] - sample_offset) * (0.5 - 0.5 * cos(2 * pi * i / (n - 1)))
+		re = re + weighted * cos(step * i)
+		im = im + weighted * sin(step * i)
+	}
+	4 * sqrt(re * re + im * im) / n / loudest_sample
+}
+def spectrum(samples, seconds, bands) {
+	start = min(round(seconds * sample_rate) as int, count(samples))
+	window = samples[start..min(start + spectrum_window, count(samples))]
+	if count(window) < 2 { return [0 for i in 0..bands] }
+	[band_level(window, band_frequency(i, bands)) for i in 0..bands]
+}

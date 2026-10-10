@@ -6,12 +6,13 @@
 //! in `<program>.database.sqlite` (in memory for code without a file, database.rs); the browser keeps them in IndexedDB
 //! (web/playground/host-files.js), where a filter stays the list comprehension over the rows.
 
+use super::words::{FOR_WORD, GLOBAL_WORD, IN_WORD};
 use super::nodes::key;
 use crate::node::{symbol, Bracket, Node, Separator};
 use crate::operators::Op;
 use crate::warp_parser::parse;
 use crate::units::static_units::si_quantity;
-use std::collections::{HashMap, HashSet};
+use std::collections::{BTreeMap, HashMap, HashSet};
 
 const DATABASE_WORDS: [&str; 2] = ["database", "indexedDB"];
 /// `app.warp` keeps its tables in `app.database.sqlite`; inline code's tables are this name alone (in memory)
@@ -20,7 +21,6 @@ pub const TABLES_FILE: &str = "database.sqlite";
 const ID_FIELD: &str = "id";
 const ADD_WORD: &str = "add";
 const REMOVE_WORD: &str = "remove";
-const GLOBAL_WORD: &str = "global";
 /// `@was(old) name: text`: the field's column was called old, so the table's column is renamed
 const RENAMED_MARK: &str = "was";
 /// `save p` writes every column of p's row (field changes are written through already, so it changes nothing then)
@@ -89,11 +89,9 @@ const LAZY_PARTS: [(&str, &str); 15] = [(FOUND, "found"), (OF, "of"), (LOAD, "lo
 const PAGE_SIZE: usize = 100;
 /// `count(people)`, `people.count`: counted without loading
 const COUNT_WORDS: [&str; 4] = ["count", "size", "length", "len"];
-const FOR_WORD: &str = "for";
 /// a paged loop's count and position, `p·end` and `p·position` of `for p in people`
 const LOOP_END: &str = "table_loop_end";
 const LOOP_POSITION: &str = "table_loop_position";
-const IN_WORD: &str = "in";
 const SCHEMA_PLACEHOLDER: &str = "table_schema";
 const READ_PLACEHOLDER: &str = "table_read";
 const ROWS_PLACEHOLDER: &str = "table_rows_read";
@@ -187,9 +185,9 @@ pub fn lower(program: Node) -> Node {
 }
 
 /// The program's registered tables by their list variable
-fn registrations(program: &Node) -> HashMap<String, Table> {
+fn registrations(program: &Node) -> BTreeMap<String, Table> {
 	let classes = class_bodies(program);
-	let mut tables = HashMap::new();
+	let mut tables = BTreeMap::new();
 	program.visit(&mut |part| if let Some((variable, table)) = registration(part, &classes) {
 		tables.insert(variable, table);
 	});
@@ -197,7 +195,7 @@ fn registrations(program: &Node) -> HashMap<String, Table> {
 }
 
 /// Each table's fields of another table's class (foreign keys) and lists of one (one-to-many, pointing back)
-fn with_relations(mut tables: HashMap<String, Table>) -> HashMap<String, Table> {
+fn with_relations(mut tables: BTreeMap<String, Table>) -> BTreeMap<String, Table> {
 	let variable_of: HashMap<String, String> = tables.iter().map(|(variable, table)| (table.class.clone(), variable.clone())).collect();
 	let fields_of: HashMap<String, Vec<(String, String)>> = tables.values()
 		.map(|table| (table.class.clone(), table.fields.iter().map(|(name, field_type, _)| (name.clone(), field_type.clone())).collect())).collect();
@@ -223,7 +221,7 @@ fn tables_file() -> String {
 
 /// The tables a program registers, both forms, before database_tables::lower; and the functions its filters' queries call
 pub struct Tables {
-	tables: HashMap<String, Table>,
+	tables: BTreeMap<String, Table>,
 	functions: Vec<Node>,
 	/// the effects of the program's functions, which a filter's query should not have
 	effects: Option<crate::effects::EffectReport>,
@@ -233,7 +231,7 @@ pub fn registered(program: &Node) -> Tables {
 	let registers = crate::warp_parser::mentions(program, crate::stored_values::STORED_WORD) || DATABASE_WORDS.iter().any(|word| crate::warp_parser::mentions(program, word));
 	let tables = match registers {
 		true => registrations(&with_stored_tables(program.clone(), &class_bodies(program))),
-		false => HashMap::new(),
+		false => BTreeMap::new(),
 	};
 	let effects = (!tables.is_empty()).then(|| crate::effects::EffectReport::of(program));
 	Tables { tables, functions: vec![], effects }
@@ -570,7 +568,7 @@ fn database_table(source: &Node) -> Option<String> {
 
 /// Each registered class with the field `id: int = 0` unless it has one (0 until the instance has a row), and its
 /// one-to-many fields as getters
-fn with_row_fields(node: Node, tables: &HashMap<String, Table>) -> Node {
+fn with_row_fields(node: Node, tables: &BTreeMap<String, Table>) -> Node {
 	match node {
 		Node::Type { name, body } => match tables.values().find(|table| table.class == name.drop_meta().name()) {
 			Some(table) => Node::Type { name, body: Box::new(with_id(with_member_getters(*body, table))) },
@@ -587,6 +585,12 @@ fn with_member_getters(body: Node, table: &Table) -> Node {
 		let Node::Key(field, Op::Colon, _) = item.drop_meta() else { return item };
 		let Some(members) = table.members.iter().find(|members| members.field == field.drop_meta().name()) else { return item };
 		let Some(back) = &members.back else { return item };
+		if cfg!(feature = "native") {
+			// the rows pointing back, selected: the other table is not loaded
+			let condition = (CONDITION_PLACEHOLDER, Node::Text(format!("{} IS ?", quote(back))));
+			return generated(&format!("{field} := {{ {FOUND}({CONDITION_PLACEHOLDER}, [{ID_FIELD}]) }}", field = members.field),
+				lazy_names(&members.table).into_iter().chain([condition]));
+		}
 		generated(&format!("{field} := {{ [{MEMBER} for {MEMBER} in {LOAD}() if {key} == {ID_FIELD}] }}", key = key_id(MEMBER, back, members.optional_back),
 			field = members.field), lazy_names(&members.table))
 	};
@@ -631,7 +635,7 @@ fn has_id(body: &Node) -> bool {
 
 /// The registrations, inserts and field changes of the tables as their table calls, in every block; `open` the tables
 /// registered so far, as a foreign key reads the rows of its table
-fn with_tables(node: Node, tables: &HashMap<String, Table>, file: &str, open: &mut Vec<String>) -> Node {
+fn with_tables(node: Node, tables: &BTreeMap<String, Table>, file: &str, open: &mut Vec<String>) -> Node {
 	if let Some(lowered) = saved(&node, tables, file).or_else(|| added_to_members(&node, tables, file)) {
 		return lowered;
 	}
@@ -653,7 +657,7 @@ fn with_tables(node: Node, tables: &HashMap<String, Table>, file: &str, open: &m
 	}
 }
 
-fn table_statements(statement: Node, tables: &HashMap<String, Table>, file: &str, open: &mut Vec<String>) -> Vec<Node> {
+fn table_statements(statement: Node, tables: &BTreeMap<String, Table>, file: &str, open: &mut Vec<String>) -> Vec<Node> {
 	if let Some(lowered) = opened(&statement, tables, file, open).or_else(|| inserted(&statement, tables, file)) {
 		return lowered;
 	}
@@ -667,7 +671,7 @@ fn table_statements(statement: Node, tables: &HashMap<String, Table>, file: &str
 /// `people#1.age = 5`, `(people where …)#1.age += 1`: a column of an element of a table changed in place, as the
 /// element bound first, `people·element = people#1; people·element.age = 5`, whose change written_through writes to
 /// its row
-fn with_bound_element(statement: &Node, tables: &HashMap<String, Table>) -> Option<Vec<Node>> {
+fn with_bound_element(statement: &Node, tables: &BTreeMap<String, Table>) -> Option<Vec<Node>> {
 	let Node::Key(target, op, value) = statement.drop_meta() else { return None };
 	if *op != Op::Assign && !op.is_compound_assign() {
 		return None;
@@ -688,7 +692,7 @@ fn with_bound_element(statement: &Node, tables: &HashMap<String, Table>) -> Opti
 /// `people: [Person] = database.people` as the list of the table's rows, each an instance with its id; then the
 /// one-to-many lists of the open tables its rows point back to. A plain `people = database.people` of a registered
 /// people opens it again (a served route reading it at each request)
-fn opened(statement: &Node, tables: &HashMap<String, Table>, file: &str, open: &mut Vec<String>) -> Option<Vec<Node>> {
+fn opened(statement: &Node, tables: &BTreeMap<String, Table>, file: &str, open: &mut Vec<String>) -> Option<Vec<Node>> {
 	let Node::Key(target, Op::Assign, source) = statement.drop_meta() else { return None };
 	let variable = match target.drop_meta() {
 		Node::Key(variable, Op::Colon, _) => variable.drop_meta(),
@@ -897,7 +901,7 @@ fn called(name: String, argument: Option<Node>) -> Node {
 /// Reads of a table's list as its load (`people` → `people·load()`), `count(people)` as its count, `people.add(p)` as
 /// its add and `people#i` as its element, which load no rows; a table's own lazy functions keep its list (`own`). Registrations, `global people`,
 /// assigned lists and field names (`x.people`) stay
-fn with_lazy_reads(node: Node, tables: &HashMap<String, Table>, own: Option<&str>) -> Node {
+fn with_lazy_reads(node: Node, tables: &BTreeMap<String, Table>, own: Option<&str>) -> Node {
 	let table_of = |node: &Node| match node.drop_meta() {
 		Node::Symbol(name) if tables.contains_key(name) && own != Some(name.as_str()) => Some(name.clone()),
 		_ => None,
@@ -946,7 +950,7 @@ fn with_lazy_reads(node: Node, tables: &HashMap<String, Table>, own: Option<&str
 		// a class's own field named like a table is the field
 		Node::Type { name, body } => {
 			let fields: Vec<String> = crate::class_methods::field_declarations(&body).into_iter().map(|(field, ..)| field).collect();
-			let visible: HashMap<String, Table> = tables.iter().filter(|(variable, _)| !fields.contains(variable)).map(|(variable, table)| (variable.clone(), table.clone())).collect();
+			let visible: BTreeMap<String, Table> = tables.iter().filter(|(variable, _)| !fields.contains(variable)).map(|(variable, table)| (variable.clone(), table.clone())).collect();
 			Node::Type { name, body: Box::new(in_method_bodies(*body, &|child| with_lazy_reads(child, &visible, own))) }
 		}
 		_ => node.map_children(rewrite),
@@ -1010,7 +1014,7 @@ fn declared(target: &Node) -> &Node {
 }
 
 /// `people·load() := …` and the other lazy functions of a table: its variable
-fn lazy_definition(node: &Node, tables: &HashMap<String, Table>) -> Option<String> {
+fn lazy_definition(node: &Node, tables: &BTreeMap<String, Table>) -> Option<String> {
 	let Node::Key(head, Op::Define, _) = node.drop_meta() else { return None };
 	let name = match head.drop_meta() {
 		Node::List(parts, _, _) => parts.first()?.drop_meta().name(),
@@ -1069,7 +1073,7 @@ fn implicit_id(table: &Table) -> bool {
 
 /// `people.add(p)`: added to the list and inserted as a row, whose id p takes; a foreign key stores the id of its row
 /// (an instance without one is an error)
-fn inserted(statement: &Node, tables: &HashMap<String, Table>, file: &str) -> Option<Vec<Node>> {
+fn inserted(statement: &Node, tables: &BTreeMap<String, Table>, file: &str) -> Option<Vec<Node>> {
 	let (list, table, word, value) = table_mutation(statement, tables)?;
 	let code = match word.as_str() {
 		ADD_WORD => format!("{ADDED} = {VALUE_PLACEHOLDER}\n{insert}", insert = insert_code(table, &list, file)),
@@ -1082,7 +1086,7 @@ if {REMOVED}.{ID_FIELD} > 0 {{ std_io(\"table\", \"delete\", [{name:?}, {REMOVED
 }
 
 /// `people.add(p)`, `people.remove(p)` of a table: its list, the table, the word and p
-fn table_mutation<'a>(statement: &'a Node, tables: &'a HashMap<String, Table>) -> Option<(String, &'a Table, String, &'a Node)> {
+fn table_mutation<'a>(statement: &'a Node, tables: &'a BTreeMap<String, Table>) -> Option<(String, &'a Table, String, &'a Node)> {
 	let Node::Key(list, Op::Dot, call) = statement.drop_meta() else { return None };
 	let list = list.drop_meta().name();
 	let table = tables.get(&list)?;
@@ -1105,7 +1109,7 @@ fn insert_code(table: &Table, list: &str, file: &str) -> String {
 
 /// `red.players.add(p)` of a one-to-many field, anywhere (`d.team.players.add(d)` too): p's key points to red, written
 /// to p's row, or p inserted into people when it has none (card orm-nested); the value p
-fn added_to_members(node: &Node, tables: &HashMap<String, Table>, file: &str) -> Option<Node> {
+fn added_to_members(node: &Node, tables: &BTreeMap<String, Table>, file: &str) -> Option<Node> {
 	let Node::Key(members_of, Op::Dot, call) = node.drop_meta() else { return None };
 	let Node::Key(owner, Op::Dot, field) = members_of.drop_meta() else { return None };
 	let Node::List(parts, _, _) = call.drop_meta() else { return None };
@@ -1131,7 +1135,7 @@ fn column_value(table: &Table, instance: &str, column: &str) -> String {
 }
 
 /// After `p.age += 1` (any assignment of a field of a registered class): the change written to p's row, when p has one
-fn written_through(statement: &Node, tables: &HashMap<String, Table>, file: &str) -> Vec<Node> {
+fn written_through(statement: &Node, tables: &BTreeMap<String, Table>, file: &str) -> Vec<Node> {
 	let Node::Key(target, op, _) = statement.drop_meta() else { return vec![] };
 	if *op != Op::Assign && !op.is_compound_assign() {
 		return vec![];
@@ -1170,7 +1174,7 @@ fn in_transaction(node: &Node, file: &str, open: &[String]) -> Option<Node> {
 	Some(Node::List(generated(&code, placeholders).children(), Bracket::Round, Separator::Semicolon))
 }
 
-fn saved(node: &Node, tables: &HashMap<String, Table>, file: &str) -> Option<Node> {
+fn saved(node: &Node, tables: &BTreeMap<String, Table>, file: &str) -> Option<Node> {
 	let Node::List(parts, _, Separator::Space) = node.drop_meta() else { return None };
 	let [word, value] = parts.as_slice() else { return None };
 	if word.drop_meta().name() != SAVE_WORD || tables.is_empty() {

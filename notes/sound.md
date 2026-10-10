@@ -16,13 +16,14 @@ play note("F#4") for 250ms      // note(name) needs `use sound` when called alon
 
 - The samples are made in warp (22050 Hz, 16-bit mono, 5 ms fade at both ends) and cross to the host word
   `sound_samples(samples, count, rate)` as whole numbers ≥ 0 (amplitude + 32768), read in one call by list_to_ints.
-- Natively (src/sound.rs) a WAV in `$TMPDIR/warp-sound/` played by afplay/paplay/aplay to its end; under tests, CI and
+- Natively (src/sound.rs) a WAV in `$TMPDIR/warp-sound/` (sound-<pid>.wav, sound-<pid>-2.wav …: one name per process, deleted once played; card sound-wavs) played by afplay/paplay/aplay to its end; under tests, CI and
   WARP_NO_WINDOW only the file and a `sound 0.50 s: <path>` line on stderr: tests stay silent.
 - Browser: the worker posts `{type: "sound"}`, the page (playground.js playSound) plays it with WebAudio, queued one
   after another; a new run silences what still plays (typing reruns the code). A browser starts audio only after a
   gesture: the run on page load stays silent, ▶ plays. A run without page hooks (tests) is silent.
-- Music files (card sound-library): `play "song.mp3"` / `play_file(path)` play a wav, mp3, ogg, flac, aiff or m4a in
-  the background (format by its first bytes), `stop_sound` stops them. Natively (src/sound.rs play_file) the first
+- Music files (card sound-library): `play "song.mp3"` / `play ./mozart.mp3` / `play_file(path)` play a wav, mp3, ogg, flac, aiff or m4a in
+  the background (format by its first bytes; card play-mozart: `./` or `../` glued to the rest of an operand is a path
+  literal, the text `"./mozart.mp3"`, src/warp_parser lookahead.rs starts_path_literal; `xs ./ 2` still divides), `stop_sound` stops them. Natively (src/sound.rs play_file) the first
   player the system has for the format: afplay (no ogg), paplay (no mp3), ffplay, mpv; headless only the check and a
   `sound file <format>: <path>` line (tests/programs/test_sound_files.rs). In the playground an `<audio>` by its URL
   (host-files.js STD_ADAPTERS.sound → worker → playground.js playSoundFile); a new run stops it. Card sound-file-failure: the
@@ -34,6 +35,18 @@ play note("F#4") for 250ms      // note(name) needs `use sound` when called alon
 Limits found on the way: assignments to the module's globals (`note_seconds = 0.25`) from the program do not
 reach the module.
 
+## Spectrum and the visualizer (card winamp-like)
+`spectrum(samples, seconds, bands)` (lib/sound.warp) gives how loud each of `bands` frequency bands sounds in the
+`spectrum_window` (512) samples from `seconds` on, 0 to 1: one Hann-weighted DFT term per band (`band_level`), bands
+spaced evenly in pitch from `band_low` 60 Hz to `band_high` 5 kHz (`band_frequency`, `nearest_band`). Plain warp, so the
+playground computes the same; 16 bands take about 11 ms natively. A single tone at loudness 0.3 reads about 0.16 in its
+band. samples/visualizer.warp plays a tune and paints the bars with falling peaks each 40 ms of real time (clock),
+natively a window, headless PNG frames (tests/programs/test_sound_spectrum.rs).
+Bugs it found, fixed on the way: float elements of a comprehension or a function's list read as ints in loop bodies, as
+arguments of a parameter that also gets ints, and in `==` ("not an int", tests/lists/test_number_list_elements.rs).
+`shown = [0.0, 0.0]` is still a list of ints (0.0 is exact), so the sample writes `[0.0 as float for …]` until the
+exact-decimal list decision (warp-numbers) lands.
+
 ## What professionals expect (user question 2026-10-09; roadmap, nothing of it built yet)
 
 The words above are layer 1, the toy layer. Each layer below keeps the ones above working and lowers to them.
@@ -41,9 +54,22 @@ The words above are layer 1, the toy layer. Each layer below keeps the ones abov
 1. Non-blocking, clocked playback. Built (step 1, 2026-10-10): `play` returns at once, its sound queued on the audio
    clock behind the sounds before it (natively a player thread, src/sound.rs queued; the playground's WebAudio queue);
    `sound_queued()` the seconds still to sound, `wait_sound`, `stop_sound` drops the queue, the process's end waits.
+   It also waits for music files playing (`play "song.mp3"`, card make-background, 2026-10-10): before, warp ended and
+   left the player (afplay) playing in the background, out of reach of ctrl-c and of Sublime's cancel (SIGTERM to the
+   build's process group); now both stop warp and the player together (probes/music_outlives_file.py, silent).
+   Offline render built (step 2, 2026-10-10, from layer 5): `render_sound("song.wav")` writes the sounds since the
+   last render (or the start) one after another into one WAV and gives its seconds; headless too, so tests check audio
+   without speakers (tests/programs/test_sound_render.rs). The samples are kept in memory (44 KB a second at 22050 Hz),
+   not read back from $TMPDIR/warp-sound: that folder is shared by all warp processes. The playground refuses it (its
+   files are texts).
+   Handles built (step 3, 2026-10-10): `play`, `melody`, `tone` and `play "song.mp3"` give the sound's handle, its
+   number in the run (sounds and music files counted together, from 1; the playground counts per run in worker.js);
+   `stop_sound(h)` drops that one from the queue or stops its player, `stop_sound` (handle 0) all of them
+   (tests/programs/test_sound_handles.rs). lib/sound.warp's sound names the handle before returning it: card
+   block-data-sound.
    Still to build:
-   Expected: a shared audio clock, sample-accurate scheduling (`at 2 beats play C4`), `play` returns a handle (stop,
-   ramp its gain), voices overlap. Tempo as a unit: `bpm`, `beat`, `bar` (`play C4 for 1/4 beat`).
+   Expected: a shared audio clock, sample-accurate scheduling (`at 2 beats play C4`), ramping a handle's gain, voices
+   overlap. Tempo as a unit: `bpm`, `beat`, `bar` (`play C4 for 1/4 beat`).
 2. Music values, not frequencies. `Note` (pitch class, octave, MIDI number, cents), `Interval`, `Chord(C4, major7)`,
    `Scale(D, dorian)`, transposition, tuning (A4 = 442Hz, just intonation), velocity. Note names parsed, not a table.
 3. Synthesis. Oscillators (sine, saw, square, triangle, noise, wavetable, band-limited, detune, unison), ADSR

@@ -6,17 +6,16 @@
 //! from shared values (P106); `await job or y` is `try await job else y`.
 //! `go xs.map(f)`, `go for x in xs {…}` and `xs.map(f) @parallel` split their items into tasks (parallel.rs).
 
+use super::words::{FOR_WORD, RETURN_WORD};
 use super::nodes::{call, key};
 use crate::node::{Bracket, Node, Separator};
 use crate::operators::Op;
 
 const GO_WORD: &str = "go";
 const BLOCK_FUNCTION_PREFIX: &str = "go·block·";
-const FOR_WORD: &str = "for";
 /// A go block's parameter is the variable it reads with this suffix: `n` comes in as `n·in`
 const INPUT_SUFFIX: &str = "·in";
 const AFTER_WORD: &str = "after";
-const RETURN_WORD: &str = "return";
 const AWAIT_WORD: &str = "await";
 const AFTER_CONDITION: &str = "after_condition_placeholder";
 const AFTER_VALUE: &str = "after_value_placeholder";
@@ -55,7 +54,7 @@ impl GoBlocks {
 	fn lower(&self, node: Node, known: &[String]) -> Node {
 		match node {
 			// `go { … }`, also inside a call: `jobs.add(go { … })` is `add go {…}`
-			Node::List(items, bracket, separator) if !is_sequence(&separator) && starts_block_at(&items).is_some() => {
+			Node::List(items, bracket, separator) if !separator.separates_statements() && starts_block_at(&items).is_some() => {
 				let at = starts_block_at(&items).expect("guarded");
 				let mut items: Vec<Node> = items.into_iter().map(|item| self.lower(item, known)).collect();
 				items[at] = self.function_of(items[at].clone(), known);
@@ -106,10 +105,6 @@ impl GoBlocks {
 		definitions.push(key(head, Op::Define, block));
 		Node::List([vec![name], inputs.into_iter().map(Node::Symbol).collect()].concat(), Bracket::Round, Separator::None)
 	}
-}
-
-fn is_sequence(separator: &Separator) -> bool {
-	matches!(separator, Separator::Semicolon | Separator::Newline)
 }
 
 struct Phrases {

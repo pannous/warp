@@ -254,31 +254,14 @@ fn format_gc_val(f: &mut std::fmt::Formatter<'_>, store: &mut Store<()>, val: &V
         Val::F32(n) => write!(f, "{}", f32::from_bits(*n)),
         Val::F64(n) => write!(f, "{}", f64::from_bits(*n)),
         Val::AnyRef(Some(anyref)) => {
-            // Try to read as string struct first
             if let Ok(struct_ref) = anyref.clone().unwrap_struct(&*store) {
-                // Check if it's a String struct (ptr/len pattern)
-                if let Ok(struct_type) = struct_ref.ty(&*store) {
-                    if struct_type.fields().len() == 2 {
-                        // Likely a String struct - try to read it
-                        if let Some(inst) = instance {
-                            if let Ok(ptr_val) = struct_ref.field(&mut *store, 0) {
-                                if let Ok(len_val) = struct_ref.field(&mut *store, 1) {
-                                    if let (Some(ptr), Some(len)) = (ptr_val.i32(), len_val.i32()) {
-                                        if let Some(memory) = inst.get_memory(&mut *store, "memory") {
-                                            let mut buf = vec![0u8; len as usize];
-                                            if memory.read(&*store, ptr as usize, &mut buf).is_ok() {
-                                                if let Ok(s) = String::from_utf8(buf) {
-                                                    return write!(f, "'{}'", s);
-                                                }
-                                            }
-                                        }
-                                    }
-                                }
-                            }
-                        }
+                // a two-field struct is likely a $String (ptr, len)
+                let is_pair = struct_ref.ty(&*store).is_ok_and(|ty| ty.fields().len() == 2);
+                if let (true, Some(instance)) = (is_pair, instance) {
+                    if let Ok(text) = gc_string::memory_text(&struct_ref, store, instance) {
+                        return write!(f, "'{}'", text);
                     }
                 }
-                // Nested struct - show as GcObject
                 write!(f, "<struct>")
             } else {
                 write!(f, "<anyref>")

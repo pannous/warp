@@ -3,13 +3,12 @@
 //! this reading: a name the program defines stays its call, and outside a tag block a call of an unbound name stays
 //! the loud error (P92). A comprehension or method call among an element's children gives children (card web-keyed).
 
+use super::words::{FOR_WORD, IN_WORD};
 use super::nodes::key;
 use crate::node::{symbol, Bracket, Node, Separator};
 use crate::operators::Op;
 use std::collections::HashSet;
 
-const FOR_WORD: &str = "for";
-const IN_WORD: &str = "in";
 const ALL_WORD: &str = "all";
 const TAG_ITEM: &str = "tag·item"; // the loop variable of `li all xs`
 /// `form post "/todos" { … }`: a form written as the route it sends to (card g_mSEw)

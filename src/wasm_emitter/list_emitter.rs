@@ -3,6 +3,7 @@
 use crate::analyzer::{call_name, is_statement, is_unbracketed_block, type_word_kind};
 use crate::node::{Bracket, Node, Separator};
 use crate::operators::{is_function_keyword, Op};
+use crate::type_kinds::Kind;
 use wasm_encoder::*;
 use Instruction as I;
 
@@ -21,6 +22,13 @@ const PRINT: &str = "print";
 const PRINT_ARGUMENT_SEPARATOR: &str = " ";
 
 /// The value `print` writes: its one argument, or several joined by a space
+/// The word a list calls: `f a b`, `f(a, b)`, `(f)`; none for a `;`/newline sequence, whose first statement may be a
+/// word of its own (`{beep⏎ play 440}` runs beep, then play; card error-beep)
+pub(super) fn called_word<'a>(items: &'a [Node], bracket: &Bracket, separator: &Separator) -> Option<&'a str> {
+	let calls = (items.len() >= 2 && !separator.separates_statements()) || *bracket == Bracket::Round && items.len() == 1;
+	items.first().filter(|_| calls)?.symbol_name()
+}
+
 fn printed_value(call: &[Node], bracket: &Bracket) -> Node {
 	match crate::warp_parser::print_arguments_of(call, bracket).as_slice() {
 		[single] => juxtaposed_text(single).unwrap_or_else(|| single.clone()),
@@ -107,10 +115,10 @@ impl WasmGcEmitter {
 	}
 
 	/// `f(a, b…)` or `(f)` of a user function, an FFI import or a text builtin
-	fn emit_function_call(&mut self, func: &mut Function, items: &[Node], bracket: &Bracket) -> bool {
-		let Some(Node::Symbol(fn_name)) = items.first().map(Node::drop_meta) else { return false };
+	fn emit_function_call(&mut self, func: &mut Function, items: &[Node], bracket: &Bracket, separator: &Separator) -> bool {
+		let Some(fn_name) = called_word(items, bracket, separator) else { return false };
 		// `(angle)` of a variable is its value
-		if items.len() < 2 && (*bracket != Bracket::Round || self.is_variable(fn_name)) {
+		if items.len() < 2 && self.is_variable(fn_name) {
 			return false;
 		}
 		if self.ctx.user_functions.contains_key(fn_name) {
@@ -231,7 +239,7 @@ impl WasmGcEmitter {
 
 		if items.len() == 1 && *bracket != Bracket::Square {
 			// `f()` of a name bound to nothing is an undefined function (P92); the group `(f)` is its item
-			if !self.emit_function_call(func, items, bracket) && !self.emit_empty_print(func, items) && !self.reject_unresolved_call(func, items, bracket, separator) {
+			if !self.emit_function_call(func, items, bracket, separator) && !self.emit_empty_print(func, items) && !self.reject_unresolved_call(func, items, bracket, separator) {
 				self.emit_node_instructions(func, &items[0]);
 			}
 			return;
@@ -306,7 +314,7 @@ impl WasmGcEmitter {
 			}
 		}
 
-		if self.emit_function_call(func, items, bracket) {
+		if self.emit_function_call(func, items, bracket, separator) {
 			return;
 		}
 
@@ -467,8 +475,7 @@ impl WasmGcEmitter {
 		match crate::type_tests::runtime_kind_mask(spec).filter(|_| unknown && !declared_type) {
 			Some(mask) => {
 				self.emit_node_instructions(func, subject);
-				func.instruction(&I::RefAsNonNull);
-				func.instruction(&I::I64Const(mask));
+				Self::emit_list(func, &[I::RefAsNonNull, I::I64Const(mask)]);
 				self.emit_call(func, crate::type_tests::NODE_KIND_IN);
 			}
 			// an instance's static kind is no type name: its declared type is read at run time
@@ -529,8 +536,7 @@ impl WasmGcEmitter {
 			"type" => {
 				let type_name = self.static_type_name(arg);
 				let (ptr, len) = self.allocate_string(&type_name);
-				func.instruction(&I::I32Const(ptr as i32));
-				func.instruction(&I::I32Const(len as i32));
+				Self::emit_list(func, &[I::I32Const(ptr as i32), I::I32Const(len as i32)]);
 				self.emit_call(func, "new_symbol");
 				true
 			}
@@ -555,20 +561,11 @@ impl WasmGcEmitter {
 			"round_half_up" => {
 				let bits = self.scratch(0);
 				self.emit_float_value(func, arg);
-				func.instruction(&I::I64ReinterpretF64);
-				func.instruction(&I::LocalTee(bits));
-				func.instruction(&I::F64ReinterpretI64);
-				func.instruction(&I::F64Floor);
-				func.instruction(&I::LocalGet(bits));
-				func.instruction(&I::F64ReinterpretI64);
-				func.instruction(&I::LocalGet(bits));
-				func.instruction(&I::F64ReinterpretI64);
-				func.instruction(&I::F64Floor);
-				func.instruction(&I::F64Sub);
-				func.instruction(&I::F64Const(0.5f64.into()));
-				func.instruction(&I::F64Ge);
-				func.instruction(&I::F64ConvertI32U);
-				func.instruction(&I::F64Add);
+				Self::emit_list(func, &[
+					I::I64ReinterpretF64, I::LocalTee(bits), I::F64ReinterpretI64, I::F64Floor, I::LocalGet(bits), I::F64ReinterpretI64,
+					I::LocalGet(bits), I::F64ReinterpretI64, I::F64Floor, I::F64Sub, I::F64Const(0.5f64.into()), I::F64Ge,
+					I::F64ConvertI32U, I::F64Add,
+				]);
 				self.emit_integral_float_as_int(func);
 				true
 			}
@@ -625,12 +622,9 @@ impl WasmGcEmitter {
 		let (quotient, divisor_bits) = (self.scratch(0), self.scratch(1));
 		self.emit_float_value(func, dividend);
 		self.emit_float_value(func, divisor);
-		func.instruction(&I::I64ReinterpretF64);
-		func.instruction(&I::LocalTee(divisor_bits));
-		func.instruction(&I::F64ReinterpretI64);
-		func.instruction(&I::F64Div);
-		func.instruction(&I::I64ReinterpretF64);
-		func.instruction(&I::LocalSet(quotient));
+		Self::emit_list(func, &[
+			I::I64ReinterpretF64, I::LocalTee(divisor_bits), I::F64ReinterpretI64, I::F64Div, I::I64ReinterpretF64, I::LocalSet(quotient),
+		]);
 		// a negative divisor rounds the quotient up, a positive one down
 		Self::emit_list(func, &[
 			I::LocalGet(quotient), I::F64ReinterpretI64, I::F64Ceil,
@@ -849,7 +843,7 @@ impl WasmGcEmitter {
 			self.emit_typed_list_extend(func, &name, &items); // the array itself is dropped, it needs no Node
 		} else if let Some((name, value)) = self.typed_list_store(item) {
 			self.emit_typed_list_store(func, &name, &value); // the array itself is dropped, it needs no Node
-		} else if self.is_float_assignment(item) || self.is_float_call(item) || destructured.is_some_and(|kind| kind.is_float()) {
+		} else if self.is_float_assignment(item) || self.is_float_read(item) || destructured.is_some_and(|kind| kind.is_float()) {
 			self.emit_float_value(func, item); // a float update or a call giving a float (shared_addf), dropped as an f64
 		} else if self.is_ref_update(item) || self.is_output_call(item) || self.is_ref_value(item) || matches!(item.drop_meta(), Node::Empty) || destructured.is_some_and(|kind| kind.is_ref()) {
 			self.emit_node_instructions(func, item);
@@ -863,10 +857,14 @@ impl WasmGcEmitter {
 		self.emit_discarded_statement(func, item, Self::emit_node_instructions);
 	}
 
-	/// A call giving a float (`shared_addf(xs, i, v)`)
-	fn is_float_call(&self, node: &Node) -> bool {
-		matches!(node.drop_meta(), Node::List(items, Bracket::Round, _) if matches!(items.first().map(Node::drop_meta), Some(Node::Symbol(_))))
-			&& self.get_type(node).is_float()
+	/// A call or an element read giving a float (`shared_addf(xs, i, v)`, `levels[i]` of a list of floats)
+	fn is_float_read(&self, node: &Node) -> bool {
+		let read = match node.drop_meta() {
+			Node::List(items, Bracket::Round, _) => matches!(items.first().map(Node::drop_meta), Some(Node::Symbol(_))),
+			Node::Key(list, Op::Hash, _) => !matches!(list.drop_meta(), Node::Empty),
+			_ => false,
+		};
+		read && self.get_type(node).is_float()
 	}
 
 	/// Statements whose last value is an exact number (`{i*10}`, `{puti(i)}`): none that `emit_discarded_statement`
@@ -874,7 +872,7 @@ impl WasmGcEmitter {
 	pub(super) fn ends_in_number(&self, statements: &[Node]) -> bool {
 		statements.last().is_some_and(|last| {
 			!self.is_float_assignment(last) && !self.is_ref_update(last) && !self.is_ref_value(last)
-				&& self.typed_list_store(last).is_none() && !self.get_type(last).is_ref() && !self.is_float_call(last)
+				&& self.typed_list_store(last).is_none() && !self.get_type(last).is_ref() && !self.is_float_read(last)
 		})
 	}
 
@@ -939,6 +937,8 @@ impl WasmGcEmitter {
 			// `c + 1` of a text c in a loop body is a text, "a1" (card loop-text)
 			Node::Symbol(_) | Node::List(_, Bracket::Round, _) => self.get_type(item).is_ref(),
 			Node::Key(_, op, _) if op.is_arithmetic() => self.get_type(item).is_ref(),
+			// `levels[i]` of a list a function gave: an element held as a Node, whatever number it is
+			Node::Key(list, Op::Hash, _) if !matches!(list.drop_meta(), Node::Empty) => matches!(self.get_type(item), Kind::Empty) || self.get_type(item).is_ref(),
 			_ => false,
 		}
 	}

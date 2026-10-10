@@ -6,7 +6,8 @@
 //! instance is known, `<`, `==` and operation calls call the witness and a missing conformance is a compile error naming
 //! the fix; elsewhere node_order asks the runtime witness table (wasm_emitter/witness.rs).
 
-use super::nodes::{call, key};
+use super::words::{FOR_WORD, IN_WORD};
+use super::nodes::{call, children_rewritten, if_then, if_then_else, key};
 use crate::analyzer::{call_name, collect_all_types};
 use crate::diagnostic::Diagnostic;
 use crate::node::{symbol, Bracket, Node, Separator};
@@ -21,8 +22,6 @@ use std::collections::HashMap;
 pub const TRAIT_KEYWORDS: [&str; 8] = ["trait", "interface", "protocol", "typeclass", "prototype", "capability", "aspect", "feature"];
 pub const WITNESS_SEPARATOR: char = '·';
 const SORT_WORD: &str = "sort";
-const FOR_WORD: &str = "for";
-const IN_WORD: &str = "in";
 /// The annotation `xs: T list` (analyzer::with_list_annotation)
 const LIST_OF_PREFIX: &str = "list of ";
 /// The parameter name a fix shows for an operation declared without parameters, `trait shape{area}`
@@ -105,6 +104,11 @@ pub fn is_builtin_trait(name: &str) -> bool {
 /// The function that implements `operation` for the declared type `type_name`
 pub fn witness_name(operation: &str, type_name: &str) -> String {
 	format!("{operation}{WITNESS_SEPARATOR}{type_name}")
+}
+
+/// The operation of a witness name, `agent` for `agent·1`; a name that is none is its own
+pub fn witness_operation(name: &str) -> &str {
+	name.split_once(WITNESS_SEPARATOR).map_or(name, |(operation, _)| operation)
 }
 
 /// The declared type of a witness name, `person` for `compare·person`
@@ -363,12 +367,7 @@ fn declare(node: Node, errors: &mut Vec<Node>) -> Node {
 			}
 		};
 	}
-	match node {
-		Node::Key(left, op, right) => key(declare(*left, errors), op, declare(*right, errors)),
-		Node::List(items, bracket, separator) => Node::List(items.into_iter().map(|item| declare(item, errors)).collect(), bracket, separator),
-		Node::Meta { node, data } => Node::Meta { node: Box::new(declare(*node, errors)), data },
-		other => other,
-	}
+	children_rewritten(node, |child| declare(child, errors))
 }
 
 /// `trait shape{area perimeter}`, `interface shape{area(s)}`: the trait, or the error of an operation it cannot take yet
@@ -414,10 +413,7 @@ fn operation(requirement: &Node) -> Option<Operation> {
 		Node::Symbol(name) => (name.clone(), vec![DEFAULT_PARAMETER.to_string()]),
 		Node::List(items, Bracket::Round, _) => {
 			let Node::Symbol(name) = items.first()?.drop_meta() else { return None };
-			let parameters: Option<Vec<String>> = items[1..].iter().map(|parameter| match parameter.drop_meta() {
-				Node::Symbol(parameter) => Some(parameter.clone()),
-				_ => None,
-			}).collect();
+			let parameters: Option<Vec<String>> = items[1..].iter().map(|parameter| parameter.symbol_name().map(String::from)).collect();
 			(name.clone(), parameters.filter(|parameters| !parameters.is_empty())?)
 		}
 		_ => return None,
@@ -430,7 +426,7 @@ fn operation(requirement: &Node) -> Option<Operation> {
 /// Rust's `fn area(&self) -> f64`: the operation `area(x)` (the result type and parameter types dropped)
 fn foreign_signature(requirement: &Node) -> Option<Operation> {
 	let (name, parameters) = signature_call(requirement)?;
-	let is_receiver = |parameter: &Node| matches!(parameter.drop_meta(), Node::Symbol(word) if word == SELF_WORD) || matches!(parameter.drop_meta(), Node::Key(_, _, word) if word.drop_meta().name() == SELF_WORD);
+	let is_receiver = |parameter: &Node| parameter.is_symbol(SELF_WORD) || matches!(parameter.drop_meta(), Node::Key(_, _, word) if word.drop_meta().name() == SELF_WORD);
 	let names = parameters.iter().filter(|parameter| !is_receiver(parameter)).map(|parameter| match parameter.drop_meta() {
 		Node::Key(name, Op::Colon, _) => Some(name.drop_meta().name()),
 		Node::Symbol(name) => Some(name.clone()),
@@ -486,10 +482,7 @@ fn with_conformance_tests(node: Node, names: &[String]) -> Node {
 			let subject = with_conformance_tests(*subject, names);
 			call(crate::type_tests::IS_TYPE, vec![subject, Node::Text(right.drop_meta().name())])
 		}
-		Node::Key(left, op, right) => key(with_conformance_tests(*left, names), op, with_conformance_tests(*right, names)),
-		Node::List(items, bracket, separator) => Node::List(items.into_iter().map(|item| with_conformance_tests(item, names)).collect(), bracket, separator),
-		Node::Meta { node, data } => Node::Meta { node: Box::new(with_conformance_tests(*node, names)), data },
-		other => other,
+		other => children_rewritten(other, |child| with_conformance_tests(child, names)),
 	}
 }
 
@@ -542,10 +535,7 @@ fn conform(node: Node, registry: &TypeRegistry, traits: &Traits) -> Node {
 			};
 			key(head, op, conform(body, registry, traits))
 		}
-		Node::Key(left, op, right) => key(conform(*left, registry, traits), op, conform(*right, registry, traits)),
-		Node::List(items, bracket, separator) => Node::List(items.into_iter().map(|item| conform(item, registry, traits)).collect(), bracket, separator),
-		Node::Meta { node, data } => Node::Meta { node: Box::new(conform(*node, registry, traits)), data },
-		other => other,
+		other => children_rewritten(other, |child| conform(child, registry, traits)),
 	}
 }
 
@@ -596,10 +586,7 @@ pub struct TypedAs(pub String);
 fn typed_uses(node: Node, parameter: &str, type_name: &str) -> Node {
 	match node {
 		Node::Symbol(name) if name == parameter => Node::meta(Node::Symbol(name), Node::data(TypedAs(type_name.to_string()))),
-		Node::Key(left, op, right) => key(typed_uses(*left, parameter, type_name), op, typed_uses(*right, parameter, type_name)),
-		Node::List(items, bracket, separator) => Node::List(items.into_iter().map(|item| typed_uses(item, parameter, type_name)).collect(), bracket, separator),
-		Node::Meta { node, data } => Node::Meta { node: Box::new(typed_uses(*node, parameter, type_name)), data },
-		other => other,
+		other => children_rewritten(other, |child| typed_uses(child, parameter, type_name)),
 	}
 }
 
@@ -695,12 +682,7 @@ fn without_claims(node: Node, traits: &Traits) -> Node {
 	if let Some((declaration, _)) = claim(&node, traits) {
 		return declaration.clone();
 	}
-	match node {
-		Node::Key(left, op, right) => key(without_claims(*left, traits), op, without_claims(*right, traits)),
-		Node::List(items, bracket, separator) => Node::List(items.into_iter().map(|item| without_claims(item, traits)).collect(), bracket, separator),
-		Node::Meta { node, data } => Node::Meta { node: Box::new(without_claims(*node, traits)), data },
-		other => other,
-	}
+	children_rewritten(node, |child| without_claims(child, traits))
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -837,6 +819,12 @@ impl InstanceTypes {
 		self.registry.types().iter().any(|type_def| type_def.fields.iter().any(|field| field.name == name))
 	}
 
+	/// Does `list` hold instances of a declared type with the field `name`: `people.name` then reads it of each
+	pub fn is_element_field(&self, list: &Node, name: &str) -> bool {
+		let Some(Shape::ListOf(type_name)) = self.shape(list) else { return false };
+		self.registry.get_by_name(&type_name).is_some_and(|type_def| type_def.fields.iter().any(|field| field.name == name))
+	}
+
 	/// The shape of an expression, when it is known to hold instances of one declared type
 	pub fn shape(&self, node: &Node) -> Option<Shape> {
 		if let Some((name, _)) = instance_parts(node) {
@@ -970,9 +958,7 @@ fn dispatcher(operation: &str, arity: usize, types: &[String]) -> Node {
 	let witness = |type_name: &str| witness_call(operation, type_name, parameters.clone());
 	let body = checked.iter().rev().fold(witness(last), |otherwise, type_name| {
 		let test = call(INSTANCE_OF, vec![parameters[0].clone(), Node::Text(type_name.clone())]);
-		let condition = key(Node::Empty, Op::If, test);
-		let then = key(condition, Op::Then, witness(type_name));
-		key(then, Op::Else, otherwise)
+		if_then_else(test, witness(type_name), otherwise)
 	});
 	// the first parameter is an instance of some type: held as a Node, like a parameter `s:square`
 	let instance = key(parameters[0].clone(), Op::Colon, Node::meta(symbol(DISPATCH), Node::data(Instance)));
@@ -1240,8 +1226,7 @@ fn position_by_equals(list: &Node, element: &Node, type_name: &str) -> Node {
 	let assign = |target: &Node, value: Node| key(target.clone(), Op::Assign, value);
 	let equal = key(witness_call(EQUALS, type_name, vec![item.clone(), element.clone()]), Op::Ne, Node::int(0));
 	let first = key(found.clone(), Op::Eq, Node::int(0));
-	let condition = key(Node::Empty, Op::If, key(first, Op::And, equal));
-	let found_it = key(condition, Op::Then, Node::List(vec![assign(&found, at.clone())], Bracket::Curly, Separator::None));
+	let found_it = if_then(key(first, Op::And, equal), Node::List(vec![assign(&found, at.clone())], Bracket::Curly, Separator::None));
 	let step = assign(&at, key(at.clone(), Op::Add, Node::int(1)));
 	let body = Node::List(vec![step, found_it], Bracket::Curly, Separator::Semicolon);
 	let search = Node::List(vec![symbol(FOR_WORD), item, symbol(IN_WORD), list.clone(), body], Bracket::None, Separator::Space);

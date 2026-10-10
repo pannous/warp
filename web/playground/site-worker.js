@@ -9,7 +9,7 @@
 const SITE_SCRIPTS = new URL(self.location.href).searchParams.get("scripts").split(",");
 importScripts(...SITE_SCRIPTS);
 self.siteScripts = SITE_SCRIPTS; // the task Workers load the same (host-tasks.js addTaskWorker)
-prepareTaskPool();
+self.prepareTaskPool?.(); // host-tasks.js, which a site that only paints does not ship (card site-frames)
 
 const PAGE_HTML = "page·html";
 let site; // the program's run (host.js runProgram's holder)
@@ -22,6 +22,7 @@ const hooks = {
 	pagePath: () => pagePath,
 	instantiated: holder => { site = holder; },
 	print: (text, stream) => post({ print: { text, stream } }),
+	paint: (pixels, width, height) => post({ paint: { pixels, width, height } }), // shown by the page (site-thread.js)
 	listen: holder => holder.timers && startTimers(holder, handler => showAfter(runTimer(holder, hooks, handler))), // host-timers.js
 	arrived: (holder, handler) => holder === site && showAfter(runTimer(holder, hooks, handler)),
 };
@@ -43,13 +44,13 @@ function pageMarkup() {
 }
 
 async function start({ module, stored, session, path, replies }) {
-	serverReplies.push(...JSON.parse(replies ?? "[]")); // host-tasks.js: a page a server rendered for its path (P221)
+	if (replies) serverReplies.push(...JSON.parse(replies)); // host-tasks.js: a page a server rendered for its path (P221)
 	Object.assign(storedValues, stored);
 	Object.assign(sessionValues, session);
 	await self.loadDatabase?.(); // host-files.js, when the program keeps values
 	pagePath = path;
 	const bytes = new Uint8Array(await (await fetch(module)).arrayBuffer());
-	await taskPoolReady(); // tasks run on loaded Workers, not inline
+	await self.taskPoolReady?.(); // tasks run on loaded Workers, not inline
 	const holder = instantiateProgram(bytes, hooks);
 	if (holder.failure) return post({ failure: holder.failure });
 	await globalThis.loadRouteModule?.(holder);
@@ -64,6 +65,7 @@ async function goTo(path) {
 }
 
 self.onmessage = ({ data }) => {
+	if (data.pointer) return self.pagePointer = sharedPointer(data.pointer); // host.js system_value
 	if (data.start) return start(data.start);
 	if (data.navigate !== undefined) return goTo(data.navigate).catch(failure => post({ failure: String(failure.message ?? failure) }));
 	if (data.event && site?.exports[`on·${data.event}·node`]) showAfter(runPageEvent(site, hooks, data.event, data.detail));

@@ -8,7 +8,7 @@
 //! - `f(**m)` spreads an object: into a `**kw` parameter it is the object, into fixed parameters the fields named like
 //!   the parameters the other arguments leave, `g(1, **m)` → `g(1, b=m.b)`.
 
-use super::nodes::key;
+use super::nodes::{children_rewritten, key, parameter_name};
 use crate::analyzer::call_name;
 use crate::node::{symbol, Bracket, Node, Separator};
 use crate::operators::Op;
@@ -47,10 +47,7 @@ fn starred(node: &Node) -> Option<String> {
 			Node::Key(_, Op::To, end) if matches!(end.drop_meta(), Node::Empty) => Some(name.name()),
 			_ => starred(name),
 		},
-		Node::Key(name, Op::To, end) if matches!(end.drop_meta(), Node::Empty) => match name.drop_meta() {
-			Node::Symbol(name) => Some(name.clone()),
-			_ => None,
-		},
+		Node::Key(name, Op::To, end) if matches!(end.drop_meta(), Node::Empty) => name.symbol_name().map(String::from),
 		_ => None,
 	}
 }
@@ -106,14 +103,6 @@ fn collect_signatures(node: &Node, signatures: &mut HashMap<String, Signature>) 
 	});
 }
 
-fn parameter_name(parameter: &Node) -> Option<String> {
-	match parameter.drop_meta() {
-		Node::Symbol(name) => Some(name.clone()),
-		Node::Key(name, _, _) => parameter_name(name),
-		_ => None,
-	}
-}
-
 /// `a=1`, `a: 1` in a call: the name a and the value
 fn named_argument(argument: &Node) -> Option<(String, Node)> {
 	match argument.drop_meta() {
@@ -159,10 +148,7 @@ impl Variadic {
 		}
 		match node {
 			Node::List(items, bracket, separator) if self.is_call(&items, &bracket, &separator) => self.call(items),
-			Node::Key(left, op, right) => key(self.rewrite(*left), op, self.rewrite(*right)),
-			Node::List(items, bracket, separator) => Node::List(items.into_iter().map(|item| self.rewrite(item)).collect(), bracket, separator),
-			Node::Meta { node, data } => Node::Meta { node: Box::new(self.rewrite(*node)), data },
-			other => other,
+			other => children_rewritten(other, |child| self.rewrite(child)),
 		}
 	}
 

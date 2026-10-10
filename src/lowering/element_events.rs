@@ -5,12 +5,12 @@
 //! `input{ bind: name }` (card web-bind) is `input{ value: name on input { name = event.value } }`; a checkbox or radio
 //! binds `checked` to `event.checked`.
 
+use super::words::ON_WORD;
 use super::nodes::key;
 use crate::event_signals::{ELEMENT_EVENT_JOINER, PAGE_EVENTS};
 use crate::node::{symbol, Bracket, Node, Separator};
 use crate::operators::Op;
 
-const ON_WORD: &str = "on";
 const BIND_WORD: &str = "bind";
 const INPUT_EVENT: &str = "input";
 const TYPE_ATTRIBUTE: &str = "type";
@@ -46,7 +46,7 @@ pub(crate) fn has_element_handler(node: &Node) -> bool {
 /// `bind: name` at `index` of an element's items: the bound variable
 fn bound_at(items: &[Node], index: usize) -> Option<Node> {
 	match items.get(index)?.drop_meta() {
-		Node::Key(word, Op::Colon, variable) if matches!(word.drop_meta(), Node::Symbol(word) if word == BIND_WORD) => Some(variable.as_ref().clone()),
+		Node::Key(word, Op::Colon, variable) if word.is_symbol(BIND_WORD) => Some(variable.as_ref().clone()),
 		_ => None,
 	}
 }
@@ -88,7 +88,7 @@ pub(crate) fn with_element_items(node: Node, rewrite: impl FnOnce(Vec<Node>) -> 
 
 /// `on click {…}` at `index` of a tag's items, as a block reads it (`on`, then `click: {…}`) or as a statement does
 pub(crate) fn handler_at(items: &[Node], index: usize) -> Option<(String, Node, usize)> {
-	if !matches!(items.get(index)?.drop_meta(), Node::Symbol(word) if word == ON_WORD) {
+	if !items.get(index)?.is_symbol(ON_WORD) {
 		return None;
 	}
 	let event_name = |node: &Node| match node.drop_meta() {

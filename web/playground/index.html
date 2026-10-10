@@ -33,6 +33,7 @@
 	<script src="version.js" onerror="window.PLAYGROUND_VERSION = null"></script>
 	<script src="markup.js"></script>
 	<script src="markup-transitions.js"></script>
+	<script src="canvas.js"></script>
 	<script src="assistant.js" defer></script>
 	<script src="completion.js" defer></script>
 	<script src="shortcuts.js" defer></script>
@@ -49,6 +50,7 @@
 		<summary title="more">⋯</summary>
 		<div class="tools-menu">
 			<p><button id="download" title="the WebAssembly module of the last run">⤓ download the wasm</button></p>
+			<p id="written-files" title="the files the program rendered (render_sound)" hidden></p>
 			<p>Put the program's routes (<code>get "/" {…}</code>) on the web as
 				<input id="deploy-name" class="deploy-name" autocomplete="off" spellcheck="false" placeholder="name"><br/>
 				<button id="deploy" title="log in with GitHub; it answers at https://warp-<name>.pannous.workers.dev">☁ Deploy</button>
@@ -107,6 +109,7 @@
 		</section>
 		<section id="assistant" class="assistant-pane" hidden>
 			<div id="chat-log" class="chat-log"></div>
+			<button id="chat-clear" class="chat-clear" type="button" title="clear the chat: its questions, answers and what Claude remembers of it" aria-label="clear the chat">✕</button>
 			<form id="chat-form" class="chat-form"><input id="chat-input" placeholder="ask about this program…" aria-label="question"><button>send</button></form>
 		</section>
 	</div>

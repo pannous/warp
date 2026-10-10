@@ -63,7 +63,7 @@ fn optional(name: Node) -> Node {
 }
 
 fn is_maybe(node: &Node) -> bool {
-	matches!(node.drop_meta(), Node::Symbol(word) if word == MAYBE_WORD)
+	node.is_symbol(MAYBE_WORD)
 }
 
 /// `maybe x`, `maybe int x`, `x: maybe int` among the parameters (also spaced in one item): `x=ø`

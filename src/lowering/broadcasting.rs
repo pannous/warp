@@ -3,10 +3,14 @@
 //! a list literal is mapped (`square xs` → `map xs square`). A function of one parameter broadcasts when the parameter is
 //! declared with a scalar type (`x:int`, `square number`, P50) or, undeclared, is an arithmetic operand of the body; a
 //! function of a list (`count(xs)`, `xs#2`, `xs:list`) takes the list whole. Operators never broadcast (`[1 2 3]*2`).
+//! A field read on a list of instances reads it of each: `people's name`, `people.name`, `name of people` are
+//! `people.map(p => p.name)` (card people-map).
 
-use super::nodes::{call, key};
+use super::words::{MAP_WORD, OF_WORD, SUM_WORD};
+use super::nodes::{call, is_colon_pair, key};
 use crate::analyzer::{annotated_kind, list_element_type};
 use crate::function_values::{definitions, Definition};
+use crate::traits::InstanceTypes;
 use crate::type_kinds::Kind;
 use crate::lambdas::IMPLICIT_PARAMETER;
 use crate::node::{symbol, Bracket, Node, Separator};
@@ -14,7 +18,6 @@ use crate::operators::Op;
 use std::collections::{HashMap, HashSet};
 
 const ARITHMETIC: [Op; 6] = [Op::Add, Op::Sub, Op::Mul, Op::Div, Op::Mod, Op::Pow];
-const MAP_WORD: &str = "map";
 const ALL_WORD: &str = "all";
 /// Methods that append to a list variable (analyzer APPEND_METHODS)
 pub(crate) const APPEND_METHODS: [&str; 3] = ["add", "append", "push"];
@@ -37,7 +40,6 @@ pub(crate) const PAIRED_COUNT: &str = "(if #LEFT == #RIGHT then #LEFT else raise
 /// `sum(xs .* ys)` and `sum(xs .* 3)` fused into one loop, no list of the products built (5–20× faster, notes/gpu.md)
 pub(crate) const PAIRED_SUM_TEMPLATE: &str = "(LEFT = paired_left; RIGHT = paired_right; SUM = 0; for paired_index in 1 to COUNT { SUM = SUM + paired_item }; SUM)";
 const FUSED_SUM_TEMPLATE: &str = "(ITEMS = fused_list; SUM = 0; for ITEM in ITEMS { SUM = SUM + fused_item }; SUM)";
-const SUM_WORD: &str = "sum";
 /// `dot(xs, ys)` is `sum(xs .* ys)`, unless the program defines dot; `xs * ys` of two lists is the same
 const DOT_WORD: &str = "dot";
 
@@ -108,14 +110,14 @@ fn all_calls(node: Node) -> Node {
 /// `all xs` as an argument: xs
 fn all_marked(argument: &Node) -> Option<&Node> {
 	match argument.drop_meta() {
-		Node::List(words, Bracket::None, Separator::Space) if words.len() == 2 && matches!(words[0].drop_meta(), Node::Symbol(word) if word == ALL_WORD) => Some(&words[1]),
+		Node::List(words, Bracket::None, Separator::Space) if words.len() == 2 && words[0].is_symbol(ALL_WORD) => Some(&words[1]),
 		_ => None,
 	}
 }
 
 /// The function and the list of `f all xs`, also as the parser nests a known function's argument, `f (all xs)`
 pub(crate) fn all_call_parts(items: &[Node]) -> Option<(&Node, &Node)> {
-	let is_all = |node: &Node| matches!(node.drop_meta(), Node::Symbol(word) if word == ALL_WORD);
+	let is_all = |node: &Node| node.is_symbol(ALL_WORD);
 	match items {
 		[function, all, list] if is_all(all) => Some((function, list)),
 		// `square (all xs)` as the parser nests a known function's argument, `(square all) xs` as a value
@@ -281,7 +283,20 @@ pub fn lower(program: Node) -> Node {
 	let list_variables = assigned.into_iter().filter(|(_, only_lists)| *only_lists).map(|(name, _)| name).collect();
 	let scalar_parameters = found.iter().map(|definition| (definition.name.clone(), definition.params.iter().map(|param| takes_a_scalar(param, &definition.body)).collect())).collect();
 	let [defines_dot, defines_sum] = [DOT_WORD, SUM_WORD].map(|word| defined.contains(&word.to_string()));
-	Broadcast { functions: broadcasting, list_variables, scalar_parameters, defines_dot, defines_sum, paired: Default::default(), shadowed: Default::default() }.rewrite(program)
+	let instances = element_shapes(&program);
+	Broadcast { functions: broadcasting, list_variables, scalar_parameters, defines_dot, defines_sum, instances, paired: Default::default(), shadowed: Default::default() }.rewrite(program)
+}
+
+/// The shapes of the program's variables as type_constructor (a later pass) will construct its instances, for a program
+/// that reads a field by name (`x.name`, `x's name`, `name of x`); None for any other
+fn element_shapes(program: &Node) -> Option<InstanceTypes> {
+	let mut reads_a_field = false;
+	program.visit(&mut |part| match part {
+		Node::Key(_, Op::Dot, field) => reads_a_field |= field.symbol_name().is_some(),
+		Node::List(items, _, _) => reads_a_field |= matches!(items.as_slice(), [_, of, _] if of.is_symbol(OF_WORD)),
+		_ => {}
+	});
+	reads_a_field.then(|| InstanceTypes::of(&crate::type_constructor::lower(program.clone())))
 }
 
 /// `map(list, broadcast_item => applied(broadcast_item))`
@@ -378,7 +393,7 @@ fn collect_list_variables(node: &Node, functions: &HashSet<String>, assigned: &m
 				}
 				let declared_list = declared_type.is_some_and(|type_node| list_element_type(&type_node.serialize()).is_some());
 				let is_list = declared_list || match value.drop_meta() {
-					Node::List(items, Bracket::Square, _) => !items.iter().any(is_pair),
+					Node::List(items, Bracket::Square, _) => !items.iter().any(is_colon_pair),
 					_ if is_range(value) => true,
 					_ if element_wise_parts(value).is_some() => true,
 					_ if crate::analyzer::typed_array_value(value).is_some() => true,
@@ -421,9 +436,6 @@ fn is_broadcast_over(value: &Node, variable: &str, functions: &HashSet<String>) 
 	broadcasting_call(items, bracket, separator, functions).is_some_and(|(_, argument)| matches!(argument.drop_meta(), Node::Symbol(same) if same == variable))
 }
 
-fn is_pair(node: &Node) -> bool {
-	matches!(node.drop_meta(), Node::Key(_, Op::Colon, _))
-}
 
 struct Broadcast {
 	functions: HashSet<String>,
@@ -432,6 +444,8 @@ struct Broadcast {
 	scalar_parameters: HashMap<String, Vec<bool>>,
 	defines_dot: bool,
 	defines_sum: bool,
+	/// The shapes of the program's variables: which field reads map over a list of instances
+	instances: Option<InstanceTypes>,
 	/// element-wise operators between two lists so far: each holds its lists under names of its own
 	paired: std::cell::Cell<usize>,
 	/// The untyped parameters of the functions being rewritten: their own values, not the program's list variables of
@@ -466,6 +480,10 @@ impl Broadcast {
 				}).collect();
 				self.broadcast_call(&items, &bracket, &separator)
 					.or_else(|| self.broadcast_one_argument(&items, &bracket, &separator))
+					.or_else(|| match items.as_slice() {
+						[field, of, list] if of.is_symbol(OF_WORD) => self.element_fields(list, field),
+						_ => None,
+					})
 					.unwrap_or(Node::List(items, bracket, separator))
 			}
 			Node::Key(left, op, right) if matches!(left.drop_meta(), Node::Empty) && SCALAR_OPERATORS.contains(&op) => {
@@ -487,7 +505,7 @@ impl Broadcast {
 				if op == Op::Mul && self.is_list(&left) && self.is_list(&right) {
 					return self.inner_product(*left, *right);
 				}
-				let method_call = (op == Op::Dot).then(|| self.broadcast_method(&left, &right)).flatten();
+				let method_call = (op == Op::Dot).then(|| self.broadcast_method(&left, &right).or_else(|| self.element_fields(&left, &right))).flatten();
 				method_call.unwrap_or(Node::Key(left, op, right))
 			}
 			Node::Meta { node, data } => Node::Meta { node: Box::new(self.rewrite(*node)), data },
@@ -526,6 +544,15 @@ impl Broadcast {
 			return None;
 		}
 		self.broadcast_call(&[Node::Symbol(name.clone()), receiver.clone()], &Bracket::Round, &Separator::None)
+	}
+
+	/// `people.name` of a list of instances whose type declares the field name: `map(people, item => item.name)`; a list's
+	/// own words (`people.count`) and a parameter of the same name as the list stay as they are
+	fn element_fields(&self, list: &Node, field: &Node) -> Option<Node> {
+		let name = field.symbol_name()?;
+		let shadowed = list.symbol_name().is_some_and(|variable| self.shadowed.borrow().iter().any(|parameter| parameter == variable));
+		let is_list_word = crate::library_words::is_library_word(name);
+		(!shadowed && !is_list_word && self.instances.as_ref().is_some_and(|instances| instances.is_element_field(list, name))).then(|| each_item(list.clone(), |item| key(item, Op::Dot, field.clone())))
 	}
 
 	/// A list variable or a range: `sqrt xs`, `sqrt (1 to 4)` map over its items
@@ -610,7 +637,7 @@ impl Broadcast {
 	/// `dot(xs, ys)`: `sum(xs .* ys)`
 	fn dot(&self, items: &[Node], bracket: &Bracket) -> Option<Node> {
 		let [head, left, right] = items else { return None };
-		if self.defines_dot || *bracket != Bracket::Round || !matches!(head.drop_meta(), Node::Symbol(word) if word == DOT_WORD) {
+		if self.defines_dot || *bracket != Bracket::Round || !head.is_symbol(DOT_WORD) {
 			return None;
 		}
 		Some(self.inner_product(left.clone(), right.clone()))
@@ -625,7 +652,7 @@ impl Broadcast {
 	/// A list literal that is no object, or a variable only ever assigned one
 	fn is_list(&self, node: &Node) -> bool {
 		match node.drop_meta() {
-			Node::List(elements, Bracket::Square, _) => !elements.is_empty() && !elements.iter().any(is_pair),
+			Node::List(elements, Bracket::Square, _) => !elements.is_empty() && !elements.iter().any(is_colon_pair),
 			_ => self.is_list_value(node),
 		}
 	}
@@ -634,7 +661,7 @@ impl Broadcast {
 	fn broadcast_operator(&self, op: Op, argument: &Node) -> Option<Node> {
 		let applied = |element: Node| key(Node::Empty, op, element);
 		match argument.drop_meta() {
-			Node::List(elements, Bracket::Square, separator) if !elements.is_empty() && !elements.iter().any(is_pair) => {
+			Node::List(elements, Bracket::Square, separator) if !elements.is_empty() && !elements.iter().any(is_colon_pair) => {
 				Some(Node::List(elements.iter().cloned().map(applied).collect(), Bracket::Square, separator.clone()))
 			}
 			_ if self.is_list_value(argument) => Some(each_item(argument.clone(), applied)),
@@ -732,10 +759,7 @@ fn untyped_parameters(head: &Node, op: Op) -> Vec<String> {
 		(Node::List(items, _, _), _) => flattened(items),
 		(single, _) => vec![single.clone()],
 	};
-	parameters.iter().filter_map(|parameter| match parameter.drop_meta() {
-		Node::Symbol(name) => Some(name.clone()),
-		_ => None,
-	}).collect()
+	parameters.iter().filter_map(|parameter| parameter.symbol_name().map(String::from)).collect()
 }
 
 /// Whether `name` appears in body only as an operand of arithmetic or as an element-wise receiver

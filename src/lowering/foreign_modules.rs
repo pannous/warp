@@ -4,7 +4,8 @@
 //! (an empty argument list is ø on the way, so whether it is a call is said apart).
 //! Values cross as JSON; the result is any Node.
 
-use super::nodes::{call, key};
+use super::words::FOR_WORD;
+use super::nodes::{call, children_rewritten, key};
 use crate::node::{symbol, text, Bracket, Node, Separator};
 use crate::operators::Op;
 use std::collections::HashMap;
@@ -172,7 +173,7 @@ fn has_component(path: &str, known: &[String]) -> bool {
 /// `use python "math"` → (alias math, (python, math)); `use python "os.path" as path` → (path, (python, os.path))
 fn foreign_use(items: &[Node]) -> Option<(String, (String, String))> {
 	let [word, runtime, module] = items else { return None };
-	if !matches!(word.drop_meta(), Node::Symbol(word) if word == USE_WORD) {
+	if !word.is_symbol(USE_WORD) {
 		return None;
 	}
 	let Node::Symbol(runtime) = runtime.drop_meta() else { return None };
@@ -248,7 +249,6 @@ fn is_warp_method(name: &str) -> bool {
 /// The module of operators every runtime offers (Python's operator plus len and list, the loops' own in JS)
 const OPERATOR_MODULE: &str = "operator";
 const COUNTING_WORDS: [&str; 4] = ["count", "len", "length", "size"];
-const FOR_WORD: &str = "for";
 
 /// The operator function an infix operator forwards to: `a * 2` of a handle is `operator.mul(a, 2)`
 fn operator_member(op: &Op) -> Option<&'static str> {
@@ -520,10 +520,7 @@ impl Foreign<'_> {
 				}
 				Node::Key(target, op, Box::new(value))
 			}
-			Node::Key(left, op, right) => key(self.rewrite(*left), op, self.rewrite(*right)),
-			Node::List(items, bracket, separator) => Node::List(items.into_iter().map(|item| self.rewrite(item)).collect(), bracket, separator),
-			Node::Meta { node, data } => Node::Meta { node: Box::new(self.rewrite(*node)), data },
-			other => other,
+			other => children_rewritten(other, |child| self.rewrite(child)),
 		}
 	}
 }

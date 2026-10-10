@@ -44,6 +44,7 @@ mod test_remove_and_index_of;
 mod test_find_any_all;
 mod test_set_past_the_end;
 mod test_number_keys;
+mod test_map_literal_number_keys; // card map-literal
 pub(crate) mod test_int_map; // card int-map
 mod test_byte_size;
 mod test_long_list_result;
@@ -85,3 +86,4 @@ mod test_object_list_walk; // orm identity map: index walks of object lists
 mod test_count_after_function; // card print-people
 mod test_range_in_structure;
 mod test_word_slices;
+mod test_number_list_elements; // card winamp-like

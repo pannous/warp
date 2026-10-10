@@ -2,7 +2,8 @@
 //! `(made = []; for x in xs { if c { made.push(x * x) } }; made)`. Lowered first, so the loop and the push go through
 //! every later pass like written ones. `xs where it > 1` filters like `[it for it in xs if it > 1]`.
 
-use super::nodes::{is_word, key};
+use super::words::{FOR_WORD, IN_WORD};
+use super::nodes::key;
 use crate::library_words::substitute;
 use crate::node::{symbol, Bracket, Node, Separator};
 use crate::operators::Op;
@@ -10,10 +11,13 @@ use crate::warp_parser::parse;
 use std::cell::Cell;
 use std::collections::{HashMap, HashSet};
 
-const FOR_WORD: &str = "for";
-const IN_WORD: &str = "in";
 const IF_WORD: &str = "if";
-const WHERE_WORD: &str = "where";
+const WHERE_KEYWORD: &str = "where";
+/// `people with age > 20`: `where` of a list of a class's instances
+const WITH_WORD: &str = "with";
+const OF_WORD: &str = "of";
+/// The element `name of people` reads the field of
+const OF_ELEMENT: &str = "of·element";
 /// The element a `where` condition reads as `it`
 const WHERE_ELEMENT: &str = "where·element";
 pub(crate) const MADE: &str = "comprehension_list";
@@ -31,8 +35,8 @@ pub fn lower(node: Node) -> Node {
 /// `xs where it > 1` as the comprehension `[it for it in xs if it > 1]`; before welcome_forms reads `xs where …` as
 /// juxtaposed words. A condition not reading `it` is an error: it would filter nothing it can name.
 pub fn lower_where(node: Node) -> Node {
-	let node = where_reassociated(node);
 	let mut lists = Lists::of(&node);
+	let node = where_reassociated(with_as_where(node, &lists));
 	let filtered = where_filters(node, &mut lists);
 	crate::database_tables::with_filter_functions(filtered, lists.tables)
 }
@@ -59,7 +63,7 @@ impl Lists {
 				}
 			}
 			Node::Key(target, Op::Assign | Op::Define, _) => variables.extend(bound_names(target)),
-			Node::List(words, _, _) if words.first().is_some_and(|word| is_word(word, FOR_WORD)) => variables.extend(words.get(1).map(Node::name)),
+			Node::List(words, _, _) if words.first().is_some_and(|word| word.is_symbol(FOR_WORD)) => variables.extend(words.get(1).map(Node::name)),
 			_ => {}
 		});
 		Lists { fields, variables, tables: crate::database_tables::registered(program) }
@@ -102,14 +106,65 @@ fn fields_of_it(condition: Node, fields: &[String], variables: &HashSet<String>)
 	}
 }
 
+/// `people with age > 20` as `people where age > 20` when people is a list of a class's instances
+fn with_as_where(node: Node, lists: &Lists) -> Node {
+	let node = node.map_children(|child| with_as_where(child, lists));
+	let Node::List(mut items, bracket, separator) = node else { return node };
+	for at in 1..items.len() {
+		let subject = crate::list_phrases::words(&items[at - 1..at]).pop().map(|word| word.drop_meta().name()).unwrap_or_default();
+		if items[at].is_symbol(WITH_WORD) && lists.fields.contains_key(&subject) {
+			items[at] = symbol(WHERE_KEYWORD);
+		}
+	}
+	Node::List(items, bracket, separator)
+}
+
+/// `name of people`, `name of (people where age > 20)`: the field of each element, `[of·element.name for of·element in
+/// people]`, when people is a list of instances of a class with that field
+fn field_of_elements(items: &[Node], lists: &Lists) -> Option<Node> {
+	let items = crate::list_phrases::words(items);
+	let [field, of, subject @ ..] = items.as_slice() else { return None };
+	let Node::Symbol(name) = field.drop_meta() else { return None };
+	let list = match subject {
+		[group] => match group.drop_meta() {
+			Node::List(inner, Bracket::Round, _) => inner.first()?,
+			_ => group,
+		},
+		[first, ..] => first,
+		[] => return None,
+	};
+	let Node::Symbol(list) = list.drop_meta() else { return None };
+	if !of.is_symbol(OF_WORD) || !lists.fields.get(list).is_some_and(|fields| fields.contains(name)) {
+		return None;
+	}
+	let sequence = match subject {
+		[single] => single.clone(),
+		words => Node::List(words.to_vec(), Bracket::None, Separator::Space),
+	};
+	let element = symbol(OF_ELEMENT);
+	let clause = Node::List(vec![symbol(FOR_WORD), element.clone(), symbol(IN_WORD), sequence], Bracket::None, Separator::Space);
+	Some(Node::List(vec![key(element, Op::Dot, field.clone()), clause], Bracket::Square, Separator::Space))
+}
+
 fn where_filters(node: Node, lists: &mut Lists) -> Node {
 	if let Node::List(items, bracket, separator) = node.drop_meta() {
 		if let Some(filtered_loop) = loop_over_filtered(items, lists) {
 			return Node::List(filtered_loop, bracket.clone(), separator.clone());
 		}
+		if let Some(comprehension) = field_of_elements(items, lists) {
+			let comprehension = where_filters(comprehension, lists);
+			return if *bracket == Bracket::None { comprehension } else { Node::List(vec![comprehension], bracket.clone(), separator.clone()) };
+		}
+		// the last argument of a call: `count(name of people)`
+		if let Some(comprehension) = items.split_first().filter(|_| *bracket == Bracket::Round).and_then(|(_, arguments)| field_of_elements(arguments, lists)) {
+			return Node::List(vec![where_filters(items[0].clone(), lists), where_filters(comprehension, lists)], bracket.clone(), separator.clone());
+		}
 	}
 	let node = node.map_children(|child| where_filters(child, lists));
 	let Node::List(items, bracket, separator) = node else { return node };
+	if let Some(queried) = comprehension_over_table(&items, lists).filter(|_| bracket == Bracket::Square) {
+		return Node::List(queried, bracket, separator);
+	}
 	let Some(at) = where_position(&items) else { return Node::List(items, bracket, separator) };
 	let filtered = match items[at + 1].drop_meta() {
 		// Haskell's binding `x * 2 where x = 3`: the assignment, then the expression
@@ -138,13 +193,34 @@ fn loop_over_filtered(items: &[Node], lists: &mut Lists) -> Option<Vec<Node>> {
 	// `for x in (xs where c) {…}` as the parser groups the filter
 	let items = crate::list_phrases::words(items);
 	let [for_word, variable, in_word, sequence, where_word, condition, body] = items.as_slice() else { return None };
-	if !is_word(for_word, FOR_WORD) || !is_word(in_word, IN_WORD) || !is_word(where_word, WHERE_WORD) || !matches!(body.drop_meta(), Node::List(_, Bracket::Curly, _)) {
+	if !for_word.is_symbol(FOR_WORD) || !in_word.is_symbol(IN_WORD) || !where_word.is_symbol(WHERE_KEYWORD) || !matches!(body.drop_meta(), Node::List(_, Bracket::Curly, _)) {
 		return None;
 	}
 	let Node::Symbol(name) = variable.drop_meta() else { return None };
 	let condition = substitute(condition.clone(), name, &symbol(crate::lambdas::IMPLICIT_PARAMETER));
 	let filter = Node::List(vec![sequence.clone(), where_word.clone(), condition], Bracket::None, Separator::Space);
 	Some(vec![for_word.clone(), variable.clone(), in_word.clone(), where_filters(filter, lists), where_filters(body.clone(), lists)])
+}
+
+/// `[p.name for p in people if p.age > 20]` of a table: `[p.name for p in people where it.age > 20]`, whose query reads
+/// only the rows it keeps instead of loading the table
+fn comprehension_over_table(items: &[Node], lists: &mut Lists) -> Option<Vec<Node>> {
+	let at = items.iter().position(starts_with_for).filter(|&at| at > 0)?;
+	let rest = &items[at + 1..];
+	let Node::List(words, _, _) = items[at].drop_meta() else { return None };
+	let [for_word, variable, in_word, sequence, if_word] = words.as_slice() else { return None };
+	if !in_word.is_symbol(IN_WORD) || !if_word.is_symbol(IF_WORD) || rest.is_empty() || rest.iter().any(starts_with_for) {
+		return None;
+	}
+	let Node::Symbol(name) = variable.drop_meta() else { return None };
+	let condition = phrase(rest);
+	if crate::lambdas::mentions(&condition, crate::lambdas::IMPLICIT_PARAMETER) {
+		return None;
+	}
+	let condition = substitute(condition, name, &symbol(crate::lambdas::IMPLICIT_PARAMETER));
+	let (Ok(found) | Err(found)) = crate::database_tables::queried(sequence, &condition, &lists.variables, &mut lists.tables)?;
+	let clause = Node::List(vec![for_word.clone(), variable.clone(), in_word.clone(), found], Bracket::None, Separator::Space);
+	Some([&items[..at], &[clause]].concat())
 }
 
 /// `[it, (for it in xs if), condition]`, as the parser groups a comprehension
@@ -201,8 +277,8 @@ fn where_flattened(node: Node) -> Node {
 		_ => None,
 	};
 	let flat = match (words_of(items.first()), words_of(items.last())) {
-		(Some(inner), _) if inner.last().is_some_and(|word| is_word(word, WHERE_WORD)) => inner.into_iter().chain(items[1..].iter().cloned()).collect(),
-		(_, Some(inner)) if items.len() > 1 && inner.len() == 2 && is_word(&inner[0], WHERE_WORD) => items[..items.len() - 1].iter().cloned().chain(inner).collect(),
+		(Some(inner), _) if inner.last().is_some_and(|word| word.is_symbol(WHERE_KEYWORD)) => inner.into_iter().chain(items[1..].iter().cloned()).collect(),
+		(_, Some(inner)) if items.len() > 1 && inner.len() == 2 && inner[0].is_symbol(WHERE_KEYWORD) => items[..items.len() - 1].iter().cloned().chain(inner).collect(),
 		_ => items,
 	};
 	Node::List(flat, bracket, separator)
@@ -210,12 +286,12 @@ fn where_flattened(node: Node) -> Node {
 
 /// The position of `where` in `[… subject, where, condition]`
 fn where_position(items: &[Node]) -> Option<usize> {
-	(items.len() >= 3).then(|| items.len() - 2).filter(|&at| matches!(items[at].drop_meta(), Node::Symbol(symbol) if symbol == WHERE_WORD))
+	(items.len() >= 3).then(|| items.len() - 2).filter(|&at| items[at].is_symbol(WHERE_KEYWORD))
 }
 
 /// The clause `for v in xs …`
 fn starts_with_for(node: &Node) -> bool {
-	matches!(node.drop_meta(), Node::List(words, _, _) if words.first().is_some_and(|word| is_word(word, FOR_WORD)))
+	matches!(node.drop_meta(), Node::List(words, _, _) if words.first().is_some_and(|word| word.is_symbol(FOR_WORD)))
 }
 
 /// One node of several juxtaposed words: `upper w`
@@ -331,7 +407,7 @@ enum Qualifier {
 fn qualifiers(clause: &Node, rest: &[Node]) -> Option<Vec<Qualifier>> {
 	let Node::List(words, _, _) = clause.drop_meta() else { return None };
 	let [_, variable, in_word, sequence, tail @ ..] = words.as_slice() else { return None };
-	if !is_word(in_word, IN_WORD) || !matches!(variable.drop_meta(), Node::Symbol(_)) {
+	if !in_word.is_symbol(IN_WORD) || !matches!(variable.drop_meta(), Node::Symbol(_)) {
 		return None;
 	}
 	let mut found = vec![Qualifier::Each(variable.clone(), sequence.clone())];
@@ -339,7 +415,7 @@ fn qualifiers(clause: &Node, rest: &[Node]) -> Option<Vec<Qualifier>> {
 		([], []) => {}
 		([nothing], []) if matches!(nothing.drop_meta(), Node::Empty) => {}
 		([nested], _) if starts_with_for(nested) => found.extend(qualifiers(nested, rest)?),
-		([filter_word], [_, ..]) if is_word(filter_word, IF_WORD) || is_word(filter_word, WHERE_WORD) => {
+		([filter_word], [_, ..]) if filter_word.is_symbol(IF_WORD) || filter_word.is_symbol(WHERE_KEYWORD) => {
 			let end = rest.iter().position(starts_with_for).unwrap_or(rest.len());
 			if end == 0 {
 				return None;

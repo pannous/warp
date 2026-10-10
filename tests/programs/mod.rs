@@ -21,6 +21,11 @@ mod test_paint_shader; // P234
 mod test_sound;
 mod test_sound_files; // card sound-library
 mod test_sound_clock; // card sound-pro
+mod test_sound_render; // card sound-pro
+mod test_sound_wavs; // card sound-wavs
+mod test_sound_handles; // card sound-pro
+mod test_sound_spectrum; // card winamp-like
+mod test_task_sound; // card task-sound
 mod test_shader_blocks; // card g_oFJc
 mod test_shader_holes; // card shader-holes
 mod test_draw;

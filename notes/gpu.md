@@ -25,15 +25,22 @@ gpu_compute / gpu_render plumbing (src/gpu.rs, web/playground/host-gpu.js, notes
    operator is a round trip and a single cheap op never beats the CPU (it is memory bound: the copy costs more than
    the arithmetic).
 
-## Precision (P214, user 2026-10-08: option a)
+## Precision (P240, user 2026-10-10, revises P214: GPU results are imprecise by design)
 WGSL has no f64 and no i64 (the shader-f64 feature is native-only and missing on Metal); warp floats are f64, Ints i64.
-- Automatic offloading only where the result is identical: Int lists whose items fit i32, computed in i32 with an
-  overflow flag the kernel sets (then the CPU redoes it).
-- Floats only when the program allows f32: `@gpu` on the expression, or a `float32[n]` list. Where `@gpu` cannot apply
-  (no adapter, an unsupported operation, big Ints) it runs on the CPU with a warning or hint saying why.
-- Err on the CPU side (P214 addition): start conservative, ≥ 10^7 items or fused chains / data resident on the GPU
-  only; a single cheap op like `xs .* 3` rarely pays off. Measurements set the real bounds later (card gpu-threshold).
-Rejected: (b) automatic f32 for floats (results differ in the 7th digit), (c) double-float emulation.
+- GPU calculations are f32 and approximate by design, and the user is told: a one-time run-time notice when a map
+  moves to the GPU by itself (gpu_maps.rs AUTOMATIC_NOTICE, native diagnostic::report_runtime_warning_once, browser
+  host-gpu.js warnOnce), and the guides' "Whole lists at once". The error grows with the item count: a software
+  adapter's sum of 40000 cosines may be off by 40000 × 2^-11.
+- Automatic switching (card gpu-auto): a heavy map of a linear float array (gpu_maps.rs automatic: assigned, or inside
+  sum/min/max, without @gpu or @cpu, Kernel.heavy) goes to the GPU from GPU_AUTO_MIN_COUNT = 10 × GPU_MAP_MIN_COUNT
+  (327680 items: one order of magnitude of room for other architectures), checked at run time (flag AUTOMATIC = 4 in
+  the keeping argument). Without an adapter it stays on the CPU silently (no warning, unlike @gpu).
+- Exactness on demand: `@cpu` on a map (`xs.map(f) @cpu`, `@cpu xs.map(f)`), a block, a function or the program keeps
+  it on the CPU in f64 and overrides the switch; `@gpu` with `@cpu` on one map is a compile error. `WARP_GPU=off`
+  pins a whole run (tests, benchmarks) to the CPU, @gpu included.
+- Tests comparing GPU and CPU results use @cpu for the reference side and common::gpu_tolerance.
+- Int lists: never automatic (step 3: the fused CPU loop always wins).
+Superseded (P214): floats on the GPU only with @gpu or float32[n]; (b) automatic f32 was rejected then.
 
 ## Threshold and transfer cost
 - Cost per GPU call: dispatch + readback ≈ 50–200 µs (map_async round trip), plus the copy: wasm GC array → host

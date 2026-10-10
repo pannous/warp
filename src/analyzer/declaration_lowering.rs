@@ -1,6 +1,7 @@
 //! Lowering declarations and list forms: typed declarations, parameter copies, list mutation methods, typed arrays
 
 use super::*;
+use crate::lowering::nodes::call;
 
 /// `x:T = v` → `x = v` with T kept as metadata on x (see `declared_type`);
 /// the widening of an Int literal assigned to a float becomes an explicit Float literal, a codepoint assigned to a text a Text
@@ -603,7 +604,7 @@ pub const ZERO_FILL_CALL: &str = "zero_fill";
 /// The zero-filled list of `count` (any number expression) elements of the type word
 pub fn zero_list(count: Node, type_word: &str) -> Option<Node> {
 	let zero = zero_element(type_word)?;
-	Some(Node::List(vec![Node::Symbol(ZERO_FILL_CALL.to_string()), count, zero], Bracket::Round, Separator::None))
+	Some(call(ZERO_FILL_CALL, vec![count, zero]))
 }
 
 /// `[x]*n` and `n*[x]` with a list literal: Python repeats the list, NumPy multiplies each element (wiki/Footguns.md
@@ -701,15 +702,14 @@ pub const EACH_ELEMENT: &str = "each_element";
 pub fn element_wise(list: Node, op: Op, operand: Node) -> Node {
 	let element = || Box::new(Node::Symbol(EACH_ELEMENT.to_string()));
 	let lambda = Node::Key(element(), Op::FatArrow, Box::new(Node::Key(element(), op, Box::new(operand))));
-	let call = Node::List(vec![Node::Symbol("map".to_string()), lambda], Bracket::Round, Separator::None);
-	Node::Key(Box::new(list), Op::Dot, Box::new(call))
+	Node::Key(Box::new(list), Op::Dot, Box::new(call("map", vec![lambda])))
 }
 
 /// `n times [x]`: the list of n copies of x (`zero_fill(n, x)`); `[x]*n` stays ambiguous (Python repeats, NumPy multiplies)
 pub fn filled_list(count: Node, list: &Node) -> Option<Node> {
 	let Node::List(items, Bracket::Square, _) = list.drop_meta() else { return None };
 	let [element] = items.as_slice() else { return None };
-	Some(Node::List(vec![Node::Symbol(ZERO_FILL_CALL.to_string()), count, element.clone()], Bracket::Round, Separator::None))
+	Some(call(ZERO_FILL_CALL, vec![count, element.clone()]))
 }
 
 /// The zero-filled list of the array type written `int[100]` (a 1-based subscript, see `subscript`)

@@ -2,8 +2,7 @@
 //! optional does (P179): used as a T it is one, ø there is the loud error of ø as a T. The value is computed once:
 //! `f() as text?` becomes `(optional·0 = f(); if optional·0 == ø then ø else optional·0 as text)`.
 
-use super::nodes::key;
-use crate::lowering::variable_signals::if_then_else;
+use super::nodes::{if_then_else, key};
 use crate::node::{symbol, Bracket, Node, Separator};
 use crate::operators::Op;
 use std::cell::Cell;

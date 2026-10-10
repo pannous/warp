@@ -93,13 +93,22 @@ pub fn call(module: &str, member: &str, arguments: &Node) -> Result<Node, String
 		}
 		// `play "song.mp3"`, `stop_sound` (lib/sound.warp, card sound-library)
 		#[cfg(feature = "native")]
-		("sound", "play_file", [path]) => crate::sound::play_file(&text_of(path)?).map(|_| Node::Empty).map_err(failure),
+		("sound", "play_file", [path]) => crate::sound::play_file(&text_of(path)?).map(|handle| Node::int(handle as i64)).map_err(failure),
+		// stop_sound(handle), play's handle (card sound-pro); handle 0: all of them
 		#[cfg(feature = "native")]
-		("sound", "stop", []) => { crate::sound::stop(); Ok(Node::Empty) }
+		("sound", "stop", [handle]) => match handle.drop_meta() {
+			Node::Number(crate::extensions::numbers::Number::Int(0)) => { crate::sound::stop(); Ok(Node::Empty) }
+			Node::Number(crate::extensions::numbers::Number::Int(handle)) => crate::sound::stop_one((*handle).max(0) as usize).map(|_| Node::Empty).map_err(failure),
+			other => Err(failure(format!("needs a sound handle, got {}", other.serialize().trim()))),
+		},
+		#[cfg(feature = "native")]
+		("sound", "last", []) => Ok(Node::int(crate::sound::last_handle() as i64)),
 		#[cfg(feature = "native")]
 		("sound", "queued", []) => Ok(Node::float(crate::sound::queued_seconds())),
 		#[cfg(feature = "native")]
 		("sound", "wait", []) => { crate::sound::wait(); Ok(Node::Empty) }
+		#[cfg(feature = "native")]
+		("sound", "render", [path]) => crate::sound::render(&text_of(path)?).map(Node::float).map_err(failure),
 		// the tables of registered classes (lowering/database_tables.rs)
 		#[cfg(feature = "native")]
 		("table", member, arguments) => crate::database::call(member, arguments).map_err(failure),

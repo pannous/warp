@@ -6,6 +6,30 @@ before asking the user; nobody reads it front to back, the code, tests and wiki 
 "notes/open_decisions.md" + a Decided section, P-, D- or #-numbers mean this file. Open and parked questions:
 notes/open_decisions.md.
 
+## Decided 2026-10-10 (user; via warp-supervisor or the Interviewer)
+- int-list (warp-numbers, card int-list): a decimal literal stays exact and is int when whole (`type([0.0, 0.0])` is
+  list of int, P196b stands); a variable's type joins its literal with every write the analyzer sees, so
+  `shown = [0.0, 0.0]; shown[0] = sqrt(2.0)` makes shown a list of float from the start. Runtime conversion only as
+  the fallback for writes the analyzer can't see. As implemented.
+- people-where (warp-class): no new `with`/`without` sugar after a list beyond what is already implemented (user:
+  the words have too many meanings; `with` could as well mean "with something added"), and "if it's already
+  implemented, keep it implemented": main's `with` filter from the orm example stays (`name of people with age > 20`,
+  tests/control/test_field_of_elements.rs), and warp-class's field-filter `without` (`people without team` = `people
+  where not it.team`) is kept. Removing values (`[1 2 3] without 2`) stays undefined.
+- P238 (warp-fixer, card generators-function): a plain generator call collects the list: `count_to(3)` is [1 2 3],
+  `sum(count_to(4))` is 10. `iter(count_to(3))` or `next` on a variable holding it gives the lazy object; a `for`
+  over it runs lazily. As implemented.
+- let-comma (warp-types): `let a, b = 3, 4` (also var/const) unpacks: a = 3, b = 4, as the undeclared `a, b = 3, 4`.
+  As implemented.
+- P239 (warp-class, cards lambda-def, unbound-lambda): in a lambda naming its parameter, `it` is the surrounding
+  code's `it`: `scale := [1 2].map(x => x * it); scale 3` is [3 6]; with no outer `it`, `[1 2].map(x => it)` is
+  the error "undefined variable: it". As implemented.
+- P240 (warp-web, card gpu-auto; revises P214): GPU calculations are imprecise by design (f32), and the user is told
+  so. Heavy maps of linear float arrays switch to the GPU automatically from 10× the measured break-even
+  (GPU_AUTO_MIN_COUNT), with a one-time run-time notice; `@cpu` (a map, block, function or program) and
+  `WARP_GPU=off` (a whole run) keep results exact in f64; `@gpu @cpu` on one map is an error. GPU-vs-CPU tests compare
+  within common::gpu_tolerance, @cpu on the reference side. notes/gpu.md "Precision".
+
 ## Decided 2026-10-09 (user, as recommended unless quoted)
 - warp-ast.wit moves from the repo root to samples/wit/warp-ast.wit; test_wit_parse reads it there (user chose the
   move over deleting it).
@@ -1054,6 +1078,10 @@ notes/open_decisions.md.
   stays a type error. Flipped tests: test_text_concat::text_plus_number_stays_an_error,
   test_footguns::test_text_plus_number_is_a_type_error, test_text_bytes::text_plus_number_stays_a_type_error.
   Not yet: a runtime ratio (`y=2.5; "x"+y`, also `y as string`) prints garbage: list_join has no text form for ratios.
+- Extended 2026-10-10 (user via warp-supervisor, card print-oldest): text + anything concatenates in its str() form
+  (`"oldest first: " + list`, an instance, a map, ø); a function stays an error. The one exception: a text spelling a
+  number plus a number (`"3"+3`) warns, offering `int("3") + 3` or `"3" + str(3)`, and keeps `"33"` (an error under
+  `use strict`); `"a"+3` is silent. Test: tests/text/test_text_plus_anything.rs.
 - `//` not followed by a space is Python floor division (`7//2`, `a //b`, `x//=3`, `x //= 3`), the Euclidean
   quotient that goes with `%` (`floor_quotient(a, b)`: floor for a positive divisor, `-7//-2` gives 4 where Python
   gives 3). `a div b` is the same floor division. An index that divides (`xs[n/2]`) traps `index must be an

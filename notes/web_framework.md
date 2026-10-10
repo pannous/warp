@@ -226,6 +226,11 @@ Each step is useful on its own and is what the next ones stand on.
   budget). Routes (step 2, card site-worker-step): the page keeps host-routes.js (links, back button, focus) and sends
   the Worker {navigate: path}; the Worker loads that route's module and answers its markup with `navigated`, after
   which the page focuses the route. Probe: probes/site_worker.py (also probes/site/routed_tasks.warp).
+- Paintings (card site-frames): a module importing paint runs in the Worker too (an animation sleeps between frames
+  and reads the pointer while it runs). The site ships canvas.js (the playground's paint and pointer code, moved out
+  of playground.js): the Worker posts {paint}, site-thread.js draws it into one canvas after the root (outside the
+  morphed markup; a new size replaces it) and shares the SharedArrayBuffer pointer for mouse_x/mouse_y/mouse_down.
+  Checked natively by test_site a_painting_site_runs_in_a_worker_with_its_canvas; the page side has no browser test.
 
 ## Routes (card web-router, 2026-10-07; split agreed with warp-cf (web-bundle) and warp-34 (playground, fetch-cancel))
 - `route "/users/:id" { UserPage(id) }` (lowering/routes.rs, lib/router.warp): each route is the function page·route·N,
@@ -345,7 +350,7 @@ Each step is useful on its own and is what the next ones stand on.
   trackPointer → worker pagePointer → host.js system_value). `on click` over the canvas gives event.x / event.y.
   Natively mouse_x is a loud error (no canvas). Tour example mouse.
 - Natively each show still writes paint-N.png (src/paint.rs). `color.with_alpha(a)` works as a method (test_draw.rs).
-  Left: built sites (site.js) show no frames and no pointer yet.
+  Built sites show frames and read the pointer too (card site-frames, "Paintings" under Built sites).
 
 ## web-apis: notify (2026-10-07, warp-90; plan approved by warp-03)
 - `notify "text"` is the host word notify (src/host.rs, warp-runtime system_values.rs notify): natively osascript
@@ -365,7 +370,8 @@ Each step is useful on its own and is what the next ones stand on.
   asynchronously, so a task Worker (task-worker.js `data.gpu`) asks for the device once, runs the job and writes
   {values} or {error} with writeShared; the program's worker blocks in host-tasks.js readShared (shared by tasks,
   fetches and the GPU). A shader that does not compile fails loudly with its line:column. Without task Workers (a page
-  that is not cross-origin isolated, e.g. a built site) it is a loud error.
+  that is not cross-origin isolated) it is a loud error. A built site using GPU words or paint (which may be given a
+  shader) ships host-gpu.js with host-tasks.js and runs its program in the site Worker (card site-gpu).
 - Natively (2026-10-07, warp-12): src/gpu.rs runs the same shader through wgpu 30 (Metal, Vulkan or DX12; the
   `native` feature; pollster blocks on its futures), one device per process; errors in the browser's form, `1:10:
   expected identifier…` or wgpu's innermost cause. A machine without an adapter says "no WebGPU adapter" (tests skip).
@@ -432,8 +438,8 @@ Each step is useful on its own and is what the next ones stand on.
   the program's scope, with WindowOrWorkerGlobalScope bundled whole (fetch, atob, setTimeout…) plus Response and
   Headers. The scope is bundled in part, so a member it lacks stays unchecked (`window.innerWidth`). A `Promise<T>`
   result is T: node's loop awaits a call (src/foreign.rs), so `self.fetch(url)` is a Response, `.text()` a text,
-  `.status` an int. Natively node mirrors self/window as globalThis. In the browser host a foreign call is
-  synchronous: a promise stays a handle there (no JSPI yet). warp's own `fetch "/x"` is unaffected.
+  `.status` an int. Natively node mirrors self/window as globalThis. In the browser host main awaits it via JSPI
+  (card jspi-page, notes/web_playground.md "Foreign runtimes"); without JSPI (Safari) a promise is a clear error. warp's own `fetch "/x"` is unaffected.
 - P203 (user): `use js <global>` is the annotation (like `use c` headers), so these checks stay compile errors
   (warp-dc, 2026-10-08).
 - Constructors (slice 7): `use js URL; URL(text)` calls the constructor (JavaScript's `new`: foreign_call member "",

@@ -47,10 +47,7 @@ pub fn lower(program: Node) -> Node {
 fn namespace_name(statement: &Node) -> Option<String> {
 	match statement.drop_meta() {
 		Node::List(items, _, _) => match items.as_slice() {
-			[word, name] if matches!(word.drop_meta(), Node::Symbol(word) if word == NAMESPACE_WORD) => match name.drop_meta() {
-				Node::Symbol(name) => Some(name.clone()),
-				_ => None,
-			},
+			[word, name] if word.is_symbol(NAMESPACE_WORD) => name.symbol_name().map(String::from),
 			_ => None,
 		},
 		_ => None,

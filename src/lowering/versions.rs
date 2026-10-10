@@ -2,7 +2,7 @@
 //! version, `version = 2` stays a variable), compared part by part as numbers (1.10 > 1.9).
 //! A module's top level `version 1.2.3` declares its version; `use x version 1.2.3`, `use x from 1.2.3` and
 //! `use x >= 1.2.3` require one of its package.
-use super::nodes::key;
+use super::nodes::{children_rewritten, key};
 use crate::node::Node;
 use crate::operators::Op;
 use std::cmp::Ordering;
@@ -144,7 +144,7 @@ pub fn version_of(node: &Node) -> Option<Version> {
 }
 
 pub fn is_version_keyword(node: &Node) -> bool {
-	matches!(node.drop_meta(), Node::Symbol(keyword) if keyword == VERSION_KEYWORD)
+	node.is_symbol(VERSION_KEYWORD)
 }
 
 /// `1.2.3` and `v1.2.3` as the lexer reads them; `v2` stays a name
@@ -177,10 +177,7 @@ pub fn lower_versions(node: Node) -> Node {
 			}
 		}
 		_ if is_version_value(&node) => Node::Text(version_of(&node).unwrap().to_string()),
-		Node::Key(left, op, right) => key(lower_versions(*left), op, lower_versions(*right)),
-		Node::List(items, bracket, separator) => Node::List(items.into_iter().map(lower_versions).collect(), bracket, separator),
-		Node::Meta { node, data } => Node::Meta { node: Box::new(lower_versions(*node)), data },
-		other => other,
+		other => children_rewritten(other, lower_versions),
 	}
 }
 

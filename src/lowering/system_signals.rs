@@ -13,6 +13,7 @@
 //! listener of that sub-channel; `send "file system full"` alone is that named event on "warp" without data, heard by
 //! `on "file system full" {…}`. `raise` stays inside the program (event_signals.rs).
 
+use super::words::{FROM_WORD, ON_WORD};
 use super::nodes::call;
 use crate::declarations::word;
 use crate::diagnostic::Diagnostic;
@@ -21,7 +22,6 @@ use crate::event_signals::{function_with_globals, main_level_variables};
 use crate::node::{symbol, Bracket, Node, Separator};
 use crate::operators::Op;
 
-const ON_WORD: &str = "on";
 const EVERY_WORD: &str = "every";
 const DAY_WORD: &str = "day";
 const AT_WORD: &str = "at";
@@ -32,7 +32,6 @@ const HALVES: [&str; 2] = ["am", "pm"];
 const FILE_WORD: &str = "file";
 const CHANGE_WORDS: [&str; 2] = ["change", "changes"];
 const MESSAGE_WORD: &str = "message";
-const FROM_WORD: &str = "from";
 const BROADCAST_WORD: &str = "broadcast";
 const SEND_WORD: &str = "send";
 /// `chat/stop the machine`: the named event `stop the machine` on the channel `chat`, a channel of its own

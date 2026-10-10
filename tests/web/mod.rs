@@ -8,7 +8,11 @@ mod test_web_playground;
 #[cfg(feature = "native")] // runs node
 mod test_editor_shortcuts; // card keyboard-shortcuts
 #[cfg(feature = "native")] // runs node
+mod test_assistant_edits; // card put-editor: the chat's code applied as edits
+#[cfg(feature = "native")] // runs node
 mod test_editor_mode; // card playground-editor
+#[cfg(feature = "native")] // runs python3
+mod test_keyword_registry; // card where-infix
 mod test_missing_use; // card clickable-hint
 mod test_guide; // the language guide on the playground page
 mod test_expert_guide;
@@ -28,6 +32,8 @@ mod test_bundle_budget;
 mod test_host_parts; // the parts of host.js a site ships
 #[cfg(feature = "native")] // builds a site natively
 mod test_site_tasks; // card site-tasks
+#[cfg(feature = "native")] // builds a site natively
+mod test_site_animation; // card site-build
 mod test_rendering_itself; // card playground-render
 #[cfg(feature = "native")] // lib/markup.warp against src/html.rs, natively
 mod test_html_render;
@@ -55,6 +61,7 @@ mod test_accessibility;
 mod test_i18n;
 mod test_webgpu;
 mod test_webgpu_ints;
+mod test_gpu_auto; // card gpu-auto
 mod test_tag_lists;
 mod test_safari_imports;
 #[cfg(feature = "native")] // a site build with the native compiler
@@ -86,3 +93,6 @@ mod test_server_route_paths; // cards server-path, route-star
 #[cfg(feature = "native")] // a server on a port and its SQLite table
 mod test_route_phrase_body; // card first-first
 mod test_sandboxed_programs; // card ferron-hosting
+mod test_page_rendered_sound; // card playground-refuses
+mod test_task_files; // card task-sound-play
+mod test_page_play_file; // card browser-play

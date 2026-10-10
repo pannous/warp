@@ -40,7 +40,7 @@ enum Test<'a> {
 fn test_of(statement: &Node) -> Option<Test<'_>> {
 	let Node::List(items, Bracket::None, Separator::Space) = statement.drop_meta() else { return None };
 	let (head, rest) = items.split_first()?;
-	if !matches!(head.drop_meta(), Node::Symbol(word) if word == TEST_WORD) {
+	if !head.is_symbol(TEST_WORD) {
 		return None;
 	}
 	if let [name, body] = rest {

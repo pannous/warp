@@ -5,8 +5,9 @@
 //!
 //! An unknown `.word` after a name, a text or a list is a loud error (`undefined function: word`), never silent data.
 
-use super::nodes::{call, is_word, key};
-use crate::analyzer::{call_name, counting_method, extract_user_functions, is_list_mutating_method};
+use super::words::SUM_WORD;
+use super::nodes::{call, children_rewritten, key};
+use crate::analyzer::{call_name, counting_method, is_list_mutating_method};
 use crate::context::Context;
 use crate::diagnostic::Diagnostic;
 use crate::node::{symbol, text, Bracket, Node, Separator};
@@ -77,7 +78,6 @@ const SYNONYMS: [(&str, &[&str]); 26] = [
 	("is_alphanumeric", &["is_alnum", "isalnum"]),
 	(crate::mutation::UNWRAP, &[]),
 ];
-const SUM: &str = "sum";
 /// `list_sum(list, loop)`: the sum of a list variable as one operation the emitter dispatches (wasm_emitter/list_dispatch.rs):
 /// a typed list sums its array, any other list runs the loop `sum` always lowered to
 pub const LIST_SUM: &str = "list_sum";
@@ -136,7 +136,7 @@ pub fn shallow_flag(argument: &Node) -> Node {
 const EXPANDED_WORDS: [(&str, usize, &str); 3] = [
 	// Python's `list(x)`: the list itself, a text's characters
 	(LIST_WORD, 1, "hidden_value as list"),
-	(SUM, 1, "(hidden_sum=0; for hidden_item in hidden_value {hidden_sum = hidden_sum + hidden_item}; hidden_sum)"),
+	(SUM_WORD, 1, "(hidden_sum=0; for hidden_item in hidden_value {hidden_sum = hidden_sum + hidden_item}; hidden_sum)"),
 	// `x!` (mutation.rs): the value, a loud error when it is ø; an Error value stays that Error
 	(crate::mutation::UNWRAP, 1, "if hidden_value == ø then error(\"unwrapped ø\") else hidden_value"),
 ];
@@ -217,7 +217,7 @@ pub fn is_library_word(name: &str) -> bool {
 
 /// Words that take the name after them as their argument inside an operand, as a defined function does:
 /// `word == reverse word` compares with `reverse(word)`
-const OPERAND_WORDS: [&str; 7] = ["reverse", "sort", "upper", "lower", "trim", "chars", SUM];
+const OPERAND_WORDS: [&str; 7] = ["reverse", "sort", "upper", "lower", "trim", "chars", SUM_WORD];
 
 pub fn is_operand_word(name: &str) -> bool {
 	canonical_word(name).is_some_and(|word| OPERAND_WORDS.contains(&word))
@@ -228,7 +228,7 @@ fn canonical_word(name: &str) -> Option<&'static str> {
 		.iter()
 		.find(|(word, synonyms)| *word == name || synonyms.contains(&name))
 		.map(|(word, _)| *word)
-		.or((name == SUM).then_some(SUM))
+		.or((name == SUM_WORD).then_some(SUM_WORD))
 }
 
 fn arity(word: &str) -> usize {
@@ -246,8 +246,7 @@ pub fn words_spelled_by(name: &str) -> Vec<&'static str> {
 
 pub fn lower(node: Node) -> Node {
 	let node = bind_read_data_objects(node);
-	let mut context = Context::new();
-	extract_user_functions(&mut context, &node);
+	let context = crate::analyzer::function_context(&node);
 	let mut shadowed: HashSet<String> = context.user_functions.keys().cloned().collect();
 	// `sum·point`, a class's own `sum` (traits.rs witness, an overload): the program defines `sum`, no library word
 	let variants: Vec<String> = shadowed.iter().filter_map(|name| name.split_once(crate::traits::WITNESS_SEPARATOR)).map(|(operation, _)| operation.to_string()).collect();
@@ -281,7 +280,7 @@ fn call_results(node: &Node, context: &Context) -> HashSet<String> {
 /// `raise X`, `throw X`, `raise(X)`: the call `raise(X)`; `raise error("m")` raises the message m
 fn raise_call(items: &[Node]) -> Option<Node> {
 	let [word, raised] = items else { return None };
-	if !crate::pipeline::RAISE_WORDS.iter().any(|raise| is_word(word, raise)) {
+	if !crate::pipeline::RAISE_WORDS.iter().any(|raise| word.is_symbol(raise)) {
 		return None;
 	}
 	let message = crate::pipeline::returned_error_message(raised).unwrap_or(raised).clone();
@@ -311,25 +310,20 @@ fn lower_counts(node: Node, library_count: bool) -> Node {
 	if let Some(occurrences) = counted(&node) {
 		return lower_counts(occurrences, library_count);
 	}
-	match node {
-		Node::List(items, bracket, separator) => Node::List(items.into_iter().map(|item| lower_counts(item, library_count)).collect(), bracket, separator),
-		Node::Key(left, op, right) => key(lower_counts(*left, library_count), op, lower_counts(*right, library_count)),
-		Node::Meta { node, data } => Node::Meta { node: Box::new(lower_counts(*node, library_count)), data },
-		other => other,
-	}
+	children_rewritten(node, |child| lower_counts(child, library_count))
 }
 
 /// `count(y, x)` is `count x in y`
 fn count_call(items: &[Node], bracket: &Bracket) -> Option<Node> {
 	let [count, haystack, needle] = items else { return None };
-	(*bracket == Bracket::Round && is_word(count, COUNT_WORD)).then(|| counted_in(count, needle, haystack)).flatten()
+	(*bracket == Bracket::Round && count.is_symbol(COUNT_WORD)).then(|| counted_in(count, needle, haystack)).flatten()
 }
 
 /// `y.count(x)` is `count x in y`
 fn count_method(receiver: &Node, call: &Node) -> Option<Node> {
 	let Node::List(items, _, _) = call.drop_meta() else { return None };
 	let [count, needle] = items.as_slice() else { return None };
-	is_word(count, COUNT_WORD).then(|| counted_in(count, needle, receiver)).flatten()
+	count.is_symbol(COUNT_WORD).then(|| counted_in(count, needle, receiver)).flatten()
 }
 
 fn counted_in(count: &Node, needle: &Node, haystack: &Node) -> Option<Node> {
@@ -348,7 +342,7 @@ fn count_in(items: &[Node]) -> Option<Node> {
 		_ => items.to_vec(),
 	};
 	let [count, needle, in_word, haystack @ ..] = phrase.as_slice() else { return None };
-	if !is_word(count, COUNT_WORD) || !is_word(in_word, IN_WORD) || haystack.is_empty() {
+	if !count.is_symbol(COUNT_WORD) || !in_word.is_symbol(IN_WORD) || haystack.is_empty() {
 		return None;
 	}
 	let haystack = match haystack {
@@ -367,8 +361,7 @@ fn count_in(items: &[Node]) -> Option<Node> {
 /// function the program does not define. Runs first, so the passes that know these calls see their plain form; user
 /// functions are called so later, in `method_call`
 pub fn lower_function_methods(node: Node) -> Node {
-	let mut context = Context::new();
-	extract_user_functions(&mut context, &node);
+	let context = crate::analyzer::function_context(&node);
 	let arities: HashMap<String, usize> = context.user_functions.iter().map(|(name, function)| (name.clone(), function.params.len())).collect();
 	let mut defined: HashSet<String> = arities.keys().cloned().collect();
 	collect_assigned_names(&node, &mut defined);
@@ -391,7 +384,7 @@ fn list_constructor_calls(node: Node, defined: &HashSet<String>) -> Node {
 				[Node::List(arguments, Bracket::Round, _)] => arguments.clone(),
 				arguments => arguments.to_vec(),
 			};
-			let is_list_word = matches!(items[0].drop_meta(), Node::Symbol(name) if name == LIST_WORD);
+			let is_list_word = items[0].is_symbol(LIST_WORD);
 			match elements.is_empty() {
 				true => Node::Empty,
 				false if is_list_word => Node::List(items.into_iter().map(|item| list_constructor_calls(item, defined)).collect(), Bracket::Round, Separator::None), // `list(x)` is `x as list`
@@ -414,10 +407,7 @@ fn function_methods_as_calls(node: Node, is_function: &dyn Fn(&str, usize) -> bo
 				_ => key(receiver, Op::Dot, method),
 			}
 		}
-		Node::Key(left, op, right) => key(lowered(*left), op, lowered(*right)),
-		Node::List(items, bracket, separator) => Node::List(items.into_iter().map(lowered).collect(), bracket, separator),
-		Node::Meta { node, data } => Node::Meta { node: Box::new(lowered(*node)), data },
-		other => other,
+		other => children_rewritten(other, lowered),
 	}
 }
 
@@ -645,14 +635,14 @@ struct Lowering {
 impl Lowering {
 	fn expand(&self, node: Node) -> Node {
 		match node {
-			Node::List(items, Bracket::Round, _) if items.len() == 3 && is_word(&items[0], TRY_MARKER) => {
+			Node::List(items, Bracket::Round, _) if items.len() == 3 && items[0].is_symbol(TRY_MARKER) => {
 				self.lower_try(self.expand(items[1].clone()), self.expand(items[2].clone()))
 			}
 			// `catch e { … }`: the fallback reads the caught Error as e (P67)
-			Node::List(items, Bracket::Round, _) if items.len() == 4 && is_word(&items[0], TRY_MARKER) => {
+			Node::List(items, Bracket::Round, _) if items.len() == 4 && items[0].is_symbol(TRY_MARKER) => {
 				self.lower_try_binding(self.expand(items[1].clone()), self.expand(items[2].clone()), &items[3])
 			}
-			Node::List(items, Bracket::Round, _) if items.len() == 3 && is_word(&items[0], ASSERT_MARKER) => {
+			Node::List(items, Bracket::Round, _) if items.len() == 3 && items[0].is_symbol(ASSERT_MARKER) => {
 				self.lower_assert(self.expand(items[1].clone()), self.expand(items[2].clone()))
 			}
 			// `def f(m) { m.a }`: the body sees the parameters, as `f(m) := m.a` does
@@ -899,7 +889,7 @@ impl Lowering {
 	/// `for k in map_keys(m) {v = m[k]; …}`
 	fn for_over_map(&self, items: &[Node]) -> Option<Node> {
 		let [keyword, names, in_word, rest @ ..] = items else { return None };
-		if !is_word(keyword, FOR_WORD) || !is_word(in_word, IN_WORD) {
+		if !keyword.is_symbol(FOR_WORD) || !in_word.is_symbol(IN_WORD) {
 			return None;
 		}
 		let (map, body) = match rest {
@@ -956,7 +946,7 @@ impl Lowering {
 			Node::Key(_, Op::Hash, unit) => crate::analyzer::text_unit(&unit.name()).is_some(),
 			other => crate::analyzer::text_unit(&other.name()).is_some(),
 		};
-		if !is_word(in_word, IN_WORD) || names_unit(element) || names_unit(collection) {
+		if !in_word.is_symbol(IN_WORD) || names_unit(element) || names_unit(collection) {
 			return None;
 		}
 		Some(self.call(COLLECTION_POSITION, in_word, vec![collection.clone(), element.clone()], false))
@@ -1160,7 +1150,7 @@ impl Lowering {
 			return Diagnostic::at(&call, format!("{word} takes {wanted} argument{plural}, got {}", arguments.len())).into_error();
 		}
 		match EXPANDED_WORDS.iter().find(|(name, _, _)| *name == word) {
-			Some((_, _, template)) if word == SUM => dispatched_sum(self.expanded(template, arguments)),
+			Some((_, _, template)) if word == SUM_WORD => dispatched_sum(self.expanded(template, arguments)),
 			Some((_, _, template)) => self.expanded(template, arguments),
 			// a prelude word calls its definition from lib/prelude.warp (modules::prelude_name)
 			None if let Some(qualified) = crate::modules::prelude_name(word) => call(&qualified, arguments),
@@ -1305,10 +1295,7 @@ pub(crate) fn named_apart(node: Node, prefix: &str, base: &str, number: usize) -
 pub(crate) fn substitute(node: Node, placeholder: &str, replacement: &Node) -> Node {
 	match node {
 		Node::Symbol(name) if name == placeholder => replacement.clone(),
-		Node::Key(left, op, right) => key(substitute(*left, placeholder, replacement), op, substitute(*right, placeholder, replacement)),
-		Node::List(items, bracket, separator) => Node::List(items.into_iter().map(|item| substitute(item, placeholder, replacement)).collect(), bracket, separator),
-		Node::Meta { node, data } => Node::Meta { node: Box::new(substitute(*node, placeholder, replacement)), data },
-		other => other,
+		other => children_rewritten(other, |child| substitute(child, placeholder, replacement)),
 	}
 }
 
@@ -1367,5 +1354,5 @@ fn keyword_definition_parameters(items: &[Node]) -> Option<Vec<String>> {
 
 /// The word `of` (`first of xs`, `name of person`)
 fn is_of(node: &Node) -> bool {
-	matches!(node.drop_meta(), Node::Symbol(word) if word == OF_WORD)
+	node.is_symbol(OF_WORD)
 }

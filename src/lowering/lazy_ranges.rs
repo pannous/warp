@@ -7,9 +7,9 @@
 //! variable a list, collected once (declaration_lowering.rs). A function whose value is a range of its parameters
 //! (`f(n) := 1..n`) returns that range: a call with plain arguments is the range itself, read as above.
 
-use super::nodes::{call, is_word, key};
-use crate::analyzer::{call_name, extract_user_functions, TEMPORARY_SEPARATOR};
-use crate::context::Context;
+use super::words::{COUNT_WORD, SUM_WORD};
+use super::nodes::{call, key};
+use crate::analyzer::{call_name, TEMPORARY_SEPARATOR};
 use crate::effects::call_arguments;
 use crate::memoization::definition_parts;
 use std::collections::{BTreeMap, BTreeSet, HashMap};
@@ -18,10 +18,8 @@ use crate::node::{Bracket, Node, Separator};
 use crate::operators::Op;
 use crate::warp_parser::parse;
 
-const COUNT: &str = "count";
-const SUM: &str = "sum";
 /// Words a range variable may stand behind a dot for: they read the range without collecting it
-const READING_METHODS: [&str; 10] = [COUNT, SUM, "map", "filter", "each", "fold", "find", "any", "all", "reduce"];
+const READING_METHODS: [&str; 10] = [COUNT_WORD, SUM_WORD, "map", "filter", "each", "fold", "find", "any", "all", "reduce"];
 const START: &str = "range_start";
 const END: &str = "range_end";
 const INDEX: &str = "range_index";
@@ -36,10 +34,9 @@ pub fn lower(node: Node) -> Node {
 	if !has_range(&node) {
 		return node;
 	}
-	let mut context = Context::new();
-	extract_user_functions(&mut context, &node);
+	let context = crate::analyzer::function_context(&node);
 	let own = |word: &str| context.user_functions.contains_key(word);
-	let mut lowering = Lowering { counts: !own(COUNT), sums: !own(SUM), temporaries: 0 };
+	let mut lowering = Lowering { counts: !own(COUNT_WORD), sums: !own(SUM_WORD), temporaries: 0 };
 	let producers = range_producers(&node);
 	let node = inline_produced_ranges(node, &producers);
 	let readers = range_readers(&node);
@@ -111,11 +108,11 @@ impl Lowering {
 	/// `count r`, `#r`, `r.count`, `sum r`, `r.sum`, `r#i` from the bounds of r
 	fn read(&mut self, node: &Node) -> Option<Node> {
 		match node.drop_meta() {
-			Node::List(items, _, separator) if is_call(items, separator) && self.counts && is_word(&items[0], COUNT) => Some(self.length(&range_of(&items[1])?)),
-			Node::List(items, _, separator) if is_call(items, separator) && self.sums && is_word(&items[0], SUM) => Some(self.sum(&range_of(&items[1])?)),
+			Node::List(items, _, separator) if is_call(items, separator) && self.counts && items[0].is_symbol(COUNT_WORD) => Some(self.length(&range_of(&items[1])?)),
+			Node::List(items, _, separator) if is_call(items, separator) && self.sums && items[0].is_symbol(SUM_WORD) => Some(self.sum(&range_of(&items[1])?)),
 			Node::Key(empty, Op::Hash, counted) if matches!(empty.drop_meta(), Node::Empty) => Some(self.length(&range_of(counted)?)),
-			Node::Key(range, Op::Dot, word) if self.counts && is_word(word, COUNT) => Some(self.length(&range_of(range)?)),
-			Node::Key(range, Op::Dot, word) if self.sums && is_word(word, SUM) => Some(self.sum(&range_of(range)?)),
+			Node::Key(range, Op::Dot, word) if self.counts && word.is_symbol(COUNT_WORD) => Some(self.length(&range_of(range)?)),
+			Node::Key(range, Op::Dot, word) if self.sums && word.is_symbol(SUM_WORD) => Some(self.sum(&range_of(range)?)),
 			Node::Key(range, Op::Hash, index) if is_position(index) => Some(self.element(&range_of(range)?, index)),
 			_ => None,
 		}
@@ -231,7 +228,7 @@ fn changes(node: &Node, name: &str) -> bool {
 			Node::Key(owner, Op::Hash | Op::Dot, _) => owner.drop_meta(),
 			other => other,
 		};
-		found |= changing && is_word(target, name);
+		found |= changing && target.is_symbol(name);
 	});
 	found
 }
@@ -247,16 +244,16 @@ fn is_parameter(node: &Node, name: &str) -> bool {
 /// word, an argument a range reader takes as its bounds; never inside a function definition, which would read it as a
 /// global
 fn only_read(node: &Node, name: &str, readers: &RangeReaders) -> bool {
-	let is_name = |node: &Node| is_word(node, name);
+	let is_name = |node: &Node| node.is_symbol(name);
 	let reads = |node: &Node| only_read(node, name, readers);
 	match node.drop_meta() {
 		_ if has_parameter(node, name) => true,
 		Node::Symbol(symbol) => symbol != name,
-		Node::List(items, _, separator) if is_call(items, separator) && is_name(&items[1]) && (is_word(&items[0], COUNT) || is_word(&items[0], SUM)) => true,
+		Node::List(items, _, separator) if is_call(items, separator) && is_name(&items[1]) && (items[0].is_symbol(COUNT_WORD) || items[0].is_symbol(SUM_WORD)) => true,
 		Node::List(items, bracket, separator) if let Some(reading) = reading_parameters(items, bracket, separator, readers) => {
 			call_arguments(&items[1..]).into_iter().zip(reading).all(|(argument, reads_range)| if is_name(argument) { *reads_range } else { reads(argument) })
 		}
-		Node::List(items, _, _) => items.iter().enumerate().all(|(at, item)| (is_name(item) && at > 0 && is_word(&items[at - 1], "in")) || reads(item)),
+		Node::List(items, _, _) => items.iter().enumerate().all(|(at, item)| (is_name(item) && at > 0 && items[at - 1].is_symbol("in")) || reads(item)),
 		Node::Key(empty, Op::Hash, counted) if matches!(empty.drop_meta(), Node::Empty) && is_name(counted) => true,
 		Node::Key(list, Op::Hash, index) if is_name(list) => is_position(index) && reads(index),
 		Node::Key(list, Op::Dot, method) if is_name(list) => reading_method(method) && reads(method),
@@ -287,7 +284,7 @@ fn signature(head: &Node) -> Option<(String, Vec<&Node>)> {
 
 /// A definition with a parameter `name`: its body reads that parameter, not the variable
 fn has_parameter(node: &Node, name: &str) -> bool {
-	definition_parts(node).and_then(|(head, _, _)| signature(&head).map(|(_, parameters)| parameters.iter().any(|parameter| is_word(parameter, name)))).unwrap_or(false)
+	definition_parts(node).and_then(|(head, _, _)| signature(&head).map(|(_, parameters)| parameters.iter().any(|parameter| parameter.is_symbol(name)))).unwrap_or(false)
 }
 
 /// `name` replaced by `range`, except in a definition with a parameter `name`
@@ -424,10 +421,7 @@ fn range_producers(program: &Node) -> RangeProducers {
 	program.visit(&mut |part| {
 		let Some((head, body, _)) = definition_parts(part) else { return };
 		let Some((name, parameters)) = signature(&head) else { return };
-		let parameters: Option<Vec<String>> = parameters.iter().map(|parameter| match parameter.drop_meta() {
-			Node::Symbol(parameter) => Some(parameter.clone()),
-			_ => None,
-		}).collect();
+		let parameters: Option<Vec<String>> = parameters.iter().map(|parameter| parameter.symbol_name().map(String::from)).collect();
 		let produced = parameters.and_then(|parameters| {
 			let range = produced_range(&body)?;
 			symbols(&range).iter().all(|symbol| parameters.contains(symbol)).then_some((parameters, range))

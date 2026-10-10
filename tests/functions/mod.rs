@@ -127,6 +127,7 @@ mod test_dollar_body;
 mod test_csharp_functions;
 mod test_user_add_and_map;
 mod test_list_conversion;
+mod test_list_fields; // card people-map
 mod test_each_spellings;
 mod test_arrow_defaults_and_types;
 mod test_python_higher_order;
@@ -151,3 +152,5 @@ mod test_operator_word_methods;
 mod test_parameter_assignment;
 mod test_generators; // card generators-function
 mod test_typed_global_capture; // card typed-global
+mod test_statement_blocks; // card statement-block
+mod test_sequence_values; // cards sequence-value, block-data-sound

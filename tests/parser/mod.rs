@@ -44,3 +44,6 @@ mod test_emoji_atoms;
 mod test_spaced_optional_type;
 mod test_empty_argument;
 mod test_if_condition_words; // card parser-if-stops
+mod test_path_literal; // card play-mozart
+mod test_url_literal; // card add-http
+mod test_scheme_relative_url; // card pannous-com

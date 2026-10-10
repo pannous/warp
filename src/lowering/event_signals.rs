@@ -8,16 +8,16 @@
 //! event (web/playground/worker.js); natively nothing does, which a warning says. System events (`on interrupt`) are
 //! kept the same way: the runtime calls their handlers (notes/system_signals.md).
 
-use super::nodes::{call, key};
+use super::words::{COUNT_WORD, FROM_WORD, OF_WORD, ON_WORD};
+use super::nodes::{block, call, children_rewritten, if_then, key};
 use crate::declarations::{handler_parts, word};
 use crate::node::{symbol, Bracket, Node, Separator};
 use crate::operators::Op;
 use crate::signal_values::ungrouped_reflection;
-use crate::variable_signals::{assign, block, if_then, symbols};
+use crate::variable_signals::{assign, symbols};
 use crate::warp_parser::parse;
 use std::collections::{HashMap, HashSet};
 
-const ON_WORD: &str = "on";
 /// `once alarm {…}`: the handler runs at the first raise only (Node's emitter.once, DOM `{once: true}`)
 const ONCE_WORD: &str = "once";
 /// `once_fired_0`: whether the once handler ran (a plain word: `global once_fired_0` is parsed)
@@ -25,12 +25,9 @@ const FIRED_PREFIX: &str = "once_fired_";
 /// `h_listening`: whether the named handler h still listens (plain words: `global h_listening` is parsed)
 const LISTENING_SUFFIX: &str = "_listening";
 const REMOVE_WORD: &str = "remove";
-const FROM_WORD: &str = "from";
 const LISTENERS_WORD: &str = "listeners";
-const OF_WORD: &str = "of";
 /// `on error of f {…}` catches the errors of f's calls
 const ERROR_WORD: &str = "error";
-const COUNT_WORD: &str = "count";
 const CLEAR_WORD: &str = "clear";
 /// `alarm_handler_3`: the flag name of an unnamed handler of a cleared event
 const HANDLER_SUFFIX: &str = "_handler_";
@@ -758,12 +755,7 @@ fn emits_as_calls(node: Node, handled: &HashMap<String, Vec<Node>>, verbs: &[Str
 		let braced = matches!(node.drop_meta(), Node::List(_, Bracket::Curly, _));
 		return if braced { Node::List(vec![call], Bracket::Curly, Separator::Semicolon) } else { call };
 	}
-	match node {
-		Node::List(items, bracket, separator) => Node::List(items.into_iter().map(|item| emits_as_calls(item, handled, verbs, block_handled)).collect(), bracket, separator),
-		Node::Key(left, op, right) => key(emits_as_calls(*left, handled, verbs, block_handled), op, emits_as_calls(*right, handled, verbs, block_handled)),
-		Node::Meta { node, data } => Node::Meta { node: Box::new(emits_as_calls(*node, handled, verbs, block_handled)), data },
-		other => other,
-	}
+	children_rewritten(node, |child| emits_as_calls(child, handled, verbs, block_handled))
 }
 
 /// The variables the main level assigns (`n = 0`, `n += 1`, `n: int = 0`)

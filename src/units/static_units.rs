@@ -19,6 +19,7 @@ use super::{exponent_of, finest_units, signature, unit_named, units_text, Dimens
 mod unit_fields;
 pub(crate) use unit_fields::{lower_field_tolerances, si_quantity};
 pub(crate) use unit_fields::unit_type;
+use crate::declarations;
 use crate::extensions::numbers::Number;
 use crate::extensions::reals::Rational;
 use crate::node::{Bracket, Node, Separator};
@@ -122,7 +123,7 @@ fn lower_shadowed(program: &Node) -> Option<Result<Node, Node>> {
 			definitions.insert((name, definition.parameters.len()), definition);
 		}
 	});
-	let mut inference = Inference { variables: HashMap::new(), lists: HashMap::new(), objects: HashMap::new(), classes, instances: HashMap::new(), class_lists: HashMap::new(), result_fields: None, definitions, specialised: HashMap::new(), in_progress: vec![], numbered: 0, new_definitions: vec![], display: display.clone(), returns: vec![], at_top: true, in_host_call: false };
+	let mut inference = Inference { variables: HashMap::new(), lists: HashMap::new(), objects: HashMap::new(), classes, instances: HashMap::new(), class_lists: HashMap::new(), result_fields: None, definitions, specialised: HashMap::new(), in_progress: vec![], numbered: 0, new_definitions: vec![], display: display.clone(), returns: vec![], at_top: true, in_host_call: false, started: HashMap::new() };
 	match inference.infer(program.clone()) {
 		Ok((node, result)) => {
 			// a final `q as km` shows km
@@ -386,6 +387,8 @@ struct Inference {
 	at_top: bool,
 	/// Inferring the arguments of a host call
 	in_host_call: bool,
+	/// The specialisation each task-started function runs as: `go f()` starts `f·u0`, `await job` reads its result
+	started: HashMap<String, String>,
 }
 
 /// The last statement of a program or block
@@ -940,6 +943,32 @@ impl Inference {
 		}
 	}
 
+	/// `task·go(f, args)` of a function with quantities starts its specialisation (the job holds its result in SI amounts)
+	fn task_start(&mut self, items: &[Node], bracket: &Bracket, separator: &Separator) -> Option<Result<(Node, Signature), Stop>> {
+		let (head, call) = items.split_first()?;
+		if declarations::word(head) != declarations::TASK_GO {
+			return None;
+		}
+		let started = match self.specialised_call(call)? {
+			Ok((Node::List(started, _, _), _)) => started,
+			Ok(_) => return None,
+			Err(stop) => return Some(Err(stop)),
+		};
+		self.started.insert(declarations::word(&call[0]), declarations::word(&started[0]));
+		Some(Ok((Node::List([vec![head.clone()], started].concat(), bracket.clone(), separator.clone()), vec![])))
+	}
+
+	/// The reads and controls of a task (`await job`: `task·value(job, f)`) name the specialisation it started
+	fn with_started_names(&self, items: Vec<Node>) -> Vec<Node> {
+		if !items.first().is_some_and(|head| declarations::is_task_marker(&declarations::word(head))) {
+			return items;
+		}
+		items.into_iter().map(|part| match self.started.get(&declarations::word(&part)) {
+			Some(specialised) => Node::Symbol(specialised.clone()),
+			None => part,
+		}).collect()
+	}
+
 	/// `f(a, b)` of a user function with quantities (or units in its body): the call of its specialisation
 	fn specialised_call(&mut self, items: &[Node]) -> Option<Result<(Node, Signature), Stop>> {
 		let (head, arguments) = items.split_first()?;
@@ -1021,6 +1050,10 @@ impl Inference {
 		if let Some(output) = self.output_form(&items, &bracket, &separator) {
 			return output;
 		}
+		if let Some(task) = self.task_start(&items, &bracket, &separator) {
+			return task;
+		}
+		let items = self.with_started_names(items);
 		// `(q as km)`: parentheses around one expression keep its signature
 		if let ([inner], Bracket::Round) = (items.as_slice(), &bracket) {
 			if matches!(inner.drop_meta(), Node::Key(..)) || conversion_target(inner).is_some() {

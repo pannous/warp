@@ -134,7 +134,7 @@ impl WarpParser {
 			// `{a*a}!` evaluates the block on the spot
 			(None, Node::List(_, Bracket::Curly, _)) => lhs.clone(),
 			// `ø!`: P73 force → unwrap (direct call; marking Empty is stripped by is_nothing / run_time_blocks)
-			(None, Node::Empty) => Node::List(vec![Node::Symbol(crate::mutation::UNWRAP.to_string()), lhs.clone()], Bracket::Round, Separator::None),
+			(None, Node::Empty) => call(crate::mutation::UNWRAP, vec![lhs.clone()]),
 			(None, _) if fully => crate::mutation::marked_fully(lhs.clone()),
 			(None, _) => crate::mutation::marked(lhs.clone()),
 		})
@@ -163,10 +163,10 @@ impl WarpParser {
 		}
 		self.advance_by(end);
 		if *word == FAILED_WORD {
-			return Some(Node::List(vec![Symbol(IS_ERROR_CALL.to_string()), lhs.clone()], Bracket::Round, Separator::None));
+			return Some(call(IS_ERROR_CALL, vec![lhs.clone()]));
 		}
 		if after_is && *word == EMPTY_WORD {
-			let counted = Node::List(vec![Symbol(COUNT_CALL.to_string()), lhs.clone()], Bracket::Round, Separator::None);
+			let counted = call(COUNT_CALL, vec![lhs.clone()]);
 			return Some(Node::Key(Box::new(counted), Op::Eq, Box::new(Node::int(0))));
 		}
 		Some(Node::Key(Box::new(Empty), Op::Not, Box::new(lhs.clone())))
@@ -314,7 +314,7 @@ impl WarpParser {
 			}
 			// `3 times "ab"`, `3 times greeting`: the text repeated (a non-text is an error where its kind is known)
 			// `3 times 4`: numbers multiply (list_emitter.rs emit_text_times)
-			quote_or_letter if matches!(quote_or_letter, '"' | '\'') || self.is_identifier_start(0) || quote_or_letter.is_ascii_digit() => return Node::List(vec![Symbol(TEXT_TIMES.to_string()), count, self.parse_atom()], Bracket::Round, Separator::None),
+			quote_or_letter if matches!(quote_or_letter, '"' | '\'') || self.is_identifier_start(0) || quote_or_letter.is_ascii_digit() => return call(TEXT_TIMES, vec![count, self.parse_atom()]),
 			_ => return error("`times` needs a body: `3 times {…}`"),
 		};
 		self.times_loops += 1;
@@ -328,7 +328,7 @@ impl WarpParser {
 			}
 		};
 		let zero_to_count = Node::Key(Box::new(Node::Number(Number::Int(0))), Op::Range, Box::new(count));
-		let rounds = Node::List(vec![Symbol("for".to_string()), counter, Symbol("in".to_string()), zero_to_count, body], Bracket::None, Separator::Space);
+		let rounds = for_in_loop(counter, zero_to_count, body);
 		match count_binding {
 			Some(binding) => Node::List(vec![binding, rounds], Bracket::Round, Separator::Semicolon),
 			None => rounds,

@@ -18,6 +18,15 @@ const SLOW_START_MS = Number(new URL(self.location.href).searchParams.get("slow_
 self.BLOCK_COMPILER_URL = COMPILER_URL; // run_block compiles with the same compiler (host.js blockCompiler)
 
 let compiler; // the compiler instance's exports
+let webEvaluate; // its web_evaluate, an async function where JSPI is (host-compiler.js awaitedEntry)
+// the messages use the compiler one after another: an evaluation whose program waits for a promise (host.js JSPI) holds
+// the compiler's memory until it ends
+let compilerTurn = Promise.resolve();
+function inTurn(work) {
+	const done = compilerTurn.then(work);
+	compilerTurn = done.catch(() => {});
+	return done;
+}
 let live; // the run whose page events are handled (host.js runProgram), until the next run
 const PAGE_VALUE = "page·value";
 const PAGE_HOLE = "page·hole";
@@ -33,22 +42,29 @@ const post = message => warming || self.postMessage(message);
 const WARM_UP_CODE = 'p{ "" }';
 self.keepStored = (name, value, file) => post({ type: "stored", name, value, file }); // host-files.js STD_ADAPTERS.store
 self.writeClipboard = text => post({ type: "clipboard", text }); // host-files.js STD_ADAPTERS.clipboard
-self.playSoundFile = url => post({ type: "sound file", url }); // host-files.js STD_ADAPTERS.sound: a worker has no <audio>
+// play's handles (lib/sound.warp, card sound-pro): the sounds and music files of a run counted from 1, as natively
+let soundHandles = 0;
+const nextSoundHandle = () => ++soundHandles;
+self.lastSoundHandle = () => soundHandles;
+self.playSoundFile = (url, bytes) => post({ type: "sound file", url, bytes, handle: nextSoundHandle() }); // host-files.js STD_ADAPTERS.sound: a worker has no <audio>
+self.keepFile = (path, bytes) => post({ type: "file", path, bytes }); // render_sound's WAV, for the page's download link
 self.stopSoundFiles = () => { soundsEnd = 0; post({ type: "stop sound files" }); };
+self.stopSound = handle => post({ type: "stop sound", handle }); // stop_sound(handle)
 // sound_queued() (lib/sound.warp, card sound-pro): the seconds the queued sounds still sound
 let soundsEnd = 0;
 const clockSeconds = () => performance.now() / 1000;
 self.soundsQueued = () => Math.max(0, soundsEnd - clockSeconds());
+// a worker has no AudioContext: the page plays it, queued behind the sounds before it as the clock here counts
+self.playSamples = (samples, rate) => {
+	soundsEnd = Math.max(soundsEnd, clockSeconds()) + samples.length / rate;
+	post({ type: "sound", samples, rate, handle: nextSoundHandle() });
+};
 const hooks = {
 	renders: true, // each outcome carries its HTML by the program's own renderer (host.js renderedHtml)
 	print: (text, stream) => post({ type: "print", text, stream }),
 	module: bytes => post({ type: "module", bytes }),
 	paint: (pixels, width, height) => post({ type: "paint", pixels, width, height }),
-	// a worker has no AudioContext: the page plays it, queued behind the sounds before it as the clock here counts
-	sound: (samples, rate) => {
-		soundsEnd = Math.max(soundsEnd, clockSeconds()) + samples.length / rate;
-		post({ type: "sound", samples, rate });
-	},
+	sound: (samples, rate) => self.playSamples(samples, rate),
 	sleeping: () => post({ type: "sleep" }),
 	tasksInline: reason => post({ type: "tasks inline", reason }),
 	notify: text => post({ type: "notify", text }),
@@ -90,8 +106,13 @@ async function loadCompiler() {
 	if (!response.ok) throw new Error(`${COMPILER_URL}: HTTP ${response.status}; build it with web/playground/build.sh`);
 	const bytes = await downloaded(response);
 	post({ type: "compiling" });
-	const { instance } = await WebAssembly.instantiate(bytes, { warp_host: warpHost(() => compiler.memory, hooks) });
+	// a stage per step, so a stalled start names it (card tour-firefox-stall)
+	stage(`compiling ${COMPILER_URL} (${bytes.length} bytes)`);
+	const module = await WebAssembly.compile(bytes);
+	stage(`instantiating ${COMPILER_URL}`);
+	const instance = await WebAssembly.instantiate(module, { warp_host: warpHost(() => compiler.memory, hooks, true) });
 	compiler = instance.exports;
+	webEvaluate = awaitedEntry(compiler.web_evaluate);
 }
 
 function passText(text) {
@@ -101,12 +122,13 @@ function passText(text) {
 	return [pointer, bytes.length];
 }
 
-function evaluate(code, acknowledged) {
+// a program's main may wait for a promise (host.js JSPI): the compiler waits with it
+async function evaluate(code, acknowledged) {
 	panicMessage = undefined;
 	const codeText = passText(code);
 	const acknowledgedText = passText(JSON.stringify(acknowledged));
 	try {
-		const length = compiler.web_evaluate(...codeText, ...acknowledgedText);
+		const length = await webEvaluate(...codeText, ...acknowledgedText);
 		const report = JSON.parse(compilerText(compiler.web_report(), length));
 		compiler.web_free(...codeText);
 		compiler.web_free(...acknowledgedText);
@@ -118,11 +140,11 @@ function evaluate(code, acknowledged) {
 }
 
 // not over a live run (its listeners and timers stay), nor without a compiler (after a crash: the next run loads it)
-function warmUp() {
+async function warmUp() {
 	if (live || !compiler) return;
 	warming = true;
 	try {
-		evaluate(WARM_UP_CODE, {});
+		await evaluate(WARM_UP_CODE, {});
 	} finally {
 		warming = false;
 	}
@@ -246,7 +268,7 @@ function runHandler(holder, handler) {
 
 // the run's timers (host.js addTimer), each running its handler until the next run
 self.onmessage = async ({ data }) => {
-	if (data.pointer) return self.pagePointer = { values: new Int32Array(data.pointer.buffer), names: data.pointer.names }; // host.js system_value
+	if (data.pointer) return self.pagePointer = sharedPointer(data.pointer); // host.js system_value
 	if (data.system) return Object.assign(self.pageSystemValues ??= {}, data.system); // host.js system_value
 	if (data.environment) return Object.assign(self, { pageEnvironment: data.environment, pageSecrets: data.secrets }); // host-files.js os.env, withPageSecret
 	if (data.stored) return Object.assign(storedValues, data.stored) && Object.assign(sessionValues, data.session); // host-files.js STD_ADAPTERS.store
@@ -254,6 +276,10 @@ self.onmessage = async ({ data }) => {
 	await ready;
 	stage("loading the database");
 	await globalThis.loadDatabase?.(); // host-files.js: `database[k]`'s values, once
+	return inTurn(() => handleMessage(data));
+};
+
+async function handleMessage(data) {
 	if (data.warm) return warmUp();
 	if (data.event) return handleEvent(data);
 	if (data.navigate) return handleNavigation(data.navigate);
@@ -271,7 +297,8 @@ self.onmessage = async ({ data }) => {
 	stage("waiting for the task workers");
 	await taskPoolReady(); // host.js: tasks run on loaded Workers, not inline
 	stage(`evaluating run ${data.id}`);
+	soundHandles = 0;
 	const started = performance.now();
-	const report = evaluate(data.code, data.acknowledged ?? {});
+	const report = await evaluate(data.code, data.acknowledged ?? {});
 	post({ type: "report", id: data.id, report, milliseconds: performance.now() - started });
-};
+}

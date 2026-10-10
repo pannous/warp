@@ -4,7 +4,7 @@
 //! `for x in xs body`   → `items=xs; index=0; while index<#items {x=items#(index+1); body; index++}`
 //! `for(init;test;step){body}` → `init; while test {body; step}`
 
-use super::nodes::{call, int, is_word, key, statement_list, symbol};
+use super::nodes::{block, call, int, key, statement_list, symbol};
 use crate::node::{Bracket, Node, Separator};
 use crate::operators::Op;
 use crate::wasm_emitter::{is_step, mark_step};
@@ -48,7 +48,7 @@ pub(crate) fn loop_variables(body: &Node) -> Vec<String> {
 	let mut variables = vec![];
 	body.visit(&mut |part| if let Node::List(items, _, _) = part {
 		if let [keyword, Node::Symbol(variable), within, ..] = items.iter().map(Node::drop_meta).collect::<Vec<_>>().as_slice() {
-			if is_word(keyword, FOR_KEYWORD) && is_word(within, IN_KEYWORD) {
+			if keyword.is_symbol(FOR_KEYWORD) && within.is_symbol(IN_KEYWORD) {
 				variables.push(variable.clone());
 			}
 		}
@@ -79,18 +79,18 @@ fn classic_for(items: &[Node]) -> Option<Node> {
 	let [keyword, parts] = header.as_slice() else { return None };
 	let Node::List(parts, Bracket::Round, Separator::Semicolon) = parts.drop_meta() else { return None };
 	let [init, test, step] = parts.as_slice() else { return None };
-	if !is_word(keyword, FOR_KEYWORD) || !matches!(body.drop_meta(), Node::List(_, Bracket::Curly, _)) {
+	if !keyword.is_symbol(FOR_KEYWORD) || !matches!(body.drop_meta(), Node::List(_, Bracket::Curly, _)) {
 		return None;
 	}
 	let mut statements = block_items(body);
 	statements.push(mark_step(step.clone()));
-	Some(statement_list(vec![init.clone(), while_do(test.clone(), statement_list(statements, Bracket::Curly))], Bracket::None))
+	Some(statement_list(vec![init.clone(), while_do(test.clone(), block(statements))], Bracket::None))
 }
 
 /// `for x in iterable {body}` and `for x in iterable: body`
 fn for_in(items: &[Node]) -> Option<Node> {
 	let [keyword, variable, in_word, rest @ ..] = items else { return None };
-	if !is_word(keyword, FOR_KEYWORD) || !is_word(in_word, IN_KEYWORD) {
+	if !keyword.is_symbol(FOR_KEYWORD) || !in_word.is_symbol(IN_KEYWORD) {
 		return None;
 	}
 	let names = loop_names(variable)?;
@@ -175,7 +175,7 @@ fn counted_start(start: &Node) -> Node {
 fn counting_range(iterable: &Node) -> Node {
 	match iterable.drop_meta() {
 		Node::List(items, Bracket::Round, _) if items.len() == 1 => counting_range(&items[0]),
-		Node::List(items, _, _) if is_word(&items[0], RANGE_CALL) => match &items[1..] {
+		Node::List(items, _, _) if items[0].is_symbol(RANGE_CALL) => match &items[1..] {
 			[end] => key(int(FIRST_INDEX), Op::Range, end.clone()),
 			[start, end] => key(start.clone(), Op::Range, end.clone()),
 			_ => iterable.clone(),
@@ -199,7 +199,7 @@ fn loop_names(variable: &Node) -> Option<Vec<Node>> {
 /// each name is bound to its part of the element; the elements of a map are its `key:value` entries
 fn destructuring_loop(names: &[Node], iterable: Node, body: Vec<Node>) -> Node {
 	let element = symbol(&names.iter().map(Node::name).collect::<Vec<_>>().join("·"));
-	let entries = Node::List(vec![symbol(crate::library_words::MAP_ENTRIES), iterable], Bracket::Round, Separator::None);
+	let entries = call(crate::library_words::MAP_ENTRIES, vec![iterable]);
 	let parts = names.iter().enumerate().map(|(position, name)| key(name.clone(), Op::Assign, key(element.clone(), Op::Hash, int(position as i64 + 1))));
 	walking_loop(&element, entries, parts.chain(body).collect())
 }
@@ -207,7 +207,7 @@ fn destructuring_loop(names: &[Node], iterable: Node, body: Vec<Node>) -> Node {
 /// `for iterable {body}` binds the implicit `it`: `for 1..4 {x+=it}`
 fn for_it(items: &[Node]) -> Option<Node> {
 	let [keyword, iterable, body] = items else { return None };
-	if !is_word(keyword, FOR_KEYWORD) || !matches!(body.drop_meta(), Node::List(_, Bracket::Curly, _)) {
+	if !keyword.is_symbol(FOR_KEYWORD) || !matches!(body.drop_meta(), Node::List(_, Bracket::Curly, _)) {
 		return None;
 	}
 	for_in(&[keyword.clone(), symbol(IMPLICIT_VARIABLE), symbol(IN_KEYWORD), iterable.clone(), body.clone()])
@@ -218,7 +218,7 @@ fn counting_loop(variable: &Node, start: &Node, range: Op, end: &Node, mut body:
 	body.push(mark_step(key(variable.clone(), Op::Inc, Node::Empty)));
 	statement_list(vec![
 		key(variable.clone(), Op::Assign, start.clone()),
-		while_do(key(variable.clone(), test_op, end.clone()), statement_list(body, Bracket::Curly)),
+		while_do(key(variable.clone(), test_op, end.clone()), block(body)),
 	], Bracket::None)
 }
 
@@ -240,6 +240,6 @@ fn walking_loop(variable: &Node, iterable: Node, mut body: Vec<Node>) -> Node {
 	statement_list(vec![
 		key(items, Op::Assign, walked_units(iterable)),
 		key(index, Op::Assign, int(FIRST_INDEX)),
-		while_do(test, statement_list(statements, Bracket::Curly)),
+		while_do(test, block(statements)),
 	], Bracket::None)
 }

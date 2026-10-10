@@ -6,6 +6,7 @@
 //! `attributes`, `members`), `p.methods` and `dir(p)` of an instance or a class are the names of its class layout,
 //! inherited fields first; of a map literal's variable they are its keys, read at run time (`m.keys`).
 
+use super::words::OF_WORD;
 use super::nodes::{call, key};
 use std::collections::{HashMap, HashSet};
 
@@ -13,7 +14,6 @@ use crate::class_methods::ClassLayout;
 use crate::node::{symbol, text, Bracket, Node, Separator};
 use crate::operators::Op;
 
-const OF_WORD: &str = "of";
 const EFFECTS_WORD: &str = "effects";
 const LISTENERS_WORD: &str = "listeners";
 /// `on alarm {…}`, `once tick {…}`, `on set x {…}`: the words before a listened name
@@ -67,17 +67,10 @@ fn listened_name(node: &Node) -> Option<String> {
 	let words: Vec<&str> = items.iter().flat_map(|item| match item.drop_meta() {
 		Node::List(parts, Bracket::None, _) => parts.iter().collect(),
 		_ => vec![item],
-	}).map(|item| word_of(item).unwrap_or("")).collect();
+	}).map(|item| item.symbol_name().unwrap_or("")).collect();
 	match words.as_slice() {
 		[listening, event, variable, ..] if LISTENING_WORDS.contains(listening) && VARIABLE_EVENTS.contains(event) && !variable.is_empty() => Some(variable.to_string()),
 		[listening, event, ..] if LISTENING_WORDS.contains(listening) && !event.is_empty() => Some(event.to_string()),
-		_ => None,
-	}
-}
-
-fn word_of(node: &Node) -> Option<&str> {
-	match node.drop_meta() {
-		Node::Symbol(word) => Some(word),
 		_ => None,
 	}
 }
@@ -86,7 +79,7 @@ fn word_of(node: &Node) -> Option<&str> {
 fn unlistened_reflection(node: &Node, listened: &HashSet<String>, defined: &HashSet<String>) -> Option<String> {
 	match node.drop_meta() {
 		Node::Key(_, Op::Define, _) => None,
-		Node::List(items, _, _) => items.windows(3).find_map(|window| match [word_of(&window[0]), word_of(&window[1]), word_of(&window[2])] {
+		Node::List(items, _, _) => items.windows(3).find_map(|window| match [window[0].symbol_name(), window[1].symbol_name(), window[2].symbol_name()] {
 			[Some(LISTENERS_WORD), Some(OF_WORD), Some(name)] if !listened.contains(name) && !defined.contains(name) => Some(name.to_string()),
 			_ => None,
 		}).or_else(|| items.iter().find_map(|item| unlistened_reflection(item, listened, defined))),
@@ -103,7 +96,7 @@ fn as_reflection_words(node: Node, functions: &Functions, listened: &HashSet<Str
 		return reflected;
 	}
 	if let Node::Key(subject, Op::Dot, word) = node.drop_meta() {
-		if let (Some(name), Some(word)) = (word_of(subject), word_of(word)) {
+		if let (Some(name), Some(word)) = (subject.symbol_name(), word.symbol_name()) {
 			let function = functions.get(name).filter(|_| !defined.contains(word));
 			let reflected = match (word, function) {
 				(EFFECTS_WORD, Some(_)) => Some(of_phrase(word, name)),
@@ -126,7 +119,7 @@ fn as_reflection_words(node: Node, functions: &Functions, listened: &HashSet<Str
 fn function_word(node: &Node, functions: &Functions, defined: &HashSet<String>) -> Option<Node> {
 	let Node::List(items, Bracket::Round | Bracket::None, _) = node.drop_meta() else { return None };
 	let [word, subject] = items.as_slice() else { return None };
-	let (word, name) = (word_of(word)?, word_of(subject)?);
+	let (word, name) = (word.symbol_name()?, subject.symbol_name()?);
 	if defined.contains(word) || !functions.contains_key(name) {
 		return None;
 	}
@@ -338,9 +331,9 @@ fn module_objects(node: &Node) -> Objects {
 fn map_keys(node: &Node) -> HashMap<String, Vec<String>> {
 	let mut maps = HashMap::new();
 	node.visit(&mut |part| if let Node::Key(target, Op::Assign | Op::Define, value) = part {
-		if let (Some(name), Node::List(items, Bracket::Curly, _)) = (word_of(target), value.drop_meta()) {
+		if let (Some(name), Node::List(items, Bracket::Curly, _)) = (target.symbol_name(), value.drop_meta()) {
 			let keys: Option<Vec<String>> = items.iter().map(|item| match item.drop_meta() {
-				Node::Key(key, Op::Colon, _) => word_of(key).map(String::from),
+				Node::Key(key, Op::Colon, _) => key.symbol_name().map(String::from),
 				_ => None,
 			}).collect();
 			if let Some(keys) = keys.filter(|keys| !keys.is_empty()) {
@@ -357,8 +350,8 @@ impl Objects {
 	/// (wasm_modules::qualified)
 	fn module_member_word(&self, subject: &Node, word: &str) -> Option<Node> {
 		let (module, member) = match subject.drop_meta() {
-			Node::Key(module, Op::Dot, member) => (word_of(module)?, word_of(member)?),
-			qualified => word_of(qualified)?.split_once('.')?,
+			Node::Key(module, Op::Dot, member) => (module.symbol_name()?, member.symbol_name()?),
+			qualified => qualified.symbol_name()?.split_once('.')?,
 		};
 		let class = self.module_classes.get(module).map(|classes| &classes[member]).filter(|class| !matches!(class.drop_meta(), Node::Empty));
 		if let Some(class) = class {
@@ -405,7 +398,7 @@ impl Objects {
 		if self.known_class(subject).is_some_and(|class| self.has_member(&class, word)) {
 			return None;
 		}
-		let Some(name) = word_of(subject) else { return self.dispatched(subject, word, written()) };
+		let Some(name) = subject.symbol_name() else { return self.dispatched(subject, word, written()) };
 		if let Some(class) = self.class_of(name) {
 			let is_instance = self.instances.contains_key(name);
 			return match word {
@@ -432,7 +425,7 @@ impl Objects {
 			return Some(reflected);
 		}
 		// no class's instance at run time: a map's keys
-		let Some(name) = word_of(subject) else { return self.dispatched(subject, DIR_WORD, self.map_keys(subject)) };
+		let Some(name) = subject.symbol_name() else { return self.dispatched(subject, DIR_WORD, self.map_keys(subject)) };
 		match (self.class_of(name), self.modules.get(name)) {
 			(Some(class), _) => self.listed(class, DIR_WORD).map(|names| text_list(&names)),
 			(None, Some(exports)) => Some(text_list(exports)),
@@ -443,7 +436,7 @@ impl Objects {
 
 	/// `help(P)`, `help(p)`: the class, its parent, fields and methods, one per line (an empty line left out)
 	fn help(&self, subject: &Node) -> Option<Node> {
-		let class = self.class_of(word_of(subject)?).filter(|_| !self.defined.contains(HELP_WORD))?;
+		let class = self.class_of(subject.symbol_name()?).filter(|_| !self.defined.contains(HELP_WORD))?;
 		let parent = self.layouts[class].parent.as_ref().map(|parent| format!(" {} {parent}", crate::warp_parser::EXTENDS_KEYWORD)).unwrap_or_default();
 		let members = [(FIELDS_WORDS[0], self.fields(class)), (METHODS_WORD, self.methods(class))];
 		let lines = members.into_iter().filter(|(_, names)| !names.is_empty()).map(|(word, names)| format!("{word}: {}", names.join(" ")));
@@ -502,9 +495,9 @@ fn with_object_words(node: Node, objects: &Objects) -> Node {
 		}
 	}
 	let reflected = match node.drop_meta() {
-		Node::Key(subject, Op::Dot, word) => word_of(word).and_then(|word| objects.dot_word(subject, word)),
-		Node::List(items, Bracket::Round | Bracket::None, _) if items.len() == 2 && word_of(&items[0]) == Some(DIR_WORD) => objects.dir(&items[1]),
-		Node::List(items, Bracket::Round | Bracket::None, _) if items.len() == 2 && word_of(&items[0]) == Some(HELP_WORD) => objects.help(&items[1]),
+		Node::Key(subject, Op::Dot, word) => word.symbol_name().and_then(|word| objects.dot_word(subject, word)),
+		Node::List(items, Bracket::Round | Bracket::None, _) if items.len() == 2 && items[0].symbol_name() == Some(DIR_WORD) => objects.dir(&items[1]),
+		Node::List(items, Bracket::Round | Bracket::None, _) if items.len() == 2 && items[0].symbol_name() == Some(HELP_WORD) => objects.help(&items[1]),
 		_ => None,
 	};
 	reflected.unwrap_or_else(|| node.map_children(|child| with_object_words(child, objects)))

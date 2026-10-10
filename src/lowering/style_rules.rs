@@ -22,7 +22,7 @@ pub fn lower(node: Node) -> Node {
 fn style_block(node: &Node) -> Option<Node> {
 	let Node::Key(name, Op::Colon, body) = node.drop_meta() else { return None };
 	let Node::List(items, Bracket::Curly, separator) = body.drop_meta() else { return None };
-	matches!(name.drop_meta(), Node::Symbol(word) if word == STYLE)
+	name.is_symbol(STYLE)
 		.then(|| Node::Key(name.clone(), Op::Colon, Box::new(Node::List(styled(items.clone(), separator), Bracket::Curly, separator.clone()))))
 }
 

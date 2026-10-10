@@ -12,7 +12,8 @@
 //! Shared values (P106): `shared done = false`, `shared n = 0`, `shared x = 0.5` are one-cell arrays: a read of `n` is
 //! `shared_get(n, 1)`, `n = v` is `shared_set(n, 1, v)`, `n += v` is `shared_add(n, 1, v)`; a boolean is the Int 1 or 0.
 
-use super::nodes::{call, is_word, key};
+use super::words::{MAP_WORD, SUM_WORD};
+use super::nodes::{call, key};
 use crate::node::{symbol, Bracket, Node, Separator};
 use crate::operators::Op;
 use std::collections::{HashMap, HashSet};
@@ -24,9 +25,7 @@ const SHARED_NEW: &str = crate::host::SHARED_WORDS[0];
 const SHARED_COUNT: &str = crate::host::SHARED_WORDS[4];
 const COUNTING_WORDS: [&str; 3] = ["count", "length", "size"];
 const FLOAT_WORDS: [&str; 3] = ["float", "real", "double"];
-const MAP_WORD: &str = "map";
 const DOT_WORD: &str = "dot";
-const SUM_WORD: &str = "sum";
 
 /// `linear xs = int[n]`: an array in linear memory
 const LINEAR_WORD: &str = "linear";
@@ -102,6 +101,8 @@ pub fn lower(node: Node) -> Node {
 		}
 		declared.extend(results);
 	}
+	// heavy maps of linear float arrays go to the GPU by themselves above a count (card gpu-auto), kept there as @gpu maps
+	let node = crate::gpu_maps::kept_on_gpu(crate::gpu_maps::automatic(node, &|list| is_linear_floats(list, &declared)));
 	let node = crate::gpu_maps::warn_unapplied(node);
 	if (declared.is_empty() && !reduces_on_gpu(&node)) || matches!(node, Node::Error(_)) {
 		return node;
@@ -150,7 +151,7 @@ fn float_array_assignment(node: &Node) -> Option<String> {
 fn only_linear_uses(node: &Node, name: &str, picked: &HashSet<String>) -> bool {
 	let (mut mentions, mut supported, mut pairings) = (0, 0, 0);
 	node.visit(&mut |part| {
-		mentions += usize::from(is_word(part, name));
+		mentions += usize::from(part.is_symbol(name));
 		let (uses, paired) = linear_uses(part, name, picked);
 		supported += uses;
 		pairings += paired;
@@ -161,7 +162,7 @@ fn only_linear_uses(node: &Node, name: &str, picked: &HashSet<String>) -> bool {
 /// The mentions of name that part makes as a linear array supports them, and how many of those pair it with another
 /// array of `picked`
 fn linear_uses(part: &Node, name: &str, picked: &HashSet<String>) -> (usize, usize) {
-	let is_name = |node: &Node| is_word(node, name);
+	let is_name = |node: &Node| node.is_symbol(name);
 	let is_picked = |node: &Node| matches!(node.drop_meta(), Node::Symbol(symbol) if picked.contains(symbol));
 	let paired = |left: &Node, right: &Node| {
 		let uses = usize::from(is_name(left)) + usize::from(is_name(right));
@@ -593,7 +594,7 @@ fn outer_values(kernel: &crate::gpu_maps::Kernel) -> Node {
 fn gpu_reduced(target: &Node, reduction: crate::gpu_maps::Reduction, array: &Node, kernel: &crate::gpu_maps::Kernel, on_cpu: Node, names: &HashMap<String, Shared>, keeping: i64) -> Node {
 	use crate::wasm_emitter::linear_arrays::{LINEAR_COUNT, LINEAR_FLOAT_WORDS, LINEAR_NEW};
 	let [get, _, _] = LINEAR_FLOAT_WORDS;
-	let (size, fewest) = (crate::gpu_maps::WORKGROUP_SIZE, crate::gpu_maps::GPU_MAP_MIN_COUNT);
+	let (size, fewest) = (crate::gpu_maps::WORKGROUP_SIZE, crate::gpu_maps::fewest_items(keeping));
 	let combined = reduction.combined("reduce_value", &format!("{get}(reduce_partials, reduce_index)"));
 	let template = crate::warp_parser::parse(&format!("reduce_partials = {LINEAR_NEW}(({LINEAR_COUNT}(reduce_source) + {size} - 1)//{size}); \
 		reduce_target = if {LINEAR_COUNT}(reduce_source) < {fewest} or {}(gpu_shader, reduce_source, gpu_values, reduce_partials, {LINEAR_COUNT}(reduce_partials), {keeping}) == 0 then reduce_on_cpu \
@@ -632,7 +633,7 @@ fn copied_into_block(target: &Node, array: &Node) -> (Node, Node) {
 fn gpu_mapped(target: &Node, array: &Node, lambda: &Node, kernel: crate::gpu_maps::Kernel, keeping: i64) -> Node {
 	use crate::wasm_emitter::linear_arrays::LINEAR_COUNT;
 	let size = crate::gpu_maps::WORKGROUP_SIZE;
-	let fewest = crate::gpu_maps::GPU_MAP_MIN_COUNT;
+	let fewest = crate::gpu_maps::fewest_items(keeping);
 	let mapped = format!("if {LINEAR_COUNT}(map_source) < {fewest} or {}(gpu_shader, map_source, gpu_values, map_target, ({LINEAR_COUNT}(map_source) + {size} - 1)//{size}, {keeping}) == 0 {{ map_loop }}", crate::host::GPU_MAP_LINEAR);
 	block_mapped(target, array, lambda, &mapped, &[("gpu_shader", Node::Text(kernel.map_shader())), ("gpu_values", outer_values(&kernel))])
 }

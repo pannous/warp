@@ -251,34 +251,32 @@ impl WarpParser {
 		}
 		// `for friend in xs`: a declared type's name visits only its instances, as `it`; the name in the body is the item
 		// (P46), a call `friend(…)` still constructs
-		let (variable, body) = match variable.drop_meta() {
+		let filtered = match variable.drop_meta() {
 			Symbol(name) if self.declared_types.contains(name) => {
 				let it = Symbol(crate::lambdas::IMPLICIT_PARAMETER.to_string());
-				let test = Node::List(vec![Symbol(crate::traits::INSTANCE_OF.to_string()), it.clone(), Node::Text(name.clone())], Bracket::Round, Separator::None);
+				let test = call(crate::traits::INSTANCE_OF, vec![it.clone(), Node::Text(name.clone())]);
 				let header = type_filter_header(name, &iterable, &body);
 				let body = item_named(body, name, &it);
-				match self.filtered_body(&format!("for {name} in …"), &format!("for x in … {{ if x is {name} {{ … }} }}"), header, test, body) {
-					Ok(body) => (it, body),
-					Err(error) => return Some(error),
-				}
+				self.type_filtered_body(name, header, test, body).map(|body| (it, body))
 			}
 			// `for number in xs`: a type word visits only the items of that type, under its own name; a literal list whose items
 			// all are of the type needs no filter
 			Symbol(name) if crate::analyzer::type_word_kind(name).is_some() && !literal_items_of_type(&iterable, name) => {
 				let test = self.type_test(&variable, name).expect("a type word");
 				let header = type_filter_header(name, &iterable, &body);
-				match self.filtered_body(&format!("for {name} in …"), &format!("for x in … {{ if x is {name} {{ … }} }}"), header, test, body) {
-					Ok(body) => (variable, body),
-					Err(error) => return Some(error),
-				}
+				self.type_filtered_body(name, header, test, body).map(|body| (variable.clone(), body))
 			}
-			_ => (variable, body),
+			_ => Ok((variable, body)),
+		};
+		let (variable, body) = match filtered {
+			Ok(filtered) => filtered,
+			Err(error) => return Some(error),
 		};
 		// `for chars in text: print it`: a unit word walks the text by that unit, the item is `it`
 		if let Some((unit, iterable)) = unit_iteration(&variable, &iterable, &body) {
-			return Some(Node::List(vec![Symbol("for".to_string()), unit, Symbol("in".to_string()), iterable, body], Bracket::None, Separator::Space));
+			return Some(for_in_loop(unit, iterable, body));
 		}
-		Some(Node::List(vec![Symbol("for".to_string()), variable, Symbol("in".to_string()), iterable, body], Bracket::None, Separator::Space))
+		Some(for_in_loop(variable, iterable, body))
 	}
 
 	/// The iterable of a loop header, its words up to the body: `for todo in todos sorted by priority {…}`,
@@ -364,7 +362,7 @@ impl WarpParser {
 			Err(error) => return Some(error),
 		};
 		let it = Symbol(crate::lambdas::IMPLICIT_PARAMETER.to_string());
-		Some(Node::List(vec![Symbol("for".to_string()), it, Symbol("in".to_string()), iterable, body], Bracket::None, Separator::Space))
+		Some(for_in_loop(it, iterable, body))
 	}
 
 	/// `(even number)` in a loop header: `even(it)` (built in: `it%2==0`, `odd` its opposite, else the user's function) and
@@ -379,10 +377,10 @@ impl WarpParser {
 		let type_test = self.type_test(&it, type_name)?;
 		let parity = |op: Op| Node::Key(Box::new(Node::Key(Box::new(it.clone()), Op::Mod, Box::new(Node::int(2)))), op, Box::new(Node::int(0)));
 		let adjective_test = match adjective.as_str() {
-			word if self.functions.contains(word) => Node::List(vec![Symbol(word.to_string()), it.clone()], Bracket::Round, Separator::None),
+			word if self.functions.contains(word) => call(word, vec![it.clone()]),
 			EVEN_WORD => parity(Op::Eq),
 			ODD_WORD => parity(Op::Ne),
-			word => Node::List(vec![Symbol(word.to_string()), it.clone()], Bracket::Round, Separator::None),
+			word => call(word, vec![it.clone()]),
 		};
 		Some(Node::Key(Box::new(type_test), Op::And, Box::new(adjective_test)))
 	}
@@ -396,7 +394,7 @@ impl WarpParser {
 		} else {
 			return None;
 		};
-		Some(Node::List(vec![Symbol(test.to_string()), value.clone(), Node::Text(type_name.to_string())], Bracket::Round, Separator::None))
+		Some(call(test, vec![value.clone(), Node::Text(type_name.to_string())]))
 	}
 
 	/// The body of a filtering loop: run only when `test` holds; the filter is announced once (got-it warning, P46).
@@ -414,6 +412,11 @@ impl WarpParser {
 		Ok(Node::List(vec![guarded], Bracket::Curly, Separator::Semicolon))
 	}
 
+	/// `filtered_body` of `for T in xs`, which visits only the items of type T
+	fn type_filtered_body(&self, name: &str, header: Option<(String, String)>, test: Node, body: Node) -> Result<Node, Node> {
+		self.filtered_body(&format!("for {name} in …"), &format!("for x in … {{ if x is {name} {{ … }} }}"), header, test, body)
+	}
+
 	/// `for (i=0;i<n;i++) {body}`, `for(…) print i`, `for(…): body`, at its head: `((for (head)) {body})` as lowering reads it
 	fn c_style_for(&mut self) -> Node {
 		let head = self.parse_atom();
@@ -424,7 +427,7 @@ impl WarpParser {
 			_ if self.matches_keyword(DO_WORD) => self.colon_body(DO_WORD),
 			_ => self.indented_lines_below().unwrap_or_else(|| self.rest_of_statement()),
 		};
-		Node::List(vec![Node::List(vec![Symbol("for".to_string()), head], Bracket::Round, Separator::None), as_block(body)], Bracket::None, Separator::None)
+		Node::List(vec![call("for", vec![head]), as_block(body)], Bracket::None, Separator::None)
 	}
 
 	/// The body after `:` or `do`: the statements up to `end` after `do`, the indented block under a `:` or `do` at the end

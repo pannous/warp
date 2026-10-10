@@ -5,8 +5,8 @@
 //! becomes `closure_call_1(f, x)`, a helper per arity that call_refs the closure's entry (wasm_emitter/closures.rs).
 //! notes/closures.md describes the representation.
 
-use super::nodes::{call, key};
-use crate::analyzer::extract_user_functions;
+use super::words::{FOR_WORD, GLOBAL_WORD, IN_WORD};
+use super::nodes::{call, key, parameter_name};
 use crate::context::{Context, Param, UserFunctionDef};
 use crate::diagnostic::Diagnostic;
 use crate::lambdas::arrow_lambda;
@@ -29,10 +29,7 @@ pub fn function_reference(name: String) -> Node {
 pub fn referenced_function(node: &Node) -> Option<String> {
 	let Node::Meta { node: inner, data } = node else { return None };
 	match data.as_ref() {
-		Node::Key(key, _, _) if key.name() == FUNCTION_REFERENCE_MARK => match inner.drop_meta() {
-			Node::Symbol(name) => Some(name.clone()),
-			_ => None,
-		},
+		Node::Key(key, _, _) if key.name() == FUNCTION_REFERENCE_MARK => inner.symbol_name().map(String::from),
 		_ => referenced_function(inner),
 	}
 }
@@ -42,8 +39,6 @@ const CAPTURE_LOCAL_MARK: &str = "·capture·";
 const CAPTURE_READER_MARK: &str = "·captured·";
 const LIFTED_PREFIX: &str = "closure_lambda_";
 const IMPLICIT_PARAMETER: &str = "it";
-const FOR_WORD: &str = "for";
-const IN_WORD: &str = "in";
 
 pub fn closure_call_name(arity: usize) -> String {
 	format!("{CLOSURE_CALL_PREFIX}{arity}")
@@ -159,8 +154,7 @@ fn for_loop_parts(node: &Node) -> Option<(&str, &Node)> {
 }
 
 fn lift_closures(program: Node) -> Node {
-	let mut context = Context::new();
-	extract_user_functions(&mut context, &program);
+	let context = crate::analyzer::function_context(&program);
 	let variables = captured_variables_of(&program);
 	let functions: HashSet<String> = context.user_functions.keys().cloned().collect();
 	// `g = x => x`: the parameter a function hands back, so `g(y => y*2)(4)` calls what it was given
@@ -273,7 +267,7 @@ fn gives_reference(node: &Node) -> bool {
 
 /// `return value`
 fn is_return(items: &[Node]) -> bool {
-	matches!(items, [word, _] if matches!(word.drop_meta(), Node::Symbol(name) if name == "return"))
+	matches!(items, [word, _] if word.is_symbol("return"))
 }
 
 /// The variable or field a node names: `s`, `s.fs` (a field lookup `s#("fs"+1)` after mutation.rs), `s.a.fs`
@@ -407,7 +401,6 @@ fn is_field(node: &Node) -> bool {
 	holder_path(node).is_some_and(|path| path.contains('.'))
 }
 
-const GLOBAL_WORD: &str = "global";
 /// Methods that append one value to a list variable (analyzer APPEND_METHODS)
 const APPEND_METHODS: [&str; 3] = ["add", "append", "push"];
 
@@ -421,14 +414,6 @@ fn definition_parameters(node: &Node, functions: &HashSet<String>) -> Option<Vec
 			functions.contains(name).then(|| params.iter().filter_map(parameter_name).collect())
 		}
 		Node::Symbol(name) if functions.contains(name) => Some(vec![IMPLICIT_PARAMETER.to_string()]),
-		_ => None,
-	}
-}
-
-fn parameter_name(param: &Node) -> Option<String> {
-	match param.drop_meta() {
-		Node::Symbol(name) => Some(name.clone()),
-		Node::Key(name, _, _) => parameter_name(name),
 		_ => None,
 	}
 }
@@ -688,7 +673,7 @@ fn assigned_variables(body: &Node) -> HashSet<String> {
 fn declared_globals(body: &Node) -> HashSet<String> {
 	let mut globals = HashSet::new();
 	body.visit(&mut |node| if let Node::Key(keyword, Op::Colon, name) = node {
-		if matches!(keyword.drop_meta(), Node::Symbol(word) if word == GLOBAL_WORD) {
+		if keyword.is_symbol(GLOBAL_WORD) {
 			globals.insert(name.drop_meta().name());
 		}
 	});

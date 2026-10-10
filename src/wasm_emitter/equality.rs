@@ -69,9 +69,9 @@ impl WasmGcEmitter {
 	}
 
 	/// `==`/`!=` by value: structured values, any text (`peek() == " "` of a function returning text), and a value held
-	/// as a Node whose kind shows only at run time (a cell's, `cell_get(c) == 5`)
+	/// as a Node whose kind shows only at run time (a cell's, `cell_get(c) == 5`; a call giving a Node that holds a float)
 	pub(crate) fn compares_structurally(&self, op: &Op, left: &Node, right: &Node) -> bool {
-		let by_value = |node: &Node| self.get_type(node) == Kind::Text || self.is_held_cell_value(node);
+		let by_value = |node: &Node| matches!(self.get_type(node), Kind::Text | Kind::Empty) || self.is_held_cell_value(node);
 		matches!(op, Op::Eq | Op::Ne) && (self.is_structural_operand(left) || self.is_structural_operand(right) || by_value(left) || by_value(right))
 	}
 
@@ -137,8 +137,7 @@ impl WasmGcEmitter {
 			self.emit_call(func, IS_TRUTHY);
 		} else if self.get_type(condition).is_float() {
 			self.emit_float_value(func, condition);
-			func.instruction(&I::F64Const(Ieee64::new(0.0f64.to_bits())));
-			func.instruction(&I::F64Ne);
+			Self::emit_list(func, &[I::F64Const(Ieee64::new(0.0f64.to_bits())), I::F64Ne]);
 		} else {
 			emit_number(self, func, condition);
 			func.instruction(&I::I64Const(0));
@@ -171,8 +170,7 @@ impl WasmGcEmitter {
 			s.emit_call(f, VALUES_EQUAL);
 			for side in [left, right] {
 				kind_of(f, side);
-				f.instruction(&I::I64Const(crate::type_kinds::BOOL_KIND));
-				f.instruction(&I::I64Eq);
+				Self::emit_list(f, &[I::I64Const(crate::type_kinds::BOOL_KIND), I::I64Eq]);
 			}
 			Self::emit_list(f, &[I::I32Eq, I::I32And]);
 		});
@@ -190,10 +188,7 @@ impl WasmGcEmitter {
 				f.instruction(&I::I32Eqz);
 				Self::return_if(f, 0);
 				Self::field(f, local, node, 0);
-				f.instruction(&I::I64Const(KIND_MASK));
-				f.instruction(&I::I64And);
-				f.instruction(&I::I64Const(kind as i64));
-				f.instruction(&I::I64Ne);
+				Self::emit_list(f, &[I::I64Const(KIND_MASK), I::I64And, I::I64Const(kind as i64), I::I64Ne]);
 				Self::return_if(f, 0);
 			};
 			is_node_of_kind(f, entry, Kind::Key);
@@ -201,17 +196,15 @@ impl WasmGcEmitter {
 			f.instruction(&I::LocalSet(key));
 			is_node_of_kind(f, key, Kind::Symbol);
 			Self::field(f, key, node, 1);
-			f.instruction(&I::RefCastNonNull(HeapType::Concrete(string)));
-			f.instruction(&I::LocalSet(name));
-			f.instruction(&I::LocalGet(name));
-			f.instruction(&I::StructGet { struct_type_index: string, field_index: 1 });
-			f.instruction(&I::I32Eqz);
+			Self::emit_list(f, &[
+				I::RefCastNonNull(HeapType::Concrete(string)), I::LocalSet(name), I::LocalGet(name),
+				I::StructGet { struct_type_index: string, field_index: 1 }, I::I32Eqz,
+			]);
 			Self::return_if(f, 0);
-			f.instruction(&I::LocalGet(name));
-			f.instruction(&I::StructGet { struct_type_index: string, field_index: 0 });
-			f.instruction(&I::I32Load8U(BYTE));
-			f.instruction(&I::I32Const(crate::node::ATTRIBUTE_MARK as i32));
-			f.instruction(&I::I32Eq);
+			Self::emit_list(f, &[
+				I::LocalGet(name), I::StructGet { struct_type_index: string, field_index: 0 }, I::I32Load8U(BYTE),
+				I::I32Const(crate::node::ATTRIBUTE_MARK as i32), I::I32Eq,
+			]);
 		});
 	}
 
@@ -222,11 +215,7 @@ impl WasmGcEmitter {
 		Self::test(f, cell, HeapType::Concrete(node));
 		f.instruction(&I::If(BlockType::Empty));
 		Self::field(f, cell, node, 0);
-		f.instruction(&I::I64Const(KIND_MASK));
-		f.instruction(&I::I64And);
-		f.instruction(&I::I64Const(Kind::List as i64));
-		f.instruction(&I::I64Eq);
-		f.instruction(&I::If(BlockType::Empty));
+		Self::emit_list(f, &[I::I64Const(KIND_MASK), I::I64And, I::I64Const(Kind::List as i64), I::I64Eq, I::If(BlockType::Empty)]);
 		Self::field(f, cell, node, 1);
 		self.call(f, IS_META_ENTRY);
 		f.instruction(&I::If(BlockType::Empty));
@@ -239,11 +228,8 @@ impl WasmGcEmitter {
 			push_rest(f);
 		}
 		Self::emit_list(f, extra);
-		f.instruction(&I::Call(recurse));
-		f.instruction(&I::Return);
-		f.instruction(&I::End);
-		f.instruction(&I::End);
-		f.instruction(&I::End);
+		Self::emit_list(f, &[I::Call(recurse), I::Return, I::End]);
+		Self::emit_list(f, &[I::End, I::End]);
 	}
 
 	pub(super) fn any_ref() -> ValType {
@@ -255,14 +241,14 @@ impl WasmGcEmitter {
 	}
 
 	pub(super) fn test(func: &mut Function, local: u32, heap: HeapType) {
-		func.instruction(&I::LocalGet(local));
-		func.instruction(&I::RefTestNonNull(heap));
+		Self::emit_list(func, &[I::LocalGet(local), I::RefTestNonNull(heap)]);
 	}
 
 	pub(super) fn field(func: &mut Function, local: u32, struct_type: u32, field_index: u32) {
-		func.instruction(&I::LocalGet(local));
-		func.instruction(&I::RefCastNonNull(HeapType::Concrete(struct_type)));
-		func.instruction(&I::StructGet { struct_type_index: struct_type, field_index });
+		Self::emit_list(func, &[
+			I::LocalGet(local), I::RefCastNonNull(HeapType::Concrete(struct_type)),
+			I::StructGet { struct_type_index: struct_type, field_index },
+		]);
 	}
 
 	/// `"A"` lexes as the character 'A': a character equals the one-character text of it, compared as that text.
@@ -270,14 +256,11 @@ impl WasmGcEmitter {
 	fn emit_character_equals_text(&self, func: &mut Function, node: u32, recurse: u32) {
 		for (character, text) in [(0, 1), (1, 0)] {
 			let has_kind = |func: &mut Function, local: u32, kind: Kind| {
-				func.instruction(&I::LocalGet(local + 2));
-				func.instruction(&I::I64Const(kind as i64));
-				func.instruction(&I::I64Eq);
+				Self::emit_list(func, &[I::LocalGet(local + 2), I::I64Const(kind as i64), I::I64Eq]);
 			};
 			has_kind(func, character, Kind::Codepoint);
 			has_kind(func, text, Kind::Text);
-			func.instruction(&I::I32And);
-			func.instruction(&I::If(BlockType::Empty));
+			Self::emit_list(func, &[I::I32And, I::If(BlockType::Empty)]);
 			for local in [0, 1] {
 				func.instruction(&I::LocalGet(local));
 				if local == character {
@@ -285,17 +268,12 @@ impl WasmGcEmitter {
 					self.call(func, crate::wasm_emitter::text_builtins::TEXT_OF);
 				}
 			}
-			func.instruction(&I::Call(recurse));
-			func.instruction(&I::Return);
-			func.instruction(&I::End);
+			Self::emit_list(func, &[I::Call(recurse), I::Return, I::End]);
 		}
 	}
 
 	pub(super) fn return_if(func: &mut Function, result: i32) {
-		func.instruction(&I::If(BlockType::Empty));
-		func.instruction(&I::I32Const(result));
-		func.instruction(&I::Return);
-		func.instruction(&I::End);
+		Self::emit_list(func, &[I::If(BlockType::Empty), I::I32Const(result), I::Return, I::End]);
 	}
 
 	/// The f64 of a number payload: a float's value, an Int converted (an exact one, a ratio too, by exact_to_f64)
@@ -336,9 +314,7 @@ impl WasmGcEmitter {
 	pub(super) fn is_number_kind(func: &mut Function, kind_local: u32) {
 		let kinds = [Kind::Int as i64, Kind::Float as i64, crate::type_kinds::BOOL_KIND];
 		for kind in kinds {
-			func.instruction(&I::LocalGet(kind_local));
-			func.instruction(&I::I64Const(kind));
-			func.instruction(&I::I64Eq);
+			Self::emit_list(func, &[I::LocalGet(kind_local), I::I64Const(kind), I::I64Eq]);
 		}
 		for _ in 1..kinds.len() {
 			func.instruction(&I::I32Or);
@@ -351,57 +327,31 @@ impl WasmGcEmitter {
 	pub(super) fn emit_unordered_entries_equal(f: &mut Function, node: u32, recurse: u32, is_meta_entry: u32, extra: &[I<'static>]) {
 		let (walked, other, found) = (7, 8, 9);
 		let cell_field = |f: &mut Function, local: u32, field_index: u32| {
-			f.instruction(&I::LocalGet(local));
-			f.instruction(&I::RefAsNonNull);
-			f.instruction(&I::StructGet { struct_type_index: node, field_index });
+			Self::emit_list(f, &[I::LocalGet(local), I::RefAsNonNull, I::StructGet { struct_type_index: node, field_index }]);
 		};
 		for (from, against) in [(0, 1), (1, 0)] {
 			for (local, list) in [(walked, from), (other, against)] {
-				f.instruction(&I::LocalGet(list));
-				f.instruction(&I::RefCastNonNull(HeapType::Concrete(node)));
-				f.instruction(&I::LocalSet(local));
+				Self::emit_list(f, &[I::LocalGet(list), I::RefCastNonNull(HeapType::Concrete(node)), I::LocalSet(local)]);
 			}
-			f.instruction(&I::Block(BlockType::Empty));
-			f.instruction(&I::Loop(BlockType::Empty));
-			f.instruction(&I::LocalGet(walked));
-			f.instruction(&I::RefIsNull);
-			f.instruction(&I::BrIf(1));
+			Self::emit_list(f, &[I::Block(BlockType::Empty), I::Loop(BlockType::Empty), I::LocalGet(walked), I::RefIsNull, I::BrIf(1)]);
 			cell_field(f, walked, 1);
 			f.instruction(&I::Call(is_meta_entry));
 			f.instruction(&I::LocalSet(found)); // a meta entry needs no partner
-			f.instruction(&I::LocalGet(against));
-			f.instruction(&I::RefCastNonNull(HeapType::Concrete(node)));
-			f.instruction(&I::LocalSet(other));
-			f.instruction(&I::Block(BlockType::Empty));
-			f.instruction(&I::Loop(BlockType::Empty));
-			f.instruction(&I::LocalGet(other));
-			f.instruction(&I::RefIsNull);
-			f.instruction(&I::BrIf(1));
+			Self::emit_list(f, &[
+				I::LocalGet(against), I::RefCastNonNull(HeapType::Concrete(node)), I::LocalSet(other), I::Block(BlockType::Empty),
+				I::Loop(BlockType::Empty), I::LocalGet(other), I::RefIsNull, I::BrIf(1),
+			]);
 			cell_field(f, walked, 1);
 			cell_field(f, other, 1);
 			Self::emit_list(f, extra);
-			f.instruction(&I::Call(recurse));
-			f.instruction(&I::If(BlockType::Empty));
-			f.instruction(&I::I32Const(1));
-			f.instruction(&I::LocalSet(found));
-			f.instruction(&I::Br(2));
-			f.instruction(&I::End);
+			Self::emit_list(f, &[I::Call(recurse), I::If(BlockType::Empty), I::I32Const(1), I::LocalSet(found), I::Br(2), I::End]);
 			cell_field(f, other, 2);
-			f.instruction(&I::LocalSet(other));
-			f.instruction(&I::Br(0));
-			f.instruction(&I::End);
-			f.instruction(&I::End);
-			f.instruction(&I::LocalGet(found));
-			f.instruction(&I::I32Eqz);
+			Self::emit_list(f, &[I::LocalSet(other), I::Br(0), I::End, I::End, I::LocalGet(found), I::I32Eqz]);
 			Self::return_if(f, 0);
 			cell_field(f, walked, 2);
-			f.instruction(&I::LocalSet(walked));
-			f.instruction(&I::Br(0));
-			f.instruction(&I::End);
-			f.instruction(&I::End);
+			Self::emit_list(f, &[I::LocalSet(walked), I::Br(0), I::End, I::End]);
 		}
-		f.instruction(&I::I32Const(1));
-		f.instruction(&I::Return);
+		Self::emit_list(f, &[I::I32Const(1), I::Return]);
 	}
 
 	/// values_equal(a: anyref, b: anyref) -> i32; locals: kind a, kind b, ptr a, ptr b, remaining bytes
@@ -419,15 +369,8 @@ impl WasmGcEmitter {
 			s.skip_meta_cell(f, 0, 1, recurse, &[]);
 			s.skip_meta_cell(f, 1, 0, recurse, &[]);
 			// null equals only null
-			f.instruction(&I::LocalGet(0));
-			f.instruction(&I::RefIsNull);
-			f.instruction(&I::If(BlockType::Empty));
-			f.instruction(&I::LocalGet(1));
-			f.instruction(&I::RefIsNull);
-			f.instruction(&I::Return);
-			f.instruction(&I::End);
-			f.instruction(&I::LocalGet(1));
-			f.instruction(&I::RefIsNull);
+			Self::emit_list(f, &[I::LocalGet(0), I::RefIsNull, I::If(BlockType::Empty), I::LocalGet(1), I::RefIsNull, I::Return, I::End]);
+			Self::emit_list(f, &[I::LocalGet(1), I::RefIsNull]);
 			Self::return_if(f, 0);
 
 			// Nodes: same kind (Int and Float are compatible), then equal data and equal value
@@ -441,38 +384,25 @@ impl WasmGcEmitter {
 				Self::emit_list(f, &[I::I64Const(crate::type_kinds::UNMARKED_KIND), I::I64And, I::LocalSet(to)]);
 			}
 			s.emit_character_equals_text(f, node, recurse);
-			f.instruction(&I::LocalGet(2));
-			f.instruction(&I::LocalGet(3));
-			f.instruction(&I::I64Ne);
-			f.instruction(&I::If(BlockType::Empty));
+			Self::emit_list(f, &[I::LocalGet(2), I::LocalGet(3), I::I64Ne, I::If(BlockType::Empty)]);
 			Self::is_number_kind(f, 2);
 			Self::is_number_kind(f, 3);
-			f.instruction(&I::I32And);
-			f.instruction(&I::I32Eqz);
+			Self::emit_list(f, &[I::I32And, I::I32Eqz]);
 			Self::return_if(f, 0);
 			f.instruction(&I::End);
 			// `{…}` objects are maps: their entries may come in any order
 			for kind in [2, 3] {
-				f.instruction(&I::LocalGet(kind));
-				f.instruction(&I::I64Const(Kind::List as i64));
-				f.instruction(&I::I64Eq);
+				Self::emit_list(f, &[I::LocalGet(kind), I::I64Const(Kind::List as i64), I::I64Eq]);
 			}
-			f.instruction(&I::I32And);
-			f.instruction(&I::If(BlockType::Empty));
+			Self::emit_list(f, &[I::I32And, I::If(BlockType::Empty)]);
 			Self::emit_unordered_entries_equal(f, node, recurse, s.func_index(IS_META_ENTRY), &[]);
 			f.instruction(&I::End);
 			Self::field(f, 0, node, 1);
 			Self::field(f, 1, node, 1);
-			f.instruction(&I::Call(recurse));
-			f.instruction(&I::If(BlockType::Result(i32t)));
+			Self::emit_list(f, &[I::Call(recurse), I::If(BlockType::Result(i32t))]);
 			Self::field(f, 0, node, 2);
 			Self::field(f, 1, node, 2);
-			f.instruction(&I::Call(recurse));
-			f.instruction(&I::Else);
-			f.instruction(&I::I32Const(0));
-			f.instruction(&I::End);
-			f.instruction(&I::Return);
-			f.instruction(&I::End);
+			Self::emit_list(f, &[I::Call(recurse), I::Else, I::I32Const(0), I::End, I::Return, I::End]);
 
 			// Codepoints
 			Self::test(f, 0, Self::i31_heap());
@@ -480,16 +410,9 @@ impl WasmGcEmitter {
 			Self::test(f, 1, Self::i31_heap());
 			f.instruction(&I::If(BlockType::Result(i32t)));
 			for local in [0, 1] {
-				f.instruction(&I::LocalGet(local));
-				f.instruction(&I::RefCastNonNull(Self::i31_heap()));
-				f.instruction(&I::I31GetS);
+				Self::emit_list(f, &[I::LocalGet(local), I::RefCastNonNull(Self::i31_heap()), I::I31GetS]);
 			}
-			f.instruction(&I::I32Eq);
-			f.instruction(&I::Else);
-			f.instruction(&I::I32Const(0));
-			f.instruction(&I::End);
-			f.instruction(&I::Return);
-			f.instruction(&I::End);
+			Self::emit_list(f, &[I::I32Eq, I::Else, I::I32Const(0), I::End, I::Return, I::End]);
 
 			// Texts: equal length, then equal bytes
 			Self::test(f, 0, HeapType::Concrete(string));
@@ -505,55 +428,36 @@ impl WasmGcEmitter {
 				Self::field(f, from, string, field_index);
 				f.instruction(&I::LocalSet(to));
 			}
-			f.instruction(&I::Block(BlockType::Empty));
-			f.instruction(&I::Loop(BlockType::Empty));
-			f.instruction(&I::LocalGet(6));
-			f.instruction(&I::I32Eqz);
-			f.instruction(&I::BrIf(1));
+			Self::emit_list(f, &[I::Block(BlockType::Empty), I::Loop(BlockType::Empty), I::LocalGet(6), I::I32Eqz, I::BrIf(1)]);
 			for pointer in [4, 5] {
-				f.instruction(&I::LocalGet(pointer));
-				f.instruction(&I::I32Load8U(BYTE));
+				Self::emit_list(f, &[I::LocalGet(pointer), I::I32Load8U(BYTE)]);
 			}
 			f.instruction(&I::I32Ne);
 			Self::return_if(f, 0);
 			for (local, step) in [(4, 1), (5, 1), (6, -1)] {
-				f.instruction(&I::LocalGet(local));
-				f.instruction(&I::I32Const(step));
-				f.instruction(&I::I32Add);
-				f.instruction(&I::LocalSet(local));
+				Self::emit_list(f, &[I::LocalGet(local), I::I32Const(step), I::I32Add, I::LocalSet(local)]);
 			}
-			f.instruction(&I::Br(0));
-			f.instruction(&I::End);
-			f.instruction(&I::End);
-			f.instruction(&I::I32Const(1));
-			f.instruction(&I::Return);
-			f.instruction(&I::End);
+			Self::emit_list(f, &[I::Br(0), I::End, I::End, I::I32Const(1), I::Return, I::End]);
 
 			// Ints exactly, Int and Float numerically
 			Self::test(f, 0, HeapType::Concrete(i64_box));
 			Self::test(f, 1, HeapType::Concrete(i64_box));
-			f.instruction(&I::I32And);
-			f.instruction(&I::If(BlockType::Empty));
+			Self::emit_list(f, &[I::I32And, I::If(BlockType::Empty)]);
 			Self::field(f, 0, i64_box, 0);
 			Self::field(f, 1, i64_box, 0);
-			f.instruction(&I::I64Eq);
-			f.instruction(&I::Return);
-			f.instruction(&I::End);
+			Self::emit_list(f, &[I::I64Eq, I::Return, I::End]);
 			// BigInts and ratios are normalized (a ratio is never integral), so only two of the same kind can be equal
 			if int_runtime {
 				for heap in [big_int, ratio] {
 					Self::test(f, 0, HeapType::Concrete(heap));
 					Self::test(f, 1, HeapType::Concrete(heap));
-					f.instruction(&I::I32And);
-					f.instruction(&I::If(BlockType::Empty));
+					Self::emit_list(f, &[I::I32And, I::If(BlockType::Empty)]);
 					for local in [0, 1] {
 						f.instruction(&I::LocalGet(local));
 						s.call(f, "int_from_payload");
 					}
 					s.call(f, "exact_cmp");
-					f.instruction(&I::I32Eqz);
-					f.instruction(&I::Return);
-					f.instruction(&I::End);
+					Self::emit_list(f, &[I::I32Eqz, I::Return, I::End]);
 				}
 			}
 			// a float and any number numerically: 0.5 equals the exact 1/2
@@ -580,90 +484,53 @@ impl WasmGcEmitter {
 		let (i64_box, f64_box) = (self.type_manager.i64_box_type, self.type_manager.f64_box_type);
 		let i32t = ValType::I32;
 		self.runtime_function(IS_TRUTHY, vec![Self::any_ref()], vec![i32t], vec![ValType::I64], |_, f| {
-			f.instruction(&I::LocalGet(0));
-			f.instruction(&I::RefIsNull);
+			Self::emit_list(f, &[I::LocalGet(0), I::RefIsNull]);
 			Self::return_if(f, 0);
 
 			Self::test(f, 0, HeapType::Concrete(node));
 			f.instruction(&I::If(BlockType::Empty));
 			Self::field(f, 0, node, 0);
-			f.instruction(&I::I64Const(KIND_MASK));
-			f.instruction(&I::I64And);
-			f.instruction(&I::LocalSet(1));
+			Self::emit_list(f, &[I::I64Const(KIND_MASK), I::I64And, I::LocalSet(1)]);
 			// ø and errors are falsy: `if x {…}` is the check of a result that may have failed (fetch)
-			f.instruction(&I::LocalGet(1));
-			f.instruction(&I::I64Const(Kind::Empty as i64));
-			f.instruction(&I::I64Eq);
-			f.instruction(&I::LocalGet(1));
-			f.instruction(&I::I64Const(Kind::Error as i64));
-			f.instruction(&I::I64Eq);
-			f.instruction(&I::I32Or);
+			Self::emit_list(f, &[
+				I::LocalGet(1), I::I64Const(Kind::Empty as i64), I::I64Eq, I::LocalGet(1), I::I64Const(Kind::Error as i64), I::I64Eq,
+				I::I32Or,
+			]);
 			Self::return_if(f, 0);
 			// lists and blocks are truthy when they have a first element
-			f.instruction(&I::LocalGet(1));
-			f.instruction(&I::I64Const(Kind::Block as i64));
-			f.instruction(&I::I64Eq);
-			f.instruction(&I::LocalGet(1));
-			f.instruction(&I::I64Const(Kind::List as i64));
-			f.instruction(&I::I64Eq);
-			f.instruction(&I::I32Or);
-			f.instruction(&I::If(BlockType::Empty));
+			Self::emit_list(f, &[
+				I::LocalGet(1), I::I64Const(Kind::Block as i64), I::I64Eq, I::LocalGet(1), I::I64Const(Kind::List as i64), I::I64Eq,
+				I::I32Or, I::If(BlockType::Empty),
+			]);
 			Self::field(f, 0, node, 1);
-			f.instruction(&I::RefIsNull);
-			f.instruction(&I::I32Eqz);
-			f.instruction(&I::Return);
-			f.instruction(&I::End);
+			Self::emit_list(f, &[I::RefIsNull, I::I32Eqz, I::Return, I::End]);
 			// keys are falsy only when key and value are
-			f.instruction(&I::LocalGet(1));
-			f.instruction(&I::I64Const(Kind::Key as i64));
-			f.instruction(&I::I64Eq);
-			f.instruction(&I::If(BlockType::Empty));
+			Self::emit_list(f, &[I::LocalGet(1), I::I64Const(Kind::Key as i64), I::I64Eq, I::If(BlockType::Empty)]);
 			Self::field(f, 0, node, 1);
-			f.instruction(&I::Call(recurse));
-			f.instruction(&I::If(BlockType::Result(i32t)));
-			f.instruction(&I::I32Const(1));
-			f.instruction(&I::Else);
+			Self::emit_list(f, &[I::Call(recurse), I::If(BlockType::Result(i32t)), I::I32Const(1), I::Else]);
 			Self::field(f, 0, node, 2);
-			f.instruction(&I::Call(recurse));
-			f.instruction(&I::End);
-			f.instruction(&I::Return);
-			f.instruction(&I::End);
+			Self::emit_list(f, &[I::Call(recurse), I::End, I::Return, I::End]);
 			Self::field(f, 0, node, 1);
-			f.instruction(&I::Call(recurse));
-			f.instruction(&I::Return);
-			f.instruction(&I::End);
+			Self::emit_list(f, &[I::Call(recurse), I::Return, I::End]);
 
 			// payloads: zero numbers, '\0' and empty text are falsy
 			Self::test(f, 0, Self::i31_heap());
-			f.instruction(&I::If(BlockType::Empty));
-			f.instruction(&I::LocalGet(0));
-			f.instruction(&I::RefCastNonNull(Self::i31_heap()));
-			f.instruction(&I::I31GetS);
-			f.instruction(&I::I32Const(0));
-			f.instruction(&I::I32Ne);
-			f.instruction(&I::Return);
-			f.instruction(&I::End);
+			Self::emit_list(f, &[
+				I::If(BlockType::Empty), I::LocalGet(0), I::RefCastNonNull(Self::i31_heap()), I::I31GetS, I::I32Const(0), I::I32Ne,
+				I::Return, I::End,
+			]);
 			Self::test(f, 0, HeapType::Concrete(string));
 			f.instruction(&I::If(BlockType::Empty));
 			Self::field(f, 0, string, 1);
-			f.instruction(&I::I32Const(0));
-			f.instruction(&I::I32Ne);
-			f.instruction(&I::Return);
-			f.instruction(&I::End);
+			Self::emit_list(f, &[I::I32Const(0), I::I32Ne, I::Return, I::End]);
 			Self::test(f, 0, HeapType::Concrete(i64_box));
 			f.instruction(&I::If(BlockType::Empty));
 			Self::field(f, 0, i64_box, 0);
-			f.instruction(&I::I64Const(0));
-			f.instruction(&I::I64Ne);
-			f.instruction(&I::Return);
-			f.instruction(&I::End);
+			Self::emit_list(f, &[I::I64Const(0), I::I64Ne, I::Return, I::End]);
 			Self::test(f, 0, HeapType::Concrete(f64_box));
 			f.instruction(&I::If(BlockType::Empty));
 			Self::field(f, 0, f64_box, 0);
-			f.instruction(&I::F64Const(Ieee64::new(0f64.to_bits())));
-			f.instruction(&I::F64Ne);
-			f.instruction(&I::Return);
-			f.instruction(&I::End);
+			Self::emit_list(f, &[I::F64Const(Ieee64::new(0f64.to_bits())), I::F64Ne, I::Return, I::End]);
 			f.instruction(&I::I32Const(1));
 		});
 		self.export_runtime_function(IS_TRUTHY);

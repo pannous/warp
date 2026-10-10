@@ -78,6 +78,10 @@ A function of a number broadcasts over a list; `map` takes a lambda `x => …`.
 square := it * it; [square [1 2 3], [1 2 3].map(x => x * 2)]
 ```
 
+A heavy map of a linear float array runs on the GPU by itself from 10× its break-even (`GPU_AUTO_MIN_COUNT`), with a
+one-time notice: f32, approximate by design, the error grows with the item count. `@cpu` (on the map, a block or a
+function) keeps it exact in f64, `WARP_GPU=off` a whole run; `@gpu` opts in from the break-even.
+
 ## Objects
 
 Literal objects with dot access and in-place updates.
@@ -121,6 +125,15 @@ def adder(k) = x => x + k; adder(3)(4)
 
 ```warp => [int yes 3 1]
 class Point { x: int y: int }; [type(3), "3" is text, "3" as int, Point{x: 1 y: 2}.x]
+```
+
+## Data and storage
+
+`stored x = v` survives runs; `local[k]` (localStorage), `database.k` (IndexedDB / SQLite) are key-value stores;
+`stored xs: [C]` is a table: `add` inserts, `where` queries (SQL natively), field writes go through.
+
+```warp => "Bo"
+class Person{name: text; age: int}; stored people: [Person]; people.add(Person("Bo", 30)); (people where age > 18)#1.name
 ```
 
 ## Errors

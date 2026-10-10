@@ -93,6 +93,9 @@ mod test_try_catch_except;
 mod test_atomic_arrays;
 mod test_task_list_literal;
 mod test_job_lists;
+mod test_word_statements; // card error-beep
+mod test_go_statement; // card go-play
+mod test_glued_block_words; // card glued-loop
 mod test_try_stack_overflow;
 mod test_try_host_failure; // card try-catch
 mod test_run_time_blocks;
@@ -152,6 +155,7 @@ mod test_database_relations; // card orm, step 4
 mod test_database_nested_add; // card orm-nested
 mod test_database_dangling_key; // card orm-dangling
 mod test_database_members_add; // cards orm-nested, orm-list-add
+mod test_database_members_query; // card orm, one-to-many as a query
 mod test_database_optional; // card orm-optional
 mod test_database_optional_units; // card unit-field
 mod test_database_units_everywhere; // card browser-unit
@@ -165,6 +169,10 @@ mod test_table_remove; // card table-remove
 mod test_table_key_filter; // card table-key-filter
 mod test_table_transactions; // card orm step 5
 mod test_table_query_loading; // orm: a filter reads only its rows
+mod test_table_comprehension; // orm: a filtered comprehension over a table is its query
+mod test_field_of_elements; // name of people with age > 20 (user 2026-10-10)
 mod test_table_linear_lookups; // card orm-linear
 mod test_table_method_reads;
 mod test_table_element_writes; // orm: people#1.age = 5 writes through
+mod test_unit_tasks; // card units-tasks
+mod test_task_char; // card task-char

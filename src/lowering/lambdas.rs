@@ -5,8 +5,9 @@
 //! - `map [1 2 3] {it*it}`, `map(xs, x=>x+1)`, `xs.map(f)` over a literal block, a lambda or a defined function is a loop
 //! - a lambda anywhere else is a closure (closures.rs); `map` over a value that is no function is the error `map needs a function, got …`
 
-use super::nodes::{call, is_type_word, key};
-use crate::analyzer::{call_name, extract_user_functions};
+use super::words::ON_WORD;
+use super::nodes::{call, children_rewritten, is_type_word, key, named_assignment};
+use crate::analyzer::call_name;
 use crate::context::Context;
 use crate::diagnostic::Diagnostic;
 use crate::library_words::substitute;
@@ -16,7 +17,6 @@ use crate::warp_parser::parse;
 use std::cell::Cell;
 
 pub const IMPLICIT_PARAMETER: &str = "it";
-pub(crate) const ON_WORD: &str = "on";
 const PARTIAL_LIST: &str = "partial_list";
 const LIST_PLACEHOLDER: &str = "loop_list";
 const START_PLACEHOLDER: &str = "loop_start";
@@ -112,8 +112,7 @@ fn lowering(node: Node, strict: bool) -> Node {
 	if let Some(error) = unbound_it(&node).filter(|_| !assigns_it(&node)) {
 		return error;
 	}
-	let mut context = Context::new();
-	extract_user_functions(&mut context, &node);
+	let context = crate::analyzer::function_context(&node);
 	let first_fresh = first_fresh_number(&node);
 	Lowering { context, counter: Cell::new(first_fresh), strict }.expand(node)
 }
@@ -241,10 +240,7 @@ fn subtract_kebab_parameters(node: Node, params: &[String]) -> Node {
 				Node::Symbol(name)
 			}
 		}
-		Node::Key(left, op, right) => key(subtract_kebab_parameters(*left, params), op, subtract_kebab_parameters(*right, params)),
-		Node::List(items, bracket, separator) => Node::List(items.into_iter().map(|item| subtract_kebab_parameters(item, params)).collect(), bracket, separator),
-		Node::Meta { node, data } => Node::Meta { node: Box::new(subtract_kebab_parameters(*node, params)), data },
-		other => other,
+		other => children_rewritten(other, |child| subtract_kebab_parameters(child, params)),
 	}
 }
 
@@ -299,7 +295,7 @@ fn arrow_parts(head: &Node, body: &Node) -> Option<Lambda> {
 	};
 	let (body, result_type) = match body.drop_meta() {
 		Node::List(parts, Bracket::None, separator @ Separator::Space) if matches!(left.drop_meta(), Node::List(_, Bracket::Round, _)) => match parts.as_slice() {
-			[result, word, rest @ ..] if !rest.is_empty() && matches!(word.drop_meta(), Node::Symbol(word) if word == SWIFT_IN) => {
+			[result, word, rest @ ..] if !rest.is_empty() && word.is_symbol(SWIFT_IN) => {
 				let body = match rest { [single] => single.clone(), many => Node::List(many.to_vec(), Bracket::None, separator.clone()) };
 				(body, Some(result.clone()))
 			}
@@ -414,7 +410,7 @@ fn unbound_it(node: &Node) -> Option<Node> {
 /// `it = 3` anywhere: the program's own variable it
 fn assigns_it(program: &Node) -> bool {
 	let mut found = false;
-	program.visit(&mut |node| found |= matches!(node, Node::Key(target, Op::Assign, _) if matches!(target.drop_meta(), Node::Symbol(name) if name == IMPLICIT_PARAMETER)));
+	program.visit(&mut |node| found |= matches!(node, Node::Key(target, Op::Assign, _) if target.is_symbol(IMPLICIT_PARAMETER)));
 	found
 }
 
@@ -430,10 +426,7 @@ fn bind_parameter(node: Node, name: &str, argument: &Node) -> Node {
 		Node::List(items, bracket, separator) if items.len() > 1 && crate::declarations::is_callee(&items[0]) => {
 			Node::List(items.into_iter().map(|item| if binds_name(&item) { item } else { bind_parameter(item, name, argument) }).collect(), bracket, separator)
 		}
-		Node::Key(left, op, right) => key(bind_parameter(*left, name, argument), op, bind_parameter(*right, name, argument)),
-		Node::List(items, bracket, separator) => Node::List(items.into_iter().map(|item| bind_parameter(item, name, argument)).collect(), bracket, separator),
-		Node::Meta { node, data } => Node::Meta { node: Box::new(bind_parameter(*node, name, argument)), data },
-		other => other,
+		other => children_rewritten(other, |child| bind_parameter(child, name, argument)),
 	}
 }
 
@@ -442,13 +435,10 @@ fn swift_closure(items: &[Node]) -> Option<Lambda> {
 	let (last, leading) = items.split_last()?;
 	let Node::List(parts, Bracket::None, Separator::Space) = last.drop_meta() else { return None };
 	let [name, word, body @ ..] = parts.as_slice() else { return None };
-	if !matches!(word.drop_meta(), Node::Symbol(word) if word == SWIFT_IN) || body.is_empty() {
+	if !word.is_symbol(SWIFT_IN) || body.is_empty() {
 		return None;
 	}
-	let params: Vec<String> = leading.iter().chain([name]).map(|param| match param.drop_meta() {
-		Node::Symbol(param) => Some(param.clone()),
-		_ => None,
-	}).collect::<Option<_>>()?;
+	let params: Vec<String> = leading.iter().chain([name]).map(|param| param.symbol_name().map(String::from)).collect::<Option<_>>()?;
 	let body = match body {
 		[single] => single.clone(),
 		many => Node::List(many.to_vec(), Bracket::None, Separator::Space),
@@ -633,13 +623,7 @@ impl Lowering {
 		};
 		let bindings: Vec<(String, Node)> = entries
 			.iter()
-			.filter_map(|entry| match entry.drop_meta() {
-				Node::Key(name, Op::Assign, value) => match name.drop_meta() {
-					Node::Symbol(name) => Some((name.clone(), value.as_ref().clone())),
-					_ => None,
-				},
-				_ => None,
-			})
+			.filter_map(named_assignment)
 			.collect();
 		let (params, values) = if bindings.len() == entries.len() && !bindings.is_empty() {
 			(bindings.iter().map(|(name, _)| name.clone()).collect(), bindings.into_iter().map(|(_, value)| value).collect())
@@ -663,7 +647,7 @@ impl Lowering {
 			// `map square on xs` of a known `square`: the parser applied it, `map (square (on xs))`
 			let rest = spliced_applications(rest.to_vec());
 			// `map square on xs`, `map &square xs`: the function may come first
-			let rest: Vec<Node> = rest.iter().filter(|item| !matches!(item.drop_meta(), Node::Symbol(word) if word == ON_WORD)).cloned().collect();
+			let rest: Vec<Node> = rest.iter().filter(|item| !item.is_symbol(ON_WORD)).cloned().collect();
 			let rest = match rest.as_slice() {
 				[first, second] if iteration.extra_arguments == 0 && self.is_function_value(first) && !self.is_function_value(second) => vec![second.clone(), first.clone()],
 				_ => rest,

@@ -87,16 +87,13 @@ pub fn is_text_builtin(name: &str) -> bool {
 	TEXT_BUILTINS.iter().any(|(builtin, _, _)| *builtin == name)
 }
 
-/// `+` of two texts or characters is a text; a number joins a text in its text form (`"F:" + 13` → `"F:13"`, as JS/Kotlin)
+/// `+` of two texts or characters is a text; anything else joins a text in its text form, as str() writes it
+/// (`"F:" + 13` → `"F:13"`, as JS/Kotlin; `"oldest: " + [1 2]` → `"oldest: [1 2]"`, card print-oldest), but a function
 pub fn concatenates(left: Kind, right: Kind) -> bool {
 	let is_text = |kind: &Kind| matches!(kind, Kind::Text | Kind::Codepoint);
 	// an Error joins as its message (card try-raise: `"caught: " + e` of `catch e`), a symbol value as its name (P230:
 	// `"square is " + effects of square`)
-	[left, right].iter().any(is_text) && [left, right].iter().all(|kind| is_text(kind) || is_number(*kind) || matches!(kind, Kind::Error | Kind::Symbol))
-}
-
-fn is_number(kind: Kind) -> bool {
-	matches!(kind, Kind::Int | Kind::Float)
+	[left, right].iter().any(is_text) && !matches!(left, Kind::Function) && !matches!(right, Kind::Function)
 }
 
 /// Runtime functions the text builtins call
@@ -395,9 +392,9 @@ impl WasmGcEmitter {
 		self.emit_call(func, TEXT_CONCAT);
 	}
 
-	/// A text operand as is, a number in its text form; the implicit conversion is hinted
+	/// A text operand as is, anything else in its text form; the implicit conversion is hinted
 	fn emit_concatenated(&mut self, func: &mut Function, operand: &Node) {
-		if matches!(self.get_type(operand), Kind::Empty | Kind::Data) {
+		if matches!(self.get_type(operand), Kind::Empty | Kind::Data) && !matches!(operand.drop_meta(), Node::Empty) {
 			// a value held as a Node (a map value, arithmetic of an any value) may be a number at runtime: joined, a number takes its text form
 			self.emit_node_instructions(func, &super::joined_text(std::slice::from_ref(operand), ""));
 			return;
@@ -406,7 +403,7 @@ impl WasmGcEmitter {
 			self.emit_runtime_text_cast(func, operand);
 			return;
 		}
-		if !is_number(self.get_type(operand)) {
+		if matches!(self.get_type(operand), Kind::Text | Kind::Codepoint | Kind::Symbol) {
 			self.emit_node_instructions(func, operand);
 			return;
 		}
@@ -416,13 +413,9 @@ impl WasmGcEmitter {
 	/// An Error node carrying `reason`, the way a failed fetch reports
 	fn emit_runtime_error_value(&mut self, func: &mut Function, reason: &str) {
 		let (ptr, len) = self.allocate_string(reason);
-		func.instruction(&I::I32Const(ptr as i32));
-		func.instruction(&I::I32Const(-(len as i32)));
+		Self::emit_list(func, &[I::I32Const(ptr as i32), I::I32Const(-(len as i32))]);
 		let (length, pointer) = (self.scratch(0), self.scratch(1));
-		func.instruction(&I::I64ExtendI32S);
-		func.instruction(&I::LocalSet(length));
-		func.instruction(&I::I64ExtendI32U);
-		func.instruction(&I::LocalSet(pointer));
+		Self::emit_list(func, &[I::I64ExtendI32S, I::LocalSet(length), I::I64ExtendI32U, I::LocalSet(pointer)]);
 		self.emit_host_text_result(func, length, pointer);
 	}
 
@@ -654,11 +647,9 @@ impl WasmGcEmitter {
 			self.exported_function(ERROR_OF, vec![node_ref], vec![node_ref], vec![], |s, f| {
 				Self::emit_list(f, &[I::LocalGet(0)]);
 				s.call(f, TEXT_OF);
-				f.instruction(&I::LocalSet(0));
-				f.instruction(&I::I64Const(Kind::Error as i64));
+				Self::emit_list(f, &[I::LocalSet(0), I::I64Const(Kind::Error as i64)]);
 				s.emit_field(f, 0, 1);
-				f.instruction(&I::RefNull(HeapType::Concrete(s.type_manager.node_type)));
-				f.instruction(&I::StructNew(s.type_manager.node_type));
+				Self::emit_list(f, &[I::RefNull(HeapType::Concrete(s.type_manager.node_type)), I::StructNew(s.type_manager.node_type)]);
 			});
 		}
 
@@ -706,8 +697,7 @@ impl WasmGcEmitter {
 				Self::emit_list(f, &[I::I32Eq]);
 				s.emit_text_field(f, 1, 0);
 				Self::emit_list(f, &[I::LocalGet(right_length), I::I32Add, I::GlobalGet(heap), I::I32Eq, I::I32And, I::LocalGet(left_length), I::I32Const(0), I::I32Ne, I::I32And]);
-				f.instruction(&I::If(BlockType::Empty));
-				f.instruction(&I::Else);
+				Self::emit_list(f, &[I::If(BlockType::Empty), I::Else]);
 				Self::emit_list(f, &[I::LocalGet(copy), I::LocalGet(left_length), I::I32Add, I::GlobalGet(heap), I::I32Eq, I::LocalGet(left_length), I::I32Const(0), I::I32Ne, I::I32And]);
 				f.instruction(&I::If(BlockType::Empty));
 				s.emit_memory_room(f, heap, right_length);

@@ -12,11 +12,12 @@
 //! which the runtime calls at the program's check points (signal_poll at main's start and end and each loop start,
 //! sleep, the end of the run): the watched values are compared with those seen last, and the listener runs on a change.
 
-use super::nodes::{call, key};
+use super::words::{COUNT_WORD, FOR_WORD, FROM_WORD, GLOBAL_WORD, IN_WORD, OF_WORD};
+use super::nodes::{block, call, children_rewritten, if_then, key};
 use crate::declarations::word;
 use crate::node::{symbol, Bracket, Node, Separator};
 use crate::operators::Op;
-use crate::variable_signals::{assign, block, defines_function, if_then, is_call_head, listener_parts, symbols, with_old, with_value, ListenerWord};
+use crate::variable_signals::{assign, defines_function, is_call_head, listener_parts, symbols, with_old, with_value, ListenerWord};
 use crate::wasm_emitter::cells::{CELL_GET, CELL_NEW, CELL_SET, SIGNAL_LISTENERS, SIGNAL_LISTENERS_SET, SIGNAL_NEW};
 use std::collections::{HashMap, HashSet};
 
@@ -38,21 +39,15 @@ const FIRED_PREFIX: &str = "signal·fired·";
 /// value before the write, in the listener
 const HELD_PREFIX: &str = "signal·held·";
 const WAS_WORD: &str = "whenever_was";
-const GLOBAL_WORD: &str = "global";
 /// `listeners of x`, `clear listeners of x` (card g-3HmY)
 const LISTENERS_WORD: &str = "listeners";
-const OF_WORD: &str = "of";
 const CLEAR_WORD: &str = "clear";
 /// `remove alarm from listeners of t` (P128)
 const REMOVE_WORD: &str = "remove";
-const FROM_WORD: &str = "from";
-const COUNT_WORD: &str = "count";
 /// `alarm_index_t`: the place of the named listener alarm in t's listeners
 const INDEX_JOINER: &str = "_index_";
 const WITHOUT_PLACEHOLDER: &str = "signal_without_placeholder";
 const WITHOUT_FUNCTION: &str = "signal·without";
-const FOR_WORD: &str = "for";
-const IN_WORD: &str = "in";
 
 /// A function definition: its name, parameter names and body
 struct Definition {
@@ -255,7 +250,7 @@ fn nested_removals(node: Node, named: &[(String, String)]) -> Node {
 		let globals = named.iter().filter(|(_, watched)| *watched == variable).map(|(other, _)| from_template(&format!("{GLOBAL_WORD} {}", index_name(other, &variable)), &[]));
 		return block(globals.chain([removing(&name, &variable, named)]).collect());
 	}
-	map_children(node, &mut |child| nested_removals(child, named))
+	children_rewritten(node, |child| nested_removals(child, named))
 }
 
 /// `alarm_index_t`: where the named listener alarm sits in t's listeners, -1 once removed
@@ -297,7 +292,7 @@ pub(crate) fn ungrouped_reflection(items: Vec<Node>) -> Vec<Node> {
 }
 
 fn reflected_lists(node: Node, reflected: &mut HashSet<String>) -> Node {
-	let Node::List(items, bracket, separator) = node else { return map_children(node, &mut |child| reflected_lists(child, reflected)) };
+	let Node::List(items, bracket, separator) = node else { return children_rewritten(node, |child| reflected_lists(child, reflected)) };
 	let mut out: Vec<Node> = vec![];
 	let items: Vec<Node> = ungrouped_reflection(items).into_iter().map(|item| reflected_lists(item, reflected)).collect();
 	let mut rest = items.into_iter().peekable();
@@ -348,7 +343,7 @@ impl Subscriptions {
 			let body = self.subscriptions(definition.body.clone(), &subscribable);
 			return with_body(node, body);
 		}
-		map_children(node, &mut |child| self.rewrite(child))
+		children_rewritten(node, |child| self.rewrite(child))
 	}
 
 	/// The listeners in a function body that watch a subscribable variable, as subscriptions
@@ -359,7 +354,7 @@ impl Subscriptions {
 		if let Some(subscription) = self.subscription(&node, subscribable, None) {
 			return subscription;
 		}
-		map_children(node, &mut |child| self.subscriptions(child, subscribable))
+		children_rewritten(node, |child| self.subscriptions(child, subscribable))
 	}
 
 	/// `on change s {body}` → `signal_listeners_set(s, signal_listeners(s) + [(value, signal·old) => {if value != signal·old {body}; 0}])`,
@@ -522,7 +517,7 @@ impl Signals {
 				}).collect();
 				Node::List(arguments, bracket, separator)
 			}
-			other => map_children(other, &mut |child| self.rewrite(child, signals, main)),
+			other => children_rewritten(other, |child| self.rewrite(child, signals, main)),
 		}
 	}
 
@@ -637,10 +632,7 @@ fn escaping(program: &Node, definitions: &[Definition]) -> Escaping {
 /// The variables a list literal names as its items: `[a, b]` → a, b
 fn named_items(list: &Node) -> Vec<String> {
 	match list.drop_meta() {
-		Node::List(items, Bracket::Square, _) => items.iter().filter_map(|item| match item.drop_meta() {
-			Node::Symbol(name) => Some(name.clone()),
-			_ => None,
-		}).collect(),
+		Node::List(items, Bracket::Square, _) => items.iter().filter_map(|item| item.symbol_name().map(String::from)).collect(),
 		_ => vec![],
 	}
 }
@@ -659,10 +651,7 @@ fn main_list_literals(program: &Node) -> Vec<(String, Node)> {
 /// `for s in xs {…}`: the loop variable s
 fn loop_variable(items: &[Node]) -> Option<String> {
 	match items {
-		[keyword, variable, in_word, _, _] if word(keyword) == FOR_WORD && word(in_word) == IN_WORD => match variable.drop_meta() {
-			Node::Symbol(name) => Some(name.clone()),
-			_ => None,
-		},
+		[keyword, variable, in_word, _, _] if word(keyword) == FOR_WORD && word(in_word) == IN_WORD => variable.symbol_name().map(String::from),
 		_ => None,
 	}
 }
@@ -773,16 +762,7 @@ fn without_definitions(node: &Node) -> Node {
 	if definition(node).is_some() {
 		return Node::Empty;
 	}
-	map_children(node.clone(), &mut |child| without_definitions(&child))
-}
-
-fn map_children(node: Node, rewrite: &mut impl FnMut(Node) -> Node) -> Node {
-	match node {
-		Node::Key(left, op, right) => key(rewrite(*left), op, rewrite(*right)),
-		Node::List(items, bracket, separator) => Node::List(items.into_iter().map(&mut *rewrite).collect(), bracket, separator),
-		Node::Meta { node, data } => Node::Meta { node: Box::new(rewrite(*node)), data },
-		other => other,
-	}
+	children_rewritten(node.clone(), |child| without_definitions(&child))
 }
 
 /// The names the main level assigns

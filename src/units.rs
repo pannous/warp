@@ -7,6 +7,7 @@
 
 use crate::extensions::numbers::Number;
 use crate::meta::DataValue;
+use crate::compile_time::{answer_of, fail, Stop};
 use crate::node::{error, Bracket, Node, Separator};
 use std::collections::HashMap;
 use crate::operators::Op;
@@ -181,7 +182,7 @@ fn mentions_word(node: &Node, word: &str) -> bool {
 	match node.drop_meta() {
 		Node::Symbol(name) => name == word,
 		Node::Type { name, body } => mentions_word(name, word) || mentions_word(body, word),
-		other => children(other).into_iter().any(|child| mentions_word(child, word)),
+		other => other.parts().into_iter().any(|child| mentions_word(child, word)),
 	}
 }
 
@@ -248,7 +249,7 @@ pub fn lower_run_time_tolerances(program: Node) -> Node {
 fn has_unit_tolerance(node: &Node) -> bool {
 	match node.drop_meta() {
 		Node::Key(value, Op::PlusMinus, spread) if unit_literal(value).is_some() || unit_literal(spread).is_some() => true,
-		other => children(other).into_iter().any(has_unit_tolerance),
+		other => other.parts().into_iter().any(has_unit_tolerance),
 	}
 }
 
@@ -330,20 +331,15 @@ pub struct Quantity {
 	factors: Vec<Factor>,
 }
 
-const SUPERSCRIPT_DIGITS: [char; 10] = ['⁰', '¹', '²', '³', '⁴', '⁵', '⁶', '⁷', '⁸', '⁹'];
 /// Between the units of a product: `m·kg`
 const UNIT_PRODUCT: &str = "·";
-
-fn superscript(n: u32) -> String {
-	n.to_string().chars().filter_map(|digit| digit.to_digit(10)).map(|digit| SUPERSCRIPT_DIGITS[digit as usize]).collect()
-}
 
 /// `m·kg/s²`: the units with a positive power, then those with a negative one after a slash
 fn units_text(factors: &[Factor]) -> String {
 	let side = |positive: bool| {
 		let units = factors.iter().filter(|factor| (factor.power > 0) == positive).map(|factor| match factor.power.unsigned_abs() {
 			1 => factor.unit.name.to_string(),
-			power => format!("{}{}", factor.unit.name, superscript(power)),
+			power => format!("{}{}", factor.unit.name, crate::extensions::reals::superscript(power.into())),
 		});
 		units.collect::<Vec<String>>().join(UNIT_PRODUCT)
 	};
@@ -494,12 +490,6 @@ enum Value {
 	Range(Range),
 }
 
-enum Stop {
-	/// not a program of integers and units: compile it normally
-	Unsupported,
-	Error(String),
-}
-
 type Evaluated = Result<Value, Stop>;
 
 /// The refusals of the compile-time evaluation that a run-time quantity answers (lower_run_time_tolerances)
@@ -507,10 +497,6 @@ const TOLERANCE_ARITHMETIC: &str = "arithmetic on a value with tolerance or a ra
 const WHOLE_TOLERANCE: &str = "a tolerance counts whole numbers";
 const PLAIN_TOLERANCE: &str = "a tolerance applies to numbers and plain quantities";
 const RUN_TIME_TOLERANCE_ERRORS: [&str; 3] = [TOLERANCE_ARITHMETIC, WHOLE_TOLERANCE, PLAIN_TOLERANCE];
-
-fn fail<T>(message: impl Into<String>) -> Result<T, Stop> {
-	Err(Stop::Error(message.into()))
-}
 
 /// The value of a program that uses units, None for any other program
 pub fn answer(program: &Node) -> Option<Node> {
@@ -521,17 +507,15 @@ fn answer_shadowed(program: &Node) -> Option<Node> {
 	if !needs_quantities(program) {
 		return None;
 	}
-	match evaluate(program) {
-		Ok(Value::Number(n)) => Some(Node::int(n)),
-		Ok(Value::Bool(truth)) => Some(Node::from(truth)),
+	answer_of(evaluate(program), |value| match value {
+		Value::Number(n) => Node::int(n),
+		Value::Bool(truth) => Node::from(truth),
 		// a ratio of two quantities of one dimension that is no whole number: `1 m / 3 m` is 1/3
-		Ok(Value::Quantity(quantity)) if quantity.factors.is_empty() => Some(quotient_node(&quantity.amount)),
-		Ok(Value::Quantity(quantity)) => Some(Node::data(quantity)),
-		Ok(Value::Tolerance(tolerance)) => Some(Node::data(tolerance)),
-		Ok(Value::Range(range)) => Some(Node::data(range)),
-		Err(Stop::Error(message)) => Some(error(&message)),
-		Err(Stop::Unsupported) => None,
-	}
+		Value::Quantity(quantity) if quantity.factors.is_empty() => quotient_node(&quantity.amount),
+		Value::Quantity(quantity) => Node::data(quantity),
+		Value::Tolerance(tolerance) => Node::data(tolerance),
+		Value::Range(range) => Node::data(range),
+	})
 }
 
 /// `sleep(1000 ms)`, `sleep 1 s`, `sleep(2 seconds)`: a constant duration is its milliseconds, what the host word takes
@@ -700,21 +684,13 @@ pub(crate) fn milliseconds(node: &Node) -> Option<i64> {
 	whole(&quantity.amount.mul(&Rational::integer(factor.unit.factor)))
 }
 
-fn children(node: &Node) -> Vec<&Node> {
-	match node.drop_meta() {
-		Node::Key(left, _, right) => vec![left, right],
-		Node::List(items, _, _) => items.iter().collect(),
-		_ => vec![],
-	}
-}
-
 fn needs_quantities(node: &Node) -> bool {
 	match node.drop_meta() {
 		Node::Symbol(name) => unit_named(name).is_some(),
 		// `3010 meters`: a long name counts after an amount
 		Node::List(items, Bracket::None, _) if matches!(items.as_slice(), [_, unit] if target_unit(unit).is_some()) => true,
 		Node::Key(_, Op::PlusMinus, _) => true,
-		other => children(other).into_iter().any(needs_quantities),
+		other => other.parts().into_iter().any(needs_quantities),
 	}
 }
 
@@ -755,7 +731,7 @@ fn collect_defined_unit_names(node: &Node, names: &mut std::collections::HashSet
 		Node::List(words, _, _) => if let Some(variable) = loop_variable(words) { add_unit(variable) },
 		_ => {}
 	}
-	children(node).into_iter().for_each(|child| collect_defined_unit_names(child, names));
+	node.drop_meta().parts().into_iter().for_each(|child| collect_defined_unit_names(child, names));
 }
 
 /// `f(s) := s * 2; f(3 s)`: a parameter named like a unit the program also writes outside the function is a name clash
@@ -794,7 +770,7 @@ fn first_word_of<'a>(node: &'a Node, words: &HashMap<String, String>) -> Option<
 	match node.drop_meta() {
 		Node::Symbol(name) if words.contains_key(name) => Some(node),
 		Node::Key(object, Op::Dot, _) => first_word_of(object, words),
-		_ => children(node).into_iter().find_map(|child| first_word_of(child, words)),
+		_ => node.drop_meta().parts().into_iter().find_map(|child| first_word_of(child, words)),
 	}
 }
 
