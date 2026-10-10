@@ -19,7 +19,7 @@ vm.runInContext(readFileSync(new URL("assistant.js", PLAYGROUND), "utf8"), page,
 const ask = (key, content) => {
 	storage.set(vm.runInContext("API_KEY_STORAGE", page), key);
 	page.content = content;
-	return vm.runInContext("askClaude({ model: COMPLETION_MODEL, system: 'Complete the warp program at ‸. Answer with only the text to insert there.', messages: [{ role: 'user', content }], maxTokens: COMPLETION_TOKENS, thinking: NO_THINKING })", page);
+	return vm.runInContext("askClaude({ task: 'completion', messages: [{ role: 'user', content }] })", page);
 };
 
 let failures = 0;
@@ -31,12 +31,12 @@ for (const program of PROGRAMS) {
 	const text = await ask(KEY, program).catch(error => `error: ${error.message}`);
 	expect(`a continuation of ${JSON.stringify(program)}`, text.trim() !== "" && !text.startsWith("error:"), text.slice(0, 60));
 }
-// card completion-terse: with the real prompt (the current guide) the shown continuation is code, one line here
+// card completion-terse: with the real prompt (assistant.json's, the current guide) the shown continuation is code, one line here
 const TERSE_PROGRAMS = ["[1 2 3] where it > 1‸", "xs = [3 1 2]\nsorted = ‸"];
 for (const program of TERSE_PROGRAMS) {
 	storage.set(vm.runInContext("API_KEY_STORAGE", page), KEY);
 	page.content = program;
-	const shown = await vm.runInContext("systemPrompt(COMPLETION_TASK).then(system => askClaude({ model: COMPLETION_MODEL, system, messages: [{ role: 'user', content }], maxTokens: COMPLETION_TOKENS, thinking: NO_THINKING })).then(answer => [answer, terseContinuation(answer)])", page).catch(error => ["", `error: ${error.message}`]);
+	const shown = await vm.runInContext("askClaude({ task: 'completion', messages: [{ role: 'user', content }] }).then(answer => [answer, terseContinuation(answer)])", page).catch(error => ["", `error: ${error.message}`]);
 	expect(`terse continuation of ${JSON.stringify(program)} (answer ${JSON.stringify(shown[0])})`, !shown[1].startsWith("error:") && !shown[1].includes("\n") && !shown[1].includes("//") && !vm.runInContext(`isProse(${JSON.stringify(shown[1])})`, page), shown[1]);
 }
 const refused = await ask("not-a-key", PROGRAMS[0]).then(text => `no error, text ${JSON.stringify(text)}`, error => error.message);
