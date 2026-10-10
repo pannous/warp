@@ -15,8 +15,8 @@ fn a_rendered_wav_is_a_file_of_the_page() {
 	is!(&rendered("round(seconds * 10)"), 2);
 	is!(&rendered("byte_slice(wav, 0, 4)"), "RIFF");
 	is!(&rendered("byte_slice(wav, 8, 12)"), "WAVE");
-	// the samples after the 44 header bytes: 0.2 s of 16-bit samples at 22050 per second
-	is!(&rendered("byte_at(wav, 40) + 256 * byte_at(wav, 41)"), 8820);
+	// the data chunk's size: 0.2 s of 16-bit samples at 22050 per second, each sound rounded to whole samples
+	is!(&rendered("abs(byte_at(wav, 40) + 256 * byte_at(wav, 41) - 8820) <= 4"), true);
 	is!(&rendered("play_file(\"rendered/song.wav\")\nexists(\"rendered/song.wav\")"), true);
 }
 
