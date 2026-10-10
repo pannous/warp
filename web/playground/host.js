@@ -139,8 +139,8 @@ function programImports(holder, hooks) {
 			},
 			// std_pure / std_io(module, member, arguments): a word of lib/<module>.warp (src/std_adapters.rs), by the
 			// adapters the parts add (host-hashes.js hash, json and regex; host-files.js file, net, store and os)
-			std_pure: (module, member, argumentList) => stdCall(program(), module, member, argumentList, holder.warnings),
-			std_io: (module, member, argumentList) => stdCall(program(), module, member, argumentList, holder.warnings),
+			std_pure: (module, member, argumentList) => stdCall(program(), module, member, argumentList, holder),
+			std_io: (module, member, argumentList) => stdCall(program(), module, member, argumentList, holder),
 			// `serve 8080 {…}` (src/web_server.rs): a page cannot listen on a port
 			serve_routes: port => { throw new Error(`serve ${port}: a server runs only in the native host (the warp CLI)`); },
 			// the host words (src/host.rs): a page cannot block, so sleep busy-waits
@@ -203,10 +203,11 @@ function programImports(holder, hooks) {
 			},
 			// sound_samples(samples, count, rate) (src/host.rs, lib/sound.warp): the page plays them with WebAudio
 			// (playground.js playSound); a run without a page (tests, node) has no speakers and stays silent, as natively
+			// render_sound writes them, played or not, into a WAV (host-files.js STD_ADAPTERS.sound.render)
 			sound_samples: (samples, count, rate) => {
-				if (!hooks.sound) return;
 				const values = intsOfList(program(), samples, Number(count)) ?? plainOfTree(readNode(program(), samples));
-				hooks.sound(values, Number(rate));
+				(holder.unrenderedSounds ??= []).push({ samples: values, rate: Number(rate) });
+				hooks.sound?.(values, Number(rate));
 			},
 			...Object.assign({}, ...eachHostPart("words", holder, hooks, access)),
 		},
@@ -274,13 +275,14 @@ function buildValue(module, tree) {
 	}
 }
 
-// an adapter reports a runtime warning with this.warn(message) (host-files.js openTable)
-function stdCall(program_, module, member, argumentList, warnings) {
+// an adapter reports a runtime warning with this.warn(message) (host-files.js openTable) and reaches its run's state as
+// this.holder (host-files.js sound.render)
+function stdCall(program_, module, member, argumentList, holder) {
 	const [moduleName, memberName, given] = [module, member, argumentList].map(node => plainOfTree(readNode(program_, node)));
 	const adapter = STD_ADAPTERS[moduleName]?.[memberName];
 	if (!adapter) throw new Error(`${moduleName}.${memberName}: no such word in the browser`);
 	try {
-		const context = { warn: message => warnings.push(message) };
+		const context = { warn: message => holder.warnings.push(message), holder };
 		return buildValue(program_, treeOfPlain(adapter.apply(context, Array.isArray(given) ? given : [given])));
 	} catch (error) {
 		// the program raises it (src/wasm_emitter/ffi_emitter.rs emit_ffi_result): `try` catches it

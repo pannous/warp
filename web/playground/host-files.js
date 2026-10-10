@@ -7,11 +7,21 @@ const PAGE_PREFIX = "page:"; // src/web.rs PAGE_PREFIX: a file of the page itsel
 const HTTP_NOT_FOUND = "HTTP status 404";
 const FILE_NOT_FOUND = "No such file or directory (os error 2)";
 
-// the files std's file module wrote, kept while the page is open: read and the file words see them before the served ones
+// src/sound.rs: 16-bit mono PCM, samples offset by SAMPLE_OFFSET; a render without sounds has the default rate
+const SAMPLE_OFFSET = 32768;
+const DEFAULT_SAMPLE_RATE = 22050;
+const WAV_HEADER_BYTES = 44;
+
+// the files std's file module wrote (texts) and render_sound rendered (bytes, a Uint8Array), kept while the page is
+// open: read and the file words see them before the served ones
 const writtenFiles = new Map();
 const filePath = path => path.replace(/^\.\//, "");
+const textOf = written => typeof written === "string" ? written : utf8Decoder.decode(written);
 
-const textOfFile = path => writtenFiles.get(filePath(path)) ?? (servedFileExists(path) ? readFile(filePath(path)) : "");
+const textOfFile = path => {
+	const written = writtenFiles.get(filePath(path));
+	return written !== undefined ? textOf(written) : servedFileExists(path) ? readFile(filePath(path)) : "";
+};
 function servedFileExists(path) {
 	try {
 		readBytes(path);
@@ -81,7 +91,7 @@ function fileUrl(path) {
 // the bytes of a file of the served repository, of the page or of a URL, failing in the words of the native read
 function readBytes(path) {
 	const written = writtenFiles.get(filePath(path));
-	if (written !== undefined) return utf8.encode(written);
+	if (written !== undefined) return typeof written === "string" ? utf8.encode(written) : written;
 	return asFileRead(() => getSync(fileUrl(path), 0, true));
 }
 
@@ -312,6 +322,22 @@ function rollBack(file) {
 	return null;
 }
 
+// a 16-bit mono PCM WAV of the offset samples (src/sound.rs wav)
+function wavOf(samples, rate) {
+	const bytes = new Uint8Array(WAV_HEADER_BYTES + 2 * samples.length);
+	const view = new DataView(bytes.buffer);
+	const ascii = (at, word) => [...word].forEach((letter, i) => view.setUint8(at + i, letter.charCodeAt(0)));
+	ascii(0, "RIFF");
+	view.setUint32(4, bytes.length - 8, true);
+	ascii(8, "WAVEfmt ");
+	[[16, 16, 4], [20, 1, 2], [22, 1, 2], [24, rate, 4], [28, 2 * rate, 4], [32, 2, 2], [34, 16, 2]]
+		.forEach(([at, value, size]) => size === 4 ? view.setUint32(at, value, true) : view.setUint16(at, value, true));
+	ascii(36, "data");
+	view.setUint32(40, 2 * samples.length, true);
+	samples.forEach((sample, i) => view.setInt16(WAV_HEADER_BYTES + 2 * i, Math.max(-32768, Math.min(32767, Number(sample) - SAMPLE_OFFSET)), true));
+	return bytes;
+}
+
 addHostPart({
 	words: (holder, hooks, { program, text }) => {
 		const fetchUrl = (pointer, length, timeout) => {
@@ -359,15 +385,32 @@ addHostPart({
 		// `play "song.mp3"`, `stop_sound` (lib/sound.warp, card sound-library): the page plays it with an <audio>
 		// (worker.js self.playSoundFile, playground.js); a run without a page (tests, node) stays silent, as natively
 		sound: {
-			play_file: path => { self.playSoundFile?.(contentText(path)); return self.lastSoundHandle?.() ?? 0; },
+			// a rendered WAV goes to the page as its bytes, a served or remote file by its URL
+			play_file: path => {
+				const written = writtenFiles.get(filePath(contentText(path)));
+				self.playSoundFile?.(contentText(path), typeof written === "string" ? undefined : written);
+				return self.lastSoundHandle?.() ?? 0;
+			},
 			// stop_sound(handle) the sound play gave that handle (card sound-pro), handle 0 all of them
 			stop: handle => { Number(handle) ? self.stopSound?.(Number(handle)) : self.stopSoundFiles?.(); return null; },
 			last: () => self.lastSoundHandle?.() ?? 0,
 			// the page's audio clock as the worker keeps it (worker.js); a worker cannot wait for the page's audio
 			queued: () => self.soundsQueued?.() ?? 0,
 			wait: () => null,
-			// files here are texts (writtenFiles): a WAV is binary
-			render: path => { throw new Error(`render_sound ${contentText(path)}: the playground keeps texts, not WAV files; render natively (warp)`); },
+			// the run's sounds since its start or the last render, one WAV (src/sound.rs render): its seconds; the page
+			// offers it for download (worker.js self.keepFile)
+			render(path) {
+				const sounds = this.holder.unrenderedSounds ?? [];
+				this.holder.unrenderedSounds = [];
+				const rate = sounds[0]?.rate ?? DEFAULT_SAMPLE_RATE;
+				const other = sounds.find(sound => sound.rate !== rate);
+				if (other) throw new Error(`sounds of ${rate} and ${other.rate} samples per second cannot share ${contentText(path)}`);
+				const samples = sounds.flatMap(sound => sound.samples);
+				const bytes = wavOf(samples, rate);
+				writtenFiles.set(filePath(contentText(path)), bytes);
+				self.keepFile?.(filePath(contentText(path)), bytes);
+				return samples.length / rate;
+			},
 		},
 	},
 });
