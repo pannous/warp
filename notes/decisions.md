@@ -21,6 +21,14 @@ notes/open_decisions.md.
   variable; other module words still shadow. Revisit if it surprises the user.
 - go-voice (warp-sound default, not asked): a `go { }` task is a voice that starts where its starter stands in the
   music and sounds along with it (native; the Playground still plays them one after another, card playground-go).
+- route-access (warp-web, user 2026-10-10): access rules come later; for now a route gives out only what it displays.
+  Login kind: no preference (parked with the card).
+- git-hook restore (warp-fixer, user 2026-10-10): agents may `git restore`/`checkout --` Cargo.toml and Cargo.lock
+  only (the build tweak); the hook saves the diff under refs/restored/<date>-<sha> first (~/.claude 1c1de70).
+- stored-visits (warp-class, aliases rule, not asked): `stored visits default 0` is the form; `stored visits = 0`
+  works with a got-it note "visits keeps its stored value; 0 is only the first run's".
+- result-keyword (warp-functions, implied by wiki/result.md): after a print, `result` is the printed value.
+- float exit status (warp-perf default): only an Int result is the exit status; a float result exits 0.
 - tag-assign (warp-class, user 2026-10-10): every `=` in a tag body is a value entry, like `:`: `cat{x=1 y=2}` is
   cat{x:1 y:2}, `p{shown = "seen"}` is p{shown:"seen"}, `html{test=1}` is html{test:1}; the meaning never depends on
   the number of entries. Tests pinning a single `=` as a statement change meaning by this decision.
