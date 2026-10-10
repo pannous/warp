@@ -4,6 +4,7 @@
 //! loud error. Passes that give a soft keyword its meaning ask `program_names` whether the program took the word.
 
 use crate::diagnostic::Diagnostic;
+use super::nodes::symbol_name;
 use crate::node::{Bracket, Node};
 use crate::operators::Op;
 
@@ -59,20 +60,13 @@ fn defined_name(node: &Node) -> Option<String> {
 	match node.drop_meta() {
 		Node::Key(target, Op::Define | Op::Assign, _) => match target.drop_meta() {
 			Node::Symbol(name) => Some(name.clone()),
-			Node::List(items, Bracket::Round, _) => items.first().and_then(symbol_name),
+			Node::List(items, Bracket::Round, _) => items.first().and_then(symbol_name).cloned(),
 			_ => None,
 		},
 		// `def ((init ø) {1})`: the name leads the head
 		Node::List(words, _, _) if words.len() > 1 && words.first().is_some_and(is_function_keyword) => {
 			Some(crate::lowering::class_methods::leading_name(&words[1])).filter(|name| !name.is_empty())
 		}
-		_ => None,
-	}
-}
-
-fn symbol_name(node: &Node) -> Option<String> {
-	match node.drop_meta() {
-		Node::Symbol(name) => Some(name.clone()),
 		_ => None,
 	}
 }
@@ -98,7 +92,7 @@ fn walk_names(node: &Node, found: &mut dyn FnMut(&str, &str)) {
 				Node::Symbol(name) => found(name, "variable"),
 				Node::List(items, Bracket::Round, _) => {
 					if let Some(name) = items.first().and_then(symbol_name) {
-						found(&name, "function");
+						found(name, "function");
 					}
 					items.iter().skip(1).filter_map(parameter_name).for_each(|name| found(&name, "parameter"));
 				}
@@ -117,7 +111,7 @@ fn walk_names(node: &Node, found: &mut dyn FnMut(&str, &str)) {
 		Node::List(entries, Bracket::Curly, _) => entries.iter().for_each(|entry| {
 			if let Node::Key(key, Op::Colon, _) = entry.drop_meta() {
 				if let Some(name) = symbol_name(key) {
-					found(&name, "field");
+					found(name, "field");
 				}
 			}
 			walk_names(entry, found);
@@ -135,7 +129,7 @@ fn walk_names(node: &Node, found: &mut dyn FnMut(&str, &str)) {
 fn parameter_name(parameter: &Node) -> Option<String> {
 	match parameter.drop_meta() {
 		Node::Symbol(name) => Some(name.clone()),
-		Node::Key(name, Op::Colon | Op::Assign, _) => symbol_name(name),
+		Node::Key(name, Op::Colon | Op::Assign, _) => symbol_name(name).cloned(),
 		_ => None,
 	}
 }

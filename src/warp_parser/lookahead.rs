@@ -329,7 +329,7 @@ impl WarpParser {
 		}
 		self.advance_by(RETURN_KEYWORD.len());
 		let value = self.parse_expr(0);
-		Some(Node::List(vec![Symbol(AFTER_MARKER.to_string()), condition, value], Bracket::Round, Separator::None))
+		Some(call(AFTER_MARKER, vec![condition, value]))
 	}
 
 	/// Is there a `return` word later on this statement, outside brackets
@@ -520,11 +520,7 @@ impl WarpParser {
 
 	/// `$main`, `$ii_i`: names keep their sigil (WAT identifiers, DOM selectors)
 	pub(super) fn parse_dollar_name(&mut self) -> Node {
-		self.advance(); // skip '$'
-		match self.parse_symbol() {
-			Ok(name) => Symbol(format!("${name}")),
-			Err(message) => error(&message),
-		}
+		self.symbol_after(1, |name| Symbol(format!("${name}")))
 	}
 
 	pub(super) fn unwrap_single(group: Node) -> Node {
@@ -540,10 +536,7 @@ impl WarpParser {
 	pub(super) fn parse_attribute(&mut self) -> Node {
 		let after_dot = self.pos > 0 && self.chars[self.pos - 1] == '.';
 		self.advance(); // skip '@'
-		let name = match self.parse_symbol() {
-			Ok(name) => name,
-			Err(message) => return error(&message),
-		};
+		let name = or_return_error!(self.parse_symbol());
 		if after_dot {
 			return Symbol(format!("{ATTRIBUTE_MARK}{name}"));
 		}

@@ -132,8 +132,7 @@ impl WasmGcEmitter {
 			}
 			let stored_alike = |local: &&Local| self.storage_type(local.kind) == self.storage_type(kind);
 			if let Some(local) = self.scope.lookup(&name).filter(stored_alike) {
-				func.instruction(&I::LocalGet(local.position));
-				func.instruction(&I::GlobalSet(global));
+				Self::emit_list(func, &[I::LocalGet(local.position), I::GlobalSet(global)]);
 			}
 		}
 		for nested in self.nested_functions(function_name) {
@@ -286,8 +285,7 @@ impl WasmGcEmitter {
 		} else if !user_fn.tuple_kinds.is_empty() {
 			// every path ends in `return a, b` (tuples::check_definition): the body's own value is never reached
 			self.emit_node_instructions(&mut func, &user_fn.body);
-			func.instruction(&I::Drop);
-			func.instruction(&I::Unreachable);
+			Self::emit_list(&mut func, &[I::Drop, I::Unreachable]);
 		} else if returns_node {
 			self.emit_node_instructions(&mut func, &user_fn.body);
 		} else {

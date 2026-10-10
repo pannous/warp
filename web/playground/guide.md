@@ -292,6 +292,11 @@ square [1 2 3]
 [1 2 3].map(x => x * 2)
 ```
 
+A heavy `map` over a very long list of floats (sin, exp and the like, from about 300 000 items) runs on the graphics
+card by itself, and says so once. The graphics card computes in single precision, so results are approximate by
+design: a sum of 40 000 cosines may be off by about 40 000 × 2⁻¹¹. Write `@cpu` after the map, before it, or on a
+block or function when every digit counts; `@gpu` asks for the graphics card from about 30 000 items.
+
 Examples: lists, broadcasting, "lazy ranges", "linear arrays"; samples: sorting, quicksort, primes, sieve, sorting_idiomatic, sieve_idiomatic
 
 ## Objects

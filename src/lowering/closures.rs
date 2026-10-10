@@ -5,7 +5,7 @@
 //! becomes `closure_call_1(f, x)`, a helper per arity that call_refs the closure's entry (wasm_emitter/closures.rs).
 //! notes/closures.md describes the representation.
 
-use super::nodes::{call, key};
+use super::nodes::{call, key, parameter_name};
 use crate::analyzer::extract_user_functions;
 use crate::context::{Context, Param, UserFunctionDef};
 use crate::diagnostic::Diagnostic;
@@ -421,14 +421,6 @@ fn definition_parameters(node: &Node, functions: &HashSet<String>) -> Option<Vec
 			functions.contains(name).then(|| params.iter().filter_map(parameter_name).collect())
 		}
 		Node::Symbol(name) if functions.contains(name) => Some(vec![IMPLICIT_PARAMETER.to_string()]),
-		_ => None,
-	}
-}
-
-fn parameter_name(param: &Node) -> Option<String> {
-	match param.drop_meta() {
-		Node::Symbol(name) => Some(name.clone()),
-		Node::Key(name, _, _) => parameter_name(name),
 		_ => None,
 	}
 }

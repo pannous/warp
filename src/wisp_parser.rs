@@ -144,25 +144,22 @@ impl WispParser {
 		match kind {
 			"text" => self.parse_text_node(),
 			"symbol" | "sym" => self.parse_symbol_node(),
-			"number" | "num" => self.parse_number_node(),
-			"int" => self.parse_int_node(),
-			"float" => self.parse_float_node(),
-			"char" => self.parse_char_node(),
+			"number" | "num" | "int" | "float" => self.finish_one(Self::parse_number),
+			"char" => self.finish_one(Self::parse_char_or_symbol),
 			"bool" => self.parse_bool_node(),
-			"true" => self.finish_true(),
-			"false" => self.finish_false(),
-			"nil" | "ø" | "empty" => self.finish_empty(),
-			"list" => self.parse_list_node(),
+			"true" => self.finish_constant(True),
+			"false" => self.finish_constant(False),
+			"nil" | "ø" | "empty" => self.closing(Empty),
+			"list" => self.finish_one(Self::parse_expr),
 			GROUP => self.finish_as_bracketed(Bracket::None),
 			ROUND => self.finish_as_bracketed(Bracket::Round),
-			"key" => self.parse_key_node(),
-			"pair" => self.parse_pair_node(),
-			"cons" => self.parse_cons_node(),
-			"tag" => self.parse_tag_node(),
+			"key" | "tag" => self.finish_key(Op::Colon),
+			"pair" => self.finish_key(Op::Assign),
+			"cons" => self.finish_key(Op::Dot),
 			"meta" => self.parse_meta_node(),
 			"defn" | "def" => self.parse_defn_node(),
-			"call" => self.parse_call_node(),
-			"error" | "err" => self.parse_error_node(),
+			"call" => self.finish_key(Op::None),
+			"error" | "err" => Error(Box::new(self.finish_one(Self::parse_expr))),
 			// `(* it it)`, as emit_wisp writes an operation
 			_ => match crate::operators::op_named(kind) {
 				Some(op) => self.finish_as_operation(op, first),
@@ -175,7 +172,7 @@ impl WispParser {
 	fn finish_as_operation(&mut self, op: Op, name: Node) -> Node {
 		match <[Node; 2]>::try_from(self.items_until(')')) {
 			Ok([left, right]) => Key(Box::new(left), op, Box::new(right)),
-			Err(args) => Key(Box::new(name), Op::None, Box::new(List(args, Bracket::Round, Separator::Space))),
+			Err(args) => call_of(name, args),
 		}
 	}
 
@@ -204,79 +201,60 @@ impl WispParser {
 	}
 
 	fn finish_as_call(&mut self, name: Node) -> Node {
-		let args = self.items_until(')');
-		// call is: name:args or key with call semantics
-		let args_node = List(args, Bracket::Round, Separator::Space);
-		Key(Box::new(name), Op::None, Box::new(args_node))
+		call_of(name, self.items_until(')'))
+	}
+
+	/// `(word value)`: the value `read` reads, then an optional placeholder and the closing paren
+	fn finish_one(&mut self, read: fn(&mut Self) -> Node) -> Node {
+		self.skip_whitespace();
+		let node = read(self);
+		self.closing(node)
+	}
+
+	fn closing(&mut self, node: Node) -> Node {
+		self.skip_optional_value();
+		self.expect(')');
+		node
+	}
+
+	/// `(true)` or `(true 1)`: the value written after the word is ignored
+	fn finish_constant(&mut self, node: Node) -> Node {
+		self.skip_optional_value();
+		self.closing(node)
+	}
+
+	/// `(word left right)`: the two parts
+	fn finish_two(&mut self) -> (Node, Node) {
+		self.skip_whitespace();
+		let left = self.parse_expr();
+		self.skip_whitespace();
+		let right = self.parse_expr();
+		self.expect(')');
+		(left, right)
+	}
+
+	fn finish_key(&mut self, op: Op) -> Node {
+		let (left, right) = self.finish_two();
+		Key(Box::new(left), op, Box::new(right))
 	}
 
 	fn parse_text_node(&mut self) -> Node {
-		self.skip_whitespace();
-		let node = self.parse_expr();
-		self.skip_optional_value();
-		self.expect(')');
-		// convert to Text if needed
-		match node {
-			Text(s) => Text(s),
+		match self.finish_one(Self::parse_expr) {
 			Char(c) => Text(c.to_string()),
 			Symbol(s) => Text(s),
-			_ => node,
+			node => node,
 		}
 	}
 
 	fn parse_symbol_node(&mut self) -> Node {
-		self.skip_whitespace();
-		let sym = self.parse_expr();
-		self.skip_optional_value();
-		self.expect(')');
-		match sym {
-			Text(s) | Symbol(s) => Symbol(s),
-			_ => sym,
+		match self.finish_one(Self::parse_expr) {
+			Text(s) => Symbol(s),
+			node => node,
 		}
-	}
-
-	fn parse_number_node(&mut self) -> Node {
-		self.skip_whitespace();
-		let num = self.parse_number();
-		self.skip_whitespace();
-		// optional type hint
-		if self.current() != ')' {
-			let _type_hint = self.parse_expr();
-		}
-		self.expect(')');
-		num
-	}
-
-	fn parse_int_node(&mut self) -> Node {
-		self.skip_whitespace();
-		let num = self.parse_number();
-		self.skip_optional_value();
-		self.expect(')');
-		num
-	}
-
-	fn parse_float_node(&mut self) -> Node {
-		self.skip_whitespace();
-		let num = self.parse_number();
-		self.skip_optional_value();
-		self.expect(')');
-		num
-	}
-
-	fn parse_char_node(&mut self) -> Node {
-		self.skip_whitespace();
-		let ch = self.parse_char_or_symbol();
-		self.skip_optional_value();
-		self.expect(')');
-		ch
 	}
 
 	fn parse_bool_node(&mut self) -> Node {
-		self.skip_whitespace();
-		let val = self.parse_expr();
-		self.skip_optional_value();
-		self.expect(')');
-		match val {
+		match self.finish_one(Self::parse_expr) {
 			Number(Number::Int(0)) => False,
 			Number(Number::Int(_)) => True,
 			Symbol(s) if s == "0" || s.eq_ignore_ascii_case("false") => False,
@@ -284,82 +262,8 @@ impl WispParser {
 		}
 	}
 
-	fn finish_true(&mut self) -> Node {
-		self.skip_whitespace();
-		if self.current() != ')' {
-			self.parse_expr(); // skip any value
-		}
-		self.skip_optional_value();
-		self.expect(')');
-		True
-	}
-
-	fn finish_false(&mut self) -> Node {
-		self.skip_whitespace();
-		if self.current() != ')' {
-			self.parse_expr();
-		}
-		self.skip_optional_value();
-		self.expect(')');
-		False
-	}
-
-	fn finish_empty(&mut self) -> Node {
-		self.skip_optional_value();
-		self.expect(')');
-		Empty
-	}
-
-	fn parse_list_node(&mut self) -> Node {
-		self.skip_whitespace();
-		let list = self.parse_expr();
-		self.skip_optional_value();
-		self.expect(')');
-		list
-	}
-
-	fn parse_key_node(&mut self) -> Node {
-		self.skip_whitespace();
-		let key = self.parse_expr();
-		self.skip_whitespace();
-		let val = self.parse_expr();
-		self.expect(')');
-		Key(Box::new(key), Op::Colon, Box::new(val))
-	}
-
-	fn parse_pair_node(&mut self) -> Node {
-		self.skip_whitespace();
-		let left = self.parse_expr();
-		self.skip_whitespace();
-		let right = self.parse_expr();
-		self.expect(')');
-		Key(Box::new(left), Op::Assign, Box::new(right))
-	}
-
-	fn parse_cons_node(&mut self) -> Node {
-		self.skip_whitespace();
-		let car = self.parse_expr();
-		self.skip_whitespace();
-		let cdr = self.parse_expr();
-		self.expect(')');
-		Key(Box::new(car), Op::Dot, Box::new(cdr))
-	}
-
-	fn parse_tag_node(&mut self) -> Node {
-		self.skip_whitespace();
-		let name = self.parse_expr();
-		self.skip_whitespace();
-		let body = self.parse_expr();
-		self.expect(')');
-		Key(Box::new(name), Op::Colon, Box::new(body))
-	}
-
 	fn parse_meta_node(&mut self) -> Node {
-		self.skip_whitespace();
-		let node = self.parse_expr();
-		self.skip_whitespace();
-		let data = self.parse_expr();
-		self.expect(')');
+		let (node, data) = self.finish_two();
 		Meta {
 			node: Box::new(node),
 			data: Box::new(data),
@@ -371,15 +275,7 @@ impl WispParser {
 	fn parse_defn_node(&mut self) -> Node {
 		self.skip_whitespace();
 		let name = self.parse_expr();
-		let mut parts = vec![];
-		loop {
-			self.skip_whitespace();
-			if self.end() || self.current() == ')' {
-				break;
-			}
-			parts.push(self.parse_expr());
-		}
-		self.expect(')');
+		let parts = self.items_until(')');
 		let body = match parts.as_slice() {
 			[body] => body.clone(),
 			[params, body] => Meta {
@@ -391,32 +287,11 @@ impl WispParser {
 		Key(Box::new(name), Op::Define, Box::new(body))
 	}
 
-	fn parse_call_node(&mut self) -> Node {
-		self.skip_whitespace();
-		let name = self.parse_expr();
-		self.skip_whitespace();
-		let args = self.parse_expr();
-		self.expect(')');
-		Key(Box::new(name), Op::None, Box::new(args))
-	}
-
-	fn parse_error_node(&mut self) -> Node {
-		self.skip_whitespace();
-		let msg = self.parse_expr();
-		self.skip_optional_value();
-		self.expect(')');
-		Error(Box::new(msg))
-	}
-
+	/// a placeholder (ø) or any extra value before the closing paren is read and ignored
 	fn skip_optional_value(&mut self) {
 		self.skip_whitespace();
 		if self.current() != ')' {
-			// could be ø or any placeholder
-			let val = self.parse_expr();
-			match val {
-				Symbol(s) if s == "ø" || s == "nil" || s == "null" => {}
-				_ => {} // ignore extra value
-			}
+			self.parse_expr();
 		}
 	}
 
@@ -543,35 +418,18 @@ impl WispParser {
 		let sym = Symbol(s);
 		self.skip_whitespace();
 		// check for shorthand operators
-		match self.current() {
-			':' if self.peek(1) == '=' => {
-				self.advance();
-				self.advance();
-				self.skip_whitespace();
-				let val = self.parse_expr();
-				Key(Box::new(sym), Op::Define, Box::new(val))
-			}
-			':' if self.peek(1) == ':' => {
-				self.advance();
-				self.advance();
-				self.skip_whitespace();
-				let val = self.parse_expr();
-				Key(Box::new(sym), Op::Scope, Box::new(val))
-			}
-			':' => {
-				self.advance();
-				self.skip_whitespace();
-				let val = self.parse_expr();
-				Key(Box::new(sym), Op::Colon, Box::new(val))
-			}
-			'=' if self.peek(1) != '=' => {
-				self.advance();
-				self.skip_whitespace();
-				let val = self.parse_expr();
-				Key(Box::new(sym), Op::Assign, Box::new(val))
-			}
-			_ => sym,
+		let (op, width) = match self.current() {
+			':' if self.peek(1) == '=' => (Op::Define, 2),
+			':' if self.peek(1) == ':' => (Op::Scope, 2),
+			':' => (Op::Colon, 1),
+			'=' if self.peek(1) != '=' => (Op::Assign, 1),
+			_ => return sym,
+		};
+		for _ in 0..width {
+			self.advance();
 		}
+		self.skip_whitespace();
+		Key(Box::new(sym), op, Box::new(self.parse_expr()))
 	}
 
 	fn expect(&mut self, ch: char) {
@@ -591,6 +449,11 @@ impl WispParser {
 			self.skip_whitespace();
 		}
 	}
+}
+
+/// `name(args…)`: the name keyed to its round argument list
+fn call_of(name: Node, args: Vec<Node>) -> Node {
+	Key(Box::new(name), Op::None, Box::new(List(args, Bracket::Round, Separator::Space)))
 }
 
 pub fn parse_wisp(input: &str) -> Node {

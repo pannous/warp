@@ -5,7 +5,8 @@ flow, meaningful names, no test edits. One area per session, small themed branch
 
 ## src/analyzer/, src/warp_parser/, src/node/ (card cleanup-analyzer, session warp-types)
 
-Done (branches cleanup-dead, cleanup-arith, cleanup-names, cleanup-parser, cleanup-modes, cleanup-guards):
+Done (branches cleanup-dead, cleanup-arith, cleanup-names, cleanup-parser, cleanup-modes, cleanup-guards, cleanup-lookahead, cleanup-atoms, cleanup-errors,
+cleanup-groups):
 - dead code: Scope types, Separator::from_char, Node::key_with_op, get_meta_data, type_definition, commented-out code
 - `Node::symbol_name` / `Node::is_symbol` replace analyzer's is_word and ~40 hand-written Symbol matches
 - node/arithmetic.rs: `keeping_left_meta` + `scalar_operands!` macro (317 → 106 lines)
@@ -23,15 +24,21 @@ Done (branches cleanup-dead, cleanup-arith, cleanup-names, cleanup-parser, clean
 - `Node::single_or_list` for the one-item-or-list choice
 - if-let guards (stable on our toolchain, already used in src/lowering/) replace ~30 arms that computed their match
   twice: `x if f(x).is_some() => f(x).expect("guarded")` and `matches!(…)` + `let … else { unreachable!() }`
+- inference.rs infer_type: `conversion_kind`; checks.rs list_type_name: `nested_type_word`, `LIST_OF_PREFIX`;
+  literals.rs parse_string: `quoted_text`
+- scanning.rs `symbol_after`, `take_while_char`, `advance_by` (from atoms.rs) for parse_atom and neighbours;
+  parse_type_declaration_body: `parse_comma_names`, one type-parameter parse
+- `or_return_error!` (warp_parser/mod.rs) for `match r { Ok(x) => x, Err(message) => return error(&message) }`
+- `lowering::nodes::call(word, args)` for the parser's ~16 hand-built `Node::List([Symbol(word), …], Round, None)`;
+  `for_in_loop` for the four desugared for loops; group_by_separators: loosest separator via max()
 
 Left (longest functions, candidates for splitting):
 - atoms.rs parse_symbol_with_suffix (~140 lines): still a keyword dispatch
-- atoms.rs parse_atom (158), parse_type_declaration_body (134)
+- atoms.rs parse_atom (~140) and parse_type_declaration_body (~120): long but flat now
 - declaration_lowering.rs lower_declarations_among (~110): a long but now flat rewrite dispatch
 - two `matches!` + `unreachable!("guarded")` arms stay where the arm moves the scrutinee the guard borrows
   (parameter_copies, `x as number = 9`)
-- lookahead.rs peek_operator (123), inference.rs infer_type (120), literals.rs parse_string (114),
-  checks.rs list_type_name (106)
+- lookahead.rs peek_operator (123): a flat operator table, left as is (keywords interleave with the glyph lengths)
 - node/comparison.rs eq: left alone, it carries the user's comments
 
 Outside this area (for whoever takes src/lowering/): private `is_word` / `symbol_name` / `is_symbol` copies in
@@ -67,6 +74,10 @@ Done:
 - `Node::as_items()`: a list's items, none of ø, else the node as the one item. Copies left for the lowering areas:
   lowering/class_methods.rs (2), component_worlds.rs, type_constructor.rs; warp_parser/mod.rs:204 differs (no
   drop_meta); site.rs items_of keeps ø as an item on purpose
+- `Node::parts()`: a list's items or a key's two sides, borrowed (units.rs). Copies left for the lowering areas:
+  lowering/class_methods.rs children_of, lowering/generators.rs parts
+- wisp_parser: the typed s-expression nodes through finish_one / finish_key / finish_constant and one call_of
+
 Left (bigger, needs care):
 - Two C header parsers: ffi_parser.rs (`parse_declaration`, one line at a time, C types → Kind → ValType via
   kind_to_valtype) and ffi/header.rs (`extract_function_signature`, multi-line declarations, C types → ValType via
@@ -83,4 +94,7 @@ Left (bigger, needs care):
   ergonomic reader). One of them could wrap the other; the public API of both is pinned by tests/wasm.
 - headless.rs node_of_json and foreign.rs node_of both turn JSON into Nodes; they differ in separator (None vs Space),
   arrays (ø vs list) and a non-integer number's fallback, so one replacing the other changes output.
+- ffi/link.rs create_ffi_wrapper: ~20 hand-typed arms (`"II_I"`, `"IIP_V"`, …) of the same shape; a macro would
+  shorten them, and the generic wrapper could take most of them if it passed f32 arguments right (it passes f64s),
+  which needs FFI tests for each signature first.
 - markup.rs escapes `<pre>` text without `>`, site.rs `escaped` with it: one escaper would change the error page.

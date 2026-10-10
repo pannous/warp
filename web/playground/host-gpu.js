@@ -36,6 +36,9 @@ const WORDS_STATE = 2; // the shared buffer's state when it holds raw 32-bit wor
 // it, by block, the last MOST_KEPT of them (src/gpu.rs KEPT); flags as gpu_map_linear's last argument
 const KEEP_RESULT = 1n;
 const SOURCE_KEPT = 2n;
+// a map the compiler switched to the GPU (gpu_maps.rs AUTOMATIC, card gpu-auto): silent without an adapter, else said once
+const AUTOMATIC = 4n;
+const AUTOMATIC_NOTICE = "ran on the GPU by itself (f32, imprecise by design; write @cpu for exact f64)"; // gpu_maps.rs
 const MOST_KEPT = 4;
 const KEPT_MISSING = "no kept buffer";
 const keptBuffers = new Map(); // the task Worker's: block → {storage, count}
@@ -294,6 +297,10 @@ addHostPart({
 			}
 			return kernel(shader, kernelNumbers(items, outer, reductions), workgroups, first, { keep });
 		};
+		// as src/diagnostic.rs report_runtime_warning_once: the notice once a run, its detail after a colon
+		const warnOnce = (notice, detail) => {
+			if (!holder.warnings.some(warning => warning.startsWith(notice))) holder.warnings.push(`${notice}: ${detail}`);
+		};
 		const gpuKernelLinear = (shader, source, values, target, workgroups, reduces, keeping = 0n) => {
 			const items = linearCells(program().memory, source);
 			const outer = [plain(values) ?? []].flat().map(Number);
@@ -302,9 +309,11 @@ addHostPart({
 				const left = keptOrUploaded(shader, items, outer, workgroups, reduces, source, keep, keeping);
 				const cells = linearCells(program().memory, target);
 				cells.set(left.subarray(0, cells.length));
+				if (keeping & AUTOMATIC) warnOnce(AUTOMATIC_NOTICE, `${reduces ? "a reduction" : "a map"} of ${items.length} items`);
 				return 1n;
 			} catch (failure) {
 				if (!/adapter|task Workers/.test(failure.message)) throw failure;
+				if (keeping & AUTOMATIC) return 0n; // the program did not ask for the GPU
 				// once a run, as the program's runtime warning (natively report_runtime_warning), not on the console
 				const warning = `@gpu: ${failure.message}, so the map runs on the CPU`;
 				if (!holder.warnings.includes(warning)) holder.warnings.push(warning);

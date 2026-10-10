@@ -23,16 +23,9 @@ impl WasmGcEmitter {
 	/// Writes the text at (ptr, len) to stdout: the iovec {ptr, len} at address IOVEC_ADDRESS, then
 	/// `fd_write(STDOUT, iovs, 1, nwritten)`. Leaves fd_write's error code on the stack; false when fd_write is not imported.
 	fn emit_stdout_write(&self, func: &mut Function, str_ptr: u32, str_len: u32) -> bool {
-		func.instruction(&I::I32Const(IOVEC_ADDRESS));
-		func.instruction(&I::I32Const(str_ptr as i32));
-		func.instruction(&I::I32Store(WORD));
-		func.instruction(&I::I32Const(IOVEC_ADDRESS + 4));
-		func.instruction(&I::I32Const(str_len as i32));
-		func.instruction(&I::I32Store(WORD));
-		func.instruction(&I::I32Const(STDOUT));
-		func.instruction(&I::I32Const(IOVEC_ADDRESS));
-		func.instruction(&I::I32Const(1));
-		func.instruction(&I::I32Const(NWRITTEN_ADDRESS));
+		Self::emit_list(func, &[I::I32Const(IOVEC_ADDRESS), I::I32Const(str_ptr as i32), I::I32Store(WORD)]);
+		Self::emit_list(func, &[I::I32Const(IOVEC_ADDRESS + 4), I::I32Const(str_len as i32), I::I32Store(WORD)]);
+		Self::emit_list(func, &[I::I32Const(STDOUT), I::I32Const(IOVEC_ADDRESS), I::I32Const(1), I::I32Const(NWRITTEN_ADDRESS)]);
 		let Some(fd_write) = self.ctx.func_registry.get("wasi_fd_write") else { return false };
 		func.instruction(&I::Call(fd_write.call_index as u32));
 		true
@@ -93,12 +86,9 @@ impl WasmGcEmitter {
 		let consumes_text = self.type_manager.function_type(vec![ValType::Ref(self.node_ref(false))], vec![]);
 		Self::emit_list(func, &[I::LocalGet(held), I::StructGet { struct_type_index: node_type, field_index: 0 }]);
 		Self::emit_list(func, &[I::I64Const(crate::type_kinds::KIND_MASK), I::I64And, I::I64Const(Kind::Empty as i64), I::I64Eq]);
-		func.instruction(&I::If(BlockType::FunctionType(consumes_text)));
-		func.instruction(&I::Drop);
-		func.instruction(&I::Else);
+		Self::emit_list(func, &[I::If(BlockType::FunctionType(consumes_text)), I::Drop, I::Else]);
 		self.emit_call(func, PRINT_VALUE);
-		func.instruction(&I::Drop);
-		func.instruction(&I::End);
+		Self::emit_list(func, &[I::Drop, I::End]);
 		self.emit_call(func, "new_empty");
 	}
 
@@ -163,32 +153,24 @@ impl WasmGcEmitter {
 			let write = |f: &mut Function, push_address: &dyn Fn(&mut Function), push_length: &dyn Fn(&mut Function)| {
 				f.instruction(&I::I32Const(0));
 				push_address(f);
-				f.instruction(&I::I32Store(WORD));
-				f.instruction(&I::I32Const(4));
+				Self::emit_list(f, &[I::I32Store(WORD), I::I32Const(4)]);
 				push_length(f);
 				f.instruction(&I::I32Store(WORD));
 				for argument in [STDOUT, 0, 1, 8] {
 					f.instruction(&I::I32Const(argument));
 				}
-				f.instruction(&I::Call(fd_write));
-				f.instruction(&I::Drop);
+				Self::emit_list(f, &[I::Call(fd_write), I::Drop]);
 			};
 			// [x] or [x, "\n"] joined: a printed line is one write, so lines of concurrent tasks do not interleave
-			f.instruction(&I::I64Const(SQUARE_LIST_KIND));
-			f.instruction(&I::LocalGet(value));
+			Self::emit_list(f, &[I::I64Const(SQUARE_LIST_KIND), I::LocalGet(value)]);
 			if ends_line {
-				f.instruction(&I::I64Const(SQUARE_LIST_KIND));
-				f.instruction(&I::I32Const(newline.0 as i32));
-				f.instruction(&I::I32Const(newline.1 as i32));
+				Self::emit_list(f, &[I::I64Const(SQUARE_LIST_KIND), I::I32Const(newline.0 as i32), I::I32Const(newline.1 as i32)]);
 				s.call(f, "new_text");
-				f.instruction(&I::RefNull(HeapType::Concrete(node_type)));
-				f.instruction(&I::StructNew(node_type));
+				Self::emit_list(f, &[I::RefNull(HeapType::Concrete(node_type)), I::StructNew(node_type)]);
 			} else {
 				f.instruction(&I::RefNull(HeapType::Concrete(node_type)));
 			}
-			f.instruction(&I::StructNew(node_type));
-			f.instruction(&I::I32Const(empty as i32));
-			f.instruction(&I::I32Const(0));
+			Self::emit_list(f, &[I::StructNew(node_type), I::I32Const(empty as i32), I::I32Const(0)]);
 			s.call(f, "new_text");
 			s.call(f, "list_join");
 			f.instruction(&I::LocalSet(text));
@@ -258,8 +240,7 @@ impl WasmGcEmitter {
 				func.instruction(&I::I32WrapI64);
 			}
 			if let Some(f) = self.ctx.func_registry.get("wasi_fd_write") {
-				func.instruction(&I::Call(f.call_index as u32));
-				func.instruction(&I::I64ExtendI32S);
+				Self::emit_list(func, &[I::Call(f.call_index as u32), I::I64ExtendI32S]);
 			}
 		}
 	}

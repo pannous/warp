@@ -474,8 +474,7 @@ impl WasmGcEmitter {
 		match crate::type_tests::runtime_kind_mask(spec).filter(|_| unknown && !declared_type) {
 			Some(mask) => {
 				self.emit_node_instructions(func, subject);
-				func.instruction(&I::RefAsNonNull);
-				func.instruction(&I::I64Const(mask));
+				Self::emit_list(func, &[I::RefAsNonNull, I::I64Const(mask)]);
 				self.emit_call(func, crate::type_tests::NODE_KIND_IN);
 			}
 			// an instance's static kind is no type name: its declared type is read at run time
@@ -536,8 +535,7 @@ impl WasmGcEmitter {
 			"type" => {
 				let type_name = self.static_type_name(arg);
 				let (ptr, len) = self.allocate_string(&type_name);
-				func.instruction(&I::I32Const(ptr as i32));
-				func.instruction(&I::I32Const(len as i32));
+				Self::emit_list(func, &[I::I32Const(ptr as i32), I::I32Const(len as i32)]);
 				self.emit_call(func, "new_symbol");
 				true
 			}
@@ -562,20 +560,11 @@ impl WasmGcEmitter {
 			"round_half_up" => {
 				let bits = self.scratch(0);
 				self.emit_float_value(func, arg);
-				func.instruction(&I::I64ReinterpretF64);
-				func.instruction(&I::LocalTee(bits));
-				func.instruction(&I::F64ReinterpretI64);
-				func.instruction(&I::F64Floor);
-				func.instruction(&I::LocalGet(bits));
-				func.instruction(&I::F64ReinterpretI64);
-				func.instruction(&I::LocalGet(bits));
-				func.instruction(&I::F64ReinterpretI64);
-				func.instruction(&I::F64Floor);
-				func.instruction(&I::F64Sub);
-				func.instruction(&I::F64Const(0.5f64.into()));
-				func.instruction(&I::F64Ge);
-				func.instruction(&I::F64ConvertI32U);
-				func.instruction(&I::F64Add);
+				Self::emit_list(func, &[
+					I::I64ReinterpretF64, I::LocalTee(bits), I::F64ReinterpretI64, I::F64Floor, I::LocalGet(bits), I::F64ReinterpretI64,
+					I::LocalGet(bits), I::F64ReinterpretI64, I::F64Floor, I::F64Sub, I::F64Const(0.5f64.into()), I::F64Ge,
+					I::F64ConvertI32U, I::F64Add,
+				]);
 				self.emit_integral_float_as_int(func);
 				true
 			}
@@ -632,12 +621,9 @@ impl WasmGcEmitter {
 		let (quotient, divisor_bits) = (self.scratch(0), self.scratch(1));
 		self.emit_float_value(func, dividend);
 		self.emit_float_value(func, divisor);
-		func.instruction(&I::I64ReinterpretF64);
-		func.instruction(&I::LocalTee(divisor_bits));
-		func.instruction(&I::F64ReinterpretI64);
-		func.instruction(&I::F64Div);
-		func.instruction(&I::I64ReinterpretF64);
-		func.instruction(&I::LocalSet(quotient));
+		Self::emit_list(func, &[
+			I::I64ReinterpretF64, I::LocalTee(divisor_bits), I::F64ReinterpretI64, I::F64Div, I::I64ReinterpretF64, I::LocalSet(quotient),
+		]);
 		// a negative divisor rounds the quotient up, a positive one down
 		Self::emit_list(func, &[
 			I::LocalGet(quotient), I::F64ReinterpretI64, I::F64Ceil,

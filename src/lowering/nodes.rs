@@ -17,6 +17,11 @@ pub(crate) fn symbol_name(node: &Node) -> Option<&String> {
 	}
 }
 
+/// The word a node is, as text
+pub(crate) fn word_of(node: &Node) -> Option<&str> {
+	symbol_name(node).map(String::as_str)
+}
+
 pub(crate) fn is_word(node: &Node, word: &str) -> bool {
 	symbol_name(node).is_some_and(|name| name == word)
 }
@@ -37,4 +42,28 @@ pub(crate) fn statement_list(statements: Vec<Node>, bracket: Bracket) -> Node {
 /// `int`, `float`, `text`, …: a word naming a type
 pub(crate) fn is_type_word(node: &Node) -> bool {
 	symbol_name(node).is_some_and(|word| crate::analyzer::type_word_kind(word).is_some())
+}
+
+/// The name a parameter declares: `x`, `x:int`, `x=1`
+pub(crate) fn parameter_name(parameter: &Node) -> Option<String> {
+	match parameter.drop_meta() {
+		Node::Symbol(name) => Some(name.clone()),
+		Node::Key(name, _, _) => parameter_name(name),
+		_ => None,
+	}
+}
+
+/// `f(…)`: a definition's head naming a function
+pub(crate) fn is_call_head(head: &Node) -> bool {
+	matches!(head.drop_meta(), Node::List(items, Bracket::Round, _) if items.first().is_some_and(|first| symbol_name(first).is_some()))
+}
+
+/// `name words… last = body`, parsed as the items `name`, `words…`, `last = body`: the name, the words through `last`
+/// and the body
+pub(crate) fn spaced_statement(items: &[Node]) -> Option<(&Node, Vec<&str>, &Node)> {
+	let (name, rest) = items.split_first()?;
+	let (last, middle) = rest.split_last()?;
+	let Node::Key(last_word, Op::Assign | Op::Define, body) = last.drop_meta() else { return None };
+	let words = middle.iter().chain(std::iter::once(last_word.as_ref())).map(word_of).collect::<Option<_>>()?;
+	Some((name, words, body))
 }

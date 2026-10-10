@@ -6,7 +6,7 @@
 //! `attributes`, `members`), `p.methods` and `dir(p)` of an instance or a class are the names of its class layout,
 //! inherited fields first; of a map literal's variable they are its keys, read at run time (`m.keys`).
 
-use super::nodes::{call, key};
+use super::nodes::{call, key, word_of};
 use std::collections::{HashMap, HashSet};
 
 use crate::class_methods::ClassLayout;
@@ -71,13 +71,6 @@ fn listened_name(node: &Node) -> Option<String> {
 	match words.as_slice() {
 		[listening, event, variable, ..] if LISTENING_WORDS.contains(listening) && VARIABLE_EVENTS.contains(event) && !variable.is_empty() => Some(variable.to_string()),
 		[listening, event, ..] if LISTENING_WORDS.contains(listening) && !event.is_empty() => Some(event.to_string()),
-		_ => None,
-	}
-}
-
-fn word_of(node: &Node) -> Option<&str> {
-	match node.drop_meta() {
-		Node::Symbol(word) => Some(word),
 		_ => None,
 	}
 }

@@ -364,6 +364,8 @@ addHostPart({
 			// the page's audio clock as the worker keeps it (worker.js); a worker cannot wait for the page's audio
 			queued: () => self.soundsQueued?.() ?? 0,
 			wait: () => null,
+			// files here are texts (writtenFiles): a WAV is binary
+			render: path => { throw new Error(`render_sound ${contentText(path)}: the playground keeps texts, not WAV files; render natively (warp)`); },
 		},
 	},
 });

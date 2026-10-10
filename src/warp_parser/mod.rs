@@ -4,11 +4,23 @@ use crate::extensions::strings::StringExtensions;
 use crate::meta::LineInfo;
 use crate::node::Node::{Empty, Symbol};
 use crate::extensions::reals::{Exact, Rational, Real};
+use crate::lowering::nodes::call;
 use crate::node::{error, key_ops, Bracket, Node, Separator};
 use crate::operators::{glyph_operator, is_function_keyword, Op};
 use crate::normalize::{hints as norm, set_hint_position, ListTypeStyle};
 use log::warn;
 use std::fs::read_to_string;
+
+/// The value of a `Result<_, String>`; an error returns from the parse function as an error node
+macro_rules! or_return_error {
+	($result:expr) => {
+		match $result {
+			Ok(value) => value,
+			Err(message) => return error(&message),
+		}
+	};
+}
+
 mod user_operators;
 mod scanning;
 mod xml;
@@ -290,7 +302,6 @@ fn unit_iteration(variable: &Node, iterable: &Node, body: &Node) -> Option<(Node
 	if !UNIT_LOOP_WORDS.contains(&word.as_str()) || mentions(word) {
 		return None;
 	}
-	let call = |name: &str, arguments: Vec<Node>| Node::List([vec![Symbol(name.to_string())], arguments].concat(), Bracket::Round, Separator::None);
 	let walked = if word == BYTES_WORD {
 		let offset = Symbol("byte·offset".to_string());
 		let count = Node::Key(Box::new(iterable.clone()), Op::Dot, Box::new(Symbol(BYTES_WORD.to_string())));
@@ -352,9 +363,9 @@ fn dot_call(function: Node, arguments: Node) -> Node {
 	}
 	let list = arguments.remove(0);
 	let item = Symbol(BROADCAST_ITEM.to_string());
-	let call = Node::List([vec![function, item.clone()], arguments].concat(), Bracket::Round, Separator::None);
-	let each = Node::Key(Box::new(item), Op::FatArrow, Box::new(call));
-	Node::List(vec![Symbol(MAP_WORD.to_string()), list, each], Bracket::Round, Separator::None)
+	let applied = Node::List([vec![function, item.clone()], arguments].concat(), Bracket::Round, Separator::None);
+	let each = Node::Key(Box::new(item), Op::FatArrow, Box::new(applied));
+	call(MAP_WORD, vec![list, each])
 }
 
 /// `for int in xs` as the explicit filter `for x in xs.filter(x => x is int)`, the body unchanged; None when the body
@@ -588,7 +599,7 @@ pub(crate) fn piped(value: Node, stage: Node) -> Node {
 }
 
 fn floor_division(dividend: Node, divisor: Node) -> Node {
-	Node::List(vec![Symbol(FLOOR_QUOTIENT.to_string()), dividend, divisor], Bracket::Round, Separator::None)
+	call(FLOOR_QUOTIENT, vec![dividend, divisor])
 }
 
 /// Read and parse a WARP file
@@ -688,6 +699,11 @@ fn glued_floor_division(diagnostic: Diagnostic, input: &str, line: usize, column
 }
 
 /// The error `message`, fixed by adding the missing `closer` at `at` (line, column)
+/// `for variable in iterable body`, the loop for_loop.rs lowers
+pub(super) fn for_in_loop(variable: Node, iterable: Node, body: Node) -> Node {
+	Node::List(vec![Symbol("for".to_string()), variable, Symbol("in".to_string()), iterable, body], Bracket::None, Separator::Space)
+}
+
 pub(super) fn missing_closer(message: String, closer: impl Into<String>, at: (usize, usize)) -> Node {
 	let closer = closer.into();
 	Diagnostic::default().message(message).offering(crate::fixits::inserted(format!("the closing {closer}"), closer, at)).into_error()
@@ -1241,7 +1257,7 @@ pub fn subscript(target: Node, index: Node) -> Node {
 		return Diagnostic::at(negative, message).into_error();
 	}
 	if let Some((start, end)) = slice_bounds(&index) {
-		return Node::List(vec![Symbol(SLICE_WORD.to_string()), target, start, end], Bracket::Round, Separator::None);
+		return call(SLICE_WORD, vec![target, start, end]);
 	}
 	let one = Node::Number(Number::Int(1));
 	let one_based = match index.drop_meta() {

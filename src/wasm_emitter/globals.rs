@@ -48,8 +48,7 @@ impl WasmGcEmitter {
 			self.emit_string_ptr_len(func, url_node);
 		} else {
 			let (url_ptr, url_len) = self.allocate_string(&url);
-			func.instruction(&I32Const(url_ptr as i32));
-			func.instruction(&I32Const(url_len as i32));
+			Self::emit_list(func, &[I32Const(url_ptr as i32), I32Const(url_len as i32)]);
 		}
 		let import = match timeout {
 			Some(timeout) => {
@@ -66,14 +65,10 @@ impl WasmGcEmitter {
 			}
 			let reason = format!("fetch {url} failed: host imports are not available");
 			let (ptr, len) = self.allocate_string(&reason);
-			func.instruction(&I32Const(ptr as i32));
-			func.instruction(&I32Const(-(len as i32)));
+			Self::emit_list(func, &[I32Const(ptr as i32), I32Const(-(len as i32))]);
 		}
 		let (len, ptr) = (self.scratch(0), self.scratch(1));
-		func.instruction(&I::I64ExtendI32S);
-		func.instruction(&I::LocalSet(len));
-		func.instruction(&I::I64ExtendI32U);
-		func.instruction(&I::LocalSet(ptr));
+		Self::emit_list(func, &[I::I64ExtendI32S, I::LocalSet(len), I::I64ExtendI32U, I::LocalSet(ptr)]);
 		self.emit_host_text_result(func, len, ptr);
 	}
 
@@ -149,8 +144,7 @@ impl WasmGcEmitter {
 			return Some(kind);
 		}
 		self.emit_value_of_kind(func, value, kind);
-		func.instruction(&I::GlobalSet(index));
-		func.instruction(&I::GlobalGet(index));
+		Self::emit_list(func, &[I::GlobalSet(index), I::GlobalGet(index)]);
 		if kind.is_ref() {
 			func.instruction(&I::RefAsNonNull);
 		}

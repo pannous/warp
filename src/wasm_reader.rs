@@ -36,10 +36,6 @@ const ENTRY_POINTS: [&str; 4] = ["main", "wasp_main", "warp_main", "_start"];
 
 /// Int payload: `$i64box(value)`, `$BigInt(negative: i32, limbs: array i32)` little-endian base 2^32,
 /// or an exact `$Ratio(numerator, denominator)` of two such payloads (wasm_emitter/exact.rs)
-pub fn read_int_payload(mut store: impl AsContextMut, data_val: &Val) -> Result<Number> {
-	read_payload(&mut store.as_context_mut(), data_val)
-}
-
 fn read_payload<T>(store: &mut wasmtime::StoreContextMut<'_, T>, data_val: &Val) -> Result<Number> {
 	let mut store = store;
 	let anyref = data_val.unwrap_anyref().ok_or_else(|| anyhow!("Int node without payload"))?;

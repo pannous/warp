@@ -3,16 +3,29 @@
 //! the host word gpu_map_linear, which reads xs's block and writes ys's (src/host.rs natively, host-gpu.js in the
 //! browser); without an adapter it says so once and gives 0, and the CPU maps the items instead. Where `@gpu` cannot
 //! apply, a warning says why and the map runs on the CPU as written (an error under strict). notes/gpu.md
+//! Without @gpu (card gpu-auto, user 2026-10-10: GPU results are imprecise by design): a heavy map of a linear float
+//! array goes to the GPU by itself from GPU_AUTO_MIN_COUNT items, saying so once at run time; `@cpu` on the map, its
+//! block or its function keeps it on the CPU in f64, and WARP_GPU=off keeps a whole run there (@gpu included)
 
 use crate::node::Node;
 use crate::operators::Op;
 
 const GPU_ATTRIBUTE: &str = "gpu";
+/// `@cpu` on a map, a block or a function: never on the GPU, exact in f64
+const CPU_ATTRIBUTE: &str = "cpu";
+/// The mark of a map the compiler sends to the GPU without @gpu
+const AUTOMATIC_ATTRIBUTE: &str = "gpu_automatic";
+/// `WARP_GPU=off`: every map on the CPU, for test runs that compare exact values
+const GPU_SWITCH: &str = "WARP_GPU";
+const GPU_SWITCHED_OFF: &str = "off";
 /// Threads per workgroup of the kernel; gpu_map_linear dispatches count / WORKGROUP_SIZE workgroups, rounded up
 pub(crate) const WORKGROUP_SIZE: i64 = 256;
 /// Fewer items map on the CPU (card gpu-threshold, notes/gpu.md): the GPU's ~2 ms of setup and readback loses below
 /// ~3·10^4 items even against a heavy lambda (sin, cos: ~70–190 ns an item on the CPU, ~12 on the GPU)
 pub(crate) const GPU_MAP_MIN_COUNT: i64 = 32768;
+/// A map without @gpu goes to the GPU from 10× the break-even: an order of magnitude of room for slower GPUs and faster
+/// CPUs, so the switch never makes a program slower (user 2026-10-10)
+pub const GPU_AUTO_MIN_COUNT: i64 = 10 * GPU_MAP_MIN_COUNT;
 /// The attributes marking an @gpu map whose result stays on the GPU for a later map of it, and that later map
 const KEEP_RESULT_ATTRIBUTE: &str = "gpu_keep_result";
 const SOURCE_KEPT_ATTRIBUTE: &str = "gpu_source_kept";
@@ -20,6 +33,10 @@ const SOURCE_KEPT_ATTRIBUTE: &str = "gpu_source_kept";
 /// address), take the source's items from such a buffer (src/gpu.rs KEPT; uploaded from memory when none is kept)
 pub(crate) const KEEP_RESULT: i64 = 1;
 pub(crate) const SOURCE_KEPT: i64 = 2;
+/// The flag of a map the compiler switched to the GPU: no warning without an adapter, a notice when it ran there
+pub(crate) const AUTOMATIC: i64 = 4;
+/// What a switched map says once a run when it ran on the GPU (decision: GPU results are imprecise by design)
+pub const AUTOMATIC_NOTICE: &str = "ran on the GPU by itself (f32, imprecise by design; write @cpu for exact f64)";
 /// The lambda's parameter as the kernel names it (the user's name could be a WGSL keyword)
 const KERNEL_ITEM: &str = "item";
 /// The math words WGSL has under the same name and meaning (warp's log is the natural logarithm, as WGSL's)
@@ -34,8 +51,74 @@ const LARGEST_MULTIPLIED_POWER: i64 = 8;
 
 /// `xs.map(f) @gpu` or `@gpu xs.map(f)`: xs and f; a chain `xs.map(f).map(g)` is xs and g after f, one kernel
 pub(crate) fn gpu_map(value: &Node) -> Option<(Node, Node)> {
-	let (list, function) = crate::parallel::is_annotated(value, GPU_ATTRIBUTE).then(|| crate::parallel::map_call(value)).flatten()?;
+	let marked = crate::parallel::is_annotated(value, GPU_ATTRIBUTE) || value.attribute(AUTOMATIC_ATTRIBUTE).is_some();
+	let (list, function) = (marked && !switched_off()).then(|| crate::parallel::map_call(value)).flatten()?;
 	Some(fused(list, function))
+}
+
+fn switched_off() -> bool {
+	std::env::var(GPU_SWITCH).is_ok_and(|switch| switch.eq_ignore_ascii_case(GPU_SWITCHED_OFF))
+}
+
+/// The minimum count for the GPU of a map with the flags `keeping`
+pub(crate) fn fewest_items(keeping: i64) -> i64 {
+	if keeping & AUTOMATIC != 0 { GPU_AUTO_MIN_COUNT } else { GPU_MAP_MIN_COUNT }
+}
+
+/// Every `ys = xs.map(f)` and `s = sum(xs.map(f))` (min, max) without @gpu, of a linear float array (`is_linear_floats`)
+/// and a lambda worth the GPU, marked for it: the lowered map then checks GPU_AUTO_MIN_COUNT at run time. Not under
+/// `@cpu`, on the map or on a block or function around it
+pub(crate) fn automatic(node: Node, is_linear_floats: &impl Fn(&Node) -> bool) -> Node {
+	automatic_in(node, is_linear_floats, switched_off())
+}
+
+fn automatic_in(node: Node, is_linear_floats: &impl Fn(&Node) -> bool, pinned: bool) -> Node {
+	let pinned = pinned || crate::parallel::is_annotated(&node, CPU_ATTRIBUTE) || node.attribute(CPU_ATTRIBUTE).is_some();
+	if pinned {
+		return node;
+	}
+	let marked = match node.drop_meta() {
+		Node::Key(target, Op::Assign, value) if matches!(target.drop_meta(), Node::Symbol(_)) => automatic_value(value, is_linear_floats),
+		_ => None,
+	};
+	if let Some(marked) = marked {
+		return with_value(node, marked);
+	}
+	node.map_children(|child| automatic_in(child, is_linear_floats, pinned))
+}
+
+/// The map, or the reduction's map, marked AUTOMATIC_ATTRIBUTE, when it qualifies
+fn automatic_value(value: &Node, is_linear_floats: &impl Fn(&Node) -> bool) -> Option<Node> {
+	let qualifies = |map: &Node| !crate::parallel::is_annotated(map, GPU_ATTRIBUTE) && !crate::parallel::is_annotated(map, CPU_ATTRIBUTE)
+		&& crate::parallel::map_call(map).map(|(list, function)| fused(list, function)).is_some_and(|(list, function)| is_linear_floats(&list) && gpu_kernel(&function).is_some());
+	if qualifies(value) {
+		return Some(value.clone().with_attribute(AUTOMATIC_ATTRIBUTE, Node::True));
+	}
+	let Node::List(items, bracket, separator) = value.drop_meta() else { return None };
+	let [word, argument] = items.as_slice() else { return None };
+	REDUCTIONS.iter().find(|reduction| word.drop_meta().name() == reduction.word())?;
+	let (map, wrapped) = match argument.drop_meta() {
+		Node::List(inner, crate::node::Bracket::Round, inner_separator) if inner.len() == 1 => (&inner[0], Some(inner_separator.clone())),
+		_ => (argument, None),
+	};
+	if !qualifies(map) {
+		return None;
+	}
+	let marked = map.clone().with_attribute(AUTOMATIC_ATTRIBUTE, Node::True);
+	let argument = match wrapped {
+		Some(inner_separator) => Node::List(vec![marked], crate::node::Bracket::Round, inner_separator),
+		None => marked,
+	};
+	Some(Node::List(vec![word.clone(), argument], bracket.clone(), separator.clone()))
+}
+
+/// The assignment with its value replaced
+fn with_value(statement: Node, value: Node) -> Node {
+	match statement {
+		Node::Meta { node, data } => Node::Meta { node: Box::new(with_value(*node, value)), data },
+		Node::Key(target, op, _) => Node::Key(target, op, Box::new(value)),
+		other => other,
+	}
 }
 
 /// The map of `list` by `function` with the maps `list` itself is made of folded in: `xs.map(f).map(g)` is xs and g
@@ -149,7 +232,7 @@ fn with_attribute_on_value(statement: Node, attribute: &str) -> Node {
 
 /// The flags of an @gpu map's value for the host word: KEEP_RESULT, SOURCE_KEPT
 pub(crate) fn keeping(value: &Node) -> i64 {
-	[(KEEP_RESULT_ATTRIBUTE, KEEP_RESULT), (SOURCE_KEPT_ATTRIBUTE, SOURCE_KEPT)].iter().filter(|(attribute, _)| value.attribute(attribute).is_some()).map(|(_, flag)| flag).sum()
+	[(KEEP_RESULT_ATTRIBUTE, KEEP_RESULT), (SOURCE_KEPT_ATTRIBUTE, SOURCE_KEPT), (AUTOMATIC_ATTRIBUTE, AUTOMATIC)].iter().filter(|(attribute, _)| value.attribute(attribute).is_some()).map(|(_, flag)| flag).sum()
 }
 
 /// The statements with statement `index`, an @gpu map whose result only later @gpu maps read, folded into those
@@ -405,11 +488,27 @@ fn float_literal(number: f64) -> String {
 /// Every `@gpu` that shared_arrays will not lower to the GPU: a warning saying why it runs on the CPU (an error under
 /// strict)
 pub fn warn_unapplied(node: Node) -> Node {
+	if let Some(both) = both_gpu_and_cpu(&node) {
+		return crate::diagnostic::Diagnostic::at(&both, "@gpu and @cpu on the same map: keep one (@cpu: exact, on the CPU; @gpu: f32, on the GPU)").into_error();
+	}
 	let mut warnings = vec![];
 	collect_unapplied(&node, &mut warnings);
 	match crate::diagnostic::report(&warnings) {
 		Ok(()) => node,
 		Err(error) => error,
+	}
+}
+
+/// The first form marked both @gpu and @cpu
+fn both_gpu_and_cpu(node: &Node) -> Option<Node> {
+	if crate::parallel::is_annotated(node, GPU_ATTRIBUTE) && crate::parallel::is_annotated(node, CPU_ATTRIBUTE) {
+		return Some(node.clone());
+	}
+	match node {
+		Node::Meta { node, .. } => both_gpu_and_cpu(node),
+		Node::Key(left, _, right) => both_gpu_and_cpu(left).or_else(|| both_gpu_and_cpu(right)),
+		Node::List(items, _, _) => items.iter().find_map(both_gpu_and_cpu),
+		_ => None,
 	}
 }
 

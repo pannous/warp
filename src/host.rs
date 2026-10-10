@@ -996,8 +996,10 @@ fn gpu_reduce_linear(caller: Caller<'_, HostState>, shader: HostNode, source: i6
 fn gpu_kernel_linear(mut caller: Caller<'_, HostState>, word: &'static str, shader: HostNode, source: i64, values: HostNode, target: i64, workgroups: i64, keeping: i64, reduces: bool) -> wasmtime::Result<i64> {
 	static WARNED: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
 	let failure = gpu_failure(word);
+	let automatic = keeping & crate::gpu_maps::AUTOMATIC != 0;
 	if let Err(problem) = crate::gpu::available() {
-		if !WARNED.swap(true, std::sync::atomic::Ordering::Relaxed) {
+		// a map the compiler switched says nothing: the program did not ask for the GPU
+		if !automatic && !WARNED.swap(true, std::sync::atomic::Ordering::Relaxed) {
 			crate::diagnostic::report_runtime_warning(&format!("@gpu: {problem}, so the map runs on the CPU"));
 		}
 		return Ok(0);
@@ -1020,6 +1022,9 @@ fn gpu_kernel_linear(mut caller: Caller<'_, HostState>, word: &'static str, shad
 	let keeping = crate::gpu::Keeping { source: kept.map(|_| source), result: (keeping & crate::gpu_maps::KEEP_RESULT != 0).then_some((target, items)) };
 	let left = crate::gpu::compute_kept(&shader, &floats, workgroups, if reduces { partials } else { 0 }, keeping).map_err(&failure)?;
 	write_linear_floats(&mut caller, target, &left, &failure)?;
+	if automatic {
+		crate::diagnostic::report_runtime_warning_once(crate::gpu_maps::AUTOMATIC_NOTICE, &format!("{} of {items} items", if reduces { "a reduction" } else { "a map" }));
+	}
 	Ok(1)
 }
 

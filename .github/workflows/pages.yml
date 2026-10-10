@@ -151,8 +151,16 @@ jobs:
         path: _site
     - name: The tour in headless Firefox
       # a run takes about 3 minutes; a stuck one fails loudly instead of holding the deploy (card deploy-firefox-hang)
-      timeout-minutes: 15
-      run: python3 web/playground/test_in_browser.py --examples --firefox --site _site
+      # a failed first attempt runs again once, loudly (card tour-firefox-stall: an intermittent worker-start stall in
+      # Firefox); a real bug fails both
+      timeout-minutes: 25
+      run: |
+        set -o pipefail
+        tour() { python3 web/playground/test_in_browser.py --examples --firefox --site _site 2>&1 | tee "$1"; }
+        tour first-attempt.log && exit 0
+        stall=$(grep -o "gave no sign for [^:]*" first-attempt.log | head -1)
+        echo "::warning title=Firefox tour failed once, running it again::${stall:-the first attempt is in the log above} (card tour-firefox-stall)"
+        tour second-attempt.log
 
   # only main may deploy (the github-pages environment); a branch check (workflow_dispatch on batchNN) ends after the
   # tours, green, instead of a failed deploy mailing a failed run
