@@ -636,9 +636,18 @@ pub fn ask(question: &Ask) -> Result<usize, Node> {
 	if question.fallback == Fallback::Error {
 		return Err(diagnostic.into_error());
 	}
-	ASSUMPTIONS.with(|assumptions| assumptions.borrow_mut().push(diagnostic.clone()));
+	// a pass that runs twice (the emitter) asks the same question at the same place once
+	let asked_before = ASSUMPTIONS.with(|assumptions| {
+		let mut assumptions = assumptions.borrow_mut();
+		let asked_before = assumptions.contains(&diagnostic);
+		assumptions.push(diagnostic.clone());
+		asked_before
+	});
 	if warning_mode() == WarningMode::Error {
 		return Err(diagnostic.into_error());
+	}
+	if asked_before {
+		return Ok(question.default);
 	}
 	// the expression "got it" for this one remembers: the question names it (`written` is only the replaced word, `upto`)
 	let expression = &question.question;

@@ -149,7 +149,7 @@ html_scoped(selectors:any, scope:any) := {
 
 html_kebab(name:any) := {
 	var out = ""
-	for c in chars(name) { out = if c != lower(c) then out + "-" + lower(c) else out + c }
+	for c in name { out = if c != lower(c) then out + "-" + lower(c) else out + c }
 	out
 }
 

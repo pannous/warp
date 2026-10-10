@@ -56,7 +56,7 @@ route_parameter(pattern:any, path:any, name:any) := {
 route_part_name(part:any) := {
 	if not starts_with(part, ":") { return "" }
 	var name = ""
-	for character in chars(part)[1:] {
+	for character in part[1:] {
 		if contains(":(?*+", character) { return name }
 		name = name + character
 	}
@@ -82,7 +82,7 @@ route_part_mark(part:any) := {
 route_number(segment:any, dots:any) := {
 	if segment == "" { return false }
 	var seen = 0
-	for character in chars(segment) {
+	for character in segment {
 		if character == '.' { seen = seen + 1 } else if not contains("0123456789", character) { return false }
 	}
 	seen <= dots
