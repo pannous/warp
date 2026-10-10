@@ -1030,8 +1030,8 @@ impl WasmGcEmitter {
 		}
 		let fixnum_offset = super::big_int::FIXNUM_OFFSET;
 		Self::emit_list(func, &[I::LocalGet(local), I::I64Const(fixnum_offset), I::I64Add, I::I64Const(0), I::I64LtS, I::If(BlockType::Empty)]);
-		self.emit_heap_get(func, local);
-		func.instruction(&I::RefTestNullable(HeapType::Concrete(self.type_manager.ratio_type)));
+		func.instruction(&I::LocalGet(local));
+		self.call(func, "is_ratio");
 		self.emit_fail_if(func, error);
 		func.instruction(&I::End);
 	}
