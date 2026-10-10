@@ -21,54 +21,23 @@ pub(super) fn check_type_errors_inner(node: &Node, scope: &mut Scope, in_structu
 		return check_type_errors_inner(body, &mut Scope::new(), false);
 	}
 	match node {
-		Node::Key(left, Op::Colon, right) => {
-			if let Node::Symbol(kw) = left.drop_meta() {
-				if kw == "global" {
-					return check_type_errors_inner(right, scope, false);
-				}
-				// Tag structure: check both sides, right is structure context
-				if let Some(err) = check_type_errors_inner(left, scope, in_structure) {
-					return Some(err);
-				}
-				return check_type_errors_inner(right, scope, true);
-			}
-			if let Some(err) = check_type_errors_inner(left, scope, in_structure) {
-				return Some(err);
-			}
-			check_type_errors_inner(right, scope, in_structure)
+		Node::Key(left, Op::Colon, right) if left.is_symbol("global") => check_type_errors_inner(right, scope, false),
+		// a tag `name: {…}` is structure on its right side
+		Node::Key(left, Op::Colon, right) if left.symbol_name().is_some() => {
+			check_type_errors_inner(left, scope, in_structure).or_else(|| check_type_errors_inner(right, scope, true))
 		}
-		Node::Key(left, Op::Define, right) => {
-			if let Node::Symbol(name) = left.drop_meta() {
-				if let Some(err) = check_assignment(name, right, scope) {
-					return Some(err);
-				}
-			}
-			check_type_errors_inner(right, scope, in_structure)
-		}
-		Node::Key(left, Op::Assign, right) => {
-			if !in_structure {
-				if let Node::Symbol(name) = left.drop_meta() {
-					if let Some(err) = check_assignment(name, right, scope) {
-						return Some(err);
-					}
-				}
-			}
-			check_type_errors_inner(right, scope, in_structure)
+		Node::Key(left, op @ (Op::Define | Op::Assign), right) => {
+			let checks_assignment = *op == Op::Define || !in_structure;
+			let assignment_error = match left.symbol_name() {
+				Some(name) if checks_assignment => check_assignment(name, right, scope),
+				_ => None,
+			};
+			assignment_error.or_else(|| check_type_errors_inner(right, scope, in_structure))
 		}
 		Node::Key(left, _, right) => {
-			if let Some(err) = check_type_errors_inner(left, scope, in_structure) {
-				return Some(err);
-			}
-			check_type_errors_inner(right, scope, in_structure)
+			check_type_errors_inner(left, scope, in_structure).or_else(|| check_type_errors_inner(right, scope, in_structure))
 		}
-		Node::List(items, _, _) => {
-			for item in items {
-				if let Some(err) = check_type_errors_inner(item, scope, in_structure) {
-					return Some(err);
-				}
-			}
-			None
-		}
+		Node::List(items, _, _) => items.iter().find_map(|item| check_type_errors_inner(item, scope, in_structure)),
 		_ => None,
 	}
 }

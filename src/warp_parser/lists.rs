@@ -3,6 +3,14 @@
 use super::*;
 
 impl WarpParser {
+	/// At the closing bracket `close` (or the end of the input), or at the end of a bracketless group
+	fn at_group_end(&self, close: Option<char>) -> bool {
+		match close {
+			Some(closer) => matches!(self.current_char(), '\0') || self.current_char() == closer,
+			None => self.end_of_input() || self.at_block_close(),
+		}
+	}
+
 	pub(super) fn parse_symbol(&mut self) -> Result<String, String> {
 		let mut symbol = String::new();
 		loop {
@@ -104,10 +112,7 @@ impl WarpParser {
 
 			// Check for end condition (also check for end-of-input to avoid infinite loop)
 			let ch = self.current_char();
-			let at_end = match close {
-				Some(c) => ch == c || ch == '\0',
-				None => self.end_of_input() || self.at_block_close(),
-			};
+			let at_end = self.at_group_end(close);
 			if at_end {
 				if let Some(closer) = close.filter(|_| ch == '\0') {
 					let (line, column) = self.group_start;
@@ -200,10 +205,7 @@ impl WarpParser {
 
 			// Determine separator after this item
 			let ch = self.current_char();
-			let at_end = match close {
-				Some(c) => ch == c || ch == '\0',
-				None => self.end_of_input() || self.at_block_close(),
-			};
+			let at_end = self.at_group_end(close);
 			let sep = if at_end {
 				Separator::None
 			} else if ch == ',' {
