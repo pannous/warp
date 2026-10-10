@@ -667,14 +667,34 @@ pub(super) fn hidden_function_it(body: &Node, warnings: &mut Vec<Diagnostic>) {
 	});
 }
 
+/// The kinds of lint warnings "got it" silences
+pub const AND_OR_TOPIC: &str = "and-or";
+const ARITHMETIC_CONVERSION_TOPIC: &str = "arithmetic-conversion";
+const NEGATIVE_MODULO_TOPIC: &str = "negative-modulo";
+
+/// `"done"`, `7`: a value written out that is never falsy
+fn is_truthy_literal(node: &Node) -> bool {
+	matches!(node.drop_meta(), Node::Number(_) | Node::Text(_) | Node::Char(_) | Node::True) && !node.is_falsy()
+}
+
+/// `x and y or z` yields z when y is falsy; none when y is written out and never falsy: `done and "done" or "open"`
+/// can't go wrong (card done-done)
+fn and_or_warning(node: &Node, condition: &Node, then: &Node, otherwise: &Node) -> Option<Diagnostic> {
+	if is_truthy_literal(then) {
+		return None;
+	}
+	let (condition, then, otherwise) = (condition.serialize(), then.serialize(), otherwise.serialize());
+	let written = format!("{condition} and {then} or {otherwise}");
+	let explicit = format!("if {condition} then {then} else {otherwise}");
+	Some(Diagnostic::at(node, format!("`{written}` yields {otherwise} whenever {then} is falsy"))
+		.fix(&explicit).offer(format!("{then} whenever {condition} holds"), &written, explicit).about(AND_OR_TOPIC, &written))
+}
+
 pub(super) fn lint_into(node: &Node, warnings: &mut Vec<Diagnostic>) {
 	match node.drop_meta() {
 		Node::Key(left, op, right) => {
 			if let (Op::Or, Node::Key(condition, Op::And, then)) = (op, left.drop_meta()) {
-				let (condition, then, otherwise) = (condition.serialize(), then.serialize(), right.serialize());
-				let explicit = format!("if {condition} then {then} else {otherwise}");
-				warnings.push(Diagnostic::at(node, format!("`{condition} and {then} or {otherwise}` yields {otherwise} whenever {then} is falsy"))
-					.fix(&explicit).offer(format!("{then} whenever {condition} holds"), format!("{condition} and {then} or {otherwise}"), explicit));
+				warnings.extend(and_or_warning(node, condition, then, right));
 			}
 			if *op == Op::As && is_arithmetic(left) {
 				let diagnostic = Diagnostic::at(node, conversion_of_arithmetic_warning(left, right));
@@ -682,12 +702,14 @@ pub(super) fn lint_into(node: &Node, warnings: &mut Vec<Diagnostic>) {
 				let readings = conversion_readings(left, right);
 				let forms: Vec<&str> = readings.iter().map(|(_, form)| form.as_str()).collect();
 				let diagnostic = diagnostic.fix(forms.join(" or "));
-				warnings.push(readings.iter().fold(diagnostic, |diagnostic, (meaning, form)| diagnostic.offer(meaning, &written, form)));
+				let diagnostic = readings.iter().fold(diagnostic, |diagnostic, (meaning, form)| diagnostic.offer(meaning, &written, form));
+				warnings.push(diagnostic.about(ARITHMETIC_CONVERSION_TOPIC, &written));
 			}
 			if *op == Op::Mod && (is_negative(left) || is_negative(right)) {
 				let (a, b) = (left.serialize(), right.serialize());
+				let written = format!("{} % {}", a.trim(), b.trim());
 				warnings.push(Diagnostic::at(node, negative_modulo_warning(left, right))
-					.offer("the truncated remainder of C/Java/JS", format!("{} % {}", a.trim(), b.trim()), format!("{} rem {}", a.trim(), b.trim())));
+					.offer("the truncated remainder of C/Java/JS", &written, format!("{} rem {}", a.trim(), b.trim())).about(NEGATIVE_MODULO_TOPIC, &written));
 			}
 			if let (Op::Add, Some(spelled)) = (op, number_text_plus_number(left, right)) {
 				warnings.push(number_text_plus_number_warning(node, left, right, &spelled));
