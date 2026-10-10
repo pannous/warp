@@ -30,36 +30,41 @@ const PAIR_WORD: &str = "pair";
 pub const TYPE_WORD: &str = "type";
 pub const SYMBOL_TYPE: &str = "symbol";
 /// A built-in type: its name, the other words naming it, the types it covers (`is` tests the subtype, `==` the type
-/// itself) and the bits of its run-time kinds (node_kind_in); a bool is an Int marked bool and has a bit of its own
+/// itself), the kind a declared value of it is held as (`x: real = 1.5` an exact Int, `x: number` a Float; none for a
+/// type no declaration converts to) and the bits of its run-time kinds (node_kind_in, none for a type only the static
+/// type answers); a bool is an Int marked bool and has a bit of its own
 struct BuiltinType {
 	name: &'static str,
 	aliases: &'static [&'static str],
 	covers: &'static [&'static str],
+	held_as: Option<K>,
 	kind_bits: &'static [i64],
 }
 
-const fn builtin(name: &'static str, aliases: &'static [&'static str], covers: &'static [&'static str], kind_bits: &'static [i64]) -> BuiltinType {
-	BuiltinType { name, aliases, covers, kind_bits }
+const fn builtin(name: &'static str, aliases: &'static [&'static str], covers: &'static [&'static str], held_as: Option<K>, kind_bits: &'static [i64]) -> BuiltinType {
+	BuiltinType { name, aliases, covers, held_as, kind_bits }
 }
 
 use crate::type_kinds::Kind as K;
-/// The built-in type words, each a type value where it stands bare (`t = int`, `type(π) == real`, card cleanup-closed-lists).
-/// `number` covers every number, `real` the exact numbers and π, `rational` the whole numbers too, `text` a one-character
-/// string (a codepoint); `list` and ø both hold the empty list, as `count` takes it; a ± value is a number
-const BUILTIN_TYPES: [BuiltinType; 13] = [
-	builtin("int", &["integer", "long", "i64", "i32"], &[], &[K::Int as i64]),
-	builtin("rational", &["exact"], &["int"], &[K::Int as i64, K::Float as i64]),
-	builtin("real", &[], &["rational"], &[K::Int as i64, K::Float as i64]),
-	builtin("float", &["double", "f64", "f32", "fast"], &[], &[K::Float as i64]),
-	builtin("number", &[], &["real", "float"], &[K::Int as i64, K::Float as i64, K::Uncertain as i64]),
-	builtin("text", &["str", "string"], &["codepoint"], &[K::Text as i64, K::Codepoint as i64]),
-	builtin("codepoint", &["char"], &[], &[K::Codepoint as i64]),
-	builtin(SYMBOL_TYPE, &[], &[], &[K::Symbol as i64]),
-	builtin("key", &[PAIR_WORD], &[], &[K::Key as i64]),
-	builtin(crate::analyzer::BOOL_TYPE, &["boolean"], &[], &[crate::type_kinds::BOOL_MASK_BIT]),
-	builtin(EMPTY_TYPE, &["unit", "nil", "ø", "none", "null", "void"], &[], &[K::Empty as i64]),
-	builtin(ERROR_TYPE, &[], &[], &[K::Error as i64]),
-	builtin(LIST_WORD, &[], &[], &[K::List as i64, K::Block as i64, K::Empty as i64]),
+/// The built-in type words, the one list of them (card cleanup-closed-lists): each is a type value where it stands bare
+/// (`t = int`, `type(π) == real`). `number` covers every number, `real` the exact numbers and π, `rational` the whole
+/// numbers too, `text` a one-character string (a codepoint); `list` and ø both hold the empty list, as `count` takes
+/// it; a ± value is a number. The fixed widths (`int8`, `uint16` …) are src/fixed_width.rs
+const BUILTIN_TYPES: [BuiltinType; 14] = [
+	builtin("int", &["integer", "long", "i64", "i32"], &[], Some(K::Int), &[K::Int as i64]),
+	builtin("rational", &["exact"], &["int"], Some(K::Int), &[K::Int as i64, K::Float as i64]),
+	builtin("real", &[], &["rational"], Some(K::Int), &[K::Int as i64, K::Float as i64]),
+	builtin("float", &["double", "f64", "f32", "float32", "float64", "fast"], &[], Some(K::Float), &[K::Float as i64]),
+	builtin("number", &["num"], &["real", "float"], Some(K::Float), &[K::Int as i64, K::Float as i64, K::Uncertain as i64]),
+	builtin("text", &["str", "string"], &["codepoint"], Some(K::Text), &[K::Text as i64, K::Codepoint as i64]),
+	builtin("codepoint", &["char", "character"], &[], Some(K::Codepoint), &[K::Codepoint as i64]),
+	builtin(crate::analyzer::BOOL_TYPE, &["boolean"], &[], Some(K::Int), &[crate::type_kinds::BOOL_MASK_BIT]),
+	builtin("function", &["closure"], &[], Some(K::Function), &[]),
+	builtin(SYMBOL_TYPE, &[], &[], None, &[K::Symbol as i64]),
+	builtin("key", &[PAIR_WORD], &[], None, &[K::Key as i64]),
+	builtin(EMPTY_TYPE, &["unit", "nil", "ø", "none", "null", "void"], &[], None, &[K::Empty as i64]),
+	builtin(ERROR_TYPE, &[], &[], None, &[K::Error as i64]),
+	builtin(LIST_WORD, &[], &[], None, &[K::List as i64, K::Block as i64, K::Empty as i64]),
 ];
 
 fn builtin_type(word: &str) -> Option<&'static BuiltinType> {
@@ -71,9 +76,25 @@ pub fn is_type_word(word: &str) -> bool {
 	builtin_type(word).is_some()
 }
 
+/// Every word naming a built-in type, aliases too
+pub fn builtin_type_words() -> impl Iterator<Item = &'static str> {
+	BUILTIN_TYPES.iter().flat_map(|builtin| std::iter::once(builtin.name).chain(builtin.aliases.iter().copied()))
+}
+
 /// Words that name the same type
 pub(crate) fn canonical_spec_word(word: &str) -> &str {
 	builtin_type(word).map_or(word, |builtin| builtin.name)
+}
+
+/// The kind a value declared of the built-in type `word` is held as (analyzer builtin_type_kind)
+pub fn held_kind(word: &str) -> Option<K> {
+	builtin_type(word)?.held_as
+}
+
+/// `rational`, `real`, `exact`: the exact numbers beyond the whole ones, the types covering int that cover no float
+pub fn is_exact_fraction_type(word: &str) -> bool {
+	let name = canonical_spec_word(word);
+	name != "int" && type_matches("int", name) && !type_matches("float", name)
 }
 
 /// Does a value of the static type name `actual` (`type(x)`) have the type `spec`: actual is spec or a type spec covers,
@@ -102,7 +123,8 @@ pub fn builtin_types_matching(spec: &str) -> Vec<&'static str> {
 pub fn runtime_kind_mask(spec: &str) -> Option<i64> {
 	let spec = canonical_spec_word(spec);
 	let spec = if spec.starts_with("list of ") { LIST_WORD } else { spec };
-	Some(builtin_type(spec)?.kind_bits.iter().fold(0, |mask, bit| mask | 1 << bit))
+	let kind_bits = builtin_type(spec)?.kind_bits;
+	(!kind_bits.is_empty()).then(|| kind_bits.iter().fold(0, |mask, bit| mask | 1 << bit))
 }
 
 /// The variables in scope (a name of one is no type in a test) and the program's declared types (`class friend`: `x is friend`)

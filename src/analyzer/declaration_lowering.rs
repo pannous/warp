@@ -800,7 +800,7 @@ pub(super) fn declared_type(target: &Node) -> Option<&Node> {
 	}
 }
 
-/// A builtin type written before a declaration: `int`, `string`, `float`, `real`, `fast` … (see `canonical_type_name`)
+/// A builtin type written before a declaration: `int`, `string`, `float`, `real`, `fast` … (type_tests BUILTIN_TYPES)
 pub(super) fn is_declaration_type(node: &Node) -> bool {
 	matches!(node.drop_meta(), Node::Symbol(name) if builtin_type_kind(name).is_some() || plural_element_type(name).is_some())
 }

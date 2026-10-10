@@ -440,7 +440,8 @@ impl WasmGcEmitter {
 	}
 }
 
-/// `int`, `Int`, `integer`: the type `x as int` converts to
+/// `int`, `Int`, `integer`: the type `x as int` converts to; `as i64` wraps (casts.rs WRAPPING_INT_WORDS)
 fn is_int_type_word(target: &Node) -> bool {
-	matches!(crate::type_kinds::canonical_type_name(&target.drop_meta().name().to_lowercase()), "int" | "integer")
+	let word = target.drop_meta().name().to_lowercase();
+	crate::type_tests::canonical_spec_word(&word) == "int" && !super::casts::WRAPPING_INT_WORDS.contains(&word.as_str())
 }

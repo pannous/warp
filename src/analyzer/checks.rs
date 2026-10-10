@@ -203,24 +203,17 @@ pub(super) fn type_name_to_kind(name: &str) -> Kind {
 	builtin_type_kind(name).unwrap_or(Kind::Int)
 }
 
-/// Kind of a built-in type name; an exact number (`exact`, `real`) is an Int that may hold a ratio (wasm_emitter/exact.rs)
+/// Kind of a built-in type name (type_tests BUILTIN_TYPES, a fixed width an Int); an exact number (`exact`, `real`) is
+/// an Int that may hold a ratio (wasm_emitter/exact.rs)
 pub fn builtin_type_kind(name: &str) -> Option<Kind> {
-	Some(match canonical_type_name(&name.to_lowercase()) {
-		"int" | "i32" | "i64" | "integer" | "long" | "exact" => Kind::Int,
-		"float" | "f32" | "float32" | "number" => Kind::Float,
-		"string" | "str" | "text" => Kind::Text,
-		"bool" | "boolean" => Kind::Int, // Booleans are i32/i64
-		"char" | "codepoint" => Kind::Codepoint,
-		"function" | "closure" => Kind::Function,
-		fixed if crate::fixed_width::fixed_width(fixed).is_some() => Kind::Int,
-		_ => return None,
-	})
+	let name = name.to_lowercase();
+	crate::type_tests::held_kind(&name).or_else(|| crate::fixed_width::fixed_width(&name).map(|_| Kind::Int))
 }
 
 /// A whole-number type (`int`, `long`, `byte` …): never a fraction, unlike `exact`
 pub fn is_whole_type(name: &str) -> bool {
 	let name = name.trim_end_matches('?').to_lowercase();
-	canonical_type_name(&name) != "exact" && builtin_type_kind(&name) == Some(Kind::Int)
+	!crate::type_tests::is_exact_fraction_type(&name) && builtin_type_kind(&name) == Some(Kind::Int)
 }
 
 /// A declared type a decimal loses digits in: a whole type, or an inline union with a whole part and no fractional
@@ -1260,7 +1253,7 @@ pub(super) fn check_parameter_annotations(program: &Node) -> Option<Diagnostic> 
 			Some(element) => is_known_name(element) || names_list_type(element),
 			None => annotated_kind(annotation).is_some() || user_types.get_by_name(type_name.trim_end_matches('?')).is_some() || traits.is_trait(&type_name),
 		};
-		let names = crate::law::type_model::BUILTIN_TYPE_WORDS.iter().map(|word| word.to_string()).chain(user_types.types().iter().map(|type_def| type_def.name.clone()));
+		let names = crate::type_tests::builtin_type_words().map(str::to_string).chain(user_types.types().iter().map(|type_def| type_def.name.clone()));
 		let diagnostic = || Diagnostic::at(annotation, format!("unknown type {type_name} of parameter {}", param.name));
 		(!known).then(|| match crate::extensions::strings::near_miss(&type_name, names) {
 			Some(near) => diagnostic().offer(format!("the type {near}"), &type_name, near),
@@ -1452,7 +1445,7 @@ pub(crate) fn admits(type_name: &str, actual: Kind) -> bool {
 		return parts.iter().any(|part| admits(part, actual));
 	}
 	let Some(expected) = builtin_type_kind(type_name) else { return true };
-	let exact_decimal = canonical_type_name(type_name) == "exact" && actual == Kind::Float;
+	let exact_decimal = crate::type_tests::is_exact_fraction_type(type_name) && actual == Kind::Float;
 	let one_character_text = expected == Kind::Text && actual == Kind::Codepoint;
 	expected == actual || (expected == Kind::Float && actual == Kind::Int) || exact_decimal || one_character_text
 }
