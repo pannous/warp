@@ -30,6 +30,14 @@ A call with an expected type that one overload returns calls it (`render·pdf("x
 dropped). Otherwise the first-declared overload is taken with the got-it warning (diagnostic::ask, Fallback::Warning,
 topic `return-type`): `render has variants returning pdf, docx: which does render "x" mean? (taking pdf); fix: render "x" as pdf`.
 
+### Companions (card int-let)
+A function f without overloads but with a companion `f_as(…, type:text)` gets its expected type at run time:
+`x:int = agent "33/3"` calls `agent_as("33/3", "int") as int` (lib/agent.warp asks Claude for a JSON value of that type
+and parses it). The `as T` stays for a built-in type word, since the companion's answer has no static type (`yes` shows as yes,
+not 1). Companions are found by operation (`agent·1` of lower_arity_overloads is `agent`), and modules.rs links `f_as`
+whenever it links f, because the call to it only appears here. `agent "is 7 prime" as bool` works too. Live check:
+probes/agent_types.sh.
+
 ## Lowering
 src/lowering/overloads.rs, right after type_constructor (constructions are instances by then) and before the trait passes and
 library_words, so `x = render "x" as pdf; x.body` reads a field: traits::InstanceTypes knows the result shape of a user

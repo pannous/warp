@@ -1,5 +1,5 @@
 // The standard library module agent (card g_X_F0): `agent "summarize this text"` sends the prompt as given to Claude
-// (the Anthropic Messages API) and gives its answer as text; `agent(prompt, "claude-opus-5-5")` names another model.
+// (the Anthropic Messages API) and gives its answer as text; `agent(prompt, "claude-opus-5-5")` names another model; with an expected type (`x:int = agent "33/3"`, `agent "…" as bool`) it answers a value of that type (agent_as).
 // The key is ANTHROPIC_API_KEY: natively the environment's (a terminal's `export ANTHROPIC_API_KEY=sk-ant-…`, in
 // ~/.zshrc to keep it), in the browser the API key field of the playground's ⋯ menu (kept in that browser only). Loaded when a program calls agent, like units
 use net
@@ -12,5 +12,15 @@ agent(prompt:text, model:text) := {
 	request = {model: model, max_tokens: 4096, messages: [{role: "user", content: prompt}]}
 	headers = {"x-api-key": key, "anthropic-version": "2023-06-01", "content-type": "application/json", "anthropic-dangerous-direct-browser-access": "true"}
 	answer = parse_json(post("https://api.anthropic.com/v1/messages", to_json(request), headers))
-	answer.content#1.text
+	// the text blocks of the answer: a model may think first, in a block of type thinking
+	var text = ""
+	for part in answer.content { if part.type == "text" { text = text + part.text } }
+	text
+}
+
+// card int-let: a call with an expected type calls this companion (lowering/overloads.rs): `x:int = agent "33/3"`
+// asks for a value of that type written as JSON and gives it as that value; text asks as agent does
+agent_as(prompt:text, type:text) := {
+	if type == "text" or type == "string" { return agent(prompt) }
+	parse_json(trim(agent(prompt + "\n\nAnswer with only the value, of type " + type + ", written as JSON: no words, no code fence.")))
 }

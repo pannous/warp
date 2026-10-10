@@ -23,6 +23,7 @@ mod test_std_prelude;
 mod test_std_net;
 #[cfg(feature = "native")] // the process environment's key: the browser reads the page's key setting instead
 mod test_agent; // card g_X_F0
+mod test_agent_types; // card int-let
 mod test_std_regex;
 mod test_std_matrix;
 mod test_use_modules;
