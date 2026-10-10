@@ -36,8 +36,8 @@ use unicode_normalization::UnicodeNormalization;
 
 /// Largest exponent written out as an exact integer literal (1e4096 has 4097 digits)
 /// The unit words a for loop walks a text by, the item being `it` (wiki/string.md)
-/// The schemes of a URL read as one text: `https://pannous.com`
-const URL_SCHEMES: [&str; 7] = ["http", "https", "ftp", "file", "data", "ws", "wss"];
+/// What follows the scheme of a URL read as one text, whatever the scheme: `https://pannous.com`, `ssh://host` (card add-http)
+const URL_MARK: &str = "://";
 const UNIT_LOOP_WORDS: [&str; 4] = ["chars", "characters", "codepoints", "bytes"];
 const BYTES_WORD: &str = "bytes";
 pub const IT_WORD: &str = "it";
