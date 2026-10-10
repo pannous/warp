@@ -80,5 +80,5 @@ whether `type(0.0)` should say `rational` (a') or stay `int`.
 ## int-exact
 
 `int i=3.3*2; i` now gives the declared-type mismatch ("i is declared int, cannot assign … fix: i=int(3.3*2) or declare
-i:float"), as `int i=3.5` does: already fixed on main (`382bf7a0f`, a float computed from literals is checked against
+i:float"), as `int i=3.5` does: already fixed on main (`c7dc0cba3`, arithmetic on exact literals is checked by its value against
 the declared type).
