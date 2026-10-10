@@ -85,6 +85,10 @@ to play x for duration: sound(chord_samples(pitches_of(x), si_amount(duration), 
 // a music file in the background (wav, mp3, ogg, flac, aiff, m4a): play "song.mp3"; stop_sound stops it
 play_file(path) := std_io("sound", "play_file", [path])
 stop_sound() := std_io("sound", "stop", [])
+// play returns at once, its sound queued behind those before it: sound_queued() is how many seconds still sound,
+// wait_sound waits for them (a program's end does too)
+sound_queued() := std_io("sound", "queued", [])
+wait_sound() := std_io("sound", "wait", [])
 to play x: if x is text then play_file(x) else sound(chord_samples(pitches_of(x), note_seconds, wave_shape))
 // one note (or chord) after another: melody [C4 E4 G4], melody [C4 E4 G4] each 250ms (or melody([C4 E4 G4], 0.25s))
 // plain seconds: the unit check reads a quantity parameter in a loop as unsupported (notes/units_runtime.md)
