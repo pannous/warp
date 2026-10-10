@@ -401,13 +401,14 @@ pub(super) const NUMBER_WORD: &str = "number";
 pub(super) const REAL_WORD: &str = "real";
 pub(super) const REAL_CONSTANTS: [&str; 2] = ["π", "pi"];
 
-/// The type word of a number literal: whole numbers are `int`, exact fractions `rational`, decimals (`2.0`, `0.1`), √2
-/// and complex `float` (decision exact-default)
+/// The type word of a number literal: whole numbers are `int` (also `2.0`), exact fractions and decimals `rational`,
+/// approximations (`1.5f`, √2, complex) `float` (decision exact-decimals)
 pub fn number_type_word(number: &Number) -> &'static str {
 	match number {
 		Number::Int(_) | Number::BigInt(_) => INT_WORD,
 		Number::Quotient(..) | Number::BigQuotient(_) => RATIONAL_WORD,
 		Number::Real(_) => REAL_WORD,
+		Number::Float(value) if Number::is_exact_decimal(*value) => if value.fract() == 0.0 { INT_WORD } else { RATIONAL_WORD },
 		_ => FLOAT_WORD,
 	}
 }

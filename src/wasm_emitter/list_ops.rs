@@ -1439,7 +1439,7 @@ impl WasmGcEmitter {
 	}
 
 	pub(super) fn arithmetic_type(&self, left: &Node, op: &crate::operators::Op, right: &Node) -> Kind {
-		crate::analyzer::arithmetic_kind_of_operands(self.get_type(left), op, self.get_type(right), right)
+		crate::analyzer::arithmetic_kind_of_operands(self.get_type(left), op, self.get_type(right), right, &self.scope)
 	}
 
 	/// Arithmetic on a value whose kind only the run time knows (`x*x` of a parameter held as a Node): maybe a float

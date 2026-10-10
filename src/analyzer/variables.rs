@@ -114,6 +114,7 @@ pub(super) fn collect_variables_inner(node: &Node, scope: &mut Scope, skip_first
 		Node::Key(left, op, right) if op.is_compound_assign() => {
 			let inner_temporaries = visit(right, scope);
 			if let Some(name) = left.symbol_name() {
+				mark_ratio(left, right, scope);
 				widen_to_float(scope, name, right);
 				// `out += x` of a number of run-time kind may add a float, as `out = out + x` does; an evident other kind
 				// (`s += "ab"` of an Int) stays the type error of emit_compound_type_error
@@ -164,6 +165,21 @@ fn bind_destructured(names: &[String], values: &[Node], scope: &mut Scope) {
 
 /// `left = right` outside a structure: a new name becomes a local, a known one may widen its type
 fn bind_assigned(left: &Node, right: &Node, scope: &mut Scope) {
+	bind_assigned_kind(left, right, scope);
+	mark_ratio(left, right, scope);
+}
+
+/// A variable given a value that may be a fraction keeps that in mind: its power `10^l` may be a float (node_pow)
+fn mark_ratio(left: &Node, right: &Node, scope: &mut Scope) {
+	let Some(name) = left.symbol_name() else { return };
+	if crate::analyzer::inference::may_be_ratio(right, scope) {
+		if let Some(local) = scope.own_binding_mut(name) {
+			local.may_be_ratio = true;
+		}
+	}
+}
+
+fn bind_assigned_kind(left: &Node, right: &Node, scope: &mut Scope) {
 	match left.drop_meta() {
 		// `k.x = 3` updates k: it binds no k, so an undefined k stays undefined (as in `k#1 = 3`)
 		Node::Symbol(name) if crate::library_words::is_field_update_of(name, right) && scope.lookup(name).is_none() => {}
@@ -880,6 +896,7 @@ impl Scope {
 			kind,
 			data_pointer: 0,
 			data_length: 0,
+			may_be_ratio: false,
 		};
 		self.locals.insert(name, local.clone());
 		local

@@ -39,9 +39,13 @@ pub(crate) fn computed_literal_kind(value: &Node) -> Option<Kind> {
 	}
 }
 
-/// The exact value of arithmetic on exact literals (`33/10*2` is 33/5), None for anything else or a division by zero
+/// The exact value of arithmetic on exact literals (`3.3*2` is 33/5), None for anything else or a division by zero
 pub(super) fn exact_literal_value(node: &Node) -> Option<crate::extensions::reals::Rational> {
 	match node.drop_meta() {
+		Node::Number(Number::Float(f)) if Number::is_exact_decimal(*f) => {
+			let (numerator, denominator) = crate::wasm_emitter::exact::decimal_fraction(*f);
+			Some(crate::extensions::reals::Rational::new(numerator, denominator))
+		}
 		Node::Number(number @ (Number::Int(_) | Number::BigInt(_) | Number::Quotient(..) | Number::BigQuotient(_))) => Some(number.to_rational()),
 		Node::Key(nothing, Op::Neg | Op::Sub, operand) if matches!(nothing.drop_meta(), Node::Empty) => Some(exact_literal_value(operand)?.neg()),
 		Node::Key(left, op, right) => {
@@ -58,10 +62,11 @@ pub(super) fn exact_literal_value(node: &Node) -> Option<crate::extensions::real
 	}
 }
 
-/// An operand of arithmetic on literals: a real constant is a float
+/// An operand of arithmetic on literals: an exact decimal stays exact (`2.0*3` is 6), a real constant is a float
 pub(super) fn operand_kind(operand: &Node) -> Option<Kind> {
 	match operand.drop_meta() {
 		Node::Symbol(name) if REAL_CONSTANTS.contains(&name.as_str()) => Some(Kind::Float),
+		Node::Number(Number::Float(f)) if Number::is_exact_decimal(*f) => Some(Kind::Int),
 		Node::Key(..) => computed_literal_kind(operand),
 		_ => literal_kind(operand),
 	}
@@ -252,6 +257,12 @@ pub fn type_word_kind(type_name: &str) -> Option<Kind> {
 		NUMBER_TYPE => Some(Kind::Int),
 		_ => builtin_type_kind(type_name),
 	}
+}
+
+/// An unannotated parameter without a default, or with an Int one (`within = 0`), takes the kind its callers pass:
+/// `f(1, w = 1e-9)` gives w a float
+fn takes_passed_kind(param: &Param) -> bool {
+	param.annotation.is_none() && param.default.as_ref().is_none_or(|value| argument_literal_kind(value) == Some(Kind::Int))
 }
 
 /// A parameter takes its declared `x:type` kind, else the kind of its default value (a fresh value per call); otherwise Int
@@ -544,7 +555,7 @@ pub(super) fn widen_parameters(ctx: &mut Context, program: &Node, globals: &Hash
 		// int parameter refused at run time ("not an int"), so it takes the Node
 		let unknown = matches!(param.used_as, None | Some(Kind::List | Kind::Int));
 		let only_nodes_and_ints = kinds.iter().all(|kind| matches!(kind, Kind::Empty | Kind::Int));
-		if kinds.contains(&Kind::Empty) && only_nodes_and_ints && unknown && param.annotation.is_none() && param.default.is_none() {
+		if kinds.contains(&Kind::Empty) && only_nodes_and_ints && unknown && takes_passed_kind(param) {
 			param.used_as = Some(Kind::Empty);
 			changed = true;
 			continue;
@@ -553,7 +564,7 @@ pub(super) fn widen_parameters(ctx: &mut Context, program: &Node, globals: &Hash
 		let [kind] = kinds.as_slice() else { continue };
 		// a parameter the body counts or indexes is guessed a list, until the calls pass it only texts
 		let guessed = matches!(param.used_as, None | Some(Kind::Int)) || (param.used_as == Some(Kind::List) && *kind == Kind::Text);
-		if param.annotation.is_none() && param.default.is_none() && guessed {
+		if takes_passed_kind(param) && guessed {
 			param.used_as = Some(*kind);
 			changed = true;
 		}
@@ -742,7 +753,7 @@ pub(super) fn infer_closure_parameters(ctx: &mut Context, program: &Node) {
 		let mut changed = false;
 		for (target, index, kind) in inferred {
 			let Some(param) = ctx.user_functions.get_mut(&target).and_then(|function| function.params.get_mut(index)) else { continue };
-			if kind != Kind::Int && param.annotation.is_none() && param.default.is_none() && param.used_as.is_none() {
+			if kind != Kind::Int && takes_passed_kind(param) && param.used_as.is_none() {
 				param.used_as = Some(kind);
 				changed = true;
 			}

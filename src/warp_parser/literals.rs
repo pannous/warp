@@ -7,6 +7,7 @@ const BACKTICK: char = '`';
 const BACKTICK_TOPIC: &str = "backtick text";
 const F_STRING_TOPIC: &str = "python f-string";
 const F_STRING_PREFIX: char = 'f';
+const FLOAT_WORD: &str = "float";
 /// The words of a WGSL block, `shader { … }` (card g_oFJc)
 const SHADER_WORDS: [&str; 2] = ["shader", "wgsl"];
 /// `\e` in a text: the start of terminal codes like `\e[H`
@@ -312,10 +313,17 @@ impl WarpParser {
 		let number = self.parse_number_value();
 		let literal: String = self.chars[start..self.pos].iter().collect();
 		let number = self.keep_source_literal(number, &literal);
-		match self.literal_type_suffix() {
+		match self.literal_type_suffix().or_else(|| self.scientific_float(&number, &literal)) {
 			Some(number_type) => Node::Key(Box::new(number), Op::As, Box::new(Node::Symbol(number_type))),
 			None => self.with_juxtaposed_factor(number),
 		}
+	}
+
+	/// `1.5e-7` is a float, as written by measurements and other programs (decision exact-decimals); `1e3` stays the
+	/// integer 1000 and `0.5` the exact decimal. Code only: data keeps the number it reads.
+	fn scientific_float(&self, number: &Node, literal: &str) -> Option<String> {
+		let is_scientific = matches!(number, Node::Number(Number::Float(_))) && literal.contains(['e', 'E']);
+		(is_scientific && !self.options.data_mode).then(|| FLOAT_WORD.to_string())
 	}
 
 	/// `2x` is 2*x, `3(4)` is 3*(4), `3x²` is 3*(x²): a number directly followed by a symbol or `(` multiplies.
