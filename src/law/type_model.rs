@@ -28,9 +28,10 @@ const BOOL_TYPE: &str = ".bool";
 const ANY_TYPE: &str = ".any";
 const LIST_TYPE_PREFIX: &str = ".list ";
 /// The builtin scalar type words warp checks a value against (analyzer admits) that W0 has a type for
-pub(crate) const BUILTIN_TYPE_WORDS: [&str; 13] = ["int", "integer", "long", "exact", "float", "number", "text", "string", "str", "codepoint", "char", "bool", "boolean"];
-/// A value of each W0 scalar type and the run-time kind warp sees it as (a bool is an Int)
-const VALUE_KINDS: [(&str, Kind); 5] = [(BOOL_TYPE, Kind::Int), (".int", Kind::Int), (".number", Kind::Float), (".text", Kind::Text), (".codepoint", Kind::Codepoint)];
+pub(crate) const BUILTIN_TYPE_WORDS: [&str; 15] = ["int", "integer", "long", "exact", "rational", "real", "float", "number", "text", "string", "str", "codepoint", "char", "bool", "boolean"];
+/// A value of each W0 scalar type and the kind warp's analyzer sees it as (a bool is an Int; a Float is a decimal
+/// written in the program, an exact number: admits cannot tell it from a float, which only a run makes)
+const VALUE_KINDS: [(&str, Kind); 5] = [(BOOL_TYPE, Kind::Int), (".int", Kind::Int), (".exact", Kind::Float), (".text", Kind::Text), (".codepoint", Kind::Codepoint)];
 const UNIT_TYPE: &str = ".unit";
 /// the parameter of a function that takes none
 const UNIT_PARAMETER: &str = "·";
@@ -88,6 +89,11 @@ fn unsupported(node: &Node) -> Lean {
 	Err(format!("not in W0: {}", node.serialize().trim()))
 }
 
+/// `0.5`, `7/2`: an exact number, an int when it is whole (Semantics.lean exactValue)
+fn exact_number(numerator: impl std::fmt::Display, denominator: impl std::fmt::Display) -> String {
+	format!("(Warp.exactValue (({numerator} : Rat) / {denominator}))")
+}
+
 fn quoted(text: &str) -> String {
 	format!("\"{}\"", text.replace('\\', "\\\\").replace('"', "\\\""))
 }
@@ -100,7 +106,8 @@ fn type_of_word(word: &str) -> Option<String> {
 		}
 		Some(match crate::type_kinds::canonical_type_name(&word.to_lowercase()) {
 			"int" | "integer" | "long" => ".int",
-			"float" | "number" | "exact" => ".number",
+			"exact" => ".exact",
+			"float" | "number" => ".number",
 			"text" | "string" | "str" => ".text",
 			"codepoint" | "char" => ".codepoint",
 			"bool" | "boolean" => BOOL_TYPE,
@@ -1180,9 +1187,12 @@ impl Exporter {
 		}
 		match node.drop_meta() {
 			Node::Number(Number::Int(n)) => Ok(format!(".int ({n})")),
-			// a number keeps its whole part, which `as int` gives (W0 keeps no fractions)
-			Node::Number(Number::Float(x)) => Ok(format!(".num ({})", x.trunc() as i64)),
-			Node::Number(Number::Quotient(numerator, denominator)) => Ok(format!(".num ({})", numerator / denominator)),
+			Node::Number(Number::Float(x)) if Number::is_exact_decimal(*x) => {
+				let (numerator, denominator) = crate::wasm_emitter::exact::decimal_fraction(*x);
+				Ok(exact_number(numerator, denominator))
+			}
+			Node::Number(Number::Float(x)) => Ok(format!(".flt (Float.toBits ({x:?} : Float))")),
+			Node::Number(Number::Quotient(numerator, denominator)) => Ok(exact_number(numerator, denominator)),
 			Node::True => Ok(".bool true".to_string()),
 			Node::False => Ok(".bool false".to_string()),
 			Node::Text(text) => Ok(format!(".text {}", quoted(text))),
@@ -1425,6 +1435,7 @@ pub fn warp_value(code: &str) -> String {
 	fn shown(value: &Node) -> String {
 		match value.drop_meta() {
 			Node::Number(Number::Int(n)) => n.to_string(),
+			Node::Number(exact @ (Number::Quotient(..) | Number::BigQuotient(_))) => exact.to_string(),
 			Node::True => "yes".to_string(),
 			Node::False => "no".to_string(),
 			Node::Text(text) => format!("\"{text}\""),

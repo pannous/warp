@@ -96,15 +96,60 @@ def asInt : Expr → Option Int
   | .int n => some n
   | _ => none
 
+/-- an exact number's value: an int's, a rational's -/
+def asExact : Expr → Option Rat
+  | .num q => some q
+  | e => (asInt e).map fun n => (n : Rat)
+
+def ratToFloat (q : Rat) : Float := Float.ofInt q.num / Float.ofNat q.den
+
+/-- a number's value as a float -/
+def asFloat : Expr → Float
+  | .flt f => Float.ofBits f
+  | e => ratToFloat ((asExact e).getD 0)
+
+/-- a float's whole part, toward zero (`3.7 as int` is 3) -/
+def floatWhole (f : Float) : Int :=
+  let whole := (if f < 0 then -f else f).floor
+  let magnitude : Int := if whole < 18446744073709551616.0 then whole.toUInt64.toNat else 0
+  if f < 0 then -magnitude else magnitude
+
+/-- a number's whole part, toward zero -/
 def asNumber : Expr → Int
-  | .num n => n
+  | .num q => if q < 0 then -((-q).floor) else q.floor
+  | .flt f => floatWhole (Float.ofBits f)
   | e => (asInt e).getD 0
+
+/-- an exact number as a value: a whole one is an int, as warp normalizes `0.5 * 2` -/
+def exactValue (q : Rat) : Expr := if q.den = 1 then .int q.num else .num q
+
+def floatValue (f : Float) : Expr := .flt f.toBits
+
+/-- the multiplicity of the prime p in n (n > 0) -/
+def multiplicity (p : Nat) (n : Nat) (fuel : Nat := 64) : Nat :=
+  match fuel with
+  | 0 => 0
+  | fuel + 1 => if n > 0 && n % p == 0 then 1 + multiplicity p (n / p) fuel else 0
+
+/-- a rational as warp prints it: a terminating decimal (`3.5`, `0.125`), else as a fraction (`1/3`) -/
+def ratDisplay (q : Rat) : String :=
+  let twos := multiplicity 2 q.den
+  let fives := multiplicity 5 q.den
+  if q.den != 2 ^ twos * 5 ^ fives then s!"{q.num}/{q.den}" else
+  let digits := max twos fives
+  let scaled := q.num.natAbs * (10 ^ digits / q.den)
+  let whole := toString (scaled / 10 ^ digits)
+  let fraction := toString (scaled % 10 ^ digits)
+  let padded := String.ofList (List.replicate (digits - fraction.length) '0') ++ fraction
+  (if q.num < 0 then "-" else "") ++ whole ++ (if digits = 0 then "" else "." ++ padded)
 
 /-- a value as `+` joins it to a text -/
 def render : Expr → String
   | .text s => s
   | .bool b => if b then "true" else "false"
-  | .int n | .num n => toString n
+  | .int n => toString n
+  | .num q => ratDisplay q
+  | .flt f => toString (Float.ofBits f)
   | _ => ""
 
 def isText : Expr → Bool
@@ -131,8 +176,13 @@ def walkText (y : String) (s : String) (b last : Expr) : Expr :=
   | some (c, rest) => .forIn y (.text rest) b (b.subst y (.text c))
 
 def isNumber : Expr → Bool
-  | .bool _ | .int _ | .num _ => true
+  | .bool _ | .int _ | .num _ | .flt _ => true
   | _ => false
+
+/-- a zero divisor: `x / 0`, `x % 0.0` -/
+def isZero : Expr → Bool
+  | .flt f => Float.ofBits f == 0
+  | v => asExact v == some 0
 
 /-- `"ab" * 3`, `3 * "ab"`: the text n times (none for n ≤ 0), P1 -/
 def repeatValues (s : String) (n : Expr) : Expr :=
@@ -154,7 +204,7 @@ def amount : Expr → Int
   | v => asNumber v
 
 /-- the value of an amount in dimensions d: a number when they cancel -/
-def quantityValue (n : Int) (d : Dims) : Expr := if d = [] then .num n else .qty n d
+def quantityValue (n : Int) (d : Dims) : Expr := if d = [] then .int n else .qty n d
 
 def DIMENSION_ERROR : String := "DimensionError"
 
@@ -172,6 +222,12 @@ def quantityValues (op : ArithOp) (a b : Expr) : Expr :=
     | none => .error DIMENSION_ERROR
   | _, _ => .error DIMENSION_ERROR
 
+/-- an operation on exact numbers, a float when the result is no rational (`2^0.5`) -/
+def exactNumber (op : ArithOp) (x y : Rat) : Expr :=
+  match op.applyExact x y with
+  | some q => exactValue q
+  | none => floatValue (op.applyFloat (ratToFloat x) (ratToFloat y))
+
 /-- `-`, `*`, `%`, `/` and `^` without quantities: numbers, or a text repeated -/
 def plainArithValues (op : ArithOp) (a b : Expr) : Expr :=
   match op, a, b with
@@ -179,10 +235,13 @@ def plainArithValues (op : ArithOp) (a b : Expr) : Expr :=
   | _, _, _ => numberValues op a b
 where numberValues (op : ArithOp) (a b : Expr) : Expr :=
   if !(isNumber a && isNumber b) then .error "not a number" else
-  if (op == .mod || op == .div) && asNumber b == 0 then .error "divide by zero" else
+  if (op == .mod || op == .div) && isZero b then .error "divide by zero" else
   match asInt a, asInt b with
-  | some x, some y => if (op == .div && x % y != 0) || (op == .pow && y < 0) then .num (op.apply x y) else .int (op.apply x y)
-  | _, _ => .num (op.apply (asNumber a) (asNumber b))
+  | some x, some y => if (op == .div && x % y != 0) || (op == .pow && y < 0) then exactNumber op x y else .int (op.apply x y)
+  | _, _ =>
+  match asExact a, asExact b with
+  | some x, some y => exactNumber op x y
+  | _, _ => floatValue (op.applyFloat (asFloat a) (asFloat b))
 
 /-- `-`, `*`, `%`, `/` and `^` on values -/
 def arithValues (op : ArithOp) (a b : Expr) : Expr :=
@@ -206,14 +265,21 @@ def addValues (a b : Expr) : Expr :=
   if isText a || isText b then .text (render a ++ render b) else
   match asInt a, asInt b with
   | some x, some y => .int (x + y)
-  | _, _ => .num (asNumber a + asNumber b)
+  | _, _ =>
+  match asExact a, asExact b with
+  | some x, some y => exactValue (x + y)
+  | _, _ => floatValue (asFloat a + asFloat b)
 
 /-- numbers by value, texts in codepoint order (`"a" < "b"`) -/
 def ltValues (a b : Expr) : Expr :=
   match a, b with
   | .qty x d, .qty y e => if d = e then .bool (decide (x < y)) else .error DIMENSION_ERROR
   | _, _ =>
-  if isNumber a && isNumber b then .bool (decide (asNumber a < asNumber b)) else
+  if isNumber a && isNumber b then
+    match asExact a, asExact b with
+    | some x, some y => .bool (decide (x < y))
+    | _, _ => .bool (asFloat a < asFloat b)
+  else
   match a, b with
   | .text x, .text y => .bool (decide (x < y))
   | _, _ => .error "not comparable"
@@ -243,7 +309,8 @@ def eqValues (P : Program) (μ : Store) (same : Bool) (a b : Expr) : Bool :=
 def truthy : Expr → Bool
   | .bool b => b
   | .int n => n != 0
-  | .num n => n != 0
+  | .num q => q != 0
+  | .flt f => Float.ofBits f != 0
   | .text s => !s.isEmpty
   | .unit | .nil => false
   | _ => true
@@ -268,7 +335,8 @@ def appendValues (a b : Expr) : Expr := if isList a && isList b then concat a b 
 def valueType : Expr → Option Ty
   | .bool _ => some .bool
   | .int _ => some .int
-  | .num _ => some .number
+  | .num _ => some .exact
+  | .flt _ => some .number
   | .qty _ d => some (.quantity d)
   | .text s => some (textTy s)
   | .unit => some .unit
@@ -294,11 +362,17 @@ def fits : Expr → Ty → Bool
     | some tv => sub tv t
     | none => false
 
+/-- a whole float prints as its int (`x: float = 2` is 2); W0 does not print other floats as warp does -/
+def floatDisplay (f : Float) : String :=
+  if f == f.floor && f.abs < 9007199254740992.0 then toString (floatWhole f) else "?"
+
 /-- a value as warp prints it, shared lists read in store μ down to `depth` levels; `?` where the model does not keep
 what warp prints (numbers, instances) -/
 def display (μ : Store) : Nat → Expr → String
   | _, .bool b => if b then "yes" else "no"
   | _, .int n => toString n
+  | _, .num q => ratDisplay q
+  | _, .flt f => floatDisplay (Float.ofBits f)
   | _, .text s => s!"\"{s}\""
   | depth + 1, .lref a t => display μ depth (μ.items (.lref a t))
   | depth, .cons h t => "[" ++ " ".intercalate (showItems depth (.cons h t)) ++ "]"
@@ -323,7 +397,7 @@ def convertValue (μ : Store) (v : Expr) : Ty → Expr
   | .text => .text (textForm μ v)
   | .bool => .bool (truthy (μ.items v))
   | .int => if isNumber v then .int (asNumber v) else parsed .int v
-  | .number => if isNumber v then .num (asNumber v) else parsed .num v
+  | .number => if isNumber v then floatValue (asFloat v) else parsed (fun n => floatValue (Float.ofInt n)) v
   | t => if fits v t then v else .error "cannot cast"
 where parsed (make : Int → Expr) : Expr → Expr
   | .text s => (s.toInt?.map make).getD (.error "invalid number")
