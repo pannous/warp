@@ -6,6 +6,13 @@ before asking the user; nobody reads it front to back, the code, tests and wiki 
 "notes/open_decisions.md" + a Decided section, P-, D- or #-numbers mean this file. Open and parked questions:
 notes/open_decisions.md.
 
+## Decided 2026-10-10 (user, via warp-supervisor)
+- P237 (warp-web, card gpu-auto; revises P214): GPU calculations are imprecise by design (f32), and the user is told
+  so. Heavy maps of linear float arrays switch to the GPU automatically from 10× the measured break-even
+  (GPU_AUTO_MIN_COUNT), with a one-time run-time notice; `@cpu` (a map, block, function or program) and
+  `WARP_GPU=off` (a whole run) keep results exact in f64; `@gpu @cpu` on one map is an error. GPU-vs-CPU tests compare
+  within common::gpu_tolerance, @cpu on the reference side. notes/gpu.md "Precision".
+
 ## Decided 2026-10-09 (user, as recommended unless quoted)
 - warp-ast.wit moves from the repo root to samples/wit/warp-ast.wit; test_wit_parse reads it there (user chose the
   move over deleting it).
