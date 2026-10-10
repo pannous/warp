@@ -110,24 +110,13 @@ macro_rules! wasm_struct {
     };
 
     // Generate accessor methods for each field
-    (@accessors $name:ident; $field_name:ident : $field_type:ty, $($rest_name:ident : $rest_type:ty),*) => {
-        impl $name {
+    (@accessors $name:ident; $($field_name:ident : $field_type:ty),*) => {
+        impl $name {$(
             pub fn $field_name(&self) -> anyhow::Result<$field_type> {
                 Ok(self.$field_name.clone())
             }
-        }
-        $crate::wasm_struct!(@accessors $name; $($rest_name: $rest_type),*);
+        )*}
     };
-
-    (@accessors $name:ident; $field_name:ident : $field_type:ty) => {
-        impl $name {
-            pub fn $field_name(&self) -> anyhow::Result<$field_type> {
-                Ok(self.$field_name.clone())
-            }
-        }
-    };
-
-    (@accessors $name:ident;) => {};
 }
 
 /// Object literal macro
@@ -251,43 +240,27 @@ macro_rules! gc_struct {
     };
 
     // Parse mutable String field
-    (@parse_fields $name:ident; $field_name:ident : $field_idx:literal => mut String, $($rest:tt)*) => {
+    (@parse_fields $name:ident; $field_name:ident : $field_idx:literal => mut String $(, $($rest:tt)*)?) => {
         $crate::gc_struct!(@impl_mut_string_field $name, $field_name, $field_idx);
-        $crate::gc_struct!(@parse_fields $name; $($rest)*);
-    };
-
-    (@parse_fields $name:ident; $field_name:ident : $field_idx:literal => mut String) => {
-        $crate::gc_struct!(@impl_mut_string_field $name, $field_name, $field_idx);
+        $crate::gc_struct!(@parse_fields $name; $($($rest)*)?);
     };
 
     // Parse mutable field (general case)
-    (@parse_fields $name:ident; $field_name:ident : $field_idx:literal => mut $field_type:ty, $($rest:tt)*) => {
+    (@parse_fields $name:ident; $field_name:ident : $field_idx:literal => mut $field_type:ty $(, $($rest:tt)*)?) => {
         $crate::gc_struct!(@impl_mut_field $name, $field_name, $field_idx, $field_type);
-        $crate::gc_struct!(@parse_fields $name; $($rest)*);
-    };
-
-    (@parse_fields $name:ident; $field_name:ident : $field_idx:literal => mut $field_type:ty) => {
-        $crate::gc_struct!(@impl_mut_field $name, $field_name, $field_idx, $field_type);
+        $crate::gc_struct!(@parse_fields $name; $($($rest)*)?);
     };
 
     // Parse immutable String field (special case for ptr/len strings)
-    (@parse_fields $name:ident; $field_name:ident : $field_idx:literal => String, $($rest:tt)*) => {
+    (@parse_fields $name:ident; $field_name:ident : $field_idx:literal => String $(, $($rest:tt)*)?) => {
         $crate::gc_struct!(@impl_string_field $name, $field_name, $field_idx);
-        $crate::gc_struct!(@parse_fields $name; $($rest)*);
-    };
-
-    (@parse_fields $name:ident; $field_name:ident : $field_idx:literal => String) => {
-        $crate::gc_struct!(@impl_string_field $name, $field_name, $field_idx);
+        $crate::gc_struct!(@parse_fields $name; $($($rest)*)?);
     };
 
     // Parse immutable field
-    (@parse_fields $name:ident; $field_name:ident : $field_idx:literal => $field_type:ty, $($rest:tt)*) => {
+    (@parse_fields $name:ident; $field_name:ident : $field_idx:literal => $field_type:ty $(, $($rest:tt)*)?) => {
         $crate::gc_struct!(@impl_field $name, $field_name, $field_idx, $field_type);
-        $crate::gc_struct!(@parse_fields $name; $($rest)*);
-    };
-
-    (@parse_fields $name:ident; $field_name:ident : $field_idx:literal => $field_type:ty) => {
-        $crate::gc_struct!(@impl_field $name, $field_name, $field_idx, $field_type);
+        $crate::gc_struct!(@parse_fields $name; $($($rest)*)?);
     };
 
     // Base case
