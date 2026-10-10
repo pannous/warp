@@ -748,6 +748,16 @@ impl WasmGcEmitter {
 			}
 			self.runtime_function(name, vec![node_ref, node_ref], vec![node_ref], vec![ValType::I64, ValType::F64], |s, f| {
 				let (kind, power) = (2, 3);
+				// a time or duration: calendar arithmetic (time_arithmetic.rs)
+				if let Some(operator) = super::time_arithmetic::TIME_OPERATORS.iter().position(|known| *known == op).filter(|_| s.uses_times()) {
+					for operand in [0, 1] {
+						s.emit_field(f, operand, 0);
+						Self::emit_list(f, &[I::I64Const(KIND_MASK), I::I64And, I::I64Const(Kind::Time as i64), I::I64Eq]);
+					}
+					Self::emit_list(f, &[I::I32Or, I::If(BlockType::Empty), I::LocalGet(0), I::LocalGet(1), I::I32Const(operator as i32)]);
+					s.call(f, super::time_arithmetic::TIME_ARITHMETIC);
+					Self::emit_list(f, &[I::Return, I::End]);
+				}
 				// node_add of two lists (ø is the empty list): their concatenation, `out = out + row`
 				if name == NODE_ADD {
 					let is_list = |f: &mut Function, operand: u32| {

@@ -22,17 +22,17 @@ const DURATION_TEXT: &str = "duration_text";
 /// Required by a zoned constant: time_text then names the zones (`[Europe/Berlin]`)
 pub const ZONE_NAMES: &str = "zone_names";
 /// civil_from_days(days) -> (year, month, day)
-const CIVIL_FROM_DAYS: &str = "civil_from_days";
+pub(super) const CIVIL_FROM_DAYS: &str = "civil_from_days";
 /// days_from_civil(year, month, day) -> days
-const DAYS_FROM_CIVIL: &str = "days_from_civil";
+pub(super) const DAYS_FROM_CIVIL: &str = "days_from_civil";
 /// time_parts(form, position) -> (days, nanoseconds of the day): the calendar day and the clock of a position
-const TIME_PARTS: &str = "time_parts";
+pub(super) const TIME_PARTS: &str = "time_parts";
 /// The fields time_field reads, as calendar::Time::field names them
 const TIME_FIELDS: [&str; 10] = ["year", "month", "day", "weekday", "day_of_year", "hour", "minute", "second", "epoch_seconds", "offset"];
 /// The fields that read the position itself, not its wall clock
 const ABSOLUTE_FIELDS: [&str; 2] = [crate::time::EPOCH_SECONDS, "offset"];
 const NANOS_PER_MILLI: i64 = 1_000_000;
-const DAY_NANOS: i64 = DAY_SECONDS * SECOND as i64;
+pub(super) const DAY_NANOS: i64 = DAY_SECONDS * SECOND as i64;
 /// `YYYY-MM-DDThh:mm:ss.fffffffff+hh:mm[America/Los_Angeles][_tzdata=warp-2026a]` is 77 bytes
 const TIME_TEXT_BYTES: i32 = 80;
 /// `-123 months -45 days -6 hours -7 minutes -8.123456789 seconds`, every amount at most 20 bytes
@@ -443,7 +443,7 @@ impl WasmGcEmitter {
 	}
 
 	/// The TimeForm of the time node in `local`
-	fn emit_time_form(&self, func: &mut Function, local: u32) {
+	pub(super) fn emit_time_form(&self, func: &mut Function, local: u32) {
 		self.emit_field(func, local, 0);
 		Self::emit_list(func, &[I::I64Const(KIND_BITS), I::I64ShrU, I::I64Const(TIME_FORM_MASK), I::I64And]);
 	}
@@ -464,14 +464,14 @@ impl WasmGcEmitter {
 	}
 
 	/// The position of the time node in `local`
-	fn emit_time_position(&self, func: &mut Function, local: u32) {
+	pub(super) fn emit_time_position(&self, func: &mut Function, local: u32) {
 		let i64_box = self.type_manager.i64_box_type;
 		self.emit_field(func, local, 1);
 		Self::emit_list(func, &[I::RefCastNonNull(HeapType::Concrete(i64_box)), I::StructGet { struct_type_index: i64_box, field_index: 0 }]);
 	}
 
 	/// Quotient and remainder rounded toward minus infinity, as div_euclid and rem_euclid
-	fn emit_floor_split(func: &mut Function, dividend: u32, divisor: i64, quotient: u32, remainder: u32) {
+	pub(super) fn emit_floor_split(func: &mut Function, dividend: u32, divisor: i64, quotient: u32, remainder: u32) {
 		Self::emit_list(func, &[I::LocalGet(dividend), I::I64Const(divisor), I::I64DivS, I::LocalSet(quotient)]);
 		Self::emit_list(func, &[I::LocalGet(dividend), I::LocalGet(quotient), I::I64Const(divisor), I::I64Mul, I::I64Sub, I::LocalTee(remainder)]);
 		Self::emit_list(func, &[I::I64Const(0), I::I64LtS, I::If(BlockType::Empty)]);

@@ -34,6 +34,7 @@ mod text_unicode;
 mod similarity;
 mod uncertain;
 pub(crate) mod times;
+mod time_arithmetic;
 pub use similarity::NUMBERS_SIMILAR;
 pub(crate) mod list_ops;
 mod list_abi;
@@ -989,6 +990,7 @@ impl WasmGcEmitter {
 		self.emit_text_as_number(); // after text_as_float and text_as_int, which it calls
 		self.emit_uncertain_runtime(); // after text_as_float, which it calls
 		self.emit_times_runtime();
+		self.emit_time_arithmetic();
 		if self.config.emit_reflection {
 			self.emit_reflection();
 		}

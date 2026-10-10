@@ -137,3 +137,4 @@ mod test_instance_size; // card size-instance
 mod test_empty_named_key; // card object-empty-field
 mod test_dates_at_run_time; // card runtime-dates
 mod test_time_values_at_run_time; // card run-time-dates
+mod test_date_arithmetic_at_run_time; // card run-time-dates, stage B2
