@@ -520,11 +520,7 @@ impl WarpParser {
 
 	/// `$main`, `$ii_i`: names keep their sigil (WAT identifiers, DOM selectors)
 	pub(super) fn parse_dollar_name(&mut self) -> Node {
-		self.advance(); // skip '$'
-		match self.parse_symbol() {
-			Ok(name) => Symbol(format!("${name}")),
-			Err(message) => error(&message),
-		}
+		self.symbol_after(1, |name| Symbol(format!("${name}")))
 	}
 
 	pub(super) fn unwrap_single(group: Node) -> Node {

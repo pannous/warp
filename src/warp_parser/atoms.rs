@@ -45,13 +45,7 @@ impl WarpParser {
 
 		let node = match self.current_char() {
 			// `&name` is the function `name` itself: a name is already a function value where a function is expected
-			'&' if self.starts_function_reference() => {
-				self.advance();
-				match self.parse_symbol() {
-					Ok(name) => crate::closures::function_reference(name),
-					Err(message) => error(&message),
-				}
-			}
+			'&' if self.starts_function_reference() => self.symbol_after(1, crate::closures::function_reference),
 			// Elixir's capture `&(&1 * 2)`: the block `{$0 * 2}`; its `&1`, `&2` are `$0`, `$1`
 			'&' if self.starts_capture() => {
 				self.advance();
@@ -65,21 +59,15 @@ impl WarpParser {
 			}
 			'&' if self.peek_char(1).is_ascii_digit() && self.in_capture => {
 				self.advance();
-				let position: String = (0..).map(|at| self.peek_char(at)).take_while(char::is_ascii_digit).collect();
-				self.advance_by(position.len());
-				let position: usize = position.parse().unwrap_or(1);
+				let position: usize = self.take_while_char(|ch| ch.is_ascii_digit()).parse().unwrap_or(1);
 				Node::Symbol(format!("${}", position.saturating_sub(1)))
 			}
 			// Ruby's `&:to_s`: the block `{$0.to_s}`, the method called on each element
 			'&' if self.peek_char(1) == ':' && self.peek_char(2).is_alphabetic() => {
-				self.advance_by(2);
-				match self.parse_symbol() {
-					Ok(method) => {
-						let call = Node::Key(Box::new(Node::Symbol(CAPTURED_ARGUMENT.to_string())), Op::Dot, Box::new(Node::Symbol(method)));
-						Node::List(vec![call], Bracket::Curly, Separator::None)
-					}
-					Err(message) => error(&message),
-				}
+				self.symbol_after(2, |method| {
+					let call = Node::Key(Box::new(Node::Symbol(CAPTURED_ARGUMENT.to_string())), Op::Dot, Box::new(Node::Symbol(method)));
+					Node::List(vec![call], Bracket::Curly, Separator::None)
+				})
 			}
 			'"' | '\'' | '«' | '`' => self.parse_string(),
 			// `a, *rest = xs`: the starred name takes the items the other names leave (src/lowering/tuples.rs); `...rest`
@@ -92,13 +80,7 @@ impl WarpParser {
 			},
 			'*' if self.is_identifier_start(1) => self.parse_starred(1),
 			// `.card { … }`: a leading-dot name, a class selector in a style block (style_rules.rs)
-			'.' if self.is_identifier_start(1) => {
-				self.advance();
-				match self.parse_symbol() {
-					Ok(name) => Node::Symbol(format!(".{name}")),
-					Err(message) => error(&message),
-				}
-			}
+			'.' if self.is_identifier_start(1) => self.symbol_after(1, |name| Node::Symbol(format!(".{name}"))),
 			'-' if self.peek_char(1) == '>' && !self.options.data_mode => self.parse_stabby_lambda(),
 			'(' | '[' | '{' => self.parse_bracketed(self.current_char()),
 			'<' if self.options.xml_mode => self.parse_xml_tag(),
@@ -110,29 +92,19 @@ impl WarpParser {
 				self.advance_by(length);
 				return truth;
 			}
-			// $n parameter reference (e.g., $0 = first param)
 			'@' if self.peek_char(1).is_alphabetic() => self.parse_attribute(),
 			'@' if self.peek_char(1) == '(' && !self.options.data_mode => self.parse_matlab_lambda(),
 			'\\' if self.backslash_lambda_ahead() && !self.options.data_mode => self.parse_backslash_lambda(),
 			// `@1`: a reference to the node whose @id is 1 (wiki/reference.md, P160)
 			'@' if self.peek_char(1).is_ascii_digit() => {
 				self.advance(); // skip '@'
-				let mut digits = String::new();
-				while self.current_char().is_ascii_digit() {
-					digits.push(self.current_char());
-					self.advance();
-				}
-				Node::Symbol(format!("{ATTRIBUTE_MARK}{digits}"))
+				Node::Symbol(format!("{ATTRIBUTE_MARK}{}", self.take_while_char(|ch| ch.is_ascii_digit())))
 			}
 			'$' if self.peek_char(1).is_alphabetic() || self.peek_char(1) == '_' => self.parse_dollar_name(),
+			// `$0`, the first parameter
 			'$' if self.peek_char(1).is_numeric() => {
 				self.advance(); // skip '$'
-				let mut num_str = String::new();
-				while self.current_char().is_numeric() {
-					num_str.push(self.current_char());
-					self.advance();
-				}
-				Node::Symbol(format!("${}", num_str))
+				Node::Symbol(format!("${}", self.take_while_char(char::is_numeric)))
 			}
 			ch if ch.is_numeric() || self.number_starts_at(0) || (ch == '-' && self.number_starts_at(1)) => {
 				self.parse_number()
@@ -154,16 +126,16 @@ impl WarpParser {
 			}
 			'\\' if let Some((name, length)) = crate::uniscript_entities::entity_name_at(&self.chars, self.pos) => {
 				let warned = self.warn_unknown_entity(&name, self.column);
-				(0..length).for_each(|_| self.advance());
+				self.advance_by(length);
 				warned.map_or_else(|strict| strict, |()| Node::Text(format!("\\:{name}")))
 			}
 			'\\' if let Some(name) = crate::uniscript_entities::bare_entity_name_at(&self.chars, self.pos) => {
-				(0..=name.len()).for_each(|_| self.advance());
+				self.advance_by(name.len() + 1);
 				Diagnostic::default().message(format!("a uniscript entity is written \\:{name}, not \\{name}"))
 					.offer("the uniscript entity", format!("\\{name}"), format!("\\:{name}")).into_error()
 			}
 			_ if let Some((operator, length)) = self.bare_operator_in_block() => {
-				(0..length).for_each(|_| self.advance());
+				self.advance_by(length);
 				error(&format!("{{{operator}}} is an operator without operands, no function: write them, e.g. map xs {{it + 1}}"))
 			}
 			ch if crate::extensions::strings::starts_an_emoji(ch) => self.parse_emoji(),
@@ -585,11 +557,7 @@ impl WarpParser {
 
 	/// `*rest`, `...rest`: the name after the `prefix` characters, starred
 	fn parse_starred(&mut self, prefix: usize) -> Node {
-		(0..prefix).for_each(|_| self.advance());
-		match self.parse_symbol() {
-			Ok(name) => Node::Symbol(format!("{}{name}", crate::tuples::STARRED)),
-			Err(message) => error(&message),
-		}
+		self.symbol_after(prefix, |name| Node::Symbol(format!("{}{name}", crate::tuples::STARRED)))
 	}
 
 	/// ` name(`: blanks, a name and its parenthesis
@@ -690,11 +658,7 @@ impl WarpParser {
 
 		// Possessive: `p's name` is the field `p.name`
 		if !self.options.data_mode && self.current_char() == '\'' && self.peek_char(1) == 's' && self.peek_char(2) == ' ' && self.is_identifier_start(3) {
-			self.advance_by(3);
-			return match self.parse_symbol() {
-				Ok(field) => Node::Key(Box::new(Symbol(symbol)), Op::Dot, Box::new(Symbol(field))),
-				Err(message) => error(&message),
-			};
+			return self.symbol_after(3, |field| Node::Key(Box::new(Symbol(symbol)), Op::Dot, Box::new(Symbol(field))));
 		}
 
 		// Optional type: `x:int?=ø`, `f(x:int?)`, the field `right? }` (wiki/null.md); a ternary `?` is followed by its branch instead
@@ -1349,11 +1313,7 @@ impl WarpParser {
 				Symbol(format!("{symbol}{rest}"))
 			}
 			'@' if self.peek_char(1).is_alphabetic() => {
-				self.advance();
-				match self.parse_symbol() {
-					Ok(key) => Node::Key(Box::new(Symbol(symbol)), Op::Dot, Box::new(Symbol(format!("{ATTRIBUTE_MARK}{key}")))),
-					Err(message) => error(&message),
-				}
+				self.symbol_after(1, |key| Node::Key(Box::new(Symbol(symbol)), Op::Dot, Box::new(Symbol(format!("{ATTRIBUTE_MARK}{key}")))))
 			}
 			'(' => {
 				// Parse arguments as a proper Node
@@ -1385,13 +1345,6 @@ impl WarpParser {
 				}
 			}
 			_ => Node::symbol(&symbol),
-		}
-	}
-
-	/// Helper to advance by N characters
-	pub(super) fn advance_by(&mut self, n: usize) {
-		for _ in 0..n {
-			self.advance();
 		}
 	}
 }

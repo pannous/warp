@@ -129,7 +129,7 @@ impl WarpParser {
 							template.push('\\');
 							continue; // the name follows as written
 						};
-						(0..length - 1).for_each(|_| self.advance());
+						self.advance_by(length - 1);
 						s.push_str(characters);
 						template.push_str(characters);
 						continue;
