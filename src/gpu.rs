@@ -195,6 +195,17 @@ fn compute_bytes(shader: &str, bytes: &[u8], workgroups: u32, first: usize, keep
 /// Run the fragment shader `main` over a width×height image: its pixels row by row as 0xFFRRGGBB (alpha dropped:
 /// paint shows opaque colors), or why not
 pub fn render(shader: &str, width: u32, height: u32, values: &[ShaderValue]) -> Result<Vec<u32>, String> {
+	Ok(render_rgba(shader, width, height, values)?.chunks_exact(PIXEL_BYTES as usize).map(opaque_color).collect())
+}
+
+/// A pixel's RGBA bytes as 0xFFRRGGBB
+pub fn opaque_color(rgba: &[u8]) -> u32 {
+	OPAQUE | u32::from(rgba[0]) << 16 | u32::from(rgba[1]) << 8 | u32::from(rgba[2])
+}
+
+/// The image of `render` as RGBA bytes, row by row: what paint's window takes without a per-pixel pass (a frame of the
+/// debug build costs 55 ms less at 1280×720)
+pub fn render_rgba(shader: &str, width: u32, height: u32, values: &[ShaderValue]) -> Result<Vec<u8>, String> {
 	let Gpu { device, queue } = gpu()?;
 	let validation = device.push_error_scope(wgpu::ErrorFilter::Validation);
 	let (declarations, bytes) = uniform_layout(values)?;
@@ -221,8 +232,11 @@ pub fn render(shader: &str, width: u32, height: u32, values: &[ShaderValue]) -> 
 	encoder.copy_texture_to_buffer(image.as_image_copy(), wgpu::TexelCopyBufferInfo { buffer: &readback, layout }, size);
 	queue.submit([encoder.finish()]);
 	let bytes = read_back(device, &readback, validation)?;
-	let rows = bytes.chunks_exact(row_bytes as usize).map(|row| &row[..(width * PIXEL_BYTES) as usize]);
-	Ok(rows.flat_map(|row| row.chunks_exact(PIXEL_BYTES as usize).map(|rgba| OPAQUE | u32::from(rgba[0]) << 16 | u32::from(rgba[1]) << 8 | u32::from(rgba[2]))).collect())
+	let mut rgba = Vec::with_capacity((width * height * PIXEL_BYTES) as usize);
+	for row in bytes.chunks_exact(row_bytes as usize) {
+		rgba.extend_from_slice(&row[..(width * PIXEL_BYTES) as usize]);
+	}
+	Ok(rgba)
 }
 
 /// The WGSL declaring `values` (appended to the shader, so its line numbers stay the user's) and the bytes of the

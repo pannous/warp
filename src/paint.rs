@@ -49,18 +49,29 @@ pub fn shows_windows() -> bool {
 /// Show the image in a window (paint_window.rs) when windows are allowed, else (or without a window) write it, say where
 pub fn paint(pixels: &[u64], width: usize, height: usize) -> Result<Option<PathBuf>, String> {
 	if width == 0 || height == 0 {
-		return Err(format!("paint: a {width}×{height} image is empty (with use draw: canvas(width, height) before show())"));
+		return Ok(None); // nothing to show, as the playground's canvas (user 2026-10-10: defaults, no errors)
 	}
 	if pixels.len() < width * height {
 		return Err(format!("paint: {width}×{height} needs {} pixels, got {}", width * height, pixels.len()));
 	}
+	shown_or_written(|| crate::paint_window::frame_bytes(pixels, width, height), || png_file(pixels, width, height))
+}
+
+/// paint of a rendered shader (gpu::render_rgba): its RGBA bytes go to the window as they are
+pub fn paint_rgba(rgba: &[u8], width: usize, height: usize) -> Result<Option<PathBuf>, String> {
+	let pixels = || rgba.chunks_exact(4).map(|pixel| u64::from(crate::gpu::opaque_color(pixel))).collect::<Vec<_>>();
+	shown_or_written(|| crate::paint_window::rgba_frame(rgba, width, height), || png_file(&pixels(), width, height))
+}
+
+/// The frame in a window when windows are allowed, else (or without a window) the PNG written
+fn shown_or_written(frame: impl FnOnce() -> Vec<u8>, write: impl FnOnce() -> Result<PathBuf, String>) -> Result<Option<PathBuf>, String> {
 	if WINDOWS.load(Ordering::Relaxed) {
-		match crate::paint_window::show(pixels, width, height) {
+		match crate::paint_window::show(&frame()) {
 			Ok(()) => return Ok(None),
 			Err(failure) => eprintln!("{failure}, so it goes to a PNG"),
 		}
 	}
-	png_file(pixels, width, height).map(Some)
+	write().map(Some)
 }
 
 /// The image as a PNG in the temporary folder

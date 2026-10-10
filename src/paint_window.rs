@@ -31,7 +31,7 @@ struct Corner { @builtin(position) at: vec4f, @location(0) uv: vec2f }
 	return Corner(vec4f(xy, 0.0, 1.0), vec2f(xy.x + 1.0, 1.0 - xy.y) * 0.5);
 }
 @fragment fn fragment(corner: Corner) -> @location(0) vec4f {
-	return textureSample(frame, nearest, corner.uv);
+	return vec4f(textureSample(frame, nearest, corner.uv).rgb, 1.0); // a shader's alpha: paint shows opaque colors
 }";
 const TRIANGLE_CORNERS: u32 = 3;
 
@@ -45,13 +45,25 @@ pub struct Frame {
 
 /// The pixels (paint's values, shaded as the PNG shades them) as one frame for the viewer's stdin
 pub fn frame_bytes(pixels: &[u64], width: usize, height: usize) -> Vec<u8> {
-	let mut bytes = Vec::with_capacity(8 + width * height * RGBA_BYTES);
-	bytes.extend((width as u32).to_le_bytes());
-	bytes.extend((height as u32).to_le_bytes());
+	let mut bytes = frame_header(width, height);
 	for &value in &pixels[..width * height] {
 		bytes.extend(crate::paint::shade(value));
 		bytes.push(u8::MAX);
 	}
+	bytes
+}
+
+/// RGBA bytes (a rendered shader, gpu::render_rgba) as one frame for the viewer's stdin
+pub fn rgba_frame(rgba: &[u8], width: usize, height: usize) -> Vec<u8> {
+	let mut bytes = frame_header(width, height);
+	bytes.extend_from_slice(&rgba[..width * height * RGBA_BYTES]);
+	bytes
+}
+
+fn frame_header(width: usize, height: usize) -> Vec<u8> {
+	let mut bytes = Vec::with_capacity(8 + width * height * RGBA_BYTES);
+	bytes.extend((width as u32).to_le_bytes());
+	bytes.extend((height as u32).to_le_bytes());
 	bytes
 }
 
@@ -70,7 +82,7 @@ pub fn read_frame(reader: &mut impl Read) -> Option<Frame> {
 static VIEWER: Mutex<Option<Child>> = Mutex::new(None);
 
 /// Show the pixels in the viewer's window, or why not (no viewer: the caller writes a PNG instead)
-pub fn show(pixels: &[u64], width: usize, height: usize) -> Result<(), String> {
+pub fn show(frame: &[u8]) -> Result<(), String> {
 	let mut viewer = VIEWER.lock().map_err(|_| "paint: the viewer lock is poisoned".to_string())?;
 	if viewer.is_none() {
 		let binary = std::env::current_exe().map_err(|failure| format!("paint: no viewer, the warp binary is unknown: {failure}"))?;
@@ -83,7 +95,7 @@ pub fn show(pixels: &[u64], width: usize, height: usize) -> Result<(), String> {
 		*viewer = Some(child.map_err(|failure| format!("paint: cannot start the viewer: {failure}"))?);
 	}
 	let input = viewer.as_mut().and_then(|child| child.stdin.as_mut()).expect("the viewer's stdin is piped");
-	let written = input.write_all(&frame_bytes(pixels, width, height)).and_then(|_| input.flush());
+	let written = input.write_all(frame).and_then(|_| input.flush());
 	written.map_err(|failure| {
 		*viewer = None;
 		format!("paint: the viewer is gone ({failure})")
