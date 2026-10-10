@@ -12,7 +12,7 @@
 //! `before test {…}` before it.
 
 use super::words::{GLOBAL_WORD, ON_WORD};
-use super::nodes::{block, call, children_rewritten, if_then, key};
+use super::nodes::{Counter, block, call, children_rewritten, if_then, key};
 use crate::declarations::{handler_parts, word};
 use crate::node::{symbol, Bracket, Node, Separator};
 use crate::operators::Op;
@@ -114,13 +114,13 @@ pub(crate) fn edge_check(held: &str, was: &str, condition: Node, body: Node) -> 
 }
 
 pub fn lower(node: Node) -> Node {
-	let node = with_watched_expressions(node, &mut 0);
+	let node = with_watched_expressions(node, &Counter::default());
 	let main_statements = match node.drop_meta() {
 		Node::List(items, bracket, separator) if is_statement_list(bracket, separator) => items.clone(),
 		_ => vec![],
 	};
 	let mut signals = Signals {
-		count: 0,
+		count: Counter::default(),
 		functions: defined_functions(&node),
 		function_reads: function_reads(&node),
 		derived: derived_values(&node),
@@ -153,7 +153,7 @@ fn root_name(path: &str) -> &str {
 
 struct Signals {
 	/// once and change listeners so far: each gets its own variable
-	count: usize,
+	count: Counter,
 	/// the functions the program defines, which `after` and `before` may name
 	functions: HashSet<String>,
 	/// the `:=` values and the names their definitions read
@@ -359,8 +359,7 @@ impl Signals {
 	}
 
 	fn fresh_name(&mut self, prefix: &str) -> String {
-		self.count += 1;
-		let name = format!("{prefix}{}", self.count - 1);
+		let name = format!("{prefix}{}", self.count.next_number());
 		self.main_variables.insert(name.clone());
 		name
 	}
@@ -486,7 +485,7 @@ pub(crate) fn listener_parts(statement: &Node) -> Option<(ListenerWord, Node, No
 
 /// `on change b + c {…}` (Vue's watch(() => b + c)) watches the expression as a `:=` value of its own:
 /// `watched·0 := b + c; on change watched·0 {…}`; `on set` the same
-fn with_watched_expressions(node: Node, count: &mut usize) -> Node {
+fn with_watched_expressions(node: Node, count: &Counter) -> Node {
 	let node = node.map_children(|child| with_watched_expressions(child, count));
 	let Node::List(items, bracket, separator) = node.drop_meta() else { return node };
 	if !is_statement_list(bracket, separator) || !items.iter().any(|statement| watched_expression(statement).is_some()) {
@@ -494,8 +493,7 @@ fn with_watched_expressions(node: Node, count: &mut usize) -> Node {
 	}
 	let items = items.iter().flat_map(|statement| match watched_expression(statement) {
 		Some((listener_word, expression, body)) => {
-			let name = Node::Symbol(format!("{WATCHED_PREFIX}{count}"));
-			*count += 1;
+			let name = Node::Symbol(format!("{WATCHED_PREFIX}{}", count.next_number()));
 			let derived = key(name.clone(), Op::Define, expression);
 			vec![derived, Node::List(vec![symbol(ON_WORD), listener_word, name, body], Bracket::None, Separator::Space)]
 		}
