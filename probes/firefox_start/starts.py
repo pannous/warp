@@ -1,6 +1,7 @@
 # Card tour-firefox-stall: how often does the compiler's worker stall while starting in headless Firefox, and at which
-# stage? Loads the playground of a collected site LOADS times, each in a fresh page, and follows playground.state()
-# until the worker is ready; a load still starting after STALL_SECONDS counts as a stall at its stage.
+# stage? Loads the playground of a collected site LOADS times, each in a fresh Firefox (the CI stalls all hit the tour's
+# first page, right after Firefox started), and follows playground.state() until the worker is ready; a load still
+# starting after STALL_SECONDS counts as a stall at its stage. Prints each load's seconds from open to ready.
 # CI only (no browser on the Mac): python3 probes/firefox_start/starts.py _site [loads]
 import collections, json, os, sys, time
 
@@ -20,14 +21,15 @@ def state():
 
 def one_load(url):
 	"""[(stage, seconds)] of this load, and whether its worker got ready"""
+	began = time.time()
 	runner.open_page(url)
-	stages, began = [], time.time()
+	stages = [["(opening)", began]]
 	while time.time() - began < STALL_SECONDS:
 		current = state() or {"worker": "no playground yet", "ready": False}
 		if not stages or stages[-1][0] != current["worker"]:
 			stages.append([current["worker"], time.time()])
 		if current["ready"]:
-			return durations(stages), True
+			return durations(stages + [["ready", time.time()]]), True
 		time.sleep(POLL_SECONDS)
 	return durations(stages + [["(gave up)", time.time()]]), False
 
@@ -38,17 +40,18 @@ def durations(stages):
 
 def main():
 	server = runner.serve(None, os.path.abspath(sys.argv[1]))
-	runner.firefox = runner.FirefoxDriver()
 	stalls = collections.Counter()
 	for load in range(1, LOADS + 1):
-		runner.open_page("about:blank")
-		stages, ready = one_load(f"http://127.0.0.1:{runner.PORT}/?load={load}")
-		slowest = max(stages, key=lambda stage: stage[1], default=("", 0))
-		print(f"{load:3} {'ready' if ready else 'STALL'} slowest {slowest[1]:5.1f} s {slowest[0]!r}  {stages}", flush=True)
+		runner.firefox = runner.FirefoxDriver()
+		runner.open_page("about:blank")  # as the tour does
+		stages, ready = one_load(f"http://127.0.0.1:{runner.PORT}/?slow_start={runner.SLOW_START_MS}")
+		runner.firefox.command("close")
+		runner.firefox.process.wait()
+		total = sum(seconds for _, seconds in stages)
+		print(f"{load:3} {'ready' if ready else 'STALL'} {total:5.1f} s  {stages}", flush=True)
 		if not ready:
 			stalls[stages[-1][0]] += 1
 	print(f"\n{sum(stalls.values())} stalls in {LOADS} loads: {dict(stalls)}")
-	runner.firefox.command("close")
 	server.shutdown()
 
 
