@@ -2342,6 +2342,10 @@ PASSED:
   ✓ numbers::test_sum_of_decimals::the_sum_of_decimal_elements
   ✓ numbers::test_superscript_variables::test_a_negative_superscript_variable_exponent
   ✓ numbers::test_superscript_variables::test_a_superscript_variable_exponent
+  ✓ numbers::test_temperature::a_temperature_is_a_quantity
+  ✓ numbers::test_temperature::temperatures_compare_at_their_zero
+  ✓ numbers::test_temperature::temperatures_convert_with_their_zero
+  ✓ numbers::test_temperature::temperatures_in_one_unit_add
   ✓ numbers::test_text_then_conversion::a_conversion_after_a_text_join_converts_the_last_operand
   ✓ numbers::test_text_then_conversion::a_grouped_conversion_still_works
   ✓ numbers::test_time_of_day::a_program_naming_time_keeps_its_own
@@ -4587,4 +4591,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-10 ignored, 4582 passed, 0 failed, 4582 total tested
+10 ignored, 4586 passed, 0 failed, 4586 total tested
