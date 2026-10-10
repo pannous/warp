@@ -54,12 +54,13 @@ fn a_deployed_program_answers_its_routes() {
 
 #[test]
 fn a_program_without_routes_is_no_worker() {
-	let failure = warp::deploy::worker_files("print 1", "none").expect_err("no routes");
+	let failure = warp::deploy::worker_files("x = 1", "none").expect_err("no routes");
 	assert!(failure.contains("get \"/\""), "{failure}");
 }
 
 /// The playground's Deploy (src/web.rs web_worker_bundle → warp-hosting): the module and the names of the host scripts
-/// warp-hosting puts before cloud-worker.js; a program without routes is refused before anything is sent
+/// warp-hosting puts before cloud-worker.js; a program answering nothing (no routes, functions or value) is refused before
+/// anything is sent
 #[test]
 fn the_playground_bundles_a_program_for_warp_hosting() {
 	let (report, module) = warp::web::worker_bundle(include_str!("../../samples/hosting.warp"));
@@ -67,7 +68,7 @@ fn the_playground_bundles_a_program_for_warp_hosting() {
 	assert_eq!(report["module_length"], module.len());
 	let scripts: Vec<&str> = report["scripts"].as_array().expect("script names").iter().filter_map(|name| name.as_str()).collect();
 	assert_eq!(scripts, ["reader.js", "host.js"], "a program of routes only imports no part of host.js");
-	let (refused, nothing) = warp::web::worker_bundle("1 + 2");
+	let (refused, nothing) = warp::web::worker_bundle("x = 1");
 	assert!(refused["error"].as_str().is_some_and(|message| message.contains("answers no request")), "{refused}");
 	assert!(nothing.is_empty());
 }
