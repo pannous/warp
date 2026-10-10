@@ -13,7 +13,7 @@
 //! wasm_emitter `refresh_enclosing_captures`), so `nonlocal y`
 //! needs no code of its own: the declaration only lifts the check and is dropped here. Writing y from inner waits.
 
-use super::nodes::key;
+use super::nodes::children_rewritten;
 use crate::analyzer::{captured_variables, collect_variables, declare_global, find_assignments, is_list_mutating_method, param_kind, Scope};
 use crate::context::{Context, UserFunctionDef};
 use crate::diagnostic::{ask, reading, Ask, Diagnostic, Fallback};
@@ -353,9 +353,7 @@ fn without_statements(program: Node, dropped: &dyn Fn(&Node) -> bool) -> Node {
 				let kept = items.into_iter().filter(|item| !dropped(item));
 				Node::List(kept.map(|item| strip(item, dropped)).collect(), bracket, separator)
 			}
-			Node::Key(left, op, right) => key(strip(*left, dropped), op, strip(*right, dropped)),
-			Node::Meta { node, data } => Node::Meta { node: Box::new(strip(*node, dropped)), data },
-			other => other,
+			other => children_rewritten(other, |child| strip(child, dropped)),
 		}
 	}
 	map_statements(program, &mut |statement| match functions_in(&statement).is_empty() {

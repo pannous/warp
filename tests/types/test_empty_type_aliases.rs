@@ -31,3 +31,19 @@ fn a_type_value_compares_with_any_word_of_its_type() {
 	is!("type(\"ab\") == string", true);
 	is!("x = 3; x == empty", false);
 }
+
+// card equality-operand: a type word compares as its type on either side of == and !=, not only on the right
+#[test]
+fn a_type_word_compares_on_either_side() {
+	is!("exact == real", true);
+	is!("integer == int", true);
+	is!("string == type(\"ab\")", true);
+	is!("int != integer", false);
+	is!("type(\"ab\") != string", false);
+	is!("type(\"ab\") != int", true);
+	is!("unit == type(ø)", true);
+	// a variable of a type word's name stays the variable
+	is!("string = \"s\"; string == \"s\"", true);
+	is!("string = \"s\"; \"s\" == string", true);
+	is!("n = 0; for char in \"ab\" { if char == \"a\" { n += 1 } }; n", 1);
+}

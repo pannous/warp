@@ -60,3 +60,27 @@ fn a_variable_declared_real_keeps_the_exact_root() {
 	is!("x: exact = √3; x ^ 2", 3);
 	is!("x: real = sqrt(2); x as text", "√2");
 }
+
+// card exact-keeps: `exact` names `real` (wiki Footguns: exact, alias real, ℚ plus π, ℯ and roots), not `rational`,
+// so it keeps a root as `real` does, and the prefix declaration keeps it as the `x: real` one
+#[test]
+fn exact_is_real_and_keeps_the_root() {
+	is!("exact x = √2; x * x", 2);
+	is!("real x = sqrt(2); x * x == 2", true);
+	is!("exact x = √2; x as text", "√2");
+	is!("real == exact", true);
+	is!("1/3 is exact", true);
+	is!("π is exact", true);
+	is!("√2 is exact", true);
+	is!("type(√2) == real", true);
+	is!("√2 is rational", false);
+}
+
+// cards implicit-float and sqrt-float, under decision exact-default (a decimal is a float): `1.` makes the sum a float,
+// sqrt of a float is the float root, not the exact √2
+#[test]
+fn a_decimal_makes_float_arithmetic() {
+	is!("s = 0; for x in 1..100 { s += 1./x^2 }; s", 1.6348839001848923); // summed in order, as C does
+	is!("sqrt(2.0)", std::f64::consts::SQRT_2);
+	is!("type(sqrt(2.0))", "float");
+}

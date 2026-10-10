@@ -6,7 +6,7 @@ use crate::is;
 fn an_int_declaration_refuses_a_float_expression() {
 	crate::common::fails_with("int i=π*1000000; i", "i is declared int, cannot assign float");
 	crate::common::fails_with("int i=π+1", "i is declared int, cannot assign float");
-	is!("int i=2.0*3; i", 6);
+	crate::common::fails_with("int i=2.0*3; i", "i is declared int, cannot assign float 2*3"); // decision exact-default: 2.0 is a float
 	is!("int i=2*3; i", 6);
 	is!("float f=π*2; f > 6", true);
 }
@@ -16,7 +16,7 @@ fn an_int_declaration_refuses_a_float_expression() {
 fn an_int_declaration_refuses_a_non_whole_exact_value() {
 	crate::common::fails_with("int i=3.3*2; i", "i is declared int, cannot assign");
 	crate::common::fails_with("int i=7/2; i", "i is declared int, cannot assign");
-	is!("int i=3.5*2; i", 7);
-	is!("int i=0.1+0.9; i", 1);
+	is!("int i=7/2*2; i", 7);
+	is!("int i=1/10+9/10; i", 1);
 	is!("int i=8/2; i", 4);
 }

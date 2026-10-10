@@ -1,5 +1,6 @@
 //! The small node forms many lowering passes build and test: a call of a word, a word
 
+use super::words::{FOR_WORD, IN_WORD};
 use crate::node::{Bracket, Node, Separator};
 use crate::operators::Op;
 use std::cell::Cell;
@@ -22,6 +23,11 @@ pub(crate) fn assign(target: Node, value: Node) -> Node {
 /// `play 440` alone or as the one statement of a block `{play 440}`: the words of a call (card statement-block)
 pub(crate) fn is_spaced_call(bracket: &Bracket, separator: &Separator) -> bool {
 	matches!(bracket, Bracket::None | Bracket::Curly) && *separator == Separator::Space
+}
+
+/// `f x`, `(f x)`, `{f x}`: words that call their head
+pub(crate) fn is_words_call(bracket: &Bracket, separator: &Separator) -> bool {
+	is_spaced_call(bracket, separator) || *bracket == Bracket::Round && *separator == Separator::Space
 }
 
 /// The call resolved from the words of `{play 440}` stays the block of its one statement, `{play(440)}`
@@ -57,6 +63,14 @@ pub(crate) fn block(statements: Vec<Node>) -> Node {
 
 pub(crate) fn is_block(node: &Node) -> bool {
 	matches!(node.drop_meta(), Node::List(_, Bracket::Curly, _))
+}
+
+/// The words `for i in …` of a loop: i
+pub(crate) fn for_in_variable(items: &[Node]) -> Option<String> {
+	match items {
+		[keyword, variable, within, ..] if keyword.is_symbol(FOR_WORD) && within.is_symbol(IN_WORD) => variable.symbol_name().map(String::from),
+		_ => None,
+	}
 }
 
 /// `if condition then body`

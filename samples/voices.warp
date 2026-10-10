@@ -1,0 +1,8 @@
+#!/usr/bin/env warp
+// Voices: a task (go { }) plays along with the program, so a bass line sounds under the melody.
+
+tempo = 110
+bass = go { melody [C3 G2 A2 F2] each 1 beat }   // a voice of its own
+melody [E4 G4 C5 B4 A4 C5 F4 A4] each 1/2 beat    // starts together with the bass
+await bass
+wait_sound()

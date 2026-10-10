@@ -1,7 +1,7 @@
 //! Lowering declarations and list forms: typed declarations, parameter copies, list mutation methods, typed arrays
 
 use super::*;
-use crate::lowering::nodes::call;
+use crate::lowering::nodes::{call, children_rewritten};
 
 /// `x:T = v` → `x = v` with T kept as metadata on x (see `declared_type`);
 /// the widening of an Int literal assigned to a float becomes an explicit Float literal, a codepoint assigned to a text a Text
@@ -38,10 +38,7 @@ pub(super) fn parameter_copies(node: Node, maps: &HashMap<(String, usize), bool>
 			}
 			Node::Key(head, op, Box::new(body))
 		}
-		Node::Key(left, op, right) => Node::Key(Box::new(parameter_copies(*left, maps)), op, Box::new(parameter_copies(*right, maps))),
-		Node::List(items, bracket, separator) => Node::List(items.into_iter().map(|item| parameter_copies(item, maps)).collect(), bracket, separator),
-		Node::Meta { node, data } => Node::Meta { node: Box::new(parameter_copies(*node, maps)), data },
-		other => other,
+		other => children_rewritten(other, |child| parameter_copies(child, maps)),
 	}
 }
 
@@ -214,10 +211,7 @@ pub(super) fn with_copy(body: Node, name: &str, suffix: &str) -> Node {
 pub(super) fn rename_symbol(node: Node, from: &str, to: &str) -> Node {
 	match node {
 		Node::Symbol(name) if name == from => Node::Symbol(to.to_string()),
-		Node::Key(left, op, right) => Node::Key(Box::new(rename_symbol(*left, from, to)), op, Box::new(rename_symbol(*right, from, to))),
-		Node::List(items, bracket, separator) => Node::List(items.into_iter().map(|item| rename_symbol(item, from, to)).collect(), bracket, separator),
-		Node::Meta { node, data } => Node::Meta { node: Box::new(rename_symbol(*node, from, to)), data },
-		other => other,
+		other => children_rewritten(other, |child| rename_symbol(child, from, to)),
 	}
 }
 
@@ -365,16 +359,13 @@ pub(super) fn lower_declarations_among(node: Node, names: &Names) -> Node {
 		Node::Key(element, Op::Hash, one_based) if let Some(zeros) = zero_filled_subscript(&element, &one_based, &names.values) => zeros,
 		// x² and x³ are x^2 and x^3 for emission; the parse keeps the suffix operators
 		Node::Key(base, op, _) if let Some(exponent) = op.suffix_exponent() => Node::Key(Box::new(lower(*base)), Op::Pow, Box::new(Node::int(exponent))),
-		Node::Key(left, op, right) => Node::Key(Box::new(lower(*left)), op, Box::new(lower(*right))),
 		// `const x=v` → `x=v`; check_constants already enforced the single assignment; `let x=v` and `var x=v` → `x=v`
 		Node::List(items, bracket, separator) if items.len() >= 2 && is_declaration_keyword(&items[0]) => {
 			let declaration = items.into_iter().skip(1).map(lower).collect::<Vec<_>>();
 			Node::single_or_list(declaration, bracket, separator)
 		}
 		Node::List(items, Bracket::None, _) if let Some((object, key)) = applied_object(&items) => lower(crate::warp_parser::subscript(object, key)),
-		Node::List(items, bracket, separator) => Node::List(items.into_iter().map(lower).collect(), bracket, separator),
-		Node::Meta { node, data } => Node::Meta { node: Box::new(lower(*node)), data },
-		other => other,
+		other => children_rewritten(other, lower),
 	}
 }
 

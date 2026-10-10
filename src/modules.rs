@@ -81,7 +81,8 @@ pub fn resolve_in(program: Node, directories: &[&str]) -> Node {
 /// module the program names (`use collections; s = Stack()`). class_methods, which turns a class's methods into
 /// functions and its method calls into theirs, runs before `resolve` loads a module's other definitions; the loader
 /// then leaves these modules' classes out (EARLY_CLASS_MODULES). A class the program declares itself wins.
-pub fn insert_module_classes(mut program: Node) -> Node {
+pub fn insert_module_classes(program: Node) -> Node {
+	let mut program = with_type_module_uses(program);
 	let file = PROGRAM_FILE.with(|current| current.borrow().clone());
 	let loader = Loader::new(&SEARCH_DIRECTORIES, file.as_deref().map(folder_of));
 	let own_names: HashSet<String> = statements(program.clone()).iter().filter_map(declared_name).collect();
@@ -196,6 +197,63 @@ fn without_use_of(program: Node, module: &str) -> Node {
 	}
 }
 
+/// `xs.unique()`: a type's methods are the words of the standard module named after it (lib/list.warp, text.warp,
+/// map.warp; user decision, card list-methods), so a program
+/// calling one as a method uses that module; `unique(xs)` still needs `use list`. A library word stays the builtin, a
+/// word the program defines is its own, a word of two such modules needs its `use`, `list.zip(a, b)` names the module
+/// (test_std_qualified)
+/// The standard modules named after a type with their words, the methods of that type: list, map, text
+pub fn type_modules() -> Vec<(&'static str, &'static [String])> {
+	std_module_names()
+		.filter(|module| crate::type_tests::is_type_word(module))
+		.filter_map(|module| Some((module, std_module_definitions(module)?)))
+		.collect()
+}
+
+fn with_type_module_uses(program: Node) -> Node {
+	let mut defined = HashSet::new();
+	program.visit(&mut |node| defined.extend(declared_name(node)));
+	let used: HashSet<String> = statements(program.clone()).iter().filter_map(used_module).map(|used| used.name).collect();
+	let type_modules = type_modules();
+	let is_module_name = |receiver: &Node| receiver.symbol_name().is_some_and(|name| std_module(name).is_some() && !defined.contains(name));
+	let only_provider = |method: &String| match type_modules.iter().filter(|(_, words)| words.contains(method)).collect::<Vec<_>>().as_slice() {
+		[(module, _)] => Some(*module),
+		_ => None,
+	};
+	let mut modules: Vec<&str> = called_methods(&program, &is_module_name)
+		.iter()
+		.filter(|method| !defined.contains(*method) && !crate::library_words::is_library_word(method))
+		.filter_map(only_provider)
+		.filter(|module| !used.contains(*module))
+		.collect();
+	modules.sort();
+	modules.dedup();
+	with_statements_first(program, modules.into_iter().map(|module| WarpParser::parse(&format!("use {module}"))).collect())
+}
+
+/// The methods called with arguments: `unique` of `xs.unique()` and `take` of `xs.take(2)`; `book.title` may be a field,
+/// `list.zip(a, b)` of a module name is a qualified word
+fn called_methods(program: &Node, is_module_name: &dyn Fn(&Node) -> bool) -> HashSet<String> {
+	let mut names = HashSet::new();
+	program.visit(&mut |node| if let Node::Key(receiver, Op::Dot | Op::SafeDot, member) = node {
+		if let (Node::List(call, _, _), false) = (member.drop_meta(), is_module_name(receiver)) {
+			names.extend(call.first().and_then(Node::symbol_name).map(String::from));
+		}
+	});
+	names
+}
+
+fn with_statements_first(program: Node, first: Vec<Node>) -> Node {
+	if first.is_empty() {
+		return program;
+	}
+	match program {
+		Node::List(statements, Bracket::None, separator @ (Separator::Semicolon | Separator::Newline)) => Node::List(first.into_iter().chain(statements).collect(), Bracket::None, separator),
+		Node::Meta { node, data } => Node::Meta { node: Box::new(with_statements_first(*node, first)), data },
+		single => Node::List(first.into_iter().chain(std::iter::once(single)).collect(), Bracket::None, Separator::Newline),
+	}
+}
+
 fn with_needed_definitions(program: Node, definitions: Vec<Node>) -> Node {
 	if definitions.is_empty() {
 		return program;
@@ -251,10 +309,12 @@ fn program_variables(program: &Node) -> HashSet<String> {
 
 /// Module words a program variable shadows, renamed in the module's definitions (`words` → `lib·words`): the module's
 /// own code calls its own words (lexical scope), the program's `words` is its variable. Likewise a local of a module
-/// function named like a program variable: a program's `global hue` is not draw's `hue` in hsv (card program-global)
+/// function named like a program variable: a program's `global hue` is not draw's `hue` in hsv (card program-global).
+/// A module's `global` is a setting, which the program's `tempo = 90` sets (lib/sound.warp's tempo, note_seconds)
 fn shadowed_apart(definitions: Vec<Node>, variables: &HashSet<String>) -> Vec<Node> {
 	let declared: Vec<String> = definitions.iter().filter_map(declared_name).collect();
-	let shadowed: Vec<String> = declared.iter().filter(|name| variables.contains(*name)).cloned().collect();
+	let settings: Vec<String> = definitions.iter().filter(|definition| is_global_declaration(definition)).filter_map(declared_name).collect();
+	let shadowed: Vec<String> = declared.iter().filter(|name| variables.contains(*name) && !settings.contains(name)).cloned().collect();
 	renamed_apart(definitions, &shadowed).into_iter().map(|definition| {
 		let locals: Vec<String> = assigned_names(&definition).into_iter().filter(|name| variables.contains(name) && !declared.contains(name)).collect();
 		renamed_apart(vec![definition], &locals).remove(0)
@@ -264,7 +324,7 @@ fn shadowed_apart(definitions: Vec<Node>, variables: &HashSet<String>) -> Vec<No
 /// The names a function definition's body assigns: `hue = …` in `def hsv(h, s, v) {…}`; none for other declarations
 fn assigned_names(definition: &Node) -> HashSet<String> {
 	let mut names = HashSet::new();
-	if matches!(definition.drop_meta(), Node::Key(_, Op::Assign, _)) || matches!(definition.drop_meta(), Node::Key(keyword, Op::Colon, _) if keyword.is_symbol(GLOBAL_KEYWORD)) {
+	if matches!(definition.drop_meta(), Node::Key(_, Op::Assign, _)) || is_global_declaration(definition) {
 		return names;
 	}
 	definition.visit(&mut |node| if let Node::Key(target, op, _) = node {
@@ -273,6 +333,11 @@ fn assigned_names(definition: &Node) -> HashSet<String> {
 		}
 	});
 	names
+}
+
+/// `global x = …`
+fn is_global_declaration(statement: &Node) -> bool {
+	matches!(statement.drop_meta(), Node::Key(keyword, Op::Colon, _) if keyword.is_symbol(GLOBAL_KEYWORD))
 }
 
 /// `names` renamed `lib·name` in the definitions: the definitions still call them, the program does not see them
@@ -913,6 +978,11 @@ const IMPLICIT_MODULES: [(&str, NeededBy); 8] = [
 	("wagi", |_| crate::pipeline::is_for_wagi()),
 ];
 
+/// Whether the program plays sound: it calls a sound word or says `use sound` (lowering/music_words.rs reads its note names)
+pub fn uses_sound(program: &Node) -> bool {
+	SOUND_WORDS.iter().any(|word| calls_undefined(program, word)) || statements(program.clone()).iter().filter_map(used_module).any(|used| used.name == SOUND_MODULE)
+}
+
 /// Whether the program calls `word` without defining it
 fn calls_undefined(program: &Node, word: &str) -> bool {
 	defined(program, word).is_none() && called_names(&statements(program.clone())).contains(word)
@@ -1036,16 +1106,25 @@ pub fn prelude_arguments(word: &str, arguments: Vec<Node>) -> Vec<Node> {
 
 fn prelude_word_parameters(word: &str) -> Option<(usize, usize)> {
 	static PARAMETERS: std::sync::OnceLock<Vec<(String, usize, usize)>> = std::sync::OnceLock::new();
+	thread_local!(static READING_PRELUDE: std::cell::Cell<bool> = const { std::cell::Cell::new(false) });
+	// parsing the prelude asks for its own words (the parser's operand words, library_words::is_operand_word): none
+	// known yet; waiting for them would wait for itself
+	if PARAMETERS.get().is_none() && READING_PRELUDE.get() {
+		return None;
+	}
 	let parameters = PARAMETERS.get_or_init(|| {
+		READING_PRELUDE.set(true);
 		let source = std_module(PRELUDE_MODULE).unwrap_or_default();
 		let has_default = |parameter: &Node| matches!(parameter.drop_meta(), Node::Key(_, Op::Assign, _));
-		statements(crate::normalize::without_hints(|| WarpParser::parse(source))).iter().filter_map(|statement| match statement.drop_meta() {
+		let parameters = statements(crate::normalize::without_hints(|| WarpParser::parse(source))).iter().filter_map(|statement| match statement.drop_meta() {
 			Node::Key(head, Op::Define, _) => match head.drop_meta() {
 				Node::List(items, _, _) => Some((leftmost_symbol(head)?, items.len() - 1, items[1..].iter().filter(|item| has_default(item)).count())),
 				_ => None,
 			},
 			_ => None,
-		}).collect()
+		}).collect();
+		READING_PRELUDE.set(false);
+		parameters
 	});
 	parameters.iter().find(|(name, _, _)| name == word).map(|(_, arity, defaults)| (*arity, *defaults))
 }
@@ -1363,8 +1442,8 @@ fn used_modules(node: &Node) -> Option<Vec<(Used, Node)>> {
 fn imported_words(node: &Node) -> Option<(Used, Node, Vec<String>)> {
 	let words = statement_words(node)?;
 	match words.as_slice() {
-		[from, module, import, names @ ..] if is_word(from, MINIMUM_KEYWORD) && is_word(import, IMPORT_KEYWORD) => words_from(module, names),
-		[import, names @ .., from, module] if is_word(import, IMPORT_KEYWORD) && is_word(from, MINIMUM_KEYWORD) => std_words_from(module, names),
+		[from, module, import, names @ ..] if from.is_symbol(MINIMUM_KEYWORD) && import.is_symbol(IMPORT_KEYWORD) => words_from(module, names),
+		[import, names @ .., from, module] if import.is_symbol(IMPORT_KEYWORD) && from.is_symbol(MINIMUM_KEYWORD) => std_words_from(module, names),
 		_ => None,
 	}
 }
@@ -1409,7 +1488,7 @@ fn used_module(node: &Node) -> Option<Used> {
 		(Node::Key(name, Op::Ge, minimum), []) => (path_of(name)?, Some(Requirement::Minimum(version_of(minimum)?))),
 		(name, []) => (path_of(name)?, None),
 		(name, [version]) if version_of(version).is_some() && is_version_list(version) => (path_of(name)?, Some(Requirement::Exact(version_of(version)?))),
-		(name, [word, version]) if is_word(word, MINIMUM_KEYWORD) => (path_of(name)?, Some(Requirement::Minimum(version_of(version)?))),
+		(name, [word, version]) if word.is_symbol(MINIMUM_KEYWORD) => (path_of(name)?, Some(Requirement::Minimum(version_of(version)?))),
 		(name, [word, version]) if is_version_keyword(word) => (path_of(name)?, Some(Requirement::Exact(version_of(version)?))),
 		_ => return None,
 	};
@@ -1419,10 +1498,6 @@ fn used_module(node: &Node) -> Option<Used> {
 /// `version 1.2.3`, as the parser binds it
 fn is_version_list(node: &Node) -> bool {
 	matches!(node.drop_meta(), Node::List(items, _, _) if items.first().is_some_and(is_version_keyword))
-}
-
-fn is_word(node: &Node, word: &str) -> bool {
-	matches!(node.drop_meta(), Node::Symbol(symbol) if symbol == word)
 }
 
 pub(crate) fn path_of(node: &Node) -> Option<String> {

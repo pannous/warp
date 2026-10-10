@@ -571,6 +571,9 @@ impl WasmGcEmitter {
 	}
 
 	pub(super) fn emit_introspection_fn(&mut self, func: &mut Function, fn_name: &str, arg: &Node) -> bool {
+		if self.ctx.user_functions.contains_key(fn_name) {
+			return false; // `def floor(x) := x+10` is the program's floor, no builtin's (card user-defined)
+		}
 		if let Some(counter) = crate::analyzer::counting_function(fn_name, &self.ctx) {
 			// count, length, size: elements, or graphemes of a text
 			self.emit_list_count(func, arg, counter);
@@ -605,10 +608,6 @@ impl WasmGcEmitter {
 				self.emit_call(func, "new_symbol");
 				true
 			}
-			"ceil" if !self.ctx.ffi_imports.contains_key(fn_name) => {
-				self.emit_rounded_as_int(func, arg, I::F64Ceil);
-				true
-			}
 			// an exact number floors exactly, also beyond the f64 range
 			"floor" if !self.ctx.ffi_imports.contains_key(fn_name) && self.get_type(arg) == crate::Kind::Int => {
 				self.emit_numeric_value(func, arg);
@@ -618,8 +617,9 @@ impl WasmGcEmitter {
 				self.emit_call(func, "new_int");
 				true
 			}
-			"floor" if !self.ctx.ffi_imports.contains_key(fn_name) => {
-				self.emit_rounded_as_int(func, arg, I::F64Floor);
+			name if float_rounding(name).is_some() && !self.ctx.ffi_imports.contains_key(fn_name) => {
+				self.emit_rounded_to_i64(func, arg, name);
+				self.emit_call(func, "new_int");
 				true
 			}
 			// round half up (JS Math.round, Excel for x ≥ 0): floor(x) + (x - floor(x) ≥ ½), x kept as bits in a scratch local
@@ -636,22 +636,19 @@ impl WasmGcEmitter {
 			}
 			// round = round half even (IEEE 754 default, Python 3, .NET): 2.5 → 2, 3.5 → 4
 			"round_half_even" => {
-				self.emit_rounded_as_int(func, arg, I::F64Nearest);
-				true
-			}
-			"round" if !self.ctx.ffi_imports.contains_key(fn_name) => {
-				self.emit_rounded_as_int(func, arg, I::F64Nearest);
+				self.emit_rounded_to_i64(func, arg, "round");
+				self.emit_call(func, "new_int");
 				true
 			}
 			_ => false,
 		}
 	}
 
-	/// `arg` as f64, rounded by `rounding`, as an exact Int node
-	fn emit_rounded_as_int(&mut self, func: &mut Function, arg: &Node, rounding: Instruction) {
+	/// `arg` as f64, rounded by the rounding function `name` (float_rounding), as an exact Int's i64
+	pub(super) fn emit_rounded_to_i64(&mut self, func: &mut Function, arg: &Node, name: &str) {
 		self.emit_float_value(func, arg);
-		func.instruction(&rounding);
-		self.emit_integral_float_as_int(func);
+		func.instruction(&float_rounding(name).expect("a rounding function"));
+		self.emit_truncating_cast(func);
 	}
 
 	/// `instance_of(x, "T")` as i64: 1 when x is an instance (a Key node) whose type name, its data, is T
@@ -681,7 +678,7 @@ impl WasmGcEmitter {
 		if !floats {
 			self.emit_numeric_value(func, dividend);
 			self.emit_numeric_value(func, divisor);
-			self.emit_call(func, "exact_euclid_div");
+			self.emit_euclidean_quotient(func, self.int_range(dividend), self.int_range(divisor));
 			return;
 		}
 		let (quotient, divisor_bits) = (self.scratch(0), self.scratch(1));
@@ -901,6 +898,11 @@ impl WasmGcEmitter {
 				self.emit_statement_sequence(func, items, Self::emit_dropped_statement);
 				return;
 			}
+			// `S1 = -0.16, S2 = 0.0083`: assignments separated by commas are statements too, each of its own kind
+			Node::List(items, bracket, Separator::Colon) if *bracket != Bracket::Square && items.iter().all(|item| matches!(item.drop_meta(), Node::Key(_, Op::Assign, _))) => {
+				self.emit_statement_sequence(func, items, Self::emit_dropped_statement);
+				return;
+			}
 			_ => {}
 		}
 		let destructured = self.destructured_kind(item);
@@ -910,6 +912,8 @@ impl WasmGcEmitter {
 			self.emit_typed_list_store(func, &name, &value); // the array itself is dropped, it needs no Node
 		} else if self.is_float_assignment(item) || self.is_float_read(item) || destructured.is_some_and(|kind| kind.is_float()) {
 			self.emit_float_value(func, item); // a float update or a call giving a float (shared_addf), dropped as an f64
+		} else if self.is_int_local_assignment(item) {
+			self.emit_numeric_value(func, item); // `i = start` of a range loop: the i64 stored, never an Int node
 		} else if self.is_ref_update(item) || self.is_output_call(item) || self.is_ref_value(item) || matches!(item.drop_meta(), Node::Empty) || destructured.is_some_and(|kind| kind.is_ref()) {
 			self.emit_node_instructions(func, item);
 		} else {
@@ -920,6 +924,13 @@ impl WasmGcEmitter {
 	/// A statement whose value is dropped: leaves one value of any type for the caller to drop
 	fn emit_dropped_statement(&mut self, func: &mut Function, item: &Node) {
 		self.emit_discarded_statement(func, item, Self::emit_node_instructions);
+	}
+
+	/// `x = value` of an Int into an Int local
+	fn is_int_local_assignment(&self, item: &Node) -> bool {
+		matches!(item.drop_meta(), Node::Key(left, Op::Define | Op::Assign, right)
+			if matches!(left.drop_meta(), Node::Symbol(name) if self.scope.lookup(name).is_some_and(|local| local.kind == Kind::Int))
+				&& self.get_type(right) == Kind::Int)
 	}
 
 	/// A call or an element read giving a float (`shared_addf(xs, i, v)`, `levels[i]` of a list of floats)
@@ -938,6 +949,7 @@ impl WasmGcEmitter {
 		statements.last().is_some_and(|last| {
 			!self.is_float_assignment(last) && !self.is_ref_update(last) && !self.is_ref_value(last)
 				&& self.typed_list_store(last).is_none() && !self.get_type(last).is_ref() && !self.is_float_read(last)
+				&& self.get_type(last) != Kind::Float
 		})
 	}
 
@@ -1017,7 +1029,7 @@ impl WasmGcEmitter {
 			other => self.is_float_assignment(other),
 		};
 		match item.drop_meta() {
-			Node::Key(left, op, _) if matches!(op, Op::Define | Op::Assign) || op.is_compound_assign() => self.is_float_variable(left),
+			Node::Key(left, op, _) if matches!(op, Op::Define | Op::Assign | Op::Inc | Op::Dec) || op.is_compound_assign() => self.is_float_variable(left),
 			Node::Key(_, Op::Then, then) => branch_assigns_float(then),
 			Node::Key(if_then, Op::Else, otherwise) => {
 				matches!(if_then.drop_meta(), Node::Key(_, Op::Then, then) if branch_assigns_float(then)) || branch_assigns_float(otherwise)
@@ -1063,4 +1075,14 @@ impl WasmGcEmitter {
 fn filter_loop_of(test: &Node) -> Option<crate::warp_parser::FilterLoop> {
 	let Node::Meta { data, node } = test else { return None };
 	data.data_value().downcast_ref::<crate::warp_parser::FilterLoop>().cloned().or_else(|| filter_loop_of(node))
+}
+
+/// The wasm instruction rounding an f64 like `floor`, `ceil` or `round` (half even, IEEE 754's default)
+pub(super) fn float_rounding(name: &str) -> Option<Instruction<'static>> {
+	match name {
+		"floor" => Some(Instruction::F64Floor),
+		"ceil" => Some(Instruction::F64Ceil),
+		"round" => Some(Instruction::F64Nearest),
+		_ => None,
+	}
 }

@@ -4,7 +4,8 @@ use crate::is;
 
 #[test]
 fn the_type_of_a_variable_is_its_value_type() {
-	is!("x = 1.5; type(x)", "rational");
+	is!("x = 1.5; type(x)", "float"); // decision exact-default: a decimal is a float
+	is!("x = 3/2; type(x)", "rational");
 	is!("type(ø)", "empty");
 	is!("x = ø; type(x)", "empty");
 	is!("class P{x:int}; p = P(1); type(p)", "P");

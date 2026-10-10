@@ -47,3 +47,12 @@ fn nearest_expands_exact_values_beyond_floats() {
 	is!("nearest(sqrt(2), rational, 10^38) == 133984184101103275326877813426364627544/94741125149636933417873079920900017937", true);
 	is!("nearest(π, rational) == 245850922/78256779", true);
 }
+
+// card nearest-rational: nearest is a method too, of a variable and of a call's result (card sqrt-round)
+#[test]
+fn nearest_as_a_method() {
+	is!("sqrt(2).nearest(rational, within: 0.001) == 41/29", true);
+	is!("type(sqrt(2).nearest(rational))", "rational");
+	is!("x = 0.1; x.nearest(rational) == 1/10", true);
+	is!("x = sqrt(2.0); x.nearest(rational, within: 0.001) == 41/29", true);
+}

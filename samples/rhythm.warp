@@ -1,0 +1,9 @@
+#!/usr/bin/env warp
+// Music by beats: note names with sharps and flats in any octave, durations in beats and bars at a tempo.
+
+tempo = 100                             // beats per minute (120 unless set)
+melody [C4 E4 G4 Bb4] each 1/2 beat     // a dominant seventh, a half beat each
+play [F#3 A3 C#4] for 1 beat            // F♯ minor, written F#3 or F♯3
+melody [D5 C♯5 B4 A4 G#4] each 1/4 beat
+play [E3 G#3 B3 D4] for 1 bar           // four beats
+wait_sound()

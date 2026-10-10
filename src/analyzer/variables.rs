@@ -2,6 +2,7 @@
 
 use super::*;
 use std::collections::HashSet;
+use crate::lowering::nodes::children_rewritten;
 
 /// Collect variables defined in node and populate scope
 /// Returns count of temp locals needed (e.g., for while loops)
@@ -274,11 +275,7 @@ fn widen_list_type(scope: &mut Scope, name: &str, value: &Node) {
 pub(super) fn widen_to_float(scope: &mut Scope, name: &str, value: &Node) {
 	let float_value = infer_type(value, scope).is_float();
 	let is_local = scope.locals.contains_key(name);
-	let binding = match is_local {
-		true => scope.locals.get_mut(name),
-		false => scope.globals.get_mut(name),
-	};
-	if let Some(local) = binding.filter(|local| local.kind == Kind::Int && local.type_node.is_none()) {
+	if let Some(local) = scope.own_binding_mut(name).filter(|local| local.kind == Kind::Int && local.type_node.is_none()) {
 		if float_value {
 			local.kind = Kind::Float;
 			// a read before this write (`y = x * 2` earlier in the loop) is a float too, once collected again
@@ -298,7 +295,7 @@ pub(super) const CONCRETE_KINDS: [Kind; 6] = [Kind::Int, Kind::Float, Kind::Text
 pub(super) fn widen_to_node(scope: &mut Scope, name: &str, value: &Node) {
 	let assigned = binding_kind(value, scope);
 	// a parameter's representation comes from its calls (infer_parameters_from_calls), not from the body
-	let Some(local) = scope.locals.get_mut(name).filter(|local| !local.is_param && local.type_node.as_ref().is_none_or(|_| local.kind == Kind::List)) else { return };
+	let Some(local) = scope.own_binding_mut(name).filter(|local| !local.is_param && local.type_node.as_ref().is_none_or(|_| local.kind == Kind::List)) else { return };
 	let mixes = |a: Kind, b: Kind| a == b || [a, b].iter().all(|kind| matches!(kind, Kind::Int | Kind::Float)) || [a, b].iter().all(|kind| matches!(kind, Kind::Text | Kind::Codepoint));
 	// an element of unknown kind may be an object: `item = 2` earlier, then `for item in basket` (samples/natural.warp)
 	let unknown_element = assigned == Kind::Empty && matches!(value.drop_meta(), Node::Key(_, Op::Hash, _));
@@ -614,10 +611,7 @@ pub(super) fn block_function_names(program: &Node) -> HashSet<String> {
 pub(super) fn without_block_bodies(node: Node, blocks: &HashSet<String>) -> Node {
 	match node {
 		Node::Key(name, Op::Define, _) if matches!(name.drop_meta(), Node::Symbol(name) if blocks.contains(name)) => Node::Empty,
-		Node::Key(left, op, right) => Node::Key(Box::new(without_block_bodies(*left, blocks)), op, Box::new(without_block_bodies(*right, blocks))),
-		Node::List(items, bracket, separator) => Node::List(items.into_iter().map(|item| without_block_bodies(item, blocks)).collect(), bracket, separator),
-		Node::Meta { node, data } => Node::Meta { node: Box::new(without_block_bodies(*node, blocks)), data },
-		other => other,
+		other => children_rewritten(other, |child| without_block_bodies(child, blocks)),
 	}
 }
 

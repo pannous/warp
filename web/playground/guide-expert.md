@@ -129,7 +129,7 @@ class Point { x: int y: int }; [type(3), "3" is text, "3" as int, Point{x: 1 y: 
 
 ## Data and storage
 
-`stored x = v` survives runs; `local[k]` (localStorage), `database.k` (IndexedDB / SQLite) are key-value stores;
+`stored x default v` (or `stored x = v`) survives runs; `local[k]` (localStorage), `database.k` (IndexedDB / SQLite) are key-value stores;
 `stored xs: [C]` is a table: `add` inserts, `where` queries (SQL natively), field writes go through.
 
 ```warp => "Bo"

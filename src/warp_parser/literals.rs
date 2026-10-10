@@ -329,7 +329,7 @@ impl WarpParser {
 		if superscript_letter(next).is_some() {
 			return number;
 		}
-		let tight = (next.is_alphabetic() || next == '_' || next == '(') && !self.at_ordinal_suffix();
+		let tight = (next.is_alphabetic() || next == '_' || next == '(' || next == crate::units::DEGREE) && !self.at_ordinal_suffix();
 		// `1500 meters` stays the pair the unit lowering reads (`3010 meters`), joined so it binds tighter than `>`
 		if !tight && self.spaced_word().is_some_and(|word| crate::units::is_long_unit_name(&word)) {
 			self.skip_spaces();

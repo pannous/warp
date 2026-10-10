@@ -1,7 +1,7 @@
 //! Persisted signals (card web-stores, notes/web_framework.md step 12): `stored theme = "dark"` is the variable theme
 //! holding the value an earlier run kept under its name, else "dark"; each change of it is kept again. Natively the
 //! values live in `<program>.stored.json` next to the program (in memory for code without a file, std_adapters.rs), in
-//! the playground in the page's localStorage (host.js). `stored x = v` becomes
+//! the playground in the page's localStorage (host.js). `stored x default v` (or `stored x = v`) becomes
 //! `x = std_io("store", "load", ["x", v, file])` and `on change x { std_io("store", "save", ["x", value, file]) }`.
 //! `storage` is the same store as a map keyed at run time (card web-apis): `storage[k] = v` saves, `storage[k]` loads (ø
 //! when absent), `delete storage[k]` removes, `keys(storage)` names the kept values; `storage.k` is the key "k".
@@ -15,6 +15,9 @@ use crate::warp_parser::parse;
 use std::collections::{HashMap, HashSet};
 
 pub const STORED_WORD: &str = "stored";
+/// `stored visits default 0`: the value of the first run, the same as `stored visits = 0`
+const DEFAULT_WORD: &str = "default";
+const DEFAULT_REASON: &str = "a stored variable keeps the last run's value, its default is only the first run's";
 /// The store of the values a `warp dev` page keeps across reloads (in memory natively; dev.js, site.js)
 pub const DEV_STORE: &str = "warp-dev";
 /// `app.warp` keeps its stored values in `app.stored.json`
@@ -82,13 +85,30 @@ fn program_file_with(extension: &str) -> Option<String> {
 /// `stored x = v` as its load and the listener that saves each change
 fn stored_statement(statement: &Node, file: &str) -> Option<Vec<Node>> {
 	let Node::List(items, _, _) = statement.drop_meta() else { return None };
-	let [word, assignment] = items.as_slice() else { return None };
+	let (word, rest) = items.split_first()?;
 	if !word.is_symbol(STORED_WORD) {
 		return None;
 	}
-	let Node::Key(name, Op::Assign | Op::Define, default) = assignment.drop_meta() else { return None };
-	let Node::Symbol(name) = name.drop_meta() else { return None };
-	Some(kept(name, default, file))
+	match rest {
+		// `stored visits default 0` (card stored-visits)
+		[name, default_word, default @ ..] if default_word.is_symbol(DEFAULT_WORD) && !default.is_empty() => {
+			let default = match default {
+				[one] => one.clone(),
+				many => Node::List(many.to_vec(), Bracket::None, Separator::Space),
+			};
+			Some(kept(name.symbol_name()?, &default, file))
+		}
+		[assignment] => {
+			let Node::Key(name, Op::Assign | Op::Define, default) = assignment.drop_meta() else { return None };
+			let name = name.symbol_name()?;
+			let default_text = default.serialize();
+			let written = format!("{STORED_WORD} {name} = {default_text}");
+			crate::normalize::set_position_of(statement);
+			crate::normalize::hint(&written, &format!("{STORED_WORD} {name} {DEFAULT_WORD} {default_text}"), DEFAULT_REASON);
+			Some(kept(name, default, file))
+		}
+		_ => None,
+	}
 }
 
 /// In a `warp dev` build, the first main-level `x = v` of a variable the program changes: kept as `stored` keeps it, in

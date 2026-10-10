@@ -5,7 +5,7 @@ use crate::is;
 fn test_scalar_type_tests() {
 	is!("3 is int", 1);
 	is!("3.5 is int", 0);
-	is!("3.5 is rational", 1);
+	is!("7/2 is rational", 1); // 3.5 is a float (decision exact-default)
 	is!("3 is rational", 1);
 	is!("3.5 is number", 1);
 	is!("\"a\" is text", 1);
@@ -52,7 +52,7 @@ fn test_a_variable_on_the_right_stays_equality() {
 #[test]
 fn test_type_of_is_type() {
 	is!("x=5; type of x", warp::Node::Symbol("int".to_string()));
-	is!("type of 2.5", warp::Node::Symbol("rational".to_string()));
+	is!("type of 2.5", warp::Node::Symbol("float".to_string())); // decision exact-default
 	is!("x=\"hello\"; type of x", warp::Node::Symbol("text".to_string()));
 }
 
@@ -66,11 +66,11 @@ fn test_as_declaration() {
 #[test]
 fn test_type_of_value_is_type() {
 	// card type-int: `type(x) is T` tests x, so it agrees with what type(x) prints
-	is!("type(0.0) is int", 1);
+	is!("type(0.0) is float", 1); // decision exact-default: 0.0 is a float
 	is!("type(0) is int", 1);
-	is!("x = 0.0; type(x) is int", 1);
+	is!("x = 0.0; type(x) is float", 1);
 	is!("type(1.5) is int", 0);
-	is!("type(1.5) is rational", 1);
+	is!("type(3/2) is rational", 1);
 	is!("type(\"a\") is text", 1);
 	is!("int is number", 1);
 	is!("number is int", 0);
@@ -83,8 +83,8 @@ fn test_types_compare_exactly_with_equals() {
 	is!("x=2; y=3; type(x) == type(y)", 1);
 	is!("type(2) == type(3.5)", 0);
 	is!("type(2) != type(3)", 0);
-	is!("type(0.0) == int", 1);
-	is!("type(1.5) == rational", 1);
+	is!("type(0.0) == float", 1); // decision exact-default
+	is!("type(3/2) == rational", 1);
 	is!("type(0) == number", 0);
 	is!("type(0) is number", 1);
 }

@@ -623,7 +623,11 @@ impl TaskTable {
 		let control = Arc::new(TaskControl { state: Mutex::new(Control::Run), changed: Condvar::new() });
 		self.controls.lock().expect("task controls").insert(id, control.clone());
 		let table = self.clone();
-		let handle = std::thread::spawn(move || table.run(&function, &arguments, &captured, control).map_err(|failure| format!("task {}: {}", task_name(&function), failure_message(failure))));
+		let voice = crate::sound::voice(); // the task is a voice of its own, starting where this one stands
+		let handle = std::thread::spawn(move || {
+			crate::sound::join_voice(voice);
+			table.run(&function, &arguments, &captured, control).map_err(|failure| format!("task {}: {}", task_name(&function), failure_message(failure)))
+		});
 		self.slots.lock().expect("task table").insert(id, Slot::Running(handle));
 		id
 	}

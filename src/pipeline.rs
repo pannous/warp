@@ -16,6 +16,7 @@ const RANGE_END_HINT: &str = "hint: `..` excludes the end; `...` or `to` include
 use crate::wasm_emitter::{failed_run, run_raw_struct};
 #[cfg(feature = "native")]
 use crate::wasm_reader::read_bytes;
+use crate::lowering::nodes::children_rewritten;
 
 /// The program written in `code`, or in the file `code` names: a file sees the definitions of its folder (D15)
 pub fn eval(code: &str) -> Node {
@@ -380,6 +381,8 @@ const SOURCE_PASSES: &[fn(Node) -> Node] = &[
 	// `{ a: 1, b: 2\n c: 3 }`: one row of fields (object_groups.rs)
 	crate::object_groups::lower,
 	// the used modules join the program before the signal passes: a listener of the program sees the writes of their functions
+	// note names (`play F#4`) while the program is its own, before the sound module joins it
+	crate::music_words::lower,
 	crate::routes::lower, crate::page_html::use_markup, crate::modules::resolve,
 	// again: a used module's phrases, `play 440Hz for 0.5s` of lib/sound.warp's `to play x for d:`
 	crate::phrase_calls::lower,
@@ -742,10 +745,7 @@ fn run_cached_block(program: Node) -> Node {
 fn spaced(node: Node) -> Node {
 	match node {
 		Node::List(items, Bracket::None, Separator::None) => Node::List(items.into_iter().map(spaced).collect(), Bracket::None, Separator::Space),
-		Node::List(items, bracket, separator) => Node::List(items.into_iter().map(spaced).collect(), bracket, separator),
-		Node::Key(left, op, right) => Node::Key(Box::new(spaced(*left)), op, Box::new(spaced(*right))),
-		Node::Meta { node, data } => Node::Meta { node: Box::new(spaced(*node)), data },
-		other => other,
+		other => children_rewritten(other, spaced),
 	}
 }
 

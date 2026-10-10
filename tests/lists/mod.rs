@@ -45,6 +45,7 @@ mod test_find_any_all;
 mod test_set_past_the_end;
 mod test_number_keys;
 mod test_map_literal_number_keys; // card map-literal
+mod test_function_maps; // card map-locals
 pub(crate) mod test_int_map; // card int-map
 mod test_byte_size;
 mod test_long_list_result;
@@ -91,3 +92,5 @@ mod test_counting_words;
 mod test_append_words;
 mod test_keys_of_a_value; // card keys-value
 mod test_comprehension_beside_own_push; // card prefix-count-field
+mod test_library_word_operands; // card derive-hard
+mod test_list_methods; // card list-methods

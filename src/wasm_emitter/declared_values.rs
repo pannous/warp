@@ -3,6 +3,7 @@
 //! when it runs: it has the declared type, else the error "not a <type>". Unannotated places stay lax.
 use super::WasmGcEmitter;
 use crate::node::Node;
+use crate::extensions::numbers::Number;
 use crate::type_kinds::{Kind, BOOL_MASK_BIT};
 use wasm_encoder::*;
 use Instruction as I;
@@ -95,6 +96,16 @@ impl WasmGcEmitter {
 	/// `value` stored into a place declared `declared` that holds a `kind`: checked at run time when its static kind leaves
 	/// open whether it fits (P204)
 	pub(super) fn emit_declared_value(&mut self, func: &mut Function, declared: Option<&Node>, value: &Node, kind: Kind) {
+		// a decimal written for an exact place (`exact x = 0.1`, `x: rational = 0.5`, `real x = 3.3`) is the fraction it spells
+		if let (Some(declared), Node::Number(Number::Float(decimal))) = (declared, value.drop_meta()) {
+			if crate::type_tests::spells_decimals_exactly(&declared.name()) && !kind.is_float() {
+				self.emit_decimal_literal(func, *decimal);
+				if kind.is_ref() {
+					self.emit_call(func, "new_int");
+				}
+				return;
+			}
+		}
 		// a float stored in a place declared exact (`x: rational = √2`, `f(x: int)`, `x: rational|int`) is refused while compiling
 		if let Some(declared) = declared.filter(|declared| crate::analyzer::refuses_floats(&declared.name())).filter(|_| self.get_type(value) == Kind::Float) {
 			let value = value.serialize();
@@ -121,7 +132,16 @@ impl WasmGcEmitter {
 		func.instruction(&I::RefAsNonNull);
 		let held = self.node_scratch();
 		func.instruction(&I::LocalSet(held));
+		// a stored error is of every type: a Node place holds it on (`return out + kept(…)` of a text function), a number
+		// place fails with its own message, never as "not a <declared>"
+		if !kind.is_ref() {
+			self.emit_fail_if_error(func, held);
+		}
 		self.emit_admits(func, held, admitted);
+		if kind.is_ref() {
+			self.emit_kind_in(func, held, 1 << Kind::Error as i64);
+			func.instruction(&I::I64Or);
+		}
 		Self::emit_list(func, &[I::I64Eqz, I::If(BlockType::Empty)]);
 		self.emit_trap_detail(func, &Node::Text(format!("not {}", crate::analyzer::with_article(&declared.name()))));
 		self.emit_runtime_error(func, super::list_ops::RETURNED_ERROR);

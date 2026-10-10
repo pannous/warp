@@ -2,7 +2,7 @@
 //! `do block` and `do name` run the block on the spot, like `{…}!` and `f!`: the word is dropped;
 //! `add x to list` is the method call `list.add(x)`.
 
-use super::nodes::key;
+use super::nodes::children_rewritten;
 use crate::node::{symbol, Bracket, Node, Separator};
 use crate::operators::Op;
 
@@ -30,9 +30,7 @@ impl Phrases {
 				let items: Vec<Node> = items.into_iter().map(|item| self.expand(item)).collect();
 				self.phrase(&items).unwrap_or(Node::List(items, bracket, separator))
 			}
-			Node::Key(left, op, right) => key(self.expand(*left), op, self.expand(*right)),
-			Node::Meta { node, data } => Node::Meta { node: Box::new(self.expand(*node)), data },
-			other => other,
+			other => children_rewritten(other, |child| self.expand(child)),
 		}
 	}
 

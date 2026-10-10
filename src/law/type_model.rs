@@ -27,11 +27,12 @@ const ERROR_CALL: &str = "error";
 /// `x failed` (warp_parser suffixes): is x a stored error
 const IS_ERROR_CALL: &str = "is_error";
 const BOOL_TYPE: &str = ".bool";
+const EXACT_TYPE: &str = ".exact";
 const ANY_TYPE: &str = ".any";
 const LIST_TYPE_PREFIX: &str = ".list ";
 /// A value of each W0 scalar type and the kind warp's analyzer sees it as (a bool is an Int; a Float is a decimal
 /// written in the program, an exact number: admits cannot tell it from a float, which only a run makes)
-const VALUE_KINDS: [(&str, Kind); 5] = [(BOOL_TYPE, Kind::Int), (".int", Kind::Int), (".exact", Kind::Float), (".text", Kind::Text), (".codepoint", Kind::Codepoint)];
+const VALUE_KINDS: [(&str, Kind); 5] = [(BOOL_TYPE, Kind::Int), (".int", Kind::Int), (EXACT_TYPE, Kind::Float), (".text", Kind::Text), (".codepoint", Kind::Codepoint)];
 const UNIT_TYPE: &str = ".unit";
 /// the parameter of a function that takes none
 const UNIT_PARAMETER: &str = "·";
@@ -113,7 +114,7 @@ fn type_of_word(word: &str) -> Option<String> {
 			"codepoint" => ".codepoint",
 			crate::analyzer::BOOL_TYPE => BOOL_TYPE,
 			"any" => ANY_TYPE,
-			exact if crate::type_tests::is_exact_fraction_type(exact) => ".exact",
+			exact if crate::type_tests::is_exact_fraction_type(exact) => EXACT_TYPE,
 			number if crate::type_tests::type_matches(number, "number") => ".number",
 			_ => return None,
 		}.to_string())
@@ -161,14 +162,14 @@ fn effect(node: &Node) -> Option<Effect<'_>> {
 	let Node::List(items, _, _) = node.drop_meta() else { return None };
 	// `on ev {h} in {body}` as a value parses as `(on ev {h}) in {body}`
 	if let [handled, keyword, body] = items.as_slice() {
-		if is_word(keyword, IN_KEYWORD) {
+		if keyword.is_symbol(IN_KEYWORD) {
 			if let Some(Effect::On { event, handler, body: None }) = effect(handled) {
 				return Some(Effect::On { event, handler, body: Some(body) });
 			}
 		}
 	}
 	let (first, rest) = items.split_first()?;
-	if is_word(first, ON_KEYWORD) {
+	if first.is_symbol(ON_KEYWORD) {
 		// `a = on ask {2} in {…}` groups the words after `on`: `on (ask {2})`
 		let rest = match rest {
 			[grouped] => match grouped.drop_meta() {
@@ -181,11 +182,11 @@ fn effect(node: &Node) -> Option<Effect<'_>> {
 		let event = event_name(words)?;
 		return match last.drop_meta() {
 			Node::List(_, Bracket::Curly, _) => Some(Effect::On { event, handler: last, body: None }),
-			Node::List(parts, _, _) if parts.len() == 3 && is_word(&parts[1], IN_KEYWORD) => Some(Effect::On { event, handler: &parts[0], body: Some(&parts[2]) }),
+			Node::List(parts, _, _) if parts.len() == 3 && parts[1].is_symbol(IN_KEYWORD) => Some(Effect::On { event, handler: &parts[0], body: Some(&parts[2]) }),
 			_ => None,
 		};
 	}
-	if !is_word(first, EMIT_KEYWORD) {
+	if !first.is_symbol(EMIT_KEYWORD) {
 		return None;
 	}
 	// `emit alarm{level: 3}` parses as `alarm: {level: 3}` after the event's other words
@@ -207,7 +208,7 @@ fn effect(node: &Node) -> Option<Effect<'_>> {
 /// `global n` or `global n = 0` (parsed `global: n`, `global: (n = 0)`): the name and the value
 fn global_declaration(node: &Node) -> Option<(&str, Option<&Node>)> {
 	let Node::Key(keyword, Op::Colon, declared) = node.drop_meta() else { return None };
-	if !is_word(keyword, GLOBAL_KEYWORD) {
+	if !keyword.is_symbol(GLOBAL_KEYWORD) {
 		return None;
 	}
 	match declared.drop_meta() {
@@ -277,14 +278,10 @@ fn map_keys(program: &Node) -> Option<Vec<String>> {
 	has_map.then_some(keys)
 }
 
-fn is_word(node: &Node, word: &str) -> bool {
-	matches!(node.drop_meta(), Node::Symbol(found) if found == word)
-}
-
 /// the value of `return v`, ø of a bare `return`
 fn returned(node: &Node) -> Option<Node> {
 	match node.drop_meta() {
-		Node::List(items, _, _) if items.first().is_some_and(|first| is_word(first, RETURN_KEYWORD)) => Some(match &items[1..] {
+		Node::List(items, _, _) if items.first().is_some_and(|first| first.is_symbol(RETURN_KEYWORD)) => Some(match &items[1..] {
 			[] => Node::Empty,
 			[value] => value.clone(),
 			words => Node::List(words.to_vec(), Bracket::None, Separator::Space),
@@ -507,10 +504,15 @@ fn arguments_class(function: &str) -> String {
 	format!("{function}{ARGUMENTS_SUFFIX}")
 }
 
-/// A bool place (a declared variable or parameter) takes the literals 1 and 0 as yes and no (P199)
-fn bool_literal(declared: Option<&str>, value: &Node) -> Option<String> {
+/// A bool place (a declared variable or parameter) takes the literals 1 and 0 as yes and no (P199); an exact place
+/// takes a decimal as the fraction it spells (`x: rational = 0.5`, as warp's emit_declared_value)
+fn place_literal(declared: Option<&str>, value: &Node) -> Option<String> {
 	match value.drop_meta() {
 		Node::Number(Number::Int(n @ (0 | 1))) if declared == Some(BOOL_TYPE) => Some(format!(".bool {}", *n == 1)),
+		Node::Number(Number::Float(decimal)) if declared == Some(EXACT_TYPE) && decimal.is_finite() => {
+			let (numerator, denominator) = crate::wasm_emitter::exact::decimal_fraction(*decimal);
+			Some(exact_number(numerator, denominator))
+		}
 		_ => None,
 	}
 }
@@ -822,7 +824,7 @@ impl Exporter {
 		}
 		argument_classes.extend(event_classes);
 		let mut words_used = false;
-		program_node.visit(&mut |part| words_used |= [COUNT_WORD, IN_KEYWORD].iter().chain(&crate::analyzer::COUNTING_WORDS).any(|word| is_word(part, word)));
+		program_node.visit(&mut |part| words_used |= [COUNT_WORD, IN_KEYWORD].iter().chain(&crate::analyzer::COUNTING_WORDS).any(|word| part.is_symbol(word)));
 		if words_used {
 			let fields = [CELL_FIELD, TALLY_INDEX].map(|field| (field.to_string(), Some("int".to_string())));
 			self.classes.insert(TALLY_CLASS.to_string(), (vec![TALLY_CLASS.to_string()], fields.to_vec()));
@@ -863,7 +865,7 @@ impl Exporter {
 				}
 				_ => unsupported(statement),
 			},
-			Node::List(items, _, _) if items.len() == 2 && is_word(&items[0], CONSTANT_KEYWORD) => match items[1].drop_meta() {
+			Node::List(items, _, _) if items.len() == 2 && items[0].is_symbol(CONSTANT_KEYWORD) => match items[1].drop_meta() {
 				Node::Key(target, Op::Assign, value) => self.binding(target, ".const", value),
 				other => unsupported(other),
 			},
@@ -987,8 +989,8 @@ impl Exporter {
 
 	/// A call's result stored in a declared list is checked item by item at run time (list-element-types): a cast
 	fn stored_value(&mut self, declared: Option<&str>, value: &Node) -> Lean {
-		if let Some(yes_or_no) = bool_literal(declared, value) {
-			return Ok(yes_or_no);
+		if let Some(literal) = place_literal(declared, value) {
+			return Ok(literal);
 		}
 		let lean = self.expression(value)?;
 		Ok(match declared {
@@ -1088,7 +1090,7 @@ impl Exporter {
 			return Ok(format!(".set (.loc {}) {} ({})", quoted(name), quoted(CELL_FIELD), self.expression(value)?));
 		}
 		let declared = self.names.get(name).cloned().flatten();
-		let value = match bool_literal(self.bool_names.contains(&name.to_string()).then_some(BOOL_TYPE), value) {
+		let value = match place_literal(self.bool_names.contains(&name.to_string()).then_some(BOOL_TYPE), value) {
 			Some(yes_or_no) => yes_or_no,
 			None => self.shared_list(name, declared.as_deref(), value)?,
 		};
@@ -1221,10 +1223,6 @@ impl Exporter {
 		}
 		match node.drop_meta() {
 			Node::Number(Number::Int(n)) => Ok(format!(".int ({n})")),
-			Node::Number(Number::Float(x)) if Number::is_exact_decimal(*x) => {
-				let (numerator, denominator) = crate::wasm_emitter::exact::decimal_fraction(*x);
-				Ok(exact_number(numerator, denominator))
-			}
 			Node::Number(Number::Float(x)) => Ok(format!(".flt (Float.toBits ({x:?} : Float))")),
 			Node::Number(Number::Quotient(numerator, denominator)) => Ok(exact_number(numerator, denominator)),
 			Node::True => Ok(".bool true".to_string()),
@@ -1255,25 +1253,25 @@ impl Exporter {
 			Node::Symbol(word) if word == BREAK_KEYWORD => self.abort(None),
 			// `global y` in a function only declares: the name is main-level and assignable there
 			_ if global_declaration(node).is_some_and(|(name, value)| value.is_none() && self.names.contains_key(name)) => Ok(UNIT_TYPE.to_string()),
-			Node::List(items, _, _) if items.len() == 2 && is_word(&items[0], BREAK_KEYWORD) => self.abort(Some(&items[1])),
+			Node::List(items, _, _) if items.len() == 2 && items[0].is_symbol(BREAK_KEYWORD) => self.abort(Some(&items[1])),
 			Node::List(items, _, _) if items.first().is_some_and(|class| self.classes.contains_key(&class.name())) => self.construction(&items[0].name(), &items[1..]),
 			Node::List(items, _, _) => match items.as_slice() {
-				[marker, body, handler] if is_word(marker, TRY_MARKER) => self.binary(".tryCatch", body, handler),
-				[for_word, variable, in_word, list, body] if is_word(for_word, FOR_KEYWORD) && is_word(in_word, IN_KEYWORD) => self.for_loop(variable, list, body),
+				[marker, body, handler] if marker.is_symbol(TRY_MARKER) => self.binary(".tryCatch", body, handler),
+				[for_word, variable, in_word, list, body] if for_word.is_symbol(FOR_KEYWORD) && in_word.is_symbol(IN_KEYWORD) => self.for_loop(variable, list, body),
 				// `count 2 in xs` parses as `count (2 in xs)`
-				[count, list] if is_word(count, COUNT_WORD) && !self.functions.contains_key(COUNT_WORD) => match list.drop_meta() {
-					Node::List(words, Bracket::None, _) if words.len() == 3 && is_word(&words[1], IN_KEYWORD) => self.tally(&words[2], Some(&words[0]), false),
+				[count, list] if count.is_symbol(COUNT_WORD) && !self.functions.contains_key(COUNT_WORD) => match list.drop_meta() {
+					Node::List(words, Bracket::None, _) if words.len() == 3 && words[1].is_symbol(IN_KEYWORD) => self.tally(&words[2], Some(&words[0]), false),
 					_ => self.tally(list, None, false),
 				},
-				[item, in_word, list] if is_word(in_word, IN_KEYWORD) => self.tally(list, Some(item), true),
-				[call, a, b] if EXTREMA.iter().any(|word| is_word(call, word)) && !self.functions.contains_key(&call.name()) => self.extremum(&call.name(), a, b),
+				[item, in_word, list] if in_word.is_symbol(IN_KEYWORD) => self.tally(list, Some(item), true),
+				[call, a, b] if EXTREMA.iter().any(|word| call.is_symbol(word)) && !self.functions.contains_key(&call.name()) => self.extremum(&call.name(), a, b),
 				// a stored error: a value until an operation that needs another value meets it (Decided #1)
-				[call, message] if is_word(call, ERROR_CALL) => match message.drop_meta() {
+				[call, message] if call.is_symbol(ERROR_CALL) => match message.drop_meta() {
 					Node::Text(message) => Ok(format!(".fail {}", quoted(message))),
 					Node::Char(letter) => Ok(format!(".fail {}", quoted(&letter.to_string()))),
 					_ => unsupported(node),
 				},
-				[call, value] if is_word(call, IS_ERROR_CALL) => Ok(format!(".failed ({})", self.expression(value)?)),
+				[call, value] if call.is_symbol(IS_ERROR_CALL) => Ok(format!(".failed ({})", self.expression(value)?)),
 				[call] if self.functions.get(&call.name()).is_some_and(|parameter| parameter == UNIT_TYPE) => Ok(format!(".call {} .unit", quoted(&call.name()))),
 				// `add 1 to 2` of `to add number a to number b: …` parses as `add (1 to 2)`: two arguments
 				[call, argument] if self.classes.contains_key(&arguments_class(&call.name())) && matches!(argument.drop_meta(), Node::Key(_, Op::To, _)) => {
@@ -1306,7 +1304,7 @@ impl Exporter {
 					};
 					let declared = self.functions[&call.name()].clone();
 					let cell = self.cell_classes.iter().find(|cell| declared == format!(".cls {}", lean_strings(&[cell.to_string()]))).cloned();
-					let argument = match bool_literal(Some(&declared), argument) {
+					let argument = match place_literal(Some(&declared), argument) {
 						Some(yes_or_no) => yes_or_no,
 						None if cell.is_some() => self.argument(cell.as_deref(), argument)?,
 						None => admitted(&declared, self.expression(argument)?),

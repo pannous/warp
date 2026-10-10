@@ -71,7 +71,9 @@ impl WasmGcEmitter {
 			// Variable definition/assignment: x:=42 or x=42 → store and return value
 			Node::Key(left, Op::Define | Op::Assign, right) => self.emit_numeric_assignment(func, located, left, right),
 			// `x as int` of an Int, what a declared result type `-> int` lowers to: x, a ratio truncated, without a box
-			Node::Key(value, Op::As, target) if self.get_type(value) == Kind::Int && is_int_type_word(target) => self.emit_int_value_truncated(func, value),
+			Node::Key(value, Op::As, target) if self.get_type(value) == Kind::Int && is_int_type_word(target) && !self.computes_at_run_time_kind(value) => {
+				self.emit_int_value_truncated(func, value)
+			}
 			// Increment/decrement: i++ or i--
 			Node::Key(left, op, right) if *op == Op::Inc || *op == Op::Dec => self.emit_numeric_step(func, left, op, right),
 			// Compound assignment: x += y → x = x + y
@@ -203,11 +205,16 @@ impl WasmGcEmitter {
 			return true;
 		}
 		// floor of an exact number as its i64, without the Int node list_emitter builds for it as a value
-		if fn_name == "floor" && !self.ctx.ffi_imports.contains_key(fn_name) && self.get_type(argument) == Kind::Int {
+		if fn_name == "floor" && !self.ctx.ffi_imports.contains_key(fn_name) && !self.ctx.user_functions.contains_key(fn_name) && self.get_type(argument) == Kind::Int {
 			self.emit_numeric_value(func, argument);
 			if self.int_runtime() {
 				self.emit_call(func, "exact_floor");
 			}
+			return true;
+		}
+		// floor, ceil and round of a float as the i64, without the Int node list_emitter builds for it as a value
+		if super::list_emitter::float_rounding(fn_name).is_some() && !self.ctx.ffi_imports.contains_key(fn_name) && self.get_type(argument).is_float() {
+			self.emit_rounded_to_i64(func, argument, fn_name);
 			return true;
 		}
 		let integer_builtin = ROUNDING_FUNCTIONS.contains(&fn_name.as_str())
@@ -290,9 +297,7 @@ impl WasmGcEmitter {
 						self.emit_declared_value(func, declared.as_ref(), right, Kind::Float);
 						func.instruction(&I::LocalTee(position));
 					} else if let Some(kind) = self.emit_global_store(func, name, right) {
-						if !kind.is_float() {
-							self.emit_int_to_f64(func, None);
-						}
+						self.emit_stored_as_f64(func, kind);
 					} else {
 						self.emit_float_value(func, right);
 						self.emit_undefined_variable(func, name);
@@ -305,6 +310,9 @@ impl WasmGcEmitter {
 			// `s += x` on a float variable, also as a statement of a loop body
 			Node::Key(left, op, right) if op.is_compound_assign() && self.is_float_variable(left) => {
 				self.emit_compound_assign(func, left, op, right, true);
+			}
+			Node::Key(left, op @ (Op::Inc | Op::Dec), _) if self.is_float_variable(left) => {
+				self.emit_inc_dec(func, left, op);
 			}
 			Node::Key(left, op, right) if op.is_arithmetic() => {
 				let kind = self.arithmetic_type(left, op, right);
@@ -324,9 +332,7 @@ impl WasmGcEmitter {
 					self.emit_int_to_f64(func, range);
 					return;
 				}
-				self.emit_float_value(func, left);
-				self.emit_float_value(func, right);
-				self.emit_float_arithmetic(func, op);
+				self.emit_float_operation(func, left, op, right);
 			}
 			// Suffix operators: x² = x*x, x³ = x*x*x (returns f64)
 			Node::Key(left, Op::Square, _) => {

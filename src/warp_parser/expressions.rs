@@ -1,6 +1,7 @@
 //! Expressions: the Pratt loop, special infix operators, prefix operators, if as a prefix
 
 use super::*;
+use crate::lowering::event_signals::{EMIT_ALIASES, EMIT_WORDS};
 
 /// Characters that end a statement: a body cannot start with them
 const BODY_ENDS: [char; 7] = ['\0', ';', ',', '\n', '}', ')', ']'];
@@ -12,6 +13,7 @@ impl WarpParser {
 	/// Handles prefix, infix, and suffix operators
 	pub(super) fn parse_expr(&mut self, min_bp: u8) -> Node {
 		self.skip_spaces();
+		let heads_definition = self.after_function_keyword_word();
 
 		// Step 1: Prefix (nud)
 		let lhs = if let Some((op, chars)) = self.peek_negated_control_word() {
@@ -74,6 +76,7 @@ impl WarpParser {
 			self.parse_atom()
 		};
 
+		self.continues_definition_head = heads_definition;
 		self.continue_expr(lhs, min_bp)
 	}
 
@@ -158,10 +161,10 @@ impl WarpParser {
 		Some(Node::List(vec![Symbol(AWAIT_KEYWORD.to_string()), operand], Bracket::None, Separator::Space))
 	}
 
-	/// `1 + emit ask`, `2 * emit stop the machine{reason: "x"} + 1`: the phrase `emit ask` is one operand, the words
+	/// `1 + emit ask`, `net * (1 + ask tax_rate)` (card price-net), `2 * emit stop the machine{reason: "x"} + 1`: the phrase `emit ask` is one operand, the words
 	/// of the event and its data bind like the operand of a unary minus; the same Space list a statement `emit ask` is
 	pub(super) fn try_parse_emit(&mut self) -> Option<Node> {
-		let keyword = EMIT_KEYWORDS.into_iter().find(|keyword| self.matches_keyword(keyword))?;
+		let keyword = EMIT_WORDS.into_iter().chain(EMIT_ALIASES).find(|keyword| self.matches_keyword(keyword))?;
 		let before_keyword = self.mark();
 		self.advance_by(keyword.len());
 		self.skip_spaces();
@@ -232,6 +235,10 @@ impl WarpParser {
 
 	/// The operator after `lhs` that the infix table does not hold, its width in characters and its binding power
 	pub(super) fn special_infix(&self, lhs: &Node) -> Option<(SpecialInfix, usize, (u8, u8))> {
+		// `def div(a,b) = …`: the word after a function keyword is the name, never an operator
+		if matches!(lhs.drop_meta(), Node::Symbol(keyword) if crate::operators::is_function_keyword(keyword)) {
+			return None;
+		}
 		// `a mod b` (`a modulo b`) is `a % b` (Euclidean, 0 ≤ r < |b|), `a rem b` the truncated remainder (sign of the
 		// dividend, as C)
 		for (word, op) in [("mod", Op::Mod), ("modulo", Op::Mod), ("rem", Op::Rem)] {
@@ -295,6 +302,7 @@ impl WarpParser {
 		const SUBSCRIPT_BP: u8 = Op::Hash.binding_power().0;
 		// Right operand of the last comparison, to chain a<b<c into a<b and b<c
 		let mut previous_comparand: Option<Node> = None;
+		let heads_definition = std::mem::take(&mut self.continues_definition_head);
 		loop {
 			self.skip_spaces_and_inline_comments(); // not newlines: they are separators
 
@@ -432,6 +440,12 @@ impl WarpParser {
 				Op::Colon | Op::Define if self.only_blanks_before_newline() => {
 					self.with_equals_comparing(false, |parser| parser.parse_indented_block()) // the block of `if c:` and `f(n):=` assigns
 				}
+				// `def foo: hi=2*2` defines foo by the rest of the line, no `(foo: hi) = 2*2`; Scala's `def f(x: Int): Int = …`
+				// declares its result type
+				Op::Colon if heads_definition && !glued_pair && !self.result_type_follows() => {
+					self.skip_spaces();
+					Some(self.with_equals_comparing(false, |parser| parser.rest_of_statement()))
+				}
 				Op::Do | Op::Then | Op::Else if self.closing_end_follows(&END_BLOCK_OPENERS) => Some(self.parse_end_block(op == Op::Then)),
 				Op::Do if self.closing_end_follows(&["do"]) => Some(error(AMBIGUOUS_END)), // `do a; if c then b end`
 				_ => None,
@@ -493,7 +507,11 @@ impl WarpParser {
 			}
 
 			let rhs = if may_pipe { self.pipe_operand(rhs, op_line, op_column) } else { rhs };
-			let rhs = if op == Op::Eq && written != IS_WORD { crate::type_tests::equality_operand(&lhs, rhs) } else { rhs };
+			// a type word compares as its type on either side of == and != (`int != integer` is no)
+			let rhs = if op.is_equality() && written != IS_WORD { crate::type_tests::equality_operand(&lhs, rhs) } else { rhs };
+			if op.is_equality() && written != IS_WORD {
+				lhs = crate::type_tests::equality_operand(&rhs, lhs);
+			}
 			if op == Op::Eq && written == IS_WORD {
 				lhs = crate::type_tests::with_compared_text(lhs, rhs_written.trim());
 			}

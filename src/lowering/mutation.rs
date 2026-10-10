@@ -3,7 +3,7 @@
 //! `x = x.upper` in the parser; in `upper x!` the parser only sees `x!`, so it marks x and `lower` turns the call into
 //! `x = upper x`. A lone `x!`, `f!` or `{…}!` keeps evaluating.
 
-use super::nodes::{call, key};
+use super::nodes::{call, children_rewritten, key};
 use crate::node::{Bracket, Node, Separator};
 use crate::operators::Op;
 use crate::diagnostic::Diagnostic;
@@ -13,8 +13,9 @@ const MUTATED_MARK: &str = "mutated";
 /// `x!` that changes nothing unwraps x (library_words: ø is a loud error)
 pub const UNWRAP: &str = "unwrap";
 
-/// Pure words whose result is a changed copy of their argument: dropping it changes nothing
-const COPY_WORDS: [&str; 11] = ["upper", "uppercase", "lower", "lowercase", "trim", "strip", "reverse", "sort", "sorted", "replace", "capitalize"];
+/// Pure words whose result is a changed copy of their argument: dropping it changes nothing. Any spelling of them
+/// (`uppercase`, `strip`, `sorted`) is one (library_words::canonical_spelling)
+const COPY_WORDS: [&str; 7] = ["upper", "lower", "trim", "reverse", "sort", "replace", "capitalize"];
 
 /// wiki/mutable.md: a statement dropping a copy word's result (`uppercase x`), and an assignment of a mutating call
 /// (`y = x.upper!`, which changes x too), warn with the forms meant
@@ -56,7 +57,7 @@ fn copy_word_call(call: &Node) -> Option<(&str, &str, bool)> {
 		other => other,
 	};
 	match (called, variable.drop_meta()) {
-		(Node::Symbol(called), Node::Symbol(name)) if COPY_WORDS.contains(&called.as_str()) => Some((called, name, is_marked(call) || is_marked(variable))),
+		(Node::Symbol(called), Node::Symbol(name)) if COPY_WORDS.contains(&crate::library_words::canonical_spelling(called)) => Some((called, name, is_marked(call) || is_marked(variable))),
 		_ => None,
 	}
 }
@@ -128,10 +129,8 @@ pub fn lower(node: Node) -> Node {
 			let call = Node::Key(receiver.clone(), Op::Dot, Box::new(unmarked(*method)));
 			Node::Key(receiver, Op::Assign, Box::new(call))
 		}
-		Node::Key(left, op, right) => key(lower(*left), op, lower(*right)),
 		Node::Meta { .. } if is_marked(&node) => unwrapped(unmarked(node)),
-		Node::Meta { node, data } => Node::Meta { node: Box::new(lower(*node)), data },
-		other => other,
+		other => children_rewritten(other, lower),
 	}
 }
 

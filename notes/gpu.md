@@ -233,3 +233,17 @@ natively gpu::with_builtin_values (input from the paint window's stdout lines `i
 paint_window::input), in the browser host-gpu.js builtinValues (pointer and key from canvas.js's shared buffer).
 time = seconds since the first render, frame = renders before, key = code point, arrows 0xF700–0xF703, 0 = none.
 Costs nothing for a shader that doesn't mention them.
+
+## Paint window, default canvas, probes (from the warp-sound handover, 2026-10-10)
+- src/paint_window.rs is a separate `warp paint-window` process fed RGBA frames on stdin; it writes
+  `input x y down key` lines on stdout, which warp-runtime system_values.rs window_input keeps (system values and
+  shader built-ins both read it). $key holds only the last key pressed.
+- Default canvas: lib/draw.warp sizes it from system values view_width / view_height (the playground's output pane
+  via playground.js viewSize; natively 640×480). notes/web_playground.md "The default canvas is the output pane".
+- Probes: probes/gpu/paint_cost.warp, render_speed.warp, web_speed.py (paint and render timing);
+  probes/paint_window.sh (the viewer process); probes/webgpu/ (gpu_compute thresholds). tests/web/test_playground_paint.rs
+  runs host.js under node, a harness for playground host behaviour without a browser (compile with `pipeline::for_a_page`).
+- Quirks: run paint probes under WARP_NO_WINDOW=1, or windows pop up on the user's Mac; headless, paint writes PNGs
+  to $TMPDIR/warp-paint, shared by every session (filter frames by size and mtime). A headless 1080p animation is
+  bound by PNG writing; the window path isn't. A shader built-in is skipped when the program assigns a variable of
+  that name (gpu_visualizer keeps its own `time`, the song's clock). `sleep 16ms` takes a unit on its number.

@@ -2,7 +2,7 @@
 //! share the arithmetic emitters. Arguments beyond plain values and arithmetic are computed once into temporaries.
 //! One list argument is the list of candidates: `max([1 5 2])`; a list variable `max(xs)` is folded at runtime.
 
-use super::nodes::{Counter, key};
+use super::nodes::{Counter, children_rewritten, key};
 use crate::analyzer::call_name;
 use crate::diagnostic::Diagnostic;
 use crate::node::{Bracket, Node, Separator};
@@ -50,9 +50,7 @@ impl Lowering<'_> {
 				let (name, arguments) = self.extremum_method(&method).expect("guarded");
 				self.expand(Node::List([vec![name, *receiver], arguments].concat(), Bracket::Round, Separator::None))
 			}
-			Node::Key(left, op, right) => key(self.expand(*left), op, self.expand(*right)),
-			Node::Meta { node, data } => Node::Meta { node: Box::new(self.expand(*node)), data },
-			other => other,
+			other => children_rewritten(other, |child| self.expand(child)),
 		}
 	}
 

@@ -127,8 +127,6 @@ fn interval_or(kind: Kind, argument: &Node, scope: &Scope) -> Kind {
 pub fn infer_type(node: &Node, scope: &Scope) -> Kind {
 	let node = node.drop_meta();
 	match node {
-		// Decimal literals are exact numbers, see wasm_emitter/exact.rs
-		Node::Number(Number::Float(f)) if Number::is_exact_decimal(*f) => Kind::Int,
 		Node::Number(Number::Float(_)) => Kind::Float,
 		Node::Number(Number::Complex(_, _) | Number::Real(_) | Number::Nan | Number::Inf | Number::NegInf) => Kind::Float,
 		// Integer and rational literals
@@ -160,12 +158,16 @@ pub fn infer_type(node: &Node, scope: &Scope) -> Kind {
 				Kind::Text
 			} else if op.base_op() == Op::Add && (left_kind == Kind::List || right_kind == Kind::List) {
 				Kind::List // `xs += [v]`, what `xs.add(v)` lowers to
+			} else if left_kind == Kind::Empty {
+				Kind::Empty // a variable held as a Node stays one: `total += event.value` of a global widened by it
 			} else if left_kind == Kind::Float || right_kind == Kind::Float {
 				Kind::Float
 			} else {
 				Kind::Int
 			}
 		}
+		// `x++` of a float steps the float
+		Node::Key(target, Op::Inc | Op::Dec, _) if infer_type(target, scope) == Kind::Float => Kind::Float,
 		// `global:value` is its value; a tag structure like `html:body` a Key
 		Node::Key(left, Op::Colon, right) if left.is_symbol("global") => infer_type(right, scope),
 		Node::Key(_, Op::Colon, _) => Kind::Key,
