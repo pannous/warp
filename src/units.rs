@@ -65,8 +65,9 @@ const UNITS: [Unit; 20] = [
 /// The sign before a temperature unit's letter: °C, °F
 pub const DEGREE: char = '°';
 
-/// Unit words standing for a unit expression: `60 mph` is `60 mi/h`, `440Hz` is `440/s` (lib/sound.warp)
-const UNIT_ALIASES: [(&str, &str); 3] = [("mph", "mi/h"), ("Hz", "1/s"), ("kHz", "1/ms")];
+/// Unit words standing for a unit expression: `60 mph` is `60 mi/h`, `440Hz` is `440/s` (lib/sound.warp), an angle `30°`
+/// is the exact `30π/180` (card angles-degrees)
+const UNIT_ALIASES: [(&str, &str); 4] = [("mph", "mi/h"), ("Hz", "1/s"), ("kHz", "1/ms"), ("°", "π/180")];
 
 /// The long names a conversion target may use, singular or plural: `2 h in minutes` (P36). Quantities keep the short
 /// names, `2 minutes` stays a duration of the time module.
