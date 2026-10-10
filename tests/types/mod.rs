@@ -135,3 +135,4 @@ mod test_map_runtime_kind; // card map-runtime
 mod test_map_type_tests; // card map-answers
 mod test_filled_map_types; // card number-keyed
 mod test_instance_size; // card size-instance
+mod test_empty_named_key; // card object-empty-field

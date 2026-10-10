@@ -53,3 +53,4 @@ mod test_json5; // card json5-parse
 mod test_module_function_dir; // card use-math
 #[cfg(feature = "native")] // another checkout's lib/ on disk and file times: not in the browser build
 mod test_checkout_std_lib; // card local-lib
+mod test_import_words; // card cleanup-closed-lists

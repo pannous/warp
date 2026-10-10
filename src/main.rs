@@ -98,6 +98,7 @@ fn node_to_i32(node: &Node) -> i32 {
 #[cfg(not(test))]
 fn main() {
     let mut args: Vec<String> = env::args().collect();
+    warp::crash_card::install();
     warp::paint::allow_windows();
     apply_flags(&mut args);
     match args.iter().position(|arg| arg == SANDBOX_FLAG) {

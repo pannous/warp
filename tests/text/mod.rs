@@ -56,3 +56,4 @@ mod test_split_default; // card split-without
 mod test_str_computed; // card str-inline
 mod test_text_plus_anything; // card print-oldest
 mod test_text_plus_printable; // card print-oldest
+mod test_text_type_words; // card cleanup-closed-lists

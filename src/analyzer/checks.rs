@@ -383,8 +383,6 @@ pub const TEMPORARY_SEPARATOR: &str = "·";
 pub fn is_compiler_temporary(name: &str) -> bool {
 	name.contains(TEMPORARY_SEPARATOR)
 }
-/// Statements that name functions or modules instead of calling them
-pub(super) const IMPORT_WORDS: [&str; 3] = ["import", "use", "include"];
 pub(super) const LIST_OF_PREFIX: &str = "list of ";
 /// The type words of a bool, held as an Int (builtin_type_kind)
 const BOOL_TYPES: [&str; 2] = ["bool", "boolean"];
@@ -491,7 +489,7 @@ pub(super) fn call_arity_error(node: &Node, context: &Context) -> Option<Diagnos
 	match node {
 		Node::Meta { node, .. } => call_arity_error(node, context),
 		// `import (sin, floor) from 'm'` names functions, it calls none
-		Node::List(items, _, _) if matches!(items.first().map(Node::drop_meta), Some(Node::Symbol(word)) if IMPORT_WORDS.contains(&word.as_str())) => None,
+		Node::List(items, _, _) if matches!(items.first().map(Node::drop_meta), Some(Node::Symbol(word)) if crate::modules::is_import_keyword(word)) => None,
 		Node::List(items, bracket, _) => {
 			if let (Bracket::Round, Some(Node::Symbol(name))) = (bracket, items.first().map(Node::drop_meta)) {
 				let libm = crate::ffi::LIBM_F64_FUNCTIONS.iter().filter(|(function, _)| function == name).map(|(_, arity)| *arity);
@@ -964,7 +962,7 @@ pub(super) fn negative_modulo_warning(left: &Node, right: &Node) -> String {
 pub(super) fn check_ambiguous_calls(node: &Node) -> Option<Diagnostic> {
 	/// `return x`, `let x`, `def f`, `use m`: a statement word, no function applied braceless
 	fn is_statement_word(word: &str) -> bool {
-		is_declaration_word(word) || crate::operators::is_function_keyword(word) || IMPORT_WORDS.contains(&word) || RETURNING_KEYWORDS.contains(&word)
+		is_declaration_word(word) || crate::operators::is_function_keyword(word) || crate::modules::is_import_keyword(word) || RETURNING_KEYWORDS.contains(&word)
 	}
 	fn braceless_call(node: &Node) -> Option<(&String, &Node)> {
 		match node.drop_meta() {
