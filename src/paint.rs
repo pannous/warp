@@ -48,6 +48,9 @@ pub fn shows_windows() -> bool {
 
 /// Show the image in a window (paint_window.rs) when windows are allowed, else (or without a window) write it, say where
 pub fn paint(pixels: &[u64], width: usize, height: usize) -> Result<Option<PathBuf>, String> {
+	if width == 0 || height == 0 {
+		return Err(format!("paint: a {width}×{height} image is empty (with use draw: canvas(width, height) before show())"));
+	}
 	if pixels.len() < width * height {
 		return Err(format!("paint: {width}×{height} needs {} pixels, got {}", width * height, pixels.len()));
 	}
