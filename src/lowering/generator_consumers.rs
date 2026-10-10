@@ -8,7 +8,7 @@
 use super::words::OF_WORD;
 use crate::generator_objects::{advanced_variables, generator_call, ITER_WORD};
 use crate::generators::{is_statement_list, yielded_value, Generator, NAME_SEPARATOR};
-use super::nodes::{assign, call, int, statement_list, symbol};
+use super::nodes::{assign, block, call, int, statement_list, symbol};
 use crate::library_words::substitute;
 use crate::node::{Bracket, Node, Separator};
 use crate::operators::Op;
@@ -191,7 +191,7 @@ impl Consumers<'_> {
 			values.push(value);
 		}
 		body.extend(template(COLLECTED, &[("OUT", &out), ("VALUE", &yielded_value(values))]));
-		before.push(while_do(condition, statement_list(body, Bracket::Curly)));
+		before.push(while_do(condition, block(body)));
 		match word.as_str() {
 			TAKE_WORD | ZIP_WORD | LIST_WORD => out,
 			_ => call(&word, vec![out]),

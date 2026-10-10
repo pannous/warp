@@ -49,6 +49,39 @@ pub(crate) fn statement_list(statements: Vec<Node>, bracket: Bracket) -> Node {
 	Node::List(statements, bracket, Separator::Semicolon)
 }
 
+/// `{a; b}`
+pub(crate) fn block(statements: Vec<Node>) -> Node {
+	statement_list(statements, Bracket::Curly)
+}
+
+pub(crate) fn is_block(node: &Node) -> bool {
+	matches!(node.drop_meta(), Node::List(_, Bracket::Curly, _))
+}
+
+/// `if condition then body`
+pub(crate) fn if_then(condition: Node, body: Node) -> Node {
+	key(key(Node::Empty, Op::If, condition), Op::Then, body)
+}
+
+pub(crate) fn if_then_else(condition: Node, body: Node, otherwise: Node) -> Node {
+	key(if_then(condition, body), Op::Else, otherwise)
+}
+
+/// `a: 1`
+pub(crate) fn is_colon_pair(node: &Node) -> bool {
+	matches!(node.drop_meta(), Node::Key(_, Op::Colon, _))
+}
+
+/// `=`, `:=` and the compound assignments `+=` …: the operators binding a name
+pub(crate) fn is_binding(op: &Op) -> bool {
+	matches!(op, Op::Assign | Op::Define) || op.is_compound_assign()
+}
+
+/// `def`, `fun`, `fn` …
+pub(crate) fn is_function_keyword(node: &Node) -> bool {
+	node.symbol_name().is_some_and(crate::operators::is_function_keyword)
+}
+
 /// `int`, `float`, `text`, …: a word naming a type
 pub(crate) fn is_type_word(node: &Node) -> bool {
 	node.symbol_name().is_some_and(|word| crate::analyzer::type_word_kind(word).is_some())

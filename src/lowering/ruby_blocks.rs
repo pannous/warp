@@ -6,7 +6,7 @@
 //! Swift's trailing closure, card web-components): `Card("Hi") { p:"text" }` passes the children, `apply(3) { it*2 }`
 //! the function.
 
-use super::nodes::key;
+use super::nodes::{is_block, key};
 use crate::node::{symbol, Bracket, Node, Separator};
 use crate::operators::Op;
 use std::collections::{HashMap, HashSet};
@@ -89,9 +89,6 @@ fn parameter_count(node: &Node) -> Option<(String, usize)> {
 	(items.len() > 1).then(|| (name.clone(), items.len() - 1))
 }
 
-fn is_block(node: &Node) -> bool {
-	matches!(node.drop_meta(), Node::List(_, Bracket::Curly, _))
-}
 
 /// `f`, `f(a)` or `f a`: the function and its arguments
 fn call_parts(node: &Node, takers: &HashMap<String, BlockTaker>) -> Option<(String, Vec<Node>)> {
