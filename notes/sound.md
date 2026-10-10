@@ -85,8 +85,9 @@ The words above are layer 1, the toy layer. Each layer below keeps the ones abov
    In the Playground too (card playground-go): each Worker keeps its voice's end on a clock the page and the Workers
    share (host-tasks.js voicePlaced, performance.timeOrigin + now), a task Worker starts from its starter's, and the
    page plays each sound at its `at` (playground.js playSound). A task's sounds reach the page only once the program's
-   Worker is back in its event loop (after `await`), so a start already past plays at once. LIMIT: a task's sounds
-   in the browser stay out of the program's render_sound (they go to the task Worker's own holder; card playground-drops).
+   Worker is back in its event loop (after `await`), so a start already past plays at once. A task's sounds go back
+   with its result to the starter's run (host-tasks.js withTaskSounds), each at its place on its voice
+   (voiceSounded), and render_sound mixes them as natively (host-files.js mixed; card playground-drops).
    Still to build:
    Expected: a shared audio clock, sample-accurate scheduling (`at 2 beats play C4`), ramping a handle's gain.
 2. Note names built (2026-10-10): parsed, not a table: a letter A–G, `#`/`♯` or `b`/`♭`, an octave 0–9 is its
