@@ -149,8 +149,9 @@ Left (each changes behaviour or needs care):
   the tail with a custom List or Key arm in between or a guard; folding those in needs a case-by-case look.
 - statements_of (class_methods, event_signals, late_binding), statements (component_worlds, test_blocks),
   is_statement_list (generators, result_word, variable_signals), is_return (closures, generators,
-  type_name_matching), loop_variable(s) (library_words, run_time_blocks, signal_values, for_loop): same name,
-  different bracket/separator rules each, so one shared version changes which forms match.
+  type_name_matching): same name, different bracket/separator rules each, so one shared version changes which forms
+  match. The `for v in …` variable is one nodes::for_in_variable (run_time_blocks, signal_values with its five-word
+  form, for_loop); library_words keeps its own (`for each v in` too, any word's name).
 - soft_keywords::parameter_name accepts only `:` / `=` keys and does not recurse, unlike nodes::parameter_name;
   go_blocks / named_arguments / parameter_shapes have their own parameter_name returning String or Node.
 - class_methods.rs (~2240 lines): operators on instances and specialized calls moved to class_methods/operators.rs
