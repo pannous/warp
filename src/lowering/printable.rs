@@ -13,8 +13,6 @@ use std::collections::HashSet;
 
 const TEXT_OPERATION: &str = "text";
 const ITERATE_OPERATION: &str = "iterate";
-/// The words whose call or cast gives a value's text
-const TEXT_WORDS: [&str; 4] = ["text", "string", "str", "String"];
 const PRINT_WORD: &str = "print";
 
 pub fn lower(node: Node) -> Node {
@@ -115,7 +113,7 @@ fn is_statements(node: &Node) -> bool {
 }
 
 pub(crate) fn is_text_word(node: &Node) -> bool {
-	matches!(node.drop_meta(), Node::Symbol(word) if TEXT_WORDS.contains(&word.as_str()))
+	matches!(node.drop_meta(), Node::Symbol(word) if crate::type_tests::is_text_type_word(word))
 }
 
 fn declared_types(node: &Node) -> HashSet<String> {

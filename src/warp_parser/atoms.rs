@@ -801,6 +801,11 @@ impl WarpParser {
 	/// `class circle{pi = 3}`, `class C{pi:int}`: a named number declared in a type body names the type's own field, which
 	/// shadows nothing outside; the type's methods read the field
 	fn names_field(&mut self, symbol: &str, constant: &Node) -> bool {
+		// `{empty: yes}`, `class Cell{empty: bool}`: a key named like ø is a name (card object-empty-field)
+		let is_word = symbol.chars().all(char::is_alphabetic);
+		if matches!(constant, Node::Empty) && is_word && self.type_annotation_follows() && self.peek_char(1) != ':' {
+			return true;
+		}
 		if !matches!(constant, Node::Number(_)) {
 			return false;
 		}

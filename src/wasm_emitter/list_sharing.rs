@@ -11,9 +11,8 @@ use std::collections::{BTreeMap, HashMap, HashSet};
 use super::map_backend::is_update;
 use crate::context::UserFunctionDef;
 
-/// Words that read a list without holding on to it
-const READING_WORDS: [&str; 15] = ["count", "len", "size", "length", "print", "put", "string", "text", "type", "has", "contains",
-	"join", "sum", crate::library_words::LIST_SUM, super::list_abi::RETURN];
+/// Words that read a list without holding on to it, besides those reading any collection (reads_collection)
+const LIST_READING_WORDS: [&str; 4] = ["join", "sum", crate::library_words::LIST_SUM, super::list_abi::RETURN];
 
 /// The variables `program` hands on as a whole Node: an argument of a function that changes that parameter (or of an
 /// imported one that `changes_arguments` may), an item of a list or map, a field value (not the program's final
@@ -102,7 +101,7 @@ pub(super) fn changes_in_place(value: &Node) -> bool {
 }
 
 fn is_reading(word: &Node) -> bool {
-	matches!(word.drop_meta(), Node::Symbol(word) if READING_WORDS.contains(&word.as_str()))
+	matches!(word.drop_meta(), Node::Symbol(word) if super::reads_collection(word) || LIST_READING_WORDS.contains(&word.as_str()))
 }
 
 /// Does the function change the list its parameter `index` holds: an item set, an append, a method that changes it

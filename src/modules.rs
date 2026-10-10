@@ -17,6 +17,11 @@ pub const MODULE_EXTENSIONS: [&str; 2] = ["wasp", "warp"];
 pub(crate) const USE_KEYWORDS: [&str; 3] = ["use", "require", "import"];
 /// `include x`: the whole file, spliced in place
 const INCLUDE_KEYWORD: &str = "include";
+
+/// `use x`, `require x`, `import x`, `include x`: a statement that brings in a module, the one list every pass asks
+pub(crate) fn is_import_keyword(word: &str) -> bool {
+	USE_KEYWORDS.contains(&word) || word == INCLUDE_KEYWORD
+}
 const USE_KEYWORD: &str = "use";
 /// `from list import zip, unique`: only those words of the module
 const IMPORT_KEYWORD: &str = "import";
@@ -1458,7 +1463,7 @@ fn leftmost_symbol(node: &Node) -> Option<String> {
 
 /// Words that bind the names after them: `fun f(x)`, `for i in`, `import f from`, `global x`
 fn binds_names(keyword: &str) -> bool {
-	is_function_keyword(keyword) || is_declaration_keyword(keyword) || matches!(keyword, "for" | "require" | "include")
+	is_function_keyword(keyword) || is_declaration_keyword(keyword) || is_import_keyword(keyword) || keyword == crate::lowering::words::FOR_WORD
 }
 
 /// The signature part of a definition: `f(x)` of `f(x): body` and of `fun f(x) {body}`

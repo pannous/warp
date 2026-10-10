@@ -10,6 +10,7 @@ use crate::extensions::reals::{Exact, Generator, Monomial, Rational, Real};
 use crate::compile_time::{answer_of, fail, Stop};
 use crate::node::{error, Node, Separator};
 use crate::operators::Op;
+use crate::type_tests::{is_float_type_word, is_text_type_word};
 use num_bigint::BigInt;
 use num_traits::ToPrimitive;
 use std::cmp::Ordering;
@@ -18,8 +19,6 @@ use std::collections::HashMap;
 pub const FUNCTIONS: [&str; 6] = ["sin", "cos", "tan", "ln", "exp", STANDARD_PART];
 /// st(x): the standard part of a finite hyperreal (wiki/hyperreals.md)
 const STANDARD_PART: &str = "st";
-/// `x as string`, `str(x)`: the text form of an exact value
-const TEXT_TYPES: [&str; 4] = ["string", "str", "text", "String"];
 
 /// `nearest(x, rational, limit, within: ε)` of an exact x is computed here, exactly (Exact::nearest_fraction); of a
 /// float at run time by lib/prelude.warp
@@ -235,7 +234,7 @@ fn list(items: &[Node], separator: &Separator, scope: &mut Scope) -> Evaluated {
 			let value = evaluate(value, scope)?;
 			nearest(value, options, scope)
 		}
-		[head, argument] if TEXT_TYPES.contains(&head.name().as_str()) && !scope.contains_key(&head.name()) => {
+		[head, argument] if is_text_type_word(&head.name()) && !scope.contains_key(&head.name()) => {
 			convert(evaluate(argument, scope)?, &head.name())
 		}
 		_ if matches!(separator, Separator::Semicolon | Separator::Newline) => {
@@ -313,13 +312,13 @@ fn exact_rational(value: Value) -> Result<Rational, Stop> {
 	}
 }
 
-/// `x as float` / `as fast` / `as f64`: the f64 nearest to the exact value; `as real` / `as exact` keep it
+/// `x as float` / `as double` / every float alias: the f64 nearest to the exact value; `as real` / `as exact` keep it
 fn convert(value: Value, target: &str) -> Evaluated {
 	match (value, target) {
-		(value, text) if TEXT_TYPES.contains(&text) => Ok(Value::Text(text_of(value)?)),
-		(Value::Real(real), "float" | "fast" | "f64" | "double") => Ok(Value::Float(finite_f64(&real)?)),
+		(value, text) if is_text_type_word(text) => Ok(Value::Text(text_of(value)?)),
+		(Value::Real(real), float) if is_float_type_word(float) => Ok(Value::Float(finite_f64(&real)?)),
 		(value @ Value::Real(_), "real" | "exact") => Ok(value),
-		(value @ Value::Float(_), "float" | "fast" | "f64" | "double") => Ok(value),
+		(value @ Value::Float(_), float) if is_float_type_word(float) => Ok(value),
 		_ => Err(Stop::Unsupported),
 	}
 }

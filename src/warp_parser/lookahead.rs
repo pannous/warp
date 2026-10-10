@@ -378,7 +378,9 @@ impl WarpParser {
 			return false; // `and f(3)`, `and x`: an operand
 		}
 		let next = self.peek_char(argument);
-		(next.is_alphanumeric() || matches!(next, '"' | '\'' | '[' | '{')) && !CONTINUING_WORDS.contains(&self.word_at(argument).as_str())
+		let argument_word = self.word_at(argument);
+		let joins_operands = CONTINUING_WORDS.contains(&argument_word.as_str()) || INFIX_WORDS.contains(&argument_word.as_str());
+		(next.is_alphanumeric() || matches!(next, '"' | '\'' | '[' | '{')) && !joins_operands
 	}
 
 	/// The word that starts the fallback of `try`: `else`, or its classical synonyms `catch` and Python's `except` (P60),

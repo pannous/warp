@@ -394,8 +394,7 @@ fn collect_list_variables(node: &Node, functions: &HashSet<String>, assigned: &m
 					Node::List(items, Bracket::Square, _) => !items.iter().any(is_colon_pair),
 					_ if is_range(value) => true,
 					_ if element_wise_parts(value).is_some() => true,
-					_ if crate::analyzer::typed_array_value(value).is_some() => true,
-					Node::Key(element, Op::Hash, one_based) => crate::analyzer::zero_filled_subscript(element, one_based, &variables).is_some(),
+					_ if crate::analyzer::typed_array_value(value, &variables).is_some() => true,
 					Node::Empty => appended.contains(name),
 					// `xs = xs + [i]`
 					Node::Key(left, Op::Add, right) => matches!(left.drop_meta(), Node::Symbol(same) if same == name) && matches!(right.drop_meta(), Node::List(_, Bracket::Square, _)),
