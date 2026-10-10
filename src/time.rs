@@ -8,7 +8,6 @@ pub use calendar::{with_rules, Disambiguation, Duration, Overflow, Time, TzRules
 use crate::extensions::numbers::Number;
 use crate::node::{error, Node, Separator};
 use crate::operators::Op;
-use std::cmp::Ordering;
 use std::collections::HashMap;
 
 /// A date or time literal as written; validated when evaluated, like `date(2024,2,30)`
@@ -265,17 +264,6 @@ fn binary(left: &Node, op: Op, right: &Node, scope: &mut Scope) -> Result<Value,
 	}
 }
 
-fn compared(op: Op, ordering: Ordering) -> bool {
-	match op {
-		Op::Eq => ordering == Ordering::Equal,
-		Op::Ne => ordering != Ordering::Equal,
-		Op::Lt => ordering == Ordering::Less,
-		Op::Le => ordering != Ordering::Greater,
-		Op::Gt => ordering == Ordering::Greater,
-		_ => ordering != Ordering::Less, // Ge
-	}
-}
-
 fn apply(left: Value, op: Op, right: Value) -> Result<Value, String> {
 	match (left, op, right) {
 		(Value::Time(time), Op::Add, Value::Duration(duration)) | (Value::Duration(duration), Op::Add, Value::Time(time)) => {
@@ -288,13 +276,13 @@ fn apply(left: Value, op: Op, right: Value) -> Result<Value, String> {
 			Ok(days) => Value::Int(days),
 			Err(duration) => Value::Duration(duration),
 		}),
-		(Value::Time(a), op, Value::Time(b)) if op.is_comparison() => Ok(Value::Bool(compared(op, a.compare(b)?))),
+		(Value::Time(a), op, Value::Time(b)) if op.is_comparison() => Ok(Value::Bool(op.holds(a.compare(b)?))),
 		(Value::Duration(a), Op::Add, Value::Duration(b)) => Ok(Value::Duration(a.plus(b))),
 		(Value::Duration(a), Op::Sub, Value::Duration(b)) => Ok(Value::Duration(a.plus(b.times(-1)))),
 		(Value::Duration(duration), Op::Mul, Value::Int(n)) | (Value::Int(n), Op::Mul, Value::Duration(duration)) => Ok(Value::Duration(duration.times(n))),
 		(Value::Duration(a), Op::Eq, Value::Duration(b)) => a.equals(b).map(Value::Bool),
 		(Value::Duration(a), Op::Ne, Value::Duration(b)) => a.equals(b).map(|equal| Value::Bool(!equal)),
-		(Value::Int(a), op, Value::Int(b)) if op.is_comparison() => Ok(Value::Bool(compared(op, a.cmp(&b)))),
+		(Value::Int(a), op, Value::Int(b)) if op.is_comparison() => Ok(Value::Bool(op.holds(a.cmp(&b)))),
 		(Value::Int(a), Op::Add, Value::Int(b)) => Ok(Value::Int(a + b)),
 		(Value::Int(a), Op::Sub, Value::Int(b)) => Ok(Value::Int(a - b)),
 		(Value::Int(a), Op::Mul, Value::Int(b)) => Ok(Value::Int(a * b)),
