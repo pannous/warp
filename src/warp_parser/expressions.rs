@@ -132,13 +132,13 @@ impl WarpParser {
 		if !self.matches_keyword(AWAIT_KEYWORD) {
 			return None;
 		}
-		let before_keyword = (self.pos, self.line_nr, self.column, self.current_line.clone());
+		let before_keyword = self.mark();
 		self.advance_by(AWAIT_KEYWORD.len());
 		let called = self.current_char() == '(';
 		self.skip_spaces();
 		let names_a_variable = self.peek_operator().is_some_and(|(op, _)| matches!(op, Op::Assign | Op::Define | Op::Colon) || op.is_compound_assign());
 		if called || names_a_variable || matches!(self.current_char(), '}' | ';' | '\n' | '\r' | '\0' | ')') {
-			(self.pos, self.line_nr, self.column, self.current_line) = before_keyword;
+			self.rewind(before_keyword);
 			return None;
 		}
 		// `await all jobs` (P47): every task of a list
@@ -157,18 +157,18 @@ impl WarpParser {
 	/// of the event and its data bind like the operand of a unary minus; the same Space list a statement `emit ask` is
 	pub(super) fn try_parse_emit(&mut self) -> Option<Node> {
 		let keyword = EMIT_KEYWORDS.into_iter().find(|keyword| self.matches_keyword(keyword))?;
-		let before_keyword = (self.pos, self.line_nr, self.column, self.current_line.clone());
+		let before_keyword = self.mark();
 		self.advance_by(keyword.len());
 		self.skip_spaces();
 		if !self.is_identifier_start(0) || self.peek_operator().is_some() {
-			(self.pos, self.line_nr, self.column, self.current_line) = before_keyword;
+			self.rewind(before_keyword);
 			return None;
 		}
 		let mut phrase = vec![Symbol(keyword.to_string())];
 		while self.is_identifier_start(0) || (phrase.len() > 1 && matches!(self.current_char(), '0'..='9' | '"' | '\'')) {
 			// `send alarm{} to "x"`: a word operator takes the whole phrase, as without this
 			if self.peek_operator().is_some() {
-				(self.pos, self.line_nr, self.column, self.current_line) = before_keyword;
+				self.rewind(before_keyword);
 				return None;
 			}
 			phrase.push(self.parse_expr(AWAIT_OPERAND_BP));
@@ -182,7 +182,7 @@ impl WarpParser {
 		if !self.matches_keyword(RETURN_KEYWORD) {
 			return None;
 		}
-		let before_keyword = (self.pos, self.line_nr, self.column, self.current_line.clone());
+		let before_keyword = self.mark();
 		self.advance_by(RETURN_KEYWORD.len());
 		self.skip_spaces();
 		let names_a_variable = self.peek_operator().is_some_and(|(op, _)| matches!(op, Op::Assign | Op::Define | Op::Colon) || op.is_compound_assign());
@@ -190,7 +190,7 @@ impl WarpParser {
 		let value = if matches!(self.current_char(), '}' | ';' | '\n' | '\r' | '\0') && !names_a_variable {
 			Node::Empty
 		} else if !self.at_body_start() || names_a_variable {
-			(self.pos, self.line_nr, self.column, self.current_line) = before_keyword; // `return := …` as a name
+			self.rewind(before_keyword); // `return := …` as a name
 			return None;
 		} else {
 			// the binding of an assigned value: `return square n` returns the braceless call, like `x = square n`; then
@@ -207,12 +207,12 @@ impl WarpParser {
 		if self.options.data_mode || !self.matches_keyword(DATA_KEYWORD) || self.peek_char(DATA_KEYWORD.len()) != ' ' {
 			return None;
 		}
-		let before_keyword = (self.pos, self.line_nr, self.column, self.current_line.clone());
+		let before_keyword = self.mark();
 		self.advance_by(DATA_KEYWORD.len());
 		self.skip_spaces();
 		let ends = matches!(self.current_char(), '}' | ']' | ')' | ';' | ',' | '\n' | '\r' | '\0');
 		if ends || self.peek_operator().is_some() || self.matches_keyword(CLASS_KEYWORD) {
-			(self.pos, self.line_nr, self.column, self.current_line) = before_keyword;
+			self.rewind(before_keyword);
 			return None;
 		}
 		let parsed = self.parse_expr(Op::Assign.binding_power().1);

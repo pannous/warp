@@ -418,14 +418,12 @@ impl WarpParser {
 		// Not in data mode yet: the data path round-trips source text and has no date serialization
 		let literal_len = if self.options.data_mode { 0 } else { crate::time::literal_len(&self.chars[self.pos..]) };
 		if literal_len > 0 {
-			let literal: String = self.chars[self.pos..self.pos + literal_len].iter().collect();
-			self.advance_by(literal_len);
+			let literal = self.take_chars(literal_len);
 			return Node::data(crate::time::TimeLiteral(literal));
 		}
 		let version_len = crate::versions::literal_len(&self.chars[self.pos..]);
 		if version_len > 0 {
-			let literal: String = self.chars[self.pos..self.pos + version_len].iter().collect();
-			self.advance_by(version_len);
+			let literal = self.take_chars(version_len);
 			return Node::Symbol(literal);
 		}
 		let mut num_str = String::new();
