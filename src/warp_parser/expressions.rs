@@ -507,7 +507,11 @@ impl WarpParser {
 			}
 
 			let rhs = if may_pipe { self.pipe_operand(rhs, op_line, op_column) } else { rhs };
-			let rhs = if op == Op::Eq && written != IS_WORD { crate::type_tests::equality_operand(&lhs, rhs) } else { rhs };
+			// a type word compares as its type on either side of == and != (`int != integer` is no)
+			let rhs = if op.is_equality() && written != IS_WORD { crate::type_tests::equality_operand(&lhs, rhs) } else { rhs };
+			if op.is_equality() && written != IS_WORD {
+				lhs = crate::type_tests::equality_operand(&rhs, lhs);
+			}
 			if op == Op::Eq && written == IS_WORD {
 				lhs = crate::type_tests::with_compared_text(lhs, rhs_written.trim());
 			}

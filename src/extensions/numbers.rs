@@ -6,6 +6,62 @@ use super::reals::{Exact, Rational, Real};
 use num_integer::Integer;
 use num_traits::{One, Pow, Signed, ToPrimitive, Zero};
 
+/// How a float prints, at compile time (float_text below) and at run time (src/wasm_emitter/float_text.rs) alike
+pub const SIGNIFICANT_DIGITS: i32 = 15;
+/// 10^(SIGNIFICANT_DIGITS-1): a mantissa in [1, 10) times this is an integer with SIGNIFICANT_DIGITS digits
+pub const MANTISSA_SCALE: f64 = 1e14;
+pub const MANTISSA_OVERFLOW: i64 = 1_000_000_000_000_000;
+/// Positional notation for decimal exponents in [SMALLEST_POSITIONAL, LARGEST_POSITIONAL)
+pub const SMALLEST_POSITIONAL: i32 = -5;
+pub const LARGEST_POSITIONAL: i32 = 15;
+
+/// The text of a float, step for step as the run-time float_text writes it: at most 15 significant digits
+/// (`0.1+0.2` is `0.3`, as `%.15g`), positional from 1e-5 up to 1e15, else `1.5e20` / `1e-7`
+pub fn float_text(x: f64) -> String {
+	if x.is_nan() {
+		return "NaN".into();
+	}
+	if x.is_infinite() {
+		return if x > 0.0 { "∞" } else { "-∞" }.into();
+	}
+	if x == 0.0 {
+		return "0".into();
+	}
+	let (mut mantissa, mut exponent) = (x.abs(), 0);
+	while mantissa >= 10.0 {
+		mantissa /= 10.0;
+		exponent += 1;
+	}
+	while mantissa < 1.0 {
+		mantissa *= 10.0;
+		exponent -= 1;
+	}
+	let mut whole = (mantissa * MANTISSA_SCALE).round_ties_even() as i64;
+	if whole >= MANTISSA_OVERFLOW {
+		whole /= 10;
+		exponent += 1;
+	}
+	while whole % 10 == 0 && whole >= 10 {
+		whole /= 10;
+	}
+	let digits = whole.to_string();
+	let count = digits.len() as i32;
+	let sign = if x < 0.0 { "-" } else { "" };
+	let zeros = |how_many: i32| "0".repeat(how_many.max(0) as usize);
+	let placed = if !(SMALLEST_POSITIONAL..LARGEST_POSITIONAL).contains(&exponent) {
+		let rest = if count > 1 { format!(".{}", &digits[1..]) } else { String::new() };
+		format!("{}{rest}e{exponent}", &digits[..1])
+	} else if exponent >= count - 1 {
+		digits.clone() + &zeros(exponent - count + 1)
+	} else if exponent >= 0 {
+		let (before, after) = digits.split_at(exponent as usize + 1);
+		format!("{before}.{after}")
+	} else {
+		format!("0.{}{digits}", zeros(-1 - exponent))
+	};
+	format!("{sign}{placed}")
+}
+
 fn deserialize_leaked_real<'de, D: serde::Deserializer<'de>>(deserializer: D) -> Result<&'static Real, D::Error> {
 	Real::deserialize(deserializer).map(|real| &*Box::leak(Box::new(real)))
 }
@@ -71,6 +127,13 @@ impl Number {
 			Number::Nan => f64::NAN,
 			Number::Inf => f64::INFINITY,
 			Number::NegInf => f64::NEG_INFINITY,
+		}
+	}
+	/// The number's text, as `"a" + x`, `str(x)` and print show it: a float as float_text writes it, the rest as it prints
+	pub fn text(&self) -> String {
+		match self {
+			Number::Float(f) => float_text(*f),
+			number => number.to_string(),
 		}
 	}
 }

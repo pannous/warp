@@ -12,8 +12,8 @@
 //! which the runtime calls at the program's check points (signal_poll at main's start and end and each loop start,
 //! sleep, the end of the run): the watched values are compared with those seen last, and the listener runs on a change.
 
-use super::words::{COUNT_WORD, FOR_WORD, FROM_WORD, GLOBAL_WORD, IN_WORD, OF_WORD};
-use super::nodes::{block, call, children_rewritten, if_then, key};
+use super::words::{COUNT_WORD, FROM_WORD, GLOBAL_WORD, OF_WORD};
+use super::nodes::{block, call, children_rewritten, for_in_variable, if_then, key};
 use crate::declarations::word;
 use crate::node::{symbol, Bracket, Node, Separator};
 use crate::operators::Op;
@@ -650,10 +650,7 @@ fn main_list_literals(program: &Node) -> Vec<(String, Node)> {
 
 /// `for s in xs {…}`: the loop variable s
 fn loop_variable(items: &[Node]) -> Option<String> {
-	match items {
-		[keyword, variable, in_word, _, _] if word(keyword) == FOR_WORD && word(in_word) == IN_WORD => variable.symbol_name().map(String::from),
-		_ => None,
-	}
+	if items.len() == 5 { for_in_variable(items) } else { None }
 }
 
 /// Each `for s in xs {…}` in the body: the loop variable and the name of the list
