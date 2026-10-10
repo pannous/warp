@@ -1,8 +1,7 @@
 use warp::Node::*;
-use warp::{Bracket, Node, Op};
+use warp::{Bracket, Node};
 use warp::run::wasmtime_runner::run;
 use warp::wasm_emitter::{eval, WasmGcEmitter};
-use warp::StringExtensions;
 use warp::write_wasm;
 use crate::{is, eq};
 
@@ -17,7 +16,6 @@ fn normalize_blocks(node: &Node) -> Node {
 	}
 }
 use warp::type_kinds::NodeKind;
-use warp::Number::Int;
 
 #[test]
 fn test_wasm_roundtrip() {
@@ -48,15 +46,9 @@ fn test_wasm_roundtrip() {
 
 #[test]
 fn test_wasm_roundtrip_via_is() {
-	// Parser treats html{test=1} as Key("html", {test=1})
-	// WASM roundtrip now preserves Op: outer uses Colon, inner uses Assign
-	let x = Key(Box::new(Symbol("test".s())), Op::Assign, Box::new(Number(Int(1))));
-	let _ok: Node = eval("html{test=1}");
-	// After single-item block unwrapping, body becomes just the Key
-	is!(
-		"html{test=1}",
-		Key(Box::new(Symbol("html".s())), Op::Colon, Box::new(x))
-	);
+	// Parser treats html{test=1} as Key("html", {test=1}); every `=` in a tag is a value entry (user, decision
+	// tag-assign), so it is html{test:1}
+	is!("html{test=1}", eval("html{test:1}"));
 }
 
 #[test]
