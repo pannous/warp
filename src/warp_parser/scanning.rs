@@ -95,6 +95,24 @@ impl WarpParser {
 		self.pos += 1;
 	}
 
+	pub(super) fn advance_by(&mut self, count: usize) {
+		for _ in 0..count {
+			self.advance();
+		}
+	}
+
+	/// The characters from here on that `keep`, consumed
+	pub(super) fn take_while_char(&mut self, keep: impl Fn(char) -> bool) -> String {
+		let length = self.chars[self.pos..].iter().take_while(|&&ch| keep(ch)).count();
+		self.take_chars(length)
+	}
+
+	/// `skip` characters, then a name given to `build`; a missing name is the error
+	pub(super) fn symbol_after(&mut self, skip: usize, build: impl FnOnce(String) -> Node) -> Node {
+		self.advance_by(skip);
+		self.parse_symbol().map_or_else(|message| error(&message), build)
+	}
+
 	/// The operand after a single `|`: a bare word or word operator is marked as a possible pipe stage, any other operand gets the hint
 	/// toward `or`
 	pub(super) fn pipe_operand(&self, operand: Node, line: usize, column: usize) -> Node {
@@ -144,9 +162,9 @@ impl WarpParser {
 		self.current_char() == '/' && self.peek_char(1) == '/' && divisor_follows && self.follows_operand_on_its_line()
 	}
 
-	/// `.+ .- .* ./` at the cursor: the element-wise form of the arithmetic operator
+	/// `.+ .- .* ./` at the cursor: the element-wise form of the arithmetic operator (`./mozart.mp3` is a path)
 	pub(super) fn element_wise_operator(&self) -> Option<Op> {
-		if self.current_char() != '.' {
+		if self.current_char() != '.' || self.starts_path_literal() {
 			return None;
 		}
 		ELEMENT_WISE_OPERATORS.iter().find(|(glyph, _)| *glyph == self.peek_char(1)).map(|(_, op)| *op)

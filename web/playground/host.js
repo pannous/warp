@@ -376,18 +376,25 @@ function stopListening(holder) {
 	holder.stopTimers?.();
 }
 
+// JSPI (WebAssembly.Suspending and promising; Safari has none): an awaited run's main waits for the promise a foreign
+// call gives, suspended until it settles (card jspi-page). Its outcome is then a promise too
+const JSPI = typeof WebAssembly.Suspending === "function" && typeof WebAssembly.promising === "function";
+// next(value), once value settles when it is a promise
+const whenSettled = (value, next) => value instanceof Promise ? value.then(next) : next(value);
+
 // run a compiled program: the outcome src/web.rs run_outcome reads
-function runProgram(bytes, hooks) {
-	const holder = instantiateProgram(bytes, hooks);
+function runProgram(bytes, hooks, awaited = false) {
+	const holder = instantiateProgram(bytes, hooks, undefined, awaited && JSPI);
 	return holder.failure ? holder : runMain(holder, hooks);
 }
 
 // the program's instance, its main not run yet (a built site first loads the module of the route it shows, site.js);
 // { failure } when it cannot be instantiated
-// `compiled`: the module compiled already, where a host compiles none from bytes (a Cloudflare Worker, cloud-worker.js)
-function instantiateProgram(bytes, hooks, compiled) {
+// `compiled`: the module compiled already, where a host compiles none from bytes (a Cloudflare Worker, cloud-worker.js);
+// `awaited`: main may wait for promises (JSPI)
+function instantiateProgram(bytes, hooks, compiled, awaited = false) {
 	// the runtime warnings go back to the compiler, which reports them (src/web.rs); the page's path is the page's own
-	const holder = { warnings: [], pagePath: hooks.pagePath?.() };
+	const holder = { warnings: [], pagePath: hooks.pagePath?.(), awaited };
 	try {
 		const module = compiled ?? new WebAssembly.Module(bytes);
 		holder.run = { module, bytes };
@@ -403,13 +410,18 @@ function instantiateProgram(bytes, hooks, compiled) {
 // main of an instantiated program, and what it left
 function runMain(holder, hooks) {
 	const { exports } = holder;
-	const outcome = outcomeOf(holder, hooks, () => withExitHandler(holder, exports, () => exports.main()));
-	const events = pageEvents(exports);
-	// a program with routes stays for its links (lowering/routes.rs page·routes)
-	if ((events.length > 0 || holder.timers || holder.fetches || exports[PAGE_ROUTES_EXPORT] || exports[PAGE_SUBMITTED_EXPORT]) && outcome.result) hooks.listen?.(holder, events);
-	// a run without page events (lib/markup.warp rendering the page's HTML, src/markup.rs) keeps the page's run
-	if (events.length > 0 && outcome.result) listeningRun = holder;
-	return outcome;
+	// a foreign call's promise suspends main only while it runs: a page event's handler cannot wait (host-foreign.js)
+	const main = holder.awaited ? WebAssembly.promising(exports.main) : exports.main;
+	holder.waiting = holder.awaited;
+	return whenSettled(outcomeOf(holder, hooks, () => withExitHandler(holder, exports, () => main())), outcome => {
+		holder.waiting = false;
+		const events = pageEvents(exports);
+		// a program with routes stays for its links (lowering/routes.rs page·routes)
+		if ((events.length > 0 || holder.timers || holder.fetches || exports[PAGE_ROUTES_EXPORT] || exports[PAGE_SUBMITTED_EXPORT]) && outcome.result) hooks.listen?.(holder, events);
+		// a run without page events (lib/markup.warp rendering the page's HTML, src/markup.rs) keeps the page's run
+		if (events.length > 0 && outcome.result) listeningRun = holder;
+		return outcome;
+	});
 }
 
 // the last run that handles page events, for the compiler's warp_host.page_event (src/headless.rs in the browser tests)
@@ -446,13 +458,17 @@ function withExitHandler(holder, exports, call) {
 		}
 	};
 	const runHandler = () => (handler.length ? withCode() : handler());
+	const failed = trap => {
+		if (holder.exitCode !== undefined) runHandler();
+		throw trap;
+	};
 	let result;
 	try {
 		result = call();
 	} catch (trap) {
-		if (holder.exitCode !== undefined) runHandler();
-		throw trap;
+		failed(trap);
 	}
+	if (result instanceof Promise) return result.then(value => (runHandler(), value), failed);
 	runHandler();
 	return result;
 }
@@ -460,18 +476,25 @@ function withExitHandler(holder, exports, call) {
 // the outcome of a call into a run's instance (main, or a page event's handler), as src/web.rs run_outcome reads it
 function outcomeOf(holder, hooks, call) {
 	const { warnings, exports } = holder;
-	try {
-		const result = call();
+	const finished = result => {
 		const unread = eachHostPart("finished", holder, hooks).find(Boolean);
 		if (unread) return { failure: unread, warnings };
 		return { result: readResult(exports, result), html: hooks.renders ? renderedHtml(exports, result) : undefined, warnings };
-	} catch (trap) {
+	};
+	const failed = trap => {
 		eachHostPart("ended", holder);
 		if (holder.exitCode !== undefined) return { result: { kind: "0", data: null, chain: [] }, warnings };
 		if (holder.blockError !== undefined) return { error: holder.blockError, warnings };
+		if (holder.lastPromised && SUSPENSION_FAILURE.test(trap.message)) return { failure: `${holder.lastPromised}: ${NESTED_PROMISE_REFUSAL}`, warnings };
 		if (!(trap instanceof WebAssembly.RuntimeError || trap instanceof RangeError)) return { failure: String(trap.message ?? trap), warnings };
 		const detail = exports[TRAP_DETAIL_EXPORT]?.value;
 		return { trap: trap.message, trace: trap.stack ?? "", detail: detail ? readNode(exports, detail) : null, warnings };
+	};
+	try {
+		const result = call();
+		return result instanceof Promise ? result.then(finished).catch(failed) : finished(result);
+	} catch (trap) {
+		return failed(trap);
 	}
 }
 

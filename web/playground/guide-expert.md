@@ -78,6 +78,10 @@ A function of a number broadcasts over a list; `map` takes a lambda `x => …`.
 square := it * it; [square [1 2 3], [1 2 3].map(x => x * 2)]
 ```
 
+A heavy map of a linear float array runs on the GPU by itself from 10× its break-even (`GPU_AUTO_MIN_COUNT`), with a
+one-time notice: f32, approximate by design, the error grows with the item count. `@cpu` (on the map, a block or a
+function) keeps it exact in f64, `WARP_GPU=off` a whole run; `@gpu` opts in from the break-even.
+
 ## Objects
 
 Literal objects with dot access and in-place updates.

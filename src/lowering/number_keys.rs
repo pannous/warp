@@ -3,6 +3,8 @@
 //! A number known only at run time keys it too, by its digits: `d[k]` is `d[string(k)]`, and so is a membership test
 //! `k in d`, `d has k`, `d.remove(k)` and `d.get(k)` (lower_key_words, after library_words names them), so a map keyed
 //! by ids stays a hash table.
+//! A map literal with number keys is such a map too (card map-literal): `m = {1: 5}` stores the key "1", so `m[1] = 2`
+//! sets that entry and `m["1"]` reads it.
 
 use super::nodes::call;
 use crate::library_words::{COLLECTION_CONTAINS, COLLECTION_POSITION, MAP_GET_OR, MAP_WITHOUT};
@@ -26,7 +28,9 @@ pub fn lower(node: Node) -> Node {
 	keyed(node, &maps)
 }
 
-/// `collection_contains(d, k)`, `map_without(d, k)` … (KEY_WORDS) of a map `d` that starts as `{}` find the key `string(k)`
+/// `collection_contains(d, k)`, `map_without(d, k)` … (KEY_WORDS) of a map `d` that starts as `{}` find the key
+/// `string(k)`; the number keys of its literal `{1: 5}` become the texts they are found by. Runs after `lower`, which
+/// still sees the number keys that make a literal a map.
 pub fn lower_key_words(node: Node) -> Node {
 	let maps = empty_map_variables(&node);
 	if maps.is_empty() {
@@ -35,20 +39,50 @@ pub fn lower_key_words(node: Node) -> Node {
 	found_by_key(node, &maps)
 }
 
-/// The variables assigned the empty map `{}`, also when declared a map (`m: map<int, int> = {}`, card typed-map)
+/// The variables assigned the empty map `{}` or a literal with number keys `{1: 5}`, also when declared a map
+/// (`m: map<int, int> = {}`, card typed-map)
 fn empty_map_variables(node: &Node) -> HashSet<String> {
 	let mut maps = HashSet::new();
 	node.visit(&mut |part| if let Node::Key(target, Op::Assign, value) = part {
-		let Node::List(items, Bracket::Curly, _) = value.drop_meta() else { return };
-		let name = match target.drop_meta() {
-			Node::Key(name, Op::Colon, declared) if is_map_type(declared) => name.drop_meta(),
-			name => name,
-		};
-		if let (Node::Symbol(name), true) = (name, items.is_empty()) {
-			maps.insert(name.clone());
+		if let (Some(name), true) = (assigned_name(target), is_number_keyed(value)) {
+			maps.insert(name.to_string());
 		}
 	});
 	maps
+}
+
+/// `m` of `m = …` and of `m: map = …`
+fn assigned_name(target: &Node) -> Option<&str> {
+	match target.drop_meta() {
+		Node::Key(name, Op::Colon, declared) if is_map_type(declared) => name.symbol_name(),
+		name => name.symbol_name(),
+	}
+}
+
+/// `{}` or `{1: 5, 2: 6}`: entries only, at least one keyed by a number
+fn is_number_keyed(value: &Node) -> bool {
+	let Node::List(items, Bracket::Curly, _) = value.drop_meta() else { return false };
+	let entry_key = |item: &Node| match item.drop_meta() {
+		Node::Key(key, Op::Colon, _) => Some(key.drop_meta().clone()),
+		_ => None,
+	};
+	let keys: Option<Vec<Node>> = items.iter().map(entry_key).collect();
+	keys.is_some_and(|keys| keys.is_empty() || keys.iter().any(|key| matches!(key, Node::Number(_))))
+}
+
+/// `{1: 5}` → `{"1": 5}`
+fn text_keyed(literal: Node) -> Node {
+	match literal {
+		Node::List(items, Bracket::Curly, separator) => {
+			let entry = |item: Node| match item.drop_meta().clone() {
+				Node::Key(key, Op::Colon, value) => Node::Key(Box::new(key_text(*key)), Op::Colon, value),
+				_ => item,
+			};
+			Node::List(items.into_iter().map(entry).collect(), Bracket::Curly, separator)
+		}
+		Node::Meta { data, node } => Node::Meta { data, node: Box::new(text_keyed(*node)) },
+		other => other,
+	}
 }
 
 /// `map`, `dict`, `map<int, int>` (one symbol, `map of int, int`)
@@ -84,6 +118,9 @@ fn keyed(node: Node, maps: &HashSet<String>) -> Node {
 
 fn found_by_key(node: Node, maps: &HashSet<String>) -> Node {
 	match node {
+		Node::Key(target, Op::Assign, value) if assigned_name(&target).is_some_and(|name| maps.contains(name)) => {
+			Node::Key(target, Op::Assign, Box::new(text_keyed(found_by_key(*value, maps))))
+		}
 		Node::List(mut items, Bracket::Round, separator) if is_key_word_call(&items, maps) => {
 			items[2] = key_text(found_by_key(items[2].clone(), maps));
 			Node::List(items, Bracket::Round, separator)

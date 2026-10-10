@@ -16,7 +16,7 @@ use crate::operators::Op;
 use crate::ruby_blocks::arguments;
 use crate::wasm_emitter::{is_step, split_step};
 use crate::warp_parser::{parse, while_do};
-use std::collections::{BTreeSet, HashMap, HashSet};
+use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 
 /// `iter(count_to(3))` makes the object explicitly
 pub(crate) const ITER_WORD: &str = "iter";
@@ -38,7 +38,7 @@ pub fn lower(node: Node) -> Node {
 	}
 	let node = crate::generator_consumers::lower(node, &generators);
 	let advanced = advanced_variables(&node);
-	let mut classes = HashMap::new();
+	let mut classes = BTreeMap::new();
 	let node = with_objects(node, &generators, &advanced, &mut classes);
 	if classes.is_empty() {
 		return node;
@@ -82,9 +82,9 @@ pub(crate) fn generator_call<'a>(node: &Node, generators: &'a HashMap<String, Ge
 }
 
 /// `v = g(args)` of an advanced v and `iter(g(args))` as the construction of g's object, `next(v)` as `v.next()`
-fn with_objects(node: Node, generators: &HashMap<String, Generator>, advanced: &HashSet<String>, classes: &mut HashMap<String, Node>) -> Node {
+fn with_objects(node: Node, generators: &HashMap<String, Generator>, advanced: &HashSet<String>, classes: &mut BTreeMap<String, Node>) -> Node {
 	let node = node.map_children(|child| with_objects(child, generators, advanced, classes));
-	let constructed = |call: &Node, classes: &mut HashMap<String, Node>| -> Option<Node> {
+	let constructed = |call: &Node, classes: &mut BTreeMap<String, Node>| -> Option<Node> {
 		let (name, generator, arguments) = generator_call(call, generators)?;
 		if !classes.contains_key(name) {
 			classes.insert(name.clone(), generator_class(name, generator)?);

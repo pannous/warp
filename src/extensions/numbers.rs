@@ -341,8 +341,8 @@ impl Neg for Number {
 	}
 }
 
-/// + - * of two numbers: exact for integers and ratios (an integer overflowing i64 becomes a BigInt), f64 for floats
-/// (an infinite or NaN result stays a Float), else mixed
+/// The sum, difference or product of two numbers: exact for integers and ratios (an integer overflowing i64 becomes a
+/// BigInt), f64 for floats (an infinite or NaN result stays a Float), else mixed
 fn arithmetic(a: Number, b: Number, operation: Operation) -> Number {
 	match (a, b) {
 		(Number::Int(n1), Number::Int(n2)) => {

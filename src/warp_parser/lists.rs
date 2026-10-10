@@ -263,85 +263,34 @@ impl WarpParser {
 			return if bracket == Bracket::Curly { Node::List(Vec::new(), bracket, Separator::None) } else { Empty }; // an empty block is a value
 		}
 
+		// only implicit groupings unwrap a single item: explicit brackets like {x} or [x] keep the wrapper
 		if items_with_seps.len() == 1 && bracket == Bracket::None {
-			// Only unwrap single items for implicit groupings
 			return only(items_with_seps).0;
 		}
-
-		// Collect all unique separator precedences (excluding None)
-		let mut precedences: Vec<u8> = items_with_seps
-			.iter()
-			.map(|(_, sep)| sep.precedence())
-			.filter(|&p| p < 255)
-			.collect();
-		precedences.sort();
-		precedences.dedup();
-
-		if precedences.is_empty() {
-			// All items have None separator - return as space-separated list
-			let items: Vec<Node> = items_with_seps.into_iter().map(|(node, _)| node).collect();
-			if items.len() == 1 && bracket == Bracket::None {
-				// Only unwrap single items for implicit groupings
-				return only(items);
-			}
-			return grouped_list(items, bracket, Separator::Space);
-		}
-
-		// Start with the loosest (highest precedence value) separator
-		let max_prec = *precedences.last().unwrap();
-		let split_sep = items_with_seps
-			.iter()
-			.find(|(_, sep)| sep.precedence() == max_prec)
-			.map(|(_, sep)| sep.clone())
-			.unwrap_or(Separator::Space);
-
-		// Split items into groups by this separator
+		// the loosest separator splits first, the groups between split by the tighter ones (None ends the list)
+		let Some(loosest) = items_with_seps.iter().map(|(_, sep)| sep.precedence()).filter(|&precedence| precedence < 255).max() else {
+			return grouped_list(items_with_seps.into_iter().map(|(node, _)| node).collect(), bracket, Separator::Space);
+		};
+		let split_sep = items_with_seps.iter().map(|(_, sep)| sep).find(|sep| sep.precedence() == loosest).cloned().expect("the loosest is among them");
 		let mut groups: Vec<Vec<(Node, Separator)>> = Vec::new();
 		let mut current_group = Vec::new();
-
 		for (item, sep) in items_with_seps {
-			if sep.precedence() == max_prec {
-				// Found a split point - add item and close group
+			if sep.precedence() == loosest {
 				current_group.push((item, Separator::None));
-				if !current_group.is_empty() {
-					groups.push(current_group);
-					current_group = Vec::new();
-				}
+				groups.push(std::mem::take(&mut current_group));
 			} else {
-				// Keep this separator for processing in sub-groups
 				current_group.push((item, sep));
 			}
 		}
-
 		if !current_group.is_empty() {
 			groups.push(current_group);
 		}
-
-		// Filter empty groups
-		groups.retain(|g| !g.is_empty());
-
-		if groups.is_empty() {
-			return Empty;
-		}
-
-		// Recursively process each group for tighter separators
-		let grouped_nodes: Vec<Node> = groups
-			.into_iter()
-			.map(|group| {
-				if group.len() == 1 && group[0].1 == Separator::None {
-					// Single item with no further separators
-					only(group).0
-				} else {
-					// Has multiple items or tighter separators - recurse
-					// Inner groups use Bracket::None to avoid extra braces in serialization
-					self.group_by_separators(group, Bracket::None)
-				}
-			})
-			.collect();
-
+		// inner groups take no brackets, which would add braces in serialization
+		let grouped_nodes: Vec<Node> = groups.into_iter().map(|group| match group.as_slice() {
+			[(_, Separator::None)] => only(group).0,
+			_ => self.group_by_separators(group, Bracket::None),
+		}).collect();
 		if grouped_nodes.len() == 1 && bracket == Bracket::None {
-			// Only unwrap single items for implicit groupings (Bracket::None)
-			// Explicit brackets like {x} or [x] should preserve the wrapper
 			only(grouped_nodes)
 		} else {
 			grouped_list(grouped_nodes, bracket, split_sep)

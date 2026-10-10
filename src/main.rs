@@ -414,10 +414,10 @@ fn run_command(args: &[String]) {
 fn print_version() {
     println!("🌀 Warp {}", WARP_VERSION);
     if cfg!(debug_assertions) {
-        let commit = command_line("git", &["-C", env!("CARGO_MANIFEST_DIR"), "rev-parse", "--short=9", "HEAD"]);
+        let commit = option_env!("WARP_COMMIT");
         let binary = env::current_exe().map(|path| path.display().to_string()).unwrap_or_default();
         let built = command_line("date", &["-r", &binary, "+%Y-%m-%d %H:%M"]);
-        eprintln!("debug build {} · built {}", commit.as_deref().unwrap_or("of an unknown commit"), built.as_deref().unwrap_or("?"));
+        eprintln!("debug build {} · built {}", commit.unwrap_or("of an unknown commit"), built.as_deref().unwrap_or("?"));
     }
 }
 
@@ -752,18 +752,23 @@ fn console() {
     let history_path = dirs_home().join(".warp_history");
     let _ = rl.load_history(&history_path);
 
+    let mut interrupted = false; // a ctrl-c on an empty line twice in a row ends the console
     loop {
-        match rl.readline("🌀") { // warp language symbol for prompt
+        let read = rl.readline("🌀"); // warp language symbol for prompt
+        let interrupted_before = interrupted;
+        interrupted = matches!(read, Err(ReadlineError::Interrupted));
+        match read {
+            Err(ReadlineError::Interrupted) if interrupted_before => break,
+            Err(ReadlineError::Interrupted) => {
+                println!("^C (again to exit)");
+                continue;
+            }
             Ok(line) => {
                 let input = line.trim();
                 if input.is_empty() { continue; }
                 if input == "exit" || input == "quit" { break; }
                 let _ = rl.add_history_entry(input);
                 show(&eval(input), RESULT_MARK);
-            }
-            Err(ReadlineError::Interrupted) => {
-                println!("^C");
-                continue;
             }
             Err(ReadlineError::Eof) => break,
             Err(e) => {

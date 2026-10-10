@@ -90,7 +90,7 @@ the browser), beside the deploy, so a batch's CI check takes ~27 min instead of 
 One configuration (.cargo/config.toml): the alias builds tests/main.rs for wasm32-wasip1 with `--no-default-features`,
 and the wasm32-wasip1 runner web/playground/test_in_browser.py serves the repository root plus the binary, opens
 web/playground/tests.html in headless Chrome (agent-browser, session warp-browser-tests) and prints a libtest summary
-(exit 101 on a failure). `WARP_BROWSER_TEST_WORKERS` (default 2) and `WARP_BROWSER_TEST_PORT` (default: a free port per run; a taken one fails naming its PID) tune it.
+(exit 101 on a failure). `WARP_BROWSER_TEST_WORKERS` (default: the cores), `WARP_BROWSER_TEST_SHARD` (`i/n`: every n-th test from the i-th; pages.yml runs four shards, and on a branch only when it changes src/, tests/, web/ or the build: card browser-suite-speed) and `WARP_BROWSER_TEST_PORT` (default: a free port per run; a taken one fails naming its PID) tune it.
   `WARP_BROWSER_TEST_PER_WORKER` (tests.js TESTS_PER_WORKER, 100) is how many tests a worker runs before it is replaced.
 - Wasm memory (card browser-memory, 2026-10-06): Chrome holds ~124 live Wasm memories per page, all Workers together,
   and an isolate that runs out collects only its own dead instances (probes/wasm_memory_limit.html), so another
@@ -209,6 +209,11 @@ web/playground/tests.html in headless Chrome (agent-browser, session warp-browse
   slow download that progresses is fine) once, with a console warning naming its stage (the verdict still fails:
   loud, not hidden), and a second silent start rejects workerReady naming the stage, so the run fails instead of
   waiting for ever. Probe: trickle_server.py --stall-once + restart.sh (the example shows after ~76 s).
+- Card tour-firefox-stall (2026-10-10, runs 38029627279 and 38030659307, CI tour-firefox, both passed on rerun): the
+  restart fired with stage "downloading warp.wasm", a label that also covered streaming the body, compiling and
+  instantiating (the per-chunk "loading" messages kept no stage). The page now names each: "downloading the compiler:
+  N MB so far", "compiling warp.wasm (N bytes)", "instantiating warp.wasm" (WebAssembly.compile and instantiate apart),
+  so the next stall's console warning says which step hangs.
 
 ## Modules and packages in the browser (2026-10-04)
 The compiler reads files through the page: `warp_host.fetch(address)` / `take_fetched` (web.rs `read_bytes`, cached
@@ -256,6 +261,16 @@ the_strict_flag_turns_warnings_into_errors before).
   names. Still jco's own: the enum check's message ("\"triangle\" is not one of the cases of shape"), and a variant
   argument (an object) is not converted.
   tests/ffi/test_components_anywhere.rs runs in both hosts.
+- A promise (card jspi-page): where the browser has JSPI (WebAssembly.Suspending/promising: Chrome 137+; not
+  Safari) the chain of a playground run is awaited end to end: worker.js calls web_evaluate through `awaitedEntry`
+  (promising), warp_host.run (host-compiler.js warpHost `awaited`) is Suspending and runs main through promising, and
+  foreign_call goes through a 169-byte wasm trampoline (host-foreign.js awaitingCall) that calls the Suspending
+  host.await only when the call gave a promise while main runs (`holder.waiting`): V8 suspends wasm frames only, and a
+  Suspending import suspends even for a plain value, trapping outside promising (probes/jspi_semantics.mjs). The test worker does the
+  same for `_start` and tells the tests WARP_JSPI. Elsewhere the promise is refused ("gives a promise"): without JSPI,
+  in a site/cloud worker run (instantiateProgram without `awaited`), in a page event's handler (after main), and in a
+  warp function JavaScript calls back (V8 refuses to suspend over a JavaScript frame: outcomeOf maps that trap to
+  "cannot wait for"). worker.js handles messages one at a time (`inTurn`) since a waiting run holds the compiler.
 
 ## paint: a canvas in the page (2026-10-06, issue #15)
 `paint(pixels, width, height)` is a host word (src/host.rs PAINT): host.js reads the pixel list and hands it to the

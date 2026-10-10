@@ -2,7 +2,7 @@
 // in Sonic Pi), `play note("C#4")`, `melody [C4 E4 G4]` (one note after another), `beep`, `tone(frequency, seconds, "square")`. Frequencies
 // and durations are numbers or quantities (440Hz, 0.5s, 250ms), read by si_amount as plain numbers (src/units/static_units.rs). The samples are made here and played by the host word
 // sound_samples: natively a WAV file and the system's player (src/sound.rs; silent under tests and WARP_NO_WINDOW),
-// in the browser WebAudio. Loaded when a program calls play, melody, tone, beep, play_file or stop_sound
+// in the browser WebAudio. Loaded when a program calls one of its words (src/modules.rs SOUND_WORDS)
 global sample_rate = 22050
 // the share of the loudest sample: chords and melodies stay below it
 global loudness = 0.3
@@ -89,6 +89,9 @@ stop_sound() := std_io("sound", "stop", [])
 // wait_sound waits for them (a program's end does too)
 sound_queued() := std_io("sound", "queued", [])
 wait_sound() := std_io("sound", "wait", [])
+// the sounds since the last render (or the start) one after another in one WAV file, offline (also without speakers):
+// render_sound("song.wav") gives its seconds
+render_sound(path) := std_io("sound", "render", [path])
 to play x: if x is text then play_file(x) else sound(chord_samples(pitches_of(x), note_seconds, wave_shape))
 // one note (or chord) after another: melody [C4 E4 G4], melody [C4 E4 G4] each 250ms (or melody([C4 E4 G4], 0.25s))
 // plain seconds: the unit check reads a quantity parameter in a loop as unsupported (notes/units_runtime.md)

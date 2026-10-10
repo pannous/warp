@@ -85,29 +85,10 @@ impl WarpParser {
 			}
 			if ch == closing {
 				self.advance(); // skip closing quote
-				let s: String = s.nfc().collect(); // an escape (`e\u{301}`) may leave it unnormalized
 				if is_template {
 					return crate::interpolation::template_text(&template);
 				}
-				// a one-character string is a Codepoint whichever quote is used, so only longer strings have a canonical quote
-				if s.chars().count() > 1 {
-					set_hint_position(quote_line, quote_column);
-					norm::quotes(quote, &s);
-				}
-				// quotes with exactly one character become Codepoint
-				let mut chars = s.chars();
-				if let Some(c) = chars.next() {
-					if chars.next().is_none() {
-						if let Some(number_type) = self.number_cast_follows().filter(|_| interpolates && !c.is_ascii_digit()) {
-							let message = format!("\"{c}\" as {number_type}: a text is no number (user decision #35); codepoint('{c}') is the code point of the character");
-							let explicit = format!("{}('{c}') as {number_type}", crate::library_words::CODEPOINT);
-							return Diagnostic { message, line: quote_line, column: quote_column, ..Default::default() }.fix(&explicit)
-								.offer("the code point of the character", format!("\"{c}\" as {number_type}"), explicit).into_error();
-						}
-						return Node::codepoint(c);
-					}
-				}
-				return Node::text(&s);
+				return self.quoted_text(s.nfc().collect(), quote, (quote_line, quote_column), interpolates);
 			}
 			let escaped_brace = self.brace_holes && matches!((ch, self.peek_char(1)), ('{', '{') | ('}', '}'));
 			if escaped_brace {
@@ -148,7 +129,7 @@ impl WarpParser {
 							template.push('\\');
 							continue; // the name follows as written
 						};
-						(0..length - 1).for_each(|_| self.advance());
+						self.advance_by(length - 1);
 						s.push_str(characters);
 						template.push_str(characters);
 						continue;
@@ -158,10 +139,7 @@ impl WarpParser {
 					'r' => '\r',
 					'e' => ESCAPE_CHARACTER,
 					'x' if self.peek_char(1).is_ascii_hexdigit() && self.peek_char(2).is_ascii_hexdigit() => self.hex_byte_escape(),
-					'u' if self.peek_char(1) == '{' => match self.unicode_escape() {
-						Ok(c) => c,
-						Err(message) => return error(&message),
-					},
+					'u' if self.peek_char(1) == '{' => or_return_error!(self.unicode_escape()),
 					c => c,
 				}
 			} else {
@@ -173,6 +151,28 @@ impl WarpParser {
 				'$' if !bare_dollar_name => template.push_str("$$"),
 				c => template.push(c),
 			}
+		}
+	}
+
+	/// The text between quotes (normalized: an escape like `e\u{301}` may leave it unnormalized); one character is a
+	/// Codepoint whichever quote is used, so only longer texts have a canonical quote
+	fn quoted_text(&self, text: String, quote: char, (line, column): (usize, usize), interpolates: bool) -> Node {
+		let mut chars = text.chars();
+		let (Some(c), None) = (chars.next(), chars.next()) else {
+			if !text.is_empty() {
+				set_hint_position(line, column);
+				norm::quotes(quote, &text);
+			}
+			return Node::text(&text);
+		};
+		match self.number_cast_follows().filter(|_| interpolates && !c.is_ascii_digit()) {
+			Some(number_type) => {
+				let message = format!("\"{c}\" as {number_type}: a text is no number (user decision #35); codepoint('{c}') is the code point of the character");
+				let explicit = format!("{}('{c}') as {number_type}", crate::library_words::CODEPOINT);
+				Diagnostic { message, line, column, ..Default::default() }.fix(&explicit)
+					.offer("the code point of the character", format!("\"{c}\" as {number_type}"), explicit).into_error()
+			}
+			None => Node::codepoint(c),
 		}
 	}
 
@@ -434,26 +434,12 @@ impl WarpParser {
 			self.advance();
 		}
 
-		// Check for hexadecimal: 0x or 0X
-		if self.current_char() == '0' {
-			let next_ch = self.peek_char(1);
-			if next_ch == 'x' || next_ch == 'X' {
-				// Parse hexadecimal
-				self.advance(); // skip '0'
-				self.advance(); // skip 'x'
-				let mut hex_str = String::new();
-				loop {
-					let ch = self.current_char();
-					if !ch.is_ascii_hexdigit() {
-						break;
-					}
-					hex_str.push(ch);
-					self.advance();
-				}
-				return i64::from_str_radix(&hex_str, 16)
-					.map(Node::int)
-					.unwrap_or_else(|_| error(&format!("Invalid hex: 0x{}", hex_str)));
-			}
+		if self.current_char() == '0' && matches!(self.peek_char(1), 'x' | 'X') {
+			self.advance_by(2);
+			let hex_str = self.take_while_char(|ch| ch.is_ascii_hexdigit());
+			return i64::from_str_radix(&hex_str, 16)
+				.map(Node::int)
+				.unwrap_or_else(|_| error(&format!("Invalid hex: 0x{}", hex_str)));
 		}
 
 		if let Some(fraction) = self.vulgar_fraction_literal() {
@@ -470,10 +456,7 @@ impl WarpParser {
 			self.advance();
 			self.push_digits(&mut num_str);
 		}
-		let exponent = match self.parse_exponent() {
-			Ok(exponent) => exponent,
-			Err(e) => return error(&e),
-		};
+		let exponent = or_return_error!(self.parse_exponent());
 
 		match exponent {
 			// 1e3 is the exact integer 1000, like the literal it abbreviates
@@ -484,14 +467,8 @@ impl WarpParser {
 				num_str.push_str(&"0".repeat(exp as usize));
 				self.integer_node(&num_str)
 			}
-			Some(exp) => format!("{}e{}", num_str, exp)
-				.parse::<f64>()
-				.map(Node::float)
-				.unwrap_or_else(|_| error(&format!("Invalid float: {}e{}", num_str, exp))),
-			None if is_float => num_str
-				.parse::<f64>()
-				.map(Node::float)
-				.unwrap_or_else(|_| error(&format!("Invalid float: {}", num_str))),
+			Some(exp) => float_node(&format!("{}e{}", num_str, exp)),
+			None if is_float => float_node(&num_str),
 			None => {
 				let number = self.integer_node(&num_str);
 				self.with_time_unit(number)
@@ -641,4 +618,9 @@ fn without_common_indentation(source: &str) -> String {
 	let indentation = |line: &&str| line.len() - line.trim_start().len();
 	let common = lines.iter().filter(|line| !line.trim().is_empty()).map(indentation).min().unwrap_or(0);
 	lines.iter().map(|line| line.get(common..).unwrap_or("").trim_end()).collect::<Vec<_>>().join("\n").trim().to_string()
+}
+
+/// The float written `text`, or the error naming it
+fn float_node(text: &str) -> Node {
+	text.parse::<f64>().map(Node::float).unwrap_or_else(|_| error(&format!("Invalid float: {text}")))
 }
