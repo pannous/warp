@@ -18,6 +18,32 @@ pub(crate) fn assign(target: Node, value: Node) -> Node {
 	key(target, Op::Assign, value)
 }
 
+/// `play 440` alone or as the one statement of a block `{play 440}`: the words of a call (card statement-block)
+pub(crate) fn is_spaced_call(bracket: &Bracket, separator: &Separator) -> bool {
+	matches!(bracket, Bracket::None | Bracket::Curly) && *separator == Separator::Space
+}
+
+/// The call resolved from the words of `{play 440}` stays the block of its one statement, `{play(440)}`
+pub(crate) fn in_block_as_written(bracket: &Bracket, call: Node) -> Node {
+	match bracket {
+		Bracket::Curly => Node::List(vec![call], Bracket::Curly, Separator::None),
+		_ => call,
+	}
+}
+
+/// `x = {a b}` assigns the data `{a b}`, no block of the statement `a b`: `x = {abs -3}` is that list
+pub(crate) fn is_assigned_data(target: &Node, value: &Node) -> bool {
+	matches!(target.drop_meta(), Node::Symbol(_)) && matches!(value.drop_meta(), Node::List(_, Bracket::Curly, _))
+}
+
+/// The parts of a node rewritten, the node itself kept as written
+pub(crate) fn with_parts_rewritten(node: Node, rewrite: &mut dyn FnMut(Node) -> Node) -> Node {
+	match node {
+		Node::Meta { node, data } => Node::Meta { node: Box::new(with_parts_rewritten(*node, rewrite)), data },
+		other => other.map_children(rewrite),
+	}
+}
+
 /// Statements run in order: `a; b`, `{a; b}`
 pub(crate) fn statement_list(statements: Vec<Node>, bracket: Bracket) -> Node {
 	Node::List(statements, bracket, Separator::Semicolon)
