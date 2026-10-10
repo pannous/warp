@@ -5,6 +5,7 @@
 //! (`iter(g(args))`, generator_objects.rs), from an object by `.next()` until ø, from any other list by its index.
 //! A call inside a `while` condition stays as it is: computed once before the loop it would not change per test.
 
+use super::words::OF_WORD;
 use crate::generator_objects::{advanced_variables, generator_call, ITER_WORD};
 use crate::generators::{is_statement_list, yielded_value, Generator, NAME_SEPARATOR};
 use super::nodes::{assign, call, int, statement_list, symbol};
@@ -18,7 +19,6 @@ use std::collections::{HashMap, HashSet};
 const TAKE_WORD: &str = "take";
 /// `first(xs, 3)` and the phrases `take 3 of xs`, `first 3 of xs` are take too
 const TAKE_WORDS: [&str; 2] = [TAKE_WORD, "first"];
-const OF_WORD: &str = "of";
 const ZIP_WORD: &str = "zip";
 const LIST_WORD: &str = "list";
 /// Calls that read the rest of an object's values as a list

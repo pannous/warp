@@ -11,6 +11,7 @@
 //! A component whose markup holds a style sheet names itself on its root element (`data-warp-scope: "Card"`), so the
 //! sheet styles only its own elements (html.rs, card web-scoped).
 
+use super::words::ON_WORD;
 use super::nodes::{call, key, named_assignment};
 use crate::element_events::{element_items, handler_at, has_element_handler, HANDLER_ATTRIBUTE_PREFIX};
 use crate::law::substitute;
@@ -41,7 +42,6 @@ const CLEANUP_LOOP: &str = "while CLEANED <= SEEN { CLEANUP(CLEANED); CLEANED +=
 const TRUNCATED: &str = "if #STATE > COUNTER { STATE = STATE[0..COUNTER] }";
 const SEEN_SET: &str = "SEEN = COUNTER";
 const SHOWN: &str = "page·shown";
-const ON_WORD: &str = "on";
 const MOUNT: &str = "mount";
 const CLEANUP: &str = "cleanup";
 const SEEN: &str = "seen";

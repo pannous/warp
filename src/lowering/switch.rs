@@ -4,6 +4,7 @@
 //! matches a list of three whose first and last items are "", binding `middle`; `_` matches any item, lists nest, and a
 //! pair `k: v` matches a pair whose key is k. A guard `n if n < 0 => …` binds n to the subject and tests the condition; a relational pattern `> 100 => …` compares it. The shape tests are ordinary type tests (`is_type(x, "list") and count(x) == n`).
 
+use super::words::COUNT_WORD;
 use super::nodes::{call, key};
 use crate::node::{text, Bracket, Node, Separator};
 use crate::operators::Op;
@@ -15,7 +16,6 @@ const DEFAULT_KEYS: [&str; 2] = ["default", WILDCARD];
 const WILDCARD: &str = "_";
 const LIST_SPEC: &str = "list";
 const PAIR_SPEC: &str = "pair";
-const COUNT_WORD: &str = "count";
 const TEXT_WORD: &str = "str";
 const SUBJECT_PREFIX: &str = "switch_subject_";
 /// Pseudo-call `switch_no_case(label: value)` the emitter turns into the runtime error function `no_case_<label>`,

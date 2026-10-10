@@ -116,6 +116,13 @@ Done:
 - parameter_name (3 identical copies), word lookups (phrase_calls, type_name_matching, reflection), is_call_head
   (memoization, type_name_matching), spaced_statement (phrase_calls + type_name_matching shared 4 lines)
 - the Key / List / Meta recursion tail spelled out in 27 passes → `children_rewritten(node, rewrite)`
+- class lookups: class_methods `with_value_classes`, `declared_classes`; `grouped_parameters` (class_methods +
+  declarations) → nodes.rs
+- calls whose head was already `symbol(f)` → `call(f, …)`
+- `analyzer::function_context(node)` replaces Context::new + extract_user_functions in 11 passes;
+  `named_assignment` (component_state + lambdas) and list_element_checks' own assign → nodes.rs
+- word constants defined in 3+ passes (FOR / IN / ON / OF / FROM / COUNT / MAP / SUM / RETURN / GLOBAL_WORD) →
+  src/lowering/words.rs; a constant with its own doc comment stayed in its pass
 
 Left (each changes behaviour or needs care):
 - Node::map_children also enters class bodies (Node::Type); children_rewritten does not. ~40 more passes spell out

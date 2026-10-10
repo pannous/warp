@@ -3,6 +3,7 @@
 //! `virtues goal = fast+safe` the record `goal={fast:true safe:true}`: the flags named are true, the others false.
 //! `real f(real x, int n) { … }`, the C way, defines `f(x:real, n:int) := { … }`.
 
+use super::words::{ON_WORD, RETURN_WORD};
 use super::nodes::{call, children_rewritten, grouped_parameters, is_type_word, key};
 use crate::node::{symbol, Bracket, Node, Separator};
 use crate::operators::{is_function_keyword, Op};
@@ -20,7 +21,6 @@ const EXTENSION_WORD: &str = "extension";
 /// `each xs: body`, `all xs: body`: a for loop over xs, the item is `it` (wiki/iteration.md)
 const COLON_ITERATION_WORDS: [&str; 2] = ["each", "all"];
 const IT_PARAMETER: &str = "it";
-const RETURN_WORD: &str = "return";
 const ENUM_WORD: &str = "enum";
 /// Swift's `enum Direction { case north, south }`
 const CASE_WORD: &str = "case";
@@ -33,7 +33,6 @@ const PLACEHOLDER: &str = "_";
 /// `go f(x)` starts a task, `await job` waits for it
 const TASK_WORDS: [&str; 2] = ["go", "await"];
 const ONCE_WORD: &str = "once";
-const ON_WORD: &str = "on";
 /// What a task signals when it is done, and the controls that would interrupt one
 const FINISH_EVENTS: [&str; 5] = ["finishes", "finished", "completes", "ends", "done"];
 const TASK_CONTROLS: [&str; 4] = ["stop", "pause", "cancel", "resume"];

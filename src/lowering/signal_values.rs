@@ -12,6 +12,7 @@
 //! which the runtime calls at the program's check points (signal_poll at main's start and end and each loop start,
 //! sleep, the end of the run): the watched values are compared with those seen last, and the listener runs on a change.
 
+use super::words::{COUNT_WORD, FOR_WORD, FROM_WORD, GLOBAL_WORD, IN_WORD, OF_WORD};
 use super::nodes::{call, children_rewritten, key};
 use crate::declarations::word;
 use crate::node::{symbol, Bracket, Node, Separator};
@@ -38,21 +39,15 @@ const FIRED_PREFIX: &str = "signal·fired·";
 /// value before the write, in the listener
 const HELD_PREFIX: &str = "signal·held·";
 const WAS_WORD: &str = "whenever_was";
-const GLOBAL_WORD: &str = "global";
 /// `listeners of x`, `clear listeners of x` (card g-3HmY)
 const LISTENERS_WORD: &str = "listeners";
-const OF_WORD: &str = "of";
 const CLEAR_WORD: &str = "clear";
 /// `remove alarm from listeners of t` (P128)
 const REMOVE_WORD: &str = "remove";
-const FROM_WORD: &str = "from";
-const COUNT_WORD: &str = "count";
 /// `alarm_index_t`: the place of the named listener alarm in t's listeners
 const INDEX_JOINER: &str = "_index_";
 const WITHOUT_PLACEHOLDER: &str = "signal_without_placeholder";
 const WITHOUT_FUNCTION: &str = "signal·without";
-const FOR_WORD: &str = "for";
-const IN_WORD: &str = "in";
 
 /// A function definition: its name, parameter names and body
 struct Definition {

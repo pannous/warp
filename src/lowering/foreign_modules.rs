@@ -4,6 +4,7 @@
 //! (an empty argument list is ø on the way, so whether it is a call is said apart).
 //! Values cross as JSON; the result is any Node.
 
+use super::words::FOR_WORD;
 use super::nodes::{call, children_rewritten, key};
 use crate::node::{symbol, text, Bracket, Node, Separator};
 use crate::operators::Op;
@@ -248,7 +249,6 @@ fn is_warp_method(name: &str) -> bool {
 /// The module of operators every runtime offers (Python's operator plus len and list, the loops' own in JS)
 const OPERATOR_MODULE: &str = "operator";
 const COUNTING_WORDS: [&str; 4] = ["count", "len", "length", "size"];
-const FOR_WORD: &str = "for";
 
 /// The operator function an infix operator forwards to: `a * 2` of a handle is `operator.mul(a, 2)`
 fn operator_member(op: &Op) -> Option<&'static str> {

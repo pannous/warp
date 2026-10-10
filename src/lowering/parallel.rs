@@ -5,6 +5,7 @@
 //! loop ends when every chunk is done. A loop body updating an outer variable (`t += x`) updates its task's copy: a
 //! warning names `shared` (P106). notes/go_blocks.md
 
+use super::words::{FOR_WORD, IN_WORD, MAP_WORD};
 use crate::node::{symbol, Bracket, Node, Separator};
 use crate::operators::Op;
 
@@ -12,9 +13,6 @@ use crate::operators::Op;
 /// per item; a later backend (SIMD, GPU) may choose its own split
 const PARALLEL_CHUNKS: i64 = 8;
 const GO_WORD: &str = "go";
-const FOR_WORD: &str = "for";
-const IN_WORD: &str = "in";
-const MAP_WORD: &str = "map";
 const PARALLEL_ATTRIBUTE: &str = "parallel";
 /// The temporaries of a template: `parallel_part` becomes `parallel·part·3` for the third parallel map or loop
 const TEMPORARY_PREFIX: &str = "parallel_";

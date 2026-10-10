@@ -7,6 +7,7 @@
 //! variable a list, collected once (declaration_lowering.rs). A function whose value is a range of its parameters
 //! (`f(n) := 1..n`) returns that range: a call with plain arguments is the range itself, read as above.
 
+use super::words::{COUNT_WORD, SUM_WORD};
 use super::nodes::{call, key};
 use crate::analyzer::{call_name, TEMPORARY_SEPARATOR};
 use crate::effects::call_arguments;
@@ -17,10 +18,8 @@ use crate::node::{Bracket, Node, Separator};
 use crate::operators::Op;
 use crate::warp_parser::parse;
 
-const COUNT: &str = "count";
-const SUM: &str = "sum";
 /// Words a range variable may stand behind a dot for: they read the range without collecting it
-const READING_METHODS: [&str; 10] = [COUNT, SUM, "map", "filter", "each", "fold", "find", "any", "all", "reduce"];
+const READING_METHODS: [&str; 10] = [COUNT_WORD, SUM_WORD, "map", "filter", "each", "fold", "find", "any", "all", "reduce"];
 const START: &str = "range_start";
 const END: &str = "range_end";
 const INDEX: &str = "range_index";
@@ -37,7 +36,7 @@ pub fn lower(node: Node) -> Node {
 	}
 	let context = crate::analyzer::function_context(&node);
 	let own = |word: &str| context.user_functions.contains_key(word);
-	let mut lowering = Lowering { counts: !own(COUNT), sums: !own(SUM), temporaries: 0 };
+	let mut lowering = Lowering { counts: !own(COUNT_WORD), sums: !own(SUM_WORD), temporaries: 0 };
 	let producers = range_producers(&node);
 	let node = inline_produced_ranges(node, &producers);
 	let readers = range_readers(&node);
@@ -109,11 +108,11 @@ impl Lowering {
 	/// `count r`, `#r`, `r.count`, `sum r`, `r.sum`, `r#i` from the bounds of r
 	fn read(&mut self, node: &Node) -> Option<Node> {
 		match node.drop_meta() {
-			Node::List(items, _, separator) if is_call(items, separator) && self.counts && items[0].is_symbol(COUNT) => Some(self.length(&range_of(&items[1])?)),
-			Node::List(items, _, separator) if is_call(items, separator) && self.sums && items[0].is_symbol(SUM) => Some(self.sum(&range_of(&items[1])?)),
+			Node::List(items, _, separator) if is_call(items, separator) && self.counts && items[0].is_symbol(COUNT_WORD) => Some(self.length(&range_of(&items[1])?)),
+			Node::List(items, _, separator) if is_call(items, separator) && self.sums && items[0].is_symbol(SUM_WORD) => Some(self.sum(&range_of(&items[1])?)),
 			Node::Key(empty, Op::Hash, counted) if matches!(empty.drop_meta(), Node::Empty) => Some(self.length(&range_of(counted)?)),
-			Node::Key(range, Op::Dot, word) if self.counts && word.is_symbol(COUNT) => Some(self.length(&range_of(range)?)),
-			Node::Key(range, Op::Dot, word) if self.sums && word.is_symbol(SUM) => Some(self.sum(&range_of(range)?)),
+			Node::Key(range, Op::Dot, word) if self.counts && word.is_symbol(COUNT_WORD) => Some(self.length(&range_of(range)?)),
+			Node::Key(range, Op::Dot, word) if self.sums && word.is_symbol(SUM_WORD) => Some(self.sum(&range_of(range)?)),
 			Node::Key(range, Op::Hash, index) if is_position(index) => Some(self.element(&range_of(range)?, index)),
 			_ => None,
 		}
@@ -250,7 +249,7 @@ fn only_read(node: &Node, name: &str, readers: &RangeReaders) -> bool {
 	match node.drop_meta() {
 		_ if has_parameter(node, name) => true,
 		Node::Symbol(symbol) => symbol != name,
-		Node::List(items, _, separator) if is_call(items, separator) && is_name(&items[1]) && (items[0].is_symbol(COUNT) || items[0].is_symbol(SUM)) => true,
+		Node::List(items, _, separator) if is_call(items, separator) && is_name(&items[1]) && (items[0].is_symbol(COUNT_WORD) || items[0].is_symbol(SUM_WORD)) => true,
 		Node::List(items, bracket, separator) if let Some(reading) = reading_parameters(items, bracket, separator, readers) => {
 			call_arguments(&items[1..]).into_iter().zip(reading).all(|(argument, reads_range)| if is_name(argument) { *reads_range } else { reads(argument) })
 		}

@@ -9,7 +9,8 @@
 //! gives it ø.
 
 use crate::for_loop::block_items;
-use crate::generators::{generators, yield_statement, holds_own, holds_stop, is_return, yielded_value, Generator, BREAK_WORD, CONTINUE_WORD, FOR_WORD, NAME_SEPARATOR, NEXT_METHOD, RETURN_WORD};
+use crate::generators::{generators, yield_statement, holds_own, holds_stop, is_return, yielded_value, Generator, BREAK_WORD, CONTINUE_WORD, NAME_SEPARATOR, NEXT_METHOD};
+use super::words::{FOR_WORD, RETURN_WORD};
 use super::nodes::{assign, call, int, key, statement_list, symbol};
 use crate::node::{Bracket, Node, Separator};
 use crate::operators::Op;
