@@ -238,6 +238,7 @@ PASSED:
   ✓ control::test_for_loop::test_for_over_inclusive_range
   ✓ control::test_for_loop::test_for_over_list_literal
   ✓ control::test_for_loop::test_for_over_list_variable
+  ✓ control::test_for_loop::test_for_range_end_is_evaluated_once
   ✓ control::test_for_loop::test_for_with_colon_body
   ✓ control::test_for_loop::test_loop_body_with_a_list_statement
   ✓ control::test_for_loop::test_nested_for
@@ -4572,4 +4573,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-10 ignored, 4567 passed, 0 failed, 4567 total tested
+10 ignored, 4568 passed, 0 failed, 4568 total tested
