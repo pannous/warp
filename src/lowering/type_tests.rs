@@ -24,6 +24,7 @@ pub const ERROR_TYPE: &str = "error";
 /// The type of ø, as type(ø) names it; unit, nil … are its aliases (canonical_spec_word)
 pub const EMPTY_TYPE: &str = "empty";
 const ARTICLES: [&str; 2] = ["a", "an"];
+const NUMBER_WORD: &str = "number";
 pub(crate) const LIST_WORD: &str = "list";
 const MAP_WORD: &str = crate::analyzer::MAP_TYPE;
 /// The collection types: `x is list`, `x is map`, and of their element type: `x is list of int`, `x is map of text`
@@ -83,6 +84,12 @@ pub fn is_type_word(word: &str) -> bool {
 /// Every word naming a built-in type, aliases too
 pub fn builtin_type_words() -> impl Iterator<Item = &'static str> {
 	BUILTIN_TYPES.iter().flat_map(|builtin| std::iter::once(builtin.name).chain(builtin.aliases.iter().copied()))
+}
+
+/// `int`, `i64`, `exact`, `real`, `f64` …: a word naming a type of numbers (one number is covers), `number` itself not
+pub fn is_number_type_word(word: &str) -> bool {
+	let name = canonical_spec_word(word);
+	is_type_word(word) && name != NUMBER_WORD && type_matches(name, NUMBER_WORD)
 }
 
 /// Words that name the same type
