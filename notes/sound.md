@@ -21,8 +21,9 @@ play note("F#4") for 250ms      // note(name) needs `use sound` when called alon
 - Browser: the worker posts `{type: "sound"}`, the page (playground.js playSound) plays it with WebAudio, queued one
   after another; a new run silences what still plays (typing reruns the code). A browser starts audio only after a
   gesture: the run on page load stays silent, ▶ plays. A run without page hooks (tests) is silent.
-- Music files (card sound-library): `play "song.mp3"` / `play_file(path)` play a wav, mp3, ogg, flac, aiff or m4a in
-  the background (format by its first bytes), `stop_sound` stops them. Natively (src/sound.rs play_file) the first
+- Music files (card sound-library): `play "song.mp3"` / `play ./mozart.mp3` / `play_file(path)` play a wav, mp3, ogg, flac, aiff or m4a in
+  the background (format by its first bytes; card play-mozart: `./` or `../` glued to the rest of an operand is a path
+  literal, the text `"./mozart.mp3"`, src/warp_parser lookahead.rs starts_path_literal; `xs ./ 2` still divides), `stop_sound` stops them. Natively (src/sound.rs play_file) the first
   player the system has for the format: afplay (no ogg), paplay (no mp3), ffplay, mpv; headless only the check and a
   `sound file <format>: <path>` line (tests/programs/test_sound_files.rs). In the playground an `<audio>` by its URL
   (host-files.js STD_ADAPTERS.sound → worker → playground.js playSoundFile); a new run stops it. Card sound-file-failure: the

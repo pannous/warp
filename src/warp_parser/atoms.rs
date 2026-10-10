@@ -33,6 +33,13 @@ fn type_parameter_names(written: &str) -> Vec<String> {
 }
 
 impl WarpParser {
+	/// The path literal at the cursor, up to whitespace, a closing bracket or a separator
+	pub(super) fn parse_path_literal(&mut self) -> Node {
+		let path: String = (0..).map(|offset| self.peek_char(offset)).take_while(|&c| !super::lookahead::ends_path(c)).collect();
+		self.advance_by(path.chars().count());
+		Node::Text(path)
+	}
+
 	/// Parse an atomic expression (no infix operators)
 	/// Handles: numbers, strings, brackets, symbols with named blocks
 	pub(super) fn parse_atom(&mut self) -> Node {
@@ -70,6 +77,7 @@ impl WarpParser {
 				})
 			}
 			'"' | '\'' | '«' | '`' => self.parse_string(),
+			'.' if self.starts_path_literal() => self.parse_path_literal(),
 			// `a, *rest = xs`: the starred name takes the items the other names leave (src/lowering/tuples.rs); `...rest`
 			// (JS) is the starred `*rest` too: a rest parameter or a spread argument (src/lowering/variadic.rs)
 			'.' if self.peek_char(1) == '.' && self.peek_char(2) == '.' && self.is_identifier_start(3) => self.parse_starred(3),

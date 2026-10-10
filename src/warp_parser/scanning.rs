@@ -162,9 +162,9 @@ impl WarpParser {
 		self.current_char() == '/' && self.peek_char(1) == '/' && divisor_follows && self.follows_operand_on_its_line()
 	}
 
-	/// `.+ .- .* ./` at the cursor: the element-wise form of the arithmetic operator
+	/// `.+ .- .* ./` at the cursor: the element-wise form of the arithmetic operator (`./mozart.mp3` is a path)
 	pub(super) fn element_wise_operator(&self) -> Option<Op> {
-		if self.current_char() != '.' {
+		if self.current_char() != '.' || self.starts_path_literal() {
 			return None;
 		}
 		ELEMENT_WISE_OPERATORS.iter().find(|(glyph, _)| *glyph == self.peek_char(1)).map(|(_, op)| *op)
