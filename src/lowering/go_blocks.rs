@@ -6,17 +6,16 @@
 //! from shared values (P106); `await job or y` is `try await job else y`.
 //! `go xs.map(f)`, `go for x in xs {…}` and `xs.map(f) @parallel` split their items into tasks (parallel.rs).
 
+use super::words::{FOR_WORD, RETURN_WORD};
 use super::nodes::{call, key};
 use crate::node::{Bracket, Node, Separator};
 use crate::operators::Op;
 
 const GO_WORD: &str = "go";
 const BLOCK_FUNCTION_PREFIX: &str = "go·block·";
-const FOR_WORD: &str = "for";
 /// A go block's parameter is the variable it reads with this suffix: `n` comes in as `n·in`
 const INPUT_SUFFIX: &str = "·in";
 const AFTER_WORD: &str = "after";
-const RETURN_WORD: &str = "return";
 const AWAIT_WORD: &str = "await";
 const AFTER_CONDITION: &str = "after_condition_placeholder";
 const AFTER_VALUE: &str = "after_value_placeholder";

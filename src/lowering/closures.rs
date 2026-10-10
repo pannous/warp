@@ -5,6 +5,7 @@
 //! becomes `closure_call_1(f, x)`, a helper per arity that call_refs the closure's entry (wasm_emitter/closures.rs).
 //! notes/closures.md describes the representation.
 
+use super::words::{FOR_WORD, GLOBAL_WORD, IN_WORD};
 use super::nodes::{call, key, parameter_name};
 use crate::context::{Context, Param, UserFunctionDef};
 use crate::diagnostic::Diagnostic;
@@ -41,8 +42,6 @@ const CAPTURE_LOCAL_MARK: &str = "·capture·";
 const CAPTURE_READER_MARK: &str = "·captured·";
 const LIFTED_PREFIX: &str = "closure_lambda_";
 const IMPLICIT_PARAMETER: &str = "it";
-const FOR_WORD: &str = "for";
-const IN_WORD: &str = "in";
 
 pub fn closure_call_name(arity: usize) -> String {
 	format!("{CLOSURE_CALL_PREFIX}{arity}")
@@ -405,7 +404,6 @@ fn is_field(node: &Node) -> bool {
 	holder_path(node).is_some_and(|path| path.contains('.'))
 }
 
-const GLOBAL_WORD: &str = "global";
 /// Methods that append one value to a list variable (analyzer APPEND_METHODS)
 const APPEND_METHODS: [&str; 3] = ["add", "append", "push"];
 

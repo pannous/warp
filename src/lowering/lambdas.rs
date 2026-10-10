@@ -5,6 +5,7 @@
 //! - `map [1 2 3] {it*it}`, `map(xs, x=>x+1)`, `xs.map(f)` over a literal block, a lambda or a defined function is a loop
 //! - a lambda anywhere else is a closure (closures.rs); `map` over a value that is no function is the error `map needs a function, got …`
 
+use super::words::ON_WORD;
 use super::nodes::{call, children_rewritten, is_type_word, key, named_assignment};
 use crate::analyzer::call_name;
 use crate::context::Context;
@@ -16,7 +17,6 @@ use crate::warp_parser::parse;
 use std::cell::Cell;
 
 pub const IMPLICIT_PARAMETER: &str = "it";
-pub(crate) const ON_WORD: &str = "on";
 const PARTIAL_LIST: &str = "partial_list";
 const LIST_PLACEHOLDER: &str = "loop_list";
 const START_PLACEHOLDER: &str = "loop_start";

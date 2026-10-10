@@ -11,6 +11,7 @@
 //! `after tested: print "ok"` (or `after test`) runs after every later statement that calls the function test,
 //! `before test {…}` before it.
 
+use super::words::{GLOBAL_WORD, ON_WORD};
 use super::nodes::{call, children_rewritten, key};
 use crate::declarations::{handler_parts, word};
 use crate::node::{symbol, Bracket, Node, Separator};
@@ -19,7 +20,6 @@ use std::collections::{HashMap, HashSet};
 
 const ONCE_WORD: &str = "once";
 const WHENEVER_WORD: &str = "whenever";
-const ON_WORD: &str = "on";
 const SET_WORD: &str = "set";
 const CHANGE_WORD: &str = "change";
 const AFTER_WORD: &str = "after";
@@ -48,7 +48,6 @@ const LAST_PREFIX: &str = "change_last_";
 const CHECK_PREFIX: &str = "signal·check·";
 /// `signal_listening_0`: whether the listener was declared yet
 const LISTENING_PREFIX: &str = "signal_listening_";
-const GLOBAL_WORD: &str = "global";
 /// `p.age` as a watched or written name
 const FIELD_SEPARATOR: char = '.';
 

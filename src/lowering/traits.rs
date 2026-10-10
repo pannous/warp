@@ -6,6 +6,7 @@
 //! instance is known, `<`, `==` and operation calls call the witness and a missing conformance is a compile error naming
 //! the fix; elsewhere node_order asks the runtime witness table (wasm_emitter/witness.rs).
 
+use super::words::{FOR_WORD, IN_WORD};
 use super::nodes::{call, children_rewritten, key};
 use crate::analyzer::{call_name, collect_all_types};
 use crate::diagnostic::Diagnostic;
@@ -21,8 +22,6 @@ use std::collections::HashMap;
 pub const TRAIT_KEYWORDS: [&str; 8] = ["trait", "interface", "protocol", "typeclass", "prototype", "capability", "aspect", "feature"];
 pub const WITNESS_SEPARATOR: char = '·';
 const SORT_WORD: &str = "sort";
-const FOR_WORD: &str = "for";
-const IN_WORD: &str = "in";
 /// The annotation `xs: T list` (analyzer::with_list_annotation)
 const LIST_OF_PREFIX: &str = "list of ";
 /// The parameter name a fix shows for an operation declared without parameters, `trait shape{area}`
