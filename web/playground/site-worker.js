@@ -9,7 +9,7 @@
 const SITE_SCRIPTS = new URL(self.location.href).searchParams.get("scripts").split(",");
 importScripts(...SITE_SCRIPTS);
 self.siteScripts = SITE_SCRIPTS; // the task Workers load the same (host-tasks.js addTaskWorker)
-prepareTaskPool();
+self.prepareTaskPool?.(); // host-tasks.js, which a site that only paints does not ship (card site-frames)
 
 const PAGE_HTML = "page·html";
 let site; // the program's run (host.js runProgram's holder)
@@ -44,13 +44,13 @@ function pageMarkup() {
 }
 
 async function start({ module, stored, session, path, replies }) {
-	serverReplies.push(...JSON.parse(replies ?? "[]")); // host-tasks.js: a page a server rendered for its path (P221)
+	if (replies) serverReplies.push(...JSON.parse(replies)); // host-tasks.js: a page a server rendered for its path (P221)
 	Object.assign(storedValues, stored);
 	Object.assign(sessionValues, session);
 	await self.loadDatabase?.(); // host-files.js, when the program keeps values
 	pagePath = path;
 	const bytes = new Uint8Array(await (await fetch(module)).arrayBuffer());
-	await taskPoolReady(); // tasks run on loaded Workers, not inline
+	await self.taskPoolReady?.(); // tasks run on loaded Workers, not inline
 	const holder = instantiateProgram(bytes, hooks);
 	if (holder.failure) return post({ failure: holder.failure });
 	await globalThis.loadRouteModule?.(holder);
