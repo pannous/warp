@@ -34,3 +34,12 @@ fn a_run_time_kind_has_an_absolute_value() {
 	is!("ratio(k) := 2^((k - 69) / 12); abs(-ratio(40)) < 0.19", true);
 	is!("ratio(k) := 2^((k - 69) / 12); abs(ratio(81))", 2);
 }
+
+// card ratio-exponent: a decimal exponent is a float (decision exact-default), so the power is the f64 one; it failed
+// with "an exact power needs an integer exponent"
+#[test]
+fn a_decimal_exponent_is_a_float_power() {
+	is!("l = -0.45; round(10^l * 1000)", 355);
+	is!("l = -0.45; type(10^l)", "float");
+	is!("x = 2.5; 4^x", 32.0);
+}
