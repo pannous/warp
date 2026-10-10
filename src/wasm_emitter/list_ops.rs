@@ -114,55 +114,33 @@ impl WasmGcEmitter {
 
 	/// list_at and list_node_at: the element of a cons list at a 1-based index
 	fn emit_list_cell_access(&mut self) {
-		let node_ref_nullable = self.node_ref(true);
 		let node_ref = self.node_ref(false);
 		if self.should_emit_function("list_at") || self.should_emit_function("list_node_at") {
 			self.emit_index_out_of_range_in();
 		}
-		// list_at(list: ref $Node, index: i64) -> i64
-		// Get the numeric value of the element at index (1-based)
-		// Traverses linked list: for index N, follow value pointer N-1 times, return data
-		if self.should_emit_function("list_at") {
-			self.exported_function("list_at", vec![Ref(node_ref), ValType::I64], vec![ValType::I64], vec![Ref(node_ref_nullable), ValType::I64], |s, func| {
-				// Locals: 0=list, 1=index, 2=current (loop variable), 3=the index asked for
-				s.emit_require_integral(func, 1);
-
-				s.emit_list_walk(func, 2);
-
-				// Get current.data (which is a ref to the element Node, cast from anyref)
-				func.instruction(&I::LocalGet(2));
-				func.instruction(&I::StructGet {
-					struct_type_index: s.type_manager.node_type,
-					field_index: 1, // data field (anyref holding ref $Node)
-				});
-				// a character element is its code point, any other non-Int element not_an_int (no cast trap)
-				func.instruction(&I::RefCastNonNull(HeapType::Concrete(s.type_manager.node_type)));
-				s.emit_call(func, "get_int_value");
-			});
-		}
-
-		// list_node_at(list: ref $Node, index: i64) -> ref $Node
-		// Get the element node at index (1-based), returns the node itself (for symbol/text lists)
-		if self.should_emit_function("list_node_at") {
-			self.exported_function("list_node_at", vec![Ref(node_ref), ValType::I64], vec![Ref(node_ref)], vec![Ref(node_ref_nullable), ValType::I64], |s, func| {
-				// Locals: 0=list, 1=index, 2=current (loop variable), 3=the index asked for
-				s.emit_require_integral(func, 1);
-
-				s.emit_list_walk(func, 2);
-
-				// Get current.data (which is a ref to the element Node, cast from anyref)
-				func.instruction(&I::LocalGet(2));
-				func.instruction(&I::StructGet {
-					struct_type_index: s.type_manager.node_type,
-					field_index: 1, // data field (anyref holding ref $Node)
-				});
-				// Cast anyref to ref $Node and return it directly
-				func.instruction(&I::RefCastNonNull(HeapType::Concrete(s.type_manager.node_type)));
-			});
-		}
+		// list_at(list, index) -> i64: the number at a 1-based index; a character is its code point, any other non-Int not_an_int
+		self.emit_list_cell_function("list_at", ValType::I64, |s, func| s.emit_call(func, "get_int_value"));
+		// list_node_at(list, index) -> node: the element itself
+		self.emit_list_cell_function("list_node_at", Ref(node_ref), |_, _| {});
 	}
 
-	/// node_count and node_bytes
+	/// `name(list, index)`: the data of the cell at a 1-based index, as a node, then `finish`
+	fn emit_list_cell_function(&mut self, name: &'static str, result: ValType, finish: impl FnOnce(&mut Self, &mut Function)) {
+		if !self.should_emit_function(name) {
+			return;
+		}
+		let (node_ref, node_ref_nullable, node_type) = (self.node_ref(false), self.node_ref(true), self.type_manager.node_type);
+		self.exported_function(name, vec![Ref(node_ref), ValType::I64], vec![result], vec![Ref(node_ref_nullable), ValType::I64], |s, func| {
+			let cell = 2;
+			s.emit_require_integral(func, 1);
+			s.emit_list_walk(func, cell);
+			s.emit_field(func, cell, 1);
+			func.instruction(&I::RefCastNonNull(HeapType::Concrete(node_type)));
+			finish(s, func);
+		});
+	}
+
+	/// node_kind_in
 	fn emit_node_kind_test(&mut self) {
 		let node_ref = self.node_ref(false);
 		// node_kind_in(node, mask) -> i64: 1 when bit `kind` of the mask is set (type tests of values of unknown static type);
@@ -228,12 +206,9 @@ impl WasmGcEmitter {
 	fn emit_node_counting(&mut self) {
 		let node_ref_nullable = self.node_ref(true);
 		let node_ref = self.node_ref(false);
-		// node_count(node: ref $Node) -> i64
-		// Count the number of elements in a list/block by traversing the value chain
+		// node_count(node) -> i64: the items of a list or block, the characters of a text
 		if self.should_emit_function("node_count") {
 			self.exported_function("node_count", vec![Ref(node_ref)], vec![ValType::I64], vec![ValType::I64, Ref(node_ref_nullable)], |s, func| {
-				// Locals: 0=node, 1=count, 2=current
-
 				// a text counts its user-perceived characters (grapheme clusters)
 				s.emit_is_text(func);
 				func.instruction(&I::If(BlockType::Empty));
@@ -268,50 +243,19 @@ impl WasmGcEmitter {
 					Self::emit_list(func, &[I::GlobalGet(counted), I::LocalGet(0), I::RefEq, I::If(BlockType::Empty), I::GlobalGet(count), I::Return, I::End]);
 				}
 
-				// count = 0
-				func.instruction(&I::I64Const(0));
-				func.instruction(&I::LocalSet(1));
-
-				// current = node
-				func.instruction(&I::LocalGet(0));
-				func.instruction(&I::LocalSet(2));
-
-				// Loop: while current is not null, count++ and current = current.value
-				func.instruction(&I::Block(BlockType::Empty));
-				func.instruction(&I::Loop(BlockType::Empty));
-
-				// if current is null, break
-				func.instruction(&I::LocalGet(2));
-				func.instruction(&I::RefIsNull);
-				func.instruction(&I::BrIf(1)); // break to outer block
-
-				// count = count + 1, unless the entry is a meta entry `@name:value`
-				func.instruction(&I::LocalGet(1));
-				s.emit_field(func, 2, 1);
+				// the cells along the value chain, a meta entry `@name:value` counting none
+				let (count, current, node_type) = (1, 2, s.type_manager.node_type);
+				Self::emit_list(func, &[I::I64Const(0), I::LocalSet(count), I::LocalGet(0), I::LocalSet(current),
+					I::Block(BlockType::Empty), I::Loop(BlockType::Empty), I::LocalGet(current), I::RefIsNull, I::BrIf(1), I::LocalGet(count)]);
+				s.emit_field(func, current, 1);
 				s.call(func, super::equality::IS_META_ENTRY);
-				func.instruction(&I::I32Eqz);
-				func.instruction(&I::I64ExtendI32U);
-				func.instruction(&I::I64Add);
-				func.instruction(&I::LocalSet(1));
-
-				// current = current.value (field 2)
-				func.instruction(&I::LocalGet(2));
-				func.instruction(&I::StructGet {
-					struct_type_index: s.type_manager.node_type,
-					field_index: 2,
-				});
-				func.instruction(&I::LocalSet(2));
-
-				// continue loop
-				func.instruction(&I::Br(0));
-				func.instruction(&I::End); // end loop
-				func.instruction(&I::End); // end block
+				Self::emit_list(func, &[I::I32Eqz, I::I64ExtendI32U, I::I64Add, I::LocalSet(count),
+					I::LocalGet(current), I::StructGet { struct_type_index: node_type, field_index: 2 }, I::LocalSet(current), I::Br(0), I::End, I::End]);
 
 				if let (Some(counted), Some(count)) = (s.list_cursor(CursorPart::Counted), s.list_cursor(CursorPart::Count)) {
 					Self::emit_list(func, &[I::LocalGet(1), I::I64Const(SHORT_WALK), I::I64GtS, I::If(BlockType::Empty),
 						I::LocalGet(0), I::GlobalSet(counted), I::LocalGet(1), I::GlobalSet(count), I::End]);
 				}
-				// return count
 				func.instruction(&I::LocalGet(1));
 			});
 		}
@@ -369,43 +313,16 @@ impl WasmGcEmitter {
 				func.instruction(&I::End);
 				s.emit_pair_part(func);
 
-				// Get node.kind
-				func.instruction(&I::LocalGet(0));
-				func.instruction(&I::StructGet {
-					struct_type_index: s.type_manager.node_type,
-					field_index: 0, // kind field
-				});
-
-				// Check if kind is Text (3) or Symbol (5)
-				// kind == 3 || kind == 5 means it's a string
-				func.instruction(&I::I64Const(3)); // Kind::Text
-				func.instruction(&I::I64Eq);
-				func.instruction(&I::If(BlockType::Result(Ref(node_ref))));
-				// It's a Text - call string_char_at
-				func.instruction(&I::LocalGet(0));
-				func.instruction(&I::LocalGet(1));
+				// a Text or Symbol indexes its characters, anything else its items
+				for kind in [Kind::Text, Kind::Symbol] {
+					s.emit_field(func, 0, 0);
+					Self::emit_list(func, &[I::I64Const(kind as i64), I::I64Eq]);
+				}
+				Self::emit_list(func, &[I::I32Or, I::If(BlockType::Result(Ref(node_ref))), I::LocalGet(0), I::LocalGet(1)]);
 				s.emit_call(func, "string_char_at");
-				func.instruction(&I::Else);
-				// Check for Symbol
-				func.instruction(&I::LocalGet(0));
-				func.instruction(&I::StructGet {
-					struct_type_index: s.type_manager.node_type,
-					field_index: 0,
-				});
-				func.instruction(&I::I64Const(5)); // Kind::Symbol
-				func.instruction(&I::I64Eq);
-				func.instruction(&I::If(BlockType::Result(Ref(node_ref))));
-				// It's a Symbol - call string_char_at
-				func.instruction(&I::LocalGet(0));
-				func.instruction(&I::LocalGet(1));
-				s.emit_call(func, "string_char_at");
-				func.instruction(&I::Else);
-				// Otherwise it's a list - call list_node_at
-				func.instruction(&I::LocalGet(0));
-				func.instruction(&I::LocalGet(1));
+				Self::emit_list(func, &[I::Else, I::LocalGet(0), I::LocalGet(1)]);
 				s.emit_call(func, "list_node_at");
-				func.instruction(&I::End); // end inner if
-				func.instruction(&I::End); // end outer if
+				func.instruction(&I::End);
 			});
 		}
 	}
