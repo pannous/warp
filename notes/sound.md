@@ -98,14 +98,30 @@ The words above are layer 1, the toy layer. Each layer below keeps the ones abov
 2. Note names built (2026-10-10): parsed, not a table: a letter A–G, `#`/`♯` or `b`/`♭`, an octave 0–9 is its
    equal-tempered frequency to a hundredth of a Hz (A4 = 440), when the program uses sound and doesn't define that
    name; `F#4` parses as `F # 4` and counts as the note unless the program defines `F` (music_words.rs; the parser
-   lets ♯ ♭ continue a name). tests/programs/test_sound_notes.rs. Still to build:
-   Music values, not frequencies. `Note` (pitch class, octave, MIDI number, cents), `Interval`, `Chord(C4, major7)`,
-   `Scale(D, dorian)`, transposition, tuning (A4 = 442Hz, just intonation), velocity. Note names parsed, not a table.
+   lets ♯ ♭ continue a name). tests/programs/test_sound_notes.rs.
+   Music values built (card music-values, samples/harmony.warp, tests/programs/test_music_values.rs): a note name
+   lowers to `midi_hertz(midi)`, so `tuning = 442` (A4, default 440) tunes every note; `midi(pitch)`,
+   `note_name(pitch)` (sharps: "D#4"); `transpose(pitch or list, semitones)` keeps a note a note (transpose(C4, 12)
+   == C5 to the hundredth) and multiplies any other frequency; `chord(root, kind)`, `scale(root, kind)` are lists of
+   notes, kinds in lib chord_intervals / scale_intervals, written as a word the program doesn't define (only directly
+   in the call: `f(major)` passes an undefined symbol) or as a text. Notes stay frequencies at run time; sound's
+   transpose/2 and matrix's transpose/1 coexist. Still to build: a `Note` value (pitch class, octave, cents) that
+   prints as its name, intervals as values, just intonation, velocity.
 3. Built (2026-10-10, samples/synth.warp, tests/programs/test_sound_synth.rs): the ADSR envelope of every note,
    module settings `attack`, `decay` (seconds), `sustain` (a share), `release` (seconds), defaults 5 ms / 0 / 1 / 5 ms
    = the old click-free fade; `wave_shape = "noise"`; gain in decibels, `loudness = -6 dB` (`-6dB`, `x = -6 dB`;
    music_words.rs → lib decibels). The float settings are declared `= 0.3 as float` (card float-global: a float
-   assigned to a global declared with a decimal fails "not an int" in the functions that read it). Still to build:
+   assigned to a global declared with a decimal fails "not an int" in the functions that read it).
+   Built (card synth-filters, samples/filters.warp, tests/programs/test_sound_filters.rs): settings `filter`
+   ("lowpass", "highpass", "bandpass": an RBJ-cookbook biquad over each note's amplitudes), `cutoff` (Hz),
+   `resonance` (Q, 0.707 flat), `vibrato` (semitones) at `vibrato_rate`, `tremolo` (a share) at `tremolo_rate`,
+   `unison` voices spread over `detune` semitones. Plain numbers: `cutoff = 1.2kHz` fails (card quantity-global).
+   The filter runs per note, so its state starts fresh at every note.
+   Stereo built (card stereo-pan, tests/programs/test_sound_pan.rs, tests/web/test_rendered_pan.rs): `pan` (-1 left,
+   1 right, 0 mono) makes lib panned interleave left, right, the far side scaled by 1 - |pan|; sound_samples carries
+   the channels (src/host.rs, 4th parameter), the WAV/AudioBuffer has them, render_sound mixes in stereo when any
+   sound is (mono on both sides alike), natively and in host-files.js mixed. Still open: voice stealing (a cap on
+   voices sounding at once), which only matters for live playing (cards real-time / patterns-live). Still to build:
    Synthesis. Oscillators (sine, saw, square, triangle, noise, wavetable, band-limited, detune, unison), ADSR
    envelopes, filters (lowpass/highpass/bandpass with resonance), LFOs and parameter automation (ramps), gain in dB,
    stereo pan, polyphony with voice stealing.

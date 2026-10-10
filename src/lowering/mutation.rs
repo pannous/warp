@@ -3,7 +3,7 @@
 //! `x = x.upper` in the parser; in `upper x!` the parser only sees `x!`, so it marks x and `lower` turns the call into
 //! `x = upper x`. A lone `x!`, `f!` or `{…}!` keeps evaluating.
 
-use super::nodes::{call, key};
+use super::nodes::{call, children_rewritten, key};
 use crate::node::{Bracket, Node, Separator};
 use crate::operators::Op;
 use crate::diagnostic::Diagnostic;
@@ -129,10 +129,8 @@ pub fn lower(node: Node) -> Node {
 			let call = Node::Key(receiver.clone(), Op::Dot, Box::new(unmarked(*method)));
 			Node::Key(receiver, Op::Assign, Box::new(call))
 		}
-		Node::Key(left, op, right) => key(lower(*left), op, lower(*right)),
 		Node::Meta { .. } if is_marked(&node) => unwrapped(unmarked(node)),
-		Node::Meta { node, data } => Node::Meta { node: Box::new(lower(*node)), data },
-		other => other,
+		other => children_rewritten(other, lower),
 	}
 }
 

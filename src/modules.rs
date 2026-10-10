@@ -81,7 +81,8 @@ pub fn resolve_in(program: Node, directories: &[&str]) -> Node {
 /// module the program names (`use collections; s = Stack()`). class_methods, which turns a class's methods into
 /// functions and its method calls into theirs, runs before `resolve` loads a module's other definitions; the loader
 /// then leaves these modules' classes out (EARLY_CLASS_MODULES). A class the program declares itself wins.
-pub fn insert_module_classes(mut program: Node) -> Node {
+pub fn insert_module_classes(program: Node) -> Node {
+	let mut program = with_type_module_uses(program);
 	let file = PROGRAM_FILE.with(|current| current.borrow().clone());
 	let loader = Loader::new(&SEARCH_DIRECTORIES, file.as_deref().map(folder_of));
 	let own_names: HashSet<String> = statements(program.clone()).iter().filter_map(declared_name).collect();
@@ -193,6 +194,63 @@ fn without_use_of(program: Node, module: &str) -> Node {
 		}
 		Node::Meta { node, data } => Node::Meta { node: Box::new(without_use_of(*node, module)), data },
 		single => single,
+	}
+}
+
+/// `xs.unique()`: a type's methods are the words of the standard module named after it (lib/list.warp, text.warp,
+/// map.warp; user decision, card list-methods), so a program
+/// calling one as a method uses that module; `unique(xs)` still needs `use list`. A library word stays the builtin, a
+/// word the program defines is its own, a word of two such modules needs its `use`, `list.zip(a, b)` names the module
+/// (test_std_qualified)
+/// The standard modules named after a type with their words, the methods of that type: list, map, text
+pub fn type_modules() -> Vec<(&'static str, &'static [String])> {
+	std_module_names()
+		.filter(|module| crate::type_tests::is_type_word(module))
+		.filter_map(|module| Some((module, std_module_definitions(module)?)))
+		.collect()
+}
+
+fn with_type_module_uses(program: Node) -> Node {
+	let mut defined = HashSet::new();
+	program.visit(&mut |node| defined.extend(declared_name(node)));
+	let used: HashSet<String> = statements(program.clone()).iter().filter_map(used_module).map(|used| used.name).collect();
+	let type_modules = type_modules();
+	let is_module_name = |receiver: &Node| receiver.symbol_name().is_some_and(|name| std_module(name).is_some() && !defined.contains(name));
+	let only_provider = |method: &String| match type_modules.iter().filter(|(_, words)| words.contains(method)).collect::<Vec<_>>().as_slice() {
+		[(module, _)] => Some(*module),
+		_ => None,
+	};
+	let mut modules: Vec<&str> = called_methods(&program, &is_module_name)
+		.iter()
+		.filter(|method| !defined.contains(*method) && !crate::library_words::is_library_word(method))
+		.filter_map(only_provider)
+		.filter(|module| !used.contains(*module))
+		.collect();
+	modules.sort();
+	modules.dedup();
+	with_statements_first(program, modules.into_iter().map(|module| WarpParser::parse(&format!("use {module}"))).collect())
+}
+
+/// The methods called with arguments: `unique` of `xs.unique()` and `take` of `xs.take(2)`; `book.title` may be a field,
+/// `list.zip(a, b)` of a module name is a qualified word
+fn called_methods(program: &Node, is_module_name: &dyn Fn(&Node) -> bool) -> HashSet<String> {
+	let mut names = HashSet::new();
+	program.visit(&mut |node| if let Node::Key(receiver, Op::Dot | Op::SafeDot, member) = node {
+		if let (Node::List(call, _, _), false) = (member.drop_meta(), is_module_name(receiver)) {
+			names.extend(call.first().and_then(Node::symbol_name).map(String::from));
+		}
+	});
+	names
+}
+
+fn with_statements_first(program: Node, first: Vec<Node>) -> Node {
+	if first.is_empty() {
+		return program;
+	}
+	match program {
+		Node::List(statements, Bracket::None, separator @ (Separator::Semicolon | Separator::Newline)) => Node::List(first.into_iter().chain(statements).collect(), Bracket::None, separator),
+		Node::Meta { node, data } => Node::Meta { node: Box::new(with_statements_first(*node, first)), data },
+		single => Node::List(first.into_iter().chain(std::iter::once(single)).collect(), Bracket::None, Separator::Newline),
 	}
 }
 

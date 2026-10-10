@@ -190,9 +190,7 @@ fn rewrite_flags(node: Node, types: &[(String, Vec<String>)]) -> Node {
 			}
 			Node::List(items.into_iter().map(|item| rewrite_flags(item, types)).collect(), bracket, separator)
 		}
-		Node::Key(left, op, right) => key(rewrite_flags(*left, types), op, rewrite_flags(*right, types)),
-		Node::Meta { node, data } => Node::Meta { node: Box::new(rewrite_flags(*node, types)), data },
-		other => other,
+		other => children_rewritten(other, |child| rewrite_flags(child, types)),
 	}
 }
 
@@ -325,9 +323,7 @@ fn awaited_starts(node: Node, counter: &Counter) -> Node {
 				_ => Node::List(items.into_iter().map(|item| awaited_starts(item, counter)).collect(), bracket, separator),
 			}
 		}
-		Node::Key(left, op, right) => key(awaited_starts(*left, counter), op, awaited_starts(*right, counter)),
-		Node::Meta { node, data } => Node::Meta { node: Box::new(awaited_starts(*node, counter)), data },
-		other => other,
+		other => children_rewritten(other, |child| awaited_starts(child, counter)),
 	}
 }
 
@@ -563,9 +559,7 @@ impl Tasks<'_> {
 				let Node::List(items, _, _) = left.drop_meta() else { unreachable!("guarded") };
 				self.within(items, Some(*right)).expect("guarded")
 			}
-			Node::Key(left, op, right) => key(self.lower(*left), op, self.lower(*right)),
-			Node::Meta { node, data } => Node::Meta { node: Box::new(self.lower(*node)), data },
-			other => other,
+			other => children_rewritten(other, |child| self.lower(child)),
 		}
 	}
 
@@ -1130,9 +1124,7 @@ fn resolved(node: Node, path: &dyn Fn(&str) -> TaskPath, wrapped: &std::cell::Re
 				_ => Node::List(items, bracket, separator),
 			}
 		}
-		Node::Key(left, op, right) => key(resolved(*left, path, wrapped), op, resolved(*right, path, wrapped)),
-		Node::Meta { node, data } => Node::Meta { node: Box::new(resolved(*node, path, wrapped)), data },
-		other => other,
+		other => children_rewritten(other, |child| resolved(child, path, wrapped)),
 	}
 }
 
@@ -1268,9 +1260,7 @@ fn declarations_in(node: Node) -> Node {
 			}).collect();
 			Node::List(items, bracket, separator)
 		}
-		Node::Key(left, op, right) => key(declarations_in(*left), op, declarations_in(*right)),
-		Node::Meta { node, data } => Node::Meta { node: Box::new(declarations_in(*node)), data },
-		other => other,
+		other => children_rewritten(other, declarations_in),
 	}
 }
 
@@ -1346,14 +1336,11 @@ pub fn lower_spaced_definitions(node: Node) -> Node {
 			let body = bind_it(lower_spaced_definitions(*body), &parameter, false);
 			Node::Key(head, op, Box::new(body))
 		}
-		Node::Key(left, op, right) => key(lower_spaced_definitions(*left), op, lower_spaced_definitions(*right)),
 		Node::List(items, bracket, separator @ (Separator::Semicolon | Separator::Newline)) => {
 			let items = haskell_definitions(items);
 			Node::List(items.into_iter().map(lower_spaced_definitions).collect(), bracket, separator)
 		}
-		Node::List(items, bracket, separator) => Node::List(items.into_iter().map(lower_spaced_definitions).collect(), bracket, separator),
-		Node::Meta { node, data } => Node::Meta { node: Box::new(lower_spaced_definitions(*node)), data },
-		other => other,
+		other => children_rewritten(other, lower_spaced_definitions),
 	}
 }
 
@@ -1487,8 +1474,7 @@ fn bind_it(node: Node, parameter: &str, is_value: bool) -> Node {
 			Node::List(items.into_iter().enumerate().map(|(index, item)| bind_it(item, parameter, is_body && index == last && !is_value)).collect(), bracket, separator)
 		}
 		Node::Key(left, op, right) => key(bind_it(*left, parameter, false), op, bind_it(*right, parameter, false)),
-		Node::Meta { node, data } => Node::Meta { node: Box::new(bind_it(*node, parameter, is_value)), data },
-		other => other,
+		other => children_rewritten(other, |child| bind_it(child, parameter, is_value)),
 	}
 }
 
@@ -2020,9 +2006,7 @@ fn lower_lists(node: Node, lowering: impl Fn(&[Node]) -> Option<Node> + Copy) ->
 			let items: Vec<Node> = items.into_iter().map(|item| lower_lists(item, lowering)).collect();
 			lowering(&items).unwrap_or(Node::List(items, bracket, separator))
 		}
-		Node::Key(left, op, right) => key(lower_lists(*left, lowering), op, lower_lists(*right, lowering)),
-		Node::Meta { node, data } => Node::Meta { node: Box::new(lower_lists(*node, lowering)), data },
-		other => other,
+		other => children_rewritten(other, |child| lower_lists(child, lowering)),
 	}
 }
 

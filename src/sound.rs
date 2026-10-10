@@ -1,4 +1,5 @@
-//! sound_samples(samples, count, rate) natively (card basic-sound, lib/sound.warp): 16-bit mono samples as a WAV file in the
+//! sound_samples(samples, count, rate, channels) natively (card basic-sound, lib/sound.warp): 16-bit samples, mono or
+//! stereo (interleaved left, right: lib panned, card stereo-pan), as a WAV file in the
 //! system's temporary folder (warp-sound/sound-<process id>.wav, then sound-<process id>-2.wav …: runs at the same time
 //! never share a file; card sound-wavs), played by the
 //! system's player when the warp binary may reach the user (paint::shows_windows: never under WARP_NO_WINDOW, CI or
@@ -20,7 +21,7 @@ pub const SAMPLE_OFFSET: i64 = 32_768;
 const FOLDER: &str = "warp-sound";
 const FILE_STEM: &str = "sound";
 const PCM_FORMAT: u16 = 1;
-const CHANNELS: u16 = 1;
+const MONO: u16 = 1;
 const BITS_PER_SAMPLE: u16 = 16;
 const BYTES_PER_SAMPLE: u32 = (BITS_PER_SAMPLE / 8) as u32;
 const FORMAT_CHUNK_SIZE: u32 = 16;
@@ -82,9 +83,16 @@ static STOPS: AtomicUsize = AtomicUsize::new(0);
 static PENDING: AtomicUsize = AtomicUsize::new(0);
 /// The place on the voices where the last render_sound ended
 static RENDERED_UNTIL: Mutex<f64> = Mutex::new(0.0);
-/// The sounds since the last render_sound: their place in their voice (seconds), sample rate and 16-bit samples (in
-/// memory, 44 KB a second at 22050 Hz: the WAV files are shared by all warp processes, another run may overwrite them)
-static UNRENDERED: Mutex<Vec<(f64, u32, Vec<u8>)>> = Mutex::new(Vec::new());
+/// A sound since the last render_sound: its place in its voice (seconds), sample rate, channels and 16-bit samples
+struct Unrendered {
+	place: f64,
+	rate: u32,
+	channels: u16,
+	samples: Vec<i16>,
+}
+/// The sounds since the last render_sound, in memory (44 KB a second at 22050 Hz mono: the WAV files are shared by all
+/// warp processes, another run may overwrite them)
+static UNRENDERED: Mutex<Vec<Unrendered>> = Mutex::new(Vec::new());
 /// A queued sound: its WAV, when it starts, the stop count it was queued at and its handle
 struct Queued {
 	path: PathBuf,
@@ -358,14 +366,14 @@ fn file_format(path: &str) -> Result<&'static str, String> {
 }
 
 /// Write the samples as a WAV and queue it on the audio clock: played when the user may hear it, else say where it is
-pub fn sound(samples: &[u64], rate: u32) -> Result<PathBuf, String> {
-	let data = pcm(samples);
+pub fn sound(samples: &[u64], rate: u32, channels: u16) -> Result<PathBuf, String> {
+	let samples = pcm(samples);
 	let handle = next_handle();
-	let path = wav_file(&data, rate, handle)?;
-	let seconds = samples.len() as f64 / rate.max(1) as f64;
+	let path = wav_file(&wav_of(&samples, rate, channels), handle)?;
+	let seconds = samples.len() as f64 / channels as f64 / rate.max(1) as f64;
 	let (start, place) = scheduled(seconds);
 	if let Ok(mut unrendered) = UNRENDERED.lock() {
-		unrendered.push((place, rate, data));
+		unrendered.push(Unrendered { place, rate, channels, samples });
 	}
 	if crate::paint::shows_windows() {
 		queued(Queued { path: path.clone(), start, stops: STOPS.load(Ordering::Relaxed), handle });
@@ -375,55 +383,60 @@ pub fn sound(samples: &[u64], rate: u32) -> Result<PathBuf, String> {
 	Ok(path)
 }
 
-fn wav_file(data: &[u8], rate: u32, handle: usize) -> Result<PathBuf, String> {
+fn wav_file(wav: &[u8], handle: usize) -> Result<PathBuf, String> {
 	let folder = std::env::temp_dir().join(FOLDER);
 	std::fs::create_dir_all(&folder).map_err(|failure| format!("sound: cannot create {}: {failure}", folder.display()))?;
 	let process = std::process::id();
 	let path = folder.join(if handle == 1 { format!("{FILE_STEM}-{process}.wav") } else { format!("{FILE_STEM}-{process}-{handle}.wav") });
-	std::fs::write(&path, wav_of_data(data, rate)).map_err(|failure| format!("sound: cannot write {}: {failure}", path.display()))?;
+	std::fs::write(&path, wav).map_err(|failure| format!("sound: cannot write {}: {failure}", path.display()))?;
 	Ok(path)
 }
 
 /// render_sound(path): the sounds since the last render (or the start) in one WAV file, each at its place in its
-/// voice, the voices mixed; its seconds
+/// voice, the voices mixed (in stereo when one of them is: a mono sound on both speakers alike); its seconds
 pub fn render(path: &str) -> Result<f64, String> {
 	let sounds = std::mem::take(&mut *UNRENDERED.lock().map_err(|_| "the rendered sounds are poisoned".to_string())?);
-	let rate = sounds.first().map_or(DEFAULT_RATE, |(_, rate, _)| *rate);
-	if let Some((_, other, _)) = sounds.iter().find(|(_, sound_rate, _)| *sound_rate != rate) {
-		return Err(format!("sounds of {rate} and {other} samples per second cannot share {path}"));
+	let rate = sounds.first().map_or(DEFAULT_RATE, |sound| sound.rate);
+	if let Some(other) = sounds.iter().find(|sound| sound.rate != rate) {
+		return Err(format!("sounds of {rate} and {} samples per second cannot share {path}", other.rate));
 	}
+	let channels = sounds.iter().map(|sound| sound.channels).max().unwrap_or(MONO);
 	// from where the last render ended, so `at 1s beep()` keeps its second of silence; an `at` before it starts earlier
 	let mut rendered_until = RENDERED_UNTIL.lock().map_err(|_| "the rendered sounds are poisoned".to_string())?;
-	let first_place = sounds.iter().map(|(place, _, _)| *place).fold(*rendered_until, f64::min);
+	let first_place = sounds.iter().map(|sound| sound.place).fold(*rendered_until, f64::min);
 	let mut mixed: Vec<i32> = vec![];
-	for (place, _, data) in sounds {
-		let start = ((place - first_place) * rate as f64).round() as usize;
-		let samples: Vec<i16> = data.chunks(2).map(|pair| i16::from_le_bytes([pair[0], pair[1]])).collect();
+	for sound in sounds {
+		let start = ((sound.place - first_place) * rate as f64).round() as usize * channels as usize;
+		let samples: Vec<i16> = sound.samples.chunks(sound.channels as usize).flat_map(|frame| (0..channels as usize).map(|channel| frame[channel.min(frame.len() - 1)])).collect();
 		if mixed.len() < start + samples.len() {
 			mixed.resize(start + samples.len(), 0);
 		}
 		mixed[start..].iter_mut().zip(samples).for_each(|(sum, sample)| *sum += sample as i32);
 	}
-	*rendered_until = first_place + mixed.len() as f64 / rate as f64;
-	let data: Vec<u8> = mixed.iter().flat_map(|&sum| (sum.clamp(i16::MIN as i32, i16::MAX as i32) as i16).to_le_bytes()).collect();
-	std::fs::write(path, wav_of_data(&data, rate)).map_err(|failure| format!("cannot write {path}: {failure}"))?;
-	Ok(mixed.len() as f64 / rate as f64)
+	let seconds = mixed.len() as f64 / channels as f64 / rate as f64;
+	*rendered_until = first_place + seconds;
+	let samples: Vec<i16> = mixed.iter().map(|&sum| sum.clamp(i16::MIN as i32, i16::MAX as i32) as i16).collect();
+	std::fs::write(path, wav_of(&samples, rate, channels)).map_err(|failure| format!("cannot write {path}: {failure}"))?;
+	Ok(seconds)
 }
 
 /// A 16-bit mono PCM WAV of the offset samples
 pub fn wav(samples: &[u64], rate: u32) -> Vec<u8> {
-	wav_of_data(&pcm(samples), rate)
+	wav_of(&pcm(samples), rate, MONO)
 }
 
-/// The offset samples as 16-bit little-endian PCM
-fn pcm(samples: &[u64]) -> Vec<u8> {
-	samples.iter().flat_map(|&sample| ((sample as i64 - SAMPLE_OFFSET).clamp(i16::MIN as i64, i16::MAX as i64) as i16).to_le_bytes()).collect()
+/// The offset samples as 16-bit amplitudes
+fn pcm(samples: &[u64]) -> Vec<i16> {
+	samples.iter().map(|&sample| (sample as i64 - SAMPLE_OFFSET).clamp(i16::MIN as i64, i16::MAX as i64) as i16).collect()
 }
 
-fn wav_of_data(data: &[u8], rate: u32) -> Vec<u8> {
+/// A 16-bit PCM WAV of the samples, a stereo one's interleaved left, right
+fn wav_of(samples: &[i16], rate: u32, channels: u16) -> Vec<u8> {
+	let data: Vec<u8> = samples.iter().flat_map(|sample| sample.to_le_bytes()).collect();
+	let data = data.as_slice();
 	let format = [
-		PCM_FORMAT.to_le_bytes().as_slice(), &CHANNELS.to_le_bytes(), &rate.to_le_bytes(), &(rate * BYTES_PER_SAMPLE * CHANNELS as u32).to_le_bytes(),
-		&(BYTES_PER_SAMPLE as u16 * CHANNELS).to_le_bytes(), &BITS_PER_SAMPLE.to_le_bytes(),
+		PCM_FORMAT.to_le_bytes().as_slice(), &channels.to_le_bytes(), &rate.to_le_bytes(), &(rate * BYTES_PER_SAMPLE * channels as u32).to_le_bytes(),
+		&(BYTES_PER_SAMPLE as u16 * channels).to_le_bytes(), &BITS_PER_SAMPLE.to_le_bytes(),
 	].concat();
 	[
 		b"RIFF".as_slice(), &(HEADER_SIZE_AFTER_RIFF + data.len() as u32).to_le_bytes(), b"WAVE",

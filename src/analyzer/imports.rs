@@ -393,6 +393,9 @@ pub fn extract_host_words(ctx: &mut Context, node: &Node) {
 				if crate::time::makes_instant(items) {
 					add_ffi_import(ctx, crate::host::LOCAL_OFFSET, crate::host::HOST_LIBRARY);
 				}
+				if crate::time::constant_form(items) == Some(crate::time::TimeForm::Zoned) {
+					ctx.required_functions.insert(crate::wasm_emitter::times::ZONE_NAMES);
+				}
 				if crate::host::HOST_WORDS.contains(&name.as_str()) && !ctx.user_functions.contains_key(name) {
 					add_ffi_import(ctx, name, crate::host::HOST_LIBRARY);
 					// the host builds a caught stack overflow's or a failed adapter's Error with the module's own error_of
@@ -403,7 +406,7 @@ pub fn extract_host_words(ctx: &mut Context, node: &Node) {
 					if [crate::host::GPU_RENDER, crate::host::TEXT_COVERAGE].contains(&name.as_str()) {
 						ctx.required_functions.insert(crate::wasm_emitter::int_lists::INTS_TO_LIST);
 					}
-					if [crate::host::PAINT, crate::host::SOUND].contains(&name.as_str()) {
+					if crate::host::INT_LIST_WORDS.contains(&name.as_str()) {
 						ctx.required_functions.insert(crate::wasm_emitter::int_lists::LIST_TO_INTS);
 					}
 					// a program that controls tasks polls at its loops, where a paused task waits (browser)

@@ -8,7 +8,7 @@
 //! - JS destructured parameters `({a, b}) => a + b`: the object taken apart into its fields
 
 use super::words::IN_WORD;
-use super::nodes::{call, is_function_keyword, is_type_word, key};
+use super::nodes::{call, children_rewritten, is_function_keyword, is_type_word, key};
 use crate::node::{symbol, Bracket, Node, Separator};
 use crate::operators::Op;
 use std::collections::HashSet;
@@ -171,9 +171,7 @@ fn forms(node: Node) -> Node {
 		}
 		// `f = lambda *xs: …`, JS `f = (...xs) => …`: the definition `f(*xs) := …`, which variadic.rs reads
 		Node::Key(name, Op::Assign, value) if starred_lambda(&name, &value).is_some() => forms(starred_lambda(&name, &value).expect("guarded")),
-		Node::Key(left, op, right) => key(forms(*left), op, forms(*right)),
-		Node::Meta { node, data } => Node::Meta { node: Box::new(forms(*node)), data },
-		other => other,
+		other => children_rewritten(other, forms),
 	}
 }
 

@@ -5,7 +5,7 @@
 //! pair `k: v` matches a pair whose key is k. A guard `n if n < 0 => …` binds n to the subject and tests the condition; a relational pattern `> 100 => …` compares it. The shape tests are ordinary type tests (`is_type(x, "list") and count(x) == n`).
 
 use super::words::COUNT_WORD;
-use super::nodes::{Counter, call, if_then, key};
+use super::nodes::{Counter, call, children_rewritten, if_then, key};
 use crate::node::{text, Bracket, Node, Separator};
 use crate::operators::Op;
 
@@ -55,9 +55,7 @@ impl Lowering<'_> {
 					None => Node::List(self.with_switch_arguments(items), bracket, separator),
 				}
 			}
-			Node::Key(left, op, right) => key(self.expand(*left), op, self.expand(*right)),
-			Node::Meta { node, data } => Node::Meta { node: Box::new(self.expand(*node)), data },
-			other => other,
+			other => children_rewritten(other, |child| self.expand(child)),
 		}
 	}
 

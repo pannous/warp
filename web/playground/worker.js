@@ -53,14 +53,14 @@ self.stopSoundFiles = () => { self.voiceStopped(); post({ type: "stop sound file
 self.stopSound = handle => post({ type: "stop sound", handle }); // stop_sound(handle)
 // a worker has no AudioContext: the page plays it at its start on the shared clock (host-tasks.js voiceSounded); a
 // task's sound comes relayed with its own voice's start
-self.playSamples = (samples, rate, at) => post({ type: "sound", samples, rate, at, handle: nextSoundHandle() });
+self.playSamples = sound => post({ type: "sound", ...sound, handle: nextSoundHandle() });
 const hooks = {
 	renders: true, // each outcome carries its HTML by the program's own renderer (host.js renderedHtml)
 	print: (text, stream) => post({ type: "print", text, stream }),
 	module: bytes => post({ type: "module", bytes }),
 	paint: (pixels, width, height, canvas) => post({ type: "paint", pixels, width, height, canvas }),
 	gpuCanvas: ({ port, ...canvas }) => self.postMessage({ type: "gpu canvas", port, ...canvas }, [port]), // host-gpu.js gpuPainted
-	sound: (samples, rate, at) => self.playSamples(samples, rate, at),
+	sound: sound => self.playSamples(sound),
 	sleeping: milliseconds => post({ type: "sleep", milliseconds }),
 	tasksInline: reason => post({ type: "tasks inline", reason }),
 	notify: text => post({ type: "notify", text }),
