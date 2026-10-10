@@ -631,7 +631,7 @@ PASSED:
   ✓ control::test_type_word_filter_loops::test_a_text_appended_with_an_item_of_a_mixed_list_inside_an_if
   ✓ control::test_type_word_filter_loops::test_a_type_word_loop_visits_only_items_of_that_type
   ✓ control::test_type_word_filter_loops::test_an_adjective_with_a_type_word_is_a_condition
-  ✓ control::test_type_word_filter_loops::test_the_codepoints_of_a_text_need_no_filter
+  ✓ control::test_type_word_filter_loops::test_the_characters_of_a_text_need_no_filter
   ✓ control::test_uncharged_blocks::test_a_block_is_no_value
   ✓ control::test_uncharged_blocks::test_a_computed_colon_warns_where_it_is_written
   ✓ control::test_uncharged_blocks::test_bang_runs_a_block
@@ -2177,9 +2177,11 @@ PASSED:
   ✓ numbers::test_nan_observed::a_nan_leaving_the_run_is_canonical
   ✓ numbers::test_nan_observed::a_nan_prints_as_nan
   ✓ numbers::test_nearest::float_to_exact_refusals_name_nearest
+  ✓ numbers::test_nearest::nearest_expands_exact_values_beyond_floats
   ✓ numbers::test_nearest::nearest_fraction
   ✓ numbers::test_nearest::nearest_of_exact_values
-  ✓ numbers::test_nearest::nearest_takes_two_or_three_arguments
+  ✓ numbers::test_nearest::nearest_takes_two_to_four_arguments
+  ✓ numbers::test_nearest::nearest_within_a_precision
   ✓ numbers::test_norm::norm_is_abs
   ✓ numbers::test_number_words::a_number_word_hints_its_digits
   ✓ numbers::test_number_words::a_variable_of_that_name_wins
@@ -4468,4 +4470,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-10 ignored, 4463 passed, 0 failed, 4463 total tested
+10 ignored, 4465 passed, 0 failed, 4465 total tested

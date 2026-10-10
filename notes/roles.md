@@ -70,6 +70,10 @@ The only session that runs the full suite and the only one that pushes code to m
   conflicts back to the worker), runs `./test.sh` with the integration build tweak, and pushes to main only at 0 failed
   and no drop in the test count. Otherwise it reports the failures to the worker (and the supervisor if it's a decision).
 - Batches branches that arrive close together into one run; runs a worker's targeted check on request.
+- Express (user, 2026-10-10: "faster results for an agent"): a branch sent as "express" (the user asked for that
+  agent's result) is not batched: it goes next, alone on main, its full suite ahead of the batch run (a running suite
+  finishes first). It skips the waiting, never the suite: one red branch on main stops every worker. To try a result
+  even sooner, the worker's early-try binary (notes/agents/common.md) needs no merge at all.
 - Before every merge: Cargo.toml/Cargo.lock restored (a branch that changes Cargo.toml is otherwise refused, and a
   grep for "conflict" does not show that). Before reporting a branch merged: `git merge-base --is-ancestor
   origin/<branch> HEAD`.

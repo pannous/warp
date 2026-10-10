@@ -34,8 +34,8 @@ fn test_a_text_appended_with_an_item_of_a_mixed_list_inside_an_if() {
 }
 
 #[test]
-fn test_the_codepoints_of_a_text_need_no_filter() {
+fn test_the_characters_of_a_text_need_no_filter() {
 	take_warnings();
-	is!("s=\"\"; for character in chars(\"abc\")[1:] { s += character }; s", "bc");
+	is!("s=\"\"; t=\"abc\"; for character in t[1:] { s += character }; s", "bc");
 	assert!(take_warnings().iter().all(|warning| !warning.message.contains("visits only")));
 }

@@ -7,6 +7,24 @@ before asking the user; nobody reads it front to back, the code, tests and wiki 
 notes/open_decisions.md.
 
 ## Decided 2026-10-10 (user; via warp-supervisor or the Interviewer)
+- footgun-divzero (warp-numbers): user: "no idea about the advantages … you decide or we decide later"; the
+  Interviewer's default, revisit any time: exact numbers (ints, rationals, decimals) raise divide by zero (`r = try
+  1/0; r failed` is yes, as failed-raised), computed IEEE floats give ∞/NaN as IEEE (`sqrt(2)/0` is ∞). The
+  extended-rational ±1/0 idea stays open for later; wiki Footguns "NaN and infinity" is corrected to this.
+- wiki-full-evaluation (warp-docs): no conflict: `created: now` stays a block until `!` (the spec); "dates are folded
+  at compile time" is today's implementation limit (Footguns "Not yet"), not a rule. Implied, not asked.
+- let-reassign (warp-types; user, asked 2026-10-10): `let` is fully immutable, `var` is the variable. `let x = 1; x = 2`,
+  `x += …`, `x++` and `xs#1 = 5` on a let are all errors with the fix "use var x". Supersedes P159's "changing a let
+  works with a note" and the wiki/mutable.md:23 split (value may change, binding fixed); the wiki follows this.
+- exact-default (user 2026-10-10, asked after warp-perf measured fraction math as ~90% of finger paint's time plus a
+  never-freed number heap): integer division stays exact, `1/3 + 1/3` is `2/3`; decimal literals are floats,
+  `.1 + .2 ≈ .3`; `==` on floats gives a warning with the fix "use ≈". Supersedes the 2026-09-28 "decimals exact"
+  (`0.1+0.2==0.3`); tests pinning it change meaning by this decision. The ratio heap leak gets fixed regardless
+  (ratios as GC values, small ones inline).
+- let-mut (user 2026-10-10, via warp-supervisor): `let mut x` means `var x`, with a loud warning that warp writes
+  `var`, not the long form.
+- runtime-dates (user 2026-10-10): "dates are evaluated at compile time" must not stand in the wiki; dates get a run-time
+  representation, `now` reads the clock at run time (card runtime-dates, Now).
 - tour-firefox-stall (warp-web): a site whose program runs in a Worker ships task-workers.js (the page creates the
   task Workers; Firefox stalls on new Worker inside a Worker); tests/web/test_site.rs expected lists gain it.
 - failed-raised (warp-fixer, card failed-raised): a raised error (1/0, raise, [1]#5) keeps stopping the program; a

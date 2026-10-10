@@ -15,22 +15,27 @@ replace(t, old, new) := join(split(t, old), new)
 is_digit(c) := c >= '0' and c <= '9'
 is_alpha(c) := (c >= 'a' and c <= 'z') or (c >= 'A' and c <= 'Z')
 is_alphanumeric(c) := is_alpha(c) or is_digit(c)
-// the fraction closest to x whose denominator is at most limit, by continued fractions (Python's limit_denominator):
-// `nearest(sqrt(2), rational)` → 665857/470832, `nearest(pi, rational, 100)` → 311/99
-nearest(x, kind, limit = 1000000) := {
+// x as a fraction, by its continued fraction (src/real.rs computes it exactly for √2, π, … written in the program):
+// `within: 1e-6` the first convergent that close, a limit the closest fraction whose denominator is at most that
+// (Python's limit_denominator), neither the first convergent that is the same float; 0 means not given
+nearest(x, kind, limit = 0, within = 0) := {
 	p0 = 0; q0 = 1; p1 = 1; q1 = 0; rest = x
 	while true {
 		a = floor(rest) as int
 		q2 = q0 + a * q1
-		if q2 > limit { break }
+		if limit > 0 and q2 > limit {
+			// the closer of the last convergent and the semiconvergent with the largest denominator in the limit
+			k = (limit - q0) div q1
+			below = (p0 + k * p1) / (q0 + k * q1)
+			above = p1 / q1
+			return if abs(above - x) <= abs(below - x) then above else below
+		}
 		p2 = p0 + a * p1
 		p0 = p1; q0 = q1; p1 = p2; q1 = q2
-		if rest == a { break }
+		fraction = p1 / q1
+		// a float stops at the first fraction that is the same float: its continued fraction beyond is noise
+		is_same_float = x is float and float(p1) / q1 == x
+		if rest == a or is_same_float or (within > 0 and abs(fraction - x) <= within) { return fraction }
 		rest = 1 / (rest - a)
 	}
-	// the best fraction is the last convergent or the semiconvergent below the limit
-	k = (limit - q0) div q1
-	below = (p0 + k * p1) / (q0 + k * q1)
-	above = p1 / q1
-	if abs(above - x) <= abs(below - x) then above else below
 }

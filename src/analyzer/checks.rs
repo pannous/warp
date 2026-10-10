@@ -455,12 +455,11 @@ pub(super) fn common_type_word(words: &[String]) -> Option<String> {
 	if words.iter().all(|word| word == first) {
 		return Some(first.clone());
 	}
-	let is_number = |word: &String| [INT_WORD, RATIONAL_WORD, REAL_WORD, FLOAT_WORD, NUMBER_WORD].contains(&word.as_str());
-	let is_exact = |word: &String| word == INT_WORD || word == RATIONAL_WORD;
+	let is_number = |word: &String| is_type_within(word, NUMBER_WORD);
 	if !words.iter().all(is_number) {
 		return None;
 	}
-	Some(if words.iter().all(is_exact) { RATIONAL_WORD } else { NUMBER_WORD }.to_string())
+	Some(if words.iter().all(|word| is_type_within(word, RATIONAL_WORD)) { RATIONAL_WORD } else { NUMBER_WORD }.to_string())
 }
 
 /// Semantic checks run before emission; the first violation comes back as an error value
@@ -1497,14 +1496,20 @@ pub(crate) fn declared_element_type(annotation: &Node) -> Option<&str> {
 
 /// Do the elements of a list of type `list_type` (list_type_name: `list of int`) fit the declared element type? A list
 /// whose elements are known only at run time (`list of node`, a plain `list`) is checked there
+/// Is the type `word` (an alias too: `double`, `exact`) the type `within` or one it covers (BUILTIN_TYPES)
+fn is_type_within(word: &str, within: &str) -> bool {
+	crate::type_tests::type_matches(crate::type_tests::canonical_spec_word(word), within)
+}
+
 pub(crate) fn elements_fit(declared_element: &str, list_type: &str) -> bool {
 	let Some(element) = list_type.strip_prefix(LIST_OF_PREFIX) else { return true };
 	// `list of int or text` (`[1] + ["a"]`): every part must fit
 	if let Some(parts) = union_parts(element) {
 		return parts.iter().all(|part| elements_fit(declared_element, &format!("{LIST_OF_PREFIX}{part}")));
 	}
-	// a rational or real element is a fraction an int list loses (`rational` names the exact Int representation)
-	let fraction = [RATIONAL_WORD, REAL_WORD, FLOAT_WORD, NUMBER_WORD].contains(&element).then_some(Kind::Float);
+	// a number int does not cover (rational, real, float …) may be a fraction an int list loses (`rational` names the
+	// exact Int representation)
+	let fraction = (is_type_within(element, NUMBER_WORD) && !is_type_within(element, INT_WORD)).then_some(Kind::Float);
 	match fraction.or_else(|| builtin_type_kind(element)) {
 		Some(kind) => admits(declared_element, kind),
 		None => true,

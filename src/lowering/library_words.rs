@@ -1156,7 +1156,7 @@ impl Lowering {
 			Some((_, _, template)) if word == SUM_WORD => dispatched_sum(self.expanded(template, arguments)),
 			Some((_, _, template)) => self.expanded(template, arguments),
 			// a prelude word calls its definition from lib/prelude.warp (modules::prelude_name)
-			None if let Some(qualified) = crate::modules::prelude_name(word) => call(&qualified, arguments),
+			None if let Some(qualified) = crate::modules::prelude_name(word) => call(&qualified, crate::modules::prelude_arguments(word, arguments)),
 			None => {
 				let name = if matches!(head.drop_meta(), Node::Symbol(written) if written == word) { head.clone() } else { symbol(word) };
 				Node::List([vec![name], arguments].concat(), Bracket::Round, Separator::None)
