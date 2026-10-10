@@ -585,6 +585,12 @@ fn with_member_getters(body: Node, table: &Table) -> Node {
 		let Node::Key(field, Op::Colon, _) = item.drop_meta() else { return item };
 		let Some(members) = table.members.iter().find(|members| members.field == field.drop_meta().name()) else { return item };
 		let Some(back) = &members.back else { return item };
+		if cfg!(feature = "native") {
+			// the rows pointing back, selected: the other table is not loaded
+			let condition = (CONDITION_PLACEHOLDER, Node::Text(format!("{} IS ?", quote(back))));
+			return generated(&format!("{field} := {{ {FOUND}({CONDITION_PLACEHOLDER}, [{ID_FIELD}]) }}", field = members.field),
+				lazy_names(&members.table).into_iter().chain([condition]));
+		}
 		generated(&format!("{field} := {{ [{MEMBER} for {MEMBER} in {LOAD}() if {key} == {ID_FIELD}] }}", key = key_id(MEMBER, back, members.optional_back),
 			field = members.field), lazy_names(&members.table))
 	};
