@@ -26,7 +26,7 @@ wagi_request() := {method: wagi_variable("REQUEST_METHOD"), path: wagi_variable(
 
 wagi_json_text(t:any) := {
 	var out = "\""
-	for c in chars(t) {
+	for c in t {
 		if c == "\"" { out = out + "\\\"" }
 		else if c == "\\" { out = out + "\\\\" }
 		else if c == "\n" { out = out + "\\n" }

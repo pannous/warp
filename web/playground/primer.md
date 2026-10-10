@@ -94,9 +94,18 @@ b
 total = 0; for (a, b) in [(1, 2), (3, 4)] { total += a * b }; total
 ```
 A type or class name as the loop variable matches by type: `for int in xs` visits only the ints, named `int` in the
-body (with a notice when some items may be skipped); `for character in chars(s)` visits every codepoint.
+body (with a notice when some items may be skipped); a text needs no `chars()`: `for char in s` visits its characters,
+and `char in s` alone is that loop.
 ```warp => 4
 sum = 0; for int in [1, "a", 3] { sum += int }; sum
+```
+```warp
+print(char in "a1b")
+```
+```printed
+a
+1
+b
 ```
 
 ## Functions
