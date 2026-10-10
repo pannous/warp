@@ -1,5 +1,6 @@
 // Card go-play: a go block of one statement runs it like a block of several: `go { play "x.wav" }` plays, it did not
-// return the data `{play "x.wav"}`
+// return the data `{play "x.wav"}`. Native only: the browser's play of a file reports no missing file
+#![cfg(feature = "native")]
 use warp::wasm_emitter::eval;
 
 const MISSING_FILE_ERROR: &str = "cannot open x.wav";
