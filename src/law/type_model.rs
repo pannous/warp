@@ -24,6 +24,8 @@ const ACCEPTED_PREFIX: &str = "ok ";
 const REJECTED: &str = "rejected";
 const CONSTANT_KEYWORD: &str = "const";
 const ERROR_CALL: &str = "error";
+/// `x failed` (warp_parser suffixes): is x a stored error
+const IS_ERROR_CALL: &str = "is_error";
 const BOOL_TYPE: &str = ".bool";
 const ANY_TYPE: &str = ".any";
 const LIST_TYPE_PREFIX: &str = ".list ";
@@ -1230,10 +1232,13 @@ impl Exporter {
 				},
 				[item, in_word, list] if is_word(in_word, IN_KEYWORD) => self.tally(list, Some(item), true),
 				[call, a, b] if EXTREMA.iter().any(|word| is_word(call, word)) && !self.functions.contains_key(&call.name()) => self.extremum(&call.name(), a, b),
+				// a stored error: a value until an operation that needs another value meets it (Decided #1)
 				[call, message] if is_word(call, ERROR_CALL) => match message.drop_meta() {
-					Node::Text(message) => Ok(format!(".error {}", quoted(message))),
+					Node::Text(message) => Ok(format!(".fail {}", quoted(message))),
+					Node::Char(letter) => Ok(format!(".fail {}", quoted(&letter.to_string()))),
 					_ => unsupported(node),
 				},
+				[call, value] if is_word(call, IS_ERROR_CALL) => Ok(format!(".failed ({})", self.expression(value)?)),
 				[call] if self.functions.get(&call.name()).is_some_and(|parameter| parameter == UNIT_TYPE) => Ok(format!(".call {} .unit", quoted(&call.name()))),
 				// `add 1 to 2` of `to add number a to number b: …` parses as `add (1 to 2)`: two arguments
 				[call, argument] if self.classes.contains_key(&arguments_class(&call.name())) && matches!(argument.drop_meta(), Node::Key(_, Op::To, _)) => {
