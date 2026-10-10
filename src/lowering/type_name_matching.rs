@@ -12,14 +12,14 @@ const ARTICLES: [&str; 3] = ["a", "an", "the"];
 pub(crate) const PREPOSITIONS: [&str; 11] = ["to", "of", "from", "with", "in", "into", "at", "by", "for", "on", "each"];
 const IT: &str = "it";
 /// Statement words before a typed declaration that never name a function: `global number = 3`, `let int x = 1`
-const STATEMENT_WORDS: [&str; 20] = [
-	"global", "let", "var", "export", "mutable", "mut", "return", "yield", "print", "println", "puts", "not", "use", "import",
-	"include", "if", "while", "for", "else", "then",
+const STATEMENT_WORDS: [&str; 17] = [
+	"global", "let", "var", "export", "mutable", "mut", "return", "yield", "print", "println", "puts", "not", "if", "while", "for", "else",
+	"then",
 ];
 
 pub(crate) fn names_a_function(name: &str) -> bool {
 	!is_type_word(name) && !ARTICLES.contains(&name) && !PREPOSITIONS.contains(&name) && !STATEMENT_WORDS.contains(&name)
-		&& !crate::analyzer::CONSTANT_KEYWORDS.contains(&name) && !crate::operators::FUNCTION_KEYWORDS.contains(&name)
+		&& !crate::modules::is_import_keyword(name) && !crate::analyzer::CONSTANT_KEYWORDS.contains(&name) && !crate::operators::FUNCTION_KEYWORDS.contains(&name)
 }
 
 fn is_type_word(word: &str) -> bool {
