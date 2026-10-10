@@ -160,6 +160,8 @@ pub fn infer_type(node: &Node, scope: &Scope) -> Kind {
 				Kind::Text
 			} else if op.base_op() == Op::Add && (left_kind == Kind::List || right_kind == Kind::List) {
 				Kind::List // `xs += [v]`, what `xs.add(v)` lowers to
+			} else if left_kind == Kind::Empty {
+				Kind::Empty // a variable held as a Node stays one: `total += event.value` of a global widened by it
 			} else if left_kind == Kind::Float || right_kind == Kind::Float {
 				Kind::Float
 			} else {
