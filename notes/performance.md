@@ -62,3 +62,9 @@ converts it (O(n)); a loop that prints or passes the map each round pays that ev
 Finger paint after runtime-speed: `dot(col, row)` passes Ints to `cell(v)`, whose v is a float: int → f64 → floor →
 int per pixel (a per-argument-kind specialization of functions would drop it); a function whose loop is its last
 value (`circle`) boxes that value per row although every caller drops it; int list get/set go through the Node layer.
+Exact decimals (card decimals-exact, 2026-10-10, release): `x = 0.5` is an exact ratio again. exact_add/sub/mul/cmp
+take operands that are inline ratios or Ints within ±2^31 in i64 with an i64 gcd (exact.rs small_shortcut); the
+generic int_gcd/ratio_new path (36 %/41 % of a stroke's profile) stays for bigger ones. 1M adds of 0.5
+(probes/perf/decimal_hot_loop.warp): float 4 ms, exact 135 → 11 ms. A finger paint stroke: float 0.3 ms, exact
+13 → 5 ms; what's left is circle's per-pixel `col + 0.5 - x` in exact math (a scaled-decimal i64 representation, or
+hoisting the conversion into the float path, would drop it).
