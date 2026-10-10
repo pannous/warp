@@ -350,7 +350,7 @@ Each step is useful on its own and is what the next ones stand on.
   trackPointer → worker pagePointer → host.js system_value). `on click` over the canvas gives event.x / event.y.
   Natively mouse_x is a loud error (no canvas). Tour example mouse.
 - Natively each show still writes paint-N.png (src/paint.rs). `color.with_alpha(a)` works as a method (test_draw.rs).
-  Left: built sites (site.js) show no frames and no pointer yet.
+  Built sites show frames and read the pointer too (card site-frames, "Paintings" under Built sites).
 
 ## web-apis: notify (2026-10-07, warp-90; plan approved by warp-03)
 - `notify "text"` is the host word notify (src/host.rs, warp-runtime system_values.rs notify): natively osascript
@@ -370,7 +370,8 @@ Each step is useful on its own and is what the next ones stand on.
   asynchronously, so a task Worker (task-worker.js `data.gpu`) asks for the device once, runs the job and writes
   {values} or {error} with writeShared; the program's worker blocks in host-tasks.js readShared (shared by tasks,
   fetches and the GPU). A shader that does not compile fails loudly with its line:column. Without task Workers (a page
-  that is not cross-origin isolated, e.g. a built site) it is a loud error.
+  that is not cross-origin isolated) it is a loud error. A built site using GPU words or paint (which may be given a
+  shader) ships host-gpu.js with host-tasks.js and runs its program in the site Worker (card site-gpu).
 - Natively (2026-10-07, warp-12): src/gpu.rs runs the same shader through wgpu 30 (Metal, Vulkan or DX12; the
   `native` feature; pollster blocks on its futures), one device per process; errors in the browser's form, `1:10:
   expected identifier…` or wgpu's innermost cause. A machine without an adapter says "no WebGPU adapter" (tests skip).
