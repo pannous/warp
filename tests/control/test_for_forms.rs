@@ -65,3 +65,11 @@ fn loops_bind_it_to_values_of_other_kinds() {
 	is!("for 1..3 {it}; s=\"\"; for friend in [foe1, friend1] {s+=\"$(it)\"}; s", "foe1friend1");
 	is!("x=1; while x<3 {x++}; xs=[a,b]; x = xs#2; x", warp::Node::Symbol("b".into()));
 }
+
+#[test] // wiki/plural.md: over a text, `word` walks the words, `line` the lines, any other name the characters (card loop-walks)
+fn the_loop_variable_name_picks_the_text_unit() {
+	is!("text=\"hi  you\"; s=\"\"; for word in text { s += word + \",\" }; s", "hi,you,");
+	is!("s=\"\"; for line in \"a\nb c\" { s += line + \",\" }; s", "a,b c,");
+	is!("text=\"hi\"; s=\"\"; for char in text { s += char + \",\" }; s", "h,i,");
+	is!("s=\"\"; for word in [\"a b\", \"c\"] { s += word + \",\" }; s", "a b,c,");
+}
