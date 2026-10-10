@@ -40,13 +40,16 @@ const FOR_KEYWORD: &str = "for";
 const VARIABLE_KEYWORDS: [&str; 2] = ["let", "shared"];
 /// the one field of a function local's cell (`f·n`): `·` keeps it apart from the program's own fields
 const CELL_FIELD: &str = "·value";
-/// An inline union `int | text` or an optional `int?` is the join of its alternatives, every value given to it a cast
+/// An inline union `int | text` is the join of its alternatives, every value given to it a cast
 const UNION_TYPE: &str = "(Ty.joinAll ";
 const RANGED_TYPE_PREFIX: &str = ".ranged ";
 const UNION_JOINER: &str = " or ";
 const OPTIONAL_MARK: char = '?';
-/// the type of ø, the empty part of an optional (ø is the empty list)
-const EMPTY_TYPE: &str = ".list .never";
+/// An optional `int?`: its values and ø
+const OPTIONAL_TYPE_PREFIX: &str = ".opt ";
+/// ø is the empty list (`xs = []` parses as ø), but the empty part where an optional takes it
+const EMPTY_LIST: &str = ".nil";
+const EMPTY_VALUE: &str = ".unit";
 /// Effect handlers (notes/effect_handlers.md): `on ev {h}`, `on ev {h} in {body}`, `emit ev{payload}`
 const ON_KEYWORD: &str = "on";
 const IN_KEYWORD: &str = "in";
@@ -133,6 +136,7 @@ fn admitted(declared: &str, value: String) -> String {
 	match union_alternatives(declared) {
 		Some(alternatives) => format!(".cast ({value}) {alternatives}"),
 		None if declared.starts_with(RANGED_TYPE_PREFIX) => format!(".cast ({value}) [{declared}]"),
+		None if declared.starts_with(OPTIONAL_TYPE_PREFIX) && value == EMPTY_LIST => EMPTY_VALUE.to_string(),
 		None => value,
 	}
 }
@@ -588,14 +592,13 @@ impl Exporter {
 		})
 	}
 
-	/// `int or text`, `int?`: the join of the alternatives; a union warp narrows to one part (`int | float` is float)
-	/// is that part
+	/// `int or text`: the join of the alternatives; a union warp narrows to one part (`int | float` is float) is that
+	/// part. `int?`: the optional of it
 	fn union_type(&self, union: &str) -> Lean {
-		let parts = union.strip_suffix(OPTIONAL_MARK);
-		let mut alternatives = parts.unwrap_or(union).split(UNION_JOINER).map(|part| self.type_of(part)).collect::<Result<Vec<_>, String>>()?;
-		if parts.is_some() {
-			alternatives.push(EMPTY_TYPE.to_string());
+		if let Some(inner) = union.strip_suffix(OPTIONAL_MARK) {
+			return Ok(format!("{OPTIONAL_TYPE_PREFIX}({})", self.union_type(inner)?));
 		}
+		let alternatives = union.split(UNION_JOINER).map(|part| self.type_of(part)).collect::<Result<Vec<_>, String>>()?;
 		Ok(match alternatives.as_slice() {
 			[single] => single.clone(),
 			_ => format!("{UNION_TYPE}[{}])", alternatives.join(", ")),
@@ -958,7 +961,8 @@ impl Exporter {
 			self.map_names.push(name.clone());
 		}
 		let aliased_list = matches!(value.drop_meta(), Node::Symbol(other) if self.list_names.contains(other));
-		if aliased_list || is_list_literal(value) || matches!(value.drop_meta(), Node::Empty) || annotation.as_deref().is_some_and(|lean| lean.starts_with(LIST_TYPE_PREFIX)) {
+		let optional = annotation.as_deref().is_some_and(|lean| lean.starts_with(OPTIONAL_TYPE_PREFIX));
+		if aliased_list || is_list_literal(value) || (matches!(value.drop_meta(), Node::Empty) && !optional) || annotation.as_deref().is_some_and(|lean| lean.starts_with(LIST_TYPE_PREFIX)) {
 			self.list_names.push(name.clone());
 		}
 		let value = self.shared_list(&name, annotation.as_deref(), value)?;
@@ -1224,7 +1228,7 @@ impl Exporter {
 			Node::False => Ok(".bool false".to_string()),
 			Node::Text(text) => Ok(format!(".text {}", quoted(text))),
 			Node::Char(c) => Ok(format!(".text {}", quoted(&c.to_string()))), // `"a"` parses as a codepoint
-			Node::Empty => Ok(".nil".to_string()), // ø is the empty list (`xs = []` parses as ø)
+			Node::Empty => Ok(EMPTY_LIST.to_string()),
 			Node::Symbol(name) if self.cells.contains(name) => Ok(self.cell_value(name)),
 			// the function's first local is its arguments object; loops and lambdas push theirs after it
 			Node::Symbol(name) if self.argument_fields.contains(name) => {
@@ -1239,7 +1243,7 @@ impl Exporter {
 			Node::Symbol(name) if crate::units::is_unit(name) => Ok(quantity_literal(name)),
 			_ if map_entries(node).is_some() && self.classes.contains_key(MAP_CLASS) => self.instance(MAP_CLASS, map_entries(node).expect("a map")),
 			Node::List(items, Bracket::Square, _) => {
-				Ok(self.expressions(items)?.iter().rev().fold(".nil".to_string(), |tail, head| format!(".cons ({head}) ({tail})")))
+				Ok(self.expressions(items)?.iter().rev().fold(EMPTY_LIST.to_string(), |tail, head| format!(".cons ({head}) ({tail})")))
 			}
 			Node::List(items, Bracket::Round, _) if items.len() == 1 => self.expression(&items[0]),
 			Node::List(items, Bracket::Curly, _) if !items.is_empty() => self.block(node),
@@ -1400,6 +1404,7 @@ impl Exporter {
 			// `'a'..'e'`: letters, outside W0
 			Node::Key(from, Op::Range | Op::To, to) if [from, to].iter().any(|bound| matches!(bound.drop_meta(), Node::Text(_) | Node::Char(_))) => unsupported(node),
 			Node::Key(from, Op::Range, to) => self.binary(".range", from, to),
+			Node::Key(left, Op::Coalesce, right) => self.binary(".orElse", left, right),
 			// `1 to 3` includes 3
 			Node::Key(from, Op::To, to) => Ok(format!(".range ({}) (.add ({}) (.int 1))", self.expression(from)?, self.expression(to)?)),
 			_ => unsupported(node),
