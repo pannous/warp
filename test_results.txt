@@ -2951,6 +2951,9 @@ PASSED:
   ✓ programs::test_sound_notes::a_variable_named_like_a_note_is_the_variable
   ✓ programs::test_sound_notes::every_octave_is_a_note
   ✓ programs::test_sound_notes::sharps_and_flats_are_notes
+  ✓ programs::test_sound_pan::a_panned_note_sounds_on_one_side
+  ✓ programs::test_sound_pan::mono_and_stereo_mix_into_stereo
+  ✓ programs::test_sound_pan::panning_interleaves_the_channels
   ✓ programs::test_sound_render::a_render_takes_the_sounds_after_the_last_one
   ✓ programs::test_sound_render::sounds_render_into_one_wav_file
   ✓ programs::test_sound_spectrum::a_tone_fills_its_own_band
@@ -4610,4 +4613,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-10 ignored, 4605 passed, 0 failed, 4605 total tested
+10 ignored, 4608 passed, 0 failed, 4608 total tested
