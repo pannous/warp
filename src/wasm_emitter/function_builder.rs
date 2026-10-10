@@ -39,6 +39,21 @@ impl WasmGcEmitter {
 		self.export_runtime_function(name);
 	}
 
+	/// A function only the host calls, exported as `export` without a name in the registry (a component adapter, a
+	/// type's constructor, the compare dispatcher): its index, taken after `body` ran
+	pub(super) fn host_only_function(&mut self, export: &str, params: Vec<ValType>, results: Vec<ValType>, locals: Vec<ValType>, body: impl FnOnce(&mut Self, &mut Function)) -> u32 {
+		let func_type = self.type_manager.function_type(params, results);
+		let mut func = Function::new(locals.into_iter().map(|local| (1, local)).collect::<Vec<_>>());
+		body(self, &mut func);
+		func.instruction(&I::End);
+		self.functions.function(func_type);
+		self.code.function(&func);
+		let index = self.next_func_idx;
+		self.exports.export(export, ExportKind::Func, index);
+		self.next_func_idx += 1;
+		index
+	}
+
 	/// Exports the emitted runtime function `name` for the host; a page's host (web/playground) calls only some, and
 	/// the others are left to tree shaking (web::test_bundle_budget)
 	pub(super) fn export_runtime_function(&mut self, name: &'static str) {

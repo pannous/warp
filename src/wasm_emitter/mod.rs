@@ -956,30 +956,12 @@ impl WasmGcEmitter {
 			heap_type: HeapType::Concrete(type_idx),
 		};
 
-		// Build parameter types
 		let params: Vec<ValType> = type_def.fields.iter().map(|f| field_def_to_val_type(f, self)).collect();
-
-		// Function type: (params...) -> (ref $TypeName)
-		let func_type = self.type_manager.function_type(params.clone(), vec![Ref(type_ref)]);
-		self.functions.function(func_type);
-
-		// Function body: get all params, struct.new
-		let mut func = Function::new(vec![]);
-		for i in 0..type_def.fields.len() {
-			func.instruction(&I::LocalGet(i as u32));
-		}
-		func.instruction(&I::StructNew(type_idx));
-		func.instruction(&I::End);
-
-		self.code.function(&func);
-
-		// Export as new_TypeName
-		let func_name = format!("new_{}", type_def.name);
-		// Leak the string to get a 'static str for the export
-		let func_name_static: &'static str = Box::leak(func_name.clone().into_boxed_str());
-		self.exports
-			.export(func_name_static, ExportKind::Func, self.next_func_idx);
-		self.next_func_idx += 1;
+		let field_count = params.len() as u32;
+		self.host_only_function(&format!("new_{}", type_def.name), params, vec![Ref(type_ref)], vec![], |_, func| {
+			(0..field_count).for_each(|field| { func.instruction(&I::LocalGet(field)); });
+			func.instruction(&I::StructNew(type_idx));
+		});
 	}
 
 
