@@ -18,6 +18,16 @@ fn test_run_time_float_rounded_across_a_half() {
 	is!("x = random() * 0 + 0.1; str(x / 3)", "0.03333333333333333");
 }
 
+/// A float no 16 digits read back as gets its 17 digits exactly (Dekker's product); tiny and huge floats their
+/// shortest digits too
+#[test]
+fn test_run_time_float_needing_17_digits() {
+	is!("x = random() * 0 + 73.0; str(x / 7)", "10.428571428571429");
+	for text in ["0.7999999999999999", "1.4285714285714285e-11", "1.7636684142857142e34", "1.7976931348623157e308", "3.110878728344063e-302", "6.62607015e-34", "1.5e-30", "5e-324", "2.2250738585072014e-308"] {
+		is!(&format!("x = random() * 0 + {text}; str(x)"), text);
+	}
+}
+
 #[test]
 fn test_folded_float_prints_shortest() {
 	for (value, text) in SHORTEST_TEXTS {
