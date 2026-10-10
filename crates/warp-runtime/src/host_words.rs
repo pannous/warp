@@ -33,8 +33,11 @@ pub const MOUSE_Y: &str = "mouse_y";
 pub const MOUSE_DOWN: &str = "mouse_down";
 /// The local time of day in milliseconds since midnight, what the word `time` is compared with a duration (src/units.rs)
 pub const TIME_OF_DAY: &str = "time of day";
-pub const SYSTEM_VALUES: [(&str, bool); 8] = [(BATTERY, false), (CHARGING, true), (ONLINE, true), (DARK_MODE, true), (CLIPBOARD_COUNT, false),
-	(MOUSE_X, false), (MOUSE_Y, false), (MOUSE_DOWN, true)];
+/// the size a picture gets: the playground's output pane, natively the paint window's first size (system_values.rs)
+pub const VIEW_WIDTH: &str = "view_width";
+pub const VIEW_HEIGHT: &str = "view_height";
+pub const SYSTEM_VALUES: [(&str, bool); 10] = [(BATTERY, false), (CHARGING, true), (ONLINE, true), (DARK_MODE, true), (CLIPBOARD_COUNT, false),
+	(MOUSE_X, false), (MOUSE_Y, false), (MOUSE_DOWN, true), (VIEW_WIDTH, false), (VIEW_HEIGHT, false)];
 /// `clipboard`: the clipboard's text, read only when the program reads it (host.rs clipboard_text)
 pub const CLIPBOARD: &str = "clipboard";
 pub const CLIPBOARD_TEXT: &str = "clipboard_text";

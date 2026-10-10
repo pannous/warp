@@ -262,8 +262,17 @@ function notification(text) {
 
 // the system values a Worker cannot read itself (host.js system_value), sent again when they change
 const darkMode = matchMedia(DARK_MODE_QUERY);
-const tellSystemValues = () => worker.postMessage({ system: { "dark mode": darkMode.matches } });
+const tellSystemValues = () => worker.postMessage({ system: { "dark mode": darkMode.matches, ...viewSize() } });
 darkMode.addEventListener("change", tellSystemValues);
+new ResizeObserver(() => worker && tellSystemValues()).observe($("output"));
+
+// view_width, view_height (use draw's default canvas): the room below the output pane's text, in CSS pixels; none while
+// the pane is folded away, so host.js's defaults stand
+function viewSize() {
+	const pane = $("output").getBoundingClientRect(), painted = $("painted").getBoundingClientRect();
+	const width = Math.floor(painted.width), height = Math.floor(pane.bottom - painted.top);
+	return width > 0 && height > 0 ? { view_width: width, view_height: height } : {};
+}
 
 // `loop { …; show(); sleep(16) }`: each sleep starts an animation's next frame, what the run paints or prints in it
 // replaces the last frame's; frames keep the run alive past RUN_TIMEOUT_MS, the next run stops it (cards
