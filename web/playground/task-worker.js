@@ -8,18 +8,27 @@ importScripts(...(SITE_SCRIPTS ?? ["reader.js", "imports.js", "host.js"]));
 if (!SITE_SCRIPTS) importScripts(...HOST_PART_FILES, "components.js", "served-files.js");
 self.postMessage(TASK_WORKER_READY); // the pool takes this Worker only once it has loaded (host.js prepareTaskPool)
 
+// what a task does for the page goes through the program's Worker (host-tasks.js relayed)
+const relay = (method, ...values) => self.postMessage({ relay: [method, ...values] });
+for (const method of ["playSoundFile", "stopSound", "stopSoundFiles"]) self[method] = (...values) => relay(method, ...values);
+// the files a task writes go back with its result (host-tasks.js finishedTask), bytes as their numbers in its JSON
+let taskFiles = new Map();
+self.taskWrote = (path, content) => taskFiles.set(path, typeof content === "string" ? content : { bytes: Array.from(content) });
+
 self.onmessage = ({ data }) => data.fetch ? fetchInto(data) : data.gpu ? gpuJobInto(data) : runTaskInto(data);
 
 // the starting program waits for the shared buffer, so every task writes it, a failure of this Worker's own too
-function runTaskInto({ module, name, ints, values, shared, arrays, captured, control, channels }) {
+function runTaskInto({ module, name, ints, values, shared, arrays, captured, control, channels, files }) {
 	Atomics.store(control, TASK_TAKEN_SLOT, 1);
 	Atomics.notify(control, TASK_TAKEN_SLOT);
 	let output = "";
+	self.takeWrittenFiles?.(files);
+	taskFiles = new Map();
 	try {
-		const hooks = { print: text => { output += text; }, panicked: text => { output += text; } };
+		const hooks = { print: text => { output += text; }, panicked: text => { output += text; }, sound: (samples, rate) => relay("playSamples", samples, rate) };
 		const record = runTask(module, hooks, [], name, ints, values, arrays, captured, control, channels);
 		if (typeof record.value === "bigint") record.ints = true; // a function of Ints: its Int result as a tree
-		writeShared(shared, { ...record, value: taskTree(record.value), output });
+		writeShared(shared, { ...record, value: taskTree(record.value), output, files: [...taskFiles] });
 	} catch (failure) {
 		console.error(failure);
 		writeShared(shared, { failure: `task ${taskName(name)}: its Worker failed: ${failure.message ?? failure}`, output });

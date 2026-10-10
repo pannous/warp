@@ -47,7 +47,20 @@ const TASKS_INLINE = "tasks take turns here, one runs to its end before the prog
 function addTaskWorker(loaded) {
 	const worker = new Worker(self.siteScripts ? `${TASK_WORKER}?scripts=${self.siteScripts.join(",")}` : TASK_WORKER);
 	// loaded: it can take tasks; later a fetch it made is done (startFetch)
-	worker.onmessage = ({ data }) => data === FETCH_DONE ? worker.fetched?.() : (taskPool.push(worker), loaded?.());
+	worker.onmessage = ({ data }) => {
+		if (data === FETCH_DONE) return worker.fetched?.();
+		if (data.relay) return relayed(data.relay);
+		taskPool.push(worker);
+		loaded?.();
+	};
+}
+
+// a sound a task plays, for the page, which only the program's Worker talks to (task-worker.js relay); it reaches the
+// page once that Worker is back in its event loop, not while it waits for the task
+const RELAYED = ["playSamples", "playSoundFile", "stopSound", "stopSoundFiles"];
+function relayed([method, ...values]) {
+	if (!RELAYED.includes(method)) throw new Error(`a task Worker relayed ${method}, which is no word of the page`);
+	self[method]?.(...values);
 }
 
 // the pool of task Workers, made by the workers that run programs (worker.js, test-worker.js) when they start, one
@@ -255,7 +268,8 @@ function startTask(holder, hooks, name, ints, values) {
 		const shared = new SharedArrayBuffer(TASK_HEADER + TASK_RESULT_BYTES, { maxByteLength: TASK_RESULT_LIMIT });
 		const worker = taskPool.pop();
 		const control = new Int32Array(new SharedArrayBuffer(2 * Int32Array.BYTES_PER_ELEMENT));
-		worker.postMessage({ module: run.module, name, ints, values, shared, arrays: run.shared, captured, control, channels: run.channels });
+		const files = self.writtenFilesForTask?.();
+		worker.postMessage({ module: run.module, name, ints, values, shared, arrays: run.shared, captured, control, channels: run.channels, files });
 		run.tasks.set(id, { name, worker, shared, control, started: performance.now(), inline });
 	} else {
 		if (!hasTaskWorkers()) sayTasksInline(run, holder, hooks);
@@ -298,6 +312,7 @@ function finishedTask(run, hooks, id) {
 	if (!task.worker) return queuedSignals(run, task);
 	let record = readShared(task.shared);
 	if (record.output) hooks.print(record.output, 1);
+	record.files?.forEach(([path, content]) => self.keepWritten?.(path, content.bytes ? Uint8Array.from(content.bytes) : content));
 	taskPool.push(task.worker); // free for the next task
 	if (record.value?.kind === KIND_INT && record.ints) record.value = BigInt(record.value.data.int);
 	// a Worker that could not even instantiate the task runs it here instead: a page holds ~124 Wasm memories in all its
