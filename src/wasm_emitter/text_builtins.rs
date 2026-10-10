@@ -68,7 +68,7 @@ pub const TEXT_FORM: &str = "text_form";
 const TEXT_BUILTINS: [(&str, usize, Kind); 23] = [
 	(MEMORY_BYTE, 1, Kind::Int), (MEMORY_SET_BYTE, 2, Kind::Int),
 	(crate::memoization::MEMO_KNOWN, 2, Kind::Int), (crate::memoization::MEMO_VALUE, 2, Kind::Int), (crate::memoization::MEMO_STORE, 3, Kind::Int),
-	(READ, 1, Kind::Text), (BYTE_AT, 2, Kind::Int), (BYTE_SLICE, 3, Kind::Text), (ERROR, 1, Kind::Text), (RAISE, 1, Kind::Text), (IS_ERROR, 1, Kind::Int),
+	(READ, 1, Kind::Text), (BYTE_AT, 2, Kind::Int), (BYTE_SLICE, 3, Kind::Text), (ERROR, 1, Kind::Empty), (RAISE, 1, Kind::Text), (IS_ERROR, 1, Kind::Int),
 	(WARNING, 1, Kind::Text), (TEXT_FORM, 1, Kind::Text), (RAN_WITHOUT_ERROR, 1, Kind::Int), (TRIM, 1, Kind::Text),
 	(STARTS_WITH, 2, Kind::Int), (ENDS_WITH, 2, Kind::Int), (CHR, 1, Kind::Codepoint), (crate::wasm_emitter::CAUGHT_ERROR, 2, Kind::Error),
 	(RAN_WITHOUT_ABORT, 2, Kind::Int), (ABORT_TO, 1, Kind::Int), (crate::uncertain::CERTAINLY, 1, Kind::Int), (crate::uncertain::POSSIBLY, 1, Kind::Int),

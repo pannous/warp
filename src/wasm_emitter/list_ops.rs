@@ -1114,9 +1114,11 @@ impl WasmGcEmitter {
 
 	/// Walk list local 0 to the element at 1-based index local 1 into `current`; trap when out of range, naming the index
 	/// asked for (local `current + 1`) and the list's range
-	fn emit_list_walk(&self, func: &mut Function, current: u32) {
+	fn emit_list_walk(&mut self, func: &mut Function, current: u32) {
 		let asked = current + 1;
 		Self::emit_list(func, &[I::LocalGet(1), I::LocalSet(asked)]);
+		// a stored error indexed (`r = error("x"); r#1`) raises itself, as any operation on it does
+		self.emit_fail_if_error(func, 0);
 		// a number, a character or a text held where a list is indexed (`x=3; x#1`, a parameter): not_a_list, not a cast trap
 		for scalar in [Kind::Int, Kind::Float, Kind::Codepoint, Kind::Text, Kind::Symbol] {
 			self.emit_field(func, 0, 0);
