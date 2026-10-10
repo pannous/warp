@@ -19,6 +19,8 @@ notes/open_decisions.md.
 - module-global-assign (warp-sound default, not asked): a program's top-level `tempo = 90` / `note_seconds = 0.25` /
   `canvas_width = 800` sets the standard module's `global` of that name instead of making a shadowing program
   variable; other module words still shadow. Revisit if it surprises the user.
+- go-voice (warp-sound default, not asked): a `go { }` task is a voice that starts where its starter stands in the
+  music and sounds along with it (native; the Playground still plays them one after another, card playground-go).
 - exact-default (user 2026-10-10, asked after warp-perf measured fraction math as ~90% of finger paint's time plus a
   never-freed number heap): integer division stays exact, `1/3 + 1/3` is `2/3`; decimal literals are floats,
   `.1 + .2 ≈ .3`; `==` on floats gives a warning with the fix "use ≈". Supersedes the 2026-09-28 "decimals exact"
