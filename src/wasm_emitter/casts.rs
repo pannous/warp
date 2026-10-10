@@ -90,6 +90,11 @@ impl WasmGcEmitter {
 				&& !self.names_unknown_word(value) && !self.computes_at_run_time_kind(value) => {
 				self.emit_int_value_truncated(func, value);
 			}
+			// a float truncated straight to the i64, without the Int node emit_cast_to_int builds
+			_ if self.get_type(value).is_float() && super::values::is_int_type_word(target) && !self.computes_at_run_time_kind(value) => {
+				self.emit_float_value(func, value);
+				self.emit_truncating_cast(func);
+			}
 			_ if crate::analyzer::builtin_type_kind(&target.name()) == Some(Kind::Int) => {
 				self.emit_cast(func, value, target);
 				self.emit_call(func, "get_int_value");

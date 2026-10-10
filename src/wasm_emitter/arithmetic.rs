@@ -619,6 +619,14 @@ impl WasmGcEmitter {
 
 	pub(super) fn emit_float_binary(&mut self, func: &mut Function, left: &Node, op: &Op, right: &Node) -> ArithmeticWrap {
 		self.emit_float_value(func, left);
+		// `x ^ 2` is x * x: one rounding of the exact square, as pow gives it, without a libm call per use
+		if *op == Op::Pow && matches!(right.drop_meta(), Node::Number(Number::Int(2))) {
+			self.pop_float_scratch(func, 0);
+			self.push_float_scratch(func, 0);
+			self.push_float_scratch(func, 0);
+			func.instruction(&I::F64Mul);
+			return ArithmeticWrap::Float;
+		}
 		self.emit_float_value(func, right);
 
 		match op {
