@@ -684,6 +684,9 @@ impl WasmGcEmitter {
 		self.derive_imports_from_effects(node);
 		self.declares_list_types = declared_values::declares_list_types(node);
 		analyze_required_functions(&mut self.ctx, node);
+		if crate::analyzer::makes_floats(&self.ctx, node) {
+			self.ctx.required_functions.insert(float_text::FLOAT_TEXT);
+		}
 		self.ctx.required_functions.extend(self.discovered_needs.iter().filter_map(|need| match need {
 			Need::Function(name) => Some(*name),
 			Need::MathImport(_) | Need::KeyOperator(_) => None,
@@ -1215,6 +1218,10 @@ impl WasmGcEmitter {
 			self.discovered_needs.insert(Need::Function(name));
 			func.instruction(&I::Unreachable);
 			return;
+		}
+		// a float the analyzer did not foresee (makes_floats) may be shown: rerun with float_text
+		if name == "new_float" && self.should_emit_function("list_join") && !self.should_emit_function(float_text::FLOAT_TEXT) {
+			self.discovered_needs.insert(Need::Function(float_text::FLOAT_TEXT));
 		}
 		self.ctx.used_functions.insert(name);
 		func.instruction(&I::Call(self.func_index(name)));

@@ -597,12 +597,14 @@ impl WasmGcEmitter {
 					s.call(f, super::times::TIME_TEXT);
 					Self::emit_list(f, &[I::LocalSet(element), I::End]);
 				}
-				is_kind(f, Kind::Float);
-				f.instruction(&I::If(BlockType::Empty));
-				s.emit_field(f, element, 1);
-				Self::emit_list(f, &[I::RefCastNonNull(HeapType::Concrete(float_box)), I::StructGet { struct_type_index: float_box, field_index: 0 }]);
-				s.call(f, super::float_text::FLOAT_TEXT);
-				Self::emit_list(f, &[I::LocalSet(element), I::End]);
+				if s.should_emit_function(super::float_text::FLOAT_TEXT) {
+					is_kind(f, Kind::Float);
+					f.instruction(&I::If(BlockType::Empty));
+					s.emit_field(f, element, 1);
+					Self::emit_list(f, &[I::RefCastNonNull(HeapType::Concrete(float_box)), I::StructGet { struct_type_index: float_box, field_index: 0 }]);
+					s.call(f, super::float_text::FLOAT_TEXT);
+					Self::emit_list(f, &[I::LocalSet(element), I::End]);
+				}
 				if exact_numbers { // a big integer or a ratio joins as its exact text, a fixnum by int_to_decimal below
 					is_kind(f, Kind::Int);
 					f.instruction(&I::If(BlockType::Empty));
