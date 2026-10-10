@@ -194,8 +194,8 @@ fn let_binding(items: &[Node]) -> Option<Node> {
 	if !keyword.is_symbol(LET_WORD) {
 		return None;
 	}
-	if let [modifier] = names {
-		return let_mut(keyword, modifier, last, last_name);
+	if let Some(variable) = names.first().filter(|_| names.len() == 1).and_then(|modifier| let_mut(keyword, modifier, last, last_name)) {
+		return Some(variable);
 	}
 	let names: Vec<&Node> = names.iter().chain([last_name.as_ref()]).collect();
 	if !names.iter().all(|name| matches!(name.drop_meta(), Node::Symbol(_))) {
