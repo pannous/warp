@@ -152,3 +152,4 @@ mod test_parameter_assignment;
 mod test_generators; // card generators-function
 mod test_typed_global_capture; // card typed-global
 mod test_statement_blocks; // card statement-block
+mod test_sequence_values; // cards sequence-value, block-data-sound
