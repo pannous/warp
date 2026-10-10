@@ -986,12 +986,16 @@ impl WasmGcEmitter {
 			if s.int_runtime() { s.call(f, "exact_to_f64") } else { f.instruction(&I::F64ConvertI64S); }
 			Self::emit_list(f, &[I::Return, I::End]);
 			s.emit_text_bounds(f, pointer, end);
-			// a sign
+			// a sign: `negative` set for -, the pointer past a - or +
+			let sign = |f: &mut Function, negative: u32| {
+				Self::emit_list(f, &byte);
+				Self::emit_list(f, &[I::LocalTee(digit), I32Const('-' as i32), I::I32Eq, I::LocalSet(negative), I::LocalGet(negative), I::LocalGet(digit), I32Const('+' as i32), I::I32Eq, I::I32Or]);
+				Self::emit_list(f, &[I::LocalGet(pointer), I::I32Add, I::LocalSet(pointer)]);
+			};
 			Self::emit_list(f, &at_end);
 			Self::emit_list(f, &[I::I32Eqz, I::If(BlockType::Empty)]);
-			Self::emit_list(f, &byte);
-			Self::emit_list(f, &[I::LocalTee(digit), I32Const('-' as i32), I::I32Eq, I::LocalSet(negative), I::LocalGet(negative), I::LocalGet(digit), I32Const('+' as i32), I::I32Eq, I::I32Or]);
-			Self::emit_list(f, &[I::LocalGet(pointer), I::I32Add, I::LocalSet(pointer), I::End]);
+			sign(f, negative);
+			f.instruction(&I::End);
 			// digits, with a point among them: value collects them all, scale_digits counts those after the point
 			let digits_loop = |f: &mut Function, after_point: bool| {
 				Self::emit_list(f, &[I::Block(BlockType::Empty), I::Loop(BlockType::Empty)]);
@@ -1025,9 +1029,8 @@ impl WasmGcEmitter {
 			Self::emit_list(f, &advance);
 			Self::emit_list(f, &at_end);
 			s.emit_fail_if(f, "invalid_number");
-			Self::emit_list(f, &byte);
-			Self::emit_list(f, &[I::LocalTee(digit), I32Const('-' as i32), I::I32Eq, I::LocalSet(exponent_negative), I::LocalGet(exponent_negative), I::LocalGet(digit), I32Const('+' as i32), I::I32Eq, I::I32Or]);
-			Self::emit_list(f, &[I::LocalGet(pointer), I::I32Add, I::LocalSet(pointer), I32Const(0), I::LocalSet(digits)]);
+			sign(f, exponent_negative);
+			Self::emit_list(f, &[I32Const(0), I::LocalSet(digits)]);
 			Self::emit_list(f, &[I::Block(BlockType::Empty), I::Loop(BlockType::Empty)]);
 			Self::emit_list(f, &at_end);
 			f.instruction(&I::BrIf(1));
