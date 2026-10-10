@@ -44,11 +44,16 @@ impl WarpParser {
 			// `sort by abs.take first 1`: a glued method applies to the word, it is no operand
 			let method_follows = self.peek_char(chars) == '.' && self.peek_char(chars + 1).is_alphabetic();
 			let bare = operator_word && (self.expression_ends_after(chars) || method_follows);
+			// `sqrt(2).round(2)`: the glued parentheses are the whole operand, the method applies to the result
+			let call_with_method = operator_word && self.parenthesis_length(chars).is_some_and(|length| self.peek_char(chars + length) == '.' && self.peek_char(chars + length + 1).is_alphabetic());
 			self.hint_operator(chars, true);
 			self.advance_by(chars);
 			self.skip_spaces();
 			if bare {
 				Node::Key(Box::new(Empty), op, Box::new(Empty))
+			} else if call_with_method {
+				let operand = self.parse_atom();
+				self.finish_prefix(op, operand)
 			} else if chars == 1 && op == Op::Abs {
 				self.parse_norm_bars()
 			} else {
