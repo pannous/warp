@@ -21,6 +21,13 @@ const PRINT: &str = "print";
 const PRINT_ARGUMENT_SEPARATOR: &str = " ";
 
 /// The value `print` writes: its one argument, or several joined by a space
+/// The word a list calls: `f a b`, `f(a, b)`, `(f)`; none for a `;`/newline sequence, whose first statement may be a
+/// word of its own (`{beep⏎ play 440}` runs beep, then play; card error-beep)
+pub(super) fn called_word<'a>(items: &'a [Node], bracket: &Bracket, separator: &Separator) -> Option<&'a str> {
+	let calls = (items.len() >= 2 && !separator.separates_statements()) || *bracket == Bracket::Round && items.len() == 1;
+	items.first().filter(|_| calls)?.symbol_name()
+}
+
 fn printed_value(call: &[Node], bracket: &Bracket) -> Node {
 	match crate::warp_parser::print_arguments_of(call, bracket).as_slice() {
 		[single] => juxtaposed_text(single).unwrap_or_else(|| single.clone()),
@@ -107,10 +114,10 @@ impl WasmGcEmitter {
 	}
 
 	/// `f(a, b…)` or `(f)` of a user function, an FFI import or a text builtin
-	fn emit_function_call(&mut self, func: &mut Function, items: &[Node], bracket: &Bracket) -> bool {
-		let Some(Node::Symbol(fn_name)) = items.first().map(Node::drop_meta) else { return false };
+	fn emit_function_call(&mut self, func: &mut Function, items: &[Node], bracket: &Bracket, separator: &Separator) -> bool {
+		let Some(fn_name) = called_word(items, bracket, separator) else { return false };
 		// `(angle)` of a variable is its value
-		if items.len() < 2 && (*bracket != Bracket::Round || self.is_variable(fn_name)) {
+		if items.len() < 2 && self.is_variable(fn_name) {
 			return false;
 		}
 		if self.ctx.user_functions.contains_key(fn_name) {
@@ -231,7 +238,7 @@ impl WasmGcEmitter {
 
 		if items.len() == 1 && *bracket != Bracket::Square {
 			// `f()` of a name bound to nothing is an undefined function (P92); the group `(f)` is its item
-			if !self.emit_function_call(func, items, bracket) && !self.emit_empty_print(func, items) && !self.reject_unresolved_call(func, items, bracket, separator) {
+			if !self.emit_function_call(func, items, bracket, separator) && !self.emit_empty_print(func, items) && !self.reject_unresolved_call(func, items, bracket, separator) {
 				self.emit_node_instructions(func, &items[0]);
 			}
 			return;
@@ -306,7 +313,7 @@ impl WasmGcEmitter {
 			}
 		}
 
-		if self.emit_function_call(func, items, bracket) {
+		if self.emit_function_call(func, items, bracket, separator) {
 			return;
 		}
 

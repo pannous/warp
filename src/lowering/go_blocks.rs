@@ -55,7 +55,7 @@ impl GoBlocks {
 	fn lower(&self, node: Node, known: &[String]) -> Node {
 		match node {
 			// `go { … }`, also inside a call: `jobs.add(go { … })` is `add go {…}`
-			Node::List(items, bracket, separator) if !is_sequence(&separator) && starts_block_at(&items).is_some() => {
+			Node::List(items, bracket, separator) if !separator.separates_statements() && starts_block_at(&items).is_some() => {
 				let at = starts_block_at(&items).expect("guarded");
 				let mut items: Vec<Node> = items.into_iter().map(|item| self.lower(item, known)).collect();
 				items[at] = self.function_of(items[at].clone(), known);
@@ -106,10 +106,6 @@ impl GoBlocks {
 		definitions.push(key(head, Op::Define, block));
 		Node::List([vec![name], inputs.into_iter().map(Node::Symbol).collect()].concat(), Bracket::Round, Separator::None)
 	}
-}
-
-fn is_sequence(separator: &Separator) -> bool {
-	matches!(separator, Separator::Semicolon | Separator::Newline)
 }
 
 struct Phrases {
