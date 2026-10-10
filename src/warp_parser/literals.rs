@@ -85,29 +85,10 @@ impl WarpParser {
 			}
 			if ch == closing {
 				self.advance(); // skip closing quote
-				let s: String = s.nfc().collect(); // an escape (`e\u{301}`) may leave it unnormalized
 				if is_template {
 					return crate::interpolation::template_text(&template);
 				}
-				// a one-character string is a Codepoint whichever quote is used, so only longer strings have a canonical quote
-				if s.chars().count() > 1 {
-					set_hint_position(quote_line, quote_column);
-					norm::quotes(quote, &s);
-				}
-				// quotes with exactly one character become Codepoint
-				let mut chars = s.chars();
-				if let Some(c) = chars.next() {
-					if chars.next().is_none() {
-						if let Some(number_type) = self.number_cast_follows().filter(|_| interpolates && !c.is_ascii_digit()) {
-							let message = format!("\"{c}\" as {number_type}: a text is no number (user decision #35); codepoint('{c}') is the code point of the character");
-							let explicit = format!("{}('{c}') as {number_type}", crate::library_words::CODEPOINT);
-							return Diagnostic { message, line: quote_line, column: quote_column, ..Default::default() }.fix(&explicit)
-								.offer("the code point of the character", format!("\"{c}\" as {number_type}"), explicit).into_error();
-						}
-						return Node::codepoint(c);
-					}
-				}
-				return Node::text(&s);
+				return self.quoted_text(s.nfc().collect(), quote, (quote_line, quote_column), interpolates);
 			}
 			let escaped_brace = self.brace_holes && matches!((ch, self.peek_char(1)), ('{', '{') | ('}', '}'));
 			if escaped_brace {
@@ -148,7 +129,7 @@ impl WarpParser {
 							template.push('\\');
 							continue; // the name follows as written
 						};
-						(0..length - 1).for_each(|_| self.advance());
+						self.advance_by(length - 1);
 						s.push_str(characters);
 						template.push_str(characters);
 						continue;
@@ -158,10 +139,7 @@ impl WarpParser {
 					'r' => '\r',
 					'e' => ESCAPE_CHARACTER,
 					'x' if self.peek_char(1).is_ascii_hexdigit() && self.peek_char(2).is_ascii_hexdigit() => self.hex_byte_escape(),
-					'u' if self.peek_char(1) == '{' => match self.unicode_escape() {
-						Ok(c) => c,
-						Err(message) => return error(&message),
-					},
+					'u' if self.peek_char(1) == '{' => or_return_error!(self.unicode_escape()),
 					c => c,
 				}
 			} else {
@@ -173,6 +151,28 @@ impl WarpParser {
 				'$' if !bare_dollar_name => template.push_str("$$"),
 				c => template.push(c),
 			}
+		}
+	}
+
+	/// The text between quotes (normalized: an escape like `e\u{301}` may leave it unnormalized); one character is a
+	/// Codepoint whichever quote is used, so only longer texts have a canonical quote
+	fn quoted_text(&self, text: String, quote: char, (line, column): (usize, usize), interpolates: bool) -> Node {
+		let mut chars = text.chars();
+		let (Some(c), None) = (chars.next(), chars.next()) else {
+			if !text.is_empty() {
+				set_hint_position(line, column);
+				norm::quotes(quote, &text);
+			}
+			return Node::text(&text);
+		};
+		match self.number_cast_follows().filter(|_| interpolates && !c.is_ascii_digit()) {
+			Some(number_type) => {
+				let message = format!("\"{c}\" as {number_type}: a text is no number (user decision #35); codepoint('{c}') is the code point of the character");
+				let explicit = format!("{}('{c}') as {number_type}", crate::library_words::CODEPOINT);
+				Diagnostic { message, line, column, ..Default::default() }.fix(&explicit)
+					.offer("the code point of the character", format!("\"{c}\" as {number_type}"), explicit).into_error()
+			}
+			None => Node::codepoint(c),
 		}
 	}
 
@@ -470,10 +470,7 @@ impl WarpParser {
 			self.advance();
 			self.push_digits(&mut num_str);
 		}
-		let exponent = match self.parse_exponent() {
-			Ok(exponent) => exponent,
-			Err(e) => return error(&e),
-		};
+		let exponent = or_return_error!(self.parse_exponent());
 
 		match exponent {
 			// 1e3 is the exact integer 1000, like the literal it abbreviates

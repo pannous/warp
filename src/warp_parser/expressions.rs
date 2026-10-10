@@ -695,9 +695,6 @@ impl WarpParser {
 /// `lhs op rhs`; a chained comparison `a<b<c` as `a<b and b<c` (`middle` is b), a range subscript `xs#(a..b)` as a slice,
 /// `a down to b` as the reversed `b to a`
 fn combined(lhs: Node, op: Op, written: &str, rhs: Node, middle: Option<Node>) -> Node {
-	let call = |word: &str, arguments: Vec<Node>| {
-		Node::List([vec![Symbol(word.to_string())], arguments].concat(), Bracket::Round, Separator::None)
-	};
 	match (middle, hash_slice_bounds(&rhs)) {
 		(Some(middle), _) if op.is_ordering() => {
 			let next_comparison = Node::Key(Box::new(middle), op, Box::new(rhs));

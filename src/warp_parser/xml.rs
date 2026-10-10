@@ -127,10 +127,7 @@ impl WarpParser {
 			return error(&format!("Unmatched closing tag </{}>", tag_name));
 		}
 
-		let tag_name = match self.parse_symbol() {
-			Ok(name) => name,
-			Err(e) => return error(&e),
-		};
+		let tag_name = or_return_error!(self.parse_symbol());
 
 		let mut attributes = Vec::new();
 		self.skip_whitespace_and_comments();
