@@ -26,6 +26,10 @@ use wasm_encoder::*;
 use Instruction as I;
 use ValType::Ref;
 
+/// The locals of an as_node(list) runtime function after its parameter: the item index and the cells built so far
+const AS_NODE_POSITION: u32 = 1;
+const AS_NODE_REST: u32 = 2;
+
 /// The field of a typed list struct holding its array (type_manager emit_growable_list_types: length, items)
 const TYPED_LIST_ITEMS: u32 = 1;
 
@@ -1098,24 +1102,11 @@ impl WasmGcEmitter {
 		// as_node(list): the cons cells of the items under the list's own kind (brackets); ø when empty or unassigned
 		if self.should_emit_function(NODE_RUNTIME.as_node) {
 			self.runtime_function(NODE_RUNTIME.as_node, vec![list_ref], vec![node_ref], vec![ValType::I32, nullable_node], |s, f| {
-				let (position, rest) = (1, 2);
-				Self::emit_list(f, &[I::LocalGet(0), I::RefIsNull, I::If(BlockType::Empty)]);
-				s.call(f, "new_empty");
-				Self::emit_list(f, &[I::Return, I::End]);
-				Self::emit_list(f, &[
-					I::RefNull(HeapType::Concrete(node)), I::LocalSet(rest),
-					I::LocalGet(0), length.clone(), I::LocalSet(position),
-					I::Block(BlockType::Empty), I::Loop(BlockType::Empty),
-					I::LocalGet(position), I::I32Eqz, I::BrIf(1),
-					I::LocalGet(position), I::I32Const(1), I::I32Sub, I::LocalSet(position),
+				s.emit_cells_from_last(f, list, |_, f| Self::emit_list(f, &[
 					I::LocalGet(0), kind.clone(),
-					I::LocalGet(0), items.clone(), I::LocalGet(position), I::ArrayGet(array),
-					I::LocalGet(rest), I::StructNew(node), I::LocalSet(rest),
-					I::Br(0), I::End, I::End,
-					I::LocalGet(rest), I::RefIsNull, I::If(BlockType::Result(node_ref)),
-				]);
-				s.call(f, "new_empty");
-				Self::emit_list(f, &[I::Else, I::LocalGet(rest), I::RefAsNonNull, I::End]);
+					I::LocalGet(0), items.clone(), I::LocalGet(AS_NODE_POSITION), I::ArrayGet(array),
+					I::LocalGet(AS_NODE_REST), I::StructNew(node),
+				]));
 			});
 		}
 		// node_list_of(node): the items of a list's cells (up to a meta entry, as a walk ends there), ø no items, any
@@ -1262,30 +1253,38 @@ impl WasmGcEmitter {
 		}
 		// as_node(list) -> ref $Node: the square list of element nodes, built from the last element; ø when empty
 		if self.should_emit_function(runtime.as_node) {
-			let node = self.type_manager.node_type;
 			let nullable_node = Ref(self.node_ref(true));
+			// a typed list variable read before its first assignment is ø, as any unassigned list variable
 			self.runtime_function(runtime.as_node, vec![list_ref], vec![node_ref], vec![ValType::I32, nullable_node], |s, f| {
-				let (position, rest) = (1, 2);
-				// a typed list variable read before its first assignment is ø, as any unassigned list variable
-				Self::emit_list(f, &[I::LocalGet(0), I::RefIsNull, I::If(BlockType::Empty)]);
-				s.call(f, "new_empty");
-				Self::emit_list(f, &[I::Return, I::End]);
-				Self::emit_list(f, &[
-					I::RefNull(HeapType::Concrete(node)), I::LocalSet(rest),
-					I::LocalGet(0), length.clone(), I::LocalSet(position),
-					I::Block(BlockType::Empty), I::Loop(BlockType::Empty),
-					I::LocalGet(position), I::I32Eqz, I::BrIf(1),
-					I::LocalGet(position), I::I32Const(1), I::I32Sub, I::LocalSet(position),
-					I::LocalGet(0), items.clone(), I::LocalGet(position), I::ArrayGet(array),
-				]);
-				s.call(f, runtime.new_node);
-				Self::emit_list(f, &[I::LocalGet(rest), I::I64Const(SQUARE_BRACKET_INFO)]);
-				s.call(f, "new_list");
-				Self::emit_list(f, &[I::LocalSet(rest), I::Br(0), I::End, I::End, I::LocalGet(rest), I::RefIsNull, I::If(BlockType::Result(node_ref))]);
-				s.call(f, "new_empty");
-				Self::emit_list(f, &[I::Else, I::LocalGet(rest), I::RefAsNonNull, I::End]);
+				s.emit_cells_from_last(f, list, |s, f| {
+					Self::emit_list(f, &[I::LocalGet(0), items.clone(), I::LocalGet(AS_NODE_POSITION), I::ArrayGet(array)]);
+					s.call(f, runtime.new_node);
+					Self::emit_list(f, &[I::LocalGet(AS_NODE_REST), I::I64Const(SQUARE_BRACKET_INFO)]);
+					s.call(f, "new_list");
+				});
 			});
 		}
+	}
+
+	/// The body of an as_node(list) runtime function (locals: position i32, rest nullable node): ø for a null or empty
+	/// list, else the cells `cell` builds from the last item to the first, each in front of the cells after it (local
+	/// AS_NODE_REST) from the item at AS_NODE_POSITION
+	fn emit_cells_from_last(&mut self, f: &mut Function, list: u32, cell: impl FnOnce(&mut Self, &mut Function)) {
+		let (position, rest) = (AS_NODE_POSITION, AS_NODE_REST);
+		Self::emit_list(f, &[I::LocalGet(0), I::RefIsNull, I::If(BlockType::Empty)]);
+		self.call(f, "new_empty");
+		Self::emit_list(f, &[I::Return, I::End]);
+		Self::emit_list(f, &[
+			I::RefNull(HeapType::Concrete(self.type_manager.node_type)), I::LocalSet(rest),
+			I::LocalGet(0), I::StructGet { struct_type_index: list, field_index: 0 }, I::LocalSet(position),
+			I::Block(BlockType::Empty), I::Loop(BlockType::Empty),
+			I::LocalGet(position), I::I32Eqz, I::BrIf(1),
+			I::LocalGet(position), I::I32Const(1), I::I32Sub, I::LocalSet(position),
+		]);
+		cell(self, f);
+		Self::emit_list(f, &[I::LocalSet(rest), I::Br(0), I::End, I::End, I::LocalGet(rest), I::RefIsNull, I::If(BlockType::Result(Ref(self.node_ref(false))))]);
+		self.call(f, "new_empty");
+		Self::emit_list(f, &[I::Else, I::LocalGet(rest), I::RefAsNonNull, I::End]);
 	}
 
 	/// Push a number list variable as a $NodeList; false for any other variable
