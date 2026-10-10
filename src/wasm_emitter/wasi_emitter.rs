@@ -72,7 +72,7 @@ impl WasmGcEmitter {
 	/// type error.
 	pub(super) fn emit_print(&mut self, func: &mut Function, value: &Node) {
 		match value.drop_meta() {
-			Node::Number(number) => self.emit_print_literal(func, &number.to_string()),
+			Node::Number(number) => self.emit_print_literal(func, &number.text()),
 			Node::Text(text) => self.emit_print_literal(func, text),
 			Node::Char(character) => self.emit_print_literal(func, &character.to_string()),
 			// infer_type calls a literal ø an Int, as constructors' field placeholders need (card print-error)
@@ -221,7 +221,7 @@ impl WasmGcEmitter {
 	/// Emit WASI puti: write an integer to stdout, without a newline; a run-time value through put_value
 	pub(super) fn emit_wasi_puti(&mut self, func: &mut Function, arg: &Node) {
 		if let Node::Number(n) = arg.drop_meta() {
-			let (str_ptr, str_len) = self.allocate_string(&n.to_string());
+			let (str_ptr, str_len) = self.allocate_string(&n.text());
 			if self.emit_stdout_write(func, str_ptr, str_len) {
 				func.instruction(&I::Drop);
 			}

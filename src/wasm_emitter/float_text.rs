@@ -2,19 +2,13 @@
 //! positional from 1e-5 up to 1e15 and as `1.5e20` / `1e-7` outside; ∞, -∞ and NaN as the exact numbers print them.
 //! list_join calls it, so print, `str(x)`, `x as text` and `"a" + x` all show floats the same way.
 
+use crate::extensions::numbers::{LARGEST_POSITIONAL, MANTISSA_OVERFLOW, MANTISSA_SCALE, SIGNIFICANT_DIGITS, SMALLEST_POSITIONAL};
 use crate::wasm_emitter::layout::BYTE;
 use crate::wasm_emitter::WasmGcEmitter;
 use wasm_encoder::*;
 use Instruction as I;
 
 pub const FLOAT_TEXT: &str = "float_text";
-const SIGNIFICANT_DIGITS: i32 = 15;
-/// 10^(SIGNIFICANT_DIGITS-1): a mantissa in [1, 10) times this is an integer with SIGNIFICANT_DIGITS digits
-const MANTISSA_SCALE: f64 = 1e14;
-const MANTISSA_OVERFLOW: i64 = 1_000_000_000_000_000;
-/// Positional notation for decimal exponents in [SMALLEST_POSITIONAL, LARGEST_POSITIONAL)
-const SMALLEST_POSITIONAL: i32 = -5;
-const LARGEST_POSITIONAL: i32 = 15;
 /// Sign, "0.", four zeros and the digits fit, so does the exponent form; the digits are formatted behind them
 const TEXT_BYTES: i32 = 32;
 const SCRATCH_BYTES: i32 = 16;

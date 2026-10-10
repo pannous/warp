@@ -336,7 +336,7 @@ impl WasmGcEmitter {
 			return self.emit_string_call(func, &quoted.serialize(), "new_text");
 		}
 		match value {
-			Node::Number(n) => self.emit_string_call(func, &n.to_string(), "new_text"),
+			Node::Number(n) => self.emit_string_call(func, &n.text(), "new_text"),
 			Node::Char(c) => self.emit_string_call(func, &c.to_string(), "new_text"),
 			Node::Text(s) => self.emit_string_call(func, s, "new_text"),
 			// `str(data a and b)`: quoted data reads as written
