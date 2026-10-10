@@ -2777,6 +2777,7 @@ PASSED:
   ✓ programs::test_paint_lists::paint_reads_ints_from_a_built_list
   ✓ programs::test_paint_lists::paint_reads_other_pixels_node_by_node
   ✓ programs::test_paint_lists::paint_takes_the_first_pixels_of_a_longer_list
+  ✓ programs::test_paint_lists::painting_an_empty_canvas_fails_loudly
   ✓ programs::test_paint_shader::paint_of_a_shader_without_values_reads_none
   ✓ programs::test_paint_shader::paint_renders_a_shader_text
   ✓ programs::test_paint_shader::use_graphics_is_use_draw
@@ -2822,7 +2823,6 @@ PASSED:
   ✓ programs::test_shader_holes::values_not_written_out_cannot_take_the_holes
   ✓ programs::test_small_samples::error_samples
   ✓ programs::test_small_samples::text_samples
-  ✓ programs::test_sound_clock::sounds_queue_on_the_audio_clock
   ✓ programs::test_sound_clock::stop_sound_empties_the_queue
   ✓ programs::test_sound_clock::waiting_headless_takes_no_time
   ✓ programs::test_sound_files::a_broken_music_file_fails
@@ -3312,6 +3312,7 @@ PASSED:
   ✓ types::test_file_declarations::a_class_body_of_one_typed_method
   ✓ types::test_file_declarations::a_file_class_takes_in_the_definitions_after_it
   ✓ types::test_file_declarations::a_namespace_qualifies_the_words_of_the_file
+  ✓ types::test_filled_map_types::a_map_filled_by_key_is_a_map
   ✓ types::test_flags::test_an_unknown_flag_is_an_error
   ✓ types::test_flags::test_flags_set_their_named_members
   ✓ types::test_flags::test_the_flags_type_is_the_empty_set
@@ -3362,6 +3363,7 @@ PASSED:
   ✓ types::test_loop_item_into_annotated::a_mixed_loop_item_into_an_annotated_place_is_checked_at_run_time
   ✓ types::test_loop_text_arithmetic::list_arithmetic_in_a_loop_body_stays_a_type_error
   ✓ types::test_loop_text_arithmetic::text_arithmetic_in_a_loop_body_is_no_type_error
+  ✓ types::test_map_type_tests::a_map_is_a_map
   ✓ types::test_match_static_variant::a_bare_variant_skips_the_class_arms
   ✓ types::test_match_static_variant::an_instance_still_takes_its_arm
   ✓ types::test_method_bodies::assignments_in_a_method
@@ -3557,6 +3559,7 @@ PASSED:
   ✓ types::test_type_tests::test_scalar_type_tests
   ✓ types::test_type_tests::test_type_of_is_type
   ✓ types::test_type_tests::test_type_of_value_is_type
+  ✓ types::test_type_tests::test_types_compare_exactly_with_equals
   ✓ types::test_type_upgrading::test_float_operations
   ✓ types::test_type_upgrading::test_float_plus_int_type_upgrading
   ✓ types::test_type_upgrading::test_global_with_float
@@ -4274,6 +4277,7 @@ PASSED:
   ✓ welcoming::test_lowered_error_text::an_unknown_word_error_quotes_the_words_as_written
   ✓ welcoming::test_open_range_slices::a_slice_from_the_start
   ✓ welcoming::test_open_range_slices::a_slice_to_the_end
+  ✓ welcoming::test_plain_hint_got_it::an_acknowledged_kind_of_hint_stays_away
   ✓ welcoming::test_quiet_hints::legitimate_forms_get_no_hint
   ✓ welcoming::test_slash_comment_after_value::a_comment_after_a_text_gets_no_division_note
   ✓ welcoming::test_slash_comment_after_value::a_prose_comment_after_a_value_gets_no_division_note
@@ -4414,6 +4418,7 @@ PASSED:
   ✓ wisp_parser::tests::test_wisp_tag
 
 FAILED:
+  ✗ programs::test_sound_clock::sounds_queue_on_the_audio_clock
 
 SUMMARY:
-10 ignored, 4411 passed, 0 failed, 4411 total tested
+10 ignored, 4415 passed, 1 failed, 4416 total tested

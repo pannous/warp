@@ -181,6 +181,7 @@ fn bind_assigned(left: &Node, right: &Node, scope: &mut Scope) {
 		}
 		Node::Symbol(name) => {
 			type_list_by_first_append(name, right, scope);
+			type_map_by_first_entry(name, right, scope);
 			widen_list_type(scope, name, right);
 			widen_to_float(scope, name, right);
 			widen_to_node(scope, name, right);
@@ -208,6 +209,16 @@ pub(super) fn type_list_by_first_append(name: &str, value: &Node, scope: &mut Sc
 	if let Some(local) = scope.own_binding_mut(name).filter(|local| local.kind == Kind::Empty && local.type_node.is_none()) {
 		local.kind = Kind::List;
 		local.type_node = Some(Box::new(Node::Symbol(appended_type)));
+	}
+}
+
+/// `m = {}; m[3] = 4`, lowered to `m = field_with(m, "3", 4)`: the empty value is a map from its first entry on
+fn type_map_by_first_entry(name: &str, value: &Node, scope: &mut Scope) {
+	if !crate::library_words::is_field_update_of(name, value) {
+		return;
+	}
+	if let Some(local) = scope.own_binding_mut(name).filter(|local| local.kind == Kind::Empty && local.type_node.is_none() && !local.is_param) {
+		local.type_node = Some(Box::new(Node::Symbol(super::checks::MAP_TYPE.to_string())));
 	}
 }
 

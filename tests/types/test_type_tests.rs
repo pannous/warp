@@ -75,3 +75,16 @@ fn test_type_of_value_is_type() {
 	is!("int is number", 1);
 	is!("number is int", 0);
 }
+
+#[test]
+fn test_types_compare_exactly_with_equals() {
+	// card type-equal, implied by decision #30: `is` tests the subtype, `==` between types asks for the same type
+	is!("type(2) == type(3)", 1);
+	is!("x=2; y=3; type(x) == type(y)", 1);
+	is!("type(2) == type(3.5)", 0);
+	is!("type(2) != type(3)", 0);
+	is!("type(0.0) == int", 1);
+	is!("type(1.5) == rational", 1);
+	is!("type(0) == number", 0);
+	is!("type(0) is number", 1);
+}
