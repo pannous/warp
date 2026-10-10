@@ -5,8 +5,8 @@
 //! - `map [1 2 3] {it*it}`, `map(xs, x=>x+1)`, `xs.map(f)` over a literal block, a lambda or a defined function is a loop
 //! - a lambda anywhere else is a closure (closures.rs); `map` over a value that is no function is the error `map needs a function, got …`
 
-use super::nodes::{call, children_rewritten, is_type_word, key};
-use crate::analyzer::{call_name, extract_user_functions};
+use super::nodes::{call, children_rewritten, is_type_word, key, named_assignment};
+use crate::analyzer::call_name;
 use crate::context::Context;
 use crate::diagnostic::Diagnostic;
 use crate::library_words::substitute;
@@ -112,8 +112,7 @@ fn lowering(node: Node, strict: bool) -> Node {
 	if let Some(error) = unbound_it(&node).filter(|_| !assigns_it(&node)) {
 		return error;
 	}
-	let mut context = Context::new();
-	extract_user_functions(&mut context, &node);
+	let context = crate::analyzer::function_context(&node);
 	let first_fresh = first_fresh_number(&node);
 	Lowering { context, counter: Cell::new(first_fresh), strict }.expand(node)
 }
@@ -627,13 +626,7 @@ impl Lowering {
 		};
 		let bindings: Vec<(String, Node)> = entries
 			.iter()
-			.filter_map(|entry| match entry.drop_meta() {
-				Node::Key(name, Op::Assign, value) => match name.drop_meta() {
-					Node::Symbol(name) => Some((name.clone(), value.as_ref().clone())),
-					_ => None,
-				},
-				_ => None,
-			})
+			.filter_map(named_assignment)
 			.collect();
 		let (params, values) = if bindings.len() == entries.len() && !bindings.is_empty() {
 			(bindings.iter().map(|(name, _)| name.clone()).collect(), bindings.into_iter().map(|(_, value)| value).collect())

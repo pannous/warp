@@ -8,8 +8,7 @@
 //! (`f(n) := 1..n`) returns that range: a call with plain arguments is the range itself, read as above.
 
 use super::nodes::{call, key};
-use crate::analyzer::{call_name, extract_user_functions, TEMPORARY_SEPARATOR};
-use crate::context::Context;
+use crate::analyzer::{call_name, TEMPORARY_SEPARATOR};
 use crate::effects::call_arguments;
 use crate::memoization::definition_parts;
 use std::collections::{BTreeMap, BTreeSet, HashMap};
@@ -36,8 +35,7 @@ pub fn lower(node: Node) -> Node {
 	if !has_range(&node) {
 		return node;
 	}
-	let mut context = Context::new();
-	extract_user_functions(&mut context, &node);
+	let context = crate::analyzer::function_context(&node);
 	let own = |word: &str| context.user_functions.contains_key(word);
 	let mut lowering = Lowering { counts: !own(COUNT), sums: !own(SUM), temporaries: 0 };
 	let producers = range_producers(&node);

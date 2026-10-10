@@ -3,7 +3,7 @@
 //! `virtues goal = fast+safe` the record `goal={fast:true safe:true}`: the flags named are true, the others false.
 //! `real f(real x, int n) { … }`, the C way, defines `f(x:real, n:int) := { … }`.
 
-use super::nodes::{call, children_rewritten, is_type_word, key};
+use super::nodes::{call, children_rewritten, grouped_parameters, is_type_word, key};
 use crate::node::{symbol, Bracket, Node, Separator};
 use crate::operators::{is_function_keyword, Op};
 
@@ -1694,11 +1694,7 @@ fn extension_definition(definition: Node) -> Node {
 fn with_receiver(call: &[Node], separator: &Separator, receiver_type: &Node, body: &Node) -> Node {
 	let receiver = if body.mentions_any(&[SELF_WORD]) { SELF_WORD } else { THIS_WORD };
 	let receiver = key(symbol(receiver), Op::Colon, receiver_type.clone());
-	let parameters = call[1..].iter().flat_map(|parameter| match parameter.drop_meta() {
-		Node::List(group, Bracket::Round, _) => group.clone(),
-		Node::Empty => vec![],
-		_ => vec![parameter.clone()],
-	});
+	let parameters = call[1..].iter().flat_map(grouped_parameters);
 	Node::List(std::iter::once(call[0].clone()).chain(std::iter::once(receiver)).chain(parameters).collect(), Bracket::Round, separator.clone())
 }
 
