@@ -15,7 +15,8 @@ global tempo = 120
 global beats_per_bar = 4
 beat_seconds(beats) := beats * 60.0 / tempo
 bar_seconds(bars) := beat_seconds(bars * beats_per_bar)
-// the samples cross to the host as whole numbers ≥ 0: amplitude + 32768 (src/sound.rs SAMPLE_OFFSET)
+// the samples cross to the host as whole numbers ≥ 0: amplitude + 32768 (src/sound.rs SAMPLE_OFFSET), a stereo sound's
+// interleaved left, right
 sample_offset = 32768
 loudest_sample = 32767
 // the envelope of every note (ADSR): it rises for attack seconds, falls for decay seconds to the sustain share and
@@ -137,8 +138,13 @@ chord_samples(pitches, duration, shape) := {
 	[sample_offset + (round(a) as int) for a in filtered(amplitudes)]
 }
 // the sound's handle: its number in the run, for stop_sound(handle)
+// where the notes sound between the left (-1) and the right speaker (1), 0 in the middle (card stereo-pan)
+global pan = 0.0 as float
+// the samples for the speakers: mono in the middle, else interleaved left, right, the far side quieter by the pan
+panned(samples) := if pan == 0 then samples else [sample_offset + (round((sample - sample_offset) * side) as int) for sample in samples for side in [min(1, 1 - pan), min(1, 1 + pan)]]
 sound(samples) := {
-	sound_samples(samples, count(samples), sample_rate)
+	speakers = panned(samples)
+	sound_samples(speakers, count(speakers), sample_rate, if pan == 0 then 1 else 2)
 	std_io("sound", "last", [])
 }
 
