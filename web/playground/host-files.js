@@ -359,8 +359,10 @@ addHostPart({
 		// `play "song.mp3"`, `stop_sound` (lib/sound.warp, card sound-library): the page plays it with an <audio>
 		// (worker.js self.playSoundFile, playground.js); a run without a page (tests, node) stays silent, as natively
 		sound: {
-			play_file: path => { self.playSoundFile?.(contentText(path)); return null; },
-			stop: () => { self.stopSoundFiles?.(); return null; },
+			play_file: path => { self.playSoundFile?.(contentText(path)); return self.lastSoundHandle?.() ?? 0; },
+			// stop_sound(handle) the sound play gave that handle (card sound-pro), handle 0 all of them
+			stop: handle => { Number(handle) ? self.stopSound?.(Number(handle)) : self.stopSoundFiles?.(); return null; },
+			last: () => self.lastSoundHandle?.() ?? 0,
 			// the page's audio clock as the worker keeps it (worker.js); a worker cannot wait for the page's audio
 			queued: () => self.soundsQueued?.() ?? 0,
 			wait: () => null,
