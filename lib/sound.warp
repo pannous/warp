@@ -76,8 +76,7 @@ chord_samples(pitches, duration, shape) := {
 // the sound's handle: its number in the run, for stop_sound(handle)
 sound(samples) := {
 	sound_samples(samples, count(samples), sample_rate)
-	handle = std_io("sound", "last", []) // named: a bare std_io call after sound_samples gives the block as data
-	handle
+	std_io("sound", "last", [])
 }
 
 // one wave shape: tone 440Hz for 0.5s (a sine), tone(220Hz, 100ms, "square")
