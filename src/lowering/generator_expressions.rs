@@ -5,7 +5,8 @@
 //! expression: `(upper w for w in words)` reads as the call `upper(w for w in words)` (comprehensions.rs).
 
 use crate::comprehensions::{bound_names, Comprehension};
-use crate::generators::{FOR_WORD, NAME_SEPARATOR};
+use crate::generators::NAME_SEPARATOR;
+use super::words::FOR_WORD;
 use super::nodes::{key, statement_list, symbol};
 use crate::node::{Bracket, Node, Separator};
 use crate::operators::Op;

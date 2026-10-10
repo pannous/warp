@@ -4,6 +4,7 @@
 //! Iterable (wiki/trait.md): `iterate(b:bag) := …` gives what a bag holds; `for x in b` walks it and `x in b` searches it.
 //! Each definition becomes its witness (`text·person`, `iterate·bag`); every other value keeps its own text and items.
 
+use super::words::{FOR_WORD, IN_WORD};
 use super::nodes::{call, key};
 use crate::node::{Bracket, Node, Separator};
 use crate::operators::Op;
@@ -15,8 +16,6 @@ const ITERATE_OPERATION: &str = "iterate";
 /// The words whose call or cast gives a value's text
 const TEXT_WORDS: [&str; 4] = ["text", "string", "str", "String"];
 const PRINT_WORD: &str = "print";
-const FOR_WORD: &str = "for";
-const IN_WORD: &str = "in";
 
 pub fn lower(node: Node) -> Node {
 	let declared = declared_types(&node);

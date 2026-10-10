@@ -6,6 +6,7 @@
 //! in `<program>.database.sqlite` (in memory for code without a file, database.rs); the browser keeps them in IndexedDB
 //! (web/playground/host-files.js), where a filter stays the list comprehension over the rows.
 
+use super::words::{FOR_WORD, GLOBAL_WORD, IN_WORD};
 use super::nodes::key;
 use crate::node::{symbol, Bracket, Node, Separator};
 use crate::operators::Op;
@@ -20,7 +21,6 @@ pub const TABLES_FILE: &str = "database.sqlite";
 const ID_FIELD: &str = "id";
 const ADD_WORD: &str = "add";
 const REMOVE_WORD: &str = "remove";
-const GLOBAL_WORD: &str = "global";
 /// `@was(old) name: text`: the field's column was called old, so the table's column is renamed
 const RENAMED_MARK: &str = "was";
 /// `save p` writes every column of p's row (field changes are written through already, so it changes nothing then)
@@ -89,11 +89,9 @@ const LAZY_PARTS: [(&str, &str); 15] = [(FOUND, "found"), (OF, "of"), (LOAD, "lo
 const PAGE_SIZE: usize = 100;
 /// `count(people)`, `people.count`: counted without loading
 const COUNT_WORDS: [&str; 4] = ["count", "size", "length", "len"];
-const FOR_WORD: &str = "for";
 /// a paged loop's count and position, `p·end` and `p·position` of `for p in people`
 const LOOP_END: &str = "table_loop_end";
 const LOOP_POSITION: &str = "table_loop_position";
-const IN_WORD: &str = "in";
 const SCHEMA_PLACEHOLDER: &str = "table_schema";
 const READ_PLACEHOLDER: &str = "table_read";
 const ROWS_PLACEHOLDER: &str = "table_rows_read";

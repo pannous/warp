@@ -9,6 +9,7 @@
 //! loop `for yield·item·1 in xs { yield yield·item·1 }`, lazy like any loop over a generator.
 //! Runs after ruby_blocks, which takes the yielding functions some call passes a block to.
 
+use super::words::{FOR_WORD, GLOBAL_WORD, IN_WORD, RETURN_WORD};
 use super::nodes::{assign, call, int, key, statement_list, symbol};
 use crate::for_loop::{block_items, loop_variables};
 use crate::inlining::renamed_names;
@@ -19,13 +20,9 @@ use crate::warp_parser::while_do;
 use std::cell::Cell;
 use std::collections::{HashMap, HashSet};
 
-pub(crate) const FOR_WORD: &str = "for";
-pub(crate) const IN_WORD: &str = "in";
 const IMPLICIT_VARIABLE: &str = "it";
-pub(crate) const RETURN_WORD: &str = "return";
 pub(crate) const BREAK_WORD: &str = "break";
 pub(crate) const CONTINUE_WORD: &str = "continue";
-const GLOBAL_WORD: &str = "global";
 pub(crate) const NAME_SEPARATOR: &str = "·";
 /// The list a collecting generator returns, `count_to·yielded`
 const YIELDED_SUFFIX: &str = "yielded";

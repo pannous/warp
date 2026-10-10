@@ -6,6 +6,7 @@
 //! `x == int` is no type test (user decision #30): a value never equals a type, so it is false and hints `x is int`.
 
 use super::memoization::{definition_parts, Rebuild};
+use super::words::OF_WORD;
 use super::nodes::{call, is_call_head, key, parameter_name};
 use crate::analyzer::{plural_element_type, type_word_kind};
 use crate::library_words::collect_assigned_names;
@@ -26,7 +27,6 @@ const ARTICLES: [&str; 2] = ["a", "an"];
 const LIST_WORD: &str = "list";
 /// `x is pair`: a `key: value` pair
 const PAIR_WORD: &str = "pair";
-const OF_WORD: &str = "of";
 pub const TYPE_WORD: &str = "type";
 
 /// Words that name the same type

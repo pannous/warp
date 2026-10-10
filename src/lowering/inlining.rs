@@ -5,6 +5,7 @@
 //! Only functions whose meaning cannot change by moving their body: not recursive, no free variables (every name is a
 //! parameter or a local), no nested definitions, lambdas, globals or early returns, and a few statements at most.
 
+use super::words::{GLOBAL_WORD, RETURN_WORD};
 use super::nodes::{children_rewritten, key};
 use crate::node::{Bracket, Node, Separator};
 use crate::operators::Op;
@@ -13,7 +14,6 @@ use std::collections::{HashMap, HashSet};
 
 /// The most statements a body may have to be inlined
 const MAX_STATEMENTS: usize = 8;
-const RETURN: &str = "return";
 const NAME_SEPARATOR: &str = "·";
 
 struct Inlinable {
@@ -60,7 +60,7 @@ fn inlinable(node: &Node) -> Option<(String, Inlinable)> {
 		return None;
 	}
 	let result = match statements.pop()?.drop_meta() {
-		Node::List(items, _, _) if items.len() == 2 && items[0].symbol_name().is_some_and(|word| word == RETURN) => items[1].clone(),
+		Node::List(items, _, _) if items.len() == 2 && items[0].symbol_name().is_some_and(|word| word == RETURN_WORD) => items[1].clone(),
 		_ => return None,
 	};
 	let mut names: HashSet<String> = parameters.iter().cloned().collect();
@@ -76,7 +76,7 @@ fn inlinable(node: &Node) -> Option<(String, Inlinable)> {
 			},
 			Node::Key(_, Op::Define | Op::FatArrow | Op::Arrow, _) => movable = false,
 			Node::Key(_, op, _) if op.is_compound_assign() || matches!(op, Op::Inc | Op::Dec) => movable = false,
-			Node::Symbol(word) if word == RETURN || *word == name || word == "global" => movable = false,
+			Node::Symbol(word) if word == RETURN_WORD || *word == name || word == GLOBAL_WORD => movable = false,
 			_ => {}
 		});
 	}
