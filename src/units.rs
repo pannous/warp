@@ -24,37 +24,46 @@ enum Dimension {
 	Mass,
 	Era,
 	Time,
+	Temperature,
 }
 
 #[derive(Debug, PartialEq)]
 /// `factor` counts the smallest step of the dimension, so every unit is a whole number of it: time in ms, length in
-/// 0.1 mm (1 ft = 3048, 1 km = 10_000_000), mass in 10 µg (1 lb = 45_359_237)
+/// 0.1 mm (1 ft = 3048, 1 km = 10_000_000), mass in 10 µg (1 lb = 45_359_237), temperature in 1/900 K (1 °F = 500).
+/// `zero` is where the unit's 0 lies, in steps above the dimension's zero: 0 °C is 273.15 K, 245_835 steps
 struct Unit {
 	name: &'static str,
 	dimension: Dimension,
 	factor: i64,
+	zero: i64,
 }
 
-const UNITS: [Unit; 17] = [
-	Unit { name: "ms", dimension: Dimension::Time, factor: 1 },
-	Unit { name: "s", dimension: Dimension::Time, factor: 1_000 },
-	Unit { name: "min", dimension: Dimension::Time, factor: 60_000 },
-	Unit { name: "h", dimension: Dimension::Time, factor: 3_600_000 },
-	Unit { name: "mm", dimension: Dimension::Length, factor: 10 },
-	Unit { name: "cm", dimension: Dimension::Length, factor: 100 },
-	Unit { name: "m", dimension: Dimension::Length, factor: 10_000 },
-	Unit { name: "km", dimension: Dimension::Length, factor: 10_000_000 },
+const UNITS: [Unit; 20] = [
+	Unit { name: "ms", dimension: Dimension::Time, factor: 1, zero: 0 },
+	Unit { name: "s", dimension: Dimension::Time, factor: 1_000, zero: 0 },
+	Unit { name: "min", dimension: Dimension::Time, factor: 60_000, zero: 0 },
+	Unit { name: "h", dimension: Dimension::Time, factor: 3_600_000, zero: 0 },
+	Unit { name: "mm", dimension: Dimension::Length, factor: 10, zero: 0 },
+	Unit { name: "cm", dimension: Dimension::Length, factor: 100, zero: 0 },
+	Unit { name: "m", dimension: Dimension::Length, factor: 10_000, zero: 0 },
+	Unit { name: "km", dimension: Dimension::Length, factor: 10_000_000, zero: 0 },
 	// `inch`, not `in`: `x in xs` and `100 cm in m` keep the word
-	Unit { name: "inch", dimension: Dimension::Length, factor: 254 },
-	Unit { name: "ft", dimension: Dimension::Length, factor: 3_048 },
-	Unit { name: "yd", dimension: Dimension::Length, factor: 9_144 },
-	Unit { name: "mi", dimension: Dimension::Length, factor: 16_093_440 },
-	Unit { name: "mg", dimension: Dimension::Mass, factor: 100 },
-	Unit { name: "g", dimension: Dimension::Mass, factor: 100_000 },
-	Unit { name: "kg", dimension: Dimension::Mass, factor: 100_000_000 },
-	Unit { name: "lb", dimension: Dimension::Mass, factor: 45_359_237 },
-	Unit { name: "AD", dimension: Dimension::Era, factor: 1 },
+	Unit { name: "inch", dimension: Dimension::Length, factor: 254, zero: 0 },
+	Unit { name: "ft", dimension: Dimension::Length, factor: 3_048, zero: 0 },
+	Unit { name: "yd", dimension: Dimension::Length, factor: 9_144, zero: 0 },
+	Unit { name: "mi", dimension: Dimension::Length, factor: 16_093_440, zero: 0 },
+	Unit { name: "mg", dimension: Dimension::Mass, factor: 100, zero: 0 },
+	Unit { name: "g", dimension: Dimension::Mass, factor: 100_000, zero: 0 },
+	Unit { name: "kg", dimension: Dimension::Mass, factor: 100_000_000, zero: 0 },
+	Unit { name: "lb", dimension: Dimension::Mass, factor: 45_359_237, zero: 0 },
+	Unit { name: "AD", dimension: Dimension::Era, factor: 1, zero: 0 },
+	Unit { name: "K", dimension: Dimension::Temperature, factor: 900, zero: 0 },
+	Unit { name: "°C", dimension: Dimension::Temperature, factor: 900, zero: 245_835 },
+	Unit { name: "°F", dimension: Dimension::Temperature, factor: 500, zero: 229_835 },
 ];
+
+/// The sign before a temperature unit's letter: °C, °F
+pub const DEGREE: char = '°';
 
 /// Unit words standing for a unit expression: `60 mph` is `60 mi/h`, `440Hz` is `440/s` (lib/sound.warp)
 const UNIT_ALIASES: [(&str, &str); 3] = [("mph", "mi/h"), ("Hz", "1/s"), ("kHz", "1/ms")];
@@ -974,6 +983,9 @@ fn convert(value: Value, target: Vec<Factor>) -> Evaluated {
 	if signature(&quantity.factors) != signature(&target) {
 		return fail(format!("DimensionError: {quantity} cannot be converted to {}", units_text(&target)));
 	}
+	if let (Some(from), [Factor { unit: to, power: 1 }]) = (quantity.single_unit(), target.as_slice()) {
+		return Ok(Value::Quantity(Quantity { amount: on_scale_of(&quantity.amount, from, to), factors: target }));
+	}
 	let in_target = |factor: &Factor| target.iter().find(|wanted| wanted.unit.dimension == factor.unit.dimension).map_or(factor.unit, |wanted| wanted.unit);
 	Ok(Value::Quantity(Quantity { amount: quantity.amount.mul(&scale(&quantity.factors, in_target)), factors: target }))
 }
@@ -1013,6 +1025,17 @@ fn duration_milliseconds(duration: &crate::time::Duration, target: &str) -> Resu
 		return Err(format!("{duration} is no whole number of milliseconds"));
 	}
 	Ok(i64::try_from(nanos / NANOS_PER_MILLISECOND).ok())
+}
+
+/// An amount of one unit read on the scale of another, each counted from its own zero: 40 °C is 104 °F
+fn on_scale_of(amount: &Rational, from: &Unit, to: &Unit) -> Rational {
+	let steps = amount.mul(&Rational::integer(from.factor)).add(&Rational::integer(from.zero - to.zero));
+	steps.mul(&Rational::new(BigInt::from(1), BigInt::from(to.factor)))
+}
+
+/// A unit counted from a zero of its own (°C, °F): its amounts add only to amounts of the same unit
+fn has_own_zero(quantity: &Quantity) -> bool {
+	quantity.factors.iter().any(|factor| factor.unit.zero != 0)
 }
 
 /// The amount of a quantity in other units, as a factor: Π (unit/target)^power over its factors (1 km/h in m/s is 5/18)
@@ -1094,7 +1117,11 @@ fn aligned(left: &Quantity, right: &Quantity) -> Result<(Rational, Rational, Vec
 
 /// Comparison of two quantities in their finer units: `3km == 3000m`, answered yes or no
 fn compare(left: Quantity, op: Op, right: Quantity) -> Evaluated {
-	let (x, y, _) = aligned(&left, &right)?;
+	let (x, y) = match (left.single_unit(), right.single_unit()) {
+		// `40°C > 100°F`: each read from its own zero
+		(Some(unit), Some(other)) if unit.dimension == other.dimension => (left.amount.clone(), on_scale_of(&right.amount, other, unit)),
+		_ => aligned(&left, &right).map(|(x, y, _)| (x, y))?,
+	};
 	let order = x.compare(&y);
 	let holds = match op {
 		Op::Eq => order.is_eq(),
@@ -1145,6 +1172,9 @@ fn same_span(left: Value, op: Op, right: Value) -> Evaluated {
 }
 
 fn sum(left: Quantity, op: Op, right: Quantity) -> Evaluated {
+	if left.factors != right.factors && (has_own_zero(&left) || has_own_zero(&right)) {
+		return fail(format!("{left} {op} {right}: add temperatures in one unit, convert one first: {right} as {}", units_text(&left.factors)));
+	}
 	let (x, y, factors) = aligned(&left, &right)?;
 	let amount = if op == Op::Add { x.add(&y) } else { x.add(&y.neg()) };
 	Ok(Value::Quantity(Quantity { amount, factors }))
