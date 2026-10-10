@@ -64,7 +64,8 @@ const hooks = {
 	renders: true, // each outcome carries its HTML by the program's own renderer (host.js renderedHtml)
 	print: (text, stream) => post({ type: "print", text, stream }),
 	module: bytes => post({ type: "module", bytes }),
-	paint: (pixels, width, height) => post({ type: "paint", pixels, width, height }),
+	paint: (pixels, width, height, canvas) => post({ type: "paint", pixels, width, height, canvas }),
+	gpuCanvas: ({ port, ...canvas }) => self.postMessage({ type: "gpu canvas", port, ...canvas }, [port]), // host-gpu.js gpuPainted
 	sound: (samples, rate) => self.playSamples(samples, rate),
 	sleeping: milliseconds => post({ type: "sleep", milliseconds }),
 	tasksInline: reason => post({ type: "tasks inline", reason }),

@@ -1,14 +1,20 @@
 // WebGPU (a part of host.js, which says how parts work; card web-apis, notes/web_framework.md "web-apis: WebGPU"):
 // gpu_compute(shader, numbers, workgroups) runs a WGSL compute shader whose entry point `main` reads and writes the
 // numbers as array<f32> at @group(0) @binding(0), dispatched over `workgroups` workgroups, and gives back the numbers it
-// left. gpu_render(shader, width, height, values) runs the fragment shader `main` over every pixel of the image and gives
+// left; given a map of named arrays, it binds each where the shader declares the storage array of that name and gives
+// them back by name. gpu_render(shader, width, height, values) runs the fragment shader `main` over every pixel of the image and gives
 // the pixels as paint takes them, 0xFFRRGGBB row by row; the shader reads the map `values` as a uniform,
 // `values.<name>` (src/gpu.rs does both natively). WebGPU only answers
 // asynchronously, so a task Worker (host-tasks.js) does the GPU work while the program's worker waits for its answer in
-// shared memory, as a task's result.
+// shared memory, as a task's result. In the playground, paint of a shader renders straight into the page's canvas: the
+// page hands the canvas's OffscreenCanvas to the task Worker, which draws through its GPUCanvasContext, and no pixels
+// come back (card web-apis-rest).
 
 const GPU_ENTRY_POINT = "main";
 const GPU_BINDING = 0;
+// `@group(0) @binding(1) var<storage, read_write> ys: array<f32>`: its binding, name and element type (src/gpu.rs STORAGE_ARRAY)
+const STORAGE_ARRAY = /@binding\((\d+)\)(?:\s*@group\(\d+\))?\s*var(?:<[^>]*>)?\s+(\w+)\s*:\s*array<(\w+)/g;
+const ELEMENT_ARRAYS = { i32: Int32Array, u32: Uint32Array };
 // appended to gpu_render's shader (after it, so its line numbers stay the user's): one triangle covering the image
 const FULL_IMAGE_VERTICES = `
 @vertex fn warp_full_image(@builtin(vertex_index) corner: u32) -> @builtin(position) vec4f {
@@ -42,6 +48,9 @@ const AUTOMATIC_NOTICE = "ran on the GPU by itself (f32, imprecise by design; wr
 const MOST_KEPT = 4;
 const KEPT_MISSING = "no kept buffer";
 const keptBuffers = new Map(); // the task Worker's: block → {storage, count}
+const CANVAS_MISSING = "no canvas of this paint";
+const paintCanvases = new Map(); // the task Worker's: canvas id → {context, format}
+let paintCanvasCount = 0; // the program's side: the canvases asked of the page, which names them by this count
 let gpuWorker; // the program's side: the task Worker that ran the last GPU job, and keeps its buffers
 
 // the task Worker's side: the floats the shader left from index `first` on (only those are read back)
@@ -105,18 +114,31 @@ function builtinValues(shader, width, height) {
 	return Object.fromEntries(BUILTIN_HOLES.filter(name => new RegExp(`\\b${VALUES_NAME}\\.${name}\\b`).test(shader)).map(name => [name, value[name]]));
 }
 
-// the pixels the fragment shader colored, row by row
-async function gpuRendered({ shader, width, height, values }) {
+// the task Worker's side of a page canvas: the OffscreenCanvas the page sends through `port`, drawn on through WebGPU
+async function gpuCanvas({ id, port, replaces }) {
+	const device = await theGpuDevice(); // without an adapter that error, as gpu_render's
+	const canvas = await new Promise(resolve => port.onmessage = ({ data }) => resolve(data.canvas));
+	port.close();
+	paintCanvases.delete(replaces);
+	const context = canvas.getContext("webgpu");
+	const format = navigator.gpu.getPreferredCanvasFormat();
+	context.configure({ device, format, alphaMode: "opaque" });
+	paintCanvases.set(id, { context, format });
+	return id;
+}
+
+// the pixels the fragment shader colored, row by row; given a `canvas` id, drawn into that page canvas instead
+async function gpuRendered({ shader, width, height, values, canvas }) {
 	const device = await theGpuDevice();
+	const painted = paintCanvases.get(canvas);
+	if (canvas !== undefined && !painted) throw new Error(CANVAS_MISSING);
 	const { declarations, bytes: valueBytes } = uniformLayout(values);
 	const code = shader + FULL_IMAGE_VERTICES + declarations;
 	const module = await gpuModule(device, code);
-	const format = "rgba8unorm";
-	const image = device.createTexture({ size: [width, height], format, usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.COPY_SRC });
-	const rowBytes = Math.ceil(width * PIXEL_BYTES / ROW_ALIGNMENT) * ROW_ALIGNMENT;
-	const readback = device.createBuffer({ size: rowBytes * height, usage: GPUBufferUsage.MAP_READ | GPUBufferUsage.COPY_DST });
+	const format = painted?.format ?? "rgba8unorm";
+	const image = painted?.context.getCurrentTexture() ?? device.createTexture({ size: [width, height], format, usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.COPY_SRC });
 	device.pushErrorScope("validation");
-	const { pipeline, groupLayout } = compiledOnce(compiledPipelines, code, () => {
+	const { pipeline, groupLayout } = compiledOnce(compiledPipelines, `${format}\n${code}`, () => {
 		const groupLayout = declarations ? valuesGroupLayout(device) : undefined;
 		const layout = groupLayout ? device.createPipelineLayout({ bindGroupLayouts: [groupLayout] }) : "auto";
 		const pipeline = device.createRenderPipeline({
@@ -133,6 +155,9 @@ async function gpuRendered({ shader, width, height, values }) {
 	if (uniform) pass.setBindGroup(0, uniform.bindings);
 	pass.draw(TRIANGLE_CORNERS);
 	pass.end();
+	if (painted) return gpuSubmitted(device, encoder).finally(() => uniform?.buffer.destroy());
+	const rowBytes = Math.ceil(width * PIXEL_BYTES / ROW_ALIGNMENT) * ROW_ALIGNMENT;
+	const readback = device.createBuffer({ size: rowBytes * height, usage: GPUBufferUsage.MAP_READ | GPUBufferUsage.COPY_DST });
 	encoder.copyTextureToBuffer({ texture: image }, { buffer: readback, bytesPerRow: rowBytes, rowsPerImage: height }, [width, height]);
 	const bytes = new Uint8Array(await gpuReadBack(device, encoder, readback));
 	image.destroy();
@@ -209,29 +234,76 @@ async function checkedModule(device, shader) {
 }
 
 // submit the encoded work (its validation scope pushed before the pipeline) and give the bytes it left in readback
-async function gpuReadBack(device, encoder, readback) {
+const gpuReadBack = async (device, encoder, readback) => (await gpuReadBacks(device, encoder, [readback]))[0];
+
+// submit the encoded work; the validation error it raised throws
+async function gpuSubmitted(device, encoder) {
 	device.queue.submit([encoder.finish()]);
 	const invalid = await device.popErrorScope();
 	if (invalid) throw new Error(invalid.message);
-	await readback.mapAsync(GPUMapMode.READ);
-	const bytes = readback.getMappedRange().slice(0);
-	readback.destroy();
-	return bytes;
 }
 
-// the typed array of the numbers a compute shader reads at @binding(0): f32 unless it declares array<i32> or array<u32>
-// (natively gpu.rs element_of)
-function gpuElements(shader) {
-	const declared = /@binding\(0\)[^]*?array<(i32|u32)>/.exec(shader)?.[1];
-	return declared === "i32" ? Int32Array : declared === "u32" ? Uint32Array : Float32Array;
+// as gpuReadBack, the bytes of each readback buffer
+async function gpuReadBacks(device, encoder, readbacks) {
+	await gpuSubmitted(device, encoder);
+	return Promise.all(readbacks.map(async readback => {
+		await readback.mapAsync(GPUMapMode.READ);
+		const bytes = readback.getMappedRange().slice(0);
+		readback.destroy();
+		return bytes;
+	}));
+}
+
+// the storage arrays the shader declares, each with the typed array of its elements: f32 unless array<i32> or array<u32>
+const storageArrays = shader => [...shader.matchAll(STORAGE_ARRAY)].map(([, binding, name, element]) => ({ binding: Number(binding), name, Elements: ELEMENT_ARRAYS[element] ?? Float32Array }));
+
+// the typed array of the numbers a compute shader reads at @binding(0) (natively gpu.rs element_of)
+const gpuElements = shader => storageArrays(shader).find(array => array.binding === GPU_BINDING)?.Elements ?? Float32Array;
+
+// gpu_compute over named arrays: each bound where the shader declares the storage array of that name; the arrays it
+// left, by name, in the order given (natively gpu.rs compute_named)
+async function gpuComputedArrays({ shader, arrays, workgroups }) {
+	const declared = storageArrays(shader);
+	const names = declared.map(array => array.name).join(", ");
+	const missing = declared.find(array => !(array.name in arrays));
+	if (missing) throw new Error(`the shader's array ${missing.name} has no numbers: give each of ${names}`);
+	const given = Object.entries(arrays).map(([name, numbers]) => {
+		const array = declared.find(array => array.name === name);
+		if (!array) throw new Error(`the shader declares no storage array ${name}, only ${names}`);
+		if (!numbers.length) throw new Error(`${name} is empty: a storage array holds at least one number`);
+		return { ...array, numbers: new array.Elements(numbers) };
+	});
+	const device = await theGpuDevice();
+	const usage = GPUBufferUsage;
+	const storages = given.map(({ numbers }) => {
+		const storage = device.createBuffer({ size: numbers.byteLength, usage: usage.STORAGE | usage.COPY_SRC | usage.COPY_DST });
+		device.queue.writeBuffer(storage, 0, numbers);
+		return storage;
+	});
+	const readbacks = storages.map(storage => device.createBuffer({ size: storage.size, usage: usage.MAP_READ | usage.COPY_DST }));
+	const module = await gpuModule(device, shader);
+	device.pushErrorScope("validation");
+	const pipeline = compiledOnce(compiledPipelines, shader, () => device.createComputePipeline({ layout: "auto", compute: { module, entryPoint: GPU_ENTRY_POINT } }));
+	const bindings = device.createBindGroup({ layout: pipeline.getBindGroupLayout(0), entries: given.map(({ binding }, at) => ({ binding, resource: { buffer: storages[at] } })) });
+	const encoder = device.createCommandEncoder();
+	const pass = encoder.beginComputePass();
+	pass.setPipeline(pipeline);
+	pass.setBindGroup(0, bindings);
+	pass.dispatchWorkgroups(workgroups);
+	pass.end();
+	storages.forEach((storage, at) => encoder.copyBufferToBuffer(storage, 0, readbacks[at], 0, storage.size));
+	const left = await gpuReadBacks(device, encoder, readbacks).finally(() => storages.forEach(storage => storage.destroy()));
+	return Object.fromEntries(given.map(({ name, Elements }, at) => [name, Array.from(new Elements(left[at]))]));
 }
 
 // gpu_compute's {values} as a list; a kernel's floats and an image's pixels as {words}, given back as raw bytes
 // (writeSharedWords), not as JSON
 const GPU_JOBS = {
-	gpu_compute: async job => ({ values: Array.from(await gpuComputedFloats(job)) }),
+	gpu_compute: async job => ({ values: job.arrays ? await gpuComputedArrays(job) : Array.from(await gpuComputedFloats(job)) }),
 	gpu_kernel: async job => ({ words: await gpuComputedFloats(job) }),
 	gpu_render: async job => ({ words: await gpuRendered(job) }),
+	gpu_canvas: async job => ({ values: await gpuCanvas(job) }),
+	gpu_paint: async job => ({ values: (await gpuRendered(job), job.canvas) }),
 };
 
 // a task Worker's job (task-worker.js): the shader's answer, or why not, into the shared buffer the program waits on
@@ -336,17 +408,46 @@ addHostPart({
 				return 0n;
 			}
 		};
+		const renderJob = (shader, width, height, values) => ({ shader, width: Number(width), height: Number(height),
+			values: { ...builtinValues(shader, Number(width), Number(height)), ...(values == null ? {} : plain(values)) } });
 		// the pixels as a Uint32Array, for gpu_render and for paint given a shader (host.js, P234)
-		holder.gpuRendered = (shader, width, height, values) => {
-			const given = { ...builtinValues(shader, Number(width), Number(height)), ...(values == null ? {} : plain(values)) };
-			return gpuJob("gpu_render", { shader, width: Number(width), height: Number(height), values: given }, [], Uint32Array);
+		holder.gpuRendered = (shader, width, height, values) => gpuJob("gpu_render", renderJob(shader, width, height, values), [], Uint32Array);
+		// paint of a shader in the playground: drawn into the page canvas the GPU's task Worker holds, a new one when it
+		// holds none of this size (the first frame, or another task Worker took the GPU); the canvas's id
+		let paintCanvas;
+		holder.gpuPainted = hooks.gpuCanvas && ((shader, width, height, values) => {
+			const job = renderJob(shader, width, height, values);
+			for (const retry of [false, true]) {
+				if (paintCanvas?.width !== job.width || paintCanvas?.height !== job.height) paintCanvas = newPaintCanvas(job.width, job.height, paintCanvas?.id);
+				try {
+					return gpuJob("gpu_paint", { ...job, canvas: paintCanvas.id });
+				} catch (failure) {
+					if (retry || !failure.message.endsWith(CANVAS_MISSING)) throw failure;
+					paintCanvas = undefined;
+				}
+			}
+		});
+		// the page makes the canvas and sends it through a channel to the task Worker, which configures it
+		const newPaintCanvas = (width, height, replaces) => {
+			const id = ++paintCanvasCount, { port1, port2 } = new MessageChannel();
+			hooks.gpuCanvas({ id, width, height, port: port2, replaces });
+			gpuJob("gpu_canvas", { id, port: port1, replaces }, [port1]);
+			return { id, width, height };
 		};
 		return {
 			gpu_compute: (shader, numbers, workgroups) => {
-				const values = gpuJob("gpu_compute", { shader: plain(shader), numbers: plain(numbers).map(Number), workgroups: Number(workgroups) });
-				// floats, also the whole ones (treeOfPlain would make 3 an Int); ints of an array<i32> or array<u32> shader
-				if (gpuElements(plain(shader)) !== Float32Array) return list(values, int => ({ kind: KIND_INT, data: { int: String(int) }, chain: [] }));
-				return list(values, float => ({ kind: KIND_FLOAT, data: { float }, chain: [] }));
+				const code = plain(shader), given = plain(numbers);
+				// floats, also the whole ones (treeOfPlain would make 3 an Int); ints of an array<i32> or array<u32>
+				const item = Elements => Elements === Float32Array ? float => ({ kind: KIND_FLOAT, data: { float }, chain: [] }) : int => ({ kind: KIND_INT, data: { int: String(int) }, chain: [] });
+				if (given !== null && typeof given === "object" && isPlainObject(given)) {
+					const arrays = Object.fromEntries(Object.entries(given).map(([name, array]) => [name, [array].flat().map(Number)]));
+					const left = gpuJob("gpu_compute", { shader: code, arrays, workgroups: Number(workgroups) });
+					const elements = Object.fromEntries(storageArrays(code).map(array => [array.name, array.Elements]));
+					const entries = Object.entries(left).map(([name, values]) => ({ kind: COLON_KEY, key: [{ kind: "5", data: { text: name }, chain: [] }, { kind: SQUARE_LIST, items: values.map(item(elements[name])) }] }));
+					return buildValue(program(), { kind: CURLY_LIST, items: entries });
+				}
+				const values = gpuJob("gpu_compute", { shader: code, numbers: given.map(Number), workgroups: Number(workgroups) });
+				return list(values, item(gpuElements(code)));
 			},
 			// over a `linear xs = float[n]`: its cells read and written in place, no list built (card gpu-vectors)
 			gpu_compute_linear: (shader, block, workgroups) => {

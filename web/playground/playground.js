@@ -207,6 +207,7 @@ function startWorker(restarts = 0) {
 			if (data.type === "file") return offerFile(data.path, data.bytes);
 			if (data.type === "stop sound files") return silence(); // stop_sound: the queued sounds and the music files
 			if (data.type === "stop sound") return silenced(data.handle); // stop_sound(handle): that one alone
+			if (data.type === "gpu canvas") return sendPaintCanvas(data);
 			if (!pending) return showEventOutput(data);
 			if (data.type === "listening") Object.assign(pending, { listening: data.events, address: data.address });
 			if (data.type === "print") printedChunk(pending, data);
@@ -215,7 +216,7 @@ function startWorker(restarts = 0) {
 				slept(pending, data.milliseconds);
 			}
 			if (data.type === "tasks inline") pending.tasksInline = data.reason;
-			if (data.type === "paint") painted(pending, data);
+			if (data.type === "paint") painted(pending, data.canvas ? { ...data, canvas: paintCanvases.get(data.canvas) } : data);
 			if (data.type === "module") lastModule = data.bytes;
 			if (data.type === "report" && data.id === pending.id) finish(pending, { ...data.report, printed: pending.printed, paintings: pending.paintings, listening: pending.listening ?? [], address: pending.address, milliseconds: data.milliseconds });
 		};
@@ -581,13 +582,27 @@ function showPaintings(paintings) {
 	$("paintings").replaceChildren(...paintings.map(paintingCanvas));
 }
 
-// the run's paintings, its last one drawn into the canvas shown for it, which keeps the pointer over it
+// the run's paintings, its last one drawn into the canvas shown for it, which keeps the pointer over it; a canvas the GPU
+// draws into (paint of a shader) is shown as it is
 function showFrame(paintings) {
 	const shown = $("paintings").querySelectorAll("canvas");
 	const canvas = shown[shown.length - 1];
 	const painting = paintings.at(-1);
-	if (shown.length === paintings.length && sameSize(canvas, painting)) drawn(canvas, painting);
+	if (painting.canvas === canvas && shown.length === paintings.length) return;
+	if (shown.length === paintings.length && sameSize(canvas, painting) && !painting.canvas && !canvas.gpu) drawn(canvas, painting);
 	else showPaintings(paintings);
+}
+
+// the canvases paint of a shader draws into, by id (host-gpu.js gpuPainted): the page makes one and sends its
+// OffscreenCanvas through the port to the task Worker holding the GPU device
+const paintCanvases = new Map();
+function sendPaintCanvas({ id, width, height, port, replaces }) {
+	const canvas = paintingElement({ width, height });
+	canvas.gpu = true;
+	paintCanvases.delete(replaces);
+	paintCanvases.set(id, canvas);
+	const offscreen = canvas.transferControlToOffscreen();
+	port.postMessage({ canvas: offscreen }, [offscreen]);
 }
 
 // ⛶ (card little-full): the last painting fills the screen at its own aspect ratio, Esc or ⛶ again leaves; a click

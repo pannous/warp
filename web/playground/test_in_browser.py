@@ -67,6 +67,17 @@ COMPLETIONS = [
 KEY_CODES = {"Tab": 9, "Enter": 13}
 CLIPBOARD_READ = "(a program reads the clipboard)"  # card web-apis-rest: host.js clipboard_text asks the page
 CLIPBOARD_TEXT = "copied by the page"
+# card web-apis-rest: gpu_compute over named arrays, and paint of a shader drawn straight into the page's canvas
+GPU_PAGE = "(named GPU arrays, a shader painted into the page's canvas)"
+NAMED_ARRAYS = """shader = "@group(0) @binding(0) var<storage, read_write> xs: array<f32>;
+@group(0) @binding(1) var<storage, read_write> ns: array<i32>;
+@compute @workgroup_size(64) fn main(@builtin(global_invocation_id) id: vec3<u32>) {
+	if (id.x < arrayLength(&xs)) { xs[id.x] = xs[id.x] + 10.0; ns[id.x] = ns[id.x] - 1; }
+}"
+gpu_compute(shader, {xs: [1.5 2 3], ns: [7 8 9]}, 1)"""
+NAMED_ARRAYS_SHOWN = ["11.5", "6 7 8"]
+RED_SHADER = 'paint("@fragment fn main(@builtin(position) at: vec4f) -> @location(0) vec4f { return vec4f(1.0, 0.0, 0.0, 1.0); }", 8, 8)'
+CANVAS_SETTLE_MS = 300  # the task Worker's frame reaches the page's canvas after its task
 # each GET the server began and finished, (seconds since it started, path, finished): shown after a failed tour, which
 # then says whether the browser asked for a stalled worker's scripts at all (card tour-firefox)
 served = []
@@ -317,6 +328,27 @@ def clipboard_read_wrong():
 	return [] if CLIPBOARD_TEXT in read else [f"clipboard read: {read!r}, expected {CLIPBOARD_TEXT!r}"]
 
 
+def gpu_page_wrong():
+	"""named arrays come back by name, and a painted shader shows red in the GPU's own canvas; skipped loudly without
+	WebGPU (the runner's Firefox)"""
+	computed = run_code(NAMED_ARRAYS)
+	if NO_GPU in computed:
+		print(f"skip {GPU_PAGE}: this browser {NO_GPU}")
+		return []
+	wrong = [f"named arrays: {computed!r}, expected {shown!r} in it" for shown in NAMED_ARRAYS_SHOWN if shown not in computed]
+	painted = run_code(RED_SHADER)
+	shown = browser("eval", f"""(async () => {{
+		await new Promise(done => setTimeout(done, {CANVAS_SETTLE_MS}));
+		const canvas = [...document.querySelectorAll("#paintings canvas")].at(-1);
+		if (!canvas) return "no canvas";
+		const copy = new OffscreenCanvas(canvas.width, canvas.height).getContext("2d");
+		copy.drawImage(canvas, 0, 0);
+		return `gpu ${{canvas.gpu === true}} red ${{copy.getImageData(4, 4, 1, 1).data[0]}}`;
+	}})()""")
+	expected = "gpu true red 255"
+	return wrong + ([] if expected in shown else [f"painted shader ({painted!r}): {shown!r}, expected {expected!r}"])
+
+
 def completion_keys_wrong():
 	"""the editor's code after each of COMPLETIONS' keys, pressed through CodeMirror's own key handling: what differs"""
 	script = f"""(() => {{
@@ -424,7 +456,7 @@ def check_examples(names, page_url=None, site=None):
 				print(f"skip {name}: this browser {NO_GPU}")
 				shown = {**shown, "value": expected.get("value"), "canvases": expected.get("canvases")}
 			verdict(name, [f"{part}: {shown.get(part)!r}, expected {expected[part]!r}" for part in ("value", "printed", "canvases", "clicked", "clickedPrinted", "kept", "keyed", "animated", "address") if part in expected and shown.get(part) != expected[part]] + [f"status: {shown.get('failed')}"] * bool(shown.get("failed")))
-	extra_checks = [(check, wrong) for check, wrong in ((COMPLETION_KEYS, completion_keys_wrong), (CLIPBOARD_READ, clipboard_read_wrong), (FILE_KEPT, lambda: file_kept_wrong(page_url))) if not names or check in names]
+	extra_checks = [(check, wrong) for check, wrong in ((COMPLETION_KEYS, completion_keys_wrong), (CLIPBOARD_READ, clipboard_read_wrong), (GPU_PAGE, gpu_page_wrong), (FILE_KEPT, lambda: file_kept_wrong(page_url))) if not names or check in names]
 	for check, wrong in extra_checks:
 		verdict(check, wrong())
 	console.stop()
