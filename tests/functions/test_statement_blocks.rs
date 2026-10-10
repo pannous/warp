@@ -2,11 +2,9 @@
 // phrase (`to add a to b`) or has several definitions (`to play x`, `to play x for duration`): `f() := {play "x.wav"}`
 // plays, it returned the data `{play "x.wav"}`; `x = {…}` still assigns the data as written
 use crate::is;
-#[cfg(feature = "native")]
 use warp::wasm_emitter::eval;
 
 const BOOP: &str = "to boop x: x + 1; to boop x for y: x + y; ";
-#[cfg(feature = "native")]
 const MISSING_FILE_ERROR: &str = "cannot open x.wav";
 
 #[test]
@@ -17,9 +15,7 @@ fn a_block_of_one_phrase_call_runs_it() {
 	is!(&format!("{BOOP}if 1 {{boop 2}}"), 3);
 }
 
-// native only: the browser's play of a file reports no missing file
 #[test]
-#[cfg(feature = "native")]
 fn a_block_of_one_sound_word_plays() {
 	for program in ["f() := {play \"x.wav\"}; f()", "if 1 {play \"x.wav\"}", "job = go { play \"x.wav\" }; await job"] {
 		assert!(eval(program).serialize().contains(MISSING_FILE_ERROR), "{program}");
