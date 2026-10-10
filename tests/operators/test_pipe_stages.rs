@@ -18,3 +18,13 @@ fn a_pipe_into_a_word_operator() {
 	is!("square x := x*x; 2|square|sqrt", 2);
 	is!("square x := x*x; square 2|sqrt", 2);
 }
+
+// card pipe-compose: wiki/pipe.md `printSum := sum|print`: a pipe between functions is their composition, the function
+// that calls them one after the other (`(f|g)(x)` is `g(f(x))`)
+#[test]
+fn a_pipe_between_functions_composes_them() {
+	is!("rootSum := sum|sqrt; rootSum 1 3 5", 3); // printSum := sum|print prints 6, its value is print's ø
+	is!("square x := x*x; f := square|sqrt; f 3", 3);
+	is!("square x := x*x; f := square|square|sqrt; f(3)", 9);
+	is!("def twice(x) = 2*x; f = twice|abs; f(-4)", 8);
+}

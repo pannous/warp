@@ -5,6 +5,7 @@
 //! `then` pipes the same way into a function missing its argument (`xs then sort`, P158); otherwise it is the
 //! condition, also without `if`.
 
+use super::lambdas::IMPLICIT_PARAMETER;
 use super::nodes::{if_then, key};
 use crate::analyzer::counting_function;
 use crate::context::Context;
@@ -69,6 +70,11 @@ struct Pipes {
 impl Pipes {
 	fn rewrite(&self, node: Node) -> Node {
 		match node {
+			// `sum|print`: functions on both sides compose, `it => print(sum(it))` (wiki/pipe.md, card pipe-compose)
+			Node::Key(value, Op::Or, stage) if self.is_stage(&stage) && self.is_function_chain(&value) => {
+				let it = Node::Symbol(IMPLICIT_PARAMETER.to_string());
+				key(it.clone(), Op::FatArrow, self.applied(&stage, self.chain_applied(*value, it)))
+			}
 			Node::Key(value, Op::Or, stage) if self.is_stage(&stage) => self.applied(&stage, self.rewrite(*value)),
 			// `cond then a else b`: the condition, also without `if` (P158)
 			Node::Key(then, Op::Else, otherwise) if is_bare_then(&then) => {
@@ -155,6 +161,23 @@ impl Pipes {
 	/// A marked stage that pipes: a function or a word operator
 	fn is_stage(&self, stage: &Node) -> bool {
 		self.function(stage).is_some() || (is_pipe_stage(stage) && operator_stage(stage).is_some())
+	}
+
+	/// `sum`, `square|sqrt`: a function, or functions piped into each other
+	fn is_function_chain(&self, node: &Node) -> bool {
+		match node.drop_meta() {
+			Node::Symbol(name) => self.names_function(name, 0),
+			Node::Key(value, Op::Or, stage) => self.is_stage(stage) && self.is_function_chain(value),
+			_ => false,
+		}
+	}
+
+	/// The function chain called with `argument`: `square|sqrt` → `√(square(argument))`
+	fn chain_applied(&self, chain: Node, argument: Node) -> Node {
+		match chain.drop_meta().clone() {
+			Node::Key(value, Op::Or, stage) => self.applied(&stage, self.chain_applied(*value, argument)),
+			function => called(function, argument),
+		}
 	}
 
 	/// The stage applied to the piped value: the call `f(value)`, or the operator `√value`
