@@ -228,7 +228,7 @@ impl WasmGcEmitter {
 			if let Some(table) = witness {
 				s.emit_instance_order(f, table, kinds, first, second);
 			}
-			s.emit_instant_order(f, kinds, first, second);
+			s.emit_time_order(f, kinds, first, second);
 			// numbers only from here
 			for kind in kinds {
 				is_kind(f, kind, Kind::Int);
@@ -401,7 +401,7 @@ impl WasmGcEmitter {
 		self.emit_exact_text();
 		self.emit_float_text(); // after int_to_decimal, which it calls
 		self.emit_uncertain_text(); // after float_text and text_concat, which it calls
-		self.emit_instant_text(); // after int_to_decimal, which it calls
+		self.emit_time_text(); // after int_to_decimal and the times runtime, which it calls
 		for (name, nested) in joinings {
 			self.emit_joining(name, nested);
 		}
@@ -478,6 +478,10 @@ impl WasmGcEmitter {
 				s.emit_field(f, element, 0);
 				Self::emit_list(f, &[I::I64Const(kind as i64), I::I64Eq]);
 			};
+			let masked_kind_is = |f: &mut Function, kind: Kind| {
+				s.emit_field(f, element, 0);
+				Self::emit_list(f, &[I::I64Const(KIND_MASK), I::I64And, I::I64Const(kind as i64), I::I64Eq]);
+			};
 			let next_element = |f: &mut Function| {
 				s.emit_field(f, cell, 1);
 				Self::emit_list(f, &[I::RefCastNonNull(HeapType::Concrete(node_type)), I::LocalSet(element)]);
@@ -512,10 +516,6 @@ impl WasmGcEmitter {
 					let new_text = |f: &mut Function, (pointer, length): (u32, u32)| {
 						Self::emit_list(f, &[I32Const(pointer as i32), I32Const(length as i32)]);
 						s.call(f, "new_text");
-					};
-					let masked_kind_is = |f: &mut Function, kind: Kind| {
-						s.emit_field(f, element, 0);
-						Self::emit_list(f, &[I::I64Const(KIND_MASK), I::I64And, I::I64Const(kind as i64), I::I64Eq]);
 					};
 					// a symbol (a map's key) as its name
 					is_kind(f, Kind::Symbol);
@@ -591,10 +591,10 @@ impl WasmGcEmitter {
 					s.call(f, super::uncertain::UNCERTAIN_TEXT);
 					Self::emit_list(f, &[I::LocalSet(element), I::End]);
 				}
-				if s.should_emit_function(super::times::INSTANT_TEXT) {
-					is_kind(f, Kind::Time);
+				if s.should_emit_function(super::times::TIME_TEXT) {
+					masked_kind_is(f, Kind::Time); // the form in the info bits
 					Self::emit_list(f, &[I::If(BlockType::Empty), I::LocalGet(element), I::RefAsNonNull]);
-					s.call(f, super::times::INSTANT_TEXT);
+					s.call(f, super::times::TIME_TEXT);
 					Self::emit_list(f, &[I::LocalSet(element), I::End]);
 				}
 				is_kind(f, Kind::Float);

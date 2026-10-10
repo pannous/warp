@@ -88,6 +88,7 @@ PASSED:
   ✓ control::test_daily_timer::a_daily_timer_starts_and_main_runs_on
   ✓ control::test_daily_timer::the_delay_until_a_time_of_day_wraps_to_tomorrow
   ✓ control::test_data_quoting::a_tag_in_a_variable_reads_as_written
+  ✓ control::test_data_quoting::a_variable_named_data_is_no_prefix
   ✓ control::test_data_quoting::data_in_a_list_reads_as_written
   ✓ control::test_data_quoting::data_of_a_tag_reads_as_written
   ✓ control::test_data_quoting::data_takes_the_whole_expression_after_it
@@ -161,6 +162,7 @@ PASSED:
   ✓ control::test_empty_bodies::an_empty_function_body_returns_nothing
   ✓ control::test_empty_bodies::an_empty_timer_body_does_nothing
   ✓ control::test_empty_reset_in_if::an_if_resetting_a_list_to_empty_runs
+  ✓ control::test_error_branch_kind::test_a_declared_result_passes_an_error_on
   ✓ control::test_error_branch_kind::test_an_error_branch_keeps_the_other_branch_kind
   ✓ control::test_error_branch_kind::test_an_error_value_stays_a_value
   ✓ control::test_error_branch_kind::test_else_if_chains_and_switch_defaults
@@ -296,6 +298,7 @@ PASSED:
   ✓ control::test_listener_removal::a_named_listener_is_removed
   ✓ control::test_listener_removal::removing_one_listener_keeps_the_others
   ✓ control::test_loop_forms::a_range_is_a_list_in_a_variable
+  ✓ control::test_loop_forms::a_while_body_prints_each_pass
   ✓ control::test_loop_forms::for_without_variable_binds_it
   ✓ control::test_loop_forms::ranges_in_for_headers_stay_ranges
   ✓ control::test_loop_forms::upto_excludes_the_end_unlike_to
@@ -304,6 +307,7 @@ PASSED:
   ✓ control::test_loop_value_at_run_time::a_function_loop_over_a_parameter_gives_its_last_body_value
   ✓ control::test_loop_value_at_run_time::a_loop_that_never_ran_is_empty_also_assigned
   ✓ control::test_loop_value::a_counting_loop_gives_its_last_body_value
+  ✓ control::test_loop_value::a_float_last_body_value_is_the_loop_value
   ✓ control::test_loop_value::a_walking_loop_gives_its_last_body_value
   ✓ control::test_loop_value::a_while_loop_of_one_expression_gives_its_value
   ✓ control::test_loops_in_functions::a_multi_line_function_with_a_loop
@@ -1590,6 +1594,7 @@ PASSED:
   ✓ lists::test_list_plus_number::the_explicit_forms_never_ask
   ✓ lists::test_list_retype::a_list_variable_given_another_element_type_holds_both
   ✓ lists::test_list_times_list::list_times_list_is_the_dot_product
+  ✓ lists::test_list_times_list::round_and_curly_lists_take_the_dot_product
   ✓ lists::test_list_truthiness::a_list_of_nothing_is_truthy
   ✓ lists::test_lists::test_array_creation
   ✓ lists::test_lists::test_array_indices
@@ -1637,6 +1642,7 @@ PASSED:
   ✓ lists::test_min_max::test_min_max_of_variables_and_expressions
   ✓ lists::test_min_max::test_min_needs_two_arguments
   ✓ lists::test_min_max::test_user_definition_wins_over_the_builtin
+  ✓ lists::test_nested_comprehension::a_where_condition_starts_with_a_count
   ✓ lists::test_nested_comprehension::filters_sit_between_and_after_the_clauses
   ✓ lists::test_nested_comprehension::two_for_clauses_nest
   ✓ lists::test_nested_index_assignment::a_nested_index_assignment_sets_the_inner_item
@@ -2097,6 +2103,7 @@ PASSED:
   ✓ numbers::test_float_bit_operations::test_logical_and_bit_operators_on_a_float_are_refused_loudly
   ✓ numbers::test_float_bit_operations::test_logical_and_bit_operators_on_ints_still_work
   ✓ numbers::test_float_exact_context::a_rational_constant_of_exact_reals_in_a_runtime_program
+  ✓ numbers::test_float_exact_context::a_variable_declared_real_keeps_the_exact_root
   ✓ numbers::test_float_exact_context::test_a_declared_exact_variable_refuses_a_float_as_a_parameter_does
   ✓ numbers::test_float_exact_context::test_explicit_cast_truncates_a_float
   ✓ numbers::test_float_exact_context::test_ffi_float_result_in_exact_context_is_refused_loudly
@@ -2523,6 +2530,7 @@ PASSED:
   ✓ operators::test_operators::test_for_each
   ✓ operators::test_operators::test_key
   ✓ operators::test_operators::test_while_true_forever
+  ✓ operators::test_pipe_stages::a_composition_takes_the_argument_after_it
   ✓ operators::test_pipe_stages::a_pipe_between_functions_composes_them
   ✓ operators::test_pipe_stages::a_pipe_into_a_spaced_definition
   ✓ operators::test_pipe_stages::a_pipe_into_a_word_operator
@@ -3198,6 +3206,7 @@ PASSED:
   ✓ types::test_bool_type::a_bool_of_unknown_static_type_is_tested_at_run_time
   ✓ types::test_bool_type::a_list_starting_with_a_bool_is_a_list
   ✓ types::test_bool_type::a_literal_bool_counts_in_arithmetic
+  ✓ types::test_bool_type::an_exact_comparison_prints_as_bool
   ✓ types::test_bool_type::strict_equality_compares_the_full_type
   ✓ types::test_bool_type::test_bool_acts_as_one_or_zero
   ✓ types::test_bool_type::test_bool_is_a_type_of_its_own
@@ -3338,7 +3347,7 @@ PASSED:
   ✓ types::test_data::test_node_data_metadata
   ✓ types::test_data::test_node_data_type_mismatch
   ✓ types::test_data::test_node_data_various_types
-  ✓ types::test_dates_at_run_time::test_an_instant_has_no_wall_clock
+  ✓ types::test_dates_at_run_time::test_an_instant_has_the_local_wall_clock
   ✓ types::test_dates_at_run_time::test_an_instant_shows_as_rfc_3339
   ✓ types::test_dates_at_run_time::test_instants_compare_at_run_time
   ✓ types::test_dates_at_run_time::test_now_reads_back_as_an_instant
@@ -3559,6 +3568,12 @@ PASSED:
   ✓ types::test_tagged_objects::a_static_counts_constructions_in_the_value_block
   ✓ types::test_text_as_number::a_literal_text_as_number_is_its_number_in_a_variable_too
   ✓ types::test_text_as_number::a_run_time_text_as_number_is_its_number
+  ✓ types::test_time_values_at_run_time::test_a_time_joins_a_text
+  ✓ types::test_time_values_at_run_time::test_a_time_reads_back
+  ✓ types::test_time_values_at_run_time::test_an_instant_reads_the_local_wall_clock
+  ✓ types::test_time_values_at_run_time::test_fields_at_run_time
+  ✓ types::test_time_values_at_run_time::test_time_literals_print
+  ✓ types::test_time_values_at_run_time::test_times_compare_at_run_time
   ✓ types::test_trait_constraints::a_constrained_list_parameter_takes_conforming_elements
   ✓ types::test_trait_constraints::a_list_annotation_reads_both_ways
   ✓ types::test_trait_constraints::elements_that_do_not_conform_are_a_compile_error
@@ -4120,6 +4135,9 @@ PASSED:
   ✓ web::test_webgpu::a_shader_that_does_not_compile_says_where
   ✓ web::test_webgpu::a_value_that_is_no_number_says_so
   ✓ welcoming::test_adopted_acknowledgements::acknowledgements_of_the_old_answers_file_are_adopted_once
+  ✓ welcoming::test_advice_fixes::a_block_assignment_offers_global_at_main
+  ✓ welcoming::test_advice_fixes::advice_without_a_replacement_offers_no_fix
+  ✓ welcoming::test_advice_fixes::then_after_a_comparison_offers_the_pipe
   ✓ welcoming::test_braceless_call_argument::a_plain_braceless_argument_does_not_warn
   ✓ welcoming::test_braceless_call_argument::an_operator_in_a_braceless_argument_warns_with_both_readings
   ✓ welcoming::test_c_style::test_c_style_definition
@@ -4506,4 +4524,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-10 ignored, 4501 passed, 0 failed, 4501 total tested
+10 ignored, 4519 passed, 0 failed, 4519 total tested

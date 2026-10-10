@@ -305,6 +305,11 @@ def looseEq (P : Program) (μ : Store) : Nat → Expr → Expr → Bool
 def eqValues (P : Program) (μ : Store) (same : Bool) (a b : Expr) : Bool :=
   if same then decide (a = b) else looseEq P μ EQ_FUEL a b
 
+/-- ø: warp's ø is the empty list (`[] ?? 3` is 3) -/
+def isEmpty : Expr → Bool
+  | .unit | .nil => true
+  | _ => false
+
 /-- a stored error -/
 def isFail : Expr → Bool
   | .fail _ => true
@@ -484,6 +489,7 @@ inductive Frame where
   | setL (f : String) (v : Expr) | setR (o : Expr) (f : String)
   | isA (c : String)
   | failed
+  | orElse (b : Expr)
   | emit (ev : String)
   | abort (ev : String) (k : Option Nat)
   | forIn (y : String) (b last : Expr)
@@ -527,6 +533,7 @@ def plug : Frame → Expr → Expr
   | setR o f, e => .set o f e
   | isA c, e => .isA e c
   | failed, e => .failed e
+  | orElse b, e => .orElse e b
   | emit ev, e => .emit ev e
   | abort ev k, e => .abort ev k e
   | forIn y b d, e => .forIn y e b d
@@ -599,6 +606,7 @@ inductive Step (P : Program) : Expr × Store → Expr × Store → Prop where
   | set {o f v μ} : o.isValue = true → v.isValue = true → Step P (.set o f v, μ) (writeField μ o f v)
   | isA {v c μ} : v.isValue = true → Step P (.isA v c, μ) (.bool (isInstance v c), μ)
   | failed {v μ} : v.isValue = true → Step P (.failed v, μ) (.bool (isFail v), μ)
+  | orElse {v b μ} : v.isValue = true → Step P (.orElse v b, μ) (if isEmpty (μ.items v) then b else v, μ)
   /-- the body runs with the handler pushed; the handlers return to what they were -/
   | handleStep {ev h b b' μ μ'} : Step P (b, μ.push ev h) (b', μ') →
       Step P (.handle ev h b, μ) (.handle ev h b', μ'.withHandlers μ.handlers)

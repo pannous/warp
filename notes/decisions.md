@@ -19,6 +19,13 @@ notes/open_decisions.md.
 - module-global-assign (warp-sound default, not asked): a program's top-level `tempo = 90` / `note_seconds = 0.25` /
   `canvas_width = 800` sets the standard module's `global` of that name instead of making a shadowing program
   variable; other module words still shadow. Revisit if it surprises the user.
+- go-voice (warp-sound default, not asked): a `go { }` task is a voice that starts where its starter stands in the
+  music and sounds along with it (native; the Playground still plays them one after another, card playground-go).
+- tag-assign (warp-class, user 2026-10-10): every `=` in a tag body is a value entry, like `:`: `cat{x=1 y=2}` is
+  cat{x:1 y:2}, `p{shown = "seen"}` is p{shown:"seen"}, `html{test=1}` is html{test:1}; the meaning never depends on
+  the number of entries. Tests pinning a single `=` as a statement change meaning by this decision.
+- float-result (warp-functions): `int square(x) = x*x; square 3.1` is a compile error naming int, fix "declare
+  `number` to keep the float, or truncate with `as int`". Implied by rational-float, not asked.
 - exact-default (user 2026-10-10, asked after warp-perf measured fraction math as ~90% of finger paint's time plus a
   never-freed number heap): integer division stays exact, `1/3 + 1/3` is `2/3`; decimal literals are floats,
   `.1 + .2 ≈ .3`; `==` on floats gives a warning with the fix "use ≈". Supersedes the 2026-09-28 "decimals exact"

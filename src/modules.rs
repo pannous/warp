@@ -47,10 +47,10 @@ const UNSCOPED_DIRECTORIES: [&str; 3] = [PACKAGES_DIRECTORY, "target", "node_mod
 const PROJECT_MARKER: &str = ".git";
 /// `stored x = v` too: a used module's persisted signal is the program's (card web-stores)
 const GLOBAL_KEYWORD: &str = "global";
-const DECLARATION_KEYWORDS: [&str; 6] = ["use", "import", "let", "var", GLOBAL_KEYWORD, crate::stored_values::STORED_WORD];
+const DECLARATION_KEYWORDS: [&str; 4] = ["let", "var", GLOBAL_KEYWORD, crate::stored_values::STORED_WORD];
 
 fn is_declaration_keyword(keyword: &str) -> bool {
-	DECLARATION_KEYWORDS.contains(&keyword) || crate::analyzer::CONSTANT_KEYWORDS.contains(&keyword)
+	DECLARATION_KEYWORDS.contains(&keyword) || is_import_keyword(keyword) || crate::analyzer::CONSTANT_KEYWORDS.contains(&keyword)
 }
 
 /// Replace every `use <module>` of the program by the definitions of that module, each module once.
@@ -1502,7 +1502,7 @@ fn leftmost_symbol(node: &Node) -> Option<String> {
 
 /// Words that bind the names after them: `fun f(x)`, `for i in`, `import f from`, `global x`
 fn binds_names(keyword: &str) -> bool {
-	is_function_keyword(keyword) || is_declaration_keyword(keyword) || is_import_keyword(keyword) || keyword == crate::lowering::words::FOR_WORD
+	is_function_keyword(keyword) || is_declaration_keyword(keyword) || keyword == crate::lowering::words::FOR_WORD
 }
 
 /// The signature part of a definition: `f(x)` of `f(x): body` and of `fun f(x) {body}`

@@ -417,6 +417,8 @@ const AND_KEYWORD: &str = "and";
 const CONTINUING_WORDS: [&str; 7] = ["and", "or", "xor", "then", "else", "is", "in"];
 /// A prefix operator word after `and` starts its operand, not a statement: `a and not c` (card let-if)
 const OPERAND_PREFIX_WORDS: [&str; 1] = ["not"];
+/// Words a condition follows: `xs where #it > 1` counts it, `where` takes no `#` index (card topo-sort-wasm)
+const CLAUSE_WORDS: [&str; 1] = ["where"];
 /// Words between two operands, as an operator: `and n mod 100 <= 13` continues the condition (card if-then-chain)
 const INFIX_WORDS: [&str; 6] = ["mod", "modulo", "rem", "div", "contains", "as"];
 pub const ASSERT_MARKER: &str = "assert·else";
@@ -758,6 +760,8 @@ pub struct WarpParser {
 	key_variables: Vec<String>,
 	/// Names assigned a text or typed text (`l = "en"`, `k:text`): `m[l]` looks a key up too (card text-key)
 	text_variables: std::collections::HashSet<String>,
+	/// Names assigned so far (`data = […]`): such a name is read as the variable, not as a prefix word
+	variables: std::collections::HashSet<String>,
 	/// The binding power of a glued pair's value (`for:email`): that value is one atom, no call of what follows
 	glued_pair_bp: Option<u8>,
 	/// Where the innermost bracketed group opened (line, column): an unclosed one names it
@@ -1084,6 +1088,7 @@ impl WarpParser {
 			in_for_header: false,
 			key_variables: vec![],
 			text_variables: Default::default(),
+			variables: Default::default(),
 			glued_pair_bp: None,
 			group_start: (0, 0),
 			stops_at_else: false,

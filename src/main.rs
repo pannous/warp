@@ -329,7 +329,8 @@ fn run_command(args: &[String]) {
         if let Err(failure) = served {
             fail(failure);
         }
-    } else if let Some(target) = arg_string.strip_prefix("data ") {
+    } else if let Some(target) = arg_string.strip_prefix("data ").filter(|target| !target.trim_start().starts_with('=')) {
+        // `warp data file.warp` prints the file as data; `warp 'data = [3 1 2]; …'` is a program
         let text = source_of(target);
         println!("{}", warp_parser::parse_data(&text).serialize());
     } else if COMPILE_COMMANDS.iter().any(|command| arg_string.starts_with(&format!("{command} "))) {

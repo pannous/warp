@@ -89,9 +89,9 @@ def ArithOp.quantityTy (op : ArithOp) (a b : Ty) : Ty :=
   | some d, some e => ((op.dims d e).map Ty.ofDims).getD .never
   | _, _ => .never
 
-/-- the result type of an arithmetic operation: `never` when a side raises, dynamic when a side is -/
+/-- the result type of an arithmetic operation: `never` when a side raises, dynamic when a side admits ø -/
 def ArithOp.ty (op : ArithOp) (a b : Ty) : Ty :=
-  if a = .never ∨ b = .never then .never else if a = .any ∨ b = .any then .any
+  if a = .never ∨ b = .never then .never else if Ty.dynamic a b = true then .any
   else if (a.isQuantity || b.isQuantity) = true then op.quantityTy a b else op.numberTy a b
 
 theorem ArithOp.ty_mono (op : ArithOp) {a b a' b' : Ty} (ha : Ty.sub a' a = true) (hb : Ty.sub b' b = true) :
@@ -107,16 +107,10 @@ theorem ArithOp.ty_mono (op : ArithOp) {a b a' b' : Ty} (ha : Ty.sub a' a = true
     · exact na (Ty.sub_to_never ha)
     · exact nb (Ty.sub_to_never hb)
   rw [ite_eq_right n]
-  by_cases y : a = .any ∨ b = .any
+  by_cases y : Ty.dynamic a b = true
   · rw [ite_eq_left y]; exact Ty.sub_any _
-  rw [ite_eq_right y]
-  have ya : a ≠ .any := fun h => y (.inl h)
-  have yb : b ≠ .any := fun h => y (.inr h)
-  have y' : ¬(a' = .any ∨ b' = .any) := by
-    rintro (rfl | rfl)
-    · exact ya (Ty.sub_from_any ha)
-    · exact yb (Ty.sub_from_any hb)
-  rw [ite_eq_right y', Ty.quantity_up ha na ya, Ty.quantity_up hb nb yb]
+  obtain ⟨y', ya, yb⟩ := Ty.not_dynamic ha hb y
+  rw [ite_eq_right y, ite_eq_right y', Ty.quantity_up ha na ya, Ty.quantity_up hb nb yb]
   by_cases q : (a.isQuantity || b.isQuantity) = true
   · rw [ite_eq_left q, ite_eq_left q]
     unfold ArithOp.quantityTy
@@ -169,6 +163,8 @@ inductive Expr where
   | fail (msg : String)
   /-- `e failed`: is the value of e a stored error -/
   | failed (e : Expr)
+  /-- `a ?? b`: a unless it is ø, else b (only ø falls back: `0 ?? 9` is 0) -/
+  | orElse (a b : Expr)
   /-- the run-time check warp inserts where a value of unknown type goes to a declared place (`names = f()` of a
   `names: texts`, card list-element-types; any value given to an inline union `x: int | text` or an optional
   `x: int?`): the value if it fits one of the alternatives ts, else an error -/
@@ -254,6 +250,7 @@ def subst (e : Expr) (y : String) (v : Expr) : Expr :=
   | letIn z t e b => letIn z t (e.subst y v) (if z = y then b else b.subst y v)
   | call f e => call f (e.subst y v)
   | tryCatch e h => tryCatch (e.subst y v) (h.subst y v)
+  | orElse a b => orElse (a.subst y v) (b.subst y v)
   | cast e ts => cast (e.subst y v) ts
   | conv e t => conv (e.subst y v) t
   | broadcast f e => broadcast f (e.subst y v)
@@ -277,7 +274,7 @@ def subst (e : Expr) (y : String) (v : Expr) : Expr :=
 def assigned : Expr → List String
   | assign x e | init x e => x :: e.assigned
   | cons a b | add a b | arith _ a b | lt a b | eq _ a b | seq a b | index a b | range a b | append a b
-  | tryCatch a b | app a b | push a b
+  | tryCatch a b | orElse a b | app a b | push a b
   | handle _ a b => a.assigned ++ b.assigned
   | ite c a b | loop c a b | setAt c a b => c.assigned ++ a.assigned ++ b.assigned
   | forIn _ e b d => e.assigned ++ b.assigned ++ d.assigned
