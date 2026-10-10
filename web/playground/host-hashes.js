@@ -57,10 +57,18 @@ function regexOf(pattern, flags = "") {
 	return new RegExp(pattern, flags + "u");
 }
 
+// JSON5 as JSON (card json5-parse): 'single quoted' texts, comments, trailing commas, bare keys; src/node/json_xml.rs's
+// json_of_json5 is the native twin
+const JSON5_PARTS = /"(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*'|\/\/[^\n]*|\/\*[\s\S]*?\*\/|,(?=(?:\s|\/\/[^\n]*|\/\*[\s\S]*?\*\/)*[}\]])|[\p{L}_$][\p{L}\p{N}_$]*(?=\s*:)/gu;
+const jsonPart = part => part[0] === '"' ? part
+	: part[0] === "'" ? `"${part.slice(1, -1).replace(/\\.|"/g, inner => inner === '"' ? '\\"' : inner === "\\'" ? "'" : inner)}"`
+	: part[0] === "/" || part === "," ? "" : `"${part}"`;
+const jsonOfJson5 = text => text.replace(JSON5_PARTS, jsonPart);
+
 addHostPart({
 	adapters: {
 		hash: { sha256: subject => sha256Hex(utf8.encode(contentText(subject))), crc32: subject => crc32Of(utf8.encode(contentText(subject))) },
-		json: { parse: text => JSON.parse(text), to_json: (value, classes) => JSON.stringify(classes ? withoutClassTags(value, new Set(classes)) : value) },
+		json: { parse: text => JSON.parse(jsonOfJson5(text)), to_json: (value, classes) => JSON.stringify(classes ? withoutClassTags(value, new Set(classes)) : value) },
 		regex: {
 			matches: (subject, pattern) => regexOf(pattern).test(subject),
 			first: (subject, pattern) => subject.match(regexOf(pattern))?.[0] ?? null,

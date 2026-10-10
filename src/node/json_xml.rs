@@ -107,6 +107,61 @@ impl Node {
 	}
 }
 
+/// JSON5 as JSON (card json5-parse, user: no more JSON nonsense): 'single quoted' texts, // and /* */ comments, trailing
+/// commas and bare keys; the browser's twin is jsonOfJson5 in web/playground/host-hashes.js
+pub fn json_of_json5(text: &str) -> String {
+	let mut json = String::with_capacity(text.len());
+	let mut chars = text.chars().peekable();
+	while let Some(char) = chars.next() {
+		match char {
+			'"' | '\'' => {
+				json.push('"');
+				while let Some(inner) = chars.next() {
+					match inner {
+						'\\' => match chars.next() {
+							Some('\'') => json.push('\''),
+							Some(escaped) => json.extend(['\\', escaped]),
+							None => {}
+						},
+						'"' if char == '\'' => json.push_str("\\\""),
+						_ if inner == char => break,
+						_ => json.push(inner),
+					}
+				}
+				json.push('"');
+			}
+			'/' if chars.peek() == Some(&'/') => while chars.next_if(|&next| next != '\n').is_some() {},
+			'/' if chars.peek() == Some(&'*') => {
+				chars.next();
+				let mut previous = ' ';
+				while let Some(next) = chars.next() {
+					if previous == '*' && next == '/' {
+						break;
+					}
+					previous = next;
+				}
+			}
+			'}' | ']' => {
+				json.truncate(json.trim_end().len());
+				if json.ends_with(',') {
+					json.pop();
+				}
+				json.push(char);
+			}
+			_ if char.is_alphabetic() || char == '_' || char == '$' => {
+				let mut word = String::from(char);
+				while let Some(next) = chars.next_if(|&next| next.is_alphanumeric() || next == '_' || next == '$') {
+					word.push(next);
+				}
+				while chars.next_if(|next| next.is_whitespace()).is_some() {}
+				if chars.peek() == Some(&':') { json.push_str(&format!("\"{word}\"")) } else { json.push_str(&word) }
+			}
+			_ => json.push(char),
+		}
+	}
+	json
+}
+
 /// `.name=value` of an item `.name: value` (a flag `.name: true` is just the name); None for content
 fn xml_attribute(item: &Node) -> Option<String> {
 	let Key(key, _, value) = item.drop_meta() else { return None };

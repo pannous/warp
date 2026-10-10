@@ -24,7 +24,7 @@ pub fn call(module: &str, member: &str, arguments: &Node) -> Result<Node, String
 	match (module, member, arguments.as_slice()) {
 		("json", "parse", [text]) => {
 			let text = text_of(text)?;
-			let parsed: serde_json::Value = serde_json::from_str(&text).map_err(|problem| failure(format!("{text:?} is no json: {problem}")))?;
+			let parsed: serde_json::Value = serde_json::from_str(&crate::node::json_of_json5(&text)).map_err(|problem| failure(format!("{text:?} is no json: {problem}")))?;
 			Ok(crate::foreign::node_of(&parsed))
 		}
 		("json", "to_json", [value]) => Ok(Node::Text(crate::foreign::json_of(value).to_string())),
