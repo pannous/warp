@@ -61,6 +61,6 @@ const SMALL_LOAD_FLOOR: i64 = 100;
 fn ten_thousand_rows_load_in_linear_time() {
 	let loaded = |table: &str, rows: i64| format!("{table}: [Person] = database.int_map_{table}\nfor i in 1 to {rows} {{ {table}.add(Person(\"p\", i)) }}\n{table}_sum = 0; for p in {table} {{ {table}_sum += p.age }}");
 	let (small, large) = (loaded("small", ENTRIES / 4), loaded("large", ENTRIES));
-	let program = format!("class Person{{name: text; age: int}}\nt0 = clock()\n{small}\nt1 = clock()\n{large}\nt2 = clock()\nif t2 - t1 <= {LINEAR_RATIO} * max(t1 - t0, {SMALL_LOAD_FLOOR}) then large_sum else -1");
+	let program = format!("class Person{{name: text; age: int}}\nt0 = clock()\n{small}\nt1 = clock()\n{large}\nt2 = clock()\nif t2 - t1 <= {LINEAR_RATIO} * max(t1 - t0, {SMALL_LOAD_FLOOR}) then large_sum else [t1 - t0, t2 - t1]");
 	is!(&program, ENTRIES * (ENTRIES + 1) / 2);
 }
