@@ -456,9 +456,7 @@ fn lower_for_emission(node: Node) -> Result<Node, Node> {
 	if let Node::Error(_) = node {
 		return Err(node);
 	}
-	if let Some(answer) = crate::time::answer(&node) {
-		return Err(answer);
-	}
+	let node = crate::time::lower(node)?;
 	if let Some(answer) = crate::units::answer(&node) {
 		return Err(answer);
 	}

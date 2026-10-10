@@ -553,6 +553,22 @@ const CORPUS: &[&str] = &[
 	"m = {a:1}; m[\"c\"] = 3; m.c",
 	"m = {a:1}; m[\"z\"]",
 	"m = {a:1}; x: int = m[\"a\"]; x",
+	// optionals: `int?` takes ø and ints, `??` falls back only for ø (or the empty list, warp's ø), a plain place
+	// unwraps an optional when it runs (card type-theory)
+	"a: int? = 3; a",
+	"a: int? = 3; a = ø; a ?? 7",
+	"3 ?? 4",
+	"a: int? = 0; a ?? 9",
+	"a: int? = 3; b: int = a; b",
+	"a: int? = ø; b: int = a; b",
+	"a: int? = \"x\"",
+	"a: int? = 2.5",
+	"a: int? = ø; a + 1",
+	"a: int? = ø; if a then 1 else 2",
+	"a: text? = \"hi\"; a",
+	"f(x: int?) := x ?? 0; f(ø) + f(4)",
+	"a: int = none",
+	"xs = []; xs ?? 3",
 ];
 
 /// Programs warp compiles although the model rejects them: holes in warp's checks, each with its card

@@ -191,19 +191,12 @@ pub fn infer_type(node: &Node, scope: &Scope) -> Kind {
 		Node::Key(left, op, right) if op.is_prefix() && matches!(left.drop_meta(), Node::Empty) => {
 			infer_type(right, scope)
 		}
-		// Ternary operator: condition ? then : else
+		// Ternary operator: condition ? then : else, an error branch as in `if c {a} else {b}`
 		Node::Key(_cond, Op::Question, then_else) => match then_else.drop_meta() {
-			Node::Key(then_expr, Op::Colon, else_expr) => branches_kind(infer_type(then_expr, scope), infer_type(else_expr, scope)),
+			Node::Key(then_expr, Op::Colon, else_expr) => choice_kind(then_expr, else_expr, scope),
 			_ => Kind::Int,
 		},
-		// if c {a} else {b}; an `error(…)` branch raises its error, so the other branch decides the kind (bottom kind)
-		Node::Key(if_then, Op::Else, else_expr) if let Node::Key(_, Op::Then, then_expr) = if_then.drop_meta() => {
-			match (raises_error(then_expr), raises_error(else_expr)) {
-				(true, false) => error_or(branch_kind(else_expr, scope)),
-				(false, true) => error_or(branch_kind(then_expr, scope)),
-				_ => branches_kind(branch_kind(then_expr, scope), branch_kind(else_expr, scope)),
-			}
-		}
+		Node::Key(if_then, Op::Else, else_expr) if let Node::Key(_, Op::Then, then_expr) = if_then.drop_meta() => choice_kind(then_expr, else_expr, scope),
 		Node::Key(if_condition, Op::Then, then_expr) if matches!(if_condition.drop_meta(), Node::Key(_, Op::If, _)) => {
 			branches_kind(branch_kind(then_expr, scope), Kind::Int)
 		}
@@ -281,8 +274,8 @@ pub(super) fn infer_list_type(node: &Node, items: &[Node], bracket: &Bracket, se
 		if [ZERO_FILL_CALL, INSERT_AT_CALL, INSERT_EITHER_CALL].contains(&name) {
 			return Kind::List;
 		}
-		// `now`: an instant, a kind the node operations meet at run time (wasm_emitter/times.rs)
-		if name == crate::time::INSTANT_AT {
+		// `now`, `2024-02-29`: a time, a kind the node operations meet at run time (wasm_emitter/times.rs)
+		if [crate::time::INSTANT_AT, crate::time::TIME_OF].contains(&name) {
 			return Kind::Data;
 		}
 		if name == crate::library_words::LIST_SUM && items.len() == 3 {
@@ -460,6 +453,16 @@ pub(crate) fn block_result(block: &Node) -> Option<Node> {
 /// wants a number; a number is held as a Node of run-time kind
 fn error_or(kind: Kind) -> Kind {
 	if matches!(kind, Kind::Int | Kind::Float) { Kind::Data } else { kind }
+}
+
+/// The kind of a choice between two branches; an `error(…)` branch raises its error, so the other branch decides the
+/// kind (bottom kind)
+fn choice_kind(then_expr: &Node, else_expr: &Node, scope: &Scope) -> Kind {
+	match (raises_error(then_expr), raises_error(else_expr)) {
+		(true, false) => error_or(branch_kind(else_expr, scope)),
+		(false, true) => error_or(branch_kind(then_expr, scope)),
+		_ => branches_kind(branch_kind(then_expr, scope), branch_kind(else_expr, scope)),
+	}
 }
 
 pub(crate) fn branch_kind(branch: &Node, scope: &Scope) -> Kind {

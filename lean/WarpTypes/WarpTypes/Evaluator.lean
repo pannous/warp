@@ -94,6 +94,7 @@ def step (P : Program) (μ : Store) : Expr → Option (Expr × Store)
   | .set o f v => stepPair (fun v => .setL f v) (fun o => .setR o f) o v μ (step P μ o) (step P μ v) (some (writeField μ o f v))
   | .isA e c => if e.isValue then some (.bool (isInstance e c), μ) else stepIn (.isA c) e μ (step P μ e)
   | .failed e => if e.isValue then some (.bool (isFail e), μ) else stepIn .failed e μ (step P μ e)
+  | .orElse a b => if a.isValue then some (if isEmpty (μ.items a) then b else a, μ) else stepIn (.orElse b) a μ (step P μ a)
   | .handle ev h b =>
     match b with
     | .error m => some (.error m, μ)
@@ -292,6 +293,11 @@ theorem step_sound : ∀ {e : Expr} {μ s'}, step P μ e = some s' → Step P (e
     split at hs
     · cases hs; exact .failed (by assumption)
     · exact stepIn_sound (F := .failed) rfl (fun _ => ih) hs
+  | orElse a b ih _ =>
+    intro μ s' hs; simp only [step] at hs
+    split at hs
+    · cases hs; exact .orElse (by assumption)
+    · exact stepIn_sound (F := .orElse b) rfl (fun _ => ih) hs
   | handle ev h b _ ih =>
     intro μ s' hs; simp only [step] at hs
     split at hs

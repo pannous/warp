@@ -152,10 +152,12 @@ fn functions_of_operator(op: &Op) -> &'static [&'static str] {
 
 /// The runtime functions a call of the word needs, besides what its arguments need
 fn functions_of_call(word: &str) -> &'static [&'static str] {
+	use crate::wasm_emitter::times::TIME_FIELD;
 	use crate::library_words::{FIELD_WITH, INSTANCE_COPY, MAP_GET_OR, MAP_WITHOUT};
 	match word {
 		ZERO_FILL_CALL => &[ZERO_FILL_CALL],
-		crate::time::INSTANT_AT => &[crate::time::INSTANT_AT, crate::wasm_emitter::list_ops::RETURNED_ERROR],
+		crate::time::INSTANT_AT => &[crate::time::INSTANT_AT, TIME_FIELD, crate::wasm_emitter::list_ops::RETURNED_ERROR],
+		crate::time::TIME_OF => &[TIME_FIELD, crate::wasm_emitter::list_ops::RETURNED_ERROR],
 		LIST_DROP_LAST => &[LIST_DROP_LAST],
 		REMOVED_VALUE_CALL => &[MAP_GET_OR, MAP_WITHOUT],
 		INSERT_AT_CALL | INSERT_EITHER_CALL => &[INSERT_AT_CALL],
@@ -385,6 +387,10 @@ pub fn extract_host_words(ctx: &mut Context, node: &Node) {
 					let signature = crate::ffi::FfiSignature::new(kernel, LINEAR_LIBRARY, vec![wasm_encoder::ValType::I64], vec![wasm_encoder::ValType::I64]);
 					ctx.ffi_imports.insert(name.clone(), signature);
 					add_ffi_import(ctx, LINEAR_NEW, LINEAR_LIBRARY);
+				}
+				// an instant's wall clock is the environment's (wasm_emitter/times.rs time_field)
+				if crate::time::makes_instant(items) {
+					add_ffi_import(ctx, crate::host::LOCAL_OFFSET, crate::host::HOST_LIBRARY);
 				}
 				if crate::host::HOST_WORDS.contains(&name.as_str()) && !ctx.user_functions.contains_key(name) {
 					add_ffi_import(ctx, name, crate::host::HOST_LIBRARY);

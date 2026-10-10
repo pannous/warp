@@ -26,6 +26,9 @@ const NEAREST: &str = "nearest";
 const NEAREST_KIND: &str = "rational";
 const NEAREST_WITHIN: &str = "within";
 const NEAREST_LIMIT: &str = "limit";
+/// The declared types that hold an exact real as it is
+const REAL_TYPE: &str = "real";
+const EXACT_TYPE: &str = "exact";
 
 /// Largest integer exponent computed exactly; beyond it the power is approximated
 const MAX_EXACT_EXPONENT: i64 = 10_000;
@@ -248,10 +251,15 @@ fn list(items: &[Node], separator: &Separator, scope: &mut Scope) -> Evaluated {
 fn key(left: &Node, op: Op, right: &Node, scope: &mut Scope) -> Evaluated {
 	match op {
 		Op::Assign | Op::Define => {
-			let Node::Symbol(name) = left.drop_meta() else {
-				return Err(Stop::Unsupported);
+			let (name, value) = match left.drop_meta() {
+				Node::Symbol(name) => (name, evaluate(right, scope)?),
+				// `x: real = sqrt(2)` keeps the exact root (card typed-real); other declared types take the run-time path
+				Node::Key(target, Op::Colon, declared) => match (target.drop_meta(), declared.name().as_str()) {
+					(Node::Symbol(name), EXACT_TYPE | REAL_TYPE) => (name, exact_value(evaluate(right, scope)?)?),
+					_ => return Err(Stop::Unsupported),
+				},
+				_ => return Err(Stop::Unsupported),
 			};
-			let value = evaluate(right, scope)?;
 			scope.insert(name.clone(), value.clone());
 			Ok(value)
 		}
@@ -314,8 +322,15 @@ fn convert(value: Value, target: &str) -> Evaluated {
 	match (value, target) {
 		(value, text) if is_text_type_word(text) => Ok(Value::Text(text_of(value)?)),
 		(Value::Real(real), float) if is_float_type_word(float) => Ok(Value::Float(finite_f64(&real)?)),
-		(value @ Value::Real(_), "real" | "exact") => Ok(value),
+		(value @ Value::Real(_), REAL_TYPE | EXACT_TYPE) => Ok(value),
 		(value @ Value::Float(_), float) if is_float_type_word(float) => Ok(value),
+		_ => Err(Stop::Unsupported),
+	}
+}
+
+fn exact_value(value: Value) -> Evaluated {
+	match value {
+		Value::Real(_) => Ok(value),
 		_ => Err(Stop::Unsupported),
 	}
 }
@@ -695,7 +710,7 @@ fn compare(left: Value, op: Op, right: Value) -> Evaluated {
 impl Value {
 	fn into_node(self) -> Node {
 		match self {
-			Value::Bool(truth) => Node::Number(Number::Int(truth as i64)), // eval encodes booleans as Int 1/0
+			Value::Bool(truth) => if truth { Node::True } else { Node::False },
 			Value::Float(f) => Node::Number(Number::Float(f)),
 			Value::Real(Real::Exact(exact)) => match exact.as_rational() {
 				Some(q) if q.is_integer() => Node::Number(Number::from_bigint(q.numerator)),

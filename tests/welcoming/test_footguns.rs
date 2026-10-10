@@ -497,7 +497,7 @@ fn test_calendar_overflow_is_explicit() {
 
 #[test]
 fn test_no_implicit_time_zone() {
-	fails_with("now.hour", "instant has no hour"); // an instant needs a zone before it has a wall clock
+	is!("now.hour >= 0 and now.hour < 24", true); // an instant's wall clock is the environment's zone (user, 2026-10-10)
 	is!("(2024-03-31T00:30Z in \"Europe/Berlin\").hour", 1);
 	is!("(2024-03-31T01:30Z in \"Europe/Berlin\").hour", 3); // DST: 02:00-03:00 does not exist
 	fails_with("2024-03-31T02:30[Europe/Berlin]", "does not exist"); // gap, no silent shift
