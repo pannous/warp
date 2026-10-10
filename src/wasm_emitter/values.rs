@@ -212,6 +212,11 @@ impl WasmGcEmitter {
 			}
 			return true;
 		}
+		// floor, ceil and round of a float as the i64, without the Int node list_emitter builds for it as a value
+		if super::list_emitter::float_rounding(fn_name).is_some() && !self.ctx.ffi_imports.contains_key(fn_name) && self.get_type(argument).is_float() {
+			self.emit_rounded_to_i64(func, argument, fn_name);
+			return true;
+		}
 		let integer_builtin = ROUNDING_FUNCTIONS.contains(&fn_name.as_str())
 			|| fn_name == crate::min_max::EMPTY_EXTREMUM_CALL
 			|| fn_name == crate::switch::NO_CASE_CALL
@@ -329,9 +334,7 @@ impl WasmGcEmitter {
 					self.emit_int_to_f64(func, range);
 					return;
 				}
-				self.emit_float_value(func, left);
-				self.emit_float_value(func, right);
-				self.emit_float_arithmetic(func, op);
+				self.emit_float_operation(func, left, op, right);
 			}
 			// Suffix operators: x² = x*x, x³ = x*x*x (returns f64)
 			Node::Key(left, Op::Square, _) => {

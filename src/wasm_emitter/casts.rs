@@ -283,7 +283,7 @@ impl WasmGcEmitter {
 	/// The i64 of an Int value; a ratio (`x/2` is exact) is truncated
 	pub(super) fn emit_int_value_truncated(&mut self, func: &mut Function, value: &Node) {
 		self.emit_numeric_value(func, value);
-		if self.int_runtime() && !big_int::is_fixnum_range(self.int_range(value)) {
+		if self.int_runtime() && !big_int::is_fixnum_range(self.int_range(value)) && !self.is_builtin_rounding_call(value) {
 			self.emit_call(func, "exact_trunc");
 		}
 	}
@@ -532,5 +532,15 @@ fn decimal_literal(value: &Node) -> Option<f64> {
 	match value.drop_meta() {
 		Node::Number(Number::Float(decimal)) => Some(*decimal),
 		_ => None,
+	}
+}
+
+impl WasmGcEmitter {
+	/// A call of a builtin rounding function (`floor(v)`, `round x`), not a user or FFI one of that name:
+	/// a whole number, never a ratio to truncate
+	fn is_builtin_rounding_call(&self, value: &Node) -> bool {
+		matches!(value.drop_meta(), Node::List(items, _, _) if matches!(items.as_slice(), [word, _]
+			if matches!(word.drop_meta(), Node::Symbol(name) if super::ROUNDING_FUNCTIONS.contains(&name.as_str())
+				&& !self.ctx.user_functions.contains_key(name) && !self.ctx.ffi_imports.contains_key(name))))
 	}
 }

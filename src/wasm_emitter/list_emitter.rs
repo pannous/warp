@@ -605,10 +605,6 @@ impl WasmGcEmitter {
 				self.emit_call(func, "new_symbol");
 				true
 			}
-			"ceil" if !self.ctx.ffi_imports.contains_key(fn_name) => {
-				self.emit_rounded_as_int(func, arg, I::F64Ceil);
-				true
-			}
 			// an exact number floors exactly, also beyond the f64 range
 			"floor" if !self.ctx.ffi_imports.contains_key(fn_name) && self.get_type(arg) == crate::Kind::Int => {
 				self.emit_numeric_value(func, arg);
@@ -618,8 +614,9 @@ impl WasmGcEmitter {
 				self.emit_call(func, "new_int");
 				true
 			}
-			"floor" if !self.ctx.ffi_imports.contains_key(fn_name) => {
-				self.emit_rounded_as_int(func, arg, I::F64Floor);
+			name if float_rounding(name).is_some() && !self.ctx.ffi_imports.contains_key(fn_name) => {
+				self.emit_rounded_to_i64(func, arg, name);
+				self.emit_call(func, "new_int");
 				true
 			}
 			// round half up (JS Math.round, Excel for x ≥ 0): floor(x) + (x - floor(x) ≥ ½), x kept as bits in a scratch local
@@ -636,22 +633,19 @@ impl WasmGcEmitter {
 			}
 			// round = round half even (IEEE 754 default, Python 3, .NET): 2.5 → 2, 3.5 → 4
 			"round_half_even" => {
-				self.emit_rounded_as_int(func, arg, I::F64Nearest);
-				true
-			}
-			"round" if !self.ctx.ffi_imports.contains_key(fn_name) => {
-				self.emit_rounded_as_int(func, arg, I::F64Nearest);
+				self.emit_rounded_to_i64(func, arg, "round");
+				self.emit_call(func, "new_int");
 				true
 			}
 			_ => false,
 		}
 	}
 
-	/// `arg` as f64, rounded by `rounding`, as an exact Int node
-	fn emit_rounded_as_int(&mut self, func: &mut Function, arg: &Node, rounding: Instruction) {
+	/// `arg` as f64, rounded by the rounding function `name` (float_rounding), as an exact Int's i64
+	pub(super) fn emit_rounded_to_i64(&mut self, func: &mut Function, arg: &Node, name: &str) {
 		self.emit_float_value(func, arg);
-		func.instruction(&rounding);
-		self.emit_integral_float_as_int(func);
+		func.instruction(&float_rounding(name).expect("a rounding function"));
+		self.emit_truncating_cast(func);
 	}
 
 	/// `instance_of(x, "T")` as i64: 1 when x is an instance (a Key node) whose type name, its data, is T
@@ -1069,4 +1063,14 @@ impl WasmGcEmitter {
 fn filter_loop_of(test: &Node) -> Option<crate::warp_parser::FilterLoop> {
 	let Node::Meta { data, node } = test else { return None };
 	data.data_value().downcast_ref::<crate::warp_parser::FilterLoop>().cloned().or_else(|| filter_loop_of(node))
+}
+
+/// The wasm instruction rounding an f64 like `floor`, `ceil` or `round` (half even, IEEE 754's default)
+pub(super) fn float_rounding(name: &str) -> Option<Instruction<'static>> {
+	match name {
+		"floor" => Some(Instruction::F64Floor),
+		"ceil" => Some(Instruction::F64Ceil),
+		"round" => Some(Instruction::F64Nearest),
+		_ => None,
+	}
 }

@@ -618,26 +618,29 @@ impl WasmGcEmitter {
 	}
 
 	pub(super) fn emit_float_binary(&mut self, func: &mut Function, left: &Node, op: &Op, right: &Node) -> ArithmeticWrap {
+		if op.is_comparison() {
+			self.emit_float_value(func, left);
+			self.emit_float_value(func, right);
+			self.emit_float_comparison(func, op);
+			return ArithmeticWrap::Int;
+		}
+		self.emit_float_operation(func, left, op, right);
+		ArithmeticWrap::Float
+	}
+
+	/// `left op right` as an f64; `x ^ 2` is x * x: one rounding of the exact square, as pow gives it, without a libm
+	/// call per use
+	pub(super) fn emit_float_operation(&mut self, func: &mut Function, left: &Node, op: &Op, right: &Node) {
 		self.emit_float_value(func, left);
-		// `x ^ 2` is x * x: one rounding of the exact square, as pow gives it, without a libm call per use
 		if *op == Op::Pow && matches!(right.drop_meta(), Node::Number(Number::Int(2))) {
 			self.pop_float_scratch(func, 0);
 			self.push_float_scratch(func, 0);
 			self.push_float_scratch(func, 0);
 			func.instruction(&I::F64Mul);
-			return ArithmeticWrap::Float;
+			return;
 		}
 		self.emit_float_value(func, right);
-
-		match op {
-			op if op.is_comparison() => {
-				self.emit_float_comparison(func, op);
-				return ArithmeticWrap::Int;
-			}
-			op => self.emit_float_arithmetic(func, op),
-		}
-
-		ArithmeticWrap::Float
+		self.emit_float_arithmetic(func, op);
 	}
 
 	pub(super) fn emit_int_binary(&mut self, func: &mut Function, left: &Node, op: &Op, right: &Node) -> ArithmeticWrap {
@@ -681,6 +684,15 @@ impl WasmGcEmitter {
 		// comparisons keep a character's code point (`c >= '0'`); arithmetic refuses it (P65)
 		let operand = if op.is_comparison() { Self::emit_numeric_value } else { Self::emit_arithmetic_operand };
 		operand(self, func, left);
+		// `x ^ 2` is x * x: the multiplication's fixnum fast path instead of a call to exact_pow per use (Mul's own
+		// scratch locals are 0 and 1)
+		if *op == Op::Pow && matches!(right.drop_meta(), Node::Number(Number::Int(2))) {
+			let copy = self.scratch(2);
+			Self::emit_list(func, &[I::LocalTee(copy), I::LocalGet(copy)]);
+			let range = self.int_range(left);
+			self.emit_int_op(func, &Op::Mul, range, range);
+			return;
+		}
 		operand(self, func, right);
 		let (left_range, right_range) = (self.int_range(left), self.int_range(right));
 		if op.is_comparison() {
