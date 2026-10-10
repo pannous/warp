@@ -417,6 +417,8 @@ const AND_KEYWORD: &str = "and";
 const CONTINUING_WORDS: [&str; 7] = ["and", "or", "xor", "then", "else", "is", "in"];
 /// A prefix operator word after `and` starts its operand, not a statement: `a and not c` (card let-if)
 const OPERAND_PREFIX_WORDS: [&str; 1] = ["not"];
+/// Words between two operands, as an operator: `and n mod 100 <= 13` continues the condition (card if-then-chain)
+const INFIX_WORDS: [&str; 6] = ["mod", "modulo", "rem", "div", "contains", "as"];
 pub const ASSERT_MARKER: &str = "assert·else";
 /// The words that start the fallback of `try X else Y`: `else`, classical `catch`, Python's `except` (P60)
 const FALLBACK_WORDS: [&str; 3] = [ELSE_KEYWORD, "catch", "except"];
