@@ -82,15 +82,16 @@ fn method_arguments_read_system_values() {
 }
 
 // the pointer over the page's canvas (card drawing-frames): mouse_x / mouse_y in canvas pixels, mouse_down yes/no;
-// a native run has no canvas, a loud error naming where it works
+// natively the pointer over the paint window, 0 before one (card native-system)
 #[test]
 fn the_mouse_is_a_system_value_of_the_page() {
 	assert!(lowered("print mouse_x").contains("(system_value \"mouse_x\")"));
 	let pressed = lowered("if mouse_down { print 1 }");
 	assert!(pressed.contains("(system_value mouse_down)!=0"), "{pressed}");
 	is!("mouse_y = 3; mouse_y + 1", 4);
+	// its own process: no window there, and no other test's pointer
 	#[cfg(feature = "native")]
-	crate::common::fails_with("print mouse_x", "mouse_x: the pointer over the playground's canvas");
+	assert_eq!(String::from_utf8_lossy(&crate::common::warp_command().args(["--no-ask", "eval", "mouse_x"]).output().unwrap().stdout).trim(), "» 0");
 }
 
 // card native-system: natively the pointer over the paint window (src/paint_window.rs follow_input) in the painted
