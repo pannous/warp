@@ -807,6 +807,7 @@ fn evaluate_in(node: &Node, variables: &mut Variables) -> Evaluated {
 			variables.insert(name.clone(), value.clone());
 			Ok(value)
 		}
+		Node::Key(keyword, Op::Colon, declaration) if is_global_keyword(keyword) => evaluate_in(declaration, variables),
 		Node::Key(left, Op::Neg, right) if matches!(left.as_ref(), Node::Empty) => negate(evaluate_in(right, variables)?),
 		// `6 m² as cm²` reads `(6 m² as cm)²`: the power belongs to the target unit
 		Node::Key(conversion, op @ (Op::Square | Op::Cube), nothing) if matches!(nothing.drop_meta(), Node::Empty) && powered_conversion(conversion, *op).is_some() => {
@@ -921,6 +922,11 @@ fn with_unit(expression: &Node, unit: &Node) -> Node {
 		Node::Key(left, op, right) => Node::Key(left.clone(), *op, Box::new(with_unit(right, unit))),
 		amount => Node::List(vec![amount.clone(), unit.clone()], Bracket::None, Separator::Space),
 	}
+}
+
+/// `global x = 5m`: a main-level declaration functions write to
+pub(crate) fn is_global_keyword(node: &Node) -> bool {
+	matches!(node.drop_meta(), Node::Symbol(word) if word == crate::lowering::words::GLOBAL_WORD)
 }
 
 fn is_unit_word(node: &Node) -> bool {
@@ -1145,8 +1151,14 @@ fn same_dimension_kept(name: &str, earlier: &Value, given: &Value) -> Result<(),
 	let (Some((was, was_shown)), Some((is, is_shown))) = (dimension(earlier), dimension(given)) else { return Ok(()) };
 	match was.len() == is.len() && was.iter().all(|power| is.contains(power)) {
 		true => Ok(()),
-		false => fail(format!("DimensionError: {name} was {was_shown}, is given {is_shown}")),
+		false => fail(reassigned_dimension(name, &was_shown, was.is_empty(), &is_shown)),
 	}
+}
+
+/// `x = 1200; x = 1.2kHz`: a variable keeps its dimension; a plain number becomes a quantity by its first value's unit
+pub(crate) fn reassigned_dimension(name: &str, was: &str, was_plain: bool, given: &str) -> String {
+	let hint = if was_plain { ": give its first value a unit too" } else { "" };
+	format!("DimensionError: {name} was {was}, is given {given}{hint}")
 }
 
 fn unitless_number(value: &Value) -> bool {
