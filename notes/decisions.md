@@ -11,9 +11,11 @@ notes/open_decisions.md.
   list of int, P196b stands); a variable's type joins its literal with every write the analyzer sees, so
   `shown = [0.0, 0.0]; shown[0] = sqrt(2.0)` makes shown a list of float from the start. Runtime conversion only as
   the fallback for writes the analyzer can't see. As implemented.
-- people-where (warp-class): no `with`/`without` sugar after a list; write `people where it.team` /
-  `people where not it.team`. User: the words have too many meanings (`with` could as well mean "with something
-  added"). The field-filter default is undone; `people without team` stays undefined.
+- people-where (warp-class): no new `with`/`without` sugar after a list beyond what is already implemented (user:
+  the words have too many meanings; `with` could as well mean "with something added"), and "if it's already
+  implemented, keep it implemented": main's `with` filter from the orm example stays (`name of people with age > 20`,
+  tests/control/test_field_of_elements.rs), and warp-class's field-filter `without` (`people without team` = `people
+  where not it.team`) is kept. Removing values (`[1 2 3] without 2`) stays undefined.
 - P238 (warp-fixer, card generators-function): a plain generator call collects the list: `count_to(3)` is [1 2 3],
   `sum(count_to(4))` is 10. `iter(count_to(3))` or `next` on a variable holding it gives the lazy object; a `for`
   over it runs lazily. As implemented.
