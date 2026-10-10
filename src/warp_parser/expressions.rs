@@ -12,6 +12,7 @@ impl WarpParser {
 	/// Handles prefix, infix, and suffix operators
 	pub(super) fn parse_expr(&mut self, min_bp: u8) -> Node {
 		self.skip_spaces();
+		let heads_definition = self.after_function_keyword_word();
 
 		// Step 1: Prefix (nud)
 		let lhs = if let Some((op, chars)) = self.peek_negated_control_word() {
@@ -74,6 +75,7 @@ impl WarpParser {
 			self.parse_atom()
 		};
 
+		self.continues_definition_head = heads_definition;
 		self.continue_expr(lhs, min_bp)
 	}
 
@@ -295,6 +297,7 @@ impl WarpParser {
 		const SUBSCRIPT_BP: u8 = Op::Hash.binding_power().0;
 		// Right operand of the last comparison, to chain a<b<c into a<b and b<c
 		let mut previous_comparand: Option<Node> = None;
+		let heads_definition = std::mem::take(&mut self.continues_definition_head);
 		loop {
 			self.skip_spaces_and_inline_comments(); // not newlines: they are separators
 
@@ -431,6 +434,11 @@ impl WarpParser {
 			let block_body = match op {
 				Op::Colon | Op::Define if self.only_blanks_before_newline() => {
 					self.with_equals_comparing(false, |parser| parser.parse_indented_block()) // the block of `if c:` and `f(n):=` assigns
+				}
+				// `def foo: hi=2*2` defines foo by the rest of the line, no `(foo: hi) = 2*2`
+				Op::Colon if heads_definition && !glued_pair => {
+					self.skip_spaces();
+					Some(self.with_equals_comparing(false, |parser| parser.rest_of_statement()))
 				}
 				Op::Do | Op::Then | Op::Else if self.closing_end_follows(&END_BLOCK_OPENERS) => Some(self.parse_end_block(op == Op::Then)),
 				Op::Do if self.closing_end_follows(&["do"]) => Some(error(AMBIGUOUS_END)), // `do a; if c then b end`

@@ -458,15 +458,17 @@ impl WarpParser {
 		while matches!(self.peek_char(next), ' ' | '\t') {
 			next += 1;
 		}
-		let defined_by_keyword = || {
-			let before: String = self.chars[..self.pos].iter().rev().skip_while(|c| c.is_whitespace()).take_while(|c| c.is_alphanumeric()).collect();
-			crate::operators::is_function_keyword(&before.chars().rev().collect::<String>())
-		};
 		match (self.peek_char(next), self.peek_char(next + 1)) {
 			(':', '=') => true,
-			(':' | '{', _) => defined_by_keyword(),
+			(':' | '{', _) => self.after_function_keyword_word(),
 			_ => false,
 		}
+	}
+
+	/// `def ` right before here: what follows heads a definition
+	pub(super) fn after_function_keyword_word(&self) -> bool {
+		let before: String = self.chars[..self.pos].iter().rev().skip_while(|c| c.is_whitespace()).take_while(|c| c.is_alphanumeric()).collect();
+		crate::operators::is_function_keyword(&before.chars().rev().collect::<String>())
 	}
 
 	/// Peek for prefix operators (unary operators that bind to right operand)
