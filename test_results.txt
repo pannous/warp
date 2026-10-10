@@ -2279,6 +2279,10 @@ PASSED:
   ✓ numbers::test_quantities_in_one_text::two_quantities_join_one_text
   ✓ numbers::test_quantity_conversion::a_run_time_quantity_converts_with_as
   ✓ numbers::test_quantity_conversion::a_run_time_quantity_joins_a_text
+  ✓ numbers::test_quantity_global::a_function_reads_a_global_with_its_unit
+  ✓ numbers::test_quantity_global::a_function_writes_a_global_in_its_units
+  ✓ numbers::test_quantity_global::a_global_holds_a_quantity
+  ✓ numbers::test_quantity_global::a_plain_number_given_a_unit_says_how_to_start_it
   ✓ numbers::test_quantity_tolerance::a_field_type_with_tolerance_gives_its_values_the_tolerance
   ✓ numbers::test_quantity_tolerance::a_final_unit_field_with_tolerance_shows_its_unit
   ✓ numbers::test_quantity_tolerance::a_gaussian_quantity_shows_sigma_apart_from_its_unit
@@ -4606,4 +4610,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-10 ignored, 4601 passed, 0 failed, 4601 total tested
+10 ignored, 4605 passed, 0 failed, 4605 total tested
