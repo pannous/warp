@@ -697,6 +697,7 @@ impl WasmGcEmitter {
 		text_builtins::add_dependencies(&mut self.ctx.required_functions);
 		self.require_list_marks(); // before any function emits a list writer, which reads marks_lists
 		self.guards_errors = try_guard::guards_errors(node);
+		self.import_float_digits();
 		let len = self.ctx.required_functions.len();
 		trace!(
 			"tree-shaking: {} functions required: {:?}",
@@ -869,6 +870,18 @@ impl WasmGcEmitter {
 			self.emit_undefined_variable(func, name);
 		}
 		position
+	}
+
+	/// float_text takes a float's shortest digits from a warp host (natively, the page, a hosted site); a module for any
+	/// other host (`warp compile`) writes its own 17 digits
+	fn import_float_digits(&mut self) {
+		let warp_hosted = !crate::pipeline::is_for_any_host() || crate::pipeline::is_for_hosting();
+		if !warp_hosted || !self.ctx.required_functions.contains(float_text::FLOAT_TEXT) {
+			return;
+		}
+		let signature = crate::ffi::get_ffi_signature_from_lib(crate::host::FLOAT_DIGITS, crate::host::HOST_LIBRARY).expect("host_word_signatures lists float_digits");
+		self.ctx.ffi_imports.insert(crate::host::FLOAT_DIGITS.to_string(), signature);
+		self.config.emit_ffi_imports = true;
 	}
 
 	/// Imports follow resolved calls: only called FFI functions, WASI/host only if called.

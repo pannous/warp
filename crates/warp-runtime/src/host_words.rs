@@ -12,6 +12,9 @@ pub const RANDOM_SEED: &str = "random_seed";
 pub const CLOCK: &str = "clock";
 /// `local_offset(ms)`: seconds east of UTC in the environment's time zone (TZ) at that instant: an instant's wall clock
 pub const LOCAL_OFFSET: &str = "local_offset";
+/// `float_digits(x)`: a float's shortest digits that read back and the exponent of the first (floats.rs
+/// shortest_digits), what float_text writes (wasm_emitter/float_text.rs)
+pub const FLOAT_DIGITS: &str = "float_digits";
 pub const SIGNAL_POLL: &str = "signal_poll";
 pub const SIGNAL_EVERY: &str = "signal_every";
 /// `signal_daily(id, minute_of_day, weekdays)`: `on every day at 9:00 {…}`, the timer on·every·id at that local time
@@ -86,7 +89,7 @@ pub const FETCH_HANDLER_PREFIX: &str = "on·fetch·";
 /// The checks of the listeners on shared values (P106), polled at every check point (lowering/signal_values.rs)
 pub const SHARED_HANDLER: &str = "on·shared";
 /// The words link_host_words provides
-pub const BASIC_HOST_WORDS: [&str; 13] = [SLEEP, RANDOM, RANDOM_BELOW, RANDOM_SEED, CLOCK, LOCAL_OFFSET, SIGNAL_POLL, SIGNAL_EVERY, SIGNAL_DAILY, SIGNAL_AT, SIGNAL_WATCH, SYSTEM_VALUE, EXIT];
+pub const BASIC_HOST_WORDS: [&str; 14] = [SLEEP, RANDOM, RANDOM_BELOW, RANDOM_SEED, CLOCK, LOCAL_OFFSET, FLOAT_DIGITS, SIGNAL_POLL, SIGNAL_EVERY, SIGNAL_DAILY, SIGNAL_AT, SIGNAL_WATCH, SYSTEM_VALUE, EXIT];
 
 #[cfg(feature = "engine")]
 pub use linking::*;
@@ -112,6 +115,7 @@ mod linking {
 		linker.func_wrap(HOST_LIBRARY, RANDOM_SEED, |seed: i64| RANDOM_STATE.set(seeded_state(seed as u64)))?;
 		linker.func_wrap(HOST_LIBRARY, CLOCK, milliseconds_since_epoch)?;
 		linker.func_wrap(HOST_LIBRARY, LOCAL_OFFSET, system_signals::local_offset_at)?;
+		linker.func_wrap(HOST_LIBRARY, FLOAT_DIGITS, crate::floats::shortest_digits)?;
 		linker.func_wrap(HOST_LIBRARY, SIGNAL_POLL, |mut caller: Caller<'_, T>| system_signals::run_due_handlers(&mut caller, exported))?;
 		linker.func_wrap(HOST_LIBRARY, SIGNAL_EVERY, system_signals::start_timer)?;
 		linker.func_wrap(HOST_LIBRARY, SIGNAL_DAILY, system_signals::start_daily_timer)?;

@@ -166,6 +166,11 @@ function programImports(holder, hooks) {
 			clock: () => BigInt(Date.now()),
 			// seconds east of UTC in the browser's time zone at that instant: an instant's wall clock (wasm_emitter/times.rs)
 			local_offset: milliseconds => BigInt(-new Date(Number(milliseconds)).getTimezoneOffset() * 60),
+			// a float's shortest digits that read back and the exponent of the first (wasm_emitter/float_text.rs): 1.5e-7 is 15, -7
+			float_digits: x => {
+				const [mantissa, exponent] = Math.abs(x).toExponential().split("e");
+				return [BigInt(mantissa.replace(".", "")), Number(exponent)];
+			},
 			// a page has no ctrl-c: `on interrupt {…}` never runs here (notes/system_signals.md); shared listeners do
 			signal_poll: checkPoint,
 			signal_watch: () => { holder.warnings.push("on file … change: a page has no files to watch"); },
