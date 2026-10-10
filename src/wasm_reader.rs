@@ -109,46 +109,6 @@ impl GcObject {
 		))
 	}
 
-	/// Check if value field is null
-	pub fn value_is_null(&self) -> bool {
-		match self.get_field(FIELD_VALUE) {
-			Ok(val) => val.unwrap_anyref().is_none(),
-			Err(_) => true,
-		}
-	}
-
-	/// Read the integer payload of an Int node: `$i64box` or `$BigInt` (see wasm_emitter/big_int.rs)
-	pub fn read_int(&self) -> Result<Number> {
-		let data_val = self.data()?;
-		let mut store = self.store.borrow_mut();
-		read_int_payload(&mut *store, &data_val)
-	}
-
-	/// Read f64 from boxed f64 in data field (for Float nodes)
-	pub fn read_boxed_f64(&self) -> Result<f64> {
-		let data_val = self.data()?;
-		let mut store = self.store.borrow_mut();
-		if let Some(anyref) = data_val.unwrap_anyref() {
-			if let Ok(structref) = anyref.unwrap_struct(&*store) {
-				let field_val = structref.field(&mut *store, 0)?;
-				return Ok(warp_runtime::floats::canonical_nan(field_val.unwrap_f64()));
-			}
-		}
-		Err(anyhow!("Cannot read boxed f64"))
-	}
-
-	/// Read i31ref value from data field (for Codepoint)
-	pub fn read_i31(&self) -> Result<i32> {
-		let data_val = self.data()?;
-		let store = self.store.borrow();
-		if let Some(anyref) = data_val.unwrap_anyref() {
-			if let Ok(i31) = anyref.unwrap_i31(&*store) {
-				return Ok(i31.get_i32());
-			}
-		}
-		Err(anyhow!("Cannot read i31ref"))
-	}
-
 	/// Read string ptr+len from $String struct in data field
 	pub fn read_string_ptr_len(&self) -> Result<(i32, i32)> {
 		let data_val = self.data()?;
@@ -188,70 +148,6 @@ impl GcObject {
 	pub fn to_node(&self) -> Node {
 		let mut store = self.store.borrow_mut();
 		node_of(&self.inner, &mut store.as_context_mut(), &self.instance)
-	}
-
-	/// Get the data field as a child GcObject (for Key nodes where data is a node ref)
-	pub fn data_as_node(&self) -> Result<GcObject> {
-		let val = self.data()?;
-		Ok(GcObject::new(
-			val,
-			self.store.clone(),
-			self.instance,
-		))
-	}
-}
-
-/// Trait for converting Val to Rust types
-pub trait FromVal: Sized {
-	fn from_val(
-		val: Val,
-		store: &mut Store<()>,
-		instance: &Instance,
-		store_rc: &Rc<RefCell<Store<()>>>,
-	) -> Result<Self>;
-}
-
-impl FromVal for i32 {
-	fn from_val(
-		val: Val,
-		_store: &mut Store<()>,
-		_instance: &Instance,
-		_store_rc: &Rc<RefCell<Store<()>>>,
-	) -> Result<Self> {
-		Ok(val.unwrap_i32())
-	}
-}
-
-impl FromVal for i64 {
-	fn from_val(
-		val: Val,
-		_store: &mut Store<()>,
-		_instance: &Instance,
-		_store_rc: &Rc<RefCell<Store<()>>>,
-	) -> Result<Self> {
-		Ok(val.unwrap_i64())
-	}
-}
-
-impl FromVal for f64 {
-	fn from_val(
-		val: Val,
-		_store: &mut Store<()>,
-		_instance: &Instance,
-		_store_rc: &Rc<RefCell<Store<()>>>,
-	) -> Result<Self> {
-		Ok(warp_runtime::floats::canonical_nan(val.unwrap_f64()))
-	}
-}
-
-impl FromVal for GcObject {
-	fn from_val(
-		val: Val,
-		_store: &mut Store<()>,
-		instance: &Instance,
-		store_rc: &Rc<RefCell<Store<()>>>,
-	) -> Result<Self> {
-		Ok(GcObject::new(val, store_rc.clone(), *instance))
 	}
 }
 
@@ -633,34 +529,6 @@ fn text_of<T>(store: &mut StoreContextMut<'_, T>, data: &Val, memory: wasmtime::
 		String::from_utf8(bytes.to_vec()).ok()
 	};
 	read(store).unwrap_or_default()
-}
-
-/// Create a node by calling a constructor function
-pub fn call_constructor(
-	func_name: &str,
-	args: &[Val],
-	store: Rc<RefCell<Store<()>>>,
-	instance: &Instance,
-) -> Result<GcObject> {
-	let func = {
-		let mut s = store.borrow_mut();
-		instance
-			.get_func(&mut *s, func_name)
-			.ok_or_else(|| anyhow!("Function {} not found", func_name))?
-	};
-
-	let mut results = vec![Val::I32(0)];
-	{
-		let mut s = store.borrow_mut();
-		func.call(&mut *s, args, &mut results)?;
-	}
-
-	Ok(GcObject::new(results[0], store, *instance))
-}
-
-/// Load WASM bytes with WASI support (for fd_write, puts, etc.)
-pub fn read_bytes_with_wasi(bytes: &[u8]) -> Result<Node> {
-	read_bytes_with_imports(bytes, Imports { wasi: true, ..Imports::default() })
 }
 
 /// Load WASM bytes with FFI support (for native function imports)

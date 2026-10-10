@@ -1,4 +1,5 @@
 #!/usr/bin/env warp
+#!/usr/bin/env warp
 // Units known only at run time: quantity("5 km") reads a quantity from text, quantity(5, unit) takes a unit given as
 // data. Each carries its unit with it. Units written in the program (`5 km`) stay static: checked at compile time,
 // plain numbers at run time. A program calling quantity loads lib/units.warp by itself

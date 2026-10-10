@@ -2,16 +2,18 @@
 //! system's temporary folder (warp-sound/sound.wav, then sound-2.wav … within one run, as paint's PNGs), played by the
 //! system's player when the warp binary may reach the user (paint::shows_windows: never under WARP_NO_WINDOW, CI or
 //! tests, which only get the file). The playground plays the same samples with WebAudio (host.js sound_samples).
+//! A sound is queued on the audio clock behind those before it and `play` returns at once (card sound-pro): a player
+//! thread plays the queue in order, stop_sound drops it, the process's end waits for it.
 
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::{Arc, Mutex, OnceLock};
+use std::time::{Duration, Instant};
 
 /// The samples cross as whole numbers ≥ 0: amplitude + 32768 (lib/sound.warp sample_offset)
 pub const SAMPLE_OFFSET: i64 = 32_768;
 const FOLDER: &str = "warp-sound";
 const FILE_STEM: &str = "sound";
-/// macOS, then PulseAudio and ALSA on Linux
-const PLAYERS: [&str; 3] = ["afplay", "paplay", "aplay"];
 const PCM_FORMAT: u16 = 1;
 const CHANNELS: u16 = 1;
 const BITS_PER_SAMPLE: u16 = 16;
@@ -25,12 +27,14 @@ const FILE_FORMATS: [(&str, &[u8], usize); 7] = [
 	("wav", b"WAVE", 8), ("mp3", b"ID3", 0), ("mp3", b"\xFF\xFB", 0), ("ogg", b"OggS", 0), ("flac", b"fLaC", 0), ("aiff", b"AIFF", 8), ("m4a", b"ftyp", 4),
 ];
 /// The players a music file plays by in the background, the first the system has that knows its format: macOS's
-/// CoreAudio player, PulseAudio/PipeWire's (libsndfile: no mp3 before 1.1), FFmpeg's and mpv; each says why it fails
-const FILE_PLAYERS: [(&str, &[&str], &[&str]); 4] = [
+/// CoreAudio player, PulseAudio/PipeWire's (libsndfile: no mp3 before 1.1), FFmpeg's, mpv and ALSA's; each says why
+/// it fails
+const FILE_PLAYERS: [(&str, &[&str], &[&str]); 5] = [
 	("afplay", &[], &["wav", "mp3", "flac", "aiff", "m4a"]),
 	("paplay", &[], &["wav", "ogg", "flac", "aiff"]),
 	("ffplay", &["-nodisp", "-autoexit", "-loglevel", "error"], &["wav", "mp3", "ogg", "flac", "aiff", "m4a"]),
 	("mpv", &["--no-video", "--msg-level=all=error"], &["wav", "mp3", "ogg", "flac", "aiff", "m4a"]),
+	("aplay", &["-q"], &["wav"]),
 ];
 /// The decoders that read a music file without playing it, the first the system has that knows its format
 const FILE_PROBES: [(&str, &[&str], &[&str]); 2] = [
@@ -38,13 +42,21 @@ const FILE_PROBES: [(&str, &[&str], &[&str]); 2] = [
 	("afinfo", &[], &["wav", "mp3", "flac", "aiff", "m4a"]),
 ];
 /// A player failing at once (a file it cannot decode) fails play itself; a later failure is printed when it happens
-const EARLY_FAILURE: std::time::Duration = std::time::Duration::from_millis(300);
-const PLAYER_POLL: std::time::Duration = std::time::Duration::from_millis(50);
+const EARLY_FAILURE: Duration = Duration::from_millis(300);
+const PLAYER_POLL: Duration = Duration::from_millis(50);
 /// The last characters of a failing player's error output that its report shows
 const FAILURE_TAIL: usize = 300;
-type Player = std::sync::Arc<std::sync::Mutex<std::process::Child>>;
-/// The music files playing in the background, stopped by stop_sound
-static PLAYING: std::sync::Mutex<Vec<Player>> = std::sync::Mutex::new(Vec::new());
+type Player = Arc<Mutex<std::process::Child>>;
+/// The sounds and music files playing, stopped by stop_sound
+static PLAYING: Mutex<Vec<Player>> = Mutex::new(Vec::new());
+/// When the queued sounds end on the audio clock; none before the first
+static SOUNDS_END: Mutex<Option<Instant>> = Mutex::new(None);
+/// Counted up by stop_sound: a queued sound of an earlier count is dropped, and its player's end is no failure
+static STOPS: AtomicUsize = AtomicUsize::new(0);
+/// The sounds queued for the player thread and not played to their end yet
+static PENDING: AtomicUsize = AtomicUsize::new(0);
+/// The player thread's queue: a sound's WAV and the stop count it was queued at
+static QUEUE: OnceLock<Mutex<std::sync::mpsc::Sender<(PathBuf, usize)>>> = OnceLock::new();
 
 /// `play "song.mp3"`: a music file played in the background when the user may hear it, else checked and named. A file
 /// the system's decoder cannot read fails here, as does a player failing at once; a later failure is printed
@@ -56,36 +68,111 @@ pub fn play_file(path: &str) -> Result<(), String> {
 		return Ok(());
 	}
 	let (player, child) = spawned(&FILE_PLAYERS, format, path, false).ok_or_else(|| format!("no player for {format} found ({}) to play {path}", names_for(&FILE_PLAYERS, format)))?;
-	let child: Player = std::sync::Arc::new(std::sync::Mutex::new(child));
-	let started = std::time::Instant::now();
+	let child: Player = Arc::new(Mutex::new(child));
+	let started = Instant::now();
 	while started.elapsed() < EARLY_FAILURE {
 		if let Some(failure) = failure_of(&child, player, path) {
 			return failure;
 		}
 		std::thread::sleep(PLAYER_POLL);
 	}
-	PLAYING.lock().map_err(|_| "the players' list is poisoned".to_string())?.push(child.clone());
-	let path = path.to_string();
-	std::thread::spawn(move || loop {
-		match failure_of(&child, player, &path) {
-			Some(Err(failure)) => return eprintln!("sound file {failure}"),
-			Some(Ok(())) => return,
-			None => std::thread::sleep(PLAYER_POLL),
-		}
-	});
+	let (path, stops) = (path.to_string(), STOPS.load(Ordering::Relaxed));
+	std::thread::spawn(move || watched(child, player, &path, stops, "sound file"));
 	Ok(())
 }
 
-/// Stop the music files playing in the background
-pub fn stop_files() {
+/// The player played to its end, its failure printed unless stop_sound ended it
+fn watched(child: Player, player: &str, path: &str, stops: usize, label: &str) {
 	if let Ok(mut playing) = PLAYING.lock() {
-		for child in playing.drain(..) {
-			if let Ok(mut child) = child.lock() {
-				let _ = child.kill();
-				let _ = child.wait();
-			}
+		playing.push(child.clone());
+	}
+	let ended = loop {
+		match failure_of(&child, player, path) {
+			Some(ended) => break ended,
+			None => std::thread::sleep(PLAYER_POLL),
+		}
+	};
+	if let (Err(failure), true) = (ended, stops == STOPS.load(Ordering::Relaxed)) {
+		eprintln!("{label} {failure}");
+	}
+	if let Ok(mut playing) = PLAYING.lock() {
+		playing.retain(|other| !Arc::ptr_eq(other, &child));
+	}
+}
+
+/// stop_sound: the queued sounds dropped, the playing sounds and music files stopped
+pub fn stop() {
+	STOPS.fetch_add(1, Ordering::Relaxed);
+	if let Ok(mut end) = SOUNDS_END.lock() {
+		*end = None;
+	}
+	let playing: Vec<Player> = PLAYING.lock().map(|playing| playing.clone()).unwrap_or_default();
+	for child in playing {
+		if let Ok(mut child) = child.lock() {
+			let _ = child.kill();
 		}
 	}
+}
+
+/// sound_queued(): the seconds the queued sounds still sound on the audio clock
+pub fn queued_seconds() -> f64 {
+	let end = SOUNDS_END.lock().ok().and_then(|end| *end);
+	end.map_or(0.0, |end| end.saturating_duration_since(Instant::now()).as_secs_f64())
+}
+
+/// wait_sound, and the process's end: until the player thread played what is queued (headless nothing is)
+pub fn wait() {
+	while PENDING.load(Ordering::Relaxed) > 0 {
+		std::thread::sleep(PLAYER_POLL);
+	}
+}
+
+/// The sound's seconds added to the audio clock behind the sounds queued before it
+fn scheduled(seconds: f64) {
+	if let Ok(mut end) = SOUNDS_END.lock() {
+		let now = Instant::now();
+		*end = Some(end.filter(|end| *end > now).unwrap_or(now) + Duration::from_secs_f64(seconds));
+	}
+}
+
+/// The WAV handed to the player thread, started with the first sound (the process's end then waits for the queue)
+fn queued(path: PathBuf) -> Result<(), String> {
+	let queue = QUEUE.get_or_init(|| {
+		let (sender, receiver) = std::sync::mpsc::channel::<(PathBuf, usize)>();
+		std::thread::spawn(move || {
+			for (path, stops) in receiver {
+				if stops == STOPS.load(Ordering::Relaxed) {
+					play_wav(&path, stops);
+				}
+				PENDING.fetch_sub(1, Ordering::Relaxed);
+			}
+		});
+		wait_at_exit();
+		Mutex::new(sender)
+	});
+	PENDING.fetch_add(1, Ordering::Relaxed);
+	let sent = queue.lock().map_err(|_| "sound: the queue is poisoned".to_string())?.send((path, STOPS.load(Ordering::Relaxed)));
+	sent.map_err(|_| "sound: the player thread ended".to_string())
+}
+
+/// One queued WAV played to its end by the first player the system has
+fn play_wav(path: &Path, stops: usize) {
+	let shown = path.display().to_string();
+	match spawned(&FILE_PLAYERS, "wav", &shown, false) {
+		Some((player, child)) => watched(Arc::new(Mutex::new(child)), player, &shown, stops, "sound"),
+		None => eprintln!("sound: no player found ({}) for {shown}", names_for(&FILE_PLAYERS, "wav")),
+	}
+}
+
+fn wait_at_exit() {
+	extern "C" fn wait_for_queue() {
+		wait();
+	}
+	extern "C" {
+		fn atexit(callback: extern "C" fn()) -> i32;
+	}
+	// SAFETY: atexit only stores the function pointer; wait reads atomics and sleeps
+	unsafe { atexit(wait_for_queue) };
 }
 
 /// Whether the system has a decoder that checks a file of this format without playing it
@@ -155,14 +242,15 @@ fn file_format(path: &str) -> Result<&'static str, String> {
 		.ok_or_else(|| format!("{path} is not a sound file (wav, mp3, ogg, flac, aiff, m4a)"))
 }
 
-/// Write the samples as a WAV and play it when the user may hear it, else say where it is; played to its end, so
-/// sounds one after another play in order
+/// Write the samples as a WAV and queue it on the audio clock: played when the user may hear it, else say where it is
 pub fn sound(samples: &[u64], rate: u32) -> Result<PathBuf, String> {
 	let path = wav_file(samples, rate)?;
+	let seconds = samples.len() as f64 / rate.max(1) as f64;
+	scheduled(seconds);
 	if crate::paint::shows_windows() {
-		play(&path)?;
+		queued(path.clone())?;
 	} else {
-		eprintln!("sound {:.2} s: {}", samples.len() as f64 / rate.max(1) as f64, path.display());
+		eprintln!("sound {seconds:.2} s: {}", path.display());
 	}
 	Ok(path)
 }
@@ -174,16 +262,6 @@ fn wav_file(samples: &[u64], rate: u32) -> Result<PathBuf, String> {
 	let path = folder.join(if call == 1 { format!("{FILE_STEM}.wav") } else { format!("{FILE_STEM}-{call}.wav") });
 	std::fs::write(&path, wav(samples, rate)).map_err(|failure| format!("sound: cannot write {}: {failure}", path.display()))?;
 	Ok(path)
-}
-
-/// The first player the system has plays the file to its end
-fn play(path: &Path) -> Result<(), String> {
-	for player in PLAYERS {
-		if let Ok(status) = std::process::Command::new(player).arg(path).status() {
-			return if status.success() { Ok(()) } else { Err(format!("sound: {player} could not play {}", path.display())) };
-		}
-	}
-	Err(format!("sound: no player found ({}) for {}", PLAYERS.join(", "), path.display()))
 }
 
 /// A 16-bit mono PCM WAV of the offset samples

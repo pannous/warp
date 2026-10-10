@@ -343,7 +343,7 @@ impl WarpParser {
 		if let Some(list_type) = self.try_parse_array_type_suffix(lhs) {
 			return Some(list_type);
 		}
-		let before_bracket = (self.pos, self.line_nr, self.column, self.current_line.clone());
+		let before_bracket = self.mark();
 		self.advance(); // skip '['
 		self.skip_whitespace();
 
@@ -358,7 +358,7 @@ impl WarpParser {
 		}
 
 		if self.current_char() != ']' {
-			(self.pos, self.line_nr, self.column, self.current_line) = before_bracket; // `foo [1 2 3]`: a list argument, not an index
+			self.rewind(before_bracket); // `foo [1 2 3]`: a list argument, not an index
 			return None;
 		}
 		self.advance(); // skip ']'

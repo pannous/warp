@@ -1,3 +1,4 @@
+#!/usr/bin/env warp
 // Conway's Game of Life: a glider on an 8x8 grid, 4 generations; checksum = sum of r*10+c over live cells (glider moved by (1,1))
 // differs from samples/life.warp: := definitions (fun/def params with list variables get typed Int), inclusive `to` ranges (`..` excludes the end; `0..size {` binds the block to size),
 // no `else if` inside blocks, no variable named count (`return count` reads as "return".count), flat cell indices instead of (r, c) tuples

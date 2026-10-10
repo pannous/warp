@@ -62,13 +62,6 @@ impl WasmGcEmitter {
 				put(f, b'0');
 				Self::emit_list(f, &[I::LocalGet(count), I::I32Const(1), I::I32Sub, I::LocalSet(count), I::Br(0), I::End, I::End]);
 			};
-			let while_true = |f: &mut Function, condition: &[I<'static>], body: &[I<'static>]| {
-				Self::emit_list(f, &[I::Block(BlockType::Empty), I::Loop(BlockType::Empty)]);
-				Self::emit_list(f, condition);
-				Self::emit_list(f, &[I::I32Eqz, I::BrIf(1)]);
-				Self::emit_list(f, body);
-				Self::emit_list(f, &[I::Br(0), I::End, I::End]);
-			};
 
 			Self::emit_list(f, &[I::LocalGet(x), I::LocalGet(x), I::F64Ne, I::If(BlockType::Empty)]);
 			return_text(f, not_a_number);
@@ -89,8 +82,8 @@ impl WasmGcEmitter {
 
 			// x = mantissa · 10^exponent with the mantissa in [1, 10)
 			let step = |x_op: I<'static>, exponent_step: i32| [I::LocalGet(x), I::F64Const(10.0.into()), x_op, I::LocalSet(x), I::LocalGet(exponent), I::I32Const(exponent_step), I::I32Add, I::LocalSet(exponent)];
-			while_true(f, &[I::LocalGet(x), I::F64Const(10.0.into()), I::F64Ge], &step(I::F64Div, 1));
-			while_true(f, &[I::LocalGet(x), I::F64Const(1.0.into()), I::F64Lt], &step(I::F64Mul, -1));
+			Self::emit_while(f, &[I::LocalGet(x), I::F64Const(10.0.into()), I::F64Ge], &step(I::F64Div, 1));
+			Self::emit_while(f, &[I::LocalGet(x), I::F64Const(1.0.into()), I::F64Lt], &step(I::F64Mul, -1));
 			Self::emit_list(f, &[I::LocalGet(x), I::F64Const(MANTISSA_SCALE.into()), I::F64Mul, I::F64Nearest, I::I64TruncF64S, I::LocalTee(digits)]);
 			// the mantissa is in [1e14, 1e15], so the trapping truncation is safe (trunc_sat needs a feature wasm-opt lacks)
 			// 9.999…95 rounds up to 10^15: one digit more
@@ -100,7 +93,7 @@ impl WasmGcEmitter {
 			Self::emit_list(f, &[I::I32Const(SIGNIFICANT_DIGITS), I::LocalSet(significant)]);
 			let has_trailing_zero = [I::LocalGet(significant), I::I32Const(1), I::I32GtS, I::LocalGet(digits), I::I64Const(10), I::I64RemS, I::I64Eqz, I::I32And];
 			let drop_trailing_zero = [I::LocalGet(digits), I::I64Const(10), I::I64DivS, I::LocalSet(digits), I::LocalGet(significant), I::I32Const(1), I::I32Sub, I::LocalSet(significant)];
-			while_true(f, &has_trailing_zero, &drop_trailing_zero);
+			Self::emit_while(f, &has_trailing_zero, &drop_trailing_zero);
 			scratch(f, &[I::I32Const(0)]);
 			f.instruction(&I::LocalGet(digits));
 			s.call(f, "int_to_decimal");

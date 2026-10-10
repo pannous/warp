@@ -206,8 +206,8 @@ impl WarpParser {
 	/// The body is the rest of the statement, a `{…}` block or an indented block. Parameters are plain names or, with a
 	/// known type word, typed slots (`to square a number:`, type_name_matching::parameter_slots). Anything else is no definition.
 	pub(super) fn try_parse_to_definition(&mut self) -> Option<Node> {
-		let before_header = (self.pos, self.line_nr, self.column, self.current_line.clone());
-		let restore = |parser: &mut Self| (parser.pos, parser.line_nr, parser.column, parser.current_line) = before_header.clone();
+		let before_header = self.mark();
+		let restore = |parser: &mut Self| parser.rewind(before_header.clone());
 		self.skip_spaces();
 		let Some(name) = self.at_identifier_start().then(|| self.parse_symbol().ok()).flatten() else {
 			restore(self);
@@ -321,10 +321,10 @@ impl WarpParser {
 	/// The `end` on the line after a block read by indentation, the newline before the next statement kept; an `end`
 	/// indented less than the block's head closes an outer block
 	pub(super) fn skip_end_line(&mut self) {
-		let before = (self.pos, self.line_nr, self.column, self.current_line.clone());
+		let before = self.mark();
 		let (_, indent) = self.skip_whitespace();
 		if indent != self.base_indent || !self.matches_keyword(END_KEYWORD) {
-			(self.pos, self.line_nr, self.column, self.current_line) = before;
+			self.rewind(before);
 			return;
 		}
 		self.advance_by(END_KEYWORD.len());
@@ -335,13 +335,13 @@ impl WarpParser {
 	pub(super) fn parse_indented_block(&mut self) -> Option<Node> {
 		let next_line = self.chars[self.pos..].iter().skip_while(|ch| **ch != '\n').skip(1);
 		let indented_by_spaces = next_line.take_while(|ch| matches!(ch, ' ' | '\t')).any(|ch| *ch == ' ');
-		let before_block = (self.pos, self.line_nr, self.column, self.current_line.clone());
+		let before_block = self.mark();
 		let outer_counts_spaces = self.indent_counts_spaces;
 		self.indent_counts_spaces |= indented_by_spaces;
 		let (_, indent) = self.skip_whitespace();
 		if indent <= self.base_indent {
 			self.indent_counts_spaces = outer_counts_spaces;
-			(self.pos, self.line_nr, self.column, self.current_line) = before_block;
+			self.rewind(before_block);
 			return None;
 		}
 		let outer_indent = std::mem::replace(&mut self.base_indent, indent);
@@ -363,26 +363,11 @@ impl WarpParser {
 			return false;
 		}
 		let mut open = 1;
-		let mut position = start;
-		while position < self.chars.len() {
-			let ch = self.chars[position];
-			// an `end` in a text or a comment is no word of the code: `// … would end it`
-			if let Some(after) = text_or_comment_end(&self.chars, position) {
-				position = after;
-				continue;
-			}
-			if !is_identifier_char(ch) {
-				position += 1;
-				continue;
-			}
-			let word_start = position;
-			while position < self.chars.len() && is_identifier_char(self.chars[position]) {
-				position += 1;
-			}
+		for (word_start, word_end) in code_words(&self.chars, start) {
 			if word_start > 0 && self.chars[word_start - 1] == '.' {
 				continue; // `range.end` is a property
 			}
-			let word: String = self.chars[word_start..position].iter().collect();
+			let word: String = self.chars[word_start..word_end].iter().collect();
 			match word.as_str() {
 				END_KEYWORD => open -= 1,
 				opener if openers.contains(&opener) => open += 1,
@@ -400,34 +385,16 @@ impl WarpParser {
 	fn names_end(&self) -> bool {
 		let next_visible = |from: usize| self.chars[from..].iter().position(|ch| !ch.is_whitespace()).map(|offset| from + offset);
 		let previous_visible = |before: usize| self.chars[..before].iter().rposition(|ch| !ch.is_whitespace());
-		let mut position = 0;
-		while position < self.chars.len() {
-			let ch = self.chars[position];
-			// an `end` in a text or a comment is no word of the code: `// … would end it`
-			if let Some(after) = text_or_comment_end(&self.chars, position) {
-				position = after;
-				continue;
-			}
-			if !is_identifier_char(ch) {
-				position += 1;
-				continue;
-			}
-			let word_start = position;
-			while position < self.chars.len() && is_identifier_char(self.chars[position]) {
-				position += 1;
-			}
-			if self.chars[word_start..position].iter().copied().ne(END_KEYWORD.chars()) {
-				continue;
+		code_words(&self.chars, 0).any(|(word_start, word_end)| {
+			if self.chars[word_start..word_end].iter().copied().ne(END_KEYWORD.chars()) {
+				return false;
 			}
 			let before = previous_visible(word_start).map(|index| self.chars[index]);
-			let after = next_visible(position);
+			let after = next_visible(word_end);
 			let assigned = after.is_some_and(|index| self.chars[index] == '=' && self.chars.get(index + 1) != Some(&'='));
 			// `(…, end)` both sides: `foo(if c then 1 else 2 end)` closes a block
-			if matches!(before, Some('(' | ',')) && after.is_some_and(|index| matches!(self.chars[index], ',' | ')')) || assigned {
-				return true;
-			}
-		}
-		false
+			matches!(before, Some('(' | ',')) && after.is_some_and(|index| matches!(self.chars[index], ',' | ')')) || assigned
+		})
 	}
 
 	/// The statements up to the closing `end` (consumed) as a `{…}` block; a `then` block also ends at its `else`
@@ -435,9 +402,9 @@ impl WarpParser {
 		let outer_else = std::mem::replace(&mut self.stops_at_else, stops_at_else);
 		let outer_end = std::mem::replace(&mut self.stops_at_end, true);
 		let outer_indent = self.base_indent;
-		let before_first_line = (self.pos, self.line_nr, self.column, self.current_line.clone());
+		let before_first_line = self.mark();
 		let (_, indent) = self.skip_whitespace();
-		(self.pos, self.line_nr, self.column, self.current_line) = before_first_line;
+		self.rewind(before_first_line);
 		self.base_indent = self.base_indent.max(indent); // its lines may be indented, the `end` line not
 		let block = self.parse_list_with_separators(None, Bracket::None);
 		self.base_indent = outer_indent;
@@ -666,8 +633,7 @@ impl WarpParser {
 	pub(super) fn parse_symbol_with_suffix(&mut self) -> Node {
 		let version_len = crate::versions::tagged_literal_len(&self.chars[self.pos..]);
 		if version_len > 0 {
-			let literal: String = self.chars[self.pos..self.pos + version_len].iter().collect();
-			self.advance_by(version_len);
+			let literal = self.take_chars(version_len);
 			return Node::Symbol(literal);
 		}
 		let symbol = match self.parse_symbol() {
@@ -983,7 +949,7 @@ impl WarpParser {
 			false => None,
 		};
 		let ends_statement = matches!(self.peek_char((0..).take_while(|&offset| matches!(self.peek_char(offset), ' ' | '\t')).count()), '\n' | ';' | '}' | '\0');
-		let before_body = (self.pos, self.line_nr, self.column, self.current_line.clone());
+		let before_body = self.mark();
 		// `class P(val x: Int)` ends at its line when no body follows on it
 		match constructor_fields.is_empty() {
 			true => {
@@ -1053,8 +1019,8 @@ impl WarpParser {
 				}
 			}
 			// Ruby's `class Point` and the lines indented below it, up to its `end`
-			(false, Empty) if self.pos > before_body.0 && self.closing_end_follows(&RUBY_END_OPENERS) => {
-				(self.pos, self.line_nr, self.column, self.current_line) = before_body;
+			(false, Empty) if self.pos > before_body.pos && self.closing_end_follows(&RUBY_END_OPENERS) => {
+				self.rewind(before_body);
 				let body = self.parse_indented_block().map(without_end_lines).map(Self::transform_fields_to_types).unwrap_or(Empty);
 				self.skip_whitespace();
 				if self.matches_keyword(END_KEYWORD) {
@@ -1508,11 +1474,33 @@ fn statements(block: Node) -> Vec<Node> {
 
 /// A Ruby class body without the `end` lines of its methods (their bodies are read by indentation)
 fn without_end_lines(body: Node) -> Node {
-	let is_end = |item: &Node| matches!(item.drop_meta(), Node::Symbol(word) if word == END_KEYWORD);
+	let is_end = |item: &Node| item.is_symbol(END_KEYWORD);
 	match body {
 		Node::List(items, bracket, separator) => Node::List(items.into_iter().filter(|item| !is_end(item)).map(without_end_lines).collect(), bracket, separator),
 		Node::Key(left, op, right) => Node::Key(Box::new(without_end_lines(*left)), op, Box::new(without_end_lines(*right))),
 		Node::Meta { node, data } => Node::Meta { node: Box::new(without_end_lines(*node)), data },
 		other => other,
 	}
+}
+
+/// The spans of the words of the code from `start` on: an `end` in a text or a comment is no word of the code
+/// (`// … would end it`)
+fn code_words(chars: &[char], start: usize) -> impl Iterator<Item = (usize, usize)> + '_ {
+	let mut position = start;
+	std::iter::from_fn(move || {
+		while position < chars.len() {
+			if let Some(after) = text_or_comment_end(chars, position) {
+				position = after;
+			} else if is_identifier_char(chars[position]) {
+				let word_start = position;
+				while position < chars.len() && is_identifier_char(chars[position]) {
+					position += 1;
+				}
+				return Some((word_start, position));
+			} else {
+				position += 1;
+			}
+		}
+		None
+	})
 }

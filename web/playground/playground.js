@@ -194,7 +194,7 @@ function startWorker(restarts = 0) {
 			if (data.type === "bundle") return bundled(data.bundle); // deploy.js
 			if (data.type === "sound") return playSound(data);
 			if (data.type === "sound file") return playSoundFile(data.url);
-			if (data.type === "stop sound files") return stopSoundFiles();
+			if (data.type === "stop sound files") return silence(); // stop_sound: the queued sounds and the music files
 			if (!pending) return showEventOutput(data);
 			if (data.type === "listening") Object.assign(pending, { listening: data.events, address: data.address });
 			if (data.type === "print") printedChunk(pending, data);

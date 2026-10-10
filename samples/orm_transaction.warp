@@ -1,3 +1,4 @@
+#!/usr/bin/env warp
 // A transaction: every write of its block lands, or none does
 class Account{owner: text; balance: int}
 accounts: [Account] = database.accounts

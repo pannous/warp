@@ -339,10 +339,17 @@ impl Op {
 		}
 	}
 
-	/// Check if this operator is right-associative
-	pub fn is_right_assoc(&self) -> bool {
-		let (l, r) = self.binding_power();
-		l > 0 && r > 0 && r < l
+	/// Whether this comparison holds for two values ordered so (`<=` holds for Less and Equal)
+	pub fn holds(&self, ordering: std::cmp::Ordering) -> bool {
+		use std::cmp::Ordering::*;
+		match self {
+			Op::Eq => ordering == Equal,
+			Op::Ne => ordering != Equal,
+			Op::Lt => ordering == Less,
+			Op::Le => ordering != Greater,
+			Op::Gt => ordering == Greater,
+			_ => ordering != Less, // Ge
+		}
 	}
 
 	/// Check if this is a binary arithmetic operator

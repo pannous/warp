@@ -1,3 +1,4 @@
+#!/usr/bin/env warp
 // N-Queens: count placements of n mutually non-attacking queens (backtracking)
 fn is_safe(queens, row, col) {
     for r in range(row) {

@@ -1,3 +1,4 @@
+#!/usr/bin/env warp
 // Quicksort implementation
 // Classic divide-and-conquer sorting
 

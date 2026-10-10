@@ -34,13 +34,21 @@ const WARM_UP_CODE = 'p{ "" }';
 self.keepStored = (name, value, file) => post({ type: "stored", name, value, file }); // host-files.js STD_ADAPTERS.store
 self.writeClipboard = text => post({ type: "clipboard", text }); // host-files.js STD_ADAPTERS.clipboard
 self.playSoundFile = url => post({ type: "sound file", url }); // host-files.js STD_ADAPTERS.sound: a worker has no <audio>
-self.stopSoundFiles = () => post({ type: "stop sound files" });
+self.stopSoundFiles = () => { soundsEnd = 0; post({ type: "stop sound files" }); };
+// sound_queued() (lib/sound.warp, card sound-pro): the seconds the queued sounds still sound
+let soundsEnd = 0;
+const clockSeconds = () => performance.now() / 1000;
+self.soundsQueued = () => Math.max(0, soundsEnd - clockSeconds());
 const hooks = {
 	renders: true, // each outcome carries its HTML by the program's own renderer (host.js renderedHtml)
 	print: (text, stream) => post({ type: "print", text, stream }),
 	module: bytes => post({ type: "module", bytes }),
 	paint: (pixels, width, height) => post({ type: "paint", pixels, width, height }),
-	sound: (samples, rate) => post({ type: "sound", samples, rate }), // a worker has no AudioContext: the page plays it
+	// a worker has no AudioContext: the page plays it, queued behind the sounds before it as the clock here counts
+	sound: (samples, rate) => {
+		soundsEnd = Math.max(soundsEnd, clockSeconds()) + samples.length / rate;
+		post({ type: "sound", samples, rate });
+	},
 	sleeping: () => post({ type: "sleep" }),
 	tasksInline: reason => post({ type: "tasks inline", reason }),
 	notify: text => post({ type: "notify", text }),

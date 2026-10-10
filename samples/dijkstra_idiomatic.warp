@@ -1,3 +1,4 @@
+#!/usr/bin/env warp
 // Dijkstra shortest path, restricted to constructs warp currently compiles:
 // integer node ids instead of string keys, lists instead of maps,
 // inline double indexing instead of edge variables, a done flag instead of break,

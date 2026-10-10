@@ -1,3 +1,4 @@
+#!/usr/bin/env warp
 // JSON Parser
 // Recursive descent parser for JSON
 // the parser state is global: functions change it (closures would capture copies)

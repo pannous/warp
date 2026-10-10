@@ -1,3 +1,4 @@
+#!/usr/bin/env warp
 // Levenshtein edit distance via dynamic programming (two-row variant), 1-based `#` indexing
 def levenshtein(a, b) {
     s = a

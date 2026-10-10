@@ -1,3 +1,4 @@
+#!/usr/bin/env warp
 // Typed lists: a declared element type, checked at every write
 // (the typing rules are machine-checked in lean/WarpTypes, notes/type_theory.md)
 

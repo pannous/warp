@@ -2,7 +2,31 @@
 
 use super::*;
 
+/// Where the cursor stands, to go back to after a look ahead
+#[derive(Clone)]
+pub(super) struct Mark {
+	pub(super) pos: usize,
+	line_nr: usize,
+	column: usize,
+	current_line: String,
+}
+
 impl WarpParser {
+	pub(super) fn mark(&self) -> Mark {
+		Mark { pos: self.pos, line_nr: self.line_nr, column: self.column, current_line: self.current_line.clone() }
+	}
+
+	pub(super) fn rewind(&mut self, mark: Mark) {
+		Mark { pos: self.pos, line_nr: self.line_nr, column: self.column, current_line: self.current_line } = mark;
+	}
+
+	/// The next `length` characters, consumed
+	pub(super) fn take_chars(&mut self, length: usize) -> String {
+		let taken = self.chars[self.pos..self.pos + length].iter().collect();
+		self.advance_by(length);
+		taken
+	}
+
 	pub(super) fn end_of_input(&self) -> bool {
 		self.pos >= self.chars.len()
 	}

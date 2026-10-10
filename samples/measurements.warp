@@ -1,3 +1,4 @@
+#!/usr/bin/env warp
 // Measurements with uncertainty: x ± r is an interval that flows through arithmetic
 length = 6.0 ± 0.3
 width = 2.0 ± 0.2

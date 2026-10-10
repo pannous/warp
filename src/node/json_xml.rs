@@ -146,8 +146,7 @@ impl Node {
 									}
 								}
 								other => {
-									// let key = format!("item_{}", map.len());
-									let key = format!("{}", map.len()); // just the number
+									let key = map.len().to_string();
 									map.insert(key, other.to_json_value());
 								}
 							}

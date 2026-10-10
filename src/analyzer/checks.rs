@@ -21,54 +21,23 @@ pub(super) fn check_type_errors_inner(node: &Node, scope: &mut Scope, in_structu
 		return check_type_errors_inner(body, &mut Scope::new(), false);
 	}
 	match node {
-		Node::Key(left, Op::Colon, right) => {
-			if let Node::Symbol(kw) = left.drop_meta() {
-				if kw == "global" {
-					return check_type_errors_inner(right, scope, false);
-				}
-				// Tag structure: check both sides, right is structure context
-				if let Some(err) = check_type_errors_inner(left, scope, in_structure) {
-					return Some(err);
-				}
-				return check_type_errors_inner(right, scope, true);
-			}
-			if let Some(err) = check_type_errors_inner(left, scope, in_structure) {
-				return Some(err);
-			}
-			check_type_errors_inner(right, scope, in_structure)
+		Node::Key(left, Op::Colon, right) if left.is_symbol("global") => check_type_errors_inner(right, scope, false),
+		// a tag `name: {…}` is structure on its right side
+		Node::Key(left, Op::Colon, right) if left.symbol_name().is_some() => {
+			check_type_errors_inner(left, scope, in_structure).or_else(|| check_type_errors_inner(right, scope, true))
 		}
-		Node::Key(left, Op::Define, right) => {
-			if let Node::Symbol(name) = left.drop_meta() {
-				if let Some(err) = check_assignment(name, right, scope) {
-					return Some(err);
-				}
-			}
-			check_type_errors_inner(right, scope, in_structure)
-		}
-		Node::Key(left, Op::Assign, right) => {
-			if !in_structure {
-				if let Node::Symbol(name) = left.drop_meta() {
-					if let Some(err) = check_assignment(name, right, scope) {
-						return Some(err);
-					}
-				}
-			}
-			check_type_errors_inner(right, scope, in_structure)
+		Node::Key(left, op @ (Op::Define | Op::Assign), right) => {
+			let checks_assignment = *op == Op::Define || !in_structure;
+			let assignment_error = match left.symbol_name() {
+				Some(name) if checks_assignment => check_assignment(name, right, scope),
+				_ => None,
+			};
+			assignment_error.or_else(|| check_type_errors_inner(right, scope, in_structure))
 		}
 		Node::Key(left, _, right) => {
-			if let Some(err) = check_type_errors_inner(left, scope, in_structure) {
-				return Some(err);
-			}
-			check_type_errors_inner(right, scope, in_structure)
+			check_type_errors_inner(left, scope, in_structure).or_else(|| check_type_errors_inner(right, scope, in_structure))
 		}
-		Node::List(items, _, _) => {
-			for item in items {
-				if let Some(err) = check_type_errors_inner(item, scope, in_structure) {
-					return Some(err);
-				}
-			}
-			None
-		}
+		Node::List(items, _, _) => items.iter().find_map(|item| check_type_errors_inner(item, scope, in_structure)),
 		_ => None,
 	}
 }
@@ -299,7 +268,7 @@ pub fn list_type_name(list: &Node, scope: &Scope) -> String {
 		// a block `(out = ø; for …; out)` is worth its last value
 		Node::List(items, Bracket::Round | Bracket::Curly, Separator::Semicolon | Separator::Newline) if !items.is_empty() => list_type_name(&items[items.len() - 1], scope),
 		// `zero_fill(count, zero)`: a list of the zero's type
-		Node::List(items, _, _) if matches!(items.as_slice(), [call, _, _] if matches!(call.drop_meta(), Node::Symbol(name) if name == ZERO_FILL_CALL)) => {
+		Node::List(items, _, _) if matches!(items.as_slice(), [call, _, _] if call.is_symbol(ZERO_FILL_CALL)) => {
 			format!("{PLAIN} of {}", element_type_word(&items[2], scope))
 		}
 		Node::List(items, Bracket::Round, _) if items.len() == 2 && map_word(&items[0]).is_some() => {
@@ -414,7 +383,7 @@ pub(super) const OF_WORD: &str = "of";
 /// The map word a call names: `map_keys`, `map_values` or `map_entries`
 pub(super) fn map_word(call: &Node) -> Option<&'static str> {
 	use crate::library_words::{MAP_ENTRIES, MAP_KEYS, MAP_VALUES};
-	[MAP_KEYS, MAP_VALUES, MAP_ENTRIES].into_iter().find(|word| matches!(call.drop_meta(), Node::Symbol(name) if name == word))
+	[MAP_KEYS, MAP_VALUES, MAP_ENTRIES].into_iter().find(|word| call.is_symbol(word))
 }
 
 pub(super) const INT_WORD: &str = "int";
@@ -658,10 +627,10 @@ fn braced_it_body(head: &Node, body: &Node) -> Option<Diagnostic> {
 pub(super) fn it_loop(items: &[Node]) -> Option<(&Node, &Node)> {
 	let (keyword, iterable, body) = match items {
 		[keyword, iterable, body] => (keyword, iterable, body),
-		[keyword, _, in_word, iterable, body] if is_word(in_word, "in") => (keyword, iterable, body),
+		[keyword, _, in_word, iterable, body] if in_word.is_symbol("in") => (keyword, iterable, body),
 		_ => return None,
 	};
-	(is_word(keyword, "for") && matches!(body.drop_meta(), Node::List(_, Bracket::Curly, _))).then_some((iterable, body))
+	(keyword.is_symbol("for") && matches!(body.drop_meta(), Node::List(_, Bracket::Curly, _))).then_some((iterable, body))
 }
 
 /// Does a function body read its implicit parameter `it`, not counting the `it` its loops bind?
@@ -782,7 +751,7 @@ pub(super) fn kebab_fixes(warning: Diagnostic, program: &Node, name: &str, subtr
 /// Where `name` is read bare: not as a data key (`a-b:2`) or a member (`x.a-b`), which already mean the key
 pub(super) fn bare_reads(node: &Node, name: &str, reads: &mut Vec<(usize, usize)>) {
 	match node {
-		Node::Meta { node: inner, .. } if matches!(inner.drop_meta(), Node::Symbol(read) if read == name) => reads.extend(crate::diagnostic::position(node)),
+		Node::Meta { node: inner, .. } if inner.is_symbol(name) => reads.extend(crate::diagnostic::position(node)),
 		Node::Meta { node, .. } => bare_reads(node, name, reads),
 		Node::Key(_, Op::Colon, value) if data_binding(node).is_some() => bare_reads(value, name, reads),
 		Node::Key(left, Op::Dot, _) => bare_reads(left, name, reads),
@@ -1188,8 +1157,7 @@ fn educate_let_change(node: &Node, place: &str, change: &str) {
 fn changing_list_method(call: &Node) -> bool {
 	let method = match call.drop_meta() {
 		Node::List(items, _, _) => items.first().map(Node::name),
-		Node::Symbol(name) => Some(name.clone()),
-		_ => None,
+		_ => call.symbol_name().map(String::from),
 	};
 	method.is_some_and(|method| is_list_mutating_method(&method))
 }
@@ -1219,7 +1187,7 @@ pub(super) fn check_constants(node: &Node, constants: &mut HashMap<String, (Stri
 	match node.drop_meta() {
 		Node::List(items, _, _) => {
 			let statements = match items.as_slice() {
-				[keyword, declaration, rest @ ..] if is_constant_keyword(keyword) || is_word(keyword, IMMUTABLE_LET) => {
+				[keyword, declaration, rest @ ..] if is_constant_keyword(keyword) || keyword.is_symbol(IMMUTABLE_LET) => {
 					let keyword = keyword.name();
 					let Some((bindings, values)) = declared_bindings(declaration) else {
 						return Some(Diagnostic::at(declaration, format!("{keyword} needs a value: {}", declaration.serialize())).fix(format!("{keyword} x = 5")));
@@ -1497,17 +1465,11 @@ pub(crate) fn annotated_builtin_type(annotation: &Node) -> Option<&str> {
 
 /// The element type a list annotation names: `texts`, `[text]` and `list of text` are lists of `text`
 pub(crate) fn declared_element_type(annotation: &Node) -> Option<&str> {
-	fn symbol(node: &Node) -> Option<&str> {
-		match node.drop_meta() {
-			Node::Symbol(name) => Some(name),
-			_ => None,
-		}
-	}
 	match annotation.drop_meta() {
 		Node::Symbol(word) => list_element_type(word),
-		Node::List(items, Bracket::Square, _) if items.len() == 1 => symbol(&items[0]),
+		Node::List(items, Bracket::Square, _) if items.len() == 1 => items[0].symbol_name(),
 		Node::List(items, _, Separator::Space) => match items.as_slice() {
-			[list, of, element] if symbol(list) == Some(LIST_WORD) && symbol(of) == Some(OF_WORD) => symbol(element),
+			[list, of, element] if list.is_symbol(LIST_WORD) && of.is_symbol(OF_WORD) => element.symbol_name(),
 			_ => None,
 		},
 		_ => None,
@@ -1636,10 +1598,7 @@ fn out_of_width(element: &str, item: &Node) -> Option<Kind> {
 /// The list variable `names` of an element `names#i`
 pub(crate) fn indexed_list(target: &Node) -> Option<&str> {
 	let Node::Key(list, Op::Hash, _) = target.drop_meta() else { return None };
-	match list.drop_meta() {
-		Node::Symbol(name) => Some(name),
-		_ => None,
-	}
+	list.symbol_name()
 }
 
 /// The items of an append call `xs.add(a)`, `xs.push(a, b)`
