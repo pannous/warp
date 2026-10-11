@@ -36,6 +36,7 @@ mod test_sound_effects; // card signal-graph
 mod test_sound_pan; // card stereo-pan
 mod test_sound_spectrum; // card winamp-like
 mod test_sound_use; // card bizarre-global
+mod test_sound_aliasing; // card reason-beep
 mod test_task_sound; // card task-sound
 mod test_shader_blocks; // card g_oFJc
 mod test_shader_holes; // card shader-holes

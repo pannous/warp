@@ -66,12 +66,18 @@ decibels(level) := 10^(level / 20.0)
 // note names (C4, F#4, Bb3, any octave 0–9) are their frequencies in a program that uses sound: the compiler parses them
 // (src/lowering/music_words.rs), as note(name) does at run time
 
-// one wave at phase p (0 to 1) of its period, from -1 to 1
-wave(shape, p) := if shape == "square" then (if p < 0.5 then 1.0 else -1.0)
+// one wave at phase p (0 to 1) of its period, from -1 to 1, a sample advancing the phase by dt; the jumps of square
+// and sawtooth are band-limited (card reason-beep), sharp without dt
+wave(shape, p, dt = 0.0) := if shape == "square" then (if p < 0.5 then 1.0 else -1.0) + step_smoothing(p, dt) - step_smoothing((p + 0.5) % 1, dt)
 	else if shape == "triangle" then 1 - 4 * abs(p - 0.5)
-	else if shape == "sawtooth" then 2 * p - 1
+	else if shape == "sawtooth" then 2 * p - 1 - step_smoothing(p, dt)
 	else if shape == "noise" then 2 * random() - 1
 	else sin(2 * pi * p)
+// the correction of a wave's upward jump of 2 at phase 0 within a sample of it (PolyBLEP): a sharp jump has harmonics
+// above half the sample rate, which fold back as an inharmonic buzz (880 Hz beep at 22050 samples a second)
+step_smoothing(p, dt) := if p < dt then (p / dt) * (2 - p / dt) - 1
+	else if p > 1 - dt then ((p - 1) / dt) * ((p - 1) / dt + 2) + 1
+	else 0.0
 // the seconds at sample i: a float source (decision exact-decimals), so the samples' math runs in f64, not in ratios
 sample_time(i) := i / (sample_rate as float)
 // how far a ramp of seconds has come after steps samples: 0 to 1
@@ -136,7 +142,7 @@ chord_samples(pitches, duration, shape) := {
 	n = round(duration * sample_rate) as int
 	voices = voices_of(pitches)
 	share = loudness * loudest_sample / count(voices)
-	amplitudes = [share * envelope(i, n) * tremolo_gain(i) * sum([wave(shape, phase(frequency, i) % 1) for frequency in voices]) for i in 0..n]
+	amplitudes = [share * envelope(i, n) * tremolo_gain(i) * sum([wave(shape, phase(frequency, i) % 1, frequency / sample_rate) for frequency in voices]) for i in 0..n]
 	[sample_offset + (round(a) as int) for a in filtered(amplitudes)]
 }
 // the signal graph (card signal-graph): every sound passes the effect chain between the voices and the output,
