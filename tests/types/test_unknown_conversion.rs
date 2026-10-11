@@ -35,3 +35,11 @@ fn fixed_width_casts() {
 	assert!(overflow.contains("byte overflow"), "{overflow}");
 }
 
+/// user, 2026-10-11: "u8 is alias for uint8 is alias for byte"
+#[test]
+fn u8_and_uint8_are_byte() {
+	is!("255 as u8", 255);
+	is!("u8 b = 255; b", 255);
+	let overflow = format!("{:?}", eval("uint8 u = 256; u"));
+	assert!(overflow.contains("byte overflow"), "{overflow}");
+}
