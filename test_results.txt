@@ -3795,6 +3795,8 @@ PASSED:
   ✓ types::test_type_alias_fields::alias_as_field_type
   ✓ types::test_type_alias_fields::alias_as_optional_field_and_parameter
   ✓ types::test_type_alias_fields::types_sample_runs
+  ✓ types::test_type_calls::a_function_of_the_program_keeps_its_name
+  ✓ types::test_type_calls::a_type_called_converts_as_the_cast
   ✓ types::test_type_colon_block::a_type_colon_block_declares_its_fields
   ✓ types::test_type_model::test_type_model_is_proved
   ✓ types::test_type_model::test_warp_admits_what_the_type_model_subtypes
@@ -4729,4 +4731,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-10 ignored, 4724 passed, 0 failed, 4724 total tested
+10 ignored, 4726 passed, 0 failed, 4726 total tested
