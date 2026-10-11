@@ -4,7 +4,8 @@
 //! the playground in the page's localStorage (host.js). `stored x default v` (or `stored x = v`) becomes
 //! `x = std_io("store", "load", ["x", v, file])` and `on change x { std_io("store", "save", ["x", value, file]) }`.
 //! `storage` is the same store as a map keyed at run time (card web-apis): `storage[k] = v` saves, `storage[k]` loads (ø
-//! when absent), `delete storage[k]` removes, `keys(storage)` names the kept values; `storage.k` is the key "k".
+//! when absent), `delete storage[k]` removes, `keys(storage)` names the kept values, `storage` alone is all of them as a
+//! map (card how-store); `storage.k` is the key "k".
 //! `local` is that store under its browser name (localStorage; `storage` its alias), `session` a store of its own
 //! (sessionStorage: while the page's tab lasts; natively while the process runs) (P188, warp-03's default).
 //! A program that defines its own `storage`, `local` or `session` keeps it.
@@ -171,14 +172,21 @@ fn storage_access(node: &Node, stores: &[(&str, String)]) -> Option<Node> {
 			let (key, file) = entry_key(target, stores)?;
 			Some(store_call("save", Some(key), Some(storage_accesses(value.as_ref().clone(), stores)), file))
 		}
-		Node::List(items, _, _) => match items.as_slice() {
+		Node::List(items, bracket, separator) => match items.as_slice() {
 			[word, target] if word.is_symbol(DELETE_WORD) => {
 				let (key, file) = entry_key(target, stores)?;
 				Some(store_call("remove", Some(key), None, file))
 			}
 			[word, store] if word.is_symbol(KEYS_WORD) => Some(store_call("names", None, None, file_of(store, stores)?)),
+			// `local x = 1`: the word leading a statement is no store
+			[word, rest @ ..] if !rest.is_empty() && file_of(word, stores).is_some() => {
+				let rest = rest.iter().map(|item| storage_accesses(item.clone(), stores));
+				Some(Node::List(std::iter::once(word.clone()).chain(rest).collect(), bracket.clone(), separator.clone()))
+			}
 			_ => None,
 		},
+		// `values(storage)`, `for key, value in storage`: the word alone is all the store's values as a map
+		Node::Symbol(_) => Some(store_call("all", None, None, file_of(node, stores)?)),
 		// ø: the value of an absent key
 		_ => {
 			let (key, file) = entry_key(node, stores)?;
