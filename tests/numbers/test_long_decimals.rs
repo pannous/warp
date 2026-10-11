@@ -16,3 +16,8 @@ fn an_exact_ratio_of_a_long_decimal_stays_exact() {
 	is!(&format!("{BIG_RATIO}; type(z)"), "rational");
 	is!(&format!("{BIG_RATIO}; exact k = z + 1; k == z"), false);
 }
+
+#[test]
+fn scientific_notation_stays_a_float() {
+	is!("type(8.33333333332248946124e+01)", "float");
+}

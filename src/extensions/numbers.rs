@@ -24,10 +24,13 @@ pub fn decimal_text_fraction(text: &str) -> Option<(BigInt, BigInt)> {
 }
 
 /// A decimal written with more significant digits than a float keeps is the exact ratio it spells (card keep-exact):
-/// 4.4215251521521521512 keeps all its digits, while 3.141592653589793, a float's own text, stays a float
+/// 4.4215251521521521512 keeps all its digits, while 3.141592653589793, a float's own text, stays a float, and so does
+/// scientific notation (8.33333333332248946124e+01), which means a float
 pub fn long_decimal(text: &str) -> Option<Number> {
-	let mantissa = text.split(['e', 'E']).next()?;
-	let digits: String = mantissa.chars().filter(char::is_ascii_digit).collect();
+	if text.contains(['e', 'E']) {
+		return None;
+	}
+	let digits: String = text.chars().filter(char::is_ascii_digit).collect();
 	if digits.trim_start_matches('0').trim_end_matches('0').len() <= FLOAT_ROUND_TRIP_DIGITS {
 		return None;
 	}
