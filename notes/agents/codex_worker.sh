@@ -25,7 +25,9 @@ notes/agents/common.md and follow them, with these differences: you cannot use S
 so never wait for input, and make undoable default choices yourself (note them in your final message).
 
 YOUR TASK: take one or two cards from the Next column of the board (\`todo list\`), easy ones first. Skip any card that
-already names an agent or whose branch exists on origin (another session works on it). Claim each with
+already names an agent or whose branch exists on origin (another session works on it). Skip every card whose key
+starts with \`user-\`: those are the user's own to-dos (clicks in web UIs, cloud settings, accounts), not repository
+work, and you must not take, branch or push for them. Take only cards solved by changing this repository. Claim each with
 \`todo take <card> codex\`. Per card: its own branch and worktree (\`cowtree add\`, as in common.md), test first,
 targeted tests only through \`tests/queue.sh -- <filter>\`, CARGO_BUILD_JOBS=2, clippy and the wasm32 check clean,
 push the branch, then \`gh workflow run Playground -R pannous/warp --ref <branch>\` and wait for it with
