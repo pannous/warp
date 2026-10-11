@@ -477,6 +477,7 @@ PASSED:
   ✓ control::test_storage::local_is_the_store_of_storage
   ✓ control::test_storage::session_is_a_store_of_its_own
   ✓ control::test_store_values::a_store_walked_key_by_key
+  ✓ control::test_store_values::a_stored_variable_is_among_the_store_values
   ✓ control::test_store_values::entries_of_a_store
   ✓ control::test_store_values::the_store_alone_is_its_values
   ✓ control::test_store_values::values_of_a_store
@@ -4714,4 +4715,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-10 ignored, 4709 passed, 0 failed, 4709 total tested
+10 ignored, 4710 passed, 0 failed, 4710 total tested
