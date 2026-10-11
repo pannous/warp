@@ -154,4 +154,6 @@ Not aliased, on purpose or open:
   dispatch with `x is map` at run time; library_words::LOWERED_TO_PRELUDE makes modules load them. `m.popitem()` (lib/map.warp),
   `fromkeys(ks, v)` (prelude), `dict.fromkeys(ks, v)` (library_words method_call drops the `dict` receiver).
 - Open: `ys = xs; xs.pop(); ys` keeps the popped item in ys (reassignment, not in place; append/remove are visible),
-  likewise pop(i) and clear(). Inside a function `x is list` of a map argument is yes; use `x is map`.
+  likewise pop(i) and clear(). A map of one entry passed to a function is its lone key at run time (`type` says key).
+- `x is list` of a value of unknown type is no for a map (a curly list at run time, card inside-function); lib/markup.warp
+  asks html_is_group (list or map) where a block `{…}` and a list `[…]` both hold items.

@@ -551,6 +551,12 @@ impl WasmGcEmitter {
 				self.emit_node_instructions(func, subject);
 				Self::emit_list(func, &[I::RefAsNonNull, I::I64Const(mask)]);
 				self.emit_call(func, crate::type_tests::NODE_KIND_IN);
+				// a map is a curly list at run time, no list (card inside-function)
+				if crate::type_tests::canonical_spec_word(spec) == crate::type_tests::LIST_WORD {
+					self.emit_node_instructions(func, subject);
+					self.emit_is_map(func);
+					Self::emit_list(func, &[I::I32Eqz, I::I64ExtendI32U, I::I64And]);
+				}
 			}
 			// an instance's static kind is no type name: its declared type is read at run time
 			None if declared_type => {

@@ -143,3 +143,4 @@ mod test_time_values_at_run_time; // card run-time-dates
 mod test_date_arithmetic_at_run_time; // card run-time-dates, stage B2
 mod test_time_zones_at_run_time; // card run-time-dates, stage B3
 mod test_time_programs_run; // card run-time-dates, stage B4
+mod test_list_test_of_a_map;

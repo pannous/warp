@@ -56,7 +56,7 @@ wagi_json(value:any) := {
 	if value is int or value is float { return str(value) }
 	if value is text { return wagi_json_text(value) }
 	if value is pair or wagi_holds_pairs(value) { return wagi_json_fields(value) }
-	if value is list { return "[" + join([wagi_json(item) for item in value], ",") + "]" }
+	if value is list or value is map { return "[" + join([wagi_json(item) for item in value], ",") + "]" }
 	wagi_json_text(str(value))
 }
 
