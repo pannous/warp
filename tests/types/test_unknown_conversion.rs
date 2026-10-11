@@ -23,3 +23,15 @@ fn known_as_words_still_convert() {
 	is!("class Point{x:int y:int}; p = {x:1 y:2} as Point; p.y", 2);
 	assert_eq!(eval("1500m as km").serialize(), "1.5km");
 }
+
+/// `255 as byte` printed itself too; a fixed width converts like `int` and traps outside its range
+#[test]
+fn fixed_width_casts() {
+	is!("255 as byte", 255);
+	is!("3.7 as int8", 3);
+	is!("\"200\" as byte", 200);
+	is!("x = 200 as uint8; x + 100", 300);
+	let overflow = format!("{:?}", eval("256 as byte"));
+	assert!(overflow.contains("byte overflow"), "{overflow}");
+}
+
