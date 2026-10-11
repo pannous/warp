@@ -161,14 +161,11 @@ def distorted(amplitudes) {
 	peak = loudness * loudest_sample
 	[peak * tanh(x * (1 + 10 * distortion) / peak) for x in amplitudes]
 }
-// the signal plus `echoes` feedback combs: y[i] = x[i] + feedback · y[i - gap], after the signal's end for the tail
+// the signal plus its echoes, each `feedback` times the one before, `gap` samples apart, to `tail` samples after the end
+// (a sum over the echoes, not a loop pushing onto a list: that grows quadratically on a long sound)
 def comb(amplitudes, gap, feedback, tail) {
-	out = []
-	for i in 0..(count(amplitudes) + tail) {
-		x = if i < count(amplitudes) then amplitudes[i] else 0.0
-		out.push(x + (if i >= gap then feedback * out[i - gap] else 0.0))
-	}
-	out
+	echoes = 0..(echoes_of(feedback) + 1)
+	[sum([feedback ^ k * dry_at(amplitudes, i - k * gap) for k in echoes]) for i in 0..(count(amplitudes) + tail)]
 }
 // the number of repeats until a feedback has died below echo_floor
 echoes_of(feedback) := if feedback <= 0 then 0 else min(max_echoes, ceil(log(echo_floor) / log(feedback)) as int)
@@ -179,7 +176,7 @@ def delayed(amplitudes) {
 	wet = comb(amplitudes, gap, delay_feedback, gap * echoes_of(delay_feedback))
 	[dry_at(amplitudes, i) + delay_mix * (wet[i] - dry_at(amplitudes, i)) for i in 0..count(wet)]
 }
-dry_at(amplitudes, i) := if i < count(amplitudes) then amplitudes[i] else 0.0
+dry_at(amplitudes, i) := if i >= 0 and i < count(amplitudes) then amplitudes[i] else 0.0
 // the dry signal and the average of four combs, reverb_mix of it, to reverb_seconds after its end
 def reverbed(amplitudes) {
 	if reverb_mix <= 0 { return amplitudes }
