@@ -210,7 +210,11 @@ fn number_value(number: &Number) -> Evaluated {
 		Number::BigInt(n) => exact(Rational::integer((*n).clone())),
 		Number::Quotient(n, d) => exact(Rational::new(BigInt::from(*n), BigInt::from(*d))),
 		Number::BigQuotient(q) => exact((*q).clone()),
-		// a decimal is a float (decision exact-default): `sqrt(2.0)` is 1.4142135623730951, not √2
+		// a decimal is the exact fraction it spells (decision exact-decimals): `sqrt(2.0)` is √2, as `sqrt(2)`
+		Number::Float(f) if Number::is_exact_decimal(*f) => {
+			let (n, d) = crate::wasm_emitter::exact::decimal_fraction(*f);
+			exact(Rational::new(n, d))
+		}
 		Number::Float(f) => Ok(Value::Float(*f)),
 		Number::Real(real) => Ok(Value::Real((*real).clone())),
 		Number::Complex(..) | Number::Nan | Number::Inf | Number::NegInf => Err(Stop::Unsupported),
@@ -411,6 +415,9 @@ fn root(real: Real, index: u32) -> Result<Real, Stop> {
 fn arithmetic(left: Value, op: Op, right: Value) -> Evaluated {
 	match beside_hyperreal(left, right) {
 		(Value::Float(a), b) => float_arithmetic(a, op, float_of(b)?),
+		// an approximation (sin(1)) is a float source: `sin(1) + 0.5` is a float (decision exact-decimals)
+		(Value::Real(Real::Approx(a)), b) => float_arithmetic(a, op, float_of(b)?),
+		(a, Value::Real(Real::Approx(b))) => float_arithmetic(float_of(a)?, op, b),
 		(a, Value::Float(b)) => float_arithmetic(float_of(a)?, op, b),
 		(Value::Real(a), Value::Real(b)) => Ok(Value::Real(real_arithmetic(a, op, b)?)),
 		_ => Err(Stop::Unsupported), // booleans are not numbers

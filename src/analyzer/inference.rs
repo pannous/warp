@@ -62,10 +62,10 @@ pub fn repeats_text(left: Kind, op: &Op, right: Kind) -> bool {
 
 /// `base ^ 0.5`, `base ^ (1/3)`: an exact base with a non-integral constant exponent is no exact number, it is computed as
 /// f64; `2^(n/12)`, an exponent that may be a ratio at run time, is decided then (node_pow): exact when it is whole
-pub fn arithmetic_kind_of_operands(left: Kind, op: &Op, right: Kind, right_operand: &Node) -> Kind {
+pub fn arithmetic_kind_of_operands(left: Kind, op: &Op, right: Kind, right_operand: &Node, scope: &Scope) -> Kind {
 	let constant_exponent = if *op == Op::Pow { constant_value(right_operand) } else { None };
 	let fractional_exponent = constant_exponent.is_some_and(|exponent| exponent.fract() != 0.0);
-	let ratio_exponent = *op == Op::Pow && constant_exponent.is_none() && divides(right_operand);
+	let ratio_exponent = *op == Op::Pow && constant_exponent.is_none() && may_be_ratio(right_operand, scope);
 	match arithmetic_kind(left, op, right) {
 		Kind::Int if fractional_exponent => Kind::Float,
 		Kind::Int if ratio_exponent => Kind::Data,
@@ -73,11 +73,13 @@ pub fn arithmetic_kind_of_operands(left: Kind, op: &Op, right: Kind, right_opera
 	}
 }
 
-/// An expression with a division `/` in it, whose exact value may be a ratio
-fn divides(node: &Node) -> bool {
+/// An expression whose exact value may be a ratio: a division `/` in it, a fraction literal (`-0.45`), a variable given one
+pub(crate) fn may_be_ratio(node: &Node, scope: &Scope) -> bool {
 	match node.drop_meta() {
-		Node::Key(left, op, right) => *op == Op::Div || divides(left) || divides(right),
-		Node::List(items, Bracket::Round, _) => items.iter().any(divides),
+		Node::Key(left, op, right) => *op == Op::Div || may_be_ratio(left, scope) || may_be_ratio(right, scope),
+		Node::List(items, Bracket::Round, _) => items.iter().any(|item| may_be_ratio(item, scope)),
+		Node::Symbol(name) => scope.lookup(name).is_some_and(|local| local.may_be_ratio),
+		number @ Node::Number(_) => super::checks::literal_number_type_word(number) == Some(super::checks::RATIONAL_WORD),
 		_ => false,
 	}
 }
@@ -127,6 +129,8 @@ fn interval_or(kind: Kind, argument: &Node, scope: &Scope) -> Kind {
 pub fn infer_type(node: &Node, scope: &Scope) -> Kind {
 	let node = node.drop_meta();
 	match node {
+		// Decimal literals are exact numbers, see wasm_emitter/exact.rs
+		Node::Number(Number::Float(f)) if Number::is_exact_decimal(*f) => Kind::Int,
 		Node::Number(Number::Float(_)) => Kind::Float,
 		Node::Number(Number::Complex(_, _) | Number::Real(_) | Number::Nan | Number::Inf | Number::NegInf) => Kind::Float,
 		// Integer and rational literals
@@ -144,7 +148,7 @@ pub fn infer_type(node: &Node, scope: &Scope) -> Kind {
 		Node::Key(_, Op::PlusMinus, _) => Kind::Data,
 		// Arithmetic: upgrade to Float if either operand is Float
 		Node::Key(left, op, right) if op.is_arithmetic() => {
-			arithmetic_kind_of_operands(infer_type(left, scope), op, infer_type(right, scope), right)
+			arithmetic_kind_of_operands(infer_type(left, scope), op, infer_type(right, scope), right, scope)
 		}
 		// Assignment/definition: type comes from value, ø as the Node a variable holding it is (`if c { f = [] }`)
 		Node::Key(_left, Op::Define | Op::Assign, right) => held_kind(right, || infer_type(right, scope)),
@@ -277,7 +281,7 @@ pub(super) fn infer_list_type(node: &Node, items: &[Node], bracket: &Bracket, se
 			return Kind::List;
 		}
 		// `now`, `2024-02-29`: a time, a kind the node operations meet at run time (wasm_emitter/times.rs)
-		if [crate::time::INSTANT_AT, crate::time::TIME_OF].contains(&name) {
+		if [crate::time::INSTANT_AT, crate::time::TIME_OF, crate::time::TIME_IN_ZONE].contains(&name) {
 			return Kind::Data;
 		}
 		if name == crate::library_words::LIST_SUM && items.len() == 3 {

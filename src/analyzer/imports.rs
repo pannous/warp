@@ -9,7 +9,8 @@ pub fn analyze_required_functions(ctx: &mut Context, node: &Node) {
 	let node = node.drop_meta();
 	match node {
 		Node::Number(number) => {
-			if !matches!(number, Number::Int(n) if crate::wasm_emitter::is_fixnum(*n)) {
+			let exact_decimal = matches!(number, Number::Float(value) if Number::is_exact_decimal(*value));
+			if exact_decimal || !matches!(number, Number::Int(n) if crate::wasm_emitter::is_fixnum(*n)) {
 				ctx.required_functions.insert(crate::wasm_emitter::INT_RUNTIME);
 			}
 		}
@@ -189,6 +190,7 @@ fn functions_of_call(word: &str) -> &'static [&'static str] {
 		ZERO_FILL_CALL => &[ZERO_FILL_CALL],
 		crate::time::INSTANT_AT => &[crate::time::INSTANT_AT, TIME_FIELD, crate::wasm_emitter::list_ops::RETURNED_ERROR],
 		crate::time::TIME_OF => &[TIME_FIELD, crate::wasm_emitter::list_ops::RETURNED_ERROR],
+		crate::time::TIME_IN_ZONE => &[crate::time::TIME_IN_ZONE, TIME_FIELD, crate::wasm_emitter::times::ZONE_NAMES, crate::wasm_emitter::list_ops::RETURNED_ERROR],
 		LIST_DROP_LAST => &[LIST_DROP_LAST],
 		REMOVED_VALUE_CALL => &[MAP_GET_OR, MAP_WITHOUT],
 		INSERT_AT_CALL | INSERT_EITHER_CALL => &[INSERT_AT_CALL],

@@ -85,7 +85,9 @@ fn method_arguments_read_system_values() {
 // natively the pointer over the paint window, 0 before one (card native-system)
 #[test]
 fn the_mouse_is_a_system_value_of_the_page() {
-	assert!(lowered("print mouse_x").contains("(system_value \"mouse_x\")"));
+	// a float source (decision exact-decimals): the pointer's pixels are a measurement
+	let read = lowered("print mouse_x");
+	assert!(read.contains("system_value") && read.contains("mouse_x") && read.contains("as float"), "{read}");
 	let pressed = lowered("if mouse_down { print 1 }");
 	assert!(pressed.contains("(system_value mouse_down)!=0"), "{pressed}");
 	is!("mouse_y = 3; mouse_y + 1", 4);

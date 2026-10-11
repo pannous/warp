@@ -3,11 +3,13 @@
 //! `Duration::plus` and `times` do for constants. node_add, node_sub and node_mul hand over when an operand is a time.
 
 use super::list_ops::RETURNED_ERROR;
-use super::times::{CIVIL_FROM_DAYS, DAYS_FROM_CIVIL, DAY_NANOS, TIME_FIELD, TIME_PARTS};
+use super::time_zones::{REJECT, ZONED_NODE};
+use super::times::{CIVIL_FROM_DAYS, DAYS_FROM_CIVIL, DAY_NANOS, TIME_FIELD, TIME_PARTS, ZONE_NAMES};
 use super::WasmGcEmitter;
 use crate::node::Node;
 use crate::operators::Op;
-use crate::time::{TimeForm, MONTHS_SHIFT, TIME_FORM_BITS, TIME_FORM_MASK};
+use crate::time::calendar::{MINUTE, SECOND};
+use crate::time::{TimeForm, MONTHS_SHIFT, OFFSET_SHIFT, TIME_FORM_BITS, TIME_FORM_MASK, ZONE_INDEX_MASK};
 use crate::type_kinds::{Kind, KIND_BITS, KIND_MASK};
 use wasm_encoder::*;
 use Instruction as I;
@@ -27,7 +29,7 @@ const DURATION_KIND: i64 = ((TimeForm::Duration as i64) << KIND_BITS) | Kind::Ti
 const NO_TIME_OF_DAY: &str = "a date has no time of day: add that duration to a local time";
 const NO_CALENDAR: &str = "an instant has no calendar: place it in a zone before adding months or days";
 const NO_DAY: &str = "the day does not exist in that month: use add(…, overflow: clamp) for the last day of the month";
-const ZONED_LATER: &str = "arithmetic on a zoned time at run time is not supported yet (card run-time-dates, stage B3)";
+const NO_ZONES: &str = "a zoned time at run time needs the time zone functions";
 const MISMATCHED: &str = "cannot subtract a date, a local time, an instant and a zoned time from each other: no implicit conversion between kinds of time";
 const NOT_ARITHMETIC: &str = "a time takes + or - a duration, a duration takes + or - a duration and * a whole number: nothing else is arithmetic on times";
 
@@ -51,7 +53,10 @@ const DAY: u32 = 15;
 const EPOCH_DAY: u32 = 16;
 const DAY_PART_NANOS: u32 = 17;
 const LAST_DAY: u32 = 18;
-const LOCAL_COUNT: usize = 16;
+const ZONE: u32 = 19;
+const EXACT_NANOS: u32 = 20;
+const IS_ZONED: u32 = 21;
+const LOCAL_COUNT: usize = 19;
 
 type Emit = Vec<I<'static>>;
 
@@ -162,7 +167,11 @@ impl WasmGcEmitter {
 	fn emit_shift_time(&mut self, f: &mut Function) {
 		let is_form = |form: TimeForm| vec![I::LocalGet(FORM), I::I64Const(form as i64), I::I64Eq];
 		Self::emit_list(f, &[I::LocalGet(KIND_A), I::I64Const(KIND_BITS), I::I64ShrU, I::I64Const(TIME_FORM_MASK), I::I64And, I::LocalSet(FORM)]);
-		Self::emit_if(f, &is_form(TimeForm::Zoned), |f| self.emit_time_failure(f, ZONED_LATER));
+		if self.ctx.required_functions.contains(ZONE_NAMES) {
+			self.emit_zoned_start(f);
+		} else {
+			Self::emit_if(f, &is_form(TimeForm::Zoned), |f| self.emit_time_failure(f, NO_ZONES));
+		}
 		Self::emit_if(f, &is_form(TimeForm::Instant), |f| {
 			let has_calendar_parts = vec![I::LocalGet(MONTHS), I::I64Const(0), I::I64Ne, I::LocalGet(DAYS), I::I64Const(0), I::I64Ne, I::I32Or];
 			Self::emit_if(f, &has_calendar_parts, |f| self.emit_time_failure(f, NO_CALENDAR));
@@ -199,12 +208,45 @@ impl WasmGcEmitter {
 		Self::emit_list(f, &[I::LocalGet(EPOCH_DAY), I::I64Const(DAY_NANOS), I::I64Mul, I::LocalGet(DAY_PART_NANOS), I::I64Add, I::LocalGet(NANOS), I::I64Add]);
 		Self::emit_list(f, &is_form_date());
 		Self::emit_list(f, &[I::Select, I::LocalSet(POSITION_A)]);
+		if self.ctx.required_functions.contains(ZONE_NAMES) {
+			self.emit_zoned_finish(f);
+		}
 		self.emit_return_time(f, KIND_A, POSITION_A);
+	}
+
+	/// A zoned time: exact durations move the instant; calendar ones move the wall time, which is then resolved
+	/// again (calendar.rs `Time::add`). The wall time carries on as a local time, IS_ZONED remembers to resolve it
+	fn emit_zoned_start(&mut self, f: &mut Function) {
+		let is_zoned = [I::LocalGet(FORM), I::I64Const(TimeForm::Zoned as i64), I::I64Eq];
+		Self::emit_if(f, &is_zoned, |f| {
+			Self::emit_list(f, &[I::LocalGet(KIND_A), I::I64Const(DAYS_SHIFT), I::I64ShrU, I::I64Const(ZONE_INDEX_MASK), I::I64And, I::LocalSet(ZONE)]);
+			let has_calendar_parts = vec![I::LocalGet(MONTHS), I::I64Const(0), I::I64Ne, I::LocalGet(DAYS), I::I64Const(0), I::I64Ne, I::I32Or, I::I32Eqz];
+			Self::emit_if(f, &has_calendar_parts, |f| {
+				Self::emit_list(f, &[I::LocalGet(ZONE), I::LocalGet(POSITION_A), I::LocalGet(NANOS), I::I64Add]);
+				self.call(f, ZONED_NODE);
+				f.instruction(&I::Return);
+			});
+			Self::emit_list(f, &[I::LocalGet(KIND_A), I::I64Const(KIND_BITS + OFFSET_SHIFT), I::I64ShrS, I::I64Const(MINUTE * SECOND as i64), I::I64Mul]);
+			Self::emit_list(f, &[I::LocalGet(POSITION_A), I::I64Add, I::LocalSet(POSITION_A)]);
+			Self::emit_list(f, &[I::I64Const(TimeForm::Local as i64), I::LocalSet(FORM), I::LocalGet(NANOS), I::LocalSet(EXACT_NANOS), I::I64Const(0), I::LocalSet(NANOS), I::I64Const(1), I::LocalSet(IS_ZONED)]);
+		});
+	}
+
+	/// The shifted wall time of a zoned time resolved in its zone (no choice: a skipped or repeated one fails), then moved by the exact part
+	fn emit_zoned_finish(&mut self, f: &mut Function) {
+		Self::emit_if(f, &[I::LocalGet(IS_ZONED), I::I64Const(0), I::I64Ne], |f| {
+			Self::emit_list(f, &[I::I64Const(REJECT), I::LocalSet(SPARE)]);
+			self.emit_resolved_instant(f, ZONE, POSITION_A, SPARE, SIGN);
+			Self::emit_list(f, &[I::LocalGet(ZONE), I::LocalGet(POSITION_A), I::LocalGet(EXACT_NANOS), I::I64Add]);
+			self.call(f, ZONED_NODE);
+			f.instruction(&I::Return);
+		});
 	}
 
 	/// `a - b` of two times of one form: days between dates, else an exact duration
 	fn emit_time_difference(&mut self, f: &mut Function) {
-		Self::emit_if(f, &[I::LocalGet(KIND_A), I::LocalGet(KIND_B), I::I64Ne], |f| self.emit_time_failure(f, MISMATCHED));
+		let form_of = |kind: u32| vec![I::LocalGet(kind), I::I64Const(KIND_BITS), I::I64ShrU, I::I64Const(TIME_FORM_MASK), I::I64And];
+		Self::emit_if(f, &[form_of(KIND_A), form_of(KIND_B), vec![I::I64Ne]].concat(), |f| self.emit_time_failure(f, MISMATCHED));
 		Self::emit_list(f, &[I::LocalGet(POSITION_A), I::LocalGet(POSITION_B), I::I64Sub, I::LocalSet(NANOS)]);
 		Self::emit_if(f, &[I::LocalGet(KIND_A), I::I64Const(KIND_BITS), I::I64ShrU, I::I64Const(TIME_FORM_MASK), I::I64And, I::I64Const(TimeForm::Date as i64), I::I64Eq], |f| {
 			f.instruction(&I::LocalGet(NANOS));
@@ -232,7 +274,7 @@ impl WasmGcEmitter {
 		]);
 	}
 
-	fn emit_time_failure(&mut self, f: &mut Function, message: &str) {
+	pub(super) fn emit_time_failure(&mut self, f: &mut Function, message: &str) {
 		self.emit_trap_detail(f, &Node::Text(message.to_string()));
 		self.emit_runtime_error(f, RETURNED_ERROR);
 	}
