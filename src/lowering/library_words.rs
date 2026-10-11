@@ -158,9 +158,10 @@ const LIST_CONSTRUCTORS: [&str; 4] = ["listOf", "mutableListOf", "arrayOf", "arr
 /// to 3 digits after the point (`round(x)` stays the builtin); `xs.first(3)`, `first 3 of xs` the first 3 items,
 /// `last(xs, 2)` the last 2 (lib/prelude.warp)
 const ARITY_VARIANTS: [(&str, usize, &str); 3] = [("round", 2, "round_to"), ("first", 2, "first_items"), ("last", 2, "last_items")];
-/// Methods a later pass lowers to prelude words: `x.pop(k)` to popped_item and popped_rest, `x.clear()` to cleared
-/// (declaration_lowering removed_key, cleared_collection)
-const LOWERED_TO_PRELUDE: [(&str, &[&str]); 2] = [("pop", &["popped_item", "popped_rest"]), ("clear", &["cleared"])];
+/// Methods a later pass lowers to prelude words: `x.pop(k)` (and `delete x[k]`, mutation::lower_deletes) to popped_item
+/// and popped_rest, `x.clear()` to cleared (declaration_lowering removed_key, cleared_collection)
+const POPPED_WORDS: &[&str] = &["popped_item", "popped_rest"];
+const LOWERED_TO_PRELUDE: [(&str, &[&str]); 3] = [("pop", POPPED_WORDS), ("delete", POPPED_WORDS), ("clear", &["cleared"])];
 const IS_ALPHA: &str = "is_alpha";
 /// Hidden variables and placeholders of the `try`/`assert` templates
 /// `try_tmp_value` of a try template becomes the temporary `try·value·3`

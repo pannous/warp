@@ -20,6 +20,18 @@ pub(crate) fn assign(target: Node, value: Node) -> Node {
 	key(target, Op::Assign, value)
 }
 
+/// Where an entry is and its key: `x[k]` (parsed as `x#(k+1)`) and `x.k` (the text "k") as `x#k` was written, which
+/// counts positions from 1 (`true`)
+pub(crate) fn written_entry(target: &Node) -> Option<(&Node, Node, bool)> {
+	let Node::Key(place, op, index) = target.drop_meta() else { return None };
+	match (op, index.drop_meta()) {
+		(Op::Dot, Node::Symbol(field)) => Some((place, Node::Text(field.clone()), false)),
+		(Op::Hash, Node::Key(key, Op::Add, one)) if *one.drop_meta() == int(1) => Some((place, key.as_ref().clone(), false)),
+		(Op::Hash, key) => Some((place, key.clone(), true)),
+		_ => None,
+	}
+}
+
 /// `play 440` alone or as the one statement of a block `{play 440}`: the words of a call (card statement-block)
 pub(crate) fn is_spaced_call(bracket: &Bracket, separator: &Separator) -> bool {
 	matches!(bracket, Bracket::None | Bracket::Curly) && *separator == Separator::Space
