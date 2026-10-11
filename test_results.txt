@@ -354,6 +354,8 @@ PASSED:
   ✓ control::test_page_events::a_raised_page_event_runs_its_handler_as_any_event
   ✓ control::test_page_events::the_last_name_of_a_program_with_page_events_is_its_output_binding
   ✓ control::test_page_events::the_last_name_of_a_program_with_timers_is_its_output_binding
+  ✓ control::test_parallel_let::a_parallel_let_binds_each_name_to_its_call
+  ✓ control::test_parallel_let::a_recursive_parallel_let_forks_only_while_cores_are_free
   ✓ control::test_parallel_map::a_parallel_all_call_runs_its_items_at_once
   ✓ control::test_parallel_map::a_parallel_form_that_runs_sequentially_warns
   ✓ control::test_parallel_map::a_parallel_loop_updating_a_copy_warns
@@ -2942,7 +2944,6 @@ PASSED:
   ✓ programs::test_samples::test_quicksort
   ✓ programs::test_samples::test_raytracer
   ✓ programs::test_samples::test_sin
-  ✓ programs::test_samples::test_sine
   ✓ programs::test_samples::test_snake
   ✓ programs::test_samples::test_sudoku
   ✓ programs::test_samples::test_sum
@@ -4682,4 +4683,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-10 ignored, 4677 passed, 0 failed, 4677 total tested
+10 ignored, 4678 passed, 0 failed, 4678 total tested
