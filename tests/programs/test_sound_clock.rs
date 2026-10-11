@@ -31,14 +31,14 @@ fn assert_queued(program: &str, seconds: f64) {
 
 #[test]
 fn sounds_queue_on_the_audio_clock() {
-	assert_queued("play C4 for 2s", 2.0);
-	assert_queued("play C4 for 2s\nplay [E4 G4] for 1s", 3.0);
-	assert_queued("melody [C4 E4] each 1s", 2.0);
+	assert_queued("use sound\nplay C4 for 2s", 2.0);
+	assert_queued("use sound\nplay C4 for 2s\nplay [E4 G4] for 1s", 3.0);
+	assert_queued("use sound\nmelody [C4 E4] each 1s", 2.0);
 }
 
 #[test]
 fn stop_sound_empties_the_queue() {
-	assert!(printed("play C4 for 2s\nstop_sound\nsound_queued()").0.contains('0'));
+	assert!(printed("use sound\nplay C4 for 2s\nstop_sound\nsound_queued()").0.contains('0'));
 }
 
 #[test]

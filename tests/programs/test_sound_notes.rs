@@ -5,10 +5,10 @@ use crate::is;
 
 #[test]
 fn sharps_and_flats_are_notes() {
-	is!("play F#4 for 5ms\nround(F#4 * 100)", 36999);
-	is!("play Bb3 for 5ms\nBb3", 233.08);
-	is!("play C♯5 for 5ms\nC♯5 == D♭5", true);
-	is!("melody [C4 Eb4 G4] each 5ms\nEb4", 311.13);
+	is!("use sound\nplay F#4 for 5ms\nround(F#4 * 100)", 36999);
+	is!("use sound\nplay Bb3 for 5ms\nBb3", 233.08);
+	is!("use sound\nplay C♯5 for 5ms\nC♯5 == D♭5", true);
+	is!("use sound\nmelody [C4 Eb4 G4] each 5ms\nEb4", 311.13);
 }
 
 #[test]

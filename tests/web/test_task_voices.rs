@@ -6,10 +6,10 @@ use crate::is;
 
 #[test]
 fn the_starter_does_not_queue_behind_its_task() {
-	is!("job = go { play E4 for 2s }\nawait job\nplay C4 for 0.1s\nsound_queued() < 1", true); // queued behind: 2.1
+	is!("use sound\njob = go { play E4 for 2s }\nawait job\nplay C4 for 0.1s\nsound_queued() < 1", true); // queued behind: 2.1
 }
 
 #[test]
 fn a_task_starts_where_its_starter_stands() {
-	is!("play C4 for 5s\njob = go { play E4 for 5s\nsound_queued() > 6 }\nawait job", true); // voiced: 10, from now: 5
+	is!("use sound\nplay C4 for 5s\njob = go { play E4 for 5s\nsound_queued() > 6 }\nawait job", true); // voiced: 10, from now: 5
 }

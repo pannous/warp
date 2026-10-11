@@ -225,7 +225,8 @@ run natively and in the browser.
 - P169/P191: `use math` is warp's math module with descriptive names (square, sine, cube_root …), forwarding to C until
   warp has its own; `use cmath` is the raw C library.
 - P170: module words work bare and qualified (`zip(a, b)`, `list.zip(a, b)`).
-- P171: new words stay in their modules, except `write` and `exists` (global); a file URL loads the file module.
+- P171: new words stay in their modules, except `write` and `exists` (global); a file URL loads the file module;
+  play, beep, stop_sound and wait_sound load sound, its other words need `use sound` (card bizarre-global).
 - P183: std modules are backed only by warp, host words or C compiled to wasm; regex is the common subset of Rust regex
   and JS RegExp with a loud error for the rest; the file module's append is `file.append(path, text)`.
 

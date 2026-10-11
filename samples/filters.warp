@@ -1,6 +1,8 @@
 #!/usr/bin/env warp
 // A synth voice: a resonant lowpass filter, vibrato, tremolo, detuned unison voices and stereo pan.
 
+use sound
+
 wave_shape = "sawtooth"
 loudness = -9 dB
 filter = "lowpass"              // or "highpass", "bandpass"

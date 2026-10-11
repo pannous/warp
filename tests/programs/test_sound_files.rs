@@ -26,8 +26,8 @@ fn errors_of(program: &str) -> String {
 #[test]
 fn a_music_file_plays_in_the_background() {
 	let wav = sound_file("sound-files", "beep.wav", &warp::sound::wav(&[32768, 40000, 32768], 22050));
-	assert!(errors_of(&format!("play \"{}\"\n7", wav.display())).contains(&format!("sound file wav: {}", wav.display())));
-	assert!(errors_of(&format!("play_file(\"{}\")\nstop_sound\n7", wav.display())).contains("sound file wav: "));
+	assert!(errors_of(&format!("use sound\nplay \"{}\"\n7", wav.display())).contains(&format!("sound file wav: {}", wav.display())));
+	assert!(errors_of(&format!("use sound\nplay_file(\"{}\")\nstop_sound\n7", wav.display())).contains("sound file wav: "));
 }
 
 /// card sound-file-failure: a file only its first bytes call music is decoded first (ffprobe, afinfo), so a broken one
