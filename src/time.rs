@@ -8,7 +8,7 @@ pub mod calendar;
 
 pub use calendar::{with_rules, Disambiguation, Duration, Overflow, Time, TzRules, Zone, Zoned};
 use crate::extensions::numbers::Number;
-use crate::node::{error, Node, Separator};
+use crate::node::{error, Bracket, Node, Separator};
 use crate::operators::Op;
 use crate::wasm_emitter::time_zones::{EARLIER, LATER, REJECT};
 use std::collections::HashMap;
@@ -166,23 +166,24 @@ pub fn time_node(info: i64, position: Option<Number>) -> Node {
 	}
 }
 
-/// A program that uses dates or times: Err(its value) when it is answered at compile time, else the program with its
-/// constant time expressions folded for the run time
-pub fn lower(program: Node) -> Result<Node, Node> {
+/// A zoned time's field: the version of the zone rules it was made with
+pub const TZDATA_FIELD: &str = "tzdata";
+
+/// A program that uses dates or times, its constant time expressions folded for the run time (stage B4: no
+/// program is answered whole at compile time any more)
+pub fn lower(program: Node) -> Node {
 	if !mentions_time(&program) || !needs_folding(&program) {
-		return Ok(program);
+		return program;
 	}
-	match evaluate(&program, &mut Scope::new()) {
-		Ok(value) => Err(value.into_node()),
-		Err(message) if !message.starts_with(UNSUPPORTED) => Err(error(&message)),
-		Err(_) => Ok(fold_constants(program)),
-	}
+	fold_constants(program)
 }
 
 /// The largest expressions of time literals and time words alone, folded: what remains runs
 fn fold_constants(node: Node) -> Node {
 	if mentions_time(&node) && only_time_words(&node) {
 		match evaluate(&node, &mut Scope::new()) {
+			// a quantity, `2 hours in minutes`: written as `120min` for the units' lowering
+			Ok(Value::Converted(quantity)) if !matches!(quantity, Node::Error(_)) => return crate::warp_parser::parse(&quantity.serialize()),
 			Ok(value) => return run_time_constant(value),
 			Err(message) if !message.starts_with(UNSUPPORTED) => return error(&message),
 			Err(_) => {}
@@ -190,6 +191,8 @@ fn fold_constants(node: Node) -> Node {
 	}
 	match node {
 		Node::Data(_) if time_data(&node) => not_at_run_time_yet(&node.serialize()),
+		// `(t in "UTC").year`: the group around a placement is its call's own
+		Node::List(mut items, Bracket::Round, _) if items.len() == 1 && zone_placement(&items[0]).is_some() => fold_constants(items.remove(0)),
 		Node::List(..) if zone_placement(&node).is_some() => {
 			let (time, zone, choice) = zone_placement(&node).expect("guarded");
 			let number = |n: i64| Node::Number(Number::Int(n));
@@ -228,8 +231,17 @@ fn only_time_words(node: &Node) -> bool {
 		// a field name: `2024-02-29.month`
 		Node::Key(owner, Op::Dot, field) if matches!(field.drop_meta(), Node::Symbol(_)) => only_time_words(owner),
 		Node::Key(left, _, right) => only_time_words(left) && only_time_words(right),
+		// a duration in a unit of the units module: `1 day in h`
+		Node::List(items, _, _) if converted_to_unit(items) => only_time_words(&items[0]),
 		Node::List(items, _, _) => items.iter().all(only_time_words),
 		Node::Number(_) | Node::Text(_) | Node::True | Node::False | Node::Data(_) => true,
+		_ => false,
+	}
+}
+
+fn converted_to_unit(items: &[Node]) -> bool {
+	match items {
+		[_, keyword, unit] => (keyword.is_symbol("in") || keyword.is_symbol("as")) && matches!(unit.drop_meta(), Node::Symbol(word) if crate::units::names_unit(word)),
 		_ => false,
 	}
 }
@@ -486,7 +498,7 @@ fn binary(left: &Node, op: Op, right: &Node, scope: &mut Scope) -> Result<Value,
 			};
 			match evaluate(left, scope)? {
 				// The time zone rules version a zoned time was resolved with
-				Value::Time(Time::Zoned(zoned)) if field == "tzdata" => Ok(Value::Text(zoned.rules.version.to_string())),
+				Value::Time(Time::Zoned(zoned)) if field == TZDATA_FIELD => Ok(Value::Text(zoned.rules.version.to_string())),
 				// the wall clock of an instant is the one where the program runs
 				Value::Time(Time::Instant(_)) if field != EPOCH_SECONDS => Err(unsupported(right)),
 				Value::Time(time) => time.field(field).map(Value::Int),
