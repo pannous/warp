@@ -49,7 +49,6 @@ PASSED:
   ✓ control::test_braceless_output_calls::a_braceless_output_call_is_worth_an_int
   ✓ control::test_branch_assigned_variables::a_text_assigned_in_both_branches_is_read_after_them
   ✓ control::test_broadcast::a_broadcast_is_a_statement_of_no_value
-  ✓ control::test_broadcast::a_broadcast_reaches_another_program
   ✓ control::test_broadcast::a_program_hears_its_own_broadcast
   ✓ control::test_broadcast::nobody_listening_is_no_error
   ✓ control::test_catch_binding::a_caught_error_reads_as_its_message_in_text
@@ -3018,6 +3017,7 @@ PASSED:
   ✓ programs::test_sound_spectrum::a_tone_fills_its_own_band
   ✓ programs::test_sound_spectrum::silence_and_the_end_are_empty
   ✓ programs::test_sound_spectrum::the_gpu_visualizer_raymarches_while_it_plays
+  ✓ programs::test_sound_spectrum::the_visualizer_paints_while_it_plays
   ✓ programs::test_sound_synth::gain_in_decibels
   ✓ programs::test_sound_synth::noise_is_a_wave
   ✓ programs::test_sound_synth::the_envelope_rises_decays_sustains_and_releases
@@ -3554,6 +3554,10 @@ PASSED:
   ✓ types::test_generic_types::test_comparisons_and_shifts_are_not_type_applications
   ✓ types::test_generic_types::test_nested_type_applications
   ✓ types::test_generic_types::test_type_of_a_literal_list_stays
+  ✓ types::test_hex_int::a_byte_shows_as_hex
+  ✓ types::test_hex_int::hex_acts_as_its_int
+  ✓ types::test_hex_int::hex_shows_as_hex
+  ✓ types::test_hex_int::print_shows_hex
   ✓ types::test_inline_unions::a_covered_part_is_dropped
   ✓ types::test_inline_unions::a_part_that_is_no_builtin_type_is_refused
   ✓ types::test_inline_unions::an_inline_union_holds_either_kind
@@ -3868,6 +3872,10 @@ PASSED:
   ✓ types::test_types::test_types_simple
   ✓ types::test_types::test_types_simple2
   ✓ types::test_types::test_user_type_wasm_emission
+  ✓ types::test_unknown_conversion::an_unknown_as_word_is_loud
+  ✓ types::test_unknown_conversion::fixed_width_casts
+  ✓ types::test_unknown_conversion::known_as_words_still_convert
+  ✓ types::test_unknown_conversion::u8_and_uint8_are_byte
   ✓ types::test_upcast_fields::a_cast_or_a_match_reads_it
   ✓ types::test_upcast_fields::a_subclass_field_through_the_declared_parent_is_an_error
   ✓ types::test_upcast_fields::unannotated_code_reads_it_at_run_time
@@ -4699,7 +4707,7 @@ PASSED:
   ✓ wisp_parser::tests::test_wisp_tag
 
 FAILED:
-  ✗ programs::test_sound_spectrum::the_visualizer_paints_while_it_plays
+  ✗ control::test_broadcast::a_broadcast_reaches_another_program
 
 SUMMARY:
-10 ignored, 4696 passed, 1 failed, 4697 total tested
+10 ignored, 4704 passed, 1 failed, 4705 total tested
