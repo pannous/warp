@@ -2167,6 +2167,8 @@ PASSED:
   ✓ numbers::test_float_zero_and_compound::test_float_compound_assignment_in_a_loop
   ✓ numbers::test_float_zero_and_compound::test_float_zero_fill_holds_floats
   ✓ numbers::test_fourth_root::fourth_root_glyph
+  ✓ numbers::test_host_floats::an_exact_operation_a_float_uses_rounds_once
+  ✓ numbers::test_host_floats::the_pointer_is_a_float_source
   ✓ numbers::test_hyperreals::test_epsilon_is_positive_and_smaller_than_every_real
   ✓ numbers::test_hyperreals::test_epsilon_times_omega_is_one
   ✓ numbers::test_hyperreals::test_no_silent_approximation_of_hyperreals
@@ -3041,6 +3043,7 @@ PASSED:
   ✓ scope::test_globals::test_global_int_simple
   ✓ scope::test_globals::test_global_reassignment
   ✓ scope::test_globals::test_global_with_expression
+  ✓ scope::test_node_widening_in_loops::a_read_before_a_node_widening_in_a_loop_holds_the_node
   ✓ scope::test_prefixed_declarations::a_fitting_value_is_accepted_with_a_prefixed_type
   ✓ scope::test_prefixed_declarations::a_value_of_the_wrong_kind_is_refused_with_a_prefixed_type
   ✓ scope::test_result_word::a_program_may_name_its_own_result
@@ -4635,4 +4638,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-10 ignored, 4630 passed, 0 failed, 4630 total tested
+10 ignored, 4633 passed, 0 failed, 4633 total tested
