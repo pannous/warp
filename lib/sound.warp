@@ -146,13 +146,14 @@ global delay_time = 0.0 as float
 global delay_feedback = 0.4 as float
 global delay_mix = 0.5 as float
 global reverb_mix = 0.0 as float
+// floats (1.0f): exact ratios can't cross into a `go` task in the browser yet
 // below this share of the level the echoes and the room's tail are cut off
-echo_floor = 0.01
+echo_floor = 0.01f
 max_echoes = 8
-reverb_seconds = 0.6
+reverb_seconds = 0.6f
 // the delays (seconds) and the feedback of the four parallel combs of the reverb (Schroeder)
-reverb_delays = [0.0297, 0.0371, 0.0411, 0.0437]
-reverb_feedback = 0.75
+reverb_delays = [0.0297f, 0.0371f, 0.0411f, 0.0437f]
+reverb_feedback = 0.75f
 effects_on() := distortion > 0 or delay_time > 0 or reverb_mix > 0
 
 // a soft clipper: tanh bends the peaks the harder the drive, the loudest sample stays at the sound's loudness
