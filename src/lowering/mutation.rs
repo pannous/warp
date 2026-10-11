@@ -127,7 +127,7 @@ fn deleted_entry(statement: &Node) -> Option<Node> {
 	}
 	let (place, key, counted_from_one) = written_entry(target)?;
 	let key = match key.drop_meta() {
-		Node::Number(position) if counted_from_one => Node::Number(position.clone() - Number::Int(1)),
+		Node::Number(position) if counted_from_one => Node::Number(*position - Number::Int(1)),
 		Node::Text(_) => key,
 		_ if counted_from_one => super::nodes::key(key, Op::Sub, int(1)),
 		_ => key,
