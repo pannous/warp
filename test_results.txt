@@ -1889,6 +1889,8 @@ PASSED:
   ✓ modules::test_std_collections::other_languages_method_names_are_the_collections_methods
   ✓ modules::test_std_collections::the_size_of_an_instance_through_len_and_count
   ✓ modules::test_std_coverage::every_library_word_is_called_by_a_test
+  ✓ modules::test_std_exec::a_failing_command_is_an_error
+  ✓ modules::test_std_exec::exec_gives_what_the_command_printed
   ✓ modules::test_std_file_copy::a_copy_of_a_std_module_knows_the_foreign_names
   ✓ modules::test_std_file::a_file_url_loads_the_module_and_append_is_qualified
   ✓ modules::test_std_file::use_file_lists_a_folder
@@ -4342,6 +4344,9 @@ PASSED:
   ✓ web::test_webgpu::a_render_shader_that_does_not_compile_says_where
   ✓ web::test_webgpu::a_shader_that_does_not_compile_says_where
   ✓ web::test_webgpu::a_value_that_is_no_number_says_so
+  ✓ web::test_webview::a_program_shows_its_page_with_what_a_command_printed
+  ✓ web::test_webview::an_html_file_shows_in_the_web_view
+  ✓ web::test_webview::without_check_no_window_opens_under_warp_no_window
   ✓ welcoming::test_adopted_acknowledgements::acknowledgements_of_the_old_answers_file_are_adopted_once
   ✓ welcoming::test_advice_fixes::a_block_assignment_offers_global_at_main
   ✓ welcoming::test_advice_fixes::advice_without_a_replacement_offers_no_fix
@@ -4738,4 +4743,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-10 ignored, 4733 passed, 0 failed, 4733 total tested
+10 ignored, 4738 passed, 0 failed, 4738 total tested
