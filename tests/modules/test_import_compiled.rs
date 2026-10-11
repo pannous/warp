@@ -7,8 +7,9 @@ use crate::is;
 const SHAPES: &str = "class P{x:int; y:int; sum() := x + y}\ndef area(w:int, h:int) { w * h }\ndef greet(name:text) { \"hi \" + name }\ndef total(numbers) { sum(numbers) }\ndef width(p:P) { p.x }\ndef origin() { P(0, 7) }\n0";
 
 #[cfg(feature = "native")]
-fn imported(name: &str, source: &str) -> String {
-	let directory = crate::common::scratch_directory("import_compiled");
+// each test its own folder: tests run in parallel, and two writing one shapes.wasm read each other's half-written file
+fn imported(folder: &str, name: &str, source: &str) -> String {
+	let directory = crate::common::scratch_directory("import_compiled").join(folder);
 	std::fs::create_dir_all(&directory).unwrap();
 	let path = directory.join(format!("{name}.wasm"));
 	std::fs::write(&path, warp::pipeline::compile(source).expect("a module").bytes).unwrap();
@@ -18,7 +19,7 @@ fn imported(name: &str, source: &str) -> String {
 #[cfg(feature = "native")]
 #[test]
 fn a_compiled_modules_functions_take_and_give_values() {
-	let shapes = imported("shapes", SHAPES);
+	let shapes = imported("functions", "shapes", SHAPES);
 	is!(&format!("{shapes}area(2, 3)"), 6);
 	is!(&format!("{shapes}greet(\"Bo\")"), "hi Bo");
 	is!(&format!("{shapes}shapes.greet(\"Ann\")"), "hi Ann");
@@ -28,7 +29,7 @@ fn a_compiled_modules_functions_take_and_give_values() {
 #[cfg(feature = "native")]
 #[test]
 fn a_compiled_modules_classes_are_the_programs_too() {
-	let shapes = imported("shapes", SHAPES);
+	let shapes = imported("classes", "shapes", SHAPES);
 	is!(&format!("{shapes}P(1, 2).y"), 2);
 	is!(&format!("{shapes}shapes.P(1, 2).x"), 1);
 	is!(&format!("{shapes}P(3, 4).sum()"), 7);
@@ -62,7 +63,7 @@ fn a_module_for_any_host_can_be_read_by_the_browser() {
 #[cfg(feature = "native")]
 #[test]
 fn an_instance_passed_to_a_compiled_module_is_shared() {
-	let moving = imported("moving", "class P{x:int; y:int}\ndef moved(p:P) { p.x = 9; 0 }\ndef grown(numbers) { numbers.add(4); 0 }\n0");
+	let moving = imported("shared", "moving", "class P{x:int; y:int}\ndef moved(p:P) { p.x = 9; 0 }\ndef grown(numbers) { numbers.add(4); 0 }\n0");
 	is!(&format!("{moving}p = P(1, 2)\nmoved(p)\np.x"), 9);
 	is!(&format!("{moving}q = P(1, 2)\nr = q\nmoved(q)\nr.x"), 9);
 	is!(&format!("{moving}numbers = [1, 2, 3]\ngrown(numbers)\ncount(numbers)"), 4);
