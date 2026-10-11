@@ -1809,6 +1809,8 @@ PASSED:
   ✓ modules::test_import_compiled::a_bare_name_imports_a_compiled_module
   ✓ modules::test_import_compiled::a_compiled_fixtures_change_of_an_instance_is_the_programs
   ✓ modules::test_import_compiled::a_compiled_fixtures_values_and_classes_cross
+  ✓ modules::test_import_compiled::a_compiled_modules_classes_are_the_programs_too
+  ✓ modules::test_import_compiled::a_compiled_modules_functions_take_and_give_values
   ✓ modules::test_import_compiled::a_module_for_any_host_can_be_read_by_the_browser
   ✓ modules::test_import_compiled::an_instance_passed_to_a_compiled_module_is_shared
   ✓ modules::test_import_words::a_hashed_import_keyword_keeps_the_line_a_comment
@@ -2910,6 +2912,9 @@ PASSED:
   ✓ programs::test_playground_samples::every_excluded_sample_exists
   ✓ programs::test_playground_samples::every_playground_sample_runs_without_an_error
   ✓ programs::test_samples_run_cleanly::every_sample_runs_without_a_compiler_error
+  ✓ programs::test_samples_run_cleanly::every_sample_runs_without_a_compiler_error_slice_2
+  ✓ programs::test_samples_run_cleanly::every_sample_runs_without_a_compiler_error_slice_3
+  ✓ programs::test_samples_run_cleanly::every_sample_runs_without_a_compiler_error_slice_4
   ✓ programs::test_samples::test_ackermann
   ✓ programs::test_samples::test_binary_tree
   ✓ programs::test_samples::test_calculator
@@ -4658,8 +4663,6 @@ PASSED:
   ✓ wisp_parser::tests::test_wisp_tag
 
 FAILED:
-  ✗ modules::test_import_compiled::a_compiled_modules_classes_are_the_programs_too
-  ✗ modules::test_import_compiled::a_compiled_modules_functions_take_and_give_values
 
 SUMMARY:
-10 ignored, 4655 passed, 2 failed, 4657 total tested
+10 ignored, 4660 passed, 0 failed, 4660 total tested
