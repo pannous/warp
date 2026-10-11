@@ -2331,6 +2331,10 @@ PASSED:
   ✓ numbers::test_recursive_law::recursive_laws_are_proved_by_induction
   ✓ numbers::test_recursive_units::a_recursive_function_keeps_its_dimensions
   ✓ numbers::test_recursive_units::a_recursive_function_takes_quantities
+  ✓ numbers::test_repeating_decimal::parentheses_after_digits_still_multiply
+  ✓ numbers::test_repeating_decimal::ratios_as_decimal_overline_their_period
+  ✓ numbers::test_repeating_decimal::repeating_decimal_literals_are_exact
+  ✓ numbers::test_repeating_decimal::terminating_and_long_periods_as_decimal
   ✓ numbers::test_round_to_digits::round_to_digits
   ✓ numbers::test_round_to_digits::round_without_digits_is_whole
   ✓ numbers::test_rounding_in_functions::test_rounding_builtins_work_inside_function_bodies
@@ -3014,7 +3018,6 @@ PASSED:
   ✓ programs::test_sound_spectrum::a_tone_fills_its_own_band
   ✓ programs::test_sound_spectrum::silence_and_the_end_are_empty
   ✓ programs::test_sound_spectrum::the_gpu_visualizer_raymarches_while_it_plays
-  ✓ programs::test_sound_spectrum::the_visualizer_paints_while_it_plays
   ✓ programs::test_sound_synth::gain_in_decibels
   ✓ programs::test_sound_synth::noise_is_a_wave
   ✓ programs::test_sound_synth::the_envelope_rises_decays_sustains_and_releases
@@ -4696,6 +4699,7 @@ PASSED:
   ✓ wisp_parser::tests::test_wisp_tag
 
 FAILED:
+  ✗ programs::test_sound_spectrum::the_visualizer_paints_while_it_plays
 
 SUMMARY:
-10 ignored, 4693 passed, 0 failed, 4693 total tested
+10 ignored, 4696 passed, 1 failed, 4697 total tested
