@@ -25,7 +25,6 @@ A time is a `$Node` of `Kind::Time` (18): `data` = `$i64box` of its position, `v
 - If the evaluator meets something it does not know (a variable, print, a loop: an `UNSUPPORTED` error),
   `fold_constants` folds the largest constant time expressions (time literals, unit and time words, field names after
   a dot) into `time_of(info, position)`, and the rest runs.
-- Known edge: `m = 1 month 2 days` (juxtaposed durations) folds item by item and fails; `1 month + 2 days` works.
 - Known edge: a variable named like a unit word (`days`) counts as a time word.
 
 ## The local wall clock of an instant
@@ -53,7 +52,14 @@ An instant's calendar fields (`now.hour`, `t.year`, …) are the wall clock of t
 - node_order compares two times of one form by position; two forms trap with "no implicit conversion between kinds
   of time", durations with "cannot order durations".
 
+## Arithmetic (stage B2, wasm_emitter/time_arithmetic.rs)
+node_add, node_sub and node_mul hand over to `time_arithmetic(a, b, operator)` when an operand is a time, as calendar.rs
+does for constants: time ± duration (months first, then days, then nanoseconds; a day that does not exist in the target
+month is a run-time error naming `add(…, overflow: clamp)`), duration ± duration, duration * whole number (either way
+round), `a - b` of two times of one form (days between dates, else a duration). A date takes no time of day, an instant
+no months or days. Zoned arithmetic is refused until B3. `1 month 2 days` is lexed as one duration
+(literals.rs `with_time_unit`).
+
 ## Next stages
-- B2: arithmetic at run time (`d + 1 day` with variables).
 - B3: zones at run time (offset_at with the Europe/US DST rules, resolve with disambiguation, zoned text).
 - B4: remove the whole-program folder.
