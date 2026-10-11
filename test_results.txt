@@ -1809,8 +1809,6 @@ PASSED:
   ✓ modules::test_import_compiled::a_bare_name_imports_a_compiled_module
   ✓ modules::test_import_compiled::a_compiled_fixtures_change_of_an_instance_is_the_programs
   ✓ modules::test_import_compiled::a_compiled_fixtures_values_and_classes_cross
-  ✓ modules::test_import_compiled::a_compiled_modules_classes_are_the_programs_too
-  ✓ modules::test_import_compiled::a_compiled_modules_functions_take_and_give_values
   ✓ modules::test_import_compiled::a_module_for_any_host_can_be_read_by_the_browser
   ✓ modules::test_import_compiled::an_instance_passed_to_a_compiled_module_is_shared
   ✓ modules::test_import_words::a_hashed_import_keyword_keeps_the_line_a_comment
@@ -2304,6 +2302,7 @@ PASSED:
   ✓ numbers::test_quantity_tolerance::quantities_with_tolerance_sum
   ✓ numbers::test_range_tolerance_compare::a_range_equals_the_same_span_with_tolerance
   ✓ numbers::test_range_tolerance_compare::spans_in_different_units_do_not_compare
+  ✓ numbers::test_ratio_compare_shortcut::small_ratios_compare_in_i64_when_the_program_calculates
   ✓ numbers::test_ratio_float_division::a_ratio_divides_by_a_float
   ✓ numbers::test_rational_quantities::test_exact_amounts_compute_on
   ✓ numbers::test_rational_quantities::test_non_whole_results_are_exact
@@ -2884,6 +2883,12 @@ PASSED:
   ✓ programs::test_kitchensink::test_kitchensink_all_node_types
   ✓ programs::test_kitchensink::test_kitchensink_complex_tree
   ✓ programs::test_kitchensink::test_kitchensink_wasmtime_execution
+  ✓ programs::test_midi::a_broken_file_fails_loudly
+  ✓ programs::test_midi::a_file_of_another_program_reads_with_running_status_and_tempo
+  ✓ programs::test_midi::headless_messages_are_named
+  ✓ programs::test_midi::listing_outputs_needs_a_backend_or_names_the_missing_one
+  ✓ programs::test_midi::native_input_is_a_loud_error
+  ✓ programs::test_midi::notes_survive_a_midi_file
   ✓ programs::test_music_values::a_frequency_reads_as_its_note
   ✓ programs::test_music_values::chords_and_scales_are_lists_of_notes
   ✓ programs::test_music_values::the_tuning_tunes_every_note
@@ -2950,6 +2955,11 @@ PASSED:
   ✓ programs::test_sound_clock::sounds_queue_on_the_audio_clock
   ✓ programs::test_sound_clock::stop_sound_empties_the_queue
   ✓ programs::test_sound_clock::waiting_headless_takes_no_time
+  ✓ programs::test_sound_effects::a_delay_adds_a_tail_of_echoes
+  ✓ programs::test_sound_effects::a_reverb_rings_after_the_end
+  ✓ programs::test_sound_effects::an_echo_sounds_where_the_dry_sound_was_silent
+  ✓ programs::test_sound_effects::distortion_flattens_the_peaks_and_stays_in_range
+  ✓ programs::test_sound_effects::effects_play_in_a_program
   ✓ programs::test_sound_files::a_broken_music_file_fails
   ✓ programs::test_sound_files::a_music_file_plays_in_the_background
   ✓ programs::test_sound_files::only_a_music_file_plays
@@ -4648,6 +4658,8 @@ PASSED:
   ✓ wisp_parser::tests::test_wisp_tag
 
 FAILED:
+  ✗ modules::test_import_compiled::a_compiled_modules_classes_are_the_programs_too
+  ✗ modules::test_import_compiled::a_compiled_modules_functions_take_and_give_values
 
 SUMMARY:
-10 ignored, 4645 passed, 0 failed, 4645 total tested
+10 ignored, 4655 passed, 2 failed, 4657 total tested

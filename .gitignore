@@ -60,3 +60,4 @@ data/
 *.spin.toml
 # the database tables of samples/orm.warp (a run keeps them beside it), after the exception above
 samples/*.database.sqlite
+/tune.mid

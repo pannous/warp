@@ -28,6 +28,8 @@ use Instruction as I;
 use ValType::Ref;
 
 pub const INT_RUNTIME: &str = "int_runtime";
+/// Marks a program that calculates: exact_cmp then carries its small shortcut
+pub const EXACT_ARITHMETIC: &str = "exact_arithmetic";
 /// The exported Int operations a host builds an exact number beyond the fixnums with (tasks.rs Builders, host.js
 /// exactHandle): shift, add, subtract, divide
 pub const EXACT_BUILDERS: [&str; 4] = ["int_shift_left", "exact_add", "exact_sub", "exact_div"];

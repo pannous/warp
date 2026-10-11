@@ -205,6 +205,7 @@ function startWorker(restarts = 0) {
 			if (data.type === "sound") return playSound(data);
 			if (data.type === "sound file") return playSoundFile(data.url, data.handle, data.bytes);
 			if (data.type === "file") return offerFile(data.path, data.bytes);
+			if (data.type === "midi") return sendMidi(data.port, data.message);
 			if (data.type === "stop sound files") return silence(); // stop_sound: the queued sounds and the music files
 			if (data.type === "stop sound") return silenced(data.handle); // stop_sound(handle): that one alone
 			if (data.type === "gpu canvas") return sendPaintCanvas(data);
@@ -321,6 +322,25 @@ function playSound({ samples, rate, channels, at, handle }) {
 	source.handle = handle;
 	source.onended = () => sounding = sounding.filter(other => other !== source);
 	sounding.push(source);
+}
+
+// midi_send / midi_on (card midi-out): Web MIDI, asked for once and kept; a browser without it, a refusal or a port that
+// is not there reaches the console, as sound failures do. The first output when the port is "". Before the page's first
+// click or key press (the run on load, the CI tour) a message goes nowhere, as a sound stays silent: asking for Web MIDI
+// then is refused, and the refusal would land as a console error during whatever runs next
+let midiAccess;
+async function sendMidi(port, message) {
+	if (beforeUserActivation()) return;
+	try {
+		if (!navigator.requestMIDIAccess) throw new Error("this browser has no Web MIDI");
+		midiAccess ??= navigator.requestMIDIAccess();
+		const outputs = [...(await midiAccess).outputs.values()];
+		const output = port ? outputs.find(candidate => candidate.name === port) : outputs[0];
+		if (!output) throw new Error(port ? `no MIDI output named ${port} (there are: ${outputs.map(candidate => candidate.name).join(", ") || "none"})` : "no MIDI output device");
+		output.send(message);
+	} catch (error) {
+		console.error(`midi: ${error.message}`);
+	}
 }
 
 // `play "song.mp3"` (card sound-library): a music file in the background, by its URL beside the page or anywhere

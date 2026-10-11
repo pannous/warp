@@ -72,11 +72,13 @@ wave(shape, p) := if shape == "square" then (if p < 0.5 then 1.0 else -1.0)
 	else if shape == "sawtooth" then 2 * p - 1
 	else if shape == "noise" then 2 * random() - 1
 	else sin(2 * pi * p)
+// the seconds at sample i: a float source (decision exact-decimals), so the samples' math runs in f64, not in ratios
+sample_time(i) := i / (sample_rate as float)
 // how far a ramp of seconds has come after steps samples: 0 to 1
 ramp(steps, seconds) := if seconds <= 0 then 1.0 else min(1.0, steps / (seconds * sample_rate))
 // the level of sample i of n (ADSR): 0 at both ends
 envelope(i, n) := {
-	t = i / sample_rate
+	t = sample_time(i)
 	held = if t < attack then 1.0 else 1 - (1 - sustain) * ramp(i - attack * sample_rate, decay)
 	ramp(i, attack) * held * ramp(n - 1 - i, release)
 }
@@ -97,12 +99,12 @@ global detune = 0.1 as float
 
 // the cycles a wave of frequency f has run at sample i, its vibrato included: the integral of f · (1 + c·sin(2π r t))
 phase(f, i) := {
-	t = i / sample_rate
+	t = sample_time(i)
 	swing = 2^(vibrato / 12) - 1
 	f * t + (if vibrato == 0 then 0.0 else f * swing * (1 - cos(2 * pi * vibrato_rate * t)) / (2 * pi * vibrato_rate))
 }
 // the gain of the tremolo at sample i: 1 at the start, 1 - tremolo at its lowest
-tremolo_gain(i) := 1 - tremolo * (0.5 - 0.5 * cos(2 * pi * tremolo_rate * i / sample_rate))
+tremolo_gain(i) := 1 - tremolo * (0.5 - 0.5 * cos(2 * pi * tremolo_rate * sample_time(i)))
 voices_of(pitches) := if unison <= 1 then pitches else [frequency * 2^(detune * (k / (unison - 1) - 0.5) / 12) for frequency in pitches for k in 0..unison]
 // the amplitudes through the filter: a biquad of the Audio EQ Cookbook (R. Bristow-Johnson)
 def filtered(amplitudes) {
@@ -137,13 +139,74 @@ chord_samples(pitches, duration, shape) := {
 	amplitudes = [share * envelope(i, n) * tremolo_gain(i) * sum([wave(shape, phase(frequency, i) % 1) for frequency in voices]) for i in 0..n]
 	[sample_offset + (round(a) as int) for a in filtered(amplitudes)]
 }
+// the signal graph (card signal-graph): every sound passes the effect chain between the voices and the output,
+// in this order: distortion → delay → reverb. Settings at the time of `play`, so each voice sends its own way.
+// distortion: the drive of a soft clipper (0: off); delay_time seconds (0: off) echoes repeating at delay_feedback
+// (0 to 0.9) of the level before, delay_mix their share; reverb_mix the share of a small room's tail (0: off)
+global distortion = 0.0 as float
+global delay_time = 0.0 as float
+global delay_feedback = 0.4 as float
+global delay_mix = 0.5 as float
+global reverb_mix = 0.0 as float
+// floats (1.0f): exact ratios can't cross into a `go` task in the browser yet
+// below this share of the level the echoes and the room's tail are cut off
+echo_floor = 0.01f
+max_echoes = 8
+reverb_seconds = 0.6f
+// the delays (seconds) and the feedback of the four parallel combs of the reverb (Schroeder)
+reverb_delays = [0.0297f, 0.0371f, 0.0411f, 0.0437f]
+reverb_feedback = 0.75f
+effects_on() := distortion > 0 or delay_time > 0 or reverb_mix > 0
+
+// a soft clipper: tanh bends the peaks the harder the drive, the loudest sample stays at the sound's loudness
+def distorted(amplitudes) {
+	if distortion <= 0 { return amplitudes }
+	peak = loudness * loudest_sample
+	[peak * tanh(x * (1 + 10 * distortion) / peak) for x in amplitudes]
+}
+// the signal plus feedback combs: y[i] = x[i] + feedback · y[i - gap], after the signal's end for the tail
+def comb(amplitudes, gap, feedback, tail) {
+	out = []
+	for i in 0..(count(amplitudes) + tail) {
+		out.push(dry_at(amplitudes, i) + (if i >= gap then feedback * out[i - gap] else 0.0))
+	}
+	out
+}
+// the number of repeats until a feedback has died below echo_floor
+echoes_of(feedback) := if feedback <= 0 then 0 else min(max_echoes, ceil(log(echo_floor) / log(feedback)) as int)
+// the dry signal and its echoes, delay_mix of them, to the length of the tail
+def delayed(amplitudes) {
+	if delay_time <= 0 { return amplitudes }
+	gap = round(delay_time * sample_rate) as int
+	wet = comb(amplitudes, gap, delay_feedback, gap * echoes_of(delay_feedback))
+	[dry_at(amplitudes, i) + delay_mix * (wet[i] - dry_at(amplitudes, i)) for i in 0..count(wet)]
+}
+dry_at(amplitudes, i) := if i >= 0 and i < count(amplitudes) then amplitudes[i] else 0.0
+// the dry signal and the average of four combs, reverb_mix of it, to reverb_seconds after its end; the combs are summed
+// one after the other: a list of the four, indexed per sample, walked each of them (quadratic on a long sound)
+def reverbed(amplitudes) {
+	if reverb_mix <= 0 { return amplitudes }
+	tail = round(reverb_seconds * sample_rate) as int
+	wet = comb(amplitudes, round(reverb_delays[0] * sample_rate) as int, reverb_feedback, tail)
+	for k in 1..count(reverb_delays) {
+		room = comb(amplitudes, round(reverb_delays[k] * sample_rate) as int, reverb_feedback, tail)
+		wet = [wet[i] + room[i] for i in 0..count(wet)]
+	}
+	[dry_at(amplitudes, i) + reverb_mix * wet[i] / count(reverb_delays) for i in 0..count(wet)]
+}
+// the samples through the effect chain, kept inside the 16 bits
+def through_effects(samples) {
+	if not effects_on() { return samples }
+	amplitudes = [x - sample_offset for x in samples]
+	[sample_offset + (max(-loudest_sample, min(loudest_sample, round(a))) as int) for a in reverbed(delayed(distorted(amplitudes)))]
+}
 // the sound's handle: its number in the run, for stop_sound(handle)
 // where the notes sound between the left (-1) and the right speaker (1), 0 in the middle (card stereo-pan)
 global pan = 0.0 as float
 // the samples for the speakers: mono in the middle, else interleaved left, right, the far side quieter by the pan
 panned(samples) := if pan == 0 then samples else [sample_offset + (round((sample - sample_offset) * side) as int) for sample in samples for side in [min(1, 1 - pan), min(1, 1 + pan)]]
 sound(samples) := {
-	speakers = panned(samples)
+	speakers = panned(through_effects(samples))
 	sound_samples(speakers, count(speakers), sample_rate, if pan == 0 then 1 else 2)
 	std_io("sound", "last", [])
 }
@@ -180,6 +243,22 @@ melody_samples(notes, seconds) := {
 }
 to melody notes each duration: sound(melody_samples(notes, si_amount(duration)))
 to melody notes: melody(notes, note_seconds)
+
+// MIDI (card midi-out): midi_on C4, midi_off C4, midi_send(144, 60, 100) to the first output device (or the browser's
+// Web MIDI output), midi_outputs() their names; channels count from 1, velocity 1 to 127
+midi_send(status, data1, data2 = 0, port = "") := std_io("midi", "send", [port, if status < 192 or status >= 224 then [status, data1, data2] else [status, data1]])
+midi_on(pitch, velocity = 100, channel = 1) := midi_send(143 + channel, midi(pitch), velocity)
+midi_off(pitch, channel = 1) := midi_send(127 + channel, midi(pitch), 0)
+midi_outputs() := std_io("midi", "outputs", [])
+// the next message [status, data1, data2] waiting at the input, ø when none (fails where there is no MIDI input)
+midi_receive() := std_io("midi", "receive", [])
+// a Standard MIDI File of notes [start, pitch, length, velocity] (seconds, frequency or note, seconds, 1 to 127) at
+// 120 beats a minute, and the notes of such a file the same way: write_midi("tune.mid", [[0, C4, 0.5, 100]])
+write_midi(path, notes) := std_io("midi", "write_file", [path, [v for entry in notes for v in [round(entry#1 * 1000) as int, midi(entry#2), round(si_amount(entry#3) * 1000) as int, entry#4]]])
+read_midi(path) := {
+	flat = std_io("midi", "read_file", [path])
+	[[flat#(4 * i + 1) / 1000.0, midi_hertz(flat#(4 * i + 2)), flat#(4 * i + 3) / 1000.0, flat#(4 * i + 4)] for i in 0..((count(flat) / 4) as int)]
+}
 
 // how loud each frequency band sounds at a moment of the samples (card winamp-like, samples/visualizer.warp): the bands
 // spaced evenly in pitch from band_low to band_high Hz, each level from 0 to 1 (a full-scale sine is 1)
