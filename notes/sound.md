@@ -132,6 +132,10 @@ The words above are layer 1, the toy layer. Each layer below keeps the ones abov
    `resonance` (Q, 0.707 flat), `vibrato` (semitones) at `vibrato_rate`, `tremolo` (a share) at `tremolo_rate`,
    `unison` voices spread over `detune` semitones. Plain numbers: `cutoff = 1.2kHz` fails (card quantity-global).
    The filter runs per note, so its state starts fresh at every note.
+   Band-limited (card reason-beep, tests/programs/test_sound_aliasing.rs, probes/sound/beep_spectrum.py): square and
+   sawtooth jumps are smoothed over a sample (PolyBLEP, lib `step_smoothing`). The naive ones folded their harmonics
+   above 11025 Hz back as buzz: beep (880 Hz square) had 3.9 % of its energy off its harmonics, a sawtooth 5.4 %, now
+   0.7 % each (a sine: 0.6 %, its fades). `wave(shape, p)` without dt stays sharp.
    Stereo built (card stereo-pan, tests/programs/test_sound_pan.rs, tests/web/test_rendered_pan.rs): `pan` (-1 left,
    1 right, 0 mono) makes lib panned interleave left, right, the far side scaled by 1 - |pan|; sound_samples carries
    the channels (src/host.rs, 4th parameter), the WAV/AudioBuffer has them, render_sound mixes in stereo when any
