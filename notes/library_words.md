@@ -153,7 +153,8 @@ Not aliased, on purpose or open:
   in declaration_lowering (removed_key, cleared_collection) to prelude words (popped_item/popped_rest, cleared), which
   dispatch with `x is map` at run time; library_words::LOWERED_TO_PRELUDE makes modules load them. `m.popitem()` (lib/map.warp),
   `fromkeys(ks, v)` (prelude), `dict.fromkeys(ks, v)` (library_words method_call drops the `dict` receiver).
-- Open: `ys = xs; xs.pop(); ys` keeps the popped item in ys (reassignment, not in place; append/remove are visible),
-  likewise pop(i) and clear(). A map of one entry passed to a function is its lone key at run time (`type` says key).
+- pop, pop(i) and clear() change the list in place like append/remove (card aliased-list): pop(i) and clear() wrap the
+  fresh rest in `list_become(xs, …)` (list_ops emit_list_become); an alias group changed in place is no typed array
+  (list_dispatch find_typed_lists), whose Node copy would part from the alias. A map of one entry passed to a function is its lone key at run time (`type` says key).
 - `x is list` of a value of unknown type is no for a map (a curly list at run time, card inside-function); lib/markup.warp
   asks html_is_group (list or map) where a block `{…}` and a list `[…]` both hold items.

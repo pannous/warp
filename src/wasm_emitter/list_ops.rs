@@ -74,6 +74,7 @@ impl WasmGcEmitter {
 		self.emit_list_concat();
 		self.emit_list_extend();
 		self.emit_list_drop_last();
+		self.emit_list_become();
 		self.emit_element_children();
 		self.emit_element_body();
 		self.emit_list_insert_at();
@@ -1688,6 +1689,41 @@ impl WasmGcEmitter {
 			s.emit_field(f, cell, 2);
 			Self::emit_list(f, &[I::LocalSet(cell), I::Br(0), I::End, I::End]);
 			Self::emit_list(f, &[I::LocalGet(cell), no_node(), set(2), I::LocalGet(list), I::RefAsNonNull]);
+		});
+	}
+
+	/// list_become(list, fresh): the list takes the items of the fresh list in place, every holder sees them (`xs.pop(i)`,
+	/// `xs.clear()`, card aliased-list): its first cell takes fresh's kind, item and rest, its element mark stays; an
+	/// empty fresh list makes it ø itself, ø takes nothing and is fresh
+	fn emit_list_become(&mut self) {
+		if !self.should_emit_function(crate::analyzer::LIST_BECOME) {
+			return;
+		}
+		let node_ref_nullable = Ref(self.node_ref(true));
+		let node_ref = Ref(self.node_ref(false));
+		let node_type = self.type_manager.node_type;
+		let set = |field_index: u32| I::StructSet { struct_type_index: node_type, field_index };
+		self.runtime_function(crate::analyzer::LIST_BECOME, vec![node_ref_nullable, node_ref_nullable], vec![node_ref], vec![], |s, f| {
+			Self::emit_list(f, &s.forget_list_cursor());
+			let (list, fresh) = (0, 1);
+			s.emit_empty_as_null(f, fresh);
+			Self::emit_list(f, &[I::LocalGet(list), I::RefIsNull, I::If(BlockType::Empty), I::LocalGet(fresh), I::RefIsNull, I::If(BlockType::Empty)]);
+			s.call(f, "new_empty");
+			Self::emit_list(f, &[I::Return, I::End, I::LocalGet(fresh), I::RefAsNonNull, I::Return, I::End]);
+			Self::emit_list(f, &[I::LocalGet(fresh), I::RefIsNull, I::If(BlockType::Empty)]);
+			s.emit_become_empty(f, list);
+			Self::emit_list(f, &[I::LocalGet(list), I::RefAsNonNull, I::Return, I::End]);
+			f.instruction(&I::LocalGet(list));
+			s.emit_field(f, fresh, 0);
+			s.emit_unmarked(f);
+			s.emit_or_element_mark(f, list);
+			f.instruction(&set(0));
+			f.instruction(&I::LocalGet(list));
+			s.emit_field(f, fresh, 1);
+			f.instruction(&set(1));
+			f.instruction(&I::LocalGet(list));
+			s.emit_field(f, fresh, 2);
+			Self::emit_list(f, &[set(2), I::LocalGet(list), I::RefAsNonNull]);
 		});
 	}
 

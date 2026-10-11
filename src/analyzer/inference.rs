@@ -383,6 +383,10 @@ pub(super) fn infer_list_type(node: &Node, items: &[Node], bracket: &Bracket, se
 			if name == LIST_DROP_LAST {
 				return Kind::List;
 			}
+			if name == crate::analyzer::LIST_BECOME {
+				// the place itself, changed
+				return infer_type(&items[1], scope);
+			}
 			if name == REMOVED_VALUE_CALL {
 				// a map's value or a list: decided at runtime (removed_value), a Node
 				return Kind::Empty;

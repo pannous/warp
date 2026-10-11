@@ -442,6 +442,9 @@ const APPEND_METHODS: [&str; 4] = ["add", "append", "push", "insert"];
 pub(super) const POP_METHOD: &str = "pop";
 /// Pseudo-call `list_drop_last(xs)`: xs without its last item, in place (wasm_emitter list_ops emit_list_drop_last)
 pub const LIST_DROP_LAST: &str = "list_drop_last";
+/// Pseudo-call `list_become(xs, ys)`: xs takes the items of the fresh list ys in place, so every holder of xs sees them
+/// (`xs.pop(i)`, `xs.clear()`; wasm_emitter list_ops emit_list_become, card aliased-list)
+pub const LIST_BECOME: &str = "list_become";
 /// The list a pop template takes from, replaced by the variable or field popped
 const POP_PLACE: &str = "pop_place";
 pub const REMOVE_METHOD: &str = "remove";
@@ -540,6 +543,7 @@ pub(super) fn removed_key(map: &Node, call: &Node) -> Option<Node> {
 	let removed = Node::Symbol(format!("{name}{TEMPORARY_SEPARATOR}removed"));
 	let value = prelude_call(value_word, vec![map.clone(), key.clone()]);
 	let without = prelude_call(rest_word, vec![map.clone(), key.clone()]);
+	let without = if rest_word == POPPED_REST_CALL { became(map, without) } else { without };
 	Some(Node::List(vec![
 		Node::Key(Box::new(removed.clone()), Op::Assign, Box::new(value)),
 		Node::Key(Box::new(map.clone()), Op::Assign, Box::new(without)),
@@ -552,7 +556,12 @@ fn cleared_collection(collection: &Node, call: &Node) -> Option<Node> {
 	let Node::Symbol(_) = collection.drop_meta() else { return None };
 	let Node::List(items, _, _) = call.drop_meta() else { return None };
 	let [method] = items.as_slice() else { return None };
-	method.is_symbol(CLEAR_METHOD).then(|| Node::Key(Box::new(collection.clone()), Op::Assign, Box::new(prelude_call(CLEARED_CALL, vec![collection.clone()]))))
+	method.is_symbol(CLEAR_METHOD).then(|| Node::Key(Box::new(collection.clone()), Op::Assign, Box::new(became(collection, prelude_call(CLEARED_CALL, vec![collection.clone()])))))
+}
+
+/// `list_become(place, fresh)`: the place takes the fresh list's items in place (LIST_BECOME)
+fn became(place: &Node, fresh: Node) -> Node {
+	Node::List(vec![Node::Symbol(LIST_BECOME.to_string()), place.clone(), fresh], Bracket::Round, Separator::None)
 }
 
 /// A call of a prelude word written after library_words, which names them `prelude·word`, has run

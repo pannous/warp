@@ -96,3 +96,4 @@ mod test_comprehension_beside_own_push; // card prefix-count-field
 mod test_library_word_operands; // card derive-hard
 mod test_list_methods; // card list-methods
 mod test_python_collections; // card python-stdlib
+mod test_aliased_changes; // card aliased-list
