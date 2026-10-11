@@ -79,6 +79,7 @@ impl WasmGcEmitter {
 		self.emit_text_case("text_upper", CaseMapping::Upper);
 		self.emit_text_case("text_lower", CaseMapping::Lower);
 		self.emit_text_split();
+		self.emit_hex_runtime(); // list_join calls hex_text
 		self.emit_list_join();
 		self.emit_list_sort(); // after text_chars and list_join: a text sorts its characters
 		self.emit_print_value(); // after list_join, which gives the text
@@ -504,6 +505,15 @@ impl WasmGcEmitter {
 				Self::emit_list(f, &[I32Const(bool_texts[1].0 as i32), I32Const(bool_texts[1].1 as i32)]);
 				s.call(f, "new_text");
 				Self::emit_list(f, &[I::End, I::LocalSet(element), I::End]);
+				// an Int shown in hex joins as 0xFF (card hex-printing)
+				if s.ctx.func_registry.contains(super::hex::HEX_TEXT) {
+					s.emit_field(f, element, 0);
+					Self::emit_list(f, &[I::I64Const(crate::type_kinds::HEX_KIND), I::I64Eq, I::If(BlockType::Empty)]);
+					s.emit_field(f, element, 1);
+					Self::emit_list(f, &[I::RefCastNonNull(HeapType::Concrete(i64_box)), I::StructGet { struct_type_index: i64_box, field_index: 0 }]);
+					s.call(f, super::hex::HEX_TEXT);
+					Self::emit_list(f, &[I::LocalSet(element), I::End]);
+				}
 				// an Error joins as its message (card catch-message): `print e`
 				is_kind(f, Kind::Error);
 				Self::emit_list(f, &[I::If(BlockType::Empty), I::I64Const(Kind::Text as i64)]);

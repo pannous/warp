@@ -10,6 +10,11 @@ notes/open_decisions.md.
 - repeating-decimals (user, via warp-integrator): no parentheses syntax for repeating decimals; only the overline form
   `0.3̅` (U+0305 after each period digit) is the exact ratio 1/3. `0.(3)` is not a repeating decimal and `0.5(3)` stays
   juxtaposition, 1.5. `x as decimal` writes a ratio with its period overlined.
+- unknown-word (user): `u8` is an alias of `uint8`, which is an alias of `byte` (src/fixed_width.rs ALIASES; overflow
+  messages name byte).
+- hex-printing (user): `255 as hex` is an int that shows as 0xFF, and a byte shows so too (a plain wasm integer,
+  special logic only at FFI crossings). Defaults taken: uppercase digits (0xFF), arithmetic gives a plain int, a
+  variable assigned `x as byte` shows in hex without the byte's range check (notes/hex_ints.md).
 - bizarre-global (user, via warp-supervisor): play, beep, stop_sound and wait_sound stay global; every other sound
   word (melody, tone, pattern, live_loop, render_sound, sound_queued, the midi words) needs `use sound`, else the error
   "X is in the standard module sound: write `use sound`". Old tests and samples gain a `use sound` line, including

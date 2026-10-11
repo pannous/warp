@@ -9,6 +9,8 @@ pub const TEXT_AS_NUMBER: &str = "text_as_number";
 /// `x as i64`: the whole number wrapped to 64 bits, not the unbounded int the other int words convert to
 pub(super) const WRAPPING_INT_WORDS: [&str; 2] = ["i64", "int64"];
 const RATIO_SLASH: i32 = '/' as i32;
+/// The words emit_cast converts to besides the number types (int, float, rational …)
+const CONVERSION_WORDS: [&str; 6] = ["text", "list", "codepoint", crate::analyzer::BOOL_TYPE, "number", super::hex::HEX_WORD];
 
 impl WasmGcEmitter {
 	/// Text converts only if it is a number literal (truncated for int); anything else is a runtime error, never a plausible 0
@@ -56,6 +58,9 @@ impl WasmGcEmitter {
 	}
 
 	pub(super) fn emit_numeric_cast(&mut self, func: &mut Function, located: &Node, value: &Node, target: &Node) {
+		if let Some(computed) = super::hex::computed_type(target) {
+			return self.emit_numeric_cast(func, located, value, &computed);
+		}
 		if let Some(refusal) = self.cast_refusal(value, target) {
 			self.emit_type_error(func, refusal);
 			return;
@@ -99,6 +104,7 @@ impl WasmGcEmitter {
 				self.emit_cast(func, value, target);
 				self.emit_call(func, "get_int_value");
 			}
+			_ if !converts_to(&target.name().to_lowercase()) => self.emit_type_error(func, unknown_conversion(value, &target.name())),
 			_ => self.emit_not_a_number(func, located, located.drop_meta()),
 		}
 	}
@@ -201,6 +207,9 @@ impl WasmGcEmitter {
 	/// Handles conversions between int, float, string
 	/// Optimizes literal conversions at compile time
 	pub(super) fn emit_cast(&mut self, func: &mut Function, value: &Node, target_type: &Node) {
+		if let Some(computed) = super::hex::computed_type(target_type) {
+			return self.emit_cast(func, value, &computed);
+		}
 		let type_name = match target_type.drop_meta() {
 			Node::Symbol(s) => s.to_lowercase(),
 			Node::Text(s) => s.to_lowercase(),
@@ -235,12 +244,13 @@ impl WasmGcEmitter {
 			"codepoint" => self.emit_cast_to_char(func, value),
 			crate::analyzer::BOOL_TYPE => self.emit_cast_to_bool(func, value),
 			"number" => self.emit_cast_to_number(func, value),
-			_ => {
-				// Unknown type, emit as key node for dynamic dispatch
-				self.emit_node_instructions(func, value);
-				self.emit_node_instructions(func, target_type);
-				self.emit_new_key(func, &Op::As);
+			// `255 as byte`: the whole number, trapping as a declared byte does when it leaves the range
+			width if let Some(width) = crate::fixed_width::fixed_width(width) => {
+				self.emit_numeric_cast(func, value, value, &Node::Symbol("int".into()));
+				self.emit_fixed_width_check(func, Some(width));
+				self.emit_call(func, "new_int");
 			}
+			_ => self.emit_type_error(func, unknown_conversion(value, &target_type.name())),
 		}
 	}
 
@@ -554,4 +564,16 @@ impl WasmGcEmitter {
 			if matches!(word.drop_meta(), Node::Symbol(name) if super::ROUNDING_FUNCTIONS.contains(&name.as_str())
 				&& !self.ctx.user_functions.contains_key(name) && !self.ctx.ffi_imports.contains_key(name))))
 	}
+}
+
+/// A word `as` converts to here: units and classes are lowered before emission
+fn converts_to(type_name: &str) -> bool {
+	let word = crate::type_tests::canonical_spec_word(type_name);
+	CONVERSION_WORDS.contains(&word) || crate::type_tests::is_exact_fraction_type(word) || crate::type_tests::spells_decimals_exactly(word)
+		|| crate::analyzer::builtin_type_kind(word).is_some()
+}
+
+/// `255 as hex`: a word that names no type, unit or class, which used to stay a silent `255 as hex` node
+fn unknown_conversion(value: &Node, type_name: &str) -> String {
+	format!("{type_name} is no type to convert to: {} as {type_name}; known: int, float, rational, {}, byte, int8 … uint64, units and classes", value.serialize(), CONVERSION_WORDS.join(", "))
 }

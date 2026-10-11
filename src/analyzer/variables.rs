@@ -48,6 +48,10 @@ pub(super) fn value_binding(value: &Node, scope: &Scope) -> (Kind, Option<Box<No
 	let type_name = match kind {
 		Kind::List => Some(list_type_name(value, scope)),
 		Kind::Int if is_boolean(value, scope) => Some(BOOL_TYPE.to_string()),
+		// `x = 255 as hex`, `x = 255 as byte`: x shows in hex too (card hex-printing), without the byte's range
+		Kind::Int if let Node::Key(_, Op::As, target) = value.drop_meta() && crate::wasm_emitter::hex::shows_in_hex(&target.name()) => {
+			Some(crate::wasm_emitter::hex::HEX_WORD.to_string())
+		}
 		_ => None,
 	};
 	(kind, type_name.map(|name| Box::new(Node::Symbol(name))))

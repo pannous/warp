@@ -20,19 +20,22 @@ const fn unsigned(type_name: &'static str, trap: &'static str, bits: u32) -> Fix
 	FixedWidth { type_name, trap, low: 0, high: (1 << bits) - 1 }
 }
 
-pub const FIXED_WIDTHS: [FixedWidth; 9] = [
+pub const FIXED_WIDTHS: [FixedWidth; 8] = [
 	unsigned("byte", "overflow_of_byte", 8),
 	signed("int8", "overflow_of_int8", 8),
 	signed("int16", "overflow_of_int16", 16),
 	signed("int32", "overflow_of_int32", 32),
 	signed("int64", "overflow_of_int64", 64),
-	unsigned("uint8", "overflow_of_uint8", 8),
 	unsigned("uint16", "overflow_of_uint16", 16),
 	unsigned("uint32", "overflow_of_uint32", 32),
 	unsigned("uint64", "overflow_of_uint64", 64),
 ];
 
+/// Other names of a fixed width (user, 2026-10-11: "u8 is alias for uint8 is alias for byte")
+const ALIASES: [(&str, &str); 2] = [("uint8", "byte"), ("u8", "byte")];
+
 pub fn fixed_width(type_name: &str) -> Option<&'static FixedWidth> {
+	let type_name = ALIASES.iter().find(|(alias, _)| *alias == type_name).map_or(type_name, |(_, name)| *name);
 	FIXED_WIDTHS.iter().find(|width| width.type_name == type_name)
 }
 
