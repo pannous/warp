@@ -226,7 +226,7 @@ fn comparison_law(f: &Function, g: &Function) -> Law {
 		g.name()
 	));
 	let variables = names.into_iter().zip(f.definition.parameters.iter().map(|(_, kind)| *kind)).collect();
-	Law { function: f.name().to_string(), statement, variables }
+	Law { name: None, function: f.name().to_string(), statement, variables }
 }
 
 fn lawful(functions: &[Function]) -> Lawful {

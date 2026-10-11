@@ -1,7 +1,7 @@
-# Headless wait cleanup
+# Bend-style laws cleanup
 
-- Keep the existing behavioral test: a 30-second queued sound must not make `wait_sound` wait in headless mode.
-- Measure the `wait_sound` call inside the Warp program, excluding child compilation and synthesis; lower only the
-  program's sample rate so the audio-clock duration remains 30 seconds with few samples.
-- Run the focused test before and after the change, record the finding in `notes/sound.md`, then run `cargo fix --offline --allow-dirty --lib --bins`.
-- Leave production sound behavior and unrelated tests unchanged.
+- Normalize the quantified law alias in the law layer, leaving the general parser and ordinary `for` loops unchanged.
+- Keep one canonical law representation so assertion, property testing, and Lean export reuse the existing pipeline.
+- Add a checked `LAWS.warp` convention example and make `warp verify` end with an explicit proof-gate verdict.
+- Cover the alias, file convention, success wording, and failure wording with focused tests.
+- Update the laws and Bend notes, run the focused tests, then run `cargo fix --offline --allow-dirty --lib --bins`.

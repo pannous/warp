@@ -113,8 +113,10 @@ Details for D (what to take):
    isolation; otherwise sequential, like Bend's JS target. Bigger win later: shared typed arrays (threads.md step 6).
 2. **LAWS/PROOF convention**: warp has `law` already (notes/laws.md: stated → asserted → tested → proved via Lean).
    Take Bend's `for x: T` quantifier form as an alias, a `LAWS.warp` file the AI must not edit, and `warp verify` as
-   the gate with Bend's wording ("all proofs check / some proofs fail"). Proofs-as-defs (equality, rewrite, induction
-   by recursive call) would cover what warp's Lean export skips today: recursive functions.
+   the gate with Bend's wording ("all proofs check / some proofs fail"). Done (card bend-style, 2026-10-11): named
+   laws accept one `for x: T` line per variable, the root `LAWS.warp` is the human-owned contract, and the gate exits
+   successfully only when every law is proved. Warp checks generated Lean directly, so it needs no generated
+   `PROOF.warp`. Proofs-as-defs (equality, rewrite, induction by recursive call) remain separate.
 3. **Live vs dead / quantities**: types and laws are never run; an erased mark `-x`. Low priority for a dynamic
    language; worth noting for the semantic IR (laws.md "Next").
 4. **Interaction rules as rewrite laws**: the HVM rule table (APP-LAM, DUP-SUP, …) is a fine test oracle for an
@@ -130,7 +132,7 @@ First (one card): **parallel let** `a b = f(x) g(y)` lowered onto go/await with 
 Done (card lower-parallel, 2026-10-11), notes/go_blocks.md "Parallel let".
 
 After it:
-- `for x: T` law quantifier alias + `LAWS.warp` convention + `warp verify` gate wording.
+- Done: `for x: T` law quantifier alias + `LAWS.warp` convention + `warp verify` gate wording (card bend-style).
 - Proofs as warp defs for recursive laws (equality type, rewrite, induction by recursive call), checked by the Lean
   export; this closes the "recursive functions stay Tested" gap in notes/laws.md.
 - Export pure, annotated warp functions + laws to `LAWS.bend` so `bend PROOF.bend --verdict` can check them

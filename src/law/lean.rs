@@ -162,7 +162,9 @@ fn definition(function: &FunctionDefinition) -> Lean {
 }
 
 fn theorem_name(law: &Law) -> String {
-	format!("{}_law", if law.function.is_empty() { "warp" } else { &law.function })
+	let name = law.name.as_deref().unwrap_or_else(|| if law.function.is_empty() { "warp" } else { &law.function });
+	let lean_name: String = name.chars().map(|character| if character.is_ascii_alphanumeric() || character == '_' { character } else { '_' }).collect();
+	format!("{lean_name}_law")
 }
 
 /// Each alternative must close the goal: `simp` alone may merely rewrite it and "succeed".

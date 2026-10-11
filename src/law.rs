@@ -33,6 +33,7 @@ const STACK_EXHAUSTED: &str = "call stack exhausted";
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct Law {
+	pub name: Option<String>,
 	pub function: String,
 	pub statement: Node,
 	pub variables: Vec<(String, Kind)>,
@@ -68,7 +69,10 @@ impl LawReport {
 
 impl fmt::Display for Law {
 	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-		write!(f, "law {}", self.statement.serialize().trim())
+		match &self.name {
+			Some(name) => write!(f, "law {name}: {}", self.statement.serialize().trim()),
+			None => write!(f, "law {}", self.statement.serialize().trim()),
+		}
 	}
 }
 
@@ -98,11 +102,36 @@ pub struct FunctionDefinition {
 	pub source: Node,
 }
 
-fn law_statement(node: &Node) -> Option<&Node> {
+struct LawDeclaration {
+	name: Option<String>,
+	statement: Node,
+	variables: Vec<(String, Kind)>,
+}
+
+fn quantified_variable(node: &Node) -> Option<(String, Kind)> {
+	let Node::List(parts, _, _) = node.drop_meta() else { return None };
+	let [for_word, variable, type_block] = parts.as_slice() else { return None };
+	if !for_word.is_symbol("for") {
+		return None;
+	}
+	let Node::List(types, Bracket::Curly, _) = type_block.drop_meta() else { return None };
+	let [type_name] = types.as_slice() else { return None };
+	Some((variable.name(), kind_of_type_name(&type_name.name())))
+}
+
+fn quantified_law(node: &Node) -> Option<LawDeclaration> {
+	let Node::Key(name, Op::Colon, body) = node.drop_meta() else { return None };
+	let items = top_level_items(body);
+	let (statement, quantifiers) = items.split_last()?;
+	let variables = quantifiers.iter().map(quantified_variable).collect::<Option<Vec<_>>>()?;
+	(!variables.is_empty()).then(|| LawDeclaration { name: Some(name.name()), statement: statement.clone(), variables })
+}
+
+fn law_declaration(node: &Node) -> Option<LawDeclaration> {
 	match node.drop_meta() {
 		// the word itself: Node's loose == takes `true` for any non-empty symbol, `[true, 2]` is no law
 		Node::List(items, _, _) if items.len() == 2 && matches!(items[0].drop_meta(), Node::Symbol(word) if word == LAW_KEYWORD) => {
-			Some(&items[1])
+			quantified_law(&items[1]).or_else(|| Some(LawDeclaration { name: None, statement: items[1].clone(), variables: vec![] }))
 		}
 		_ => None,
 	}
@@ -127,16 +156,16 @@ fn rebuild_block(items: Vec<Node>, like: &Node) -> Node {
 /// Split laws from the program. Without laws the parsed node is returned untouched.
 pub fn separate_laws(parsed: Node) -> Lawful {
 	let items = top_level_items(&parsed);
-	if !items.iter().any(|item| law_statement(item).is_some()) {
+	if !items.iter().any(|item| law_declaration(item).is_some()) {
 		return Lawful { program: parsed, laws: vec![], functions: vec![] };
 	}
 	let (law_items, program_items): (Vec<Node>, Vec<Node>) =
-		items.into_iter().partition(|item| law_statement(item).is_some());
+		items.into_iter().partition(|item| law_declaration(item).is_some());
 	let functions: Vec<FunctionDefinition> = program_items.iter().filter_map(function_definition).collect();
 	let laws = law_items
 		.iter()
-		.filter_map(law_statement)
-		.map(|statement| make_law(statement, &functions))
+		.filter_map(law_declaration)
+		.map(|declaration| make_law(declaration, &functions))
 		.collect();
 	Lawful { program: rebuild_block(program_items, &parsed), laws, functions }
 }
@@ -201,10 +230,10 @@ pub(crate) fn call_parts(node: &Node) -> Option<(&str, &[Node])> {
 	}
 }
 
-fn make_law(statement: &Node, functions: &[FunctionDefinition]) -> Law {
+fn make_law(declaration: LawDeclaration, functions: &[FunctionDefinition]) -> Law {
+	let LawDeclaration { name, statement, mut variables } = declaration;
 	let known = |name: &str| functions.iter().find(|f| f.name == name);
 	let mut function = String::new();
-	let mut variables: Vec<(String, Kind)> = vec![];
 	statement.visit(&mut |node| {
 		if let Some((name, args)) = call_parts(node) {
 			if let Some(definition) = known(name) {
@@ -230,7 +259,7 @@ fn make_law(statement: &Node, functions: &[FunctionDefinition]) -> Law {
 			}
 		}
 	});
-	Law { function, statement: statement.clone(), variables }
+	Law { name, function, statement, variables }
 }
 
 pub fn substitute(node: &Node, bindings: &HashMap<String, Node>) -> Node {

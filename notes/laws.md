@@ -15,7 +15,29 @@ A `law` states a property once. Its assurance rises without touching the source.
 | proved | pure integer functions and the law are exported to Lean 4 as unbounded `Int` and checked | `law::lean::prove` |
 
 `law::verify(code)` runs tested → proved and returns a `LawReport` per law.
-CLI: `warp verify file.warp` (or inline code) prints the reports and exits 1 if any law is violated.
+CLI: `warp verify file.warp` (or inline code) prints the reports, then `ALL PROOFS CHECK` only when every law is
+proved; otherwise it prints `SOME PROOFS FAIL` and exits 1.
+
+## Project law file and quantified alias
+
+`LAWS.warp` at a project root is the human-owned contract: AI agents may read and verify it but must not edit it.
+After changing code covered by those claims, `warp verify LAWS.warp` is the gate. Warp needs no separate generated
+`PROOF.warp`: `warp verify` generates Lean obligations and checks them with Lean itself.
+
+A law can use the compact original form or the named Bend-style alias; both become the same `Law` before assertion,
+property testing, and Lean export:
+
+```warp
+square(x) := x*x
+law square(-x) == square(x)
+
+law square_symmetry:
+  for x: int
+  square(-x) == square(x)
+```
+
+Several typed variables are one `for` line each. The name labels reports and the generated Lean theorem; it does not
+change the proposition.
 
 ## Lean export
 

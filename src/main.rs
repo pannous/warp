@@ -283,7 +283,9 @@ fn run_command(args: &[String]) {
         let code = source_of(target);
         let reports = law::verify(&code);
         reports.iter().for_each(|report| println!("{}", report));
-        std::process::exit(reports.iter().any(|report| report.failed()) as i32);
+        let all_proofs_check = reports.iter().all(|report| report.assurance == law::Assurance::Proved && !report.failed());
+        println!("{}", if all_proofs_check { "ALL PROOFS CHECK" } else { "SOME PROOFS FAIL" });
+        std::process::exit((!all_proofs_check) as i32);
     } else if let Some(target) = arg_string.strip_prefix("types ") {
         println!("{}", law::type_model::report(&source_of(target)));
     } else if args[1] == TOOL_COMMAND && args.len() >= 3 {
