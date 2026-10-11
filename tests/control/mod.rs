@@ -168,6 +168,7 @@ mod test_database_optional_units; // card unit-field
 mod test_database_units_everywhere; // card browser-unit
 mod test_database_short_names; // card orm-one-letter-column
 mod test_print_empty; // card print-error
+mod test_print_empty_map;
 mod test_database_bool_column; // card todo-app
 mod test_try_else_print; // card try-print
 mod test_database_busy; // card orm-sample-lock

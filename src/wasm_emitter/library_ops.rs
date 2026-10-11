@@ -588,13 +588,13 @@ impl WasmGcEmitter {
 					f.instruction(&I::End);
 					s.call(f, super::text_builtins::TEXT_CONCAT);
 					Self::emit_list(f, &[I::LocalSet(element), I::End]);
-					// a ø item reads as ø, as Node::serialize writes it
-					is_kind(f, Kind::Empty);
-					f.instruction(&I::If(BlockType::Empty));
-					Self::emit_list(f, &[I32Const(empty_text.0 as i32), I32Const(empty_text.1 as i32)]);
-					s.call(f, "new_text");
-					Self::emit_list(f, &[I::LocalSet(element), I::End]);
 				}
+				// a ø item reads as ø, as Node::serialize writes it: also an empty map at the top (card print-empty-map)
+				is_kind(f, Kind::Empty);
+				f.instruction(&I::If(BlockType::Empty));
+				Self::emit_list(f, &[I32Const(empty_text.0 as i32), I32Const(empty_text.1 as i32)]);
+				s.call(f, "new_text");
+				Self::emit_list(f, &[I::LocalSet(element), I::End]);
 				if s.should_emit_function(super::uncertain::UNCERTAIN_TEXT) {
 					is_kind(f, Kind::Uncertain);
 					Self::emit_list(f, &[I::If(BlockType::Empty), I::LocalGet(element), I::RefAsNonNull]);
