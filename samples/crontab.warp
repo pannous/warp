@@ -1,0 +1,16 @@
+#!/usr/bin/env warp
+// The cron table, read only (card read-chron): `warp app samples/crontab.warp` shows it in a window.
+// A job is its schedule (five fields, or one like @reboot) and the command after it; comments and settings (PATH=…) are no jobs.
+fields(line) := split(line, " ")
+is_job(line) := line != "" and not line.starts_with("#") and not fields(line)#1.contains("=")
+schedule_size(job) := if job.starts_with("@") then 1 else 5
+schedule(job) := join(fields(job)[0..schedule_size(job)], " ")
+command(job) := join(fields(job)[schedule_size(job)..], " ")
+jobs = [line for line in split(exec sh "crontab -l", "\n") if is_job(line)]
+html{ lang:"en"
+  style{ body { font-family: system-ui; margin: 2em } td { padding: 4px 12px; border-bottom: 1px solid silver } code { white-space: pre-wrap } }
+  body{
+    h1{ "cron table" }
+    table{ for job in jobs { tr{ td{ code{ schedule(job) } } td{ code{ command(job) } } } } }
+  }
+}

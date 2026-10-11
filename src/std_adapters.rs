@@ -78,6 +78,11 @@ pub fn call(module: &str, member: &str, arguments: &Node) -> Result<Node, String
 		("clipboard", "write", [text]) => warp_runtime::system_values::write_clipboard(&text_of(text)?).map(|_| Node::Empty).map_err(failure),
 		("os", "env", [name]) => Ok(std::env::var(text_of(name)?).map_or(Node::Empty, Node::Text)),
 		("os", "args", []) => Ok(texts(PROGRAM_ARGUMENTS.with(|arguments| arguments.borrow().clone()))),
+		#[cfg(feature = "native")]
+		("os", "exec", [command]) => {
+			let arguments = command.as_items().iter().map(content_of).collect::<Result<Vec<_>, _>>()?;
+			executed(&arguments).map(Node::Text).map_err(failure)
+		}
 		// `stored theme = "dark"` (lowering/stored_values.rs): the value kept under its name, or the default
 		("store", "load", [name, default, file]) => {
 			let kept = stored_values(&text_of(file)?).map_err(failure)?.remove(&text_of(name)?);
@@ -211,6 +216,18 @@ fn save_stored_values(file: &str, values: StoredValues) -> Result<(), String> {
 /// A list of texts
 /// The whole numbers of a list argument
 #[cfg(feature = "native")]
+/// What the command (program, arguments…) printed, run without a shell, its trailing newlines dropped as `$(…)` does;
+/// a command that fails is an error with what it printed to stderr
+#[cfg(feature = "native")]
+fn executed(command: &[String]) -> Result<String, String> {
+	let (program, arguments) = command.split_first().ok_or("needs a command")?;
+	let output = std::process::Command::new(program).args(arguments).stdin(std::process::Stdio::null()).output().map_err(|problem| format!("cannot run {program}: {problem}"))?;
+	if !output.status.success() {
+		return Err(format!("{} failed ({}): {}", command.join(" "), output.status, String::from_utf8_lossy(&output.stderr).trim()));
+	}
+	Ok(String::from_utf8_lossy(&output.stdout).trim_end_matches('\n').to_string())
+}
+
 fn whole_numbers(list: &Node) -> Result<Vec<i64>, String> {
 	list.as_items().iter().map(|item| match item.drop_meta() {
 		Node::Number(crate::extensions::numbers::Number::Int(value)) => Ok(*value),
