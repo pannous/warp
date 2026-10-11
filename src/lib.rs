@@ -43,6 +43,8 @@ pub mod shared;
 pub mod paint;
 #[cfg(feature = "native")]
 pub mod paint_window;
+#[cfg(all(feature = "native", target_os = "macos"))]
+pub mod webview;
 #[cfg(feature = "native")]
 pub mod crash_card;
 #[cfg(feature = "native")]
