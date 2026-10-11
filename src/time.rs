@@ -8,7 +8,7 @@ pub mod calendar;
 
 pub use calendar::{with_rules, Disambiguation, Duration, Overflow, Time, TzRules, Zone, Zoned};
 use crate::extensions::numbers::Number;
-use crate::node::{error, Node, Separator};
+use crate::node::{error, Bracket, Node, Separator};
 use crate::operators::Op;
 use crate::wasm_emitter::time_zones::{EARLIER, LATER, REJECT};
 use std::collections::HashMap;
@@ -191,6 +191,8 @@ fn fold_constants(node: Node) -> Node {
 	}
 	match node {
 		Node::Data(_) if time_data(&node) => not_at_run_time_yet(&node.serialize()),
+		// `(t in "UTC").year`: the group around a placement is its call's own
+		Node::List(mut items, Bracket::Round, _) if items.len() == 1 && zone_placement(&items[0]).is_some() => fold_constants(items.remove(0)),
 		Node::List(..) if zone_placement(&node).is_some() => {
 			let (time, zone, choice) = zone_placement(&node).expect("guarded");
 			let number = |n: i64| Node::Number(Number::Int(n));
@@ -239,7 +241,7 @@ fn only_time_words(node: &Node) -> bool {
 
 fn converted_to_unit(items: &[Node]) -> bool {
 	match items {
-		[_, keyword, Node::Symbol(unit)] => (keyword.is_symbol("in") || keyword.is_symbol("as")) && crate::units::names_unit(unit),
+		[_, keyword, unit] => (keyword.is_symbol("in") || keyword.is_symbol("as")) && matches!(unit.drop_meta(), Node::Symbol(word) if crate::units::names_unit(word)),
 		_ => false,
 	}
 }

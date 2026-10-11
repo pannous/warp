@@ -445,13 +445,13 @@ impl WasmGcEmitter {
 		Self::emit_list(func, &[I::Br(1), I::End]);
 	}
 
-	/// `t.tzdata` of a zoned time: the version of the rules it was made with, the builtin ones
+	/// `t.tzdata` of a zoned time: the version of the rules it was made with, those of the compilation
 	fn emit_tzdata_lookup(&mut self, func: &mut Function, held: u32) {
 		self.emit_field(func, held, 0);
 		Self::emit_list(func, &[I::I64Const(KIND_MASK), I::I64And, I::I64Const(Kind::Time as i64), I::I64Eq, I::If(BlockType::Empty)]);
 		self.emit_time_form(func, held);
 		Self::emit_list(func, &[I::I64Const(TimeForm::Zoned as i64), I::I64Eq, I::If(BlockType::Empty)]);
-		self.emit_node_instructions(func, &Node::Text(BUILTIN_RULES.version.to_string()));
+		self.emit_node_instructions(func, &Node::Text(crate::time::calendar::rules().version.to_string()));
 		Self::emit_list(func, &[I::Br(2), I::End, I::End]);
 	}
 

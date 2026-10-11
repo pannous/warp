@@ -20,11 +20,12 @@ A time is a `$Node` of `Kind::Time` (18): `data` = `$i64box` of its position, `v
 
 ## Lowering (`time::lower`, called by pipeline.rs)
 - A free `now` (also `now.hour`) becomes `instant_at(clock())` (`time::now_call`, system_values).
-- A program with forms only the compile-time evaluator knows (literals, durations, `date(…)`, `t in "Zone"`) is
-  first evaluated whole. If that succeeds, the program is its answer. A real error is the program's error.
-- If the evaluator meets something it does not know (a variable, print, a loop: an `UNSUPPORTED` error),
-  `fold_constants` folds the largest constant time expressions (time literals, unit and time words, field names after
-  a dot) into `time_of(info, position)`, and the rest runs.
+- No program is answered whole at compile time (stage B4): `fold_constants` folds the largest constant time
+  expressions (time literals, unit and time words, field names after a dot) into `time_of(info, position)`, and the
+  rest runs. A real error of a constant expression is the program's error.
+- A duration in a unit of the units module (`1 day in h`) folds to its quantity, written as `24h` for the units'
+  lowering; `(t in "Zone")` in parentheses is the placement's call itself, so its fields read.
+- `t.tzdata` of a zoned time is the version of the rules of the compilation (`emit_tzdata_lookup`).
 - Known edge: a variable named like a unit word (`days`) counts as a time word.
 
 ## The local wall clock of an instant
@@ -74,5 +75,5 @@ no months or days. Zoned arithmetic is B3 (below). `1 month 2 days` is lexed as 
   (reject: a day landing on a skipped or repeated wall time fails). `a - b` of two zoned times is their elapsed time.
 - Not yet: `add(t, d, disambiguation: …)` and a zone name held in a variable at run time.
 
-## Next stages
-- B4: remove the whole-program folder.
+## Stages
+B1a, B1b, B2, B3 above; B4 (the whole-program folder removed) done.
