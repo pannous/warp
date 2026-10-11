@@ -323,7 +323,7 @@ const SOURCE_PASSES: &[fn(Node) -> Node] = &[
 	// `xs where it > 1` before welcome_forms reads its words and a function's `it` is read as its parameter
 	crate::comprehensions::lower_where,
 	// `go { … }` before any pass reads into the block (go_blocks.rs)
-	crate::go_blocks::lower,
+	crate::music_words::lower_live_loops, crate::go_blocks::lower,
 	// `$a` / `$1` references of data literals (references.rs) before a pass takes `{ parent=$1 }` for a Swift closure
 	crate::references::lower,
 	// `serve 8080 { get "/" {…} }`: route functions and the serving call (serve.rs), before any pass reads `get` as a call

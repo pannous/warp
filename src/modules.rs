@@ -961,7 +961,7 @@ const ROUTE_PARTS: [&str; 3] = ["route_segment", "route_parameter", "route_match
 const AGENT_MODULE: &str = "agent";
 /// lib/sound.warp: `play 440Hz for 0.5s`, `beep` (card basic-sound), loaded when a program calls one of its words
 const SOUND_MODULE: &str = "sound";
-const SOUND_WORDS: [&str; 15] = ["play", "melody", "tone", "beep", "play_file", "stop_sound", "sound_queued", "wait_sound", "render_sound",
+const SOUND_WORDS: [&str; 17] = ["pattern", "live_loop", "play", "melody", "tone", "beep", "play_file", "stop_sound", "sound_queued", "wait_sound", "render_sound",
 	"midi_send", "midi_outputs", "midi_receive", "midi_on", "write_midi", "read_midi"];
 /// Whether a program needs a module
 type NeededBy = fn(&Node) -> bool;

@@ -100,8 +100,8 @@ global detune = 0.1 as float
 // the cycles a wave of frequency f has run at sample i, its vibrato included: the integral of f · (1 + c·sin(2π r t))
 phase(f, i) := {
 	t = sample_time(i)
-	swing = 2^(vibrato / 12) - 1
-	f * t + (if vibrato == 0 then 0.0 else f * swing * (1 - cos(2 * pi * vibrato_rate * t)) / (2 * pi * vibrato_rate))
+	depth = 2^(vibrato / 12) - 1
+	f * t + (if vibrato == 0 then 0.0 else f * depth * (1 - cos(2 * pi * vibrato_rate * t)) / (2 * pi * vibrato_rate))
 }
 // the gain of the tremolo at sample i: 1 at the start, 1 - tremolo at its lowest
 tremolo_gain(i) := 1 - tremolo * (0.5 - 0.5 * cos(2 * pi * tremolo_rate * sample_time(i)))
@@ -243,6 +243,85 @@ melody_samples(notes, seconds) := {
 }
 to melody notes each duration: sound(melody_samples(notes, si_amount(duration)))
 to melody notes: melody(notes, note_seconds)
+
+// patterns in Tidal's mini-notation (card patterns-live): a cycle of steps that share the cycle's seconds evenly.
+// `c4 e4 g4` three steps, `~` a rest, `[g4 b4]` a group sharing one step, `c4*2` twice in its step, `c4,e4,g4` a chord,
+// `c4(3,8)` Euclidean: 3 notes spread over 8 steps. The cycle lasts `for 2 bars` (a bar without), the result is one sound
+// the voice goes on after; `swing` (0 to 1) delays every second step of a group, 1 to a triplet feel
+global swing = 0.0 as float
+// a pattern item is [0, items] (a group) or [1, frequencies] (a sound, no frequencies: a rest)
+pattern_note(word) := if word == "~" then [1, []] else [1, [note(upper(word[0]) + word[1..]) for word in split(word, ",")]]
+// k notes over n steps as evenly as possible: step i sounds when (i * k) mod n < k
+pattern_euclid(item, k, n) := [0, [if (i * k) % n < k then item else [1, []] for i in 0..n]]
+pattern_end(text: text, from: int, stops: text) := {
+	i = from
+	while i < count(text) and not (text[i] in stops) { i = i + 1 }
+	i
+}
+// the steps from `from` to the closing bracket (or the end), and the place after it
+def parse_pattern(text: text, from: int) {
+	items = []
+	i = from
+	while i < count(text) {
+		c = text[i]
+		if c == " " { i = i + 1 }
+		else if c == "]" { return [items, i + 1] }
+		else {
+			item = [1, []]
+			if c == "[" {
+				inner = parse_pattern(text, i + 1)
+				item = [0, inner[0]]
+				i = inner[1]
+			} else {
+				stop = pattern_end(text, i, " []*(")
+				item = pattern_note(text[i..stop])
+				i = stop
+			}
+			while i < count(text) and (text[i] == "*" or text[i] == "(") {
+				if text[i] == "*" {
+					stop = pattern_end(text, i + 1, " []*(")
+					item = [0, [item for x in 0..number(text[i + 1..stop])]]
+				} else {
+					stop = pattern_end(text, i + 1, ")")
+					arguments = split(text[i + 1..stop], ",")
+					item = pattern_euclid(item, number(arguments[0]), number(arguments[1]))
+					stop = stop + 1
+				}
+				i = stop
+			}
+			items.push(item)
+		}
+	}
+	[items, i]
+}
+// [frequencies, seconds] of every sound and rest of the items spread over the seconds, the swing applied
+def pattern_events(items, seconds) {
+	step = seconds / count(items)
+	shift = swing * step / 3
+	events = []
+	for k in 0..count(items) {
+		length = step + (if k % 2 == 1 then -shift else if k + 1 < count(items) then shift else 0)
+		item = items[k]
+		if item[0] == 0 { events = events + pattern_events(item[1], length) } else { events.push([item[1], length]) }
+	}
+	events
+}
+silence(n) := [sample_offset for i in 0..n]
+// the samples of the events one after another, each ending at the sample its cumulated seconds reach: no drift
+def pattern_samples(events) {
+	samples = []
+	elapsed = 0.0
+	done = 0
+	for event in events {
+		elapsed = elapsed + event[1]
+		target = round(elapsed * sample_rate) as int
+		if target > done { samples = samples + (if count(event[0]) == 0 then silence(target - done) else chord_samples(event[0], (target - done) / sample_rate, wave_shape)) }
+		done = target
+	}
+	samples
+}
+to pattern text for duration: sound(pattern_samples(pattern_events(parse_pattern(text, 0)[0], si_amount(duration))))
+to pattern text: pattern(text, bar_seconds(1))
 
 // MIDI (card midi-out): midi_on C4, midi_off C4, midi_send(144, 60, 100) to the first output device (or the browser's
 // Web MIDI output), midi_outputs() their names; channels count from 1, velocity 1 to 127

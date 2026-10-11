@@ -9,6 +9,8 @@
 //! program names like a note (`A4 = 3`) keeps its meaning. Runs before modules::resolve, while the program is its own.
 //! Scheduling (card sample-accurate): `at 2 beats play C4`, `at 1 bar { … }` is the statement between lib/sound.warp
 //! sound_at(time) and sound_at_end(): its sounds start at that time on the voice, the voice then goes on where it stood.
+//! Live loops (card patterns-live): `live_loop 4 { pattern "c4 e4" }` is `go { … }` repeating the block 4 times: its own voice,
+//! playing along with the others on the beat clock.
 //! Chord and scale kinds (card music-values): `chord(C4, major7)`, `scale(D4, dorian)` name their kind by a word the
 //! program does not define, the text that lib/sound.warp chord_intervals and scale_intervals know it by.
 
@@ -29,8 +31,29 @@ const AT_WORD: &str = "at";
 const DEF_WORD: &str = "def";
 const AT_CALL: &str = "sound_at";
 const AT_END_CALL: &str = "sound_at_end";
+const LIVE_LOOP_WORD: &str = "live_loop";
+/// what `live_loop 4 { … }` is: a voice of its own that plays the block that many cycles, one after another
+const LIVE_LOOP_TEMPLATE: &str = "live_voice = go { for live_cycle in 0..live_cycles { live_body } }";
+const LIVE_CYCLES: &str = "live_cycles";
+const LIVE_BODY: &str = "live_body";
 /// the words whose second argument is a kind: chord(root, kind), scale(root, kind)
 const KIND_TAKERS: [&str; 2] = ["chord", "scale"];
+
+/// Before the go blocks are lowered (pipeline.rs): `live_loop 4 { … }` becomes the `go { … }` it stands for
+pub fn lower_live_loops(program: Node) -> Node {
+	if !crate::modules::uses_sound(&program) {
+		return program;
+	}
+	let defined = defined_names(&program);
+	expand_live_loops(program, &defined)
+}
+
+fn expand_live_loops(node: Node, defined: &HashSet<String>) -> Node {
+	if let Some(voice) = live_loop_statement(&node, defined) {
+		return voice;
+	}
+	node.map_children(|child| expand_live_loops(child, defined))
+}
 
 pub fn lower(program: Node) -> Node {
 	if !crate::modules::uses_sound(&program) {
@@ -93,6 +116,43 @@ fn scheduled(statement: &Node, defined: &HashSet<String>) -> Option<Vec<Node>> {
 		_ => vec![Node::List(action.to_vec(), crate::node::Bracket::None, separator.clone())],
 	};
 	Some([call(AT_CALL, vec![time.clone()])].into_iter().chain(actions).chain([call(AT_END_CALL, vec![])]).collect())
+}
+
+/// `live_loop 4 { body }` → `go { for live_cycle in 0..4 { body } }`
+fn live_loop_statement(statement: &Node, defined: &HashSet<String>) -> Option<Node> {
+	let Node::List(items, _, separator) = statement.drop_meta() else { return None };
+	let [word, cycles, rest @ ..] = items.as_slice() else { return None };
+	let [block] = rest else { return None };
+	let Node::List(_, crate::node::Bracket::Curly, _) = block.drop_meta() else { return None };
+	if separator.separates_statements() || defined.contains(LIVE_LOOP_WORD) || !word.is_symbol(LIVE_LOOP_WORD) {
+		return None;
+	}
+	let made = substituted(crate::warp_parser::parse(LIVE_LOOP_TEMPLATE), &[(LIVE_CYCLES, cycles.clone()), (LIVE_BODY, block.clone())]);
+	Some(match made {
+		Node::List(mut statements, _, _) if statements.len() == 1 => statements.remove(0),
+		made => made,
+	})
+}
+
+/// The node with each named symbol replaced; a block holding only such a symbol is replaced whole (a block, not a block in a block)
+fn substituted(node: Node, replacements: &[(&str, Node)]) -> Node {
+	let alone = match node.drop_meta() {
+		Node::List(items, crate::node::Bracket::Curly, _) => match items.as_slice() {
+			[only] => match only.drop_meta() {
+				Node::Symbol(name) => Some(name),
+				_ => None,
+			},
+			_ => None,
+		},
+		Node::Symbol(name) => Some(name),
+		_ => None,
+	};
+	if let Some(name) = alone {
+		if let Some((_, replacement)) = replacements.iter().find(|(word, _)| word == name) {
+			return replacement.clone();
+		}
+	}
+	node.map_children(|child| substituted(child, replacements))
 }
 
 /// `chord(C4, major7)` → `chord(C4, "major7")`
@@ -186,3 +246,4 @@ fn definition_names(target: &Node) -> Vec<String> {
 		_ => vec![],
 	}
 }
+
