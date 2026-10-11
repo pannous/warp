@@ -502,7 +502,7 @@ fn computes_value(node: &Node) -> bool {
 		Node::Key(_, Op::Hash, _) => true,
 		Node::Key(_, op, _) if op.is_arithmetic() => !names_anything(part),
 		// `str(now)`: the instant the clock reads when the program runs; `str(2024-02-29)` a time node
-		Node::List(items, ..) => matches!(items.first().map(Node::drop_meta), Some(Node::Symbol(head)) if [crate::time::INSTANT_AT, crate::time::TIME_OF].contains(&head.as_str())),
+		Node::List(items, ..) => matches!(items.first().map(Node::drop_meta), Some(Node::Symbol(head)) if [crate::time::INSTANT_AT, crate::time::TIME_OF, crate::time::TIME_IN_ZONE].contains(&head.as_str())),
 		_ => false,
 	});
 	found

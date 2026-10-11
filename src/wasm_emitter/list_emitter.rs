@@ -11,12 +11,12 @@ use Instruction as I;
 use super::{WasmGcEmitter, ROUNDING_FUNCTIONS};
 
 /// Names the emitter resolves itself, besides user functions, imports, type words and counting functions
-const BUILTIN_CALLS: [&str; 24] = [
+const BUILTIN_CALLS: [&str; 25] = [
 	"return", "fetch", "puts", "puti", "putl", "putf", "fd_write", "range", "type", "use",
 	crate::min_max::EMPTY_EXTREMUM_CALL, crate::switch::NO_CASE_CALL, crate::analyzer::ZERO_FILL_CALL, crate::analyzer::INSERT_AT_CALL,
 	crate::analyzer::INSERT_EITHER_CALL, crate::library_words::LIST_SUM, crate::traits::INSTANCE_OF, crate::analyzer::REMOVED_VALUE_CALL,
 	crate::analyzer::LIST_DROP_LAST, crate::library_words::VALUES_SIMILAR, super::list_ops::LIST_EXTEND, crate::library_words::VALUES_ROUGH,
-	crate::time::INSTANT_AT, crate::time::TIME_OF,
+	crate::time::INSTANT_AT, crate::time::TIME_OF, crate::time::TIME_IN_ZONE,
 ];
 
 const PRINT: &str = "print";
@@ -342,6 +342,15 @@ impl WasmGcEmitter {
 			if call == crate::time::INSTANT_AT {
 				self.emit_numeric_value(func, milliseconds);
 				self.emit_call(func, crate::time::INSTANT_AT);
+				return;
+			}
+		}
+		if let [Node::Symbol(call), time, Node::Number(Number::Int(zone)), Node::Number(Number::Int(choice))] = items {
+			if call == crate::time::TIME_IN_ZONE {
+				self.emit_node_instructions(func, time);
+				func.instruction(&Instruction::I64Const(*zone));
+				func.instruction(&Instruction::I64Const(*choice));
+				self.emit_call(func, crate::time::TIME_IN_ZONE);
 				return;
 			}
 		}

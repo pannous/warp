@@ -22,3 +22,12 @@ break_length = 1 hour + 30 minutes
 print "break: " + break_length
 launch = 2030-07-01T09:30[America/New_York]
 print "launch " + launch + " at offset " + launch.offset
+
+// a time zone has its own offset, with daylight saving: the same instant, two wall clocks
+moment = 2024-07-01T10:00:00Z
+print "Berlin: " + (moment in "Europe/Berlin")
+print "Kolkata: " + (moment in "Asia/Kolkata")
+// a calendar day keeps the wall clock across the clock change, 24 hours does not
+before_change = 2024-03-30T12:00[Europe/Berlin]
+print "+1 day:    " + (before_change + 1 day)
+print "+24 hours: " + (before_change + 24 hours)
