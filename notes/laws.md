@@ -44,3 +44,5 @@ Counterexamples come from property tests evaluated in wasm. Lean either proves t
 - Use an SMT backend (z3 is installed) as a faster prover for linear and bitvector laws.
 - Asserted mode checks concrete call sites at compile time. It doesn't yet check values computed at runtime inside the WASM module.
 - Lawful lifting: broadcasting is allowed only where functor laws are Proved.
+- Beyond Lean: proofs as warp functions (Bend style) and an own kernel proved sound in Lean: notes/own_prover.md;
+  Bend's laws and runtime: notes/bend.md.

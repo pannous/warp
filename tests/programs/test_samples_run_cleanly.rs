@@ -6,6 +6,7 @@ use warp::wasm_emitter::eval;
 
 const COMPILER_FAILURES: [&str; 4] = ["internal error", "cast failure", "panicked", "unreachable"];
 const NEEDS_A_WINDOW: [&str; 2] = ["raylib", "sdl"];
+const SLICES: usize = 4;
 const MINIMUM_SAMPLES: usize = 50; // guards against an empty directory listing (the browser reads it over HTTP)
 
 fn runnable_samples() -> Vec<String> {
@@ -25,10 +26,31 @@ fn compiler_failure(sample: &str) -> Option<String> {
 	COMPILER_FAILURES.iter().any(|failure| result.contains(failure)).then(|| format!("{sample}: {result}"))
 }
 
-#[test]
-fn every_sample_runs_without_a_compiler_error() {
+/// Every SLICES-th sample from `slice` on: the browser stops a test after 120 s, and all samples in one test came to 93 s
+/// and then over it, so each slice is a test of its own with headroom
+fn slice_runs_cleanly(slice: usize) {
 	let samples = runnable_samples();
 	assert!(samples.len() >= MINIMUM_SAMPLES, "only {} samples found: {samples:?}", samples.len());
-	let failures: Vec<String> = samples.iter().filter_map(|sample| compiler_failure(sample)).collect();
+	let failures: Vec<String> = samples.iter().skip(slice).step_by(SLICES).filter_map(|sample| compiler_failure(sample)).collect();
 	assert!(failures.is_empty(), "compiler errors in samples:\n{}", failures.join("\n"));
+}
+
+#[test]
+fn every_sample_runs_without_a_compiler_error() {
+	slice_runs_cleanly(0);
+}
+
+#[test]
+fn every_sample_runs_without_a_compiler_error_slice_2() {
+	slice_runs_cleanly(1);
+}
+
+#[test]
+fn every_sample_runs_without_a_compiler_error_slice_3() {
+	slice_runs_cleanly(2);
+}
+
+#[test]
+fn every_sample_runs_without_a_compiler_error_slice_4() {
+	slice_runs_cleanly(3);
 }
