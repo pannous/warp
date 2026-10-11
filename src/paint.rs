@@ -59,7 +59,7 @@ pub fn paint(pixels: &[u64], width: usize, height: usize) -> Result<Option<PathB
 
 /// paint of a rendered shader (gpu::render_rgba): its RGBA bytes go to the window as they are
 pub fn paint_rgba(rgba: &[u8], width: usize, height: usize) -> Result<Option<PathBuf>, String> {
-	let pixels = || rgba.chunks_exact(4).map(|pixel| u64::from(crate::gpu::opaque_color(pixel))).collect::<Vec<_>>();
+	let pixels = || crate::gpu::opaque_colors(rgba).map(u64::from).collect::<Vec<_>>();
 	shown_or_written(|| crate::paint_window::rgba_frame(rgba, width, height), || png_file(&pixels(), width, height))
 }
 

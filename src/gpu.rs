@@ -232,7 +232,7 @@ fn dispatch(encoder: &mut wgpu::CommandEncoder, pipeline: &wgpu::ComputePipeline
 }
 
 fn words(bytes: &[u8]) -> impl Iterator<Item = [u8; 4]> + '_ {
-	bytes.chunks_exact(WORD_BYTES).map(|chunk| chunk.try_into().expect("four bytes"))
+	bytes.as_chunks::<WORD_BYTES>().0.iter().copied()
 }
 
 /// The shader over the 4-byte numbers in `bytes`: the bytes it left from number `first` on
@@ -279,12 +279,13 @@ fn compute_bytes(shader: &str, bytes: &[u8], workgroups: u32, first: usize, keep
 /// Run the fragment shader `main` over a width×height image: its pixels row by row as 0xFFRRGGBB (alpha dropped:
 /// paint shows opaque colors), or why not
 pub fn render(shader: &str, width: u32, height: u32, values: &[ShaderValue]) -> Result<Vec<u32>, String> {
-	Ok(render_rgba(shader, width, height, values)?.chunks_exact(PIXEL_BYTES as usize).map(opaque_color).collect())
+	Ok(opaque_colors(&render_rgba(shader, width, height, values)?).collect())
 }
 
-/// A pixel's RGBA bytes as 0xFFRRGGBB
-pub fn opaque_color(rgba: &[u8]) -> u32 {
-	OPAQUE | u32::from(rgba[0]) << 16 | u32::from(rgba[1]) << 8 | u32::from(rgba[2])
+/// The pixels of RGBA bytes as 0xFFRRGGBB
+pub fn opaque_colors(rgba: &[u8]) -> impl Iterator<Item = u32> + '_ {
+	let pixels = rgba.as_chunks::<{ PIXEL_BYTES as usize }>().0;
+	pixels.iter().map(|[red, green, blue, _]| OPAQUE | u32::from(*red) << 16 | u32::from(*green) << 8 | u32::from(*blue))
 }
 
 /// The image of `render` as RGBA bytes, row by row: what paint's window takes without a per-pixel pass (a frame of the
