@@ -27,7 +27,7 @@ const running = new Set(); // names of the tests on the workers now: a stuck pag
 
 function listTests() {
 	return new Promise((resolve, reject) => {
-		const lister = new Worker("test-worker.js");
+		const lister = serveTaskWorkers(new Worker("test-worker.js")); // task-workers.js
 		lister.onmessage = ({ data }) => { lister.terminate(); resolve(data.tests); };
 		lister.onerror = event => reject(new Error(event.message));
 		lister.postMessage({ type: "compile", url: wasmUrl });
@@ -79,7 +79,7 @@ function runner(queue, total) {
 		};
 		const start = () => {
 			testsOnWorker = 0;
-			worker = new Worker("test-worker.js");
+			worker = serveTaskWorkers(new Worker("test-worker.js"));
 			worker.onmessage = ({ data }) => data.type === "result" && record(data);
 			worker.postMessage({ type: "compile", url: wasmUrl });
 		};

@@ -49,14 +49,15 @@ struct BlockFunction {
 	body: Node,
 }
 
-/// `f(c, body:block) := …`: a definition with at least one `block` (or `code`) parameter
+/// `f(c, body:block) := …`: a definition with at least one `block` (or `code`) parameter; a parameter named `block` or
+/// `code` without a type is one too (`def repeats(n: int, block) := …`)
 fn block_function(node: &Node) -> Option<(String, BlockFunction)> {
 	let Node::Key(head, Op::Define | Op::Assign, body) = node.drop_meta() else { return None };
 	let Node::List(items, Bracket::Round, Separator::None) = head.drop_meta() else { return None };
 	let (name, parameters) = items.split_first()?;
 	let Node::Symbol(name) = name.drop_meta() else { return None };
 	let parameters: Vec<(String, bool)> = parameters.iter().map(|parameter| match parameter.drop_meta() {
-		Node::Symbol(name) => Some((name.clone(), false)),
+		Node::Symbol(name) => Some((name.clone(), BLOCK_WORDS.contains(&name.as_str()))),
 		Node::Key(name, Op::Colon, kind) => Some((name.name(), matches!(kind.drop_meta(), Node::Symbol(word) if BLOCK_WORDS.contains(&word.as_str())))),
 		_ => None,
 	}).collect::<Option<_>>()?;
@@ -102,15 +103,38 @@ fn prefixed_group(node: &Node) -> Option<Node> {
 
 /// In a body: `param!` the argument's code (a group), a bare `param` the argument as data
 fn substitute_block(node: Node, parameter: &str, argument: &Node) -> Node {
-	if let Some((Node::Symbol(name), _)) = bang_target(&node) {
-		if name == parameter {
-			return Node::List(vec![argument.clone()], Bracket::Round, Separator::None);
-		}
+	if runs_parameter(&node, parameter) {
+		return Node::List(vec![argument.clone()], Bracket::Round, Separator::None);
 	}
 	match node {
 		Node::Symbol(name) if name == parameter => Node::List(vec![symbol(DATA_WORD), argument.clone()], Bracket::None, Separator::Space),
 		other => children_rewritten(other, |child| substitute_block(child, parameter, argument)),
 	}
+}
+
+/// `body!` or `body()` of the block parameter body
+fn runs_parameter(node: &Node, parameter: &str) -> bool {
+	let is_parameter = |node: &Node| matches!(node.drop_meta(), Node::Symbol(name) if name == parameter);
+	match node.drop_meta() {
+		Node::List(items, Bracket::Round, Separator::None) => matches!(items.as_slice(), [only] if is_parameter(only)),
+		_ => bang_target(node).is_some_and(|(target, _)| is_parameter(&target)),
+	}
+}
+
+/// The arguments of a call to a function with these parameters: one each, or, when the last parameter is a block, the
+/// rest of the call as its argument (`twice(print "hi")` is read as the items twice, print, "hi")
+fn fitted_arguments(parameters: &[(String, bool)], arguments: &[Node]) -> Option<Vec<Node>> {
+	if arguments.len() == parameters.len() {
+		return Some(arguments.to_vec());
+	}
+	let last_is_block = parameters.last().is_some_and(|(_, block)| *block);
+	if !last_is_block || arguments.len() < parameters.len() {
+		return None;
+	}
+	let (single, rest) = arguments.split_at(parameters.len() - 1);
+	let mut fitted = single.to_vec();
+	fitted.push(Node::List(rest.to_vec(), Bracket::None, Separator::Space));
+	Some(fitted)
 }
 
 struct Blocks {
@@ -259,9 +283,26 @@ fn path_node(path: &str) -> Node {
 	parts.fold(first, |object, field| key(object, Op::Dot, field))
 }
 
+/// `kill{print '🕱'}`, `reset{a = 0; print a}` as an entry: braces holding a statement, the field and its block (card
+/// symbolism-object); the braces say it is code, so no warning. A value in braces is content: markup's
+/// `p{"clicked " + count}` stays an element
+fn code_entry(entry: &Node) -> Option<(String, Node)> {
+	let Node::Key(target, Op::Colon, value) = entry.drop_meta() else { return None };
+	let Node::Symbol(field) = target.drop_meta() else { return None };
+	let Node::List(items, Bracket::Curly, separator) = value.drop_meta() else { return None };
+	let is_statement = |item: &Node| crate::analyzer::is_statement(item, &Bracket::Curly);
+	let statement = Node::List(items.clone(), Bracket::None, separator.clone());
+	let block = match statement_block(value) {
+		Some(block) if items.iter().any(is_statement) => block,
+		_ if *separator == Separator::Space && is_statement(&statement) => statement,
+		_ => return None,
+	};
+	Some((field.clone(), block))
+}
+
 /// An entry the object lowering rewrites: a block, a function, a value entry, or a nested object holding one
 fn is_rewritten_entry(entry: &Node) -> bool {
-	uncharged(entry).is_some() || function_entry(entry).is_some() || value_entry(entry).is_some() || nested_object(entry).is_some()
+	code_entry(entry).is_some() || uncharged(entry).is_some() || function_entry(entry).is_some() || value_entry(entry).is_some() || nested_object(entry).is_some()
 }
 
 /// `a: {f: x => x + 1}`: an entry whose value is an object with rewritten entries; its field, the object and its entries
@@ -366,24 +407,40 @@ impl Blocks {
 					self.objects.insert(name, pairs);
 					return lowered;
 				}
-				// `o = {s1: a+b, …}`: computed entries are blocks the object holds as data, `s3 = …` entries values
-				if let Some(entries) = object_entries(value).filter(|entries| entries.iter().any(is_rewritten_entry)) {
-					let name = name.clone();
-					self.forget(&name);
-					let (mut definitions, object) = match self.object_with_entries(&name, value, entries) {
-						Ok(lowered) => lowered,
-						Err(error) => return error,
-					};
-					let object = Node::Key(target.clone(), Op::Assign, Box::new(object));
-					if definitions.is_empty() {
-						return object;
-					}
-					definitions.push(object);
-					return Node::List(definitions, Bracket::None, Separator::Semicolon);
+				if let Some(object) = self.object_statement(name, target, Op::Assign, value) {
+					return object;
+				}
+			}
+		}
+		// the tagged object `cat{x=1 kill{print '🕱'}}` as `cat = {…}` (card symbolism-object); plain `key: value` data keeps
+		// reading its siblings' paths (`circle:{color: colors.red}`); every `=` in a tag is a value entry, `p{shown = "seen"}`
+		// is p{shown:"seen"} (user, decision tag-assign)
+		if let Node::Key(target, Op::Colon, value) = node.drop_meta() {
+			let is_code = |entry: &Node| code_entry(entry).is_some() || value_entry(entry).is_some() || function_entry(entry).is_some();
+			if let (Node::Symbol(name), Some(_)) = (target.drop_meta(), object_entries(value).filter(|entries| entries.iter().any(is_code))) {
+				if let Some(object) = self.object_statement(name, target, Op::Colon, value) {
+					return object;
 				}
 			}
 		}
 		self.rewrite(node)
+	}
+
+	/// `o = {s1: a+b, …}`: computed entries are blocks the object holds as data, `s3 = …` entries values; preceded by the
+	/// definitions of its function entries
+	fn object_statement(&mut self, name: &str, target: &Node, op: Op, value: &Node) -> Option<Node> {
+		let entries = object_entries(value).filter(|entries| entries.iter().any(is_rewritten_entry))?;
+		self.forget(name);
+		let (mut definitions, object) = match self.object_with_entries(name, value, entries) {
+			Ok(lowered) => lowered,
+			Err(error) => return Some(error),
+		};
+		let object = Node::Key(Box::new(target.clone()), op, Box::new(object));
+		if definitions.is_empty() {
+			return Some(object);
+		}
+		definitions.push(object);
+		Some(Node::List(definitions, Bracket::None, Separator::Semicolon))
 	}
 
 	/// The object literal `value` at `path` (`o`, or `o.a` of a nested object) with its entries lowered: the definitions of
@@ -412,9 +469,16 @@ impl Blocks {
 				lowered.push(key(Node::Symbol(field), Op::Colon, inner));
 				continue;
 			}
-			lowered.push(match uncharged(entry) {
-				Some((field, block)) => {
+			let block_entry = match (code_entry(entry), uncharged(entry)) {
+				(Some(code), _) => Some(code),
+				(None, Some((field, block))) => {
 					self.warn_uncharged(&field, &block, entry)?;
+					Some((field, block))
+				}
+				(None, None) => None,
+			};
+			lowered.push(match block_entry {
+				Some((field, block)) => {
 					let block = self.rewrite(block);
 					self.blocks.insert(format!("{path}.{field}"), block.clone());
 					let data = Node::List(vec![symbol(DATA_WORD), block], Bracket::None, Separator::Space);
@@ -544,14 +608,15 @@ impl Blocks {
 		let (head, arguments) = items.split_first()?;
 		let Node::Symbol(name) = head.drop_meta() else { return None };
 		let function = self.functions.get(name)?.clone();
-		if function.parameters.len() != arguments.len() || self.expansions > MAX_EXPANSIONS {
+		let arguments = fitted_arguments(&function.parameters, arguments)?;
+		if self.expansions > MAX_EXPANSIONS {
 			return None;
 		}
 		let number = self.expansions;
 		self.expansions += 1;
 		let mut statements = vec![];
 		let mut body = function.body;
-		for ((parameter, is_block), argument) in function.parameters.iter().zip(arguments) {
+		for ((parameter, is_block), argument) in function.parameters.iter().zip(&arguments) {
 			if *is_block {
 				body = substitute_block(body, parameter, argument);
 			} else {
@@ -568,7 +633,8 @@ impl Blocks {
 		if let Some((target, _)) = bang_target(&node) {
 			return self.run(&target).unwrap_or(node);
 		}
-		if let Node::List(items, Bracket::Round, Separator::None) = node.drop_meta() {
+		// `f(a, b)` and `f a {…}`
+		if let Node::List(items, Bracket::Round, Separator::None) | Node::List(items, Bracket::None, Separator::Space) = node.drop_meta() {
 			if let Some(expanded) = self.expand(items) {
 				return expanded;
 			}
@@ -612,13 +678,10 @@ impl Blocks {
 				}
 				key(self.rewrite(*left), op, self.rewrite(*right))
 			}
-			Node::Key(left, op, right) => key(self.rewrite(*left), op, self.rewrite(*right)),
 			Node::List(items, bracket, separator @ (Separator::Semicolon | Separator::Newline)) => {
 				Node::List(items.into_iter().map(|item| self.statement(item)).collect(), bracket, separator)
 			}
-			Node::List(items, bracket, separator) => Node::List(items.into_iter().map(|item| self.rewrite(item)).collect(), bracket, separator),
-			Node::Meta { node, data } => Node::Meta { node: Box::new(self.rewrite(*node)), data },
-			other => other,
+			other => children_rewritten(other, |child| self.rewrite(child)),
 		}
 	}
 }

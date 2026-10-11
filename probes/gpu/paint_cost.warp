@@ -1,0 +1,12 @@
+// paint's cost apart from the shader: a one-line shader over the visualizer's 640×360
+use graphics
+flat = shader {
+	@fragment fn main(@builtin(position) at: vec4f) -> @location(0) vec4f {
+		return vec4f(at.x / 640.0, at.y / 360.0, 0.5, 1.0);
+	}
+}
+for frame in 1..6 {
+	t0 = clock()
+	paint(flat, 640, 360)
+	print "flat paint \(clock() - t0)"
+}

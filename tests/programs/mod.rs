@@ -24,12 +24,26 @@ mod test_sound_clock; // card sound-pro
 mod test_sound_render; // card sound-pro
 mod test_sound_wavs; // card sound-wavs
 mod test_sound_handles; // card sound-pro
+mod test_sound_notes; // card sound-pro
+mod test_sound_tempo; // card sound-pro
+mod test_sound_synth; // card sound-pro
+mod test_sound_voices; // card sound-pro
+mod test_sound_at; // card sample-accurate
+mod test_music_values; // card music-values
+mod test_sound_filters; // card synth-filters
+mod test_sound_patterns; // card patterns-live
+mod test_sound_effects; // card signal-graph
+mod test_sound_pan; // card stereo-pan
 mod test_sound_spectrum; // card winamp-like
+mod test_sound_use; // card bizarre-global
+mod test_sound_aliasing; // card reason-beep
 mod test_task_sound; // card task-sound
 mod test_shader_blocks; // card g_oFJc
 mod test_shader_holes; // card shader-holes
+mod test_shader_builtins; // card shader-builtins
 mod test_draw;
 mod test_draw_label; // card paint-text
 mod test_plain_hints_when_piped;
 mod test_warp_command;
 mod test_hints_toggle; // card hints-toggle
+mod test_midi; // card midi-out

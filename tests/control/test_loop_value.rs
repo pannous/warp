@@ -17,3 +17,11 @@ fn a_walking_loop_gives_its_last_body_value() {
 fn a_while_loop_of_one_expression_gives_its_value() {
 	is!("i=1; while (i+=1)<=5 {i*10}", 50);
 }
+
+#[test] // card loop-float: a float last body value stays a float (it gave 4, or a type error for `x + 1`)
+fn a_float_last_body_value_is_the_loop_value() {
+	is!("for i in 1 to 3 { x = 0.5; x += 1 }", 1.5);
+	is!("for i in 1 to 3 { x = 0.5; x + 1 }", 1.5);
+	is!("i=0; while i<3 { i++; x = 0.5; x + 1 }", 1.5);
+	is!("for i in 1 to 3 { i * 0.5 }", 1.5);
+}

@@ -11,15 +11,17 @@ const ARTICLES: [&str; 3] = ["a", "an", "the"];
 /// The words that separate a phrase's slots; `each` too: `to hum notes each d: …` is called `hum [C4 E4] each 50ms`
 pub(crate) const PREPOSITIONS: [&str; 11] = ["to", "of", "from", "with", "in", "into", "at", "by", "for", "on", "each"];
 const IT: &str = "it";
+/// The word that makes an error value, `error("e")`
+const ERROR_WORD: &str = "error";
 /// Statement words before a typed declaration that never name a function: `global number = 3`, `let int x = 1`
-const STATEMENT_WORDS: [&str; 20] = [
-	"global", "let", "var", "export", "mutable", "mut", "return", "yield", "print", "println", "puts", "not", "use", "import",
-	"include", "if", "while", "for", "else", "then",
+const STATEMENT_WORDS: [&str; 17] = [
+	"global", "let", "var", "export", "mutable", "mut", "return", "yield", "print", "println", "puts", "not", "if", "while", "for", "else",
+	"then",
 ];
 
 pub(crate) fn names_a_function(name: &str) -> bool {
 	!is_type_word(name) && !ARTICLES.contains(&name) && !PREPOSITIONS.contains(&name) && !STATEMENT_WORDS.contains(&name)
-		&& !crate::analyzer::CONSTANT_KEYWORDS.contains(&name) && !crate::operators::FUNCTION_KEYWORDS.contains(&name)
+		&& !crate::modules::is_import_keyword(name) && !crate::analyzer::CONSTANT_KEYWORDS.contains(&name) && !crate::operators::FUNCTION_KEYWORDS.contains(&name)
 }
 
 fn is_type_word(word: &str) -> bool {
@@ -202,13 +204,31 @@ fn flat_head(head: &Node) -> Node {
 
 
 /// The value converted to the declared result type; an arithmetic value is grouped, `(x*2) as int`, as written it
-/// would be the ambiguous `x*2 as int`
+/// would be the ambiguous `x*2 as int`. The branches of a choice convert each, so an `error(…)` branch stays the
+/// error (card braced-body: `def f(x) -> text { error("e") }` fails with e; `as text` would give the text "(error 'e')")
 fn as_type(value: Node, type_name: &Node) -> Node {
-	let value = match value.drop_meta() {
-		Node::Key(_, op, _) if op.is_arithmetic() => Node::List(vec![value], Bracket::Round, Separator::None),
-		_ => value,
-	};
-	key(value, Op::As, type_name.clone())
+	match value.drop_meta() {
+		_ if is_error_value(&value) => value,
+		Node::Key(condition, Op::Question, branches) if let Node::Key(chosen, Op::Colon, otherwise) = branches.drop_meta() => {
+			key(condition.as_ref().clone(), Op::Question, key(as_type(chosen.as_ref().clone(), type_name), Op::Colon, as_type(otherwise.as_ref().clone(), type_name)))
+		}
+		Node::Key(then, Op::Else, otherwise) if let Node::Key(head, Op::Then, chosen) = then.drop_meta() => {
+			let then = key(head.as_ref().clone(), Op::Then, as_type(chosen.as_ref().clone(), type_name));
+			key(then, Op::Else, as_type(otherwise.as_ref().clone(), type_name))
+		}
+		Node::List(items, Bracket::Curly, _) if !items.is_empty() => converted_last(value, type_name),
+		Node::Key(_, op, _) if op.is_arithmetic() => key(Node::List(vec![value], Bracket::Round, Separator::None), Op::As, type_name.clone()),
+		_ => key(value, Op::As, type_name.clone()),
+	}
+}
+
+/// `error("e")`
+fn is_error_value(value: &Node) -> bool {
+	match value.drop_meta() {
+		Node::Error(_) => true,
+		Node::List(items, _, _) => items.len() == 2 && items[0].symbol_name() == Some(ERROR_WORD),
+		_ => false,
+	}
 }
 
 const RETURN: &str = "return";
@@ -219,8 +239,12 @@ fn is_return(node: &Node) -> bool {
 
 /// The body with every value it gives back converted: each `return e` and the last statement of a block
 fn converted(body: &Node, type_name: &Node) -> Node {
-	let body = converted_returns(body.drop_meta().clone(), type_name);
-	match body {
+	converted_last(converted_returns(body.drop_meta().clone(), type_name), type_name)
+}
+
+/// The last statement of a block converted, the value itself outside a block; a `return` is converted already
+fn converted_last(body: Node, type_name: &Node) -> Node {
+	match body.drop_meta().clone() {
 		Node::List(mut items, Bracket::Curly, separator) if !items.is_empty() => {
 			let last = items.pop().expect("not empty");
 			items.push(if is_return(&last) { last } else { as_type(last, type_name) });

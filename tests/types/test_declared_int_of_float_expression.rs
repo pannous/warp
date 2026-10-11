@@ -18,5 +18,7 @@ fn an_int_declaration_refuses_a_non_whole_exact_value() {
 	crate::common::fails_with("int i=7/2; i", "i is declared int, cannot assign");
 	is!("int i=3.5*2; i", 7);
 	is!("int i=0.1+0.9; i", 1);
+	is!("int i=7/2*2; i", 7);
+	is!("int i=1/10+9/10; i", 1);
 	is!("int i=8/2; i", 4);
 }

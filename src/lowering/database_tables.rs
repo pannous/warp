@@ -10,11 +10,11 @@ use super::words::{FOR_WORD, GLOBAL_WORD, IN_WORD};
 use super::nodes::key;
 use crate::node::{symbol, Bracket, Node, Separator};
 use crate::operators::Op;
+use crate::stored_values::DATABASE_WORDS;
 use crate::warp_parser::parse;
 use crate::units::static_units::si_quantity;
 use std::collections::{BTreeMap, HashMap, HashSet};
 
-const DATABASE_WORDS: [&str; 2] = ["database", "indexedDB"];
 /// `app.warp` keeps its tables in `app.database.sqlite`; inline code's tables are this name alone (in memory)
 pub const TABLES_FILE: &str = "database.sqlite";
 /// The row id every registered class gets, unless it declares one
@@ -87,8 +87,6 @@ const LAZY_PARTS: [(&str, &str); 15] = [(FOUND, "found"), (OF, "of"), (LOAD, "lo
 	(KEPT, "kept"), (LOADED, "loaded"), (MET, "met"), (PAGE, "page"), (START, "start")];
 /// The rows a loop over an unloaded table reads at once (notes/orm.md Loading)
 const PAGE_SIZE: usize = 100;
-/// `count(people)`, `people.count`: counted without loading
-const COUNT_WORDS: [&str; 4] = ["count", "size", "length", "len"];
 /// a paged loop's count and position, `p·end` and `p·position` of `for p in people`
 const LOOP_END: &str = "table_loop_end";
 const LOOP_POSITION: &str = "table_loop_position";
@@ -619,13 +617,23 @@ fn with_id(body: Node) -> Node {
 			items.push(id);
 			Node::List(items, Bracket::Curly, separator)
 		}
-		Node::List(mut items, Bracket::Curly, _) if items.len() == 1 => {
+		// `{name: text age: int = 0}`: fields side by side
+		Node::List(mut items, Bracket::Curly, _) if items.len() == 1 || items.iter().all(is_typed_field) => {
 			items.push(id);
 			Node::List(items, Bracket::Curly, Separator::Semicolon)
 		}
 		// `{int x}`: one field of words
 		Node::List(words, Bracket::Curly, separator) => Node::List(vec![Node::List(words, Bracket::None, separator), id], Bracket::Curly, Separator::Semicolon),
 		body => Node::List(vec![body, id], Bracket::Curly, Separator::Semicolon),
+	}
+}
+
+/// `age: int`, `age: int = 0`
+fn is_typed_field(item: &Node) -> bool {
+	match item.drop_meta() {
+		Node::Key(_, Op::Colon, _) => true,
+		Node::Key(field, Op::Assign | Op::Define, _) => matches!(field.drop_meta(), Node::Key(_, Op::Colon, _)),
+		_ => false,
 	}
 }
 
@@ -917,7 +925,7 @@ fn with_lazy_reads(node: Node, tables: &BTreeMap<String, Table>, own: Option<&st
 		},
 		Node::Key(_, Op::Assign, source) if database_table(&source).is_some() => node,
 		Node::Key(word, Op::Colon, _) if word.drop_meta().name() == GLOBAL_WORD => node,
-		Node::List(parts, _, _) if parts.len() == 2 && COUNT_WORDS.contains(&parts[0].drop_meta().name().as_str()) && table_of(&parts[1]).is_some() => {
+		Node::List(parts, _, _) if parts.len() == 2 && crate::analyzer::is_counting_word(&parts[0].drop_meta().name()) && table_of(&parts[1]).is_some() => {
 			called(lazy_name(&table_of(&parts[1]).unwrap_or_default(), "count"), None)
 		}
 		Node::List(parts, _, _) if parts.len() == 5 && parts[0].drop_meta().name() == FOR_WORD && parts[2].drop_meta().name() == IN_WORD
@@ -932,7 +940,7 @@ fn with_lazy_reads(node: Node, tables: &BTreeMap<String, Table>, own: Option<&st
 			Node::meta(row, Node::data(crate::lowering::traits::TypedAs(tables[&variable].class.clone())))
 		}
 		Node::Key(left, Op::Dot, right) => match (table_of(&left), right.drop_meta()) {
-			(Some(variable), Node::Symbol(word)) if COUNT_WORDS.contains(&word.as_str()) => called(lazy_name(&variable, "count"), None),
+			(Some(variable), Node::Symbol(word)) if crate::analyzer::is_counting_word(word) => called(lazy_name(&variable, "count"), None),
 			(Some(variable), Node::List(parts, _, _)) if parts.len() == 3 && parts[0].drop_meta().name() == FOUND_WORD => {
 				let code = format!("{FUNCTION_PLACEHOLDER}({CONDITION_PLACEHOLDER}, {PARAMETERS_PLACEHOLDER})");
 				generated(&code, [(FUNCTION_PLACEHOLDER, Node::Symbol(lazy_name(&variable, "found"))), (CONDITION_PLACEHOLDER, parts[1].clone()), (PARAMETERS_PLACEHOLDER, rewrite(parts[2].clone()))])

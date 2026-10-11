@@ -30,9 +30,9 @@ const NODE_MAP_RESLOT: &str = "node_map_reslot";
 const NODE_MAP_REMOVE: &str = "node_map_remove";
 /// The functions a program using a map variable calls; the rest come with them
 pub(super) const NODE_MAP_FUNCTIONS: [&str; 6] = [NODE_MAP_NEW, NODE_MAP_SET, NODE_MAP_LOOKUP, NODE_MAP_AS_NODE, NODE_MAP_OF, NODE_MAP_REMOVE];
-/// Words that read a map without holding on to it: a map variable given to them stays a hash table
-const READING_WORDS: [&str; 16] = [crate::analyzer::REMOVED_VALUE_CALL, "count", "len", "size", "length", "print", "put", "string", "text", "type", "has", "contains",
-	crate::library_words::MAP_KEYS, crate::library_words::MAP_VALUES, COLLECTION_CONTAINS, COLLECTION_POSITION];
+/// Words that read a map without holding on to it, besides those reading any collection (reads_collection): a map
+/// variable given to them stays a hash table
+const MAP_READING_WORDS: [&str; 5] = [crate::analyzer::REMOVED_VALUE_CALL, crate::library_words::MAP_KEYS, crate::library_words::MAP_VALUES, COLLECTION_CONTAINS, COLLECTION_POSITION];
 /// Entries and slots of a new table; both double when full (slots when half full)
 const FIRST_ENTRIES: i32 = 8;
 const FIRST_SLOTS: i32 = 16;
@@ -455,7 +455,7 @@ fn is_empty_map(value: &Node) -> bool {
 /// what is left of a variable is a use that may share it
 fn without_reads(node: Node) -> Node {
 	let is_variable = |node: &Node| matches!(node.drop_meta(), Node::Symbol(_));
-	let is_reading_word = |node: &Node| matches!(node.drop_meta(), Node::Symbol(word) if READING_WORDS.contains(&word.as_str()));
+	let is_reading_word = |node: &Node| matches!(node.drop_meta(), Node::Symbol(word) if super::reads_collection(word) || MAP_READING_WORDS.contains(&word.as_str()));
 	let read = |node: Node| if is_variable(&node) { Node::Empty } else { without_reads(node) };
 	match node {
 		Node::List(items, bracket, separator) if items.first().is_some_and(is_reading_word) => {

@@ -12,6 +12,10 @@
 #![allow(clippy::upper_case_acronyms)]
 #![allow(clippy::identity_op)]
 #![allow(clippy::missing_safety_doc)]
+#![allow(clippy::doc_lazy_continuation)]
+#![allow(rustdoc::broken_intra_doc_links)]
+#![allow(rustdoc::bare_urls)]
+#![allow(rustdoc::invalid_html_tags)]
 
 #[cfg_attr(target_vendor = "apple", link(name = "AppKit", kind = "framework"))]
 extern "C" {}
@@ -49,6 +53,9 @@ mod __NSAccessibilityProtocols;
 #[cfg(feature = "NSActionCell")]
 #[path = "NSActionCell.rs"]
 mod __NSActionCell;
+#[cfg(feature = "NSAdaptiveImageGlyph")]
+#[path = "NSAdaptiveImageGlyph.rs"]
+mod __NSAdaptiveImageGlyph;
 #[cfg(feature = "NSAffineTransform")]
 #[path = "NSAffineTransform.rs"]
 mod __NSAffineTransform;
@@ -82,6 +89,9 @@ mod __NSArrayController;
 #[cfg(feature = "NSAttributedString")]
 #[path = "NSAttributedString.rs"]
 mod __NSAttributedString;
+#[cfg(feature = "NSBackgroundExtensionView")]
+#[path = "NSBackgroundExtensionView.rs"]
+mod __NSBackgroundExtensionView;
 #[cfg(feature = "NSBezierPath")]
 #[path = "NSBezierPath.rs"]
 mod __NSBezierPath;
@@ -208,6 +218,9 @@ mod __NSDictionaryController;
 #[cfg(feature = "NSDiffableDataSource")]
 #[path = "NSDiffableDataSource.rs"]
 mod __NSDiffableDataSource;
+#[cfg(feature = "NSDirection")]
+#[path = "NSDirection.rs"]
+mod __NSDirection;
 #[cfg(feature = "NSDockTile")]
 #[path = "NSDockTile.rs"]
 mod __NSDockTile;
@@ -277,6 +290,9 @@ mod __NSFormCell;
 #[cfg(feature = "NSGestureRecognizer")]
 #[path = "NSGestureRecognizer.rs"]
 mod __NSGestureRecognizer;
+#[cfg(feature = "NSGlassEffectView")]
+#[path = "NSGlassEffectView.rs"]
+mod __NSGlassEffectView;
 #[cfg(feature = "NSGlyphGenerator")]
 #[path = "NSGlyphGenerator.rs"]
 mod __NSGlyphGenerator;
@@ -325,6 +341,9 @@ mod __NSInputServer;
 #[cfg(feature = "NSInterfaceStyle")]
 #[path = "NSInterfaceStyle.rs"]
 mod __NSInterfaceStyle;
+#[cfg(feature = "NSItemBadge")]
+#[path = "NSItemBadge.rs"]
+mod __NSItemBadge;
 #[cfg(feature = "NSItemProvider")]
 #[path = "NSItemProvider.rs"]
 mod __NSItemProvider;
@@ -379,12 +398,21 @@ mod __NSMovie;
 #[cfg(feature = "NSNib")]
 #[path = "NSNib.rs"]
 mod __NSNib;
+#[cfg(feature = "NSNibConnector")]
+#[path = "NSNibConnector.rs"]
+mod __NSNibConnector;
+#[cfg(feature = "NSNibControlConnector")]
+#[path = "NSNibControlConnector.rs"]
+mod __NSNibControlConnector;
 #[cfg(feature = "NSNibDeclarations")]
 #[path = "NSNibDeclarations.rs"]
 mod __NSNibDeclarations;
 #[cfg(feature = "NSNibLoading")]
 #[path = "NSNibLoading.rs"]
 mod __NSNibLoading;
+#[cfg(feature = "NSNibOutletConnector")]
+#[path = "NSNibOutletConnector.rs"]
+mod __NSNibOutletConnector;
 #[cfg(feature = "NSObjectController")]
 #[path = "NSObjectController.rs"]
 mod __NSObjectController;
@@ -556,6 +584,9 @@ mod __NSSegmentedControl;
 #[cfg(feature = "NSShadow")]
 #[path = "NSShadow.rs"]
 mod __NSShadow;
+#[cfg(feature = "NSSharingCollaborationModeRestriction")]
+#[path = "NSSharingCollaborationModeRestriction.rs"]
+mod __NSSharingCollaborationModeRestriction;
 #[cfg(feature = "NSSharingService")]
 #[path = "NSSharingService.rs"]
 mod __NSSharingService;
@@ -601,6 +632,9 @@ mod __NSSplitViewController;
 #[cfg(feature = "NSSplitViewItem")]
 #[path = "NSSplitViewItem.rs"]
 mod __NSSplitViewItem;
+#[cfg(feature = "NSSplitViewItemAccessoryViewController")]
+#[path = "NSSplitViewItemAccessoryViewController.rs"]
+mod __NSSplitViewItemAccessoryViewController;
 #[cfg(feature = "NSStackView")]
 #[path = "NSStackView.rs"]
 mod __NSStackView;
@@ -757,6 +791,9 @@ mod __NSTextViewportLayoutController;
 #[cfg(feature = "NSTintConfiguration")]
 #[path = "NSTintConfiguration.rs"]
 mod __NSTintConfiguration;
+#[cfg(feature = "NSTintProminence")]
+#[path = "NSTintProminence.rs"]
+mod __NSTintProminence;
 #[cfg(feature = "NSTitlebarAccessoryViewController")]
 #[path = "NSTitlebarAccessoryViewController.rs"]
 mod __NSTitlebarAccessoryViewController;
@@ -826,6 +863,9 @@ mod __NSView;
 #[cfg(feature = "NSViewController")]
 #[path = "NSViewController.rs"]
 mod __NSViewController;
+#[cfg(feature = "NSViewLayoutRegion")]
+#[path = "NSViewLayoutRegion.rs"]
+mod __NSViewLayoutRegion;
 #[cfg(feature = "NSVisualEffectView")]
 #[path = "NSVisualEffectView.rs"]
 mod __NSVisualEffectView;
@@ -850,6 +890,15 @@ mod __NSWindowTabGroup;
 #[cfg(feature = "NSWorkspace")]
 #[path = "NSWorkspace.rs"]
 mod __NSWorkspace;
+#[cfg(feature = "NSWritingToolsCoordinator")]
+#[path = "NSWritingToolsCoordinator.rs"]
+mod __NSWritingToolsCoordinator;
+#[cfg(feature = "NSWritingToolsCoordinatorAnimationParameters")]
+#[path = "NSWritingToolsCoordinatorAnimationParameters.rs"]
+mod __NSWritingToolsCoordinatorAnimationParameters;
+#[cfg(feature = "NSWritingToolsCoordinatorContext")]
+#[path = "NSWritingToolsCoordinatorContext.rs"]
+mod __NSWritingToolsCoordinatorContext;
 
 #[cfg(feature = "AppKitErrors")]
 pub use self::__AppKitErrors::NSFontAssetDownloadError;
@@ -857,6 +906,18 @@ pub use self::__AppKitErrors::NSFontAssetDownloadError;
 pub use self::__AppKitErrors::NSFontErrorMaximum;
 #[cfg(feature = "AppKitErrors")]
 pub use self::__AppKitErrors::NSFontErrorMinimum;
+#[cfg(feature = "AppKitErrors")]
+pub use self::__AppKitErrors::NSPasteboardCommunicationError;
+#[cfg(feature = "AppKitErrors")]
+pub use self::__AppKitErrors::NSPasteboardContentsNotAvailableError;
+#[cfg(feature = "AppKitErrors")]
+pub use self::__AppKitErrors::NSPasteboardErrorMaximum;
+#[cfg(feature = "AppKitErrors")]
+pub use self::__AppKitErrors::NSPasteboardErrorMinimum;
+#[cfg(feature = "AppKitErrors")]
+pub use self::__AppKitErrors::NSPasteboardInvalidArgumentError;
+#[cfg(feature = "AppKitErrors")]
+pub use self::__AppKitErrors::NSPasteboardMiscellaneousError;
 #[cfg(feature = "AppKitErrors")]
 pub use self::__AppKitErrors::NSServiceApplicationLaunchFailedError;
 #[cfg(feature = "AppKitErrors")]
@@ -968,6 +1029,8 @@ pub use self::__NSAccessibilityConstants::NSAccessibilityAnnouncementKey;
 #[cfg(feature = "NSAccessibilityConstants")]
 pub use self::__NSAccessibilityConstants::NSAccessibilityAnnouncementRequestedNotification;
 #[cfg(feature = "NSAccessibilityConstants")]
+pub use self::__NSAccessibilityConstants::NSAccessibilityAnyTypeSearchKey;
+#[cfg(feature = "NSAccessibilityConstants")]
 pub use self::__NSAccessibilityConstants::NSAccessibilityApplicationActivatedNotification;
 #[cfg(feature = "NSAccessibilityConstants")]
 pub use self::__NSAccessibilityConstants::NSAccessibilityApplicationDeactivatedNotification;
@@ -978,6 +1041,8 @@ pub use self::__NSAccessibilityConstants::NSAccessibilityApplicationRole;
 #[cfg(feature = "NSAccessibilityConstants")]
 pub use self::__NSAccessibilityConstants::NSAccessibilityApplicationShownNotification;
 #[cfg(feature = "NSAccessibilityConstants")]
+pub use self::__NSAccessibilityConstants::NSAccessibilityArticleSearchKey;
+#[cfg(feature = "NSAccessibilityConstants")]
 pub use self::__NSAccessibilityConstants::NSAccessibilityAscendingSortDirectionValue;
 #[cfg(feature = "NSAccessibilityConstants")]
 pub use self::__NSAccessibilityConstants::NSAccessibilityAttachmentTextAttribute;
@@ -986,9 +1051,21 @@ pub use self::__NSAccessibilityConstants::NSAccessibilityAttributeName;
 #[cfg(feature = "NSAccessibilityConstants")]
 pub use self::__NSAccessibilityConstants::NSAccessibilityAttributedStringForRangeParameterizedAttribute;
 #[cfg(feature = "NSAccessibilityConstants")]
+pub use self::__NSAccessibilityConstants::NSAccessibilityAutoInteractableAttribute;
+#[cfg(feature = "NSAccessibilityConstants")]
 pub use self::__NSAccessibilityConstants::NSAccessibilityAutocorrectedTextAttribute;
 #[cfg(feature = "NSAccessibilityConstants")]
+pub use self::__NSAccessibilityConstants::NSAccessibilityAutocorrectionOccurredNotification;
+#[cfg(feature = "NSAccessibilityConstants")]
 pub use self::__NSAccessibilityConstants::NSAccessibilityBackgroundColorTextAttribute;
+#[cfg(feature = "NSAccessibilityConstants")]
+pub use self::__NSAccessibilityConstants::NSAccessibilityBlockQuoteLevelAttribute;
+#[cfg(feature = "NSAccessibilityConstants")]
+pub use self::__NSAccessibilityConstants::NSAccessibilityBlockquoteSameLevelSearchKey;
+#[cfg(feature = "NSAccessibilityConstants")]
+pub use self::__NSAccessibilityConstants::NSAccessibilityBlockquoteSearchKey;
+#[cfg(feature = "NSAccessibilityConstants")]
+pub use self::__NSAccessibilityConstants::NSAccessibilityBoldFontSearchKey;
 #[cfg(feature = "NSAccessibilityConstants")]
 pub use self::__NSAccessibilityConstants::NSAccessibilityBoundsForRangeParameterizedAttribute;
 #[cfg(feature = "NSAccessibilityConstants")]
@@ -997,6 +1074,8 @@ pub use self::__NSAccessibilityConstants::NSAccessibilityBrowserRole;
 pub use self::__NSAccessibilityConstants::NSAccessibilityBusyIndicatorRole;
 #[cfg(feature = "NSAccessibilityConstants")]
 pub use self::__NSAccessibilityConstants::NSAccessibilityButtonRole;
+#[cfg(feature = "NSAccessibilityConstants")]
+pub use self::__NSAccessibilityConstants::NSAccessibilityButtonSearchKey;
 #[cfg(feature = "NSAccessibilityConstants")]
 pub use self::__NSAccessibilityConstants::NSAccessibilityCancelAction;
 #[cfg(feature = "NSAccessibilityConstants")]
@@ -1012,7 +1091,11 @@ pub use self::__NSAccessibilityConstants::NSAccessibilityCentimetersUnitValue;
 #[cfg(feature = "NSAccessibilityConstants")]
 pub use self::__NSAccessibilityConstants::NSAccessibilityCheckBoxRole;
 #[cfg(feature = "NSAccessibilityConstants")]
+pub use self::__NSAccessibilityConstants::NSAccessibilityCheckBoxSearchKey;
+#[cfg(feature = "NSAccessibilityConstants")]
 pub use self::__NSAccessibilityConstants::NSAccessibilityChildrenAttribute;
+#[cfg(feature = "NSAccessibilityConstants")]
+pub use self::__NSAccessibilityConstants::NSAccessibilityChildrenInNavigationOrderAttribute;
 #[cfg(feature = "NSAccessibilityConstants")]
 pub use self::__NSAccessibilityConstants::NSAccessibilityClearButtonAttribute;
 #[cfg(feature = "NSAccessibilityConstants")]
@@ -1046,11 +1129,19 @@ pub use self::__NSAccessibilityConstants::NSAccessibilityContentListSubrole;
 #[cfg(feature = "NSAccessibilityConstants")]
 pub use self::__NSAccessibilityConstants::NSAccessibilityContentsAttribute;
 #[cfg(feature = "NSAccessibilityConstants")]
+pub use self::__NSAccessibilityConstants::NSAccessibilityControlSearchKey;
+#[cfg(feature = "NSAccessibilityConstants")]
 pub use self::__NSAccessibilityConstants::NSAccessibilityCreatedNotification;
 #[cfg(feature = "NSAccessibilityConstants")]
 pub use self::__NSAccessibilityConstants::NSAccessibilityCriticalValueAttribute;
 #[cfg(feature = "NSAccessibilityConstants")]
 pub use self::__NSAccessibilityConstants::NSAccessibilityCustomTextAttribute;
+#[cfg(feature = "NSAccessibilityConstants")]
+pub use self::__NSAccessibilityConstants::NSAccessibilityDateTimeAreaRole;
+#[cfg(feature = "NSAccessibilityConstants")]
+pub use self::__NSAccessibilityConstants::NSAccessibilityDateTimeComponentsAttribute;
+#[cfg(feature = "NSAccessibilityConstants")]
+pub use self::__NSAccessibilityConstants::NSAccessibilityDateTimeComponentsFlags;
 #[cfg(feature = "NSAccessibilityConstants")]
 pub use self::__NSAccessibilityConstants::NSAccessibilityDecimalTabStopMarkerTypeValue;
 #[cfg(feature = "NSAccessibilityConstants")]
@@ -1076,6 +1167,8 @@ pub use self::__NSAccessibilityConstants::NSAccessibilityDescriptionListSubrole;
 #[cfg(feature = "NSAccessibilityConstants")]
 pub use self::__NSAccessibilityConstants::NSAccessibilityDialogSubrole;
 #[cfg(feature = "NSAccessibilityConstants")]
+pub use self::__NSAccessibilityConstants::NSAccessibilityDifferentTypeSearchKey;
+#[cfg(feature = "NSAccessibilityConstants")]
 pub use self::__NSAccessibilityConstants::NSAccessibilityDisclosedByRowAttribute;
 #[cfg(feature = "NSAccessibilityConstants")]
 pub use self::__NSAccessibilityConstants::NSAccessibilityDisclosedRowsAttribute;
@@ -1088,11 +1181,25 @@ pub use self::__NSAccessibilityConstants::NSAccessibilityDisclosureTriangleRole;
 #[cfg(feature = "NSAccessibilityConstants")]
 pub use self::__NSAccessibilityConstants::NSAccessibilityDocumentAttribute;
 #[cfg(feature = "NSAccessibilityConstants")]
+pub use self::__NSAccessibilityConstants::NSAccessibilityDraggingDestinationDragAcceptedNotification;
+#[cfg(feature = "NSAccessibilityConstants")]
+pub use self::__NSAccessibilityConstants::NSAccessibilityDraggingDestinationDragNotAcceptedNotification;
+#[cfg(feature = "NSAccessibilityConstants")]
+pub use self::__NSAccessibilityConstants::NSAccessibilityDraggingDestinationDropAllowedNotification;
+#[cfg(feature = "NSAccessibilityConstants")]
+pub use self::__NSAccessibilityConstants::NSAccessibilityDraggingDestinationDropNotAllowedNotification;
+#[cfg(feature = "NSAccessibilityConstants")]
+pub use self::__NSAccessibilityConstants::NSAccessibilityDraggingSourceDragBeganNotification;
+#[cfg(feature = "NSAccessibilityConstants")]
+pub use self::__NSAccessibilityConstants::NSAccessibilityDraggingSourceDragEndedNotification;
+#[cfg(feature = "NSAccessibilityConstants")]
 pub use self::__NSAccessibilityConstants::NSAccessibilityDrawerCreatedNotification;
 #[cfg(feature = "NSAccessibilityConstants")]
 pub use self::__NSAccessibilityConstants::NSAccessibilityDrawerRole;
 #[cfg(feature = "NSAccessibilityConstants")]
 pub use self::__NSAccessibilityConstants::NSAccessibilityEditedAttribute;
+#[cfg(feature = "NSAccessibilityConstants")]
+pub use self::__NSAccessibilityConstants::NSAccessibilityEmbeddedImageDescriptionAttribute;
 #[cfg(feature = "NSAccessibilityConstants")]
 pub use self::__NSAccessibilityConstants::NSAccessibilityEnabledAttribute;
 #[cfg(feature = "NSAccessibilityConstants")]
@@ -1120,7 +1227,15 @@ pub use self::__NSAccessibilityConstants::NSAccessibilityFocusedWindowChangedNot
 #[cfg(feature = "NSAccessibilityConstants")]
 pub use self::__NSAccessibilityConstants::NSAccessibilityFontAttributeKey;
 #[cfg(feature = "NSAccessibilityConstants")]
+pub use self::__NSAccessibilityConstants::NSAccessibilityFontBoldAttribute;
+#[cfg(feature = "NSAccessibilityConstants")]
+pub use self::__NSAccessibilityConstants::NSAccessibilityFontChangeSearchKey;
+#[cfg(feature = "NSAccessibilityConstants")]
+pub use self::__NSAccessibilityConstants::NSAccessibilityFontColorChangeSearchKey;
+#[cfg(feature = "NSAccessibilityConstants")]
 pub use self::__NSAccessibilityConstants::NSAccessibilityFontFamilyKey;
+#[cfg(feature = "NSAccessibilityConstants")]
+pub use self::__NSAccessibilityConstants::NSAccessibilityFontItalicAttribute;
 #[cfg(feature = "NSAccessibilityConstants")]
 pub use self::__NSAccessibilityConstants::NSAccessibilityFontNameKey;
 #[cfg(feature = "NSAccessibilityConstants")]
@@ -1130,11 +1245,15 @@ pub use self::__NSAccessibilityConstants::NSAccessibilityFontTextAttribute;
 #[cfg(feature = "NSAccessibilityConstants")]
 pub use self::__NSAccessibilityConstants::NSAccessibilityForegroundColorTextAttribute;
 #[cfg(feature = "NSAccessibilityConstants")]
+pub use self::__NSAccessibilityConstants::NSAccessibilityFrameSearchKey;
+#[cfg(feature = "NSAccessibilityConstants")]
 pub use self::__NSAccessibilityConstants::NSAccessibilityFrontmostAttribute;
 #[cfg(feature = "NSAccessibilityConstants")]
 pub use self::__NSAccessibilityConstants::NSAccessibilityFullScreenButtonAttribute;
 #[cfg(feature = "NSAccessibilityConstants")]
 pub use self::__NSAccessibilityConstants::NSAccessibilityFullScreenButtonSubrole;
+#[cfg(feature = "NSAccessibilityConstants")]
+pub use self::__NSAccessibilityConstants::NSAccessibilityGraphicSearchKey;
 #[cfg(feature = "NSAccessibilityConstants")]
 pub use self::__NSAccessibilityConstants::NSAccessibilityGridRole;
 #[cfg(feature = "NSAccessibilityConstants")]
@@ -1152,6 +1271,26 @@ pub use self::__NSAccessibilityConstants::NSAccessibilityHeadIndentMarkerTypeVal
 #[cfg(feature = "NSAccessibilityConstants")]
 pub use self::__NSAccessibilityConstants::NSAccessibilityHeaderAttribute;
 #[cfg(feature = "NSAccessibilityConstants")]
+pub use self::__NSAccessibilityConstants::NSAccessibilityHeadingLevel1SearchKey;
+#[cfg(feature = "NSAccessibilityConstants")]
+pub use self::__NSAccessibilityConstants::NSAccessibilityHeadingLevel2SearchKey;
+#[cfg(feature = "NSAccessibilityConstants")]
+pub use self::__NSAccessibilityConstants::NSAccessibilityHeadingLevel3SearchKey;
+#[cfg(feature = "NSAccessibilityConstants")]
+pub use self::__NSAccessibilityConstants::NSAccessibilityHeadingLevel4SearchKey;
+#[cfg(feature = "NSAccessibilityConstants")]
+pub use self::__NSAccessibilityConstants::NSAccessibilityHeadingLevel5SearchKey;
+#[cfg(feature = "NSAccessibilityConstants")]
+pub use self::__NSAccessibilityConstants::NSAccessibilityHeadingLevel6SearchKey;
+#[cfg(feature = "NSAccessibilityConstants")]
+pub use self::__NSAccessibilityConstants::NSAccessibilityHeadingLevelAttribute;
+#[cfg(feature = "NSAccessibilityConstants")]
+pub use self::__NSAccessibilityConstants::NSAccessibilityHeadingRole;
+#[cfg(feature = "NSAccessibilityConstants")]
+pub use self::__NSAccessibilityConstants::NSAccessibilityHeadingSameLevelSearchKey;
+#[cfg(feature = "NSAccessibilityConstants")]
+pub use self::__NSAccessibilityConstants::NSAccessibilityHeadingSearchKey;
+#[cfg(feature = "NSAccessibilityConstants")]
 pub use self::__NSAccessibilityConstants::NSAccessibilityHelpAttribute;
 #[cfg(feature = "NSAccessibilityConstants")]
 pub use self::__NSAccessibilityConstants::NSAccessibilityHelpTagCreatedNotification;
@@ -1167,6 +1306,10 @@ pub use self::__NSAccessibilityConstants::NSAccessibilityHorizontalScrollBarAttr
 pub use self::__NSAccessibilityConstants::NSAccessibilityHorizontalUnitDescriptionAttribute;
 #[cfg(feature = "NSAccessibilityConstants")]
 pub use self::__NSAccessibilityConstants::NSAccessibilityHorizontalUnitsAttribute;
+#[cfg(feature = "NSAccessibilityConstants")]
+pub use self::__NSAccessibilityConstants::NSAccessibilityHourMinuteDateTimeComponentsFlag;
+#[cfg(feature = "NSAccessibilityConstants")]
+pub use self::__NSAccessibilityConstants::NSAccessibilityHourMinuteSecondDateTimeComponentsFlag;
 #[cfg(feature = "NSAccessibilityConstants")]
 pub use self::__NSAccessibilityConstants::NSAccessibilityIdentifierAttribute;
 #[cfg(feature = "NSAccessibilityConstants")]
@@ -1186,11 +1329,23 @@ pub use self::__NSAccessibilityConstants::NSAccessibilityIncrementorRole;
 #[cfg(feature = "NSAccessibilityConstants")]
 pub use self::__NSAccessibilityConstants::NSAccessibilityIndexAttribute;
 #[cfg(feature = "NSAccessibilityConstants")]
+pub use self::__NSAccessibilityConstants::NSAccessibilityIndexForChildUIElementAttribute;
+#[cfg(feature = "NSAccessibilityConstants")]
+pub use self::__NSAccessibilityConstants::NSAccessibilityIndexForChildUIElementInNavigationOrderAttribute;
+#[cfg(feature = "NSAccessibilityConstants")]
 pub use self::__NSAccessibilityConstants::NSAccessibilityInsertionPointLineNumberAttribute;
+#[cfg(feature = "NSAccessibilityConstants")]
+pub use self::__NSAccessibilityConstants::NSAccessibilityItalicFontSearchKey;
+#[cfg(feature = "NSAccessibilityConstants")]
+pub use self::__NSAccessibilityConstants::NSAccessibilityKeyboardFocusableSearchKey;
 #[cfg(feature = "NSAccessibilityConstants")]
 pub use self::__NSAccessibilityConstants::NSAccessibilityLabelUIElementsAttribute;
 #[cfg(feature = "NSAccessibilityConstants")]
 pub use self::__NSAccessibilityConstants::NSAccessibilityLabelValueAttribute;
+#[cfg(feature = "NSAccessibilityConstants")]
+pub use self::__NSAccessibilityConstants::NSAccessibilityLandmarkSearchKey;
+#[cfg(feature = "NSAccessibilityConstants")]
+pub use self::__NSAccessibilityConstants::NSAccessibilityLanguageAttribute;
 #[cfg(feature = "NSAccessibilityConstants")]
 pub use self::__NSAccessibilityConstants::NSAccessibilityLanguageTextAttribute;
 #[cfg(feature = "NSAccessibilityConstants")]
@@ -1212,6 +1367,8 @@ pub use self::__NSAccessibilityConstants::NSAccessibilityLineForIndexParameteriz
 #[cfg(feature = "NSAccessibilityConstants")]
 pub use self::__NSAccessibilityConstants::NSAccessibilityLinkRole;
 #[cfg(feature = "NSAccessibilityConstants")]
+pub use self::__NSAccessibilityConstants::NSAccessibilityLinkSearchKey;
+#[cfg(feature = "NSAccessibilityConstants")]
 pub use self::__NSAccessibilityConstants::NSAccessibilityLinkTextAttribute;
 #[cfg(feature = "NSAccessibilityConstants")]
 pub use self::__NSAccessibilityConstants::NSAccessibilityLinkedUIElementsAttribute;
@@ -1222,7 +1379,13 @@ pub use self::__NSAccessibilityConstants::NSAccessibilityListItemLevelTextAttrib
 #[cfg(feature = "NSAccessibilityConstants")]
 pub use self::__NSAccessibilityConstants::NSAccessibilityListItemPrefixTextAttribute;
 #[cfg(feature = "NSAccessibilityConstants")]
+pub use self::__NSAccessibilityConstants::NSAccessibilityListMarkerRole;
+#[cfg(feature = "NSAccessibilityConstants")]
 pub use self::__NSAccessibilityConstants::NSAccessibilityListRole;
+#[cfg(feature = "NSAccessibilityConstants")]
+pub use self::__NSAccessibilityConstants::NSAccessibilityListSearchKey;
+#[cfg(feature = "NSAccessibilityConstants")]
+pub use self::__NSAccessibilityConstants::NSAccessibilityLiveRegionSearchKey;
 #[cfg(feature = "NSAccessibilityConstants")]
 pub use self::__NSAccessibilityConstants::NSAccessibilityLoadingToken;
 #[cfg(feature = "NSAccessibilityConstants")]
@@ -1274,6 +1437,8 @@ pub use self::__NSAccessibilityConstants::NSAccessibilityMinimizedAttribute;
 #[cfg(feature = "NSAccessibilityConstants")]
 pub use self::__NSAccessibilityConstants::NSAccessibilityMisspelledTextAttribute;
 #[cfg(feature = "NSAccessibilityConstants")]
+pub use self::__NSAccessibilityConstants::NSAccessibilityMisspelledWordSearchKey;
+#[cfg(feature = "NSAccessibilityConstants")]
 pub use self::__NSAccessibilityConstants::NSAccessibilityModalAttribute;
 #[cfg(feature = "NSAccessibilityConstants")]
 pub use self::__NSAccessibilityConstants::NSAccessibilityMovedNotification;
@@ -1298,6 +1463,8 @@ pub use self::__NSAccessibilityConstants::NSAccessibilityOutlineRole;
 #[cfg(feature = "NSAccessibilityConstants")]
 pub use self::__NSAccessibilityConstants::NSAccessibilityOutlineRowSubrole;
 #[cfg(feature = "NSAccessibilityConstants")]
+pub use self::__NSAccessibilityConstants::NSAccessibilityOutlineSearchKey;
+#[cfg(feature = "NSAccessibilityConstants")]
 pub use self::__NSAccessibilityConstants::NSAccessibilityOverflowButtonAttribute;
 #[cfg(feature = "NSAccessibilityConstants")]
 pub use self::__NSAccessibilityConstants::NSAccessibilityPageRole;
@@ -1306,11 +1473,15 @@ pub use self::__NSAccessibilityConstants::NSAccessibilityParameterizedAttributeN
 #[cfg(feature = "NSAccessibilityConstants")]
 pub use self::__NSAccessibilityConstants::NSAccessibilityParentAttribute;
 #[cfg(feature = "NSAccessibilityConstants")]
+pub use self::__NSAccessibilityConstants::NSAccessibilityPathAttribute;
+#[cfg(feature = "NSAccessibilityConstants")]
 pub use self::__NSAccessibilityConstants::NSAccessibilityPicasUnitValue;
 #[cfg(feature = "NSAccessibilityConstants")]
 pub use self::__NSAccessibilityConstants::NSAccessibilityPickAction;
 #[cfg(feature = "NSAccessibilityConstants")]
 pub use self::__NSAccessibilityConstants::NSAccessibilityPlaceholderValueAttribute;
+#[cfg(feature = "NSAccessibilityConstants")]
+pub use self::__NSAccessibilityConstants::NSAccessibilityPlainTextSearchKey;
 #[cfg(feature = "NSAccessibilityConstants")]
 pub use self::__NSAccessibilityConstants::NSAccessibilityPointsUnitValue;
 #[cfg(feature = "NSAccessibilityConstants")]
@@ -1340,6 +1511,8 @@ pub use self::__NSAccessibilityConstants::NSAccessibilityRadioButtonRole;
 #[cfg(feature = "NSAccessibilityConstants")]
 pub use self::__NSAccessibilityConstants::NSAccessibilityRadioGroupRole;
 #[cfg(feature = "NSAccessibilityConstants")]
+pub use self::__NSAccessibilityConstants::NSAccessibilityRadioGroupSearchKey;
+#[cfg(feature = "NSAccessibilityConstants")]
 pub use self::__NSAccessibilityConstants::NSAccessibilityRaiseAction;
 #[cfg(feature = "NSAccessibilityConstants")]
 pub use self::__NSAccessibilityConstants::NSAccessibilityRangeForIndexParameterizedAttribute;
@@ -1355,6 +1528,8 @@ pub use self::__NSAccessibilityConstants::NSAccessibilityRelevanceIndicatorRole;
 pub use self::__NSAccessibilityConstants::NSAccessibilityRequiredAttribute;
 #[cfg(feature = "NSAccessibilityConstants")]
 pub use self::__NSAccessibilityConstants::NSAccessibilityResizedNotification;
+#[cfg(feature = "NSAccessibilityConstants")]
+pub use self::__NSAccessibilityConstants::NSAccessibilityResultsForSearchPredicateParameterizedAttribute;
 #[cfg(feature = "NSAccessibilityConstants")]
 pub use self::__NSAccessibilityConstants::NSAccessibilityRightTabStopMarkerTypeValue;
 #[cfg(feature = "NSAccessibilityConstants")]
@@ -1390,6 +1565,8 @@ pub use self::__NSAccessibilityConstants::NSAccessibilityRulerRole;
 #[cfg(feature = "NSAccessibilityConstants")]
 pub use self::__NSAccessibilityConstants::NSAccessibilityRulerUnitValue;
 #[cfg(feature = "NSAccessibilityConstants")]
+pub use self::__NSAccessibilityConstants::NSAccessibilitySameTypeSearchKey;
+#[cfg(feature = "NSAccessibilityConstants")]
 pub use self::__NSAccessibilityConstants::NSAccessibilityScreenPointForLayoutPointParameterizedAttribute;
 #[cfg(feature = "NSAccessibilityConstants")]
 pub use self::__NSAccessibilityConstants::NSAccessibilityScreenSizeForLayoutSizeParameterizedAttribute;
@@ -1398,11 +1575,39 @@ pub use self::__NSAccessibilityConstants::NSAccessibilityScrollAreaRole;
 #[cfg(feature = "NSAccessibilityConstants")]
 pub use self::__NSAccessibilityConstants::NSAccessibilityScrollBarRole;
 #[cfg(feature = "NSAccessibilityConstants")]
+pub use self::__NSAccessibilityConstants::NSAccessibilityScrollToVisibleAction;
+#[cfg(feature = "NSAccessibilityConstants")]
 pub use self::__NSAccessibilityConstants::NSAccessibilitySearchButtonAttribute;
+#[cfg(feature = "NSAccessibilityConstants")]
+pub use self::__NSAccessibilityConstants::NSAccessibilitySearchCurrentElementKey;
+#[cfg(feature = "NSAccessibilityConstants")]
+pub use self::__NSAccessibilityConstants::NSAccessibilitySearchCurrentRangeKey;
+#[cfg(feature = "NSAccessibilityConstants")]
+pub use self::__NSAccessibilityConstants::NSAccessibilitySearchDirectionKey;
+#[cfg(feature = "NSAccessibilityConstants")]
+pub use self::__NSAccessibilityConstants::NSAccessibilitySearchDirectionNext;
+#[cfg(feature = "NSAccessibilityConstants")]
+pub use self::__NSAccessibilityConstants::NSAccessibilitySearchDirectionPrevious;
 #[cfg(feature = "NSAccessibilityConstants")]
 pub use self::__NSAccessibilityConstants::NSAccessibilitySearchFieldSubrole;
 #[cfg(feature = "NSAccessibilityConstants")]
+pub use self::__NSAccessibilityConstants::NSAccessibilitySearchIdentifiersKey;
+#[cfg(feature = "NSAccessibilityConstants")]
+pub use self::__NSAccessibilityConstants::NSAccessibilitySearchKey;
+#[cfg(feature = "NSAccessibilityConstants")]
 pub use self::__NSAccessibilityConstants::NSAccessibilitySearchMenuAttribute;
+#[cfg(feature = "NSAccessibilityConstants")]
+pub use self::__NSAccessibilityConstants::NSAccessibilitySearchResultDescriptionOverrideKey;
+#[cfg(feature = "NSAccessibilityConstants")]
+pub use self::__NSAccessibilityConstants::NSAccessibilitySearchResultElementKey;
+#[cfg(feature = "NSAccessibilityConstants")]
+pub use self::__NSAccessibilityConstants::NSAccessibilitySearchResultLoaderKey;
+#[cfg(feature = "NSAccessibilityConstants")]
+pub use self::__NSAccessibilityConstants::NSAccessibilitySearchResultRangeKey;
+#[cfg(feature = "NSAccessibilityConstants")]
+pub use self::__NSAccessibilityConstants::NSAccessibilitySearchResultsLimitKey;
+#[cfg(feature = "NSAccessibilityConstants")]
+pub use self::__NSAccessibilityConstants::NSAccessibilitySearchTextKey;
 #[cfg(feature = "NSAccessibilityConstants")]
 pub use self::__NSAccessibilityConstants::NSAccessibilitySectionListSubrole;
 #[cfg(feature = "NSAccessibilityConstants")]
@@ -1482,17 +1687,23 @@ pub use self::__NSAccessibilityConstants::NSAccessibilityStandardWindowSubrole;
 #[cfg(feature = "NSAccessibilityConstants")]
 pub use self::__NSAccessibilityConstants::NSAccessibilityStaticTextRole;
 #[cfg(feature = "NSAccessibilityConstants")]
+pub use self::__NSAccessibilityConstants::NSAccessibilityStaticTextSearchKey;
+#[cfg(feature = "NSAccessibilityConstants")]
 pub use self::__NSAccessibilityConstants::NSAccessibilityStrikethroughColorTextAttribute;
 #[cfg(feature = "NSAccessibilityConstants")]
 pub use self::__NSAccessibilityConstants::NSAccessibilityStrikethroughTextAttribute;
 #[cfg(feature = "NSAccessibilityConstants")]
 pub use self::__NSAccessibilityConstants::NSAccessibilityStringForRangeParameterizedAttribute;
 #[cfg(feature = "NSAccessibilityConstants")]
+pub use self::__NSAccessibilityConstants::NSAccessibilityStyleChangeSearchKey;
+#[cfg(feature = "NSAccessibilityConstants")]
 pub use self::__NSAccessibilityConstants::NSAccessibilityStyleRangeForIndexParameterizedAttribute;
 #[cfg(feature = "NSAccessibilityConstants")]
 pub use self::__NSAccessibilityConstants::NSAccessibilitySubrole;
 #[cfg(feature = "NSAccessibilityConstants")]
 pub use self::__NSAccessibilityConstants::NSAccessibilitySubroleAttribute;
+#[cfg(feature = "NSAccessibilityConstants")]
+pub use self::__NSAccessibilityConstants::NSAccessibilitySuggestionSubrole;
 #[cfg(feature = "NSAccessibilityConstants")]
 pub use self::__NSAccessibilityConstants::NSAccessibilitySuperscriptTextAttribute;
 #[cfg(feature = "NSAccessibilityConstants")]
@@ -1512,6 +1723,10 @@ pub use self::__NSAccessibilityConstants::NSAccessibilityTableRole;
 #[cfg(feature = "NSAccessibilityConstants")]
 pub use self::__NSAccessibilityConstants::NSAccessibilityTableRowSubrole;
 #[cfg(feature = "NSAccessibilityConstants")]
+pub use self::__NSAccessibilityConstants::NSAccessibilityTableSameLevelSearchKey;
+#[cfg(feature = "NSAccessibilityConstants")]
+pub use self::__NSAccessibilityConstants::NSAccessibilityTableSearchKey;
+#[cfg(feature = "NSAccessibilityConstants")]
 pub use self::__NSAccessibilityConstants::NSAccessibilityTabsAttribute;
 #[cfg(feature = "NSAccessibilityConstants")]
 pub use self::__NSAccessibilityConstants::NSAccessibilityTailIndentMarkerTypeValue;
@@ -1522,9 +1737,23 @@ pub use self::__NSAccessibilityConstants::NSAccessibilityTextAreaRole;
 #[cfg(feature = "NSAccessibilityConstants")]
 pub use self::__NSAccessibilityConstants::NSAccessibilityTextAttachmentSubrole;
 #[cfg(feature = "NSAccessibilityConstants")]
+pub use self::__NSAccessibilityConstants::NSAccessibilityTextCompletionAttribute;
+#[cfg(feature = "NSAccessibilityConstants")]
 pub use self::__NSAccessibilityConstants::NSAccessibilityTextFieldRole;
 #[cfg(feature = "NSAccessibilityConstants")]
+pub use self::__NSAccessibilityConstants::NSAccessibilityTextFieldSearchKey;
+#[cfg(feature = "NSAccessibilityConstants")]
+pub use self::__NSAccessibilityConstants::NSAccessibilityTextInputMarkedRangeAttribute;
+#[cfg(feature = "NSAccessibilityConstants")]
+pub use self::__NSAccessibilityConstants::NSAccessibilityTextInputMarkingSessionBeganNotification;
+#[cfg(feature = "NSAccessibilityConstants")]
+pub use self::__NSAccessibilityConstants::NSAccessibilityTextInputMarkingSessionEndedNotification;
+#[cfg(feature = "NSAccessibilityConstants")]
 pub use self::__NSAccessibilityConstants::NSAccessibilityTextLinkSubrole;
+#[cfg(feature = "NSAccessibilityConstants")]
+pub use self::__NSAccessibilityConstants::NSAccessibilityTextStateChangeTypeKey;
+#[cfg(feature = "NSAccessibilityConstants")]
+pub use self::__NSAccessibilityConstants::NSAccessibilityTextStateSyncKey;
 #[cfg(feature = "NSAccessibilityConstants")]
 pub use self::__NSAccessibilityConstants::NSAccessibilityTimelineSubrole;
 #[cfg(feature = "NSAccessibilityConstants")]
@@ -1546,11 +1775,15 @@ pub use self::__NSAccessibilityConstants::NSAccessibilityTopLevelUIElementAttrib
 #[cfg(feature = "NSAccessibilityConstants")]
 pub use self::__NSAccessibilityConstants::NSAccessibilityUIElementDestroyedNotification;
 #[cfg(feature = "NSAccessibilityConstants")]
+pub use self::__NSAccessibilityConstants::NSAccessibilityUIElementsForSearchPredicateParameterizedAttribute;
+#[cfg(feature = "NSAccessibilityConstants")]
 pub use self::__NSAccessibilityConstants::NSAccessibilityUIElementsKey;
 #[cfg(feature = "NSAccessibilityConstants")]
 pub use self::__NSAccessibilityConstants::NSAccessibilityURLAttribute;
 #[cfg(feature = "NSAccessibilityConstants")]
 pub use self::__NSAccessibilityConstants::NSAccessibilityUnderlineColorTextAttribute;
+#[cfg(feature = "NSAccessibilityConstants")]
+pub use self::__NSAccessibilityConstants::NSAccessibilityUnderlineSearchKey;
 #[cfg(feature = "NSAccessibilityConstants")]
 pub use self::__NSAccessibilityConstants::NSAccessibilityUnderlineTextAttribute;
 #[cfg(feature = "NSAccessibilityConstants")]
@@ -1573,6 +1806,8 @@ pub use self::__NSAccessibilityConstants::NSAccessibilityUnknownSortDirectionVal
 pub use self::__NSAccessibilityConstants::NSAccessibilityUnknownSubrole;
 #[cfg(feature = "NSAccessibilityConstants")]
 pub use self::__NSAccessibilityConstants::NSAccessibilityUnknownUnitValue;
+#[cfg(feature = "NSAccessibilityConstants")]
+pub use self::__NSAccessibilityConstants::NSAccessibilityUnvisitedLinkSearchKey;
 #[cfg(feature = "NSAccessibilityConstants")]
 pub use self::__NSAccessibilityConstants::NSAccessibilityValueAttribute;
 #[cfg(feature = "NSAccessibilityConstants")]
@@ -1602,7 +1837,13 @@ pub use self::__NSAccessibilityConstants::NSAccessibilityVisibleNameKey;
 #[cfg(feature = "NSAccessibilityConstants")]
 pub use self::__NSAccessibilityConstants::NSAccessibilityVisibleRowsAttribute;
 #[cfg(feature = "NSAccessibilityConstants")]
+pub use self::__NSAccessibilityConstants::NSAccessibilityVisitedAttribute;
+#[cfg(feature = "NSAccessibilityConstants")]
+pub use self::__NSAccessibilityConstants::NSAccessibilityVisitedLinkSearchKey;
+#[cfg(feature = "NSAccessibilityConstants")]
 pub use self::__NSAccessibilityConstants::NSAccessibilityWarningValueAttribute;
+#[cfg(feature = "NSAccessibilityConstants")]
+pub use self::__NSAccessibilityConstants::NSAccessibilityWebAreaRole;
 #[cfg(feature = "NSAccessibilityConstants")]
 pub use self::__NSAccessibilityConstants::NSAccessibilityWindowAttribute;
 #[cfg(feature = "NSAccessibilityConstants")]
@@ -1619,6 +1860,10 @@ pub use self::__NSAccessibilityConstants::NSAccessibilityWindowResizedNotificati
 pub use self::__NSAccessibilityConstants::NSAccessibilityWindowRole;
 #[cfg(feature = "NSAccessibilityConstants")]
 pub use self::__NSAccessibilityConstants::NSAccessibilityWindowsAttribute;
+#[cfg(feature = "NSAccessibilityConstants")]
+pub use self::__NSAccessibilityConstants::NSAccessibilityYearMonthDateTimeComponentsFlag;
+#[cfg(feature = "NSAccessibilityConstants")]
+pub use self::__NSAccessibilityConstants::NSAccessibilityYearMonthDayDateTimeComponentsFlag;
 #[cfg(feature = "NSAccessibilityConstants")]
 pub use self::__NSAccessibilityConstants::NSAccessibilityZoomButtonAttribute;
 #[cfg(feature = "NSAccessibilityConstants")]
@@ -1683,6 +1928,10 @@ pub use self::__NSAccessibilityProtocols::NSAccessibilitySwitch;
 pub use self::__NSAccessibilityProtocols::NSAccessibilityTable;
 #[cfg(all(feature = "NSActionCell", feature = "NSCell"))]
 pub use self::__NSActionCell::NSActionCell;
+#[cfg(feature = "NSAdaptiveImageGlyph")]
+pub use self::__NSAdaptiveImageGlyph::NSAdaptiveImageGlyph;
+#[cfg(feature = "NSAdaptiveImageGlyph")]
+pub use self::__NSAdaptiveImageGlyph::NSAttributedStringAdaptiveImageGlyphConveniences;
 #[cfg(feature = "NSAffineTransform")]
 pub use self::__NSAffineTransform::NSAffineTransformNSAppKitAdditions;
 #[cfg(feature = "NSAlert")]
@@ -1986,6 +2235,10 @@ pub use self::__NSApplication::NSApplicationProtectedDataDidBecomeAvailableNotif
 #[cfg(feature = "NSApplication")]
 pub use self::__NSApplication::NSApplicationProtectedDataWillBecomeUnavailableNotification;
 #[cfg(feature = "NSApplication")]
+pub use self::__NSApplication::NSApplicationShouldBeginSuppressingHighDynamicRangeContentNotification;
+#[cfg(feature = "NSApplication")]
+pub use self::__NSApplication::NSApplicationShouldEndSuppressingHighDynamicRangeContentNotification;
+#[cfg(feature = "NSApplication")]
 pub use self::__NSApplication::NSApplicationTerminateReply;
 #[cfg(feature = "NSApplication")]
 pub use self::__NSApplication::NSApplicationWillBecomeActiveNotification;
@@ -2045,6 +2298,8 @@ pub use self::__NSApplication::NSUpdateDynamicServices;
 pub use self::__NSApplication::NSUpdateWindowsRunLoopOrdering;
 #[cfg(feature = "NSApplication")]
 pub use self::__NSApplication::NSWindowListOptions;
+#[cfg(feature = "NSApplication")]
+pub(crate) use self::__NSApplication::_NSModalSession;
 #[cfg(all(
     feature = "NSArrayController",
     feature = "NSController",
@@ -2052,9 +2307,17 @@ pub use self::__NSApplication::NSWindowListOptions;
 ))]
 pub use self::__NSArrayController::NSArrayController;
 #[cfg(feature = "NSAttributedString")]
+pub use self::__NSAttributedString::NSAdaptiveImageGlyphAttributeName;
+#[cfg(feature = "NSAttributedString")]
 pub use self::__NSAttributedString::NSAppearanceDocumentAttribute;
 #[cfg(feature = "NSAttributedString")]
 pub use self::__NSAttributedString::NSAttachmentAttributeName;
+#[cfg(feature = "NSAttributedString")]
+pub use self::__NSAttributedString::NSAttributedStringAppKitAdditions;
+#[cfg(feature = "NSAttributedString")]
+pub use self::__NSAttributedString::NSAttributedStringAppKitAttributeFixing;
+#[cfg(feature = "NSAttributedString")]
+pub use self::__NSAttributedString::NSAttributedStringAppKitDocumentFormats;
 #[cfg(feature = "NSAttributedString")]
 pub use self::__NSAttributedString::NSAttributedStringAttributeFixing;
 #[cfg(feature = "NSAttributedString")]
@@ -2158,9 +2421,9 @@ pub use self::__NSAttributedString::NSMarkedClauseSegmentAttributeName;
 #[cfg(feature = "NSAttributedString")]
 pub use self::__NSAttributedString::NSModificationTimeDocumentAttribute;
 #[cfg(feature = "NSAttributedString")]
-pub use self::__NSAttributedString::NSMutableAttributedStringDocumentFormats;
+pub use self::__NSAttributedString::NSMutableAttributedStringAppKitAdditions;
 #[cfg(feature = "NSAttributedString")]
-pub use self::__NSAttributedString::NSMutableAttributedStringKitAdditions;
+pub use self::__NSAttributedString::NSMutableAttributedStringDocumentFormats;
 #[cfg(feature = "NSAttributedString")]
 pub use self::__NSAttributedString::NSNoUnderlineStyle;
 #[cfg(feature = "NSAttributedString")]
@@ -2223,6 +2486,30 @@ pub use self::__NSAttributedString::NSTextEffectStyle;
 pub use self::__NSAttributedString::NSTextEncodingNameDocumentAttribute;
 #[cfg(feature = "NSAttributedString")]
 pub use self::__NSAttributedString::NSTextEncodingNameDocumentOption;
+#[cfg(feature = "NSAttributedString")]
+pub use self::__NSAttributedString::NSTextHighlightColorScheme;
+#[cfg(feature = "NSAttributedString")]
+pub use self::__NSAttributedString::NSTextHighlightColorSchemeAttributeName;
+#[cfg(feature = "NSAttributedString")]
+pub use self::__NSAttributedString::NSTextHighlightColorSchemeBlue;
+#[cfg(feature = "NSAttributedString")]
+pub use self::__NSAttributedString::NSTextHighlightColorSchemeDefault;
+#[cfg(feature = "NSAttributedString")]
+pub use self::__NSAttributedString::NSTextHighlightColorSchemeMint;
+#[cfg(feature = "NSAttributedString")]
+pub use self::__NSAttributedString::NSTextHighlightColorSchemeOrange;
+#[cfg(feature = "NSAttributedString")]
+pub use self::__NSAttributedString::NSTextHighlightColorSchemePink;
+#[cfg(feature = "NSAttributedString")]
+pub use self::__NSAttributedString::NSTextHighlightColorSchemePurple;
+#[cfg(feature = "NSAttributedString")]
+pub use self::__NSAttributedString::NSTextHighlightStyle;
+#[cfg(feature = "NSAttributedString")]
+pub use self::__NSAttributedString::NSTextHighlightStyleAttributeName;
+#[cfg(feature = "NSAttributedString")]
+pub use self::__NSAttributedString::NSTextHighlightStyleDefault;
+#[cfg(feature = "NSAttributedString")]
+pub use self::__NSAttributedString::NSTextKit1ListMarkerFormatDocumentOption;
 #[cfg(feature = "NSAttributedString")]
 pub use self::__NSAttributedString::NSTextLayoutSectionKey;
 #[cfg(feature = "NSAttributedString")]
@@ -2291,6 +2578,14 @@ pub use self::__NSAttributedString::NSWordMLTextDocumentType;
 pub use self::__NSAttributedString::NSWritingDirectionAttributeName;
 #[cfg(feature = "NSAttributedString")]
 pub use self::__NSAttributedString::NSWritingDirectionFormatType;
+#[cfg(feature = "NSAttributedString")]
+pub use self::__NSAttributedString::NSWritingToolsExclusionAttributeName;
+#[cfg(all(
+    feature = "NSBackgroundExtensionView",
+    feature = "NSResponder",
+    feature = "NSView"
+))]
+pub use self::__NSBackgroundExtensionView::NSBackgroundExtensionView;
 #[cfg(feature = "NSBezierPath")]
 pub use self::__NSBezierPath::NSBevelLineJoinStyle;
 #[cfg(feature = "NSBezierPath")]
@@ -2549,9 +2844,19 @@ pub use self::__NSCell::NSControlTint;
 pub use self::__NSCell::NSControlTintDidChangeNotification;
 #[cfg(feature = "NSCell")]
 pub use self::__NSCell::NSDoubleType;
-#[cfg(all(feature = "NSCell", feature = "NSGraphics", feature = "NSImage"))]
+#[cfg(all(
+    feature = "NSCell",
+    feature = "NSGraphics",
+    feature = "NSImage",
+    feature = "objc2-core-foundation"
+))]
 pub use self::__NSCell::NSDrawNinePartImage;
-#[cfg(all(feature = "NSCell", feature = "NSGraphics", feature = "NSImage"))]
+#[cfg(all(
+    feature = "NSCell",
+    feature = "NSGraphics",
+    feature = "NSImage",
+    feature = "objc2-core-foundation"
+))]
 pub use self::__NSCell::NSDrawThreePartImage;
 #[cfg(feature = "NSCell")]
 pub use self::__NSCell::NSFloatType;
@@ -2666,9 +2971,15 @@ pub use self::__NSCollectionViewCompositionalLayout::NSCollectionViewComposition
 pub use self::__NSCollectionViewCompositionalLayout::NSCollectionViewCompositionalLayoutConfiguration;
 #[cfg(all(feature = "NSCollectionViewCompositionalLayout", feature = "block2"))]
 pub use self::__NSCollectionViewCompositionalLayout::NSCollectionViewCompositionalLayoutSectionProvider;
-#[cfg(feature = "NSCollectionViewCompositionalLayout")]
+#[cfg(all(
+    feature = "NSCollectionViewCompositionalLayout",
+    feature = "objc2-core-foundation"
+))]
 pub use self::__NSCollectionViewCompositionalLayout::NSDirectionalEdgeInsets;
-#[cfg(feature = "NSCollectionViewCompositionalLayout")]
+#[cfg(all(
+    feature = "NSCollectionViewCompositionalLayout",
+    feature = "objc2-core-foundation"
+))]
 pub use self::__NSCollectionViewCompositionalLayout::NSDirectionalEdgeInsetsZero;
 #[cfg(feature = "NSCollectionViewCompositionalLayout")]
 pub use self::__NSCollectionViewCompositionalLayout::NSDirectionalRectEdge;
@@ -2853,6 +3164,8 @@ pub use self::__NSComboButton::NSComboButtonStyle;
 #[cfg(all(feature = "NSControl", feature = "NSResponder", feature = "NSView"))]
 pub use self::__NSControl::NSControl;
 #[cfg(feature = "NSControl")]
+pub use self::__NSControl::NSControlBorderShape;
+#[cfg(feature = "NSControl")]
 pub use self::__NSControl::NSControlTextDidBeginEditingNotification;
 #[cfg(feature = "NSControl")]
 pub use self::__NSControl::NSControlTextDidChangeNotification;
@@ -2866,6 +3179,10 @@ pub use self::__NSController::NSController;
 pub use self::__NSCursor::NSAppKitVersionNumberWithCursorSizeSupport;
 #[cfg(feature = "NSCursor")]
 pub use self::__NSCursor::NSCursor;
+#[cfg(feature = "NSCursor")]
+pub use self::__NSCursor::NSCursorFrameResizeDirections;
+#[cfg(feature = "NSCursor")]
+pub use self::__NSCursor::NSCursorFrameResizePosition;
 #[cfg(all(feature = "NSCustomImageRep", feature = "NSImageRep"))]
 pub use self::__NSCustomImageRep::NSCustomImageRep;
 #[cfg(all(feature = "NSCustomTouchBarItem", feature = "NSTouchBarItem"))]
@@ -2938,6 +3255,10 @@ pub use self::__NSDiffableDataSource::NSCollectionViewDiffableDataSource;
 pub use self::__NSDiffableDataSource::NSCollectionViewDiffableDataSourceSupplementaryViewProvider;
 #[cfg(feature = "NSDiffableDataSource")]
 pub use self::__NSDiffableDataSource::NSDiffableDataSourceSnapshot;
+#[cfg(feature = "NSDirection")]
+pub use self::__NSDirection::NSHorizontalDirections;
+#[cfg(feature = "NSDirection")]
+pub use self::__NSDirection::NSVerticalDirections;
 #[cfg(all(feature = "NSApplication", feature = "NSDockTile"))]
 pub use self::__NSDockTile::NSAppKitVersionNumberWithDockTilePlugInSupport;
 #[cfg(feature = "NSDockTile")]
@@ -3402,7 +3723,7 @@ pub use self::__NSFont::NSControlGlyph;
 pub use self::__NSFont::NSConvertGlyphsToPackedGlyphs;
 #[cfg(feature = "NSFont")]
 pub use self::__NSFont::NSFont;
-#[cfg(feature = "NSFont")]
+#[cfg(all(feature = "NSFont", feature = "objc2-core-foundation"))]
 pub use self::__NSFont::NSFontIdentityMatrix;
 #[cfg(feature = "NSFont")]
 pub use self::__NSFont::NSFontRenderingMode;
@@ -3596,37 +3917,37 @@ pub use self::__NSFontDescriptor::NSFontVariationAxisNameKey;
 pub use self::__NSFontDescriptor::NSFontVerticalTrait;
 #[cfg(feature = "NSFontDescriptor")]
 pub use self::__NSFontDescriptor::NSFontVisibleNameAttribute;
-#[cfg(feature = "NSFontDescriptor")]
+#[cfg(all(feature = "NSFontDescriptor", feature = "objc2-core-foundation"))]
 pub use self::__NSFontDescriptor::NSFontWeight;
-#[cfg(feature = "NSFontDescriptor")]
+#[cfg(all(feature = "NSFontDescriptor", feature = "objc2-core-foundation"))]
 pub use self::__NSFontDescriptor::NSFontWeightBlack;
-#[cfg(feature = "NSFontDescriptor")]
+#[cfg(all(feature = "NSFontDescriptor", feature = "objc2-core-foundation"))]
 pub use self::__NSFontDescriptor::NSFontWeightBold;
-#[cfg(feature = "NSFontDescriptor")]
+#[cfg(all(feature = "NSFontDescriptor", feature = "objc2-core-foundation"))]
 pub use self::__NSFontDescriptor::NSFontWeightHeavy;
-#[cfg(feature = "NSFontDescriptor")]
+#[cfg(all(feature = "NSFontDescriptor", feature = "objc2-core-foundation"))]
 pub use self::__NSFontDescriptor::NSFontWeightLight;
-#[cfg(feature = "NSFontDescriptor")]
+#[cfg(all(feature = "NSFontDescriptor", feature = "objc2-core-foundation"))]
 pub use self::__NSFontDescriptor::NSFontWeightMedium;
-#[cfg(feature = "NSFontDescriptor")]
+#[cfg(all(feature = "NSFontDescriptor", feature = "objc2-core-foundation"))]
 pub use self::__NSFontDescriptor::NSFontWeightRegular;
-#[cfg(feature = "NSFontDescriptor")]
+#[cfg(all(feature = "NSFontDescriptor", feature = "objc2-core-foundation"))]
 pub use self::__NSFontDescriptor::NSFontWeightSemibold;
-#[cfg(feature = "NSFontDescriptor")]
+#[cfg(all(feature = "NSFontDescriptor", feature = "objc2-core-foundation"))]
 pub use self::__NSFontDescriptor::NSFontWeightThin;
 #[cfg(feature = "NSFontDescriptor")]
 pub use self::__NSFontDescriptor::NSFontWeightTrait;
-#[cfg(feature = "NSFontDescriptor")]
+#[cfg(all(feature = "NSFontDescriptor", feature = "objc2-core-foundation"))]
 pub use self::__NSFontDescriptor::NSFontWeightUltraLight;
-#[cfg(feature = "NSFontDescriptor")]
+#[cfg(all(feature = "NSFontDescriptor", feature = "objc2-core-foundation"))]
 pub use self::__NSFontDescriptor::NSFontWidth;
-#[cfg(feature = "NSFontDescriptor")]
+#[cfg(all(feature = "NSFontDescriptor", feature = "objc2-core-foundation"))]
 pub use self::__NSFontDescriptor::NSFontWidthCompressed;
-#[cfg(feature = "NSFontDescriptor")]
+#[cfg(all(feature = "NSFontDescriptor", feature = "objc2-core-foundation"))]
 pub use self::__NSFontDescriptor::NSFontWidthCondensed;
-#[cfg(feature = "NSFontDescriptor")]
+#[cfg(all(feature = "NSFontDescriptor", feature = "objc2-core-foundation"))]
 pub use self::__NSFontDescriptor::NSFontWidthExpanded;
-#[cfg(feature = "NSFontDescriptor")]
+#[cfg(all(feature = "NSFontDescriptor", feature = "objc2-core-foundation"))]
 pub use self::__NSFontDescriptor::NSFontWidthStandard;
 #[cfg(feature = "NSFontDescriptor")]
 pub use self::__NSFontDescriptor::NSFontWidthTrait;
@@ -3701,6 +4022,20 @@ pub use self::__NSGestureRecognizer::NSGestureRecognizer;
 pub use self::__NSGestureRecognizer::NSGestureRecognizerDelegate;
 #[cfg(feature = "NSGestureRecognizer")]
 pub use self::__NSGestureRecognizer::NSGestureRecognizerState;
+#[cfg(all(
+    feature = "NSGlassEffectView",
+    feature = "NSResponder",
+    feature = "NSView"
+))]
+pub use self::__NSGlassEffectView::NSGlassEffectContainerView;
+#[cfg(all(
+    feature = "NSGlassEffectView",
+    feature = "NSResponder",
+    feature = "NSView"
+))]
+pub use self::__NSGlassEffectView::NSGlassEffectView;
+#[cfg(feature = "NSGlassEffectView")]
+pub use self::__NSGlassEffectView::NSGlassEffectViewStyle;
 #[cfg(feature = "NSGlyphGenerator")]
 pub use self::__NSGlyphGenerator::NSGlyphGenerator;
 #[cfg(feature = "NSGlyphGenerator")]
@@ -3733,7 +4068,7 @@ pub use self::__NSGraphics::NSBestDepth;
 pub use self::__NSGraphics::NSBitsPerPixelFromDepth;
 #[cfg(feature = "NSGraphics")]
 pub use self::__NSGraphics::NSBitsPerSampleFromDepth;
-#[cfg(feature = "NSGraphics")]
+#[cfg(all(feature = "NSGraphics", feature = "objc2-core-foundation"))]
 pub use self::__NSGraphics::NSBlack;
 #[cfg(feature = "NSGraphics")]
 pub use self::__NSGraphics::NSCalibratedBlackColorSpace;
@@ -3815,7 +4150,7 @@ pub use self::__NSGraphics::NSCountWindows;
 pub use self::__NSGraphics::NSCountWindowsForContext;
 #[cfg(feature = "NSGraphics")]
 pub use self::__NSGraphics::NSCustomColorSpace;
-#[cfg(feature = "NSGraphics")]
+#[cfg(all(feature = "NSGraphics", feature = "objc2-core-foundation"))]
 pub use self::__NSGraphics::NSDarkGray;
 #[cfg(feature = "NSGraphics")]
 pub use self::__NSGraphics::NSDeviceBitsPerSample;
@@ -3857,7 +4192,7 @@ pub use self::__NSGraphics::NSDrawGrayBezel;
 pub use self::__NSGraphics::NSDrawGroove;
 #[cfg(feature = "NSGraphics")]
 pub use self::__NSGraphics::NSDrawLightBezel;
-#[cfg(feature = "NSGraphics")]
+#[cfg(all(feature = "NSGraphics", feature = "objc2-core-foundation"))]
 pub use self::__NSGraphics::NSDrawTiledRects;
 #[cfg(feature = "NSGraphics")]
 pub use self::__NSGraphics::NSDrawWhiteBezel;
@@ -3873,15 +4208,15 @@ pub use self::__NSGraphics::NSFocusRingPlacement;
 pub use self::__NSGraphics::NSFocusRingType;
 #[cfg(feature = "NSGraphics")]
 pub use self::__NSGraphics::NSFrameRect;
-#[cfg(feature = "NSGraphics")]
+#[cfg(all(feature = "NSGraphics", feature = "objc2-core-foundation"))]
 pub use self::__NSGraphics::NSFrameRectWithWidth;
-#[cfg(feature = "NSGraphics")]
+#[cfg(all(feature = "NSGraphics", feature = "objc2-core-foundation"))]
 pub use self::__NSGraphics::NSFrameRectWithWidthUsingOperation;
 #[cfg(feature = "NSGraphics")]
 pub use self::__NSGraphics::NSGetWindowServerMemory;
 #[cfg(feature = "NSGraphics")]
 pub use self::__NSGraphics::NSHighlightRect;
-#[cfg(feature = "NSGraphics")]
+#[cfg(all(feature = "NSGraphics", feature = "objc2-core-foundation"))]
 pub use self::__NSGraphics::NSLightGray;
 #[cfg(feature = "NSGraphics")]
 pub use self::__NSGraphics::NSNamedColorSpace;
@@ -3907,7 +4242,7 @@ pub use self::__NSGraphics::NSRectFillListUsingOperation;
 pub use self::__NSGraphics::NSRectFillListWithColors;
 #[cfg(all(feature = "NSColor", feature = "NSGraphics"))]
 pub use self::__NSGraphics::NSRectFillListWithColorsUsingOperation;
-#[cfg(feature = "NSGraphics")]
+#[cfg(all(feature = "NSGraphics", feature = "objc2-core-foundation"))]
 pub use self::__NSGraphics::NSRectFillListWithGrays;
 #[cfg(feature = "NSGraphics")]
 pub use self::__NSGraphics::NSRectFillUsingOperation;
@@ -3915,7 +4250,7 @@ pub use self::__NSGraphics::NSRectFillUsingOperation;
 pub use self::__NSGraphics::NSSetFocusRingStyle;
 #[cfg(feature = "NSGraphics")]
 pub use self::__NSGraphics::NSShowAnimationEffect;
-#[cfg(feature = "NSGraphics")]
+#[cfg(all(feature = "NSGraphics", feature = "objc2-core-foundation"))]
 pub use self::__NSGraphics::NSWhite;
 #[cfg(feature = "NSGraphics")]
 pub use self::__NSGraphics::NSWindowDepth;
@@ -3953,7 +4288,7 @@ pub use self::__NSGridView::NSGridRow;
 pub use self::__NSGridView::NSGridRowAlignment;
 #[cfg(all(feature = "NSGridView", feature = "NSResponder", feature = "NSView"))]
 pub use self::__NSGridView::NSGridView;
-#[cfg(feature = "NSGridView")]
+#[cfg(all(feature = "NSGridView", feature = "objc2-core-foundation"))]
 pub use self::__NSGridView::NSGridViewSizeForContent;
 #[cfg(all(feature = "NSGroupTouchBarItem", feature = "NSTouchBarItem"))]
 pub use self::__NSGroupTouchBarItem::NSGroupTouchBarItem;
@@ -4276,9 +4611,15 @@ pub use self::__NSImage::NSImageNameUserGroup;
 #[cfg(feature = "NSImage")]
 pub use self::__NSImage::NSImageNameUserGuest;
 #[cfg(feature = "NSImage")]
+pub use self::__NSImage::NSImageResizingMode;
+#[cfg(feature = "NSImage")]
+pub use self::__NSImage::NSImageSymbolColorRenderingMode;
+#[cfg(feature = "NSImage")]
 pub use self::__NSImage::NSImageSymbolConfiguration;
 #[cfg(feature = "NSImage")]
 pub use self::__NSImage::NSImageSymbolScale;
+#[cfg(feature = "NSImage")]
+pub use self::__NSImage::NSImageSymbolVariableValueMode;
 #[cfg(feature = "NSImageCell")]
 pub use self::__NSImageCell::NSImageAlignment;
 #[cfg(all(feature = "NSCell", feature = "NSImageCell"))]
@@ -4328,6 +4669,8 @@ pub use self::__NSInterfaceStyle::NSNextStepInterfaceStyle;
 pub use self::__NSInterfaceStyle::NSNoInterfaceStyle;
 #[cfg(feature = "NSInterfaceStyle")]
 pub use self::__NSInterfaceStyle::NSWindows95InterfaceStyle;
+#[cfg(feature = "NSItemBadge")]
+pub use self::__NSItemBadge::NSItemBadge;
 #[cfg(feature = "NSItemProvider")]
 pub use self::__NSItemProvider::NSItemProviderNSItemSourceInfo;
 #[cfg(feature = "NSItemProvider")]
@@ -4610,9 +4953,9 @@ pub use self::__NSLayoutConstraint::NSLayoutPriorityRequired;
 pub use self::__NSLayoutConstraint::NSLayoutPriorityWindowSizeStayPut;
 #[cfg(feature = "NSLayoutConstraint")]
 pub use self::__NSLayoutConstraint::NSLayoutRelation;
-#[cfg(feature = "NSLayoutConstraint")]
+#[cfg(all(feature = "NSLayoutConstraint", feature = "objc2-core-foundation"))]
 pub use self::__NSLayoutConstraint::NSViewNoInstrinsicMetric;
-#[cfg(feature = "NSLayoutConstraint")]
+#[cfg(all(feature = "NSLayoutConstraint", feature = "objc2-core-foundation"))]
 pub use self::__NSLayoutConstraint::NSViewNoIntrinsicMetric;
 #[cfg(feature = "NSLayoutGuide")]
 pub use self::__NSLayoutGuide::NSLayoutGuide;
@@ -4738,8 +5081,14 @@ pub use self::__NSNib::NSNibName;
 pub use self::__NSNib::NSNibOwner;
 #[cfg(feature = "NSNib")]
 pub use self::__NSNib::NSNibTopLevelObjects;
+#[cfg(feature = "NSNibConnector")]
+pub use self::__NSNibConnector::NSNibConnector;
+#[cfg(all(feature = "NSNibConnector", feature = "NSNibControlConnector"))]
+pub use self::__NSNibControlConnector::NSNibControlConnector;
 #[cfg(feature = "NSNibLoading")]
 pub use self::__NSNibLoading::NSObjectNSNibAwaking;
+#[cfg(all(feature = "NSNibConnector", feature = "NSNibOutletConnector"))]
+pub use self::__NSNibOutletConnector::NSNibOutletConnector;
 #[cfg(all(feature = "NSController", feature = "NSObjectController"))]
 pub use self::__NSObjectController::NSObjectController;
 #[cfg(feature = "NSOpenGL")]
@@ -4773,7 +5122,15 @@ pub use self::__NSOpenGL::NSOpenGLCPSwapRectangle;
 #[cfg(feature = "NSOpenGL")]
 pub use self::__NSOpenGL::NSOpenGLCPSwapRectangleEnable;
 #[cfg(feature = "NSOpenGL")]
+pub use self::__NSOpenGL::NSOpenGLContext;
+#[cfg(feature = "NSOpenGL")]
 pub use self::__NSOpenGL::NSOpenGLContextParameter;
+#[cfg(all(feature = "NSOpenGL", feature = "objc2-open-gl"))]
+#[cfg(target_vendor = "apple")]
+pub use self::__NSOpenGL::NSOpenGLGetOption;
+#[cfg(all(feature = "NSOpenGL", feature = "objc2-open-gl"))]
+#[cfg(target_vendor = "apple")]
+pub use self::__NSOpenGL::NSOpenGLGetVersion;
 #[cfg(feature = "NSOpenGL")]
 pub use self::__NSOpenGL::NSOpenGLGlobalOption;
 #[cfg(feature = "NSOpenGL")]
@@ -4855,6 +5212,10 @@ pub use self::__NSOpenGL::NSOpenGLPFAVirtualScreenCount;
 #[cfg(feature = "NSOpenGL")]
 pub use self::__NSOpenGL::NSOpenGLPFAWindow;
 #[cfg(feature = "NSOpenGL")]
+pub use self::__NSOpenGL::NSOpenGLPixelBuffer;
+#[cfg(feature = "NSOpenGL")]
+pub use self::__NSOpenGL::NSOpenGLPixelFormat;
+#[cfg(feature = "NSOpenGL")]
 pub use self::__NSOpenGL::NSOpenGLPixelFormatAttribute;
 #[cfg(feature = "NSOpenGL")]
 pub use self::__NSOpenGL::NSOpenGLProfileVersion3_2Core;
@@ -4862,6 +5223,14 @@ pub use self::__NSOpenGL::NSOpenGLProfileVersion3_2Core;
 pub use self::__NSOpenGL::NSOpenGLProfileVersion4_1Core;
 #[cfg(feature = "NSOpenGL")]
 pub use self::__NSOpenGL::NSOpenGLProfileVersionLegacy;
+#[cfg(all(feature = "NSOpenGL", feature = "objc2-open-gl"))]
+#[cfg(target_vendor = "apple")]
+pub use self::__NSOpenGL::NSOpenGLSetOption;
+#[cfg(all(feature = "NSOpenGLLayer", feature = "objc2-quartz-core"))]
+#[cfg(target_vendor = "apple")]
+pub use self::__NSOpenGLLayer::NSOpenGLLayer;
+#[cfg(all(feature = "NSOpenGLView", feature = "NSResponder", feature = "NSView"))]
+pub use self::__NSOpenGLView::NSOpenGLView;
 #[cfg(all(
     feature = "NSOpenPanel",
     feature = "NSPanel",
@@ -5005,7 +5374,37 @@ pub use self::__NSPasteboard::NSPICTPboardType;
 #[cfg(feature = "NSPasteboard")]
 pub use self::__NSPasteboard::NSPasteboard;
 #[cfg(feature = "NSPasteboard")]
+pub use self::__NSPasteboard::NSPasteboardAccessBehavior;
+#[cfg(feature = "NSPasteboard")]
 pub use self::__NSPasteboard::NSPasteboardContentsOptions;
+#[cfg(feature = "NSPasteboard")]
+pub use self::__NSPasteboard::NSPasteboardDetectionPattern;
+#[cfg(feature = "NSPasteboard")]
+pub use self::__NSPasteboard::NSPasteboardDetectionPatternCalendarEvent;
+#[cfg(feature = "NSPasteboard")]
+pub use self::__NSPasteboard::NSPasteboardDetectionPatternEmailAddress;
+#[cfg(feature = "NSPasteboard")]
+pub use self::__NSPasteboard::NSPasteboardDetectionPatternFlightNumber;
+#[cfg(feature = "NSPasteboard")]
+pub use self::__NSPasteboard::NSPasteboardDetectionPatternLink;
+#[cfg(feature = "NSPasteboard")]
+pub use self::__NSPasteboard::NSPasteboardDetectionPatternMoneyAmount;
+#[cfg(feature = "NSPasteboard")]
+pub use self::__NSPasteboard::NSPasteboardDetectionPatternNumber;
+#[cfg(feature = "NSPasteboard")]
+pub use self::__NSPasteboard::NSPasteboardDetectionPatternPhoneNumber;
+#[cfg(feature = "NSPasteboard")]
+pub use self::__NSPasteboard::NSPasteboardDetectionPatternPostalAddress;
+#[cfg(feature = "NSPasteboard")]
+pub use self::__NSPasteboard::NSPasteboardDetectionPatternProbableWebSearch;
+#[cfg(feature = "NSPasteboard")]
+pub use self::__NSPasteboard::NSPasteboardDetectionPatternProbableWebURL;
+#[cfg(feature = "NSPasteboard")]
+pub use self::__NSPasteboard::NSPasteboardDetectionPatternShipmentTrackingNumber;
+#[cfg(feature = "NSPasteboard")]
+pub use self::__NSPasteboard::NSPasteboardMetadataType;
+#[cfg(feature = "NSPasteboard")]
+pub use self::__NSPasteboard::NSPasteboardMetadataTypeContentType;
 #[cfg(feature = "NSPasteboard")]
 pub use self::__NSPasteboard::NSPasteboardName;
 #[cfg(feature = "NSPasteboard")]
@@ -5579,10 +5978,16 @@ pub use self::__NSSegmentedControl::NSSegmentSwitchTracking;
 pub use self::__NSSegmentedControl::NSSegmentedControl;
 #[cfg(feature = "NSShadow")]
 pub use self::__NSShadow::NSShadow;
+#[cfg(feature = "NSSharingCollaborationModeRestriction")]
+pub use self::__NSSharingCollaborationModeRestriction::NSSharingCollaborationMode;
+#[cfg(feature = "NSSharingCollaborationModeRestriction")]
+pub use self::__NSSharingCollaborationModeRestriction::NSSharingCollaborationModeRestriction;
 #[cfg(feature = "NSSharingService")]
 pub use self::__NSSharingService::NSCloudKitSharingServiceOptions;
 #[cfg(feature = "NSSharingService")]
 pub use self::__NSSharingService::NSCloudSharingServiceDelegate;
+#[cfg(feature = "NSSharingService")]
+pub use self::__NSSharingService::NSItemProviderNSCloudKitSharing;
 #[cfg(feature = "NSSharingService")]
 pub use self::__NSSharingService::NSSharingContentScope;
 #[cfg(feature = "NSSharingService")]
@@ -5684,11 +6089,11 @@ pub use self::__NSSliderCell::NSTickMarkLeft;
 pub use self::__NSSliderCell::NSTickMarkPosition;
 #[cfg(feature = "NSSliderCell")]
 pub use self::__NSSliderCell::NSTickMarkRight;
-#[cfg(feature = "NSSliderTouchBarItem")]
+#[cfg(all(feature = "NSSliderTouchBarItem", feature = "objc2-core-foundation"))]
 pub use self::__NSSliderTouchBarItem::NSSliderAccessoryWidth;
-#[cfg(feature = "NSSliderTouchBarItem")]
+#[cfg(all(feature = "NSSliderTouchBarItem", feature = "objc2-core-foundation"))]
 pub use self::__NSSliderTouchBarItem::NSSliderAccessoryWidthDefault;
-#[cfg(feature = "NSSliderTouchBarItem")]
+#[cfg(all(feature = "NSSliderTouchBarItem", feature = "objc2-core-foundation"))]
 pub use self::__NSSliderTouchBarItem::NSSliderAccessoryWidthWide;
 #[cfg(all(feature = "NSSliderTouchBarItem", feature = "NSTouchBarItem"))]
 pub use self::__NSSliderTouchBarItem::NSSliderTouchBarItem;
@@ -5918,7 +6323,7 @@ pub use self::__NSSplitView::NSSplitViewWillResizeSubviewsNotification;
     feature = "NSViewController"
 ))]
 pub use self::__NSSplitViewController::NSSplitViewController;
-#[cfg(feature = "NSSplitViewController")]
+#[cfg(all(feature = "NSSplitViewController", feature = "objc2-core-foundation"))]
 pub use self::__NSSplitViewController::NSSplitViewControllerAutomaticDimension;
 #[cfg(feature = "NSSplitViewItem")]
 pub use self::__NSSplitViewItem::NSSplitViewItem;
@@ -5926,8 +6331,14 @@ pub use self::__NSSplitViewItem::NSSplitViewItem;
 pub use self::__NSSplitViewItem::NSSplitViewItemBehavior;
 #[cfg(feature = "NSSplitViewItem")]
 pub use self::__NSSplitViewItem::NSSplitViewItemCollapseBehavior;
-#[cfg(feature = "NSSplitViewItem")]
+#[cfg(all(feature = "NSSplitViewItem", feature = "objc2-core-foundation"))]
 pub use self::__NSSplitViewItem::NSSplitViewItemUnspecifiedDimension;
+#[cfg(all(
+    feature = "NSResponder",
+    feature = "NSSplitViewItemAccessoryViewController",
+    feature = "NSViewController"
+))]
+pub use self::__NSSplitViewItemAccessoryViewController::NSSplitViewItemAccessoryViewController;
 #[cfg(all(feature = "NSResponder", feature = "NSStackView", feature = "NSView"))]
 pub use self::__NSStackView::NSStackView;
 #[cfg(feature = "NSStackView")]
@@ -5936,7 +6347,7 @@ pub use self::__NSStackView::NSStackViewDelegate;
 pub use self::__NSStackView::NSStackViewDistribution;
 #[cfg(feature = "NSStackView")]
 pub use self::__NSStackView::NSStackViewGravity;
-#[cfg(feature = "NSStackView")]
+#[cfg(all(feature = "NSStackView", feature = "objc2-core-foundation"))]
 pub use self::__NSStackView::NSStackViewSpacingUseDefault;
 #[cfg(feature = "NSStackView")]
 pub use self::__NSStackView::NSStackViewVisibilityPriority;
@@ -5946,11 +6357,11 @@ pub use self::__NSStackView::NSStackViewVisibilityPriorityDetachOnlyIfNecessary;
 pub use self::__NSStackView::NSStackViewVisibilityPriorityMustHold;
 #[cfg(feature = "NSStackView")]
 pub use self::__NSStackView::NSStackViewVisibilityPriorityNotVisible;
-#[cfg(feature = "NSStatusBar")]
+#[cfg(all(feature = "NSStatusBar", feature = "objc2-core-foundation"))]
 pub use self::__NSStatusBar::NSSquareStatusItemLength;
 #[cfg(feature = "NSStatusBar")]
 pub use self::__NSStatusBar::NSStatusBar;
-#[cfg(feature = "NSStatusBar")]
+#[cfg(all(feature = "NSStatusBar", feature = "objc2-core-foundation"))]
 pub use self::__NSStatusBar::NSVariableStatusItemLength;
 #[cfg(all(
     feature = "NSButton",
@@ -6198,6 +6609,8 @@ pub use self::__NSText::NSTabTextMovement;
 #[cfg(all(feature = "NSResponder", feature = "NSText", feature = "NSView"))]
 pub use self::__NSText::NSText;
 #[cfg(feature = "NSText")]
+pub use self::__NSText::NSTextAlignment;
+#[cfg(feature = "NSText")]
 pub use self::__NSText::NSTextDelegate;
 #[cfg(feature = "NSText")]
 pub use self::__NSText::NSTextDidBeginEditingNotification;
@@ -6245,6 +6658,10 @@ pub use self::__NSTextCheckingClient::NSTextCheckingClient;
 pub use self::__NSTextCheckingClient::NSTextInputTraitType;
 #[cfg(feature = "NSTextCheckingClient")]
 pub use self::__NSTextCheckingClient::NSTextInputTraits;
+#[cfg(feature = "NSTextCheckingClient")]
+pub use self::__NSTextCheckingClient::NSWritingToolsBehavior;
+#[cfg(feature = "NSTextCheckingClient")]
+pub use self::__NSTextCheckingClient::NSWritingToolsResultOptions;
 #[cfg(feature = "NSTextCheckingController")]
 pub use self::__NSTextCheckingController::NSTextCheckingController;
 #[cfg(feature = "NSTextContainer")]
@@ -6581,6 +6998,8 @@ pub use self::__NSTextViewportLayoutController::NSTextViewportLayoutController;
 pub use self::__NSTextViewportLayoutController::NSTextViewportLayoutControllerDelegate;
 #[cfg(feature = "NSTintConfiguration")]
 pub use self::__NSTintConfiguration::NSTintConfiguration;
+#[cfg(feature = "NSTintProminence")]
+pub use self::__NSTintProminence::NSTintProminence;
 #[cfg(all(
     feature = "NSResponder",
     feature = "NSTitlebarAccessoryViewController",
@@ -6633,11 +7052,15 @@ pub use self::__NSToolbar::NSToolbarItemIdentifier;
 #[cfg(feature = "NSToolbar")]
 pub use self::__NSToolbar::NSToolbarItemKey;
 #[cfg(feature = "NSToolbar")]
+pub use self::__NSToolbar::NSToolbarNewIndexKey;
+#[cfg(feature = "NSToolbar")]
 pub use self::__NSToolbar::NSToolbarSizeMode;
 #[cfg(feature = "NSToolbar")]
 pub use self::__NSToolbar::NSToolbarUserInfoKey;
 #[cfg(feature = "NSToolbar")]
 pub use self::__NSToolbar::NSToolbarWillAddItemNotification;
+#[cfg(feature = "NSToolbarItem")]
+pub use self::__NSToolbarItem::NSCloudSharingValidation;
 #[cfg(all(feature = "NSToolbar", feature = "NSToolbarItem"))]
 pub use self::__NSToolbarItem::NSToolbarCloudSharingItemIdentifier;
 #[cfg(all(feature = "NSToolbar", feature = "NSToolbarItem"))]
@@ -6648,6 +7071,8 @@ pub use self::__NSToolbarItem::NSToolbarFlexibleSpaceItemIdentifier;
 pub use self::__NSToolbarItem::NSToolbarInspectorTrackingSeparatorItemIdentifier;
 #[cfg(feature = "NSToolbarItem")]
 pub use self::__NSToolbarItem::NSToolbarItem;
+#[cfg(feature = "NSToolbarItem")]
+pub use self::__NSToolbarItem::NSToolbarItemStyle;
 #[cfg(feature = "NSToolbarItem")]
 pub use self::__NSToolbarItem::NSToolbarItemValidation;
 #[cfg(feature = "NSToolbarItem")]
@@ -6676,6 +7101,8 @@ pub use self::__NSToolbarItem::NSToolbarSpaceItemIdentifier;
 pub use self::__NSToolbarItem::NSToolbarToggleInspectorItemIdentifier;
 #[cfg(all(feature = "NSToolbar", feature = "NSToolbarItem"))]
 pub use self::__NSToolbarItem::NSToolbarToggleSidebarItemIdentifier;
+#[cfg(all(feature = "NSToolbar", feature = "NSToolbarItem"))]
+pub use self::__NSToolbarItem::NSToolbarWritingToolsItemIdentifier;
 #[cfg(all(feature = "NSToolbarItem", feature = "NSToolbarItemGroup"))]
 pub use self::__NSToolbarItemGroup::NSToolbarItemGroup;
 #[cfg(feature = "NSToolbarItemGroup")]
@@ -6791,6 +7218,8 @@ pub use self::__NSView::NSView;
 #[cfg(feature = "NSView")]
 pub use self::__NSView::NSViewBoundsDidChangeNotification;
 #[cfg(feature = "NSView")]
+pub use self::__NSView::NSViewContentSelectionInfo;
+#[cfg(feature = "NSView")]
 pub use self::__NSView::NSViewDidUpdateTrackingAreasNotification;
 #[cfg(feature = "NSView")]
 pub use self::__NSView::NSViewFocusDidChangeNotification;
@@ -6814,6 +7243,10 @@ pub use self::__NSViewController::NSViewController;
 pub use self::__NSViewController::NSViewControllerPresentationAnimator;
 #[cfg(feature = "NSViewController")]
 pub use self::__NSViewController::NSViewControllerTransitionOptions;
+#[cfg(feature = "NSViewLayoutRegion")]
+pub use self::__NSViewLayoutRegion::NSViewLayoutRegion;
+#[cfg(feature = "NSViewLayoutRegion")]
+pub use self::__NSViewLayoutRegion::NSViewLayoutRegionAdaptivityAxis;
 #[cfg(feature = "NSVisualEffectView")]
 pub use self::__NSVisualEffectView::NSVisualEffectBlendingMode;
 #[cfg(feature = "NSVisualEffectView")]
@@ -6960,6 +7393,8 @@ pub use self::__NSWindow::NSWindowNumberListOptions;
 pub use self::__NSWindow::NSWindowOcclusionState;
 #[cfg(feature = "NSWindow")]
 pub use self::__NSWindow::NSWindowPersistableFrameDescriptor;
+#[cfg(feature = "NSWindow")]
+pub use self::__NSWindow::NSWindowSharingReadWrite;
 #[cfg(feature = "NSWindow")]
 pub use self::__NSWindow::NSWindowSharingType;
 #[cfg(feature = "NSWindow")]
@@ -7118,3 +7553,23 @@ pub use self::__NSWorkspace::NSWorkspaceWillPowerOffNotification;
 pub use self::__NSWorkspace::NSWorkspaceWillSleepNotification;
 #[cfg(feature = "NSWorkspace")]
 pub use self::__NSWorkspace::NSWorkspaceWillUnmountNotification;
+#[cfg(feature = "NSWritingToolsCoordinator")]
+pub use self::__NSWritingToolsCoordinator::NSTextPreview;
+#[cfg(feature = "NSWritingToolsCoordinator")]
+pub use self::__NSWritingToolsCoordinator::NSWritingToolsCoordinator;
+#[cfg(feature = "NSWritingToolsCoordinator")]
+pub use self::__NSWritingToolsCoordinator::NSWritingToolsCoordinatorContextScope;
+#[cfg(feature = "NSWritingToolsCoordinator")]
+pub use self::__NSWritingToolsCoordinator::NSWritingToolsCoordinatorDelegate;
+#[cfg(feature = "NSWritingToolsCoordinator")]
+pub use self::__NSWritingToolsCoordinator::NSWritingToolsCoordinatorState;
+#[cfg(feature = "NSWritingToolsCoordinator")]
+pub use self::__NSWritingToolsCoordinator::NSWritingToolsCoordinatorTextAnimation;
+#[cfg(feature = "NSWritingToolsCoordinator")]
+pub use self::__NSWritingToolsCoordinator::NSWritingToolsCoordinatorTextReplacementReason;
+#[cfg(feature = "NSWritingToolsCoordinator")]
+pub use self::__NSWritingToolsCoordinator::NSWritingToolsCoordinatorTextUpdateReason;
+#[cfg(feature = "NSWritingToolsCoordinatorAnimationParameters")]
+pub use self::__NSWritingToolsCoordinatorAnimationParameters::NSWritingToolsCoordinatorAnimationParameters;
+#[cfg(feature = "NSWritingToolsCoordinatorContext")]
+pub use self::__NSWritingToolsCoordinatorContext::NSWritingToolsCoordinatorContext;

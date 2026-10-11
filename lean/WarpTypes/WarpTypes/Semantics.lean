@@ -1,7 +1,7 @@
 import WarpTypes.Typing
 
 /-! Small-step semantics of W0: left to right, call by value. An `error` in any evaluation position propagates,
-except under `try`. Main-level names are cells of the store; class instances live in its heap, which only grows. -/
+except under `try`; a stored error (`fail`) is a value until an operation that needs another value meets it. Main-level names are cells of the store; class instances live in its heap, which only grows. -/
 
 namespace Warp
 open Ty Expr
@@ -96,15 +96,125 @@ def asInt : Expr → Option Int
   | .int n => some n
   | _ => none
 
+/-- an exact number's value: an int's, a rational's -/
+def asExact : Expr → Option Rat
+  | .num q => some q
+  | e => (asInt e).map fun n => (n : Rat)
+
+def ratToFloat (q : Rat) : Float := Float.ofInt q.num / Float.ofNat q.den
+
+/-- a number's value as a float -/
+def asFloat : Expr → Float
+  | .flt f => Float.ofBits f
+  | e => ratToFloat ((asExact e).getD 0)
+
+/-- a float's whole part, toward zero (`3.7 as int` is 3) -/
+def floatWhole (f : Float) : Int :=
+  let whole := (if f < 0 then -f else f).floor
+  let magnitude : Int := if whole < 18446744073709551616.0 then whole.toUInt64.toNat else 0
+  if f < 0 then -magnitude else magnitude
+
+/-- a number's whole part, toward zero -/
 def asNumber : Expr → Int
-  | .num n => n
+  | .num q => if q < 0 then -((-q).floor) else q.floor
+  | .flt f => floatWhole (Float.ofBits f)
   | e => (asInt e).getD 0
+
+/-- an exact number as a value: a whole one is an int, as warp normalizes `0.5 * 2` -/
+def exactValue (q : Rat) : Expr := if q.den = 1 then .int q.num else .num q
+
+def floatValue (f : Float) : Expr := .flt f.toBits
+
+/-- the multiplicity of the prime p in n (n > 0) -/
+def multiplicity (p : Nat) (n : Nat) (fuel : Nat := 64) : Nat :=
+  match fuel with
+  | 0 => 0
+  | fuel + 1 => if n > 0 && n % p == 0 then 1 + multiplicity p (n / p) fuel else 0
+
+/-- a rational as warp prints it: a terminating decimal (`3.5`, `0.125`), else as a fraction (`1/3`) -/
+def ratDisplay (q : Rat) : String :=
+  let twos := multiplicity 2 q.den
+  let fives := multiplicity 5 q.den
+  if q.den != 2 ^ twos * 5 ^ fives then s!"{q.num}/{q.den}" else
+  let digits := max twos fives
+  let scaled := q.num.natAbs * (10 ^ digits / q.den)
+  let whole := toString (scaled / 10 ^ digits)
+  let fraction := toString (scaled % 10 ^ digits)
+  let padded := String.ofList (List.replicate (digits - fraction.length) '0') ++ fraction
+  (if q.num < 0 then "-" else "") ++ whole ++ (if digits = 0 then "" else "." ++ padded)
+
+/-- warp's float_text constants (src/wasm_emitter/float_text.rs): the most digits a float needs, positional exponents -/
+def mostDigits : Nat := 17
+def smallestPositional : Int := -5
+def largestPositional : Int := 15
+
+/-- a positive finite float exactly: whole · 2^twos -/
+def binaryParts (x : Float) : Nat × Int :=
+  let (fraction, exponent) := x.frExp
+  ((fraction * 9007199254740992).toUInt64.toNat, exponent - 53)
+
+/-- whole · 2^twos · 10^tens as numerator / denominator -/
+def scaledRatio (whole : Nat) (twos tens : Int) : Nat × Nat :=
+  (whole * 2 ^ twos.toNat * 10 ^ tens.toNat, 2 ^ (-twos).toNat * 10 ^ (-tens).toNat)
+
+/-- numerator / denominator rounded to the nearest whole, ties to even -/
+def roundRatio (numerator denominator : Nat) : Nat :=
+  let (quotient, twice) := (numerator / denominator, 2 * (numerator % denominator))
+  if twice > denominator || (twice == denominator && quotient % 2 == 1) then quotient + 1 else quotient
+
+/-- the decimal exponent of the first digit of whole · 2^twos, from a guess off by at most a few -/
+def firstDigitExponent : (fuel : Nat) → Nat → Int → Int → Int
+  | 0, _, _, guess => guess
+  | fuel + 1, whole, twos, guess =>
+    let (numerator, denominator) := scaledRatio whole twos (-guess)
+    if numerator < denominator then firstDigitExponent fuel whole twos (guess - 1)
+    else if numerator >= 10 * denominator then firstDigitExponent fuel whole twos (guess + 1)
+    else guess
+
+/-- a whole times 10^exponent as a float -/
+def decimalFloat (whole : Nat) (exponent : Int) : Float :=
+  if exponent >= 0 then Float.ofScientific whole false exponent.toNat else Float.ofScientific whole true (-exponent).toNat
+
+/-- the fewest digits, 1 up to mostDigits, that read back as x, and the exponent of the first digit -/
+def shortestDigits (x : Float) : Nat × Int :=
+  let (whole, twos) := binaryParts x
+  let first := firstDigitExponent 8 whole twos (Float.floor (Float.log10 x)).toInt64.toInt
+  let digitsAt (count : Nat) :=
+    let (numerator, denominator) := scaledRatio whole twos (count - 1 - first)
+    let rounded := roundRatio numerator denominator
+    if rounded >= 10 ^ count then (rounded / 10, first + 1) else (rounded, first)
+  let fits := (List.range mostDigits).map (· + 1) |>.find? fun count =>
+    let (digits, exponent) := digitsAt count
+    decimalFloat digits (exponent - (toString digits).length + 1) == x
+  digitsAt (fits.getD mostDigits)
+
+def zeroText (count : Int) : String := String.ofList (List.replicate count.toNat '0')
+
+/-- the digits of a positive float laid out at its decimal exponent: positional from 1e-5 up to 1e15, else `1.5e20` -/
+def placeDigits (digits : String) (exponent : Int) : String :=
+  let count : Int := digits.length
+  let before (k : Int) := String.ofList (digits.toList.take k.toNat)
+  let after (k : Int) := String.ofList (digits.toList.drop k.toNat)
+  if exponent < smallestPositional || exponent >= largestPositional then
+    before 1 ++ (if count > 1 then "." ++ after 1 else "") ++ "e" ++ toString exponent
+  else if exponent >= count - 1 then digits ++ zeroText (exponent - count + 1)
+  else if exponent >= 0 then before (exponent + 1) ++ "." ++ after (exponent + 1)
+  else "0." ++ zeroText (-1 - exponent) ++ digits
+
+/-- a float as warp's float_text writes it (user decision float-text): its shortest digits that read back, as
+JavaScript and Python write floats (`0.1`, `0.30000000000000004`, `1.5e-7`) -/
+def floatText (f : Float) : String :=
+  if f.isNaN then "NaN" else if f.isInf then (if f > 0 then "∞" else "-∞") else if f == 0 then "0" else
+  let (digits, exponent) := shortestDigits f.abs
+  (if f < 0 then "-" else "") ++ placeDigits (toString digits) exponent
 
 /-- a value as `+` joins it to a text -/
 def render : Expr → String
   | .text s => s
   | .bool b => if b then "true" else "false"
-  | .int n | .num n => toString n
+  | .int n => toString n
+  | .num q => ratDisplay q
+  | .flt f => floatText (Float.ofBits f)
   | _ => ""
 
 def isText : Expr → Bool
@@ -131,8 +241,13 @@ def walkText (y : String) (s : String) (b last : Expr) : Expr :=
   | some (c, rest) => .forIn y (.text rest) b (b.subst y (.text c))
 
 def isNumber : Expr → Bool
-  | .bool _ | .int _ | .num _ => true
+  | .bool _ | .int _ | .num _ | .flt _ => true
   | _ => false
+
+/-- a zero divisor: `x / 0`, `x % 0.0` -/
+def isZero : Expr → Bool
+  | .flt f => Float.ofBits f == 0
+  | v => asExact v == some 0
 
 /-- `"ab" * 3`, `3 * "ab"`: the text n times (none for n ≤ 0), P1 -/
 def repeatValues (s : String) (n : Expr) : Expr :=
@@ -154,7 +269,7 @@ def amount : Expr → Int
   | v => asNumber v
 
 /-- the value of an amount in dimensions d: a number when they cancel -/
-def quantityValue (n : Int) (d : Dims) : Expr := if d = [] then .num n else .qty n d
+def quantityValue (n : Int) (d : Dims) : Expr := if d = [] then .int n else .qty n d
 
 def DIMENSION_ERROR : String := "DimensionError"
 
@@ -172,6 +287,12 @@ def quantityValues (op : ArithOp) (a b : Expr) : Expr :=
     | none => .error DIMENSION_ERROR
   | _, _ => .error DIMENSION_ERROR
 
+/-- an operation on exact numbers, a float when the result is no rational (`2^0.5`) -/
+def exactNumber (op : ArithOp) (x y : Rat) : Expr :=
+  match op.applyExact x y with
+  | some q => exactValue q
+  | none => floatValue (op.applyFloat (ratToFloat x) (ratToFloat y))
+
 /-- `-`, `*`, `%`, `/` and `^` without quantities: numbers, or a text repeated -/
 def plainArithValues (op : ArithOp) (a b : Expr) : Expr :=
   match op, a, b with
@@ -179,10 +300,13 @@ def plainArithValues (op : ArithOp) (a b : Expr) : Expr :=
   | _, _, _ => numberValues op a b
 where numberValues (op : ArithOp) (a b : Expr) : Expr :=
   if !(isNumber a && isNumber b) then .error "not a number" else
-  if (op == .mod || op == .div) && asNumber b == 0 then .error "divide by zero" else
+  if (op == .mod || op == .div) && isZero b then .error "divide by zero" else
   match asInt a, asInt b with
-  | some x, some y => if (op == .div && x % y != 0) || (op == .pow && y < 0) then .num (op.apply x y) else .int (op.apply x y)
-  | _, _ => .num (op.apply (asNumber a) (asNumber b))
+  | some x, some y => if (op == .div && x % y != 0) || (op == .pow && y < 0) then exactNumber op x y else .int (op.apply x y)
+  | _, _ =>
+  match asExact a, asExact b with
+  | some x, some y => exactNumber op x y
+  | _, _ => floatValue (op.applyFloat (asFloat a) (asFloat b))
 
 /-- `-`, `*`, `%`, `/` and `^` on values -/
 def arithValues (op : ArithOp) (a b : Expr) : Expr :=
@@ -206,14 +330,21 @@ def addValues (a b : Expr) : Expr :=
   if isText a || isText b then .text (render a ++ render b) else
   match asInt a, asInt b with
   | some x, some y => .int (x + y)
-  | _, _ => .num (asNumber a + asNumber b)
+  | _, _ =>
+  match asExact a, asExact b with
+  | some x, some y => exactValue (x + y)
+  | _, _ => floatValue (asFloat a + asFloat b)
 
 /-- numbers by value, texts in codepoint order (`"a" < "b"`) -/
 def ltValues (a b : Expr) : Expr :=
   match a, b with
   | .qty x d, .qty y e => if d = e then .bool (decide (x < y)) else .error DIMENSION_ERROR
   | _, _ =>
-  if isNumber a && isNumber b then .bool (decide (asNumber a < asNumber b)) else
+  if isNumber a && isNumber b then
+    match asExact a, asExact b with
+    | some x, some y => .bool (decide (x < y))
+    | _, _ => .bool (asFloat a < asFloat b)
+  else
   match a, b with
   | .text x, .text y => .bool (decide (x < y))
   | _, _ => .error "not comparable"
@@ -239,13 +370,27 @@ def looseEq (P : Program) (μ : Store) : Nat → Expr → Expr → Bool
 def eqValues (P : Program) (μ : Store) (same : Bool) (a b : Expr) : Bool :=
   if same then decide (a = b) else looseEq P μ EQ_FUEL a b
 
-/-- false, 0, "", ø and [] are falsy -/
+/-- ø: warp's ø is the empty list (`[] ?? 3` is 3) -/
+def isEmpty : Expr → Bool
+  | .unit | .nil => true
+  | _ => false
+
+/-- a stored error -/
+def isFail : Expr → Bool
+  | .fail _ => true
+  | _ => false
+
+theorem isFail_eq : ∀ {e : Expr}, isFail e = true → ∃ m, e = .fail m := by
+  intro e h; cases e <;> simp_all [isFail]
+
+/-- false, 0, "", ø, [] and a stored error are falsy -/
 def truthy : Expr → Bool
   | .bool b => b
   | .int n => n != 0
-  | .num n => n != 0
+  | .num q => q != 0
+  | .flt f => Float.ofBits f != 0
   | .text s => !s.isEmpty
-  | .unit | .nil => false
+  | .unit | .nil | .fail _ => false
   | _ => true
 
 /-- the i-th element, 1-based; of a text its i-th codepoint -/
@@ -268,13 +413,15 @@ def appendValues (a b : Expr) : Expr := if isList a && isList b then concat a b 
 def valueType : Expr → Option Ty
   | .bool _ => some .bool
   | .int _ => some .int
-  | .num _ => some .number
+  | .num _ => some .exact
+  | .flt _ => some .number
   | .qty _ d => some (.quantity d)
   | .text s => some (textTy s)
   | .unit => some .unit
   | .nil => some (.list .never)
   | .ref _ p => some (.cls p)
   | .lref _ t => some (.list t)
+  | .fail _ => some .any
   | .cons h t =>
     match valueType h, valueType t with
     | some a, some l =>
@@ -294,12 +441,19 @@ def fits : Expr → Ty → Bool
     | some tv => sub tv t
     | none => false
 
+/-- a whole float prints as its int (`x: float = 2` is 2); W0 does not print other floats as warp does -/
+def floatDisplay (f : Float) : String :=
+  if f == f.floor && f.abs < 9007199254740992.0 then toString (floatWhole f) else "?"
+
 /-- a value as warp prints it, shared lists read in store μ down to `depth` levels; `?` where the model does not keep
 what warp prints (numbers, instances) -/
 def display (μ : Store) : Nat → Expr → String
   | _, .bool b => if b then "yes" else "no"
   | _, .int n => toString n
+  | _, .num q => ratDisplay q
+  | _, .flt f => floatDisplay (Float.ofBits f)
   | _, .text s => s!"\"{s}\""
+  | _, .fail _ => "error"
   | depth + 1, .lref a t => display μ depth (μ.items (.lref a t))
   | depth, .cons h t => "[" ++ " ".intercalate (showItems depth (.cons h t)) ++ "]"
   | _, _ => "?"
@@ -313,7 +467,7 @@ def DISPLAY_DEPTH : Nat := 8
 /-- `v as text`: a text as it is, the empty list ø, anything else as warp prints it -/
 def textForm (μ : Store) (v : Expr) : String :=
   match μ.items v with
-  | .text s => s
+  | .text s | .fail s => s
   | .nil => "ø"
   | v => display μ DISPLAY_DEPTH v
 
@@ -323,7 +477,7 @@ def convertValue (μ : Store) (v : Expr) : Ty → Expr
   | .text => .text (textForm μ v)
   | .bool => .bool (truthy (μ.items v))
   | .int => if isNumber v then .int (asNumber v) else parsed .int v
-  | .number => if isNumber v then .num (asNumber v) else parsed .num v
+  | .number => if isNumber v then floatValue (asFloat v) else parsed (fun n => floatValue (Float.ofInt n)) v
   | t => if fits v t then v else .error "cannot cast"
 where parsed (make : Int → Expr) : Expr → Expr
   | .text s => (s.toInt?.map make).getD (.error "invalid number")
@@ -342,8 +496,16 @@ def replaceAt : Expr → Int → Expr → Option Expr
   | .cons h t, n, v => if n = 1 then some (.cons v t) else (replaceAt t (n - 1) v).map (.cons h)
   | _, _, _ => none
 
-/-- `xs#i = v` of values: v replaces an item of the shared list if it fits the list's element type -/
-def setAtValues (μ : Store) : Expr → Expr → Expr → Expr × Store
+/-- `xs#i` of values: the i-th item of a list or a text, from 1; `m[k]` of an instance its field k (a map's computed
+key) -/
+def indexValues (μ : Store) (l i : Expr) : Expr :=
+  match l, i with
+  | .ref a p, .text k => readField μ (.ref a p) k
+  | _, _ => (nth (μ.items l) ((asInt i).getD 0)).getD (.error "index out of range")
+
+/-- `xs#i = v` of values: v replaces an item of the shared list if it fits the list's element type; `m[k] = v` the
+field k of an instance if its class has one and v fits its type -/
+def setAtValues (P : Program) (μ : Store) : Expr → Expr → Expr → Expr × Store
   | .lref a t, i, v =>
     match μ.listAt a t with
     | some items =>
@@ -353,6 +515,10 @@ def setAtValues (μ : Store) : Expr → Expr → Expr → Expr × Store
         | none => (.error "index out of range", μ)
       else (.error "type mismatch", μ)
     | none => (.error "dangling list", μ)
+  | .ref a p, .text k, v =>
+    match P.fieldTy p k with
+    | some t => if (μ.obj a p).isSome && fits v t then (v, μ.write a k v) else (.error "type mismatch", μ)
+    | none => (.error "no field", μ)
   | _, _, _ => (.error "not a list", μ)
 
 /-- the k ints from m: `[m, m+1, …]` -/
@@ -387,6 +553,8 @@ inductive Frame where
   | get (f : String)
   | setL (f : String) (v : Expr) | setR (o : Expr) (f : String)
   | isA (c : String)
+  | failed
+  | orElse (b : Expr)
   | emit (ev : String)
   | abort (ev : String) (k : Option Nat)
   | forIn (y : String) (b last : Expr)
@@ -429,6 +597,8 @@ def plug : Frame → Expr → Expr
   | setL f v, e => .set e f v
   | setR o f, e => .set o f e
   | isA c, e => .isA e c
+  | failed, e => .failed e
+  | orElse b, e => .orElse e b
   | emit ev, e => .emit ev e
   | abort ev k, e => .abort ev k e
   | forIn y b d, e => .forIn y e b d
@@ -457,7 +627,8 @@ inductive Step (P : Program) : Expr × Store → Expr × Store → Prop where
   | raise {F : Frame} {m μ} : F.ready = true → Step P (F.plug (.error m), μ) (.error m, μ)
   | tryStep {e e' h μ μ'} : Step P (e, μ) (e', μ') → Step P (.tryCatch e h, μ) (.tryCatch e' h, μ')
   | tryError {m h μ} : Step P (.tryCatch (.error m) h, μ) (h, μ)
-  | tryValue {v h μ} : v.isValue = true → Step P (.tryCatch v h, μ) (v, μ)
+  | tryValue {v h μ} : v.isValue = true → isFail v = false → Step P (.tryCatch v h, μ) (v, μ)
+  | tryFail {m h μ} : Step P (.tryCatch (.fail m) h, μ) (h, μ)
   | readValue {x v μ} : μ x = some (.val v) → Step P (.glob x, μ) (v, μ)
   | readUnset {x μ} : μ x = some .unset → Step P (.glob x, μ) (.error "unset", μ)
   | readCharged {x b μ} : μ x = some (.charged b) → Step P (.glob x, μ) (b, μ)
@@ -474,7 +645,7 @@ inductive Step (P : Program) : Expr × Store → Expr × Store → Prop where
       Step P (.app f v, μ) (.error "not a function", μ)
   | range {a b μ} : a.isValue = true → b.isValue = true → Step P (.range a b, μ) (rangeValues a b, μ)
   | index {l i μ} : l.isValue = true → i.isValue = true →
-      Step P (.index l i, μ) ((nth (μ.items l) ((asInt i).getD 0)).getD (.error "index out of range"), μ)
+      Step P (.index l i, μ) (indexValues μ l i, μ)
   | append {a b μ} : a.isValue = true → b.isValue = true →
       Step P (.append a b, μ) (appendValues (μ.items a) (μ.items b), μ)
   | assign {x v μ} : v.isValue = true → Step P (.assign x v, μ) (v, μ.set x (.val v))
@@ -492,13 +663,15 @@ inductive Step (P : Program) : Expr × Store → Expr × Store → Prop where
       Step P (.share v t, μ) (.error "type mismatch", μ)
   | push {l v μ} : l.isValue = true → v.isValue = true → Step P (.push l v, μ) (pushValues μ l v)
   | setAt {l i v μ} : l.isValue = true → i.isValue = true → v.isValue = true →
-      Step P (.setAt l i v, μ) (setAtValues μ l i v)
+      Step P (.setAt l i v, μ) (setAtValues P μ l i v)
   | cast {v ts μ} : v.isValue = true → Step P (.cast v ts, μ) (if ts.any (fits v) then v else .error "type mismatch", μ)
   | conv {v t μ} : v.isValue = true → Step P (.conv v t, μ) (convertValue μ v t, μ)
   | new {p μ} : Step P (.new p, μ) (.ref μ.heap.length p, μ.alloc p)
   | get {o f μ} : o.isValue = true → Step P (.get o f, μ) (readField μ o f, μ)
   | set {o f v μ} : o.isValue = true → v.isValue = true → Step P (.set o f v, μ) (writeField μ o f v)
   | isA {v c μ} : v.isValue = true → Step P (.isA v c, μ) (.bool (isInstance v c), μ)
+  | failed {v μ} : v.isValue = true → Step P (.failed v, μ) (.bool (isFail v), μ)
+  | orElse {v b μ} : v.isValue = true → Step P (.orElse v b, μ) (if isEmpty (μ.items v) then b else v, μ)
   /-- the body runs with the handler pushed; the handlers return to what they were -/
   | handleStep {ev h b b' μ μ'} : Step P (b, μ.push ev h) (b', μ') →
       Step P (.handle ev h b, μ) (.handle ev h b', μ'.withHandlers μ.handlers)

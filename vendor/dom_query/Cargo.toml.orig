@@ -1,0 +1,80 @@
+[workspace.package]
+version = "0.28.0"
+license = "MIT"
+edition = "2021"
+rust-version = "1.75"
+repository = "https://github.com/niklak/dom_query"
+authors = ["niklak <morgenpurple@gmail.com>"]
+
+[package]
+name = "dom_query"
+version.workspace = true
+license.workspace = true
+repository.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+description = "HTML querying and manipulation with CSS selectors"
+documentation = "https://docs.rs/dom_query/latest"
+keywords = ["html", "css", "selectors", "scraping", "parser"]
+categories = ["web-programming", "text-processing"]
+authors = ["niklak <morgenpurple@gmail.com>","importcjj <importcjj@gmail.com>"]
+readme = "README.md"
+exclude = [".*", "test-pages", "deny.toml"]
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+html5ever = "0.39.0"
+selectors = "0.38.0"
+cssparser = "0.37.0"
+tendril = "0.5.0"
+foldhash = "0.2.0"
+hashbrown = {version = "0.16.1", default-features = false, features = ["allocator-api2", "inline-more", "default-hasher"], optional = true}
+precomputed-hash = "0.1.1"
+bit-set = "0.8.0"
+nom = {version = "8.0.0", optional = true}
+
+[dev-dependencies]
+wasm-bindgen-test = "=0.3.67"
+alloc_cat = "=1.0.0"
+
+[features]
+default = ["markdown"]
+hashbrown = ["dep:hashbrown"]
+atomic = []
+markdown = []
+mini_selector = ["dep:nom"]
+
+
+[[example]]
+name = "send_document"
+required-features = ["atomic"]
+
+[[example]]
+name = "markdown"
+required-features = ["markdown"]
+
+
+[workspace]
+members = [
+    "dom-query-bench",
+]
+
+
+[profile.bench]
+codegen-units = 1
+lto = "fat"
+incremental = false
+opt-level = 3
+
+[lints.clippy]
+all = { level = "warn", priority = -1 }
+cargo = { level = "warn", priority = -1 }
+pedantic = { level = "warn", priority = -1 }
+must_use_candidate = "allow"
+return_self_not_must_use = "allow"
+redundant_closure_for_method_calls = "allow"
+similar_names = "allow"
+needless_pass_by_value = "allow"
+trivially_copy_pass_by_ref = "allow"
+range_plus_one = "allow"
+should_panic_without_expect = "allow"

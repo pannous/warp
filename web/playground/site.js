@@ -50,7 +50,7 @@ async function hydrate() {
 	Object.assign(storedValues, keptValues());
 	Object.assign(sessionValues, keptValues([SESSION_STORE]));
 	// `database[k]`'s values (host-files.js, shipped when the program keeps values)
-	await self.loadDatabase?.();
+	await self.loadKept?.();
 	self.keepStored = keepValue;
 	const holder = instantiateProgram(bytes, siteHooks);
 	if (holder.failure) return console.error("warp:", holder.failure);

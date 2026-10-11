@@ -10,14 +10,13 @@
 //! Runs after ruby_blocks, which takes the yielding functions some call passes a block to.
 
 use super::words::{FOR_WORD, GLOBAL_WORD, IN_WORD, RETURN_WORD};
-use super::nodes::{assign, block, call, if_then, int, key, statement_list, symbol};
+use super::nodes::{Counter, assign, block, call, if_then, int, key, statement_list, symbol};
 use crate::for_loop::{block_items, loop_variables};
 use crate::inlining::renamed_names;
 use crate::node::{Bracket, Node, Separator};
 use crate::operators::Op;
 use crate::ruby_blocks::{arguments, contains_yield, is_yield, yielded};
 use crate::warp_parser::while_do;
-use std::cell::Cell;
 use std::collections::{HashMap, HashSet};
 
 const IMPLICIT_VARIABLE: &str = "it";
@@ -54,23 +53,22 @@ enum Step {
 }
 
 pub fn lower(node: Node) -> Node {
-	let node = delegations(crate::generator_expressions::lower(node), &Cell::new(0));
+	let node = delegations(crate::generator_expressions::lower(node), &Counter::starting_at(1));
 	let generators = generators(&node);
 	if generators.is_empty() {
 		return node;
 	}
 	// first, so a generator looping over another (`(x * x for x in naturals())`) has it inlined before its object is made
-	let node = lazy_loops(node, &generators, &Cell::new(0));
+	let node = lazy_loops(node, &generators, &Counter::starting_at(1));
 	let node = crate::generator_objects::lower(node);
 	collected_definitions(node, &generators)
 }
 
 /// `yield from xs` as `for yield·item·1 in xs { yield yield·item·1 }`
-fn delegations(node: Node, counter: &Cell<usize>) -> Node {
+fn delegations(node: Node, counter: &Counter) -> Node {
 	let node = node.map_children(|child| delegations(child, counter));
 	let Some(source) = delegated_source(&node) else { return node };
-	counter.set(counter.get() + 1);
-	let item = symbol(&[DELEGATED_ITEM, &counter.get().to_string()].join(NAME_SEPARATOR));
+	let item = symbol(&[DELEGATED_ITEM, &counter.next_number().to_string()].join(NAME_SEPARATOR));
 	crate::generator_consumers::template(DELEGATION, &[("ITEM", &item), ("SOURCE", &source)]).remove(0).with_meta_of(&node)
 }
 
@@ -192,21 +190,12 @@ fn rewritten(node: Node, step: &dyn Fn(&Node) -> Step) -> Node {
 	}
 }
 
-/// The direct parts of a node: a list's items, a key's two sides
-fn parts(node: &Node) -> Vec<&Node> {
-	match node {
-		Node::List(items, _, _) => items.iter().collect(),
-		Node::Key(left, _, right) => vec![left, right],
-		_ => vec![],
-	}
-}
-
 /// Whether `node` holds `word` outside its loops and own scopes: a `break` or `continue` of the loop body itself
 pub(crate) fn holds_own(node: &Node, word: &str) -> bool {
 	match node.drop_meta() {
 		inner if inner.is_symbol(word) => true,
 		inner if is_loop(inner) || is_own_scope(inner) => false,
-		inner => parts(inner).into_iter().any(|child| holds_own(child, word)),
+		inner => inner.parts().into_iter().any(|child| holds_own(child, word)),
 	}
 }
 
@@ -215,7 +204,7 @@ pub(crate) fn holds_stop(node: &Node) -> bool {
 	match node.drop_meta() {
 		inner if yielded(inner).is_some() || is_return(inner) => true,
 		inner if is_own_scope(inner) => false,
-		inner => parts(inner).into_iter().any(holds_stop),
+		inner => inner.parts().into_iter().any(holds_stop),
 	}
 }
 
@@ -245,13 +234,12 @@ fn generator_loop<'a>(node: &Node, generators: &'a HashMap<String, Generator>) -
 	(generator.inlinable && arguments.len() == generator.parameters.len()).then(|| (variable, name, generator, arguments, body.clone()))
 }
 
-fn lazy_loops(node: Node, generators: &HashMap<String, Generator>, counter: &Cell<usize>) -> Node {
+fn lazy_loops(node: Node, generators: &HashMap<String, Generator>, counter: &Counter) -> Node {
 	let node = node.map_children(|child| lazy_loops(child, generators, counter));
 	match generator_loop(&node, generators) {
 		Some((variable, name, generator, arguments, body)) => {
-			counter.set(counter.get() + 1);
 			// the generator may loop over another generator: inlined in turn
-			let inlined = inlined_loop(variable, name, generator, arguments, body, counter.get());
+			let inlined = inlined_loop(variable, name, generator, arguments, body, counter.next_number());
 			lazy_loops(inlined, generators, counter).with_meta_of(&node)
 		}
 		None => node,
@@ -309,7 +297,7 @@ fn holds_own_return(node: &Node) -> bool {
 	match node.drop_meta() {
 		inner if is_return(inner) => true,
 		inner if is_own_scope(inner) => false,
-		inner => parts(inner).into_iter().any(holds_own_return),
+		inner => inner.parts().into_iter().any(holds_own_return),
 	}
 }
 

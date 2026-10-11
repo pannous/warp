@@ -1,4 +1,4 @@
-//! Exact numbers by default: `1/3*3 == 1`, `0.1+0.2 == 0.3` (DESIGN.md "Exact numbers by default").
+//! Exact numbers by default: `1/3*3 == 1`, `1/3 + 1/3` is 2/3 (DESIGN.md "Exact numbers by default").
 //!
 //! An exact number is an Int (see big_int.rs) whose handle may also point at a `$Ratio` in the
 //! same heap: numerator and denominator are Int payloads, the denominator is > 1 and coprime to
@@ -6,15 +6,15 @@
 //! i64 fast path and only the slow paths ask `is_ratio`. The `$Ratio` doubles as the payload of
 //! an Int node, read back as `Number::Quotient`.
 //!
-//! Decimal literals are exact (`0.1` is 1/10, see `Number::is_exact_decimal`); f64 only comes from
-//! float functions (`sqrt`, FFI), irrational constants (`π`) or `as float`, and mixing an f64 into an
-//! expression makes the result an f64.
+//! Decimal literals are exact (`.1 + .2 == .3`, decision exact-decimals); floats come only from float sources (sin,
+//! host values, `as float`, e-notation) and mixing one into an expression makes the result an f64.
+//! Small operands (inline ratios, Ints within ±2^31) add, subtract, multiply and (in calculating programs) compare in i64
 //! Division by zero yields the extended rationals' ±∞ = ±1/0 and NaN = 0/0 (never a quiet f64 NaN):
 //! ∞ + 1 = ∞, 1/∞ = 0, ∞ - ∞ = NaN, NaN equals only NaN. Truncating ∞ or NaN to an integer traps.
 
 use super::WasmGcEmitter;
 use num_bigint::BigInt;
-use num_traits::{One, Pow};
+use num_traits::One;
 use wasm_encoder::*;
 use Instruction as I;
 use crate::wasm_emitter::layout::BYTE;
@@ -23,8 +23,24 @@ use crate::wasm_emitter::layout::BYTE;
 pub const MAX_SHIFT_COUNT: i64 = 1 << 16;
 /// exact_text(x): the text of any exact number, as the host prints it (`2.5`, `1/3`, `-∞`, big integers in full)
 pub const EXACT_TEXT: &str = "exact_text";
+/// decimal_text(x), `x as decimal`: an exact ratio in decimal digits, each repeating one overlined: 1/6 is 0.16̅
+/// (card repeating-decimals); a period longer than MAX_PERIOD digits stays the ratio's text
+pub const DECIMAL_TEXT: &str = "decimal_text";
+pub const DECIMAL_WORD: &str = "decimal";
+const MAX_PERIOD: i32 = 1000;
+/// U+0305 COMBINING OVERLINE in UTF-8, after each repeating digit
+const OVERLINE_BYTES: [u8; 2] = [0xCC, 0x85];
 const INT_TEXT: &str = "int_text";
+/// int_gcd(a, b): every ratio is normalized by one
+pub(crate) const INT_GCD: &str = "int_gcd";
 const DECIMAL_BASE: i64 = 10;
+/// exact_dispatch's shortcut takes operands within ±SMALL_LIMIT (inline ratio parts are smaller) as i64 parts
+const SMALL_LIMIT: i64 = 1 << 31;
+/// The shortcut's locals after the two operands: a.n, a.d, b.n, b.d (reused as gcd and rest), then the result's parts
+const SMALL_PARTS: [u32; 4] = [2, 3, 4, 5];
+const SMALL_NUMERATOR: u32 = 6;
+const SMALL_DENOMINATOR: u32 = 7;
+const SMALL_LOCALS: usize = 6;
 /// A ratio whose denominator has no other prime factors is a terminating decimal
 const DECIMAL_PRIMES: [i64; 2] = [2, 5];
 
@@ -36,12 +52,33 @@ impl WasmGcEmitter {
 	}
 
 	pub(crate) fn emit_exact_literal(&mut self, func: &mut Function, numerator: &BigInt, denominator: &BigInt) {
-		self.emit_int_literal(func, numerator);
-		if denominator.is_one() {
-			return;
+		match denominator.is_one() {
+			true => self.emit_int_literal(func, numerator),
+			false => self.emit_number_constant(func, numerator, denominator),
 		}
-		self.emit_int_literal(func, denominator);
-		self.emit_call(func, "exact_div");
+	}
+
+	/// A literal beyond the fixnums (a big Int, a ratio) from a global set on its first evaluation: built at every
+	/// evaluation, each one added a $BigInt or $Ratio to the handle heap, which keeps them until the run ends
+	pub(super) fn emit_number_constant(&mut self, func: &mut Function, numerator: &BigInt, denominator: &BigInt) {
+		let key = (numerator.clone(), denominator.clone());
+		let global = match self.number_constants.get(&key) {
+			Some(global) => *global,
+			None => {
+				let global = self.declare_global_of(ValType::I64, ConstExpr::i64_const(0)); // 0 is never a handle
+				let name = if denominator.is_one() { format!("number {numerator}") } else { format!("number {numerator}/{denominator}") };
+				self.extra_global_names.push((global, name));
+				self.number_constants.insert(key, global);
+				global
+			}
+		};
+		Self::emit_list(func, &[I::GlobalGet(global), I::I64Eqz, I::If(BlockType::Empty)]);
+		self.emit_built_int_literal(func, numerator);
+		if !denominator.is_one() {
+			self.emit_built_int_literal(func, denominator);
+			self.emit_call(func, "exact_div");
+		}
+		Self::emit_list(func, &[I::GlobalSet(global), I::End, I::GlobalGet(global)]);
 	}
 
 	fn ratio_ref(&self) -> HeapType {
@@ -84,10 +121,63 @@ impl WasmGcEmitter {
 		f.instruction(&I::LocalSet(local));
 	}
 
-	/// `name(a, b)`: ratio_op when an operand is a ratio, else the integer slow path
-	fn exact_dispatch(&mut self, name: &'static str, result: ValType, ratio_op: impl FnOnce(&Self, &mut Function), integer_op: &str) {
+	/// Return `fixnum_result` at once when a and b (params 0, 1) are fixnums and b is not 0: a division or remainder of
+	/// two machine-sized Ints needs neither a $BigInt nor a $Ratio, which int_store keeps for the whole run
+	fn fixnum_division_shortcut(&self, f: &mut Function, fixnum_result: &[Instruction]) {
+		self.emit_fixnum_test(f, &[0, 1]);
+		Self::emit_list(f, &[I::LocalGet(1), I::I64Const(0), I::I64Ne, I::I32And, I::If(BlockType::Empty)]);
+		Self::emit_list(f, fixnum_result);
+		Self::emit_list(f, &[I::Return, I::End]);
+	}
+
+	/// Push i32 1 when operand `x` is small, an inline ratio or an Int within ±2^31, after loading its numerator and
+	/// denominator into `numerator`, `denominator`: products of two such parts stay far inside the fixnums
+	fn small_parts(&self, f: &mut Function, x: u32, numerator: u32, denominator: u32) {
+		self.emit_inline_ratio_test(f, x);
+		f.instruction(&I::If(BlockType::Result(ValType::I32)));
+		self.emit_inline_numerator(f, x);
+		f.instruction(&I::LocalSet(numerator));
+		self.emit_inline_denominator(f, x);
+		Self::emit_list(f, &[I::LocalSet(denominator), I::I32Const(1), I::Else]);
+		Self::emit_list(f, &[I::LocalGet(x), I::LocalSet(numerator), I::I64Const(1), I::LocalSet(denominator)]);
+		Self::emit_list(f, &[I::LocalGet(x), I::I64Const(SMALL_LIMIT), I::I64Add, I::I64Const(2 * SMALL_LIMIT), I::I64LtU, I::End]);
+	}
+
+	/// Both operands small (small_parts into SMALL_PARTS): run `small_op` on their parts in i64 and return
+	fn small_shortcut(&self, f: &mut Function, small_op: impl FnOnce(&Self, &mut Function)) {
+		let [a_numerator, a_denominator, b_numerator, b_denominator] = SMALL_PARTS;
+		self.small_parts(f, 0, a_numerator, a_denominator);
+		self.small_parts(f, 1, b_numerator, b_denominator);
+		Self::emit_list(f, &[I::I32And, I::If(BlockType::Empty)]);
+		small_op(self, f);
+		Self::emit_list(f, &[I::Return, I::End]);
+	}
+
+	/// The ratio numerator/denominator of `combine`'s two i64 results, normalized by an i64 Euclid gcd (the denominator
+	/// is positive): an Int, an inline ratio, or ratio_new's
+	fn small_ratio(&self, f: &mut Function, combine: &[Instruction]) {
+		let [gcd, rest, ..] = SMALL_PARTS;
+		Self::emit_list(f, combine);
+		Self::emit_list(f, &[I::LocalSet(SMALL_DENOMINATOR), I::LocalTee(SMALL_NUMERATOR)]);
+		Self::emit_list(f, &[I::LocalGet(SMALL_NUMERATOR), I::I64Const(63), I::I64ShrS, I::I64Xor, I::LocalGet(SMALL_NUMERATOR), I::I64Const(63), I::I64ShrS, I::I64Sub, I::LocalSet(gcd)]);
+		Self::emit_list(f, &[I::LocalGet(SMALL_DENOMINATOR), I::LocalSet(rest), I::Block(BlockType::Empty), I::Loop(BlockType::Empty)]);
+		Self::emit_list(f, &[I::LocalGet(rest), I::I64Eqz, I::BrIf(1), I::LocalGet(gcd), I::LocalGet(rest), I::I64RemU, I::LocalGet(rest), I::LocalSet(gcd), I::LocalSet(rest), I::Br(0), I::End, I::End]);
+		Self::emit_list(f, &[I::LocalGet(SMALL_NUMERATOR), I::LocalGet(gcd), I::I64DivS, I::LocalSet(SMALL_NUMERATOR)]);
+		Self::emit_list(f, &[I::LocalGet(SMALL_DENOMINATOR), I::LocalGet(gcd), I::I64DivU, I::LocalTee(SMALL_DENOMINATOR)]);
+		Self::emit_list(f, &[I::I64Const(1), I::I64Eq, I::If(BlockType::Result(ValType::I64)), I::LocalGet(SMALL_NUMERATOR), I::Else]);
+		self.emit_inline_ratio_fits(f, SMALL_NUMERATOR, SMALL_DENOMINATOR);
+		f.instruction(&I::If(BlockType::Result(ValType::I64)));
+		self.emit_inline_ratio(f, SMALL_NUMERATOR, SMALL_DENOMINATOR);
+		Self::emit_list(f, &[I::Else, I::LocalGet(SMALL_NUMERATOR), I::LocalGet(SMALL_DENOMINATOR)]);
+		self.call(f, "ratio_new");
+		Self::emit_list(f, &[I::End, I::End]);
+	}
+
+	/// `name(a, b)`: `shortcut`, then ratio_op when an operand is a ratio, else the integer slow path
+	fn exact_dispatch(&mut self, name: &'static str, result: ValType, shortcut: impl FnOnce(&Self, &mut Function), ratio_op: impl FnOnce(&Self, &mut Function), integer_op: &str) {
 		let i64t = ValType::I64;
-		self.runtime_function(name, vec![i64t, i64t], vec![result], vec![], |s, f| {
+		self.runtime_function(name, vec![i64t, i64t], vec![result], vec![i64t; SMALL_LOCALS], |s, f| {
+			shortcut(s, f);
 			s.any_ratio(f, 0, 1);
 			f.instruction(&I::If(BlockType::Result(result)));
 			ratio_op(s, f);
@@ -144,7 +234,7 @@ impl WasmGcEmitter {
 		}
 
 		// int_gcd(a, b) >= 0 by Euclid; locals: remainder
-		self.runtime_function("int_gcd", vec![i64t, i64t], vec![i64t], vec![i64t], |s, f| {
+		self.runtime_function(INT_GCD, vec![i64t, i64t], vec![i64t], vec![i64t], |s, f| {
 			for local in [0, 1] {
 				s.is_negative(f, local);
 				f.instruction(&I::If(BlockType::Empty));
@@ -168,8 +258,10 @@ impl WasmGcEmitter {
 		self.runtime_function("is_ratio", vec![i64t], vec![i32t], vec![], |s, f| {
 			s.emit_fixnum_test(f, &[0]);
 			Self::emit_list(f, &[I::If(BlockType::Result(i32t)), I::I32Const(0), I::Else]);
+			s.emit_inline_ratio_test(f, 0);
+			Self::emit_list(f, &[I::If(BlockType::Result(i32t)), I::I32Const(1), I::Else]);
 			s.emit_heap_get(f, 0);
-			Self::emit_list(f, &[I::RefTestNonNull(ratio_ref), I::End]);
+			Self::emit_list(f, &[I::RefTestNonNull(ratio_ref), I::End, I::End]);
 		});
 
 		for (name, field, integer_value) in [("exact_numerator", 0, None), ("exact_denominator", 1, Some(1))] {
@@ -177,10 +269,17 @@ impl WasmGcEmitter {
 				f.instruction(&I::LocalGet(0));
 				s.call(f, "is_ratio");
 				f.instruction(&I::If(BlockType::Result(i64t)));
+				s.emit_inline_ratio_test(f, 0);
+				f.instruction(&I::If(BlockType::Result(i64t)));
+				match integer_value {
+					Some(_) => s.emit_inline_denominator(f, 0),
+					None => s.emit_inline_numerator(f, 0),
+				}
+				f.instruction(&I::Else);
 				s.emit_heap_get(f, 0);
 				Self::emit_list(f, &[I::RefCastNonNull(ratio_ref), I::StructGet { struct_type_index: ratio, field_index: field }]);
 				s.call(f, "int_from_payload");
-				f.instruction(&I::Else);
+				Self::emit_list(f, &[I::End, I::Else]);
 				f.instruction(&match integer_value {
 					Some(one) => I::I64Const(one),
 					None => I::LocalGet(0),
@@ -197,7 +296,7 @@ impl WasmGcEmitter {
 			s.negate_local(f, 1);
 			f.instruction(&I::End);
 			Self::emit_list(f, &[I::LocalGet(0), I::LocalGet(1)]);
-			s.call(f, "int_gcd");
+			s.call(f, INT_GCD);
 			// gcd 0 only for 0/0 (NaN)
 			Self::emit_list(f, &[I::LocalTee(2), I::I64Const(1), I::I64GtS, I::If(BlockType::Empty)]);
 			for local in [0, 1] {
@@ -207,11 +306,15 @@ impl WasmGcEmitter {
 			}
 			f.instruction(&I::End);
 			Self::emit_list(f, &[I::LocalGet(1), I::I64Const(1), I::I64Eq, I::If(BlockType::Result(i64t)), I::LocalGet(0), I::Else]);
+			s.emit_inline_ratio_fits(f, 0, 1);
+			f.instruction(&I::If(BlockType::Result(i64t)));
+			s.emit_inline_ratio(f, 0, 1);
+			f.instruction(&I::Else);
 			s.emit_int_payload(f, 0);
 			s.emit_int_payload(f, 1);
 			f.instruction(&I::StructNew(ratio));
 			s.call(f, "int_store");
-			f.instruction(&I::End);
+			Self::emit_list(f, &[I::End, I::End]);
 		});
 
 		// exact_div(a, b): a/b, an integer whenever b divides a; locals: quotient, remainder
@@ -258,8 +361,14 @@ impl WasmGcEmitter {
 	fn emit_exact_operations(&mut self) {
 		let (i64t, i32t, f64t) = (ValType::I64, ValType::I32, ValType::F64);
 
-		for (name, combine, integer_op) in [("exact_add", "int_add", "int_add_slow"), ("exact_sub", "int_sub", "int_sub_slow")] {
-			self.exact_dispatch(name, i64t, |s, f| {
+		let [a_numerator, a_denominator, b_numerator, b_denominator] = SMALL_PARTS;
+		let denominators = [I::LocalGet(a_denominator), I::LocalGet(b_denominator), I::I64Mul];
+		for (name, combine, small_combine, integer_op) in [("exact_add", "int_add", I::I64Add, "int_add_slow"), ("exact_sub", "int_sub", I::I64Sub, "int_sub_slow")] {
+			let small_sum = [
+				I::LocalGet(a_numerator), I::LocalGet(b_denominator), I::I64Mul, I::LocalGet(b_numerator), I::LocalGet(a_denominator), I::I64Mul,
+				small_combine, denominators[0].clone(), denominators[1].clone(), denominators[2].clone(),
+			];
+			self.exact_dispatch(name, i64t, |s, f| s.small_shortcut(f, |s, f| s.small_ratio(f, &small_sum)), |s, f| {
 				s.cross_product(f, 0, 1);
 				s.cross_product(f, 1, 0);
 				s.call(f, combine);
@@ -267,7 +376,8 @@ impl WasmGcEmitter {
 				s.call(f, "ratio_new");
 			}, integer_op);
 		}
-		self.exact_dispatch("exact_mul", i64t, |s, f| {
+		let small_product = [I::LocalGet(a_numerator), I::LocalGet(b_numerator), I::I64Mul, denominators[0].clone(), denominators[1].clone(), denominators[2].clone()];
+		self.exact_dispatch("exact_mul", i64t, |s, f| s.small_shortcut(f, |s, f| s.small_ratio(f, &small_product)), |s, f| {
 			s.part_product(f, 0, "exact_numerator", 1, "exact_numerator");
 			s.part_product(f, 0, "exact_denominator", 1, "exact_denominator");
 			s.call(f, "ratio_new");
@@ -289,7 +399,14 @@ impl WasmGcEmitter {
 		});
 		// -1/0/1, and 2 (unequal) when exactly one side is NaN.
 		// Finite denominators are positive, so a/b <=> c/d is a*d <=> c*b
-		self.exact_dispatch("exact_cmp", i32t, |s, f| {
+		// small: the sign of a.n·b.d - b.n·a.d. exact_cmp ships in every module (equality) and a hello-world site has a
+		// size budget, so the shortcut comes only with exact arithmetic
+		let small_sign = [
+			I::LocalGet(a_numerator), I::LocalGet(b_denominator), I::I64Mul, I::LocalGet(b_numerator), I::LocalGet(a_denominator), I::I64Mul,
+			I::I64Sub, I::LocalTee(SMALL_NUMERATOR), I::I64Const(0), I::I64GtS, I::LocalGet(SMALL_NUMERATOR), I::I64Const(0), I::I64LtS, I::I32Sub,
+		];
+		let calculates = self.should_emit_function(super::EXACT_ARITHMETIC);
+		self.exact_dispatch("exact_cmp", i32t, |s, f| if calculates { s.small_shortcut(f, |_, f| Self::emit_list(f, &small_sign)) }, |s, f| {
 			let is_nan = |f: &mut Function, local: u32| {
 				f.instruction(&I::LocalGet(local));
 				s.call(f, "exact_is_nan");
@@ -355,7 +472,7 @@ impl WasmGcEmitter {
 		});
 
 		// exact_rem(a, b) = a - b*trunc(a/b), the sign of a like i64.rem_s
-		self.exact_dispatch("exact_rem", i64t, |s, f| {
+		self.exact_dispatch("exact_rem", i64t, |s, f| s.fixnum_division_shortcut(f, &[I::LocalGet(0), I::LocalGet(1), I::I64RemS]), |s, f| {
 			Self::emit_list(f, &[I::LocalGet(0), I::LocalGet(1), I::LocalGet(0), I::LocalGet(1)]);
 			s.call(f, "exact_div");
 			s.call(f, "exact_trunc");
@@ -364,7 +481,9 @@ impl WasmGcEmitter {
 		}, "int_rem_slow");
 
 		// exact_mod(a, b): Euclidean remainder, 0 ≤ r < |b|: the truncated remainder plus |b| when negative; locals: r
+		let euclidean_remainder = super::big_int::euclidean_remainder(0, 1, 2);
 		self.runtime_function("exact_mod", vec![i64t, i64t], vec![i64t], vec![i64t], |s, f| {
+			s.fixnum_division_shortcut(f, &euclidean_remainder);
 			Self::emit_list(f, &[I::LocalGet(0), I::LocalGet(1)]);
 			s.call(f, "exact_rem");
 			Self::emit_list(f, &[I::LocalTee(2), I::I64Const(0)]);
@@ -391,7 +510,10 @@ impl WasmGcEmitter {
 
 		// exact_euclid_div(a, b): the quotient of a // b that goes with a % b: floor(a/b) for b > 0, ceil(a/b) =
 		// -floor(-a/b) for b < 0
-		self.runtime_function("exact_euclid_div", vec![i64t, i64t], vec![i64t], vec![], |s, f| {
+		// for fixnums (a - a % b) / b, which divides exactly
+		let euclidean_quotient = [&[I::LocalGet(0)][..], &euclidean_remainder, &[I::I64Sub, I::LocalGet(1), I::I64DivS]].concat();
+		self.runtime_function("exact_euclid_div", vec![i64t, i64t], vec![i64t], vec![i64t], |s, f| {
+			s.fixnum_division_shortcut(f, &euclidean_quotient);
 			Self::emit_list(f, &[I::LocalGet(1), I::I64Const(0)]);
 			s.call(f, "exact_cmp");
 			Self::emit_list(f, &[I::I32Const(0), I::I32LtS, I::If(BlockType::Result(i64t)), I::I64Const(0), I::I64Const(0), I::LocalGet(0), I::LocalGet(1)]);
@@ -597,6 +719,93 @@ impl WasmGcEmitter {
 			s.call(f, "new_text");
 			concat(f);
 		});
+
+		if !self.should_emit_function(DECIMAL_TEXT) {
+			return;
+		}
+		// decimal_text(x): the digits before the period (as many as the larger count of 2s and 5s in the denominator),
+		// then the period (the order of 10 modulo the rest of the denominator), written by long division
+		let locals = vec![i64t, i64t, i64t, i32t, i32t, i32t, i64t, i32t, i32t, i32t, nullable];
+		self.runtime_function(DECIMAL_TEXT, vec![i64t], vec![node_ref], locals, |s, f| {
+			let (value, numerator, denominator, rest, before_period, fives, period, power, length, address, at, prefix) = (0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11);
+			let concat = |f: &mut Function| s.call(f, crate::wasm_emitter::text_builtins::TEXT_CONCAT);
+			let exact_text_if = |f: &mut Function| {
+				Self::emit_list(f, &[I::If(BlockType::Empty), I::LocalGet(value)]);
+				s.call(f, EXACT_TEXT);
+				Self::emit_list(f, &[I::Return, I::End]);
+			};
+			// an integer, ±∞ and NaN, and a terminating or too long decimal: as exact_text writes them
+			f.instruction(&I::LocalGet(value));
+			s.call(f, "is_ratio");
+			f.instruction(&I::I32Eqz);
+			exact_text_if(f);
+			f.instruction(&I::LocalGet(value));
+			s.call(f, "exact_numerator");
+			Self::emit_list(f, &[I::LocalSet(numerator), I::LocalGet(value)]);
+			s.call(f, "exact_denominator");
+			Self::emit_list(f, &[I::LocalTee(denominator), I::LocalSet(rest), I::LocalGet(denominator), I::I64Eqz]);
+			exact_text_if(f);
+			for (prime, count) in DECIMAL_PRIMES.into_iter().zip([before_period, fives]) {
+				Self::emit_list(f, &[I::Block(BlockType::Empty), I::Loop(BlockType::Empty), I::LocalGet(rest), I::I64Const(prime)]);
+				s.call(f, "int_rem");
+				Self::emit_list(f, &[I::I64Eqz, I::I32Eqz, I::BrIf(1), I::LocalGet(rest), I::I64Const(prime)]);
+				s.call(f, "int_quot");
+				Self::emit_list(f, &[I::LocalSet(rest), I::LocalGet(count), I::I32Const(1), I::I32Add, I::LocalSet(count), I::Br(0), I::End, I::End]);
+			}
+			Self::emit_list(f, &[I::LocalGet(before_period), I::LocalGet(fives), I::LocalGet(before_period), I::LocalGet(fives), I::I32GtS, I::Select, I::LocalSet(before_period)]);
+			Self::emit_list(f, &[I::LocalGet(rest), I::I64Const(1), I::I64Eq]);
+			exact_text_if(f);
+			// the period: the first power of ten that is 1 modulo the rest
+			f.instruction(&I::I64Const(DECIMAL_BASE));
+			f.instruction(&I::LocalGet(rest));
+			s.call(f, "int_rem");
+			Self::emit_list(f, &[I::LocalSet(power), I::I32Const(1), I::LocalSet(period)]);
+			Self::emit_list(f, &[I::Block(BlockType::Empty), I::Loop(BlockType::Empty), I::LocalGet(power), I::I64Const(1), I::I64Eq, I::BrIf(1)]);
+			Self::emit_list(f, &[I::LocalGet(period), I::I32Const(MAX_PERIOD), I::I32GeU]);
+			exact_text_if(f);
+			Self::emit_list(f, &[I::LocalGet(power), I::I64Const(DECIMAL_BASE)]);
+			s.call(f, "int_mul");
+			f.instruction(&I::LocalGet(rest));
+			s.call(f, "int_rem");
+			Self::emit_list(f, &[I::LocalSet(power), I::LocalGet(period), I::I32Const(1), I::I32Add, I::LocalSet(period), I::Br(0), I::End, I::End]);
+			// the sign and the whole part
+			s.is_negative(f, numerator);
+			f.instruction(&I::If(BlockType::Result(node_ref)));
+			s.negate_local(f, numerator);
+			push_text(s, f, minus);
+			f.instruction(&I::Else);
+			push_text(s, f, empty);
+			Self::emit_list(f, &[I::End, I::LocalGet(numerator), I::LocalGet(denominator)]);
+			s.call(f, "int_quot");
+			s.call(f, INT_TEXT);
+			concat(f);
+			push_text(s, f, dot);
+			concat(f);
+			f.instruction(&I::LocalSet(prefix));
+			// the fraction's digits, one byte each and the period's followed by the overline's two
+			Self::emit_list(f, &[I::LocalGet(numerator), I::LocalGet(denominator)]);
+			s.call(f, "int_rem");
+			let overlined_digit_bytes = 1 + OVERLINE_BYTES.len() as i32;
+			Self::emit_list(f, &[I::LocalSet(rest), I::LocalGet(before_period), I::LocalGet(period), I::I32Const(overlined_digit_bytes), I::I32Mul, I::I32Add, I::LocalSet(length)]);
+			s.emit_text_allocation(f, length, address);
+			Self::emit_list(f, &[I::LocalGet(address), I::LocalSet(at)]);
+			Self::emit_list(f, &[I::Block(BlockType::Empty), I::Loop(BlockType::Empty), I::LocalGet(before_period), I::LocalGet(period), I::I32Or, I::I32Eqz, I::BrIf(1)]);
+			Self::emit_list(f, &[I::LocalGet(rest), I::I64Const(DECIMAL_BASE)]);
+			s.call(f, "int_mul");
+			Self::emit_list(f, &[I::LocalSet(rest), I::LocalGet(at), I::LocalGet(rest), I::LocalGet(denominator)]);
+			s.call(f, "int_quot");
+			Self::emit_list(f, &[I::I32WrapI64, I::I32Const(b'0' as i32), I::I32Add, I::I32Store8(BYTE), I::LocalGet(rest), I::LocalGet(denominator)]);
+			s.call(f, "int_rem");
+			Self::emit_list(f, &[I::LocalSet(rest), I::LocalGet(at), I::I32Const(1), I::I32Add, I::LocalSet(at)]);
+			Self::emit_list(f, &[I::LocalGet(before_period), I::If(BlockType::Empty), I::LocalGet(before_period), I::I32Const(1), I::I32Sub, I::LocalSet(before_period), I::Else]);
+			for byte in OVERLINE_BYTES {
+				Self::emit_list(f, &[I::LocalGet(at), I::I32Const(byte as i32), I::I32Store8(BYTE), I::LocalGet(at), I::I32Const(1), I::I32Add, I::LocalSet(at)]);
+			}
+			Self::emit_list(f, &[I::LocalGet(period), I::I32Const(1), I::I32Sub, I::LocalSet(period), I::End, I::Br(0), I::End, I::End]);
+			Self::emit_list(f, &[I::LocalGet(prefix), I::RefAsNonNull, I::LocalGet(address), I::LocalGet(length)]);
+			s.call(f, "new_text");
+			concat(f);
+		});
 	}
 
 	/// Push numerator(x) quot denominator(x)
@@ -611,15 +820,5 @@ impl WasmGcEmitter {
 
 /// Exact fraction of the shortest decimal that round-trips `value`: 0.1 → (1, 10)
 pub fn decimal_fraction(value: f64) -> (BigInt, BigInt) {
-	let scientific = format!("{:e}", value); // "-1.25e-3"
-	let (mantissa, exponent) = scientific.split_once('e').expect("LowerExp has an exponent");
-	let fraction_digits = mantissa.split_once('.').map_or(0, |(_, fraction)| fraction.len()) as i64;
-	let digits: BigInt = mantissa.replace('.', "").parse().expect("decimal digits");
-	let scale = exponent.parse::<i64>().expect("decimal exponent") - fraction_digits;
-	let power: BigInt = BigInt::from(10).pow(scale.unsigned_abs() as u32);
-	if scale >= 0 {
-		(digits * power, BigInt::one())
-	} else {
-		(digits, power)
-	}
+	crate::extensions::numbers::decimal_text_fraction(&format!("{:e}", value)).expect("LowerExp writes decimal digits and an exponent")
 }

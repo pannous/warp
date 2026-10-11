@@ -106,6 +106,8 @@ fn test_data_does_not_execute() {
 #[test]
 fn test_exact_decimal_arithmetic() {
 	is!("0.1+0.2==0.3", true);
+	is!("0.1+0.2 ≈ 0.3", true);
+	is!("1/10+2/10==3/10", true);
 	is!("1/3*3==1", true);
 }
 
@@ -495,7 +497,7 @@ fn test_calendar_overflow_is_explicit() {
 
 #[test]
 fn test_no_implicit_time_zone() {
-	fails_with("now.hour", "instant has no hour"); // an instant needs a zone before it has a wall clock
+	is!("now.hour >= 0 and now.hour < 24", true); // an instant's wall clock is the environment's zone (user, 2026-10-10)
 	is!("(2024-03-31T00:30Z in \"Europe/Berlin\").hour", 1);
 	is!("(2024-03-31T01:30Z in \"Europe/Berlin\").hour", 3); // DST: 02:00-03:00 does not exist
 	fails_with("2024-03-31T02:30[Europe/Berlin]", "does not exist"); // gap, no silent shift
@@ -661,6 +663,7 @@ fn test_compiler_failures_are_error_values() {
 fn test_exact_rationals_stay_exact() {
 	is!("1/3", Node::Number(warp::Number::Quotient(1, 3))); // Python/JS: 0.3333333333333333
 	is!("x=0.1;x*3", 0.3);
+	is!("x=1/10;x*3", 0.3);
 	is!("2^-2", 0.25); // was a wasm trap: negative exponents need rationals
 	is!("1/3 < 0.34", true);
 }
@@ -712,8 +715,9 @@ fn test_shell_holes_are_whole_arguments() {
 #[test]
 fn test_running_queries_and_commands_needs_a_capability() {
 	is!("lookup(n) := execute sql \"SELECT * FROM t WHERE id = $n\"\neffects of lookup", Node::Symbol("IO".into()));
-	// P88 (user 2026-10-05): the capabilities are granted for now, but no host runs exec or execute yet: still loud
-	fails_with("c=sh \"ls -l\";exec c", "undefined: exec");
+	// P88 (user 2026-10-05): the capabilities are granted for now; no host runs execute yet: still loud
+	#[cfg(feature = "native")] // the browser runs no processes
+	is!("c=sh \"echo hi\";exec c", "hi"); // runs natively now (card read-chron)
 	fails_with("execute sql \"SELECT 1\"", "undefined: execute");
 	fails_with("lookup(n) := execute sql \"SELECT * FROM t WHERE id = $n\" ! Pure\nlookup(1)", "lookup is declared ! Pure but performs IO");
 }
@@ -788,6 +792,7 @@ fn test_booleans_count_as_numbers() {
 #[test] // IEEE 754: (0.1+0.2)+0.3 != 0.1+(0.2+0.3); number literals are exact by default
 fn test_addition_is_associative_by_default() {
 	is!("(0.1+0.2)+0.3 == 0.1+(0.2+0.3)", true);
+	is!("(1/10+2/10)+3/10 == 1/10+(2/10+3/10)", true);
 }
 
 #[test] // IEEE floats are the explicit opt-in, and then the law is weaker

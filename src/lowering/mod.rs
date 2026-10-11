@@ -42,6 +42,7 @@ pub mod list_element_checks;
 pub mod nested_index;
 pub mod named_arguments;
 pub mod number_keys;
+pub mod music_words;
 pub mod overloads;
 pub mod variadic;
 pub mod phrase_calls;

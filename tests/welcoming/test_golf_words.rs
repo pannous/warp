@@ -46,8 +46,8 @@ fn bits_of_whole_numbers() {
 }
 
 #[test]
-fn a_text_word_without_its_module_names_the_module() {
-	crate::common::fails_with("use math; to_base(5, 2).count_of(\"1\")", "count_of is in the standard module text: write `use text`");
+fn a_text_word_without_its_module_is_a_text_method() {
+	is!("use math; to_base(5, 2).count_of(\"1\")", 2);
 }
 
 #[cfg(feature = "native")]

@@ -48,6 +48,8 @@ const STD_ALIASES: [StdAlias; 21] = [
 ];
 /// The standard words warp writes qualified by their module: `json.parse(t)` (card g_ogQg), lowered as the aliases are
 const WARP_FORMS: [StdAlias; 1] = [alias("json", "parse", "json", "parse_json", &[0])];
+/// Standard words called bare, `member(…)`, module "": `json(t)` is json.parse(t) (card json5-parse)
+const BARE_FORMS: [StdAlias; 1] = [alias("", "json", "json", "parse_json", &[0])];
 const USE_WORD: &str = "use";
 
 pub fn lower(program: Node) -> Node {
@@ -87,7 +89,7 @@ fn aliased(node: Node, kept: &[&str], used: &mut HashSet<&'static str>) -> Node 
 	match aliased_call(&node, kept) {
 		Some((alias, arguments)) => {
 			crate::normalize::set_position_of(&node);
-			if !WARP_FORMS.iter().any(|form| std::ptr::eq(form, alias)) {
+			if !alias.module.is_empty() && !WARP_FORMS.iter().any(|form| std::ptr::eq(form, alias)) {
 				crate::diagnostic::note_alias(&format!("{}.{}", alias.module, alias.member), &warp_form(alias.word));
 			}
 			if !alias.std_module.is_empty() {
@@ -103,6 +105,9 @@ fn aliased(node: Node, kept: &[&str], used: &mut HashSet<&'static str>) -> Node 
 /// `module.member(arguments…)` of a known alias with as many arguments as it takes; a shape tuple stands for its items
 /// (`np.zeros((2, 3))` is zeros(2, 3))
 fn aliased_call<'a>(node: &'a Node, kept: &[&str]) -> Option<(&'static StdAlias, &'a [Node])> {
+	if let Some(bare) = bare_call(node, kept) {
+		return Some(bare);
+	}
 	let Node::Key(module, Op::Dot, call) = node.drop_meta() else { return None };
 	let Node::List(items, _, _) = call.drop_meta() else { return None };
 	let (member, arguments) = items.split_first()?;
@@ -117,6 +122,14 @@ fn aliased_call<'a>(node: &'a Node, kept: &[&str]) -> Option<(&'static StdAlias,
 	STD_ALIASES.iter().chain(WARP_FORMS.iter())
 		.filter(|alias| alias.module == module && alias.member == member && !kept.contains(&alias.module))
 		.find_map(|alias| [arguments, shape_items(arguments)].into_iter().find(|given| given.len() == alias.order.len()).map(|given| (alias, given)))
+}
+
+/// `json(t)`: a bare form called with as many arguments as it takes, where the program names no such word itself
+fn bare_call<'a>(node: &'a Node, kept: &[&str]) -> Option<(&'static StdAlias, &'a [Node])> {
+	let Node::List(items, Bracket::Round, _) = node.drop_meta() else { return None };
+	let (word, arguments) = items.split_first()?;
+	let word = word.drop_meta().symbol_name()?;
+	BARE_FORMS.iter().find(|form| form.member == word && form.order.len() == arguments.len() && !kept.contains(&form.member)).map(|form| (form, arguments))
 }
 
 /// The program with `use module` first for each module an alias brought

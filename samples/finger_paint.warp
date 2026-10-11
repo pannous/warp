@@ -1,0 +1,42 @@
+#!/usr/bin/env warp
+// finger painting: hold the mouse button over the window (in the playground, the canvas) and draw strokes whose color
+// turns as you go. mouse_x, mouse_y and mouse_down are the pointer over the painted picture, in its pixels
+use draw
+// 1024 pixels across or more show pixel for pixel: crisp on a Retina screen (640×400 points there)
+width = 1280
+height = 800
+brush = 8
+// a brush dab every this many pixels along a stroke: dabs overlap into a smooth line
+spacing = 3
+degrees_per_dab = 0.5
+
+canvas(width, height)
+clear(white)
+show()
+global turn = 0.0
+last_x = 0.0
+last_y = 0.0
+was_down = false
+
+// dabs of the brush from x1, y1 to x2, y2
+def stroke(x1, y1, x2, y2) {
+	dabs = max(cell(max(abs(x2 - x1), abs(y2 - y1)) / spacing), 1)
+	for i in 1 to dabs {
+		circle(x1 + (x2 - x1) * i / dabs, y1 + (y2 - y1) * i / dabs, brush, hsv(turn, 0.8, 0.9))
+		turn += degrees_per_dab
+	}
+}
+
+// until the window closes; headless (no window) the loop never starts
+while window_open {
+	if mouse_down {
+		// a new stroke starts where the button went down, not where the last one ended
+		if not was_down { last_x = mouse_x; last_y = mouse_y }
+		stroke(last_x, last_y, mouse_x, mouse_y)
+		last_x = mouse_x
+		last_y = mouse_y
+		show()
+	}
+	was_down = mouse_down
+	sleep 16ms
+}

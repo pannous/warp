@@ -16,6 +16,7 @@ use crate::type_kinds::Kind;
 mod serialization;
 pub use serialization::{NO, YES};
 mod json_xml;
+pub use json_xml::json_of_json5;
 mod indexing;
 mod comparison;
 #[cfg(feature = "native")]

@@ -6,11 +6,99 @@ before asking the user; nobody reads it front to back, the code, tests and wiki 
 "notes/open_decisions.md" + a Decided section, P-, D- or #-numbers mean this file. Open and parked questions:
 notes/open_decisions.md.
 
+## Decided 2026-10-11 (user; via warp-supervisor or the Interviewer)
+- repeating-decimals (user, via warp-integrator): no parentheses syntax for repeating decimals; only the overline form
+  `0.3̅` (U+0305 after each period digit) is the exact ratio 1/3. `0.(3)` is not a repeating decimal and `0.5(3)` stays
+  juxtaposition, 1.5. `x as decimal` writes a ratio with its period overlined.
+- unknown-word (user): `u8` is an alias of `uint8`, which is an alias of `byte` (src/fixed_width.rs ALIASES; overflow
+  messages name byte).
+- hex-printing (user): `255 as hex` is an int that shows as 0xFF, and a byte shows so too (a plain wasm integer,
+  special logic only at FFI crossings). Defaults taken: uppercase digits (0xFF), arithmetic gives a plain int, a
+  variable assigned `x as byte` shows in hex without the byte's range check (notes/hex_ints.md).
+- bizarre-global (user, via warp-supervisor): play, beep, stop_sound and wait_sound stay global; every other sound
+  word (melody, tone, pattern, live_loop, render_sound, sound_queued, the midi words) needs `use sound`, else the error
+  "X is in the standard module sound: write `use sound`". Old tests and samples gain a `use sound` line, including
+  the meaning change of sound_words_run_without_use.
+
 ## Decided 2026-10-10 (user; via warp-supervisor or the Interviewer)
+- footgun-divzero (warp-numbers): user: "no idea about the advantages … you decide or we decide later"; the
+  Interviewer's default, revisit any time: exact numbers (ints, rationals, decimals) raise divide by zero (`r = try
+  1/0; r failed` is yes, as failed-raised), computed IEEE floats give ∞/NaN as IEEE (`sqrt(2)/0` is ∞). The
+  extended-rational ±1/0 idea stays open for later; wiki Footguns "NaN and infinity" is corrected to this.
+- wiki-full-evaluation (warp-docs): no conflict: `created: now` stays a block until `!` (the spec); "dates are folded
+  at compile time" is today's implementation limit (Footguns "Not yet"), not a rule. Implied, not asked.
+- let-reassign (warp-types; user, asked 2026-10-10): `let` is fully immutable, `var` is the variable. `let x = 1; x = 2`,
+  `x += …`, `x++` and `xs#1 = 5` on a let are all errors with the fix "use var x". Supersedes P159's "changing a let
+  works with a note" and the wiki/mutable.md:23 split (value may change, binding fixed); the wiki follows this.
+- module-global-assign (warp-sound default, not asked): a program's top-level `tempo = 90` / `note_seconds = 0.25` /
+  `canvas_width = 800` sets the standard module's `global` of that name instead of making a shadowing program
+  variable; other module words still shadow. Revisit if it surprises the user.
+- go-voice (warp-sound default, not asked): a `go { }` task is a voice that starts where its starter stands in the
+  music and sounds along with it (native; the Playground still plays them one after another, card playground-go).
+- exact-decimals (user 2026-10-10, revises exact-default the same day; proposed by the Interviewer, supervisor
+  agreed): decimal literals are exact decimals stored as an inline i64 mantissa plus a power-of-ten scale (no gcd, no
+  heap; GC big decimal/rational on overflow): `0.1 + 0.2 == 0.3` is yes. Division gives exact ratios (`1/3+1/3` 2/3).
+  Floats come only from float sources and are contagious (exact ⊕ float → float): sin and other transcendental
+  functions, sqrt of a non-square, fractional powers, host values (mouse, time, audio), `as float`, float-typed
+  parameters/fields, e-notation literals (1.5e-7). `==` warns only when a float is involved. Clarified by the user: everything
+  stays exact unless it flows into a float (speed-relevant) path, so `sqrt(2.0)` is the exact √2 like `sqrt(2)`
+  (no special rule for a written point; card sqrt-float-arg obsolete); `sin(1) + 0.5`, `mouse_x + 0.5` are floats. warp-perf measures the cost (finger_paint_bench,
+  `x = 0.5` + hot loop). float-text (shortest-exact) still holds for floats.
+- float-text (warp-fixer, user 2026-10-10): floats print shortest-exact everywhere (text, print, str, results), like
+  Python/JS repr: `print 1/3.0` 0.3333333333333333, `0.1+0.2` 0.30000000000000004, tiny ones `1.5e-7`. Replaces the
+  15-digit text form. The user also asked for repeating-decimal notation 0.3̅: only for exact rationals (card
+  repeating-decimals), never for floats.
+- range-end-once (warp-perf default, Interviewer): every `for` range end is evaluated once before the loop, `0..n` too
+  (`n=3; for i in 0..n { n = 10 }` runs 3 rounds), like Python.
+- sound-at (warp-sound default): `at 2 beats play C4`, `at 1 bar { … }` place a statement's sounds at that time from
+  the voice's first sound; the voice continues where it stood. Alternatives: Sonic Pi's sleep-moves-time, trailing
+  `play C4 at 2 beats`.
+- route-access (warp-web, user 2026-10-10): access rules come later; for now a route gives out only what it displays.
+  Login kind: no preference (parked with the card).
+- git-hook restore (warp-fixer, user 2026-10-10): agents may `git restore`/`checkout --` Cargo.toml and Cargo.lock
+  only (the build tweak); the hook saves the diff under refs/restored/<date>-<sha> first (~/.claude 1c1de70).
+- stored-visits (warp-class, aliases rule, not asked): `stored visits default 0` is the form; `stored visits = 0`
+  works with a got-it note "visits keeps its stored value; 0 is only the first run's".
+- result-keyword (warp-functions, implied by wiki/result.md): after a print, `result` is the printed value.
+- float exit status (warp-perf default): only an Int result is the exit status; a float result exits 0.
+- tag-assign (warp-class, user 2026-10-10): every `=` in a tag body is a value entry, like `:`: `cat{x=1 y=2}` is
+  cat{x:1 y:2}, `p{shown = "seen"}` is p{shown:"seen"}, `html{test=1}` is html{test:1}; the meaning never depends on
+  the number of entries. Tests pinning a single `=` as a statement change meaning by this decision.
+- float-result (warp-functions): `int square(x) = x*x; square 3.1` is a compile error naming int, fix "declare
+  `number` to keep the float, or truncate with `as int`". Implied by rational-float, not asked.
+- exact-default (user 2026-10-10, asked after warp-perf measured fraction math as ~90% of finger paint's time plus a
+  never-freed number heap): integer division stays exact, `1/3 + 1/3` is `2/3`; decimal literals are floats,
+  `.1 + .2 ≈ .3`; `==` on floats gives a warning with the fix "use ≈". Supersedes the 2026-09-28 "decimals exact"
+  (`0.1+0.2==0.3`); tests pinning it change meaning by this decision. The ratio heap leak gets fixed regardless
+  (ratios as GC values, small ones inline).
+- let-mut (user 2026-10-10, via warp-supervisor): `let mut x` means `var x`, with a loud warning that warp writes
+  `var`, not the long form.
+- runtime-dates (user 2026-10-10): "dates are evaluated at compile time" must not stand in the wiki; dates get a run-time
+  representation, `now` reads the clock at run time (card runtime-dates, Now).
+- tour-firefox-stall (warp-web): a site whose program runs in a Worker ships task-workers.js (the page creates the
+  task Workers; Firefox stalls on new Worker inside a Worker); tests/web/test_site.rs expected lists gain it.
+- failed-raised (warp-fixer, card failed-raised): a raised error (1/0, raise, [1]#5) keeps stopping the program; a
+  bare `try X` (no else) turns it into the value: `r = try 10/0; if r failed then 1 else 2` is 1, `r = 10/0` stops
+  with divide by zero. `try` without `else` is allowed from now on.
+- rational-float (warp-numbers): `x: rational = sqrt(2)` is a compile error naming rational ("√(2) is a float where an
+  exact rational is expected: declare it `number` to keep the float, or truncate with `as int`"), like a rational
+  parameter. `x: real = sqrt(2)` works (card real-holds).
+- canvas-zero (warp-sound): `use draw` + `show()` without `canvas(…)` uses a default canvas (the playground pane or
+  the window size, else 640×480), never an error. User: "who demanded … errors? We should have defaults." The
+  branch's "a 0×0 image is empty" error is undone. General rule (welcoming.md): a missing setting takes a sensible
+  default; errors only for ambiguity too dangerous to guess.
+- arctan-allow (warp-class): `arctan := arc_tangent` names the function (as `arctan = &arc_tangent`). Partial
+  application only with an explicit hole: `inc := add(1, _); inc 5` is 6. Too few arguments without a hole
+  (`inc := add 1`) stays the error "add needs 2 arguments", whose fix names `add(1, _)`.
 - int-list (warp-numbers, card int-list): a decimal literal stays exact and is int when whole (`type([0.0, 0.0])` is
   list of int, P196b stands); a variable's type joins its literal with every write the analyzer sees, so
   `shown = [0.0, 0.0]; shown[0] = sqrt(2.0)` makes shown a list of float from the start. Runtime conversion only as
   the fallback for writes the analyzer can't see. As implemented.
+- type-equal (warp-numbers, cards type-int and type-equal; implied by #30 "Only `is` tests types", per warp-supervisor):
+  `is` is the subtype test and `==` between types is exact. `type(0.0) is int`, `type(0) is number` and
+  `int is number` are yes; `type(0) == number` is no; `type(2) == type(3)` is yes. Built on the user's rule (cards
+  type-value-type, real-equality): a bare type name is the type as a value, not a constructor, so `type(π) == real`,
+  `t = type(0); t is int` and `int == int` work like any value; `3 == int` is no with the hint toward `is`.
 - people-where (warp-class): no new `with`/`without` sugar after a list beyond what is already implemented (user:
   the words have too many meanings; `with` could as well mean "with something added"), and "if it's already
   implemented, keep it implemented": main's `with` filter from the orm example stays (`name of people with age > 20`,
@@ -1081,7 +1169,9 @@ notes/open_decisions.md.
 - Extended 2026-10-10 (user via warp-supervisor, card print-oldest): text + anything concatenates in its str() form
   (`"oldest first: " + list`, an instance, a map, ø); a function stays an error. The one exception: a text spelling a
   number plus a number (`"3"+3`) warns, offering `int("3") + 3` or `"3" + str(3)`, and keeps `"33"` (an error under
-  `use strict`); `"a"+3` is silent. Test: tests/text/test_text_plus_anything.rs.
+  `use strict`); `"a"+3` is silent. Test: tests/text/test_text_plus_anything.rs. User, same day: "text + Formatable
+  should work in general": an instance of a Printable type (`text(p:P) := …`, a text() method) joins as its own text
+  (`"hi " + bo`, `s + bo`; tests/text/test_text_plus_printable.rs); numbers keep joining, `"3"+3` keeps its warning.
 - `//` not followed by a space is Python floor division (`7//2`, `a //b`, `x//=3`, `x //= 3`), the Euclidean
   quotient that goes with `%` (`floor_quotient(a, b)`: floor for a positive divisor, `-7//-2` gives 4 where Python
   gives 3). `a div b` is the same floor division. An index that divides (`xs[n/2]`) traps `index must be an

@@ -117,3 +117,11 @@ fn a_module_is_used_as_an_alias() {
 	is!("use square as sq\nsq.square(7)", 49);
 	is!("use math as m\nm.floor(4.5)", 4);
 }
+
+/// card program-global: a program's `global hue` is not the local `hue` of a used module's function (draw's hsv); the
+/// module's own globals (canvas_width) stay its globals
+#[test]
+fn a_programs_global_is_not_a_module_functions_local() {
+	is!("use draw; global hue = 10; c = hsv(120, 1, 1); hue", 10);
+	is!("use draw; global hue = 10; c = hsv(120, 1, 1); c == rgb(0, 255, 0)", true);
+}

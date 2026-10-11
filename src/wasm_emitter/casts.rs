@@ -6,7 +6,11 @@ use crate::wasm_emitter::layout::BYTE;
 /// text_as_number(node): a text's number at run time, as the literal cast gives it: "1/3" the exact ratio, a whole
 /// number an Int, else a Float; no number is invalid_number
 pub const TEXT_AS_NUMBER: &str = "text_as_number";
+/// `x as i64`: the whole number wrapped to 64 bits, not the unbounded int the other int words convert to
+pub(super) const WRAPPING_INT_WORDS: [&str; 2] = ["i64", "int64"];
 const RATIO_SLASH: i32 = '/' as i32;
+/// The words emit_cast converts to besides the number types (int, float, rational …)
+const CONVERSION_WORDS: [&str; 6] = ["text", "list", "codepoint", crate::analyzer::BOOL_TYPE, "number", super::hex::HEX_WORD];
 
 impl WasmGcEmitter {
 	/// Text converts only if it is a number literal (truncated for int); anything else is a runtime error, never a plausible 0
@@ -32,9 +36,10 @@ impl WasmGcEmitter {
 		}
 	}
 
-	/// An f64 has no exact value yet: `x as exact` of a runtime float is refused instead of rounded silently
+	/// An f64 has no exact value yet (nearest_hint): `x as exact` of a runtime float is refused instead of rounded silently
 	pub(super) fn emit_inexact_to_exact(&mut self, func: &mut Function, value: &Node) {
-		let message = format!("{} is an IEEE float, `as exact` of a float is not supported yet: keep it exact from the start", value.serialize());
+		let value = value.serialize();
+		let message = format!("{value} is an IEEE float, `as exact` of a float is not supported yet: keep it exact from the start, {}", nearest_hint(&value));
 		self.emit_type_error(func, message);
 	}
 
@@ -53,36 +58,53 @@ impl WasmGcEmitter {
 	}
 
 	pub(super) fn emit_numeric_cast(&mut self, func: &mut Function, located: &Node, value: &Node, target: &Node) {
+		if let Some(computed) = super::hex::computed_type(target) {
+			return self.emit_numeric_cast(func, located, value, &computed);
+		}
 		if let Some(refusal) = self.cast_refusal(value, target) {
 			self.emit_type_error(func, refusal);
 			return;
 		}
 		let exact_value = !matches!(value.drop_meta(), Node::Text(_) | Node::Char(_)) && !self.get_type(value).is_float();
-		match crate::type_kinds::canonical_type_name(&target.name().to_lowercase()) {
+		match crate::type_tests::canonical_spec_word(&target.name().to_lowercase()) {
 			"float" => {
 				let message = format!("{} is a float where an exact Int is expected: `as float` promotes, `as int` truncates", located.serialize());
 				self.emit_type_error(func, message);
 			}
-			"exact" if exact_value => self.emit_numeric_value(func, value),
+			exact if exact_value && crate::type_tests::is_exact_fraction_type(exact) => self.emit_numeric_value(func, value),
+			exact if crate::type_tests::spells_decimals_exactly(exact) && decimal_literal(value).is_some() => {
+				self.emit_decimal_literal(func, decimal_literal(value).expect("guarded"))
+			}
 			// a character held unboxed is its code point
-			"char" | "character" => match value.drop_meta() {
+			"codepoint" => match value.drop_meta() {
 				Node::Char(character) => {
 					func.instruction(&I::I64Const(*character as i64));
 				}
 				_ => self.emit_numeric_value(func, value),
 			},
 			// `n = "4" as number`, `"4.5" as number`: held as an exact Int (card number-variable)
-			"number" | "num" if crate::analyzer::literal_number(value).is_some() => {
+			"number" if crate::analyzer::literal_number(value).is_some() => {
 				self.emit_numeric_value(func, &crate::analyzer::literal_number(value).expect("guarded"));
 			}
-			"number" | "num" => {
+			"number" => {
 				self.emit_cast(func, value, target);
 				self.emit_call(func, "get_int_value");
+			}
+			// an exact number as its truncated i64, without the Int node emit_cast_to_int builds
+			_ if exact_value && super::values::is_int_type_word(target) && !matches!(self.get_type(value), Kind::Text | Kind::Codepoint | Kind::Empty)
+				&& !self.names_unknown_word(value) && !self.computes_at_run_time_kind(value) => {
+				self.emit_int_value_truncated(func, value);
+			}
+			// a float truncated straight to the i64, without the Int node emit_cast_to_int builds
+			_ if self.get_type(value).is_float() && super::values::is_int_type_word(target) && !self.computes_at_run_time_kind(value) => {
+				self.emit_float_value(func, value);
+				self.emit_truncating_cast(func);
 			}
 			_ if crate::analyzer::builtin_type_kind(&target.name()) == Some(Kind::Int) => {
 				self.emit_cast(func, value, target);
 				self.emit_call(func, "get_int_value");
 			}
+			_ if !converts_to(&target.name().to_lowercase()) => self.emit_type_error(func, unknown_conversion(value, &target.name())),
 			_ => self.emit_not_a_number(func, located, located.drop_meta()),
 		}
 	}
@@ -169,10 +191,25 @@ impl WasmGcEmitter {
 		held
 	}
 
+	/// `cube 3 as int`, the body of `def g() -> int { cube 3 }`: an unknown word is an error as without the cast
+	fn unknown_word_refusal(&self, value: &Node) -> Option<String> {
+		match value.drop_meta() {
+			Node::List(items, bracket, separator) => self.unknown_word_error(items, bracket, separator),
+			_ => None,
+		}
+	}
+
+	fn names_unknown_word(&self, value: &Node) -> bool {
+		self.unknown_word_refusal(value).is_some()
+	}
+
 	/// Emit type cast: value as type
 	/// Handles conversions between int, float, string
 	/// Optimizes literal conversions at compile time
 	pub(super) fn emit_cast(&mut self, func: &mut Function, value: &Node, target_type: &Node) {
+		if let Some(computed) = super::hex::computed_type(target_type) {
+			return self.emit_cast(func, value, &computed);
+		}
 		let type_name = match target_type.drop_meta() {
 			Node::Symbol(s) => s.to_lowercase(),
 			Node::Text(s) => s.to_lowercase(),
@@ -184,35 +221,36 @@ impl WasmGcEmitter {
 		};
 
 		let value = value.drop_meta();
-		// `cube 3 as int`, the body of `def g() -> int { cube 3 }`: an unknown word is an error as without the cast
-		let unknown_word = match value {
-			Node::List(items, bracket, separator) => self.unknown_word_error(items, bracket, separator),
-			_ => None,
-		};
-		if let Some(refusal) = unknown_word.or_else(|| self.cast_refusal(value, target_type)) {
+		if let Some(refusal) = self.unknown_word_refusal(value).or_else(|| self.cast_refusal(value, target_type)) {
 			self.emit_type_error(func, refusal);
 			return;
 		}
 
-		match crate::type_kinds::canonical_type_name(&type_name) {
+		let wraps = WRAPPING_INT_WORDS.contains(&type_name.as_str()) && !self.get_type(value).is_float() && !matches!(value, Node::Text(_) | Node::Char(_));
+		match crate::type_tests::canonical_spec_word(&type_name) {
 			"list" => self.emit_list_cast(func, value),
-			"i64" | "int64" if !self.get_type(value).is_float() && !matches!(value, Node::Text(_) | Node::Char(_)) => {
+			super::exact::DECIMAL_WORD => self.emit_cast_to_decimal(func, value),
+			"int" if wraps => {
 				self.emit_wrapping_int(func, value);
 				self.emit_call(func, "new_int");
 			}
-			"int" | "integer" | "i32" | "i64" | "long" => self.emit_cast_to_int(func, value, target_type),
-			"exact" => self.emit_cast_to_exact(func, value, target_type),
-			"float" | "f32" => self.emit_cast_to_float(func, value, target_type),
-			"string" | "str" | "text" => self.emit_cast_to_text(func, value),
-			"char" | "character" => self.emit_cast_to_char(func, value),
-			"bool" | "boolean" => self.emit_cast_to_bool(func, value),
-			"number" | "num" => self.emit_cast_to_number(func, value),
-			_ => {
-				// Unknown type, emit as key node for dynamic dispatch
-				self.emit_node_instructions(func, value);
-				self.emit_node_instructions(func, target_type);
-				self.emit_new_key(func, &Op::As);
+			"int" => self.emit_cast_to_int(func, value, target_type),
+			exact if crate::type_tests::is_exact_fraction_type(exact) => self.emit_cast_to_exact(func, value, target_type),
+			exact if crate::type_tests::spells_decimals_exactly(exact) && decimal_literal(value).is_some() => {
+				self.emit_cast_to_exact(func, value, target_type)
 			}
+			"float" => self.emit_cast_to_float(func, value, target_type),
+			"text" => self.emit_cast_to_text(func, value),
+			"codepoint" => self.emit_cast_to_char(func, value),
+			crate::analyzer::BOOL_TYPE => self.emit_cast_to_bool(func, value),
+			"number" => self.emit_cast_to_number(func, value),
+			// `255 as byte`: the whole number, trapping as a declared byte does when it leaves the range
+			width if let Some(width) = crate::fixed_width::fixed_width(width) => {
+				self.emit_numeric_cast(func, value, value, &Node::Symbol("int".into()));
+				self.emit_fixed_width_check(func, Some(width));
+				self.emit_call(func, "new_int");
+			}
+			_ => self.emit_type_error(func, unknown_conversion(value, &target_type.name())),
 		}
 	}
 
@@ -240,7 +278,7 @@ impl WasmGcEmitter {
 				self.emit_call(func, "new_int");
 			}
 			// a text, or a value known only at run time (a list element), parses its digits
-			_ if matches!(self.get_type(value), Kind::Text | Kind::Codepoint | Kind::Empty) => {
+			_ if matches!(self.get_type(value), Kind::Text | Kind::Codepoint | Kind::Empty) || self.computes_at_run_time_kind(value) => {
 				self.emit_node_instructions(func, value);
 				self.emit_call(func, list_ops::TEXT_AS_INT);
 				self.emit_call(func, "new_int");
@@ -256,14 +294,18 @@ impl WasmGcEmitter {
 	/// The i64 of an Int value; a ratio (`x/2` is exact) is truncated
 	pub(super) fn emit_int_value_truncated(&mut self, func: &mut Function, value: &Node) {
 		self.emit_numeric_value(func, value);
-		if self.int_runtime() && !big_int::is_fixnum_range(self.int_range(value)) {
+		if self.int_runtime() && !big_int::is_fixnum_range(self.int_range(value)) && !self.is_builtin_rounding_call(value) {
 			self.emit_call(func, "exact_trunc");
 		}
 	}
 
-	/// `x as exact`: decimal literals are ratios already (exact.rs), a float becomes the ratio it is
+	/// `x as exact`: a decimal literal is the fraction it spells (`2.1 as exact` is 21/10), a runtime float is refused
 	pub(super) fn emit_cast_to_exact(&mut self, func: &mut Function, value: &Node, target_type: &Node) {
-		match value {
+		match value.drop_meta() {
+			Node::Number(Number::Float(decimal)) => {
+				self.emit_decimal_literal(func, *decimal);
+				self.emit_call(func, "new_int");
+			}
 			Node::Text(s) => self.emit_text_cast(func, s, target_type),
 			Node::Char(_) => self.emit_cast(func, value, &Node::Symbol("int".into())),
 			_ if self.get_type(value).is_float() => self.emit_inexact_to_exact(func, value),
@@ -296,6 +338,16 @@ impl WasmGcEmitter {
 				self.emit_call(func, "new_float");
 			}
 		}
+	}
+
+	/// `x as decimal`: the text of an exact number in decimal digits, its repeating ones overlined (`(1/6) as decimal` is
+	/// "0.16̅"); a float has no period, it is its shortest text (card repeating-decimals)
+	pub(super) fn emit_cast_to_decimal(&mut self, func: &mut Function, value: &Node) {
+		if self.get_type(value).is_float() {
+			return self.emit_cast_to_text(func, value);
+		}
+		self.emit_numeric_value(func, value);
+		self.emit_call(func, super::exact::DECIMAL_TEXT);
 	}
 
 	/// `x as text`, `str(x)`
@@ -470,6 +522,8 @@ fn computes_value(node: &Node) -> bool {
 	node.visit(&mut |part| found |= match part {
 		Node::Key(_, Op::Hash, _) => true,
 		Node::Key(_, op, _) if op.is_arithmetic() => !names_anything(part),
+		// `str(now)`: the instant the clock reads when the program runs; `str(2024-02-29)` a time node
+		Node::List(items, ..) => matches!(items.first().map(Node::drop_meta), Some(Node::Symbol(head)) if [crate::time::INSTANT_AT, crate::time::TIME_OF, crate::time::TIME_IN_ZONE].contains(&head.as_str())),
 		_ => false,
 	});
 	found
@@ -487,4 +541,47 @@ fn quoted_source(value: &Node) -> Option<String> {
 		Node::List(items, Bracket::None, _) if items.len() == 2 && crate::lowering::run_time_blocks::is_data(value) => Some(items[1].serialize()),
 		_ => None,
 	}
+}
+
+/// The way from a float to an exact value the float→exact refusals name: the prelude word nearest (lib/prelude.warp)
+pub(super) fn nearest_hint(value: &str) -> String {
+	format!("or use nearest({value}, rational) for the closest fraction")
+}
+
+/// A number written with a decimal point: `3.3`
+fn decimal_literal(value: &Node) -> Option<f64> {
+	match value.drop_meta() {
+		Node::Number(Number::Float(decimal)) => Some(*decimal),
+		_ => None,
+	}
+}
+
+impl WasmGcEmitter {
+	/// A call of a builtin rounding function (`floor(v)`, `round x`), not a user or FFI one of that name:
+	/// a whole number, never a ratio to truncate
+	fn is_builtin_rounding_call(&self, value: &Node) -> bool {
+		matches!(value.drop_meta(), Node::List(items, _, _) if matches!(items.as_slice(), [word, _]
+			if matches!(word.drop_meta(), Node::Symbol(name) if super::ROUNDING_FUNCTIONS.contains(&name.as_str())
+				&& !self.ctx.user_functions.contains_key(name) && !self.ctx.ffi_imports.contains_key(name))))
+	}
+}
+
+/// A word `as` converts to here: units and classes are lowered before emission
+fn converts_to(type_name: &str) -> bool {
+	let word = crate::type_tests::canonical_spec_word(type_name);
+	CONVERSION_WORDS.contains(&word) || crate::type_tests::is_exact_fraction_type(word) || crate::type_tests::spells_decimals_exactly(word)
+		|| crate::analyzer::builtin_type_kind(word).is_some()
+}
+
+/// `hex(123)`, `decimal(x)`, `byte(65)`: a type word whose call converts as `x as type` (type_constructor). The other
+/// built-in types have their calls (`int("12")`, analyzer::type_cast_of), a library word its function (`codepoint(c)`)
+pub(crate) fn is_called_conversion(type_name: &str) -> bool {
+	(converts_to(type_name) || type_name == super::exact::DECIMAL_WORD)
+		&& (crate::analyzer::type_word_kind(type_name).is_none() || super::hex::shows_in_hex(type_name))
+		&& !library_ops::LIBRARY_FUNCTIONS.iter().any(|(word, _)| *word == type_name)
+}
+
+/// `255 as hex`: a word that names no type, unit or class, which used to stay a silent `255 as hex` node
+fn unknown_conversion(value: &Node, type_name: &str) -> String {
+	format!("{type_name} is no type to convert to: {} as {type_name}; known: int, float, rational, {}, byte, int8 … uint64, units and classes", value.serialize(), CONVERSION_WORDS.join(", "))
 }

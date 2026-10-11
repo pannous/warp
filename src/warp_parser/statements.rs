@@ -201,6 +201,7 @@ impl WarpParser {
 	/// the statement. `for 1..10 : print it` names no variable (wiki/for.md): `for iterable {body}`, whose items are `it`
 	pub(super) fn try_parse_for_in(&mut self) -> Option<Node> {
 		let before_header = self.mark();
+		let starts_statement = self.word_starts_statement("for".len());
 		self.skip_spaces();
 		if let Some(filtered) = self.try_parse_condition_loop() {
 			return Some(filtered);
@@ -227,7 +228,7 @@ impl WarpParser {
 			let body = match body_word {
 				Some(word) => self.colon_body(word),
 				None if self.current_char() == '{' => self.parse_atom(), // `for (1…5).filter(odd) {print it}`
-				None => match self.indented_lines_below() {
+				None => match starts_statement.then(|| self.indented_lines_below()).flatten() { // `play 440Hz for 0.05s` owns no lines below
 					Some(block) => block, // `for 0 to 2` and the lines indented below it
 					None => {
 						self.rewind(before_header);
@@ -257,14 +258,14 @@ impl WarpParser {
 				let test = call(crate::traits::INSTANCE_OF, vec![it.clone(), Node::Text(name.clone())]);
 				let header = type_filter_header(name, &iterable, &body);
 				let body = item_named(body, name, &it);
-				self.type_filtered_body(name, header, test, body).map(|body| (it, body))
+				self.filtered_body(&format!("for {name} in …"), &format!("for x in … {{ if x is {name} {{ … }} }}"), header, test, body).map(|body| (it, body))
 			}
 			// `for number in xs`: a type word visits only the items of that type, under its own name; a literal list whose items
 			// all are of the type needs no filter
 			Symbol(name) if crate::analyzer::type_word_kind(name).is_some() && !literal_items_of_type(&iterable, name) => {
 				let test = self.type_test(&variable, name).expect("a type word");
 				let header = type_filter_header(name, &iterable, &body);
-				self.type_filtered_body(name, header, test, body).map(|body| (variable.clone(), body))
+				Ok((variable.clone(), self.type_filtered_body(name, &iterable, header, test, body)))
 			}
 			_ => Ok((variable, body)),
 		};
@@ -276,7 +277,27 @@ impl WarpParser {
 		if let Some((unit, iterable)) = unit_iteration(&variable, &iterable, &body) {
 			return Some(for_in_loop(unit, iterable, body));
 		}
+		let iterable = self.walked_text_units(&variable, iterable);
 		Some(for_in_loop(variable, iterable, body))
+	}
+
+	/// `for word in text`, `for line in text` (wiki/plural.md): over a text the loop variable's name picks the unit, words
+	/// between runs of spaces or lines (as lib/text.warp's words and lines); any other name walks the characters
+	fn walked_text_units(&self, variable: &Node, iterable: Node) -> Node {
+		let is_text = match iterable.drop_meta() {
+			Node::Text(_) => true,
+			Symbol(name) => self.text_variables.contains(name),
+			_ => false,
+		};
+		let unit = variable.drop_meta().symbol_name().and_then(|name| TEXT_UNIT_NAMES.iter().find(|(unit, _)| *unit == name));
+		let (Some((unit, separator)), true) = (unit, is_text) else { return iterable };
+		let parts = call(SPLIT_WORD, vec![iterable, Node::Text(separator.to_string())]);
+		if *unit != WORD_UNIT {
+			return parts;
+		}
+		let part = Symbol(format!("{unit}·part"));
+		let non_empty = Node::Key(Box::new(part.clone()), Op::FatArrow, Box::new(Node::Key(Box::new(part), Op::Ne, Box::new(Node::Text(String::new())))));
+		Node::Key(Box::new(parts), Op::Dot, Box::new(call(FILTER_WORD, vec![non_empty])))
 	}
 
 	/// The iterable of a loop header, its words up to the body: `for todo in todos sorted by priority {…}`,
@@ -401,20 +422,27 @@ impl WarpParser {
 	/// `header` is the loop's header as written and its explicit form, the fix ("I meant: …"); None when the body
 	/// needs the edit too
 	pub(super) fn filtered_body(&self, written: &str, explicit: &str, header: Option<(String, String)>, test: Node, body: Node) -> Result<Node, Node> {
+		ask(&self.filter_question(written, explicit, header))?;
+		Ok(guarded_body(test, body))
+	}
+
+	/// The got-it question announcing a filtering loop
+	fn filter_question(&self, written: &str, explicit: &str, header: Option<(String, String)>) -> Ask {
 		let question = format!("`{written}` visits only the items that pass its filter");
 		let filter = reading("filter the items", explicit);
 		let readings = vec![match header {
 			Some((written, replacement)) => filter.replacing(written, replacement),
 			None => filter,
 		}];
-		ask(&Ask::new(FILTER_LOOP_TOPIC, question, readings, Fallback::Warning).written(written).at(self.line_nr, self.column))?;
-		let guarded = Node::Key(Box::new(Node::Key(Box::new(Empty), Op::If, Box::new(test))), Op::Then, Box::new(body));
-		Ok(Node::List(vec![guarded], Bracket::Curly, Separator::Semicolon))
+		Ask::new(FILTER_LOOP_TOPIC, question, readings, Fallback::Warning).written(written).at(self.line_nr, self.column)
 	}
 
-	/// `filtered_body` of `for T in xs`, which visits only the items of type T
-	fn type_filtered_body(&self, name: &str, header: Option<(String, String)>, test: Node, body: Node) -> Result<Node, Node> {
-		self.filtered_body(&format!("for {name} in …"), &format!("for x in … {{ if x is {name} {{ … }} }}"), header, test, body)
+	/// `for T in xs` of a type word T, which visits only the items of type T: the type test carries the loop, so the emitter
+	/// decides it from the items' static type and announces the filter only when it is left to run time (`for char in s`
+	/// of a text s filters nothing)
+	fn type_filtered_body(&self, name: &str, iterable: &Node, header: Option<(String, String)>, test: Node, body: Node) -> Node {
+		let question = self.filter_question(&format!("for {name} in …"), &format!("for x in … {{ if x is {name} {{ … }} }}"), header);
+		guarded_body(test.with_meta_data(super::FilterLoop { question, iterable: iterable.clone() }), body)
 	}
 
 	/// `for (i=0;i<n;i++) {body}`, `for(…) print i`, `for(…): body`, at its head: `((for (head)) {body})` as lowering reads it
@@ -531,7 +559,7 @@ impl WarpParser {
 		}
 
 		if let Node::Key(condition, Op::Colon, body) = &rhs {
-			let body = self.continue_expr(body.as_ref().clone(), 0); // `while c: i+=2`
+			let body = self.continue_colon_body(body); // `while c: i+=2`, `while x-->0 : print x`
 			return while_do(condition.as_ref().clone(), body);
 		}
 
@@ -618,4 +646,10 @@ fn as_block(body: Node) -> Node {
 		Node::List(_, Bracket::Curly, _) => body,
 		_ => Node::List(vec![body], Bracket::Curly, Separator::Semicolon),
 	}
+}
+
+/// `{ if test then body }`, the body of a filtering loop
+fn guarded_body(test: Node, body: Node) -> Node {
+	let guarded = Node::Key(Box::new(Node::Key(Box::new(Empty), Op::If, Box::new(test))), Op::Then, Box::new(body));
+	Node::List(vec![guarded], Bracket::Curly, Separator::Semicolon)
 }

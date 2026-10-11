@@ -16,6 +16,8 @@ pub const TEXT_CONCAT: &str = "text_concat";
 pub const TEXT_OF: &str = "text_of";
 /// text_argument(node): the text a text builtin reads (text_of), but an Error fails with its own message (card byte-slice)
 const TEXT_ARGUMENT: &str = "text_argument";
+/// float_text when the analyzer saw floats (makes_floats), and the run-time functions that make floats
+const FLOAT_MAKERS: [&str; 4] = [super::float_text::FLOAT_TEXT, super::list_ops::TEXT_AS_FLOAT, super::casts::TEXT_AS_NUMBER, super::uncertain::UNCERTAIN_NEW];
 /// The builtins that read their text through text_argument
 const TEXT_ARGUMENT_USERS: [&str; 5] = [BYTE_AT, BYTE_SLICE, TEXT_TRIM, TEXT_STARTS_WITH, TEXT_ENDS_WITH];
 /// c_string(text) -> i32: a zero-terminated copy of a text known only at run time, for a C function's `char*`
@@ -68,7 +70,7 @@ pub const TEXT_FORM: &str = "text_form";
 const TEXT_BUILTINS: [(&str, usize, Kind); 23] = [
 	(MEMORY_BYTE, 1, Kind::Int), (MEMORY_SET_BYTE, 2, Kind::Int),
 	(crate::memoization::MEMO_KNOWN, 2, Kind::Int), (crate::memoization::MEMO_VALUE, 2, Kind::Int), (crate::memoization::MEMO_STORE, 3, Kind::Int),
-	(READ, 1, Kind::Text), (BYTE_AT, 2, Kind::Int), (BYTE_SLICE, 3, Kind::Text), (ERROR, 1, Kind::Text), (RAISE, 1, Kind::Text), (IS_ERROR, 1, Kind::Int),
+	(READ, 1, Kind::Text), (BYTE_AT, 2, Kind::Int), (BYTE_SLICE, 3, Kind::Text), (ERROR, 1, Kind::Empty), (RAISE, 1, Kind::Text), (IS_ERROR, 1, Kind::Int),
 	(WARNING, 1, Kind::Text), (TEXT_FORM, 1, Kind::Text), (RAN_WITHOUT_ERROR, 1, Kind::Int), (TRIM, 1, Kind::Text),
 	(STARTS_WITH, 2, Kind::Int), (ENDS_WITH, 2, Kind::Int), (CHR, 1, Kind::Codepoint), (crate::wasm_emitter::CAUGHT_ERROR, 2, Kind::Error),
 	(RAN_WITHOUT_ABORT, 2, Kind::Int), (ABORT_TO, 1, Kind::Int), (crate::uncertain::CERTAINLY, 1, Kind::Int), (crate::uncertain::POSSIBLY, 1, Kind::Int),
@@ -188,10 +190,19 @@ pub fn add_dependencies(required: &mut HashSet<&'static str>) {
 	}
 	// the text of a list (list_text) is emitted with join, as the analyzer requires list_join for both
 	if required.contains("list_join") {
-		required.extend([super::float_text::FLOAT_TEXT, TEXT_CONCAT, super::library_ops::LIST_TEXT, super::library_ops::TEXT_QUOTED]); // a float joins as its text, a nested list as "[…]", a text quoted
+		required.extend([TEXT_CONCAT, super::library_ops::LIST_TEXT, super::library_ops::TEXT_QUOTED]); // a nested list joins as "[…]", a text quoted
+		// a float joins as its text, made only by a program with floats (analyzer::makes_floats)
+		if FLOAT_MAKERS.iter().any(|name| required.contains(name)) {
+			required.insert(super::float_text::FLOAT_TEXT);
+		}
 		if required.contains(super::uncertain::UNCERTAIN_NEW) {
 			required.insert(super::uncertain::UNCERTAIN_TEXT); // `7.0 ± 2.0`
 		}
+		if required.contains(super::times::TIME_FIELD) {
+			required.insert(super::times::TIME_TEXT); // `2026-10-10T14:43:33.682Z`
+		}
+	} else {
+		required.remove(super::float_text::FLOAT_TEXT); // no float is shown as text
 	}
 	// numbers that are no fixnum (big integers, ratios) join as their exact text, built by text_concat
 	if required.contains("list_join") && required.contains(super::INT_RUNTIME) {
@@ -392,11 +403,15 @@ impl WasmGcEmitter {
 		self.emit_call(func, TEXT_CONCAT);
 	}
 
+	/// A value whose kind is known only at run time (a map value, arithmetic of an any value, a stored error), not ø itself
+	pub(crate) fn holds_run_time_kind(&self, operand: &Node) -> bool {
+		matches!(self.get_type(operand), Kind::Empty | Kind::Data) && !matches!(operand.drop_meta(), Node::Empty)
+	}
+
 	/// A text operand as is, anything else in its text form; the implicit conversion is hinted
 	fn emit_concatenated(&mut self, func: &mut Function, operand: &Node) {
-		if matches!(self.get_type(operand), Kind::Empty | Kind::Data) && !matches!(operand.drop_meta(), Node::Empty) {
-			// a value held as a Node (a map value, arithmetic of an any value) may be a number at runtime: joined, a number takes its text form
-			self.emit_node_instructions(func, &super::joined_text(std::slice::from_ref(operand), ""));
+		if self.holds_run_time_kind(operand) {
+			self.emit_run_time_text_form(func, operand);
 			return;
 		}
 		if self.get_type(operand) == Kind::Error {
@@ -408,6 +423,24 @@ impl WasmGcEmitter {
 			return;
 		}
 		self.emit_cast(func, operand, &Node::Symbol("str".to_string()));
+	}
+
+	/// A value held as a Node (a map value, arithmetic of an any value) may be a number at run time: joined, a number
+	/// takes its text form; a stored error stays itself, for text_concat to give it on, never joined as its message
+	/// (`r = error("b"); "a" + r`, card error-value-kind)
+	fn emit_run_time_text_form(&mut self, func: &mut Function, operand: &Node) {
+		let (held, node_ref) = (self.node_scratch(), Ref(self.node_ref(false)));
+		let node_type = self.type_manager.node_type;
+		let (pointer, length) = self.allocate_string("");
+		self.emit_node_instructions(func, operand);
+		func.instruction(&I::LocalSet(held));
+		self.emit_field(func, held, 0);
+		Self::emit_list(func, &[I::I64Const(KIND_MASK), I::I64And, I::I64Const(Kind::Error as i64), I::I64Eq, I::If(BlockType::Result(node_ref))]);
+		Self::emit_list(func, &[I::LocalGet(held), I::RefAsNonNull, I::Else, I::I64Const(crate::type_kinds::SQUARE_LIST_KIND), I::LocalGet(held)]);
+		Self::emit_list(func, &[I::RefNull(HeapType::Concrete(node_type)), I::StructNew(node_type), I::I32Const(pointer as i32), I::I32Const(length as i32)]);
+		self.emit_call(func, "new_text");
+		self.emit_call(func, super::library_ops::LIST_JOIN);
+		func.instruction(&I::End);
 	}
 
 	/// An Error node carrying `reason`, the way a failed fetch reports

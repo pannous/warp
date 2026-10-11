@@ -6,7 +6,7 @@
 //! b's class (`b = bag(…)`), else guarded by each class with a list field of that name, `if (b is bag) and not (v is text)`.
 //! The check is a statement before the store, so the store keeps its form (a typed int list stays an array).
 
-use super::nodes::{assign, key};
+use super::nodes::{Counter, assign, key};
 use crate::analyzer::{added_items, appended_items, builtin_type_kind, computed_literal_kind, declaring_name_and_type, indexed_list, list_element_type, of_type_declaration};
 use crate::library_words::substitute;
 use crate::node::{Bracket, Node, Separator};
@@ -27,7 +27,7 @@ pub fn lower(node: Node) -> Node {
 	let class_fields = crate::class_methods::class_fields(&node);
 	let classes: Vec<String> = class_fields.keys().cloned().collect();
 	let instances = crate::class_methods::instance_classes(&node, &classes);
-	ElementChecks { declared: HashMap::new(), class_fields, instances, temporaries: 0 }.lower(node)
+	ElementChecks { declared: HashMap::new(), class_fields, instances, temporaries: Counter::starting_at(1) }.lower(node)
 }
 
 struct ElementChecks {
@@ -37,7 +37,7 @@ struct ElementChecks {
 	class_fields: HashMap<String, Vec<(String, String)>>,
 	/// the class of each variable known to hold an instance
 	instances: HashMap<String, String>,
-	temporaries: usize,
+	temporaries: Counter,
 }
 
 /// The run-time test and the error message of a declared list `name: type_name`; None for a type it does not check
@@ -226,8 +226,7 @@ impl ElementChecks {
 	}
 
 	fn temporary(&mut self) -> Node {
-		self.temporaries += 1;
-		Node::Symbol(format!("{CHECKED_PREFIX}{}", self.temporaries))
+		Node::Symbol(format!("{CHECKED_PREFIX}{}", self.temporaries.next_number()))
 	}
 }
 

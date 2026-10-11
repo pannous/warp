@@ -7,7 +7,7 @@
 //! `people.map(p => p.name)` (card people-map).
 
 use super::words::{MAP_WORD, OF_WORD, SUM_WORD};
-use super::nodes::{call, is_colon_pair, key};
+use super::nodes::{Counter, call, children_rewritten, is_colon_pair, key};
 use crate::analyzer::{annotated_kind, list_element_type};
 use crate::function_values::{definitions, Definition};
 use crate::traits::InstanceTypes;
@@ -19,8 +19,7 @@ use std::collections::{HashMap, HashSet};
 
 const ARITHMETIC: [Op; 6] = [Op::Add, Op::Sub, Op::Mul, Op::Div, Op::Mod, Op::Pow];
 const ALL_WORD: &str = "all";
-/// Methods that append to a list variable (analyzer APPEND_METHODS)
-pub(crate) const APPEND_METHODS: [&str; 3] = ["add", "append", "push"];
+const EACH_WORD: &str = "each";
 const EXTREMUM_WORDS: [&str; 2] = ["max", "min"];
 /// Parameter types a comparison's result fits
 const TRUTH_TYPES: [&str; 3] = ["bool", "boolean", "any"];
@@ -259,6 +258,11 @@ fn with_comma_arguments(node: Node, rest: &[Node], arities: &HashMap<String, Ari
 /// `f 1 2 3` → `f [1 2 3]` of the functions `single`
 fn gather_arguments(node: Node, single: &HashSet<String>, gathered: &mut bool) -> Node {
 	match node {
+		// `words of text`, `sq of 3`: the function called with what follows `of` (the library words: library_words.rs)
+		Node::List(items, Bracket::None, Separator::Space) if items.len() == 3 && items[1].is_symbol(OF_WORD) && items[0].symbol_name().is_some_and(|name| single.contains(name)) => {
+			let [function, _, object] = <[Node; 3]>::try_from(items).expect("three items");
+			Node::List(vec![function, gather_arguments(object, single, gathered)], Bracket::Round, Separator::None)
+		}
 		Node::List(items, Bracket::None, Separator::Space) if items.len() > 2 && matches!(items[0].drop_meta(), Node::Symbol(name) if single.contains(name)) => {
 			*gathered = true;
 			let mut items: Vec<Node> = items.into_iter().map(|item| gather_arguments(item, single, gathered)).collect();
@@ -280,11 +284,54 @@ pub fn lower(program: Node) -> Node {
 	broadcasting.extend(SCALAR_LIBRARY_WORDS.iter().map(|word| word.to_string()).filter(|word| !defined.contains(word)));
 	let mut assigned = HashMap::new();
 	collect_list_variables(&program, &broadcasting, &mut assigned);
-	let list_variables = assigned.into_iter().filter(|(_, only_lists)| *only_lists).map(|(name, _)| name).collect();
+	let names: HashSet<String> = assigned.keys().cloned().collect();
+	let list_variables: HashSet<String> = assigned.into_iter().filter(|(_, only_lists)| *only_lists).map(|(name, _)| name).collect();
+	let program = each_singular(program, &list_variables, &names);
 	let scalar_parameters = found.iter().map(|definition| (definition.name.clone(), definition.params.iter().map(|param| takes_a_scalar(param, &definition.body)).collect())).collect();
 	let [defines_dot, defines_sum] = [DOT_WORD, SUM_WORD].map(|word| defined.contains(&word.to_string()));
 	let instances = element_shapes(&program);
 	Broadcast { functions: broadcasting, list_variables, scalar_parameters, defines_dot, defines_sum, instances, paired: Default::default(), shadowed: Default::default() }.rewrite(program)
+}
+
+/// `print each friend`: `each` and a name the program never assigns walk the list of its plural, `print all friends`
+/// (wiki/plural.md); `each friends` is `all friends`
+fn each_singular(node: Node, lists: &HashSet<String>, names: &HashSet<String>) -> Node {
+	let walked_list = |word: &Node| {
+		let name = word.symbol_name()?;
+		let plurals = [name.to_string(), format!("{name}s"), format!("{name}es"), format!("{}ies", name.strip_suffix('y').unwrap_or(name))];
+		let is_plural_of = |plural: &String| *plural == name || !names.contains(name);
+		plurals.into_iter().find(|plural| lists.contains(plural) && is_plural_of(plural))
+	};
+	match node {
+		Node::List(items, bracket, separator) => {
+			// `each xs {it*10}`: a leading each with a body is the loop over xs (wiki/Iteration.md), no `all` argument
+			let is_loop = items.len() > 2 && items[0].is_symbol(EACH_WORD);
+			let mut walked = Vec::with_capacity(items.len());
+			let mut items = items.into_iter().map(|item| each_singular(item, lists, names)).peekable();
+			while let Some(item) = items.next() {
+				let list = items.peek().filter(|_| item.is_symbol(EACH_WORD)).and_then(walked_list);
+				if let (true, Some(plural)) = (is_loop, &list) {
+					items.next();
+					walked.extend([item, symbol(plural)]); // `each friend {…}` loops over friends
+					continue;
+				}
+				match list {
+					Some(plural) => {
+						items.next();
+						let all = vec![symbol(ALL_WORD), symbol(&plural)];
+						// `each friend` alone is the whole list node, `sq each x` nests it as `sq all xs` parses
+						if items.peek().is_none() && walked.is_empty() {
+							return Node::List(all, bracket, separator);
+						}
+						walked.push(Node::List(all, Bracket::None, Separator::Space));
+					}
+					None => walked.push(item),
+				}
+			}
+			Node::List(walked, bracket, separator)
+		}
+		other => other.map_children(|child| each_singular(child, lists, names)),
+	}
 }
 
 /// The shapes of the program's variables as type_constructor (a later pass) will construct its instances, for a program
@@ -371,7 +418,7 @@ fn collect_list_variables(node: &Node, functions: &HashSet<String>, assigned: &m
 	node.visit(&mut |part| match part {
 		Node::Key(list, Op::Dot, call) => {
 			if let (Node::Symbol(name), Node::List(items, _, _)) = (list.drop_meta(), call.drop_meta()) {
-				if matches!(items.first().map(Node::drop_meta), Some(Node::Symbol(method)) if APPEND_METHODS.contains(&method.as_str())) {
+				if matches!(items.first().map(Node::drop_meta), Some(Node::Symbol(method)) if crate::analyzer::appends(method, items.len() - 1)) {
 					appended.insert(name.clone());
 				}
 			}
@@ -392,12 +439,11 @@ fn collect_list_variables(node: &Node, functions: &HashSet<String>, assigned: &m
 					return;
 				}
 				let declared_list = declared_type.is_some_and(|type_node| list_element_type(&type_node.serialize()).is_some());
-				let is_list = declared_list || match value.drop_meta() {
+				let is_list = declared_list || is_list_literal(value) || match value.drop_meta() {
 					Node::List(items, Bracket::Square, _) => !items.iter().any(is_colon_pair),
 					_ if is_range(value) => true,
 					_ if element_wise_parts(value).is_some() => true,
-					_ if crate::analyzer::typed_array_value(value).is_some() => true,
-					Node::Key(element, Op::Hash, one_based) => crate::analyzer::zero_filled_subscript(element, one_based, &variables).is_some(),
+					_ if crate::analyzer::typed_array_value(value, &variables).is_some() => true,
 					Node::Empty => appended.contains(name),
 					// `xs = xs + [i]`
 					Node::Key(left, Op::Add, right) => matches!(left.drop_meta(), Node::Symbol(same) if same == name) && matches!(right.drop_meta(), Node::List(_, Bracket::Square, _)),
@@ -418,6 +464,15 @@ fn assigned_variable(target: &Node) -> Option<(&String, Option<&Node>)> {
 			_ => None,
 		},
 		_ => None,
+	}
+}
+
+/// `[1 2]`, and `(1 2)` or `{3 4}` of several literal values: no call and no block (wiki/list.md)
+fn is_list_literal(node: &Node) -> bool {
+	match node.drop_meta() {
+		Node::List(items, Bracket::Square, _) => !items.is_empty() && !items.iter().any(is_colon_pair),
+		Node::List(items, Bracket::Round | Bracket::Curly, _) => items.len() > 1 && items.iter().all(|item| matches!(item.drop_meta(), Node::Number(_) | Node::Text(_) | Node::Char(_))),
+		_ => false,
 	}
 }
 
@@ -447,7 +502,7 @@ struct Broadcast {
 	/// The shapes of the program's variables: which field reads map over a list of instances
 	instances: Option<InstanceTypes>,
 	/// element-wise operators between two lists so far: each holds its lists under names of its own
-	paired: std::cell::Cell<usize>,
+	paired: Counter,
 	/// The untyped parameters of the functions being rewritten: their own values, not the program's list variables of
 	/// the same names (card param-named-like-global)
 	shadowed: std::cell::RefCell<Vec<String>>,
@@ -508,8 +563,7 @@ impl Broadcast {
 				let method_call = (op == Op::Dot).then(|| self.broadcast_method(&left, &right).or_else(|| self.element_fields(&left, &right))).flatten();
 				method_call.unwrap_or(Node::Key(left, op, right))
 			}
-			Node::Meta { node, data } => Node::Meta { node: Box::new(self.rewrite(*node)), data },
-			other => other,
+			other => children_rewritten(other, |child| self.rewrite(child)),
 		}
 	}
 
@@ -603,7 +657,7 @@ impl Broadcast {
 
 	/// The template's names made this rewrite's own: LEFT → paired_left_3 …
 	fn namer(&self) -> impl Fn(&str) -> String {
-		named_by(self.paired.replace(self.paired.get() + 1).to_string())
+		named_by(self.paired.next_number().to_string())
 	}
 
 	/// `sum(xs .op ys)`, `sum(xs .op k)`: one loop adding the items, the element-wise list never built
@@ -651,10 +705,7 @@ impl Broadcast {
 
 	/// A list literal that is no object, or a variable only ever assigned one
 	fn is_list(&self, node: &Node) -> bool {
-		match node.drop_meta() {
-			Node::List(elements, Bracket::Square, _) => !elements.is_empty() && !elements.iter().any(is_colon_pair),
-			_ => self.is_list_value(node),
-		}
+		is_list_literal(node) || self.is_list_value(node)
 	}
 
 	/// `abs [-1 2]`, `sqrt xs`: a scalar prefix operator over a list literal or a list variable

@@ -40,3 +40,24 @@ fn paint_of_too_few_ints_fails() {
 	let said = format!("{}{}", String::from_utf8_lossy(&run.stdout), String::from_utf8_lossy(&run.stderr));
 	assert!(said.contains("paint: 3×1 needs 3 pixels, got 2"), "{said}");
 }
+
+// card show-use: show() before canvas(width, height) used to panic in the PNG writer (chunks of width 0); it paints the
+// default canvas (user 2026-10-10: defaults, no errors)
+#[test]
+fn show_before_canvas_paints_the_default_canvas() {
+	let run = crate::common::warp_command().args(["--no-ask", "eval", "use draw; show()"]).output().unwrap();
+	let said = format!("{}{}", String::from_utf8_lossy(&run.stdout), String::from_utf8_lossy(&run.stderr));
+	assert!(said.contains("painted 640×480") && !said.contains("panicked"), "{said}");
+}
+
+// card runtime-speed: a typed int list (draw's canvas_pixels) crosses to paint as its array, no Node per pixel; a big
+// Int in it paints saturated, white (an RGB row), as the host reads a big Number
+#[test]
+fn paint_reads_a_typed_int_list_from_its_array() {
+	assert_eq!(painted_rows("pixels = int[6]; pixels[2] = 1; pixels[4] = -1; paint(pixels, 3, 2)", "paint-typed"), [0, 250, 250, 29, 0, 250, 29, 250]);
+}
+
+#[test]
+fn paint_saturates_a_big_int_in_a_typed_list() {
+	assert_eq!(painted_rows("pixels = int[2]; pixels[1] = 2^70; paint(pixels, 2, 1)", "paint-typed-big"), [0, 250, 250, 250, 255, 255, 255]);
+}

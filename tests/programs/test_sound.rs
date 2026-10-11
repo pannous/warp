@@ -31,8 +31,8 @@ fn play_writes_the_tone_as_a_wav() {
 
 #[test]
 fn a_melody_is_its_notes_one_after_another() {
-	assert_eq!(sounded("sound-melody", "melody([C4 E4 [C4 G4]], 20ms); 7").len(), 3 * 441);
-	assert_eq!(sounded("sound-melody-each", "melody [C4 E4] each 20ms; 7").len(), 2 * 441);
+	assert_eq!(sounded("sound-melody", "use sound\nmelody([C4 E4 [C4 G4]], 20ms); 7").len(), 3 * 441);
+	assert_eq!(sounded("sound-melody-each", "use sound\nmelody [C4 E4] each 20ms; 7").len(), 2 * 441);
 	is!("use sound\ncount(melody_samples([C4 [E4 G4]], 0.01))", 2 * 220);
 }
 
@@ -64,5 +64,13 @@ fn the_note_table_matches_note() {
 
 #[test]
 fn sound_words_run_without_use() {
-	is!("play C4 for 10ms\nbeep\ntone(220Hz, 10ms, \"square\")\ntone 330Hz for 5ms\nplay [C4 E4 G4] for 10ms\n7", 7);
+	// card bizarre-global (user, 2026-10-11): play, beep, stop_sound and wait_sound are global, the other words need the use
+	is!("play C4 for 10ms\nbeep\nplay [C4 E4 G4] for 10ms\n7", 7);
+	is!("use sound\ntone(220Hz, 10ms, \"square\")\ntone 330Hz for 5ms\n7", 7);
+}
+
+#[test]
+fn play_inside_a_def_body_before_the_value() {
+	is!("def h(value) { play 440Hz for 0.05s; value + 1 }; h(2)", 3);
+	is!("def h(value) {\n  play 440Hz for 0.05s\n  value + 1\n}\nh(2)", 3); // the `for` of play owns no indented lines below
 }

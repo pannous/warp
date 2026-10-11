@@ -163,3 +163,6 @@ fn test_kitchensink() {
 	let value = warp::pipeline::for_tests(|| warp::wasm_emitter::eval("samples/kitchensink.warp")).serialize();
 	assert!(value.starts_with("\"✓ ") && value.ends_with(" tests passed\""), "{value}");
 }
+
+#[test] // fact(10) and fib(20) through the Z combinator (card y-combinator)
+fn test_y_combinator() { is!("samples/y_combinator.warp", 6765); }

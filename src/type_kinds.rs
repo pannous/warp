@@ -15,6 +15,9 @@ pub const SQUARE_LIST_KIND: i64 = (SQUARE_BRACKET_INFO << KIND_BITS) | Kind::Lis
 /// that reads the kind masked takes it as the Int it is, and printing, `type` and reading back see a bool
 pub const BOOL_INFO: i64 = 1;
 pub const BOOL_KIND: i64 = (BOOL_INFO << KIND_BITS) | Kind::Int as i64;
+/// An Int shown in hex, 0xFF (card hex-printing, wasm_emitter/hex.rs): marked only where it becomes a Node
+pub const HEX_INFO: i64 = 2;
+pub const HEX_KIND: i64 = (HEX_INFO << KIND_BITS) | Kind::Int as i64;
 /// The bit of a bool in the kind masks of run-time type tests (node_kind_in): no Kind is that high
 pub const BOOL_MASK_BIT: i64 = 62;
 /// P215: the head cell of a declared list carries the run-time kinds its element type admits, its element mark, in the
@@ -59,6 +62,7 @@ pub enum Kind {
 	Float32 = 15,  // explicit f32 (for FFI)
 	Function = 16, // closure: data = $Closure struct (typed function reference + captured values), value = name symbol
 	Uncertain = 17, // x ± σ: data = $f64 array [value, source id, contribution, …] (wasm_emitter/uncertain.rs)
+	Time = 18,     // an instant: data = $i64box(nanoseconds since 1970 UTC) (wasm_emitter/times.rs)
 }
 
 impl Kind {
@@ -129,17 +133,8 @@ impl std::fmt::Display for Kind {
 			Kind::Pointer => write!(f, "pointer"),
 			Kind::Function => write!(f, "function"),
 			Kind::Uncertain => write!(f, "uncertain"),
+			Kind::Time => write!(f, "instant"),
 		}
-	}
-}
-
-/// Number type aliases, resolved in one place: literals are exact by default, IEEE 754 is opt-in.
-/// `exact` (alias `real`: strictly the rationals ℚ for now, √2 is not exact) and `float` (aliases `fast`, `f64`, `float64`, `double`)
-pub fn canonical_type_name(name: &str) -> &str {
-	match name {
-		"exact" | "real" | "rational" => "exact",
-		"float" | "fast" | "f64" | "double" | "float64" => "float",
-		other => other,
 	}
 }
 

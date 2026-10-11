@@ -6,7 +6,7 @@
 //! notes/closures.md describes the representation.
 
 use super::words::{FOR_WORD, GLOBAL_WORD, IN_WORD};
-use super::nodes::{call, key, parameter_name};
+use super::nodes::{call, children_rewritten, key, parameter_name};
 use crate::context::{Context, Param, UserFunctionDef};
 use crate::diagnostic::Diagnostic;
 use crate::lambdas::arrow_lambda;
@@ -352,7 +352,7 @@ impl FunctionValues {
 				if let Node::Key(list, Op::Dot, call) = node {
 					if let (Node::Symbol(name), Node::List(items, _, _)) = (list.drop_meta(), call.drop_meta()) {
 						if let [method, value] = items.as_slice() {
-							if APPEND_METHODS.contains(&method.drop_meta().name().as_str()) && self.is_function_value(value) {
+							if crate::analyzer::appends(&method.drop_meta().name(), 1) && self.is_function_value(value) {
 								lists.insert(name.clone());
 							}
 						}
@@ -401,8 +401,6 @@ fn is_field(node: &Node) -> bool {
 	holder_path(node).is_some_and(|path| path.contains('.'))
 }
 
-/// Methods that append one value to a list variable (analyzer APPEND_METHODS)
-const APPEND_METHODS: [&str; 3] = ["add", "append", "push"];
 
 /// The parameter names of a definition `name(params) := body`, or `it` for `name := body` with `it`
 fn definition_parameters(node: &Node, functions: &HashSet<String>) -> Option<Vec<String>> {
@@ -497,13 +495,11 @@ impl Lifting {
 				let arguments = arguments.into_iter().map(|argument| self.walk(argument, bound)).collect();
 				closure_call(Node::Key(list, Op::Hash, Box::new(position)), arguments)
 			}
-			Node::Key(left, op, right) => key(self.walk(*left, bound), op, self.walk(*right, bound)),
 			Node::List(items, bracket, separator) => {
 				let items: Vec<Node> = items.into_iter().map(|item| self.walk(item, bound)).collect();
 				self.called_value(items, bracket, separator, bound)
 			}
-			Node::Meta { node, data } => Node::Meta { node: Box::new(self.walk(*node, bound)), data },
-			other => other,
+			other => children_rewritten(other, |child| self.walk(child, bound)),
 		}
 	}
 

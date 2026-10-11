@@ -5,7 +5,7 @@ use crate::function::{Function, FunctionRegistry};
 use crate::local::Local;
 use crate::node::{Bracket, Node, Separator};
 use crate::operators::{is_function_keyword, Op};
-use crate::type_kinds::{canonical_type_name, Kind};
+use crate::type_kinds::Kind;
 use std::collections::{HashMap, HashSet};
 
 /// Property words that count the elements of a value: `size of x`, `x size`, `x.size`; `size` is a synonym of `count`
@@ -24,21 +24,28 @@ fn is_constant_keyword(node: &Node) -> bool {
 
 /// `var x = 1` announces a reassignable variable, plain `x = 1`
 const VAR_KEYWORD: &str = "var";
-/// `let x = 1` may change, with a note teaching `var` (P159; check_constants)
+/// `let x = 1` binds x once: any change of it is an error naming `var` (user, card let-reassign; check_constants)
 const IMMUTABLE_LET: &str = "let";
 
 pub(crate) fn is_declaration_keyword(node: &Node) -> bool {
-	is_constant_keyword(node) || node.is_symbol(VAR_KEYWORD) || node.is_symbol(IMMUTABLE_LET)
+	matches!(node.drop_meta(), Node::Symbol(word) if is_declaration_word(word))
 }
 
-const COUNTING_PROPERTIES: [&str; 5] = ["number", "count", "length", "size", "len"];
+/// `var`, `let`, `const`, `val` …: a word declaring the name after it
+pub(crate) fn is_declaration_word(word: &str) -> bool {
+	CONSTANT_KEYWORDS.contains(&word) || word == VAR_KEYWORD || word == IMMUTABLE_LET
+}
+
+/// The words counting a value's elements, as `count x`, `x.size`, `len(x)`: the one table every pass asks, through
+/// is_counting_word (a class's own size method is looked up in this order)
+pub(crate) const COUNTING_WORDS: [&str; 4] = ["size", "count", "len", "length"];
 /// `byte_size(x)`, `x.byte_size`: the bytes of x, as `x.bytes` (size is the element count, user decision P40)
 const BYTE_SIZE: &str = "byte_size";
-/// The counting properties that are also functions: `number x` is the type conversion, not a count
-const TYPE_WORDS_AMONG_COUNTING: [&str; 1] = ["number"];
+/// `x.number` counts too, but `number x` is the type conversion, not a count
+const NUMBER_PROPERTY: &str = "number";
 
 pub(crate) fn is_counting_property(word: &str) -> bool {
-	COUNTING_PROPERTIES.contains(&word)
+	word == NUMBER_PROPERTY || is_counting_word(word)
 }
 
 /// Check if a node is pure data (not a statement/function call)
@@ -82,7 +89,7 @@ pub fn is_statement(item: &Node, bracket: &Bracket) -> bool {
 		Node::List(list_items, _, _) if list_items.len() >= 2 => {
 			// `cell_set(c, v)` is the assignment of a nonlocal variable (lowering/nonlocal_cells.rs)
 			// `$destructure (h, o) value` is `h, o = value` lowered (tuples.rs)
-			matches!(list_items[0].drop_meta(), Node::Symbol(s) if is_function_keyword(s) || ["use", "import", "return", crate::tuples::DESTRUCTURE, crate::host::TASK_CHECK, crate::wasm_emitter::cells::CELL_SET, crate::wasm_emitter::cells::SIGNAL_LISTENERS_SET].contains(&s.as_str()))
+			matches!(list_items[0].drop_meta(), Node::Symbol(s) if is_function_keyword(s) || crate::modules::is_import_keyword(s) || ["return", crate::tuples::DESTRUCTURE, crate::host::TASK_CHECK, crate::wasm_emitter::cells::CELL_SET, crate::wasm_emitter::cells::SIGNAL_LISTENERS_SET].contains(&s.as_str()))
 		}
 		_ => false,
 	}

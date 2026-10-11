@@ -191,3 +191,11 @@ fn remove_deletes_the_row() {
 	is!(&program("people_removed", "people#1.name"), "Cy");
 	is!(&program("people_removed", "people.remove(people#1)\npeople.add(Person(\"Di\", 4))\npeople#1.name"), "Di");
 }
+
+// card stored-space: a class whose fields stand side by side, without `;`, is a table too
+#[test]
+fn a_class_of_fields_side_by_side_is_a_table() {
+	eval("class Hiker { name: text age: int = 5 }\nhikers: [Hiker] = database.hikers_spaced\nhikers.add(Hiker(\"Bo\", 30))\nhikers.add(Hiker(\"Cy\"))");
+	is!("class Hiker { name: text age: int = 5 }\nhikers: [Hiker] = database.hikers_spaced\n(hikers where age > 18)#1.name", "Bo");
+	is!("class Hiker { name: text age: int = 5 }\nhikers: [Hiker] = database.hikers_spaced\nhikers#2.age", 5);
+}

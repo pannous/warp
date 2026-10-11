@@ -24,7 +24,7 @@ const siteStarts = new Promise(start => {
 async function startSiteWorker() {
 	await siteStarts;
 	const root = document.getElementById(SITE_ROOT);
-	const worker = new Worker(`site-worker.js?scripts=${root.getAttribute(WORKER_ATTRIBUTE)}`);
+	const worker = serveTaskWorkers(new Worker(`site-worker.js?scripts=${root.getAttribute(WORKER_ATTRIBUTE)}`)); // task-workers.js
 	worker.onmessage = ({ data }) => {
 		if (data.html !== undefined) {
 			const template = document.createElement("template");
@@ -34,6 +34,7 @@ async function startSiteWorker() {
 		}
 		if (data.stored) keepValue(data.stored.name, data.stored.value, data.stored.file);
 		if (data.clipboard !== undefined) copyText(data.clipboard);
+		if (data.clipboardRead) pasteInto(data.clipboardRead);
 		if (data.paint) showPainting(root, data.paint);
 		if (data.print) (data.print.stream === 2 ? console.error : console.log)(data.print.text.replace(/\n$/, ""));
 		if (data.failure) console.error("warp:", data.failure);

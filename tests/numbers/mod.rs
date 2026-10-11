@@ -5,6 +5,9 @@ mod test_declared_float_exact_reals;
 mod test_fixed_width_ints;
 mod test_float_assignment;
 mod test_float_text;
+mod test_host_floats;
+mod test_float_text_folded; // card float text one way
+mod test_float_shortest; // card floats-print
 mod test_float_bit_operations;
 mod test_float_exact_context;
 mod test_float_quotient; // card exact-div
@@ -13,6 +16,8 @@ mod test_float_promotion;
 mod test_float_to_int_range;
 mod test_hyperreals;
 mod test_law;
+mod test_bend_laws; // card bend-style
+mod test_recursive_law; // card recursive-laws
 mod test_math;
 mod test_number;
 mod test_rational_type;
@@ -91,4 +96,13 @@ mod test_recursive_units; // card static-units
 mod test_unit_named_function; // card static-units-function
 mod test_unit_named_parameter; // card static-units-parameter
 mod test_unit_glue_hint; // card unit-glue
+mod test_nearest; // card nearest-helper
 mod test_units_type_holes; // cards units-compare units-reassign units-annotation units-text-repeat
+mod test_method_on_operator_call; // card sqrt-round
+mod test_literal_type_words; // card cleanup-closed-lists
+mod test_quantity_global; // card quantity-global
+mod test_temperature; // card temperature
+mod test_degrees; // card angles-degrees
+mod test_ratio_compare_shortcut;
+mod test_repeating_decimal; // card repeating-decimals
+mod test_long_decimals; // card keep-exact

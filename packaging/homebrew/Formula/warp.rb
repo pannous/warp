@@ -5,7 +5,7 @@
 class Warp < Formula
   desc "Wasm-first programming language and data notation (Rust implementation of Wasp)"
   homepage "https://github.com/pannous/warp"
-  version "1.2.5"
+  version "1.2.6"
 
   RELEASE = "https://github.com/pannous/warp/releases/download/v#{version}/warp-v#{version}".freeze
 
@@ -17,22 +17,22 @@ class Warp < Formula
   on_macos do
     on_arm do
       url "#{RELEASE}-aarch64-apple-darwin.tar.gz"
-      sha256 "08d9bd910a7dd20da93ff27f40e0997cbe3bab4149d80cf94a19b01f8f6ddf6f"
+      sha256 "f05e01ed01c81446d4097664861b7bd7c8b39a58c30afb65d06bf5fe5e4bd26c"
     end
     on_intel do
       url "#{RELEASE}-x86_64-apple-darwin.tar.gz"
-      sha256 "8c56a92c1f73af3a602fcffd8465f0956da210cebb0981d09ee075024498ea46"
+      sha256 "ef8f92a4069b5e7367cb49e647be5033fb3ab34d41a4625efb061046abaa40ca"
     end
   end
 
   on_linux do
     on_arm do
       url "#{RELEASE}-aarch64-unknown-linux-gnu.tar.gz"
-      sha256 "e2069c045806967ee4783f38da54c63b3a3d94da7487a93eb0af502eb8db8c52"
+      sha256 "de2f9204f86067f6e6f609c3a14d8a000ccbba96d4d87767ea92c4c0758596a1"
     end
     on_intel do
       url "#{RELEASE}-x86_64-unknown-linux-gnu.tar.gz"
-      sha256 "760c5049d42ab6e46e8d0bcc6ae01b6f22d28bdf188509c9e18ce3482f8ed78c"
+      sha256 "53c92db525c14fb27c68844eef76d91c29799b574b4fbf3eb6f75355a2642c35"
     end
   end
 

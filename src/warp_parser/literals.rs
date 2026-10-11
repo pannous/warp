@@ -7,6 +7,9 @@ const BACKTICK: char = '`';
 const BACKTICK_TOPIC: &str = "backtick text";
 const F_STRING_TOPIC: &str = "python f-string";
 const F_STRING_PREFIX: char = 'f';
+const FLOAT_WORD: &str = "float";
+/// U+0305 COMBINING OVERLINE, written on each repeating digit of a decimal: 0.3̅ (card repeating-decimals)
+pub const OVERLINE: char = '\u{305}';
 /// The words of a WGSL block, `shader { … }` (card g_oFJc)
 const SHADER_WORDS: [&str; 2] = ["shader", "wgsl"];
 /// `\e` in a text: the start of terminal codes like `\e[H`
@@ -312,10 +315,17 @@ impl WarpParser {
 		let number = self.parse_number_value();
 		let literal: String = self.chars[start..self.pos].iter().collect();
 		let number = self.keep_source_literal(number, &literal);
-		match self.literal_type_suffix() {
+		match self.literal_type_suffix().or_else(|| self.scientific_float(&number, &literal)) {
 			Some(number_type) => Node::Key(Box::new(number), Op::As, Box::new(Node::Symbol(number_type))),
 			None => self.with_juxtaposed_factor(number),
 		}
+	}
+
+	/// `1.5e-7` is a float, as written by measurements and other programs (decision exact-decimals); `1e3` stays the
+	/// integer 1000 and `0.5` the exact decimal. Code only: data keeps the number it reads.
+	fn scientific_float(&self, number: &Node, literal: &str) -> Option<String> {
+		let is_scientific = matches!(number, Node::Number(Number::Float(_))) && literal.contains(['e', 'E']);
+		(is_scientific && !self.options.data_mode).then(|| FLOAT_WORD.to_string())
 	}
 
 	/// `2x` is 2*x, `3(4)` is 3*(4), `3x²` is 3*(x²): a number directly followed by a symbol or `(` multiplies.
@@ -329,7 +339,7 @@ impl WarpParser {
 		if superscript_letter(next).is_some() {
 			return number;
 		}
-		let tight = (next.is_alphabetic() || next == '_' || next == '(') && !self.at_ordinal_suffix();
+		let tight = (next.is_alphabetic() || next == '_' || next == '(' || next == crate::units::DEGREE) && !self.at_ordinal_suffix();
 		// `1500 meters` stays the pair the unit lowering reads (`3010 meters`), joined so it binds tighter than `>`
 		if !tight && self.spaced_word().is_some_and(|word| crate::units::is_long_unit_name(&word)) {
 			self.skip_spaces();
@@ -396,7 +406,8 @@ impl WarpParser {
 			return None;
 		}
 		let name: String = self.chars[self.pos + 1..].iter().take_while(|c| is_identifier_char(**c)).collect();
-		if !LITERAL_NUMBER_TYPES.contains(&name.as_str()) {
+		// `0.1:float`, `1.5:int`, `x:exact`: a number type binds tightly, unlike the loose `as`
+		if !crate::type_tests::is_number_type_word(&name) {
 			return None;
 		}
 		self.advance_by(1 + name.chars().count());
@@ -447,6 +458,9 @@ impl WarpParser {
 		}
 
 		self.push_digits(&mut num_str);
+		if let Some(repeating) = self.repeating_decimal_literal(&num_str) {
+			return repeating;
+		}
 		let mut is_float = false;
 		// Only consume . as decimal if NOT followed by another . (range operator) or a word (`4.square` calls square)
 		let after_point = self.peek_char(1);
@@ -476,6 +490,18 @@ impl WarpParser {
 		}
 	}
 
+	/// `0.3̅`, a combining overline on each repeating digit, is the exact ratio it spells, 1/3 (card repeating-decimals)
+	pub(super) fn repeating_decimal_literal(&mut self, integer: &str) -> Option<Node> {
+		if self.current_char() != '.' {
+			return None;
+		}
+		let fraction = &self.chars[self.pos + 1..];
+		let (fixed, period, length) = overlined_fraction(fraction)?;
+		self.advance_by(1 + length);
+		let (negative, integer) = integer.strip_prefix('-').map_or((false, integer), |digits| (true, digits));
+		Some(Node::Number(Number::repeating_decimal(negative, integer, &fixed, &period)))
+	}
+
 	/// `⅓` is the exact ratio 1/3; a number written directly after it multiplies: `⅓9` is 3
 	pub(super) fn vulgar_fraction_literal(&mut self) -> Option<Node> {
 		let (numerator, denominator) = vulgar_fraction(self.current_char())?;
@@ -489,7 +515,7 @@ impl WarpParser {
 		Some(Node::Key(Box::new(fraction), Op::Mul, Box::new(factor)))
 	}
 
-	/// `1 month`, `24 hours`: an integer followed by a time unit word is a duration
+	/// `1 month`, `24 hours`: an integer followed by a time unit word is a duration; `1 month 2 days` is one duration
 	pub(super) fn with_time_unit(&mut self, number: Node) -> Node {
 		let Node::Number(Number::Int(count)) = &number else {
 			return number;
@@ -497,16 +523,38 @@ impl WarpParser {
 		if self.options.data_mode {
 			return number;
 		}
-		let Some((unit, length)) = crate::time::unit_after(&self.chars[self.pos..]) else {
+		let Some((unit, length)) = self.time_unit_at(0) else {
 			return number;
 		};
-		// `{year:1970 month:1}`: a unit word that starts the next entry or assignment is no unit
-		let after_word: String = self.chars[self.pos + length..].iter().skip_while(|c| **c == ' ').take(2).collect();
-		if after_word.starts_with(':') || (after_word.starts_with('=') && after_word != "==") {
-			return number;
-		}
 		self.advance_by(length);
-		Node::data(unit.times(*count))
+		let mut duration = unit.times(*count);
+		while let Some((following, length)) = self.following_duration() {
+			self.advance_by(length);
+			duration = duration.plus(following);
+		}
+		Node::data(duration)
+	}
+
+	/// The unit word `offset` chars ahead and its length with leading spaces; `{year:1970 month:1}`: a unit word that
+	/// starts the next entry or assignment is no unit
+	fn time_unit_at(&self, offset: usize) -> Option<(crate::time::Duration, usize)> {
+		let (unit, length) = crate::time::unit_after(&self.chars[self.pos + offset..])?;
+		let after_word: String = self.chars[self.pos + offset + length..].iter().skip_while(|c| **c == ' ').take(2).collect();
+		let starts_entry = after_word.starts_with(':') || (after_word.starts_with('=') && after_word != "==");
+		(!starts_entry).then_some((unit, length))
+	}
+
+	/// ` 2 days` after a duration: the next amount of the same duration, and how many chars it takes
+	fn following_duration(&self) -> Option<(crate::time::Duration, usize)> {
+		let rest = &self.chars[self.pos..];
+		let spaces = rest.iter().take_while(|c| **c == ' ').count();
+		let digits = rest[spaces..].iter().take_while(|c| c.is_ascii_digit()).count();
+		if spaces == 0 || digits == 0 {
+			return None;
+		}
+		let count: i64 = rest[spaces..spaces + digits].iter().collect::<String>().parse().ok()?;
+		let (unit, length) = self.time_unit_at(spaces + digits)?;
+		Some((unit.times(count), spaces + digits + length))
 	}
 
 	pub(super) fn integer_node(&self, digits: &str) -> Node {
@@ -620,7 +668,29 @@ fn without_common_indentation(source: &str) -> String {
 	lines.iter().map(|line| line.get(common..).unwrap_or("").trim_end()).collect::<Vec<_>>().join("\n").trim().to_string()
 }
 
-/// The float written `text`, or the error naming it
+/// The fixed and the overlined digits of a fraction (`16̅`: "1", "6") and its length in characters; none without an
+/// overline, or with a plain digit after an overlined one
+fn overlined_fraction(chars: &[char]) -> Option<(String, String, usize)> {
+	let (mut fixed, mut period, mut at) = (String::new(), String::new(), 0);
+	while let Some(&digit) = chars.get(at).filter(|ch| ch.is_ascii_digit()) {
+		let overlined = chars.get(at + 1) == Some(&OVERLINE);
+		if overlined {
+			period.push(digit);
+			at += 2;
+		} else if period.is_empty() {
+			fixed.push(digit);
+			at += 1;
+		} else {
+			return None;
+		}
+	}
+	(!period.is_empty()).then_some((fixed, period, at))
+}
+
+/// The float written `text`, or the error naming it; written with more digits than a float keeps, the exact ratio
 fn float_node(text: &str) -> Node {
+	if let Some(exact) = crate::extensions::numbers::long_decimal(text) {
+		return Node::Number(exact);
+	}
 	text.parse::<f64>().map(Node::float).unwrap_or_else(|_| error(&format!("Invalid float: {text}")))
 }

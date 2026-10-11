@@ -24,29 +24,35 @@ const ACCEPTED_PREFIX: &str = "ok ";
 const REJECTED: &str = "rejected";
 const CONSTANT_KEYWORD: &str = "const";
 const ERROR_CALL: &str = "error";
+/// `x failed` (warp_parser suffixes): is x a stored error
+const IS_ERROR_CALL: &str = "is_error";
 const BOOL_TYPE: &str = ".bool";
+const EXACT_TYPE: &str = ".exact";
 const ANY_TYPE: &str = ".any";
 const LIST_TYPE_PREFIX: &str = ".list ";
-/// The builtin scalar type words warp checks a value against (analyzer admits) that W0 has a type for
-pub(crate) const BUILTIN_TYPE_WORDS: [&str; 13] = ["int", "integer", "long", "exact", "float", "number", "text", "string", "str", "codepoint", "char", "bool", "boolean"];
-/// A value of each W0 scalar type and the run-time kind warp sees it as (a bool is an Int)
-const VALUE_KINDS: [(&str, Kind); 5] = [(BOOL_TYPE, Kind::Int), (".int", Kind::Int), (".number", Kind::Float), (".text", Kind::Text), (".codepoint", Kind::Codepoint)];
+/// A value of each W0 scalar type and the kind warp's analyzer sees it as (a bool is an Int; a Float is a decimal
+/// written in the program, an exact number: admits cannot tell it from a float, which only a run makes)
+const VALUE_KINDS: [(&str, Kind); 5] = [(BOOL_TYPE, Kind::Int), (".int", Kind::Int), (EXACT_TYPE, Kind::Float), (".text", Kind::Text), (".codepoint", Kind::Codepoint)];
 const UNIT_TYPE: &str = ".unit";
 /// the parameter of a function that takes none
 const UNIT_PARAMETER: &str = "·";
 const ARGUMENTS_SUFFIX: &str = "·args";
-const APPEND_METHODS: [&str; 2] = ["add", "push"];
 const FOR_KEYWORD: &str = "for";
-const VARIABLE_KEYWORDS: [&str; 2] = ["let", "shared"];
+const SHARED_KEYWORD: &str = "shared";
+/// `let x = 1` binds x once, as const does (user, card let-reassign)
+const LET_KEYWORD: &str = "let";
 /// the one field of a function local's cell (`f·n`): `·` keeps it apart from the program's own fields
 const CELL_FIELD: &str = "·value";
-/// An inline union `int | text` or an optional `int?` is the join of its alternatives, every value given to it a cast
+/// An inline union `int | text` is the join of its alternatives, every value given to it a cast
 const UNION_TYPE: &str = "(Ty.joinAll ";
 const RANGED_TYPE_PREFIX: &str = ".ranged ";
 const UNION_JOINER: &str = " or ";
 const OPTIONAL_MARK: char = '?';
-/// the type of ø, the empty part of an optional (ø is the empty list)
-const EMPTY_TYPE: &str = ".list .never";
+/// An optional `int?`: its values and ø
+const OPTIONAL_TYPE_PREFIX: &str = ".opt ";
+/// ø is the empty list (`xs = []` parses as ø), but the empty part where an optional takes it
+const EMPTY_LIST: &str = ".nil";
+const EMPTY_VALUE: &str = ".unit";
 /// Effect handlers (notes/effect_handlers.md): `on ev {h}`, `on ev {h} in {body}`, `emit ev{payload}`
 const ON_KEYWORD: &str = "on";
 const IN_KEYWORD: &str = "in";
@@ -68,8 +74,6 @@ const MAP_CLASS: &str = "map";
 /// `count xs`, `count x in xs` (how often x is in xs) and `x in xs` (x's first position from 1, else 0) walk the list
 /// with a `·tally` instance: its int fields hold the count or position and the current index
 const COUNT_WORD: &str = "count";
-/// `xs.size`, `xs.count`, `"abc".length`: `count xs`
-const SIZE_METHODS: [&str; 3] = ["size", "count", "length"];
 /// `min(a, b)` and `max(a, b)` of two values (lowering/min_max.rs): a comparison, each argument computed once
 const EXTREMA: [&str; 2] = ["min", "max"];
 const TALLY_CLASS: &str = "·tally";
@@ -88,6 +92,11 @@ fn unsupported(node: &Node) -> Lean {
 	Err(format!("not in W0: {}", node.serialize().trim()))
 }
 
+/// `0.5`, `7/2`: an exact number, an int when it is whole (Semantics.lean exactValue)
+fn exact_number(numerator: impl std::fmt::Display, denominator: impl std::fmt::Display) -> String {
+	format!("(Warp.exactValue (({numerator} : Rat) / {denominator}))")
+}
+
 fn quoted(text: &str) -> String {
 	format!("\"{}\"", text.replace('\\', "\\\\").replace('"', "\\\""))
 }
@@ -98,13 +107,15 @@ fn type_of_word(word: &str) -> Option<String> {
 		if let Some(width) = crate::fixed_width::fixed_width(word) {
 			return Some(format!("{RANGED_TYPE_PREFIX}({}) ({})", width.low, width.high));
 		}
-		Some(match crate::type_kinds::canonical_type_name(&word.to_lowercase()) {
-			"int" | "integer" | "long" => ".int",
-			"float" | "number" | "exact" => ".number",
-			"text" | "string" | "str" => ".text",
-			"codepoint" | "char" => ".codepoint",
-			"bool" | "boolean" => BOOL_TYPE,
+		let word = word.to_lowercase();
+		Some(match crate::type_tests::canonical_spec_word(&word) {
+			"int" => ".int",
+			"text" => ".text",
+			"codepoint" => ".codepoint",
+			crate::analyzer::BOOL_TYPE => BOOL_TYPE,
 			"any" => ANY_TYPE,
+			exact if crate::type_tests::is_exact_fraction_type(exact) => EXACT_TYPE,
+			number if crate::type_tests::type_matches(number, "number") => ".number",
 			_ => return None,
 		}.to_string())
 	};
@@ -128,6 +139,7 @@ fn admitted(declared: &str, value: String) -> String {
 	match union_alternatives(declared) {
 		Some(alternatives) => format!(".cast ({value}) {alternatives}"),
 		None if declared.starts_with(RANGED_TYPE_PREFIX) => format!(".cast ({value}) [{declared}]"),
+		None if declared.starts_with(OPTIONAL_TYPE_PREFIX) && value == EMPTY_LIST => EMPTY_VALUE.to_string(),
 		None => value,
 	}
 }
@@ -150,14 +162,14 @@ fn effect(node: &Node) -> Option<Effect<'_>> {
 	let Node::List(items, _, _) = node.drop_meta() else { return None };
 	// `on ev {h} in {body}` as a value parses as `(on ev {h}) in {body}`
 	if let [handled, keyword, body] = items.as_slice() {
-		if is_word(keyword, IN_KEYWORD) {
+		if keyword.is_symbol(IN_KEYWORD) {
 			if let Some(Effect::On { event, handler, body: None }) = effect(handled) {
 				return Some(Effect::On { event, handler, body: Some(body) });
 			}
 		}
 	}
 	let (first, rest) = items.split_first()?;
-	if is_word(first, ON_KEYWORD) {
+	if first.is_symbol(ON_KEYWORD) {
 		// `a = on ask {2} in {…}` groups the words after `on`: `on (ask {2})`
 		let rest = match rest {
 			[grouped] => match grouped.drop_meta() {
@@ -170,11 +182,11 @@ fn effect(node: &Node) -> Option<Effect<'_>> {
 		let event = event_name(words)?;
 		return match last.drop_meta() {
 			Node::List(_, Bracket::Curly, _) => Some(Effect::On { event, handler: last, body: None }),
-			Node::List(parts, _, _) if parts.len() == 3 && is_word(&parts[1], IN_KEYWORD) => Some(Effect::On { event, handler: &parts[0], body: Some(&parts[2]) }),
+			Node::List(parts, _, _) if parts.len() == 3 && parts[1].is_symbol(IN_KEYWORD) => Some(Effect::On { event, handler: &parts[0], body: Some(&parts[2]) }),
 			_ => None,
 		};
 	}
-	if !is_word(first, EMIT_KEYWORD) {
+	if !first.is_symbol(EMIT_KEYWORD) {
 		return None;
 	}
 	// `emit alarm{level: 3}` parses as `alarm: {level: 3}` after the event's other words
@@ -196,7 +208,7 @@ fn effect(node: &Node) -> Option<Effect<'_>> {
 /// `global n` or `global n = 0` (parsed `global: n`, `global: (n = 0)`): the name and the value
 fn global_declaration(node: &Node) -> Option<(&str, Option<&Node>)> {
 	let Node::Key(keyword, Op::Colon, declared) = node.drop_meta() else { return None };
-	if !is_word(keyword, GLOBAL_KEYWORD) {
+	if !keyword.is_symbol(GLOBAL_KEYWORD) {
 		return None;
 	}
 	match declared.drop_meta() {
@@ -222,7 +234,25 @@ fn map_entries(node: &Node) -> Option<Vec<(String, &Node)>> {
 	}).collect()
 }
 
-/// every key a map literal or a field write `x.key = v` names, when the program has a map literal
+/// `k` of `k+1`: the parser writes `m[k]` as `m#(k+1)`, a list's 1-based index
+fn bracket_index(index: &Node) -> Option<&Node> {
+	match index.drop_meta() {
+		Node::Key(key, Op::Add, one) if matches!(one.drop_meta(), Node::Number(Number::Int(1))) => Some(key),
+		_ => None,
+	}
+}
+
+/// the text of a text literal (a one-letter one parses as a codepoint)
+fn literal_text(node: &Node) -> Option<String> {
+	match node.drop_meta() {
+		Node::Text(text) => Some(text.clone()),
+		Node::Char(letter) => Some(letter.to_string()),
+		_ => None,
+	}
+}
+
+/// every key a map literal, a field write `x.key = v` or a write `x["key"] = v` names, when the program has a map
+/// literal
 fn map_keys(program: &Node) -> Option<Vec<String>> {
 	let mut has_map = false;
 	let mut keys: Vec<String> = Vec::new();
@@ -234,6 +264,7 @@ fn map_keys(program: &Node) -> Option<Vec<String>> {
 			}
 			(None, Node::Key(target, Op::Assign, _)) => match target.drop_meta() {
 				Node::Key(_, Op::Dot, field) => vec![field.name()],
+				Node::Key(_, Op::Hash, index) => bracket_index(index).and_then(literal_text).into_iter().collect(),
 				_ => vec![],
 			},
 			_ => vec![],
@@ -247,14 +278,10 @@ fn map_keys(program: &Node) -> Option<Vec<String>> {
 	has_map.then_some(keys)
 }
 
-fn is_word(node: &Node, word: &str) -> bool {
-	matches!(node.drop_meta(), Node::Symbol(found) if found == word)
-}
-
 /// the value of `return v`, ø of a bare `return`
 fn returned(node: &Node) -> Option<Node> {
 	match node.drop_meta() {
-		Node::List(items, _, _) if items.first().is_some_and(|first| is_word(first, RETURN_KEYWORD)) => Some(match &items[1..] {
+		Node::List(items, _, _) if items.first().is_some_and(|first| first.is_symbol(RETURN_KEYWORD)) => Some(match &items[1..] {
 			[] => Node::Empty,
 			[value] => value.clone(),
 			words => Node::List(words.to_vec(), Bracket::None, Separator::Space),
@@ -477,10 +504,15 @@ fn arguments_class(function: &str) -> String {
 	format!("{function}{ARGUMENTS_SUFFIX}")
 }
 
-/// A bool place (a declared variable or parameter) takes the literals 1 and 0 as yes and no (P199)
-fn bool_literal(declared: Option<&str>, value: &Node) -> Option<String> {
+/// A bool place (a declared variable or parameter) takes the literals 1 and 0 as yes and no (P199); an exact place
+/// takes a decimal as the fraction it spells (`x: rational = 0.5`, as warp's emit_declared_value)
+fn place_literal(declared: Option<&str>, value: &Node) -> Option<String> {
 	match value.drop_meta() {
 		Node::Number(Number::Int(n @ (0 | 1))) if declared == Some(BOOL_TYPE) => Some(format!(".bool {}", *n == 1)),
+		Node::Number(Number::Float(decimal)) if declared == Some(EXACT_TYPE) && decimal.is_finite() => {
+			let (numerator, denominator) = crate::wasm_emitter::exact::decimal_fraction(*decimal);
+			Some(exact_number(numerator, denominator))
+		}
 		_ => None,
 	}
 }
@@ -513,6 +545,8 @@ struct Exporter {
 	/// main-level names bound to a list (`xs = [1]`, `xs = []`, `xs: ints = …`): `xs.add(v)` appends to them, while
 	/// `.add` of a text concatenates, outside W0
 	list_names: Vec<String>,
+	/// main-level names bound to a map literal (`m = {a:1}`): `m[k]` reads and writes its key k
+	map_names: Vec<String>,
 	locals: Vec<String>,
 	/// the parameters of the function being exported when it takes several: each is a field of its arguments object
 	argument_fields: Vec<String>,
@@ -562,14 +596,13 @@ impl Exporter {
 		})
 	}
 
-	/// `int or text`, `int?`: the join of the alternatives; a union warp narrows to one part (`int | float` is float)
-	/// is that part
+	/// `int or text`: the join of the alternatives; a union warp narrows to one part (`int | float` is float) is that
+	/// part. `int?`: the optional of it
 	fn union_type(&self, union: &str) -> Lean {
-		let parts = union.strip_suffix(OPTIONAL_MARK);
-		let mut alternatives = parts.unwrap_or(union).split(UNION_JOINER).map(|part| self.type_of(part)).collect::<Result<Vec<_>, String>>()?;
-		if parts.is_some() {
-			alternatives.push(EMPTY_TYPE.to_string());
+		if let Some(inner) = union.strip_suffix(OPTIONAL_MARK) {
+			return Ok(format!("{OPTIONAL_TYPE_PREFIX}({})", self.union_type(inner)?));
 		}
+		let alternatives = union.split(UNION_JOINER).map(|part| self.type_of(part)).collect::<Result<Vec<_>, String>>()?;
 		Ok(match alternatives.as_slice() {
 			[single] => single.clone(),
 			_ => format!("{UNION_TYPE}[{}])", alternatives.join(", ")),
@@ -791,7 +824,7 @@ impl Exporter {
 		}
 		argument_classes.extend(event_classes);
 		let mut words_used = false;
-		program_node.visit(&mut |part| words_used |= [COUNT_WORD, IN_KEYWORD].iter().chain(&SIZE_METHODS).any(|word| is_word(part, word)));
+		program_node.visit(&mut |part| words_used |= [COUNT_WORD, IN_KEYWORD].iter().chain(&crate::analyzer::COUNTING_WORDS).any(|word| part.is_symbol(word)));
 		if words_used {
 			let fields = [CELL_FIELD, TALLY_INDEX].map(|field| (field.to_string(), Some("int".to_string())));
 			self.classes.insert(TALLY_CLASS.to_string(), (vec![TALLY_CLASS.to_string()], fields.to_vec()));
@@ -832,7 +865,7 @@ impl Exporter {
 				}
 				_ => unsupported(statement),
 			},
-			Node::List(items, _, _) if items.len() == 2 && is_word(&items[0], CONSTANT_KEYWORD) => match items[1].drop_meta() {
+			Node::List(items, _, _) if items.len() == 2 && items[0].is_symbol(CONSTANT_KEYWORD) => match items[1].drop_meta() {
 				Node::Key(target, Op::Assign, value) => self.binding(target, ".const", value),
 				other => unsupported(other),
 			},
@@ -843,11 +876,12 @@ impl Exporter {
 					_ => self.assign_tuple(&names, &values),
 				}
 			}
-			// `let x = 1`, `shared n = 5` (one thread in W0): a variable; `int i = 2`: `i: int = 2`
+			// `let x = 1`: a constant; `shared n = 5` (one thread in W0): a variable; `int i = 2`: `i: int = 2`
 			Node::List(items, _, _) if items.len() == 2 && matches!(items[1].drop_meta(), Node::Key(target, Op::Assign, _) if matches!(target.drop_meta(), Node::Symbol(_))) => {
 				let Node::Key(target, _, value) = items[1].drop_meta() else { unreachable!("an assignment") };
 				match items[0].drop_meta() {
-					Node::Symbol(word) if VARIABLE_KEYWORDS.contains(&word.as_str()) => self.binding(target, ".var", value),
+					Node::Symbol(word) if word == LET_KEYWORD => self.binding(target, ".const", value),
+					Node::Symbol(word) if word == SHARED_KEYWORD => self.binding(target, ".var", value),
 					Node::Symbol(word) if self.type_of(word).is_ok() => self.binding(&Node::Key(target.clone(), Op::Colon, Box::new(items[0].clone())), ".var", value),
 					_ => Ok(format!(".statement ({})", self.expression(statement)?)),
 				}
@@ -928,8 +962,12 @@ impl Exporter {
 		if matches!(unwrapped(value), Node::Key(_, Op::FatArrow, _)) {
 			self.lambda_names.push(name.clone());
 		}
+		if map_entries(value).is_some() {
+			self.map_names.push(name.clone());
+		}
 		let aliased_list = matches!(value.drop_meta(), Node::Symbol(other) if self.list_names.contains(other));
-		if aliased_list || is_list_literal(value) || matches!(value.drop_meta(), Node::Empty) || annotation.as_deref().is_some_and(|lean| lean.starts_with(LIST_TYPE_PREFIX)) {
+		let optional = annotation.as_deref().is_some_and(|lean| lean.starts_with(OPTIONAL_TYPE_PREFIX));
+		if aliased_list || is_list_literal(value) || (matches!(value.drop_meta(), Node::Empty) && !optional) || annotation.as_deref().is_some_and(|lean| lean.starts_with(LIST_TYPE_PREFIX)) {
 			self.list_names.push(name.clone());
 		}
 		let value = self.shared_list(&name, annotation.as_deref(), value)?;
@@ -951,8 +989,8 @@ impl Exporter {
 
 	/// A call's result stored in a declared list is checked item by item at run time (list-element-types): a cast
 	fn stored_value(&mut self, declared: Option<&str>, value: &Node) -> Lean {
-		if let Some(yes_or_no) = bool_literal(declared, value) {
-			return Ok(yes_or_no);
+		if let Some(literal) = place_literal(declared, value) {
+			return Ok(literal);
 		}
 		let lean = self.expression(value)?;
 		Ok(match declared {
@@ -1052,7 +1090,7 @@ impl Exporter {
 			return Ok(format!(".set (.loc {}) {} ({})", quoted(name), quoted(CELL_FIELD), self.expression(value)?));
 		}
 		let declared = self.names.get(name).cloned().flatten();
-		let value = match bool_literal(self.bool_names.contains(&name.to_string()).then_some(BOOL_TYPE), value) {
+		let value = match place_literal(self.bool_names.contains(&name.to_string()).then_some(BOOL_TYPE), value) {
 			Some(yes_or_no) => yes_or_no,
 			None => self.shared_list(name, declared.as_deref(), value)?,
 		};
@@ -1153,6 +1191,11 @@ impl Exporter {
 		}
 	}
 
+	/// `k` of `m[k]` (parsed `m#(k+1)`) of a map name m: a computed key
+	fn map_key<'a>(&self, map: &Node, index: &'a Node) -> Option<&'a Node> {
+		matches!(map.drop_meta(), Node::Symbol(name) if self.map_names.contains(name)).then(|| bracket_index(index)).flatten()
+	}
+
 	fn binary(&mut self, constructor: &str, left: &Node, right: &Node) -> Lean {
 		Ok(format!("{constructor} ({}) ({})", self.expression(left)?, self.expression(right)?))
 	}
@@ -1180,14 +1223,17 @@ impl Exporter {
 		}
 		match node.drop_meta() {
 			Node::Number(Number::Int(n)) => Ok(format!(".int ({n})")),
-			// a number keeps its whole part, which `as int` gives (W0 keeps no fractions)
-			Node::Number(Number::Float(x)) => Ok(format!(".num ({})", x.trunc() as i64)),
-			Node::Number(Number::Quotient(numerator, denominator)) => Ok(format!(".num ({})", numerator / denominator)),
+			Node::Number(Number::Float(x)) if Number::is_exact_decimal(*x) => {
+				let (numerator, denominator) = crate::wasm_emitter::exact::decimal_fraction(*x);
+				Ok(exact_number(numerator, denominator))
+			}
+			Node::Number(Number::Float(x)) => Ok(format!(".flt (Float.toBits ({x:?} : Float))")),
+			Node::Number(Number::Quotient(numerator, denominator)) => Ok(exact_number(numerator, denominator)),
 			Node::True => Ok(".bool true".to_string()),
 			Node::False => Ok(".bool false".to_string()),
 			Node::Text(text) => Ok(format!(".text {}", quoted(text))),
 			Node::Char(c) => Ok(format!(".text {}", quoted(&c.to_string()))), // `"a"` parses as a codepoint
-			Node::Empty => Ok(".nil".to_string()), // ø is the empty list (`xs = []` parses as ø)
+			Node::Empty => Ok(EMPTY_LIST.to_string()),
 			Node::Symbol(name) if self.cells.contains(name) => Ok(self.cell_value(name)),
 			// the function's first local is its arguments object; loops and lambdas push theirs after it
 			Node::Symbol(name) if self.argument_fields.contains(name) => {
@@ -1202,7 +1248,7 @@ impl Exporter {
 			Node::Symbol(name) if crate::units::is_unit(name) => Ok(quantity_literal(name)),
 			_ if map_entries(node).is_some() && self.classes.contains_key(MAP_CLASS) => self.instance(MAP_CLASS, map_entries(node).expect("a map")),
 			Node::List(items, Bracket::Square, _) => {
-				Ok(self.expressions(items)?.iter().rev().fold(".nil".to_string(), |tail, head| format!(".cons ({head}) ({tail})")))
+				Ok(self.expressions(items)?.iter().rev().fold(EMPTY_LIST.to_string(), |tail, head| format!(".cons ({head}) ({tail})")))
 			}
 			Node::List(items, Bracket::Round, _) if items.len() == 1 => self.expression(&items[0]),
 			Node::List(items, Bracket::Curly, _) if !items.is_empty() => self.block(node),
@@ -1211,22 +1257,25 @@ impl Exporter {
 			Node::Symbol(word) if word == BREAK_KEYWORD => self.abort(None),
 			// `global y` in a function only declares: the name is main-level and assignable there
 			_ if global_declaration(node).is_some_and(|(name, value)| value.is_none() && self.names.contains_key(name)) => Ok(UNIT_TYPE.to_string()),
-			Node::List(items, _, _) if items.len() == 2 && is_word(&items[0], BREAK_KEYWORD) => self.abort(Some(&items[1])),
+			Node::List(items, _, _) if items.len() == 2 && items[0].is_symbol(BREAK_KEYWORD) => self.abort(Some(&items[1])),
 			Node::List(items, _, _) if items.first().is_some_and(|class| self.classes.contains_key(&class.name())) => self.construction(&items[0].name(), &items[1..]),
 			Node::List(items, _, _) => match items.as_slice() {
-				[marker, body, handler] if is_word(marker, TRY_MARKER) => self.binary(".tryCatch", body, handler),
-				[for_word, variable, in_word, list, body] if is_word(for_word, FOR_KEYWORD) && is_word(in_word, IN_KEYWORD) => self.for_loop(variable, list, body),
+				[marker, body, handler] if marker.is_symbol(TRY_MARKER) => self.binary(".tryCatch", body, handler),
+				[for_word, variable, in_word, list, body] if for_word.is_symbol(FOR_KEYWORD) && in_word.is_symbol(IN_KEYWORD) => self.for_loop(variable, list, body),
 				// `count 2 in xs` parses as `count (2 in xs)`
-				[count, list] if is_word(count, COUNT_WORD) && !self.functions.contains_key(COUNT_WORD) => match list.drop_meta() {
-					Node::List(words, Bracket::None, _) if words.len() == 3 && is_word(&words[1], IN_KEYWORD) => self.tally(&words[2], Some(&words[0]), false),
+				[count, list] if count.is_symbol(COUNT_WORD) && !self.functions.contains_key(COUNT_WORD) => match list.drop_meta() {
+					Node::List(words, Bracket::None, _) if words.len() == 3 && words[1].is_symbol(IN_KEYWORD) => self.tally(&words[2], Some(&words[0]), false),
 					_ => self.tally(list, None, false),
 				},
-				[item, in_word, list] if is_word(in_word, IN_KEYWORD) => self.tally(list, Some(item), true),
-				[call, a, b] if EXTREMA.iter().any(|word| is_word(call, word)) && !self.functions.contains_key(&call.name()) => self.extremum(&call.name(), a, b),
-				[call, message] if is_word(call, ERROR_CALL) => match message.drop_meta() {
-					Node::Text(message) => Ok(format!(".error {}", quoted(message))),
+				[item, in_word, list] if in_word.is_symbol(IN_KEYWORD) => self.tally(list, Some(item), true),
+				[call, a, b] if EXTREMA.iter().any(|word| call.is_symbol(word)) && !self.functions.contains_key(&call.name()) => self.extremum(&call.name(), a, b),
+				// a stored error: a value until an operation that needs another value meets it (Decided #1)
+				[call, message] if call.is_symbol(ERROR_CALL) => match message.drop_meta() {
+					Node::Text(message) => Ok(format!(".fail {}", quoted(message))),
+					Node::Char(letter) => Ok(format!(".fail {}", quoted(&letter.to_string()))),
 					_ => unsupported(node),
 				},
+				[call, value] if call.is_symbol(IS_ERROR_CALL) => Ok(format!(".failed ({})", self.expression(value)?)),
 				[call] if self.functions.get(&call.name()).is_some_and(|parameter| parameter == UNIT_TYPE) => Ok(format!(".call {} .unit", quoted(&call.name()))),
 				// `add 1 to 2` of `to add number a to number b: …` parses as `add (1 to 2)`: two arguments
 				[call, argument] if self.classes.contains_key(&arguments_class(&call.name())) && matches!(argument.drop_meta(), Node::Key(_, Op::To, _)) => {
@@ -1259,7 +1308,7 @@ impl Exporter {
 					};
 					let declared = self.functions[&call.name()].clone();
 					let cell = self.cell_classes.iter().find(|cell| declared == format!(".cls {}", lean_strings(&[cell.to_string()]))).cloned();
-					let argument = match bool_literal(Some(&declared), argument) {
+					let argument = match place_literal(Some(&declared), argument) {
 						Some(yes_or_no) => yes_or_no,
 						None if cell.is_some() => self.argument(cell.as_deref(), argument)?,
 						None => admitted(&declared, self.expression(argument)?),
@@ -1284,6 +1333,10 @@ impl Exporter {
 			Node::Key(target, Op::Assign, value) => match target.drop_meta() {
 				Node::Symbol(name) => self.assignment(name, value),
 				Node::Key(object, Op::Dot, field) => Ok(format!(".set ({}) {} ({})", self.expression(object)?, quoted(&field.name()), self.expression(value)?)),
+				Node::Key(map, Op::Hash, index) if self.map_key(map, index).is_some() => {
+					let key = self.map_key(map, index).expect("a map key");
+					Ok(format!(".setAt ({}) ({}) ({})", self.expression(map)?, self.expression(key)?, self.expression(value)?))
+				}
 				// `xs#i = v` writes into the shared list xs, checked against its element type when it runs
 				Node::Key(list, Op::Hash, index) if matches!(list.drop_meta(), Node::Symbol(name) if self.list_names.contains(name) && !self.cell_lists.contains(name)) => {
 					Ok(format!(".setAt ({}) ({}) ({})", self.expression(list)?, self.expression(index)?, self.expression(value)?))
@@ -1292,11 +1345,11 @@ impl Exporter {
 			},
 			// `xs.add(v)` changes the shared list xs holds; a function local's list is a value: `xs = xs ++ [v]`
 			Node::Key(list, Op::Dot, call) => match (list.drop_meta(), call.drop_meta()) {
-				(Node::Symbol(name), Node::List(items, _, _)) if items.len() == 2 && self.cell_lists.contains(name) && APPEND_METHODS.iter().any(|method| is_word(&items[0], method)) => {
+				(Node::Symbol(name), Node::List(items, _, _)) if items.len() == 2 && self.cell_lists.contains(name) && crate::analyzer::appends(&items[0].drop_meta().name(), 1) => {
 					let item = self.expression(&items[1])?;
 					Ok(format!(".set (.loc {}) {} (.append ({}) (.cons ({item}) .nil))", quoted(name), quoted(CELL_FIELD), self.cell_value(name)))
 				}
-				(Node::Symbol(name), Node::List(items, _, _)) if items.len() == 2 && APPEND_METHODS.iter().any(|method| is_word(&items[0], method)) => {
+				(Node::Symbol(name), Node::List(items, _, _)) if items.len() == 2 && crate::analyzer::appends(&items[0].drop_meta().name(), 1) => {
 					let item = self.expression(&items[1])?;
 					if !self.list_names.contains(name) {
 						return unsupported(node);
@@ -1304,7 +1357,7 @@ impl Exporter {
 					Ok(format!(".push (.glob {}) ({item})", quoted(name)))
 				}
 				(_, Node::Symbol(field)) if self.is_field(field) => Ok(format!(".get ({}) {}", self.expression(list)?, quoted(field))),
-				(_, Node::Symbol(method)) if SIZE_METHODS.contains(&method.as_str()) => self.tally(list, None, false),
+				(_, Node::Symbol(method)) if crate::analyzer::is_counting_word(method) => self.tally(list, None, false),
 				_ => unsupported(node),
 			},
 			Node::Key(if_then, Op::Else, otherwise) => match if_then.drop_meta() {
@@ -1343,6 +1396,7 @@ impl Exporter {
 				let compared = self.binary(if matches!(op, Op::Identical | Op::NotIdentical) { ".eq true" } else { ".eq false" }, left, right)?;
 				Ok(if matches!(op, Op::Ne | Op::NotIdentical) { negation(compared) } else { compared })
 			}
+			Node::Key(map, Op::Hash, index) if self.map_key(map, index).is_some() => self.binary(".index", map, self.map_key(map, index).expect("a map key")),
 			Node::Key(list, Op::Hash, index) if !list.is_nothing() => self.binary(".index", list, index),
 			Node::Key(empty, Op::Not, operand) if empty.is_nothing() => Ok(negation(self.expression(operand)?)),
 			Node::Key(parameter, Op::FatArrow, body) => self.lambda(parameter, body),
@@ -1355,6 +1409,7 @@ impl Exporter {
 			// `'a'..'e'`: letters, outside W0
 			Node::Key(from, Op::Range | Op::To, to) if [from, to].iter().any(|bound| matches!(bound.drop_meta(), Node::Text(_) | Node::Char(_))) => unsupported(node),
 			Node::Key(from, Op::Range, to) => self.binary(".range", from, to),
+			Node::Key(left, Op::Coalesce, right) => self.binary(".orElse", left, right),
 			// `1 to 3` includes 3
 			Node::Key(from, Op::To, to) => Ok(format!(".range ({}) (.add ({}) (.int 1))", self.expression(from)?, self.expression(to)?)),
 			_ => unsupported(node),
@@ -1402,9 +1457,10 @@ fn ask_each<T>(name: &str, requests: Vec<String>, what: &str, answer: impl Fn(&s
 }
 
 /// Where warp's run-time admission of a value to a builtin type (analyzer admits) differs from W0's `Ty.sub`, for
-/// every type word and W0 scalar value type: "word ← value type: warp admits / W0 sub"
+/// every builtin type word W0 has a type for and every W0 scalar value type: "word ← value type: warp admits / W0 sub"
 pub fn admits_disagreements() -> Result<Vec<String>, String> {
-	let pairs: Vec<(&str, &str, Kind)> = BUILTIN_TYPE_WORDS.iter().flat_map(|word| VALUE_KINDS.iter().map(move |(value, kind)| (*word, *value, *kind))).collect();
+	let words = crate::type_tests::builtin_type_words().filter(|word| crate::type_tests::held_kind(word).is_some() && type_of_word(word).is_some());
+	let pairs: Vec<(&str, &str, Kind)> = words.flat_map(|word| VALUE_KINDS.iter().map(move |(value, kind)| (word, *value, *kind))).collect();
 	let requests = pairs.iter().map(|(word, value, _)| format!("Ty.sub ({value}) ({})", type_of_word(word).expect("a W0 type word"))).collect();
 	let answers: Vec<bool> = ask_each("admits", requests, "pairs", |line| line.parse().ok())?;
 	Ok(pairs.iter().zip(answers).filter_map(|((word, value, kind), sub)| {
@@ -1425,6 +1481,7 @@ pub fn warp_value(code: &str) -> String {
 	fn shown(value: &Node) -> String {
 		match value.drop_meta() {
 			Node::Number(Number::Int(n)) => n.to_string(),
+			Node::Number(exact @ (Number::Quotient(..) | Number::BigQuotient(_))) => exact.to_string(),
 			Node::True => "yes".to_string(),
 			Node::False => "no".to_string(),
 			Node::Text(text) => format!("\"{text}\""),

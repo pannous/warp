@@ -120,7 +120,7 @@ echo "built $page/samples.js"
 
 # the editor colors the keywords of P165 from their definitions (keywords.py)
 python3 web/playground/keywords.py "$page/keywords.js"
-echo "built $page/keywords.js"
+echo "built $page/keywords.js and keywords.txt"
 # the uniscript entities completion.js lists after \: and <:
 cp src/uniscript_entities.tsv "$page/entities.tsv"
 

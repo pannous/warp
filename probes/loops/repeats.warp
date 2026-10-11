@@ -1,0 +1,9 @@
+def repeats(n: int, block) := {
+	for i in 0...n {
+		block()
+	}
+}
+count = 0
+repeats 4 {
+	print "hi"
+}

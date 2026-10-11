@@ -21,6 +21,10 @@ pub fn analyze_required_functions(ctx: &mut Context, node: &Node) {
 		}
 		// run_block hands exact numbers back by composing them from fixnums (tasks.rs Builders)
 		Node::Symbol(name) if crate::host::VALUE_GIVING_WORDS.contains(&name.as_str()) => ctx.required_functions.extend([crate::wasm_emitter::INT_RUNTIME, "new_int"]),
+		// `as hex`, `byte b`: values shown in hex (card hex-printing)
+		Node::Symbol(name) if crate::wasm_emitter::hex::shows_in_hex(name) => {
+			ctx.required_functions.extend([crate::wasm_emitter::hex::AS_HEX, crate::wasm_emitter::hex::HEX_TEXT, "list_join", "new_text"]);
+		}
 		Node::Empty | Node::Symbol(_) | Node::Char(_) | Node::True | Node::False => {}
 		Node::Key(key, op, value) => {
 			ctx.required_functions.extend(functions_of_operator(op));
@@ -38,6 +42,9 @@ pub fn analyze_required_functions(ctx: &mut Context, node: &Node) {
 			}
 			if *op == Op::As && matches!(value.name().to_lowercase().as_str(), "string" | "str" | "text") {
 				ctx.required_functions.insert("list_join"); // `x as string` of a variable joins its text
+			}
+			if *op == Op::As && value.name().to_lowercase() == crate::wasm_emitter::exact::DECIMAL_WORD {
+				ctx.required_functions.extend(["list_join", crate::wasm_emitter::INT_RUNTIME, crate::wasm_emitter::exact::DECIMAL_TEXT]); // `x as decimal`: a text
 			}
 			if *op == Op::As && value.name().to_lowercase() == "list" {
 				ctx.required_functions.extend(["text_chars", "list_reverse", "text_reverse"]); // `x as list` of a text
@@ -138,25 +145,63 @@ pub fn analyze_required_functions(ctx: &mut Context, node: &Node) {
 	}
 }
 
+/// Operators whose result may be a float (a ratio may be shown as one)
+const FLOAT_OPERATORS: [Op; 6] = [Op::Div, Op::DivAssign, Op::Pow, Op::PowAssign, Op::Sqrt, Op::Cbrt];
+
+/// Does the program visibly make floats: a decimal literal, a division, a root or power, a float type word, π, a libm
+/// function, a foreign float or a host value. Then float_text is emitted for their text (a float the emitter makes
+/// anyway reruns it with float_text: WasmGcEmitter::emit_call), else a program that never shows a float goes without
+/// (web::test_bundle_budget)
+pub fn makes_floats(ctx: &Context, node: &Node) -> bool {
+	let is_float_word = |name: &str| {
+		builtin_type_kind(name).is_some_and(|kind| kind.is_float()) || [NUMBER_WORD, REAL_WORD].contains(&name) || REAL_CONSTANTS.contains(&name)
+			|| crate::ffi::LIBM_F64_FUNCTIONS.iter().any(|(libm, _)| *libm == name)
+	};
+	let gives_float = |signature: &crate::ffi::FfiSignature| match signature.results.first() {
+		Some(wasm_encoder::ValType::F64 | wasm_encoder::ValType::F32) => true,
+		Some(wasm_encoder::ValType::Ref(_)) => signature.library == crate::host::HOST_LIBRARY,
+		_ => false,
+	};
+	let mut found = ctx.ffi_imports.values().any(gives_float);
+	node.visit(&mut |part| {
+		found |= match part {
+			Node::Number(number) => !matches!(number, Number::Int(_) | Number::BigInt(_)),
+			Node::Text(text) => crate::warp_parser::number_in_text(text).is_some_and(|number| !matches!(number, Number::Int(_) | Number::BigInt(_))),
+			Node::Key(_, op, _) => FLOAT_OPERATORS.contains(op),
+			Node::Symbol(name) => is_float_word(name),
+			_ => false,
+		}
+	});
+	found
+}
+
 /// The runtime functions an operator needs wherever it appears
 fn functions_of_operator(op: &Op) -> &'static [&'static str] {
-	use crate::wasm_emitter::{INT_RUNTIME, IS_TRUTHY, SAME_NODE, VALUES_EQUAL};
+	use crate::wasm_emitter::{EXACT_ARITHMETIC, INT_RUNTIME, IS_TRUTHY, SAME_NODE, VALUES_EQUAL};
 	match op {
 		Op::Eq | Op::Ne => &[VALUES_EQUAL],
 		Op::Identical | Op::NotIdentical => &[VALUES_EQUAL, SAME_NODE],
 		Op::If | Op::While | Op::Question | Op::Not | Op::And | Op::Or => &[IS_TRUTHY],
-		Op::Inc | Op::Dec | Op::Neg | Op::Abs | Op::Square | Op::Cube | Op::Xor => &[INT_RUNTIME],
-		op if op.is_arithmetic() || op.is_shift() || op.is_compound_assign() => &[INT_RUNTIME],
+		Op::Inc | Op::Dec | Op::Neg | Op::Abs | Op::Square | Op::Cube => &[INT_RUNTIME, EXACT_ARITHMETIC],
+		Op::Xor => &[INT_RUNTIME],
+		Op::Div | Op::DivAssign => &[INT_RUNTIME, EXACT_ARITHMETIC, crate::wasm_emitter::exact::INT_GCD], // ratios: fast multi-limb division for their gcds
+		op if op.is_arithmetic() || op.is_compound_assign() => &[INT_RUNTIME, EXACT_ARITHMETIC],
+		op if op.is_shift() => &[INT_RUNTIME],
 		_ => &[],
 	}
 }
 
 /// The runtime functions a call of the word needs, besides what its arguments need
 fn functions_of_call(word: &str) -> &'static [&'static str] {
+	use crate::wasm_emitter::times::TIME_FIELD;
 	use crate::library_words::{FIELD_WITH, INSTANCE_COPY, MAP_GET_OR, MAP_WITHOUT};
 	match word {
 		ZERO_FILL_CALL => &[ZERO_FILL_CALL],
+		crate::time::INSTANT_AT => &[crate::time::INSTANT_AT, TIME_FIELD, crate::wasm_emitter::list_ops::RETURNED_ERROR],
+		crate::time::TIME_OF => &[TIME_FIELD, crate::wasm_emitter::list_ops::RETURNED_ERROR],
+		crate::time::TIME_IN_ZONE => &[crate::time::TIME_IN_ZONE, TIME_FIELD, crate::wasm_emitter::times::ZONE_NAMES, crate::wasm_emitter::list_ops::RETURNED_ERROR],
 		LIST_DROP_LAST => &[LIST_DROP_LAST],
+		crate::analyzer::LIST_BECOME => &[crate::analyzer::LIST_BECOME],
 		REMOVED_VALUE_CALL => &[MAP_GET_OR, MAP_WITHOUT],
 		INSERT_AT_CALL | INSERT_EITHER_CALL => &[INSERT_AT_CALL],
 		crate::type_tests::IS_TYPE => &[crate::type_tests::NODE_KIND_IN],
@@ -246,10 +291,20 @@ pub(super) fn uses_library(node: &Node, library: &str) -> bool {
 /// libm functions the emitter does not implement itself (rounding and √ are builtins): a call of one the program neither
 /// imports nor defines links it from libm, as `import f from 'm'` would; without that it compiled to its argument
 pub(super) fn add_implicit_libm_imports(ctx: &mut Context, node: &Node) {
-	let is_builtin = |name: &str| crate::wasm_emitter::ROUNDING_FUNCTIONS.contains(&name) || name == "sqrt";
-	let mut implicit: Vec<&str> = crate::ffi::LIBM_F64_FUNCTIONS.iter().map(|(name, _)| *name).filter(|name| !is_builtin(name)).collect();
+	let mut implicit: Vec<&str> = crate::ffi::LIBM_F64_FUNCTIONS.iter().map(|(name, _)| *name).filter(|name| !is_wasm_builtin(name)).collect();
 	implicit.push(LIBM_LN); // ffi.rs signs it as libm's log
-	add_called_library_imports(ctx, node, "m", &|name| implicit.contains(&name) || (!is_builtin(name) && is_f64_header_function(name)));
+	add_called_library_imports(ctx, node, "m", &|name| implicit.contains(&name) || (!is_wasm_builtin(name) && is_f64_header_function(name)));
+}
+
+/// floor, ceil, round and √ are wasm instructions (f64.floor, f64.ceil, f64.nearest, f64.sqrt) and the rounding words give
+/// exact Ints (user 2026-10-10: "floor(v) should be int, upgradable to float"): never linked from libm, also not by
+/// `use m` or `import floor from 'm'`, whose f64 results the analyzer did not expect (lib/draw.warp's cell failed)
+fn is_wasm_builtin(name: &str) -> bool {
+	crate::wasm_emitter::ROUNDING_FUNCTIONS.contains(&name) || name == "sqrt"
+}
+
+fn skips_libm_builtin(name: &str, library: &str) -> bool {
+	crate::ffi::resolve_library_alias(library) == "m" && is_wasm_builtin(name)
 }
 
 /// A function math.h declares with f64 parameters and an f64 result (exp2, cbrt, erf): it links from libm like the
@@ -376,6 +431,13 @@ pub fn extract_host_words(ctx: &mut Context, node: &Node) {
 					ctx.ffi_imports.insert(name.clone(), signature);
 					add_ffi_import(ctx, LINEAR_NEW, LINEAR_LIBRARY);
 				}
+				// an instant's wall clock is the environment's (wasm_emitter/times.rs time_field)
+				if crate::time::makes_instant(items) {
+					add_ffi_import(ctx, crate::host::LOCAL_OFFSET, crate::host::HOST_LIBRARY);
+				}
+				if crate::time::constant_form(items) == Some(crate::time::TimeForm::Zoned) {
+					ctx.required_functions.insert(crate::wasm_emitter::times::ZONE_NAMES);
+				}
 				if crate::host::HOST_WORDS.contains(&name.as_str()) && !ctx.user_functions.contains_key(name) {
 					add_ffi_import(ctx, name, crate::host::HOST_LIBRARY);
 					// the host builds a caught stack overflow's or a failed adapter's Error with the module's own error_of
@@ -386,7 +448,7 @@ pub fn extract_host_words(ctx: &mut Context, node: &Node) {
 					if [crate::host::GPU_RENDER, crate::host::TEXT_COVERAGE].contains(&name.as_str()) {
 						ctx.required_functions.insert(crate::wasm_emitter::int_lists::INTS_TO_LIST);
 					}
-					if [crate::host::PAINT, crate::host::SOUND].contains(&name.as_str()) {
+					if crate::host::INT_LIST_WORDS.contains(&name.as_str()) {
 						ctx.required_functions.insert(crate::wasm_emitter::int_lists::LIST_TO_INTS);
 					}
 					// a program that controls tasks polls at its loops, where a paused task waits (browser)
@@ -446,6 +508,9 @@ fn add_named_import(ctx: &mut Context, name: &str, library: &str) {
 pub(super) fn add_ffi_import(ctx: &mut Context, name: &str, library: &str) {
 	use crate::ffi::{get_ffi_signature, get_ffi_signature_from_lib};
 
+	if skips_libm_builtin(name, library) {
+		return;
+	}
 	let sig = get_ffi_signature_from_lib(name, library)
 		.or_else(|| get_ffi_signature(name));
 
@@ -499,7 +564,7 @@ pub(super) fn add_ffi_lib_dynamic(ctx: &mut Context, lib: &str) {
 		return;
 	}
 
-	for (name, sig) in signatures {
+	for (name, sig) in signatures.iter().filter(|(name, _)| !skips_libm_builtin(name, lib)) {
 		ctx.ffi_imports.insert(name.clone(), sig.clone());
 	}
 }

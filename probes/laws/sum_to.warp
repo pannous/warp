@@ -1,0 +1,5 @@
+sum_to(n) := if n <= 0 then 0 else n + sum_to(n - 1)
+law sum_to(n) >= 0
+law n >= 0 => sum_to(n) * 2 == n * (n + 1)
+fact(n) := if n <= 0 then 1 else n * fact(n - 1)
+law fact(n) >= 1  // Tested: needs x*y >= 1 from x, y >= 1 (nonlinear), a proof def later

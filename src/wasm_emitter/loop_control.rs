@@ -6,7 +6,7 @@
 //! wasm labels are relative depths: a jump counts the control frames opened since its target.
 
 use super::WasmGcEmitter;
-use crate::node::Node;
+use crate::node::{Bracket, Node, Separator};
 use crate::operators::Op;
 use wasm_encoder::{Function, Instruction};
 use Instruction as I;
@@ -57,6 +57,8 @@ pub(crate) fn split_step(body: &Node) -> (Node, Option<Node>) {
 			let (step, statements) = items.split_last().expect("guarded");
 			(Node::List(statements.to_vec(), bracket.clone(), separator.clone()), Some(step.clone()))
 		}
+		// `{print x}` holds the words of its one statement: the body is the call `print x`, whose value is ø (P213)
+		Node::List(words, Bracket::Curly, Separator::Space) if words.len() > 1 => (Node::List(words.clone(), Bracket::None, Separator::Space), None),
 		_ => (body.clone(), None),
 	}
 }

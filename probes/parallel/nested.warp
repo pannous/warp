@@ -1,0 +1,2 @@
+sum(d) := if d == 0 { 1 } else { j = go sum(d - 1); b = sum(d - 1); (await j) + b }
+print sum(6)

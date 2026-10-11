@@ -167,7 +167,7 @@ function startWorker(restarts = 0) {
 	// test_in_browser.py --examples: a worker that starts as late as on a slow CI runner
 	const slowStart = new URLSearchParams(location.search).get(SLOW_START_PARAMETER);
 	if (slowStart) options.set(SLOW_START_PARAMETER, slowStart);
-	worker = new Worker(options.size ? `worker.js?${options}` : "worker.js");
+	worker = serveTaskWorkers(new Worker(options.size ? `worker.js?${options}` : "worker.js")); // task-workers.js
 	showLoading("starting the compiler's worker", false);
 	workerReady = new Promise((resolve, reject) => {
 		const starting = worker;
@@ -199,19 +199,25 @@ function startWorker(restarts = 0) {
 			if (data.type === "ready") return ready();
 			if (data.type === "stored") return keepValue(data.name, data.value, data.file);
 			if (data.type === "clipboard") return copyText(data.text);
+			if (data.type === "clipboard read") return pasteInto(data.shared);
 			if (data.type === "failed") return failed(new Error(data.message));
 			if (data.type === "bundle") return bundled(data.bundle); // deploy.js
 			if (data.type === "sound") return playSound(data);
 			if (data.type === "sound file") return playSoundFile(data.url, data.handle, data.bytes);
 			if (data.type === "file") return offerFile(data.path, data.bytes);
+			if (data.type === "midi") return sendMidi(data.port, data.message);
 			if (data.type === "stop sound files") return silence(); // stop_sound: the queued sounds and the music files
 			if (data.type === "stop sound") return silenced(data.handle); // stop_sound(handle): that one alone
+			if (data.type === "gpu canvas") return sendPaintCanvas(data);
 			if (!pending) return showEventOutput(data);
 			if (data.type === "listening") Object.assign(pending, { listening: data.events, address: data.address });
 			if (data.type === "print") printedChunk(pending, data);
-			if (data.type === "sleep") pending.frame++;
+			if (data.type === "sleep") {
+				pending.frame++;
+				slept(pending, data.milliseconds);
+			}
 			if (data.type === "tasks inline") pending.tasksInline = data.reason;
-			if (data.type === "paint") painted(pending, data);
+			if (data.type === "paint") painted(pending, data.canvas ? { ...data, canvas: paintCanvases.get(data.canvas) } : data);
 			if (data.type === "module") lastModule = data.bytes;
 			if (data.type === "report" && data.id === pending.id) finish(pending, { ...data.report, printed: pending.printed, paintings: pending.paintings, listening: pending.listening ?? [], address: pending.address, milliseconds: data.milliseconds });
 		};
@@ -257,10 +263,22 @@ function notification(text) {
 	return { type: "print", text: `notification: ${text}\n`, stream: STDOUT };
 }
 
-// the system values a Worker cannot read itself (host.js system_value), sent again when they change
+// the system values a Worker cannot read itself (host.js system_value), sent again when they change. window_open: the
+// canvas shows the pictures to someone once the page was clicked or typed in; before (the CI tour, as for sounds) a
+// `while window_open` drawing loop ends at once instead of waiting for input forever
 const darkMode = matchMedia(DARK_MODE_QUERY);
-const tellSystemValues = () => worker.postMessage({ system: { "dark mode": darkMode.matches } });
+const tellSystemValues = () => worker.postMessage({ system: { "dark mode": darkMode.matches, window_open: Number(!beforeUserActivation()), ...viewSize() } });
 darkMode.addEventListener("change", tellSystemValues);
+["pointerdown", "keydown"].forEach(type => addEventListener(type, () => worker && tellSystemValues(), { once: true, capture: true }));
+new ResizeObserver(() => worker && tellSystemValues()).observe($("output"));
+
+// view_width, view_height (use draw's default canvas): the room below the output pane's text, in CSS pixels; none while
+// the pane is folded away, so host.js's defaults stand
+function viewSize() {
+	const pane = $("output").getBoundingClientRect(), painted = $("painted").getBoundingClientRect();
+	const width = Math.floor(painted.width), height = Math.floor(pane.bottom - painted.top);
+	return width > 0 && height > 0 ? { view_width: width, view_height: height } : {};
+}
 
 // `loop { …; show(); sleep(16) }`: each sleep starts an animation's next frame, what the run paints or prints in it
 // replaces the last frame's; frames keep the run alive past RUN_TIMEOUT_MS, the next run stops it (cards
@@ -278,27 +296,51 @@ function startsFrame(run, output) {
 // ---- sound ----------------------------------------------------------------------------------------------------
 
 let audio; // the page's AudioContext, made at the first sound after a click or key press
-let soundsEnd = 0; // when the queued sounds end, in the AudioContext's time: one plays after the other, as natively
+// the clock the page and the Workers share for sounds (host-tasks.js soundClock), in seconds
+const soundClock = () => (performance.timeOrigin + performance.now()) / 1000;
+// the AudioContext's time minus soundClock, set anew when nothing sounds and kept while sounds follow, so a voice's
+// sounds join without a gap
+let clockOffset = 0;
 let sounding = []; // the playing and queued sounds, silenced when the next run starts (typing reruns the code)
 
 // before the page's first click or key press (the run on load, the CI tour) a sound stays silent: an AudioContext made
 // then cannot start and the browser warns
 const beforeUserActivation = () => navigator.userActivation && !navigator.userActivation.hasBeenActive;
-function playSound({ samples, rate, handle }) {
+function playSound({ samples, rate, channels, at, handle }) {
 	if (beforeUserActivation()) return;
 	audio ??= new AudioContext();
 	audio.resume();
-	const buffer = audio.createBuffer(1, Math.max(samples.length, 1), rate);
-	buffer.getChannelData(0).set(Float32Array.from(samples, sample => (sample - SOUND_OFFSET) / SOUND_OFFSET));
+	const frames = Math.max(Math.ceil(samples.length / channels), 1);
+	const buffer = audio.createBuffer(channels, frames, rate);
+	for (let channel = 0; channel < channels; channel++)
+		buffer.getChannelData(channel).set(Float32Array.from({ length: frames }, (_, frame) => ((samples[frame * channels + channel] ?? SOUND_OFFSET) - SOUND_OFFSET) / SOUND_OFFSET));
 	const source = audio.createBufferSource();
 	source.buffer = buffer;
 	source.connect(audio.destination);
-	soundsEnd = Math.max(soundsEnd, audio.currentTime);
-	source.start(soundsEnd);
-	soundsEnd += buffer.duration;
+	if (sounding.length === 0) clockOffset = audio.currentTime - soundClock();
+	source.start(Math.max(audio.currentTime, at + clockOffset));
 	source.handle = handle;
 	source.onended = () => sounding = sounding.filter(other => other !== source);
 	sounding.push(source);
+}
+
+// midi_send / midi_on (card midi-out): Web MIDI, asked for once and kept; a browser without it, a refusal or a port that
+// is not there reaches the console, as sound failures do. The first output when the port is "". Before the page's first
+// click or key press (the run on load, the CI tour) a message goes nowhere, as a sound stays silent: asking for Web MIDI
+// then is refused, and the refusal would land as a console error during whatever runs next
+let midiAccess;
+async function sendMidi(port, message) {
+	if (beforeUserActivation()) return;
+	try {
+		if (!navigator.requestMIDIAccess) throw new Error("this browser has no Web MIDI");
+		midiAccess ??= navigator.requestMIDIAccess();
+		const outputs = [...(await midiAccess).outputs.values()];
+		const output = port ? outputs.find(candidate => candidate.name === port) : outputs[0];
+		if (!output) throw new Error(port ? `no MIDI output named ${port} (there are: ${outputs.map(candidate => candidate.name).join(", ") || "none"})` : "no MIDI output device");
+		output.send(message);
+	} catch (error) {
+		console.error(`midi: ${error.message}`);
+	}
 }
 
 // `play "song.mp3"` (card sound-library): a music file in the background, by its URL beside the page or anywhere
@@ -328,7 +370,6 @@ function silenced(handle) {
 function silence() {
 	sounding.forEach(source => source.stop());
 	sounding = [];
-	soundsEnd = 0;
 	stopSoundFiles();
 }
 
@@ -353,10 +394,13 @@ function printedChunk(run, chunk) {
 	if (!run.animating) showPrinted(run.printed);
 }
 
-function stopAfterTimeout(run) {
+// the runaway limit counts running time only: a sleep moves the deadline on by its milliseconds (card sleep-run-limit)
+function stopAfterTimeout(run, milliseconds = RUN_TIMEOUT_MS) {
 	clearTimeout(run.timer);
-	run.timer = setTimeout(() => stopRun(run, `stopped after ${RUN_TIMEOUT_MS / 1000} s: ${run.tasksInline ?? "the program may not terminate"}`), RUN_TIMEOUT_MS);
+	run.deadline = Date.now() + milliseconds;
+	run.timer = setTimeout(() => stopRun(run, `stopped after ${RUN_TIMEOUT_MS / 1000} s: ${run.tasksInline ?? "the program may not terminate"}`), milliseconds);
 }
+const slept = (run, milliseconds) => stopAfterTimeout(run, run.deadline - Date.now() + milliseconds);
 
 // a program that does not stop blocks the worker: replace it
 function stopRun(run, message) {
@@ -562,13 +606,27 @@ function showPaintings(paintings) {
 	$("paintings").replaceChildren(...paintings.map(paintingCanvas));
 }
 
-// the run's paintings, its last one drawn into the canvas shown for it, which keeps the pointer over it
+// the run's paintings, its last one drawn into the canvas shown for it, which keeps the pointer over it; a canvas the GPU
+// draws into (paint of a shader) is shown as it is
 function showFrame(paintings) {
 	const shown = $("paintings").querySelectorAll("canvas");
 	const canvas = shown[shown.length - 1];
 	const painting = paintings.at(-1);
-	if (shown.length === paintings.length && sameSize(canvas, painting)) drawn(canvas, painting);
+	if (painting.canvas === canvas && shown.length === paintings.length) return;
+	if (shown.length === paintings.length && sameSize(canvas, painting) && !painting.canvas && !canvas.gpu) drawn(canvas, painting);
 	else showPaintings(paintings);
+}
+
+// the canvases paint of a shader draws into, by id (host-gpu.js gpuPainted): the page makes one and sends its
+// OffscreenCanvas through the port to the task Worker holding the GPU device
+const paintCanvases = new Map();
+function sendPaintCanvas({ id, width, height, port, replaces }) {
+	const canvas = paintingElement({ width, height });
+	canvas.gpu = true;
+	paintCanvases.delete(replaces);
+	paintCanvases.set(id, canvas);
+	const offscreen = canvas.transferControlToOffscreen();
+	port.postMessage({ canvas: offscreen }, [offscreen]);
 }
 
 // ⛶ (card little-full): the last painting fills the screen at its own aspect ratio, Esc or ⛶ again leaves; a click

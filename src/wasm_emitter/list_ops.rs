@@ -36,6 +36,9 @@ const LIST_CURSOR_PARTS: [CursorPart; 7] =
 /// An index or count up to this leaves the cursor where it is: a short list read inside a loop (a row's `row#4`, its
 /// `#row`) takes few links from its head anyway, and the loop's long list keeps its cursor, or each step walks it again
 const SHORT_WALK: i64 = 8;
+/// Lists whose read cursors are kept at once: a loop reading several long lists by turns (`room#i for room in rooms`,
+/// lib/sound.warp's four reverb combs) walks on in each instead of from the head of all but one (quadratic)
+const READ_CURSORS: u32 = 4;
 
 /// The locals of a copy of a list's first cells (emit_collect_cells, emit_rebuild_cells), consecutive from `cell`
 pub(super) struct CopyCells {
@@ -71,6 +74,7 @@ impl WasmGcEmitter {
 		self.emit_list_concat();
 		self.emit_list_extend();
 		self.emit_list_drop_last();
+		self.emit_list_become();
 		self.emit_element_children();
 		self.emit_element_body();
 		self.emit_list_insert_at();
@@ -95,6 +99,28 @@ impl WasmGcEmitter {
 			self.globals.global(GlobalType { val_type, mutable: true, shared: false }, &initial);
 			self.next_global_idx += 1;
 		}
+		// the read cursors after the first: list, cell, index each
+		for _ in 1..READ_CURSORS {
+			for val_type in [Ref(self.node_ref(true)), Ref(self.node_ref(true)), ValType::I64] {
+				let initial = if val_type == ValType::I64 { ConstExpr::i64_const(0) } else { ConstExpr::ref_null(HeapType::Concrete(node_type)) };
+				self.globals.global(GlobalType { val_type, mutable: true, shared: false }, &initial);
+				self.next_global_idx += 1;
+			}
+		}
+	}
+
+	/// The globals (list, cell, index) of read cursor `slot`: the first is the list cursor's own
+	fn read_cursor(&self, slot: u32) -> Option<(u32, u32, u32)> {
+		let first = self.list_cursor_global?;
+		if slot == 0 {
+			return Some((first + CursorPart::List as u32, first + CursorPart::Cell as u32, first + CursorPart::Index as u32));
+		}
+		let list = first + LIST_CURSOR_PARTS.len() as u32 + (slot - 1) * 3;
+		Some((list, list + 1, list + 2))
+	}
+
+	fn read_cursors(&self) -> Vec<(u32, u32, u32)> {
+		(0..READ_CURSORS).filter_map(|slot| self.read_cursor(slot)).collect()
 	}
 
 	/// The global of a part of the list cursor
@@ -109,7 +135,12 @@ impl WasmGcEmitter {
 
 	fn forget_cursor_parts(&self, parts: &[CursorPart]) -> Vec<Instruction<'static>> {
 		let forget = |global: u32| [I::RefNull(HeapType::Concrete(self.type_manager.node_type)), I::GlobalSet(global)];
-		parts.iter().filter_map(|part| self.list_cursor(*part)).flat_map(forget).collect()
+		let read_lists: Vec<u32> = if parts.iter().any(|part| matches!(part, CursorPart::List)) {
+			self.read_cursors().into_iter().skip(1).map(|(list, _, _)| list).collect()
+		} else {
+			vec![]
+		};
+		parts.iter().filter_map(|part| self.list_cursor(*part)).chain(read_lists).flat_map(forget).collect()
 	}
 
 	/// list_at and list_node_at: the element of a cons list at a 1-based index
@@ -157,6 +188,12 @@ impl WasmGcEmitter {
 		}
 	}
 
+	/// node on the stack → i32 1 when it is a map: a list whose kind carries the curly bracket (`{a: 1}`)
+	pub(super) fn emit_is_map(&self, func: &mut Function) {
+		Self::emit_list(func, &[I::RefAsNonNull, I::StructGet { struct_type_index: self.type_manager.node_type, field_index: 0 },
+			I::I64Const(crate::type_kinds::UNMARKED_KIND), I::I64And, I::I64Const(crate::type_kinds::CURLY_LIST_KIND), I::I64Eq]);
+	}
+
 	/// node_type_name(node) -> ref $Node: `type(x)` of a value whose static type is unknown (held as a Node), the symbol
 	/// naming its run-time kind as the static names do: bool, rational, int, text, …
 	pub(crate) fn emit_node_type_name(&mut self) {
@@ -194,6 +231,11 @@ impl WasmGcEmitter {
 				}
 				f.instruction(&I::End);
 			}
+			Self::emit_list(f, &[I::LocalGet(0)]);
+			s.emit_is_map(f);
+			f.instruction(&I::If(BlockType::Empty));
+			s.emit_string_call(f, crate::analyzer::MAP_TYPE, "new_symbol");
+			Self::emit_list(f, &[I::Return, I::End]);
 			for named in RUN_TIME_TYPE_KINDS {
 				Self::emit_list(f, &[I::LocalGet(kind), I::I64Const(KIND_MASK), I::I64And, I::I64Const(named as i64), I::I64Eq, I::If(BlockType::Empty)]);
 				s.emit_string_call(f, &named.to_string(), "new_symbol");
@@ -577,7 +619,7 @@ fn divided_index(index: &Node) -> Option<(&Node, &Node)> {
 
 /// How to fix a runtime error, appended to its message: the trap knows no source position, so the fix is generic
 const WHOLE_NUMBER_FIX: &str = "fix: compute it with // (floor division) or `… as int`";
-const RUNTIME_ERROR_FIXES: [(&str, &str); 4] = [(INDEX_NOT_INTEGRAL, WHOLE_NUMBER_FIX), (COUNT_NOT_INTEGRAL, WHOLE_NUMBER_FIX), (INT_NOT_WHOLE, WHOLE_NUMBER_FIX),
+const RUNTIME_ERROR_FIXES: [(&str, &str); 5] = [(NOT_A_MAP, "keys, values and entries are a map's; a list's positions are 1..count(xs)"), (INDEX_NOT_INTEGRAL, WHOLE_NUMBER_FIX), (COUNT_NOT_INTEGRAL, WHOLE_NUMBER_FIX), (INT_NOT_WHOLE, WHOLE_NUMBER_FIX),
 	(super::declared_values::LIST_CANNOT_HOLD, "its declared element type does not admit it (P215)")];
 
 /// The message of the runtime error trapped in the function `name`: its words, then its fix if it has one
@@ -601,13 +643,16 @@ pub const RETURNED_ERROR: &str = "returned_error";
 /// `a % 0`, `a rem 0`: an integer divide by zero (big_int::emit_nonzero_divisor)
 pub const DIVIDE_BY_ZERO: &str = "divide_by_zero";
 
-pub const RUNTIME_ERRORS: [&str; 29] = [
+/// `x.keys`, `x.values`, `x.entries` of a value that is no map (card keys-value)
+const NOT_A_MAP: &str = "not_a_map";
+
+pub const RUNTIME_ERRORS: [&str; 30] = [
 	"index_out_of_range", INDEX_NOT_INTEGRAL, "invalid_number", "out_of_memory", "key_not_found", "float_out_of_int_range",
 	"min_of_an_empty_list", "max_of_an_empty_list", "reduce_of_an_empty_list",
 	"not_a_list", "not_a_text", "not_an_int", "non_ascii_text", "not_a_joinable_item", "empty_separator", "not_an_object",
 	"not_comparable", super::closures::NOT_A_FUNCTION, super::closures::WRONG_ARGUMENT_COUNT, super::tuple_emitter::WRONG_NUMBER_OF_VALUES,
 	RETURNED_ERROR, "not_a_character", COUNT_NOT_INTEGRAL, NOT_A_NUMBER, DIVIDE_BY_ZERO, INT_NOT_WHOLE, super::declared_values::LIST_CANNOT_HOLD,
-	super::uncertain::NEGATIVE_UNCERTAINTY, super::uncertain::INTERVAL_AND_GAUSSIAN,
+	super::uncertain::NEGATIVE_UNCERTAINTY, super::uncertain::INTERVAL_AND_GAUSSIAN, NOT_A_MAP,
 ];
 
 /// text_as_int(node) -> i64: a Text's optional sign and decimal digits, any other node's Int (get_int_value)
@@ -649,6 +694,15 @@ impl WasmGcEmitter {
 			Self::emit_list(f, &[I::I64Const('0' as i64), I::I64Sub, I::LocalTee(value), I::I64Const(9), I::I64GtU]);
 			s.emit_fail_if(f, "invalid_number");
 			Self::emit_list(f, &[I::LocalGet(value), I::Return, I::End]);
+			// a float truncates toward zero (`(x*x) as int` of a float parameter held as a Node)
+			let (node_type, float_box) = (s.type_manager.node_type, s.type_manager.f64_box_type);
+			s.emit_field(f, 0, 0);
+			Self::emit_list(f, &[I::I64Const(KIND_MASK), I::I64And, I::I64Const(Kind::Float as i64), I::I64Eq, I::If(BlockType::Empty), I::LocalGet(0)]);
+			Self::emit_list(f, &[I::StructGet { struct_type_index: node_type, field_index: 1 }, I::RefCastNonNull(HeapType::Concrete(float_box))]);
+			f.instruction(&I::StructGet { struct_type_index: float_box, field_index: 0 });
+			// a checked truncation: wasm-split and wasm-opt reject the saturating one without nontrapping-float-to-int
+			s.emit_truncating_cast_via(f, value);
+			Self::emit_list(f, &[I::Return, I::End]);
 			s.emit_field(f, 0, 0);
 			Self::emit_list(f, &[I::I64Const(KIND_MASK), I::I64And, I::I64Const(Kind::Text as i64), I::I64Ne, I::If(BlockType::Empty), I::LocalGet(0)]);
 			s.call(f, "get_int_value");
@@ -734,8 +788,24 @@ impl WasmGcEmitter {
 			}
 			self.runtime_function(name, vec![node_ref, node_ref], vec![node_ref], vec![ValType::I64, ValType::F64], |s, f| {
 				let (kind, power) = (2, 3);
+				// a time or duration: calendar arithmetic (time_arithmetic.rs)
+				if let Some(operator) = super::time_arithmetic::TIME_OPERATORS.iter().position(|known| *known == op).filter(|_| s.uses_times()) {
+					for operand in [0, 1] {
+						s.emit_field(f, operand, 0);
+						Self::emit_list(f, &[I::I64Const(KIND_MASK), I::I64And, I::I64Const(Kind::Time as i64), I::I64Eq]);
+					}
+					Self::emit_list(f, &[I::I32Or, I::If(BlockType::Empty), I::LocalGet(0), I::LocalGet(1), I::I32Const(operator as i32)]);
+					s.call(f, super::time_arithmetic::TIME_ARITHMETIC);
+					Self::emit_list(f, &[I::Return, I::End]);
+				}
 				// node_add of two lists (ø is the empty list): their concatenation, `out = out + row`
 				if name == NODE_ADD {
+					// an Error operand is the sum, as text_concat gives it: errors propagate, and are never joined into a
+					// text as their message (`out += tag(x)` of an error, card error-value-kind)
+					for side in 0..2 {
+						s.emit_field(f, side, 0);
+						Self::emit_list(f, &[I::I64Const(KIND_MASK), I::I64And, I::I64Const(Kind::Error as i64), I::I64Eq, I::If(BlockType::Empty), I::LocalGet(side), I::Return, I::End]);
+					}
 					let is_list = |f: &mut Function, operand: u32| {
 						s.emit_field(f, operand, 0);
 						Self::emit_list(f, &[
@@ -1016,8 +1086,8 @@ impl WasmGcEmitter {
 		}
 		let fixnum_offset = super::big_int::FIXNUM_OFFSET;
 		Self::emit_list(func, &[I::LocalGet(local), I::I64Const(fixnum_offset), I::I64Add, I::I64Const(0), I::I64LtS, I::If(BlockType::Empty)]);
-		self.emit_heap_get(func, local);
-		func.instruction(&I::RefTestNullable(HeapType::Concrete(self.type_manager.ratio_type)));
+		func.instruction(&I::LocalGet(local));
+		self.call(func, "is_ratio");
 		self.emit_fail_if(func, error);
 		func.instruction(&I::End);
 	}
@@ -1103,9 +1173,11 @@ impl WasmGcEmitter {
 
 	/// Walk list local 0 to the element at 1-based index local 1 into `current`; trap when out of range, naming the index
 	/// asked for (local `current + 1`) and the list's range
-	fn emit_list_walk(&self, func: &mut Function, current: u32) {
+	fn emit_list_walk(&mut self, func: &mut Function, current: u32) {
 		let asked = current + 1;
 		Self::emit_list(func, &[I::LocalGet(1), I::LocalSet(asked)]);
+		// a stored error indexed (`r = error("x"); r#1`) raises itself, as any operation on it does
+		self.emit_fail_if_error(func, 0);
 		// a number, a character or a text held where a list is indexed (`x=3; x#1`, a parameter): not_a_list, not a cast trap
 		for scalar in [Kind::Int, Kind::Float, Kind::Codepoint, Kind::Text, Kind::Symbol] {
 			self.emit_field(func, 0, 0);
@@ -1119,8 +1191,8 @@ impl WasmGcEmitter {
 		Self::emit_index_compare(func, I::I64LtS);
 		self.emit_fail_out_of_range_if(func, asked);
 		Self::emit_list(func, &[I::LocalGet(0), I::LocalSet(current)]);
-		// at or past the cursor of this list: walk on from its cell, the rest of the index
-		if let (Some(list), Some(cell), Some(index)) = (self.list_cursor(CursorPart::List), self.list_cursor(CursorPart::Cell), self.list_cursor(CursorPart::Index)) {
+		// at or past a cursor of this list: walk on from its cell, the rest of the index
+		for (list, cell, index) in self.read_cursors() {
 			Self::emit_list(func, &[I::GlobalGet(list), I::LocalGet(0), I::RefEq, I::LocalGet(asked), I::GlobalGet(index), I::I64GeS, I::I32And, I::If(BlockType::Empty),
 				I::GlobalGet(cell), I::LocalSet(current), I::LocalGet(asked), I::GlobalGet(index), I::I64Sub, I::I64Const(1), I::I64Add, I::LocalSet(1), I::End]);
 		}
@@ -1136,9 +1208,30 @@ impl WasmGcEmitter {
 		self.emit_field(func, current, 1);
 		self.call(func, super::equality::IS_META_ENTRY);
 		self.emit_fail_out_of_range_if(func, asked);
-		if let (Some(list), Some(cell), Some(index)) = (self.list_cursor(CursorPart::List), self.list_cursor(CursorPart::Cell), self.list_cursor(CursorPart::Index)) {
-			Self::emit_list(func, &[I::LocalGet(asked), I::I64Const(SHORT_WALK), I::I64GtS, I::If(BlockType::Empty),
-				I::LocalGet(0), I::GlobalSet(list), I::LocalGet(current), I::GlobalSet(cell), I::LocalGet(asked), I::GlobalSet(index), I::End]);
+		let cursors = self.read_cursors();
+		if !cursors.is_empty() {
+			Self::emit_list(func, &[I::LocalGet(asked), I::I64Const(SHORT_WALK), I::I64GtS, I::If(BlockType::Empty)]);
+			Self::emit_cursor_store(func, &cursors, current, asked);
+			func.instruction(&I::End);
+		}
+	}
+
+	/// Store the cell found in the cursor of list local 0, or, a list without one, in the first cursor with the others
+	/// moved one on (the oldest dropped): `if list == cursor 0 {…} else if list == cursor 1 {…} … else {shift; …}`
+	fn emit_cursor_store(func: &mut Function, cursors: &[(u32, u32, u32)], current: u32, asked: u32) {
+		let store = |(list, cell, index): (u32, u32, u32)| [I::LocalGet(0), I::GlobalSet(list), I::LocalGet(current), I::GlobalSet(cell), I::LocalGet(asked), I::GlobalSet(index)];
+		for &(list, _, _) in cursors {
+			Self::emit_list(func, &[I::GlobalGet(list), I::LocalGet(0), I::RefEq, I::If(BlockType::Empty)]);
+			Self::emit_list(func, &store(cursors[cursors.iter().position(|c| c.0 == list).unwrap()]));
+			func.instruction(&I::Else);
+		}
+		for pair in cursors.windows(2).rev() {
+			let ((list, cell, index), (next_list, next_cell, next_index)) = (pair[0], pair[1]);
+			Self::emit_list(func, &[I::GlobalGet(list), I::GlobalSet(next_list), I::GlobalGet(cell), I::GlobalSet(next_cell), I::GlobalGet(index), I::GlobalSet(next_index)]);
+		}
+		Self::emit_list(func, &store(cursors[0]));
+		for _ in cursors {
+			func.instruction(&I::End);
 		}
 	}
 
@@ -1408,7 +1501,16 @@ impl WasmGcEmitter {
 	}
 
 	pub(super) fn arithmetic_type(&self, left: &Node, op: &crate::operators::Op, right: &Node) -> Kind {
-		crate::analyzer::arithmetic_kind_of_operands(self.get_type(left), op, self.get_type(right), right)
+		crate::analyzer::arithmetic_kind_of_operands(self.get_type(left), op, self.get_type(right), right, &self.scope)
+	}
+
+	/// Arithmetic on a value whose kind only the run time knows (`x*x` of a parameter held as a Node): maybe a float
+	pub(super) fn computes_at_run_time_kind(&self, value: &Node) -> bool {
+		match value.drop_meta() {
+			Node::Key(left, op, right) if op.is_arithmetic() => crate::analyzer::node_arithmetic(self.get_type(left), op, self.get_type(right)).is_some(),
+			Node::List(items, crate::node::Bracket::Round, _) if items.len() == 1 => self.computes_at_run_time_kind(&items[0]),
+			_ => false,
+		}
 	}
 
 	/// ø (an Empty node) in local `list` becomes null, the end of a cons list
@@ -1587,6 +1689,41 @@ impl WasmGcEmitter {
 			s.emit_field(f, cell, 2);
 			Self::emit_list(f, &[I::LocalSet(cell), I::Br(0), I::End, I::End]);
 			Self::emit_list(f, &[I::LocalGet(cell), no_node(), set(2), I::LocalGet(list), I::RefAsNonNull]);
+		});
+	}
+
+	/// list_become(list, fresh): the list takes the items of the fresh list in place, every holder sees them (`xs.pop(i)`,
+	/// `xs.clear()`, card aliased-list): its first cell takes fresh's kind, item and rest, its element mark stays; an
+	/// empty fresh list makes it ø itself, ø takes nothing and is fresh
+	fn emit_list_become(&mut self) {
+		if !self.should_emit_function(crate::analyzer::LIST_BECOME) {
+			return;
+		}
+		let node_ref_nullable = Ref(self.node_ref(true));
+		let node_ref = Ref(self.node_ref(false));
+		let node_type = self.type_manager.node_type;
+		let set = |field_index: u32| I::StructSet { struct_type_index: node_type, field_index };
+		self.runtime_function(crate::analyzer::LIST_BECOME, vec![node_ref_nullable, node_ref_nullable], vec![node_ref], vec![], |s, f| {
+			Self::emit_list(f, &s.forget_list_cursor());
+			let (list, fresh) = (0, 1);
+			s.emit_empty_as_null(f, fresh);
+			Self::emit_list(f, &[I::LocalGet(list), I::RefIsNull, I::If(BlockType::Empty), I::LocalGet(fresh), I::RefIsNull, I::If(BlockType::Empty)]);
+			s.call(f, "new_empty");
+			Self::emit_list(f, &[I::Return, I::End, I::LocalGet(fresh), I::RefAsNonNull, I::Return, I::End]);
+			Self::emit_list(f, &[I::LocalGet(fresh), I::RefIsNull, I::If(BlockType::Empty)]);
+			s.emit_become_empty(f, list);
+			Self::emit_list(f, &[I::LocalGet(list), I::RefAsNonNull, I::Return, I::End]);
+			f.instruction(&I::LocalGet(list));
+			s.emit_field(f, fresh, 0);
+			s.emit_unmarked(f);
+			s.emit_or_element_mark(f, list);
+			f.instruction(&set(0));
+			f.instruction(&I::LocalGet(list));
+			s.emit_field(f, fresh, 1);
+			f.instruction(&set(1));
+			f.instruction(&I::LocalGet(list));
+			s.emit_field(f, fresh, 2);
+			Self::emit_list(f, &[set(2), I::LocalGet(list), I::RefAsNonNull]);
 		});
 	}
 
@@ -1935,6 +2072,7 @@ impl WasmGcEmitter {
 						func.instruction(&I::BrOnNonNull(0));
 					}
 					self.emit_uncertain_field_lookup(func, held, &name);
+					self.emit_time_field_lookup(func, held, &name);
 					if name == MESSAGE_FIELD {
 						Self::emit_list(func, &[I::LocalGet(held)]);
 						self.emit_call(func, ERROR_MESSAGE);
@@ -2299,7 +2437,16 @@ impl WasmGcEmitter {
 			f.instruction(&I::RefAsNonNull);
 		});
 		for (name, part) in [(MAP_ENTRIES, ENTRY_PART), (MAP_KEYS, KEY_PART), (MAP_VALUES, VALUE_PART)] {
+			// keys or values of a number, a text or a list: not_a_map, no silent echo of it (card keys-value); ø and [] have
+			// none. map_entries passes a list through: `for a, b in [[1, 2], [3, 4]]` unpacks with it
 			self.runtime_function(name, vec![node_ref], vec![node_ref], vec![], |s, f| {
+				if name != MAP_ENTRIES {
+					f.instruction(&I::LocalGet(0));
+					s.call(f, IS_MAP);
+					s.emit_field(f, 0, 1);
+					Self::emit_list(f, &[I::RefIsNull, I::I32Or, I::I32Eqz]);
+					s.emit_fail_if(f, NOT_A_MAP);
+				}
 				Self::emit_list(f, &[I::LocalGet(0), I32Const(part)]);
 				s.call(f, MAP_COLUMN);
 			});

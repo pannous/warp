@@ -1,0 +1,2 @@
+arc_tangent(x) := atan(x)
+arctan := arc_tangent

@@ -34,14 +34,24 @@ ask me decision questions."
 - Merges duplicates, drops questions that the code or an earlier decision already answers, and orders by impact.
 - Ready to try (user 2026-10-10: "a general mechanism when some feature is done and ready to be tested by me"; the
   question popups are the notifications that reach the user): after each batch of questions, and whenever idle,
-  `todo try --new` lists finished features not announced yet. Only features already in the user's installed `warp`
-  (the brew release; `warp --version`) are announced: v1.2.5 was 211 commits behind main and every tried feature
-  failed, so a finished feature waits for the next release (releases need no approval; ask the Integrator to cut
-  one). Format (user: "put the command for one test into the title"): one single-select question per feature, the
-  exact command in the question text, options Yes / No, e.g. "Try `~/dev/angles/warp/samples/visualizer.warp` to see
-  the new visualizer. Did it work?". Up to 4 per popup, sharing it with decision questions. Yes → `todo tried <card>`;
-  No or a pasted error → `todo add "…" Now` for the worker who built it; unanswered ones stay in `todo try`. Samples
-  are run directly by path (shebang + executable). A popup blocks only the Interviewer.
+  `todo try --new` lists finished features not announced yet. Try lines spell out the full path
+  /Users/me/dev/bin/warp: a debug build of main refreshed by push_tested.sh after every pushed batch (`--version`:
+  "… debug build <commit>"). Plain `warp` and a sample's `#!/usr/bin/env warp` run brew's copy (/opt/homebrew/bin
+  comes first on PATH), so a sample is tried as `/Users/me/dev/bin/warp samples/x.warp`. Homebrew releases are occasional (user,
+  2026-10-10), so nothing waits for brew; a feature is announced once its batch is pushed (workers run `todo done`
+  only after their branch is on main). Never the shared-target debug/warp: it holds whichever worktree built last.
+  Format (user 2026-10-10): the Interviewer's FINAL reply of a turn (the user's app summarizes earlier text and
+  shows only the final message in full) lists each feature as a ```sh code block the user runs with its ▶ button,
+  the expected result after it; no popup follows. Shape (user): `warp 'a = 1; b = 2; a + b'`, the program right
+  after `warp`, statements joined by semicolons, no echo/printf pipes or newlines. The user's interactive shell finds
+  /Users/me/dev/bin/warp first, so plain `warp` means main's build; a branch-only feature names its worktree binary
+  in the same shape. The user answers in their next message: works → `todo tried
+  <card>`; a failure → `todo add "…" Now` for the worker who built it; untouched ones stay in `todo try`. Fallback:
+  the command in a popup question's text or preview. The Interviewer runs every snippet itself first and announces
+  only the ones that pass. Speed (user: "if it runs the test just for this one feature, we could
+  already present it"): a worker may hand over a try line as soon as its targeted test passes on its branch, with
+  its own binary (scripts/own-warp.sh → <worktree>/scratch/warp), not waiting for the Integrator's batch.
+  A popup blocks only the Interviewer.
 
 ## Never blocked by a decision
 A session that needs a decision: take the recommended option (the one most in line with notes/welcoming.md and the
@@ -60,6 +70,10 @@ The only session that runs the full suite and the only one that pushes code to m
   conflicts back to the worker), runs `./test.sh` with the integration build tweak, and pushes to main only at 0 failed
   and no drop in the test count. Otherwise it reports the failures to the worker (and the supervisor if it's a decision).
 - Batches branches that arrive close together into one run; runs a worker's targeted check on request.
+- Express (user, 2026-10-10: "faster results for an agent"): a branch sent as "express" (the user asked for that
+  agent's result) is not batched: it goes next, alone on main, its full suite ahead of the batch run (a running suite
+  finishes first). It skips the waiting, never the suite: one red branch on main stops every worker. To try a result
+  even sooner, the worker's early-try binary (notes/agents/common.md) needs no merge at all.
 - Before every merge: Cargo.toml/Cargo.lock restored (a branch that changes Cargo.toml is otherwise refused, and a
   grep for "conflict" does not show that). Before reporting a branch merged: `git merge-base --is-ancestor
   origin/<branch> HEAD`.

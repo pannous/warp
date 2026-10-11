@@ -13,12 +13,12 @@ fn let_var_and_const_declare_inside_any_block() {
 	is!("s=0; for i in 1…3 { let t = i; s += t }; s", 6);
 	is!("if 1 { let y = 2; y } else { 0 }", 2);
 	is!("let x = 3; x", 3);
-	// P159: a `let` variable may change, with a got-it note teaching `var`; `var` and plain `=` change
+	// a `let` is fully immutable (user, card let-reassign); `var` and plain `=` change
 	is!("var x = 0; x += 1; x", 1);
-	is!("let x = 0; x += 1; x", 1);
-	is!("let x = 1; x = 2; x", 2);
-	is!("let x = 1; x++; x", 2);
-	is!("let xs = [1 2]; xs#1 = 5; xs", warp::ints(vec![5, 2]));
+	fails_with("let x = 0; x += 1; x", "x is let (immutable), cannot change it");
+	fails_with("let x = 1; x = 2; x", "fix: use var x");
+	fails_with("let x = 1; x++; x", "x is let (immutable)");
+	fails_with("let xs = [1 2]; xs#1 = 5; xs", "xs is let (immutable)");
 }
 
 #[test]
@@ -184,4 +184,16 @@ fn a_comment_after_a_text_needs_no_note() {
 	let notes = |code: &str| capture_hints(|| warp::wasm_emitter::eval(code)).1.iter().filter(|hint| hint.canonical == "a//b").count();
 	assert_eq!(notes("p = { e: \"trailing\" // a comment\n age: 30 }; p.age"), 0);
 	assert_eq!(notes("x = \"a\", // a comment\nx"), 0);
+}
+
+// card hint-misfires: a trailing word that is a unit or a noun (`// Hz`, `// peaks`) is a comment; only a number or a
+// one-or-two-letter name (`// 2`, `// n`) could be a divisor
+#[test]
+fn a_word_comment_after_a_value_needs_no_note() {
+	use warp::normalize::capture_hints;
+	let notes = |code: &str| capture_hints(|| warp::wasm_emitter::eval(code)).1.iter().filter(|hint| hint.canonical == "a//b").count();
+	assert_eq!(notes("cutoff = 900 // Hz\ncutoff"), 0);
+	assert_eq!(notes("x = 4 // peaks\nx"), 0);
+	assert_eq!(notes("x = 4.0 // a peak\nx"), 0);
+	assert_eq!(notes("n = 2\nx = 8 // n\nx"), 1);
 }

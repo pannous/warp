@@ -49,10 +49,39 @@ CONSOLE_SETTLE_SECONDS = 0.3  # a shown example's last messages reach the watche
 # warnings the browser logs itself, which no page code can silence, and what the program does instead (card
 # browser-tour): Chrome without WebGPU says this on every navigator.gpu.requestAdapter(); @gpu then maps on the CPU and
 # says so in the program's own warning, gpu_render fails with the program's error (shown on the page, not the console)
-BROWSER_OWN_WARNINGS = {"No available adapters."}
+# Chrome's Dawn says the second when the next example ends the task Worker of an animating GPU sample while a frame of
+# its OffscreenCanvas is in flight (samples/manual_3d_object_viewer, cards flaky-viewer, flaky-deploy): the stopped
+# program's device is gone, nothing the next example sees
+BROWSER_OWN_WARNINGS = {"No available adapters.", "A valid external Instance reference no longer exists."}
 # an example on the GPU (paint of a shader) in a browser without WebGPU (the runner's Firefox): skipped, loudly
 NO_GPU = "offers no WebGPU adapter"
 PAGE_LOAD = "(loading the page)"
+FILE_KEPT = "(a written file after a reload)"  # card files-written: host-files.js keeps written files in IndexedDB
+FILE_KEPT_TEXT = "kept across a reload"
+WRITE_FILE = f'use file\nwrite("kept.txt", "{FILE_KEPT_TEXT}")'
+READ_FILE = 'use file\nread("kept.txt")'
+COMPLETION_KEYS = "(completion with Tab and Enter)"  # cards code-completion-must, completion-must (completion.js)
+# code at the cursor, the keys pressed, the code after them
+COMPLETIONS = [
+	("use math\ndir(ma", ["Tab", "Tab"], "use math\ndir(math"),
+	("xs_long = 1\nxs_short = 2\nxs_", ["Tab", "Enter"], "xs_long = 1\nxs_short = 2\nxs_long"),
+	("xs = 1\nxs_a = 2\nxs_b = 3\nxs", ["Tab", "Enter"], "xs = 1\nxs_a = 2\nxs_b = 3\nxs\n"),
+]
+KEY_CODES = {"Tab": 9, "Enter": 13}
+CLIPBOARD_READ = "(a program reads the clipboard)"  # card web-apis-rest: host.js clipboard_text asks the page
+CLIPBOARD_TEXT = "copied by the page"
+# card web-apis-rest: gpu_compute over named arrays, and paint of a shader drawn straight into the page's canvas
+GPU_PAGE = "(named GPU arrays, a shader painted into the page's canvas)"
+NAMED_ARRAYS = """shader = "@group(0) @binding(0) var<storage, read_write> xs: array<f32>;
+@group(0) @binding(1) var<storage, read_write> ns: array<i32>;
+@compute @workgroup_size(64) fn main(@builtin(global_invocation_id) id: vec3<u32>) {
+	if (id.x < arrayLength(&xs)) { xs[id.x] = xs[id.x] + 10.0; ns[id.x] = ns[id.x] - 1; }
+}"
+gpu_compute(shader, {xs: [1.5 2 3], ns: [7 8 9]}, 1)"""
+NAMED_ARRAYS_SHOWN = ["11.5", "6 7 8"]
+RED_SHADER = 'paint("@fragment fn main(@builtin(position) at: vec4f) -> @location(0) vec4f { return vec4f(1.0, 0.0, 0.0, 1.0); }", 8, 8)'
+CANVAS_FAILED = "the page's canvas failed"  # host-gpu.js CANVAS_FAILED: the shader painted through pixels instead
+CANVAS_SETTLE_MS = 300  # the task Worker's frame reaches the page's canvas after its task
 # each GET the server began and finished, (seconds since it started, path, finished): shown after a failed tour, which
 # then says whether the browser asked for a stalled worker's scripts at all (card tour-firefox)
 served = []
@@ -270,6 +299,83 @@ class ConsoleWatch:
 		self.process.terminate()
 
 
+def run_code(code):
+	"""the playground's value once it ran `code`"""
+	script = f"""(async () => {{
+		await playground.runCode({json.dumps(code)});
+		while (document.getElementById("status").textContent === "running…") await new Promise(done => setTimeout(done, 50));
+		return document.getElementById("value").textContent;
+	}})()"""
+	shown = browser("eval", script)
+	return json.loads(shown) if shown.startswith('"') else f"(page gave no answer: {shown or browser_complaint})"
+
+
+def file_kept_wrong(page_url):
+	"""a file one run wrote is read by a run after the page reloaded: what differs"""
+	run_code(WRITE_FILE)
+	open_page(page_url)
+	wait_for_isolation()
+	read = run_code(READ_FILE)
+	return [] if FILE_KEPT_TEXT in read else [f"read after a reload: {read!r}, expected {FILE_KEPT_TEXT!r}"]
+
+
+def clipboard_read_wrong():
+	"""a program reads what the page copied; skipped loudly when the browser refuses the page its own clipboard"""
+	refused = browser("eval", f"""(async () => {{
+		try {{ await navigator.clipboard.writeText({json.dumps(CLIPBOARD_TEXT)}); await navigator.clipboard.readText(); return ""; }}
+		catch (failure) {{ return failure.message; }}
+	}})()""")
+	if refused not in ('""', ""):
+		print(f"skip {CLIPBOARD_READ}: this browser refuses the page its clipboard: {refused}")
+		return []
+	read = run_code("clipboard")
+	return [] if CLIPBOARD_TEXT in read else [f"clipboard read: {read!r}, expected {CLIPBOARD_TEXT!r}"]
+
+
+def gpu_page_wrong():
+	"""named arrays come back by name, and a painted shader shows red in the GPU's own canvas; skipped loudly without
+	WebGPU (the runner's Firefox)"""
+	computed = run_code(NAMED_ARRAYS)
+	if NO_GPU in computed:
+		print(f"skip {GPU_PAGE}: this browser {NO_GPU}")
+		return []
+	wrong = [f"named arrays: {computed!r}, expected {shown!r} in it" for shown in NAMED_ARRAYS_SHOWN if shown not in computed]
+	painted = run_code(RED_SHADER)
+	shown = browser("eval", f"""(async () => {{
+		await new Promise(done => setTimeout(done, {CANVAS_SETTLE_MS}));
+		const canvas = [...document.querySelectorAll("#paintings canvas")].at(-1);
+		if (!canvas) return "no canvas";
+		const copy = new OffscreenCanvas(canvas.width, canvas.height).getContext("2d");
+		copy.drawImage(canvas, 0, 0);
+		const failed = [...document.querySelectorAll("#diagnostics li")].map(item => item.textContent).find(text => text.includes({json.dumps(CANVAS_FAILED)}));
+		return `gpu ${{canvas.gpu === true}} red ${{copy.getImageData(4, 4, 1, 1).data[0]}} ${{failed ?? ""}}`;
+	}})()""")
+	if CANVAS_FAILED in shown:
+		print(f"skip {GPU_PAGE} (its page canvas): {shown}")
+	expected = "red 255" if CANVAS_FAILED in shown else "gpu true red 255"
+	return wrong + ([] if expected in shown else [f"painted shader ({painted!r}): {shown!r}, expected {expected!r}"])
+
+
+def completion_keys_wrong():
+	"""the editor's code after each of COMPLETIONS' keys, pressed through CodeMirror's own key handling: what differs"""
+	script = f"""(() => {{
+		const editor = document.querySelector(".CodeMirror").CodeMirror;
+		const press = code => editor.triggerOnKeyDown({{ type: "keydown", keyCode: code, preventDefault() {{}}, stopPropagation() {{}} }});
+		editor.focus();
+		return JSON.stringify({json.dumps(COMPLETIONS)}.map(([code, keys]) => {{
+			editor.setValue(code);
+			editor.setCursor(editor.lastLine(), editor.getLine(editor.lastLine()).length);
+			keys.forEach(key => press({json.dumps(KEY_CODES)}[key]));
+			return editor.getValue();
+		}}));
+	}})()"""
+	shown = browser("eval", script)
+	if not shown.startswith('"'):
+		return [f"(page gave no answer: {shown or browser_complaint})"]
+	results = json.loads(json.loads(shown))
+	return [f"{code!r} then {' '.join(keys)}: {result!r}, expected {expected!r}" for (code, keys, expected), result in zip(COMPLETIONS, results) if result != expected]
+
+
 def show_example(name):
 	"""the playground's value and printed text once it showed the example, and its timers ran `wait` milliseconds; with
 	`typed` (into the first input) and `clicks` also the value after typing and clicking those buttons or links, whether every element shown stayed (`kept`), kept its key (`keyed`) and whether anything animated (`animated`) and the address bar's path (`address`)"""
@@ -333,7 +439,8 @@ def check_examples(names, page_url=None, site=None):
 		page_url = f"http://127.0.0.1:{PORT}/web/playground/"
 	open_page("about:blank")
 	console = FirefoxConsole() if firefox else ConsoleWatch()  # before the page, so its loading is watched too
-	open_page(f"{page_url}{'&' if '?' in page_url else '?'}slow_start={SLOW_START_MS}")
+	page_url = f"{page_url}{'&' if '?' in page_url else '?'}slow_start={SLOW_START_MS}"
+	open_page(page_url)
 	wait_for_isolation()
 	examples = json.loads(json.loads(browser("eval", "JSON.stringify(EXAMPLES)")))
 	samples = json.loads(json.loads(browser("eval", "JSON.stringify(Object.keys(SAMPLES).sort())")))
@@ -356,13 +463,17 @@ def check_examples(names, page_url=None, site=None):
 				print(f"skip {name}: this browser {NO_GPU}")
 				shown = {**shown, "value": expected.get("value"), "canvases": expected.get("canvases")}
 			verdict(name, [f"{part}: {shown.get(part)!r}, expected {expected[part]!r}" for part in ("value", "printed", "canvases", "clicked", "clickedPrinted", "kept", "keyed", "animated", "address") if part in expected and shown.get(part) != expected[part]] + [f"status: {shown.get('failed')}"] * bool(shown.get("failed")))
+	extra_checks = [(check, wrong) for check, wrong in ((COMPLETION_KEYS, completion_keys_wrong), (CLIPBOARD_READ, clipboard_read_wrong), (GPU_PAGE, gpu_page_wrong), (FILE_KEPT, lambda: file_kept_wrong(page_url))) if not names or check in names]
+	for check, wrong in extra_checks:
+		verdict(check, wrong())
 	console.stop()
 	browser("close")
 	if server:
 		server.shutdown()
 		if failures:
 			show_served()
-	print(f"\nexamples and samples: {len(chosen) + 1 - len(failures)} of {len(chosen) + 1} show what they promise, without console errors" + (f"; failed: {', '.join(failures)}" if failures else ""))
+	checked = len(chosen) + 1 + len(extra_checks)
+	print(f"\nexamples and samples: {checked - len(failures)} of {checked} show what they promise, without console errors" + (f"; failed: {', '.join(failures)}" if failures else ""))
 	sys.exit(101 if failures else 0)
 
 

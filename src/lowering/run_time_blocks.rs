@@ -4,7 +4,7 @@
 //! the block is a typo, or symbolic data that wants `data a+b`.
 //! A block known only at run time runs through the host (run_block, notes/runtime_eval.md step 2).
 
-use super::nodes::call;
+use super::nodes::{call, for_in_variable};
 use crate::diagnostic::{ask, reading, Ask, Fallback};
 use crate::node::{symbol, Bracket, Node, Separator};
 use crate::operators::Op;
@@ -144,14 +144,6 @@ struct Site {
 fn assigned_name(statement: &Node) -> Option<String> {
 	match statement.drop_meta() {
 		Node::Key(target, Op::Assign, _) => target.symbol_name().map(String::from),
-		_ => None,
-	}
-}
-
-/// `for i in …`: i
-fn loop_variable(items: &[Node]) -> Option<String> {
-	match items.iter().map(Node::drop_meta).collect::<Vec<_>>().as_slice() {
-		[Node::Symbol(word), Node::Symbol(variable), Node::Symbol(within), ..] if word == "for" && within == "in" => Some(variable.clone()),
 		_ => None,
 	}
 }
@@ -330,9 +322,9 @@ impl Site {
 				}).collect();
 				Node::List(items, bracket, separator)
 			}
-			Node::List(items, bracket, separator) if loop_variable(&items).is_some() => {
+			Node::List(items, bracket, separator) if for_in_variable(&items).is_some() => {
 				let mut site = self.clone();
-				site.bind(loop_variable(&items).unwrap_or_default());
+				site.bind(for_in_variable(&items).unwrap_or_default());
 				Node::List(items.into_iter().map(|item| lower(&site, item)).collect(), bracket, separator)
 			}
 			other => other.map_children(|child| lower(self, child)),

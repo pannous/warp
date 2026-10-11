@@ -1,6 +1,6 @@
 // Exact numbers beyond the fixnums (ratios, big integers) cross to a task and back (card g-rH6E): composed from fixnum
-// pieces in the receiving instance (tasks.rs Builders), as a run-time block hands them back
-#![cfg(feature = "native")] // the browser task path still refuses them
+// pieces in the receiving instance (tasks.rs Builders, in the browser host.js exactHandle), as a run-time block hands them
+// back
 use crate::is;
 
 #[test]

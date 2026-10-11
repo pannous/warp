@@ -1,6 +1,6 @@
 framework = "UIKit"
 crate = "objc2-ui-kit"
-required-dependencies = ["objc2-foundation"]
+required-crates = ["objc2", "objc2-foundation"]
 custom-lib-rs = true
 maccatalyst = "13.0"
 ios = "2.0"
@@ -8,9 +8,18 @@ tvos = "9.0"
 watchos = "2.0"
 visionos = "1.0"
 
-# CF_RETURNS_NOT_RETAINED
-fn.UIGraphicsGetCurrentContext.skipped = true
-class.UIGraphicsRenderer.methods."contextWithFormat:".skipped = true
+external.INIntent.module = "Intents.INIntent"
+external.INIntentResponse.module = "Intents.INIntentResponse"
+external.UTType.module = "UniformTypeIdentifiers.UTType"
+external.CKContainer.module = "CloudKit.CKContainer"
+external.CKShare.module = "CloudKit.CKShare"
+external.CKShareMetadata.module = "CloudKit.CKShareMetadata"
+external.NSManagedObjectContext.module = "CoreData.NSManagedObjectContext"
+external.NSManagedObjectModel.module = "CoreData.NSManagedObjectModel"
+external.CLRegion.module = "CoreLocation.CLRegion"
+
+class.UIFont.bridged-to = "CoreText.CTFont.CTFont"
+class.UIFontDescriptor.bridged-to = "CoreText.CTFontDescriptor.CTFontDescriptor"
 
 # Both property and method
 class.NSDiffableDataSourceSectionSnapshot.methods.items.skipped = true
@@ -20,9 +29,16 @@ static.UIKeyInputF1.skipped = true
 
 # These protocol impls would return the wrong types
 class.NSTextStorage.skipped-protocols = ["NSCopying", "NSMutableCopying"]
-# Subclasses `NSMutableAttributedString`, though I think this should
-# actually be `InteriorMutable`?
-class.NSTextStorage.mutability = "Mutable"
+
+# Set counterparts
+class.NSParagraphStyle.counterpart = "MutableSubclass(UIKit.NSParagraphStyle.NSMutableParagraphStyle)"
+class.NSMutableParagraphStyle.counterpart = "ImmutableSuperclass(UIKit.NSParagraphStyle.NSParagraphStyle)"
+class.UIApplicationShortcutItem.counterpart = "MutableSubclass(UIKit.UIApplicationShortcutItem.UIMutableApplicationShortcutItem)"
+class.UIMutableApplicationShortcutItem.counterpart = "ImmutableSuperclass(UIKit.UIApplicationShortcutItem.UIApplicationShortcutItem)"
+class.UIUserNotificationCategory.counterpart = "MutableSubclass(UIKit.UIUserNotificationSettings.UIMutableUserNotificationCategory)"
+class.UIMutableUserNotificationCategory.counterpart = "ImmutableSuperclass(UIKit.UIUserNotificationSettings.UIUserNotificationCategory)"
+class.UIUserNotificationAction.counterpart = "MutableSubclass(UIKit.UIUserNotificationSettings.UIMutableUserNotificationAction)"
+class.UIMutableUserNotificationAction.counterpart = "ImmutableSuperclass(UIKit.UIUserNotificationSettings.UIUserNotificationAction)"
 
 # These subclass a generic struct, and hence the type parameter defaults to
 # `AnyObject`, which is not PartialEq, Eq nor Hash.
@@ -30,9 +46,11 @@ class.NSLayoutXAxisAnchor.derives = "Debug"
 class.NSLayoutYAxisAnchor.derives = "Debug"
 class.NSLayoutDimension.derives = "Debug"
 
-# Different definitions depending on target
-enum.NSImageResizingMode.skipped = true
-enum.NSTextAlignment.skipped = true
+# Different definitions depending on target.
+const.UIImageResizingModeTile.skipped = true
+const.UIImageResizingModeStretch.skipped = true
+const.NSTextAlignmentCenter.skipped = true
+const.NSTextAlignmentRight.skipped = true
 
 # Duplicated parameter name
 class.UIStepper.methods."dividerImageForLeftSegmentState:rightSegmentState:".skipped = true
@@ -56,35 +74,18 @@ class.NSAttributedString.skipped-protocols = ["NSItemProviderReading", "NSItemPr
 class.NSUserActivity.skipped-protocols = ["NSItemProviderReading", "NSItemProviderWriting"]
 
 # Requires MainThreadOnly, which I'm not sure UIImage is?
-class.UIImage.skipped-protocols = ["UIItemProviderPresentationSizeProviding"]
+class.UIImage.skipped-protocols = ["UIItemProviderPresentationSizeProviding", "UIAccessibilityIdentification"]
 
-# Type defaults to `c_int`, but value is `NSInteger`
-enum.anonymous.constants.NSControlCharacterZeroAdvancementAction.skipped = true
-enum.anonymous.constants.NSControlCharacterWhitespaceAction.skipped = true
-enum.anonymous.constants.NSControlCharacterHorizontalTabAction.skipped = true
-enum.anonymous.constants.NSControlCharacterLineBreakAction.skipped = true
-enum.anonymous.constants.NSControlCharacterParagraphBreakAction.skipped = true
-enum.anonymous.constants.NSControlCharacterContainerBreakAction.skipped = true
+# Requires MainThreadOnly, which I'm not sure NSTextAttachment is?
+class.NSTextAttachment.skipped-protocols = ["UIAccessibilityContentSizeCategoryImageAdjusting"]
 
-# Typedef to an enum, which our valus handle wrong
+# Typedef to an enum, which our values handle wrong
 typedef.UITextWritingDirection.skipped = true
 static.UITextWritingDirectionNatural.skipped = true
 static.UITextWritingDirectionLeftToRight.skipped = true
 static.UITextWritingDirectionRightToLeft.skipped = true
 
-# Needs `CGColorRef`
-class.UIColor.methods."colorWithCGColor:".skipped = true
-class.UIColor.methods."initWithCGColor:".skipped = true
-class.UIColor.methods.CGColor.skipped = true
-
-# Needs `CGImageRef`
-class.UIImage.methods."imageWithCGImage:".skipped = true
-class.UIImage.methods."imageWithCGImage:scale:orientation:".skipped = true
-class.UIImage.methods."initWithCGImage:".skipped = true
-class.UIImage.methods."initWithCGImage:scale:orientation:".skipped = true
-class.UIImage.methods.CGImage.skipped = true
-
-# Needs `AVAudioSession`
+# Needs `AVAudioSession` (undesired dependency)
 class.UIScene.methods."getDefaultAudioSessionWithCompletionHandler:".skipped = true
 
 # Needs `INIntent`
@@ -95,181 +96,110 @@ protocol.UIApplicationDelegate.methods."application:handleIntent:completionHandl
 fn.NSTextAlignmentToCTTextAlignment.skipped = true
 fn.NSTextAlignmentFromCTTextAlignment.skipped = true
 
-# Needs `CGAffineTransform`
-class.UIView.methods.transform = { skipped = true }
-class.UIView.methods."setTransform:" = { skipped = true }
+# Needs LinkPresentation, which itself depends on UIKit
+protocol.UIActivityItemSource.methods."activityViewControllerLinkMetadata:".skipped = true
+class.UIDocumentProperties.methods."initWithMetadata:".skipped = true
+class.UIDocumentProperties.methods.metadata.skipped = true
+class.UIDocumentProperties.methods."setMetadata:".skipped = true
 
-# Needs `CGPathRef`
-class.UIBezierPath.methods."bezierPathWithCGPath:".skipped = true
-class.UIBezierPath.methods.CGPath.skipped = true
-class.UIBezierPath.methods."setCGPath:".skipped = true
-
-# Needs `CGLineCap`
-class.UIBezierPath.methods.lineCapStyle.skipped = true
-class.UIBezierPath.methods."setLineCapStyle:".skipped = true
-
-# Needs `CGLineJoin`
-class.UIBezierPath.methods.lineJoinStyle.skipped = true
-class.UIBezierPath.methods."setLineJoinStyle:".skipped = true
-
-# Needs `CGBlendMode`
-class.UIBezierPath.methods."fillWithBlendMode:alpha:".skipped = true
-class.UIBezierPath.methods."strokeWithBlendMode:alpha:".skipped = true
-class.UIGraphicsRendererContext.methods."fillRect:blendMode:".skipped = true
-class.UIGraphicsRendererContext.methods."strokeRect:blendMode:".skipped = true
-class.UIImage.methods."drawAtPoint:blendMode:alpha:".skipped = true
-class.UIImage.methods."drawInRect:blendMode:alpha:".skipped = true
-fn.UIRectFillUsingBlendMode.skipped = true
-fn.UIRectFrameUsingBlendMode.skipped = true
-
-# Needs `CFTimeInterval`
-class.UIScreen.methods.calibratedLatency.skipped = true
-
-# Needs `CGGlyph`
-class.NSLayoutManager.methods."CGGlyphAtIndex:isValidIndex:".skipped = true
-class.NSLayoutManager.methods."CGGlyphAtIndex:".skipped = true
-class.NSLayoutManager.methods."glyphAtIndex:isValidIndex:".skipped = true
-class.NSLayoutManager.methods."glyphAtIndex:".skipped = true
-class.NSLayoutManager.methods."showCGGlyphs:positions:count:font:textMatrix:attributes:inContext:".skipped = true
-class.NSLayoutManager.methods."showCGGlyphs:positions:count:font:matrix:attributes:inContext:".skipped = true
-class.NSLayoutManager.methods."setGlyphs:properties:characterIndexes:font:forGlyphRange:".skipped = true
-class.NSLayoutManager.methods."getGlyphsInRange:glyphs:properties:characterIndexes:bidiLevels:".skipped = true
-class.NSLayoutManager.methods."glyphIndexForPoint:inTextContainer:fractionOfDistanceThroughGlyph:".skipped = true
-class.NSLayoutManagerDelegate.methods."layoutManager:shouldGenerateGlyphs:properties:characterIndexes:font:forGlyphRange:".skipped = true
-protocol.NSLayoutManagerDelegate.methods."layoutManager:shouldGenerateGlyphs:properties:characterIndexes:font:forGlyphRange:".skipped = true
-
-# Needs `CGContextRef`
-class.NSTextLayoutFragment.methods."drawAtPoint:inContext:".skipped = true
-class.NSTextLineFragment.methods."drawAtPoint:inContext:".skipped = true
-fn.UIGraphicsPushContext.skipped = true
-class.UIGraphicsRendererContext.methods.CGContext.skipped = true
-class.UIGraphicsRenderer.methods."prepareCGContext:withRendererContext:".skipped = true
+# Unclear how error handling is done for methods returning integers
+class.UIApplication.methods."defaultStatusForCategory:error:".skipped = true
 
 # Protocols require that these are main thread only
-class.UIDocumentBrowserTransitionController.mutability = "MainThreadOnly"
-class.UIDocumentInteractionController.mutability = "MainThreadOnly"
-class.UIToolTipInteraction.mutability = "MainThreadOnly"
-class.UIWindowSceneActivationInteraction.mutability = "MainThreadOnly"
-class.UITraitUserInterfaceIdiom.mutability = "MainThreadOnly"
-class.UITraitUserInterfaceStyle.mutability = "MainThreadOnly"
-class.UITraitLayoutDirection.mutability = "MainThreadOnly"
-class.UITraitDisplayScale.mutability = "MainThreadOnly"
-class.UITraitHorizontalSizeClass.mutability = "MainThreadOnly"
-class.UITraitVerticalSizeClass.mutability = "MainThreadOnly"
-class.UITraitForceTouchCapability.mutability = "MainThreadOnly"
-class.UITraitPreferredContentSizeCategory.mutability = "MainThreadOnly"
-class.UITraitDisplayGamut.mutability = "MainThreadOnly"
-class.UITraitAccessibilityContrast.mutability = "MainThreadOnly"
-class.UITraitUserInterfaceLevel.mutability = "MainThreadOnly"
-class.UITraitLegibilityWeight.mutability = "MainThreadOnly"
-class.UITraitActiveAppearance.mutability = "MainThreadOnly"
-class.UITraitToolbarItemPresentationSize.mutability = "MainThreadOnly"
-class.UITraitImageDynamicRange.mutability = "MainThreadOnly"
-class.UITraitTypesettingLanguage.mutability = "MainThreadOnly"
-class.UITraitSceneCaptureState.mutability = "MainThreadOnly"
+class.UIDocumentBrowserTransitionController.main-thread-only = true
+class.UIDocumentInteractionController.main-thread-only = true
+class.UIToolTipInteraction.main-thread-only = true
+class.UIWindowSceneActivationInteraction.main-thread-only = true
+class.UITraitUserInterfaceIdiom.main-thread-only = true
+class.UITraitUserInterfaceStyle.main-thread-only = true
+class.UITraitLayoutDirection.main-thread-only = true
+class.UITraitDisplayScale.main-thread-only = true
+class.UITraitHorizontalSizeClass.main-thread-only = true
+class.UITraitVerticalSizeClass.main-thread-only = true
+class.UITraitForceTouchCapability.main-thread-only = true
+class.UITraitPreferredContentSizeCategory.main-thread-only = true
+class.UITraitDisplayGamut.main-thread-only = true
+class.UITraitAccessibilityContrast.main-thread-only = true
+class.UITraitUserInterfaceLevel.main-thread-only = true
+class.UITraitLegibilityWeight.main-thread-only = true
+class.UITraitActiveAppearance.main-thread-only = true
+class.UITraitToolbarItemPresentationSize.main-thread-only = true
+class.UITraitImageDynamicRange.main-thread-only = true
+class.UITraitTypesettingLanguage.main-thread-only = true
+class.UITraitSceneCaptureState.main-thread-only = true
+class.UITraitListEnvironment.main-thread-only = true
+class.UITraitSplitViewControllerLayoutEnvironment.main-thread-only = true
+class.UITraitHDRHeadroomUsageLimit.main-thread-only = true
+class.UITraitResolvesNaturalAlignmentWithBaseWritingDirection.main-thread-only = true
+
+# We don't really want objc2-ui-kit to depend on objc2-core-text
+class.NSAdaptiveImageGlyph.skipped-protocols = ["CTAdaptiveImageProviding"]
+
+# Needs `INPerson`
+protocol.UIActivityItemSource.methods."activityViewControllerShareRecipients:".skipped = true
+
+# Custom-defined.
+fn.UIApplicationMain.renamed = "__main"
+
+# TODO: Is it actually allowed to reset the view to NULL?
+class.UIViewController.methods."setView:".arguments.0.nullability = "nullable"
 
 ###
 ### Safety
 ###
-### Methods used in Winit, marked safe mostly for convenience there.
-###
 
-class.UIApplication.methods.windows.unsafe = false
-class.UIApplication.methods.sharedApplication.unsafe = false
-class.UIApplication.methods.statusBarFrame.unsafe = false
-protocol.UICoordinateSpace.methods."convertPoint:toCoordinateSpace:".unsafe = false
-protocol.UICoordinateSpace.methods."convertPoint:fromCoordinateSpace:".unsafe = false
-protocol.UICoordinateSpace.methods."convertRect:toCoordinateSpace:".unsafe = false
-protocol.UICoordinateSpace.methods."convertRect:fromCoordinateSpace:".unsafe = false
-protocol.UICoordinateSpace.methods.bounds.unsafe = false
-class.UIDevice.methods.currentDevice.unsafe = false
-class.UIDevice.methods.userInterfaceIdiom.unsafe = false
-class.UIGestureRecognizer.methods.delegate.unsafe = false
-class.UIGestureRecognizer.methods."setDelegate:".unsafe = false
-class.UIPanGestureRecognizer.methods.maximumNumberOfTouches.unsafe = false
-class.UIPanGestureRecognizer.methods."setMaximumNumberOfTouches:".unsafe = false
-class.UIPanGestureRecognizer.methods.minimumNumberOfTouches.unsafe = false
-class.UIPanGestureRecognizer.methods."setMinimumNumberOfTouches:".unsafe = false
-class.UIPanGestureRecognizer.methods."translationInView:".unsafe = false
-class.UIPanGestureRecognizer.methods."setTranslation:inView:".unsafe = false
-class.UIPanGestureRecognizer.methods."velocityInView:".unsafe = false
-class.UIPanGestureRecognizer.methods.allowedScrollTypesMask.unsafe = false
-class.UIPinchGestureRecognizer.methods.scale.unsafe = false
-class.UIPinchGestureRecognizer.methods.velocity.unsafe = false
-# UIResponder
-class.UIRotationGestureRecognizer.methods.rotation.unsafe = false
-class.UIRotationGestureRecognizer.methods.velocity.unsafe = false
-class.UITapGestureRecognizer.methods.buttonMaskRequired.unsafe = false
-class.UITapGestureRecognizer.methods."setButtonMaskRequired:".unsafe = false
-class.UITapGestureRecognizer.methods.numberOfTapsRequired.unsafe = false
-class.UITapGestureRecognizer.methods."setNumberOfTapsRequired:".unsafe = false
-class.UITapGestureRecognizer.methods.numberOfTouchesRequired.unsafe = false
-class.UITapGestureRecognizer.methods."setNumberOfTouchesRequired:".unsafe = false
-class.UIScreen.methods.mainScreen.unsafe = false
-class.UIScreen.methods.screens.unsafe = false
-class.UIScreen.methods.mirroredScreen.unsafe = false
-class.UIScreen.methods.nativeBounds.unsafe = false
-class.UIScreen.methods.nativeScale.unsafe = false
-class.UIScreen.methods.preferredMode.unsafe = false
-class.UIScreen.methods.maximumFramesPerSecond.unsafe = false
-class.UIScreen.methods.currentMode.unsafe = false
-class.UIScreen.methods.availableModes.unsafe = false
-class.UIScreen.methods."setCurrentMode:".unsafe = false
-class.UIScreen.methods.bounds.unsafe = false
-class.UIScreen.methods.scale.unsafe = false
-class.UIScreen.methods.overscanCompensation.unsafe = false
-class.UIScreen.methods."setOverscanCompensation:".unsafe = false
-class.UIScreen.methods.coordinateSpace.unsafe = false
+# UIKit's is huge, so I (madsmtm) have only skimmed it while reviewing.
+# It is surprisingly well-behaved though!
+#
+# (At least assuming we got the main thread safety stuff right above).
+unsafe-default-safety.documentation-is-reviewed = true
+# UIKit is bounds-checked and throw exceptions.
+unsafe-default-safety.bounds-checked-internally = true
+
+# TODO(breaking): Are these actually safe, even though they're nonatomic?
+# Maybe we need to mark the classes themselves as MainThreadOnly?
 class.UIScreenMode.methods.size.unsafe = false
 class.UITraitCollection.methods.forceTouchCapability.unsafe = false
-protocol.UITraitEnvironment.methods.traitCollection.unsafe = false
-class.UITouch.methods."locationInView:".unsafe = false
-class.UITouch.methods."previousLocationInView:".unsafe = false
-class.UITouch.methods.view.unsafe = false
-class.UITouch.methods.window.unsafe = false
-class.UITouch.methods.tapCount.unsafe = false
-class.UITouch.methods.timestamp.unsafe = false
-class.UITouch.methods.type.unsafe = false
-class.UITouch.methods.phase.unsafe = false
-class.UITouch.methods.force.unsafe = false
-class.UITouch.methods.maximumPossibleForce.unsafe = false
-class.UITouch.methods.altitudeAngle.unsafe = false
-class.UITouch.methods."azimuthAngleInView:".unsafe = false
-class.UITouch.methods."azimuthUnitVectorInView:".unsafe = false
-class.UITouch.methods.rollAngle.unsafe = false
-class.UIView.methods."initWithFrame:".unsafe = false
-class.UIView.methods.backgroundColor.unsafe = false
-class.UIView.methods."setBackgroundColor:".unsafe = false
-class.UIView.methods.layerClass.unsafe = false
-class.UIView.methods.layer.unsafe = false
-class.UIView.methods.frame.unsafe = false
-class.UIView.methods."setFrame:".unsafe = false
-class.UIView.methods.bounds.unsafe = false
-class.UIView.methods."setBounds:".unsafe = false
-class.UIView.methods.superview.unsafe = false
-class.UIView.methods.subviews.unsafe = false
-class.UIView.methods.window.unsafe = false
-class.UIView.methods.multipleTouchEnabled.unsafe = false
-class.UIView.methods."setMultipleTouchEnabled:".unsafe = false
-class.UIView.methods.contentScaleFactor.unsafe = false
-class.UIView.methods."setContentScaleFactor:".unsafe = false
-class.UIView.methods."addGestureRecognizer:".unsafe = false
-class.UIView.methods."removeGestureRecognizer:".unsafe = false
-class.UIView.methods.gestureRecognizers.unsafe = false
-class.UIView.methods."gestureRecognizerShouldBegin:".unsafe = false
-class.UIView.methods.isHidden.unsafe = false
-class.UIView.methods."setHidden:".unsafe = false
-class.UIView.methods.setNeedsDisplay.unsafe = false
-class.UIView.methods.safeAreaInsets.unsafe = false
-class.UIViewController.methods.attemptRotationToDeviceOrientation.unsafe = false
-class.UIViewController.methods.setNeedsStatusBarAppearanceUpdate.unsafe = false
-class.UIViewController.methods.setNeedsUpdateOfHomeIndicatorAutoHidden.unsafe = false
-class.UIViewController.methods.setNeedsUpdateOfScreenEdgesDeferringSystemGestures.unsafe = false
-class.UIViewController.methods.view.unsafe = false
-class.UIViewController.methods."setView:".unsafe = false
-class.UIWindow.methods.screen.unsafe = false
-class.UIWindow.methods."setScreen:".unsafe = false
-class.UIWindow.methods.rootViewController.unsafe = false
-class.UIWindow.methods."setRootViewController:".unsafe = false
-class.UIWindow.methods.makeKeyAndVisible.unsafe = false
-class.UIWindow.methods.isKeyWindow.unsafe = false
+
+# Breaks type-safety, you must check encodings before accessing a value.
+class.NSValue.unsafe = true
+
+# The documentation says:
+# > If the transform property is not the identity transform, the value of
+# > this property is undefined and therefore should be ignored.
+# But this not gonna lead to memory safety, so we mark it safe regardless.
+class.UIView.methods."frame".unsafe = false
+
+# TODO: Might be a soundness requirement that these are balanced?
+class.UIApplication.methods.extendStateRestoration.unsafe = true
+class.UIApplication.methods.completeStateRestoration.unsafe = true
+fn.UIGraphicsPushContext.unsafe = true
+fn.UIGraphicsPopContext.unsafe = true
+
+# Unlike for objc2-quartz-core, getting and modifying subviews is safe, since
+# all the methods that modify make sure to first remove the view from its
+# superview.
+
+# This is safe, but note that it's unsafe to override.
+class.UIPrintFormatter.methods.requiresMainThread.unsafe = false
+
+# Incorrectly overwritten, breaks type-safety.
+class.UIKeyCommand.methods.action.unsafe = true
+class.UICommand.methods.action.unsafe = true
+class.UICollectionView.methods."setDelegate:".unsafe = true
+class.UITableView.methods."setDelegate:".unsafe = true
+class.UIScrollView.methods."setDelegate:".unsafe = true
+class.UITextView.methods."setDelegate:".unsafe = true
+class.UIPageControlTimerProgress.methods."setDelegate:".unsafe = true
+class.UIPageControlProgress.methods."setDelegate:".unsafe = true
+class.UIVideoEditorController.methods."setDelegate:".unsafe = true
+class.UINavigationController.methods."setDelegate:".unsafe = true
+class.UISheetPresentationController.methods."setDelegate:".unsafe = true
+class.UIPopoverPresentationController.methods."setDelegate:".unsafe = true
+class.UIPresentationController.methods."setDelegate:".unsafe = true
+class.NSTextContentStorage.methods."setDelegate:".unsafe = true
+class.NSTextContentManager.methods."setDelegate:".unsafe = true
+class.UITargetedDragPreview.methods."retargetedPreviewWithTarget:".unsafe = true
+class.UITargetedPreview.methods."retargetedPreviewWithTarget:".unsafe = true
+class.UIPointerStyle.methods."styleWithEffect:shape:".unsafe = true
+class.UIHoverStyle.methods."styleWithEffect:shape:".unsafe = true

@@ -24,3 +24,14 @@ fn is_error_tests_any_value() {
 	is!("\"bad\" is error", false);
 	assert_eq!(eval("try { raise \"boom\" } catch e { e is error }").serialize(), "yes");
 }
+
+#[test]
+fn a_stored_error_fails_when_an_operation_runs_on_it() {
+	// card error-value-kind (notes/type_theory.md Stored errors): its type is any, not text, so nothing is refused while
+	// compiling and each operation raises the stored error itself when it runs
+	for operation in ["r - 1", "r * 2", "r#1", "for x in r { print(x) }"] {
+		crate::common::fails_with(&format!("r = error(\"bad value\"); {operation}"), "bad value");
+	}
+	is!("r = error(\"bad value\"); if 0 then r - 1 else 5", 5);
+	is!("r = error(\"bad value\"); type(r) == error", true);
+}

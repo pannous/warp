@@ -11,9 +11,8 @@ use std::collections::{BTreeMap, HashMap, HashSet};
 use super::map_backend::is_update;
 use crate::context::UserFunctionDef;
 
-/// Words that read a list without holding on to it
-const READING_WORDS: [&str; 15] = ["count", "len", "size", "length", "print", "put", "string", "text", "type", "has", "contains",
-	"join", "sum", crate::library_words::LIST_SUM, super::list_abi::RETURN];
+/// Words that read a list without holding on to it, besides those reading any collection (reads_collection)
+const LIST_READING_WORDS: [&str; 4] = ["join", "sum", crate::library_words::LIST_SUM, super::list_abi::RETURN];
 
 /// The variables `program` hands on as a whole Node: an argument of a function that changes that parameter (or of an
 /// imported one that `changes_arguments` may), an item of a list or map, a field value (not the program's final
@@ -93,7 +92,7 @@ impl<'n> Holders<'_, 'n> {
 }
 
 /// The calls that change the list they are given: what `xs.pop()`, `xs.insert(…)` and `xs.remove(v)` lower to
-const IN_PLACE_CALLS: [&str; 4] = [crate::analyzer::LIST_DROP_LAST, crate::analyzer::INSERT_AT_CALL, crate::analyzer::INSERT_EITHER_CALL,
+const IN_PLACE_CALLS: [&str; 5] = [crate::analyzer::LIST_DROP_LAST, crate::analyzer::LIST_BECOME, crate::analyzer::INSERT_AT_CALL, crate::analyzer::INSERT_EITHER_CALL,
 	crate::library_words::MAP_WITHOUT];
 
 /// `list_drop_last(xs)`, `list_insert_at(xs, i, v)`, `map_without(xs, v)`: a call that changes the list it is given
@@ -102,7 +101,7 @@ pub(super) fn changes_in_place(value: &Node) -> bool {
 }
 
 fn is_reading(word: &Node) -> bool {
-	matches!(word.drop_meta(), Node::Symbol(word) if READING_WORDS.contains(&word.as_str()))
+	matches!(word.drop_meta(), Node::Symbol(word) if super::reads_collection(word) || LIST_READING_WORDS.contains(&word.as_str()))
 }
 
 /// Does the function change the list its parameter `index` holds: an item set, an append, a method that changes it

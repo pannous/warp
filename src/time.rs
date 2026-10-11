@@ -1,14 +1,117 @@
-//! Dates and times (Footguns.md → Dates and time zones).
-//! The parser lexes RFC 3339 / RFC 9557 literals and `1 month` style durations into data nodes;
-//! programs that use them are evaluated here at compile time. A WASM GC representation is future work.
+//! Dates and times (Footguns.md → Dates and time zones, notes/dates_at_run_time.md).
+//! The parser lexes RFC 3339 / RFC 9557 literals and `1 month` style durations into data nodes. A program this
+//! evaluator answers whole is answered here at compile time; in any other its constant time expressions fold to
+//! `time_of(form, position)`, a Kind::Time node built when the program runs (wasm_emitter/times.rs), and `now` is
+//! `instant_at(clock())` (system_values).
 
 pub mod calendar;
 
 pub use calendar::{with_rules, Disambiguation, Duration, Overflow, Time, TzRules, Zone, Zoned};
 use crate::extensions::numbers::Number;
-use crate::node::{error, Node, Separator};
+use crate::node::{error, Bracket, Node, Separator};
 use crate::operators::Op;
+use crate::wasm_emitter::time_zones::{EARLIER, LATER, REJECT};
 use std::collections::HashMap;
+
+pub const NOW_WORD: &str = "now";
+/// instant_at(milliseconds since 1970): the instant node `now` is at run time
+pub const INSTANT_AT: &str = "instant_at";
+
+/// time_of(form, position): a time constant at run time, the TimeForm and the calendar::Time position
+pub const TIME_OF: &str = "time_of";
+/// time_in_zone(time, zone index, choice): `t in "Europe/Berlin"` of a time only the run knows
+pub use crate::wasm_emitter::time_zones::TIME_IN_ZONE;
+/// The one field of an instant that needs no time zone
+pub const EPOCH_SECONDS: &str = "epoch_seconds";
+
+/// The form of a run-time time node, in the info bits above Kind::Time; its $i64box holds the position: days since
+/// 1970 for a date, nanoseconds since 1970 for the others (a local time as if it were UTC), the exact nanoseconds of a
+/// duration. Above the form, a duration keeps its days and months, a zoned time its zone and offset (`time_info`)
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum TimeForm {
+	Instant = 0,
+	Date = 1,
+	Local = 2,
+	Duration = 3,
+	Zoned = 4,
+}
+pub const TIME_FORMS: [TimeForm; 5] = [TimeForm::Instant, TimeForm::Date, TimeForm::Local, TimeForm::Duration, TimeForm::Zoned];
+/// The info bits of the form
+pub const TIME_FORM_MASK: i64 = 7;
+pub const TIME_FORM_BITS: i64 = 3;
+/// A duration's months above its days, which take 32 bits
+pub const MONTHS_SHIFT: i64 = TIME_FORM_BITS + 32;
+/// A zoned time's index in calendar::ZONES, then its offset in minutes east of UTC
+pub const ZONE_INDEX_MASK: i64 = 0xff;
+pub const OFFSET_SHIFT: i64 = TIME_FORM_BITS + 8;
+
+impl TimeForm {
+	/// Why a time of this form has no field `name`, as the compile-time evaluator says it
+	pub fn refusal(self, name: &str) -> Option<String> {
+		let example = match self {
+			TimeForm::Instant => Time::Instant(0),
+			TimeForm::Date => Time::Date(calendar::civil_from_days(0)),
+			TimeForm::Local => {
+				let (date, clock) = calendar::from_wall_nanos(0);
+				Time::Local(date, clock)
+			}
+			TimeForm::Duration => return Duration::default().field(name).err(),
+			TimeForm::Zoned => Time::Zoned(Zoned::at(0, &calendar::ZONES[0])),
+		};
+		example.field(name).err()
+	}
+}
+
+/// The info bits and the position of a time or duration at run time (TimeForm)
+fn time_info(value: &Value) -> Option<(i64, i64)> {
+	match value {
+		Value::Time(Time::Instant(instant)) => Some((TimeForm::Instant as i64, *instant as i64)),
+		Value::Time(time @ Time::Date(_)) => Some((TimeForm::Date as i64, time.position() as i64)),
+		Value::Time(time @ Time::Local(..)) => Some((TimeForm::Local as i64, time.position() as i64)),
+		Value::Time(Time::Zoned(zoned)) => {
+			let index = calendar::ZONES.iter().position(|zone| zone.name == zoned.zone.name)? as i64;
+			Some((TimeForm::Zoned as i64 | index << TIME_FORM_BITS | (zoned.offset / calendar::MINUTE) << OFFSET_SHIFT, zoned.instant() as i64))
+		}
+		Value::Duration(duration) => {
+			let days = (duration.days as u32 as i64) << TIME_FORM_BITS;
+			Some((TimeForm::Duration as i64 | days | duration.months << MONTHS_SHIFT, duration.nanos as i64))
+		}
+		_ => None,
+	}
+}
+
+/// Seconds east of UTC in the environment's time zone at an instant: an instant's wall clock (the host word
+/// local_offset at run time). UTC without a host
+pub fn local_offset(instant: calendar::Instant) -> i64 {
+	#[cfg(feature = "native")]
+	return warp_runtime::system_signals::local_offset_at(instant.div_euclid(calendar::SECOND / 1000) as i64);
+	#[allow(unreachable_code)]
+	{
+		let _ = instant;
+		0
+	}
+}
+
+/// `now` or an instant constant: its fields need the host's local_offset (wasm_emitter/times.rs time_field)
+pub fn makes_instant(items: &[Node]) -> bool {
+	matches!(items.first(), Some(head) if head.is_symbol(INSTANT_AT)) || constant_form(items) == Some(TimeForm::Instant)
+}
+
+/// The form of a constant `time_of(info, position)`
+pub fn constant_form(items: &[Node]) -> Option<TimeForm> {
+	match items {
+		[head, info, _] if head.is_symbol(TIME_OF) => match info.drop_meta() {
+			Node::Number(Number::Int(info)) => form_of(*info),
+			_ => None,
+		},
+		_ => None,
+	}
+}
+
+/// `now` as the program reads it: the host's clock when it runs
+pub fn now_call() -> Node {
+	crate::lowering::nodes::call(INSTANT_AT, vec![crate::lowering::nodes::call(crate::host::CLOCK, vec![])])
+}
 
 /// A date or time literal as written; validated when evaluated, like `date(2024,2,30)`
 #[derive(Clone, Debug, PartialEq)]
@@ -32,15 +135,115 @@ enum Value {
 
 type Scope = HashMap<String, Value>;
 
-/// The value of a program that uses dates or times, None for any other program
-pub fn answer(program: &Node) -> Option<Node> {
-	if !mentions_time(program) {
-		return None;
+fn form_of(info: i64) -> Option<TimeForm> {
+	TIME_FORMS.into_iter().find(|form| *form as i64 == info & TIME_FORM_MASK)
+}
+
+/// A time read back from the run-time node (Kind::Time): its info bits (TimeForm) and position
+pub fn time_node(info: i64, position: Option<Number>) -> Node {
+	let Some(Number::Int(position)) = position else { return error("unreadable time") };
+	let position = position as i128;
+	match form_of(info) {
+		Some(TimeForm::Instant) => Node::data(Time::Instant(position)),
+		Some(TimeForm::Date) => Node::data(Time::Date(calendar::civil_from_days(position as i64))),
+		Some(TimeForm::Local) => {
+			let (date, clock) = calendar::from_wall_nanos(position);
+			Node::data(Time::Local(date, clock))
+		}
+		Some(TimeForm::Duration) => {
+			let days = (info >> TIME_FORM_BITS) as i32 as i64;
+			Node::data(Duration { months: info >> MONTHS_SHIFT, days, nanos: position })
+		}
+		Some(TimeForm::Zoned) => match calendar::ZONES.get(((info >> TIME_FORM_BITS) & ZONE_INDEX_MASK) as usize) {
+			Some(zone) => {
+				let offset = (info >> OFFSET_SHIFT) * calendar::MINUTE;
+				let (date, clock) = calendar::local_at(position, offset);
+				Node::data(Time::Zoned(Zoned { date, clock, offset, zone, rules: calendar::rules() }))
+			}
+			None => error("unreadable time zone"),
+		},
+		None => error("unreadable time"),
 	}
-	Some(match evaluate(program, &mut Scope::new()) {
-		Ok(value) => value.into_node(),
-		Err(message) => error(&message),
-	})
+}
+
+/// A zoned time's field: the version of the zone rules it was made with
+pub const TZDATA_FIELD: &str = "tzdata";
+
+/// A program that uses dates or times, its constant time expressions folded for the run time (stage B4: no
+/// program is answered whole at compile time any more)
+pub fn lower(program: Node) -> Node {
+	if !mentions_time(&program) || !needs_folding(&program) {
+		return program;
+	}
+	fold_constants(program)
+}
+
+/// The largest expressions of time literals and time words alone, folded: what remains runs
+fn fold_constants(node: Node) -> Node {
+	if mentions_time(&node) && only_time_words(&node) {
+		match evaluate(&node, &mut Scope::new()) {
+			// a quantity, `2 hours in minutes`: written as `120min` for the units' lowering
+			Ok(Value::Converted(quantity)) if !matches!(quantity, Node::Error(_)) => return crate::warp_parser::parse(&quantity.serialize()),
+			Ok(value) => return run_time_constant(value),
+			Err(message) if !message.starts_with(UNSUPPORTED) => return error(&message),
+			Err(_) => {}
+		}
+	}
+	match node {
+		Node::Data(_) if time_data(&node) => not_at_run_time_yet(&node.serialize()),
+		// `(t in "UTC").year`: the group around a placement is its call's own
+		Node::List(mut items, Bracket::Round, _) if items.len() == 1 && zone_placement(&items[0]).is_some() => fold_constants(items.remove(0)),
+		Node::List(..) if zone_placement(&node).is_some() => {
+			let (time, zone, choice) = zone_placement(&node).expect("guarded");
+			let number = |n: i64| Node::Number(Number::Int(n));
+			crate::lowering::nodes::call(TIME_IN_ZONE, vec![fold_constants(time), number(zone), number(choice)])
+		}
+		Node::Meta { node, data } => Node::Meta { node: Box::new(fold_constants(*node)), data },
+		other => other.map_children(fold_constants),
+	}
+}
+
+fn run_time_constant(value: Value) -> Node {
+	match time_info(&value) {
+		Some((info, position)) => {
+			let number = |n: i64| Node::Number(Number::Int(n));
+			crate::lowering::nodes::call(TIME_OF, vec![number(info), number(position)])
+		}
+		None if matches!(value, Value::Time(_) | Value::Duration(_)) => not_at_run_time_yet(&value.into_node().serialize()),
+		None => value.into_node(),
+	}
+}
+
+fn not_at_run_time_yet(written: &str) -> Node {
+	error(&format!("{written}: this time in a program that runs is not supported yet (card run-time-dates)"))
+}
+
+/// Words a constant time expression may hold: no variable, which only the run knows
+const TIME_WORDS: [&str; 12] = ["in", "as", "date", "add", "zoned", "overflow", "disambiguation", "clamp", "constrain", "reject", "earlier", "later"];
+
+fn is_time_word(word: &str) -> bool {
+	TIME_WORDS.contains(&word) || calendar::unit_named(word).is_some()
+}
+
+fn only_time_words(node: &Node) -> bool {
+	match node.drop_meta() {
+		Node::Symbol(word) => is_time_word(word),
+		// a field name: `2024-02-29.month`
+		Node::Key(owner, Op::Dot, field) if matches!(field.drop_meta(), Node::Symbol(_)) => only_time_words(owner),
+		Node::Key(left, _, right) => only_time_words(left) && only_time_words(right),
+		// a duration in a unit of the units module: `1 day in h`
+		Node::List(items, _, _) if converted_to_unit(items) => only_time_words(&items[0]),
+		Node::List(items, _, _) => items.iter().all(only_time_words),
+		Node::Number(_) | Node::Text(_) | Node::True | Node::False | Node::Data(_) => true,
+		_ => false,
+	}
+}
+
+fn converted_to_unit(items: &[Node]) -> bool {
+	match items {
+		[_, keyword, unit] => (keyword.is_symbol("in") || keyword.is_symbol("as")) && matches!(unit.drop_meta(), Node::Symbol(word) if crate::units::names_unit(word)),
+		_ => false,
+	}
 }
 
 fn time_data(node: &Node) -> bool {
@@ -50,19 +253,57 @@ fn time_data(node: &Node) -> bool {
 	}
 }
 
-fn is_symbol(node: &Node, name: &str) -> bool {
-	matches!(node.drop_meta(), Node::Symbol(symbol) if symbol == name)
+fn is_call_of(node: &Node, name: &str) -> bool {
+	matches!(node.drop_meta(), Node::List(items, _, _) if items.first().is_some_and(|head| head.is_symbol(name)))
+}
+
+/// What only this compile-time evaluator knows so far: literals, durations, `date(…)`, `t in "Europe/Berlin"`;
+/// a program with none of them reads `now` at run time
+fn needs_folding(node: &Node) -> bool {
+	let mut found = false;
+	node.visit(&mut |part| found |= time_data(part) || is_call_of(part, "date") || places_in_zone(part));
+	found
+}
+
+fn places_in_zone(node: &Node) -> bool {
+	zone_placement(node).is_some()
+}
+
+/// `t in "Europe/Berlin"` or `zoned(t, "Europe/Berlin", disambiguation: later)` of a named zone: the time, the zone's
+/// index in calendar::ZONES and the choice (wasm_emitter/time_zones.rs REJECT, EARLIER, LATER)
+fn zone_placement(node: &Node) -> Option<(Node, i64, i64)> {
+	let Node::List(items, _, separator) = node.drop_meta() else { return None };
+	let (time, zone, choices) = match items.as_slice() {
+		[time, keyword, zone] if keyword.is_symbol("in") => (time, zone, &[][..]),
+		[head, time, zone, choices @ ..] if *separator == Separator::None && head.is_symbol("zoned") => (time, zone, choices),
+		_ => return None,
+	};
+	let Node::Text(name) = zone.drop_meta() else { return None };
+	let index = calendar::ZONES.iter().position(|known| known.name == *name)?;
+	let choice = match choices {
+		[] => REJECT,
+		[option] => match option.drop_meta() {
+			Node::Key(key, Op::Colon, mode) if key.drop_meta().is_symbol("disambiguation") => match mode.drop_meta() {
+				Node::Symbol(mode) if mode == "earlier" => EARLIER,
+				Node::Symbol(mode) if mode == "later" => LATER,
+				Node::Symbol(mode) if mode == "reject" => REJECT,
+				_ => return None,
+			},
+			_ => return None,
+		},
+		_ => return None,
+	};
+	Some((time.clone(), index as i64, choice))
 }
 
 fn mentions_time(node: &Node) -> bool {
 	match node.drop_meta() {
-		Node::Symbol(name) => name == "now",
-		// a key or member named now (`{now: 5}`, `interface c { now: () -> i64 }`, `x.now`) is no read of the time
+		// a key or member name (`{date: 5}`, `x.date`) is no use of the time
 		Node::Key(key, Op::Colon, value) if matches!(key.drop_meta(), Node::Symbol(_)) => mentions_time(value),
 		Node::Key(owner, Op::Dot, field) if matches!(field.drop_meta(), Node::Symbol(_)) => mentions_time(owner),
 		Node::Key(left, _, right) => mentions_time(left) || mentions_time(right),
 		Node::List(items, _, _) => {
-			items.first().is_some_and(|head| is_symbol(head, "date")) || items.iter().any(mentions_time)
+			items.first().is_some_and(|head| head.is_symbol("date") || head.is_symbol(INSTANT_AT)) || items.iter().any(mentions_time)
 		}
 		other => time_data(other),
 	}
@@ -80,8 +321,11 @@ fn getter_name(head: &Node) -> Option<&str> {
 	}
 }
 
+/// The start of what the evaluator does not know: the run time takes those programs
+const UNSUPPORTED: &str = "not evaluated at compile time:";
+
 fn unsupported(node: &Node) -> String {
-	format!("dates and times are evaluated at compile time only; `{node}` is not supported with them yet")
+	format!("{UNSUPPORTED} `{node}`")
 }
 
 fn now() -> Time {
@@ -113,8 +357,9 @@ fn evaluate(node: &Node, scope: &mut Scope) -> Result<Value, String> {
 		Node::Symbol(name) => Ok(match scope.get(name) {
 			Some(Value::Getter(body)) => return evaluate(&body.clone(), scope),
 			Some(value) => value.clone(),
-			None if name == "now" => Value::Time(now()),
-			None => Value::Symbol(name.clone()),
+			None if is_time_word(name) => Value::Symbol(name.clone()),
+			// a variable this evaluator does not know: the run knows it
+			None => return Err(unsupported(node)),
 		}),
 		Node::Key(left, op, right) => binary(left, *op, right, scope),
 		Node::List(items, _, separator) => list(node, items, separator.clone(), scope),
@@ -125,11 +370,13 @@ fn evaluate(node: &Node, scope: &mut Scope) -> Result<Value, String> {
 
 fn list(node: &Node, items: &[Node], separator: Separator, scope: &mut Scope) -> Result<Value, String> {
 	match items {
+		[head, ..] if head.is_symbol(INSTANT_AT) => Ok(Value::Time(now())),
+		[head, ..] if head.is_symbol(TIME_OF) => Err(unsupported(node)),
 		[single] => evaluate(single, scope),
-		[time, keyword, zone] if is_symbol(keyword, "in") => place_in_zone(time, zone, scope),
-		[head, args @ ..] if separator == Separator::None && is_symbol(head, "date") => construct_date(args, scope),
-		[head, args @ ..] if separator == Separator::None && is_symbol(head, "add") => add(args, scope),
-		[head, args @ ..] if separator == Separator::None && is_symbol(head, "zoned") => zoned(args, scope),
+		[time, keyword, zone] if keyword.is_symbol("in") => place_in_zone(time, zone, scope),
+		[head, args @ ..] if separator == Separator::None && head.is_symbol("date") => construct_date(args, scope),
+		[head, args @ ..] if separator == Separator::None && head.is_symbol("add") => add(args, scope),
+		[head, args @ ..] if separator == Separator::None && head.is_symbol("zoned") => zoned(args, scope),
 		_ if matches!(separator, Separator::Semicolon | Separator::Newline) => {
 			let mut last = Err(unsupported(node));
 			for statement in items {
@@ -251,7 +498,9 @@ fn binary(left: &Node, op: Op, right: &Node, scope: &mut Scope) -> Result<Value,
 			};
 			match evaluate(left, scope)? {
 				// The time zone rules version a zoned time was resolved with
-				Value::Time(Time::Zoned(zoned)) if field == "tzdata" => Ok(Value::Text(zoned.rules.version.to_string())),
+				Value::Time(Time::Zoned(zoned)) if field == TZDATA_FIELD => Ok(Value::Text(zoned.rules.version.to_string())),
+				// the wall clock of an instant is the one where the program runs
+				Value::Time(Time::Instant(_)) if field != EPOCH_SECONDS => Err(unsupported(right)),
 				Value::Time(time) => time.field(field).map(Value::Int),
 				Value::Duration(duration) => duration.field(field).map(Value::Int),
 				other => Err(format!("{} has no field {field}", other.kind())),
@@ -292,7 +541,22 @@ fn apply(left: Value, op: Op, right: Value) -> Result<Value, String> {
 		(Value::Bool(a), Op::Eq, Value::Bool(b)) => Ok(Value::Bool(a == b)),
 		(Value::Bool(a), Op::Ne, Value::Bool(b)) => Ok(Value::Bool(a != b)),
 		(Value::Duration(duration), Op::As, Value::Symbol(unit)) => converted(&duration, &Node::Symbol(unit)),
+		// `"on " + 2024-02-29`: a text joins the other's text, as list_join does at run time
+		(left, Op::Add, right) if matches!(left, Value::Text(_)) || matches!(right, Value::Text(_)) => match (joined_text(&left), joined_text(&right)) {
+			(Some(left), Some(right)) => Ok(Value::Text(left + &right)),
+			_ => Err(format!("cannot apply + to a {} and a {}", left.kind(), right.kind())),
+		},
 		(left, op, right) => Err(format!("cannot apply {op} to a {} and a {}", left.kind(), right.kind())),
+	}
+}
+
+fn joined_text(value: &Value) -> Option<String> {
+	match value {
+		Value::Text(text) => Some(text.clone()),
+		Value::Time(time) => Some(time.to_string()),
+		Value::Duration(duration) => Some(duration.to_string()),
+		Value::Int(number) => Some(number.to_string()),
+		_ => None,
 	}
 }
 

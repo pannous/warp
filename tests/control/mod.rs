@@ -20,6 +20,7 @@ mod test_loop_forms;
 mod test_loops_in_functions;
 mod test_not_condition_block;
 mod test_error_branch_kind;
+mod test_error_value_return;
 mod test_filter_loops;
 mod test_type_word_filter_loops;
 mod test_structural_patterns;
@@ -27,6 +28,7 @@ mod test_switch_match;
 mod test_match_guards_and_finally;
 mod test_relational_arms;
 mod test_block_parameters;
+mod test_block_parameter_calls; // card repeats-loop
 mod test_charged_fields;
 mod test_object_blocks;
 mod test_object_functions;
@@ -104,9 +106,11 @@ mod test_catch_binding;
 mod test_filter_loop_over_variable;
 mod test_all_with_condition;
 mod test_go_blocks;
+mod test_task_globals; // card error-undefined
 mod test_shared_values;
 mod test_after;
 mod test_parallel_map;
+mod test_parallel_let; // card lower-parallel
 mod test_implicit_await;
 mod test_task_parameter_shadows;
 mod test_task_name_scope;
@@ -114,7 +118,9 @@ mod test_task_signals;
 mod test_empty_reset_in_if;
 mod test_signal_values;
 mod test_stored_signals;
+mod test_stored_default; // card stored-visits
 mod test_storage;
+mod test_store_values;
 mod test_undo_history;
 mod test_scoped_handlers;
 mod test_shared_signals;
@@ -155,12 +161,14 @@ mod test_database_relations; // card orm, step 4
 mod test_database_nested_add; // card orm-nested
 mod test_database_dangling_key; // card orm-dangling
 mod test_database_members_add; // cards orm-nested, orm-list-add
+#[cfg(feature = "native")] // its one test counts native database queries: not in the browser build
 mod test_database_members_query; // card orm, one-to-many as a query
 mod test_database_optional; // card orm-optional
 mod test_database_optional_units; // card unit-field
 mod test_database_units_everywhere; // card browser-unit
 mod test_database_short_names; // card orm-one-letter-column
 mod test_print_empty; // card print-error
+mod test_print_empty_map;
 mod test_database_bool_column; // card todo-app
 mod test_try_else_print; // card try-print
 mod test_database_busy; // card orm-sample-lock
@@ -169,10 +177,13 @@ mod test_table_remove; // card table-remove
 mod test_table_key_filter; // card table-key-filter
 mod test_table_transactions; // card orm step 5
 mod test_table_query_loading; // orm: a filter reads only its rows
+#[cfg(feature = "native")] // its one test counts the table rows read natively: not in the browser build
 mod test_table_comprehension; // orm: a filtered comprehension over a table is its query
 mod test_field_of_elements; // name of people with age > 20 (user 2026-10-10)
+mod test_list_without; // people without team (card people-where)
 mod test_table_linear_lookups; // card orm-linear
 mod test_table_method_reads;
 mod test_table_element_writes; // orm: people#1.age = 5 writes through
 mod test_unit_tasks; // card units-tasks
 mod test_task_char; // card task-char
+mod test_bare_try; // card failed-raised

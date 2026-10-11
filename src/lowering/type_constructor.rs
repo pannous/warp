@@ -2,7 +2,7 @@
 //! `P{x:1 y:2}` (glued, parsed as the key `P` Op::None `{…}`) constructs and validates one too, while `P:{…}` is plain
 //! data (D4): an instance is the data key marked `Instance`, emitted with its own op code, so it never equals the data.
 
-use super::nodes::key;
+use super::nodes::{children_rewritten, key};
 use crate::analyzer::{builtin_type_kind, call_name, collect_all_types, list_element_type, literal_misfit, misfit_item};
 use crate::diagnostic::Diagnostic;
 use crate::node::{symbol, Bracket, Node, Separator};
@@ -37,7 +37,24 @@ pub fn lower(node: Node) -> Node {
 	let mut registry = TypeRegistry::new();
 	collect_all_types(&mut registry, &node);
 	let constructors = defined_constructors(&node, &registry);
+	let node = conversion_calls(node.clone(), &node);
 	construct(node, &Classes { registry: &registry, constructors: &constructors, defaulting: Default::default() })
+}
+
+/// A built-in type called as a function converts as in Python (card types-constructor): `hex(123)` is `123 as hex`,
+/// unless the program names hex itself
+fn conversion_calls(node: Node, program: &Node) -> Node {
+	let node = children_rewritten(node, |child| conversion_calls(child, program));
+	match node.drop_meta() {
+		// braced `hex(255)` and braceless `byte 65` alike: one call shape (analyzer::applied_word)
+		Node::List(items, bracket, separator) => match crate::analyzer::applied_word(items, bracket, separator) {
+			Some((name, value)) if crate::wasm_emitter::is_called_conversion(name) && !crate::soft_keywords::program_names(program, name) => {
+				key(value.clone(), Op::As, items[0].clone())
+			}
+			_ => node,
+		},
+		_ => node,
+	}
 }
 
 /// The declared types and their `init{…}` / `init(name){…}` constructors (class_methods::constructor_name), each
@@ -143,9 +160,7 @@ fn construct(node: Node, classes: &Classes) -> Node {
 				None => Node::Key(name, Op::Colon, Box::new(Node::List(entries, Bracket::Curly, Separator::Space))),
 			}
 		}
-		Node::Key(left, op, right) => key(construct(*left, classes), op, construct(*right, classes)),
-		Node::Meta { node, data } => Node::Meta { node: Box::new(construct(*node, classes)), data },
-		other => other,
+		other => children_rewritten(other, |child| construct(child, classes)),
 	}
 }
 

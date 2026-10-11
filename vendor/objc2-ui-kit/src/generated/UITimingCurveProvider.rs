@@ -5,6 +5,7 @@ use objc2_foundation::*;
 
 use crate::*;
 
+/// [Apple's documentation](https://developer.apple.com/documentation/uikit/uitimingcurvetype?language=objc)
 // NS_ENUM
 #[repr(transparent)]
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
@@ -29,18 +30,20 @@ unsafe impl RefEncode for UITimingCurveType {
 }
 
 extern_protocol!(
-    pub unsafe trait UITimingCurveProvider: NSCoding + NSCopying + IsMainThreadOnly {
-        #[method(timingCurveType)]
-        unsafe fn timingCurveType(&self) -> UITimingCurveType;
+    /// [Apple's documentation](https://developer.apple.com/documentation/uikit/uitimingcurveprovider?language=objc)
+    pub unsafe trait UITimingCurveProvider: NSCoding + NSCopying + MainThreadOnly {
+        #[unsafe(method(timingCurveType))]
+        #[unsafe(method_family = none)]
+        fn timingCurveType(&self) -> UITimingCurveType;
 
         #[cfg(feature = "UITimingParameters")]
-        #[method_id(@__retain_semantics Other cubicTimingParameters)]
-        unsafe fn cubicTimingParameters(&self) -> Option<Retained<UICubicTimingParameters>>;
+        #[unsafe(method(cubicTimingParameters))]
+        #[unsafe(method_family = none)]
+        fn cubicTimingParameters(&self) -> Option<Retained<UICubicTimingParameters>>;
 
         #[cfg(feature = "UITimingParameters")]
-        #[method_id(@__retain_semantics Other springTimingParameters)]
-        unsafe fn springTimingParameters(&self) -> Option<Retained<UISpringTimingParameters>>;
+        #[unsafe(method(springTimingParameters))]
+        #[unsafe(method_family = none)]
+        fn springTimingParameters(&self) -> Option<Retained<UISpringTimingParameters>>;
     }
-
-    unsafe impl ProtocolType for dyn UITimingCurveProvider {}
 );

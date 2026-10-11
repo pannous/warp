@@ -38,9 +38,10 @@ const LOOP_WORDS: [&str; 4] = ["for", "while", "repeat", "loop"];
 const LOOP_SUBSCRIPTION_TOPIC: &str = "handler-in-loop";
 /// `emit alarm{level: 3}` runs the `on alarm` handlers and goes on; nobody listening, it does nothing (P163). `send`
 /// without `to` is the same; `raise` and `throw` are errors only
-const EMIT_WORDS: [&str; 2] = ["emit", "send"];
-/// Other systems' words for emit, working with a got-it note naming it (a program defining one of them keeps it)
-const EMIT_ALIASES: [&str; 3] = ["fire", "trigger", "signal"];
+pub(crate) const EMIT_WORDS: [&str; 2] = ["emit", "send"];
+/// Other systems' words for emit, working with a got-it note naming it (a program defining one of them keeps it);
+/// `ask` reads as asking a handler for a value: `net * (1 + ask tax_rate)` (card price-net)
+pub(crate) const EMIT_ALIASES: [&str; 4] = ["fire", "trigger", "signal", "ask"];
 const EMIT_TOPIC: &str = "emit-word";
 const UNHANDLED_TOPIC: &str = "unhandled-emit";
 const RAISE_WORDS: [&str; 2] = ["raise", "throw"];
@@ -277,7 +278,7 @@ fn subscriptions(node: Node, raised: &HashSet<String>, subscribed: &mut Vec<Stri
 		if in_loop {
 			let reason = format!("a handler in a loop subscribes once per pass: each emit {event} runs all of them; subscribe before the loop unless that is meant");
 			crate::normalize::set_position_of(&node);
-			crate::diagnostic::advise_once(LOOP_SUBSCRIPTION_TOPIC, &format!("on {event} {{…}}"), "on … before the loop", &reason);
+			crate::diagnostic::advise_once(LOOP_SUBSCRIPTION_TOPIC, &format!("on {event} {{…}}"), "on … before the loop", &reason, None);
 		}
 		let list = Node::Symbol(subscribers_name(&event));
 		let listener = key(symbol(EVENT_WORD), Op::FatArrow, body);
@@ -746,7 +747,7 @@ fn emits_as_calls(node: Node, handled: &HashMap<String, Vec<Node>>, verbs: &[Str
 				// P202: an emit no handler anywhere receives does nothing, with a got-it note
 				if !block_handled.contains(&name) {
 					crate::normalize::set_position_of(&node);
-					crate::diagnostic::advise_once(UNHANDLED_TOPIC, &format!("emit {name}"), &format!("on {name} {{…}}"), &format!("no handler for event {name}: this emit does nothing"));
+					crate::diagnostic::advise_once(UNHANDLED_TOPIC, &format!("emit {name}"), &format!("on {name} {{…}}"), &format!("no handler for event {name}: this emit does nothing"), None);
 				}
 				Node::Empty
 			}

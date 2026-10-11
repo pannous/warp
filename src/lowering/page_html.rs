@@ -15,7 +15,7 @@ pub const PAGE_HTML: &str = "page·html";
 pub const PAGE_RENDER: &str = "page·render";
 const TO_HTML: &str = "to_html";
 /// Words that start a statement, not a value to show
-const STATEMENT_WORDS: [&str; 5] = ["print", "puts", "use", "import", "return"];
+const STATEMENT_WORDS: [&str; 3] = ["print", "puts", "return"];
 
 /// A page uses lib/markup.warp (modules.rs brings it implicitly) and exports page·html := to_html(page·value()) and page·render(event) := to_html(event),
 /// before modules::resolve joins the used modules (it keeps the std definitions the program names)
@@ -65,7 +65,7 @@ fn defines(statement: &Node, name: &str) -> bool {
 fn is_shown(statement: &Node) -> bool {
 	match statement.drop_meta() {
 		Node::Key(_, op, _) => !matches!(op, Op::Assign | Op::Define) && !op.is_compound_assign(),
-		Node::List(items, _, _) => !matches!(items.first().map(Node::drop_meta), Some(Node::Symbol(word)) if STATEMENT_WORDS.contains(&word.as_str())),
+		Node::List(items, _, _) => !matches!(items.first().map(Node::drop_meta), Some(Node::Symbol(word)) if STATEMENT_WORDS.contains(&word.as_str()) || crate::modules::is_import_keyword(word)),
 		_ => true,
 	}
 }

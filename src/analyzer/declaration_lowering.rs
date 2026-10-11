@@ -1,7 +1,7 @@
 //! Lowering declarations and list forms: typed declarations, parameter copies, list mutation methods, typed arrays
 
 use super::*;
-use crate::lowering::nodes::call;
+use crate::lowering::nodes::{call, children_rewritten};
 
 /// `x:T = v` → `x = v` with T kept as metadata on x (see `declared_type`);
 /// the widening of an Int literal assigned to a float becomes an explicit Float literal, a codepoint assigned to a text a Text
@@ -38,10 +38,7 @@ pub(super) fn parameter_copies(node: Node, maps: &HashMap<(String, usize), bool>
 			}
 			Node::Key(head, op, Box::new(body))
 		}
-		Node::Key(left, op, right) => Node::Key(Box::new(parameter_copies(*left, maps)), op, Box::new(parameter_copies(*right, maps))),
-		Node::List(items, bracket, separator) => Node::List(items.into_iter().map(|item| parameter_copies(item, maps)).collect(), bracket, separator),
-		Node::Meta { node, data } => Node::Meta { node: Box::new(parameter_copies(*node, maps)), data },
-		other => other,
+		other => children_rewritten(other, |child| parameter_copies(child, maps)),
 	}
 }
 
@@ -214,10 +211,7 @@ pub(super) fn with_copy(body: Node, name: &str, suffix: &str) -> Node {
 pub(super) fn rename_symbol(node: Node, from: &str, to: &str) -> Node {
 	match node {
 		Node::Symbol(name) if name == from => Node::Symbol(to.to_string()),
-		Node::Key(left, op, right) => Node::Key(Box::new(rename_symbol(*left, from, to)), op, Box::new(rename_symbol(*right, from, to))),
-		Node::List(items, bracket, separator) => Node::List(items.into_iter().map(|item| rename_symbol(item, from, to)).collect(), bracket, separator),
-		Node::Meta { node, data } => Node::Meta { node: Box::new(rename_symbol(*node, from, to)), data },
-		other => other,
+		other => children_rewritten(other, |child| rename_symbol(child, from, to)),
 	}
 }
 
@@ -287,9 +281,9 @@ pub(super) fn lower_declarations_among(node: Node, names: &Names) -> Node {
 		Node::List(items, _, _) if let Some(count) = hashed_unit_count(&items) => lower(count),
 		Node::Key(empty, Op::Hash, counted) if matches!(empty.drop_meta(), Node::Empty) && let Some(count) = unit_count(&counted) => lower(count),
 		// `x : 100 int` and `x:int[100]` declare x as a zero-filled list of 100 ints
-		declaration if let Some((name, zeros)) = typed_array_declaration(&declaration) => Node::Key(Box::new(name), Op::Assign, Box::new(zeros)),
+		declaration if let Some((name, zeros)) = typed_array_declaration(&declaration, &names.values) => Node::Key(Box::new(name), Op::Assign, Box::new(zeros)),
 		// `letters = char[3]` and `upcases = 26 * char` are zero-filled typed arrays like `x : 100 int`
-		Node::Key(target, Op::Assign, value) if let Some(zeros) = typed_array_value(&value) => Node::Key(target, Op::Assign, Box::new(zeros)),
+		Node::Key(target, Op::Assign, value) if let Some(zeros) = typed_array_value(&value, &names.values) => Node::Key(target, Op::Assign, Box::new(zeros)),
 		// `x as number = 9` declares `x:number=9`
 		Node::Key(target, Op::Assign, value) if matches!(target.drop_meta(), Node::Key(name, Op::As, type_node)
 			if matches!(name.drop_meta(), Node::Symbol(_)) && is_declaration_type(type_node)) => {
@@ -361,20 +355,18 @@ pub(super) fn lower_declarations_among(node: Node, names: &Names) -> Node {
 		}
 		Node::Key(list, Op::Dot, call) if let Some(popped) = popped_list(&list, &call) => popped,
 		Node::Key(map, Op::Dot, call) if let Some(removal) = removed_key(&map, &call) => lower(removal),
+		Node::Key(collection, Op::Dot, call) if let Some(emptied) = cleared_collection(&collection, &call) => emptied,
 		// `int[n]`, `#(int[n])`: n zeros of the type, wherever it stands, unless the word is a variable (`chars[i]`)
 		Node::Key(element, Op::Hash, one_based) if let Some(zeros) = zero_filled_subscript(&element, &one_based, &names.values) => zeros,
 		// x² and x³ are x^2 and x^3 for emission; the parse keeps the suffix operators
 		Node::Key(base, op, _) if let Some(exponent) = op.suffix_exponent() => Node::Key(Box::new(lower(*base)), Op::Pow, Box::new(Node::int(exponent))),
-		Node::Key(left, op, right) => Node::Key(Box::new(lower(*left)), op, Box::new(lower(*right))),
 		// `const x=v` → `x=v`; check_constants already enforced the single assignment; `let x=v` and `var x=v` → `x=v`
 		Node::List(items, bracket, separator) if items.len() >= 2 && is_declaration_keyword(&items[0]) => {
 			let declaration = items.into_iter().skip(1).map(lower).collect::<Vec<_>>();
 			Node::single_or_list(declaration, bracket, separator)
 		}
 		Node::List(items, Bracket::None, _) if let Some((object, key)) = applied_object(&items) => lower(crate::warp_parser::subscript(object, key)),
-		Node::List(items, bracket, separator) => Node::List(items.into_iter().map(lower).collect(), bracket, separator),
-		Node::Meta { node, data } => Node::Meta { node: Box::new(lower(*node)), data },
-		other => other,
+		other => children_rewritten(other, lower),
 	}
 }
 
@@ -446,16 +438,27 @@ pub(super) fn applied_object(items: &[Node]) -> Option<(Node, Node)> {
 }
 
 /// Methods that append one element: `x.add(v)` is `x += [v]`, in place
-pub(super) const APPEND_METHODS: [&str; 4] = ["add", "append", "push", "insert"];
+const APPEND_METHODS: [&str; 4] = ["add", "append", "push", "insert"];
 pub(super) const POP_METHOD: &str = "pop";
 /// Pseudo-call `list_drop_last(xs)`: xs without its last item, in place (wasm_emitter list_ops emit_list_drop_last)
 pub const LIST_DROP_LAST: &str = "list_drop_last";
+/// Pseudo-call `list_become(xs, ys)`: xs takes the items of the fresh list ys in place, so every holder of xs sees them
+/// (`xs.pop(i)`, `xs.clear()`; wasm_emitter list_ops emit_list_become, card aliased-list)
+pub const LIST_BECOME: &str = "list_become";
 /// The list a pop template takes from, replaced by the variable or field popped
 const POP_PLACE: &str = "pop_place";
 pub const REMOVE_METHOD: &str = "remove";
+const DELETE_METHOD: &str = "delete";
 /// Pseudo-call `removed_value(collection, k)`: what `collection.remove(k)` gives, by the collection's kind: of a map the
 /// value of the key (P35, Python's dict.pop), of a list the list without the first element equal to k
 pub const REMOVED_VALUE_CALL: &str = "removed_value";
+/// lib/prelude.warp's `popped_item(x, k)` and `popped_rest(x, k)`: what Python's `xs.pop(i)` and `m.pop(k)` give and
+/// leave, the element at the 0-based position i of a list, the value of the key k of a map (card python-aliases)
+const POPPED_ITEM_CALL: &str = "popped_item";
+const POPPED_REST_CALL: &str = "popped_rest";
+/// Python's `xs.clear()` and `m.clear()`: the variable becomes lib/prelude.warp's `cleared(x)`, the empty list or map
+const CLEAR_METHOD: &str = "clear";
+const CLEARED_CALL: &str = "cleared";
 pub(super) const POP_TEMPORARY: &str = "pop_tmp";
 pub(super) const INSERT_METHOD: &str = "insert";
 
@@ -477,9 +480,19 @@ pub fn constant_field_name(key: &Node) -> Option<String> {
 	(!name.is_empty() && name.chars().all(|c| c.is_alphanumeric() || c == '_' || c == '-')).then_some(name)
 }
 
+/// `xs.add(v)`, `xs.append(v)`, `xs.push(a, b)`, `xs.insert(v)`: a call appending its arguments (`xs.insert(i, v)` inserts
+/// at a position); the one table every pass asks
+pub(crate) fn appends(method: &str, argument_count: usize) -> bool {
+	APPEND_METHODS.contains(&method) && (method != INSERT_METHOD || argument_count == 1)
+}
+
 /// Methods that change the list variable they are called on: `xs.add(v)`, `xs.insert(v, at:1)`, `xs.pop()`
 pub fn is_list_mutating_method(name: &str) -> bool {
-	APPEND_METHODS.contains(&name) || name == POP_METHOD || name == REMOVE_METHOD
+	APPEND_METHODS.contains(&name) || [POP_METHOD, REMOVE_METHOD, DELETE_METHOD, CLEAR_METHOD].contains(&name)
+}
+
+fn is_removal_method(name: &str) -> bool {
+	[REMOVE_METHOD, DELETE_METHOD].contains(&name)
 }
 
 /// A place a list update can assign: a variable `xs` or a field of one `p.items`, `self.stack.items` (by now the
@@ -521,23 +534,51 @@ pub(super) fn popped_list(list: &Node, call: &Node) -> Option<Node> {
 }
 
 /// `m.remove(k)` when m is a variable: the value of k, its entry removed from m (P35 default, Python's dict.pop); of a
-/// list variable the first element equal to k removed, and the list it gives (REMOVED_VALUE_CALL)
+/// list variable the first element equal to k removed, and the list it gives (REMOVED_VALUE_CALL). `delete` is the
+/// familiar alias for `remove`; `x.pop(k)` is Python's pop of a key or a 0-based position (POPPED_ITEM_CALL).
 pub(super) fn removed_key(map: &Node, call: &Node) -> Option<Node> {
 	let Node::Symbol(name) = map.drop_meta() else { return None };
 	let Node::List(items, _, _) = call.drop_meta() else { return None };
 	let [method, key] = items.as_slice() else { return None };
-	if !method.is_symbol(REMOVE_METHOD) {
-		return None;
-	}
-	let call = |word: &str, arguments: Vec<Node>| Node::List([vec![Node::Symbol(word.to_string())], arguments].concat(), Bracket::Round, Separator::None);
+	let method = method.symbol_name()?;
+	let (value_word, rest_word) = match method {
+		name if is_removal_method(name) => {
+			if name == DELETE_METHOD {
+				crate::diagnostic::note_alias(DELETE_METHOD, REMOVE_METHOD);
+			}
+			(REMOVED_VALUE_CALL, crate::library_words::MAP_WITHOUT)
+		}
+		POP_METHOD => (POPPED_ITEM_CALL, POPPED_REST_CALL),
+		_ => return None,
+	};
 	let removed = Node::Symbol(format!("{name}{TEMPORARY_SEPARATOR}removed"));
-	let value = call(REMOVED_VALUE_CALL, vec![map.clone(), key.clone()]);
-	let without = call(crate::library_words::MAP_WITHOUT, vec![map.clone(), key.clone()]);
+	let value = prelude_call(value_word, vec![map.clone(), key.clone()]);
+	let without = prelude_call(rest_word, vec![map.clone(), key.clone()]);
+	let without = if rest_word == POPPED_REST_CALL { became(map, without) } else { without };
 	Some(Node::List(vec![
 		Node::Key(Box::new(removed.clone()), Op::Assign, Box::new(value)),
 		Node::Key(Box::new(map.clone()), Op::Assign, Box::new(without)),
 		removed,
 	], Bracket::Round, Separator::Semicolon))
+}
+
+/// `x.clear()` when x is a variable: `x = cleared(x)`, emptied in place (CLEAR_METHOD)
+fn cleared_collection(collection: &Node, call: &Node) -> Option<Node> {
+	let Node::Symbol(_) = collection.drop_meta() else { return None };
+	let Node::List(items, _, _) = call.drop_meta() else { return None };
+	let [method] = items.as_slice() else { return None };
+	method.is_symbol(CLEAR_METHOD).then(|| Node::Key(Box::new(collection.clone()), Op::Assign, Box::new(became(collection, prelude_call(CLEARED_CALL, vec![collection.clone()])))))
+}
+
+/// `list_become(place, fresh)`: the place takes the fresh list's items in place (LIST_BECOME)
+fn became(place: &Node, fresh: Node) -> Node {
+	Node::List(vec![Node::Symbol(LIST_BECOME.to_string()), place.clone(), fresh], Bracket::Round, Separator::None)
+}
+
+/// A call of a prelude word written after library_words, which names them `prelude·word`, has run
+fn prelude_call(word: &str, arguments: Vec<Node>) -> Node {
+	let word = crate::modules::prelude_name(word).unwrap_or(word.to_string());
+	Node::List([vec![Node::Symbol(word)], arguments].concat(), Bracket::Round, Separator::None)
 }
 
 /// `xs.insert(a, b)` when xs is a variable. Warp writes `insert(value, position)`, Python `insert(position, value)`:
@@ -712,17 +753,6 @@ pub fn filled_list(count: Node, list: &Node) -> Option<Node> {
 	Some(call(ZERO_FILL_CALL, vec![count, element.clone()]))
 }
 
-/// The zero-filled list of the array type written `int[100]` (a 1-based subscript, see `subscript`)
-pub(super) fn subscripted_array_type(type_node: &Node) -> Option<Node> {
-	match type_node.drop_meta() {
-		Node::Key(element, Op::Hash, one_based) => match (element.drop_meta(), one_based.drop_meta()) {
-			(Node::Symbol(word), Node::Number(Number::Int(one_based))) => zero_list(Node::int(one_based - 1), word),
-			_ => None,
-		},
-		_ => None,
-	}
-}
-
 /// `int[n]` parsed as the subscript `int#(n+1)`: the list of n zeros when the type word is no variable
 pub(crate) fn zero_filled_subscript(element: &Node, one_based: &Node, variables: &HashSet<String>) -> Option<Node> {
 	let Node::Symbol(word) = element.drop_meta() else { return None };
@@ -736,15 +766,17 @@ pub(crate) fn zero_filled_subscript(element: &Node, one_based: &Node, variables:
 	zero_list(count, word)
 }
 
-/// `int[100]` or `100 * int`: the zero-filled list of that many elements (the parser reads `int[n]` as one already)
-pub(crate) fn typed_array_value(value: &Node) -> Option<Node> {
+/// `int[100]` or `100 * int`: the zero-filled list of that many elements (the parser reads `int[n]` as one already),
+/// unless the subscripted word is one of the variables (`chars=["a" "b"]; x=chars[1]` indexes)
+pub(crate) fn typed_array_value(value: &Node, variables: &HashSet<String>) -> Option<Node> {
 	match value.drop_meta() {
 		Node::List(items, _, _) if matches!(items.first().map(Node::drop_meta), Some(Node::Symbol(call)) if call == ZERO_FILL_CALL) => Some(value.clone()),
 		Node::Key(count, Op::Mul, element) => match element.drop_meta() {
 			Node::Symbol(word) => zero_list(count.as_ref().clone(), word),
 			_ => None,
 		},
-		other => subscripted_array_type(other),
+		Node::Key(element, Op::Hash, one_based) => zero_filled_subscript(element, one_based, variables),
+		_ => None,
 	}
 }
 
@@ -770,10 +802,10 @@ fn declared_bracketed_list_type(type_node: &Node) -> Option<Node> {
 }
 
 /// `x:int[100]` as the variable and its zero-filled list
-pub(super) fn typed_array_declaration(node: &Node) -> Option<(Node, Node)> {
+pub(super) fn typed_array_declaration(node: &Node, variables: &HashSet<String>) -> Option<(Node, Node)> {
 	let Node::Key(name, Op::Colon, type_node) = node.drop_meta() else { return None };
 	let Node::Symbol(_) = name.drop_meta() else { return None };
-	Some((name.drop_meta().clone(), typed_array_value(type_node)?))
+	Some((name.drop_meta().clone(), typed_array_value(type_node, variables)?))
 }
 
 /// `x : 100` followed by the element type `int`: the declaration `x = [0 … 0]`
@@ -800,7 +832,7 @@ pub(super) fn declared_type(target: &Node) -> Option<&Node> {
 	}
 }
 
-/// A builtin type written before a declaration: `int`, `string`, `float`, `real`, `fast` … (see `canonical_type_name`)
+/// A builtin type written before a declaration: `int`, `string`, `float`, `real`, `fast` … (type_tests BUILTIN_TYPES)
 pub(super) fn is_declaration_type(node: &Node) -> bool {
 	matches!(node.drop_meta(), Node::Symbol(name) if builtin_type_kind(name).is_some() || plural_element_type(name).is_some())
 }

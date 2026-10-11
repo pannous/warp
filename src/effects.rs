@@ -20,7 +20,6 @@ use Effect::*;
 const PURE: &str = "Pure";
 const ENTRY: &str = "main";
 const QUERY_WORDS: [&str; 2] = ["effects", "of"];
-const DECLARATION_KEYWORDS: [&str; 2] = ["import", "use"];
 const STATE_KEYWORD: &str = "global";
 
 /// Trusted effect signatures of the built-in host and WASI functions.
@@ -36,6 +35,7 @@ const TRUSTED_EXTERNALS: &[(&str, Capability, &[Effect])] = &[
 	("putl", Wasi, &[IO]),
 	("putf", Wasi, &[IO]),
 	("fd_write", Wasi, &[IO, Unsafe]),
+	("wasi_environment", Wasi, &[IO]),
 	("execute", Sql, &[IO]),
 	("exec", Process, &[IO]),
 	// the standard library's adapters (src/std_adapters.rs): std_pure's words are pure like libm's, std_io's do IO
@@ -892,7 +892,7 @@ fn leading_symbol(node: &Node) -> Option<String> {
 /// `import f from lib` / `use lib`
 fn is_declaration(node: &Node) -> bool {
 	match node.drop_meta() {
-		Node::List(items, _, _) => matches!(items.first().map(Node::drop_meta), Some(Node::Symbol(word)) if DECLARATION_KEYWORDS.contains(&word.as_str())),
+		Node::List(items, _, _) => matches!(items.first().map(Node::drop_meta), Some(Node::Symbol(word)) if crate::modules::is_import_keyword(word)),
 		_ => false,
 	}
 }

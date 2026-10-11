@@ -2,6 +2,8 @@ mod test_array_types;
 mod test_inline_unions;
 mod test_list_element_types;
 mod test_cast_bugs;
+mod test_unknown_conversion; // card unknown-word
+mod test_hex_int; // card hex-printing
 mod test_constructor_vs_data;
 mod test_data;
 mod test_generic_types;
@@ -24,6 +26,7 @@ mod test_generic_classes;
 mod test_class_properties;
 mod test_class_mixins;
 mod test_tagged_objects;
+mod test_symbolism_object; // card symbolism-object
 mod test_class_forms_ported;
 mod test_class_operators;
 mod test_returned_instances; // card units-dynamic
@@ -130,3 +133,16 @@ mod test_param_named_like_global; // card param-named-like-global
 mod test_runtime_text_ratio;
 mod test_method_result_text; // card instance-result
 mod test_typed_list_elements; // card typed-list-elements
+mod test_map_runtime_kind; // card map-runtime
+mod test_map_type_tests; // card map-answers
+mod test_filled_map_types; // card number-keyed
+mod test_instance_size; // card size-instance
+mod test_empty_named_key; // card object-empty-field
+mod test_dates_at_run_time; // card runtime-dates
+mod test_time_values_at_run_time; // card run-time-dates
+mod test_date_arithmetic_at_run_time; // card run-time-dates, stage B2
+mod test_time_zones_at_run_time; // card run-time-dates, stage B3
+mod test_time_programs_run; // card run-time-dates, stage B4
+mod test_list_test_of_a_map;
+mod test_type_calls; // card types-constructor
+mod test_hex_word; // hex x is hex(x), literals are 0x…

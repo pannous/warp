@@ -42,30 +42,27 @@ const post = message => warming || self.postMessage(message);
 const WARM_UP_CODE = 'p{ "" }';
 self.keepStored = (name, value, file) => post({ type: "stored", name, value, file }); // host-files.js STD_ADAPTERS.store
 self.writeClipboard = text => post({ type: "clipboard", text }); // host-files.js STD_ADAPTERS.clipboard
+self.askPageClipboard = shared => self.postMessage({ type: "clipboard read", shared }); // host.js clipboard_text
 // play's handles (lib/sound.warp, card sound-pro): the sounds and music files of a run counted from 1, as natively
 let soundHandles = 0;
 const nextSoundHandle = () => ++soundHandles;
 self.lastSoundHandle = () => soundHandles;
 self.playSoundFile = (url, bytes) => post({ type: "sound file", url, bytes, handle: nextSoundHandle() }); // host-files.js STD_ADAPTERS.sound: a worker has no <audio>
 self.keepFile = (path, bytes) => post({ type: "file", path, bytes }); // render_sound's WAV, for the page's download link
-self.stopSoundFiles = () => { soundsEnd = 0; post({ type: "stop sound files" }); };
+self.stopSoundFiles = () => { self.voiceStopped(); post({ type: "stop sound files" }); };
+self.sendMidi = (port, message) => post({ type: "midi", port, message }); // host-files.js STD_ADAPTERS.midi
 self.stopSound = handle => post({ type: "stop sound", handle }); // stop_sound(handle)
-// sound_queued() (lib/sound.warp, card sound-pro): the seconds the queued sounds still sound
-let soundsEnd = 0;
-const clockSeconds = () => performance.now() / 1000;
-self.soundsQueued = () => Math.max(0, soundsEnd - clockSeconds());
-// a worker has no AudioContext: the page plays it, queued behind the sounds before it as the clock here counts
-self.playSamples = (samples, rate) => {
-	soundsEnd = Math.max(soundsEnd, clockSeconds()) + samples.length / rate;
-	post({ type: "sound", samples, rate, handle: nextSoundHandle() });
-};
+// a worker has no AudioContext: the page plays it at its start on the shared clock (host-tasks.js voiceSounded); a
+// task's sound comes relayed with its own voice's start
+self.playSamples = sound => post({ type: "sound", ...sound, handle: nextSoundHandle() });
 const hooks = {
 	renders: true, // each outcome carries its HTML by the program's own renderer (host.js renderedHtml)
 	print: (text, stream) => post({ type: "print", text, stream }),
 	module: bytes => post({ type: "module", bytes }),
-	paint: (pixels, width, height) => post({ type: "paint", pixels, width, height }),
-	sound: (samples, rate) => self.playSamples(samples, rate),
-	sleeping: () => post({ type: "sleep" }),
+	paint: (pixels, width, height, canvas) => post({ type: "paint", pixels, width, height, canvas }),
+	gpuCanvas: ({ port, ...canvas }) => self.postMessage({ type: "gpu canvas", port, ...canvas }, [port]), // host-gpu.js gpuPainted
+	sound: sound => self.playSamples(sound),
+	sleeping: milliseconds => post({ type: "sleep", milliseconds }),
 	tasksInline: reason => post({ type: "tasks inline", reason }),
 	notify: text => post({ type: "notify", text }),
 	listen: (holder, events) => {
@@ -275,7 +272,7 @@ self.onmessage = async ({ data }) => {
 	stage("waiting for the compiler");
 	await ready;
 	stage("loading the database");
-	await globalThis.loadDatabase?.(); // host-files.js: `database[k]`'s values, once
+	await globalThis.loadKept?.(); // host-files.js: `database[k]`'s values and the written files, once
 	return inTurn(() => handleMessage(data));
 };
 

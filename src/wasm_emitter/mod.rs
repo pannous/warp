@@ -14,8 +14,10 @@ pub mod cells;
 mod closures;
 pub use closures::{CLOSURE_APPLY, CLOSURE_CAPTURED, CLOSURE_REBUILD};
 pub(crate) mod exact;
+pub(crate) mod hex;
 mod constructors;
 pub use constructors::NEW_BOOL;
+pub(crate) use casts::is_called_conversion;
 mod equality;
 mod function_builder;
 mod config;
@@ -33,6 +35,9 @@ mod library_ops;
 mod text_unicode;
 mod similarity;
 mod uncertain;
+pub(crate) mod times;
+mod time_arithmetic;
+pub(crate) mod time_zones;
 pub use similarity::NUMBERS_SIMILAR;
 pub(crate) mod list_ops;
 mod list_abi;
@@ -50,8 +55,9 @@ mod tuple_emitter;
 pub use try_guard::{ABORT_TO, CAUGHT_ERROR, RAN_WITHOUT_ABORT, RAN_WITHOUT_ERROR};
 mod witness;
 pub(crate) mod wasi_emitter;
+const WASI_START: &str = "_start";
 
-pub use big_int::{is_fixnum, EXACT_BUILDERS, INT_RUNTIME};
+pub use big_int::{is_fixnum, EXACT_ARITHMETIC, EXACT_BUILDERS, INT_RUNTIME};
 
 /// Something emission found it must have that the analysis pass did not request
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
@@ -86,6 +92,13 @@ const FIX_SEPARATOR: &str = "; fix: ";
 pub const CAPTURE_EXPORT_PREFIX: &str = "capture·";
 /// The WASI output words besides print: each gives an Int (analyzer)
 pub const OUTPUT_WORDS: [&str; 4] = ["puts", "puti", "putl", "putf"];
+/// Words that read a list or map without holding on to it, besides the counting words: `print m`, `type(xs)`, `m has k`
+const COLLECTION_READING_WORDS: [&str; 7] = ["print", "put", "string", "text", "type", "has", "contains"];
+
+/// `count(xs)`, `print m`, `xs has v`: a word given a collection variable reads it, the variable is not shared
+pub(super) fn reads_collection(word: &str) -> bool {
+	crate::analyzer::is_counting_word(word) || COLLECTION_READING_WORDS.contains(&word)
+}
 pub(crate) const OUTPUT_CALLS: [&str; 5] = ["print", OUTPUT_WORDS[0], OUTPUT_WORDS[1], OUTPUT_WORDS[2], OUTPUT_WORDS[3]];
 
 /// Builtins that round a float to an exact Int
@@ -231,7 +244,8 @@ pub struct WasmGcEmitter {
 	error_catching: Option<try_guard::ErrorCatching>, // the tag and globals of that `try`
 	abort_catching: Option<try_guard::AbortCatching>, // the tag of aborting effect handlers
 	memo_caches: HashMap<i64, (u32, u32)>, // per memoized function id: the globals of its values and known flags (memoization.rs)
-	extra_global_names: Vec<(u32, &'static str)>,
+	extra_global_names: Vec<(u32, String)>,
+	number_constants: HashMap<(num_bigint::BigInt, num_bigint::BigInt), u32>, // a big or fractional literal's global, made on first use (exact.rs)
 
 	// Configuration
 	config: EmitterConfig,
@@ -297,6 +311,8 @@ pub struct WasmGcEmitter {
 	closures: closures::ClosureTypes,
 	/// The user function whose body is being compiled; None in main
 	compiling: Option<String>,
+	/// The names the program's `for … in` loops and comprehensions bind: variables even beside a function of that name
+	loop_variables: HashSet<String>,
 }
 
 impl Default for WasmGcEmitter {
@@ -325,6 +341,7 @@ impl WasmGcEmitter {
 			abort_catching: None,
 			memo_caches: HashMap::new(),
 			extra_global_names: Vec::new(),
+			number_constants: HashMap::new(),
 			config: EmitterConfig::default(),
 			type_manager: TypeManager::new(),
 			import_manager: ImportManager::new(),
@@ -369,6 +386,7 @@ impl WasmGcEmitter {
 			compare_witness: None,
 			closures: closures::ClosureTypes::default(),
 			compiling: None,
+			loop_variables: HashSet::new(),
 		}
 	}
 
@@ -660,6 +678,7 @@ impl WasmGcEmitter {
 			node
 		};
 		self.config.emit_all_functions = false;
+		self.loop_variables = crate::lowering::for_loop::loop_variables(node).into_iter().collect();
 		// First pass: register all types (forward reference support)
 		collect_all_types(&mut self.ctx.type_registry, node);
 		// Analyze: Extract FFI imports, user functions, and required functions
@@ -673,6 +692,9 @@ impl WasmGcEmitter {
 		self.derive_imports_from_effects(node);
 		self.declares_list_types = declared_values::declares_list_types(node);
 		analyze_required_functions(&mut self.ctx, node);
+		if crate::analyzer::makes_floats(&self.ctx, node) {
+			self.ctx.required_functions.insert(float_text::FLOAT_TEXT);
+		}
 		self.ctx.required_functions.extend(self.discovered_needs.iter().filter_map(|need| match need {
 			Need::Function(name) => Some(*name),
 			Need::MathImport(_) | Need::KeyOperator(_) => None,
@@ -790,15 +812,15 @@ impl WasmGcEmitter {
 	}
 
 	/// A variable named like a function of the program is the variable: a parameter (`f(inc) := inc(3)`), and inside a
-	/// function its locals too (`angle = 0.5; cos(angle)` beside math's angle). main also holds a local for each
-	/// `sq := it * 2`, which is the function
+	/// function its locals too (`angle = 0.5; cos(angle)` beside math's angle), and a loop's variable in main (`[str f for f in xs]`).
+	/// main also holds a local for each `sq := it * 2`, which is the function
 	fn is_variable(&self, name: &str) -> bool {
-		self.scope.lookup(name).is_some_and(|local| local.is_param || self.compiling.is_some())
+		self.scope.lookup(name).is_some_and(|local| local.is_param || self.compiling.is_some() || self.loop_variables.contains(name))
 	}
 
 	/// A name that is no variable, global, function or `$n` parameter here
 	fn is_unbound(&self, name: &str) -> bool {
-		!name.starts_with('$') && self.scope.lookup(name).is_none() && !self.ctx.user_globals.contains_key(name) && !self.ctx.user_functions.contains_key(name)
+		!name.starts_with('$') && !crate::type_tests::is_type_word(name) && self.scope.lookup(name).is_none() && !self.ctx.user_globals.contains_key(name) && !self.ctx.user_functions.contains_key(name)
 	}
 
 	/// `x is 5` of a name defined nowhere: `is` compares (P61, user: "educate the user to use the be key word for
@@ -869,7 +891,9 @@ impl WasmGcEmitter {
 		let polls = effects.calls_external(crate::host::TASK_CONTROL);
 		// signal_poll likewise, by a program with `on interrupt {…}` or `on every … {…}`
 		let polls_signals = crate::analyzer::handles_system_signals(&self.ctx);
-		self.ctx.ffi_imports.retain(|name, _| effects.calls_external(name) || (polls && name == crate::host::TASK_POLL) || (polls_signals && name == crate::host::SIGNAL_POLL));
+		// local_offset by time_field, imported only by a program that makes an instant (analyzer extract_host_words)
+		let emitter_calls = |name: &str| (polls && name == crate::host::TASK_POLL) || (polls_signals && name == crate::host::SIGNAL_POLL) || name == crate::host::LOCAL_OFFSET;
+		self.ctx.ffi_imports.retain(|name, _| effects.calls_external(name) || emitter_calls(name));
 		for need in &self.discovered_needs {
 			if let Need::MathImport(key) = need {
 				let function = key.trim_start_matches("m.");
@@ -975,6 +999,9 @@ impl WasmGcEmitter {
 		self.emit_text_as_float();
 		self.emit_text_as_number(); // after text_as_float and text_as_int, which it calls
 		self.emit_uncertain_runtime(); // after text_as_float, which it calls
+		self.emit_times_runtime();
+		self.emit_time_zones();
+		self.emit_time_arithmetic();
 		if self.config.emit_reflection {
 			self.emit_reflection();
 		}
@@ -1069,14 +1096,18 @@ impl WasmGcEmitter {
 	/// f64 on the stack → exact Int, truncated toward zero: the explicit casts `as int` and `int(x)`, and the
 	/// rounding functions. There is no f64 → bignum path, so a NaN or a value beyond i64 fails cleanly.
 	fn emit_truncating_cast(&mut self, func: &mut Function) {
-		let value_bits = self.scratch(0);
+		self.emit_truncating_cast_via(func, self.scratch(0));
+	}
+
+	/// emit_truncating_cast through the i64 local `value_bits` (a runtime function has no scratch locals)
+	pub(super) fn emit_truncating_cast_via(&mut self, func: &mut Function, value_bits: u32) {
 		Self::emit_list(func, &[I::I64ReinterpretF64, I::LocalSet(value_bits)]);
 		Self::emit_list(func, &[
 			I::LocalGet(value_bits), I::F64ReinterpretI64, I::F64Abs, I::F64Const(I64_RANGE_LIMIT.into()), I::F64Lt, I::I32Eqz,
 		]);
 		self.emit_fail_if(func, "float_out_of_int_range");
 		Self::emit_list(func, &[I::LocalGet(value_bits), I::F64ReinterpretI64, I::I64TruncF64S]);
-		self.emit_int_from_machine(func);
+		self.emit_int_from_machine_in(func, value_bits);
 	}
 
 	/// A float has no implicit exact value: reading it as an Int is refused instead of truncated
@@ -1163,6 +1194,20 @@ impl WasmGcEmitter {
 		self.exports.export("main", ExportKind::Func, self.next_func_idx);
 		self.main_index = Some(self.next_func_idx);
 		self.next_func_idx += 1;
+		if crate::pipeline::is_for_wagi() {
+			self.emit_wagi_start();
+		}
+	}
+
+	/// `_start`: main without its value, the entry WASI commands and WAGI (`warp build --wagi`) call
+	fn emit_wagi_start(&mut self) {
+		let start_type = self.type_manager.function_type(vec![], vec![]);
+		self.functions.function(start_type);
+		let mut func = Function::new(vec![]);
+		Self::emit_list(&mut func, &[I::Call(self.main_index.expect("main before _start")), I::Drop, I::End]);
+		self.code.function(&func);
+		self.exports.export(WASI_START, ExportKind::Func, self.next_func_idx);
+		self.next_func_idx += 1;
 	}
 
 	fn collect_and_allocate_strings(&mut self, node: &Node) {
@@ -1184,6 +1229,10 @@ impl WasmGcEmitter {
 			func.instruction(&I::Unreachable);
 			return;
 		}
+		// a float the analyzer did not foresee (makes_floats) may be shown: rerun with float_text
+		if name == "new_float" && self.should_emit_function("list_join") && !self.should_emit_function(float_text::FLOAT_TEXT) {
+			self.discovered_needs.insert(Need::Function(float_text::FLOAT_TEXT));
+		}
 		self.ctx.used_functions.insert(name);
 		func.instruction(&I::Call(self.func_index(name)));
 	}
@@ -1199,6 +1248,9 @@ impl WasmGcEmitter {
 		// a comparison, `not`, a bool variable…: its Int 1/0 as the bool it is (card bool-type)
 		if !matches!(node.drop_meta(), Node::True | Node::False) && crate::analyzer::is_boolean(node, &self.scope) {
 			self.emit_call(func, constructors::AS_BOOL);
+		}
+		if self.shows_hex(node) {
+			self.emit_call(func, hex::AS_HEX);
 		}
 	}
 
@@ -1437,7 +1489,7 @@ impl WasmGcEmitter {
 				"kind_key", "kind_block", "kind_list", "kind_data", "kind_meta", "kind_error"];
 			let mut globals: Vec<(u32, &str)> = KIND_GLOBALS.iter().enumerate()
 				.filter(|(idx, _)| (*idx as u32) < self.ctx.kind_global_indices.len() as u32).map(|(idx, name)| (idx as u32, *name)).collect();
-			globals.extend(self.extra_global_names.iter().copied());
+			globals.extend(self.extra_global_names.iter().map(|(index, name)| (*index, name.as_str())));
 			self.names.globals(&name_map(&mut globals));
 		}
 

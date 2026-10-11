@@ -17,6 +17,9 @@ def strictRead (P : Program) : Ty → String → Bool
 /-- the checker takes `#` and `++` of a list or of a dynamic value (checked when it runs) -/
 def listy (t : Ty) : Bool := t == .any || (element t).isSome
 
+/-- `m[k]`: an instance read or written by a text key, a map's computed key (checked when it runs) -/
+def keyed (tl ti : Ty) : Bool := (match tl with | .cls _ => true | _ => false) && textual ti
+
 /-- what a call takes statically: a function, an error, or a dynamic value (checked when it runs) -/
 def callable : Ty → Bool
   | .fn _ | .never | .any => true
@@ -37,7 +40,7 @@ def evidentMisfit (v : Expr) (t : Ty) : Bool := v.isValue && !fits v t
 admits (`[1] as int` is refused) -/
 def convertible (te : Ty) : Ty → Bool
   | .text | .bool => true
-  | .int | .number => consub te .number || consub te .text
+  | .int | .exact | .number => consub te .number || consub te .text
   | t => consub te t
 
 /-- a quantity meets only its own dimensions (or a dynamic value, or an error): `1 m + 1 s`, `1 m == 1`, `1 m < "a"`
@@ -56,7 +59,10 @@ def measurable (t : Ty) : Bool := numeric t || t.isQuantity
 def typeOf (P : Program) (Γ : Ctx) : Expr → Option Ty
   | .bool _ => some .bool
   | .int _ => some .int
-  | .num _ => some .number
+  | .num _ => some .exact
+  | .flt _ => some .number
+  | .fail _ => some .any
+  | .failed e => (typeOf P Γ e).map fun _ => .bool
   | .qty _ d => some (.quantity d)
   | .text s => some (textTy s)
   | .unit => some .unit
@@ -94,7 +100,7 @@ def typeOf (P : Program) (Γ : Ctx) : Expr → Option Ty
     | _, _, _ => none
   | .loop c b d =>
     match typeOf P Γ c, typeOf P Γ b, typeOf P Γ d with
-    | some _, some tb, some td => some (join tb (join td .unit))
+    | some _, some tb, some td => some (join tb (join td .any))
     | _, _, _ => none
   | .seq a b =>
     match typeOf P Γ a, typeOf P Γ b with
@@ -103,7 +109,7 @@ def typeOf (P : Program) (Γ : Ctx) : Expr → Option Ty
   -- a number index is checked when it runs: `xs[n/2]`
   | .index l i =>
     match typeOf P Γ l, typeOf P Γ i with
-    | some tl, some ti => if listy tl || tl.isText then (if consub ti .number then some (elementTy tl) else none) else none
+    | some tl, some ti => if (listy tl || tl.isText) && consub ti .number || keyed tl ti then some (elementTy tl) else none
     | _, _ => none
   | .range a b =>
     match typeOf P Γ a, typeOf P Γ b with
@@ -134,6 +140,10 @@ def typeOf (P : Program) (Γ : Ctx) : Expr → Option Ty
     match typeOf P Γ e, typeOf P Γ h with
     | some te, some th => some (join te th)
     | _, _ => none
+  | .orElse a b =>
+    match typeOf P Γ a, typeOf P Γ b with
+    | some ta, some tb => some (join (strip ta) tb)
+    | _, _ => none
   | .cast e ts => (typeOf P Γ e).bind fun te => if ts.any (consub te) then some (joinAll ts) else none
   | .conv e t => (typeOf P Γ e).bind fun te => if convertible te t then some t else none
   | .broadcast f e =>
@@ -154,7 +164,8 @@ def typeOf (P : Program) (Γ : Ctx) : Expr → Option Ty
   | .setAt l i v =>
     match typeOf P Γ l, typeOf P Γ i, typeOf P Γ v with
     | some tl, some ti, some tv =>
-      if listy tl && consub ti .number && consub tv (listElem tl) && !evidentMisfit v (listElem tl) then some tv else none
+      if listy tl && consub ti .number && consub tv (listElem tl) && !evidentMisfit v (listElem tl) || keyed tl ti then some tv
+      else none
     | _, _, _ => none
   | .get e f => (typeOf P Γ e).bind fun te => if strictRead P te f then some (P.readTy te f) else none
   | .set e f v =>
@@ -168,13 +179,13 @@ def typeOf (P : Program) (Γ : Ctx) : Expr → Option Ty
     | _, _, _ => none
   | .emit ev e =>
     match P.effects ev, typeOf P Γ e with
-    | some R, some _ => some (join R .unit)
+    | some R, some _ => some (join R .any)
     | _, _ => none
   | .scope _ e => typeOf P Γ e
   | .abort ev _ e => (typeOf P Γ e).bind fun te => if sub te (P.aborts ev) then some .never else none
   | .forIn y l b d => (typeOf P Γ l).bind fun tl =>
     if listy tl || tl.isText then (typeOf P (Γ.set y (elementTy tl)) b).bind fun tb =>
-      (typeOf P Γ d).map fun td => join tb (join td .unit)
+      (typeOf P Γ d).map fun td => join tb (join td .any)
     else none
   | .lam y b => (typeOf P (Γ.set y .any) b).map .fn
   | .clo y b => (typeOf P (Ctx.empty.set y .any) b).map .fn
@@ -187,7 +198,7 @@ theorem typeOf_sound {P : Program} : ∀ {e : Expr} {Γ t}, typeOf P Γ e = some
   intro e
   induction e with
   | text s => intro Γ t h; simp [typeOf] at h; subst h; exact .ofText s
-  | bool | int | num | qty | unit | nil => intro Γ t h; simp [typeOf] at h; subst h; constructor
+  | bool | int | num | flt | qty | unit | nil | fail => intro Γ t h; simp [typeOf] at h; subst h; constructor
   | cons h tl ih1 ih2 =>
     intro Γ t hs; simp only [typeOf] at hs; split at hs
     · rename_i a l ha hl
@@ -242,9 +253,7 @@ theorem typeOf_sound {P : Program} : ∀ {e : Expr} {Γ t}, typeOf P Γ e = some
     intro Γ t h
     cases hl : typeOf P Γ l <;> cases hi : typeOf P Γ i <;> simp only [typeOf, hl, hi] at h <;> try cases h
     split at h
-    · split at h
-      · cases h; exact .index (ih1 hl) (ih2 hi)
-      · cases h
+    · cases h; exact .index (ih1 hl) (ih2 hi)
     · cases h
   | range a b ih1 ih2 =>
     intro Γ t h
@@ -286,6 +295,10 @@ theorem typeOf_sound {P : Program} : ∀ {e : Expr} {Γ t}, typeOf P Γ e = some
   | tryCatch e h' ih1 ih2 =>
     intro Γ t h; simp only [typeOf] at h; split at h
     · rename_i he hh; cases h; exact .tryCatch (ih1 he) (ih2 hh)
+    · cases h
+  | orElse a b ih1 ih2 =>
+    intro Γ t h; simp only [typeOf] at h; split at h
+    · rename_i ha hb; cases h; exact .orElse (ih1 ha) (ih2 hb)
     · cases h
   | cast e ts ih =>
     intro Γ t h; simp only [typeOf, Option.bind_eq_some_iff] at h
@@ -345,6 +358,10 @@ theorem typeOf_sound {P : Program} : ∀ {e : Expr} {Γ t}, typeOf P Γ e = some
     intro Γ t h; simp only [typeOf, Option.map_eq_some_iff] at h
     obtain ⟨_, he, rfl⟩ := h
     exact .isA (ih he)
+  | failed e ih =>
+    intro Γ t h; simp only [typeOf, Option.map_eq_some_iff] at h
+    obtain ⟨_, he, rfl⟩ := h
+    exact .failed (ih he)
   | handle ev h b ih1 ih2 =>
     intro Γ t hs
     cases hR : P.effects ev <;> cases hh : typeOf P (Γ.set eventLocal .any) h <;> cases hb : typeOf P Γ b <;>
@@ -541,11 +558,11 @@ def widen : Ty → Ty
 def valuesOf (x : String) : Expr → List Expr
   | .assign y e | .init y e => (if y = x then [e] else []) ++ valuesOf x e
   | .cons a b | .add a b | .arith _ a b | .lt a b | .eq _ a b | .seq a b | .index a b | .range a b | .append a b
-  | .tryCatch a b | .app a b => valuesOf x a ++ valuesOf x b
+  | .tryCatch a b | .orElse a b | .app a b => valuesOf x a ++ valuesOf x b
   | .ite c a b | .loop c a b | .forIn _ c a b => valuesOf x c ++ valuesOf x a ++ valuesOf x b
   | .letIn _ _ e b => valuesOf x e ++ valuesOf x b
   | .set a _ b => valuesOf x a ++ valuesOf x b
-  | .call _ e | .cast e _ | .conv e _ | .broadcast _ e | .get e _ | .isA e _ | .emit _ e | .scope _ e | .abort _ _ e => valuesOf x e
+  | .call _ e | .cast e _ | .conv e _ | .broadcast _ e | .get e _ | .isA e _ | .failed e | .emit _ e | .scope _ e | .abort _ _ e => valuesOf x e
   | .handle _ h b => valuesOf x h ++ valuesOf x b
   | .lam _ b => valuesOf x b
   | _ => []
@@ -578,11 +595,13 @@ def Expr.rewrite (P : Program) (f : Ctx → Expr → Expr) (Γ : Ctx) : Expr →
   | .init x e => f Γ (.init x (e.rewrite P f Γ))
   | .letIn y t e b => f Γ (.letIn y t (e.rewrite P f Γ) (b.rewrite P f (Γ.set y t)))
   | .tryCatch e h => f Γ (.tryCatch (e.rewrite P f Γ) (h.rewrite P f Γ))
+  | .orElse a b => f Γ (.orElse (a.rewrite P f Γ) (b.rewrite P f Γ))
   | .cast e ts => f Γ (.cast (e.rewrite P f Γ) ts)
   | .conv e t => f Γ (.conv (e.rewrite P f Γ) t)
   | .get e g => f Γ (.get (e.rewrite P f Γ) g)
   | .set e g v => f Γ (.set (e.rewrite P f Γ) g (v.rewrite P f Γ))
   | .isA e c => f Γ (.isA (e.rewrite P f Γ) c)
+  | .failed e => f Γ (.failed (e.rewrite P f Γ))
   | .handle ev h b => f Γ (.handle ev (h.rewrite P f (Γ.set eventLocal .any)) (b.rewrite P f Γ))
   | .emit ev e => f Γ (.emit ev (e.rewrite P f Γ))
   | .scope k e => f Γ (.scope k (e.rewrite P f Γ))
@@ -606,12 +625,13 @@ def resolveCalls (P : Program) : Ctx → Expr → Expr :=
     | e => e
 
 /-- gradual typing: a value of static type any given to a narrower name or parameter is checked when it runs
-(`level = event.level` is `level = cast event.level [int]`); warp admits these at compile time -/
+(`level = event.level` is `level = cast event.level [int]`), and so is an optional given to a place that takes no ø
+(`a: int? = 3; b: int = a`: warp unwraps it when it runs); warp admits these at compile time -/
 def castDynamicValues (P : Program) : Ctx → Expr → Expr :=
   Expr.rewrite P fun Γ e =>
     let checked (place : Option Ty) (v : Expr) (give : Expr → Expr) :=
       match place, typeOf P Γ v with
-      | some t, some .any => if t == .any then e else give (.cast v [t])
+      | some t, some tv => if (tv == .any || tv.isOptional) && !sub tv t then give (.cast v [t]) else e
       | _, _ => e
     match e with
     | .assign x v => checked ((P.names x).map (·.2)) v (.assign x)
@@ -690,9 +710,9 @@ def observe (P : Program) (Γ : Ctx) : Expr → List Observation
       | _, _ => []) ++ observe P Γ o ++ observe P Γ v
   | .letIn y t e b => observe P Γ e ++ observe P (Γ.set y t) b
   | .cons a b | .add a b | .arith _ a b | .lt a b | .eq _ a b | .seq a b | .index a b | .range a b | .append a b
-  | .tryCatch a b | .app a b => observe P Γ a ++ observe P Γ b
+  | .tryCatch a b | .orElse a b | .app a b => observe P Γ a ++ observe P Γ b
   | .ite c a b | .loop c a b => observe P Γ c ++ observe P Γ a ++ observe P Γ b
-  | .assign _ e | .init _ e | .cast e _ | .conv e _ | .broadcast _ e | .get e _ | .isA e _ | .emit _ e | .scope _ e => observe P Γ e
+  | .assign _ e | .init _ e | .cast e _ | .conv e _ | .broadcast _ e | .get e _ | .isA e _ | .failed e | .emit _ e | .scope _ e => observe P Γ e
   | .handle ev h b => observeHandler P Γ ev h ++ observe P Γ b
   | .abort ev _ e => ((typeOf P Γ e).getD .any |> Observation.abort ev) :: observe P Γ e
   | .forIn y l b d => observe P Γ l ++ observe P (Γ.set y (((typeOf P Γ l).map elementTy).getD .any)) b ++ observe P Γ d
@@ -791,9 +811,9 @@ def Expr.breaksIn (ev : Option String) : Expr → Bool
   | .lam _ b => b.breaksIn none
   | .letIn _ _ e b => e.breaksIn ev && b.breaksIn ev
   | .cons a b | .add a b | .arith _ a b | .lt a b | .eq _ a b | .seq a b | .index a b | .range a b | .append a b | .tryCatch a b
-  | .set a _ b | .app a b => a.breaksIn ev && b.breaksIn ev
+  | .orElse a b | .set a _ b | .app a b => a.breaksIn ev && b.breaksIn ev
   | .ite c a b => c.breaksIn ev && a.breaksIn ev && b.breaksIn ev
-  | .assign _ e | .init _ e | .call _ e | .cast e _ | .conv e _ | .broadcast _ e | .get e _ | .isA e _ | .emit _ e
+  | .assign _ e | .init _ e | .call _ e | .cast e _ | .conv e _ | .broadcast _ e | .get e _ | .isA e _ | .failed e | .emit _ e
   | .scope _ e => e.breaksIn ev
   | _ => true
 

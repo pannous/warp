@@ -1,0 +1,6 @@
+// timing probe of the parallel let (card lower-parallel): a tree of work, split in parallel at the top levels;
+// tree_sum_sequential.warp is the same tree with plain calls
+leaf(k) := { s = 0; for i in 1...30000000 { s = s + (i + k) % 7 }; s }
+tree(d, k) := { if d == 0 { return leaf(k) }; a b = tree(d - 1, 2 * k) tree(d - 1, 2 * k + 1); a + b }
+start = clock() % 1 // known only at run time: no compile-time evaluation
+print tree(4, start)

@@ -6,7 +6,7 @@
 //! - a lambda anywhere else is a closure (closures.rs); `map` over a value that is no function is the error `map needs a function, got …`
 
 use super::words::ON_WORD;
-use super::nodes::{call, children_rewritten, is_type_word, key, named_assignment};
+use super::nodes::{Counter, call, children_rewritten, is_type_word, key, named_assignment};
 use crate::analyzer::call_name;
 use crate::context::Context;
 use crate::diagnostic::Diagnostic;
@@ -14,7 +14,6 @@ use crate::library_words::substitute;
 use crate::node::{symbol, Bracket, Node, Separator};
 use crate::operators::Op;
 use crate::warp_parser::parse;
-use std::cell::Cell;
 
 pub const IMPLICIT_PARAMETER: &str = "it";
 const PARTIAL_LIST: &str = "partial_list";
@@ -114,7 +113,7 @@ fn lowering(node: Node, strict: bool) -> Node {
 	}
 	let context = crate::analyzer::function_context(&node);
 	let first_fresh = first_fresh_number(&node);
-	Lowering { context, counter: Cell::new(first_fresh), strict }.expand(node)
+	Lowering { context, counter: Counter::starting_at(first_fresh), strict }.expand(node)
 }
 
 /// `loop_item_1`, the variable of a loop inlined from a function: an `it` in its body is no loop item but the `it` of
@@ -187,12 +186,13 @@ pub(crate) fn it_function(node: &Node) -> Option<Node> {
 	(!is_bare && mentions_outside_blocks(node, IMPLICIT_PARAMETER)).then(|| Node::Key(it(), Op::FatArrow, Box::new(node.clone())))
 }
 
-/// `a > b`, also as the one statement of a block
+/// `a > b`, also as the one statement of a block, and any other bool: `a < b or a == b and c`, `if … then a < b else …`
+/// (card sort-comparator)
 fn is_comparison(body: &Node) -> bool {
 	match body.drop_meta() {
-		Node::Key(_, op, _) => COMPARISONS.contains(op),
+		Node::Key(_, op, _) if COMPARISONS.contains(op) => true,
 		Node::List(items, _, _) if items.len() == 1 => is_comparison(&items[0]),
-		_ => false,
+		_ => crate::analyzer::is_boolean(body, &crate::analyzer::Scope::new()),
 	}
 }
 
@@ -519,14 +519,13 @@ fn named_function_arguments(items: Vec<Node>, bracket: &Bracket) -> Vec<Node> {
 
 struct Lowering {
 	context: Context,
-	counter: Cell<usize>,
+	counter: Counter,
 	strict: bool,
 }
 
 impl Lowering {
 	fn fresh(&self, prefix: &str) -> String {
-		let number = self.counter.get();
-		self.counter.set(number + 1);
+		let number = self.counter.next_number();
 		format!("{prefix}_{number}")
 	}
 
@@ -554,7 +553,6 @@ impl Lowering {
 					None => key(receiver, Op::Dot, call(iteration.word, [extras, vec![function]].concat())),
 				}
 			}
-			Node::Key(left, op, right) => key(self.expand(*left), op, self.expand(*right)),
 			Node::List(items, bracket, separator) => {
 				let items = named_function_arguments(items, &bracket);
 				let items = flatten_prefix_application(items, &bracket, &separator);
@@ -575,8 +573,7 @@ impl Lowering {
 				let immediate = if bracket == Bracket::Square { None } else { self.immediate_call(&items) };
 				immediate.or_else(|| self.iteration_call(&items, &bracket, &separator)).unwrap_or(Node::List(items, bracket, separator))
 			}
-			Node::Meta { node, data } => Node::Meta { node: Box::new(self.expand(*node)), data },
-			other => other,
+			other => children_rewritten(other, |child| self.expand(child)),
 		}
 	}
 

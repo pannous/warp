@@ -31,6 +31,9 @@ const KEYS_WORD: &str = "keys";
 const EXPORTS_WORD: &str = "exports";
 /// The run-time choice of a class's names (Objects::dispatched)
 const DISPATCH_TEMPLATE: &str = "if RECEIVER is CLASS then NAMES else OTHERWISE";
+const DIR_OTHERWISE_TEMPLATE: &str = "if RECEIVER is map then RECEIVER.keys else OTHERWISE";
+/// A map's `dir` lists its keys, not the map module's words
+const MAP_WORD: &str = "map";
 pub(crate) const PARAMS_WORDS: [&str; 2] = ["params", "parameters"];
 const SIGNATURE_WORD: &str = "signature";
 /// `f.body`: the body as written, as data (card g_X_3s)
@@ -424,13 +427,13 @@ impl Objects {
 		if let Some(reflected) = self.module_member_word(subject, DIR_WORD) {
 			return Some(reflected);
 		}
-		// no class's instance at run time: a map's keys
-		let Some(name) = subject.symbol_name() else { return self.dispatched(subject, DIR_WORD, self.map_keys(subject)) };
+		// no class's instance at run time: a map's keys, else no names
+		let Some(name) = subject.symbol_name() else { return self.dispatched(subject, DIR_WORD, dir_otherwise(subject)) };
 		match (self.class_of(name), self.modules.get(name)) {
 			(Some(class), _) => self.listed(class, DIR_WORD).map(|names| text_list(&names)),
 			(None, Some(exports)) => Some(text_list(exports)),
 			(None, None) if self.maps.contains_key(name) => Some(self.map_keys(subject)),
-			(None, None) => self.dispatched(subject, DIR_WORD, self.map_keys(subject)),
+			(None, None) => self.dispatched(subject, DIR_WORD, dir_otherwise(subject)),
 		}
 	}
 
@@ -474,15 +477,47 @@ impl Objects {
 				true => written.clone(),
 				false => text_list(&self.listed(class, word).unwrap_or_default()),
 			};
-			let bindings = [("RECEIVER", subject.clone()), ("CLASS", Node::Symbol(class.clone())), ("NAMES", names), ("OTHERWISE", otherwise)];
-			let bindings = bindings.into_iter().map(|(placeholder, node)| (placeholder.to_string(), node)).collect();
-			crate::law::substitute(&crate::warp_parser::parse(DISPATCH_TEMPLATE), &bindings).drop_meta().clone()
+			type_dispatch(subject, class, names, otherwise)
 		}))
 	}
 
 	fn map_keys(&self, subject: &Node) -> Node {
 		key(subject.clone(), Op::Dot, symbol(KEYS_WORD))
 	}
+}
+
+/// `dir(x)` no earlier pass answered (no module, class, map, function or task it knows): a map's keys at run time, else
+/// no names, so `dir pi` answers instead of being "undefined: dir" (card error-undefined-dir)
+pub fn lower_unknown_dir(node: Node) -> Node {
+	if !node.mentions_any(&[DIR_WORD]) || crate::library_words::defined_names(&node).contains(DIR_WORD) {
+		return node;
+	}
+	answered_dir(node)
+}
+
+fn answered_dir(node: Node) -> Node {
+	match node.drop_meta() {
+		Node::List(items, Bracket::Round | Bracket::None, _) if items.len() == 2 && items[0].symbol_name() == Some(DIR_WORD) => dir_otherwise(&answered_dir(items[1].clone())),
+		_ => node.map_children(answered_dir),
+	}
+}
+
+/// `if subject is class then names else otherwise`
+fn type_dispatch(subject: &Node, class: &str, names: Node, otherwise: Node) -> Node {
+	substituted(DISPATCH_TEMPLATE, [("RECEIVER", subject.clone()), ("CLASS", Node::Symbol(class.to_string())), ("NAMES", names), ("OTHERWISE", otherwise)])
+}
+
+fn substituted<const N: usize>(template: &str, bindings: [(&str, Node); N]) -> Node {
+	let bindings = bindings.into_iter().map(|(placeholder, node)| (placeholder.to_string(), node)).collect();
+	crate::law::substitute(&crate::warp_parser::parse(template), &bindings).drop_meta().clone()
+}
+
+/// What `dir` lists of a value that is no instance of the program's classes: a map's keys, else its type's methods
+/// as Python's dir([1, 2]) does, the words of the module named after the type (`dir([1 2])` == `dir(list)`), else none
+fn dir_otherwise(subject: &Node) -> Node {
+	let methods = crate::modules::type_modules().into_iter().rev().filter(|(module, _)| *module != MAP_WORD)
+		.fold(text_list(&[]), |otherwise, (module, words)| type_dispatch(subject, module, text_list(words), otherwise));
+	substituted(DIR_OTHERWISE_TEMPLATE, [("RECEIVER", subject.clone()), ("OTHERWISE", methods)])
 }
 
 fn with_object_words(node: Node, objects: &Objects) -> Node {

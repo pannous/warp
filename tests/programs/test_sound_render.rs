@@ -28,7 +28,7 @@ fn wav_path(name: &str) -> std::path::PathBuf {
 #[test]
 fn sounds_render_into_one_wav_file() {
 	let path = wav_path("song");
-	let printed = run(&format!("play C4 for 0.1s\nmelody [C4 E4] each 0.05s\nround(render_sound(\"{}\") * 10)", path.display()));
+	let printed = run(&format!("use sound\nplay C4 for 0.1s\nmelody [C4 E4] each 0.05s\nround(render_sound(\"{}\") * 10)", path.display()));
 	assert!(printed.contains('2'), "{printed}");
 	let (rate, seconds) = rendered(&path);
 	assert_eq!(rate, SAMPLE_RATE);
@@ -38,7 +38,7 @@ fn sounds_render_into_one_wav_file() {
 #[test]
 fn a_render_takes_the_sounds_after_the_last_one() {
 	let (first, second) = (wav_path("first"), wav_path("second"));
-	run(&format!("play C4 for 0.2s\nrender_sound(\"{}\")\nplay E4 for 0.1s\nrender_sound(\"{}\")", first.display(), second.display()));
+	run(&format!("use sound\nplay C4 for 0.2s\nrender_sound(\"{}\")\nplay E4 for 0.1s\nrender_sound(\"{}\")", first.display(), second.display()));
 	assert!((rendered(&first).1 - 0.2).abs() < 0.001);
 	assert!((rendered(&second).1 - 0.1).abs() < 0.001);
 }

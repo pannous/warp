@@ -37,9 +37,9 @@ fn elvis_takes_the_left_unless_it_is_falsy() {
 }
 
 #[test]
-fn hex_word_reads_a_hexadecimal_number() {
-	is!("hex 1010", 4112);
-	is!("hex 1010 + 1", 4113);
+fn hex_word_is_the_hex_constructor_and_0x_the_literal() {
+	is!("hex 1010", 1010);
+	is!("hex 1010 + 1", 1011);
 	is!("0x1010", 4112);
 }
 

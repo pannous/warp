@@ -20,11 +20,16 @@ pub fn call(module: &str, member: &str, arguments: &Node) -> Result<Node, String
 	let failure = |problem: String| format!("{module}.{member}: {problem}");
 	let text_of = |node: &Node| text_value(node).ok_or_else(|| failure(format!("needs a text, got {}", node.serialize().trim())));
 	// what write puts into a file: a text as it is, any other value as warp writes it (`42`, `[1 2]`)
+	#[cfg(feature = "native")]
+	let number_of = |node: &Node| match node.drop_meta() {
+		Node::Number(number) => Ok(f64::from(*number)),
+		other => Err(failure(format!("needs a number, got {}", other.serialize().trim()))),
+	};
 	let content_of = |node: &Node| text_of(node).or_else(|_| Ok::<String, String>(node.serialize().trim().to_string()));
 	match (module, member, arguments.as_slice()) {
 		("json", "parse", [text]) => {
 			let text = text_of(text)?;
-			let parsed: serde_json::Value = serde_json::from_str(&text).map_err(|problem| failure(format!("{text:?} is no json: {problem}")))?;
+			let parsed: serde_json::Value = serde_json::from_str(&text).or_else(|_| serde_json::from_str(&crate::node::json_of_json5(&text))).map_err(|problem| failure(format!("{text:?} is no json: {problem}")))?;
 			Ok(crate::foreign::node_of(&parsed))
 		}
 		("json", "to_json", [value]) => Ok(Node::Text(crate::foreign::json_of(value).to_string())),
@@ -73,10 +78,25 @@ pub fn call(module: &str, member: &str, arguments: &Node) -> Result<Node, String
 		("clipboard", "write", [text]) => warp_runtime::system_values::write_clipboard(&text_of(text)?).map(|_| Node::Empty).map_err(failure),
 		("os", "env", [name]) => Ok(std::env::var(text_of(name)?).map_or(Node::Empty, Node::Text)),
 		("os", "args", []) => Ok(texts(PROGRAM_ARGUMENTS.with(|arguments| arguments.borrow().clone()))),
+		#[cfg(feature = "native")]
+		("os", "exec", [command]) => {
+			let arguments = command.as_items().iter().map(content_of).collect::<Result<Vec<_>, _>>()?;
+			executed(&arguments).map(Node::Text).map_err(failure)
+		}
 		// `stored theme = "dark"` (lowering/stored_values.rs): the value kept under its name, or the default
 		("store", "load", [name, default, file]) => {
 			let kept = stored_values(&text_of(file)?).map_err(failure)?.remove(&text_of(name)?);
 			Ok(kept.map_or_else(|| default.clone(), |value| crate::foreign::node_of(&value)))
+		}
+		// `stored theme default "dark"`: the default kept from the first run on, so the store lists it
+		("store", "declare", [name, default, file]) => {
+			let (name, file) = (text_of(name)?, text_of(file)?);
+			let mut values = stored_values(&file).map_err(failure)?;
+			if let Some(kept) = values.get(&name) {
+				return Ok(crate::foreign::node_of(kept));
+			}
+			values.insert(name, crate::foreign::json_of(default));
+			save_stored_values(&file, values).map(|_| default.clone()).map_err(failure)
 		}
 		("store", "save", [name, value, file]) => {
 			let file = text_of(file)?;
@@ -84,7 +104,7 @@ pub fn call(module: &str, member: &str, arguments: &Node) -> Result<Node, String
 			values.insert(text_of(name)?, crate::foreign::json_of(value));
 			save_stored_values(&file, values).map(|_| Node::Empty).map_err(failure)
 		}
-		// `delete storage[k]`, `keys(storage)` (lowering/stored_values.rs)
+		// `delete storage[k]`, `keys(storage)`, `storage` alone (lowering/stored_values.rs)
 		("store", "remove", [name, file]) => {
 			let file = text_of(file)?;
 			let mut values = stored_values(&file).map_err(failure)?;
@@ -106,12 +126,38 @@ pub fn call(module: &str, member: &str, arguments: &Node) -> Result<Node, String
 		#[cfg(feature = "native")]
 		("sound", "queued", []) => Ok(Node::float(crate::sound::queued_seconds())),
 		#[cfg(feature = "native")]
+		("sound", "at", [seconds]) => { crate::sound::at(number_of(seconds)?); Ok(Node::Empty) }
+		#[cfg(feature = "native")]
+		("sound", "at_end", []) => { crate::sound::at_end(); Ok(Node::Empty) }
+		#[cfg(feature = "native")]
 		("sound", "wait", []) => { crate::sound::wait(); Ok(Node::Empty) }
 		#[cfg(feature = "native")]
 		("sound", "render", [path]) => crate::sound::render(&text_of(path)?).map(Node::float).map_err(failure),
+		// MIDI (card midi-out, src/midi.rs): notes cross as flat whole numbers [start ms, key, length ms, velocity …]
+		#[cfg(feature = "native")]
+		("midi", "write_file", [path, notes]) => {
+			let encoded = crate::midi::encode(&whole_numbers(notes).map_err(failure)?).map_err(failure)?;
+			std::fs::write(text_of(path)?, encoded).map(|_| Node::Empty).map_err(|problem| failure(problem.to_string()))
+		}
+		#[cfg(feature = "native")]
+		("midi", "read_file", [path]) => {
+			let path = text_of(path)?;
+			let bytes = std::fs::read(&path).map_err(|problem| failure(format!("cannot read {path}: {problem}")))?;
+			crate::midi::decode(&bytes).map(|notes| Node::list(notes.into_iter().map(Node::int).collect())).map_err(failure)
+		}
+		#[cfg(feature = "native")]
+		("midi", "send", [port, message]) => {
+			let bytes = whole_numbers(message).map_err(failure)?.into_iter().map(|byte| u8::try_from(byte).map_err(|_| failure(format!("{byte} is no MIDI byte (0 to 255)")))).collect::<Result<Vec<_>, _>>()?;
+			crate::midi::send(&text_of(port)?, &bytes).map(|_| Node::Empty).map_err(failure)
+		}
+		#[cfg(feature = "native")]
+		("midi", "outputs", []) => crate::midi::outputs().map(texts).map_err(failure),
+		#[cfg(feature = "native")]
+		("midi", "receive", []) => crate::midi::receive().map(|_| Node::Empty).map_err(failure),
 		// the tables of registered classes (lowering/database_tables.rs)
 		#[cfg(feature = "native")]
 		("table", member, arguments) => crate::database::call(member, arguments).map_err(failure),
+		("store", "all", [file]) => Ok(crate::foreign::node_of(&serde_json::Value::Object(stored_values(&text_of(file)?).map_err(failure)?))),
 		("store", "names", [file]) => Ok(texts(stored_values(&text_of(file)?).map_err(failure)?.into_iter().map(|(name, _)| name))),
 		_ => Err(failure(format!("no such word of {} arguments", arguments.len()))),
 	}
@@ -168,6 +214,27 @@ fn save_stored_values(file: &str, values: StoredValues) -> Result<(), String> {
 }
 
 /// A list of texts
+/// The whole numbers of a list argument
+#[cfg(feature = "native")]
+/// What the command (program, arguments…) printed, run without a shell, its trailing newlines dropped as `$(…)` does;
+/// a command that fails is an error with what it printed to stderr
+#[cfg(feature = "native")]
+fn executed(command: &[String]) -> Result<String, String> {
+	let (program, arguments) = command.split_first().ok_or("needs a command")?;
+	let output = std::process::Command::new(program).args(arguments).stdin(std::process::Stdio::null()).output().map_err(|problem| format!("cannot run {program}: {problem}"))?;
+	if !output.status.success() {
+		return Err(format!("{} failed ({}): {}", command.join(" "), output.status, String::from_utf8_lossy(&output.stderr).trim()));
+	}
+	Ok(String::from_utf8_lossy(&output.stdout).trim_end_matches('\n').to_string())
+}
+
+fn whole_numbers(list: &Node) -> Result<Vec<i64>, String> {
+	list.as_items().iter().map(|item| match item.drop_meta() {
+		Node::Number(crate::extensions::numbers::Number::Int(value)) => Ok(*value),
+		other => Err(format!("needs whole numbers, got {}", other.serialize().trim())),
+	}).collect()
+}
+
 fn texts(items: impl IntoIterator<Item = String>) -> Node {
 	Node::List(items.into_iter().map(Node::Text).collect(), crate::node::Bracket::Square, crate::node::Separator::Space)
 }

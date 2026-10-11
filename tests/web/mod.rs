@@ -8,9 +8,17 @@ mod test_web_playground;
 #[cfg(feature = "native")] // runs node
 mod test_editor_shortcuts; // card keyboard-shortcuts
 #[cfg(feature = "native")] // runs node
+mod test_playground_paint; // card canvas-zero
+#[cfg(feature = "native")] // runs node
 mod test_assistant_edits; // card put-editor: the chat's code applied as edits
 #[cfg(feature = "native")] // runs node
+mod test_completion_terse; // card completion-terse: the gray continuation is code only
+#[cfg(feature = "native")] // runs node
+mod test_completion_words; // cards code-completion-should, completion-must
+#[cfg(feature = "native")] // runs node
 mod test_editor_mode; // card playground-editor
+#[cfg(feature = "native")] // runs node
+mod test_sleep_run_limit; // card sleep-run-limit
 #[cfg(feature = "native")] // runs python3
 mod test_keyword_registry; // card where-infix
 mod test_missing_use; // card clickable-hint
@@ -21,6 +29,7 @@ mod test_primer; // card language-primer: the assistant's system prompt, /llms.t
 mod test_web_server;
 #[cfg(feature = "native")] // `warp dev` serves HTTP on a port
 mod test_dev_server;
+mod test_task_voices; // card playground-go
 mod test_async_data; // the browser: a task Worker fetches into shared memory, read at the check points
 #[cfg(feature = "native")] // warp build --site writes files with the native compiler
 mod test_site;
@@ -61,6 +70,7 @@ mod test_accessibility;
 mod test_i18n;
 mod test_webgpu;
 mod test_webgpu_ints;
+mod test_webgpu_named; // card web-apis-rest
 mod test_gpu_auto; // card gpu-auto
 mod test_tag_lists;
 mod test_safari_imports;
@@ -94,5 +104,14 @@ mod test_server_route_paths; // cards server-path, route-star
 mod test_route_phrase_body; // card first-first
 mod test_sandboxed_programs; // card ferron-hosting
 mod test_page_rendered_sound; // card playground-refuses
+mod test_rendered_task_sounds; // card playground-drops
+mod test_rendered_at; // card sample-accurate
+mod test_rendered_pan; // card stereo-pan
 mod test_task_files; // card task-sound-play
 mod test_page_play_file; // card browser-play
+#[cfg(feature = "native")] // runs the WAGI module with wasmtime and WASI
+mod test_wagi; // card fermyon-hosting
+#[cfg(feature = "native")] // runs wrangler dev and node
+mod test_assistant_proxy; // card assistant-proxy
+#[cfg(all(feature = "native", target_os = "macos"))] // the system web view: macOS only for now
+mod test_webview; // card read-chron

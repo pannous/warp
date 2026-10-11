@@ -1,0 +1,13 @@
+d = 1 day
+print d
+m = 1 month + 2 days + 3 hours + 4 minutes + 5 seconds
+print m
+h = 90 minutes
+print "h: " + h
+z = 2024-01-31T10:00[Europe/Berlin]
+print z
+print z.hour
+print z.offset
+f = 2030-07-01T09:30:15[America/New_York]
+print f
+print f.year + " " + f.minute

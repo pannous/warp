@@ -206,7 +206,7 @@ fn test_cast_style_constructor() {
 #[test]
 fn test_variable_definition() {
 	expect_hint("let x = 5", "let x = 5", "x := 5", "1:1");
-	expect_hint("var x = 5", "var x = 5", "x := 5", "1:1");
+	expect_hint("var x = 5", "var x = 5", "x = 5", "1:1");
 	expect_no_hint("x := 5");
 	expect_no_hint("x = 5");
 }
@@ -215,7 +215,7 @@ fn test_variable_definition() {
 fn test_variable_definition_let_style() {
 	let style = Style { var_def: VarStyle::Let, ..Style::default() };
 	expect_styled_hint(style.clone(), "x := 5", "x := 5", "let x = 5", "1:1");
-	expect_styled_hint(style.clone(), "var x = 5", "var x = 5", "let x = 5", "1:1");
+	expect_styled_hint(style.clone(), "var x = 5", "var x = 5", "x = 5", "1:1");
 	expect_styled_no_hint(style, "let x = 5");
 }
 

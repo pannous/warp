@@ -42,6 +42,14 @@ Unbounded ints, exact fractions, `mod`, `^`; numbers carry units.
 x = 3; x += 1; x
 ```
 
+## Values that follow
+
+`=` copies once, `:=` recomputes like a spreadsheet cell, `whenever` reacts.
+
+```warp => [6 8]
+x = 3; y = x * 2; z := x * 2; x = 4; [y, z]
+```
+
 ## Truth
 
 Booleans are `yes` and `no`, with word operators `and`, `or`, `not`.
@@ -129,7 +137,7 @@ class Point { x: int y: int }; [type(3), "3" is text, "3" as int, Point{x: 1 y: 
 
 ## Data and storage
 
-`stored x = v` survives runs; `local[k]` (localStorage), `database.k` (IndexedDB / SQLite) are key-value stores;
+`stored x default v` (or `stored x = v`) survives runs; `local[k]` (localStorage), `database.k` (IndexedDB / SQLite) are key-value stores;
 `stored xs: [C]` is a table: `add` inserts, `where` queries (SQL natively), field writes go through.
 
 ```warp => "Bo"
@@ -150,14 +158,6 @@ Errors are values; `raise` makes one; ambiguous lines are questions, not guesses
 
 ```warp => 1.4142135623730951
 use math; sqrt 2
-```
-
-## Values that follow
-
-`=` copies once, `:=` recomputes like a spreadsheet cell, `whenever` reacts.
-
-```warp => [6 8]
-x = 3; y = x * 2; z := x * 2; x = 4; [y, z]
 ```
 
 ## Events and timers

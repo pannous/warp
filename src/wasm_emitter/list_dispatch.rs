@@ -465,6 +465,8 @@ impl WasmGcEmitter {
 		let mut declared_floats: HashSet<String> = HashSet::new();
 		// `row = grid#i`, `ys = p.xs`: a typed list read from a field or item, an array copy of a list others hold
 		let mut place_sourced: HashSet<String> = HashSet::new();
+		// `xs.pop()`, `xs.clear()`: a Node list changed in place, which a typed array would copy
+		let mut changed_in_place: HashSet<String> = HashSet::new();
 		program.visit(&mut |part| {
 			let Node::Key(target, op, value) = part else { return };
 			match target.drop_meta() {
@@ -478,6 +480,7 @@ impl WasmGcEmitter {
 					sources.entry(name.clone()).or_default().push(self.source_of(name, value));
 					if super::list_sharing::changes_in_place(value) {
 						updated.insert(name.clone());
+						changed_in_place.insert(name.clone());
 					}
 				}
 				Node::Symbol(name) if *op == Op::AddAssign && extended_items(value).is_some() => {
@@ -516,6 +519,8 @@ impl WasmGcEmitter {
 			}
 		}
 		let groups = alias_groups(&sources);
+		// `ys = xs; xs.pop()`: the aliases share the one Node list the change is made in (card aliased-list)
+		excluded.extend(changed_in_place.iter().filter_map(|name| groups.get(name)).filter(|group| group.len() > 1).flatten().cloned());
 		let group_updated = |name: &String| groups.get(name).is_some_and(|group| group.iter().any(|member| updated.contains(member)));
 		// a function of an imported warp module may change the Node it gets: the change is written back to it (wasm_modules.rs
 		// write_back), not to a typed array
@@ -1003,6 +1008,13 @@ impl WasmGcEmitter {
 		let Some((slot, list)) = self.typed_list(&Node::Symbol(name.to_string())) else { return false };
 		func.instruction(&slot.get());
 		self.emit_call(func, list.element.runtime().as_node);
+		true
+	}
+
+	/// The $IntList itself of a typed int list variable, as a host word reads it (list_to_ints); false for any other value
+	pub(super) fn emit_typed_int_list(&mut self, func: &mut Function, value: &Node) -> bool {
+		let Some((slot, _)) = self.typed_list(value).filter(|(_, list)| list.element == ElementType::Int) else { return false };
+		func.instruction(&slot.get());
 		true
 	}
 

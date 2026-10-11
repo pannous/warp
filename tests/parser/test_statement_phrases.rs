@@ -45,3 +45,18 @@ fn and_not_continues_the_condition_after_let() {
 	is!("a=1;b=0;c=0; let shown = if (a or b) and not c then 7 else 8; shown", 7);
 	is!("a=1;c=1; let shown = if a and not c then 7 else 8; shown", 8);
 }
+
+/// card if-then-chain: `and n mod 100 <= 13` continues the condition: a word followed by an infix word (mod, div,
+/// contains) is an operand, not a statement `n` with an argument
+#[test]
+fn and_before_an_infix_word_continues_the_condition() {
+	is!("def s(n) = if n mod 100 >= 11 and n mod 100 <= 13 then 1 else 2; s(12)", 1);
+	is!("def s(n) = n >= 11 and n div 2 <= 6; s(12)", true);
+	is!("def suffix(n) = if n mod 100 >= 11 and n mod 100 <= 13 then \"th\" else if n mod 10 == 1 then \"st\" else if n mod 10 == 2 then \"nd\" else if n mod 10 == 3 then \"rd\" else \"th\"
+out = \"\"
+for n in [1 2 3 4 11 12 13 21 22 101] {
+	if out.length > 0 { out += \" \" }
+	out += \"$(n)$(suffix(n))\"
+}
+out", "1st 2nd 3rd 4th 11th 12th 13th 21st 22nd 101st");
+}

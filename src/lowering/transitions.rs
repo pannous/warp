@@ -154,7 +154,8 @@ fn declarations(pairs: &[(&str, &str)]) -> Node {
 fn advise_css(spec: &str, css: &str, starting: &[(&str, &str)], kind: &str) {
 	let starting: Vec<String> = starting.iter().map(|(name, value)| if value.parse::<f64>().is_ok() { format!("{name}: {value}") } else { format!("{name}: \"{value}\"") }).collect();
 	let canonical = format!("transition: \"{css}\" starting-style: {{ {} }}", starting.join(" "));
-	crate::normalize::advise(&format!("transition: {spec}"), &canonical, &format!("{kind} is no CSS: a transition names CSS properties, the state an element enters from is its starting-style"));
+	let (written, reason) = (format!("transition: {spec}"), format!("{kind} is no CSS: a transition names CSS properties, the state an element enters from is its starting-style"));
+	crate::normalize::advise(&written, &canonical, &reason, Some(crate::normalize::rewrite(&written, &canonical, &reason)));
 }
 
 /// The CSS transition, the style at `at`, joins the element's own inline style when it has one: its declarations or text

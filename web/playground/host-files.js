@@ -13,8 +13,105 @@ const SAMPLE_OFFSET = 32768;
 const DEFAULT_SAMPLE_RATE = 22050;
 const WAV_HEADER_BYTES = 44;
 
-// the files std's file module wrote (texts) and render_sound rendered (bytes, a Uint8Array), kept while the page is
-// open: read and the file words see them before the served ones
+// MIDI (card midi-out, src/midi.rs, which says how notes cross): Standard MIDI Files, format 0, 480 ticks a quarter at 120 beats a minute
+const MIDI_TICKS_PER_QUARTER = 480;
+const MIDI_MICROSECONDS_PER_QUARTER = 500000;
+const MIDI_TICKS_PER_SECOND = MIDI_TICKS_PER_QUARTER * 1e6 / MIDI_MICROSECONDS_PER_QUARTER;
+const MIDI_NOTE_ON = 0x90;
+const MIDI_NOTE_OFF = 0x80;
+const MIDI_FIELDS = 4; // start ms, key, length ms, velocity
+const midiTicks = milliseconds => Math.round(Math.max(0, milliseconds) * MIDI_TICKS_PER_SECOND / 1000);
+const midiVariableLength = value => {
+	const groups = [value & 0x7f];
+	for (value >>= 7; value > 0; value >>= 7) groups.push(value & 0x7f | 0x80);
+	return groups.reverse();
+};
+const midiChunk = (kind, body) => {
+	const bytes = new Uint8Array(8 + body.length);
+	const view = new DataView(bytes.buffer);
+	[...kind].forEach((letter, i) => bytes[i] = letter.charCodeAt(0));
+	view.setUint32(4, body.length);
+	bytes.set(body, 8);
+	return bytes;
+};
+function midiFileOf(flat) {
+	if (flat.length % MIDI_FIELDS) throw new Error(`notes come as [start, key, length, velocity] four numbers each, got ${flat.length} numbers`);
+	const events = [];
+	for (let i = 0; i < flat.length; i += MIDI_FIELDS) {
+		const [start, key, length, velocity] = flat.slice(i, i + MIDI_FIELDS);
+		if (key < 0 || key > 127) throw new Error(`MIDI keys are 0 to 127, got ${key}`);
+		const on = midiTicks(start);
+		events.push([on, 1, [MIDI_NOTE_ON, key, Math.min(127, Math.max(1, velocity))]], [Math.max(on, midiTicks(start + length)), 0, [MIDI_NOTE_OFF, key, 0]]);
+	}
+	events.sort((a, b) => a[0] - b[0] || a[1] - b[1]);
+	const track = [0, 0xff, 0x51, 3, MIDI_MICROSECONDS_PER_QUARTER >> 16 & 255, MIDI_MICROSECONDS_PER_QUARTER >> 8 & 255, MIDI_MICROSECONDS_PER_QUARTER & 255];
+	let now = 0;
+	for (const [tick, , message] of events) {
+		track.push(...midiVariableLength(tick - now), ...message);
+		now = tick;
+	}
+	track.push(0, 0xff, 0x2f, 0);
+	const header = new Uint8Array([0, 0, 0, 1, MIDI_TICKS_PER_QUARTER >> 8, MIDI_TICKS_PER_QUARTER & 255]);
+	return Uint8Array.from([...midiChunk("MThd", header), ...midiChunk("MTrk", track)]);
+}
+function midiNotesOf(bytes) {
+	const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.length);
+	const ascii = at => String.fromCharCode(...bytes.slice(at, at + 4));
+	if (ascii(0) !== "MThd") throw new Error("not a MIDI file (it does not start with MThd)");
+	const tracks = view.getUint16(10), division = view.getUint16(12);
+	if (division & 0x8000) throw new Error("MIDI files timed in SMPTE frames are not supported, only ticks per quarter note");
+	const tempi = [[0, MIDI_MICROSECONDS_PER_QUARTER]], messages = [];
+	let at = 8 + view.getUint32(4);
+	for (let t = 0; t < tracks; t++) {
+		const end = at + 8 + view.getUint32(at + 4), kind = ascii(at);
+		at += 8;
+		if (kind !== "MTrk") { at = end; continue; }
+		const ended = () => { throw new Error("the file ends inside an event"); };
+		const byte = () => at < end ? bytes[at++] : ended();
+		const length = () => { let value = 0; for (let i = 0; i < 4; i++) { const b = byte(); value = value << 7 | b & 0x7f; if (!(b & 0x80)) return value; } throw new Error("a delay is longer than four bytes"); };
+		let tick = 0, status = 0;
+		while (at < end) {
+			tick += length();
+			const first = byte();
+			if (first & 0x80) status = first; else at--;
+			if (status === 0xff) {
+				const type = byte(), size = length(), data = bytes.slice(at, at += size);
+				if (type === 0x51 && size === 3) tempi.push([tick, data[0] << 16 | data[1] << 8 | data[2]]);
+			} else if (status === 0xf0 || status === 0xf7) at += length();
+			else {
+				const kind = status & 0xf0, channel = status & 15, one = byte();
+				const two = kind === 0xc0 || kind === 0xd0 ? 0 : byte();
+				if (kind === MIDI_NOTE_ON) messages.push([tick, two > 0, channel, one, two]);
+				else if (kind === MIDI_NOTE_OFF) messages.push([tick, false, channel, one, 0]);
+			}
+		}
+		at = end;
+	}
+	tempi.sort((a, b) => a[0] - b[0]);
+	const milliseconds = tick => {
+		let seconds = 0, from = 0, tempo = MIDI_MICROSECONDS_PER_QUARTER;
+		for (const [when, next] of tempi) {
+			if (when >= tick) break;
+			seconds += (when - from) * tempo / 1e6 / division;
+			[from, tempo] = [when, next];
+		}
+		return Math.round((seconds + (tick - from) * tempo / 1e6 / division) * 1000);
+	};
+	messages.sort((a, b) => a[0] - b[0]);
+	const sounding = [], notes = [];
+	for (const [tick, on, channel, key, velocity] of messages) {
+		if (on) { sounding.push([tick, channel, key, velocity]); continue; }
+		const index = sounding.findIndex(([, c, k]) => c === channel && k === key);
+		if (index < 0) continue;
+		const [start, , , started] = sounding.splice(index, 1)[0];
+		notes.push([milliseconds(start), key, milliseconds(tick) - milliseconds(start), started]);
+	}
+	return notes.sort((a, b) => a[0] - b[0] || a[1] - b[1]).flat();
+}
+const wholeNumbers = list => Array.from(list, Number);
+
+// the files std's file module wrote (texts) and render_sound rendered (bytes, a Uint8Array): read and the file words see
+// them before the served ones. A page keeps them in IndexedDB (keepWrittenFile), so they are still there after a reload
 const writtenFiles = new Map();
 const filePath = path => path.replace(/^\.\//, "");
 const textOf = written => typeof written === "string" ? written : utf8Decoder.decode(written);
@@ -26,6 +123,7 @@ self.takeWrittenFiles = files => files?.forEach((content, path) => writtenFiles.
 // a file written (a text) or rendered (bytes, which the page offers for download: worker.js self.keepFile)
 function keepWritten(path, content) {
 	writtenFiles.set(filePath(path), content);
+	keepWrittenFile(filePath(path), content);
 	if (typeof content !== "string") self.keepFile?.(filePath(path), content);
 	self.taskWrote?.(path, content);
 }
@@ -135,10 +233,11 @@ function hostBytes(program, action, what) {
 }
 
 // `database[k]`: the store of any file ending so (src/lowering/stored_values.rs DATABASE_STORE), kept in IndexedDB, which
-// Workers have too; its values are read before the program runs (loadDatabase: worker.js, site-worker.js, site.js) and
+// Workers have too; its values are read before the program runs (loadKept: worker.js, site-worker.js, site.js) and
 // each change written back where the host keeps values (self.keepStored; the browser test suite keeps them in memory)
 const DATABASE_STORE = "database.json";
-const DATABASE = { name: "warp", version: 1, objects: "values" }; // the IndexedDB database and its object store
+// the IndexedDB database, its object store of values and that of the files a program wrote (card files-written)
+const DATABASE = { name: "warp", version: 2, objects: "values", files: "files" };
 const databaseValues = {};
 const isDatabase = file => file.endsWith(DATABASE_STORE);
 let databaseLoaded;
@@ -146,12 +245,13 @@ let databaseLoaded;
 // the values of a store: the session's (markup.js SESSION_STORE), the database's, else the program's
 const valuesOf = file => file === "warp-session" ? sessionValues : isDatabase(file) ? databaseValues : storedValues;
 
-// the IndexedDB object store of `database[k]` in a transaction of `mode`
-function databaseObjects(mode) {
+// an IndexedDB object store (that of `database[k]`, else of the written files) in a transaction of `mode`
+function databaseObjects(mode, store = DATABASE.objects) {
 	return new Promise((resolve, reject) => {
 		const opening = indexedDB.open(DATABASE.name, DATABASE.version);
-		opening.onupgradeneeded = () => opening.result.createObjectStore(DATABASE.objects);
-		opening.onsuccess = () => resolve(opening.result.transaction(DATABASE.objects, mode).objectStore(DATABASE.objects));
+		opening.onupgradeneeded = () => [DATABASE.objects, DATABASE.files].filter(name => !opening.result.objectStoreNames.contains(name))
+			.forEach(name => opening.result.createObjectStore(name));
+		opening.onsuccess = () => resolve(opening.result.transaction(store, mode).objectStore(store));
 		opening.onerror = () => reject(opening.error);
 	});
 }
@@ -161,12 +261,29 @@ const requested = request => new Promise((resolve, reject) => {
 	request.onerror = () => reject(request.error);
 });
 
-// databaseValues from IndexedDB, once; none when it fails (loudly on the console)
-function loadDatabase() {
-	return databaseLoaded ??= databaseObjects("readonly")
-		.then(objects => Promise.all([requested(objects.getAllKeys()), requested(objects.getAll())]))
-		.then(([names, values]) => names.forEach((name, index) => takeDatabaseValue(name, values[index])))
-		.catch(failure => console.error("database values could not be read:", failure));
+// every entry of an IndexedDB object store, as [key, value]
+const keptEntries = store => databaseObjects("readonly", store)
+	.then(objects => Promise.all([requested(objects.getAllKeys()), requested(objects.getAll())]))
+	.then(([keys, values]) => keys.map((key, index) => [key, values[index]]));
+
+// databaseValues and the written files from IndexedDB, once, before a page's first run; none when it fails (loudly on
+// the console). A file written since (by a task) stays as written
+function loadKept() {
+	return databaseLoaded ??= Promise.all([
+		keptEntries(DATABASE.objects).then(entries => entries.forEach(([name, value]) => takeDatabaseValue(name, value)))
+			.catch(failure => console.error("database values could not be read:", failure)),
+		keptEntries(DATABASE.files).then(entries => entries.forEach(([path, content]) => writtenFiles.has(path) || writtenFiles.set(path, content)))
+			.catch(failure => console.error("the files written before could not be read:", failure)),
+	]);
+}
+
+// a written file kept in IndexedDB where the host keeps values (a page; a task's Worker hands its files to the
+// program's, which keeps them)
+function keepWrittenFile(path, content) {
+	if (!self.keepStored) return;
+	databaseObjects("readwrite", DATABASE.files)
+		.then(objects => requested(objects.put(content, path)))
+		.catch(failure => console.error(`the file ${path} could not be kept:`, failure));
 }
 
 // the other tabs' workers keep the same database: each change is told to them, so their tables stay current (a row
@@ -345,14 +462,41 @@ function rollBack(file) {
 }
 
 // a 16-bit mono PCM WAV of the offset samples (src/sound.rs wav)
-function wavOf(samples, rate) {
+// the sounds mixed at their places on their voices (src/sound.rs render): a task's sound along with the program's; a
+// sound without a place (no voices where it ran) follows the one before. From where the run's last render ended, so
+// `at 1s beep()` keeps its second of silence
+// the sounds mixed at their places, in stereo when one of them is (a mono sound on both speakers alike, as src/sound.rs
+// render): the samples interleaved and the channels
+function mixed(sounds, rate, run) {
+	const channels = Math.max(1, ...sounds.map(sound => sound.channels ?? 1));
+	const framesOf = sound => sound.samples.length / (sound.channels ?? 1);
+	let end = run.renderedUntil ?? 0;
+	const starts = sounds.map(sound => {
+		const place = sound.place ?? end;
+		end = Math.max(end, place + framesOf(sound) / rate);
+		return place;
+	});
+	const first = Math.min(run.renderedUntil ?? 0, ...starts);
+	const offsets = starts.map(place => Math.round((place - first) * rate));
+	const amplitudes = new Float64Array(channels * Math.max(0, ...sounds.map((sound, i) => offsets[i] + framesOf(sound))));
+	sounds.forEach((sound, i) => {
+		const own = sound.channels ?? 1;
+		for (let frame = 0; frame < framesOf(sound); frame++)
+			for (let channel = 0; channel < channels; channel++)
+				amplitudes[(offsets[i] + frame) * channels + channel] += Number(sound.samples[frame * own + Math.min(channel, own - 1)]) - SAMPLE_OFFSET;
+	});
+	run.renderedUntil = first + amplitudes.length / channels / rate;
+	return { samples: Array.from(amplitudes, amplitude => amplitude + SAMPLE_OFFSET), channels };
+}
+
+function wavOf(samples, rate, channels = 1) {
 	const bytes = new Uint8Array(WAV_HEADER_BYTES + 2 * samples.length);
 	const view = new DataView(bytes.buffer);
 	const ascii = (at, word) => [...word].forEach((letter, i) => view.setUint8(at + i, letter.charCodeAt(0)));
 	ascii(0, "RIFF");
 	view.setUint32(4, bytes.length - 8, true);
 	ascii(8, "WAVEfmt ");
-	[[16, 16, 4], [20, 1, 2], [22, 1, 2], [24, rate, 4], [28, 2 * rate, 4], [32, 2, 2], [34, 16, 2]]
+	[[16, 16, 4], [20, 1, 2], [22, channels, 2], [24, rate, 4], [28, 2 * channels * rate, 4], [32, 2 * channels, 2], [34, 16, 2]]
 		.forEach(([at, value, size]) => size === 4 ? view.setUint32(at, value, true) : view.setUint16(at, value, true));
 	ascii(36, "data");
 	view.setUint32(40, 2 * samples.length, true);
@@ -384,10 +528,14 @@ addHostPart({
 		// session's, else the program's)
 		store: {
 			load: (name, fallback, file) => name in valuesOf(file) ? valuesOf(file)[name] : fallback,
+			// `stored theme default "dark"`: the default kept from the first run on
+			declare: (name, fallback, file) => name in valuesOf(file) ? valuesOf(file)[name] : (valuesOf(file)[name] = fallback, keep(name, fallback, file), fallback),
 			save: (name, value, file) => { valuesOf(file)[name] = value; keep(name, value, file); return null; },
 			// `delete local[k]` (kept as undefined: markup.js keepValue drops it), `keys(local)`
 			remove: (name, file) => { delete valuesOf(file)[name]; keep(name, undefined, file); return null; },
 			names: file => Object.keys(valuesOf(file)),
+			// `storage` alone: all its values as a map
+			all: file => ({ ...valuesOf(file) }),
 		},
 		file: {
 			write: (path, content) => { keepWritten(path, contentText(content)); return null; },
@@ -404,6 +552,19 @@ addHostPart({
 		// `clipboard.write(text)` (lowering/system_values.rs): a page writes it (markup.js copyText), a Worker has no
 		// clipboard and hands the text to its page (self.writeClipboard: worker.js)
 		clipboard: { write: text => { (self.writeClipboard ?? copyText)(contentText(text)); return null; } },
+		// MIDI (card midi-out, lib/sound.warp): files are bytes as render_sound's; a message goes to the page, which holds
+		// the Web MIDI access (playground.js sendMidi). A Worker cannot wait for the page's device list or its input
+		midi: {
+			write_file: (path, notes) => { keepWritten(contentText(path), midiFileOf(wholeNumbers(notes))); return null; },
+			read_file: path => midiNotesOf(readBytes(contentText(path))),
+			send: (port, message) => {
+				if (!self.sendMidi) return null; // a run without a page (tests, node) has no devices, silent as sound is
+				self.sendMidi(contentText(port), wholeNumbers(message));
+				return null;
+			},
+			outputs: () => { throw new Error("midi.outputs: the playground's page owns the MIDI devices and a program cannot wait for their list; midi_on and midi_send use the first output"); },
+			receive: () => { throw new Error("midi.receive: MIDI input does not reach a playground program yet (Web MIDI answers on the page, not in the program's Worker)"); },
+		},
 		// `play "song.mp3"`, `stop_sound` (lib/sound.warp, card sound-library): the page plays it with an <audio>
 		// (worker.js self.playSoundFile, playground.js); a run without a page (tests, node) stays silent, as natively
 		sound: {
@@ -421,19 +582,20 @@ addHostPart({
 			last: () => self.lastSoundHandle?.() ?? 0,
 			// the page's audio clock as the worker keeps it (worker.js); a worker cannot wait for the page's audio
 			queued: () => self.soundsQueued?.() ?? 0,
+			at: seconds => { self.voiceAt?.(Number(seconds)); return null; },
+			at_end: () => { self.voiceAtEnd?.(); return null; },
 			wait: () => null,
 			// the run's sounds since its start or the last render, one WAV (src/sound.rs render): its seconds; the page
 			// offers it for download
 			render(path) {
-				const sounds = this.holder.unrenderedSounds ?? [];
-				this.holder.unrenderedSounds = [];
+				const sounds = this.holder.run.unrenderedSounds ?? [];
+				this.holder.run.unrenderedSounds = [];
 				const rate = sounds[0]?.rate ?? DEFAULT_SAMPLE_RATE;
 				const other = sounds.find(sound => sound.rate !== rate);
 				if (other) throw new Error(`sounds of ${rate} and ${other.rate} samples per second cannot share ${contentText(path)}`);
-				const samples = sounds.flatMap(sound => sound.samples);
-				const bytes = wavOf(samples, rate);
-				keepWritten(contentText(path), bytes);
-				return samples.length / rate;
+				const { samples, channels } = mixed(sounds, rate, this.holder.run);
+				keepWritten(contentText(path), wavOf(samples, rate, channels));
+				return samples.length / channels / rate;
 			},
 		},
 	},

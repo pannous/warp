@@ -11,6 +11,10 @@ const PAGE_SUBMITTED_EXPORT = "page·submitted"; // lowering/serve.rs PAGE_SUBMI
 const PAGE_BITS = 16;
 const STDERR = 2;
 const DARK_MODE_QUERY = "(prefers-color-scheme: dark)";
+// view_width, view_height on a page that tells no output pane (playground.js tellSystemValues), as natively
+// (crates/warp-runtime/src/system_values.rs NATIVE_VIEW)
+// window_open: no page told it shows the pictures (playground.js tellSystemValues), so `while window_open` never starts
+const VIEW_DEFAULTS = { view_width: 640, view_height: 480, window_open: 0 };
 // the standard library's adapters (src/std_adapters.rs, notes/stdlib.md section 7): module → member → function of
 // plain values (plainOfTree / treeOfPlain, as for foreign_call); the parts add them (host-hashes.js, host-files.js)
 const STD_ADAPTERS = {};
@@ -148,7 +152,7 @@ function programImports(holder, hooks) {
 			serve_routes: port => { throw new Error(`serve ${port}: a server runs only in the native host (the warp CLI)`); },
 			// the host words (src/host.rs): a page cannot block, so sleep busy-waits
 			sleep: milliseconds => {
-				hooks.sleeping?.(); // a paint after a sleep is the next frame of an animation (playground.js)
+				hooks.sleeping?.(Number(milliseconds)); // the next frame of an animation, and no runaway time (playground.js)
 				const until = Date.now() + Number(milliseconds);
 				let check = Date.now() + SHARED_CHECK_MILLISECONDS;
 				while (Date.now() < until) {
@@ -160,6 +164,8 @@ function programImports(holder, hooks) {
 				checkPoint();
 			},
 			clock: () => BigInt(Date.now()),
+			// seconds east of UTC in the browser's time zone at that instant: an instant's wall clock (wasm_emitter/times.rs)
+			local_offset: milliseconds => BigInt(-new Date(Number(milliseconds)).getTimezoneOffset() * 60),
 			// a page has no ctrl-c: `on interrupt {…}` never runs here (notes/system_signals.md); shared listeners do
 			signal_poll: checkPoint,
 			signal_watch: () => { holder.warnings.push("on file … change: a page has no files to watch"); },
@@ -171,7 +177,7 @@ function programImports(holder, hooks) {
 				const pointerIndex = self.pagePointer?.names.indexOf(value) ?? -1; // canvas.js trackPointer
 				if (pointerIndex >= 0) return BigInt(Atomics.load(self.pagePointer.values, pointerIndex));
 				// a Worker has no matchMedia: the page tells it (playground.js tellSystemValues)
-				const known = value === "dark mode" && globalThis.matchMedia ? matchMedia(DARK_MODE_QUERY).matches : self.pageSystemValues?.[value];
+				const known = value === "dark mode" && globalThis.matchMedia ? matchMedia(DARK_MODE_QUERY).matches : self.pageSystemValues?.[value] ?? VIEW_DEFAULTS[value];
 				if (known !== undefined) return BigInt(known);
 				throw new Error(`${value}: the playground cannot read it yet`);
 			},
@@ -186,31 +192,36 @@ function programImports(holder, hooks) {
 				const covered = textCoverage(String(plainOfTree(readNode(program(), words))), Number(size));
 				return listOfInts(program(), covered) ?? buildValue(program(), treeOfPlain(Array.from(covered)));
 			},
-			clipboard_text: () => { throw new Error("clipboard: the playground cannot read it (the browser's clipboard is asynchronous)"); },
 			// `exit(code)` ends the run, its value ø (P121): runProgram tells it from a failure by holder.exitCode
 			exit: code => {
 				holder.exitCode = Number(code);
 				throw new Error(`exit(${code})`);
 			},
 			// paint(pixels, width, height) (src/host.rs): the page draws them on a canvas (playground.js showPaintings);
-			// paint(shader, width, height, values) renders the WGSL fragment shader first, as gpu_render (P234)
+			// paint(shader, width, height, values) renders the WGSL fragment shader first, as gpu_render (P234), in the
+			// playground straight into the page's canvas (host-gpu.js gpuPainted), which the hook gets by its id
 			paint: (pixels, width, height, values) => {
 				if (!hooks.paint) throw new Error("paint: no canvas here; it draws in the playground page");
 				const room = Number(width) * Number(height);
 				let painted = intsOfList(program(), pixels, room) ?? plainOfTree(readNode(program(), pixels));
 				if (typeof painted === "string") {
 					if (!holder.gpuRendered) throw new Error("paint: a shader needs WebGPU (host-gpu.js), which this page has not");
-					painted = Array.from(holder.gpuRendered(painted, width, height, values));
+					const rendered = (holder.gpuPainted ?? holder.gpuRendered)(painted, width, height, values); // pixels, or the id of a canvas drawn into
+					if (typeof rendered === "number") return hooks.paint(undefined, Number(width), Number(height), rendered);
+					painted = Array.from(rendered);
 				}
 				hooks.paint(painted, Number(width), Number(height));
 			},
-			// sound_samples(samples, count, rate) (src/host.rs, lib/sound.warp): the page plays them with WebAudio
+			// sound_samples(samples, count, rate, channels) (src/host.rs, lib/sound.warp; stereo interleaved left, right):
+			// the page plays them with WebAudio
 			// (playground.js playSound); a run without a page (tests, node) has no speakers and stays silent, as natively
 			// render_sound writes them, played or not, into a WAV (host-files.js STD_ADAPTERS.sound.render)
-			sound_samples: (samples, count, rate) => {
+			sound_samples: (samples, count, rate, channels) => {
 				const values = intsOfList(program(), samples, Number(count)) ?? plainOfTree(readNode(program(), samples));
-				(holder.unrenderedSounds ??= []).push({ samples: values, rate: Number(rate) });
-				hooks.sound?.(values, Number(rate));
+				const sound = { samples: values, rate: Number(rate), channels: Number(channels) };
+				const { place, at } = self.voiceSounded?.(values.length / sound.channels / sound.rate) ?? {};
+				(holder.run.unrenderedSounds ??= []).push({ ...sound, place });
+				hooks.sound?.({ ...sound, at });
 			},
 			...Object.assign({}, ...eachHostPart("words", holder, hooks, access)),
 		},
@@ -256,10 +267,12 @@ function buildValue(module, tree) {
 	const payload = tree.data ?? {};
 	switch (Number(kind & KIND_MASK)) {
 		case 0: return module.new_empty();
-		case 1:
-			if (payload.exact) return module.new_int(exactHandle(module, ...payload.exact.map(BigInt)));
-			if (payload.int === undefined) throw new Error("an exact number beyond the fixnum range cannot cross to another task yet");
+		case 1: {
+			const exact = exactOfPayload(payload);
+			if (exact) return module.new_int(exactHandle(module, ...exact));
+			if (payload.int === undefined) throw new Error(`an Int payload of no known form: ${JSON.stringify(payload)}`);
 			return module.new_int(BigInt(payload.int));
+		}
 		case 2: return module.new_float(Number(payload.float));
 		case 3: case 5: {
 			const [pointer, length] = writeBytes(module, utf8.encode(payload.text));
@@ -361,8 +374,24 @@ function treeOfPlain(value) {
 
 // the Int handle of an exact number beyond the fixnums, composed from fixnum pieces with the module's exported Int
 // operations (src/tasks.rs EXACT_BUILDERS, integer_handle)
+// an integer as reader.js reads it (src/web.rs int_payload): a fixnum, or a big one's 32-bit limbs, least significant first
+function integerOfPayload(payload) {
+	if (payload.int !== undefined) return BigInt(payload.int);
+	const magnitude = payload.big.limbs.reduceRight((value, limb) => (value << 32n) | BigInt(limb), 0n);
+	return payload.big.negative ? -magnitude : magnitude;
+}
+
+// numerator and denominator of an exact number beyond the fixnums: digits (src/web.rs tree_of, Python), a big integer
+// or a ratio as reader.js reads them (a task's value); undefined for a fixnum
+function exactOfPayload(payload) {
+	if (payload.exact) return payload.exact.map(BigInt);
+	if (payload.ratio) return payload.ratio.map(integerOfPayload);
+	if (payload.big) return [integerOfPayload(payload), 1n];
+}
+
 const FIXNUM_MIN = -(2n ** 62n - 1n);
 const FIXNUM_MAX = 2n ** 62n;
+const isExactHandle = value => typeof value === "bigint" && (value < FIXNUM_MIN || value > FIXNUM_MAX);
 function exactHandle(module, numerator, denominator) {
 	const integer = n => {
 		if (n >= FIXNUM_MIN && n <= FIXNUM_MAX) return n;
@@ -403,6 +432,7 @@ function instantiateProgram(bytes, hooks, compiled, awaited = false) {
 	try {
 		const module = compiled ?? new WebAssembly.Module(bytes);
 		holder.run = { module, bytes };
+		self.joinVoice?.(); // a program's sounds start now on a fresh voice, not behind an earlier run's (host-tasks.js)
 		eachHostPart("started", holder.run);
 		holder.exports = new WebAssembly.Instance(holder.run.module, programImports(holder, hooks)).exports;
 		hooks.instantiated?.(holder);

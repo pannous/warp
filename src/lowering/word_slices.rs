@@ -9,6 +9,7 @@
 use super::nodes::{call, key, symbol};
 use crate::diagnostic::Diagnostic;
 use crate::extensions::numbers::Number;
+use crate::library_words::SLICE;
 use crate::node::{Bracket, Node, Separator};
 use crate::operators::Op;
 
@@ -21,7 +22,6 @@ const LAST: &str = "last";
 /// `xs up to nth`: the position n
 const NTH: (&str, &str) = ("nth", "n");
 const ORDINAL_WORDS: [&str; 10] = ["first", "second", "third", "fourth", "fifth", "sixth", "seventh", "eighth", "ninth", "tenth"];
-const SLICE: &str = "slice";
 
 /// A bound of a word slice
 enum Bound {

@@ -1,0 +1,12 @@
+// Implement a singly linked list with append and print its elements after appending 1 2 3 4 separated by spaces.
+def append(l, v) = if l.empty : {empty: no value: v next: {empty: yes}} else {empty: no value: l.value next: append(l.next, v)}
+lst = {empty: yes}
+for i in 1 to 4 { lst = append(lst, i) }
+s = ""
+cur = lst
+while not cur.empty {
+	if s.length > 0 : s += " "
+	s += "$(cur.value)"
+	cur = cur.next
+}
+print s

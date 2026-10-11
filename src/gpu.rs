@@ -1,14 +1,18 @@
 //! gpu_compute natively (card web-apis, notes/web_framework.md "web-apis: WebGPU"): the WGSL compute shader runs through
 //! wgpu (Metal, Vulkan or DX12) exactly as web/playground/host-gpu.js runs it through the browser's WebGPU: entry point
 //! `main`, the numbers as array<f32> (or array<i32>, array<u32>) at @group(0) @binding(0), dispatched over `workgroups` workgroups, and the value is
-//! the numbers it left. gpu_render runs a WGSL fragment shader `main` over every pixel of a width×height image, as
+//! the numbers it left; a map of named arrays binds each where the shader declares the storage array of that name
+//! and gives them back by name. gpu_render runs a WGSL fragment shader `main` over every pixel of a width×height image, as
 //! host-gpu.js does, and gives the pixels as paint takes them.
 
-use std::sync::{Mutex, OnceLock};
+use std::collections::HashMap;
+use std::sync::{LazyLock, Mutex, OnceLock};
 use wgpu::util::DeviceExt;
 
 const ENTRY_POINT: &str = "main";
 const BINDING: u32 = 0;
+/// `@group(0) @binding(1) var<storage, read_write> ys: array<f32>`: its binding, name and element type
+const STORAGE_ARRAY: &str = r"@binding\((\d+)\)(?:\s*@group\(\d+\))?\s*var(?:<[^>]*>)?\s+(\w+)\s*:\s*array<(\w+)";
 /// f32, i32 and u32 alike
 const WORD_BYTES: usize = size_of::<f32>();
 /// Appended to the shader of gpu_render (after it, so its line numbers stay the user's): one triangle covering the image
@@ -20,6 +24,9 @@ const VERTEX_ENTRY_POINT: &str = "warp_full_image";
 const TRIANGLE_CORNERS: u32 = 3;
 const PIXEL_BYTES: u32 = 4;
 const OPAQUE: u32 = 0xFF00_0000;
+const IMAGE_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Rgba8Unorm;
+/// Compiled shaders kept at once, as host-gpu.js MOST_COMPILED: a program painting more distinct ones compiles some anew
+const PAINTERS_KEPT: usize = 16;
 /// gpu_render's values as the shader names them: `values.<name>`
 const VALUES_NAME: &str = "values";
 const VALUES_BINDING: u32 = 0;
@@ -31,6 +38,7 @@ pub const VECTOR_FLOATS: usize = 4;
 
 /// A value the shader reads as `values.<name>`: one to four floats (f32, vec2f, vec3f, vec4f), or an array of vec4f
 /// (`values.<name>[i]`), its floats four by four
+#[derive(Clone)]
 pub struct ShaderValue {
 	pub name: String,
 	pub floats: Vec<f32>,
@@ -109,29 +117,122 @@ pub enum Element {
 }
 
 pub fn element_of(shader: &str) -> Element {
-	let declared = shader.find("@binding(0)").and_then(|binding| shader[binding..].find("array<").map(|array| &shader[binding + array + "array<".len()..]));
-	match declared.map(|rest| rest.get(..3)) {
-		Some(Some("i32")) => Element::Int,
-		Some(Some("u32")) => Element::Unsigned,
-		_ => Element::Float,
-	}
+	storage_arrays(shader).into_iter().find(|array| array.binding == BINDING).map_or(Element::Float, |array| array.element)
 }
 
 /// Run a shader over 32-bit ints (array<i32> or array<u32>, as `element` says): the ints it left
 pub fn compute_ints(shader: &str, numbers: &[i64], workgroups: u32, element: Element) -> Result<Vec<i64>, String> {
-	let bytes: Vec<u8> = numbers.iter().map(|&number| match element {
-		Element::Unsigned => u32::try_from(number).map(u32::to_le_bytes).map_err(|_| format!("{number} is no u32")),
-		_ => i32::try_from(number).map(i32::to_le_bytes).map_err(|_| format!("{number} is no i32")),
-	}).collect::<Result<Vec<_>, _>>()?.concat();
-	let left = compute_bytes(shader, &bytes, workgroups, 0, Keeping::default())?;
-	Ok(words(&left).map(|word| match element {
-		Element::Unsigned => u32::from_le_bytes(word) as i64,
-		_ => i32::from_le_bytes(word) as i64,
-	}).collect())
+	let numbers: Vec<f64> = numbers.iter().map(|&number| number as f64).collect();
+	let left = compute_bytes(shader, &encoded(&numbers, element)?, workgroups, 0, Keeping::default())?;
+	Ok(decoded(&left, element).into_iter().map(|number| number as i64).collect())
+}
+
+/// The numbers as the shader's 4-byte elements: f32, or i32 / u32, which must hold them
+fn encoded(numbers: &[f64], element: Element) -> Result<Vec<u8>, String> {
+	numbers.iter().map(|&number| {
+		let whole = number.fract() == 0.0;
+		match element {
+			Element::Float => Ok((number as f32).to_le_bytes()),
+			Element::Int if whole && (i32::MIN as f64..=i32::MAX as f64).contains(&number) => Ok((number as i32).to_le_bytes()),
+			Element::Unsigned if whole && (0.0..=u32::MAX as f64).contains(&number) => Ok((number as u32).to_le_bytes()),
+			Element::Int => Err(format!("{number} is no i32")),
+			Element::Unsigned => Err(format!("{number} is no u32")),
+		}
+	}).collect::<Result<Vec<_>, _>>().map(|words| words.concat())
+}
+
+fn decoded(bytes: &[u8], element: Element) -> Vec<f64> {
+	words(bytes).map(|word| match element {
+		Element::Float => f32::from_le_bytes(word) as f64,
+		Element::Int => i32::from_le_bytes(word) as f64,
+		Element::Unsigned => u32::from_le_bytes(word) as f64,
+	}).collect()
+}
+
+/// A storage array the shader declares: `@group(0) @binding(1) var<storage, read_write> ys: array<f32>;`
+pub struct StorageArray {
+	pub binding: u32,
+	pub name: String,
+	pub element: Element,
+}
+
+pub fn storage_arrays(shader: &str) -> Vec<StorageArray> {
+	static DECLARATION: LazyLock<regex::Regex> = LazyLock::new(|| regex::Regex::new(STORAGE_ARRAY).expect("the pattern of a storage array"));
+	DECLARATION.captures_iter(shader).map(|declared| StorageArray {
+		binding: declared[1].parse().expect("digits"),
+		name: declared[2].to_string(),
+		element: match &declared[3] {
+			"i32" => Element::Int,
+			"u32" => Element::Unsigned,
+			_ => Element::Float,
+		},
+	}).collect()
+}
+
+/// `gpu_compute(shader, {xs: […], ys: […]}, workgroups)`: each named array bound where the shader declares the
+/// storage array of that name; the arrays it left, in the order given, as their element type says
+pub fn compute_named(shader: &str, arrays: &[(String, Vec<f64>)], workgroups: u32) -> Result<Vec<(String, Element, Vec<f64>)>, String> {
+	let declared = storage_arrays(shader);
+	let names = || declared.iter().map(|array| array.name.as_str()).collect::<Vec<_>>().join(", ");
+	if let Some(missing) = declared.iter().find(|array| !arrays.iter().any(|(name, _)| *name == array.name)) {
+		return Err(format!("the shader's array {} has no numbers: give each of {}", missing.name, names()));
+	}
+	let buffers = arrays.iter().map(|(name, numbers)| {
+		let array = declared.iter().find(|array| array.name == *name).ok_or_else(|| format!("the shader declares no storage array {name}, only {}", names()))?;
+		if numbers.is_empty() {
+			return Err(format!("{name} is empty: a storage array holds at least one number"));
+		}
+		Ok((array.binding, array.element, encoded(numbers, array.element)?))
+	}).collect::<Result<Vec<_>, String>>()?;
+	let left = compute_buffers(shader, &buffers.iter().map(|(binding, _, bytes)| (*binding, bytes.as_slice())).collect::<Vec<_>>(), workgroups)?;
+	Ok(arrays.iter().zip(&buffers).zip(left).map(|(((name, _), (_, element, _)), bytes)| (name.clone(), *element, decoded(&bytes, *element))).collect())
+}
+
+/// The shader over a storage buffer per binding: the bytes each holds afterwards
+fn compute_buffers(shader: &str, buffers: &[(u32, &[u8])], workgroups: u32) -> Result<Vec<Vec<u8>>, String> {
+	let Gpu { device, queue } = gpu()?;
+	let usage = wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_SRC | wgpu::BufferUsages::COPY_DST;
+	let storages: Vec<wgpu::Buffer> = buffers.iter().map(|(_, bytes)| device.create_buffer_init(&wgpu::util::BufferInitDescriptor { label: Some("gpu_compute array"), contents: bytes, usage })).collect();
+	let readbacks: Vec<wgpu::Buffer> = storages.iter().map(|storage| readback_of(device, storage.size())).collect();
+	let validation = device.push_error_scope(wgpu::ErrorFilter::Validation);
+	let pipeline = compute_pipeline(device, shader)?;
+	let entries: Vec<wgpu::BindGroupEntry> = buffers.iter().zip(&storages).map(|((binding, _), storage)| wgpu::BindGroupEntry { binding: *binding, resource: storage.as_entire_binding() }).collect();
+	let bindings = device.create_bind_group(&wgpu::BindGroupDescriptor { label: Some("gpu_compute arrays"), layout: &pipeline.get_bind_group_layout(0), entries: &entries });
+	let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor::default());
+	dispatch(&mut encoder, &pipeline, &bindings, workgroups);
+	for (storage, readback) in storages.iter().zip(&readbacks) {
+		encoder.copy_buffer_to_buffer(storage, 0, readback, 0, storage.size());
+	}
+	queue.submit([encoder.finish()]);
+	read_backs(device, &readbacks, validation)
+}
+
+fn readback_of(device: &wgpu::Device, size: u64) -> wgpu::Buffer {
+	device.create_buffer(&wgpu::BufferDescriptor { label: Some("gpu_compute readback"), size, usage: wgpu::BufferUsages::MAP_READ | wgpu::BufferUsages::COPY_DST, mapped_at_creation: false })
+}
+
+/// The compute pipeline of the shader's entry point `main`, its bind group laid out as the shader declares it
+fn compute_pipeline(device: &wgpu::Device, shader: &str) -> Result<wgpu::ComputePipeline, String> {
+	let module = compiled(device, shader)?;
+	Ok(device.create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
+		label: Some("gpu_compute"),
+		layout: None,
+		module: &module,
+		entry_point: Some(ENTRY_POINT),
+		compilation_options: Default::default(),
+		cache: None,
+	}))
+}
+
+fn dispatch(encoder: &mut wgpu::CommandEncoder, pipeline: &wgpu::ComputePipeline, bindings: &wgpu::BindGroup, workgroups: u32) {
+	let mut pass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor::default());
+	pass.set_pipeline(pipeline);
+	pass.set_bind_group(0, bindings, &[]);
+	pass.dispatch_workgroups(workgroups, 1, 1);
 }
 
 fn words(bytes: &[u8]) -> impl Iterator<Item = [u8; 4]> + '_ {
-	bytes.chunks_exact(WORD_BYTES).map(|chunk| chunk.try_into().expect("four bytes"))
+	bytes.as_chunks::<WORD_BYTES>().0.iter().copied()
 }
 
 /// The shader over the 4-byte numbers in `bytes`: the bytes it left from number `first` on
@@ -147,18 +248,10 @@ fn compute_bytes(shader: &str, bytes: &[u8], workgroups: u32, first: usize, keep
 	if !bytes.is_empty() {
 		queue.write_buffer(&storage, (items * WORD_BYTES) as u64, bytes);
 	}
-	let readback = device.create_buffer(&wgpu::BufferDescriptor { label: Some("gpu_compute readback"), size, usage: wgpu::BufferUsages::MAP_READ | wgpu::BufferUsages::COPY_DST, mapped_at_creation: false });
+	let readback = readback_of(device, size);
 
 	let validation = device.push_error_scope(wgpu::ErrorFilter::Validation);
-	let module = compiled(device, shader)?;
-	let pipeline = device.create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
-		label: Some("gpu_compute"),
-		layout: None,
-		module: &module,
-		entry_point: Some(ENTRY_POINT),
-		compilation_options: Default::default(),
-		cache: None,
-	});
+	let pipeline = compute_pipeline(device, shader)?;
 	let bindings = device.create_bind_group(&wgpu::BindGroupDescriptor {
 		label: Some("gpu_compute numbers"),
 		layout: &pipeline.get_bind_group_layout(0),
@@ -168,12 +261,7 @@ fn compute_bytes(shader: &str, bytes: &[u8], workgroups: u32, first: usize, keep
 	if let Some((buffer, count)) = &kept {
 		encoder.copy_buffer_to_buffer(buffer, 0, &storage, 0, (count * WORD_BYTES) as u64);
 	}
-	{
-		let mut pass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor::default());
-		pass.set_pipeline(&pipeline);
-		pass.set_bind_group(0, &bindings, &[]);
-		pass.dispatch_workgroups(workgroups, 1, 1);
-	}
+	dispatch(&mut encoder, &pipeline, &bindings, workgroups);
 	encoder.copy_buffer_to_buffer(&storage, offset, &readback, 0, size);
 	queue.submit([encoder.finish()]);
 	let bytes = read_back(device, &readback, validation)?;
@@ -191,36 +279,37 @@ fn compute_bytes(shader: &str, bytes: &[u8], workgroups: u32, first: usize, keep
 /// Run the fragment shader `main` over a width×height image: its pixels row by row as 0xFFRRGGBB (alpha dropped:
 /// paint shows opaque colors), or why not
 pub fn render(shader: &str, width: u32, height: u32, values: &[ShaderValue]) -> Result<Vec<u32>, String> {
+	Ok(opaque_colors(&render_rgba(shader, width, height, values)?).collect())
+}
+
+/// The pixels of RGBA bytes as 0xFFRRGGBB
+pub fn opaque_colors(rgba: &[u8]) -> impl Iterator<Item = u32> + '_ {
+	let pixels = rgba.as_chunks::<{ PIXEL_BYTES as usize }>().0;
+	pixels.iter().map(|[red, green, blue, _]| OPAQUE | u32::from(*red) << 16 | u32::from(*green) << 8 | u32::from(*blue))
+}
+
+/// The image of `render` as RGBA bytes, row by row: what paint's window takes without a per-pixel pass (a frame of the
+/// debug build costs 55 ms less at 1280×720)
+pub fn render_rgba(shader: &str, width: u32, height: u32, values: &[ShaderValue]) -> Result<Vec<u8>, String> {
+	let values = &with_builtin_values(shader, width, height, values);
 	let Gpu { device, queue } = gpu()?;
 	let validation = device.push_error_scope(wgpu::ErrorFilter::Validation);
 	let (declarations, bytes) = uniform_layout(values)?;
-	let module = compiled(device, &format!("{shader}{FULL_IMAGE_VERTICES}{declarations}"))?;
-	let uniform = (!bytes.is_empty()).then(|| uniform_binding(device, &bytes));
-	let format = wgpu::TextureFormat::Rgba8Unorm;
+	let Painter { pipeline, values_layout } = painter(device, format!("{shader}{FULL_IMAGE_VERTICES}{declarations}"), !bytes.is_empty())?;
+	let value_bindings = values_layout.map(|layout| value_bindings(device, &layout, &bytes));
 	let size = wgpu::Extent3d { width, height, depth_or_array_layers: 1 };
 	let usage = wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::COPY_SRC;
-	let image = device.create_texture(&wgpu::TextureDescriptor { label: Some("gpu_render image"), size, mip_level_count: 1, sample_count: 1, dimension: wgpu::TextureDimension::D2, format, usage, view_formats: &[] });
+	let image = device.create_texture(&wgpu::TextureDescriptor { label: Some("gpu_render image"), size, mip_level_count: 1, sample_count: 1, dimension: wgpu::TextureDimension::D2, format: IMAGE_FORMAT, usage, view_formats: &[] });
 	// a copied row is padded to 256 bytes
 	let row_bytes = (width * PIXEL_BYTES).next_multiple_of(wgpu::COPY_BYTES_PER_ROW_ALIGNMENT);
 	let readback = device.create_buffer(&wgpu::BufferDescriptor { label: Some("gpu_render readback"), size: u64::from(row_bytes * height), usage: wgpu::BufferUsages::MAP_READ | wgpu::BufferUsages::COPY_DST, mapped_at_creation: false });
-	let pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
-		label: Some("gpu_render"),
-		layout: uniform.as_ref().map(|(layout, _)| layout),
-		vertex: wgpu::VertexState { module: &module, entry_point: Some(VERTEX_ENTRY_POINT), compilation_options: Default::default(), buffers: &[] },
-		primitive: wgpu::PrimitiveState::default(),
-		depth_stencil: None,
-		multisample: wgpu::MultisampleState::default(),
-		fragment: Some(wgpu::FragmentState { module: &module, entry_point: Some(ENTRY_POINT), compilation_options: Default::default(), targets: &[Some(format.into())] }),
-		multiview_mask: None,
-		cache: None,
-	});
 	let view = image.create_view(&wgpu::TextureViewDescriptor::default());
 	let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor::default());
 	{
 		let target = wgpu::RenderPassColorAttachment { view: &view, depth_slice: None, resolve_target: None, ops: wgpu::Operations::default() };
 		let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor { label: Some("gpu_render"), color_attachments: &[Some(target)], ..Default::default() });
 		pass.set_pipeline(&pipeline);
-		if let Some((_, bindings)) = &uniform {
+		if let Some(bindings) = &value_bindings {
 			pass.set_bind_group(0, bindings, &[]);
 		}
 		pass.draw(0..TRIANGLE_CORNERS, 0..1);
@@ -229,8 +318,43 @@ pub fn render(shader: &str, width: u32, height: u32, values: &[ShaderValue]) -> 
 	encoder.copy_texture_to_buffer(image.as_image_copy(), wgpu::TexelCopyBufferInfo { buffer: &readback, layout }, size);
 	queue.submit([encoder.finish()]);
 	let bytes = read_back(device, &readback, validation)?;
-	let rows = bytes.chunks_exact(row_bytes as usize).map(|row| &row[..(width * PIXEL_BYTES) as usize]);
-	Ok(rows.flat_map(|row| row.chunks_exact(PIXEL_BYTES as usize).map(|rgba| OPAQUE | u32::from(rgba[0]) << 16 | u32::from(rgba[1]) << 8 | u32::from(rgba[2]))).collect())
+	let mut rgba = Vec::with_capacity((width * height * PIXEL_BYTES) as usize);
+	for row in bytes.chunks_exact(row_bytes as usize) {
+		rgba.extend_from_slice(&row[..(width * PIXEL_BYTES) as usize]);
+	}
+	Ok(rgba)
+}
+
+/// The values with the built-in holes the shader reads and the program gave no value (shader_holes.rs BUILTIN_HOLES)
+fn with_builtin_values(shader: &str, width: u32, height: u32, values: &[ShaderValue]) -> Vec<ShaderValue> {
+	static FIRST_RENDER: LazyLock<std::time::Instant> = LazyLock::new(std::time::Instant::now);
+	static RENDERS: std::sync::atomic::AtomicU32 = std::sync::atomic::AtomicU32::new(0);
+	let frame = RENDERS.fetch_add(1, std::sync::atomic::Ordering::Relaxed) as f32;
+	let size = [width as f32, height as f32];
+	let [mouse_x, mouse_y, mouse_down, key] = warp_runtime::system_values::window_input();
+	let filled = crate::shader_holes::BUILTIN_HOLES.into_iter().filter(|name| reads_value(shader, name) && !values.iter().any(|value| value.name == *name));
+	let builtins = filled.map(|name| ShaderValue {
+		name: name.to_string(),
+		floats: match name {
+			"width" => vec![size[0]],
+			"height" => vec![size[1]],
+			"size" => size.to_vec(),
+			"time" => vec![FIRST_RENDER.elapsed().as_secs_f32()],
+			"frame" => vec![frame],
+			"mouse" => vec![mouse_x, mouse_y],
+			"mouse_down" => vec![mouse_down],
+			"key" => vec![key],
+			other => unreachable!("{other} is no built-in hole"),
+		},
+		array: false,
+	});
+	values.iter().cloned().chain(builtins).collect()
+}
+
+/// Whether the shader reads `values.name`
+fn reads_value(shader: &str, name: &str) -> bool {
+	let read = format!("{}.{name}", crate::shader_holes::VALUES);
+	shader.match_indices(&read).any(|(at, _)| !shader[at + read.len()..].starts_with(|ch: char| ch.is_alphanumeric() || ch == '_'))
 }
 
 /// The WGSL declaring `values` (appended to the shader, so its line numbers stay the user's) and the bytes of the
@@ -262,24 +386,60 @@ pub fn uniform_layout(values: &[ShaderValue]) -> Result<(String, Vec<u8>), Strin
 	Ok((declarations, bytes))
 }
 
-/// The pipeline layout holding the uniform and its bind group: explicit, so a shader that leaves `values` unread
-/// still binds them
-fn uniform_binding(device: &wgpu::Device, bytes: &[u8]) -> (wgpu::PipelineLayout, wgpu::BindGroup) {
-	let buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor { label: Some("gpu_render values"), contents: bytes, usage: wgpu::BufferUsages::UNIFORM });
-	let entry = wgpu::BindGroupLayoutEntry {
-		binding: VALUES_BINDING,
-		visibility: wgpu::ShaderStages::FRAGMENT,
-		ty: wgpu::BindingType::Buffer { ty: wgpu::BufferBindingType::Uniform, has_dynamic_offset: false, min_binding_size: None },
-		count: None,
-	};
-	let group_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor { label: Some("gpu_render values"), entries: &[entry] });
-	let layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor { label: Some("gpu_render"), bind_group_layouts: &[Some(&group_layout)], immediate_size: 0 });
-	let bindings = device.create_bind_group(&wgpu::BindGroupDescriptor {
-		label: Some("gpu_render values"),
-		layout: &group_layout,
-		entries: &[wgpu::BindGroupEntry { binding: VALUES_BINDING, resource: buffer.as_entire_binding() }],
+/// A fragment shader compiled into its pipeline, with the layout of its values (none: the shader takes no values)
+#[derive(Clone)]
+struct Painter {
+	pipeline: wgpu::RenderPipeline,
+	values_layout: Option<wgpu::BindGroupLayout>,
+}
+
+/// The painter of a shader text, compiled once: compiling a pipeline anew for every frame costs more than drawing it
+/// (over 100 ms for a raymarching shader on Metal, samples/gpu_visualizer.warp)
+fn painter(device: &wgpu::Device, source: String, takes_values: bool) -> Result<Painter, String> {
+	static PAINTERS: LazyLock<Mutex<HashMap<String, Painter>>> = LazyLock::new(Default::default);
+	let mut painters = PAINTERS.lock().unwrap();
+	if let Some(painter) = painters.get(&source) {
+		return Ok(painter.clone());
+	}
+	let module = compiled(device, &source)?;
+	// explicit, so a shader that leaves `values` unread still binds them
+	let values_layout = takes_values.then(|| {
+		let entry = wgpu::BindGroupLayoutEntry {
+			binding: VALUES_BINDING,
+			visibility: wgpu::ShaderStages::FRAGMENT,
+			ty: wgpu::BindingType::Buffer { ty: wgpu::BufferBindingType::Uniform, has_dynamic_offset: false, min_binding_size: None },
+			count: None,
+		};
+		device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor { label: Some("gpu_render values"), entries: &[entry] })
 	});
-	(layout, bindings)
+	let layout = values_layout.as_ref().map(|values| device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor { label: Some("gpu_render"), bind_group_layouts: &[Some(values)], immediate_size: 0 }));
+	let pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+		label: Some("gpu_render"),
+		layout: layout.as_ref(),
+		vertex: wgpu::VertexState { module: &module, entry_point: Some(VERTEX_ENTRY_POINT), compilation_options: Default::default(), buffers: &[] },
+		primitive: wgpu::PrimitiveState::default(),
+		depth_stencil: None,
+		multisample: wgpu::MultisampleState::default(),
+		fragment: Some(wgpu::FragmentState { module: &module, entry_point: Some(ENTRY_POINT), compilation_options: Default::default(), targets: &[Some(IMAGE_FORMAT.into())] }),
+		multiview_mask: None,
+		cache: None,
+	});
+	if painters.len() >= PAINTERS_KEPT {
+		painters.clear();
+	}
+	let painter = Painter { pipeline, values_layout };
+	painters.insert(source, painter.clone());
+	Ok(painter)
+}
+
+/// This frame's values bound to the painter's layout
+fn value_bindings(device: &wgpu::Device, layout: &wgpu::BindGroupLayout, bytes: &[u8]) -> wgpu::BindGroup {
+	let buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor { label: Some("gpu_render values"), contents: bytes, usage: wgpu::BufferUsages::UNIFORM });
+	device.create_bind_group(&wgpu::BindGroupDescriptor {
+		label: Some("gpu_render values"),
+		layout,
+		entries: &[wgpu::BindGroupEntry { binding: VALUES_BINDING, resource: buffer.as_entire_binding() }],
+	})
 }
 
 /// The shader's module, or where and why it does not compile
@@ -291,13 +451,19 @@ fn compiled(device: &wgpu::Device, shader: &str) -> Result<wgpu::ShaderModule, S
 
 /// The bytes the submitted work left in `readback`, or the validation error the work raised
 fn read_back(device: &wgpu::Device, readback: &wgpu::Buffer, validation: wgpu::ErrorScopeGuard) -> Result<Vec<u8>, String> {
+	Ok(read_backs(device, std::slice::from_ref(readback), validation)?.concat())
+}
+
+/// The bytes the submitted work left in each readback buffer, or the validation error the work raised
+fn read_backs(device: &wgpu::Device, readbacks: &[wgpu::Buffer], validation: wgpu::ErrorScopeGuard) -> Result<Vec<Vec<u8>>, String> {
 	if let Some(invalid) = pollster::block_on(validation.pop()) {
 		return Err(essence(&invalid.to_string()));
 	}
-	readback.slice(..).map_async(wgpu::MapMode::Read, |_| {});
+	for readback in readbacks {
+		readback.slice(..).map_async(wgpu::MapMode::Read, |_| {});
+	}
 	device.poll(wgpu::PollType::wait_indefinitely()).map_err(|problem| problem.to_string())?;
-	let view = readback.slice(..).get_mapped_range().map_err(|problem| problem.to_string())?;
-	Ok(view.to_vec())
+	readbacks.iter().map(|readback| readback.slice(..).get_mapped_range().map(|view| view.to_vec()).map_err(|problem| problem.to_string())).collect()
 }
 
 /// `1:10: expected identifier, found "{"`: where and why the shader does not compile, as the browser says it

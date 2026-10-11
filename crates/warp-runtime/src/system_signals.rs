@@ -236,17 +236,25 @@ pub fn millisecond_of_day() -> i64 {
 
 fn local_time_at(since_epoch: Duration) -> (i64, i64) {
 	let now = since_epoch.as_secs() as i64;
-	#[cfg(unix)]
-	{
-		let time = now as libc::time_t;
-		let mut local: libc::tm = unsafe { std::mem::zeroed() };
-		if !unsafe { libc::localtime_r(&time, &mut local) }.is_null() {
-			return (local.tm_wday as i64, (local.tm_hour * 3600 + local.tm_min * 60 + local.tm_sec) as i64);
-		}
-	}
+	let local = now + local_offset_at(now * 1000);
 	let day = DAY.as_secs() as i64;
 	const THURSDAY: i64 = 4; // 1970-01-01
-	((now.div_euclid(day) + THURSDAY) % WEEK_DAYS, now.rem_euclid(day))
+	((local.div_euclid(day) + THURSDAY) % WEEK_DAYS, local.rem_euclid(day))
+}
+
+/// Seconds east of UTC in the environment's time zone (TZ, else the system's) at the instant `milliseconds` after
+/// 1970: daylight saving included. UTC where the platform gives no time zone
+pub fn local_offset_at(milliseconds: i64) -> i64 {
+	#[cfg(unix)]
+	{
+		let time = milliseconds.div_euclid(1000) as libc::time_t;
+		let mut local: libc::tm = unsafe { std::mem::zeroed() };
+		if !unsafe { libc::localtime_r(&time, &mut local) }.is_null() {
+			return local.tm_gmtoff as i64;
+		}
+	}
+	let _ = milliseconds;
+	0
 }
 
 /// `signal_watch(id, path)`: the handler on·file·id runs when the file changes from now on

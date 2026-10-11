@@ -6,7 +6,7 @@
 //! An unknown `.word` after a name, a text or a list is a loud error (`undefined function: word`), never silent data.
 
 use super::words::SUM_WORD;
-use super::nodes::{call, children_rewritten, key};
+use super::nodes::{Counter, call, children_rewritten, key};
 use crate::analyzer::{call_name, counting_method, is_list_mutating_method};
 use crate::context::Context;
 use crate::diagnostic::Diagnostic;
@@ -14,7 +14,7 @@ use crate::node::{symbol, text, Bracket, Node, Separator};
 use crate::operators::Op;
 use crate::warp_parser::{parse, ASSERT_MARKER, TRY_MARKER};
 use crate::wasm_emitter::{CAUGHT_ERROR, RAN_WITHOUT_ERROR};
-use std::cell::{Cell, RefCell};
+use std::cell::RefCell;
 use std::collections::{HashMap, HashSet};
 
 /// The map words, named after their runtime functions: `m.keys()`, `m.values()`, `x in xs` (`xs.has(x)`, Python's and
@@ -48,8 +48,9 @@ const LOG_WORD: &str = "log";
 const OF_WORD: &str = "of";
 
 /// Canonical word and the spellings that mean it
-const SYNONYMS: [(&str, &[&str]); 26] = [
-	(LIST_WORD, &[]),
+const SYNONYMS: [(&str, &[&str]); 29] = [
+	// Python's tuple(xs) (card python-stdlib)
+	(LIST_WORD, &["tuple"]),
 	(MAP_KEYS, &["keys"]),
 	(MAP_VALUES, &["values"]),
 	(MAP_ENTRIES, &[]),
@@ -62,7 +63,7 @@ const SYNONYMS: [(&str, &[&str]); 26] = [
 	("lower", &["lowercase"]),
 	// the text builtin trim (text_builtins.rs), Python's strip
 	("trim", &["strip"]),
-	("reverse", &[]),
+	("reverse", &["reversed"]),
 	("sort", &["sorted"]),
 	("split", &[]),
 	("join", &[]),
@@ -76,6 +77,10 @@ const SYNONYMS: [(&str, &[&str]); 26] = [
 	("mean", &["average"]),
 	(IS_ALPHA, &["is_letter", "isalpha"]),
 	("is_alphanumeric", &["is_alnum", "isalnum"]),
+	("nearest", &[]),
+	// lib/prelude.warp's map of [key value] pairs, Python's dict(pairs)
+	(DICT_WORD, &[]),
+	(FROMKEYS, &[]),
 	(crate::mutation::UNWRAP, &[]),
 ];
 /// `list_sum(list, loop)`: the sum of a list variable as one operation the emitter dispatches (wasm_emitter/list_dispatch.rs):
@@ -83,7 +88,8 @@ const SYNONYMS: [(&str, &[&str]); 26] = [
 pub const LIST_SUM: &str = "list_sum";
 
 /// Words the emitter implements as runtime functions, with the number of arguments including the receiver
-pub const RUNTIME_WORDS: [(&str, usize); 18] = [
+pub const RUNTIME_WORDS: [(&str, usize); 19] = [
+	(crate::wasm_emitter::wasi_emitter::WASI_ENVIRONMENT, 0),
 	(ORD, 1), ("upper", 1), ("lower", 1), ("reverse", 1), ("sort", 1), ("split", 2), ("join", 2), ("chars", 1), (FIELD_WITH, 3),
 	(MAP_KEYS, 1), (MAP_VALUES, 1), (MAP_ENTRIES, 1), (COLLECTION_CONTAINS, 2), (COLLECTION_POSITION, 2), (MAP_GET_OR, 3), (SLICE, 3),
 	(MAP_WITHOUT, 2), (INSTANCE_COPY, 2),
@@ -142,6 +148,9 @@ const EXPANDED_WORDS: [(&str, usize, &str); 3] = [
 ];
 const IS_DIGIT: &str = "is_digit";
 const LIST_WORD: &str = "list";
+const DICT_WORD: &str = "dict";
+/// lib/prelude.warp's fromkeys(ks, value), also called on the class as Python's `dict.fromkeys(ks, value)`
+const FROMKEYS: &str = "fromkeys";
 /// Conversions a method may name, `x.string` being `string(x)`
 const CONVERSION_METHODS: [&str; 4] = ["string", "str", "int", "float"];
 const LIST_CONSTRUCTORS: [&str; 4] = ["listOf", "mutableListOf", "arrayOf", "arrayListOf"];
@@ -149,6 +158,10 @@ const LIST_CONSTRUCTORS: [&str; 4] = ["listOf", "mutableListOf", "arrayOf", "arr
 /// to 3 digits after the point (`round(x)` stays the builtin); `xs.first(3)`, `first 3 of xs` the first 3 items,
 /// `last(xs, 2)` the last 2 (lib/prelude.warp)
 const ARITY_VARIANTS: [(&str, usize, &str); 3] = [("round", 2, "round_to"), ("first", 2, "first_items"), ("last", 2, "last_items")];
+/// Methods a later pass lowers to prelude words: `x.pop(k)` (and `delete x[k]`, mutation::lower_deletes) to popped_item
+/// and popped_rest, `x.clear()` to cleared (declaration_lowering removed_key, cleared_collection)
+const POPPED_WORDS: &[&str] = &["popped_item", "popped_rest"];
+const LOWERED_TO_PRELUDE: [(&str, &[&str]); 3] = [("pop", POPPED_WORDS), ("delete", POPPED_WORDS), ("clear", &["cleared"])];
 const IS_ALPHA: &str = "is_alpha";
 /// Hidden variables and placeholders of the `try`/`assert` templates
 /// `try_tmp_value` of a try template becomes the temporary `try·value·3`
@@ -187,11 +200,12 @@ const SAFE_PREFIX: &str = "safe_tmp_";
 const SAFE_BASE: &str = "safe";
 
 /// Library words whose result is always a text, and those whose result is always a list
-const TEXT_RESULT_WORDS: [&str; 4] = ["upper", "lower", "trim", "join"];
+const TEXT_RESULT_WORDS: [&str; 5] = ["upper", "lower", "trim", "join", crate::wasm_emitter::wasi_emitter::WASI_ENVIRONMENT];
 const LIST_RESULT_WORDS: [&str; 8] = ["chars", "sort", "split", MAP_KEYS, MAP_VALUES, MAP_ENTRIES, MAP_WITHOUT, crate::wasm_emitter::list_ops::LIST_EXTEND];
 
 pub fn result_kind(word: &str) -> Option<crate::type_kinds::Kind> {
 	use crate::type_kinds::Kind;
+	let word = canonical_spelling(word);
 	if TEXT_RESULT_WORDS.contains(&word) {
 		Some(Kind::Text)
 	} else {
@@ -215,12 +229,16 @@ pub fn is_library_word(name: &str) -> bool {
 	is_runtime_word(name) || canonical_word(name).is_some()
 }
 
-/// Words that take the name after them as their argument inside an operand, as a defined function does:
-/// `word == reverse word` compares with `reverse(word)`
-const OPERAND_WORDS: [&str; 7] = ["reverse", "sort", "upper", "lower", "trim", "chars", SUM_WORD];
-
+/// A library word of one argument takes the name after it as that argument inside an operand, as a defined function
+/// does: `word == reverse word` compares with `reverse(word)`, `1 == first xs` with `first(xs)`. A type word stays a
+/// type: `x: list int`
 pub fn is_operand_word(name: &str) -> bool {
-	canonical_word(name).is_some_and(|word| OPERAND_WORDS.contains(&word))
+	canonical_word(name).is_some_and(|word| arity(word) == 1 && !crate::type_tests::is_type_word(word))
+}
+
+/// The spelling word lists name a library word by (`sorted` → sort); any other name as it is
+pub fn canonical_spelling(name: &str) -> &str {
+	canonical_word(name).unwrap_or(name)
 }
 
 fn canonical_word(name: &str) -> Option<&'static str> {
@@ -241,7 +259,8 @@ fn arity(word: &str) -> usize {
 /// its ARITY_VARIANTS (`round(x, 2)` round_to). modules::resolve, which runs before, loads the prelude words by them
 pub fn words_spelled_by(name: &str) -> Vec<&'static str> {
 	let variants = ARITY_VARIANTS.iter().filter(|(word, _, _)| *word == name).map(|(_, _, variant)| *variant);
-	canonical_word(name).into_iter().chain(variants).collect()
+	let lowered = LOWERED_TO_PRELUDE.iter().filter(|(word, _)| *word == name).flat_map(|(_, words)| words.iter().copied());
+	canonical_word(name).into_iter().chain(variants).chain(lowered).collect()
 }
 
 pub fn lower(node: Node) -> Node {
@@ -259,7 +278,7 @@ pub fn lower(node: Node) -> Node {
 	let objects = assigned.objects.into_iter().filter_map(|(name, literal)| Some((name, literal?))).collect();
 	let instances = crate::traits::InstanceTypes::of(&node);
 	let call_results = call_results(&node, &context);
-	Lowering { context, shadowed, objects, plain, instances, parameters: RefCell::new(vec![]), defining: RefCell::new(vec![]), call_results, temporaries: Cell::new(0) }.expand(node)
+	Lowering { context, shadowed, objects, plain, instances, parameters: RefCell::new(vec![]), defining: RefCell::new(vec![]), call_results, temporaries: Counter::default() }.expand(node)
 }
 
 /// The variables assigned what a user function returns (`result = parse_json(text)`): any may hold an object
@@ -629,7 +648,7 @@ struct Lowering {
 	defining: RefCell<Vec<(String, Vec<String>)>>,
 	/// Variables assigned the result of a user function call (call_results)
 	call_results: HashSet<String>,
-	temporaries: Cell<usize>,
+	temporaries: Counter,
 }
 
 impl Lowering {
@@ -701,9 +720,7 @@ impl Lowering {
 				let as_float = |operand: Node| key(operand, Op::As, symbol(FLOAT_WORD));
 				key(as_float(self.expand(*left)), Op::Div, as_float(*right))
 			}
-			Node::Key(left, op, right) => key(self.expand(*left), op, self.expand(*right)),
-			Node::Meta { node, data } => Node::Meta { node: Box::new(self.expand(*node)), data },
-			other => other,
+			other => children_rewritten(other, |child| self.expand(child)),
 		}
 	}
 
@@ -973,6 +990,9 @@ impl Lowering {
 			_ => return None,
 		};
 		let Node::Symbol(name) = word_node.drop_meta() else { return None };
+		if receiver.symbol_name() == Some(DICT_WORD) && name == FROMKEYS {
+			return Some(self.call(FROMKEYS, word_node, arguments, false));
+		}
 		let has_arguments = !arguments.is_empty();
 		let literal = self.object_literal(receiver);
 		let is_field = literal.as_ref().and_then(object_entries).is_some_and(|entries| entries.iter().any(|(field, _)| field == name));
@@ -1078,9 +1098,7 @@ impl Lowering {
 	}
 
 	fn next_temporary(&self) -> usize {
-		let number = self.temporaries.get();
-		self.temporaries.set(number + 1);
-		number
+		self.temporaries.next_number()
 	}
 
 	/// `receiver?.name`: ø when the receiver is ø, else the field
@@ -1144,16 +1162,19 @@ impl Lowering {
 		}
 		// a text builtin's own arity check names its values (`trim takes 1 value, got 2`)
 		let checks_itself = crate::wasm_emitter::text_builtins::is_text_builtin(word);
-		if arguments.len() != wanted && !checks_itself {
+		// a prelude parameter with a default may be left out: its definition fills it in
+		let fewest = wanted - crate::modules::prelude_word_defaults(word);
+		if !(fewest..=wanted).contains(&arguments.len()) && !checks_itself {
 			let plural = if wanted == 1 { "" } else { "s" };
+			let counts = if fewest == wanted { wanted.to_string() } else { format!("{fewest} to {wanted}") };
 			let call = Node::List([vec![head.clone()], arguments.clone()].concat(), Bracket::Round, Separator::None);
-			return Diagnostic::at(&call, format!("{word} takes {wanted} argument{plural}, got {}", arguments.len())).into_error();
+			return Diagnostic::at(&call, format!("{word} takes {counts} argument{plural}, got {}", arguments.len())).into_error();
 		}
 		match EXPANDED_WORDS.iter().find(|(name, _, _)| *name == word) {
 			Some((_, _, template)) if word == SUM_WORD => dispatched_sum(self.expanded(template, arguments)),
 			Some((_, _, template)) => self.expanded(template, arguments),
 			// a prelude word calls its definition from lib/prelude.warp (modules::prelude_name)
-			None if let Some(qualified) = crate::modules::prelude_name(word) => call(&qualified, arguments),
+			None if let Some(qualified) = crate::modules::prelude_name(word) => call(&qualified, crate::modules::prelude_arguments(word, arguments)),
 			None => {
 				let name = if matches!(head.drop_meta(), Node::Symbol(written) if written == word) { head.clone() } else { symbol(word) };
 				Node::List([vec![name], arguments].concat(), Bracket::Round, Separator::None)

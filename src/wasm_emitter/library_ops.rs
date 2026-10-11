@@ -29,7 +29,8 @@ const COPY_BYTES: I<'static> = I::MemoryCopy { src_mem: 0, dst_mem: 0 };
 const EMPTY_TEXT: &str = "ø";
 
 /// Names of the runtime functions, keyed by the library word
-pub const LIBRARY_FUNCTIONS: [(&str, &str); 18] = [
+pub const LIBRARY_FUNCTIONS: [(&str, &str); 19] = [
+	(super::wasi_emitter::WASI_ENVIRONMENT, super::wasi_emitter::WASI_ENVIRONMENT),
 	(crate::library_words::MAP_KEYS, crate::library_words::MAP_KEYS),
 	(crate::library_words::MAP_VALUES, crate::library_words::MAP_VALUES),
 	(crate::library_words::MAP_ENTRIES, crate::library_words::MAP_ENTRIES),
@@ -78,9 +79,11 @@ impl WasmGcEmitter {
 		self.emit_text_case("text_upper", CaseMapping::Upper);
 		self.emit_text_case("text_lower", CaseMapping::Lower);
 		self.emit_text_split();
+		self.emit_hex_runtime(); // list_join calls hex_text
 		self.emit_list_join();
 		self.emit_list_sort(); // after text_chars and list_join: a text sorts its characters
 		self.emit_print_value(); // after list_join, which gives the text
+		self.emit_wasi_environment();
 		self.emit_node_slice(); // after list_reverse, text_chars and list_join, which it calls
 		self.emit_codepoint_of();
 	}
@@ -226,6 +229,7 @@ impl WasmGcEmitter {
 			if let Some(table) = witness {
 				s.emit_instance_order(f, table, kinds, first, second);
 			}
+			s.emit_time_order(f, kinds, first, second);
 			// numbers only from here
 			for kind in kinds {
 				is_kind(f, kind, Kind::Int);
@@ -398,6 +402,7 @@ impl WasmGcEmitter {
 		self.emit_exact_text();
 		self.emit_float_text(); // after int_to_decimal, which it calls
 		self.emit_uncertain_text(); // after float_text and text_concat, which it calls
+		self.emit_time_text(); // after int_to_decimal and the times runtime, which it calls
 		for (name, nested) in joinings {
 			self.emit_joining(name, nested);
 		}
@@ -474,6 +479,10 @@ impl WasmGcEmitter {
 				s.emit_field(f, element, 0);
 				Self::emit_list(f, &[I::I64Const(kind as i64), I::I64Eq]);
 			};
+			let masked_kind_is = |f: &mut Function, kind: Kind| {
+				s.emit_field(f, element, 0);
+				Self::emit_list(f, &[I::I64Const(KIND_MASK), I::I64And, I::I64Const(kind as i64), I::I64Eq]);
+			};
 			let next_element = |f: &mut Function| {
 				s.emit_field(f, cell, 1);
 				Self::emit_list(f, &[I::RefCastNonNull(HeapType::Concrete(node_type)), I::LocalSet(element)]);
@@ -496,6 +505,15 @@ impl WasmGcEmitter {
 				Self::emit_list(f, &[I32Const(bool_texts[1].0 as i32), I32Const(bool_texts[1].1 as i32)]);
 				s.call(f, "new_text");
 				Self::emit_list(f, &[I::End, I::LocalSet(element), I::End]);
+				// an Int shown in hex joins as 0xFF (card hex-printing)
+				if s.ctx.func_registry.contains(super::hex::HEX_TEXT) {
+					s.emit_field(f, element, 0);
+					Self::emit_list(f, &[I::I64Const(crate::type_kinds::HEX_KIND), I::I64Eq, I::If(BlockType::Empty)]);
+					s.emit_field(f, element, 1);
+					Self::emit_list(f, &[I::RefCastNonNull(HeapType::Concrete(i64_box)), I::StructGet { struct_type_index: i64_box, field_index: 0 }]);
+					s.call(f, super::hex::HEX_TEXT);
+					Self::emit_list(f, &[I::LocalSet(element), I::End]);
+				}
 				// an Error joins as its message (card catch-message): `print e`
 				is_kind(f, Kind::Error);
 				Self::emit_list(f, &[I::If(BlockType::Empty), I::I64Const(Kind::Text as i64)]);
@@ -508,10 +526,6 @@ impl WasmGcEmitter {
 					let new_text = |f: &mut Function, (pointer, length): (u32, u32)| {
 						Self::emit_list(f, &[I32Const(pointer as i32), I32Const(length as i32)]);
 						s.call(f, "new_text");
-					};
-					let masked_kind_is = |f: &mut Function, kind: Kind| {
-						s.emit_field(f, element, 0);
-						Self::emit_list(f, &[I::I64Const(KIND_MASK), I::I64And, I::I64Const(kind as i64), I::I64Eq]);
 					};
 					// a symbol (a map's key) as its name
 					is_kind(f, Kind::Symbol);
@@ -574,25 +588,33 @@ impl WasmGcEmitter {
 					f.instruction(&I::End);
 					s.call(f, super::text_builtins::TEXT_CONCAT);
 					Self::emit_list(f, &[I::LocalSet(element), I::End]);
-					// a ø item reads as ø, as Node::serialize writes it
-					is_kind(f, Kind::Empty);
-					f.instruction(&I::If(BlockType::Empty));
-					Self::emit_list(f, &[I32Const(empty_text.0 as i32), I32Const(empty_text.1 as i32)]);
-					s.call(f, "new_text");
-					Self::emit_list(f, &[I::LocalSet(element), I::End]);
 				}
+				// a ø item reads as ø, as Node::serialize writes it: also an empty map at the top (card print-empty-map)
+				is_kind(f, Kind::Empty);
+				f.instruction(&I::If(BlockType::Empty));
+				Self::emit_list(f, &[I32Const(empty_text.0 as i32), I32Const(empty_text.1 as i32)]);
+				s.call(f, "new_text");
+				Self::emit_list(f, &[I::LocalSet(element), I::End]);
 				if s.should_emit_function(super::uncertain::UNCERTAIN_TEXT) {
 					is_kind(f, Kind::Uncertain);
 					Self::emit_list(f, &[I::If(BlockType::Empty), I::LocalGet(element), I::RefAsNonNull]);
 					s.call(f, super::uncertain::UNCERTAIN_TEXT);
 					Self::emit_list(f, &[I::LocalSet(element), I::End]);
 				}
-				is_kind(f, Kind::Float);
-				f.instruction(&I::If(BlockType::Empty));
-				s.emit_field(f, element, 1);
-				Self::emit_list(f, &[I::RefCastNonNull(HeapType::Concrete(float_box)), I::StructGet { struct_type_index: float_box, field_index: 0 }]);
-				s.call(f, super::float_text::FLOAT_TEXT);
-				Self::emit_list(f, &[I::LocalSet(element), I::End]);
+				if s.should_emit_function(super::times::TIME_TEXT) {
+					masked_kind_is(f, Kind::Time); // the form in the info bits
+					Self::emit_list(f, &[I::If(BlockType::Empty), I::LocalGet(element), I::RefAsNonNull]);
+					s.call(f, super::times::TIME_TEXT);
+					Self::emit_list(f, &[I::LocalSet(element), I::End]);
+				}
+				if s.should_emit_function(super::float_text::FLOAT_TEXT) {
+					is_kind(f, Kind::Float);
+					f.instruction(&I::If(BlockType::Empty));
+					s.emit_field(f, element, 1);
+					Self::emit_list(f, &[I::RefCastNonNull(HeapType::Concrete(float_box)), I::StructGet { struct_type_index: float_box, field_index: 0 }]);
+					s.call(f, super::float_text::FLOAT_TEXT);
+					Self::emit_list(f, &[I::LocalSet(element), I::End]);
+				}
 				if exact_numbers { // a big integer or a ratio joins as its exact text, a fixnum by int_to_decimal below
 					is_kind(f, Kind::Int);
 					f.instruction(&I::If(BlockType::Empty));

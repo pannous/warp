@@ -139,3 +139,22 @@ that is what a funcref table plus closures would add. Pipeline: lambdas (loops f
 Parser: `&name` is glued to the name and not to a word before it (`a &b` is now the application `a (&b)`, `a & b` and `a&b` stay `and`);
 `x<k` is a comparison, only a type name (`Vec<T>`, `list<int>`, a type word) starts a generic; a braceless `map xs f` is flattened.
 Not done: `f(+)` (an operator inside call brackets does not parse), unary operators as values, functions stored in lists or objects.
+
+## Python's list, dict and tuple words (card python-stdlib, tests/lists/test_python_collections.rs)
+
+Aliases of warp's own words: `reversed` → reverse, `tuple(xs)` → list, `len` → count (with its hint), `xs.index(x)` (lib/list.warp:
+the position from 0, a `ValueError` raise when absent; `index_of` stays the 1-based one), `xs.extend(ys)` (appends in place),
+`m.items()` → entries, `m.update(n)` → merge (in place), `m.setdefault(k, d)`, `dict(pairs)` (prelude). Already warp words:
+append, remove, pop(), count, copy, keys, values, get, sorted, any, all, sum, min, max.
+Not aliased, on purpose or open:
+- `xs.sort()` / `xs.reverse()` stay copies with the unused-value warning; warp's in-place form is `xs.sort!` (wiki/mutable.md).
+- `xs.insert(i, v)` is the ambiguity error naming both readings (decided earlier).
+- Card python-aliases: `x.pop(k)` (0-based position of a list, -1 the last; key of a map) and `x.clear()` of a variable lower
+  in declaration_lowering (removed_key, cleared_collection) to prelude words (popped_item/popped_rest, cleared), which
+  dispatch with `x is map` at run time; library_words::LOWERED_TO_PRELUDE makes modules load them. `m.popitem()` (lib/map.warp),
+  `fromkeys(ks, v)` (prelude), `dict.fromkeys(ks, v)` (library_words method_call drops the `dict` receiver).
+- pop, pop(i) and clear() change the list in place like append/remove (card aliased-list): pop(i) and clear() wrap the
+  fresh rest in `list_become(xs, …)` (list_ops emit_list_become); an alias group changed in place is no typed array
+  (list_dispatch find_typed_lists), whose Node copy would part from the alias. A map of one entry passed to a function is its lone key at run time (`type` says key).
+- `x is list` of a value of unknown type is no for a map (a curly list at run time, card inside-function); lib/markup.warp
+  asks html_is_group (list or map) where a block `{…}` and a list `[…]` both hold items.

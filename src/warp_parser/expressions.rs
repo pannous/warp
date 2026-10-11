@@ -1,6 +1,7 @@
 //! Expressions: the Pratt loop, special infix operators, prefix operators, if as a prefix
 
 use super::*;
+use crate::lowering::event_signals::{EMIT_ALIASES, EMIT_WORDS};
 
 /// Characters that end a statement: a body cannot start with them
 const BODY_ENDS: [char; 7] = ['\0', ';', ',', '\n', '}', ')', ']'];
@@ -12,6 +13,7 @@ impl WarpParser {
 	/// Handles prefix, infix, and suffix operators
 	pub(super) fn parse_expr(&mut self, min_bp: u8) -> Node {
 		self.skip_spaces();
+		let heads_definition = self.after_function_keyword_word();
 
 		// Step 1: Prefix (nud)
 		let lhs = if let Some((op, chars)) = self.peek_negated_control_word() {
@@ -44,11 +46,16 @@ impl WarpParser {
 			// `sort by abs.take first 1`: a glued method applies to the word, it is no operand
 			let method_follows = self.peek_char(chars) == '.' && self.peek_char(chars + 1).is_alphabetic();
 			let bare = operator_word && (self.expression_ends_after(chars) || method_follows);
+			// `sqrt(2).round(2)`: the glued parentheses are the whole operand, the method applies to the result
+			let call_with_method = operator_word && self.parenthesis_length(chars).is_some_and(|length| self.peek_char(chars + length) == '.' && self.peek_char(chars + length + 1).is_alphabetic());
 			self.hint_operator(chars, true);
 			self.advance_by(chars);
 			self.skip_spaces();
 			if bare {
 				Node::Key(Box::new(Empty), op, Box::new(Empty))
+			} else if call_with_method {
+				let operand = self.parse_atom();
+				self.finish_prefix(op, operand)
 			} else if chars == 1 && op == Op::Abs {
 				self.parse_norm_bars()
 			} else {
@@ -69,6 +76,7 @@ impl WarpParser {
 			self.parse_atom()
 		};
 
+		self.continues_definition_head = heads_definition;
 		self.continue_expr(lhs, min_bp)
 	}
 
@@ -153,10 +161,10 @@ impl WarpParser {
 		Some(Node::List(vec![Symbol(AWAIT_KEYWORD.to_string()), operand], Bracket::None, Separator::Space))
 	}
 
-	/// `1 + emit ask`, `2 * emit stop the machine{reason: "x"} + 1`: the phrase `emit ask` is one operand, the words
+	/// `1 + emit ask`, `net * (1 + ask tax_rate)` (card price-net), `2 * emit stop the machine{reason: "x"} + 1`: the phrase `emit ask` is one operand, the words
 	/// of the event and its data bind like the operand of a unary minus; the same Space list a statement `emit ask` is
 	pub(super) fn try_parse_emit(&mut self) -> Option<Node> {
-		let keyword = EMIT_KEYWORDS.into_iter().find(|keyword| self.matches_keyword(keyword))?;
+		let keyword = EMIT_WORDS.into_iter().chain(EMIT_ALIASES).find(|keyword| self.matches_keyword(keyword))?;
 		let before_keyword = self.mark();
 		self.advance_by(keyword.len());
 		self.skip_spaces();
@@ -204,7 +212,9 @@ impl WarpParser {
 	/// `data a and b` is the data `a and b`, also as an operand (`x = data a and b`, `string(data a and b)`); parentheses
 	/// around all of it only group it (`data (a and b)`). `data = …`, `data.x`, glued `data(x)` and `data class` stay
 	pub(super) fn try_parse_data(&mut self) -> Option<Node> {
-		if self.options.data_mode || !self.matches_keyword(DATA_KEYWORD) || self.peek_char(DATA_KEYWORD.len()) != ' ' {
+		// `data = [4 2]; for x in data {…}`: a variable named data is read, not a prefix
+		let is_variable = self.variables.contains(DATA_KEYWORD);
+		if is_variable || self.options.data_mode || !self.matches_keyword(DATA_KEYWORD) || self.peek_char(DATA_KEYWORD.len()) != ' ' {
 			return None;
 		}
 		let before_keyword = self.mark();
@@ -225,6 +235,10 @@ impl WarpParser {
 
 	/// The operator after `lhs` that the infix table does not hold, its width in characters and its binding power
 	pub(super) fn special_infix(&self, lhs: &Node) -> Option<(SpecialInfix, usize, (u8, u8))> {
+		// `def div(a,b) = …`: the word after a function keyword is the name, never an operator
+		if matches!(lhs.drop_meta(), Node::Symbol(keyword) if crate::operators::is_function_keyword(keyword)) {
+			return None;
+		}
 		// `a mod b` (`a modulo b`) is `a % b` (Euclidean, 0 ≤ r < |b|), `a rem b` the truncated remainder (sign of the
 		// dividend, as C)
 		for (word, op) in [("mod", Op::Mod), ("modulo", Op::Mod), ("rem", Op::Rem)] {
@@ -288,6 +302,7 @@ impl WarpParser {
 		const SUBSCRIPT_BP: u8 = Op::Hash.binding_power().0;
 		// Right operand of the last comparison, to chain a<b<c into a<b and b<c
 		let mut previous_comparand: Option<Node> = None;
+		let heads_definition = std::mem::take(&mut self.continues_definition_head);
 		loop {
 			self.skip_spaces_and_inline_comments(); // not newlines: they are separators
 
@@ -385,6 +400,12 @@ impl WarpParser {
 			if ends_command || l_bp < min_bp || (op == Op::Else && self.stops_at_else) {
 				break;
 			}
+			// `xs where #it > 1`, `[i for i in xs where -i < 0]`, `where to#i == n`: after `where` a glued `#` or `-`, or an
+			// operator word (a variable `to`), starts the condition
+			let starts_operand = (matches!(op, Op::Hash | Op::Sub) && !self.peek_char(chars).is_whitespace()) || self.current_char().is_alphabetic();
+			if starts_operand && ends_with_clause_word(&lhs) {
+				break;
+			}
 			if let Err(refused) = self.left_arrow_assignment(op, &lhs) {
 				lhs = refused;
 				break;
@@ -418,6 +439,12 @@ impl WarpParser {
 			let block_body = match op {
 				Op::Colon | Op::Define if self.only_blanks_before_newline() => {
 					self.with_equals_comparing(false, |parser| parser.parse_indented_block()) // the block of `if c:` and `f(n):=` assigns
+				}
+				// `def foo: hi=2*2` defines foo by the rest of the line, no `(foo: hi) = 2*2`; Scala's `def f(x: Int): Int = …`
+				// declares its result type
+				Op::Colon if heads_definition && !glued_pair && !self.result_type_follows() => {
+					self.skip_spaces();
+					Some(self.with_equals_comparing(false, |parser| parser.rest_of_statement()))
 				}
 				Op::Do | Op::Then | Op::Else if self.closing_end_follows(&END_BLOCK_OPENERS) => Some(self.parse_end_block(op == Op::Then)),
 				Op::Do if self.closing_end_follows(&["do"]) => Some(error(AMBIGUOUS_END)), // `do a; if c then b end`
@@ -480,7 +507,11 @@ impl WarpParser {
 			}
 
 			let rhs = if may_pipe { self.pipe_operand(rhs, op_line, op_column) } else { rhs };
-			let rhs = if op == Op::Eq && written != IS_WORD { crate::type_tests::equality_operand(rhs) } else { rhs };
+			// a type word compares as its type on either side of == and != (`int != integer` is no)
+			let rhs = if op.is_equality() && written != IS_WORD { crate::type_tests::equality_operand(&lhs, rhs) } else { rhs };
+			if op.is_equality() && written != IS_WORD {
+				lhs = crate::type_tests::equality_operand(&rhs, lhs);
+			}
 			if op == Op::Eq && written == IS_WORD {
 				lhs = crate::type_tests::with_compared_text(lhs, rhs_written.trim());
 			}
@@ -490,7 +521,7 @@ impl WarpParser {
 			} else {
 				op
 			};
-			self.note_text_variable(&lhs, op, &rhs);
+			self.note_variable(&lhs, op, &rhs);
 			if let Some(warning) = hash_range_warning(&lhs, op, &written, &rhs) {
 				if let Err(strict) = crate::diagnostic::report(&[warning]) {
 					lhs = strict;
@@ -603,17 +634,7 @@ impl WarpParser {
 			let if_cond = Node::Key(Box::new(Empty), Op::If, cond.clone());
 			// the body runs to the end of the statement, `if c: x+=1`, but not into the `else`
 			let outer = std::mem::replace(&mut self.stops_at_else, true);
-			let then_expr = match then_expr.drop_meta() {
-				_ if is_print_word(then_expr) && self.braceless_argument_follows() => { // `if it%2: print it`, `if c: print ord x`
-					let first = self.expression_of_words();
-					self.print_call_from(first, Self::expression_of_words)
-				}
-				// `if c: print a, b`: the colon took `print a`, the comma continues its arguments
-				Node::List(words, Bracket::None, Separator::Space) if words.len() > 1 && is_print_word(&words[0]) && self.current_char() == ',' => {
-					self.print_call_from(one_expression(&words[1..]), |parser| parser.parse_expr(0))
-				}
-				_ => self.continue_expr(then_expr.as_ref().clone(), 0),
-			};
+			let then_expr = self.continue_colon_body(then_expr);
 			self.stops_at_else = outer;
 			let if_then = Node::Key(Box::new(if_cond), Op::Then, Box::new(then_expr));
 			return self.parse_optional_else(if_then, ElseParseMode::Expr);
@@ -637,6 +658,21 @@ impl WarpParser {
 		}
 
 		Node::Key(Box::new(Empty), Op::If, Box::new(rhs))
+	}
+
+	/// The rest of the body after `if c:` or `while c:`, of which the colon took only the first word or words
+	pub(super) fn continue_colon_body(&mut self, body: &Node) -> Node {
+		match body.drop_meta() {
+			_ if is_print_word(body) && self.braceless_argument_follows() => { // `if it%2: print it`, `if c: print ord x`
+				let first = self.expression_of_words();
+				self.print_call_from(first, Self::expression_of_words)
+			}
+			// `if c: print a, b`: the colon took `print a`, the comma continues its arguments
+			Node::List(words, Bracket::None, Separator::Space) if words.len() > 1 && is_print_word(&words[0]) && self.current_char() == ',' => {
+				self.print_call_from(one_expression(&words[1..]), |parser| parser.parse_expr(0))
+			}
+			_ => self.continue_expr(body.clone(), 0),
+		}
 	}
 
 	/// `|x| x*x`, `|a, b| a+b` (Rust, and Ruby's `{ |x| x*x }`): the parameters of a lambda between bars, which the
@@ -678,9 +714,12 @@ impl WarpParser {
 		matches!(index.drop_meta(), Node::Symbol(name) if self.key_variables.contains(name) || self.text_variables.contains(name))
 	}
 
-	/// `l = "en"` or `k:text` (a typed parameter or declaration) makes l, k text variables
-	fn note_text_variable(&mut self, lhs: &Node, op: Op, rhs: &Node) {
+	/// `l = "en"` or `k:text` (a typed parameter or declaration) makes l, k text variables; any `x = …` a variable
+	fn note_variable(&mut self, lhs: &Node, op: Op, rhs: &Node) {
 		let Node::Symbol(name) = lhs.drop_meta() else { return };
+		if matches!(op, Op::Assign | Op::Define) {
+			self.variables.insert(name.clone());
+		}
 		let holds_text = match (op, rhs.drop_meta()) {
 			(Op::Assign | Op::Define, Node::Text(_)) => true,
 			(Op::Colon, Node::Symbol(type_word)) => TEXT_TYPE_WORDS.contains(&type_word.as_str()),
@@ -703,5 +742,14 @@ fn combined(lhs: Node, op: Op, written: &str, rhs: Node, middle: Option<Node>) -
 		(_, Some((start, end))) if op == Op::Hash => call(SLICE_WORD, vec![lhs, start, end]),
 		_ if op == Op::To && written.starts_with(DOWN_WORD) => call(REVERSE_WORD, vec![Node::Key(Box::new(rhs), Op::To, Box::new(lhs))]),
 		_ => Node::Key(Box::new(lhs), op, Box::new(rhs)),
+	}
+}
+
+/// `where`, alone or the last word of `for i in xs where`: a word whose condition follows
+fn ends_with_clause_word(node: &Node) -> bool {
+	match node.drop_meta() {
+		Node::Symbol(word) => CLAUSE_WORDS.contains(&word.as_str()),
+		Node::List(items, Bracket::None, _) => items.last().is_some_and(ends_with_clause_word),
+		_ => false,
 	}
 }

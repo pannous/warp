@@ -40,6 +40,11 @@ use unicode_normalization::UnicodeNormalization;
 const URL_MARK: &str = "://";
 const UNIT_LOOP_WORDS: [&str; 4] = ["chars", "characters", "codepoints", "bytes"];
 const BYTES_WORD: &str = "bytes";
+const WORD_UNIT: &str = "word";
+/// The loop variable names that walk a text by a unit other than the character, and the text between two units
+const TEXT_UNIT_NAMES: [(&str, &str); 2] = [(WORD_UNIT, " "), ("line", "\n")];
+const SPLIT_WORD: &str = "split";
+const FILTER_WORD: &str = "filter";
 pub const IT_WORD: &str = "it";
 /// The item of the map a Julia dot call `f.(xs)` lowers to
 const BROADCAST_ITEM: &str = "broadcast_item";
@@ -49,8 +54,6 @@ const REST_MARKERS: [&str; 2] = ["vararg", "params"];
 const MAX_INTEGER_EXPONENT: i64 = 4096;
 /// Literal suffixes of C, Java and C#, a tight conversion: `0.1f`, `0.1d` (double) → float; `0.1l` (long double) → exact, the default anyway
 const LITERAL_SUFFIXES: [(char, &str); 6] = [('f', "float"), ('F', "float"), ('d', "float"), ('D', "float"), ('l', "exact"), ('L', "exact")];
-/// `0.1:float`, `1.5:int`: a number literal directly typed with one of these binds tightly, unlike the loose `as`
-const LITERAL_NUMBER_TYPES: [&str; 11] = ["int", "i64", "integer", "exact", "real", "float", "fast", "f64", "double", "f32", "i32"];
 /// Words that may precede the name of a global besides a type word (`int`, `long` … see `analyzer::type_word_kind`)
 pub(crate) const ORDINAL_SUFFIXES: [&str; 4] = ["st", "nd", "rd", "th"];
 
@@ -80,8 +83,8 @@ pub(crate) const TYPE_DECLARATION_WORDS: [&str; 2] = ["class", "struct"];
 /// Words before a class declaration that change nothing in warp: `data class` (a warp class compares by value already),
 /// `open`, `abstract`, `sealed`, `final`, visibility
 const CLASS_MODIFIERS: [&str; 8] = ["data", "open", "abstract", "sealed", "final", "public", "private", "internal"];
-/// The keywords of a field in a primary constructor `class Point(val x: Int, var y: Int)`
-const FIELD_KEYWORDS: [&str; 3] = ["val", "var", "let"];
+/// The keywords of a field: Kotlin's primary constructor `class Point(val x: Int, var y: Int)`, Swift's `var count = 0`
+pub(crate) const FIELD_KEYWORDS: [&str; 3] = ["val", "var", "let"];
 /// `new Point(1, 2)`: the construction `Point(1, 2)`
 const NEW_WORD: &str = "new";
 /// `constant x = 3` is `const x = 3`, with a note naming const (card constant-alias)
@@ -161,8 +164,6 @@ const GLUED_BLOCK_KEYWORDS: [&str; 3] = ["go", "loop", "do"];
 const AWAIT_ALL_WORD: &str = "all";
 /// `await x` binds its operand like unary minus
 const AWAIT_OPERAND_BP: u8 = Op::Neg.binding_power().1;
-/// `1 + emit ask`: an emit inside an expression takes the words of its event like a call (card emit-operand)
-const EMIT_KEYWORDS: [&str; 2] = ["emit", "send"];
 const PRINT_WORD: &str = "print";
 const CODEPOINT_TYPE: &str = "codepoint";
 /// `print a  print b`: statements separated by spaces only (user decision 2026-10-03: a loud error)
@@ -419,6 +420,10 @@ const AND_KEYWORD: &str = "and";
 const CONTINUING_WORDS: [&str; 7] = ["and", "or", "xor", "then", "else", "is", "in"];
 /// A prefix operator word after `and` starts its operand, not a statement: `a and not c` (card let-if)
 const OPERAND_PREFIX_WORDS: [&str; 1] = ["not"];
+/// Words a condition follows: `xs where #it > 1` counts it, `where` takes no `#` index (card topo-sort-wasm)
+const CLAUSE_WORDS: [&str; 1] = ["where"];
+/// Words between two operands, as an operator: `and n mod 100 <= 13` continues the condition (card if-then-chain)
+const INFIX_WORDS: [&str; 6] = ["mod", "modulo", "rem", "div", "contains", "as"];
 pub const ASSERT_MARKER: &str = "assert·else";
 /// The words that start the fallback of `try X else Y`: `else`, classical `catch`, Python's `except` (P60)
 const FALLBACK_WORDS: [&str; 3] = [ELSE_KEYWORD, "catch", "except"];
@@ -470,6 +475,13 @@ fn iterates_keys(iterable: &Node) -> bool {
 
 /// The got-it topic of a filtering loop (`for friend in xs`, `for (it>2) in xs`)
 pub(crate) const FILTER_LOOP_TOPIC: &str = "for-filter";
+
+/// The type test of a loop `for T in xs` carries its loop: the iterable and the got-it question announcing the filter
+#[derive(Clone, Debug, PartialEq)]
+pub(crate) struct FilterLoop {
+	pub question: crate::diagnostic::Ask,
+	pub iterable: Node,
+}
 /// Built-in adjectives of a loop filter `(even number)`, when no function of that name is defined
 const EVEN_WORD: &str = "even";
 const ODD_WORD: &str = "odd";
@@ -482,19 +494,15 @@ const TO_SENTENCE_WORD: &str = "To";
 const DO_WORD: &str = "do";
 const OF_WORD: &str = "of";
 /// `a[start:end]` calls the library word `slice`
-const SLICE_WORD: &str = "slice";
+const SLICE_WORD: &str = crate::library_words::SLICE;
 const TIMES_WORD: &str = "times";
 /// The call `n times text` is parsed to: the text repeated n times
 pub const TEXT_TIMES: &str = "times·text";
 /// The acknowledge-once note that a spaced `//` after code is a comment, not Python's floor division
 const SLASH_COMMENT_TOPIC: &str = "slash-comment";
-/// Directive words after `#` that keep the line a comment (`#use lib`, `#include x`, `#import f from "m"`);
-/// besides them only `# ` with a space, `#!` (shebang) and `##` (doc comment) start a comment, any other `#x` counts
-const HASH_DIRECTIVES: [&str; 3] = ["use", "include", "import"];
 const ELVIS_WORD: &str = "elvis";
 /// `x is int` tests the type; `x == int` stays equality (user decision #30)
 const IS_WORD: &str = "is";
-const HEX_WORD: &str = "hex";
 /// `N times` takes everything up to an assignment: `n+1 times {…}`
 const TIMES_BP: u8 = 50;
 
@@ -582,7 +590,12 @@ fn is_number_glyph(ch: char) -> bool {
 }
 
 fn is_identifier_char(c: char) -> bool {
-	c.is_alphanumeric() || c == '_'
+	c.is_alphanumeric() || c == '_' || is_music_accidental(c)
+}
+
+/// The sharp and flat signs continue a name: `C♯4`, `D♭5` are note names (lowering/music_words.rs)
+fn is_music_accidental(c: char) -> bool {
+	matches!(c, '♯' | '♭')
 }
 
 /// `floor_quotient(a, b)`: what `a // b` and `a div b` are, the Euclidean quotient that goes with `%`
@@ -754,6 +767,8 @@ pub struct WarpParser {
 	key_variables: Vec<String>,
 	/// Names assigned a text or typed text (`l = "en"`, `k:text`): `m[l]` looks a key up too (card text-key)
 	text_variables: std::collections::HashSet<String>,
+	/// Names assigned so far (`data = […]`): such a name is read as the variable, not as a prefix word
+	variables: std::collections::HashSet<String>,
 	/// The binding power of a glued pair's value (`for:email`): that value is one atom, no call of what follows
 	glued_pair_bp: Option<u8>,
 	/// Where the innermost bracketed group opened (line, column): an unclosed one names it
@@ -794,6 +809,8 @@ pub struct WarpParser {
 	pending_comment: Option<String>,
 	/// The symbol parsed last was a function keyword (`def`, `function`): the next one is the function's name
 	after_function_keyword: bool,
+	/// The expression continue_expr goes on with heads a definition: `foo` of `def foo: hi=2*2`
+	continues_definition_head: bool,
 	/// inside Elixir's capture `&(…)`, where `&1` is its first argument
 	in_capture: bool,
 	/// `a ?: b` with a computed left side parsed so far, numbering their hidden variables
@@ -1080,6 +1097,7 @@ impl WarpParser {
 			in_for_header: false,
 			key_variables: vec![],
 			text_variables: Default::default(),
+			variables: Default::default(),
 			glued_pair_bp: None,
 			group_start: (0, 0),
 			stops_at_else: false,
@@ -1097,6 +1115,7 @@ impl WarpParser {
 			times_loops: 0,
 			pending_comment: None,
 			after_function_keyword: false,
+			continues_definition_head: false,
 			in_capture: false,
 			elvis_operands: 0,
 			finally_blocks: 0,

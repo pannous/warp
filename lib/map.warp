@@ -17,3 +17,10 @@ entries(m) := { out = []; ks = keys(m); for k in ks { out = out + [[k, m.get(k)]
 get_or(m, key, fallback) := if m.has(key) then m.get(key) else fallback
 // the first key whose value f holds for, ø when none
 find_key(m, f) := { ks = keys(m); for k in ks { if f(m.get(k)) { return k } }; ø }
+// Python's dict methods (card python-stdlib): update merges in place, items are the entries, setdefault keeps the
+// default for a missing key and gives the key's value
+update(m, other) := merge(m, other)
+items(m) := entries(m)
+setdefault(m, key, fallback) := { if not m.has(key) { m[key] = fallback }; m.get(key) }
+// the last entry as [key value], removed from m in place (Python's dict.popitem)
+popitem(m) := { k = last(keys(m)); v = m.get(k); m.remove(k); [k, v] }

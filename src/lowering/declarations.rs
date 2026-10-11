@@ -4,7 +4,7 @@
 //! `real f(real x, int n) { … }`, the C way, defines `f(x:real, n:int) := { … }`.
 
 use super::words::{ON_WORD, RETURN_WORD};
-use super::nodes::{block, call, children_rewritten, grouped_parameters, if_then, if_then_else, is_type_word, key};
+use super::nodes::{Counter, block, call, children_rewritten, grouped_parameters, if_then, if_then_else, is_type_word, key};
 use crate::node::{symbol, Bracket, Node, Separator};
 use crate::operators::{is_function_keyword, Op};
 
@@ -71,11 +71,9 @@ const RAISE_WORD: &str = "raise";
 const TIMEOUT_EVENT: &str = "timeout";
 thread_local! {
 	/// `await any` races so far, each with its own winner variable
-	static RACES: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+	static RACES: Counter = const { Counter::starting_at(0) };
 }
 const ADD_WORD: &str = "add";
-/// The words that count a list: counting a job list waits for no job
-const JOB_COUNTERS: [&str; 4] = ["count", "size", "length", "len"];
 /// The parameter of the await map over a job list (resolve_tasks)
 const AWAITED_JOB: &str = "awaited_job";
 /// `stop job`, `job.pause()`: until resolve_tasks knows whether the task runs on a thread
@@ -192,9 +190,7 @@ fn rewrite_flags(node: Node, types: &[(String, Vec<String>)]) -> Node {
 			}
 			Node::List(items.into_iter().map(|item| rewrite_flags(item, types)).collect(), bracket, separator)
 		}
-		Node::Key(left, op, right) => key(rewrite_flags(*left, types), op, rewrite_flags(*right, types)),
-		Node::Meta { node, data } => Node::Meta { node: Box::new(rewrite_flags(*node, types)), data },
-		other => other,
+		other => children_rewritten(other, |child| rewrite_flags(child, types)),
 	}
 }
 
@@ -214,7 +210,7 @@ fn named_flags(value: &Node) -> Vec<String> {
 /// finishes:` for `go download(url)`) runs at once, as the task is done; a handler of a pause or stop never runs and
 /// `stop job` has nothing left to stop: both warn. A program defining its own `go` or `await` keeps them.
 pub fn lower_tasks(node: Node) -> Node {
-	let node = awaited_starts(node, &std::cell::Cell::new(0));
+	let node = awaited_starts(node, &Counter::default());
 	let mut defined = std::collections::HashSet::new();
 	let mut functions = std::collections::HashSet::new();
 	let mut tasks = std::collections::HashSet::new();
@@ -285,12 +281,12 @@ fn spoken_words(items: &[Node]) -> Vec<Node> {
 }
 
 /// `await go f(x)`: the task gets a name, `(go·job·1 = go f(x); await go·job·1)`, so it is awaited like any other
-fn awaited_starts(node: Node, counter: &std::cell::Cell<usize>) -> Node {
+fn awaited_starts(node: Node, counter: &Counter) -> Node {
 	match node {
 		Node::List(items, bracket, separator) => {
 			match spoken_words(&items).as_slice() {
 				[await_word, go_word, started @ ..] if !started.is_empty() && await_word.name() == TASK_WORDS[1] && go_word.name() == TASK_WORDS[0] => {
-					let job = Node::Symbol(format!("go·job·{}", counter.replace(counter.get() + 1)));
+					let job = Node::Symbol(format!("go·job·{}", counter.next_number()));
 					let start = Node::List([vec![go_word.clone()], started.to_vec()].concat(), Bracket::None, Separator::Space);
 					let assignment = key(job.clone(), Op::Assign, start);
 					let awaited = Node::List(vec![await_word.clone(), job], Bracket::None, Separator::Space);
@@ -310,7 +306,7 @@ fn awaited_starts(node: Node, counter: &std::cell::Cell<usize>) -> Node {
 					let mut starts = vec![];
 					let results: Vec<Node> = listed.into_iter().map(|item| match is_start(&item) {
 						true => {
-							let job = Node::Symbol(format!("go·job·{}", counter.replace(counter.get() + 1)));
+							let job = Node::Symbol(format!("go·job·{}", counter.next_number()));
 							starts.push(key(job.clone(), Op::Assign, item));
 							if racing { job } else { Node::List(vec![await_word.clone(), job], Bracket::None, Separator::Space) }
 						}
@@ -327,9 +323,7 @@ fn awaited_starts(node: Node, counter: &std::cell::Cell<usize>) -> Node {
 				_ => Node::List(items.into_iter().map(|item| awaited_starts(item, counter)).collect(), bracket, separator),
 			}
 		}
-		Node::Key(left, op, right) => key(awaited_starts(*left, counter), op, awaited_starts(*right, counter)),
-		Node::Meta { node, data } => Node::Meta { node: Box::new(awaited_starts(*node, counter)), data },
-		other => other,
+		other => children_rewritten(other, |child| awaited_starts(child, counter)),
 	}
 }
 
@@ -478,9 +472,9 @@ impl Tasks<'_> {
 	fn counted_job_list(&self, node: &Node) -> bool {
 		let is_job_list = |list: &Node| matches!(list.drop_meta(), Node::Symbol(name) if self.job_lists.contains_key(name));
 		match node.drop_meta() {
-			Node::List(items, _, _) => matches!(items.as_slice(), [counter, list] if JOB_COUNTERS.contains(&word(counter).as_str()) && is_job_list(list)),
+			Node::List(items, _, _) => matches!(items.as_slice(), [counter, list] if crate::analyzer::is_counting_word(&word(counter)) && is_job_list(list)),
 			Node::Key(empty, Op::Hash, list) => matches!(empty.drop_meta(), Node::Empty) && is_job_list(list),
-			Node::Key(list, Op::Dot, counter) => is_job_list(list) && JOB_COUNTERS.contains(&word(counter).as_str()),
+			Node::Key(list, Op::Dot, counter) => is_job_list(list) && crate::analyzer::is_counting_word(&word(counter)),
 			_ => false,
 		}
 	}
@@ -565,9 +559,7 @@ impl Tasks<'_> {
 				let Node::List(items, _, _) = left.drop_meta() else { unreachable!("guarded") };
 				self.within(items, Some(*right)).expect("guarded")
 			}
-			Node::Key(left, op, right) => key(self.lower(*left), op, self.lower(*right)),
-			Node::Meta { node, data } => Node::Meta { node: Box::new(self.lower(*node)), data },
-			other => other,
+			other => children_rewritten(other, |child| self.lower(child)),
 		}
 	}
 
@@ -618,7 +610,7 @@ impl Tasks<'_> {
 			Node::List(parts, _, _) if word(&parts[0]) == TASK_VALUE => parts[1].clone(),
 			other => other.clone(),
 		};
-		let started = format!("{STARTED_PREFIX}{}", RACES.with(|races| races.replace(races.get() + 1)));
+		let started = format!("{STARTED_PREFIX}{}", RACES.with(Counter::next_number));
 		let status = marker(crate::host::TASK_STATUS, vec![job_name.clone()]);
 		let runs = key(status, Op::Eq, crate::node::int(TASK_RUNNING));
 		let elapsed = key(marker(crate::host::CLOCK, vec![]), Op::Sub, Node::Symbol(started.clone()));
@@ -690,7 +682,7 @@ impl Tasks<'_> {
 			Node::List(items, _, _) if word(&items[0]) == TASK_VALUE => items[1].clone(),
 			other => other.clone(),
 		};
-		let winner = format!("{RACE_PREFIX}{}", RACES.with(|races| races.replace(races.get() + 1)));
+		let winner = format!("{RACE_PREFIX}{}", RACES.with(Counter::next_number));
 		let winner_is = |index: usize| key(Node::Symbol(winner.clone()), Op::Eq, crate::node::int(index as i64));
 		// `go 1+1` is computed right away, no task is started: it has ended (card await-hang)
 		let ended = |job: &Node| {
@@ -791,7 +783,7 @@ pub fn resolve_tasks(node: Node) -> Node {
 			&& int_starts.get(function).copied().unwrap_or(false);
 		if ints { TaskPath::Ints } else { TaskPath::Values(parameters, definition.return_kind) }
 	};
-	let node = TaskHandlers { path: &path, count: std::cell::Cell::new(0) }.lower(node, &[]);
+	let node = TaskHandlers { path: &path, count: Counter::default() }.lower(node, &[]);
 	let wrapped = std::cell::RefCell::new(std::collections::BTreeMap::new());
 	// the guardable functions, with the type word their Node result converts back to (it comes back from the host as a Node)
 	let guardable = |function: &str| context.user_functions.get(function).filter(|definition| definition.tuple_kinds.is_empty())
@@ -858,7 +850,7 @@ impl TaskHandler {
 
 struct TaskHandlers<'a> {
 	path: &'a dyn Fn(&str) -> TaskPath,
-	count: std::cell::Cell<usize>,
+	count: Counter,
 }
 
 impl TaskHandlers<'_> {
@@ -906,8 +898,7 @@ impl TaskHandlers<'_> {
 				"pause" | "pauses" | "paused" => crate::host::TASK_PAUSED,
 				_ => crate::host::TASK_STOPPED, // stop, cancel
 			};
-			let flag = format!("{HANDLED_PREFIX}{}", self.count.get());
-			self.count.set(self.count.get() + 1);
+			let flag = format!("{HANDLED_PREFIX}{}", self.count.next_number());
 			out.push(crate::variable_signals::assign(&flag, Node::False));
 			let handler = TaskHandler { job, status, body, flag };
 			active.push(handler.clone());
@@ -1133,9 +1124,7 @@ fn resolved(node: Node, path: &dyn Fn(&str) -> TaskPath, wrapped: &std::cell::Re
 				_ => Node::List(items, bracket, separator),
 			}
 		}
-		Node::Key(left, op, right) => key(resolved(*left, path, wrapped), op, resolved(*right, path, wrapped)),
-		Node::Meta { node, data } => Node::Meta { node: Box::new(resolved(*node, path, wrapped)), data },
-		other => other,
+		other => children_rewritten(other, |child| resolved(child, path, wrapped)),
 	}
 }
 
@@ -1271,9 +1260,7 @@ fn declarations_in(node: Node) -> Node {
 			}).collect();
 			Node::List(items, bracket, separator)
 		}
-		Node::Key(left, op, right) => key(declarations_in(*left), op, declarations_in(*right)),
-		Node::Meta { node, data } => Node::Meta { node: Box::new(declarations_in(*node)), data },
-		other => other,
+		other => children_rewritten(other, declarations_in),
 	}
 }
 
@@ -1285,7 +1272,9 @@ fn zero_declaration(statement: &Node, assigned: &std::collections::HashSet<Strin
 	if assigned.contains(variable) || crate::analyzer::type_word_kind(variable).is_some() {
 		return None;
 	}
-	let zero = zero_value(crate::analyzer::type_word_kind(type_name)?)?;
+	// a number type held as a Node (`real`) starts at the exact 0 of the int it covers
+	let exact_zero = || crate::type_tests::type_matches("int", type_name).then(|| Node::int(0));
+	let zero = zero_value(crate::analyzer::type_word_kind(type_name)?).or_else(exact_zero)?;
 	let typed = key(name.clone(), Op::Colon, type_word.clone());
 	Some(key(typed, Op::Assign, zero))
 }
@@ -1347,14 +1336,11 @@ pub fn lower_spaced_definitions(node: Node) -> Node {
 			let body = bind_it(lower_spaced_definitions(*body), &parameter, false);
 			Node::Key(head, op, Box::new(body))
 		}
-		Node::Key(left, op, right) => key(lower_spaced_definitions(*left), op, lower_spaced_definitions(*right)),
 		Node::List(items, bracket, separator @ (Separator::Semicolon | Separator::Newline)) => {
 			let items = haskell_definitions(items);
 			Node::List(items.into_iter().map(lower_spaced_definitions).collect(), bracket, separator)
 		}
-		Node::List(items, bracket, separator) => Node::List(items.into_iter().map(lower_spaced_definitions).collect(), bracket, separator),
-		Node::Meta { node, data } => Node::Meta { node: Box::new(lower_spaced_definitions(*node)), data },
-		other => other,
+		other => children_rewritten(other, lower_spaced_definitions),
 	}
 }
 
@@ -1488,8 +1474,7 @@ fn bind_it(node: Node, parameter: &str, is_value: bool) -> Node {
 			Node::List(items.into_iter().enumerate().map(|(index, item)| bind_it(item, parameter, is_body && index == last && !is_value)).collect(), bracket, separator)
 		}
 		Node::Key(left, op, right) => key(bind_it(*left, parameter, false), op, bind_it(*right, parameter, false)),
-		Node::Meta { node, data } => Node::Meta { node: Box::new(bind_it(*node, parameter, is_value)), data },
-		other => other,
+		other => children_rewritten(other, |child| bind_it(child, parameter, is_value)),
 	}
 }
 
@@ -2021,9 +2006,7 @@ fn lower_lists(node: Node, lowering: impl Fn(&[Node]) -> Option<Node> + Copy) ->
 			let items: Vec<Node> = items.into_iter().map(|item| lower_lists(item, lowering)).collect();
 			lowering(&items).unwrap_or(Node::List(items, bracket, separator))
 		}
-		Node::Key(left, op, right) => key(lower_lists(*left, lowering), op, lower_lists(*right, lowering)),
-		Node::Meta { node, data } => Node::Meta { node: Box::new(lower_lists(*node, lowering)), data },
-		other => other,
+		other => children_rewritten(other, |child| lower_lists(child, lowering)),
 	}
 }
 

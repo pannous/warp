@@ -45,6 +45,7 @@ mod test_find_any_all;
 mod test_set_past_the_end;
 mod test_number_keys;
 mod test_map_literal_number_keys; // card map-literal
+mod test_function_maps; // card map-locals
 pub(crate) mod test_int_map; // card int-map
 mod test_byte_size;
 mod test_long_list_result;
@@ -83,7 +84,17 @@ mod test_for_where; // card for-where
 mod test_phrase_in_call; // card phrase-in-call
 mod test_first_items; // card first-first
 mod test_object_list_walk; // orm identity map: index walks of object lists
+mod test_lists_read_by_turns; // several long lists read by turns: a read cursor each
 mod test_count_after_function; // card print-people
 mod test_range_in_structure;
 mod test_word_slices;
 mod test_number_list_elements; // card winamp-like
+mod test_counting_words;
+mod test_append_words;
+mod test_keys_of_a_value; // card keys-value
+mod test_comprehension_beside_own_push; // card prefix-count-field
+mod test_library_word_operands; // card derive-hard
+mod test_list_methods; // card list-methods
+mod test_python_collections; // card python-stdlib
+mod test_aliased_changes; // card aliased-list
+mod test_delete_list; // card delete-list

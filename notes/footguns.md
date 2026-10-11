@@ -122,7 +122,8 @@
 - Fixed: `1/4+1/4` → 0 (analyzer::arithmetic_kind). Exact rationals by default (src/wasm_emitter/exact.rs): an Int handle
   may point at a `$Ratio{num,den}` of Int payloads in the same heap as `$BigInt`; integer fast paths unchanged, only the
   slow paths dispatch on `is_ratio`. `0.1+0.2==0.3`, `1/3*3==1`, `2^-2` → 0.25 (used to trap), `1/0` → ∞, `0/0` → NaN (den 0).
-- Decimal literals with ≤ 15 significant digits are exact (`Number::is_exact_decimal`); π, sqrt, FFI floats stay f64.
+- Decimal literals are f64 floats since decision exact-default (2026-10-10): `0.1+0.2 ≈ 0.3`, `==` on floats warns
+  (fix: use ≈); integer division stays exact (`1/3 + 1/3` is 2/3), a ratio meeting a float gives a float.
 - Left open (Decision needed in Footguns.md): negative modulo (existing tests pin C semantics), rounding-mode naming,
   bool kind, and `test_float_plus_int_type_upgrading` which requires a Float where the exact result is now a Quotient.
 - Fixed: ratios with parts beyond i64 read back as `Number::BigQuotient` (exact), not f64; Quotient stays (i64,i64).
@@ -600,6 +601,14 @@ Tests still pinning the old rule (not edited, supervisor decides): tests/welcomi
 | Vee | ⋁ (Sm) | ⩔ (Sm) | LaTeX | ⩔ (Sm) |
 | Wedge | ⋀ (Sm) | ⩓ (Sm) | LaTeX | ⩓ (Sm) |
 
+The two-letter codes in parentheses are Unicode General Categories, the property Unicode assigns to every code point:
+Sk   │ Symbol, modifier
+So   │ Symbol, other
+Sm   │ Symbol, math
+Po   │ Punctuation,
+Mn   │ Mark, nonspacing
+
+
 ## Array covariance (TypeScript's `Array<string>` passed as `Array<string | number>`), probed 2026-10-08
 - Not a hole in warp: lists are values, so a callee that widens the element type (`xs: list`,
   `xs: list of (text or number)`) appends to its own copy. The caller's `names: texts` stays `["hi"]`; the same goes for a
@@ -610,3 +619,14 @@ Tests still pinning the old rule (not edited, supervisor decides): tests/welcomi
   checked like scalars, at compile time where known, at the store otherwise (notes/typed_lists.md); the variance design
   above needs no extra rule while lists stay values. Found on the way: const-list-add, typed-list-upper, class-field-list-of, uncalled-list-param,
   map-function-name.
+
+# Tiny footguns
+I can't think of a situation where these are problems, but it's a little surprise to newcomers:
+~/dev/angles/warp/ warp "type(.0)"    
+» int
+~/dev/angles/warp/ warp ".0 is float"     
+» no
+~/dev/angles/warp/ warp "'A' is codepoint"
+» yes
+~/dev/angles/warp/ warp "'A' is text"     
+» yes

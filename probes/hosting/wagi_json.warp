@@ -1,0 +1,29 @@
+wagi_json_text(t:any) := {
+	var out = "\""
+	for c in chars(t) {
+		if c == "\"" { out = out + "\\\"" }
+		else if c == "\\" { out = out + "\\\\" }
+		else if c == "\n" { out = out + "\\n" }
+		else if c == "\t" { out = out + "\\t" }
+		else { out = out + c }
+	}
+	out + "\""
+}
+wagi_json(value:any) := {
+	if value == ø { return "null" }
+	if value is bool { return if value then "true" else "false" }
+	if value is int or value is float { return str(value) }
+	if value is text { return wagi_json_text(value) }
+	if value is pair { return "{" + wagi_json_text(str(keys(value)#1)) + ":" + wagi_json(values(value)#1) + "}" }
+	if value is list and html_holds_pairs(value) { return "{" + join([wagi_json_text(str(keys(item)#1)) + ":" + wagi_json(values(item)#1) for item in value], ",") + "}" }
+	if value is list { return "[" + join([wagi_json(item) for item in value], ",") + "]" }
+	wagi_json_text(str(value))
+}
+html_holds_pairs(value:any) := {
+	for item in value { if item is pair { return true } }
+	false
+}
+print wagi_json({n: 20, fib: 6765})
+print wagi_json([1, 2.5, "a\"b", yes, ø, [3]])
+print wagi_json({name: "x", tags: ["a", "b"], inner: {k: no}})
+print wagi_json("hello from the edge")

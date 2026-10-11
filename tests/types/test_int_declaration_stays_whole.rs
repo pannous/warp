@@ -10,6 +10,9 @@ fn a_declared_int_refuses_a_fraction_at_run_time() {
 	fails_with("x:int = 3; x += 0.5; x", NOT_WHOLE);
 	fails_with("x:int = 3; x *= 1.5; x", NOT_WHOLE);
 	fails_with("x:int = 3; y = 0.5; x = y; x", NOT_WHOLE);
+	fails_with("x:int = 3; x += 1/2; x", NOT_WHOLE);
+	fails_with("x:int = 3; x *= 3/2; x", NOT_WHOLE);
+	fails_with("x:int = 3; y = 1/2; x = y; x", NOT_WHOLE);
 	fails_with("x:int = 3; x = x / 2; x", NOT_WHOLE);
 }
 
@@ -25,5 +28,8 @@ fn an_int_field_refuses_a_fraction() {
 	fails_with("class P{x:int}; p = P(0.5); p.x", NOT_WHOLE);
 	fails_with("class P{x:int}; p = P(1); p.x = 0.5; p.x", NOT_WHOLE);
 	fails_with("class P{x:int}; p = P(1); p.x += 0.5; p.x", NOT_WHOLE);
+	fails_with("class P{x:int}; p = P(1/2); p.x", NOT_WHOLE);
+	fails_with("class P{x:int}; p = P(1); p.x = 1/2; p.x", NOT_WHOLE);
+	fails_with("class P{x:int}; p = P(1); p.x += 1/2; p.x", NOT_WHOLE);
 	is!("class P{x:int}; p = P(1); p.x = 2; p.x", 2);
 }

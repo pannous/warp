@@ -69,6 +69,19 @@ Fractions stay exact.
 1/3 + 1/6
 ```
 
+Decimals are exact too.
+
+```warp => yes
+0.1 + 0.2 == 0.3
+```
+
+Floats come from float sources: `sin`, `sqrt` of a non-square, e-notation, `as float` and the suffix `f`. A float spreads
+to what it meets; `≈` compares floats, `==` on them warns.
+
+```warp => yes
+0.1f + 0.2 ≈ 0.3
+```
+
 `mod` gives the remainder.
 
 ```warp => 1
@@ -144,6 +157,42 @@ x
 ```
 
 Some names, like `pi`, are constants. They never change.
+
+## Values that follow
+
+Like a spreadsheet cell, a value can follow other values.
+
+`=` copies a value once.
+
+```warp => 6
+x = 3
+y = x * 2
+x = 4
+y
+```
+
+`:=` keeps following.
+
+```warp => 8
+x = 3
+y := x * 2
+x = 4
+y
+```
+
+`whenever` runs code each time something becomes true.
+
+```warp
+x = 1
+whenever x > 2 : print "big"
+x = 3
+```
+```printed
+big
+```
+
+Examples: "derived values", signals, listeners, "signals in lists"
+
 
 Examples: constants
 
@@ -277,6 +326,13 @@ With a function, `square [1 2 3 4]` does the same: see "Whole lists at once" bel
 [1 2 3 4] where it > 2
 ```
 
+`it` works in a block too: `{it.length}` is a function of one item. Given one, `sort` orders the items by its value,
+here the shortest word first.
+
+```warp => ["fig" "kiwi" "apple" "banana"]
+sort(["banana" "fig" "apple" "kiwi"], {it.length})
+```
+
 ### Whole lists at once
 
 A function for one number also works on a whole list.
@@ -389,6 +445,17 @@ twice := it * 2
 twice 21
 ```
 
+Pick a fresh name: type names like `double` and keywords like `fun` are taken.
+
+A function reads the variables around it, but changing one needs `global`.
+
+```warp => 2
+score = 1
+def bump() { global score; score += 1 }
+bump()
+score
+```
+
 A function can call itself.
 
 ```warp => 55
@@ -448,10 +515,11 @@ Examples: classes, properties; samples: types, polymorphism
 
 ## Data and storage
 
-A program forgets its variables when it ends. `stored` keeps one: run this twice and it counts on.
+A program forgets its variables when it ends. `stored` keeps one: run this twice and it counts on. The `default` is
+only the first run's value.
 
 ```warp
-stored visits = 0
+stored visits default 0
 visits += 1
 ```
 
@@ -480,18 +548,18 @@ people.add(Person("Bo", 30))
 
 A row is an ordinary object: change a field (`bo.age += 1`) and the table changes with it, no save needed.
 
-Files are written and read by name. In the browser they last while the page is open.
+Files are written and read by name. In the browser they are kept in the browser's storage, so they are still there after a reload.
 
 ```warp => "milk"
-write("shopping.txt", "milk")
-read("shopping.txt")
+write "shopping.txt" "milk"
+read "shopping.txt"
 ```
 
-JSON from elsewhere becomes warp data.
+JSON(5) from elsewhere becomes warp data.
 
 ```warp => 36
 use json
-json.parse('{"age": 36}').age
+json('{"age": 36}').age
 ```
 
 Examples: data; samples: orm, orm_transaction, orm_units, todo_app, json_parser
@@ -510,6 +578,22 @@ Things go wrong sometimes. In warp an error is a value that says what happened.
 raise "boom"
 ```
 
+A function can also hand an error back as its value. The caller asks `failed`: no try, no catch.
+
+```warp => 1
+f(x) := if x < 0 then error("neg") else x
+r = f(-1)
+if r failed then 1 else 2
+```
+
+A raised error stops the program, even inside `r = 10/0`. A bare `try` keeps it as the value instead, so `failed` works
+the same way.
+
+```warp => 1
+r = try 10/0
+if r failed then 1 else 2
+```
+
 When a line could mean two things, warp asks which one you meant.
 
 Examples: "welcoming errors", ambiguity; samples: try_catch, try_else, parse_number, raise_error, assertions
@@ -520,45 +604,10 @@ A module is a ready-made toolbox. `use` opens it.
 
 ```warp => 1.4142135623730951
 use math
-sqrt 2
+max(√2 arc_cosine(π/4))
 ```
 
 Examples: "C libraries"; samples: lib, square, main, test_ffi, test_ffi_comprehensive, test_ffi_extended
-
-## Values that follow
-
-Like a spreadsheet cell, a value can follow other values.
-
-`=` copies a value once.
-
-```warp => 6
-x = 3
-y = x * 2
-x = 4
-y
-```
-
-`:=` keeps following.
-
-```warp => 8
-x = 3
-y := x * 2
-x = 4
-y
-```
-
-`whenever` runs code each time something becomes true.
-
-```warp
-x = 1
-whenever x > 2 : print "big"
-x = 3
-```
-```printed
-big
-```
-
-Examples: "derived values", signals, listeners, "signals in lists"
 
 ## Events and timers
 

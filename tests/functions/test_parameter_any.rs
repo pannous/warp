@@ -31,3 +31,12 @@ fn an_any_result_joins_a_text() {
 	is!("doubled(x:any) := x * 2; n = 1; n = doubled(n); \"n \" + n", "n 2");
 	is!("half(x:any) := x / 2.0; half(3) + \" left\"", "1.5 left");
 }
+
+/// card recursive-sum: a parameter whose kind the body tests (`x is list`) takes any value; the else branch holds what
+/// is no list (was "int + list": the list argument made x a list everywhere)
+#[test]
+fn a_parameter_tested_for_its_kind_takes_any() {
+	is!("def total(x) = if x is list then sum(x.map(y => total(y))) else x; total([1 [2 3] [4 [5]]])", 15);
+	is!("def total(x){ if x is list { s=0; for y in x { s += total(y) }; return s }; x }; total([1 [2 3]])", 6);
+	is!("def depth(x) = if x is list then 1 + max(x.map(depth)) else 0; depth([1 [2 [3]]])", 3);
+}

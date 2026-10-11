@@ -7,7 +7,7 @@ custom section, `warp.meta`, kept unstripped.
 ## Words
 | word (aliases) | on | answer | today (2026-10-08, probed) |
 |---|---|---|---|
-| `dir(x)` | module, object, class, map | names: module words / fields + methods / keys | step 2: compile time for a known instance, class or map literal's variable; else undefined |
+| `dir(x)` | module, object, class, map | names: module words / fields + methods / keys | step 2: compile time for a known instance, class or map literal's variable; any other value (`dir pi`) a map's keys at run time, else no names, never undefined (card error-undefined-dir, reflection.rs lower_unknown_dir) |
 | `dir(f)`, `type(f)` | user function, `f` or `&f` | `["params" "signature" "body" "effects"]` / `function` | card dir-function: the reflection words take the function itself, never its call (P83) |
 | `dir(job)` | task (`job = go f()`) | `["await" "stop" "pause" "cancel" "resume" "finishes"]`, no wait for the task | card g_oOJs (2026-10-09): declarations::Tasks::task_dir |
 | `x.type`, `type(x)` | any value | its type name (`int`, `P`) | works; `p.type` of a known instance since step 2 |

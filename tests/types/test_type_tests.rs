@@ -6,6 +6,7 @@ fn test_scalar_type_tests() {
 	is!("3 is int", 1);
 	is!("3.5 is int", 0);
 	is!("3.5 is rational", 1);
+	is!("7/2 is rational", 1);
 	is!("3 is rational", 1);
 	is!("3.5 is number", 1);
 	is!("\"a\" is text", 1);
@@ -61,4 +62,45 @@ fn test_as_declaration() {
 	is!("x as number = 9; x", 9);
 	is!("x as number = 9; x is a number", 1);
 	is!("y as int = 4; y + 1", 5);
+}
+
+#[test]
+fn test_type_of_value_is_type() {
+	// card type-int: `type(x) is T` tests x, so it agrees with what type(x) prints
+	is!("type(0.0) is int", 1);
+	is!("type(0) is int", 1);
+	is!("x = 0.0; type(x) is int", 1);
+	is!("type(1.5) is int", 0);
+	is!("type(1.5) is rational", 1);
+	is!("type(3/2) is rational", 1);
+	is!("type(\"a\") is text", 1);
+	is!("int is number", 1);
+	is!("number is int", 0);
+}
+
+#[test]
+fn test_types_compare_exactly_with_equals() {
+	// card type-equal, implied by decision #30: `is` tests the subtype, `==` between types asks for the same type
+	is!("type(2) == type(3)", 1);
+	is!("x=2; y=3; type(x) == type(y)", 1);
+	is!("type(2) == type(3.5)", 0);
+	is!("type(2) != type(3)", 0);
+	is!("type(0.0) == int", 1);
+	is!("type(1.5) == rational", 1);
+	is!("type(3/2) == rational", 1);
+	is!("type(0) == number", 0);
+	is!("type(0) is number", 1);
+}
+
+#[test]
+fn test_bare_type_names_are_type_values() {
+	// cards type-value-type, real-equality: a type word standing bare is that type as a value (one table, cleanup-closed-lists)
+	is!("type(π) == real", 1);
+	is!("t = type(0); t is int", 1);
+	is!("t = type(0); t is number", 1);
+	is!("t = type(0); t is text", 0);
+	is!("t = type(0); t == int", 1);
+	is!("int == int", 1);
+	is!("int == number", 0);
+	is!("3 == int", 0);
 }

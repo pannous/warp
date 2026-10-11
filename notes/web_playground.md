@@ -25,15 +25,21 @@ build switch, silenced hints) sit in the header's ⋯ menu; the run time is a sm
 
 - The assistant (assistant.js, notes/agent.md): the API key field in the ⋯ menu, completion (Ctrl-Space), Ask ✦ chat.
 - Completion as you type (completion.js, card g_oQgw, like the Sublime packages Warp and Uniscript): words from the
-  second letter (keywords first, then the words of the code, examples and samples by use), the standard modules after
+  second letter (the words of the whole code first, then keywords, then examples and samples, by use), the standard modules after
   `use` (keywords.js `modules`, from src/modules.rs), uniscript entities after `\:` and `<:` (entities.tsv, a copy of
   src/uniscript_entities.tsv fetched on first use) which become their character; a typed `<:name>` becomes it at `>`.
-  Tab takes the first, Enter only one chosen with Up/Down (else a new line). probes/web/completion.py checks it.
+  Tab and Enter take the chosen one (the first unless Up/Down chose another); Enter after a word that is whole
+  already (a keyword, a name of the code) is a new line. Tab after a word with no list open lists its completions from
+  the first letter, or takes the only one; Claude's gray continuation goes before both (cards code-completion-must,
+  completion-must, code-completion-should). Claude reads the whole program (up to 20000 characters around the cursor)
+  and also continues before closing brackets (`dir(m‸)`). probes/web/completion.py checks the keys; the tour's
+  "(completion with Tab and Enter)" check runs them in CI.
 - Keyboard shortcuts (shortcuts.js SHORTCUTS, card keyboard-shortcuts, user 2026-10-09): one table of CodeMirror key
   names, the editor's extraKeys. Cmd/Ctrl-Enter runs; Cmd-/ (Ctrl-/ elsewhere) toggles `// ` on the selected lines or
   the cursor's line (after their shallowest indentation; all commented: uncommented), one undo step, the selection kept.
-  tests/web/test_editor_shortcuts.rs runs commentEdits under node; the keys checked by hand headless (agent-browser
-  press Meta+/).
+  Cmd-Ctrl-Up/Down (Alt-Up/Down elsewhere, card keyboard-shortcut) move those lines one up or down with the selection.
+  tests/web/test_editor_shortcuts.rs runs commentEdits, and moveLines in a small editor double, under node; the keys
+  themselves only by hand (agent-browser press Meta+/; no local Chrome).
 
 ## The language guide (guide.md, guide.js)
 The left pane of the page (cards "core feature", "doc-example"; P188 one page): web/playground/guide.md, chapters `## Title` from
@@ -214,6 +220,15 @@ web/playground/tests.html in headless Chrome (agent-browser, session warp-browse
   instantiating (the per-chunk "loading" messages kept no stage). The page now names each: "downloading the compiler:
   N MB so far", "compiling warp.wasm (N bytes)", "instantiating warp.wasm" (WebAssembly.compile and instantiate apart),
   so the next stall's console warning says which step hangs.
+  The next stalls named "compiling warp.wasm" (1) and "starting the task workers" (2), always on the tour's first
+  page. probes/firefox_start/starts.py (CI only: a fresh Firefox per load, playground.state() followed to ready)
+  reproduced them: 4 of 80 fresh starts stalled (3 compiling, 1 starting the task workers); with the pool started
+  after the compiler only the pool stall remained (1 of 80). So the hang is Firefox's nested `new Worker` (it waits for
+  the page's thread), which also starves the compile's completion when it runs meanwhile. Fix: the page makes the task
+  Workers (task-workers.js serveTaskWorkers, used by playground.js, tests.js, site-thread.js): the program's Worker
+  asks {taskWorker: {id, url}}, gets a MessagePort to the new Worker, and asks {endTaskWorker: id} to stop one; the
+  pool holds the ports. Both listeners are registered before the Worker's own onmessage and stop the message there.
+  Measured (runs 38055959458 vs 38055971317, 150 fresh starts each): 0 stalls with the fix, 6 without.
 
 ## Modules and packages in the browser (2026-10-04)
 The compiler reads files through the page: `warp_host.fetch(address)` / `take_fetched` (web.rs `read_bytes`, cached
@@ -309,3 +324,9 @@ ends on about:blank), a declared memory maximum (still ~8 GB reserved).
   inputs as shader holes (src/shader_holes.rs): `$mouse` (a list [mouse_x, mouse_y] → vec2f), `$mouse_down` (0/1)
   and `$seconds` (from clock()), read at each paint. The ⛶ box (.painted) is as wide as its paintings, so ⛶ sits on
   the painting's corner.
+
+## The default canvas is the output pane (card draw-default, user 2026-10-10: defaults, no errors)
+System values `view_width`, `view_height`: playground.js viewSize tells the room below the output pane's text (CSS
+pixels, retold on resize) with the other system values; host.js falls back to 640×480 (VIEW_DEFAULTS) on a page
+without a pane, as natively (warp-runtime system_values.rs NATIVE_VIEW). lib/draw.warp sizes its default canvas from
+them, so `use draw; show()` fills the pane. Test: tests/web/test_playground_paint.rs.

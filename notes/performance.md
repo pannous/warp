@@ -39,6 +39,20 @@ otherwise constant evaluation may hide the loop. Profile the generated module ap
 - **Texts grow in place** (text_concat): a left text ending where the heap starts gets right's bytes after it; a
   right text made just now (a character's bytes) already follows left, so nothing is copied. The left text's own
   bytes never change, so other values sharing them stay right.
+- **Finger paint strokes** (card runtime-speed, 2026-10-10; probes/perf/finger_paint_bench.warp, release):
+  2.6 ms → 0.4 ms a stroke. The guest profile (probes/perf/finger_paint_profile.warp, wasmtime `--profile=guest`,
+  summed by probes/perf/profile_self_time.py) blamed boxing, not pixels: `floor(v) as int` built an Int node
+  (new_int), read it back and called exact_trunc; `radius^2` called exact_pow. Now `floor`/`ceil`/`round` of a float
+  are F64Floor/F64Ceil/F64Nearest + a truncating cast to the i64, an `as int` of a builtin rounding call skips
+  exact_trunc (a user or FFI function of that name keeps it), `x^2` is one multiplication (floats: F64Mul; ints:
+  the overflow-checked `*`), and a float `as int` truncates natively. Then `a // b` on fixnums is inline
+  (`(a - a % b) / b` beside the inline `%`), an Int assignment whose value is dropped (`i = start` of a range loop)
+  stores the i64 without new_int, and a computed range end (`for col in cell(x-r)..cell(x+r)+1`) is evaluated
+  once into `col·end` instead of every round (lowering/for_loop.rs), as a walked list already was.
+- **Finger paint frames** (same card): `show()` passed draw's typed `canvas_pixels` to paint as a value, so each frame
+  built a million Int Nodes (int_list_as_node) only for list_to_ints to read them back. Now a typed int list crosses
+  to the host words in host.rs INT_LIST_WORDS (paint, sound) as its `$IntList`, and list_to_ints copies its array.
+  Release bench: show 96–120 ms → 40 ms (headless; what's left is mostly the PNG write).
 
 ## Measured as fine
 Closure calls cost what definition calls cost: 50 million calls of `add=(a,b)=>a+b`, of a capturing `x=>x*k` and of a
@@ -49,3 +63,14 @@ closure typing has nothing to win here yet. Loops over typed lists, map, append:
 A map that is not a hash table variable (a literal start `{a:1}`, a parameter, a global, one updated by `+=` or with
 dynamic keys) is still the immutable cons list: n keys cost n². Each use of a hash-table map as a whole value
 converts it (O(n)); a loop that prints or passes the map each round pays that every round.
+Finger paint after runtime-speed: `dot(col, row)` passes Ints to `cell(v)`, whose v is a float: int → f64 → floor →
+int per pixel (a per-argument-kind specialization of functions would drop it); a function whose loop is its last
+value (`circle`) boxes that value per row although every caller drops it; int list get/set go through the Node layer.
+A shown frame in a window still goes through frame_bytes → a 4 MB pipe write → a texture upload in the paint-window
+child process (not measured; WebGPU directly would drop it).
+Exact decimals (card decimals-exact, 2026-10-10, release): `x = 0.5` is an exact ratio again. exact_add/sub/mul
+take operands that are inline ratios or Ints within ±2^31 in i64 with an i64 gcd (exact.rs small_shortcut); the
+generic int_gcd/ratio_new path (36 %/41 % of a stroke's profile) stays for bigger ones. 1M adds of 0.5
+(probes/perf/decimal_hot_loop.warp): float 4 ms, exact 135 → 11 ms. A finger paint stroke: float 0.3 ms, exact
+13 → 5 ms; what's left is circle's per-pixel `col + 0.5 - x` in exact math (a scaled-decimal i64 representation, or
+hoisting the conversion into the float path, would drop it).

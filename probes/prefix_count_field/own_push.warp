@@ -1,0 +1,12 @@
+class Stack { items: [int] }
+s = Stack{items: []}
+def push(st, x) {
+	st.items += [x]
+}
+def pop(st) {
+	st.items = [st.items#i for i in 1 to 1]
+	0
+}
+push(s, 1)
+push(s, 2)
+pop(s)

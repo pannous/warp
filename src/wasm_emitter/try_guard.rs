@@ -59,11 +59,11 @@ impl WasmGcEmitter {
 		}
 		let tag = self.declare_i32_tag();
 		self.globals.global(GlobalType { val_type: ValType::I32, mutable: true, shared: false }, &ConstExpr::i32_const(0));
-		self.extra_global_names.push((self.next_global_idx, TRY_DEPTH_GLOBAL));
+		self.extra_global_names.push((self.next_global_idx, TRY_DEPTH_GLOBAL.to_string()));
 		let depth_global = self.next_global_idx;
 		self.next_global_idx += 1;
 		self.globals.global(GlobalType { val_type: ValType::I32, mutable: true, shared: false }, &ConstExpr::i32_const(-1));
-		self.extra_global_names.push((self.next_global_idx, CAUGHT_ERROR_GLOBAL));
+		self.extra_global_names.push((self.next_global_idx, CAUGHT_ERROR_GLOBAL.to_string()));
 		let caught_global = self.next_global_idx;
 		self.next_global_idx += 1;
 		let catching = ErrorCatching { tag, depth_global, caught_global };
@@ -86,7 +86,7 @@ impl WasmGcEmitter {
 		}
 		let tag = self.declare_i32_tag();
 		self.globals.global(GlobalType { val_type: ValType::I32, mutable: true, shared: false }, &ConstExpr::i32_const(0));
-		self.extra_global_names.push((self.next_global_idx, ABORT_PAYLOAD_GLOBAL));
+		self.extra_global_names.push((self.next_global_idx, ABORT_PAYLOAD_GLOBAL.to_string()));
 		let catching = AbortCatching { tag, payload_global: self.next_global_idx };
 		self.next_global_idx += 1;
 		self.abort_catching = Some(catching);

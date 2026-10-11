@@ -145,14 +145,14 @@ impl WarpParser {
 			&& !is_identifier_char(self.peek_char(keyword.len()))
 	}
 
-	/// `#` followed by a space (`# note`), a shebang `#!`, a doc comment `##` or a directive (`#use lib`) starts a comment;
+	/// `#` followed by a space (`# note`), a shebang `#!`, a doc comment `##` or a directive (`#use lib`, `#include x`, `#import f from "m"`, every import keyword) starts a comment;
 	/// `#` directly followed by anything else counts (`#s`, `#a-1`, `#f(x)`)
 	pub(super) fn at_hash_comment(&self) -> bool {
 		if matches!(self.peek_char(1), ' ' | '\t' | '\n' | '\r' | '\0' | '!' | '#') {
 			return true;
 		}
 		let word: String = (1..).map(|offset| self.peek_char(offset)).take_while(|&c| is_identifier_char(c)).collect();
-		HASH_DIRECTIVES.contains(&word.as_str())
+		crate::modules::is_import_keyword(&word)
 	}
 
 	/// `//` after an operand with no space behind it (`7//2`, `x //= 2`, `f(x) //2`) divides; followed by a space or the end
@@ -227,12 +227,17 @@ impl WarpParser {
 		last.is_some_and(|&c| c.is_alphanumeric() || matches!(c, '_' | ')' | ']'))
 	}
 
-	/// The `//` at the cursor is followed by what a divisor could be: one word (`// 2`, `// n`) or an expression
-	/// (`// n + 1`), not prose (`// property with value list`)
+	/// The `//` at the cursor is followed by what a divisor could be: a number or short name (`// 2`, `// n`) or an
+	/// expression (`// n + 1`), not prose (`// property with value list`) nor a word (`// Hz`, `// peaks`)
 	fn comment_reads_like_divisor(&self) -> bool {
 		let rest: String = self.chars[self.pos + 2..].iter().take_while(|&&c| c != '\n').collect();
 		let rest = rest.trim();
-		!rest.contains(char::is_whitespace) || (rest.contains(['+', '-', '*', '/', '%', '(', '^']) && !has_adjacent_words(rest))
+		let has_operator = rest.contains(DIVISOR_OPERATORS);
+		if rest.contains(char::is_whitespace) {
+			has_operator && !has_adjacent_words(rest)
+		} else {
+			has_operator || is_number_or_short_name(rest)
+		}
 	}
 
 	pub(super) fn is_at_line_start(&self) -> bool {
@@ -461,6 +466,14 @@ impl WarpParser {
 			self.advance();
 		}
 	}
+}
+
+const DIVISOR_OPERATORS: [char; 7] = ['+', '-', '*', '/', '%', '(', '^'];
+const MAX_DIVISOR_NAME_LENGTH: usize = 2;
+
+fn is_number_or_short_name(word: &str) -> bool {
+	let is_name = word.len() <= MAX_DIVISOR_NAME_LENGTH && word.chars().all(|c| c.is_ascii_lowercase() || c == '_');
+	is_name || word.parse::<f64>().is_ok()
 }
 
 /// Prose, not an expression: two words side by side with no operator between them (`data for`, `GET /api` stays one)

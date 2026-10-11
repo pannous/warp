@@ -86,7 +86,7 @@ quantity(amount, u) := { measure = unit_measure(u); Quantity(amount * measure#1,
 quantity(t:text) := {
 	var amount_text = ""
 	var u = ""
-	for c in t.trim().chars() {
+	for c in t.trim() {
 		if u == "" and "0123456789.+-".contains(c) { amount_text = amount_text + c } else if c != " " { u = u + c }
 	}
 	if amount_text == "" or u == "" { raise "not a quantity: " + t }
@@ -98,7 +98,7 @@ exact_decimal(t:text) := {
 	if not t.contains(".") { return t as int }
 	parts = t.replace("-", "").replace("+", "").split(".")
 	var denominator = 1
-	for c in parts#2.chars() { denominator = denominator * 10 }
+	for c in parts#2 { denominator = denominator * 10 }
 	magnitude = ((parts#1 + parts#2) as int) / denominator
 	if t.starts_with("-") then -magnitude else magnitude
 }

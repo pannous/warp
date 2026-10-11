@@ -1,10 +1,11 @@
 //! Persisted signals (card web-stores, notes/web_framework.md step 12): `stored theme = "dark"` is the variable theme
 //! holding the value an earlier run kept under its name, else "dark"; each change of it is kept again. Natively the
 //! values live in `<program>.stored.json` next to the program (in memory for code without a file, std_adapters.rs), in
-//! the playground in the page's localStorage (host.js). `stored x = v` becomes
-//! `x = std_io("store", "load", ["x", v, file])` and `on change x { std_io("store", "save", ["x", value, file]) }`.
+//! the playground in the page's localStorage (host.js). `stored x default v` (or `stored x = v`) becomes
+//! `x = std_io("store", "declare", ["x", v, file])` and `on change x { std_io("store", "save", ["x", value, file]) }`.
 //! `storage` is the same store as a map keyed at run time (card web-apis): `storage[k] = v` saves, `storage[k]` loads (ø
-//! when absent), `delete storage[k]` removes, `keys(storage)` names the kept values; `storage.k` is the key "k".
+//! when absent), `delete storage[k]` removes, `keys(storage)` names the kept values, `storage` alone is all of them as a
+//! map (card how-store); `storage.k` is the key "k".
 //! `local` is that store under its browser name (localStorage; `storage` its alias), `session` a store of its own
 //! (sessionStorage: while the page's tab lasts; natively while the process runs) (P188, warp-03's default).
 //! A program that defines its own `storage`, `local` or `session` keeps it.
@@ -15,6 +16,9 @@ use crate::warp_parser::parse;
 use std::collections::{HashMap, HashSet};
 
 pub const STORED_WORD: &str = "stored";
+/// `stored visits default 0`: the value of the first run, the same as `stored visits = 0`
+const DEFAULT_WORD: &str = "default";
+const DEFAULT_REASON: &str = "a stored variable keeps the last run's value, its default is only the first run's";
 /// The store of the values a `warp dev` page keeps across reloads (in memory natively; dev.js, site.js)
 pub const DEV_STORE: &str = "warp-dev";
 /// `app.warp` keeps its stored values in `app.stored.json`
@@ -30,7 +34,8 @@ pub const SESSION_STORE: &str = "warp-session";
 /// is `app.database.json`, inline code's this name alone (in memory natively, std_adapters.rs); in the browser any
 /// store whose file ends so is IndexedDB (host-files.js DATABASE_STORE)
 pub const DATABASE_STORE: &str = "database.json";
-const DATABASE_WORDS: [&str; 2] = ["database", "indexedDB"];
+/// `database.people`, `indexedDB.people`: the stores of tables (database_tables, serve)
+pub(crate) const DATABASE_WORDS: [&str; 2] = ["database", "indexedDB"];
 const DELETE_WORD: &str = "delete";
 const KEYS_WORD: &str = "keys";
 /// stand for the key and the value in the templates of a storage access
@@ -81,13 +86,30 @@ fn program_file_with(extension: &str) -> Option<String> {
 /// `stored x = v` as its load and the listener that saves each change
 fn stored_statement(statement: &Node, file: &str) -> Option<Vec<Node>> {
 	let Node::List(items, _, _) = statement.drop_meta() else { return None };
-	let [word, assignment] = items.as_slice() else { return None };
+	let (word, rest) = items.split_first()?;
 	if !word.is_symbol(STORED_WORD) {
 		return None;
 	}
-	let Node::Key(name, Op::Assign | Op::Define, default) = assignment.drop_meta() else { return None };
-	let Node::Symbol(name) = name.drop_meta() else { return None };
-	Some(kept(name, default, file))
+	match rest {
+		// `stored visits default 0` (card stored-visits)
+		[name, default_word, default @ ..] if default_word.is_symbol(DEFAULT_WORD) && !default.is_empty() => {
+			let default = match default {
+				[one] => one.clone(),
+				many => Node::List(many.to_vec(), Bracket::None, Separator::Space),
+			};
+			Some(kept(name.symbol_name()?, &default, file))
+		}
+		[assignment] => {
+			let Node::Key(name, Op::Assign | Op::Define, default) = assignment.drop_meta() else { return None };
+			let name = name.symbol_name()?;
+			let default_text = default.serialize();
+			let written = format!("{STORED_WORD} {name} = {default_text}");
+			crate::normalize::set_position_of(statement);
+			crate::normalize::hint(&written, &format!("{STORED_WORD} {name} {DEFAULT_WORD} {default_text}"), DEFAULT_REASON);
+			Some(kept(name, default, file))
+		}
+		_ => None,
+	}
 }
 
 /// In a `warp dev` build, the first main-level `x = v` of a variable the program changes: kept as `stored` keeps it, in
@@ -97,9 +119,9 @@ fn dev_kept(statement: &Node, changed: &HashSet<String>, kept_names: &mut HashSe
 	(changed.contains(name) && kept_names.insert(name.clone())).then(|| kept(name, default, DEV_STORE))
 }
 
-/// `x = std_io("store", "load", ["x", v, file])` and the listener saving each change of x
+/// `x = std_io("store", "declare", ["x", v, file])` (v kept when x isn't yet) and the listener saving each change of x
 fn kept(name: &str, default: &Node, file: &str) -> Vec<Node> {
-	let load = parse(&format!("{name} = std_io(\"store\", \"load\", [\"{name}\", {DEFAULT_PLACEHOLDER}, {file:?}])"));
+	let load = parse(&format!("{name} = std_io(\"store\", \"declare\", [\"{name}\", {DEFAULT_PLACEHOLDER}, {file:?}])"));
 	let load = crate::law::substitute(&load, &HashMap::from([(DEFAULT_PLACEHOLDER.to_string(), default.clone())]));
 	let save = parse(&format!("on change {name} {{ std_io(\"store\", \"save\", [\"{name}\", value, {file:?}]) }}"));
 	vec![load, save]
@@ -150,14 +172,21 @@ fn storage_access(node: &Node, stores: &[(&str, String)]) -> Option<Node> {
 			let (key, file) = entry_key(target, stores)?;
 			Some(store_call("save", Some(key), Some(storage_accesses(value.as_ref().clone(), stores)), file))
 		}
-		Node::List(items, _, _) => match items.as_slice() {
+		Node::List(items, bracket, separator) => match items.as_slice() {
 			[word, target] if word.is_symbol(DELETE_WORD) => {
 				let (key, file) = entry_key(target, stores)?;
 				Some(store_call("remove", Some(key), None, file))
 			}
 			[word, store] if word.is_symbol(KEYS_WORD) => Some(store_call("names", None, None, file_of(store, stores)?)),
+			// `local x = 1`: the word leading a statement is no store
+			[word, rest @ ..] if !rest.is_empty() && file_of(word, stores).is_some() => {
+				let rest = rest.iter().map(|item| storage_accesses(item.clone(), stores));
+				Some(Node::List(std::iter::once(word.clone()).chain(rest).collect(), bracket.clone(), separator.clone()))
+			}
 			_ => None,
 		},
+		// `values(storage)`, `for key, value in storage`: the word alone is all the store's values as a map
+		Node::Symbol(_) => Some(store_call("all", None, None, file_of(node, stores)?)),
 		// ø: the value of an absent key
 		_ => {
 			let (key, file) = entry_key(node, stores)?;
@@ -168,15 +197,8 @@ fn storage_access(node: &Node, stores: &[(&str, String)]) -> Option<Node> {
 
 /// The key and the store's file of `local[k]` (parsed as `local#(k+1)`), `local#k` or `local.k`
 fn entry_key<'a>(target: &Node, stores: &'a [(&str, String)]) -> Option<(Node, &'a str)> {
-	let Node::Key(store, op, index) = target.drop_meta() else { return None };
-	let file = file_of(store, stores)?;
-	let key = match (op, index.drop_meta()) {
-		(Op::Dot, Node::Symbol(field)) => Node::Text(field.clone()),
-		(Op::Hash, Node::Key(key, Op::Add, one)) if *one.drop_meta() == Node::int(1) => key.as_ref().clone(),
-		(Op::Hash, key) => key.clone(),
-		_ => return None,
-	};
-	Some((key, file))
+	let (store, key, _) = super::nodes::written_entry(target)?;
+	Some((key, file_of(store, stores)?))
 }
 
 /// The file of the store a word names

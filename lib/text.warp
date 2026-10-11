@@ -19,7 +19,7 @@ capitalize(t) := if t == "" then t else upper(t[0]) + t[1..]
 center(t, width) := pad_right(pad_left(t, (width + count(t))//2), width)
 title(t) := join([capitalize(w) for w in words(t)], " ")
 // lower case letters and digits, the rest as single dashes: "Hello, World!" → "hello-world"
-slug(t) := join(words(join([if is_alphanumeric(c) then c else " " for c in chars(lower(t))], "")), "-")
+slug(t) := join(words(join([if is_alphanumeric(c) then c else " " for c in lower(t)], "")), "-")
 truncate(t, width) := if count(t) <= width then t else t[0 ..< width - 1] + "…"
 // UTF-8: a text as its bytes, and bytes back as a text (Rust's String::from_utf8, string.from_utf8)
 def to_utf8(t: text) {
@@ -55,17 +55,17 @@ remove_prefix(t, prefix) := if starts_with(t, prefix) then t[count(prefix):] els
 remove_suffix(t, suffix) := if ends_with(t, suffix) then t[0:count(t) - count(suffix)] else t
 // how often part occurs, not overlapping: count_of("banana", "an") is 2
 count_of(t, part) := count(split(t, part)) - 1
-is_palindrome(t) := { s = lower(join([c for c in chars(t) if is_alphanumeric(c)], "")); s == reverse(s) }
+is_palindrome(t) := { s = lower(join([c for c in t if is_alphanumeric(c)], "")); s == reverse(s) }
 word_count(t) := count(words(t))
 // "helloWorld", "Hello World", "hello-world" → "hello_world"
-snake_case(t) := { out = ""; for c in chars(t) { if is_alphanumeric(c) { if upper(c) == c and lower(c) != c and out != "" and last(out) != "_" { out = out + "_" }; out = out + lower(c) } else if out != "" and last(out) != "_" { out = out + "_" } }; out }
+snake_case(t) := { out = ""; for c in t { if is_alphanumeric(c) { if upper(c) == c and lower(c) != c and out != "" and last(out) != "_" { out = out + "_" }; out = out + lower(c) } else if out != "" and last(out) != "_" { out = out + "_" } }; out }
 kebab_case(t) := join(split(snake_case(t), "_"), "-")
 // "hello_world" → "helloWorld"
 camel_case(t) := { parts = [p for p in split(snake_case(t), "_") if p != ""]; if parts == [] then "" else first(parts) + join([capitalize(p) for p in drop(parts, 1)], "") }
 // each line indented by n spaces
 indent(t, n) := join([n times " " + line for line in lines(t)], "\n")
 // a whole or decimal number, optionally signed: "12.5", "-3"
-is_numeric(t) := { parts = split(remove_prefix(trim(t), "-"), "."); if count(parts) > 2 { return false }; for p in parts { if p == "" { return false }; for c in chars(p) { if not is_digit(c) { return false } } }; true }
+is_numeric(t) := { parts = split(remove_prefix(trim(t), "-"), "."); if count(parts) > 2 { return false }; for p in parts { if p == "" { return false }; for c in p { if not is_digit(c) { return false } } }; true }
 // the text between the first opening and the next closing after it, "" when either is missing
 between(t, opening, closing) := { from = index_of(t, opening); if from == 0 { return "" }; rest = t[from - 1 + count(opening):]; to = index_of(rest, closing); if to == 0 then "" else rest[0:to - 1] }
 // the words in lines of at most width characters

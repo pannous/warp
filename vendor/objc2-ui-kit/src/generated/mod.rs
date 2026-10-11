@@ -12,6 +12,10 @@
 #![allow(clippy::upper_case_acronyms)]
 #![allow(clippy::identity_op)]
 #![allow(clippy::missing_safety_doc)]
+#![allow(clippy::doc_lazy_continuation)]
+#![allow(rustdoc::broken_intra_doc_links)]
+#![allow(rustdoc::bare_urls)]
+#![allow(rustdoc::invalid_html_tags)]
 
 #[link(name = "UIKit", kind = "framework")]
 extern "C" {}
@@ -19,6 +23,9 @@ extern "C" {}
 #[cfg(feature = "DocumentManager")]
 #[path = "DocumentManager.rs"]
 mod __DocumentManager;
+#[cfg(feature = "NSAdaptiveImageGlyph")]
+#[path = "NSAdaptiveImageGlyph.rs"]
+mod __NSAdaptiveImageGlyph;
 #[cfg(feature = "NSAttributedString")]
 #[path = "NSAttributedString.rs"]
 mod __NSAttributedString;
@@ -160,6 +167,9 @@ mod __UIActionSheet;
 #[cfg(feature = "UIActivity")]
 #[path = "UIActivity.rs"]
 mod __UIActivity;
+#[cfg(feature = "UIActivityCollaborationModeRestriction")]
+#[path = "UIActivityCollaborationModeRestriction.rs"]
+mod __UIActivityCollaborationModeRestriction;
 #[cfg(feature = "UIActivityIndicatorView")]
 #[path = "UIActivityIndicatorView.rs"]
 mod __UIActivityIndicatorView;
@@ -172,6 +182,9 @@ mod __UIActivityItemsConfiguration;
 #[cfg(feature = "UIActivityItemsConfigurationReading")]
 #[path = "UIActivityItemsConfigurationReading.rs"]
 mod __UIActivityItemsConfigurationReading;
+#[cfg(feature = "UIActivityItemsConfigurationReading_ShareSheet")]
+#[path = "UIActivityItemsConfigurationReading_ShareSheet.rs"]
+mod __UIActivityItemsConfigurationReading_ShareSheet;
 #[cfg(feature = "UIActivityViewController")]
 #[path = "UIActivityViewController.rs"]
 mod __UIActivityViewController;
@@ -199,6 +212,9 @@ mod __UIAttachmentBehavior;
 #[cfg(feature = "UIBackgroundConfiguration")]
 #[path = "UIBackgroundConfiguration.rs"]
 mod __UIBackgroundConfiguration;
+#[cfg(feature = "UIBackgroundExtensionView")]
+#[path = "UIBackgroundExtensionView.rs"]
+mod __UIBackgroundExtensionView;
 #[cfg(feature = "UIBandSelectionInteraction")]
 #[path = "UIBandSelectionInteraction.rs"]
 mod __UIBandSelectionInteraction;
@@ -211,6 +227,9 @@ mod __UIBarButtonItem;
 #[cfg(feature = "UIBarButtonItemAppearance")]
 #[path = "UIBarButtonItemAppearance.rs"]
 mod __UIBarButtonItemAppearance;
+#[cfg(feature = "UIBarButtonItemBadge")]
+#[path = "UIBarButtonItemBadge.rs"]
+mod __UIBarButtonItemBadge;
 #[cfg(feature = "UIBarButtonItemGroup")]
 #[path = "UIBarButtonItemGroup.rs"]
 mod __UIBarButtonItemGroup;
@@ -244,6 +263,9 @@ mod __UICalendarSelectionMultiDate;
 #[cfg(feature = "UICalendarSelectionSingleDate")]
 #[path = "UICalendarSelectionSingleDate.rs"]
 mod __UICalendarSelectionSingleDate;
+#[cfg(feature = "UICalendarSelectionWeekOfYear")]
+#[path = "UICalendarSelectionWeekOfYear.rs"]
+mod __UICalendarSelectionWeekOfYear;
 #[cfg(feature = "UICalendarView")]
 #[path = "UICalendarView.rs"]
 mod __UICalendarView;
@@ -349,12 +371,27 @@ mod __UIContextMenuConfiguration;
 #[cfg(feature = "UIContextMenuInteraction")]
 #[path = "UIContextMenuInteraction.rs"]
 mod __UIContextMenuInteraction;
+#[cfg(feature = "UIContextMenuSystem")]
+#[path = "UIContextMenuSystem.rs"]
+mod __UIContextMenuSystem;
 #[cfg(feature = "UIContextualAction")]
 #[path = "UIContextualAction.rs"]
 mod __UIContextualAction;
 #[cfg(feature = "UIControl")]
 #[path = "UIControl.rs"]
 mod __UIControl;
+#[cfg(feature = "UIConversationContext")]
+#[path = "UIConversationContext.rs"]
+mod __UIConversationContext;
+#[cfg(feature = "UIConversationEntry")]
+#[path = "UIConversationEntry.rs"]
+mod __UIConversationEntry;
+#[cfg(feature = "UICornerConfiguration")]
+#[path = "UICornerConfiguration.rs"]
+mod __UICornerConfiguration;
+#[cfg(feature = "UICornerRadius")]
+#[path = "UICornerRadius.rs"]
+mod __UICornerRadius;
 #[cfg(feature = "UIDataDetectors")]
 #[path = "UIDataDetectors.rs"]
 mod __UIDataDetectors;
@@ -400,6 +437,9 @@ mod __UIDocumentProperties;
 #[cfg(feature = "UIDocumentViewController")]
 #[path = "UIDocumentViewController.rs"]
 mod __UIDocumentViewController;
+#[cfg(feature = "UIDocumentViewControllerLaunchOptions")]
+#[path = "UIDocumentViewControllerLaunchOptions.rs"]
+mod __UIDocumentViewControllerLaunchOptions;
 #[cfg(feature = "UIDragInteraction")]
 #[path = "UIDragInteraction.rs"]
 mod __UIDragInteraction;
@@ -460,6 +500,9 @@ mod __UIFocusAnimationCoordinator;
 #[cfg(feature = "UIFocusDebugger")]
 #[path = "UIFocusDebugger.rs"]
 mod __UIFocusDebugger;
+#[cfg(feature = "UIFocusDefines")]
+#[path = "UIFocusDefines.rs"]
+mod __UIFocusDefines;
 #[cfg(feature = "UIFocusEffect")]
 #[path = "UIFocusEffect.rs"]
 mod __UIFocusEffect;
@@ -472,6 +515,12 @@ mod __UIFocusMovementHint;
 #[cfg(feature = "UIFocusSystem")]
 #[path = "UIFocusSystem.rs"]
 mod __UIFocusSystem;
+#[cfg(feature = "UIFocusSystem_UIKitAdditions")]
+#[path = "UIFocusSystem_UIKitAdditions.rs"]
+mod __UIFocusSystem_UIKitAdditions;
+#[cfg(feature = "UIFocusUpdateContext_UIKitAdditions")]
+#[path = "UIFocusUpdateContext_UIKitAdditions.rs"]
+mod __UIFocusUpdateContext_UIKitAdditions;
 #[cfg(feature = "UIFont")]
 #[path = "UIFont.rs"]
 mod __UIFont;
@@ -499,6 +548,9 @@ mod __UIGestureRecognizer;
 #[cfg(feature = "UIGestureRecognizerSubclass")]
 #[path = "UIGestureRecognizerSubclass.rs"]
 mod __UIGestureRecognizerSubclass;
+#[cfg(feature = "UIGlassEffect")]
+#[path = "UIGlassEffect.rs"]
+mod __UIGlassEffect;
 #[cfg(feature = "UIGraphics")]
 #[path = "UIGraphics.rs"]
 mod __UIGraphics;
@@ -562,6 +614,9 @@ mod __UIImpactFeedbackGenerator;
 #[cfg(feature = "UIIndirectScribbleInteraction")]
 #[path = "UIIndirectScribbleInteraction.rs"]
 mod __UIIndirectScribbleInteraction;
+#[cfg(feature = "UIInputSuggestion")]
+#[path = "UIInputSuggestion.rs"]
+mod __UIInputSuggestion;
 #[cfg(feature = "UIInputView")]
 #[path = "UIInputView.rs"]
 mod __UIInputView;
@@ -628,6 +683,15 @@ mod __UILocalizedIndexedCollation;
 #[cfg(feature = "UILongPressGestureRecognizer")]
 #[path = "UILongPressGestureRecognizer.rs"]
 mod __UILongPressGestureRecognizer;
+#[cfg(feature = "UIMailConversationContext")]
+#[path = "UIMailConversationContext.rs"]
+mod __UIMailConversationContext;
+#[cfg(feature = "UIMailConversationEntry")]
+#[path = "UIMailConversationEntry.rs"]
+mod __UIMailConversationEntry;
+#[cfg(feature = "UIMainMenuSystem")]
+#[path = "UIMainMenuSystem.rs"]
+mod __UIMainMenuSystem;
 #[cfg(feature = "UIManagedDocument")]
 #[path = "UIManagedDocument.rs"]
 mod __UIManagedDocument;
@@ -652,6 +716,12 @@ mod __UIMenuLeaf;
 #[cfg(feature = "UIMenuSystem")]
 #[path = "UIMenuSystem.rs"]
 mod __UIMenuSystem;
+#[cfg(feature = "UIMessageConversationContext")]
+#[path = "UIMessageConversationContext.rs"]
+mod __UIMessageConversationContext;
+#[cfg(feature = "UIMessageConversationEntry")]
+#[path = "UIMessageConversationEntry.rs"]
+mod __UIMessageConversationEntry;
 #[cfg(feature = "UIMotionEffect")]
 #[path = "UIMotionEffect.rs"]
 mod __UIMotionEffect;
@@ -820,9 +890,15 @@ mod __UIScene;
 #[cfg(feature = "UISceneActivationConditions")]
 #[path = "UISceneActivationConditions.rs"]
 mod __UISceneActivationConditions;
+#[cfg(feature = "UISceneConfiguration")]
+#[path = "UISceneConfiguration.rs"]
+mod __UISceneConfiguration;
 #[cfg(feature = "UISceneDefinitions")]
 #[path = "UISceneDefinitions.rs"]
 mod __UISceneDefinitions;
+#[cfg(feature = "UISceneDestructionCondition")]
+#[path = "UISceneDestructionCondition.rs"]
+mod __UISceneDestructionCondition;
 #[cfg(feature = "UISceneEnhancedStateRestoration")]
 #[path = "UISceneEnhancedStateRestoration.rs"]
 mod __UISceneEnhancedStateRestoration;
@@ -835,9 +911,18 @@ mod __UISceneSession;
 #[cfg(feature = "UISceneSessionActivationRequest")]
 #[path = "UISceneSessionActivationRequest.rs"]
 mod __UISceneSessionActivationRequest;
+#[cfg(feature = "UISceneSizeRestrictions")]
+#[path = "UISceneSizeRestrictions.rs"]
+mod __UISceneSizeRestrictions;
+#[cfg(feature = "UISceneSystemProtectionManager")]
+#[path = "UISceneSystemProtectionManager.rs"]
+mod __UISceneSystemProtectionManager;
 #[cfg(feature = "UISceneWindowingBehaviors")]
 #[path = "UISceneWindowingBehaviors.rs"]
 mod __UISceneWindowingBehaviors;
+#[cfg(feature = "UISceneWindowingControlStyle")]
+#[path = "UISceneWindowingControlStyle.rs"]
+mod __UISceneWindowingControlStyle;
 #[cfg(feature = "UIScene_AVAudioSession")]
 #[path = "UIScene_AVAudioSession.rs"]
 mod __UIScene_AVAudioSession;
@@ -856,6 +941,9 @@ mod __UIScreenshotService;
 #[cfg(feature = "UIScribbleInteraction")]
 #[path = "UIScribbleInteraction.rs"]
 mod __UIScribbleInteraction;
+#[cfg(feature = "UIScrollEdgeElementContainerInteraction")]
+#[path = "UIScrollEdgeElementContainerInteraction.rs"]
+mod __UIScrollEdgeElementContainerInteraction;
 #[cfg(feature = "UIScrollView")]
 #[path = "UIScrollView.rs"]
 mod __UIScrollView;
@@ -874,6 +962,9 @@ mod __UISearchDisplayController;
 #[cfg(feature = "UISearchSuggestion")]
 #[path = "UISearchSuggestion.rs"]
 mod __UISearchSuggestion;
+#[cfg(feature = "UISearchTab")]
+#[path = "UISearchTab.rs"]
+mod __UISearchTab;
 #[cfg(feature = "UISearchTextField")]
 #[path = "UISearchTextField.rs"]
 mod __UISearchTextField;
@@ -883,6 +974,9 @@ mod __UISegmentedControl;
 #[cfg(feature = "UISelectionFeedbackGenerator")]
 #[path = "UISelectionFeedbackGenerator.rs"]
 mod __UISelectionFeedbackGenerator;
+#[cfg(feature = "UIShadowProperties")]
+#[path = "UIShadowProperties.rs"]
+mod __UIShadowProperties;
 #[cfg(feature = "UIShape")]
 #[path = "UIShape.rs"]
 mod __UIShape;
@@ -892,12 +986,21 @@ mod __UISheetPresentationController;
 #[cfg(feature = "UISlider")]
 #[path = "UISlider.rs"]
 mod __UISlider;
+#[cfg(feature = "UISliderTrackConfiguration")]
+#[path = "UISliderTrackConfiguration.rs"]
+mod __UISliderTrackConfiguration;
+#[cfg(feature = "UISmartReplySuggestion")]
+#[path = "UISmartReplySuggestion.rs"]
+mod __UISmartReplySuggestion;
 #[cfg(feature = "UISnapBehavior")]
 #[path = "UISnapBehavior.rs"]
 mod __UISnapBehavior;
 #[cfg(feature = "UISplitViewController")]
 #[path = "UISplitViewController.rs"]
 mod __UISplitViewController;
+#[cfg(feature = "UISplitViewControllerLayoutEnvironment")]
+#[path = "UISplitViewControllerLayoutEnvironment.rs"]
+mod __UISplitViewControllerLayoutEnvironment;
 #[cfg(feature = "UISpringLoadedInteraction")]
 #[path = "UISpringLoadedInteraction.rs"]
 mod __UISpringLoadedInteraction;
@@ -940,9 +1043,18 @@ mod __UISwipeGestureRecognizer;
 #[cfg(feature = "UISwitch")]
 #[path = "UISwitch.rs"]
 mod __UISwitch;
+#[cfg(feature = "UISymbolContentTransition")]
+#[path = "UISymbolContentTransition.rs"]
+mod __UISymbolContentTransition;
 #[cfg(feature = "UISymbolEffectCompletion")]
 #[path = "UISymbolEffectCompletion.rs"]
 mod __UISymbolEffectCompletion;
+#[cfg(feature = "UITab")]
+#[path = "UITab.rs"]
+mod __UITab;
+#[cfg(feature = "UITabAccessory")]
+#[path = "UITabAccessory.rs"]
+mod __UITabAccessory;
 #[cfg(feature = "UITabBar")]
 #[path = "UITabBar.rs"]
 mod __UITabBar;
@@ -952,9 +1064,18 @@ mod __UITabBarAppearance;
 #[cfg(feature = "UITabBarController")]
 #[path = "UITabBarController.rs"]
 mod __UITabBarController;
+#[cfg(feature = "UITabBarControllerSidebar")]
+#[path = "UITabBarControllerSidebar.rs"]
+mod __UITabBarControllerSidebar;
 #[cfg(feature = "UITabBarItem")]
 #[path = "UITabBarItem.rs"]
 mod __UITabBarItem;
+#[cfg(feature = "UITabGroup")]
+#[path = "UITabGroup.rs"]
+mod __UITabGroup;
+#[cfg(feature = "UITabSidebarItem")]
+#[path = "UITabSidebarItem.rs"]
+mod __UITabSidebarItem;
 #[cfg(feature = "UITableView")]
 #[path = "UITableView.rs"]
 mod __UITableView;
@@ -1006,6 +1127,24 @@ mod __UITextField;
 #[cfg(feature = "UITextFormattingCoordinator")]
 #[path = "UITextFormattingCoordinator.rs"]
 mod __UITextFormattingCoordinator;
+#[cfg(feature = "UITextFormattingViewController")]
+#[path = "UITextFormattingViewController.rs"]
+mod __UITextFormattingViewController;
+#[cfg(feature = "UITextFormattingViewControllerChangeValue")]
+#[path = "UITextFormattingViewControllerChangeValue.rs"]
+mod __UITextFormattingViewControllerChangeValue;
+#[cfg(feature = "UITextFormattingViewControllerComponent")]
+#[path = "UITextFormattingViewControllerComponent.rs"]
+mod __UITextFormattingViewControllerComponent;
+#[cfg(feature = "UITextFormattingViewControllerConfiguration")]
+#[path = "UITextFormattingViewControllerConfiguration.rs"]
+mod __UITextFormattingViewControllerConfiguration;
+#[cfg(feature = "UITextFormattingViewControllerFormattingDescriptor")]
+#[path = "UITextFormattingViewControllerFormattingDescriptor.rs"]
+mod __UITextFormattingViewControllerFormattingDescriptor;
+#[cfg(feature = "UITextFormattingViewControllerFormattingStyle")]
+#[path = "UITextFormattingViewControllerFormattingStyle.rs"]
+mod __UITextFormattingViewControllerFormattingStyle;
 #[cfg(feature = "UITextInput")]
 #[path = "UITextInput.rs"]
 mod __UITextInput;
@@ -1075,6 +1214,18 @@ mod __UITrait;
 #[cfg(feature = "UITraitCollection")]
 #[path = "UITraitCollection.rs"]
 mod __UITraitCollection;
+#[cfg(feature = "UITraitListEnvironment")]
+#[path = "UITraitListEnvironment.rs"]
+mod __UITraitListEnvironment;
+#[cfg(feature = "UIUpdateActionPhase")]
+#[path = "UIUpdateActionPhase.rs"]
+mod __UIUpdateActionPhase;
+#[cfg(feature = "UIUpdateInfo")]
+#[path = "UIUpdateInfo.rs"]
+mod __UIUpdateInfo;
+#[cfg(feature = "UIUpdateLink")]
+#[path = "UIUpdateLink.rs"]
+mod __UIUpdateLink;
 #[cfg(feature = "UIUserActivity")]
 #[path = "UIUserActivity.rs"]
 mod __UIUserActivity;
@@ -1099,12 +1250,18 @@ mod __UIViewConfigurationState;
 #[cfg(feature = "UIViewController")]
 #[path = "UIViewController.rs"]
 mod __UIViewController;
+#[cfg(feature = "UIViewControllerTransition")]
+#[path = "UIViewControllerTransition.rs"]
+mod __UIViewControllerTransition;
 #[cfg(feature = "UIViewControllerTransitionCoordinator")]
 #[path = "UIViewControllerTransitionCoordinator.rs"]
 mod __UIViewControllerTransitionCoordinator;
 #[cfg(feature = "UIViewControllerTransitioning")]
 #[path = "UIViewControllerTransitioning.rs"]
 mod __UIViewControllerTransitioning;
+#[cfg(feature = "UIViewLayoutRegion")]
+#[path = "UIViewLayoutRegion.rs"]
+mod __UIViewLayoutRegion;
 #[cfg(feature = "UIViewPropertyAnimator")]
 #[path = "UIViewPropertyAnimator.rs"]
 mod __UIViewPropertyAnimator;
@@ -1159,13 +1316,37 @@ mod __UIWindowScenePlacement;
 #[cfg(feature = "UIWindowSceneProminentPlacement")]
 #[path = "UIWindowSceneProminentPlacement.rs"]
 mod __UIWindowSceneProminentPlacement;
+#[cfg(feature = "UIWindowScenePushPlacement")]
+#[path = "UIWindowScenePushPlacement.rs"]
+mod __UIWindowScenePushPlacement;
+#[cfg(feature = "UIWindowSceneReplacePlacement")]
+#[path = "UIWindowSceneReplacePlacement.rs"]
+mod __UIWindowSceneReplacePlacement;
 #[cfg(feature = "UIWindowSceneStandardPlacement")]
 #[path = "UIWindowSceneStandardPlacement.rs"]
 mod __UIWindowSceneStandardPlacement;
+#[cfg(feature = "UIWritingToolsCoordinator")]
+#[path = "UIWritingToolsCoordinator.rs"]
+mod __UIWritingToolsCoordinator;
+#[cfg(feature = "UIWritingToolsCoordinatorAnimationParameters")]
+#[path = "UIWritingToolsCoordinatorAnimationParameters.rs"]
+mod __UIWritingToolsCoordinatorAnimationParameters;
+#[cfg(feature = "UIWritingToolsCoordinatorContext")]
+#[path = "UIWritingToolsCoordinatorContext.rs"]
+mod __UIWritingToolsCoordinatorContext;
+#[cfg(feature = "UIZoomTransitionOptions")]
+#[path = "UIZoomTransitionOptions.rs"]
+mod __UIZoomTransitionOptions;
 #[cfg(feature = "UNNotificationResponse_UIKitAdditions")]
 #[path = "UNNotificationResponse_UIKitAdditions.rs"]
 mod __UNNotificationResponse_UIKitAdditions;
 
+#[cfg(feature = "NSAdaptiveImageGlyph")]
+pub use self::__NSAdaptiveImageGlyph::NSAdaptiveImageGlyph;
+#[cfg(feature = "NSAdaptiveImageGlyph")]
+pub use self::__NSAdaptiveImageGlyph::NSAttributedStringAdaptiveImageGlyphConveniences;
+#[cfg(feature = "NSAttributedString")]
+pub use self::__NSAttributedString::NSAdaptiveImageGlyphAttributeName;
 #[cfg(feature = "NSAttributedString")]
 pub use self::__NSAttributedString::NSAttachmentAttributeName;
 #[cfg(feature = "NSAttributedString")]
@@ -1261,6 +1442,30 @@ pub use self::__NSAttributedString::NSTextEffectLetterpressStyle;
 #[cfg(feature = "NSAttributedString")]
 pub use self::__NSAttributedString::NSTextEffectStyle;
 #[cfg(feature = "NSAttributedString")]
+pub use self::__NSAttributedString::NSTextHighlightColorScheme;
+#[cfg(feature = "NSAttributedString")]
+pub use self::__NSAttributedString::NSTextHighlightColorSchemeAttributeName;
+#[cfg(feature = "NSAttributedString")]
+pub use self::__NSAttributedString::NSTextHighlightColorSchemeBlue;
+#[cfg(feature = "NSAttributedString")]
+pub use self::__NSAttributedString::NSTextHighlightColorSchemeDefault;
+#[cfg(feature = "NSAttributedString")]
+pub use self::__NSAttributedString::NSTextHighlightColorSchemeMint;
+#[cfg(feature = "NSAttributedString")]
+pub use self::__NSAttributedString::NSTextHighlightColorSchemeOrange;
+#[cfg(feature = "NSAttributedString")]
+pub use self::__NSAttributedString::NSTextHighlightColorSchemePink;
+#[cfg(feature = "NSAttributedString")]
+pub use self::__NSAttributedString::NSTextHighlightColorSchemePurple;
+#[cfg(feature = "NSAttributedString")]
+pub use self::__NSAttributedString::NSTextHighlightStyle;
+#[cfg(feature = "NSAttributedString")]
+pub use self::__NSAttributedString::NSTextHighlightStyleAttributeName;
+#[cfg(feature = "NSAttributedString")]
+pub use self::__NSAttributedString::NSTextHighlightStyleDefault;
+#[cfg(feature = "NSAttributedString")]
+pub use self::__NSAttributedString::NSTextKit1ListMarkerFormatDocumentOption;
+#[cfg(feature = "NSAttributedString")]
 pub use self::__NSAttributedString::NSTextLayoutSectionKey;
 #[cfg(feature = "NSAttributedString")]
 pub use self::__NSAttributedString::NSTextLayoutSectionOrientation;
@@ -1306,6 +1511,8 @@ pub use self::__NSAttributedString::NSViewZoomDocumentAttribute;
 pub use self::__NSAttributedString::NSWritingDirectionAttributeName;
 #[cfg(feature = "NSAttributedString")]
 pub use self::__NSAttributedString::NSWritingDirectionFormatType;
+#[cfg(feature = "NSAttributedString")]
+pub use self::__NSAttributedString::NSWritingToolsExclusionAttributeName;
 #[cfg(feature = "NSDataAsset")]
 pub use self::__NSDataAsset::NSDataAsset;
 #[cfg(feature = "NSDataAsset")]
@@ -1361,6 +1568,18 @@ pub use self::__NSLayoutConstraint::UILayoutSupport;
 #[cfg(feature = "NSLayoutManager")]
 pub use self::__NSLayoutManager::NSControlCharacterAction;
 #[cfg(feature = "NSLayoutManager")]
+pub use self::__NSLayoutManager::NSControlCharacterContainerBreakAction;
+#[cfg(feature = "NSLayoutManager")]
+pub use self::__NSLayoutManager::NSControlCharacterHorizontalTabAction;
+#[cfg(feature = "NSLayoutManager")]
+pub use self::__NSLayoutManager::NSControlCharacterLineBreakAction;
+#[cfg(feature = "NSLayoutManager")]
+pub use self::__NSLayoutManager::NSControlCharacterParagraphBreakAction;
+#[cfg(feature = "NSLayoutManager")]
+pub use self::__NSLayoutManager::NSControlCharacterWhitespaceAction;
+#[cfg(feature = "NSLayoutManager")]
+pub use self::__NSLayoutManager::NSControlCharacterZeroAdvancementAction;
+#[cfg(feature = "NSLayoutManager")]
 pub use self::__NSLayoutManager::NSGlyphProperty;
 #[cfg(feature = "NSLayoutManager")]
 pub use self::__NSLayoutManager::NSLayoutManager;
@@ -1398,6 +1617,8 @@ pub use self::__NSStringDrawing::NSStringDrawingContext;
 pub use self::__NSStringDrawing::NSStringDrawingOptions;
 #[cfg(feature = "NSStringDrawing")]
 pub use self::__NSStringDrawing::NSStringNSExtendedStringDrawing;
+#[cfg(feature = "NSText")]
+pub use self::__NSText::NSTextAlignment;
 #[cfg(feature = "NSText")]
 pub use self::__NSText::NSWritingDirection;
 #[cfg(feature = "NSTextAttachment")]
@@ -1572,9 +1793,17 @@ pub use self::__UIAccessibility::AXObjectReturnBlock;
     feature = "block2"
 ))]
 pub use self::__UIAccessibility::AXPathReturnBlock;
-#[cfg(all(feature = "UIAccessibility", feature = "block2"))]
+#[cfg(all(
+    feature = "UIAccessibility",
+    feature = "block2",
+    feature = "objc2-core-foundation"
+))]
 pub use self::__UIAccessibility::AXPointReturnBlock;
-#[cfg(all(feature = "UIAccessibility", feature = "block2"))]
+#[cfg(all(
+    feature = "UIAccessibility",
+    feature = "block2",
+    feature = "objc2-core-foundation"
+))]
 pub use self::__UIAccessibility::AXRectReturnBlock;
 #[cfg(all(feature = "UIAccessibility", feature = "block2"))]
 pub use self::__UIAccessibility::AXStringArrayReturnBlock;
@@ -1592,6 +1821,13 @@ pub use self::__UIAccessibility::AXTextualContextReturnBlock;
     feature = "block2"
 ))]
 pub use self::__UIAccessibility::AXTraitsReturnBlock;
+#[cfg(all(
+    feature = "UIAccessibility",
+    feature = "UITextInput",
+    feature = "UITextInputTraits",
+    feature = "block2"
+))]
+pub use self::__UIAccessibility::AXUITextInputReturnBlock;
 #[cfg(all(feature = "UIAccessibility", feature = "block2"))]
 pub use self::__UIAccessibility::AXVoidReturnBlock;
 #[cfg(feature = "UIAccessibility")]
@@ -1602,6 +1838,12 @@ pub use self::__UIAccessibility::NSObjectUIAccessibilityAction;
 pub use self::__UIAccessibility::NSObjectUIAccessibilityDragging;
 #[cfg(feature = "UIAccessibility")]
 pub use self::__UIAccessibility::NSObjectUIAccessibilityFocus;
+#[cfg(feature = "UIAccessibility")]
+pub use self::__UIAccessibility::NSObjectUIAccessibilityHitTest;
+#[cfg(feature = "UIAccessibility")]
+pub use self::__UIAccessibility::NSObjectUIAccessibilityTextNavigation;
+#[cfg(feature = "UIAccessibility")]
+pub use self::__UIAccessibility::NSObjectUIAccessibilityTextOperations;
 #[cfg(feature = "UIAccessibility")]
 pub use self::__UIAccessibility::UIAccessibilityAssistiveTouchStatusDidChangeNotification;
 #[cfg(feature = "UIAccessibility")]
@@ -1615,7 +1857,8 @@ pub use self::__UIAccessibility::UIAccessibilityClosedCaptioningStatusDidChangeN
 #[cfg(all(
     feature = "UIAccessibility",
     feature = "UIResponder",
-    feature = "UIView"
+    feature = "UIView",
+    feature = "objc2-core-foundation"
 ))]
 pub use self::__UIAccessibility::UIAccessibilityConvertFrameToScreenCoordinates;
 #[cfg(all(
@@ -1736,6 +1979,8 @@ pub use self::__UIAccessibilityConstants::UIAccessibilityDirectTouchOptions;
 #[cfg(feature = "UIAccessibilityConstants")]
 pub use self::__UIAccessibilityConstants::UIAccessibilityElementFocusedNotification;
 #[cfg(feature = "UIAccessibilityConstants")]
+pub use self::__UIAccessibilityConstants::UIAccessibilityExpandedStatus;
+#[cfg(feature = "UIAccessibilityConstants")]
 pub use self::__UIAccessibilityConstants::UIAccessibilityFocusedElementKey;
 #[cfg(feature = "UIAccessibilityConstants")]
 pub use self::__UIAccessibilityConstants::UIAccessibilityLayoutChangedNotification;
@@ -1853,6 +2098,8 @@ pub use self::__UIAccessibilityContainer::UIAccessibilityContainerDataTableCell;
 pub use self::__UIAccessibilityContentSizeCategoryImageAdjusting::UIAccessibilityContentSizeCategoryImageAdjusting;
 #[cfg(feature = "UIAccessibilityCustomAction")]
 pub use self::__UIAccessibilityCustomAction::UIAccessibilityCustomAction;
+#[cfg(feature = "UIAccessibilityCustomAction")]
+pub use self::__UIAccessibilityCustomAction::UIAccessibilityCustomActionCategoryEdit;
 #[cfg(all(feature = "UIAccessibilityCustomAction", feature = "block2"))]
 pub use self::__UIAccessibilityCustomAction::UIAccessibilityCustomActionHandler;
 #[cfg(all(feature = "UIAccessibilityCustomRotor", feature = "block2"))]
@@ -1882,7 +2129,8 @@ pub use self::__UIAccessibilityZoom::UIAccessibilityRegisterGestureConflictWithZ
 #[cfg(all(
     feature = "UIAccessibilityZoom",
     feature = "UIResponder",
-    feature = "UIView"
+    feature = "UIView",
+    feature = "objc2-core-foundation"
 ))]
 pub use self::__UIAccessibilityZoom::UIAccessibilityZoomFocusChanged;
 #[cfg(feature = "UIAccessibilityZoom")]
@@ -1893,6 +2141,8 @@ pub use self::__UIAction::UIAction;
 pub use self::__UIAction::UIActionHandler;
 #[cfg(feature = "UIAction")]
 pub use self::__UIAction::UIActionIdentifier;
+#[cfg(feature = "UIAction")]
+pub use self::__UIAction::UIActionNewFromPasteboard;
 #[cfg(feature = "UIAction")]
 pub use self::__UIAction::UIActionPaste;
 #[cfg(feature = "UIAction")]
@@ -1953,6 +2203,15 @@ pub use self::__UIActivity::UIActivityTypePrint;
 pub use self::__UIActivity::UIActivityTypeSaveToCameraRoll;
 #[cfg(feature = "UIActivity")]
 pub use self::__UIActivity::UIActivityTypeSharePlay;
+#[cfg(feature = "UIActivityCollaborationModeRestriction")]
+pub use self::__UIActivityCollaborationModeRestriction::UIActivityCollaborationMode;
+#[cfg(feature = "UIActivityCollaborationModeRestriction")]
+pub use self::__UIActivityCollaborationModeRestriction::UIActivityCollaborationModeRestriction;
+#[cfg(all(
+    feature = "UIActivityCollaborationModeRestriction",
+    feature = "UIActivityItemsConfigurationReading"
+))]
+pub use self::__UIActivityCollaborationModeRestriction::UIActivityItemsConfigurationMetadataKeyCollaborationModeRestrictions;
 #[cfg(all(
     feature = "UIActivityIndicatorView",
     feature = "UIResponder",
@@ -1991,6 +2250,13 @@ pub use self::__UIActivityItemsConfigurationReading::UIActivityItemsConfiguratio
 pub use self::__UIActivityItemsConfigurationReading::UIActivityItemsConfigurationProviding;
 #[cfg(feature = "UIActivityItemsConfigurationReading")]
 pub use self::__UIActivityItemsConfigurationReading::UIActivityItemsConfigurationReading;
+#[cfg(all(
+    feature = "UIActivityItemsConfigurationReading",
+    feature = "UIActivityItemsConfigurationReading_ShareSheet"
+))]
+pub use self::__UIActivityItemsConfigurationReading_ShareSheet::UIActivityItemsConfigurationMetadataKeyShareRecipients;
+#[cfg(feature = "UIActivityViewController")]
+pub use self::__UIActivityViewController::UIActivitySectionTypes;
 #[cfg(all(
     feature = "UIActivityViewController",
     feature = "UIResponder",
@@ -2041,6 +2307,18 @@ pub use self::__UIApplication::UIApplicationBackgroundFetchIntervalMinimum;
 pub use self::__UIApplication::UIApplicationBackgroundFetchIntervalNever;
 #[cfg(feature = "UIApplication")]
 pub use self::__UIApplication::UIApplicationBackgroundRefreshStatusDidChangeNotification;
+#[cfg(feature = "UIApplication")]
+pub use self::__UIApplication::UIApplicationCategory;
+#[cfg(feature = "UIApplication")]
+pub use self::__UIApplication::UIApplicationCategoryDefaultErrorCode;
+#[cfg(feature = "UIApplication")]
+pub use self::__UIApplication::UIApplicationCategoryDefaultErrorDomain;
+#[cfg(feature = "UIApplication")]
+pub use self::__UIApplication::UIApplicationCategoryDefaultRetryAvailabilityDateErrorKey;
+#[cfg(feature = "UIApplication")]
+pub use self::__UIApplication::UIApplicationCategoryDefaultStatus;
+#[cfg(feature = "UIApplication")]
+pub use self::__UIApplication::UIApplicationCategoryDefaultStatusLastProvidedDateErrorKey;
 #[cfg(feature = "UIApplication")]
 pub use self::__UIApplication::UIApplicationDelegate;
 #[cfg(feature = "UIApplication")]
@@ -2093,6 +2371,8 @@ pub use self::__UIApplication::UIApplicationLaunchOptionsUserActivityDictionaryK
 pub use self::__UIApplication::UIApplicationLaunchOptionsUserActivityTypeKey;
 #[cfg(feature = "UIApplication")]
 pub use self::__UIApplication::UIApplicationMain;
+#[cfg(feature = "UIApplication")]
+pub use self::__UIApplication::UIApplicationOpenDefaultApplicationsSettingsURLString;
 #[cfg(feature = "UIApplication")]
 pub use self::__UIApplication::UIApplicationOpenExternalURLOptionsEventAttributionKey;
 #[cfg(feature = "UIApplication")]
@@ -2167,16 +2447,22 @@ pub use self::__UIApplicationShortcutItem::UIMutableApplicationShortcutItem;
 pub use self::__UIAttachmentBehavior::UIAttachmentBehavior;
 #[cfg(feature = "UIAttachmentBehavior")]
 pub use self::__UIAttachmentBehavior::UIAttachmentBehaviorType;
-#[cfg(feature = "UIAttachmentBehavior")]
+#[cfg(all(feature = "UIAttachmentBehavior", feature = "objc2-core-foundation"))]
 pub use self::__UIAttachmentBehavior::UIFloatRange;
-#[cfg(feature = "UIAttachmentBehavior")]
+#[cfg(all(feature = "UIAttachmentBehavior", feature = "objc2-core-foundation"))]
 pub use self::__UIAttachmentBehavior::UIFloatRangeInfinite;
-#[cfg(feature = "UIAttachmentBehavior")]
+#[cfg(all(feature = "UIAttachmentBehavior", feature = "objc2-core-foundation"))]
 pub use self::__UIAttachmentBehavior::UIFloatRangeIsInfinite;
-#[cfg(feature = "UIAttachmentBehavior")]
+#[cfg(all(feature = "UIAttachmentBehavior", feature = "objc2-core-foundation"))]
 pub use self::__UIAttachmentBehavior::UIFloatRangeZero;
 #[cfg(feature = "UIBackgroundConfiguration")]
 pub use self::__UIBackgroundConfiguration::UIBackgroundConfiguration;
+#[cfg(all(
+    feature = "UIBackgroundExtensionView",
+    feature = "UIResponder",
+    feature = "UIView"
+))]
+pub use self::__UIBackgroundExtensionView::UIBackgroundExtensionView;
 #[cfg(feature = "UIBandSelectionInteraction")]
 pub use self::__UIBandSelectionInteraction::UIBandSelectionInteraction;
 #[cfg(feature = "UIBandSelectionInteraction")]
@@ -2193,6 +2479,8 @@ pub use self::__UIBarButtonItem::UIBarButtonSystemItem;
 pub use self::__UIBarButtonItemAppearance::UIBarButtonItemAppearance;
 #[cfg(feature = "UIBarButtonItemAppearance")]
 pub use self::__UIBarButtonItemAppearance::UIBarButtonItemStateAppearance;
+#[cfg(feature = "UIBarButtonItemBadge")]
+pub use self::__UIBarButtonItemBadge::UIBarButtonItemBadge;
 #[cfg(feature = "UIBarButtonItemGroup")]
 pub use self::__UIBarButtonItemGroup::UIBarButtonItemGroup;
 #[cfg(feature = "UIBarCommon")]
@@ -2273,6 +2561,13 @@ pub use self::__UICalendarSelectionSingleDate::UICalendarSelectionSingleDate;
 #[cfg(feature = "UICalendarSelectionSingleDate")]
 pub use self::__UICalendarSelectionSingleDate::UICalendarSelectionSingleDateDelegate;
 #[cfg(all(
+    feature = "UICalendarSelection",
+    feature = "UICalendarSelectionWeekOfYear"
+))]
+pub use self::__UICalendarSelectionWeekOfYear::UICalendarSelectionWeekOfYear;
+#[cfg(feature = "UICalendarSelectionWeekOfYear")]
+pub use self::__UICalendarSelectionWeekOfYear::UICalendarSelectionWeekOfYearDelegate;
+#[cfg(all(
     feature = "UICalendarView",
     feature = "UIResponder",
     feature = "UIView"
@@ -2322,7 +2617,7 @@ pub use self::__UICellAccessory::UICellAccessoryPositionAfterAccessoryOfClass;
 pub use self::__UICellAccessory::UICellAccessoryPositionBeforeAccessoryOfClass;
 #[cfg(feature = "UICellAccessory")]
 pub use self::__UICellAccessory::UICellAccessoryReorder;
-#[cfg(feature = "UICellAccessory")]
+#[cfg(all(feature = "UICellAccessory", feature = "objc2-core-foundation"))]
 pub use self::__UICellAccessory::UICellAccessoryStandardDimension;
 #[cfg(feature = "UICellConfigurationState")]
 pub use self::__UICellConfigurationState::UICellConfigurationDragState;
@@ -2347,6 +2642,8 @@ pub use self::__UICloudSharingController::UICloudSharingPermissionOptions;
 pub use self::__UICollectionLayoutList::UICollectionLayoutListAppearance;
 #[cfg(feature = "UICollectionLayoutList")]
 pub use self::__UICollectionLayoutList::UICollectionLayoutListConfiguration;
+#[cfg(feature = "UICollectionLayoutList")]
+pub use self::__UICollectionLayoutList::UICollectionLayoutListContentHuggingElements;
 #[cfg(feature = "UICollectionLayoutList")]
 pub use self::__UICollectionLayoutList::UICollectionLayoutListFooterMode;
 #[cfg(feature = "UICollectionLayoutList")]
@@ -2454,7 +2751,8 @@ pub use self::__UICollectionViewCompositionalLayout::NSCollectionLayoutSection;
 #[cfg(all(
     feature = "UICollectionViewCompositionalLayout",
     feature = "UIDynamicBehavior",
-    feature = "block2"
+    feature = "block2",
+    feature = "objc2-core-foundation"
 ))]
 pub use self::__UICollectionViewCompositionalLayout::NSCollectionLayoutSectionVisibleItemsInvalidationHandler;
 #[cfg(feature = "UICollectionViewCompositionalLayout")]
@@ -2472,13 +2770,25 @@ pub use self::__UICollectionViewCompositionalLayout::NSCollectionLayoutVisibleIt
 pub use self::__UICollectionViewCompositionalLayout::UICollectionLayoutSectionOrthogonalScrollingBehavior;
 #[cfg(feature = "UICollectionViewCompositionalLayout")]
 pub use self::__UICollectionViewCompositionalLayout::UICollectionLayoutSectionOrthogonalScrollingBounce;
-#[cfg(feature = "UICollectionViewCompositionalLayout")]
+#[cfg(all(
+    feature = "UICollectionViewCompositionalLayout",
+    feature = "objc2-core-foundation"
+))]
 pub use self::__UICollectionViewCompositionalLayout::UICollectionLayoutSectionOrthogonalScrollingDecelerationRate;
-#[cfg(feature = "UICollectionViewCompositionalLayout")]
+#[cfg(all(
+    feature = "UICollectionViewCompositionalLayout",
+    feature = "objc2-core-foundation"
+))]
 pub use self::__UICollectionViewCompositionalLayout::UICollectionLayoutSectionOrthogonalScrollingDecelerationRateAutomatic;
-#[cfg(feature = "UICollectionViewCompositionalLayout")]
+#[cfg(all(
+    feature = "UICollectionViewCompositionalLayout",
+    feature = "objc2-core-foundation"
+))]
 pub use self::__UICollectionViewCompositionalLayout::UICollectionLayoutSectionOrthogonalScrollingDecelerationRateFast;
-#[cfg(feature = "UICollectionViewCompositionalLayout")]
+#[cfg(all(
+    feature = "UICollectionViewCompositionalLayout",
+    feature = "objc2-core-foundation"
+))]
 pub use self::__UICollectionViewCompositionalLayout::UICollectionLayoutSectionOrthogonalScrollingDecelerationRateNormal;
 #[cfg(feature = "UICollectionViewCompositionalLayout")]
 pub use self::__UICollectionViewCompositionalLayout::UICollectionLayoutSectionOrthogonalScrollingProperties;
@@ -2510,7 +2820,10 @@ pub use self::__UICollectionViewFlowLayout::UICollectionViewDelegateFlowLayout;
     feature = "UICollectionViewLayout"
 ))]
 pub use self::__UICollectionViewFlowLayout::UICollectionViewFlowLayout;
-#[cfg(feature = "UICollectionViewFlowLayout")]
+#[cfg(all(
+    feature = "UICollectionViewFlowLayout",
+    feature = "objc2-core-foundation"
+))]
 pub use self::__UICollectionViewFlowLayout::UICollectionViewFlowLayoutAutomaticSize;
 #[cfg(all(
     feature = "UICollectionViewFlowLayout",
@@ -2549,7 +2862,7 @@ pub use self::__UICollectionViewLayout::UICollectionElementKindSectionHeader;
 pub use self::__UICollectionViewLayout::UICollectionViewLayout;
 #[cfg(feature = "UICollectionViewLayout")]
 pub use self::__UICollectionViewLayout::UICollectionViewLayoutAttributes;
-#[cfg(feature = "UICollectionViewLayout")]
+#[cfg(all(feature = "UICollectionViewLayout", feature = "objc2-core-foundation"))]
 pub use self::__UICollectionViewLayout::UICollectionViewLayoutAutomaticDimension;
 #[cfg(feature = "UICollectionViewLayout")]
 pub use self::__UICollectionViewLayout::UICollectionViewLayoutInvalidationContext;
@@ -2581,6 +2894,8 @@ pub use self::__UICollisionBehavior::UICollisionBehaviorMode;
 pub use self::__UIColor::CIColorUIKitAdditions;
 #[cfg(feature = "UIColor")]
 pub use self::__UIColor::UIColor;
+#[cfg(feature = "UIColor")]
+pub use self::__UIColor::UIColorProminence;
 #[cfg(all(
     feature = "UIColorPickerViewController",
     feature = "UIResponder",
@@ -2722,6 +3037,8 @@ pub use self::__UIContextMenuInteraction::UIContextMenuInteractionCommitAnimatin
 pub use self::__UIContextMenuInteraction::UIContextMenuInteractionCommitStyle;
 #[cfg(feature = "UIContextMenuInteraction")]
 pub use self::__UIContextMenuInteraction::UIContextMenuInteractionDelegate;
+#[cfg(all(feature = "UIContextMenuSystem", feature = "UIMenuSystem"))]
+pub use self::__UIContextMenuSystem::UIContextMenuSystem;
 #[cfg(feature = "UIContextualAction")]
 pub use self::__UIContextualAction::UIContextualAction;
 #[cfg(all(
@@ -2743,6 +3060,14 @@ pub use self::__UIControl::UIControlContentVerticalAlignment;
 pub use self::__UIControl::UIControlEvents;
 #[cfg(feature = "UIControl")]
 pub use self::__UIControl::UIControlState;
+#[cfg(feature = "UIConversationContext")]
+pub use self::__UIConversationContext::UIConversationContext;
+#[cfg(feature = "UIConversationEntry")]
+pub use self::__UIConversationEntry::UIConversationEntry;
+#[cfg(feature = "UICornerConfiguration")]
+pub use self::__UICornerConfiguration::UICornerConfiguration;
+#[cfg(feature = "UICornerRadius")]
+pub use self::__UICornerRadius::UICornerRadius;
 #[cfg(feature = "UIDataDetectors")]
 pub use self::__UIDataDetectors::UIDataDetectorTypes;
 #[cfg(feature = "UIDataSourceTranslating")]
@@ -2760,6 +3085,10 @@ pub use self::__UIDatePicker::UIDatePickerMode;
 pub use self::__UIDatePicker::UIDatePickerStyle;
 #[cfg(all(feature = "UIDeferredMenuElement", feature = "UIMenuElement"))]
 pub use self::__UIDeferredMenuElement::UIDeferredMenuElement;
+#[cfg(feature = "UIDeferredMenuElement")]
+pub use self::__UIDeferredMenuElement::UIDeferredMenuElementIdentifier;
+#[cfg(feature = "UIDeferredMenuElement")]
+pub use self::__UIDeferredMenuElement::UIDeferredMenuElementProvider;
 #[cfg(feature = "UIDevice")]
 pub use self::__UIDevice::UIDevice;
 #[cfg(feature = "UIDevice")]
@@ -2827,6 +3156,14 @@ pub use self::__UIDocument::UIDocument;
 #[cfg(feature = "UIDocument")]
 pub use self::__UIDocument::UIDocumentChangeKind;
 #[cfg(feature = "UIDocument")]
+pub use self::__UIDocument::UIDocumentCreationIntent;
+#[cfg(feature = "UIDocument")]
+pub use self::__UIDocument::UIDocumentCreationIntentDefault;
+#[cfg(feature = "UIDocument")]
+pub use self::__UIDocument::UIDocumentDidMoveToWritableLocationNotification;
+#[cfg(feature = "UIDocument")]
+pub use self::__UIDocument::UIDocumentDidMoveToWritableLocationOldURLKey;
+#[cfg(feature = "UIDocument")]
 pub use self::__UIDocument::UIDocumentSaveOperation;
 #[cfg(feature = "UIDocument")]
 pub use self::__UIDocument::UIDocumentState;
@@ -2892,6 +3229,8 @@ pub use self::__UIDocumentProperties::UIDocumentProperties;
     feature = "UIViewController"
 ))]
 pub use self::__UIDocumentViewController::UIDocumentViewController;
+#[cfg(feature = "UIDocumentViewControllerLaunchOptions")]
+pub use self::__UIDocumentViewControllerLaunchOptions::UIDocumentViewControllerLaunchOptions;
 #[cfg(feature = "UIDragInteraction")]
 pub use self::__UIDragInteraction::UIDragAnimating;
 #[cfg(feature = "UIDragInteraction")]
@@ -3000,6 +3339,8 @@ pub use self::__UIFocus::UIFocusHeading;
 pub use self::__UIFocus::UIFocusItem;
 #[cfg(feature = "UIFocus")]
 pub use self::__UIFocus::UIFocusItemContainer;
+#[cfg(feature = "UIFocus")]
+pub use self::__UIFocus::UIFocusItemDeferralMode;
 #[cfg(feature = "UIFocus")]
 pub use self::__UIFocus::UIFocusItemScrollableContainer;
 #[cfg(feature = "UIFocus")]
@@ -3120,37 +3461,37 @@ pub use self::__UIFontDescriptor::UIFontTextStyleTitle1;
 pub use self::__UIFontDescriptor::UIFontTextStyleTitle2;
 #[cfg(feature = "UIFontDescriptor")]
 pub use self::__UIFontDescriptor::UIFontTextStyleTitle3;
-#[cfg(feature = "UIFontDescriptor")]
+#[cfg(all(feature = "UIFontDescriptor", feature = "objc2-core-foundation"))]
 pub use self::__UIFontDescriptor::UIFontWeight;
-#[cfg(feature = "UIFontDescriptor")]
+#[cfg(all(feature = "UIFontDescriptor", feature = "objc2-core-foundation"))]
 pub use self::__UIFontDescriptor::UIFontWeightBlack;
-#[cfg(feature = "UIFontDescriptor")]
+#[cfg(all(feature = "UIFontDescriptor", feature = "objc2-core-foundation"))]
 pub use self::__UIFontDescriptor::UIFontWeightBold;
-#[cfg(feature = "UIFontDescriptor")]
+#[cfg(all(feature = "UIFontDescriptor", feature = "objc2-core-foundation"))]
 pub use self::__UIFontDescriptor::UIFontWeightHeavy;
-#[cfg(feature = "UIFontDescriptor")]
+#[cfg(all(feature = "UIFontDescriptor", feature = "objc2-core-foundation"))]
 pub use self::__UIFontDescriptor::UIFontWeightLight;
-#[cfg(feature = "UIFontDescriptor")]
+#[cfg(all(feature = "UIFontDescriptor", feature = "objc2-core-foundation"))]
 pub use self::__UIFontDescriptor::UIFontWeightMedium;
-#[cfg(feature = "UIFontDescriptor")]
+#[cfg(all(feature = "UIFontDescriptor", feature = "objc2-core-foundation"))]
 pub use self::__UIFontDescriptor::UIFontWeightRegular;
-#[cfg(feature = "UIFontDescriptor")]
+#[cfg(all(feature = "UIFontDescriptor", feature = "objc2-core-foundation"))]
 pub use self::__UIFontDescriptor::UIFontWeightSemibold;
-#[cfg(feature = "UIFontDescriptor")]
+#[cfg(all(feature = "UIFontDescriptor", feature = "objc2-core-foundation"))]
 pub use self::__UIFontDescriptor::UIFontWeightThin;
 #[cfg(feature = "UIFontDescriptor")]
 pub use self::__UIFontDescriptor::UIFontWeightTrait;
-#[cfg(feature = "UIFontDescriptor")]
+#[cfg(all(feature = "UIFontDescriptor", feature = "objc2-core-foundation"))]
 pub use self::__UIFontDescriptor::UIFontWeightUltraLight;
-#[cfg(feature = "UIFontDescriptor")]
+#[cfg(all(feature = "UIFontDescriptor", feature = "objc2-core-foundation"))]
 pub use self::__UIFontDescriptor::UIFontWidth;
-#[cfg(feature = "UIFontDescriptor")]
+#[cfg(all(feature = "UIFontDescriptor", feature = "objc2-core-foundation"))]
 pub use self::__UIFontDescriptor::UIFontWidthCompressed;
-#[cfg(feature = "UIFontDescriptor")]
+#[cfg(all(feature = "UIFontDescriptor", feature = "objc2-core-foundation"))]
 pub use self::__UIFontDescriptor::UIFontWidthCondensed;
-#[cfg(feature = "UIFontDescriptor")]
+#[cfg(all(feature = "UIFontDescriptor", feature = "objc2-core-foundation"))]
 pub use self::__UIFontDescriptor::UIFontWidthExpanded;
-#[cfg(feature = "UIFontDescriptor")]
+#[cfg(all(feature = "UIFontDescriptor", feature = "objc2-core-foundation"))]
 pub use self::__UIFontDescriptor::UIFontWidthStandard;
 #[cfg(feature = "UIFontDescriptor")]
 pub use self::__UIFontDescriptor::UIFontWidthTrait;
@@ -3166,106 +3507,128 @@ pub use self::__UIFontPickerViewController::UIFontPickerViewController;
 pub use self::__UIFontPickerViewController::UIFontPickerViewControllerDelegate;
 #[cfg(feature = "UIFontPickerViewControllerConfiguration")]
 pub use self::__UIFontPickerViewControllerConfiguration::UIFontPickerViewControllerConfiguration;
-#[cfg(feature = "UIGeometry")]
+#[cfg(all(feature = "UIGeometry", feature = "objc2-core-foundation"))]
 pub use self::__UIGeometry::CGAffineTransformFromString;
-#[cfg(feature = "UIGeometry")]
+#[cfg(all(feature = "UIGeometry", feature = "objc2-core-foundation"))]
 pub use self::__UIGeometry::CGPointFromString;
-#[cfg(feature = "UIGeometry")]
+#[cfg(all(feature = "UIGeometry", feature = "objc2-core-foundation"))]
 pub use self::__UIGeometry::CGRectFromString;
-#[cfg(feature = "UIGeometry")]
+#[cfg(all(feature = "UIGeometry", feature = "objc2-core-foundation"))]
 pub use self::__UIGeometry::CGSizeFromString;
-#[cfg(feature = "UIGeometry")]
+#[cfg(all(feature = "UIGeometry", feature = "objc2-core-foundation"))]
 pub use self::__UIGeometry::CGVectorFromString;
 #[cfg(feature = "UIGeometry")]
 pub use self::__UIGeometry::NSCoderUIGeometryKeyedCoding;
-#[cfg(feature = "UIGeometry")]
+#[cfg(all(feature = "UIGeometry", feature = "objc2-core-foundation"))]
 pub use self::__UIGeometry::NSDirectionalEdgeInsets;
-#[cfg(feature = "UIGeometry")]
+#[cfg(all(feature = "UIGeometry", feature = "objc2-core-foundation"))]
 pub use self::__UIGeometry::NSDirectionalEdgeInsetsFromString;
-#[cfg(feature = "UIGeometry")]
+#[cfg(all(feature = "UIGeometry", feature = "objc2-core-foundation"))]
 pub use self::__UIGeometry::NSDirectionalEdgeInsetsZero;
 #[cfg(feature = "UIGeometry")]
 pub use self::__UIGeometry::NSDirectionalRectEdge;
 #[cfg(feature = "UIGeometry")]
 pub use self::__UIGeometry::NSRectAlignment;
-#[cfg(feature = "UIGeometry")]
+#[cfg(all(feature = "UIGeometry", feature = "objc2-core-foundation"))]
 pub use self::__UIGeometry::NSStringFromCGAffineTransform;
-#[cfg(feature = "UIGeometry")]
+#[cfg(all(feature = "UIGeometry", feature = "objc2-core-foundation"))]
 pub use self::__UIGeometry::NSStringFromCGPoint;
-#[cfg(feature = "UIGeometry")]
+#[cfg(all(feature = "UIGeometry", feature = "objc2-core-foundation"))]
 pub use self::__UIGeometry::NSStringFromCGRect;
-#[cfg(feature = "UIGeometry")]
+#[cfg(all(feature = "UIGeometry", feature = "objc2-core-foundation"))]
 pub use self::__UIGeometry::NSStringFromCGSize;
-#[cfg(feature = "UIGeometry")]
+#[cfg(all(feature = "UIGeometry", feature = "objc2-core-foundation"))]
 pub use self::__UIGeometry::NSStringFromCGVector;
-#[cfg(feature = "UIGeometry")]
+#[cfg(all(feature = "UIGeometry", feature = "objc2-core-foundation"))]
 pub use self::__UIGeometry::NSStringFromDirectionalEdgeInsets;
-#[cfg(feature = "UIGeometry")]
+#[cfg(all(feature = "UIGeometry", feature = "objc2-core-foundation"))]
 pub use self::__UIGeometry::NSStringFromUIEdgeInsets;
-#[cfg(feature = "UIGeometry")]
+#[cfg(all(feature = "UIGeometry", feature = "objc2-core-foundation"))]
 pub use self::__UIGeometry::NSStringFromUIOffset;
 #[cfg(feature = "UIGeometry")]
 pub use self::__UIGeometry::NSValueUIGeometryExtensions;
 #[cfg(feature = "UIGeometry")]
-pub use self::__UIGeometry::UIAxis;
-#[cfg(feature = "UIGeometry")]
 pub use self::__UIGeometry::UIDirectionalRectEdge;
-#[cfg(feature = "UIGeometry")]
+#[cfg(all(feature = "UIGeometry", feature = "objc2-core-foundation"))]
 pub use self::__UIGeometry::UIEdgeInsets;
-#[cfg(feature = "UIGeometry")]
+#[cfg(all(feature = "UIGeometry", feature = "objc2-core-foundation"))]
 pub use self::__UIGeometry::UIEdgeInsetsFromString;
-#[cfg(feature = "UIGeometry")]
+#[cfg(all(feature = "UIGeometry", feature = "objc2-core-foundation"))]
 pub use self::__UIGeometry::UIEdgeInsetsZero;
-#[cfg(feature = "UIGeometry")]
+#[cfg(all(feature = "UIGeometry", feature = "objc2-core-foundation"))]
 pub use self::__UIGeometry::UIOffset;
-#[cfg(feature = "UIGeometry")]
+#[cfg(all(feature = "UIGeometry", feature = "objc2-core-foundation"))]
 pub use self::__UIGeometry::UIOffsetFromString;
-#[cfg(feature = "UIGeometry")]
+#[cfg(all(feature = "UIGeometry", feature = "objc2-core-foundation"))]
 pub use self::__UIGeometry::UIOffsetZero;
 #[cfg(feature = "UIGeometry")]
 pub use self::__UIGeometry::UIRectCorner;
-#[cfg(feature = "UIGeometry")]
-pub use self::__UIGeometry::UIRectEdge;
 #[cfg(feature = "UIGestureRecognizer")]
 pub use self::__UIGestureRecognizer::UIGestureRecognizer;
 #[cfg(feature = "UIGestureRecognizer")]
 pub use self::__UIGestureRecognizer::UIGestureRecognizerDelegate;
 #[cfg(feature = "UIGestureRecognizer")]
 pub use self::__UIGestureRecognizer::UIGestureRecognizerState;
-#[cfg(feature = "UIGraphics")]
+#[cfg(all(feature = "UIGlassEffect", feature = "UIVisualEffect"))]
+pub use self::__UIGlassEffect::UIGlassContainerEffect;
+#[cfg(all(feature = "UIGlassEffect", feature = "UIVisualEffect"))]
+pub use self::__UIGlassEffect::UIGlassEffect;
+#[cfg(feature = "UIGlassEffect")]
+pub use self::__UIGlassEffect::UIGlassEffectStyle;
+#[cfg(all(feature = "UIGraphics", feature = "objc2-core-foundation"))]
 pub use self::__UIGraphics::UIGraphicsAddPDFContextDestinationAtPoint;
-#[cfg(feature = "UIGraphics")]
+#[cfg(all(feature = "UIGraphics", feature = "objc2-core-foundation"))]
 pub use self::__UIGraphics::UIGraphicsBeginImageContext;
-#[cfg(feature = "UIGraphics")]
+#[cfg(all(feature = "UIGraphics", feature = "objc2-core-foundation"))]
 pub use self::__UIGraphics::UIGraphicsBeginImageContextWithOptions;
-#[cfg(feature = "UIGraphics")]
+#[cfg(all(feature = "UIGraphics", feature = "objc2-core-foundation"))]
 pub use self::__UIGraphics::UIGraphicsBeginPDFContextToData;
-#[cfg(feature = "UIGraphics")]
+#[cfg(all(feature = "UIGraphics", feature = "objc2-core-foundation"))]
 pub use self::__UIGraphics::UIGraphicsBeginPDFContextToFile;
 #[cfg(feature = "UIGraphics")]
 pub use self::__UIGraphics::UIGraphicsBeginPDFPage;
-#[cfg(feature = "UIGraphics")]
+#[cfg(all(feature = "UIGraphics", feature = "objc2-core-foundation"))]
 pub use self::__UIGraphics::UIGraphicsBeginPDFPageWithInfo;
 #[cfg(feature = "UIGraphics")]
 pub use self::__UIGraphics::UIGraphicsEndImageContext;
 #[cfg(feature = "UIGraphics")]
 pub use self::__UIGraphics::UIGraphicsEndPDFContext;
+#[cfg(all(
+    feature = "UIGraphics",
+    feature = "objc2-core-foundation",
+    feature = "objc2-core-graphics"
+))]
+pub use self::__UIGraphics::UIGraphicsGetCurrentContext;
 #[cfg(all(feature = "UIGraphics", feature = "UIImage"))]
 pub use self::__UIGraphics::UIGraphicsGetImageFromCurrentImageContext;
-#[cfg(feature = "UIGraphics")]
+#[cfg(all(feature = "UIGraphics", feature = "objc2-core-foundation"))]
 pub use self::__UIGraphics::UIGraphicsGetPDFContextBounds;
 #[cfg(feature = "UIGraphics")]
 pub use self::__UIGraphics::UIGraphicsPopContext;
-#[cfg(feature = "UIGraphics")]
+#[cfg(all(feature = "UIGraphics", feature = "objc2-core-graphics"))]
+pub use self::__UIGraphics::UIGraphicsPushContext;
+#[cfg(all(feature = "UIGraphics", feature = "objc2-core-foundation"))]
 pub use self::__UIGraphics::UIGraphicsSetPDFContextDestinationForRect;
-#[cfg(feature = "UIGraphics")]
+#[cfg(all(feature = "UIGraphics", feature = "objc2-core-foundation"))]
 pub use self::__UIGraphics::UIGraphicsSetPDFContextURLForRect;
-#[cfg(feature = "UIGraphics")]
+#[cfg(all(feature = "UIGraphics", feature = "objc2-core-foundation"))]
 pub use self::__UIGraphics::UIRectClip;
-#[cfg(feature = "UIGraphics")]
+#[cfg(all(feature = "UIGraphics", feature = "objc2-core-foundation"))]
 pub use self::__UIGraphics::UIRectFill;
-#[cfg(feature = "UIGraphics")]
+#[cfg(all(
+    feature = "UIGraphics",
+    feature = "objc2-core-foundation",
+    feature = "objc2-core-graphics"
+))]
+pub use self::__UIGraphics::UIRectFillUsingBlendMode;
+#[cfg(all(feature = "UIGraphics", feature = "objc2-core-foundation"))]
 pub use self::__UIGraphics::UIRectFrame;
+#[cfg(all(
+    feature = "UIGraphics",
+    feature = "objc2-core-foundation",
+    feature = "objc2-core-graphics"
+))]
+pub use self::__UIGraphics::UIRectFrameUsingBlendMode;
 #[cfg(all(
     feature = "UIGraphicsImageRenderer",
     feature = "UIGraphicsRenderer",
@@ -3341,7 +3704,7 @@ pub use self::__UIImage::CIImageUIKitAdditions;
 pub use self::__UIImage::UIImage;
 #[cfg(feature = "UIImage")]
 pub use self::__UIImage::UIImageHEICRepresentation;
-#[cfg(feature = "UIImage")]
+#[cfg(all(feature = "UIImage", feature = "objc2-core-foundation"))]
 pub use self::__UIImage::UIImageJPEGRepresentation;
 #[cfg(feature = "UIImage")]
 pub use self::__UIImage::UIImageOrientation;
@@ -3408,8 +3771,14 @@ pub use self::__UIImagePickerController::UIVideoAtPathIsCompatibleWithSavedPhoto
 pub use self::__UIImageReader::UIImageReader;
 #[cfg(feature = "UIImageReader")]
 pub use self::__UIImageReader::UIImageReaderConfiguration;
-#[cfg(all(feature = "UIFontDescriptor", feature = "UIImageSymbolConfiguration"))]
+#[cfg(all(
+    feature = "UIFontDescriptor",
+    feature = "UIImageSymbolConfiguration",
+    feature = "objc2-core-foundation"
+))]
 pub use self::__UIImageSymbolConfiguration::UIFontWeightForImageSymbolWeight;
+#[cfg(feature = "UIImageSymbolConfiguration")]
+pub use self::__UIImageSymbolConfiguration::UIImageSymbolColorRenderingMode;
 #[cfg(all(
     feature = "UIImageConfiguration",
     feature = "UIImageSymbolConfiguration"
@@ -3418,8 +3787,14 @@ pub use self::__UIImageSymbolConfiguration::UIImageSymbolConfiguration;
 #[cfg(feature = "UIImageSymbolConfiguration")]
 pub use self::__UIImageSymbolConfiguration::UIImageSymbolScale;
 #[cfg(feature = "UIImageSymbolConfiguration")]
+pub use self::__UIImageSymbolConfiguration::UIImageSymbolVariableValueMode;
+#[cfg(feature = "UIImageSymbolConfiguration")]
 pub use self::__UIImageSymbolConfiguration::UIImageSymbolWeight;
-#[cfg(all(feature = "UIFontDescriptor", feature = "UIImageSymbolConfiguration"))]
+#[cfg(all(
+    feature = "UIFontDescriptor",
+    feature = "UIImageSymbolConfiguration",
+    feature = "objc2-core-foundation"
+))]
 pub use self::__UIImageSymbolConfiguration::UIImageSymbolWeightForFontWeight;
 #[cfg(all(feature = "UIImageView", feature = "UIResponder", feature = "UIView"))]
 pub use self::__UIImageView::UIImageView;
@@ -3433,6 +3808,8 @@ pub use self::__UIIndirectScribbleInteraction::UIIndirectScribbleInteraction;
 pub use self::__UIIndirectScribbleInteraction::UIIndirectScribbleInteractionDelegate;
 #[cfg(feature = "UIIndirectScribbleInteraction")]
 pub use self::__UIIndirectScribbleInteraction::UIScribbleElementIdentifier;
+#[cfg(feature = "UIInputSuggestion")]
+pub use self::__UIInputSuggestion::UIInputSuggestion;
 #[cfg(all(feature = "UIInputView", feature = "UIResponder", feature = "UIView"))]
 pub use self::__UIInputView::UIInputView;
 #[cfg(feature = "UIInputView")]
@@ -3457,6 +3834,8 @@ pub use self::__UIInterface::UIAccessibilityContrast;
 pub use self::__UIInterface::UIBarStyle;
 #[cfg(feature = "UIInterface")]
 pub use self::__UIInterface::UIDisplayGamut;
+#[cfg(feature = "UIInterface")]
+pub use self::__UIInterface::UIHDRHeadroomUsageLimit;
 #[cfg(feature = "UIInterface")]
 pub use self::__UIInterface::UIImageDynamicRange;
 #[cfg(feature = "UIInterface")]
@@ -3483,7 +3862,7 @@ pub use self::__UIKey::UIKey;
     feature = "UIMenuElement"
 ))]
 pub use self::__UIKeyCommand::UIKeyCommand;
-#[cfg(feature = "UIKeyConstants")]
+#[cfg(all(feature = "UIKeyConstants", feature = "objc2-core-foundation"))]
 pub use self::__UIKeyConstants::UIKeyboardHIDUsage;
 #[cfg(all(
     feature = "UIKeyboardLayoutGuide",
@@ -3523,7 +3902,10 @@ pub use self::__UIListContentConfiguration::UIListContentConfiguration;
 pub use self::__UIListContentConfiguration::UIListContentView;
 #[cfg(feature = "UIListContentImageProperties")]
 pub use self::__UIListContentImageProperties::UIListContentImageProperties;
-#[cfg(feature = "UIListContentImageProperties")]
+#[cfg(all(
+    feature = "UIListContentImageProperties",
+    feature = "objc2-core-foundation"
+))]
 pub use self::__UIListContentImageProperties::UIListContentImageStandardDimension;
 #[cfg(feature = "UIListContentTextProperties")]
 pub use self::__UIListContentTextProperties::UIListContentTextAlignment;
@@ -3531,7 +3913,11 @@ pub use self::__UIListContentTextProperties::UIListContentTextAlignment;
 pub use self::__UIListContentTextProperties::UIListContentTextProperties;
 #[cfg(feature = "UIListContentTextProperties")]
 pub use self::__UIListContentTextProperties::UIListContentTextTransform;
-#[cfg(all(feature = "UIGeometry", feature = "UIListSeparatorConfiguration"))]
+#[cfg(all(
+    feature = "UIGeometry",
+    feature = "UIListSeparatorConfiguration",
+    feature = "objc2-core-foundation"
+))]
 pub use self::__UIListSeparatorConfiguration::UIListSeparatorAutomaticInsets;
 #[cfg(feature = "UIListSeparatorConfiguration")]
 pub use self::__UIListSeparatorConfiguration::UIListSeparatorConfiguration;
@@ -3548,6 +3934,19 @@ pub use self::__UILocalizedIndexedCollation::UILocalizedIndexedCollation;
     feature = "UILongPressGestureRecognizer"
 ))]
 pub use self::__UILongPressGestureRecognizer::UILongPressGestureRecognizer;
+#[cfg(all(
+    feature = "UIConversationContext",
+    feature = "UIMailConversationContext"
+))]
+pub use self::__UIMailConversationContext::UIMailConversationContext;
+#[cfg(all(feature = "UIConversationEntry", feature = "UIMailConversationEntry"))]
+pub use self::__UIMailConversationEntry::UIMailConversationEntry;
+#[cfg(feature = "UIMailConversationEntry")]
+pub use self::__UIMailConversationEntry::UIMailConversationEntryKind;
+#[cfg(all(feature = "UIMainMenuSystem", feature = "UIMenuSystem"))]
+pub use self::__UIMainMenuSystem::UIMainMenuSystem;
+#[cfg(feature = "UIMainMenuSystem")]
+pub use self::__UIMainMenuSystem::UIMainMenuSystemConfiguration;
 #[cfg(all(feature = "UIDocument", feature = "UIManagedDocument"))]
 pub use self::__UIManagedDocument::UIManagedDocument;
 #[cfg(all(feature = "UIMenu", feature = "UIMenuElement"))]
@@ -3575,6 +3974,8 @@ pub use self::__UIMenu::UIMenuFile;
 #[cfg(feature = "UIMenu")]
 pub use self::__UIMenu::UIMenuFind;
 #[cfg(feature = "UIMenu")]
+pub use self::__UIMenu::UIMenuFindPanel;
+#[cfg(feature = "UIMenu")]
 pub use self::__UIMenu::UIMenuFont;
 #[cfg(feature = "UIMenu")]
 pub use self::__UIMenu::UIMenuFormat;
@@ -3593,7 +3994,11 @@ pub use self::__UIMenu::UIMenuLookup;
 #[cfg(feature = "UIMenu")]
 pub use self::__UIMenu::UIMenuMinimizeAndZoom;
 #[cfg(feature = "UIMenu")]
+pub use self::__UIMenu::UIMenuNewItem;
+#[cfg(feature = "UIMenu")]
 pub use self::__UIMenu::UIMenuNewScene;
+#[cfg(feature = "UIMenu")]
+pub use self::__UIMenu::UIMenuOpen;
 #[cfg(feature = "UIMenu")]
 pub use self::__UIMenu::UIMenuOpenRecent;
 #[cfg(feature = "UIMenu")]
@@ -3677,11 +4082,31 @@ pub use self::__UIMenuElement::UIMenuElement;
 #[cfg(feature = "UIMenuElement")]
 pub use self::__UIMenuElement::UIMenuElementAttributes;
 #[cfg(feature = "UIMenuElement")]
+pub use self::__UIMenuElement::UIMenuElementRepeatBehavior;
+#[cfg(feature = "UIMenuElement")]
 pub use self::__UIMenuElement::UIMenuElementState;
 #[cfg(feature = "UIMenuLeaf")]
 pub use self::__UIMenuLeaf::UIMenuLeaf;
 #[cfg(feature = "UIMenuSystem")]
 pub use self::__UIMenuSystem::UIMenuSystem;
+#[cfg(feature = "UIMenuSystem")]
+pub use self::__UIMenuSystem::UIMenuSystemElementGroupPreference;
+#[cfg(feature = "UIMenuSystem")]
+pub use self::__UIMenuSystem::UIMenuSystemFindElementGroupConfiguration;
+#[cfg(feature = "UIMenuSystem")]
+pub use self::__UIMenuSystem::UIMenuSystemFindElementGroupConfigurationStyle;
+#[cfg(all(
+    feature = "UIConversationContext",
+    feature = "UIMessageConversationContext"
+))]
+pub use self::__UIMessageConversationContext::UIMessageConversationContext;
+#[cfg(all(
+    feature = "UIConversationEntry",
+    feature = "UIMessageConversationEntry"
+))]
+pub use self::__UIMessageConversationEntry::UIMessageConversationEntry;
+#[cfg(feature = "UIMessageConversationEntry")]
+pub use self::__UIMessageConversationEntry::UIMessageConversationEntryDataKind;
 #[cfg(feature = "UIMotionEffect")]
 pub use self::__UIMotionEffect::UIInterpolatingMotionEffect;
 #[cfg(feature = "UIMotionEffect")]
@@ -3710,7 +4135,7 @@ pub use self::__UINavigationBarAppearance::UINavigationBarAppearance;
 pub use self::__UINavigationController::UINavigationController;
 #[cfg(feature = "UINavigationController")]
 pub use self::__UINavigationController::UINavigationControllerDelegate;
-#[cfg(feature = "UINavigationController")]
+#[cfg(all(feature = "UINavigationController", feature = "objc2-core-foundation"))]
 pub use self::__UINavigationController::UINavigationControllerHideShowBarDuration;
 #[cfg(feature = "UINavigationController")]
 pub use self::__UINavigationController::UINavigationControllerOperation;
@@ -3895,23 +4320,23 @@ pub use self::__UIPickerView::UIPickerViewDelegate;
 pub use self::__UIPinchGestureRecognizer::UIPinchGestureRecognizer;
 #[cfg(feature = "UIPointerAccessory")]
 pub use self::__UIPointerAccessory::UIPointerAccessory;
-#[cfg(feature = "UIPointerAccessory")]
+#[cfg(all(feature = "UIPointerAccessory", feature = "objc2-core-foundation"))]
 pub use self::__UIPointerAccessory::UIPointerAccessoryPosition;
-#[cfg(feature = "UIPointerAccessory")]
+#[cfg(all(feature = "UIPointerAccessory", feature = "objc2-core-foundation"))]
 pub use self::__UIPointerAccessory::UIPointerAccessoryPositionBottom;
-#[cfg(feature = "UIPointerAccessory")]
+#[cfg(all(feature = "UIPointerAccessory", feature = "objc2-core-foundation"))]
 pub use self::__UIPointerAccessory::UIPointerAccessoryPositionBottomLeft;
-#[cfg(feature = "UIPointerAccessory")]
+#[cfg(all(feature = "UIPointerAccessory", feature = "objc2-core-foundation"))]
 pub use self::__UIPointerAccessory::UIPointerAccessoryPositionBottomRight;
-#[cfg(feature = "UIPointerAccessory")]
+#[cfg(all(feature = "UIPointerAccessory", feature = "objc2-core-foundation"))]
 pub use self::__UIPointerAccessory::UIPointerAccessoryPositionLeft;
-#[cfg(feature = "UIPointerAccessory")]
+#[cfg(all(feature = "UIPointerAccessory", feature = "objc2-core-foundation"))]
 pub use self::__UIPointerAccessory::UIPointerAccessoryPositionRight;
-#[cfg(feature = "UIPointerAccessory")]
+#[cfg(all(feature = "UIPointerAccessory", feature = "objc2-core-foundation"))]
 pub use self::__UIPointerAccessory::UIPointerAccessoryPositionTop;
-#[cfg(feature = "UIPointerAccessory")]
+#[cfg(all(feature = "UIPointerAccessory", feature = "objc2-core-foundation"))]
 pub use self::__UIPointerAccessory::UIPointerAccessoryPositionTopLeft;
-#[cfg(feature = "UIPointerAccessory")]
+#[cfg(all(feature = "UIPointerAccessory", feature = "objc2-core-foundation"))]
 pub use self::__UIPointerAccessory::UIPointerAccessoryPositionTopRight;
 #[cfg(feature = "UIPointerInteraction")]
 pub use self::__UIPointerInteraction::UIPointerInteraction;
@@ -4139,6 +4564,8 @@ pub use self::__UIScene::UISceneWillEnterForegroundNotification;
 pub use self::__UISceneActivationConditions::NSUserActivityUISceneActivationConditions;
 #[cfg(feature = "UISceneActivationConditions")]
 pub use self::__UISceneActivationConditions::UISceneActivationConditions;
+#[cfg(feature = "UISceneConfiguration")]
+pub use self::__UISceneConfiguration::UISceneConfiguration;
 #[cfg(feature = "UISceneDefinitions")]
 pub use self::__UISceneDefinitions::UISceneActivationState;
 #[cfg(feature = "UISceneDefinitions")]
@@ -4149,6 +4576,8 @@ pub use self::__UISceneDefinitions::UISceneErrorCode;
 pub use self::__UISceneDefinitions::UISceneErrorDomain;
 #[cfg(feature = "UISceneDefinitions")]
 pub use self::__UISceneDefinitions::UISceneSessionRole;
+#[cfg(feature = "UISceneDestructionCondition")]
+pub use self::__UISceneDestructionCondition::UISceneDestructionCondition;
 #[cfg(feature = "UISceneOptions")]
 pub use self::__UISceneOptions::UISceneActivationRequestOptions;
 #[cfg(feature = "UISceneOptions")]
@@ -4162,13 +4591,19 @@ pub use self::__UISceneOptions::UISceneOpenExternalURLOptions;
 #[cfg(feature = "UISceneOptions")]
 pub use self::__UISceneOptions::UISceneOpenURLOptions;
 #[cfg(feature = "UISceneSession")]
-pub use self::__UISceneSession::UISceneConfiguration;
-#[cfg(feature = "UISceneSession")]
 pub use self::__UISceneSession::UISceneSession;
 #[cfg(feature = "UISceneSessionActivationRequest")]
 pub use self::__UISceneSessionActivationRequest::UISceneSessionActivationRequest;
+#[cfg(feature = "UISceneSizeRestrictions")]
+pub use self::__UISceneSizeRestrictions::UISceneSizeRestrictions;
+#[cfg(feature = "UISceneSystemProtectionManager")]
+pub use self::__UISceneSystemProtectionManager::UISceneSystemProtectionDidChangeNotification;
+#[cfg(feature = "UISceneSystemProtectionManager")]
+pub use self::__UISceneSystemProtectionManager::UISceneSystemProtectionManager;
 #[cfg(feature = "UISceneWindowingBehaviors")]
 pub use self::__UISceneWindowingBehaviors::UISceneWindowingBehaviors;
+#[cfg(feature = "UISceneWindowingControlStyle")]
+pub use self::__UISceneWindowingControlStyle::UISceneWindowingControlStyle;
 #[cfg(feature = "UIScreen")]
 pub use self::__UIScreen::UIScreen;
 #[cfg(feature = "UIScreen")]
@@ -4203,15 +4638,21 @@ pub use self::__UIScreenshotService::UIScreenshotServiceDelegate;
 pub use self::__UIScribbleInteraction::UIScribbleInteraction;
 #[cfg(feature = "UIScribbleInteraction")]
 pub use self::__UIScribbleInteraction::UIScribbleInteractionDelegate;
+#[cfg(feature = "UIScrollEdgeElementContainerInteraction")]
+pub use self::__UIScrollEdgeElementContainerInteraction::UIScrollEdgeElementContainerInteraction;
+#[cfg(feature = "UIScrollView")]
+pub use self::__UIScrollView::UIScrollEdgeEffect;
+#[cfg(feature = "UIScrollView")]
+pub use self::__UIScrollView::UIScrollEdgeEffectStyle;
 #[cfg(all(feature = "UIResponder", feature = "UIScrollView", feature = "UIView"))]
 pub use self::__UIScrollView::UIScrollView;
 #[cfg(feature = "UIScrollView")]
 pub use self::__UIScrollView::UIScrollViewContentInsetAdjustmentBehavior;
-#[cfg(feature = "UIScrollView")]
+#[cfg(all(feature = "UIScrollView", feature = "objc2-core-foundation"))]
 pub use self::__UIScrollView::UIScrollViewDecelerationRate;
-#[cfg(feature = "UIScrollView")]
+#[cfg(all(feature = "UIScrollView", feature = "objc2-core-foundation"))]
 pub use self::__UIScrollView::UIScrollViewDecelerationRateFast;
-#[cfg(feature = "UIScrollView")]
+#[cfg(all(feature = "UIScrollView", feature = "objc2-core-foundation"))]
 pub use self::__UIScrollView::UIScrollViewDecelerationRateNormal;
 #[cfg(feature = "UIScrollView")]
 pub use self::__UIScrollView::UIScrollViewDelegate;
@@ -4257,6 +4698,8 @@ pub use self::__UISearchDisplayController::UISearchDisplayDelegate;
 pub use self::__UISearchSuggestion::UISearchSuggestion;
 #[cfg(feature = "UISearchSuggestion")]
 pub use self::__UISearchSuggestion::UISearchSuggestionItem;
+#[cfg(all(feature = "UISearchTab", feature = "UITab"))]
+pub use self::__UISearchTab::UISearchTab;
 #[cfg(all(
     feature = "UIControl",
     feature = "UIResponder",
@@ -4289,6 +4732,8 @@ pub use self::__UISegmentedControl::UISegmentedControlStyle;
     feature = "UISelectionFeedbackGenerator"
 ))]
 pub use self::__UISelectionFeedbackGenerator::UISelectionFeedbackGenerator;
+#[cfg(feature = "UIShadowProperties")]
+pub use self::__UIShadowProperties::UIShadowProperties;
 #[cfg(feature = "UIShape")]
 pub use self::__UIShape::UICornerCurve;
 #[cfg(feature = "UIShape")]
@@ -4304,7 +4749,10 @@ pub use self::__UIShape::UIShapeResolutionContext;
     feature = "UISheetPresentationController"
 ))]
 pub use self::__UISheetPresentationController::UISheetPresentationController;
-#[cfg(feature = "UISheetPresentationController")]
+#[cfg(all(
+    feature = "UISheetPresentationController",
+    feature = "objc2-core-foundation"
+))]
 pub use self::__UISheetPresentationController::UISheetPresentationControllerAutomaticDimension;
 #[cfg(all(
     feature = "UIPresentationController",
@@ -4319,7 +4767,10 @@ pub use self::__UISheetPresentationController::UISheetPresentationControllerDete
 pub use self::__UISheetPresentationController::UISheetPresentationControllerDetentIdentifierLarge;
 #[cfg(feature = "UISheetPresentationController")]
 pub use self::__UISheetPresentationController::UISheetPresentationControllerDetentIdentifierMedium;
-#[cfg(feature = "UISheetPresentationController")]
+#[cfg(all(
+    feature = "UISheetPresentationController",
+    feature = "objc2-core-foundation"
+))]
 pub use self::__UISheetPresentationController::UISheetPresentationControllerDetentInactive;
 #[cfg(feature = "UISheetPresentationController")]
 pub use self::__UISheetPresentationController::UISheetPresentationControllerDetentResolutionContext;
@@ -4330,6 +4781,14 @@ pub use self::__UISheetPresentationController::UISheetPresentationControllerDete
     feature = "UIView"
 ))]
 pub use self::__UISlider::UISlider;
+#[cfg(feature = "UISlider")]
+pub use self::__UISlider::UISliderStyle;
+#[cfg(feature = "UISliderTrackConfiguration")]
+pub use self::__UISliderTrackConfiguration::UISliderTick;
+#[cfg(feature = "UISliderTrackConfiguration")]
+pub use self::__UISliderTrackConfiguration::UISliderTrackConfiguration;
+#[cfg(all(feature = "UIInputSuggestion", feature = "UISmartReplySuggestion"))]
+pub use self::__UISmartReplySuggestion::UISmartReplySuggestion;
 #[cfg(all(feature = "UIDynamicBehavior", feature = "UISnapBehavior"))]
 pub use self::__UISnapBehavior::UISnapBehavior;
 #[cfg(all(
@@ -4338,7 +4797,7 @@ pub use self::__UISnapBehavior::UISnapBehavior;
     feature = "UIViewController"
 ))]
 pub use self::__UISplitViewController::UISplitViewController;
-#[cfg(feature = "UISplitViewController")]
+#[cfg(all(feature = "UISplitViewController", feature = "objc2-core-foundation"))]
 pub use self::__UISplitViewController::UISplitViewControllerAutomaticDimension;
 #[cfg(feature = "UISplitViewController")]
 pub use self::__UISplitViewController::UISplitViewControllerBackgroundStyle;
@@ -4356,6 +4815,10 @@ pub use self::__UISplitViewController::UISplitViewControllerPrimaryEdge;
 pub use self::__UISplitViewController::UISplitViewControllerSplitBehavior;
 #[cfg(feature = "UISplitViewController")]
 pub use self::__UISplitViewController::UISplitViewControllerStyle;
+#[cfg(feature = "UISplitViewControllerLayoutEnvironment")]
+pub use self::__UISplitViewControllerLayoutEnvironment::UISplitViewControllerLayoutEnvironment;
+#[cfg(feature = "UISplitViewControllerLayoutEnvironment")]
+pub use self::__UISplitViewControllerLayoutEnvironment::UITraitSplitViewControllerLayoutEnvironment;
 #[cfg(feature = "UISpringLoadedInteraction")]
 pub use self::__UISpringLoadedInteraction::UISpringLoadedInteraction;
 #[cfg(feature = "UISpringLoadedInteraction")]
@@ -4374,9 +4837,9 @@ pub use self::__UIStackView::UIStackView;
 pub use self::__UIStackView::UIStackViewAlignment;
 #[cfg(feature = "UIStackView")]
 pub use self::__UIStackView::UIStackViewDistribution;
-#[cfg(feature = "UIStackView")]
+#[cfg(all(feature = "UIStackView", feature = "objc2-core-foundation"))]
 pub use self::__UIStackView::UIStackViewSpacingUseDefault;
-#[cfg(feature = "UIStackView")]
+#[cfg(all(feature = "UIStackView", feature = "objc2-core-foundation"))]
 pub use self::__UIStackView::UIStackViewSpacingUseSystem;
 #[cfg(all(
     feature = "UIResponder",
@@ -4455,10 +4918,22 @@ pub use self::__UISwipeGestureRecognizer::UISwipeGestureRecognizerDirection;
 pub use self::__UISwitch::UISwitch;
 #[cfg(feature = "UISwitch")]
 pub use self::__UISwitch::UISwitchStyle;
+#[cfg(feature = "UISymbolContentTransition")]
+pub use self::__UISymbolContentTransition::UISymbolContentTransition;
 #[cfg(all(feature = "UISymbolEffectCompletion", feature = "block2"))]
 pub use self::__UISymbolEffectCompletion::UISymbolEffectCompletion;
 #[cfg(feature = "UISymbolEffectCompletion")]
 pub use self::__UISymbolEffectCompletion::UISymbolEffectCompletionContext;
+#[cfg(feature = "UITab")]
+pub use self::__UITab::UITab;
+#[cfg(feature = "UITab")]
+pub use self::__UITab::UITabPlacement;
+#[cfg(feature = "UITabAccessory")]
+pub use self::__UITabAccessory::UITabAccessory;
+#[cfg(feature = "UITabAccessory")]
+pub use self::__UITabAccessory::UITabAccessoryEnvironment;
+#[cfg(feature = "UITabAccessory")]
+pub use self::__UITabAccessory::UITraitTabAccessoryEnvironment;
 #[cfg(all(feature = "UIResponder", feature = "UITabBar", feature = "UIView"))]
 pub use self::__UITabBar::UITabBar;
 #[cfg(feature = "UITabBar")]
@@ -4481,10 +4956,32 @@ pub use self::__UITabBarAppearance::UITabBarItemStateAppearance;
 pub use self::__UITabBarController::UITabBarController;
 #[cfg(feature = "UITabBarController")]
 pub use self::__UITabBarController::UITabBarControllerDelegate;
+#[cfg(feature = "UITabBarController")]
+pub use self::__UITabBarController::UITabBarControllerMode;
+#[cfg(feature = "UITabBarController")]
+pub use self::__UITabBarController::UITabBarMinimizeBehavior;
+#[cfg(feature = "UITabBarControllerSidebar")]
+pub use self::__UITabBarControllerSidebar::UITabBarControllerSidebar;
+#[cfg(feature = "UITabBarControllerSidebar")]
+pub use self::__UITabBarControllerSidebar::UITabBarControllerSidebarAnimating;
+#[cfg(feature = "UITabBarControllerSidebar")]
+pub use self::__UITabBarControllerSidebar::UITabBarControllerSidebarDelegate;
+#[cfg(feature = "UITabBarControllerSidebar")]
+pub use self::__UITabBarControllerSidebar::UITabBarControllerSidebarLayout;
+#[cfg(feature = "UITabBarControllerSidebar")]
+pub use self::__UITabBarControllerSidebar::UITabSidebarScrollTarget;
 #[cfg(all(feature = "UIBarItem", feature = "UITabBarItem"))]
 pub use self::__UITabBarItem::UITabBarItem;
 #[cfg(feature = "UITabBarItem")]
 pub use self::__UITabBarItem::UITabBarSystemItem;
+#[cfg(all(feature = "UITab", feature = "UITabGroup"))]
+pub use self::__UITabGroup::UITabGroup;
+#[cfg(feature = "UITabGroup")]
+pub use self::__UITabGroup::UITabGroupSidebarAppearance;
+#[cfg(feature = "UITabSidebarItem")]
+pub use self::__UITabSidebarItem::UITabSidebarItem;
+#[cfg(feature = "UITabSidebarItem")]
+pub use self::__UITabSidebarItem::UITabSidebarItemRequest;
 #[cfg(all(
     feature = "UIResponder",
     feature = "UIScrollView",
@@ -4492,8 +4989,10 @@ pub use self::__UITabBarItem::UITabBarSystemItem;
     feature = "UIView"
 ))]
 pub use self::__UITableView::UITableView;
-#[cfg(feature = "UITableView")]
+#[cfg(all(feature = "UITableView", feature = "objc2-core-foundation"))]
 pub use self::__UITableView::UITableViewAutomaticDimension;
+#[cfg(feature = "UITableView")]
+pub use self::__UITableView::UITableViewContentHuggingElements;
 #[cfg(feature = "UITableView")]
 pub use self::__UITableView::UITableViewDataSource;
 #[cfg(feature = "UITableView")]
@@ -4668,6 +5167,136 @@ pub use self::__UITextField::UITextFieldViewMode;
 pub use self::__UITextFormattingCoordinator::UITextFormattingCoordinator;
 #[cfg(feature = "UITextFormattingCoordinator")]
 pub use self::__UITextFormattingCoordinator::UITextFormattingCoordinatorDelegate;
+#[cfg(all(
+    feature = "UIResponder",
+    feature = "UITextFormattingViewController",
+    feature = "UIViewController"
+))]
+pub use self::__UITextFormattingViewController::UITextFormattingViewController;
+#[cfg(feature = "UITextFormattingViewController")]
+pub use self::__UITextFormattingViewController::UITextFormattingViewControllerDelegate;
+#[cfg(feature = "UITextFormattingViewControllerChangeValue")]
+pub use self::__UITextFormattingViewControllerChangeValue::UITextFormattingViewControllerChangeType;
+#[cfg(feature = "UITextFormattingViewControllerChangeValue")]
+pub use self::__UITextFormattingViewControllerChangeValue::UITextFormattingViewControllerChangeValue;
+#[cfg(feature = "UITextFormattingViewControllerChangeValue")]
+pub use self::__UITextFormattingViewControllerChangeValue::UITextFormattingViewControllerDecreaseFontSizeChangeType;
+#[cfg(feature = "UITextFormattingViewControllerChangeValue")]
+pub use self::__UITextFormattingViewControllerChangeValue::UITextFormattingViewControllerDecreaseIndentationChangeType;
+#[cfg(feature = "UITextFormattingViewControllerChangeValue")]
+pub use self::__UITextFormattingViewControllerChangeValue::UITextFormattingViewControllerFontChangeType;
+#[cfg(feature = "UITextFormattingViewControllerChangeValue")]
+pub use self::__UITextFormattingViewControllerChangeValue::UITextFormattingViewControllerFontSizeChangeType;
+#[cfg(feature = "UITextFormattingViewControllerChangeValue")]
+pub use self::__UITextFormattingViewControllerChangeValue::UITextFormattingViewControllerFormattingStyleChangeType;
+#[cfg(feature = "UITextFormattingViewControllerChangeValue")]
+pub use self::__UITextFormattingViewControllerChangeValue::UITextFormattingViewControllerHighlightChangeType;
+#[cfg(feature = "UITextFormattingViewControllerChangeValue")]
+pub use self::__UITextFormattingViewControllerChangeValue::UITextFormattingViewControllerIncreaseFontSizeChangeType;
+#[cfg(feature = "UITextFormattingViewControllerChangeValue")]
+pub use self::__UITextFormattingViewControllerChangeValue::UITextFormattingViewControllerIncreaseIndentationChangeType;
+#[cfg(feature = "UITextFormattingViewControllerChangeValue")]
+pub use self::__UITextFormattingViewControllerChangeValue::UITextFormattingViewControllerLineHeightPointSizeChangeType;
+#[cfg(feature = "UITextFormattingViewControllerChangeValue")]
+pub use self::__UITextFormattingViewControllerChangeValue::UITextFormattingViewControllerRemoveBoldChangeType;
+#[cfg(feature = "UITextFormattingViewControllerChangeValue")]
+pub use self::__UITextFormattingViewControllerChangeValue::UITextFormattingViewControllerRemoveItalicChangeType;
+#[cfg(feature = "UITextFormattingViewControllerChangeValue")]
+pub use self::__UITextFormattingViewControllerChangeValue::UITextFormattingViewControllerRemoveStrikethroughChangeType;
+#[cfg(feature = "UITextFormattingViewControllerChangeValue")]
+pub use self::__UITextFormattingViewControllerChangeValue::UITextFormattingViewControllerRemoveUnderlineChangeType;
+#[cfg(feature = "UITextFormattingViewControllerChangeValue")]
+pub use self::__UITextFormattingViewControllerChangeValue::UITextFormattingViewControllerSetBoldChangeType;
+#[cfg(feature = "UITextFormattingViewControllerChangeValue")]
+pub use self::__UITextFormattingViewControllerChangeValue::UITextFormattingViewControllerSetItalicChangeType;
+#[cfg(feature = "UITextFormattingViewControllerChangeValue")]
+pub use self::__UITextFormattingViewControllerChangeValue::UITextFormattingViewControllerSetStrikethroughChangeType;
+#[cfg(feature = "UITextFormattingViewControllerChangeValue")]
+pub use self::__UITextFormattingViewControllerChangeValue::UITextFormattingViewControllerSetUnderlineChangeType;
+#[cfg(feature = "UITextFormattingViewControllerChangeValue")]
+pub use self::__UITextFormattingViewControllerChangeValue::UITextFormattingViewControllerTextAlignmentChangeType;
+#[cfg(feature = "UITextFormattingViewControllerChangeValue")]
+pub use self::__UITextFormattingViewControllerChangeValue::UITextFormattingViewControllerTextColorChangeType;
+#[cfg(feature = "UITextFormattingViewControllerChangeValue")]
+pub use self::__UITextFormattingViewControllerChangeValue::UITextFormattingViewControllerTextListChangeType;
+#[cfg(feature = "UITextFormattingViewControllerChangeValue")]
+pub use self::__UITextFormattingViewControllerChangeValue::UITextFormattingViewControllerUndefinedChangeType;
+#[cfg(feature = "UITextFormattingViewControllerComponent")]
+pub use self::__UITextFormattingViewControllerComponent::UITextFormattingViewControllerComponent;
+#[cfg(feature = "UITextFormattingViewControllerComponent")]
+pub use self::__UITextFormattingViewControllerComponent::UITextFormattingViewControllerComponentGroup;
+#[cfg(feature = "UITextFormattingViewControllerComponent")]
+pub use self::__UITextFormattingViewControllerComponent::UITextFormattingViewControllerComponentKey;
+#[cfg(feature = "UITextFormattingViewControllerComponent")]
+pub use self::__UITextFormattingViewControllerComponent::UITextFormattingViewControllerComponentSize;
+#[cfg(feature = "UITextFormattingViewControllerComponent")]
+pub use self::__UITextFormattingViewControllerComponent::UITextFormattingViewControllerFontAttributesComponentKey;
+#[cfg(feature = "UITextFormattingViewControllerComponent")]
+pub use self::__UITextFormattingViewControllerComponent::UITextFormattingViewControllerFontPickerComponentKey;
+#[cfg(feature = "UITextFormattingViewControllerComponent")]
+pub use self::__UITextFormattingViewControllerComponent::UITextFormattingViewControllerFontPointSizeComponentKey;
+#[cfg(feature = "UITextFormattingViewControllerComponent")]
+pub use self::__UITextFormattingViewControllerComponent::UITextFormattingViewControllerFontSizeComponentKey;
+#[cfg(feature = "UITextFormattingViewControllerComponent")]
+pub use self::__UITextFormattingViewControllerComponent::UITextFormattingViewControllerFormattingStylesComponentKey;
+#[cfg(feature = "UITextFormattingViewControllerComponent")]
+pub use self::__UITextFormattingViewControllerComponent::UITextFormattingViewControllerHighlightComponentKey;
+#[cfg(feature = "UITextFormattingViewControllerComponent")]
+pub use self::__UITextFormattingViewControllerComponent::UITextFormattingViewControllerHighlightPickerComponentKey;
+#[cfg(feature = "UITextFormattingViewControllerComponent")]
+pub use self::__UITextFormattingViewControllerComponent::UITextFormattingViewControllerLineHeightComponentKey;
+#[cfg(feature = "UITextFormattingViewControllerComponent")]
+pub use self::__UITextFormattingViewControllerComponent::UITextFormattingViewControllerListStylesComponentKey;
+#[cfg(feature = "UITextFormattingViewControllerComponent")]
+pub use self::__UITextFormattingViewControllerComponent::UITextFormattingViewControllerTextAlignmentAndJustificationComponentKey;
+#[cfg(feature = "UITextFormattingViewControllerComponent")]
+pub use self::__UITextFormattingViewControllerComponent::UITextFormattingViewControllerTextAlignmentComponentKey;
+#[cfg(feature = "UITextFormattingViewControllerComponent")]
+pub use self::__UITextFormattingViewControllerComponent::UITextFormattingViewControllerTextColorComponentKey;
+#[cfg(feature = "UITextFormattingViewControllerComponent")]
+pub use self::__UITextFormattingViewControllerComponent::UITextFormattingViewControllerTextIndentationComponentKey;
+#[cfg(feature = "UITextFormattingViewControllerConfiguration")]
+pub use self::__UITextFormattingViewControllerConfiguration::UITextFormattingViewControllerConfiguration;
+#[cfg(feature = "UITextFormattingViewControllerFormattingDescriptor")]
+pub use self::__UITextFormattingViewControllerFormattingDescriptor::UITextFormattingViewControllerFormattingDescriptor;
+#[cfg(feature = "UITextFormattingViewControllerFormattingDescriptor")]
+pub use self::__UITextFormattingViewControllerFormattingDescriptor::UITextFormattingViewControllerHighlight;
+#[cfg(feature = "UITextFormattingViewControllerFormattingDescriptor")]
+pub use self::__UITextFormattingViewControllerFormattingDescriptor::UITextFormattingViewControllerHighlightBlue;
+#[cfg(feature = "UITextFormattingViewControllerFormattingDescriptor")]
+pub use self::__UITextFormattingViewControllerFormattingDescriptor::UITextFormattingViewControllerHighlightDefault;
+#[cfg(feature = "UITextFormattingViewControllerFormattingDescriptor")]
+pub use self::__UITextFormattingViewControllerFormattingDescriptor::UITextFormattingViewControllerHighlightMint;
+#[cfg(feature = "UITextFormattingViewControllerFormattingDescriptor")]
+pub use self::__UITextFormattingViewControllerFormattingDescriptor::UITextFormattingViewControllerHighlightOrange;
+#[cfg(feature = "UITextFormattingViewControllerFormattingDescriptor")]
+pub use self::__UITextFormattingViewControllerFormattingDescriptor::UITextFormattingViewControllerHighlightPink;
+#[cfg(feature = "UITextFormattingViewControllerFormattingDescriptor")]
+pub use self::__UITextFormattingViewControllerFormattingDescriptor::UITextFormattingViewControllerHighlightPurple;
+#[cfg(feature = "UITextFormattingViewControllerFormattingDescriptor")]
+pub use self::__UITextFormattingViewControllerFormattingDescriptor::UITextFormattingViewControllerTextAlignment;
+#[cfg(feature = "UITextFormattingViewControllerFormattingDescriptor")]
+pub use self::__UITextFormattingViewControllerFormattingDescriptor::UITextFormattingViewControllerTextAlignmentCenter;
+#[cfg(feature = "UITextFormattingViewControllerFormattingDescriptor")]
+pub use self::__UITextFormattingViewControllerFormattingDescriptor::UITextFormattingViewControllerTextAlignmentJustified;
+#[cfg(feature = "UITextFormattingViewControllerFormattingDescriptor")]
+pub use self::__UITextFormattingViewControllerFormattingDescriptor::UITextFormattingViewControllerTextAlignmentLeft;
+#[cfg(feature = "UITextFormattingViewControllerFormattingDescriptor")]
+pub use self::__UITextFormattingViewControllerFormattingDescriptor::UITextFormattingViewControllerTextAlignmentNatural;
+#[cfg(feature = "UITextFormattingViewControllerFormattingDescriptor")]
+pub use self::__UITextFormattingViewControllerFormattingDescriptor::UITextFormattingViewControllerTextAlignmentRight;
+#[cfg(feature = "UITextFormattingViewControllerFormattingDescriptor")]
+pub use self::__UITextFormattingViewControllerFormattingDescriptor::UITextFormattingViewControllerTextList;
+#[cfg(feature = "UITextFormattingViewControllerFormattingDescriptor")]
+pub use self::__UITextFormattingViewControllerFormattingDescriptor::UITextFormattingViewControllerTextListDecimal;
+#[cfg(feature = "UITextFormattingViewControllerFormattingDescriptor")]
+pub use self::__UITextFormattingViewControllerFormattingDescriptor::UITextFormattingViewControllerTextListDisc;
+#[cfg(feature = "UITextFormattingViewControllerFormattingDescriptor")]
+pub use self::__UITextFormattingViewControllerFormattingDescriptor::UITextFormattingViewControllerTextListHyphen;
+#[cfg(feature = "UITextFormattingViewControllerFormattingDescriptor")]
+pub use self::__UITextFormattingViewControllerFormattingDescriptor::UITextFormattingViewControllerTextListOther;
+#[cfg(feature = "UITextFormattingViewControllerFormattingStyle")]
+pub use self::__UITextFormattingViewControllerFormattingStyle::UITextFormattingViewControllerFormattingStyle;
 #[cfg(feature = "UITextInput")]
 pub use self::__UITextInput::UIDictationPhrase;
 #[cfg(all(feature = "UITextInput", feature = "UITextInputTraits"))]
@@ -4821,6 +5450,8 @@ pub use self::__UITextInputTraits::UITextInputPasswordRules;
 #[cfg(feature = "UITextInputTraits")]
 pub use self::__UITextInputTraits::UITextInputTraits;
 #[cfg(feature = "UITextInputTraits")]
+pub use self::__UITextInputTraits::UITextMathExpressionCompletionType;
+#[cfg(feature = "UITextInputTraits")]
 pub use self::__UITextInputTraits::UITextSmartDashesType;
 #[cfg(feature = "UITextInputTraits")]
 pub use self::__UITextInputTraits::UITextSmartInsertDeleteType;
@@ -4828,6 +5459,10 @@ pub use self::__UITextInputTraits::UITextSmartInsertDeleteType;
 pub use self::__UITextInputTraits::UITextSmartQuotesType;
 #[cfg(feature = "UITextInputTraits")]
 pub use self::__UITextInputTraits::UITextSpellCheckingType;
+#[cfg(feature = "UITextInputTraits")]
+pub use self::__UITextInputTraits::UIWritingToolsBehavior;
+#[cfg(feature = "UITextInputTraits")]
+pub use self::__UITextInputTraits::UIWritingToolsResultOptions;
 #[cfg(feature = "UITextInteraction")]
 pub use self::__UITextInteraction::UITextInteraction;
 #[cfg(feature = "UITextInteraction")]
@@ -4949,6 +5584,8 @@ pub use self::__UITrait::UITraitDisplayScale;
 #[cfg(feature = "UITrait")]
 pub use self::__UITrait::UITraitForceTouchCapability;
 #[cfg(feature = "UITrait")]
+pub use self::__UITrait::UITraitHDRHeadroomUsageLimit;
+#[cfg(feature = "UITrait")]
 pub use self::__UITrait::UITraitHorizontalSizeClass;
 #[cfg(feature = "UITrait")]
 pub use self::__UITrait::UITraitImageDynamicRange;
@@ -4958,6 +5595,8 @@ pub use self::__UITrait::UITraitLayoutDirection;
 pub use self::__UITrait::UITraitLegibilityWeight;
 #[cfg(feature = "UITrait")]
 pub use self::__UITrait::UITraitPreferredContentSizeCategory;
+#[cfg(feature = "UITrait")]
+pub use self::__UITrait::UITraitResolvesNaturalAlignmentWithBaseWritingDirection;
 #[cfg(feature = "UITrait")]
 pub use self::__UITrait::UITraitSceneCaptureState;
 #[cfg(feature = "UITrait")]
@@ -4988,6 +5627,16 @@ pub use self::__UITraitCollection::UITraitEnvironment;
 pub use self::__UITraitCollection::UITraitMutations;
 #[cfg(feature = "UITraitCollection")]
 pub use self::__UITraitCollection::UITraitOverrides;
+#[cfg(feature = "UITraitListEnvironment")]
+pub use self::__UITraitListEnvironment::UIListEnvironment;
+#[cfg(feature = "UITraitListEnvironment")]
+pub use self::__UITraitListEnvironment::UITraitListEnvironment;
+#[cfg(feature = "UIUpdateActionPhase")]
+pub use self::__UIUpdateActionPhase::UIUpdateActionPhase;
+#[cfg(feature = "UIUpdateInfo")]
+pub use self::__UIUpdateInfo::UIUpdateInfo;
+#[cfg(feature = "UIUpdateLink")]
+pub use self::__UIUpdateLink::UIUpdateLink;
 #[cfg(feature = "UIUserActivity")]
 pub use self::__UIUserActivity::UIUserActivityRestoring;
 #[cfg(feature = "UIUserNotificationSettings")]
@@ -5026,12 +5675,10 @@ pub use self::__UIVideoEditorController::UIVideoEditorController;
 #[cfg(feature = "UIVideoEditorController")]
 pub use self::__UIVideoEditorController::UIVideoEditorControllerDelegate;
 #[cfg(feature = "UIView")]
-pub use self::__UIView::UICoordinateSpace;
-#[cfg(feature = "UIView")]
 pub use self::__UIView::UILayoutConstraintAxis;
-#[cfg(feature = "UIView")]
+#[cfg(all(feature = "UIView", feature = "objc2-core-foundation"))]
 pub use self::__UIView::UILayoutFittingCompressedSize;
-#[cfg(feature = "UIView")]
+#[cfg(all(feature = "UIView", feature = "objc2-core-foundation"))]
 pub use self::__UIView::UILayoutFittingExpandedSize;
 #[cfg(feature = "UIView")]
 pub use self::__UIView::UISemanticContentAttribute;
@@ -5051,7 +5698,7 @@ pub use self::__UIView::UIViewAutoresizing;
 pub use self::__UIView::UIViewContentMode;
 #[cfg(feature = "UIView")]
 pub use self::__UIView::UIViewKeyframeAnimationOptions;
-#[cfg(feature = "UIView")]
+#[cfg(all(feature = "UIView", feature = "objc2-core-foundation"))]
 pub use self::__UIView::UIViewNoIntrinsicMetric;
 #[cfg(feature = "UIView")]
 pub use self::__UIView::UIViewTintAdjustmentMode;
@@ -5091,6 +5738,10 @@ pub use self::__UIViewController::UIViewControllerPreviewing;
 pub use self::__UIViewController::UIViewControllerPreviewingDelegate;
 #[cfg(feature = "UIViewController")]
 pub use self::__UIViewController::UIViewControllerShowDetailTargetDidChangeNotification;
+#[cfg(feature = "UIViewControllerTransition")]
+pub use self::__UIViewControllerTransition::UIViewControllerTransition;
+#[cfg(feature = "UIViewControllerTransition")]
+pub use self::__UIViewControllerTransition::UIZoomTransitionSourceViewProviderContext;
 #[cfg(feature = "UIViewControllerTransitionCoordinator")]
 pub use self::__UIViewControllerTransitionCoordinator::UITransitionContextViewControllerKey;
 #[cfg(feature = "UIViewControllerTransitionCoordinator")]
@@ -5129,6 +5780,10 @@ pub use self::__UIViewControllerTransitioning::UIViewControllerContextTransition
 pub use self::__UIViewControllerTransitioning::UIViewControllerInteractiveTransitioning;
 #[cfg(feature = "UIViewControllerTransitioning")]
 pub use self::__UIViewControllerTransitioning::UIViewControllerTransitioningDelegate;
+#[cfg(feature = "UIViewLayoutRegion")]
+pub use self::__UIViewLayoutRegion::UIViewLayoutRegion;
+#[cfg(feature = "UIViewLayoutRegion")]
+pub use self::__UIViewLayoutRegion::UIViewLayoutRegionAdaptivityAxis;
 #[cfg(feature = "UIViewPropertyAnimator")]
 pub use self::__UIViewPropertyAnimator::UIViewPropertyAnimator;
 #[cfg(feature = "UIVisualEffect")]
@@ -5189,16 +5844,14 @@ pub use self::__UIWindow::UIWindowDidBecomeKeyNotification;
 pub use self::__UIWindow::UIWindowDidBecomeVisibleNotification;
 #[cfg(feature = "UIWindow")]
 pub use self::__UIWindow::UIWindowDidResignKeyNotification;
-#[cfg(feature = "UIWindow")]
+#[cfg(all(feature = "UIWindow", feature = "objc2-core-foundation"))]
 pub use self::__UIWindow::UIWindowLevel;
-#[cfg(feature = "UIWindow")]
+#[cfg(all(feature = "UIWindow", feature = "objc2-core-foundation"))]
 pub use self::__UIWindow::UIWindowLevelAlert;
-#[cfg(feature = "UIWindow")]
+#[cfg(all(feature = "UIWindow", feature = "objc2-core-foundation"))]
 pub use self::__UIWindow::UIWindowLevelNormal;
-#[cfg(feature = "UIWindow")]
+#[cfg(all(feature = "UIWindow", feature = "objc2-core-foundation"))]
 pub use self::__UIWindow::UIWindowLevelStatusBar;
-#[cfg(feature = "UIWindowScene")]
-pub use self::__UIWindowScene::UISceneSizeRestrictions;
 #[cfg(all(
     feature = "UIResponder",
     feature = "UIScene",
@@ -5213,6 +5866,8 @@ pub use self::__UIWindowScene::UIWindowSceneDestructionRequestOptions;
 pub use self::__UIWindowScene::UIWindowSceneDismissalAnimation;
 #[cfg(all(feature = "UISceneDefinitions", feature = "UIWindowScene"))]
 pub use self::__UIWindowScene::UIWindowSceneSessionRoleApplication;
+#[cfg(all(feature = "UISceneDefinitions", feature = "UIWindowScene"))]
+pub use self::__UIWindowScene::UIWindowSceneSessionRoleAssistiveAccessApplication;
 #[cfg(all(feature = "UISceneDefinitions", feature = "UIWindowScene"))]
 pub use self::__UIWindowScene::UIWindowSceneSessionRoleExternalDisplay;
 #[cfg(all(feature = "UISceneDefinitions", feature = "UIWindowScene"))]
@@ -5240,7 +5895,8 @@ pub use self::__UIWindowSceneActivationInteraction::UIWindowSceneActivationInter
 #[cfg(all(
     feature = "UIWindowSceneActivationConfiguration",
     feature = "UIWindowSceneActivationInteraction",
-    feature = "block2"
+    feature = "block2",
+    feature = "objc2-core-foundation"
 ))]
 pub use self::__UIWindowSceneActivationInteraction::UIWindowSceneActivationInteractionConfigurationProvider;
 #[cfg(all(
@@ -5268,7 +5924,10 @@ pub use self::__UIWindowSceneGeometryPreferencesIOS::UIWindowSceneGeometryPrefer
     feature = "UIWindowSceneGeometryPreferencesMac"
 ))]
 pub use self::__UIWindowSceneGeometryPreferencesMac::UIWindowSceneGeometryPreferencesMac;
-#[cfg(feature = "UIWindowSceneGeometryPreferencesVision")]
+#[cfg(all(
+    feature = "UIWindowSceneGeometryPreferencesVision",
+    feature = "objc2-core-foundation"
+))]
 pub use self::__UIWindowSceneGeometryPreferencesVision::UIProposedSceneSizeNoPreference;
 #[cfg(all(
     feature = "UIWindowSceneGeometryPreferences",
@@ -5284,8 +5943,44 @@ pub use self::__UIWindowScenePlacement::UIWindowScenePlacement;
 pub use self::__UIWindowSceneProminentPlacement::UIWindowSceneProminentPlacement;
 #[cfg(all(
     feature = "UIWindowScenePlacement",
+    feature = "UIWindowScenePushPlacement"
+))]
+pub use self::__UIWindowScenePushPlacement::UIWindowScenePushPlacement;
+#[cfg(all(
+    feature = "UIWindowScenePlacement",
+    feature = "UIWindowSceneReplacePlacement"
+))]
+pub use self::__UIWindowSceneReplacePlacement::UIWindowSceneReplacePlacement;
+#[cfg(all(
+    feature = "UIWindowScenePlacement",
     feature = "UIWindowSceneStandardPlacement"
 ))]
 pub use self::__UIWindowSceneStandardPlacement::UIWindowSceneStandardPlacement;
+#[cfg(feature = "UIWritingToolsCoordinator")]
+pub use self::__UIWritingToolsCoordinator::UIWritingToolsCoordinator;
+#[cfg(feature = "UIWritingToolsCoordinator")]
+pub use self::__UIWritingToolsCoordinator::UIWritingToolsCoordinatorContextScope;
+#[cfg(feature = "UIWritingToolsCoordinator")]
+pub use self::__UIWritingToolsCoordinator::UIWritingToolsCoordinatorDelegate;
+#[cfg(feature = "UIWritingToolsCoordinator")]
+pub use self::__UIWritingToolsCoordinator::UIWritingToolsCoordinatorState;
+#[cfg(feature = "UIWritingToolsCoordinator")]
+pub use self::__UIWritingToolsCoordinator::UIWritingToolsCoordinatorTextAnimation;
+#[cfg(feature = "UIWritingToolsCoordinator")]
+pub use self::__UIWritingToolsCoordinator::UIWritingToolsCoordinatorTextAnimationDebugDescription;
+#[cfg(feature = "UIWritingToolsCoordinator")]
+pub use self::__UIWritingToolsCoordinator::UIWritingToolsCoordinatorTextReplacementReason;
+#[cfg(feature = "UIWritingToolsCoordinator")]
+pub use self::__UIWritingToolsCoordinator::UIWritingToolsCoordinatorTextUpdateReason;
+#[cfg(feature = "UIWritingToolsCoordinatorAnimationParameters")]
+pub use self::__UIWritingToolsCoordinatorAnimationParameters::UIWritingToolsCoordinatorAnimationParameters;
+#[cfg(feature = "UIWritingToolsCoordinatorContext")]
+pub use self::__UIWritingToolsCoordinatorContext::UIWritingToolsCoordinatorContext;
+#[cfg(feature = "UIZoomTransitionOptions")]
+pub use self::__UIZoomTransitionOptions::UIZoomTransitionAlignmentRectContext;
+#[cfg(feature = "UIZoomTransitionOptions")]
+pub use self::__UIZoomTransitionOptions::UIZoomTransitionInteractionContext;
+#[cfg(feature = "UIZoomTransitionOptions")]
+pub use self::__UIZoomTransitionOptions::UIZoomTransitionOptions;
 #[cfg(feature = "UNNotificationResponse_UIKitAdditions")]
 pub use self::__UNNotificationResponse_UIKitAdditions::UNNotificationResponseUIKitAdditions;

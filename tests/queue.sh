@@ -19,8 +19,39 @@ TARGETED_TEST_THREADS=4
 # top's MEM counts compressed memory, ps's RSS doesn't.
 MEMORY_CAP_GB="${WARP_TEST_MEMORY_CAP_GB:-4}"
 MEMORY_POLL_SECONDS=1
+# A test binary running longer than this is killed, naming it and the program it waits for: batch 137 hung 294 s on
+# finger_paint.warp (card tests-queue). The tests binary takes ~150 s of a full run, 266 s at most so far.
+TEST_TIME_LIMIT_SECONDS="${WARP_TEST_TIME_LIMIT:-600}"
+TEST_BINARY_PATTERN='^[^ ]*/deps/[^/ ]+-[0-9a-f]{16}( |$)' # the executable of cargo's test runs: …/deps/<crate>-<hash>
+# panics provoked by tests file no to-do board cards (src/crash_card.rs); test.sh runs through here too
+export WARP_CRASH_CARDS=0
+# rustup's toolchain (nightly, with the wasm32 targets) goes ahead of Homebrew's rust formula, whose cargo and rustc
+# win in a PATH that lists /opt/homebrew/bin first (cron, Codex) and lack the wasm32 std (card homebrew-rustc)
+RUSTUP_BIN="$HOME/.cargo/bin"
+[ -x "$RUSTUP_BIN/rustup" ] && export PATH="$RUSTUP_BIN:$PATH"
 
-if [ "$1" = "cargo" ] || [ -x "$1" ]; then run=("$@"); else run=(cargo --offline test "$@"); fi
+# `tests/queue.sh -- --lib x`: cargo's target selection written among the test binary's filters goes before the `--`,
+# where cargo reads it; the binary would refuse it as an unknown option (card test-queue)
+CARGO_TARGET_FLAGS=" --lib --bins --tests --benches --examples --all-targets --doc "
+CARGO_TARGET_FLAGS_WITH_VALUE=" --test --bin --bench --example -p --package "
+with_target_flags_first() {
+	local before=() after=() past_separator=""
+	while [ $# -gt 0 ]; do
+		if [ -z "$past_separator" ]; then
+			[ "$1" = "--" ] && past_separator=1 || before+=("$1")
+		elif [[ "$CARGO_TARGET_FLAGS" == *" $1 "* ]]; then
+			before+=("$1")
+		elif [[ "$CARGO_TARGET_FLAGS_WITH_VALUE" == *" $1 "* ]] && [ $# -gt 1 ]; then
+			before+=("$1" "$2"); shift
+		else
+			after+=("$1")
+		fi
+		shift
+	done
+	run=(cargo --offline test "${before[@]}")
+	[ -n "$past_separator" ] && run+=(-- "${after[@]}")
+}
+if [ "$1" = "cargo" ] || [ -x "$1" ]; then run=("$@"); else with_target_flags_first "$@"; fi
 [ -n "$WARP_TEST_LOCKED" ] && exec "${run[@]}"
 
 # lockf is the Mac's (BSD) lock tool, Linux (cloud VMs) has flock; with neither there is no lock to take
@@ -68,13 +99,35 @@ largest_memory_mb() {
 			mb = unit == "G" ? amount * 1024 : unit == "M" ? amount : unit == "K" ? amount / 1024 : amount / 1048576; if (mb > largest) largest = mb }
 		END { printf "%d", largest }'
 }
-# runs beside the test run (our PID survives the exec below) and kills its whole process tree above the cap
-watch_memory() {
+# "pid seconds command" of the given PIDs, oldest first; ps shows the elapsed time as [[dd-]hh:]mm:ss
+running_times() {
+	ps -o pid=,etime=,command= -p "$(IFS=,; echo "$*")" 2>/dev/null | awk '{
+		split($2, part, /[-:]/); n = length(part); seconds = part[n] + 60 * part[n - 1]
+		if (n > 2) seconds += 3600 * part[n - 2]; if (n > 3) seconds += 86400 * part[n - 3]
+		$2 = seconds; print }' | sort -k2 -rn
+}
+# a test binary of the run over TEST_TIME_LIMIT_SECONDS is killed with what it started; the run fails, naming both
+kill_overdue_test_binaries() {
+	local pid seconds command children
+	running_times "$@" | while read -r pid seconds command; do
+		[ "$seconds" -gt "$TEST_TIME_LIMIT_SECONDS" ] && echo "$command" | grep -qE "$TEST_BINARY_PATTERN" || continue
+		children=($(descendants "$pid"))
+		echo "test queue: KILLED the test binary after ${seconds} s, over the time limit of ${TEST_TIME_LIMIT_SECONDS} s" \
+			"(WARP_TEST_TIME_LIMIT): $command" >&2
+		[ ${#children[@]} -gt 0 ] && echo "test queue: it was waiting for: $(running_times "${children[@]}" | head -1 | cut -d' ' -f3-)" >&2
+		kill -9 "$pid" "${children[@]}" 2>/dev/null
+	done
+}
+# runs beside the test run (our PID survives the exec below): kills its whole process tree above the memory cap
+# (Mac only: top's MEM) and a test binary over the time limit
+watch_run() {
 	local run_pid=$1 cap_mb=$((MEMORY_CAP_GB * 1024)) pids used_mb
 	while kill -0 "$run_pid" 2>/dev/null; do
 		sleep $MEMORY_POLL_SECONDS
 		pids=($(descendants "$run_pid"))
 		[ ${#pids[@]} -eq 0 ] && continue
+		kill_overdue_test_binaries "${pids[@]}"
+		[ "$(uname)" = Darwin ] || continue
 		used_mb=$(largest_memory_mb "${pids[@]}")
 		if [ "$used_mb" -gt "$cap_mb" ]; then
 			echo "test queue: KILLED the run, a process used ${used_mb} MB, over the memory cap of ${MEMORY_CAP_GB} GB" \
@@ -84,7 +137,7 @@ watch_memory() {
 		fi
 	done
 }
-[ "$(uname)" = Darwin ] && watch_memory $$ &
+watch_run $$ &
 
 # exec keeps our PID, so the ticket stays valid while we wait for the lock and run; it is removed when the run ends
 export WARP_TEST_LOCKED=1

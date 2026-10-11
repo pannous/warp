@@ -31,7 +31,12 @@ const WIT_EXTENSION: &str = "wit";
 /// `warp build --component app.warp`: app.component.wasm, the component of that world (src/component_builder.rs)
 const COMPONENT_FLAG: &str = "--component";
 const COMPONENT_EXTENSION: &str = "component.wasm";
-const COMPILE_FLAGS: [&str; 6] = [EXE_FLAG, WASM_FLAG, AOT_FLAG, SITE_FLAG, WIT_FLAG, COMPONENT_FLAG];
+/// `warp build --wagi app.warp`: app.wagi.wasm, its routes answering one WAGI request (lib/wagi.warp), and app.spin.toml
+/// to run it: `spin up -f app.spin.toml` (Spin's wagi executor; Akamai Functions: `spin aka deploy`)
+const WAGI_FLAG: &str = "--wagi";
+const WAGI_EXTENSION: &str = "wagi.wasm";
+const SPIN_MANIFEST_EXTENSION: &str = "spin.toml";
+const COMPILE_FLAGS: [&str; 7] = [EXE_FLAG, WASM_FLAG, AOT_FLAG, SITE_FLAG, WIT_FLAG, COMPONENT_FLAG, WAGI_FLAG];
 const MACHINE_CODE_EXTENSION: &str = "cwasm";
 /// The name of an executable built from inline code (plus the platform's extension)
 const DEFAULT_EXECUTABLE_NAME: &str = "out";
@@ -52,6 +57,9 @@ const COMPILE_COMMANDS: [&str; 3] = ["compile", "build", "link"];
 const TOOL_COMMAND: &str = "tool";
 /// `warp dev <file> [port]`: serves the file's site and builds it anew when it changes (src/dev_server.rs, card web-dev)
 const DEV_COMMAND: &str = "dev";
+/// `warp app page.warp`: the program's page in a window (src/webview.rs, card read-chron)
+const APP_COMMAND: &str = "app";
+const APP_CHECK: &str = "--check";
 /// `warp deploy [--dev|--dry-run] app.warp`: the program as a Cloudflare Worker, deployed by wrangler (src/deploy.rs)
 const DEPLOY_COMMAND: &str = "deploy";
 /// `warp serve [app.warp] [port]`: serves the program, its page, server functions and routes (P222)
@@ -62,10 +70,11 @@ const REGISTER_COMMAND: &str = "register";
 /// The program `warp serve` serves when it is given none: the first of these in the current folder
 const DEFAULT_PROGRAMS: [&str; 2] = ["app.warp", "main.warp"];
 const WARP_VERSION: &str = env!("CARGO_PKG_VERSION");
-/// The warnings and notes the user said "got it" to, remembered per project: one `ack:<topic> = acknowledged` per line
+/// The warnings, notes and hints the user said "got it" to, in the home folder: one `ack:<topic> = acknowledged` per
+/// line. A "got it" holds wherever warp runs next (card hints-dismissed)
 const ACKNOWLEDGEMENTS_FILE: &str = ".warp-acknowledged";
-/// What earlier versions called the acknowledgements file: its `ack:` lines are adopted
-const OLD_ANSWERS_FILE: &str = ".warp-answers";
+/// Where earlier versions remembered "got it", in the current folder: their `ack:` lines are adopted
+const LOCAL_ACKNOWLEDGEMENTS_FILES: [&str; 2] = [".warp-answers", ACKNOWLEDGEMENTS_FILE];
 /// Never prompt "got it?" after a warning or note (as in CI or a pipe)
 const NO_ASK_FLAG: &str = "--no-ask";
 /// Hints and notes (`prefer ^ over **`) are shown by default; `--no-hints` or WARP_HINTS=0 hide them (card hints-toggle)
@@ -80,10 +89,10 @@ const RESULT_MARK: &str = "» ";
 /// The exit status of a run that ends in an uncaught error (card cli-error-exit)
 const ERROR_STATUS: i32 = 1;
 
+/// A program file's exit status: its Int result; a float (a measurement such as elapsed seconds) is no status
 fn node_to_i32(node: &Node) -> i32 {
     match node.drop_meta() {
         Node::Number(Number::Int(n)) => *n as i32,
-        Node::Number(Number::Float(f)) => *f as i32,
         Node::Error(_) => ERROR_STATUS,
         _ => 0,
     }
@@ -92,6 +101,8 @@ fn node_to_i32(node: &Node) -> i32 {
 #[cfg(not(test))]
 fn main() {
     let mut args: Vec<String> = env::args().collect();
+    warp::crash_card::install();
+    end_quietly_on_closed_pipe(); // after the crash card hook, so a closed pipe files none
     warp::paint::allow_windows();
     apply_flags(&mut args);
     match args.iter().position(|arg| arg == SANDBOX_FLAG) {
@@ -102,6 +113,36 @@ fn main() {
         None => run_command(&args),
     }
 }
+
+/// A reader that closed the pipe (`warp run x.warp | head -1`) ends warp by SIGPIPE, as it ends cat: Rust ignores the
+/// signal, so println! panicked on the broken pipe and filed a crash card (cards crash-show, crashes-broken). That panic
+/// raises the signal now. It stays ignored for every other pipe: a closed viewer or interpreter stdin is an error warp
+/// handles (paint_window.rs falls back to PNGs), not its end.
+#[cfg(all(unix, not(test)))]
+fn end_quietly_on_closed_pipe() {
+    const SIGPIPE: i32 = 13; // the same on macOS and Linux
+    const DEFAULT_ACTION: usize = 0; // SIG_DFL
+    const PRINT_FAILED: &str = "failed printing to std"; // print!'s panic on stdout or stderr
+    const CLOSED_PIPE: &str = "(os error 32)"; // EPIPE, the same on macOS and Linux
+    unsafe extern "C" {
+        fn signal(signal: i32, handler: usize) -> usize;
+        fn raise(signal: i32) -> i32;
+    }
+    let next_hook = std::panic::take_hook();
+    std::panic::set_hook(Box::new(move |info| {
+        let message = info.payload_as_str().unwrap_or_default();
+        if message.starts_with(PRINT_FAILED) && message.contains(CLOSED_PIPE) {
+            unsafe {
+                signal(SIGPIPE, DEFAULT_ACTION);
+                raise(SIGPIPE);
+            }
+        }
+        next_hook(info);
+    }));
+}
+
+#[cfg(all(not(unix), not(test)))]
+fn end_quietly_on_closed_pipe() {}
 
 /// `--fuel <steps>`, `--strict`, `--no-ask`, `--no-hints` take effect and leave the arguments; the answers file is read
 #[cfg(not(test))]
@@ -137,8 +178,11 @@ fn apply_flags(args: &mut Vec<String>) {
     if !no_ask && env::var_os("CI").is_none() && io::stdin().is_terminal() && io::stderr().is_terminal() {
         diagnostic::set_acknowledger(Some(std::rc::Rc::new(diagnostic::TerminalAcknowledger)));
     }
-    diagnostic::adopt_acknowledgements(OLD_ANSWERS_FILE, ACKNOWLEDGEMENTS_FILE);
-    diagnostic::use_acknowledgements_file(ACKNOWLEDGEMENTS_FILE);
+    let acknowledgements = dirs_home().join(ACKNOWLEDGEMENTS_FILE);
+    for local_file in LOCAL_ACKNOWLEDGEMENTS_FILES {
+        diagnostic::adopt_acknowledgements(local_file, &acknowledgements);
+    }
+    diagnostic::use_acknowledgements_file(acknowledgements);
 }
 
 /// After the run (also one ending in process::exit), one line telling how to hide the hints it showed
@@ -236,13 +280,18 @@ fn run_command(args: &[String]) {
         return;
     }
 
-    if arg_string.ends_with(".html") || arg_string.ends_with(".htm") {
-        println!("warp compiled without webview");
+    if args[1] == APP_COMMAND && args.len() >= 3 {
+        let check = args[2] == APP_CHECK;
+        show_in_webview(&args[if check { 3 } else { 2 }..].join(" "), check);
+    } else if is_html_file(&arg_string) {
+        show_in_webview(&arg_string, false);
     } else if let Some(target) = arg_string.strip_prefix("verify ") {
         let code = source_of(target);
         let reports = law::verify(&code);
         reports.iter().for_each(|report| println!("{}", report));
-        std::process::exit(reports.iter().any(|report| report.failed()) as i32);
+        let all_proofs_check = reports.iter().all(|report| report.assurance == law::Assurance::Proved && !report.failed());
+        println!("{}", if all_proofs_check { "ALL PROOFS CHECK" } else { "SOME PROOFS FAIL" });
+        std::process::exit((!all_proofs_check) as i32);
     } else if let Some(target) = arg_string.strip_prefix("types ") {
         println!("{}", law::type_model::report(&source_of(target)));
     } else if args[1] == TOOL_COMMAND && args.len() >= 3 {
@@ -288,7 +337,8 @@ fn run_command(args: &[String]) {
         if let Err(failure) = served {
             fail(failure);
         }
-    } else if let Some(target) = arg_string.strip_prefix("data ") {
+    } else if let Some(target) = arg_string.strip_prefix("data ").filter(|target| !target.trim_start().starts_with('=')) {
+        // `warp data file.warp` prints the file as data; `warp 'data = [3 1 2]; …'` is a program
         let text = source_of(target);
         println!("{}", warp_parser::parse_data(&text).serialize());
     } else if COMPILE_COMMANDS.iter().any(|command| arg_string.starts_with(&format!("{command} "))) {
@@ -305,6 +355,9 @@ fn run_command(args: &[String]) {
         }
         if flags.contains(&COMPONENT_FLAG) {
             return write_component(&code, &target);
+        }
+        if flags.contains(&WAGI_FLAG) {
+            return write_wagi(&code, &target);
         }
         if standalone {
             match write_standalone_executable(&code, &target) {
@@ -409,16 +462,17 @@ fn run_command(args: &[String]) {
     }
 }
 
-/// `Warp 🌀 1.2.4`; a debug build also names, on stderr, the commit of the checkout it was built from and the time of
-/// its binary (cards g_oMw8, g_oM-0): `debug build 75d67b068 · built 2026-10-09 14:32`
+/// `🌀 Warp 1.2.4` (its last word the version, tests/common checks it), then on stderr the commit and branch the build
+/// was made from and the time of its binary (cards g_oMw8, g_oM-0, version-banner-version):
+/// `debug build 75d67b068 on main · built 2026-10-09 14:32`
 fn print_version() {
     println!("🌀 Warp {}", WARP_VERSION);
-    if cfg!(debug_assertions) {
-        let commit = option_env!("WARP_COMMIT");
-        let binary = env::current_exe().map(|path| path.display().to_string()).unwrap_or_default();
-        let built = command_line("date", &["-r", &binary, "+%Y-%m-%d %H:%M"]);
-        eprintln!("debug build {} · built {}", commit.unwrap_or("of an unknown commit"), built.as_deref().unwrap_or("?"));
-    }
+    let profile = if cfg!(debug_assertions) { "debug" } else { "release" };
+    let commit = option_env!("WARP_COMMIT").unwrap_or("of an unknown commit");
+    let branch = option_env!("WARP_BRANCH").map(|branch| format!(" on {branch}")).unwrap_or_default();
+    let binary = env::current_exe().map(|path| path.display().to_string()).unwrap_or_default();
+    let built = command_line("date", &["-r", &binary, "+%Y-%m-%d %H:%M"]);
+    eprintln!("{profile} build {commit}{branch} · built {}", built.as_deref().unwrap_or("?"));
 }
 
 /// The first line a successful command prints
@@ -612,6 +666,49 @@ fn write_component(code: &str, target: &str) {
     }
 }
 
+/// `warp build --wagi`: the WAGI module and its Spin manifest next to the program file
+fn write_wagi(code: &str, target: &str) {
+    let module_path = std::path::Path::new(&compiled_output_path(target)).with_extension(WAGI_EXTENSION);
+    let manifest_path = module_path.with_extension("").with_extension(SPIN_MANIFEST_EXTENSION);
+    let name = module_path.file_stem().and_then(|stem| stem.to_str()).and_then(|stem| stem.split('.').next()).unwrap_or(DEFAULT_EXECUTABLE_NAME).to_string();
+    match warp::pipeline::for_wagi(|| wasm_emitter::compile(code)) {
+        Ok(module) => {
+            fs::write(&module_path, &module.bytes).expect("could not write the WAGI module");
+            let source = module_path.file_name().unwrap_or_default().to_string_lossy();
+            fs::write(&manifest_path, warp::deploy::spin_manifest(&name, &source)).expect("could not write the Spin manifest");
+            println!("wrote {} ({} bytes) and {}", module_path.display(), module.bytes.len(), manifest_path.display());
+        }
+        Err(failure) => {
+            eprintln!("warp build --wagi: {failure}");
+            std::process::exit(1);
+        }
+    }
+}
+
+fn is_html_file(target: &str) -> bool {
+    target.ends_with(".html") || target.ends_with(".htm")
+}
+
+/// `warp page.html`, `warp app [--check] page.warp`: the page in a web view window (src/webview.rs); --check prints
+/// its text from a hidden window instead
+fn show_in_webview(target: &str, check: bool) {
+    if !check && !warp::paint::shows_windows() {
+        fail(format!("warp {APP_COMMAND}: no window under {} or CI; `warp {APP_COMMAND} {APP_CHECK} {target}` prints the page's text", warp::paint::NO_WINDOW_VARIABLE));
+    }
+    #[cfg(target_os = "macos")]
+    let shown = if is_html_file(target) {
+        warp::webview::show_file(std::path::Path::new(target), check)
+    } else {
+        let title = std::path::Path::new(target).file_stem().filter(|_| file_exists(target)).map_or(DEFAULT_SITE_NAME.into(), |stem| stem.to_string_lossy());
+        warp::webview::show_program(&source_of(target), &title, check)
+    };
+    #[cfg(not(target_os = "macos"))]
+    let shown: Result<(), String> = Err(format!("warp is compiled without a web view here (macOS only for now); `warp build --site {target}` writes the page"));
+    if let Err(failure) = shown {
+        fail(format!("warp {APP_COMMAND}: {failure}"));
+    }
+}
+
 /// `warp build --site`: the site next to the program file, its report or failure
 fn write_site(code: &str, target: &str) {
     let file = std::path::Path::new(target);
@@ -734,6 +831,35 @@ fn usage() {
     println!("  warp help <module>   A standard module's words (warp help --markdown: all, as wiki/standard-library.md)");
 }
 
+#[derive(Default)]
+struct ConsoleSession {
+    state: Vec<String>,
+}
+
+impl ConsoleSession {
+    fn source_with(&self, input: &str) -> String {
+        self.state.iter().map(String::as_str).chain([input]).collect::<Vec<_>>().join("\n")
+    }
+
+    fn remember(&mut self, input: &str, value: &Node) {
+        if !matches!(value.drop_meta(), Node::Error(_)) && console_state_line(&warp_parser::parse(input)) {
+            self.state.push(input.to_string());
+        }
+    }
+}
+
+fn console_state_line(node: &Node) -> bool {
+    match node.drop_meta() {
+        Node::Key(_, op, _) => matches!(op, warp::operators::Op::Assign | warp::operators::Op::Define | warp::operators::Op::Inc | warp::operators::Op::Dec) || op.is_compound_assign(),
+        Node::List(items, node::Bracket::None, separator) if separator.separates_statements() => items.iter().all(console_state_line),
+        Node::List(items, node::Bracket::None, node::Separator::Space) => {
+            matches!(items.first().and_then(Node::symbol_name), Some("let" | "var" | "const" | "global"))
+                && items.iter().skip(1).any(console_state_line)
+        }
+        _ => false,
+    }
+}
+
 fn console() {
     use rustyline::error::ReadlineError;
     use rustyline::DefaultEditor;
@@ -753,6 +879,7 @@ fn console() {
     let _ = rl.load_history(&history_path);
 
     let mut interrupted = false; // a ctrl-c on an empty line twice in a row ends the console
+    let mut session = ConsoleSession::default();
     loop {
         let read = rl.readline("🌀"); // warp language symbol for prompt
         let interrupted_before = interrupted;
@@ -768,7 +895,9 @@ fn console() {
                 if input.is_empty() { continue; }
                 if input == "exit" || input == "quit" { break; }
                 let _ = rl.add_history_entry(input);
-                show(&eval(input), RESULT_MARK);
+                let value = eval(&session.source_with(input));
+                session.remember(input, &value);
+                show(&value, RESULT_MARK);
             }
             Err(ReadlineError::Eof) => break,
             Err(e) => {
@@ -801,4 +930,3 @@ fn file_exists(path: &str) -> bool {
 fn extract_after(s: &str, sep: &str) -> String {
     s.split_once(sep).map(|(_, after)| after.to_string()).unwrap_or_default()
 }
-

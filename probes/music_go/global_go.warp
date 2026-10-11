@@ -1,0 +1,4 @@
+global g = 2.5
+f() := g * 2
+go{ print f() }
+sleep(1s)

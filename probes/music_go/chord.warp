@@ -1,0 +1,5 @@
+go{
+play [C4 E4 G4] for 0.2s
+print "chord done"
+}
+sleep(2s)

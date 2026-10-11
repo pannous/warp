@@ -27,3 +27,11 @@ fn ranges_in_for_headers_stay_ranges() {
 	is!("x=0; for i in 1..4 {x+=i}; x", 6);
 	is!("x=0; for i in 1...4 {x+=i}; x", 10);
 }
+
+#[test] // wiki/signal.md's countdown: `while c : print x` runs the whole call each pass, as `{print x}` does (card while-decrement)
+#[cfg(feature = "native")]
+fn a_while_body_prints_each_pass() {
+	assert_eq!(crate::common::printed("x=3\nwhile x-->0 : print x"), "2\n1\n");
+	assert_eq!(crate::common::printed("x=3\nwhile x-->0 { print x }"), "2\n1\n");
+	assert_eq!(crate::common::printed("x=6\nonce x==3 {print \"half\"}\nwhile x-->0 : print x"), "5\n4\nhalf\n3\n2\n1\n");
+}

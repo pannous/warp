@@ -23,3 +23,12 @@ fn ruby_def_indented_by_tabs() {
 	is!("def f(x)\n\ty = x * 2\n\ty + 1\nend\nf(3)", 7);
 	is!("class Point\n\tdef initialize(x)\n\t\t@x = x\n\tend\n\tdef double\n\t\t@x * 2\n\tend\nend\nPoint.new(4).double", 8);
 }
+
+/// card lowering-drops: after `def foo:` the rest of the line is the body, an assignment too (wiki/result.md)
+#[test]
+fn a_colon_body_may_assign() {
+	is!("def foo: hi=2*2\nfoo", 4);
+	is!("def foo: hi=2*2; foo", 4);
+	is!("def foo(x): y = x*2\nfoo(5)", 10);
+	is!("def foo: hi=2*2\nfoo\nresult", 4);
+}

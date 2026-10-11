@@ -6,44 +6,53 @@ use objc2_foundation::*;
 use crate::*;
 
 extern "C" {
+    /// [Apple's documentation](https://developer.apple.com/documentation/uikit/uitextattributefont?language=objc)
+    #[deprecated]
     pub static UITextAttributeFont: Option<&'static NSString>;
 }
 
 extern "C" {
+    /// [Apple's documentation](https://developer.apple.com/documentation/uikit/uitextattributetextcolor?language=objc)
+    #[deprecated]
     pub static UITextAttributeTextColor: Option<&'static NSString>;
 }
 
 extern "C" {
+    /// [Apple's documentation](https://developer.apple.com/documentation/uikit/uitextattributetextshadowcolor?language=objc)
+    #[deprecated = "Use NSShadowAttributeName with an NSShadow instance as the value"]
     pub static UITextAttributeTextShadowColor: Option<&'static NSString>;
 }
 
 extern "C" {
+    /// [Apple's documentation](https://developer.apple.com/documentation/uikit/uitextattributetextshadowoffset?language=objc)
+    #[deprecated = "Use NSShadowAttributeName with an NSShadow instance as the value"]
     pub static UITextAttributeTextShadowOffset: Option<&'static NSString>;
 }
 
+/// [Apple's documentation](https://developer.apple.com/documentation/uikit/uilinebreakmode?language=objc)
 // NS_ENUM
 #[deprecated]
 #[repr(transparent)]
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub struct UILineBreakMode(pub NSInteger);
 impl UILineBreakMode {
-    #[deprecated]
     #[doc(alias = "UILineBreakModeWordWrap")]
+    #[deprecated]
     pub const WordWrap: Self = Self(0);
-    #[deprecated]
     #[doc(alias = "UILineBreakModeCharacterWrap")]
+    #[deprecated]
     pub const CharacterWrap: Self = Self(1);
-    #[deprecated]
     #[doc(alias = "UILineBreakModeClip")]
+    #[deprecated]
     pub const Clip: Self = Self(2);
-    #[deprecated]
     #[doc(alias = "UILineBreakModeHeadTruncation")]
+    #[deprecated]
     pub const HeadTruncation: Self = Self(3);
-    #[deprecated]
     #[doc(alias = "UILineBreakModeTailTruncation")]
-    pub const TailTruncation: Self = Self(4);
     #[deprecated]
+    pub const TailTruncation: Self = Self(4);
     #[doc(alias = "UILineBreakModeMiddleTruncation")]
+    #[deprecated]
     pub const MiddleTruncation: Self = Self(5);
 }
 
@@ -55,20 +64,21 @@ unsafe impl RefEncode for UILineBreakMode {
     const ENCODING_REF: Encoding = Encoding::Pointer(&Self::ENCODING);
 }
 
+/// [Apple's documentation](https://developer.apple.com/documentation/uikit/uitextalignment?language=objc)
 // NS_ENUM
 #[deprecated]
 #[repr(transparent)]
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub struct UITextAlignment(pub NSInteger);
 impl UITextAlignment {
-    #[deprecated]
     #[doc(alias = "UITextAlignmentLeft")]
+    #[deprecated]
     pub const Left: Self = Self(0);
-    #[deprecated]
     #[doc(alias = "UITextAlignmentCenter")]
-    pub const Center: Self = Self(1);
     #[deprecated]
+    pub const Center: Self = Self(1);
     #[doc(alias = "UITextAlignmentRight")]
+    #[deprecated]
     pub const Right: Self = Self(2);
 }
 
@@ -80,6 +90,7 @@ unsafe impl RefEncode for UITextAlignment {
     const ENCODING_REF: Encoding = Encoding::Pointer(&Self::ENCODING);
 }
 
+/// [Apple's documentation](https://developer.apple.com/documentation/uikit/uibaselineadjustment?language=objc)
 // NS_ENUM
 #[repr(transparent)]
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]

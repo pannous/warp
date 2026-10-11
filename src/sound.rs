@@ -1,15 +1,19 @@
-//! sound_samples(samples, count, rate) natively (card basic-sound, lib/sound.warp): 16-bit mono samples as a WAV file in the
+//! sound_samples(samples, count, rate, channels) natively (card basic-sound, lib/sound.warp): 16-bit samples, mono or
+//! stereo (interleaved left, right: lib panned, card stereo-pan), as a WAV file in the
 //! system's temporary folder (warp-sound/sound-<process id>.wav, then sound-<process id>-2.wav …: runs at the same time
 //! never share a file; card sound-wavs), played by the
 //! system's player when the warp binary may reach the user (paint::shows_windows: never under WARP_NO_WINDOW, CI or
 //! tests, which only get the file). The playground plays the same samples with WebAudio (host.js sound_samples).
-//! A sound is queued on the audio clock behind those before it and `play` returns at once (card sound-pro): a player
-//! thread plays the queue in order, stop_sound drops it, the process's end waits for it and for the music files playing. render_sound writes the
-//! sounds since the last render one after another into one WAV, offline: headless too.
+//! A sound is queued on the audio clock behind those before it in its voice and `play` returns at once (card sound-pro):
+//! each sound waits for its start on a thread of its own and plays, stop_sound drops the waiting ones, the process's
+//! end waits for them and for the music files playing. A voice is the program's thread or a task (`go { … }`), which
+//! starts where its starter stands: voices sound together. render_sound mixes the sounds since the last render as
+//! they sound, by the voices' places on the clock (counted in samples, not in real time): offline, headless too.
 
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicUsize, Ordering};
-use std::sync::{Arc, Mutex, Once, OnceLock};
+use std::cell::{Cell, RefCell};
+use std::sync::{Arc, Mutex, Once};
 use std::time::{Duration, Instant};
 
 /// The samples cross as whole numbers ≥ 0: amplitude + 32768 (lib/sound.warp sample_offset)
@@ -17,7 +21,7 @@ pub const SAMPLE_OFFSET: i64 = 32_768;
 const FOLDER: &str = "warp-sound";
 const FILE_STEM: &str = "sound";
 const PCM_FORMAT: u16 = 1;
-const CHANNELS: u16 = 1;
+const MONO: u16 = 1;
 const BITS_PER_SAMPLE: u16 = 16;
 const BYTES_PER_SAMPLE: u32 = (BITS_PER_SAMPLE / 8) as u32;
 const FORMAT_CHUNK_SIZE: u32 = 16;
@@ -57,23 +61,45 @@ const FAILURE_TAIL: usize = 300;
 type Player = Arc<Mutex<std::process::Child>>;
 /// The sounds and music files playing by their handles, stopped by stop_sound
 static PLAYING: Mutex<Vec<(usize, Player)>> = Mutex::new(Vec::new());
-/// When the queued sounds end on the audio clock; none before the first
-static SOUNDS_END: Mutex<Option<Instant>> = Mutex::new(None);
+/// Where a voice stands on the audio clock: when its queued sounds end in real time, and how many seconds of sound
+/// it has made in all (its place for render_sound, free of the time computing them took); its origin is the real time
+/// of place 0, where `at 2 beats` counts from
+#[derive(Clone, Copy, Default)]
+pub struct Voice {
+	end: Option<Instant>,
+	seconds: f64,
+	origin: Option<Instant>,
+	stops: usize,
+}
+thread_local! {
+	/// The voice of this thread: the program's, or a task's from its start (tasks.rs spawn)
+	static VOICE: Cell<Voice> = Cell::new(Voice::default());
+	/// The voices an `at` statement left, taken up again at its end
+	static BEFORE_AT: RefCell<Vec<Voice>> = const { RefCell::new(Vec::new()) };
+}
 /// Counted up by stop_sound: a queued sound of an earlier count is dropped, and its player's end is no failure
 static STOPS: AtomicUsize = AtomicUsize::new(0);
 /// The sounds queued for the player thread and not played to their end yet
 static PENDING: AtomicUsize = AtomicUsize::new(0);
-/// The sounds since the last render_sound, in order: their sample rate and 16-bit samples (in memory, 44 KB a second
-/// at 22050 Hz: the WAV files are shared by all warp processes, another run may overwrite them)
-static UNRENDERED: Mutex<Vec<(u32, Vec<u8>)>> = Mutex::new(Vec::new());
-/// A queued sound: its WAV, the stop count it was queued at and its handle
+/// The place on the voices where the last render_sound ended
+static RENDERED_UNTIL: Mutex<f64> = Mutex::new(0.0);
+/// A sound since the last render_sound: its place in its voice (seconds), sample rate, channels and 16-bit samples
+struct Unrendered {
+	place: f64,
+	rate: u32,
+	channels: u16,
+	samples: Vec<i16>,
+}
+/// The sounds since the last render_sound, in memory (44 KB a second at 22050 Hz mono: the WAV files are shared by all
+/// warp processes, another run may overwrite them)
+static UNRENDERED: Mutex<Vec<Unrendered>> = Mutex::new(Vec::new());
+/// A queued sound: its WAV, when it starts, the stop count it was queued at and its handle
 struct Queued {
 	path: PathBuf,
+	start: Instant,
 	stops: usize,
 	handle: usize,
 }
-/// The player thread's queue
-static QUEUE: OnceLock<Mutex<std::sync::mpsc::Sender<Queued>>> = OnceLock::new();
 
 /// `play "song.mp3"`: a music file played in the background when the user may hear it, else checked and named. A file
 /// the system's decoder cannot read fails here, as does a player failing at once; a later failure is printed. Its handle
@@ -95,7 +121,7 @@ pub fn play_file(path: &str) -> Result<usize, String> {
 		std::thread::sleep(PLAYER_POLL);
 	}
 	listed(handle, &child);
-	let queued = Queued { path: path.into(), stops: STOPS.load(Ordering::Relaxed), handle };
+	let queued = Queued { path: path.into(), start: Instant::now(), stops: STOPS.load(Ordering::Relaxed), handle };
 	std::thread::spawn(move || watched(child, player, &queued, "sound file"));
 	Ok(handle)
 }
@@ -145,9 +171,6 @@ fn watched(child: Player, player: &str, queued: &Queued, label: &str) {
 /// stop_sound: the queued sounds dropped, the playing sounds and music files stopped
 pub fn stop() {
 	STOPS.fetch_add(1, Ordering::Relaxed);
-	if let Ok(mut end) = SOUNDS_END.lock() {
-		*end = None;
-	}
 	killed(|_| true);
 }
 
@@ -173,9 +196,10 @@ fn killed(chosen: impl Fn(usize) -> bool) {
 	}
 }
 
-/// sound_queued(): the seconds the queued sounds still sound on the audio clock
+/// sound_queued(): the seconds this voice's queued sounds still sound on the audio clock (a task asks its own voice)
 pub fn queued_seconds() -> f64 {
-	let end = SOUNDS_END.lock().ok().and_then(|end| *end);
+	let voice = voice();
+	let end = voice.end.filter(|_| voice.stops == STOPS.load(Ordering::Relaxed));
 	end.map_or(0.0, |end| end.saturating_duration_since(Instant::now()).as_secs_f64())
 }
 
@@ -186,33 +210,58 @@ pub fn wait() {
 	}
 }
 
-/// The sound's seconds added to the audio clock behind the sounds queued before it
-fn scheduled(seconds: f64) {
-	if let Ok(mut end) = SOUNDS_END.lock() {
-		let now = Instant::now();
-		*end = Some(end.filter(|end| *end > now).unwrap_or(now) + Duration::from_secs_f64(seconds));
+/// This thread's voice, for a task it starts: the task's sounds begin where this voice stands
+pub fn voice() -> Voice {
+	VOICE.with(Cell::get)
+}
+
+/// The voice of a task's thread, taken over from the thread that started it
+pub fn join_voice(voice: Voice) {
+	VOICE.with(|own| own.set(voice));
+}
+
+/// `at seconds …` (card sample-accurate): the statement's sounds start that many seconds after the voice's first
+/// sound, its place in renders exactly, on the speakers not before now; at_end returns to where the voice stood
+pub fn at(seconds: f64) {
+	let voice = voice();
+	BEFORE_AT.with(|before| before.borrow_mut().push(voice));
+	let origin = voice.origin.unwrap_or_else(Instant::now);
+	let stops = STOPS.load(Ordering::Relaxed);
+	join_voice(Voice { end: Some(origin + Duration::from_secs_f64(seconds.max(0.0))), seconds: seconds.max(0.0), origin: Some(origin), stops });
+}
+
+pub fn at_end() {
+	if let Some(before) = BEFORE_AT.with(|before| before.borrow_mut().pop()) {
+		join_voice(Voice { origin: voice().origin, ..before }); // the origin `at` gave a voice without sounds stays
 	}
 }
 
-/// The WAV handed to the player thread, started with the first sound (the process's end then waits for the queue)
-fn queued(sound: Queued) -> Result<(), String> {
-	let queue = QUEUE.get_or_init(|| {
-		let (sender, receiver) = std::sync::mpsc::channel::<Queued>();
-		std::thread::spawn(move || {
-			for queued in receiver {
-				if !queued.stopped() {
-					play_wav(&queued);
-				}
-				let _ = std::fs::remove_file(&queued.path); // played or stopped: per-process names would pile up otherwise
-				PENDING.fetch_sub(1, Ordering::Relaxed);
-			}
-		});
-		wait_at_exit();
-		Mutex::new(sender)
-	});
+/// The sound's seconds added to its voice behind the sounds queued there before it: when it starts in real time, and
+/// its place among the voice's sounds. stop_sound since the voice's last sound starts the voice anew, now
+fn scheduled(seconds: f64) -> (Instant, f64) {
+	let now = Instant::now();
+	let stops = STOPS.load(Ordering::Relaxed);
+	let mut voice = voice();
+	let start = voice.end.filter(|end| *end > now && voice.stops == stops).unwrap_or(now);
+	let place = voice.seconds;
+	let origin = voice.origin.unwrap_or_else(|| start - Duration::from_secs_f64(place));
+	voice = Voice { end: Some(start + Duration::from_secs_f64(seconds)), seconds: place + seconds, origin: Some(origin), stops };
+	join_voice(voice);
+	(start, place)
+}
+
+/// The WAV played at its start on a thread of its own (the process's end waits for it)
+fn queued(sound: Queued) {
+	wait_at_exit();
 	PENDING.fetch_add(1, Ordering::Relaxed);
-	let sent = queue.lock().map_err(|_| "sound: the queue is poisoned".to_string())?.send(sound);
-	sent.map_err(|_| "sound: the player thread ended".to_string())
+	std::thread::spawn(move || {
+		std::thread::sleep(sound.start.saturating_duration_since(Instant::now()));
+		if !sound.stopped() {
+			play_wav(&sound);
+		}
+		let _ = std::fs::remove_file(&sound.path); // played or stopped: per-process names would pile up otherwise
+		PENDING.fetch_sub(1, Ordering::Relaxed);
+	});
 }
 
 /// One queued WAV played to its end by the first player the system has
@@ -317,58 +366,77 @@ fn file_format(path: &str) -> Result<&'static str, String> {
 }
 
 /// Write the samples as a WAV and queue it on the audio clock: played when the user may hear it, else say where it is
-pub fn sound(samples: &[u64], rate: u32) -> Result<PathBuf, String> {
-	let data = pcm(samples);
+pub fn sound(samples: &[u64], rate: u32, channels: u16) -> Result<PathBuf, String> {
+	let samples = pcm(samples);
 	let handle = next_handle();
-	let path = wav_file(&data, rate, handle)?;
+	let path = wav_file(&wav_of(&samples, rate, channels), handle)?;
+	let seconds = samples.len() as f64 / channels as f64 / rate.max(1) as f64;
+	let (start, place) = scheduled(seconds);
 	if let Ok(mut unrendered) = UNRENDERED.lock() {
-		unrendered.push((rate, data));
+		unrendered.push(Unrendered { place, rate, channels, samples });
 	}
-	let seconds = samples.len() as f64 / rate.max(1) as f64;
-	scheduled(seconds);
 	if crate::paint::shows_windows() {
-		queued(Queued { path: path.clone(), stops: STOPS.load(Ordering::Relaxed), handle })?;
+		queued(Queued { path: path.clone(), start, stops: STOPS.load(Ordering::Relaxed), handle });
 	} else {
 		eprintln!("sound {seconds:.2} s: {}", path.display());
 	}
 	Ok(path)
 }
 
-fn wav_file(data: &[u8], rate: u32, handle: usize) -> Result<PathBuf, String> {
+fn wav_file(wav: &[u8], handle: usize) -> Result<PathBuf, String> {
 	let folder = std::env::temp_dir().join(FOLDER);
 	std::fs::create_dir_all(&folder).map_err(|failure| format!("sound: cannot create {}: {failure}", folder.display()))?;
 	let process = std::process::id();
 	let path = folder.join(if handle == 1 { format!("{FILE_STEM}-{process}.wav") } else { format!("{FILE_STEM}-{process}-{handle}.wav") });
-	std::fs::write(&path, wav_of_data(data, rate)).map_err(|failure| format!("sound: cannot write {}: {failure}", path.display()))?;
+	std::fs::write(&path, wav).map_err(|failure| format!("sound: cannot write {}: {failure}", path.display()))?;
 	Ok(path)
 }
 
-/// render_sound(path): the sounds since the last render (or the start) one after another in one WAV file, its seconds
+/// render_sound(path): the sounds since the last render (or the start) in one WAV file, each at its place in its
+/// voice, the voices mixed (in stereo when one of them is: a mono sound on both speakers alike); its seconds
 pub fn render(path: &str) -> Result<f64, String> {
 	let sounds = std::mem::take(&mut *UNRENDERED.lock().map_err(|_| "the rendered sounds are poisoned".to_string())?);
-	let rate = sounds.first().map_or(DEFAULT_RATE, |(rate, _)| *rate);
-	if let Some((other, _)) = sounds.iter().find(|(sound_rate, _)| *sound_rate != rate) {
-		return Err(format!("sounds of {rate} and {other} samples per second cannot share {path}"));
+	let rate = sounds.first().map_or(DEFAULT_RATE, |sound| sound.rate);
+	if let Some(other) = sounds.iter().find(|sound| sound.rate != rate) {
+		return Err(format!("sounds of {rate} and {} samples per second cannot share {path}", other.rate));
 	}
-	let data: Vec<u8> = sounds.into_iter().flat_map(|(_, data)| data).collect();
-	std::fs::write(path, wav_of_data(&data, rate)).map_err(|failure| format!("cannot write {path}: {failure}"))?;
-	Ok(data.len() as f64 / BYTES_PER_SAMPLE as f64 / rate as f64)
+	let channels = sounds.iter().map(|sound| sound.channels).max().unwrap_or(MONO);
+	// from where the last render ended, so `at 1s beep()` keeps its second of silence; an `at` before it starts earlier
+	let mut rendered_until = RENDERED_UNTIL.lock().map_err(|_| "the rendered sounds are poisoned".to_string())?;
+	let first_place = sounds.iter().map(|sound| sound.place).fold(*rendered_until, f64::min);
+	let mut mixed: Vec<i32> = vec![];
+	for sound in sounds {
+		let start = ((sound.place - first_place) * rate as f64).round() as usize * channels as usize;
+		let samples: Vec<i16> = sound.samples.chunks(sound.channels as usize).flat_map(|frame| (0..channels as usize).map(|channel| frame[channel.min(frame.len() - 1)])).collect();
+		if mixed.len() < start + samples.len() {
+			mixed.resize(start + samples.len(), 0);
+		}
+		mixed[start..].iter_mut().zip(samples).for_each(|(sum, sample)| *sum += sample as i32);
+	}
+	let seconds = mixed.len() as f64 / channels as f64 / rate as f64;
+	*rendered_until = first_place + seconds;
+	let samples: Vec<i16> = mixed.iter().map(|&sum| sum.clamp(i16::MIN as i32, i16::MAX as i32) as i16).collect();
+	std::fs::write(path, wav_of(&samples, rate, channels)).map_err(|failure| format!("cannot write {path}: {failure}"))?;
+	Ok(seconds)
 }
 
 /// A 16-bit mono PCM WAV of the offset samples
 pub fn wav(samples: &[u64], rate: u32) -> Vec<u8> {
-	wav_of_data(&pcm(samples), rate)
+	wav_of(&pcm(samples), rate, MONO)
 }
 
-/// The offset samples as 16-bit little-endian PCM
-fn pcm(samples: &[u64]) -> Vec<u8> {
-	samples.iter().flat_map(|&sample| ((sample as i64 - SAMPLE_OFFSET).clamp(i16::MIN as i64, i16::MAX as i64) as i16).to_le_bytes()).collect()
+/// The offset samples as 16-bit amplitudes
+fn pcm(samples: &[u64]) -> Vec<i16> {
+	samples.iter().map(|&sample| (sample as i64 - SAMPLE_OFFSET).clamp(i16::MIN as i64, i16::MAX as i64) as i16).collect()
 }
 
-fn wav_of_data(data: &[u8], rate: u32) -> Vec<u8> {
+/// A 16-bit PCM WAV of the samples, a stereo one's interleaved left, right
+fn wav_of(samples: &[i16], rate: u32, channels: u16) -> Vec<u8> {
+	let data: Vec<u8> = samples.iter().flat_map(|sample| sample.to_le_bytes()).collect();
+	let data = data.as_slice();
 	let format = [
-		PCM_FORMAT.to_le_bytes().as_slice(), &CHANNELS.to_le_bytes(), &rate.to_le_bytes(), &(rate * BYTES_PER_SAMPLE * CHANNELS as u32).to_le_bytes(),
-		&(BYTES_PER_SAMPLE as u16 * CHANNELS).to_le_bytes(), &BITS_PER_SAMPLE.to_le_bytes(),
+		PCM_FORMAT.to_le_bytes().as_slice(), &channels.to_le_bytes(), &rate.to_le_bytes(), &(rate * BYTES_PER_SAMPLE * channels as u32).to_le_bytes(),
+		&(BYTES_PER_SAMPLE as u16 * channels).to_le_bytes(), &BITS_PER_SAMPLE.to_le_bytes(),
 	].concat();
 	[
 		b"RIFF".as_slice(), &(HEADER_SIZE_AFTER_RIFF + data.len() as u32).to_le_bytes(), b"WAVE",

@@ -1,0 +1,2 @@
+e = wasi_environment()
+print contains(e, "WAGI_PROBE=yes")

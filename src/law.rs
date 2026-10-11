@@ -28,9 +28,12 @@ const RANDOM_INT_RANGE: i64 = 1000;
 /// Keep machine-word boundaries in the generated corpus even though Warp Int promotes on overflow.
 const EDGE_INTS: [i64; 9] = [0, 1, -1, 2, -2, i64::MAX, i64::MIN, 3_037_000_500, -3_037_000_500];
 const EDGE_FLOATS: [f64; 5] = [0.0, 1.0, -1.0, 0.5, -2.5];
+/// The wasm trap of a recursion deeper than the stack
+const STACK_EXHAUSTED: &str = "call stack exhausted";
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct Law {
+	pub name: Option<String>,
 	pub function: String,
 	pub statement: Node,
 	pub variables: Vec<(String, Kind)>,
@@ -66,7 +69,10 @@ impl LawReport {
 
 impl fmt::Display for Law {
 	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-		write!(f, "law {}", self.statement.serialize().trim())
+		match &self.name {
+			Some(name) => write!(f, "law {name}: {}", self.statement.serialize().trim()),
+			None => write!(f, "law {}", self.statement.serialize().trim()),
+		}
 	}
 }
 
@@ -96,11 +102,36 @@ pub struct FunctionDefinition {
 	pub source: Node,
 }
 
-fn law_statement(node: &Node) -> Option<&Node> {
+struct LawDeclaration {
+	name: Option<String>,
+	statement: Node,
+	variables: Vec<(String, Kind)>,
+}
+
+fn quantified_variable(node: &Node) -> Option<(String, Kind)> {
+	let Node::List(parts, _, _) = node.drop_meta() else { return None };
+	let [for_word, variable, type_block] = parts.as_slice() else { return None };
+	if !for_word.is_symbol("for") {
+		return None;
+	}
+	let Node::List(types, Bracket::Curly, _) = type_block.drop_meta() else { return None };
+	let [type_name] = types.as_slice() else { return None };
+	Some((variable.name(), kind_of_type_name(&type_name.name())))
+}
+
+fn quantified_law(node: &Node) -> Option<LawDeclaration> {
+	let Node::Key(name, Op::Colon, body) = node.drop_meta() else { return None };
+	let items = top_level_items(body);
+	let (statement, quantifiers) = items.split_last()?;
+	let variables = quantifiers.iter().map(quantified_variable).collect::<Option<Vec<_>>>()?;
+	(!variables.is_empty()).then(|| LawDeclaration { name: Some(name.name()), statement: statement.clone(), variables })
+}
+
+fn law_declaration(node: &Node) -> Option<LawDeclaration> {
 	match node.drop_meta() {
 		// the word itself: Node's loose == takes `true` for any non-empty symbol, `[true, 2]` is no law
 		Node::List(items, _, _) if items.len() == 2 && matches!(items[0].drop_meta(), Node::Symbol(word) if word == LAW_KEYWORD) => {
-			Some(&items[1])
+			quantified_law(&items[1]).or_else(|| Some(LawDeclaration { name: None, statement: items[1].clone(), variables: vec![] }))
 		}
 		_ => None,
 	}
@@ -125,16 +156,16 @@ fn rebuild_block(items: Vec<Node>, like: &Node) -> Node {
 /// Split laws from the program. Without laws the parsed node is returned untouched.
 pub fn separate_laws(parsed: Node) -> Lawful {
 	let items = top_level_items(&parsed);
-	if !items.iter().any(|item| law_statement(item).is_some()) {
+	if !items.iter().any(|item| law_declaration(item).is_some()) {
 		return Lawful { program: parsed, laws: vec![], functions: vec![] };
 	}
 	let (law_items, program_items): (Vec<Node>, Vec<Node>) =
-		items.into_iter().partition(|item| law_statement(item).is_some());
+		items.into_iter().partition(|item| law_declaration(item).is_some());
 	let functions: Vec<FunctionDefinition> = program_items.iter().filter_map(function_definition).collect();
 	let laws = law_items
 		.iter()
-		.filter_map(law_statement)
-		.map(|statement| make_law(statement, &functions))
+		.filter_map(law_declaration)
+		.map(|declaration| make_law(declaration, &functions))
 		.collect();
 	Lawful { program: rebuild_block(program_items, &parsed), laws, functions }
 }
@@ -189,7 +220,7 @@ fn kind_of_type_name(name: &str) -> Kind {
 	crate::analyzer::builtin_type_kind(name).filter(|kind| kind.is_float()).unwrap_or(Kind::Int)
 }
 
-fn call_parts(node: &Node) -> Option<(&str, &[Node])> {
+pub(crate) fn call_parts(node: &Node) -> Option<(&str, &[Node])> {
 	match node.drop_meta() {
 		Node::List(items, _, _) if !items.is_empty() => match items[0].drop_meta() {
 			Node::Symbol(name) => Some((name.as_str(), &items[1..])),
@@ -199,10 +230,10 @@ fn call_parts(node: &Node) -> Option<(&str, &[Node])> {
 	}
 }
 
-fn make_law(statement: &Node, functions: &[FunctionDefinition]) -> Law {
+fn make_law(declaration: LawDeclaration, functions: &[FunctionDefinition]) -> Law {
+	let LawDeclaration { name, statement, mut variables } = declaration;
 	let known = |name: &str| functions.iter().find(|f| f.name == name);
 	let mut function = String::new();
-	let mut variables: Vec<(String, Kind)> = vec![];
 	statement.visit(&mut |node| {
 		if let Some((name, args)) = call_parts(node) {
 			if let Some(definition) = known(name) {
@@ -228,7 +259,7 @@ fn make_law(statement: &Node, functions: &[FunctionDefinition]) -> Law {
 			}
 		}
 	});
-	Law { function, statement: statement.clone(), variables }
+	Law { name, function, statement, variables }
 }
 
 pub fn substitute(node: &Node, bindings: &HashMap<String, Node>) -> Node {
@@ -245,10 +276,23 @@ pub fn substitute(node: &Node, bindings: &HashMap<String, Node>) -> Node {
 	}
 }
 
-/// Evaluate one instance of a law through the full parse → wasm → Node machinery.
+/// Evaluate one instance of a law through the full parse → wasm → Node machinery. `law a => b` holds where a does not,
+/// without running b (`n >= 0 => sum_to(n) …` never calls sum_to of a negative n)
 pub(crate) fn check_instance(lawful: &Lawful, law: &Law, bindings: &HashMap<String, Node>, code: &str) -> Verdict {
+	let statement = substitute(&law.statement, bindings);
+	if let Node::Key(condition, Op::FatArrow | Op::Arrow, conclusion) = statement.drop_meta() {
+		return match instance_verdict(lawful, condition, bindings, code) {
+			Verdict::Holds => instance_verdict(lawful, conclusion, bindings, code),
+			Verdict::Violated(_) => Verdict::Holds,
+			unknown => unknown,
+		};
+	}
+	instance_verdict(lawful, &statement, bindings, code)
+}
+
+fn instance_verdict(lawful: &Lawful, statement: &Node, bindings: &HashMap<String, Node>, code: &str) -> Verdict {
 	let mut items: Vec<Node> = lawful.functions.iter().map(|f| f.source.clone()).collect();
-	items.push(substitute(&law.statement, bindings));
+	items.push(statement.clone());
 	let instance = Node::List(items, Bracket::None, Separator::Semicolon);
 	match eval_parsed(instance, code) {
 		Node::True => Verdict::Holds,
@@ -349,36 +393,49 @@ impl Generator {
 	}
 }
 
+/// An instance recursing deeper than the wasm stack (`sum_to(i64::MAX)`) is skipped: no verdict, Lean decides
 pub fn property_test(lawful: &Lawful, law: &Law, trials: usize, code: &str) -> Verdict {
 	let mut generator = Generator(RANDOM_SEED);
+	let (mut run, mut too_deep) = (0, 0);
 	for trial in 0..trials {
 		let bindings: HashMap<String, Node> =
 			law.variables.iter().map(|(name, kind)| (name.clone(), generator.value(*kind, trial))).collect();
+		run += 1;
 		match check_instance(lawful, law, &bindings, code) {
 			Verdict::Holds => {}
+			Verdict::Unknown(why) if why.contains(STACK_EXHAUSTED) => too_deep += 1,
 			other => return other,
 		}
 		if law.variables.is_empty() {
 			break;
 		}
 	}
-	Verdict::Holds
+	match too_deep == run {
+		true => Verdict::Unknown(format!("every instance recursed too deep to run ({STACK_EXHAUSTED})")),
+		false => Verdict::Holds,
+	}
 }
 
 // ==================== verify ====================
 
-/// Raise every law as far as it goes: property tests first (they find counterexamples), then Lean.
+/// Raise every law as far as it goes: property tests first (they find counterexamples), then Lean, with the laws
+/// proved before as lemmas
 pub fn verify(code: &str) -> Vec<LawReport> {
 	let lawful = separate_laws(crate::warp_parser::WarpParser::parse(code));
-	lawful
-		.laws
-		.iter()
-		.map(|law| match property_test(&lawful, law, PROPERTY_TRIALS, code) {
-			Verdict::Holds => match lean::prove(&lawful.functions, law) {
+	let mut proved: Vec<Law> = vec![];
+	let mut reports = vec![];
+	for law in &lawful.laws {
+		let report = match property_test(&lawful, law, PROPERTY_TRIALS, code) {
+			Verdict::Holds => match lean::prove_using(&lawful.functions, law, &proved) {
 				Verdict::Holds => LawReport { law: law.clone(), assurance: Assurance::Proved, verdict: Verdict::Holds },
 				verdict => LawReport { law: law.clone(), assurance: Assurance::Tested, verdict },
 			},
 			verdict => LawReport { law: law.clone(), assurance: Assurance::Stated, verdict },
-		})
-		.collect()
+		};
+		if report.assurance == Assurance::Proved {
+			proved.push(law.clone());
+		}
+		reports.push(report);
+	}
+	reports
 }

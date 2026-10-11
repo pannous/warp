@@ -28,25 +28,52 @@ def ArithOp.apply : ArithOp → Int → Int → Int
   | .div, a, b => a / b
   | .pow, a, b => a ^ b.toNat
 
-/-- the left side of `/` and `^` counts as a number: two ints divide to a fraction, a negative power is one -/
-def ArithOp.widen : ArithOp → Ty → Ty
-  | .div, t | .pow, t => Ty.join t .number
-  | _, t => t
+/-- the Euclidean remainder of rationals, as of ints: `7.5 % 2` is 1.5, `-1.5 % 1` is 0.5 -/
+def ratMod (a b : Rat) : Rat :=
+  let size := if b < 0 then -b else b
+  a - size * (a / size).floor
 
-theorem ArithOp.widen_mono (op : ArithOp) {a a' : Ty} (h : Ty.sub a' a = true) :
-    Ty.sub (op.widen a') (op.widen a) = true := by
-  cases op <;> simp only [widen] <;> first | exact h | exact Ty.join_mono h (Ty.sub_refl _)
+/-- an operation on exact numbers: none when the result is no rational (`2^0.5`), a float in warp -/
+def ArithOp.applyExact : ArithOp → Rat → Rat → Option Rat
+  | .sub, a, b => some (a - b)
+  | .mul, a, b => some (a * b)
+  | .mod, a, b => some (ratMod a b)
+  | .div, a, b => some (a / b)
+  | .pow, a, b => if b.den = 1 then some (a ^ b.num) else none
+
+def ArithOp.applyFloat : ArithOp → Float → Float → Float
+  | .sub, a, b => a - b
+  | .mul, a, b => a * b
+  | .mod, a, b => a - b.abs * (a / b.abs).floor
+  | .div, a, b => a / b
+  | .pow, a, b => a ^ b
+
+/-- the left side of `/` and `^` counts as exact: two ints divide to a fraction, a negative power is one; a power
+whose exponent may be fractional (`2^0.5`) counts as a float -/
+def ArithOp.widen : ArithOp → Ty → Ty → Ty
+  | .div, t, _ => Ty.join t .exact
+  | .pow, t, e => Ty.join t (if Ty.sub e .int then .exact else .number)
+  | _, t, _ => t
+
+theorem ArithOp.widen_mono (op : ArithOp) {a b a' b' : Ty} (h : Ty.sub a' a = true) (hb : Ty.sub b' b = true) :
+    Ty.sub (op.widen a' b') (op.widen a b) = true := by
+  cases op <;> simp only [widen] <;> try first | exact h | exact Ty.join_mono h (Ty.sub_refl _)
+  by_cases e : Ty.sub b .int = true
+  · rw [if_pos (Ty.sub_trans hb e), if_pos e]; exact Ty.join_mono h (Ty.sub_refl _)
+  · rw [if_neg e]; split
+    · exact Ty.join_mono h (by decide)
+    · exact Ty.join_mono h (Ty.sub_refl _)
 
 /-- the result type of an arithmetic operation on numbers: `*` also repeats a text -/
 def ArithOp.numberTy : ArithOp → Ty → Ty → Ty
   | .mul, a, b => Ty.repeatTy a b
-  | op, a, b => Ty.arithTy (op.widen a) b
+  | op, a, b => Ty.arithTy (op.widen a b) b
 
 theorem ArithOp.numberTy_mono (op : ArithOp) {a b a' b' : Ty} (ha : Ty.sub a' a = true) (hb : Ty.sub b' b = true) :
     Ty.sub (op.numberTy a' b') (op.numberTy a b) = true := by
   cases op
   case mul => exact Ty.repeatTy_mono ha hb
-  all_goals exact Ty.arithTy_mono (ArithOp.widen_mono _ ha) hb
+  all_goals exact Ty.arithTy_mono (ArithOp.widen_mono _ ha hb) hb
 
 /-- the dimensions of a product (`*`) or quotient (`/`) of quantities of dimensions d and e -/
 def ArithOp.dims : ArithOp → Dims → Dims → Option Dims
@@ -62,9 +89,9 @@ def ArithOp.quantityTy (op : ArithOp) (a b : Ty) : Ty :=
   | some d, some e => ((op.dims d e).map Ty.ofDims).getD .never
   | _, _ => .never
 
-/-- the result type of an arithmetic operation: `never` when a side raises, dynamic when a side is -/
+/-- the result type of an arithmetic operation: `never` when a side raises, dynamic when a side admits ø -/
 def ArithOp.ty (op : ArithOp) (a b : Ty) : Ty :=
-  if a = .never ∨ b = .never then .never else if a = .any ∨ b = .any then .any
+  if a = .never ∨ b = .never then .never else if Ty.dynamic a b = true then .any
   else if (a.isQuantity || b.isQuantity) = true then op.quantityTy a b else op.numberTy a b
 
 theorem ArithOp.ty_mono (op : ArithOp) {a b a' b' : Ty} (ha : Ty.sub a' a = true) (hb : Ty.sub b' b = true) :
@@ -80,16 +107,10 @@ theorem ArithOp.ty_mono (op : ArithOp) {a b a' b' : Ty} (ha : Ty.sub a' a = true
     · exact na (Ty.sub_to_never ha)
     · exact nb (Ty.sub_to_never hb)
   rw [ite_eq_right n]
-  by_cases y : a = .any ∨ b = .any
+  by_cases y : Ty.dynamic a b = true
   · rw [ite_eq_left y]; exact Ty.sub_any _
-  rw [ite_eq_right y]
-  have ya : a ≠ .any := fun h => y (.inl h)
-  have yb : b ≠ .any := fun h => y (.inr h)
-  have y' : ¬(a' = .any ∨ b' = .any) := by
-    rintro (rfl | rfl)
-    · exact ya (Ty.sub_from_any ha)
-    · exact yb (Ty.sub_from_any hb)
-  rw [ite_eq_right y', Ty.quantity_up ha na ya, Ty.quantity_up hb nb yb]
+  obtain ⟨y', ya, yb⟩ := Ty.not_dynamic ha hb y
+  rw [ite_eq_right y, ite_eq_right y', Ty.quantity_up ha na ya, Ty.quantity_up hb nb yb]
   by_cases q : (a.isQuantity || b.isQuantity) = true
   · rw [ite_eq_left q, ite_eq_left q]
     unfold ArithOp.quantityTy
@@ -101,8 +122,10 @@ theorem ArithOp.ty_mono (op : ArithOp) {a b a' b' : Ty} (ha : Ty.sub a' a = true
 inductive Expr where
   | bool (b : Bool)
   | int (n : Int)
-  /-- an exact or float number; its representation does not matter to the type theory -/
-  | num (n : Int)
+  /-- an exact number that is no int: `0.5`, `7/2` (a whole result is an int, as in warp) -/
+  | num (q : Rat)
+  /-- a float, by its bits: `sqrt(2)`, `x as float` -/
+  | flt (bits : UInt64)
   /-- a quantity, `2 m`: n counts the smallest step of each base dimension (units.rs `factor`: 0.1 mm, ms, 10 µg),
   so every unit is a whole number of steps -/
   | qty (n : Int) (dims : Dims)
@@ -135,6 +158,13 @@ inductive Expr where
   | call (f : String) (arg : Expr)
   | error (msg : String)
   | tryCatch (e handler : Expr)
+  /-- a stored error, `error("x")` as a value (Decided #1, errors as values): a name, a list item or an argument keeps
+  it, `if` takes it as false, `try` and `failed` test for it, any other operation given one raises -/
+  | fail (msg : String)
+  /-- `e failed`: is the value of e a stored error -/
+  | failed (e : Expr)
+  /-- `a ?? b`: a unless it is ø, else b (only ø falls back: `0 ?? 9` is 0) -/
+  | orElse (a b : Expr)
   /-- the run-time check warp inserts where a value of unknown type goes to a declared place (`names = f()` of a
   `names: texts`, card list-element-types; any value given to an inline union `x: int | text` or an optional
   `x: int?`): the value if it fits one of the alternatives ts, else an error -/
@@ -196,7 +226,7 @@ def eventLocal : String := "event"
 namespace Expr
 
 def isValue : Expr → Bool
-  | bool _ | int _ | num _ | qty _ _ | text _ | unit | nil | ref _ _ | clo _ _ | lref _ _ => true
+  | bool _ | int _ | num _ | flt _ | qty _ _ | text _ | unit | nil | ref _ _ | clo _ _ | lref _ _ | fail _ => true
   | cons h t => h.isValue && t.isValue
   | _ => false
 
@@ -220,12 +250,14 @@ def subst (e : Expr) (y : String) (v : Expr) : Expr :=
   | letIn z t e b => letIn z t (e.subst y v) (if z = y then b else b.subst y v)
   | call f e => call f (e.subst y v)
   | tryCatch e h => tryCatch (e.subst y v) (h.subst y v)
+  | orElse a b => orElse (a.subst y v) (b.subst y v)
   | cast e ts => cast (e.subst y v) ts
   | conv e t => conv (e.subst y v) t
   | broadcast f e => broadcast f (e.subst y v)
   | get e f => get (e.subst y v) f
   | set e f w => set (e.subst y v) f (w.subst y v)
   | isA e c => isA (e.subst y v) c
+  | failed e => failed (e.subst y v)
   | handle ev h b => handle ev (if y = eventLocal then h else h.subst y v) (b.subst y v)
   | emit ev e => emit ev (e.subst y v)
   | scope k e => scope k (e.subst y v)
@@ -242,13 +274,13 @@ def subst (e : Expr) (y : String) (v : Expr) : Expr :=
 def assigned : Expr → List String
   | assign x e | init x e => x :: e.assigned
   | cons a b | add a b | arith _ a b | lt a b | eq _ a b | seq a b | index a b | range a b | append a b
-  | tryCatch a b | app a b | push a b
+  | tryCatch a b | orElse a b | app a b | push a b
   | handle _ a b => a.assigned ++ b.assigned
   | ite c a b | loop c a b | setAt c a b => c.assigned ++ a.assigned ++ b.assigned
   | forIn _ e b d => e.assigned ++ b.assigned ++ d.assigned
   | letIn _ _ e b => e.assigned ++ b.assigned
   | set a _ b => a.assigned ++ b.assigned
-  | call _ e | cast e _ | conv e _ | broadcast _ e | get e _ | isA e _ | emit _ e | scope _ e | abort _ _ e | lam _ e
+  | call _ e | cast e _ | conv e _ | broadcast _ e | get e _ | isA e _ | failed e | emit _ e | scope _ e | abort _ _ e | lam _ e
   | share e _ => e.assigned
   | _ => []
 

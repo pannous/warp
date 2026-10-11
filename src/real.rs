@@ -10,16 +10,23 @@ use crate::extensions::reals::{Exact, Generator, Monomial, Rational, Real};
 use crate::compile_time::{answer_of, fail, Stop};
 use crate::node::{error, Node, Separator};
 use crate::operators::Op;
+use crate::type_tests::{is_float_type_word, is_real_type_word, is_text_type_word};
 use num_bigint::BigInt;
 use num_traits::ToPrimitive;
 use std::cmp::Ordering;
 use std::collections::HashMap;
+use crate::lowering::nodes::children_rewritten;
 
 pub const FUNCTIONS: [&str; 6] = ["sin", "cos", "tan", "ln", "exp", STANDARD_PART];
 /// st(x): the standard part of a finite hyperreal (wiki/hyperreals.md)
 const STANDARD_PART: &str = "st";
-/// `x as string`, `str(x)`: the text form of an exact value
-const TEXT_TYPES: [&str; 4] = ["string", "str", "text", "String"];
+
+/// `nearest(x, rational, limit, within: ε)` of an exact x is computed here, exactly (Exact::nearest_fraction); of a
+/// float at run time by lib/prelude.warp
+const NEAREST: &str = "nearest";
+const NEAREST_KIND: &str = "rational";
+const NEAREST_WITHIN: &str = "within";
+const NEAREST_LIMIT: &str = "limit";
 
 /// Largest integer exponent computed exactly; beyond it the power is approximated
 const MAX_EXACT_EXPONENT: i64 = 10_000;
@@ -80,15 +87,12 @@ fn folded_exact(node: Node) -> Node {
 			Ok(Value::Bool(truth)) => return if truth { Node::True } else { Node::False },
 			// beyond i64 the run-time path stays as it was (√1e40 is a float there, floor of it out of int range)
 			Ok(Value::Real(real)) if rational(&real).is_some_and(|q| q.numerator.to_i64().is_some() && q.denominator.to_i64().is_some()) => return Value::Real(real).into_node(),
+			// a fraction nearest asked for is exact whatever its size
+			Ok(value @ Value::Real(_)) if is_nearest_call(&node) => return value.into_node(),
 			_ => {}
 		}
 	}
-	match node {
-		Node::Key(left, op, right) => Node::Key(Box::new(folded_exact(*left)), op, Box::new(folded_exact(*right))),
-		Node::List(items, bracket, separator) => Node::List(items.into_iter().map(folded_exact).collect(), bracket, separator),
-		Node::Meta { node, data } => Node::Meta { node: Box::new(folded_exact(*node)), data },
-		other => other,
-	}
+	children_rewritten(node, folded_exact)
 }
 
 /// Variables assigned once, to a value that mentions an exact real (`x=π`): their type is the type of that value
@@ -136,27 +140,29 @@ fn lower_reals(node: Node) -> Node {
 			Real::Exact(exact) if exact.has_epsilon() => error(&format!("{exact} is a hyperreal: ε and ω are only supported in constant expressions")),
 			_ => Node::Number(Number::Float(real.to_f64())),
 		},
-		Node::Key(left, op, right) => Node::Key(Box::new(lower_reals(*left)), op, Box::new(lower_reals(*right))),
 		Node::List(items, _, _) if is_type_of_real(&items) => Node::Symbol(type_name_before_lowering(&items[1])),
 		// `π is real`: answered before π becomes a float
 		Node::List(items, _, _) if is_type_test_of_real(&items) => {
 			let Node::Text(spec) = items[2].drop_meta() else { unreachable!("guarded") };
 			if crate::type_tests::type_matches(&type_name_before_lowering(&items[1]), spec) { Node::True } else { Node::False }
 		}
-		Node::List(items, bracket, separator) => Node::List(items.into_iter().map(lower_reals).collect(), bracket, separator),
-		Node::Meta { node, data } => Node::Meta { node: Box::new(lower_reals(*node)), data },
-		other => other,
+		other => children_rewritten(other, lower_reals),
 	}
 }
 
 /// `type(π)` asks for the type before lowering makes π a float: the type name is `real`, whatever the representation
 fn is_type_of_real(items: &[Node]) -> bool {
-	matches!(items, [head, argument] if matches!(head.drop_meta(), Node::Symbol(name) if name == "type") && mentions_real(argument))
+	matches!(items, [head, argument] if matches!(head.drop_meta(), Node::Symbol(name) if name == "type") && known_before_lowering(argument))
 }
 
 fn is_type_test_of_real(items: &[Node]) -> bool {
 	matches!(items, [head, argument, spec] if matches!(head.drop_meta(), Node::Symbol(name) if name == crate::type_tests::IS_TYPE)
-		&& matches!(spec.drop_meta(), Node::Text(_)) && mentions_real(argument))
+		&& matches!(spec.drop_meta(), Node::Text(_)) && known_before_lowering(argument))
+}
+
+/// An argument whose type lowering would change: a written exact real, or a constant expression of roots (`√2` is real)
+fn known_before_lowering(argument: &Node) -> bool {
+	mentions_real(argument) || mentions_generator(argument) && evaluate(argument, &mut Scope::new()).is_ok()
 }
 
 /// The type of the written number, else of the exact value of a constant expression (`2 * π` is real, `π / π` int)
@@ -204,11 +210,12 @@ fn number_value(number: &Number) -> Evaluated {
 		Number::BigInt(n) => exact(Rational::integer((*n).clone())),
 		Number::Quotient(n, d) => exact(Rational::new(BigInt::from(*n), BigInt::from(*d))),
 		Number::BigQuotient(q) => exact((*q).clone()),
+		// a decimal is the exact fraction it spells (decision exact-decimals): `sqrt(2.0)` is √2, as `sqrt(2)`
 		Number::Float(f) if Number::is_exact_decimal(*f) => {
 			let (n, d) = crate::wasm_emitter::exact::decimal_fraction(*f);
 			exact(Rational::new(n, d))
 		}
-		Number::Float(f) => Ok(Value::Real(Real::Approx(*f))),
+		Number::Float(f) => Ok(Value::Float(*f)),
 		Number::Real(real) => Ok(Value::Real((*real).clone())),
 		Number::Complex(..) | Number::Nan | Number::Inf | Number::NegInf => Err(Stop::Unsupported),
 	}
@@ -222,7 +229,16 @@ fn list(items: &[Node], separator: &Separator, scope: &mut Scope) -> Evaluated {
 			let argument = evaluate(argument, scope)?;
 			call(function_name(head).unwrap_or_default(), argument)
 		}
-		[head, argument] if TEXT_TYPES.contains(&head.name().as_str()) && !scope.contains_key(&head.name()) => {
+		[head, value, kind, options @ ..] if head.name() == NEAREST && kind.name() == NEAREST_KIND && !scope.contains_key(NEAREST) => {
+			let value = evaluate(value, scope)?;
+			nearest(value, options, scope)
+		}
+		// `real x = sqrt(2)` declares as `x: real = sqrt(2)` does
+		[head, declaration] if matches!(head.drop_meta(), Node::Symbol(word) if is_real_type_word(word) && !scope.contains_key(word)) => match declaration.drop_meta() {
+			Node::Key(target, Op::Assign | Op::Define, value) => declare_real(target, value, scope),
+			_ => Err(Stop::Unsupported),
+		},
+		[head, argument] if is_text_type_word(&head.name()) && !scope.contains_key(&head.name()) => {
 			convert(evaluate(argument, scope)?, &head.name())
 		}
 		_ if matches!(separator, Separator::Semicolon | Separator::Newline) => {
@@ -239,12 +255,16 @@ fn list(items: &[Node], separator: &Separator, scope: &mut Scope) -> Evaluated {
 fn key(left: &Node, op: Op, right: &Node, scope: &mut Scope) -> Evaluated {
 	match op {
 		Op::Assign | Op::Define => {
-			let Node::Symbol(name) = left.drop_meta() else {
-				return Err(Stop::Unsupported);
-			};
-			let value = evaluate(right, scope)?;
-			scope.insert(name.clone(), value.clone());
-			Ok(value)
+			match left.drop_meta() {
+				Node::Symbol(name) => {
+					let value = evaluate(right, scope)?;
+					scope.insert(name.clone(), value.clone());
+					Ok(value)
+				}
+				// `x: real = sqrt(2)` keeps the exact root (card typed-real); other declared types take the run-time path
+				Node::Key(target, Op::Colon, declared) if is_real_type_word(&declared.name()) => declare_real(target, right, scope),
+				_ => Err(Stop::Unsupported),
+			}
 		}
 		Op::Sqrt | Op::Cbrt | Op::Neg | Op::Abs if is_empty(left) => unary(op, evaluate(right, scope)?),
 		Op::Square | Op::Cube if is_empty(right) => {
@@ -272,15 +292,54 @@ fn key(left: &Node, op: Op, right: &Node, scope: &mut Scope) -> Evaluated {
 	}
 }
 
-/// `x as float` / `as fast` / `as f64`: the f64 nearest to the exact value; `as real` / `as exact` keep it
-fn convert(value: Value, target: &str) -> Evaluated {
-	match (value, target) {
-		(value, text) if TEXT_TYPES.contains(&text) => Ok(Value::Text(text_of(value)?)),
-		(Value::Real(real), "float" | "fast" | "f64" | "double") => Ok(Value::Float(finite_f64(&real)?)),
-		(value @ Value::Real(_), "real" | "exact") => Ok(value),
-		(value @ Value::Float(_), "float" | "fast" | "f64" | "double") => Ok(value),
+fn is_nearest_call(node: &Node) -> bool {
+	matches!(node.drop_meta(), Node::List(items, _, _) if items.first().is_some_and(|head| head.name() == NEAREST))
+}
+
+/// The fraction `nearest(x, rational, limit, within: ε)` names; a float x is left to lib/prelude.warp
+fn nearest(value: Value, options: &[Node], scope: &mut Scope) -> Evaluated {
+	let Value::Real(Real::Exact(exact)) = value else { return Err(Stop::Unsupported) };
+	let (mut limit, mut within) = (None, None);
+	for option in options {
+		match option.drop_meta() {
+			Node::Key(name, Op::Colon | Op::Assign, amount) if name.name() == NEAREST_WITHIN => within = Some(exact_rational(evaluate(amount, scope)?)?),
+			Node::Key(name, Op::Colon | Op::Assign, amount) if name.name() == NEAREST_LIMIT => limit = Some(exact_rational(evaluate(amount, scope)?)?.numerator),
+			positional => limit = Some(exact_rational(evaluate(positional, scope)?)?.numerator),
+		}
+	}
+	let fraction = exact.nearest_fraction(limit.as_ref(), within.as_ref()).map_err(Stop::Error)?;
+	Ok(Value::Real(Real::Exact(Exact::rational(fraction))))
+}
+
+/// The exact value of a number argument: a float as the decimal it was written as (1e-40 is 1/10^40)
+fn exact_rational(value: Value) -> Result<Rational, Stop> {
+	match value {
+		Value::Real(Real::Exact(exact)) => exact.as_rational().ok_or(Stop::Unsupported),
+		Value::Real(Real::Approx(f)) | Value::Float(f) => Rational::of_decimal(f).ok_or(Stop::Unsupported),
 		_ => Err(Stop::Unsupported),
 	}
+}
+
+/// `x as float` / `as double` / every float alias: the f64 nearest to the exact value; `as real` / `as exact` keep it
+fn convert(value: Value, target: &str) -> Evaluated {
+	match (value, target) {
+		(value, text) if is_text_type_word(text) => Ok(Value::Text(text_of(value)?)),
+		(Value::Real(real), float) if is_float_type_word(float) => Ok(Value::Float(finite_f64(&real)?)),
+		(value @ Value::Real(_), real) if is_real_type_word(real) => Ok(value),
+		(value @ Value::Float(_), float) if is_float_type_word(float) => Ok(value),
+		_ => Err(Stop::Unsupported),
+	}
+}
+
+/// A variable declared `real` (or `exact`) holds the exact real as it is
+fn declare_real(target: &Node, value: &Node, scope: &mut Scope) -> Evaluated {
+	let Node::Symbol(name) = target.drop_meta() else { return Err(Stop::Unsupported) };
+	let value = evaluate(value, scope)?;
+	if !matches!(value, Value::Real(_)) {
+		return Err(Stop::Unsupported);
+	}
+	scope.insert(name.clone(), value.clone());
+	Ok(value)
 }
 
 /// The text form of a value: an exact real symbolically (`√2`, `π/2`), as it prints
@@ -354,12 +413,25 @@ fn root(real: Real, index: u32) -> Result<Real, Stop> {
 }
 
 fn arithmetic(left: Value, op: Op, right: Value) -> Evaluated {
-	match (left, right) {
+	match beside_hyperreal(left, right) {
 		(Value::Float(a), b) => float_arithmetic(a, op, float_of(b)?),
+		// an approximation (sin(1)) is a float source: `sin(1) + 0.5` is a float (decision exact-decimals)
+		(Value::Real(Real::Approx(a)), b) => float_arithmetic(a, op, float_of(b)?),
+		(a, Value::Real(Real::Approx(b))) => float_arithmetic(float_of(a)?, op, b),
 		(a, Value::Float(b)) => float_arithmetic(float_of(a)?, op, b),
 		(Value::Real(a), Value::Real(b)) => Ok(Value::Real(real_arithmetic(a, op, b)?)),
 		_ => Err(Stop::Unsupported), // booleans are not numbers
 	}
+}
+
+/// A float next to a hyperreal is the decimal it was written as: a hyperreal has no float to meet it (`ε < 0.0001`)
+fn beside_hyperreal(left: Value, right: Value) -> (Value, Value) {
+	let is_hyperreal = |value: &Value| matches!(value, Value::Real(Real::Exact(exact)) if exact.has_epsilon());
+	let exact = |value: Value| match value {
+		Value::Float(f) => Rational::of_decimal(f).map_or(Value::Float(f), |q| Value::Real(Real::Exact(Exact::rational(q)))),
+		other => other,
+	};
+	if is_hyperreal(&left) || is_hyperreal(&right) { (exact(left), exact(right)) } else { (left, right) }
 }
 
 /// The f64 of a real; a hyperreal has none (an infinitesimal is no float), which is an error, never 0
@@ -629,6 +701,7 @@ fn exp(real: Real) -> Result<Real, Stop> {
 }
 
 fn compare(left: Value, op: Op, right: Value) -> Evaluated {
+	let (left, right) = beside_hyperreal(left, right);
 	let ordering = match (left, right) {
 		(Value::Bool(a), Value::Bool(b)) if op.is_equality() => return Ok(Value::Bool((a == b) == (op == Op::Eq))),
 		(Value::Real(a), Value::Real(b)) if op.is_equality() => {
@@ -647,7 +720,7 @@ fn compare(left: Value, op: Op, right: Value) -> Evaluated {
 impl Value {
 	fn into_node(self) -> Node {
 		match self {
-			Value::Bool(truth) => Node::Number(Number::Int(truth as i64)), // eval encodes booleans as Int 1/0
+			Value::Bool(truth) => if truth { Node::True } else { Node::False },
 			Value::Float(f) => Node::Number(Number::Float(f)),
 			Value::Real(Real::Exact(exact)) => match exact.as_rational() {
 				Some(q) if q.is_integer() => Node::Number(Number::from_bigint(q.numerator)),

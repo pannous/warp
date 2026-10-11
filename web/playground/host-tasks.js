@@ -31,6 +31,7 @@ const TASK_RESULT_BYTES = 1 << 16; // the shared buffer a Worker writes its resu
 const TASK_RESULT_LIMIT = 1 << 28;
 const TASK_HEADER = 8; // [state, length] as Int32, then the result's JSON
 const TASK_STOPPED = "task stopped";
+const PAGE_ANSWER_MS = 60000; // how long a Worker waits for its page's answer: a clipboard read may wait for a permission
 // Workers a task runs on: made while the program's worker is idle (prepareTaskPool), since a Worker only starts once
 // its creator returns to its event loop and a running program never does (emscripten keeps a thread pool for this)
 const taskPool = [];
@@ -43,16 +44,70 @@ const hasTaskWorkers = () => self.crossOriginIsolated && self.Worker;
 // timeout then names it instead of "the program may not terminate" (card coi-headless)
 const TASKS_INLINE = "tasks take turns here, one runs to its end before the program goes on: the page is not cross-origin isolated (its service worker cannot run, as in a private window), so it has no shared memory for task Workers. A task that waits for another, or runs until stopped, never ends";
 
+// the page makes a task Worker for this Worker and gives it a MessagePort to it (task-workers.js serveTaskWorkers): in
+// the pool the port stands for the Worker, `terminate` asks the page to stop it
+const madeTaskWorkers = new Map(); // id → what to do with the port of the task Worker the page made
+let taskWorkersAsked = 0;
+self.addEventListener("message", event => {
+	if (event.data?.taskWorker === undefined || !event.data.port) return;
+	event.stopImmediatePropagation(); // registered before the Worker's own onmessage, which never sees it
+	madeTaskWorkers.get(event.data.taskWorker)(event.data.port);
+	madeTaskWorkers.delete(event.data.taskWorker);
+});
+
 // a built site's task Worker loads the site's scripts (site-worker.js siteScripts), the playground's all of them
 function addTaskWorker(loaded) {
-	const worker = new Worker(self.siteScripts ? `${TASK_WORKER}?scripts=${self.siteScripts.join(",")}` : TASK_WORKER);
-	// loaded: it can take tasks; later a fetch it made is done (startFetch)
-	worker.onmessage = ({ data }) => {
-		if (data === FETCH_DONE) return worker.fetched?.();
-		if (data.relay) return relayed(data.relay);
-		taskPool.push(worker);
-		loaded?.();
-	};
+	const id = taskWorkersAsked++;
+	madeTaskWorkers.set(id, worker => {
+		worker.terminate = () => self.postMessage({ endTaskWorker: id });
+		// loaded: it can take tasks; later a fetch it made is done (startFetch)
+		worker.onmessage = ({ data }) => {
+			if (data === FETCH_DONE) return worker.fetched?.();
+			if (data.relay) return relayed(data.relay);
+			taskPool.push(worker);
+			loaded?.();
+		};
+	});
+	const url = self.siteScripts ? `${TASK_WORKER}?scripts=${self.siteScripts.join(",")}` : TASK_WORKER;
+	self.postMessage({ taskWorker: { id, url: new URL(url, self.location.href).href } });
+}
+
+// a voice (card playground-go, natively src/sound.rs Voice): when this Worker's queued sounds end on the clock the
+// page and every Worker share, the seconds of sound it made in all (its sounds' places for render_sound) and the
+// clock's time of place 0 (where `at 2 beats` counts from). A task's voice starts where its starter's stands
+let voice = {};
+let voicesBeforeAt = []; // the voices `at` statements left (sound_at), taken up again by sound_at_end
+const soundClock = () => (performance.timeOrigin + performance.now()) / 1000;
+self.soundsQueued = () => Math.max(0, (voice.end ?? 0) - soundClock()); // sound_queued()
+self.voiceStopped = () => { voice = { ...voice, end: undefined }; };
+self.joinVoice = starters => { voice = { ...starters }; }; // a task Worker's: its starter's; none: a run's fresh one
+self.currentVoice = () => voice;
+// a sound of that many seconds behind the voice's sounds, never before now: its place and its start on the clock
+self.voiceSounded = seconds => {
+	const at = Math.max(voice.end ?? 0, soundClock());
+	const place = voice.seconds ?? 0;
+	voice = { end: at + seconds, seconds: place + seconds, origin: voice.origin ?? at - place };
+	return { place, at };
+};
+// `at time …`: the voice placed that many seconds after its place 0; its end puts it back, keeping that origin
+self.voiceAt = seconds => {
+	voicesBeforeAt.push(voice);
+	const origin = voice.origin ?? soundClock();
+	voice = { end: origin + seconds, seconds, origin };
+};
+self.voiceAtEnd = () => {
+	if (voicesBeforeAt.length) voice = { ...voicesBeforeAt.pop(), origin: voice.origin };
+};
+// a task run inline sounds as a voice of its own too: the starter's voice stands where it stood
+function asVoice(run) {
+	const starters = voice;
+	try { return run(); } finally { voice = starters; }
+}
+// the sounds a task made go to its starter's run, for its render_sound (card playground-drops)
+function withTaskSounds(run, record) {
+	(run.unrenderedSounds ??= []).push(...(record.sounds ?? []));
+	delete record.sounds;
+	return record;
 }
 
 // a sound a task plays, for the page, which only the program's Worker talks to (task-worker.js relay); it reaches the
@@ -63,10 +118,8 @@ function relayed([method, ...values]) {
 	self[method]?.(...values);
 }
 
-// the pool of task Workers, made by the workers that run programs (worker.js, test-worker.js) when they start, one
-// after the other: in Firefox a worker's `new Worker` waits for the page's thread, and while siblings it just made are
-// still starting, that wait sometimes never ends (the tour's first example stalled 1 run in 8 at "creating task worker
-// 3 of 4", card tour-firefox)
+// the pool of task Workers of the workers that run programs (worker.js, test-worker.js), asked for when they start, one
+// after the other
 function prepareTaskPool(size = TASK_POOL_SIZE) {
 	if (!hasTaskWorkers()) return;
 	const addFrom = index => index < size && addTaskWorker(() => addFrom(index + 1));
@@ -263,13 +316,13 @@ function startTask(holder, hooks, name, ints, values) {
 	const run = holder.run;
 	const id = BigInt(run.tasks.size + 1);
 	const captured = capturedValues(holder.exports);
-	const inline = () => runTask(run.module, hooks, holder.warnings, name, ints, values, run.shared, captured, null, run.channels);
+	const inline = () => withTaskSounds(run, asVoice(() => runTask(run.module, hooks, holder.warnings, name, ints, values, run.shared, captured, null, run.channels)));
 	if (taskPool.length > 0) {
 		const shared = new SharedArrayBuffer(TASK_HEADER + TASK_RESULT_BYTES, { maxByteLength: TASK_RESULT_LIMIT });
 		const worker = taskPool.pop();
 		const control = new Int32Array(new SharedArrayBuffer(2 * Int32Array.BYTES_PER_ELEMENT));
 		const files = self.writtenFilesForTask?.();
-		worker.postMessage({ module: run.module, name, ints, values, shared, arrays: run.shared, captured, control, channels: run.channels, files });
+		worker.postMessage({ module: run.module, name, ints, values, shared, arrays: run.shared, captured, control, channels: run.channels, files, voice });
 		run.tasks.set(id, { name, worker, shared, control, started: performance.now(), inline });
 	} else {
 		if (!hasTaskWorkers()) sayTasksInline(run, holder, hooks);
@@ -291,12 +344,14 @@ function runTask(module, hooks, warnings, name, ints, values, arrays, captured =
 		instance = new WebAssembly.Instance(module, programImports(taskHolder, hooks));
 		taskHolder.exports = instance.exports;
 		// what the spawning instance's closures captured, as it had it
-		for (const [global, value] of captured) instance.exports[global].value = value.tree ? buildValue(instance.exports, value.tree) : value.raw;
+		for (const [global, value] of captured) instance.exports[global].value = value.tree ? buildValue(instance.exports, value.tree)
+			: value.exact ? exactHandle(instance.exports, ...value.exact) : value.raw;
 		const callee = instance.exports[name];
 		const result = values ? callee(buildValue(instance.exports, values)) : callee(...ints.slice(0, callee.length));
 		const unread = joinTasks(taskHolder.run, hooks);
-		if (unread) return { failure: `task ${taskName(name)}: ${unread}`, signals: taskHolder.run.signals };
-		return { value: typeof result === "object" && result !== null ? readNode(instance.exports, result) : result, signals: taskHolder.run.signals };
+		const { signals, unrenderedSounds: sounds } = taskHolder.run;
+		if (unread) return { failure: `task ${taskName(name)}: ${unread}`, signals, sounds };
+		return { value: typeof result === "object" && result !== null ? readNode(instance.exports, result) : portableInt(instance.exports, result), signals, sounds };
 	} catch (trap) {
 		// no instance: the task never ran (`Out of memory: Cannot allocate Wasm memory`, see finishedTask)
 		return { failure: `task ${taskName(name)}: ${raisedText(instance?.exports) ?? trapMessage(trap, name)}`, unstarted: !instance, signals: taskHolder.run.signals };
@@ -310,11 +365,11 @@ function finishedTask(run, hooks, id) {
 	while (isRunningOnWorker(run.tasks.get(id)) && !isWritten(run.tasks.get(id), TASK_CHECK_MS)) runStalledTasks(run, hooks);
 	const task = run.tasks.get(id);
 	if (!task.worker) return queuedSignals(run, task);
-	let record = readShared(task.shared);
+	let record = withTaskSounds(run, readShared(task.shared));
 	if (record.output) hooks.print(record.output, 1);
 	record.files?.forEach(([path, content]) => self.keepWritten?.(path, content.bytes ? Uint8Array.from(content.bytes) : content));
 	taskPool.push(task.worker); // free for the next task
-	if (record.value?.kind === KIND_INT && record.ints) record.value = BigInt(record.value.data.int);
+	if (record.value?.kind === KIND_INT && record.ints && record.value.data.int !== undefined) record.value = BigInt(record.value.data.int);
 	// a Worker that could not even instantiate the task runs it here instead: a page holds ~124 Wasm memories in all its
 	// Workers, and only the isolate that dropped an instance collects it, so the dead instances of this one (the
 	// starting program's) block the Worker until this isolate collects them, which it does when its own allocation
@@ -460,8 +515,20 @@ function capturedValues(exports) {
 	const names = Object.keys(exports).filter(name => name.startsWith(CAPTURE_PREFIX));
 	return names.map(name => {
 		const value = exports[name].value;
-		return [name, typeof value === "object" && value !== null ? { tree: readTaskValue(exports, value) } : { raw: value }];
+		if (typeof value === "object" && value !== null) return [name, { tree: readTaskValue(exports, value) }];
+		return [name, isExactHandle(value) ? { exact: exactParts(exports, value) } : { raw: value }];
 	});
+}
+
+// an Int handle beyond the fixnums as [numerator, denominator]: the handle means nothing in another instance (card
+// error-undefined, src/tasks.rs Captured::Int)
+function exactParts(exports, handle) {
+	return exactOfPayload(readNode(exports, exports.new_int(handle)).data);
+}
+
+// a task's whole-number result as it can leave its instance: a handle beyond the fixnums as the tree of its parts
+function portableInt(exports, result) {
+	return isExactHandle(result) ? { kind: KIND_INT, data: { exact: exactParts(exports, result).map(String) }, chain: [] } : result;
 }
 
 // a task's result as a tree: a number of a function of numbers, else the tree already read
@@ -548,6 +615,20 @@ function writeShared(shared, record) {
 	header[1] = reply.length;
 	Atomics.store(header, 0, 1);
 	Atomics.notify(header, 0);
+}
+
+// the page's answer to a Worker's question its asynchronous browser APIs answer (the clipboard's text, card
+// web-apis-rest): `ask(shared)` hands the page a shared buffer, the page writes its record into it (markup.js
+// answerInto) while the Worker waits; without shared memory (a page not cross-origin isolated) a loud error
+function askPage(what, ask) {
+	if (!ask) throw new Error(`${what}: this page has no way to answer its Worker`);
+	if (!self.crossOriginIsolated) throw new Error(`${what}: the page is not cross-origin isolated, so its Worker cannot wait for it`);
+	const shared = new SharedArrayBuffer(TASK_HEADER + TASK_RESULT_BYTES, { maxByteLength: TASK_RESULT_LIMIT });
+	ask(shared);
+	if (Atomics.wait(new Int32Array(shared, 0, 2), 0, 0, PAGE_ANSWER_MS) === "timed-out") throw new Error(`${what}: the page did not answer in ${PAGE_ANSWER_MS / 1000} s`);
+	const { error, ...answer } = readShared(shared);
+	if (error) throw new Error(`${what}: ${error}`);
+	return answer;
 }
 
 // the record a task Worker wrote into a shared buffer (writeShared), undefined while none is there yet
@@ -637,6 +718,9 @@ function broadcastListener(name) {
 
 addHostPart({
 	words: (holder, hooks, { program, cString }) => ({
+		// `clipboard`: the page reads it (asynchronously) while the Worker waits (askPage; shipped with this part only,
+		// host_parts.rs, so a page that reads no clipboard carries none of it)
+		clipboard_text: () => buildValue(program(), treeOfPlain(self.askPage("clipboard", self.askPageClipboard).text)),
 		// channels between programs (src/channels.rs): a BroadcastChannel of the name, which reaches the other tabs and
 		// workers of this page's origin; the listener's timer (lowering/system_signals.rs) takes what arrived
 		channel_listen: (id, channel) => listenOnChannel(holder, hooks, Number(id), plainOfTree(readNode(program(), channel))),
@@ -668,6 +752,8 @@ addHostPart({
 			if (task.failure) throw new Error(task.failure);
 			// a task whose function returns a Node (`go { n + 1 }` of a Node parameter n) still gives its number here
 			if (typeof task.value === "object" && task.value !== null) {
+				const exact = exactOfPayload(task.value.data ?? {});
+				if (exact) return exactHandle(program(), ...exact);
 				const number = task.value.data?.int;
 				if (number === undefined) throw new Error(`task ${taskName(task.name ?? "")}: its result is no whole number`);
 				return BigInt(number);
@@ -689,6 +775,8 @@ addHostPart({
 		},
 		// a raise inside a task goes to the starting program's handlers (src/tasks.rs signal_send, deliver)
 		task_inside: () => holder.inTask ? 1n : 0n,
+		// a parallel let forks from the program only: a task's Worker does not see how many others run (src/tasks.rs counts them)
+		task_forks: () => holder.inTask ? 0n : 1n,
 		signal_send: (handler, values) => {
 			(holder.run.signals ??= []).push({ handler: decode(cString(handler)), values: readTaskValue(program(), values) });
 			return 0n;

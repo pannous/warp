@@ -7,7 +7,13 @@
 //! declares `dog like animal`, so a dog is accepted where an animal is wanted.
 
 use super::words::{GLOBAL_WORD, MAP_WORD, RETURN_WORD, SUM_WORD};
-use super::nodes::{call, grouped_parameters, if_then, key};
+use super::nodes::{Counter, call, grouped_parameters, if_then, key};
+mod inheritance;
+mod operators;
+mod other_languages;
+use inheritance::*;
+use operators::*;
+use other_languages::*;
 use crate::node::{symbol, text, Bracket, Node, Separator};
 use crate::operators::Op;
 
@@ -47,10 +53,6 @@ const METHOD_ALIASES: [(&str, &[&str]); 23] = [
 	("contains", &["has"]), ("includes", &["has"]), ("delete", &["remove"]), ("discard", &["remove"]),
 	("len", &["size"]),
 ];
-/// `len(s)`, `count(s)`, `s.count()` of an instance whose class defines its size under another of these names
-const SIZE_WORDS: [&str; 4] = ["size", "count", "len", "length"];
-/// The keywords of a field: Swift's `var count = 0`, `let`, Kotlin's `val`
-const FIELD_KEYWORDS: [&str; 3] = ["var", "let", "val"];
 /// Member modifiers that may mean something in warp, so they get no note that warp needs them not
 const SILENT_MODIFIERS: [&str; 1] = ["async"];
 /// The constructor names of other languages, aliases of `init` (P162): warp's old `value`, JavaScript, Python, Ruby,
@@ -146,7 +148,7 @@ pub fn lower(node: Node) -> Node {
 	let node = if statics.is_empty() { node } else { static_reads(node, &statics) };
 	// `s.area`, `s.scaled(3)` of a shared method: the call `area(s)` before traits rename each class's method;
 	// `c.inc()` of a method changing its object: `c = inc(c)` (P116)
-	let node = if shared.is_empty() && changing.is_empty() { node } else { method_calls(node, &shared, &changing, &std::cell::Cell::new(0)) };
+	let node = if shared.is_empty() && changing.is_empty() { node } else { method_calls(node, &shared, &changing, &Counter::starting_at(1)) };
 	match (traits.is_empty(), node) {
 		(true, node) => node,
 		(false, Node::List(items, bracket, separator)) if separator != Separator::Space => Node::List([traits, items].concat(), bracket, separator),
@@ -155,7 +157,7 @@ pub fn lower(node: Node) -> Node {
 }
 
 /// `d.append(1)` of a deque, `s.contains(2)` of a set, `len(s)`: the class's own method when it does not define that
-/// name (METHOD_ALIASES, SIZE_WORDS), with a note
+/// name (METHOD_ALIASES, analyzer::COUNTING_WORDS), with a note
 fn method_aliases(node: Node) -> Node {
 	let mut methods: std::collections::HashMap<String, Vec<String>> = std::collections::HashMap::new();
 	node.visit(&mut |part| if let Node::Type { name, body } = part {
@@ -175,8 +177,8 @@ fn aliased_method(written: &str, defined: &[String]) -> Option<String> {
 	if defined.iter().any(|method| method == written) {
 		return None;
 	}
-	let candidates: Vec<&str> = match SIZE_WORDS.contains(&written) {
-		true => SIZE_WORDS.to_vec(),
+	let candidates: Vec<&str> = match crate::analyzer::is_counting_word(written) {
+		true => crate::analyzer::COUNTING_WORDS.to_vec(),
 		false => METHOD_ALIASES.iter().find(|(alias, _)| *alias == written).map(|(_, methods)| methods.to_vec()).unwrap_or_default(),
 	};
 	let method = candidates.into_iter().find(|candidate| defined.iter().any(|method| method == candidate))?;
@@ -200,9 +202,15 @@ fn with_method_aliases(node: Node, instances: &std::collections::HashMap<String,
 			};
 			Node::Key(receiver, Op::Dot, Box::new(member))
 		}
-		// `len(s)`: `s.size()`
-		Node::List(items, Bracket::Round, separator) if matches!(items.as_slice(), [word, argument] if SIZE_WORDS.contains(&word.drop_meta().name().as_str()) && defined_by(argument).is_some()) => {
-			match aliased_method(&items[0].drop_meta().name(), defined_by(&items[1]).expect("guarded")) {
+		// `len(s)`: `s.size()`; `size(s)` of a class defining size(): `s.size()` too (card size-instance)
+		Node::List(items, Bracket::Round, separator) if matches!(items.as_slice(), [word, argument] if crate::analyzer::is_counting_word(&word.drop_meta().name()) && defined_by(argument).is_some()) => {
+			let written = items[0].drop_meta().name();
+			let defined = defined_by(&items[1]).expect("guarded");
+			let method = match defined.contains(&written) {
+				true => Some(written),
+				false => aliased_method(&written, defined),
+			};
+			match method {
 				Some(method) => key(items[1].clone(), Op::Dot, call(&method, vec![])),
 				None => Node::List(items, Bracket::Round, separator),
 			}
@@ -859,410 +867,6 @@ fn constructed_class(value: &Node) -> Option<String> {
 		_ => None,
 	}
 }
-
-/// `a + b` of an instance a whose class defines the operator's method (`plus`, Python's `__add__`, wiki/operator.md):
-/// the method call `a.plus(b)`; an operation of such calls is an instance of the same class (`a + b + c`)
-fn operator_calls(node: Node) -> Node {
-	let mut methods: Vec<(String, Op, String)> = vec![];
-	node.visit(&mut |part| if let Node::Type { name, body } = part {
-		for (method, _, _) in class_items(body).iter().filter_map(method_parts) {
-			if let Some((op, names)) = OPERATOR_METHODS.iter().find(|(_, names)| names.contains(&method.as_str())) {
-				if method != names[0] {
-					crate::normalize::set_position_of(part);
-					crate::diagnostic::note_alias(&method, names[0]);
-				}
-				methods.push((name.drop_meta().name(), *op, method));
-			}
-		}
-	});
-	if methods.is_empty() {
-		return node;
-	}
-	let defines = |methods: &[(String, Op, String)], class: &str, op: Op| methods.iter().find(|(owner, known, _)| owner == class && *known == op).map(|(_, _, method)| method.clone());
-	for (class, _, _) in methods.clone() {
-		for (defined, missing) in INTERCHANGEABLE_OPERATORS {
-			if let (Some(method), None) = (defines(&methods, &class, defined), defines(&methods, &class, missing)) {
-				methods.push((class.clone(), missing, method));
-			}
-		}
-	}
-	let classes: Vec<String> = methods.iter().map(|(class, _, _)| class.clone()).collect();
-	let instances = instance_classes(&node, &classes);
-	let returned = returned_classes(&node, &classes);
-	let no_parameters = std::collections::HashMap::new();
-	let operands = Operands { methods: &methods, instances: &instances, returned: &returned, parameters: &no_parameters };
-	let node = specialized_calls(node, &operands);
-	let parameters = parameter_classes(&argument_classes(&node, &operands));
-	with_operator_calls(node, &Operands { parameters: &parameters, ..operands }).0
-}
-
-/// Each class's fields: (name, type) in declaration order
-pub(crate) type ClassFields = std::collections::HashMap<String, Vec<(String, String)>>;
-/// The class of a value, when known
-type ClassOf<'a> = dyn Fn(&Node) -> Option<String> + 'a;
-/// Per defined function, the operator class each argument of each of its calls gives (None: a plain value or unknown)
-type CallClasses = std::collections::HashMap<String, Vec<Vec<Option<String>>>>;
-
-fn argument_classes(node: &Node, operands: &Operands) -> CallClasses {
-	let defined: std::collections::HashSet<String> = definition_heads(node).into_iter().map(|items| items[0].drop_meta().name()).collect();
-	let mut calls = CallClasses::new();
-	collect_argument_classes(node, operands, &defined, &mut calls);
-	calls
-}
-
-/// The class of each parameter that every call of its function gives an instance of: `f(x) := x * 2; f(5 m ± 1 cm)`
-/// (card plus-minus-units); None at a position where the calls differ or give no instance
-fn parameter_classes(calls: &CallClasses) -> std::collections::HashMap<String, Vec<Option<String>>> {
-	let agreed = |calls: &Vec<Vec<Option<String>>>| calls[1..].iter().fold(calls[0].clone(), |known, given| {
-		known.iter().zip(given).map(|(known, given)| known.clone().filter(|known| Some(known) == given.as_ref())).collect()
-	});
-	calls.iter().map(|(function, calls)| (function.clone(), agreed(calls))).collect()
-}
-
-/// `f(x) := x * 2` called with a quantity and with a plain number (card mixed-arguments): each call whose argument is
-/// an instance where other calls give something else calls a copy typed by that class, `f_Quantity(x:Quantity)`,
-/// so the operators in it are the class's methods and the plain calls keep f. Only the program's own functions with
-/// untyped parameters are copied, not methods
-fn specialized_calls(node: Node, operands: &Operands) -> Node {
-	let calls = argument_classes(&node, operands);
-	let copyable = copyable_functions(&node);
-	let mixed: std::collections::HashMap<String, Vec<bool>> = calls.iter().filter(|(function, _)| copyable.contains(*function)).filter_map(|(function, calls)| {
-		let positions = (0..calls[0].len()).map(|position| {
-			let given: Vec<&Option<String>> = calls.iter().filter_map(|call| call.get(position)).collect();
-			given.iter().any(|class| class.is_some()) && given.iter().any(|class| *class != given[0])
-		}).collect::<Vec<bool>>();
-		positions.contains(&true).then(|| (function.clone(), positions))
-	}).collect();
-	if mixed.is_empty() {
-		return node;
-	}
-	let specializations = Specializations { mixed, operands };
-	let variants = specializations.variants(&calls);
-	specializations.with_copies(specializations.rewrite(node), &variants)
-}
-
-/// The functions defined at the top of the program whose parameters are all plain names
-fn copyable_functions(node: &Node) -> std::collections::HashSet<String> {
-	let statements = match node.drop_meta() {
-		Node::List(items, Bracket::None, _) => items.iter().collect(),
-		single => vec![single],
-	};
-	statements.into_iter().filter_map(|statement| match statement.drop_meta() {
-		Node::Key(head, Op::Define, _) => match head.drop_meta() {
-			Node::List(items, Bracket::Round, _) if items.len() > 1 && items[1..].iter().all(|item| matches!(item.drop_meta(), Node::Symbol(_))) => Some(items[0].drop_meta().name()),
-			_ => None,
-		},
-		_ => None,
-	}).collect()
-}
-
-struct Specializations<'a> {
-	/// Per function, the positions whose calls give different classes
-	mixed: std::collections::HashMap<String, Vec<bool>>,
-	operands: &'a Operands<'a>,
-}
-
-impl Specializations<'_> {
-	/// The classes a call gives at its function's mixed positions, when it gives one there
-	fn variant(&self, function: &str, given: &[Option<String>]) -> Option<Vec<Option<String>>> {
-		let mixed = self.mixed.get(function)?;
-		let variant: Vec<Option<String>> = given.iter().zip(mixed).map(|(class, mixed)| class.clone().filter(|_| *mixed)).collect();
-		variant.iter().any(Option::is_some).then_some(variant)
-	}
-
-	fn variants(&self, calls: &CallClasses) -> std::collections::HashMap<String, std::collections::BTreeSet<Vec<Option<String>>>> {
-		let mut variants: std::collections::HashMap<String, std::collections::BTreeSet<Vec<Option<String>>>> = std::collections::HashMap::new();
-		for (function, calls) in calls {
-			variants.entry(function.clone()).or_default().extend(calls.iter().filter_map(|given| self.variant(function, given)));
-		}
-		variants
-	}
-
-	fn rewrite(&self, node: Node) -> Node {
-		match node {
-			Node::List(items, Bracket::Round, separator) if items.len() > 1 && self.mixed.contains_key(&items[0].drop_meta().name()) => {
-				let function = items[0].drop_meta().name();
-				let given: Vec<Option<String>> = items[1..].iter().map(|argument| argument_class(argument, self.operands)).collect();
-				let head = match self.variant(&function, &given) {
-					Some(variant) => Node::Symbol(variant_name(&function, &variant)),
-					None => items[0].clone(),
-				};
-				let arguments = items[1..].iter().map(|argument| self.rewrite(argument.clone()));
-				Node::List(std::iter::once(head).chain(arguments).collect(), Bracket::Round, separator)
-			}
-			other => other.map_children(|child| self.rewrite(child)),
-		}
-	}
-
-	/// Each definition of a function called with instances, followed by its typed copies
-	fn with_copies(&self, node: Node, variants: &std::collections::HashMap<String, std::collections::BTreeSet<Vec<Option<String>>>>) -> Node {
-		match node {
-			Node::Meta { node, data } => Node::Meta { node: Box::new(self.with_copies(*node, variants)), data },
-			Node::List(items, Bracket::None, separator) => {
-				let copies = |item: &Node| {
-					let Node::Key(head, Op::Define, body) = item.drop_meta() else { return vec![] };
-					let Node::List(parameters, Bracket::Round, head_separator) = head.drop_meta() else { return vec![] };
-					let function = parameters[0].drop_meta().name();
-					variants.get(&function).into_iter().flatten().map(|variant| {
-						let typed = parameters[1..].iter().zip(variant).map(|(parameter, class)| match class {
-							Some(class) => key(parameter.clone(), Op::Colon, Node::Symbol(class.clone())),
-							None => parameter.clone(),
-						});
-						let head = Node::List(std::iter::once(Node::Symbol(variant_name(&function, variant))).chain(typed).collect(), Bracket::Round, head_separator.clone());
-						Node::Key(Box::new(head), Op::Define, body.clone())
-					}).collect()
-				};
-				let items = items.into_iter().flat_map(|item| { let copies = copies(&item); std::iter::once(item).chain(copies) }).collect();
-				Node::List(items, Bracket::None, separator)
-			}
-			other => other,
-		}
-	}
-}
-
-/// `f_Quantity`, the copy of f for its classes at the mixed positions
-fn variant_name(function: &str, variant: &[Option<String>]) -> String {
-	std::iter::once(function).chain(variant.iter().flatten().map(String::as_str)).collect::<Vec<_>>().join("_")
-}
-
-fn definition_heads(node: &Node) -> Vec<Vec<Node>> {
-	let mut heads = vec![];
-	node.visit(&mut |part| if let Node::Key(head, Op::Define, _) = part {
-		if let Node::List(items, Bracket::Round, _) = head.drop_meta() {
-			if items.len() > 1 {
-				heads.push(items.clone());
-			}
-		}
-	});
-	heads
-}
-
-fn collect_argument_classes(node: &Node, operands: &Operands, defined: &std::collections::HashSet<String>, calls: &mut CallClasses) {
-	match node.drop_meta() {
-		Node::Key(_, Op::Define, body) => collect_argument_classes(body, operands, defined, calls),
-		Node::List(items, Bracket::Round, _) if items.len() > 1 && defined.contains(&items[0].drop_meta().name()) => {
-			let given: Vec<Option<String>> = items[1..].iter().map(|argument| argument_class(argument, operands)).collect();
-			calls.entry(items[0].drop_meta().name()).or_default().push(given);
-			items[1..].iter().for_each(|argument| collect_argument_classes(argument, operands, defined, calls));
-		}
-		other => children_of(other).into_iter().for_each(|child| collect_argument_classes(child, operands, defined, calls)),
-	}
-}
-
-/// The class of an argument that is an instance of a class with operator methods
-fn argument_class(argument: &Node, operands: &Operands) -> Option<String> {
-	operand_class(argument, operands).filter(|class| operands.methods.iter().any(|(owner, _, _)| owner == class))
-}
-
-fn children_of(node: &Node) -> Vec<&Node> {
-	match node {
-		Node::Key(left, _, right) => vec![left, right],
-		Node::List(items, _, _) => items.iter().collect(),
-		_ => vec![],
-	}
-}
-
-/// What tells an operator's operand an instance: the classes' operator methods, the variables holding instances, the
-/// functions returning them
-struct Operands<'a> {
-	methods: &'a [(String, Op, String)],
-	instances: &'a std::collections::HashMap<String, String>,
-	returned: &'a std::collections::HashMap<String, String>,
-	/// parameter_classes
-	parameters: &'a std::collections::HashMap<String, Vec<Option<String>>>,
-}
-
-/// The node with its operator calls, and the class of the instance it gives when it is one
-fn with_operator_calls(node: Node, operands: &Operands) -> (Node, Option<String>) {
-	let recurse = |child: Node| with_operator_calls(child, operands).0;
-	match node {
-		certainty if crate::uncertain::certainty_parts(&certainty).is_some() => (with_certain_amounts(&certainty, operands), None),
-		sum if summed_quantities(&sum, operands).is_some() => {
-			let quantities = with_operator_calls(summed_quantities(&sum, operands).expect("guarded").clone(), operands).0;
-			(quantities_reduced(quantities), Some(crate::units::RUN_TIME_QUANTITY.to_string()))
-		}
-		Node::Key(left, op, right) if OPERATOR_METHODS.iter().any(|(known, _)| *known == op) => {
-			let (left, class) = with_operator_calls(*left, operands);
-			let (right, right_class) = with_operator_calls(*right, operands);
-			let class = class.or_else(|| operand_class(&left, operands));
-			let right_class = right_class.or_else(|| operand_class(&right, operands));
-			// `"v: " + q` of a run-time quantity q joins its text, as a static quantity does (card quantity-falls)
-			if op == Op::Add && (is_text(&left) || is_text(&right)) {
-				return (key(joined_text(left, class), op, joined_text(right, right_class)), None);
-			}
-			let (left, class, right) = with_run_time_units(left, class, right, right_class, operands);
-			match class.as_ref().and_then(|class| operands.methods.iter().find(|(owner, known, _)| owner == class && *known == op)) {
-				Some((_, _, method)) => (method_call(left, method, right), class),
-				None => (key(left, op, right), None),
-			}
-		}
-		// `q as km/h`, `q in m` of a run-time quantity q: its conversion `q.to("km/h")` (card quantity-falls)
-		conversion if crate::units::conversion(&conversion).is_some() => {
-			let (quantity, units) = crate::units::conversion(&conversion).map(|(quantity, units)| (quantity.clone(), units)).expect("guarded");
-			let (quantity, class) = with_operator_calls(quantity, operands);
-			let run_time = Some(crate::units::RUN_TIME_QUANTITY);
-			match class.or_else(|| operand_class(&quantity, operands)).as_deref() == run_time {
-				true => (method_call(quantity, CONVERSION_METHOD, Node::Text(crate::units::unit_suffix(&units))), run_time.map(str::to_string)),
-				false => (conversion.map_children(recurse), None),
-			}
-		}
-		// `1 min == q` of a run-time quantity q (the equality witness compares them)
-		Node::Key(left, op @ (Op::Eq | Op::Ne), right) => {
-			let (left, class) = with_operator_calls(*left, operands);
-			let (right, right_class) = with_operator_calls(*right, operands);
-			let class = class.or_else(|| operand_class(&left, operands));
-			let (left, _, right) = with_run_time_units(left, class, right, right_class, operands);
-			(key(left, op, right), None)
-		}
-		Node::List(items, Bracket::Round, separator) if items.len() == 1 => {
-			let (item, class) = with_operator_calls(items[0].clone(), operands);
-			(Node::List(vec![item], Bracket::Round, separator), class)
-		}
-		// `f(a) := a + 1`: its parameters are none of the program's instance variables of the same names; one typed by a
-		// class (`q:Quantity`), or given instances of one class by every call, is an instance of it
-		Node::Key(head, Op::Define, body) if matches!(head.drop_meta(), Node::List(items, Bracket::Round, _) if items.len() > 1) => {
-			let Node::List(items, _, _) = head.drop_meta() else { unreachable!("guarded") };
-			let mut instances = operands.instances.clone();
-			let called_with = operands.parameters.get(&items[0].drop_meta().name());
-			for (position, parameter) in items[1..].iter().enumerate() {
-				let (name, declared) = match parameter.drop_meta() {
-					Node::Key(name, Op::Colon, type_node) => (name.drop_meta().name(), Some(type_node.drop_meta().name())),
-					other => (other.name(), called_with.and_then(|classes| classes.get(position).cloned().flatten())),
-				};
-				match declared.filter(|class| operands.methods.iter().any(|(owner, _, _)| owner == class)) {
-					Some(class) => instances.insert(name, class),
-					None => instances.remove(&name),
-				};
-			}
-			let body = with_operator_calls(*body, &Operands { instances: &instances, ..*operands }).0;
-			(Node::Key(head, Op::Define, Box::new(body)), None)
-		}
-		other => (other.map_children(recurse), None),
-	}
-}
-
-/// `receiver.method(argument)`; `(quantity(…)) * 2`: the receiver without its parentheses, else `(f(…)).times` reads as
-/// a call of f
-/// `rope certainly > 4 m` of a run-time quantity rope: its amount and the other's in the same base units compare, a ±
-/// amount as the interval it is; `Quantity.more` would answer a plain yes (card quantity-tolerance)
-fn with_certain_amounts(certainty: &Node, operands: &Operands) -> Node {
-	let (word, ordering) = crate::uncertain::certainty_parts(certainty).expect("guarded");
-	let Node::Key(left, op, right) = ordering.drop_meta() else { unreachable!("certainty_parts takes orderings") };
-	let (left, class) = with_operator_calls(left.as_ref().clone(), operands);
-	let (right, right_class) = with_operator_calls(right.as_ref().clone(), operands);
-	let class = class.or_else(|| operand_class(&left, operands));
-	let (left, class, right) = with_run_time_units(left, class, right, right_class, operands);
-	let compared = match class.as_deref() == Some(crate::units::RUN_TIME_QUANTITY) {
-		true => {
-			let comparable = call(SAME_DIMENSION, vec![left.clone(), right, text("compare")]);
-			key(amount_of(left), *op, amount_of(comparable))
-		}
-		false => key(left, *op, right),
-	};
-	Node::List(vec![symbol(word), compared], Bracket::None, Separator::Space).with_meta_of(certainty)
-}
-
-/// The list of `sum([5 m ± 1 cm, 3 m ± 2 cm])` or `[…].sum()` when each item is a run-time quantity
-fn summed_quantities<'n>(node: &'n Node, operands: &Operands) -> Option<&'n Node> {
-	let list = summed_list(node)?;
-	let Node::List(items, Bracket::Square, _) = list.drop_meta() else { return None };
-	let is_quantity = |item: &Node| operand_class(item, operands).as_deref() == Some(crate::units::RUN_TIME_QUANTITY);
-	(!items.is_empty() && items.iter().all(is_quantity)).then_some(list)
-}
-
-/// The list of `sum(xs)`, `xs.sum()`
-fn summed_list(node: &Node) -> Option<&Node> {
-	match node.drop_meta() {
-		Node::List(items, Bracket::Round, _) => match items.as_slice() {
-			[word, list] if word.drop_meta().name() == SUM_WORD => Some(list),
-			_ => None,
-		},
-		Node::Key(list, Op::Dot, call) if is_call_of(call, SUM_WORD) || call.drop_meta().name() == SUM_WORD => Some(list),
-		_ => None,
-	}
-}
-
-/// `quantities.reduce((sum, item) => sum.plus(item))`, marked a Quantity so `str()` and a final value show its text
-/// (card quantity-sum)
-fn quantities_reduced(quantities: Node) -> Node {
-	let [sum, item] = REDUCED_NAMES.map(symbol);
-	let parameters = Node::List(vec![sum.clone(), item.clone()], Bracket::Round, Separator::Colon);
-	let added = key(parameters, Op::FatArrow, method_call(sum, operator_method(Op::Add).expect("plus"), item));
-	let reduced = key(quantities, Op::Dot, call(REDUCE_WORD, vec![added]));
-	Node::meta(reduced, Node::data(crate::lowering::traits::TypedAs(crate::units::RUN_TIME_QUANTITY.to_string())))
-}
-
-fn amount_of(quantity: Node) -> Node {
-	key(quantity, Op::Dot, symbol(QUANTITY_AMOUNT))
-}
-
-fn method_call(receiver: Node, method: &str, argument: Node) -> Node {
-	let receiver = match receiver.drop_meta() {
-		Node::List(items, Bracket::Round, _) if items.len() == 1 => items[0].clone(),
-		_ => receiver,
-	};
-	let call = call(method, vec![argument]);
-	key(receiver, Op::Dot, call)
-}
-
-/// `2 km < q`, `q + 1 m` of a run-time quantity q: the unit written in the program is one too (card units-mixed); the
-/// operands with the left one's class
-fn with_run_time_units(left: Node, class: Option<String>, right: Node, right_class: Option<String>, operands: &Operands) -> (Node, Option<String>, Node) {
-	let run_time = Some(crate::units::RUN_TIME_QUANTITY);
-	let lifted_left = class.is_none() && right_class.or_else(|| operand_class(&right, operands)).as_deref() == run_time;
-	let (left, class) = match lifted_left.then(|| crate::units::as_run_time_quantity(&left)).flatten() {
-		Some(quantity) => (quantity, run_time.map(str::to_string)),
-		None => (left, class),
-	};
-	let right = match class.as_deref() == run_time {
-		true => crate::units::as_run_time_quantity(&right).unwrap_or(right),
-		false => right,
-	};
-	(left, class, right)
-}
-
-/// The class of the instance an operand is: a variable holding one, a parenthesized operation, a construction or a call
-/// of a function returning one
-fn operand_class(operand: &Node, operands: &Operands) -> Option<String> {
-	match operand.drop_meta() {
-		Node::Symbol(variable) => operands.instances.get(variable).cloned(),
-		// `(a + b).x`: the parenthesized operation, `(quantity("5 m")) * 2` the parenthesized instance
-		Node::List(items, Bracket::Round, _) if items.len() == 1 => with_operator_calls(items[0].clone(), operands).1.or_else(|| operand_class(&items[0], operands)),
-		// `f(quantity("5 m") / 5)`: an operation of an instance as an argument
-		Node::Key(_, op, _) if OPERATOR_METHODS.iter().any(|(known, _)| known == op) => with_operator_calls(operand.drop_meta().clone(), operands).1,
-		// `q.times(2)`: an operator method already called on an instance gives one of its class
-		Node::Key(receiver, Op::Dot, call) if is_operator_method_call(call, operands) || is_call_of(call, CONVERSION_METHOD) => operand_class(receiver, operands),
-		other => instance_class(other, operands.returned),
-	}
-}
-
-fn is_text(node: &Node) -> bool {
-	matches!(node.drop_meta(), Node::Text(_))
-}
-
-/// An operand joining a text: a run-time quantity as `str(q)`
-fn joined_text(operand: Node, class: Option<String>) -> Node {
-	match class.as_deref() == Some(crate::units::RUN_TIME_QUANTITY) {
-		true => call(TEXT_WORD, vec![operand]),
-		false => operand,
-	}
-}
-
-fn is_operator_method_call(call: &Node, operands: &Operands) -> bool {
-	operands.methods.iter().any(|(_, _, method)| is_call_of(call, method))
-}
-
-/// `to("m")` is a call of `to`
-fn is_call_of(call: &Node, method: &str) -> bool {
-	matches!(call.drop_meta(), Node::List(items, Bracket::Round, _) if items.first().is_some_and(|word| word.drop_meta().name() == method))
-}
-
-/// A name the library gives lists and texts too (`pop`, `sum`, `count`): a method of that name is one only on an
-/// instance
-fn is_library_method(name: &str) -> bool {
-	crate::analyzer::is_list_mutating_method(name) || crate::library_words::is_library_word(name) || crate::analyzer::is_counting_property(name)
-}
-
 /// The clashing method names, and the variables holding instances of the classes defining them
 struct MethodNames {
 	names: Vec<String>,
@@ -1358,92 +962,6 @@ fn with_arguments(member: Node, change: impl Fn(Node) -> Node) -> Node {
 	}
 }
 
-/// Rust's `impl Point { fn sum(&self) -> i32 {…} }` (and `impl Trait for Point {…}`): its functions are methods of
-/// the class Point, the impl block itself goes
-fn with_impls(node: Node) -> Node {
-	let mut impls: Vec<(String, Vec<Node>)> = vec![];
-	node.visit(&mut |part| if let Some((class, items)) = impl_block(part) {
-		impls.push((class, items));
-	});
-	if impls.is_empty() {
-		return node;
-	}
-	taking_in_impls(node, &impls)
-}
-
-fn taking_in_impls(node: Node, impls: &[(String, Vec<Node>)]) -> Node {
-	match node {
-		_ if impl_block(&node).is_some() => Node::Empty,
-		Node::Type { name, body } => {
-			let class = name.drop_meta().name();
-			let added: Vec<Node> = impls.iter().filter(|(owner, _)| *owner == class).flat_map(|(_, items)| items.clone()).collect();
-			match added.is_empty() {
-				true => Node::Type { name, body },
-				false => Node::Type { name, body: Box::new(Node::List([class_items(&body), added].concat(), Bracket::Curly, Separator::Semicolon)) },
-			}
-		}
-		Node::List(items, bracket, separator) => {
-			let items: Vec<Node> = items.into_iter().map(|item| taking_in_impls(item, impls)).filter(|item| !matches!(item, Node::Empty)).collect();
-			Node::List(items, bracket, separator)
-		}
-		Node::Meta { node, data } => match taking_in_impls(*node, impls) {
-			Node::Empty => Node::Empty,
-			node => Node::Meta { node: Box::new(node), data },
-		},
-		other => other,
-	}
-}
-
-/// `impl Point {…}`, `impl Display for Point {…}`: the class and the items of the block
-fn impl_block(node: &Node) -> Option<(String, Vec<Node>)> {
-	let Node::List(words, _, _) = node.drop_meta() else { return None };
-	let (class, block) = match words.as_slice() {
-		[word, class, block] if word.drop_meta().name() == IMPL_WORD => (class, block),
-		// `impl Point {…}` of a declared Point reads like the spaced construction `Point {…}`
-		[word, construction] if word.drop_meta().name() == IMPL_WORD => match construction.drop_meta() {
-			Node::Key(class, Op::None | Op::Colon, block) => (class.as_ref(), block.as_ref()),
-			_ => return None,
-		},
-		[word, _, for_word, class, block] if word.drop_meta().name() == IMPL_WORD && for_word.drop_meta().name() == "for" => (class, block),
-		_ => return go_method(words),
-	};
-	let Node::Symbol(class) = class.drop_meta() else { return None };
-	match block.drop_meta() {
-		Node::List(_, Bracket::Curly, _) => Some((class.clone(), class_items(block))),
-		_ => None,
-	}
-}
-
-/// Go's method `func (p Point) Sum() int {…}` (or of the pointer `(p *Point)`): the class and the method `func Sum() int
-/// {…}`, its receiver p read as self
-fn go_method(words: &[Node]) -> Option<(String, Vec<Node>)> {
-	let [keyword, receiver, rest @ ..] = words else { return None };
-	if keyword.drop_meta().name() != GO_FUNCTION_WORD || rest.is_empty() {
-		return None;
-	}
-	let Node::List(receiver, Bracket::Round, _) = receiver.drop_meta() else { return None };
-	let (variable, class) = match receiver.as_slice() {
-		[variable, class] => (variable.drop_meta(), class.drop_meta()),
-		[single] => match single.drop_meta() {
-			Node::Key(variable, Op::Mul, class) => (variable.drop_meta(), class.drop_meta()),
-			_ => return None,
-		},
-		_ => return None,
-	};
-	let class = match class {
-		Node::Key(empty, Op::Mul, class) if matches!(empty.drop_meta(), Node::Empty) => class.drop_meta(),
-		class => class,
-	};
-	let (Node::Symbol(variable), Node::Symbol(class)) = (variable, class) else { return None };
-	let rest: Vec<Node> = match rest {
-		[Node::List(group, Bracket::None, _)] => group.clone(),
-		_ => rest.to_vec(),
-	};
-	let bindings = [(variable.clone(), symbol(RECEIVER))].into_iter().collect();
-	let method = crate::law::substitute(&Node::List([vec![keyword.clone()], rest].concat(), Bracket::None, Separator::Space), &bindings);
-	Some((class.clone(), class_items(&Node::List(vec![method], Bracket::Curly, Separator::Semicolon))))
-}
-
 /// Kotlin's `p.copy(y = 5)`: a new instance with p's fields, those changed: `field_with(instance_copy(p, no), "y", 5)`;
 /// `shallow = yes` among them asks for the shallow copy (P205)
 fn copies(node: Node) -> Node {
@@ -1474,89 +992,6 @@ fn copies(node: Node) -> Node {
 	}
 }
 
-/// Every class with the items of the mixins it takes in (`class Duck with Walker {…}`, `include Walker` in its body)
-/// after its own, but those it defines itself; the mixin declarations themselves are no classes and go
-fn with_mixins(node: Node) -> Result<Node, Node> {
-	let mut mixins: Vec<(String, Vec<Node>)> = vec![];
-	node.visit(&mut |part| if let Node::Type { name, body } = part {
-		if name.attribute(crate::warp_parser::MIXIN_WORD).is_some() {
-			mixins.push((name.drop_meta().name(), class_items(body)));
-		}
-	});
-	if mixins.is_empty() {
-		return Ok(node);
-	}
-	taking_in_mixins(node, &mixins)
-}
-
-fn taking_in_mixins(node: Node, mixins: &[(String, Vec<Node>)]) -> Result<Node, Node> {
-	match node {
-		Node::Type { name, .. } if name.attribute(crate::warp_parser::MIXIN_WORD).is_some() => Ok(Node::Empty),
-		Node::Type { name, body } => {
-			let mut taken: Vec<String> = name.attribute(crate::warp_parser::WITH_KEYWORD).map(|names| match names.drop_meta() {
-				Node::List(names, _, _) => names.iter().map(|name| name.drop_meta().name()).collect(),
-				single => vec![single.name()],
-			}).unwrap_or_default();
-			// `include m` of no declared mixin stays (P139: it loads the module m)
-			let is_mixin = |item: &Node| included_mixin(item).is_some_and(|mixin| mixins.iter().any(|(declared, _)| *declared == mixin));
-			let (included, own): (Vec<Node>, Vec<Node>) = class_items(&body).into_iter().partition(is_mixin);
-			taken.extend(included.iter().filter_map(included_mixin));
-			if taken.is_empty() {
-				return Ok(Node::Type { name, body });
-			}
-			let own_names: Vec<String> = own.iter().filter_map(item_name).collect();
-			let mut items = own;
-			for mixin in taken {
-				let Some((_, mixin_items)) = mixins.iter().find(|(declared, _)| *declared == mixin) else {
-					return Err(crate::node::error(&format!("{} takes in {mixin}, which is no mixin: declare mixin {mixin}{{…}}", name.drop_meta().name())));
-				};
-				items.extend(mixin_items.iter().filter(|item| item_name(item).is_none_or(|item| !own_names.contains(&item))).cloned());
-			}
-			let name = match name.attribute(crate::warp_parser::EXTENDS_KEYWORD) {
-				Some(parent) => Node::Symbol(name.drop_meta().name()).with_attribute(crate::warp_parser::EXTENDS_KEYWORD, parent.clone()),
-				None => Node::Symbol(name.drop_meta().name()),
-			};
-			Ok(Node::Type { name: Box::new(name), body: Box::new(Node::List(items, Bracket::Curly, Separator::Semicolon)) })
-		}
-		Node::List(items, bracket, separator) => {
-			let items = items.into_iter().map(|item| taking_in_mixins(item, mixins)).collect::<Result<Vec<_>, _>>()?;
-			Ok(Node::List(items.into_iter().filter(|item| !matches!(item, Node::Empty)).collect(), bracket, separator))
-		}
-		Node::Meta { node, data } => Ok(Node::Meta { node: Box::new(taking_in_mixins(*node, mixins)?), data }),
-		other => Ok(other),
-	}
-}
-
-/// `include Walker` in a class body: the mixin it takes in
-fn included_mixin(item: &Node) -> Option<String> {
-	let Node::List(words, _, _) = item.drop_meta() else { return None };
-	let [word, mixin] = words.as_slice() else { return None };
-	(word.drop_meta().name() == INCLUDE_WORD && matches!(mixin.drop_meta(), Node::Symbol(_))).then(|| mixin.drop_meta().name())
-}
-
-/// The classes with the fields and methods of the class they extend, and the likeness `dog like animal` of each
-fn inherit(node: Node) -> Result<(Node, Vec<Node>), Node> {
-	let mut classes: Vec<(String, Option<String>, Vec<Node>)> = vec![];
-	node.visit(&mut |part| {
-		if let Node::Type { name, body } = part {
-			let parent = name.attribute(crate::warp_parser::EXTENDS_KEYWORD).map(|parent| parent.drop_meta().name());
-			classes.push((name.drop_meta().name(), parent, class_items(body)));
-		}
-	});
-	if classes.iter().all(|(_, parent, _)| parent.is_none()) {
-		return Ok((node, vec![]));
-	}
-	let mut likenesses = vec![];
-	for (class, parent, _) in &classes {
-		if let Some(parent) = parent {
-			inherited_items(class, &classes, &mut vec![])?;
-			let words = [class.as_str(), crate::traits::LIKE_WORD, parent.as_str()].map(symbol);
-			likenesses.push(Node::List(words.to_vec(), Bracket::None, Separator::Space));
-		}
-	}
-	Ok((with_inherited(node, &classes)?, likenesses))
-}
-
 /// The fields and methods of a class body; the groups a `;` makes (`{name age:int; greet() := …}`) flattened
 fn class_items(body: &Node) -> Vec<Node> {
 	let items = match body.drop_meta() {
@@ -1564,9 +999,7 @@ fn class_items(body: &Node) -> Vec<Node> {
 		Node::List(words, Bracket::Curly, Separator::Space) if words.first().is_some_and(|first| matches!(first.drop_meta(), Node::Symbol(word) if crate::operators::is_function_keyword(word))) || auto_property(words).is_some() || typed_field(words).is_some() => {
 			vec![Node::List(words.clone(), Bracket::None, Separator::Space)]
 		}
-		Node::List(items, _, _) => items.clone(),
-		Node::Empty => vec![],
-		single => vec![single.clone()],
+		_ => body.as_items(),
 	};
 	items.into_iter().map(without_modifiers).map(with_body_words).flat_map(|item| match item.drop_meta() {
 		Node::List(words, _, _) if keyword_method(words).is_some() => keyword_method(words).into_iter().collect(),
@@ -1694,7 +1127,7 @@ fn setter_calls(node: Node, setters: &[String]) -> Node {
 /// `var count = 0` the field `count = 0`
 fn without_modifiers(item: Node) -> Node {
 	let Node::List(words, bracket, separator) = item.drop_meta().clone() else { return item };
-	let is_modifier = |word: &Node| matches!(word.drop_meta(), Node::Symbol(word) if crate::warp_parser::MEMBER_MODIFIERS.contains(&word.as_str()) || FIELD_KEYWORDS.contains(&word.as_str()));
+	let is_modifier = |word: &Node| matches!(word.drop_meta(), Node::Symbol(word) if crate::warp_parser::MEMBER_MODIFIERS.contains(&word.as_str()) || crate::warp_parser::FIELD_KEYWORDS.contains(&word.as_str()));
 	let kept: Vec<Node> = words.iter().skip_while(|word| is_modifier(word)).cloned().collect();
 	if let Some(kept_word) = kept.first().map(leading_name).filter(|_| kept.len() < words.len()) {
 		let modifiers: Vec<String> = words[..words.len() - kept.len()].iter().map(|word| word.drop_meta().name()).collect();
@@ -1809,38 +1242,6 @@ fn declared_classes(node: &Node, keep: impl Fn(&Node) -> bool) -> Vec<String> {
 	classes
 }
 
-/// Ruby's `Point.new(1, 2)` of a declared class that defines no `new`: the construction `Point(1, 2)`, with a note
-fn ruby_constructions(node: Node) -> Node {
-	let classes = declared_classes(&node, |body| !class_items(body).iter().filter_map(method_parts).any(|(method, _, _)| method == RUBY_NEW_WORD));
-	if classes.is_empty() {
-		return node;
-	}
-	constructed_by_new(node, &classes)
-}
-
-/// Ruby's `Point.new(1, 2)` and Java's `new Set(xs)` of a class the parser did not see (a standard module's): the
-/// construction, with a note
-fn constructed_by_new(node: Node, classes: &[String]) -> Node {
-	match node {
-		Node::List(items, Bracket::None, Separator::Space) if matches!(items.as_slice(), [new, call] if new.drop_meta().name() == RUBY_NEW_WORD && classes.contains(&leading_name(call))) => {
-			let call = items[1].clone();
-			crate::diagnostic::note_alias(&format!("{RUBY_NEW_WORD} {}", leading_name(&call)), &leading_name(&call));
-			constructed_by_new(call, classes)
-		}
-		Node::Key(class, Op::Dot, member) if classes.contains(&class.drop_meta().name()) && matches!(class.drop_meta(), Node::Symbol(_)) && leading_name(&member) == RUBY_NEW_WORD => {
-			let class_name = class.drop_meta().name();
-			crate::normalize::set_position_of(&class);
-			crate::diagnostic::note_alias(&format!("{class_name}.{RUBY_NEW_WORD}"), &class_name);
-			let arguments = match member.drop_meta().clone() {
-				Node::List(items, _, _) => items[1..].iter().cloned().map(|argument| constructed_by_new(argument, classes)).collect(),
-				_ => vec![],
-			};
-			Node::List([vec![*class], arguments].concat(), Bracket::Round, Separator::None)
-		}
-		other => other.map_children(|child| constructed_by_new(child, classes)),
-	}
-}
-
 /// Go's positional braces `Point{1, 2}` of a declared class: the construction `Point(1, 2)`, with a note (P167); of
 /// an unknown name they stay tagged data
 fn positional_braces(node: Node) -> Node {
@@ -1866,48 +1267,6 @@ fn constructed_from_braces(node: Node, classes: &[String]) -> Node {
 		// a match arm's `Point{x, y} =>` is a pattern (destructurings), no construction
 		Node::Key(pattern, Op::FatArrow, body) => Node::Key(pattern, Op::FatArrow, Box::new(constructed_from_braces(*body, classes))),
 		other => other.map_children(|child| constructed_from_braces(child, classes)),
-	}
-}
-
-fn is_witness_method(name: &str) -> bool {
-	WITNESS_METHODS.iter().any(|(witness, _)| *witness == name)
-}
-
-/// A class's `text()`, `equals(o)` and `compare(o)` (Java's `toString()`, `compareTo(o)`, Python's `__str__`, `__eq__`…,
-/// with a note) as the witnesses of its text, equality and order: the other instance typed by the class,
-/// `equals(o:P)`, so the method is `equals(self:P, o:P)`, which traits makes equals·P
-fn with_witness_methods(node: Node) -> Node {
-	match node {
-		Node::Type { name, body } => {
-			let class = name.drop_meta().name();
-			let items: Vec<Node> = class_items(&body);
-			if !items.iter().filter_map(method_parts).any(|(method, _, _)| WITNESS_METHODS.iter().any(|(witness, aliases)| *witness == method || aliases.contains(&method.as_str()))) {
-				return Node::Type { name, body };
-			}
-			let items = items.into_iter().map(|item| witness_method(item, &class)).collect();
-			Node::Type { name, body: Box::new(Node::List(items, Bracket::Curly, Separator::Semicolon)) }
-		}
-		other => other.map_children(with_witness_methods),
-	}
-}
-
-fn witness_method(item: Node, class: &str) -> Node {
-	let Some((method, parameters, _)) = method_parts(&item) else { return item };
-	let Some((witness, _)) = WITNESS_METHODS.iter().find(|(witness, aliases)| *witness == method || aliases.contains(&method.as_str())) else { return item };
-	if *witness != method {
-		crate::diagnostic::note_alias(&method, witness);
-	}
-	let typed = |parameter: Node| match parameter.drop_meta() {
-		Node::Symbol(_) if *witness != "text" => key(parameter, Op::Colon, symbol(class)),
-		_ => parameter,
-	};
-	let head = call(witness, parameters.into_iter().map(typed).collect());
-	match item.drop_meta().clone() {
-		Node::Key(old_head, Op::Define, body) => match old_head.drop_meta() {
-			Node::Key(_, Op::Colon, result) if result_type(&item).is_some() => Node::Key(Box::new(Node::Key(Box::new(head), Op::Colon, result.clone())), Op::Define, body),
-			_ => Node::Key(Box::new(head), Op::Define, body),
-		},
-		_ => item,
 	}
 }
 
@@ -1982,12 +1341,7 @@ fn with_members(node: Node) -> Node {
 
 /// The items of a class body as written, its `;` groups flattened, nothing read into them
 fn class_items_as_written(body: &Node) -> Vec<Node> {
-	let items = match body.drop_meta() {
-		Node::List(items, _, _) => items.clone(),
-		Node::Empty => vec![],
-		single => vec![single.clone()],
-	};
-	items.into_iter().flat_map(|item| match item.drop_meta() {
+	body.as_items().into_iter().flat_map(|item| match item.drop_meta() {
 		Node::List(group, Bracket::None, _) => group.clone(),
 		_ => vec![item],
 	}).collect()
@@ -2153,93 +1507,6 @@ fn with_result_type(definition: Node, result_type: Option<&Node>) -> Node {
 	}
 }
 
-/// A class's items after those of its parents: a parent's field or method the class defines again is left out
-fn inherited_items(class: &str, classes: &[(String, Option<String>, Vec<Node>)], visiting: &mut Vec<String>) -> Result<Vec<Node>, Node> {
-	if visiting.iter().any(|seen| seen == class) {
-		return Err(crate::node::error(&format!("class {class} extends itself through {}", visiting.join(", "))));
-	}
-	let Some((_, parent, own)) = classes.iter().find(|(name, _, _)| name == class) else {
-		let child = visiting.last().cloned().unwrap_or_default();
-		return Err(crate::node::error(&format!("{child} extends {class}, which is no class: declare class {class}{{…}}")));
-	};
-	let Some(parent) = parent else { return Ok(own.clone()) };
-	visiting.push(class.to_string());
-	let inherited = inherited_items(parent, classes, visiting)?;
-	visiting.pop();
-	let mut called = vec![];
-	let own: Vec<Node> = own.iter().cloned().map(|item| super_calls(item, class, &mut called)).collect();
-	let mut parent_versions = vec![];
-	for method in called {
-		let Some(version) = inherited.iter().find(|item| method_parts(item).is_some_and(|(name, _, _)| name == method)) else {
-			return Err(crate::node::error(&format!("{class} calls {SUPER}.{method}, but {parent} has no method {method}")));
-		};
-		parent_versions.push(renamed(version, &format!("{method}{SUPER_INFIX}{class}")));
-	}
-	let own_names: Vec<String> = own.iter().filter_map(item_name).collect();
-	let kept = inherited.into_iter().filter(|item| item_name(item).is_none_or(|name| !own_names.contains(&name)));
-	Ok(kept.chain(parent_versions).chain(own).collect())
-}
-
-/// `super.speak(…)` in a method of class dog as `self.speak·super·dog(…)`; the names of the methods called go to `called`
-fn super_calls(node: Node, class: &str, called: &mut Vec<String>) -> Node {
-	let Node::Key(object, Op::Dot, member) = node else { return node.map_children(|child| super_calls(child, class, called)) };
-	if object.drop_meta().name() != SUPER || !matches!(object.drop_meta(), Node::Symbol(_)) {
-		return key(super_calls(*object, class, called), Op::Dot, super_calls(*member, class, called));
-	}
-	let member = match member.drop_meta().clone() {
-		Node::Symbol(name) => parent_version(name, class, called),
-		Node::List(items, Bracket::Round, separator) if matches!(items.first().map(Node::drop_meta), Some(Node::Symbol(_))) => {
-			let arguments: Vec<Node> = items[1..].iter().cloned().map(|argument| super_calls(argument, class, called)).collect();
-			let name = parent_version(items[0].drop_meta().name(), class, called);
-			Node::List([vec![name], arguments].concat(), Bracket::Round, separator)
-		}
-		other => other,
-	};
-	key(symbol(RECEIVER), Op::Dot, member)
-}
-
-/// `speak·super·dog`, the name of the speak dog inherits; speak goes to `called`
-fn parent_version(method: String, class: &str, called: &mut Vec<String>) -> Node {
-	let version = format!("{method}{SUPER_INFIX}{class}");
-	if !called.contains(&method) {
-		called.push(method);
-	}
-	Node::Symbol(version)
-}
-
-/// A method definition under another name
-fn renamed(method: &Node, name: &str) -> Node {
-	let Node::Key(head, Op::Define, body) = method.drop_meta() else { return method.clone() };
-	if let Node::Key(untyped, Op::Colon, result_type) = head.drop_meta() {
-		let untyped = renamed(&Node::Key(untyped.clone(), Op::Define, body.clone()), name);
-		return with_result_type(untyped, Some(result_type));
-	}
-	let head = match head.drop_meta() {
-		Node::List(parts, bracket, separator) => Node::List([vec![symbol(name)], parts[1..].to_vec()].concat(), bracket.clone(), separator.clone()),
-		_ => symbol(name),
-	};
-	Node::Key(Box::new(head), Op::Define, body.clone())
-}
-
-/// The name a class item defines: a field or a method
-fn item_name(item: &Node) -> Option<String> {
-	method_parts(item).map(|(name, _, _)| name).or_else(|| field_name(item))
-}
-
-/// Every class that extends another with all its items, its name without the parent
-fn with_inherited(node: Node, classes: &[(String, Option<String>, Vec<Node>)]) -> Result<Node, Node> {
-	match node {
-		Node::Type { name, body: _ } if name.attribute(crate::warp_parser::EXTENDS_KEYWORD).is_some() => {
-			let class = name.drop_meta().name();
-			let items = inherited_items(&class, classes, &mut vec![])?;
-			Ok(Node::Type { name: Box::new(Node::Symbol(class)), body: Box::new(Node::List(items, Bracket::Curly, Separator::Space)) })
-		}
-		Node::List(items, bracket, separator) => Ok(Node::List(items.into_iter().map(|item| with_inherited(item, classes)).collect::<Result<_, _>>()?, bracket, separator)),
-		Node::Meta { node, data } => Ok(Node::Meta { node: Box::new(with_inherited(*node, classes)?), data }),
-		other => Ok(other),
-	}
-}
-
 /// `trait has·area{area}` for each method name that two or more classes define, taking the first one's parameters
 fn shared_method_traits(node: &Node) -> Vec<Node> {
 	let mut methods: Vec<(String, Node)> = vec![];
@@ -2326,7 +1593,7 @@ fn trait_operation(declaration: &Node) -> Option<String> {
 /// `x.m` and `x.m(args)` of the methods `m` as calls `m(x)`, `m(x, args)`; of a method changing its object, on a variable,
 /// the update `x = m(x, args)`; each call's pair is a temp of its own, `pop·result·1`, so a call inside a method shares
 /// no name with one in main
-fn method_calls(node: Node, called: &[String], changing: &Changing, calls: &std::cell::Cell<usize>) -> Node {
+fn method_calls(node: Node, called: &[String], changing: &Changing, calls: &Counter) -> Node {
 	let recurse = |child: Node| method_calls(child, called, changing, calls);
 	let Node::Key(receiver, Op::Dot, member) = node else { return node.map_children(recurse) };
 	let receiver = recurse(*receiver);
@@ -2343,8 +1610,7 @@ fn method_calls(node: Node, called: &[String], changing: &Changing, calls: &std:
 	match receiver.drop_meta() {
 		// `s.pop()`: the pair (value, changed object) of the call, the object stored back, the value given
 		Node::Symbol(_) if changing.giving_value.contains(&name) => {
-			calls.set(calls.get() + 1);
-			let pair = Node::Symbol(format!("{name}{RESULT_SUFFIX}·{}", calls.get()));
+			let pair = Node::Symbol(format!("{name}{RESULT_SUFFIX}·{}", calls.next_number()));
 			Node::List(vec![
 				key(pair.clone(), Op::Assign, call),
 				key(receiver, Op::Assign, item(pair.clone(), 2)),

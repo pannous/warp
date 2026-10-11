@@ -23,7 +23,6 @@ const SHARED_WORDS: [&str; 2] = ["shared", "atomic"];
 /// The host words (src/host.rs SHARED_WORDS, SHARED_FLOAT_WORDS)
 const SHARED_NEW: &str = crate::host::SHARED_WORDS[0];
 const SHARED_COUNT: &str = crate::host::SHARED_WORDS[4];
-const COUNTING_WORDS: [&str; 3] = ["count", "length", "size"];
 const FLOAT_WORDS: [&str; 3] = ["float", "real", "double"];
 const DOT_WORD: &str = "dot";
 
@@ -175,10 +174,10 @@ fn linear_uses(part: &Node, name: &str, picked: &HashSet<String>) -> (usize, usi
 		Node::Key(..) if float_array_assignment(part).as_deref() == Some(name) => true,
 		Node::Key(array, Op::Hash, index) if is_name(array) => !matches!(index.drop_meta(), Node::Empty),
 		Node::Key(empty, Op::Hash, array) => matches!(empty.drop_meta(), Node::Empty) && is_name(array),
-		Node::Key(array, Op::Dot, word) => is_name(array) && COUNTING_WORDS.contains(&word.name().as_str()),
+		Node::Key(array, Op::Dot, word) => is_name(array) && crate::analyzer::is_counting_word(&word.name()),
 		Node::List(items, Bracket::Round, _) if items.len() == 3 && items[0].name() == DOT_WORD => return paired(&items[1], &items[2]),
 		Node::List(items, _, _) => match items.as_slice() {
-			[word, array] => COUNTING_WORDS.contains(&word.name().as_str()) && is_name(array),
+			[word, array] => crate::analyzer::is_counting_word(&word.name()) && is_name(array),
 			[word, _, in_word, array, _] => word.name() == "for" && in_word.name() == "in" && is_name(array),
 			_ => false,
 		},
@@ -413,7 +412,7 @@ impl Rewrite<'_> {
 					}
 					// `#xs`, `xs.count`
 					(Node::Empty, Op::Hash) if let Some(kind) = shared(&value, &names) => builtin(kind.storage.new_and_count().1, vec![*value]),
-					(array, Op::Dot) if let Some(kind) = shared(array, &names) && COUNTING_WORDS.contains(&value.name().as_str()) => builtin(kind.storage.new_and_count().1, vec![array.clone()]),
+					(array, Op::Dot) if let Some(kind) = shared(array, &names) && crate::analyzer::is_counting_word(&value.name()) => builtin(kind.storage.new_and_count().1, vec![array.clone()]),
 					_ => key(self.node(*target, function), op, self.node(*value, function)),
 				}
 			}
@@ -430,7 +429,7 @@ impl Rewrite<'_> {
 					return crate::diagnostic::Diagnostic::at(array, format!("a task cannot take the linear array {}: it lives in this task's memory; `shared {} = int[n]` shares one", array.name(), array.name())).into_error();
 				}
 				match items.as_slice() {
-					[word, array] if COUNTING_WORDS.contains(&word.name().as_str()) && let Some(kind) = shared(array, &names) => builtin(kind.storage.new_and_count().1, vec![array.clone()]),
+					[word, array] if crate::analyzer::is_counting_word(&word.name()) && let Some(kind) = shared(array, &names) => builtin(kind.storage.new_and_count().1, vec![array.clone()]),
 					[word, left, right] if word.name() == crate::wasm_emitter::linear_arrays::LINEAR_DOT && is_linear_floats(left, &names) && is_linear_floats(right, &names) => builtin(&word.name(), vec![left.clone(), right.clone()]),
 					[word, shader, array, workgroups] if word.name() == crate::host::GPU_COMPUTE && is_linear_floats(array, &names) => {
 						builtin(crate::host::GPU_COMPUTE_LINEAR, vec![self.node(shader.clone(), function), array.clone(), self.node(workgroups.clone(), function)])

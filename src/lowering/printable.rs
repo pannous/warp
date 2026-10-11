@@ -5,7 +5,7 @@
 //! Each definition becomes its witness (`text·person`, `iterate·bag`); every other value keeps its own text and items.
 
 use super::words::{FOR_WORD, IN_WORD};
-use super::nodes::{call, key};
+use super::nodes::{call, children_rewritten, key};
 use crate::node::{Bracket, Node, Separator};
 use crate::operators::Op;
 use crate::traits::{witness_name, InstanceTypes, Shape};
@@ -13,8 +13,6 @@ use std::collections::HashSet;
 
 const TEXT_OPERATION: &str = "text";
 const ITERATE_OPERATION: &str = "iterate";
-/// The words whose call or cast gives a value's text
-const TEXT_WORDS: [&str; 4] = ["text", "string", "str", "String"];
 const PRINT_WORD: &str = "print";
 
 pub fn lower(node: Node) -> Node {
@@ -83,10 +81,20 @@ impl Operations {
 				let body = self.types.in_definition(&head, || self.rewrite(*body));
 				Node::Key(head, Op::Define, Box::new(body))
 			}
-			Node::Key(left, op, right) => key(self.rewrite(*left), op, self.rewrite(*right)),
-			Node::Meta { node, data } => Node::Meta { node: Box::new(self.rewrite(*node)), data },
-			other => other,
+			// `"hi " + bo`, `s + bo`: an instance joining a text joins as its text (card print-oldest: text + anything
+			// printable); `bo + other`, `bo + 1` of another instance or a number stay the type's own sums
+			Node::Key(left, Op::Add, right) if self.joins_printable(&left, &right) || self.joins_printable(&right, &left) => {
+				let joined = |side: Node| self.call(TEXT_OPERATION, &self.printable, &side).unwrap_or_else(|| self.rewrite(side));
+				key(joined(*left), Op::Add, joined(*right))
+			}
+			other => children_rewritten(other, |child| self.rewrite(child)),
 		}
+	}
+
+	/// `instance + other` of a printable instance and a value that is no instance and no number: a text
+	fn joins_printable(&self, instance: &Node, other: &Node) -> bool {
+		let printable = matches!(self.types.shape(instance), Some(Shape::Instance(type_name)) if self.printable.contains(&type_name));
+		printable && self.types.shape(other).is_none() && !matches!(other.drop_meta(), Node::Number(_))
 	}
 
 	/// `text·person(x)`, `iterate·bag(b)` for a value known to be an instance of a type defining the operation
@@ -103,7 +111,7 @@ fn is_statements(node: &Node) -> bool {
 }
 
 pub(crate) fn is_text_word(node: &Node) -> bool {
-	matches!(node.drop_meta(), Node::Symbol(word) if TEXT_WORDS.contains(&word.as_str()))
+	matches!(node.drop_meta(), Node::Symbol(word) if crate::type_tests::is_text_type_word(word))
 }
 
 fn declared_types(node: &Node) -> HashSet<String> {

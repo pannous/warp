@@ -1,7 +1,9 @@
 //! The small node forms many lowering passes build and test: a call of a word, a word
 
+use super::words::{FOR_WORD, IN_WORD};
 use crate::node::{Bracket, Node, Separator};
 use crate::operators::Op;
+use std::cell::Cell;
 
 pub(crate) use crate::node::{int, symbol};
 
@@ -18,9 +20,26 @@ pub(crate) fn assign(target: Node, value: Node) -> Node {
 	key(target, Op::Assign, value)
 }
 
+/// Where an entry is and its key: `x[k]` (parsed as `x#(k+1)`) and `x.k` (the text "k") as `x#k` was written, which
+/// counts positions from 1 (`true`)
+pub(crate) fn written_entry(target: &Node) -> Option<(&Node, Node, bool)> {
+	let Node::Key(place, op, index) = target.drop_meta() else { return None };
+	match (op, index.drop_meta()) {
+		(Op::Dot, Node::Symbol(field)) => Some((place, Node::Text(field.clone()), false)),
+		(Op::Hash, Node::Key(key, Op::Add, one)) if *one.drop_meta() == int(1) => Some((place, key.as_ref().clone(), false)),
+		(Op::Hash, key) => Some((place, key.clone(), true)),
+		_ => None,
+	}
+}
+
 /// `play 440` alone or as the one statement of a block `{play 440}`: the words of a call (card statement-block)
 pub(crate) fn is_spaced_call(bracket: &Bracket, separator: &Separator) -> bool {
 	matches!(bracket, Bracket::None | Bracket::Curly) && *separator == Separator::Space
+}
+
+/// `f x`, `(f x)`, `{f x}`: words that call their head
+pub(crate) fn is_words_call(bracket: &Bracket, separator: &Separator) -> bool {
+	is_spaced_call(bracket, separator) || *bracket == Bracket::Round && *separator == Separator::Space
 }
 
 /// The call resolved from the words of `{play 440}` stays the block of its one statement, `{play(440)}`
@@ -56,6 +75,14 @@ pub(crate) fn block(statements: Vec<Node>) -> Node {
 
 pub(crate) fn is_block(node: &Node) -> bool {
 	matches!(node.drop_meta(), Node::List(_, Bracket::Curly, _))
+}
+
+/// The words `for i in …` of a loop: i
+pub(crate) fn for_in_variable(items: &[Node]) -> Option<String> {
+	match items {
+		[keyword, variable, within, ..] if keyword.is_symbol(FOR_WORD) && within.is_symbol(IN_WORD) => variable.symbol_name().map(String::from),
+		_ => None,
+	}
 }
 
 /// `if condition then body`
@@ -131,6 +158,20 @@ pub(crate) fn grouped_parameters(parameter: &Node) -> Vec<Node> {
 		Node::List(group, Bracket::Round, _) => group.clone(),
 		Node::Empty => vec![],
 		_ => vec![parameter.clone()],
+	}
+}
+
+/// Numbers a pass's temporaries apart: each `next_number` the next one, from 0 or from where it starts
+#[derive(Default)]
+pub(crate) struct Counter(Cell<usize>);
+
+impl Counter {
+	pub(crate) const fn starting_at(first: usize) -> Self {
+		Counter(Cell::new(first))
+	}
+
+	pub(crate) fn next_number(&self) -> usize {
+		self.0.replace(self.0.get() + 1)
 	}
 }
 

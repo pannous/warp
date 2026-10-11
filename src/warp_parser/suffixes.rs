@@ -267,21 +267,6 @@ impl WarpParser {
 		Some(Node::List(vec![store, elvis(operand)], Bracket::Round, Separator::Semicolon))
 	}
 
-	/// `hex 1010` is `0x1010`; the digits start with a number, `hex ff` stays a call of `hex` on `ff`
-	pub(super) fn try_parse_hex_word(&mut self) -> Option<Node> {
-		let blanks = (0..).take_while(|&offset| matches!(self.peek_char(offset), ' ' | '\t')).count();
-		if blanks == 0 || !self.peek_char(blanks).is_ascii_digit() {
-			return None;
-		}
-		let end = (blanks..).find(|&offset| !self.peek_char(offset).is_ascii_hexdigit())?;
-		if is_identifier_char(self.peek_char(end)) {
-			return None;
-		}
-		let digits: String = (blanks..end).map(|offset| self.peek_char(offset)).collect();
-		self.advance_by(end);
-		Some(i64::from_str_radix(&digits, 16).map(Node::int).unwrap_or_else(|_| error(&format!("Invalid hex: hex {digits}"))))
-	}
-
 	/// `times [x]` fills a list, binding to the count right before it: `xs = 100 times [0]`
 	pub(super) fn times_fills_list(&self) -> bool {
 		let after_word = TIMES_WORD.len();
@@ -430,7 +415,7 @@ impl WarpParser {
 			_ => false,
 		};
 		let lhs_is_defined_function = matches!(lhs.drop_meta(), Node::Symbol(name) if self.functions.contains(name));
-		let lhs_is_operand_word = matches!(lhs.drop_meta(), Node::Symbol(name) if crate::library_words::is_operand_word(name));
+		let lhs_is_operand_word = || matches!(lhs.drop_meta(), Node::Symbol(name) if crate::library_words::is_operand_word(name));
 		let ch = self.current_char();
 		let in_assignment_context = min_bp <= 60 || self.branch_bp == Some(min_bp); // Assignment r_bp is 59
 		let arg_is_non_identifier = ch.is_numeric()
@@ -442,7 +427,7 @@ impl WarpParser {
 			|| ch == '{'
 			|| ch == '-'
 			|| self.starts_function_reference();
-		let should_apply = in_assignment_context || arg_is_non_identifier || lhs_is_defined_function || lhs_is_operand_word;
+		let should_apply = in_assignment_context || arg_is_non_identifier || lhs_is_defined_function || lhs_is_operand_word();
 
 		// At statement level a list `f a b` is a call with all its items; a function of the implicit `it` takes one argument,
 		// so `f 3-1 > 15` compares `f(3-1)` just like the operand `1 + f 3-1 > 15` does

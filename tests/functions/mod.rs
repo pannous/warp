@@ -90,6 +90,7 @@ mod test_phrase_slot_words;
 mod test_picked_calls;
 mod test_tuple_function_values;
 mod test_libm_pure;
+mod test_rounding_builtins;
 mod test_float_to_int_parameter;
 mod test_whole_float_to_int_parameter;
 mod test_late_binding;
@@ -154,3 +155,4 @@ mod test_generators; // card generators-function
 mod test_typed_global_capture; // card typed-global
 mod test_statement_blocks; // card statement-block
 mod test_sequence_values; // cards sequence-value, block-data-sound
+mod test_alias_definition; // card arctan-allow

@@ -6,6 +6,77 @@ use super::reals::{Exact, Rational, Real};
 use num_integer::Integer;
 use num_traits::{One, Pow, Signed, ToPrimitive, Zero};
 
+/// Positional notation for decimal exponents in [SMALLEST_POSITIONAL, LARGEST_POSITIONAL), at compile time (float_text
+/// below) and at run time (src/wasm_emitter/float_text.rs) alike
+pub const SMALLEST_POSITIONAL: i32 = -5;
+pub const LARGEST_POSITIONAL: i32 = 15;
+/// The most significant digits the shortest text of a float has: a decimal written with more was meant exactly
+const FLOAT_ROUND_TRIP_DIGITS: usize = 17;
+
+/// The exact ratio a decimal text spells, as numerator and denominator: "0.1" is 1/10, "-1.25e-3" is -125/100000
+pub fn decimal_text_fraction(text: &str) -> Option<(BigInt, BigInt)> {
+	let (mantissa, exponent) = text.split_once(['e', 'E']).unwrap_or((text, "0"));
+	let fraction_digits = mantissa.split_once('.').map_or(0, |(_, fraction)| fraction.len()) as i64;
+	let digits: BigInt = mantissa.replace('.', "").parse().ok()?;
+	let scale = exponent.parse::<i64>().ok()? - fraction_digits;
+	let power = BigInt::from(10).pow(scale.unsigned_abs() as u32);
+	Some(if scale >= 0 { (digits * power, BigInt::one()) } else { (digits, power) })
+}
+
+/// A decimal written with more significant digits than a float keeps is the exact ratio it spells (card keep-exact):
+/// 4.4215251521521521512 keeps all its digits, while 3.141592653589793, a float's own text, stays a float, and so does
+/// scientific notation (8.33333333332248946124e+01), which means a float
+pub fn long_decimal(text: &str) -> Option<Number> {
+	if text.contains(['e', 'E']) {
+		return None;
+	}
+	let digits: String = text.chars().filter(char::is_ascii_digit).collect();
+	if digits.trim_start_matches('0').trim_end_matches('0').len() <= FLOAT_ROUND_TRIP_DIGITS {
+		return None;
+	}
+	let (numerator, denominator) = decimal_text_fraction(text)?;
+	Some(Number::ratio(Number::from_bigint(numerator), Number::from_bigint(denominator)))
+}
+
+/// The text of a float as the run-time float_text writes it (user decision float-text): the shortest digits that read
+/// back (`0.1+0.2` as floats is `0.30000000000000004`), positional from 1e-5 up to 1e15, else `1.5e20` / `1e-7`
+pub fn float_text(x: f64) -> String {
+	if x.is_nan() {
+		return "NaN".into();
+	}
+	if x.is_infinite() {
+		return if x > 0.0 { "∞" } else { "-∞" }.into();
+	}
+	if x == 0.0 {
+		return "0".into();
+	}
+	let (whole, exponent) = shortest_digits(x);
+	let digits = whole.to_string();
+	let count = digits.len() as i32;
+	let sign = if x < 0.0 { "-" } else { "" };
+	let zeros = |how_many: i32| "0".repeat(how_many.max(0) as usize);
+	let placed = if !(SMALLEST_POSITIONAL..LARGEST_POSITIONAL).contains(&exponent) {
+		let rest = if count > 1 { format!(".{}", &digits[1..]) } else { String::new() };
+		format!("{}{rest}e{exponent}", &digits[..1])
+	} else if exponent >= count - 1 {
+		digits.clone() + &zeros(exponent - count + 1)
+	} else if exponent >= 0 {
+		let (before, after) = digits.split_at(exponent as usize + 1);
+		format!("{before}.{after}")
+	} else {
+		format!("0.{}{digits}", zeros(-1 - exponent))
+	};
+	format!("{sign}{placed}")
+}
+
+/// The shortest decimal digits that read back as x (finite, not 0) and the decimal exponent of the first digit:
+/// 1.5e-7 is (15, -7), 0.1 + 0.2 is (30000000000000004, -1)
+fn shortest_digits(x: f64) -> (i64, i32) {
+	let written = format!("{:e}", x.abs()); // Rust writes the shortest digits that read back
+	let (mantissa, exponent) = written.split_once('e').unwrap_or((&written, "0"));
+	(mantissa.replace('.', "").parse().unwrap_or(0), exponent.parse().unwrap_or(0))
+}
+
 fn deserialize_leaked_real<'de, D: serde::Deserializer<'de>>(deserializer: D) -> Result<&'static Real, D::Error> {
 	Real::deserialize(deserializer).map(|real| &*Box::leak(Box::new(real)))
 }
@@ -137,6 +208,17 @@ impl Number {
 		Number::from_rational(Rational::new(numerator, denominator))
 	}
 
+	/// The exact value of a repeating decimal written as its digits (card repeating-decimals): `0.16̅` is
+	/// ("0", "1", "6") = 1/6. The digits up to the period's end less those before it, over 10^fixed · (10^period − 1)
+	pub fn repeating_decimal(negative: bool, integer: &str, fixed: &str, period: &str) -> Number {
+		let digits = |text: &str| text.parse::<BigInt>().unwrap_or_default();
+		let numerator = digits(&format!("{integer}{fixed}{period}")) - digits(&format!("{integer}{fixed}"));
+		let power_of_ten = |length: usize| BigInt::from(10).pow(length as u32);
+		let denominator = power_of_ten(fixed.len()) * (power_of_ten(period.len()) - 1);
+		let magnitude = Number::ratio(Number::from_bigint(numerator), Number::from_bigint(denominator));
+		if negative { -magnitude } else { magnitude }
+	}
+
 	/// Normalize: a ratio that fits two i64 is `Quotient`, only larger ones are `BigQuotient`
 	pub fn from_rational(ratio: Rational) -> Number {
 		if ratio.is_integer() {
@@ -207,7 +289,7 @@ impl Display for Number {
 		match self {
 			Number::Int(i) => write!(f, "{}", i),
 			Number::BigInt(b) => write!(f, "{}", b),
-			Number::Float(fl) => write!(f, "{}", fl),
+			Number::Float(fl) => write!(f, "{}", float_text(*fl)),
 			Number::Quotient(numer, denom) => match Number::terminating_decimal(*numer, *denom) {
 				Some(decimal) => write!(f, "{}", decimal),
 				None => write!(f, "{}/{}", numer, denom),

@@ -18,6 +18,7 @@ let pagePath = "/";
 const post = message => self.postMessage(message);
 self.keepStored = (name, value, file) => post({ stored: { name, value, file } }); // host-files.js STD_ADAPTERS.store
 self.writeClipboard = text => post({ clipboard: text }); // host-files.js STD_ADAPTERS.clipboard: the page has the clipboard
+self.askPageClipboard = shared => post({ clipboardRead: shared }); // host.js clipboard_text
 const hooks = {
 	pagePath: () => pagePath,
 	instantiated: holder => { site = holder; },
@@ -47,7 +48,7 @@ async function start({ module, stored, session, path, replies }) {
 	if (replies) serverReplies.push(...JSON.parse(replies)); // host-tasks.js: a page a server rendered for its path (P221)
 	Object.assign(storedValues, stored);
 	Object.assign(sessionValues, session);
-	await self.loadDatabase?.(); // host-files.js, when the program keeps values
+	await self.loadKept?.(); // host-files.js, when the program keeps values
 	pagePath = path;
 	const bytes = new Uint8Array(await (await fetch(module)).arrayBuffer());
 	await self.taskPoolReady?.(); // tasks run on loaded Workers, not inline

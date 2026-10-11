@@ -1,6 +1,7 @@
 //! Atoms: symbols with suffixes, definitions and their bodies, indented and end blocks, URLs, type declarations
 
 use super::*;
+use crate::lowering::nodes::children_rewritten;
 
 const VOID_WORD: &str = "void";
 /// `none` is the null ø; called, `none(xs, f)` (Kotlin's "no element matches") is an error naming it (P185)
@@ -98,6 +99,9 @@ impl WarpParser {
 			';' | '>' | '}' | ')' | ']' => Empty, // Closing brackets/terminators handled by caller
 			'ø' => { self.advance(); return Empty }
 			'∞' => { self.advance(); return Node::Number(Number::Inf) } // the float infinity (P56)
+			// `°C`, `°F`: a temperature unit; `30°`: an angle in degrees (units.rs)
+			crate::units::DEGREE if self.peek_char(1).is_alphabetic() => self.symbol_after(1, |name| Node::Symbol(format!("{}{name}", crate::units::DEGREE))),
+			crate::units::DEGREE => { self.advance(); Node::Symbol(crate::units::DEGREE.to_string()) }
 			_ if let Some((truth, length)) = self.truth_glyph_at() => {
 				self.advance_by(length);
 				return truth;
@@ -619,6 +623,11 @@ impl WarpParser {
 		if let Some(version) = self.version_operand(&symbol) {
 			return version;
 		}
+		// `x°`: a variable in degrees, as `30°` (card angles-degrees)
+		if self.current_char() == crate::units::DEGREE && !self.peek_char(1).is_alphabetic() {
+			self.advance();
+			return Node::Key(Box::new(Node::Symbol(symbol)), Op::Mul, Box::new(Node::Symbol(crate::units::DEGREE.to_string())));
+		}
 
 		// `def square (n) {…}` names its function like `def square(n) {…}`
 		let in_code = self.in_code();
@@ -672,12 +681,6 @@ impl WarpParser {
 		if self.current_char() == '?' && (self.ends_optional_type(self.peek_char(1), self.peek_char(2)) || self.closes_after_blanks(1) || self.next_field_follows(1)) {
 			self.advance();
 			return Symbol(format!("{symbol}?"));
-		}
-
-		if symbol == HEX_WORD && !self.options.data_mode {
-			if let Some(number) = self.try_parse_hex_word() {
-				return number;
-			}
 		}
 
 		// `To square a number: …` starts an English sentence with a capital
@@ -801,6 +804,11 @@ impl WarpParser {
 	/// `class circle{pi = 3}`, `class C{pi:int}`: a named number declared in a type body names the type's own field, which
 	/// shadows nothing outside; the type's methods read the field
 	fn names_field(&mut self, symbol: &str, constant: &Node) -> bool {
+		// `{empty: yes}`, `class Cell{empty: bool}`: a key named like ø is a name (card object-empty-field)
+		let is_word = symbol.chars().all(char::is_alphabetic);
+		if matches!(constant, Node::Empty) && is_word && self.type_annotation_follows() && self.peek_char(1) != ':' {
+			return true;
+		}
 		if !matches!(constant, Node::Number(_)) {
 			return false;
 		}
@@ -1411,9 +1419,7 @@ fn without_end_lines(body: Node) -> Node {
 	let is_end = |item: &Node| item.is_symbol(END_KEYWORD);
 	match body {
 		Node::List(items, bracket, separator) => Node::List(items.into_iter().filter(|item| !is_end(item)).map(without_end_lines).collect(), bracket, separator),
-		Node::Key(left, op, right) => Node::Key(Box::new(without_end_lines(*left)), op, Box::new(without_end_lines(*right))),
-		Node::Meta { node, data } => Node::Meta { node: Box::new(without_end_lines(*node)), data },
-		other => other,
+		other => children_rewritten(other, without_end_lines),
 	}
 }
 

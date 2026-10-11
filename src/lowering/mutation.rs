@@ -3,7 +3,8 @@
 //! `x = x.upper` in the parser; in `upper x!` the parser only sees `x!`, so it marks x and `lower` turns the call into
 //! `x = upper x`. A lone `x!`, `f!` or `{…}!` keeps evaluating.
 
-use super::nodes::{call, key};
+use super::nodes::{call, children_rewritten, int, key, written_entry};
+use crate::extensions::numbers::Number;
 use crate::node::{Bracket, Node, Separator};
 use crate::operators::Op;
 use crate::diagnostic::Diagnostic;
@@ -12,9 +13,12 @@ use crate::diagnostic::Diagnostic;
 const MUTATED_MARK: &str = "mutated";
 /// `x!` that changes nothing unwraps x (library_words: ø is a loud error)
 pub const UNWRAP: &str = "unwrap";
+const DELETE_WORD: &str = "delete";
+const POP_WORD: &str = "pop";
 
-/// Pure words whose result is a changed copy of their argument: dropping it changes nothing
-const COPY_WORDS: [&str; 11] = ["upper", "uppercase", "lower", "lowercase", "trim", "strip", "reverse", "sort", "sorted", "replace", "capitalize"];
+/// Pure words whose result is a changed copy of their argument: dropping it changes nothing. Any spelling of them
+/// (`uppercase`, `strip`, `sorted`) is one (library_words::canonical_spelling)
+const COPY_WORDS: [&str; 7] = ["upper", "lower", "trim", "reverse", "sort", "replace", "capitalize"];
 
 /// wiki/mutable.md: a statement dropping a copy word's result (`uppercase x`), and an assignment of a mutating call
 /// (`y = x.upper!`, which changes x too), warn with the forms meant
@@ -56,7 +60,7 @@ fn copy_word_call(call: &Node) -> Option<(&str, &str, bool)> {
 		other => other,
 	};
 	match (called, variable.drop_meta()) {
-		(Node::Symbol(called), Node::Symbol(name)) if COPY_WORDS.contains(&called.as_str()) => Some((called, name, is_marked(call) || is_marked(variable))),
+		(Node::Symbol(called), Node::Symbol(name)) if COPY_WORDS.contains(&crate::library_words::canonical_spelling(called)) => Some((called, name, is_marked(call) || is_marked(variable))),
 		_ => None,
 	}
 }
@@ -108,6 +112,29 @@ pub(crate) fn bang_target(node: &Node) -> Option<(Node, bool)> {
 	}
 }
 
+/// `delete xs[i]`, `delete xs#i`, `delete m["k"]`, `delete m.k` remove the entry as Python's `del`: `xs.pop(k)` of a
+/// 0-based position or a key (card delete-list). A store's entry (`delete storage[k]`) was lowered by stored_values
+pub fn lower_deletes(node: Node) -> Node {
+	let node = node.map_children(lower_deletes);
+	deleted_entry(&node).unwrap_or(node)
+}
+
+fn deleted_entry(statement: &Node) -> Option<Node> {
+	let Node::List(items, _, _) = statement.drop_meta() else { return None };
+	let [word, target] = items.as_slice() else { return None };
+	if !word.is_symbol(DELETE_WORD) {
+		return None;
+	}
+	let (place, key, counted_from_one) = written_entry(target)?;
+	let key = match key.drop_meta() {
+		Node::Number(position) if counted_from_one => Node::Number(*position - Number::Int(1)),
+		Node::Text(_) => key,
+		_ if counted_from_one => super::nodes::key(key, Op::Sub, int(1)),
+		_ => key,
+	};
+	Some(super::nodes::key(place.clone(), Op::Dot, call(POP_WORD, vec![key])))
+}
+
 /// `upper x!` → `x = upper x`; every other marked name is just the name
 pub fn lower(node: Node) -> Node {
 	match node {
@@ -128,10 +155,8 @@ pub fn lower(node: Node) -> Node {
 			let call = Node::Key(receiver.clone(), Op::Dot, Box::new(unmarked(*method)));
 			Node::Key(receiver, Op::Assign, Box::new(call))
 		}
-		Node::Key(left, op, right) => key(lower(*left), op, lower(*right)),
 		Node::Meta { .. } if is_marked(&node) => unwrapped(unmarked(node)),
-		Node::Meta { node, data } => Node::Meta { node: Box::new(lower(*node)), data },
-		other => other,
+		other => children_rewritten(other, lower),
 	}
 }
 

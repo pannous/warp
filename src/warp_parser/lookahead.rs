@@ -291,12 +291,11 @@ impl WarpParser {
 			self.skip_python_colon();
 			// `try X else print "msg"`: a braceless call as on the guarded side (card try-print)
 			self.parse_guarded_phrase()
-		} else if marker == TRY_MARKER && self.finally_ahead().is_some() {
-			// `try X finally Z` is `try X catch e { e } finally Z`: a failure of X, trap included, stays the value after Z
+		} else if marker == TRY_MARKER {
+			// `r = try X` (user, card failed-raised) and `try X finally Z` are `try X catch e { e }`: a failure of X,
+			// trap included, stays the value, which `r failed` tests
 			caught = Some(UNCAUGHT_ERROR.to_string());
 			Symbol(UNCAUGHT_ERROR.to_string())
-		} else if marker == TRY_MARKER {
-			return error("`try` needs an `else`: `try X else Y`");
 		} else if marker == ASSERT_MARKER {
 			// the error names the condition as written, before lowering rewrote it
 			Node::Text(format!("{ASSERTION_FAILED}: {}", written.trim()))
@@ -379,7 +378,9 @@ impl WarpParser {
 			return false; // `and f(3)`, `and x`: an operand
 		}
 		let next = self.peek_char(argument);
-		(next.is_alphanumeric() || matches!(next, '"' | '\'' | '[' | '{')) && !CONTINUING_WORDS.contains(&self.word_at(argument).as_str())
+		let argument_word = self.word_at(argument);
+		let joins_operands = CONTINUING_WORDS.contains(&argument_word.as_str()) || INFIX_WORDS.contains(&argument_word.as_str());
+		(next.is_alphanumeric() || matches!(next, '"' | '\'' | '[' | '{')) && !joins_operands
 	}
 
 	/// The word that starts the fallback of `try`: `else`, or its classical synonyms `catch` and Python's `except` (P60),
@@ -457,15 +458,23 @@ impl WarpParser {
 		while matches!(self.peek_char(next), ' ' | '\t') {
 			next += 1;
 		}
-		let defined_by_keyword = || {
-			let before: String = self.chars[..self.pos].iter().rev().skip_while(|c| c.is_whitespace()).take_while(|c| c.is_alphanumeric()).collect();
-			crate::operators::is_function_keyword(&before.chars().rev().collect::<String>())
-		};
 		match (self.peek_char(next), self.peek_char(next + 1)) {
 			(':', '=') => true,
-			(':' | '{', _) => defined_by_keyword(),
+			(':' | '{', _) => self.after_function_keyword_word(),
 			_ => false,
 		}
+	}
+
+	/// `def ` right before here: what follows heads a definition
+	pub(super) fn after_function_keyword_word(&self) -> bool {
+		let before: String = self.chars[..self.pos].iter().rev().skip_while(|c| c.is_whitespace()).take_while(|c| c.is_alphanumeric()).collect();
+		crate::operators::is_function_keyword(&before.chars().rev().collect::<String>())
+	}
+
+	/// `Int` or `float` after the colon of a definition's head: its result type, not its body
+	pub(super) fn result_type_follows(&self) -> bool {
+		let word: String = self.chars[self.pos..].iter().skip_while(|c| **c == ' ' || **c == '\t').take_while(|c| c.is_alphanumeric() || **c == '_').collect();
+		word.starts_with(char::is_uppercase) || crate::analyzer::type_word_kind(&word).is_some()
 	}
 
 	/// Peek for prefix operators (unary operators that bind to right operand)

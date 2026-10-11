@@ -446,6 +446,11 @@ fn struct_node<T>(structref: &wasmtime::Rooted<wasmtime::StructRef>, store: &mut
 			Ok(Number::Int(0)) => Node::False,
 			_ => Node::True,
 		},
+		t if t == Kind::Int as u8 && high_byte == crate::type_kinds::HEX_INFO => match read_payload(store, &data) {
+			Ok(Number::Int(value)) => Node::Number(Number::Int(value)).with_source_literal(&crate::wasm_emitter::hex::hex_literal(value)),
+			Ok(number) => Node::Number(number),
+			Err(failure) => Node::Error(Box::new(Node::Text(format!("unreadable Int: {failure}")))),
+		},
 		t if t == Kind::Int as u8 => match read_payload(store, &data) {
 			Ok(number) => Node::Number(number),
 			Err(failure) => Node::Error(Box::new(Node::Text(format!("unreadable Int: {failure}")))),
@@ -474,6 +479,7 @@ fn struct_node<T>(structref: &wasmtime::Rooted<wasmtime::StructRef>, store: &mut
 		},
 		t if t == Kind::TypeDef as u8 => Node::Type { name: Box::new(node(&data)), body: Box::new(node(&child)) },
 		t if t == Kind::Uncertain as u8 => crate::uncertain::Uncertain::read_node(float_array(store, &data)),
+		t if t == Kind::Time as u8 => crate::time::time_node(kind >> crate::type_kinds::KIND_BITS, read_payload(store, &data).ok()),
 		_ => Node::Text(format!("Unknown Kind: {tag}")),
 	}
 }

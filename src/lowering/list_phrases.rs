@@ -6,6 +6,7 @@
 
 use super::nodes::{call, key, symbol};
 use crate::context::Context;
+use crate::library_words::SLICE;
 use crate::node::{Bracket, Node, Separator};
 use crate::operators::Op;
 
@@ -19,7 +20,6 @@ const METHOD_ALIASES: [(&str, &str); 1] = [("sorted", "sort")];
 const PROPERTIES: [(&str, &str); 4] = [("positive", "it > 0"), ("negative", "it < 0"), ("even", "it % 2 == 0"), ("odd", "it % 2 != 0")];
 const WHERE_KEYWORD: &str = "where";
 const SORT_BY: &str = "sort_by";
-const SLICE: &str = "slice";
 /// The parameter of a `sort by` key
 const ELEMENT: &str = "phrase·element";
 

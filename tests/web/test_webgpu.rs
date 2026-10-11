@@ -64,6 +64,16 @@ fn a_fragment_shader_reads_the_values_given() {
 	assert_eq!(rendered.serialize(), format!("[{}]", 0xFFFFFF00u32));
 }
 
+// the shader compiles once and is kept (src/gpu.rs painter): each frame still binds its own values
+#[test]
+fn a_kept_shader_reads_each_frames_values() {
+	let rendered = eval(&format!("{WITH_VALUES}\ngpu_render(shader, 1, 1, {{red: 0.0, tint: [0.0, 0.0, 1.0]}})"));
+	if matches!(&rendered, Node::Error(message) if message.to_string().contains("no WebGPU adapter")) {
+		return crate::common::announce_skip("a WebGPU adapter", module_path!());
+	}
+	assert_eq!(rendered.serialize(), format!("[{}]", 0xFF0000FFu32));
+}
+
 #[test]
 fn a_value_that_is_no_number_says_so() {
 	let failed = eval("gpu_render(\"@fragment fn main() -> @location(0) vec4f { return vec4f(1.0); }\", 1, 1, {name: \"x\"})");

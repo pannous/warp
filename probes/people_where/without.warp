@@ -1,0 +1,6 @@
+// card people-where: `without` a field filters like `where not` (user 2026-10-10); `[1 2 3] without 2` stays undefined
+class P{name: text; team: text?; age: int}
+people: [P] = [P{name: "Al", team: "red", age: 30}, P{name: "Bo", age: 10}, P{name: "Cy", age: 40}]
+young = people without age > 20
+print(name of people without team) // ["Bo" "Cy"]
+count(young) // 1

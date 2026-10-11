@@ -48,6 +48,24 @@ impl Diagnostic {
 		self
 	}
 
+	/// A warning of the kind `topic` about the expression `written`: shown until the user says "got it" to it or to all
+	/// of the kind
+	pub fn about(self, topic: &str, written: &str) -> Self {
+		Diagnostic { topic: Some(topic.to_string()), expression_key: Some(expression_key(topic, written)), ..self }
+	}
+
+	/// The topic "got it" silences and the expression it names, for a warning that has them
+	fn acknowledgeable(&self) -> Option<(&str, &str)> {
+		let topic = self.topic.as_deref()?;
+		let written = self.expression_key.as_deref()?.strip_prefix(topic)?.strip_prefix('@')?;
+		Some((topic, written))
+	}
+
+	/// Said "got it" to before, or on a line that says `// got it`
+	fn is_silenced(&self) -> bool {
+		silenced_by_comment(self.line) || self.acknowledgeable().is_some_and(|(topic, written)| is_acknowledged(topic, written))
+	}
+
 	/// The error, remembered with its fixes for a host to offer (take_error_diagnostics)
 	pub fn into_error(self) -> Node {
 		crate::node::error(&self.remembered())
@@ -260,7 +278,8 @@ pub(crate) fn note_said() {
 	SAID.with(|said| said.set(said.get() + 1));
 }
 
-/// Compile-time warnings: printed in Warn mode, the first one is the error in Error mode
+/// Compile-time warnings: printed in Warn mode, but those said "got it" to, each followed by its "got it?"; the first
+/// one is the error in Error mode
 pub fn report(warnings: &[Diagnostic]) -> Result<(), Node> {
 	if !warnings.is_empty() {
 		note_said();
@@ -269,13 +288,17 @@ pub fn report(warnings: &[Diagnostic]) -> Result<(), Node> {
 		(WarningMode::Error, Some(first)) => Err(first.clone().into_error()),
 		(WarningMode::Quiet, _) => Ok(()),
 		_ => {
-			for warning in warnings {
+			let shown: Vec<Diagnostic> = warnings.iter().filter(|warning| !warning.is_silenced()).cloned().collect();
+			for warning in &shown {
 				eprintln!("warning: {warning}");
 				if let Some(excerpt) = shown_excerpt(warning.line, warning.column) {
 					eprintln!("{excerpt}");
 				}
+				if let Some((topic, written)) = warning.acknowledgeable() {
+					offer_acknowledgement(topic, written);
+				}
 			}
-			COMPILE_WARNINGS.with(|reported| reported.borrow_mut().extend_from_slice(warnings));
+			COMPILE_WARNINGS.with(|reported| reported.borrow_mut().extend(shown));
 			Ok(())
 		}
 	}
@@ -423,8 +446,8 @@ impl Ask {
 				(format!("{} (too ambiguous to guess)", self.question), forms.join(" or "))
 			}
 		};
-		let expression_key = Some(expression_key(&self.topic, &self.question));
-		let diagnostic = Diagnostic { message, line: self.line, column: self.column, fix: Some(fix), topic: Some(self.topic.clone()), fixes: vec![], expression_key };
+		// the expression "got it" for this one remembers: the question names it (`written` is only the replaced word, `upto`)
+		let diagnostic = Diagnostic { message, line: self.line, column: self.column, fix: Some(fix), ..Default::default() }.about(&self.topic, &self.question);
 		let fixes = self.readings.iter().map(|reading| reading.fix.clone().unwrap_or_else(|| crate::fixits::fix(&reading.meaning, &self.written, &reading.explicit_form)));
 		fixes.fold(diagnostic, Diagnostic::offering)
 	}
@@ -524,7 +547,8 @@ pub fn with_acknowledger<R>(acknowledger: impl Acknowledger + 'static, body: imp
 /// Remember "got it" across runs in `path` (one `ack:<topic> = acknowledged` per line), loading the ones already there
 /// The `ack:` lines of the answers file earlier versions wrote, appended to the acknowledgements file when it lacks
 /// them, so acknowledged notes stay quiet after the rename
-pub fn adopt_acknowledgements(old_file: &str, file: &str) {
+pub fn adopt_acknowledgements(old_file: &str, file: impl AsRef<std::path::Path>) {
+	let file = file.as_ref();
 	let Ok(old) = std::fs::read_to_string(old_file) else { return };
 	let current = std::fs::read_to_string(file).unwrap_or_default();
 	let is_acknowledgement = |line: &&str| line.split_once(" = ").is_some_and(|(key, value)| key.trim().starts_with(ACKNOWLEDGED_PREFIX) && value.trim() == ACKNOWLEDGED);
@@ -561,7 +585,7 @@ pub fn begin_program() {
 }
 
 /// Acknowledged for the whole topic, or for this written expression
-fn is_acknowledged(topic: &str, written: &str) -> bool {
+pub(crate) fn is_acknowledged(topic: &str, written: &str) -> bool {
 	let acknowledger = ACKNOWLEDGER.with(|current| current.borrow().clone());
 	[topic.to_string(), expression_key(topic, written)].iter().any(|key| {
 		ACKNOWLEDGED_TOPICS.with(|acknowledged| acknowledged.borrow().contains(key))
@@ -582,7 +606,7 @@ fn remember_acknowledged(topic: &str) {
 
 /// After a warning or note of `topic` was shown, once per run: does the user say "got it", for this expression or all of
 /// the kind? Then it is not shown again
-fn offer_acknowledgement(topic: &str, written: &str) {
+pub(crate) fn offer_acknowledgement(topic: &str, written: &str) {
 	if !NOTES_SHOWN.with(|shown| shown.borrow_mut().insert(topic.to_string())) {
 		return;
 	}
@@ -598,21 +622,22 @@ fn offer_acknowledgement(topic: &str, written: &str) {
 /// Educate with "got it": the hint (`written` → `preferred`, and why) is shown once per run until the user
 /// acknowledges it, then never again; it never blocks non-interactive runs, which just show the hint
 pub fn educate_once(topic: &str, written: &str, preferred: &str, reason: &str) {
-	noted_once(topic, written, || crate::normalize::hint(written, preferred, reason));
+	noted_once(topic, written, || crate::normalize::show_hint(written, preferred, reason, Some(crate::normalize::rewrite(written, preferred, reason))));
 }
 
-/// `educate_once` with advice that does not replace `written` (`subscribe before the loop`)
-pub fn advise_once(topic: &str, written: &str, preferred: &str, reason: &str) {
-	noted_once(topic, written, || crate::normalize::advise(written, preferred, reason));
+/// `educate_once` with advice (normalize::advise): `fix` is its "I meant" edit, none for `subscribe before the loop`
+pub fn advise_once(topic: &str, written: &str, preferred: &str, reason: &str, fix: Option<crate::fixits::Fix>) {
+	noted_once(topic, written, || crate::normalize::show_hint(written, preferred, reason, fix));
 }
 
-fn noted_once(topic: &str, written: &str, show: impl FnOnce()) {
+fn noted_once(topic: &str, written: &str, show: impl FnOnce() -> bool) {
 	let hints_off = crate::normalize::hint_mode() == crate::normalize::HintMode::Off || is_quiet();
 	if hints_off || is_acknowledged(topic, written) || silenced_by_comment(crate::normalize::hint_line()) || NOTES_SHOWN.with(|shown| shown.borrow().contains(topic)) {
 		return;
 	}
-	show();
-	offer_acknowledgement(topic, written);
+	if show() {
+		offer_acknowledgement(topic, written);
+	}
 }
 
 /// Another language's word for a warp word (`__add__` for `plus`, user 2026-10-06): it works, with a got-it note
@@ -634,16 +659,20 @@ pub fn ask(question: &Ask) -> Result<usize, Node> {
 	if question.fallback == Fallback::Error {
 		return Err(diagnostic.into_error());
 	}
-	ASSUMPTIONS.with(|assumptions| assumptions.borrow_mut().push(diagnostic.clone()));
+	// a pass that runs twice (the emitter) asks the same question at the same place once
+	let asked_before = ASSUMPTIONS.with(|assumptions| {
+		let mut assumptions = assumptions.borrow_mut();
+		let asked_before = assumptions.contains(&diagnostic);
+		assumptions.push(diagnostic.clone());
+		asked_before
+	});
 	if warning_mode() == WarningMode::Error {
 		return Err(diagnostic.into_error());
 	}
-	// the expression "got it" for this one remembers: the question names it (`written` is only the replaced word, `upto`)
-	let expression = &question.question;
-	if !is_quiet() && !is_acknowledged(&question.topic, expression) && !silenced_by_comment(question.line) {
-		report(&[diagnostic])?;
-		offer_acknowledgement(&question.topic, expression);
+	if asked_before {
+		return Ok(question.default);
 	}
+	report(&[diagnostic])?;
 	Ok(question.default)
 }
 

@@ -37,6 +37,7 @@ mod test_std_named_program; // card cli-std
 mod test_std_file_copy; // card std-file
 mod test_netbase_package;
 mod test_dir;
+mod test_dir_any_value;
 mod test_use_several; // card std-use
 mod test_from_import; // card std-import
 mod test_std_shadowed_names; // card libm-function
@@ -48,3 +49,12 @@ mod test_std_words; // card std-word
 mod test_std_names_offline; // card playground-module
 mod test_std_module_docs; // card std-module-docs
 mod test_json_parse_form; // card g_ogQg
+mod test_json5; // card json5-parse
+mod test_module_function_dir; // card use-math
+#[cfg(feature = "native")] // another checkout's lib/ on disk and file times: not in the browser build
+mod test_checkout_std_lib; // card local-lib
+mod test_import_words; // card cleanup-closed-lists
+mod test_std_import_forms; // cards import-square include-math
+mod test_dir_value_methods; // card list-methods: dir([1 2]) lists its methods
+#[cfg(feature = "native")] // runs a process: not in the browser
+mod test_std_exec; // card read-chron

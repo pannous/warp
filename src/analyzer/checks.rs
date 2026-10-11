@@ -1,6 +1,7 @@
 //! Analysis and its diagnostics: analyze, type errors, function collection, lints and the checks of calls, nulls and declarations
 
 use super::*;
+use crate::lowering::nodes::children_rewritten;
 
 pub fn analyze(raw: Node) -> Node {
 	let mut scope = Scope::new();
@@ -203,24 +204,17 @@ pub(super) fn type_name_to_kind(name: &str) -> Kind {
 	builtin_type_kind(name).unwrap_or(Kind::Int)
 }
 
-/// Kind of a built-in type name; an exact number (`exact`, `real`) is an Int that may hold a ratio (wasm_emitter/exact.rs)
+/// Kind of a built-in type name (type_tests BUILTIN_TYPES, a fixed width an Int); an exact number (`exact`, `real`) is
+/// an Int that may hold a ratio (wasm_emitter/exact.rs)
 pub fn builtin_type_kind(name: &str) -> Option<Kind> {
-	Some(match canonical_type_name(&name.to_lowercase()) {
-		"int" | "i32" | "i64" | "integer" | "long" | "exact" => Kind::Int,
-		"float" | "f32" | "float32" | "number" => Kind::Float,
-		"string" | "str" | "text" => Kind::Text,
-		"bool" | "boolean" => Kind::Int, // Booleans are i32/i64
-		"char" | "codepoint" => Kind::Codepoint,
-		"function" | "closure" => Kind::Function,
-		fixed if crate::fixed_width::fixed_width(fixed).is_some() => Kind::Int,
-		_ => return None,
-	})
+	let name = name.to_lowercase();
+	crate::type_tests::held_kind(&name).or_else(|| crate::fixed_width::fixed_width(&name).map(|_| Kind::Int))
 }
 
 /// A whole-number type (`int`, `long`, `byte` …): never a fraction, unlike `exact`
 pub fn is_whole_type(name: &str) -> bool {
 	let name = name.trim_end_matches('?').to_lowercase();
-	canonical_type_name(&name) != "exact" && builtin_type_kind(&name) == Some(Kind::Int)
+	!crate::type_tests::is_exact_fraction_type(&name) && builtin_type_kind(&name) == Some(Kind::Int)
 }
 
 /// A declared type a decimal loses digits in: a whole type, or an inline union with a whole part and no fractional
@@ -232,10 +226,25 @@ pub fn refuses_decimals(type_name: &str) -> bool {
 	}
 }
 
+/// A declared type held as an exact Int, or a union of such (`rational`, `int or rational`): an IEEE float loses its
+/// value there
+pub fn refuses_floats(type_name: &str) -> bool {
+	let type_name = type_name.trim_end_matches('?');
+	let exact = |name: &str| builtin_type_kind(name) == Some(Kind::Int);
+	union_parts(type_name).map_or_else(|| exact(type_name), |parts| parts.iter().all(|part| exact(part)))
+}
+
 /// A plural type word denotes a list of that type: `ints`, `numbers` → `int`, `number`
 pub fn plural_element_type(word: &str) -> Option<&str> {
 	let singular = word.strip_suffix('s')?;
 	type_word_kind(singular).map(|_| singular)
+}
+
+/// The map type of a variable held as a Node: `m: map = {}`, or `m = {}` given entries (variables.rs type_map_by_first_entry)
+pub fn held_map_type(subject: &Node, scope: &Scope) -> Option<String> {
+	let local = scope.binding(subject.drop_meta().symbol_name()?)?;
+	let type_name = local.type_node.as_ref()?.name();
+	(local.kind == Kind::Empty && type_name.starts_with(MAP_TYPE)).then_some(type_name)
 }
 
 /// The type name `type(x)` reports for a list: a list whose elements are held as Nodes is a plain `list`
@@ -356,9 +365,7 @@ fn nested_type_word(item: &Node, scope: &Scope) -> String {
 }
 
 /// The type name of a map literal, `map of <value type>` when its values share one
-/// The got-it topic of a `let` variable that changes (P159)
-const LET_CHANGES_TOPIC: &str = "let changes";
-pub(super) const MAP_TYPE: &str = "map";
+pub(crate) const MAP_TYPE: &str = "map";
 /// Library words whose list result has the elements of their list argument
 pub(super) const ORDER_WORDS: [&str; 2] = ["sort", "reverse"];
 /// Library words whose result is a list of texts
@@ -375,8 +382,6 @@ pub const TEMPORARY_SEPARATOR: &str = "·";
 pub fn is_compiler_temporary(name: &str) -> bool {
 	name.contains(TEMPORARY_SEPARATOR)
 }
-/// Statements that name functions or modules instead of calling them
-pub(super) const IMPORT_WORDS: [&str; 3] = ["import", "use", "include"];
 pub(super) const LIST_OF_PREFIX: &str = "list of ";
 /// The type words of a bool, held as an Int (builtin_type_kind)
 const BOOL_TYPES: [&str; 2] = ["bool", "boolean"];
@@ -398,7 +403,7 @@ pub(super) const REAL_WORD: &str = "real";
 pub(super) const REAL_CONSTANTS: [&str; 2] = ["π", "pi"];
 
 /// The type word of a number literal: whole numbers are `int` (also `2.0`), exact fractions and decimals `rational`,
-/// approximations (`1.5f`, √2, complex) `float`
+/// approximations (`1.5f`, √2, complex) `float` (decision exact-decimals)
 pub fn number_type_word(number: &Number) -> &'static str {
 	match number {
 		Number::Int(_) | Number::BigInt(_) => INT_WORD,
@@ -447,12 +452,11 @@ pub(super) fn common_type_word(words: &[String]) -> Option<String> {
 	if words.iter().all(|word| word == first) {
 		return Some(first.clone());
 	}
-	let is_number = |word: &String| [INT_WORD, RATIONAL_WORD, REAL_WORD, FLOAT_WORD, NUMBER_WORD].contains(&word.as_str());
-	let is_exact = |word: &String| word == INT_WORD || word == RATIONAL_WORD;
+	let is_number = |word: &String| is_type_within(word, NUMBER_WORD);
 	if !words.iter().all(is_number) {
 		return None;
 	}
-	Some(if words.iter().all(is_exact) { RATIONAL_WORD } else { NUMBER_WORD }.to_string())
+	Some(if words.iter().all(|word| is_type_within(word, RATIONAL_WORD)) { RATIONAL_WORD } else { NUMBER_WORD }.to_string())
 }
 
 /// Semantic checks run before emission; the first violation comes back as an error value
@@ -484,7 +488,7 @@ pub(super) fn call_arity_error(node: &Node, context: &Context) -> Option<Diagnos
 	match node {
 		Node::Meta { node, .. } => call_arity_error(node, context),
 		// `import (sin, floor) from 'm'` names functions, it calls none
-		Node::List(items, _, _) if matches!(items.first().map(Node::drop_meta), Some(Node::Symbol(word)) if IMPORT_WORDS.contains(&word.as_str())) => None,
+		Node::List(items, _, _) if matches!(items.first().map(Node::drop_meta), Some(Node::Symbol(word)) if crate::modules::is_import_keyword(word)) => None,
 		Node::List(items, bracket, _) => {
 			if let (Bracket::Round, Some(Node::Symbol(name))) = (bracket, items.first().map(Node::drop_meta)) {
 				let libm = crate::ffi::LIBM_F64_FUNCTIONS.iter().filter(|(function, _)| function == name).map(|(_, arity)| *arity);
@@ -664,14 +668,34 @@ pub(super) fn hidden_function_it(body: &Node, warnings: &mut Vec<Diagnostic>) {
 	});
 }
 
+/// The kinds of lint warnings "got it" silences
+pub const AND_OR_TOPIC: &str = "and-or";
+const ARITHMETIC_CONVERSION_TOPIC: &str = "arithmetic-conversion";
+const NEGATIVE_MODULO_TOPIC: &str = "negative-modulo";
+
+/// `"done"`, `7`: a value written out that is never falsy
+fn is_truthy_literal(node: &Node) -> bool {
+	matches!(node.drop_meta(), Node::Number(_) | Node::Text(_) | Node::Char(_) | Node::True) && !node.is_falsy()
+}
+
+/// `x and y or z` yields z when y is falsy; none when y is written out and never falsy: `done and "done" or "open"`
+/// can't go wrong (card done-done)
+fn and_or_warning(node: &Node, condition: &Node, then: &Node, otherwise: &Node) -> Option<Diagnostic> {
+	if is_truthy_literal(then) {
+		return None;
+	}
+	let (condition, then, otherwise) = (condition.serialize(), then.serialize(), otherwise.serialize());
+	let written = format!("{condition} and {then} or {otherwise}");
+	let explicit = format!("if {condition} then {then} else {otherwise}");
+	Some(Diagnostic::at(node, format!("`{written}` yields {otherwise} whenever {then} is falsy"))
+		.fix(&explicit).offer(format!("{then} whenever {condition} holds"), &written, explicit).about(AND_OR_TOPIC, &written))
+}
+
 pub(super) fn lint_into(node: &Node, warnings: &mut Vec<Diagnostic>) {
 	match node.drop_meta() {
 		Node::Key(left, op, right) => {
 			if let (Op::Or, Node::Key(condition, Op::And, then)) = (op, left.drop_meta()) {
-				let (condition, then, otherwise) = (condition.serialize(), then.serialize(), right.serialize());
-				let explicit = format!("if {condition} then {then} else {otherwise}");
-				warnings.push(Diagnostic::at(node, format!("`{condition} and {then} or {otherwise}` yields {otherwise} whenever {then} is falsy"))
-					.fix(&explicit).offer(format!("{then} whenever {condition} holds"), format!("{condition} and {then} or {otherwise}"), explicit));
+				warnings.extend(and_or_warning(node, condition, then, right));
 			}
 			if *op == Op::As && is_arithmetic(left) {
 				let diagnostic = Diagnostic::at(node, conversion_of_arithmetic_warning(left, right));
@@ -679,12 +703,17 @@ pub(super) fn lint_into(node: &Node, warnings: &mut Vec<Diagnostic>) {
 				let readings = conversion_readings(left, right);
 				let forms: Vec<&str> = readings.iter().map(|(_, form)| form.as_str()).collect();
 				let diagnostic = diagnostic.fix(forms.join(" or "));
-				warnings.push(readings.iter().fold(diagnostic, |diagnostic, (meaning, form)| diagnostic.offer(meaning, &written, form)));
+				let diagnostic = readings.iter().fold(diagnostic, |diagnostic, (meaning, form)| diagnostic.offer(meaning, &written, form));
+				warnings.push(diagnostic.about(ARITHMETIC_CONVERSION_TOPIC, &written));
 			}
 			if *op == Op::Mod && (is_negative(left) || is_negative(right)) {
 				let (a, b) = (left.serialize(), right.serialize());
+				let written = format!("{} % {}", a.trim(), b.trim());
 				warnings.push(Diagnostic::at(node, negative_modulo_warning(left, right))
-					.offer("the truncated remainder of C/Java/JS", format!("{} % {}", a.trim(), b.trim()), format!("{} rem {}", a.trim(), b.trim())));
+					.offer("the truncated remainder of C/Java/JS", &written, format!("{} rem {}", a.trim(), b.trim())).about(NEGATIVE_MODULO_TOPIC, &written));
+			}
+			if matches!(op, Op::Eq | Op::Ne) && (is_float_literal_value(left) || is_float_literal_value(right)) {
+				warnings.push(float_equality_warning(node, left, *op, right));
 			}
 			if let (Op::Add, Some(spelled)) = (op, number_text_plus_number(left, right)) {
 				warnings.push(number_text_plus_number_warning(node, left, right, &spelled));
@@ -718,6 +747,23 @@ pub(super) fn assigned_names(program: &Node) -> HashSet<&str> {
 		}
 	});
 	names
+}
+
+/// Arithmetic on literals that gives a float: a decimal (`0.1 + 0.2`), √2, π (decision exact-default)
+fn is_float_literal_value(node: &Node) -> bool {
+	!matches!(node.drop_meta(), Node::Symbol(_)) && infer_type(node, &Scope::new()) == Kind::Float
+}
+
+/// `0.1 + 0.2 == 0.3` is no: decimals are floats, which `==` compares bit for bit (decision exact-default)
+fn float_equality_warning(node: &Node, left: &Node, op: Op, right: &Node) -> Diagnostic {
+	let (a, b) = (left.serialize(), right.serialize());
+	let (a, b) = (a.trim(), b.trim());
+	let (written, similar) = match op {
+		Op::Ne => (format!("{a} != {b}"), format!("not {a} ≈ {b}")),
+		_ => (format!("{a} == {b}"), format!("{a} ≈ {b}")),
+	};
+	Diagnostic::at(node, format!("`{written}` compares floats exactly: rounding makes 0.1 + 0.2 == 0.3 no"))
+		.fix("use ≈").offer("equal within rounding", written, similar)
 }
 
 /// A data key `a-b:2` also reads as the subtraction `a - b` when `a` and `b` are variables
@@ -844,10 +890,7 @@ pub(super) fn subtract_kebab_variables(node: Node, variables: &HashSet<String>) 
 		Node::Key(left, op @ (Op::Colon | Op::Assign | Op::Define), right) => {
 			Node::Key(left, op, Box::new(subtract_kebab_variables(*right, variables)))
 		}
-		Node::Key(left, op, right) => Node::Key(Box::new(subtract_kebab_variables(*left, variables)), op, Box::new(subtract_kebab_variables(*right, variables))),
-		Node::List(items, bracket, separator) => Node::List(items.into_iter().map(|item| subtract_kebab_variables(item, variables)).collect(), bracket, separator),
-		Node::Meta { node, data } => Node::Meta { node: Box::new(subtract_kebab_variables(*node, variables)), data },
-		other => other,
+		other => children_rewritten(other, |child| subtract_kebab_variables(child, variables)),
 	}
 }
 
@@ -869,7 +912,8 @@ pub(super) fn resolve_blocks(node: Node, variables: &HashSet<String>) -> Node {
 				resolved.push(item);
 			}
 			match resolved.pop() {
-				Some(value) if ends_in_lookup => value,
+				// only data collapses to the key it reads: `cat{…}; cat.kill!; cat` keeps running cat.kill!
+				Some(value) if ends_in_lookup && resolved.iter().all(|item| data_binding(item).is_some()) => value,
 				Some(last) => {
 					resolved.push(last);
 					Node::List(resolved, bracket, separator)
@@ -877,9 +921,7 @@ pub(super) fn resolve_blocks(node: Node, variables: &HashSet<String>) -> Node {
 				None => Node::List(resolved, bracket, separator),
 			}
 		}
-		Node::Key(left, op, right) => Node::Key(Box::new(resolve_blocks(*left, variables)), op, Box::new(resolve_blocks(*right, variables))),
-		Node::Meta { node, data } => Node::Meta { node: Box::new(resolve_blocks(*node, variables)), data },
-		other => other,
+		other => children_rewritten(other, |child| resolve_blocks(child, variables)),
 	}
 }
 
@@ -890,10 +932,7 @@ pub(super) fn substitute_keys(node: Node, keys: &HashMap<String, Node>) -> Node 
 	match node {
 		Node::Symbol(name) => keys.get(&name).cloned().unwrap_or(Node::Symbol(name)),
 		Node::Key(left, op @ (Op::Colon | Op::Assign | Op::Define), right) => Node::Key(left, op, Box::new(substitute_keys(*right, keys))),
-		Node::Key(left, op, right) => Node::Key(Box::new(substitute_keys(*left, keys)), op, Box::new(substitute_keys(*right, keys))),
-		Node::List(items, bracket, separator) => Node::List(items.into_iter().map(|item| substitute_keys(item, keys)).collect(), bracket, separator),
-		Node::Meta { node, data } => Node::Meta { node: Box::new(substitute_keys(*node, keys)), data },
-		other => other,
+		other => children_rewritten(other, |child| substitute_keys(child, keys)),
 	}
 }
 
@@ -954,11 +993,14 @@ pub(super) fn negative_modulo_warning(left: &Node, right: &Node) -> String {
 /// is ambiguous (wiki/precedence.md): `square 3 + square 3` reads as `square(3 + square 3)` or `square(3) + square(3)`.
 /// Bad.md's recursive `fib it-1 + fib it-2` would silently mean `fib(it-1 + fib(it-2))`, so it is rejected with both readings.
 pub(super) fn check_ambiguous_calls(node: &Node) -> Option<Diagnostic> {
-	const KEYWORDS: [&str; 10] = ["return", "const", "let", "var", "def", "fun", "fn", "use", "import", "include"];
+	/// `return x`, `let x`, `def f`, `use m`: a statement word, no function applied braceless
+	fn is_statement_word(word: &str) -> bool {
+		is_declaration_word(word) || crate::operators::is_function_keyword(word) || crate::modules::is_import_keyword(word) || RETURNING_KEYWORDS.contains(&word)
+	}
 	fn braceless_call(node: &Node) -> Option<(&String, &Node)> {
 		match node.drop_meta() {
 			Node::List(items, Bracket::None, Separator::Space) if items.len() == 2 => match items[0].drop_meta() {
-				Node::Symbol(head) if !KEYWORDS.contains(&head.as_str()) && !CONSTANT_KEYWORDS.contains(&head.as_str()) => Some((head, &items[1])),
+				Node::Symbol(head) if !is_statement_word(head) => Some((head, &items[1])),
 				_ => None,
 			},
 			_ => None,
@@ -1147,12 +1189,10 @@ pub(super) fn check_null_use(node: &Node, nullable: &mut HashMap<String, Uncheck
 }
 
 /// `const x=…` binds x once: a later assignment of another value, a compound assignment, an increment or an element
-/// assignment is rejected (P130); the same value again only warns (P159). `let x=…` may change, with a note that
-/// teaches `var` for a variable that changes (P159)
-/// A `let` variable may change, with a got-it note teaching `var`
-fn educate_let_change(node: &Node, place: &str, change: &str) {
-	crate::normalize::set_position_of(node);
-	crate::diagnostic::educate_once(LET_CHANGES_TOPIC, &format!("let {place}"), &format!("var {place}"), &format!("{place} changes ({change}): var says so where it is declared"));
+/// assignment is rejected (P130); the same value again only warns (P159). `let x=…` is fully immutable: any change
+/// of it is an error naming `var` (user, card let-reassign)
+fn let_change(node: &Node, place: &str, change: &str) -> Diagnostic {
+	Diagnostic::at(node, format!("{place} is let (immutable), cannot change it: {change}")).fix(format!("use var {place}"))
 }
 
 /// The method call `add(4)`, `pop()`, `remove(x)` of `names.add(4)`: one that changes the list it is called on
@@ -1211,7 +1251,7 @@ pub(super) fn check_constants(node: &Node, constants: &mut HashMap<String, (Stri
 			};
 			let assignment = node.drop_meta().serialize();
 			match constants.get(&place) {
-				Some((keyword, _)) if keyword == IMMUTABLE_LET => educate_let_change(node, &place, &assignment),
+				Some((keyword, _)) if keyword == IMMUTABLE_LET => return Some(let_change(node, &place, &assignment)),
 				Some((_, bound)) if *op == Op::Assign && matches!(target.drop_meta(), Node::Symbol(_)) && value.serialize() == *bound => {
 					let redundant = Diagnostic::at(node, format!("{place} is const and already {bound}: {assignment} changes nothing")).fix("remove the redundant assignment".to_string());
 					if crate::diagnostic::report(std::slice::from_ref(&redundant)).is_err() {
@@ -1231,7 +1271,7 @@ pub(super) fn check_constants(node: &Node, constants: &mut HashMap<String, (Stri
 			let place = list.name();
 			let change = node.drop_meta().serialize();
 			match constants.get(&place) {
-				Some((keyword, _)) if keyword == IMMUTABLE_LET => educate_let_change(node, &place, &change),
+				Some((keyword, _)) if keyword == IMMUTABLE_LET => return Some(let_change(node, &place, &change)),
 				Some(_) => {
 					return Some(Diagnostic::at(node, format!("{place} is const, cannot change it: {change}"))
 						.fix(format!("change a copy (copy = {place}), or declare {place} without const")));
@@ -1260,7 +1300,7 @@ pub(super) fn check_parameter_annotations(program: &Node) -> Option<Diagnostic> 
 			Some(element) => is_known_name(element) || names_list_type(element),
 			None => annotated_kind(annotation).is_some() || user_types.get_by_name(type_name.trim_end_matches('?')).is_some() || traits.is_trait(&type_name),
 		};
-		let names = crate::law::type_model::BUILTIN_TYPE_WORDS.iter().map(|word| word.to_string()).chain(user_types.types().iter().map(|type_def| type_def.name.clone()));
+		let names = crate::type_tests::builtin_type_words().map(str::to_string).chain(user_types.types().iter().map(|type_def| type_def.name.clone()));
 		let diagnostic = || Diagnostic::at(annotation, format!("unknown type {type_name} of parameter {}", param.name));
 		(!known).then(|| match crate::extensions::strings::near_miss(&type_name, names) {
 			Some(near) => diagnostic().offer(format!("the type {near}"), &type_name, near),
@@ -1329,8 +1369,10 @@ pub(crate) fn union_type_name(node: &Node) -> Option<String> {
 	let optional = parts.iter().any(|part| NONE_WORDS.contains(&part.as_str()));
 	parts.retain(|part| !NONE_WORDS.contains(&part.as_str()));
 	parts.dedup();
+	let admits_part = |wide: &String, narrow: &String| !is_bool_type(wide) && builtin_type_kind(narrow).is_some_and(|kind| admits(wide, kind));
+	// two parts held alike (`rational | int`) admit each other: the subtype goes
 	let covers = |wide: &String, narrow: &String| {
-		wide != narrow && !is_bool_type(wide) && builtin_type_kind(narrow).is_some_and(|kind| admits(wide, kind))
+		wide != narrow && admits_part(wide, narrow) && (!admits_part(narrow, wide) || crate::type_tests::type_matches(narrow, wide))
 	};
 	let kept: Vec<&String> = parts.iter().filter(|part| !parts.iter().any(|other| covers(other, part))).collect();
 	let joined = kept.iter().map(|part| part.as_str()).collect::<Vec<_>>().join(UNION_JOINER);
@@ -1452,7 +1494,11 @@ pub(crate) fn admits(type_name: &str, actual: Kind) -> bool {
 		return parts.iter().any(|part| admits(part, actual));
 	}
 	let Some(expected) = builtin_type_kind(type_name) else { return true };
-	let exact_decimal = canonical_type_name(type_name) == "exact" && actual == Kind::Float;
+	// a type held as a Node (`real`: an exact Int or a float) admits the kinds it holds at run time
+	if expected == Kind::Empty {
+		return crate::type_tests::runtime_kind_mask(type_name).is_none_or(|mask| mask & 1 << actual as i64 != 0);
+	}
+	let exact_decimal = crate::type_tests::is_exact_fraction_type(type_name) && actual == Kind::Float;
 	let one_character_text = expected == Kind::Text && actual == Kind::Codepoint;
 	expected == actual || (expected == Kind::Float && actual == Kind::Int) || exact_decimal || one_character_text
 }
@@ -1480,14 +1526,20 @@ pub(crate) fn declared_element_type(annotation: &Node) -> Option<&str> {
 
 /// Do the elements of a list of type `list_type` (list_type_name: `list of int`) fit the declared element type? A list
 /// whose elements are known only at run time (`list of node`, a plain `list`) is checked there
+/// Is the type `word` (an alias too: `double`, `exact`) the type `within` or one it covers (BUILTIN_TYPES)
+fn is_type_within(word: &str, within: &str) -> bool {
+	crate::type_tests::type_matches(crate::type_tests::canonical_spec_word(word), within)
+}
+
 pub(crate) fn elements_fit(declared_element: &str, list_type: &str) -> bool {
 	let Some(element) = list_type.strip_prefix(LIST_OF_PREFIX) else { return true };
 	// `list of int or text` (`[1] + ["a"]`): every part must fit
 	if let Some(parts) = union_parts(element) {
 		return parts.iter().all(|part| elements_fit(declared_element, &format!("{LIST_OF_PREFIX}{part}")));
 	}
-	// a rational or real element is a fraction an int list loses (`rational` names the exact Int representation)
-	let fraction = [RATIONAL_WORD, REAL_WORD, FLOAT_WORD, NUMBER_WORD].contains(&element).then_some(Kind::Float);
+	// a number int does not cover (rational, real, float …) may be a fraction an int list loses (`rational` names the
+	// exact Int representation)
+	let fraction = (is_type_within(element, NUMBER_WORD) && !is_type_within(element, INT_WORD)).then_some(Kind::Float);
 	match fraction.or_else(|| builtin_type_kind(element)) {
 		Some(kind) => admits(declared_element, kind),
 		None => true,
@@ -1608,7 +1660,7 @@ pub(crate) fn appended_items(call: &Node) -> Option<&[Node]> {
 	let Node::Key(_, Op::Dot, method_call) = call.drop_meta() else { return None };
 	let Node::List(items, _, _) = method_call.drop_meta() else { return None };
 	let (method, arguments) = items.split_first()?;
-	let is_append = matches!(method.drop_meta(), Node::Symbol(word) if crate::broadcasting::APPEND_METHODS.contains(&word.as_str()));
+	let is_append = matches!(method.drop_meta(), Node::Symbol(word) if appends(word, arguments.len()));
 	is_append.then_some(arguments)
 }
 

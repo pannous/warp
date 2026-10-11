@@ -1,0 +1,1219 @@
+// Rosetta-style tasks for scripts/llm/corpus.py (Sonnet)
+[
+ {
+  "name": "fibonacci_first_10",
+  "task": "Print the first 10 Fibonacci numbers starting from 0, separated by single spaces."
+ },
+ {
+  "name": "factorial_20",
+  "task": "Print 20! as an exact integer."
+ },
+ {
+  "name": "gcd_lcm_pair",
+  "task": "Print the gcd and lcm of 462 and 1071 separated by a space."
+ },
+ {
+  "name": "sum_digits_2_pow_100",
+  "task": "Print the sum of the decimal digits of 2^100."
+ },
+ {
+  "name": "primes_below_50",
+  "task": "Print all primes below 50 separated by spaces."
+ },
+ {
+  "name": "perfect_numbers_below_10000",
+  "task": "Print all perfect numbers below 10000 separated by spaces."
+ },
+ {
+  "name": "collatz_27_steps",
+  "task": "Print the number of steps for 27 to reach 1 under the Collatz rule."
+ },
+ {
+  "name": "rational_sum_harmonic",
+  "task": "Compute the exact sum 1/1 + 1/2 + ... + 1/10 as a reduced fraction and print it as numerator/denominator."
+ },
+ {
+  "name": "integer_sqrt_floor",
+  "task": "Print the floor of the square root of 10^30 using integer arithmetic only."
+ },
+ {
+  "name": "binary_of_255",
+  "task": "Print 255 in binary, octal and hexadecimal (lowercase), separated by spaces."
+ },
+ {
+  "name": "armstrong_numbers",
+  "task": "Print all three-digit Armstrong numbers separated by spaces."
+ },
+ {
+  "name": "amicable_pairs_below_3000",
+  "task": "Print all amicable pairs (a,b) with a<b<3000 as 'a b' on separate lines."
+ },
+ {
+  "name": "digital_root_987654321",
+  "task": "Print the digital root of 987654321."
+ },
+ {
+  "name": "power_mod_large",
+  "task": "Print 3^200 mod 1000007 using modular exponentiation."
+ },
+ {
+  "name": "sum_multiples_3_5",
+  "task": "Print the sum of all multiples of 3 or 5 below 1000."
+ },
+ {
+  "name": "triangular_numbers_10",
+  "task": "Print the first 10 triangular numbers separated by spaces."
+ },
+ {
+  "name": "decimal_exact_0_1_plus_0_2",
+  "task": "Using exact decimal or rational arithmetic, print whether 1/10 + 2/10 equals 3/10 (true or false)."
+ },
+ {
+  "name": "integer_division_negative",
+  "task": "Print the quotient and remainder of -17 divided by 5 using floor division, separated by a space."
+ },
+ {
+  "name": "euler_totient_36",
+  "task": "Print Euler's totient of 36."
+ },
+ {
+  "name": "is_palindromic_number_range",
+  "task": "Print how many palindromic numbers exist between 1 and 9999 inclusive."
+ },
+ {
+  "name": "factorial_100_digits",
+  "task": "Print the number of digits of 100!."
+ },
+ {
+  "name": "fib_100",
+  "task": "Print the 100th Fibonacci number (F1=F2=1) exactly."
+ },
+ {
+  "name": "two_pow_1000_digits",
+  "task": "Print the number of decimal digits in 2^1000."
+ },
+ {
+  "name": "binomial_50_25",
+  "task": "Print the binomial coefficient C(50,25) exactly."
+ },
+ {
+  "name": "big_sum_squares",
+  "task": "Print the sum of squares of integers from 1 to 100000."
+ },
+ {
+  "name": "last_ten_digits_self_powers",
+  "task": "Print the last ten digits of the sum of n^n for n from 1 to 100."
+ },
+ {
+  "name": "catalan_numbers_10",
+  "task": "Print the first 10 Catalan numbers starting with C0, separated by spaces."
+ },
+ {
+  "name": "bigint_factorial_trailing_zeros",
+  "task": "Print the number of trailing zeros of 1000! computed from its exact value."
+ },
+ {
+  "name": "mersenne_exponent_check",
+  "task": "Print all primes p below 130 for which 2^p-1 is prime, using the Lucas-Lehmer test, separated by spaces."
+ },
+ {
+  "name": "reverse_string",
+  "task": "Print the reverse of the string 'Hello, World!'."
+ },
+ {
+  "name": "palindrome_check",
+  "task": "Print true or false for whether 'A man, a plan, a canal: Panama' is a palindrome ignoring case and non-letters."
+ },
+ {
+  "name": "count_vowels",
+  "task": "Print the number of vowels in 'The quick brown fox jumps over the lazy dog'."
+ },
+ {
+  "name": "word_count",
+  "task": "Print the number of words in 'the rain in spain falls mainly on the plain'."
+ },
+ {
+  "name": "caesar_cipher_encode",
+  "task": "Encode 'Hello, World!' with a Caesar shift of 3 and print the result."
+ },
+ {
+  "name": "caesar_cipher_decode",
+  "task": "Decode 'Khoor, Zruog!' with a Caesar shift of 3 and print the result."
+ },
+ {
+  "name": "title_case",
+  "task": "Print 'the quick brown fox' with the first letter of each word capitalized."
+ },
+ {
+  "name": "char_frequency_sorted",
+  "task": "For the string 'mississippi', print each letter and its count as 'letter:count', ordered alphabetically, separated by spaces."
+ },
+ {
+  "name": "run_length_encode",
+  "task": "Run-length encode 'WWWWBBBWWCD' and print the result like 'W4B3W2C1D1'."
+ },
+ {
+  "name": "run_length_decode",
+  "task": "Decode 'A3B2C4' into a string and print it."
+ },
+ {
+  "name": "anagram_check",
+  "task": "Print true or false for whether 'listen' and 'silent' are anagrams."
+ },
+ {
+  "name": "string_repeat_join",
+  "task": "Print the word 'ab' repeated 5 times joined by hyphens."
+ },
+ {
+  "name": "longest_word",
+  "task": "Print the longest word in 'a quick brown fox jumped over lazy dogs' (first one if tied)."
+ },
+ {
+  "name": "strip_and_pad",
+  "task": "Trim whitespace from '   hi   ' and print it left-padded with '*' to width 6."
+ },
+ {
+  "name": "split_csv_line",
+  "task": "Split 'a,b,,d' on commas and print the number of fields and then the fields joined by '|'."
+ },
+ {
+  "name": "replace_substring",
+  "task": "Replace every 'cat' in 'concatenate the cat category' with 'dog' and print the result."
+ },
+ {
+  "name": "roman_numerals_encode",
+  "task": "Print the Roman numeral for 1994."
+ },
+ {
+  "name": "roman_numerals_decode",
+  "task": "Print the integer value of the Roman numeral MCMXCIV."
+ },
+ {
+  "name": "number_to_words_small",
+  "task": "Print 342 in English words as 'three hundred forty-two'."
+ },
+ {
+  "name": "bracket_balance",
+  "task": "Print true or false for whether '{[()()]}' has balanced brackets, and again for '{[(])}', on separate lines."
+ },
+ {
+  "name": "unique_chars_in_order",
+  "task": "Print the characters of 'programming language' with duplicates removed, keeping first occurrences."
+ },
+ {
+  "name": "hamming_distance",
+  "task": "Print the Hamming distance between 'karolin' and 'kathrin'."
+ },
+ {
+  "name": "levenshtein_kitten",
+  "task": "Print the Levenshtein distance between 'kitten' and 'sitting'."
+ },
+ {
+  "name": "binary_string_to_int",
+  "task": "Parse '101101' as binary and print the integer."
+ },
+ {
+  "name": "vigenere_encode",
+  "task": "Encode 'ATTACKATDAWN' with Vigenere key 'LEMON' and print the result."
+ },
+ {
+  "name": "longest_common_prefix",
+  "task": "Print the longest common prefix of 'interstellar', 'internet', 'interval'."
+ },
+ {
+  "name": "camel_to_snake",
+  "task": "Convert 'camelCaseStringExample' to snake_case and print it."
+ },
+ {
+  "name": "count_substring_overlap",
+  "task": "Print the number of (possibly overlapping) occurrences of 'aa' in 'aaaaa'."
+ },
+ {
+  "name": "sum_of_list",
+  "task": "Print the sum of the list 3 1 4 1 5 9 2 6."
+ },
+ {
+  "name": "max_min_list",
+  "task": "Print the maximum and minimum of the list 7 2 9 4 1 8 separated by a space."
+ },
+ {
+  "name": "reverse_list",
+  "task": "Print the list 1 2 3 4 5 reversed, separated by spaces."
+ },
+ {
+  "name": "remove_duplicates_list",
+  "task": "Remove duplicates from 3 1 3 2 1 4 keeping first occurrences and print the result."
+ },
+ {
+  "name": "flatten_nested_list",
+  "task": "Flatten the nested list [1,[2,[3,4]],[5],6] and print the elements separated by spaces."
+ },
+ {
+  "name": "rotate_list_left",
+  "task": "Rotate the list 1 2 3 4 5 6 left by 2 positions and print it."
+ },
+ {
+  "name": "chunk_list",
+  "task": "Split the numbers 1 to 10 into chunks of 3 and print each chunk on its own line, space separated."
+ },
+ {
+  "name": "zip_two_lists",
+  "task": "Zip [1,2,3] with ['a','b','c'] and print pairs as '1a 2b 3c'."
+ },
+ {
+  "name": "list_intersection",
+  "task": "Print the sorted intersection of [1,2,3,4,5] and [4,5,6,7,2]."
+ },
+ {
+  "name": "list_union_sorted",
+  "task": "Print the sorted union of [5,1,3] and [3,4,1,9]."
+ },
+ {
+  "name": "running_totals",
+  "task": "Print the running totals of 1 2 3 4 5 separated by spaces."
+ },
+ {
+  "name": "pairwise_differences",
+  "task": "Print differences between consecutive elements of 1 4 9 16 25 separated by spaces."
+ },
+ {
+  "name": "median_of_list",
+  "task": "Print the median of 9 3 7 1 5 8."
+ },
+ {
+  "name": "mode_of_list",
+  "task": "Print the most frequent element of 1 3 3 2 2 3 1."
+ },
+ {
+  "name": "cartesian_product",
+  "task": "Print the Cartesian product of [1,2] and [3,4] as pairs like '1,3 1,4 2,3 2,4'."
+ },
+ {
+  "name": "permutations_of_abc",
+  "task": "Print all permutations of 'abc' in lexicographic order separated by spaces."
+ },
+ {
+  "name": "combinations_4_choose_2",
+  "task": "Print all 2-element combinations of 1 2 3 4 as 'ab' groups separated by spaces, in lexicographic order."
+ },
+ {
+  "name": "power_set_of_three",
+  "task": "Print the number of subsets of {1,2,3} and then the subsets whose sum is 3 as lists, one per line."
+ },
+ {
+  "name": "matrix_transpose",
+  "task": "Transpose the matrix [[1,2,3],[4,5,6]] and print each row on a line, space separated."
+ },
+ {
+  "name": "matrix_multiply_2x2",
+  "task": "Multiply [[1,2],[3,4]] by [[5,6],[7,8]] and print each row on a line."
+ },
+ {
+  "name": "pascal_triangle_6",
+  "task": "Print the first 6 rows of Pascal's triangle, each row space separated."
+ },
+ {
+  "name": "word_frequency_map",
+  "task": "Count word frequencies in 'to be or not to be' and print 'word=count' sorted alphabetically, space separated."
+ },
+ {
+  "name": "invert_map",
+  "task": "Invert the map {a:1,b:2,c:3} and print 'key=value' pairs sorted by key, space separated."
+ },
+ {
+  "name": "group_by_length",
+  "task": "Group the words cat dog bird fish ant by length and print each length followed by its words, ordered by length."
+ },
+ {
+  "name": "map_merge_override",
+  "task": "Merge {a:1,b:2} with {b:3,c:4} where the second wins, and print pairs sorted by key as 'k=v'."
+ },
+ {
+  "name": "map_default_counter",
+  "task": "Count how many times each digit occurs in 1223334444 and print 'digit:count' sorted by digit."
+ },
+ {
+  "name": "nested_map_lookup",
+  "task": "Build a map {x:{y:{z:42}}} and print the value reached through x, y, z."
+ },
+ {
+  "name": "map_keys_sorted",
+  "task": "Print the keys of {pear:3,apple:1,fig:2} in sorted order separated by spaces."
+ },
+ {
+  "name": "map_values_sum",
+  "task": "Print the sum of the values of {a:10,b:20,c:30}."
+ },
+ {
+  "name": "set_operations",
+  "task": "Given sets {1,2,3,4} and {3,4,5}, print the sorted difference, then the sorted symmetric difference, on two lines."
+ },
+ {
+  "name": "first_non_repeating_char",
+  "task": "Print the first non-repeating character in 'swiss'."
+ },
+ {
+  "name": "memoized_lookup_table",
+  "task": "Build a map from n to n squared for n in 1..5 and print the values in key order separated by spaces."
+ },
+ {
+  "name": "bubble_sort",
+  "task": "Implement bubble sort and print the sorted list of 5 2 9 1 5 6."
+ },
+ {
+  "name": "insertion_sort",
+  "task": "Implement insertion sort and print the sorted list of 31 41 59 26 53 58."
+ },
+ {
+  "name": "selection_sort",
+  "task": "Implement selection sort and print the sorted list of 64 25 12 22 11."
+ },
+ {
+  "name": "merge_sort",
+  "task": "Implement merge sort and print the sorted list of 38 27 43 3 9 82 10."
+ },
+ {
+  "name": "quick_sort",
+  "task": "Implement quicksort and print the sorted list of 10 7 8 9 1 5."
+ },
+ {
+  "name": "heap_sort",
+  "task": "Implement heap sort and print the sorted list of 12 11 13 5 6 7."
+ },
+ {
+  "name": "counting_sort",
+  "task": "Implement counting sort on 4 2 2 8 3 3 1 and print the result."
+ },
+ {
+  "name": "sort_by_length_then_alpha",
+  "task": "Sort the words banana fig apple kiwi plum by length then alphabetically and print them."
+ },
+ {
+  "name": "sort_descending",
+  "task": "Print 5 3 8 1 9 2 sorted in descending order."
+ },
+ {
+  "name": "sort_records_by_field",
+  "task": "Sort records (Ann,30),(Bob,25),(Cy,35) by age ascending and print names separated by spaces."
+ },
+ {
+  "name": "stable_sort_demo",
+  "task": "Sort pairs (1,b),(0,a),(1,a),(0,b) by first element only with a stable sort and print them as 'ab' style like '0a 0b 1b 1a'."
+ },
+ {
+  "name": "binary_search_found",
+  "task": "Implement binary search on 1 3 5 7 9 11 13 and print the index of 9."
+ },
+ {
+  "name": "binary_search_missing",
+  "task": "Binary search for 8 in 1 3 5 7 9 11 and print -1 if not found."
+ },
+ {
+  "name": "linear_search_last",
+  "task": "Print the index of the last occurrence of 3 in 1 3 5 3 7."
+ },
+ {
+  "name": "is_sorted_check",
+  "task": "Print true or false for whether 1 2 2 5 7 is sorted non-decreasing, then the same for 1 3 2."
+ },
+ {
+  "name": "kth_smallest",
+  "task": "Print the 3rd smallest element of 7 10 4 3 20 15."
+ },
+ {
+  "name": "two_sum_pair",
+  "task": "Print the indices (0-based, space separated) of the two numbers in 2 7 11 15 summing to 9."
+ },
+ {
+  "name": "max_subarray_sum",
+  "task": "Print the maximum contiguous subarray sum of -2 1 -3 4 -1 2 1 -5 4."
+ },
+ {
+  "name": "merge_two_sorted",
+  "task": "Merge sorted lists 1 4 7 and 2 3 9 into one sorted list and print it."
+ },
+ {
+  "name": "insertion_position",
+  "task": "Print the index where 6 would be inserted into the sorted list 1 3 5 7 to keep it sorted."
+ },
+ {
+  "name": "bisect_sqrt_two",
+  "task": "Use bisection to approximate sqrt(2) and print it rounded to 6 decimals."
+ },
+ {
+  "name": "newton_sqrt_two",
+  "task": "Use Newton's method with 6 iterations from 1.0 to approximate sqrt(2) and print it rounded to 8 decimals."
+ },
+ {
+  "name": "recursive_factorial",
+  "task": "Write a recursive factorial and print factorial(15)."
+ },
+ {
+  "name": "recursive_fibonacci",
+  "task": "Write a naive recursive Fibonacci and print fib(20)."
+ },
+ {
+  "name": "hanoi_move_count",
+  "task": "Solve Towers of Hanoi recursively for 10 disks and print the number of moves."
+ },
+ {
+  "name": "hanoi_moves_3",
+  "task": "Print the moves for 3 disks from A to C via B as 'A->C' per line."
+ },
+ {
+  "name": "ackermann_2_3",
+  "task": "Print Ackermann(2,3)."
+ },
+ {
+  "name": "recursive_power",
+  "task": "Write fast recursive exponentiation and print 3^25."
+ },
+ {
+  "name": "recursive_gcd",
+  "task": "Write recursive Euclid's gcd and print gcd(1071,462)."
+ },
+ {
+  "name": "recursive_sum_digits",
+  "task": "Recursively sum the digits of 98765 and print it."
+ },
+ {
+  "name": "recursive_palindrome",
+  "task": "Recursively check whether 'racecar' is a palindrome and print true or false."
+ },
+ {
+  "name": "recursive_binary_repr",
+  "task": "Recursively produce the binary representation of 37 and print it."
+ },
+ {
+  "name": "recursive_list_sum",
+  "task": "Recursively sum the nested list [1,[2,3],[4,[5]]] and print the total."
+ },
+ {
+  "name": "recursive_permutations_count",
+  "task": "Generate all permutations of 1 2 3 4 recursively and print how many there are."
+ },
+ {
+  "name": "n_queens_6",
+  "task": "Print the number of solutions to the 6-queens problem."
+ },
+ {
+  "name": "n_queens_8",
+  "task": "Print the number of solutions to the 8-queens problem."
+ },
+ {
+  "name": "flood_fill_count",
+  "task": "On a 5x5 grid given by rows '00100','00100','11011','00100','00100' (1 is wall), flood fill from (0,0) over 0 cells and print the count filled."
+ },
+ {
+  "name": "subset_sum_exists",
+  "task": "Print true or false for whether a subset of 3 34 4 12 5 2 sums to 9."
+ },
+ {
+  "name": "count_change_100",
+  "task": "Print the number of ways to make 100 cents from coins 1, 5, 10, 25, 50."
+ },
+ {
+  "name": "gray_code_3",
+  "task": "Print the 3-bit Gray code sequence separated by spaces."
+ },
+ {
+  "name": "generate_parentheses_3",
+  "task": "Print all balanced parentheses strings of 3 pairs in lexicographic order separated by spaces."
+ },
+ {
+  "name": "ackermann_depth_safe",
+  "task": "Print Ackermann(3,3)."
+ },
+ {
+  "name": "map_square",
+  "task": "Map squaring over 1..10 and print the results separated by spaces."
+ },
+ {
+  "name": "filter_even",
+  "task": "Filter the even numbers from 1..20 and print them separated by spaces."
+ },
+ {
+  "name": "reduce_product",
+  "task": "Use reduce to print the product of 1..10."
+ },
+ {
+  "name": "compose_functions",
+  "task": "Write a compose function and print compose(double, increment)(5) where double multiplies by 2 and increment adds 1 (apply increment first)."
+ },
+ {
+  "name": "closure_counter",
+  "task": "Create a counter closure and print the values of three successive calls separated by spaces."
+ },
+ {
+  "name": "adder_factory",
+  "task": "Build add_n(n) returning a function and print add_n(5)(10) and add_n(-3)(10) separated by a space."
+ },
+ {
+  "name": "currying_three_args",
+  "task": "Curry a function f(a,b,c)=a*b+c and print f(2)(3)(4)."
+ },
+ {
+  "name": "partial_application",
+  "task": "Partially apply power(base, exp) with exp=3 and print the results for bases 1..5 separated by spaces."
+ },
+ {
+  "name": "function_returning_functions_list",
+  "task": "Create a list of three closures each multiplying by a different index 0,1,2 and print their results on 10 separated by spaces."
+ },
+ {
+  "name": "fold_left_string",
+  "task": "Fold the list of strings a b c d into 'abcd' with a left fold and print it."
+ },
+ {
+  "name": "fold_right_subtract",
+  "task": "Compute the right fold of subtraction over 1 2 3 4 with initial 0 (1-(2-(3-(4-0)))) and print it."
+ },
+ {
+  "name": "take_while_squares",
+  "task": "Print squares of 1,2,3,... while they are below 100, separated by spaces."
+ },
+ {
+  "name": "memoize_function",
+  "task": "Memoize a slow recursive Fibonacci and print fib(80)."
+ },
+ {
+  "name": "y_combinator_factorial",
+  "task": "Use a fixed-point combinator to compute factorial(10) without direct recursion and print it."
+ },
+ {
+  "name": "higher_order_apply_n",
+  "task": "Write apply_n(f,n,x) applying f n times; print apply_n(double,10,1)."
+ },
+ {
+  "name": "sum_via_generator",
+  "task": "Using a lazy generator or iterator, print the sum of the first 100 odd numbers."
+ },
+ {
+  "name": "sort_with_comparator",
+  "task": "Sort 'pear fig banana kiwi' by descending length using a custom comparator and print the words."
+ },
+ {
+  "name": "pipeline_chain",
+  "task": "Using chained operations, take 1..20, keep multiples of 3, square them and print the sum."
+ },
+ {
+  "name": "any_all_predicates",
+  "task": "Print whether any and all of 2 4 6 8 10 are even and whether any is greater than 9, on one line as three booleans."
+ },
+ {
+  "name": "stack_class",
+  "task": "Implement a Stack class with push, pop, and peek; push 1 2 3, pop once and print the peek and size separated by a space."
+ },
+ {
+  "name": "queue_class",
+  "task": "Implement a Queue class; enqueue 1 2 3, dequeue once and print the front element and size separated by space."
+ },
+ {
+  "name": "point_distance_class",
+  "task": "Define a Point class with a distance method and print the distance between (0,0) and (3,4)."
+ },
+ {
+  "name": "bank_account_class",
+  "task": "Define a BankAccount class with deposit and withdraw; deposit 100, withdraw 30 and print the balance."
+ },
+ {
+  "name": "shape_polymorphism",
+  "task": "Define Circle and Rectangle with an area method sharing a base type; print areas of a circle radius 1 and rectangle 3x4 rounded to 2 decimals, space separated."
+ },
+ {
+  "name": "inheritance_animals",
+  "task": "Define Animal with speak() and subclasses Dog and Cat overriding it; print each speak result for a dog then a cat on separate lines."
+ },
+ {
+  "name": "to_string_method",
+  "task": "Define a Person class with a string representation and print 'Alice (30)' via it."
+ },
+ {
+  "name": "operator_overload_vector",
+  "task": "Define a Vector2 class supporting addition and print the sum of (1,2) and (3,4) as '(4, 6)'."
+ },
+ {
+  "name": "complex_number_class",
+  "task": "Implement a minimal complex number class with multiplication and print (1+2i)*(3+4i) as '-5+10i'."
+ },
+ {
+  "name": "linked_list_class",
+  "task": "Implement a singly linked list with append and print its elements after appending 1 2 3 4 separated by spaces."
+ },
+ {
+  "name": "linked_list_reverse",
+  "task": "Implement list reversal on a singly linked list of 1 2 3 4 5 and print the elements."
+ },
+ {
+  "name": "binary_tree_inorder",
+  "task": "Insert 5 3 8 1 4 7 9 into a binary search tree and print the inorder traversal separated by spaces."
+ },
+ {
+  "name": "binary_tree_height",
+  "task": "Insert 5 3 8 1 4 7 9 10 into a BST and print its height counting nodes on the longest root-to-leaf path."
+ },
+ {
+  "name": "static_counter_instances",
+  "task": "Create three instances of a class tracking a shared instance counter and print the count."
+ },
+ {
+  "name": "interface_duck_typing",
+  "task": "Define two unrelated types each with a name() method and call it on both via a common function; print both results on separate lines."
+ },
+ {
+  "name": "immutable_record_update",
+  "task": "Create a record {name:'Bob',age:20}, make a modified copy with age 21 without changing the original, and print both ages separated by a space."
+ },
+ {
+  "name": "iterator_class_range",
+  "task": "Implement a custom iterator class that yields 1 to 5 and print its elements separated by spaces."
+ },
+ {
+  "name": "priority_queue_class",
+  "task": "Implement a min priority queue, insert 5 1 4 2 3 and print the extraction order separated by spaces."
+ },
+ {
+  "name": "matrix_class_determinant",
+  "task": "Implement a Matrix class with a determinant method and print the determinant of [[2,0,1],[1,3,2],[1,1,1]]."
+ },
+ {
+  "name": "match_head_tail",
+  "task": "Use pattern matching to destructure the list [1,2,3,4] into head and tail and print the head, then the tail space separated."
+ },
+ {
+  "name": "match_tuple_cases",
+  "task": "Use pattern matching on pairs (0,0),(0,5),(3,0),(2,2) to classify each as origin, y-axis, x-axis or other and print them space separated."
+ },
+ {
+  "name": "match_shapes_area",
+  "task": "Using pattern matching on tagged values, compute the area of ('circle',2) and ('rect',3,4) and print rounded to 2 decimals separated by a space."
+ },
+ {
+  "name": "regex_digits_extract",
+  "task": "Use a regular expression to extract all integers from 'a12b345c6' and print their sum."
+ },
+ {
+  "name": "regex_email_validate",
+  "task": "Using a simple regex, print true or false for whether 'user@example.com' and 'bad@' are valid emails, on one line."
+ },
+ {
+  "name": "regex_replace_whitespace",
+  "task": "Replace runs of whitespace in 'a   b \\t c' with a single space and print the result."
+ },
+ {
+  "name": "regex_date_capture",
+  "task": "Capture year, month, day from '2024-03-15' using a regex and print them as 'd/m/y' style '15/03/2024'."
+ },
+ {
+  "name": "glob_style_match",
+  "task": "Implement wildcard matching with '*' and '?' and print true or false for matching 'a*c?e' against 'abcde' and 'abcdde'."
+ },
+ {
+  "name": "match_fizzbuzz",
+  "task": "Use pattern matching on (n mod 3, n mod 5) to print FizzBuzz for 1..15 separated by spaces."
+ },
+ {
+  "name": "match_option_values",
+  "task": "Represent optional values as Some/None, pattern match over [Some(3),None,Some(5)] and print the sum treating None as 0."
+ },
+ {
+  "name": "expression_tree_eval",
+  "task": "Evaluate the expression tree Add(Mul(2,3),Neg(4)) using pattern matching and print the result."
+ },
+ {
+  "name": "divide_by_zero_catch",
+  "task": "Catch a division by zero error for 10/0 and print 'error' instead of crashing."
+ },
+ {
+  "name": "parse_int_failure",
+  "task": "Try parsing 'abc' and '42' as integers, printing 'invalid' for failures and the number otherwise, space separated."
+ },
+ {
+  "name": "custom_exception",
+  "task": "Define a custom error type, throw it with message 'boom' and print the caught message."
+ },
+ {
+  "name": "finally_block_order",
+  "task": "Demonstrate try/catch/finally printing 'try', 'catch', 'finally' on separate lines when an error is raised."
+ },
+ {
+  "name": "index_out_of_range",
+  "task": "Catch an out-of-range list access on [1,2,3] at index 5 and print 'out of range'."
+ },
+ {
+  "name": "missing_key_error",
+  "task": "Catch a lookup of a missing key in a map and print 'missing'."
+ },
+ {
+  "name": "result_type_chain",
+  "task": "Write safe_div returning a result or error and chain two calls (100/5 then /0) printing 'ok 20' for the first and 'err' for the second on separate lines."
+ },
+ {
+  "name": "retry_until_success",
+  "task": "Simulate a function that fails twice then succeeds; retry up to 5 times and print the number of attempts used."
+ },
+ {
+  "name": "validate_input_errors",
+  "task": "Validate ages -5, 30, 200 (valid range 0..150) by raising errors, and print 'ok' or 'bad' for each separated by spaces."
+ },
+ {
+  "name": "rethrow_wrapped",
+  "task": "Catch an error, wrap it in another error with an outer message, and print 'outer: inner' where inner was the original message 'disk'."
+ },
+ {
+  "name": "assertion_failure_catch",
+  "task": "Make an assertion that 1 equals 2, catch the failure and print 'assert failed'."
+ },
+ {
+  "name": "nested_try_scopes",
+  "task": "Use nested try blocks where the inner one rethrows and the outer catches; print 'inner' then 'outer' on separate lines."
+ },
+ {
+  "name": "multiplication_table_5",
+  "task": "Print the 5x5 multiplication table, each row space separated."
+ },
+ {
+  "name": "fizzbuzz_15",
+  "task": "Print FizzBuzz for 1 to 15 separated by spaces."
+ },
+ {
+  "name": "sum_1_to_n_while",
+  "task": "Using a while loop print the sum of 1 to 1000."
+ },
+ {
+  "name": "star_triangle",
+  "task": "Print a right triangle of 5 rows of asterisks, one row per line, row k having k stars."
+ },
+ {
+  "name": "pyramid_5",
+  "task": "Print a centered pyramid of 4 rows of '*' using spaces for padding."
+ },
+ {
+  "name": "countdown_10",
+  "task": "Print a countdown from 10 to 1 then 'Liftoff!', separated by spaces."
+ },
+ {
+  "name": "loop_with_break",
+  "task": "Print the first number greater than 100 that is divisible by both 7 and 13."
+ },
+ {
+  "name": "loop_with_continue",
+  "task": "Print the numbers 1 to 20 skipping multiples of 3, separated by spaces."
+ },
+ {
+  "name": "nested_loop_pairs",
+  "task": "Print all pairs (a,b) with 1<=a<b<=4 as 'a-b' separated by spaces."
+ },
+ {
+  "name": "digits_loop_reverse_number",
+  "task": "Reverse the digits of 123456 using arithmetic in a loop and print the result."
+ },
+ {
+  "name": "pythagorean_triples_50",
+  "task": "Print all Pythagorean triples with c<=30 as 'a,b,c' with a<b, ordered by c then a, space separated."
+ },
+ {
+  "name": "leap_years_range",
+  "task": "Print all leap years between 1990 and 2030 inclusive separated by spaces."
+ },
+ {
+  "name": "sum_of_divisors_loop",
+  "task": "Print all divisors of 360 in increasing order separated by spaces."
+ },
+ {
+  "name": "prime_factorization_360",
+  "task": "Print the prime factorization of 360 as '2^3 3^2 5^1'."
+ },
+ {
+  "name": "sieve_of_eratosthenes_100",
+  "task": "Use the Sieve of Eratosthenes and print the count of primes below 100."
+ },
+ {
+  "name": "twin_primes_below_100",
+  "task": "Print all twin prime pairs below 100 as 'p,q' separated by spaces."
+ },
+ {
+  "name": "temperature_c_to_f",
+  "task": "Print Fahrenheit values for Celsius 0, 25, 100 separated by spaces."
+ },
+ {
+  "name": "temperature_f_to_c",
+  "task": "Convert 98.6 F to Celsius and print it rounded to 1 decimal."
+ },
+ {
+  "name": "km_to_miles",
+  "task": "Convert 42.195 km to miles using 1 mile = 1.609344 km and print rounded to 3 decimals."
+ },
+ {
+  "name": "seconds_to_hms",
+  "task": "Convert 98765 seconds to 'h:mm:ss' format and print it."
+ },
+ {
+  "name": "bytes_human_readable",
+  "task": "Print 123456789 bytes in MiB rounded to 2 decimals followed by ' MiB'."
+ },
+ {
+  "name": "inches_to_feet_inches",
+  "task": "Convert 100 inches to feet and inches and print as '8 ft 4 in'."
+ },
+ {
+  "name": "currency_cents_format",
+  "task": "Given the integer 123456 cents, print it as dollars '1234.56' using integer arithmetic."
+ },
+ {
+  "name": "minutes_to_days",
+  "task": "Convert 100000 minutes into days, hours and minutes and print as 'd h m' with spaces."
+ },
+ {
+  "name": "kelvin_table",
+  "task": "Print Kelvin for Celsius -40, 0, 37 separated by spaces with 2 decimals."
+ },
+ {
+  "name": "unit_tagged_values",
+  "task": "Represent a length as a (value, unit) pair, add 2 m and 150 cm giving meters and print '3.5 m'."
+ },
+ {
+  "name": "speed_kmh_to_ms",
+  "task": "Convert 90 km/h to m/s and print it."
+ },
+ {
+  "name": "day_of_week_2000_01_01",
+  "task": "Print the day of the week for 2000-01-01."
+ },
+ {
+  "name": "days_between_dates",
+  "task": "Print the number of days between 2020-01-01 and 2024-03-01."
+ },
+ {
+  "name": "add_days_to_date",
+  "task": "Print the date 100 days after 2023-12-25 in YYYY-MM-DD format."
+ },
+ {
+  "name": "is_leap_year_func",
+  "task": "Write is_leap_year and print true or false for 1900, 2000, 2023, 2024 separated by spaces."
+ },
+ {
+  "name": "friday_13th_2026",
+  "task": "Print the dates in 2026 that fall on Friday the 13th, in YYYY-MM-DD format, one per line."
+ },
+ {
+  "name": "day_of_year_dec31",
+  "task": "Print the day-of-year number of 2024-12-31."
+ },
+ {
+  "name": "month_name_lengths",
+  "task": "Print the number of days in each month of 2024 separated by spaces."
+ },
+ {
+  "name": "format_time_12h",
+  "task": "Convert 17:45 to 12-hour format and print '5:45 PM'."
+ },
+ {
+  "name": "age_from_birthdate",
+  "task": "Compute the full years between birth date 1990-06-15 and 2024-06-14 and print the result."
+ },
+ {
+  "name": "easter_date_2024",
+  "task": "Compute the date of Easter 2024 with the anonymous Gregorian algorithm and print it in YYYY-MM-DD format."
+ },
+ {
+  "name": "calendar_first_weekdays",
+  "task": "Print the weekday names of the first day of each month of 2023 separated by spaces, abbreviated to 3 letters."
+ },
+ {
+  "name": "time_add_minutes",
+  "task": "Add 135 minutes to 22:50 and print the result as HH:MM on a 24-hour clock."
+ },
+ {
+  "name": "dice_lcg_rolls",
+  "task": "Using the LCG x=(1103515245*x+12345) mod 2^31 with seed 42, print the first 5 values of (x mod 6)+1 separated by spaces."
+ },
+ {
+  "name": "game_of_life_blinker",
+  "task": "Simulate one generation of Conway's Game of Life on a 5x5 grid with a vertical blinker in the center and print the grid rows with '#' and '.'."
+ },
+ {
+  "name": "random_walk_lcg",
+  "task": "Run a 10-step walk using the LCG x=(1664525*x+1013904223) mod 2^32 seeded with 1, stepping +1 if x is even otherwise -1, and print the final position."
+ },
+ {
+  "name": "bank_interest_compound",
+  "task": "Compute 1000 at 5% annual interest compounded yearly for 10 years and print rounded to 2 decimals."
+ },
+ {
+  "name": "elevator_simulation",
+  "task": "Simulate an elevator starting at floor 1 visiting floors 5,2,8,3 in order and print the total floors travelled."
+ },
+ {
+  "name": "queue_simulation_tickets",
+  "task": "Simulate a queue where customers arrive at times 0,1,2,3 each needing 2 minutes of service by one clerk, and print the total completion time."
+ },
+ {
+  "name": "traffic_light_cycle",
+  "task": "Simulate a traffic light cycling green,yellow,red for 7 steps starting at green and print the states separated by spaces."
+ },
+ {
+  "name": "cellular_automaton_rule_90",
+  "task": "Run Rule 90 for 4 generations on 9 cells with only the middle cell set, printing each generation with '#' and '.'."
+ },
+ {
+  "name": "monte_carlo_pi_lcg",
+  "task": "Estimate pi with 1000 points using an LCG of your choice with fixed seed and print the count of points inside the unit circle; state the LCG in a comment."
+ },
+ {
+  "name": "vending_machine_change",
+  "task": "Return change for 87 cents with the fewest coins from 25,10,5,1 and print counts per coin separated by spaces."
+ },
+ {
+  "name": "ant_langton_steps",
+  "task": "Simulate Langton's ant for 100 steps on an unbounded grid and print the number of black cells."
+ },
+ {
+  "name": "bouncing_ball_height",
+  "task": "A ball dropped from 100 m rebounds to 60% each bounce; print the height after the 5th bounce."
+ },
+ {
+  "name": "population_growth",
+  "task": "A population of 1000 grows 3% per year; print the first year in which it exceeds 2000."
+ },
+ {
+  "name": "tic_tac_toe_winner",
+  "task": "Determine the winner of the board XOX/OXO/OXX and print X, O or draw."
+ },
+ {
+  "name": "sudoku_row_valid",
+  "task": "Print true or false for whether the row 5 3 4 6 7 8 9 1 2 is a valid sudoku row."
+ },
+ {
+  "name": "magic_square_3",
+  "task": "Print a 3x3 magic square built by the Siamese method, one row per line."
+ },
+ {
+  "name": "eight_ball_cycle",
+  "task": "Cycle through the answers 'yes','no','maybe' for 7 queries and print them separated by spaces."
+ },
+ {
+  "name": "josephus_41_3",
+  "task": "Print the survivor position in the Josephus problem with 41 people and every 3rd eliminated (1-based)."
+ },
+ {
+  "name": "sheep_goat_monty_hall_det",
+  "task": "Run the Monty Hall game deterministically for 3 doors with the player always switching and the car behind each door once; print the number of wins."
+ },
+ {
+  "name": "gcd_of_list",
+  "task": "Print the gcd of 48 180 336 using reduction."
+ },
+ {
+  "name": "happy_numbers_first_8",
+  "task": "Print the first 8 happy numbers separated by spaces."
+ },
+ {
+  "name": "look_and_say_8",
+  "task": "Print the first 8 terms of the look-and-say sequence starting from 1, one per line."
+ },
+ {
+  "name": "pascal_row_10_sum",
+  "task": "Print the sum of row 10 (starting at row 0) of Pascal's triangle."
+ },
+ {
+  "name": "pangram_check",
+  "task": "Print true or false for whether 'Sphinx of black quartz, judge my vow' is a pangram."
+ },
+ {
+  "name": "luhn_check",
+  "task": "Print true or false for whether 49927398716 passes the Luhn check."
+ },
+ {
+  "name": "isbn10_check",
+  "task": "Print true or false for whether ISBN-10 0306406152 is valid."
+ },
+ {
+  "name": "binary_gap_1041",
+  "task": "Print the longest run of zeros between ones in the binary form of 1041."
+ },
+ {
+  "name": "bit_count_range",
+  "task": "Print the total number of set bits in the numbers from 0 to 255."
+ },
+ {
+  "name": "xor_swap",
+  "task": "Swap 12 and 25 using XOR and print them separated by a space."
+ },
+ {
+  "name": "decimal_to_base_36",
+  "task": "Print 123456789 in base 36 using digits 0-9 and lowercase a-z."
+ },
+ {
+  "name": "base_conversion_roundtrip",
+  "task": "Convert 'ff' from base 16 to base 7 and print the result."
+ },
+ {
+  "name": "spiral_matrix_4",
+  "task": "Print a 4x4 spiral matrix with numbers 1..16 filled clockwise from top-left, rows space separated."
+ },
+ {
+  "name": "sum_of_diagonals",
+  "task": "Print the sum of both diagonals (counting the center once) of the 3x3 matrix with entries 1..9 in row order."
+ },
+ {
+  "name": "bfs_shortest_path",
+  "task": "Run BFS on the graph edges 1-2,1-3,2-4,3-4,4-5 and print the shortest path length from 1 to 5."
+ },
+ {
+  "name": "dfs_order",
+  "task": "Run DFS from node 1 on edges 1-2,1-3,2-4,3-4,4-5 visiting neighbors in ascending order and print the visit order."
+ },
+ {
+  "name": "topological_sort_small",
+  "task": "Print a topological order of edges 5->2, 5->0, 4->0, 4->1, 2->3, 3->1 choosing the smallest available node each time."
+ },
+ {
+  "name": "dijkstra_small",
+  "task": "Run Dijkstra on edges A-B:4, A-C:1, C-B:2, B-D:1, C-D:5 and print the shortest distance from A to D."
+ },
+ {
+  "name": "lcs_length",
+  "task": "Print the length of the longest common subsequence of 'AGGTAB' and 'GXTXAYB'."
+ },
+ {
+  "name": "knapsack_01",
+  "task": "Solve 0/1 knapsack with values 60 100 120, weights 10 20 30 and capacity 50 and print the max value."
+ },
+ {
+  "name": "edit_path_count_grid",
+  "task": "Print the number of lattice paths from corner to corner of a 10x10 grid moving only right or down."
+ },
+ {
+  "name": "longest_increasing_subsequence",
+  "task": "Print the length of the longest strictly increasing subsequence of 10 9 2 5 3 7 101 18."
+ },
+ {
+  "name": "matrix_chain_cost",
+  "task": "Print the minimal multiplication cost for matrix chain dimensions 10 30 5 60."
+ },
+ {
+  "name": "gcd_euclid_steps",
+  "task": "Print the number of division steps Euclid's algorithm takes for gcd(1071,462)."
+ },
+ {
+  "name": "bubble_sort_swaps_count",
+  "task": "Print the number of swaps bubble sort performs on 5 1 4 2 8."
+ },
+ {
+  "name": "sieve_nth_prime",
+  "task": "Print the 1000th prime number."
+ },
+ {
+  "name": "sum_primes_below_2000",
+  "task": "Print the sum of all primes below 2000."
+ },
+ {
+  "name": "goldbach_100",
+  "task": "Print one pair of primes summing to 100 with the smallest first prime as 'p q'."
+ },
+ {
+  "name": "bin_packing_first_fit",
+  "task": "Pack items 4 8 1 4 2 1 with bin capacity 10 using first-fit and print the number of bins."
+ },
+ {
+  "name": "balanced_ternary_encode",
+  "task": "Convert 25 to balanced ternary using symbols +,0,- and print it."
+ },
+ {
+  "name": "zeckendorf_100",
+  "task": "Print the Zeckendorf representation of 100 as a string of 0s and 1s."
+ },
+ {
+  "name": "pi_digits_spigot",
+  "task": "Print the first 30 digits of pi (including the leading 3) computed with integer arithmetic."
+ },
+ {
+  "name": "e_digits_bigint",
+  "task": "Print e to 30 decimal places computed using exact rational or big integer arithmetic, truncated rather than rounded."
+ },
+ {
+  "name": "sum_of_cubes_identity",
+  "task": "Verify that the sum of cubes of 1..50 equals the square of the sum of 1..50 and print true or false."
+ },
+ {
+  "name": "rot13_text",
+  "task": "Apply ROT13 to 'Hello, World!' and print the result."
+ },
+ {
+  "name": "bit_reverse_byte",
+  "task": "Reverse the bits of the 8-bit value 0b00010110 and print the result in binary with 8 digits."
+ },
+ {
+  "name": "hex_dump_string",
+  "task": "Print the hexadecimal bytes of the ASCII string 'Hi!' separated by spaces, lowercase two-digit each."
+ },
+ {
+  "name": "balanced_brackets_generate_count",
+  "task": "Print the number of balanced bracket strings with 8 pairs."
+ },
+ {
+  "name": "text_wrap_20",
+  "task": "Wrap 'the quick brown fox jumps over the lazy dog' to lines of at most 15 characters at word boundaries and print each line."
+ },
+ {
+  "name": "center_text",
+  "task": "Center 'hi' in a field of width 10 padded with dots and print it."
+ },
+ {
+  "name": "sort_chars_in_string",
+  "task": "Print the characters of 'programming' sorted alphabetically as one string."
+ },
+ {
+  "name": "acronym_maker",
+  "task": "Make an acronym from 'portable network graphics' in upper case and print it."
+ },
+ {
+  "name": "toggle_case",
+  "task": "Swap the case of every letter in 'Hello World 123' and print it."
+ },
+ {
+  "name": "unicode_length_bytes",
+  "task": "Print the number of characters and the number of UTF-8 bytes of 'héllo' separated by a space."
+ },
+ {
+  "name": "string_compare_natural",
+  "task": "Sort the strings file10 file2 file1 file20 naturally by embedded number and print them."
+ },
+ {
+  "name": "number_with_commas",
+  "task": "Format 1234567890 with comma thousands separators and print it."
+ },
+ {
+  "name": "ordinal_suffix",
+  "task": "Print the ordinals for 1 2 3 4 11 12 13 21 22 101 separated by spaces."
+ },
+ {
+  "name": "word_ladder_distance",
+  "task": "Print the number of positions at which 'flaw' and 'lawn' differ when compared character by character."
+ },
+ {
+  "name": "table_formatting",
+  "task": "Print the rows (apple,3),(kiwi,12),(fig,100) as a table with names left-aligned to width 8 and numbers right-aligned to width 4."
+ },
+ {
+  "name": "bank_queue_sim_summary",
+  "task": "Simulate 3 deposits of 50 and 2 withdrawals of 30 on an account starting at 0 and print the final balance and the count of transactions separated by a space."
+ },
+ {
+  "name": "bigint_digit_sum_factorial_100",
+  "task": "Print the sum of the digits of 100!."
+ },
+ {
+  "name": "bigint_fibonacci_1000_digits",
+  "task": "Print the index of the first Fibonacci number with 1000 digits."
+ },
+ {
+  "name": "bigint_power_tower",
+  "task": "Print the last 10 digits of 7^(7^7) using modular exponentiation with the exponent computed exactly."
+ },
+ {
+  "name": "bigint_lcm_1_to_40",
+  "task": "Print the least common multiple of the integers 1 through 40."
+ }
+]

@@ -25,10 +25,29 @@ fn compiler_failure(sample: &str) -> Option<String> {
 	COMPILER_FAILURES.iter().any(|failure| result.contains(failure)).then(|| format!("{sample}: {result}"))
 }
 
-#[test]
-fn every_sample_runs_without_a_compiler_error() {
+fn slice_runs_cleanly(slice: usize) {
 	let samples = runnable_samples();
 	assert!(samples.len() >= MINIMUM_SAMPLES, "only {} samples found: {samples:?}", samples.len());
-	let failures: Vec<String> = samples.iter().filter_map(|sample| compiler_failure(sample)).collect();
+	let failures: Vec<String> = crate::common::sample_slice(&samples, slice).filter_map(|sample| compiler_failure(sample)).collect();
 	assert!(failures.is_empty(), "compiler errors in samples:\n{}", failures.join("\n"));
+}
+
+#[test]
+fn every_sample_runs_without_a_compiler_error() {
+	slice_runs_cleanly(0);
+}
+
+#[test]
+fn every_sample_runs_without_a_compiler_error_slice_2() {
+	slice_runs_cleanly(1);
+}
+
+#[test]
+fn every_sample_runs_without_a_compiler_error_slice_3() {
+	slice_runs_cleanly(2);
+}
+
+#[test]
+fn every_sample_runs_without_a_compiler_error_slice_4() {
+	slice_runs_cleanly(3);
 }

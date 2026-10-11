@@ -54,3 +54,15 @@ fn reduce_with_a_start_is_fold() {
 	assert_eq!(printed("xs = [1,2,3]; xs.reduce(10, (a, b) => a + b)"), "16");
 	assert_eq!(printed("reduce([1,2,3], 1, (a, b) => a * b)"), "6");
 }
+
+// card sort-comparator: a comparator whose result is any bool (and/or of comparisons, if-then-else of comparisons)
+// says whether the first sorts first, as a single comparison does; it was taken for a JS number and sorted nothing
+#[test]
+fn sort_with_boolean_comparator() {
+	let words = "words = [\"banana\" \"fig\" \"apple\" \"kiwi\" \"plum\"]; ";
+	let by_length_then_alpha = "[\"fig\" \"kiwi\" \"plum\" \"apple\" \"banana\"]";
+	assert_eq!(printed(&format!("{words}sort(words, {{if $0.length == $1.length : $0 < $1 else $0.length < $1.length}})")), by_length_then_alpha);
+	assert_eq!(printed(&format!("{words}sort(words, {{if $0.length == $1.length then $0 < $1 else $0.length < $1.length}})")), by_length_then_alpha);
+	assert_eq!(printed(&format!("{words}sort(words, {{$0.length < $1.length or $0.length == $1.length and $0 < $1}})")), by_length_then_alpha);
+	assert_eq!(printed("def before(a,b){ a > b and yes }; sorted([1,3,2], before)"), "[3 2 1]");
+}

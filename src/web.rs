@@ -291,6 +291,10 @@ fn cell_node(cell: &Value, value: Option<Node>) -> Node {
 		tag if tag == Kind::Int as i64 && info == crate::type_kinds::BOOL_INFO => {
 			if matches!(payload_number(data), Some(Number::Int(0))) { Node::False } else { Node::True }
 		}
+		tag if tag == Kind::Int as i64 && info == crate::type_kinds::HEX_INFO => match payload_number(data) {
+			Some(Number::Int(value)) => Node::Number(Number::Int(value)).with_source_literal(&crate::wasm_emitter::hex::hex_literal(value)),
+			number => number.map_or_else(|| crate::node::error("unreadable Int"), Node::Number),
+		},
 		tag if tag == Kind::Int as i64 => payload_number(data).map_or_else(|| crate::node::error("unreadable Int"), Node::Number),
 		tag if tag == Kind::Float as i64 => Node::Number(Number::Float(payload_float(data).unwrap_or(0.0))),
 		tag if tag == Kind::Text as i64 => Node::Text(text()),
@@ -312,6 +316,7 @@ fn cell_node(cell: &Value, value: Option<Node>) -> Node {
 			let floats = data.get("floats").and_then(Value::as_array);
 			crate::uncertain::Uncertain::read_node(floats.map(|parts| parts.iter().filter_map(float_value).collect()))
 		}
+		tag if tag == Kind::Time as i64 => crate::time::time_node(kind >> KIND_BITS, payload_number(data)),
 		tag => Node::Text(format!("Unknown Kind: {tag}")),
 	}
 }
