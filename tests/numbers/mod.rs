@@ -5,6 +5,7 @@ mod test_declared_float_exact_reals;
 mod test_fixed_width_ints;
 mod test_float_assignment;
 mod test_float_text;
+mod test_host_floats;
 mod test_float_text_folded; // card float text one way
 mod test_float_shortest; // card floats-print
 mod test_float_bit_operations;
