@@ -55,7 +55,7 @@ mod witness;
 pub(crate) mod wasi_emitter;
 const WASI_START: &str = "_start";
 
-pub use big_int::{is_fixnum, EXACT_BUILDERS, INT_RUNTIME};
+pub use big_int::{is_fixnum, EXACT_ARITHMETIC, EXACT_BUILDERS, INT_RUNTIME};
 
 /// Something emission found it must have that the analysis pass did not request
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]

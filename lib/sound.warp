@@ -72,11 +72,13 @@ wave(shape, p) := if shape == "square" then (if p < 0.5 then 1.0 else -1.0)
 	else if shape == "sawtooth" then 2 * p - 1
 	else if shape == "noise" then 2 * random() - 1
 	else sin(2 * pi * p)
+// the seconds at sample i: a float source (decision exact-decimals), so the samples' math runs in f64, not in ratios
+sample_time(i) := i / (sample_rate as float)
 // how far a ramp of seconds has come after steps samples: 0 to 1
 ramp(steps, seconds) := if seconds <= 0 then 1.0 else min(1.0, steps / (seconds * sample_rate))
 // the level of sample i of n (ADSR): 0 at both ends
 envelope(i, n) := {
-	t = i / sample_rate
+	t = sample_time(i)
 	held = if t < attack then 1.0 else 1 - (1 - sustain) * ramp(i - attack * sample_rate, decay)
 	ramp(i, attack) * held * ramp(n - 1 - i, release)
 }
@@ -97,12 +99,12 @@ global detune = 0.1 as float
 
 // the cycles a wave of frequency f has run at sample i, its vibrato included: the integral of f · (1 + c·sin(2π r t))
 phase(f, i) := {
-	t = i / sample_rate
+	t = sample_time(i)
 	swing = 2^(vibrato / 12) - 1
 	f * t + (if vibrato == 0 then 0.0 else f * swing * (1 - cos(2 * pi * vibrato_rate * t)) / (2 * pi * vibrato_rate))
 }
 // the gain of the tremolo at sample i: 1 at the start, 1 - tremolo at its lowest
-tremolo_gain(i) := 1 - tremolo * (0.5 - 0.5 * cos(2 * pi * tremolo_rate * i / sample_rate))
+tremolo_gain(i) := 1 - tremolo * (0.5 - 0.5 * cos(2 * pi * tremolo_rate * sample_time(i)))
 voices_of(pitches) := if unison <= 1 then pitches else [frequency * 2^(detune * (k / (unison - 1) - 0.5) / 12) for frequency in pitches for k in 0..unison]
 // the amplitudes through the filter: a biquad of the Audio EQ Cookbook (R. Bristow-Johnson)
 def filtered(amplitudes) {
