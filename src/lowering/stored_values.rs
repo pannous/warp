@@ -197,15 +197,8 @@ fn storage_access(node: &Node, stores: &[(&str, String)]) -> Option<Node> {
 
 /// The key and the store's file of `local[k]` (parsed as `local#(k+1)`), `local#k` or `local.k`
 fn entry_key<'a>(target: &Node, stores: &'a [(&str, String)]) -> Option<(Node, &'a str)> {
-	let Node::Key(store, op, index) = target.drop_meta() else { return None };
-	let file = file_of(store, stores)?;
-	let key = match (op, index.drop_meta()) {
-		(Op::Dot, Node::Symbol(field)) => Node::Text(field.clone()),
-		(Op::Hash, Node::Key(key, Op::Add, one)) if *one.drop_meta() == Node::int(1) => key.as_ref().clone(),
-		(Op::Hash, key) => key.clone(),
-		_ => return None,
-	};
-	Some((key, file))
+	let (store, key, _) = super::nodes::written_entry(target)?;
+	Some((key, file_of(store, stores)?))
 }
 
 /// The file of the store a word names
