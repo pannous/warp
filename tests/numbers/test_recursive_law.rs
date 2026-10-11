@@ -54,3 +54,16 @@ fn recursive_laws_are_proved_by_induction() {
 		assert_eq!(reports[0].assurance, Assurance::Proved, "{}", reports[0]);
 	}
 }
+
+// a law proved before is a lemma of the laws after it, as Bend proves with helper laws: `fact(n) > 0` needs
+// x*y > 0 from x, y > 0, which Lean's automation does not find in the induction alone
+#[cfg_attr(not(feature = "native"), ignore = "browser: needs the lean prover")]
+#[test]
+fn a_proved_law_is_a_lemma_of_the_next() {
+	crate::requires!(crate::common::LEAN);
+	let fact = "fact(n) := if n <= 0 then 1 else n * fact(n - 1)";
+	assert_eq!(verify(&law_of(fact, "fact(n) > 0"))[0].assurance, Assurance::Tested);
+	let reports = verify(&format!("{fact}\nlaw x > 0 and y > 0 => x * y > 0\nlaw fact(n) > 0"));
+	assert_eq!(reports[0].assurance, Assurance::Proved, "{}", reports[0]);
+	assert_eq!(reports[1].assurance, Assurance::Proved, "{}", reports[1]);
+}

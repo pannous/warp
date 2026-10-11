@@ -389,18 +389,24 @@ pub fn property_test(lawful: &Lawful, law: &Law, trials: usize, code: &str) -> V
 
 // ==================== verify ====================
 
-/// Raise every law as far as it goes: property tests first (they find counterexamples), then Lean.
+/// Raise every law as far as it goes: property tests first (they find counterexamples), then Lean, with the laws
+/// proved before as lemmas
 pub fn verify(code: &str) -> Vec<LawReport> {
 	let lawful = separate_laws(crate::warp_parser::WarpParser::parse(code));
-	lawful
-		.laws
-		.iter()
-		.map(|law| match property_test(&lawful, law, PROPERTY_TRIALS, code) {
-			Verdict::Holds => match lean::prove(&lawful.functions, law) {
+	let mut proved: Vec<Law> = vec![];
+	let mut reports = vec![];
+	for law in &lawful.laws {
+		let report = match property_test(&lawful, law, PROPERTY_TRIALS, code) {
+			Verdict::Holds => match lean::prove_using(&lawful.functions, law, &proved) {
 				Verdict::Holds => LawReport { law: law.clone(), assurance: Assurance::Proved, verdict: Verdict::Holds },
 				verdict => LawReport { law: law.clone(), assurance: Assurance::Tested, verdict },
 			},
 			verdict => LawReport { law: law.clone(), assurance: Assurance::Stated, verdict },
-		})
-		.collect()
+		};
+		if report.assurance == Assurance::Proved {
+			proved.push(law.clone());
+		}
+		reports.push(report);
+	}
+	reports
 }

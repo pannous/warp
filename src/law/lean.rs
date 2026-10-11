@@ -15,7 +15,9 @@ use std::process::{Command, Stdio};
 use std::time::{Duration, Instant};
 
 const LEAN_TIMEOUT: Duration = Duration::from_secs(120);
-pub const TACTICS: &[&str] = &["rfl", "decide", "ac_rfl", "grind", "simp", "exact warp_mul_self_nonneg _"];
+pub const TACTICS: &[&str] = &["rfl", "decide", "ac_rfl", "grind", "simp", "exact warp_mul_self_nonneg _", "simp_all [Int.mul_pos]"];
+/// The name of the i-th law proved before the one being proved, a lemma of its proof
+const LEMMA_PREFIX: &str = "warp_lemma_";
 const HEADER: &str = "import Std.Tactic.BVDecide\n\n\
 theorem warp_mul_self_nonneg (x : Int) : 0 ≤ x * x := by\n  \
 rcases Int.le_total 0 x with hx | hx\n  \
@@ -192,8 +194,9 @@ fn reached<'a>(functions: &'a [FunctionDefinition], law: &Law) -> Vec<&'a str> {
 }
 
 /// The induction over each recursive function the law calls with its variables: `fun_induction sum_to n`, the
-/// recursive call's value its hypothesis, every case closed knowing the reached functions' equations
-fn induction_alternatives(functions: &[FunctionDefinition], law: &Law, reached: &[&str]) -> Vec<String> {
+/// recursive call's value its hypothesis, every case closed knowing the reached functions' equations (grind) or the
+/// unfolded ones' (simp_all loops on a recursive equation), and the lemmas
+fn induction_alternatives(functions: &[FunctionDefinition], law: &Law, reached: &[&str], unfolded: &[&str], lemmas: &[String]) -> Vec<String> {
 	let recursive = |name: &str| functions.iter().any(|function| function.name == name && calls_itself(function));
 	let is_variable = |argument: &Node| matches!(argument.drop_meta(), Node::Symbol(name) if law.variables.iter().any(|(variable, _)| variable == name));
 	let mut inductions: Vec<String> = vec![];
@@ -206,8 +209,9 @@ fn induction_alternatives(functions: &[FunctionDefinition], law: &Law, reached: 
 		}
 	});
 	inductions.dedup();
-	let equations = reached.join(", ");
-	let cases = closing_alternatives(&[&format!("grind [{equations}]"), &format!("simp_all [{equations}]"), "omega"]);
+	let lemmas: Vec<&str> = lemmas.iter().map(String::as_str).collect();
+	let (equations, simplifications) = ([reached, &lemmas].concat().join(", "), [unfolded, &lemmas].concat().join(", "));
+	let cases = closing_alternatives(&[&format!("grind [{equations}]"), &format!("simp_all [{simplifications}]"), "omega"]);
 	let mut alternatives: Vec<String> = inductions.iter().map(|induction| format!("({induction} <;> first | {cases})")).collect();
 	if !alternatives.is_empty() {
 		alternatives.push(format!("(grind [{equations}]; done)"));
@@ -215,22 +219,43 @@ fn induction_alternatives(functions: &[FunctionDefinition], law: &Law, reached: 
 	alternatives
 }
 
-/// A complete Lean file trying `tactics` after unfolding the definitions the law reaches; a law of a recursive
-/// function tries induction first, and unfolds only the others (unfolding the recursive one loops)
+/// A complete Lean file trying `tactics` after unfolding the definitions the law reaches
 pub fn export(functions: &[FunctionDefinition], law: &Law, tactics: &[&str]) -> Lean {
+	export_using(functions, law, &[], tactics)
+}
+
+/// The laws proved before, stated as lemmas whose proofs Lean checked in their own files (`sorry` here: a warning)
+fn lemma_theorems(lemmas: &[Law]) -> Result<(Vec<String>, String), String> {
+	let names: Vec<String> = (1..=lemmas.len()).map(|index| format!("{LEMMA_PREFIX}{index}")).collect();
+	let statements: Result<Vec<String>, String> = lemmas.iter().zip(&names)
+		.map(|(lemma, name)| Ok(format!("theorem {name} {} : {} := by sorry\n", binders(&lemma.variables)?, proposition(&lemma.statement)?)))
+		.collect();
+	Ok((names, statements?.join("")))
+}
+
+/// A law of a recursive function tries induction first, and unfolds only the other functions (unfolding the recursive
+/// one loops); the lemmas close cases too
+pub fn export_using(functions: &[FunctionDefinition], law: &Law, lemmas: &[Law], tactics: &[&str]) -> Lean {
 	let definitions: Result<Vec<String>, String> = functions.iter().map(definition).collect();
+	let (lemma_names, lemma_statements) = lemma_theorems(lemmas)?;
 	let names = reached(functions, law);
 	let unfolded: Vec<&str> = names.iter().copied().filter(|name| functions.iter().any(|function| function.name == *name && !calls_itself(function))).collect();
-	let (unfold, closers) = (format!("try simp only [{}]", unfolded.join(", ")), closing_alternatives(tactics));
-	let inductions = induction_alternatives(functions, law, &names);
+	let with_lemmas: Vec<String> = match lemma_names.is_empty() {
+		true => vec![],
+		false => vec![format!("grind [{}]", lemma_names.join(", ")), format!("simp_all [{}]", lemma_names.join(", "))],
+	};
+	let tactics: Vec<&str> = tactics.iter().copied().chain(with_lemmas.iter().map(String::as_str)).collect();
+	let (unfold, closers) = (format!("try simp only [{}]", unfolded.join(", ")), closing_alternatives(&tactics));
+	let inductions = induction_alternatives(functions, law, &names, &unfolded, &lemma_names);
 	let proof = match inductions.is_empty() {
 		true => format!("{unfold}\n  all_goals first | {closers}"),
 		false => format!("first\n  | {}\n  | (({unfold}) <;> first | {closers})", inductions.join("\n  | ")),
 	};
 	Ok(format!(
-		"{}{}\ntheorem {} {} : {} := by\n  {}\n",
+		"{}{}{}\ntheorem {} {} : {} := by\n  {}\n",
 		HEADER,
 		definitions?.join(""),
+		lemma_statements,
 		theorem_name(law),
 		binders(&law.variables)?,
 		proposition(&law.statement)?,
@@ -316,7 +341,12 @@ fn cached(source: &str, attempt: impl FnOnce(&Path) -> Result<String, String>) -
 
 /// Holds: proved for unbounded Warp Int. Unknown: Lean could not prove or export the law.
 pub fn prove(functions: &[FunctionDefinition], law: &Law) -> Verdict {
-	match export(functions, law, TACTICS) {
+	prove_using(functions, law, &[])
+}
+
+/// As prove, with the laws proved before as lemmas
+pub fn prove_using(functions: &[FunctionDefinition], law: &Law, lemmas: &[Law]) -> Verdict {
+	match export_using(functions, law, lemmas, TACTICS) {
 		Ok(source) => cached(&source, check_file),
 		Err(why) => Verdict::Unknown(why),
 	}

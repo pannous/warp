@@ -39,8 +39,11 @@ CLI: `warp verify file.warp` (or inline code) prints the reports and exits 1 if 
 - An instance recursing deeper than the wasm stack (`sum_to(i64::MAX)`) is skipped, no counterexample; when every
   instance is that deep the law is Unknown.
 - Proved: `sum_to(n) >= 0`, `n >= 0 => sum_to(n) * 2 == n * (n + 1)`, `e >= 0 => power(b, e + 1) == b * power(b, e)`.
-  Not yet: `fact(n) >= 1` (needs `x*y >= 1` from `x, y >= 1`, nonlinear). Next: proofs as warp defs for those
-  (Bend style: equality, rewrite, the recursive call as hypothesis), probes/laws/sum_to.warp.
+- Lemmas: a law proved earlier in the program is a lemma of the laws after it (`lean::prove_using`): its theorem
+  `warp_lemma_i` is stated (`by sorry`, it was proved in its own file) and handed to `grind [...]` and `simp_all [...]`.
+  `law x > 0 and y > 0 => x * y > 0` (proved by `simp_all [Int.mul_pos]`) then proves `fact(n) > 0`, which alone is
+  only Tested (nonlinear). simp_all never gets a recursive function's equation (it loops); grind does.
+  Next: proofs as warp defs (Bend style: equality, rewrite, the recursive call as hypothesis), probes/laws/sum_to.warp.
 
 ## Verdicts
 
