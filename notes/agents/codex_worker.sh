@@ -9,7 +9,8 @@ INTEGRATOR=warp-integrator
 LOG_DIR=$REPO/data/agents/codex
 LOCK=$LOG_DIR/running.pid
 RELAY_MODEL=claude-haiku-5-5
-export PATH=/opt/homebrew/bin:/usr/local/bin:/Users/me/dev/bin:/usr/bin:/bin:$PATH
+# ~/.local/bin holds claude (the relay); cron's PATH has none of these
+export PATH=/Users/me/.local/bin:/opt/homebrew/bin:/usr/local/bin:/Users/me/dev/bin:/usr/bin:/bin:$PATH
 
 mkdir -p "$LOG_DIR"
 if [ -f "$LOCK" ] && kill -0 "$(cat "$LOCK")" 2>/dev/null; then
@@ -60,4 +61,8 @@ fi
 unset CLAUDECODE
 printf '%s\n\n%s\n' "Use the SendMessage tool (load it with ToolSearch \"select:SendMessage\" first) to send the text below, unchanged, to \"$INTEGRATOR\". Start the message with the line \"Merge request from the timed Codex worker (log $RUN.jsonl):\". Then stop." "$REQUESTS" |
 	claude -p --model "$RELAY_MODEL" --allowedTools "SendMessage,ToolSearch" >> "$RUN.relay.log" 2>&1
+if [ "${PIPESTATUS[1]}" -ne 0 ]; then
+	echo "$(date +%FT%T) RELAY FAILED (see $RUN.relay.log): merge requests in $RUN.last.md never reached $INTEGRATOR"
+	exit 1
+fi
 echo "$(date +%FT%T) relayed $(grep -c '^MERGE REQUEST' <<< "$REQUESTS") merge request(s) to $INTEGRATOR"
