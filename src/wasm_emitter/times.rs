@@ -8,7 +8,7 @@ use super::list_ops::RETURNED_ERROR;
 use super::WasmGcEmitter;
 use crate::node::Node;
 use crate::time::calendar::{BUILTIN_RULES, DAYS_PER_ERA, DAY_SECONDS, EPOCH_SHIFT, HOUR, MINUTE, SECOND, YEARS_PER_ERA, ZONES};
-use crate::time::{TimeForm, INSTANT_AT, MONTHS_SHIFT, OFFSET_SHIFT, TIME_FORMS, TIME_FORM_BITS, TIME_FORM_MASK, ZONE_INDEX_MASK};
+use crate::time::{TimeForm, INSTANT_AT, TZDATA_FIELD, MONTHS_SHIFT, OFFSET_SHIFT, TIME_FORMS, TIME_FORM_BITS, TIME_FORM_MASK, ZONE_INDEX_MASK};
 use crate::type_kinds::{Kind, KIND_BITS, KIND_MASK};
 use wasm_encoder::*;
 use Instruction as I;
@@ -421,6 +421,9 @@ impl WasmGcEmitter {
 
 	/// `t.month` of a time: its field, or the refusal of a form without it (`instant has no hour`, `date has no hour`)
 	pub(super) fn emit_time_field_lookup(&mut self, func: &mut Function, held: u32, name: &str) {
+		if name == TZDATA_FIELD {
+			return self.emit_tzdata_lookup(func, held);
+		}
 		if !self.should_emit_function(TIME_FIELD) {
 			return;
 		}
@@ -440,6 +443,16 @@ impl WasmGcEmitter {
 		self.call(func, TIME_FIELD);
 		self.call(func, "new_int");
 		Self::emit_list(func, &[I::Br(1), I::End]);
+	}
+
+	/// `t.tzdata` of a zoned time: the version of the rules it was made with, the builtin ones
+	fn emit_tzdata_lookup(&mut self, func: &mut Function, held: u32) {
+		self.emit_field(func, held, 0);
+		Self::emit_list(func, &[I::I64Const(KIND_MASK), I::I64And, I::I64Const(Kind::Time as i64), I::I64Eq, I::If(BlockType::Empty)]);
+		self.emit_time_form(func, held);
+		Self::emit_list(func, &[I::I64Const(TimeForm::Zoned as i64), I::I64Eq, I::If(BlockType::Empty)]);
+		self.emit_node_instructions(func, &Node::Text(BUILTIN_RULES.version.to_string()));
+		Self::emit_list(func, &[I::Br(2), I::End, I::End]);
 	}
 
 	/// The TimeForm of the time node in `local`
