@@ -2090,6 +2090,10 @@ PASSED:
   ✓ numbers::test_average::a_program_may_define_its_own_mean
   ✓ numbers::test_average::average_needs_no_use
   ✓ numbers::test_average::the_average_of_quantities_has_their_unit
+  ✓ numbers::test_bend_laws::a_named_for_quantifier_is_the_existing_law_form
+  ✓ numbers::test_bend_laws::a_violated_law_makes_the_gate_loud_and_red
+  ✓ numbers::test_bend_laws::quantified_laws_still_reach_the_lean_prover
+  ✓ numbers::test_bend_laws::the_project_laws_file_is_a_green_verification_gate
   ✓ numbers::test_big_ratio::test_big_ratio_readback_stays_exact
   ✓ numbers::test_big_ratio::test_big_ratio_terminating_decimal
   ✓ numbers::test_big_ratio::test_big_ratio_unit_amounts_stay_exact
@@ -3258,7 +3262,6 @@ PASSED:
   ✓ text::test_text_bytes::bytes_of_a_one_character_text_in_a_variable
   ✓ text::test_text_bytes::plus_concatenates_texts_and_characters
   ✓ text::test_text_bytes::plus_equals_appends_to_a_text
-  ✓ text::test_text_bytes::read_loads_a_file_as_bytes
   ✓ text::test_text_bytes::text_plus_number_stays_a_type_error
   ✓ text::test_text_casts::a_double_quoted_text_as_float_is_loud
   ✓ text::test_text_casts::a_numeric_text_as_float_in_a_float_variable
@@ -4690,4 +4693,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-10 ignored, 4685 passed, 0 failed, 4685 total tested
+10 ignored, 4688 passed, 0 failed, 4688 total tested
