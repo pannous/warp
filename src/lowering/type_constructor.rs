@@ -37,7 +37,23 @@ pub fn lower(node: Node) -> Node {
 	let mut registry = TypeRegistry::new();
 	collect_all_types(&mut registry, &node);
 	let constructors = defined_constructors(&node, &registry);
+	let node = conversion_calls(node.clone(), &node);
 	construct(node, &Classes { registry: &registry, constructors: &constructors, defaulting: Default::default() })
+}
+
+/// A built-in type called as a function converts as in Python (card types-constructor): `hex(123)` is `123 as hex`,
+/// unless the program names hex itself
+fn conversion_calls(node: Node, program: &Node) -> Node {
+	let node = children_rewritten(node, |child| conversion_calls(child, program));
+	match node.drop_meta() {
+		Node::List(items, Bracket::Round, _) => match items.as_slice() {
+			[word, value] if word.symbol_name().is_some_and(|name| crate::wasm_emitter::is_called_conversion(name) && !crate::soft_keywords::program_names(program, name)) => {
+				key(value.clone(), Op::As, word.clone())
+			}
+			_ => node,
+		},
+		_ => node,
+	}
 }
 
 /// The declared types and their `init{…}` / `init(name){…}` constructors (class_methods::constructor_name), each

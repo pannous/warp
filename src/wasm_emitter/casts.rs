@@ -573,6 +573,14 @@ fn converts_to(type_name: &str) -> bool {
 		|| crate::analyzer::builtin_type_kind(word).is_some()
 }
 
+/// `hex(123)`, `decimal(x)`, `byte(65)`: a type word whose call converts as `x as type` (type_constructor). The other
+/// built-in types have their calls (`int("12")`, analyzer::type_cast_of), a library word its function (`codepoint(c)`)
+pub(crate) fn is_called_conversion(type_name: &str) -> bool {
+	(converts_to(type_name) || type_name == super::exact::DECIMAL_WORD)
+		&& (crate::analyzer::type_word_kind(type_name).is_none() || super::hex::shows_in_hex(type_name))
+		&& !library_ops::LIBRARY_FUNCTIONS.iter().any(|(word, _)| *word == type_name)
+}
+
 /// `255 as hex`: a word that names no type, unit or class, which used to stay a silent `255 as hex` node
 fn unknown_conversion(value: &Node, type_name: &str) -> String {
 	format!("{type_name} is no type to convert to: {} as {type_name}; known: int, float, rational, {}, byte, int8 … uint64, units and classes", value.serialize(), CONVERSION_WORDS.join(", "))

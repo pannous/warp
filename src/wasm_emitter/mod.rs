@@ -17,6 +17,7 @@ pub(crate) mod exact;
 pub(crate) mod hex;
 mod constructors;
 pub use constructors::NEW_BOOL;
+pub(crate) use casts::is_called_conversion;
 mod equality;
 mod function_builder;
 mod config;
