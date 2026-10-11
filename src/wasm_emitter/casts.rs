@@ -9,6 +9,8 @@ pub const TEXT_AS_NUMBER: &str = "text_as_number";
 /// `x as i64`: the whole number wrapped to 64 bits, not the unbounded int the other int words convert to
 pub(super) const WRAPPING_INT_WORDS: [&str; 2] = ["i64", "int64"];
 const RATIO_SLASH: i32 = '/' as i32;
+/// The words emit_cast converts to besides the number types (int, float, rational …)
+const CONVERSION_WORDS: [&str; 5] = ["text", "list", "codepoint", crate::analyzer::BOOL_TYPE, "number"];
 
 impl WasmGcEmitter {
 	/// Text converts only if it is a number literal (truncated for int); anything else is a runtime error, never a plausible 0
@@ -99,6 +101,7 @@ impl WasmGcEmitter {
 				self.emit_cast(func, value, target);
 				self.emit_call(func, "get_int_value");
 			}
+			_ if !converts_to(&target.name().to_lowercase()) => self.emit_type_error(func, unknown_conversion(value, &target.name())),
 			_ => self.emit_not_a_number(func, located, located.drop_meta()),
 		}
 	}
@@ -234,12 +237,7 @@ impl WasmGcEmitter {
 			"codepoint" => self.emit_cast_to_char(func, value),
 			crate::analyzer::BOOL_TYPE => self.emit_cast_to_bool(func, value),
 			"number" => self.emit_cast_to_number(func, value),
-			_ => {
-				// Unknown type, emit as key node for dynamic dispatch
-				self.emit_node_instructions(func, value);
-				self.emit_node_instructions(func, target_type);
-				self.emit_new_key(func, &Op::As);
-			}
+			_ => self.emit_type_error(func, unknown_conversion(value, &target_type.name())),
 		}
 	}
 
@@ -543,4 +541,16 @@ impl WasmGcEmitter {
 			if matches!(word.drop_meta(), Node::Symbol(name) if super::ROUNDING_FUNCTIONS.contains(&name.as_str())
 				&& !self.ctx.user_functions.contains_key(name) && !self.ctx.ffi_imports.contains_key(name))))
 	}
+}
+
+/// A word `as` converts to here: units and classes are lowered before emission
+fn converts_to(type_name: &str) -> bool {
+	let word = crate::type_tests::canonical_spec_word(type_name);
+	CONVERSION_WORDS.contains(&word) || crate::type_tests::is_exact_fraction_type(word) || crate::type_tests::spells_decimals_exactly(word)
+		|| crate::analyzer::builtin_type_kind(word).is_some()
+}
+
+/// `255 as hex`: a word that names no type, unit or class, which used to stay a silent `255 as hex` node
+fn unknown_conversion(value: &Node, type_name: &str) -> String {
+	format!("{type_name} is no type to convert to: {} as {type_name}; known: int, float, rational, {}, units and classes", value.serialize(), CONVERSION_WORDS.join(", "))
 }
