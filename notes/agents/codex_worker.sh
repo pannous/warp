@@ -9,8 +9,9 @@ INTEGRATOR=warp-integrator
 LOG_DIR=$REPO/data/agents/codex
 LOCK=$LOG_DIR/running.pid
 RELAY_MODEL=claude-haiku-5-5
-# ~/.local/bin holds claude (the relay); cron's PATH has none of these
-export PATH=/Users/me/.local/bin:/opt/homebrew/bin:/usr/local/bin:/Users/me/dev/bin:/usr/bin:/bin:$PATH
+# ~/.local/bin holds claude (the relay), ~/.cargo/bin rustup's toolchain ahead of Homebrew's rust (card
+# homebrew-rustc); cron's PATH has none of these
+export PATH=/Users/me/.local/bin:/Users/me/.cargo/bin:/opt/homebrew/bin:/usr/local/bin:/Users/me/dev/bin:/usr/bin:/bin:$PATH
 
 mkdir -p "$LOG_DIR"
 if [ -f "$LOCK" ] && kill -0 "$(cat "$LOCK")" 2>/dev/null; then
