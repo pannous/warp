@@ -17,15 +17,18 @@ fn a_program_hears_its_own_broadcast() {
 #[test]
 #[cfg(all(feature = "native", unix))]
 fn a_broadcast_reaches_another_program() {
-	let listener = crate::common::warp_command()
-		.args(["--no-ask", "on message from \"test-other\" { print \"heard \" + event; exit }\nsleep(3000 ms)\nprint \"nothing\""])
+	use std::io::BufRead;
+	// the listener says when it listens: a fixed head start was too short under load (card broadcast-test)
+	let mut listener = crate::common::warp_command()
+		.args(["--no-ask", "on message from \"test-other\" { print \"heard \" + event; exit }\nprint \"listening\"\nsleep(30000 ms)\nprint \"nothing\""])
 		.stdout(std::process::Stdio::piped())
 		.spawn()
 		.expect("the listener starts");
-	std::thread::sleep(std::time::Duration::from_millis(800));
+	let mut lines = std::io::BufReader::new(listener.stdout.take().expect("the listener's output")).lines().map_while(Result::ok);
+	assert_eq!(lines.next().as_deref(), Some("listening"));
 	printed("broadcast \"ping\" on \"test-other\"");
-	let output = listener.wait_with_output().expect("the listener ends");
-	assert_eq!(String::from_utf8_lossy(&output.stdout).lines().next(), Some("heard ping"));
+	assert_eq!(lines.next().as_deref(), Some("heard ping"));
+	listener.wait().expect("the listener ends");
 }
 
 #[test]
