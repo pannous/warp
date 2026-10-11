@@ -1711,8 +1711,11 @@ PASSED:
   ✓ lists::test_pop::pop_gives_the_last_item
   ✓ lists::test_pop::pop_removes_the_last_item
   ✓ lists::test_python_collections::a_missing_index_is_an_error
+  ✓ lists::test_python_collections::clear_empties_a_list_or_a_map
   ✓ lists::test_python_collections::dict_methods
   ✓ lists::test_python_collections::list_methods
+  ✓ lists::test_python_collections::pop_of_a_position_or_a_key
+  ✓ lists::test_python_collections::popitem_and_fromkeys
   ✓ lists::test_range_arguments::a_range_argument_is_read_from_its_bounds
   ✓ lists::test_range_arguments::a_range_argument_used_as_a_list_stays_one
   ✓ lists::test_range_arguments::a_range_passed_on_to_a_reader_stays_its_bounds
@@ -4720,4 +4723,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-10 ignored, 4715 passed, 0 failed, 4715 total tested
+10 ignored, 4718 passed, 0 failed, 4718 total tested
