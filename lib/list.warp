@@ -51,3 +51,6 @@ last_n(xs, n) := drop(xs, max(count(xs) - n, 0))
 fill(n, value) := { out = []; for i in 1 to n { out = out + [value] }; out }
 // [smallest, greatest]
 minmax(xs) := [min(xs), max(xs)]
+// Python's list methods (card python-stdlib): extend appends each of ys in place, index is the position from 0
+extend(xs, ys) := { for y in ys { xs.append(y) }; xs }
+index(xs, x) := { at = index_of(xs, x); if at == 0 { raise "ValueError: " + str(x) + " is not in the list" }; at - 1 }

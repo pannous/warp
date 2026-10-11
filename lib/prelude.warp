@@ -39,3 +39,5 @@ nearest(x, kind, limit = 0, within = 0) := {
 		rest = 1 / (rest - a)
 	}
 }
+// Python's dict(pairs) (card python-stdlib): a map of [key value] pairs
+dict(pairs) := { out = {}; for pair in pairs { out[pair#1] = pair#2 }; out }

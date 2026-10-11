@@ -48,8 +48,9 @@ const LOG_WORD: &str = "log";
 const OF_WORD: &str = "of";
 
 /// Canonical word and the spellings that mean it
-const SYNONYMS: [(&str, &[&str]); 27] = [
-	(LIST_WORD, &[]),
+const SYNONYMS: [(&str, &[&str]); 28] = [
+	// Python's tuple(xs) (card python-stdlib)
+	(LIST_WORD, &["tuple"]),
 	(MAP_KEYS, &["keys"]),
 	(MAP_VALUES, &["values"]),
 	(MAP_ENTRIES, &[]),
@@ -62,7 +63,7 @@ const SYNONYMS: [(&str, &[&str]); 27] = [
 	("lower", &["lowercase"]),
 	// the text builtin trim (text_builtins.rs), Python's strip
 	("trim", &["strip"]),
-	("reverse", &[]),
+	("reverse", &["reversed"]),
 	("sort", &["sorted"]),
 	("split", &[]),
 	("join", &[]),
@@ -77,6 +78,8 @@ const SYNONYMS: [(&str, &[&str]); 27] = [
 	(IS_ALPHA, &["is_letter", "isalpha"]),
 	("is_alphanumeric", &["is_alnum", "isalnum"]),
 	("nearest", &[]),
+	// lib/prelude.warp's map of [key value] pairs, Python's dict(pairs)
+	("dict", &[]),
 	(crate::mutation::UNWRAP, &[]),
 ];
 /// `list_sum(list, loop)`: the sum of a list variable as one operation the emitter dispatches (wasm_emitter/list_dispatch.rs):

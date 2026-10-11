@@ -139,3 +139,15 @@ that is what a funcref table plus closures would add. Pipeline: lambdas (loops f
 Parser: `&name` is glued to the name and not to a word before it (`a &b` is now the application `a (&b)`, `a & b` and `a&b` stay `and`);
 `x<k` is a comparison, only a type name (`Vec<T>`, `list<int>`, a type word) starts a generic; a braceless `map xs f` is flattened.
 Not done: `f(+)` (an operator inside call brackets does not parse), unary operators as values, functions stored in lists or objects.
+
+## Python's list, dict and tuple words (card python-stdlib, tests/lists/test_python_collections.rs)
+
+Aliases of warp's own words: `reversed` → reverse, `tuple(xs)` → list, `len` → count (with its hint), `xs.index(x)` (lib/list.warp:
+the position from 0, a `ValueError` raise when absent; `index_of` stays the 1-based one), `xs.extend(ys)` (appends in place),
+`m.items()` → entries, `m.update(n)` → merge (in place), `m.setdefault(k, d)`, `dict(pairs)` (prelude). Already warp words:
+append, remove, pop(), count, copy, keys, values, get, sorted, any, all, sum, min, max.
+Not aliased, on purpose or open:
+- `xs.sort()` / `xs.reverse()` stay copies with the unused-value warning; warp's in-place form is `xs.sort!` (wiki/mutable.md).
+- `xs.insert(i, v)` is the ambiguity error naming both readings (decided earlier).
+- Open: `xs.clear()` / `m.clear()` (clear is draw's word), `xs.pop(i)`, `m.pop(k)` (`m.remove(k)` is it), `m.popitem()`,
+  `dict.fromkeys(ks, v)`.

@@ -95,3 +95,4 @@ mod test_keys_of_a_value; // card keys-value
 mod test_comprehension_beside_own_push; // card prefix-count-field
 mod test_library_word_operands; // card derive-hard
 mod test_list_methods; // card list-methods
+mod test_python_collections; // card python-stdlib
