@@ -2319,6 +2319,12 @@ PASSED:
   ✓ numbers::test_rational_type::test_pi_is_real_whatever_its_representation
   ✓ numbers::test_rational_type::test_rational_and_rationals_are_type_words
   ✓ numbers::test_rational_type::test_type_of_a_list_of_decimals_is_a_list_of_rational
+  ✓ numbers::test_recursive_law::a_false_recursive_law_has_its_counterexample
+  ✓ numbers::test_recursive_law::a_precondition_skips_the_instances_it_excludes
+  ✓ numbers::test_recursive_law::a_proved_law_is_a_lemma_of_the_next
+  ✓ numbers::test_recursive_law::a_recursive_function_is_exported_with_its_termination_measure
+  ✓ numbers::test_recursive_law::an_instance_too_deep_to_run_is_no_counterexample
+  ✓ numbers::test_recursive_law::recursive_laws_are_proved_by_induction
   ✓ numbers::test_recursive_units::a_recursive_function_keeps_its_dimensions
   ✓ numbers::test_recursive_units::a_recursive_function_takes_quantities
   ✓ numbers::test_round_to_digits::round_to_digits
@@ -4684,4 +4690,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-10 ignored, 4679 passed, 0 failed, 4679 total tested
+10 ignored, 4685 passed, 0 failed, 4685 total tested
