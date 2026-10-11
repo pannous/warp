@@ -888,10 +888,8 @@ impl Inference {
 		};
 		if let Some(class) = self.class_lists.get(&source_name).cloned() {
 			self.declare_instance(parameter, class);
-		} else if let Some(element) = self.lists.get(&source_name).cloned() {
-			self.variables.insert(parameter, element);
 		} else {
-			return None;
+			self.variables.insert(parameter, self.lists.get(&source_name).cloned()?);
 		}
 		Some(self.infer(body.clone()).map(|(body, element)| {
 			let function = match function.drop_meta() {

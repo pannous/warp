@@ -364,7 +364,7 @@ fn ints_of_list(caller: &mut Caller<'_, HostState>, memory: Memory, list: HostNo
 	let Ok(written) = usize::try_from(written) else { return Ok(None) };
 	let mut bytes = vec![0; written * I64_BYTES];
 	memory.read(&*caller, address as usize, &mut bytes)?;
-	Ok(Some(bytes.chunks_exact(I64_BYTES).map(|value| u64::from_le_bytes(value.try_into().expect("8 bytes"))).collect()))
+	Ok(Some(bytes.as_chunks::<I64_BYTES>().0.iter().map(|value| u64::from_le_bytes(*value)).collect()))
 }
 
 /// Free memory for `bytes` bytes above the module's text heap, which the next text may take again (int_lists.rs), at
@@ -830,7 +830,7 @@ fn linear_floats(caller: &mut Caller<'_, HostState>, block: i64, failure: &impl 
 	let memory = linear_memory(caller, failure)?;
 	let bytes = memory.data(&*caller);
 	let cells = linear_cells(bytes, block).ok_or_else(|| failure(format!("no linear array at {block}")))?;
-	Ok(bytes[cells].chunks_exact(LINEAR_CELL_BYTES).map(|cell| f64::from_le_bytes(cell.try_into().expect("8 bytes")) as f32).collect())
+	Ok(bytes[cells].as_chunks::<LINEAR_CELL_BYTES>().0.iter().map(|cell| f64::from_le_bytes(*cell) as f32).collect())
 }
 
 /// The f32 the GPU left, written into a linear float array's cells
@@ -838,7 +838,7 @@ fn write_linear_floats(caller: &mut Caller<'_, HostState>, block: i64, floats: &
 	let memory = linear_memory(caller, failure)?;
 	let cells = linear_cells(memory.data(&*caller), block).ok_or_else(|| failure(format!("no linear array at {block}")))?;
 	let written = &mut memory.data_mut(caller)[cells];
-	written.chunks_exact_mut(LINEAR_CELL_BYTES).zip(floats).for_each(|(cell, float)| cell.copy_from_slice(&f64::from(*float).to_le_bytes()));
+	written.as_chunks_mut::<LINEAR_CELL_BYTES>().0.iter_mut().zip(floats).for_each(|(cell, float)| *cell = f64::from(*float).to_le_bytes());
 	Ok(())
 }
 
@@ -846,7 +846,7 @@ fn write_linear_floats(caller: &mut Caller<'_, HostState>, block: i64, floats: &
 fn gpu_render(mut caller: Caller<'_, HostState>, shader: HostNode, width: i64, height: i64, values: HostNode) -> wasmtime::Result<HostNode> {
 	let failure = gpu_failure(GPU_RENDER);
 	let shader = given_shader(&mut caller, shader, &failure)?;
-	let pixels: Vec<u32> = rendered(&mut caller, &shader, width, height, values, &failure)?.chunks_exact(4).map(crate::gpu::opaque_color).collect();
+	let pixels: Vec<u32> = crate::gpu::opaque_colors(&rendered(&mut caller, &shader, width, height, values, &failure)?).collect();
 	if let Some(list) = list_of_ints(&mut caller, &pixels)? {
 		return Ok(list);
 	}

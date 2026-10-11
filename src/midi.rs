@@ -43,8 +43,7 @@ pub fn encode(flat: &[i64]) -> Result<Vec<u8>, String> {
 		return Err(format!("notes come as [start, key, length, velocity] four numbers each, got {} numbers", flat.len()));
 	}
 	let mut events = vec![];
-	for note in flat.chunks_exact(FIELDS) {
-		let (start, key, length, velocity) = (note[0], note[1], note[2], note[3]);
+	for &[start, key, length, velocity] in flat.as_chunks::<FIELDS>().0 {
 		if !(0..=127).contains(&key) {
 			return Err(format!("MIDI keys are 0 to 127, got {key}"));
 		}
