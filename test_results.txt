@@ -2911,6 +2911,9 @@ PASSED:
   ✓ programs::test_plain_hints_when_piped::a_hint_on_piped_stderr_has_no_escape_codes
   ✓ programs::test_playground_samples::every_excluded_sample_exists
   ✓ programs::test_playground_samples::every_playground_sample_runs_without_an_error
+  ✓ programs::test_playground_samples::every_playground_sample_runs_without_an_error_slice_2
+  ✓ programs::test_playground_samples::every_playground_sample_runs_without_an_error_slice_3
+  ✓ programs::test_playground_samples::every_playground_sample_runs_without_an_error_slice_4
   ✓ programs::test_samples_run_cleanly::every_sample_runs_without_a_compiler_error
   ✓ programs::test_samples_run_cleanly::every_sample_runs_without_a_compiler_error_slice_2
   ✓ programs::test_samples_run_cleanly::every_sample_runs_without_a_compiler_error_slice_3
@@ -2982,6 +2985,14 @@ PASSED:
   ✓ programs::test_sound_pan::a_panned_note_sounds_on_one_side
   ✓ programs::test_sound_pan::mono_and_stereo_mix_into_stereo
   ✓ programs::test_sound_pan::panning_interleaves_the_channels
+  ✓ programs::test_sound_patterns::a_bar_without_duration
+  ✓ programs::test_sound_patterns::a_cycle_lasts_its_seconds_whatever_its_steps
+  ✓ programs::test_sound_patterns::a_live_loop_is_a_voice_that_repeats
+  ✓ programs::test_sound_patterns::a_rest_is_silent
+  ✓ programs::test_sound_patterns::euclid_spreads_three_notes_over_eight_steps
+  ✓ programs::test_sound_patterns::live_loops_play_along
+  ✓ programs::test_sound_patterns::pattern_samples_ends_each_event_at_its_cumulated_seconds
+  ✓ programs::test_sound_patterns::swing_holds_the_first_note_longer
   ✓ programs::test_sound_render::a_render_takes_the_sounds_after_the_last_one
   ✓ programs::test_sound_render::sounds_render_into_one_wav_file
   ✓ programs::test_sound_spectrum::a_tone_fills_its_own_band
@@ -3681,6 +3692,9 @@ PASSED:
   ✓ types::test_tagged_objects::a_static_counts_constructions_in_the_value_block
   ✓ types::test_text_as_number::a_literal_text_as_number_is_its_number_in_a_variable_too
   ✓ types::test_text_as_number::a_run_time_text_as_number_is_its_number
+  ✓ types::test_time_programs_run::a_duration_in_a_unit_is_its_quantity_in_a_running_program
+  ✓ types::test_time_programs_run::a_placement_in_parentheses_has_fields
+  ✓ types::test_time_programs_run::a_zoned_times_rules_version_is_read_at_run_time
   ✓ types::test_time_values_at_run_time::test_a_time_joins_a_text
   ✓ types::test_time_values_at_run_time::test_a_time_reads_back
   ✓ types::test_time_values_at_run_time::test_an_instant_reads_the_local_wall_clock
@@ -4665,4 +4679,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-10 ignored, 4660 passed, 0 failed, 4660 total tested
+10 ignored, 4674 passed, 0 failed, 4674 total tested
