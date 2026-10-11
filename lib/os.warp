@@ -3,3 +3,6 @@
 env(name:any) := std_io("os", "env", [name])
 // the command line arguments after the program file: `warp run prog.warp a b` gives ["a" "b"]
 args = std_io("os", "args", [])
+// `exec sh "crontab -l"`: the command (a sh template, its argument vector) run without a shell, what it printed; natively
+// only, the browser runs no processes
+exec(command:any) := std_io("os", "exec", [command])
