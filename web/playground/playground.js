@@ -325,9 +325,12 @@ function playSound({ samples, rate, channels, at, handle }) {
 }
 
 // midi_send / midi_on (card midi-out): Web MIDI, asked for once and kept; a browser without it, a refusal or a port that
-// is not there reaches the console, as sound failures do. The first output when the port is ""
+// is not there reaches the console, as sound failures do. The first output when the port is "". Before the page's first
+// click or key press (the run on load, the CI tour) a message goes nowhere, as a sound stays silent: asking for Web MIDI
+// then is refused, and the refusal would land as a console error during whatever runs next
 let midiAccess;
 async function sendMidi(port, message) {
+	if (beforeUserActivation()) return;
 	try {
 		if (!navigator.requestMIDIAccess) throw new Error("this browser has no Web MIDI");
 		midiAccess ??= navigator.requestMIDIAccess();
