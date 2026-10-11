@@ -2226,6 +2226,9 @@ PASSED:
   ✓ numbers::test_log_base::log_takes_a_base
   ✓ numbers::test_log_glyphs::the_lower_corner_after_a_number_is_its_log
   ✓ numbers::test_log_glyphs::the_lower_corner_before_a_number_is_its_log_to_that_base
+  ✓ numbers::test_long_decimals::a_long_decimal_keeps_its_digits
+  ✓ numbers::test_long_decimals::an_exact_ratio_of_a_long_decimal_stays_exact
+  ✓ numbers::test_long_decimals::scientific_notation_stays_a_float
   ✓ numbers::test_math::test_abs_alias
   ✓ numbers::test_math::test_absolute_value_arithmetic
   ✓ numbers::test_math::test_arithmetic
@@ -2763,7 +2766,7 @@ PASSED:
   ✓ parser::test_parser_sugar::doc_comments_do_not_change_behaviour
   ✓ parser::test_parser_sugar::elvis_takes_the_left_unless_it_is_falsy
   ✓ parser::test_parser_sugar::final_constant_and_val_bind_once_like_const
-  ✓ parser::test_parser_sugar::hex_word_reads_a_hexadecimal_number
+  ✓ parser::test_parser_sugar::hex_word_is_the_hex_constructor_and_0x_the_literal
   ✓ parser::test_parser::parse_list_via_separator
   ✓ parser::test_parser::parse_list_via_separator_semicolon
   ✓ parser::test_parser::parse_list_via_separator_space
@@ -3577,6 +3580,8 @@ PASSED:
   ✓ types::test_hex_int::hex_acts_as_its_int
   ✓ types::test_hex_int::hex_shows_as_hex
   ✓ types::test_hex_int::print_shows_hex
+  ✓ types::test_hex_word::hex_literals_are_written_0x
+  ✓ types::test_hex_word::hex_word_is_the_hex_call
   ✓ types::test_inline_unions::a_covered_part_is_dropped
   ✓ types::test_inline_unions::a_part_that_is_no_builtin_type_is_refused
   ✓ types::test_inline_unions::an_inline_union_holds_either_kind
@@ -3796,6 +3801,8 @@ PASSED:
   ✓ types::test_type_alias_fields::alias_as_optional_field_and_parameter
   ✓ types::test_type_alias_fields::types_sample_runs
   ✓ types::test_type_calls::a_function_of_the_program_keeps_its_name
+  ✓ types::test_type_calls::a_function_of_the_program_keeps_its_name_braceless
+  ✓ types::test_type_calls::a_type_called_braceless_converts_like_braced
   ✓ types::test_type_calls::a_type_called_converts_as_the_cast
   ✓ types::test_type_colon_block::a_type_colon_block_declares_its_fields
   ✓ types::test_type_model::test_type_model_is_proved
@@ -4731,4 +4738,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-10 ignored, 4726 passed, 0 failed, 4726 total tested
+10 ignored, 4733 passed, 0 failed, 4733 total tested
