@@ -364,6 +364,8 @@ PASSED:
   ✓ control::test_parallel_map::a_parallel_map_takes_a_function_value
   ✓ control::test_parallel_map::go_for_runs_its_iterations_in_parallel
   ✓ control::test_parallel_map::go_maps_in_parallel
+  ✓ control::test_print_empty_map::an_empty_map_joins_as_empty
+  ✓ control::test_print_empty_map::print_of_an_empty_map_prints_empty
   ✓ control::test_print_empty::print_empty_gives_nothing
   ✓ control::test_print_empty::print_empty_prints_it
   ✓ control::test_raise::raise_ends_the_run_with_its_message
@@ -4715,4 +4717,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-10 ignored, 4710 passed, 0 failed, 4710 total tested
+10 ignored, 4712 passed, 0 failed, 4712 total tested
