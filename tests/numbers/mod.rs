@@ -5,7 +5,9 @@ mod test_declared_float_exact_reals;
 mod test_fixed_width_ints;
 mod test_float_assignment;
 mod test_float_text;
+mod test_host_floats;
 mod test_float_text_folded; // card float text one way
+mod test_float_shortest; // card floats-print
 mod test_float_bit_operations;
 mod test_float_exact_context;
 mod test_float_quotient; // card exact-div
@@ -99,3 +101,4 @@ mod test_literal_type_words; // card cleanup-closed-lists
 mod test_quantity_global; // card quantity-global
 mod test_temperature; // card temperature
 mod test_degrees; // card angles-degrees
+mod test_ratio_compare_shortcut;

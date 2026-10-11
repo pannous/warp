@@ -201,6 +201,7 @@ impl WarpParser {
 	/// the statement. `for 1..10 : print it` names no variable (wiki/for.md): `for iterable {body}`, whose items are `it`
 	pub(super) fn try_parse_for_in(&mut self) -> Option<Node> {
 		let before_header = self.mark();
+		let starts_statement = self.word_starts_statement("for".len());
 		self.skip_spaces();
 		if let Some(filtered) = self.try_parse_condition_loop() {
 			return Some(filtered);
@@ -227,7 +228,7 @@ impl WarpParser {
 			let body = match body_word {
 				Some(word) => self.colon_body(word),
 				None if self.current_char() == '{' => self.parse_atom(), // `for (1…5).filter(odd) {print it}`
-				None => match self.indented_lines_below() {
+				None => match starts_statement.then(|| self.indented_lines_below()).flatten() { // `play 440Hz for 0.05s` owns no lines below
 					Some(block) => block, // `for 0 to 2` and the lines indented below it
 					None => {
 						self.rewind(before_header);

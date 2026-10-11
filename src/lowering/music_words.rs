@@ -15,7 +15,7 @@
 //! program does not define, the text that lib/sound.warp chord_intervals and scale_intervals know it by.
 
 use super::nodes::call;
-use crate::node::Node;
+use crate::node::{Bracket, Node};
 use crate::operators::Op;
 use std::collections::HashSet;
 
@@ -224,10 +224,18 @@ fn defined_names(program: &Node) -> HashSet<String> {
 	let mut names: HashSet<String> = super::for_loop::loop_variables(program).into_iter().collect();
 	program.visit(&mut |node| match node {
 		Node::Key(target, Op::Assign | Op::Define, _) => names.extend(definition_names(target)),
-		Node::List(items, _, _) if items.first().is_some_and(|keyword| keyword.is_symbol(DEF_WORD)) => names.extend(items.get(1).map(definition_names).unwrap_or_default()),
+		Node::List(items, _, _) if items.first().is_some_and(|keyword| keyword.is_symbol(DEF_WORD)) => names.extend(items.get(1).map(definition_signature_names).unwrap_or_default()),
 		_ => {}
 	});
 	names
+}
+
+/// `def h(v) { play C4 }` is `def ((h (v)) {body})`: the names of the signature, not of the body
+fn definition_signature_names(definition: &Node) -> Vec<String> {
+	match definition.drop_meta() {
+		Node::List(parts, _, _) if parts.last().is_some_and(|last| matches!(last.drop_meta(), Node::List(_, Bracket::Curly, _))) => parts[..parts.len() - 1].iter().flat_map(definition_names).collect(),
+		_ => definition_names(definition),
+	}
 }
 
 /// `B3` → B3; `(B3 x)`, `(f (k))` → the function and its parameters

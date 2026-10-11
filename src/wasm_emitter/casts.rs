@@ -336,7 +336,7 @@ impl WasmGcEmitter {
 			return self.emit_string_call(func, &quoted.serialize(), "new_text");
 		}
 		match value {
-			Node::Number(n) => self.emit_string_call(func, &n.text(), "new_text"),
+			Node::Number(n) => self.emit_string_call(func, &n.to_string(), "new_text"),
 			Node::Char(c) => self.emit_string_call(func, &c.to_string(), "new_text"),
 			Node::Text(s) => self.emit_string_call(func, s, "new_text"),
 			// `str(data a and b)`: quoted data reads as written
@@ -502,7 +502,7 @@ fn computes_value(node: &Node) -> bool {
 		Node::Key(_, Op::Hash, _) => true,
 		Node::Key(_, op, _) if op.is_arithmetic() => !names_anything(part),
 		// `str(now)`: the instant the clock reads when the program runs; `str(2024-02-29)` a time node
-		Node::List(items, ..) => matches!(items.first().map(Node::drop_meta), Some(Node::Symbol(head)) if [crate::time::INSTANT_AT, crate::time::TIME_OF].contains(&head.as_str())),
+		Node::List(items, ..) => matches!(items.first().map(Node::drop_meta), Some(Node::Symbol(head)) if [crate::time::INSTANT_AT, crate::time::TIME_OF, crate::time::TIME_IN_ZONE].contains(&head.as_str())),
 		_ => false,
 	});
 	found

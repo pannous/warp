@@ -25,7 +25,6 @@ A time is a `$Node` of `Kind::Time` (18): `data` = `$i64box` of its position, `v
 - If the evaluator meets something it does not know (a variable, print, a loop: an `UNSUPPORTED` error),
   `fold_constants` folds the largest constant time expressions (time literals, unit and time words, field names after
   a dot) into `time_of(info, position)`, and the rest runs.
-- Known edge: `m = 1 month 2 days` (juxtaposed durations) folds item by item and fails; `1 month + 2 days` works.
 - Known edge: a variable named like a unit word (`days`) counts as a time word.
 
 ## The local wall clock of an instant
@@ -53,7 +52,27 @@ An instant's calendar fields (`now.hour`, `t.year`, …) are the wall clock of t
 - node_order compares two times of one form by position; two forms trap with "no implicit conversion between kinds
   of time", durations with "cannot order durations".
 
+## Arithmetic (stage B2, wasm_emitter/time_arithmetic.rs)
+node_add, node_sub and node_mul hand over to `time_arithmetic(a, b, operator)` when an operand is a time, as calendar.rs
+does for constants: time ± duration (months first, then days, then nanoseconds; a day that does not exist in the target
+month is a run-time error naming `add(…, overflow: clamp)`), duration ± duration, duration * whole number (either way
+round), `a - b` of two times of one form (days between dates, else a duration). A date takes no time of day, an instant
+no months or days. Zoned arithmetic is B3 (below). `1 month 2 days` is lexed as one duration
+(literals.rs `with_time_unit`).
+
+## Zones (stage B3, wasm_emitter/time_zones.rs)
+- `zone_rule(zone)` (winter offset, Dst) is a table of calendar::ZONES; `zone_offset_at(zone, seconds)` applies the Europe
+  and US rules as `Zone::offset_at`; `zone_resolve(zone, wall nanos, choice) -> (instant, status)` as `Zone::resolve`
+  (status 1 skipped, 2 repeated, both failing with the choice named unless `disambiguation: earlier|later`);
+  `zoned_node(zone, instant)` builds the node with zone and offset in the info bits.
+- The zone functions exist when a program makes a zoned time (ZONE_NAMES required, by a zoned constant or by
+  `time_in_zone`).
+- `t in "Zone"` and `zoned(t, "Zone", disambiguation: later)` of a time only the run knows lower (time.rs
+  `zone_placement`, in `fold_constants`) to `time_in_zone(t, zone index, choice)`; the zone must be a literal name.
+  An instant or zoned time keeps its instant, a local time is resolved, a date is refused.
+- Zoned `+`/`-` a duration: exact units move the instant, months and days move the wall time which is resolved again
+  (reject: a day landing on a skipped or repeated wall time fails). `a - b` of two zoned times is their elapsed time.
+- Not yet: `add(t, d, disambiguation: …)` and a zone name held in a variable at run time.
+
 ## Next stages
-- B2: arithmetic at run time (`d + 1 day` with variables).
-- B3: zones at run time (offset_at with the Europe/US DST rules, resolve with disambiguation, zoned text).
 - B4: remove the whole-program folder.

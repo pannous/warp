@@ -1618,6 +1618,8 @@ PASSED:
   ✓ lists::test_list_times_list::list_times_list_is_the_dot_product
   ✓ lists::test_list_times_list::round_and_curly_lists_take_the_dot_product
   ✓ lists::test_list_truthiness::a_list_of_nothing_is_truthy
+  ✓ lists::test_lists_read_by_turns::lists_read_by_turns_after_an_in_place_change
+  ✓ lists::test_lists_read_by_turns::lists_read_by_turns_take_linear_steps
   ✓ lists::test_lists::test_array_creation
   ✓ lists::test_lists::test_array_indices
   ✓ lists::test_lists::test_array_initialization
@@ -1807,8 +1809,6 @@ PASSED:
   ✓ modules::test_import_compiled::a_bare_name_imports_a_compiled_module
   ✓ modules::test_import_compiled::a_compiled_fixtures_change_of_an_instance_is_the_programs
   ✓ modules::test_import_compiled::a_compiled_fixtures_values_and_classes_cross
-  ✓ modules::test_import_compiled::a_compiled_modules_classes_are_the_programs_too
-  ✓ modules::test_import_compiled::a_compiled_modules_functions_take_and_give_values
   ✓ modules::test_import_compiled::a_module_for_any_host_can_be_read_by_the_browser
   ✓ modules::test_import_compiled::an_instance_passed_to_a_compiled_module_is_shared
   ✓ modules::test_import_words::a_hashed_import_keyword_keeps_the_line_a_comment
@@ -2153,6 +2153,11 @@ PASSED:
   ✓ numbers::test_float_quotient::an_int_quotient_elsewhere_stays_exact
   ✓ numbers::test_float_quotient::an_int_quotient_into_a_float_is_rounded_once
   ✓ numbers::test_float_quotient::an_int_quotient_into_a_float_still_fails_dividing_by_zero
+  ✓ numbers::test_float_shortest::test_folded_float_prints_shortest
+  ✓ numbers::test_float_shortest::test_print_float_shortest
+  ✓ numbers::test_float_shortest::test_run_time_float_needing_17_digits
+  ✓ numbers::test_float_shortest::test_run_time_float_prints_shortest
+  ✓ numbers::test_float_shortest::test_run_time_float_rounded_across_a_half
   ✓ numbers::test_float_text_folded::test_folded_float_joins_text_as_at_run_time
   ✓ numbers::test_float_text_folded::test_printed_float_literal_as_float_text
   ✓ numbers::test_float_text::test_float_as_text
@@ -2162,6 +2167,8 @@ PASSED:
   ✓ numbers::test_float_zero_and_compound::test_float_compound_assignment_in_a_loop
   ✓ numbers::test_float_zero_and_compound::test_float_zero_fill_holds_floats
   ✓ numbers::test_fourth_root::fourth_root_glyph
+  ✓ numbers::test_host_floats::an_exact_operation_a_float_uses_rounds_once
+  ✓ numbers::test_host_floats::the_pointer_is_a_float_source
   ✓ numbers::test_hyperreals::test_epsilon_is_positive_and_smaller_than_every_real
   ✓ numbers::test_hyperreals::test_epsilon_times_omega_is_one
   ✓ numbers::test_hyperreals::test_no_silent_approximation_of_hyperreals
@@ -2295,6 +2302,7 @@ PASSED:
   ✓ numbers::test_quantity_tolerance::quantities_with_tolerance_sum
   ✓ numbers::test_range_tolerance_compare::a_range_equals_the_same_span_with_tolerance
   ✓ numbers::test_range_tolerance_compare::spans_in_different_units_do_not_compare
+  ✓ numbers::test_ratio_compare_shortcut::small_ratios_compare_in_i64_when_the_program_calculates
   ✓ numbers::test_ratio_float_division::a_ratio_divides_by_a_float
   ✓ numbers::test_rational_quantities::test_exact_amounts_compute_on
   ✓ numbers::test_rational_quantities::test_non_whole_results_are_exact
@@ -2875,6 +2883,12 @@ PASSED:
   ✓ programs::test_kitchensink::test_kitchensink_all_node_types
   ✓ programs::test_kitchensink::test_kitchensink_complex_tree
   ✓ programs::test_kitchensink::test_kitchensink_wasmtime_execution
+  ✓ programs::test_midi::a_broken_file_fails_loudly
+  ✓ programs::test_midi::a_file_of_another_program_reads_with_running_status_and_tempo
+  ✓ programs::test_midi::headless_messages_are_named
+  ✓ programs::test_midi::listing_outputs_needs_a_backend_or_names_the_missing_one
+  ✓ programs::test_midi::native_input_is_a_loud_error
+  ✓ programs::test_midi::notes_survive_a_midi_file
   ✓ programs::test_music_values::a_frequency_reads_as_its_note
   ✓ programs::test_music_values::chords_and_scales_are_lists_of_notes
   ✓ programs::test_music_values::the_tuning_tunes_every_note
@@ -2940,6 +2954,12 @@ PASSED:
   ✓ programs::test_sound_at::the_words_it_lowers_to
   ✓ programs::test_sound_clock::sounds_queue_on_the_audio_clock
   ✓ programs::test_sound_clock::stop_sound_empties_the_queue
+  ✓ programs::test_sound_clock::waiting_headless_takes_no_time
+  ✓ programs::test_sound_effects::a_delay_adds_a_tail_of_echoes
+  ✓ programs::test_sound_effects::a_reverb_rings_after_the_end
+  ✓ programs::test_sound_effects::an_echo_sounds_where_the_dry_sound_was_silent
+  ✓ programs::test_sound_effects::distortion_flattens_the_peaks_and_stays_in_range
+  ✓ programs::test_sound_effects::effects_play_in_a_program
   ✓ programs::test_sound_files::a_broken_music_file_fails
   ✓ programs::test_sound_files::a_music_file_plays_in_the_background
   ✓ programs::test_sound_files::only_a_music_file_plays
@@ -2950,6 +2970,7 @@ PASSED:
   ✓ programs::test_sound_filters::vibrato_bends_the_pitch
   ✓ programs::test_sound_handles::play_gives_the_sounds_handle
   ✓ programs::test_sound_handles::stop_sound_stops_one_sound
+  ✓ programs::test_sound_notes::a_note_inside_a_function_body_plays
   ✓ programs::test_sound_notes::a_variable_named_like_a_note_is_the_variable
   ✓ programs::test_sound_notes::every_octave_is_a_note
   ✓ programs::test_sound_notes::sharps_and_flats_are_notes
@@ -2976,6 +2997,7 @@ PASSED:
   ✓ programs::test_sound::a_melody_is_its_notes_one_after_another
   ✓ programs::test_sound::notes_are_frequencies
   ✓ programs::test_sound::notes_are_named_in_a_program_with_units
+  ✓ programs::test_sound::play_inside_a_def_body_before_the_value
   ✓ programs::test_sound::play_writes_the_tone_as_a_wav
   ✓ programs::test_sound::sound_words_run_without_use
   ✓ programs::test_sound::the_note_table_matches_note
@@ -3033,6 +3055,7 @@ PASSED:
   ✓ scope::test_globals::test_global_int_simple
   ✓ scope::test_globals::test_global_reassignment
   ✓ scope::test_globals::test_global_with_expression
+  ✓ scope::test_node_widening_in_loops::a_read_before_a_node_widening_in_a_loop_holds_the_node
   ✓ scope::test_prefixed_declarations::a_fitting_value_is_accepted_with_a_prefixed_type
   ✓ scope::test_prefixed_declarations::a_value_of_the_wrong_kind_is_refused_with_a_prefixed_type
   ✓ scope::test_result_word::a_program_may_name_its_own_result
@@ -3421,6 +3444,13 @@ PASSED:
   ✓ types::test_data::test_node_data_metadata
   ✓ types::test_data::test_node_data_type_mismatch
   ✓ types::test_data::test_node_data_various_types
+  ✓ types::test_date_arithmetic_at_run_time::test_a_date_plus_a_duration
+  ✓ types::test_date_arithmetic_at_run_time::test_a_local_time_and_an_instant_plus_a_duration
+  ✓ types::test_date_arithmetic_at_run_time::test_arithmetic_prints
+  ✓ types::test_date_arithmetic_at_run_time::test_durations_add_and_scale
+  ✓ types::test_date_arithmetic_at_run_time::test_juxtaposed_durations_run
+  ✓ types::test_date_arithmetic_at_run_time::test_month_overflow_is_rejected_at_run_time
+  ✓ types::test_date_arithmetic_at_run_time::test_time_minus_time
   ✓ types::test_dates_at_run_time::test_an_instant_has_the_local_wall_clock
   ✓ types::test_dates_at_run_time::test_an_instant_shows_as_rfc_3339
   ✓ types::test_dates_at_run_time::test_instants_compare_at_run_time
@@ -3656,6 +3686,16 @@ PASSED:
   ✓ types::test_time_values_at_run_time::test_times_compare_at_run_time
   ✓ types::test_time_values_at_run_time::test_zoned_fields_at_run_time
   ✓ types::test_time_values_at_run_time::test_zoned_times_and_durations_compare_at_run_time
+  ✓ types::test_time_zones_at_run_time::test_a_calendar_day_keeps_the_wall_time_across_a_transition
+  ✓ types::test_time_zones_at_run_time::test_a_day_landing_on_a_skipped_wall_time_is_rejected
+  ✓ types::test_time_zones_at_run_time::test_a_local_time_in_a_zone_resolves
+  ✓ types::test_time_zones_at_run_time::test_a_repeated_wall_time_is_rejected_unless_chosen
+  ✓ types::test_time_zones_at_run_time::test_a_skipped_wall_time_is_rejected_unless_chosen
+  ✓ types::test_time_zones_at_run_time::test_a_zoned_time_changes_zone_keeping_its_instant
+  ✓ types::test_time_zones_at_run_time::test_exact_time_keeps_the_elapsed_time_across_a_transition
+  ✓ types::test_time_zones_at_run_time::test_offset_follows_the_europe_rules
+  ✓ types::test_time_zones_at_run_time::test_offset_follows_the_united_states_rules
+  ✓ types::test_time_zones_at_run_time::test_zoned_times_subtract_to_elapsed_time
   ✓ types::test_trait_constraints::a_constrained_list_parameter_takes_conforming_elements
   ✓ types::test_trait_constraints::a_list_annotation_reads_both_ways
   ✓ types::test_trait_constraints::elements_that_do_not_conform_are_a_compile_error
@@ -4618,7 +4658,8 @@ PASSED:
   ✓ wisp_parser::tests::test_wisp_tag
 
 FAILED:
-  ✗ programs::test_sound_clock::waiting_headless_takes_no_time
+  ✗ modules::test_import_compiled::a_compiled_modules_classes_are_the_programs_too
+  ✗ modules::test_import_compiled::a_compiled_modules_functions_take_and_give_values
 
 SUMMARY:
-10 ignored, 4615 passed, 1 failed, 4616 total tested
+10 ignored, 4655 passed, 2 failed, 4657 total tested

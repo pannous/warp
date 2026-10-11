@@ -84,6 +84,7 @@ mod test_for_where; // card for-where
 mod test_phrase_in_call; // card phrase-in-call
 mod test_first_items; // card first-first
 mod test_object_list_walk; // orm identity map: index walks of object lists
+mod test_lists_read_by_turns; // several long lists read by turns: a read cursor each
 mod test_count_after_function; // card print-people
 mod test_range_in_structure;
 mod test_word_slices;

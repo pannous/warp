@@ -9,7 +9,8 @@ pub fn analyze_required_functions(ctx: &mut Context, node: &Node) {
 	let node = node.drop_meta();
 	match node {
 		Node::Number(number) => {
-			if !matches!(number, Number::Int(n) if crate::wasm_emitter::is_fixnum(*n)) {
+			let exact_decimal = matches!(number, Number::Float(value) if Number::is_exact_decimal(*value));
+			if exact_decimal || !matches!(number, Number::Int(n) if crate::wasm_emitter::is_fixnum(*n)) {
 				ctx.required_functions.insert(crate::wasm_emitter::INT_RUNTIME);
 			}
 		}
@@ -137,16 +138,48 @@ pub fn analyze_required_functions(ctx: &mut Context, node: &Node) {
 	}
 }
 
+/// Operators whose result may be a float (a ratio may be shown as one)
+const FLOAT_OPERATORS: [Op; 6] = [Op::Div, Op::DivAssign, Op::Pow, Op::PowAssign, Op::Sqrt, Op::Cbrt];
+
+/// Does the program visibly make floats: a decimal literal, a division, a root or power, a float type word, π, a libm
+/// function, a foreign float or a host value. Then float_text is emitted for their text (a float the emitter makes
+/// anyway reruns it with float_text: WasmGcEmitter::emit_call), else a program that never shows a float goes without
+/// (web::test_bundle_budget)
+pub fn makes_floats(ctx: &Context, node: &Node) -> bool {
+	let is_float_word = |name: &str| {
+		builtin_type_kind(name).is_some_and(|kind| kind.is_float()) || [NUMBER_WORD, REAL_WORD].contains(&name) || REAL_CONSTANTS.contains(&name)
+			|| crate::ffi::LIBM_F64_FUNCTIONS.iter().any(|(libm, _)| *libm == name)
+	};
+	let gives_float = |signature: &crate::ffi::FfiSignature| match signature.results.first() {
+		Some(wasm_encoder::ValType::F64 | wasm_encoder::ValType::F32) => true,
+		Some(wasm_encoder::ValType::Ref(_)) => signature.library == crate::host::HOST_LIBRARY,
+		_ => false,
+	};
+	let mut found = ctx.ffi_imports.values().any(gives_float);
+	node.visit(&mut |part| {
+		found |= match part {
+			Node::Number(number) => !matches!(number, Number::Int(_) | Number::BigInt(_)),
+			Node::Text(text) => crate::warp_parser::number_in_text(text).is_some_and(|number| !matches!(number, Number::Int(_) | Number::BigInt(_))),
+			Node::Key(_, op, _) => FLOAT_OPERATORS.contains(op),
+			Node::Symbol(name) => is_float_word(name),
+			_ => false,
+		}
+	});
+	found
+}
+
 /// The runtime functions an operator needs wherever it appears
 fn functions_of_operator(op: &Op) -> &'static [&'static str] {
-	use crate::wasm_emitter::{INT_RUNTIME, IS_TRUTHY, SAME_NODE, VALUES_EQUAL};
+	use crate::wasm_emitter::{EXACT_ARITHMETIC, INT_RUNTIME, IS_TRUTHY, SAME_NODE, VALUES_EQUAL};
 	match op {
 		Op::Eq | Op::Ne => &[VALUES_EQUAL],
 		Op::Identical | Op::NotIdentical => &[VALUES_EQUAL, SAME_NODE],
 		Op::If | Op::While | Op::Question | Op::Not | Op::And | Op::Or => &[IS_TRUTHY],
-		Op::Inc | Op::Dec | Op::Neg | Op::Abs | Op::Square | Op::Cube | Op::Xor => &[INT_RUNTIME],
-		Op::Div | Op::DivAssign => &[INT_RUNTIME, crate::wasm_emitter::exact::INT_GCD], // ratios: fast multi-limb division for their gcds
-		op if op.is_arithmetic() || op.is_shift() || op.is_compound_assign() => &[INT_RUNTIME],
+		Op::Inc | Op::Dec | Op::Neg | Op::Abs | Op::Square | Op::Cube => &[INT_RUNTIME, EXACT_ARITHMETIC],
+		Op::Xor => &[INT_RUNTIME],
+		Op::Div | Op::DivAssign => &[INT_RUNTIME, EXACT_ARITHMETIC, crate::wasm_emitter::exact::INT_GCD], // ratios: fast multi-limb division for their gcds
+		op if op.is_arithmetic() || op.is_compound_assign() => &[INT_RUNTIME, EXACT_ARITHMETIC],
+		op if op.is_shift() => &[INT_RUNTIME],
 		_ => &[],
 	}
 }
@@ -159,6 +192,7 @@ fn functions_of_call(word: &str) -> &'static [&'static str] {
 		ZERO_FILL_CALL => &[ZERO_FILL_CALL],
 		crate::time::INSTANT_AT => &[crate::time::INSTANT_AT, TIME_FIELD, crate::wasm_emitter::list_ops::RETURNED_ERROR],
 		crate::time::TIME_OF => &[TIME_FIELD, crate::wasm_emitter::list_ops::RETURNED_ERROR],
+		crate::time::TIME_IN_ZONE => &[crate::time::TIME_IN_ZONE, TIME_FIELD, crate::wasm_emitter::times::ZONE_NAMES, crate::wasm_emitter::list_ops::RETURNED_ERROR],
 		LIST_DROP_LAST => &[LIST_DROP_LAST],
 		REMOVED_VALUE_CALL => &[MAP_GET_OR, MAP_WITHOUT],
 		INSERT_AT_CALL | INSERT_EITHER_CALL => &[INSERT_AT_CALL],

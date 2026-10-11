@@ -66,3 +66,9 @@ fn the_note_table_matches_note() {
 fn sound_words_run_without_use() {
 	is!("play C4 for 10ms\nbeep\ntone(220Hz, 10ms, \"square\")\ntone 330Hz for 5ms\nplay [C4 E4 G4] for 10ms\n7", 7);
 }
+
+#[test]
+fn play_inside_a_def_body_before_the_value() {
+	is!("def h(value) { play 440Hz for 0.05s; value + 1 }; h(2)", 3);
+	is!("def h(value) {\n  play 440Hz for 0.05s\n  value + 1\n}\nh(2)", 3); // the `for` of play owns no indented lines below
+}

@@ -36,6 +36,9 @@ const LIST_CURSOR_PARTS: [CursorPart; 7] =
 /// An index or count up to this leaves the cursor where it is: a short list read inside a loop (a row's `row#4`, its
 /// `#row`) takes few links from its head anyway, and the loop's long list keeps its cursor, or each step walks it again
 const SHORT_WALK: i64 = 8;
+/// Lists whose read cursors are kept at once: a loop reading several long lists by turns (`room#i for room in rooms`,
+/// lib/sound.warp's four reverb combs) walks on in each instead of from the head of all but one (quadratic)
+const READ_CURSORS: u32 = 4;
 
 /// The locals of a copy of a list's first cells (emit_collect_cells, emit_rebuild_cells), consecutive from `cell`
 pub(super) struct CopyCells {
@@ -95,6 +98,28 @@ impl WasmGcEmitter {
 			self.globals.global(GlobalType { val_type, mutable: true, shared: false }, &initial);
 			self.next_global_idx += 1;
 		}
+		// the read cursors after the first: list, cell, index each
+		for _ in 1..READ_CURSORS {
+			for val_type in [Ref(self.node_ref(true)), Ref(self.node_ref(true)), ValType::I64] {
+				let initial = if val_type == ValType::I64 { ConstExpr::i64_const(0) } else { ConstExpr::ref_null(HeapType::Concrete(node_type)) };
+				self.globals.global(GlobalType { val_type, mutable: true, shared: false }, &initial);
+				self.next_global_idx += 1;
+			}
+		}
+	}
+
+	/// The globals (list, cell, index) of read cursor `slot`: the first is the list cursor's own
+	fn read_cursor(&self, slot: u32) -> Option<(u32, u32, u32)> {
+		let first = self.list_cursor_global?;
+		if slot == 0 {
+			return Some((first + CursorPart::List as u32, first + CursorPart::Cell as u32, first + CursorPart::Index as u32));
+		}
+		let list = first + LIST_CURSOR_PARTS.len() as u32 + (slot - 1) * 3;
+		Some((list, list + 1, list + 2))
+	}
+
+	fn read_cursors(&self) -> Vec<(u32, u32, u32)> {
+		(0..READ_CURSORS).filter_map(|slot| self.read_cursor(slot)).collect()
 	}
 
 	/// The global of a part of the list cursor
@@ -109,7 +134,12 @@ impl WasmGcEmitter {
 
 	fn forget_cursor_parts(&self, parts: &[CursorPart]) -> Vec<Instruction<'static>> {
 		let forget = |global: u32| [I::RefNull(HeapType::Concrete(self.type_manager.node_type)), I::GlobalSet(global)];
-		parts.iter().filter_map(|part| self.list_cursor(*part)).flat_map(forget).collect()
+		let read_lists: Vec<u32> = if parts.iter().any(|part| matches!(part, CursorPart::List)) {
+			self.read_cursors().into_iter().skip(1).map(|(list, _, _)| list).collect()
+		} else {
+			vec![]
+		};
+		parts.iter().filter_map(|part| self.list_cursor(*part)).chain(read_lists).flat_map(forget).collect()
 	}
 
 	/// list_at and list_node_at: the element of a cons list at a 1-based index
@@ -757,6 +787,16 @@ impl WasmGcEmitter {
 			}
 			self.runtime_function(name, vec![node_ref, node_ref], vec![node_ref], vec![ValType::I64, ValType::F64], |s, f| {
 				let (kind, power) = (2, 3);
+				// a time or duration: calendar arithmetic (time_arithmetic.rs)
+				if let Some(operator) = super::time_arithmetic::TIME_OPERATORS.iter().position(|known| *known == op).filter(|_| s.uses_times()) {
+					for operand in [0, 1] {
+						s.emit_field(f, operand, 0);
+						Self::emit_list(f, &[I::I64Const(KIND_MASK), I::I64And, I::I64Const(Kind::Time as i64), I::I64Eq]);
+					}
+					Self::emit_list(f, &[I::I32Or, I::If(BlockType::Empty), I::LocalGet(0), I::LocalGet(1), I::I32Const(operator as i32)]);
+					s.call(f, super::time_arithmetic::TIME_ARITHMETIC);
+					Self::emit_list(f, &[I::Return, I::End]);
+				}
 				// node_add of two lists (ø is the empty list): their concatenation, `out = out + row`
 				if name == NODE_ADD {
 					// an Error operand is the sum, as text_concat gives it: errors propagate, and are never joined into a
@@ -1150,8 +1190,8 @@ impl WasmGcEmitter {
 		Self::emit_index_compare(func, I::I64LtS);
 		self.emit_fail_out_of_range_if(func, asked);
 		Self::emit_list(func, &[I::LocalGet(0), I::LocalSet(current)]);
-		// at or past the cursor of this list: walk on from its cell, the rest of the index
-		if let (Some(list), Some(cell), Some(index)) = (self.list_cursor(CursorPart::List), self.list_cursor(CursorPart::Cell), self.list_cursor(CursorPart::Index)) {
+		// at or past a cursor of this list: walk on from its cell, the rest of the index
+		for (list, cell, index) in self.read_cursors() {
 			Self::emit_list(func, &[I::GlobalGet(list), I::LocalGet(0), I::RefEq, I::LocalGet(asked), I::GlobalGet(index), I::I64GeS, I::I32And, I::If(BlockType::Empty),
 				I::GlobalGet(cell), I::LocalSet(current), I::LocalGet(asked), I::GlobalGet(index), I::I64Sub, I::I64Const(1), I::I64Add, I::LocalSet(1), I::End]);
 		}
@@ -1167,9 +1207,30 @@ impl WasmGcEmitter {
 		self.emit_field(func, current, 1);
 		self.call(func, super::equality::IS_META_ENTRY);
 		self.emit_fail_out_of_range_if(func, asked);
-		if let (Some(list), Some(cell), Some(index)) = (self.list_cursor(CursorPart::List), self.list_cursor(CursorPart::Cell), self.list_cursor(CursorPart::Index)) {
-			Self::emit_list(func, &[I::LocalGet(asked), I::I64Const(SHORT_WALK), I::I64GtS, I::If(BlockType::Empty),
-				I::LocalGet(0), I::GlobalSet(list), I::LocalGet(current), I::GlobalSet(cell), I::LocalGet(asked), I::GlobalSet(index), I::End]);
+		let cursors = self.read_cursors();
+		if !cursors.is_empty() {
+			Self::emit_list(func, &[I::LocalGet(asked), I::I64Const(SHORT_WALK), I::I64GtS, I::If(BlockType::Empty)]);
+			Self::emit_cursor_store(func, &cursors, current, asked);
+			func.instruction(&I::End);
+		}
+	}
+
+	/// Store the cell found in the cursor of list local 0, or, a list without one, in the first cursor with the others
+	/// moved one on (the oldest dropped): `if list == cursor 0 {…} else if list == cursor 1 {…} … else {shift; …}`
+	fn emit_cursor_store(func: &mut Function, cursors: &[(u32, u32, u32)], current: u32, asked: u32) {
+		let store = |(list, cell, index): (u32, u32, u32)| [I::LocalGet(0), I::GlobalSet(list), I::LocalGet(current), I::GlobalSet(cell), I::LocalGet(asked), I::GlobalSet(index)];
+		for &(list, _, _) in cursors {
+			Self::emit_list(func, &[I::GlobalGet(list), I::LocalGet(0), I::RefEq, I::If(BlockType::Empty)]);
+			Self::emit_list(func, &store(cursors[cursors.iter().position(|c| c.0 == list).unwrap()]));
+			func.instruction(&I::Else);
+		}
+		for pair in cursors.windows(2).rev() {
+			let ((list, cell, index), (next_list, next_cell, next_index)) = (pair[0], pair[1]);
+			Self::emit_list(func, &[I::GlobalGet(list), I::GlobalSet(next_list), I::GlobalGet(cell), I::GlobalSet(next_cell), I::GlobalGet(index), I::GlobalSet(next_index)]);
+		}
+		Self::emit_list(func, &store(cursors[0]));
+		for _ in cursors {
+			func.instruction(&I::End);
 		}
 	}
 
@@ -1439,7 +1500,7 @@ impl WasmGcEmitter {
 	}
 
 	pub(super) fn arithmetic_type(&self, left: &Node, op: &crate::operators::Op, right: &Node) -> Kind {
-		crate::analyzer::arithmetic_kind_of_operands(self.get_type(left), op, self.get_type(right), right)
+		crate::analyzer::arithmetic_kind_of_operands(self.get_type(left), op, self.get_type(right), right, &self.scope)
 	}
 
 	/// Arithmetic on a value whose kind only the run time knows (`x*x` of a parameter held as a Node): maybe a float

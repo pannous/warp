@@ -1,0 +1,14 @@
+// a comprehension of sums of comprehensions (lib/sound.warp reverb): the outer list and the inner ones grow by turns
+
+for n in [5000, 10000, 20000] {
+	a = [0.5 * i for i in 0..n]
+	b = [0.25 * i for i in 0..n]
+	rooms = [a, b]
+	t0 = clock()
+	s = [sum([room[i] for room in rooms]) for i in 0..n]
+	t1 = clock()
+	out = []
+	for i in 0..n { out.push(a[i] + (if i >= 300 then 0.5 * out[i - 300] else 0.0)) }
+	t2 = clock()
+	print("n " + n + " nested " + (t1 - t0) + " push " + (t2 - t1))
+}

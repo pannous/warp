@@ -50,6 +50,7 @@ self.lastSoundHandle = () => soundHandles;
 self.playSoundFile = (url, bytes) => post({ type: "sound file", url, bytes, handle: nextSoundHandle() }); // host-files.js STD_ADAPTERS.sound: a worker has no <audio>
 self.keepFile = (path, bytes) => post({ type: "file", path, bytes }); // render_sound's WAV, for the page's download link
 self.stopSoundFiles = () => { self.voiceStopped(); post({ type: "stop sound files" }); };
+self.sendMidi = (port, message) => post({ type: "midi", port, message }); // host-files.js STD_ADAPTERS.midi
 self.stopSound = handle => post({ type: "stop sound", handle }); // stop_sound(handle)
 // a worker has no AudioContext: the page plays it at its start on the shared clock (host-tasks.js voiceSounded); a
 // task's sound comes relayed with its own voice's start

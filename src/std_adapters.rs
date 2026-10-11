@@ -118,6 +118,27 @@ pub fn call(module: &str, member: &str, arguments: &Node) -> Result<Node, String
 		("sound", "wait", []) => { crate::sound::wait(); Ok(Node::Empty) }
 		#[cfg(feature = "native")]
 		("sound", "render", [path]) => crate::sound::render(&text_of(path)?).map(Node::float).map_err(failure),
+		// MIDI (card midi-out, src/midi.rs): notes cross as flat whole numbers [start ms, key, length ms, velocity …]
+		#[cfg(feature = "native")]
+		("midi", "write_file", [path, notes]) => {
+			let encoded = crate::midi::encode(&whole_numbers(notes).map_err(failure)?).map_err(failure)?;
+			std::fs::write(text_of(path)?, encoded).map(|_| Node::Empty).map_err(|problem| failure(problem.to_string()))
+		}
+		#[cfg(feature = "native")]
+		("midi", "read_file", [path]) => {
+			let path = text_of(path)?;
+			let bytes = std::fs::read(&path).map_err(|problem| failure(format!("cannot read {path}: {problem}")))?;
+			crate::midi::decode(&bytes).map(|notes| Node::list(notes.into_iter().map(Node::int).collect())).map_err(failure)
+		}
+		#[cfg(feature = "native")]
+		("midi", "send", [port, message]) => {
+			let bytes = whole_numbers(message).map_err(failure)?.into_iter().map(|byte| u8::try_from(byte).map_err(|_| failure(format!("{byte} is no MIDI byte (0 to 255)")))).collect::<Result<Vec<_>, _>>()?;
+			crate::midi::send(&text_of(port)?, &bytes).map(|_| Node::Empty).map_err(failure)
+		}
+		#[cfg(feature = "native")]
+		("midi", "outputs", []) => crate::midi::outputs().map(texts).map_err(failure),
+		#[cfg(feature = "native")]
+		("midi", "receive", []) => crate::midi::receive().map(|_| Node::Empty).map_err(failure),
 		// the tables of registered classes (lowering/database_tables.rs)
 		#[cfg(feature = "native")]
 		("table", member, arguments) => crate::database::call(member, arguments).map_err(failure),
@@ -177,6 +198,15 @@ fn save_stored_values(file: &str, values: StoredValues) -> Result<(), String> {
 }
 
 /// A list of texts
+/// The whole numbers of a list argument
+#[cfg(feature = "native")]
+fn whole_numbers(list: &Node) -> Result<Vec<i64>, String> {
+	list.as_items().iter().map(|item| match item.drop_meta() {
+		Node::Number(crate::extensions::numbers::Number::Int(value)) => Ok(*value),
+		other => Err(format!("needs whole numbers, got {}", other.serialize().trim())),
+	}).collect()
+}
+
 fn texts(items: impl IntoIterator<Item = String>) -> Node {
 	Node::List(items.into_iter().map(Node::Text).collect(), crate::node::Bracket::Square, crate::node::Separator::Space)
 }

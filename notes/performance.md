@@ -68,3 +68,9 @@ int per pixel (a per-argument-kind specialization of functions would drop it); a
 value (`circle`) boxes that value per row although every caller drops it; int list get/set go through the Node layer.
 A shown frame in a window still goes through frame_bytes → a 4 MB pipe write → a texture upload in the paint-window
 child process (not measured; WebGPU directly would drop it).
+Exact decimals (card decimals-exact, 2026-10-10, release): `x = 0.5` is an exact ratio again. exact_add/sub/mul
+take operands that are inline ratios or Ints within ±2^31 in i64 with an i64 gcd (exact.rs small_shortcut); the
+generic int_gcd/ratio_new path (36 %/41 % of a stroke's profile) stays for bigger ones. 1M adds of 0.5
+(probes/perf/decimal_hot_loop.warp): float 4 ms, exact 135 → 11 ms. A finger paint stroke: float 0.3 ms, exact
+13 → 5 ms; what's left is circle's per-pixel `col + 0.5 - x` in exact math (a scaled-decimal i64 representation, or
+hoisting the conversion into the float path, would drop it).

@@ -12,6 +12,7 @@ pub struct Local {
 	pub kind: crate::type_kinds::Kind,  // Value kind (Int, Float, Text, etc.)
 	pub data_pointer: u32,              // Linear memory offset for reference data
 	pub data_length: u32,               // Length of data in memory (for strings)
+	pub may_be_ratio: bool,             // an exact number given a value that may be a fraction (`l = -0.45`, `y = n/12`)
 }
 
 
@@ -26,6 +27,7 @@ impl Local {
 			is_param: false,
 			data_pointer: 0,
 			data_length: 0,
+			may_be_ratio: false,
 		}
 	}
 

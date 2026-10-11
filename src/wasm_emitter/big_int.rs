@@ -28,6 +28,8 @@ use Instruction as I;
 use ValType::Ref;
 
 pub const INT_RUNTIME: &str = "int_runtime";
+/// Marks a program that calculates: exact_cmp then carries its small shortcut
+pub const EXACT_ARITHMETIC: &str = "exact_arithmetic";
 /// The exported Int operations a host builds an exact number beyond the fixnums with (tasks.rs Builders, host.js
 /// exactHandle): shift, add, subtract, divide
 pub const EXACT_BUILDERS: [&str; 4] = ["int_shift_left", "exact_add", "exact_sub", "exact_div"];
@@ -35,6 +37,8 @@ pub const FIXNUM_OFFSET: i64 = (1 << 62) - 1;
 pub const FIXNUM_MIN: i128 = -((1 << 62) - 1);
 pub const FIXNUM_MAX: i128 = 1 << 62;
 const HANDLE_BASE: i64 = i64::MIN;
+/// Every integer within ±2^53 is an f64 exactly
+const F64_EXACT_LIMIT: i64 = 1 << 53;
 /// A small ratio lives in its handle and never on the heap, which int_store never frees: handles from INLINE_RATIO_BASE
 /// on hold `((numerator + INLINE_NUMERATOR_BIAS) << INLINE_DENOMINATOR_BITS) | denominator`, a numerator of 31 bits and
 /// a denominator of 30; the heap's handles stay below (2^61 of them)
@@ -60,6 +64,26 @@ pub fn is_fixnum_range(range: IntRange) -> bool {
 
 fn fits(range: IntRange, low: i128, high: i128) -> bool {
 	matches!(range, Some((l, h)) if l >= low && h <= high)
+}
+
+/// The f64 that is exactly this number: an integer within ±2^53, a ratio over a power of two
+fn exact_f64(number: &Number) -> Option<f64> {
+	let within = |n: i64| n.unsigned_abs() <= F64_EXACT_LIMIT as u64;
+	match *number {
+		Number::Int(n) if within(n) => Some(n as f64),
+		// 6/4: the odd part of the denominator divides the numerator, what is left is over a power of two
+		Number::Quotient(n, d) if d > 0 => {
+			let odd = d >> d.trailing_zeros();
+			(n % odd == 0 && within(n / odd)).then(|| (n / odd) as f64 / (d / odd) as f64)
+		}
+		// a decimal literal means its digits (0.5 is 5/10): exact as an f64 when the f64 is that decimal (0.1 is not)
+		Number::Float(value) => {
+			let (numerator, denominator) = super::exact::decimal_fraction(value);
+			let (numerator, denominator) = (i64::try_from(&numerator).ok()?, i64::try_from(&denominator).ok()?);
+			exact_f64(&Number::Quotient(numerator, denominator)).filter(|exact| *exact == value)
+		}
+		_ => None,
+	}
 }
 
 pub fn is_fixnum(n: i64) -> bool {
@@ -540,6 +564,40 @@ impl WasmGcEmitter {
 		func.instruction(&I::LocalSet(a));
 		self.emit_fixnum_test(func, &[a]);
 		self.emit_fast_or_unary_slow(func, a, &[I::LocalGet(a), I::F64ConvertI64S], "exact_to_f64", ValType::F64);
+	}
+
+	/// `col + 0.5` where a float uses it (`col + 0.5 - x` of a float x): IEEE rounds an operation on exact f64 operands
+	/// once, as converting the exact result does, so a variable holding an integer within ±2^53 and a constant an f64
+	/// holds exactly take the f64 operation; any other value the exact one (decision exact-decimals: the value stays
+	/// exact up to the float, a ratio per pixel made circle five times slower than with floats)
+	pub(crate) fn emit_exact_operation_as_f64(&mut self, func: &mut Function, node: &Node, left: &Node, op: &Op, right: &Node) -> bool {
+		if !matches!(op, Op::Add | Op::Sub | Op::Mul) || !self.int_runtime() {
+			return false;
+		}
+		let (variable, constant) = match (left.drop_meta(), right.drop_meta()) {
+			(Node::Symbol(_), Node::Number(number)) => (left, number),
+			(Node::Number(number), Node::Symbol(_)) => (right, number),
+			_ => return false,
+		};
+		let Some(constant) = exact_f64(constant) else { return false };
+		let held = self.scratch(0);
+		self.emit_numeric_value(func, variable);
+		Self::emit_list(func, &[I::LocalSet(held), I::LocalGet(held), I::I64Const(F64_EXACT_LIMIT), I::I64Add,
+			I::I64Const(2 * F64_EXACT_LIMIT), I::I64LeU, I::If(BlockType::Result(ValType::F64))]);
+		for side in [left, right] {
+			if std::ptr::eq(side, variable) {
+				Self::emit_list(func, &[I::LocalGet(held), I::F64ConvertI64S]);
+			} else {
+				func.instruction(&I::F64Const(Ieee64::new(constant.to_bits())));
+			}
+		}
+		self.emit_float_arithmetic(func, op);
+		func.instruction(&I::Else);
+		self.emit_numeric_value(func, node);
+		let range = self.int_range(node);
+		self.emit_int_to_f64(func, range);
+		func.instruction(&I::End);
+		true
 	}
 
 	/// Integer literal of any size as an Int

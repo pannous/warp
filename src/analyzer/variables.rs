@@ -115,6 +115,7 @@ pub(super) fn collect_variables_inner(node: &Node, scope: &mut Scope, skip_first
 		Node::Key(left, op, right) if op.is_compound_assign() => {
 			let inner_temporaries = visit(right, scope);
 			if let Some(name) = left.symbol_name() {
+				mark_ratio(left, right, scope);
 				widen_to_float(scope, name, right);
 				// `out += x` of a number of run-time kind may add a float, as `out = out + x` does; an evident other kind
 				// (`s += "ab"` of an Int) stays the type error of emit_compound_type_error
@@ -165,6 +166,21 @@ fn bind_destructured(names: &[String], values: &[Node], scope: &mut Scope) {
 
 /// `left = right` outside a structure: a new name becomes a local, a known one may widen its type
 fn bind_assigned(left: &Node, right: &Node, scope: &mut Scope) {
+	bind_assigned_kind(left, right, scope);
+	mark_ratio(left, right, scope);
+}
+
+/// A variable given a value that may be a fraction keeps that in mind: its power `10^l` may be a float (node_pow)
+fn mark_ratio(left: &Node, right: &Node, scope: &mut Scope) {
+	let Some(name) = left.symbol_name() else { return };
+	if crate::analyzer::inference::may_be_ratio(right, scope) {
+		if let Some(local) = scope.own_binding_mut(name) {
+			local.may_be_ratio = true;
+		}
+	}
+}
+
+fn bind_assigned_kind(left: &Node, right: &Node, scope: &mut Scope) {
 	match left.drop_meta() {
 		// `k.x = 3` updates k: it binds no k, so an undefined k stays undefined (as in `k#1 = 3`)
 		Node::Symbol(name) if crate::library_words::is_field_update_of(name, right) && scope.lookup(name).is_none() => {}
@@ -174,6 +190,7 @@ fn bind_assigned(left: &Node, right: &Node, scope: &mut Scope) {
 				Some(type_name) => (declared_kind(type_name).unwrap_or_else(|| binding_kind(right, scope)), Some(Box::new(type_name.clone()))),
 				None => match (value_binding(right, scope), scope.widened_bindings.get(name)) {
 					((Kind::List, _), Some(widened @ (Kind::List, _))) | ((Kind::Int, None), Some(widened @ (Kind::Float, None))) => widened.clone(),
+					((kind, _), Some(widened @ (Kind::Empty, None))) if CONCRETE_KINDS.contains(&kind) => widened.clone(),
 					(binding, _) => binding,
 				},
 			};
@@ -306,6 +323,10 @@ pub(super) fn widen_to_node(scope: &mut Scope, name: &str, value: &Node) {
 	if CONCRETE_KINDS.contains(&local.kind) && other_kind {
 		local.kind = Kind::Empty;
 		local.type_node = None;
+		// a read before this write (`x2 = x1` earlier in the loop) holds the Node too, once collected again
+		if scope.locals.contains_key(name) {
+			scope.widened_bindings.insert(name.to_string(), (Kind::Empty, None));
+		}
 	}
 }
 
@@ -878,6 +899,7 @@ impl Scope {
 			kind,
 			data_pointer: 0,
 			data_length: 0,
+			may_be_ratio: false,
 		};
 		self.locals.insert(name, local.clone());
 		local

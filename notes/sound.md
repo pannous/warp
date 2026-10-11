@@ -48,6 +48,18 @@ arguments of a parameter that also gets ints, and in `==` ("not an int", tests/l
 `shown = [0.0, 0.0]` is still a list of ints (0.0 is exact), so the sample writes `[0.0 as float for …]` until the
 exact-decimal list decision (warp-numbers) lands.
 
+## MIDI (card midi-out, layer 7 started; samples/midi.warp, tests/programs/test_midi.rs)
+`write_midi(path, notes)` / `read_midi(path)`: Standard MIDI Files (format 0, 480 ticks a quarter at 120 bpm; reading takes
+formats 0 and 1, running status, tempo changes) of notes `[start s, pitch, length s, velocity]`; they cross to the host as
+flat whole numbers `[start ms, key, length ms, velocity …]` (src/midi.rs natively, host-files.js midiFileOf / midiNotesOf in
+the browser, the same codec twice). `midi_on(pitch, velocity = 100, channel = 1)`, `midi_off`, `midi_send(status, d1, d2, port)`.
+Natively a message goes to `sendmidi` (brew install gbevin/tools/sendmidi; missing → a loud error naming it), headless only
+`midi out <port>: 90 3c 64` on stderr. Browser: Web MIDI on the page (playground.js sendMidi, first output or by name,
+failures to the console). Open, each failing loudly today: `midi_receive()` (no CoreMIDI binding natively: needs the midir
+crate or libloading CoreMIDI; in the browser the page's input would have to be handed to the Worker), `midi_outputs()` in the
+browser (a Worker cannot wait for the page's device list), clock-timed MIDI (messages are immediate, not scheduled with `at`).
+A loop variable named `note` inside lib/sound.warp breaks: `note` is the module's own word ("not a list").
+
 ## Probes and quirks (from the warp-sound handover, 2026-10-10)
 - probes/sound/sound_words.warp exercises the sound words; probes/music_go/ the `play`/`melody` phrases;
   probes/music_outlives_file.py that the player stops with warp.
@@ -185,3 +197,11 @@ last stage that moves samples to the speaker.
 So: Web Audio semantics, warp words, one engine for rendering, cpal (CoreAudio/ALSA/PipeWire/WASAPI) or Web Audio's
 destination for output. Not a wrapper over each platform's own high-level API (AVAudioEngine, GStreamer): those
 differ in model and would make the browser and native sound differ.
+
+## Signal graph built (card signal-graph, 2026-10-10, samples/signal_graph.warp, tests/programs/test_sound_effects.rs)
+The simple form of layer 4: every sound passes a fixed effect chain distortion → delay → reverb between the voices and the
+output (lib/sound.warp `through_effects`, run in `sound()` over the whole phrase, so a melody has one tail). Module settings
+`distortion` (soft-clipper drive), `delay_time` / `delay_feedback` / `delay_mix`, `reverb_mix` (four Schroeder combs, 0.6 s
+tail); all off by default (no cost). The settings at the time of `play` are that sound's sends, so each voice (task) sets its
+own. Pure warp, so the playground runs the same. Still to build: the `osc |> lowpass |> delay |> out` pipe form with nodes
+and buses as values, shared buses between voices, compressor, EQ, effects on a running handle.
