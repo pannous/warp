@@ -1,7 +1,6 @@
-# Bend-style laws cleanup
+# Delete-list cleanup
 
-- Normalize the quantified law alias in the law layer, leaving the general parser and ordinary `for` loops unchanged.
-- Keep one canonical law representation so assertion, property testing, and Lean export reuse the existing pipeline.
-- Add a checked `LAWS.warp` convention example and make `warp verify` end with an explicit proof-gate verdict.
-- Cover the alias, file convention, success wording, and failure wording with focused tests.
-- Update the laws and Bend notes, run the focused tests, then run `cargo fix --offline --allow-dirty --lib --bins`.
+- Reproduce deletion of a list variable with a new focused probe test.
+- Reuse the existing mutation lowering and list helpers rather than adding a special runtime path.
+- Make deletion mutate the list variable consistently with list methods and preserve other delete forms.
+- Run the focused test before and after, then clippy, wasm32 checking, and cargo fix.

@@ -448,6 +448,7 @@ pub const LIST_BECOME: &str = "list_become";
 /// The list a pop template takes from, replaced by the variable or field popped
 const POP_PLACE: &str = "pop_place";
 pub const REMOVE_METHOD: &str = "remove";
+const DELETE_METHOD: &str = "delete";
 /// Pseudo-call `removed_value(collection, k)`: what `collection.remove(k)` gives, by the collection's kind: of a map the
 /// value of the key (P35, Python's dict.pop), of a list the list without the first element equal to k
 pub const REMOVED_VALUE_CALL: &str = "removed_value";
@@ -487,7 +488,11 @@ pub(crate) fn appends(method: &str, argument_count: usize) -> bool {
 
 /// Methods that change the list variable they are called on: `xs.add(v)`, `xs.insert(v, at:1)`, `xs.pop()`
 pub fn is_list_mutating_method(name: &str) -> bool {
-	APPEND_METHODS.contains(&name) || [POP_METHOD, REMOVE_METHOD, CLEAR_METHOD].contains(&name)
+	APPEND_METHODS.contains(&name) || [POP_METHOD, REMOVE_METHOD, DELETE_METHOD, CLEAR_METHOD].contains(&name)
+}
+
+fn is_removal_method(name: &str) -> bool {
+	[REMOVE_METHOD, DELETE_METHOD].contains(&name)
 }
 
 /// A place a list update can assign: a variable `xs` or a field of one `p.items`, `self.stack.items` (by now the
@@ -529,15 +534,21 @@ pub(super) fn popped_list(list: &Node, call: &Node) -> Option<Node> {
 }
 
 /// `m.remove(k)` when m is a variable: the value of k, its entry removed from m (P35 default, Python's dict.pop); of a
-/// list variable the first element equal to k removed, and the list it gives (REMOVED_VALUE_CALL). `x.pop(k)` is
-/// Python's pop of a key or a 0-based position (POPPED_ITEM_CALL)
+/// list variable the first element equal to k removed, and the list it gives (REMOVED_VALUE_CALL). `delete` is the
+/// familiar alias for `remove`; `x.pop(k)` is Python's pop of a key or a 0-based position (POPPED_ITEM_CALL).
 pub(super) fn removed_key(map: &Node, call: &Node) -> Option<Node> {
 	let Node::Symbol(name) = map.drop_meta() else { return None };
 	let Node::List(items, _, _) = call.drop_meta() else { return None };
 	let [method, key] = items.as_slice() else { return None };
-	let (value_word, rest_word) = match method.symbol_name() {
-		Some(REMOVE_METHOD) => (REMOVED_VALUE_CALL, crate::library_words::MAP_WITHOUT),
-		Some(POP_METHOD) => (POPPED_ITEM_CALL, POPPED_REST_CALL),
+	let method = method.symbol_name()?;
+	let (value_word, rest_word) = match method {
+		name if is_removal_method(name) => {
+			if name == DELETE_METHOD {
+				crate::diagnostic::note_alias(DELETE_METHOD, REMOVE_METHOD);
+			}
+			(REMOVED_VALUE_CALL, crate::library_words::MAP_WITHOUT)
+		}
+		POP_METHOD => (POPPED_ITEM_CALL, POPPED_REST_CALL),
 		_ => return None,
 	};
 	let removed = Node::Symbol(format!("{name}{TEMPORARY_SEPARATOR}removed"));
