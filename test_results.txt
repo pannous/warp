@@ -2971,6 +2971,7 @@ PASSED:
   ✓ programs::test_shader_holes::values_not_written_out_cannot_take_the_holes
   ✓ programs::test_small_samples::error_samples
   ✓ programs::test_small_samples::text_samples
+  ✓ programs::test_sound_aliasing::square_and_sawtooth_do_not_alias
   ✓ programs::test_sound_at::a_statement_sounds_inside_another
   ✓ programs::test_sound_at::beats_place_a_block
   ✓ programs::test_sound_at::the_silence_before_stays_and_the_voice_goes_on
@@ -3021,6 +3022,9 @@ PASSED:
   ✓ programs::test_sound_tempo::notes_last_beats
   ✓ programs::test_sound_tempo::the_program_sets_the_modules_settings
   ✓ programs::test_sound_tempo::the_tempo_sets_the_beat
+  ✓ programs::test_sound_use::a_rare_sound_word_needs_use_sound
+  ✓ programs::test_sound_use::an_own_word_named_like_a_rare_sound_word_is_the_program_s
+  ✓ programs::test_sound_use::play_and_beep_need_no_use
   ✓ programs::test_sound_voices::a_task_is_a_voice_that_sounds_along
   ✓ programs::test_sound_voices::a_voice_starts_where_its_starter_stands
   ✓ programs::test_sound_voices::voices_add_up
@@ -3262,6 +3266,7 @@ PASSED:
   ✓ text::test_text_bytes::bytes_of_a_one_character_text_in_a_variable
   ✓ text::test_text_bytes::plus_concatenates_texts_and_characters
   ✓ text::test_text_bytes::plus_equals_appends_to_a_text
+  ✓ text::test_text_bytes::read_loads_a_file_as_bytes
   ✓ text::test_text_bytes::text_plus_number_stays_a_type_error
   ✓ text::test_text_casts::a_double_quoted_text_as_float_is_loud
   ✓ text::test_text_casts::a_numeric_text_as_float_in_a_float_variable
@@ -4693,4 +4698,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-10 ignored, 4688 passed, 0 failed, 4688 total tested
+10 ignored, 4693 passed, 0 failed, 4693 total tested
