@@ -28,6 +28,9 @@ PASSED:
   ✓ control::test_block_assigns_outer::a_block_that_assigns_an_outer_variable_hints_global_or_return
   ✓ control::test_block_assigns_outer::a_block_that_assigns_an_outer_variable_leaves_it_unchanged
   ✓ control::test_block_assigns_outer::the_declared_and_returned_forms_change_it
+  ✓ control::test_block_parameter_calls::a_block_parameter_takes_a_trailing_block_without_parentheses
+  ✓ control::test_block_parameter_calls::a_parameter_named_block_is_a_block_parameter_and_runs_with_parentheses
+  ✓ control::test_block_parameter_calls::a_trailing_block_parameter_takes_the_rest_of_the_call
   ✓ control::test_block_parameters::test_a_bang_known_only_at_run_time_is_loud
   ✓ control::test_block_parameters::test_a_prefix_takes_the_rest_of_its_group
   ✓ control::test_block_parameters::test_block_parameters_take_their_argument_unevaluated
@@ -4679,4 +4682,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-10 ignored, 4674 passed, 0 failed, 4674 total tested
+10 ignored, 4677 passed, 0 failed, 4677 total tested
