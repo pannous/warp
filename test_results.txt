@@ -49,6 +49,7 @@ PASSED:
   ✓ control::test_braceless_output_calls::a_braceless_output_call_is_worth_an_int
   ✓ control::test_branch_assigned_variables::a_text_assigned_in_both_branches_is_read_after_them
   ✓ control::test_broadcast::a_broadcast_is_a_statement_of_no_value
+  ✓ control::test_broadcast::a_broadcast_reaches_another_program
   ✓ control::test_broadcast::a_program_hears_its_own_broadcast
   ✓ control::test_broadcast::nobody_listening_is_no_error
   ✓ control::test_catch_binding::a_caught_error_reads_as_its_message_in_text
@@ -4707,7 +4708,6 @@ PASSED:
   ✓ wisp_parser::tests::test_wisp_tag
 
 FAILED:
-  ✗ control::test_broadcast::a_broadcast_reaches_another_program
 
 SUMMARY:
-10 ignored, 4704 passed, 1 failed, 4705 total tested
+10 ignored, 4705 passed, 0 failed, 4705 total tested
