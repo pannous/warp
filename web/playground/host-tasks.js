@@ -775,6 +775,8 @@ addHostPart({
 		},
 		// a raise inside a task goes to the starting program's handlers (src/tasks.rs signal_send, deliver)
 		task_inside: () => holder.inTask ? 1n : 0n,
+		// a parallel let forks from the program only: a task's Worker does not see how many others run (src/tasks.rs counts them)
+		task_forks: () => holder.inTask ? 0n : 1n,
 		signal_send: (handler, values) => {
 			(holder.run.signals ??= []).push({ handler: decode(cString(handler)), values: readTaskValue(program(), values) });
 			return 0n;

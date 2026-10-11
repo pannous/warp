@@ -3,8 +3,11 @@
 //! `xs.map(f) @parallel` and `@parallel f all xs` are the same map; `@parallel` on another form warns. The items are
 //! split into PARALLEL_CHUNKS slices, each mapped (or looped) in a go block; the map's results come back in order, the
 //! loop ends when every chunk is done. A loop body updating an outer variable (`t += x`) updates its task's copy: a
-//! warning names `shared` (P106). notes/go_blocks.md
+//! warning names `shared` (P106). The parallel let `a b = f(x) g(y)` (Bend 2, notes/bend.md) runs its calls in
+//! parallel while cores are free. notes/go_blocks.md
 
+use super::go_blocks::AWAIT_WORD;
+use super::nodes::key;
 use super::words::{FOR_WORD, IN_WORD, MAP_WORD};
 use crate::node::{symbol, Bracket, Node, Separator};
 use crate::operators::Op;
@@ -20,6 +23,8 @@ const TEMPORARY_BASE: &str = "parallel";
 const LIST_PLACEHOLDER: &str = "go_map_list";
 const FUNCTION_PLACEHOLDER: &str = "go_map_function";
 const LOOP_PLACEHOLDER: &str = "go_map_loop";
+const FORKED_PLACEHOLDER: &str = "go_let_forked";
+const SEQUENTIAL_PLACEHOLDER: &str = "go_let_sequential";
 
 /// The slices of `go_map_list` as tasks in `parallel_jobs`; `{work}` is the go block's body for `parallel_part`
 fn chunked(work: &str) -> String {
@@ -123,6 +128,40 @@ pub(crate) fn loop_in_tasks(variable: Node, list: Node, body: Node, number: usiz
 	let walk = Node::List(vec![symbol(FOR_WORD), variable, symbol(IN_WORD), temporary("part", number), body], Bracket::None, Separator::Space);
 	let program = format!("({}; ø)", chunked(&format!("{LOOP_PLACEHOLDER}; 0")));
 	filled(&program, number, &[(LIST_PLACEHOLDER, list), (LOOP_PLACEHOLDER, walk)])
+}
+
+/// `a b = f(x) g(y)`, arriving as `a (b = f(x)) g(y)`: the names and the calls, as many of each, at least two
+pub(crate) fn parallel_let(items: &[Node], bracket: &Bracket, separator: &Separator) -> Option<(Vec<Node>, Vec<Node>)> {
+	if (bracket, separator) != (&Bracket::None, &Separator::Space) {
+		return None;
+	}
+	let assignment = items.iter().position(|item| matches!(item.drop_meta(), Node::Key(_, Op::Assign, _)))?;
+	let Node::Key(last_name, Op::Assign, first_value) = items[assignment].drop_meta() else { return None };
+	let names: Vec<Node> = items[..assignment].iter().chain([last_name.as_ref()]).cloned().collect();
+	let values: Vec<Node> = std::iter::once(first_value.as_ref()).chain(&items[assignment + 1..]).cloned().collect();
+	let is_name = |node: &Node| matches!(node.drop_meta(), Node::Symbol(_));
+	(names.len() >= 2 && names.len() == values.len() && names.iter().all(is_name) && values.iter().all(is_call)).then_some((names, values))
+}
+
+/// `f(x)`: a call by name
+fn is_call(node: &Node) -> bool {
+	matches!(node.drop_meta(), Node::List(items, Bracket::Round, _) if matches!(items.first().map(Node::drop_meta), Some(Node::Symbol(_))))
+}
+
+/// Each call but the last in a task, the last one here, then the tasks awaited, while task_forks() finds a core free;
+/// else the calls one after the other, so a recursive parallel let forks only its top levels (BendRT's cutoff)
+pub(crate) fn let_in_tasks(names: Vec<Node>, values: Vec<Node>, number: usize) -> Node {
+	let job = |index: usize| Node::Symbol(crate::library_words::temporary_name(&[TEMPORARY_BASE, "job", &number.to_string(), &index.to_string()]));
+	let assign = |name: &Node, value: Node| key(name.clone(), Op::Assign, value);
+	let word = |word: &str, node: Node| Node::List(vec![symbol(word), node], Bracket::None, Separator::Space);
+	let last = names.len() - 1;
+	let forks = (0..last).map(|index| assign(&job(index), word(GO_WORD, values[index].clone())));
+	let awaits = (0..last).map(|index| assign(&names[index], word(AWAIT_WORD, job(index))));
+	let forked = forks.chain([assign(&names[last], values[last].clone())]).chain(awaits).collect();
+	let sequential = names.iter().zip(values).map(|(name, value)| assign(name, value)).collect();
+	let statements = |items| Node::List(items, Bracket::None, Separator::Semicolon);
+	let program = format!("if {}() {{ {FORKED_PLACEHOLDER} }} else {{ {SEQUENTIAL_PLACEHOLDER} }}", crate::host::TASK_FORKS);
+	filled(&program, number, &[(FORKED_PLACEHOLDER, statements(forked)), (SEQUENTIAL_PLACEHOLDER, statements(sequential))])
 }
 
 /// The template with its temporaries named apart, then the placeholders filled (the program's own `parallel_…` names

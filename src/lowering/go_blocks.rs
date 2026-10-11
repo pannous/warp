@@ -16,7 +16,7 @@ const BLOCK_FUNCTION_PREFIX: &str = "go·block·";
 /// A go block's parameter is the variable it reads with this suffix: `n` comes in as `n·in`
 const INPUT_SUFFIX: &str = "·in";
 const AFTER_WORD: &str = "after";
-const AWAIT_WORD: &str = "await";
+pub(crate) const AWAIT_WORD: &str = "await";
 const AFTER_CONDITION: &str = "after_condition_placeholder";
 const AFTER_VALUE: &str = "after_value_placeholder";
 /// How often a waiting `after` checks its condition, in milliseconds
@@ -133,6 +133,9 @@ fn task_phrases(node: Node, phrases: &Phrases) -> Node {
 	match node {
 		Node::List(items, bracket, separator) => {
 			let items: Vec<Node> = items.into_iter().map(|item| task_phrases(item, phrases)).collect();
+			if let Some((names, values)) = crate::parallel::parallel_let(&items, &bracket, &separator) {
+				return crate::parallel::let_in_tasks(names, values, phrases.next_parallel());
+			}
 			if let Some((variable, list, body)) = crate::parallel::parallel_loop(&items) {
 				return crate::parallel::loop_in_tasks(variable, list, body, phrases.next_parallel(), &phrases.shared);
 			}

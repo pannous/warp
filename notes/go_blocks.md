@@ -41,3 +41,15 @@ later; the program waits for its tasks before it ends (tasks::TaskTable::join_al
   `await any`. `await job within 100 ms or 0` (P154, asyncio.wait_for): polls the job's status until the deadline, then
   stops it and gives the `or` value (`raise timeout` without one, which `try` catches); a got-it note says so where it
   is written. As `x = await job within … or v` it arrives as go_blocks' try·else (Tasks::within_or).
+
+## Parallel let (card lower-parallel, notes/bend.md)
+- `a b = f(x) g(y)` arrives as `a (b = f(x)) g(y)`; go_blocks.rs hands it to parallel.rs `let_in_tasks` when every
+  value is a call by name and names and calls are as many (two or more): `if task_forks() { j0 = go f(x); b = g(y);
+  a = await j0 } else { a = f(x); b = g(y) }`, the last call on the current thread as in BendRT.
+- `task_forks()` (host.rs) is the cutoff: natively 1 while the run's TaskTable has fewer running tasks (nested ones
+  too) than `available_parallelism`, so a recursive split forks only its top levels; in the browser 1 in the program
+  and 0 inside a task (a Worker does not see the others).
+- `go` inside an if-expression (`j = if c { go f(3) } else { f(3) }; await j`) gives a wrong value (1), so the cutoff
+  duplicates the whole statement into both branches instead.
+- Timing (probes/parallel/tree_sum.warp vs tree_sum_sequential.warp, 16 leaves of 30M steps, 10 cores, loaded machine):
+  0.86 s vs 1.72 s.

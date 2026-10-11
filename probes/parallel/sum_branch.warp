@@ -1,0 +1,6 @@
+sum(d) := {
+	if d == 0 { return 1 }
+	if d > 3 { j = go sum(d - 1); b = sum(d - 1); a = await j } else { a = sum(d - 1); b = sum(d - 1) }
+	a + b
+}
+print sum(8)

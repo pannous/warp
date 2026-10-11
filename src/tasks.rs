@@ -417,6 +417,8 @@ pub struct TaskTable {
 	signals: Mutex<Vec<(String, TaskValue)>>,
 	controls: Mutex<HashMap<i64, Arc<TaskControl>>>,
 	next_id: AtomicI64,
+	/// the tasks of the run still running, nested ones too (task_forks)
+	running: AtomicI64,
 	/// the shared arrays of the run, linked into every task (shared.rs)
 	shared: Option<Arc<crate::shared::SharedArrays>>,
 	channels: Channels,
@@ -425,7 +427,7 @@ pub struct TaskTable {
 /// Link task_spawn and task_await for `module`, sharing one table with every task it starts
 pub fn link(linker: &mut Linker<HostState>, engine: &Engine, module: &Module, imports: Imports, shared: Option<Arc<crate::shared::SharedArrays>>) -> Result<Arc<TaskTable>> {
 	let table = Arc::new(TaskTable {
-		engine: engine.clone(), module: module.clone(), imports, slots: Mutex::default(), taken: Mutex::default(), signals: Mutex::default(), controls: Mutex::default(), next_id: AtomicI64::new(1), shared, channels: Channels::default(),
+		engine: engine.clone(), module: module.clone(), imports, slots: Mutex::default(), taken: Mutex::default(), signals: Mutex::default(), controls: Mutex::default(), next_id: AtomicI64::new(1), running: AtomicI64::new(0), shared, channels: Channels::default(),
 	});
 	table.link_into(linker)?;
 	tick_while_running(Arc::downgrade(&table));
@@ -433,6 +435,11 @@ pub fn link(linker: &mut Linker<HostState>, engine: &Engine, module: &Module, im
 }
 
 /// The epoch advances while the table lives, so tasks reach their checks (stop, pause)
+/// The machine's cores: a parallel let forks while fewer tasks run (task_forks)
+fn cores() -> i64 {
+	std::thread::available_parallelism().map_or(1, |cores| cores.get() as i64)
+}
+
 fn tick_while_running(table: Weak<TaskTable>) {
 	std::thread::spawn(move || loop {
 		std::thread::sleep(EPOCH_TICK);
@@ -516,6 +523,8 @@ impl TaskTable {
 			Ok(status)
 		})?;
 		linker.func_wrap(HOST_LIBRARY, crate::host::TASK_INSIDE, |caller: Caller<'_, HostState>| -> i64 { caller.data().in_task as i64 })?;
+		let forker = self.clone();
+		linker.func_wrap(HOST_LIBRARY, crate::host::TASK_FORKS, move || -> i64 { (forker.running.load(Ordering::Relaxed) < cores()) as i64 })?;
 		let sender = self.clone();
 		linker.func_wrap(HOST_LIBRARY, crate::host::SIGNAL_SEND, move |mut caller: Caller<'_, HostState>, handler: i32, arguments: Option<Rooted<AnyRef>>| -> wasmtime::Result<i64> {
 			let handler = c_string(&mut caller, handler).map_err(host_error)?;
@@ -624,9 +633,12 @@ impl TaskTable {
 		self.controls.lock().expect("task controls").insert(id, control.clone());
 		let table = self.clone();
 		let voice = crate::sound::voice(); // the task is a voice of its own, starting where this one stands
+		self.running.fetch_add(1, Ordering::Relaxed);
 		let handle = std::thread::spawn(move || {
 			crate::sound::join_voice(voice);
-			table.run(&function, &arguments, &captured, control).map_err(|failure| format!("task {}: {}", task_name(&function), failure_message(failure)))
+			let result = table.run(&function, &arguments, &captured, control).map_err(|failure| format!("task {}: {}", task_name(&function), failure_message(failure)));
+			table.running.fetch_sub(1, Ordering::Relaxed);
+			result
 		});
 		self.slots.lock().expect("task table").insert(id, Slot::Running(handle));
 		id
