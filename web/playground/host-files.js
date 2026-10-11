@@ -532,6 +532,8 @@ addHostPart({
 			// `delete local[k]` (kept as undefined: markup.js keepValue drops it), `keys(local)`
 			remove: (name, file) => { delete valuesOf(file)[name]; keep(name, undefined, file); return null; },
 			names: file => Object.keys(valuesOf(file)),
+			// `storage` alone: all its values as a map
+			all: file => ({ ...valuesOf(file) }),
 		},
 		file: {
 			write: (path, content) => { keepWritten(path, contentText(content)); return null; },

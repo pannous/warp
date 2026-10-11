@@ -120,6 +120,7 @@ mod test_signal_values;
 mod test_stored_signals;
 mod test_stored_default; // card stored-visits
 mod test_storage;
+mod test_store_values;
 mod test_undo_history;
 mod test_scoped_handlers;
 mod test_shared_signals;
