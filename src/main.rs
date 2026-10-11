@@ -801,6 +801,35 @@ fn usage() {
     println!("  warp help <module>   A standard module's words (warp help --markdown: all, as wiki/standard-library.md)");
 }
 
+#[derive(Default)]
+struct ConsoleSession {
+    state: Vec<String>,
+}
+
+impl ConsoleSession {
+    fn source_with(&self, input: &str) -> String {
+        self.state.iter().map(String::as_str).chain([input]).collect::<Vec<_>>().join("\n")
+    }
+
+    fn remember(&mut self, input: &str, value: &Node) {
+        if !matches!(value.drop_meta(), Node::Error(_)) && console_state_line(&warp_parser::parse(input)) {
+            self.state.push(input.to_string());
+        }
+    }
+}
+
+fn console_state_line(node: &Node) -> bool {
+    match node.drop_meta() {
+        Node::Key(_, op, _) => matches!(op, warp::operators::Op::Assign | warp::operators::Op::Define | warp::operators::Op::Inc | warp::operators::Op::Dec) || op.is_compound_assign(),
+        Node::List(items, node::Bracket::None, separator) if separator.separates_statements() => items.iter().all(console_state_line),
+        Node::List(items, node::Bracket::None, node::Separator::Space) => {
+            matches!(items.first().and_then(Node::symbol_name), Some("let" | "var" | "const" | "global"))
+                && items.iter().skip(1).any(console_state_line)
+        }
+        _ => false,
+    }
+}
+
 fn console() {
     use rustyline::error::ReadlineError;
     use rustyline::DefaultEditor;
@@ -820,6 +849,7 @@ fn console() {
     let _ = rl.load_history(&history_path);
 
     let mut interrupted = false; // a ctrl-c on an empty line twice in a row ends the console
+    let mut session = ConsoleSession::default();
     loop {
         let read = rl.readline("🌀"); // warp language symbol for prompt
         let interrupted_before = interrupted;
@@ -835,7 +865,9 @@ fn console() {
                 if input.is_empty() { continue; }
                 if input == "exit" || input == "quit" { break; }
                 let _ = rl.add_history_entry(input);
-                show(&eval(input), RESULT_MARK);
+                let value = eval(&session.source_with(input));
+                session.remember(input, &value);
+                show(&value, RESULT_MARK);
             }
             Err(ReadlineError::Eof) => break,
             Err(e) => {
@@ -868,4 +900,3 @@ fn file_exists(path: &str) -> bool {
 fn extract_after(s: &str, sep: &str) -> String {
     s.split_once(sep).map(|(_, after)| after.to_string()).unwrap_or_default()
 }
-
