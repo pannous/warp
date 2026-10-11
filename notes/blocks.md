@@ -30,6 +30,9 @@ Next: code/block prefixes, block parameters for if/while/for/def.
 - `x = code e` / `x = block e` bind blocks; `y = data e; y!` runs with the got-it warning "running data as code".
 - Block parameters: `f(c, body:block) := …` is expanded at each call like a macro: other parameters bound once to
   `param·mN`, `body!` → `(arg)`, bare `body` → `data arg`; the definition itself is dropped. Cap: 1000 expansions.
+  Card repeats-loop: `body()` runs it like `body!`; an untyped parameter named `block` or `code` is a block parameter
+  (`def repeats(n: int, block) := …`); calls expand in every form, `repeats 4 {…}` too, and a last block parameter
+  takes the rest of the call (`twice(print "hi")`, which the parser reads as the items twice, print, "hi").
 
 ## Function entries of objects (branch object-functions)
 - `o = {a: 1, f := it*2}`, `f := x => …`, `f = x => …`, `f: x => …`, `f(x, y) := …`: the entry becomes the top-level

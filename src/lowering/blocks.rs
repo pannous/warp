@@ -49,14 +49,15 @@ struct BlockFunction {
 	body: Node,
 }
 
-/// `f(c, body:block) := …`: a definition with at least one `block` (or `code`) parameter
+/// `f(c, body:block) := …`: a definition with at least one `block` (or `code`) parameter; a parameter named `block` or
+/// `code` without a type is one too (`def repeats(n: int, block) := …`)
 fn block_function(node: &Node) -> Option<(String, BlockFunction)> {
 	let Node::Key(head, Op::Define | Op::Assign, body) = node.drop_meta() else { return None };
 	let Node::List(items, Bracket::Round, Separator::None) = head.drop_meta() else { return None };
 	let (name, parameters) = items.split_first()?;
 	let Node::Symbol(name) = name.drop_meta() else { return None };
 	let parameters: Vec<(String, bool)> = parameters.iter().map(|parameter| match parameter.drop_meta() {
-		Node::Symbol(name) => Some((name.clone(), false)),
+		Node::Symbol(name) => Some((name.clone(), BLOCK_WORDS.contains(&name.as_str()))),
 		Node::Key(name, Op::Colon, kind) => Some((name.name(), matches!(kind.drop_meta(), Node::Symbol(word) if BLOCK_WORDS.contains(&word.as_str())))),
 		_ => None,
 	}).collect::<Option<_>>()?;
@@ -102,15 +103,38 @@ fn prefixed_group(node: &Node) -> Option<Node> {
 
 /// In a body: `param!` the argument's code (a group), a bare `param` the argument as data
 fn substitute_block(node: Node, parameter: &str, argument: &Node) -> Node {
-	if let Some((Node::Symbol(name), _)) = bang_target(&node) {
-		if name == parameter {
-			return Node::List(vec![argument.clone()], Bracket::Round, Separator::None);
-		}
+	if runs_parameter(&node, parameter) {
+		return Node::List(vec![argument.clone()], Bracket::Round, Separator::None);
 	}
 	match node {
 		Node::Symbol(name) if name == parameter => Node::List(vec![symbol(DATA_WORD), argument.clone()], Bracket::None, Separator::Space),
 		other => children_rewritten(other, |child| substitute_block(child, parameter, argument)),
 	}
+}
+
+/// `body!` or `body()` of the block parameter body
+fn runs_parameter(node: &Node, parameter: &str) -> bool {
+	let is_parameter = |node: &Node| matches!(node.drop_meta(), Node::Symbol(name) if name == parameter);
+	match node.drop_meta() {
+		Node::List(items, Bracket::Round, Separator::None) => matches!(items.as_slice(), [only] if is_parameter(only)),
+		_ => bang_target(node).is_some_and(|(target, _)| is_parameter(&target)),
+	}
+}
+
+/// The arguments of a call to a function with these parameters: one each, or, when the last parameter is a block, the
+/// rest of the call as its argument (`twice(print "hi")` is read as the items twice, print, "hi")
+fn fitted_arguments(parameters: &[(String, bool)], arguments: &[Node]) -> Option<Vec<Node>> {
+	if arguments.len() == parameters.len() {
+		return Some(arguments.to_vec());
+	}
+	let last_is_block = parameters.last().is_some_and(|(_, block)| *block);
+	if !last_is_block || arguments.len() < parameters.len() {
+		return None;
+	}
+	let (single, rest) = arguments.split_at(parameters.len() - 1);
+	let mut fitted = single.to_vec();
+	fitted.push(Node::List(rest.to_vec(), Bracket::None, Separator::Space));
+	Some(fitted)
 }
 
 struct Blocks {
@@ -584,14 +608,15 @@ impl Blocks {
 		let (head, arguments) = items.split_first()?;
 		let Node::Symbol(name) = head.drop_meta() else { return None };
 		let function = self.functions.get(name)?.clone();
-		if function.parameters.len() != arguments.len() || self.expansions > MAX_EXPANSIONS {
+		let arguments = fitted_arguments(&function.parameters, arguments)?;
+		if self.expansions > MAX_EXPANSIONS {
 			return None;
 		}
 		let number = self.expansions;
 		self.expansions += 1;
 		let mut statements = vec![];
 		let mut body = function.body;
-		for ((parameter, is_block), argument) in function.parameters.iter().zip(arguments) {
+		for ((parameter, is_block), argument) in function.parameters.iter().zip(&arguments) {
 			if *is_block {
 				body = substitute_block(body, parameter, argument);
 			} else {
@@ -608,7 +633,8 @@ impl Blocks {
 		if let Some((target, _)) = bang_target(&node) {
 			return self.run(&target).unwrap_or(node);
 		}
-		if let Node::List(items, Bracket::Round, Separator::None) = node.drop_meta() {
+		// `f(a, b)` and `f a {…}`
+		if let Node::List(items, Bracket::Round, Separator::None) | Node::List(items, Bracket::None, Separator::Space) = node.drop_meta() {
 			if let Some(expanded) = self.expand(items) {
 				return expanded;
 			}
