@@ -48,7 +48,7 @@ const LOG_WORD: &str = "log";
 const OF_WORD: &str = "of";
 
 /// Canonical word and the spellings that mean it
-const SYNONYMS: [(&str, &[&str]); 28] = [
+const SYNONYMS: [(&str, &[&str]); 29] = [
 	// Python's tuple(xs) (card python-stdlib)
 	(LIST_WORD, &["tuple"]),
 	(MAP_KEYS, &["keys"]),
@@ -79,7 +79,8 @@ const SYNONYMS: [(&str, &[&str]); 28] = [
 	("is_alphanumeric", &["is_alnum", "isalnum"]),
 	("nearest", &[]),
 	// lib/prelude.warp's map of [key value] pairs, Python's dict(pairs)
-	("dict", &[]),
+	(DICT_WORD, &[]),
+	(FROMKEYS, &[]),
 	(crate::mutation::UNWRAP, &[]),
 ];
 /// `list_sum(list, loop)`: the sum of a list variable as one operation the emitter dispatches (wasm_emitter/list_dispatch.rs):
@@ -147,6 +148,9 @@ const EXPANDED_WORDS: [(&str, usize, &str); 3] = [
 ];
 const IS_DIGIT: &str = "is_digit";
 const LIST_WORD: &str = "list";
+const DICT_WORD: &str = "dict";
+/// lib/prelude.warp's fromkeys(ks, value), also called on the class as Python's `dict.fromkeys(ks, value)`
+const FROMKEYS: &str = "fromkeys";
 /// Conversions a method may name, `x.string` being `string(x)`
 const CONVERSION_METHODS: [&str; 4] = ["string", "str", "int", "float"];
 const LIST_CONSTRUCTORS: [&str; 4] = ["listOf", "mutableListOf", "arrayOf", "arrayListOf"];
@@ -154,6 +158,9 @@ const LIST_CONSTRUCTORS: [&str; 4] = ["listOf", "mutableListOf", "arrayOf", "arr
 /// to 3 digits after the point (`round(x)` stays the builtin); `xs.first(3)`, `first 3 of xs` the first 3 items,
 /// `last(xs, 2)` the last 2 (lib/prelude.warp)
 const ARITY_VARIANTS: [(&str, usize, &str); 3] = [("round", 2, "round_to"), ("first", 2, "first_items"), ("last", 2, "last_items")];
+/// Methods a later pass lowers to prelude words: `x.pop(k)` to popped_item and popped_rest, `x.clear()` to cleared
+/// (declaration_lowering removed_key, cleared_collection)
+const LOWERED_TO_PRELUDE: [(&str, &[&str]); 2] = [("pop", &["popped_item", "popped_rest"]), ("clear", &["cleared"])];
 const IS_ALPHA: &str = "is_alpha";
 /// Hidden variables and placeholders of the `try`/`assert` templates
 /// `try_tmp_value` of a try template becomes the temporary `try·value·3`
@@ -251,7 +258,8 @@ fn arity(word: &str) -> usize {
 /// its ARITY_VARIANTS (`round(x, 2)` round_to). modules::resolve, which runs before, loads the prelude words by them
 pub fn words_spelled_by(name: &str) -> Vec<&'static str> {
 	let variants = ARITY_VARIANTS.iter().filter(|(word, _, _)| *word == name).map(|(_, _, variant)| *variant);
-	canonical_word(name).into_iter().chain(variants).collect()
+	let lowered = LOWERED_TO_PRELUDE.iter().filter(|(word, _)| *word == name).flat_map(|(_, words)| words.iter().copied());
+	canonical_word(name).into_iter().chain(variants).chain(lowered).collect()
 }
 
 pub fn lower(node: Node) -> Node {
@@ -981,6 +989,9 @@ impl Lowering {
 			_ => return None,
 		};
 		let Node::Symbol(name) = word_node.drop_meta() else { return None };
+		if receiver.symbol_name() == Some(DICT_WORD) && name == FROMKEYS {
+			return Some(self.call(FROMKEYS, word_node, arguments, false));
+		}
 		let has_arguments = !arguments.is_empty();
 		let literal = self.object_literal(receiver);
 		let is_field = literal.as_ref().and_then(object_entries).is_some_and(|entries| entries.iter().any(|(field, _)| field == name));

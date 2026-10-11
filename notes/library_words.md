@@ -149,5 +149,9 @@ append, remove, pop(), count, copy, keys, values, get, sorted, any, all, sum, mi
 Not aliased, on purpose or open:
 - `xs.sort()` / `xs.reverse()` stay copies with the unused-value warning; warp's in-place form is `xs.sort!` (wiki/mutable.md).
 - `xs.insert(i, v)` is the ambiguity error naming both readings (decided earlier).
-- Open: `xs.clear()` / `m.clear()` (clear is draw's word), `xs.pop(i)`, `m.pop(k)` (`m.remove(k)` is it), `m.popitem()`,
-  `dict.fromkeys(ks, v)`.
+- Card python-aliases: `x.pop(k)` (0-based position of a list, -1 the last; key of a map) and `x.clear()` of a variable lower
+  in declaration_lowering (removed_key, cleared_collection) to prelude words (popped_item/popped_rest, cleared), which
+  dispatch with `x is map` at run time; library_words::LOWERED_TO_PRELUDE makes modules load them. `m.popitem()` (lib/map.warp),
+  `fromkeys(ks, v)` (prelude), `dict.fromkeys(ks, v)` (library_words method_call drops the `dict` receiver).
+- Open: `ys = xs; xs.pop(); ys` keeps the popped item in ys (reassignment, not in place; append/remove are visible),
+  likewise pop(i) and clear(). Inside a function `x is list` of a map argument is yes; use `x is map`.

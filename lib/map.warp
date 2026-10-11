@@ -22,3 +22,5 @@ find_key(m, f) := { ks = keys(m); for k in ks { if f(m.get(k)) { return k } }; Ã
 update(m, other) := merge(m, other)
 items(m) := entries(m)
 setdefault(m, key, fallback) := { if not m.has(key) { m[key] = fallback }; m.get(key) }
+// the last entry as [key value], removed from m in place (Python's dict.popitem)
+popitem(m) := { k = last(keys(m)); v = m.get(k); m.remove(k); [k, v] }

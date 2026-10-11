@@ -355,6 +355,7 @@ pub(super) fn lower_declarations_among(node: Node, names: &Names) -> Node {
 		}
 		Node::Key(list, Op::Dot, call) if let Some(popped) = popped_list(&list, &call) => popped,
 		Node::Key(map, Op::Dot, call) if let Some(removal) = removed_key(&map, &call) => lower(removal),
+		Node::Key(collection, Op::Dot, call) if let Some(emptied) = cleared_collection(&collection, &call) => emptied,
 		// `int[n]`, `#(int[n])`: n zeros of the type, wherever it stands, unless the word is a variable (`chars[i]`)
 		Node::Key(element, Op::Hash, one_based) if let Some(zeros) = zero_filled_subscript(&element, &one_based, &names.values) => zeros,
 		// x² and x³ are x^2 and x^3 for emission; the parse keeps the suffix operators
@@ -447,6 +448,13 @@ pub const REMOVE_METHOD: &str = "remove";
 /// Pseudo-call `removed_value(collection, k)`: what `collection.remove(k)` gives, by the collection's kind: of a map the
 /// value of the key (P35, Python's dict.pop), of a list the list without the first element equal to k
 pub const REMOVED_VALUE_CALL: &str = "removed_value";
+/// lib/prelude.warp's `popped_item(x, k)` and `popped_rest(x, k)`: what Python's `xs.pop(i)` and `m.pop(k)` give and
+/// leave, the element at the 0-based position i of a list, the value of the key k of a map (card python-aliases)
+const POPPED_ITEM_CALL: &str = "popped_item";
+const POPPED_REST_CALL: &str = "popped_rest";
+/// Python's `xs.clear()` and `m.clear()`: the variable becomes lib/prelude.warp's `cleared(x)`, the empty list or map
+const CLEAR_METHOD: &str = "clear";
+const CLEARED_CALL: &str = "cleared";
 pub(super) const POP_TEMPORARY: &str = "pop_tmp";
 pub(super) const INSERT_METHOD: &str = "insert";
 
@@ -476,7 +484,7 @@ pub(crate) fn appends(method: &str, argument_count: usize) -> bool {
 
 /// Methods that change the list variable they are called on: `xs.add(v)`, `xs.insert(v, at:1)`, `xs.pop()`
 pub fn is_list_mutating_method(name: &str) -> bool {
-	APPEND_METHODS.contains(&name) || name == POP_METHOD || name == REMOVE_METHOD
+	APPEND_METHODS.contains(&name) || [POP_METHOD, REMOVE_METHOD, CLEAR_METHOD].contains(&name)
 }
 
 /// A place a list update can assign: a variable `xs` or a field of one `p.items`, `self.stack.items` (by now the
@@ -518,23 +526,39 @@ pub(super) fn popped_list(list: &Node, call: &Node) -> Option<Node> {
 }
 
 /// `m.remove(k)` when m is a variable: the value of k, its entry removed from m (P35 default, Python's dict.pop); of a
-/// list variable the first element equal to k removed, and the list it gives (REMOVED_VALUE_CALL)
+/// list variable the first element equal to k removed, and the list it gives (REMOVED_VALUE_CALL). `x.pop(k)` is
+/// Python's pop of a key or a 0-based position (POPPED_ITEM_CALL)
 pub(super) fn removed_key(map: &Node, call: &Node) -> Option<Node> {
 	let Node::Symbol(name) = map.drop_meta() else { return None };
 	let Node::List(items, _, _) = call.drop_meta() else { return None };
 	let [method, key] = items.as_slice() else { return None };
-	if !method.is_symbol(REMOVE_METHOD) {
-		return None;
-	}
-	let call = |word: &str, arguments: Vec<Node>| Node::List([vec![Node::Symbol(word.to_string())], arguments].concat(), Bracket::Round, Separator::None);
+	let (value_word, rest_word) = match method.symbol_name() {
+		Some(REMOVE_METHOD) => (REMOVED_VALUE_CALL, crate::library_words::MAP_WITHOUT),
+		Some(POP_METHOD) => (POPPED_ITEM_CALL, POPPED_REST_CALL),
+		_ => return None,
+	};
 	let removed = Node::Symbol(format!("{name}{TEMPORARY_SEPARATOR}removed"));
-	let value = call(REMOVED_VALUE_CALL, vec![map.clone(), key.clone()]);
-	let without = call(crate::library_words::MAP_WITHOUT, vec![map.clone(), key.clone()]);
+	let value = prelude_call(value_word, vec![map.clone(), key.clone()]);
+	let without = prelude_call(rest_word, vec![map.clone(), key.clone()]);
 	Some(Node::List(vec![
 		Node::Key(Box::new(removed.clone()), Op::Assign, Box::new(value)),
 		Node::Key(Box::new(map.clone()), Op::Assign, Box::new(without)),
 		removed,
 	], Bracket::Round, Separator::Semicolon))
+}
+
+/// `x.clear()` when x is a variable: `x = cleared(x)`, emptied in place (CLEAR_METHOD)
+fn cleared_collection(collection: &Node, call: &Node) -> Option<Node> {
+	let Node::Symbol(_) = collection.drop_meta() else { return None };
+	let Node::List(items, _, _) = call.drop_meta() else { return None };
+	let [method] = items.as_slice() else { return None };
+	method.is_symbol(CLEAR_METHOD).then(|| Node::Key(Box::new(collection.clone()), Op::Assign, Box::new(prelude_call(CLEARED_CALL, vec![collection.clone()]))))
+}
+
+/// A call of a prelude word written after library_words, which names them `prelude·word`, has run
+fn prelude_call(word: &str, arguments: Vec<Node>) -> Node {
+	let word = crate::modules::prelude_name(word).unwrap_or(word.to_string());
+	Node::List([vec![Node::Symbol(word)], arguments].concat(), Bracket::Round, Separator::None)
 }
 
 /// `xs.insert(a, b)` when xs is a variable. Warp writes `insert(value, position)`, Python `insert(position, value)`:

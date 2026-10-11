@@ -41,3 +41,12 @@ nearest(x, kind, limit = 0, within = 0) := {
 }
 // Python's dict(pairs) (card python-stdlib): a map of [key value] pairs
 dict(pairs) := { out = {}; for pair in pairs { out[pair#1] = pair#2 }; out }
+// Python's dict.fromkeys(ks, value) (card python-aliases): a map of each key with the one value
+fromkeys(ks, value) := { out = {}; for k in ks { out[k] = value }; out }
+// Python's xs.pop(i) and m.pop(k) (card python-aliases, declaration_lowering removed_key): the element at the 0-based
+// position i (-1 the last) or the value of the key k, and the list or map without it
+popped_position(xs, i) := if i < 0 then count(xs) + i + 1 else i + 1
+popped_item(x, k) := if x is map then x.get(k) else x#(popped_position(x, k))
+popped_rest(x, k) := if x is map then { rest = x; rest.remove(k); rest } else [x#i for i in 1 to count(x) if i != popped_position(x, k)]
+// Python's xs.clear() and m.clear() (card python-aliases, declaration_lowering cleared_collection): the empty list or map
+cleared(x) := if x is map then {} else []

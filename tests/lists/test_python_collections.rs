@@ -27,3 +27,26 @@ fn dict_methods() {
 	is!("m = {a:1}; m.setdefault(\"b\", 5) + m.setdefault(\"a\", 7)", 6);
 	is!("d = dict([[\"a\" 1] [\"b\" 2]]); d.b", 2);
 }
+
+// card python-aliases
+#[test]
+fn popitem_and_fromkeys() {
+	is!("m = {a:1 b:2}; e = m.popitem(); e#2 * 10 + count(m)", 21);
+	is!("count(fromkeys([\"a\" \"b\"], 0))", 2);
+	is!("dict.fromkeys([\"a\" \"b\"], 7).b", 7);
+}
+
+// lowered to lib/prelude.warp's popped_item and popped_rest (by popped_position)
+#[test]
+fn pop_of_a_position_or_a_key() {
+	is!("xs = [5 6 7]; first = xs.pop(0); first * 100 + count(xs) * 10 + xs#1", 526);
+	is!("xs = [5 6 7]; xs.pop(-1) * 10 + count(xs)", 72);
+	is!("m = {a:1 b:2}; m.pop(\"b\") * 10 + count(m)", 21);
+}
+
+// lowered to lib/prelude.warp's cleared
+#[test]
+fn clear_empties_a_list_or_a_map() {
+	is!("xs = [1 2]; xs.clear(); xs.add(3); count(xs)", 1);
+	is!("m = {a:1}; m.clear(); m.b = 2; count(m)", 1);
+}
