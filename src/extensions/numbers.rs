@@ -181,6 +181,17 @@ impl Number {
 		Number::from_rational(Rational::new(numerator, denominator))
 	}
 
+	/// The exact value of a repeating decimal written as its digits (card repeating-decimals): `0.16̅` is
+	/// ("0", "1", "6") = 1/6. The digits up to the period's end less those before it, over 10^fixed · (10^period − 1)
+	pub fn repeating_decimal(negative: bool, integer: &str, fixed: &str, period: &str) -> Number {
+		let digits = |text: &str| text.parse::<BigInt>().unwrap_or_default();
+		let numerator = digits(&format!("{integer}{fixed}{period}")) - digits(&format!("{integer}{fixed}"));
+		let power_of_ten = |length: usize| BigInt::from(10).pow(length as u32);
+		let denominator = power_of_ten(fixed.len()) * (power_of_ten(period.len()) - 1);
+		let magnitude = Number::ratio(Number::from_bigint(numerator), Number::from_bigint(denominator));
+		if negative { -magnitude } else { magnitude }
+	}
+
 	/// Normalize: a ratio that fits two i64 is `Quotient`, only larger ones are `BigQuotient`
 	pub fn from_rational(ratio: Rational) -> Number {
 		if ratio.is_integer() {

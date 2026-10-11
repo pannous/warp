@@ -103,3 +103,4 @@ mod test_quantity_global; // card quantity-global
 mod test_temperature; // card temperature
 mod test_degrees; // card angles-degrees
 mod test_ratio_compare_shortcut;
+mod test_repeating_decimal; // card repeating-decimals
