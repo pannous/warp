@@ -6,6 +6,12 @@ before asking the user; nobody reads it front to back, the code, tests and wiki 
 "notes/open_decisions.md" + a Decided section, P-, D- or #-numbers mean this file. Open and parked questions:
 notes/open_decisions.md.
 
+## Decided 2026-10-11 (user; via warp-supervisor or the Interviewer)
+- bizarre-global (user, via warp-supervisor): play, beep, stop_sound and wait_sound stay global; every other sound
+  word (melody, tone, pattern, live_loop, render_sound, sound_queued, the midi words) needs `use sound`, else the error
+  "X is in the standard module sound: write `use sound`". Old tests and samples gain a `use sound` line, including
+  the meaning change of sound_words_run_without_use.
+
 ## Decided 2026-10-10 (user; via warp-supervisor or the Interviewer)
 - footgun-divzero (warp-numbers): user: "no idea about the advantages … you decide or we decide later"; the
   Interviewer's default, revisit any time: exact numbers (ints, rationals, decimals) raise divide by zero (`r = try

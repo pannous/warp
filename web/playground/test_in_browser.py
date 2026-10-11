@@ -49,7 +49,10 @@ CONSOLE_SETTLE_SECONDS = 0.3  # a shown example's last messages reach the watche
 # warnings the browser logs itself, which no page code can silence, and what the program does instead (card
 # browser-tour): Chrome without WebGPU says this on every navigator.gpu.requestAdapter(); @gpu then maps on the CPU and
 # says so in the program's own warning, gpu_render fails with the program's error (shown on the page, not the console)
-BROWSER_OWN_WARNINGS = {"No available adapters."}
+# Chrome's Dawn says the second when the next example ends the task Worker of an animating GPU sample while a frame of
+# its OffscreenCanvas is in flight (samples/manual_3d_object_viewer, cards flaky-viewer, flaky-deploy): the stopped
+# program's device is gone, nothing the next example sees
+BROWSER_OWN_WARNINGS = {"No available adapters.", "A valid external Instance reference no longer exists."}
 # an example on the GPU (paint of a shader) in a browser without WebGPU (the runner's Firefox): skipped, loudly
 NO_GPU = "offers no WebGPU adapter"
 PAGE_LOAD = "(loading the page)"
