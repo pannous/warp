@@ -266,10 +266,18 @@ pub(crate) fn is_output_call(node: &Node) -> bool {
 /// The type word of a cast `int 4`, `int("5")`, `double 2`: a type word applied to one value. A list `[int, 4]`, a comma
 /// group `(int, 4)` or a variable named like a type word (`int = 3; int 4`) casts nothing (card variable-named)
 pub fn type_cast_of<'a>(items: &'a [Node], bracket: &Bracket, separator: &Separator, is_variable: &dyn Fn(&str) -> bool) -> Option<&'a str> {
-	let [word, _] = items else { return None };
+	let (name, _) = applied_word(items, bracket, separator)?;
+	(!is_variable(name) && type_word_kind(&name.to_lowercase()).is_some()).then_some(name)
+}
+
+/// A word applied to one value: `f(x)` and `f x` are the same call, braced or not. A list `[f, x]`, a comma group
+/// `(f, x)`, the statements `f; x` or a typed declaration `byte b = 10` apply nothing
+pub fn applied_word<'a>(items: &'a [Node], bracket: &Bracket, separator: &Separator) -> Option<(&'a str, &'a Node)> {
+	let [word, value] = items else { return None };
 	let Node::Symbol(name) = word.drop_meta() else { return None };
-	let listed = *bracket == Bracket::Square || *separator == Separator::Colon; // Colon is the comma
-	(!listed && !is_variable(name) && type_word_kind(&name.to_lowercase()).is_some()).then_some(name.as_str())
+	let listed = *bracket == Bracket::Square || *separator == Separator::Colon || separator.separates_statements(); // Colon is the comma
+	let declared = matches!(value.drop_meta(), Node::Key(_, Op::Assign | Op::Define, _));
+	(!listed && !declared).then_some((name.as_str(), value))
 }
 
 pub(super) fn infer_list_type(node: &Node, items: &[Node], bracket: &Bracket, separator: &Separator, scope: &Scope) -> Kind {

@@ -46,9 +46,10 @@ pub fn lower(node: Node) -> Node {
 fn conversion_calls(node: Node, program: &Node) -> Node {
 	let node = children_rewritten(node, |child| conversion_calls(child, program));
 	match node.drop_meta() {
-		Node::List(items, Bracket::Round, _) => match items.as_slice() {
-			[word, value] if word.symbol_name().is_some_and(|name| crate::wasm_emitter::is_called_conversion(name) && !crate::soft_keywords::program_names(program, name)) => {
-				key(value.clone(), Op::As, word.clone())
+		// braced `hex(255)` and braceless `byte 65` alike: one call shape (analyzer::applied_word)
+		Node::List(items, bracket, separator) => match crate::analyzer::applied_word(items, bracket, separator) {
+			Some((name, value)) if crate::wasm_emitter::is_called_conversion(name) && !crate::soft_keywords::program_names(program, name) => {
+				key(value.clone(), Op::As, items[0].clone())
 			}
 			_ => node,
 		},
