@@ -6,7 +6,9 @@ notes/decisions.md, work goes on the board (`todo add`), rules go where they are
 the wiki).
 
 ## Pending
-(none)
+- single-entry (warp-worker via warp-integrator, branch single-entry 014f1f0c7, parked unmerged; asked 2026-10-11, no
+  answer yet): is `{a:1}` a one-entry map (recommended: braces always make a map; data_blocks_stay_data:13 and
+  a_value_of_a_pair_is_held_as_a_node:9 change meaning, `{a:1} == (a:1)` becomes no) or the pair (today; branch dropped)?
 
 ## Parked (user: "later")
 - P237 (warp-class, card natural-phrases): what `numbers.sort by size` means; today a silent no-op. The user leans to
