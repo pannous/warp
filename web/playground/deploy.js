@@ -17,7 +17,9 @@ const TICKET_BYTES = 24;
 const DEPLOYING_TEXT = "deploying …";
 const REFUSED_LOGIN = [401, 403];
 
-const pastedToken = () => $("cloudflare-token").value.trim();
+// the pasted-token field is optional: index.html may leave it out, then only the Cloudflare login deploys there
+const tokenInput = () => $("cloudflare-token");
+const pastedToken = () => tokenInput()?.value.trim() ?? "";
 const needsLogin = provider => !(provider === "cloudflare" && pastedToken()) && !stored(SESSION_KEYS[provider]);
 const newTicket = () => btoa(String.fromCharCode(...crypto.getRandomValues(new Uint8Array(TICKET_BYTES)))).replace(/\+/g, "-").replace(/\//g, "_");
 const ticketAddress = ticket => `${HOSTING}/ticket?ticket=${ticket}`;
@@ -136,7 +138,7 @@ async function deploy(target) {
 }
 
 $("deploy-name").value = stored(NAME_KEY) ?? "";
-$("cloudflare-token").value = stored(PASTED_TOKEN_KEY) ?? "";
+if (tokenInput()) tokenInput().value = stored(PASTED_TOKEN_KEY) ?? "";
 $("deploy").onclick = () => deploy("github");
 $("deploy-own").onclick = () => deploy("cloudflare");
 $("deploy-native").onclick = () => deploy("native");

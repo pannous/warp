@@ -158,7 +158,7 @@ x
 
 Some names, like `pi`, are constants. They never change.
 
-### Values that follow
+## Values that follow
 
 Like a spreadsheet cell, a value can follow other values.
 
