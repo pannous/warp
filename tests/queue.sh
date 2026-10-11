@@ -26,7 +26,28 @@ TEST_BINARY_PATTERN='^[^ ]*/deps/[^/ ]+-[0-9a-f]{16}( |$)' # the executable of c
 # panics provoked by tests file no to-do board cards (src/crash_card.rs); test.sh runs through here too
 export WARP_CRASH_CARDS=0
 
-if [ "$1" = "cargo" ] || [ -x "$1" ]; then run=("$@"); else run=(cargo --offline test "$@"); fi
+# `tests/queue.sh -- --lib x`: cargo's target selection written among the test binary's filters goes before the `--`,
+# where cargo reads it; the binary would refuse it as an unknown option (card test-queue)
+CARGO_TARGET_FLAGS=" --lib --bins --tests --benches --examples --all-targets --doc "
+CARGO_TARGET_FLAGS_WITH_VALUE=" --test --bin --bench --example -p --package "
+with_target_flags_first() {
+	local before=() after=() past_separator=""
+	while [ $# -gt 0 ]; do
+		if [ -z "$past_separator" ]; then
+			[ "$1" = "--" ] && past_separator=1 || before+=("$1")
+		elif [[ "$CARGO_TARGET_FLAGS" == *" $1 "* ]]; then
+			before+=("$1")
+		elif [[ "$CARGO_TARGET_FLAGS_WITH_VALUE" == *" $1 "* ]] && [ $# -gt 1 ]; then
+			before+=("$1" "$2"); shift
+		else
+			after+=("$1")
+		fi
+		shift
+	done
+	run=(cargo --offline test "${before[@]}")
+	[ -n "$past_separator" ] && run+=(-- "${after[@]}")
+}
+if [ "$1" = "cargo" ] || [ -x "$1" ]; then run=("$@"); else with_target_flags_first "$@"; fi
 [ -n "$WARP_TEST_LOCKED" ] && exec "${run[@]}"
 
 # lockf is the Mac's (BSD) lock tool, Linux (cloud VMs) has flock; with neither there is no lock to take
