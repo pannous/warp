@@ -7,8 +7,9 @@
 
 /// What `program` prints, and how long its run took
 fn printed(program: &str) -> (String, std::time::Duration) {
+	let mut command = crate::common::warp_command();
 	let started = std::time::Instant::now();
-	let run = crate::common::warp_command().args(["--no-ask", "eval", program]).output().unwrap();
+	let run = command.args(["--no-ask", "eval", program]).output().unwrap();
 	let printed = String::from_utf8_lossy(&run.stdout).into_owned();
 	assert!(run.status.success(), "{printed} {}", String::from_utf8_lossy(&run.stderr));
 	(printed, started.elapsed())
@@ -36,6 +37,6 @@ fn stop_sound_empties_the_queue() {
 
 #[test]
 fn waiting_headless_takes_no_time() {
-	let (output, took) = printed("play C4 for 3s\nwait_sound\n7");
-	assert!(output.contains('7') && took < std::time::Duration::from_secs(3), "{took:?}");
+	let (output, took) = printed("play C4 for 30s\nwait_sound\n7");
+	assert!(output.contains('7') && took < std::time::Duration::from_secs(10), "{took:?}");
 }

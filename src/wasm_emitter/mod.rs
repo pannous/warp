@@ -309,6 +309,8 @@ pub struct WasmGcEmitter {
 	closures: closures::ClosureTypes,
 	/// The user function whose body is being compiled; None in main
 	compiling: Option<String>,
+	/// The names the program's `for … in` loops and comprehensions bind: variables even beside a function of that name
+	loop_variables: HashSet<String>,
 }
 
 impl Default for WasmGcEmitter {
@@ -382,6 +384,7 @@ impl WasmGcEmitter {
 			compare_witness: None,
 			closures: closures::ClosureTypes::default(),
 			compiling: None,
+			loop_variables: HashSet::new(),
 		}
 	}
 
@@ -673,6 +676,7 @@ impl WasmGcEmitter {
 			node
 		};
 		self.config.emit_all_functions = false;
+		self.loop_variables = crate::lowering::for_loop::loop_variables(node).into_iter().collect();
 		// First pass: register all types (forward reference support)
 		collect_all_types(&mut self.ctx.type_registry, node);
 		// Analyze: Extract FFI imports, user functions, and required functions
@@ -686,6 +690,9 @@ impl WasmGcEmitter {
 		self.derive_imports_from_effects(node);
 		self.declares_list_types = declared_values::declares_list_types(node);
 		analyze_required_functions(&mut self.ctx, node);
+		if crate::analyzer::makes_floats(&self.ctx, node) {
+			self.ctx.required_functions.insert(float_text::FLOAT_TEXT);
+		}
 		self.ctx.required_functions.extend(self.discovered_needs.iter().filter_map(|need| match need {
 			Need::Function(name) => Some(*name),
 			Need::MathImport(_) | Need::KeyOperator(_) => None,
@@ -803,10 +810,10 @@ impl WasmGcEmitter {
 	}
 
 	/// A variable named like a function of the program is the variable: a parameter (`f(inc) := inc(3)`), and inside a
-	/// function its locals too (`angle = 0.5; cos(angle)` beside math's angle). main also holds a local for each
-	/// `sq := it * 2`, which is the function
+	/// function its locals too (`angle = 0.5; cos(angle)` beside math's angle), and a loop's variable in main (`[str f for f in xs]`).
+	/// main also holds a local for each `sq := it * 2`, which is the function
 	fn is_variable(&self, name: &str) -> bool {
-		self.scope.lookup(name).is_some_and(|local| local.is_param || self.compiling.is_some())
+		self.scope.lookup(name).is_some_and(|local| local.is_param || self.compiling.is_some() || self.loop_variables.contains(name))
 	}
 
 	/// A name that is no variable, global, function or `$n` parameter here
@@ -1219,6 +1226,10 @@ impl WasmGcEmitter {
 			self.discovered_needs.insert(Need::Function(name));
 			func.instruction(&I::Unreachable);
 			return;
+		}
+		// a float the analyzer did not foresee (makes_floats) may be shown: rerun with float_text
+		if name == "new_float" && self.should_emit_function("list_join") && !self.should_emit_function(float_text::FLOAT_TEXT) {
+			self.discovered_needs.insert(Need::Function(float_text::FLOAT_TEXT));
 		}
 		self.ctx.used_functions.insert(name);
 		func.instruction(&I::Call(self.func_index(name)));

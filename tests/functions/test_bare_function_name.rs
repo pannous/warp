@@ -25,3 +25,10 @@ fn test_bare_name_of_function_with_only_defaults_calls_it() {
 fn test_bare_name_counts_only_required_parameters() {
 	fails_with("f(x, y=1) = x + y; f", "f needs 1 argument");
 }
+
+#[test]
+fn a_loop_variable_named_like_a_function_is_the_variable() {
+	is!("f(n) := n * 2; join([str f for f in [1, 2]], \"-\")", "1-2");
+	is!("f(n) := n * 2; sum(f + 1 for f in [1, 2])", 5);
+	is!("f(n) := n * 2; s = 0; for f in [1, 2] { s = s + abs f }; s", 3);
+}
