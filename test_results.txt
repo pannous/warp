@@ -3674,6 +3674,16 @@ PASSED:
   ✓ types::test_time_values_at_run_time::test_times_compare_at_run_time
   ✓ types::test_time_values_at_run_time::test_zoned_fields_at_run_time
   ✓ types::test_time_values_at_run_time::test_zoned_times_and_durations_compare_at_run_time
+  ✓ types::test_time_zones_at_run_time::test_a_calendar_day_keeps_the_wall_time_across_a_transition
+  ✓ types::test_time_zones_at_run_time::test_a_day_landing_on_a_skipped_wall_time_is_rejected
+  ✓ types::test_time_zones_at_run_time::test_a_local_time_in_a_zone_resolves
+  ✓ types::test_time_zones_at_run_time::test_a_repeated_wall_time_is_rejected_unless_chosen
+  ✓ types::test_time_zones_at_run_time::test_a_skipped_wall_time_is_rejected_unless_chosen
+  ✓ types::test_time_zones_at_run_time::test_a_zoned_time_changes_zone_keeping_its_instant
+  ✓ types::test_time_zones_at_run_time::test_exact_time_keeps_the_elapsed_time_across_a_transition
+  ✓ types::test_time_zones_at_run_time::test_offset_follows_the_europe_rules
+  ✓ types::test_time_zones_at_run_time::test_offset_follows_the_united_states_rules
+  ✓ types::test_time_zones_at_run_time::test_zoned_times_subtract_to_elapsed_time
   ✓ types::test_trait_constraints::a_constrained_list_parameter_takes_conforming_elements
   ✓ types::test_trait_constraints::a_list_annotation_reads_both_ways
   ✓ types::test_trait_constraints::elements_that_do_not_conform_are_a_compile_error
@@ -4638,4 +4648,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-10 ignored, 4633 passed, 0 failed, 4633 total tested
+10 ignored, 4643 passed, 0 failed, 4643 total tested
