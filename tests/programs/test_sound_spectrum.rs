@@ -18,28 +18,34 @@ fn silence_and_the_end_are_empty() {
 	is!(&format!("{SOUND}max(spectrum(chord_samples([A4], 0.1, \"sine\"), 5, 4)) == 0"), true);
 }
 
+/// A visualizer sample's run: it plays its song and paints frame after frame; None without a WebGPU adapter
+#[cfg(feature = "native")]
+fn animates_while_it_plays(sample: &str) -> Option<()> {
+	let run = crate::common::warp_command().args(["--no-ask", "run", sample]).output().unwrap();
+	let errors = String::from_utf8_lossy(&run.stderr);
+	if errors.contains("no WebGPU adapter") {
+		return None;
+	}
+	assert!(run.status.success(), "{errors}");
+	assert!(errors.contains("sound "), "{errors}");
+	// the loop paints a frame per 40 ms of a 4 s song by the wall clock: a second frame shows it animates, however slow
+	// a frame gets under load (3 frames once failed in a full gate: card visualizer-test)
+	let painted = |output: &[u8]| String::from_utf8_lossy(output).matches("painted").count();
+	assert!(painted(&run.stderr).max(painted(&run.stdout)) >= 2, "{errors}");
+	Some(())
+}
+
 #[cfg(feature = "native")]
 #[test]
 fn the_visualizer_paints_while_it_plays() {
-	let sample = concat!(env!("CARGO_MANIFEST_DIR"), "/samples/visualizer.warp");
-	let run = crate::common::warp_command().args(["--no-ask", "run", sample]).output().unwrap();
-	let errors = String::from_utf8_lossy(&run.stderr);
-	assert!(run.status.success(), "{errors}");
-	assert!(errors.contains("sound "), "{errors}");
-	assert!(errors.matches("paint").count() >= 3 || String::from_utf8_lossy(&run.stdout).matches("paint").count() >= 3, "{errors}");
+	animates_while_it_plays(concat!(env!("CARGO_MANIFEST_DIR"), "/samples/visualizer.warp")).expect("the visualizer needs no GPU");
 }
 
 // the WebGPU visualizer: a raymarching fragment shader reads the spectrum through $levels each frame
 #[cfg(feature = "native")]
 #[test]
 fn the_gpu_visualizer_raymarches_while_it_plays() {
-	let sample = concat!(env!("CARGO_MANIFEST_DIR"), "/samples/gpu_visualizer.warp");
-	let run = crate::common::warp_command().args(["--no-ask", "run", sample]).output().unwrap();
-	let errors = String::from_utf8_lossy(&run.stderr);
-	if errors.contains("no WebGPU adapter") {
-		return crate::common::announce_skip("a WebGPU adapter", module_path!());
+	if animates_while_it_plays(concat!(env!("CARGO_MANIFEST_DIR"), "/samples/gpu_visualizer.warp")).is_none() {
+		crate::common::announce_skip("a WebGPU adapter", module_path!());
 	}
-	assert!(run.status.success(), "{errors}");
-	assert!(errors.contains("sound "), "{errors}");
-	assert!(errors.matches("painted").count() >= 3, "{errors}");
 }
