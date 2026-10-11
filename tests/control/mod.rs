@@ -28,6 +28,7 @@ mod test_switch_match;
 mod test_match_guards_and_finally;
 mod test_relational_arms;
 mod test_block_parameters;
+mod test_block_parameter_calls; // card repeats-loop
 mod test_charged_fields;
 mod test_object_blocks;
 mod test_object_functions;
