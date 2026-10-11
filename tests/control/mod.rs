@@ -109,6 +109,7 @@ mod test_task_globals; // card error-undefined
 mod test_shared_values;
 mod test_after;
 mod test_parallel_map;
+mod test_parallel_let; // card lower-parallel
 mod test_implicit_await;
 mod test_task_parameter_shadows;
 mod test_task_name_scope;
