@@ -693,6 +693,9 @@ impl<'a> Loader<'a> {
 	/// The standard modules a program uses without `use`: those IMPLICIT_MODULES picks for it, the prelude words it
 	/// mentions (P171); a module the program used is loaded already
 	fn implicit_std_modules(&mut self, program: &Node) -> Result<(), Node> {
+		if let Some(word) = rare_sound_word(program).filter(|_| !self.program_std_modules.contains(SOUND_MODULE)) {
+			return Err(error(&crate::ffi::undefined_function_message(word)));
+		}
 		for (module, needed) in IMPLICIT_MODULES {
 			if needed(program) {
 				self.use_std_module(module, std_module(module).expect("an implicit module is embedded"))?;
@@ -963,11 +966,14 @@ const AGENT_MODULE: &str = "agent";
 const SOUND_MODULE: &str = "sound";
 const SOUND_WORDS: [&str; 17] = ["pattern", "live_loop", "play", "melody", "tone", "beep", "play_file", "stop_sound", "sound_queued", "wait_sound", "render_sound",
 	"midi_send", "midi_outputs", "midi_receive", "midi_on", "write_midi", "read_midi"];
+/// The sound words every program plays without `use sound` (card basic-sound); the module's rarer words need it (card
+/// bizarre-global, P171), also when these words bring the module along
+const SOUND_SETUP_FREE_WORDS: [&str; 4] = ["play", "beep", "stop_sound", "wait_sound"];
 /// Whether a program needs a module
 type NeededBy = fn(&Node) -> bool;
 /// The standard modules a program needs without `use`: P183 a file URL → file, a page → markup (lowering/page_html.rs),
 /// routes or a server route's path parameters → router, a route's regular expression → regex (lowering/routes.rs), a call of quantity → units (run-time units),
-/// a call of agent → agent, a call of play, melody, tone or beep → sound, a WAGI build (`warp build --wagi`) → wagi
+/// a call of agent → agent, a call of play, beep, stop_sound or wait_sound → sound, a WAGI build (`warp build --wagi`) → wagi
 const IMPLICIT_MODULES: [(&str, NeededBy); 8] = [
 	("file", mentions_file_url),
 	("markup", |_| crate::pipeline::renders_itself()),
@@ -975,13 +981,18 @@ const IMPLICIT_MODULES: [(&str, NeededBy); 8] = [
 	("regex", |program| defined(program, crate::routes::PAGE_ROUTE_INDEX).is_some_and(|index| called_names(&[index]).contains(crate::routes::REGEX_MATCH))),
 	(UNITS_MODULE, |program| calls_undefined(program, QUANTITY)),
 	(AGENT_MODULE, |program| calls_undefined(program, AGENT_MODULE)),
-	(SOUND_MODULE, |program| SOUND_WORDS.iter().any(|word| calls_undefined(program, word))),
+	(SOUND_MODULE, |program| SOUND_SETUP_FREE_WORDS.iter().any(|word| calls_undefined(program, word))),
 	("wagi", |_| crate::pipeline::is_for_wagi()),
 ];
 
 /// Whether the program plays sound: it calls a sound word or says `use sound` (lowering/music_words.rs reads its note names)
 pub fn uses_sound(program: &Node) -> bool {
 	SOUND_WORDS.iter().any(|word| calls_undefined(program, word)) || statements(program.clone()).iter().filter_map(used_module).any(|used| used.name == SOUND_MODULE)
+}
+
+/// A rare sound word the program calls: without `use sound` its error names the `use` (card bizarre-global)
+fn rare_sound_word(program: &Node) -> Option<&'static str> {
+	SOUND_WORDS.into_iter().find(|word| !SOUND_SETUP_FREE_WORDS.contains(word) && calls_undefined(program, word))
 }
 
 /// Whether the program calls `word` without defining it
