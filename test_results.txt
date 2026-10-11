@@ -1510,6 +1510,7 @@ PASSED:
   ✓ lists::test_decimal_list_elements::the_extremum_of_a_decimal_list
   ✓ lists::test_deep_index_assignment::a_deep_index_assignment_keeps_the_stack
   ✓ lists::test_delete_list::delete_removes_the_first_matching_list_item
+  ✓ lists::test_delete_list::delete_statement_removes_an_entry
   ✓ lists::test_down_and_letter_ranges::a_range_from_an_undefined_name_names_it
   ✓ lists::test_down_and_letter_ranges::down_to_counts_down
   ✓ lists::test_down_and_letter_ranges::letters_make_ranges
@@ -4728,4 +4729,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-10 ignored, 4723 passed, 0 failed, 4723 total tested
+10 ignored, 4724 passed, 0 failed, 4724 total tested
