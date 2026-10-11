@@ -2944,6 +2944,7 @@ PASSED:
   ✓ programs::test_samples::test_quicksort
   ✓ programs::test_samples::test_raytracer
   ✓ programs::test_samples::test_sin
+  ✓ programs::test_samples::test_sine
   ✓ programs::test_samples::test_snake
   ✓ programs::test_samples::test_sudoku
   ✓ programs::test_samples::test_sum
@@ -2966,7 +2967,6 @@ PASSED:
   ✓ programs::test_sound_at::the_words_it_lowers_to
   ✓ programs::test_sound_clock::sounds_queue_on_the_audio_clock
   ✓ programs::test_sound_clock::stop_sound_empties_the_queue
-  ✓ programs::test_sound_clock::waiting_headless_takes_no_time
   ✓ programs::test_sound_effects::a_delay_adds_a_tail_of_echoes
   ✓ programs::test_sound_effects::a_reverb_rings_after_the_end
   ✓ programs::test_sound_effects::an_echo_sounds_where_the_dry_sound_was_silent
@@ -4681,6 +4681,7 @@ PASSED:
   ✓ wisp_parser::tests::test_wisp_tag
 
 FAILED:
+  ✗ programs::test_sound_clock::waiting_headless_takes_no_time
 
 SUMMARY:
-10 ignored, 4678 passed, 0 failed, 4678 total tested
+10 ignored, 4678 passed, 1 failed, 4679 total tested
