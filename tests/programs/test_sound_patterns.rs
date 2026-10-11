@@ -60,3 +60,12 @@ fn live_loops_play_along() {
 	let (seconds, _) = rendered("along", program);
 	assert_eq!(seconds, "2");
 }
+
+#[test]
+fn pattern_samples_ends_each_event_at_its_cumulated_seconds() {
+	let (seconds, samples) = rendered("events", "sound(pattern_samples([[[], 0.5], [[69], 0.5]]))\nrender_sound(\"SONG\")");
+	assert_eq!(seconds, "1");
+	assert_eq!(samples.len(), RATE);
+	assert!(silent(&samples[..RATE / 2 - 10]), "the rest");
+	assert!(!silent(&samples[RATE / 2..]), "the note");
+}
