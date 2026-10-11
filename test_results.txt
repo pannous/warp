@@ -1618,6 +1618,8 @@ PASSED:
   ✓ lists::test_list_times_list::list_times_list_is_the_dot_product
   ✓ lists::test_list_times_list::round_and_curly_lists_take_the_dot_product
   ✓ lists::test_list_truthiness::a_list_of_nothing_is_truthy
+  ✓ lists::test_lists_read_by_turns::lists_read_by_turns_after_an_in_place_change
+  ✓ lists::test_lists_read_by_turns::lists_read_by_turns_take_linear_steps
   ✓ lists::test_lists::test_array_creation
   ✓ lists::test_lists::test_array_indices
   ✓ lists::test_lists::test_array_initialization
@@ -4648,4 +4650,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-10 ignored, 4643 passed, 0 failed, 4643 total tested
+10 ignored, 4645 passed, 0 failed, 4645 total tested
