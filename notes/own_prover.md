@@ -42,6 +42,19 @@ Background: notes/bend.md (what Bend 2 and HVM are), notes/laws.md (warp's laws 
 Result: laws, counterexamples, automatic proofs, hand- or AI-written proofs as ordinary code, all checked by warp, while
 warp keeps mutation, floats, unbounded ints and the browser (Bend 2 gives those up).
 
+## Prior art: self-hosted and independent kernels
+
+- **lean4lean** (Mario Carneiro, 2023–): the Lean 4 kernel reimplemented in Lean, checks all of Mathlib at 20–50 %
+  slower; correctness is proved only in parts. Its consistency proof doesn't cover inductive types yet, so it shared
+  the official kernel's soundness bug #14576 (nested-inductive projections, fixed in Lean v4.32.2, 2026-07). Lags
+  recent toolchains (lean4lean#17). This is the route of step 4, and it shows the expensive part: inductives.
+- **nanoda** (Chris Bailey, Rust): an independent Lean 4 checker; it rejected the #14576 exploit that both the
+  official kernel and lean4lean accepted. Independent reimplementation catches what a port inherits.
+- **MetaCoq** (Coq kernel verified in Coq) and **Candle** (HOL Light kernel verified in CakeML) are the precedents
+  for a fully proved kernel; both took several person-years.
+- Lesson for warp: keep the kernel tiny and its datatypes few, prove it sound in Lean, and cross-check with an
+  independent checker rather than a port.
+
 ## The real hurdle: a precise semantics
 
 Proofs need an exact meaning for every construct; warp has many words, aliases, automatic conversions and lowering
