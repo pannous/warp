@@ -24,3 +24,10 @@ fn entries_of_a_store() {
 fn a_store_walked_key_by_key() {
 	is!("session[\"walk_a\"] = 1; session[\"walk_b\"] = 2; total = 0; for key, value in session { total += value }; total", 3);
 }
+
+// card empty-store: a stored variable is in its store from its first run, not only after its first change
+#[test]
+fn a_stored_variable_is_among_the_store_values() {
+	is!("stored shown_default default 41; storage[\"shown_default\"] + 1", 42);
+	is!("stored listed_default default 1; contains(keys(storage), \"listed_default\")", true);
+}

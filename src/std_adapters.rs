@@ -83,6 +83,16 @@ pub fn call(module: &str, member: &str, arguments: &Node) -> Result<Node, String
 			let kept = stored_values(&text_of(file)?).map_err(failure)?.remove(&text_of(name)?);
 			Ok(kept.map_or_else(|| default.clone(), |value| crate::foreign::node_of(&value)))
 		}
+		// `stored theme default "dark"`: the default kept from the first run on, so the store lists it
+		("store", "declare", [name, default, file]) => {
+			let (name, file) = (text_of(name)?, text_of(file)?);
+			let mut values = stored_values(&file).map_err(failure)?;
+			if let Some(kept) = values.get(&name) {
+				return Ok(crate::foreign::node_of(kept));
+			}
+			values.insert(name, crate::foreign::json_of(default));
+			save_stored_values(&file, values).map(|_| default.clone()).map_err(failure)
+		}
 		("store", "save", [name, value, file]) => {
 			let file = text_of(file)?;
 			let mut values = stored_values(&file).map_err(failure)?;

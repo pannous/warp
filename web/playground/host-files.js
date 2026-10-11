@@ -528,6 +528,8 @@ addHostPart({
 		// session's, else the program's)
 		store: {
 			load: (name, fallback, file) => name in valuesOf(file) ? valuesOf(file)[name] : fallback,
+			// `stored theme default "dark"`: the default kept from the first run on
+			declare: (name, fallback, file) => name in valuesOf(file) ? valuesOf(file)[name] : (valuesOf(file)[name] = fallback, keep(name, fallback, file), fallback),
 			save: (name, value, file) => { valuesOf(file)[name] = value; keep(name, value, file); return null; },
 			// `delete local[k]` (kept as undefined: markup.js keepValue drops it), `keys(local)`
 			remove: (name, file) => { delete valuesOf(file)[name]; keep(name, undefined, file); return null; },

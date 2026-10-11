@@ -2,7 +2,7 @@
 //! holding the value an earlier run kept under its name, else "dark"; each change of it is kept again. Natively the
 //! values live in `<program>.stored.json` next to the program (in memory for code without a file, std_adapters.rs), in
 //! the playground in the page's localStorage (host.js). `stored x default v` (or `stored x = v`) becomes
-//! `x = std_io("store", "load", ["x", v, file])` and `on change x { std_io("store", "save", ["x", value, file]) }`.
+//! `x = std_io("store", "declare", ["x", v, file])` and `on change x { std_io("store", "save", ["x", value, file]) }`.
 //! `storage` is the same store as a map keyed at run time (card web-apis): `storage[k] = v` saves, `storage[k]` loads (ø
 //! when absent), `delete storage[k]` removes, `keys(storage)` names the kept values, `storage` alone is all of them as a
 //! map (card how-store); `storage.k` is the key "k".
@@ -119,9 +119,9 @@ fn dev_kept(statement: &Node, changed: &HashSet<String>, kept_names: &mut HashSe
 	(changed.contains(name) && kept_names.insert(name.clone())).then(|| kept(name, default, DEV_STORE))
 }
 
-/// `x = std_io("store", "load", ["x", v, file])` and the listener saving each change of x
+/// `x = std_io("store", "declare", ["x", v, file])` (v kept when x isn't yet) and the listener saving each change of x
 fn kept(name: &str, default: &Node, file: &str) -> Vec<Node> {
-	let load = parse(&format!("{name} = std_io(\"store\", \"load\", [\"{name}\", {DEFAULT_PLACEHOLDER}, {file:?}])"));
+	let load = parse(&format!("{name} = std_io(\"store\", \"declare\", [\"{name}\", {DEFAULT_PLACEHOLDER}, {file:?}])"));
 	let load = crate::law::substitute(&load, &HashMap::from([(DEFAULT_PLACEHOLDER.to_string(), default.clone())]));
 	let save = parse(&format!("on change {name} {{ std_io(\"store\", \"save\", [\"{name}\", value, {file:?}]) }}"));
 	vec![load, save]
