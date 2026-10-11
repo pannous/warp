@@ -58,3 +58,10 @@ fn native_input_is_a_loud_error() {
 	let errors = failures_of("midi_receive()");
 	assert!(errors.contains("MIDI input is not available natively yet"), "{errors}");
 }
+
+#[test]
+fn listing_outputs_needs_a_backend_or_names_the_missing_one() {
+	let output = failures_of("midi_outputs()");
+	assert!(output.starts_with('»') || output.contains("sendmidi") || output.contains("Error"), "{output}");
+	assert!(output.contains('[') || output.contains("sendmidi"), "{output}");
+}
