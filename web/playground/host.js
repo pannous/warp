@@ -391,6 +391,7 @@ function exactOfPayload(payload) {
 
 const FIXNUM_MIN = -(2n ** 62n - 1n);
 const FIXNUM_MAX = 2n ** 62n;
+const isExactHandle = value => typeof value === "bigint" && (value < FIXNUM_MIN || value > FIXNUM_MAX);
 function exactHandle(module, numerator, denominator) {
 	const integer = n => {
 		if (n >= FIXNUM_MIN && n <= FIXNUM_MAX) return n;

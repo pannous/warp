@@ -351,7 +351,7 @@ function runTask(module, hooks, warnings, name, ints, values, arrays, captured =
 		const unread = joinTasks(taskHolder.run, hooks);
 		const { signals, unrenderedSounds: sounds } = taskHolder.run;
 		if (unread) return { failure: `task ${taskName(name)}: ${unread}`, signals, sounds };
-		return { value: typeof result === "object" && result !== null ? readNode(instance.exports, result) : result, signals, sounds };
+		return { value: typeof result === "object" && result !== null ? readNode(instance.exports, result) : portableInt(instance.exports, result), signals, sounds };
 	} catch (trap) {
 		// no instance: the task never ran (`Out of memory: Cannot allocate Wasm memory`, see finishedTask)
 		return { failure: `task ${taskName(name)}: ${raisedText(instance?.exports) ?? trapMessage(trap, name)}`, unstarted: !instance, signals: taskHolder.run.signals };
@@ -369,7 +369,7 @@ function finishedTask(run, hooks, id) {
 	if (record.output) hooks.print(record.output, 1);
 	record.files?.forEach(([path, content]) => self.keepWritten?.(path, content.bytes ? Uint8Array.from(content.bytes) : content));
 	taskPool.push(task.worker); // free for the next task
-	if (record.value?.kind === KIND_INT && record.ints) record.value = BigInt(record.value.data.int);
+	if (record.value?.kind === KIND_INT && record.ints && record.value.data.int !== undefined) record.value = BigInt(record.value.data.int);
 	// a Worker that could not even instantiate the task runs it here instead: a page holds ~124 Wasm memories in all its
 	// Workers, and only the isolate that dropped an instance collects it, so the dead instances of this one (the
 	// starting program's) block the Worker until this isolate collects them, which it does when its own allocation
@@ -516,17 +516,19 @@ function capturedValues(exports) {
 	return names.map(name => {
 		const value = exports[name].value;
 		if (typeof value === "object" && value !== null) return [name, { tree: readTaskValue(exports, value) }];
-		return [name, typeof value === "bigint" && (value < FIXNUM_MIN || value > FIXNUM_MAX) ? { exact: exactParts(exports, value) } : { raw: value }];
+		return [name, isExactHandle(value) ? { exact: exactParts(exports, value) } : { raw: value }];
 	});
 }
 
 // an Int handle beyond the fixnums as [numerator, denominator]: the handle means nothing in another instance (card
 // error-undefined, src/tasks.rs Captured::Int)
 function exactParts(exports, handle) {
-	const integer = payload => payload.int !== undefined ? BigInt(payload.int)
-		: (payload.big.negative ? -1n : 1n) * payload.big.limbs.reduceRight((value, limb) => (value << 32n) + BigInt(limb), 0n);
-	const payload = readNode(exports, exports.new_int(handle)).data;
-	return payload.ratio ? payload.ratio.map(integer) : [integer(payload), 1n];
+	return exactOfPayload(readNode(exports, exports.new_int(handle)).data);
+}
+
+// a task's whole-number result as it can leave its instance: a handle beyond the fixnums as the tree of its parts
+function portableInt(exports, result) {
+	return isExactHandle(result) ? { kind: KIND_INT, data: { exact: exactParts(exports, result).map(String) }, chain: [] } : result;
 }
 
 // a task's result as a tree: a number of a function of numbers, else the tree already read
@@ -750,6 +752,8 @@ addHostPart({
 			if (task.failure) throw new Error(task.failure);
 			// a task whose function returns a Node (`go { n + 1 }` of a Node parameter n) still gives its number here
 			if (typeof task.value === "object" && task.value !== null) {
+				const exact = exactOfPayload(task.value.data ?? {});
+				if (exact) return exactHandle(program(), ...exact);
 				const number = task.value.data?.int;
 				if (number === undefined) throw new Error(`task ${taskName(task.name ?? "")}: its result is no whole number`);
 				return BigInt(number);
