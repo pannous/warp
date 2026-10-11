@@ -148,11 +148,15 @@ fn binders(variables: &[(String, Kind)]) -> Result<String, String> {
 		.map(|parts| parts.join(" "))
 }
 
+/// A recursive function terminates by the sum of its parameters' sizes, which each call must lower (omega shows it
+/// from the branch's condition); Lean refuses one that does not, and the law stays Tested
 fn definition(function: &FunctionDefinition) -> Lean {
-	if calls_itself(function) {
-		return Err(format!("recursive {} is not exported to Lean yet", function.name));
+	let header = format!("def {} {} : {} := {}\n", function.name, binders(&function.parameters)?, INTEGER, term(&function.body)?);
+	if !calls_itself(function) {
+		return Ok(header);
 	}
-	Ok(format!("def {} {} : {} := {}\n", function.name, binders(&function.parameters)?, INTEGER, term(&function.body)?))
+	let measure: Vec<String> = function.parameters.iter().map(|(name, _)| format!("{name}.toNat")).collect();
+	Ok(format!("{header}termination_by {}\ndecreasing_by all_goals omega\n", measure.join(" + ")))
 }
 
 fn theorem_name(law: &Law) -> String {
@@ -187,19 +191,50 @@ fn reached<'a>(functions: &'a [FunctionDefinition], law: &Law) -> Vec<&'a str> {
 	functions.iter().map(|f| f.name.as_str()).filter(|name| seen.iter().any(|s| s == name)).collect()
 }
 
-/// A complete Lean file trying `tactics` after unfolding the definitions the law reaches.
+/// The induction over each recursive function the law calls with its variables: `fun_induction sum_to n`, the
+/// recursive call's value its hypothesis, every case closed knowing the reached functions' equations
+fn induction_alternatives(functions: &[FunctionDefinition], law: &Law, reached: &[&str]) -> Vec<String> {
+	let recursive = |name: &str| functions.iter().any(|function| function.name == name && calls_itself(function));
+	let is_variable = |argument: &Node| matches!(argument.drop_meta(), Node::Symbol(name) if law.variables.iter().any(|(variable, _)| variable == name));
+	let mut inductions: Vec<String> = vec![];
+	law.statement.visit(&mut |node| {
+		if let Some((name, arguments)) = super::call_parts(node) {
+			if recursive(name) && arguments.iter().all(is_variable) {
+				let names: Vec<String> = arguments.iter().map(|argument| argument.name()).collect();
+				inductions.push(format!("fun_induction {name} {}", names.join(" ")));
+			}
+		}
+	});
+	inductions.dedup();
+	let equations = reached.join(", ");
+	let cases = closing_alternatives(&[&format!("grind [{equations}]"), &format!("simp_all [{equations}]"), "omega"]);
+	let mut alternatives: Vec<String> = inductions.iter().map(|induction| format!("({induction} <;> first | {cases})")).collect();
+	if !alternatives.is_empty() {
+		alternatives.push(format!("(grind [{equations}]; done)"));
+	}
+	alternatives
+}
+
+/// A complete Lean file trying `tactics` after unfolding the definitions the law reaches; a law of a recursive
+/// function tries induction first, and unfolds only the others (unfolding the recursive one loops)
 pub fn export(functions: &[FunctionDefinition], law: &Law, tactics: &[&str]) -> Lean {
 	let definitions: Result<Vec<String>, String> = functions.iter().map(definition).collect();
 	let names = reached(functions, law);
+	let unfolded: Vec<&str> = names.iter().copied().filter(|name| functions.iter().any(|function| function.name == *name && !calls_itself(function))).collect();
+	let (unfold, closers) = (format!("try simp only [{}]", unfolded.join(", ")), closing_alternatives(tactics));
+	let inductions = induction_alternatives(functions, law, &names);
+	let proof = match inductions.is_empty() {
+		true => format!("{unfold}\n  all_goals first | {closers}"),
+		false => format!("first\n  | {}\n  | (({unfold}) <;> first | {closers})", inductions.join("\n  | ")),
+	};
 	Ok(format!(
-		"{}{}\ntheorem {} {} : {} := by\n  try simp only [{}]\n  all_goals first | {}\n",
+		"{}{}\ntheorem {} {} : {} := by\n  {}\n",
 		HEADER,
 		definitions?.join(""),
 		theorem_name(law),
 		binders(&law.variables)?,
 		proposition(&law.statement)?,
-		names.join(", "),
-		closing_alternatives(tactics)
+		proof
 	))
 }
 
