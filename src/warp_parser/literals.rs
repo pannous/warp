@@ -7,6 +7,7 @@ const BACKTICK: char = '`';
 const BACKTICK_TOPIC: &str = "backtick text";
 const F_STRING_TOPIC: &str = "python f-string";
 const F_STRING_PREFIX: char = 'f';
+const FLOAT_WORD: &str = "float";
 /// The words of a WGSL block, `shader { … }` (card g_oFJc)
 const SHADER_WORDS: [&str; 2] = ["shader", "wgsl"];
 /// `\e` in a text: the start of terminal codes like `\e[H`
@@ -312,10 +313,17 @@ impl WarpParser {
 		let number = self.parse_number_value();
 		let literal: String = self.chars[start..self.pos].iter().collect();
 		let number = self.keep_source_literal(number, &literal);
-		match self.literal_type_suffix() {
+		match self.literal_type_suffix().or_else(|| self.scientific_float(&number, &literal)) {
 			Some(number_type) => Node::Key(Box::new(number), Op::As, Box::new(Node::Symbol(number_type))),
 			None => self.with_juxtaposed_factor(number),
 		}
+	}
+
+	/// `1.5e-7` is a float, as written by measurements and other programs (decision exact-decimals); `1e3` stays the
+	/// integer 1000 and `0.5` the exact decimal. Code only: data keeps the number it reads.
+	fn scientific_float(&self, number: &Node, literal: &str) -> Option<String> {
+		let is_scientific = matches!(number, Node::Number(Number::Float(_))) && literal.contains(['e', 'E']);
+		(is_scientific && !self.options.data_mode).then(|| FLOAT_WORD.to_string())
 	}
 
 	/// `2x` is 2*x, `3(4)` is 3*(4), `3x²` is 3*(x²): a number directly followed by a symbol or `(` multiplies.
@@ -490,7 +498,7 @@ impl WarpParser {
 		Some(Node::Key(Box::new(fraction), Op::Mul, Box::new(factor)))
 	}
 
-	/// `1 month`, `24 hours`: an integer followed by a time unit word is a duration
+	/// `1 month`, `24 hours`: an integer followed by a time unit word is a duration; `1 month 2 days` is one duration
 	pub(super) fn with_time_unit(&mut self, number: Node) -> Node {
 		let Node::Number(Number::Int(count)) = &number else {
 			return number;
@@ -498,16 +506,38 @@ impl WarpParser {
 		if self.options.data_mode {
 			return number;
 		}
-		let Some((unit, length)) = crate::time::unit_after(&self.chars[self.pos..]) else {
+		let Some((unit, length)) = self.time_unit_at(0) else {
 			return number;
 		};
-		// `{year:1970 month:1}`: a unit word that starts the next entry or assignment is no unit
-		let after_word: String = self.chars[self.pos + length..].iter().skip_while(|c| **c == ' ').take(2).collect();
-		if after_word.starts_with(':') || (after_word.starts_with('=') && after_word != "==") {
-			return number;
-		}
 		self.advance_by(length);
-		Node::data(unit.times(*count))
+		let mut duration = unit.times(*count);
+		while let Some((following, length)) = self.following_duration() {
+			self.advance_by(length);
+			duration = duration.plus(following);
+		}
+		Node::data(duration)
+	}
+
+	/// The unit word `offset` chars ahead and its length with leading spaces; `{year:1970 month:1}`: a unit word that
+	/// starts the next entry or assignment is no unit
+	fn time_unit_at(&self, offset: usize) -> Option<(crate::time::Duration, usize)> {
+		let (unit, length) = crate::time::unit_after(&self.chars[self.pos + offset..])?;
+		let after_word: String = self.chars[self.pos + offset + length..].iter().skip_while(|c| **c == ' ').take(2).collect();
+		let starts_entry = after_word.starts_with(':') || (after_word.starts_with('=') && after_word != "==");
+		(!starts_entry).then_some((unit, length))
+	}
+
+	/// ` 2 days` after a duration: the next amount of the same duration, and how many chars it takes
+	fn following_duration(&self) -> Option<(crate::time::Duration, usize)> {
+		let rest = &self.chars[self.pos..];
+		let spaces = rest.iter().take_while(|c| **c == ' ').count();
+		let digits = rest[spaces..].iter().take_while(|c| c.is_ascii_digit()).count();
+		if spaces == 0 || digits == 0 {
+			return None;
+		}
+		let count: i64 = rest[spaces..spaces + digits].iter().collect::<String>().parse().ok()?;
+		let (unit, length) = self.time_unit_at(spaces + digits)?;
+		Some((unit.times(count), spaces + digits + length))
 	}
 
 	pub(super) fn integer_node(&self, digits: &str) -> Node {

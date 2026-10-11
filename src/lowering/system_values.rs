@@ -19,10 +19,14 @@ use crate::node::{symbol, Bracket, Node};
 use crate::operators::Op;
 use crate::time::NOW_WORD;
 use std::collections::HashSet;
-use warp_runtime::host_words::{BATTERY, CLIPBOARD, CLIPBOARD_COUNT, CLIPBOARD_TEXT, SYSTEM_VALUE, SYSTEM_VALUES};
+use warp_runtime::host_words::{BATTERY, CLIPBOARD, CLIPBOARD_COUNT, CLIPBOARD_TEXT, MOUSE_X, MOUSE_Y, SYSTEM_VALUE, SYSTEM_VALUES};
 
 /// The mark of a system value read between the two passes
 pub const SYSTEM_PREFIX: &str = "system·";
+/// Host readings that are measurements, not counts: float sources (decision exact-decimals), so the exact decimals
+/// they meet (`col + 0.5 - mouse_x`) convert once at that use instead of making every later step exact
+const FLOAT_VALUES: [&str; 2] = [MOUSE_X, MOUSE_Y];
+const FLOAT_TYPE: &str = "float";
 const LISTENER_WORDS: [&str; 3] = ["whenever", "once", "on"];
 const CHANGE_WORDS: [&str; 2] = ["change", "changes"];
 /// The timer that keeps a listening program and wakes it for the checks
@@ -203,8 +207,15 @@ fn reading(node: Node) -> Node {
 		Node::Symbol(name) if name.starts_with(SYSTEM_PREFIX) => {
 			let name = name[SYSTEM_PREFIX.len()..].to_string();
 			let yes_no = SYSTEM_VALUES.iter().any(|(system, yes_no)| *system == name && *yes_no);
+			let measured = FLOAT_VALUES.contains(&name.as_str());
 			let call = call(SYSTEM_VALUE, vec![Node::Text(name)]);
-			if yes_no { key(call, Op::Ne, Node::int(0)) } else { call }
+			if yes_no {
+				key(call, Op::Ne, Node::int(0))
+			} else if measured {
+				key(call, Op::As, symbol(FLOAT_TYPE))
+			} else {
+				call
+			}
 		}
 		other => other.map_children(reading),
 	}

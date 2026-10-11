@@ -34,6 +34,7 @@ mod text_unicode;
 mod similarity;
 mod uncertain;
 pub(crate) mod times;
+mod time_arithmetic;
 pub use similarity::NUMBERS_SIMILAR;
 pub(crate) mod list_ops;
 mod list_abi;
@@ -688,6 +689,9 @@ impl WasmGcEmitter {
 		self.derive_imports_from_effects(node);
 		self.declares_list_types = declared_values::declares_list_types(node);
 		analyze_required_functions(&mut self.ctx, node);
+		if crate::analyzer::makes_floats(&self.ctx, node) {
+			self.ctx.required_functions.insert(float_text::FLOAT_TEXT);
+		}
 		self.ctx.required_functions.extend(self.discovered_needs.iter().filter_map(|need| match need {
 			Need::Function(name) => Some(*name),
 			Need::MathImport(_) | Need::KeyOperator(_) => None,
@@ -993,6 +997,7 @@ impl WasmGcEmitter {
 		self.emit_text_as_number(); // after text_as_float and text_as_int, which it calls
 		self.emit_uncertain_runtime(); // after text_as_float, which it calls
 		self.emit_times_runtime();
+		self.emit_time_arithmetic();
 		if self.config.emit_reflection {
 			self.emit_reflection();
 		}
@@ -1220,6 +1225,10 @@ impl WasmGcEmitter {
 			func.instruction(&I::Unreachable);
 			return;
 		}
+		// a float the analyzer did not foresee (makes_floats) may be shown: rerun with float_text
+		if name == "new_float" && self.should_emit_function("list_join") && !self.should_emit_function(float_text::FLOAT_TEXT) {
+			self.discovered_needs.insert(Need::Function(float_text::FLOAT_TEXT));
+		}
 		self.ctx.used_functions.insert(name);
 		func.instruction(&I::Call(self.func_index(name)));
 	}
@@ -1276,11 +1285,11 @@ impl WasmGcEmitter {
 					self.emit_int_literal(func, &num.to_bigint());
 					self.emit_call(func, "new_int");
 				}
-				Number::Float(f) => {
+				Number::Float(f) if !Number::is_exact_decimal(*f) => {
 					func.instruction(&I::F64Const(Ieee64::new(f.to_bits())));
 					self.emit_call(func, "new_float");
 				}
-				Number::Quotient(..) | Number::BigQuotient(_) => {
+				Number::Float(_) | Number::Quotient(..) | Number::BigQuotient(_) => {
 					self.emit_numeric_value(func, node);
 					self.emit_call(func, "new_int");
 				}

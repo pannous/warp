@@ -16,6 +16,8 @@ pub const TEXT_CONCAT: &str = "text_concat";
 pub const TEXT_OF: &str = "text_of";
 /// text_argument(node): the text a text builtin reads (text_of), but an Error fails with its own message (card byte-slice)
 const TEXT_ARGUMENT: &str = "text_argument";
+/// float_text when the analyzer saw floats (makes_floats), and the run-time functions that make floats
+const FLOAT_MAKERS: [&str; 4] = [super::float_text::FLOAT_TEXT, super::list_ops::TEXT_AS_FLOAT, super::casts::TEXT_AS_NUMBER, super::uncertain::UNCERTAIN_NEW];
 /// The builtins that read their text through text_argument
 const TEXT_ARGUMENT_USERS: [&str; 5] = [BYTE_AT, BYTE_SLICE, TEXT_TRIM, TEXT_STARTS_WITH, TEXT_ENDS_WITH];
 /// c_string(text) -> i32: a zero-terminated copy of a text known only at run time, for a C function's `char*`
@@ -188,13 +190,19 @@ pub fn add_dependencies(required: &mut HashSet<&'static str>) {
 	}
 	// the text of a list (list_text) is emitted with join, as the analyzer requires list_join for both
 	if required.contains("list_join") {
-		required.extend([super::float_text::FLOAT_TEXT, TEXT_CONCAT, super::library_ops::LIST_TEXT, super::library_ops::TEXT_QUOTED]); // a float joins as its text, a nested list as "[…]", a text quoted
+		required.extend([TEXT_CONCAT, super::library_ops::LIST_TEXT, super::library_ops::TEXT_QUOTED]); // a nested list joins as "[…]", a text quoted
+		// a float joins as its text, made only by a program with floats (analyzer::makes_floats)
+		if FLOAT_MAKERS.iter().any(|name| required.contains(name)) {
+			required.insert(super::float_text::FLOAT_TEXT);
+		}
 		if required.contains(super::uncertain::UNCERTAIN_NEW) {
 			required.insert(super::uncertain::UNCERTAIN_TEXT); // `7.0 ± 2.0`
 		}
 		if required.contains(super::times::TIME_FIELD) {
 			required.insert(super::times::TIME_TEXT); // `2026-10-10T14:43:33.682Z`
 		}
+	} else {
+		required.remove(super::float_text::FLOAT_TEXT); // no float is shown as text
 	}
 	// numbers that are no fixnum (big integers, ratios) join as their exact text, built by text_concat
 	if required.contains("list_join") && required.contains(super::INT_RUNTIME) {

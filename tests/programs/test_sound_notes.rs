@@ -22,3 +22,11 @@ fn every_octave_is_a_note() {
 fn a_variable_named_like_a_note_is_the_variable() {
 	is!("A4 = 3\nplay 440Hz for 5ms\nA4", 3);
 }
+
+// card play-c4: the body of a def does not define its note names
+#[test]
+fn a_note_inside_a_function_body_plays() {
+	is!("def h(v) { play C4 for 5ms; 5 }; h(2)", 5);
+	is!("def h(v) { play C4 for 5ms; v }; h(2)", 2);
+	is!("def A4(v) { v }; play 440Hz for 5ms\nA4(3)", 3);
+}
