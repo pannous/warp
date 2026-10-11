@@ -13,6 +13,103 @@ const SAMPLE_OFFSET = 32768;
 const DEFAULT_SAMPLE_RATE = 22050;
 const WAV_HEADER_BYTES = 44;
 
+// MIDI (card midi-out, src/midi.rs, which says how notes cross): Standard MIDI Files, format 0, 480 ticks a quarter at 120 beats a minute
+const MIDI_TICKS_PER_QUARTER = 480;
+const MIDI_MICROSECONDS_PER_QUARTER = 500000;
+const MIDI_TICKS_PER_SECOND = MIDI_TICKS_PER_QUARTER * 1e6 / MIDI_MICROSECONDS_PER_QUARTER;
+const MIDI_NOTE_ON = 0x90;
+const MIDI_NOTE_OFF = 0x80;
+const MIDI_FIELDS = 4; // start ms, key, length ms, velocity
+const midiTicks = milliseconds => Math.round(Math.max(0, milliseconds) * MIDI_TICKS_PER_SECOND / 1000);
+const midiVariableLength = value => {
+	const groups = [value & 0x7f];
+	for (value >>= 7; value > 0; value >>= 7) groups.push(value & 0x7f | 0x80);
+	return groups.reverse();
+};
+const midiChunk = (kind, body) => {
+	const bytes = new Uint8Array(8 + body.length);
+	const view = new DataView(bytes.buffer);
+	[...kind].forEach((letter, i) => bytes[i] = letter.charCodeAt(0));
+	view.setUint32(4, body.length);
+	bytes.set(body, 8);
+	return bytes;
+};
+function midiFileOf(flat) {
+	if (flat.length % MIDI_FIELDS) throw new Error(`notes come as [start, key, length, velocity] four numbers each, got ${flat.length} numbers`);
+	const events = [];
+	for (let i = 0; i < flat.length; i += MIDI_FIELDS) {
+		const [start, key, length, velocity] = flat.slice(i, i + MIDI_FIELDS);
+		if (key < 0 || key > 127) throw new Error(`MIDI keys are 0 to 127, got ${key}`);
+		const on = midiTicks(start);
+		events.push([on, 1, [MIDI_NOTE_ON, key, Math.min(127, Math.max(1, velocity))]], [Math.max(on, midiTicks(start + length)), 0, [MIDI_NOTE_OFF, key, 0]]);
+	}
+	events.sort((a, b) => a[0] - b[0] || a[1] - b[1]);
+	const track = [0, 0xff, 0x51, 3, MIDI_MICROSECONDS_PER_QUARTER >> 16 & 255, MIDI_MICROSECONDS_PER_QUARTER >> 8 & 255, MIDI_MICROSECONDS_PER_QUARTER & 255];
+	let now = 0;
+	for (const [tick, , message] of events) {
+		track.push(...midiVariableLength(tick - now), ...message);
+		now = tick;
+	}
+	track.push(0, 0xff, 0x2f, 0);
+	const header = new Uint8Array([0, 0, 0, 1, MIDI_TICKS_PER_QUARTER >> 8, MIDI_TICKS_PER_QUARTER & 255]);
+	return Uint8Array.from([...midiChunk("MThd", header), ...midiChunk("MTrk", track)]);
+}
+function midiNotesOf(bytes) {
+	const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.length);
+	const ascii = at => String.fromCharCode(...bytes.slice(at, at + 4));
+	if (ascii(0) !== "MThd") throw new Error("not a MIDI file (it does not start with MThd)");
+	const tracks = view.getUint16(10), division = view.getUint16(12);
+	if (division & 0x8000) throw new Error("MIDI files timed in SMPTE frames are not supported, only ticks per quarter note");
+	const tempi = [[0, MIDI_MICROSECONDS_PER_QUARTER]], messages = [];
+	let at = 8 + view.getUint32(4);
+	for (let t = 0; t < tracks; t++) {
+		const end = at + 8 + view.getUint32(at + 4), kind = ascii(at);
+		at += 8;
+		if (kind !== "MTrk") { at = end; continue; }
+		const ended = () => { throw new Error("the file ends inside an event"); };
+		const byte = () => at < end ? bytes[at++] : ended();
+		const length = () => { let value = 0; for (let i = 0; i < 4; i++) { const b = byte(); value = value << 7 | b & 0x7f; if (!(b & 0x80)) return value; } throw new Error("a delay is longer than four bytes"); };
+		let tick = 0, status = 0;
+		while (at < end) {
+			tick += length();
+			const first = byte();
+			if (first & 0x80) status = first; else at--;
+			if (status === 0xff) {
+				const type = byte(), size = length(), data = bytes.slice(at, at += size);
+				if (type === 0x51 && size === 3) tempi.push([tick, data[0] << 16 | data[1] << 8 | data[2]]);
+			} else if (status === 0xf0 || status === 0xf7) at += length();
+			else {
+				const kind = status & 0xf0, channel = status & 15, one = byte();
+				const two = kind === 0xc0 || kind === 0xd0 ? 0 : byte();
+				if (kind === MIDI_NOTE_ON) messages.push([tick, two > 0, channel, one, two]);
+				else if (kind === MIDI_NOTE_OFF) messages.push([tick, false, channel, one, 0]);
+			}
+		}
+		at = end;
+	}
+	tempi.sort((a, b) => a[0] - b[0]);
+	const milliseconds = tick => {
+		let seconds = 0, from = 0, tempo = MIDI_MICROSECONDS_PER_QUARTER;
+		for (const [when, next] of tempi) {
+			if (when >= tick) break;
+			seconds += (when - from) * tempo / 1e6 / division;
+			[from, tempo] = [when, next];
+		}
+		return Math.round((seconds + (tick - from) * tempo / 1e6 / division) * 1000);
+	};
+	messages.sort((a, b) => a[0] - b[0]);
+	const sounding = [], notes = [];
+	for (const [tick, on, channel, key, velocity] of messages) {
+		if (on) { sounding.push([tick, channel, key, velocity]); continue; }
+		const index = sounding.findIndex(([, c, k]) => c === channel && k === key);
+		if (index < 0) continue;
+		const [start, , , started] = sounding.splice(index, 1)[0];
+		notes.push([milliseconds(start), key, milliseconds(tick) - milliseconds(start), started]);
+	}
+	return notes.sort((a, b) => a[0] - b[0] || a[1] - b[1]).flat();
+}
+const wholeNumbers = list => Array.from(list, Number);
+
 // the files std's file module wrote (texts) and render_sound rendered (bytes, a Uint8Array): read and the file words see
 // them before the served ones. A page keeps them in IndexedDB (keepWrittenFile), so they are still there after a reload
 const writtenFiles = new Map();
@@ -451,6 +548,19 @@ addHostPart({
 		// `clipboard.write(text)` (lowering/system_values.rs): a page writes it (markup.js copyText), a Worker has no
 		// clipboard and hands the text to its page (self.writeClipboard: worker.js)
 		clipboard: { write: text => { (self.writeClipboard ?? copyText)(contentText(text)); return null; } },
+		// MIDI (card midi-out, lib/sound.warp): files are bytes as render_sound's; a message goes to the page, which holds
+		// the Web MIDI access (playground.js sendMidi). A Worker cannot wait for the page's device list or its input
+		midi: {
+			write_file: (path, notes) => { keepWritten(contentText(path), midiFileOf(wholeNumbers(notes))); return null; },
+			read_file: path => midiNotesOf(readBytes(contentText(path))),
+			send: (port, message) => {
+				if (!self.sendMidi) return null; // a run without a page (tests, node) has no devices, silent as sound is
+				self.sendMidi(contentText(port), wholeNumbers(message));
+				return null;
+			},
+			outputs: () => { throw new Error("midi.outputs: the playground's page owns the MIDI devices and a program cannot wait for their list; midi_on and midi_send use the first output"); },
+			receive: () => { throw new Error("midi.receive: MIDI input does not reach a playground program yet (Web MIDI answers on the page, not in the program's Worker)"); },
+		},
 		// `play "song.mp3"`, `stop_sound` (lib/sound.warp, card sound-library): the page plays it with an <audio>
 		// (worker.js self.playSoundFile, playground.js); a run without a page (tests, node) stays silent, as natively
 		sound: {

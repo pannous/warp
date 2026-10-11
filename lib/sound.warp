@@ -242,6 +242,22 @@ melody_samples(notes, seconds) := {
 to melody notes each duration: sound(melody_samples(notes, si_amount(duration)))
 to melody notes: melody(notes, note_seconds)
 
+// MIDI (card midi-out): midi_on C4, midi_off C4, midi_send(144, 60, 100) to the first output device (or the browser's
+// Web MIDI output), midi_outputs() their names; channels count from 1, velocity 1 to 127
+midi_send(status, data1, data2 = 0, port = "") := std_io("midi", "send", [port, if status < 192 or status >= 224 then [status, data1, data2] else [status, data1]])
+midi_on(pitch, velocity = 100, channel = 1) := midi_send(143 + channel, midi(pitch), velocity)
+midi_off(pitch, channel = 1) := midi_send(127 + channel, midi(pitch), 0)
+midi_outputs() := std_io("midi", "outputs", [])
+// the next message [status, data1, data2] waiting at the input, ø when none (fails where there is no MIDI input)
+midi_receive() := std_io("midi", "receive", [])
+// a Standard MIDI File of notes [start, pitch, length, velocity] (seconds, frequency or note, seconds, 1 to 127) at
+// 120 beats a minute, and the notes of such a file the same way: write_midi("tune.mid", [[0, C4, 0.5, 100]])
+write_midi(path, notes) := std_io("midi", "write_file", [path, [v for entry in notes for v in [round(entry#1 * 1000) as int, midi(entry#2), round(si_amount(entry#3) * 1000) as int, entry#4]]])
+read_midi(path) := {
+	flat = std_io("midi", "read_file", [path])
+	[[flat#(4 * i + 1) / 1000.0, midi_hertz(flat#(4 * i + 2)), flat#(4 * i + 3) / 1000.0, flat#(4 * i + 4)] for i in 0..((count(flat) / 4) as int)]
+}
+
 // how loud each frequency band sounds at a moment of the samples (card winamp-like, samples/visualizer.warp): the bands
 // spaced evenly in pitch from band_low to band_high Hz, each level from 0 to 1 (a full-scale sine is 1)
 global band_low = 60
