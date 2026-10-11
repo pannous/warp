@@ -39,7 +39,7 @@ fn chunk(kind: &[u8; 4], body: &[u8]) -> Vec<u8> {
 
 /// The bytes of a format 0 file holding the notes `[start ms, key, length ms, velocity …]`
 pub fn encode(flat: &[i64]) -> Result<Vec<u8>, String> {
-	if flat.len() % FIELDS != 0 {
+	if !flat.len().is_multiple_of(FIELDS) {
 		return Err(format!("notes come as [start, key, length, velocity] four numbers each, got {} numbers", flat.len()));
 	}
 	let mut events = vec![];

@@ -47,6 +47,7 @@ pub mod paint_window;
 pub mod crash_card;
 #[cfg(feature = "native")]
 pub mod midi;
+#[cfg(feature = "native")]
 pub mod sound;
 #[cfg(feature = "native")]
 pub mod text_raster;
