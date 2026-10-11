@@ -3,6 +3,14 @@ use warp::Node;
 
 /// Set to "true" in Claude Code cloud sessions
 const CLOUD_SESSION_VAR: &str = "CLAUDE_CODE_REMOTE";
+/// The browser suite stops a test after 120 s and running every sample came close and then over it: a test over all
+/// samples is SAMPLE_SLICES tests, each over one slice
+const SAMPLE_SLICES: usize = 4;
+
+/// Every SAMPLE_SLICES-th item from `slice` on
+pub fn sample_slice<T>(items: &[T], slice: usize) -> impl Iterator<Item = &T> {
+	items.iter().skip(slice).step_by(SAMPLE_SLICES)
+}
 
 /// Something a test needs that only some machines have (the Mac's C headers, sibling repositories, local files)
 pub struct Resource {

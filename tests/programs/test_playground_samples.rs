@@ -29,16 +29,35 @@ fn runs_here(name: &str) -> bool {
 	cfg!(feature = "native") || !fs::read_to_string(sample_path(name)).is_ok_and(|source| PAINTING.iter().any(|word| source.contains(word)))
 }
 
-#[test]
-fn every_playground_sample_runs_without_an_error() {
+fn slice_runs_without_an_error(slice: usize) {
 	let excluded = excluded_samples();
 	let mut menu: Vec<String> = fs::read_dir(SAMPLES).expect(SAMPLES)
 		.filter_map(|entry| entry.ok()?.path().file_name()?.to_str()?.strip_suffix(".warp").map(str::to_string))
 		.filter(|name| !excluded.contains(name) && runs_here(name))
 		.collect();
 	menu.sort();
-	let failures: Vec<String> = menu.iter().filter_map(|name| sample_failure(name)).collect();
+	let failures: Vec<String> = crate::common::sample_slice(&menu, slice).filter_map(|name| sample_failure(name)).collect();
 	assert!(failures.is_empty(), "playground samples with an error (fix them or list them in {EXCLUDED_LIST}):\n{}", failures.join("\n"));
+}
+
+#[test]
+fn every_playground_sample_runs_without_an_error() {
+	slice_runs_without_an_error(0);
+}
+
+#[test]
+fn every_playground_sample_runs_without_an_error_slice_2() {
+	slice_runs_without_an_error(1);
+}
+
+#[test]
+fn every_playground_sample_runs_without_an_error_slice_3() {
+	slice_runs_without_an_error(2);
+}
+
+#[test]
+fn every_playground_sample_runs_without_an_error_slice_4() {
+	slice_runs_without_an_error(3);
 }
 
 // a sample that waits for input it never gets (a window, the mouse) hangs the whole test binary: each one gets this long
