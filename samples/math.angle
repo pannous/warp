@@ -1,6 +1,13 @@
 # see math.warp !
 #τ=π*2
-π*2≈6.2831853
-#assert τ≈6.2831853
-#τ≈6.2831853
-#τ==6.2831853
+assert 2π≈6.2831853
+assert τ≈6.2831853
+
+use math
+arcsin=&arc_sine
+arctan x:=arc_tangent x
+check arcsin(−1) = −π/2
+check arcsin(0) = 0
+check arcsin(1/2) ≈ π/6
+check arcsin(1) = π/2
+arctan(π)

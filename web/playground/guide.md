@@ -158,6 +158,42 @@ x
 
 Some names, like `pi`, are constants. They never change.
 
+### Values that follow
+
+Like a spreadsheet cell, a value can follow other values.
+
+`=` copies a value once.
+
+```warp => 6
+x = 3
+y = x * 2
+x = 4
+y
+```
+
+`:=` keeps following.
+
+```warp => 8
+x = 3
+y := x * 2
+x = 4
+y
+```
+
+`whenever` runs code each time something becomes true.
+
+```warp
+x = 1
+whenever x > 2 : print "big"
+x = 3
+```
+```printed
+big
+```
+
+Examples: "derived values", signals, listeners, "signals in lists"
+
+
 Examples: constants
 
 ## Truth
@@ -515,15 +551,15 @@ A row is an ordinary object: change a field (`bo.age += 1`) and the table change
 Files are written and read by name. In the browser they are kept in the browser's storage, so they are still there after a reload.
 
 ```warp => "milk"
-write("shopping.txt", "milk")
-read("shopping.txt")
+write "shopping.txt" "milk"
+read "shopping.txt"
 ```
 
-JSON from elsewhere becomes warp data.
+JSON(5) from elsewhere becomes warp data.
 
 ```warp => 36
 use json
-json.parse('{"age": 36}').age
+json('{"age": 36}').age
 ```
 
 Examples: data; samples: orm, orm_transaction, orm_units, todo_app, json_parser
@@ -568,45 +604,10 @@ A module is a ready-made toolbox. `use` opens it.
 
 ```warp => 1.4142135623730951
 use math
-sqrt 2
+max(√2 arc_cosine(π/4))
 ```
 
 Examples: "C libraries"; samples: lib, square, main, test_ffi, test_ffi_comprehensive, test_ffi_extended
-
-## Values that follow
-
-Like a spreadsheet cell, a value can follow other values.
-
-`=` copies a value once.
-
-```warp => 6
-x = 3
-y = x * 2
-x = 4
-y
-```
-
-`:=` keeps following.
-
-```warp => 8
-x = 3
-y := x * 2
-x = 4
-y
-```
-
-`whenever` runs code each time something becomes true.
-
-```warp
-x = 1
-whenever x > 2 : print "big"
-x = 3
-```
-```printed
-big
-```
-
-Examples: "derived values", signals, listeners, "signals in lists"
 
 ## Events and timers
 

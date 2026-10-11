@@ -1,5 +1,4 @@
 #!/usr/bin/env warp
-#!/usr/bin/env warp
 // Kitchen sink: every feature of the language in one program that compiles and runs, natively and in the playground
 // (tests/programs/test_samples.rs test_kitchensink, tour example "kitchen sink"). Each part tests its own results:
 // `warp test samples/kitchensink.warp` (and the playground) runs them and says whether all of them pass
@@ -69,8 +68,11 @@ test switch 3 {1: "one" 3: "three" default: "many"} == "three"
 test 5 is int
 
 // ---- classes and inheritance
-class Animal { name: "?"; speak := "..." }
+# class Animal {}
+class Animal { name: "?"}
+# class Animal { name: "?"; speak := "..." }
 class Dog extends Animal { speak := name + " barks" }
+# rex:Animal = Dog{name: "Rex"}
 rex = Dog{name: "Rex"}
 test rex.speak == "Rex barks"
 
@@ -86,7 +88,7 @@ temperature = 20
 heat_waves = 0
 whenever temperature > 30 { heat_waves += 1 }
 temperature = 35
-temperature = 36
+temperature = 36 # Not triggered again!! 
 temperature = 10
 temperature = 40
 test heat_waves == 2

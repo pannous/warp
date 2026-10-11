@@ -601,6 +601,14 @@ Tests still pinning the old rule (not edited, supervisor decides): tests/welcomi
 | Vee | ⋁ (Sm) | ⩔ (Sm) | LaTeX | ⩔ (Sm) |
 | Wedge | ⋀ (Sm) | ⩓ (Sm) | LaTeX | ⩓ (Sm) |
 
+The two-letter codes in parentheses are Unicode General Categories, the property Unicode assigns to every code point:
+Sk   │ Symbol, modifier
+So   │ Symbol, other
+Sm   │ Symbol, math
+Po   │ Punctuation,
+Mn   │ Mark, nonspacing
+
+
 ## Array covariance (TypeScript's `Array<string>` passed as `Array<string | number>`), probed 2026-10-08
 - Not a hole in warp: lists are values, so a callee that widens the element type (`xs: list`,
   `xs: list of (text or number)`) appends to its own copy. The caller's `names: texts` stays `["hi"]`; the same goes for a
@@ -611,3 +619,14 @@ Tests still pinning the old rule (not edited, supervisor decides): tests/welcomi
   checked like scalars, at compile time where known, at the store otherwise (notes/typed_lists.md); the variance design
   above needs no extra rule while lists stay values. Found on the way: const-list-add, typed-list-upper, class-field-list-of, uncalled-list-param,
   map-function-name.
+
+# Tiny footguns
+I can't think of a situation where these are problems, but it's a little surprise to newcomers:
+~/dev/angles/warp/ warp "type(.0)"    
+» int
+~/dev/angles/warp/ warp ".0 is float"     
+» no
+~/dev/angles/warp/ warp "'A' is codepoint"
+» yes
+~/dev/angles/warp/ warp "'A' is text"     
+» yes
