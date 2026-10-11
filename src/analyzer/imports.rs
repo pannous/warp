@@ -39,6 +39,9 @@ pub fn analyze_required_functions(ctx: &mut Context, node: &Node) {
 			if *op == Op::As && matches!(value.name().to_lowercase().as_str(), "string" | "str" | "text") {
 				ctx.required_functions.insert("list_join"); // `x as string` of a variable joins its text
 			}
+			if *op == Op::As && value.name().to_lowercase() == crate::wasm_emitter::exact::DECIMAL_WORD {
+				ctx.required_functions.extend(["list_join", crate::wasm_emitter::INT_RUNTIME, crate::wasm_emitter::exact::DECIMAL_TEXT]); // `x as decimal`: a text
+			}
 			if *op == Op::As && value.name().to_lowercase() == "list" {
 				ctx.required_functions.extend(["text_chars", "list_reverse", "text_reverse"]); // `x as list` of a text
 			}

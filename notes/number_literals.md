@@ -88,3 +88,13 @@ whether `type(0.0)` should say `rational` (a') or stay `int`.
 `int i=3.3*2; i` now gives the declared-type mismatch ("i is declared int, cannot assign … fix: i=int(3.3*2) or declare
 i:float"), as `int i=3.5` does: already fixed on main (`c7dc0cba3`, arithmetic on exact literals is checked by its value against
 the declared type).
+
+## Repeating decimals (card repeating-decimals)
+
+`0.3̅` (U+0305 COMBINING OVERLINE after each period digit) is the exact ratio 1/3: parser
+`repeating_decimal_literal` (src/warp_parser/literals.rs) → `Number::repeating_decimal` (n = integer·fixed·period −
+integer·fixed, d = 10^|fixed| · (10^|period| − 1)). No parentheses form `0.(3)` (user decision, notes/decisions.md):
+`0.5(3)` stays juxtaposition, 1.5. A plain digit after an overlined one (`0.3̅4`) is an error ("Unexpected character").
+`x as decimal` is a Text (wasm runtime `decimal_text`, src/wasm_emitter/exact.rs): the period found as the order of 10
+modulo the denominator without its 2s and 5s, long division writes the digits; a terminating ratio prints plainly
+(`0.25`), a period of 1000 digits or more prints as the ratio (`1/7919`), a float as its shortest text.

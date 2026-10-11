@@ -220,6 +220,7 @@ impl WasmGcEmitter {
 		let wraps = WRAPPING_INT_WORDS.contains(&type_name.as_str()) && !self.get_type(value).is_float() && !matches!(value, Node::Text(_) | Node::Char(_));
 		match crate::type_tests::canonical_spec_word(&type_name) {
 			"list" => self.emit_list_cast(func, value),
+			super::exact::DECIMAL_WORD => self.emit_cast_to_decimal(func, value),
 			"int" if wraps => {
 				self.emit_wrapping_int(func, value);
 				self.emit_call(func, "new_int");
@@ -327,6 +328,16 @@ impl WasmGcEmitter {
 				self.emit_call(func, "new_float");
 			}
 		}
+	}
+
+	/// `x as decimal`: the text of an exact number in decimal digits, its repeating ones overlined (`(1/6) as decimal` is
+	/// "0.16̅"); a float has no period, it is its shortest text (card repeating-decimals)
+	pub(super) fn emit_cast_to_decimal(&mut self, func: &mut Function, value: &Node) {
+		if self.get_type(value).is_float() {
+			return self.emit_cast_to_text(func, value);
+		}
+		self.emit_numeric_value(func, value);
+		self.emit_call(func, super::exact::DECIMAL_TEXT);
 	}
 
 	/// `x as text`, `str(x)`

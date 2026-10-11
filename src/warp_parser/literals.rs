@@ -8,6 +8,8 @@ const BACKTICK_TOPIC: &str = "backtick text";
 const F_STRING_TOPIC: &str = "python f-string";
 const F_STRING_PREFIX: char = 'f';
 const FLOAT_WORD: &str = "float";
+/// U+0305 COMBINING OVERLINE, written on each repeating digit of a decimal: 0.3̅ (card repeating-decimals)
+pub const OVERLINE: char = '\u{305}';
 /// The words of a WGSL block, `shader { … }` (card g_oFJc)
 const SHADER_WORDS: [&str; 2] = ["shader", "wgsl"];
 /// `\e` in a text: the start of terminal codes like `\e[H`
@@ -456,6 +458,9 @@ impl WarpParser {
 		}
 
 		self.push_digits(&mut num_str);
+		if let Some(repeating) = self.repeating_decimal_literal(&num_str) {
+			return repeating;
+		}
 		let mut is_float = false;
 		// Only consume . as decimal if NOT followed by another . (range operator) or a word (`4.square` calls square)
 		let after_point = self.peek_char(1);
@@ -483,6 +488,18 @@ impl WarpParser {
 				self.with_time_unit(number)
 			}
 		}
+	}
+
+	/// `0.3̅`, a combining overline on each repeating digit, is the exact ratio it spells, 1/3 (card repeating-decimals)
+	pub(super) fn repeating_decimal_literal(&mut self, integer: &str) -> Option<Node> {
+		if self.current_char() != '.' {
+			return None;
+		}
+		let fraction = &self.chars[self.pos + 1..];
+		let (fixed, period, length) = overlined_fraction(fraction)?;
+		self.advance_by(1 + length);
+		let (negative, integer) = integer.strip_prefix('-').map_or((false, integer), |digits| (true, digits));
+		Some(Node::Number(Number::repeating_decimal(negative, integer, &fixed, &period)))
 	}
 
 	/// `⅓` is the exact ratio 1/3; a number written directly after it multiplies: `⅓9` is 3
@@ -649,6 +666,25 @@ fn without_common_indentation(source: &str) -> String {
 	let indentation = |line: &&str| line.len() - line.trim_start().len();
 	let common = lines.iter().filter(|line| !line.trim().is_empty()).map(indentation).min().unwrap_or(0);
 	lines.iter().map(|line| line.get(common..).unwrap_or("").trim_end()).collect::<Vec<_>>().join("\n").trim().to_string()
+}
+
+/// The fixed and the overlined digits of a fraction (`16̅`: "1", "6") and its length in characters; none without an
+/// overline, or with a plain digit after an overlined one
+fn overlined_fraction(chars: &[char]) -> Option<(String, String, usize)> {
+	let (mut fixed, mut period, mut at) = (String::new(), String::new(), 0);
+	while let Some(&digit) = chars.get(at).filter(|ch| ch.is_ascii_digit()) {
+		let overlined = chars.get(at + 1) == Some(&OVERLINE);
+		if overlined {
+			period.push(digit);
+			at += 2;
+		} else if period.is_empty() {
+			fixed.push(digit);
+			at += 1;
+		} else {
+			return None;
+		}
+	}
+	(!period.is_empty()).then_some((fixed, period, at))
 }
 
 /// The float written `text`, or the error naming it

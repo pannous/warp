@@ -229,7 +229,7 @@ fn conversion_kind(target: &str) -> Option<Kind> {
 	match crate::type_tests::canonical_spec_word(target) {
 		"codepoint" => Some(Kind::Codepoint),
 		"list" => Some(Kind::List),
-		"text" => Some(Kind::Text),
+		"text" | crate::wasm_emitter::exact::DECIMAL_WORD => Some(Kind::Text),
 		_ => None,
 	}
 }
