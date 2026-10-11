@@ -138,6 +138,8 @@ After it:
   per task.
 - Wiki credit: a "Prior art: Bend/HVM" section in the laws and threads pages.
 
+Longer term, an own proof kernel absorbing Lean's and Bend's ideas: notes/own_prover.md.
+
 Sources: github.com/HigherOrderCO/Bend (→ bendlang/bend) README, guide/GUIDE.md, CHANGELOG.md, paper BendRT.pdf /
 BendTT.pdf; HVM2 README + paper; HVM4 README and docs; Taelin on X (2025-11) on Bend2/HVM4 plans; LICENSE files of
 each repo.
