@@ -490,14 +490,13 @@ impl WarpParser {
 		}
 	}
 
-	/// `0.3̅` (a combining overline on each repeating digit) and `0.(3)` (the whole fraction repeating) are the exact
-	/// ratio they spell, 1/3 (card repeating-decimals); `0.5(3)` stays 0.5 times 3
+	/// `0.3̅`, a combining overline on each repeating digit, is the exact ratio it spells, 1/3 (card repeating-decimals)
 	pub(super) fn repeating_decimal_literal(&mut self, integer: &str) -> Option<Node> {
 		if self.current_char() != '.' {
 			return None;
 		}
 		let fraction = &self.chars[self.pos + 1..];
-		let (fixed, period, length) = overlined_fraction(fraction).or_else(|| parenthesized_fraction(fraction))?;
+		let (fixed, period, length) = overlined_fraction(fraction)?;
 		self.advance_by(1 + length);
 		let (negative, integer) = integer.strip_prefix('-').map_or((false, integer), |digits| (true, digits));
 		Some(Node::Number(Number::repeating_decimal(negative, integer, &fixed, &period)))
@@ -669,7 +668,6 @@ fn without_common_indentation(source: &str) -> String {
 	lines.iter().map(|line| line.get(common..).unwrap_or("").trim_end()).collect::<Vec<_>>().join("\n").trim().to_string()
 }
 
-/// The float written `text`, or the error naming it
 /// The fixed and the overlined digits of a fraction (`16̅`: "1", "6") and its length in characters; none without an
 /// overline, or with a plain digit after an overlined one
 fn overlined_fraction(chars: &[char]) -> Option<(String, String, usize)> {
@@ -689,13 +687,7 @@ fn overlined_fraction(chars: &[char]) -> Option<(String, String, usize)> {
 	(!period.is_empty()).then_some((fixed, period, at))
 }
 
-/// The digits of a fraction `(3)` repeating as a whole, and its length in characters
-fn parenthesized_fraction(chars: &[char]) -> Option<(String, String, usize)> {
-	let period: String = chars.get(1..)?.iter().take_while(|ch| ch.is_ascii_digit()).collect();
-	let closed = chars.first() == Some(&'(') && !period.is_empty() && chars.get(period.len() + 1) == Some(&')');
-	closed.then(|| (String::new(), period.clone(), period.len() + 2))
-}
-
+/// The float written `text`, or the error naming it
 fn float_node(text: &str) -> Node {
 	text.parse::<f64>().map(Node::float).unwrap_or_else(|_| error(&format!("Invalid float: {text}")))
 }

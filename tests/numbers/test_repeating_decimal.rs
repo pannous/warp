@@ -1,18 +1,17 @@
 // card repeating-decimals: a repeating decimal literal is its exact ratio, the period overlined (0.3̅, U+0305 after each
-// digit) or in parentheses (0.(3)); `as decimal` writes a ratio back that way
+// digit); `as decimal` writes a ratio back that way. No parentheses form (user, 2026-10-11): 0.5(3) multiplies
 use crate::is;
 
 #[test]
 fn repeating_decimal_literals_are_exact() {
 	is!("0.3̅ == 1/3", true);
-	is!("0.(3) == 1/3", true);
-	is!("1.(3) == 4/3", true);
+	is!("1.3̅ == 4/3", true);
 	is!("0.16̅ == 1/6", true);
 	is!("2.45̅ == 221/90", true);
 	is!("-0.3̅ == -1/3", true);
 	is!("0.1̅4̅2̅8̅5̅7̅ * 7", 1);
 	is!("0.9̅", 1);
-	is!("0.3̅ + 0.(6)", 1);
+	is!("0.3̅ + 0.6̅", 1);
 }
 
 #[test]
