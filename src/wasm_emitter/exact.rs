@@ -14,7 +14,7 @@
 
 use super::WasmGcEmitter;
 use num_bigint::BigInt;
-use num_traits::{One, Pow};
+use num_traits::One;
 use wasm_encoder::*;
 use Instruction as I;
 use crate::wasm_emitter::layout::BYTE;
@@ -820,15 +820,5 @@ impl WasmGcEmitter {
 
 /// Exact fraction of the shortest decimal that round-trips `value`: 0.1 → (1, 10)
 pub fn decimal_fraction(value: f64) -> (BigInt, BigInt) {
-	let scientific = format!("{:e}", value); // "-1.25e-3"
-	let (mantissa, exponent) = scientific.split_once('e').expect("LowerExp has an exponent");
-	let fraction_digits = mantissa.split_once('.').map_or(0, |(_, fraction)| fraction.len()) as i64;
-	let digits: BigInt = mantissa.replace('.', "").parse().expect("decimal digits");
-	let scale = exponent.parse::<i64>().expect("decimal exponent") - fraction_digits;
-	let power: BigInt = BigInt::from(10).pow(scale.unsigned_abs() as u32);
-	if scale >= 0 {
-		(digits * power, BigInt::one())
-	} else {
-		(digits, power)
-	}
+	crate::extensions::numbers::decimal_text_fraction(&format!("{:e}", value)).expect("LowerExp writes decimal digits and an exponent")
 }

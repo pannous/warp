@@ -105,3 +105,4 @@ mod test_temperature; // card temperature
 mod test_degrees; // card angles-degrees
 mod test_ratio_compare_shortcut;
 mod test_repeating_decimal; // card repeating-decimals
+mod test_long_decimals; // card keep-exact

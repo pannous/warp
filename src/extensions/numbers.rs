@@ -10,6 +10,33 @@ use num_traits::{One, Pow, Signed, ToPrimitive, Zero};
 /// below) and at run time (src/wasm_emitter/float_text.rs) alike
 pub const SMALLEST_POSITIONAL: i32 = -5;
 pub const LARGEST_POSITIONAL: i32 = 15;
+/// The most significant digits the shortest text of a float has: a decimal written with more was meant exactly
+const FLOAT_ROUND_TRIP_DIGITS: usize = 17;
+
+/// The exact ratio a decimal text spells, as numerator and denominator: "0.1" is 1/10, "-1.25e-3" is -125/100000
+pub fn decimal_text_fraction(text: &str) -> Option<(BigInt, BigInt)> {
+	let (mantissa, exponent) = text.split_once(['e', 'E']).unwrap_or((text, "0"));
+	let fraction_digits = mantissa.split_once('.').map_or(0, |(_, fraction)| fraction.len()) as i64;
+	let digits: BigInt = mantissa.replace('.', "").parse().ok()?;
+	let scale = exponent.parse::<i64>().ok()? - fraction_digits;
+	let power = BigInt::from(10).pow(scale.unsigned_abs() as u32);
+	Some(if scale >= 0 { (digits * power, BigInt::one()) } else { (digits, power) })
+}
+
+/// A decimal written with more significant digits than a float keeps is the exact ratio it spells (card keep-exact):
+/// 4.4215251521521521512 keeps all its digits, while 3.141592653589793, a float's own text, stays a float, and so does
+/// scientific notation (8.33333333332248946124e+01), which means a float
+pub fn long_decimal(text: &str) -> Option<Number> {
+	if text.contains(['e', 'E']) {
+		return None;
+	}
+	let digits: String = text.chars().filter(char::is_ascii_digit).collect();
+	if digits.trim_start_matches('0').trim_end_matches('0').len() <= FLOAT_ROUND_TRIP_DIGITS {
+		return None;
+	}
+	let (numerator, denominator) = decimal_text_fraction(text)?;
+	Some(Number::ratio(Number::from_bigint(numerator), Number::from_bigint(denominator)))
+}
 
 /// The text of a float as the run-time float_text writes it (user decision float-text): the shortest digits that read
 /// back (`0.1+0.2` as floats is `0.30000000000000004`), positional from 1e-5 up to 1e15, else `1.5e20` / `1e-7`

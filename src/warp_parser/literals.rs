@@ -687,7 +687,10 @@ fn overlined_fraction(chars: &[char]) -> Option<(String, String, usize)> {
 	(!period.is_empty()).then_some((fixed, period, at))
 }
 
-/// The float written `text`, or the error naming it
+/// The float written `text`, or the error naming it; written with more digits than a float keeps, the exact ratio
 fn float_node(text: &str) -> Node {
+	if let Some(exact) = crate::extensions::numbers::long_decimal(text) {
+		return Node::Number(exact);
+	}
 	text.parse::<f64>().map(Node::float).unwrap_or_else(|_| error(&format!("Invalid float: {text}")))
 }
